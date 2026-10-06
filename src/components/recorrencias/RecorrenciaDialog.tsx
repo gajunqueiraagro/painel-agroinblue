@@ -18,9 +18,12 @@ import { escopoDoSubcentro } from '@/lib/financeiro/escopoDoSubcentro';
 import { DiaVencimentoGrade } from './DiaVencimentoGrade';
 import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import {
-  resumoVivo, primeiroVencimentoDe, mesDoFatoDe, propagarRecorrencia,
-  type Recorrencia, type MesDoFato, type ResultadoPropagacao,
+  resumoVivo, primeiroVencimentoDe, mesDoFatoDe, propagarRecorrencia, mudouOQueSePropaga,
+  type Recorrencia, type MesDoFato, type ResultadoPropagacao, type PayloadDaRegra,
 } from '@/hooks/useRecorrencias';
+import { Segmentado } from '@/components/ui/segmentado';
+import { Checkbox } from '@/components/ui/checkbox';
+import { EXPLICACAO_A_CONFIRMAR, ROTULO_TIPO } from '@/lib/financeiro/recorrenciasDoMes';
 import { PropagarRecorrenciaDialog } from './PropagarRecorrenciaDialog';
 import { cn } from '@/lib/utils';
 
@@ -116,6 +119,10 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
      sinal, ou digita negativo e o seletor acompanha. */
   const [ehSaida, setEhSaida] = useState((ed?.valorBase ?? -1) < 0);
   const [valorTexto, setValorTexto] = useState(ed ? String(Math.abs(ed.valorBase)).replace('.', ',') : '');
+  /* REC-VALOR-CERTO-01 — dois atributos da REGRA: o valor é certo ou a confirmar (`tipo_valor`), e é folha de pagamento.
+     Trocá-los não altera lançamento nenhum e não abre o Propagar (`mudouOQueSePropaga`). Novo nasce "Certo", sem folha. */
+  const [valorAConfirmar, setValorAConfirmar] = useState(ed?.valorAConfirmar ?? false);
+  const [folha, setFolha] = useState(ed?.folha ?? false);
   const [diaVencimento, setDiaVencimento] = useState(String(ed?.diaVencimento ?? 10));
   const [dataInicio, setDataInicio] = useState(ed?.dataInicio?.slice(0, 10) ?? '');
   /* ⚠ O VENCIMENTO DO 1º DEIXOU DE SER CAMPO. Ele é DERIVADO do cartão no
@@ -186,7 +193,7 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
     }
     setSalvando(true);
     try {
-      const payload = {
+      const payload: PayloadDaRegra = {
         cliente_id: clienteId,
         fazenda_id: fazendaId,
         descricao: descricao.trim(),
@@ -210,6 +217,8 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
         data_inicio: dataInicio,
         primeiro_vencimento: primeiroVenc,
         data_fim: dataFim,
+        tipo_valor: valorAConfirmar ? 'estimado' : 'exato',
+        folha,
       };
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado
       const q = (supabase as any).from('financeiro_recorrencias');
@@ -223,7 +232,9 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
          ⚠ E A SIMULAÇÃO USA `'futuros'`, não `'nenhum'`: é o escopo que faz a RPC recusar
          sinal trocado ANTES de escrever. A recusa chega aqui como erro e vira a mensagem do
          diálogo — a regra já está salva, e não se chama de novo. */
-      if (ed) {
+      /* ⚠ REC-VALOR-CERTO-01 — TROCAR SÓ O TIPO DO VALOR OU A FOLHA NÃO PROPAGA: são atributos da regra, nenhum lançamento os
+         tem. A pergunta "até onde propagar?" só aparece quando mudou algo que o Propagar leva aos lançamentos. */
+      if (ed && mudouOQueSePropaga(ed, payload)) {
         const sim = await propagarRecorrencia(ed.id, 'futuros', true);
         if (!sim.ok) { setPropagar({ previa: null, recusa: sim.erro ?? 'O banco recusou a propagação.' }); return; }
         if (sim.dados && sim.dados.futuros + sim.dados.passados > 0) {
@@ -266,15 +277,18 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
         </DialogHeader>
 
         <div className="max-h-[70vh] space-y-2.5 overflow-y-auto px-4 py-3">
-          {/* LINHA 1 — Descrição | Tipo | Valor base */}
-          <div className="grid grid-cols-12 gap-2">
-            <div className="col-span-6">
+          {/* LINHA 1 — Descrição | Tipo | Valor base | O valor é.
+              ⚠ LARGURAS EM px, MEDIDAS NA TELA (REC-VALOR-CERTO-01, janela de 1.126): Descrição 268 · Tipo 92 · Valor base 112
+              ("99.999.999,99" pede 87 dos 90 úteis — 3px de folga) · "O valor é" 142 (os dois segmentos pedem 117). Nenhum
+              número corta. O modal tem 514px em "Certo", em "A confirmar" e com a folha marcada. */}
+          <div className="grid grid-cols-[minmax(0,1fr)_92px_112px_142px] gap-2">
+            <div className="min-w-0">
               <Label className="text-[10px]">Descrição *</Label>
               <Input value={descricao} onChange={e => setDescricao(e.target.value)}
                 className="h-8 text-xs" placeholder="Telefone, internet, mão de obra…" />
             </div>
 
-            <div className="col-span-3">
+            <div>
               <Label className="text-[10px]">Tipo *</Label>
               <Select value={ehSaida ? 'saida' : 'entrada'} onValueChange={v => setEhSaida(v === 'saida')}>
                 <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
@@ -285,12 +299,37 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
               </Select>
             </div>
 
-            <div className="col-span-3">
+            <div>
               <Label className="text-[10px]">Valor base *</Label>
               <Input value={valorTexto} onChange={e => setValorTexto(e.target.value)}
                 className="h-8 text-xs tabular-nums" placeholder="350,00"
                 title="Sempre positivo — o sinal vem do Tipo ao lado." />
             </div>
+
+            <div>
+              <Label className="text-[10px]">O valor é *</Label>
+              <div className="flex h-8 items-center" data-testid="rec-tipo-do-valor">
+                <Segmentado altura={26} valor={valorAConfirmar ? 'a_confirmar' : 'certo'}
+                  onEscolher={v => setValorAConfirmar(v === 'a_confirmar')}
+                  opcoes={[
+                    { valor: 'certo', rotulo: ROTULO_TIPO.certo, title: 'Valor certo: a conta de cada mês nasce com este valor' },
+                    { valor: 'a_confirmar', rotulo: ROTULO_TIPO.a_confirmar, title: EXPLICACAO_A_CONFIRMAR },
+                  ]} />
+              </div>
+            </div>
+          </div>
+
+          {/* ⚠ SLOT DE ALTURA FIXA, SEMPRE PRESENTE (nada se move): a explicação do "A confirmar" à esquerda — vazia em "Certo"
+              — e a caixa da folha à direita. O modal não muda de altura entre os dois estados. */}
+          <div className="flex h-[28px] items-start gap-3" data-testid="rec-slot-do-valor">
+            <p className="min-w-0 flex-1 text-[10px] leading-[14px] text-muted-foreground" data-testid="rec-explicacao-a-confirmar">
+              {valorAConfirmar ? EXPLICACAO_A_CONFIRMAR : ''}
+            </p>
+            <label className="flex h-[14px] shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap text-[10px]">
+              <Checkbox checked={folha} onCheckedChange={v => setFolha(v === true)} className="h-3.5 w-3.5"
+                data-testid="rec-folha" />
+              Folha de pagamento
+            </label>
           </div>
 
           {/* LINHA 2 — Conta | Favorecido | Fazenda.

@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 06/10/2026 (ACESSOS-FIN-02, +17 −2: `src/v2/lib/acessoMeta.test.tsx` 16 (novo), `src/pages/pecDrePanel.test.tsx` 1; em
+  Baseline em 06/10/2026 (REC-VALOR-CERTO-01, +36: `src/lib/financeiro/recorrenciasDoMes.test.ts` 19,
+  `src/components/recorrencias/recValorCerto01.test.tsx` 17 — 4121 depois dele; antes o ACESSOS-FIN-02, +17 −2: `src/v2/lib/acessoMeta.test.tsx` 16 (novo), `src/pages/pecDrePanel.test.tsx` 1; em
   `src/v2/lib/acessoOperacao.test.tsx` o M9 passou de 8 a 6 casos (o par "gestor e financeiro acesos" virou so' gestor, e o apagado
   passou de leitura a financeiro) — 4085 depois dele; antes o ACESSOS-FIN-01, +20: `src/v2/lib/acessoTelas.test.tsx` 9, `src/v2/lib/acessoSaidas.test.tsx` 6,
   `src/v2/lib/acessoOperacao.test.tsx` 4, `src/v2/lib/acessoCapacidadesOC.test.tsx` 1 — 4070 depois dele; antes o CPR-SALDO-DIA-02, +9: `src/components/financeiro-v2/cprFluxoPrevisto.test.ts` 5, `src/lib/financeiro/cprRecorte.test.ts` 4 — 4050 depois dele;
@@ -210,7 +211,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4085
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4121
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -2987,6 +2988,60 @@ docs/historico/frentes-ate-2026-09-29.md.)
     navegador: salvar -> reabrir -> voltar, o gesto apagado em conta paga, o "· pela planilha" e a intencao com "Vincular à
     operação" / "Criar OC" no rodape (so' por teste; pela conta, sobram ~330px para os 260 da frase) · o Cancelar do modal
     acionado por script nao fecha em 1,5 s (ja' registrado no FIN-VALOR-CALC-01a).
+- ⚠ A RECORRENCIA DIZ SE O VALOR E' CERTO OU A CONFIRMAR E MARCA FOLHA; A TELA MOSTRA O MES, E O MES TEM UM DONO (REC-VALOR-CERTO-01,
+  Gabriel 06/10/2026; migration 20261027193600, ⚠ registrada como 20261006132308; ledger = arquivo, md5 3d7e1961…). "Mesmo numa
+  recorrência de valor certo ele pode mudar — não pode engessar."
+  ⚠ VOCABULARIO APROVADO, E SO' ELE: "Valor certo" e "A confirmar". As duas palavras do DRE (as dos dois blocos de custo) sao
+    PROIBIDAS em rotulo, coluna, nome de campo e comentario nos arquivos da recorrencia — preso por teste de fonte com auto-teste.
+  · BANCO: o tipo do valor REUSA `financeiro_recorrencias.tipo_valor` ('exato' = Valor certo · 'estimado' = A confirmar), que ja'
+    existia desde 02/09 sem leitor; a migration criou so' `folha boolean NOT NULL DEFAULT false`, SEM BACKFILL (o sistema nao
+    adivinha; o operador marca). ⚠ O BRIEFING PEDIA `valor_a_confirmar boolean` — NAO FOI CRIADA (decisao do Gabriel na pergunta
+    de 06/10: seria a segunda coluna para a mesma verdade). Nenhuma funcao, policy ou ACL mudou; a tela grava a regra por
+    insert/update direto (RLS). Teste: `supabase/tests/rec_valor_certo_01_test.sql` (T1–T6).
+  · TRES FONTES, UMA POR PERGUNTA: o TIPO e a FOLHA sao da REGRA; o VALOR DO MES e' do lancamento da ocorrencia; "CONFIRMADO" e' a
+    marca gravada do valor do mes (`valor_do_mes_em`) ou a conta ja' realizada/conciliada — nunca comparacao de valores.
+  · DONO DO MES, puro, em centavos inteiros: `src/lib/financeiro/recorrenciasDoMes.ts` — `linhasDoMes(regras, ocorrencias, mes)`,
+    `resumoDoMes`, `filtrarLinhas`, `totalDaLista`, `proporcoesDoMes`. A TELA NAO SOMA (preso por teste: sem `reduce` nem `+=`).
+    O MES E' O DO VENCIMENTO (`competenciaQueVenceNoMes`, em cima de `vencimentoPrevisto`). Por recorrencia:
+      com ocorrencia viva vencendo no mes -> o valor DELA (duas: soma; a situacao e' a pior), mesmo com a regra pausada;
+      sem ocorrencia -> |valor base|, SO' se a regra esta' ativa, tem competencia que vence no mes e essa competencia ainda NAO foi
+        gerada (acima da marca d'agua); competencia ja' gerada sem ocorrencia viva = conta CANCELADA, nao entra;
+      situacao: valor certo -> 'certo'; a confirmar -> 'confirmado' (marca ou paga) ou 'estimado'.
+    RESUMO: total · certo · confirmado · estimado (certo + confirmado + estimado = total, ao centavo) · `folha` (SUBCONJUNTO do
+    total, nao quarta fatia) · `entradas` A' PARTE (recorrencia de receita nunca entra no total).
+  · CADASTRO (`RecorrenciaDialog`): na linha 1, "O valor é *" (`Segmentado` Certo | A confirmar; novo nasce Certo); abaixo, um SLOT
+    de 28px SEMPRE presente com a explicacao (vazia em Certo) e a caixa "Folha de pagamento". ⚠ TROCAR SO' O TIPO OU A FOLHA NAO
+    ABRE O PROPAGAR (`mudouOQueSePropaga`, `useRecorrencias.ts`: so' os 13 campos que o Propagar leva aos lancamentos contam) e nao
+    altera lancamento nenhum. Medido a 1.126: modal 672 x 514 nos tres estados; linha 1 = 268 · 92 · 112 · 142; "99.999.999,99"
+    pede 87 dos 90 uteis do Valor base.
+  · TELA (`V2Recorrencias.tsx`): regua do mes (`SeletorPeriodo` `modo="ano-mes"` `modoUnico`, meses neutros, nasce no mes corrente) ·
+    CINCO CARTOES que nao mudam com o filtro (Recorrente em {mes} · Valor certo · A confirmar · ja' informado · A confirmar · ainda
+    estimado, em ambar · Folha de pagamento · dentro do total), cada um liga/desliga o filtro dele · barra de proporcao de 8px ·
+    linha de filtros de 22px (Todas | Valor certo | A confirmar | Folha · Todas | Confirmado | Estimado · No mês | Todas as regras ·
+    busca) · tabela `table-fixed` com cabecalho navy preso · rodape "Total do mês" FORA da rolagem, com a MESMA regua (`Colunas`).
+    Valores com ▼ / ▲ e `COR_SINAL`; o estimado em ambar; "0,00" apagado sem seta.
+    "TODAS AS REGRAS" (criado neste PR: a tela nao tinha como ver a regra fora da vigencia no mes) lista toda regra; a coluna do
+    mes fica "—" e os filtros do mes ficam apagados com o motivo.
+    SAIRAM DA LISTA PARA O `title` DA DESCRICAO: periodicidade, proxima competencia, situacao da REGRA (ativa / gerada ate' /
+    pausada), quantas geradas. Sairam os cartoes "Ativas" (a contagem esta' no `title` do primeiro) e "Geradas até o fim".
+    Ordenacao em todas as colunas, primeiro clique do maior para o menor; abre por Dia crescente.
+    MEDIDO a 1.126 no NJ (so' leitura): cartoes 168 x 42, "▼ 99.999.999,99" pede 108 dos 152 uteis nos cinco; colunas 232 · 118 ·
+    100 · 70 · 36 · 56 · 84 · 100 · 66 · 22 = 884, linhas de 19px; pior numero: Previsto 73 de 76, Valor 83 de 92, rodape igual;
+    nenhum cabecalho corta; cabecalho em 210 e rodape em 551 iguais ao trocar cartao, filtro, "Todas as regras" e mes (out, nov,
+    jan); sem rolagem horizontal nem da pagina.
+  · NUMEROS REAIS, out/26, pelo dono (so' leitura): NJ total 222.189,08 em 94 contas, tudo em valor certo, folha 0, entradas
+    114.416,52 em 6 a' parte — = soma direta das 99 ocorrencias vivas (336.169,85) + 435,75 da regra "Internet - Leonardo", ativa
+    e ainda nunca gerada. Vera 43.241,00 em 30, tudo certo = a soma direta. Nenhuma recorrencia esta' marcada "A confirmar" nem
+    "Folha": o operador marca.
+  ⚠ DIVIDAS E FILA: REC-VALOR-CERTO-02 (o selo "estimado" e as linhas confirmado / ainda estimado em Contas a Pagar e Receber) ·
+    REC-FOLHA-01 (modal proprio de folha: admissao, historico, documentos; mock antes) · grafico por dia/mes e debito automatico x
+    boleto na tela de Recorrencias · O GESTO DE MARCAR E SALVAR NAO FOI FEITO NO NAVEGADOR (o cliente Teste nao tem recorrencia;
+    provado pelo payload em teste e pelo UPDATE como `authenticated` no teste SQL) · leitura das ocorrencias do mes com
+    `(supabase as any).from` (`valor_do_mes_em` fora do `types.ts`; os tipos NAO foram regenerados — regenerar mexe na baseline do
+    TSC) e com teto de 1.000 linhas (o rodape avisa "mês incompleto"; o maior mes do proto tem 99) · a contagem "geradas" do
+    `useRecorrencias` le' TODAS as ocorrencias vivas do cliente sem paginar (NJ: 1.044 — ja' corta) · o rotulo do primeiro e do
+    ultimo cartao corta a 152px (inteiro no `title`) · o cabecalho da tabela tem 22px (o primitivo), nao 18 · os cartoes e o
+    rodape mostram SAIDAS; as entradas so' aparecem no rodape e na lista · a tela nao se monta em teste (lida da fonte).
 - ⚠ O GERAR GARANTE A SERIE COMPLETA DA RECORRENCIA (FIN-RECORRENCIA-GERAR-PREENCHE-VAGA-01, Gabriel 30/09): alem de
   avancar a marca, `fn_recorrencia_gerar` preenche a competencia VAGA abaixo dela; CANCELADO CONTA COMO OCUPADO; nunca
   antes do mes corrente (competencia), nem em mes fechado. As travas moram so' em `_fn_recorrencia_vagas`, e o

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
+import type { OcorrenciaDoMes } from '@/lib/financeiro/recorrenciasDoMes';
 
 /**
  * useRecorrencias — as regras de repetição e o que elas já produziram.
@@ -39,6 +40,10 @@ export interface Recorrencia {
   ativo: boolean;
   ultimoLancamentoGerado: string | null;
   fazendaId: string;
+  /** REC-VALOR-CERTO-01 — `tipo_valor = 'estimado'` no banco: o valor base é estimativa até o valor do mês ser informado. */
+  valorAConfirmar: boolean;
+  /** REC-VALOR-CERTO-01 — folha de pagamento (atributo da regra). */
+  folha: boolean;
   /** Derivados — leitura, não coluna. */
   proximaCompetencia: string | null;
   situacao: SituacaoRecorrencia;
@@ -205,6 +210,8 @@ export function useRecorrencias() {
           ativo: r.ativo === true,
           ultimoLancamentoGerado: r.ultimo_lancamento_gerado ?? null,
           fazendaId: r.fazenda_id,
+          valorAConfirmar: r.tipo_valor === 'estimado',
+          folha: r.folha === true,
           proximaCompetencia: prox,
           situacao,
           gerados: porRegra[r.id] ?? 0,
@@ -218,6 +225,73 @@ export function useRecorrencias() {
   useEffect(() => { void carregar(); }, [carregar]);
 
   return { recorrencias, loading, recarregar: carregar, clienteId };
+}
+
+/**
+ * AS OCORRÊNCIAS VIVAS QUE VENCEM NUM MÊS — REC-VALOR-CERTO-01. O que o dono do mês (`recorrenciasDoMes.ts`) precisa para
+ * dizer o valor e a situação de cada recorrência: uma consulta por mês, pelo VENCIMENTO.
+ * ⚠ `(supabase as any).from`: `valor_do_mes_em` nasceu depois do `types.ts` (REC-PROPAGAR-VALOR-DO-MES-01) — o idioma do
+ *   `RecorrenciaDialog`, que grava a regra do mesmo jeito. As linhas são lidas campo a campo, sem `as`.
+ * ⚠ `incompleto` QUANDO A RESPOSTA BATE NO TETO DE 1.000: a tela diz que o mês pode estar cortado em vez de somar calada
+ *   (medido em 06/10/2026: o maior mês do proto tem 99 ocorrências).
+ */
+export const TETO_OCORRENCIAS_DO_MES = 1000;
+export function useOcorrenciasDoMes(clienteId: string | null, mes: string) {
+  const [ocorrencias, setOcorrencias] = useState<OcorrenciaDoMes[]>([]);
+  const [incompleto, setIncompleto] = useState(false);
+  const [carregando, setCarregando] = useState(false);
+  const carregar = useCallback(async () => {
+    if (!clienteId || !/^\d{4}-\d{2}$/.test(mes)) { setOcorrencias([]); setIncompleto(false); return; }
+    const [a, m] = mes.split('-').map(Number);
+    const fim = `${mes}-${String(new Date(Date.UTC(a, m, 0)).getUTCDate()).padStart(2, '0')}`;
+    setCarregando(true);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- coluna fora de types.ts; idioma do RecorrenciaDialog
+      const { data } = await (supabase as any)
+        .from('financeiro_lancamentos_v2')
+        .select('recorrencia_id, valor, data_vencimento, status_transacao, valor_do_mes_em')
+        .eq('cliente_id', clienteId)
+        .eq('cancelado', false)
+        .not('recorrencia_id', 'is', null)
+        .gte('data_vencimento', `${mes}-01`)
+        .lte('data_vencimento', fim)
+        .limit(TETO_OCORRENCIAS_DO_MES);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- linhas cruas
+      const linhas: any[] = Array.isArray(data) ? data : [];
+      setIncompleto(linhas.length >= TETO_OCORRENCIAS_DO_MES);
+      setOcorrencias(linhas.map(lerOcorrencia));
+    } finally {
+      setCarregando(false);
+    }
+  }, [clienteId, mes]);
+  useEffect(() => { void carregar(); }, [carregar]);
+  return { ocorrencias, incompleto, carregando, recarregar: carregar };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- linha crua do PostgREST
+export const lerOcorrencia = (l: any): OcorrenciaDoMes => ({
+  recorrenciaId: String(l?.recorrencia_id ?? ''),
+  valor: Number(l?.valor ?? 0),
+  dataVencimento: typeof l?.data_vencimento === 'string' ? l.data_vencimento : null,
+  status: typeof l?.status_transacao === 'string' ? l.status_transacao : null,
+  valorDoMesEm: typeof l?.valor_do_mes_em === 'string' ? l.valor_do_mes_em : null,
+});
+
+/**
+ * O QUE SE PROPAGA — REC-VALOR-CERTO-01. O tipo do valor (certo | a confirmar) e a folha são atributos da REGRA: trocá-los
+ * não altera lançamento nenhum e NÃO abre a pergunta do Propagar. Só os campos que o Propagar leva aos lançamentos contam.
+ */
+export type CampoQueSePropaga = 'fazenda_id' | 'descricao' | 'favorecido_id' | 'conta_bancaria_id' | 'subcentro' | 'safra_id'
+  | 'forma_pagamento' | 'observacao' | 'valor_base' | 'dia_vencimento' | 'data_inicio' | 'primeiro_vencimento' | 'data_fim';
+export type PayloadDaRegra = Record<CampoQueSePropaga, string | number | null>
+  & { cliente_id: string; tipo_valor: 'exato' | 'estimado'; folha: boolean };
+export function mudouOQueSePropaga(ed: Recorrencia, p: PayloadDaRegra): boolean {
+  const data = (d: string | null) => (d ? d.slice(0, 10) : null);
+  return ed.fazendaId !== p.fazenda_id || ed.descricao !== p.descricao || (ed.favorecidoId ?? null) !== p.favorecido_id
+    || ed.contaBancariaId !== p.conta_bancaria_id || ed.subcentro !== p.subcentro || (ed.safraId ?? null) !== p.safra_id
+    || (ed.formaPagamento ?? null) !== p.forma_pagamento || (ed.observacao ?? null) !== p.observacao
+    || Math.round(ed.valorBase * 100) !== Math.round(Number(p.valor_base) * 100) || ed.diaVencimento !== Number(p.dia_vencimento)
+    || data(ed.dataInicio) !== p.data_inicio || data(ed.primeiroVencimento) !== p.primeiro_vencimento || data(ed.dataFim) !== p.data_fim;
 }
 
 /**
