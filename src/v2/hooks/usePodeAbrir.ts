@@ -1,7 +1,7 @@
 import { useCliente } from '@/contexts/ClienteContext';
 import { useMemo } from 'react';
 import { acessoDaPessoa, podeNaOperacao, type AcessoOperacao, type CapacidadeOC } from '@/v2/lib/acessoOperacao';
-import { nivelDaTela, podeVerMeta } from '@/v2/lib/acessoTelas';
+import { nivelDaTela, podeEditarMeta, podeVerMeta } from '@/v2/lib/acessoTelas';
 import { TELA_OPERACAO_COMERCIAL, type V2Section } from '@/v2/lib/navGrupos';
 
 /**
@@ -38,6 +38,15 @@ export function usePodeAbrirRotaSoAdmin(): boolean {
 export function usePodeVerMeta(): boolean {
   const { clienteAtual, isAdmin } = useCliente();
   return podeVerMeta(clienteAtual?.perfil ?? null, isAdmin);
+}
+
+/**
+ * A PESSOA EDITA META? — ACESSOS-FIN-03. O ajudante de quem desenha um gesto que CRIA, ALTERA ou APAGA meta (a grade META do
+ * Fluxo Caixa, a linha de meta de Pecuária › Lançamentos). Hoje so' o admin. So' consulta o dono (`podeEditarMeta`).
+ */
+export function usePodeEditarMeta(): boolean {
+  const { clienteAtual, isAdmin } = useCliente();
+  return podeEditarMeta(clienteAtual?.perfil ?? null, isAdmin);
 }
 
 /** A tela pela qual se abre e se altera uma operacao comercial — a MESMA que os atalhos do ACESSOS-02b consultam. Desde o

@@ -90,8 +90,9 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
   }, [initialTab]);
 
   const [fluxoCenarioPedido, setFluxoCenario] = useState<'realizado' | 'meta'>(initialFluxoCenario);
-  /* ACESSOS-FIN-02 — o lado META do Fluxo e' a grade do PLANEJAMENTO (`PlanejamentoFinanceiroTab`, que EDITA a meta): quem nao
-     ve^ meta fica em Realizado, mesmo que chegue com "meta" pedido, e a opcao META fica apagada com o motivo. */
+  /* ACESSOS-FIN-02/03 — o lado META do Fluxo e' a grade do PLANEJAMENTO (`PlanejamentoFinanceiroTab`): quem nao VE^ meta fica em
+     Realizado, mesmo que chegue com "meta" pedido, e a opcao META fica apagada com o motivo. Quem ve^ e nao EDITA (gestor,
+     financeiro) abre a grade em LEITURA — a trava mora na propria grade (`usePodeEditarMeta`). */
   const veMeta = usePodeVerMeta();
   const fluxoCenario: 'realizado' | 'meta' = veMeta ? fluxoCenarioPedido : 'realizado';
   const [drillDown, setDrillDown] = useState<(DrillDownPayload & { ano: string; mes: number }) | null>(null);

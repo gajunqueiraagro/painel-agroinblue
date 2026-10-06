@@ -29,6 +29,8 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useOcCompromissos } from '@/hooks/useOcCompromissos';
 import { STATUS_OPTIONS_ZOOTECNICO_COM_META, getStatusBadge, getStatus, isMeta, type StatusOperacional } from '@/lib/statusOperacional';
+import { usePodeEditarMeta } from '@/v2/hooks/usePodeAbrir';
+import { MOTIVO_META_SO_ADMIN } from '@/v2/lib/acessoTelas';
 import { CompraFinanceiroPanel } from '@/components/CompraFinanceiroPanel';
 import { EditCompraForm } from '@/components/edit/EditCompraForm';
 import { LancamentoZooModal } from '@/v2/components/edicao/LancamentoZooModal';
@@ -85,11 +87,11 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
   // errado: permitia trocar cenário realizado→meta pela edição operacional.
   // Regra soberana: Meta só aparece quando o lançamento JÁ é Meta.
   const canEditMeta = lancamentoIsMeta;
-  // metaLocked = "Meta sem permissão para editar". Antes dependia da
-  // permissão do usuário; agora, com canEditMeta = lancamentoIsMeta, a
-  // expressão é sempre false (preserva forma para usos downstream e evita
-  // remoção arriscada de condicionais).
-  const metaLocked = lancamentoIsMeta && !canEditMeta;
+  // metaLocked = "Meta sem permissão para editar". ACESSOS-FIN-03 (Gabriel, 06/10/2026): a meta se LÊ, só o admin a edita. A
+  // trava que estava adormecida (a expressão era sempre false) volta a valer, e quem decide é o DONO (`usePodeEditarMeta`,
+  // em cima de `podeEditarMeta`) — nenhum `if` de perfil aqui. Para o admin continua false: nada muda.
+  const editaMeta = usePodeEditarMeta();
+  const metaLocked = lancamentoIsMeta && !editaMeta;
 
   // ─── P1 governance for this lancamento's month ───
   const lancAnoMes = useMemo(() => lancamento.data?.slice(0, 7), [lancamento.data]);
@@ -878,20 +880,24 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
               {/* META lock banner */}
               {metaLocked && (
                 <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded px-2 py-1">
-                  <p className="text-[9px] text-amber-700 dark:text-amber-400 font-medium">
-                    🔒 Registro META — somente consultores podem editar ou excluir.
+                  <p className="text-[9px] text-amber-700 dark:text-amber-400 font-medium" data-testid="meta-so-admin">
+                    🔒 Registro META — {MOTIVO_META_SO_ADMIN}.
                   </p>
                 </div>
               )}
 
               {/* ── Ações ── */}
               <div className="flex gap-2 pt-0.5">
-                {!isTransferenciaEntrada && !metaLocked && (
+                {/* ⚠ ACESSOS-FIN-03 — GESTO QUE NÃO VALE FICA APAGADO COM O MOTIVO, não some: na linha de meta, para quem não
+                    edita meta, Editar e Apagar ficam desabilitados com o motivo no `title` (e escrito no aviso acima). */}
+                {!isTransferenciaEntrada && (
                   <>
-                    <Button variant="default" size="sm" className="flex-1 h-[26px] text-[11px] font-bold" onClick={handleEditClick}>
+                    <Button variant="default" size="sm" className="flex-1 h-[26px] text-[11px] font-bold"
+                      onClick={metaLocked ? undefined : handleEditClick} disabled={metaLocked} title={metaLocked ? MOTIVO_META_SO_ADMIN : undefined}>
                       <Pencil className="h-3 w-3 mr-1" /> Editar
                     </Button>
-                    <Button variant="destructive" size="sm" className="h-[26px] text-[11px]" onClick={handleRemoverClick} disabled={checkingVinculos || effectiveP1Oficial}>
+                    <Button variant="destructive" size="sm" className="h-[26px] text-[11px]" onClick={metaLocked ? undefined : handleRemoverClick}
+                      disabled={checkingVinculos || effectiveP1Oficial || metaLocked} title={metaLocked ? MOTIVO_META_SO_ADMIN : undefined}>
                       <Trash2 className="h-3 w-3 mr-1" /> Apagar
                     </Button>
                   </>

@@ -13,6 +13,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { usePlanejamentoFinanceiro, type SubcentroGrid } from '@/hooks/usePlanejamentoFinanceiro';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
+import { usePodeEditarMeta } from '@/v2/hooks/usePodeAbrir';
+import { MOTIVO_META_SO_ADMIN } from '@/v2/lib/acessoTelas';
 import { ModalParametrosNutricao } from '@/components/financeiro/ModalParametrosNutricao';
 import { ProjetosInvestimento } from '@/components/financeiro/ProjetosInvestimento';
 import { toast } from 'sonner';
@@ -131,6 +133,12 @@ export function PlanejamentoFinanceiroTab({ onBack, ano: anoProp, mesAte: _mesAt
   const { fazendaAtual, fazendas } = useFazenda();
   const fazendaId = fazendaAtual?.id ?? '';
   const isGlobal = !fazendaId || fazendaId === '__global__' || fazendaId === '';
+  /* ACESSOS-FIN-03 — A GRADE META SE LE^; SO' O ADMIN A EDITA. Quem nao edita meta ve^ a grade no MESMO modo leitura que o Global
+     ja' tinha (celula em texto, sem campo), e os gestos que gravam ficam APAGADOS com o motivo. `semEdicao` e' a condicao unica
+     dos pontos de escrita; `isGlobal` segue decidindo so' o que e' do Global. Para o admin, `semEdicao === isGlobal`: nada muda. */
+  const editaMeta = usePodeEditarMeta();
+  const semEdicao = isGlobal || !editaMeta;
+  const motivoSemEdicao = editaMeta ? undefined : MOTIVO_META_SO_ADMIN;
   const isAdminFazenda = fazendaAtual?.nome?.toLowerCase().includes('admin') ?? false;
   const isFazendaOp = !isGlobal && !isAdminFazenda;
 
@@ -520,7 +528,7 @@ export function PlanejamentoFinanceiroTab({ onBack, ano: anoProp, mesAte: _mesAt
                               </td>
                               {ajusteMeses.map((v, mesIdx) => (
                                 <td key={mesIdx} className={`px-0.5 py-[1px]${trimBorder(mesIdx)}`} style={{ background: subBg, cursor: (bloqueio.bloqueado || isProjeto) ? 'not-allowed' : undefined }} title={isProjeto ? 'Valor definido via Projetos de Investimento' : bloqueio.bloqueado ? bloqueio.motivo : undefined}>
-                                  {isGlobal || bloqueio.bloqueado || isProjeto ? (
+                                  {semEdicao || bloqueio.bloqueado || isProjeto ? (
                                     <span className={`text-[8px] text-right block px-0.5 leading-tight ${isProjeto ? 'opacity-30' : bloqueio.bloqueado ? 'opacity-60' : ''}`}>{fmtCompact(v)}</span>
                                   ) : (
                                     <EditableCell value={v} onSave={(newVal) => handleCellChange(sub.gridIdx, mesIdx, newVal)} onAutoSave={(newVal) => handleAutoSave(sub.gridIdx, mesIdx, newVal)} />
@@ -555,7 +563,7 @@ export function PlanejamentoFinanceiroTab({ onBack, ano: anoProp, mesAte: _mesAt
                           <td className="px-1 py-[1.5px] text-left leading-tight font-normal text-[8px] text-muted-foreground sticky left-0 z-10 border-r-2 border-border/40 truncate whitespace-nowrap" style={{ background: subBg, paddingLeft: 40, cursor: bloqueio.bloqueado ? 'not-allowed' : undefined }} title={bloqueio.bloqueado ? bloqueio.motivo : undefined}>
                             <span className="inline-flex items-center gap-0.5">
                               {sub.subcentro}
-                              {!isGlobal && !bloqueio.bloqueado && (
+                              {!semEdicao && !bloqueio.bloqueado && (
                                 <Download
                                   className="h-2.5 w-2.5 shrink-0 text-muted-foreground/50 hover:text-primary cursor-pointer opacity-0 group-hover/subrow:opacity-100 transition-opacity"
                                   onClick={(e) => { e.stopPropagation(); setImportConfirm({ subcentro: sub.subcentro, centro_custo: grid[sub.gridIdx]?.centro_custo || '', gridIdx: sub.gridIdx }); }}
@@ -565,7 +573,7 @@ export function PlanejamentoFinanceiroTab({ onBack, ano: anoProp, mesAte: _mesAt
                           </td>
                           {sub.meses.map((v, mesIdx) => (
                             <td key={mesIdx} className={`px-0.5 py-[1px]${trimBorder(mesIdx)}`} style={{ background: subBg, cursor: bloqueio.bloqueado ? 'not-allowed' : undefined }} title={bloqueio.bloqueado ? bloqueio.motivo : undefined}>
-                              {isGlobal || bloqueio.bloqueado ? (
+                              {semEdicao || bloqueio.bloqueado ? (
                                 <span className={`text-[8px] text-right block px-0.5 leading-tight ${bloqueio.bloqueado ? 'opacity-60' : ''}`}>{fmtCompact(v)}</span>
                               ) : (
                                 <EditableCell value={v} onSave={(newVal) => handleCellChange(sub.gridIdx, mesIdx, newVal)} onAutoSave={(newVal) => handleAutoSave(sub.gridIdx, mesIdx, newVal)} />
@@ -620,8 +628,15 @@ export function PlanejamentoFinanceiroTab({ onBack, ano: anoProp, mesAte: _mesAt
             Selecione uma fazenda para editar
           </span>
         )}
+        {!editaMeta && (
+          <span className="inline-flex items-center gap-1 whitespace-nowrap text-[10px] text-muted-foreground" data-testid="meta-so-admin">
+            <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" />
+            {MOTIVO_META_SO_ADMIN}
+          </span>
+        )}
         <div className="flex-1" />
-        <Button size="sm" variant="outline" onClick={() => setProjetosOpen(true)} title="Projetos de Investimento">
+        <Button size="sm" variant="outline" onClick={() => setProjetosOpen(true)} disabled={!editaMeta}
+          title={motivoSemEdicao ?? 'Projetos de Investimento'}>
           <ClipboardList className="h-4 w-4 mr-1" />Projetos
         </Button>
         <Button size="sm" variant="outline" onClick={async () => { setVersoesOpen(true); setVersoes(await listarVersoes()); }} title="Gerenciar Versões">
@@ -631,17 +646,18 @@ export function PlanejamentoFinanceiroTab({ onBack, ano: anoProp, mesAte: _mesAt
           size="sm"
           variant="outline"
           onClick={() => setResumoOpen(true)}
-          disabled={isGlobal}
-          title="Resumo Executivo para Aprovação"
+          disabled={semEdicao}
+          title={motivoSemEdicao ?? 'Resumo Executivo para Aprovação'}
         >
           <ClipboardCheck className="h-4 w-4 mr-1" />Aprovar
         </Button>
         {!isGlobal && (
-          <Button size="sm" variant="ghost" onClick={() => setNutricaoModalOpen(true)} title="Parâmetros de Nutrição">
+          <Button size="sm" variant="ghost" onClick={() => setNutricaoModalOpen(true)} disabled={!editaMeta}
+            title={motivoSemEdicao ?? 'Parâmetros de Nutrição'}>
             <Settings className="h-4 w-4" />
           </Button>
         )}
-        <Button size="sm" onClick={handleSave} disabled={saving || isGlobal || !dirty}>
+        <Button size="sm" onClick={handleSave} disabled={saving || semEdicao || !dirty} title={motivoSemEdicao}>
           <Save className="h-4 w-4 mr-1" />Salvar
         </Button>
       </div>
@@ -815,7 +831,8 @@ export function PlanejamentoFinanceiroTab({ onBack, ano: anoProp, mesAte: _mesAt
               <Button
                 size="sm"
                 className="w-full gap-1.5 h-8 text-xs"
-                disabled={snapshotSaving || isGlobal}
+                disabled={snapshotSaving || semEdicao}
+                title={motivoSemEdicao}
                 onClick={async () => {
                   if (snapshotSaving) return;
                   setSnapshotSaving(true);
@@ -852,6 +869,8 @@ export function PlanejamentoFinanceiroTab({ onBack, ano: anoProp, mesAte: _mesAt
                       size="sm"
                       variant="ghost"
                       className="h-6 text-[10px] shrink-0"
+                      disabled={!editaMeta}
+                      title={motivoSemEdicao}
                       onClick={async () => {
                         await restaurarVersao(v.id);
                         setVersoesOpen(false);

@@ -108,21 +108,38 @@ function infoDaTela(tela: V2Section): { grupo: GrupoAcesso; liberada: boolean } 
 }
 
 /**
- * QUEM VE^ META — ACESSOS-FIN-02 (Gabriel, 06/10/2026: "poderia bloquear para ele metas"). Varias telas liberadas trazem a meta
- * DENTRO delas (o cenario Realizado | Meta do PC-100 e do Fluxo Caixa, a referencia "Meta" do DRE, o filtro Meta de Pecuária ›
- * Lançamentos). A pergunta "esta pessoa ve^ meta?" tem UMA resposta, aqui; a tela so' consulta (`usePodeVerMeta`).
- * ⚠ E' LINHA PROPRIA, NAO "TEM TELA DE PLANEJAMENTO?" (decisao do Gabriel na pergunta de 06/10): nenhuma tela de Planejamento
- *   esta' liberada a cliente, e por essa regua o GESTOR tambem perderia a meta. O gestor ve^; o financeiro, nao.
- * ⚠ ITEM QUE NAO VALE FICA APAGADO COM O MOTIVO, nunca some: a opcao Meta continua no controle, desabilitada, com
- *   `MOTIVO_SEM_META` no `title`; quem chega com "meta" gravado (URL) cai em Realizado.
- * ⚠ E' O QUE A TELA OFERECE: as telas BUSCAM a meta mesmo sem mostrar (hooks de dado intocados) — a trava de leitura e' o 01F.
+ * A META SE LE^; SO' O ADMIN A CRIA OU EDITA — ACESSOS-FIN-03 (Gabriel, 06/10/2026, substitui a parte de meta do ACESSOS-FIN-02):
+ * "O financeiro tem acesso a tudo. Só a criação da meta — onde eu coloco valor de meta no fluxo de caixa, lançar rebanho,
+ * nascimento, morte, área, tudo da meta — por enquanto sou só eu. Nem o dono, nem o financeiro, nem o campo. […] O financeiro pode
+ * ver a meta do período no PC-100; ali ele não consegue editar nem mudar nada. Não adianta bloquear tanto assim."
+ *
+ * DUAS PERGUNTAS SEPARADAS, as duas aqui; a tela so' consulta (`usePodeVerMeta`, `usePodeEditarMeta`):
+ *      perfil            ver meta   editar meta
+ *      admin             S          S
+ *      gestor_cliente    S          N
+ *      financeiro        S          N
+ *      campo             N          N
+ *      leitura           N          N
+ * ⚠ VER: a opcao Meta dos controles de cenario (PC-100, Fluxo Caixa, DRE, Pecuária › Lançamentos) fica acesa para quem ve^; para
+ *   quem nao ve^, APAGADA com `MOTIVO_SEM_META`, e quem chega com "meta" gravado cai em Realizado.
+ * ⚠ EDITAR: onde a meta se cria, altera ou apaga (a grade META do Fluxo Caixa — que e' a grade do Planejamento —, a linha de meta
+ *   em Pecuária › Lançamentos), quem nao edita ve^ em LEITURA, com os gestos de gravacao APAGADOS e `MOTIVO_META_SO_ADMIN`.
+ * ⚠ E' O QUE A TELA OFERECE: o banco nao distingue perfil, e as telas buscam a meta mesmo sem mostrar — a trava e' o 01F.
  */
-export const VE_META: Record<PerfilCliente, boolean> = { gestor_cliente: true, financeiro: false, campo: false, leitura: false };
+export const VE_META: Record<PerfilCliente, boolean> = { gestor_cliente: true, financeiro: true, campo: false, leitura: false };
+/** Nenhum perfil de CLIENTE edita meta: so' o admin do AGROinBLUE. Linha escrita para a decisao ser uma celula, como as outras. */
+export const EDITA_META: Record<PerfilCliente, boolean> = { gestor_cliente: false, financeiro: false, campo: false, leitura: false };
 export const MOTIVO_SEM_META = 'meta: só para quem tem o Planejamento';
+export const MOTIVO_META_SO_ADMIN = 'meta: só o administrador edita';
 export function podeVerMeta(perfil: string | null | undefined, isAdmin: boolean): boolean {
   if (isAdmin) return true;
   if (!ehPerfilCliente(perfil)) return false;
   return VE_META[perfil];
+}
+export function podeEditarMeta(perfil: string | null | undefined, isAdmin: boolean): boolean {
+  if (isAdmin) return true;
+  if (!ehPerfilCliente(perfil)) return false;
+  return EDITA_META[perfil];
 }
 
 /**

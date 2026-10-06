@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 06/10/2026 (REC-VALOR-CERTO-01, +36: `src/lib/financeiro/recorrenciasDoMes.test.ts` 19,
+  Baseline em 06/10/2026 (ACESSOS-FIN-03, +13 em `src/v2/lib/acessoMeta.test.tsx` (16 -> 29) — 4134 depois dele; antes o
+  REC-VALOR-CERTO-01, +36: `src/lib/financeiro/recorrenciasDoMes.test.ts` 19,
   `src/components/recorrencias/recValorCerto01.test.tsx` 17 — 4121 depois dele; antes o ACESSOS-FIN-02, +17 −2: `src/v2/lib/acessoMeta.test.tsx` 16 (novo), `src/pages/pecDrePanel.test.tsx` 1; em
   `src/v2/lib/acessoOperacao.test.tsx` o M9 passou de 8 a 6 casos (o par "gestor e financeiro acesos" virou so' gestor, e o apagado
   passou de leitura a financeiro) — 4085 depois dele; antes o ACESSOS-FIN-01, +20: `src/v2/lib/acessoTelas.test.tsx` 9, `src/v2/lib/acessoSaidas.test.tsx` 6,
@@ -211,7 +212,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4121
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4134
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -518,40 +519,57 @@ CONSULTAM: a lateral (`V2Sidebar`, por `gruposVisiveis`), o drawer (`V2ContextDr
     ACESSOS-FIN-SAIDAS-NAO-VARRIDAS-01 (varridos: os callbacks que o `V2Index` entrega e os `navigate`/`window.location` das 16
     telas; os modais e dialogos internos de cada tela NAO foram lidos um a um) · NADA DISTO FOI PROVADO NO NAVEGADOR com perfil
     nao admin (homologacao do Gabriel, usuario Financeiro no cliente Teste).
-- ⚠ A META NAO APARECE PARA QUEM NAO VE^ META, E "REABRIR MÊS…" NA OC E' CAPACIDADE (ACESSOS-FIN-02, 06/10/2026, so' tela, sem banco).
-  · QUEM VE^ META TEM UM DONO: `podeVerMeta(perfil, isAdmin)` e a linha `VE_META` (`src/v2/lib/acessoTelas.ts`) — gestor S,
-    financeiro N, campo N, leitura N; admin sempre. O ajudante e' `usePodeVerMeta()` (`usePodeAbrir.ts`) e o motivo, um so',
-    `MOTIVO_SEM_META` = "meta: só para quem tem o Planejamento". Nenhum `if` de perfil na tela.
-    ⚠ E' LINHA PROPRIA, NAO "TEM TELA DE PLANEJAMENTO?" (decisao do Gabriel na pergunta de 06/10): nenhuma tela de Planejamento
-      esta' liberada a cliente, e por essa regua o GESTOR tambem perderia a meta. O gestor ve^ (DOM identico ao de antes).
-  · A REGRA DA TELA: a opcao Meta CONTINUA no controle, DESABILITADA, com o motivo no `title` (nunca some); quem chega com "meta"
-    gravado cai em Realizado; linha de meta misturada ao realizado nao e' desenhada. ONDE VALE (as quatro das 16 telas que tem meta):
-      PC-100 (`PainelConsultorTab.tsx`, o alternador Realizado | Meta; o cenario e' estado local, nasce em Realizado);
-      Fluxo Caixa (`FinanceiroCaixaTab.tsx`, Realizado | META — ⚠ o lado META e' a grade do PLANEJAMENTO,
-        `PlanejamentoFinanceiroTab`, que EDITA a meta: antes deste PR o financeiro a alcancava por ali);
-      DRE (`AgriDreLavouraTab.tsx` + o card `FaixaVisoesPec` de `PecDrePanel.tsx`, por `motivoSemMeta`): a referencia "Meta" do card
-        "Comparação" apagada, e `f_visao=meta` na URL vira comparacao por anos (a URL nao e' reescrita);
-      Pecuária › Lançamentos (`FinanceiroTab.tsx`, por `motivoSemMeta` vindo da rota): os DOIS filtros Meta apagados, e as linhas de
-        meta saem da lista inteira (o "todos" as misturava com o realizado).
-    NAO TEM META: Evolução Patrimonial, Visão Consolidada, Financiamentos, Painel Financiamentos, Contratos, Recorrências,
-    Fornecedores, Contas Bancárias, Fechamento Área, Estoque de Grãos, Barter; "Lançar › Pecuária" ja' so' oferece Realizado
-    (`cenariosPermitidos`).
-  ⚠ AS TELAS BUSCAM A META MESMO SEM MOSTRAR (hooks de dado intocados): PC-100 (`useLancamentos({cenario:'meta'})`,
-    `useRebanhoOficial({cenario:'meta'})`), DRE (`useDrePecuaria(..., 'meta')`) e a lista de Pecuária › Lançamentos
-    (`lancamentosTodosCenarios`). Esconder e' tela; nao ler e' o 01F.
-  · "REABRIR MÊS…" DENTRO DA OC (`ReabrirMesNaOC`) deixou de perguntar a' TELA (`usePodeAbrir('fechamento')`, que o financeiro
-    ganhou no ACESSOS-FIN-01) e virou a capacidade `reabrir_mes` de `CAPACIDADES_OC`: gestor S, financeiro N, campo N, leitura N
-    (admin sempre). O motivo escrito e' o de sempre ("só quem fecha o mês pode reabrir"). ISTO SUBSTITUI a "consequencia" do
-    ACESSOS-FIN-01 (o gesto acendia para os dois). So' o gesto dentro da OC: a tela Fechamento Área nao consulta a capacidade.
+- ⚠ A META SE LE^; SO' O ADMIN A CRIA OU EDITA — E "REABRIR MÊS…" NA OC E' CAPACIDADE (ACESSOS-FIN-03, Gabriel 06/10/2026, so' tela;
+  SUBSTITUI a parte de meta do ACESSOS-FIN-02, commit 341439e5, que apagava a Meta para o financeiro): "O financeiro tem acesso a
+  tudo. Só a criação da meta — onde eu coloco valor de meta no fluxo de caixa, lançar rebanho, nascimento, morte, área, tudo da
+  meta — por enquanto sou só eu. Nem o dono, nem o financeiro, nem o campo. O campo só vai ver campo. O financeiro pode ver a meta
+  do período no PC-100; ali ele não consegue editar nem mudar nada. Não adianta bloquear tanto assim."
+  · DUAS PERGUNTAS SEPARADAS, NO DONO (`src/v2/lib/acessoTelas.ts`: `podeVerMeta` / `VE_META`, `podeEditarMeta` / `EDITA_META`;
+    ajudantes `usePodeVerMeta()` e `usePodeEditarMeta()` em `usePodeAbrir.ts`). Nenhum `if` de perfil na tela.
+        perfil            ver meta   editar meta
+        admin             S          S
+        gestor_cliente    S          N
+        financeiro        S          N
+        campo             N          N
+        leitura           N          N
+  · VER (as quatro das 16 telas que tem meta): a opcao Meta fica ACESA para quem ve^ — PC-100 (`PainelConsultorTab.tsx`, o
+    alternador Realizado | Meta), Fluxo Caixa (`FinanceiroCaixaTab.tsx`, Realizado | META), DRE (a referencia "Meta" do card
+    `FaixaVisoesPec`; `f_visao=meta` na URL) e Pecuária › Lançamentos (`FinanceiroTab.tsx`, os dois filtros Meta e as linhas de
+    meta). Para quem NAO ve^ (campo, leitura — que hoje nem abrem essas telas): a opcao continua no controle, APAGADA com
+    `MOTIVO_SEM_META` no `title`; quem chega com "meta" gravado cai em Realizado; a linha de meta nao entra na lista.
+  · EDITAR — OS PONTOS DE ESCRITA DE META NAS 16 TELAS (⚠ ENTRADA DO 01F: o banco nao distingue perfil; isto e' so' o que a tela
+    oferece). Para quem nao edita (`usePodeEditarMeta()` falso), o motivo e' `MOTIVO_META_SO_ADMIN` = "meta: só o administrador edita":
+      (1) A GRADE META DO FLUXO CAIXA = a grade do Planejamento (`PlanejamentoFinanceiroTab.tsx`, montada pelo `FinanceiroCaixaTab`
+          no lado META). Abre em LEITURA pelo MESMO modo que o Global ja' tinha (`semEdicao = isGlobal || !editaMeta`): as duas
+          celulas editaveis (`EditableCell`, ajuste e subcentro normal) viram texto; o icone de importar subcentro some com o
+          modo leitura (como no Global); e ficam APAGADOS com o motivo no `title`: Salvar, Projetos (o editor de projetos de
+          investimento), Aprovar (resumo executivo), Parâmetros de Nutrição, Criar Snapshot e Restaurar versão. O motivo fica
+          ESCRITO na barra da grade. Escritores por tras: `usePlanejamentoFinanceiro` (`salvarGrid`, `salvarCelula`,
+          `importarSubcentro`, `salvarVersao`, `restaurarVersao`).
+      (2) A LINHA DE META EM PECUÁRIA › LANÇAMENTOS: o detalhe (`LancamentoDetalhe.tsx`) tinha uma trava `metaLocked` ADORMECIDA
+          (a expressao era sempre falsa); ela voltou a valer lendo o dono. Editar e Apagar ficam APAGADOS com o motivo (nao
+          somem) e o aviso "🔒 Registro META — meta: só o administrador edita." fica escrito. O detalhe abre em leitura.
+      (3) LANÇAR › PECUÁRIA nao oferece o cenario Meta: a rota entrega `cenariosPermitidos={['realizado']}` e o seletor apaga o
+          resto (ja' era assim; preso por teste de fonte).
+      (4) PC-100 e DRE NAO ESCREVEM meta (nenhum insert/update/RPC de escrita nos arquivos).
+      As telas de PLANEJAMENTO seguem FECHADAS a todo nao admin (nenhuma marca `liberadaClientes`).
+    Para o ADMIN nada muda: `semEdicao` volta a ser o Global de sempre, os `title` sao os de antes e a trava do detalhe e' falsa.
+  ⚠ AS TELAS BUSCAM A META MESMO SEM MOSTRAR (hooks de dado intocados): PC-100, DRE e a lista de Pecuária › Lançamentos. 01F.
+  · "REABRIR MÊS…" DENTRO DA OC (`ReabrirMesNaOC`) e' a capacidade `reabrir_mes` de `CAPACIDADES_OC` (ACESSOS-FIN-02, decisao do
+    arquiteto, mantida): gestor S, financeiro N, campo N, leitura N (admin sempre); motivo "só quem fecha o mês pode reabrir". So' o
+    gesto dentro da OC: a tela Fechamento Área nao consulta a capacidade.
   ⚠ MEDIDO, SEM MUDAR — o que o FINANCEIRO consegue dentro do Fechamento Área (`FechamentoTab.tsx`): "Fechar mês" em lote e
     "Reabrir Mês" em lote NAO aparecem para ele (`canEdit('zootecnico') || canEdit('pastos')` do `usePermissions` legado: so' gestor,
     admin e campo — ~:385, ~:980, ~:1026); mas o modal do PASTO (~:1417–1439) entrega salvar itens, fechar o pasto, reabrir o pasto
     (`reabrir_pilar_fechamento`) e copiar o mes anterior SEM passar pelo `canEdit` neste arquivo — o que o modal faz com isso nao
     foi lido. Decisao do Gabriel pendente: o que o financeiro pode no Fechamento Área.
-  ⚠ DIVIDAS: os controles de meta so' tem `title` (o motivo nao esta' escrito ao lado: nao ha' slot nas barras) · PC-100, Fluxo
-    Caixa, DRE e Pecuária › Lançamentos NAO se montam em teste — os pontos sao provados LENDO A FONTE (o card do DRE, montado) ·
-    nada medido no navegador (perfil nao admin nao se prova com o login do admin; os controles ganharam so' atributos, nenhum
-    elemento novo) · `usePermissions` (legado, com `if` de perfil) segue decidindo dentro do Fechamento Área, fora do dono.
+  ⚠ DIVIDAS: nos controles Realizado | Meta e nos gestos da grade o motivo so' esta' no `title` (escrito, so' na barra da grade e no
+    aviso do detalhe) · "Projetos" e "Aprovar" ficaram apagados INTEIROS para quem nao edita (nem a leitura deles abre): abrir em
+    leitura pede olhar os dois modais · PC-100, Fluxo Caixa, DRE, Pecuária › Lançamentos, a grade META e o detalhe do lancamento
+    NAO se montam em teste — provados LENDO A FONTE (o card do DRE, montado) · nada medido no navegador com perfil nao admin · o
+    modal zootecnico (`LancamentoZooModal`) aberto por outro caminho que nao o detalhe nao foi auditado para linha de meta ·
+    `usePermissions` (legado, com `if` de perfil; `canEditMeta = isAdmin`) segue decidindo o cenario Meta do "Lançar › Pecuária" e
+    os gestos do Fechamento Área, fora do dono.
 - ⚠ O QUE FALTA: (a) o EFEITO de 'ver' nas telas (modo somente leitura por perfil) — hoje a funcao devolve o nivel e nenhuma tela o
   usa; no piloto as tres sao 'editar' para gestor e financeiro, e 'ver' para `leitura`, que hoje EDITARIA; (b) a trava no banco, 01F;
   (c) a grade por pessoa, ACESSOS-03; (d) [feito no ACESSOS-02b: o endereco e' "/"].
