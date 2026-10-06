@@ -291,7 +291,9 @@ describe('prova 3 — salvar sem tocar em nada grava o que foi lido', () => {
       natureza: lido.natureza, descricao: lido.descricao, numero_contrato: lido.numero_contrato,
       tipo_financiamento: lido.tipo_financiamento, credor_id: lido.credor_id, conta_bancaria_id: lido.conta_bancaria_id,
       valor_total: lido.valor_total, valor_entrada: lido.valor_entrada, taxa_juros_mensal: lido.taxa_juros_mensal,
-      data_contrato: lido.data_contrato, data_primeira_parcela: lido.data_primeira_parcela, observacao: lido.observacao,
+      /* PARC-LIVRES-01 2A — no PARCELAMENTO o gravador do contrato não leva `data_primeira_parcela`: a data de cada parcela é da
+         grade de parcelas (parcela e lançamento juntos). */
+      data_contrato: lido.data_contrato, observacao: lido.observacao,
       status: lido.status, gerar_lancamento_captacao: lido.gerar_lancamento_captacao,
       plano_conta_captacao_id: lido.plano_conta_captacao_id, plano_conta_parcela_id: lido.plano_conta_parcela_id,
     });
@@ -410,5 +412,53 @@ describe('o aviso do que o Salvar não alcança', () => {
     await salvar();
     expect(espia).toHaveBeenLastCalledWith('Obrigação atualizada');
     espia.mockRestore();
+  });
+});
+
+/* ── PARC-LIVRES-01 passo 2A — o editor de parcela do financiamento não vale no parcelamento ──────────────────────────────── */
+describe('2A — parcelamento não passa pelo editor de parcela nem pelo deslocamento do contrato', () => {
+  const lapis = () => screen.getAllByRole('button', { name: 'Editar parcela' }) as HTMLButtonElement[];
+  const MOTIVO = 'Parcela de parcelamento: o pagamento é pelo lançamento, no Financeiro; data e valor se editam na grade de parcelas.';
+
+  it('parcelamento: o lápis de cada parcela fica APAGADO com o motivo (não some), no detalhe e no diálogo', async () => {
+    montarDetalhe();
+    await screen.findByText('Dados do contrato');
+    await waitFor(() => expect(lapis().length).toBe(2));
+    expect(lapis().map((b) => [b.disabled, b.title])).toEqual([[true, MOTIVO], [true, MOTIVO]]);
+    await abrirEdicao(); await pronto();
+    await irParaAba('Parcelas');
+    /* com o diálogo aberto o fundo fica fora da árvore acessível: estes são os dois lápis DO DIÁLOGO */
+    const todos = lapis();
+    expect(todos.length).toBe(2);
+    expect(todos.every((b) => b.disabled && b.title === MOTIVO)).toBe(true);
+    expect(screen.getByText('No parcelamento a data de cada parcela se edita na grade de parcelas.')).toBeTruthy();
+  });
+
+  it('financiamento com juros: o lápis segue ACESO, com o título de sempre', async () => {
+    banco.contrato = FINANCIAMENTO('financiamento');
+    montarDetalhe();
+    await screen.findByText('Dados do contrato');
+    await waitFor(() => expect(lapis().length).toBe(2));
+    expect(lapis().map((b) => [b.disabled, b.title])).toEqual([[false, 'Editar parcela'], [false, 'Editar parcela']]);
+  });
+
+  it('salvar um parcelamento não escreve em `financiamento_parcelas` nem leva `data_primeira_parcela` (a fonte prende o desvio)', async () => {
+    montarDetalhe();
+    await abrirEdicao(); await pronto();
+    fireEvent.change(campoDescricao(), { target: { value: 'Outra descrição' } });
+    await salvar();
+    expect(banco.updates.filter((u) => u.tabela === 'financiamento_parcelas')).toEqual([]);
+    expect('data_primeira_parcela' in updatesDoContrato()[0].payload).toBe(false);
+    const fonte = readFileSync(resolve(__dirname, '../../pages/FinanciamentoDetalhe.tsx'), 'utf8');
+    expect(fonte).toContain("if (form.natureza !== 'parcelamento' && dataAntiga && dataNova && dataAntiga !== dataNova) {");
+    expect(fonte).toContain("...(form.natureza === 'parcelamento' ? {} : { data_primeira_parcela: form.data_primeira_parcela || null }),");
+  });
+
+  it('financiamento: o gravador do contrato continua levando `data_primeira_parcela`', async () => {
+    banco.contrato = FINANCIAMENTO('financiamento');
+    montarDetalhe();
+    await abrirEdicao(); await pronto();
+    await salvar();
+    expect('data_primeira_parcela' in updatesDoContrato()[0].payload).toBe(true);
   });
 });

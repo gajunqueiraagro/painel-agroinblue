@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 06/10/2026 (PARC-LIVRES-01 passo 1, +33: `src/lib/financiamentos/parcelasLivres.test.ts` 17,
+  Baseline em 06/10/2026 (PARC-LIVRES-01 passo 2A, +4 em `src/components/financiamentos/obrigacaoEdicao.test.tsx` — 4301 depois dele; antes o
+  PARC-LIVRES-01 passo 1, +33: `src/lib/financiamentos/parcelasLivres.test.ts` 17,
   `src/components/financiamentos/gradeDeParcelas.test.tsx` 13, `src/components/financeiro-v2/novoDeXml.test.tsx` 3 — 4297 depois dele; antes o
   PARC-LIVRES-01 passo 0, +1 em `src/lib/pdf/cpr/exportCpr.test.tsx` — 4264 depois dele; antes o
   CONC-SEM-CLASSIFICACAO-01 tela, +32: `src/lib/conciliacao/semClassificacao.test.ts` 12,
@@ -223,7 +224,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4297
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4301
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3106,6 +3107,33 @@ docs/historico/frentes-ate-2026-09-29.md.)
   ⚠ DIVIDAS: PARC-LIVRES-FREQUENCIA-ROTULO-01 (na tela de Parcelamentos o seletor diz "Igual todo mês" tambem com frequencia
     bimestral/anual) · o rodape de totais mede 21px (declarado 20) · o resumo lateral do `ObrigacaoDialog` segue rolando por
     dentro (368 de 447, anterior a este PR) · a costura clara de 1px entre "#" e "Vencimento" no cabecalho navy (subpixel).
+- ⚠ PARCELAMENTO TEM UM ESCRITOR SO' DOS SEUS LANCAMENTOS; O MOTOR DO FINANCIAMENTO NAO ENTRA NELE (PARC-LIVRES-01 passo 2A, Gabriel
+  06/10/2026; migration 20261027194100, ⚠ registrada como 20261006234925; ledger = arquivo, md5 8845ff67…; patch guardado por md5:
+  `fn_reconciliar_parcela_financiamento` 7af8dbfb… -> d8063b41…, `fn_financiamento_pagar_pelo_extrato` 3a642f9f… -> 34d5a1e8…).
+  · O DEFEITO (NJ, "Protocolo IATF", 06/10 23:29 UTC): o lapis da parcela (`ModalBaixaParcela`) chama o motor do financiamento. O
+    lancamento que `fn_parcelamento_cadastrar` cria nasce com `origem_lancamento` NULO; o motor so' reconhece
+    'parcela_financiamento', tratava-o como "origem invalida", CANCELAVA-o e CRIAVA outro — "Parcela i/N Descricao", status derivado
+    da parcela (vencida = previsto), sem safra, sem forma e sem documento (que ficou no cancelado), com o 🏦 na lista (o icone le'
+    `origem_lancamento = 'parcela_financiamento'`, `FinanceiroV2Tab.tsx`). ⚠ NAO ERA "REESCRITA": era cancelar + criar.
+    E o gravador do contrato (`saveEdit`, `FinanciamentoDetalhe.tsx`), ao mudar a "1ª parcela", deslocava SO' `financiamento_parcelas`:
+    parcela e lancamento ficavam com datas diferentes.
+  · O CONSERTO: (1) o motor devolve `{skip: 'parcelamento_tem_escritor_proprio'}` para contrato de natureza 'parcelamento', antes
+    de qualquer leitura ou escrita de lancamento; financiamento e emprestimo: saida do `p_dry_run` IDENTICA em 547 parcelas, antes x
+    depois na mesma transacao; (2) `fn_financiamento_pagar_pelo_extrato` RECUSA parcela de parcelamento, tambem na simulacao
+    ("Parcela de parcelamento se paga pelo lançamento dela: …"; 0 usos ate' hoje — ele trocava o valor da parcela pelo do
+    extrato); (3) tela: no parcelamento o lapis da parcela fica APAGADO com o motivo (`MOTIVO_PARCELA_DE_PARCELAMENTO`,
+    `valorDasParcelas.ts`) no detalhe e no dialogo, a "1ª parcela" fica em leitura na edicao, e o `saveEdit` nao desloca parcelas
+    nem leva `data_primeira_parcela`. Financiamento e emprestimo: fotos do dialogo identicas.
+  · MEDIDO (06/10): so' UM contrato real foi desfigurado (NJ, 5 lancamentos; os 5 originais cancelados tinham safra, Boleto e
+    documento); o Teste tem 6 de ensaios antigos. 16 parcelamentos no total (NJ 12, Vera 4) + 2 no Teste.
+  · REPARO DO "PROTOCOLO IATF": `docs/investigacao/parc-livres-01-2a-reparo-protocolo-iatf.sql` — ENSAIO REVERTIDO, NAO EXECUTADO
+    (os originais voltam a valer com o vencimento corrigido, os do motor sao cancelados pelo dono, parcela = lancamento). Aguarda OK.
+  Teste: `supabase/tests/parc_livres_01_2a_test.sql` (T1–T4; no corpo antigo cai em T1 com 'cancelar_lanc_atual'); 5 mutacoes de tela mortas.
+  ⚠ ENTRE O 2A E O 2B/4 a parcela de parcelamento NAO se edita nem se paga pela tela do contrato (lapis apagado): paga-se pelo
+    lancamento no Financeiro; a grade de edicao e' o passo 2B e a leitura da situacao pelo lancamento, o passo 4.
+  ⚠ PARCELAS EM DOBRO NO NJ (proposta, nada alterado): o contrato tem 5 parcelas e a mesma obrigacao (doc 249220, 5 x 14.553,94) ja'
+    tinha a 1ª paga pelo banco (c6a665f9, conciliada em 14/09) e a 2ª vinda da planilha (322f7467, "Parcela 2 - None", 12/10).
+  ⚠ NAO PROVADO NO NAVEGADOR: o lapis apagado e a "1ª parcela" em leitura (so' por teste).
 - ⚠ A CONTA DIRETO NO CAMPO DE VALOR TEM UM DONO, E GUARDA-SE SO' O RESULTADO (FIN-VALOR-CALC-01a, Gabriel 05/10/2026, so' tela).
   Ele lanca rateios (o cliente manda o valor cheio, o lancamento e' uma parte): digita "16.238,00/2" no campo e fica o
   resultado; a conta NAO vai para observacao nem para lugar nenhum.

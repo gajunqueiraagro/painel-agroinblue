@@ -7,6 +7,14 @@
  * ⚠ PURO: não lê banco, não conhece React. Quem busca os lançamentos é o diálogo.
  */
 export const VARIA_ENTRE_AS_PARCELAS = 'varia entre as parcelas';
+/**
+ * PARC-LIVRES-01 passo 2A — a parcela de PARCELAMENTO não passa pelo editor de parcela do financiamento: ele chamava o motor
+ * do financiamento, que cancelava o lançamento da parcela e criava outro (sem safra, forma e documento).
+ */
+export const MOTIVO_PARCELA_DE_PARCELAMENTO = 'Parcela de parcelamento: o pagamento é pelo lançamento, no Financeiro; data e valor se editam na grade de parcelas.';
+/** A 1ª parcela do parcelamento é a da lista de parcelas — mudar a data aqui deslocava só as parcelas, não os lançamentos. */
+export const MOTIVO_PRIMEIRA_PARCELA_DO_PARCELAMENTO = 'No parcelamento a data de cada parcela se edita na grade de parcelas.';
+
 export const MOTIVO_VALE_POR_PARCELA = 'Vale por parcela. A alteração em todas as parcelas chega na próxima etapa.';
 
 export type ValorDasParcelas =

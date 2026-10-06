@@ -20,6 +20,7 @@ import {
   SUBCENTRO_AMORTIZACAO, SUBCENTRO_JUROS, NOME_NATUREZA, PILULA_NATUREZA,
 } from '@/components/financiamentos/ObrigacaoDialog';
 import { FinanciamentoForm } from '@/hooks/useFinanciamentoCadastro';
+import { MOTIVO_PARCELA_DE_PARCELAMENTO } from '@/lib/financiamentos/valorDasParcelas';
 
 const fmt = (v: number) =>
   v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -136,7 +137,8 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
         valor_entrada: form.valor_entrada,
         taxa_juros_mensal: Math.round(taxaMensal * 10000) / 10000,
         data_contrato: form.data_contrato,
-        data_primeira_parcela: form.data_primeira_parcela || null,
+        /* no parcelamento a 1ª parcela é a da lista: este gravador não a troca (o campo fica em leitura) */
+        ...(form.natureza === 'parcelamento' ? {} : { data_primeira_parcela: form.data_primeira_parcela || null }),
         observacao: form.observacao || null,
         /* A situacao do contrato volta a ser editavel — o seletor mora na aba Contrato do
            ObrigacaoDialog, so' em modo editar, e chega aqui por `extras` porque nao e' campo
@@ -165,7 +167,10 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
        e o dia do mes acompanha o que o operador escolheu. */
     const dataAntiga: string | null = fin?.data_primeira_parcela ?? null;
     const dataNova = form.data_primeira_parcela || null;
-    if (dataAntiga && dataNova && dataAntiga !== dataNova) {
+    /* PARC-LIVRES-01 2A — NO PARCELAMENTO NAO SE DESLOCA: este laço move só `financiamento_parcelas`, e o lançamento de cada
+       parcela ficava com a data de antes (parcela e lançamento divergiam). A data de cada parcela se edita na grade de parcelas,
+       que grava parcela e lançamento juntos. Financiamento e empréstimo: como sempre. */
+    if (form.natureza !== 'parcelamento' && dataAntiga && dataNova && dataAntiga !== dataNova) {
       const MS_DIA = 86400000;
       const deltaDias = Math.round(
         (new Date(dataNova + 'T12:00:00').getTime() - new Date(dataAntiga + 'T12:00:00').getTime()) / MS_DIA,
@@ -626,7 +631,10 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
                             PR-PARC-04b fixou na lista: `py-0` na celula faz o filho mais
                             alto mandar na altura de TODAS as linhas. */}
                         <Button variant="ghost" size="icon" className="h-5 w-5 p-0"
-                          onClick={() => setParcelaEdit(p)} title="Editar parcela" aria-label="Editar parcela">
+                          onClick={() => setParcelaEdit(p)}
+                          /* PARC-LIVRES-01 2A — em parcelamento o editor de parcela não vale: ele chama o motor do financiamento. */
+                          disabled={ehParcelamento}
+                          title={ehParcelamento ? MOTIVO_PARCELA_DE_PARCELAMENTO : 'Editar parcela'} aria-label="Editar parcela">
                           <Pencil className="size-3.5" />
                         </Button>
                       </TableCell>

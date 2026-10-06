@@ -22,7 +22,9 @@ import { useCulturasDaSafra } from '@/hooks/useAreaPlantada';
 import { FORMAS_PAGAMENTO_V2, FORMA_PAGAMENTO_V2_NENHUMA } from '@/lib/financeiro/formasPagamentoV2';
 import { ehSubcentroAdministrativo } from '@/lib/financeiro/escopoDoSubcentro';
 import { CULTURAS_LANCAMENTO, FASES } from '@/lib/agri/rateioLancamento';
-import { MOTIVO_VALE_POR_PARCELA, textoDasParcelas, valorComumDasParcelas } from '@/lib/financiamentos/valorDasParcelas';
+import {
+  MOTIVO_PARCELA_DE_PARCELAMENTO, MOTIVO_PRIMEIRA_PARCELA_DO_PARCELAMENTO, MOTIVO_VALE_POR_PARCELA, textoDasParcelas, valorComumDasParcelas,
+} from '@/lib/financiamentos/valorDasParcelas';
 import ModalBaixaParcela from '@/components/financiamentos/ModalBaixaParcela';
 import { TableFooter } from '@/components/ui/table';
 import { Pencil } from 'lucide-react';
@@ -1029,7 +1031,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                     <div>
                       <Label className={ROTULO}>1ª parcela *</Label>
                       <DatePicker value={form.data_primeira_parcela} onChange={v => set('data_primeira_parcela', v)}
-                        disabled={livresAbertas} />
+                        disabled={livresAbertas || (ehEdicao && ehParcelamento)} />
                       {/* ⚠ EDITAVEL, E COM CONSEQUENCIA ESCRITA. Mudar a 1a parcela DESLOCA
                           os vencimentos das pendentes pelo mesmo numero de dias — quem
                           renegocia a data de entrada espera que o resto ande junto. As PAGAS
@@ -1037,7 +1039,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                           seria mentir sobre um fato. O deslocamento roda no gravador. */}
                       {ehEdicao && (
                         <p className="mt-0.5 text-[10px] text-amber-600 dark:text-amber-500">
-                          Move os vencimentos das parcelas pendentes; as pagas não mudam.
+                          {ehParcelamento ? MOTIVO_PRIMEIRA_PARCELA_DO_PARCELAMENTO : 'Move os vencimentos das parcelas pendentes; as pagas não mudam.'}
                         </p>
                       )}
                     </div>
@@ -1180,7 +1182,10 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                                 <TableCell className="px-0 text-right select-none">
                                   <Button variant="ghost" size="icon" className="h-5 w-5 p-0"
                                     onClick={() => setParcelaEdit(pg)}
-                                    title="Editar parcela" aria-label="Editar parcela">
+                                    /* PARC-LIVRES-01 2A — o editor de parcela chama o motor do financiamento; em parcelamento ele
+                                       cancelava o lançamento e criava outro. Apagado com o motivo, nunca escondido. */
+                                    disabled={ehParcelamento}
+                                    title={ehParcelamento ? MOTIVO_PARCELA_DE_PARCELAMENTO : 'Editar parcela'} aria-label="Editar parcela">
                                     <Pencil className="size-3.5" />
                                   </Button>
                                 </TableCell>
