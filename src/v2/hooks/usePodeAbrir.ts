@@ -19,6 +19,18 @@ export function usePodeAbrir(tela: V2Section): boolean {
   return nivelDaTela(clienteAtual?.perfil ?? null, isAdmin, tela) !== 'nao';
 }
 
+/**
+ * A PESSOA PODE ABRIR UMA ROTA FORA DO V2? — ACESSOS-FIN-01. As rotas fora do `V2Index` (`/caderno-importacao`, `/v3`,
+ * `/layout-lab`, `/resumo-operacional`) nao sao `V2Section`: quem as guarda e' o `SoAdmin` (`src/AppRouter.tsx`), e a regra dele
+ * e' so' "admin do AGROinBLUE". Este ajudante e' o ESPELHO DECLARADO dessa guarda, para quem desenha o ATALHO: o cartao
+ * "Movimentações por foto" de "Lançar movimentação" levava quem nao e' admin a "/" sem dizer nada.
+ * ⚠ Quem mudar a regra do `SoAdmin` muda esta junto (preso por teste de fonte, `acessoSaidas.test.tsx`).
+ */
+export function usePodeAbrirRotaSoAdmin(): boolean {
+  const { isAdmin } = useCliente();
+  return isAdmin;
+}
+
 /** A tela pela qual se abre e se altera uma operacao comercial — a MESMA que os atalhos do ACESSOS-02b consultam. Desde o
  *  ACESSOS-OC-01 e' a tela PROPRIA da operacao (`operacao-comercial`), nao mais a de lancamentos do rebanho. */
 export const TELA_DA_OPERACAO: V2Section = TELA_OPERACAO_COMERCIAL;

@@ -6,7 +6,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { render, screen, fireEvent, renderHook } from '@testing-library/react';
-import { usePodeAbrir, TELA_DA_OPERACAO } from '@/v2/hooks/usePodeAbrir';
+import { usePodeAbrir, usePodeAbrirRotaSoAdmin, TELA_DA_OPERACAO } from '@/v2/hooks/usePodeAbrir';
 import { CelulaOC } from '@/components/financeiro-v2/SecaoSemCaixa';
 import { RodapeCancelamento } from '@/components/financeiro-v2/RodapeCancelamento';
 
@@ -19,24 +19,40 @@ beforeEach(() => como('financeiro'));
 
 describe('usePodeAbrir — so consulta o dono', () => {
   const pode = (tela: Parameters<typeof usePodeAbrir>[0]) => renderHook(() => usePodeAbrir(tela)).result.current;
-  it('financeiro: abre as tres do piloto e, desde o ACESSOS-OC-03a, a lista e a tela da OC; NAO abre a tela do rebanho nem Financiamentos', () => {
+  it('financeiro: abre as tres do piloto, a lista e a tela da OC e, desde o ACESSOS-FIN-01, "Lançar › Pecuária" e Financiamentos; NAO abre as vizinhas sem a marca', () => {
     expect(pode('financeiro-lanc')).toBe(true);
     expect(pode('conciliacao')).toBe(true);
     expect(pode('contas-a-pagar-receber')).toBe(true);
-    expect(pode('lancamentos-zoot')).toBe(false);
+    expect(pode('lancamentos-zoot')).toBe(true);
     expect(pode(TELA_DA_OPERACAO)).toBe(true);
     expect(pode('operacoes-comerciais')).toBe(true);
-    expect(pode('financiamentos')).toBe(false);
+    expect(pode('financiamentos')).toBe(true);
+    expect(pode('fechamento')).toBe(true);
+    /* os destinos das saidas tratadas no ACESSOS-FIN-01: nenhum e' dele */
+    for (const t of ['chuvas-lancamento', 'conferencia-mensal', 'mapa-pastos', 'home', 'financeiro-dashboard', 'rateio-adm', 'importacao-extratos'] as const) {
+      expect(`${t}:${pode(t)}`).toBe(`${t}:false`);
+    }
     /* quem segue de fora da OC: leitura e campo */
     for (const p of ['leitura', 'campo']) { como(p); expect(pode(TELA_DA_OPERACAO)).toBe(false); expect(pode('operacoes-comerciais')).toBe(false); }
   });
-  it('gestor (ACESSOS-OC-01): abre a lista e a tela propria da OC — os atalhos do 02b voltam para ele; a tela do rebanho segue fechada', () => {
+  it('gestor: abre a lista e a tela propria da OC (ACESSOS-OC-01) e, desde o ACESSOS-FIN-01, "Lançar › Pecuária" e Financiamentos; as vizinhas sem a marca seguem fechadas', () => {
     como('gestor_cliente');
     expect(TELA_DA_OPERACAO).toBe('operacao-comercial');
     expect(pode(TELA_DA_OPERACAO)).toBe(true);
     expect(pode('operacoes-comerciais')).toBe(true);
-    expect(pode('lancamentos-zoot')).toBe(false);
-    expect(pode('financiamentos')).toBe(false);
+    expect(pode('lancamentos-zoot')).toBe(true);
+    expect(pode('financiamentos')).toBe(true);
+    for (const t of ['chuvas-lancamento', 'conferencia-mensal', 'mapa-pastos', 'home'] as const) expect(`${t}:${pode(t)}`).toBe(`${t}:false`);
+  });
+  it('rota fora do V2 (`/caderno-importacao`): so o admin — o espelho declarado do `SoAdmin`', () => {
+    const podeRota = () => renderHook(() => usePodeAbrirRotaSoAdmin()).result.current;
+    for (const p of ['financeiro', 'gestor_cliente', 'campo', 'leitura', null]) { como(p); expect(`${p}:${podeRota()}`).toBe(`${p}:false`); }
+    como('admin_agroinblue', true);
+    expect(podeRota()).toBe(true);
+    /* a guarda que ele espelha: a mesma condicao, e a rota do caderno dentro dela */
+    const rotas = readFileSync('src/AppRouter.tsx', 'utf8');
+    expect(rotas).toContain('return isAdmin ? <>{children}</> : <Navigate to="/" replace />;');
+    expect(rotas).toContain('<Route path="/caderno-importacao" element={<SoAdmin><CadernoImportTab /></SoAdmin>} />');
   });
   it('admin: abre tudo; perfil nulo: nada', () => {
     como('admin_agroinblue', true);
@@ -128,5 +144,40 @@ describe('o modal do lancamento (LancamentoV2Dialog, lido da FONTE)', () => {
     expect(modal).toContain('onAbrirOC={podeAbrirOC ? (opId, tipo) => {');
     expect(modal).toContain('parteOCLida && podeAbrirOC && podeCriarOCDoLegado(lancamento, !!parteOCViva) && (');
     expect(modal).toContain('onAbrirOperacao={!podeAbrirOC ? undefined : (ocId, tipo) => {');
+  });
+});
+
+/* ═══ ACESSOS-FIN-01 — as saidas das telas que passaram a ser do gestor e do financeiro ═══════════════════════════════════ */
+describe('ACESSOS-FIN-01 — as saidas das telas liberadas (V2Index, lido da FONTE): um caso por ponto', () => {
+  const rota = fonte('src/v2/V2Index.tsx');
+  it('o dono e consultado num lugar so, e nenhum `if` de perfil entra na rota', () => {
+    expect(rota).toContain("const podeAbrirTela = (s: V2Section): boolean => nivelDaTela(perfilAcesso, isAdmin, s) !== 'nao';");
+    expect(rota).not.toMatch(/perfil === '|perfilAcesso ===|=== 'financeiro'|=== 'gestor_cliente'/);
+  });
+  it('"Lançar movimentação": o cartao "Movimentações por foto" (rota so do admin) so se desenha para quem a abre', () => {
+    expect(rota).toContain('const podeAbrirCaderno = usePodeAbrirRotaSoAdmin();');
+    expect(rota).toContain(`{podeAbrirCaderno && ( <button type="button" data-testid="atalho-caderno-importacao" onClick={() => navigate('/caderno-importacao', { state: { from: 'v2-lancamentos-zoot' } })}`);
+    /* um caminho so' para o caderno nesta tela */
+    expect(rota.match(/navigate\('\/caderno-importacao'/g)).toHaveLength(1);
+  });
+  it('"Lançar movimentação": o cartao Chuvas so recebe o callback com a tela de destino — e sem callback o cartao nao existe (LancamentosTab)', () => {
+    expect(rota).toContain("onNavegarChuvas={podeAbrirTela('chuvas-lancamento') ? () => setSection('chuvas-lancamento') : undefined}");
+    expect(fonte('src/pages/LancamentosTab.tsx')).toContain(".filter(it => !it.navOnly || (it.value === 'chuvas' && !!onNavegarChuvas))");
+  });
+  it('"Fechamento Área": "Conferência do GMD" e "Mapa de Pastos" so recebem o callback com a tela de destino — e sem callback o botao nao existe (FechamentoTab)', () => {
+    expect(rota).toContain("onNavigateToConferenciaGmd={podeAbrirTela('conferencia-mensal') ? (filtro) => {");
+    expect(rota).toContain("onNavigateToMapaPastos={podeAbrirTela('mapa-pastos') ? (filtro) => {");
+    const fech = fonte('src/pages/FechamentoTab.tsx');
+    expect(fech).toContain('{onNavigateToConferenciaGmd && ( <Button');
+    expect(fech).toContain('{onNavigateToMapaPastos && ( <Button');
+    /* os outros dois destinos do Fechamento sao telas dele: ficam */
+    expect(rota).toContain("onNavigateToValorRebanho={(filtro) => {");
+    expect(rota).toContain("onNavigateToReclass={(filtro) => {");
+  });
+  it('PC-100: a seta de voltar leva a Visão Geral e so existe para quem a tem', () => {
+    expect(rota).toContain("onBack={podeAbrirTela('home') ? () => setSection('home') : undefined}");
+    const pc = fonte('src/pages/PainelConsultorTab.tsx');
+    expect(pc).toContain('onBack?: () => void;');
+    expect(pc).toContain('{onBack && ( <Button variant="ghost" size="icon" onClick={onBack} className="h-7 w-7" data-testid="pc100-voltar">');
   });
 });

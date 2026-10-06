@@ -17,6 +17,7 @@ import { AnaliseOperacionalTab } from '@/pages/AnaliseOperacionalTab';
 import { PrecoMercadoTab } from '@/pages/PrecoMercadoTab';
 import V2NaoEncontrada from '@/v2/pages/V2NaoEncontrada';
 import V2SemAcesso from '@/v2/pages/V2SemAcesso';
+import { usePodeAbrirRotaSoAdmin } from '@/v2/hooks/usePodeAbrir';
 import { nivelDaTela, primeiraTelaPermitida } from '@/v2/lib/acessoTelas';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
@@ -233,6 +234,9 @@ function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEd
   }, [lancamentos, isGlobal]);
 
   const mostrarCardsIA = cenarioInicial !== 'meta';
+  /* ACESSOS-FIN-01 — "Movimentações por foto" leva a `/caderno-importacao`, rota so' do admin (`SoAdmin`): atalho para onde a
+     pessoa nao entra nao e' oferecido. */
+  const podeAbrirCaderno = usePodeAbrirRotaSoAdmin();
 
   return (
     <div className="w-full">
@@ -289,8 +293,10 @@ function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEd
            LancamentosTab com o mesmo respiro. Sao dois arquivos, uma tela so. */
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 px-4 pt-3 pb-[18px]">
           {/* Card 1: Movimentações por Foto — navega para /caderno-importacao */}
+          {podeAbrirCaderno && (
           <button
             type="button"
+            data-testid="atalho-caderno-importacao"
             onClick={() => navigate('/caderno-importacao', { state: { from: 'v2-lancamentos-zoot' } })}
             aria-label="Movimentações por foto — extração automática via foto do caderno"
             title="Extração automática via foto do caderno do peão"
@@ -299,6 +305,7 @@ function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEd
             <Camera className="h-[15px] w-[15px] shrink-0 text-amber-700 dark:text-amber-400" />
             <span className="min-w-0 truncate text-[11px] font-medium text-foreground">Movimentações por foto</span>
           </button>
+          )}
 
           {/* Card 2: Rebanho em Pastos por Foto — placeholder; handler real ainda aguarda confirmação */}
           <button
@@ -364,6 +371,14 @@ function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEd
 /* ACESSOS-OC-02 — onde nasce uma OC NOVA. Pedida pelos cards de "Lançar movimentação", fica la' (o card abre o modal na mesma
    tela, como sempre: nada muda para o admin); pedida de qualquer outro lugar (os botoes da lista de Operações Comerciais), abre
    na tela propria da operacao, que a abre sozinha pelo tipo na URL. */
+/** A faixa "Financeiro" do desktop (dashboard, fluxo, rateio, importacao). Lista num lugar so': a rota a filtra pelo acesso. */
+const SUBNAV_FINANCEIRO: ReadonlyArray<{ id: V2Section; label: string }> = [
+  { id: 'financeiro-dashboard', label: 'Dashboard' },
+  { id: 'fluxo-caixa',          label: 'Fluxo de Caixa' },
+  { id: 'rateio-adm',            label: 'Rateio ADM' },
+  { id: 'importacao-extratos',   label: 'Importação' },
+];
+
 function telaDaOCNova(origem: V2Section): V2Section {
   return origem === 'lancamentos-zoot' ? 'lancamentos-zoot' : TELA_OPERACAO_COMERCIAL;
 }
@@ -821,6 +836,9 @@ export default function V2Index() {
      o cliente carregar, entao perfil e `isAdmin` ja' sao os de verdade aqui. Para o admin, nada muda. */
   const perfilAcesso = clienteAtual?.perfil ?? null;
   const semAcesso = nivelDaTela(perfilAcesso, isAdmin, section) === 'nao';
+  /* ACESSOS-FIN-01 — ATALHO PARA TELA SEM ACESSO NAO E' OFERECIDO (a regra do 02b), agora tambem nas saidas que esta rota entrega
+     por prop as telas liberadas: a tela so' desenha o botao quando recebe o callback, e quem decide se recebe e' o dono. */
+  const podeAbrirTela = (s: V2Section): boolean => nivelDaTela(perfilAcesso, isAdmin, s) !== 'nao';
   const primeiraPermitida = primeiraTelaPermitida(perfilAcesso, isAdmin);
   /* A TELA INICIAL de quem nao tem a Visão Geral: ao entrar e ao trocar de cliente, quem esta' na 'home' cai na primeira tela
      permitida na ordem do menu (no piloto, Lançamentos Financeiros). ⚠ SO' A 'home' E' TROCADA: quem chegou a OUTRA tela sem
@@ -910,7 +928,8 @@ export default function V2Index() {
     }
     if (section === 'painel-consultor') return (
       <PainelConsultorTab
-        onBack={() => setSection('home')}
+        /* ACESSOS-FIN-01 — a seta leva a' Visão Geral: sem ela, a seta some (e nao cai calada em outra tela). */
+        onBack={podeAbrirTela('home') ? () => setSection('home') : undefined}
         filtroGlobal={{ ano, mes: parseInt(mes) || new Date().getMonth() + 1 }}
         onPeriodoChange={(a, m) => { setAno(a); setMes(String(m)); }}
       />
@@ -1185,7 +1204,8 @@ export default function V2Index() {
           limparEdicaoAvancada();
           setSection('conferencia-lancamentos');
         }}
-        onNavegarChuvas={() => setSection('chuvas-lancamento')}
+        /* ACESSOS-FIN-01 — o cartao "Chuvas" so' existe com o callback (`itensVisiveis`, LancamentosTab): sem a tela, sem cartao. */
+        onNavegarChuvas={podeAbrirTela('chuvas-lancamento') ? () => setSection('chuvas-lancamento') : undefined}
         onNavegarMapaRebanho={() => {
           // Mesma estratégia do hub legado LancarZooHubTab:
           // seta flag em sessionStorage, FechamentoTab abre o modal ao montar.
@@ -1279,17 +1299,19 @@ export default function V2Index() {
           setMes(String(filtro.mes));
           setSection('valor-rebanho');
         }}
-        onNavigateToConferenciaGmd={(filtro) => {
+        /* ACESSOS-FIN-01 — "Conferência do GMD" e "Mapa de Pastos" so' se desenham com o callback (FechamentoTab): sem a tela de
+           destino, sem botao. */
+        onNavigateToConferenciaGmd={podeAbrirTela('conferencia-mensal') ? (filtro) => {
           setAno(filtro.ano);
           setMes(String(filtro.mes));
           setSection('conferencia-mensal');
-        }}
-        onNavigateToMapaPastos={(filtro) => {
+        } : undefined}
+        onNavigateToMapaPastos={podeAbrirTela('mapa-pastos') ? (filtro) => {
           setAno(filtro.ano);
           setMes(String(filtro.mes));
           mapaPastosOriginRef.current = true;
           setSection('mapa-pastos');
-        }}
+        } : undefined}
       />
     );
     if (section === 'evolucao-categoria') return (
@@ -1565,15 +1587,14 @@ export default function V2Index() {
           })()} />
 
         {/* SUB-NAV FINANCEIRO — desktop apenas */}
-        {!semAcesso && ['financeiro-dashboard', 'fluxo-caixa', 'rateio-adm', 'importacao-extratos'].includes(section) && (
-          <div className="hidden md:flex shrink-0 items-center gap-1 px-4 py-1.5 border-b border-border bg-background">
+        {/* ACESSOS-FIN-01 — "Fluxo Caixa" passou a ser tela liberada, e a faixa oferecia tres vizinhas que nao sao: so' entram as
+            telas que a pessoa abre (`SUBNAV_FINANCEIRO.filter`), e sobrando so' a propria a faixa some — a regra do atalho de
+            Producao. Para o admin, as quatro de sempre. */}
+        {!semAcesso && SUBNAV_FINANCEIRO.some((o) => o.id === section)
+          && SUBNAV_FINANCEIRO.filter((o) => podeAbrirTela(o.id)).length > 1 && (
+          <div className="hidden md:flex shrink-0 items-center gap-1 px-4 py-1.5 border-b border-border bg-background" data-testid="subnav-financeiro">
             <span className="text-[11px] font-bold text-foreground mr-2">Financeiro</span>
-            {([
-              { id: 'financeiro-dashboard', label: 'Dashboard' },
-              { id: 'fluxo-caixa',          label: 'Fluxo de Caixa' },
-              { id: 'rateio-adm',            label: 'Rateio ADM' },
-              { id: 'importacao-extratos',   label: 'Importação' },
-            ] as const).map(({ id, label }) => (
+            {SUBNAV_FINANCEIRO.filter((o) => podeAbrirTela(o.id)).map(({ id, label }) => (
               <button
                 key={id}
                 onClick={() => setSection(id)}

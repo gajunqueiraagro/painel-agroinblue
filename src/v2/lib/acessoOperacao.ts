@@ -6,13 +6,18 @@
  * (`LancamentosTab`) le' as capacidades uma vez (`useAcessoOperacao`) e as desce por prop aos shells e as abas.
  *
  * O MODELO: O COMBINADO x O QUE ACONTECEU.
- *   · A NEGOCIACAO (lote: categoria, quantidade, peso, preco; incluir e excluir lote) e' o COMBINADO. O financeiro o edita — e
- *     por isso CRIA a OC inteira — enquanto NENHUM gado se moveu naquela OC.
- *   · A ENTREGA / O RECEBIMENTO e' o que ACONTECEU, e move rebanho: so' o gestor.
- *   · Depois do primeiro movimento, o combinado fisico (quantidade, peso, categoria, lixeira, incluir lote) fecha para o
- *     financeiro; o preco segue aberto.
+ *   · A NEGOCIACAO (lote: categoria, quantidade, peso, preco; incluir e excluir lote) e' o COMBINADO.
+ *   · A ENTREGA / O RECEBIMENTO e' o que ACONTECEU, e move rebanho.
+ *   · Depois do primeiro movimento, o combinado fisico (quantidade, peso, categoria, lixeira, incluir lote) so' segue aberto
+ *     para quem tem 'negociar_apos_movimento'; o preco segue aberto.
  * "HOUVE MOVIMENTO?" E' FATO DA OC, NAO CAPACIDADE: `ocTemGadoMovido`, lida do que a tela ja' tem carregado. O ponto de uso
  * combina as duas.
+ *
+ * ⚠ ACESSOS-FIN-01 (Gabriel, 06/10/2026) REVERTE A DECISAO DE 05/10 (ACESSOS-OC-03a): "O financeiro tem um acesso mais completo
+ *   do sistema. O bloqueio maior tem que ser com o campo." O financeiro passou a REGISTRAR entrega e recebimento de gado
+ *   ('movimentar_gado'), a alterar quantidade, peso, categoria e lotes depois do movimento ('negociar_apos_movimento') e a
+ *   reabrir depois dele ('reabrir_apos_movimento'). Foram TRES celulas; o mecanismo (trava do fisico, Entrega em leitura,
+ *   Reabrir apagado) continua no codigo e hoje nenhum perfil que abre a OC cai nele. Abate e boitel seguem fechados para ele.
  *
  * ⚠ E' O QUE A TELA OFERECE, NAO A TRAVA: a gravacao por perfil e' do banco (01F). `oc_salvar_lotes` manda o lote inteiro.
  * ⚠ ARQUIVO IRMAO de `acessoTelas.ts`, e nao dentro dele: aquele e' o dono de TELA (menu e rota) e ja' tem 130 linhas; este e' o
@@ -55,11 +60,11 @@ export const CAPACIDADES_OC: Record<CapacidadeOC, Record<PerfilCliente, boolean>
   criar:                   { gestor_cliente: S, financeiro: S, campo: N, leitura: N },
   negociar_preco:          { gestor_cliente: S, financeiro: S, campo: N, leitura: N },
   negociar_combinado:      { gestor_cliente: S, financeiro: S, campo: N, leitura: N },
-  negociar_apos_movimento: { gestor_cliente: S, financeiro: N, campo: N, leitura: N },
+  negociar_apos_movimento: { gestor_cliente: S, financeiro: S, campo: N, leitura: N },
   negociar_abate_boitel:   { gestor_cliente: S, financeiro: N, campo: N, leitura: N },
-  movimentar_gado:         { gestor_cliente: S, financeiro: N, campo: N, leitura: N },
+  movimentar_gado:         { gestor_cliente: S, financeiro: S, campo: N, leitura: N },
   concluir_negociacao:     { gestor_cliente: S, financeiro: S, campo: N, leitura: N },
-  reabrir_apos_movimento:  { gestor_cliente: S, financeiro: N, campo: N, leitura: N },
+  reabrir_apos_movimento:  { gestor_cliente: S, financeiro: S, campo: N, leitura: N },
   lancar_realizado_boitel: { gestor_cliente: S, financeiro: N, campo: N, leitura: N },
   atualizar_entregas:      { gestor_cliente: S, financeiro: S, campo: N, leitura: N },
   excluir_definitivo:      { gestor_cliente: N, financeiro: N, campo: N, leitura: N },
@@ -105,10 +110,11 @@ export function ocTemGadoMovido(movimentacoes: ReadonlyArray<{ cancelado?: boole
   return (movimentacoes ?? []).some((m) => m.cancelado !== true);
 }
 
-/** OS MOTIVOS, lista unica: o gesto que nao vale fica apagado com um destes escrito, nunca some. */
-export const MOTIVO_GADO = 'Movimentação de gado: feita pelo gestor da fazenda.';
-export const MOTIVO_APOS_MOVIMENTO = 'Gado já movimentado: quantidade, peso, categoria e lotes são alterados pelo gestor da fazenda. O preço segue editável.';
-export const MOTIVO_REABRIR_APOS_MOVIMENTO = 'Gado já movimentado: a negociação é reaberta pelo gestor da fazenda.';
+/** OS MOTIVOS, lista unica: o gesto que nao vale fica apagado com um destes escrito, nunca some.
+ *  ⚠ Os tres primeiros dizem QUEM faz, e por isso mudaram com a tabela no ACESSOS-FIN-01: gestor OU financeiro. */
+export const MOTIVO_GADO = 'Movimentação de gado: feita pelo gestor ou pelo financeiro.';
+export const MOTIVO_APOS_MOVIMENTO = 'Gado já movimentado: quantidade, peso, categoria e lotes são alterados pelo gestor ou pelo financeiro. O preço segue editável.';
+export const MOTIVO_REABRIR_APOS_MOVIMENTO = 'Gado já movimentado: a negociação é reaberta pelo gestor ou pelo financeiro.';
 export const MOTIVO_ABATE_BOITEL = 'Abate e boitel: edição pelo financeiro chega na próxima etapa.';
 export const MOTIVO_SEM_CAPACIDADE = 'Seu perfil não faz isto na operação comercial.';
 

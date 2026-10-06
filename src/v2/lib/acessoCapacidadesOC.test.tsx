@@ -1,6 +1,9 @@
 /**
- * ACESSOS-OC-03a — as CAPACIDADES dentro da operacao comercial: o financeiro entra, edita o COMBINADO enquanto nenhum gado se
- * moveu, e nunca move gado.
+ * ACESSOS-OC-03a — as CAPACIDADES dentro da operacao comercial.
+ * ⚠ ACESSOS-FIN-01 (Gabriel, 06/10/2026) REVERTEU TRES CELULAS: o financeiro move gado, altera o combinado fisico depois do
+ *   movimento e reabre depois dele. Os casos abaixo foram levados ao contrato novo: o MECANISMO (fisico apagado, Entrega em
+ *   leitura, Reabrir apagado) segue provado com `SEM_O_FISICO` — quem nao tem as tres capacidades —, e o FINANCEIRO e' provado
+ *   do lado de quem pode. Abate e boitel continuam fechados para ele.
  *
  * ⚠ O PERFIL FINANCEIRO E' PROVADO SO' AQUI: nao ha' usuario financeiro para o navegador (nao se cria usuario nem se troca
  *   perfil). Os shells recebem as capacidades por prop (`acessoOC`), exatamente como o hospedeiro as desce.
@@ -13,7 +16,7 @@ import type { ComponentProps } from 'react';
 import {
   ACESSO_TOTAL, CAPACIDADES_OC, CAPACIDADES_OC_LISTA, MOTIVO_ABATE_BOITEL, MOTIVO_APOS_MOVIMENTO, MOTIVO_GADO,
   MOTIVO_REABRIR_APOS_MOVIMENTO, acessoDaPessoa, motivoFisicoTravado, motivoReabrirTravado, ocTemGadoMovido, podeNaOperacao,
-  type CapacidadeOC,
+  type AcessoOperacao, type CapacidadeOC,
 } from './acessoOperacao';
 import { nivelDaTela } from './acessoTelas';
 import { TELA_OPERACAO_COMERCIAL } from './navGrupos';
@@ -40,6 +43,9 @@ import type { RecebimentoApi } from '@/hooks/useOperacaoRecebimento';
 
 const FINANCEIRO = acessoDaPessoa('financeiro', false);
 const GESTOR = acessoDaPessoa('gestor_cliente', false);
+/* Quem abre a OC mas nao tem as tres capacidades do gado — o financeiro de ANTES do ACESSOS-FIN-01. Hoje nenhum perfil que abre
+   a OC e' assim; o mecanismo continua no codigo e e' por ele que se prova. */
+const SEM_O_FISICO: AcessoOperacao = { ...GESTOR, negociar_apos_movimento: false, movimentar_gado: false, reabrir_apos_movimento: false };
 const PERFIS = ['gestor_cliente', 'financeiro', 'campo', 'leitura'] as const;
 
 /* ═══ 1. O DONO ═══════════════════════════════════════════════════════════════════ */
@@ -51,11 +57,11 @@ describe('o dono das capacidades (podeNaOperacao)', () => {
       criar:                   [true,  true,  false, false],
       negociar_preco:          [true,  true,  false, false],
       negociar_combinado:      [true,  true,  false, false],
-      negociar_apos_movimento: [true,  false, false, false],
+      negociar_apos_movimento: [true,  true,  false, false],
       negociar_abate_boitel:   [true,  false, false, false],
-      movimentar_gado:         [true,  false, false, false],
+      movimentar_gado:         [true,  true,  false, false],
       concluir_negociacao:     [true,  true,  false, false],
-      reabrir_apos_movimento:  [true,  false, false, false],
+      reabrir_apos_movimento:  [true,  true,  false, false],
       lancar_realizado_boitel: [true,  false, false, false],
       atualizar_entregas:      [true,  true,  false, false],
       excluir_definitivo:      [false, false, false, false],
@@ -86,17 +92,23 @@ describe('o dono das capacidades (podeNaOperacao)', () => {
     expect(ocTemGadoMovido([{ cancelado: true }, { cancelado: false }])).toBe(true);
     expect(ocTemGadoMovido([{}])).toBe(true);
   });
-  it('capacidade x fato: o fisico e o reabrir so fecham para o financeiro DEPOIS do movimento; o gestor nunca', () => {
-    expect(motivoFisicoTravado(FINANCEIRO, false)).toBeNull();
-    expect(motivoFisicoTravado(FINANCEIRO, true)).toBe(MOTIVO_APOS_MOVIMENTO);
-    expect(motivoReabrirTravado(FINANCEIRO, false)).toBeNull();
-    expect(motivoReabrirTravado(FINANCEIRO, true)).toBe(MOTIVO_REABRIR_APOS_MOVIMENTO);
+  it('capacidade x fato: o fisico e o reabrir so fecham, DEPOIS do movimento, para quem nao tem a capacidade; gestor e financeiro nunca', () => {
+    expect(motivoFisicoTravado(SEM_O_FISICO, false)).toBeNull();
+    expect(motivoFisicoTravado(SEM_O_FISICO, true)).toBe(MOTIVO_APOS_MOVIMENTO);
+    expect(motivoReabrirTravado(SEM_O_FISICO, false)).toBeNull();
+    expect(motivoReabrirTravado(SEM_O_FISICO, true)).toBe(MOTIVO_REABRIR_APOS_MOVIMENTO);
     for (const movido of [false, true]) {
-      expect(motivoFisicoTravado(GESTOR, movido)).toBeNull();
-      expect(motivoReabrirTravado(GESTOR, movido)).toBeNull();
-      expect(motivoFisicoTravado(ACESSO_TOTAL, movido)).toBeNull();
+      for (const quemPode of [GESTOR, FINANCEIRO, ACESSO_TOTAL]) {
+        expect(motivoFisicoTravado(quemPode, movido)).toBeNull();
+        expect(motivoReabrirTravado(quemPode, movido)).toBeNull();
+      }
     }
-    expect(MOTIVO_GADO).toBe('Movimentação de gado: feita pelo gestor da fazenda.');
+    /* ACESSOS-FIN-01: no gado, o financeiro e' o gestor — as tres celulas, e so' elas, mudaram */
+    expect(FINANCEIRO.movimentar_gado && FINANCEIRO.negociar_apos_movimento && FINANCEIRO.reabrir_apos_movimento).toBe(true);
+    expect([FINANCEIRO.negociar_abate_boitel, FINANCEIRO.lancar_realizado_boitel, FINANCEIRO.excluir_definitivo]).toEqual([false, false, false]);
+    expect(MOTIVO_GADO).toBe('Movimentação de gado: feita pelo gestor ou pelo financeiro.');
+    expect(MOTIVO_APOS_MOVIMENTO).toBe('Gado já movimentado: quantidade, peso, categoria e lotes são alterados pelo gestor ou pelo financeiro. O preço segue editável.');
+    expect(MOTIVO_REABRIR_APOS_MOVIMENTO).toBe('Gado já movimentado: a negociação é reaberta pelo gestor ou pelo financeiro.');
     expect(MOTIVO_ABATE_BOITEL).toBe('Abate e boitel: edição pelo financeiro chega na próxima etapa.');
   });
 });
@@ -153,9 +165,9 @@ describe('Negociacao — financeiro SEM gado movido: edita o combinado inteiro',
   });
 });
 
-describe('Negociacao — financeiro COM gado movido: fisico apagado com o motivo, preco aberto', () => {
-  const motivo = motivoFisicoTravado(FINANCEIRO, true)!;
-  const props = { fisicoBloqueado: true, acesso: { motivoFisico: motivo, motivoReabrir: motivoReabrirTravado(FINANCEIRO, true) } };
+describe('Negociacao — quem nao altera o fisico, COM gado movido: fisico apagado com o motivo, preco aberto', () => {
+  const motivo = motivoFisicoTravado(SEM_O_FISICO, true)!;
+  const props = { fisicoBloqueado: true, acesso: { motivoFisico: motivo, motivoReabrir: motivoReabrirTravado(SEM_O_FISICO, true) } };
   it('o motivo fica ESCRITO; incluir lote e lixeira continuam la, apagados, com o motivo no title — e o clique nao dispara', () => {
     const api = lotesFalsos();
     negociacao(api, props);
@@ -250,7 +262,7 @@ describe('Entrega / Recebimento — so leitura para quem nao move gado', () => {
     expect(screen.getAllByRole('button').filter((b) => GESTOS_DE_GADO.test(b.textContent?.trim() ?? '')).length).toBeGreaterThan(0);
     expect(screen.queryByTestId('entrega-somente-leitura')).toBeNull();
   });
-  it('financeiro: nenhum gesto de gado, e o motivo ESCRITO no lugar da frase do titulo financeiro', () => {
+  it('quem nao move gado: nenhum gesto de gado, e o motivo ESCRITO no lugar da frase do titulo financeiro', () => {
     entrega({ somenteLeitura: true, motivoSomenteLeitura: MOTIVO_GADO });
     expect(screen.queryAllByRole('button').filter((b) => GESTOS_DE_GADO.test(b.textContent?.trim() ?? ''))).toEqual([]);
     expect(screen.getByTestId('entrega-somente-leitura').textContent).toBe(MOTIVO_GADO);
@@ -300,8 +312,8 @@ describe('venda comum — o shell combina capacidade e fato', () => {
     expect(screen.getByRole('button', { name: 'Adicionar lote' }).hasAttribute('disabled')).toBe(false);
     expect(botao(/Concluir negociação/)).not.toBeNull();
   });
-  it('financeiro, COM movimento: o fisico fecha com o motivo — e para o gestor a mesma OC segue aberta', () => {
-    const r = venda({ acessoOC: FINANCEIRO, abaInicial: 'negociacao', recebimentoApi: recebimentoFalso([MOV]) });
+  it('sem a capacidade, COM movimento: o fisico fecha com o motivo — e para o gestor E PARA O FINANCEIRO a mesma OC segue aberta', () => {
+    const r = venda({ acessoOC: SEM_O_FISICO, abaInicial: 'negociacao', recebimentoApi: recebimentoFalso([MOV]) });
     expect(screen.getByTestId('motivo-fisico').textContent).toBe(MOTIVO_APOS_MOVIMENTO);
     expect(screen.getByRole('button', { name: 'Adicionar lote' }).hasAttribute('disabled')).toBe(true);
     /* a venda passou a ligar a trava do fisico (que so' a compra ligava): no lote, quantidade e peso apagados, valor aberto */
@@ -310,31 +322,56 @@ describe('venda comum — o shell combina capacidade e fato', () => {
     expect(campo(/^Peso m/).hasAttribute('disabled')).toBe(true);
     expect(campo(/^Valor/).hasAttribute('disabled')).toBe(false);
     r.unmount();
-    venda({ acessoOC: GESTOR, abaInicial: 'negociacao', recebimentoApi: recebimentoFalso([MOV]) });
-    expect(screen.queryByTestId('motivo-fisico')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Adicionar lote' }).hasAttribute('disabled')).toBe(false);
+    for (const quemPode of [GESTOR, FINANCEIRO]) {
+      const v = venda({ acessoOC: quemPode, abaInicial: 'negociacao', recebimentoApi: recebimentoFalso([MOV]) });
+      expect(screen.queryByTestId('motivo-fisico')).toBeNull();
+      expect(screen.getByRole('button', { name: 'Adicionar lote' }).hasAttribute('disabled')).toBe(false);
+      v.unmount();
+    }
   });
-  it('movimentacao ESTORNADA nao conta: o financeiro volta a editar o combinado', () => {
-    venda({ acessoOC: FINANCEIRO, abaInicial: 'negociacao', recebimentoApi: recebimentoFalso([{ ...MOV, cancelado: true }]) });
+  it('movimentacao ESTORNADA nao conta: quem nao altera o fisico volta a editar o combinado', () => {
+    venda({ acessoOC: SEM_O_FISICO, abaInicial: 'negociacao', recebimentoApi: recebimentoFalso([{ ...MOV, cancelado: true }]) });
     expect(screen.queryByTestId('motivo-fisico')).toBeNull();
   });
-  it('"Reabrir negociação" (OC fechada): financeiro sem movimento reabre; com movimento, apagado com o motivo', () => {
-    const r = venda({ acessoOC: FINANCEIRO, abaInicial: 'negociacao', ocStatusComercial: 'fechada' });
+  it('"Reabrir negociação" (OC fechada): sem movimento reabre; com movimento, apagado com o motivo so para quem nao tem a capacidade — o financeiro reabre', () => {
+    const r = venda({ acessoOC: SEM_O_FISICO, abaInicial: 'negociacao', ocStatusComercial: 'fechada' });
     expect(botao(/Reabrir negociação/)?.hasAttribute('disabled')).toBe(false);
     expect(screen.queryByTestId('reabrir-negociacao-motivo')).toBeNull();
     r.unmount();
-    venda({ acessoOC: FINANCEIRO, abaInicial: 'negociacao', ocStatusComercial: 'fechada', recebimentoApi: recebimentoFalso([MOV]) });
+    const s = venda({ acessoOC: SEM_O_FISICO, abaInicial: 'negociacao', ocStatusComercial: 'fechada', recebimentoApi: recebimentoFalso([MOV]) });
     expect(screen.getByTestId('reabrir-negociacao').hasAttribute('disabled')).toBe(true);
     expect(screen.getByTestId('reabrir-negociacao-motivo').textContent).toBe(MOTIVO_REABRIR_APOS_MOVIMENTO);
+    s.unmount();
+    venda({ acessoOC: FINANCEIRO, abaInicial: 'negociacao', ocStatusComercial: 'fechada', recebimentoApi: recebimentoFalso([MOV]) });
+    expect(botao(/Reabrir negociação/)?.hasAttribute('disabled')).toBe(false);
+    expect(screen.queryByTestId('reabrir-negociacao-motivo')).toBeNull();
   });
-  it('Entrega: financeiro ve a aba em leitura com o motivo; o gestor, com os gestos', () => {
-    const r = venda({ acessoOC: FINANCEIRO, abaInicial: 'entrega', ocStatusComercial: 'fechada', recebimentoApi: recebimentoFalso([MOV]) });
+  it('Entrega: quem nao move gado ve a aba em leitura com o motivo; o gestor E O FINANCEIRO, com os gestos', () => {
+    const r = venda({ acessoOC: SEM_O_FISICO, abaInicial: 'entrega', ocStatusComercial: 'fechada', recebimentoApi: recebimentoFalso([MOV]) });
     expect(screen.getByTestId('entrega-somente-leitura').textContent).toBe(MOTIVO_GADO);
     expect(within(screen.getByTestId('entrega-somente-leitura').closest('div.space-y-2, div')!.parentElement!).queryAllByRole('button').filter((b) => GESTOS_DE_GADO.test(b.textContent?.trim() ?? ''))).toEqual([]);
     r.unmount();
-    venda({ acessoOC: GESTOR, abaInicial: 'entrega', ocStatusComercial: 'fechada', recebimentoApi: recebimentoFalso([MOV]) });
-    expect(screen.queryByTestId('entrega-somente-leitura')).toBeNull();
-    expect(screen.getAllByRole('button').filter((b) => GESTOS_DE_GADO.test(b.textContent?.trim() ?? '')).length).toBeGreaterThan(0);
+    for (const quemPode of [GESTOR, FINANCEIRO]) {
+      const v = venda({ acessoOC: quemPode, abaInicial: 'entrega', ocStatusComercial: 'fechada', recebimentoApi: recebimentoFalso([MOV]) });
+      expect(screen.queryByTestId('entrega-somente-leitura')).toBeNull();
+      expect(screen.getAllByRole('button').filter((b) => GESTOS_DE_GADO.test(b.textContent?.trim() ?? '')).length).toBeGreaterThan(0);
+      v.unmount();
+    }
+  });
+  it('ACESSOS-FIN-01: na venda comum o shell do FINANCEIRO rende o MESMO DOM do gestor, com e sem gado movido — a unica diferenca e a frase do boitel', () => {
+    const FRASE_BOITEL = /<p [^>]*data-testid="motivo-tipo-boitel"[^>]*>[^<]*<\/p>/;
+    const limpo = (h: string) => h.replace(/:r[0-9a-z]+:|radix-[^"]+/g, '');
+    for (const aba of ['venda', 'negociacao', 'entrega'] as const) for (const movs of [[], [MOV]]) {
+      const a = venda({ acessoOC: FINANCEIRO, abaInicial: aba, recebimentoApi: recebimentoFalso(movs) });
+      const fin = a.container.innerHTML; a.unmount();
+      const b = venda({ acessoOC: GESTOR, abaInicial: aba, recebimentoApi: recebimentoFalso(movs) });
+      const ges = b.container.innerHTML; b.unmount();
+      expect(ges.length).toBeGreaterThan(500);
+      /* a busca sabe achar: na aba Venda a frase do boitel existe para o financeiro, e so' para ele */
+      expect(`${aba}:${FRASE_BOITEL.test(fin)}`).toBe(`${aba}:${aba === 'venda'}`);
+      expect(FRASE_BOITEL.test(ges)).toBe(false);
+      expect(limpo(fin.replace(FRASE_BOITEL, ''))).toBe(limpo(ges));
+    }
   });
   it('gestor e admin: o shell com `acessoOC` de gestor rende o MESMO DOM de quem nao recebe a prop (o de hoje)', () => {
     for (const aba of ['venda', 'negociacao', 'entrega'] as const) {

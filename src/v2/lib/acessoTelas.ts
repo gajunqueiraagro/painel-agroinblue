@@ -48,14 +48,38 @@ export const MATRIZ_ACESSO: Record<GrupoAcesso, Record<PerfilCliente, NivelTela>
  * diferente do grupo dela, sem mexer no resto do grupo. Nasce com a Operacao Comercial, que mora no grupo `rebanho` (onde o
  * financeiro so' ve^ e o campo edita) mas e' trabalho comercial e financeiro.
  * ⚠ GESTOR E FINANCEIRO (ACESSOS-OC-03a, Gabriel 05/10/2026): os dois abrem a lista e a OC. O que o financeiro NAO faz dentro
- *   dela (mover gado; mexer no combinado fisico depois do primeiro movimento; abate e boitel, ate' o 03b) e' do dono de
+ *   dela (desde o ACESSOS-FIN-01, so' abate e boitel, ate' o 03b) e' do dono de
  *   CAPACIDADE, `podeNaOperacao` (`acessoOperacao.ts`) — aqui so' se decide quem ABRE. Campo e leitura: fora.
  * ⚠ A lista (`operacoes-comerciais`) e a tela da operacao andam JUNTAS: quem ve^ a lista abre a OC.
  */
 const GESTOR_E_FINANCEIRO: Record<PerfilCliente, NivelTela> = { gestor_cliente: 'editar', financeiro: 'editar', campo: 'nao', leitura: 'nao' };
+
+/**
+ * AS TELAS DO TRABALHO DO FINANCEIRO — ACESSOS-FIN-01 (Gabriel, 06/10/2026: "O financeiro tem um acesso mais completo do
+ * sistema. O bloqueio maior tem que ser com o campo: o campo não pode ver nem mexer no financeiro, mas o financeiro pode mexer
+ * em mais áreas. Poderia bloquear para ele metas."). Cada uma ganhou a marca `liberadaClientes` no menu E uma linha aqui:
+ * gestor e financeiro 'editar', campo e leitura 'nao'. A matriz por grupo NAO mudou.
+ * ⚠ O FINANCEIRO 'EDITA' TELAS DE GRUPOS EM QUE A MATRIZ SO' LHE DARIA 'ver' (rebanho, executivo): e' a excecao da TELA, de
+ *   proposito — e' o trabalho dele.
+ * ⚠ O CAMPO FICA 'nao' NAS CINCO DE PRODUCAO (decisao do Gabriel, 06/10/2026), embora a matriz do grupo `rebanho` lhe desse
+ *   'editar': tres delas mostram dinheiro (Pecuária › Lançamentos, Estoque de Grãos, Barter) e "Lançar › Pecuária" leva a' OC.
+ *   Abrir Producao ao campo e' PR proprio.
+ * ⚠ O LEITURA FICA 'nao', PROVISORIO: o efeito de 'ver' (modo somente leitura por perfil) ainda nao existe — com 'ver' ele
+ *   EDITARIA. Quando o efeito existir, estas linhas voltam a' matriz.
+ * ⚠ CONTINUA FECHADO PARA O FINANCEIRO, por falta da marca: Planejamento (META), Auditoria, Validar e os Cadastros fora de
+ *   Fornecedores e Contas Bancarias. Tela nova para ele entra NESTA lista e ganha a marca — nunca `if` de perfil na tela.
+ */
+export const TELAS_DO_FINANCEIRO: readonly V2Section[] = [
+  'financiamentos', 'contratos', 'recorrencias', 'painel-financiamentos', 'visao-consolidada', 'fluxo-caixa',
+  'lancamentos-zoot', 'conferencia-lancamentos', 'fechamento', 'estoque-graos', 'barter-contratos',
+  'valor-rebanho', 'dre', 'painel-consultor',
+  'fornecedores', 'contas-bancarias',
+];
+
 export const NIVEL_POR_TELA: Partial<Record<V2Section, Record<PerfilCliente, NivelTela>>> = {
   'operacoes-comerciais': GESTOR_E_FINANCEIRO,
   [TELA_OPERACAO_COMERCIAL]: GESTOR_E_FINANCEIRO,
+  ...Object.fromEntries(TELAS_DO_FINANCEIRO.map((t) => [t, GESTOR_E_FINANCEIRO])),
 };
 
 const PERFIS: readonly string[] = ['gestor_cliente', 'financeiro', 'campo', 'leitura'];

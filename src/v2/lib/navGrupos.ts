@@ -87,7 +87,8 @@ export interface NavItem {
   emConstrucao?: boolean;
   /**
    * A tela esta' LIBERADA PARA CLIENTES — ACESSOS-02a. Sem a marca, so' o admin do AGROinBLUE a ve^ e a abre, qualquer que seja
-   * o perfil do membro. O piloto comeca com o MINIMO e libera aos poucos (decisao do Gabriel, 04/10/2026): hoje, tres telas.
+   * o perfil do membro. O piloto comecou com o MINIMO (04/10/2026, tres telas) e libera aos poucos: a lista de OCs (ACESSOS-OC-01)
+   * e as 16 telas do trabalho do financeiro (ACESSOS-FIN-01, 06/10/2026 — a lista e' `TELAS_DO_FINANCEIRO`, em `acessoTelas.ts`).
    * ⚠ A MARCA NAO DECIDE SOZINHA: liberada, a tela ainda passa pela matriz perfil × grupo. Quem responde "esta pessoa acessa
    *   esta tela?" e' UM dono, `nivelDaTela` (`src/v2/lib/acessoTelas.ts`); menu e rota so' consultam.
    */
@@ -143,7 +144,7 @@ export const NAV_GRUPOS: NavGrupo[] = [
       {
         titulo: 'Lançar',
         itens: [
-          { id: 'lancamentos-zoot',          label: 'Pecuária',     status: 'ready', primary: true },
+          { id: 'lancamentos-zoot',          label: 'Pecuária',     status: 'ready', primary: true, liberadaClientes: true },
           { id: 'lancamentos-agricultura',   label: 'Agricultura',  status: 'ready' },
           { id: 'lancamentos-silvicultura',  label: 'Silvicultura', status: 'ready', emConstrucao: true },
         ],
@@ -153,14 +154,14 @@ export const NAV_GRUPOS: NavGrupo[] = [
            pecuaria, entao pendura-lo sob "Pecuária" diria o contrario. */
         titulo: '',
         itens: [
-          { id: 'fechamento', label: 'Fechamento Área', status: 'ready', primary: true },
+          { id: 'fechamento', label: 'Fechamento Área', status: 'ready', primary: true, liberadaClientes: true },
         ],
       },
       {
         titulo: 'Pecuária',
         itens: [
           { id: 'rebanho-home',            label: 'Visão Geral',          status: 'ready' },
-          { id: 'conferencia-lancamentos', label: 'Lançamentos',          status: 'ready' },
+          { id: 'conferencia-lancamentos', label: 'Lançamentos',          status: 'ready', liberadaClientes: true },
           { id: 'operacoes-comerciais',    label: 'Operações Comerciais', status: 'ready', primary: true, liberadaClientes: true },
           { id: 'conferencia-mensal',      label: 'Evolução no Ano',      status: 'ready' },
           { id: 'mapa-pastos',             label: 'Mapa de Pastos',       status: 'ready' },
@@ -180,8 +181,8 @@ export const NAV_GRUPOS: NavGrupo[] = [
              caminho do grão — colheita, barter, sobra —, mas o menu não é uma linha do tempo: é
              onde se procura. O estoque é a pergunta de todo dia ("quanto tenho para vender?") e
              o barter é o contrato que se abre de vez em quando. */
-          { id: 'estoque-graos', label: 'Estoque de Grãos', status: 'ready' },
-          { id: 'barter-contratos', label: 'Barter', status: 'ready' },
+          { id: 'estoque-graos', label: 'Estoque de Grãos', status: 'ready', liberadaClientes: true },
+          { id: 'barter-contratos', label: 'Barter', status: 'ready', liberadaClientes: true },
         ],
       },
       {
@@ -208,7 +209,7 @@ export const NAV_GRUPOS: NavGrupo[] = [
              conviver sem dizer qual e' qual faria o operador escolher no escuro.
              As velhas e este "Extrato Gerencial" saem na rodada 2, depois da
              homologacao. */
-          { id: 'visao-consolidada',   label: 'Visão Consolidada',       status: 'ready' },
+          { id: 'visao-consolidada',   label: 'Visão Consolidada',       status: 'ready', liberadaClientes: true },
           // PR-CLEANUP-MESA-CLASSIFICACAO-01 — 'mesa-classificacao' saiu do menu. O fluxo
           // vigente e' Conciliação Bancária → Importar Banco / Enriquecer / Conciliação.
           // PR-CLEANUP-REFERENCIAS-OPERACIONAIS-01 — 'mesa-operacional' saiu do menu junto com
@@ -224,9 +225,9 @@ export const NAV_GRUPOS: NavGrupo[] = [
              ("Lançamentos Financeiros"), que dispoe de 200px por nao ter o ponto: 30% mais
              texto em 7% menos espaco. O `truncate` do span cortaria justamente
              "Financiamentos", a palavra pela qual o operador conhece a tela. */
-          { id: 'financiamentos',      label: 'Financ. e Parcelamentos', status: 'needs-wrapper' },
-          { id: 'contratos',           label: 'Contratos',               status: 'needs-wrapper' },
-          { id: 'recorrencias',        label: 'Recorrências',            status: 'ready' },
+          { id: 'financiamentos',      label: 'Financ. e Parcelamentos', status: 'needs-wrapper', liberadaClientes: true },
+          { id: 'contratos',           label: 'Contratos',               status: 'needs-wrapper', liberadaClientes: true },
+          { id: 'recorrencias',        label: 'Recorrências',            status: 'ready', liberadaClientes: true },
           // PR-IMPORT-EXCEL-LANC-01 — planilha no vocabulário DO CLIENTE (de-para de plano
           // de contas). Distinta de 'Importação Extratos', que exige o formato AGROinBLUE.
         ],
@@ -235,7 +236,7 @@ export const NAV_GRUPOS: NavGrupo[] = [
         titulo: 'Gestão',
         itens: [
           { id: 'financeiro-dashboard',  label: 'Dashboard Financeiro',  status: 'needs-wrapper' },
-          { id: 'fluxo-caixa',           label: 'Fluxo Caixa',           status: 'needs-wrapper' },
+          { id: 'fluxo-caixa',           label: 'Fluxo Caixa',           status: 'needs-wrapper', liberadaClientes: true },
           { id: 'rateio-adm',            label: 'Rateio ADM',            status: 'needs-wrapper' },
           /* A mesma leitura do Extrato Gerencial, com o recorte do fechamento — FIN-PAINEL-SAFRA-01.
              Fica em Gestão, e não em Conciliação, porque Conciliação é operação de UMA conta num
@@ -246,7 +247,7 @@ export const NAV_GRUPOS: NavGrupo[] = [
              quando, somando todas as contas", que é a mesma família do Painel por Período:
              leitura de compromisso, não lançamento. */
           { id: 'contas-a-pagar-receber', label: 'Contas a Pagar/Receber', status: 'ready', liberadaClientes: true },
-          { id: 'painel-financiamentos', label: 'Painel Financiamentos', status: 'needs-wrapper' },
+          { id: 'painel-financiamentos', label: 'Painel Financiamentos', status: 'needs-wrapper', liberadaClientes: true },
         ],
       },
     ],
@@ -284,14 +285,14 @@ export const NAV_GRUPOS: NavGrupo[] = [
       {
         titulo: 'Visão Executiva',
         itens: [
-          { id: 'painel-consultor',    label: 'PC-100',                       status: 'ready' },
+          { id: 'painel-consultor',    label: 'PC-100',                       status: 'ready', liberadaClientes: true },
           { id: 'fechamento-periodo',  label: 'Fechamento do Período',        status: 'ready' },
           { id: 'indicadores-zoot',    label: 'Indicadores',                  status: 'needs-wrapper' },
-          { id: 'valor-rebanho',       label: 'Evolução Patrimonial',         status: 'needs-wrapper' },
+          { id: 'valor-rebanho',       label: 'Evolução Patrimonial',         status: 'needs-wrapper', liberadaClientes: true },
           /* ⚠ A GRADE UNICA DA LAVOURA — compara as culturas da safra, abre os centros e, no
              clique do cabecalho de uma cultura, vira o painel dela (Resultado, Producao,
              Historico). E' a unica porta do DRE agricola desde o PR-DRE-LAVOURA-02. */
-          { id: 'dre',                 label: 'DRE',                          status: 'ready' },
+          { id: 'dre',                 label: 'DRE',                          status: 'ready', liberadaClientes: true },
           /* ⚠ "DRE por cultura" E "Painel da Safra" SAIRAM NO PR-DRE-LAVOURA-02, e nao por
              arrumacao: a grade unica de `Executivo > DRE` responde as duas perguntas — compara
              culturas E abre os centros — e o drill por cultura trouxe a Producao e o Historico
@@ -334,8 +335,8 @@ export const NAV_GRUPOS: NavGrupo[] = [
           /* O item abre a tela com as abas Cadastro e Pastos — "Fazendas" sozinho
              escondia metade do que ha ali. */
           { id: 'config-fazendas',   label: 'Fazendas e Pastos',   status: 'ready' },
-          { id: 'contas-bancarias',  label: 'Contas Bancárias',    status: 'needs-wrapper' },
-          { id: 'fornecedores',      label: 'Fornecedores',        status: 'needs-wrapper' },
+          { id: 'contas-bancarias',  label: 'Contas Bancárias',    status: 'needs-wrapper', liberadaClientes: true },
+          { id: 'fornecedores',      label: 'Fornecedores',        status: 'needs-wrapper', liberadaClientes: true },
           { id: 'plano-contas',      label: 'Plano de Contas',     status: 'needs-wrapper' },
           { id: 'safras',            label: 'Safras',              status: 'ready' },
           /* ⚠ ELE FICA EM CADASTROS, NÃO EM AGRICULTURA, e a diferença é o que o item É: um local

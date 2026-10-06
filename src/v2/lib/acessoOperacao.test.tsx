@@ -107,9 +107,11 @@ describe('a faixa de atalhos de Produção (M7): atalho para tela sem acesso nã
   it('admin: as três de sempre, na ordem', () => {
     expect(pode('admin_agroinblue', true)).toEqual(OPCOES_ATALHO_PRODUCAO.map((o) => o.valor));
   });
-  it('gestor e financeiro: só a própria lista — e com uma opção só a faixa some (a rota exige mais de uma)', () => {
-    expect(pode('gestor_cliente', false)).toEqual(['operacoes-comerciais']);
-    expect(pode('financeiro', false)).toEqual(['operacoes-comerciais']);
+  it('gestor e financeiro (ACESSOS-FIN-01): as três, como o admin; leitura e campo, nenhuma — e com menos de duas a faixa some (a rota exige mais de uma)', () => {
+    expect(pode('gestor_cliente', false)).toEqual(OPCOES_ATALHO_PRODUCAO.map((o) => o.valor));
+    expect(pode('financeiro', false)).toEqual(OPCOES_ATALHO_PRODUCAO.map((o) => o.valor));
+    expect(pode('leitura', false)).toEqual([]);
+    expect(pode('campo', false)).toEqual([]);
     expect(fonte('src/v2/V2Index.tsx')).toContain("const opcoes = opcoesDoAtalho((s) => nivelDaTela(perfilAcesso, isAdmin, s) !== 'nao'); return ativa && opcoes.length > 1 ? (");
   });
   it('sair da tela da operação com uma OC na URL limpa os `oc_*`, como já era em "Lançar movimentação"', () => {
@@ -190,9 +192,25 @@ describe('M9 — "Reabrir mês…" de dentro da OC', () => {
       fireEvent.click(b);
       expect(abrir).toHaveBeenCalledTimes(1);
     });
-    it(`${forma} · gestor (não tem a tela do fechamento): apagado com o motivo exato, e o clique não abre`, () => {
-      como('gestor_cliente');
-      expect(nivelDaTela('gestor_cliente', false, 'fechamento')).toBe('nao');
+    /* ACESSOS-FIN-01 — "Fechamento Área" passou a ser tela do gestor e do financeiro: a REGRA do gesto nao mudou
+       (`usePodeAbrir('fechamento')`), e por ela o "Reabrir mês…" ACENDE para os dois. */
+    for (const perfil of ['gestor_cliente', 'financeiro'] as const) {
+      it(`${forma} · ${perfil} (tem a tela do fechamento desde o ACESSOS-FIN-01): habilitado, sem motivo, e o clique abre`, () => {
+        como(perfil);
+        expect(nivelDaTela(perfil, false, 'fechamento')).toBe('editar');
+        const abrir = vi.fn();
+        render(<ReabrirMesNaOC forma={forma} onAbrir={abrir} />);
+        const b = screen.getByTestId('reabrir-mes');
+        expect(b).toHaveProperty('disabled', false);
+        expect(b.getAttribute('title')).toBeNull();
+        expect(screen.queryByTestId('reabrir-mes-motivo')).toBeNull();
+        fireEvent.click(b);
+        expect(abrir).toHaveBeenCalledTimes(1);
+      });
+    }
+    it(`${forma} · leitura (não tem a tela do fechamento): apagado com o motivo exato, e o clique não abre`, () => {
+      como('leitura');
+      expect(nivelDaTela('leitura', false, 'fechamento')).toBe('nao');
       const abrir = vi.fn();
       render(<ReabrirMesNaOC forma={forma} onAbrir={abrir} />);
       const b = screen.getByTestId('reabrir-mes');

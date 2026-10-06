@@ -68,7 +68,8 @@ type ViewTab = 'mensal' | 'medio' | 'acumulado' | 'media_periodo';
 type Cenario = 'realizado' | 'meta';
 
 interface Props {
-  onBack: () => void;
+  /** ACESSOS-FIN-01 — sem o callback a seta de voltar nao e' desenhada (quem nao tem a tela de destino nao recebe o atalho). */
+  onBack?: () => void;
   onTabChange?: (tab: string) => void;
   filtroGlobal?: { ano: string; mes: number };
   /* ⚠ O PERÍODO DESCE E VOLTA — PR-BARRA-UNICA-01a. A fita de ano/mês do shell saiu e esta
@@ -2716,9 +2717,11 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
         <div className="sticky top-0 z-30 bg-background border-b border-border/40 px-2 pt-2 pb-0 space-y-1">
           {/* Toolbar */}
           <div className="flex items-center gap-1.5 flex-wrap">
-            <Button variant="ghost" size="icon" onClick={onBack} className="h-7 w-7">
+            {onBack && (
+            <Button variant="ghost" size="icon" onClick={onBack} className="h-7 w-7" data-testid="pc100-voltar">
               <ArrowLeft className="h-4 w-4" />
             </Button>
+            )}
 
 
             {/* Cenário toggle */}

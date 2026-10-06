@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 06/10/2026 (CPR-SALDO-DIA-02, +9: `src/components/financeiro-v2/cprFluxoPrevisto.test.ts` 5, `src/lib/financeiro/cprRecorte.test.ts` 4 — 4050 depois dele;
+  Baseline em 06/10/2026 (ACESSOS-FIN-01, +20: `src/v2/lib/acessoTelas.test.tsx` 9, `src/v2/lib/acessoSaidas.test.tsx` 6,
+  `src/v2/lib/acessoOperacao.test.tsx` 4, `src/v2/lib/acessoCapacidadesOC.test.tsx` 1 — 4070 depois dele; antes o CPR-SALDO-DIA-02, +9: `src/components/financeiro-v2/cprFluxoPrevisto.test.ts` 5, `src/lib/financeiro/cprRecorte.test.ts` 4 — 4050 depois dele;
   antes o CPR-EXPORT-01, +18: `src/lib/pdf/cpr/exportCpr.test.tsx` 14, `src/lib/financeiro/cprRecorte.test.ts` 4 — 4041 depois dele;
   antes o CPR-SALDO-DIA-01, +22: `src/lib/financeiro/cprRecorte.test.ts` 18, `src/lib/financeiro/saldoEmCaixa.test.ts` 4 — 4023 depois dele;
   antes o FIN-V2-COLUNAS-OC-01, +8 em `src/components/financeiro-v2/finV2ColunasOC01.test.ts` — 4001 depois dele;
@@ -207,7 +208,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4050
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4070
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -453,6 +454,67 @@ CONSULTAM: a lateral (`V2Sidebar`, por `gruposVisiveis`), o drawer (`V2ContextDr
     categoria, incluir e remover lote sem saida ativa, e trocar a categoria de lote ja' movido reescreve `lancamentos.categoria`
     da movimentacao. Vale hoje para gestor e admin (o financeiro ficou fechado no 03a). Decisao de produto pendente: o que o
     gestor pode alterar depois do gado movido.
+- ⚠ O FINANCEIRO TEM AS TELAS DO TRABALHO DELE; O BLOQUEIO MAIOR E' O DO CAMPO (ACESSOS-FIN-01, Gabriel 06/10/2026, so' tela, sem
+  banco): "O financeiro tem um acesso mais completo do sistema. O bloqueio maior tem que ser com o campo: o campo não pode ver nem
+  mexer no financeiro, mas o financeiro pode mexer em mais áreas. Poderia bloquear para ele metas." ⚠ ISTO SUBSTITUI o que os
+  blocos de cima dizem sobre "piloto de tres telas", "o gestor so' recebe a lista e a OC da Producao" e a tabela de capacidades do 03a.
+  · AS 16 TELAS (`TELAS_DO_FINANCEIRO`, `src/v2/lib/acessoTelas.ts`; cada uma com a marca `liberadaClientes` E linha em
+    `NIVEL_POR_TELA`): Financeiro — `financiamentos` (Financ. e Parcelamentos), `contratos`, `recorrencias`, `painel-financiamentos`,
+    `visao-consolidada`, `fluxo-caixa` (o item "Fluxo Caixa"; o briefing dizia "Fluxo de Caixa" e o Gabriel confirmou este id — a
+    versao META segue fechada); Producao — `lancamentos-zoot` (Lançar › Pecuária), `conferencia-lancamentos` (Pecuária ›
+    Lançamentos), `fechamento` (Fechamento Área), `estoque-graos`, `barter-contratos`; Executivo — `valor-rebanho` (Evolução
+    Patrimonial), `dre`, `painel-consultor` (PC-100); Cadastros — `fornecedores`, `contas-bancarias`.
+  · NIVEL, igual nas 16: gestor_cliente 'editar' · financeiro 'editar' · campo 'nao' · leitura 'nao'. A MATRIZ POR GRUPO NAO MUDOU:
+    e' a excecao da TELA que da' 'editar' ao financeiro em grupos onde a matriz so' lhe daria 'ver' (rebanho, executivo).
+    ⚠ O CAMPO FICA 'nao' TAMBEM NAS CINCO DE PRODUCAO (decisao do Gabriel na pergunta da FASE 0, 06/10), embora a matriz do
+      `rebanho` lhe desse 'editar': Pecuária › Lançamentos, Estoque de Grãos e Barter mostram dinheiro, e Lançar › Pecuária leva a'
+      OC. Hoje o campo NAO ABRE TELA NENHUMA (preso por teste); abrir Producao ao campo e' PR proprio.
+    ⚠ O LEITURA FICA 'nao', PROVISORIO: o efeito de 'ver' ainda nao existe (com 'ver' ele editaria). Ele segue so' com as tres do
+      piloto, em 'ver'. Quando o modo somente leitura existir, as 16 linhas voltam a' matriz.
+  · CONTINUA FECHADO PARA O FINANCEIRO (sem a marca; provado tela a tela): todo o Planejamento (META, inclusive as telas fora do
+    menu), toda a Auditoria, todo o Validar e os Cadastros fora de Fornecedores e Contas Bancárias.
+  · MENU do gestor e do financeiro: Produção (6 itens), Financeiro (9), Executivo (3), Cadastros (2). A TELA DE ENTRADA NAO MUDOU:
+    `TELA_DE_ENTRADA_PREFERIDA` = Lançamentos Financeiros, embora a primeira do menu deles agora seja "Lançar › Pecuária".
+  · DENTRO DA OC — REVERTE A DECISAO DE 05/10 (ACESSOS-OC-03a): o financeiro passou a registrar entrega e recebimento de gado e a
+    alterar quantidade, peso, categoria e lotes depois do movimento. `CAPACIDADES_OC` depois (tres celulas trocadas):
+        capacidade                gestor  financeiro
+        abrir / criar             S       S
+        negociar_preco            S       S
+        negociar_combinado        S       S
+        negociar_apos_movimento   S       S   <- era N
+        negociar_abate_boitel     S       N
+        movimentar_gado           S       S   <- era N
+        concluir_negociacao       S       S
+        reabrir_apos_movimento    S       S   <- era N
+        lancar_realizado_boitel   S       N
+        atualizar_entregas        S       S
+        excluir_definitivo        N       N   (so' o admin)
+    campo e leitura: N em todas. Na venda e na compra comuns o shell do financeiro rende o MESMO DOM do gestor (a unica diferenca
+    e' a frase do boitel no "Tipo de venda"). O MECANISMO do 03a (fisico apagado com o motivo, Entrega em leitura, Reabrir apagado)
+    FICA no codigo e hoje nenhum perfil que abre a OC cai nele; os motivos passaram a dizer "pelo gestor ou pelo financeiro".
+    ⚠ NO ABATE o financeiro agora MOVE GADO (aba Entrega) com a Negociacao ainda em leitura ('negociar_abate_boitel' N, ate' o 03b).
+    ⚠ NENHUMA RPC MUDOU: a trava de gravacao por perfil continua sendo o 01F.
+  · SAIDAS TRATADAS (atalho para tela sem acesso nao e' oferecido). A rota consulta o dono num lugar so', `podeAbrirTela`
+    (`V2Index.tsx`, em cima de `nivelDaTela`), e entrega o callback so' a quem tem o destino — as telas ja' desenhavam o botao so'
+    com o callback: cartao "Chuvas" de Lançar › Pecuária (`chuvas-lancamento`); "Conferência do GMD" (`conferencia-mensal`) e "Mapa
+    de Pastos" (`mapa-pastos`) do Fechamento Área; a seta de voltar do PC-100 (`home`; `onBack` virou opcional no
+    `PainelConsultorTab`); a faixa "Financeiro" do desktop (`SUBNAV_FINANCEIRO`: so' as telas que a pessoa abre, e some com menos
+    de duas — para o financeiro some, porque das quatro ele so' tem o Fluxo Caixa); e o cartao "Movimentações por foto"
+    (`/caderno-importacao`, rota do `SoAdmin`), por `usePodeAbrirRotaSoAdmin` (`usePodeAbrir.ts`, espelho declarado do `SoAdmin`).
+  · CONSEQUENCIAS, sem mudar regra: "REABRIR MÊS…" na OC (`ReabrirMesNaOC`, `usePodeAbrir('fechamento')`) ACENDE para o gestor e
+    para o financeiro, porque os dois ganharam o Fechamento Área; a faixa de atalhos de Producao mostra as tres para os dois;
+    "Ver contrato" da parcela de financiamento e "abrir no formulario principal" do modal zootecnico (divida
+    ACESSOS-SAIDA-MODAL-ZOO-01) deixam de cair no aviso para eles.
+  · `needs-wrapper` (o `status` do item) SO' DESENHA UM PONTO DE 6px no drawer (`V2ContextDrawer.tsx`); nao muda rota nem
+    comportamento. Liberadas com a marca: `financiamentos`, `contratos`, `painel-financiamentos`, `fluxo-caixa`, `fornecedores`,
+    `contas-bancarias`, `valor-rebanho`.
+  ⚠ DIVIDAS: ACESSOS-FIN-LAYOUT-WRAPPER-01 (o que falta de layout nas sete telas `needs-wrapper` NAO foi levantado tela a tela — so'
+    se sabe que a marca e' o ponto do drawer) · ACESSOS-FIN-META-DENTRO-DA-TELA-01 (o PC-100 e o Fluxo Caixa tem alternancia de
+    cenario Realizado/Meta DENTRO da tela: o financeiro ve^ a meta por ali; nao tratado) · a barra do CELULAR continua sem aba para
+    nenhuma tela dele · `MOTIVO_GADO` ainda e' a reserva de `motivoLancarRealizado` na venda (`VendaModalShell`), inalcancavel hoje ·
+    ACESSOS-FIN-SAIDAS-NAO-VARRIDAS-01 (varridos: os callbacks que o `V2Index` entrega e os `navigate`/`window.location` das 16
+    telas; os modais e dialogos internos de cada tela NAO foram lidos um a um) · NADA DISTO FOI PROVADO NO NAVEGADOR com perfil
+    nao admin (homologacao do Gabriel, usuario Financeiro no cliente Teste).
 - ⚠ O QUE FALTA: (a) o EFEITO de 'ver' nas telas (modo somente leitura por perfil) — hoje a funcao devolve o nivel e nenhuma tela o
   usa; no piloto as tres sao 'editar' para gestor e financeiro, e 'ver' para `leitura`, que hoje EDITARIA; (b) a trava no banco, 01F;
   (c) a grade por pessoa, ACESSOS-03; (d) [feito no ACESSOS-02b: o endereco e' "/"].
