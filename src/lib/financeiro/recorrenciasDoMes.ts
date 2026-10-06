@@ -91,6 +91,16 @@ export function competenciaQueVenceNoMes(regra: Pick<RegraDoMes, 'diaVencimento'
   return mesDe(venc) === mes ? comp : null;
 }
 
+/**
+ * A OCORRÊNCIA ESTÁ ESTIMADA? — a regra ÚNICA do "ainda é estimativa" (REC-VALOR-CERTO-01/02): a recorrência é A CONFIRMAR e a
+ * ocorrência não tem a marca do valor do mês nem está realizada/conciliada. A tela de Recorrências (`linhasDoMes`) e Contas a
+ * Pagar e Receber (`lerEstimadasDoCliente` -> `recortarCpr`) julgam por ESTA função; nenhuma segunda regra.
+ */
+export function ocorrenciaEstimada(o: { valorAConfirmar: boolean; valorDoMesEm: string | null | undefined; status: string | null | undefined }): boolean {
+  if (!o.valorAConfirmar) return false;
+  return !o.valorDoMesEm && !STATUS_PAGO.includes(o.status ?? '');
+}
+
 /** A pior situação vence: 'estimado' > 'confirmado'. */
 const pior = (a: SituacaoDoMes, b: SituacaoDoMes): SituacaoDoMes => (a === 'estimado' || b === 'estimado' ? 'estimado' : a === 'confirmado' || b === 'confirmado' ? 'confirmado' : 'certo');
 
@@ -121,8 +131,8 @@ export function linhasDoMes(regras: readonly RegraDoMes[], ocorrencias: readonly
       for (const o of vivas) {
         valor += centavos(o.valor);
         if (tipo === 'a_confirmar') {
-          const confirmada = !!o.valorDoMesEm || STATUS_PAGO.includes(o.status ?? '');
-          situacao = pior(situacao, confirmada ? 'confirmado' : 'estimado');
+          const estimada = ocorrenciaEstimada({ valorAConfirmar: true, valorDoMesEm: o.valorDoMesEm, status: o.status });
+          situacao = pior(situacao, estimada ? 'estimado' : 'confirmado');
         }
       }
       linhas.push({ ...base, valor, situacao, ocorrencias: vivas.length });

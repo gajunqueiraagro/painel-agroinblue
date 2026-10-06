@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 06/10/2026 (ACESSOS-FIN-03, +13 em `src/v2/lib/acessoMeta.test.tsx` (16 -> 29) — 4134 depois dele; antes o
+  Baseline em 06/10/2026 (REC-VALOR-CERTO-02, +17 em `src/lib/financeiro/cprEstimado.test.ts` (novo) — 4151 depois dele; antes o
+  ACESSOS-FIN-03, +13 em `src/v2/lib/acessoMeta.test.tsx` (16 -> 29) — 4134 depois dele; antes o
   REC-VALOR-CERTO-01, +36: `src/lib/financeiro/recorrenciasDoMes.test.ts` 19,
   `src/components/recorrencias/recValorCerto01.test.tsx` 17 — 4121 depois dele; antes o ACESSOS-FIN-02, +17 −2: `src/v2/lib/acessoMeta.test.tsx` 16 (novo), `src/pages/pecDrePanel.test.tsx` 1; em
   `src/v2/lib/acessoOperacao.test.tsx` o M9 passou de 8 a 6 casos (o par "gestor e financeiro acesos" virou so' gestor, e o apagado
@@ -212,7 +213,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4134
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4151
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -2754,6 +2755,44 @@ docs/historico/frentes-ate-2026-09-29.md.)
     contraste dos dois tons do rodape navy medido na tela (calculado: ~6,4:1 e ~8,8:1), sair da tela com o Ampliado ligado (so'
     por teste de fonte), e, no Ampliado, DIGITAR nas datas e ABRIR o seletor de conta (sao os mesmos nos da tela normal; no
     navegador foram trocados atalho, segmento e a caixa).
+- ⚠ CONTAS A PAGAR E RECEBER DIZ O QUE AINDA E' ESTIMATIVA, PELA REGRA UNICA DA RECORRENCIA (REC-VALOR-CERTO-02, Gabriel 06/10/2026,
+  so' tela): "quando a gente tem uma previsão de contas a pagar, é legal ter uma ideia desse valor: muitos são previsão, outros já
+  são confirmados."
+  · A REGRA E' UMA: `ocorrenciaEstimada({ valorAConfirmar, valorDoMesEm, status })` (`src/lib/financeiro/recorrenciasDoMes.ts`) —
+    recorrencia A CONFIRMAR cuja ocorrencia nao tem a marca do valor do mes nem esta' realizada/conciliada. A tela de Recorrencias
+    (`linhasDoMes`) e a CPR julgam por ELA; `cprRecorte.ts` NAO julga (preso por teste: nao cita marca nem tipo do valor).
+  · DADO: a consulta da lista (`cpr-lancs`) le' a view `vw_financeiro_lancamentos_v2_doc`, que NAO expoe `recorrencia_id` nem
+    `valor_do_mes_em` (medido) — "acrescentar a' mesma consulta" exigiria mudar a view (banco). Entrou UMA leitura por cliente,
+    `cpr-estimadas` (`lerEstimadasDoCliente`, `useRecorrencias.ts`): (1) os ids das recorrencias com `tipo_valor = 'estimado'`;
+    (2) SO' se houver alguma, as ocorrencias vivas delas, e `idsEstimados` monta o conjunto pela regra unica. NUNCA por linha. Hoje
+    (06/10) nenhuma recorrencia esta' "A confirmar": a segunda leitura nao acontece. Invalida junto com as outras chaves da tela.
+  · DONO: `recortarCpr(…, { estimadas })` devolve `aPagarConfirmado` / `aPagarEstimado` (e `aReceberConfirmado` / `aReceberEstimado`),
+    em CENTAVOS inteiros, sobre as MESMAS linhas do total do rodape (vencidos, se a caixa esta' ligada, + periodo): confirmado +
+    estimado = total, ao centavo. Conta que nao e' de recorrencia — e tudo, sem o conjunto — e' confirmada. NADA MUDA NO SALDO
+    (baldes, totais e a serie identicos com e sem o conjunto, preso por teste).
+  · LISTA (normal e Ampliado): a conta estimada leva o selo "estimado" (ambar, 9px, 14px) DEPOIS da descricao, dentro da celula — a
+    descricao corta antes, o selo nunca — e o valor dela em ambar; `title` do selo "valor estimado pela recorrência · informe o
+    valor do mês no lançamento". Conta paga nao leva selo. Linha de 18px, igual.
+  · TOTAIS: SO' NO AMPLIADO, na terceira linha (a das pilulas, 20px), a' direita: "confirmado ▼ X" e "estimado ▼ Y" (o segundo em
+    ambar), num lugar RESERVADO de 316px que existe sempre e so' se preenche com estimado > 0. NA TELA NORMAL NAO COUBE: a faixa
+    "A pagar por conta" tem 154px livres dos 316 (medido no NJ) — os dois numeros vao no `title` do cartao "A pagar". A RECEBER
+    nao e' desenhado (nao ha' recorrencia de entrada estimada).
+  Medido a 1.126 no NJ (so' leitura): linha 18px com e sem o selo (selo 47 x 14, 9px; a descricao de 185px corta antes dele); os
+  dois pares com "▼ R$ 99.999.999,99" pedem 154 + 144 + 12; pilulas 50,8 · 69,7 · 60,7 · 58,2 e cabecalho 119 / rodape 544 como antes.
+  Numeros reais, 30 dias, Ambos: NJ total a pagar 1.781.011,29 = confirmado, estimado 0,00; Vera 61.783,03 = confirmado, estimado
+  0,00 (nenhuma recorrencia marcada "A confirmar" no banco). Saldo do NJ igual ao publicado (Caixa 1.283.617,05; fim −379.341,22).
+  ⚠ MEDIR SEM TROCAR NO' DO REACT: ao medir o selo eu SUBSTITUI um no' da lista por um clone e a tela ficou BRANCA no gesto
+    seguinte (o React foi remover um no' que ja' nao estava la'). Medida de pior caso vai num CLONE SOLTO no `body`, nunca dentro
+    da arvore que o React controla.
+  · LEITURA INCOMPLETA: a leitura das ocorrencias estimadas tem teto de 5.000 linhas (`TETO_OCORRENCIAS_ESTIMADAS`); batendo nele, a
+    tela escreve o aviso no `title` do selo, dos dois totais e do cartao "A pagar" (`AVISO_ESTIMADAS_INCOMPLETO`). SO' no `title`: ao
+    lado dos totais nao cabe (o lugar de 316px fica cheio no pior numero).
+  ⚠ DIVIDAS: REC-VALOR-CERTO-EXPORT-01 (PDF e Excel da CPR sem o selo "estimado" e sem os dois totais — a regua do PDF e' medida e
+    nao foi tocada) · REC-VALOR-CERTO-TELA-NORMAL-01 (os dois totais confirmado / estimado so' existem no Ampliado; na tela normal
+    vao no `title` do cartao "A pagar") · `(supabase as any).from` nas duas leituras (colunas fora do `types.ts`).
+  ⚠ NAO PROVADO: o selo e os dois totais com conta estimada REAL (nenhuma recorrencia esta' marcada "A confirmar": so' teste e
+    medicao de clone) · o lugar de 316px REMEDIDO na tela (foi alargado de 290 depois da medicao) · o gesto no cliente Teste (nao
+    ha' recorrencia la') · o aviso de leitura incompleta (nenhum cliente chega perto do teto).
 - ⚠ CONTAS A PAGAR E RECEBER EXPORTA O QUE A TELA MOSTRA, E O ARQUIVO NAO FAZ CONTA (CPR-EXPORT-01, Gabriel 05–06/10/2026, so' tela,
   sem consulta nova). Botao "Exportar ▾" (PDF · Excel), UM no' (`ctlExportar`): na barra 2 da tela normal, antes do Ampliar, e no
   Ampliado a' direita da faixa dos cartoes. Exporta o recorte DO MOMENTO DO CLIQUE (periodo, conta, segmento, caixa de vencidos,

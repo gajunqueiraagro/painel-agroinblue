@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
-import type { OcorrenciaDoMes } from '@/lib/financeiro/recorrenciasDoMes';
+import { ocorrenciaEstimada, type OcorrenciaDoMes } from '@/lib/financeiro/recorrenciasDoMes';
 
 /**
  * useRecorrencias — as regras de repetição e o que elas já produziram.
@@ -276,6 +276,48 @@ export const lerOcorrencia = (l: any): OcorrenciaDoMes => ({
   status: typeof l?.status_transacao === 'string' ? l.status_transacao : null,
   valorDoMesEm: typeof l?.valor_do_mes_em === 'string' ? l.valor_do_mes_em : null,
 });
+
+/**
+ * OS LANÇAMENTOS AINDA ESTIMADOS DE UM CLIENTE — REC-VALOR-CERTO-02. O que Contas a Pagar e Receber precisa para dizer "isto é
+ * estimativa": o conjunto de ids de lançamento cuja ocorrência a regra única (`ocorrenciaEstimada`) julga estimada.
+ * ⚠ DUAS LEITURAS POR CLIENTE, NUNCA POR LINHA: (1) os ids das recorrências A CONFIRMAR (`tipo_valor = 'estimado'`); (2) SÓ se
+ *   houver alguma, as ocorrências vivas delas (id, status, marca do valor do mês). Sem recorrência a confirmar — o estado do
+ *   proto em 06/10/2026 — a segunda leitura NÃO acontece.
+ * ⚠ POR QUE NÃO É "A MESMA CONSULTA" DA CPR: ela lê a view `vw_financeiro_lancamentos_v2_doc`, que não expõe `recorrencia_id` nem
+ *   `valor_do_mes_em` (medido). Mudar a view é banco; isto é só tela.
+ * ⚠ `incompleto` quando a segunda leitura bate no teto: quem chama diz, em vez de classificar calado.
+ */
+export const TETO_OCORRENCIAS_ESTIMADAS = 5000;
+export async function lerEstimadasDoCliente(clienteId: string): Promise<{ ids: Set<string>; incompleto: boolean }> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- `tipo_valor`/`valor_do_mes_em` fora de types.ts; idioma do RecorrenciaDialog
+  const cliente = supabase as any;
+  const { data: regras, error: e1 } = await cliente.from('financeiro_recorrencias')
+    .select('id').eq('cliente_id', clienteId).eq('tipo_valor', 'estimado');
+  if (e1) throw e1;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- linhas cruas
+  const idsDasRegras: string[] = (Array.isArray(regras) ? regras : []).map((r: any) => String(r?.id ?? '')).filter(Boolean);
+  if (idsDasRegras.length === 0) return { ids: new Set(), incompleto: false };
+  const { data, error: e2 } = await cliente.from('financeiro_lancamentos_v2')
+    .select('id, recorrencia_id, valor, data_vencimento, status_transacao, valor_do_mes_em')
+    .eq('cliente_id', clienteId).eq('cancelado', false).in('recorrencia_id', idsDasRegras)
+    .range(0, TETO_OCORRENCIAS_ESTIMADAS - 1);
+  if (e2) throw e2;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- linhas cruas
+  const linhas: any[] = Array.isArray(data) ? data : [];
+  return { ids: idsEstimados(linhas), incompleto: linhas.length >= TETO_OCORRENCIAS_ESTIMADAS };
+}
+
+/** Das ocorrências vivas de recorrências A CONFIRMAR, os ids que a regra única julga estimados. Pura: é o que o teste exercita. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- linhas cruas do PostgREST
+export function idsEstimados(linhas: readonly any[]): Set<string> {
+  const ids = new Set<string>();
+  for (const l of linhas) {
+    const o = lerOcorrencia(l);
+    const id = String(l?.id ?? '');
+    if (id && ocorrenciaEstimada({ valorAConfirmar: true, valorDoMesEm: o.valorDoMesEm, status: o.status })) ids.add(id);
+  }
+  return ids;
+}
 
 /**
  * O QUE SE PROPAGA — REC-VALOR-CERTO-01. O tipo do valor (certo | a confirmar) e a folha são atributos da REGRA: trocá-los

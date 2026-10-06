@@ -28,12 +28,13 @@ import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialo
 import { PageHeader } from '@/components/ui/page-header';
 import { Segmentado } from '@/components/ui/segmentado';
 import { CprFluxoPrevisto } from '@/components/financeiro-v2/CprFluxoPrevisto';
+import { lerEstimadasDoCliente } from '@/hooks/useRecorrencias';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   ATALHOS_CPR, periodoDoAtalho, recortarCpr, ramoDaConsultaCpr, doSegmentoCpr, contaEmAberto,
   ehReceberCpr, contaDaConta, resumoPorContaCpr, contasDaFaixaCpr, SEM_CONTA,
-  ancorasDoCaixaCpr, serieDoSaldoCpr, linhasDoSaldoCpr, resumoPorSemanaCpr, saldoPorContaCpr,
+  ancorasDoCaixaCpr, serieDoSaldoCpr, linhasDoSaldoCpr, resumoPorSemanaCpr, saldoPorContaCpr, contaEstimadaCpr,
   type AtalhoCpr, type PeriodoCpr, type FiltroContaCpr,
 } from '@/lib/financeiro/cprRecorte';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -608,17 +609,30 @@ export function ContasPagarReceberTab({ onIntensiveToggle }: {
   const ehReceber = ehReceberCpr;
   /* CPR-SALDO-DIA-01 (D2): a âncora de CADA conta, LIDA do cartão Caixa (a data que o cálculo dele usou) — nenhuma consulta nova. */
   const ancoras = useMemo(() => (caixaTodas ? ancorasDoCaixaCpr(caixaTodas.ancoraPorConta) : undefined), [caixaTodas]);
+  /* REC-VALOR-CERTO-02 — os lançamentos AINDA ESTIMADOS do cliente (recorrência a confirmar sem o valor do mês): o conjunto vem da
+     regra única, em até duas leituras por cliente (nunca por linha; a segunda só existe se houver recorrência a confirmar). O
+     dono reparte o total por ele; a tela só desenha o selo e os dois totais. */
+  const { data: estimadasDoCliente } = useQuery({
+    queryKey: ['cpr-estimadas', clienteId],
+    enabled: !!clienteId,
+    queryFn: async () => (clienteId ? lerEstimadasDoCliente(clienteId) : { ids: new Set<string>(), incompleto: false }),
+  });
+  const estimadas = estimadasDoCliente?.ids;
+  /* A leitura das ocorrências estimadas tem teto (`TETO_OCORRENCIAS_ESTIMADAS`): batendo nele, a tela DIZ — no `title` do selo e dos
+     dois totais — em vez de classificar calada. Só no `title`: o lugar dos totais (316px) fica cheio no pior número. */
+  const avisoEstimadasIncompleto = estimadasDoCliente?.incompleto ? AVISO_ESTIMADAS_INCOMPLETO : '';
+  const tituloDoSelo = TITULO_SELO_ESTIMADO + (avisoEstimadasIncompleto ? `\n${avisoEstimadasIncompleto}` : '');
   const recorte = useMemo(
-    () => recortarCpr(linhas, { periodo, hoje: hojeIso, incluirVencidos, conta: contaSel, ancoras }),
-    [linhas, periodo, hojeIso, incluirVencidos, contaSel, ancoras]);
+    () => recortarCpr(linhas, { periodo, hoje: hojeIso, incluirVencidos, conta: contaSel, ancoras, estimadas }),
+    [linhas, periodo, hojeIso, incluirVencidos, contaSel, ancoras, estimadas]);
   /* A SÉRIE DO SALDO — do dono, a partir do MESMO número do cartão Caixa. A caixa "Incluir vencidos" não entra nela (D3). */
   const serie = useMemo(
     () => serieDoSaldoCpr(recorte, caixa && caixa.ancoradas > 0 ? caixa.total : null),
     [recorte, caixa]);
   /* o resumo por conta (opções do seletor e a faixa): do MESMO dono, sobre os MESMOS dados, sempre de TODAS as contas */
   const recorteDeTodas = useMemo(
-    () => (contaSel == null ? recorte : recortarCpr(linhas, { periodo, hoje: hojeIso, incluirVencidos, ancoras })),
-    [recorte, contaSel, linhas, periodo, hojeIso, incluirVencidos, ancoras]);
+    () => (contaSel == null ? recorte : recortarCpr(linhas, { periodo, hoje: hojeIso, incluirVencidos, ancoras, estimadas })),
+    [recorte, contaSel, linhas, periodo, hojeIso, incluirVencidos, ancoras, estimadas]);
   const resumoContas = useMemo(
     () => resumoPorContaCpr(linhas, { periodo, hoje: hojeIso, incluirVencidos }),
     [linhas, periodo, hojeIso, incluirVencidos]);
@@ -776,6 +790,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle }: {
       queryClient.invalidateQueries({ queryKey: ['cpr-lancs'] }),
       queryClient.invalidateQueries({ queryKey: ['cpr-caixa'] }),
       queryClient.invalidateQueries({ queryKey: ['cpr-anexos'] }),
+      queryClient.invalidateQueries({ queryKey: ['cpr-estimadas'] }),
     ]);
   };
 
@@ -994,6 +1009,27 @@ export function ContasPagarReceberTab({ onIntensiveToggle }: {
   /* AS PÍLULAS DE STATUS — UM nó, um estado (`statusLigados`), nos dois modos. No Ampliado elas moram numa TERCEIRA linha fixa de
      20px, menores (16px / 9,5px): na faixa dos cartões sobram ~245px ao lado do "Exportar ▾" e as quatro pedem quase isso —
      sem medida de tela que garanta folga, não se arrisca cortar número. */
+  /* REC-VALOR-CERTO-02 — "confirmado ▼ X · estimado ▼ Y" do total A PAGAR do recorte (do dono, em centavos). LUGAR RESERVADO, de
+     largura fixa: o bloco existe sempre e só se preenche quando há estimado — nada se move quando aparece. Só no Ampliado (terceira
+     linha); na tela normal a faixa "A pagar por conta" tem 154px livres dos 316 que o par pede (medido no NJ a 1.126), e os dois
+     números vão no `title` do cartão "A pagar". 316 = 154 + 144 (os dois pares com "▼ R$ 99.999.999,99") + 12 de vão + folga. */
+  const temEstimado = recorte.aPagarEstimado.valor > 0;
+  const ctlConfirmadoEstimado = (
+    <div data-testid="cpr-confirmado-estimado" className="flex h-[16px] w-[316px] shrink-0 items-center justify-end gap-3 text-[9.5px]">
+      {temEstimado && (
+        <>
+          <span className="flex shrink-0 items-baseline gap-1" title={`a pagar confirmado: ${recorte.aPagarConfirmado.qtd} ${recorte.aPagarConfirmado.qtd === 1 ? 'conta' : 'contas'}` + (avisoEstimadasIncompleto ? `\n${avisoEstimadasIncompleto}` : '')}>
+            <span className="text-muted-foreground">confirmado</span>
+            <span className={cn('whitespace-nowrap text-[10px] font-medium tabular-nums', COR_SINAL.neg)} data-valor-confirmado>▼ {formatMoeda(recorte.aPagarConfirmado.valor / 100)}</span>
+          </span>
+          <span className="flex shrink-0 items-baseline gap-1" title={`a pagar ainda estimado: ${recorte.aPagarEstimado.qtd} ${recorte.aPagarEstimado.qtd === 1 ? 'conta' : 'contas'} · ${tituloDoSelo}`}>
+            <span className={COR_ESTIMADO}>estimado</span>
+            <span className={cn('whitespace-nowrap text-[10px] font-medium tabular-nums', COR_ESTIMADO)} data-valor-estimado>▼ {formatMoeda(recorte.aPagarEstimado.valor / 100)}</span>
+          </span>
+        </>
+      )}
+    </div>
+  );
   const ctlStatus = (
     <div className="flex shrink-0 items-center gap-1" data-testid="cpr-status">
       {STATUS_DISPONIVEIS.map((s) => {
@@ -1061,6 +1097,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle }: {
             <span className="shrink-0 text-[9.5px] text-muted-foreground">Status</span>
             {ctlStatus}
             <div className="flex min-w-0 flex-1 basis-0 justify-end">{ctlRecadoExport}</div>
+            {ctlConfirmadoEstimado}
           </div>
         </div>
       )}
@@ -1117,7 +1154,9 @@ export function ContasPagarReceberTab({ onIntensiveToggle }: {
             testId="cpr-card-pagar"
             rotulo="A pagar"
             contagem={`· ${recorte.periodoSoma.pagar.contas}`}
-            titulo={`A pagar no período: ${contas(recorte.periodoSoma.pagar.contas)}, sem os vencidos`}
+            titulo={`A pagar no período: ${contas(recorte.periodoSoma.pagar.contas)}, sem os vencidos`
+              + (temEstimado ? `\nno total a pagar do recorte: confirmado ${formatMoeda(recorte.aPagarConfirmado.valor / 100)} · estimado ${formatMoeda(recorte.aPagarEstimado.valor / 100)} (${recorte.aPagarEstimado.qtd})` : '')
+              + (avisoEstimadasIncompleto ? `\n${avisoEstimadasIncompleto}` : '')}
             valor={formatMoeda(recorte.periodoSoma.pagar.valor)}
             classeValor="text-destructive"
             borda="border-l-destructive"
@@ -1315,8 +1354,10 @@ export function ContasPagarReceberTab({ onIntensiveToggle }: {
                     const doc = (l.numero_documento ?? '').trim() ? (l.documento_formatado ?? '') : '';
                     /* Origem, Doc e Conta saíram da grade: moram no `title` da Descrição. */
                     const dicaDescricao = `${l.descricao || '—'}\norigem: ${rotuloOrigem(l.origem_lancamento)} · doc: ${doc || '—'} · conta: ${nomeConta(contaDaConta(l))}`;
+                    /* REC-VALOR-CERTO-02 — a conta ESTIMADA (pelo conjunto da regra única): selo depois da descrição e valor em âmbar. */
+                    const estimada = !paga && contaEstimadaCpr(l, estimadas);
                     const celValor = (
-                      <span data-valor-da-linha className={cn('whitespace-nowrap text-right tabular-nums', receber ? COR_SINAL.pos : COR_SINAL.neg, paga && 'opacity-50')}
+                      <span data-valor-da-linha className={cn('whitespace-nowrap text-right tabular-nums', estimada ? COR_ESTIMADO : receber ? COR_SINAL.pos : COR_SINAL.neg, paga && 'opacity-50')}
                         title={paga ? 'já paga — não entra nos totais nem no saldo' : undefined}>
                         {formatMoeda(valor)}
                       </span>
@@ -1349,9 +1390,20 @@ export function ContasPagarReceberTab({ onIntensiveToggle }: {
                             {paga && l.data_pagamento ? format(parseISO(l.data_pagamento), 'dd/MM/yy') : ''}
                           </span>
                         )}
-                        <span className="min-w-0 flex-1 truncate text-foreground" title={dicaDescricao} data-celula-descricao>
-                          {l.descricao || '—'}
-                        </span>
+                        {estimada ? (
+                          /* a descrição corta ANTES do selo; o selo nunca corta, e a linha segue com 18px */
+                          <span className="flex min-w-0 flex-1 items-center gap-1" data-celula-descricao>
+                            <span className="min-w-0 truncate text-foreground" title={dicaDescricao}>{l.descricao || '—'}</span>
+                            <span data-testid="cpr-selo-estimado" title={tituloDoSelo}
+                              className="h-[14px] shrink-0 whitespace-nowrap rounded bg-amber-100 px-1 text-[9px] leading-[14px] text-amber-700">
+                              estimado
+                            </span>
+                          </span>
+                        ) : (
+                          <span className="min-w-0 flex-1 truncate text-foreground" title={dicaDescricao} data-celula-descricao>
+                            {l.descricao || '—'}
+                          </span>
+                        )}
                         <span style={larg(regua.fornecedor)} className="truncate text-muted-foreground" title={fornecedor}>
                           {fornecedor}
                         </span>
@@ -1497,6 +1549,11 @@ function CardResumo({ rotulo, contagem, classeContagem, titulo, valor, classeVal
  * ▼ a pagar (vermelho) · ▲ a receber (verde) · saldo ▲ verde se ≥ 0, ▼ vermelho se < 0, com "−" tipográfico colado.
  * Zero é R$ 0,00 (sem seta, apagado). As cores vêm de `COR_SINAL`; no rodapé navy, de `TOM_NO_NAVY`.
  */
+/* REC-VALOR-CERTO-02 — o âmbar do "ainda é estimativa" e a frase do selo, num lugar só. */
+const COR_ESTIMADO = 'text-amber-600';
+const TITULO_SELO_ESTIMADO = 'valor estimado pela recorrência · informe o valor do mês no lançamento';
+const AVISO_ESTIMADAS_INCOMPLETO = 'leitura incompleta: há mais ocorrências de recorrência a confirmar do que a tela lê de uma vez — pode haver conta estimada sem o selo';
+
 function CelValor({ largura, tipo, valor, navy, semSeta, fundoNegativo, motivoSemSaldo }: {
   largura: number; tipo: 'pagar' | 'receber' | 'saldo'; valor: number | null | undefined;
   navy?: boolean; semSeta?: boolean; fundoNegativo?: boolean; motivoSemSaldo?: string;

@@ -235,7 +235,7 @@ describe('a tela só renderiza o dono (lido da fonte)', () => {
     expect(tela).not.toMatch(/ramoDoHorizonte|limiteDoHorizonte/);
   });
   it('os cartões e o total leem `recorte`; nenhuma soma de `linhas` na tela', () => {
-    expect(tela).toContain('recortarCpr(linhas, { periodo, hoje: hojeIso, incluirVencidos, ancoras })');
+    expect(tela).toContain('recortarCpr(linhas, { periodo, hoje: hojeIso, incluirVencidos, ancoras, estimadas })');
     for (const campo of ['recorte.vencidos.pagar.valor', 'recorte.periodoSoma.pagar.valor', 'recorte.periodoSoma.receber.valor', 'recorte.total.pagar.valor', 'recorte.total.receber.valor', 'serie.fim', 'serie.menor']) {
       expect(tela, campo).toContain(campo);
     }
@@ -252,7 +252,7 @@ describe('a tela só renderiza o dono (lido da fonte)', () => {
     expect(Array.from(tela.matchAll(/overflow-y-auto/g)).length).toBe(1);
   });
   it('CPR-CONTA-01: o filtro entra no dono e chega a tudo — cartões, lista, total, gráfico, caixa e cabeçalho', () => {
-    expect(tela).toContain('recortarCpr(linhas, { periodo, hoje: hojeIso, incluirVencidos, conta: contaSel, ancoras })');
+    expect(tela).toContain('recortarCpr(linhas, { periodo, hoje: hojeIso, incluirVencidos, conta: contaSel, ancoras, estimadas })');
     expect(tela).toContain('resumoPorContaCpr(linhas, { periodo, hoje: hojeIso, incluirVencidos })');
     /* o gráfico desenha o que sai do MESMO recorte filtrado, e parte do saldo da MESMA conta */
     expect(tela).toContain('const doFluxo = useMemo(() => linhasDoSaldoCpr(recorte), [recorte]);');
@@ -270,7 +270,10 @@ describe('a tela só renderiza o dono (lido da fonte)', () => {
     expect(tela).toContain('conta: ${nomeConta(contaDaConta(l))}');   // a Conta saiu da grade: mora no `title` da Descrição
     expect(tela).not.toContain('nomeConta(l.conta_bancaria_id)');
     /* nenhuma consulta nova: a tela continua com as mesmas três chaves de cache */
-    expect(Array.from(new Set(Array.from(tela.matchAll(/queryKey: \['(cpr-[a-z]+)'/g)).map(m => m[1]))).sort()).toEqual(['cpr-anexos', 'cpr-caixa', 'cpr-lancs']);
+    expect(Array.from(new Set(Array.from(tela.matchAll(/queryKey: \['(cpr-[a-z]+)'/g)).map(m => m[1]))).sort())
+      /* REC-VALOR-CERTO-02: entrou UMA leitura por cliente (`cpr-estimadas`, o conjunto dos lançamentos ainda estimados) — a view da
+         lista não expõe `recorrencia_id` nem a marca do valor do mês. Continua sem consulta por linha. */
+      .toEqual(['cpr-anexos', 'cpr-caixa', 'cpr-estimadas', 'cpr-lancs']);
   });
   it('o cartão tem 40px e o valor não corta; o gráfico começa em "de"', () => {
     expect(tela).toContain("'flex min-w-0 h-[40px] items-center gap-1 rounded-md border border-l-[3px] px-1 py-[3px]'");

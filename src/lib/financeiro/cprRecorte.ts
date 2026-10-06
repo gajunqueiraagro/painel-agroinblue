@@ -150,7 +150,19 @@ export interface RecorteCpr<T extends ContaCpr> {
   pagas: T[];
   /** O total do rodapé da lista, por segmento: vencidos (se ligados) + período. Em "ambos" é o líquido (receber − pagar). */
   total: Record<SegmentoCpr, LadoCpr>;
+  /**
+   * REC-VALOR-CERTO-02 — o total A PAGAR (e A RECEBER) do MESMO recorte do rodapé, repartido em CONFIRMADO e ESTIMADO, em
+   * CENTAVOS inteiros: confirmado + estimado = total, ao centavo. "Estimado" é a conta cujo id está em `opcoes.estimadas` —
+   * o conjunto que a regra única (`ocorrenciaEstimada`, `recorrenciasDoMes.ts`) julgou; este dono NÃO julga, só reparte.
+   * Conta que não é de recorrência (ou sem o conjunto) é confirmada.
+   */
+  aPagarConfirmado: FatiaCpr; aPagarEstimado: FatiaCpr;
+  aReceberConfirmado: FatiaCpr; aReceberEstimado: FatiaCpr;
 }
+/** Uma fatia em CENTAVOS inteiros. */
+export interface FatiaCpr { valor: number; qtd: number }
+/** A conta está estimada? Só pergunta ao conjunto que veio da regra única. */
+export const contaEstimadaCpr = (c: Pick<ContaCpr, 'id'>, estimadas?: ReadonlySet<string>): boolean => !!estimadas && estimadas.has(c.id);
 
 function somar<T extends ContaCpr>(linhas: readonly T[]): SomaCpr & { cPagar: number; cReceber: number } {
   let cPagar = 0, cReceber = 0, nPagar = 0, nReceber = 0;
@@ -163,7 +175,7 @@ function somar<T extends ContaCpr>(linhas: readonly T[]): SomaCpr & { cPagar: nu
 
 export function recortarCpr<T extends ContaCpr>(
   linhas: readonly T[],
-  opcoes: { periodo: PeriodoCpr; hoje: string; incluirVencidos: boolean; conta?: FiltroContaCpr; ancoras?: AncorasCpr },
+  opcoes: { periodo: PeriodoCpr; hoje: string; incluirVencidos: boolean; conta?: FiltroContaCpr; ancoras?: AncorasCpr; estimadas?: ReadonlySet<string> },
 ): RecorteCpr<T> {
   const { periodo, hoje, incluirVencidos } = opcoes;
   const porBalde: Record<BaldeCpr, T[]> = { paga: [], sem_vencimento: [], vencido: [], periodo: [], antes_do_periodo: [], fora: [] };
@@ -183,6 +195,13 @@ export function recortarCpr<T extends ContaCpr>(
   const maisAntiga = porBalde.vencido.length > 0 ? (porBalde.vencido[0].data_vencimento ?? '').slice(0, 10) : null;
   const vP = incluirVencidos ? sv.cPagar : 0, vR = incluirVencidos ? sv.cReceber : 0;
   const nVP = incluirVencidos ? sv.pagar.contas : 0, nVR = incluirVencidos ? sv.receber.contas : 0;
+  /* REC-VALOR-CERTO-02 — as MESMAS linhas do total do rodapé (vencidos, se ligados, + período), repartidas pelo conjunto. */
+  const fatias = { pc: { valor: 0, qtd: 0 }, pe: { valor: 0, qtd: 0 }, rc: { valor: 0, qtd: 0 }, re: { valor: 0, qtd: 0 } };
+  for (const l of [...(incluirVencidos ? porBalde.vencido : []), ...porBalde.periodo]) {
+    const est = contaEstimadaCpr(l, opcoes.estimadas);
+    const f = ehPagarCpr(l) ? (est ? fatias.pe : fatias.pc) : ehReceberCpr(l) ? (est ? fatias.re : fatias.rc) : null;
+    if (f) { f.valor += centavosDaConta(l); f.qtd += 1; }
+  }
   return {
     periodo, hoje, incluirVencidos,
     vencidos: {
@@ -199,6 +218,7 @@ export function recortarCpr<T extends ContaCpr>(
       receber: { valor: reais(vR + sp.cReceber), contas: nVR + sp.receber.contas },
       ambos: { valor: reais((vR + sp.cReceber) - (vP + sp.cPagar)), contas: nVP + nVR + sp.pagar.contas + sp.receber.contas },
     },
+    aPagarConfirmado: fatias.pc, aPagarEstimado: fatias.pe, aReceberConfirmado: fatias.rc, aReceberEstimado: fatias.re,
   };
 }
 
