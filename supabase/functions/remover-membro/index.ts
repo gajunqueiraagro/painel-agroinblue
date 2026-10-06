@@ -1,4 +1,12 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { alvoPermitido, podeGerenciarAcessos } from "../_shared/regrasDeAcesso.ts";
+
+/**
+ * NO PILOTO SO' O ADMIN DO AGROinBLUE GERENCIA ACESSOS (Gabriel, 06/10/2026). O ramo do gestor continua no corpo, atras
+ * desta constante. ⚠ RELIGAR EXIGE A REGRA DO ALVO de `_shared/regrasDeAcesso.ts` (admin nunca e' alvo; ninguem e' alvo
+ * de si mesmo) — sem ela um gestor redefinia a senha de um admin com linha no cliente dele.
+ */
+const GESTOR_GERENCIA_ACESSOS = false;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -58,25 +66,33 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Verify caller has permission (admin or gestor_cliente of same client)
+    // Quem pode chamar: o admin; o gestor do cliente so' com GESTOR_GERENCIA_ACESSOS ligado.
     const { data: isAdmin } = await adminClient.rpc('is_admin_agroinblue', { _user_id: caller.id });
-    if (!isAdmin) {
+    let callerGestor = false;
+    if (!isAdmin && GESTOR_GERENCIA_ACESSOS) {
       const { data: callerPerfil } = await adminClient.rpc('get_user_perfil', {
         _user_id: caller.id,
         _cliente_id: membro.cliente_id,
       });
-      if (callerPerfil !== 'gestor_cliente') {
-        return new Response(JSON.stringify({ error: "Sem permissão para remover membros" }), {
-          status: 403,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
+      callerGestor = callerPerfil === 'gestor_cliente';
+    }
+    const pode = podeGerenciarAcessos({
+      chamadorAdmin: !!isAdmin, chamadorGestorDoCliente: callerGestor, gestorGerencia: GESTOR_GERENCIA_ACESSOS,
+      fraseSemPermissao: "Sem permissão para remover membros",
+    });
+    if (pode.ok === false) {
+      return new Response(JSON.stringify({ error: pode.erro, etapa: "permissao" }), {
+        status: pode.status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    // Don't allow removing yourself
-    if (membro.user_id === caller.id) {
-      return new Response(JSON.stringify({ error: "Não é possível remover a si mesmo" }), {
-        status: 400,
+    // O ALVO: admin do AGROinBLUE nunca, quem quer que chame; e ninguem se remove por esta via.
+    const { data: alvoAdmin } = await adminClient.rpc('is_admin_agroinblue', { _user_id: membro.user_id });
+    const alvo = alvoPermitido({ alvoAdmin: !!alvoAdmin, alvoId: membro.user_id, chamadorId: caller.id });
+    if (alvo.ok === false) {
+      return new Response(JSON.stringify({ error: alvo.erro, etapa: "alvo" }), {
+        status: alvo.status,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -106,7 +122,7 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
-    console.error("remover-membro error:", err);
+    console.error("remover-membro error:", err?.message);
     return new Response(JSON.stringify({ error: err.message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

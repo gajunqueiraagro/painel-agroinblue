@@ -1,4 +1,12 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { acharLoginPorEmail, normalizarEmail, PERFIS_CRIAVEIS, podeGerenciarAcessos } from "../_shared/regrasDeAcesso.ts";
+
+/**
+ * NO PILOTO SO' O ADMIN DO AGROinBLUE GERENCIA ACESSOS (Gabriel, 06/10/2026). O ramo do gestor continua no corpo, atras
+ * desta constante. ⚠ RELIGAR EXIGE A REGRA DO ALVO de `_shared/regrasDeAcesso.ts` (admin nunca e' alvo; ninguem e' alvo
+ * de si mesmo) — sem ela um gestor redefinia a senha de um admin com linha no cliente dele.
+ */
+const GESTOR_GERENCIA_ACESSOS = false;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -40,50 +48,64 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { email, senha, nome, cliente_id, perfil, fazenda_ids } = await req.json();
+    const corpo = await req.json();
+    const { senha, nome, cliente_id, perfil, fazenda_ids } = corpo;
+    /* O e-mail se compara e se grava sem espacos e em minusculas. */
+    const email = normalizarEmail(corpo.email);
 
     if (!email || !senha || !cliente_id || !perfil) {
-      return new Response(JSON.stringify({ error: "Campos obrigatórios: email, senha, cliente_id, perfil" }), {
+      return new Response(JSON.stringify({ error: "Campos obrigatórios: email, senha, cliente_id, perfil", etapa: "validacao" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     if (senha.length < 6) {
-      return new Response(JSON.stringify({ error: "Senha deve ter pelo menos 6 caracteres" }), {
+      return new Response(JSON.stringify({ error: "Senha deve ter pelo menos 6 caracteres", etapa: "validacao" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const validPerfis = ['gestor_cliente', 'financeiro', 'campo', 'leitura'];
+    const validPerfis = PERFIS_CRIAVEIS;
     if (!validPerfis.includes(perfil)) {
-      return new Response(JSON.stringify({ error: "Perfil inválido. Valores aceitos: " + validPerfis.join(', ') }), {
+      return new Response(JSON.stringify({ error: "Perfil inválido. Valores aceitos: " + validPerfis.join(', '), etapa: "validacao" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Verify caller is admin or gestor_cliente of this client
+    // Quem pode chamar: o admin; o gestor do cliente so' com GESTOR_GERENCIA_ACESSOS ligado.
     const { data: isAdmin } = await adminClient.rpc('is_admin_agroinblue', { _user_id: caller.id });
-    if (!isAdmin) {
+    let callerGestor = false;
+    if (!isAdmin && GESTOR_GERENCIA_ACESSOS) {
       const { data: callerPerfil } = await adminClient.rpc('get_user_perfil', {
         _user_id: caller.id,
         _cliente_id: cliente_id,
       });
-      if (callerPerfil !== 'gestor_cliente') {
-        return new Response(JSON.stringify({ error: "Sem permissão para adicionar membros neste cliente" }), {
-          status: 403,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
+      callerGestor = callerPerfil === 'gestor_cliente';
+    }
+    const pode = podeGerenciarAcessos({
+      chamadorAdmin: !!isAdmin, chamadorGestorDoCliente: callerGestor, gestorGerencia: GESTOR_GERENCIA_ACESSOS,
+      fraseSemPermissao: "Sem permissão para adicionar membros neste cliente",
+    });
+    if (pode.ok === false) {
+      return new Response(JSON.stringify({ error: pode.erro, etapa: "permissao" }), {
+        status: pode.status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    // Check if user already exists
-    const { data: existingUsers } = await adminClient.auth.admin.listUsers();
-    const existingUser = existingUsers?.users?.find((u) => u.email === email);
+    // O e-mail ja' tem login? Percorre TODAS as paginas (a API admin nao busca por e-mail).
+    const existingUser = await acharLoginPorEmail(email, async (pagina, porPagina) => {
+      const { data, error } = await adminClient.auth.admin.listUsers({ page: pagina, perPage: porPagina });
+      if (error) throw new Error("Erro ao consultar os logins: " + error.message);
+      return data?.users ?? [];
+    });
 
     let userId: string;
+    /* O e-mail ja' tinha login: o vinculo e' criado e a SENHA DELE NAO MUDA (a digitada e' ignorada). A tela avisa. */
+    const loginExistente = !!existingUser;
 
     if (existingUser) {
       // Check if already a member of this client
@@ -95,7 +117,7 @@ Deno.serve(async (req) => {
         .single();
 
       if (existingMembro) {
-        return new Response(JSON.stringify({ error: "Este email já está cadastrado neste cliente" }), {
+        return new Response(JSON.stringify({ error: "Este email já está cadastrado neste cliente", etapa: "login" }), {
           status: 409,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
@@ -112,12 +134,12 @@ Deno.serve(async (req) => {
 
       if (createError) {
         if (createError.message?.includes('already') || createError.message?.includes('duplicate')) {
-          return new Response(JSON.stringify({ error: "Este email já está cadastrado no sistema" }), {
+          return new Response(JSON.stringify({ error: "Este email já está cadastrado no sistema", etapa: "login" }), {
             status: 409,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
-        return new Response(JSON.stringify({ error: "Erro ao criar usuário: " + createError.message }), {
+        return new Response(JSON.stringify({ error: "Erro ao criar usuário: " + createError.message, etapa: "login" }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
@@ -152,7 +174,12 @@ Deno.serve(async (req) => {
           .from("cliente_membros")
           .insert({ user_id: userId, cliente_id, perfil });
         if (insertError) {
-          return new Response(JSON.stringify({ error: "Erro ao vincular ao cliente: " + insertError.message }), {
+          /* ⚠ DIVIDA ACESSOS-CRIAR-USUARIO-ATOMICO-01: se o login acabou de ser criado, ele FICA sem vinculo. A resposta diz. */
+          return new Response(JSON.stringify({
+            error: "Erro ao vincular ao cliente: " + insertError.message
+              + (loginExistente ? "" : " — o login foi criado e ficou SEM acesso a este cliente."),
+            etapa: "vinculo_cliente", login_criado_sem_vinculo: !loginExistente,
+          }), {
             status: 400,
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
@@ -205,12 +232,13 @@ Deno.serve(async (req) => {
       .eq("user_id", userId)
       .is("cliente_id", null);
 
-    return new Response(JSON.stringify({ success: true, user_id: userId }), {
+    return new Response(JSON.stringify({ success: true, user_id: userId, login_existente: loginExistente }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
-    console.error("criar-usuario error:", err);
-    return new Response(JSON.stringify({ error: err.message }), {
+    /* So' a mensagem: o corpo do pedido (com a senha) nunca vai para o log. */
+    console.error("criar-usuario error:", err?.message);
+    return new Response(JSON.stringify({ error: err.message, etapa: "inesperado" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

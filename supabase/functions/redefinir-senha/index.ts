@@ -1,4 +1,12 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { alvoPermitido, podeGerenciarAcessos } from "../_shared/regrasDeAcesso.ts";
+
+/**
+ * NO PILOTO SO' O ADMIN DO AGROinBLUE GERENCIA ACESSOS (Gabriel, 06/10/2026). O ramo do gestor continua no corpo, atras
+ * desta constante. ⚠ RELIGAR EXIGE A REGRA DO ALVO de `_shared/regrasDeAcesso.ts` (admin nunca e' alvo; ninguem e' alvo
+ * de si mesmo) — sem ela um gestor redefinia a senha de um admin com linha no cliente dele.
+ */
+const GESTOR_GERENCIA_ACESSOS = false;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -42,7 +50,7 @@ Deno.serve(async (req) => {
     const { user_id, nova_senha } = await req.json();
 
     if (!user_id || !nova_senha) {
-      return new Response(JSON.stringify({ error: "Campos obrigatórios: user_id, nova_senha" }), {
+      return new Response(JSON.stringify({ error: "Campos obrigatórios: user_id, nova_senha", etapa: "validacao" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -55,10 +63,11 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Verify caller is admin or gestor of a shared client
+    // Quem pode chamar: o admin; o gestor de um cliente em comum so' com GESTOR_GERENCIA_ACESSOS ligado.
     const isAdmin = await adminClient.rpc('is_admin_agroinblue', { _user_id: caller.id });
-    
-    if (!isAdmin.data) {
+    let hasSharedClient = false;
+
+    if (!isAdmin.data && GESTOR_GERENCIA_ACESSOS) {
       // Check if caller is gestor_cliente of the same client as target user
       const { data: callerMembros } = await adminClient
         .from("cliente_membros")
@@ -78,14 +87,27 @@ Deno.serve(async (req) => {
 
       const targetClientes = (targetMembros || []).map(m => m.cliente_id);
 
-      const hasSharedClient = callerGestorClientes.some(c => targetClientes.includes(c));
+      hasSharedClient = callerGestorClientes.some(c => targetClientes.includes(c));
+    }
+    const pode = podeGerenciarAcessos({
+      chamadorAdmin: !!isAdmin.data, chamadorGestorDoCliente: hasSharedClient, gestorGerencia: GESTOR_GERENCIA_ACESSOS,
+      fraseSemPermissao: "Sem permissão para redefinir senha deste usuário",
+    });
+    if (pode.ok === false) {
+      return new Response(JSON.stringify({ error: pode.erro, etapa: "permissao" }), {
+        status: pode.status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
-      if (!hasSharedClient) {
-        return new Response(JSON.stringify({ error: "Sem permissão para redefinir senha deste usuário" }), {
-          status: 403,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
+    // O ALVO: admin do AGROinBLUE nunca, quem quer que chame; e ninguem redefine a propria senha por esta via.
+    const alvoAdmin = await adminClient.rpc('is_admin_agroinblue', { _user_id: user_id });
+    const alvo = alvoPermitido({ alvoAdmin: !!alvoAdmin.data, alvoId: user_id, chamadorId: caller.id });
+    if (alvo.ok === false) {
+      return new Response(JSON.stringify({ error: alvo.erro, etapa: "alvo" }), {
+        status: alvo.status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const { error: updateError } = await adminClient.auth.admin.updateUserById(user_id, {
@@ -103,7 +125,8 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
-    console.error("redefinir-senha error:", err);
+    /* So' a mensagem: o corpo do pedido (com a senha) nunca vai para o log. */
+    console.error("redefinir-senha error:", err?.message);
     return new Response(JSON.stringify({ error: err.message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
