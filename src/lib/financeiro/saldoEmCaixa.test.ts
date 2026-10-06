@@ -475,3 +475,55 @@ describe('elo fraco por natureza — PR-CPR-SALDO-NATUREZA-01', () => {
     expect(r.conciliadoAplicadoAte).toBeNull();
   });
 });
+
+/* CPR-SALDO-DIA-01 — a âncora de cada conta é LIDA do cálculo do cartão (nenhum espelho): o que `ancoraPorConta` diz é a data que
+   o saldo de cada conta de fato usou. */
+describe('estimarSaldoEmCaixa · ancoraPorConta', () => {
+  const MEIO = 'cc-posicao-no-meio', SEM = 'cc-sem-linha-que-concilie', PERMUTA = 'permuta', CARTAO = 'cartao', INV = 'investimento';
+  const contas = [
+    { id: MEIO, nome: 'Posição no meio', tipo: 'cc', acumuladoRealizados: null },
+    { id: SEM, nome: 'Não concilia', tipo: 'cc', acumuladoRealizados: null },
+    { id: PERMUTA, nome: 'Permuta', tipo: 'permuta', acumuladoRealizados: 500 },
+    { id: CARTAO, nome: 'Cartão', tipo: 'cartao', acumuladoRealizados: null },
+    { id: INV, nome: 'Investimento', tipo: 'inv', acumuladoRealizados: null },
+  ];
+  const saldos = [
+    saldo(MEIO, '2026-08', 0, 1000),                       // ago fecha (entrada de 1000)
+    saldo(MEIO, '2026-09', 1000, 700, '2026-09-17'),       // set fecha ATÉ 17/09 (saída de 300 em 10/09)
+    saldo(SEM, '2026-08', 0, 999),                         // nada explica 999: não concilia em mês nenhum
+    saldo(PERMUTA, '2026-08', 0, 500),                     // sem extrato: vale o declarado mais recente
+    saldo(CARTAO, '2026-09', 0, 0),
+    saldo(INV, '2026-07', 0, 150),                         // jul fecha; ago não tem linha
+  ];
+  const linhas = [
+    entrada(MEIO, '2026-08-05', 1000), saida(MEIO, '2026-09-10', 300), saida(MEIO, '2026-09-18', 50),
+    entrada(INV, '2026-07-02', 150),
+  ];
+  const r = estimarSaldoEmCaixa({ contas, saldos, linhas, hoje: HOJE, mesMinimo: JANELA });
+  const mapa = new Map(r.ancoraPorConta.map((a) => [a.contaId, a.data]));
+
+  it('uma entrada por conta que ENTROU na soma, com a data que o cálculo usou', () => {
+    expect(r.ancoraPorConta).toHaveLength(r.ancoradas);
+    expect(mapa.get(MEIO)).toBe('2026-09-17');             // a posição declarada no meio do mês manda
+    expect(mapa.get(PERMUTA)).toBe('2026-08-31');
+    expect(mapa.get(INV)).toBe('2026-07-31');
+    /* a mesma data que as funções da âncora dão, conta a conta */
+    expect(mapa.get(MEIO)).toBe(ancoraDaConta(MEIO, saldos, linhas, JANELA)?.data);
+    expect(mapa.get(INV)).toBe(ancoraDaConta(INV, saldos, linhas, JANELA)?.data);
+    expect(mapa.get(PERMUTA)).toBe(ancoraSemExtrato(PERMUTA, saldos)?.data);
+  });
+  it('conta sem linha que concilie e cartão de crédito NÃO têm âncora', () => {
+    expect(mapa.has(SEM)).toBe(false);
+    expect(mapa.has(CARTAO)).toBe(false);
+    expect(r.semAncora).toEqual(['Não concilia']);
+  });
+  it('o saldo de cada conta parte dessa data: a soma fecha com âncora + o que veio depois', () => {
+    /* MEIO 700 − 50 (18/09) = 650; INV 150; PERMUTA 500 */
+    expect(r.disponivel).toBe(650);
+    expect(r.aplicado).toBe(650);
+    expect(r.ancoraMaisAtrasada).toBe(r.ancoraPorConta.map((a) => a.data).sort()[0]);
+  });
+  it('sem nenhuma conta ancorada a lista é vazia', () => {
+    expect(estimarSaldoEmCaixa({ contas: [contas[1], contas[3]], saldos, linhas, hoje: HOJE, mesMinimo: JANELA }).ancoraPorConta).toEqual([]);
+  });
+});

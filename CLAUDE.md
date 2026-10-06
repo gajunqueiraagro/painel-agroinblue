@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 06/10/2026 (FIN-V2-COLUNAS-OC-01, +8 em `src/components/financeiro-v2/finV2ColunasOC01.test.ts` — 4001 depois dele;
+  Baseline em 06/10/2026 (CPR-SALDO-DIA-01, +22: `src/lib/financeiro/cprRecorte.test.ts` 18, `src/lib/financeiro/saldoEmCaixa.test.ts` 4 — 4023 depois dele;
+  antes o FIN-V2-COLUNAS-OC-01, +8 em `src/components/financeiro-v2/finV2ColunasOC01.test.ts` — 4001 depois dele;
   antes o CPR-CONTA-01, +7 em `src/lib/financeiro/cprRecorte.test.ts` — 3993 depois dele;
   antes o OC-VINCULAR-CANDIDATAS-01b, +1 em `src/components/financeiro-v2/vincularCandidatas.test.tsx` — 3986 depois dele;
   antes o CPR-PERIODO-VENCIDOS-01, +16 em `src/lib/financeiro/cprRecorte.test.ts` — 3985 depois dele;
@@ -204,7 +205,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4001
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4023
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -2518,6 +2519,101 @@ docs/historico/frentes-ate-2026-09-29.md.)
     houver uso real) · a barra 1 esta' SEM FOLGA a 1.126 (886 de 886): item novo quebra a linha · CONTA INATIVA aparece como "Conta
     inativa", sem o nome (o catalogo da tela so' carrega ativas) · "Sem conta definida" e conta inativa nao tem caso real (so' por
     teste) · as medidas a 1.024 e 1.280 foram feitas num iframe da propria aplicacao, nao numa janela real.
+- ⚠ CONTAS A PAGAR E RECEBER: SALDO POR DIA, E O VENCIDO SO' CONTA DEPOIS DA CONCILIACAO DA CONTA (CPR-SALDO-DIA-01, Gabriel
+  06/10/2026, so' tela, sem consulta nova). Dono: `src/lib/financeiro/cprRecorte.ts` — a regra depende da CONTA da linha e do
+  balde, que ja' eram dele; o grafico (`fluxoPrevisto.ts` / `CprFluxoPrevisto`) so' desenha as linhas que o dono entrega.
+  · D1 — O VENCIDO EM ABERTO CONTA NO SALDO (sai/entra HOJE) SO' COM VENCIMENTO POSTERIOR A' ULTIMA CONCILIACAO DA CONTA
+    (`vencidoContaNoSaldo`). Vencimento <= a ancora = mes ja' conciliado: NAO conta ("pode ser lancamento errado, legado"), fica a'
+    vista, e o operador abre o lancamento e atualiza a data para ele entrar na soma.
+  · D2 — A DATA DE CORTE E' POR CONTA: a ancora que o cartao Caixa usa, LIDA dele — `estimarSaldoEmCaixa` devolve
+    `ancoraPorConta [{contaId, data}]` (a data que o calculo de cada conta usou; o calculo nao mudou) e a tela a entrega ao dono por
+    `ancorasDoCaixaCpr`. NENHUM ESPELHO: `cprRecorte.ts` nao importa nada de `saldoEmCaixa.ts` (preso por teste). Em "Todas as
+    contas" cada vencido e' julgado pela ancora da conta DA LINHA (`contaDaConta`). Linha sem conta ou de conta sem ancora (cartao
+    de credito inclusive): fora do saldo, no subgrupo dos anteriores.
+  · D3 — A CAIXA "INCLUIR VENCIDOS" NAO MUDA O SALDO: decide so' a lista e o total do rodape (a pagar / a receber).
+  · D4 — LISTA E GRAFICO, A MESMA REGRA DO MESMO DONO: `serieDoSaldoCpr(recorte, saldo de hoje)` = partida (Caixa − vencidos a
+    pagar que contam + a receber que contam) -> "entre hoje e de" (se "de" e' futuro) -> cada dia (anterior − a pagar + a receber,
+    so' contas EM ABERTO, dos DOIS lados) -> fim; `menor` = o minimo da serie com o dia dele. Centavos inteiros. O grafico recebe
+    `linhasDoSaldoCpr(recorte)` e parte do MESMO saldo (`serie.hoje`); `ajusteVencidoPorDia(linhas, null, hoje, null)` desconta
+    todo vencido que recebe — o piso por "de" e o "conciliado ate'" do cliente inteiro SAIRAM (eram a regra antiga, que fazia o
+    grafico discordar da lista).
+  · ⚠ A LINHA DE SALDO DO GRAFICO E' SEMPRE A DA CONTA (Gabriel, 06/10: "o grafico tem que mostrar o saldo exato"): o Fluxo recebe
+    os DOIS lados em qualquer segmento (`doFluxo = linhasDoSaldoCpr(recorte)`, sem filtro) — conciliado, realizado, vencido,
+    previsto, as areas e as tags. O SEGMENTO decide SO' as barras de movimento (prop `barras` do `CprFluxoPrevisto`; o tooltip
+    as segue porque le' o que foi desenhado). O Fluxo NAO forca mais "Ambos" ao entrar (a unica razao era proteger o saldo).
+    Provado em "A pagar", "A receber" e "Ambos": partida, tres dias e fim identicos entre si e a' coluna Saldo (NJ · Banco do
+    Brasil 394.164,24 -> −195.584,67; Agnaldo · Bradesco −19.492,32 -> −59.165,15).
+  · BALDE NOVO `antes_do_periodo` (em aberto, entre hoje e um "de" FUTURO): passa pelo saldo, nao e' listado; e a busca
+    (`ramoDaConsultaCpr`) passou a comecar em `min(de, hoje)` para traze^-lo. A MESMA consulta, com o intervalo mais largo.
+  · A LISTA: linha fixa "Saldo hoje · {conta | todas as contas}" (= cartao Caixa); com a caixa DESLIGADA ela vira "… · apos vencidos"
+    e mostra o saldo de partida. Vencidos em DOIS subgrupos: "Vencidos · N contas · contam no saldo" (tom vermelho, com o saldo depois)
+    e "Vencidos anteriores a' conciliacao de DD/MM · N contas · fora do saldo" (muted, sem seta, Saldo vazio; em Todas "de cada conta";
+    conta sem ancora "de conta sem saldo conferido"). TODO DIA DA SERIE TEM FAIXA DE FECHAMENTO, mesmo sem conta listada no segmento
+    (o segmento governa a LISTAGEM; totais e saldo sao dos dois lados, e o N do titulo tambem). Rodape navy "Fim do periodo ·
+    DD/MM/AAAA · N contas" com o total a pagar, a receber e o SALDO NO FIM. "Sem vencimento" fora do saldo. Sem saldo em caixa
+    (cartao de credito): Saldo "—" com o motivo no `title`.
+  · SETAS E CORES NUM LUGAR SO' (`CelValor`): ▼ a pagar (vermelho), ▲ a receber (verde), saldo ▲ verde se >= 0 / ▼ vermelho se < 0
+    com "−" tipografico colado; cores de `COR_SINAL`; no rodape navy os dois tons claros `TOM_NO_NAVY` (#fca5a5 / #86efac). Zero e'
+    "R$ 0,00" apagado, sem seta. Faixa do dia: fundo OPACO de 12 % de primary sobre o cartao (`FUNDO_DIA`, `color-mix`), 22px,
+    filete de 1,5px; saldo negativo com fundo vermelho claro.
+  · UM SCROLLPORT, E TUDO O QUE E' FIXO MORA DENTRO DELE (cabecalho `top-0`, "Saldo hoje" `top-[22px]`, faixas `top-[42px]`, rodape
+    `sticky bottom-0`): fora, o fixo teria a largura cheia e as colunas de valor desalinhariam das linhas pelo gutter da barra.
+    ⚠ `.rolagem-sem-tampar` tem `padding-bottom: 10px`, e o `sticky bottom-0` ancora na caixa de CONTEUDO: o scrollport leva `!pb-0`.
+  · DUAS REGUAS, EM px, MEDIDAS a 1.126 com "▼ −R$ 99.999.999,99" em toda celula de valor, "Programado" em todo status e datas cheias
+    (0 cortes; folga minima 2px nos valores, 3,8 no status, 1,9 nas datas):
+      NORMAL (lista 884, conteudo 857): Venc. 46 · Descricao 185 · Fornecedor 100 · Subcentro 82 · Status 60 · clipe 12 · A pagar 111 ·
+        A receber 111 · Saldo 118. Sairam Conta, Origem e Doc: moram no `title` da Descricao ("origem: … · doc: … · conta: …").
+      AMPLIADO (lista 1.092): Comp. 30 · Venc. 46 · Pgto. 46 · Descricao 221 · Fornecedor 96 · Subcentro 84 · Safra 56 · Faz. 26 ·
+        Status 60 · clipe 12 · A pagar 111 · A receber 111 · Saldo 118. A CONTA NAO COUBE (a Descricao cairia abaixo de 220): `title`.
+    Alturas: cabecalho 22 · saldo hoje 20 · faixa do dia e dos vencidos que contam 22 · anteriores 20 · linha 18 · rodape 26.
+    Datas, Subcentro, Safra e Faz. a 9,5px; status a 9px (a excecao de sempre); nada abaixo.
+  · CARTOES: "Saldo" virou "Mínimo" (o `menor` da serie): rotulo "Mínimo ▼ · DD/MM" (ou "· hoje"), a seta na cor do sinal; sem
+    saldo em caixa, "Mínimo" e "—"; `title` "menor saldo previsto da conta no período". O `title` do Vencidos diz quantos contam e
+    quantos sao anteriores. Mesma grade. Medido a 1.126: rotulo 82,8 de 117px (a palavra e a data inteiras), valor no pior caso
+    113,9 de 117, cinco cartoes de 40px.
+  · O AMPLIADO E' O MODO PRINCIPAL: TEM OS MESMOS FILTROS DA TELA NORMAL, PELO MESMO ESTADO, E VALE PARA LISTA E FLUXO (Gabriel,
+    06/10). Mecanismo: o da lista de Lancamentos (`onIntensiveToggle`, repassado pelo `V2Index` em UMA linha; estado local; sair
+    da tela desliga). Cada controle e' UM no' (`ctlVisao`, `ctlAtalho`, `ctlDatas`, `ctlConta`, `ctlSegmento`, `ctlIncluir`) que a
+    tela normal e o Ampliado so' POSICIONAM — nenhum controle nem estado duplicado (preso por teste). Cabecalho do Ampliado em DUAS
+    linhas fixas: (1) barra de filtros de 26px — Lista|Fluxo · atalhos · de/ate' · Conta · A pagar|A receber|Ambos · Incluir
+    vencidos · Recolher; (2) faixa dos cartoes de 24px (Vencidos · A pagar · A receber · Minimo · Caixa) com, a' direita, "status:
+    Previsto · Programado · Agendado" (as PILULAS DE STATUS, 277px, NAO CABEM na barra: ficam so' na tela normal). O rotulo
+    "Conta" sai no Ampliado (o seletor diz o nome). Medido a 1.126: barra 1.094 de 1.094, uma linha, 10,9px de folga; nenhuma data
+    cortada. Trocar atalho, segmento ou a caixa no Ampliado nao move cabecalho (95), "Saldo hoje" (117) nem rodape (544) e nao
+    liga rolagem na pagina. O botao Ampliar fica na barra 2 da tela normal. Excel/PDF: a tela nao tem.
+  · FLUXO AMPLIADO: o grafico ocupa toda a area abaixo do cabecalho — 876 x 250 na tela normal, 1.084 x 375 no Ampliado (o
+    `ResponsiveContainer` mede em pixels reais; nenhuma fonte escala: 9,5 / 10 / 11 / 12 / 13px nos dois). Trocar Lista <-> Fluxo
+    mantem periodo, conta, segmento e o Ampliado. Nenhuma tag fora do grafico.
+    ⚠ DIVIDA CPR-FLUXO-TAG-HOJE-EIXO-01: quando o periodo comeca HOJE, a tag do saldo de hoje vai para a esquerda do ponto e a
+      CAIXA dela encosta na do rotulo do eixo Y vizinho (17 x 14,5px; NJ BB "500 mil" x "R$ 394 mil *", Agnaldo Bradesco "−10 mil"
+      x "R$ −19 mil *") — IGUAL na tela normal e no Ampliado; em "Este mes" e "60 dias" (NJ BB) nao acontece.
+    ⚠ Com o periodo comecando hoje, um PONTO SOLTO marca em "Hoje" o saldo em conta (o do cartao Caixa) acima da partida da linha.
+  ANTES x DEPOIS DO GRAFICO (06/10, "Ambos", ponto de hoje -> ponto final):
+      NJ · Banco do Brasil (Caixa 604.088,31; contam 209.924,07 em 46; anteriores 3.636,50 a pagar e 7.173,39 a receber; ancora 30/09)
+        Este mes   394.164,24 -> −116.182,20   |  igual (o piso antigo "de" = 01/10 coincidia com a ancora)
+        30 dias    604.088,31 -> 14.339,40     |  394.164,24 -> −195.584,67
+        60 dias    604.088,31 -> −123.419,20   |  394.164,24 -> −333.343,27
+        16/10–15/11 604.088,31 -> 313.269,20   |  394.164,24 -> −226.887,58
+      Agnaldo · Bradesco (Caixa 1,00; contam 19.493,32 em 6; anteriores 366.056,95 a pagar e 156.181,29 a receber; ancora 30/09)
+        Este mes   −19.492,32 -> −39.671,83    |  igual
+        30 dias    1,00 -> −39.671,83          |  −19.492,32 -> −59.165,15
+        60 dias    1,00 -> −69.455,58          |  −19.492,32 -> −88.948,90
+        16/10–15/11 1,00 -> −39.636,83         |  −19.492,32 -> −68.170,08
+    Lista x grafico: partida, saldo no fim e tres dias intermediarios iguais ao centavo nos 4 atalhos, nas duas contas e em Todas (NJ).
+  ⚠ O PONTO "HOJE" DO GRAFICO E' A PARTIDA; o que vence HOJE entra no dia seguinte do grafico e na faixa de hoje da lista.
+  ⚠ DECISAO PENDENTE CPR-CARTAO-NO-SALDO-TODAS-01: em "Todas as contas", conta a pagar em cartao de credito ou sem conta desconta
+    do saldo no VENCIMENTO DELA (herdado do grafico); o dinheiro so' sai na fatura. So' os VENCIDOS delas ficam fora.
+  PROVA DO GESTO (cliente Teste, 06/10, desfeita): o 5a9f8ea4 ("Pensão Crianças", 6.484,00, vencimento 10/08) estava em "Vencidos
+    anteriores… · fora do saldo"; aberto pela linha, vencimento -> 20/10, Salvar: SEM F5 saiu do subgrupo, apareceu na faixa de
+    20/10 e os cartoes mudaram (Vencidos 6.484,00 -> 0,00; A pagar 0,00 -> 6.484,00); devolvido a 10/08, a tela voltou identica.
+    ⚠ PARCIAL: o cliente Teste NAO TEM CONTA COM ANCORA (Caixa "—"), entao Saldo no fim, Minimo e grafico mudando pelo valor NAO
+    foram vistos na tela — so' por teste do dono.
+  ⚠ DIVIDAS: CPR-CONTA-NO-AMPLIADO-01 (a coluna Conta nao coube no Ampliado; o nome fica no `title` da Descricao) · o N do titulo dos
+    subgrupos conta os dois lados e a listagem so' o segmento · no Ampliado as pilulas de status so' se trocam recolhendo · NAO PROVADO NO NAVEGADOR: o saldo mudando pelo valor depois de
+    salvar (o Teste nao tem ancora), a faixa "Entre hoje e DD/MM" (so' por teste e pelo calculo do dono sobre os dados reais), o
+    contraste dos dois tons do rodape navy medido na tela (calculado: ~6,4:1 e ~8,8:1), sair da tela com o Ampliado ligado (so'
+    por teste de fonte), e, no Ampliado, DIGITAR nas datas e ABRIR o seletor de conta (sao os mesmos nos da tela normal; no
+    navegador foram trocados atalho, segmento e a caixa).
 - ⚠ A CONTA DIRETO NO CAMPO DE VALOR TEM UM DONO, E GUARDA-SE SO' O RESULTADO (FIN-VALOR-CALC-01a, Gabriel 05/10/2026, so' tela).
   Ele lanca rateios (o cliente manda o valor cheio, o lancamento e' uma parte): digita "16.238,00/2" no campo e fica o
   resultado; a conta NAO vai para observacao nem para lugar nenhum.

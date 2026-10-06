@@ -228,6 +228,11 @@ export interface SaldoEmCaixa {
   aConferir: string[];
   /** Quantas contas entraram no total. */
   ancoradas: number;
+  /**
+   * CPR-SALDO-DIA-01: a âncora (data da última posição conferida) de CADA conta que entrou na soma — a MESMA que o cálculo
+   * usou. Quem precisa saber "até quando esta conta está conciliada" LÊ daqui; não refaz a escolha.
+   */
+  ancoraPorConta: { contaId: string; data: string }[];
 }
 
 /**
@@ -251,7 +256,7 @@ export function estimarSaldoEmCaixa(entrada: {
   let ancoradas = 0;
   const semAncora: string[] = [];
   const aConferir: string[] = [];
-  const porConta: { nome: string; data: string; grupo: GrupoDeCaixa }[] = [];
+  const porConta: { id: string; nome: string; data: string; grupo: GrupoDeCaixa }[] = [];
 
   for (const c of contas) {
     const grupo = grupoDoTipoConta(c.tipo);
@@ -267,7 +272,7 @@ export function estimarSaldoEmCaixa(entrada: {
     if (grupo === 'disponivel') disponivel = roundCurrency(disponivel + valor);
     else aplicado = roundCurrency(aplicado + valor);
     ancoradas += 1;
-    porConta.push({ nome: c.nome, data: ancora.data, grupo });
+    porConta.push({ id: c.id, nome: c.nome, data: ancora.data, grupo });
 
     /* Negativo é erro de lançamento em QUALQUER conta de caixa, e mais ainda na permuta. */
     if (valor < 0) { aConferir.push(c.nome); continue; }
@@ -293,7 +298,7 @@ export function estimarSaldoEmCaixa(entrada: {
       total, disponivel, aplicado, ancoraMaisAtrasada: null,
       conciliadoCorrenteAte: null, conciliadoAplicadoAte: null,
       contasCorrente: 0, contasAplicado: 0,
-      contasNoEloFraco: [], semAncora, aConferir, ancoradas: 0,
+      contasNoEloFraco: [], semAncora, aConferir, ancoradas: 0, ancoraPorConta: [],
     };
   }
   const maisAtrasada = porConta.reduce((m, p) => (p.data < m ? p.data : m), porConta[0].data);
@@ -310,6 +315,7 @@ export function estimarSaldoEmCaixa(entrada: {
     semAncora,
     aConferir,
     ancoradas,
+    ancoraPorConta: porConta.map((p) => ({ contaId: p.id, data: p.data })),
   };
 }
 

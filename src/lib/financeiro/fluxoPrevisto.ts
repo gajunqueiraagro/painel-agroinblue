@@ -430,7 +430,10 @@ export interface PontoLinha extends PontoFluxo {
  * O que o gráfico deixa de fazer é cobrá-lo duas vezes.
  */
 export function ajusteVencidoPorDia(
-  linhas: readonly LinhaFluxoPrevisto[], inicio: string, hoje: string,
+  linhas: readonly LinhaFluxoPrevisto[],
+  /** `null` = sem piso (CPR-SALDO-DIA-01): todo vencido entregue conta, qualquer que seja o "de" — quem decide QUAIS vencidos
+   *  contam no saldo é `vencidoContaNoSaldo` (cprRecorte.ts, pela âncora da CONTA da linha), e a tela só entrega esses. */
+  inicio: string | null, hoje: string,
   conciliadoAte: string | null,
 ): Map<string, number> {
   const porDia = new Map<string, number>();
@@ -441,7 +444,7 @@ export function ajusteVencidoPorDia(
     if (!ehEntrada && !ehSaida) continue;
     const venc = (l.data_vencimento ?? '').slice(0, 10);
     /* `< hoje`: o que vence HOJE já é barra do ponto de hoje (ver `montarFluxoPrevisto`). */
-    if (!venc || venc < inicio || venc >= hoje) continue;
+    if (!venc || (inicio != null && venc < inicio) || venc >= hoje) continue;
     /* Dentro do período conciliado o saldo do banco manda — ver a nota acima. */
     if (conciliadoAte && venc <= conciliadoAte) continue;
     const v = Math.abs(Number(l.valor ?? 0));

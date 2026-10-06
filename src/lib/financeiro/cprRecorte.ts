@@ -58,9 +58,10 @@ export interface ContaCpr {
  *  'sem_vencimento'  em aberto, sem data de vencimento (grupo próprio, fora dos cartões do período);
  *  'vencido'         em aberto, vencimento ANTES de hoje — de qualquer idade, inclusive o que está entre "de" e ontem;
  *  'periodo'         em aberto, vencimento de max(de, hoje) até "até" (o dia de hoje é do período, não vencido);
- *  'fora'            em aberto, mas depois de "até" (ou entre hoje e um "de" futuro).
+ *  'antes_do_periodo' em aberto, entre hoje e um "de" FUTURO: não é listada, mas passa pelo saldo antes de o período começar;
+ *  'fora'            em aberto, depois de "até".
  */
-export type BaldeCpr = 'paga' | 'sem_vencimento' | 'vencido' | 'periodo' | 'fora';
+export type BaldeCpr = 'paga' | 'sem_vencimento' | 'vencido' | 'periodo' | 'antes_do_periodo' | 'fora';
 
 const STATUS_PAGOS = new Set(['realizado', 'conciliado']);
 export function contaEmAberto(c: Pick<ContaCpr, 'status_transacao' | 'data_pagamento'>): boolean {
@@ -73,6 +74,7 @@ export function baldeDaConta(c: ContaCpr, periodo: PeriodoCpr, hoje: string): Ba
   if (!v) return 'sem_vencimento';
   if (v < hoje) return 'vencido';
   if (v >= periodo.de && v <= periodo.ate) return 'periodo';
+  if (v < periodo.de) return 'antes_do_periodo';
   return 'fora';
 }
 
@@ -89,6 +91,28 @@ export function daContaCpr(c: Pick<ContaCpr, 'tipo_operacao' | 'conta_bancaria_i
   if (filtro == null) return true;
   const conta = contaDaConta(c);
   return filtro === SEM_CONTA ? conta == null : conta === filtro;
+}
+
+/* ─── CPR-SALDO-DIA-01 — QUAL VENCIDO CONTA NO SALDO (D1/D2, Gabriel 06/10/2026) ─────────────────────────────────────────
+   UMA função, lida pela lista e pelo gráfico. O vencido em aberto conta no saldo (sai/entra HOJE) quando o vencimento é
+   POSTERIOR à última conciliação DA CONTA DA LINHA — a âncora que o cartão Caixa usa. Vencimento em mês já conciliado (≤ âncora),
+   linha sem conta e conta sem âncora (cartão de crédito inclusive) NÃO contam: o saldo conferido com o banco já diz o que
+   aconteceu ali; ficam à vista, e o operador corrige a data do lançamento para ele entrar na soma.
+   ⚠ MORA AQUI, E NÃO EM fluxoPrevisto.ts: a regra depende da CONTA da linha e do balde — que são deste dono; o gráfico só desenha
+     as linhas que este arquivo lhe entrega. */
+/** A data da âncora (última posição conferida) de cada conta que entra no caixa: `contaId → 'YYYY-MM-DD'`. */
+export type AncorasCpr = ReadonlyMap<string, string>;
+/** As âncoras por conta, LIDAS do cartão Caixa (`SaldoEmCaixa.ancoraPorConta`, a mesma data que o cálculo usou) — nenhum espelho. */
+export function ancorasDoCaixaCpr(ancoraPorConta: readonly { contaId: string; data: string }[] | null | undefined): Map<string, string> {
+  return new Map((ancoraPorConta ?? []).map((a) => [a.contaId, a.data.slice(0, 10)]));
+}
+export function vencidoContaNoSaldo(
+  c: Pick<ContaCpr, 'data_vencimento' | 'tipo_operacao' | 'conta_bancaria_id' | 'conta_destino_id'>, ancoras: AncorasCpr | undefined,
+): boolean {
+  const conta = contaDaConta(c);
+  const ancora = conta ? ancoras?.get(conta) : undefined;
+  const venc = (c.data_vencimento ?? '').slice(0, 10);
+  return !!ancora && !!venc && venc > ancora;
 }
 
 export const ehPagarCpr = (c: Pick<ContaCpr, 'tipo_operacao'>) => (c.tipo_operacao ?? '').startsWith('2-');
@@ -110,7 +134,15 @@ export interface RecorteCpr<T extends ContaCpr> {
   hoje: string;
   incluirVencidos: boolean;
   /** Vencidos em aberto, de qualquer idade — o cartão os mostra SEMPRE; a caixa decide se entram na lista e no total. */
-  vencidos: SomaCpr & { maisAntiga: string | null; diasDaMaisAntiga: number | null; linhas: T[] };
+  vencidos: SomaCpr & {
+    maisAntiga: string | null; diasDaMaisAntiga: number | null; linhas: T[];
+    /** CPR-SALDO-DIA-01 (D1/D2): os que CONTAM NO SALDO (vencimento posterior à âncora da conta da linha) … */
+    contam: SomaCpr & { linhas: T[] };
+    /** … e os ANTERIORES À CONCILIAÇÃO (≤ âncora, sem conta ou de conta sem âncora): à vista, fora do saldo. */
+    anteriores: SomaCpr & { linhas: T[] };
+  };
+  /** Em aberto entre hoje e um "de" futuro: somadas no saldo, não listadas. */
+  antesDoPeriodo: SomaCpr & { linhas: T[] };
   /** O período, sem os vencidos. `saldo` = a receber − a pagar. */
   periodoSoma: SomaCpr & { saldo: number; linhas: T[] };
   semVencimento: SomaCpr & { linhas: T[] };
@@ -130,10 +162,11 @@ function somar<T extends ContaCpr>(linhas: readonly T[]): SomaCpr & { cPagar: nu
 }
 
 export function recortarCpr<T extends ContaCpr>(
-  linhas: readonly T[], opcoes: { periodo: PeriodoCpr; hoje: string; incluirVencidos: boolean; conta?: FiltroContaCpr },
+  linhas: readonly T[],
+  opcoes: { periodo: PeriodoCpr; hoje: string; incluirVencidos: boolean; conta?: FiltroContaCpr; ancoras?: AncorasCpr },
 ): RecorteCpr<T> {
   const { periodo, hoje, incluirVencidos } = opcoes;
-  const porBalde: Record<BaldeCpr, T[]> = { paga: [], sem_vencimento: [], vencido: [], periodo: [], fora: [] };
+  const porBalde: Record<BaldeCpr, T[]> = { paga: [], sem_vencimento: [], vencido: [], periodo: [], antes_do_periodo: [], fora: [] };
   /* CPR-CONTA-01 — o filtro de conta entra AQUI, antes de tudo: cartões, grupos, total e gráfico leem o mesmo recorte. */
   for (const l of linhas) if (daContaCpr(l, opcoes.conta ?? null)) porBalde[baldeDaConta(l, periodo, hoje)].push(l);
   const porData = (a: T, b: T) => {
@@ -142,13 +175,22 @@ export function recortarCpr<T extends ContaCpr>(
   };
   porBalde.vencido.sort(porData); porBalde.periodo.sort(porData);
 
+  porBalde.antes_do_periodo.sort(porData);
   const sv = somar(porBalde.vencido), sp = somar(porBalde.periodo), ss = somar(porBalde.sem_vencimento);
+  const contam = porBalde.vencido.filter((l) => vencidoContaNoSaldo(l, opcoes.ancoras));
+  const anteriores = porBalde.vencido.filter((l) => !vencidoContaNoSaldo(l, opcoes.ancoras));
+  const sc = somar(contam), sa = somar(anteriores), sx = somar(porBalde.antes_do_periodo);
   const maisAntiga = porBalde.vencido.length > 0 ? (porBalde.vencido[0].data_vencimento ?? '').slice(0, 10) : null;
   const vP = incluirVencidos ? sv.cPagar : 0, vR = incluirVencidos ? sv.cReceber : 0;
   const nVP = incluirVencidos ? sv.pagar.contas : 0, nVR = incluirVencidos ? sv.receber.contas : 0;
   return {
     periodo, hoje, incluirVencidos,
-    vencidos: { pagar: sv.pagar, receber: sv.receber, maisAntiga, diasDaMaisAntiga: maisAntiga ? diasEntre(maisAntiga, hoje) : null, linhas: porBalde.vencido },
+    vencidos: {
+      pagar: sv.pagar, receber: sv.receber, maisAntiga, diasDaMaisAntiga: maisAntiga ? diasEntre(maisAntiga, hoje) : null, linhas: porBalde.vencido,
+      contam: { pagar: sc.pagar, receber: sc.receber, linhas: contam },
+      anteriores: { pagar: sa.pagar, receber: sa.receber, linhas: anteriores },
+    },
+    antesDoPeriodo: { pagar: sx.pagar, receber: sx.receber, linhas: porBalde.antes_do_periodo },
     periodoSoma: { pagar: sp.pagar, receber: sp.receber, saldo: reais(sp.cReceber - sp.cPagar), linhas: porBalde.periodo },
     semVencimento: { pagar: ss.pagar, receber: ss.receber, linhas: porBalde.sem_vencimento },
     pagas: porBalde.paga,
@@ -180,8 +222,10 @@ export function liquidoEmAberto<T extends ContaCpr>(linhas: readonly T[]): numbe
  *   histórico inteiro de pagos.
  */
 export function ramoDaConsultaCpr(periodo: PeriodoCpr, hoje: string): string {
+  /* com "de" FUTURO a busca começa em hoje: o que vence entre hoje e "de" passa pelo saldo antes de o período começar */
+  const desde = periodo.de < hoje ? periodo.de : hoje;
   return [
-    `and(data_vencimento.gte.${periodo.de},data_vencimento.lte.${periodo.ate})`,
+    `and(data_vencimento.gte.${desde},data_vencimento.lte.${periodo.ate})`,
     `and(data_vencimento.lt.${hoje},status_transacao.in.(previsto,programado,agendado),data_pagamento.is.null)`,
     'data_vencimento.is.null',
   ].join(',');
@@ -224,4 +268,49 @@ export function resumoPorContaCpr<T extends ContaCpr>(
  *  pagar e a receber). O "+N" conta só as que a faixa desenharia. */
 export function contasDaFaixaCpr(resumo: readonly ContaNoResumoCpr[]): ContaNoResumoCpr[] {
   return resumo.filter((c) => c.pagar.valor > 0);
+}
+
+/* ─── CPR-SALDO-DIA-01 — A SÉRIE DO SALDO (lista e gráfico leem a mesma conta) ───────────────────────────────────────────
+   partida = saldo de hoje (o cartão Caixa) − vencidos a pagar que contam + vencidos a receber que contam;
+   depois, "entre hoje e de" (se "de" é futuro) e cada DIA do período: saldo = anterior − a pagar + a receber, só contas EM
+   ABERTO, dos DOIS lados (o saldo é da conta, não do segmento). Em centavos inteiros. A caixa "Incluir vencidos" NÃO entra
+   aqui (D3): ela decide a lista e o total, nunca o saldo. Sem saldo de hoje (cartão de crédito, conta sem âncora): `null`. */
+export interface PassoDoSaldoCpr { pagar: LadoCpr; receber: LadoCpr; saldo: number | null }
+export interface SerieDoSaldoCpr {
+  /** o saldo de hoje (o cartão Caixa); `null` = não há (cartão de crédito, conta sem saldo conferido): os saldos ficam todos nulos */
+  hoje: number | null;
+  /** depois dos vencidos que contam */
+  partida: PassoDoSaldoCpr;
+  entreHojeEDe: PassoDoSaldoCpr | null;
+  dias: (PassoDoSaldoCpr & { data: string })[];
+  fim: number | null;
+  /** o menor saldo da série, da partida ao fim; `data` nula = já na partida (hoje). */
+  menor: { valor: number; data: string | null } | null;
+}
+export function serieDoSaldoCpr<T extends ContaCpr>(recorte: RecorteCpr<T>, saldoHoje: number | null): SerieDoSaldoCpr {
+  const tem = saldoHoje != null && Number.isFinite(saldoHoje);
+  let saldo = tem ? Math.round(saldoHoje * 100) : 0;
+  let menor: { valor: number; data: string | null } | null = null;
+  let menorC = Number.POSITIVE_INFINITY;
+  const passo = (linhas: readonly T[], data: string | null): PassoDoSaldoCpr => {
+    const s = somar(linhas);
+    saldo += s.cReceber - s.cPagar;
+    if (tem && saldo < menorC) { menorC = saldo; menor = { valor: reais(saldo), data }; }
+    return { pagar: s.pagar, receber: s.receber, saldo: tem ? reais(saldo) : null };
+  };
+  const partida = passo(recorte.vencidos.contam.linhas, null);
+  const antes = recorte.antesDoPeriodo.linhas;
+  const entreHojeEDe = antes.length > 0 ? passo(antes, (antes[antes.length - 1].data_vencimento ?? recorte.hoje).slice(0, 10)) : null;
+  const porDia = new Map<string, T[]>();
+  for (const l of recorte.periodoSoma.linhas) {
+    const d = (l.data_vencimento ?? '').slice(0, 10);
+    const g = porDia.get(d); if (g) g.push(l); else porDia.set(d, [l]);
+  }
+  const dias = Array.from(porDia.keys()).sort().map((data) => ({ ...passo(porDia.get(data) ?? [], data), data }));
+  return { hoje: tem ? reais(Math.round(saldoHoje * 100)) : null, partida, entreHojeEDe, dias, fim: tem ? reais(saldo) : null, menor };
+}
+
+/** As linhas EM ABERTO que o gráfico desenha — as MESMAS que a série soma: vencidos que contam + entre hoje e "de" + período. */
+export function linhasDoSaldoCpr<T extends ContaCpr>(recorte: RecorteCpr<T>): T[] {
+  return [...recorte.vencidos.contam.linhas, ...recorte.antesDoPeriodo.linhas, ...recorte.periodoSoma.linhas];
 }

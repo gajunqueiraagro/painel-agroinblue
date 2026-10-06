@@ -218,7 +218,7 @@ function TooltipFluxo({ active, label, payload }: TooltipProps) {
 }
 
 export function CprFluxoPrevisto({
-  linhas, saldoInicial, caveat, granularidade, hoje, inicio, passado, conciliadoAte,
+  linhas, saldoInicial, caveat, granularidade, hoje, inicio, passado, conciliadoAte, vencidosForaDoSaldo = 0, barras = 'ambos',
 }: {
   linhas: readonly LinhaFluxoPrevisto[];
   /** O mesmo "Saldo em caixa (estimado)" do card. `null` quando não há âncora. */
@@ -243,6 +243,13 @@ export function CprFluxoPrevisto({
    * passa a contar. Antes dela, o saldo conferido com o banco é soberano.
    */
   conciliadoAte: string | null;
+  /** CPR-SALDO-DIA-01: quantos vencidos ficaram FORA do saldo (anteriores à conciliação da conta) — só para a legenda. */
+  vencidosForaDoSaldo?: number;
+  /**
+   * CPR-SALDO-DIA-01 (G): o SEGMENTO da tela decide SÓ as barras de movimento (e, por elas, o tooltip). `linhas` vem SEMPRE com
+   * os dois lados: a linha de saldo, as áreas e as tags são as da CONTA, em qualquer segmento.
+   */
+  barras?: 'pagar' | 'receber' | 'ambos';
 }) {
   /**
    * ⚠ AS DUAS VERDADES, E CADA UMA NO SEU LUGAR — PR-CPR-2B.3.2, ajustado em 2B.3.5.
@@ -261,9 +268,10 @@ export function CprFluxoPrevisto({
   const inicioDesenho = inicio < hoje ? inicio : hoje;
   const passadoDoPeriodo = useMemo(() => passado.filter((p) => p.data >= inicioDesenho), [passado, inicioDesenho]);
 
-  const vencidoPorDia = useMemo(
-    () => ajusteVencidoPorDia(linhas, inicioDesenho, hoje, conciliadoAte),
-    [linhas, inicioDesenho, hoje, conciliadoAte]);
+  /* CPR-SALDO-DIA-01 (D4): QUAIS vencidos contam no saldo é decisão do dono (`vencidoContaNoSaldo`, cprRecorte.ts — pela âncora
+     da CONTA de cada linha). A tela só entrega os que contam; aqui TODO vencido recebido desconta, sem piso de data nem um
+     "conciliado até" do cliente inteiro (era a regra antiga, e fazia o gráfico discordar da lista). */
+  const vencidoPorDia = useMemo(() => ajusteVencidoPorDia(linhas, null, hoje, null), [linhas, hoje]);
   const ajusteTotal = useMemo(
     () => Array.from(vencidoPorDia.values()).reduce((s, v) => s + v, 0), [vencidoPorDia]);
 
@@ -443,7 +451,8 @@ export function CprFluxoPrevisto({
             conciliado até certa data E assume que todo compromisso cai no vencimento. */}
         <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
           {caveat ? `${caveat} · ` : ''}* de hoje em diante, assumindo que tudo cai no vencimento
-          {anteriores > 0 && ` · ${anteriores} já vencido${anteriores > 1 ? 's' : ''}, fora da projeção`}
+          {anteriores > 0 && ` · ${anteriores} já vencido${anteriores > 1 ? 's' : ''}, ${anteriores > 1 ? 'descontados' : 'descontado'} do saldo de hoje`}
+          {vencidosForaDoSaldo > 0 && ` · ${vencidosForaDoSaldo} vencido${vencidosForaDoSaldo > 1 ? 's' : ''} anterior${vencidosForaDoSaldo > 1 ? 'es' : ''} à conciliação, fora do saldo`}
           {semVencimento > 0 && ` · ${semVencimento} sem vencimento, fora do gráfico`}
           {rebaixada && ' · período longo demais para o detalhe diário: agrupado por mês'}
         </p>
@@ -494,8 +503,8 @@ export function CprFluxoPrevisto({
                 outra para baixo do zero. Empilhadas, o out/26 da Vera mostrava a saída
                 pendurada acima da entrada, cruzando o zero — dinheiro que sai desenhado como
                 se entrasse. */}
-            <Bar dataKey="entradas" name="Entradas" fill={COR_ENTRADA} maxBarSize={18} />
-            <Bar dataKey="saidas" name="Saídas" fill={COR_SAIDA} maxBarSize={18} />
+            {barras !== 'pagar' && <Bar dataKey="entradas" name="Entradas" fill={COR_ENTRADA} maxBarSize={18} />}
+            {barras !== 'receber' && <Bar dataKey="saidas" name="Saídas" fill={COR_SAIDA} maxBarSize={18} />}
 
             {/* ⚠ DUAS ÁREAS, UMA POR SINAL — e nenhum gradiente. Cada uma vai da sua metade do
                 saldo até o zero, então onde a linha é positiva só a azul tem altura e onde é

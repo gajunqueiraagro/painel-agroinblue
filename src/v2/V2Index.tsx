@@ -1012,7 +1012,7 @@ export default function V2Index() {
 
     if (section === 'recorrencias') return <V2Recorrencias />;
     if (section === 'painel-periodo') return <PainelPeriodoTab />;
-    if (section === 'contas-a-pagar-receber') return <ContasPagarReceberTab />;
+    if (section === 'contas-a-pagar-receber') return <ContasPagarReceberTab onIntensiveToggle={setIntensivo} />;
     // PR-IMPORT-EXCEL-LANC-01 — passos 1-3 (ler, mapear, conferir). A gravação
     // (passo 4) entra depois, no mesmo PR; o botão fica desabilitado até lá.
 
