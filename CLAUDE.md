@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 06/10/2026 (CPR-CONTA-01, +7 em `src/lib/financeiro/cprRecorte.test.ts` — 3993 depois dele;
+  Baseline em 06/10/2026 (FIN-V2-COLUNAS-OC-01, +8 em `src/components/financeiro-v2/finV2ColunasOC01.test.ts` — 4001 depois dele;
+  antes o CPR-CONTA-01, +7 em `src/lib/financeiro/cprRecorte.test.ts` — 3993 depois dele;
   antes o OC-VINCULAR-CANDIDATAS-01b, +1 em `src/components/financeiro-v2/vincularCandidatas.test.tsx` — 3986 depois dele;
   antes o CPR-PERIODO-VENCIDOS-01, +16 em `src/lib/financeiro/cprRecorte.test.ts` — 3985 depois dele;
   antes o OC-VINCULAR-CANDIDATAS-01, +24 em `src/components/financeiro-v2/vincularCandidatas.test.tsx` — 3969 depois dele;
@@ -203,7 +204,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 3993
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4001
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -824,7 +825,9 @@ preview que o cabecalho nao sai da tela ao rolar.
   auxiliar a 8,5px — "do extrato", "pelo historico do banco", "transferencia" e o selo "cru/classificado" do rodape —,
   com o corpo da tabela a 10,5; (4) a LISTA da Mesa compacta (PR-CONC-ENRIQUECER-V2-01, decisao do Gabriel no briefing):
   168px, itens de 16px a 8,5px (`LARGURA_LISTA_MESA`/`ALTURA_ITEM_LISTA` em `EnriquecimentoMesaModal.tsx`) — e' navegacao,
-  o painel ao lado repete a linha inteira. Excecoes declaradas, nao precedente:
+  o painel ao lado repete a linha inteira; (5) a LISTA DE LANCAMENTOS FINANCEIROS (FIN-V2-COLUNAS-OC-01, decisao do Gabriel de
+  05/10): Status a 8px (`.celula-status`) e Macro e Centro a 8,5px (`.celula-classe`), por classe da tabela no index.css — as
+  demais colunas dela ja' renderizavam a 9px (datas e Doc. a 8px) pelo `.table-financeiro td`. Excecoes declaradas, nao precedente:
   abaixo de 9,5px fora delas reprova o PR.
   ⚠ LARGURA DE COLUNA = pior texto RENDERIZADO + 8 de folga + 14 de padding, contando o slot do marcador
     ▲/▼ (`L_MARCADOR`, 10px). Mede-se com um `Range` sobre o conteudo de cada `td` contra o `clientWidth`
@@ -2425,6 +2428,24 @@ docs/historico/frentes-ate-2026-09-29.md.)
 - ⚠ FINANCEIRO V2 MOSTRA SO DINHEIRO por padrao; sem caixa (entregas, barter, consumo) em secao
   separada atras de chave. OC se abre pelo icone do produto ou "Abrir OC" no menu (FIN-V2-SEM-CAIXA-01,
   FIN-V2-HOMOLOG-FIX-01).
+  ⚠ A MARCA DA OC TEM COLUNA PROPRIA, ANTES DO PRODUTO (FIN-V2-COLUNAS-OC-01, Gabriel 05/10, so' tela, `src/pages/FinanceiroV2Tab.tsx`):
+    "o icone vem depois do texto e some quando o texto e' longo". Coluna "OC" de 16px entre Pgto. e Produto, NAO congelada (a
+    cadeia sticky 0/28/42/82/122 nao mudou). O conteudo e' o que estava no fim da celula do Produto, MOVIDO VERBATIM: com acesso,
+    o botao `icone-oc` (abre a operacao e para a propagacao); sem acesso, a marca `marca-oc` (ACESSOS-02b); sem OC, vazia. O 🏦 da
+    parcela e o icone do zootecnico ficam no Produto. A coluna de 58px com o codigo da OC (`CelulaOC`) segue fora da lista.
+    LARGURAS (normal, MEDIDAS a 1.126): 28·14·40·40·40·OC 16·Produto 136·Fornecedor 100·Macro 56·Centro 56·Faz. 30·Safra 66·
+    Valor 90·Doc. 70·Status 64·acoes 28 = 874 (Ampliado: Produto 150 e as duas contas de 92 = 1.072). Status 77 -> 64 a 8px: o
+    maior e' "Conciliado" com o selo, 55,1px em 60 uteis (`px-0.5`); Faz. 38 -> 30: o pior codigo, "ADM", 21,1px em 26 uteis;
+    Macro e Centro 66 -> 56 a 8,5px (cortam com `title`, como ja' cortavam). Linha de 25px, antes e depois. O legado "Conciliado
+    (legado)" pede 75,7px e CORTA numa linha com o rotulo no `title` (antes quebrava em duas); "Meta (legado)" cabe.
+    ⚠ DIVIDAS: FIN-V2-DOC-CORTA-01 — numero de documento longo CORTA na coluna Doc. de 70px (951 de 5.212 linhas no NJ, 140 de
+      1.551 no Agnaldo; ex.: "20260930010176200"), contra a regra "numero nunca corta"; ja' cortava antes deste PR ·
+      A LISTA INTEIRA RENDERIZA A 9px pelo `.table-financeiro td` do index.css (datas e Doc. a 8px), abaixo do piso de 9,5px,
+      desde antes deste PR · FOLGA DO STATUS DE 4,9px (padding lateral de 2px): status novo mais longo que "Conciliado" pede
+      remedir a coluna · NAO PROVADO: a rolagem do Ampliado (a 1.126 a tabela de 1.072 cabe sem rolar — a cadeia sticky foi
+      conferida pelos offsets e pela ausencia de fresta), o corte do "Conciliado (legado)" numa linha real (nenhuma linha de 2026
+      tem status legado: so' por medicao do rotulo e por teste) e a marca `marca-oc` sem botao para perfil sem acesso (so' por
+      teste de fonte).
   ⚠ O "..." NUNCA E' FIXO/STICKY (decisao soberana do Gabriel, 30/09, PR-FIN-V2-STATUS-PGTO-01-fix1; revoga o "fixo e
     sempre visivel" do FIN-V2-HOMOLOG-FIX-01): e' a ultima coluna normal, no fim da linha; se a tabela rolar, ele rola junto,
     NUNCA por cima de outra coluna. A lista CABE sem rolar no modo normal na janela do Gabriel e a 1280 — a largura se MEDE NA

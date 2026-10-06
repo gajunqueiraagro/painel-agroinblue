@@ -105,8 +105,11 @@ describe('a cor do status tem um dono', () => {
 });
 
 describe('FinanceiroV2Tab — a coluna ST', () => {
-  it('ST com 77px, Doc com 70, e o status sem truncate, em pílula', () => {
-    expect(tela).toContain('<col style={{ width: 77 }} />');
+  /* ⚠ CONTRATO MUDOU NO FIN-V2-COLUNAS-OC-01 (Gabriel, 05/10): o status renderiza a 8px (`.celula-status`) e a coluna foi
+     remedida — 77 → 64. A pílula e a cor continuam vindo do dono. */
+  it('ST com 64px (a 8px), Doc com 70, e o status em pílula', () => {
+    expect(tela).toContain('<col style={{ width: 64 }} />');
+    expect(tela).not.toContain('<col style={{ width: 77 }} />');
     expect(tela).toContain('<col style={{ width: 70 }} />');
     expect(tela).toContain('<span className={cn(STATUS_PILULA_BASE, stPilula)} data-status={stKey}>{stLabel}</span>');
     expect(tela).not.toContain('text-[10px] leading-tight ${stColor}`}');
@@ -127,7 +130,7 @@ describe('FinanceiroV2Tab — a coluna ST', () => {
       const tern = l.match(/modoIntensivo \? \d+ : (\d+)/);
       return Number(tern ? tern[1] : l.match(/width: (\d+)/)![1]);
     });
-    expect(larguras.length).toBe(15);
+    expect(larguras.length).toBe(16);   // FIN-V2-COLUNAS-OC-01: +1, a coluna do ícone da OC (16px); a soma segue ≤ 874
     expect(larguras.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(874);
   });
 });

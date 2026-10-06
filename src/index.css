@@ -172,6 +172,17 @@
 .table-financeiro td.celula-doc * {
   font-size: 8px !important;
 }
+/* FIN-V2-COLUNAS-OC-01 — EXCEÇÃO (5) AO PISO DE 9,5px, SÓ NESTA LISTA (decisão do Gabriel, 05/10/2026):
+   Status a 8px (texto e pílula — a forma e a cor seguem em statusFinanceiro.ts; aqui só o tamanho) e
+   Macro e Centro a 8,5px. Por CLASSE NOMEADA, como as demais; as outras colunas não mudam. */
+.table-financeiro td.celula-status,
+.table-financeiro td.celula-status * {
+  font-size: 8px !important;
+}
+.table-financeiro td.celula-classe,
+.table-financeiro td.celula-classe * {
+  font-size: 8.5px !important;
+}
 /* Forçar herança em elementos internos */
 .table-financeiro td span,
 .table-financeiro td div {

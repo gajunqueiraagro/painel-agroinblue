@@ -46,9 +46,10 @@ describe('totais do Financeiro V2: caixa x sem caixa', () => {
     const tela = readFileSync(resolve(__dirname, '../../pages/FinanceiroV2Tab.tsx'), 'utf8');
     expect(tela).not.toContain('>Tipo</th>');
     expect(tela).not.toContain('tipoDaLinha');
-    /* FIN-V2-HOMOLOG-FIX-01 (item 3): a coluna OC da lista SAIU — o icone ao lado do produto e o "Abrir OC" do menu a
-       substituem (ver finV2HomologFix01.test.ts). */
-    expect(tela).not.toContain('>OC</th>');
+    /* FIN-V2-HOMOLOG-FIX-01 (item 3): a coluna de 58px com o CODIGO da OC (`CelulaOC`) saiu da lista e continua fora.
+       ⚠ CONTRATO MUDOU NO FIN-V2-COLUNAS-OC-01: o ICONE da OC ganhou uma coluna propria de 16px, antes do Produto (ver
+       finV2ColunasOC01.test.ts) — o cabecalho "OC" voltou, a celula do codigo nao. */
+    expect(tela).toContain('title="Operação comercial">OC</th>');
     expect(tela).not.toContain('<CelulaOC oc={lancamentosComOC.get(l.id)}');
     for (const rotulo of ['Entradas:', 'Saídas:', 'Transf.:', 'lanç.']) expect(tela).toContain(rotulo);
     /* os dois totais sem caixa sairam da faixa padrao; o total sem caixa so' existe dentro de `mostrarSemCaixa &&` */

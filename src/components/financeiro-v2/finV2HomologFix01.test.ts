@@ -17,12 +17,14 @@ const tela = readFileSync(resolve(__dirname, '../../pages/FinanceiroV2Tab.tsx'),
 const dialogo = readFileSync(resolve(__dirname, './LancamentoV2Dialog.tsx'), 'utf8');
 const migration = readFileSync(resolve(__dirname, '../../../supabase/migrations/20261027174000_fin_v2_homolog_fix_01.sql'), 'utf8');
 
-describe('item 3 — lista sem coluna OC, "..." sempre visivel, "Abrir OC" no menu', () => {
-  it('a coluna OC sai do cabecalho e das linhas; a linha vazia passa a ocupar 15 colunas', () => {
-    expect(tela).not.toContain('>OC</th>');
+describe('item 3 — lista sem a coluna OC de 58px, "..." sempre visivel, "Abrir OC" no menu', () => {
+  /* ⚠ CONTRATO MUDOU NO FIN-V2-COLUNAS-OC-01 (Gabriel, 05/10): a coluna OC VOLTOU, mas com 16px e so' o ICONE (a de 58px, com o
+     codigo da OC — `CelulaOC` — continua fora da lista: era ela que empurrava a tabela para a rolagem). A soma segue 874. */
+  it('a celula de 58px da OC segue fora das linhas; a coluna do icone tem 16px e a linha vazia ocupa todas as colunas', () => {
+    expect(tela).toContain('title="Operação comercial">OC</th>');
     expect(tela).not.toContain('<CelulaOC oc={lancamentosComOC.get(l.id)}');
-    expect(tela).toContain('<td colSpan={15}');
-    expect(tela).not.toContain('<td colSpan={16}');
+    expect(tela).toContain('<td colSpan={modoIntensivo ? 18 : 16}');
+    expect(tela).not.toContain('<td colSpan={15}');
     /* a busca sabe achar: a secao sem caixa ainda usa a celula OC (cabe sem rolagem la') */
     expect(tela).toContain("import { SecaoSemCaixa, totalSemCaixa } from '@/components/financeiro-v2/SecaoSemCaixa';");
   });
