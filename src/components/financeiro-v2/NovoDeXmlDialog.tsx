@@ -37,11 +37,11 @@ export interface LinhaDeNota {
   lancada: boolean;
 }
 
-/** "2 × 8.119,00 · 05/11 e 05/12" | "sem duplicatas" | "3 · fora do padrão" | "1 × 16.238,00 · 30/10". */
+/** "2 × 8.119,00 · 05/11 e 05/12" | "sem duplicatas" | "3 · parcelas livres" | "1 × 16.238,00 · 30/10". */
 export function resumoDasDuplicatas(p: PropostaDeLancamento): string {
   const d = p.duplicatas;
   if (d.length === 0) return 'sem duplicatas';
-  if (p.parcelamento.tipo === 'fora_do_padrao') return `${d.length} · fora do padrão`;
+  if (p.parcelamento.tipo === 'livres') return `${d.length} · parcelas livres`;
   const datas = d.length <= 2 ? d.map((x) => diaMes(x.vencimento)).join(' e ') : `${diaMes(d[0].vencimento)} a ${diaMes(d[d.length - 1].vencimento)}`;
   return `${d.length} × ${reais(d[0].valorCent)} · ${datas}`;
 }

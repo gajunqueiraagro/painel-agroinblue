@@ -140,27 +140,3 @@ export function AvisosDoXml({ xml, registradaDispensada, onDispensarRegistrada, 
     </>
   );
 }
-
-/** As duplicatas do XML, SO' LEITURA — a conferencia de quando elas nao cabem no parcelamento de hoje. */
-export function DuplicatasDoXml({ xml }: { xml: DoXml }) {
-  const d = xml.proposta.duplicatas;
-  if (d.length === 0) return null;
-  return (
-    <div className="overflow-hidden rounded border border-amber-300" data-testid="xml-duplicatas">
-      <div className="grid grid-cols-[64px_1fr_1fr] gap-1 bg-primary px-2 text-[9.5px] font-medium leading-[18px] text-primary-foreground">
-        <span>Duplicata</span><span>Vencimento</span><span className="text-right">Valor (R$)</span>
-      </div>
-      {d.map((x) => (
-        <div key={`${x.numero}-${x.vencimento}`} className="grid h-[18px] grid-cols-[64px_1fr_1fr] items-center gap-1 px-2 text-[10px]">
-          <span className="font-mono">{x.numero}</span>
-          <span className="tabular-nums">{dataCurta(x.vencimento)}</span>
-          <span className="text-right font-mono tabular-nums">{reais(x.valorCent)}</span>
-        </div>
-      ))}
-      <div className="flex h-[18px] items-center justify-between bg-muted/40 px-2 text-[10px]">
-        <span className="text-muted-foreground">Soma das duplicatas</span>
-        <span className="font-mono font-semibold tabular-nums">{reais(xml.proposta.duplicatas.reduce((s, x) => s + x.valorCent, 0))}</span>
-      </div>
-    </div>
-  );
-}

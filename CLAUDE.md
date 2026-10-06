@@ -162,7 +162,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 06/10/2026 (PARC-LIVRES-01 passo 0, +1 em `src/lib/pdf/cpr/exportCpr.test.tsx` — 4264 depois dele; antes o
+  Baseline em 06/10/2026 (PARC-LIVRES-01 passo 1, +33: `src/lib/financiamentos/parcelasLivres.test.ts` 17,
+  `src/components/financiamentos/gradeDeParcelas.test.tsx` 13, `src/components/financeiro-v2/novoDeXml.test.tsx` 3 — 4297 depois dele; antes o
+  PARC-LIVRES-01 passo 0, +1 em `src/lib/pdf/cpr/exportCpr.test.tsx` — 4264 depois dele; antes o
   CONC-SEM-CLASSIFICACAO-01 tela, +32: `src/lib/conciliacao/semClassificacao.test.ts` 12,
   `src/components/conciliacao/semClassificacaoModal.test.tsx` 14, `src/pages/conciliacaoDono.test.tsx` 5,
   `src/v2/components/SeletorPeriodo.test.tsx` 1 — 4263 depois dele; antes o CONC-SEM-CLASSIFICACAO-01 leitor, +3 em
@@ -221,7 +223,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4264
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4297
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3054,6 +3056,56 @@ docs/historico/frentes-ate-2026-09-29.md.)
     regra de seta/tom existe na tela (`CelValor`) e no modelo (`celulaDeValor`): quem mexer numa confere a outra · NAO PROVADO NO
     NAVEGADOR: o download real pelo clique (a prova capturou o arquivo em memoria e a planilha foi pedida a' `export-xlsx` com o
     mesmo payload), caixa de vencidos desligada, fazenda filtrada, "de" futuro e "sem vencimento" no PDF (so' por teste).
+- ⚠ PARCELAS LIVRES AO CRIAR: O SISTEMA NAO FIXA DIA NEM VALOR DE PARCELA, E A TELA NAO SOMA (PARC-LIVRES-01 passo 1, Gabriel
+  06/10/2026; migration 20261027194000, ⚠ registrada como 20261006224522; ledger = arquivo, md5 7cc0ca7b…; patch guardado por md5,
+  7 ancoras: `fn_parcelamento_cadastrar` 6bf9d80b… -> 7d9874b0…). Nasce da NF 000.000.518 do NJ: 110.000,00 em sete duplicatas
+  (entrada de 33.000,00 e seis a cada 28 dias), que o parcelamento mensal nao aceitava.
+  · BANCO: a chave OPCIONAL `parcelas` [{numero, data_vencimento, valor}] no payload. SEM ela o corpo e' o de antes (N iguais,
+    mensais, a ultima com a sobra; 6 de 6 payloads identicos). COM ela grava EXATAMENTE a lista e RECUSA (22023, frase, nada
+    gravado): lista vazia; `total_parcelas` ≠ tamanho; numeracao que nao vai de 1 a N; data vazia; valor <= 0 ou com mais de duas
+    casas; SOMA EM CENTAVOS ≠ `valor_total`. A "1ª parcela" do contrato = o vencimento da parcela 1 da lista.
+    ⚠ DEFEITO ANTIGO CONSERTADO JUNTO: as quatro recusas da funcao usavam `raise exception 'x' using …, message='y'`, que o
+      PL/pgSQL recusa em execucao ("RAISE option already specified: MESSAGE") — a frase nunca chegava a' tela. A forma certa e'
+      `raise exception using errcode=…, message=…`. E `to_char` com G/D usa o locale en: numero em frase vai por
+      `translate(to_char(v, 'FM999,999,999,990.00'), ',.', '.,')`.
+  · DONO PURO, EM CENTAVOS INTEIROS: `src/lib/financiamentos/parcelasLivres.ts` — `resumoDasParcelas` (N, soma, compra,
+    diferenca = soma − compra), `motivoNaoSalva` (sem parcela · sem vencimento · sem valor · "A soma das parcelas não fecha com a
+    compra."), os gestos (`editarVencimento`, `editarValor`, `acrescentarParcela` — nasce SEM data e SEM valor —, `retirarParcela`,
+    `porDiferencaNaUltima`), `deOndeVeio` ("duplicata da nota" / "editado · era {data · valor}"), `parcelasParaPayload`. PARCELA
+    PAGA NAO MUDA em nenhuma funcao (preparado para o passo 2). UM centavo de diferenca trava.
+  · A GRADE E' UMA: `GradeDeParcelas` (`src/components/financiamentos/`). Barra de 26px ("Igual todo mês" | "Parcelas livres",
+    "+ Parcela", o voltar), lista com cabecalho navy preso (# 30 · Vencimento 104 · Valor 112 · De onde veio · ✕ 22; linha de
+    19px), rodape de totais congelado EM TABELA (N parcelas · Soma · Valor da compra · Diferença "0,00 ✓" verde ou ▲/▼ vermelho) e
+    faixa de aviso de 18px SEMPRE presente. Diferenca ≠ 0: a frase vermelha e os DOIS gestos — "Pôr ±X na parcela N" (a ultima nao
+    paga; apagado com o motivo se ela zeraria) e "A compra vale {soma}" (apagado sem `onCompraVale`). O SISTEMA NAO ESCOLHE.
+    Voltar ao "Igual todo mês" com edicao PERGUNTA na linha. O valor da parcela aceita a conta no campo (`contaNoCampo.ts`). A
+    grade nao tem `reduce` nem `+=` (teste de fonte com auto-teste). No mensal e' so' leitura: mostra o que a RPC grava.
+  · ONDE: (1) `LancamentoV2Dialog`, aba Pagamento, no lugar da previa antiga; o Salvar fica apagado com `motivoDasParcelas` ESCRITO
+    ao lado (`motivo-das-parcelas`); nas livres o "Nº de Parcelas" e o Vencimento do lancamento sao OS DA LISTA; o payload leva
+    `parcelas` so' nas livres (`montarPayloadParcelamento`: sem a lista, as 19 chaves de sempre, sem chave nula). A altura da
+    grade no modal segue a JANELA (`clamp(140px, calc(100vh - 355px), 236px)`), nunca o conteudo. (2) `ObrigacaoDialog`, criacao
+    de parcelamento, aba Parcelas (altura 276; "o contrato" nas frases; "O contrato vale {soma}"); nas livres "Nº de parcelas" e
+    "1ª parcela" ficam em leitura. ⚠ A previa antiga dessa tela deixava EDITAR a data de cada parcela e a RPC a ignorava: agora
+    o mensal e' leitura. Financiamento, emprestimo e a EDICAO nao mudaram (fotos identicas; so' a foto da criacao de parcelamento
+    foi regravada, de proposito).
+  · XML: `ParcelamentoProposto` 'fora_do_padrao' virou `{ tipo: 'livres', parcelas: N }` — as duplicatas com valor ou data
+    proprios entram DIRETO em "Parcelas livres", como estao na nota, com o recado `fraseParcelasComoNaNota(N)`;
+    `FRASE_DUPLICATAS_FORA_DO_PADRAO` e `DuplicatasDoXml` SAIRAM. Duplicatas no padrao mensal seguem "Igual todo mês" (linhas
+    "duplicata da nota"), com a opcao de passar para livres. "= valor da nota" / "nota X · diferença Y" passou a ser o recado da
+    grade. A lista de notas diz "N · parcelas livres".
+  ⚠ DESVIO DO MOCK, DECLARADO: as colunas Nota fiscal e Boleto NAO estao nesta grade — seguem na aba Documentos
+    (`ParcelasDaCompra`), que le' as MESMAS linhas (`parcelaRows` = a lista do modo aberto) e continua casando os boletos por
+    ordem de vencimento. A grade tem a prop `extras` para recebe^-las; juntar as duas e' o passo 3.
+  Medido a 1.126 x 579 no cliente Teste, sem gravar: modal 1024 x 547, corpo SEM rolagem (448 de 448), grade 724 x 224, lista
+  rolando por dentro com cabecalho (316) e rodape (473) parados ao rolar, linhas de 19px, 0 cortes; Parcelamentos: dialogo
+  1024 x 558, grade 698 x 276, "99.999.999,99" no campo sem corte, a frase + os dois gestos numa linha. A 523 de altura a grade
+  do modal fica com 168px (pela formula, nao medido). Provas: 16 mutacoes de tela mortas e 7 de banco; teste SQL
+  `supabase/tests/parc_livres_01_test.sql` (T1–T3, cliente Teste, termina em RAISE OK).
+  ⚠ NAO PROVADO NO NAVEGADOR: o SALVAR pela tela (nenhum parcelamento foi gravado: provado pelo payload em teste e pela RPC no
+    teste SQL), a nota real do NJ, o DatePicker da linha digitado, e a janela de 523 de altura.
+  ⚠ DIVIDAS: PARC-LIVRES-FREQUENCIA-ROTULO-01 (na tela de Parcelamentos o seletor diz "Igual todo mês" tambem com frequencia
+    bimestral/anual) · o rodape de totais mede 21px (declarado 20) · o resumo lateral do `ObrigacaoDialog` segue rolando por
+    dentro (368 de 447, anterior a este PR) · a costura clara de 1px entre "#" e "Vencimento" no cabecalho navy (subpixel).
 - ⚠ A CONTA DIRETO NO CAMPO DE VALOR TEM UM DONO, E GUARDA-SE SO' O RESULTADO (FIN-VALOR-CALC-01a, Gabriel 05/10/2026, so' tela).
   Ele lanca rateios (o cliente manda o valor cheio, o lancamento e' uma parte): digita "16.238,00/2" no campo e fica o
   resultado; a conta NAO vai para observacao nem para lugar nenhum.

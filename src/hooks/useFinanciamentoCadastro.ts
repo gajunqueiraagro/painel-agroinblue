@@ -11,7 +11,7 @@ import { montarPayloadConta } from '@/lib/financeiro/contaPayload';
 import { loadPlanoContasCompleto, planoToClassificacoes } from '@/lib/financeiro/planoContasBuilder';
 import type { ClassificacaoItem, Safra } from '@/hooks/useFinanceiroV2';
 import type { ClassificacaoValor } from '@/components/shared/ClassificacaoLancamento';
-import { montarPayloadParcelamento } from '@/lib/financiamentos/montarPayloadParcelamento';
+import { montarPayloadParcelamento, type ParcelaDoPayload } from '@/lib/financiamentos/montarPayloadParcelamento';
 
 /* ── Types ── */
 export interface ParcelaPreview {
@@ -353,7 +353,7 @@ export function useFinanciamentoCadastro() {
     descricao: string; tipo: string; valor: number;
     fornecedor_id: string; conta_bancaria_id: string;
     plano_conta_id: string; gerar_lancamento: boolean; observacao: string;
-  }>): Promise<boolean> => {
+  }>, parcelasLivres?: ParcelaDoPayload[] | null): Promise<boolean> => {
     if (!clienteId || !user) {
       toast.error('Sessão inválida');
       return false;
@@ -426,6 +426,8 @@ export function useFinanciamentoCadastro() {
               tipoFinanciamento: form.tipo_financiamento,
               numeroContrato: form.numero_contrato.trim() || null,
               observacao: form.observacao || null,
+              /* PARC-LIVRES-01 — nas parcelas livres a RPC grava EXATAMENTE a lista; sem ela, a chave não viaja. */
+              parcelas: parcelasLivres ?? null,
             },
             {
               plano_conta_id: form.plano_conta_parcela_id,

@@ -6,7 +6,7 @@ import { lerNFe } from './lerNFe';
 import type { AvisoNFe, DuplicataNFe, NotaLida } from './tipos';
 import { EMITENTE_CNPJ, montarNFe, utf8, type OpcoesNota } from './__fixtures__/notas';
 import {
-  FORMA_POR_TPAG, FRASE_DUPLICATAS_FORA_DO_PADRAO, FRASE_FAZENDA_NAO_IDENTIFICADA, FRASE_NOTA_DE_VENDA, FRASE_SEM_DUPLICATAS,
+  FORMA_POR_TPAG, fraseParcelasComoNaNota, FRASE_FAZENDA_NAO_IDENTIFICADA, FRASE_NOTA_DE_VENDA, FRASE_SEM_DUPLICATAS,
   FRASE_SEM_PROTOCOLO, descricaoDaNota, duplicatasCabemNoParcelamentoDeHoje, proporLancamento, somarMeses,
   type FazendaComIE, type PropostaDeLancamento, type UltimaClassificacao,
 } from './proporLancamento';
@@ -106,9 +106,9 @@ describe('proporLancamento — as decisoes', () => {
     expect(p.documento.valorCent).toBe(1623800);
     expect(p.origens.valor).toBe('soma das duplicatas');
     expect(p.avisos).toContain('Duplicatas 16.119,00 · nota 16.238,00. Lançamento = 16.119,00 · diferença −119,00');
-    /* valores diferentes entre si: nao cabe no parcelamento de hoje */
-    expect(p.parcelamento).toEqual({ tipo: 'fora_do_padrao' });
-    expect(p.avisos).toContain(FRASE_DUPLICATAS_FORA_DO_PADRAO);
+    /* valores diferentes entre si: entram como PARCELAS LIVRES, como estao na nota (PARC-LIVRES-01) */
+    expect(p.parcelamento).toEqual({ tipo: 'livres', parcelas: 2 });
+    expect(p.origens.parcelamento).toBe('Parcelas livres · 2 · como na nota');
   });
   it('6 — sem duplicatas: lancamento unico, vencimento VAZIO, valor da nota, aviso', () => {
     const p = propor({ duplicatas: null });
@@ -124,11 +124,12 @@ describe('proporLancamento — as decisoes', () => {
     expect(p.origens.vencimento).toBe('duplicata');
     expect(p.avisos).toEqual([]);
   });
-  it('duplicatas fora do padrao mensal: NAO parcela sozinho, e diz por que', () => {
+  it('duplicatas fora do padrao mensal: PARCELAS LIVRES como na nota, sem aviso de recusa (PARC-LIVRES-01)', () => {
     const p = propor({ duplicatas: [['001', '2026-10-30', '8119.00'], ['002', '2026-11-29', '8119.00']] });
-    expect(p.parcelamento).toEqual({ tipo: 'fora_do_padrao' });
+    expect(p.parcelamento).toEqual({ tipo: 'livres', parcelas: 2 });
     expect(p.valorCent).toBe(1623800);
-    expect(p.avisos).toEqual([FRASE_DUPLICATAS_FORA_DO_PADRAO]);
+    expect(p.avisos).toEqual([]);
+    expect(fraseParcelasComoNaNota(2)).toBe('A nota trouxe 2 parcelas com valores ou datas próprias: entram como estão na nota.');
     expect(p.duplicatas).toHaveLength(2);
   });
   it('8 e 9 — IE do EMITENTE = IE de uma fazenda do cliente: recusa, com a frase', () => {

@@ -27,6 +27,10 @@ import ModalBaixaParcela from '@/components/financiamentos/ModalBaixaParcela';
 import { TableFooter } from '@/components/ui/table';
 import { Pencil } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
+import { GradeDeParcelas, type ModoDasParcelas } from '@/components/financiamentos/GradeDeParcelas';
+import {
+  centavos, motivoNaoSalva, parcelasParaPayload, type ParcelaLivre,
+} from '@/lib/financiamentos/parcelasLivres';
 
 /* ══ NOVA OBRIGACAO — a casca do CompraModalShell aplicada ao contrato ═══════════
    PR-PARC-04. Substitui a PAGINA `src/pages/FinanciamentoCadastro.tsx` como porta de
@@ -56,6 +60,8 @@ const ALTURA_CORPO = 'h-[69vh]';
  * de reservar 260px de vazio. Altura fixa aqui seria moldura em volta de nada.
  */
 const ALTURA_PREVIA = 'max-h-[260px]';
+/** PARC-LIVRES-01 — a grade de parcelas da criação do parcelamento: altura FIXA (barra 26 + lista + totais 20 + aviso 18). */
+const ALTURA_GRADE = 276;
 const CAMPO = 'h-8';                       // A16 — todo campo do formulario na mesma altura
 const CAMPO_CELULA = 'h-6';                // A16 — dentro da grade densa, todos na dela
 /* Idioma canonico de campo travado (AbaLiquidacaoOC / CompraModalShell). */
@@ -443,6 +449,33 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
     setJurosTexto(n ? n.toLocaleString('pt-BR', { maximumFractionDigits: 4 }) : '');
   };
 
+  /* ── PARC-LIVRES-01 — "Igual todo mês" × "Parcelas livres", só na CRIAÇÃO do parcelamento ──────────────
+     No mensal a grade mostra a prévia (só leitura: é o que a RPC grava). Nas livres a lista é do operador, e o número de
+     parcelas e a 1ª parcela do formulário passam a ser OS DA LISTA (os campos ficam em leitura). */
+  const [modoParcelas, setModoParcelas] = useState<ModoDasParcelas>('mensal');
+  const [parcelasLivres, setParcelasLivres] = useState<ParcelaLivre[]>([]);
+  const [baseLivres, setBaseLivres] = useState<ParcelaLivre[] | null>(null);
+  useEffect(() => { if (!open) { setModoParcelas('mensal'); setParcelasLivres([]); setBaseLivres(null); } }, [open]);
+  const livresAbertas = !ehEdicao && form.natureza === 'parcelamento' && modoParcelas === 'livres';
+  /** A prévia mensal no formato da grade (o valor da parcela é principal + juros; no parcelamento os juros são zero). */
+  const previaComoParcelas = useMemo<ParcelaLivre[]>(() => parcelas.map((p) => {
+    const valorCent = centavos(p.valor_principal + p.valor_juros);
+    return { chave: `mensal-${p.numero}`, vencimento: p.data_vencimento, valorCent, origem: 'mensal', era: { vencimento: p.data_vencimento, valorCent } };
+  }), [parcelas]);
+  const trocarModoDasParcelas = (m: ModoDasParcelas) => {
+    if (m === 'livres') { setParcelasLivres(previaComoParcelas); setBaseLivres(previaComoParcelas); }
+    else { setParcelasLivres([]); setBaseLivres(null); }
+    setModoParcelas(m);
+  };
+  const nLivres = parcelasLivres.length;
+  const primeiroVencimentoLivre = parcelasLivres[0]?.vencimento ?? '';
+  useEffect(() => {
+    if (!livresAbertas) return;
+    set('total_parcelas', nLivres); setParcelasTexto(String(nLivres));
+    set('data_primeira_parcela', primeiroVencimentoLivre);
+  }, [livresAbertas, nLivres, primeiroVencimentoLivre]);
+  const motivoDasParcelas = livresAbertas ? motivoNaoSalva(parcelasLivres, centavos(Number(form.valor_total) || 0), 'o contrato') : null;
+
   /* Auto-gerar parcelas — mesma cadeia de dependencias da pagina. */
   useEffect(() => {
     /* ⚠ EM EDICAO NAO SE REGERA NADA. As parcelas gravadas podem ter lancamento
@@ -510,8 +543,12 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
     if (!form.descricao?.trim()) lista.push({ aba: 'contrato', texto: 'Informe a descrição do contrato.' });
     if (!Number(form.valor_total)) lista.push({ aba: 'parcelas', texto: 'Informe o valor total.' });
     if (!form.data_contrato) lista.push({ aba: 'contrato', texto: 'Informe a data do contrato.' });
-    if (!form.data_primeira_parcela) lista.push({ aba: 'parcelas', texto: 'Informe a data da 1ª parcela.' });
-    if (!Number(form.total_parcelas)) lista.push({ aba: 'parcelas', texto: 'Informe o número de parcelas.' });
+    /* PARC-LIVRES-01 — nas livres quem fala é a grade: a MESMA função que ela lê (`motivoNaoSalva`). */
+    if (motivoDasParcelas) lista.push({ aba: 'parcelas', texto: motivoDasParcelas });
+    else if (!livresAbertas) {
+      if (!form.data_primeira_parcela) lista.push({ aba: 'parcelas', texto: 'Informe a data da 1ª parcela.' });
+      if (!Number(form.total_parcelas)) lista.push({ aba: 'parcelas', texto: 'Informe o número de parcelas.' });
+    }
     if (ehParcelamento && !form.plano_conta_parcela_id) lista.push({ aba: 'classificacao', texto: 'Escolha a classificação da parcela' });
     /* ⚠ A FAZENDA E' OBRIGATORIA NO PARCELAMENTO — PAR-01c, e a RPC recusa sem ela. A pendencia
        existe para o operador ler a frase ANTES de clicar, em vez de receber de volta a recusa do
@@ -519,7 +556,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
     if (ehParcelamento && !form.fazenda_id) lista.push({ aba: 'contrato', texto: 'Escolha a fazenda do parcelamento.' });
     return lista;
   }, [form.descricao, form.valor_total, form.data_contrato, form.data_primeira_parcela,
-      form.total_parcelas, form.plano_conta_parcela_id, form.fazenda_id, ehParcelamento]);
+      form.total_parcelas, form.plano_conta_parcela_id, form.fazenda_id, ehParcelamento, motivoDasParcelas, livresAbertas]);
 
   const primeiraPendencia = pendencias[0]?.texto ?? null;
   const contarPendencias = (a: Aba) => pendencias.filter(p => p.aba === a).length;
@@ -618,7 +655,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
       if (ok) onSalvo?.();
       return;
     }
-    const ok = await salvar(destinacoes);
+    const ok = await salvar(destinacoes, livresAbertas ? parcelasParaPayload(parcelasLivres) : null);
     if (ok) onSalvo?.();
   };
 
@@ -962,11 +999,11 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                           exigiria refazer o cronograma, e o cronograma nao se refaz (as
                           parcelas ja' podem ter lancamento vinculado). Campo que aceita o
                           que nao vai acontecer e' pior que campo travado. */}
-                      {ehEdicao ? (
+                      {ehEdicao || livresAbertas ? (
                         <>
                           <Input readOnly tabIndex={-1} value={String(form.total_parcelas)}
                             className={`${CAMPO} text-right ${NUM} ${CAMPO_TRAVADO}`} />
-                          <p className={APOIO}>Para mudar a quantidade, edite ou cancele parcelas na tabela.</p>
+                          <p className={APOIO}>{livresAbertas ? 'O da lista: use "+ Parcela" e o ✕.' : 'Para mudar a quantidade, edite ou cancele parcelas na tabela.'}</p>
                         </>
                       ) : (
                         <>
@@ -991,7 +1028,8 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                   <div className={ehParcelamento && !ehEdicao ? 'contents' : `grid gap-2 ${ehEdicao ? 'grid-cols-4 [&>div]:max-w-[200px]' : 'grid-cols-3'}`}>
                     <div>
                       <Label className={ROTULO}>1ª parcela *</Label>
-                      <DatePicker value={form.data_primeira_parcela} onChange={v => set('data_primeira_parcela', v)} />
+                      <DatePicker value={form.data_primeira_parcela} onChange={v => set('data_primeira_parcela', v)}
+                        disabled={livresAbertas} />
                       {/* ⚠ EDITAVEL, E COM CONSEQUENCIA ESCRITA. Mudar a 1a parcela DESLOCA
                           os vencimentos das pendentes pelo mesmo numero de dias — quem
                           renegocia a data de entrada espera que o resto ande junto. As PAGAS
@@ -1056,6 +1094,23 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                         na edicao), entao a linha nunca leva as duas.
                         ⚠ `min-w-0` + `truncate` NA FRASE, nao no rotulo: em coluna estreita quem
                         cede e' a explicacao, nunca o nome do campo. */}
+                    {/* PARC-LIVRES-01 — na CRIAÇÃO do parcelamento a prévia é a GRADE: "Igual todo mês" (o que a RPC grava, só
+                        leitura) × "Parcelas livres" (vencimento e valor por parcela, com a soma contra o contrato). */}
+                    {ehParcelamento && !ehEdicao ? (
+                      <GradeDeParcelas
+                        modo={modoParcelas}
+                        onModo={trocarModoDasParcelas}
+                        parcelas={livresAbertas ? parcelasLivres : previaComoParcelas}
+                        onParcelas={setParcelasLivres}
+                        compraCent={centavos(Number(form.valor_total) || 0)}
+                        oQue={{ frase: 'o contrato', rotulo: 'Valor do contrato', passaAValer: 'O contrato vale' }}
+                        onCompraVale={(somaCent) => set('valor_total', somaCent / 100)}
+                        base={baseLivres}
+                        rotuloVoltar="Desfazer edições"
+                        recado={livresAbertas ? null : 'Sem juros. Cada parcela é o total dividido por N; a última absorve o arredondamento.'}
+                        altura={ALTURA_GRADE}
+                      />
+                    ) : (<>
                     <div className="flex items-baseline justify-between gap-2">
                       <Label className={ROTULO}>{ehEdicao ? 'Parcelas do contrato' : 'Prévia das parcelas'}</Label>
                       {ehParcelamento && !ehEdicao && (
@@ -1213,6 +1268,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                         </TableBody>
                       </Table>
                     )}
+                    </>)}
                   </div>
                 </TabsContent>
 

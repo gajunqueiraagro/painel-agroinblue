@@ -74,8 +74,8 @@ import {
 import { pendenteDaNota, type DoXml } from '@/lib/financeiro/nfePrefill';
 import { gravarDocumentoNoCadastro, type OcorrenciaDaNota } from '@/lib/financeiro/nfeConsultas';
 import { documentoFormatado, reais } from '@/lib/financeiro/nfe/formatos';
-import type { CampoDoXml } from '@/lib/financeiro/nfe/proporLancamento';
-import { AvisosDoXml, CAMPO_AMBAR, DuplicatasDoXml, FaixaDoFornecedor, OrigemDoXml, PilulaDoXml } from './LancamentoDoXml';
+import { fraseParcelasComoNaNota, type CampoDoXml } from '@/lib/financeiro/nfe/proporLancamento';
+import { AvisosDoXml, CAMPO_AMBAR, FaixaDoFornecedor, OrigemDoXml, PilulaDoXml } from './LancamentoDoXml';
 import type { ExcelContext } from '@/v2/lib/mesa/buildExcelContext';
 import { planoDeTransferencia, ehTipoTransferencia } from '@/v2/lib/mesa/transferenciaPlano';
 import { ATIVIDADES, lembrarAtividade, ultimaAtividade, type Atividade } from '@/lib/financeiro/ultimaAtividade';
@@ -97,6 +97,11 @@ import { podeOferecerDesvinculo } from '@/lib/oc/desvincularLancamento';
 import { DesvincularOperacaoDialog } from '@/components/financeiro-v2/DesvincularOperacaoDialog';
 import { DocumentosPendentes } from '@/components/financeiro-v2/DocumentosPendentes';
 import { ParcelasDaCompra } from '@/components/financeiro-v2/ParcelasDaCompra';
+import { GradeDeParcelas, type ModoDasParcelas } from '@/components/financiamentos/GradeDeParcelas';
+import {
+  centavos, houveEdicao, motivoNaoSalva, parcelasComoPrevistas, parcelasDaNota, parcelasDoMensal, parcelasParaPayload,
+  type ParcelaLivre,
+} from '@/lib/financiamentos/parcelasLivres';
 import { AnexarBoletosDialog, type BoletoAtribuido } from '@/components/financeiro-v2/AnexarBoletosDialog';
 import {
   gravarDocumentosPendentes, gravarDocumentosDoParcelamento, lancamentosDoParcelamento, irmasDaParcela, numeroDaNotaDaCompra,
@@ -657,6 +662,11 @@ export function LancamentoV2Dialog({
    */
   const [numParcelas, setNumParcelas] = useState(2);
   const [numParcelasTexto, setNumParcelasTexto] = useState('2');
+  /* PARC-LIVRES-01 — "Igual todo mês" (a prévia da RPC, como sempre) × "Parcelas livres" (valor e vencimento por parcela).
+     `baseLivres` é o ponto de partida das livres (as duplicatas da nota, ou a prévia mensal): é o que o "voltar" restaura. */
+  const [modoParcelas, setModoParcelas] = useState<ModoDasParcelas>('mensal');
+  const [parcelasLivres, setParcelasLivres] = useState<ParcelaLivre[]>([]);
+  const [baseLivres, setBaseLivres] = useState<ParcelaLivre[] | null>(null);
   /** Aplica o mínimo/máximo — só no blur/Enter, nunca a cada tecla. */
   const fecharNumParcelas = () => {
     const n = Math.max(2, Math.min(24, parseInt(numParcelasTexto, 10) || 2));
@@ -1099,6 +1109,7 @@ export function LancamentoV2Dialog({
       // CRITICAL: reset parcela/recorrência when editing — prevents stale state from previous "new" dialog
       setFormaPagamentoParc('avista');
       setNumParcelas(2); setNumParcelasTexto('2');
+      setModoParcelas('mensal'); setParcelasLivres([]); setBaseLivres(null);
     } else if (prefill) {
       // Modo "criar a partir de fonte externa" (OFX órfão, p.ex.) — campos
       // chave vêm pré-preenchidos do prefill; demais ficam vazios igual ao
@@ -1161,9 +1172,15 @@ export function LancamentoV2Dialog({
       setTipoDocumento(TIPOS_DOCUMENTO.find((td) => td === prefill.tipo_documento) ?? '');
       setObservacao(prefill.observacao ?? '');
       /* FIN-NFE-XML-01d — duplicatas que CABEM no parcelamento de hoje abrem como "Parcelada · Nx"; o resto, a' vista. */
-      const parcelasDoXml = prefill.doXml?.proposta.parcelamento.tipo === 'parcelado' ? prefill.doXml.proposta.parcelamento.parcelas : null;
+      const propostaDoXml = prefill.doXml?.proposta ?? null;
+      const parcelasDoXml = propostaDoXml && propostaDoXml.parcelamento.tipo !== 'unico' ? propostaDoXml.parcelamento.parcelas : null;
       setFormaPagamentoParc(parcelasDoXml ? 'parcelada' : 'avista');
       setNumParcelas(parcelasDoXml ?? 2); setNumParcelasTexto(String(parcelasDoXml ?? 2));
+      /* PARC-LIVRES-01 — duplicatas com valor ou data próprios entram DIRETO em "Parcelas livres", como estão na nota. */
+      if (propostaDoXml && propostaDoXml.parcelamento.tipo === 'livres') {
+        const daNota = parcelasDaNota(propostaDoXml.duplicatas);
+        setModoParcelas('livres'); setParcelasLivres(daNota); setBaseLivres(daNota);
+      } else { setModoParcelas('mensal'); setParcelasLivres([]); setBaseLivres(null); }
       setFormaPgto(prefill.forma_pagamento ?? '');
       setDadosPagamento(prefill.dados_pagamento ?? '');
     } else {
@@ -1199,6 +1216,7 @@ export function LancamentoV2Dialog({
       setObservacao('');
       setFormaPagamentoParc('avista');
       setNumParcelas(2); setNumParcelasTexto('2');
+      setModoParcelas('mensal'); setParcelasLivres([]); setBaseLivres(null);
       setFormaPgto('');
       setDadosPagamento('');
     }
@@ -1312,12 +1330,39 @@ export function LancamentoV2Dialog({
    * ⚠ A SEMENTE É O VENCIMENTO: a RPC escalona `data_vencimento`. O pagamento só entra quando
    * não há vencimento nenhum, para a prévia não ficar muda enquanto o operador preenche.
    */
-  const parcelaRows = useMemo(
+  const parcelasMensais = useMemo(
     () => (formaPagamentoParc === 'parcelada' && numParcelas >= 2
       ? preverParcelas(valorNum, numParcelas, dataVencimento || dataPagamento, 1)
       : []),
     [formaPagamentoParc, numParcelas, valorNum, dataVencimento, dataPagamento],
   );
+  /* PARC-LIVRES-01 — nas livres, a lista é a do operador; no mensal, a prévia de sempre. Quem lê `parcelaRows` (a grade de
+     boletos, o resumo) recebe a lista do modo aberto. */
+  const livresAbertas = formaPagamentoParc === 'parcelada' && modoParcelas === 'livres';
+  const parcelaRows = useMemo(
+    () => (livresAbertas ? parcelasComoPrevistas(parcelasLivres) : parcelasMensais),
+    [livresAbertas, parcelasLivres, parcelasMensais],
+  );
+  /* nas livres o número de parcelas É o tamanho da lista (o campo fica em leitura) */
+  /* …e o Vencimento do lançamento é o da parcela 1 (o que o contrato grava como "1ª parcela") */
+  const primeiroVencimentoLivre = parcelasLivres[0]?.vencimento ?? '';
+  useEffect(() => {
+    if (!livresAbertas) return;
+    setNumParcelas(parcelasLivres.length); setNumParcelasTexto(String(parcelasLivres.length));
+    setDataVencimento(primeiroVencimentoLivre);
+  }, [livresAbertas, parcelasLivres.length, primeiroVencimentoLivre]);
+  /** Por que o parcelado livre não pode ser salvo (escrito ao lado do Salvar) — a MESMA função que a grade lê. */
+  const motivoDasParcelas = !livresAbertas ? null
+    : parcelasLivres.length < 2 ? 'O parcelado pede ao menos duas parcelas.'
+      : motivoNaoSalva(parcelasLivres, centavos(Math.abs(valorNum)));
+  const trocarModoDasParcelas = (m: ModoDasParcelas) => {
+    if (m === 'livres') {
+      /* o ponto de partida: as duplicatas da nota (quando a tela ainda as descreve) ou a prévia mensal */
+      const partida = duplicatasNaGrade ? parcelasDaNota(duplicatasNaGrade) : parcelasDoMensal(parcelasMensais);
+      setParcelasLivres(partida); setBaseLivres(partida);
+    } else { setParcelasLivres([]); setBaseLivres(null); }
+    setModoParcelas(m);
+  };
 
   /* ── DADOS PARA PAGAMENTO: o cadastro do fornecedor manda enquanto não está pago — FIN-PIX-CADASTRO-MODAL-01 ──────────
      ⚠ O `buildDadosPagamento` que morava aqui virou `textoDoCadastro` (a lib), byte a byte. Ele só rodava quando a forma ou o
@@ -1467,7 +1512,7 @@ export function LancamentoV2Dialog({
   });
   /* ⚠ `carregando` VENCE A VALIDAÇÃO: com os catálogos vazios o formulário até pode parecer
      válido — os campos estão "preenchidos" com nada —, e é justamente esse o caso perigoso. */
-  const canSave = validacao.canSave && !carregando;
+  const canSave = validacao.canSave && !carregando && motivoDasParcelas === null;
   // PR-FIN-V2-STATUS-01-AJUSTE item 2 — mensagem clara da pendência principal (regra/campo).
   const pendenciaMsg = statusTransacao === 'realizado' && !dataPagamento
     ? 'Data de pagamento obrigatória quando status = Realizado.'
@@ -1717,7 +1762,7 @@ export function LancamentoV2Dialog({
          `data_pagamento`, e o vencimento real ia igual nas N. A RPC escalona o VENCIMENTO e
          deixa o pagamento NULO, que é o que 'programado' significa. O pagamento só entra como
          semente quando não há vencimento nenhum — não inventar data é melhor que recusar. */
-      const primeira = dataVencimento || dataPagamento;
+      const primeira = livresAbertas ? (parcelasLivres[0]?.vencimento ?? '') : (dataVencimento || dataPagamento);
       if (!primeira) { toast.error('Informe a data de vencimento da 1ª parcela'); setSaving(false); return; }
       try {
         const payload = montarPayloadParcelamento(
@@ -1728,6 +1773,8 @@ export function LancamentoV2Dialog({
             valorTotal: Math.abs(valorNum),
             totalParcelas: numParcelas,
             dataPrimeiraParcela: primeira,
+            /* PARC-LIVRES-01 — nas livres a RPC grava EXATAMENTE a lista; no mensal a chave não viaja. */
+            parcelas: livresAbertas ? parcelasParaPayload(parcelasLivres) : null,
             dataCompetencia,
             /* ⚠ MENSAL FIXO, e não é campo novo: o `addDays(i * 30)` que morreu aqui já TENTAVA
                ser mensal. A RPC faz `make_interval(months => …)`, que é mensal de verdade. */
@@ -1967,8 +2014,11 @@ export function LancamentoV2Dialog({
       case 'valor': return Math.round(Math.abs(valorNum) * 100) === p.valorCent;
       case 'subcentro': return !!p.classificacao && classificacao.plano_conta_id === p.classificacao.plano_conta_id;
       case 'fazenda': return !!p.fazendaId && fazendaId === p.fazendaId;
-      case 'parcelamento': return p.parcelamento.tipo === 'parcelado' && formaPagamentoParc === 'parcelada'
-        && numParcelas === p.parcelamento.parcelas && dataVencimento === p.parcelamento.primeiroVencimento;
+      case 'parcelamento':
+        /* PARC-LIVRES-01 — nas livres o âmbar vale enquanto a lista é a da nota, sem edição */
+        if (p.parcelamento.tipo === 'livres') return livresAbertas && !!baseLivres && !houveEdicao(parcelasLivres, baseLivres);
+        return p.parcelamento.tipo === 'parcelado' && formaPagamentoParc === 'parcelada' && modoParcelas === 'mensal'
+          && numParcelas === p.parcelamento.parcelas && dataVencimento === p.parcelamento.primeiroVencimento;
       case 'forma': return !!p.formaPagamento && formaPgto === p.formaPagamento;
       case 'documento': return notaFiscal === p.numeroDocumento;
       case 'descricao': return descricao === p.descricao;
@@ -1984,7 +2034,14 @@ export function LancamentoV2Dialog({
   const xmlRotTexto = (rotulo: string, campo: CampoDoXml) => (xmlAmbar(campo) ? `${rotulo} · ${xml?.proposta.origens[campo] ?? ''}` : rotulo);
   const xmlCls = (campo: CampoDoXml) => (xmlAmbar(campo) ? CAMPO_AMBAR : undefined);
   /** As duplicatas do XML, enquanto o parcelamento da tela ainda e' o que elas descrevem. */
-  const duplicatasNaGrade = xml && xmlAmbar('parcelamento') ? xml.proposta.duplicatas : null;
+  const duplicatasNaGrade = xml && !livresAbertas && xmlAmbar('parcelamento') ? xml.proposta.duplicatas : null;
+  /* PARC-LIVRES-01 — o recado da grade (a faixa de 18px, quando a soma fecha): de onde a lista veio e as parcelas × a NOTA. */
+  const recadoDasParcelas = ((): string | null => {
+    if (!xml || formaPagamentoParc !== 'parcelada') return null;
+    if (livresAbertas && xml.proposta.parcelamento.tipo === 'livres' && xmlAmbar('parcelamento')) return fraseParcelasComoNaNota(xml.proposta.parcelamento.parcelas);
+    const dif = Math.round(parcelasTotal * 100) - xml.proposta.documento.valorCent;
+    return dif === 0 ? '= valor da nota' : `nota ${reais(xml.proposta.documento.valorCent)} · diferença ${reais(dif)}`;
+  })();
   const abrirOcorrenciaDaNota = (o: OcorrenciaDaNota) => {
     /* Em OUTRA aba: o lancamento em preenchimento nao se perde. */
     const destino = o.origem === 'lancamento' && o.lancamentoId ? `/?flancId=${encodeURIComponent(o.lancamentoId)}`
@@ -2684,62 +2741,33 @@ export function LancamentoV2Dialog({
                           onChange={e => setNumParcelasTexto(e.target.value)}
                           onBlur={fecharNumParcelas}
                           onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); fecharNumParcelas(); } }}
+                          disabled={livresAbertas}
+                          title={livresAbertas ? 'Nas parcelas livres o número é o da lista: use "+ Parcela" e o ✕.' : undefined}
                           className={cn("h-8", fieldBg)}
                         />
                       </div>
                     )}
                   </div>
 
-                  {/* Parcela grid */}
-                  {formaPagamentoParc === 'parcelada' && parcelaRows.length > 0 && (
-                    <div className="rounded-lg border border-border/30 bg-background dark:bg-muted/20 overflow-hidden">
-                      <div className={cn("grid gap-1 px-3 py-1.5 bg-muted/40 text-[10px] font-bold text-muted-foreground uppercase tracking-wider", duplicatasNaGrade ? "grid-cols-[48px_64px_1fr_1fr]" : "grid-cols-[48px_1fr_1fr]")}>
-                        <span>Parc.</span>
-                        {duplicatasNaGrade && <span data-testid="xml-coluna-duplicata">Duplicata</span>}
-                        <span>Vencimento</span>
-                        <span>Valor (R$)</span>
-                      </div>
-                      <div className="divide-y divide-border/20">
-                        {/* ⚠ SO' LEITURA, E A COLUNA "Vencimento" AGORA MOSTRA O VENCIMENTO —
-                            PAR-02. O cabecalho ja' dizia "Vencimento"; o campo embaixo era
-                            `row.dataPagamento`, e era ele que ia para o banco como pagamento
-                            numa parcela 'programado'. A grade era o WRITER: o que estivesse
-                            nela virava lancamento. Agora ela ESPELHA o que a RPC vai gravar. */}
-                        {parcelaRows.map((row) => (
-                          <div key={row.numero} className={cn("grid gap-1 px-2 py-0.5 items-center", duplicatasNaGrade ? "grid-cols-[48px_64px_1fr_1fr]" : "grid-cols-[48px_1fr_1fr]")}>
-                            <span className="text-[11px] font-semibold text-muted-foreground">{row.numero}/{numParcelas}</span>
-                            {duplicatasNaGrade && <span className="text-[11px] font-mono text-amber-900">{duplicatasNaGrade[row.numero - 1]?.numero ?? '—'}</span>}
-                            <span className="text-[11px] tabular-nums">{resumoFmtData(row.dataVencimento) ?? '—'}</span>
-                            <span className="text-[11px] text-right font-mono tabular-nums">{formatMoeda(row.valor)}</span>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="px-3 py-1.5 bg-muted/40 flex justify-between items-center text-xs">
-                        <span className="text-muted-foreground font-medium">Total parcelas:</span>
-                        <span className={cn("font-bold font-mono", Math.abs(parcelasTotal - Math.abs(valorNum)) < 0.01 ? "text-success" : "text-destructive")}>
-                          {formatMoeda(parcelasTotal)}
-                        </span>
-                      </div>
-                      {/* FIN-NFE-XML-01d — as parcelas contra a NOTA: "= valor da nota", ou a diferença escrita. */}
-                      {xml && (() => {
-                        const dif = Math.round(parcelasTotal * 100) - xml.proposta.documento.valorCent;
-                        return (
-                          <div className="px-3 py-1 bg-amber-50 text-amber-900 text-[10px]" data-testid="xml-parcelas-x-nota">
-                            {dif === 0 ? '= valor da nota' : `nota ${reais(xml.proposta.documento.valorCent)} · diferença ${reais(dif)}`}
-                          </div>
-                        );
-                      })()}
-                      {Math.abs(parcelasTotal - Math.abs(valorNum)) >= 0.01 && (
-                        <div className="px-3 py-1 bg-destructive/10 text-destructive text-[10px] flex items-center gap-1">
-                          <AlertCircle className="h-3 w-3" />
-                          A soma das parcelas difere do valor total ({formatMoeda(Math.abs(valorNum))})
-                        </div>
-                      )}
-                    </div>
+                  {/* PARC-LIVRES-01 — A GRADE DE PARCELAS: "Igual todo mês" (a prévia do que a RPC grava, só leitura) ×
+                      "Parcelas livres" (vencimento e valor por parcela). N, soma, compra e diferença vêm de `resumoDasParcelas`;
+                      o que apaga o Salvar é `motivoDasParcelas`, a MESMA função. Altura fixa: só a lista rola. */}
+                  {formaPagamentoParc === 'parcelada' && (
+                    <GradeDeParcelas
+                      modo={modoParcelas}
+                      onModo={trocarModoDasParcelas}
+                      parcelas={livresAbertas ? parcelasLivres : (duplicatasNaGrade ? parcelasDaNota(duplicatasNaGrade) : parcelasDoMensal(parcelasMensais))}
+                      onParcelas={setParcelasLivres}
+                      compraCent={centavos(Math.abs(valorNum))}
+                      onCompraVale={(somaCent) => setValorDisplay(toBRL(somaCent / 100))}
+                      base={baseLivres}
+                      rotuloVoltar={xml && xml.proposta.duplicatas.length > 0 ? 'Voltar às duplicatas da nota' : 'Desfazer edições'}
+                      recado={recadoDasParcelas}
+                      /* a altura segue a JANELA (nunca o conteúdo): medido, o corpo do modal tem 100vh − 131 e a grade começa a 207
+                         com 15 de respiro embaixo — assim o modal não rola e só a lista rola */
+                      altura="clamp(140px, calc(100vh - 355px), 236px)"
+                    />
                   )}
-
-                  {/* FIN-NFE-XML-01d — duplicatas que NAO cabem no parcelamento de hoje: a conferência, só leitura. */}
-                  {xml && xml.proposta.parcelamento.tipo === 'fora_do_padrao' && <DuplicatasDoXml xml={xml} />}
 
                   {/* Recurrence grid */}
                 </div>
@@ -2974,6 +3002,12 @@ export function LancamentoV2Dialog({
             )}
             {/* FIN-NFE-PARCELAS-01 — depois do salvar, com documento que nao gravou: a frase ao lado do botao
                 (UX-TOAST-01) e o "Tentar de novo" no lugar do salvar, que criaria OUTRO lancamento. */}
+            {/* PARC-LIVRES-01 — por que o Salvar está apagado nas parcelas livres: o motivo escrito ao lado dele. */}
+            {!posSalvar && !erroAntesDeSalvar && motivoDasParcelas && (
+              <span className="max-w-[520px] truncate text-[10px] leading-tight text-destructive" title={motivoDasParcelas} data-testid="motivo-das-parcelas">
+                {motivoDasParcelas}
+              </span>
+            )}
             {!posSalvar && erroAntesDeSalvar && (
               <span className="max-w-[520px] text-[10px] leading-tight text-destructive" data-testid="erro-antes-de-salvar">
                 {erroAntesDeSalvar}

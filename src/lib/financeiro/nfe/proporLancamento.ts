@@ -34,7 +34,8 @@ export const FRASE_NOTA_DE_VENDA = 'Nota de venda entra pela Operação Comercia
 export const FRASE_FAZENDA_NAO_IDENTIFICADA = 'Fazenda não identificada pela inscrição estadual.';
 export const FRASE_SEM_DUPLICATAS = 'Nota sem duplicatas. Preencha o vencimento.';
 export const FRASE_SEM_PROTOCOLO = 'Nota sem protocolo de autorização.';
-export const FRASE_DUPLICATAS_FORA_DO_PADRAO = 'Duplicatas com valor ou data fora do padrão mensal: parcelas livres chegam na próxima etapa. Ajuste o parcelamento ou lance cada parcela.';
+/** PARC-LIVRES-01 — duplicatas com valor ou data próprios entram como PARCELAS LIVRES, como estão na nota (o recado da grade). */
+export const fraseParcelasComoNaNota = (n: number) => `A nota trouxe ${n} parcelas com valores ou datas próprias: entram como estão na nota.`;
 
 /** `iso` + n meses, com o dia preso ao fim do mes — o que o `make_interval(months => n)` do banco faz. */
 export function somarMeses(iso: string, n: number): string {
@@ -85,7 +86,7 @@ export type CampoDoXml =
 export type ParcelamentoProposto =
   | { tipo: 'unico'; vencimento: string }                       // '' quando a nota nao traz duplicata
   | { tipo: 'parcelado'; parcelas: number; primeiroVencimento: string }
-  | { tipo: 'fora_do_padrao' };
+  | { tipo: 'livres'; parcelas: number };                       // PARC-LIVRES-01: valores ou datas proprios, como na nota
 
 export interface PropostaDeLancamento {
   rotuloNota: string;                 // "NF 000.178.766"
@@ -175,8 +176,8 @@ export function proporLancamento(entrada: {
     parcelamento = { tipo: 'parcelado', parcelas: nota.duplicatas.length, primeiroVencimento: nota.duplicatas[0].vencimento };
     origens.parcelamento = `Parcelada · ${nota.duplicatas.length}x · 1º venc. ${dataCurta(nota.duplicatas[0].vencimento)}`;
   } else {
-    parcelamento = { tipo: 'fora_do_padrao' };
-    avisos.push(FRASE_DUPLICATAS_FORA_DO_PADRAO);
+    parcelamento = { tipo: 'livres', parcelas: nota.duplicatas.length };
+    origens.parcelamento = `Parcelas livres · ${nota.duplicatas.length} · como na nota`;
   }
 
   if (avisosDoLeitor.includes('sem_protocolo')) avisos.push(FRASE_SEM_PROTOCOLO);

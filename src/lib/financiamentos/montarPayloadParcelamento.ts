@@ -52,7 +52,16 @@ export interface DadosGeraisParcelamento {
   tipoFinanciamento: string | null;
   numeroContrato: string | null;
   observacao: string | null;
+  /**
+   * PARCELAS LIVRES — PARC-LIVRES-01. A lista {numero, data_vencimento, valor} que a RPC grava EXATAMENTE como vem.
+   * ⚠ AUSENTE (ou nula) = "Igual todo mês": a chave NÃO entra no payload e a RPC divide como sempre dividiu. Presente, quem
+   *   manda é a lista: `total_parcelas` vira o tamanho dela e `data_primeira_parcela` o vencimento da parcela 1.
+   */
+  parcelas?: ParcelaDoPayload[] | null;
 }
+
+/** Uma parcela livre no payload da RPC. */
+export interface ParcelaDoPayload { numero: number; data_vencimento: string; valor: number }
 
 /** O objeto que viaja como `p_payload` da RPC. */
 export interface PayloadParcelamento {
@@ -75,6 +84,8 @@ export interface PayloadParcelamento {
   tipo_financiamento: string | null;
   numero_contrato: string | null;
   observacao: string | null;
+  /** Só nas parcelas livres — ausente no "Igual todo mês". */
+  parcelas?: ParcelaDoPayload[];
 }
 
 /**
@@ -88,13 +99,14 @@ export function montarPayloadParcelamento(
   gerais: DadosGeraisParcelamento,
   classificacao: ClassificacaoDoParcelamento,
 ): PayloadParcelamento {
+  const livres = gerais.parcelas && gerais.parcelas.length > 0 ? gerais.parcelas : null;
   return {
     cliente_id: clienteId,
     fazenda_id: gerais.fazendaId,
     descricao: gerais.descricao.trim(),
     valor_total: gerais.valorTotal,
-    total_parcelas: gerais.totalParcelas,
-    data_primeira_parcela: gerais.dataPrimeiraParcela,
+    total_parcelas: livres ? livres.length : gerais.totalParcelas,
+    data_primeira_parcela: livres ? (livres.find((p) => p.numero === 1)?.data_vencimento ?? gerais.dataPrimeiraParcela) : gerais.dataPrimeiraParcela,
     data_competencia: gerais.dataCompetencia,
     intervalo_meses: gerais.intervaloMeses,
     tipo_operacao: TIPO_OPERACAO_PARCELAMENTO,
@@ -110,6 +122,8 @@ export function montarPayloadParcelamento(
     observacao: gerais.observacao || null,
     /* ⚠ `valor_entrada` NÃO VIAJA, e o campo some da tela no parcelamento: a prévia divide o
        total cheio por N, e a RPC também. Mandá-lo faria os dois discordarem. */
+    /* PARC-LIVRES-01 — a chave só existe nas parcelas livres: sem ela o payload é o de sempre, chave por chave. */
+    ...(livres ? { parcelas: livres } : {}),
   };
 }
 

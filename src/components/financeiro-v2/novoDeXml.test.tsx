@@ -213,7 +213,7 @@ describe('tela A — a lista de notas', () => {
     const r = (o: OpcoesNota) => resumoDasDuplicatas(doXmlDe(o, [AGRO]).proposta);
     expect(r({})).toBe('2 × 8.119,00 · 05/11 e 05/12');
     expect(r({ duplicatas: null })).toBe('sem duplicatas');
-    expect(r({ duplicatas: [['001', '2026-10-30', '5000.00'], ['002', '2026-11-29', '5000.00'], ['003', '2026-12-29', '6238.00']] })).toBe('3 · fora do padrão');
+    expect(r({ duplicatas: [['001', '2026-10-30', '5000.00'], ['002', '2026-11-29', '5000.00'], ['003', '2026-12-29', '6238.00']] })).toBe('3 · parcelas livres');
     expect(r({ duplicatas: [['001', '2026-10-30', '16238.00']] })).toBe('1 × 16.238,00 · 30/10');
   });
 });
@@ -269,6 +269,73 @@ describe('tela B — o Novo lançamento preenchido pela nota', () => {
     expect(m.onSave).not.toHaveBeenCalled();
   });
 
+  /* PARC-LIVRES-01 — a nota que motivou o PR, MONTADA EM MEMORIA: 110.000,00 em sete duplicatas (entrada + seis a cada 28 dias). */
+  const SETE: [string, string, string][] = [
+    ['001', '2026-05-23', '33000.00'], ['002', '2026-06-19', '12833.34'], ['003', '2026-07-17', '12833.34'], ['004', '2026-08-14', '12833.33'],
+    ['005', '2026-09-11', '12833.33'], ['006', '2026-10-09', '12833.33'], ['007', '2026-11-06', '12833.33'],
+  ];
+  const abrirPagamento = () => {
+    const aba = screen.getAllByRole('tab').find((t) => /Pagamento/.test(t.textContent ?? ''))!;
+    fireEvent.mouseDown(aba); fireEvent.click(aba);
+  };
+
+  it('PARCELAS LIVRES: as sete duplicatas entram como estao na nota e o Salvar manda a LISTA ao writer (soma 110.000,00)', async () => {
+    banco.rpc.mockImplementation(async (nome: unknown) => (nome === 'fn_parcelamento_cadastrar' ? { data: 'fin-1', error: null } : { data: null, error: null }));
+    const m = montarModal({ prefill: comConta(doXmlDe({ duplicatas: SETE }, [AGRO])) });
+    await screen.findByDisplayValue('110.000,00');
+    await waitFor(() => expect(botaoSalvar().textContent).toBe('Criar 7 Parcelas'));
+    abrirPagamento();
+    await waitFor(() => expect(screen.getByTestId('rodape-n').textContent).toBe('7 parcelas'));
+    expect(screen.getByTestId('rodape-soma').textContent).toBe('110.000,00');
+    expect(screen.getByTestId('rodape-compra').textContent).toBe('110.000,00');
+    expect(screen.getByTestId('diferenca').textContent).toBe('0,00 ✓');
+    expect(screen.getByTestId('recado-de-parcelas').textContent).toBe('A nota trouxe 7 parcelas com valores ou datas próprias: entram como estão na nota.');
+    expect(screen.queryByTestId('motivo-das-parcelas')).toBeNull();
+    expect(botaoSalvar().disabled).toBe(false);
+    fireEvent.click(botaoSalvar());
+    await waitFor(() => expect(banco.rpc.mock.calls.some((c) => c[0] === 'fn_parcelamento_cadastrar')).toBe(true));
+    const payload = (banco.rpc.mock.calls.find((c) => c[0] === 'fn_parcelamento_cadastrar')?.[1] as { p_payload: Record<string, unknown> }).p_payload;
+    expect(payload).toMatchObject({ valor_total: 110000, total_parcelas: 7, data_primeira_parcela: '2026-05-23' });
+    expect(payload.parcelas).toEqual([
+      { numero: 1, data_vencimento: '2026-05-23', valor: 33000 }, { numero: 2, data_vencimento: '2026-06-19', valor: 12833.34 },
+      { numero: 3, data_vencimento: '2026-07-17', valor: 12833.34 }, { numero: 4, data_vencimento: '2026-08-14', valor: 12833.33 },
+      { numero: 5, data_vencimento: '2026-09-11', valor: 12833.33 }, { numero: 6, data_vencimento: '2026-10-09', valor: 12833.33 },
+      { numero: 7, data_vencimento: '2026-11-06', valor: 12833.33 },
+    ]);
+    await waitFor(() => expect(m.onLancamentoCriado).toHaveBeenCalledTimes(1));
+  });
+
+  it('PARCELAS LIVRES: trocar 12.833,33 por 12.333,33 apaga o Salvar com o motivo ao lado e NADA vai ao banco; "A compra vale" muda o Valor e reacende', async () => {
+    montarModal({ prefill: comConta(doXmlDe({ duplicatas: SETE }, [AGRO])) });
+    await screen.findByDisplayValue('110.000,00');
+    abrirPagamento();
+    await waitFor(() => expect(screen.getAllByTestId('valor-da-parcela')).toHaveLength(7));
+    const campo = screen.getAllByTestId('valor-da-parcela')[3];
+    fireEvent.change(campo, { target: { value: '12.333,33' } }); fireEvent.blur(campo);
+    expect(screen.getByTestId('diferenca').textContent).toBe('▼\u00a0−500,00');
+    expect(screen.getByTestId('motivo-das-parcelas').textContent).toBe('A soma das parcelas não fecha com a compra.');
+    expect(botaoSalvar().disabled).toBe(true);
+    fireEvent.click(botaoSalvar());
+    expect(banco.rpc.mock.calls.some((c) => c[0] === 'fn_parcelamento_cadastrar')).toBe(false);
+    fireEvent.click(screen.getByTestId('compra-vale'));
+    await waitFor(() => expect(screen.getByTestId('rodape-compra').textContent).toBe('109.500,00'));
+    expect(screen.getByTestId('diferenca').textContent).toBe('0,00 ✓');
+    expect(screen.queryByTestId('motivo-das-parcelas')).toBeNull();
+    expect(botaoSalvar().disabled).toBe(false);
+  });
+
+  it('"Igual todo mês" (o de hoje): o payload NAO leva a chave `parcelas`', async () => {
+    banco.rpc.mockImplementation(async (nome: unknown) => (nome === 'fn_parcelamento_cadastrar' ? { data: 'fin-1', error: null } : { data: null, error: null }));
+    montarModal({ prefill: comConta(doXmlDe({}, [AGRO])) });
+    await screen.findByDisplayValue('16.238,00');
+    abrirPagamento();
+    await waitFor(() => expect(screen.getByTestId('grade-de-parcelas').getAttribute('data-modo')).toBe('mensal'));
+    fireEvent.click(botaoSalvar());
+    await waitFor(() => expect(banco.rpc.mock.calls.some((c) => c[0] === 'fn_parcelamento_cadastrar')).toBe(true));
+    const mensal = (banco.rpc.mock.calls.find((c) => c[0] === 'fn_parcelamento_cadastrar')?.[1] as { p_payload: Record<string, unknown> }).p_payload;
+    expect('parcelas' in mensal).toBe(false);
+  });
+
   it('A VISTA (nota sem duplicatas): vencimento VAZIO, o aviso escrito, e o payload do Salvar = o que a tela mostra; o XML sobe como application/xml', async () => {
     const d = doXmlDe({ duplicatas: null }, [AGRO]);
     const m = montarModal({ prefill: comConta(d) });
@@ -296,31 +363,38 @@ describe('tela B — o Novo lançamento preenchido pela nota', () => {
     expect(m.onLancamentoCriado).toHaveBeenCalledTimes(1);
   });
 
-  it('aba Pagamento: "Parcelada · 2x" em ambar, a grade com a coluna Duplicata (001, 002) e "= valor da nota"; a forma veio do XML', async () => {
+  it('aba Pagamento: "Parcelada · 2x" em ambar, a grade em "Igual todo mês" com as duas duplicatas da nota e "= valor da nota"; a forma veio do XML', async () => {
     montarModal({ prefill: prefillDaNota(doXmlDe({}, [AGRO])) });
     await screen.findByDisplayValue('16.238,00');
     const aba = screen.getAllByRole('tab').find((t) => /Pagamento/.test(t.textContent ?? ''))!;
     fireEvent.mouseDown(aba); fireEvent.click(aba);
-    await waitFor(() => expect(screen.getByTestId('xml-coluna-duplicata')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId('grade-de-parcelas')).toBeTruthy());
     expect(screen.getByTestId('origem-xml-parcelamento').textContent).toBe('Parcelada · 2x · 1º venc. 05/11/26');
     expect(screen.getByTestId('origem-xml-forma').textContent).toBe('do XML');
     expect(combo('Boleto')).toBe(true);
-    const grade = screen.getByTestId('xml-coluna-duplicata').parentElement!.parentElement!;
-    expect(grade.textContent).toContain('1/2001');
-    expect(grade.textContent).toContain('2/2002');
-    expect(grade.textContent).toContain('8.119,00');
-    expect(screen.getByTestId('xml-parcelas-x-nota').textContent).toBe('= valor da nota');
+    const grade = screen.getByTestId('grade-de-parcelas');
+    expect(grade.getAttribute('data-modo')).toBe('mensal');
+    expect(screen.getAllByTestId('linha-da-parcela').map((l) => l.textContent)).toEqual([
+      '105/11/268.119,00duplicata da nota', '205/12/268.119,00duplicata da nota',
+    ]);
+    expect(screen.getByTestId('diferenca').textContent).toBe('0,00 ✓');
+    expect(screen.getByTestId('recado-de-parcelas').textContent).toBe('= valor da nota');
   });
 
-  it('aba Pagamento, duplicatas fora do padrao: a vista, com a tabela de conferencia so leitura', async () => {
+  it('aba Pagamento, duplicatas fora do padrao: entram DIRETO em "Parcelas livres", como estao na nota, com a frase (PARC-LIVRES-01)', async () => {
     montarModal({ prefill: prefillDaNota(doXmlDe({ duplicatas: [['001', '2026-10-30', '8119.00'], ['002', '2026-11-29', '8119.00']] }, [AGRO])) });
     await screen.findByDisplayValue('16.238,00');
     const aba = screen.getAllByRole('tab').find((t) => /Pagamento/.test(t.textContent ?? ''))!;
     fireEvent.mouseDown(aba); fireEvent.click(aba);
-    await waitFor(() => expect(screen.getByTestId('xml-duplicatas')).toBeTruthy());
-    expect(screen.getByTestId('xml-duplicatas').textContent).toBe('DuplicataVencimentoValor (R$)00130/10/268.119,0000229/11/268.119,00Soma das duplicatas16.238,00');
-    expect(screen.queryByTestId('xml-coluna-duplicata')).toBeNull();
-    expect(combo('À vista')).toBe(true);
+    await waitFor(() => expect(screen.getByTestId('grade-de-parcelas')).toBeTruthy());
+    expect(screen.getByTestId('grade-de-parcelas').getAttribute('data-modo')).toBe('livres');
+    expect(combo('Parcelada')).toBe(true);
+    expect(screen.getAllByTestId('cel-de-onde-veio').map((c) => c.textContent)).toEqual(['duplicata da nota', 'duplicata da nota']);
+    expect(screen.getAllByTestId('valor-da-parcela').map((c) => (c as HTMLInputElement).value)).toEqual(['8.119,00', '8.119,00']);
+    expect(screen.getByTestId('rodape-soma').textContent).toBe('16.238,00');
+    expect(screen.getByTestId('diferenca').textContent).toBe('0,00 ✓');
+    expect(screen.getByTestId('recado-de-parcelas').textContent).toBe('A nota trouxe 2 parcelas com valores ou datas próprias: entram como estão na nota.');
+    expect(screen.getByTestId('origem-xml-parcelamento').textContent).toBe('Parcelas livres · 2 · como na nota');
   });
 
   it('fazenda NAO identificada pela IE: o campo nasce VAZIO, mesmo com a lista filtrada numa fazenda — e o aviso diz por que', async () => {
@@ -357,12 +431,12 @@ describe('tela B — o Novo lançamento preenchido pela nota', () => {
     expect(extensaoDoArquivo(d.arquivo)).toBe('xml');
   });
 
-  it('duplicatas fora do padrao: NAO parcela sozinho — a vista, com a frase e a tabela de conferencia', async () => {
+  it('duplicatas fora do padrao: o lancamento nasce parcelado em livres — "Criar 2 Parcelas", sem aviso de recusa', async () => {
     const d = doXmlDe({ duplicatas: [['001', '2026-10-30', '8119.00'], ['002', '2026-11-29', '8119.00']] }, [AGRO]);
     montarModal({ prefill: prefillDaNota(d) });
     await screen.findByDisplayValue('16.238,00');
-    expect(botaoSalvar().textContent).toBe('Criar Lançamento');
-    expect(screen.getByTestId('xml-aviso').textContent).toBe('Duplicatas com valor ou data fora do padrão mensal: parcelas livres chegam na próxima etapa. Ajuste o parcelamento ou lance cada parcela.');
+    await waitFor(() => expect(botaoSalvar().textContent).toBe('Criar 2 Parcelas'));
+    expect(screen.queryByTestId('xml-aviso')).toBeNull();
   });
 
   it('nota ja registrada: AVISA, diz onde, e "seguir mesmo assim" tira o aviso — o Salvar nunca fica bloqueado', async () => {
@@ -444,7 +518,7 @@ describe('sem XML, o modal e o de sempre', () => {
   it('nenhuma peca do XML e montada no Novo lançamento comum', async () => {
     montarModal({});
     await waitFor(() => expect(botaoSalvar()).toBeTruthy());
-    for (const t of ['pilula-do-xml', 'xml-faixas', 'xml-faixa-fornecedor', 'xml-aviso', 'origem-xml-tipo', 'origem-xml-valor', 'xml-parcelas-x-nota', 'xml-duplicatas']) expect(screen.queryByTestId(t)).toBeNull();
+    for (const t of ['pilula-do-xml', 'xml-faixas', 'xml-faixa-fornecedor', 'xml-aviso', 'origem-xml-tipo', 'origem-xml-valor', 'recado-de-parcelas']) expect(screen.queryByTestId(t)).toBeNull();
     expect(document.body.innerHTML).not.toContain('border-amber-300 bg-amber-50 dark:bg-amber-950/30');
     expect(screen.getByText('Fornecedor *')).toBeTruthy();
   });
