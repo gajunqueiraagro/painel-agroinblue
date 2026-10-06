@@ -80,6 +80,29 @@ describe('A23 — nada muda de tamanho ao selecionar', () => {
     expect(geometriaDe(com)).toEqual(geometriaDe(sem));
     expect(com.textContent).toBe('Jul');
   });
+
+  it('`contador` no tom (CONC-SEM-CLASSIFICACAO-01): número vermelho FORA do fluxo, sem mudar a cor nem a geometria do mês; convive com a marca', () => {
+    const tom = { bg: 'rgb(1, 2, 3)', border: 'rgb(4, 5, 6)', txt: 'rgb(7, 8, 9)', title: 'Conciliado' };
+    montar(mesUnico(2026, 5), { tomPorMes: {
+      6: tom, 7: { ...tom, contador: { qtde: 39, title: '39 sem classificação' } },
+      8: { ...tom, marca: 'aviso do extrato', contador: { qtde: 2, title: '2 sem classificação' } },
+    } });
+    const sem = screen.getByText('Jun');
+    const com = screen.getByText('Jul', { exact: false });
+    expect(sem.querySelector('[data-testid="contador-mes"]')).toBeNull();   // a busca sabe achar
+    const c = com.querySelector<HTMLElement>('[data-testid="contador-mes"]');
+    expect(c?.textContent).toBe('39');
+    expect(c?.style.position).toBe('absolute');
+    expect(com.getAttribute('data-contador')).toBe('39');
+    expect(com.getAttribute('title')).toBe('Conciliado — 39 sem classificação');
+    expect(com.style.backgroundColor).toBe(sem.style.backgroundColor);     // D6: a cor é o status
+    expect(geometriaDe(com)).toEqual(geometriaDe(sem));
+    expect(com.querySelector('[data-testid="marca-aviso-mes"]')).toBeNull();
+    const os2 = screen.getByText('Ago', { exact: false });
+    expect(os2.querySelector('[data-testid="marca-aviso-mes"]')).not.toBeNull();
+    expect(os2.querySelector('[data-testid="contador-mes"]')?.textContent).toBe('2');
+    expect(os2.getAttribute('title')).toBe('Conciliado — aviso do extrato — 2 sem classificação');
+  });
 });
 
 describe('seleção', () => {

@@ -77,6 +77,12 @@ export interface LancPendenciaItem {
   pendencias: string[];
 }
 
+/**
+ * ⚠ A CONCILIAÇÃO NÃO USA MAIS ESTA REGRA — CONC-SEM-CLASSIFICACAO-01 (06/10/2026). "Sem classificação" tem UM dono, no banco:
+ *   lançamento ativo com `plano_conta_id` nulo (`_fn_lancamento_sem_plano`), e a Conciliação lê os avisos `sem_classificacao` e
+ *   `sem_fornecedor` de `fn_conciliacao_resumo_mes`. Esta função decide por TEXTO, não olha `plano_conta_id` e acende por falta
+ *   de fornecedor; segue viva só para a `V2MesaOperacional` (dívida SEM-CLASSIFICACAO-REGRA-UNICA-02). Não a use em tela nova.
+ */
 export function derivarDetalhePendencias(lancs: readonly LancDetalhe[]): LancPendenciaItem[] {
   const out: LancPendenciaItem[] = [];
   for (const l of lancs) {

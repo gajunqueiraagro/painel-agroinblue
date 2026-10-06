@@ -48,6 +48,12 @@ export interface TomDoMes {
    * a largura nem a altura do botão.
    */
   marca?: string;
+  /**
+   * CONTADOR VERMELHO no canto do mês (CONC-SEM-CLASSIFICACAO-01): a quantidade, com o `title` somado ao do mês. Como a
+   * marca, NÃO muda a cor do mês nem a geometria do botão (posição absoluta). A quantidade vem de quem monta o tom — o
+   * seletor só a desenha.
+   */
+  contador?: { qtde: number; title: string };
 }
 
 export interface SeletorPeriodoProps {
@@ -142,6 +148,13 @@ const BOTAO_BASE: React.CSSProperties = {
 const MARCA_DO_MES: React.CSSProperties = {
   position: 'absolute', top: 3, right: 3, width: 5, height: 5, borderRadius: '50%',
   background: '#D97706', pointerEvents: 'none',
+};
+
+/** O contador vermelho do mês: canto superior ESQUERDO (o direito é da marca âmbar), fora do fluxo. */
+const CONTADOR_DO_MES: React.CSSProperties = {
+  position: 'absolute', top: 1, left: 2, minWidth: 11, height: 11, padding: '0 2px', borderRadius: 6,
+  background: '#C62828', color: '#fff', fontSize: 8, lineHeight: '11px', fontWeight: 600, textAlign: 'center',
+  fontVariantNumeric: 'tabular-nums', pointerEvents: 'none',
 };
 
 /** "Ano" usa a MESMA régua dos meses — só a largura é fixa, porque ele não é um dos doze. */
@@ -300,16 +313,20 @@ export function SeletorPeriodo({
                   key={m}
                   type="button"
                   onClick={(e) => clicarMes(m, e.shiftKey)}
-                  title={tom?.marca ? [tom.title, tom.marca].filter(Boolean).join(' — ') : tom?.title}
+                  title={tom?.marca || tom?.contador ? [tom.title, tom.marca, tom.contador?.title].filter(Boolean).join(' — ') : tom?.title}
                   aria-pressed={papel !== 'fora'}
                   data-papel={papel}
                   data-marca={tom?.marca ? 'aviso' : undefined}
                   className={papel === 'fora' && !tom ? 'hover:!bg-[#e3e6ea]' : undefined}
-                  style={{ ...BOTAO_BASE, ...estilo, ...(tom?.marca ? { position: 'relative' } : {}) }}
+                  data-contador={tom?.contador ? tom.contador.qtde : undefined}
+                  style={{ ...BOTAO_BASE, ...estilo, ...(tom?.marca || tom?.contador ? { position: 'relative' } : {}) }}
                 >
                   {rotulo}
                   {tom?.marca && (
                     <span aria-hidden data-testid="marca-aviso-mes" style={MARCA_DO_MES} />
+                  )}
+                  {tom?.contador && (
+                    <span aria-hidden data-testid="contador-mes" style={CONTADOR_DO_MES}>{tom.contador.qtde}</span>
                   )}
                 </button>
               );

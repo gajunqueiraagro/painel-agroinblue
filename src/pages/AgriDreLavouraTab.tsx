@@ -44,6 +44,7 @@ import { labelDaCultura } from '@/lib/agri/areaPlantada';
 import { simboloDaUnidade, descricaoDaUnidade } from '@/lib/agri/colheita';
 import { useSafrasLavoura, useTalhoesDaSafra } from '@/hooks/useAreaPlantada';
 import { useColheita } from '@/hooks/useColheita';
+import { AvisoDreSemClassificacao } from '@/components/agri/AvisoDreSemClassificacao';
 import { useCliente } from '@/contexts/ClienteContext';
 import { usePodeVerMeta } from '@/v2/hooks/usePodeAbrir';
 import { MOTIVO_SEM_META } from '@/v2/lib/acessoTelas';
@@ -255,7 +256,9 @@ const corDoTom = (tom: DefLinha['tom']) =>
 
 
 
-export function AgriDreLavouraTab({ onCorrigirPrecos }: {
+export function AgriDreLavouraTab({ onCorrigirPrecos, onIrParaConciliacao }: {
+  /** CONC-SEM-CLASSIFICACAO-01 — a saída do aviso "sem plano de contas" para a Conciliação (só para quem a tem). */
+  onIrParaConciliacao?: () => void;
   /**
    * ⚠ QUEM TROCA DE SECTION É O V2Index, não esta página: `section` é um `useState` dele e não
    * está na URL. O modal precisa de uma saída para a tela Valor do Rebanho, e o caminho é este
@@ -1255,6 +1258,14 @@ export function AgriDreLavouraTab({ onCorrigirPrecos }: {
           )}
           </div>
         </>
+      )}
+
+      {/* ⚠ O AVISO "SEM PLANO DE CONTAS" — CONC-SEM-CLASSIFICACAO-01: slot FIXO de 18px, sempre presente fora do Ampliado (a grade
+          mede o próprio topo). Pecuária: a competência do período aberto; lavoura: a safra aberta. */}
+      {!ampliado && (
+        <AvisoDreSemClassificacao clienteId={clienteId}
+          recorte={ehPec ? { de: pecDe, ate: pecAte } : { safraId: safraId || null }}
+          onIrParaConciliacao={onIrParaConciliacao} />
       )}
 
       {/* ⚠ PRODUÇÃO E HISTÓRICO NÃO ENTRAM NO CARTÃO DA GRADE: cada um traz as próprias tabelas,

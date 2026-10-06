@@ -162,7 +162,10 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 06/10/2026 (CONC-SEM-CLASSIFICACAO-01, +3 em `src/lib/conciliacao/resumoDoDono.test.ts` — 4231 depois dele; antes o
+  Baseline em 06/10/2026 (CONC-SEM-CLASSIFICACAO-01 tela, +32: `src/lib/conciliacao/semClassificacao.test.ts` 12,
+  `src/components/conciliacao/semClassificacaoModal.test.tsx` 14, `src/pages/conciliacaoDono.test.tsx` 5,
+  `src/v2/components/SeletorPeriodo.test.tsx` 1 — 4263 depois dele; antes o CONC-SEM-CLASSIFICACAO-01 leitor, +3 em
+  `src/lib/conciliacao/resumoDoDono.test.ts` — 4231 depois dele; antes o
   ACESSOS-TELA-01, +39: `src/lib/acessos/regrasDeAcesso.test.ts` 15, `src/pages/acessosTab.test.tsx` 19,
   `src/v2/lib/acessoTelaDeAcessos.test.tsx` 5 — 4228 depois dele; antes o DRE-RATEIO-MODAL-01 + fix1, +42 −4: `src/components/agri/rateioEncontro.test.tsx` 42 (novo); sairam os 4 da
   etapa "Não alocado" de `src/components/agri/rateioDetalheModal.test.tsx`, com o codigo que testavam — 4189 depois dele; antes o
@@ -217,7 +220,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4231
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4263
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -2149,16 +2152,46 @@ docs/historico/frentes-ate-2026-09-29.md.)
     (regra, apelido, plano), so' com conta ATIVA e do MESMO tipo do lancamento; nenhum segundo motor. ⚠ O RESOLVEDOR NAO COBRE TEXTO
     DE EXTRATO: os apelidos sao do texto do SUBCENTRO da planilha e nao ha' regra por descricao (3 regras, nenhuma por texto) — no NJ
     set/26, 0 de 59 com sugestao. As duas leituras recusam com 42501 (sem usuario inclusive).
+  · A TELA (so' tela, aceita pelo Chat em 06/10): na Conciliacao, o mes leva um CONTADOR VERMELHO
+    com a quantidade do total do dono (`TomDoMes.contador`, posicao absoluta: nao muda cor nem geometria — 64,5 x 28 com e sem); o
+    card Status ganha o bloco "N / sem classificação / fora do DRE ▲ ▼ / Classificar agora" e o ambar "N sem fornecedor"; a linha
+    da conta leva o contador vermelho NO RECUO de 18px (na celula do lapis ele alargava a coluna e quebrava 4 nomes em duas
+    linhas, medido a 1.126). O "🔴 N sem classificação" antigo e `derivarDetalhePendencias` sairam da Conciliacao; o dialogo
+    antigo ficou so' com os duplicados entre origens. MODAL `SemClassificacaoModal` (`src/components/conciliacao/`): tamanho
+    fixo (1090 x 100vh−32), um scrollport (a lista, cabecalho preso nela), cartoes e rodape do `resumo` do banco, filtros,
+    ordem por coluna (padrao valor desc), linha de 18px (Data · Historico · Valor ▲▼ · Falta S F C · Fornecedor · Subcentro ·
+    acao), seletores da casa (`FavorecidoSelect`, `PlanoSubcentroSelect`), Subcentro so' com conta do PLANO (`contasDoPlano`:
+    fora os `dividendo-<uuid>` e os legados sem id). ⚠ GRAVAR E' `fin.editarLancamento` (o escritor do modal do lancamento,
+    `silent`), com o form que nasce da linha INTEIRA do banco (`formParaClassificar`, `src/lib/conciliacao/semClassificacao.ts`);
+    "desfazer" regrava `formDoLancamento(antes)`; depois de cada gesto `notificarLancamentosMudaram` — a Conciliacao rele sem F5.
+    Clique na linha abre o `LancamentoV2Dialog`. DRE: `AvisoDreSemClassificacao` (`src/components/agri/`), slot FIXO de 18px sob
+    os controles, numeros em tabela, "classificar na Conciliação →" so' para quem tem a tela (`onIrParaConciliacao`, do `V2Index`).
+    ⚠ PARA OS SELETORES BASTA O PLANO CARREGADO (`planoPronto`): cliente sem fornecedor ou safra (o Teste) tem catalogo vazio de
+      verdade, e esperar os quatro deixava os seletores apagados para sempre (achado no navegador).
+    ⚠ O DESFAZER NAO DEVOLVE `editado_manual` nem `updated_at/by` (o escritor os carimba) — classificacao, fornecedor, fazenda e
+      safra voltam. ACEITO pelo Gabriel (06/10). "Classificados nesta sessão" e' a unica contagem local (estado do modal).
+    ⚠ O AVISO DO DRE E' UM NUMERO SO' E CONTA OS DIVIDENDOS POR TEXTO (decisao do Gabriel, 06/10): eles saem da conta quando
+      ganharem conta no plano (CONC-DIVIDENDOS-PLANO-01, aguardando a aprovacao dos 11 nomes); o banco nao muda por isso.
+    PROVA DO GESTO (cliente Teste, 06/10, desfeita): lancamento sintetico de 12,34 sem plano — aceitar gravou o plano 6020 e as
+      copias, e SEM F5 o contador saiu da regua, do card e da linha (0 toasts); desfazer devolveu plano e copias a nulo e o
+      contador voltou a 1; o lancamento foi apagado e ficaram 2 linhas de `audit_log` no Teste (auditoria nao se apaga).
   Teste: `supabase/tests/conc_sem_classificacao_01_test.sql` (T0–T9, sintetico no cliente Teste; 10 mutacoes do banco mortas). Os
   sinteticos de `conc_saldo_uma_regua_01`, `_01b`, `conc_status_saldo_01a` e `conc_interna_separada_01a` passaram a nascer COM plano
   e fornecedor (sao testes de saldo; sem isso acendiam os avisos novos).
   ⚠ MEDIDO (06/10): os 567 "Dividendos por texto" (5 clientes, 11 textos) vem de `financeiro_dividendos` — o seletor oferece
     "Dividendos <nome>" com id sintetico `dividendo-<uuid>`, que nao e' conta do plano; nome que coincide com conta global resolve
     pelo gatilho, os 11 que nao coincidem ficam sem chave. Santa Rita ja' tem conta POR CLIENTE para cada nome (17160–17230).
-  ⚠ DIVIDAS: SEM-CLASSIFICACAO-REGRA-UNICA-02 (as outras cinco regras do front que ainda decidem por texto: `isSemClassificacao`,
-    `lancamentoCru`, `ehCru`, `distribuicaoEconomica`, `derivarPendenciasGerenciais`) · CONC-DIVIDENDOS-PLANO-01 (criar as contas e
-    migrar) · o ramo sem `contas_com_aviso` de `fn_conciliacao_status_ano` (`|| r.avisos`) nao tem teste sintetico ·
-    `conc_import_banco_agnaldo_01a_test.sql` falha em P2 (0 de 81 iguais a `dados_anteriores`) — deriva de dado, sem relacao.
+  ⚠ DIVIDAS: SEM-CLASSIFICACAO-REGRA-UNICA-02 (as cinco regras do front que ainda decidem por texto — `isSemClassificacao`,
+    `lancamentoCru`, `ehCru`, `distribuicaoEconomica`, `derivarPendenciasGerenciais` — mais `derivarDetalhePendencias`, que saiu
+    da Conciliacao e segue na `V2MesaOperacional`) · CONC-DIVIDENDOS-PLANO-01 (criar as contas e migrar os Dividendos por texto) ·
+    CONC-SUGESTAO-EXTRATO-01 (sugestao de classificacao a partir do TEXTO DO EXTRATO do banco: hoje 0 sugestoes nos crus, o
+    resolvedor so' casa texto de planilha) · CONC-SEM-CLASSIFICACAO-NAO-PROVADO-01 (o modal a 1.126 x 523 — foi medido a 579;
+    "Aceitar as N sugestões", o clique na linha abrindo o modal do lancamento e a recusa escrita ao lado do botao, no navegador;
+    o aviso do DRE da LAVOURA preenchido; perfil nao admin; o ramo da regua sem `contas_com_aviso`, `|| r.avisos`, sem teste
+    sintetico) · CONC-IMPORT-AGNALDO-TESTE-DERIVA-01 (`conc_import_banco_agnaldo_01a_test.sql` falha em P2, "0 de 81 lancamentos
+    iguais a dados_anteriores"; MEDIDO em 06/10 com os corpos de ANTES da 20261027193900 repostos num ensaio revertido — md5
+    04aa7a4d… e ab397ac3… —: falha IGUAL; e' deriva do dado do Agnaldo, anterior a este PR).
+  ⚠ COMPARAR ANTES x DEPOIS E' EM WORKTREE SEPARADO, NUNCA `git stash` (usei uma vez neste PR para o TSC; voltou limpo, nao repetir).
 - ⚠ "FALTA SALDO · N CONTA(S)" NO LUGAR DO "—", E NENHUMA DATA QUE NINGUEM INFORMOU (CONC-TOTAL-SEM-SALDO-01b, Gabriel 04/10, so'
   tela). Ausencia de saldo nunca aparenta "confere"; a tela diz o que falta. ⚠ "falta SALDO", nao "falta extrato": a coluna Extrato
   e' o saldo INFORMADO da conta, nao o arquivo do banco.

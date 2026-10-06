@@ -925,7 +925,9 @@ export default function V2Index() {
         setAno(String(a));
         origemPendenciaRef.current = section;
         setSection('valor-rebanho');
-      }} />;
+      }}
+        /* CONC-SEM-CLASSIFICACAO-01 — a saída do aviso "sem plano de contas"; sem a Conciliação, o aviso só informa. */
+        onIrParaConciliacao={podeAbrirTela('conciliacao') ? () => setSection('conciliacao') : undefined} />;
     }
     if (section === 'painel-consultor') return (
       <PainelConsultorTab

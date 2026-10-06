@@ -1,0 +1,13 @@
+{
+  "lancamento": {
+    "id": "00000000-0000-4000-8000-000000000001", "cliente_id": "cli", "fazenda_id": "faz-adm", "conta_bancaria_id": "conta-1",
+    "conta_destino_id": null, "data_competencia": "2026-09-08", "data_pagamento": "2026-09-08", "data_vencimento": "2026-09-08",
+    "valor": 600, "sinal": -1, "tipo_operacao": "2-Saídas", "status_transacao": "realizado", "descricao": "PAGAMENTO PIX SINT",
+    "macro_custo": "Dividendos", "grupo_custo": null, "centro_custo": "Dividendos", "subcentro": "Dividendos Dependentes",
+    "escopo_negocio": null, "observacao": "obs do operador", "ano_mes": "2026-09", "documento": null, "historico": null,
+    "numero_documento": "NF 123", "tipo_documento": "Nota Fiscal", "favorecido_id": "f-antes", "origem_lancamento": "extrato",
+    "lote_importacao_id": null, "forma_pagamento": "PIX", "dados_pagamento": null, "cancelado": false, "conciliado_em": null,
+    "editado_manual": false, "created_by": null, "created_at": "2026-09-30T20:56:00Z", "updated_at": "2026-09-30T20:56:00Z",
+    "movimentacao_rebanho_id": null, "recorrencia_id": null, "safra_id": "s1", "plano_conta_id": null
+  }
+}

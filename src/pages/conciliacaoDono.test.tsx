@@ -15,7 +15,7 @@
  * sem par. As linhas de conta escritas à mão passam por `comProprio` (o `proprio` = topo que o dono manda em conta sem par).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within, cleanup } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -33,6 +33,8 @@ const B = vi.hoisted(() => ({
   tom: [] as Array<Record<number, unknown> | undefined>,
   /** As props com que o lápis foi aberto (o `saldoAtual` é o extrato que a linha passa). */
   lapis: [] as Array<Record<string, unknown>>,
+  /** As props do modal "Sem classificação" a cada desenho (CONC-SEM-CLASSIFICACAO-01). */
+  semClassificacao: [] as Array<Record<string, unknown>>,
 }));
 
 vi.mock('@/integrations/supabase/client', () => {
@@ -79,6 +81,12 @@ vi.mock('@/v2/components/SeletorPeriodo', () => ({
   SeletorPeriodo: (p: { tomPorMes?: Record<number, unknown> }) => {
     B.tom.push(p.tomPorMes);
     return <div data-testid="regua" data-meses={Object.keys(p.tomPorMes ?? {}).join(',')} />;
+  },
+}));
+vi.mock('@/components/conciliacao/SemClassificacaoModal', () => ({
+  SemClassificacaoModal: (p: Record<string, unknown>) => {
+    B.semClassificacao.push(p);
+    return p.aberto ? <div data-testid="modal-sem-classificacao" data-conta={String(p.contaId)} data-nome={String(p.contaNome)} data-mes={String(p.anoMes)} /> : null;
   },
 }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
@@ -154,7 +162,7 @@ beforeEach(() => {
     { ano_mes: '2026-09', nivel: 'total', status: 'nao_conciliado', motivos: [], avisos: [] },
   ];
   B.segurarAno = null;
-  B.inserts = []; B.rpcs = []; B.espelhoProps = []; B.tom = []; B.lapis = [];
+  B.inserts = []; B.rpcs = []; B.espelhoProps = []; B.tom = []; B.lapis = []; B.semClassificacao = [];
 });
 
 function montar() {
@@ -650,6 +658,94 @@ describe('T8 — "Fechar contas sem movimento" grava o saldo do dono', () => {
     expect(B.inserts[0].linha).toMatchObject({
       conta_bancaria_id: 'parada', ano_mes: '2026-09', saldo_inicial: 300000, saldo_final: 300000, origem_saldo: 'sem_movimento',
     });
+  });
+});
+
+describe('CONC-SEM-CLASSIFICACAO-01 — o contador vermelho, o aviso âmbar e a porta do modal, lidos do dono', () => {
+  const SC = { motivo: 'sem_classificacao', qtde: 39, valor_entradas: 36.9, valor_saidas: 2659.36 };
+  const SF = { motivo: 'sem_fornecedor', qtde: 2 };
+  const comAvisos = () => {
+    B.resumo['2026-09'] = [
+      linhaConta({ ...LINHA_EMERSON, proprio: undefined, avisos: [SC, SF] }), LINHA_PARADA, LINHA_CARTAO,
+      linhaConta({ ...TOTAL_NJ, proprio: undefined, avisos: [...(TOTAL_NJ.avisos as unknown[]), { ...SC, qtde: 41 }, SF] }),
+    ];
+    B.statusAno = [
+      { ano_mes: '2026-08', nivel: 'total', status: 'conciliado', motivos: [], avisos: [] },
+      { ano_mes: '2026-09', nivel: 'total', status: 'conciliado', motivos: [], avisos: [{ ...SC, qtde: 41 }, SF] },
+    ];
+  };
+
+  it('a busca sabe achar: sem o aviso do dono não há contador, bloco nem aviso âmbar', async () => {
+    await abrirConta(ID_LAV);
+    await waitFor(() => expect(screen.getByTestId('card-status').getAttribute('data-status')).toBe('conciliado'));
+    expect(screen.queryByTestId('bloco-sem-classificacao')).toBeNull();
+    expect(screen.queryByTestId('sem-fornecedor-qtde')).toBeNull();
+    expect(screen.queryByTestId('contador-sem-classificacao')).toBeNull();
+    expect(Object.values(B.tom.at(-1) ?? {}).some((t) => (t as { contador?: unknown }).contador)).toBe(false);
+  });
+
+  it('a conta conciliada SEGUE verde ("confere em todos os dias") e ganha ao lado: N, o valor fora do DRE, o botão e o âmbar', async () => {
+    comAvisos();
+    await abrirConta(ID_LAV);
+    await waitFor(() => expect(screen.getByTestId('bloco-sem-classificacao')).toBeInTheDocument());
+    /* D6 — o status, a cor e as frases do saldo não mudam */
+    expect(screen.getByTestId('card-status').getAttribute('data-status')).toBe('conciliado');
+    expect(within(screen.getByTestId('status-motivos')).getByText('confere em todos os dias')).toBeInTheDocument();
+    expect(screen.queryByTestId('segunda-prova')).toBeNull();   // os dois avisos NÃO são 2ª prova do extrato
+    expect(screen.queryByTestId('marca-aviso-conta')).toBeNull();
+    /* os números são os do dono, em tabela, com sinal */
+    expect(screen.getByTestId('sem-classificacao-qtde').textContent).toBe('39');
+    expect(n(screen.getByTestId('fora-do-dre-entradas').textContent)).toBe('▲36,90');
+    expect(n(screen.getByTestId('fora-do-dre-saidas').textContent)).toBe('▼2.659,36');
+    expect(screen.getByTestId('sem-fornecedor-qtde').textContent).toBe('2 sem fornecedor');
+    expect(screen.getByTestId('sem-fornecedor-qtde').className).toContain('amber');
+    /* a linha da conta: contador vermelho com a quantidade; o ponto continua o do status */
+    const linha = linhaDaConta(ID_LAV);
+    expect(within(linha).getByTestId('contador-sem-classificacao').textContent).toBe('39');
+    expect(linha.getAttribute('data-status')).toBe('conciliado');
+    expect(within(linhaDaConta('cartao')).queryByTestId('contador-sem-classificacao')).toBeNull();
+  });
+
+  it('"Classificar agora" abre o modal da conta aberta; o contador da linha, o da conta dela; no Todas, todas as contas', async () => {
+    comAvisos();
+    await abrirConta(ID_LAV);
+    fireEvent.click(await screen.findByTestId('classificar-agora'));
+    let m = screen.getByTestId('modal-sem-classificacao');
+    expect([m.getAttribute('data-conta'), m.getAttribute('data-nome'), m.getAttribute('data-mes')]).toEqual([ID_LAV, 'Sicredi Lavoura', '2026-09']);
+    cleanup();
+    montar();
+    await screen.findAllByTestId('linha-saldo-conta');
+    expect(screen.getByTestId('sem-classificacao-qtde').textContent).toBe('41');   // o total do dono, não uma soma da tela
+    fireEvent.click(screen.getByTestId('classificar-agora'));
+    m = screen.getByTestId('modal-sem-classificacao');
+    expect([m.getAttribute('data-conta'), m.getAttribute('data-nome')]).toEqual(['null', 'Todas as contas']);
+    cleanup();
+    montar();
+    await screen.findAllByTestId('linha-saldo-conta');
+    fireEvent.click(within(linhaDaConta(ID_LAV)).getByTestId('contador-sem-classificacao'));
+    expect(screen.getByTestId('modal-sem-classificacao').getAttribute('data-conta')).toBe(ID_LAV);
+  });
+
+  it('a régua: o mês leva o contador do TOTAL do dono e a cor continua sendo a do status (sem marca âmbar por isso)', async () => {
+    comAvisos();
+    montar();
+    await waitFor(() => expect((B.tom.at(-1)?.[9] as { contador?: { qtde: number } } | undefined)?.contador?.qtde).toBe(41));
+    const set = B.tom.at(-1)?.[9] as { bg: string; marca?: string; contador?: { qtde: number; title: string } };
+    const ago = B.tom.at(-1)?.[8] as { bg: string; marca?: string; contador?: unknown };
+    expect(set.contador).toEqual({ qtde: 41, title: '41 sem classificação' });
+    expect(set.bg).toBe(ago.bg);            // os dois meses conciliados têm a MESMA cor
+    expect(set.marca).toBeUndefined();
+    expect(ago.contador).toBeUndefined();
+  });
+
+  it('o "🔴 N sem classificação" antigo e a regra do front saíram; os duplicados seguem com o diálogo deles', () => {
+    const fonte = readFileSync(resolve(process.cwd(), 'src/pages/ConciliacaoBancariaTab.tsx'), 'utf8');
+    expect(fonte).not.toMatch(/derivarDetalhePendencias\(/);
+    expect(fonte).not.toContain('🔴 {diagPendencias.semClassificacao');
+    expect(fonte).toContain('detectarDuplicatasCrossOrigin(lancMes)');
+    expect(fonte).toContain('Duplicados entre origens');
+    /* a busca sabe achar */
+    expect('const x = derivarDetalhePendencias(lancMes);').toMatch(/derivarDetalhePendencias\(/);
   });
 });
 

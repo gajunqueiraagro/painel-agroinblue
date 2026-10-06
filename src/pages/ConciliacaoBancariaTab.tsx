@@ -31,10 +31,13 @@ import { useResumoMes, useStatusAno, invalidarDono, useReleDonoAoVoltarAVista } 
 import {
   ROTULO_STATUS, frasesDoStatus, fraseFaltaSaldo, fraseDoRetido, fraseSemConta, contasParaFecharSemMovimento,
   saldosDaLinha, marcaDoPar, diferencaNaPosicao, TITULO_DIFERENCA_NA_POSICAO_INDISPONIVEL,
-  frasesDosAvisos, marcaDeAviso,
+  frasesDosAvisos, marcaDeAviso, semClassificacaoDaLinha, semFornecedorDaLinha,
+  type SemClassificacao,
   type LinhaResumo, type StatusDono, type FraseDoStatus,
 } from '@/lib/conciliacao/resumoDoDono';
-import { detectarDuplicatasCrossOrigin, montarSituacaoFechamento, derivarPendenciasGerenciais, derivarDetalhePendencias } from '@/lib/financeiro/fechamentoPendencias';
+import { detectarDuplicatasCrossOrigin, montarSituacaoFechamento, derivarPendenciasGerenciais } from '@/lib/financeiro/fechamentoPendencias';
+import { SemClassificacaoModal } from '@/components/conciliacao/SemClassificacaoModal';
+import { COR_SINAL } from '@/lib/oc/contaCorrente';
 import { buildUnifiedSaldos, type ContaSaldoRef, type SaldoV2SourceRow, type SaldoLegacySourceRow } from '@/lib/financeiro/saldosBancarios';
 import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
 import { mesUnico } from '@/v2/lib/periodo';
@@ -272,6 +275,8 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   /* O dia em que a Conferência abre — o link "N dias com diferença" do Status (PR-CONC-SALDO-UMA-REGUA-02). */
   const [diaFoco, setDiaFoco] = useState<string | null>(null);
   const [showPendencias, setShowPendencias] = useState(false);
+  /* CONC-SEM-CLASSIFICACAO-01: o modal de classificar na linha, aberto para UMA conta (`null` = todas as contas). */
+  const [semClassificacaoDe, setSemClassificacaoDe] = useState<{ contaId: string | null } | null>(null);
   /* ⚠ O ESPELHO CONTINUA MODAL, E TAMBÉM VIRA ABA — PR-ESPELHO-02 e PR-CONCILIACAO-5-ABAS-01.
      O modal "Espelho OFX × Sistema", aberto pelo botão em "Importar Banco", segue sendo o FECHO
      do mês: só realizados, sem candidatos. A aba "Casar lançamentos" monta o MESMO
@@ -468,13 +473,15 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   const tomDosMeses = useMemo(() => {
     /* ⚠ A COR É O STATUS (o saldo); o aviso do extrato é um PONTO ÂMBAR no canto do mês conciliado, com os avisos no
        `title` — PR-CONC-STATUS-SALDO-01b. `marcaDeAviso` só lê o status e os avisos do dono. */
-    const m: Record<number, { bg: string; border: string; txt: string; title?: string; marca?: string }> = {};
+    /* ⚠ O CONTADOR VERMELHO (CONC-SEM-CLASSIFICACAO-01) é a quantidade do aviso 'sem_classificacao' do TOTAL do mês, lida do
+       dono: NÃO muda a cor do mês (D6) — o mês conciliado segue verde, com o número no canto. */
+    const m: Record<number, { bg: string; border: string; txt: string; title?: string; marca?: string; contador?: { qtde: number; title: string } }> = {};
     for (const r of statusAnoQ.data ?? []) {
       if (r.nivel !== 'total' || r.ano_mes.slice(0, 4) !== ano) continue;
-      m[Number(r.ano_mes.slice(5, 7))] = { ...STATUS_COR[r.status], title: ROTULO_STATUS[r.status], marca: marcaDeAviso(r) ?? undefined };
+      m[Number(r.ano_mes.slice(5, 7))] = { ...STATUS_COR[r.status], title: ROTULO_STATUS[r.status], marca: marcaDeAviso(r) ?? undefined, contador: contadorDoMes(semClassificacaoDaLinha(r)) };
     }
     if (!statusAnoQ.data && linhaTotal) {
-      m[Number(selectedMes)] = { ...STATUS_COR[linhaTotal.status], title: ROTULO_STATUS[linhaTotal.status], marca: marcaDeAviso(linhaTotal) ?? undefined };
+      m[Number(selectedMes)] = { ...STATUS_COR[linhaTotal.status], title: ROTULO_STATUS[linhaTotal.status], marca: marcaDeAviso(linhaTotal) ?? undefined, contador: contadorDoMes(semClassificacaoDaLinha(linhaTotal)) };
     }
     return m;
   }, [statusAnoQ.data, linhaTotal, ano, selectedMes]);
@@ -523,12 +530,14 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     return montarSituacaoFechamento({ diferencaSaldo: difSaldo, duplicatas: dup, pendenciasGerenciais: pendGerenciais });
   }, [lancMes, saldosSel.diferenca]);
 
-  // Detalhe de pendências (mesmo lancMes canônico) — alimenta card Status + modal.
+  /* Duplicados entre origens (mesmo lancMes canônico) — alimenta o card Status e o diálogo de duplicados.
+     ⚠ O "SEM CLASSIFICAÇÃO" SAIU DAQUI (CONC-SEM-CLASSIFICACAO-01): era `derivarDetalhePendencias`, uma regra do front que nem
+       olhava `plano_conta_id` e acendia por falta de fornecedor. Agora a quantidade e o valor são os avisos do DONO
+       (`semClassificacaoDaLinha` / `semFornecedorDaLinha`) e a lista é a de `fn_conciliacao_sem_classificacao_lista`. */
   const diagPendencias = useMemo(() => {
-    const semClassificacao = derivarDetalhePendencias(lancMes);
     const dup = detectarDuplicatasCrossOrigin(lancMes);
     const duplicados = lancMes.filter(l => dup.ids.includes(l.id));
-    return { semClassificacao, duplicadosCount: dup.qtd, duplicados };
+    return { duplicadosCount: dup.qtd, duplicados };
   }, [lancMes]);
 
   /* ── Lançamentos for modal ── */
@@ -615,6 +624,9 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   const frasesStatus = linhaSel ? frasesDoStatus(linhaSel) : [];
   /* A 2ª PROVA (o extrato importado): avisos do dono, escritos à parte e nunca em vermelho — PR-CONC-STATUS-SALDO-01b. */
   const frasesAvisos = linhaSel ? frasesDosAvisos(linhaSel) : [];
+  /* CONC-SEM-CLASSIFICACAO-01: os dois avisos da classificação da linha aberta (a conta, ou o total no Todas), do dono. */
+  const semClassificacaoSel = semClassificacaoDaLinha(linhaSel);
+  const semFornecedorSel = semFornecedorDaLinha(linhaSel);
   const retido = linhaSel ? fraseDoRetido(linhaSel.retido_em_depositos) : null;
   const semConta = selectedConta === '__all__' && linhaTotal ? fraseSemConta(linhaTotal.sem_conta) : null;
 
@@ -1432,9 +1444,32 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                       ? 'pareamento —'
                       : `pareamento ${pareamento.conciliado}/${pareamento.todos}`}
                   </div>
-                  {diagPendencias.semClassificacao.length > 0 && (
-                    <div className="text-[9.5px] leading-tight font-medium text-destructive">
-                      🔴 {diagPendencias.semClassificacao.length} sem classificação
+                  {/* ⚠ SEM CLASSIFICAÇÃO — CONC-SEM-CLASSIFICACAO-01: a quantidade e o valor fora do DRE são do DONO (realizados do
+                      mês e da conta sem plano de contas). INFORMAM: o status e a cor do card não mudam (D6). "Sem fornecedor" é
+                      aviso SEPARADO, em âmbar (D2). O bloco só existe com quantidade > 0. */}
+                  {semClassificacaoSel && (
+                    <div className="w-full border-t border-black/10 pt-1 text-[9.5px] leading-tight" data-testid="bloco-sem-classificacao">
+                      <div className="text-[12px] font-bold leading-none text-destructive tabular-nums" data-testid="sem-classificacao-qtde">{semClassificacaoSel.qtde}</div>
+                      <div className="font-semibold text-destructive whitespace-nowrap">sem classificação</div>
+                      <table className="mx-auto mt-0.5 border-collapse" title="valor fora do DRE: lançamento sem plano de contas não entra em linha nenhuma do DRE">
+                        <tbody>
+                          <tr><td className="pr-1 text-left text-muted-foreground" colSpan={2}>fora do DRE</td></tr>
+                          <ValorForaDoDre valor={semClassificacaoSel.valorEntradas} entrada />
+                          <ValorForaDoDre valor={semClassificacaoSel.valorSaidas} entrada={false} />
+                        </tbody>
+                      </table>
+                      <button type="button"
+                        onClick={() => setSemClassificacaoDe({ contaId: selectedConta === '__all__' ? null : selectedConta })}
+                        className="mt-1 h-[18px] rounded-[3px] bg-destructive px-[3px] text-[9.5px] font-medium leading-none text-destructive-foreground whitespace-nowrap cursor-pointer hover:opacity-90"
+                        data-testid="classificar-agora">
+                        Classificar agora
+                      </button>
+                    </div>
+                  )}
+                  {semFornecedorSel > 0 && (
+                    <div className="text-[9.5px] leading-tight font-medium text-amber-700 whitespace-nowrap" data-testid="sem-fornecedor-qtde"
+                         title="lançamentos realizados com plano de contas e sem fornecedor">
+                      {semFornecedorSel} sem fornecedor
                     </div>
                   )}
                   {diagPendencias.duplicadosCount > 0 && (
@@ -1442,7 +1477,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                       🔴 {diagPendencias.duplicadosCount} duplicados
                     </div>
                   )}
-                  {(diagPendencias.semClassificacao.length > 0 || diagPendencias.duplicadosCount > 0) && (
+                  {diagPendencias.duplicadosCount > 0 && (
                     <button type="button" onClick={() => setShowPendencias(true)}
                       className="text-[9.5px] underline text-muted-foreground hover:text-foreground mt-0.5">
                       Ver detalhes
@@ -1583,7 +1618,8 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                         canEdit={canEditSaldoFinal(anoMesSel)}
                         showSaldoAlert={anoMesSel === s.conta.mes_inicio && s.conta.saldo_inicial_oficial === null}
                         temOfx={contasComOfx.get(anoMesSel)?.has(s.conta.id) ?? false}
-                        temPdf={contasComPdf.get(anoMesSel)?.has(s.conta.id) ?? false} />
+                        temPdf={contasComPdf.get(anoMesSel)?.has(s.conta.id) ?? false}
+                        onClassificar={() => setSemClassificacaoDe({ contaId: s.conta.id })} />
                       ))}
                     </tbody>
                   ))}
@@ -1772,33 +1808,26 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
         />
       )}
 
+      {/* ⚠ O "Pendências de fechamento" VIROU ESTA TELA (CONC-SEM-CLASSIFICACAO-01): classificar na linha, pelo escritor do modal
+          do lançamento. O diálogo abaixo ficou só com os duplicados entre origens, que seguem onde estavam. */}
+      {clienteId && (
+        <SemClassificacaoModal
+          aberto={semClassificacaoDe !== null}
+          aoFechar={() => setSemClassificacaoDe(null)}
+          clienteId={clienteId}
+          clienteNome={clienteAtual?.nome ?? ''}
+          anoMes={anoMesSel}
+          contaId={semClassificacaoDe?.contaId ?? null}
+          contaNome={nomeDaContaDoModal(contas.find(c => c.id === semClassificacaoDe?.contaId))}
+        />
+      )}
+
       <Dialog open={showPendencias} onOpenChange={setShowPendencias}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Pendências de fechamento — {selectedConta === '__all__' ? 'Todas as contas' : (contas.find(c => c.id === selectedConta)?.nome_exibicao ?? '')} · {ano}-{selectedMes}</DialogTitle>
+            <DialogTitle>Duplicados entre origens — {selectedConta === '__all__' ? 'Todas as contas' : (contas.find(c => c.id === selectedConta)?.nome_exibicao ?? '')} · {ano}-{selectedMes}</DialogTitle>
           </DialogHeader>
           <div className="text-xs max-h-[60vh] overflow-auto space-y-4">
-            {diagPendencias.semClassificacao.length > 0 && (
-              <div>
-                <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">Sem classificação ({diagPendencias.semClassificacao.length})</div>
-                <div className="divide-y">
-                  {diagPendencias.semClassificacao.map(l => (
-                    <div key={l.id} className="py-2">
-                      <div className="flex items-center gap-2">
-                        {selectedConta === '__all__' && <span className="text-muted-foreground w-28 shrink-0 truncate">{contas.find(c => c.id === l.conta_bancaria_id)?.nome_exibicao ?? '—'}</span>}
-                        <span className="w-14 shrink-0 text-muted-foreground">{l.data ? l.data.slice(8,10)+'/'+l.data.slice(5,7) : '—'}</span>
-                        <span className="flex-1 truncate font-medium">{l.descricao ?? '—'}</span>
-                        <span className="w-24 text-right tabular-nums">{formatMoeda(l.valor)}</span>
-                      </div>
-                      <div className="flex items-center gap-1 mt-1">
-                        <span className="text-[10px] text-muted-foreground">Faltando:</span>
-                        {l.pendencias.map(p => <span key={p} className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/10 text-destructive border border-red-200">{p}</span>)}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
             {diagPendencias.duplicadosCount > 0 && (
               <div>
                 <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">Duplicados ({diagPendencias.duplicadosCount})</div>
@@ -1833,6 +1862,27 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
   );
 }
 
+/** O nome da conta no título do modal "Sem classificação"; sem conta é o Todas. */
+function nomeDaContaDoModal(conta: ContaRef | undefined): string {
+  return conta ? getContaLabel(conta) : 'Todas as contas';
+}
+
+/** O contador vermelho do mês na régua: a quantidade sem classificação do total do mês, do dono. */
+function contadorDoMes(sc: SemClassificacao | null): { qtde: number; title: string } | undefined {
+  return sc ? { qtde: sc.qtde, title: `${sc.qtde} sem classificação` } : undefined;
+}
+
+/** Uma linha do valor fora do DRE no card Status: seta, sinal e cor (▲ verde entrada, ▼ vermelho saída); zero apagado. */
+function ValorForaDoDre({ valor, entrada }: { valor: number; entrada: boolean }) {
+  const txt = valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return (
+    <tr data-testid={entrada ? 'fora-do-dre-entradas' : 'fora-do-dre-saidas'}>
+      <td className={`pr-1 text-left ${valor === 0 ? 'text-muted-foreground' : entrada ? COR_SINAL.pos : COR_SINAL.neg}`}>{valor === 0 ? '' : entrada ? '▲' : '▼'}</td>
+      <td className={`text-right tabular-nums whitespace-nowrap ${valor === 0 ? 'text-muted-foreground' : entrada ? COR_SINAL.pos : COR_SINAL.neg}`}>{txt}</td>
+    </tr>
+  );
+}
+
 /* ── Sub-component: SaldoContaRow ── */
 interface SaldoContaRowProps {
   data: PerContaSaldo;
@@ -1846,9 +1896,11 @@ interface SaldoContaRowProps {
   temOfx?: boolean;
   /** O mês desta conta tem extrato (PDF/imagem) anexado. */
   temPdf?: boolean;
+  /** Abre o modal "Sem classificação" desta conta (CONC-SEM-CLASSIFICACAO-01). */
+  onClassificar: () => void;
 }
 
-function SaldoContaRow({data, isActive, isDimmed, onClick, onEdit, canEdit, showSaldoAlert, temOfx, temPdf}: SaldoContaRowProps) {
+function SaldoContaRow({data, isActive, isDimmed, onClick, onEdit, canEdit, showSaldoAlert, temOfx, temPdf, onClassificar}: SaldoContaRowProps) {
   /* ⚠ A LINHA É A DO DONO — PR-CONC-SALDO-UMA-REGUA-02 (D4): o status (o ponto) e os motivos (o `title`).
      ⚠ OS TRÊS NÚMEROS SÃO OS DA CONTA, o `proprio` do dono (PR-CONC-INTERNA-SEPARADA-01b, D2): a mãe e a interna têm cada uma
      a sua linha e o seu saldo; a marca "· conferida com X" diz que o mês delas só fecha junto. O status é o do par. */
@@ -1863,8 +1915,13 @@ function SaldoContaRow({data, isActive, isDimmed, onClick, onEdit, canEdit, show
   /* O `title` diz o status (o saldo) e, à parte, a 2ª prova (os avisos do extrato) — PR-CONC-STATUS-SALDO-01b. */
   const avisos = frasesDosAvisos(linha);
   const marcaAviso = marcaDeAviso(linha);
+  /* CONC-SEM-CLASSIFICACAO-01: os dois avisos da classificação, do dono. Não mudam o ponto nem a cor da linha (D6). */
+  const semClass = semClassificacaoDaLinha(linha);
+  const semForn = semFornecedorDaLinha(linha);
   const titulo = `${ROTULO_STATUS[linha.status]}${frases.length > 0 ? ': ' + frases.map(f => f.texto).join(' · ') : ''}`
-    + (avisos.length > 0 ? ` — 2ª prova · extrato: ${avisos.map(f => f.texto).join(' · ')}` : '');
+    + (avisos.length > 0 ? ` — 2ª prova · extrato: ${avisos.map(f => f.texto).join(' · ')}` : '')
+    + (semClass ? ` — ${semClass.qtde} sem classificação` : '')
+    + (semForn > 0 ? ` — ${semForn} sem fornecedor` : '');
   return (
     <tr
       /* ⚠ A SELECIONADA É NAVY A 10% COM FILETE, NÃO `#E3F2FD` — PR-CONC-SALDOS-LAYOUT-01: o azul claro brigava com as faixas
@@ -1878,7 +1935,17 @@ function SaldoContaRow({data, isActive, isDimmed, onClick, onEdit, canEdit, show
       data-testid="linha-saldo-conta" data-conta={conta.id} data-status={linha.status}
     >
       {/* ⚠ RECUO DE 18px: a conta fica visivelmente DENTRO do grupo (a faixa do grupo começa em 8px). */}
-      <td className={`py-0.5 pl-[18px] pr-2 overflow-hidden ${isActive ? 'shadow-[inset_3px_0_0_hsl(var(--primary))]' : ''}`}>
+      <td className={`relative py-0.5 pl-[18px] pr-2 overflow-hidden ${isActive ? 'shadow-[inset_3px_0_0_hsl(var(--primary))]' : ''}`}>
+        {/* ⚠ O CONTADOR VERMELHO DA CONTA mora NO RECUO de 18px (posição absoluta): a coluna Conta não tem folga, e na célula do
+            lápis ele alargava a coluna e quebrava quatro nomes em duas linhas (medido a 1.126). Abre o modal desta conta. O
+            "sem fornecedor" da conta fica no `title` da linha e no card Status — não há lugar para um segundo contador. */}
+        {semClass && (
+          <button type="button" onClick={e => { e.stopPropagation(); onClassificar(); }}
+            className="absolute left-[2px] top-1/2 h-[12px] min-w-[13px] -translate-y-1/2 rounded-[6px] bg-destructive px-[2px] text-[8.5px] font-semibold leading-[12px] text-destructive-foreground tabular-nums cursor-pointer"
+            title={`${semClass.qtde} sem classificação · classificar agora`} data-testid="contador-sem-classificacao">
+            {semClass.qtde}
+          </button>
+        )}
         {/* ⚠ O PONTO É O STATUS (o saldo). Conta CONCILIADA com aviso do extrato leva um ponto âmbar de 4px SOBRE o canto
             do ponto de status (posição absoluta): avisa sem gastar um pixel da coluna Conta, que não tem folga. */}
         <span style={{width:7,height:7,borderRadius:'50%',background:dotColor,display:'inline-block',marginRight:4,verticalAlign:'middle',flexShrink:0,position:'relative'}}>
