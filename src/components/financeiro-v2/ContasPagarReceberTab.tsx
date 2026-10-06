@@ -33,7 +33,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import {
   ATALHOS_CPR, periodoDoAtalho, recortarCpr, ramoDaConsultaCpr, doSegmentoCpr, contaEmAberto,
   ehReceberCpr, contaDaConta, resumoPorContaCpr, contasDaFaixaCpr, SEM_CONTA,
-  ancorasDoCaixaCpr, serieDoSaldoCpr, linhasDoSaldoCpr,
+  ancorasDoCaixaCpr, serieDoSaldoCpr, linhasDoSaldoCpr, resumoPorSemanaCpr, saldoPorContaCpr,
   type AtalhoCpr, type PeriodoCpr, type FiltroContaCpr,
 } from '@/lib/financeiro/cprRecorte';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -47,7 +47,11 @@ import {
 import { movimentoNaConta, type LinhaDaPosicao } from '@/hooks/useExtratoDaConta';
 import { rotuloOrigem } from '@/v2/lib/origemLancamento';
 import { useNomesDeFornecedores } from '@/hooks/useNomesDeFornecedores';
-import { Maximize2, Minimize2, Paperclip } from 'lucide-react';
+import { ChevronDown, Maximize2, Minimize2, Paperclip } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { montarModeloCpr, nomeDoArquivoCpr, type EntradaDoModelo } from '@/lib/pdf/cpr/modeloCpr';
+import { montarPayloadExcelCpr } from '@/lib/financeiro/cprExcel';
+import { triggerXlsxDownload } from '@/lib/xlsxDownload';
 import { COR_SINAL } from '@/lib/oc/contaCorrente';
 import { STATUS_FILTRO_COR, STATUS_FILTRO_LABEL } from '@/lib/financeiro/statusFinanceiro';
 import { formatMoeda } from '@/lib/calculos/formatters';
@@ -888,6 +892,101 @@ export function ContasPagarReceberTab({ onIntensiveToggle }: {
       ]}
     />
   );
+  /* ── CPR-EXPORT-01 — EXPORTAR o que a tela mostra NESTE momento (período, conta, segmento, caixa de vencidos, status).
+        Os números são os do dono, já calculados acima; o modelo só os escreve. Nenhuma consulta nova. ── */
+  const [exportando, setExportando] = useState<null | 'pdf' | 'excel'>(null);
+  const [recadoExport, setRecadoExport] = useState<{ erro: boolean; texto: string } | null>(null);
+  const semDados = statusLigados.length === 0 || grupos.length === 0;
+  const resolvedores: EntradaDoModelo<LinhaViewDoc>['de'] = {
+    fornecedor: (l) => (l.favorecido_id && nomesFornecedores.get(l.favorecido_id)) || '—',
+    conta: (l) => nomeConta(contaDaConta(l)),
+    nomeDaConta: (id) => nomeConta(id),
+    subcentro: (l) => l.subcentro || '—',
+    centro: (l) => l.centro_custo || '',
+    macro: (l) => l.macro_custo || '',
+    safra: (l) => codigoDaSafra(l.safra_id),
+    faz: (l) => codigoDaFazenda(l.fazenda_id),
+    status: (l) => { const k = (l.status_transacao ?? '').toLowerCase(); return { chave: k, rotulo: STATUS_FILTRO_LABEL[k] ?? (k || '—') }; },
+    origem: (l) => rotuloOrigem(l.origem_lancamento),
+    doc: (l) => ((l.numero_documento ?? '').trim() ? (l.documento_formatado ?? '') : ''),
+    receber: (l) => ehReceber(l),
+    paga: (l) => !contaEmAberto(l),
+  };
+  const identidadeDoArquivo = {
+    clienteNome: clienteAtual?.nome ?? 'cliente', contaNome: contaSel == null ? 'Todas as contas' : nomeConta(contaSel),
+    todasAsContas: contaSel == null, periodo,
+  };
+  const exportarPdf = async () => {
+    setExportando('pdf'); setRecadoExport(null);
+    try {
+      /* o saldo de cada conta (só em "Todas"): o MESMO cálculo do cartão Caixa, conta a conta, entregue ao dono */
+      const caixaDe = (id: string): number | null => {
+        if (!caixaTodas) return null;
+        const c = estimarSaldoEmCaixa({ ...caixaTodas.argumentos, contas: caixaTodas.argumentos.contas.filter((x) => x.id === id) });
+        return c.ancoradas > 0 ? c.total : null;
+      };
+      const modelo = montarModeloCpr<LinhaViewDoc>({
+        ...identidadeDoArquivo,
+        fazendaNome: fazScope ? (fazendaAtual?.nome ?? undefined) : undefined,
+        segmento, incluirVencidos, emitidoEm: format(new Date(), 'dd/MM/yyyy HH:mm'),
+        serie, grupos,
+        cartoes: {
+          vencidosContamPagar: recorte.vencidos.contam.pagar, vencidosContamReceber: recorte.vencidos.contam.receber,
+          pagarNoPeriodo: recorte.periodoSoma.pagar, receberNoPeriodo: recorte.periodoSoma.receber,
+        },
+        rodape: { pagar: recorte.total.pagar.valor, receber: recorte.total.receber.valor, contas: recorte.total.ambos.contas },
+        semanas: resumoPorSemanaCpr(serie, periodo),
+        porConta: contaSel == null
+          ? saldoPorContaCpr(linhas, { periodo, hoje: hojeIso, incluirVencidos, ancoras }, caixaDe, (caixaTodas?.ancoraPorConta ?? []).map((a) => a.contaId))
+          : null,
+        motivoSemSaldo, de: resolvedores,
+      });
+      const { gerarPdfCpr } = await import('@/lib/pdf/cpr/gerarPdfCpr');
+      const r = await gerarPdfCpr(modelo);
+      if (r.ok === false) setRecadoExport({ erro: true, texto: r.frase });
+      else if (r.aviso) setRecadoExport({ erro: false, texto: r.aviso });
+    } catch (e) {
+      setRecadoExport({ erro: true, texto: `Falha ao gerar PDF: ${e instanceof Error ? e.message : String(e)}` });
+    } finally {
+      setExportando(null);
+    }
+  };
+  const exportarExcel = () => {
+    setExportando('excel'); setRecadoExport(null);
+    try {
+      triggerXlsxDownload(montarPayloadExcelCpr<LinhaViewDoc>({
+        arquivo: nomeDoArquivoCpr(identidadeDoArquivo), grupos, serie, de: resolvedores, incluirVencidos, hoje: hojeIso,
+      }));
+    } catch (e) {
+      setRecadoExport({ erro: true, texto: `Falha ao gerar Excel: ${e instanceof Error ? e.message : String(e)}` });
+    } finally {
+      setExportando(null);
+    }
+  };
+  /* UM nó: "Exportar ▾" (PDF · Excel). Gerando: desabilitado e "Gerando…"; sem dados no recorte: desabilitado com o motivo. */
+  const ctlExportar = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button type="button" data-testid="cpr-exportar" disabled={semDados || exportando !== null}
+          title={semDados ? 'Nada a exportar: o recorte não tem contas' : 'Exportar o que a tela mostra (PDF ou Excel)'}
+          className="flex h-[22px] shrink-0 items-center gap-1 rounded-md border px-2 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-muted disabled:cursor-default disabled:opacity-50">
+          {exportando ? 'Gerando…' : 'Exportar'}<ChevronDown className="h-3 w-3" aria-hidden />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem data-testid="cpr-exportar-pdf" onSelect={() => { void exportarPdf(); }}>PDF</DropdownMenuItem>
+        <DropdownMenuItem data-testid="cpr-exportar-excel" onSelect={exportarExcel}>Excel</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+  /* a frase do erro (ou do aviso) fica ESCRITA ao lado do botão — nunca em toast; uma linha, inteira no `title` */
+  const ctlRecadoExport = recadoExport ? (
+    <span data-testid="cpr-exportar-recado" title={recadoExport.texto}
+      className={cn('min-w-0 truncate text-[10px]', recadoExport.erro ? 'text-destructive' : 'text-amber-600 dark:text-amber-400')}>
+      {recadoExport.texto}
+    </span>
+  ) : null;
+
   /* as pílulas de status NÃO cabem na barra do Ampliado (277px): lá a faixa dos cartões escreve quais estão ligadas */
   const statusLigadosTexto = STATUS_DISPONIVEIS.filter((x) => statusLigados.includes(x)).map((x) => STATUS_FILTRO_LABEL[x] ?? x);
 
@@ -916,17 +1015,20 @@ export function ContasPagarReceberTab({ onIntensiveToggle }: {
             </button>
           </div>
           <div data-testid="cpr-faixa-recolhida"
-            className="grid h-[24px] grid-cols-[148px_142px_150px_136px_132px_minmax(0,1fr)] items-center gap-2 rounded-md border bg-card px-2 text-[10px] whitespace-nowrap">
+            className="grid h-[24px] grid-cols-[148px_142px_150px_136px_132px_minmax(0,1fr)_auto] items-center gap-2 rounded-md border bg-card px-2 text-[10px] whitespace-nowrap">
             <CelRecolhida rotulo="Vencidos" valor={formatMoeda(recorte.vencidos.pagar.valor)} classe={recorte.vencidos.pagar.valor > 0 ? COR_SINAL.neg : undefined} />
             <CelRecolhida rotulo="A pagar" valor={formatMoeda(recorte.periodoSoma.pagar.valor)} classe={COR_SINAL.neg} />
             <CelRecolhida rotulo="A receber" valor={formatMoeda(recorte.periodoSoma.receber.valor)} classe={recorte.periodoSoma.receber.valor > 0 ? COR_SINAL.pos : undefined} />
             <CelRecolhida rotulo="Mínimo" titulo={tituloMenorSaldo}
               valor={serie.menor ? moedaComSinal(serie.menor.valor) : '—'} classe={serie.menor ? (serie.menor.valor < 0 ? COR_SINAL.neg : COR_SINAL.pos) : undefined} />
             <CelRecolhida rotulo="Caixa" valor={serie.hoje != null ? moedaComSinal(serie.hoje) : '—'} titulo={serie.hoje == null ? motivoSemSaldo : undefined} />
-            <span data-testid="cpr-status-ligados" className="min-w-0 truncate text-right text-muted-foreground"
-              title={`Status ligados: ${statusLigadosTexto.join(', ') || 'nenhum'} — para trocar, Recolher`}>
-              {isFetching ? 'carregando… · ' : ''}status: {statusLigadosTexto.join(' · ') || 'nenhum'}
-            </span>
+            {ctlRecadoExport ?? (
+              <span data-testid="cpr-status-ligados" className="min-w-0 truncate text-right text-muted-foreground"
+                title={`Status ligados: ${statusLigadosTexto.join(', ') || 'nenhum'} — para trocar, Recolher`}>
+                {isFetching ? 'carregando… · ' : ''}status: {statusLigadosTexto.join(' · ') || 'nenhum'}
+              </span>
+            )}
+            {ctlExportar}
           </div>
         </div>
       )}
@@ -1076,8 +1178,10 @@ export function ContasPagarReceberTab({ onIntensiveToggle }: {
             })}
           </div>
 
-          <div className="flex-1" />
+          {/* o espaço entre os filtros e os botões carrega a frase do exportar (erro ou aviso), numa linha */}
+          <div className="flex min-w-0 flex-1 basis-0 justify-end">{ctlRecadoExport}</div>
 
+          {ctlExportar}
           {/* AMPLIAR — o mesmo mecanismo da lista de Lançamentos (o shell esconde a lateral). Na barra 2: a barra 1 não tem folga a 1.126px. */}
           <button type="button" data-testid="cpr-ampliar" onClick={() => setAmpliado(true)} title="Ampliar a lista (mais colunas)"
             className="flex h-[22px] shrink-0 items-center gap-1 rounded-md border px-2 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-muted">

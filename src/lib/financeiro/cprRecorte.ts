@@ -286,15 +286,20 @@ export interface SerieDoSaldoCpr {
   fim: number | null;
   /** o menor saldo da série, da partida ao fim; `data` nula = já na partida (hoje). */
   menor: { valor: number; data: string | null } | null;
+  /** TUDO o que a série consome (vencidos que contam + entre hoje e "de" + período): hoje − a pagar + a receber = fim. */
+  totalPagar: LadoCpr;
+  totalReceber: LadoCpr;
 }
 export function serieDoSaldoCpr<T extends ContaCpr>(recorte: RecorteCpr<T>, saldoHoje: number | null): SerieDoSaldoCpr {
   const tem = saldoHoje != null && Number.isFinite(saldoHoje);
   let saldo = tem ? Math.round(saldoHoje * 100) : 0;
   let menor: { valor: number; data: string | null } | null = null;
   let menorC = Number.POSITIVE_INFINITY;
+  let tP = 0, tR = 0, nP = 0, nR = 0;
   const passo = (linhas: readonly T[], data: string | null): PassoDoSaldoCpr => {
     const s = somar(linhas);
     saldo += s.cReceber - s.cPagar;
+    tP += s.cPagar; tR += s.cReceber; nP += s.pagar.contas; nR += s.receber.contas;
     if (tem && saldo < menorC) { menorC = saldo; menor = { valor: reais(saldo), data }; }
     return { pagar: s.pagar, receber: s.receber, saldo: tem ? reais(saldo) : null };
   };
@@ -307,10 +312,74 @@ export function serieDoSaldoCpr<T extends ContaCpr>(recorte: RecorteCpr<T>, sald
     const g = porDia.get(d); if (g) g.push(l); else porDia.set(d, [l]);
   }
   const dias = Array.from(porDia.keys()).sort().map((data) => ({ ...passo(porDia.get(data) ?? [], data), data }));
-  return { hoje: tem ? reais(Math.round(saldoHoje * 100)) : null, partida, entreHojeEDe, dias, fim: tem ? reais(saldo) : null, menor };
+  return {
+    hoje: tem ? reais(Math.round(saldoHoje * 100)) : null, partida, entreHojeEDe, dias, fim: tem ? reais(saldo) : null, menor,
+    totalPagar: { valor: reais(tP), contas: nP }, totalReceber: { valor: reais(tR), contas: nR },
+  };
 }
 
 /** As linhas EM ABERTO que o gráfico desenha — as MESMAS que a série soma: vencidos que contam + entre hoje e "de" + período. */
 export function linhasDoSaldoCpr<T extends ContaCpr>(recorte: RecorteCpr<T>): T[] {
   return [...recorte.vencidos.contam.linhas, ...recorte.antesDoPeriodo.linhas, ...recorte.periodoSoma.linhas];
+}
+
+/* ─── CPR-EXPORT-01 — agregados que só a folha exportada mostra; nascem AQUI, em centavos ──────────────────────────── */
+/** Uma semana do período (segunda a domingo, cortada em "de" e "até"): o que vence nela e o saldo no fim dela. */
+export interface SemanaCpr { de: string; ate: string; pagar: number; receber: number; saldo: number | null }
+/**
+ * O resumo por semana, DA SÉRIE: soma os dias da série dentro de cada semana (centavos) e lê o saldo do último dia dela;
+ * semana sem conta repete o saldo anterior. A primeira semana parte do saldo antes do período (partida, ou "entre hoje e de").
+ */
+export function resumoPorSemanaCpr(serie: SerieDoSaldoCpr, periodo: PeriodoCpr): SemanaCpr[] {
+  if (!periodo.de || !periodo.ate || periodo.de > periodo.ate) return [];
+  const semanas: SemanaCpr[] = [];
+  let corrente = (serie.entreHojeEDe ?? serie.partida).saldo;
+  let ini = periodo.de;
+  while (ini <= periodo.ate) {
+    const dia = new Date(msDe(ini)).getUTCDay();                    // 0 = domingo
+    const domingo = somarDiasIso(ini, (7 - dia) % 7);
+    const fim = domingo < periodo.ate ? domingo : periodo.ate;
+    let cP = 0, cR = 0;
+    for (const d of serie.dias) {
+      if (d.data < ini || d.data > fim) continue;
+      cP += Math.round(d.pagar.valor * 100); cR += Math.round(d.receber.valor * 100);
+      corrente = d.saldo;
+    }
+    semanas.push({ de: ini, ate: fim, pagar: reais(cP), receber: reais(cR), saldo: corrente });
+    ini = somarDiasIso(fim, 1);
+  }
+  return semanas;
+}
+
+/** A linha de uma conta no "Resumo por conta": caixa hoje − a pagar + a receber = saldo no fim (o que a série DELA consome). */
+export interface SaldoDaContaCpr { conta: string; caixa: number | null; pagar: LadoCpr; receber: LadoCpr; fim: number | null }
+/**
+ * O saldo de cada conta no recorte: o MESMO recorte e a MESMA série, conta a conta. `caixaDe` devolve o saldo em caixa da conta
+ * (o cartão Caixa dela) ou nulo (cartão de crédito, sem âncora, "sem conta"). Entram as contas com a pagar / a receber no
+ * recorte e as que têm caixa diferente de zero; a zerada e sem movimento fica de fora. A soma de a pagar e de a receber das linhas é o total da série de "Todas".
+ */
+export function saldoPorContaCpr<T extends ContaCpr>(
+  linhas: readonly T[],
+  opcoes: { periodo: PeriodoCpr; hoje: string; incluirVencidos: boolean; ancoras?: AncorasCpr },
+  caixaDe: (conta: string) => number | null,
+  contasComCaixa: readonly string[] = [],
+): SaldoDaContaCpr[] {
+  const vistas = new Set<string>();
+  const ordem: string[] = [];
+  for (const l of linhas) {
+    const b = baldeDaConta(l, opcoes.periodo, opcoes.hoje);
+    if (b !== 'vencido' && b !== 'periodo' && b !== 'antes_do_periodo') continue;
+    const c = contaDaConta(l) ?? SEM_CONTA;
+    if (!vistas.has(c)) { vistas.add(c); ordem.push(c); }
+  }
+  for (const c of contasComCaixa) if (!vistas.has(c)) { vistas.add(c); ordem.push(c); }
+  const linhasDe = ordem.map((conta) => {
+    const s = serieDoSaldoCpr(recortarCpr(linhas, { ...opcoes, conta }), conta === SEM_CONTA ? null : caixaDe(conta));
+    return { conta, caixa: s.hoje, pagar: s.totalPagar, receber: s.totalReceber, fim: s.fim };
+  });
+  /* só conta com caixa diferente de zero OU com a pagar / a receber no recorte: a zerada e sem movimento não diz nada, e tirá-la
+     não muda soma nenhuma (ela só somava zeros) */
+  return linhasDe
+    .filter((x) => (x.caixa != null && Math.round(x.caixa * 100) !== 0) || x.pagar.contas > 0 || x.receber.contas > 0)
+    .sort((a, b) => b.pagar.valor - a.pagar.valor || (a.conta < b.conta ? -1 : 1));
 }

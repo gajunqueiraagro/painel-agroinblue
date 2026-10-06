@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 06/10/2026 (CPR-SALDO-DIA-01, +22: `src/lib/financeiro/cprRecorte.test.ts` 18, `src/lib/financeiro/saldoEmCaixa.test.ts` 4 — 4023 depois dele;
+  Baseline em 06/10/2026 (CPR-EXPORT-01, +18: `src/lib/pdf/cpr/exportCpr.test.tsx` 14, `src/lib/financeiro/cprRecorte.test.ts` 4 — 4041 depois dele;
+  antes o CPR-SALDO-DIA-01, +22: `src/lib/financeiro/cprRecorte.test.ts` 18, `src/lib/financeiro/saldoEmCaixa.test.ts` 4 — 4023 depois dele;
   antes o FIN-V2-COLUNAS-OC-01, +8 em `src/components/financeiro-v2/finV2ColunasOC01.test.ts` — 4001 depois dele;
   antes o CPR-CONTA-01, +7 em `src/lib/financeiro/cprRecorte.test.ts` — 3993 depois dele;
   antes o OC-VINCULAR-CANDIDATAS-01b, +1 em `src/components/financeiro-v2/vincularCandidatas.test.tsx` — 3986 depois dele;
@@ -205,7 +206,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4023
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4041
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -2614,6 +2615,56 @@ docs/historico/frentes-ate-2026-09-29.md.)
     contraste dos dois tons do rodape navy medido na tela (calculado: ~6,4:1 e ~8,8:1), sair da tela com o Ampliado ligado (so'
     por teste de fonte), e, no Ampliado, DIGITAR nas datas e ABRIR o seletor de conta (sao os mesmos nos da tela normal; no
     navegador foram trocados atalho, segmento e a caixa).
+- ⚠ CONTAS A PAGAR E RECEBER EXPORTA O QUE A TELA MOSTRA, E O ARQUIVO NAO FAZ CONTA (CPR-EXPORT-01, Gabriel 05–06/10/2026, so' tela,
+  sem consulta nova). Botao "Exportar ▾" (PDF · Excel), UM no' (`ctlExportar`): na barra 2 da tela normal, antes do Ampliar, e no
+  Ampliado a' direita da faixa dos cartoes. Exporta o recorte DO MOMENTO DO CLIQUE (periodo, conta, segmento, caixa de vencidos,
+  status). Gerando: "Gerando…" e desabilitado; sem contas no recorte: desabilitado com o motivo no `title`. Erro e aviso ficam
+  ESCRITOS ao lado do botao (`cpr-exportar-recado`), nunca em toast.
+  · QUEM FAZ O QUE: os numeros sao do dono (`cprRecorte.ts`); `src/lib/pdf/cpr/modeloCpr.ts` so' os ESCREVE (texto, seta e tom
+    de cada celula — a mesma regra do `CelValor` da tela); `DocumentoCpr.tsx` so' DESENHA; `gerarPdfCpr.tsx` monta e baixa;
+    `src/lib/financeiro/cprExcel.ts` monta a planilha. Nenhum dos quatro soma, filtra ou reclassifica (preso por teste de fonte). NAO usar jspdf.
+  · AGREGADOS NOVOS, NO DONO E EM CENTAVOS: `SerieDoSaldoCpr.totalPagar/totalReceber` (tudo o que a serie consome: hoje − a pagar
+    + a receber = fim); `resumoPorSemanaCpr(serie, periodo)` (segunda a domingo, cortada em "de" e "ate'"; semana sem conta repete
+    o saldo; a ultima fecha no saldo no fim); `saldoPorContaCpr(linhas, opcoes, caixaDe, contasComCaixa)` (o mesmo recorte e a
+    mesma serie, conta a conta; cada linha fecha sozinha e as contas somam o total de "Todas" em caixa, a pagar e a receber;
+    conta sem caixa — cartao de credito, sem conta — tem saldo nulo e o que vence nela entra no total; SO' ENTRA conta com caixa
+    diferente de zero OU com a pagar / a receber no recorte — a zerada e sem movimento sai, e a soma nao muda).
+  · PDF: chassi do executivo (`PdfHeader` com `titulo` e `linha2` por prop — sem elas o executivo sai identico, preso por teste —,
+    `PdfRodape`, `estilos`, `COR`, `carregarLogoBase64`). A LOGO e' `src/assets/logo.png`, a do AGROinBLUE, a mesma de todo PDF do
+    sistema. A4 PAISAGEM (a tabela tem ate' doze colunas: em retrato os 551pt uteis nao levam as onze a 7pt). Cabecalho e rodape
+    fixos (pagina N de M). Bloco de numeros: Caixa hoje · Vencidos que contam · A pagar no periodo · A receber no periodo · Minimo
+    (e o dia) · Saldo no fim (e a data); com a caixa desligada o primeiro vira "Saldo de partida · apos vencidos". Tabela como a
+    lista do Ampliado (Comp. · Venc. · [Conta, so' em "Todas"] · Descricao · Fornecedor · Subcentro · Safra · Faz. · Status · A
+    pagar · A receber · Saldo): "Saldo hoje", vencidos que contam, cada dia com a faixa de fechamento, "Fim do periodo". Texto
+    longo corta com reticencia; numero, data e status nao; a faixa nao fica orfa (ela e a primeira conta nao se partem). Depois,
+    em pagina propria: vencidos anteriores a' conciliacao (com a frase), sem vencimento, resumo por semana e, em "Todas", resumo
+    por conta. NENHUM BLOCO CONTINUA NOUTRA PAGINA SEM O CABECALHO: os dois resumos e os blocos de ate' 30 contas vao INTEIROS
+    (`wrap={false}`); bloco de contas maior ganha pagina propria com o cabecalho da tabela fixo. Segmento "A pagar" / "A receber":
+    a tabela lista so' o lado e a nota diz que totais e saldo sao dos dois lados.
+    REGUA (pt, 7pt nas linhas, 7,5 no titulo da faixa, 8 no fim, 11 nos numeros): Comp. 26 · Venc. 38 · [Conta 64] · Descricao = o
+    resto (170 sem Conta, 126 com) · Fornecedor 112 (100 com Conta) · Subcentro 104 (94) · Safra 46 · Faz. 24 · Status 50 · A pagar 70 ·
+    A receber 70 · Saldo 80. Texto que corta para 5pt antes da coluna vizinha e NAO hifeniza (`hyphenationCallback`). ⚠ AS SETAS SAO DESENHADAS (`Svg`), e o negativo usa "-": a fonte padrao do motor nao tem ▲ ▼ nem "−".
+  · EXCEL: pelo caminho de sempre (`triggerXlsxDownload` -> funcao `export-xlsx`, o do Financeiro). "Contas": uma linha por conta
+    listada (17 colunas, com Grupo: vencido que conta / vencido anterior / periodo / sem vencimento). "Saldo por dia": Saldo hoje,
+    vencidos que contam e cada dia. VALORES COMO NUMERO.
+    ⚠ DIVIDA CPR-EXPORT-DATA-COMO-DATA-01: AS DATAS VAO COMO TEXTO DD/MM/AAAA — a `export-xlsx` so' aceita texto, numero, booleano
+      e nulo (nao ha' celula de data no contrato dela); e' a convencao do exportador do Financeiro. Data como DATA pede mudar a
+      funcao (ou gerar a planilha no navegador): decisao do Gabriel; ligada a' XLSX-DATA-COMO-DATA. Aceito por ora (06/10).
+  · NOME: `contas-a-pagar-receber_{cliente}_{conta|todas}_{AAAA-MM-DD}_a_{AAAA-MM-DD}` (.pdf / .xlsx), sem acento nem espaco.
+  Provas (06/10, 30 dias, Ambos): NJ · Banco do Brasil 8 paginas, Agnaldo · Bradesco 3, NJ · Todas 11 — numeros, tres faixas de
+  dia e o fim iguais a' tela; Excel com 226 / 48 / 313 linhas = contas listadas, somas = rodape, ultima linha de "Saldo por dia" =
+  saldo no fim; "Resumo por conta" do NJ soma caixa 1.283.617,05, a pagar 1.777.374,79 e a receber 114.416,52. Medido a 1.126:
+  barra 2 em 886 de 886 (Exportar 74,9px, 80px de folga), Ampliado barra 1.094 e faixa 1.092, 0 valores cortados.
+  ⚠ DIVIDA CPR-EXPORT-CLIQUE-REAL-01 (homologacao do Gabriel): NAO PROVADO — o CLIQUE REAL em "Exportar ▾ -> PDF" e "-> Excel" (o nome
+    do arquivo salvo pelo navegador, o "Gerando…" voltando); os PDFs do Agnaldo regenerados depois das correcoes visuais (os
+    numeros deles foram conferidos antes delas); o BLOCO DE MAIS DE 30 CONTAS em pagina propria com o cabecalho fixo (caso Agnaldo ·
+    Todas, 31 anteriores); e o detalhe do "Saldo de partida" numa linha (preso por teste da arvore do documento, sem PDF gerado).
+    A janela do Chrome ficou em segundo plano em 06/10 e a geracao em aba oculta nao termina (o navegador segura os temporizadores).
+  ⚠ DIVIDA CPR-EXPORT-LOGO-DO-CLIENTE-01: NAO EXISTE LOGO POR CLIENTE — todo PDF sai com a do AGROinBLUE (decisao do Gabriel pendente).
+  ⚠ DIVIDAS: o PDF pesa 0,5 a 2,9 MB (a logo vai como PNG de 291 KB e o motor a repete por pagina — igual ao executivo) · o
+    regra de seta/tom existe na tela (`CelValor`) e no modelo (`celulaDeValor`): quem mexer numa confere a outra · NAO PROVADO NO
+    NAVEGADOR: o download real pelo clique (a prova capturou o arquivo em memoria e a planilha foi pedida a' `export-xlsx` com o
+    mesmo payload), caixa de vencidos desligada, fazenda filtrada, "de" futuro e "sem vencimento" no PDF (so' por teste).
 - ⚠ A CONTA DIRETO NO CAMPO DE VALOR TEM UM DONO, E GUARDA-SE SO' O RESULTADO (FIN-VALOR-CALC-01a, Gabriel 05/10/2026, so' tela).
   Ele lanca rateios (o cliente manda o valor cheio, o lancamento e' uma parte): digita "16.238,00/2" no campo e fica o
   resultado; a conta NAO vai para observacao nem para lugar nenhum.

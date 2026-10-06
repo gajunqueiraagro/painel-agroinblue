@@ -9,6 +9,7 @@ import {
   periodoDoAtalho, baldeDaConta, recortarCpr, ramoDaConsultaCpr, somarDiasIso, diasEntre, liquidoEmAberto, doSegmentoCpr,
   tituloDoGrupoVencidos, rotuloDoTotal, centavosDaConta, contaDaConta, daContaCpr, resumoPorContaCpr, contasDaFaixaCpr, SEM_CONTA, type ContaCpr,
   ancorasDoCaixaCpr, vencidoContaNoSaldo, serieDoSaldoCpr, linhasDoSaldoCpr,
+  resumoPorSemanaCpr, saldoPorContaCpr,
 } from '@/lib/financeiro/cprRecorte';
 
 const HOJE = '2026-10-05';
@@ -439,7 +440,7 @@ describe('CPR-SALDO-DIA-01 — a tela só renderiza (lido da fonte)', () => {
     const dono = readFileSync(resolve(__dirname, 'cprRecorte.ts'), 'utf8');
     const serie = dono.slice(dono.indexOf('export function serieDoSaldoCpr'), dono.indexOf('export function linhasDoSaldoCpr'));
     expect(serie).not.toContain('incluirVencidos');
-    expect(dono.slice(dono.indexOf('export function linhasDoSaldoCpr'))).not.toContain('incluirVencidos');
+    expect(dono.slice(dono.indexOf('export function linhasDoSaldoCpr'), dono.indexOf('CPR-EXPORT-01'))).not.toContain('incluirVencidos');
   });
   it('setas e cores num lugar só: ▼ a pagar, ▲ a receber, saldo pelo sinal, de COR_SINAL', () => {
     const cel = tela.slice(tela.indexOf('function CelValor('), tela.indexOf('function Faixa('));
@@ -490,7 +491,7 @@ describe('CPR-SALDO-DIA-01 (G/H) — saldo do gráfico sem segmento; Ampliado co
   it('G: a série do dono não conhece segmento', () => {
     const dono = readFileSync(resolve(__dirname, 'cprRecorte.ts'), 'utf8');
     const serie = dono.slice(dono.indexOf('export function serieDoSaldoCpr'));
-    expect(serie).not.toMatch(/segmento|doSegmentoCpr/);
+    expect(serie).not.toMatch(/segmento|doSegmentoCpr/);   // vale também para os agregados da folha exportada, que vêm depois
   });
   it('H: cada controle é UM nó, posicionado na tela normal OU no Ampliado — um estado só', () => {
     for (const ctl of ['ctlVisao', 'ctlAtalho', 'ctlDatas', 'ctlIncluir', 'ctlConta', 'ctlSegmento']) {
@@ -510,5 +511,69 @@ describe('CPR-SALDO-DIA-01 (G/H) — saldo do gráfico sem segmento; Ampliado co
     /* o corpo (Lista ou Fluxo) é o mesmo nos dois modos: trocar a visão não mexe no Ampliado */
     expect(Array.from(tela.matchAll(/<CprFluxoPrevisto/g)).length).toBe(1);
     expect(tela).not.toMatch(/setVisao\([^)]*\)[^\n]*setAmpliado|setAmpliado\(false\)[^\n]*setVisao/);
+  });
+});
+
+describe('CPR-EXPORT-01 — agregados da folha exportada, no dono e em centavos', () => {
+  const ANC = new Map([['A', '2026-09-30'], ['B', '2026-08-31']]);
+  const sai = (venc: string, valor: number, c: string | null = 'A') => conta(venc, valor, { conta_bancaria_id: c });
+  const entra = (venc: string, valor: number, c: string | null = 'A') => conta(venc, valor, { tipo_operacao: '1-Entradas', conta_destino_id: c });
+  /* 05/10/2026 é segunda-feira */
+  const linhas = [
+    sai('2026-10-02', 100.10),                                   // vencido que conta
+    sai('2026-10-05', 0.10), sai('2026-10-05', 0.20),            // seg — centavos
+    entra('2026-10-11', 1000),                                   // dom da 1ª semana
+    sai('2026-10-12', 5000),                                     // seg da 2ª
+    sai('2026-10-30', 70.07), sai('2026-11-02', 30.03),          // 5ª semana cruza o mês (26/10–01/11); 6ª começa em 02/11
+    sai('2026-09-15', 40.40, 'B'), sai('2026-10-20', 60.60, 'B'), sai('2026-10-21', 9.99, null),
+  ];
+  const rec = (conta?: string | null, periodo = D30) => recortarCpr(linhas, { periodo, hoje: HOJE, incluirVencidos: true, ancoras: ANC, conta });
+  it('a série diz TUDO o que consome: hoje − a pagar + a receber = fim', () => {
+    const s = serieDoSaldoCpr(rec('A'), 1000);
+    expect(s.totalPagar).toEqual({ valor: 5200.50, contas: 6 });
+    expect(s.totalReceber).toEqual({ valor: 1000, contas: 1 });
+    expect(Math.round(((s.hoje ?? 0) - s.totalPagar.valor + s.totalReceber.valor) * 100)).toBe(Math.round((s.fim ?? 0) * 100));
+  });
+  it('resumo por semana: segunda a domingo, cortado no período; semana sem conta repete o saldo; cruza o mês', () => {
+    const s = serieDoSaldoCpr(rec('A'), 1000);
+    const w = resumoPorSemanaCpr(s, D30);
+    expect(w.map(x => [x.de, x.ate])).toEqual([
+      ['2026-10-05', '2026-10-11'], ['2026-10-12', '2026-10-18'], ['2026-10-19', '2026-10-25'], ['2026-10-26', '2026-11-01'], ['2026-11-02', '2026-11-04'],
+    ]);
+    expect(w[0]).toMatchObject({ pagar: 0.30, receber: 1000, saldo: 1899.60 });      // 1000 − 100,10 − 0,30 + 1000
+    expect(w[1]).toMatchObject({ pagar: 5000, receber: 0, saldo: -3100.40 });
+    expect(w[2]).toMatchObject({ pagar: 0, receber: 0, saldo: -3100.40 });           // semana sem conta: o saldo anterior
+    expect(w[3]).toMatchObject({ pagar: 70.07, receber: 0, saldo: -3170.47 });       // 26/10 a 01/11: cruza o mês
+    expect(w[4]).toMatchObject({ pagar: 30.03, receber: 0, saldo: -3200.50 });
+    /* a última semana fecha no saldo no fim, e as semanas somam o período da série, ao centavo */
+    expect(w[w.length - 1].saldo).toBe(s.fim);
+    const c = (v: number) => Math.round(v * 100);
+    expect(w.reduce((t, x) => t + c(x.pagar), 0)).toBe(s.dias.reduce((t, d) => t + c(d.pagar.valor), 0));
+  });
+  it('resumo por semana: período de um dia; período invertido; sem saldo em caixa', () => {
+    const umDia = { de: '2026-10-12', ate: '2026-10-12' };
+    const w = resumoPorSemanaCpr(serieDoSaldoCpr(rec('A', umDia), 1000), umDia);
+    expect(w).toEqual([{ de: '2026-10-12', ate: '2026-10-12', pagar: 5000, receber: 0, saldo: -3100.40 }]);   // 1000 − 100,10, depois "entre hoje e de" (−0,30 + 1000), depois −5000
+    expect(resumoPorSemanaCpr(serieDoSaldoCpr(rec('A'), 1000), { de: '2026-10-20', ate: '2026-10-10' })).toEqual([]);
+    const semCaixa = resumoPorSemanaCpr(serieDoSaldoCpr(rec('A'), null), D30);
+    expect(semCaixa.every(x => x.saldo === null)).toBe(true);
+    expect(semCaixa[1].pagar).toBe(5000);
+  });
+  it('saldo por conta: a soma das contas é o total de "Todas" (a pagar, a receber e caixa); sem caixa o saldo é nulo', () => {
+    const caixa: Record<string, number> = { A: 1000, B: 250.25, C: 7, ZERADA: 0 };
+    const por = saldoPorContaCpr(linhas, { periodo: D30, hoje: HOJE, incluirVencidos: true, ancoras: ANC }, (c) => caixa[c] ?? null, ['A', 'B', 'C', 'ZERADA', 'SEM_ANCORA']);
+    /* a conta zerada e sem movimento e a sem caixa e sem movimento NÃO entram; a busca sabe achar (C, só com caixa, entra) */
+    expect(por.some(x => x.conta === 'ZERADA' || x.conta === 'SEM_ANCORA')).toBe(false);
+    const todas = serieDoSaldoCpr(rec(null), 1257.25);
+    const c = (v: number | null) => Math.round((v ?? 0) * 100);
+    expect(por.map(x => x.conta).sort()).toEqual(['A', 'B', 'C', SEM_CONTA].sort());
+    expect(por.reduce((t, x) => t + c(x.pagar.valor), 0)).toBe(c(todas.totalPagar.valor));
+    expect(por.reduce((t, x) => t + c(x.receber.valor), 0)).toBe(c(todas.totalReceber.valor));
+    expect(por.reduce((t, x) => t + c(x.caixa), 0)).toBe(c(todas.hoje));
+    expect(por.find(x => x.conta === 'B')).toMatchObject({ caixa: 250.25, pagar: { valor: 101, contas: 2 }, fim: 149.25 });   // 15/09 conta na B (âncora 31/08)
+    expect(por.find(x => x.conta === SEM_CONTA)).toMatchObject({ caixa: null, fim: null, pagar: { valor: 9.99, contas: 1 } });
+    expect(por.find(x => x.conta === 'C')).toMatchObject({ caixa: 7, fim: 7 });          // só tem caixa: entra, para a soma do caixa fechar
+    /* cada linha fecha sozinha */
+    for (const x of por) if (x.caixa != null) expect(c(x.caixa) - c(x.pagar.valor) + c(x.receber.valor)).toBe(c(x.fim));
   });
 });
