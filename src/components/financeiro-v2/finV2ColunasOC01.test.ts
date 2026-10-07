@@ -110,4 +110,13 @@ describe('passo 3 — clipe, Doc. e origem (lidos da fonte da lista)', () => {
     expect(tela).toContain('<button type="button" className="block w-full cursor-pointer" aria-label={`${stLabel} · origem: ${icone.significado}`}>{rotulo}</button>');
     expect(tela).toContain('if (!icone) return rotulo;');
   });
+  it('passo 5 — parcela de parcelamento: o nome corta e o "i/N" do CONTRATO fica numa parte que não corta; a tela não monta o texto', () => {
+    expect(tela).toContain('const np = nomeEParcela(descExibida, parcelasDosLancamentos?.get(l.id));');
+    expect(tela).toContain('<span className="shrink-0 whitespace-nowrap tabular-nums" data-testid="parcela-i-n">{np.parcela}</span>');
+    expect(tela).toContain('<span className="min-w-0 truncate">');
+    /* nenhuma descrição de parcela montada na tela: nem "Parcela ${", nem "/${" colado a um total */
+    expect(tela).not.toMatch(/Parcela \$\{/);
+    /* a busca sabe achar: o padrão proibido existe no painel legado de compra */
+    expect(readFileSync(resolve(__dirname, '../CompraFinanceiroPanel.tsx'), 'utf8')).toMatch(/Parcela \$\{/);
+  });
 });

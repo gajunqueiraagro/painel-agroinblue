@@ -18,6 +18,8 @@ import { useLancamentosConciliados, desfazerVinculo, desfazerGrupo } from '@/hoo
 import { useLancamentosComOC, rotuloOrigemOC } from '@/hooks/useLancamentosComOC';
 import { iconeOrigemLancamento } from '@/v2/lib/origemLancamento';
 import { useDocumentosDoCliente } from '@/hooks/useDocumentosDoCliente';
+import { useParcelasDosLancamentos } from '@/hooks/useParcelasDosLancamentos';
+import { nomeEParcela } from '@/lib/financiamentos/nomeDaParcela';
 import { docDaLinha } from '@/lib/financeiro/documentoHelper';
 import { MinimodalOrigemLancamento } from '@/components/financeiro-v2/MinimodalOrigemLancamento';
 import { useCoberturaExtrato } from '@/hooks/useCoberturaExtrato';
@@ -262,6 +264,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   /* PARC-LIVRES-01 passo 3 — os documentos por lançamento (os dele e os LIGADOS a ele: a nota da compra nas N parcelas), da mesma
      fonte da aba Documentos. É o que acende o clipe e dá o "NF 000.000.NNN" à parcela que não tem número próprio. */
   const { data: documentosPorLancamento } = useDocumentosDoCliente(clienteAtual?.id ?? null);
+  const { data: parcelasDosLancamentos } = useParcelasDosLancamentos(clienteAtual?.id);
 
   /**
    * PR-FORN-01 — as opções e a contagem saem do RECORTE CARREGADO, não do catálogo.
@@ -2683,6 +2686,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                         && !l.descricao.includes('Parc.') && l.descricao.includes(' — '))
                       ? l.descricao.slice(0, l.descricao.indexOf(' — '))
                       : l.descricao;
+                    /* PARC-LIVRES-01 passo 5 — parcela de parcelamento: o "i/N" vem do CONTRATO e fica numa parte que nunca corta;
+                       o nome corta antes dele. Sem parcela de contrato a célula é a de sempre. */
+                    const np = nomeEParcela(descExibida, parcelasDosLancamentos?.get(l.id));
                     /* ⚠ CONCILIADO É DERIVADO, e é por isso que a chave se
                        calcula aqui em vez de vir do banco: existe vínculo ativo →
                        conciliado; não existe → o status persistido, intocado. A
@@ -2801,9 +2807,14 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                             );
                           })()}
                         </td>
-                        <td className="truncate px-1 py-1 align-middle text-[12px] font-medium leading-tight" title={isParcelaFinanciamento ? `Parcela de financiamento (origem automática) — ${descExibida || ''}` : (descExibida || '')}>
-                          {isParcelaFinanciamento && <span className="mr-1" title="Parcela de financiamento">🏦</span>}
-                          {descExibida || '-'}
+                        <td className="truncate px-1 py-1 align-middle text-[12px] font-medium leading-tight" title={isParcelaFinanciamento ? `Parcela de financiamento (origem automática) — ${np.inteiro || ''}` : (np.inteiro || '')}>
+                          {isParcelaFinanciamento && !np.parcela && <span className="mr-1" title="Parcela de financiamento">🏦</span>}
+                          {np.parcela ? (
+                            <span className="flex min-w-0 items-baseline gap-1" data-testid="nome-com-parcela">
+                              <span className="min-w-0 truncate">{isParcelaFinanciamento && <span className="mr-1" title="Parcela de financiamento">🏦</span>}{np.nome || '-'}</span>
+                              <span className="shrink-0 whitespace-nowrap tabular-nums" data-testid="parcela-i-n">{np.parcela}</span>
+                            </span>
+                          ) : <>{descExibida || '-'}</>}
                           {l.movimentacao_rebanho_id && (
                             <Tooltip>
                               <TooltipTrigger asChild>

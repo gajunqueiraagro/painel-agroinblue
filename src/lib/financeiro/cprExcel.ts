@@ -25,7 +25,7 @@ export function montarPayloadExcelCpr<L extends LinhaDaTela>(e: {
       const receber = e.de.receber(l);
       contas.push({
         'Comp.': dataCheia(l.data_competencia), 'Venc.': dataCheia(l.data_vencimento), 'Pgto.': c.paga ? dataCheia(l.data_pagamento) : '',
-        'Descrição': c.descricao, 'Fornecedor': c.fornecedor, 'Conta': c.conta, 'Subcentro': c.subcentro, 'Centro': c.centro, 'Macro': c.macro,
+        'Descrição': c.parcela ? `${c.descricao === '—' ? '' : c.descricao} ${c.parcela}`.trim() : c.descricao, 'Fornecedor': c.fornecedor, 'Conta': c.conta, 'Subcentro': c.subcentro, 'Centro': c.centro, 'Macro': c.macro,
         'Safra': c.safra, 'Faz.': c.faz, 'Status': c.status, 'Origem': c.origem, 'Doc': c.doc,
         'A pagar': receber ? null : numero(l.valor), 'A receber': receber ? numero(l.valor) : null,
         'Grupo': c.paga ? 'paga (não soma)' : ROTULO_DO_GRUPO[g.tipo],

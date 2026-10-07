@@ -101,13 +101,13 @@ BEGIN
   select q.id, q.lancamento_id, q.numero_parcela into v_novo from financiamento_parcelas q where q.financiamento_id = v_fin and q.status <> 'cancelado' and q.id not in (p1.id, p2.id, p3.id);
   IF v_novo.numero_parcela <> 4 OR NOT EXISTS (select 1 from financeiro_lancamentos_v2 l where l.id = v_novo.lancamento_id and l.safra_id = v_safra and l.forma_pagamento = 'Boleto'
         and l.plano_conta_id = v_plano and l.status_transacao = 'programado' and l.data_pagamento is null and l.fazenda_id = v_faz and l.data_competencia = date '2031-01-10'
-        and l.valor = 119.45 and l.data_vencimento = date '2031-07-01' and l.descricao = 'SINT parc-2b - Parcela 4/4' and l.origem_lancamento is null) THEN
+        and l.valor = 119.45 and l.data_vencimento = date '2031-07-01' and l.descricao = 'SINT parc-2b 4/4' and l.origem_lancamento is null) THEN
     RAISE EXCEPTION 'E1 (d): a parcela acrescentada nao herdou a classificacao'; END IF;
   IF NOT EXISTS (select 1 from financeiro_documento_vinculos v where v.documento_id = v_doc and v.lancamento_id = v_novo.lancamento_id) THEN RAISE EXCEPTION 'E1 (d): a acrescentada nao herdou a NF'; END IF;
   IF (select count(*) from financeiro_documento_vinculos v where v.documento_id = v_doc) <> 4 THEN RAISE EXCEPTION 'E1 (d): os vinculos da NF mudaram (a retirada segue ligada, como toda parcela cancelada)'; END IF;
   -- nomes coerentes
   select string_agg(l.descricao, ' | ' order by q.numero_parcela) into v_txt from financiamento_parcelas q join financeiro_lancamentos_v2 l on l.id = q.lancamento_id where q.financiamento_id = v_fin and q.status <> 'cancelado';
-  IF v_txt <> 'SINT parc-2b - Parcela 1/4 | SINT parc-2b - Parcela 2/4 | SINT parc-2b - Parcela 3/4 | SINT parc-2b - Parcela 4/4' THEN RAISE EXCEPTION 'E1: nomes %', v_txt; END IF;
+  IF v_txt <> 'SINT parc-2b 1/4 | SINT parc-2b 2/4 | SINT parc-2b 3/4 | SINT parc-2b 4/4' THEN RAISE EXCEPTION 'E1: nomes %', v_txt; END IF;
 
   -- o N muda: tira a 3 -> "1/3 2/3 3/3"; na PAGA so' o trecho i/N do nome muda; nome editado a' mao fica
   update financeiro_lancamentos_v2 set descricao = 'Nome posto à mão' where id = p2.lancamento_id;
@@ -116,7 +116,7 @@ BEGIN
            jsonb_build_object('id', p2.id, 'data_vencimento', '2031-03-25', 'valor', 130.55),
            jsonb_build_object('id', v_novo.id, 'data_vencimento', '2031-07-01', 'valor', 119.45)), 350);
   select string_agg(l.descricao, ' | ' order by q.numero_parcela) into v_txt from financiamento_parcelas q join financeiro_lancamentos_v2 l on l.id = q.lancamento_id where q.financiamento_id = v_fin and q.status <> 'cancelado';
-  IF v_txt <> 'SINT parc-2b - Parcela 1/3 | Nome posto à mão | SINT parc-2b - Parcela 3/3' THEN RAISE EXCEPTION 'E1: nomes depois de tirar uma: %', v_txt; END IF;
+  IF v_txt <> 'SINT parc-2b 1/3 | Nome posto à mão | SINT parc-2b 3/3' THEN RAISE EXCEPTION 'E1: nomes depois de tirar uma: %', v_txt; END IF;
   IF (select (l.status_transacao, l.data_pagamento, l.valor, l.data_vencimento) from financeiro_lancamentos_v2 l where l.id = p1.lancamento_id) IS DISTINCT FROM ('realizado'::text, date '2031-02-10', 100::numeric, date '2031-02-10') THEN
     RAISE EXCEPTION 'E1: a paga mudou alem do nome'; END IF;
 

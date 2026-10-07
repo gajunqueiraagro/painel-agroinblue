@@ -82,7 +82,13 @@ function LinhaDaConta({ c, comConta, zebra }: { c: ContaDaFolha; comConta: boole
       <Text style={{ ...t, width: W.comp }}>{c.comp}</Text>
       <Text style={{ ...t, width: W.venc }}>{c.venc}</Text>
       {comConta ? <Corta texto={c.conta} largura={W.conta} cor={COR.cinzaMedio} /> : null}
-      <Corta texto={c.descricao} cor={COR.cinza} />
+      {/* PARC-LIVRES-01 passo 5 — parcela de parcelamento: o nome corta e o "i/N" (do contrato) fica inteiro ao lado */}
+      {c.parcela ? (
+        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', paddingRight: 5 }}>
+          <View style={{ flexShrink: 1 }}><Text hyphenationCallback={semHifen} style={{ ...corta, fontSize: F, color: COR.cinza }}>{c.descricao}</Text></View>
+          <Text style={{ fontSize: F, color: COR.cinza, marginLeft: 3, flexShrink: 0 }}>{c.parcela}</Text>
+        </View>
+      ) : <Corta texto={c.descricao} cor={COR.cinza} />}
       <Corta texto={c.fornecedor} largura={wForn(comConta)} cor={COR.cinzaMedio} />
       <Corta texto={c.subcentro} largura={wSub(comConta)} cor={COR.cinzaMedio} />
       <Text style={{ ...t, width: W.safra }}>{c.safra}</Text>

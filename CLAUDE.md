@@ -162,7 +162,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 06/10/2026 (PARC-LIVRES-01 passo 3, +18: `src/lib/financeiro/docDaLinha.test.ts` 10,
+  Baseline em 06/10/2026 (PARC-LIVRES-01 passo 5, +16: `src/lib/financiamentos/nomeDaParcela.test.ts` 9, `src/lib/pdf/cpr/parcelaNoPdf.test.ts` 6,
+  `src/components/financeiro-v2/finV2ColunasOC01.test.ts` 1 — 4350 depois dele; antes o
+  PARC-LIVRES-01 passo 3, +18: `src/lib/financeiro/docDaLinha.test.ts` 10,
   `src/components/financeiro-v2/notaDaCompraNoModal.test.tsx` 5, `src/components/financeiro-v2/finV2ColunasOC01.test.ts` 3 — 4334 depois dele; antes o
   PARC-LIVRES-01 passo 4, +8: `src/components/financiamentos/obrigacaoEdicao.test.tsx` +5 (6 novos do passo 4; saiu 1 do 2A, o do lápis apagado no
   detalhe, com a regra que ele prendia), `src/lib/financiamentos/situacaoDoContrato.test.ts` 3 — 4316 depois dele; antes o
@@ -229,7 +231,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4334
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4350
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3227,6 +3229,48 @@ docs/historico/frentes-ate-2026-09-29.md.)
     emprestimo de `obrigacaoDialog.fotos.json` foram REGRAVADAS: a foto e' do `body` inteiro e a pagina do contrato atras do
     dialogo mudou (o dialogo nao foi tocado neste passo) · financiamento COM JUROS e 'parcial' nao foram vistos no navegador (so'
     por teste).
+- ⚠ O NOME DA PARCELA E' "Descrição i/N", E QUEM O FORMA E' O BANCO (PARC-LIVRES-01 passo 5, Gabriel 06/10/2026; migration
+  20261027194400, ⚠ registrada como 20261007020914; ledger = arquivo, md5 bc79a75e…; patch guardado por md5:
+  `fn_parcelamento_cadastrar` 7d9874b0… -> a86837e1…, `fn_parcelamento_editar_parcelas` 04ec64c3… -> 1fbb077a…).
+  · UM DONO DO TEXTO: `_fn_parcela_descricao(descricao, i, N)` = `descricao || ' ' || i || '/' || N` ("Manutenção Cercas 2/3"; era
+    "… - Parcela i/N"; md5 4b2982c6…). Usam-no o nascimento (os dois modos; antes o cadastro montava o texto no proprio corpo) e a
+    parcela acrescentada na edicao. O FRONT NAO MONTA DESCRICAO DE PARCELA DE PARCELAMENTO em lugar nenhum.
+  · QUANDO N MUDA NA EDICAO: `_fn_parcela_renumerar(nome, i_antes, N_antes, i, N)` (md5 a6add78e…) troca SO' o trecho
+    "i_antes/N_antes" do FIM do nome (precedido de espaco, ou sozinho) — forma nova e forma ANTIGA ("… - Parcela 2/3" vira
+    "… - Parcela 2/4": o existente nao e' renomeado, so' fica coerente); nome que nao termina nesse trecho (posto a' mao) fica;
+    "12/3" nao e' "2/3". Na paga so' o nome muda. ⚠ Contrato antigo que ganha parcela fica com DUAS formas (a acrescentada nasce
+    na nova).
+  · NA TELA O "i/N" VEM DO CONTRATO, NUMA PARTE QUE NUNCA CORTA: `fn_parcelas_dos_lancamentos(cliente)` (LEITURA; jsonb
+    `{lancamento_id: [numero, total]}`; so' contrato de natureza 'parcelamento' e parcela viva; SECURITY DEFINER com `tenant_ok` e
+    42501; md5 3fcc9033…) -> `useParcelasDosLancamentos` (uma leitura por cliente, relida pelo canal) -> o dono puro
+    `nomeEParcela(descricao, parcela)` (`src/lib/financiamentos/nomeDaParcela.ts`) -> `{ nome, parcela, inteiro }`. O texto so' e'
+    LIDO para nao escrever o "i/N" duas vezes: sai do nome o MESMO "i/N" do contrato no fim ("X 2/3", "X - Parcela 2/3", "X Parc.
+    2/3") ou no comeco ("Parcela 2/3 X", a forma do motor); "i/N" DIFERENTE do contrato fica no nome como esta'.
+    Onde vale: Produto da lista de Lançamentos (`nome-com-parcela` / `parcela-i-n`), Descricao da CPR (`cpr-parcela-i-n`), o PDF da
+    CPR (`ContaDaFolha.parcela`, um `Text` que nao encolhe; o resolvedor `de.parcela` e' opcional — sem ele o modelo e' o de antes)
+    e o Excel (nome + "i/N" na mesma celula). O nome inteiro vai no `title`. Financiamento com juros e OC: fora (a descricao como
+    esta').
+  Medido a 1.126 x 579 no cliente Teste (parcelamento sintetico de nome longo, 3 x 33.333.333,33, criado pela RPC e APAGADO):
+  nasceu "… 1/3 | … 2/3 | … 3/3"; lista: "1/3" 15px inteiro, nome cortado em 104 de 131px, linha de 25px; CPR: "1/3" 16,6px
+  inteiro, nome cortado em 164 de 185px, linha de 18px.
+  Testes: `supabase/tests/parc_livres_01_5_test.sql` (N1–N5); `parc_livres_01_test.sql` e `_2b_test.sql` atualizados ao nome novo;
+  6 mutacoes de banco e 5 do dono da tela mortas.
+  · EXISTENTES, SO' MEDIDO (06/10; NADA RENOMEADO — renomear em massa e' script a' parte, com ensaio revertido e OK do Gabriel):
+    lancamentos de contrato de PARCELAMENTO — NJ 82 (67 na forma antiga gerada, 5 na do motor "Parcela i/N Protocolo IATF", 10 com
+    outro nome, ex. "Adensado/Nucleo - 1/3"); Vera 14 (11 + 0 + 3, ex. "Balança Pesagem - 2/2"); Teste 6 (cancelados).
+    Em TODOS os lancamentos vivos (regex, contagem aproximada): "… - Parcela i/N" NJ 155 · Vera 31 · Santa Rita 29 · RRCC 2 ·
+    Agnaldo 1 (quase todos dos paineis legados de abate/compra/venda, ex. "Abate 18 Garrotes - Parcela 1/1"); "Parcela i/N …" NJ
+    5; "Parc N" NJ 79 · Agnaldo 29 · RRCC 19 · Santa Rita 9 (ex. "4 pneus PA carregadeira W130 - parc 4/8"); "Parcela N - None"
+    NJ 59 (Lucro Rural, ex. "Manutenção e conserto · Parcela 3 - None" — listado, nao tocado).
+  · OUTROS ESCRITORES DE "Parcela" (relatados, NAO tocados): front legado — `CompraFinanceiroPanel.tsx` ~:403,
+    `AbateFinanceiroPanel.tsx` ~:361, `VendaFinanceiroPanel.tsx` ~:687, `compra/gerarFinanceiroCompra.ts` ~:108,
+    `useBoitelOperacoes.ts` ~:336 (todos "X - Parcela i/N"); banco — o motor do financiamento com juros
+    (`fn_reconciliar_parcela_financiamento`, "Parcela i/N Descricao") e a OC (sufixo "i/N" das parcelas de compromisso).
+  ⚠ DIVIDAS: PARC-NOME-RENOMEAR-EXISTENTES-01 (o script de renomear os existentes, nao escrito) · a tela de Recorrencias, o
+    Fluxo e os demais lugares que mostram descricao NAO separam o "i/N" (so' lista, CPR, PDF e Excel) · a BUSCA da lista por
+    texto segue sobre `l.descricao` · NAO PROVADO: o PDF gerado de verdade com parcela (a aba do Chrome estava em segundo plano
+    e a geracao nao termina; provado pelo modelo e pela fonte), o Excel baixado, o Ampliado, a janela de 523 de altura (estava
+    em 579), e a forma antiga / a do motor NO NAVEGADOR com dado real do NJ (so' por teste).
 - ⚠ O DOCUMENTO DA LINHA TEM UM DONO: `docDaLinha` (PARC-LIVRES-01 passo 3, Gabriel 06/10/2026, so' tela, sem banco). Puro, em
   `src/lib/financeiro/documentoHelper.ts`: `docDaLinha(lancamento {tipo_documento, numero_documento}, documentos) -> { rotulo,
   origem 'lancamento'|'nota'|'documento'|null, clipe, resumo }`. A coluna Doc. e o clipe da lista de Lançamentos, o bloco

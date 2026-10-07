@@ -52,6 +52,8 @@ import { useNomesDeFornecedores } from '@/hooks/useNomesDeFornecedores';
 import { ChevronDown, Maximize2, Minimize2, Paperclip } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { montarModeloCpr, nomeDoArquivoCpr, type EntradaDoModelo } from '@/lib/pdf/cpr/modeloCpr';
+import { useParcelasDosLancamentos } from '@/hooks/useParcelasDosLancamentos';
+import { nomeEParcela } from '@/lib/financiamentos/nomeDaParcela';
 import { montarPayloadExcelCpr } from '@/lib/financeiro/cprExcel';
 import { triggerXlsxDownload } from '@/lib/xlsxDownload';
 import { COR_SINAL } from '@/lib/oc/contaCorrente';
@@ -676,6 +678,8 @@ export function ContasPagarReceberTab({ onIntensiveToggle }: {
    * mesmo padrão do mapa de conciliação do Extrato Gerencial. Nenhum join novo.
    */
   const idsVisiveis = useMemo(() => linhas.map((l) => l.id).sort(), [linhas]);
+  /* PARC-LIVRES-01 passo 5 — o "i/N" da parcela de parcelamento vem do CONTRATO, numa parte que nunca corta (lista, PDF e Excel). */
+  const { data: parcelasDosLancamentos } = useParcelasDosLancamentos(clienteId);
   const { data: comAnexo } = useQuery({
     queryKey: ['cpr-anexos', clienteId, idsVisiveis.length, idsVisiveis[0] ?? ''],
     enabled: !!clienteId && idsVisiveis.length > 0,
@@ -930,6 +934,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle }: {
     origem: (l) => rotuloOrigem(l.origem_lancamento),
     doc: (l) => ((l.numero_documento ?? '').trim() ? (l.documento_formatado ?? '') : ''),
     receber: (l) => ehReceber(l),
+    parcela: (l) => parcelasDosLancamentos?.get(l.id) ?? null,
     paga: (l) => !contaEmAberto(l),
   };
   const identidadeDoArquivo = {
@@ -1357,7 +1362,11 @@ export function ContasPagarReceberTab({ onIntensiveToggle }: {
                     /* ⚠ Doc exige o guarda do `numero_documento`: sem número, `documento_formatado` degrada para o nome do TIPO. */
                     const doc = (l.numero_documento ?? '').trim() ? (l.documento_formatado ?? '') : '';
                     /* Origem, Doc e Conta saíram da grade: moram no `title` da Descrição. */
-                    const dicaDescricao = `${l.descricao || '—'}\norigem: ${rotuloOrigem(l.origem_lancamento)} · doc: ${doc || '—'} · conta: ${nomeConta(contaDaConta(l))}`;
+                    const np = nomeEParcela(l.descricao, parcelasDosLancamentos?.get(l.id));
+                    const seloDaParcela = np.parcela
+                      ? <span className="shrink-0 whitespace-nowrap tabular-nums text-foreground" data-testid="cpr-parcela-i-n">{np.parcela}</span>
+                      : null;
+                    const dicaDescricao = `${np.inteiro || '—'}\norigem: ${rotuloOrigem(l.origem_lancamento)} · doc: ${doc || '—'} · conta: ${nomeConta(contaDaConta(l))}`;
                     /* REC-VALOR-CERTO-02 — a conta ESTIMADA (pelo conjunto da regra única): selo depois da descrição e valor em âmbar. */
                     const estimada = !paga && contaEstimadaCpr(l, estimadas);
                     const celValor = (
@@ -1397,11 +1406,18 @@ export function ContasPagarReceberTab({ onIntensiveToggle }: {
                         {estimada ? (
                           /* a descrição corta ANTES do selo; o selo nunca corta, e a linha segue com 18px */
                           <span className="flex min-w-0 flex-1 items-center gap-1" data-celula-descricao>
-                            <span className="min-w-0 truncate text-foreground" title={dicaDescricao}>{l.descricao || '—'}</span>
+                            <span className="min-w-0 truncate text-foreground" title={dicaDescricao}>{np.nome || '—'}</span>
+                            {seloDaParcela}
                             <span data-testid="cpr-selo-estimado" title={tituloDoSelo}
                               className="h-[14px] shrink-0 whitespace-nowrap rounded bg-amber-100 px-1 text-[9px] leading-[14px] text-amber-700">
                               estimado
                             </span>
+                          </span>
+                        ) : seloDaParcela ? (
+                          /* o nome corta ANTES do "i/N"; o "i/N" nunca corta */
+                          <span className="flex min-w-0 flex-1 items-center gap-1" data-celula-descricao>
+                            <span className="min-w-0 truncate text-foreground" title={dicaDescricao}>{np.nome || '—'}</span>
+                            {seloDaParcela}
                           </span>
                         ) : (
                           <span className="min-w-0 flex-1 truncate text-foreground" title={dicaDescricao} data-celula-descricao>

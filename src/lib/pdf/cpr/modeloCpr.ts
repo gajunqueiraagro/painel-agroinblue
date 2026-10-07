@@ -6,6 +6,7 @@
  * tela mostra no momento do clique. O documento do PDF recebe este modelo e só desenha.
  * ⚠ SEM DEPENDÊNCIA DO MOTOR (react-pdf): quem monta o modelo é a tela, antes de decidir gerar.
  */
+import { nomeEParcela, type ParcelaDoContrato } from '@/lib/financiamentos/nomeDaParcela';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import type { PeriodoCpr, SerieDoSaldoCpr, SemanaCpr, SaldoDaContaCpr, LadoCpr } from '@/lib/financeiro/cprRecorte';
 
@@ -33,7 +34,9 @@ export const datasDoModelo = { dma, dm };
 
 /** Uma linha de CONTA (lançamento) da tabela — tudo texto. */
 export interface ContaDaFolha {
-  comp: string; venc: string; pgto: string; descricao: string; fornecedor: string; conta: string; subcentro: string; centro: string;
+  comp: string; venc: string; pgto: string; descricao: string;
+  /** PARC-LIVRES-01 passo 5 — o "i/N" do CONTRATO, que nunca corta; '' quando a conta não é parcela de parcelamento. */
+  parcela: string; fornecedor: string; conta: string; subcentro: string; centro: string;
   macro: string; safra: string; faz: string; status: string; statusChave: string; origem: string; doc: string;
   /** o valor cai na coluna do SEU lado, sem seta */
   pagar: string; receber: string; paga: boolean;
@@ -91,6 +94,8 @@ export interface EntradaDoModelo<L extends LinhaDaTela> {
     centro: (l: L) => string; macro: (l: L) => string; safra: (l: L) => string; faz: (l: L) => string;
     status: (l: L) => { chave: string; rotulo: string }; origem: (l: L) => string; doc: (l: L) => string;
     receber: (l: L) => boolean; paga: (l: L) => boolean;
+    /** o número e o total da parcela NO CONTRATO (lidos do banco); ausente = a descrição como está */
+    parcela?: (l: L) => ParcelaDoContrato | null;
   };
 }
 
@@ -107,9 +112,10 @@ export function contaDaFolha<L extends LinhaDaTela>(l: L, de: EntradaDoModelo<L>
   const receber = de.receber(l), paga = de.paga(l);
   const st = de.status(l);
   const texto = Number.isFinite(v) ? formatMoeda(v) : '—';
+  const np = nomeEParcela(l.descricao, de.parcela ? de.parcela(l) : null);
   return {
     comp: ma(l.data_competencia), venc: dmaCurto(l.data_vencimento), pgto: paga ? dmaCurto(l.data_pagamento) : '',
-    descricao: l.descricao || '—', fornecedor: de.fornecedor(l), conta: de.conta(l), subcentro: de.subcentro(l), centro: de.centro(l),
+    descricao: (np.parcela ? np.nome : l.descricao) || '—', parcela: np.parcela ?? '', fornecedor: de.fornecedor(l), conta: de.conta(l), subcentro: de.subcentro(l), centro: de.centro(l),
     macro: de.macro(l), safra: de.safra(l), faz: de.faz(l), status: st.rotulo, statusChave: st.chave, origem: de.origem(l), doc: de.doc(l),
     pagar: receber ? '' : texto, receber: receber ? texto : '', paga,
   };

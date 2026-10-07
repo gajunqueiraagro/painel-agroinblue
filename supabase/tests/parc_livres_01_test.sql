@@ -41,11 +41,11 @@ BEGIN
   IF (r.total_parcelas, r.valor_total, r.data_primeira_parcela) IS DISTINCT FROM (7, 110000.00::numeric, date '2026-05-23') THEN
     RAISE EXCEPTION 'T2: contrato %', r; END IF;
   IF (select sum(p.valor_total) from financiamento_parcelas p where p.financiamento_id = v_id) <> 110000.00 THEN RAISE EXCEPTION 'T2: soma'; END IF;
-  -- cada lancamento = a parcela dele: valor, vencimento, programado, sem pagamento, descricao "Parcela i/7"
+  -- cada lancamento = a parcela dele: valor, vencimento, programado, sem pagamento, descricao "… i/7" (passo 5: "Descricao i/N")
   IF (select count(*) from financiamento_parcelas p join financeiro_lancamentos_v2 l on l.id = p.lancamento_id
        where p.financiamento_id = v_id and l.valor = p.valor_total and l.data_vencimento = p.data_vencimento
          and l.status_transacao = 'programado' and l.data_pagamento is null and l.financiamento_id = v_id
-         and l.descricao = 'SINT parc-livres-01 - Parcela ' || p.numero_parcela || '/7') <> 7 THEN
+         and l.descricao = 'SINT parc-livres-01 ' || p.numero_parcela || '/7') <> 7 THEN
     RAISE EXCEPTION 'T2: lancamentos nao espelham as parcelas'; END IF;
   -- lista fora de ordem no array: quem manda e' o numero
   v_id := fn_parcelamento_cadastrar(v_base || jsonb_build_object('valor_total', 30, 'total_parcelas', 2, 'parcelas',
