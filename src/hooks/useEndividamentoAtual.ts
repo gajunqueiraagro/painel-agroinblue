@@ -21,6 +21,9 @@
  * NÃO calcula: histórico anual, mensal, cronograma, credor, parcelas enriquecidas,
  * evolução. Para isso, usar `useFinanciamentosPainel`.
  */
+import { lerSituacaoEmLoteDoBanco } from '@/hooks/useSituacaoDoContrato';
+import { parcelasDoLote } from '@/lib/financiamentos/situacaoEmLote';
+import { hojeLocal } from '@/lib/datas/hojeLocal';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -146,13 +149,12 @@ export function useEndividamentoAtual(anoBase?: number): EndividamentoAtual {
       // 2) Parcelas relevantes: em aberto OU pagas dentro da janela coberta pelas séries.
       //    Janela = início do ano anterior ao anoBase OU dataCorteAnoAnt (o que for menor).
       const inicioCobertura = `${Math.min(anoBaseEff - 1, anoHoje - 1)}-01-01`;
-      const { data: parcs, error: e2 } = await supabase
-        .from('financiamento_parcelas')
-        .select('financiamento_id, valor_principal, valor_juros, data_vencimento, data_pagamento')
-        .in('financiamento_id', ids)
-        .neq('status', 'cancelado')
-        .or(`data_pagamento.is.null,data_pagamento.gte.${inicioCobertura}`);
-      if (e2) throw e2;
+      /* PARC-FECHA-02 item 2 — do DONO da situação (o lote sobre `fn_financiamento_situacao`): a data de pagamento é a do
+         LANÇAMENTO, não a coluna da parcela (que ficava nula quando se pagava pelo Financeiro); a cancelada não vem. */
+      const lote = await lerSituacaoEmLoteDoBanco(clienteId!, hojeISO);
+      const dosContratos = new Set(ids);
+      const parcs = parcelasDoLote(lote).filter(p => dosContratos.has(p.financiamento_id)
+        && (p.data_pagamento === null || p.data_pagamento >= inicioCobertura));
 
       // 3) Snapshots de valor_rebanho_fechamento (somando fazendas).
       //    Limit 300 cobre ~10 fazendas × 30 meses — suficiente p/ séries 24m + recentes.

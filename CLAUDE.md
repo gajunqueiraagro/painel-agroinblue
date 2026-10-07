@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 07/10/2026 (PARC-FECHA-02 item 1, +7: `src/hooks/useFinanceiroV2.tipoDocumento.test.ts` 2, `src/lib/financeiro/docDaLinha.test.ts` 2,
+  Baseline em 07/10/2026 (PARC-FECHA-02 item 2, +8 em `src/lib/financiamentos/situacaoEmLote.test.ts` — 4386 depois dele; antes o
+  PARC-FECHA-02 item 1, +7: `src/hooks/useFinanceiroV2.tipoDocumento.test.ts` 2, `src/lib/financeiro/docDaLinha.test.ts` 2,
   `src/components/financeiro-v2/notaDaCompraNoModal.test.tsx` 3 — 4378 depois dele; antes o
   PARC-LIVRES-01 passo 6, +20: `src/components/financiamentos/documentosDoContrato.test.tsx` 12,
   `src/lib/financiamentos/notaContraContrato.test.ts` 8 — 4371 depois dele; antes o
@@ -236,7 +237,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4378
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4386
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3334,6 +3335,47 @@ docs/historico/frentes-ate-2026-09-29.md.)
     TODOS os documentos do cliente a cada aviso do canal (NJ: centenas de linhas; medir se crescer) · NAO PROVADO NO NAVEGADOR: o
     Ampliado, o minimodal aberto pelo Status, o clipe por ARQUIVO anexado sem numero, e o documento que nao e' nota no modal
     (so' por teste); a janela estava em 579 de altura, nao 523.
+- ⚠ A LISTA DE CONTRATOS E OS PAINEIS LEEM A SITUACAO DO MESMO DONO DO CONTRATO, EM LOTE (PARC-FECHA-02 item 2, Gabriel 06/10/2026;
+  migration 20261027194500, ⚠ registrada como 20261007100908; ledger = arquivo, md5 53d1cb4f…). `fn_financiamentos_situacao_lote(
+  cliente, hoje)` (md5 d85ccfa3…; so' leitura, `tenant_ok`, 42501, GRANT a `authenticated`) devolve `{ <financiamento_id>: <o
+  retorno de fn_financiamento_situacao> }` — NAO REPETE A REGRA: chama o dono contrato a contrato. Uma chamada por tela.
+  · NASCE DE DEFEITO VISTO NO NJ: a lista dizia saldo devedor 110.000,00 no "Reboque Agrícola" e 35.700,00 no "Lascas Eucalipto
+    Tratado" (lia `financiamento_parcelas.status`, que ninguem atualiza quando se paga pelo Financeiro); os cartoes do topo
+    herdavam o erro.
+  · FRONT: leitor `src/lib/financiamentos/situacaoEmLote.ts` (`lerSituacaoEmLote`: uma peca torta invalida o lote inteiro;
+    `resumoDoContratoNaLista`: em aberto = a vencer + vencido DOS CARTOES do dono, juros das nao pagas, proxima parcela;
+    `parcelasDoLote`: a forma que os paineis liam, com `status` 'pago' SO' na parcela paga e a data de pagamento do LANCAMENTO;
+    `totaisDaLista`: os cartoes do topo, em CENTAVOS — a tela nao soma). Leitura `lerSituacaoEmLoteDoBanco` /
+    `useSituacaoEmLote` (`useSituacaoDoContrato.ts`). A lista segue na chave `financiamentos-lista` e passou a reler pelo canal
+    do Financeiro (pagar pelo lancamento muda a lista sem F5).
+  · TROCADOS (nao consultam mais `financiamento_parcelas`): `FinanciamentosListaPage.tsx` (linhas, "N/M", proxima, cartoes
+    Principal em aberto · Juros a vencer · A pagar), `useFinanciamentosPainel.ts` (o painel de financiamentos) e
+    `useEndividamentoAtual.ts` (endividamento atual: a data de pagamento passou a ser a do lancamento).
+  · FICARAM, E POR QUE (nenhuma coluna apagada): `useEndividamentoMensal.ts` -> `fn_endividamento_mensal` (BANCO; serie historica
+    "saldo no fim de cada mes": o dono responde a situacao de HOJE, a serie pede desenho proprio) · `useParcelasFinanciamento.ts`
+    :92 (a Mesa: parcelas 'pendente' candidatas a casar com o extrato — e' pergunta de conciliacao) ·
+    `usePlanejamentoFinanceiro.ts` ~:432, `buildPlanejamentoVisaoGeralData.ts`, `useResumoExecMeta.ts`, `indicadorCatalogo.ts`
+    (Planejamento/META, so' admin) · `ObrigacaoDialog.tsx` :326–333 e ~:1236 (a tabela e as travas da edicao de FINANCIAMENTO
+    com juros) · `ModalBaixaParcela.tsx` (o ESCRITOR da coluna) · `FinanciamentoDetalhe.tsx` ~:173 (o deslocamento de parcelas do
+    financiamento) · `documentosPendentes.ts` :175 (so' pergunta se e' 'cancelado') · `FinanceiroV2Tab.tsx` :553 (so'
+    `financiamento_id`); banco: `fn_endividamento_mensal`, `fn_financiamento_sincronizar_status`,
+    `fn_contrato_editar_e_regenerar`, `fn_financiamento_pagar_pelo_extrato` e os dois reconciliadores.
+  · TAMANHO DA CORRECAO — "em aberto" dos contratos ATIVOS, antes (coluna da parcela) x depois (o dono), em 06/10:
+        cliente       ativos   antes            depois           diferenca
+        NJ            41       22.368.564,24    22.053.680,72    −314.883,52
+        Vera          7        280.799,25       274.917,75       −5.881,50
+        Santa Rita    14       12.008.672,32    12.008.672,32    0,00
+        RRCC          2        2.597.740,00     2.597.740,00     0,00
+        Agnaldo       8        22.680,00        22.680,00        0,00
+        Teste         2        7,38             7,38             0,00
+  Provas: teste SQL `supabase/tests/parc_fecha_02_situacao_lote_test.sql` (L1–L3: lote = dono em todos os contratos dos 7
+  clientes); NO NAVEGADOR, NJ, so' leitura, 1.126 x 523: Reboque Agrícola 25.666,66 · 5/7, Lascas 17.850,00 · 3/6, iguais ao
+  contrato; soma das 41 linhas 22.053.680,72 = cartao "A pagar"; do clique a' lista na tela 0,94 s; a RPC custa 53 ms no NJ, 33
+  na Santa Rita, 7 na Vera. 4 mutacoes mortas.
+  ⚠ DIVIDAS: o tempo de carga de ANTES nao foi medido na tela (so' o de depois) · 'parcial' entra nos paineis como 'pendente'
+    pelo valor CHEIO da parcela (na lista entra so' pelo que falta, via cartoes) — 0 casos reais hoje · o painel de
+    financiamentos nao rele pelo canal (a chave `painel-parcelas` so' e' invalidada por quem ja' a invalidava) · os paineis NAO
+    foram abertos no navegador (provados pelo leitor e pela fonte).
 - ⚠ NO PARCELADO O "TIPO / Nº DOCUMENTO" DO TOPO FICA EM LEITURA; A NOTA DA COMPRA TEM UM DONO (PARC-FECHA-02 item 1, Gabriel
   06/10/2026, so' tela: "ponho nota fiscal, digito o número, salvo e ele vira documento… não persiste"). DUAS CAUSAS, MEDIDAS:
   · EDICAO DA PARCELA GRAVADA: o banco GRAVAVA (auditoria do NJ: 58bfafe9 e 9e159df4, `tipo_documento` nulo -> "Nota Fiscal" com o

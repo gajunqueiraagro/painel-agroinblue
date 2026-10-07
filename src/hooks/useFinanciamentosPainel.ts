@@ -1,4 +1,7 @@
 import { useMemo } from 'react';
+import { lerSituacaoEmLoteDoBanco } from '@/hooks/useSituacaoDoContrato';
+import { parcelasDoLote } from '@/lib/financiamentos/situacaoEmLote';
+import { hojeLocal } from '@/lib/datas/hojeLocal';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useQuery } from '@tanstack/react-query';
@@ -167,12 +170,13 @@ export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin, mesRef
     queryKey: ['painel-parcelas', clienteId, financiamentoIds.join(',')],
     enabled: !!clienteId && financiamentoIds.length > 0,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('financiamento_parcelas')
-        .select('id, financiamento_id, numero_parcela, data_vencimento, data_pagamento, valor_principal, valor_juros, status, cliente_id')
-        .in('financiamento_id', financiamentoIds);
-      if (error) throw error;
-      return (data ?? []) as ParcelaRow[];
+      /* PARC-FECHA-02 item 2 — as parcelas vêm do DONO da situação (o lote sobre `fn_financiamento_situacao`), não de
+         `financiamento_parcelas.status`: paga = o lançamento realizado/conciliado; a cancelada não vem. */
+      const lote = await lerSituacaoEmLoteDoBanco(clienteId!, hojeLocal());
+      const dosContratos = new Set(financiamentoIds);
+      const linhas: ParcelaRow[] = parcelasDoLote(lote).filter(p => dosContratos.has(p.financiamento_id))
+        .map(p => ({ ...p, numero_parcela: p.numero_parcela ?? 0, data_vencimento: p.data_vencimento ?? '', cliente_id: clienteId! }));
+      return linhas;
     },
   });
 

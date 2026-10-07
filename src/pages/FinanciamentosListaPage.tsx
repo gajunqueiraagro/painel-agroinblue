@@ -8,9 +8,13 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { format } from 'date-fns';
 import { ObrigacaoDialog } from '@/components/financiamentos/ObrigacaoDialog';
+import { lerSituacaoEmLoteDoBanco } from '@/hooks/useSituacaoDoContrato';
+import { inscreverEmLancamentos } from '@/hooks/useFinanceiroV2';
+import { resumoDoContratoNaLista, totaisDaLista } from '@/lib/financiamentos/situacaoEmLote';
+import { hojeLocal } from '@/lib/datas/hojeLocal';
 
 /* ── Types ── */
 /* ⚠ CLASSES LIDAS DO CÓDIGO DA REFERÊNCIA, não estimadas: `NUM` e `APOIO` são
@@ -166,8 +170,20 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
   };
 
   /* ── Query principal ── */
+  /* ⚠ A SITUAÇÃO DAS PARCELAS VEM DO DONO, EM LOTE — PARC-FECHA-02 item 2. A lista lia `financiamento_parcelas.status`, que
+     ninguém atualiza quando a parcela é paga pelo Financeiro: "Reboque Agrícola" mostrava saldo devedor 110.000,00 com
+     25.666,66 a vencer no contrato. Agora é a MESMA leitura da tela do contrato (`fn_financiamento_situacao`), numa chamada
+     por tela. A chave segue `financiamentos-lista` (quem cria, edita ou apaga contrato a invalida pelo prefixo), e o canal
+     do Financeiro a relê: pagar uma parcela pelo lançamento muda a lista sem F5. */
+  const hoje = hojeLocal();
+  useEffect(() => {
+    if (!clienteId) return;
+    return inscreverEmLancamentos(clienteId, () => {
+      void qc.invalidateQueries({ queryKey: ['financiamentos-lista', clienteId] }, { cancelRefetch: false });
+    });
+  }, [clienteId, qc]);
   const { data: financiamentos = [], isLoading } = useQuery({
-    queryKey: ['financiamentos-lista', clienteId],
+    queryKey: ['financiamentos-lista', clienteId, hoje],
     enabled: !!clienteId,
     queryFn: async () => {
       // 1) financiamentos + credor
@@ -178,41 +194,11 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
         .order('created_at', { ascending: false });
       if (e1) throw e1;
 
-      // 2) parcelas
-      const { data: parcelas, error: e2 } = await supabase
-        .from('financiamento_parcelas')
-        .select('financiamento_id, status, data_vencimento, valor_principal, valor_juros')
-        .eq('cliente_id', clienteId!);
-      if (e2) throw e2;
-
-      // Agrupar parcelas por financiamento
-      const parcelaMap = new Map<string, typeof parcelas>();
-      for (const p of parcelas ?? []) {
-        const arr = parcelaMap.get(p.financiamento_id) ?? [];
-        arr.push(p);
-        parcelaMap.set(p.financiamento_id, arr);
-      }
+      // 2) a situação de cada contrato, do dono, numa chamada
+      const lote = await lerSituacaoEmLoteDoBanco(clienteId!, hoje);
 
       return (fins ?? []).map((f: any): FinanciamentoRow => {
-        const ps = parcelaMap.get(f.id) ?? [];
-        const pagas = ps.filter(p => p.status === 'pago').length;
-        const pendentes = ps.filter(p => p.status === 'pendente');
-        const proxVenc = pendentes
-          .map(p => p.data_vencimento)
-          .sort()
-          .at(0);
-        const totalPendente = pendentes.reduce(
-          (s, p) => s + Number(p.valor_principal) + Number(p.valor_juros), 0
-        );
-        /* A mesma varredura, a mesma lista de pendentes: os dois números não
-           podem divergir porque saem do mesmo `pendentes`. */
-        const jurosPendente = pendentes.reduce((s, p) => s + Number(p.valor_juros), 0);
-          /* A parcela da PRÓXIMA data — a mesma linha que `prox_vencimento`
-             aponta. Principal + juros é o que o operador paga. */
-          const proxParcela = pendentes.find(p => p.data_vencimento === proxVenc);
-          const valorParcela = proxParcela
-            ? Number(proxParcela.valor_principal) + Number(proxParcela.valor_juros)
-            : null;
+        const r = resumoDoContratoNaLista(lote.get(f.id));
 
         return {
           id: f.id,
@@ -230,11 +216,11 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
           status: f.status,
           created_at: f.created_at,
           credor_nome: f.financeiro_fornecedores?.nome ?? '—',
-          parcelas_pagas: pagas,
-          prox_vencimento: proxVenc ?? undefined,
-          total_pendente: totalPendente,
-          juros_pendente: jurosPendente,
-            valor_parcela: valorParcela,
+          parcelas_pagas: r.parcelasPagas,
+          prox_vencimento: r.proxVencimento ?? undefined,
+          total_pendente: r.totalPendente,
+          juros_pendente: r.jurosPendente,
+            valor_parcela: r.valorDaProxParcela,
         };
       });
     },
@@ -325,9 +311,10 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
      não há como os quatro divergirem entre si. */
   const totais = useMemo(() => ({
     financiado: filtered.reduce((s, f) => s + f.valor_total, 0),
-    principalAberto: filtered.reduce((s, f) => s + (f.total_pendente - f.juros_pendente), 0),
-    juros: filtered.reduce((s, f) => s + f.juros_pendente, 0),
-    aPagar: filtered.reduce((s, f) => s + f.total_pendente, 0),
+    /* em centavos, no dono puro (`totaisDaLista`) — a tela não soma o que vem do contrato */
+    principalAberto: totaisDaLista(filtered).principalAberto,
+    juros: totaisDaLista(filtered).jurosAVencer,
+    aPagar: totaisDaLista(filtered).aPagar,
   }), [filtered]);
 
   const hasExtraFilters = !!(filtroDescricao || filtroContrato || filtroCredor !== 'todos' ||
