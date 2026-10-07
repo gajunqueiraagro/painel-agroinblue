@@ -172,12 +172,16 @@ export async function gravarDocumentosDoParcelamento(
 export async function lancamentosDoParcelamento(financiamentoId: string): Promise<ParcelaGravada[]> {
   const { data, error } = await supabase
     .from('financiamento_parcelas')
-    .select('numero_parcela, lancamento_id')
+    .select('numero_parcela, lancamento_id, status')
     .eq('financiamento_id', financiamentoId)
     .order('numero_parcela', { ascending: true });
   if (error) throw error;
+  /* ⚠ A PARCELA RETIRADA NÃO É IRMÃ (PARC-LIVRES-01 fechamento D): a edição do contrato (`fn_parcelamento_editar_parcelas`)
+     deixa a retirada com status 'cancelado' e o NÚMERO que tinha — a acrescentada no lugar ganha o MESMO número. Sem este
+     filtro o "Anexar boletos das parcelas" contava 4 parcelas num contrato de 3 e a busca pelo número podia cair na retirada. */
   return (data ?? [])
-    .filter((r): r is { numero_parcela: number; lancamento_id: string } => typeof r.lancamento_id === 'string')
+    .filter(r => r.status !== 'cancelado')
+    .filter((r): r is { numero_parcela: number; lancamento_id: string; status: string | null } => typeof r.lancamento_id === 'string')
     .map(r => ({ numero: r.numero_parcela, lancamentoId: r.lancamento_id }));
 }
 

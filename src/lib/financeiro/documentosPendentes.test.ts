@@ -60,7 +60,8 @@ vi.mock('@/integrations/supabase/client', () => {
         chamadas.push({ op: `from:${tabela}`, args: ops });
         return Promise.resolve({ data: [
           { numero_parcela: 1, lancamento_id: 'lanc-p1' }, { numero_parcela: 2, lancamento_id: 'lanc-p2' },
-          { numero_parcela: 3, lancamento_id: 'lanc-p3' }, { numero_parcela: 4, lancamento_id: null },
+          { numero_parcela: 3, lancamento_id: 'lanc-p3-retirada', status: 'cancelado' }, { numero_parcela: 3, lancamento_id: 'lanc-p3', status: 'pendente' },
+          { numero_parcela: 4, lancamento_id: null },
         ], error: null }).then(ok, erro);
       },
     };
@@ -106,14 +107,14 @@ describe('gravação depois do salvar', () => {
     expect(r.gravado).toBe(true);
   });
 
-  it('as parcelas do parcelamento vêm de financiamento_parcelas, pelo número, sem as que não têm lançamento', async () => {
+  it('as parcelas do parcelamento vêm de financiamento_parcelas, pelo número, sem as que não têm lançamento e SEM A RETIRADA (mesmo número da que entrou no lugar)', async () => {
     const parcelas = await lancamentosDoParcelamento('fin-1');
     expect(parcelas).toEqual([
       { numero: 1, lancamentoId: 'lanc-p1' }, { numero: 2, lancamentoId: 'lanc-p2' }, { numero: 3, lancamentoId: 'lanc-p3' },
     ]);
     expect(chamadas[0]).toEqual({
       op: 'from:financiamento_parcelas',
-      args: [['select', 'numero_parcela, lancamento_id'], ['eq', 'financiamento_id', 'fin-1'], ['order', 'numero_parcela', { ascending: true }]],
+      args: [['select', 'numero_parcela, lancamento_id, status'], ['eq', 'financiamento_id', 'fin-1'], ['order', 'numero_parcela', { ascending: true }]],
     });
   });
 });

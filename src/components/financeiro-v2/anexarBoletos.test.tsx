@@ -127,6 +127,23 @@ describe('tela A — grade de parcelas do novo parcelado', () => {
     expect(screen.getAllByTestId('linha-parcela')[1].textContent).toContain('Formato não aceito');
   });
 
+  /* PARC-LIVRES-01 fechamento D — "sumiu a opção de incluir boleto": sem valor ou sem vencimento o lançamento não tem parcela
+     prevista, e a grade ficava VAZIA sem dizer por quê. Opção que não vale fica apagada com o motivo, nunca some. */
+  it('sem parcela listada: a grade diz o motivo e o "Anexar vários boletos" fica apagado com ele; com parcela, a de sempre', () => {
+    const { unmount } = render(<ParcelasDaCompra parcelas={[]} notaFiscal={null} qtdNotas={0} boletos={[]} foraDoPlano={[]}
+      onBoleto={vi.fn()} onTirarBoleto={vi.fn()} onAnexarVarios={vi.fn()} />);
+    expect(screen.getByTestId('sem-parcelas-para-boleto').textContent).toBe('Informe o valor e o vencimento do lançamento para listar as parcelas e anexar os boletos.');
+    const botao = screen.getByTestId('abrir-anexar-varios') as HTMLButtonElement;
+    expect(botao.disabled).toBe(true);
+    expect(botao.title).toBe('Informe o valor e o vencimento do lançamento para listar as parcelas e anexar os boletos.');
+    unmount();
+    render(<ParcelasDaCompra parcelas={previa} notaFiscal={null} qtdNotas={0} boletos={[]} foraDoPlano={[]}
+      onBoleto={vi.fn()} onTirarBoleto={vi.fn()} onAnexarVarios={vi.fn()} />);
+    expect(screen.queryByTestId('sem-parcelas-para-boleto')).toBeNull();
+    expect((screen.getByTestId('abrir-anexar-varios') as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.getAllByTestId(/^mais-boleto-/).length).toBe(previa.length);
+  });
+
   it('boleto de parcela fora do plano (o operador baixou o número de parcelas) aparece em vermelho', () => {
     const b5 = novoPendente({ especie: 'boleto' }, pdf('b5.pdf'), 5);
     render(<ParcelasDaCompra parcelas={previa} notaFiscal={null} qtdNotas={0} boletos={[]} foraDoPlano={[b5]}

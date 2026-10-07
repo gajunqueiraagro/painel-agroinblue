@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 06/10/2026 (PARC-LIVRES-01 passo 5, +16: `src/lib/financiamentos/nomeDaParcela.test.ts` 9, `src/lib/pdf/cpr/parcelaNoPdf.test.ts` 6,
+  Baseline em 06/10/2026 (PARC-LIVRES-01 fechamento D, +1 em `src/components/financeiro-v2/anexarBoletos.test.tsx` — 4351 depois dele; antes o
+  PARC-LIVRES-01 passo 5, +16: `src/lib/financiamentos/nomeDaParcela.test.ts` 9, `src/lib/pdf/cpr/parcelaNoPdf.test.ts` 6,
   `src/components/financeiro-v2/finV2ColunasOC01.test.ts` 1 — 4350 depois dele; antes o
   PARC-LIVRES-01 passo 3, +18: `src/lib/financeiro/docDaLinha.test.ts` 10,
   `src/components/financeiro-v2/notaDaCompraNoModal.test.tsx` 5, `src/components/financeiro-v2/finV2ColunasOC01.test.ts` 3 — 4334 depois dele; antes o
@@ -231,7 +232,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4350
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4351
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3325,6 +3326,27 @@ docs/historico/frentes-ate-2026-09-29.md.)
     TODOS os documentos do cliente a cada aviso do canal (NJ: centenas de linhas; medir se crescer) · NAO PROVADO NO NAVEGADOR: o
     Ampliado, o minimodal aberto pelo Status, o clipe por ARQUIVO anexado sem numero, e o documento que nao e' nota no modal
     (so' por teste); a janela estava em 579 de altura, nao 523.
+- ⚠ CONFERENCIA DO BOLETO (PARC-LIVRES-01 fechamento D, 06/10/2026, so' tela; relato do Gabriel: "sumiu a opção de incluir boleto").
+  NAO SUMIU NO CODIGO: a aba Documentos do `LancamentoV2Dialog` e' a mesma do commit 20ff55d (as condicoes dos tres ramos nao
+  mudaram). Conferido no navegador, cliente Teste, 1.126 x 523, sem gravar pela tela:
+      cenario                                              antes de hoje (20ff55d)         agora
+      Novo parcelado · Igual todo mês (valor + venc.)      Documentos da compra + grade     igual: 2 linhas, 2 "+ Boleto", "Anexar vários"
+      Novo parcelado · Parcelas livres                     nao existia                      as MESMAS linhas da grade livre (nº, venc., valor)
+      Novo parcelado SEM valor ou SEM vencimento           grade VAZIA, sem motivo          grade com o motivo escrito; "Anexar vários" apagado
+      Parcela gravada, pela lista (nao paga, paga, e a     NF da compra + boleto +          igual, nas tres; "Anexar boletos das parcelas"
+        acrescentada pelo 2B)                              "Adicionar documento" +          diz 3 parcelas (dizia 4: contava a retirada)
+                                                           "Anexar boletos das parcelas"
+      Parcela gravada, pelo lapis do contrato (passo 4)    nao existia                      o mesmo modal: NF, boleto e os dois botoes
+  · ONDE O "+ Boleto" NAO APARECE: (1) no Novo parcelado enquanto o lancamento nao tem VALOR e VENCIMENTO (nao ha' parcela
+    prevista para listar) — agora a grade escreve `MOTIVO_SEM_PARCELAS` e o "Anexar vários boletos" fica apagado com ele; (2) na
+    parcela JA' GRAVADA nunca houve botao "+ Boleto": o boleto entra por "Adicionar documento" (tipo Boleto) ou "Anexar boletos
+    das parcelas"; (3) no "Editar obrigação" do contrato nao ha' documento nenhum (e' o passo 6).
+  · DEFEITO CONSERTADO (vinha do 2B): `lancamentosDoParcelamento` (`documentosPendentes.ts`) trazia tambem a parcela RETIRADA
+    (status 'cancelado'), que guarda o numero que tinha — o MESMO da acrescentada no lugar. O "Anexar boletos das parcelas" dizia
+    "4 parcelas" num contrato de 3 e a busca pelo numero podia cair na retirada. Agora a retirada nao e' irma.
+  ⚠ ACHADOS, sem corrigir: o selo da NF na aba Documentos diz "4 parcelas" num contrato de 3 (o `ligado_a_qtd` da view conta o
+    vinculo da parcela retirada, que segue ligada a' NF por desenho do 2B) · no Novo lancamento a "Data Competência" nasceu
+    07/10/2026 a's 22h40 de 06/10 (hora local): a data padrao sai em UTC — FIN-DATA-PADRAO-UTC-01.
 - ⚠ A CONTA DIRETO NO CAMPO DE VALOR TEM UM DONO, E GUARDA-SE SO' O RESULTADO (FIN-VALOR-CALC-01a, Gabriel 05/10/2026, so' tela).
   Ele lanca rateios (o cliente manda o valor cheio, o lancamento e' uma parte): digita "16.238,00/2" no campo e fica o
   resultado; a conta NAO vai para observacao nem para lugar nenhum.

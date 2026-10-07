@@ -117,6 +117,9 @@ function LinhaDaParcela({ parcela: p, impar, total, nf, boleto: b, recusaDoCliqu
   );
 }
 
+/** Por que a grade de boletos está vazia: as parcelas saem do valor e do vencimento do lançamento (ou da lista de parcelas livres). */
+export const MOTIVO_SEM_PARCELAS = 'Informe o valor e o vencimento do lançamento para listar as parcelas e anexar os boletos.';
+
 export function ParcelasDaCompra({ parcelas, notaFiscal, qtdNotas, boletos, onBoleto, onTirarBoleto, onAnexarVarios, travado, foraDoPlano }: {
   parcelas: readonly ParcelaPrevistaLinha[];
   /** Número da NF da compra pendente (a primeira), ou null. */
@@ -149,8 +152,9 @@ export function ParcelasDaCompra({ parcelas, notaFiscal, qtdNotas, boletos, onBo
         <span className="text-[11px] font-semibold text-foreground">
           Parcelas <span className="font-normal text-muted-foreground">· 1 boleto por parcela · agora ou depois</span>
         </span>
-        <Button type="button" variant="outline" className="h-[22px] px-[9px] text-[10px]" disabled={travado} onClick={onAnexarVarios}
-          data-testid="abrir-anexar-varios">
+        {/* opção que não vale fica APAGADA com o motivo (fechamento D): sem parcela listada não há onde pôr boleto */}
+        <Button type="button" variant="outline" className="h-[22px] px-[9px] text-[10px]" disabled={travado || n === 0} onClick={onAnexarVarios}
+          title={n === 0 ? MOTIVO_SEM_PARCELAS : undefined} data-testid="abrir-anexar-varios">
           Anexar vários boletos
         </Button>
       </div>
@@ -181,6 +185,11 @@ export function ParcelasDaCompra({ parcelas, notaFiscal, qtdNotas, boletos, onBo
             </tr>
           </thead>
           <tbody>
+            {n === 0 && (
+              <tr>
+                <td colSpan={6} className={`${TD} text-center text-muted-foreground`} data-testid="sem-parcelas-para-boleto">{MOTIVO_SEM_PARCELAS}</td>
+              </tr>
+            )}
             {parcelas.map((p, k) => (
               <LinhaDaParcela key={p.numero} parcela={p} impar={k % 2 === 1} total={n} nf={nf} boleto={porParcela.get(p.numero)}
                 recusaDoClique={recusa?.parcela === p.numero ? recusa.msg : null} travado={!!travado}
