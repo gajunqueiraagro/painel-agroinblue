@@ -2517,9 +2517,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 <col style={{ width: 28 }} />
                 {/* PR-CONC-B-1 — ícone de origem. 22px fixos; as demais larguras ficam
                     intactas e a tabela apenas cresce 22px dentro do container que rola. */}
-                {/* 18→14: a coluna do marcador de origem carrega UM ícone; o checkbox tem
-                    coluna própria, de 28px. */}
-                <col style={{ width: 14 }} />
+                {/* ⚠ PARC-FECHA-02 item 6 (Gabriel, 07/10): a coluna de 14px do CLIPE SAIU DAQUI e foi para entre VALOR e DOC. — o
+                    clipe fala do documento e fica ao lado dele. Nada ficou no lugar (nenhuma coluna vazia): as três datas andaram
+                    14px para a esquerda e a cadeia congelada passou a 0/28/68/108. A soma do colgroup segue 874. */}
                 {/* PR-FIN-GRADE-DATAS-03 — COMP. | VENC. | PGTO. (3 colunas de data).
                     45→40 cada em FIN-LISTA-VISUAL-06. Foram a 34 no FIN-TABELA-GEOMETRIA-01
                     e VOLTARAM: a fonte de 7px que justificava os 34 foi revertida, e — o que
@@ -2601,6 +2601,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 {modoIntensivo && <col style={{ width: 92 }} />}
                 {modoIntensivo && <col style={{ width: 92 }} />}
                 <col style={{ width: 90 }} />
+                {/* PARC-FECHA-02 item 6 — o CLIPE, 14px, entre Valor e Doc. (vale também no Ampliado). Não é congelada. */}
+                <col style={{ width: 14 }} />
                 {/* Doc: 55 na normal, 90→60 no Ampliado — FIN-LISTA-VISUAL-06.
                     ⚠ A FONTE NÃO MUDA, e o briefing pedia 10px: a célula JÁ renderiza a 9px,
                     porque `.celula-doc` no index.css tem `font-size: 9px !important` e vence
@@ -2632,13 +2634,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                   <th className="px-1 py-[3px] text-center align-middle bg-primary sticky left-0 z-30">
                     <Checkbox checked={allSelected} onCheckedChange={toggleSelectAll} className="h-3 w-3 border-primary-foreground data-[state=checked]:bg-primary-foreground data-[state=checked]:text-primary" />
                   </th>
-                  {/* PR-CONC-B-1 — sem rótulo: o cabeçalho de 8px não caberia e a legenda do
-                      rodapé é quem explica os cinco símbolos. */}
-                  <th className="px-0 py-[3px] text-center align-middle sticky left-[28px] z-30 bg-primary" aria-label="Documentos" title="Documentos" />
-                  <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[42px] z-30 bg-primary" onClick={() => toggleSort('data')}>Comp.<SortIndicator field="data" /></th>
+                  <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[28px] z-30 bg-primary" onClick={() => toggleSort('data')}>Comp.<SortIndicator field="data" /></th>
                   {/* ⚠ A CADEIA DE `sticky left` É A SOMA DAS COLUNAS ANTERIORES, e agora bate —
-                      FIN-LISTA-VISUAL-06: 0 (check 28) → 28 (origem 14) → 42 (comp. 40) →
-                      82 (venc. 40) → 122. Estava 0/28/50/95/140 contra colunas de 28+14+45+45:
+                      PARC-FECHA-02 item 6: 0 (check 28) → 28 (comp. 40) → 68 (venc. 40) → 108 (pgto. 40). Era
+                      0/28/42/82/122 enquanto a coluna de 14px do clipe morava depois do checkbox. Estava 0/28/50/95/140 contra colunas de 28+14+45+45:
                       8px de sobra na primeira data e 5 e 10 nas outras, herdados de um corte
                       anterior que mexeu na largura e não na cadeia.
                       ⚠ ISSO SÓ APARECE NO AMPLIADO, que é o único modo que rola na horizontal:
@@ -2647,8 +2646,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       isso o defeito viveu escondido.
                       ⚠ QUEM MEXER NA LARGURA DE UMA DESTAS CINCO refaz a conta aqui. São quatro
                       números em oito lugares (th + td). */}
-                  <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[82px] z-30 bg-primary" onClick={() => toggleSort('venc')}>Venc.<SortIndicator field="venc" /></th>
-                  <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[122px] z-30 bg-primary" onClick={() => toggleSort('pgto')}>Pgto.<SortIndicator field="pgto" /></th>
+                  <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[68px] z-30 bg-primary" onClick={() => toggleSort('venc')}>Venc.<SortIndicator field="venc" /></th>
+                  <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[108px] z-30 bg-primary" onClick={() => toggleSort('pgto')}>Pgto.<SortIndicator field="pgto" /></th>
                   <th className="px-0 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground" title="Operação comercial">OC</th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('produto')}>Produto<SortIndicator field="produto" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('fornecedor')}>Fornecedor<SortIndicator field="fornecedor" /></th>
@@ -2663,6 +2662,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground">C. Destino</th>
                   )}
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('valor')}>Valor<SortIndicator field="valor" /></th>
+                  {/* PARC-FECHA-02 item 6 — o clipe, sem rótulo (14px), entre Valor e Doc. */}
+                  <th className="px-0 py-[3px] text-center align-middle" aria-label="Documentos" title="Documentos" />
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('doc')}>Doc.<SortIndicator field="doc" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('status')}>Status<SortIndicator field="status" /></th>
                   {/* ⚠ O "…" NÃO É FIXO — decisão soberana do Gabriel, 30/09 (PR-FIN-V2-STATUS-PGTO-01-fix1),
@@ -2754,32 +2755,23 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                           onClick={(e) => e.stopPropagation()}>
                           <Checkbox checked={selectedIds.has(l.id)} onCheckedChange={() => toggleSelect(l.id)} disabled={isParcelaFinanciamento} className="h-3 w-3" />
                         </td>
-                        {/* PARC-LIVRES-01 passo 3 — O CLIPE no lugar do marcador de origem (mesma coluna de 14px, mesma cadeia sticky):
-                            aceso quando há documento — arquivo anexado OU a nota da compra ligada —, com o que tem no `title`. */}
-                        <td className="px-0 py-1 align-middle text-center sticky left-[28px] z-10 bg-background" data-testid="celula-clipe">
-                          {doc.clipe && (
-                            <span title={doc.resumo} aria-label={`Documentos: ${doc.resumo}`} data-testid="clipe-da-linha" className="inline-flex">
-                              <Paperclip className="h-2.5 w-2.5 text-muted-foreground" aria-hidden />
-                            </span>
-                          )}
-                        </td>
                         {/* ⚠ DATA CINZA POR PADRÃO, VENCIDA EM VERMELHO — e só a data, não a
                             linha: pintar a linha inteira faria o atraso competir com o valor e
                             o status, que são o que se lê primeiro. Vencido = tem vencimento no
                             passado E não tem pagamento; um lançamento pago ontem com
                             vencimento anteontem não está atrasado, está resolvido. */}
-                        <td className="celula-data font-mono px-0.5 py-1 align-middle leading-tight sticky left-[42px] z-10 bg-background text-center text-muted-foreground">{fmtDate(l.data_competencia)}</td>
+                        <td className="celula-data font-mono px-0.5 py-1 align-middle leading-tight sticky left-[28px] z-10 bg-background text-center text-muted-foreground">{fmtDate(l.data_competencia)}</td>
                         {/* PR-FIN-GRADE-DATAS-03 — VENC. e PGTO. em colunas separadas, cada uma a sua coluna real
                             (nunca fundidas, nunca a data financeira derivada). fmtDate(null) já rende o sentinela '-'.
                             VENC. permanece visível mesmo quando há PGTO. */}
-                        <td className={`celula-data font-mono px-0.5 py-1 align-middle leading-tight sticky left-[82px] z-10 bg-background text-center ${vencido ? 'font-semibold text-destructive' : 'text-muted-foreground'}`}
+                        <td className={`celula-data font-mono px-0.5 py-1 align-middle leading-tight sticky left-[68px] z-10 bg-background text-center ${vencido ? 'font-semibold text-destructive' : 'text-muted-foreground'}`}
                           title={vencido ? 'Vencido e não pago' : undefined}>{fmtDate(l.data_vencimento)}</td>
-                        <td className="celula-data font-mono px-0.5 py-1 align-middle leading-tight sticky left-[122px] z-10 bg-background text-center text-muted-foreground">{fmtDate(l.data_pagamento)}</td>
+                        <td className="celula-data font-mono px-0.5 py-1 align-middle leading-tight sticky left-[108px] z-10 bg-background text-center text-muted-foreground">{fmtDate(l.data_pagamento)}</td>
                         {/* FIN-V2-COLUNAS-OC-01 — A MARCA DA OC TEM COLUNA PRÓPRIA, antes do Produto (Gabriel, 05/10: "o ícone vem depois do
                             texto e some quando o texto é longo"). O bloco abaixo é o que estava no fim da célula do Produto, MOVIDO
                             VERBATIM: com acesso, o botão que abre a operação (e para a propagação — a linha não abre); sem acesso, só a
                             marca (ACESSOS-02b). Sem OC, célula vazia. ⚠ NÃO É CONGELADA: vem depois das cinco `sticky` e rola com o
-                            Produto; a cadeia 0/28/42/82/122 não mudou. */}
+                            Produto; a cadeia congelada (hoje 0/28/68/108) não passa por ela. */}
                         <td className="px-0 py-1 align-middle text-left" data-testid="celula-oc">
                           {(() => {
                             const oc = lancamentosComOC.get(l.id);
@@ -2878,6 +2870,15 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                             `--background: 220 17% 97%` sobre o branco do card. */}
                         <td className={`celula-valor text-right font-semibold whitespace-nowrap px-1 py-1 align-middle text-[12px] leading-tight bg-background ${valorDaLinha(l).classe}`}>
                           {valorDaLinha(l).texto}
+                        </td>
+                        {/* O CLIPE (PARC-LIVRES-01 passo 3), entre Valor e Doc. desde o PARC-FECHA-02 item 6: aceso quando há documento —
+                            arquivo anexado OU a nota da compra ligada —, com o que tem no `title`. Coluna de 14px, não congelada. */}
+                        <td className="px-0 py-1 align-middle text-center" data-testid="celula-clipe">
+                          {doc.clipe && (
+                            <span title={doc.resumo} aria-label={`Documentos: ${doc.resumo}`} data-testid="clipe-da-linha" className="inline-flex">
+                              <Paperclip className="h-2.5 w-2.5 text-muted-foreground" aria-hidden />
+                            </span>
+                          )}
                         </td>
                         {/* Doc. à direita: é número, e número se lê alinhado pela unidade. */}
                         <td className="celula-doc font-mono text-muted-foreground text-right px-1 py-1 align-middle text-[10px] leading-tight truncate" data-testid="celula-doc"

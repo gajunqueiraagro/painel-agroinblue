@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 07/10/2026 (PARC-FECHA-02 item 5, +1 em `src/components/financiamentos/obrigacaoEdicao.test.tsx` — 4394 depois dele; antes o
+  Baseline em 07/10/2026 (PARC-FECHA-02 item 6, +1 em `src/components/financeiro-v2/finV2ColunasOC01.test.ts` — 4395 depois dele; antes o
+  PARC-FECHA-02 item 5, +1 em `src/components/financiamentos/obrigacaoEdicao.test.tsx` — 4394 depois dele; antes o
   PARC-FECHA-02 item 4, +7 em `src/lib/datas/hojeLocal.test.ts` — 4393 depois dele; antes o
   PARC-FECHA-02 item 2, +8 em `src/lib/financiamentos/situacaoEmLote.test.ts` — 4386 depois dele; antes o
   PARC-FECHA-02 item 1, +7: `src/hooks/useFinanceiroV2.tipoDocumento.test.ts` 2, `src/lib/financeiro/docDaLinha.test.ts` 2,
@@ -239,7 +240,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4394
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4395
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3337,6 +3338,24 @@ docs/historico/frentes-ate-2026-09-29.md.)
     TODOS os documentos do cliente a cada aviso do canal (NJ: centenas de linhas; medir se crescer) · NAO PROVADO NO NAVEGADOR: o
     Ampliado, o minimodal aberto pelo Status, o clipe por ARQUIVO anexado sem numero, e o documento que nao e' nota no modal
     (so' por teste); a janela estava em 579 de altura, nao 523.
+- ⚠ NA LISTA DE LANCAMENTOS O CLIPE FICA ENTRE VALOR E DOC., E A CADEIA CONGELADA E' 0/28/68/108 (PARC-FECHA-02 item 6, Gabriel
+  07/10/2026, so' tela, `src/pages/FinanceiroV2Tab.tsx`; SUBSTITUI o "0/28/42/82/122" dos blocos FIN-V2-COLUNAS-OC-01 e
+  FIN-V2-HOMOLOG-FIX-01). A coluna de 14px do clipe saiu do comeco da linha (depois do checkbox) e foi para entre Valor e Doc.,
+  no colgroup, no cabecalho e na linha, tambem no Ampliado; NAO e' congelada. Nada ficou no lugar: Comp., Venc. e Pgto. andaram
+  14px para a esquerda e os `sticky left` passaram a 28 / 68 / 108 (th + td, seis lugares; o teste recusa sobra da cadeia velha).
+  LARGURAS (normal): 28·40·40·40·OC 16·Produto 130·Fornecedor 124·Macro 33·Centro 41·Faz. 30·Safra 66·Valor 90·clipe 14·Doc. 90·
+  Status 64·acoes 28 = 874 (Ampliado: Produto 144 e as duas contas de 92 antes do Valor = 1.072).
+  Medido no NJ a 1.126 (5.263 linhas, so' leitura): tabela 880 em 900 sem rolagem; Valor cortado 0; datas cortadas 0; ordem
+  Valor (12a) · clipe (13a) · Doc. (14a); 114 linhas com o clipe aceso; congeladas em 0 / 28 / 68 / 109. Ampliado: tabela 1.088
+  em 1.108, sem rolagem, mesma ordem, Valor e datas 0 cortes. 3 mutacoes mortas.
+  ⚠ O DOC. CONTINUA CORTANDO (divida FIN-V2-DOC-CORTA-01, NAO resolvida aqui): 944 de 5.263 linhas no NJ, 929 delas numero —
+    quase todas "Doc. 2026040114846980" (o numero de 16 digitos do extrato, que pede 114px numa coluna de 91). A largura da coluna
+    nao mudou neste item (90), entao o corte e' o de antes; o item moveu uma coluna de 14px, nao liberou espaco. Zerar pede ~24px
+    a mais no Doc. (de Produto ou Fornecedor) ou tirar o prefixo "Doc." do tipo generico — decisao do Gabriel.
+  ⚠ NO AMPLIADO a 1.126 as colunas ESTICAM (a tabela de 1.072 ocupa 1.088) e as datas renderizam a 41px: a terceira congelada
+    fica 1–2px fora da cadeia (68 -> 69, 108 -> 110). Sem rolagem horizontal nao ha' fresta a' vista; em janela onde o Ampliado
+    rolar, conferir. Ja' era assim com a cadeia antiga.
+  ⚠ NAO PROVADO: o Ampliado ROLANDO na horizontal (a 1.126 ele cabe) e o "Recolher" pelo botao (o script nao o achou).
 - ⚠ NA TELA DO CONTRATO O TOTAL E' O RODAPE PADRAO DA CASA E A LINHA TEM 19px (PARC-FECHA-02 item 5, Gabriel 07/10/2026, so'
   apresentacao, `src/pages/FinanciamentoDetalhe.tsx`). O Total da tabela de parcelas usa o padrao do `TF` de `ParcelasDaCompra`:
   fundo #E8E6DF, negrito, 10px, 2px em cima (`TOTAL`), em TODAS as celulas (as vazias inclusive), no `tfoot` preso no fim da

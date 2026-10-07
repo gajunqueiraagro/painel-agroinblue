@@ -43,11 +43,14 @@ describe('a coluna OC', () => {
     expect(tela.match(/data-testid="icone-oc"/g)?.length).toBe(1);
     expect(tela.match(/data-testid="marca-oc"/g)?.length).toBe(1);
   });
-  it('vem depois das cinco congeladas e NÃO é sticky; a cadeia 0/28/42/82/122 não mudou', () => {
-    expect(linha.indexOf('data-testid="celula-oc"')).toBeGreaterThan(linha.indexOf('sticky left-[122px]'));
+  it('vem depois das congeladas e NÃO é sticky; a cadeia é 0/28/68/108 (PARC-FECHA-02 item 6: o clipe saiu da esquerda)', () => {
+    expect(linha.indexOf('data-testid="celula-oc"')).toBeGreaterThan(linha.indexOf('sticky left-[108px]'));
     expect(/<td className="[^"]*sticky[^"]*" data-testid="celula-oc"/.test(linha)).toBe(false);
-    for (const left of ['left-0', 'left-[28px]', 'left-[42px]', 'left-[82px]', 'left-[122px]']) expect(linha, left).toContain(`sticky ${left}`);
-    expect(larguras(false).slice(0, 5)).toEqual([28, 14, 40, 40, 40]);      // 0 → 28 → 42 → 82 → 122
+    for (const left of ['left-0', 'left-[28px]', 'left-[68px]', 'left-[108px]']) expect(linha, left).toContain(`sticky ${left}`);
+    /* a cadeia velha não sobrou em lugar nenhum (cabeçalho e linha): uma sobra abriria fresta no Ampliado */
+    for (const velho of ['left-[42px]', 'left-[82px]', 'left-[122px]']) expect(tela, velho).not.toContain(`sticky ${velho}`);
+    expect(tela.match(/sticky left-\[(28|68|108)px\]/g)?.length).toBe(6);
+    expect(larguras(false).slice(0, 4)).toEqual([28, 40, 40, 40]);      // 0 → 28 → 68 → 108
     expect(tela).toContain('title="Operação comercial">OC</th>');
   });
 });
@@ -57,21 +60,22 @@ describe('as larguras', () => {
     const n = larguras(false);
     /* PARC-LIVRES-01 passo 3: Produto 136→130 e Macro/Centro 56→49 devolvem 20px à coluna Doc. (70→90), que passou a escrever o tipo */
     /* fechamento C: Fornecedor 100→124, tirando 16 de Macro (49→33) e 8 de Centro (49→41) */
-    expect(n).toEqual([28, 14, 40, 40, 40, 16, 130, 124, 33, 41, 30, 66, 90, 90, 64, 28]);
+    /* PARC-FECHA-02 item 6: os 14px do clipe foram da 2ª posição para entre Valor e Doc.; as outras larguras e a soma não mudaram */
+    expect(n).toEqual([28, 40, 40, 40, 16, 130, 124, 33, 41, 30, 66, 90, 14, 90, 64, 28]);
     expect(soma(n)).toBe(874);
     expect(soma(n)).toBeLessThanOrEqual(874);
-    expect(n[6]).toBeGreaterThanOrEqual(130);
+    expect(n[5]).toBeGreaterThanOrEqual(130);
   });
   it('o Ampliado tem as duas contas a mais e o Produto com o mesmo ganho; a linha vazia ocupa todas as colunas nos dois modos', () => {
     const a = larguras(true);
     expect(a.length).toBe(18);
     expect(larguras(false).length).toBe(16);
-    expect(a[6] - 125).toBe(larguras(false)[6] - 111);
+    expect(a[5] - 125).toBe(larguras(false)[5] - 111);
     expect(tela).toContain('<td colSpan={modoIntensivo ? 18 : 16}');
   });
   it('não cedem: datas 40, Fornecedor 124, Safra 66, Valor 90, Doc. 90, ações 28, check 28, clipe 14', () => {
     const n = larguras(false);
-    expect([n[0], n[1], n[2], n[3], n[4], n[7], n[11], n[12], n[13], n[15]]).toEqual([28, 14, 40, 40, 40, 124, 66, 90, 90, 28]);
+    expect([n[0], n[12], n[1], n[2], n[3], n[6], n[10], n[11], n[13], n[15]]).toEqual([28, 14, 40, 40, 40, 124, 66, 90, 90, 28]);
   });
 });
 
@@ -93,12 +97,31 @@ describe('as fontes — exceção ao piso só nesta lista, por classe da tabela 
 
 /* ── PARC-LIVRES-01 passo 3 — o clipe no lugar do marcador de origem, e a coluna Doc. pela função única ───────────────────── */
 describe('passo 3 — clipe, Doc. e origem (lidos da fonte da lista)', () => {
-  it('a coluna de 14px é a do CLIPE: aceso por `doc.clipe`, com o que tem no `title`; a cadeia sticky não mudou', () => {
+  it('a coluna de 14px é a do CLIPE, ENTRE VALOR E DOC. (item 6), no cabeçalho, na linha e no colgroup — também no Ampliado', () => {
+    const linha = tela.slice(tela.indexOf('<tr key={l.id}'), tela.indexOf('<DropdownMenuTrigger asChild>', tela.indexOf('<tr key={l.id}')));
+    const ordem = (trecho: string, ...marcas: string[]) => marcas.map(m => trecho.indexOf(m));
+    const [valor, clipe, docu] = ordem(linha, 'celula-valor', 'data-testid="celula-clipe"', 'data-testid="celula-doc"');
+    expect(valor).toBeGreaterThan(-1);
+    expect(clipe).toBeGreaterThan(valor);
+    expect(docu).toBeGreaterThan(clipe);
+    expect(linha.slice(clipe, docu).match(/<td/g)?.length).toBe(1);   // só o `<td` do próprio Doc.: nada entre os dois
+    expect(linha.slice(valor, clipe).match(/<td/g)?.length).toBe(1);  // e só o do clipe depois do Valor
+    expect(/<td className="[^"]*sticky[^"]*" data-testid="celula-clipe"/.test(linha)).toBe(false);
+    const [thValor, thClipe, thDoc] = ordem(tela, "toggleSort('valor')}", 'aria-label="Documentos" title="Documentos"', "toggleSort('doc')}");
+    expect(thClipe).toBeGreaterThan(thValor);
+    expect(thDoc).toBeGreaterThan(thClipe);
+    for (const amp of [false, true]) {
+      const n = larguras(amp);
+      expect(n.slice(-5)).toEqual([90, 14, 90, 64, 28]);
+      expect(n[1]).toBe(40);                                          // a 2ª coluna voltou a ser a Comp.: nenhuma vazia no lugar
+    }
+    expect(soma(larguras(true)) - soma(larguras(false))).toBe(14 + 92 + 92);
+  });
+  it('o clipe acende por `doc.clipe`, com o que tem no `title`', () => {
     expect(tela).toContain('aria-label="Documentos" title="Documentos"');
     expect(tela).not.toContain('aria-label="Origem"');
     expect(tela).toContain('{doc.clipe && (');
     expect(tela).toContain('<span title={doc.resumo} aria-label={`Documentos: ${doc.resumo}`} data-testid="clipe-da-linha"');
-    expect(larguras(false).slice(0, 5)).toEqual([28, 14, 40, 40, 40]);
   });
   it('a coluna Doc. escreve o texto do DONO (`docDaLinha`), nunca o número cru; a legenda dos ícones saiu', () => {
     expect(tela).toContain('const doc = docDaLinha(lancamentoParaDoc(l), documentosPorLancamento?.get(l.id));');
