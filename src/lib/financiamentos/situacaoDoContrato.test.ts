@@ -41,7 +41,8 @@ describe('o detalhe do contrato', () => {
   it('lê o detalhe da parcela e dos cartões como vieram', () => {
     const s = lerSituacaoDoContrato({ parcelas: [{ ...PARCELA, ...DETALHE }], cartoes: { ...CARTOES, ...CONTAGENS } })!;
     expect(s.parcelas[0].detalhe).toEqual({ competencia: '2026-06-02', contaNome: 'Banco do Brasil', tipoDocumento: null, numeroDocumento: null,
-      prazo: { tipo: 'antes', dias: 3 }, documentos: [{ especie: 'nf', numero: '5510', cancelado: false }], boletos: 0 });
+      prazo: { tipo: 'antes', dias: 3 }, documentos: [{ especie: 'nf', numero: '5510', cancelado: false }], boletos: 0,
+      lancamentoCancelado: null });   // PARC-CADEIA-01 passo 4: a chave nova; nula quando o lançamento da parcela está vivo
     expect(s.cartoes.detalhe).toEqual({ aVencerQtde: 2, vencidoQtde: 1, notasQtde: 1, notasValor: 35700, notasDiferenca: 0, boletos: 0 });
   });
   it('prazo nulo é nulo (paga sem data); nota sem valor fica nula, nunca zero', () => {

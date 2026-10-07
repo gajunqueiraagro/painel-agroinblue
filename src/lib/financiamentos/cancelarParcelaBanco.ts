@@ -4,7 +4,10 @@
  * (`cancelarParcela.ts`).
  */
 import { supabase } from '@/integrations/supabase/client';
-import { lerPreviaCancelarParcela, type EscopoDoCancelamento, type PreviaCancelarParcela } from '@/lib/financiamentos/cancelarParcela';
+import {
+  lerPreviaCancelarParcela, lerPreviaExcluirCompra, lerPreviaRecriar,
+  type EscopoDoCancelamento, type PreviaCancelarParcela, type PreviaExcluirCompra, type PreviaRecriar,
+} from '@/lib/financiamentos/cancelarParcela';
 
 export interface AlvoDoCancelamento { lancamentoId?: string | null; parcelaId?: string | null }
 
@@ -49,6 +52,52 @@ export async function simularCancelarParcela(alvo: AlvoDoCancelamento, escopo: E
 export async function gravarCancelarParcela(alvo: AlvoDoCancelamento, escopo: EscopoDoCancelamento, motivo: string): Promise<string | null> {
   try {
     const { error } = await chamar(alvo, escopo, motivo, false);
+    return error ? mensagem(error) : null;
+  } catch (e) {
+    return mensagem(e);
+  }
+}
+
+/* ── PARC-CADEIA-01 passo 4 — excluir a compra inteira e recriar o lançamento de uma parcela (a tela do contrato) ────── */
+
+const NAO_LEU = 'O banco devolveu uma resposta que a tela não soube ler.';
+
+/** A simulação de `fn_parcelamento_excluir`: quantos lançamentos e parcelas saem, ou a recusa. */
+export async function simularExcluirCompra(financiamentoId: string): Promise<{ previa: PreviaExcluirCompra; erro: null } | { previa: null; erro: string }> {
+  try {
+    const { data, error } = await (supabase as any).rpc('fn_parcelamento_excluir', { p_financiamento_id: financiamentoId, p_motivo: '', p_simular: true });
+    if (error) return { previa: null, erro: mensagem(error) };
+    const previa = lerPreviaExcluirCompra(data);
+    return previa ? { previa, erro: null } : { previa: null, erro: NAO_LEU };
+  } catch (e) {
+    return { previa: null, erro: mensagem(e) };
+  }
+}
+
+/** Grava a exclusão da compra. Devolve a frase da recusa, ou nulo quando gravou. */
+export async function gravarExcluirCompra(financiamentoId: string, motivo: string): Promise<string | null> {
+  try {
+    const { error } = await (supabase as any).rpc('fn_parcelamento_excluir', { p_financiamento_id: financiamentoId, p_motivo: motivo, p_simular: false });
+    return error ? mensagem(error) : null;
+  } catch (e) {
+    return mensagem(e);
+  }
+}
+
+export async function simularRecriarLancamento(parcelaId: string): Promise<{ previa: PreviaRecriar; erro: null } | { previa: null; erro: string }> {
+  try {
+    const { data, error } = await (supabase as any).rpc('fn_parcelamento_recriar_lancamento', { p_parcela_id: parcelaId, p_simular: true });
+    if (error) return { previa: null, erro: mensagem(error) };
+    const previa = lerPreviaRecriar(data);
+    return previa ? { previa, erro: null } : { previa: null, erro: NAO_LEU };
+  } catch (e) {
+    return { previa: null, erro: mensagem(e) };
+  }
+}
+
+export async function gravarRecriarLancamento(parcelaId: string): Promise<string | null> {
+  try {
+    const { error } = await (supabase as any).rpc('fn_parcelamento_recriar_lancamento', { p_parcela_id: parcelaId, p_simular: false });
     return error ? mensagem(error) : null;
   } catch (e) {
     return mensagem(e);

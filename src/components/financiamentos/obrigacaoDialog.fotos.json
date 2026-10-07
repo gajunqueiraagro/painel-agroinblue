@@ -36,27 +36,27 @@
   "bytes": 20232
  },
  "edicao-emprestimo-classificacao": {
-  "md5": "e6abd00fed5665ac3b8c864479ca12af",
-  "bytes": 39078
+  "md5": "a219192dcf721174f8876d625d1daa6d",
+  "bytes": 39114
  },
  "edicao-emprestimo-contrato": {
-  "md5": "23b2e64f282d9ea393960de51c4b0524",
-  "bytes": 43230
+  "md5": "9a8bf513736586d17bed9ff8d563f270",
+  "bytes": 43266
  },
  "edicao-emprestimo-parcelas": {
-  "md5": "6ebac455df46acc63fb6b70f20aff53c",
-  "bytes": 48108
+  "md5": "f28bb3df2feaaadecbafff66949bf7c7",
+  "bytes": 48144
  },
  "edicao-financiamento-classificacao": {
-  "md5": "54ffa9b97c368c00d0d2c45788476f88",
-  "bytes": 39019
+  "md5": "8fdd08bcc2c6c154d694111280e34a25",
+  "bytes": 39055
  },
  "edicao-financiamento-contrato": {
-  "md5": "3d43f961e2e36c53269137843462907c",
-  "bytes": 43162
+  "md5": "4c0e2d8ecbe5278ef86d60880e0045c8",
+  "bytes": 43198
  },
  "edicao-financiamento-parcelas": {
-  "md5": "56fc7cf6801ec0613b51cb65b4ebdad7",
-  "bytes": 48049
+  "md5": "6e616aacfe76a6ea02bcf2463755b248",
+  "bytes": 48085
  }
 }

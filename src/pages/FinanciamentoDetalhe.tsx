@@ -1,7 +1,15 @@
 import { useState } from 'react';
 import { LancamentoDaParcelaDialog } from '@/components/financiamentos/LancamentoDaParcelaDialog';
 import { useSituacaoDoContrato } from '@/hooks/useSituacaoDoContrato';
-import { CLASSE_SITUACAO, MOTIVO_PARCELA_SEM_LANCAMENTO, ROTULO_SITUACAO, TOM_DO_PRAZO, origemDaSituacao, textoDasNotas, textoDoPrazo } from '@/lib/financiamentos/situacaoDoContrato';
+import {
+  CLASSE_SEM_LANCAMENTO, CLASSE_SITUACAO, MOTIVO_PARCELA_SEM_LANCAMENTO, ROTULO_SEM_LANCAMENTO, ROTULO_SITUACAO, TOM_DO_PRAZO,
+  origemDaSituacao, porQueSemLancamento, semLancamento, textoDasNotas, textoDoPrazo,
+} from '@/lib/financiamentos/situacaoDoContrato';
+import { CancelarParcelaDialog } from '@/components/financiamentos/CancelarParcelaDialog';
+import { ExcluirCompraDialog, RecriarLancamentoDialog } from '@/components/financiamentos/GestosDoContratoDialogs';
+import { simularCancelarParcela } from '@/lib/financiamentos/cancelarParcelaBanco';
+import type { PreviaCancelarParcela } from '@/lib/financiamentos/cancelarParcela';
+import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
 import { docDaLinha } from '@/lib/financeiro/documentoHelper';
 import { textoDasParcelas, valorComumDasParcelas } from '@/lib/financiamentos/valorDasParcelas';
 import { hojeLocal } from '@/lib/datas/hojeLocal';
@@ -70,6 +78,25 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
   const [lancamentoAberto, setLancamentoAberto] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  /* PARC-CADEIA-01 passo 4 — a parcela viva sem lançamento vivo tem dois gestos na linha: recriar o lançamento, ou retirar a
+     parcela (o MESMO aviso das portas do Financeiro, pelo id da parcela). A frase de erro do gesto fica escrita ao lado de "Parcelas". */
+  const [recriarParcela, setRecriarParcela] = useState<string | null>(null);
+  const [retirarParcela, setRetirarParcela] = useState<{ parcelaId: string; previa: PreviaCancelarParcela } | null>(null);
+  const [recadoDaLinha, setRecadoDaLinha] = useState<string | null>(null);
+  const pedirRetirada = async (parcelaId: string) => {
+    setRecadoDaLinha(null);
+    const r = await simularCancelarParcela({ parcelaId }, 'so_esta');
+    if (r.previa) setRetirarParcela({ parcelaId, previa: r.previa });
+    else setRecadoDaLinha(r.erro);
+  };
+  /** depois de um gesto que mexeu na cadeia: avisa o Financeiro e relê o contrato e a lista (sem F5) */
+  const aposMexerNaCadeia = () => {
+    if (clienteId) notificarLancamentosMudaram(clienteId);
+    for (const chave of ['financiamento-detalhe', 'financiamentos-lista', 'financiamento-parcelas', 'financiamento-situacao', 'painel-financiamentos',
+      'obrigacao-edicao', 'obrigacao-edicao-parcelas', 'obrigacao-edicao-lancamentos', 'cpr-lancs', 'cpr-caixa']) {
+      void qc.invalidateQueries({ queryKey: [chave] });
+    }
+  };
 
   /* ── Financiamento ── */
   const { data: fin, isLoading: loadingFin } = useQuery({
@@ -572,7 +599,10 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
         <div className="flex h-full min-h-0 flex-col rounded-lg border border-border bg-card px-3 pt-1.5 pb-0">
           <div className="mb-1 flex h-[22px] shrink-0 items-center gap-2">
             <h2 className="text-[12px] font-semibold text-foreground">Parcelas</h2>
-            <span className="min-w-0 truncate text-[10px] text-muted-foreground" data-testid="dica-da-linha">clique na linha para abrir o lançamento no Financeiro</span>
+            <span className={`min-w-0 truncate text-[10px] ${recadoDaLinha ? 'font-medium text-destructive' : 'text-muted-foreground'}`}
+              data-testid="dica-da-linha" title={recadoDaLinha ?? undefined}>
+              {recadoDaLinha ?? 'clique na linha para abrir o lançamento no Financeiro'}
+            </span>
             <Button variant="outline" size="sm" className="ml-auto h-[20px] shrink-0 gap-1 px-2 text-[10px]" onClick={() => abrirEdicao('parcelas')}>
               <Pencil className="size-3" /> Editar parcelas
             </Button>
@@ -590,7 +620,8 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
                 {!ehParcelamento && <col style={{ width: 84 }} />}
                 {!ehParcelamento && <col style={{ width: 76 }} />}
                 <col style={{ width: 88 }} />
-                <col style={{ width: 62 }} />
+                {/* Situação: 88 = "sem lançamento" (o pior rótulo, 78px medidos) + o respiro da célula */}
+                <col style={{ width: 88 }} />
                 {ehParcelamento && <col style={{ width: 118 }} />}
                 {ehParcelamento && <col style={{ width: 46 }} />}
                 {!ehParcelamento && <col style={{ width: 40 }} />}
@@ -619,6 +650,8 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
                   const d = p.detalhe;
                   const doc = d ? docDaLinha({ tipo_documento: d.tipoDocumento, numero_documento: d.numeroDocumento }, d.documentos) : null;
                   const abrir = () => { if (p.lancamentoId) setLancamentoAberto(p.lancamentoId); };
+                  /* PARC-CADEIA-01 passo 4 — parcela viva de compra parcelada SEM lançamento vivo: situação própria e dois gestos */
+                  const orfa = ehParcelamento && semLancamento(p);
                   return (
                     /* O CLIQUE NA LINHA abre o lançamento da parcela no modal do Financeiro; o lápis faz o mesmo. A coluna "Ver" saiu. */
                     <TableRow key={p.id} className={`${LINHA} ${p.lancamentoId ? 'cursor-pointer' : ''}`} data-testid="linha-do-contrato" data-situacao={p.situacao}
@@ -635,15 +668,31 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
                       {!ehParcelamento && <TableCell className={MOEDA}>{num2(p.valorJuros)}</TableCell>}
                       <TableCell className={`${MOEDA} font-semibold`}>{num2(p.valorTotal)}</TableCell>
                       <TableCell>
-                        <span className={`inline-flex items-center rounded px-1 py-0 text-[9px] font-normal leading-tight ${CLASSE_SITUACAO[p.situacao]}`}
-                              title={origemDaSituacao(p)} data-testid="situacao-da-parcela">
-                          {ROTULO_SITUACAO[p.situacao]}
+                        <span className={`inline-flex items-center whitespace-nowrap rounded px-1 py-0 text-[9px] font-normal leading-tight ${orfa ? CLASSE_SEM_LANCAMENTO : CLASSE_SITUACAO[p.situacao]}`}
+                              title={orfa ? porQueSemLancamento(p) : origemDaSituacao(p)} data-testid="situacao-da-parcela" data-sem-lancamento={orfa ? 'sim' : undefined}>
+                          {orfa ? ROTULO_SEM_LANCAMENTO : ROTULO_SITUACAO[p.situacao]}
                         </span>
                       </TableCell>
-                      {ehParcelamento && (
+                      {ehParcelamento && orfa && (
+                        /* sem lançamento não há nota nem boleto a mostrar: as duas colunas dão lugar aos dois gestos da linha */
+                        <TableCell colSpan={2} className="whitespace-nowrap" data-testid="gestos-da-parcela">
+                          <button type="button" className="text-[10px] font-medium text-primary hover:underline"
+                            title="Cria um lançamento novo para esta parcela (o cancelado não volta)"
+                            onClick={(e) => { e.stopPropagation(); setRecadoDaLinha(null); setRecriarParcela(p.id); }} data-testid="recriar-da-linha">
+                            Recriar lançamento
+                          </button>
+                          <span className="px-1 text-muted-foreground">·</span>
+                          <button type="button" className="text-[10px] font-medium text-destructive hover:underline"
+                            title="Retira esta parcela da compra: o contrato passa a ter uma parcela a menos e o total é recalculado"
+                            onClick={(e) => { e.stopPropagation(); void pedirRetirada(p.id); }} data-testid="retirar-da-linha">
+                            Retirar
+                          </button>
+                        </TableCell>
+                      )}
+                      {ehParcelamento && !orfa && (
                         <TableCell className={NUM} title={doc?.resumo || undefined} data-testid="nota-da-parcela">{doc?.rotulo || '—'}</TableCell>
                       )}
-                      {ehParcelamento && (
+                      {ehParcelamento && !orfa && (
                         <TableCell className="text-center" data-testid="boleto-da-parcela">
                           {d && d.boletos > 0
                             ? <span title={d.boletos === 1 ? '1 boleto' : `${d.boletos} boletos`} className="inline-flex"><Paperclip className="size-3 text-muted-foreground" aria-label="tem boleto" /></span>
@@ -728,7 +777,34 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
         />
       )}
 
-      <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+      {/* PARC-CADEIA-01 passo 4 — COMPRA PARCELADA: a exclusão é UMA gravação no banco (`fn_parcelamento_excluir`), com a
+          simulação no diálogo, motivo obrigatório e a recusa escrita ao lado do botão. Financiamento com juros e empréstimo
+          seguem pelo caminho de sempre, logo abaixo. */}
+      {ehParcelamento && confirmDelete && id && (
+        <ExcluirCompraDialog
+          financiamentoId={id}
+          descricao={fin.descricao ?? ''}
+          aoVoltar={() => setConfirmDelete(false)}
+          aoExcluir={(previa) => {
+            setConfirmDelete(false);
+            setEditOpen(false);
+            aposMexerNaCadeia();
+            toast.success(`Compra parcelada cancelada. ${previa.lancamentos === 1 ? '1 lançamento cancelado' : `${previa.lancamentos} lançamentos cancelados`}.`);
+            onVoltar?.();
+          }}
+        />
+      )}
+      {recriarParcela && (
+        <RecriarLancamentoDialog parcelaId={recriarParcela} aoVoltar={() => setRecriarParcela(null)}
+          aoRecriar={() => { setRecriarParcela(null); aposMexerNaCadeia(); }} />
+      )}
+      {retirarParcela && clienteId && (
+        <CancelarParcelaDialog clienteId={clienteId} alvo={{ parcelaId: retirarParcela.parcelaId }} previa={retirarParcela.previa}
+          aoVoltar={() => setRetirarParcela(null)}
+          aoGravar={(escopo) => { setRetirarParcela(null); aposMexerNaCadeia(); if (escopo === 'todas') onVoltar?.(); }} />
+      )}
+
+      <AlertDialog open={confirmDelete && !ehParcelamento} onOpenChange={setConfirmDelete}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir financiamento?</AlertDialogTitle>

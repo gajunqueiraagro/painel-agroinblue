@@ -23,6 +23,8 @@ export interface DetalheDaParcela {
   /** os documentos VIVOS do lançamento da parcela (a NF da compra e os dela), na forma que o dono `docDaLinha` lê */
   documentos: DocumentoDaLinha[];
   boletos: number;
+  /** PARC-CADEIA-01 passo 4 — o lançamento que a parcela aponta e está CANCELADO (quando e por quê); nulo = não é o caso */
+  lancamentoCancelado: { em: string | null; motivo: string | null } | null;
 }
 
 /** O que `p_detalhe` acrescenta aos cartões. `notasDiferenca` = nota − soma das parcelas; nulo = sem nota ou nota sem valor. */
@@ -87,9 +89,11 @@ function lerDetalheDaParcela(p: Record<string, unknown>): DetalheDaParcela | nul
     if (!tipo || dias === null) return undefined;
     prazo = { tipo, dias };
   }
+  const lc = obj(p.lancamento_cancelado);
   return {
     competencia: txt(p.competencia), contaNome: txt(p.conta_nome), tipoDocumento: txt(p.tipo_documento), numeroDocumento: txt(p.numero_documento),
     prazo, documentos, boletos,
+    lancamentoCancelado: lc ? { em: txt(lc.em), motivo: txt(lc.motivo) } : null,
   };
 }
 
@@ -140,6 +144,30 @@ export function origemDaSituacao(p: ParcelaDoContrato): string {
   return 'situação lida do lançamento desta parcela';
 }
 export const MOTIVO_PARCELA_SEM_LANCAMENTO = 'Parcela sem lançamento no Financeiro.';
+
+/* ── PARC-CADEIA-01 passo 4 — a parcela viva SEM lançamento vivo deixa de ser muda ─────────────────────────────────────── */
+
+/** Não paga e sem lançamento vivo: a situação que a tela escreve é "sem lançamento" (âmbar), com os dois gestos na linha. */
+export const semLancamento = (p: ParcelaDoContrato): boolean => p.lancamentoId === null && p.situacao !== 'paga';
+export const ROTULO_SEM_LANCAMENTO = 'sem lançamento';
+export const CLASSE_SEM_LANCAMENTO = 'bg-amber-100 text-amber-800';
+
+/** A data LOCAL (dd/mm/aa) de um instante do banco; '' quando não dá para ler. */
+function diaLocal(instante: string | null): string {
+  if (!instante) return '';
+  const d = new Date(instante);
+  if (Number.isNaN(d.getTime())) return '';
+  const dd = String(d.getDate()).padStart(2, '0'); const mm = String(d.getMonth() + 1).padStart(2, '0');
+  return `${dd}/${mm}/${String(d.getFullYear()).slice(-2)}`;
+}
+
+/** O `title` da situação "sem lançamento": "lançamento cancelado em dd/mm/aa · motivo" — o que o banco registrou. */
+export function porQueSemLancamento(p: ParcelaDoContrato): string {
+  const c = p.detalhe?.lancamentoCancelado;
+  if (!c) return MOTIVO_PARCELA_SEM_LANCAMENTO;
+  const quando = diaLocal(c.em);
+  return ['lançamento cancelado' + (quando ? ` em ${quando}` : ''), c.motivo?.trim() || 'sem motivo registrado'].join(' · ');
+}
 
 /* ── PARC-CONTRATO-01 item 1 — como a tela ESCREVE o que o banco calculou (nenhuma conta aqui) ─────────────────────────── */
 

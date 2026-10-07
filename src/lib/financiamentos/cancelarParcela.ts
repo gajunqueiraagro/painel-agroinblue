@@ -155,3 +155,51 @@ export function separarParcelas(ids: readonly string[], parcelas: ReadonlySet<st
 
 export const fraseDoLote = (n: number): string =>
   `${n === 1 ? '1 parcela' : `${n} parcelas`} de compra parcelada: cancele uma a uma.`;
+
+/* ── PARC-CADEIA-01 passo 4 — a tela do contrato: excluir a compra e recriar o lançamento ───────────────────────────── */
+
+export interface PreviaExcluirCompra { lancamentos: number; parcelas: number; recusa: RecusaDoBanco | null }
+
+/** Lê o retorno de `fn_parcelamento_excluir`. Peça torta = `null`. */
+export function lerPreviaExcluirCompra(json: unknown): PreviaExcluirCompra | null {
+  if (!ehObjeto(json)) return null;
+  const lancamentos = numero(json.lancamentos); const parcelas = numero(json.parcelas);
+  if (lancamentos === null || parcelas === null) return null;
+  return { lancamentos, parcelas, recusa: lerRecusa(json.recusa) };
+}
+
+const plural = (n: number, um: string, varios: string) => (n === 1 ? `1 ${um}` : `${n} ${varios}`);
+
+/** "Serão cancelados 4 lançamentos e 4 parcelas. O contrato fica como cancelado; nada é apagado." — os números do banco. */
+export const fraseDoExcluir = (p: PreviaExcluirCompra): string =>
+  `${p.lancamentos === 1 ? 'Será cancelado' : 'Serão cancelados'} ${plural(p.lancamentos, 'lançamento', 'lançamentos')} e ${plural(p.parcelas, 'parcela', 'parcelas')}. `
+  + 'O contrato fica como cancelado; nada é apagado.';
+
+export interface PreviaRecriar {
+  parcela: { numero: number; total: number; valor: number; vencimento: string | null };
+  descricao: string;
+  molde: 'vizinha' | 'cancelado' | null;
+  recusa: RecusaDoBanco | null;
+}
+
+/** Lê o retorno de `fn_parcelamento_recriar_lancamento`. Peça torta = `null`. */
+export function lerPreviaRecriar(json: unknown): PreviaRecriar | null {
+  if (!ehObjeto(json) || !ehObjeto(json.parcela)) return null;
+  const n = numero(json.parcela.numero); const t = numero(json.parcela.total); const v = numero(json.parcela.valor);
+  const descricao = texto(json.descricao);
+  if (n === null || t === null || v === null || descricao === null) return null;
+  return {
+    parcela: { numero: n, total: t, valor: v, vencimento: texto(json.parcela.vencimento) },
+    descricao, molde: json.molde === 'vizinha' || json.molde === 'cancelado' ? json.molde : null,
+    recusa: lerRecusa(json.recusa),
+  };
+}
+
+/** De onde vem a classificação do lançamento novo — o que o banco disse que vai usar de molde. */
+export const fraseDoMolde = (p: PreviaRecriar): string =>
+  p.molde === 'cancelado' ? 'Classificação, conta e fornecedor copiados do lançamento cancelado desta parcela.'
+    : 'Classificação, conta e fornecedor copiados da parcela vizinha.';
+
+export function dadosDoRecriar(p: PreviaRecriar): { vencimento: string; valor: string } {
+  return { vencimento: dataBR(p.parcela.vencimento), valor: formatMoeda(p.parcela.valor) };
+}

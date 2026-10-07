@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 07/10/2026 (PARC-CADEIA-01 passo 3, +11 em `src/lib/financiamentos/parcelaNoModal.test.ts` — 4475 depois dele; antes o
+  Baseline em 07/10/2026 (PARC-CADEIA-01 passo 4, +13 em `src/components/financiamentos/gestosDoContrato.test.tsx` — 4488 depois dele; antes o
+  PARC-CADEIA-01 passo 3, +11 em `src/lib/financiamentos/parcelaNoModal.test.ts` — 4475 depois dele; antes o
   PARC-CADEIA-01 passo 2, +34: `src/lib/financiamentos/cancelarParcela.test.ts` 18,
   `src/components/financiamentos/cancelarParcelaDialog.test.tsx` 10, `src/lib/financeiro/cprRetorno.test.ts` 5,
   `src/hooks/useFinanceiroV2.cancelMotivo.test.ts` 1 — 4464 depois dele; antes o
@@ -251,7 +252,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4475
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4488
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3349,6 +3350,39 @@ docs/historico/frentes-ate-2026-09-29.md.)
     TODOS os documentos do cliente a cada aviso do canal (NJ: centenas de linhas; medir se crescer) · NAO PROVADO NO NAVEGADOR: o
     Ampliado, o minimodal aberto pelo Status, o clipe por ARQUIVO anexado sem numero, e o documento que nao e' nota no modal
     (so' por teste); a janela estava em 579 de altura, nao 523.
+- ⚠ NA TELA DO CONTRATO: EXCLUIR A COMPRA PARCELADA E' UMA GRAVACAO, E A PARCELA SEM LANCAMENTO DEIXA DE SER MUDA (PARC-CADEIA-01 passo 4,
+  Gabriel 07/10/2026; migration 20261027194900, ⚠ registrada como 20261007185054; ledger = arquivo, md5 e3880ce1…; patch guardado
+  por md5: `fn_financiamento_situacao` 7d59c915… -> 70a7d04b…, 1 ancora).
+  · EXCLUIR (4a): em contrato de PARCELAMENTO o botao abre o `ExcluirCompraDialog`
+    (`src/components/financiamentos/GestosDoContratoDialogs.tsx`, 500 x 210 fixo): a SIMULACAO de `fn_parcelamento_excluir` no
+    dialogo ("Serão cancelados N lançamentos e N parcelas. O contrato fica como cancelado; nada é apagado."), motivo obrigatorio,
+    a recusa (parcela paga: dizendo quais) no lugar da previa com o botao apagado, e a recusa da gravacao ao lado do botao. O
+    `import()` dinamico de `parcelaMirror` e as tres idas soltas ficaram SO' para financiamento com juros e emprestimo
+    (`open={confirmDelete && !ehParcelamento}`), intocados. ⚠ O contrato excluido NAO some: fica 'cancelado' (a lista ja' tem o
+    filtro "Cancelado").
+  · PARCELA VIVA SEM LANCAMENTO VIVO (4b): com `p_detalhe` cada parcela ganha NO FIM `lancamento_cancelado {em, motivo}` (o
+    lancamento que ela aponta e esta' cancelado; nulo fora disso). SEM `p_detalhe` o retorno e' o de antes (206 contratos
+    identicos por md5, e as chaves de antes identicas com detalhe; 14 parcelas com a chave nova = contagem direta). Na tela
+    (`FinanciamentoDetalhe.tsx`, so' parcelamento): Situação "sem lançamento" (ambar; `semLancamento`, `porQueSemLancamento` em
+    `situacaoDoContrato.ts`: `title` "lançamento cancelado em dd/mm/aa · motivo") e, no lugar das colunas Nota fiscal e Boleto,
+    os dois gestos: "Recriar lançamento" (`RecriarLancamentoDialog`, 500 x 190: diz o lancamento que vai nascer — nome, vencimento,
+    valor, programado — e de onde vem a classificacao, e grava por `fn_parcelamento_recriar_lancamento`) e "Retirar" (o MESMO
+    `CancelarParcelaDialog` do passo 2, pelo id da parcela). A coluna Situação passou de 62 a 88px ("sem lançamento" pede 78).
+    Depois de cada gesto a tela avisa o canal do Financeiro e rele (`aposMexerNaCadeia`).
+  PROVA NO NAVEGADOR (cliente Teste, 1.126 x 523, contrato sintetico de 4 x 100,00 com o lancamento da 3ª cancelado de proposito,
+  criado por RPC e APAGADO): a linha 3/4 com "sem lançamento", `title` "lançamento cancelado em 07/10/26 · legado (…)" e os dois
+  gestos; 4 linhas de 19px, 0 celulas cortadas, pagina sem rolagem; "Recriar" — "… 3/4 · venc. 20/12/2026 · R$ 100,00 ·
+  programado · copiados da parcela vizinha", gravado: lancamento NOVO programado na parcela, o cancelado continuou cancelado, a
+  linha voltou a "A vencer" sem F5; "Retirar" — aviso 560 x 330, 4 -> 3 parcelas e 400,00 -> 300,00, gravado, tela relida sem
+  F5; "Excluir" — 500 x 210, "Serão cancelados 3 lançamentos e 3 parcelas…", gravado: contrato 'cancelado' com o motivo na
+  observacao, e a tela voltou para a lista. 8 mutacoes mortas.
+  ⚠ As 6 fotos de EDICAO de financiamento e emprestimo de `obrigacaoDialog.fotos.json` foram REGRAVADAS (a pagina do contrato
+    atras do dialogo mudou; o dialogo nao foi tocado, e as 9 de criacao e de parcelamento ficaram identicas).
+  ⚠ DIVIDAS: o gesto da linha diz "Retirar" (nao "Retirar parcela": os dois rotulos inteiros nao cabem nas duas colunas; o nome
+    completo esta' no `title`) · o aviso de sucesso do Excluir e' toast (o erro nao) · a lista de contratos NAO foi conferida
+    com o contrato recem-cancelado na tela (so' o retorno a ela) · NAO PROVADO NO NAVEGADOR: a recusa do Excluir com parcela
+    paga, o molde "lançamento cancelado" (compra sem nenhuma vizinha viva — o caso do "Parcela 3 - None") e o Excluir de
+    financiamento com juros pelo caminho antigo depois da trava (a trava nao o alcanca: provado no teste SQL do passo 1).
 - ⚠ NO MODAL DO LANCAMENTO, VALOR E VENCIMENTO DE PARCELA DE COMPRA PARCELADA MUDAM JUNTO COM A PARCELA (PARC-CADEIA-01 passo 3, Gabriel
   07/10/2026, so' tela; FECHA a divida PARC-MODAL-PARCELA-VALOR-01). Antes o modal gravava so' o lancamento e a parcela ficava com
   o numero antigo (o caso da Vera, "Balança Pesagem": parcela 21/10 x lancamento 15/10).

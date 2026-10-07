@@ -16,7 +16,7 @@ DECLARE
   c_hoje constant date := date '2031-04-15';
   r record; v_n int := 0; v_dif int := 0; v_chave int := 0; v_tot int := 0;
   v_fin uuid; l1 uuid; l2 uuid; l3 uuid; v_nf uuid; v_bol uuid; j jsonb; p jsonb; c jsonb; v_conta text;
-  c_novas constant text[] := array['competencia','conta_id','conta_nome','tipo_documento','numero_documento','prazo','documentos','boletos'];
+  c_novas constant text[] := array['competencia','conta_id','conta_nome','tipo_documento','numero_documento','prazo','documentos','boletos','lancamento_cancelado'];   -- a ultima, do PARC-CADEIA-01 passo 4
   c_cart  constant text[] := array['a_vencer_qtde','vencido_qtde','notas_qtde','notas_valor','notas_diferenca','boletos'];
 BEGIN
   -- D1
