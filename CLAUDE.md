@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 06/10/2026 (PARC-LIVRES-01 passo 2A, +4 em `src/components/financiamentos/obrigacaoEdicao.test.tsx` — 4301 depois dele; antes o
+  Baseline em 06/10/2026 (PARC-LIVRES-01 passo 2B, +7 em `src/components/financiamentos/obrigacaoEdicao.test.tsx` — 4308 depois dele; antes o
+  PARC-LIVRES-01 passo 2A, +4 em `src/components/financiamentos/obrigacaoEdicao.test.tsx` — 4301 depois dele; antes o
   PARC-LIVRES-01 passo 1, +33: `src/lib/financiamentos/parcelasLivres.test.ts` 17,
   `src/components/financiamentos/gradeDeParcelas.test.tsx` 13, `src/components/financeiro-v2/novoDeXml.test.tsx` 3 — 4297 depois dele; antes o
   PARC-LIVRES-01 passo 0, +1 em `src/lib/pdf/cpr/exportCpr.test.tsx` — 4264 depois dele; antes o
@@ -224,7 +225,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4301
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4308
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3134,6 +3135,46 @@ docs/historico/frentes-ate-2026-09-29.md.)
   ⚠ PARCELAS EM DOBRO NO NJ (proposta, nada alterado): o contrato tem 5 parcelas e a mesma obrigacao (doc 249220, 5 x 14.553,94) ja'
     tinha a 1ª paga pelo banco (c6a665f9, conciliada em 14/09) e a 2ª vinda da planilha (322f7467, "Parcela 2 - None", 12/10).
   ⚠ NAO PROVADO NO NAVEGADOR: o lapis apagado e a "1ª parcela" em leitura (so' por teste).
+- ⚠ EDITAR AS PARCELAS DE UM PARCELAMENTO JA' CRIADO E' UMA RPC SO', ATOMICA (PARC-LIVRES-01 passo 2B, Gabriel 06/10/2026; migration
+  20261027194200, ⚠ registrada como 20261007000435; ledger = arquivo, md5 391d90f1…). `fn_parcelamento_editar_parcelas(
+  p_financiamento_id, p_parcelas, p_valor_total)` (md5 04ec64c3…; GRANT a `authenticated`) recebe a lista FINAL das parcelas do
+  contrato, na ordem da tela — [{id?, data_vencimento, valor}] — e grava `financiamento_parcelas`, o lancamento de cada parcela e o
+  contrato (`valor_total`, `total_parcelas`, `data_primeira_parcela`) na mesma transacao. NAO HA' segundo caminho.
+  · PARCELA PAGA NUNCA MUDA: paga = parcela 'pago' OU lancamento realizado/conciliado OU lancamento com vinculo vivo ao extrato
+    (`_fn_parcela_de_parcelamento_paga`, interna; espelho na tela: `pagaEm`, `parcelasLivres.ts`). A paga tem de vir na lista com a
+    MESMA data e o MESMO valor; mudar ou tirar e' RECUSADO (22023, "A parcela N já está paga: …"), sem gravar nada.
+  · NAO PAGA: muda data e valor — na parcela e no lancamento, e SO' esses dois campos do lancamento (nome, status, competencia,
+    safra, forma, plano, fornecedor, conta e fazenda ficam); a que sai da lista e' RETIRADA (lancamento cancelado pelo dono
+    `fn_cancelar_lancamento_auditoria`, parcela 'cancelado'); a sem `id` e' ACRESCENTADA (o lancamento copia classificacao, safra,
+    cultura, fase, fornecedor, forma, conta, fazenda e competencia da parcela de maior numero do contrato e HERDA a nota fiscal da
+    compra: o documento NF vivo ja' ligado a outra parcela por `financeiro_documento_vinculos`). A retirada segue ligada a' NF,
+    como toda parcela cancelada.
+  · A SOMA EM CENTAVOS DA LISTA = `p_valor_total`, senao recusa com os dois numeros. O numero da parcela e' a posicao na lista, e o
+    "i/N" do nome acompanha SO' quando o nome ainda e' o gerado (`_fn_parcela_descricao`, o dono do texto; nome posto a' mao fica).
+    Nas pagas so' esse trecho muda.
+  · TELA: Editar obrigação › aba Parcelas mostra a MESMA `GradeDeParcelas` (sem o seletor de modo) sobre as parcelas gravadas
+    (`parcelasGravadasParaGrade`): a paga APAGADA, sem campo e sem ✕, com "paga em dd/mm/aa: data e valor não mudam" no `title`, e
+    na soma; "+ Parcela", ✕, "Desfazer alterações" (volta a's gravadas, ANTES de salvar — depois de salvo a volta e' editar de
+    novo); a soma contra o valor do contrato com os dois gestos ("Pôr ±X na parcela N" nao paga / "O contrato vale {soma}").
+    Salvar apagado com o motivo na pendencia; ao salvar, a RPC vai ANTES do gravador do contrato e so' quando a grade mudou; a
+    recusa fica ESCRITA ao lado do botao (`erro-da-grade`) e o contrato nao e' gravado. Depois: `notificarLancamentosMudaram` e as
+    chaves da tela e da CPR invalidadas. Os campos da aba ficam numa linha so' (como na criacao).
+  Provas: teste SQL `supabase/tests/parc_livres_01_2b_test.sql` (E1–E4; 12 mutacoes de banco — 11 mortas e 1 equivalente: tirar o
+  `v_el is null` nao muda nada, a comparacao com nulo ja' recusa); 9 mutacoes de tela mortas. NO NAVEGADOR, cliente Teste, 1.126 x
+  579: criado pelo modal do lancamento um parcelado LIVRE de 3 parcelas (100,00 em 10/11 · 121,00 em 05/12 · 79,00 em 20/01) —
+  o SALVAR DO PASSO 1, provado pela tela —; com a 1ª paga, a grade do contrato abriu com ela apagada; mudei a 2ª para 100,00,
+  tirei a 3ª e acrescentei 120,00 em 10/02: diferenca ▲ 20,00, Salvar apagado com a frase, "O contrato vale 320,00", salvo —
+  banco: contrato 320,00 / 3 parcelas, parcela = lancamento nas tres, a paga intocada, a retirada cancelada (parcela e
+  lancamento), a nova com a classificacao. Dialogo 1024 x 558, grade 698 x 276, linhas de 19px, 0 cortes.
+  ⚠ O DEFEITO DE 05/10 ("descricao, forma e classificacao nao persistem") NAO E' A MESMA CAUSA: o contrato grava e reabre certo desde
+    o PARC-OBRIGACAO-EDICAO-01a; o que falta e' LEVAR descricao, classificacao e forma do contrato aos lancamentos das parcelas
+    (PARC-PROPAGACAO-PARCELAS-01, aberta).
+  ⚠ DIVIDAS: o DETALHE do contrato lista a parcela CANCELADA e a soma no Total e no "N parcelas" (medido no Teste: 4 parcelas,
+    Total 399,00 num contrato de 320,00) — sai no passo 4, que troca os cartoes e a situacao por uma leitura do banco · o resumo
+    lateral do dialogo diz "3 × R$ 100,00" (a 1ª parcela) tambem com parcelas diferentes · mes fechado: a recusa vem crua do
+    dono do cancelamento ("competencia … em mes fechado") · a RPC nao tem simulacao · o resumo lateral segue rolando por dentro
+    (368 de 417) · NAO PROVADO NO NAVEGADOR: a recusa da RPC escrita ao lado do botao, "Desfazer alterações", "Pôr na parcela N",
+    a NF herdada (so' por teste) e a janela de 523 de altura.
 - ⚠ A CONTA DIRETO NO CAMPO DE VALOR TEM UM DONO, E GUARDA-SE SO' O RESULTADO (FIN-VALOR-CALC-01a, Gabriel 05/10/2026, so' tela).
   Ele lanca rateios (o cliente manda o valor cheio, o lancamento e' uma parte): digita "16.238,00/2" no campo e fica o
   resultado; a conta NAO vai para observacao nem para lugar nenhum.

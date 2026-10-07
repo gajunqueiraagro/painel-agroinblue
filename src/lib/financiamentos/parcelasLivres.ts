@@ -74,7 +74,8 @@ export function motivoNaoSalva(parcelas: readonly ParcelaLivre[], compraCent: nu
 /** O que mudou em relação ao que a parcela era. */
 export function mudancaDaParcela(p: ParcelaLivre): { vencimento: boolean; valor: boolean } {
   if (!p.era) return { vencimento: false, valor: false };
-  return { vencimento: p.vencimento !== p.era.vencimento, valor: p.valorCent !== p.era.valorCent };
+  /* a data que nasceu VAZIA (prévia sem 1º vencimento) e foi preenchida não é "edição": não havia o que mudar */
+  return { vencimento: p.era.vencimento !== '' && p.vencimento !== p.era.vencimento, valor: p.valorCent !== p.era.valorCent };
 }
 
 const brData = (iso: string) => (/^\d{4}-\d{2}-\d{2}$/.test(iso) ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(2, 4)}` : '—');
@@ -151,4 +152,50 @@ export function parcelasParaPayload(parcelas: readonly ParcelaLivre[]): { numero
 /** A lista no formato da prévia (o que a grade de boletos e o resumo já leem). */
 export function parcelasComoPrevistas(parcelas: readonly ParcelaLivre[]): ParcelaPrevista[] {
   return parcelas.map((p, i) => ({ numero: i + 1, dataVencimento: p.vencimento, valor: p.valorCent / 100 }));
+}
+
+/* ── passo 2B: as parcelas GRAVADAS de um parcelamento, na grade ───────────────────────────────────────────────────────── */
+
+/** O que a grade precisa de cada parcela gravada (linha de `financiamento_parcelas`). */
+export interface ParcelaGravadaDoBanco {
+  id: string;
+  numero_parcela: number | null;
+  data_vencimento: string | null;
+  valor_principal: number | null;
+  valor_juros: number | null;
+  status: string | null;
+  data_pagamento?: string | null;
+  lancamento_id?: string | null;
+}
+/** O que a grade precisa do lançamento da parcela. */
+export interface LancamentoDaParcela { id: string; status_transacao?: string | null; data_pagamento?: string | null }
+
+/** Paga pelo DONO (o lançamento realizado ou conciliado) ou pela parcela marcada 'pago' — espelho de `_fn_parcela_de_parcelamento_paga`. */
+export function pagaEm(p: ParcelaGravadaDoBanco, lancamento: LancamentoDaParcela | undefined): { em: string | null } | undefined {
+  const pelaParcela = p.status === 'pago';
+  const peloLancamento = lancamento?.status_transacao === 'realizado' || lancamento?.status_transacao === 'conciliado';
+  if (!pelaParcela && !peloLancamento) return undefined;
+  return { em: (peloLancamento ? lancamento?.data_pagamento : null) ?? p.data_pagamento ?? null };
+}
+
+/** As parcelas vivas do contrato, na ordem do número, como linhas da grade (a cancelada não entra). */
+export function parcelasGravadasParaGrade(
+  gravadas: readonly ParcelaGravadaDoBanco[], lancamentos: readonly LancamentoDaParcela[],
+): ParcelaLivre[] {
+  const porId = new Map(lancamentos.map((l) => [l.id, l]));
+  return gravadas
+    .filter((p) => p.status !== 'cancelado')
+    .slice()
+    .sort((a, b) => (a.numero_parcela ?? 0) - (b.numero_parcela ?? 0))
+    .map((p) => {
+      const valorCent = centavos((Number(p.valor_principal) || 0) + (Number(p.valor_juros) || 0));
+      const vencimento = p.data_vencimento ?? '';
+      const paga = pagaEm(p, p.lancamento_id ? porId.get(p.lancamento_id) : undefined);
+      return { chave: `gravada-${p.id}`, id: p.id, vencimento, valorCent, origem: 'gravada', era: { vencimento, valorCent }, ...(paga ? { paga } : {}) };
+    });
+}
+
+/** O que viaja em `p_parcelas` de `fn_parcelamento_editar_parcelas`: a lista FINAL, na ordem; a gravada leva o `id`. */
+export function parcelasParaEditar(parcelas: readonly ParcelaLivre[]): { id?: string; data_vencimento: string; valor: number }[] {
+  return parcelas.map((p) => ({ ...(p.id ? { id: p.id } : {}), data_vencimento: p.vencimento, valor: p.valorCent / 100 }));
 }

@@ -23,12 +23,16 @@ const banco = vi.hoisted(() => ({
   leituras: [] as string[],
   /** `true` = o UPDATE do contrato não altera o que a leitura devolve (para isolar o que a tela faz com o cache). */
   toasts: [] as string[],
+  /** a recusa que a RPC devolve (nulo = aceita) */
+  erroRpc: null as string | null,
+  /** a ordem das escritas: 'rpc:<fn>' e 'update:<tabela>' */
+  ordem: [] as string[],
 }));
 
 vi.mock('@/integrations/supabase/client', () => {
   const tabela = (t: string, op: { tipo: 'select' | 'update' | 'insert'; payload?: Record<string, unknown> }) => {
     if (op.tipo === 'update') {
-      banco.updates.push({ tabela: t, payload: op.payload ?? {} });
+      banco.updates.push({ tabela: t, payload: op.payload ?? {} }); banco.ordem.push(`update:${t}`);
       if (t === 'financiamentos') banco.contrato = { ...banco.contrato, ...(op.payload ?? {}) };
       return null;
     }
@@ -77,7 +81,10 @@ vi.mock('@/integrations/supabase/client', () => {
   return {
     supabase: {
       from: (t: string) => construtor(t),
-      rpc: (fn: string, args: Record<string, unknown>) => { banco.rpcs.push({ fn, args }); return Promise.resolve({ data: 'novo-id', error: null }); },
+      rpc: (fn: string, args: Record<string, unknown>) => {
+        banco.rpcs.push({ fn, args }); banco.ordem.push(`rpc:${fn}`);
+        return Promise.resolve(banco.erroRpc ? { data: null, error: { message: banco.erroRpc } } : { data: 'novo-id', error: null });
+      },
     },
   };
 });
@@ -154,7 +161,7 @@ const updatesDoContrato = () => banco.updates.filter((u) => u.tabela === 'financ
 beforeEach(() => {
   cleanup();
   banco.contrato = PARCELAMENTO(); banco.parcelas = PARCELAS(); banco.lancs = LANCS();
-  banco.updates = []; banco.rpcs = []; banco.leituras = []; banco.toasts = [];
+  banco.updates = []; banco.rpcs = []; banco.leituras = []; banco.toasts = []; banco.erroRpc = null; banco.ordem = [];
   qc = novoQc(0);
   Element.prototype.scrollIntoView = () => {};
   Element.prototype.hasPointerCapture = () => false;
@@ -420,18 +427,17 @@ describe('2A — parcelamento não passa pelo editor de parcela nem pelo desloca
   const lapis = () => screen.getAllByRole('button', { name: 'Editar parcela' }) as HTMLButtonElement[];
   const MOTIVO = 'Parcela de parcelamento: o pagamento é pelo lançamento, no Financeiro; data e valor se editam na grade de parcelas.';
 
-  it('parcelamento: o lápis de cada parcela fica APAGADO com o motivo (não some), no detalhe e no diálogo', async () => {
+  it('parcelamento: no detalhe o lápis de cada parcela fica APAGADO com o motivo (não some); no diálogo, a grade', async () => {
     montarDetalhe();
     await screen.findByText('Dados do contrato');
     await waitFor(() => expect(lapis().length).toBe(2));
     expect(lapis().map((b) => [b.disabled, b.title])).toEqual([[true, MOTIVO], [true, MOTIVO]]);
     await abrirEdicao(); await pronto();
     await irParaAba('Parcelas');
-    /* com o diálogo aberto o fundo fica fora da árvore acessível: estes são os dois lápis DO DIÁLOGO */
-    const todos = lapis();
-    expect(todos.length).toBe(2);
-    expect(todos.every((b) => b.disabled && b.title === MOTIVO)).toBe(true);
-    expect(screen.getByText('No parcelamento a data de cada parcela se edita na grade de parcelas.')).toBeTruthy();
+    /* no diálogo o parcelamento não tem lápis: as parcelas se editam na GRADE (passo 2B) */
+    expect(screen.queryAllByRole('button', { name: 'Editar parcela' })).toEqual([]);
+    expect(screen.getByTestId('grade-de-parcelas')).toBeTruthy();
+    expect(screen.getByText('A da lista: edite na grade.').getAttribute('title')).toBe('No parcelamento a data de cada parcela se edita na grade de parcelas.');
   });
 
   it('financiamento com juros: o lápis segue ACESO, com o título de sempre', async () => {
@@ -460,5 +466,104 @@ describe('2A — parcelamento não passa pelo editor de parcela nem pelo desloca
     await abrirEdicao(); await pronto();
     await salvar();
     expect('data_primeira_parcela' in updatesDoContrato()[0].payload).toBe(true);
+  });
+});
+
+/* ── PARC-LIVRES-01 passo 2B — editar as parcelas gravadas, na mesma grade, por UMA RPC ───────────────────────────────────── */
+describe('2B — a grade sobre as parcelas gravadas do parcelamento', () => {
+  const valores = () => screen.getAllByTestId('valor-da-parcela') as HTMLInputElement[];
+  const digitar = (i: number, texto: string) => { fireEvent.change(valores()[i], { target: { value: texto } }); fireEvent.blur(valores()[i]); };
+  const botaoSalvar = () => screen.getByRole('button', { name: 'Salvar alterações' }) as HTMLButtonElement;
+  const abrirGrade = async () => {
+    montarDetalhe();
+    await abrirEdicao(); await pronto();
+    await irParaAba('Parcelas');
+    await waitFor(() => expect(screen.getAllByTestId('linha-da-parcela').length).toBeGreaterThan(0));
+  };
+  const rpcsDeEdicao = () => banco.rpcs.filter((r) => r.fn === 'fn_parcelamento_editar_parcelas');
+
+  it('abre com as parcelas gravadas: a PAGA (pelo lançamento realizado) apagada, sem campo e sem ✕, com o motivo — e na soma', async () => {
+    banco.lancs = LANCS([{ status_transacao: 'realizado', data_pagamento: '2026-10-09' }, { status_transacao: 'programado' }]);
+    await abrirGrade();
+    const linhas = screen.getAllByTestId('linha-da-parcela');
+    expect(linhas.length).toBe(2);
+    expect(linhas[0].getAttribute('data-paga')).toBe('sim');
+    expect(linhas[0].getAttribute('title')).toBe('paga em 09/10/26: data e valor não mudam');
+    expect(linhas[0].querySelector('input')).toBeNull();
+    expect(valores().map((v) => v.value)).toEqual(['8.119,00']);
+    expect(screen.getAllByTestId('tirar-parcela').length).toBe(1);
+    expect(screen.getByTestId('rodape-soma').textContent).toBe('16.238,00');
+    expect(screen.getByTestId('rodape-compra').textContent).toBe('16.238,00');
+    expect(screen.getByTestId('diferenca').textContent).toBe('0,00 ✓');
+    expect(screen.queryByText('Igual todo mês')).toBeNull();
+  });
+
+  it('paga também pela parcela marcada "pago"; a cancelada não entra na grade', async () => {
+    banco.parcelas = [...PARCELAS().map((p, i) => (i === 0 ? { ...p, status: 'pago', data_pagamento: '2026-10-10' } : p)),
+      { ...PARCELAS()[1], id: 'par-3', numero_parcela: 3, status: 'cancelado', lancamento_id: 'lanc-3' }];
+    await abrirGrade();
+    const linhas = screen.getAllByTestId('linha-da-parcela');
+    expect(linhas.length).toBe(2);
+    expect(linhas[0].getAttribute('title')).toBe('paga em 10/10/26: data e valor não mudam');
+  });
+
+  it('sem mexer na grade, salvar NÃO chama a RPC das parcelas', async () => {
+    await abrirGrade();
+    await salvar();
+    expect(rpcsDeEdicao()).toEqual([]);
+    expect(updatesDoContrato().length).toBe(1);
+  });
+
+  it('mudar um valor abre diferença: Salvar APAGADO com o motivo; "O contrato vale" fecha, e o Salvar grava parcelas ANTES do contrato', async () => {
+    await abrirGrade();
+    digitar(1, '8.000,00');
+    expect(screen.getByTestId('diferenca').textContent).toBe('▼\u00a0−119,00');
+    expect(screen.getByTestId('frase-nao-fecha').textContent).toBe('A soma das parcelas não fecha com o contrato.');
+    expect(botaoSalvar().disabled).toBe(true);
+    expect(botaoSalvar().title).toBe('A soma das parcelas não fecha com o contrato.');
+    expect(screen.getByTestId('por-na-ultima').textContent).toBe('Pôr +119,00 na parcela 2');
+    fireEvent.click(screen.getByTestId('compra-vale'));
+    await waitFor(() => expect(screen.getByTestId('rodape-compra').textContent).toBe('16.119,00'));
+    await salvar();
+    expect(rpcsDeEdicao()).toEqual([{ fn: 'fn_parcelamento_editar_parcelas', args: {
+      p_financiamento_id: 'ctr-1',
+      p_parcelas: [{ id: 'par-1', data_vencimento: '2026-10-10', valor: 8119 }, { id: 'par-2', data_vencimento: '2026-11-10', valor: 8000 }],
+      p_valor_total: 16119,
+    } }]);
+    expect(banco.ordem.indexOf('rpc:fn_parcelamento_editar_parcelas')).toBeLessThan(banco.ordem.indexOf('update:financiamentos'));
+    expect(updatesDoContrato()[0].payload.valor_total).toBe(16119);
+    expect(banco.updates.filter((u) => u.tabela === 'financiamento_parcelas' || u.tabela === 'financeiro_lancamentos_v2')).toEqual([]);
+  });
+
+  it('"+ Parcela" e ✕: a acrescentada viaja SEM id, a retirada sai da lista; "Desfazer alterações" volta às gravadas', async () => {
+    await abrirGrade();
+    fireEvent.click(screen.getAllByTestId('tirar-parcela')[1]);
+    fireEvent.click(screen.getByTestId('mais-parcela'));
+    expect(screen.getByTestId('rodape-n').textContent).toBe('2 parcelas');
+    expect(botaoSalvar().title).toBe('Parcela 2 sem vencimento.');
+    fireEvent.click(screen.getByTestId('voltar-a-base'));
+    expect(valores().map((v) => v.value)).toEqual(['8.119,00', '8.119,00']);
+    expect(screen.getByTestId('diferenca').textContent).toBe('0,00 ✓');
+    expect(screen.getByTestId('voltar-a-base').textContent).toBe('Desfazer alterações');
+  });
+
+  it('a RPC recusou: a frase fica ESCRITA ao lado do botão, o diálogo não fecha e o contrato NÃO é gravado', async () => {
+    banco.erroRpc = 'A parcela 1 já está paga: data e valor não mudam, e ela não pode ser retirada. Nada foi gravado.';
+    await abrirGrade();
+    digitar(0, '8.000,00'); digitar(1, '8.238,00');
+    await waitFor(() => expect(botaoSalvar().disabled).toBe(false));
+    fireEvent.click(botaoSalvar());
+    await waitFor(() => expect(screen.getByTestId('erro-da-grade').textContent).toBe(banco.erroRpc));
+    expect(screen.getByText('Editar obrigação')).toBeTruthy();
+    expect(updatesDoContrato()).toEqual([]);
+  });
+
+  it('financiamento com juros: a aba Parcelas segue com a tabela de sempre (sem a grade)', async () => {
+    banco.contrato = FINANCIAMENTO('financiamento');
+    montarDetalhe();
+    await abrirEdicao(); await pronto();
+    await irParaAba('Parcelas');
+    expect(screen.queryByTestId('grade-de-parcelas')).toBeNull();
+    expect(screen.getAllByRole('button', { name: 'Editar parcela' }).length).toBe(2);
   });
 });

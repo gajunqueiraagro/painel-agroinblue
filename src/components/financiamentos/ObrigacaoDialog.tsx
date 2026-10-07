@@ -31,8 +31,9 @@ import { Pencil } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { GradeDeParcelas, type ModoDasParcelas } from '@/components/financiamentos/GradeDeParcelas';
 import {
-  centavos, motivoNaoSalva, parcelasParaPayload, type ParcelaLivre,
+  centavos, houveEdicao, motivoNaoSalva, parcelasGravadasParaGrade, parcelasParaEditar, parcelasParaPayload, type ParcelaLivre,
 } from '@/lib/financiamentos/parcelasLivres';
+import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
 
 /* ══ NOVA OBRIGACAO — a casca do CompraModalShell aplicada ao contrato ═══════════
    PR-PARC-04. Substitui a PAGINA `src/pages/FinanciamentoCadastro.tsx` como porta de
@@ -292,7 +293,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
     queryFn: async () => {
       const { data } = await supabase
         .from('financeiro_lancamentos_v2')
-        .select('id, safra_id, cultura, fase, forma_pagamento')
+        .select('id, safra_id, cultura, fase, forma_pagamento, status_transacao, data_pagamento')
         .eq('financiamento_id', financiamentoId!)
         .eq('cancelado', false);
       const linhas = data ?? [];
@@ -478,6 +479,32 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
   }, [livresAbertas, nLivres, primeiroVencimentoLivre]);
   const motivoDasParcelas = livresAbertas ? motivoNaoSalva(parcelasLivres, centavos(Number(form.valor_total) || 0), 'o contrato') : null;
 
+  /* ── PARC-LIVRES-01 passo 2B — EDITAR as parcelas de um parcelamento já criado ───────────────────────────────────────────
+     A MESMA grade do nascimento, sobre as parcelas GRAVADAS: a paga fica apagada (data e valor não mudam) e entra na soma; a não
+     paga se edita, se tira e se acrescenta. Quem grava é UMA RPC (`fn_parcelamento_editar_parcelas`): parcela, lançamento e
+     contrato na mesma transação. A lista nasce UMA vez (`baseEdicao`), com o dado fresco; "Desfazer alterações" volta a ela. */
+  const [gradeEdicao, setGradeEdicao] = useState<ParcelaLivre[]>([]);
+  const [baseEdicao, setBaseEdicao] = useState<ParcelaLivre[] | null>(null);
+  const [erroDaGrade, setErroDaGrade] = useState<string | null>(null);
+  /* a RPC já gravou esta lista e o gravador do contrato falhou depois: a nova tentativa NÃO a manda de novo (a acrescentada
+     entraria duas vezes) e a grade fica travada até o diálogo reabrir com o dado do banco */
+  const [gradeGravada, setGradeGravada] = useState(false);
+  const edicaoDeParcelamento = ehEdicao && ehParcelamento;
+  useEffect(() => { if (!open) { setGradeEdicao([]); setBaseEdicao(null); setErroDaGrade(null); setGradeGravada(false); } }, [open]);
+  useEffect(() => {
+    if (!edicaoDeParcelamento || !carregado || baseEdicao !== null || !lancamentosDoContrato || parcelasGravadas.length === 0) return;
+    const semente = parcelasGravadasParaGrade(parcelasGravadas, lancamentosDoContrato.linhas);
+    setGradeEdicao(semente); setBaseEdicao(semente);
+  }, [edicaoDeParcelamento, carregado, baseEdicao, lancamentosDoContrato, parcelasGravadas]);
+  const nDaGradeEdicao = gradeEdicao.length;
+  useEffect(() => {
+    if (!edicaoDeParcelamento || baseEdicao === null) return;
+    set('total_parcelas', nDaGradeEdicao);
+  }, [edicaoDeParcelamento, baseEdicao, nDaGradeEdicao]);
+  const motivoDaGradeEdicao = edicaoDeParcelamento && baseEdicao !== null
+    ? motivoNaoSalva(gradeEdicao, centavos(Number(form.valor_total) || 0), 'o contrato') : null;
+  const gradeEdicaoMudou = edicaoDeParcelamento && baseEdicao !== null && houveEdicao(gradeEdicao, baseEdicao);
+
   /* Auto-gerar parcelas — mesma cadeia de dependencias da pagina. */
   useEffect(() => {
     /* ⚠ EM EDICAO NAO SE REGERA NADA. As parcelas gravadas podem ter lancamento
@@ -547,6 +574,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
     if (!form.data_contrato) lista.push({ aba: 'contrato', texto: 'Informe a data do contrato.' });
     /* PARC-LIVRES-01 — nas livres quem fala é a grade: a MESMA função que ela lê (`motivoNaoSalva`). */
     if (motivoDasParcelas) lista.push({ aba: 'parcelas', texto: motivoDasParcelas });
+    else if (motivoDaGradeEdicao) lista.push({ aba: 'parcelas', texto: motivoDaGradeEdicao });
     else if (!livresAbertas) {
       if (!form.data_primeira_parcela) lista.push({ aba: 'parcelas', texto: 'Informe a data da 1ª parcela.' });
       if (!Number(form.total_parcelas)) lista.push({ aba: 'parcelas', texto: 'Informe o número de parcelas.' });
@@ -558,7 +586,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
     if (ehParcelamento && !form.fazenda_id) lista.push({ aba: 'contrato', texto: 'Escolha a fazenda do parcelamento.' });
     return lista;
   }, [form.descricao, form.valor_total, form.data_contrato, form.data_primeira_parcela,
-      form.total_parcelas, form.plano_conta_parcela_id, form.fazenda_id, ehParcelamento, motivoDasParcelas, livresAbertas]);
+      form.total_parcelas, form.plano_conta_parcela_id, form.fazenda_id, ehParcelamento, motivoDasParcelas, livresAbertas, motivoDaGradeEdicao]);
 
   const primeiraPendencia = pendencias[0]?.texto ?? null;
   const contarPendencias = (a: Aba) => pendencias.filter(p => p.aba === a).length;
@@ -652,6 +680,28 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
     if (ehEdicao) {
       if (!onSalvarEdicao) return;
       setSalvandoEdicao(true);
+      /* PARC-LIVRES-01 2B — as PARCELAS primeiro, pela RPC (parcela + lançamento + total, uma transação). Recusou: a frase fica
+         escrita ao lado do botão e NADA mais é gravado. Só depois o contrato (os campos dele). */
+      if (gradeEdicaoMudou && !gradeGravada && financiamentoId) {
+        setErroDaGrade(null);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+        const { error } = await (supabase as any).rpc('fn_parcelamento_editar_parcelas', {
+          p_financiamento_id: financiamentoId,
+          p_parcelas: parcelasParaEditar(gradeEdicao),
+          p_valor_total: form.valor_total,
+        });
+        if (error) {
+          setErroDaGrade(typeof error.message === 'string' && error.message ? error.message : 'Não foi possível gravar as parcelas. Nada foi gravado.');
+          setSalvandoEdicao(false);
+          return;
+        }
+        /* gravada: lista, Conciliação e CPR releem sozinhas */
+        setGradeGravada(true);
+        qc.invalidateQueries({ queryKey: ['obrigacao-edicao-parcelas', financiamentoId] });
+        qc.invalidateQueries({ queryKey: ['obrigacao-edicao-lancamentos', financiamentoId] });
+        qc.invalidateQueries({ queryKey: ['cpr-lancs'] });
+        if (clienteId) notificarLancamentosMudaram(clienteId);
+      }
       const ok = await onSalvarEdicao(form, { status: statusContrato });
       setSalvandoEdicao(false);
       if (ok) onSalvo?.();
@@ -966,8 +1016,8 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                       ⚠ SO' NA CRIACAO DE PARCELAMENTO: em edicao a grade ja' e' de quatro com
                       teto de 200px por campo, e o financiamento tem seis campos, que em uma
                       linha ficariam ilegiveis. */}
-                  <div className={ehParcelamento && !ehEdicao ? 'grid grid-cols-4 gap-2' : 'space-y-2.5'}>
-                  <div className={ehParcelamento && !ehEdicao ? 'contents' : `grid gap-2 ${ehEdicao ? 'grid-cols-4 [&>div]:max-w-[200px]' : 'grid-cols-3'}`}>
+                  <div className={ehParcelamento ? 'grid grid-cols-4 gap-2' : 'space-y-2.5'}>
+                  <div className={ehParcelamento ? 'contents' : `grid gap-2 ${ehEdicao ? 'grid-cols-4 [&>div]:max-w-[200px]' : 'grid-cols-3'}`}>
                     <div>
                       <Label className={ROTULO}>Valor total *</Label>
                       <CampoMoeda valor={form.valor_total || null}
@@ -1005,7 +1055,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                         <>
                           <Input readOnly tabIndex={-1} value={String(form.total_parcelas)}
                             className={`${CAMPO} text-right ${NUM} ${CAMPO_TRAVADO}`} />
-                          <p className={APOIO}>{livresAbertas ? 'O da lista: use "+ Parcela" e o ✕.' : 'Para mudar a quantidade, edite ou cancele parcelas na tabela.'}</p>
+                          <p className={APOIO}>{livresAbertas || edicaoDeParcelamento ? 'O da lista: use "+ Parcela" e o ✕.' : 'Para mudar a quantidade, edite ou cancele parcelas na tabela.'}</p>
                         </>
                       ) : (
                         <>
@@ -1027,7 +1077,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                       Esconder a terceira celula mantendo `grid-cols-3` deixaria um
                       terco vazio a' direita, e buraco em grade le-se como campo que
                       faltou carregar. */}
-                  <div className={ehParcelamento && !ehEdicao ? 'contents' : `grid gap-2 ${ehEdicao ? 'grid-cols-4 [&>div]:max-w-[200px]' : 'grid-cols-3'}`}>
+                  <div className={ehParcelamento ? 'contents' : `grid gap-2 ${ehEdicao ? 'grid-cols-4 [&>div]:max-w-[200px]' : 'grid-cols-3'}`}>
                     <div>
                       <Label className={ROTULO}>1ª parcela *</Label>
                       <DatePicker value={form.data_primeira_parcela} onChange={v => set('data_primeira_parcela', v)}
@@ -1038,8 +1088,9 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                           nao se movem: a data delas ja' virou lancamento no caixa, e reescreve-la
                           seria mentir sobre um fato. O deslocamento roda no gravador. */}
                       {ehEdicao && (
-                        <p className="mt-0.5 text-[10px] text-amber-600 dark:text-amber-500">
-                          {ehParcelamento ? MOTIVO_PRIMEIRA_PARCELA_DO_PARCELAMENTO : 'Move os vencimentos das parcelas pendentes; as pagas não mudam.'}
+                        <p className={ehParcelamento ? 'mt-0.5 truncate text-[10px] text-amber-600 dark:text-amber-500' : 'mt-0.5 text-[10px] text-amber-600 dark:text-amber-500'}
+                           title={ehParcelamento ? MOTIVO_PRIMEIRA_PARCELA_DO_PARCELAMENTO : undefined}>
+                          {ehParcelamento ? 'A da lista: edite na grade.' : 'Move os vencimentos das parcelas pendentes; as pagas não mudam.'}
                         </p>
                       )}
                     </div>
@@ -1098,7 +1149,22 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                         cede e' a explicacao, nunca o nome do campo. */}
                     {/* PARC-LIVRES-01 — na CRIAÇÃO do parcelamento a prévia é a GRADE: "Igual todo mês" (o que a RPC grava, só
                         leitura) × "Parcelas livres" (vencimento e valor por parcela, com a soma contra o contrato). */}
-                    {ehParcelamento && !ehEdicao ? (
+                    {edicaoDeParcelamento ? (
+                      /* PARC-LIVRES-01 2B — as parcelas GRAVADAS na mesma grade: a paga apagada, a não paga editável. */
+                      <GradeDeParcelas
+                        modo="livres"
+                        parcelas={gradeEdicao}
+                        onParcelas={(lista) => { setErroDaGrade(null); setGradeEdicao(lista); }}
+                        compraCent={centavos(Number(form.valor_total) || 0)}
+                        oQue={{ frase: 'o contrato', rotulo: 'Valor do contrato', passaAValer: 'O contrato vale' }}
+                        onCompraVale={(somaCent) => set('valor_total', somaCent / 100)}
+                        base={baseEdicao}
+                        rotuloVoltar="Desfazer alterações"
+                        recado="Parcela paga não muda. Salvar grava parcela, lançamento e contrato juntos."
+                        travado={gradeGravada}
+                        altura={ALTURA_GRADE}
+                      />
+                    ) : ehParcelamento && !ehEdicao ? (
                       <GradeDeParcelas
                         modo={modoParcelas}
                         onModo={trocarModoDasParcelas}
@@ -1541,7 +1607,9 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
               operador o trabalho de adivinhar. */}
           <div className="border-t px-4 py-2.5 flex items-center justify-between">
             <p className="text-[11px] text-muted-foreground min-w-0 truncate">
-              {primeiraPendencia && (
+              {erroDaGrade ? (
+                <span className="font-medium text-destructive" title={erroDaGrade} data-testid="erro-da-grade">{erroDaGrade}</span>
+              ) : primeiraPendencia && (
                 <>
                   <span className="font-medium text-amber-600 dark:text-amber-500">Pendência:</span> {primeiraPendencia}
                 </>
