@@ -65,8 +65,11 @@ const dataBr = (iso: string | null) => (iso ? iso.split('-').reverse().join('/')
 const GRADE_DOCUMENTOS = 'grid grid-cols-[max-content_minmax(0,1fr)_70px_92px_66px_72px] gap-x-[10px]';
 const LINHA_DOCUMENTOS = 'col-span-full grid [grid-template-columns:subgrid] items-center';
 
-export function AbaDocumentosLancamento({ api, somenteLeitura, fornecedores, onAnexarBoletosDasParcelas, sugestao }: {
+export function AbaDocumentosLancamento({ api, somenteLeitura, fornecedores, onAnexarBoletosDasParcelas, sugestao, semBoleto }: {
   api: LancamentoDocumentosApi;
+  /** Sem o tipo Boleto no formulário — PARC-LIVRES-01 passo 6: no CONTRATO esta lista é a dos documentos da COMPRA (valem para
+   *  todas as parcelas); o boleto é de UMA parcela e entra pela grade das parcelas, logo abaixo. */
+  semBoleto?: boolean;
   somenteLeitura?: boolean;
   fornecedores: FornecedorDoDocumento[];
   /** O que o lançamento SALVO já diz, para o documento NOVO nascer preenchido — FIN-DOCUMENTO-FORM-01. É a MESMA sugestão do
@@ -292,7 +295,7 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, fornecedores, onA
       )}
 
       {formAberto && (
-        <FormDocumento api={api} documento={editando} fornecedores={fornecedores} sugestao={sugestao}
+        <FormDocumento api={api} documento={editando} fornecedores={fornecedores} sugestao={sugestao} semBoleto={semBoleto}
           onFechar={() => { setFormAberto(false); setEditando(null); }} />
       )}
 

@@ -44,7 +44,8 @@ const valorBR = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits
  *   até o Salvar do lançamento, como sempre.
  * ⚠ A LINHA TEM 18px EM TODO ESTADO: realce, recusa e pergunta cabem na célula (uma linha por registro).
  */
-function LinhaDaParcela({ parcela: p, impar, total, nf, boleto: b, recusaDoClique, travado, onEscolher, onLimparRecusa, onBoleto, onTirarBoleto }: {
+function LinhaDaParcela({ parcela: p, impar, total, nf, boleto: b, recusaDoClique, travado, onEscolher, onLimparRecusa, onBoleto, onTirarBoleto, onVerBoleto }: {
+  onVerBoleto?: (chave: string) => void;
   parcela: ParcelaPrevistaLinha; impar: boolean; total: number; nf: string | null;
   boleto: DocumentoPendente | undefined; recusaDoClique: string | null; travado: boolean;
   onEscolher: () => void; onLimparRecusa: () => void;
@@ -97,7 +98,10 @@ function LinhaDaParcela({ parcela: p, impar, total, nf, boleto: b, recusaDoCliqu
             </button>
           </span>
         ) : rec ? <span className="text-destructive">{rec}</span>
-          : b?.arquivo ? <NomeDoArquivo nome={b.arquivo.name} />
+          : b?.arquivo ? (onVerBoleto
+            ? <button type="button" className="max-w-full text-left text-primary hover:underline" data-testid={`ver-boleto-${p.numero}`}
+                title={`Abrir ${b.arquivo.name}`} onClick={() => onVerBoleto(b.chave)}><NomeDoArquivo nome={b.arquivo.name} /></button>
+            : <NomeDoArquivo nome={b.arquivo.name} />)
             : <span className="text-muted-foreground">sem boleto</span>}
       </td>
       <td className={`${TD} text-center whitespace-nowrap`}>
@@ -120,7 +124,7 @@ function LinhaDaParcela({ parcela: p, impar, total, nf, boleto: b, recusaDoCliqu
 /** Por que a grade de boletos está vazia: as parcelas saem do valor e do vencimento do lançamento (ou da lista de parcelas livres). */
 export const MOTIVO_SEM_PARCELAS = 'Informe o valor e o vencimento do lançamento para listar as parcelas e anexar os boletos.';
 
-export function ParcelasDaCompra({ parcelas, notaFiscal, qtdNotas, boletos, onBoleto, onTirarBoleto, onAnexarVarios, travado, foraDoPlano }: {
+export function ParcelasDaCompra({ parcelas, notaFiscal, qtdNotas, boletos, onBoleto, onTirarBoleto, onAnexarVarios, travado, foraDoPlano, onVerBoleto }: {
   parcelas: readonly ParcelaPrevistaLinha[];
   /** Número da NF da compra pendente (a primeira), ou null. */
   notaFiscal: string | null;
@@ -133,6 +137,8 @@ export function ParcelasDaCompra({ parcelas, notaFiscal, qtdNotas, boletos, onBo
   travado?: boolean;
   /** Boletos de parcela que não existe mais no plano (o operador baixou o número de parcelas). */
   foraDoPlano: readonly DocumentoPendente[];
+  /** Só no CONTRATO (PARC-LIVRES-01 passo 6), onde o boleto já está gravado: o nome do arquivo abre o boleto. */
+  onVerBoleto?: (chave: string) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [alvo, setAlvo] = useState<number | null>(null);
@@ -194,7 +200,7 @@ export function ParcelasDaCompra({ parcelas, notaFiscal, qtdNotas, boletos, onBo
               <LinhaDaParcela key={p.numero} parcela={p} impar={k % 2 === 1} total={n} nf={nf} boleto={porParcela.get(p.numero)}
                 recusaDoClique={recusa?.parcela === p.numero ? recusa.msg : null} travado={!!travado}
                 onEscolher={() => escolher(p.numero)} onLimparRecusa={() => setRecusa(null)}
-                onBoleto={onBoleto} onTirarBoleto={onTirarBoleto} />
+                onBoleto={onBoleto} onTirarBoleto={onTirarBoleto} onVerBoleto={onVerBoleto} />
             ))}
           </tbody>
           <tfoot>

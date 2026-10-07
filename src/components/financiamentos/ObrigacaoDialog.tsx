@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { DocumentosDoContrato } from '@/components/financiamentos/DocumentosDoContrato';
+import { usarDuplicatasDaNota } from '@/lib/financiamentos/notaContraContrato';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
@@ -78,7 +80,7 @@ const MIN_PARCELAS = 1;
 const MAX_PARCELAS = 360;
 
 export type Escopo = 'pecuaria' | 'agricultura';
-type Aba = 'contrato' | 'parcelas' | 'classificacao';
+type Aba = 'contrato' | 'parcelas' | 'classificacao' | 'documentos';
 type Frequencia = FinanciamentoForm['frequencia_parcela'];
 
 /* ⚠ GUARDAS, NAO CASTS (regra zero-cast). O `onValueChange` do Select entrega `string`;
@@ -114,7 +116,7 @@ const SELECT_POPPER = 'w-[var(--radix-select-trigger-width)]';
 /* Cabecalho da grade — override LOCAL, igual ao da lista e do detalhe: azul de fundo,
    branco por cima, caixa normal. O primitivo dense nao muda. */
 const TH_PREVIA = 'text-primary-foreground normal-case tracking-normal';
-const ehAba = (v: string): v is Aba => v === 'contrato' || v === 'parcelas' || v === 'classificacao';
+const ehAba = (v: string): v is Aba => v === 'contrato' || v === 'parcelas' || v === 'classificacao' || v === 'documentos';
 const FREQUENCIAS: Frequencia[] = ['mensal', 'bimestral', 'trimestral', 'semestral', 'anual'];
 const ehFrequencia = (v: string): v is Frequencia => FREQUENCIAS.some(f => f === v);
 
@@ -490,6 +492,8 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
      entraria duas vezes) e a grade fica travada até o diálogo reabrir com o dado do banco */
   const [gradeGravada, setGradeGravada] = useState(false);
   const edicaoDeParcelamento = ehEdicao && ehParcelamento;
+  /* a data LOCAL (nunca `toISOString`, que é UTC), para a leitura da situação do contrato na aba Documentos */
+  const hojeLocalDosDocumentos = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })();
   useEffect(() => { if (!open) { setGradeEdicao([]); setBaseEdicao(null); setErroDaGrade(null); setGradeGravada(false); } }, [open]);
   useEffect(() => {
     if (!edicaoDeParcelamento || !carregado || baseEdicao !== null || !lancamentosDoContrato || parcelasGravadas.length === 0) return;
@@ -717,10 +721,14 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
     ? 'Uma despesa paga em N vezes. Ela gera as parcelas, e as parcelas geram os lançamentos.'
     : 'Um crédito contratado. Ele gera as parcelas, e cada parcela gera amortização e juros.';
 
+  const abaDeDocumentos: Array<{ key: Aba; label: string }> = edicaoDeParcelamento ? [{ key: 'documentos', label: 'Documentos' }] : [];
   const abas: Array<{ key: Aba; label: string }> = [
     { key: 'contrato', label: 'Contrato' },
     { key: 'parcelas', label: 'Parcelas' },
     { key: 'classificacao', label: 'Classificação' },
+    /* PARC-LIVRES-01 passo 6 — só na EDIÇÃO de PARCELAMENTO: os documentos moram nos lançamentos das parcelas, que só existem
+       depois de o contrato nascer; financiamento com juros fica fora deste PR. */
+    ...abaDeDocumentos,
   ];
 
   return (
@@ -1342,6 +1350,22 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                     </>)}
                   </div>
                 </TabsContent>
+
+                {/* ══ ABA DOCUMENTOS (parcelamento, edição) — PARC-LIVRES-01 passo 6 ═══ */}
+                {edicaoDeParcelamento && financiamentoId && clienteId && (
+                  <TabsContent value="documentos" className="mt-0">
+                    {/* altura FIXA pela janela (como a grade das parcelas): só a grade dos boletos rola */}
+                    <div style={{ height: 'clamp(250px, calc(100vh - 262px), 420px)' }}>
+                      <DocumentosDoContrato financiamentoId={financiamentoId} clienteId={clienteId} hoje={hojeLocalDosDocumentos}
+                        credorId={form.credor_id || null} valorDoContrato={Number(form.valor_total) || 0}
+                        onUsarDuplicatas={gradeGravada ? undefined : (nota) => {
+                          setErroDaGrade(null);
+                          setGradeEdicao((g) => usarDuplicatasDaNota(g, nota));
+                          setAba('parcelas');
+                        }} />
+                    </div>
+                  </TabsContent>
+                )}
 
                 {/* ══ ABA CLASSIFICACAO ═════════════════════════════════════════ */}
                 <TabsContent value="classificacao" className="mt-0 space-y-2.5">

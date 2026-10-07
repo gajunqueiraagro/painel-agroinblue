@@ -162,7 +162,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 06/10/2026 (PARC-LIVRES-01 fechamento D, +1 em `src/components/financeiro-v2/anexarBoletos.test.tsx` — 4351 depois dele; antes o
+  Baseline em 07/10/2026 (PARC-LIVRES-01 passo 6, +20: `src/components/financiamentos/documentosDoContrato.test.tsx` 12,
+  `src/lib/financiamentos/notaContraContrato.test.ts` 8 — 4371 depois dele; antes o
+  PARC-LIVRES-01 fechamento D, +1 em `src/components/financeiro-v2/anexarBoletos.test.tsx` — 4351 depois dele; antes o
   PARC-LIVRES-01 passo 5, +16: `src/lib/financiamentos/nomeDaParcela.test.ts` 9, `src/lib/pdf/cpr/parcelaNoPdf.test.ts` 6,
   `src/components/financeiro-v2/finV2ColunasOC01.test.ts` 1 — 4350 depois dele; antes o
   PARC-LIVRES-01 passo 3, +18: `src/lib/financeiro/docDaLinha.test.ts` 10,
@@ -232,7 +234,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4351
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4371
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -243,6 +245,10 @@ no mesmo arquivo.
   ⚠ DIVIDA SUITE-TESTE-OSCILA-01: em 06/10/2026 UMA execucao da suite inteira deu 4 falhas em vez de 3 (logo depois de uma rodada
     de mutacoes); as cinco execucoes seguintes deram as 3 de sempre. O quarto teste NAO foi identificado (a saida daquela rodada
     nao foi guardada). Quem vir 4 falhas guarda a lista dos `FAIL` antes de repetir.
+    [07/10/2026, PARC-LIVRES-01 passo 6: UMA execucao deu 8 falhas (as 3 + 5); as cinco de fora, GUARDADAS — passam sozinhas e na
+    execucao seguinte da suite inteira: `conferenciaFechamentoDia.test.tsx` (D3/D4), `espelhoDono.test.tsx` (os dois do link
+    "N dias com diferença"), `valorComConta.test.tsx` (prova 7, novo lancamento pela mascara) e `obrigacaoEdicao.test.tsx` (foto
+    da criacao de financiamento). Todas montam modal grande: cheira a tempo esgotado sob carga, nao a regressao.]
   ⚠ CASO EXISTENTE QUE FALHA POR MUDANCA DE CONTRATO e' atualizado ao contrato novo, nunca afrouxado
     para passar; teste que sai junto com o codigo que testava nao e' perda de cobertura.
   ⚠ ASSERCAO DE "NENHUM" LEVA A PROVA DE QUE A BUSCA SABE ACHAR (a lei do auto-teste do `check:tdz`),
@@ -3326,6 +3332,52 @@ docs/historico/frentes-ate-2026-09-29.md.)
     TODOS os documentos do cliente a cada aviso do canal (NJ: centenas de linhas; medir se crescer) · NAO PROVADO NO NAVEGADOR: o
     Ampliado, o minimodal aberto pelo Status, o clipe por ARQUIVO anexado sem numero, e o documento que nao e' nota no modal
     (so' por teste); a janela estava em 579 de altura, nao 523.
+- ⚠ DOCUMENTOS NO CONTRATO DO PARCELAMENTO: O CONTRATO NAO GUARDA DOCUMENTO, MOSTRA E GRAVA OS DOS LANCAMENTOS DAS PARCELAS
+  (PARC-LIVRES-01 passo 6, Gabriel 05–06/10/2026, so' tela, sem banco: "Não tem opção de incluir NF e importar no modal pai").
+  Editar obrigação ganha a aba "Documentos" (so' na EDICAO de PARCELAMENTO): `DocumentosDoContrato`
+  (`src/components/financiamentos/`). NENHUM SEGUNDO CADASTRO: os donos sao os do modal do lancamento.
+  · DOCUMENTOS DA COMPRA (valem para todas as parcelas): a MESMA `AbaDocumentosLancamento`, sobre os documentos da 1ª parcela viva
+    (onde a NF e' registrada) SEM o boleto dela e sem o confronto de uma parcela so'; prop nova `semBoleto` (o formulario nao
+    oferece Boleto). Documento registrado por ali e' LIGADO a's N parcelas pela mesma `fin_documento_vincular` do nascimento. UMA
+    NF, N vinculos: anexar pela parcela ou pelo contrato da' no mesmo registro. Sob a lista, a NF contra a COMPRA INTEIRA: "Nota R$ X
+    · compra (soma das parcelas) R$ Y · confere ✓ / não confere" — os dois numeros lado a lado (a soma e' `cartoes.somaTotal`,
+    do banco); a tela so' compara, em centavos.
+  · O BOLETO DE CADA PARCELA: a MESMA `ParcelasDaCompra` (a grade do lancamento novo), com as parcelas VIVAS do banco
+    (`fn_financiamento_situacao`: a retirada nao entra; a PAGA entra e recebe boleto). "+ Boleto", soltar na linha e "Anexar vários
+    boletos" (`AnexarBoletosDialog`) GRAVAM NA HORA pelo dono `gravarDocumentosDoParcelamento`; o boleto gravado aparece com o
+    nome clicavel (prop nova `onVerBoleto`, abre pela URL assinada do dono); ✕ pergunta no lugar FIXO de 22px ("Tirar o boleto da
+    parcela N? Sim, tirar / Não") e cancela pelo dono com `MOTIVO_TIRAR_BOLETO`. Recado e recusa escritos nesse lugar, sem toast.
+  · IMPORTAR XML CONFERE, NAO SOBRESCREVE: a area "Importar XML da nota" le' pelo `lerNFe` e abre um DIALOGO proprio (760 x 187)
+    com a tabela Campo · Contrato · Nota · Situação — fornecedor pelo CNPJ/CPF (so' digitos; cadastro sem documento = "não
+    comparável", nunca "confere"), valor total ao centavo, parcelas x duplicatas. Dono puro:
+    `src/lib/financiamentos/notaContraContrato.ts` (`conferirNota`, `duplicatasEmAberto`, `usarDuplicatasDaNota`). Dois gestos:
+    "Gravar esta nota no contrato" (registra UMA NF com o XML como arquivo e liga a's N) e "Usar as duplicatas da nota" (so' quando
+    diferem; apagado com o motivo ESCRITO quando nao vale): leva a lista a' aba Parcelas — a nao paga e' EDITADA ("editado · era
+    …"), a que sobra sai, a que falta entra — SEM GRAVAR; a duplicata igual (data e valor) a uma parcela paga E' a parcela paga.
+    ⚠ O DIALOGO NASCEU DE MEDICAO: a tabela dentro da aba deixava 5px para a grade dos boletos a 523 de altura.
+  · ALTURA FIXA: a aba tem `clamp(250px, calc(100vh - 262px), 420px)`; so' a grade dos boletos rola. Medido a 1.126 x 523 no
+    Teste: dialogo 1024 x 519, aba 698 x 261 igual vazia, com a NF, com a pergunta do ✕ e com o XML aberto; linhas de 18px; o
+    CNPJ nunca corta (parte fixa da celula; o nome corta com `title`).
+  PROVA NO NAVEGADOR (cliente Teste, 06–07/10, contrato sintetico de 3 parcelas, criado por RPC e APAGADO): banco antes — 0 NF, 0
+  vinculos, NF por parcela 0,0,0; XML sintetico importado e "Gravar esta nota" — 1 NF, 2 vinculos (dona + 2 = as 3), NF por
+  parcela 1,1,1 pela `vw_lancamento_documentos` (a que o modal do Financeiro le'); "+ Boleto" na 2ª — "1 de 3 com boleto", nome
+  clicavel; ✕ + Sim — 0 boletos vivos, 1 cancelado; "Usar as duplicatas" — aba Parcelas com "2 | 18/11/2026 | 120,00 | editado ·
+  era 20/11/26 · 100,00" e "3 | 15/12/2026 | 80,00 | editado · era …", Diferença 0,00 ✓, e NADA gravado (0 parcelas mudadas).
+  ⚠ FOI O PRIMEIRO `.xml` REAL NO BUCKET `fin-documentos` (fecha o "nunca exercitado" do UI-ARRASTAR-ARQUIVO-01a quanto a SUBIR).
+  Testes: `documentosDoContrato.test.tsx` 12, `notaContraContrato.test.ts` 8; 8 mutacoes mortas.
+  ⚠ FINANCIAMENTO COM JUROS: a aba nao aparece. Faltaria: (1) a parcela tem DOIS lancamentos (principal e juros) — decidir em
+    qual o boleto mora e ligar a NF aos dois ou so' ao principal; (2) nao ha' "compra" nem duplicata: o documento e' o contrato de
+    credito, e a conferencia por nota nao se aplica; (3) o escritor dos lancamentos e' o motor, que cancela e recria — o documento
+    ficaria no cancelado (o defeito do "Protocolo IATF").
+  ⚠ DIVIDAS: PARC-DOCS-ARQUIVO-ORFAO-TESTE-01 (2 arquivos sinteticos da prova — um .xml e um .pdf de 9 bytes — ficaram no bucket
+    `fin-documentos` sob o cliente Teste: o banco recusa DELETE direto em `storage.objects`; tirar pela API de Storage) · o
+    boleto gravado aparece pelo NOME DO DOCUMENTO ("boleto"), nao pelo nome do arquivo (a view nao o traz) · a faixa "Documentado —
+    / Valor do lançamento —" da lista aparece vazia no contrato (o confronto de uma parcela so' foi desligado) · o emitente do
+    formulario so' oferece o fornecedor do contrato (+ "Outro") · "Usar as duplicatas" casa a duplicata com a parcela paga so' por
+    data E valor iguais · NAO PROVADO NO NAVEGADOR: "Anexar vários boletos", arrastar e soltar real, o "ver" do boleto abrindo a
+    URL, trocar a NF pelo lapis, a recusa de um XML que nao e' nota, fornecedor COM CNPJ (confere / difere), contrato com muitas
+    parcelas (a grade rolando) e parcela paga na grade (so' por teste); a NF vista ao ABRIR cada parcela pelo Financeiro foi
+    conferida pela view que o modal le', nao pelo clique.
 - ⚠ CONFERENCIA DO BOLETO (PARC-LIVRES-01 fechamento D, 06/10/2026, so' tela; relato do Gabriel: "sumiu a opção de incluir boleto").
   NAO SUMIU NO CODIGO: a aba Documentos do `LancamentoV2Dialog` e' a mesma do commit 20ff55d (as condicoes dos tres ramos nao
   mudaram). Conferido no navegador, cliente Teste, 1.126 x 523, sem gravar pela tela:
