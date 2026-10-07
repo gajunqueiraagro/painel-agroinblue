@@ -1,6 +1,7 @@
--- PARC-LIVRES-01 (passo 2A) — REPARO DO CONTRATO "Protocolo IATF" (NJ, 65c972a5) — ENSAIO REVERTIDO.
--- ⚠ NAO EXECUTADO. Este arquivo termina em ROLLBACK: roda, mostra o antes x depois e NAO grava. Para executar de verdade o
---   Gabriel aprova e troca o ROLLBACK final por COMMIT (e este cabecalho ganha a data da execucao).
+-- PARC-LIVRES-01 (passo 2A) — REPARO DO CONTRATO "Protocolo IATF" (NJ, 65c972a5).
+-- ⚠ EXECUTADO EM 06/10/2026 (07/10 UTC), com o SIM do Gabriel no prompt, depois de o ensaio revertido passar no mesmo dia.
+--   REGISTRO HISTORICO: NAO SE REEXECUTA — a guarda de origem recusa (o contrato ja' nao esta' no estado medido).
+--   Diferencas para o ensaio: o `raise exception 'ENSAIO OK'` final saiu (fica o NOTICE) e o ROLLBACK virou COMMIT.
 --
 -- O QUE ACONTECEU (06/10/2026, 23:28–23:33 UTC): o contrato nasceu com 5 parcelas de 14.553,94 (1a em 12/10). A data foi corrigida
 -- pelo lapis de cada parcela (23:29:02–23:29:33): o motor do financiamento CANCELOU os 5 lancamentos do cadastro (safra 26/27-Pec,
@@ -67,7 +68,6 @@ begin
     raise exception 'REPARO IATF: o estado final nao fecha (5 vivos, 72.769,70, parcela = lancamento)';
   end if;
   raise notice E'ANTES\n%\nDEPOIS\n%\n(o resto do NJ: identico)', v_antes, v_depois;
-  raise exception E'ENSAIO OK — nada gravado.\nANTES\n%\nDEPOIS\n%', v_antes, v_depois;
 end
 $r$;
-rollback;
+commit;
