@@ -165,7 +165,7 @@ const novoQc = (staleTime: number) => new QueryClient({ defaultOptions: { querie
 const montarDetalhe = () => render(<QueryClientProvider client={qc}><FinanciamentoDetalhe id="ctr-1" /></QueryClientProvider>);
 const abrirEdicao = async () => {
   /* o botão dos Dados do contrato é o primeiro; as linhas da grade de parcelas têm o seu */
-  await screen.findByText('Dados do contrato');
+  await screen.findByTestId('dados-do-contrato');
   fireEvent.click(screen.getAllByRole('button', { name: /^Editar$/ })[0]);
   await screen.findByText('Editar obrigação');
 };
@@ -577,7 +577,7 @@ describe('2B — a grade sobre as parcelas gravadas do parcelamento', () => {
 describe('4 — a tela do contrato mostra o que o banco derivou do lançamento', () => {
   const cartao = (rotulo: string) => screen.getByTestId(`cartao-${rotulo}`).textContent;
   const linhasDoContrato = () => screen.getAllByTestId('linha-do-contrato');
-  const abrirDetalhe = async () => { montarDetalhe(); await screen.findByText('Dados do contrato'); await waitFor(() => expect(linhasDoContrato().length).toBeGreaterThan(0)); };
+  const abrirDetalhe = async () => { montarDetalhe(); await screen.findByTestId('dados-do-contrato'); await waitFor(() => expect(linhasDoContrato().length).toBeGreaterThan(0)); };
 
   it('parcela paga pelo Financeiro: "Paga", "Pago em" e os cartões são os do banco (a coluna da parcela diz "pendente")', async () => {
     banco.situacao = SITUACAO([{ situacao: 'paga', pago_em: '2026-10-09', valor_pago: 8119, lancamento_status: 'conciliado', diverge: true }, { situacao: 'vencida' }],
@@ -585,13 +585,14 @@ describe('4 — a tela do contrato mostra o que o banco derivou do lançamento',
     await abrirDetalhe();
     expect(linhasDoContrato().map((l) => l.getAttribute('data-situacao'))).toEqual(['paga', 'vencida']);
     expect(screen.getAllByTestId('situacao-da-parcela').map((s) => s.textContent)).toEqual(['Paga', 'Vencida']);
-    expect(screen.getAllByTestId('pago-em').map((s) => s.textContent)).toEqual(['09/10/2026', '—']);
+    expect(screen.getAllByTestId('pago-em').map((s) => s.textContent)).toEqual(['09/10/26', '—']);
     expect(cartao('Pago')).toContain('8.119,00');
     expect(cartao('A vencer')).toContain('0,00');
     expect(cartao('Vencido')).toContain('8.119,00');
-    expect(cartao('Progresso')).toContain('1/2');
+    expect(cartao('Progresso')).toContain('1 de 2 pagas');
     expect(screen.getByTestId('total-das-parcelas').textContent).toContain('16.238,00');
-    expect(screen.getByText('1/2 pagas')).toBeTruthy();
+    expect(screen.getByTestId('total-pagas').textContent).toBe('1 de 2');
+    expect(screen.getByTestId('total-pago').textContent).toBe('pago 8.119,00');
   });
 
   it('a parcela CANCELADA não entra: a lista e o total são os do banco, não os de `financiamento_parcelas`', async () => {
@@ -602,36 +603,41 @@ describe('4 — a tela do contrato mostra o que o banco derivou do lançamento',
     await abrirDetalhe();
     expect(linhasDoContrato().length).toBe(2);
     expect(screen.getByTestId('total-das-parcelas').textContent).toContain('320,00');
-    expect(screen.getByText('2 parcelas')).toBeTruthy();
+    expect(screen.getByTestId('rodape-das-parcelas').textContent).toContain('Total · 2 parcelas');
     expect(screen.queryByText('Cancelada')).toBeNull();
   });
 
-  it('o lápis e o "Ver" abrem o lançamento DAQUELA parcela no modal do Financeiro; com juros, a linha oferece o dos juros', async () => {
+  it('o lápis e o CLIQUE NA LINHA abrem o lançamento DAQUELA parcela no modal do Financeiro; a coluna "Ver" saiu; com juros, a linha oferece o dos juros', async () => {
+    banco.contrato = FINANCIAMENTO('financiamento');
     banco.situacao = SITUACAO([{}, { lancamento_juros_id: 'lanc-juros-2', valor_juros: 100, valor_total: 8219 }]);
     await abrirDetalhe();
     fireEvent.click(screen.getAllByRole('button', { name: 'Abrir o lançamento da parcela' })[0]);
     expect(screen.getByTestId('modal-do-financeiro').textContent).toBe('lanc-1');
-    fireEvent.click(screen.getAllByRole('button', { name: 'Ver' })[1]);
+    fireEvent.click(linhasDoContrato()[1]);
     expect(screen.getByTestId('modal-do-financeiro').textContent).toBe('lanc-2');
+    expect(screen.queryByRole('button', { name: 'Ver' })).toBeNull();
+    expect(screen.getByTestId('dica-da-linha').textContent).toBe('clique na linha para abrir o lançamento no Financeiro');
     expect(screen.getAllByTestId('ver-juros').length).toBe(1);
     fireEvent.click(screen.getByTestId('ver-juros'));
     expect(screen.getByTestId('modal-do-financeiro').textContent).toBe('lanc-juros-2');
   });
 
-  it('parcela SEM lançamento: o lápis fica APAGADO com o motivo e não há "Ver"', async () => {
+  it('parcela SEM lançamento: o lápis fica APAGADO com o motivo e o clique na linha não abre nada', async () => {
     banco.situacao = SITUACAO([{ lancamento_id: null, fonte: 'parcela', situacao: 'paga', pago_em: '2026-10-10', valor_pago: 8119 }, {}], { pago: 8119, pagas: 1 });
     await abrirDetalhe();
     const lapis = screen.getAllByRole('button', { name: 'Abrir o lançamento da parcela' }) as HTMLButtonElement[];
     expect([lapis[0].disabled, lapis[0].title]).toEqual([true, 'Parcela sem lançamento no Financeiro.']);
     expect(lapis[1].disabled).toBe(false);
-    expect(screen.getAllByRole('button', { name: 'Ver' }).length).toBe(1);
+    fireEvent.click(linhasDoContrato()[0]);
+    expect(screen.queryByTestId('modal-do-financeiro')).toBeNull();
+    expect(linhasDoContrato()[0].getAttribute('title')).toBe('Parcela sem lançamento no Financeiro.');
     expect(screen.getAllByTestId('situacao-da-parcela')[0].getAttribute('title')).toBe('parcela sem lançamento: a situação é a registrada na parcela');
   });
 
   it('enquanto o banco não responde (ou responde torto) os cartões dizem "…", nunca R$ 0,00', async () => {
     banco.situacao = { parcelas: [{ id: 'par-1' }], cartoes: {} };
     montarDetalhe();
-    await screen.findByText('Dados do contrato');
+    await screen.findByTestId('dados-do-contrato');
     await waitFor(() => expect(qc.isFetching()).toBe(0));
     expect(cartao('Pago')).toBe('Pago…');
     expect(cartao('Progresso')).toBe('Progresso…');
@@ -666,7 +672,99 @@ describe('4 — a tela do contrato mostra o que o banco derivou do lançamento',
     expect(screen.getAllByRole('button', { name: 'Abrir o lançamento da parcela' })[0].className).toContain('h-4');
     expect(document.body.innerHTML).not.toContain('text-[9px] font-semibold');
     /* o Total continua vindo da leitura do contrato */
-    expect(screen.getByTestId('total-das-parcelas').textContent).toBe(celulas[2].textContent);
+    expect(screen.getByTestId('total-das-parcelas').textContent).toBe('16.238,00');
+  });
+
+  /* ── PARC-CONTRATO-01 item 1 — a tela conforme o mock: o detalhe vem PRONTO do banco ─────────────────────────────── */
+  const DET = (o: Record<string, unknown> = {}) => ({
+    competencia: '2026-06-02', conta_id: 'cta-1', conta_nome: 'Banco do Brasil', tipo_documento: null, numero_documento: null,
+    prazo: null, documentos: [{ id: 'nf-1', especie: 'nf', numero: '5510', valor: 16238 }], boletos: 0, ...o,
+  });
+  const CART = (o: Record<string, unknown> = {}) => ({ a_vencer_qtde: 0, vencido_qtde: 1, notas_qtde: 1, notas_valor: 16238, notas_diferenca: 0, boletos: 1, ...o });
+
+  it('PARC-CONTRATO-01: prazo, conta, competência, nota e boleto são os do banco; o rodapé e os cartões também (parcelamento)', async () => {
+    banco.situacao = SITUACAO([
+      { situacao: 'paga', pago_em: '2026-10-07', valor_pago: 8119, data_vencimento: '2026-10-10', ...DET({ prazo: { tipo: 'antes', dias: 3 }, boletos: 1 }) },
+      { situacao: 'vencida', data_vencimento: '2026-10-05', ...DET({ prazo: { tipo: 'vencida', dias: 2 } }) },
+    ], { pago: 8119, a_vencer: 0, vencido: 8119, pagas: 1, ...CART() });
+    await abrirDetalhe();
+    const celulas = (i: number) => Array.from(linhasDoContrato()[i].querySelectorAll('td')).map((td) => td.textContent);
+    expect(celulas(0).slice(0, 9)).toEqual(['1/2', '02/06/26', '10/10/26', '07/10/26', '3 dias antes', 'Banco do Brasil', '8.119,00', 'Paga', 'NF 000.005.510']);
+    expect(celulas(1).slice(0, 9)).toEqual(['2/2', '02/06/26', '05/10/26', '—', 'vencida há 2 dias', 'Banco do Brasil', '8.119,00', 'Vencida', 'NF 000.005.510']);
+    const prazos = screen.getAllByTestId('prazo');
+    expect(prazos[0].className).toContain('text-[#15803d]');
+    expect(prazos[1].className).toContain('text-[#b91c1c]');
+    /* o boleto: clipe só onde o banco contou boleto */
+    const boletos = screen.getAllByTestId('boleto-da-parcela');
+    expect(boletos[0].querySelector('[aria-label="tem boleto"]')).not.toBeNull();
+    expect(boletos[1].textContent).toBe('—');
+    /* cabeçalho na ordem do mock, sem "Lançamento" */
+    const cab = Array.from(screen.getByTestId('rodape-das-parcelas').closest('table')!.querySelectorAll('thead th')).map((th) => th.textContent);
+    expect(cab).toEqual(['Nº', 'Comp.', 'Venc.', 'Pgto.', 'Prazo', 'Conta', 'Valor (R$)', 'Situação', 'Nota fiscal', 'Boleto', '']);
+    /* rodapé: tudo lido */
+    expect(Array.from(screen.getByTestId('rodape-das-parcelas').querySelectorAll('td')).map((td) => td.textContent))
+      .toEqual(['Total · 2 parcelas', 'pago 8.119,00', '16.238,00', '1 de 2', '1 nota · confere', '1', '']);
+    /* cartões com a contagem do banco; "Juros previstos" não existe no parcelamento */
+    expect(cartao('Pago')).toBe('Pago · 1 parcelaR$ 8.119,00');
+    expect(cartao('A vencer')).toBe('A vencer · 0 parcelasR$ 0,00');
+    expect(cartao('Vencido')).toBe('Vencido · 1 parcelaR$ 8.119,00');
+    expect(screen.queryByTestId('cartao-Juros previstos')).toBeNull();
+  });
+
+  it('PARC-CONTRATO-01: a nota que NÃO confere escreve a diferença do banco; sem detalhe (banco antigo) a tela diz "—", nunca inventa', async () => {
+    banco.situacao = SITUACAO([{ ...DET() }, { ...DET() }], CART({ notas_valor: 33000, notas_diferenca: -77000 }));
+    await abrirDetalhe();
+    expect(screen.getByTestId('total-notas').textContent).toBe('1 nota · −77.000,00');
+    expect(screen.getByTestId('total-notas').className).toContain('text-[#b91c1c]');
+    cleanup();
+    qc = novoQc(0);
+    banco.situacao = SITUACAO([{}, {}]);
+    await abrirDetalhe();
+    expect(screen.getAllByTestId('prazo').map((p) => p.textContent)).toEqual(['—', '—']);
+    expect(screen.getAllByTestId('conta-da-parcela').map((p) => p.textContent)).toEqual(['—', '—']);
+    expect(screen.getByTestId('total-notas').textContent).toBe('—');
+    expect(screen.getByTestId('total-boletos').textContent).toBe('…');
+    expect(cartao('A vencer')).toBe('A vencerR$ 16.238,00');
+  });
+
+  it('PARC-CONTRATO-01: título CONTIDO numa linha (corta com title, botões com lugar reservado); Documentos e Editar parcelas abrem o diálogo na aba certa', async () => {
+    banco.contrato = { ...PARCELAMENTO(), descricao: 'Contrato de teste com um nome bem comprido de sessenta letras xx' };
+    banco.situacao = SITUACAO([{ ...DET() }, { ...DET() }], CART());
+    await abrirDetalhe();
+    const titulo = screen.getByTestId('titulo-do-contrato');
+    expect(titulo.className).toContain('truncate');
+    expect(titulo.className).toContain('min-w-0');
+    expect(titulo.className).toContain('text-[15px]');
+    expect(titulo.getAttribute('title')).toBe('Contrato de teste com um nome bem comprido de sessenta letras xx');
+    expect(screen.getByTestId('linha-do-titulo').className).toContain('h-[26px]');
+    const botoes = screen.getByTestId('botoes-do-contrato');
+    expect(botoes.className).toContain('shrink-0');
+    expect(Array.from(botoes.querySelectorAll('button')).map((b) => b.textContent?.trim())).toEqual(['Editar', 'Documentos', 'Excluir']);
+    /* o bloco de dados não tem mais o título "Dados do contrato", e nada de fonte mono na tela */
+    expect(screen.queryByText('Dados do contrato')).toBeNull();
+    expect(document.body.innerHTML).not.toContain('font-mono');
+    fireEvent.click(screen.getByRole('button', { name: /Documentos/ }));
+    await screen.findByText('Editar obrigação');
+    expect((await screen.findByRole('tab', { name: /Documentos/ })).getAttribute('aria-selected')).toBe('true');
+    cleanup();
+    qc = novoQc(0);
+    await abrirDetalhe();
+    fireEvent.click(screen.getByRole('button', { name: /Editar parcelas/ }));
+    await screen.findByText('Editar obrigação');
+    await waitFor(() => expect(screen.getByRole('tab', { name: /Parcelas/ }).getAttribute('aria-selected')).toBe('true'));
+  });
+
+  it('PARC-CONTRATO-01: financiamento com juros — Principal, Juros e Total no lugar de Nota e Boleto; "Documentos" apagado com o motivo; "Juros previstos" aparece', async () => {
+    banco.contrato = FINANCIAMENTO('financiamento');
+    banco.situacao = { ...SITUACAO([{ valor_juros: 100, valor_total: 8219, lancamento_juros_id: 'lj-1', ...DET({ documentos: [] }) }], { juros_previstos: 100, ...CART({ notas_qtde: 0, notas_valor: null, notas_diferenca: null, boletos: 0 }) }), natureza: 'financiamento' };
+    await abrirDetalhe();
+    const cab = Array.from(screen.getByTestId('rodape-das-parcelas').closest('table')!.querySelectorAll('thead th')).map((th) => th.textContent);
+    expect(cab).toEqual(['Nº', 'Comp.', 'Venc.', 'Pgto.', 'Prazo', 'Conta', 'Principal', 'Juros', 'Total (R$)', 'Situação', '', '']);
+    expect(Array.from(linhasDoContrato()[0].querySelectorAll('td')).map((td) => td.textContent).slice(6, 9)).toEqual(['8.119,00', '100,00', '8.219,00']);
+    expect(screen.queryByTestId('total-notas')).toBeNull();
+    const documentos = screen.getByRole('button', { name: /Documentos/ }) as HTMLButtonElement;
+    expect([documentos.disabled, documentos.title]).toEqual([true, 'Documentos no contrato: só em parcelamento. No financiamento com juros a nota e o boleto ficam no lançamento.']);
+    expect(cartao('Juros previstos')).toContain('100,00');
   });
 
   it('a tela não soma nem decide quem está pago, e não abre mais o editor antigo de parcela (a fonte prende)', () => {
@@ -676,6 +774,13 @@ describe('4 — a tela do contrato mostra o que o banco derivou do lançamento',
     expect(soma(fonte)).toBe(false);
     expect(fonte).not.toContain('ModalBaixaParcela');
     expect(fonte).not.toContain('DialogVerLancamentosOficiais');
-    expect(fonte).toContain('useSituacaoDoContrato(id, clienteId, hj)');
+    expect(fonte).toContain('useSituacaoDoContrato(id, clienteId, hj, { detalhe: true })');
+    /* o prazo, a conta, a nota e as contagens vêm do banco: a tela não faz conta de data */
+    expect(/differenceIn|getTime\(\)|Date\.parse/.test('const d = a.getTime() - b.getTime()')).toBe(true);
+    /* da linha do título em diante é o que a tela DESENHA (o `saveEdit`, acima, desloca parcelas do financiamento e tem conta de data) */
+    const desenho = fonte.slice(fonte.indexOf('linha-do-titulo'));
+    expect(desenho.length).toBeGreaterThan(5000);
+    expect(/differenceIn|getTime\(\)|Date\.parse|\.reduce\(/.test(desenho)).toBe(false);
+    expect(fonte).toContain("const hj = hojeLocal();");
   });
 });

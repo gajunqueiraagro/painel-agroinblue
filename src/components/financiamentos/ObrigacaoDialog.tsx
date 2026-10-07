@@ -80,7 +80,8 @@ const MIN_PARCELAS = 1;
 const MAX_PARCELAS = 360;
 
 export type Escopo = 'pecuaria' | 'agricultura';
-type Aba = 'contrato' | 'parcelas' | 'classificacao' | 'documentos';
+export type AbaDaObrigacao = 'contrato' | 'parcelas' | 'classificacao' | 'documentos';
+type Aba = AbaDaObrigacao;
 type Frequencia = FinanciamentoForm['frequencia_parcela'];
 
 /* ⚠ GUARDAS, NAO CASTS (regra zero-cast). O `onValueChange` do Select entrega `string`;
@@ -204,9 +205,11 @@ interface Props {
    * continua sendo quem ja' gravava — o mesmo padrao de prop-bag do CompraModalShell.
    */
   onSalvarEdicao?: (form: FinanciamentoForm, extras: { status: StatusContrato }) => Promise<boolean>;
+  /** PARC-CONTRATO-01: a aba em que o diálogo abre ("Documentos" e "Editar parcelas" da tela do contrato). Sem ela, Contrato. */
+  abaInicial?: AbaDaObrigacao;
 }
 
-export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', financiamentoId, onSalvarEdicao }: Props) {
+export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', financiamentoId, onSalvarEdicao, abaInicial }: Props) {
   const {
     form, setForm,
     parcelas, setParcelas,
@@ -238,7 +241,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
   const ehAdministrativo = ehSubcentroAdministrativo(classificacoes, classificacao.subcentro);
 
   const qc = useQueryClient();
-  const [aba, setAba] = useState<Aba>('contrato');
+  const [aba, setAba] = useState<Aba>(abaInicial ?? 'contrato');
   const [destinacoes, setDestinacoes] = useState<DestinacaoItem[]>([]);
   const [carregado, setCarregado] = useState(false);
   /* ⚠ FORA DO `FinanciamentoForm` DE PROPOSITO: `status` nao e' campo de CRIACAO (todo

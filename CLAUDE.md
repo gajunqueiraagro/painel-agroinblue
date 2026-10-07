@@ -162,7 +162,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 07/10/2026 (PARC-FECHA-02 item 6, +1 em `src/components/financeiro-v2/finV2ColunasOC01.test.ts` — 4395 depois dele; antes o
+  Baseline em 07/10/2026 (PARC-CONTRATO-01 item 1, +9: `src/lib/financiamentos/situacaoDoContrato.test.ts` 5,
+  `src/components/financiamentos/obrigacaoEdicao.test.tsx` 4 — 4404 depois dele; antes o
+  PARC-FECHA-02 item 6, +1 em `src/components/financeiro-v2/finV2ColunasOC01.test.ts` — 4395 depois dele; antes o
   PARC-FECHA-02 item 5, +1 em `src/components/financiamentos/obrigacaoEdicao.test.tsx` — 4394 depois dele; antes o
   PARC-FECHA-02 item 4, +7 em `src/lib/datas/hojeLocal.test.ts` — 4393 depois dele; antes o
   PARC-FECHA-02 item 2, +8 em `src/lib/financiamentos/situacaoEmLote.test.ts` — 4386 depois dele; antes o
@@ -240,7 +242,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4395
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4404
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3338,6 +3340,57 @@ docs/historico/frentes-ate-2026-09-29.md.)
     TODOS os documentos do cliente a cada aviso do canal (NJ: centenas de linhas; medir se crescer) · NAO PROVADO NO NAVEGADOR: o
     Ampliado, o minimodal aberto pelo Status, o clipe por ARQUIVO anexado sem numero, e o documento que nao e' nota no modal
     (so' por teste); a janela estava em 579 de altura, nao 523.
+- ⚠ A TELA DO CONTRATO E' O MOCK APROVADO, E TUDO O QUE ELA MOSTRA AO LADO DA SITUACAO VEM DO MESMO DONO (PARC-CONTRATO-01 item 1,
+  Gabriel 07/10/2026; migration 20261027194600, ⚠ registrada como 20261007111021; ledger = arquivo, md5 d6089d62…; patch guardado
+  por md5: `fn_financiamento_situacao` a3f310c2… -> 7d59c915…, 1 ancora). Queixa: titulo e textos grandes e cortando, numeros em
+  fonte diferente, "Ver" e lapis fazendo a mesma coisa, e faltava saber se pagou no prazo e por qual conta.
+  · BANCO: `fn_financiamento_situacao(p_financiamento_id, p_hoje, p_detalhe boolean DEFAULT false)`. SEM `p_detalhe` o retorno e'
+    o de antes, byte a byte (198 contratos e os 7 lotes identicos por md5, antes x depois na mesma transacao; o lote do NJ segue
+    em 54 ms). COM ele cada parcela leva `competencia`, `conta_id`/`conta_nome` (a conta do LANCAMENTO, pela regua
+    `_fn_conta_do_lancamento`), `tipo_documento`/`numero_documento`, `prazo {tipo: antes|no_dia|atraso|vencida|a_vencer, dias}`
+    (paga: pago em x vencimento; nao paga: o HOJE recebido x vencimento; paga sem data = nulo), `documentos` (os VIVOS do
+    lancamento: id, especie, numero, valor) e `boletos`; os cartoes levam `a_vencer_qtde`, `vencido_qtde`, `notas_qtde`,
+    `notas_valor`, `notas_diferenca` (nota − soma das parcelas; NULO = sem nota ou nota sem valor, nunca zero) e `boletos`.
+    ⚠ A ASSINATURA GANHOU PARAMETRO: DROP + CREATE (o REPLACE criaria uma segunda funcao e a chamada de dois argumentos ficaria
+      ambigua); a ACL foi reconcedida na migration (authenticated e service_role; anon nao). O detalhe de todos os contratos do
+      NJ custa 160 ms; o do maior (36 parcelas), 8,5 ms.
+  · LEITOR E TEXTOS (`src/lib/financiamentos/situacaoDoContrato.ts`): `detalhe` na parcela e nos cartoes (nulo sem `p_detalhe`;
+    peca torta invalida a leitura inteira), `textoDoPrazo` ("3 dias antes" · "no dia" · "2 dias de atraso" · "vencida há 2 dias" ·
+    "vence em 29 dias" · "vence hoje"), `TOM_DO_PRAZO`, `textoDasNotas` ("1 nota · confere" / "1 nota · −77.000,00" / "· sem
+    valor" / "—"). `ROTULO_SITUACAO.pendente` passou a "A vencer". O hook `useSituacaoDoContrato(…, { detalhe: true })` tem chave
+    propria; so' a tela do contrato o pede. A TELA NAO SOMA NEM FAZ CONTA DE DATA (preso por teste de fonte sobre o desenho).
+  · A TELA (`FinanciamentoDetalhe.tsx`), de cima para baixo: (a) LINHA DO TITULO de 26px — ← · nome a 15px (CONTIDO: `min-w-0
+    truncate` + `title`) · selo PARC/FIN · situacao · "Parcelamento · Pecuária" · e, com lugar reservado (`shrink-0`), Editar ·
+    Documentos · Excluir. "Documentos" abre o Editar obrigação na aba Documentos (`abaInicial`, prop nova do `ObrigacaoDialog`);
+    no financiamento com juros fica APAGADO com o motivo no `title`. (b) DADOS em duas linhas de 18px (rotulo cinza + valor em
+    negrito, 10,5px): Descrição · Credor · Contrato em · Parcelas / Classificação · Conta · 1ª parcela · Safra; a terceira so'
+    com Nº contrato, Entrada ou Observação (no credito leva Amortização e Juros, e a Taxa vai na segunda). A SAFRA e' a das
+    parcelas, pelo dono `valorComumDasParcelas`. (c) CINCO CARTOES de 40px com a contagem do banco ("Pago · 3 parcelas");
+    "Juros previstos" so' no credito (seis). (d) TABELA: Nº ("1/6") · Comp. · Venc. · Pgto. · Prazo · Conta · Valor (R$) ·
+    Situação · Nota fiscal (o dono `docDaLinha`) · Boleto (clipe ou "—") · lapis. A coluna "Lançamento · Ver" SAIU: o CLIQUE NA
+    LINHA abre o lancamento no modal do Financeiro (o lapis faz o mesmo), com a frase ao lado de "Parcelas" e o botao "Editar
+    parcelas" (abre o Editar obrigação na aba Parcelas). Rodape preso: "Total · N parcelas" · pago · total · "3 de 6" · notas ·
+    boletos. Numeros na FONTE DO PROJETO com `tabular-nums` (a mono saiu); datas dd/mm/aa; valor sem "R$" (esta' no cabecalho).
+    ⚠ CADA LINHA DE DADOS E' INDEPENDENTE (flex), NAO UMA GRADE DE COLUNAS: medido no NJ, com colunas alinhadas o credor longo de
+      uma linha e a classificacao longa da outra pediam 912px dos 810 e os dois cortavam.
+    ⚠ FINANCIAMENTO COM JUROS, o que muda: Principal · Juros · Total (R$) no lugar de Valor, e NAO ha' Nota fiscal nem Boleto
+      (o contrato de credito nao tem "compra"); a linha oferece o botao "juros" (o segundo lancamento da parcela).
+  Medido no NJ, so' leitura, a 1.126 x 523 e a 1.126 x 579 (esta num iframe da aplicacao: a janela nao cresceu), Lascas (6),
+  Reboque Agrícola (7) e Dodge Ram (20): titulo 26px; nome de 60 caracteres pede 479px, corta em 412 e os botoes seguem com 240px
+  encostados a' direita; 0 textos cortados no bloco de dados; 0 celulas cortadas; linhas e rodape de 19px; cartoes de 40px sem
+  corte; Dodge Ram rolando 144px (523) e 88px (579) com o cabecalho parado (243,5) e o rodape parado (499 / 555); pagina sem
+  rolagem. Lascas = o briefing: 3, 2 e 3 dias antes, parcela 4 "vencida há 2 dias", NF 000.005.510, "1 nota · confere".
+  Provas: `supabase/tests/parc_contrato_01_detalhe_test.sql` (D1–D6; 5 mutacoes de banco mortas); 12 mutacoes de tela mortas.
+  ⚠ ACHADO DE DADO (so' relato): no Reboque Agrícola do NJ o rodape diz "1 nota · −77.000,00" — a NF ligada tem valor 33.000,00
+    (a entrada) e as parcelas somam 110.000,00.
+  ⚠ As 6 fotos de EDICAO de financiamento e emprestimo de `obrigacaoDialog.fotos.json` foram REGRAVADAS (a pagina atras do dialogo
+    mudou; o dialogo so' ganhou a prop `abaInicial`, e as 9 fotos de criacao e de parcelamento ficaram identicas).
+  ⚠ DIVIDAS: a consulta `financiamento-parcelas` da tela ficou so' para o estado de carregamento (ninguem le' as linhas) · a
+    Safra do bloco le' os lancamentos do contrato numa consulta da tela (a mesma do Editar obrigação), nao do dono · o teste D1
+    confere o lote contra o dono so' nos 40 primeiros contratos (o identico-por-md5 dos 198 foi no ensaio) · "Documentos" apagado
+    tem o motivo so' no `title` · NAO PROVADO NO NAVEGADOR: o clique na linha abrindo o modal, "Documentos" e "Editar parcelas"
+    abrindo na aba certa (so' por teste), a terceira linha de dados, parcela com boleto (0 casos nos tres contratos), 'parcial',
+    e a janela REAL de 579.
 - ⚠ NA LISTA DE LANCAMENTOS O CLIPE FICA ENTRE VALOR E DOC., E A CADEIA CONGELADA E' 0/28/68/108 (PARC-FECHA-02 item 6, Gabriel
   07/10/2026, so' tela, `src/pages/FinanceiroV2Tab.tsx`; SUBSTITUI o "0/28/42/82/122" dos blocos FIN-V2-COLUNAS-OC-01 e
   FIN-V2-HOMOLOG-FIX-01). A coluna de 14px do clipe saiu do comeco da linha (depois do checkbox) e foi para entre Valor e Doc.,

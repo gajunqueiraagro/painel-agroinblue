@@ -11,7 +11,9 @@ import { lerSituacaoEmLote } from '@/lib/financiamentos/situacaoEmLote';
 
 export const CHAVE_SITUACAO_DO_CONTRATO = 'financiamento-situacao';
 
-export function useSituacaoDoContrato(financiamentoId: string | null | undefined, clienteId: string | null | undefined, hoje: string) {
+/** `detalhe` (PARC-CONTRATO-01): a tela do contrato pede também competência, conta, prazo, documentos e as contagens dos cartões. */
+export function useSituacaoDoContrato(financiamentoId: string | null | undefined, clienteId: string | null | undefined, hoje: string, opcoes?: { detalhe?: boolean }) {
+  const detalhe = opcoes?.detalhe === true;
   const qc = useQueryClient();
   useEffect(() => {
     if (!clienteId) return;
@@ -20,11 +22,13 @@ export function useSituacaoDoContrato(financiamentoId: string | null | undefined
     });
   }, [clienteId, qc]);
   return useQuery({
-    queryKey: [CHAVE_SITUACAO_DO_CONTRATO, financiamentoId, hoje],
+    queryKey: detalhe ? [CHAVE_SITUACAO_DO_CONTRATO, financiamentoId, hoje, 'detalhe'] : [CHAVE_SITUACAO_DO_CONTRATO, financiamentoId, hoje],
     enabled: !!financiamentoId && !!clienteId,
     queryFn: async (): Promise<SituacaoDoContrato> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
-      const { data, error } = await (supabase as any).rpc('fn_financiamento_situacao', { p_financiamento_id: financiamentoId, p_hoje: hoje });
+      const { data, error } = await (supabase as any).rpc('fn_financiamento_situacao', detalhe
+        ? { p_financiamento_id: financiamentoId, p_hoje: hoje, p_detalhe: true }
+        : { p_financiamento_id: financiamentoId, p_hoje: hoje });
       if (error) throw error;
       const lido = lerSituacaoDoContrato(data);
       if (!lido) throw new Error('A situação do contrato veio em formato inesperado.');
