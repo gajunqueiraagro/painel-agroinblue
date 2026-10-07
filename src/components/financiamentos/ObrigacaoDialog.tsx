@@ -37,6 +37,10 @@ import {
 } from '@/lib/financiamentos/parcelasLivres';
 import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
 import { PropagarContratoDialog } from '@/components/financiamentos/PropagarContratoDialog';
+import { DocumentosNaCriacao } from '@/components/financiamentos/DocumentosNaCriacao';
+import { gravarDocumentosDoParcelamento, lancamentosDoParcelamento, novoPendente, todosGravados, type DocumentoPendente } from '@/lib/financeiro/documentosPendentes';
+import { parcelasDaNota } from '@/lib/financiamentos/parcelasLivres';
+import type { NotaLida } from '@/lib/financeiro/nfe/tipos';
 import { camposAPropagar, lerPreviaDaPropagacao, type CamposAPropagar, type CamposDasParcelas, type ComumDasParcelas, type PreviaDaPropagacao } from '@/lib/financiamentos/propagarContrato';
 import type { EscopoDePropagacao } from '@/components/financeiro-v2/OpcoesDeEscopo';
 
@@ -785,7 +789,23 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
       if (ok) onSalvo?.();
       return;
     }
-    const ok = await salvar(destinacoes, livresAbertas ? parcelasParaPayload(parcelasLivres) : null);
+    /* PARC-CONTRATO-01 item 3 — contrato JÁ gravado e documento que falhou: o Salvar tenta de novo SÓ os documentos */
+    if (posCriacao) {
+      setErroDaGrade(null);
+      const falha = await gravarDocumentosDoContratoNovo(posCriacao.id);
+      if (falha) { setPosCriacao({ id: posCriacao.id, erro: falha }); return; }
+      setPosCriacao(null);
+      onSalvo?.();
+      return;
+    }
+    /* os documentos pendentes (a NF da compra, ligada às N; o boleto de cada parcela) são gravados DEPOIS de o contrato nascer,
+       pelo mesmo pós-salvar do lançamento parcelado. Falhou um: o contrato FICA e a frase diz qual documento não gravou. */
+    let criado: string | null = null; let falha: string | null = null;
+    const ok = await salvar(destinacoes, livresAbertas ? parcelasParaPayload(parcelasLivres) : null,
+      ehParcelamento && pendentesDaCriacao.length > 0
+        ? async (id) => { criado = id; falha = await gravarDocumentosDoContratoNovo(id); }
+        : undefined);
+    if (ok && criado && falha) { setPosCriacao({ id: criado, erro: falha }); setAba('documentos'); return; }
     if (ok) onSalvo?.();
   };
 
@@ -814,13 +834,63 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
     return null;
   };
 
+  /* ── PARC-CONTRATO-01 item 3 — DOCUMENTOS AO CRIAR: pendentes em memória, gravados junto com o Salvar ─────────────────── */
+  const [pendentesDaCriacao, setPendentesDaCriacao] = useState<DocumentoPendente[]>([]);
+  /* o contrato nasceu e algum documento não gravou: guarda o id para o "tentar de novo" não criar outro contrato */
+  const [posCriacao, setPosCriacao] = useState<{ id: string; erro: string } | null>(null);
+  /* o que o XML preencheu — a tela diz, em âmbar; nada é gravado ao importar */
+  const [recadoDoXml, setRecadoDoXml] = useState<string | null>(null);
+  const gravarDocumentosDoContratoNovo = async (id: string): Promise<string | null> => {
+    if (!clienteId) return 'Contrato gravado, mas sem cliente para gravar os documentos.';
+    const gravadas = await lancamentosDoParcelamento(id);
+    if (gravadas.length === 0) return 'Contrato gravado, mas as parcelas não foram encontradas: anexe os documentos pelo Editar obrigação.';
+    const lista = await gravarDocumentosDoParcelamento(clienteId, gravadas, pendentesDaCriacao);
+    setPendentesDaCriacao(lista);
+    if (todosGravados(lista)) return null;
+    const f = lista.find(p => !p.gravado);
+    const qual = f ? (f.parcela != null ? `o boleto da parcela ${f.parcela}` : `o documento "${f.payload.nome || f.payload.numero || f.payload.especie}"`) : 'um documento';
+    return `Contrato gravado. Não foi gravado ${qual}: ${f?.erro ?? 'falha'}. Clique em salvar para tentar de novo.`;
+  };
+  /* as parcelas que o contrato VAI criar, como a grade dos boletos as lê (só as que já têm data e valor) */
+  const parcelasParaOsBoletos = useMemo(() => (livresAbertas ? parcelasLivres : previaComoParcelas)
+    .map((p, i) => ({ numero: i + 1, dataVencimento: p.vencimento, valor: p.valorCent / 100 }))
+    .filter(p => p.dataVencimento && p.valor > 0), [livresAbertas, parcelasLivres, previaComoParcelas]);
+  /* IMPORTAR XML NA CRIAÇÃO: preenche o contrato novo (credor pelo CNPJ/CPF, valor, emissão, duplicatas → parcelas livres) e
+     guarda a NF como pendente com o XML. NADA é gravado. */
+  const preencherPelaNota = async (nota: NotaLida, arquivo: File) => {
+    const feito: string[] = [];
+    let credorId: string | null = null;
+    if (clienteId && nota.emitente.documento) {
+      /* o documento é gravado com máscaras variadas: procura pelos dígitos em ordem, com qualquer coisa entre eles */
+      const { data } = await supabase.from('financeiro_fornecedores').select('id, nome, cpf_cnpj')
+        .eq('cliente_id', clienteId).ilike('cpf_cnpj', `%${nota.emitente.documento.split('').join('%')}%`).limit(2);
+      if (data && data.length === 1) { credorId = data[0].id; set('credor_id', data[0].id); feito.push('credor'); }
+    }
+    const valorCent = nota.duplicatas.length > 0 ? nota.somaDuplicatasCent : nota.totais.notaCent;
+    set('valor_total', valorCent / 100); feito.push('valor');
+    if (nota.emissao) { set('data_contrato', nota.emissao); feito.push('data do contrato'); }
+    if (nota.duplicatas.length > 0) {
+      const lista = parcelasDaNota(nota.duplicatas.map(d => ({ vencimento: d.vencimento, valorCent: d.valorCent })));
+      setModoParcelas('livres'); setParcelasLivres(lista); setBaseLivres(lista);
+      feito.push(`${lista.length} ${lista.length === 1 ? 'parcela' : 'parcelas'}`);
+    }
+    setPendentesDaCriacao(l => [...l.filter(p => !(p.parcela == null && p.payload.especie === 'nf' && p.payload.chaveAcesso === nota.chave)),
+      novoPendente({
+        especie: 'nf', nome: `nf ${nota.numero}`, numero: nota.numero, serie: nota.serie || null, chaveAcesso: nota.chave,
+        dataEmissao: nota.emissao, valorDocumento: nota.totais.notaCent / 100,
+        emitenteId: credorId, emitenteNome: credorId ? null : nota.emitente.nome, emitenteDocumento: credorId ? null : nota.emitente.documento,
+      }, arquivo, null)]);
+    setRecadoDoXml(`Da NF ${nota.numero}: ${feito.join(', ')}${credorId ? '' : ' · credor não encontrado pelo CNPJ/CPF: escolha no contrato'} · nada foi gravado`);
+  };
+
   const gravando = saving || salvandoEdicao;
 
   const subtitulo = ehParcelamento
     ? 'Uma despesa paga em N vezes. Ela gera as parcelas, e as parcelas geram os lançamentos.'
     : 'Um crédito contratado. Ele gera as parcelas, e cada parcela gera amortização e juros.';
 
-  const abaDeDocumentos: Array<{ key: Aba; label: string }> = edicaoDeParcelamento ? [{ key: 'documentos', label: 'Documentos' }] : [];
+  /* PARC-CONTRATO-01 item 3: a aba Documentos existe também ao CRIAR um parcelamento (os documentos ficam pendentes até o Salvar) */
+  const abaDeDocumentos: Array<{ key: Aba; label: string }> = ehParcelamento ? [{ key: 'documentos', label: 'Documentos' }] : [];
   const abas: Array<{ key: Aba; label: string }> = [
     { key: 'contrato', label: 'Contrato' },
     { key: 'parcelas', label: 'Parcelas' },
@@ -1450,11 +1520,16 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                   </div>
                 </TabsContent>
 
-                {/* ══ ABA DOCUMENTOS (parcelamento, edição) — PARC-LIVRES-01 passo 6 ═══ */}
-                {edicaoDeParcelamento && financiamentoId && clienteId && (
+                {/* ══ ABA DOCUMENTOS (parcelamento) — edição: PARC-LIVRES-01 passo 6; criação: PARC-CONTRATO-01 item 3 ═══ */}
+                {ehParcelamento && (!ehEdicao || (!!financiamentoId && !!clienteId)) && (
                   <TabsContent value="documentos" className="mt-0">
                     {/* altura FIXA pela janela (como a grade das parcelas): só a grade dos boletos rola */}
                     <div style={{ height: 'clamp(250px, calc(100vh - 262px), 420px)' }}>
+                      {!ehEdicao ? (
+                        <DocumentosNaCriacao pendentes={pendentesDaCriacao} onMudar={setPendentesDaCriacao}
+                          parcelas={parcelasParaOsBoletos} credor={credor ? { id: credor.id, nome: credor.nome } : null}
+                          travado={!!posCriacao} onNotaDoXml={(nota, arquivo) => { void preencherPelaNota(nota, arquivo); }} recadoDoXml={recadoDoXml} />
+                      ) : (
                       <DocumentosDoContrato financiamentoId={financiamentoId} clienteId={clienteId} hoje={hojeLocalDosDocumentos}
                         credorId={form.credor_id || null} valorDoContrato={Number(form.valor_total) || 0}
                         onUsarDuplicatas={gradeGravada ? undefined : (nota) => {
@@ -1462,6 +1537,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                           setGradeEdicao((g) => usarDuplicatasDaNota(g, nota));
                           setAba('parcelas');
                         }} />
+                      )}
                     </div>
                   </TabsContent>
                 )}
@@ -1732,7 +1808,9 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
               operador o trabalho de adivinhar. */}
           <div className="border-t px-4 py-2.5 flex items-center justify-between">
             <p className="text-[11px] text-muted-foreground min-w-0 truncate">
-              {erroDaGrade ? (
+              {posCriacao ? (
+                <span className="font-medium text-destructive" title={posCriacao.erro} data-testid="erro-dos-documentos">{posCriacao.erro}</span>
+              ) : erroDaGrade ? (
                 <span className="font-medium text-destructive" title={erroDaGrade} data-testid="erro-da-grade">{erroDaGrade}</span>
               ) : primeiraPendencia && (
                 <>

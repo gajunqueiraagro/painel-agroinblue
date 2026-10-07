@@ -353,7 +353,9 @@ export function useFinanciamentoCadastro() {
     descricao: string; tipo: string; valor: number;
     fornecedor_id: string; conta_bancaria_id: string;
     plano_conta_id: string; gerar_lancamento: boolean; observacao: string;
-  }>, parcelasLivres?: ParcelaDoPayload[] | null): Promise<boolean> => {
+  }>, parcelasLivres?: ParcelaDoPayload[] | null,
+    /** PARC-CONTRATO-01 item 3 — chamado com o id do PARCELAMENTO recém-criado, antes do aviso: é onde os documentos pendentes são gravados */
+    aoCriarParcelamento?: (financiamentoId: string) => Promise<void>): Promise<boolean> => {
     if (!clienteId || !user) {
       toast.error('Sessão inválida');
       return false;
@@ -438,6 +440,7 @@ export function useFinanciamentoCadastro() {
           ),
         });
         if (error) throw error;
+        if (typeof data === 'string' && data && aoCriarParcelamento) await aoCriarParcelamento(data);
         toast.success('Parcelamento cadastrado');
         return !!data;
       } catch (e) {

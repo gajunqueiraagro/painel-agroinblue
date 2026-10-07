@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 07/10/2026 (PARC-CONTRATO-01 item 2, +14: `src/lib/financiamentos/propagarContrato.test.ts` 8,
+  Baseline em 07/10/2026 (PARC-CONTRATO-01 item 3, +8 em `src/components/financiamentos/documentosNaCriacao.test.tsx` — 4426 depois dele; antes o
+  PARC-CONTRATO-01 item 2, +14: `src/lib/financiamentos/propagarContrato.test.ts` 8,
   `src/components/financiamentos/obrigacaoEdicao.test.tsx` 6 — 4418 depois dele; antes o
   PARC-CONTRATO-01 item 1, +9: `src/lib/financiamentos/situacaoDoContrato.test.ts` 5,
   `src/components/financiamentos/obrigacaoEdicao.test.tsx` 4 — 4404 depois dele; antes o
@@ -244,7 +245,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4418
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4426
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3342,6 +3343,31 @@ docs/historico/frentes-ate-2026-09-29.md.)
     TODOS os documentos do cliente a cada aviso do canal (NJ: centenas de linhas; medir se crescer) · NAO PROVADO NO NAVEGADOR: o
     Ampliado, o minimodal aberto pelo Status, o clipe por ARQUIVO anexado sem numero, e o documento que nao e' nota no modal
     (so' por teste); a janela estava em 579 de altura, nao 523.
+- ⚠ DOCUMENTOS JA' NA CRIACAO DO PARCELAMENTO: PENDENTES EM MEMORIA, GRAVADOS DEPOIS DO CONTRATO, PELOS DONOS DE SEMPRE (PARC-CONTRATO-01
+  item 3, Gabriel 07/10/2026, so' tela, sem banco). "Nova obrigação" de PARCELAMENTO tem a aba Documentos (`DocumentosNaCriacao`,
+  `src/components/financiamentos/`): os documentos da compra (`DocumentosPendentes`) e o boleto por parcela (`ParcelasDaCompra`,
+  `AnexarBoletosDialog`) ficam PENDENTES e NADA e' gravado ate' o Salvar. NENHUM SEGUNDO CADASTRO: ao salvar, o hook
+  (`useFinanciamentoCadastro.salvar(…, aoCriarParcelamento)`) chama o retorno com o id do contrato novo e o dialogo grava por
+  `lancamentosDoParcelamento` + `gravarDocumentosDoParcelamento` — o mesmo caminho do Novo lancamento parcelado.
+  · AS LINHAS DA GRADE DE BOLETOS SAO AS DA ABA PARCELAS (mensal ou livres); sem valor ou sem parcelas a grade escreve o motivo.
+  · "IMPORTAR XML DA NOTA" (o `lerNFe` de sempre) PREENCHE o contrato novo, SEM GRAVAR: credor pelo CNPJ/CPF (so' digitos; nao
+    achou = "escolha no contrato"), valor total, data do contrato = emissao, duplicatas -> Parcelas livres, e a NF entra como
+    documento pendente com o XML de arquivo. O que veio da nota fica ESCRITO numa linha ambar (`recado-do-xml`: "Da NF N: valor,
+    data do contrato, 3 parcelas · … · nada foi gravado"); recusa do leitor na mesma linha, em vermelho.
+  · VER ANTES DE SALVAR: "ver <arquivo>" para cada arquivo da compra e o nome do boleto na linha da parcela abrem o arquivo em
+    memoria (URL de blob).
+  · CONTRATO GRAVOU E DOCUMENTO FALHOU: o contrato FICA; a frase vai ao lado do botao (`erro-dos-documentos`) dizendo QUAL
+    documento nao gravou, e o Salvar seguinte tenta SO' os documentos (`posCriacao`), nunca cria o contrato de novo.
+  · Financiamento e emprestimo: sem a aba (fotos identicas); as 3 fotos da criacao de parcelamento foram regravadas (aba nova).
+  PROVA NO NAVEGADOR (cliente Teste, 07/10, 1.126 x 523, XML e boleto SINTETICOS, contrato criado pela tela e APAGADO): XML importado
+  -> valor 300,00, data 30/09/2026, 3 parcelas livres (100,00 · 120,00 · 80,00), NF 777 pendente "3 de 3 parcelas"; boleto na 2ª;
+  Salvar -> banco: 1 NF ligada a's 3 parcelas (dona + 2 vinculos), 1 boleto na parcela 2, parcelas = as duplicatas. Aba de 261px,
+  igual vazia e preenchida. 6 mutacoes mortas.
+  ⚠ DIVIDAS: PARC-DOCS-CRIACAO-AMBAR-POR-CAMPO-01 (o ambar e' UMA linha de recado, nao campo a campo como no modal do lancamento) ·
+    PARC-DOCS-ARQUIVO-ORFAO-TESTE-01 cresceu (mais um .xml e um .pdf sinteticos no bucket `fin-documentos` sob o Teste) · o resumo
+    lateral segue dizendo "3 × R$ 100,00" nas livres · NAO PROVADO NO NAVEGADOR: a NF vista ABRINDO cada parcela pelo Financeiro
+    (conferida pela `vw_lancamento_documentos`, a view que o modal le'), o credor ACHADO pelo CNPJ (o Teste nao tem fornecedor com
+    documento), "Anexar vários boletos", a falha de um documento com o contrato gravado e o "ver" abrindo o arquivo (so' por teste).
 - ⚠ A EDICAO DO CONTRATO DE PARCELAMENTO CHEGA A'S PARCELAS PELO DIALOGO DE ESCOPO, NUMA GRAVACAO SO' (PARC-CONTRATO-01 item 2,
   Gabriel 05 e 07/10/2026; migration 20261027194700, ⚠ registrada como 20261007113841; ledger = arquivo, md5 31a477b5…). Queixa:
   mudou o nome do contrato para "Lascas Eucalipto Tratado" e as parcelas seguiram "LASCAS DE EUCALIP… 4/6"; descricao, forma e
