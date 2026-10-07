@@ -20,6 +20,7 @@ import type { Pasto } from '@/hooks/usePastos';
 import type { PastoOcupacao } from '@/hooks/usePastoOcupacao';
 import { toast } from 'sonner';
 import { useStableLeafletMap } from '@/hooks/useStableLeafletMap';
+import { dataLocalISO, hojeLocal } from '@/lib/datas/hojeLocal';
 
 const STATUS_STYLES: Record<string, { fillColor: string; color: string; label: string }> = {
   adequado:    { fillColor: 'hsl(145, 38%, 62%)', color: 'hsl(145, 30%, 42%)', label: 'Ideal' },
@@ -142,7 +143,7 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
         .select('quantidade, categoria, data, pasto_origem_id')
         .eq('pasto_destino_id', pastoId)
         .eq('tipo', 'transferencia')
-        .gte('data', sevenDaysAgo.toISOString().slice(0, 10))
+        .gte('data', dataLocalISO(sevenDaysAgo))
         .order('data', { ascending: false })
         .limit(10);
 
@@ -285,7 +286,7 @@ export function MapaOperacaoView({ geometrias, pastos, categorias, ocupacoes, ge
     if (qtyNum > maxQty) { toast.error(`Máximo disponível: ${maxQty} cabeças`); return; }
 
     setSaving(true);
-    const today = new Date().toISOString().slice(0, 10);
+    const today = hojeLocal();
     const success = await registrarMovimentacao({
       fazenda_id: fazendaAtual!.id,
       cliente_id: fazendaAtual!.cliente_id,

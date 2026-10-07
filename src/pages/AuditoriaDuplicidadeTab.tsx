@@ -24,6 +24,7 @@ import {
   ArrowLeft, Search, AlertTriangle, CheckCircle2, XCircle,
   Copy, Eye, RefreshCw, Download, Loader2, Shield, Clock
 } from 'lucide-react';
+import { hojeLocal } from '@/lib/datas/hojeLocal';
 
 interface Props {
   onBack: () => void;
@@ -365,7 +366,7 @@ export function AuditoriaDuplicidadeTab({ onBack }: Props) {
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = `auditoria_duplicidade_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.href = url; a.download = `auditoria_duplicidade_${hojeLocal()}.csv`;
     a.click(); URL.revokeObjectURL(url);
   };
 

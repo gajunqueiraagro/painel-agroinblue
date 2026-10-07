@@ -29,6 +29,7 @@ import { anoMes, mesCorrente, MESES_CURTOS, type Periodo } from '@/v2/lib/period
 import { COR_SINAL } from '@/lib/oc/contaCorrente';
 import { RecorrenciaDialog } from '@/components/recorrencias/RecorrenciaDialog';
 import { GerarLancamentosDialog } from '@/components/recorrencias/GerarLancamentosDialog';
+import { hojeLocal } from '@/lib/datas/hojeLocal';
 
 /**
  * V2Recorrencias — as regras que se repetem todo mês.
@@ -536,7 +537,7 @@ function Colunas() {
  */
 export function rotuloSituacao(r: { situacao: SituacaoRecorrencia; dataFim: string | null }): string {
   if (r.situacao === 'cancelada') return 'Pausada';
-  const hoje = new Date().toISOString().slice(0, 10);
+  const hoje = hojeLocal();
   if (r.dataFim && r.dataFim < hoje) return 'Encerrada';
   if (r.situacao === 'concluida') return `Gerada até ${r.dataFim ? mesBr(r.dataFim) : '—'}`;
   return 'Ativa';

@@ -61,6 +61,7 @@ import { useOrdenacaoTabela, type ColunaOrdenavel } from '@/hooks/useOrdenacaoTa
 import { ThOrdenavel } from '@/components/ui/th-ordenavel';
 import { useSafrasLavoura } from '@/hooks/useAreaPlantada';
 import { formatNum } from '@/lib/calculos/formatters';
+import { hojeLocal } from '@/lib/datas/hojeLocal';
 
 /** O visual de cada status — o mesmo vocabulário da Central de Operações. */
 const TOM_STATUS: Record<string, string> = {
@@ -139,7 +140,7 @@ export function AgriBarterTab() {
   const [nome, setNome] = useState('');
   const [cultura, setCultura] = useState('');
   /* ⚠ Nasce em hoje, mas EDITÁVEL: o barter costuma ser lançado meses depois de assinado. */
-  const [dataAbertura, setDataAbertura] = useState(() => new Date().toISOString().slice(0, 10));
+  const [dataAbertura, setDataAbertura] = useState(() => hojeLocal());
   const [descricao, setDescricao] = useState('');
   /**
    * A FAZENDA DO CONTRATO — campo, não mais o filtro do cabeçalho.
@@ -421,7 +422,7 @@ export function AgriBarterTab() {
         : `Contrato aberto na conta de permuta que já existia com ${parceiro}.`);
       setNovoAberto(false);
       setParceiroId(''); setParceiroNome(''); setNome(''); setCultura('');
-      setDataAbertura(new Date().toISOString().slice(0, 10)); setDescricao('');
+      setDataAbertura(hojeLocal()); setDescricao('');
       if (r.abertura?.contrato_id) setAbertoId(r.abertura.contrato_id);
     } finally {
       setSalvando(false);
@@ -884,7 +885,7 @@ export function AgriBarterTab() {
         <Button size="sm" className="h-8 gap-1 text-[11px]"
           onClick={() => {
             setEditandoId(null); setParceiroId(''); setParceiroNome(''); setNome('');
-            setCultura(''); setDataAbertura(new Date().toISOString().slice(0, 10)); setDescricao('');
+            setCultura(''); setDataAbertura(hojeLocal()); setDescricao('');
             setFazendaContratoId(fazendaDoCabecalho);
             setNovoAberto(true);
           }}>

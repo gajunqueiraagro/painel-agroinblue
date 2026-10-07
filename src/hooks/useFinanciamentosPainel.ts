@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { lerSituacaoEmLoteDoBanco } from '@/hooks/useSituacaoDoContrato';
 import { parcelasDoLote } from '@/lib/financiamentos/situacaoEmLote';
-import { hojeLocal } from '@/lib/datas/hojeLocal';
+import { dataLocalISO, hojeLocal } from '@/lib/datas/hojeLocal';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useQuery } from '@tanstack/react-query';
@@ -205,11 +205,11 @@ export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin, mesRef
   const loading = loadingFin || loadingParc || loadingReb;
 
   const derived = useMemo(() => {
-    const hojeISO = new Date().toISOString().slice(0, 10);
+    const hojeISO = hojeLocal();
     const anoInicio = `${ano}-01-01`;
     const anoFim = `${ano}-12-31`;
     const hojeMs = new Date(hojeISO + 'T00:00:00').getTime();
-    const em30Dias = new Date(hojeMs + 30 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+    const em30Dias = dataLocalISO(new Date(hojeMs + 30 * 24 * 3600 * 1000));
 
     // ── Data de corte derivada dos filtros (mes='todos' → 31/12 do ano; senão último dia do mês) ──
     const corteMes = mesRef === 'todos' ? 12 : Number(mesRef);

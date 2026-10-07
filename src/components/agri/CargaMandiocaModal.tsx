@@ -46,6 +46,7 @@ import { useFazenda } from '@/contexts/FazendaContext';
 import {
   TIPOS_SERVICO, type ServicoDaCarga, type LancamentoTravado,
 } from '@/hooks/useCargaMandioca';
+import { hojeLocal } from '@/lib/datas/hojeLocal';
 
 /** O mesmo foco fino do modal irmão — anel de 1px, sem o halo de 4. */
 const FOCO = 'focus-visible:ring-1 focus-visible:ring-offset-0 focus:ring-1 focus:ring-offset-0';
@@ -113,7 +114,7 @@ export interface CargaMandiocaForm {
 
 export const cargaMandiocaVazia = (): CargaMandiocaForm => ({
   ids: [],
-  dataColheita: new Date().toISOString().slice(0, 10),
+  dataColheita: hojeLocal(),
   industriaId: null,
   industriaNome: null,
   nf: '',

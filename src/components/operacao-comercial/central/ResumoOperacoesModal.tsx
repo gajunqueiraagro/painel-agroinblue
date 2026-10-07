@@ -22,6 +22,7 @@ import {
   carregarResumoOC, totalLinhas,
   type OcResumo, type OcResumoLinha, type OcResumoParcela, type TomSituacao,
 } from '@/v2/lib/ocResumo';
+import { hojeLocal } from '@/lib/datas/hojeLocal';
 
 const num = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const inteiro = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 0 });
@@ -124,7 +125,7 @@ export function ResumoOperacoesModal({
 
   const geradoEm = resumo?.geradoEm ?? new Date();
   const geradoTexto = `${String(geradoEm.getDate()).padStart(2, '0')}/${String(geradoEm.getMonth() + 1).padStart(2, '0')}/${geradoEm.getFullYear()} ${String(geradoEm.getHours()).padStart(2, '0')}:${String(geradoEm.getMinutes()).padStart(2, '0')}`;
-  const periodo = `${filtros.periodoIni || '—'} a ${filtros.periodoFim || dataBR(new Date().toISOString().slice(0, 10))}`;
+  const periodo = `${filtros.periodoIni || '—'} a ${filtros.periodoFim || dataBR(hojeLocal())}`;
 
   const nomeArquivo = (ext: string) => {
     const tipos = resumo?.blocos.map((b) => b.tipo) ?? [];

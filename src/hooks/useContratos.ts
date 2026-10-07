@@ -4,6 +4,7 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { toast } from 'sonner';
 import { ErroUsuarioSeguro, reportarErro } from '@/lib/erroOperacional';
+import { hojeLocal } from '@/lib/datas/hojeLocal';
 
 /**
  * PR-SEC-RLS-CONTRATOS-01A — a exclusao de contrato esta BLOQUEADA.
@@ -167,7 +168,7 @@ export function useContratos() {
       const { data: r, error: erroRpc } = await (supabase as any).rpc('fn_contrato_editar_e_regenerar', {
         p_contrato_id: id,
         p_versao: atual.updated_at,
-        p_a_partir_de: new Date().toISOString().slice(0, 10),
+        p_a_partir_de: hojeLocal(),
         p_fazenda_id: novo.fazenda_id ?? null,
         p_fornecedor_id: novo.fornecedor_id ?? null,
         p_produto: novo.produto ?? null,

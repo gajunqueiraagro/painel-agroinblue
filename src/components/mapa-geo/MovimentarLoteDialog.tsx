@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { usePastoMovimentacoes, TIPOS_MOV_PASTO } from '@/hooks/usePastoMovimentacoes';
 import { CATEGORIAS } from '@/types/cattle';
 import type { Pasto } from '@/hooks/usePastos';
+import { hojeLocal } from '@/lib/datas/hojeLocal';
 
 interface Props {
   open: boolean;
@@ -28,7 +29,7 @@ export function MovimentarLoteDialog({ open, onOpenChange, pasto, anoMes, allPas
   const [refRebanho, setRefRebanho] = useState('');
   const [pastoDestinoId, setPastoDestinoId] = useState('');
   const [observacao, setObservacao] = useState('');
-  const [dataMov, setDataMov] = useState(new Date().toISOString().slice(0, 10));
+  const [dataMov, setDataMov] = useState(hojeLocal());
   const [saving, setSaving] = useState(false);
 
   const isTransferencia = tipo === 'transferencia';

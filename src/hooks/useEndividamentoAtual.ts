@@ -114,7 +114,7 @@ export function useEndividamentoAtual(anoBase?: number): EndividamentoAtual {
     gcTime: 30 * 60 * 1000,
     queryFn: async () => {
       const hoje = new Date();
-      const hojeISO = hoje.toISOString().slice(0, 10);
+      const hojeISO = hojeLocal(hoje);
       const mesHoje = hoje.getMonth() + 1; // 1-12
       const anoHoje = hoje.getFullYear();
 

@@ -79,6 +79,7 @@ import {
   reduzirLista, ESTADO_INICIAL, temPendencias, calcularPaginacao,
   type EstadoLista, type FiltrosEditaveis,
 } from '@/lib/financeiro/estadoFiltrosLista';
+import { hojeLocal } from '@/lib/datas/hojeLocal';
 
 /**
  * A memória da busca dos comboboxes desta tela.
@@ -1623,7 +1624,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   /* ⚠ UMA LEITURA POR RENDER, não uma por linha: `new Date()` dentro do `map` de quatro mil
      linhas seria quatro mil objetos por render, e — pior — a lista poderia virar o dia no meio
      da varredura, com as primeiras linhas comparadas contra ontem e as últimas contra hoje. */
-  const hojeISO = new Date().toISOString().slice(0, 10);
+  const hojeISO = hojeLocal();
 
   const selCls = "h-6 text-[10px]";
   const lblCls = "text-[9px] font-semibold leading-none mb-0.5 block text-[hsl(213_52%_24%)]";

@@ -1,3 +1,4 @@
+import { hojeLocal } from '@/lib/datas/hojeLocal';
 /**
  * Baixar um CSV — [ENRIQUECER-PROGRESSO-01] (131).
  *
@@ -44,7 +45,7 @@ export function baixarCsv(nome: string, linhas: string[]): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${nome}_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `${nome}_${hojeLocal()}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }

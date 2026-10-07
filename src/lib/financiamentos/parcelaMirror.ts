@@ -12,6 +12,7 @@
  *    para lookup via .eq('observacao', parcelaId).
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { hojeLocal } from '@/lib/datas/hojeLocal';
 
 export interface ParcelaInput {
   id: string;
@@ -106,7 +107,7 @@ export async function deletarMirrorParcela(
 export async function cancelarLancamentosDoFinanciamento(
   supabase: SupabaseClient,
   financiamentoId: string,
-  auditTag: string = `[fin_excluido_cascade_${new Date().toISOString().slice(0, 10)}]`,
+  auditTag: string = `[fin_excluido_cascade_${hojeLocal()}]`,
 ): Promise<{
   ok: boolean;
   totalCandidatos: number;

@@ -11,6 +11,7 @@ import {
 } from 'recharts';
 import { format } from 'date-fns';
 import { useFinanciamentosPainel, type TipoFin } from '@/hooks/useFinanciamentosPainel';
+import { hojeLocal } from '@/lib/datas/hojeLocal';
 
 interface Props {
   onVoltar?: () => void;
@@ -50,13 +51,13 @@ export default function FinanciamentosPainelTab({ onVoltar, onAbrirFinanciamento
   }, [mesSelecionado, parcelasEnriquecidas, ano]);
 
   const statusBadgeClass = (status: string, vencimento: string) => {
-    const hoje = new Date().toISOString().slice(0, 10);
+    const hoje = hojeLocal();
     if (status === 'pago') return 'bg-emerald-100 text-emerald-800';
     if (status === 'pendente' && vencimento < hoje) return 'bg-red-100 text-red-800';
     return 'bg-amber-100 text-amber-800';
   };
   const statusLabel = (status: string, vencimento: string) => {
-    const hoje = new Date().toISOString().slice(0, 10);
+    const hoje = hojeLocal();
     if (status === 'pago') return 'pago';
     if (status === 'pendente' && vencimento < hoje) return 'vencido';
     return status;

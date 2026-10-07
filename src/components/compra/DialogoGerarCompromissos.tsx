@@ -26,6 +26,7 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { X } from 'lucide-react';
 import { FORMAS_PAGAMENTO as FORMAS } from '@/lib/financeiro/formasPagamento';
 import { formatMoeda } from '@/lib/calculos/formatters';
+import { dataLocalISO } from '@/lib/datas/hojeLocal';
 
 /** Uma linha proposta — já resolvida por quem tem os dados do tipo de operação. */
 export interface PropostaCompromisso {
@@ -62,7 +63,7 @@ const centavos = (x: number) => Math.round(x * 100);
 export function vencimentoPadrao(dataOperacao: string | null): string {
   const base = dataOperacao ? new Date(`${dataOperacao}T12:00:00`) : new Date();
   base.setDate(base.getDate() + 30);
-  return base.toISOString().slice(0, 10);
+  return dataLocalISO(base);
 }
 
 export function DialogoGerarCompromissos({

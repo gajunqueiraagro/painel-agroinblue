@@ -107,6 +107,7 @@ import {
   gravarDocumentosPendentes, gravarDocumentosDoParcelamento, lancamentosDoParcelamento, irmasDaParcela, numeroDaNotaDaCompra,
   novoPendente, todosGravados, type DocumentoPendente, type ParcelaGravada, type ParcelaIrma,
 } from '@/lib/financeiro/documentosPendentes';
+import { hojeLocal } from '@/lib/datas/hojeLocal';
 
 interface Props {
   open: boolean;
@@ -1115,7 +1116,7 @@ export function LancamentoV2Dialog({
       // chave vêm pré-preenchidos do prefill; demais ficam vazios igual ao
       // modo criação. Conta segue o mesmo padrão do branch `lancamento`:
       // Entradas → destino; demais → origem.
-      const today = new Date().toISOString().slice(0, 10);
+      const today = hojeLocal();
       setFazendaId(prefill.fazenda_id ?? defaultFazendaId ?? '');
       setDataCompetencia(prefill.data_competencia ?? prefill.data_pagamento ?? today);
       /* PR-FIN-MODAL-VENCIMENTO-02B — o default segue vazio; só preenche quem passou a
@@ -1184,7 +1185,7 @@ export function LancamentoV2Dialog({
       setFormaPgto(prefill.forma_pagamento ?? '');
       setDadosPagamento(prefill.dados_pagamento ?? '');
     } else {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = hojeLocal();
       setFazendaId(defaultFazendaId || '');
       setDataCompetencia(today);
       setDataVencimento('');   // PR-FIN-MODAL-VENCIMENTO-02B — novo lançamento abre com vencimento vazio

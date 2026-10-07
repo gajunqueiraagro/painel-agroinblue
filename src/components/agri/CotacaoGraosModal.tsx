@@ -29,6 +29,7 @@ import { labelDaCultura } from '@/lib/agri/areaPlantada';
 import { labelDaClasse, corDaClasse } from '@/lib/agri/barterVenda';
 import type { EstoqueClasse } from '@/hooks/useEstoqueGraos';
 import { TH_CINZA as TH } from '@/lib/idiomaVisual';
+import { hojeLocal } from '@/lib/datas/hojeLocal';
 
 /** O que o modal devolve para quem chama a RPC. */
 export interface CotacaoGraosPayload {
@@ -59,7 +60,7 @@ export function CotacaoGraosModal({
   cultura: string;
   safraRotulo: string;
 }) {
-  const [data, setData] = useState(() => new Date().toISOString().slice(0, 10));
+  const [data, setData] = useState(() => hojeLocal());
   const [fonte, setFonte] = useState('manual');
   /** `classe -> preço novo`. `null` = não mexi nesta classe. */
   const [precos, setPrecos] = useState<Record<string, number | null>>({});
@@ -76,7 +77,7 @@ export function CotacaoGraosModal({
     if (!aberto) return;
     setPrecos({});
     setFonte('manual');
-    setData(new Date().toISOString().slice(0, 10));
+    setData(hojeLocal());
   }, [aberto]);
 
   const linhas = useMemo(() => CLASSES.map(classe => {

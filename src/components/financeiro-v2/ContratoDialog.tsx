@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 import type { Contrato, ContratoForm } from '@/hooks/useContratos';
 import type { ContaBancariaV2, ClassificacaoItem, FornecedorV2 } from '@/hooks/useFinanceiroV2';
 import type { Fazenda } from '@/contexts/FazendaContext';
+import { hojeLocal } from '@/lib/datas/hojeLocal';
 
 interface Props {
   open: boolean;
@@ -152,7 +153,7 @@ export function ContratoDialog({
       setFazendaId(contrato.fazenda_id);
       setStatus(contrato.status);
     } else {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = hojeLocal();
       setProduto('');
       setFornecedorId('');
       setValorDisplay('0,00');

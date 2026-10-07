@@ -36,6 +36,7 @@ import {
 import type { ClassificacaoItem } from '@/hooks/useFinanceiroV2';
 import type { BarterVenda, VendaPayload } from '@/hooks/useBarterVenda';
 import { NATUREZA_RECEITA } from '@/hooks/useBarterVenda';
+import { hojeLocal } from '@/lib/datas/hojeLocal';
 
 const FOCO = 'focus-visible:ring-1 focus-visible:ring-offset-0';
 const TH = 'bg-primary px-1.5 py-1 text-[9px] font-semibold text-primary-foreground';
@@ -44,7 +45,7 @@ const TH = 'bg-primary px-1.5 py-1 text-[9px] font-semibold text-primary-foregro
 const LINHAS_VAZIAS = (): EntregaForm[] =>
   CLASSES_VENDA.map(c => ({ classe: c.valor, sacas: '', precoSaca: '' }));
 
-const hoje = () => new Date().toISOString().slice(0, 10);
+const hoje = () => hojeLocal();
 
 export function BarterVendaModal({
   aberto, venda, clienteId, safras, classificacoes, salvando, onFechar, onSalvar,

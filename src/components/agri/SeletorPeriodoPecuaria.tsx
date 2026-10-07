@@ -20,6 +20,7 @@ import { supabase } from '@/integrations/supabase/client';
 import {
   anoMes, mesUnico, anoInteiro, ordenar, type Periodo, type PontoPeriodo,
 } from '@/v2/lib/periodo';
+import { dataLocalISO } from '@/lib/datas/hojeLocal';
 
 type Modo = 'mes' | 'ano' | 'safra' | 'personalizado';
 
@@ -336,7 +337,7 @@ export function useSafraDeAbertura(clienteId: string | null | undefined) {
         .eq('cliente_id', clienteId)
         .eq('escopo_negocio', 'pecuaria')
         .eq('cancelado', false)
-        .gte('data_competencia', corte.toISOString().slice(0, 10));
+        .gte('data_competencia', dataLocalISO(corte));
       const meses = new Set<string>();
       for (const l of (lanc ?? []) as Array<{ data_competencia: string | null }>) {
         if (l.data_competencia) meses.add(l.data_competencia.slice(0, 7));

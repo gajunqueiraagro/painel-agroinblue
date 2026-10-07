@@ -34,6 +34,7 @@ import { rotuloCulturaUnidade, unidadeCurtaDaCultura } from '@/lib/agri/colheita
 import { labelDaClasse, corDaClasse } from '@/lib/agri/barterVenda';
 import type { EstoqueClasse } from '@/hooks/useEstoqueGraos';
 import { TH_CINZA as TH, CINZA_CABECALHO } from '@/lib/idiomaVisual';
+import { hojeLocal } from '@/lib/datas/hojeLocal';
 
 /** O que o modal devolve para quem chama a RPC — uma baixa por classe. */
 export interface QuebraPayload {
@@ -77,7 +78,7 @@ export function QuebraModal({
   safraRotulo: string;
   clienteId: string | null | undefined;
 }) {
-  const [data, setData] = useState(() => new Date().toISOString().slice(0, 10));
+  const [data, setData] = useState(() => hojeLocal());
   const [localId, setLocalId] = useState('');
   const { precisaEscolher, ativos } = useRegraLocalEstoque(clienteId);
   /* ⚠ O AVISO É SÓ PARA LOCAL DE TERCEIRO (spec 8b): na cooperativa a perda de armazenagem chega
@@ -97,7 +98,7 @@ export function QuebraModal({
     setItens({});
     setMotivo('');
     setObservacoes('');
-    setData(new Date().toISOString().slice(0, 10));
+    setData(hojeLocal());
   }, [aberto]);
 
   const unidade = unidadeCurtaDaCultura(cultura);

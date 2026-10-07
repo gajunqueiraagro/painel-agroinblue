@@ -25,6 +25,7 @@ import {
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { hojeLocal } from '@/lib/datas/hojeLocal';
 
 interface Props {
   importacoes: ImportacaoRecord[];
@@ -196,7 +197,7 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesF
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `erros_importacao_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `erros_importacao_${hojeLocal()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };

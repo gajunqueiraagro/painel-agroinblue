@@ -50,6 +50,7 @@ import { LocalEstoqueSelect, useRegraLocalEstoque } from '@/components/agri/Loca
    primeiro tipo que o Financeiro acrescentasse, e a venda gravaria um tipo que o resto do
    sistema nao conhece. */
 import { TIPOS_DOCUMENTO, type TipoDocumento } from '@/lib/financeiro/documentoHelper';
+import { hojeLocal } from '@/lib/datas/hojeLocal';
 
 /** O que o modal devolve para quem chama `agri_venda_graos_registrar`. */
 export interface VendaGraosPayload {
@@ -267,7 +268,7 @@ export function VendaGraosModal({
   const [condicao, setCondicao] = useState<'avista' | 'aprazo'>('avista');
   const [parcelas, setParcelas] = useState<ParcelaForm[]>([novaParcela()]);
   const [compradorId, setCompradorId] = useState('');
-  const [data, setData] = useState(() => new Date().toISOString().slice(0, 10));
+  const [data, setData] = useState(() => hojeLocal());
   const [obs, setObs] = useState('');
   const [localId, setLocalId] = useState('');
   const [documento, setDocumento] = useState('');
@@ -440,7 +441,7 @@ export function VendaGraosModal({
     setSenarPct(String(SENAR_PCT_PADRAO).replace('.', ',')); setSenarReais(''); setSenarTocado(false);
     setDescontos([]); setCondicao('avista'); setParcelas([novaParcela()]);
     setCompradorId(''); setObs(''); setSubstituir(new Set()); setAbreSubstituir(false);
-    setData(new Date().toISOString().slice(0, 10));
+    setData(hojeLocal());
   }, [aberto, estoque, modo, venda]);
 
   /**

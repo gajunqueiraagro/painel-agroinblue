@@ -23,6 +23,7 @@ import { CloudRain, Plus, BarChart3, Construction } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { ChuvasGlobalView } from './ChuvasGlobalView';
+import { hojeLocal } from '@/lib/datas/hojeLocal';
 
 export type ChuvasMode = 'operacional' | 'analitico';
 
@@ -66,7 +67,7 @@ export function ChuvasTab({ anoInicial, mode = 'operacional' }: Props = {}) {
 
   // Dialog state for quick entry
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [novaData, setNovaData] = useState(new Date().toISOString().slice(0, 10));
+  const [novaData, setNovaData] = useState(hojeLocal());
   const [novaMm, setNovaMm] = useState('');
   const [novaObs, setNovaObs] = useState('');
 

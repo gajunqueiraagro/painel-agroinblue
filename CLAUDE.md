@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 07/10/2026 (PARC-FECHA-02 item 2, +8 em `src/lib/financiamentos/situacaoEmLote.test.ts` — 4386 depois dele; antes o
+  Baseline em 07/10/2026 (PARC-FECHA-02 item 4, +7 em `src/lib/datas/hojeLocal.test.ts` — 4393 depois dele; antes o
+  PARC-FECHA-02 item 2, +8 em `src/lib/financiamentos/situacaoEmLote.test.ts` — 4386 depois dele; antes o
   PARC-FECHA-02 item 1, +7: `src/hooks/useFinanceiroV2.tipoDocumento.test.ts` 2, `src/lib/financeiro/docDaLinha.test.ts` 2,
   `src/components/financeiro-v2/notaDaCompraNoModal.test.tsx` 3 — 4378 depois dele; antes o
   PARC-LIVRES-01 passo 6, +20: `src/components/financiamentos/documentosDoContrato.test.tsx` 12,
@@ -237,7 +238,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4386
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4393
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3335,6 +3336,38 @@ docs/historico/frentes-ate-2026-09-29.md.)
     TODOS os documentos do cliente a cada aviso do canal (NJ: centenas de linhas; medir se crescer) · NAO PROVADO NO NAVEGADOR: o
     Ampliado, o minimodal aberto pelo Status, o clipe por ARQUIVO anexado sem numero, e o documento que nao e' nota no modal
     (so' por teste); a janela estava em 579 de altura, nao 523.
+- ⚠ "HOJE" E' A DATA LOCAL DO NAVEGADOR, E TEM UM DONO (PARC-FECHA-02 item 4, Gabriel 07/10/2026, so' tela): `hojeLocal()`,
+  `dataLocalISO(d)` e `mesLocal()` em `src/lib/datas/hojeLocal.ts`. PROIBIDO `new Date().toISOString().slice(0, 10)` para data de
+  calendario (competencia, vencimento, pagamento, emissao, filtro "hoje", nome de arquivo): `toISOString` e' UTC, e em Campo
+  Grande (UTC−4) das 20h a' meia-noite ja' e' o dia seguinte — a competencia padrao do lancamento novo saia com a data de amanha.
+  Carimbo de instante (`created_at`, `updated_at`, `valor_do_mes_em`) continua `toISOString()` inteiro.
+  · TROCADOS (35 pontos em 26 arquivos): o modal do lancamento (novo e prefill), contrato, recorrencias, lista de Lancamentos,
+    painel e endividamento de financiamentos (o "vencida / vence em 30 dias"), recebimento da OC, vencimento padrao do "Gerar
+    compromissos" sem data de operacao, resumo de OCs, barter, graos (cotacao, venda, quebra), carga de mandioca, chuvas, mapa
+    (movimentar lote; os 7 dias de transferencias), o corte de 4 anos do seletor de periodo da pecuaria, `p_a_partir_de` do
+    contrato, a marca de auditoria do `parcelaMirror` e quatro nomes de arquivo CSV.
+  · NAO TROCADOS, DE PROPOSITO (data DERIVADA, nao "agora"): os que montam a data em UTC e leem em UTC (`T12:00:00Z`, `Date.UTC`,
+    `T00:00:00Z` — `fluxoPrevisto`, `saldoEmCaixa`, `useOperacaoLiquidacao`, `useConciliacaoDoMes`, `VincularMatchDireto`,
+    `BuscarDespesaOCDialog`, `matchOfxOnDemand`, `linhaDigitavel`, `importZootHistorico`) estao certos em qualquer fuso; os que
+    montam MEIA-NOITE LOCAL e leem em UTC (`LancamentoV2Dialog` ~:513/:524, `useImportacaoExtrato` ~:428, `recortePainel` ~:77,
+    `useExcelLinhasAux` ~:313, `EspelhoConciliacaoTab` ~:887, `ConciliarExtratoDialog` ~:80) dao a data certa em fuso A OESTE de
+    UTC (o Brasil inteiro) e a do dia ANTERIOR a leste — divida DATA-MEIA-NOITE-LOCAL-UTC-01.
+  · Teste: `src/lib/datas/hojeLocal.test.ts` — relogio em 2026-10-06T23:30−04:00, fuso do processo America/Campo_Grande: o teste
+    prova primeiro que o instante ja' e' dia 07 em UTC, depois que `hojeLocal()` = 2026-10-06; e varre a fonte (com auto-teste do
+    detector) atras de "hoje" por `toISOString`. 2 mutacoes mortas.
+  ⚠ NO BANCO (so' medido; NADA mudou): o servidor esta' em UTC e `CURRENT_DATE` vira o dia as 20h de Campo Grande. Quem o usa:
+    `fn_candidatos_conciliacao` (titulo "vencido" e `dias_atraso`: das 20h a's 0h o que vence HOJE ja' aparece vencido, com 1 dia
+    a mais de atraso) · `fn_contrato_criar_e_gerar` e `fn_contrato_editar_e_regenerar` (`v_hoje`) · `_fn_recorrencia_vagas` (o mes
+    corrente: so' erra na ultima noite do mes) · `fn_reconciliar_parcela_financiamento` (`v_today`, status derivado da parcela) ·
+    `oc_receber_lotes` e `oc_sincronizar_liquidacao_de_financeiro` (data na falta da informada) · `fn_locais_estoque` (vigencia) ·
+    `agri_carga_mandioca_corrigir` (texto do motivo). `fn_financiamento_situacao` e `fn_financiamentos_situacao_lote` RECEBEM
+    `p_hoje` da tela (o `CURRENT_DATE` delas e' so' a reserva, que nenhuma tela usa). Divida BANCO-HOJE-UTC-01: receber a data da
+    tela, como a situacao do contrato.
+  ⚠ PARCELA 'pago' SEM LANCAMENTO VIVO (PARC-FECHA-02 item 3, so' leitura, 07/10): 30 parcelas, todas de FINANCIAMENTO — NJ 19,
+    Santa Rita 8, Raul 2, Agnaldo 1. 27 tem valor 0,00 e nunca tiveram lancamento (linhas de carencia / legado); 3 do NJ tem valor
+    (5.178.526,13) e estao em contratos CANCELADOS, com o lancamento cancelado como duplicado em 03/09 e 22/09. Nenhum lancamento
+    realizado de mesmo valor em ±7 dias foi achado para nenhuma. Nada foi vinculado nem alterado; a lista foi entregue ao Gabriel
+    (nao vai para o repositorio). ⚠ A contagem do passo 4 (NJ 20, Santa Rita 11, Raul 3) era maior: nao sei dizer quais sairam.
 - ⚠ A LISTA DE CONTRATOS E OS PAINEIS LEEM A SITUACAO DO MESMO DONO DO CONTRATO, EM LOTE (PARC-FECHA-02 item 2, Gabriel 06/10/2026;
   migration 20261027194500, ⚠ registrada como 20261007100908; ledger = arquivo, md5 53d1cb4f…). `fn_financiamentos_situacao_lote(
   cliente, hoje)` (md5 d85ccfa3…; so' leitura, `tenant_ok`, 42501, GRANT a `authenticated`) devolve `{ <financiamento_id>: <o

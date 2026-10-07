@@ -12,6 +12,7 @@ import type { DocumentosApi } from '@/hooks/useOperacaoDocumentos';
 import { DocumentoFormOC, FORM_VAZIO } from './DocumentoFormOC';
 import { EntregasVendaTabela, EnviarTodosDialog } from '@/components/venda/EntregasVendaTabela';
 import type { LadoContaCorrente } from '@/lib/oc/contaCorrente';
+import { hojeLocal } from '@/lib/datas/hojeLocal';
 
 // Aba Recebimento (PR-OC-RECEB-01). Lotes negociados aparecem automaticamente; registro/estorno
 //   por lote; "Receber todos conforme negociado"; divergência por lote; encerrar recebimento.
@@ -209,7 +210,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
   const [reabrirOpen, setReabrirOpen] = useState(false);
   const [motivoReabrir, setMotivoReabrir] = useState('');
   const [enviarTodosOpen, setEnviarTodosOpen] = useState(false);
-  const hoje = new Date().toISOString().slice(0, 10);
+  const hoje = hojeLocal();
   /* O que o campo de data traz aberto. Editavel: o operador corrige quando a saida (ou a
      chegada) nao aconteceu no dia da operacao. */
   const dataPadrao = dataOperacao || hoje;

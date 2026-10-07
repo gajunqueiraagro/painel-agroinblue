@@ -35,6 +35,7 @@ import {
   type MotivoConflito,
   type ResultadoCardinalidade,
 } from '@/lib/financeiro/duplicidadeImportacao';
+import { hojeLocal } from '@/lib/datas/hojeLocal';
 
 // ── Types ──
 
@@ -544,7 +545,7 @@ export function ConferenciaImportacaoDialog({ open, onClose, nomeArquivo, linhas
     }
     const blob = new Blob(['\uFEFF' + csvLines.join('\n')], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `erros_importacao_${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(url);
+    const a = document.createElement('a'); a.href = url; a.download = `erros_importacao_${hojeLocal()}.csv`; a.click(); URL.revokeObjectURL(url);
   };
 
   // Import with audit trail
