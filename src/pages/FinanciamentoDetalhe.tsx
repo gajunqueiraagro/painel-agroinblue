@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import ModalBaixaParcela from '@/components/financiamentos/ModalBaixaParcela';
-import DialogVerLancamentosOficiais from '@/components/financiamentos/DialogVerLancamentosOficiais';
+import { LancamentoDaParcelaDialog } from '@/components/financiamentos/LancamentoDaParcelaDialog';
+import { useSituacaoDoContrato } from '@/hooks/useSituacaoDoContrato';
+import { CLASSE_SITUACAO, MOTIVO_PARCELA_SEM_LANCAMENTO, ROTULO_SITUACAO, origemDaSituacao } from '@/lib/financiamentos/situacaoDoContrato';
 import { ArrowLeft, Pencil, Trash2 } from 'lucide-react';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -20,7 +21,6 @@ import {
   SUBCENTRO_AMORTIZACAO, SUBCENTRO_JUROS, NOME_NATUREZA, PILULA_NATUREZA,
 } from '@/components/financiamentos/ObrigacaoDialog';
 import { FinanciamentoForm } from '@/hooks/useFinanciamentoCadastro';
-import { MOTIVO_PARCELA_DE_PARCELAMENTO } from '@/lib/financiamentos/valorDasParcelas';
 
 const fmt = (v: number) =>
   v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -51,8 +51,8 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
   const clienteId = clienteAtual?.id;
 
   const [editOpen, setEditOpen] = useState(false);
-  const [parcelaEdit, setParcelaEdit] = useState<any>(null);
-  const [parcelaLancamentosOpen, setParcelaLancamentosOpen] = useState<any>(null);
+  /* PARC-LIVRES-01 passo 4 — o lápis e o "Ver" abrem o lançamento da parcela no MODAL DO FINANCEIRO (o dono do pagamento). */
+  const [lancamentoAberto, setLancamentoAberto] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -89,23 +89,16 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
     },
   });
 
-  /* ── Resumo financeiro ── */
+  /* ── A SITUAÇÃO E OS CARTÕES — PARC-LIVRES-01 passo 4 ──────────────────────────────────────────────────────────────────
+     ⚠ O DONO DA SITUAÇÃO "PAGA" É O LANÇAMENTO, e a leitura é UMA, no banco (`fn_financiamento_situacao`): as parcelas vivas com
+       a situação derivada e os cartões prontos. Esta tela NÃO SOMA, não filtra e não decide quem está pago — antes ela somava
+       `financiamento_parcelas.status`, que ninguém atualiza quando o pagamento acontece pelo Financeiro (o contrato dizia
+       "Pago R$ 0,00 · 0/6" com três parcelas conciliadas). Relê sozinha quando um lançamento muda. */
   const hj = today();
-  const pagas = parcelas.filter(p => p.status === 'pago');
-  const pendentes = parcelas.filter(p => p.status === 'pendente');
-  const totalPago = pagas.reduce((s, p) => s + Number(p.valor_principal) + Number(p.valor_juros), 0);
-  const aVencer = pendentes.filter(p => p.data_vencimento >= hj).reduce((s, p) => s + Number(p.valor_principal) + Number(p.valor_juros), 0);
-  const vencido = pendentes.filter(p => p.data_vencimento < hj).reduce((s, p) => s + Number(p.valor_principal) + Number(p.valor_juros), 0);
-  const progresso = parcelas.length > 0 ? (pagas.length / parcelas.length) * 100 : 0;
-  /* Juros previstos — a soma do que o contrato vai custar ALEM do principal. No
-     parcelamento nao existe (o motor grava valor_juros = 0), e ali o numero certo e' o
-     traco, nunca "R$ 0,00": zero afirma que se apurou e deu zero. */
-  const jurosPrevistos = parcelas.reduce((s2, p) => s2 + Number(p.valor_juros), 0);
-  /* ⚠ SOMAS DA LINHA DE TOTAL — sobre TODAS as parcelas, nao so' as visiveis na rolagem.
-     Nao e' agregacao nova nem consulta nova: sao as mesmas linhas ja' carregadas por
-     `financiamento-parcelas`. Uma tabela que rola sem total obriga a somar no olho. */
-  const somaPrincipal = parcelas.reduce((s2, p) => s2 + Number(p.valor_principal), 0);
-  const somaTotal = somaPrincipal + jurosPrevistos;
+  const { data: situacao } = useSituacaoDoContrato(id, clienteId, hj);
+  const cartoes = situacao?.cartoes ?? null;
+  const linhas = situacao?.parcelas ?? [];
+  const dinheiro = (v: number | undefined) => (v === undefined ? '…' : fmt(v));
 
   /* ⚠ O FORM DEIXOU DE SER SEMEADO AQUI. Quem carrega o contrato agora e' o
      `ObrigacaoDialog` em `modo="editar"` (query propria por `financiamentoId`), e por
@@ -278,6 +271,7 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
     qc.invalidateQueries({ queryKey: ['financiamento-detalhe', id] });
     qc.invalidateQueries({ queryKey: ['financiamentos-lista'] });
     qc.invalidateQueries({ queryKey: ['financiamento-parcelas', id] });
+    qc.invalidateQueries({ queryKey: ['financiamento-situacao'] });
     qc.invalidateQueries({ queryKey: ['saldo-sistema-conta'] });
     qc.invalidateQueries({ queryKey: ['saldo-caixa-mensal'] });
     qc.invalidateQueries({ queryKey: ['painel-financiamentos'] });
@@ -527,23 +521,24 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
         <div className="grid grid-cols-6 gap-2">
           {([
             { rotulo: 'Valor do contrato', valor: fmt(Number(fin.valor_total)), borda: 'border-l-muted-foreground/40' },
-            { rotulo: 'Pago',              valor: fmt(totalPago),               borda: 'border-l-emerald-500' },
-            { rotulo: 'A vencer',          valor: fmt(aVencer),                 borda: 'border-l-primary' },
+            { rotulo: 'Pago',              valor: dinheiro(cartoes?.pago),      borda: 'border-l-emerald-500' },
+            { rotulo: 'A vencer',          valor: dinheiro(cartoes?.aVencer),   borda: 'border-l-primary' },
             /* Vencido so' fica vermelho QUANDO HA' VENCIDO: uma tarja de alerta acesa em
                contrato em dia ensina a ignorar a cor. */
-            { rotulo: 'Vencido',           valor: fmt(vencido),                 borda: vencido > 0 ? 'border-l-destructive' : 'border-l-muted-foreground/40' },
-            { rotulo: 'Progresso',         valor: `${pagas.length}/${parcelas.length}`, borda: 'border-l-muted-foreground/40' },
-            { rotulo: 'Juros previstos',   valor: ehParcelamento ? '—' : fmt(jurosPrevistos), borda: 'border-l-amber-500' },
+            { rotulo: 'Vencido',           valor: dinheiro(cartoes?.vencido),   borda: (cartoes?.vencido ?? 0) > 0 ? 'border-l-destructive' : 'border-l-muted-foreground/40' },
+            { rotulo: 'Progresso',         valor: cartoes ? `${cartoes.pagas}/${cartoes.parcelas}` : '…', borda: 'border-l-muted-foreground/40' },
+            { rotulo: 'Juros previstos',   valor: ehParcelamento ? '—' : dinheiro(cartoes?.jurosPrevistos), borda: 'border-l-amber-500' },
           ] as const).map(c => (
             /* ⚠ 42px, E NAO 38 — mesma medida da lista: o conteudo sempre foi 43px
                (rotulo 13 com o `mt-0.5`, valor 18, `py-1.5` 12) e o valor era cortado. */
-            <div key={c.rotulo} className={`h-[42px] rounded-md border border-l-[3px] px-3 py-1.5 ${c.borda}`}>
+            <div key={c.rotulo} data-testid={`cartao-${c.rotulo}`} className={`h-[42px] rounded-md border border-l-[3px] px-3 py-1.5 ${c.borda}`}>
               <div className="text-[10px] leading-none text-muted-foreground truncate">{c.rotulo}</div>
               <div className="mt-0.5 text-[14px] font-semibold tabular-nums leading-tight truncate">{c.valor}</div>
             </div>
           ))}
         </div>
-        <Progress value={progresso} className="h-1" />
+        {/* a barra é só desenho: a fração vem pronta (pagas e parcelas do banco) */}
+        <Progress value={cartoes && cartoes.parcelas > 0 ? (cartoes.pagas / cartoes.parcelas) * 100 : 0} className="h-1" />
       </div>
 
       {/* ═══ 4 — PARCELAS, ate' o rodape ═══════════════════════════════════════
@@ -555,7 +550,7 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
           <div className="mb-1.5 flex shrink-0 items-baseline justify-between">
             <h2 className="text-[12px] font-semibold text-foreground">Parcelas</h2>
             <span className="text-[11px] text-muted-foreground">
-              {parcelas.length} {parcelas.length === 1 ? 'parcela' : 'parcelas'}
+              {cartoes ? `${cartoes.parcelas} ${cartoes.parcelas === 1 ? 'parcela' : 'parcelas'}` : '…'}
             </span>
           </div>
           <div className="min-h-0 flex-1">
@@ -587,43 +582,40 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {parcelas.map(p => {
-                  const principal = Number(p.valor_principal);
-                  const juros = Number(p.valor_juros);
-                  const total = principal + juros;
-                  const isPending = p.status === 'pendente';
-                  const isOverdue = isPending && p.data_vencimento < hj;
-                  /* Vocabulario de tela — os identificadores gravados nao mudam. */
-                  const situacaoLabel = p.status === 'pago' ? 'Paga'
-                    : p.status === 'cancelado' ? 'Cancelada'
-                    : isOverdue ? 'Vencida' : 'Pendente';
-                  const situacaoClass = p.status === 'pago'
-                    ? 'bg-emerald-100 text-emerald-800'
-                    : isOverdue
-                      ? 'bg-red-100 text-red-800'
-                      : 'bg-amber-100 text-amber-800';
-                  const temLancamento = !!(p.lancamento_id || p.lancamento_juros_id);
-
+                {linhas.map(p => {
                   return (
-                    <TableRow key={p.id}>
-                      <TableCell className={NUM}>{p.numero_parcela}</TableCell>
-                      <TableCell className={NUM}>{fmtDate(p.data_vencimento)}</TableCell>
-                      {!ehParcelamento && <TableCell className={MOEDA}>{fmt(principal)}</TableCell>}
-                      {!ehParcelamento && <TableCell className={MOEDA}>{fmt(juros)}</TableCell>}
-                      <TableCell className={`${MOEDA} font-semibold`}>{fmt(total)}</TableCell>
+                    <TableRow key={p.id} data-testid="linha-do-contrato" data-situacao={p.situacao}>
+                      <TableCell className={NUM}>{p.numero ?? '—'}</TableCell>
+                      <TableCell className={NUM}>{fmtDate(p.dataVencimento)}</TableCell>
+                      {!ehParcelamento && <TableCell className={MOEDA}>{fmt(p.valorPrincipal)}</TableCell>}
+                      {!ehParcelamento && <TableCell className={MOEDA}>{fmt(p.valorJuros)}</TableCell>}
+                      <TableCell className={`${MOEDA} font-semibold`}>{fmt(p.valorTotal)}</TableCell>
                       <TableCell>
-                        <span className={`inline-flex items-center rounded px-1 py-0 text-[9px] font-normal leading-tight ${situacaoClass}`}>
-                          {situacaoLabel}
+                        <span className={`inline-flex items-center rounded px-1 py-0 text-[9px] font-normal leading-tight ${CLASSE_SITUACAO[p.situacao]}`}
+                              title={origemDaSituacao(p)} data-testid="situacao-da-parcela">
+                          {ROTULO_SITUACAO[p.situacao]}
                         </span>
                       </TableCell>
-                      <TableCell className={NUM}>{fmtDate(p.data_pagamento)}</TableCell>
-                      <TableCell>
-                        {temLancamento ? (
-                          <button type="button"
-                            className="text-[10px] font-medium text-primary hover:underline"
-                            onClick={() => setParcelaLancamentosOpen(p)}>
-                            Ver
-                          </button>
+                      <TableCell className={NUM} data-testid="pago-em">{fmtDate(p.pagoEm)}</TableCell>
+                      <TableCell className="whitespace-nowrap">
+                        {p.lancamentoId ? (
+                          <>
+                            <button type="button"
+                              className="text-[10px] font-medium text-primary hover:underline"
+                              title="Abrir o lançamento desta parcela no Financeiro"
+                              onClick={() => setLancamentoAberto(p.lancamentoId)}>
+                              Ver
+                            </button>
+                            {/* financiamento com juros: a parcela tem DOIS lançamentos — o lápis e o "Ver" abrem o principal, e a linha oferece o dos juros */}
+                            {p.lancamentoJurosId && (
+                              <button type="button"
+                                className="ml-2 text-[10px] font-medium text-primary hover:underline"
+                                title="Abrir o lançamento dos juros desta parcela no Financeiro"
+                                onClick={() => setLancamentoAberto(p.lancamentoJurosId)} data-testid="ver-juros">
+                                juros
+                              </button>
+                            )}
+                          </>
                         ) : <span className="text-muted-foreground">—</span>}
                       </TableCell>
                       <TableCell className="px-0 text-right select-none">
@@ -631,10 +623,10 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
                             PR-PARC-04b fixou na lista: `py-0` na celula faz o filho mais
                             alto mandar na altura de TODAS as linhas. */}
                         <Button variant="ghost" size="icon" className="h-5 w-5 p-0"
-                          onClick={() => setParcelaEdit(p)}
-                          /* PARC-LIVRES-01 2A — em parcelamento o editor de parcela não vale: ele chama o motor do financiamento. */
-                          disabled={ehParcelamento}
-                          title={ehParcelamento ? MOTIVO_PARCELA_DE_PARCELAMENTO : 'Editar parcela'} aria-label="Editar parcela">
+                          onClick={() => setLancamentoAberto(p.lancamentoId)}
+                          disabled={!p.lancamentoId}
+                          title={p.lancamentoId ? 'Abrir o lançamento desta parcela no Financeiro' : MOTIVO_PARCELA_SEM_LANCAMENTO}
+                          aria-label="Abrir o lançamento da parcela">
                           <Pencil className="size-3.5" />
                         </Button>
                       </TableCell>
@@ -651,13 +643,13 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
                 <TableRow>
                   <TableCell className="font-semibold">Total</TableCell>
                   <TableCell />
-                  {!ehParcelamento && <TableCell className={`${MOEDA} font-semibold`}>{fmt(somaPrincipal)}</TableCell>}
-                  {!ehParcelamento && <TableCell className={`${MOEDA} font-semibold`}>{fmt(jurosPrevistos)}</TableCell>}
-                  <TableCell className={`${MOEDA} font-semibold`}>{fmt(somaTotal)}</TableCell>
+                  {!ehParcelamento && <TableCell className={`${MOEDA} font-semibold`}>{dinheiro(cartoes?.somaPrincipal)}</TableCell>}
+                  {!ehParcelamento && <TableCell className={`${MOEDA} font-semibold`}>{dinheiro(cartoes?.jurosPrevistos)}</TableCell>}
+                  <TableCell className={`${MOEDA} font-semibold`} data-testid="total-das-parcelas">{dinheiro(cartoes?.somaTotal)}</TableCell>
                   <TableCell className="text-muted-foreground">
-                    {pagas.length}/{parcelas.length} pagas
+                    {cartoes ? `${cartoes.pagas}/${cartoes.parcelas} pagas` : '…'}
                   </TableCell>
-                  <TableCell className={`${MOEDA} font-semibold`}>{fmt(totalPago)}</TableCell>
+                  <TableCell className={`${MOEDA} font-semibold`}>{dinheiro(cartoes?.pago)}</TableCell>
                   <TableCell />
                   <TableCell />
                 </TableRow>
@@ -707,24 +699,8 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* ── Modal único: editar parcela (cobre registro de pagamento via mudança de status) ── */}
-      <ModalBaixaParcela
-        parcela={parcelaEdit}
-        financiamento={fin}
-        onClose={() => setParcelaEdit(null)}
-        modo="editar"
-      />
-
-      {/* ── Dialog read-only: ver lançamentos oficiais da parcela ── */}
-      <DialogVerLancamentosOficiais
-        parcela={parcelaLancamentosOpen}
-        financiamento={fin}
-        onClose={() => setParcelaLancamentosOpen(null)}
-        onEditarParcela={(p) => {
-          setParcelaLancamentosOpen(null);
-          setParcelaEdit(p);
-        }}
-      />
+      {/* ── O lançamento da parcela, no modal do Financeiro: é nele que se paga e se edita; ao salvar, esta tela relê sozinha ── */}
+      <LancamentoDaParcelaDialog lancamentoId={lancamentoAberto} clienteId={clienteId} aoFechar={() => setLancamentoAberto(null)} />
     </div>
   );
 }

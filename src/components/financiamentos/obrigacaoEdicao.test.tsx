@@ -23,6 +23,8 @@ const banco = vi.hoisted(() => ({
   leituras: [] as string[],
   /** `true` = o UPDATE do contrato não altera o que a leitura devolve (para isolar o que a tela faz com o cache). */
   toasts: [] as string[],
+  /** o que `fn_financiamento_situacao` devolve (a leitura do detalhe do contrato) */
+  situacao: null as unknown,
   /** a recusa que a RPC devolve (nulo = aceita) */
   erroRpc: null as string | null,
   /** a ordem das escritas: 'rpc:<fn>' e 'update:<tabela>' */
@@ -82,6 +84,7 @@ vi.mock('@/integrations/supabase/client', () => {
     supabase: {
       from: (t: string) => construtor(t),
       rpc: (fn: string, args: Record<string, unknown>) => {
+        if (fn === 'fn_financiamento_situacao') return Promise.resolve({ data: banco.situacao, error: null });
         banco.rpcs.push({ fn, args }); banco.ordem.push(`rpc:${fn}`);
         return Promise.resolve(banco.erroRpc ? { data: null, error: { message: banco.erroRpc } } : { data: 'novo-id', error: null });
       },
@@ -89,6 +92,10 @@ vi.mock('@/integrations/supabase/client', () => {
   };
 });
 vi.mock('@/contexts/ClienteContext', () => ({ useCliente: () => ({ clienteAtual: { id: 'cli' } }) }));
+/* o modal do Financeiro é outro mundo (catálogos, hooks): aqui só interessa QUAL lançamento a tela mandou abrir */
+vi.mock('@/components/financiamentos/LancamentoDaParcelaDialog', () => ({
+  LancamentoDaParcelaDialog: ({ lancamentoId }: { lancamentoId: string | null }) => (lancamentoId ? <div data-testid="modal-do-financeiro">{lancamentoId}</div> : null),
+}));
 const ctxFazenda = vi.hoisted(() => ({
   fazendas: [{ id: 'faz-1', nome: 'Faz. 3 Muchachas' }, { id: 'faz-adm', nome: 'Administrativo' }],
   fazendaAtual: { id: 'faz-1', nome: 'Faz. 3 Muchachas' },
@@ -141,6 +148,18 @@ const LANCS = (over: Array<Record<string, unknown>> = [{}, {}]) => over.map((o, 
   forma_pagamento: 'Boleto', ...o,
 }));
 
+/** A leitura do banco para o contrato de teste: duas parcelas, nenhuma paga (o formato de `fn_financiamento_situacao`). */
+const SITUACAO = (over: Array<Record<string, unknown>> = [{}, {}], cartoes: Record<string, unknown> = {}) => ({
+  financiamento_id: 'ctr-1', natureza: 'parcelamento', hoje: '2026-10-06',
+  parcelas: over.map((o, i) => ({
+    id: `par-${i + 1}`, numero: i + 1, data_vencimento: `2026-1${i}-10`, valor_principal: 8119, valor_juros: 0, valor_total: 8119,
+    situacao: 'pendente', pago_em: null, valor_pago: 0, lancamento_id: `lanc-${i + 1}`, lancamento_juros_id: null,
+    lancamento_status: 'programado', juros_status: null, fonte: 'lancamento', diverge: false, ...o,
+  })),
+  cartoes: { valor_contrato: 16238, pago: 0, a_vencer: 16238, vencido: 0, pagas: 0, parcelas: over.length, juros_previstos: 0,
+    soma_principal: 16238, soma_total: 16238, divergentes: 0, ...cartoes },
+});
+
 let qc: QueryClient;
 const novoQc = (staleTime: number) => new QueryClient({ defaultOptions: { queries: { retry: false, staleTime } } });
 const montarDetalhe = () => render(<QueryClientProvider client={qc}><FinanciamentoDetalhe id="ctr-1" /></QueryClientProvider>);
@@ -162,6 +181,7 @@ beforeEach(() => {
   cleanup();
   banco.contrato = PARCELAMENTO(); banco.parcelas = PARCELAS(); banco.lancs = LANCS();
   banco.updates = []; banco.rpcs = []; banco.leituras = []; banco.toasts = []; banco.erroRpc = null; banco.ordem = [];
+  banco.situacao = SITUACAO();
   qc = novoQc(0);
   Element.prototype.scrollIntoView = () => {};
   Element.prototype.hasPointerCapture = () => false;
@@ -424,28 +444,13 @@ describe('o aviso do que o Salvar não alcança', () => {
 
 /* ── PARC-LIVRES-01 passo 2A — o editor de parcela do financiamento não vale no parcelamento ──────────────────────────────── */
 describe('2A — parcelamento não passa pelo editor de parcela nem pelo deslocamento do contrato', () => {
-  const lapis = () => screen.getAllByRole('button', { name: 'Editar parcela' }) as HTMLButtonElement[];
-  const MOTIVO = 'Parcela de parcelamento: o pagamento é pelo lançamento, no Financeiro; data e valor se editam na grade de parcelas.';
-
-  it('parcelamento: no detalhe o lápis de cada parcela fica APAGADO com o motivo (não some); no diálogo, a grade', async () => {
+  it('parcelamento: no diálogo de edição não há lápis de parcela — as parcelas se editam na GRADE (passo 2B)', async () => {
     montarDetalhe();
-    await screen.findByText('Dados do contrato');
-    await waitFor(() => expect(lapis().length).toBe(2));
-    expect(lapis().map((b) => [b.disabled, b.title])).toEqual([[true, MOTIVO], [true, MOTIVO]]);
     await abrirEdicao(); await pronto();
     await irParaAba('Parcelas');
-    /* no diálogo o parcelamento não tem lápis: as parcelas se editam na GRADE (passo 2B) */
     expect(screen.queryAllByRole('button', { name: 'Editar parcela' })).toEqual([]);
     expect(screen.getByTestId('grade-de-parcelas')).toBeTruthy();
     expect(screen.getByText('A da lista: edite na grade.').getAttribute('title')).toBe('No parcelamento a data de cada parcela se edita na grade de parcelas.');
-  });
-
-  it('financiamento com juros: o lápis segue ACESO, com o título de sempre', async () => {
-    banco.contrato = FINANCIAMENTO('financiamento');
-    montarDetalhe();
-    await screen.findByText('Dados do contrato');
-    await waitFor(() => expect(lapis().length).toBe(2));
-    expect(lapis().map((b) => [b.disabled, b.title])).toEqual([[false, 'Editar parcela'], [false, 'Editar parcela']]);
   });
 
   it('salvar um parcelamento não escreve em `financiamento_parcelas` nem leva `data_primeira_parcela` (a fonte prende o desvio)', async () => {
@@ -565,5 +570,81 @@ describe('2B — a grade sobre as parcelas gravadas do parcelamento', () => {
     await irParaAba('Parcelas');
     expect(screen.queryByTestId('grade-de-parcelas')).toBeNull();
     expect(screen.getAllByRole('button', { name: 'Editar parcela' }).length).toBe(2);
+  });
+});
+
+/* ── PARC-LIVRES-01 passo 4 — o contrato LÊ a situação do banco (o dono é o lançamento) ──────────────────────────────────── */
+describe('4 — a tela do contrato mostra o que o banco derivou do lançamento', () => {
+  const cartao = (rotulo: string) => screen.getByTestId(`cartao-${rotulo}`).textContent;
+  const linhasDoContrato = () => screen.getAllByTestId('linha-do-contrato');
+  const abrirDetalhe = async () => { montarDetalhe(); await screen.findByText('Dados do contrato'); await waitFor(() => expect(linhasDoContrato().length).toBeGreaterThan(0)); };
+
+  it('parcela paga pelo Financeiro: "Paga", "Pago em" e os cartões são os do banco (a coluna da parcela diz "pendente")', async () => {
+    banco.situacao = SITUACAO([{ situacao: 'paga', pago_em: '2026-10-09', valor_pago: 8119, lancamento_status: 'conciliado', diverge: true }, { situacao: 'vencida' }],
+      { pago: 8119, a_vencer: 0, vencido: 8119, pagas: 1, divergentes: 1 });
+    await abrirDetalhe();
+    expect(linhasDoContrato().map((l) => l.getAttribute('data-situacao'))).toEqual(['paga', 'vencida']);
+    expect(screen.getAllByTestId('situacao-da-parcela').map((s) => s.textContent)).toEqual(['Paga', 'Vencida']);
+    expect(screen.getAllByTestId('pago-em').map((s) => s.textContent)).toEqual(['09/10/2026', '—']);
+    expect(cartao('Pago')).toContain('8.119,00');
+    expect(cartao('A vencer')).toContain('0,00');
+    expect(cartao('Vencido')).toContain('8.119,00');
+    expect(cartao('Progresso')).toContain('1/2');
+    expect(screen.getByTestId('total-das-parcelas').textContent).toContain('16.238,00');
+    expect(screen.getByText('1/2 pagas')).toBeTruthy();
+  });
+
+  it('a parcela CANCELADA não entra: a lista e o total são os do banco, não os de `financiamento_parcelas`', async () => {
+    /* a tabela tem TRÊS linhas (uma cancelada, que somaria 79,00); o banco devolve as duas vivas e 320,00 */
+    banco.parcelas = [...PARCELAS(), { ...PARCELAS()[1], id: 'par-3', numero_parcela: 3, status: 'cancelado', valor_principal: 79 }];
+    banco.situacao = SITUACAO([{ valor_principal: 200, valor_total: 200 }, { valor_principal: 120, valor_total: 120 }],
+      { valor_contrato: 320, a_vencer: 320, soma_principal: 320, soma_total: 320 });
+    await abrirDetalhe();
+    expect(linhasDoContrato().length).toBe(2);
+    expect(screen.getByTestId('total-das-parcelas').textContent).toContain('320,00');
+    expect(screen.getByText('2 parcelas')).toBeTruthy();
+    expect(screen.queryByText('Cancelada')).toBeNull();
+  });
+
+  it('o lápis e o "Ver" abrem o lançamento DAQUELA parcela no modal do Financeiro; com juros, a linha oferece o dos juros', async () => {
+    banco.situacao = SITUACAO([{}, { lancamento_juros_id: 'lanc-juros-2', valor_juros: 100, valor_total: 8219 }]);
+    await abrirDetalhe();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Abrir o lançamento da parcela' })[0]);
+    expect(screen.getByTestId('modal-do-financeiro').textContent).toBe('lanc-1');
+    fireEvent.click(screen.getAllByRole('button', { name: 'Ver' })[1]);
+    expect(screen.getByTestId('modal-do-financeiro').textContent).toBe('lanc-2');
+    expect(screen.getAllByTestId('ver-juros').length).toBe(1);
+    fireEvent.click(screen.getByTestId('ver-juros'));
+    expect(screen.getByTestId('modal-do-financeiro').textContent).toBe('lanc-juros-2');
+  });
+
+  it('parcela SEM lançamento: o lápis fica APAGADO com o motivo e não há "Ver"', async () => {
+    banco.situacao = SITUACAO([{ lancamento_id: null, fonte: 'parcela', situacao: 'paga', pago_em: '2026-10-10', valor_pago: 8119 }, {}], { pago: 8119, pagas: 1 });
+    await abrirDetalhe();
+    const lapis = screen.getAllByRole('button', { name: 'Abrir o lançamento da parcela' }) as HTMLButtonElement[];
+    expect([lapis[0].disabled, lapis[0].title]).toEqual([true, 'Parcela sem lançamento no Financeiro.']);
+    expect(lapis[1].disabled).toBe(false);
+    expect(screen.getAllByRole('button', { name: 'Ver' }).length).toBe(1);
+    expect(screen.getAllByTestId('situacao-da-parcela')[0].getAttribute('title')).toBe('parcela sem lançamento: a situação é a registrada na parcela');
+  });
+
+  it('enquanto o banco não responde (ou responde torto) os cartões dizem "…", nunca R$ 0,00', async () => {
+    banco.situacao = { parcelas: [{ id: 'par-1' }], cartoes: {} };
+    montarDetalhe();
+    await screen.findByText('Dados do contrato');
+    await waitFor(() => expect(qc.isFetching()).toBe(0));
+    expect(cartao('Pago')).toBe('Pago…');
+    expect(cartao('Progresso')).toBe('Progresso…');
+    expect(screen.queryAllByTestId('linha-do-contrato')).toEqual([]);
+  });
+
+  it('a tela não soma nem decide quem está pago, e não abre mais o editor antigo de parcela (a fonte prende)', () => {
+    const fonte = readFileSync(resolve(__dirname, '../../pages/FinanciamentoDetalhe.tsx'), 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+    const soma = (t: string) => /\.reduce\(|status === 'pago'|status === 'pendente'/.test(t);
+    expect(soma("parcelas.filter(p => p.status === 'pago').reduce((s, p) => s + 1, 0)")).toBe(true);
+    expect(soma(fonte)).toBe(false);
+    expect(fonte).not.toContain('ModalBaixaParcela');
+    expect(fonte).not.toContain('DialogVerLancamentosOficiais');
+    expect(fonte).toContain('useSituacaoDoContrato(id, clienteId, hj)');
   });
 });

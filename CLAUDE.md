@@ -162,7 +162,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 06/10/2026 (PARC-LIVRES-01 passo 2B, +7 em `src/components/financiamentos/obrigacaoEdicao.test.tsx` — 4308 depois dele; antes o
+  Baseline em 06/10/2026 (PARC-LIVRES-01 passo 4, +8: `src/components/financiamentos/obrigacaoEdicao.test.tsx` +5 (6 novos do passo 4; saiu 1 do 2A, o do lápis apagado no
+  detalhe, com a regra que ele prendia), `src/lib/financiamentos/situacaoDoContrato.test.ts` 3 — 4316 depois dele; antes o
+  PARC-LIVRES-01 passo 2B, +7 em `src/components/financiamentos/obrigacaoEdicao.test.tsx` — 4308 depois dele; antes o
   PARC-LIVRES-01 passo 2A, +4 em `src/components/financiamentos/obrigacaoEdicao.test.tsx` — 4301 depois dele; antes o
   PARC-LIVRES-01 passo 1, +33: `src/lib/financiamentos/parcelasLivres.test.ts` 17,
   `src/components/financiamentos/gradeDeParcelas.test.tsx` 13, `src/components/financeiro-v2/novoDeXml.test.tsx` 3 — 4297 depois dele; antes o
@@ -225,7 +227,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4308
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4316
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3175,6 +3177,54 @@ docs/historico/frentes-ate-2026-09-29.md.)
     dono do cancelamento ("competencia … em mes fechado") · a RPC nao tem simulacao · o resumo lateral segue rolando por dentro
     (368 de 417) · NAO PROVADO NO NAVEGADOR: a recusa da RPC escrita ao lado do botao, "Desfazer alterações", "Pôr na parcela N",
     a NF herdada (so' por teste) e a janela de 523 de altura.
+- ⚠ PAGOU NO FINANCEIRO, O CONTRATO MOSTRA: O DONO DA SITUACAO "PAGA" E' O LANCAMENTO (PARC-LIVRES-01 passo 4, Gabriel 06/10/2026;
+  migration 20261027194300, ⚠ registrada como 20261007013925; ledger = arquivo, md5 305af222…). Nasce do "Lascas Eucalipto Tratado"
+  do NJ: tres parcelas pagas e conciliadas pelo Financeiro e o contrato dizia "Pago R$ 0,00 · 0/6 · Vencido R$ 23.800,00".
+  · NAO EXISTE (e nao se cria) gatilho lancamento -> parcela: `financiamento_parcelas.status` so' muda pelo editor antigo de
+    parcela. PROIBIDO sincronizar copiando estado para a parcela.
+  · A LEITURA E' UMA, NO BANCO: `fn_financiamento_situacao(p_financiamento_id, p_hoje)` (md5 a3f310c2…; so' leitura, `tenant_ok`,
+    42501) devolve `parcelas` VIVAS — a 'cancelado' NAO entra, nem na lista nem nas somas — com `situacao`, `pago_em`,
+    `valor_pago`, `lancamento_id`, `lancamento_juros_id`, `fonte` e `diverge`, e os `cartoes` prontos (valor_contrato, pago,
+    a_vencer, vencido, pagas, parcelas, juros_previstos, soma_principal, soma_total, divergentes). `p_hoje` e' a data LOCAL da tela.
+      com lancamento vivo: PAGA = TODOS os lancamentos vivos da parcela realizados ou conciliados (principal e, no financiamento,
+        juros); so' ALGUM = 'parcial' (valor_pago = o realizado; o resto conta em vencido / a vencer); senao VENCIDA (vencimento <
+        hoje) ou PENDENTE;
+      sem lancamento vivo (legado sem espelho, ou lancamento cancelado): nao ha' dono — vale a parcela, `fonte = 'parcela'`;
+      `diverge` = a coluna da parcela diz outra coisa (informacao; vale o lancamento; nada e' acertado por UPDATE).
+  · TELA (`FinanciamentoDetalhe.tsx`, todo contrato — parcelamento, financiamento e emprestimo): cartoes, lista, total e
+    progresso sao os do banco (`useSituacaoDoContrato`, leitor sem cast `src/lib/financiamentos/situacaoDoContrato.ts`); a tela
+    NAO soma nem le' `status` (preso por teste de fonte); sem resposta, "…", nunca R$ 0,00. O LAPIS E O "Ver" ABREM O LANCAMENTO DA
+    PARCELA NO MODAL DO FINANCEIRO (`LancamentoDaParcelaDialog` -> `LancamentoV2Dialog`); com juros, o lapis e o "Ver" abrem o
+    principal e a linha oferece "juros"; parcela sem lancamento: lapis APAGADO com "Parcela sem lançamento no Financeiro.". Ao
+    salvar ali o canal do Financeiro avisa e o contrato rele sozinho. `ModalBaixaParcela` e `DialogVerLancamentosOficiais` NAO
+    sao mais abertos por esta tela (o primeiro segue aberto pelo `ObrigacaoDialog` na edicao de FINANCIAMENTO com juros; o
+    segundo ficou sem chamador — apagar e' decisao).
+  · MEDIDO (06/10) — parcela x lancamento, por cliente (vale o lancamento; nada alterado):
+      lancamento pago, parcela nao: parcelamento — NJ 17 (156.494,03), Vera 2 (5.881,50); financiamento — NJ 1 (26.127,18);
+      parcela 'pago' sem lancamento vivo (vale a parcela): NJ 20 (16.424,08; 17 sem lancamento, 3 com ele cancelado), Santa Rita
+      11 (242.789,60), Raul 3 (386,00), Agnaldo 1 (0,00). Com juros: 327 parcelas com dois lancamentos, 0 com so' um realizado.
+  Provas: teste SQL `supabase/tests/parc_livres_01_4_test.sql` (S1–S6); 8 mutacoes de banco e 6 de tela mortas. NO NAVEGADOR
+  (1.126 x 579): "Lascas" do NJ, so' leitura — Pago 17.850,00 · A vencer 11.900,00 · Vencido 5.950,00 · 3/6 · total 35.700,00,
+  iguais ao banco; no Teste, o contrato de 320,00 (que mostrava Total 399,00 com a cancelada) mostra 320,00 e 3 parcelas; paguei a
+  parcela 2 pelo modal do Financeiro e, SEM F5, Pago foi de 100,00 a 200,00 e o progresso de 1/3 a 2/3; desfeito, voltou; o
+  contrato de teste foi apagado.
+  ⚠ QUEM AINDA LE^ `financiamento_parcelas.status` (proposta de retirada: PARC-STATUS-DA-PARCELA-01; a coluna NAO foi mexida) —
+    tela: `FinanciamentosListaPage.tsx` (a LISTA de contratos: saldo devedor, proxima parcela — no NJ o "Lascas" segue com saldo
+    35.700,00 la'), `useFinanciamentosPainel.ts`, `useEndividamentoAtual.ts`, `useEndividamentoMensal.ts`,
+    `useParcelasFinanciamento.ts`, `buildPlanejamentoVisaoGeralData.ts`, `usePlanejamentoFinanceiro.ts`, `useResumoExecMeta.ts`,
+    `indicadorCatalogo.ts`, `documentosPendentes.ts`, `FinanceiroV2Tab.tsx`, `ObrigacaoDialog.tsx` (a tabela do financiamento),
+    `ModalBaixaParcela.tsx`; banco: `fn_endividamento_mensal`, `fn_financiamento_sincronizar_status`,
+    `fn_contrato_editar_e_regenerar`, `fn_financiamento_pagar_pelo_extrato`, os dois reconciliadores.
+  ⚠ DIVIDAS: PARC-MODAL-PARCELA-VALOR-01 (no modal do Financeiro o Valor e o Vencimento de um lancamento de PARCELA nao paga sao
+    editaveis e gravam SO' o lancamento — a parcela fica com o numero antigo; o caminho certo e' a grade do contrato / a RPC do
+    2B; travar ou rotear pela RPC e' PR proprio) · PARC-OBRIGACAO-PROPAGA-01 (descricao, forma de pagamento e classificacao
+    editadas no contrato nao chegam aos lancamentos das parcelas; falta o dialogo "só os futuros / futuros e passados / não
+    propagar", com a regra das recorrencias: realizado nunca muda data nem valor, so' classificacao) · PARC-LIVRES-NAO-PROVADO-01
+    (no navegador: a recusa da RPC ao lado do botao, "Desfazer alterações", "Pôr na parcela N", a NF herdada e a janela de 523 de
+    altura) · as linhas do detalhe medem 24–25px (a tabela `dense` de antes; nao 18–19) · as 6 fotos de edicao de financiamento e
+    emprestimo de `obrigacaoDialog.fotos.json` foram REGRAVADAS: a foto e' do `body` inteiro e a pagina do contrato atras do
+    dialogo mudou (o dialogo nao foi tocado neste passo) · financiamento COM JUROS e 'parcial' nao foram vistos no navegador (so'
+    por teste).
 - ⚠ A CONTA DIRETO NO CAMPO DE VALOR TEM UM DONO, E GUARDA-SE SO' O RESULTADO (FIN-VALOR-CALC-01a, Gabriel 05/10/2026, so' tela).
   Ele lanca rateios (o cliente manda o valor cheio, o lancamento e' uma parte): digita "16.238,00/2" no campo e fica o
   resultado; a conta NAO vai para observacao nem para lugar nenhum.
