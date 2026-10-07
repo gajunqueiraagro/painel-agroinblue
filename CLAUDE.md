@@ -3133,8 +3133,12 @@ docs/historico/frentes-ate-2026-09-29.md.)
     nem leva `data_primeira_parcela`. Financiamento e emprestimo: fotos do dialogo identicas.
   · MEDIDO (06/10): so' UM contrato real foi desfigurado (NJ, 5 lancamentos; os 5 originais cancelados tinham safra, Boleto e
     documento); o Teste tem 6 de ensaios antigos. 16 parcelamentos no total (NJ 12, Vera 4) + 2 no Teste.
-  · REPARO DO "PROTOCOLO IATF": `docs/investigacao/parc-livres-01-2a-reparo-protocolo-iatf.sql` — ENSAIO REVERTIDO, NAO EXECUTADO
-    (os originais voltam a valer com o vencimento corrigido, os do motor sao cancelados pelo dono, parcela = lancamento). Aguarda OK.
+  · REPARO DO "PROTOCOLO IATF": `docs/investigacao/parc-livres-01-2a-reparo-protocolo-iatf.sql` — EXECUTADO em 06/10/2026 com o
+    SIM do Gabriel (commit 779ad562): os 5 originais voltaram a valer (safra 26/27-Pec, Boleto, a nota ligada a's cinco), os 5 do
+    motor foram cancelados pelo dono, e parcela = lancamento em 12/09, 12/10, 12/11, 12/12/2026 e 12/01/2027; contrato 72.769,70,
+    5 vivas, 0 divergentes. O DESLOCAMENTO DE 30 DIAS NAO PODE MAIS ACONTECER em parcelamento: o `saveEdit` nao desloca parcelas
+    nem leva `data_primeira_parcela` (preso pelo teste "2A — parcelamento não passa pelo editor de parcela nem pelo deslocamento
+    do contrato"), e a data de cada parcela so' muda pela RPC do 2B, que grava parcela e lancamento juntos.
   Teste: `supabase/tests/parc_livres_01_2a_test.sql` (T1–T4; no corpo antigo cai em T1 com 'cancelar_lanc_atual'); 5 mutacoes de tela mortas.
   ⚠ ENTRE O 2A E O 2B/4 a parcela de parcelamento NAO se edita nem se paga pela tela do contrato (lapis apagado): paga-se pelo
     lancamento no Financeiro; a grade de edicao e' o passo 2B e a leitura da situacao pelo lancamento, o passo 4.
@@ -3255,7 +3259,12 @@ docs/historico/frentes-ate-2026-09-29.md.)
   inteiro, nome cortado em 164 de 185px, linha de 18px.
   Testes: `supabase/tests/parc_livres_01_5_test.sql` (N1–N5); `parc_livres_01_test.sql` e `_2b_test.sql` atualizados ao nome novo;
   6 mutacoes de banco e 5 do dono da tela mortas.
-  · EXISTENTES, SO' MEDIDO (06/10; NADA RENOMEADO — renomear em massa e' script a' parte, com ensaio revertido e OK do Gabriel):
+  · RENOMEADAS EM 06/10/2026, com o SIM do Gabriel (`docs/investigacao/parc-livres-01-5-renomear-parcelas.sql`, registro
+    historico): 83 lancamentos ativos de parcela viva de parcelamento com o nome EXATO "Descrição - Parcela i/N" — NJ 72 (21
+    pagas) e Vera 11 (2 pagas) — passaram a "Descrição i/N" pela `_fn_parcela_descricao`; so' a descricao mudou (md5 dos demais
+    campos igual) e nenhuma linha fora do escopo foi escrita (conferido pelo `xmin`). Depois: NJ 103 na forma nova e 10 de outro
+    nome; Vera 11 e 3. A forma do motor ficou com 0 (eram as 5 do IATF). A medicao abaixo e' a de ANTES.
+  · EXISTENTES, COMO ESTAVAM ANTES DE RENOMEAR (06/10):
     lancamentos de contrato de PARCELAMENTO — NJ 82 (67 na forma antiga gerada, 5 na do motor "Parcela i/N Protocolo IATF", 10 com
     outro nome, ex. "Adensado/Nucleo - 1/3"); Vera 14 (11 + 0 + 3, ex. "Balança Pesagem - 2/2"); Teste 6 (cancelados).
     Em TODOS os lancamentos vivos (regex, contagem aproximada): "… - Parcela i/N" NJ 155 · Vera 31 · Santa Rita 29 · RRCC 2 ·
@@ -3266,7 +3275,7 @@ docs/historico/frentes-ate-2026-09-29.md.)
     `AbateFinanceiroPanel.tsx` ~:361, `VendaFinanceiroPanel.tsx` ~:687, `compra/gerarFinanceiroCompra.ts` ~:108,
     `useBoitelOperacoes.ts` ~:336 (todos "X - Parcela i/N"); banco — o motor do financiamento com juros
     (`fn_reconciliar_parcela_financiamento`, "Parcela i/N Descricao") e a OC (sufixo "i/N" das parcelas de compromisso).
-  ⚠ DIVIDAS: PARC-NOME-RENOMEAR-EXISTENTES-01 (o script de renomear os existentes, nao escrito) · a tela de Recorrencias, o
+  ⚠ DIVIDAS: a tela de Recorrencias, o
     Fluxo e os demais lugares que mostram descricao NAO separam o "i/N" (so' lista, CPR, PDF e Excel) · a BUSCA da lista por
     texto segue sobre `l.descricao` · NAO PROVADO: o PDF gerado de verdade com parcela (a aba do Chrome estava em segundo plano
     e a geracao nao termina; provado pelo modelo e pela fonte), o Excel baixado, o Ampliado, a janela de 523 de altura (estava
