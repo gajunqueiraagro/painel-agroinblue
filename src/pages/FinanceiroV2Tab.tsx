@@ -21,6 +21,7 @@ import { useDocumentosDoCliente } from '@/hooks/useDocumentosDoCliente';
 import { useParcelasDosLancamentos } from '@/hooks/useParcelasDosLancamentos';
 import { nomeEParcela } from '@/lib/financiamentos/nomeDaParcela';
 import { docDaLinha } from '@/lib/financeiro/documentoHelper';
+import { fraseDoLote } from '@/lib/financiamentos/cancelarParcela';
 import { MinimodalOrigemLancamento } from '@/components/financeiro-v2/MinimodalOrigemLancamento';
 import { useCoberturaExtrato } from '@/hooks/useCoberturaExtrato';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -1448,6 +1449,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
       if (result.puladosOC.length > 0) {
         /* O lote PULOU e diz por que: titulo de OC sai pelo "Desfazer compromisso". */
         toast.warning(`${result.puladosOC.length} título${result.puladosOC.length !== 1 ? 's' : ''} de operação comercial não ${result.puladosOC.length !== 1 ? 'foram cancelados' : 'foi cancelado'}. ${MOTIVO_BLOQUEIO_TITULO_OC}.`);
+      }
+      if (result.puladosParcela.length > 0) {
+        /* PARC-CADEIA-01 — parcela de compra parcelada não sai em lote: cada uma muda o contrato. */
+        toast.warning(fraseDoLote(result.puladosParcela.length));
       }
       if (result.excluidos > 0) {
         toast.success(`${result.excluidos} lançamento${result.excluidos !== 1 ? 's' : ''} excluído${result.excluidos !== 1 ? 's' : ''}`);
@@ -3031,6 +3036,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         onLancamentoCriado={() => { if (linhaXmlAberta) setLinhasXmlLancadas(antes => new Set([...antes, linhaXmlAberta])); }}
         documentosAntesDeSalvar
         onDelete={handleDelete}
+        /* PARC-CADEIA-01 — "Abrir o contrato" do aviso de parcela: só para quem acessa Financiamentos; os filtros ativos
+           já ficam na memória da sessão (FIN-LISTA-FILTROS-01a) e voltam na remontagem. */
+        onAbrirContrato={podeAbrirFinanciamento ? onAbrirFinanciamento : undefined}
         lancamento={editingLanc}
         fazendas={fazendas}
         contas={hook.contasBancarias}

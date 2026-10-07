@@ -17,7 +17,7 @@
  * Frontend puro: sem RPC, sem migration, sem tabela nova.
  */
 import { motivoDaFalhaDoPdf } from '@/lib/pdf/cpr/falhaDoPdf';
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -62,6 +62,7 @@ import { formatMoeda } from '@/lib/calculos/formatters';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { docDaLinha } from '@/lib/financeiro/documentoHelper';
+import { consumirRetornoCpr, guardarRetornoCpr } from '@/lib/financeiro/cprRetorno';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Vocabulário da tela
@@ -278,9 +279,12 @@ interface Grupo {
   saldo: number | null | undefined;
 }
 
-export function ContasPagarReceberTab({ onIntensiveToggle }: {
+export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento }: {
   /** CPR-SALDO-DIA-01: o MESMO mecanismo do "Ampliar" da lista de Lançamentos — o shell esconde a lateral. */
   onIntensiveToggle?: (ativo: boolean) => void;
+  /** PARC-CADEIA-01 — "Abrir o contrato" do aviso de parcela de compra parcelada. Ausente = a pessoa não acessa a tela do
+   *  contrato: o atalho não é oferecido. O shell volta para cá ao sair do contrato. */
+  onAbrirFinanciamento?: (financiamentoId: string) => void;
 } = {}) {
   const { clienteAtual } = useCliente();
   const clienteId = clienteAtual?.id ?? null;
@@ -289,21 +293,29 @@ export function ContasPagarReceberTab({ onIntensiveToggle }: {
   const queryClient = useQueryClient();
   const fin = useFinanceiroV2();
 
-  const [visao, setVisao] = useState<Visao>('lista');
+  /* PARC-CADEIA-01 — o instantâneo da ida ao contrato, lido UMA vez na montagem (e apagado): a volta reabre no mesmo recorte. */
+  const [retorno] = useState(consumirRetornoCpr);
+  const [visao, setVisao] = useState<Visao>(retorno?.visao ?? 'lista');
   /* CPR-PERIODO-VENCIDOS-01 — UM PERÍODO, igual nas duas visões. O atalho dá as datas; editar uma data vira "Escolher datas".
      30 dias segue o default (PR-CPR-2B.3.6). Os vencidos ficam à parte, atrás da caixa "Incluir vencidos" (ligada). */
-  const [atalho, setAtalho] = useState<AtalhoCpr>('30');
-  const [datas, setDatas] = useState<PeriodoCpr | null>(null);
-  const [incluirVencidos, setIncluirVencidos] = useState(true);
+  const [atalho, setAtalho] = useState<AtalhoCpr>(retorno?.atalho ?? '30');
+  const [datas, setDatas] = useState<PeriodoCpr | null>(retorno?.datas ?? null);
+  const [incluirVencidos, setIncluirVencidos] = useState(retorno?.incluirVencidos ?? true);
   /* CPR-CONTA-01 — o filtro de conta: `null` = todas; um id; ou `SEM_CONTA`. Trocar de cliente volta a "Todas". */
-  const [contaSel, setContaSel] = useState<FiltroContaCpr>(null);
-  useEffect(() => { setContaSel(null); }, [clienteId]);
-  const [segmento, setSegmento] = useState<Segmento>('pagar');
-  const [statusLigados, setStatusLigados] = useState<string[]>(STATUS_INICIAIS);
+  const [contaSel, setContaSel] = useState<FiltroContaCpr>(retorno?.contaSel ?? null);
+  /* trocar de CLIENTE volta a "Todas"; a montagem não é troca (senão a conta restaurada da ida ao contrato seria apagada) */
+  const clienteDaConta = useRef(clienteId);
+  useEffect(() => {
+    if (clienteDaConta.current === clienteId) return;
+    clienteDaConta.current = clienteId;
+    setContaSel(null);
+  }, [clienteId]);
+  const [segmento, setSegmento] = useState<Segmento>(retorno?.segmento ?? 'pagar');
+  const [statusLigados, setStatusLigados] = useState<string[]>(retorno?.statusLigados ?? STATUS_INICIAIS);
   const [lancEdicao, setLancEdicao] = useState<LancamentoV2 | null>(null);
   const [abrindo, setAbrindo] = useState(false);
   /* Ampliar/Recolher — estado LOCAL; sair da tela desliga (o shell volta a mostrar a lateral). */
-  const [ampliado, setAmpliado] = useState(false);
+  const [ampliado, setAmpliado] = useState(retorno?.ampliado ?? false);
   useEffect(() => { onIntensiveToggle?.(ampliado); }, [ampliado, onIntensiveToggle]);
   useEffect(() => () => { onIntensiveToggle?.(false); }, [onIntensiveToggle]);
   const regua = ampliado ? REGUA_AMPLIADA : REGUA_NORMAL;
@@ -1495,6 +1507,10 @@ export function ContasPagarReceberTab({ onIntensiveToggle }: {
           return ok;
         }}
         onDelete={cancelarLancamento}
+        onAbrirContrato={onAbrirFinanciamento ? (finId) => {
+          guardarRetornoCpr({ visao, atalho, datas, incluirVencidos, contaSel, segmento, statusLigados, ampliado });
+          onAbrirFinanciamento(finId);
+        } : undefined}
         lancamento={lancEdicao}
         fazendas={fazendas}
         contas={fin.contasBancarias}

@@ -92,6 +92,9 @@ import { VincularOperacaoDialog } from '@/components/financeiro-v2/VincularOpera
 import { CriarOCDoLegadoDialog } from '@/components/financeiro-v2/CriarOCDoLegadoDialog';
 import { podeCriarOCDoLegado } from '@/lib/oc/criarDoLegado';
 import { RodapeCancelamento } from '@/components/financeiro-v2/RodapeCancelamento';
+import { CancelarParcelaDialog } from '@/components/financiamentos/CancelarParcelaDialog';
+import { consultarParcelaDoLancamento } from '@/lib/financiamentos/cancelarParcelaBanco';
+import type { PreviaCancelarParcela } from '@/lib/financiamentos/cancelarParcela';
 import { podeOferecerVinculo, subcentrosVinculaveis, lancamentoTemParteOC } from '@/lib/oc/vincularLancamento';
 import { podeOferecerDesvinculo } from '@/lib/oc/desvincularLancamento';
 import { DesvincularOperacaoDialog } from '@/components/financeiro-v2/DesvincularOperacaoDialog';
@@ -156,6 +159,9 @@ interface Props {
   permiteEditarFavorecidoOC?: boolean;
   // navegação SPA para abrir a OC vinculada na aba Financeiro (preserva contexto; substitui o reload).
   onAbrirOperacaoOC?: (operacaoId: string, tipo?: string | null) => void;
+  /** PARC-CADEIA-01 — "Abrir o contrato" do aviso de parcela de compra parcelada. Ausente = a tela não navega até o contrato
+   *  (ou a pessoa não o acessa): o atalho não é oferecido. */
+  onAbrirContrato?: (financiamentoId: string) => void;
   prefill?: {
     fazenda_id?: string;
     conta_bancaria_id?: string;
@@ -547,7 +553,7 @@ export function LancamentoV2Dialog({
   open, carregando, onClose, onSave, onDelete, lancamento, fazendas, contas, classificacoes,
   fornecedores, safras, defaultFazendaId, onCriarFornecedor, prefill, lockedFields, onLancamentoCriado,
   ocultarParcelamento, tiposOperacaoPermitidos,
-  referenciaOperacionalInfo, excelContext, permiteEditarFavorecidoOC, onAbrirOperacaoOC,
+  referenciaOperacionalInfo, excelContext, permiteEditarFavorecidoOC, onAbrirOperacaoOC, onAbrirContrato,
   documentosAntesDeSalvar,
 }: Props) {
   const { clienteAtual } = useCliente();
@@ -614,6 +620,20 @@ export function LancamentoV2Dialog({
   const [saving, setSaving] = useState(false);
   /* A confirmação do cancelamento e o motivo que ela coleta — PR-CPR-2A.4. */
   const [confirmandoCancelamento, setConfirmandoCancelamento] = useState(false);
+  /* PARC-CADEIA-01 — o lançamento é parcela viva de compra parcelada (quem diz é o BANCO, pela simulação): em vez da
+     confirmação de sempre abre o aviso, que cancela a parcela e ajusta o contrato juntos. */
+  const [parcelaACancelar, setParcelaACancelar] = useState<PreviaCancelarParcela | null>(null);
+  const [consultandoParcela, setConsultandoParcela] = useState(false);
+  const abrirCancelamento = async () => {
+    if (consultandoParcela) return;
+    setMotivoCancelamento('');
+    const id = lancamento?.id;
+    setConsultandoParcela(true);
+    const previa = id ? await consultarParcelaDoLancamento(id) : null;
+    setConsultandoParcela(false);
+    if (previa) setParcelaACancelar(previa);
+    else setConfirmandoCancelamento(true);
+  };
   const [motivoCancelamento, setMotivoCancelamento] = useState('');
   const [cancelando, setCancelando] = useState(false);
   // PR-FIN-MODAL-02B — aba ativa (Tabs controlado). Vive no pai; nenhum estado de campo é
@@ -3036,7 +3056,7 @@ export function LancamentoV2Dialog({
               <RodapeCancelamento
                 tituloOC={parteOCViva}
                 bloqueioRebanho={bloqueiaCancelamentoPeloFinanceiro(lancamento)}
-                onCancelar={() => { setMotivoCancelamento(''); setConfirmandoCancelamento(true); }}
+                onCancelar={() => { void abrirCancelamento(); }}
                 onAbrirOC={podeAbrirOC ? (opId, tipo) => {
                   if (onAbrirOperacaoOC) onAbrirOperacaoOC(opId, tipo);
                   else window.location.assign(`/v2?oc_id=${encodeURIComponent(opId)}`);
@@ -3251,6 +3271,18 @@ export function LancamentoV2Dialog({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* PARC-CADEIA-01 — parcela de compra parcelada: o cancelamento é o do contrato (uma gravação, no banco). */}
+      {parcelaACancelar && lancamento?.id && clienteAtual?.id && (
+        <CancelarParcelaDialog
+          clienteId={clienteAtual.id}
+          alvo={{ lancamentoId: lancamento.id }}
+          previa={parcelaACancelar}
+          aoVoltar={() => setParcelaACancelar(null)}
+          aoGravar={() => { setParcelaACancelar(null); onClose(); }}
+          aoAbrirContrato={onAbrirContrato ? (finId) => { setParcelaACancelar(null); onClose(); onAbrirContrato(finId); } : undefined}
+        />
+      )}
 
       {/* VINCULAR-LANC-OC-01 — por cima do detalhe; vinculado, fecha os dois (a lista ja' foi avisada). */}
       {vincularAberto && lancamento?.id && clienteAtual?.id && (

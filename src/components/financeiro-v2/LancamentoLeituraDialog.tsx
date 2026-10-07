@@ -10,9 +10,13 @@ import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { CancelarParcelaDialog } from '@/components/financiamentos/CancelarParcelaDialog';
+import { consultarParcelaDoLancamento } from '@/lib/financiamentos/cancelarParcelaBanco';
+import type { PreviaCancelarParcela } from '@/lib/financiamentos/cancelarParcela';
 
 interface LancRow {
   id: string;
+  cliente_id: string;
   data_pagamento: string | null; data_competencia: string | null;
   valor: number | null; sinal: string | null;
   descricao: string | null; historico: string | null; observacao: string | null;
@@ -64,6 +68,17 @@ export function LancamentoLeituraDialog({ open, lancamentoId, onClose, onResolve
   const [msgErro, setMsgErro] = useState('');
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [cancelando, setCancelando] = useState(false);
+  /* PARC-CADEIA-01 — parcela viva de compra parcelada (quem diz é o banco): o cancelamento é o do contrato, pelo aviso. */
+  const [parcelaACancelar, setParcelaACancelar] = useState<PreviaCancelarParcela | null>(null);
+  const [consultandoParcela, setConsultandoParcela] = useState(false);
+  const pedirCancelamento = async (id: string) => {
+    if (consultandoParcela) return;
+    setConsultandoParcela(true);
+    const previa = await consultarParcelaDoLancamento(id);
+    setConsultandoParcela(false);
+    if (previa) setParcelaACancelar(previa);
+    else setConfirmCancel(true);
+  };
 
   useEffect(() => {
     if (!open || !lancamentoId) return;
@@ -194,7 +209,7 @@ export function LancamentoLeituraDialog({ open, lancamentoId, onClose, onResolve
           ) : (
             <>
               {estado === 'ok' && l && !l.cancelado && (
-                <Button size="sm" variant="outline" className="h-7 text-[11px] text-rose-600 border-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/30" onClick={() => setConfirmCancel(true)}>Cancelar lançamento</Button>
+                <Button size="sm" variant="outline" className="h-7 text-[11px] text-rose-600 border-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/30" disabled={consultandoParcela} onClick={() => { void pedirCancelamento(l.id); }}>Cancelar lançamento</Button>
               )}
               {estado === 'ok' && semVinculo && onResolver && l && (
                 <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={() => onResolver(l.id)}>Resolver</Button>
@@ -207,6 +222,15 @@ export function LancamentoLeituraDialog({ open, lancamentoId, onClose, onResolve
           )}
         </footer>
       </DialogContent>
+      {parcelaACancelar && l && (
+        <CancelarParcelaDialog
+          clienteId={l.cliente_id}
+          alvo={{ lancamentoId: l.id }}
+          previa={parcelaACancelar}
+          aoVoltar={() => setParcelaACancelar(null)}
+          aoGravar={() => { setParcelaACancelar(null); onClose(); onCancelado?.(); }}
+        />
+      )}
     </Dialog>
   );
 }

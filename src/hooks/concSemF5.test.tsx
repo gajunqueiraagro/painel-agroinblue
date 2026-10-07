@@ -245,7 +245,7 @@ describe('(3) os pontos que não se montam em teste, lidos da FONTE', () => {
     expect(hook).toContain('if (clienteId) notificarLancamentosMudaram(clienteId, meuOuvinteRef.current);');
     expect(hook.match(/if \(!opts\?\.silent\) \{ toast\.success\('Lançamento atualizado'\); avisarOsOutros\(\); \}/g)).toHaveLength(2);
     expect(hook).toContain("toast.success('Lançamento excluído com sucesso'); avisarOsOutros(); return true;");
-    expect(hook).toContain('if (totalExcluidos > 0) avisarOsOutros(); return { excluidos: totalExcluidos, bloqueados: [], puladosOC };');
+    expect(hook).toContain('if (totalExcluidos > 0) avisarOsOutros(); return { excluidos: totalExcluidos, bloqueados: [], puladosOC, puladosParcela };');
     expect(hook).toContain('if (atualizados > 0) avisarOsOutros(); return { atualizados }; }, [clienteId, user, avisarOsOutros]);');
   });
   it('o `onMudou` do Espelho (todo gesto da Conferência) relê o espelho E avisa; o quadro do topo ouve o canal', () => {

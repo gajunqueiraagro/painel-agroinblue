@@ -162,7 +162,10 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 07/10/2026 (PARC-CONTRATO-01 item 4, +4: `src/lib/financeiro/docDaLinha.test.ts` 2,
+  Baseline em 07/10/2026 (PARC-CADEIA-01 passo 2, +34: `src/lib/financiamentos/cancelarParcela.test.ts` 18,
+  `src/components/financiamentos/cancelarParcelaDialog.test.tsx` 10, `src/lib/financeiro/cprRetorno.test.ts` 5,
+  `src/hooks/useFinanceiroV2.cancelMotivo.test.ts` 1 — 4464 depois dele; antes o
+  PARC-CONTRATO-01 item 4, +4: `src/lib/financeiro/docDaLinha.test.ts` 2,
   `src/components/financeiro-v2/finV2ColunasOC01.test.ts` 2 — 4430 depois dele; antes o
   PARC-CONTRATO-01 item 3, +8 em `src/components/financiamentos/documentosNaCriacao.test.tsx` — 4426 depois dele; antes o
   PARC-CONTRATO-01 item 2, +14: `src/lib/financiamentos/propagarContrato.test.ts` 8,
@@ -247,7 +250,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4430
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4464
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3345,6 +3348,45 @@ docs/historico/frentes-ate-2026-09-29.md.)
     TODOS os documentos do cliente a cada aviso do canal (NJ: centenas de linhas; medir se crescer) · NAO PROVADO NO NAVEGADOR: o
     Ampliado, o minimodal aberto pelo Status, o clipe por ARQUIVO anexado sem numero, e o documento que nao e' nota no modal
     (so' por teste); a janela estava em 579 de altura, nao 523.
+- ⚠ CANCELAR UM LANCAMENTO QUE E' PARCELA DE COMPRA PARCELADA ABRE O AVISO, EM TODA PORTA, POR UM DONO (PARC-CADEIA-01 passo 2, Gabriel
+  07/10/2026, so' tela: "se eu for apagar uma parcela, ele tem que dar um aviso de que faz parte de uma compra parcelada, se é
+  para cancelar só essa ou todas, direcionar para a tela pai").
+  · "E' PARCELA?" QUEM RESPONDE E' O BANCO: a porta chama `consultarParcelaDoLancamento(id)`
+    (`src/lib/financiamentos/cancelarParcelaBanco.ts` = a SIMULACAO de `fn_parcelamento_cancelar_parcela` em 'so_esta'); nulo
+    (nao e' parcela viva de parcelamento, ou o banco nao respondeu) = o cancelamento de sempre, e a trava do banco continua
+    valendo. NENHUM `if` de origem na tela. Dono puro dos textos e do que se oferece: `src/lib/financiamentos/cancelarParcela.ts`
+    (`lerPreviaCancelarParcela` — peca torta = nulo —, `tituloDoCancelamento`, `dadosDaParcela`, `antesDepois`,
+    `caminhosDoCancelamento`, `caminhoInicial`, `separarParcelas`, `fraseDoLote`); sem conta (preso por teste de fonte).
+  · O DIALOGO E' UM: `CancelarParcelaDialog` (`src/components/financiamentos/`), AlertDialog de 560 x 330 FIXO, sem rolagem:
+    titulo numa linha ("Parcela 3/4 de «Nome»", corta com `title`); linha de dados credor · nota (pelo `rotuloDoDocumento`, ou
+    "sem nota fiscal ligada") · vencimento · valor; tabela "O que muda no contrato" Hoje x Depois (Parcelas, Total da compra — do
+    banco); dois caminhos que GRAVAM ("Cancelar só esta parcela" / "Cancelar a compra inteira" — a segunda simulacao diz quantos
+    lancamentos saem), o que o banco recusa fica APAGADO com a frase da recusa; motivo obrigatorio (`motivoInformado`);
+    "Abrir o contrato" num lugar fixo; "Voltar" fecha sem gravar; a recusa da gravacao ESCRITA ao lado do botao, sem toast.
+    Depois de gravar: `notificarLancamentosMudaram` + as chaves do contrato e da CPR invalidadas.
+  · AS PORTAS: (a) e (c) — o "Cancelar lançamento" do `LancamentoV2Dialog` (`abrirCancelamento`; vale para a lista, a CPR, o
+    Espelho e o Fluxo Caixa, que montam o mesmo modal); (d) `LancamentoLeituraDialog`; (b) o LOTE
+    (`excluirLancamentosEmLote`): as parcelas vivas (lidas de `fn_parcelas_dos_lancamentos`) sao PULADAS antes de qualquer escrita
+    e voltam em `puladosParcela`; a lista avisa "N parcelas de compra parcelada: cancele uma a uma." (como o `puladosOC`).
+  · "ABRIR O CONTRATO" E A VOLTA: o modal ganhou `onAbrirContrato` (ausente = o atalho nao e' oferecido). Lista de Lançamentos:
+    `onAbrirFinanciamento` de sempre, so' para quem acessa Financiamentos (os filtros ativos ja' ficam na memoria da sessao). CPR:
+    prop nova `onAbrirFinanciamento` (o shell so' a entrega a quem abre `financiamentos`) + o instantaneo da ida
+    (`src/lib/financeiro/cprRetorno.ts`: visao, atalho, datas, vencidos, conta, segmento, status, Ampliado — validado campo a
+    campo, lido UMA vez na montagem e apagado). O shell guarda de onde se abriu o contrato (`origemDoFinanciamento`, `V2Index`) e
+    o voltar retorna para la'.
+    ⚠ Na CPR o "trocar de cliente volta a Todas as contas" deixou de rodar na MONTAGEM (apagaria a conta restaurada).
+  PROVA NO NAVEGADOR (cliente Teste, 1.126 x 523, contrato sintetico de 5 parcelas criado por RPC e APAGADO; as RPCs chamadas
+  pela tela, sob o PostgREST): aviso 560 x 330, titulo e frases sem corte, linha de dados a 10px; PELA LISTA "só esta" — contrato
+  5 -> 4 parcelas e 500,00 -> 400,00, i/N renumerado, motivo do operador no lancamento, a linha saiu da lista SEM F5; PELA CPR
+  (60 dias, Ambos) o aviso abre, "Abrir o contrato" leva a' tela do contrato e o voltar retorna a' CPR em 60 dias / Ambos; com a
+  1a PAGA os dois caminhos apagados com as duas frases e o botao apagado ("Nenhum caminho disponível."); "a compra inteira" —
+  Depois 0 / R$ 0,00, 4 lancamentos e 4 parcelas cancelados, contrato 'cancelado' com o motivo na observacao.
+  10 mutacoes mortas; 1 sobrevivente EQUIVALENTE (a recusa do caminho no botao: o caminho recusado nunca chega a ser o escolhido).
+  ⚠ DIVIDAS: a Mesa do Enriquecer cancela pelo hook direto (`excluirLancamento`, sem o aviso): parcela ali recebe a frase da
+    trava em toast · `LancamentoLeituraDialog` chama `fn_cancelar_lancamento_auditoria` SEM motivo (anterior a este PR) · a
+    volta da lista de Lançamentos restaura os filtros pela memoria geral, nao por instantaneo proprio · NAO PROVADO NO NAVEGADOR:
+    a porta (d), o lote com parcela (so' por teste), a recusa do banco na gravacao escrita ao lado do botao, e a volta do
+    contrato para a LISTA (foi vista para a CPR).
 - ⚠ A PARCELA DE PARCELAMENTO E O LANCAMENTO DELA MUDAM JUNTOS: UM ESCRITOR POR GESTO, NO BANCO, E A TRAVA MORA NO DONO (PARC-CADEIA-01
   passo 1, Gabriel 07/10/2026, so' banco; migration 20261027194800, ⚠ registrada como 20261007180741; ledger = arquivo, md5
   8792961a…). Nasce do "Parcela 3 - None" do NJ: parcelas canceladas pela lista do Financeiro, e o contrato seguiu com 4 parcelas,

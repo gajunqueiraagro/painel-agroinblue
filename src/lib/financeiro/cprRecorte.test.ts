@@ -463,7 +463,8 @@ describe('CPR-SALDO-DIA-01 — a tela só renderiza (lido da fonte)', () => {
     expect(tela).toContain("const MOTIVO_ANTERIORES = 'vencimento em mês já conciliado: abra o lançamento e atualize a data para entrar no saldo';");
   });
   it('Ampliar é o mecanismo do shell: uma prop, estado local, e sair da tela desliga', () => {
-    expect(shell).toContain("return <ContasPagarReceberTab onIntensiveToggle={setIntensivo} />;");
+    /* PARC-CADEIA-01: a tela ganhou a ida ao contrato (outra prop); o Ampliar segue sendo a MESMA prop, numa linha */
+    expect(shell).toContain("<ContasPagarReceberTab\n        onIntensiveToggle={setIntensivo}\n");
     expect(tela).toContain('useEffect(() => { onIntensiveToggle?.(ampliado); }, [ampliado, onIntensiveToggle]);');
     expect(tela).toContain('useEffect(() => () => { onIntensiveToggle?.(false); }, [onIntensiveToggle]);');
     expect(tela).toContain("!ampliado && 'max-w-5xl mx-auto'");
@@ -590,7 +591,8 @@ describe('CPR-SALDO-DIA-02 — pílulas de status no Ampliado: o mesmo nó, o me
     /* um estado só: uma declaração, um escritor (o clique da pílula) */
     expect(Array.from(tela.matchAll(/useState<string\[\]>\(/g)).length).toBe(1);
     expect(Array.from(tela.matchAll(/setStatusLigados\(/g)).length).toBe(1);
-    expect(tela).toContain('const [statusLigados, setStatusLigados] = useState<string[]>(STATUS_INICIAIS);');
+    /* PARC-CADEIA-01: o estado nasce do instantâneo da ida ao contrato quando ele existe; senão, o padrão de sempre */
+    expect(tela).toContain('const [statusLigados, setStatusLigados] = useState<string[]>(retorno?.statusLigados ?? STATUS_INICIAIS);');
   });
   it('no Ampliado a 3ª linha é fixa, de 20px, sempre presente; o texto "status: …" saiu', () => {
     const ampliado = tela.slice(tela.indexOf('{ampliado && ('), tela.indexOf('{!ampliado && ('));

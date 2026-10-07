@@ -16,6 +16,9 @@ const ADIANT = 'f489abd9-76b5-4807-89fa-8fdd6abc925d';
 const COMUM_1 = '11111111-0000-0000-0000-000000000001';
 const COMUM_2 = '22222222-0000-0000-0000-000000000002';
 const COM_PARTE = new Set([IATRO, ADIANT]);
+/* PARC-CADEIA-01 — parcela viva de compra parcelada: o que `fn_parcelas_dos_lancamentos` devolve para o cliente do fixture */
+const PARCELA = '33333333-0000-0000-0000-000000000003';
+const rpcs: string[] = [];
 
 interface Update { tabela: string; payload: Record<string, unknown>; ids: string[] }
 const updates: Update[] = [];
@@ -45,7 +48,13 @@ function construtor(tabela: string) {
 }
 
 vi.mock('@/integrations/supabase/client', () => ({
-  supabase: { from: (t: string) => construtor(t), rpc: () => Promise.resolve({ data: null, error: null }) },
+  supabase: {
+    from: (t: string) => construtor(t),
+    rpc: (nome: string) => {
+      rpcs.push(nome);
+      return Promise.resolve({ data: nome === 'fn_parcelas_dos_lancamentos' ? { [PARCELA]: [2, 4] } : null, error: null });
+    },
+  },
 }));
 /* `vi.hoisted`: o mock sobe para o topo do arquivo, e o espiao tem de subir junto. */
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() }));
@@ -62,7 +71,7 @@ import { MOTIVO_OBRIGATORIO, MOTIVO_BLOQUEIO_TITULO_OC } from '@/lib/financeiro/
 
 const cancelamentos = () => updates.filter(u => u.tabela === 'financeiro_lancamentos_v2' && u.payload.cancelado === true);
 
-beforeEach(() => { updates.length = 0; Object.values(toast).forEach(f => f.mockClear()); });
+beforeEach(() => { updates.length = 0; rpcs.length = 0; Object.values(toast).forEach(f => f.mockClear()); });
 
 describe('cancelamento individual', () => {
   it('recusa motivo vazio ou so espacos, sem gravar nada', async () => {
@@ -109,11 +118,22 @@ describe('cancelamento em lote', () => {
     const { result } = renderHook(() => useFinanceiroV2());
     let r: { excluidos: number; bloqueados: string[]; puladosOC: string[] } | undefined;
     await act(async () => { r = await result.current.excluirLancamentosEmLote([COMUM_1, IATRO, COMUM_2, ADIANT], 'limpeza de teste'); });
-    expect(r).toEqual({ excluidos: 2, bloqueados: [], puladosOC: [IATRO, ADIANT] });
+    expect(r).toEqual({ excluidos: 2, bloqueados: [], puladosOC: [IATRO, ADIANT], puladosParcela: [] });
     const c = cancelamentos();
     expect(c).toHaveLength(1);
     expect(c[0].ids).toEqual([COMUM_1, COMUM_2]);
     expect(c[0].payload).toMatchObject({ cancelado: true, cancelado_motivo: 'limpeza de teste', cancelado_por: 'gabriel' });
+  });
+
+  it('PARC-CADEIA-01 — PULA a parcela de compra parcelada (quem diz quais sao e o banco) e devolve quais; as comuns saem', async () => {
+    const { result } = renderHook(() => useFinanceiroV2());
+    let r: { excluidos: number; puladosOC: string[]; puladosParcela: string[] } | undefined;
+    await act(async () => { r = await result.current.excluirLancamentosEmLote([COMUM_1, PARCELA, IATRO, COMUM_2], 'limpeza'); });
+    expect(r).toMatchObject({ excluidos: 2, puladosOC: [IATRO], puladosParcela: [PARCELA] });
+    expect(rpcs).toContain('fn_parcelas_dos_lancamentos');
+    const c = cancelamentos();
+    expect(c).toHaveLength(1);
+    expect(c[0].ids).toEqual([COMUM_1, COMUM_2]);
   });
 
   it('as duas funcoes sem chamador sairam do hook', () => {

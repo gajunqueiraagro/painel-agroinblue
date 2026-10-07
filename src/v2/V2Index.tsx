@@ -490,6 +490,8 @@ export default function V2Index() {
   // setamos o id e trocamos para a section 'financiamentos' para abrir FinanciamentoDetalhe.
   // Voltar do detalhe externo limpa este state e retorna a 'financeiro-lanc'.
   const [financiamentoIdAlvo, setFinanciamentoIdAlvo] = useState<string | null>(null);
+  /* PARC-CADEIA-01 — de onde se abriu o contrato: a volta retorna para lá (Lançamentos ou Contas a Pagar e Receber). */
+  const [origemDoFinanciamento, setOrigemDoFinanciamento] = useState<V2Section>('financeiro-lanc');
   // Quando o lápis do modal "Lançamentos do mês" da Conciliação Bancária é clicado,
   // navegamos para 'financeiro-lanc' com ano/mês do contexto e habilitamos onBack
   // para retornar a 'conciliacao'. Resetar ao redirecionar para outras sections.
@@ -998,7 +1000,7 @@ export default function V2Index() {
         initialFinanciamentoId={financiamentoIdAlvo ?? undefined}
         onVoltarParaOrigem={() => {
           setFinanciamentoIdAlvo(null);
-          setSection('financeiro-lanc');
+          setSection(origemDoFinanciamento);
         }}
       />
     );
@@ -1034,7 +1036,16 @@ export default function V2Index() {
 
     if (section === 'recorrencias') return <V2Recorrencias />;
     if (section === 'painel-periodo') return <PainelPeriodoTab />;
-    if (section === 'contas-a-pagar-receber') return <ContasPagarReceberTab onIntensiveToggle={setIntensivo} />;
+    if (section === 'contas-a-pagar-receber') return (
+      <ContasPagarReceberTab
+        onIntensiveToggle={setIntensivo}
+        onAbrirFinanciamento={podeAbrirTela('financiamentos') ? (id) => {
+          setOrigemDoFinanciamento('contas-a-pagar-receber');
+          setFinanciamentoIdAlvo(id);
+          setSection('financiamentos');
+        } : undefined}
+      />
+    );
     // PR-IMPORT-EXCEL-LANC-01 — passos 1-3 (ler, mapear, conferir). A gravação
     // (passo 4) entra depois, no mesmo PR; o botão fica desabilitado até lá.
 
@@ -1246,6 +1257,7 @@ export default function V2Index() {
           // Ao redirecionar para Financiamentos, limpa o flag de retorno à Conciliação
           // para evitar que o "Voltar" do Detalhe → Lançamentos volte errado para Concilia.
           setVoltarParaConciliacao(false);
+          setOrigemDoFinanciamento('financeiro-lanc');
           setFinanciamentoIdAlvo(id);
           setSection('financiamentos');
         }}

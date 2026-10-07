@@ -13,6 +13,8 @@ import { reportarErro, normalizarErro, ErroUsuarioSeguro } from '@/lib/erroOpera
 import { montarPlanoBaseV2, mesesDoRecorte, anosDoRecorte } from '@/lib/financeiro/filtrosBaseV2';
 import { FEATURE_FLAGS } from '@/lib/featureFlags';
 import { MOTIVO_OBRIGATORIO, MOTIVO_BLOQUEIO_TITULO_OC, motivoInformado, separarTitulosOC } from '@/lib/financeiro/cancelamentoLancamento';
+import { separarParcelas } from '@/lib/financiamentos/cancelarParcela';
+import { lerParcelasDosLancamentos } from '@/lib/financiamentos/nomeDaParcela';
 import {
   consultarPagina,
   consultarTotais,
@@ -1280,10 +1282,10 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
    * individual. E o lote PULA titulo com parte viva de OC e devolve quais pulou (`puladosOC`): o
    * caminho deles e' o "Desfazer compromisso" da OC.
    */
-  const excluirLancamentosEmLote = useCallback(async (ids: string[], motivo?: string): Promise<{ excluidos: number; bloqueados: string[]; puladosOC: string[] }> => {
-    if (ids.length === 0) return { excluidos: 0, bloqueados: [], puladosOC: [] };
+  const excluirLancamentosEmLote = useCallback(async (ids: string[], motivo?: string): Promise<{ excluidos: number; bloqueados: string[]; puladosOC: string[]; puladosParcela: string[] }> => {
+    if (ids.length === 0) return { excluidos: 0, bloqueados: [], puladosOC: [], puladosParcela: [] };
     const motivoOk = motivoInformado(motivo);
-    if (!motivoOk) { toast.error(MOTIVO_OBRIGATORIO); return { excluidos: 0, bloqueados: [], puladosOC: [] }; }
+    if (!motivoOk) { toast.error(MOTIVO_OBRIGATORIO); return { excluidos: 0, bloqueados: [], puladosOC: [], puladosParcela: [] }; }
 
     /* Quem tem parte viva de OC sai do lote ANTES de qualquer escrita. */
     const comParte = new Set<string>();
@@ -1293,10 +1295,19 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
         .select('financeiro_lancamento_id')
         .in('financeiro_lancamento_id', ids.slice(i, i + 100))
         .eq('cancelada', false);
-      if (error) { reportarErro(error, 'excluirEmLote:partesOC', toast.error); return { excluidos: 0, bloqueados: [], puladosOC: [] }; }
+      if (error) { reportarErro(error, 'excluirEmLote:partesOC', toast.error); return { excluidos: 0, bloqueados: [], puladosOC: [], puladosParcela: [] }; }
       for (const r of data ?? []) if (r.financeiro_lancamento_id) comParte.add(r.financeiro_lancamento_id);
     }
-    const { cancelaveis, puladosOC } = separarTitulosOC(ids, comParte);
+    const { cancelaveis: semOC, puladosOC } = separarTitulosOC(ids, comParte);
+    /* PARC-CADEIA-01 — parcela viva de compra parcelada sai do lote ANTES de qualquer escrita: cancelar uma muda o contrato
+       (parcelas e total), e isso se faz uma a uma, pelo aviso. Quem diz quais são é o banco (`fn_parcelas_dos_lancamentos`). */
+    let parcelasVivas: ReadonlySet<string> = new Set<string>();
+    if (clienteId && semOC.length > 0) {
+      const { data: mapa, error: erroParcelas } = await (supabase as any).rpc('fn_parcelas_dos_lancamentos', { p_cliente_id: clienteId });
+      if (erroParcelas) { reportarErro(erroParcelas, 'excluirEmLote:parcelas', toast.error); return { excluidos: 0, bloqueados: [], puladosOC, puladosParcela: [] }; }
+      parcelasVivas = new Set(lerParcelasDosLancamentos(mapa).keys());
+    }
+    const { cancelaveis, puladosParcela } = separarParcelas(semOC, parcelasVivas);
 
     // PR-STATUS-SYNC-01: acumula os extratos com vínculo ATIVO dos lançamentos-alvo,
     // DEDUPLICADOS (recompute uma vez por extrato ao final, mesmo com dezenas de
@@ -1345,8 +1356,8 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     }
 
     if (totalExcluidos > 0) avisarOsOutros();
-    return { excluidos: totalExcluidos, bloqueados: [], puladosOC };
-  }, [user, avisarOsOutros]);
+    return { excluidos: totalExcluidos, bloqueados: [], puladosOC, puladosParcela };
+  }, [user, avisarOsOutros, clienteId]);
 
 
   /**
