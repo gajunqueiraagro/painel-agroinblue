@@ -34,8 +34,11 @@ describe('quem desenha (lido da fonte)', () => {
   const pdf = readFileSync(resolve(__dirname, 'DocumentoCpr.tsx'), 'utf8');
   const tela = readFileSync(resolve(__dirname, '../../../components/financeiro-v2/ContasPagarReceberTab.tsx'), 'utf8');
   const excel = readFileSync(resolve(__dirname, '../../financeiro/cprExcel.ts'), 'utf8');
-  it('PDF: o "i/N" é um Text próprio que não encolhe, ao lado do nome que corta', () => {
-    expect(pdf).toContain("<Text style={{ fontSize: F, color: COR.cinza, marginLeft: 3, flexShrink: 0 }}>{c.parcela}</Text>");
+  it('PDF: o "i/N" tem lugar próprio de LARGURA FIXA e o nome ocupa o resto (com `flexShrink` o "1/3" saía por cima do nome)', () => {
+    expect(pdf).toContain("<Text style={{ width: W_PARCELA, fontSize: F, color: COR.cinza, textAlign: 'right' }}>{c.parcela}</Text>");
+    expect(pdf).toContain("<View style={{ flex: 1, paddingRight: 2 }}><Text hyphenationCallback={semHifen} style={{ ...corta, fontSize: F, color: COR.cinza }}>{c.descricao}</Text></View>");
+    expect(pdf).toContain('const W_PARCELA = 26;');
+    expect(pdf).not.toContain('flexShrink: 0 }}>{c.parcela}');
     expect(pdf).toContain('{c.parcela ? (');
   });
   it('tela: o "i/N" é `shrink-0 whitespace-nowrap`, vem do mapa do contrato, e o nome corta antes dele', () => {

@@ -3264,6 +3264,11 @@ docs/historico/frentes-ate-2026-09-29.md.)
     pagas) e Vera 11 (2 pagas) — passaram a "Descrição i/N" pela `_fn_parcela_descricao`; so' a descricao mudou (md5 dos demais
     campos igual) e nenhuma linha fora do escopo foi escrita (conferido pelo `xmin`). Depois: NJ 103 na forma nova e 10 de outro
     nome; Vera 11 e 3. A forma do motor ficou com 0 (eram as 5 do IATF). A medicao abaixo e' a de ANTES.
+  · PDF E EXCEL GERADOS DE VERDADE (fechamento C, 06/10, cliente Teste, clique real em Exportar com a aba em primeiro plano,
+    parcelamento sintetico de nome longo criado e apagado): o Excel traz "… eucalipto tratado 1/3" inteiro na celula; O PDF MOSTROU
+    UM DEFEITO que o teste de fonte nao via — com `flexShrink` no nome o motor nao encolhia o texto e o "1/3" saia POR CIMA do
+    nome cortado. Conserto: o "i/N" tem lugar proprio de LARGURA FIXA (`W_PARCELA` 26pt, a' direita da coluna Descricao) e o
+    nome ocupa o resto; regerado: "SINT FECHA-C Manutenção…   1/3", sem sobreposicao. ⚠ LAYOUT DE PDF SO' SE PROVA NO PDF GERADO.
   · EXISTENTES, COMO ESTAVAM ANTES DE RENOMEAR (06/10):
     lancamentos de contrato de PARCELAMENTO — NJ 82 (67 na forma antiga gerada, 5 na do motor "Parcela i/N Protocolo IATF", 10 com
     outro nome, ex. "Adensado/Nucleo - 1/3"); Vera 14 (11 + 0 + 3, ex. "Balança Pesagem - 2/2"); Teste 6 (cancelados).
@@ -3300,6 +3305,10 @@ docs/historico/frentes-ate-2026-09-29.md.)
     …"), e o clique no Status abre o `MinimodalOrigemLancamento` (ver / desfazer o vinculo com o banco), que era aberto pelo
     icone. LARGURAS (soma 874, igual): Produto 136 -> 130 (Ampliado 150 -> 144), Macro e Centro 56 -> 49, Doc. 70 -> 90.
     ⚠ NAO SOBROU LARGURA PARA O FORNECEDOR (o briefing previa): o prefixo do tipo consome mais do que a coluna de origem devolvia.
+    [FECHAMENTO C, Gabriel 06/10: FORNECEDOR 100 -> 124, tirando 16 de Macro (49 -> 33) e 8 de Centro (49 -> 41); soma 874.
+    Medido no NJ a 1.126 x 523 (5.251 linhas, 829 fornecedores distintos): linhas com o fornecedor cortado 3.516 -> 2.328; nomes
+    distintos cortados 530 -> 340; Macro cortava em 5.250 e corta em 5.251; Centro 3.646 -> 4.992 (o custo); datas e valor 0;
+    Doc. 944 (as mesmas); linha de 25px; sem rolagem horizontal.]
     Medido a 1.126 no NJ (5.226 linhas, so' leitura): "NF 000.000.NNN" 67,4px e "Doc." + 11 digitos 77,1 em 82 uteis; 513 linhas
     de NF, 0 cortadas; 58 clipes; linha de 25px (a de sempre); cabecalho em 202px antes e depois de rolar 3.000px. CORTAM 944
     linhas: numero de 13+ digitos e texto livre no campo ("Formulário Casul…") — as mesmas que ja' cortavam sem o prefixo (divida

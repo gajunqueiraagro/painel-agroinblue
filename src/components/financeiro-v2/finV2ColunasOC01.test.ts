@@ -56,7 +56,8 @@ describe('as larguras', () => {
   it('a soma do colgroup normal NÃO passa de 874, com a coluna OC de 16 e o Produto com pelo menos 130', () => {
     const n = larguras(false);
     /* PARC-LIVRES-01 passo 3: Produto 136→130 e Macro/Centro 56→49 devolvem 20px à coluna Doc. (70→90), que passou a escrever o tipo */
-    expect(n).toEqual([28, 14, 40, 40, 40, 16, 130, 100, 49, 49, 30, 66, 90, 90, 64, 28]);
+    /* fechamento C: Fornecedor 100→124, tirando 16 de Macro (49→33) e 8 de Centro (49→41) */
+    expect(n).toEqual([28, 14, 40, 40, 40, 16, 130, 124, 33, 41, 30, 66, 90, 90, 64, 28]);
     expect(soma(n)).toBe(874);
     expect(soma(n)).toBeLessThanOrEqual(874);
     expect(n[6]).toBeGreaterThanOrEqual(130);
@@ -68,9 +69,9 @@ describe('as larguras', () => {
     expect(a[6] - 125).toBe(larguras(false)[6] - 111);
     expect(tela).toContain('<td colSpan={modoIntensivo ? 18 : 16}');
   });
-  it('não cedem: datas 40, Fornecedor 100, Safra 66, Valor 90, Doc. 90, ações 28, check 28, clipe 14', () => {
+  it('não cedem: datas 40, Fornecedor 124, Safra 66, Valor 90, Doc. 90, ações 28, check 28, clipe 14', () => {
     const n = larguras(false);
-    expect([n[0], n[1], n[2], n[3], n[4], n[7], n[11], n[12], n[13], n[15]]).toEqual([28, 14, 40, 40, 40, 100, 66, 90, 90, 28]);
+    expect([n[0], n[1], n[2], n[3], n[4], n[7], n[11], n[12], n[13], n[15]]).toEqual([28, 14, 40, 40, 40, 124, 66, 90, 90, 28]);
   });
 });
 

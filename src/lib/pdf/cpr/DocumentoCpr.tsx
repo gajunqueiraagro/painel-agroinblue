@@ -27,6 +27,9 @@ const corta: { maxLines: number; textOverflow: 'ellipsis' } = { maxLines: 1, tex
 /** sem hifenização: o texto corta na palavra, com reticência — o motor partia "San-…" no meio */
 const semHifen = (palavra: string): string[] => [palavra];
 /** Uma célula de TEXTO que corta: a caixa tem a largura da coluna e o texto para 5pt ANTES da coluna vizinha. */
+/** O lugar do "i/N" da parcela, dentro da coluna Descrição: fixo, para o nome cortar ANTES dele. */
+const W_PARCELA = 26;
+
 function Corta({ texto, largura, cor, tamanho = F }: { texto: string; largura?: number; cor: string; tamanho?: number }) {
   return (
     <View style={largura == null ? { flex: 1, paddingRight: 5 } : { width: largura, paddingRight: 5 }}>
@@ -82,11 +85,13 @@ function LinhaDaConta({ c, comConta, zebra }: { c: ContaDaFolha; comConta: boole
       <Text style={{ ...t, width: W.comp }}>{c.comp}</Text>
       <Text style={{ ...t, width: W.venc }}>{c.venc}</Text>
       {comConta ? <Corta texto={c.conta} largura={W.conta} cor={COR.cinzaMedio} /> : null}
-      {/* PARC-LIVRES-01 passo 5 — parcela de parcelamento: o nome corta e o "i/N" (do contrato) fica inteiro ao lado */}
+      {/* PARC-LIVRES-01 passo 5 — parcela de parcelamento: o nome corta e o "i/N" (do contrato) fica inteiro.
+          ⚠ O "i/N" TEM LUGAR PROPRIO DE LARGURA FIXA (fechamento C): com `flexShrink` no nome, o motor do PDF nao encolhia o texto e
+          o "1/3" saia POR CIMA do nome cortado — so' o PDF gerado de verdade mostrou. 26pt cabem "24/24" a 7pt (20,4pt medidos). */}
       {c.parcela ? (
         <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', paddingRight: 5 }}>
-          <View style={{ flexShrink: 1 }}><Text hyphenationCallback={semHifen} style={{ ...corta, fontSize: F, color: COR.cinza }}>{c.descricao}</Text></View>
-          <Text style={{ fontSize: F, color: COR.cinza, marginLeft: 3, flexShrink: 0 }}>{c.parcela}</Text>
+          <View style={{ flex: 1, paddingRight: 2 }}><Text hyphenationCallback={semHifen} style={{ ...corta, fontSize: F, color: COR.cinza }}>{c.descricao}</Text></View>
+          <Text style={{ width: W_PARCELA, fontSize: F, color: COR.cinza, textAlign: 'right' }}>{c.parcela}</Text>
         </View>
       ) : <Corta texto={c.descricao} cor={COR.cinza} />}
       <Corta texto={c.fornecedor} largura={wForn(comConta)} cor={COR.cinzaMedio} />

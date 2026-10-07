@@ -2558,11 +2558,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 {/* PARC-LIVRES-01 passo 3: Produto 136→130 (Ampliado 150→144) e Macro/Centro 56→49 devolvem 20px à coluna Doc. */}
                 <col style={{ width: modoIntensivo ? 144 : 130 }} />
                 {/* Fornecedor 140→120 — FIN-LISTA-VISUAL-06; 120→100 no fix1. Trunca com o nome inteiro no `title`. */}
-                <col style={{ width: 100 }} />
+                {/* ⚠ 100 → 124 — PARC-LIVRES-01 fechamento C (pedido do Gabriel: Fornecedor mais largo). Os 24px saem de Macro (49→33,
+                    que já cortava em 5.250 de 5.251 linhas do NJ) e de Centro (49→41). Medido no NJ a 1.126. */}
+                <col style={{ width: 124 }} />
                 {/* Macro e Centro 66→56, a 8,5px (`.celula-classe`, exceção ao piso só nesta lista): cortam com o texto inteiro no
                     `title`, como já cortavam — medido no NJ: 3 das 11 macros cabiam em 66 a 9px, e as mesmas 3 cabem em 56 a 8,5. */}
-                <col style={{ width: 49 }} />
-                <col style={{ width: 49 }} />
+                <col style={{ width: 33 }} />
+                <col style={{ width: 41 }} />
                 {/* FIN-V2-HOMOLOG-FIX-01: a coluna OC (58px, do FIN-V2-SEM-CAIXA-01) SAIU — empurrava a tabela para a rolagem
                     horizontal e escondia o "…" (onde mora "Criar OC a partir deste lançamento"). A OC continua a um clique: o
                     icone ao lado do produto abre a operacao na aba Financeiro, e o "…" ganhou "Abrir OC". */}
