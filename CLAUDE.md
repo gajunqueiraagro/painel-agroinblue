@@ -162,7 +162,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 06/10/2026 (PARC-LIVRES-01 passo 4, +8: `src/components/financiamentos/obrigacaoEdicao.test.tsx` +5 (6 novos do passo 4; saiu 1 do 2A, o do lápis apagado no
+  Baseline em 06/10/2026 (PARC-LIVRES-01 passo 3, +18: `src/lib/financeiro/docDaLinha.test.ts` 10,
+  `src/components/financeiro-v2/notaDaCompraNoModal.test.tsx` 5, `src/components/financeiro-v2/finV2ColunasOC01.test.ts` 3 — 4334 depois dele; antes o
+  PARC-LIVRES-01 passo 4, +8: `src/components/financiamentos/obrigacaoEdicao.test.tsx` +5 (6 novos do passo 4; saiu 1 do 2A, o do lápis apagado no
   detalhe, com a regra que ele prendia), `src/lib/financiamentos/situacaoDoContrato.test.ts` 3 — 4316 depois dele; antes o
   PARC-LIVRES-01 passo 2B, +7 em `src/components/financiamentos/obrigacaoEdicao.test.tsx` — 4308 depois dele; antes o
   PARC-LIVRES-01 passo 2A, +4 em `src/components/financiamentos/obrigacaoEdicao.test.tsx` — 4301 depois dele; antes o
@@ -227,7 +229,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4316
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4334
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -2766,7 +2768,7 @@ docs/historico/frentes-ate-2026-09-29.md.)
     maior e' "Conciliado" com o selo, 55,1px em 60 uteis (`px-0.5`); Faz. 38 -> 30: o pior codigo, "ADM", 21,1px em 26 uteis;
     Macro e Centro 66 -> 56 a 8,5px (cortam com `title`, como ja' cortavam). Linha de 25px, antes e depois. O legado "Conciliado
     (legado)" pede 75,7px e CORTA numa linha com o rotulo no `title` (antes quebrava em duas); "Meta (legado)" cabe.
-    ⚠ DIVIDAS: FIN-V2-DOC-CORTA-01 — numero de documento longo CORTA na coluna Doc. de 70px (951 de 5.212 linhas no NJ, 140 de
+    ⚠ DIVIDAS: FIN-V2-DOC-CORTA-01 — numero de documento longo CORTA na coluna Doc. de 70px [90px desde o PARC-LIVRES-01 passo 3] (951 de 5.212 linhas no NJ, 140 de
       1.551 no Agnaldo; ex.: "20260930010176200"), contra a regra "numero nunca corta"; ja' cortava antes deste PR ·
       A LISTA INTEIRA RENDERIZA A 9px pelo `.table-financeiro td` do index.css (datas e Doc. a 8px), abaixo do piso de 9,5px,
       desde antes deste PR · FOLGA DO STATUS DE 4,9px (padding lateral de 2px): status novo mais longo que "Conciliado" pede
@@ -3225,6 +3227,42 @@ docs/historico/frentes-ate-2026-09-29.md.)
     emprestimo de `obrigacaoDialog.fotos.json` foram REGRAVADAS: a foto e' do `body` inteiro e a pagina do contrato atras do
     dialogo mudou (o dialogo nao foi tocado neste passo) · financiamento COM JUROS e 'parcial' nao foram vistos no navegador (so'
     por teste).
+- ⚠ O DOCUMENTO DA LINHA TEM UM DONO: `docDaLinha` (PARC-LIVRES-01 passo 3, Gabriel 06/10/2026, so' tela, sem banco). Puro, em
+  `src/lib/financeiro/documentoHelper.ts`: `docDaLinha(lancamento {tipo_documento, numero_documento}, documentos) -> { rotulo,
+  origem 'lancamento'|'nota'|'documento'|null, clipe, resumo }`. A coluna Doc. e o clipe da lista de Lançamentos, o bloco
+  "Documento" do resumo lateral e o topo da aba Documentos do modal leem DELE; nenhum dos tres monta texto de documento.
+  ⚠ NASCE DE DEFEITO MEDIDO: a parcela de compra parcelada nao tem `numero_documento` (o cadastro do parcelamento nao o grava); a
+    nota mora no DOCUMENTO ligado a' parcela (`financeiro_documento_vinculos`), e os tres lugares liam so' a coluna do lancamento.
+    Lancamentos de parcelamento com NF ligada e Doc. vazio: NJ 28 de 32, Vera 4 de 6.
+  · PRIORIDADE: (1) o numero PROPRIO do lancamento, com o prefixo do tipo — "NF 000.000.518" (Nota Fiscal, ate' 9 digitos; mais
+    que isso sai cru), "Rec. X", "Bol. X" (Boleto e Fatura), "Comp. X", senao "Doc. X"; (2) a NF ligada (`nf`, `nf_principal`,
+    `nf_complementar`) — origem 'nota'; (3) outro documento ligado com numero — origem 'documento'. Documento CANCELADO nao conta.
+    Numero "-" (o vazio das planilhas importadas; 62 linhas no NJ) nao e' numero. `clipe` = ha' documento vivo ligado; `resumo` =
+    o que tem ("NF 000.000.518 · 1 boleto"), o `title` do clipe.
+  · A LEITURA: `useDocumentosDoCliente` (`src/hooks/`), UMA leitura paginada por cliente de `vw_lancamento_documentos` (a view ja'
+    devolve o documento para cada lancamento ligado: 32 de 32 vinculos), relida pelo canal de lancamentos. Nunca por linha. O
+    modal le' o `documentosApi.documentos` que ja' tinha.
+  · LISTA (`FinanceiroV2Tab`): a coluna de 14px que tinha o marcador de ORIGEM (B ↺ ✓ M !) e' a do CLIPE (cadeia sticky
+    0/28/42/82/122 intacta); a LEGENDA dos icones saiu do rodape. ⚠ A ORIGEM NAO SUMIU: vai no `title` do STATUS ("… · origem:
+    …"), e o clique no Status abre o `MinimodalOrigemLancamento` (ver / desfazer o vinculo com o banco), que era aberto pelo
+    icone. LARGURAS (soma 874, igual): Produto 136 -> 130 (Ampliado 150 -> 144), Macro e Centro 56 -> 49, Doc. 70 -> 90.
+    ⚠ NAO SOBROU LARGURA PARA O FORNECEDOR (o briefing previa): o prefixo do tipo consome mais do que a coluna de origem devolvia.
+    Medido a 1.126 no NJ (5.226 linhas, so' leitura): "NF 000.000.NNN" 67,4px e "Doc." + 11 digitos 77,1 em 82 uteis; 513 linhas
+    de NF, 0 cortadas; 58 clipes; linha de 25px (a de sempre); cabecalho em 202px antes e depois de rolar 3.000px. CORTAM 944
+    linhas: numero de 13+ digitos e texto livre no campo ("Formulário Casul…") — as mesmas que ja' cortavam sem o prefixo (divida
+    FIN-V2-DOC-CORTA-01, agora contra 90px).
+  · MODAL (`LancamentoV2Dialog`): resumo "Tipo: Nota Fiscal · da compra" / "Número: NF 000.005.510" (15px por linha, o aside nao
+    rola); no topo da aba Documentos, na MESMA linha do titulo, "nota da compra: NF 000.005.510" (`doc-da-compra`; bloco de 91px,
+    modal 1024 x 547). ⚠ SO' LEITURA: "Tipo Documento" e "Nº Documento" continuam sendo as colunas do lancamento e ficam vazios —
+    nada e' escrito neles. Sem documento ligado o HTML do modal e' o de antes (as fotos nao mudaram).
+  Seis mutacoes do dono mortas. Testes: `docDaLinha.test.ts`, `notaDaCompraNoModal.test.tsx`, `finV2ColunasOC01.test.ts` (fonte).
+  ⚠ DIVIDAS: FIN-V2-ORIGEM-NO-STATUS-01 (a origem so' esta' no `title` e no clique do Status: nao ha' mais marca visivel de "veio
+    do banco / manual", nem legenda — decisao do Gabriel se volta em outro lugar) · CPR e PDF seguem com o clipe/Doc. proprios
+    (`comAnexo`), fora do dono · a busca e a ordenacao por documento da lista ainda usam `formatNF` (o numero proprio): a nota da
+    compra nao e' achada pela busca · `useDocumentosDoCliente` rele^
+    TODOS os documentos do cliente a cada aviso do canal (NJ: centenas de linhas; medir se crescer) · NAO PROVADO NO NAVEGADOR: o
+    Ampliado, o minimodal aberto pelo Status, o clipe por ARQUIVO anexado sem numero, e o documento que nao e' nota no modal
+    (so' por teste); a janela estava em 579 de altura, nao 523.
 - ⚠ A CONTA DIRETO NO CAMPO DE VALOR TEM UM DONO, E GUARDA-SE SO' O RESULTADO (FIN-VALOR-CALC-01a, Gabriel 05/10/2026, so' tela).
   Ele lanca rateios (o cliente manda o valor cheio, o lancamento e' uma parte): digita "16.238,00/2" no campo e fica o
   resultado; a conta NAO vai para observacao nem para lugar nenhum.

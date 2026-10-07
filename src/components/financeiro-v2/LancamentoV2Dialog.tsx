@@ -17,7 +17,7 @@ import {
   STATUS_PALETA,
   STATUS_PILULA_BASE,
 } from '@/lib/financeiro/statusFinanceiro';
-import { TIPOS_DOCUMENTO, formatNFNumber, extractNFDigits, type TipoDocumento } from '@/lib/financeiro/documentoHelper';
+import { TIPOS_DOCUMENTO, formatNFNumber, extractNFDigits, docDaLinha, type TipoDocumento } from '@/lib/financeiro/documentoHelper';
 import { useCliente } from '@/contexts/ClienteContext';
 import { usePodeAbrir, usePodeAlterarOperacao, TELA_DA_OPERACAO } from '@/v2/hooks/usePodeAbrir';
 import { GestoDeOperacao } from '@/components/financeiro-v2/GestoDeOperacao';
@@ -1462,6 +1462,12 @@ export function LancamentoV2Dialog({
     ? (tipoDocumento === 'Nota Fiscal' ? formatNFNumber(notaFiscal) : notaFiscal)
     : '';
 
+  /* PARC-LIVRES-01 passo 3 — a parcela de uma compra parcelada não tem `numero_documento` próprio: a nota mora no DOCUMENTO
+     ligado a ela. O dono (`docDaLinha`, o mesmo da coluna Doc. da lista) diz o que mostrar; aqui só se LÊ — os dois campos
+     continuam sendo as colunas do lançamento, e nada é escrito neles. */
+  const docDoLancamento = docDaLinha({ tipo_documento: tipoDocumento, numero_documento: notaFiscal }, documentosApi.documentos);
+  const docVemDeDocumento = docDoLancamento.origem === 'nota' || docDoLancamento.origem === 'documento';
+
   /* O documento novo nasce com o que o lançamento já diz — Nº Documento, competência, valor e favorecido.
      Só semeia o formulário: mudar o número no documento NÃO muda o Nº Documento do lançamento. */
   const sugestaoDoDocumento = {
@@ -2791,7 +2797,14 @@ export function LancamentoV2Dialog({
                 cobre o cabeçalho das abas nem o rodapé). Mesmos campos; só a régua (rótulo 10, campo 11, h-8
                 como os outros campos do modal) e a posição. */}
             <section className={cn(sectionClass, "sticky -top-2 z-20")} data-testid="bloco-documentos-topo">
-              <p className="text-[11px] font-semibold text-foreground">Documentos <span className="font-normal text-muted-foreground">· do lançamento</span></p>
+              <p className={cn("text-[11px] font-semibold text-foreground", docVemDeDocumento && "flex items-baseline gap-1 whitespace-nowrap")}>Documentos <span className="font-normal text-muted-foreground">· do lançamento</span>
+                {docVemDeDocumento && (
+                  <span className="ml-auto font-mono text-[10px] font-normal text-muted-foreground" data-testid="doc-da-compra"
+                    title={`${docDoLancamento.resumo} · ${docDoLancamento.origem === 'nota' ? 'nota da compra, ligada a este lançamento' : 'documento ligado a este lançamento'}`}>
+                    {docDoLancamento.origem === 'nota' ? 'nota da compra' : 'documento ligado'}: <span className="text-foreground">{docDoLancamento.rotulo}</span>
+                  </span>
+                )}
+              </p>
               <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">
                 <div>
                   <Label className="text-[10px]">Tipo Documento</Label>
@@ -3082,8 +3095,8 @@ export function LancamentoV2Dialog({
 
                 <SecaoResumo titulo="Documento" />
                 <div>
-                  <LinhaResumo rotulo="Tipo" valor={tipoDocumento || null} quebra />
-                  <LinhaResumo rotulo="Número" valor={notaFiscalDisplay || null} quebra />
+                  <LinhaResumo rotulo="Tipo" valor={tipoDocumento || (docDoLancamento.origem === 'nota' ? 'Nota Fiscal · da compra' : docDoLancamento.origem === 'documento' ? 'Documento ligado' : null)} quebra />
+                  <LinhaResumo rotulo="Número" valor={notaFiscalDisplay || (docVemDeDocumento ? docDoLancamento.rotulo : null)} quebra />
                 </div>
               </AsideResumo>
             </div>

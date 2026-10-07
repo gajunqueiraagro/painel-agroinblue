@@ -107,10 +107,11 @@ describe('a cor do status tem um dono', () => {
 describe('FinanceiroV2Tab — a coluna ST', () => {
   /* ⚠ CONTRATO MUDOU NO FIN-V2-COLUNAS-OC-01 (Gabriel, 05/10): o status renderiza a 8px (`.celula-status`) e a coluna foi
      remedida — 77 → 64. A pílula e a cor continuam vindo do dono. */
-  it('ST com 64px (a 8px), Doc com 70, e o status em pílula', () => {
+  it('ST com 64px (a 8px), Doc com 90 (70 até o PARC-LIVRES-01 passo 3: a coluna passou a escrever o tipo), e o status em pílula', () => {
     expect(tela).toContain('<col style={{ width: 64 }} />');
     expect(tela).not.toContain('<col style={{ width: 77 }} />');
-    expect(tela).toContain('<col style={{ width: 70 }} />');
+    expect(tela.split('<col style={{ width: 90 }} />').length - 1).toBe(2);   // Valor e Doc.
+    expect(tela).not.toContain('<col style={{ width: 70 }} />');
     expect(tela).toContain('<span className={cn(STATUS_PILULA_BASE, stPilula)} data-status={stKey}>{stLabel}</span>');
     expect(tela).not.toContain('text-[10px] leading-tight ${stColor}`}');
   });

@@ -16,7 +16,9 @@ import { totaisDaListaV2 } from '@/lib/financeiro/totaisDaListaV2';
 import { SecaoSemCaixa, totalSemCaixa } from '@/components/financeiro-v2/SecaoSemCaixa';
 import { useLancamentosConciliados, desfazerVinculo, desfazerGrupo } from '@/hooks/useConciliacaoDoMes';
 import { useLancamentosComOC, rotuloOrigemOC } from '@/hooks/useLancamentosComOC';
-import { iconeOrigemLancamento, LEGENDA_ICONES } from '@/v2/lib/origemLancamento';
+import { iconeOrigemLancamento } from '@/v2/lib/origemLancamento';
+import { useDocumentosDoCliente } from '@/hooks/useDocumentosDoCliente';
+import { docDaLinha } from '@/lib/financeiro/documentoHelper';
 import { MinimodalOrigemLancamento } from '@/components/financeiro-v2/MinimodalOrigemLancamento';
 import { useCoberturaExtrato } from '@/hooks/useCoberturaExtrato';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -43,7 +45,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Plus, Pencil, Copy, MoreHorizontal, ChevronLeft, ChevronRight, Zap, List, ChevronsUpDown, FilterX, Download, ArrowUp, ArrowDown, ArrowUpDown, Trash2, X, SlidersHorizontal, Maximize2, Minimize2, ExternalLink, Beef, CheckCircle2, FilePlus2 } from 'lucide-react';
+import { Plus, Pencil, Copy, MoreHorizontal, ChevronLeft, ChevronRight, Zap, List, ChevronsUpDown, FilterX, Download, ArrowUp, ArrowDown, ArrowUpDown, Trash2, X, SlidersHorizontal, Maximize2, Minimize2, ExternalLink, Beef, CheckCircle2, FilePlus2, Paperclip } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -183,6 +185,8 @@ function fmtDate(d: string | null) {
 function formatNF(l: LancamentoV2): string {
   return l.numero_documento?.trim() || '-';
 }
+/** O que a coluna Doc. escreve (PARC-LIVRES-01 passo 3): o texto padronizado do dono — "NF 000.000.518", "Rec. X", "Doc. X"… */
+const lancamentoParaDoc = (l: LancamentoV2) => ({ tipo_documento: (l as any).tipo_documento ?? null, numero_documento: l.numero_documento });
 
 // Tooltip mantém info completa (tipo + número formatado)
 function formatDocCompleto(l: LancamentoV2): string {
@@ -255,6 +259,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const lancamentosComOC = useLancamentosComOC(clienteAtual?.id ?? null);
 
   const coberturaExtrato = useCoberturaExtrato(clienteAtual?.id);
+  /* PARC-LIVRES-01 passo 3 — os documentos por lançamento (os dele e os LIGADOS a ele: a nota da compra nas N parcelas), da mesma
+     fonte da aba Documentos. É o que acende o clipe e dá o "NF 000.000.NNN" à parcela que não tem número próprio. */
+  const { data: documentosPorLancamento } = useDocumentosDoCliente(clienteAtual?.id ?? null);
 
   /**
    * PR-FORN-01 — as opções e a contagem saem do RECORTE CARREGADO, não do catálogo.
@@ -2545,13 +2552,14 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 <col style={{ width: 16 }} />
                 {/* ⚠ FIN-V2-COLUNAS-OC-01 (Gabriel, 05/10): Produto 111→136 (Ampliado 125→150) — recebe o que Status, Faz., Macro e
                     Centro devolveram, menos os 16 da coluna OC. A soma normal segue 874. */}
-                <col style={{ width: modoIntensivo ? 150 : 136 }} />
+                {/* PARC-LIVRES-01 passo 3: Produto 136→130 (Ampliado 150→144) e Macro/Centro 56→49 devolvem 20px à coluna Doc. */}
+                <col style={{ width: modoIntensivo ? 144 : 130 }} />
                 {/* Fornecedor 140→120 — FIN-LISTA-VISUAL-06; 120→100 no fix1. Trunca com o nome inteiro no `title`. */}
                 <col style={{ width: 100 }} />
                 {/* Macro e Centro 66→56, a 8,5px (`.celula-classe`, exceção ao piso só nesta lista): cortam com o texto inteiro no
                     `title`, como já cortavam — medido no NJ: 3 das 11 macros cabiam em 66 a 9px, e as mesmas 3 cabem em 56 a 8,5. */}
-                <col style={{ width: 56 }} />
-                <col style={{ width: 56 }} />
+                <col style={{ width: 49 }} />
+                <col style={{ width: 49 }} />
                 {/* FIN-V2-HOMOLOG-FIX-01: a coluna OC (58px, do FIN-V2-SEM-CAIXA-01) SAIU — empurrava a tabela para a rolagem
                     horizontal e escondia o "…" (onde mora "Criar OC a partir deste lançamento"). A OC continua a um clique: o
                     icone ao lado do produto abre a operacao na aba Financeiro, e o "…" ganhou "Abrir OC". */}
@@ -2595,7 +2603,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 {/* ⚠ 55/60 → 70 — PR-FIN-V2-STATUS-PGTO-01: o documento cabe INTEIRO no formato
                     "000.000.000". Medido com a fonte real (mono 8px, a `.celula-doc`): 53px de
                     texto + 8 de padding + 8 de folga = 69. */}
-                <col style={{ width: 70 }} />
+                {/* ⚠ 70 → 90 — PARC-LIVRES-01 passo 3: a coluna passou a escrever o TIPO antes do número ("NF 000.000.518",
+                    "Doc. 21474298649"). Medido no NJ com um Range (mono 8px): NF 67,4px; "Doc." + 11 dígitos 77,1; + 12 dígitos
+                    81,9 — os mesmos números que cabiam sem o prefixo em 70 cabem com ele em 90 (82 úteis). 13 dígitos ou mais
+                    já cortavam e seguem cortando (dívida FIN-V2-DOC-CORTA-01). */}
+                <col style={{ width: 90 }} />
                 {/* ⚠ 64 → 84 → 77. Com 64 o status saía cortado colado nos pontinhos ("Ag"); o
                     PR-FIN-V2-STATUS-PGTO-01 foi a 84 pela pílula em "Programado", e o fix1 a 77: previsto, programado e agendado viraram
                     TEXTO (sem o padding da pílula), e a caixa ficou só para realizado e conciliado.
@@ -2616,7 +2628,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                   </th>
                   {/* PR-CONC-B-1 — sem rótulo: o cabeçalho de 8px não caberia e a legenda do
                       rodapé é quem explica os cinco símbolos. */}
-                  <th className="px-0 py-[3px] text-center align-middle sticky left-[28px] z-30 bg-primary" aria-label="Origem" />
+                  <th className="px-0 py-[3px] text-center align-middle sticky left-[28px] z-30 bg-primary" aria-label="Documentos" title="Documentos" />
                   <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[42px] z-30 bg-primary" onClick={() => toggleSort('data')}>Comp.<SortIndicator field="data" /></th>
                   {/* ⚠ A CADEIA DE `sticky left` É A SOMA DAS COLUNAS ANTERIORES, e agora bate —
                       FIN-LISTA-VISUAL-06: 0 (check 28) → 28 (origem 14) → 42 (comp. 40) →
@@ -2704,6 +2716,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     /* PR-CONC-B-1 — o mesmo `vinculo` que decide a pílula de status decide o
                        ícone; nenhuma consulta a mais por linha. */
                     const icone = iconeOrigemLancamento(l, vinculo, coberturaExtrato);
+                    const doc = docDaLinha(lancamentoParaDoc(l), documentosPorLancamento?.get(l.id));
                     const isHistoricoReadOnly = l.origem_lancamento === 'importacao_historica';
                     const isParcelaFinanciamento = l.origem_lancamento === 'parcela_financiamento' || (l as any).origem_tipo === 'financiamento_captacao' || (l.origem_lancamento === 'financiamento' && !!(l as any).financiamento_id);
                     const isImported = !!l.lote_importacao_id;
@@ -2732,24 +2745,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                           onClick={(e) => e.stopPropagation()}>
                           <Checkbox checked={selectedIds.has(l.id)} onCheckedChange={() => toggleSelect(l.id)} disabled={isParcelaFinanciamento} className="h-3 w-3" />
                         </td>
-                        <td className="px-0 py-1 align-middle text-center sticky left-[28px] z-10 bg-background">
-                          {icone && (
-                            <MinimodalOrigemLancamento
-                              lancamento={l}
-                              icone={icone}
-                              nomeFavorecido={(id) => fornecedoresMap.get(id || '')}
-                              onAbrirLancamento={() => openEdit(l)}
-                              onVinculoDesfeito={recarregarVinculos}
-                            >
-                              <button
-                                type="button"
-                                className={cn('text-[11px] font-semibold leading-none not-italic cursor-pointer', icone.cor)}
-                                title={icone.significado}
-                                aria-label={icone.significado}
-                              >
-                                {icone.simbolo}
-                              </button>
-                            </MinimodalOrigemLancamento>
+                        {/* PARC-LIVRES-01 passo 3 — O CLIPE no lugar do marcador de origem (mesma coluna de 14px, mesma cadeia sticky):
+                            aceso quando há documento — arquivo anexado OU a nota da compra ligada —, com o que tem no `title`. */}
+                        <td className="px-0 py-1 align-middle text-center sticky left-[28px] z-10 bg-background" data-testid="celula-clipe">
+                          {doc.clipe && (
+                            <span title={doc.resumo} aria-label={`Documentos: ${doc.resumo}`} data-testid="clipe-da-linha" className="inline-flex">
+                              <Paperclip className="h-2.5 w-2.5 text-muted-foreground" aria-hidden />
+                            </span>
                           )}
                         </td>
                         {/* ⚠ DATA CINZA POR PADRÃO, VENCIDA EM VERMELHO — e só a data, não a
@@ -2864,7 +2866,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                           {valorDaLinha(l).texto}
                         </td>
                         {/* Doc. à direita: é número, e número se lê alinhado pela unidade. */}
-                        <td className="celula-doc font-mono text-muted-foreground text-right px-1 py-1 align-middle text-[10px] leading-tight truncate" title={formatDocCompleto(l)}>{formatNF(l)}</td>
+                        <td className="celula-doc font-mono text-muted-foreground text-right px-1 py-1 align-middle text-[10px] leading-tight truncate" data-testid="celula-doc"
+                            title={doc.origem === 'nota' ? `${doc.rotulo} · nota da compra` : (doc.rotulo || undefined)}>{doc.rotulo || '-'}</td>
                         {/* `truncate` também aqui: a tabela é `tableLayout: fixed`, então a
                             faixa não cede — sem truncar, "Realizado" transbordaria a célula em
                             vez de a alargar. É o mesmo raciocínio do `min-w-0` da barra, do
@@ -2877,10 +2880,29 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                             ⚠ 8px E UMA LINHA — FIN-V2-COLUNAS-OC-01: o tamanho vem da classe da tabela (`.celula-status`, index.css),
                             não do dono (outras telas seguem com o delas). Os estágios e as duas pílulas cabem inteiros na coluna
                             medida; só o legado "Conciliado (legado)" não cabe e CORTA (`truncate`), com o rótulo no `title`. */}
-                        <td className="celula-status px-0.5 py-1 text-center align-middle leading-tight" title={stTitle ?? (stPilula || stEstagio ? undefined : stLabel)}>
-                          {stPilula
-                            ? <span className={cn(STATUS_PILULA_BASE, stPilula)} data-status={stKey}>{stLabel}</span>
-                            : <span className={cn('block truncate', stColor, stEstagio && 'font-semibold')} data-status={stKey}>{stLabel}</span>}
+                        {/* PARC-LIVRES-01 passo 3 — A ORIGEM (cru do banco, substituído, enriquecido, manual, sem par) saiu da coluna e veio
+                            para CÁ: o `title` do Status a diz por extenso, e o clique no Status abre o mesmo minimodal do vínculo que o
+                            marcador abria. Sem origem a marcar, o Status é o de sempre. */}
+                        <td className="celula-status px-0.5 py-1 text-center align-middle leading-tight" data-testid="celula-status"
+                            title={[stTitle ?? (stPilula || stEstagio ? null : stLabel), icone ? `origem: ${icone.significado}` : null].filter(Boolean).join(' · ') || undefined}
+                            onClick={icone ? (e) => e.stopPropagation() : undefined}>
+                          {(() => {
+                            const rotulo = stPilula
+                              ? <span className={cn(STATUS_PILULA_BASE, stPilula)} data-status={stKey}>{stLabel}</span>
+                              : <span className={cn('block truncate', stColor, stEstagio && 'font-semibold')} data-status={stKey}>{stLabel}</span>;
+                            if (!icone) return rotulo;
+                            return (
+                              <MinimodalOrigemLancamento
+                                lancamento={l}
+                                icone={icone}
+                                nomeFavorecido={(id) => fornecedoresMap.get(id || '')}
+                                onAbrirLancamento={() => openEdit(l)}
+                                onVinculoDesfeito={recarregarVinculos}
+                              >
+                                <button type="button" className="block w-full cursor-pointer" aria-label={`${stLabel} · origem: ${icone.significado}`}>{rotulo}</button>
+                              </MinimodalOrigemLancamento>
+                            );
+                          })()}
                         </td>
                         {/* ⚠ UM BOTÃO "…" NO LUGAR DE DOIS ÍCONES — FIN-LISTA-LAYOUT-01. Dois
                             botões de 20px numa coluna de 36 disputavam espaço com a tabela
@@ -2975,23 +2997,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
             </div>
           )}
 
-          {/* Total count + legenda dos ícones de origem (PR-CONC-B-1).
-              ⚠ FORA DA ÁREA QUE ROLA, de propósito: dentro da tabela a legenda custaria uma
-              linha de lista em cada tela, e some justamente quando o operador rola até o
-              lançamento que não entendeu. */}
+          {/* A contagem, FORA da área que rola. A legenda dos ícones de origem saiu com a coluna (PARC-LIVRES-01 passo 3): a
+              origem de cada linha está no `title` do Status. */}
           {/* 8px = o padding interno do scrollport, para o rodapé alinhar com a PRIMEIRA
               COLUNA da tabela, não com a borda do card. */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-2 py-1">
             <span className="text-[10px] text-muted-foreground">
               {totalLancamentosFiltrados} lançamento{totalLancamentosFiltrados !== 1 ? 's' : ''} encontrado{totalLancamentosFiltrados !== 1 ? 's' : ''}
-            </span>
-            <span className="flex flex-wrap items-center gap-x-2 text-[10px] text-muted-foreground">
-              {LEGENDA_ICONES.map((ic, i) => (
-                <span key={ic.simbolo} className="whitespace-nowrap">
-                  {i > 0 && <span className="mr-2 text-muted-foreground/60">·</span>}
-                  <span className={cn('font-semibold not-italic', ic.cor)}>{ic.simbolo}</span>{' '}{ic.curto}
-                </span>
-              ))}
             </span>
           </div>
         </>

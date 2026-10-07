@@ -187,3 +187,84 @@ export function parseDocumentoImport(raw: string | null): { tipo: TipoDocumento;
   const v2 = parseDocumentoImportV2(raw);
   return { tipo: v2.tipoDocumento || 'Outros', numero: v2.numeroDocumento || '' };
 }
+
+/* ── PARC-LIVRES-01 passo 3 — O DOCUMENTO DA LINHA, NUMA FUNÇÃO SÓ ─────────────────────────────────────────────────────────
+   A coluna Doc. da lista, o resumo do modal e o topo da aba Documentos escrevem o MESMO texto, daqui. A NOTA FISCAL DA COMPRA
+   (o documento NF do lançamento ou o ligado a ele — as N parcelas de um parcelado) vale para a linha que não tem número próprio:
+   o parcelamento não grava `numero_documento` em cada parcela, e a parcela aparecia sem nota. */
+
+/** O que a função precisa de cada documento (linha de `vw_lancamento_documentos`, que já traz os ligados). */
+export interface DocumentoDaLinha { especie: string | null; numero: string | null; cancelado?: boolean | null }
+
+const ESPECIES_NF: readonly string[] = ['nf', 'nf_principal', 'nf_complementar'];
+const ehNF = (d: DocumentoDaLinha) => ESPECIES_NF.includes(d.especie ?? '');
+const vivos = (docs: readonly DocumentoDaLinha[] | null | undefined) => (docs ?? []).filter((d) => !d.cancelado);
+
+/** "NF 000.000.518": até 9 dígitos, com a máscara; número maior (ou sem dígito) vai como está. */
+function numeroDeNF(numero: string): string {
+  const digitos = numero.replace(/\D/g, '');
+  return digitos.length > 0 && digitos.length <= 9 ? formatNFNumber(digitos) : numero.trim();
+}
+
+const PREFIXO_POR_TIPO: Readonly<Record<string, string>> = {
+  'Nota Fiscal': 'NF', Recibo: 'Rec.', Fatura: 'Bol.', Boleto: 'Bol.', Comprovante: 'Comp.',
+};
+const PREFIXO_POR_ESPECIE: Readonly<Record<string, string>> = {
+  nf: 'NF', nf_principal: 'NF', nf_complementar: 'NF', recibo: 'Rec.', boleto: 'Bol.', comprovante: 'Comp.',
+};
+
+/** O texto padronizado: "NF 000.000.000" · "Rec. XXX" · "Bol. XXX" · "Comp. XXX" · "Doc. XXX". Sem número: ''. */
+export function rotuloDoDocumento(prefixo: string, numero: string | null | undefined): string {
+  const n = (numero ?? '').trim();
+  /* "-" (e variações) é o "vazio" que as planilhas importadas trouxeram: não é número de documento. */
+  if (!n || /^[-–—]+$/.test(n)) return '';
+  return `${prefixo} ${prefixo === 'NF' ? numeroDeNF(n) : n}`;
+}
+
+export interface DocDaLinha {
+  /** O texto da coluna Doc. ('' = sem número de documento). */
+  rotulo: string;
+  /** De onde veio: 'lancamento' = o Nº Documento do próprio lançamento; 'nota' = a NF ligada (a da compra); 'documento' = outro documento anexado. */
+  origem: 'lancamento' | 'nota' | 'documento' | null;
+  /** Há documento vivo (arquivo anexado ou NF da compra ligada): a lista desenha o clipe. */
+  clipe: boolean;
+  /** O `title` do clipe: "NF 000.000.518 · 1 boleto". '' sem documento. */
+  resumo: string;
+}
+
+const PLURAL: Readonly<Record<string, [string, string]>> = {
+  boleto: ['boleto', 'boletos'], recibo: ['recibo', 'recibos'], comprovante: ['comprovante', 'comprovantes'], outro: ['outro documento', 'outros documentos'],
+};
+
+/** "NF 000.000.518 · 1 boleto · 2 comprovantes" — as notas pelo número, o resto pela contagem. */
+export function resumoDosDocumentos(docs: readonly DocumentoDaLinha[] | null | undefined): string {
+  const lista = vivos(docs);
+  const partes: string[] = [];
+  const notas = lista.filter(ehNF);
+  for (const n of notas) partes.push(rotuloDoDocumento('NF', n.numero) || 'NF sem número');
+  for (const especie of ['boleto', 'recibo', 'comprovante', 'outro']) {
+    const q = lista.filter((d) => !ehNF(d) && (PLURAL[d.especie ?? ''] ? d.especie === especie : especie === 'outro')).length;
+    if (q > 0) partes.push(`${q} ${PLURAL[especie][q === 1 ? 0 : 1]}`);
+  }
+  return partes.join(' · ');
+}
+
+/**
+ * O DOCUMENTO DE UMA LINHA. Ordem: (1) o Nº Documento do próprio lançamento, com o prefixo do tipo; (2) a nota fiscal ligada
+ * (a da compra); (3) outro documento anexado que tenha número. O clipe não depende do número: basta haver documento vivo.
+ */
+export function docDaLinha(
+  lancamento: { tipo_documento?: string | null; numero_documento?: string | null },
+  docs: readonly DocumentoDaLinha[] | null | undefined,
+): DocDaLinha {
+  const lista = vivos(docs);
+  const clipe = lista.length > 0;
+  const resumo = resumoDosDocumentos(lista);
+  const proprio = rotuloDoDocumento(PREFIXO_POR_TIPO[lancamento.tipo_documento ?? ''] ?? 'Doc.', lancamento.numero_documento);
+  if (proprio) return { rotulo: proprio, origem: 'lancamento', clipe, resumo };
+  const nota = lista.find((d) => ehNF(d) && (d.numero ?? '').trim() !== '');
+  if (nota) return { rotulo: rotuloDoDocumento('NF', nota.numero), origem: 'nota', clipe, resumo };
+  const outro = lista.find((d) => (d.numero ?? '').trim() !== '');
+  if (outro) return { rotulo: rotuloDoDocumento(PREFIXO_POR_ESPECIE[outro.especie ?? ''] ?? 'Doc.', outro.numero), origem: 'documento', clipe, resumo };
+  return { rotulo: '', origem: null, clipe, resumo };
+}
