@@ -44,7 +44,10 @@ BEGIN
   IF (r->'parcelas'->1->>'situacao', r->'parcelas'->1->>'diverge', r->'parcelas'->1->>'valor_pago') IS DISTINCT FROM ('vencida', 'true', '0.00') THEN RAISE EXCEPTION 'S3: parcela 2 %', r->'parcelas'->1; END IF;
 
   -- S4: sem lancamento vivo vale a parcela; a cancelada nao entra
+  -- PARC-CADEIA-01: o lancamento de parcela viva so' se cancela com a chave do escritor; aqui o teste MONTA a quebra de proposito
+  perform set_config('app.parcelamento_escritor', 'on', true);
   update financeiro_lancamentos_v2 set cancelado = true where id = p2.lancamento_id;
+  perform set_config('app.parcelamento_escritor', 'off', true);
   r := fn_financiamento_situacao(v_fin, date '2031-03-15');
   IF (r->'parcelas'->1->>'situacao', r->'parcelas'->1->>'fonte', r->'parcelas'->1->>'pago_em', r->'parcelas'->1->>'diverge') IS DISTINCT FROM ('paga', 'parcela', '2031-03-01', 'false') THEN RAISE EXCEPTION 'S4: parcela sem lancamento %', r->'parcelas'->1; END IF;
   update financiamento_parcelas set status = 'cancelado' where id = p3.id;

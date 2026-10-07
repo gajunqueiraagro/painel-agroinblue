@@ -3345,6 +3345,52 @@ docs/historico/frentes-ate-2026-09-29.md.)
     TODOS os documentos do cliente a cada aviso do canal (NJ: centenas de linhas; medir se crescer) · NAO PROVADO NO NAVEGADOR: o
     Ampliado, o minimodal aberto pelo Status, o clipe por ARQUIVO anexado sem numero, e o documento que nao e' nota no modal
     (so' por teste); a janela estava em 579 de altura, nao 523.
+- ⚠ A PARCELA DE PARCELAMENTO E O LANCAMENTO DELA MUDAM JUNTOS: UM ESCRITOR POR GESTO, NO BANCO, E A TRAVA MORA NO DONO (PARC-CADEIA-01
+  passo 1, Gabriel 07/10/2026, so' banco; migration 20261027194800, ⚠ registrada como 20261007180741; ledger = arquivo, md5
+  8792961a…). Nasce do "Parcela 3 - None" do NJ: parcelas canceladas pela lista do Financeiro, e o contrato seguiu com 4 parcelas,
+  o total cheio e as parcelas sem lancamento. Financiamento com juros, emprestimo, OC e lancamento comum: FORA (provado).
+  · TRAVA (1c): gatilho `trg_guard_parcelamento_cancelar` (BEFORE UPDATE OF cancelado em `financeiro_lancamentos_v2`, WHEN passa a
+    cancelado E tem `financiamento_id`) -> `guard_parcelamento_lancamento_cancelar()`: o lancamento de parcela VIVA de contrato de
+    PARCELAMENTO vivo so' se cancela com `app.parcelamento_escritor = 'on'` (transacao), ligado SO' pelas RPCs do parcelamento e
+    desligado logo depois. Fora delas: P0001 "Este lançamento é a parcela N/M da compra parcelada «X». Cancele pela tela, que
+    ajusta o contrato junto." — por UPDATE direto e por `fn_cancelar_lancamento_auditoria`, tambem como `authenticated`.
+    ⚠ TESTE SQL QUE MONTA A QUEBRA DE PROPOSITO liga a chave (`parc_livres_01_4_test.sql` passou a ligar).
+    ⚠ CUSTO, MEDIDO A/B NA MESMA TRANSACAO (20 series de 300 cancelamentos, duas rodadas): lancamento comum −0,4% / +2,0% na
+      mediana (ruido: nem chama a funcao); lancamento COM contrato +3,7% / +6,8% (0,03–0,06 ms por cancelamento) — acima do teto
+      de +2% do briefing, ACEITO pelo Gabriel (07/10). Nao da' para estreitar pela origem: 10 parcelas vivas de parcelamento tem
+      lancamento com `origem_lancamento = 'parcela_financiamento'` (as recriadas pelo motor antes do 2A).
+  · `fn_parcelamento_cancelar_parcela(p_lancamento_id, p_escopo, p_motivo, p_simular, p_parcela_id)` (1a; md5 68643d6d…): resolve
+    contrato e parcela pelo lancamento (ou pelo id da parcela). 'so_esta' NAO repete regra: chama `fn_parcelamento_editar_parcelas`
+    com a lista das vivas sem esta (parcela 'cancelado', lancamento cancelado pelo dono COM O MOTIVO DO OPERADOR, contrato
+    recalculado, i/N renumerado); recusa a PAGA ("A parcela N já está paga: desfaça o pagamento antes.") e a ULTIMA viva (manda
+    cancelar a compra inteira). 'todas' = o 1b. Retorno (igual na simulacao): `contrato {id, descricao, credor}`, `parcela
+    {id, numero, total, valor, vencimento, paga, lancamento_id}`, `nota` (o numero da NF viva ligada; nulo = sem nota), `antes` /
+    `depois` `{parcelas, valor_total}`, `todas {lancamentos, parcelas}`, `recusa {motivo, frase} | null`.
+  · `fn_parcelamento_excluir(p_financiamento_id, p_motivo, p_simular)` (1b; md5 986dd2fd…): cancela pelo dono os lancamentos vivos
+    das parcelas e marca parcelas e CONTRATO 'cancelado' — NADA E' APAGADO; o motivo vai tambem na observacao do contrato
+    ("[cancelada em AAAA-MM-DD: motivo]", porque `financiamentos` nao tem colunas de cancelamento). Recusa dizendo QUAIS parcelas
+    estao pagas. "Editado manualmente" nao e' motivo de recusa.
+  · `fn_parcelamento_recriar_lancamento(p_parcela_id, p_simular)` (1d; md5 ad8b2c91…): parcela viva sem lancamento vivo ganha
+    lancamento NOVO pela rotina unica `_fn_parcelamento_lancamento_novo` (o INSERT e a NF herdada, MOVIDOS VERBATIM do 2B — a
+    parcela acrescentada na grade passou a nascer por ela); o cancelado nao e' reativado. MOLDE: a vizinha viva de maior numero;
+    ⚠ DESVIO DECLARADO: sem nenhuma vizinha viva (o caso do "Parcela 3 - None"), o molde e' o proprio lancamento cancelado.
+  · SIMULACAO = GRAVACAO: a simulacao EXECUTA o mesmo caminho e desfaz (SQLSTATE 'PCSIM' num bloco com EXCEPTION); recusa do
+    banco na simulacao volta em `recusa {motivo:'banco', frase}`; na GRAVACAO toda recusa levanta erro com a frase + "Nada foi
+    gravado." Motivo obrigatorio so' na gravacao. Mes fechado vira frase (`_fn_parcelamento_frase_do_erro`).
+  · `fn_parcelamento_editar_parcelas` 1fbb077a… -> bf9a8713… (patch guardado por md5, 3 ancoras): liga/desliga a chave na
+    retirada, aceita o motivo do operador (`app.parcelamento_motivo`) e cria a acrescentada pela rotina interna.
+  · Indice novo `idx_fin_parcelas_lancamento_id`. As tres publicas com GRANT a `authenticated`; internas e a do gatilho fechadas.
+  MEDIDO NO PASSO 0 (07/10, so' leitura; a lista foi ao Gabriel, nao ao repositorio): parcela viva sem lancamento vivo — NJ 5 (as
+  4 do "Parcela 3 - None" e 1 do "Sal Adensado"), Teste 6 (ensaios antigos); todas com o lancamento CANCELADO (nenhuma sem id).
+  ⚠ DIVIDAS DE DADO, so' relatadas (decisao do Gabriel): PARC-CADEIA-PAGA-VALOR-DIFERENTE-01 — 4 parcelas do NJ pagas e
+    conciliadas por valor diferente do da parcela (22.000,00 x 22.005,00; 1.904,33 x 1.905,00; 1.159,18 x 1.159,16; 666,20 x
+    682,85) e 1 da Vera com o vencimento mudado so' no lancamento (21/10 x 15/10; o passo 3 fecha a porta); NJ "Seguro Rural":
+    as 10 parcelas somam 10.545,45 e o contrato diz 10.545,50.
+  Teste: `supabase/tests/parc_cadeia_01_test.sql` (C1–C10, sintetico no cliente Teste, termina em RAISE OK); 11 mutacoes de banco
+  mortas. Os oito testes SQL de parcelamento e o `seg_tenant_varredura_01c` OK no banco vivo depois de aplicar.
+  ⚠ ATE' OS PASSOS 2 E 4 ENTRAREM, cancelar parcela pela lista, pela CPR ou excluir o contrato de parcelamento pela tela devolve
+    a frase da trava (em toast, nas portas antigas) em vez de quebrar o contrato.
+  ⚠ NAO PROVADO: as tres RPCs chamadas PELA TELA (sob pg_safeupdate, pelo PostgREST) — fica para o navegador dos passos 2 e 4.
 - ⚠ NA COLUNA DOC. O TIPO GENERICO NAO LEVA PREFIXO: SO' O NUMERO (PARC-CONTRATO-01 item 4, Gabriel 07/10/2026, so' tela). No dono
   `docDaLinha` (`src/lib/financeiro/documentoHelper.ts`): documento SEM tipo, ou com tipo sem prefixo proprio ("Outros", especie
   "outro"), escreve so' o numero — a reserva "Doc." SAIU; "NF", "Rec.", "Bol." e "Comp." seguem com prefixo. O dono devolve tambem
