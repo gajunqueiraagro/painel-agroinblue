@@ -638,6 +638,37 @@ describe('4 — a tela do contrato mostra o que o banco derivou do lançamento',
     expect(screen.queryAllByTestId('linha-do-contrato')).toEqual([]);
   });
 
+  it('PARC-FECHA-02 item 5: o Total é o rodapé padrão da casa, preso no fim da lista, e toda linha tem 19px (contrato)', async () => {
+    banco.situacao = SITUACAO([{}, {}]);
+    await abrirDetalhe();
+    const rodape = screen.getByTestId('rodape-das-parcelas');
+    expect(rodape.tagName).toBe('TFOOT');
+    expect(rodape.className).toContain('sticky');
+    expect(rodape.className).toContain('bottom-0');
+    const celulas = Array.from(rodape.querySelectorAll('td'));
+    expect(celulas.length).toBeGreaterThan(5);
+    /* todas as células do Total, as vazias inclusive: fundo, negrito e o filete de 2px */
+    for (const td of celulas) {
+      expect(td.className).toContain('bg-[#E8E6DF]');
+      expect(td.className).toContain('font-bold');
+      expect(td.className).toContain('shadow-[inset_0_2px_0_#9aa7b6]');
+    }
+    const cabecalho = rodape.closest('table')!.querySelector('thead')!;
+    expect(cabecalho.className).toContain('sticky');
+    expect(cabecalho.className).toContain('top-0');
+    /* a rolagem mora no wrapper da tabela: só as parcelas rolam */
+    expect(rodape.closest('table')!.parentElement!.className).toContain('overflow-y-auto');
+    for (const linha of [...linhasDoContrato(), rodape.querySelector('tr')!]) {
+      expect(linha.className).toContain('h-[19px]');
+      expect(linha.className).toContain('[&>td]:leading-[18px]');
+    }
+    /* nada dentro da linha passa de 16px, e nenhum valor fica abaixo de 10px */
+    expect(screen.getAllByRole('button', { name: 'Abrir o lançamento da parcela' })[0].className).toContain('h-4');
+    expect(document.body.innerHTML).not.toContain('text-[9px] font-semibold');
+    /* o Total continua vindo da leitura do contrato */
+    expect(screen.getByTestId('total-das-parcelas').textContent).toBe(celulas[2].textContent);
+  });
+
   it('a tela não soma nem decide quem está pago, e não abre mais o editor antigo de parcela (a fonte prende)', () => {
     const fonte = readFileSync(resolve(__dirname, '../../pages/FinanciamentoDetalhe.tsx'), 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
     const soma = (t: string) => /\.reduce\(|status === 'pago'|status === 'pendente'/.test(t);

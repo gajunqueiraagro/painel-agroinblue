@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 07/10/2026 (PARC-FECHA-02 item 4, +7 em `src/lib/datas/hojeLocal.test.ts` — 4393 depois dele; antes o
+  Baseline em 07/10/2026 (PARC-FECHA-02 item 5, +1 em `src/components/financiamentos/obrigacaoEdicao.test.tsx` — 4394 depois dele; antes o
+  PARC-FECHA-02 item 4, +7 em `src/lib/datas/hojeLocal.test.ts` — 4393 depois dele; antes o
   PARC-FECHA-02 item 2, +8 em `src/lib/financiamentos/situacaoEmLote.test.ts` — 4386 depois dele; antes o
   PARC-FECHA-02 item 1, +7: `src/hooks/useFinanceiroV2.tipoDocumento.test.ts` 2, `src/lib/financeiro/docDaLinha.test.ts` 2,
   `src/components/financeiro-v2/notaDaCompraNoModal.test.tsx` 3 — 4378 depois dele; antes o
@@ -238,7 +239,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4393
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4394
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3336,6 +3337,25 @@ docs/historico/frentes-ate-2026-09-29.md.)
     TODOS os documentos do cliente a cada aviso do canal (NJ: centenas de linhas; medir se crescer) · NAO PROVADO NO NAVEGADOR: o
     Ampliado, o minimodal aberto pelo Status, o clipe por ARQUIVO anexado sem numero, e o documento que nao e' nota no modal
     (so' por teste); a janela estava em 579 de altura, nao 523.
+- ⚠ NA TELA DO CONTRATO O TOTAL E' O RODAPE PADRAO DA CASA E A LINHA TEM 19px (PARC-FECHA-02 item 5, Gabriel 07/10/2026, so'
+  apresentacao, `src/pages/FinanciamentoDetalhe.tsx`). O Total da tabela de parcelas usa o padrao do `TF` de `ParcelasDaCompra`:
+  fundo #E8E6DF, negrito, 10px, 2px em cima (`TOTAL`), em TODAS as celulas (as vazias inclusive), no `tfoot` preso no fim da
+  lista; cabecalho preso; so' as parcelas rolam (a rolagem ja' morava no wrapper da tabela). Os valores do Total seguem vindo da
+  leitura do contrato (`cartoes`). Sem coluna nova.
+  ⚠ O FILETE DE 2px E' SOMBRA INTERNA DA CELULA, NAO BORDA: o `tfoot` e' `sticky`, e borda de celula em tabela colapsada fica para
+    tras quando a lista rola; a sombra nao ocupa espaco.
+  ⚠ A LINHA MEDIA 24–25px POR DOIS MOTIVOS, MEDIDOS: o botao do lapis de 20px (agora 16) e a ENTRELINHA de 20px que a celula
+    herdava — so' com `[&>td]:leading-[18px]` a linha fecha em 19 (18 + 1 de borda); com `h-[19px]` sozinho ela ficava em 20,5–21.
+    Os valores passaram de 9 a 10px (o piso e' 9,5).
+  Medido a 1.126 x 523 no NJ (so' leitura): Reboque Agricola (7 parcelas) e Dodge Ram (20 parcelas) — linhas de 19px, rodape de
+  19px com o topo em 499 antes e depois de rolar a lista ate' o fim, cabecalho parado (362 / 382), 0 celulas cortadas, pagina
+  sem rolagem (523 de 523); a lista rola por dentro (15,5px com 7 parcelas; 282,5px com 20). Total = o do banco (110.000,00;
+  62.761,34). 4 mutacoes mortas.
+  ⚠ A 523 DE ALTURA A LISTA MOSTRA ~6 LINHAS (136–156px): o bloco "Dados do contrato" e os cartoes ocupam o resto; a 579 cabem ~9.
+  ⚠ As 6 fotos de EDICAO de financiamento e emprestimo de `obrigacaoDialog.fotos.json` foram REGRAVADAS de novo: a foto e' do
+    `body` inteiro e a pagina do contrato atras do dialogo mudou (o dialogo nao foi tocado).
+  ⚠ SUITE-TESTE-OSCILA-01, UM NOME: em 07/10 uma execucao da suite inteira deu 4 falhas — a quarta foi `obrigacaoEdicao.test.tsx >
+    foto do diálogo > criação de parcelamento`; sozinho o arquivo passou 3 de 3 e a suite seguinte deu as 3 de sempre.
 - ⚠ "HOJE" E' A DATA LOCAL DO NAVEGADOR, E TEM UM DONO (PARC-FECHA-02 item 4, Gabriel 07/10/2026, so' tela): `hojeLocal()`,
   `dataLocalISO(d)` e `mesLocal()` em `src/lib/datas/hojeLocal.ts`. PROIBIDO `new Date().toISOString().slice(0, 10)` para data de
   calendario (competencia, vencimento, pagamento, emissao, filtro "hoje", nome de arquivo): `toISOString` e' UTC, e em Campo

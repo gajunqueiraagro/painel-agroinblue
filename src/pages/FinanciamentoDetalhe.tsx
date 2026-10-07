@@ -35,7 +35,14 @@ const today = () => format(new Date(), 'yyyy-MM-dd');
 const NUM = 'font-mono tabular-nums whitespace-nowrap';
 /* 9px so' para numero monetario em mono — a mesma excecao registrada na lista
    (PR-PARC-05d item 6b): abreviar viola o A19 e quebrar linha viola os 21px. */
-const MOEDA = 'text-right font-mono tabular-nums whitespace-nowrap text-[9px]';
+const MOEDA = 'text-right font-mono tabular-nums whitespace-nowrap text-[10px]';
+/* PARC-FECHA-02 item 5 — o Total é o RODAPÉ PADRÃO DA CASA (o `TF` de `ParcelasDaCompra`): fundo #E8E6DF, negrito, 2px em cima.
+   ⚠ O filete de 2px é SOMBRA INTERNA da célula, não borda: o `tfoot` é `sticky` e borda de célula em tabela colapsada fica
+   para trás quando a lista rola. A sombra anda com a célula e não ocupa espaço (a linha segue com 19px). */
+const TOTAL = 'bg-[#E8E6DF] text-[10px] font-bold shadow-[inset_0_2px_0_#9aa7b6]';
+/* linha da parcela: 19px (o padrão de tabela, A31). Nada dentro dela passa de 16px — o filho mais alto manda na altura. */
+/* ⚠ a entrelinha vai ESCRITA: a celula herdava 20px e, sozinha, levava a linha a 20,5–21px (medido). 18 + 1 de borda = 19. */
+const LINHA = 'h-[19px] [&>td]:leading-[18px]';
 
 /* ================================================================ */
 
@@ -584,7 +591,7 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
               <TableBody>
                 {linhas.map(p => {
                   return (
-                    <TableRow key={p.id} data-testid="linha-do-contrato" data-situacao={p.situacao}>
+                    <TableRow key={p.id} className={LINHA} data-testid="linha-do-contrato" data-situacao={p.situacao}>
                       <TableCell className={NUM}>{p.numero ?? '—'}</TableCell>
                       <TableCell className={NUM}>{fmtDate(p.dataVencimento)}</TableCell>
                       {!ehParcelamento && <TableCell className={MOEDA}>{fmt(p.valorPrincipal)}</TableCell>}
@@ -619,15 +626,15 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
                         ) : <span className="text-muted-foreground">—</span>}
                       </TableCell>
                       <TableCell className="px-0 text-right select-none">
-                        {/* ⚠ h-5 (20px) DENTRO DE LINHA DE 21px — a mesma regra que o
-                            PR-PARC-04b fixou na lista: `py-0` na celula faz o filho mais
-                            alto mandar na altura de TODAS as linhas. */}
-                        <Button variant="ghost" size="icon" className="h-5 w-5 p-0"
+                        {/* ⚠ 16px DENTRO DE LINHA DE 19px — a mesma regra que o PR-PARC-04b fixou na
+                            lista: `py-0` na celula faz o filho mais alto mandar na altura de TODAS
+                            as linhas (com h-5 a linha media 24–25px). */}
+                        <Button variant="ghost" size="icon" className="h-4 w-4 p-0 align-middle"
                           onClick={() => setLancamentoAberto(p.lancamentoId)}
                           disabled={!p.lancamentoId}
                           title={p.lancamentoId ? 'Abrir o lançamento desta parcela no Financeiro' : MOTIVO_PARCELA_SEM_LANCAMENTO}
                           aria-label="Abrir o lançamento da parcela">
-                          <Pencil className="size-3.5" />
+                          <Pencil className="size-3" />
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -639,19 +646,19 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
                   linha ela e' filha do que rola e pisca a cada quadro. Fundo OPACO pelo
                   mesmo motivo do cabecalho: translucido deixa a parcela passar por baixo
                   do numero que se esta' conferindo. */}
-              <TableFooter className="sticky bottom-0 z-10 border-t border-border bg-card [&>tr]:border-b-0">
-                <TableRow>
-                  <TableCell className="font-semibold">Total</TableCell>
-                  <TableCell />
-                  {!ehParcelamento && <TableCell className={`${MOEDA} font-semibold`}>{dinheiro(cartoes?.somaPrincipal)}</TableCell>}
-                  {!ehParcelamento && <TableCell className={`${MOEDA} font-semibold`}>{dinheiro(cartoes?.jurosPrevistos)}</TableCell>}
-                  <TableCell className={`${MOEDA} font-semibold`} data-testid="total-das-parcelas">{dinheiro(cartoes?.somaTotal)}</TableCell>
-                  <TableCell className="text-muted-foreground">
+              <TableFooter className="sticky bottom-0 z-10 border-t-0 bg-[#E8E6DF] [&>tr]:border-b-0" data-testid="rodape-das-parcelas">
+                <TableRow className={`${LINHA} hover:bg-transparent`}>
+                  <TableCell className={TOTAL}>Total</TableCell>
+                  <TableCell className={TOTAL} />
+                  {!ehParcelamento && <TableCell className={`${MOEDA} ${TOTAL}`}>{dinheiro(cartoes?.somaPrincipal)}</TableCell>}
+                  {!ehParcelamento && <TableCell className={`${MOEDA} ${TOTAL}`}>{dinheiro(cartoes?.jurosPrevistos)}</TableCell>}
+                  <TableCell className={`${MOEDA} ${TOTAL}`} data-testid="total-das-parcelas">{dinheiro(cartoes?.somaTotal)}</TableCell>
+                  <TableCell className={`${TOTAL} whitespace-nowrap`}>
                     {cartoes ? `${cartoes.pagas}/${cartoes.parcelas} pagas` : '…'}
                   </TableCell>
-                  <TableCell className={`${MOEDA} font-semibold`}>{dinheiro(cartoes?.pago)}</TableCell>
-                  <TableCell />
-                  <TableCell />
+                  <TableCell className={`${MOEDA} ${TOTAL}`}>{dinheiro(cartoes?.pago)}</TableCell>
+                  <TableCell className={TOTAL} />
+                  <TableCell className={TOTAL} />
                 </TableRow>
               </TableFooter>
             </Table>
