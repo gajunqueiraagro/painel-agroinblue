@@ -1,6 +1,6 @@
 /** O documento da linha — PARC-LIVRES-01 passo 3: um texto só para a lista, o resumo do modal e a aba Documentos. */
 import { describe, expect, it } from 'vitest';
-import { docDaLinha, resumoDosDocumentos, rotuloDoDocumento } from './documentoHelper';
+import { ehParcelaDeParcelamento, topoDoDocumentoTravado, docDaLinha, resumoDosDocumentos, rotuloDoDocumento } from './documentoHelper';
 
 const NF = { especie: 'nf', numero: '518', cancelado: false };
 const BOLETO = { especie: 'boleto', numero: null, cancelado: false };
@@ -63,5 +63,21 @@ describe('resumoDosDocumentos — o title do clipe', () => {
     expect(docDaLinha({ tipo_documento: null, numero_documento: '-' }, []).rotulo).toBe('');
     expect(docDaLinha({ tipo_documento: null, numero_documento: ' — ' }, [{ especie: 'nf', numero: '518' }]).rotulo).toBe('NF 000.000.518');
     expect(docDaLinha({ tipo_documento: null, numero_documento: '12-3' }, []).rotulo).toBe('Doc. 12-3');
+  });
+});
+
+describe('PARC-FECHA-02 item 1 — no parcelado o topo "Tipo / Nº Documento" fica em leitura', () => {
+  const PARCELA = { origem_tipo: 'parcela_principal', origem_lancamento: null };
+  it('parcela de PARCELAMENTO: origem_tipo parcela_principal e sem origem_lancamento; a do motor (financiamento com juros) não é', () => {
+    expect(ehParcelaDeParcelamento(PARCELA)).toBe(true);
+    expect(ehParcelaDeParcelamento({ origem_tipo: 'parcela_principal', origem_lancamento: 'parcela_financiamento' })).toBe(false);
+    expect(ehParcelaDeParcelamento({ origem_tipo: null, origem_lancamento: 'manual' })).toBe(false);
+    expect(ehParcelaDeParcelamento(null)).toBe(false);
+  });
+  it('novo: trava só na modalidade parcelada; gravado: trava só na parcela de parcelamento — lançamento comum nunca', () => {
+    expect(topoDoDocumentoTravado({ novo: true, modalidadeParcelada: true })).toBe(true);
+    expect(topoDoDocumentoTravado({ novo: true, modalidadeParcelada: false })).toBe(false);
+    expect(topoDoDocumentoTravado({ novo: false, modalidadeParcelada: true, lancamento: { origem_tipo: null, origem_lancamento: 'manual' } })).toBe(false);
+    expect(topoDoDocumentoTravado({ novo: false, modalidadeParcelada: false, lancamento: PARCELA })).toBe(true);
   });
 });

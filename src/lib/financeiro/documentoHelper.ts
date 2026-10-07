@@ -268,3 +268,21 @@ export function docDaLinha(
   if (outro) return { rotulo: rotuloDoDocumento(PREFIXO_POR_ESPECIE[outro.especie ?? ''] ?? 'Doc.', outro.numero), origem: 'documento', clipe, resumo };
   return { rotulo: '', origem: null, clipe, resumo };
 }
+
+/* ── PARC-FECHA-02 item 1 — no PARCELADO o documento da compra tem UM dono ─────────────────────────────────────────────── */
+
+/** A nota de uma compra parcelada é o registro de documento ligado às N parcelas; o "Tipo / Nº Documento" do topo não a grava. */
+export const MOTIVO_TOPO_NO_PARCELADO = 'A nota desta compra fica em Documentos e vale para todas as parcelas.';
+
+/**
+ * O lançamento é a parcela de um PARCELAMENTO? Nasce de `fn_parcelamento_cadastrar` com `origem_tipo = 'parcela_principal'` e
+ * SEM `origem_lancamento`; a parcela de financiamento com juros (do motor) leva `origem_lancamento = 'parcela_financiamento'`.
+ */
+export function ehParcelaDeParcelamento(l: { origem_tipo?: string | null; origem_lancamento?: string | null } | null | undefined): boolean {
+  return !!l && l.origem_tipo === 'parcela_principal' && l.origem_lancamento !== 'parcela_financiamento';
+}
+
+/** O topo fica em LEITURA: no Novo lançamento parcelado e na parcela de parcelamento já gravada. Fora disso, como sempre. */
+export function topoDoDocumentoTravado(e: { novo: boolean; modalidadeParcelada: boolean; lancamento?: { origem_tipo?: string | null; origem_lancamento?: string | null } | null }): boolean {
+  return e.novo ? e.modalidadeParcelada : ehParcelaDeParcelamento(e.lancamento);
+}

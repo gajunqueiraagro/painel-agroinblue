@@ -964,6 +964,10 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
           documento: verify.documento,
           historico: verify.historico,
           numero_documento: verify.numero_documento,
+          /* PARC-FECHA-02 item 1 — `tipo_documento` é OPCIONAL no tipo, então a anotação acima não acusava a falta dele: o banco
+             gravava "Nota Fiscal", a linha em memória seguia sem tipo, e reabrir o modal (que lê da LISTA) mostrava o número
+             sem o tipo — "virava documento" — e o salvar seguinte gravava o tipo NULO. */
+          tipo_documento: verify.tipo_documento,
           favorecido_id: verify.favorecido_id,
           conta_destino_id: verify.conta_destino_id,
           origem_lancamento: verify.origem_lancamento ?? 'manual',

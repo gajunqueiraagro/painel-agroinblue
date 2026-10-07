@@ -149,3 +149,31 @@ describe('a nota da compra no resumo e no topo da aba Documentos', () => {
     expect((await screen.findByTestId('doc-da-compra')).textContent).toBe('documento ligado: Rec. 12');
   });
 });
+
+describe('PARC-FECHA-02 item 1 — o topo em leitura na parcela de parcelamento', () => {
+  const PARCELA = { ...FOLHA, origem_lancamento: null, origem_tipo: 'parcela_principal' } as LancamentoV2;
+  it('parcela de parcelamento: Tipo e Nº ficam APAGADOS com o motivo escrito (não somem); a nota da compra segue à vista', async () => {
+    await abrir(PARCELA);
+    abaDocumentos();
+    const bloco = await screen.findByTestId('bloco-documentos-topo');
+    expect((screen.getByPlaceholderText('Número') as HTMLInputElement).disabled).toBe(true);
+    expect(bloco.querySelector('[role="combobox"]')?.hasAttribute('disabled')).toBe(true);
+    expect(screen.getByTestId('motivo-topo-parcelado').textContent).toBe('A nota desta compra fica em Documentos e vale para todas as parcelas.');
+  });
+  it('com a NF ligada, o lugar do motivo mostra a nota (o motivo vai no title do campo)', async () => {
+    docs.lista = [NF];
+    await abrir(PARCELA);
+    abaDocumentos();
+    expect((await screen.findByTestId('doc-da-compra')).textContent).toBe('nota da compra: NF 000.000.518');
+    expect(screen.queryByTestId('motivo-topo-parcelado')).toBeNull();
+    expect((screen.getByPlaceholderText('Número') as HTMLInputElement).title).toBe('A nota desta compra fica em Documentos e vale para todas as parcelas.');
+  });
+  it('lançamento COMUM: os dois campos seguem editáveis e sem motivo (a busca sabe achar: o caso de cima acha)', async () => {
+    await abrir(FOLHA);
+    abaDocumentos();
+    const bloco = await screen.findByTestId('bloco-documentos-topo');
+    expect((screen.getByPlaceholderText('Número') as HTMLInputElement).disabled).toBe(false);
+    expect(bloco.querySelector('[role="combobox"]')?.hasAttribute('disabled')).toBe(false);
+    expect(screen.queryByTestId('motivo-topo-parcelado')).toBeNull();
+  });
+});

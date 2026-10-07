@@ -162,7 +162,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 07/10/2026 (PARC-LIVRES-01 passo 6, +20: `src/components/financiamentos/documentosDoContrato.test.tsx` 12,
+  Baseline em 07/10/2026 (PARC-FECHA-02 item 1, +7: `src/hooks/useFinanceiroV2.tipoDocumento.test.ts` 2, `src/lib/financeiro/docDaLinha.test.ts` 2,
+  `src/components/financeiro-v2/notaDaCompraNoModal.test.tsx` 3 — 4378 depois dele; antes o
+  PARC-LIVRES-01 passo 6, +20: `src/components/financiamentos/documentosDoContrato.test.tsx` 12,
   `src/lib/financiamentos/notaContraContrato.test.ts` 8 — 4371 depois dele; antes o
   PARC-LIVRES-01 fechamento D, +1 em `src/components/financeiro-v2/anexarBoletos.test.tsx` — 4351 depois dele; antes o
   PARC-LIVRES-01 passo 5, +16: `src/lib/financiamentos/nomeDaParcela.test.ts` 9, `src/lib/pdf/cpr/parcelaNoPdf.test.ts` 6,
@@ -234,7 +236,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4371
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4378
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3332,6 +3334,32 @@ docs/historico/frentes-ate-2026-09-29.md.)
     TODOS os documentos do cliente a cada aviso do canal (NJ: centenas de linhas; medir se crescer) · NAO PROVADO NO NAVEGADOR: o
     Ampliado, o minimodal aberto pelo Status, o clipe por ARQUIVO anexado sem numero, e o documento que nao e' nota no modal
     (so' por teste); a janela estava em 579 de altura, nao 523.
+- ⚠ NO PARCELADO O "TIPO / Nº DOCUMENTO" DO TOPO FICA EM LEITURA; A NOTA DA COMPRA TEM UM DONO (PARC-FECHA-02 item 1, Gabriel
+  06/10/2026, so' tela: "ponho nota fiscal, digito o número, salvo e ele vira documento… não persiste"). DUAS CAUSAS, MEDIDAS:
+  · EDICAO DA PARCELA GRAVADA: o banco GRAVAVA (auditoria do NJ: 58bfafe9 e 9e159df4, `tipo_documento` nulo -> "Nota Fiscal" com o
+    numero 119238). Quem perdia era a LINHA EM MEMORIA: o remendo de `editarLancamento` (`useFinanceiroV2.ts`, o objeto `doBanco`)
+    nao levava `tipo_documento` — o campo e' OPCIONAL em `LancamentoV2`, entao a anotacao "campo esquecido = erro de compilacao"
+    nao o via. Reabrir o modal (que le' da LISTA) mostrava o numero sem tipo ("Doc. 119238" na coluna, pelo rotulo de reserva do
+    `docDaLinha`), e um salvar seguinte mandaria o tipo NULO. Conserto: `tipo_documento: verify.tipo_documento` no remendo.
+    ⚠ CAMPO OPCIONAL NO TIPO ESCAPA DA GUARDA DO REMENDO: quem acrescentar coluna ao lancamento a poe no `doBanco` a' mao.
+  · CRIACAO DO PARCELADO: `montarPayloadParcelamento.ts` nao tem `tipo_documento` nem `numero_documento` — o que se digitava no
+    topo nunca viajou para `fn_parcelamento_cadastrar` (confirmado: as parcelas novas do NJ nascem com os dois nulos).
+  · A SAIDA ESCOLHIDA E' A (b): o documento da compra e' o REGISTRO ligado a's N parcelas (aba Documentos, logo abaixo do topo);
+    um segundo lugar que grava por parcela faria a nota divergir entre as parcelas. Dono: `topoDoDocumentoTravado` /
+    `ehParcelaDeParcelamento` / `MOTIVO_TOPO_NO_PARCELADO` (`documentoHelper.ts`). No Novo lancamento com modalidade PARCELADA e
+    na parcela de parcelamento JA' GRAVADA (`origem_tipo = 'parcela_principal'` sem `origem_lancamento`) os dois campos ficam
+    APAGADOS, com o motivo escrito na linha do titulo do bloco ("A nota desta compra fica em Documentos e vale para todas as
+    parcelas."); com a NF ligada, esse lugar mostra a nota (passo 3) e o motivo vai no `title` do campo.
+    NADA SE PERDE SEM AVISO: no Novo parcelado, o que ja' estava digitado no topo ganha o link "levar o que foi digitado para
+    Documentos da compra" (vira documento pendente da compra, ligado a's N ao salvar) e, se ficar la', o Salvar PARA com a frase
+    ao lado do botao e abre a aba Documentos. Lancamento que nao e' parcela: identico (as fotos do modal nao mudaram).
+  Medido a 1.126 x 523 no Teste, sem gravar: bloco de 91px com o topo livre, travado com o link e depois do link; motivo + link
+  598 de 598px, sem corte. 5 mutacoes mortas. Testes: `useFinanceiroV2.tipoDocumento.test.ts`, `docDaLinha.test.ts`,
+  `notaDaCompraNoModal.test.tsx`.
+  ⚠ DIVIDAS: PARC-TOPO-PROPRIO-LEGADO-01 (parcelas que JA' tem tipo/numero proprios — 7 no NJ em 06/10 — seguem mostrando-os, em
+    leitura, com prioridade sobre a nota ligada; nao ha' gesto para limpa'-los) · financiamento com juros segue com o topo livre ·
+    NAO PROVADO NO NAVEGADOR: o Salvar do Novo parcelado parando com a frase, e criar pela tela e reabrir cada parcela (a NF nas
+    N parcelas foi provada no passo 6 pelo mesmo gravador; aqui so' o link e o topo travado foram vistos).
 - ⚠ DOCUMENTOS NO CONTRATO DO PARCELAMENTO: O CONTRATO NAO GUARDA DOCUMENTO, MOSTRA E GRAVA OS DOS LANCAMENTOS DAS PARCELAS
   (PARC-LIVRES-01 passo 6, Gabriel 05–06/10/2026, so' tela, sem banco: "Não tem opção de incluir NF e importar no modal pai").
   Editar obrigação ganha a aba "Documentos" (so' na EDICAO de PARCELAMENTO): `DocumentosDoContrato`

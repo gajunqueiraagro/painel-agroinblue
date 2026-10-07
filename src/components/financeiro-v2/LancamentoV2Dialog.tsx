@@ -17,7 +17,7 @@ import {
   STATUS_PALETA,
   STATUS_PILULA_BASE,
 } from '@/lib/financeiro/statusFinanceiro';
-import { TIPOS_DOCUMENTO, formatNFNumber, extractNFDigits, docDaLinha, type TipoDocumento } from '@/lib/financeiro/documentoHelper';
+import { TIPOS_DOCUMENTO, formatNFNumber, extractNFDigits, docDaLinha, topoDoDocumentoTravado, MOTIVO_TOPO_NO_PARCELADO, type TipoDocumento } from '@/lib/financeiro/documentoHelper';
 import { useCliente } from '@/contexts/ClienteContext';
 import { usePodeAbrir, usePodeAlterarOperacao, TELA_DA_OPERACAO } from '@/v2/hooks/usePodeAbrir';
 import { GestoDeOperacao } from '@/components/financeiro-v2/GestoDeOperacao';
@@ -1467,6 +1467,16 @@ export function LancamentoV2Dialog({
      continuam sendo as colunas do lançamento, e nada é escrito neles. */
   const docDoLancamento = docDaLinha({ tipo_documento: tipoDocumento, numero_documento: notaFiscal }, documentosApi.documentos);
   const docVemDeDocumento = docDoLancamento.origem === 'nota' || docDoLancamento.origem === 'documento';
+  /* PARC-FECHA-02 item 1 — NO PARCELADO O DOCUMENTO DA COMPRA TEM UM DONO (o registro ligado às N parcelas, logo abaixo): o
+     "Tipo / Nº Documento" do topo fica em LEITURA, com o motivo escrito. No Novo parcelado ele nunca viajou para
+     `fn_parcelamento_cadastrar` (o operador digitava e perdia); o que já estiver digitado ali é OFERECIDO à lista da compra. */
+  const topoTravado = topoDoDocumentoTravado({ novo: !isEdit, modalidadeParcelada: formaPagamentoParc === 'parcelada', lancamento });
+  const digitadoNoTopo = !!(notaFiscal || tipoDocumento);
+  const haNotaNaCompra = pendentes.some(p => p.parcela == null && p.payload.especie === 'nf');
+  const levarOTopoParaACompra = () => {
+    setPendentes(l => [...l, novoPendente({ especie: tipoDocumento === 'Recibo' ? 'recibo' : tipoDocumento === 'Nota Fiscal' || !tipoDocumento ? 'nf' : 'outro', numero: notaFiscal || null }, null, null)]);
+    setNotaFiscal(''); setTipoDocumento('');
+  };
 
   /* O documento novo nasce com o que o lançamento já diz — Nº Documento, competência, valor e favorecido.
      Só semeia o formulário: mudar o número no documento NÃO muda o Nº Documento do lançamento. */
@@ -1757,6 +1767,13 @@ export function LancamentoV2Dialog({
       /* PR 2b — boleto de parcela que saiu do plano não tem onde nascer: pára ANTES de gravar, e diz. */
       if (pendentes.some(p => p.parcela != null && p.parcela > numParcelas)) {
         setErroAntesDeSalvar(`Há boleto de parcela acima de ${numParcelas} — tire-o na aba Documentos ou volte o número de parcelas.`);
+        setAbaAtiva('documentos');
+        setSaving(false);
+        return;
+      }
+      /* PARC-FECHA-02 item 1 — o que foi digitado no topo NÃO viaja no parcelado: pára ANTES de gravar e diz, em vez de perder. */
+      if (digitadoNoTopo && !haNotaNaCompra) {
+        setErroAntesDeSalvar('O tipo e o número digitados no topo de Documentos não valem no parcelado — leve-os para Documentos da compra (o link ao lado) ou apague-os.');
         setAbaAtiva('documentos');
         setSaving(false);
         return;
@@ -2797,7 +2814,17 @@ export function LancamentoV2Dialog({
                 cobre o cabeçalho das abas nem o rodapé). Mesmos campos; só a régua (rótulo 10, campo 11, h-8
                 como os outros campos do modal) e a posição. */}
             <section className={cn(sectionClass, "sticky -top-2 z-20")} data-testid="bloco-documentos-topo">
-              <p className={cn("text-[11px] font-semibold text-foreground", docVemDeDocumento && "flex items-baseline gap-1 whitespace-nowrap")}>Documentos <span className="font-normal text-muted-foreground">· do lançamento</span>
+              <p className={cn("text-[11px] font-semibold text-foreground", (docVemDeDocumento || topoTravado) && "flex items-baseline gap-1 whitespace-nowrap")}>Documentos <span className="font-normal text-muted-foreground">· do lançamento</span>
+                {topoTravado && !docVemDeDocumento && (
+                  <span className="ml-auto min-w-0 truncate text-[10px] font-normal text-amber-700" data-testid="motivo-topo-parcelado" title={MOTIVO_TOPO_NO_PARCELADO}>
+                    {MOTIVO_TOPO_NO_PARCELADO}
+                    {!isEdit && digitadoNoTopo && !haNotaNaCompra && (
+                      <button type="button" className="ml-1 font-semibold text-primary underline" data-testid="levar-topo-para-compra" onClick={levarOTopoParaACompra}>
+                        levar o que foi digitado para Documentos da compra
+                      </button>
+                    )}
+                  </span>
+                )}
                 {docVemDeDocumento && (
                   <span className="ml-auto font-mono text-[10px] font-normal text-muted-foreground" data-testid="doc-da-compra"
                     title={`${docDoLancamento.resumo} · ${docDoLancamento.origem === 'nota' ? 'nota da compra, ligada a este lançamento' : 'documento ligado a este lançamento'}`}>
@@ -2808,7 +2835,7 @@ export function LancamentoV2Dialog({
               <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">
                 <div>
                   <Label className="text-[10px]">Tipo Documento</Label>
-                  <Select value={tipoDocumento || '__none_td__'} onValueChange={v => { setTipoDocumento(v === '__none_td__' ? '' : v as TipoDocumento); if (v !== 'Nota Fiscal') { /* keep raw */ } }}>
+                  <Select disabled={topoTravado} value={tipoDocumento || '__none_td__'} onValueChange={v => { setTipoDocumento(v === '__none_td__' ? '' : v as TipoDocumento); if (v !== 'Nota Fiscal') { /* keep raw */ } }}>
                     <SelectTrigger tabIndex={12} className={cn("h-8 text-[11px]", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__none_td__">Nenhum</SelectItem>
@@ -2820,6 +2847,8 @@ export function LancamentoV2Dialog({
                   <Label className="text-[10px]">{xmlRot('Nº Documento', 'documento')}</Label>
                   <Input
                     tabIndex={13}
+                    disabled={topoTravado}
+                    title={topoTravado ? MOTIVO_TOPO_NO_PARCELADO : undefined}
                     value={notaFiscalDisplay}
                     onChange={handleNotaFiscalChange}
                     inputMode={tipoDocumento === 'Nota Fiscal' ? 'numeric' : 'text'}
