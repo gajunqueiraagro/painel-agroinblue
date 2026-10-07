@@ -95,6 +95,8 @@ import { RodapeCancelamento } from '@/components/financeiro-v2/RodapeCancelament
 import { CancelarParcelaDialog } from '@/components/financiamentos/CancelarParcelaDialog';
 import { consultarParcelaDoLancamento } from '@/lib/financiamentos/cancelarParcelaBanco';
 import type { PreviaCancelarParcela } from '@/lib/financiamentos/cancelarParcela';
+import { edicaoDaParcela, podeSerParcelaDeContrato, MOTIVO_PARCELA_PAGA } from '@/lib/financiamentos/parcelaNoModal';
+import { gravarParcelaDoModal, lerContratoDaParcela, type ContratoDaParcela } from '@/lib/financiamentos/parcelaNoModalBanco';
 import { podeOferecerVinculo, subcentrosVinculaveis, lancamentoTemParteOC } from '@/lib/oc/vincularLancamento';
 import { podeOferecerDesvinculo } from '@/lib/oc/desvincularLancamento';
 import { DesvincularOperacaoDialog } from '@/components/financeiro-v2/DesvincularOperacaoDialog';
@@ -623,6 +625,17 @@ export function LancamentoV2Dialog({
   /* PARC-CADEIA-01 — o lançamento é parcela viva de compra parcelada (quem diz é o BANCO, pela simulação): em vez da
      confirmação de sempre abre o aviso, que cancela a parcela e ajusta o contrato juntos. */
   const [parcelaACancelar, setParcelaACancelar] = useState<PreviaCancelarParcela | null>(null);
+  /* PARC-CADEIA-01 passo 3 — o contrato de que este lançamento é parcela viva (lido do dono da situação, só na edição de quem
+     PODE ser parcela). Com ele, valor e vencimento da parcela mudam JUNTO com o lançamento; sem ele, o modal é o de sempre. */
+  const [contratoDaParcela, setContratoDaParcela] = useState<ContratoDaParcela | null>(null);
+  const idDaPossivelParcela = open && lancamento?.id && podeSerParcelaDeContrato(lancamento) ? lancamento.id : null;
+  useEffect(() => {
+    setContratoDaParcela(null);
+    if (!idDaPossivelParcela) return;
+    let vivo = true;
+    void lerContratoDaParcela(idDaPossivelParcela).then(c => { if (vivo) setContratoDaParcela(c); });
+    return () => { vivo = false; };
+  }, [idDaPossivelParcela]);
   const [consultandoParcela, setConsultandoParcela] = useState(false);
   const abrirCancelamento = async () => {
     if (consultandoParcela) return;
@@ -1492,6 +1505,11 @@ export function LancamentoV2Dialog({
      "Tipo / Nº Documento" do topo fica em LEITURA, com o motivo escrito. No Novo parcelado ele nunca viajou para
      `fn_parcelamento_cadastrar` (o operador digitava e perdia); o que já estiver digitado ali é OFERECIDO à lista da compra. */
   const topoTravado = topoDoDocumentoTravado({ novo: !isEdit, modalidadeParcelada: formaPagamentoParc === 'parcelada', lancamento });
+  /* PARC-CADEIA-01 passo 3 — o que o Salvar faz com valor e vencimento desta parcela (dono puro). Nulo = não é parcela. */
+  const edicaoParcela = contratoDaParcela && lancamento?.id
+    ? edicaoDaParcela(contratoDaParcela.situacao, lancamento.id, valorNum, dataVencimento || null)
+    : null;
+  const parcelaPaga = edicaoParcela?.paga === true;
   const digitadoNoTopo = !!(notaFiscal || tipoDocumento);
   const haNotaNaCompra = pendentes.some(p => p.parcela == null && p.payload.especie === 'nf');
   const levarOTopoParaACompra = () => {
@@ -1927,6 +1945,14 @@ export function LancamentoV2Dialog({
         'form.conta_bancaria_id': form.conta_bancaria_id,
         tipoOperacao,
       });
+
+    /* PARC-CADEIA-01 passo 3 — parcela NÃO paga de compra parcelada com valor ou vencimento mudado: os dois campos vão
+       PRIMEIRO pela gravação do contrato (parcela + lançamento + contrato, numa transação). Recusou: a frase fica ao lado do
+       botão e NADA é gravado. Passou: o gravador de sempre leva o resto (e os mesmos dois valores). */
+    if (currentIsEdit && contratoDaParcela && edicaoParcela && edicaoParcela.mudou) {
+      const recusa = await gravarParcelaDoModal(contratoDaParcela.financiamentoId, edicaoParcela.lista, edicaoParcela.totalDepoisCent);
+      if (recusa) { setErroAntesDeSalvar(recusa); setSaving(false); return; }
+    }
 
     // CRITICAL: pass the stable ID for edits — ensures UPDATE, never INSERT
     const ok = await onSave(form, currentEditId || undefined);
@@ -2407,7 +2433,8 @@ export function LancamentoV2Dialog({
                   data_pagamento. Contrato de Data Pagamento do manual permanece inalterado. */}
               <div className="col-span-2">
                 <Label className="text-[10px]">{xmlAmbar('vencimento') ? xmlRot('Vencimento', 'vencimento') : 'Data Vencimento'}</Label>
-                <DatePicker value={dataVencimento} onChange={setDataVencimento} disabled={isOCTitulo} className={cn(dateFieldCls, xmlCls('vencimento'))} />
+                {/* parcela paga: em leitura; o motivo está escrito no rodapé (`parcela-do-contrato`) — sem invólucro aqui, o HTML do lançamento comum não muda */}
+                <DatePicker value={dataVencimento} onChange={setDataVencimento} disabled={isOCTitulo || parcelaPaga} className={cn(dateFieldCls, xmlCls('vencimento'))} />
               </div>
               <div className="col-span-2"
                 title={!pagamentoPermitido && !pagamentoTravado ? 'Só realizado tem data de pagamento' : undefined}>
@@ -2506,7 +2533,7 @@ export function LancamentoV2Dialog({
                   valor={valorDisplay}
                   onValor={setValorDisplay}
                   className={cn("h-8 text-right font-mono", fieldBg, xmlCls('valor'))}
-                  disabled={lockedFields?.includes('valor') || isOCTitulo}
+                  disabled={lockedFields?.includes('valor') || isOCTitulo || parcelaPaga}
                   contaAbertaRef={contaAbertaRef}
                 />
               </div>
@@ -3002,6 +3029,15 @@ export function LancamentoV2Dialog({
             {/* REC-VALOR-DO-MES-MODAL-01 — a ocorrência de recorrência fala AQUI, no rodapé de 32px (altura fixa): UMA linha,
                 o texto corta com o inteiro no `title` e o NÚMERO nunca corta. Marcada: a linha + "Voltar ao previsto" (apagado
                 com o motivo quando não vale). Não marcada: só a intenção, e só enquanto há diferença. Lançamento comum: nada. */}
+            {/* PARC-CADEIA-01 passo 3 — a parcela de compra parcelada fala AQUI (rodapé de altura fixa, uma linha): paga = o
+                motivo de valor e vencimento estarem em leitura; valor mudado = o total novo da compra, ANTES de salvar. */}
+            {edicaoParcela && (edicaoParcela.paga || edicaoParcela.frase) && (
+              <span className="min-w-0 truncate whitespace-nowrap text-[10px] leading-tight text-amber-700 dark:text-amber-400"
+                title={edicaoParcela.paga ? MOTIVO_PARCELA_PAGA : (edicaoParcela.frase ?? undefined)} data-testid="parcela-do-contrato"
+                data-estado={edicaoParcela.paga ? 'paga' : 'total-novo'}>
+                {edicaoParcela.paga ? MOTIVO_PARCELA_PAGA : edicaoParcela.frase}
+              </span>
+            )}
             {partesValorDoMes && (
               <span className="flex min-w-0 items-baseline gap-1 whitespace-nowrap text-[10px] leading-tight text-amber-700 dark:text-amber-400"
                 title={tituloDasPartes(partesValorDoMes)} data-testid="valor-do-mes" data-estado={marcaGravada ? 'marcada' : 'intencao'}>

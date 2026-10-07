@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 07/10/2026 (PARC-CADEIA-01 passo 2, +34: `src/lib/financiamentos/cancelarParcela.test.ts` 18,
+  Baseline em 07/10/2026 (PARC-CADEIA-01 passo 3, +11 em `src/lib/financiamentos/parcelaNoModal.test.ts` — 4475 depois dele; antes o
+  PARC-CADEIA-01 passo 2, +34: `src/lib/financiamentos/cancelarParcela.test.ts` 18,
   `src/components/financiamentos/cancelarParcelaDialog.test.tsx` 10, `src/lib/financeiro/cprRetorno.test.ts` 5,
   `src/hooks/useFinanceiroV2.cancelMotivo.test.ts` 1 — 4464 depois dele; antes o
   PARC-CONTRATO-01 item 4, +4: `src/lib/financeiro/docDaLinha.test.ts` 2,
@@ -250,7 +251,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4464
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4475
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3348,6 +3349,33 @@ docs/historico/frentes-ate-2026-09-29.md.)
     TODOS os documentos do cliente a cada aviso do canal (NJ: centenas de linhas; medir se crescer) · NAO PROVADO NO NAVEGADOR: o
     Ampliado, o minimodal aberto pelo Status, o clipe por ARQUIVO anexado sem numero, e o documento que nao e' nota no modal
     (so' por teste); a janela estava em 579 de altura, nao 523.
+- ⚠ NO MODAL DO LANCAMENTO, VALOR E VENCIMENTO DE PARCELA DE COMPRA PARCELADA MUDAM JUNTO COM A PARCELA (PARC-CADEIA-01 passo 3, Gabriel
+  07/10/2026, so' tela; FECHA a divida PARC-MODAL-PARCELA-VALOR-01). Antes o modal gravava so' o lancamento e a parcela ficava com
+  o numero antigo (o caso da Vera, "Balança Pesagem": parcela 21/10 x lancamento 15/10).
+  · QUEM E' PARCELA: na EDICAO de lancamento com `origem_tipo = 'parcela_principal'` (prefiltro barato,
+    `podeSerParcelaDeContrato`) o modal le' o contrato pelo dono da situacao (`lerContratoDaParcela`,
+    `src/lib/financiamentos/parcelaNoModalBanco.ts`: a parcela viva pelo `lancamento_id`, contrato de PARCELAMENTO vivo,
+    `fn_financiamento_situacao`). Sem resposta, ou financiamento com juros: o modal e' o de sempre. Lancamento comum nao consulta
+    nada e nao ganha no' no HTML (as fotos do modal nao mudaram).
+  · DONO PURO: `edicaoDaParcela(situacao, lancamentoId, valor, vencimento)` (`src/lib/financiamentos/parcelaNoModal.ts`), em
+    CENTAVOS: `mudou` (o valor ou o vencimento do modal difere do da PARCELA), a `lista` final do contrato com so' esta parcela
+    alterada, o total novo = a SOMA da lista, e a frase "A compra passa de X para Y." so' quando o total muda. UM centavo conta.
+  · SALVAR: com `mudou`, a lista vai PRIMEIRO por `fn_parcelamento_editar_parcelas` (parcela + lancamento + contrato, uma
+    transacao; `p_valor_total` = a soma nova); recusa do banco ESCRITA ao lado do botao (`erro-antes-de-salvar`) e nada mais e'
+    gravado; passou, o gravador de sempre leva o resto (com os mesmos dois valores). A frase do total novo aparece no RODAPE do
+    modal (`parcela-do-contrato`, altura fixa, uma linha, ambar) ANTES de salvar.
+  · PARCELA PAGA (a situacao do banco diz 'paga'): Valor e Vencimento em LEITURA, e o rodape escreve "Parcela paga: valor e
+    vencimento não mudam." (`MOTIVO_PARCELA_PAGA`).
+  PROVA NO NAVEGADOR (cliente Teste, 1.126 x 523, contrato sintetico de 3 x 100,00 criado por RPC e APAGADO): valor da 1ª de
+  100,00 para 150,00 — rodape "A compra passa de 300,00 para 350,00." (193px, sem corte, modal 491px igual), Salvar -> banco:
+  parcela 150,00 = lancamento 150,00, contrato 350,00 / 3 parcelas; com a 2ª paga, Valor e Vencimento desabilitados e o motivo
+  escrito no rodape. 8 mutacoes mortas.
+  ⚠ SE O GRAVADOR DE SEMPRE FALHAR DEPOIS DA PARCELA GRAVADA, valor e vencimento ja' ficaram (parcela = lancamento = contrato,
+    coerentes) e o resto do modal nao; o Salvar seguinte so' leva o resto. Nao ha' transacao unica entre as duas idas.
+  ⚠ DIVIDAS: as 10 parcelas vivas cujo lancamento tem `origem_lancamento = 'parcela_financiamento'` ENTRAM (o prefiltro olha so'
+    `origem_tipo`) · parcela paga cujo STATUS o operador quer desfazer e mudar valor no mesmo Salvar: sao dois gestos (o campo
+    so' abre depois de salvar o status) · NAO PROVADO NO NAVEGADOR: mudar so' o VENCIMENTO, a recusa do banco ao lado do botao
+    (vencimento apagado) e o modal aberto pela CPR / pelo lapis do contrato (e' o mesmo modal).
 - ⚠ CANCELAR UM LANCAMENTO QUE E' PARCELA DE COMPRA PARCELADA ABRE O AVISO, EM TODA PORTA, POR UM DONO (PARC-CADEIA-01 passo 2, Gabriel
   07/10/2026, so' tela: "se eu for apagar uma parcela, ele tem que dar um aviso de que faz parte de uma compra parcelada, se é
   para cancelar só essa ou todas, direcionar para a tela pai").
