@@ -3350,6 +3350,15 @@ docs/historico/frentes-ate-2026-09-29.md.)
     TODOS os documentos do cliente a cada aviso do canal (NJ: centenas de linhas; medir se crescer) · NAO PROVADO NO NAVEGADOR: o
     Ampliado, o minimodal aberto pelo Status, o clipe por ARQUIVO anexado sem numero, e o documento que nao e' nota no modal
     (so' por teste); a janela estava em 579 de altura, nao 523.
+- ⚠ CONTRATOS DE PARCELAMENTO QUE JA' QUEBRARAM: A PROPOSTA ESTA' ESCRITA E NAO FOI EXECUTADA (PARC-CADEIA-01 passo 5, 07/10/2026).
+  `docs/investigacao/parc-cadeia-01-conserto.sql` — um bloco por caso, com guarda do estado medido, a simulacao da propria funcao
+  em NOTICE (antes x depois) e o gesto contrario escrito; so' ids e contagens de parcelas (nenhum nome, credor ou valor). O
+  Gabriel aprova CASO A CASO.
+      caso 1 — NJ 57a954ed, parcela 1 de 3 com o lancamento cancelado em 07/10: RETIRAR a parcela (3 -> 2 vivas)
+      caso 2 — Teste 27ec1644 (resto de ensaio), as 2 parcelas sem lancamento: CANCELAR A COMPRA
+      caso 3 — Teste b0149862 (resto de ensaio), as 4 parcelas sem lancamento: CANCELAR A COMPRA
+  FORA DO SCRIPT, por decisao do Gabriel: o NJ 580db8cd ("Parcela 3 - None", as 4 parcelas sem lancamento) — ele refaz pela tela.
+  Ensaiado em transacao REVERTIDA (os tres casos passam pela guarda e gravam o esperado; o banco ficou como estava).
 - ⚠ NA TELA DO CONTRATO: EXCLUIR A COMPRA PARCELADA E' UMA GRAVACAO, E A PARCELA SEM LANCAMENTO DEIXA DE SER MUDA (PARC-CADEIA-01 passo 4,
   Gabriel 07/10/2026; migration 20261027194900, ⚠ registrada como 20261007185054; ledger = arquivo, md5 e3880ce1…; patch guardado
   por md5: `fn_financiamento_situacao` 7d59c915… -> 70a7d04b…, 1 ancora).
