@@ -162,7 +162,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 07/10/2026 (PARC-CONTRATO-01 item 1, +9: `src/lib/financiamentos/situacaoDoContrato.test.ts` 5,
+  Baseline em 07/10/2026 (PARC-CONTRATO-01 item 2, +14: `src/lib/financiamentos/propagarContrato.test.ts` 8,
+  `src/components/financiamentos/obrigacaoEdicao.test.tsx` 6 — 4418 depois dele; antes o
+  PARC-CONTRATO-01 item 1, +9: `src/lib/financiamentos/situacaoDoContrato.test.ts` 5,
   `src/components/financiamentos/obrigacaoEdicao.test.tsx` 4 — 4404 depois dele; antes o
   PARC-FECHA-02 item 6, +1 em `src/components/financeiro-v2/finV2ColunasOC01.test.ts` — 4395 depois dele; antes o
   PARC-FECHA-02 item 5, +1 em `src/components/financiamentos/obrigacaoEdicao.test.tsx` — 4394 depois dele; antes o
@@ -242,7 +244,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4404
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4418
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3340,6 +3342,55 @@ docs/historico/frentes-ate-2026-09-29.md.)
     TODOS os documentos do cliente a cada aviso do canal (NJ: centenas de linhas; medir se crescer) · NAO PROVADO NO NAVEGADOR: o
     Ampliado, o minimodal aberto pelo Status, o clipe por ARQUIVO anexado sem numero, e o documento que nao e' nota no modal
     (so' por teste); a janela estava em 579 de altura, nao 523.
+- ⚠ A EDICAO DO CONTRATO DE PARCELAMENTO CHEGA A'S PARCELAS PELO DIALOGO DE ESCOPO, NUMA GRAVACAO SO' (PARC-CONTRATO-01 item 2,
+  Gabriel 05 e 07/10/2026; migration 20261027194700, ⚠ registrada como 20261007113841; ledger = arquivo, md5 31a477b5…). Queixa:
+  mudou o nome do contrato para "Lascas Eucalipto Tratado" e as parcelas seguiram "LASCAS DE EUCALIP… 4/6"; descricao, forma e
+  classificacao mudadas no Editar obrigacao nao chegavam a's parcelas. FECHA as dividas PARC-PROPAGACAO-PARCELAS-01 e
+  PARC-OBRIGACAO-PROPAGA-01 (para parcelamento).
+  · BANCO: `fn_parcelamento_propagar(p_financiamento_id, p_campos, p_escopo, p_simular)` (md5 523dd2b9…; SECURITY DEFINER,
+    `tenant_ok`, GRANT a `authenticated`) — UMA funcao, atomica: grava no CONTRATO as colunas dele (descricao, credor, conta,
+    fazenda, plano) e nos LANCAMENTOS DAS PARCELAS os mesmos campos, na mesma transacao. SIMULACAO = GRAVACAO (`p_simular`
+    percorre as mesmas linhas e so' nao escreve). `p_campos` so' aceita descricao, credor_id, forma_pagamento,
+    conta_bancaria_id, fazenda_id, plano_conta_id, safra_id, cultura, fase; DATA E VALOR SAO RECUSADOS com frase (editam-se na
+    grade, a RPC do 2B). 'futuros' = as NAO pagas; 'todos' = todas, e NAS PAGAS MUDAM SO' DESCRICAO E CLASSIFICACAO (plano,
+    safra, cultura, fase) — forma, conta, credor, fazenda, data e valor da paga nao mudam nunca; 'nenhum' = nada e' escrito.
+    PAGA = a regra do 2B (`_fn_parcela_de_parcelamento_paga`). O nome sempre por `_fn_parcela_descricao` (o "i/N" fica).
+    ⚠ NOME PROPRIO = O QUE NAO TERMINA NO "i/N" DA PROPRIA PARCELA (decisao do Gabriel na pergunta de 07/10; DESVIO do briefing,
+      que pedia "bater com a descricao atual do contrato"): pela regra literal o contrato JA' renomeado sem propagar — o caso do
+      Lascas — nunca seria alcancado. O que termina no i/N (forma nova, ou a antiga "… - Parcela i/N") e' nome gerado e
+      acompanha; o que nao termina fica, e a previa diz quantos sao.
+    Retorno: `parcelas {nao_pagas, pagas}`, `nome_proprio {nao_pagas, pagas}`, `campos [{campo, de, para, nao_pagas, pagas,
+    nas_pagas}]`, `alteradas {futuros, todos}`, `gravadas`.
+  · TELA: ao Salvar a edicao de um PARCELAMENTO o `ObrigacaoDialog` pede a previa ao banco; se NENHUM lancamento mudaria, grava
+    como sempre; se algum mudaria, abre o `PropagarContratoDialog` e NADA e' gravado ainda — tabela Campo · De → para · Não
+    pagas · Pagas (numeros do banco), "Com nome próprio, ficam como estão: …" num lugar fixo, as tres opcoes, e "Voltar" (fecha
+    sem gravar) / "Salvar". Salvar = a RPC com o escopo e, DEPOIS, o gravador do contrato de sempre (os campos que nao se
+    propagam); "Não propagar" grava so' o contrato. A recusa do banco fica ESCRITA ao lado do botao. Depois de salvo a volta e'
+    editar de novo. Lista de Lançamentos, CPR e Conciliação releem pelo canal.
+    ⚠ A DESCRICAO VAI SEMPRE NA PREVIA (mesmo sem ter sido mexida): e' o que faz o diálogo abrir num contrato renomeado antes.
+      Os outros campos so' entram quando a edicao os mudou (`camposAPropagar`, `src/lib/financiamentos/propagarContrato.ts`).
+    ⚠ AS TRES OPCOES SAO UMA PECA SO': `OpcoesDeEscopo` (`src/components/financeiro-v2/`), movida do
+      `PropagarRecorrenciaDialog`, que passou a usa'-la (HTML identico: as fotos da recorrencia nao mudaram). O dialogo do
+      contrato e' OUTRO componente, de proposito: na recorrencia a regra ja' esta' salva quando ele abre; no contrato nada foi
+      gravado e a gravacao e' uma so'.
+    · SAFRA, CULTURA/FASE E FORMA DE PAGAMENTO (moram so' nas parcelas) deixaram de ser leitura na edicao de parcelamento:
+      `CampoDasParcelas` mostra o que todas tem (ou "varia entre as parcelas") e deixa escolher; a escolha vai na previa.
+    · O gravador do contrato passou a gravar a FAZENDA do parcelamento (era editavel e jogada fora) e, quando houve propagacao,
+      o aviso diz "N lançamentos de parcela atualizados" (o numero do banco).
+    · FINANCIAMENTO COM JUROS: fora — nenhuma previa e' pedida (as parcelas sao do motor).
+  · MEDIDO (07/10, so' leitura): contratos de parcelamento com nome de parcela ≠ nome do contrato — NJ 5 de 41 (10 parcelas),
+    Vera 2 de 4 (3 parcelas); nenhum nome sem "i/N". Nada foi corrigido em massa.
+  PROVA NO NAVEGADOR (cliente Teste, contrato sintetico de 4 parcelas com a 1ª paga, criado por RPC e APAGADO): mudei o nome e
+  salvei — diálogo 620 x 323, linhas de 18px, "Descrição | SINT FECHA-PROPAGAR → SINT FECHA-NOME NOVO | 3 | 1", banco intacto
+  com o diálogo aberto; "Só os futuros": as 3 nao pagas renomeadas, a PAGA identica por md5 da linha, contrato renomeado, aviso
+  "3 lançamentos de parcela atualizados"; de novo, "Futuros e passados": a paga mudou so' o nome (data, valor, forma e
+  classificacao iguais). Teste SQL `supabase/tests/parc_contrato_01_propagar_test.sql` (P1–P7); 9 mutacoes de tela mortas.
+  ⚠ DIVIDAS: PARC-PROPAGAR-DE-DA-DESCRICAO-01 (o "de" da descricao e' a base MAIS COMUM dos nomes; quando so' a paga ficou com
+    o nome antigo a linha diz "X → X" com 0 | 1 — deveria dizer "varia entre as parcelas"; e' banco) · a previa roda a cada
+    Salvar de parcelamento (uma ida a mais ao banco) · classificacao por plano ADMINISTRATIVO propagada nao zera a safra das
+    parcelas (o modal do Financeiro normaliza; a RPC nao) · a RPC nao tem guarda propria de mes fechado (vale a dos gatilhos do
+    lancamento) · NAO PROVADO NO NAVEGADOR: "Voltar", "Não propagar", a recusa escrita, trocar forma / safra / fase pelos
+    seletores novos e ver "de → para" deles, o nome proprio contado (so' por teste); nenhuma mutacao de banco deste item.
 - ⚠ A TELA DO CONTRATO E' O MOCK APROVADO, E TUDO O QUE ELA MOSTRA AO LADO DA SITUACAO VEM DO MESMO DONO (PARC-CONTRATO-01 item 1,
   Gabriel 07/10/2026; migration 20261027194600, ⚠ registrada como 20261007111021; ledger = arquivo, md5 d6089d62…; patch guardado
   por md5: `fn_financiamento_situacao` a3f310c2… -> 7d59c915…, 1 ancora). Queixa: titulo e textos grandes e cortando, numeros em

@@ -15,7 +15,8 @@ export const MOTIVO_PARCELA_DE_PARCELAMENTO = 'Parcela de parcelamento: o pagame
 /** A 1ª parcela do parcelamento é a da lista de parcelas — mudar a data aqui deslocava só as parcelas, não os lançamentos. */
 export const MOTIVO_PRIMEIRA_PARCELA_DO_PARCELAMENTO = 'No parcelamento a data de cada parcela se edita na grade de parcelas.';
 
-export const MOTIVO_VALE_POR_PARCELA = 'Vale por parcela. A alteração em todas as parcelas chega na próxima etapa.';
+/* PARC-CONTRATO-01 item 2: a "próxima etapa" chegou — o campo é editável e o Salvar pergunta até onde a alteração vai. */
+export const MOTIVO_VALE_POR_PARCELA = 'Vale por parcela. Ao salvar você escolhe quais parcelas a alteração alcança.';
 
 export type ValorDasParcelas =
   /** Nenhuma parcela com lançamento vivo: não há de onde ler. */

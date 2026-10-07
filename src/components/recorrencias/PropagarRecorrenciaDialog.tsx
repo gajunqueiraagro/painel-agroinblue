@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { OpcoesDeEscopo } from '@/components/financeiro-v2/OpcoesDeEscopo';
 import { AlertTriangle, Loader2, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { propagarRecorrencia, textoVagas, frasePuladasValorDoMes, type EscopoPropagacao, type ResultadoPropagacao } from '@/hooks/useRecorrencias';
@@ -198,20 +197,8 @@ export function PropagarRecorrenciaDialog({ recorrenciaId, descricao, previa, re
 
               {escopo !== 'nenhum' && <BlocoCompetencia previa={previa} escopo={escopo} />}
 
-              {/* ⚠ SEM `as`: a lista é a fonte dos valores, então procurar nela estreita o tipo
-                  e ainda valida — um valor que não esteja em OPCOES simplesmente não passa. */}
-              <RadioGroup className="gap-1.5" value={escopo}
-                onValueChange={v => { const o = OPCOES.find(x => x.valor === v); if (o) setEscopo(o.valor); }}>
-                {OPCOES.map(o => (
-                  <div key={o.valor} className="flex items-start gap-2">
-                    <RadioGroupItem value={o.valor} id={`prop-${o.valor}`} className="mt-0.5" />
-                    <Label htmlFor={`prop-${o.valor}`} className="cursor-pointer font-normal leading-snug">
-                      <span className="text-[11px] font-medium">{o.rotulo}</span>
-                      <span className="block text-[10px] text-muted-foreground">{o.explica}</span>
-                    </Label>
-                  </div>
-                ))}
-              </RadioGroup>
+              {/* As três opções moram em `OpcoesDeEscopo` (PARC-CONTRATO-01): a MESMA peça do contrato de parcelamento. */}
+              <OpcoesDeEscopo opcoes={OPCOES} valor={escopo} aoMudar={setEscopo} />
             </>
           )}
         </div>

@@ -149,7 +149,7 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
      que invalida as sete chaves de saldo e auditoria; o que era `editForm.<campo>`
      (Record solto) passou a ser `form.<campo>` (FinanciamentoForm tipado). O dialogo
      entrega o form e este metodo grava — ver `onSalvarEdicao` no ObrigacaoDialog. */
-  const saveEdit = async (form: FinanciamentoForm, extras: { status: string }): Promise<boolean> => {
+  const saveEdit = async (form: FinanciamentoForm, extras: { status: string; parcelasAtualizadas?: number }): Promise<boolean> => {
     /* O banco guarda a taxa MENSAL; o form fala em ANUAL. Mesma conversao de juros
        compostos que o gravador de criacao usa. */
     const taxaMensal = form.taxa_juros_anual > 0
@@ -169,7 +169,8 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
         taxa_juros_mensal: Math.round(taxaMensal * 10000) / 10000,
         data_contrato: form.data_contrato,
         /* no parcelamento a 1ª parcela é a da lista: este gravador não a troca (o campo fica em leitura) */
-        ...(form.natureza === 'parcelamento' ? {} : { data_primeira_parcela: form.data_primeira_parcela || null }),
+        /* a FAZENDA do parcelamento é gravada (PARC-CONTRATO-01 item 2: o campo era editável e o Salvar a jogava fora) */
+        ...(form.natureza === 'parcelamento' ? (form.fazenda_id ? { fazenda_id: form.fazenda_id } : {}) : { data_primeira_parcela: form.data_primeira_parcela || null }),
         observacao: form.observacao || null,
         /* A situacao do contrato volta a ser editavel — o seletor mora na aba Contrato do
            ObrigacaoDialog, so' em modo editar, e chega aqui por `extras` porque nao e' campo
@@ -298,7 +299,11 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
       (form.descricao ?? '') !== (fin?.descricao ?? '')
       || (form.plano_conta_parcela_id || null) !== (fin?.plano_conta_parcela_id ?? null)
       || (form.conta_bancaria_id || null) !== (fin?.conta_bancaria_id ?? null);
-    if (mudouOQueAsParcelasCopiam && parcelas.length > 0) {
+    if ((extras.parcelasAtualizadas ?? 0) > 0) {
+      /* PARC-CONTRATO-01 item 2: a alteração foi levada às parcelas pelo diálogo de escopo — o número é o que o banco gravou */
+      const n = extras.parcelasAtualizadas ?? 0;
+      toast.success('Obrigação atualizada', { description: n === 1 ? '1 lançamento de parcela atualizado.' : `${n} lançamentos de parcela atualizados.` });
+    } else if (mudouOQueAsParcelasCopiam && parcelas.length > 0) {
       toast.success('Obrigação atualizada', { description: 'As parcelas já lançadas não foram alteradas.' });
     } else {
       toast.success('Obrigação atualizada');

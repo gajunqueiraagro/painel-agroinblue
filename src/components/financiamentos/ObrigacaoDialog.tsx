@@ -25,7 +25,7 @@ import { FORMAS_PAGAMENTO_V2, FORMA_PAGAMENTO_V2_NENHUMA } from '@/lib/financeir
 import { ehSubcentroAdministrativo } from '@/lib/financeiro/escopoDoSubcentro';
 import { CULTURAS_LANCAMENTO, FASES } from '@/lib/agri/rateioLancamento';
 import {
-  MOTIVO_PARCELA_DE_PARCELAMENTO, MOTIVO_PRIMEIRA_PARCELA_DO_PARCELAMENTO, MOTIVO_VALE_POR_PARCELA, textoDasParcelas, valorComumDasParcelas,
+  MOTIVO_PARCELA_DE_PARCELAMENTO, MOTIVO_PRIMEIRA_PARCELA_DO_PARCELAMENTO, MOTIVO_VALE_POR_PARCELA, VARIA_ENTRE_AS_PARCELAS, textoDasParcelas, valorComumDasParcelas,
 } from '@/lib/financiamentos/valorDasParcelas';
 import ModalBaixaParcela from '@/components/financiamentos/ModalBaixaParcela';
 import { TableFooter } from '@/components/ui/table';
@@ -36,6 +36,9 @@ import {
   centavos, houveEdicao, motivoNaoSalva, parcelasGravadasParaGrade, parcelasParaEditar, parcelasParaPayload, type ParcelaLivre,
 } from '@/lib/financiamentos/parcelasLivres';
 import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
+import { PropagarContratoDialog } from '@/components/financiamentos/PropagarContratoDialog';
+import { camposAPropagar, lerPreviaDaPropagacao, type CamposAPropagar, type CamposDasParcelas, type ComumDasParcelas, type PreviaDaPropagacao } from '@/lib/financiamentos/propagarContrato';
+import type { EscopoDePropagacao } from '@/components/financeiro-v2/OpcoesDeEscopo';
 
 /* ══ NOVA OBRIGACAO — a casca do CompraModalShell aplicada ao contrato ═══════════
    PR-PARC-04. Substitui a PAGINA `src/pages/FinanciamentoCadastro.tsx` como porta de
@@ -175,6 +178,32 @@ function BlocoHead({ titulo }: { titulo: string }) {
    colados e o bloco lia-se como um paragrafo; 24px separa linha de linha sem custar
    altura de tela, porque o resumo tem rolagem propria. `items-center` acompanha a troca:
    com altura fixa, alinhar pela base deixava o valor flutuando. */
+/**
+ * UM CAMPO QUE MORA NAS PARCELAS (forma de pagamento, safra, cultura, fase) — PARC-CONTRATO-01 item 2.
+ * Mostra o que TODAS as parcelas têm (ou "varia entre as parcelas") e deixa escolher outro valor; a escolha NÃO é gravada aqui:
+ * vai para a prévia do banco no Salvar, que pergunta até onde ela alcança. `VAZIO` é a palavra da casa para "nenhum".
+ */
+const VALOR_VAZIO_DAS_PARCELAS = '__vazio__';
+function CampoDasParcelas({ testid, comum, escolhido, vazio, opcoes, aoMudar }: {
+  testid: string; comum: ComumDasParcelas[keyof ComumDasParcelas]; escolhido: string | null | undefined; vazio: string;
+  opcoes: ReadonlyArray<{ valor: string; label: string }>; aoMudar: (v: string | null) => void;
+}) {
+  const atual = escolhido !== undefined ? (escolhido || VALOR_VAZIO_DAS_PARCELAS)
+    : comum.tipo === 'igual' ? (comum.valor || VALOR_VAZIO_DAS_PARCELAS) : undefined;
+  const dica = comum.tipo === 'varia' ? VARIA_ENTRE_AS_PARCELAS : '—';
+  /* o valor que as parcelas têm e que não está na lista (legado) continua visível como opção */
+  const lista = atual && atual !== VALOR_VAZIO_DAS_PARCELAS && !opcoes.some(o => o.valor === atual) ? [...opcoes, { valor: atual, label: atual }] : opcoes;
+  return (
+    <Select value={atual} onValueChange={v => aoMudar(v === VALOR_VAZIO_DAS_PARCELAS ? null : v)} disabled={comum.tipo === 'sem_parcelas'}>
+      <SelectTrigger className={CAMPO} data-testid={testid} data-escolhido={escolhido !== undefined ? 'sim' : 'nao'}><SelectValue placeholder={dica} /></SelectTrigger>
+      <SelectContent position="popper" className={SELECT_POPPER}>
+        <SelectItem value={VALOR_VAZIO_DAS_PARCELAS}>{vazio}</SelectItem>
+        {lista.map(o => <SelectItem key={o.valor} value={o.valor}>{o.label}</SelectItem>)}
+      </SelectContent>
+    </Select>
+  );
+}
+
 function Linha({ rotulo, valor, valorClassName }: { rotulo: string; valor: string | null; valorClassName?: string }) {
   return (
     <div className="flex h-6 items-center justify-between gap-1.5 leading-tight">
@@ -204,7 +233,7 @@ interface Props {
    * codigo que mexe em dinheiro para ganhar nada. O dialogo e' o FORMULARIO; quem grava
    * continua sendo quem ja' gravava — o mesmo padrao de prop-bag do CompraModalShell.
    */
-  onSalvarEdicao?: (form: FinanciamentoForm, extras: { status: StatusContrato }) => Promise<boolean>;
+  onSalvarEdicao?: (form: FinanciamentoForm, extras: { status: StatusContrato; parcelasAtualizadas?: number }) => Promise<boolean>;
   /** PARC-CONTRATO-01: a aba em que o diálogo abre ("Documentos" e "Editar parcelas" da tela do contrato). Sem ela, Contrato. */
   abaInicial?: AbaDaObrigacao;
 }
@@ -325,6 +354,23 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
       forma: textoDasParcelas(valorComumDasParcelas(linhas.map(l => l.forma_pagamento)), 'Nenhuma'),
     };
   }, [parcelasGravadas, lancamentosDoContrato]);
+  /* PARC-CONTRATO-01 item 2 — o valor CRU que as parcelas têm em comum (ou "varia"): é contra ele que a escolha do operador é
+     comparada, e é ele que o campo mostra enquanto ninguém mexeu. */
+  const comumDasParcelas = useMemo((): ComumDasParcelas => {
+    const ids = new Set(parcelasGravadas.map(p => p.lancamento_id).filter((v): v is string => !!v));
+    const linhas = (lancamentosDoContrato?.linhas ?? []).filter(l => ids.has(l.id));
+    return {
+      forma_pagamento: valorComumDasParcelas(linhas.map(l => l.forma_pagamento)),
+      safra_id: valorComumDasParcelas(linhas.map(l => l.safra_id)),
+      cultura: valorComumDasParcelas(linhas.map(l => l.cultura)),
+      fase: valorComumDasParcelas(linhas.map(l => l.fase)),
+    };
+  }, [parcelasGravadas, lancamentosDoContrato]);
+  /* o que o operador escolheu para as parcelas (não é coluna do contrato); `undefined` = não mexeu */
+  const [escolhaDasParcelas, setEscolhaDasParcelas] = useState<CamposDasParcelas>({});
+  const escolher = (k: keyof CamposDasParcelas, v: string | null) => setEscolhaDasParcelas(a => ({ ...a, [k]: v }));
+  /* a prévia do banco, aberta no diálogo de escopo; nada foi gravado enquanto ela está na tela */
+  const [propagar, setPropagar] = useState<{ previa: PreviaDaPropagacao; campos: CamposAPropagar } | null>(null);
 
   const temParcelaPaga = parcelasGravadas.some(p => p.status === 'pago');
   /* Somas do rodape da grade — sobre TODAS as parcelas gravadas, nao so' as visiveis na
@@ -709,6 +755,31 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
         qc.invalidateQueries({ queryKey: ['cpr-lancs'] });
         if (clienteId) notificarLancamentosMudaram(clienteId);
       }
+      /* PARC-CONTRATO-01 item 2 — a edição do contrato chega às parcelas? Quem responde é o BANCO (a prévia da MESMA função que
+         grava). Se algum lançamento mudaria, abre o diálogo de escopo e NADA é gravado ainda; se nenhum, segue como sempre. */
+      if (edicaoDeParcelamento && financiamentoId && contrato) {
+        const campos = camposAPropagar(
+          { descricao: contrato.descricao ?? '', credor_id: contrato.credor_id ?? '', conta_bancaria_id: contrato.conta_bancaria_id ?? '', fazenda_id: contrato.fazenda_id ?? '', plano_conta_id: contrato.plano_conta_parcela_id ?? '' },
+          { descricao: form.descricao ?? '', credor_id: form.credor_id ?? '', conta_bancaria_id: form.conta_bancaria_id ?? '', fazenda_id: form.fazenda_id ?? '', plano_conta_id: form.plano_conta_parcela_id ?? '' },
+          escolhaDasParcelas, comumDasParcelas);
+        if (Object.keys(campos).length > 0) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+          const { data, error } = await (supabase as any).rpc('fn_parcelamento_propagar', {
+            p_financiamento_id: financiamentoId, p_campos: campos, p_escopo: 'todos', p_simular: true,
+          });
+          const previa = error ? null : lerPreviaDaPropagacao(data);
+          if (!previa) {
+            setErroDaGrade(typeof error?.message === 'string' && error.message ? error.message : 'Não foi possível calcular o que muda nas parcelas. Nada foi gravado.');
+            setSalvandoEdicao(false);
+            return;
+          }
+          if (previa.alteradas.todos > 0) {
+            setPropagar({ previa, campos });
+            setSalvandoEdicao(false);
+            return;
+          }
+        }
+      }
       const ok = await onSalvarEdicao(form, { status: statusContrato });
       setSalvandoEdicao(false);
       if (ok) onSalvo?.();
@@ -716,6 +787,31 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
     }
     const ok = await salvar(destinacoes, livresAbertas ? parcelasParaPayload(parcelasLivres) : null);
     if (ok) onSalvo?.();
+  };
+
+  /* O "Salvar" do diálogo de escopo: UMA gravação atômica no banco (contrato + lançamentos das parcelas) e, depois, o gravador
+     do contrato de sempre para os campos que não se propagam. Recusou: devolve a frase, que fica escrita ao lado do botão. */
+  const salvarComEscopo = async (escopo: EscopoDePropagacao): Promise<string | null> => {
+    if (!propagar || !financiamentoId || !onSalvarEdicao) return 'Nada a gravar.';
+    let gravadas = 0;
+    if (escopo !== 'nenhum') {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+      const { data, error } = await (supabase as any).rpc('fn_parcelamento_propagar', {
+        p_financiamento_id: financiamentoId, p_campos: propagar.campos, p_escopo: escopo, p_simular: false,
+      });
+      const feito = error ? null : lerPreviaDaPropagacao(data);
+      if (!feito) return typeof error?.message === 'string' && error.message ? error.message : 'O banco recusou a gravação. Nada foi gravado.';
+      gravadas = feito.gravadas;
+      qc.invalidateQueries({ queryKey: ['obrigacao-edicao-lancamentos', financiamentoId] });
+      qc.invalidateQueries({ queryKey: ['financiamento-safra-das-parcelas', financiamentoId] });
+      qc.invalidateQueries({ queryKey: ['cpr-lancs'] });
+      if (clienteId) notificarLancamentosMudaram(clienteId);
+    }
+    const ok = await onSalvarEdicao(form, { status: statusContrato, parcelasAtualizadas: gravadas });
+    if (!ok) return 'As parcelas foram gravadas, mas o contrato não: confira os campos e salve de novo.';
+    setPropagar(null);
+    onSalvo?.();
+    return null;
   };
 
   const gravando = saving || salvandoEdicao;
@@ -963,9 +1059,9 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                          ou "varia entre as parcelas"); o motivo vai na linha de baixo, inteiro. */
                       <div>
                         <Label className={ROTULO}>Forma de pagamento</Label>
-                        <Input readOnly disabled tabIndex={-1} data-testid="forma-das-parcelas"
-                          className={`${CAMPO} ${CAMPO_TRAVADO}`} value={dasParcelas.forma} title={dasParcelas.forma} />
-                        <p className={APOIO}>Lida das parcelas</p>
+                        <CampoDasParcelas testid="forma-das-parcelas" comum={comumDasParcelas.forma_pagamento} escolhido={escolhaDasParcelas.forma_pagamento}
+                          vazio="Nenhuma" opcoes={FORMAS_PAGAMENTO_V2.map(v => ({ valor: v, label: v }))} aoMudar={v => escolher('forma_pagamento', v)} />
+                        <p className={APOIO}>Das parcelas</p>
                       </div>
                       ) : (
                       <div>
@@ -1435,21 +1531,23 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                           <div className="grid grid-cols-12 gap-2 items-start">
                             <div className="col-span-4">
                               <Label className="text-[10px]">Safra</Label>
-                              <Input readOnly disabled tabIndex={-1} data-testid="safra-das-parcelas"
-                                className={`${CAMPO} ${CAMPO_TRAVADO}`} value={dasParcelas.safra} title={dasParcelas.safra} />
+                              <CampoDasParcelas testid="safra-das-parcelas" comum={comumDasParcelas.safra_id} escolhido={escolhaDasParcelas.safra_id}
+                                vazio="Sem safra" aoMudar={v => escolher('safra_id', v)}
+                                opcoes={[...safras.filter(sf => sf.ativa).map(sf => ({ valor: sf.id, label: sf.nome })),
+                                  ...Object.entries(lancamentosDoContrato?.nomes ?? {}).filter(([id]) => !safras.some(sf => sf.ativa && sf.id === id)).map(([id, nome]) => ({ valor: id, label: nome }))]} />
                             </div>
                             {classificacao.atividade === 'agricultura' && (
                               <div className="col-span-4">
                                 <Label className="text-[10px]">Cultura</Label>
-                                <Input readOnly disabled tabIndex={-1} data-testid="cultura-das-parcelas"
-                                  className={`${CAMPO} ${CAMPO_TRAVADO}`} value={dasParcelas.cultura} title={dasParcelas.cultura} />
+                                <CampoDasParcelas testid="cultura-das-parcelas" comum={comumDasParcelas.cultura} escolhido={escolhaDasParcelas.cultura}
+                                  vazio="Todas (rateia)" opcoes={CULTURAS_LANCAMENTO.map(c => ({ valor: c.valor, label: c.label }))} aoMudar={v => escolher('cultura', v)} />
                               </div>
                             )}
                             {classificacao.atividade === 'pecuaria' && (
                               <div className="col-span-4">
                                 <Label className="text-[10px]">Fase</Label>
-                                <Input readOnly disabled tabIndex={-1} data-testid="fase-das-parcelas"
-                                  className={`${CAMPO} ${CAMPO_TRAVADO}`} value={dasParcelas.fase} title={dasParcelas.fase} />
+                                <CampoDasParcelas testid="fase-das-parcelas" comum={comumDasParcelas.fase} escolhido={escolhaDasParcelas.fase}
+                                  vazio="Todas (rateia)" opcoes={FASES.map(c => ({ valor: c.valor, label: c.label }))} aoMudar={v => escolher('fase', v)} />
                               </div>
                             )}
                           </div>
@@ -1705,6 +1803,11 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
           qc.invalidateQueries({ queryKey: ['financiamento-detalhe', financiamentoId] });
         }}
       />
+    )}
+    {/* PARC-CONTRATO-01 item 2 — até onde a edição alcança as parcelas. "Voltar" fecha sem gravar nada. */}
+    {propagar && (
+      <PropagarContratoDialog descricao={form.descricao || contrato?.descricao || ''} previa={propagar.previa}
+        aoSalvar={salvarComEscopo} aoVoltar={() => setPropagar(null)} />
     )}
     </>
   );

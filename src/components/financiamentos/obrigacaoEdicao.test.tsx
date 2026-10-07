@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, cleanup, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup, act, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -29,6 +29,9 @@ const banco = vi.hoisted(() => ({
   erroRpc: null as string | null,
   /** a ordem das escritas: 'rpc:<fn>' e 'update:<tabela>' */
   ordem: [] as string[],
+  /** PARC-CONTRATO-01 item 2 — o que a prévia de `fn_parcelamento_propagar` devolve, e as prévias pedidas (não são escrita) */
+  propagar: null as unknown,
+  previas: [] as Array<Record<string, unknown>>,
 }));
 
 vi.mock('@/integrations/supabase/client', () => {
@@ -85,7 +88,12 @@ vi.mock('@/integrations/supabase/client', () => {
       from: (t: string) => construtor(t),
       rpc: (fn: string, args: Record<string, unknown>) => {
         if (fn === 'fn_financiamento_situacao') return Promise.resolve({ data: banco.situacao, error: null });
+        if (fn === 'fn_parcelamento_propagar' && args.p_simular === true) {
+          banco.previas.push(args);
+          return Promise.resolve({ data: banco.propagar, error: null });
+        }
         banco.rpcs.push({ fn, args }); banco.ordem.push(`rpc:${fn}`);
+        if (fn === 'fn_parcelamento_propagar') return Promise.resolve(banco.erroRpc ? { data: null, error: { message: banco.erroRpc } } : { data: { ...(banco.propagar as object), gravadas: 3 }, error: null });
         return Promise.resolve(banco.erroRpc ? { data: null, error: { message: banco.erroRpc } } : { data: 'novo-id', error: null });
       },
     },
@@ -160,6 +168,12 @@ const SITUACAO = (over: Array<Record<string, unknown>> = [{}, {}], cartoes: Reco
     soma_principal: 16238, soma_total: 16238, divergentes: 0, ...cartoes },
 });
 
+/** a prévia do banco: por padrão NADA muda nas parcelas (o diálogo de escopo não abre) */
+const PREVIA = (o: Record<string, unknown> = {}) => ({
+  ok: true, escopo: 'todos', simulado: true, parcelas: { nao_pagas: 2, pagas: 0 }, nome_proprio: { nao_pagas: 0, pagas: 0 },
+  campos: [], alteradas: { futuros: 0, todos: 0 }, gravadas: 0, ...o,
+});
+
 let qc: QueryClient;
 const novoQc = (staleTime: number) => new QueryClient({ defaultOptions: { queries: { retry: false, staleTime } } });
 const montarDetalhe = () => render(<QueryClientProvider client={qc}><FinanciamentoDetalhe id="ctr-1" /></QueryClientProvider>);
@@ -180,6 +194,7 @@ const updatesDoContrato = () => banco.updates.filter((u) => u.tabela === 'financ
 beforeEach(() => {
   cleanup();
   banco.contrato = PARCELAMENTO(); banco.parcelas = PARCELAS(); banco.lancs = LANCS();
+  banco.propagar = PREVIA(); banco.previas = [];
   banco.updates = []; banco.rpcs = []; banco.leituras = []; banco.toasts = []; banco.erroRpc = null; banco.ordem = [];
   banco.situacao = SITUACAO();
   qc = novoQc(0);
@@ -321,6 +336,8 @@ describe('prova 3 — salvar sem tocar em nada grava o que foi lido', () => {
       /* PARC-LIVRES-01 2A — no PARCELAMENTO o gravador do contrato não leva `data_primeira_parcela`: a data de cada parcela é da
          grade de parcelas (parcela e lançamento juntos). */
       data_contrato: lido.data_contrato, observacao: lido.observacao,
+      /* PARC-CONTRATO-01 item 2 — a fazenda do parcelamento passou a ser gravada (era editável e o Salvar a jogava fora) */
+      fazenda_id: lido.fazenda_id,
       status: lido.status, gerar_lancamento_captacao: lido.gerar_lancamento_captacao,
       plano_conta_captacao_id: lido.plano_conta_captacao_id, plano_conta_parcela_id: lido.plano_conta_parcela_id,
     });
@@ -334,23 +351,24 @@ describe('prova 3 — salvar sem tocar em nada grava o que foi lido', () => {
 });
 
 describe('prova 4 — safra, fase e forma de pagamento vêm das parcelas, em leitura', () => {
-  const ler = (id: string) => screen.getByTestId(id) as HTMLInputElement;
-  it('iguais em todas as parcelas: mostra o valor; campo desabilitado; motivo no DOM', async () => {
+  /* PARC-CONTRATO-01 item 2: os campos das parcelas viraram SELETORES (editáveis); o que se lê é o texto do gatilho */
+  const ler = (id: string) => { const el = screen.getByTestId(id) as HTMLButtonElement; return { value: el.textContent ?? '', disabled: el.disabled }; };
+  it('iguais em todas as parcelas: mostra o valor; o campo é EDITÁVEL (PARC-CONTRATO-01) e o motivo diz que o Salvar pergunta o alcance', async () => {
     montarDetalhe();
     await abrirEdicao(); await pronto();
     await waitFor(() => expect(ler('forma-das-parcelas').value).toBe('Boleto'));
-    expect(ler('forma-das-parcelas').disabled).toBe(true);
+    expect(ler('forma-das-parcelas').disabled).toBe(false);
+    expect(screen.getByTestId('forma-das-parcelas').getAttribute('data-escolhido')).toBe('nao');
     expect(screen.getByTestId('motivo-forma').textContent)
-      .toBe('Forma de pagamento: Vale por parcela. A alteração em todas as parcelas chega na próxima etapa.');
+      .toBe('Forma de pagamento: Vale por parcela. Ao salvar você escolhe quais parcelas a alteração alcança.');
     await irParaAba('Classificação');
     expect(ler('safra-das-parcelas').value).toBe('Safra 26/27 Pecuária');
     expect(ler('fase-das-parcelas').value).toBe('Cria');
-    expect(ler('safra-das-parcelas').disabled && ler('fase-das-parcelas').disabled).toBe(true);
+    expect(ler('safra-das-parcelas').disabled || ler('fase-das-parcelas').disabled).toBe(false);
     expect(screen.queryByTestId('cultura-das-parcelas')).toBeNull();   // pecuária: o eixo é a fase
     expect(screen.getByTestId('motivo-safra').textContent)
-      .toBe('Vale por parcela. A alteração em todas as parcelas chega na próxima etapa.');
-    /* o seletor editável de safra do cluster NÃO está na tela */
-    expect(screen.queryByText('Sem safra')).toBeNull();
+      .toBe('Vale por parcela. Ao salvar você escolhe quais parcelas a alteração alcança.');
+    /* o seletor de safra do CLUSTER (o que sugere pela data) segue fora da tela: quem está ali é o seletor das parcelas */
     expect(screen.queryByText('sugerida')).toBeNull();
   });
   it('divergentes: "varia entre as parcelas" nos três', async () => {
@@ -443,6 +461,105 @@ describe('o aviso do que o Salvar não alcança', () => {
 });
 
 /* ── PARC-LIVRES-01 passo 2A — o editor de parcela do financiamento não vale no parcelamento ──────────────────────────────── */
+/* ── PARC-CONTRATO-01 item 2 — a edição do contrato chega às parcelas pelo diálogo de escopo ─────────────────────────── */
+describe('PARC-CONTRATO-01 item 2 — propagar a edição do contrato às parcelas', () => {
+  const COM_MUDANCA = () => PREVIA({
+    parcelas: { nao_pagas: 1, pagas: 1 }, nome_proprio: { nao_pagas: 0, pagas: 1 },
+    campos: [{ campo: 'descricao', de: 'Compra parcelada', para: 'Nome novo', nao_pagas: 1, pagas: 1, nas_pagas: true }],
+    alteradas: { futuros: 1, todos: 2 },
+  });
+  const clicarSalvarDoEditar = async () => {
+    const botoes = screen.getAllByRole('button', { name: /^Salvar/ });
+    fireEvent.click(botoes[0]);
+  };
+  const mudarNomeESalvar = async () => {
+    montarDetalhe();
+    await abrirEdicao(); await pronto();
+    fireEvent.change(campoDescricao(), { target: { value: 'Nome novo' } });
+    await clicarSalvarDoEditar();
+  };
+
+  it('nada muda nas parcelas (a prévia do banco diz zero): o diálogo de escopo NÃO abre e o Salvar é o de sempre', async () => {
+    montarDetalhe();
+    await abrirEdicao(); await pronto();
+    await salvar();
+    expect(banco.previas.length).toBe(1);
+    expect(banco.previas[0]).toMatchObject({ p_escopo: 'todos', p_simular: true, p_campos: { descricao: PARCELAMENTO().descricao } });
+    expect(screen.queryByTestId('propagar-contrato')).toBeNull();
+    expect(banco.rpcs.filter((r) => r.fn === 'fn_parcelamento_propagar')).toEqual([]);
+    expect(updatesDoContrato().length).toBe(1);
+  });
+
+  it('mudou o nome: abre o diálogo com a tabela do banco e NADA foi gravado; "Voltar" fecha sem gravar', async () => {
+    banco.propagar = COM_MUDANCA();
+    await mudarNomeESalvar();
+    const dlg = await screen.findByTestId('propagar-contrato');
+    expect(banco.previas[0].p_campos).toEqual({ descricao: 'Nome novo' });
+    expect(updatesDoContrato().length).toBe(0);
+    expect(banco.rpcs).toEqual([]);
+    expect(dlg.textContent).toContain('nada foi gravado ainda');
+    expect(Array.from(screen.getByTestId('propagar-campo-descricao').querySelectorAll('td')).map((td) => td.textContent))
+      .toEqual(['Descrição', 'Compra parcelada → Nome novo', '1', '1']);
+    expect([screen.getByTestId('propagar-nao-pagas').textContent, screen.getByTestId('propagar-pagas').textContent]).toEqual(['1', '1']);
+    /* padrão "Só os futuros": o número é o do banco para esse escopo, e o nome próprio das PAGAS não aparece */
+    expect(screen.getByTestId('propagar-recado').textContent).toBe('1 lançamento será alterado, junto com o contrato.');
+    expect(screen.getByTestId('propagar-nome-proprio').textContent).toBe('');
+    fireEvent.click(screen.getByText('Futuros e passados'));
+    expect(screen.getByTestId('propagar-recado').textContent).toBe('2 lançamentos serão alterados, junto com o contrato.');
+    expect(screen.getByTestId('propagar-nome-proprio').textContent).toBe('Com nome próprio, ficam como estão: 1 paga.');
+    fireEvent.click(screen.getByRole('button', { name: 'Voltar' }));
+    await waitFor(() => expect(screen.queryByTestId('propagar-contrato')).toBeNull());
+    expect(screen.getByText('Editar obrigação')).toBeTruthy();          // o Editar continua aberto, com o digitado
+    expect(campoDescricao().value).toBe('Nome novo');
+    expect(updatesDoContrato().length).toBe(0);
+    expect(banco.rpcs).toEqual([]);
+  });
+
+  it('"Só os futuros" e Salvar: a RPC grava com o escopo ANTES do gravador do contrato, e o diálogo fecha', async () => {
+    banco.propagar = COM_MUDANCA();
+    await mudarNomeESalvar();
+    await screen.findByTestId('propagar-contrato');
+    fireEvent.click(within(screen.getByTestId('propagar-contrato')).getByRole('button', { name: /Salvar/ }));
+    await waitFor(() => expect(updatesDoContrato().length).toBe(1));
+    expect(banco.rpcs).toEqual([{ fn: 'fn_parcelamento_propagar', args: { p_financiamento_id: 'ctr-1', p_campos: { descricao: 'Nome novo' }, p_escopo: 'futuros', p_simular: false } }]);
+    expect(banco.ordem).toEqual(['rpc:fn_parcelamento_propagar', 'update:financiamentos']);
+    await waitFor(() => expect(screen.queryByTestId('propagar-contrato')).toBeNull());
+  });
+
+  it('"Não propagar": grava SÓ o contrato — nenhuma RPC de escrita', async () => {
+    banco.propagar = COM_MUDANCA();
+    await mudarNomeESalvar();
+    await screen.findByTestId('propagar-contrato');
+    fireEvent.click(screen.getByText('Não propagar'));
+    expect(screen.getByTestId('propagar-recado').textContent).toBe('Só o contrato será gravado.');
+    fireEvent.click(within(screen.getByTestId('propagar-contrato')).getByRole('button', { name: /Salvar/ }));
+    await waitFor(() => expect(updatesDoContrato().length).toBe(1));
+    expect(banco.rpcs).toEqual([]);
+    expect(banco.toasts).toContain('Obrigação atualizada');
+  });
+
+  it('o banco recusa: a frase fica ESCRITA ao lado do botão, o diálogo fica e o contrato NÃO é gravado', async () => {
+    banco.propagar = COM_MUDANCA();
+    await mudarNomeESalvar();
+    await screen.findByTestId('propagar-contrato');
+    banco.erroRpc = 'Data e valor de parcela não se propagam pelo contrato: edite na grade de parcelas.';
+    fireEvent.click(within(screen.getByTestId('propagar-contrato')).getByRole('button', { name: /Salvar/ }));
+    await waitFor(() => expect(screen.getByTestId('propagar-recado').textContent).toBe('Data e valor de parcela não se propagam pelo contrato: edite na grade de parcelas.'));
+    expect(screen.getByTestId('propagar-recado').className).toContain('text-destructive');
+    expect(updatesDoContrato().length).toBe(0);
+    expect(banco.toasts.filter((t) => t.startsWith('ERRO'))).toEqual([]);
+  });
+
+  it('financiamento com juros: fora — nenhuma prévia é pedida e o Salvar é o de sempre', async () => {
+    banco.contrato = FINANCIAMENTO('financiamento');
+    montarDetalhe();
+    await abrirEdicao(); await pronto();
+    await salvar();
+    expect(banco.previas).toEqual([]);
+    expect(screen.queryByTestId('propagar-contrato')).toBeNull();
+  });
+});
+
 describe('2A — parcelamento não passa pelo editor de parcela nem pelo deslocamento do contrato', () => {
   it('parcelamento: no diálogo de edição não há lápis de parcela — as parcelas se editam na GRADE (passo 2B)', async () => {
     montarDetalhe();
@@ -462,7 +579,7 @@ describe('2A — parcelamento não passa pelo editor de parcela nem pelo desloca
     expect('data_primeira_parcela' in updatesDoContrato()[0].payload).toBe(false);
     const fonte = readFileSync(resolve(__dirname, '../../pages/FinanciamentoDetalhe.tsx'), 'utf8');
     expect(fonte).toContain("if (form.natureza !== 'parcelamento' && dataAntiga && dataNova && dataAntiga !== dataNova) {");
-    expect(fonte).toContain("...(form.natureza === 'parcelamento' ? {} : { data_primeira_parcela: form.data_primeira_parcela || null }),");
+expect(fonte).toContain("...(form.natureza === 'parcelamento' ? (form.fazenda_id ? { fazenda_id: form.fazenda_id } : {}) : { data_primeira_parcela: form.data_primeira_parcela || null }),");
   });
 
   it('financiamento: o gravador do contrato continua levando `data_primeira_parcela`', async () => {
