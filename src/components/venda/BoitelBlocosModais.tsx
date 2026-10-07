@@ -24,6 +24,7 @@
  * (dinheiro sempre formatado), A20 (DatePicker, nunca `input type=date`).
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { importarDoApp } from '@/lib/app/falhaDeVersao';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -1973,7 +1974,7 @@ function BoitelAnaliseModal({ projetado, realizado, categoria, cabecas, onFechar
     if (!el || salvandoPrint) return;
     setSalvandoPrint(true);
     try {
-      const { default: html2canvas } = await import('html2canvas');
+      const { default: html2canvas } = await importarDoApp(() => import('html2canvas'));
       const canvas = await html2canvas(el, { scale: 2.5, backgroundColor: '#ffffff', logging: false, useCORS: true });
       const a = document.createElement('a');
       a.href = canvas.toDataURL('image/png');

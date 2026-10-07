@@ -1,4 +1,5 @@
 import { kml as kmlToGeoJSON } from '@tmcw/togeojson';
+import { importarDoApp } from '@/lib/app/falhaDeVersao';
 
 export interface ParsedPolygon {
   name: string;
@@ -29,7 +30,7 @@ export function parseKML(kmlText: string): ParsedPolygon[] {
  */
 export async function parseKMZ(arrayBuffer: ArrayBuffer): Promise<ParsedPolygon[]> {
   // Dynamic import to keep bundle small
-  const JSZip = (await import('jszip')).default;
+  const JSZip = (await importarDoApp(() => import('jszip'))).default;
   const zip = await JSZip.loadAsync(arrayBuffer);
   
   // Find the KML file inside the KMZ

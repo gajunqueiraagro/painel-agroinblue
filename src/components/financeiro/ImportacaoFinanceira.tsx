@@ -2,6 +2,7 @@
  * Tela de importação financeira via Excel — aba única EXPORT_APP_UNICO.
  */
 import { useState, useRef, useMemo, useEffect } from 'react';
+import { importarDoApp } from '@/lib/app/falhaDeVersao';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Download, Upload, CheckCircle2, AlertTriangle, FileSpreadsheet, Loader2, Ban, ShieldCheck } from 'lucide-react';
@@ -79,7 +80,7 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesF
   useEffect(() => {
     if (!clienteAtual?.id) return;
     const load = async () => {
-      const { loadPlanoContasCompleto } = await import('@/lib/financeiro/planoContasBuilder');
+      const { loadPlanoContasCompleto } = await importarDoApp(() => import('@/lib/financeiro/planoContasBuilder'));
       const items = await loadPlanoContasCompleto(clienteAtual.id);
       const set = new Set<string>();
       for (const item of items) {

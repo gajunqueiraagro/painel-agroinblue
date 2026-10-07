@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { importarDoApp } from '@/lib/app/falhaDeVersao';
 import { LancamentoDaParcelaDialog } from '@/components/financiamentos/LancamentoDaParcelaDialog';
 import { useSituacaoDoContrato } from '@/hooks/useSituacaoDoContrato';
 import {
@@ -367,7 +368,7 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
     setDeleting(true);
     try {
       // ETAPA 1: Cancelar lancamentos financeiros vinculados em cascata
-      const { cancelarLancamentosDoFinanciamento } = await import('@/lib/financiamentos/parcelaMirror');
+      const { cancelarLancamentosDoFinanciamento } = await importarDoApp(() => import('@/lib/financiamentos/parcelaMirror'));
       const result = await cancelarLancamentosDoFinanciamento(supabase as any, id);
 
       // Bloqueio: conciliados ou editados manualmente

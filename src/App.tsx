@@ -9,6 +9,7 @@ import AppRouter from "./AppRouter";
 import NotFound from "./pages/NotFound.tsx";
 import { useEffect } from "react";
 import { protegerSoltarFora } from "@/lib/arquivo/protegerSoltarFora";
+import { AvisoVersaoNova } from "@/components/app/AvisoVersaoNova";
 
 const queryClient = new QueryClient();
 
@@ -25,6 +26,9 @@ const App = () => {
           posição. Medido: 147 arquivos usavam o `sonner` e UM usava o outro (`V2AreasMeta`,
           convertido no mesmo PR). Fica o que o sistema de fato usa. */}
       <Sonner />
+      {/* APP-VERSAO-NOVA-01 — pedaço que não chega (página aberta antes de uma publicação): aviso fixo, com X e "Recarregar".
+          NUNCA recarrega sozinho. Ouve o `vite:preloadError` e o aviso do dono (`importarDoApp`). */}
+      <AvisoVersaoNova />
       <AuthProvider>
         <ClienteProvider>
           <FazendaProvider>

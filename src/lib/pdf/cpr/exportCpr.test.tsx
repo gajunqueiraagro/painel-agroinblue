@@ -188,8 +188,10 @@ describe('gerar o PDF — valor inválido não derruba, e o erro volta em frase'
     expect(tela).toMatch(/^import \{ motivoDaFalhaDoPdf \} from '@\/lib\/pdf\/cpr\/falhaDoPdf';$/m);
     expect(tela).toContain('setRecadoExport({ erro: true, texto: motivoDaFalhaDoPdf(e) })');
     expect(tela).not.toContain('`Falha ao gerar PDF: ${e instanceof Error');
-    /* o dono da frase não puxa o motor nem o documento */
-    expect(dono).not.toMatch(/^\s*import\s/m);
+    /* o dono da frase não puxa o motor nem o documento: o ÚNICO import dele é o dono da falha de versão (APP-VERSAO-NOVA-01),
+       que por sua vez não importa nada */
+    expect(dono.match(/^\s*import\s.*$/gm)).toEqual(["import { ehFalhaDeVersao } from '@/lib/app/falhaDeVersao';"]);
+    expect(readFileSync(resolve(process.cwd(), 'src/lib/app/falhaDeVersao.ts'), 'utf8')).not.toMatch(/^\s*import\s/m);
   });
 });
 

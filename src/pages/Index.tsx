@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
+import { importarDoApp } from '@/lib/app/falhaDeVersao';
 import { toast } from 'sonner';
 import { BottomNav, TabId } from '@/components/BottomNav';
 import { Header } from '@/components/Header';
@@ -78,9 +79,9 @@ import { cn } from '@/lib/utils';
 import ImportZootHistoricoTab from './ImportZootHistoricoTab';
 import HistoricoImportacoesZootTab from './HistoricoImportacoesZootTab';
 
-const FinanciamentosListaPage = lazy(() => import('./FinanciamentosListaPage'));
-const FinanciamentoDetalhe = lazy(() => import('./FinanciamentoDetalhe'));
-const FinanciamentosPainelTab = lazy(() => import('./FinanciamentosPainelTab'));
+const FinanciamentosListaPage = lazy(() => importarDoApp(() => import('./FinanciamentosListaPage')));
+const FinanciamentoDetalhe = lazy(() => importarDoApp(() => import('./FinanciamentoDetalhe')));
+const FinanciamentosPainelTab = lazy(() => importarDoApp(() => import('./FinanciamentosPainelTab')));
 
 export interface FiltroGlobal {
   ano: string;

@@ -2,6 +2,7 @@
  * Hook for financeiro_lancamentos_v2 CRUD with pagination and filters.
  */
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { importarDoApp } from '@/lib/app/falhaDeVersao';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -456,7 +457,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
   const loadClassificacoes = useCallback(async () => {
     if (!clienteId) return;
 
-    const { loadPlanoContasCompleto, planoToClassificacoes, normalizeDividendoSubcentro } = await import('@/lib/financeiro/planoContasBuilder');
+    const { loadPlanoContasCompleto, planoToClassificacoes, normalizeDividendoSubcentro } = await importarDoApp(() => import('@/lib/financeiro/planoContasBuilder'));
     const plano = await loadPlanoContasCompleto(clienteId);
     /* ⚠ ANOTADO COMO `ClassificacaoItem[]` — PR-MESA-TRANSF-01. Sem a anotação, o TS infere
        a forma exata do `map` (com `ordem_exibicao` obrigatório) e o `push` das combinações

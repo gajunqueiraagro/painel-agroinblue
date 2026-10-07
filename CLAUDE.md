@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 07/10/2026 (PARC-CADEIA-01 passo 4, +13 em `src/components/financiamentos/gestosDoContrato.test.tsx` — 4488 depois dele; antes o
+  Baseline em 07/10/2026 (APP-VERSAO-NOVA-01, +14 em `src/lib/app/falhaDeVersao.test.tsx` — 4502 depois dele; antes o
+  PARC-CADEIA-01 passo 4, +13 em `src/components/financiamentos/gestosDoContrato.test.tsx` — 4488 depois dele; antes o
   PARC-CADEIA-01 passo 3, +11 em `src/lib/financiamentos/parcelaNoModal.test.ts` — 4475 depois dele; antes o
   PARC-CADEIA-01 passo 2, +34: `src/lib/financiamentos/cancelarParcela.test.ts` 18,
   `src/components/financiamentos/cancelarParcelaDialog.test.tsx` 10, `src/lib/financeiro/cprRetorno.test.ts` 5,
@@ -252,7 +253,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4488
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4502
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3350,6 +3351,31 @@ docs/historico/frentes-ate-2026-09-29.md.)
     TODOS os documentos do cliente a cada aviso do canal (NJ: centenas de linhas; medir se crescer) · NAO PROVADO NO NAVEGADOR: o
     Ampliado, o minimodal aberto pelo Status, o clipe por ARQUIVO anexado sem numero, e o documento que nao e' nota no modal
     (so' por teste); a janela estava em 579 de altura, nao 523.
+- ⚠ PEDACO QUE NAO CHEGA (PAGINA ABERTA ANTES DE UMA PUBLICACAO) NUNCA APARECE CRU, E TODO `import()` DINAMICO PASSA POR UM DONO
+  (APP-VERSAO-NOVA-01, Gabriel 07/10/2026, so' tela). Dono: `src/lib/app/falhaDeVersao.ts` — importado ESTATICAMENTE e sem import
+  nenhum (frase que mora em pedaco dinamico falha junto com ele). Frase: "O sistema foi atualizado depois que esta página abriu.
+  Recarregue a página (Ctrl+R) e repita." (`FRASE_VERSAO_NOVA`).
+  · TODO PEDACO SOB DEMANDA SE CARREGA ASSIM: `await importarDoApp(() => import('…'))` (e `lazy(() => importarDoApp(() => import('…')))`).
+    Pedaco que nao chega (as tres grafias do navegador + "Unable to preload CSS" do Vite, `ehFalhaDeVersao`): acende o aviso do
+    shell e RELANCA `FalhaDeVersao`, cuja mensagem ja' e' a frase — quem tem `catch` proprio escreve a frase, nunca o endereco do
+    arquivo. Qualquer outra falha passa como veio. PROIBIDO `import()` dinamico cru em `src`: preso por teste de fonte
+    (`src/lib/app/falhaDeVersao.test.tsx`, com auto-teste do detector; `import()` de TIPO e comentario nao contam).
+  · O AVISO E' DO SHELL (`AvisoVersaoNova`, `src/components/app/`, montado em `App.tsx`): ouve `vite:preloadError` e o evento do
+    dono (`app:versao-nova`); fixo no topo, acima dos modais, com X e o botao "Recarregar". ⚠ NUNCA RECARREGA SOZINHO (perderia o
+    que esta' digitado) e NAO chama `preventDefault` no evento do Vite (a falha segue para quem chamou). O X fecha; a falha
+    seguinte reacende. Medido a 1.126 x 523: 578 x 28, a frase inteira, sem corte.
+  · O PDF DA CPR DELEGA: `motivoDaFalhaDoPdf` pergunta ao dono (`ehFalhaDeVersao`) e escreve a frase DELE, identica a' de antes
+    ("O aplicativo foi atualizado… e gere o PDF de novo."); o unico import de `falhaDoPdf.ts` e' o dono.
+  · ⚠ DIVERGENCIA DO BRIEFING, MEDIDA: sao 11 `import()` dinamicos em 9 arquivos, nao 8 — `ContasPagarReceberTab`,
+    `BoitelBlocosModais`, `ImportacaoFinanceira`, `useFinanceiroV2`, `kmlParser`, `extractPdfText`, `FinanciamentoDetalhe` (sobrou:
+    o excluir de financiamento com juros), e DOIS em cada gerador de PDF (`gerarPdfCpr`, `gerarPdfAnaliseExecutivaV3`: o motor e o
+    documento). Os 3 `lazy(` estao em `src/pages/Index.tsx`, que NAO e' rota (legado); tratados mesmo assim. 14 no total.
+  ⚠ NA CPR A FALHA DO PDF APARECE DUAS VEZES, de proposito: a frase ao lado do botao e o aviso do shell (o evento do Vite dispara
+    de qualquer jeito).
+  ⚠ NAO PROVADO: a falha REAL (publicar com a pagina aberta) — no navegador so' o evento `vite:preloadError` sintetico acendeu o
+    aviso e o X o fechou sem recarregar; o clique em "Recarregar" e o aviso por cima de um modal aberto so' por teste; quem nao
+    tem `catch` (print do boitel, classificacoes do Financeiro, KMZ, PDF do extrato) mostra SO' o aviso do shell — a tela dele
+    nao escreve nada ao lado do gesto; o PDF executivo (`ExtratoGerencialTab`) nao foi aberto.
 - ⚠ CONTRATOS DE PARCELAMENTO QUE JA' QUEBRARAM: A PROPOSTA ESTA' ESCRITA E NAO FOI EXECUTADA (PARC-CADEIA-01 passo 5, 07/10/2026).
   `docs/investigacao/parc-cadeia-01-conserto.sql` — um bloco por caso, com guarda do estado medido, a simulacao da propria funcao
   em NOTICE (antes x depois) e o gesto contrario escrito; so' ids e contagens de parcelas (nenhum nome, credor ou valor). O

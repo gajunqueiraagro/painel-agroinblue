@@ -17,6 +17,7 @@
  * Frontend puro: sem RPC, sem migration, sem tabela nova.
  */
 import { motivoDaFalhaDoPdf } from '@/lib/pdf/cpr/falhaDoPdf';
+import { importarDoApp } from '@/lib/app/falhaDeVersao';
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format, parseISO } from 'date-fns';
@@ -979,7 +980,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
           : null,
         motivoSemSaldo, de: resolvedores,
       });
-      const { gerarPdfCpr } = await import('@/lib/pdf/cpr/gerarPdfCpr');
+      const { gerarPdfCpr } = await importarDoApp(() => import('@/lib/pdf/cpr/gerarPdfCpr'));
       const r = await gerarPdfCpr(modelo);
       if (r.ok === false) setRecadoExport({ erro: true, texto: r.frase });
       else if (r.aviso) setRecadoExport({ erro: false, texto: r.aviso });

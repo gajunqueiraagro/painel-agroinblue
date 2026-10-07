@@ -16,6 +16,7 @@
 // Vite ?url copia o asset pro build e devolve URL absoluta no proprio
 // dominio. Tipos do `vite/client` (vite-env.d.ts) cobrem `*?url`.
 import workerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import { importarDoApp } from '@/lib/app/falhaDeVersao';
 
 export interface PdfExtractResult {
   /** Texto concatenado de todas as paginas, separado por \n. */
@@ -43,7 +44,7 @@ function hasStr(it: unknown): it is PdfTextItem {
 }
 
 export async function extractPdfText(file: File): Promise<PdfExtractResult> {
-  const pdfjs = await import('pdfjs-dist');
+  const pdfjs = await importarDoApp(() => import('pdfjs-dist'));
   pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
 
   const buffer = await file.arrayBuffer();

@@ -5,6 +5,7 @@
  * o <Document>. Motor react-pdf carregado por import() dinâmico (bundle leve). FASE 1 = Página 1.
  */
 import { toast } from 'sonner';
+import { importarDoApp } from '@/lib/app/falhaDeVersao';
 import { serieEvolucaoRP, etapasPagamento, etapaDoDia, distribuicaoEconomica, maioresCompromissos, creditosPorOrigem, type EtapaId } from '@/lib/analise/analiseAgregacoes';
 import { carregarLogoBase64 } from '@/lib/pdf/pdfChassi';
 import { formatMoeda } from '@/lib/calculos/formatters';
@@ -207,8 +208,8 @@ async function montarEBaixar(params: ParamsPdfExecutiva): Promise<void> {
 
   // Motor react-pdf sob demanda.
   const [{ pdf }, { DocumentoAnaliseExecutiva }] = await Promise.all([
-    import('@react-pdf/renderer'),
-    import('@/lib/pdf/analise/DocumentoAnaliseExecutiva'),
+    importarDoApp(() => import('@react-pdf/renderer')),
+    importarDoApp(() => import('@/lib/pdf/analise/DocumentoAnaliseExecutiva')),
   ]);
   // Elemento React (padrão do react-pdf) — NÃO invocar como função.
   const blob = await pdf(

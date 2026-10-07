@@ -10,6 +10,7 @@ import type { ModeloCpr } from '@/lib/pdf/cpr/modeloCpr';
 export type ResultadoDoPdfCpr = { ok: true; aviso: string | null } | { ok: false; frase: string };
 
 import { motivoDaFalhaDoPdf } from '@/lib/pdf/cpr/falhaDoPdf';
+import { importarDoApp } from '@/lib/app/falhaDeVersao';
 
 /* a frase mora fora deste módulo (que se carrega por `import()`); o nome antigo continua exportado daqui */
 export { motivoDaFalhaDoPdf };
@@ -19,8 +20,8 @@ export async function montarBlobPdfCpr(modelo: ModeloCpr): Promise<Blob> {
   let logoData: string | undefined;
   try { logoData = await carregarLogoBase64(); } catch { logoData = undefined; }
   const [{ pdf }, { DocumentoCpr }] = await Promise.all([
-    import('@react-pdf/renderer'),
-    import('@/lib/pdf/cpr/DocumentoCpr'),
+    importarDoApp(() => import('@react-pdf/renderer')),
+    importarDoApp(() => import('@/lib/pdf/cpr/DocumentoCpr')),
   ]);
   return pdf(<DocumentoCpr modelo={modelo} logoData={logoData} />).toBlob();
 }
