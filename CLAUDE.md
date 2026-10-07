@@ -162,7 +162,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 07/10/2026 (PARC-CONTRATO-01 item 3, +8 em `src/components/financiamentos/documentosNaCriacao.test.tsx` — 4426 depois dele; antes o
+  Baseline em 07/10/2026 (PARC-CONTRATO-01 item 4, +4: `src/lib/financeiro/docDaLinha.test.ts` 2,
+  `src/components/financeiro-v2/finV2ColunasOC01.test.ts` 2 — 4430 depois dele; antes o
+  PARC-CONTRATO-01 item 3, +8 em `src/components/financiamentos/documentosNaCriacao.test.tsx` — 4426 depois dele; antes o
   PARC-CONTRATO-01 item 2, +14: `src/lib/financiamentos/propagarContrato.test.ts` 8,
   `src/components/financiamentos/obrigacaoEdicao.test.tsx` 6 — 4418 depois dele; antes o
   PARC-CONTRATO-01 item 1, +9: `src/lib/financiamentos/situacaoDoContrato.test.ts` 5,
@@ -245,7 +247,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4426
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4430
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3343,6 +3345,21 @@ docs/historico/frentes-ate-2026-09-29.md.)
     TODOS os documentos do cliente a cada aviso do canal (NJ: centenas de linhas; medir se crescer) · NAO PROVADO NO NAVEGADOR: o
     Ampliado, o minimodal aberto pelo Status, o clipe por ARQUIVO anexado sem numero, e o documento que nao e' nota no modal
     (so' por teste); a janela estava em 579 de altura, nao 523.
+- ⚠ NA COLUNA DOC. O TIPO GENERICO NAO LEVA PREFIXO: SO' O NUMERO (PARC-CONTRATO-01 item 4, Gabriel 07/10/2026, so' tela). No dono
+  `docDaLinha` (`src/lib/financeiro/documentoHelper.ts`): documento SEM tipo, ou com tipo sem prefixo proprio ("Outros", especie
+  "outro"), escreve so' o numero — a reserva "Doc." SAIU; "NF", "Rec.", "Bol." e "Comp." seguem com prefixo. O dono devolve tambem
+  `titulo`, o `title` da celula: no generico "Documento 109122795412"; com prefixo, o proprio rotulo; nota ligada, "NF … · nota da
+  compra". A tela nao monta `title` de documento.
+  · VALE NA LISTA, NA CPR, NO PDF E NO EXCEL PELA MESMA FUNCAO: a CPR (o "doc:" do `title` da Descricao e o `de.doc` que alimenta
+    o PDF e a coluna "Doc" do Excel) deixou de ler `documento_formatado` da view e chama `docDaLinha` com tipo e numero do
+    lancamento. ⚠ Na CPR os documentos LIGADOS nao entram (a nota da compra de uma parcela segue sem aparecer la').
+  · MEDIDO NO NJ a 1.126 x 523 (5.271 linhas, 2.927 com texto, 2.258 sem prefixo): CORTAM 46 linhas (38 textos distintos), contra
+    944 antes; a meta era 0. Por prefixo: generico 25, Bol. 8, NF 7, Rec. 6. Uteis 83px. Os maiores sao texto livre posto no campo
+    ("Formulário Casul … — pago …", 130 a 217px) e numeros de 15 a 17 digitos com prefixo ("Bol." + 17 digitos, 106px). A LARGURA
+    NAO FOI MEXIDA. Linha de 25px.
+  4 mutacoes mortas. ⚠ DIVIDA FIN-V2-DOC-CORTA-01 segue aberta, agora com 46 linhas no NJ (texto livre no campo de numero e
+    numero de 15+ digitos com prefixo) · a busca e a ordenacao por documento seguem sobre o numero cru · NAO PROVADO: CPR, PDF e
+    Excel no navegador (so' por teste de fonte; nenhum arquivo gerado), e o Ampliado.
 - ⚠ DOCUMENTOS JA' NA CRIACAO DO PARCELAMENTO: PENDENTES EM MEMORIA, GRAVADOS DEPOIS DO CONTRATO, PELOS DONOS DE SEMPRE (PARC-CONTRATO-01
   item 3, Gabriel 07/10/2026, so' tela, sem banco). "Nova obrigação" de PARCELAMENTO tem a aba Documentos (`DocumentosNaCriacao`,
   `src/components/financiamentos/`): os documentos da compra (`DocumentosPendentes`) e o boleto por parcela (`ParcelasDaCompra`,

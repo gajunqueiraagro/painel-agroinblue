@@ -61,6 +61,7 @@ import { STATUS_FILTRO_COR, STATUS_FILTRO_LABEL } from '@/lib/financeiro/statusF
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { docDaLinha } from '@/lib/financeiro/documentoHelper';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Vocabulário da tela
@@ -932,7 +933,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle }: {
     faz: (l) => codigoDaFazenda(l.fazenda_id),
     status: (l) => { const k = (l.status_transacao ?? '').toLowerCase(); return { chave: k, rotulo: STATUS_FILTRO_LABEL[k] ?? (k || '—') }; },
     origem: (l) => rotuloOrigem(l.origem_lancamento),
-    doc: (l) => ((l.numero_documento ?? '').trim() ? (l.documento_formatado ?? '') : ''),
+    doc: (l) => docDaLinha({ tipo_documento: l.tipo_documento, numero_documento: l.numero_documento }, null).rotulo,
     receber: (l) => ehReceber(l),
     parcela: (l) => parcelasDosLancamentos?.get(l.id) ?? null,
     paga: (l) => !contaEmAberto(l),
@@ -1359,8 +1360,8 @@ export function ContasPagarReceberTab({ onIntensiveToggle }: {
                     const status = (l.status_transacao ?? '').toLowerCase();
                     const fornecedor = (l.favorecido_id && nomesFornecedores.get(l.favorecido_id)) || '—';
                     const anexo = comAnexo?.has(l.id) ?? false;
-                    /* ⚠ Doc exige o guarda do `numero_documento`: sem número, `documento_formatado` degrada para o nome do TIPO. */
-                    const doc = (l.numero_documento ?? '').trim() ? (l.documento_formatado ?? '') : '';
+                    /* PARC-CONTRATO-01 item 4 — o texto do Doc é o do DONO (`docDaLinha`), o mesmo da lista de Lançamentos, do PDF e do Excel. */
+                    const doc = docDaLinha({ tipo_documento: l.tipo_documento, numero_documento: l.numero_documento }, null).rotulo;
                     /* Origem, Doc e Conta saíram da grade: moram no `title` da Descrição. */
                     const np = nomeEParcela(l.descricao, parcelasDosLancamentos?.get(l.id));
                     const seloDaParcela = np.parcela

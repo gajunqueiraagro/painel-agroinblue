@@ -2882,7 +2882,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                         </td>
                         {/* Doc. à direita: é número, e número se lê alinhado pela unidade. */}
                         <td className="celula-doc font-mono text-muted-foreground text-right px-1 py-1 align-middle text-[10px] leading-tight truncate" data-testid="celula-doc"
-                            title={doc.origem === 'nota' ? `${doc.rotulo} · nota da compra` : (doc.rotulo || undefined)}>{doc.rotulo || '-'}</td>
+                            title={doc.titulo || undefined}>{doc.rotulo || '-'}</td>
                         {/* `truncate` também aqui: a tabela é `tableLayout: fixed`, então a
                             faixa não cede — sem truncar, "Realizado" transbordaria a célula em
                             vez de a alargar. É o mesmo raciocínio do `min-w-0` da barra, do

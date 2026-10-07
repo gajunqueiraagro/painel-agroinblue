@@ -129,6 +129,16 @@ describe('passo 3 — clipe, Doc. e origem (lidos da fonte da lista)', () => {
     expect(tela).not.toContain('{formatNF(l)}</td>');
     expect(tela).not.toContain('LEGENDA_ICONES');
   });
+  it('PARC-CONTRATO-01 item 4 — o `title` da célula Doc. é o do DONO (`doc.titulo`: no genérico, "Documento N"), nunca montado na tela', () => {
+    expect(tela).toContain('title={doc.titulo || undefined}>{doc.rotulo ||');
+    expect(tela).not.toContain('· nota da compra`');
+  });
+  it('item 4 — a CPR (e por ela o PDF e o Excel) escreve o Doc pelo MESMO dono, não pelo `documento_formatado` da view', () => {
+    const cpr = readFileSync(resolve(__dirname, 'ContasPagarReceberTab.tsx'), 'utf8');
+    expect(cpr).toContain('doc: (l) => docDaLinha({ tipo_documento: l.tipo_documento, numero_documento: l.numero_documento }, null).rotulo,');
+    expect(cpr).toContain('const doc = docDaLinha({ tipo_documento: l.tipo_documento, numero_documento: l.numero_documento }, null).rotulo;');
+    expect(cpr).not.toContain('l.documento_formatado');
+  });
   it('a origem não sumiu: está no `title` do Status, e o clique no Status abre o minimodal do vínculo', () => {
     expect(tela).toContain('icone ? `origem: ${icone.significado}` : null');
     expect(tela).toContain('<button type="button" className="block w-full cursor-pointer" aria-label={`${stLabel} · origem: ${icone.significado}`}>{rotulo}</button>');

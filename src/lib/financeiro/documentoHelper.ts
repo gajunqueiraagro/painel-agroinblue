@@ -213,17 +213,27 @@ const PREFIXO_POR_ESPECIE: Readonly<Record<string, string>> = {
   nf: 'NF', nf_principal: 'NF', nf_complementar: 'NF', recibo: 'Rec.', boleto: 'Bol.', comprovante: 'Comp.',
 };
 
-/** O texto padronizado: "NF 000.000.000" · "Rec. XXX" · "Bol. XXX" · "Comp. XXX" · "Doc. XXX". Sem número: ''. */
+/** PARC-CONTRATO-01 item 4 — o tipo GENÉRICO (sem tipo, ou tipo sem prefixo próprio) não leva prefixo na coluna: só o número.
+ *  O tipo por extenso fica no `titulo` ("Documento 109122795412"). */
+const SEM_PREFIXO = '';
+
+/** O texto padronizado: "NF 000.000.000" · "Rec. XXX" · "Bol. XXX" · "Comp. XXX"; sem prefixo (o genérico), só o número. Sem número: ''. */
 export function rotuloDoDocumento(prefixo: string, numero: string | null | undefined): string {
   const n = (numero ?? '').trim();
   /* "-" (e variações) é o "vazio" que as planilhas importadas trouxeram: não é número de documento. */
   if (!n || /^[-–—]+$/.test(n)) return '';
+  if (!prefixo) return n;
   return `${prefixo} ${prefixo === 'NF' ? numeroDeNF(n) : n}`;
 }
+
+/** O `title`: com prefixo, o próprio rótulo; no genérico, "Documento N". */
+const comTipo = (prefixo: string, rotulo: string) => (rotulo && !prefixo ? `Documento ${rotulo}` : rotulo);
 
 export interface DocDaLinha {
   /** O texto da coluna Doc. ('' = sem número de documento). */
   rotulo: string;
+  /** O `title` da célula: o rótulo e, no genérico (sem prefixo), o tipo por extenso — "Documento 109122795412". '' sem número. */
+  titulo: string;
   /** De onde veio: 'lancamento' = o Nº Documento do próprio lançamento; 'nota' = a NF ligada (a da compra); 'documento' = outro documento anexado. */
   origem: 'lancamento' | 'nota' | 'documento' | null;
   /** Há documento vivo (arquivo anexado ou NF da compra ligada): a lista desenha o clipe. */
@@ -260,13 +270,21 @@ export function docDaLinha(
   const lista = vivos(docs);
   const clipe = lista.length > 0;
   const resumo = resumoDosDocumentos(lista);
-  const proprio = rotuloDoDocumento(PREFIXO_POR_TIPO[lancamento.tipo_documento ?? ''] ?? 'Doc.', lancamento.numero_documento);
-  if (proprio) return { rotulo: proprio, origem: 'lancamento', clipe, resumo };
+  const prefixoProprio = PREFIXO_POR_TIPO[lancamento.tipo_documento ?? ''] ?? SEM_PREFIXO;
+  const proprio = rotuloDoDocumento(prefixoProprio, lancamento.numero_documento);
+  if (proprio) return { rotulo: proprio, titulo: comTipo(prefixoProprio, proprio), origem: 'lancamento', clipe, resumo };
   const nota = lista.find((d) => ehNF(d) && (d.numero ?? '').trim() !== '');
-  if (nota) return { rotulo: rotuloDoDocumento('NF', nota.numero), origem: 'nota', clipe, resumo };
+  if (nota) {
+    const r = rotuloDoDocumento('NF', nota.numero);
+    return { rotulo: r, titulo: `${r} · nota da compra`, origem: 'nota', clipe, resumo };
+  }
   const outro = lista.find((d) => (d.numero ?? '').trim() !== '');
-  if (outro) return { rotulo: rotuloDoDocumento(PREFIXO_POR_ESPECIE[outro.especie ?? ''] ?? 'Doc.', outro.numero), origem: 'documento', clipe, resumo };
-  return { rotulo: '', origem: null, clipe, resumo };
+  if (outro) {
+    const prefixo = PREFIXO_POR_ESPECIE[outro.especie ?? ''] ?? SEM_PREFIXO;
+    const r = rotuloDoDocumento(prefixo, outro.numero);
+    return { rotulo: r, titulo: comTipo(prefixo, r), origem: 'documento', clipe, resumo };
+  }
+  return { rotulo: '', titulo: '', origem: null, clipe, resumo };
 }
 
 /* ── PARC-FECHA-02 item 1 — no PARCELADO o documento da compra tem UM dono ─────────────────────────────────────────────── */
