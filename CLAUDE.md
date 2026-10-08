@@ -162,7 +162,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 07/10/2026 (APP-VERSAO-NOVA-01, +14 em `src/lib/app/falhaDeVersao.test.tsx` — 4502 depois dele; antes o
+  Baseline em 08/10/2026 (FORN-SELETOR-PADRAO-01 passo 1a, +22: `src/lib/fornecedores/leitorDeFornecedores.test.ts` 14,
+  `src/hooks/useFornecedoresDoCliente.test.tsx` 8 — 4524 depois dele; antes o
+  APP-VERSAO-NOVA-01, +14 em `src/lib/app/falhaDeVersao.test.tsx` — 4502 depois dele; antes o
   PARC-CADEIA-01 passo 4, +13 em `src/components/financiamentos/gestosDoContrato.test.tsx` — 4488 depois dele; antes o
   PARC-CADEIA-01 passo 3, +11 em `src/lib/financiamentos/parcelaNoModal.test.ts` — 4475 depois dele; antes o
   PARC-CADEIA-01 passo 2, +34: `src/lib/financiamentos/cancelarParcela.test.ts` 18,
@@ -253,7 +255,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4502
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4524
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -1257,6 +1259,34 @@ preview que o cabecalho nao sai da tela ao rolar.
     NAVEGADOR: o arrasto real do Finder (so' evento sintetico), boletos e OC dentro dos modais reais, o clique abrindo o seletor
     do sistema, e os tres `@dnd-kit` com a protecao ligada (so' por teste de fonte) · OC-DOCUMENTO-XML-REAL-01: subir e abrir um
     `.xml` real na OC e na aba Documentos (homologacao do Gabriel).
+- ⚠ FORNECEDOR TEM UM LEITOR SO', POR CLIENTE (FORN-SELETOR-PADRAO-01 passo 1a, Gabriel 08/10/2026, so' tela, sem banco). Lista de
+  seletor de fornecedor / favorecido / credor / comprador sai de `useFornecedoresDoCliente(cliente, gravadoId)`
+  (`src/hooks/useFornecedoresDoCliente.ts`), em cima do leitor puro `src/lib/fornecedores/leitorDeFornecedores.ts`. PROIBIDO
+  seletor novo consultar `financeiro_fornecedores` por conta propria.
+  · O QUE ELE TRAZ: SO' ATIVOS, com `cpf_cnpj` (e as colunas de pagamento que o `FornecedorV2` ja' tinha), paginado ATE' O FIM
+    (1.000 por pagina, a primeira com o total e as demais em paralelo; sem o total, em serie ate' a pagina curta — nunca corta em
+    1.000), ordem estavel (nome, id). `ativo` nulo no banco conta como ativo.
+  · O GRAVADO QUE NAO ESTA' ENTRE OS ATIVOS vem POR ID (`gravado`, com o `ativo` real e o cliente no filtro): o campo o mostra
+    marcado "inativo" em vez de esvaziar registro antigo.
+  · CACHE POR CLIENTE, SEM VAZAR: cada cliente tem a sua entrada; o hook so' devolve o que e' do cliente pedido NAQUELE render
+    (na troca, a lista do anterior some no mesmo render; resposta atrasada de outro cliente e' descartada). Leituras simultaneas
+    do mesmo cliente sao UMA ida. Falha nao fica em cache.
+  · RELE SEM F5: quem grava no cadastro chama `notificarFornecedoresMudaram(cliente)` DEPOIS de gravar, so' no sucesso; o cache
+    daquele cliente esquece (a lista e os lidos por id), quem ouve rele, e a lista antiga fica na tela ate' a nova chegar.
+    Resposta de leitura que chega depois de um aviso (geracao velha) nao entra no cache. Avisam hoje (preso por teste de fonte,
+    com a contagem por arquivo): `FornecedorFormDialog` (salvar, reativar, mesclar, inativar, excluir), `CredorAutocomplete`
+    (criar, reativar), `AbaDocumentosOC` (criar emitente, gravar documento), `AbaCompromissosOC` (criar), `nfeConsultas`
+    (`gravarDocumentoNoCadastro`), `FinV2FornecedoresTab` (criar da pendencia), `useFinanceiroV2.criarFornecedor` e os quatro
+    "criar fornecedor" do `LancamentosTab`. Escritor novo de nome, documento ou `ativo` avisa no mesmo PR.
+  · FALHA: o hook devolve `erro` ("Não foi possível carregar os fornecedores. (motivo)") e `tentarDeNovo`; o campo escreve ao lado.
+  ⚠ NINGUEM USA O LEITOR AINDA (o passo 1b liga o Novo/Editar lancamento; os sete leitores antigos migram no PASSO 2, fatia a
+    fatia): `useFinanceiroV2`, `useOperacaoLiquidacao`, `LancamentosTab`, `FornecedorSelect`, `CredorAutocomplete`,
+    `useFinanciamentoCadastro` / `DestinacoesForm` e `MesaPareamentoModal`.
+  ⚠ DIVIDAS: FORN-LEITOR-ESCRITORES-MUDOS-01 — gravam no cadastro e NAO avisam: `useFinanceiro.ts` ~:1127 (o importador legado
+    cria fornecedor dentro do laco) e `CusteioTxtImportTab.tsx` ~:483 (so' apelido, que o leitor nao le') · as colunas de
+    pagamento vem para TODOS os ativos (NJ: 2.594 linhas x 15 colunas), como o `useFinanceiroV2` ja' fazia · o leitor nao foi
+    exercitado no navegador neste passo (nenhuma tela o chama): a consulta real, a paginacao no NJ e a releitura pelo aviso
+    ficam para a prova do 1b.
 - ⚠ O `DialogContent` RENDERIZA A 95% E FICA ASSIM (DIALOG-ZOOM-95-01): medir com `offsetWidth`, nunca com
   `getBoundingClientRect()` (erra 5 % para menos), e `fontSize: 9` aparece como 8,55px. Nao corrigido de
   proposito: mexe na animacao de todos os dialogos.

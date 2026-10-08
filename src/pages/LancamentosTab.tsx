@@ -177,6 +177,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
 import { usePeriodoUrl } from '@/v2/hooks/usePeriodoUrl';
 import { anoInteiro, dentro, mesUnico, type Periodo } from '@/v2/lib/periodo';
+import { notificarFornecedoresMudaram } from '@/hooks/useFornecedoresDoCliente';
 
 /* ⚠ QUEM ESCOLHE A PROPRIA FAZENDA. Em contexto Global, so' estes podem lancar: os
    demais herdam a fazenda do contexto, que em Global nao existe.
@@ -4884,6 +4885,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               .select('id, nome')
               .single();
             if (error) { toast.error('Erro ao salvar fornecedor'); return; }
+            notificarFornecedoresMudaram(clienteAtual.id);
             if (rec) {
               setAbateFornecedores(prev => [...prev, rec].sort((a, b) => a.nome.localeCompare(b.nome)));
               setVendaDestinoFornecedorId(rec.id);
@@ -6966,6 +6968,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             .select('id, nome')
             .single();
           if (error) { toast.error('Erro ao salvar fornecedor'); return; }
+          notificarFornecedoresMudaram(clienteAtual.id);
           if (rec) {
             setAbateFornecedores(prev => [...prev, rec].sort((a, b) => a.nome.localeCompare(b.nome)));
             setAbateFornecedorId(rec.id);
@@ -6988,6 +6991,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             .select('id, nome')
             .single();
           if (error) { toast.error('Erro ao salvar fornecedor'); return; }
+          notificarFornecedoresMudaram(clienteAtual.id);
           if (rec) {
             setAbateFornecedores(prev => [...prev, rec].sort((a, b) => a.nome.localeCompare(b.nome)));
             setCompraFornecedorId(rec.id);
@@ -7009,6 +7013,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             .select('id, nome')
             .single();
           if (error) { toast.error('Erro ao salvar fornecedor'); return; }
+          notificarFornecedoresMudaram(clienteAtual.id);
           if (rec) {
             setAbateFornecedores(prev => [...prev, rec].sort((a, b) => a.nome.localeCompare(b.nome)));
             setVendaDestinoFornecedorId(rec.id);

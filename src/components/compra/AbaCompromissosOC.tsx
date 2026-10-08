@@ -48,6 +48,7 @@ import { linhasDeDespesa, recusaNaContaCorrente, totaisDeDespesa, type LinhaDesp
    locais e nao exportados, entao outra tela nao tinha como reusar o campo — e a aba
    Documentos exibia valor cru por isso. Aqui nao ha mais copia: esta e' a unica. */
 import { CampoMoeda, brl, round2 } from '@/components/ui/campo-moeda';
+import { notificarFornecedoresMudaram } from '@/hooks/useFornecedoresDoCliente';
 
 // PR-OC-UI-FIN-VIEW / FIX-01 / FIX-01b — aba Financeiro do modelo de compromissos (Blocos A/B/C).
 //   Consome APENAS useOcCompromissos (totais/flags/modo soberanos da view; React nunca soma). Escrita
@@ -1085,6 +1086,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
       .select('id, nome')
       .single();
     if (error || !data) { toast.error('Erro ao salvar fornecedor'); return null; }
+    notificarFornecedoresMudaram(clienteId);
     try { await recarregarDados?.(); } catch { /* o registro ja existe; a lista volta no proximo refresh */ }
     toast.success(`Fornecedor "${data.nome}" criado e selecionado`);
     return data;

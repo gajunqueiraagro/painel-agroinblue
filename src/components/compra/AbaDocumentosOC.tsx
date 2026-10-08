@@ -6,6 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { DocumentosApi, EspecieDoc } from '@/hooks/useOperacaoDocumentos';
 import { DocumentoFormOC, FORM_VAZIO, ESPECIE_LABEL, brl, fmtNumeroDoc, type FormState } from './DocumentoFormOC';
+import { notificarFornecedoresMudaram } from '@/hooks/useFornecedoresDoCliente';
 
 // Aba Documentos (PR-OC-DOC-UI-01). Tela OFICIAL de consulta e manutenção completa. O cadastro/edição
 //   é o form REUTILIZÁVEL DocumentoFormOC (mesma persistência/validação usada pelo registro rápido na
@@ -51,6 +52,7 @@ export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedo
       .insert({ cliente_id: clienteId, nome, cpf_cnpj: cpfCnpj || null })
       .select('id, nome').single();
     if (error || !data) { toast.error('Erro ao salvar emitente'); return null; }
+    notificarFornecedoresMudaram(clienteId);
     try { await recarregarFornecedores?.(); } catch { /* o registro existe; a lista volta no proximo refresh */ }
     toast.success(`Emitente "${data.nome}" criado e selecionado`);
     return data;
@@ -67,6 +69,7 @@ export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedo
       .update({ cpf_cnpj: cpfCnpj })
       .eq('id', fornecedorId).eq('cliente_id', clienteId);
     if (error) { toast.error('Não foi possível gravar o documento no cadastro.'); return false; }
+    notificarFornecedoresMudaram(clienteId);
     try { await recarregarFornecedores?.(); } catch { /* gravou; a lista volta no proximo refresh */ }
     toast.success('Documento gravado no cadastro do fornecedor.');
     return true;

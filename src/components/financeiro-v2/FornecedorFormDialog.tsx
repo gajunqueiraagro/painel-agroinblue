@@ -11,6 +11,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { normalizeFornecedorNome } from '@/lib/financeiro/normalizeFornecedorNome';
+import { notificarFornecedoresMudaram } from '@/hooks/useFornecedoresDoCliente';
 
 // PR-FORNECEDOR-FAZENDA-01: fazenda é opcional. Sentinela do "— Sem fazenda —"
 // (Radix Select não aceita SelectItem com value vazio) → mapeado para null no save.
@@ -218,6 +219,7 @@ export function FornecedorFormDialog({
       toast.success('Fornecedor criado');
     }
     setSaving(false);
+    notificarFornecedoresMudaram(clienteId);   /* FORN-SELETOR-PADRAO-01: o leitor único relê */
     onClose();
     onSaved();
   }, [saving, clienteId, nome, cpfCnpj, fazendaId, ativo, editing, onClose, onSaved, allFornecedores, tipoRecebimento, pixTipoChave, pixChave, banco, agencia, conta, tipoConta, cpfCnpjPagamento, nomeFavorecido, observacaoPagamento]);
@@ -236,9 +238,10 @@ export function FornecedorFormDialog({
     }
     toast.success(`Fornecedor "${reativarTarget.nome}" reativado`);
     setReativarTarget(null);
+    notificarFornecedoresMudaram(clienteId);
     onClose();
     onSaved();
-  }, [reativarTarget, onClose, onSaved]);
+  }, [reativarTarget, onClose, onSaved, clienteId]);
 
   const handleMerge = useCallback(async (target: Fornecedor) => {
     if (!editing) return;
@@ -267,9 +270,10 @@ export function FornecedorFormDialog({
     await supabase.from('financeiro_fornecedores').update({ ativo: false }).eq('id', editing.id);
 
     toast.success(`Mesclado com "${target.nome}". Lançamentos migrados.`);
+    notificarFornecedoresMudaram(clienteId);
     onClose();
     onSaved();
-  }, [editing, onClose, onSaved]);
+  }, [editing, onClose, onSaved, clienteId]);
 
   const handleUseExisting = useCallback((target: Fornecedor) => {
     onSelectExisting?.(target);
@@ -493,6 +497,7 @@ export function FornecedorFormDialog({
                     <AlertDialogAction onClick={async () => {
                       await supabase.from('financeiro_fornecedores').update({ ativo: false }).eq('id', editing.id);
                       toast.success('Fornecedor inativado');
+                      notificarFornecedoresMudaram(clienteId);
                       onClose();
                       onSaved();
                     }}>Confirmar Inativação</AlertDialogAction>
@@ -521,6 +526,7 @@ export function FornecedorFormDialog({
                       setDeleting(false);
                       if (error) { toast.error('Erro ao excluir'); return; }
                       toast.success('Fornecedor excluído');
+                      notificarFornecedoresMudaram(clienteId);
                       onClose();
                       onSaved();
                     }}>Excluir Permanentemente</AlertDialogAction>

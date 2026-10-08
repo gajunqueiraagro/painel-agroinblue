@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { lerResolucoesDoBanco } from '@/v2/lib/importLanc/importLancamentosView';
 import { documentoFormatado, soDigitos } from '@/lib/financeiro/nfe/formatos';
 import type { UltimaClassificacao } from '@/lib/financeiro/nfe/proporLancamento';
+import { notificarFornecedoresMudaram } from '@/hooks/useFornecedoresDoCliente';
 
 /** Onde uma nota ja' esta' registrada — uma linha de `fn_documento_chave_ja_registrada`. */
 export interface OcorrenciaDaNota {
@@ -94,5 +95,7 @@ export async function gravarDocumentoNoCadastro(clienteId: string, fornecedorId:
   if (!formatado) return null;
   const { error } = await supabase.from('financeiro_fornecedores').update({ cpf_cnpj: formatado })
     .eq('id', fornecedorId).eq('cliente_id', clienteId).or('cpf_cnpj.is.null,cpf_cnpj.eq.');
-  return error ? error.message : null;
+  if (error) return error.message;
+  notificarFornecedoresMudaram(clienteId);   /* FORN-SELETOR-PADRAO-01: o documento do cadastro mudou */
+  return null;
 }

@@ -23,6 +23,7 @@ import { ChevronsUpDown, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { normalizeFornecedorNome } from '@/lib/financeiro/normalizeFornecedorNome';
 import { cn } from '@/lib/utils';
+import { notificarFornecedoresMudaram } from '@/hooks/useFornecedoresDoCliente';
 
 /* PR-PARC-04 item 5 — BUSCA NO SERVIDOR.
    ⚠ O DEFEITO QUE ISTO CORRIGE NAO ERA DE PERFORMANCE, ERA DE DADO SUMIDO. A query
@@ -183,6 +184,7 @@ export function CredorAutocomplete({ value, onChange, clienteId, placeholder = '
     }
     if (data) {
       invalidarCredores();
+      notificarFornecedoresMudaram(clienteId);
       onChange(data.id);
       toast.success('Credor criado');
       setNovoOpen(false);
@@ -204,6 +206,7 @@ export function CredorAutocomplete({ value, onChange, clienteId, placeholder = '
       return;
     }
     invalidarCredores();
+    notificarFornecedoresMudaram(clienteId);
     onChange(reativarTarget.id);
     toast.success(`Fornecedor "${reativarTarget.nome}" reativado e selecionado`);
     setReativarTarget(null);

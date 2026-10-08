@@ -12,6 +12,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Plus, Pencil, Search, Link2, AlertTriangle } from 'lucide-react';
 import { FornecedorFormDialog } from '@/components/financeiro-v2/FornecedorFormDialog';
 import { toast } from 'sonner';
+import { notificarFornecedoresMudaram } from '@/hooks/useFornecedoresDoCliente';
 
 interface Fornecedor {
   id: string;
@@ -194,6 +195,7 @@ export function FinV2FornecedoresTab() {
         toast.error('Erro ao criar fornecedor');
         return;
       }
+      notificarFornecedoresMudaram(clienteAtual.id);
       await linkToFornecedor(pending, data.id);
       load();
     } finally {

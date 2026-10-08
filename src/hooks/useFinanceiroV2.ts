@@ -47,6 +47,7 @@ export type { FiltrosV2, DimensaoDataFinanceiro } from '@/lib/financeiro/filtros
 import type { FiltrosV2, DimensaoDataFinanceiro } from '@/lib/financeiro/filtrosBaseV2';
 import { paginarTudo } from '@/lib/financeiro/paginarTudo';
 import { colunasDoValorDoMes, type PedidoDoValorDoMes } from '@/lib/financeiro/valorDoMes';
+import { notificarFornecedoresMudaram } from '@/hooks/useFornecedoresDoCliente';
 
 
 export interface LancamentoV2 {
@@ -450,6 +451,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       return null;
     }
     setFornecedores(prev => [...prev, data as FornecedorV2]);
+    notificarFornecedoresMudaram(clienteId);   /* FORN-SELETOR-PADRAO-01: o leitor único relê */
     toast.success('Fornecedor criado');
     return data as FornecedorV2;
   }, [clienteId]);
