@@ -173,7 +173,11 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
     if (el) el.scrollIntoView({ block: 'nearest' });
   }, [highlight]);
 
+  /* ⚠ LISTA FECHADA NAO ESCOLHE (MENU-CLIQUE-FECHANDO-01): ao fechar, a lista continua no DOM enquanto roda a animacao de saida
+     (150 ms; numa aba oculta, indefinidamente). Um segundo clique no mesmo lugar trocava o fornecedor escolhido. A primeira
+     trava e' do primitivo (conteudo fechado nao recebe clique); esta e' a segunda: nenhum gesto da lista vale com ela fechada. */
   const handleSelect = (fId: string) => {
+    if (!open) return;
     onChange(fId);
     setOpen(false);
     onSearchChange('');
@@ -182,6 +186,7 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
   };
 
   const handleLimpar = () => {
+    if (!open) return;
     onChange('');
     setOpen(false);
     onSearchChange('');
@@ -303,7 +308,7 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
             {acaoFinal && (
               <button type="button" data-testid="favorecido-acao-final"
                 className={cn("flex w-full cursor-pointer select-none items-center border-t border-zinc-500/40 outline-none", MENU_ITEM, MENU_REALCE_HOVER)}
-                onClick={() => { setOpen(false); onSearchChange(''); acaoFinal.onSelect(); }}>
+                onClick={() => { if (!open) return; setOpen(false); onSearchChange(''); acaoFinal.onSelect(); }}>
                 <Plus className="mr-2 h-3.5 w-3.5 shrink-0" />
                 <span className="truncate" title={acaoFinal.label}>{acaoFinal.label}</span>
               </button>

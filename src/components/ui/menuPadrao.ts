@@ -47,3 +47,20 @@ export const MENU_VAZIO = 'text-[9.5px] text-zinc-200';
 
 /** O campo de busca dentro do menu: fundo zinc-700, texto branco, placeholder zinc-300, 9,5px. */
 export const MENU_BUSCA = 'bg-zinc-700 text-[9.5px] text-white placeholder:text-zinc-300';
+
+/**
+ * MENU FECHADO NAO ACEITA CLIQUE — MENU-CLIQUE-FECHANDO-01 (Gabriel, 08/10/2026).
+ *
+ * Ao fechar, o conteudo de um menu ou de uma lista continua no DOM com `data-state="closed"` enquanto roda a animacao de saida
+ * (150 ms; numa aba oculta a animacao nao anda e ele fica la' indefinidamente). Um segundo clique no mesmo lugar disparava outro
+ * item. Regra de produto: nenhum gesto acontece por clique em coisa que o operador ja' nao esta' vendo.
+ *
+ * DUAS TRAVAS: (1) a classe `data-[state=closed]:!pointer-events-none`, ESCRITA POR EXTENSO em cada primitivo (com `!` porque o
+ * Radix poe `pointer-events: auto` inline no conteudo quando ha' um modal por baixo, e inline vence classe comum); (2) esta
+ * funcao, para o item que quer recusar o gesto em codigo — e' a que o teste em jsdom consegue provar (o jsdom nao aplica CSS ao
+ * clique sintetico).
+ */
+export function conteudoFechado(el: Element | null): boolean {
+  return el?.closest('[data-state][role="menu"], [data-state][role="dialog"]')?.getAttribute('data-state') === 'closed';
+}
+

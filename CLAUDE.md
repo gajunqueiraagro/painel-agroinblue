@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 08/10/2026 (APP-SEM-TRADUCAO-01, +5 em `src/lib/app/semTraducao.test.ts` — 4619 depois dele; antes a
+  Baseline em 08/10/2026 (MENU-CLIQUE-FECHANDO-01, +14 em `src/components/ui/menuFechadoSemClique.test.tsx` — 4633 depois dele; antes o
+  APP-SEM-TRADUCAO-01, +5 em `src/lib/app/semTraducao.test.ts` — 4619 depois dele; antes a
   FORN-SELETOR-PADRAO-01 fatia 2b, +20: `src/components/shared/favorecidoSelectDono.test.tsx` 16,
   `src/components/compra/documentoFormEmitente.test.tsx` 4 — 4614 depois dele; antes o
   FORN-SELETOR-PADRAO-01 conserto 2a-fix1, +7: `src/components/shared/favorecidoSelectDono.test.tsx` 3,
@@ -265,7 +266,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4619
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4633
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -1269,6 +1270,60 @@ preview que o cabecalho nao sai da tela ao rolar.
     NAVEGADOR: o arrasto real do Finder (so' evento sintetico), boletos e OC dentro dos modais reais, o clique abrindo o seletor
     do sistema, e os tres `@dnd-kit` com a protecao ligada (so' por teste de fonte) · OC-DOCUMENTO-XML-REAL-01: subir e abrir um
     `.xml` real na OC e na aba Documentos (homologacao do Gabriel).
+- ⚠ LISTA OU MENU FECHANDO NAO ACEITA CLIQUE (MENU-CLIQUE-FECHANDO-01, Gabriel 08/10/2026, so' tela). Regra de produto: NENHUM GESTO
+  ACONTECE POR CLIQUE EM COISA QUE O OPERADOR JA' NAO ESTA' VENDO. Ao fechar, o conteudo do Radix continua no DOM com
+  `data-state="closed"` enquanto roda o `animate-out` (150 ms; numa aba OCULTA a animacao nao anda e ele fica la' indefinidamente),
+  e aceitava clique: um segundo clique no mesmo lugar trocava o fornecedor escolhido ou disparava o segundo item do "⋯".
+  · PRIMEIRA TRAVA, NO PRIMITIVO: a classe `data-[state=closed]:!pointer-events-none`, ESCRITA POR EXTENSO (nunca montada em tempo
+    de execucao) no conteudo de `popover.tsx` (1), `dropdown-menu.tsx` (2: conteudo e submenu), `context-menu.tsx` (2),
+    `menubar.tsx` (2) e `hover-card.tsx` (1). ⚠ O "!" NAO E' ENFEITE: dentro de um Dialog o Radix poe `pointer-events: auto`
+    INLINE no conteudo da lista (medido no Novo lançamento), e inline vence classe comum; com o "!" o computado e' `none`.
+    Alcanca de uma vez tudo o que usa o `PopoverContent` da casa: seletor de fornecedor, `SearchableSelect`, `DatePicker`,
+    seletor do plano e os demais combobox.
+  · SEGUNDA TRAVA, EM CODIGO (a que o jsdom prova — ele nao aplica CSS ao clique sintetico): no `FavorecidoSelect` os tres gestos
+    da lista (`handleSelect`, que tambem serve o Enter da busca; `handleLimpar`; a acao do pe') comecam com `if (!open) return;`;
+    no `DropdownMenu`, `Item`, `CheckboxItem` e `RadioItem` passam o `onClick` por `recusarSeFechado` (impede o clique, e o Radix
+    so' chama o `onSelect` de clique nao impedido). Quem responde "este conteudo ja' fechou?" e' `conteudoFechado(el)`
+    (`src/components/ui/menuPadrao.ts`). A animacao de saida nao mudou; nada muda de tamanho nem de posicao.
+  · PARA ONDE VAI O SEGUNDO CLIQUE: para o que esta' EMBAIXO. Medido: sob a lista do fornecedor no Novo lançamento estava o campo
+    Subcentro — o clique abriu a lista dele (nao grava); sob o "⋯" da lista de Lançamentos, depois de "Editar", estava o texto do
+    resumo do modal ja' aberto — nada aconteceu. ⚠ NAO VARRIDO tela a tela: onde houver botao que GRAVA sob uma lista, o segundo
+    clique o alcanca como alcancaria com a lista ja' fora do DOM (e' o clique duplo de sempre, nao um gesto escondido).
+  · INVENTARIO DO PASSO 0 (sondagem: o primitivo montado com a animacao de saida simulada; "dispara" = o segundo clique chamou o
+    handler com o conteudo em `closed`):
+        componente (arquivo:linha)                saida     usado em   dispara fechando?
+        Popover (`popover.tsx:20`)                150 ms    19         SIM -> consertado
+        DropdownMenu (`dropdown-menu.tsx:52,71`)  150 ms    14         SIM (item e submenu) -> consertado
+        ContextMenu (`context-menu.tsx:47,63`)    150 ms    0          SIM -> classe (sem uso no sistema)
+        Menubar (`menubar.tsx:72,91`)             150 ms*   0          SIM -> classe (sem uso; *o conteudo principal nao tem `animate-out`)
+        HoverCard (`hover-card.tsx:19`)           150 ms    0          SIM -> classe (sem uso)
+        Tooltip (`tooltip.tsx:20`)                150 ms    28         nao se aplica (sem conteudo clicavel)
+        Select (`select.tsx:89`)                  —         143        NAO (o Radix Select nao tem `Presence`: sai do DOM na hora)
+        SearchableSelect                          —         12         NAO (a lista sai do DOM ao fechar)
+        Command (dentro de Popover)               a do Popover 9       coberto pelo Popover
+        NavigationMenu, Accordion, Sidebar, Drawer —        0          nao sondados (sem uso no sistema)
+        Dialog (`dialog.tsx:22,50`)               200 ms    145        SIM — NAO CONSERTADO (ver divida)
+        AlertDialog (`alert-dialog.tsx:19,37`)    200 ms    42         SIM — NAO CONSERTADO
+        Sheet (`sheet.tsx:22,32`)                 300 ms    10         SIM — NAO CONSERTADO
+  PROVA NO NAVEGADOR (cliente Teste, 08/10, aba em SEGUNDO PLANO — o caso em que a janela nao fechava nunca; 8 fornecedores
+  sinteticos criados e APAGADOS; nada gravado): Novo lançamento, lista do fornecedor fechada e ainda no DOM (`closed`), inline
+  `auto`, computado `none`; o ponto onde estava a 5ª opcao devolve o campo Subcentro (`elementFromPoint`) e o clique REAL do mouse
+  ali abriu o Subcentro — o fornecedor ficou "SINT FORN Repetido · 123.456.789-09". Menu "⋯" da lista: "Editar" abriu o modal, o
+  menu ficou `closed` no DOM, o ponto do "Duplicar" devolve o texto do modal e o clique real nao duplicou nada.
+  Testes: `src/components/ui/menuFechadoSemClique.test.tsx` (14: gesto com a saida simulada, `conteudoFechado`, e a FONTE dos
+  primitivos com auto-teste do detector — recusa a regra sem o "!" e montada em pedacos). 12 mutacoes mortas, uma por trava.
+  ⚠ DIVIDA DIALOG-CLIQUE-FECHANDO-01 (medida, NAO consertada — conserto de outro tamanho, texto proprio): em `Dialog`,
+    `AlertDialog` e `Sheet` o botao continua clicavel durante o fechamento (200–300 ms; indefinidamente em aba oculta). Na
+    sondagem, o segundo clique num "Salvar" de `Dialog`/`Sheet` e num `AlertDialogAction` ("Excluir") chamou o handler DE NOVO
+    com o conteudo ja' em `closed`. Se isso grava em dobro depende de cada tela ter a propria guarda (botao desabilitado
+    enquanto salva) — NAO auditado tela a tela. Efeito colateral visto na prova: em aba oculta o modal fechado fica no DOM com
+    a cortina por cima e a pagina nao recebe clique ate' recarregar.
+  ⚠ NAO PROVADO NO NAVEGADOR: a aba em PRIMEIRO PLANO com o segundo clique dentro dos 150 ms (a janela que a extensao abre fica
+    em segundo plano; a aba oculta e' o caso mais largo do mesmo defeito) · o menu "⋯" ANTES do conserto falhando no navegador
+    (no caso provado o Radix ja' punha `pointer-events: none` inline, porque um modal abriu por cima; o defeito do menu esta'
+    provado pela sondagem e pelo teste) · `DatePicker`, seletor do plano, `ContextMenu`, `Menubar` e `HoverCard` na tela.
+  ⚠ DOIS CLIQUES POR SCRIPT NO MESMO INSTANTE (antes de o React redesenhar) ainda escolhem duas vezes: a lista esta' ABERTA nos
+    dois. Nao e' gesto de pessoa (dois cliques fisicos nao cabem no mesmo quadro); registrado para nao confundir prova futura.
 - ⚠ A PAGINA SE DECLARA EM PORTUGUES DO BRASIL E NAO SE TRADUZ (APP-SEM-TRADUCAO-01, Gabriel 08/10/2026, so' tela). `index.html`:
   `<html lang="pt-BR" translate="no">` + `<meta name="google" content="notranslate">`; `public/site.webmanifest`: `"lang": "pt-BR"`.
   PROIBIDO tirar qualquer uma das tres marcas ou trocar o idioma da pagina em tempo de execucao — preso por
@@ -1288,12 +1343,8 @@ preview que o cabecalho nao sai da tela ao rolar.
   · Nenhuma foto e nenhum snapshot mudou.
   ⚠ NAO PROVADO: o balao do tradutor em si (depende do Chrome de cada pessoa — quem ja' tem "traduzir sempre" ligado para o site
     precisa desligar) e a pagina ja' aberta antes da publicacao (so' muda ao recarregar).
-  ⚠ DIVIDA MENU-CLIQUE-FECHANDO-01 (medida no mesmo dia, SEM conserto — aguarda texto do Gabriel): a lista do `FavorecidoSelect`
-    fica no DOM com `data-state="closed"` enquanto roda o `animate-out` do `PopoverContent` (150 ms; numa aba OCULTA a animacao
-    nao anda e ela fica indefinidamente) e a opcao aceita clique: `onClick={() => handleSelect(o.f.id)}` nao olha `open`, e nada
-    poe `pointer-events: none` no estado fechado. Teste que simula a animacao de saida FALHA com o codigo de hoje (o valor muda
-    de 'b' para 'c'); o `DropdownMenu` da casa tem o mesmo comportamento; o `SearchableSelect` nao (a lista sai do DOM ao
-    fechar); o `Select` do Radix nao anima a saida. O teste NAO foi commitado (fica vermelho ate' o conserto).
+  [A divida MENU-CLIQUE-FECHANDO-01, medida neste passo, FECHOU no commit seguinte — ver a regra "LISTA OU MENU FECHANDO NAO
+    ACEITA CLIQUE", acima.]
 - ⚠ FORNECEDOR NA OC: OS OITO PONTOS USAM O DONO PELO LEITOR UNICO (FORN-SELETOR-PADRAO-01 fatia 2b, Gabriel 08/10/2026, so' tela).
   ⚠ REGRA DAS FATIAS (Gabriel, 08/10): NAO ALARGAR NEM ESTREITAR O CONJUNTO QUE CADA TELA OFERECIA SEM REPORTAR ANTES DE MUDAR; lista
     restrita (tipo, papel, credor, sugestoes) se mantem pela prop de opcoes restritas do dono (ainda nao existe: nenhum ponto ate'

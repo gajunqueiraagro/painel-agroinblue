@@ -5,6 +5,7 @@ import { Check, ChevronRight, Circle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   MENU_ITEM, MENU_PALETA, MENU_REALCE_ABERTO, MENU_REALCE_FOCO, MENU_ROTULO, MENU_SECUNDARIO,
+  conteudoFechado,
 } from "@/components/ui/menuPadrao";
 
 const DropdownMenu = DropdownMenuPrimitive.Root;
@@ -49,7 +50,7 @@ const DropdownMenuSubContent = React.forwardRef<
   <DropdownMenuPrimitive.SubContent
     ref={ref}
     className={cn(
-      "z-50 min-w-[8rem] overflow-hidden rounded-md border p-1 shadow-lg data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+      "z-50 min-w-[8rem] overflow-hidden rounded-md border p-1 shadow-lg data-[state=closed]:!pointer-events-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
       MENU_PALETA,
       className,
     )}
@@ -68,7 +69,7 @@ const DropdownMenuContent = React.forwardRef<
       sideOffset={sideOffset}
       className={cn(
         /* ⚠ A PALETA E A MEDIDA DO ITEM SÃO AS DO PADRÃO (`menuPadrao.ts`, UI-DROPDOWN-PADRAO-01): opaca e 20px / 9,5px (fix1). */
-        "z-50 min-w-[8rem] overflow-hidden rounded-md border p-1 shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+        "z-50 min-w-[8rem] overflow-hidden rounded-md border p-1 shadow-md data-[state=closed]:!pointer-events-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
         MENU_PALETA,
         className,
       )}
@@ -78,14 +79,24 @@ const DropdownMenuContent = React.forwardRef<
 ));
 DropdownMenuContent.displayName = DropdownMenuPrimitive.Content.displayName;
 
+/* MENU-CLIQUE-FECHANDO-01 — a segunda trava do item: com o menu fechado (ainda no DOM, saindo), o clique nao chega ao `onClick`
+   do hospedeiro nem ao `onSelect` (o Radix so' seleciona se o clique nao foi impedido). A primeira trava e' a classe do conteudo. */
+function recusarSeFechado(onClick?: React.MouseEventHandler<HTMLDivElement>): React.MouseEventHandler<HTMLDivElement> {
+  return (e) => {
+    if (conteudoFechado(e.currentTarget)) { e.preventDefault(); return; }
+    onClick?.(e);
+  };
+}
+
 const DropdownMenuItem = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Item>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Item> & {
     inset?: boolean;
   }
->(({ className, inset, ...props }, ref) => (
+>(({ className, inset, onClick, ...props }, ref) => (
   <DropdownMenuPrimitive.Item
     ref={ref}
+    onClick={recusarSeFechado(onClick)}
     className={cn(
       "relative flex cursor-default select-none items-center rounded-sm gap-1.5 overflow-hidden text-ellipsis whitespace-nowrap",
       MENU_ITEM,
@@ -102,9 +113,10 @@ DropdownMenuItem.displayName = DropdownMenuPrimitive.Item.displayName;
 const DropdownMenuCheckboxItem = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.CheckboxItem>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.CheckboxItem>
->(({ className, children, checked, ...props }, ref) => (
+>(({ className, children, checked, onClick, ...props }, ref) => (
   <DropdownMenuPrimitive.CheckboxItem
     ref={ref}
+    onClick={recusarSeFechado(onClick)}
     className={cn(
       "relative flex cursor-default select-none items-center rounded-sm overflow-hidden text-ellipsis whitespace-nowrap",
       MENU_ITEM,
@@ -128,9 +140,10 @@ DropdownMenuCheckboxItem.displayName = DropdownMenuPrimitive.CheckboxItem.displa
 const DropdownMenuRadioItem = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.RadioItem>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.RadioItem>
->(({ className, children, ...props }, ref) => (
+>(({ className, children, onClick, ...props }, ref) => (
   <DropdownMenuPrimitive.RadioItem
     ref={ref}
+    onClick={recusarSeFechado(onClick)}
     className={cn(
       "relative flex cursor-default select-none items-center rounded-sm overflow-hidden text-ellipsis whitespace-nowrap",
       MENU_ITEM,
