@@ -190,7 +190,6 @@ export function ContratosTab() {
         fazendas={fazendas}
         contas={contas}
         classificacoes={classificacoes}
-        fornecedores={fornecedores}
         defaultFazendaId={defaultFazendaId}
       />
     </div>

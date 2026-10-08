@@ -17,6 +17,8 @@ import { DocumentosPendentes } from '@/components/financeiro-v2/DocumentosPenden
 import {
   daConfronto, confrontoDasDuasOrigens, type LancDocumento, type LancamentoDocumentosApi, type Confronto,
 } from '@/hooks/useLancamentoDocumentos';
+/* FORN-SELETOR-PADRAO-01 fatia 2a — o emitente lê do leitor único (de mentira no teste) */
+vi.mock('@/hooks/useFornecedoresDoCliente', async () => (await import('@/test/leitorDeFornecedoresFake')).moduloDoLeitorFake());
 
 const doc = (x: Partial<LancDocumento>): LancDocumento => ({
   id: 'd', origem: 'lancamento', operacaoId: null, especie: 'nf', especieOC: null, nome: 'nf', numero: null, serie: null,
@@ -34,7 +36,7 @@ function api(confronto: Confronto | null, cancelar = vi.fn().mockResolvedValue(t
   };
 }
 const monta = (a: LancamentoDocumentosApi, onAnexar?: () => void) => render(
-  <MemoryRouter><AbaDocumentosLancamento api={a} fornecedores={[]} onAnexarBoletosDasParcelas={onAnexar} /></MemoryRouter>);
+  <MemoryRouter><AbaDocumentosLancamento api={a} clienteId="cli" onAnexarBoletosDasParcelas={onAnexar} /></MemoryRouter>);
 
 describe('tela C — a NF da compra dentro de uma parcela', () => {
   it('selo "8 parcelas" na NF; a NF não tem cancelar no cartão; o boleto tem', () => {
@@ -116,7 +118,7 @@ describe('UX-TOAST-01 — o formulário do documento não usa toast para recusa'
   it('arquivo em formato errado é recusado NA ÁREA ao escolher, e nenhum toast.error', async () => {
     toastErro.mockClear();
     let lista: import('@/lib/financeiro/documentosPendentes').DocumentoPendente[] = [];
-    render(<DocumentosPendentes pendentes={lista} onMudar={f => { lista = f(lista); }} fornecedores={[]} />);
+    render(<DocumentosPendentes pendentes={lista} onMudar={f => { lista = f(lista); }} clienteId="cli" />);
     fireEvent.click(screen.getByText('Adicionar documento'));
     const input = document.querySelector('input[type="file"]');
     if (!input) throw new Error('input de arquivo não achado');

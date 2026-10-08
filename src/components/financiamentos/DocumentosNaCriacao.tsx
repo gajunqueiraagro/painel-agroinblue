@@ -26,8 +26,8 @@ interface Props {
   onMudar: (f: (l: DocumentoPendente[]) => DocumentoPendente[]) => void;
   /** as parcelas que o contrato VAI criar (a prévia mensal ou a lista livre); vazia = a grade escreve o motivo */
   parcelas: readonly ParcelaPrevistaLinha[];
-  /** o credor escolhido no contrato: é o emitente oferecido no formulário do documento */
-  credor: { id: string; nome: string } | null;
+  /** FORN-SELETOR-PADRAO-01 fatia 2a — o emitente do documento se escolhe entre os fornecedores ATIVOS do cliente (leitor único) */
+  clienteId: string | null;
   /** depois do Salvar (contrato gravado, documento que falhou): nada mais se edita aqui */
   travado: boolean;
   /** a nota lida do XML, com o arquivo pronto para o bucket — quem preenche o contrato é o diálogo */
@@ -44,7 +44,7 @@ function verArquivo(arquivo: File | null) {
   window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
-export function DocumentosNaCriacao({ pendentes, onMudar, parcelas, credor, travado, onNotaDoXml, recadoDoXml }: Props) {
+export function DocumentosNaCriacao({ pendentes, onMudar, parcelas, clienteId, travado, onNotaDoXml, recadoDoXml }: Props) {
   const [recusaXml, setRecusaXml] = useState<string | null>(null);
   const [anexarVarios, setAnexarVarios] = useState(false);
   const n = parcelas.length;
@@ -72,7 +72,7 @@ export function DocumentosNaCriacao({ pendentes, onMudar, parcelas, credor, trav
       <div className="shrink-0">
         <DocumentosPendentes pendentes={daCompra}
           onMudar={f => onMudar(l => [...f(l.filter(p => p.parcela == null)), ...l.filter(p => p.parcela != null)])}
-          fornecedores={credor ? [{ id: credor.id, nome: credor.nome }] : []}
+          clienteId={clienteId}
           ligadoA={n} travado={travado} />
       </div>
       {/* VER antes de salvar: lugar fixo de 16px (existe mesmo vazio) com os arquivos dos documentos da compra */}

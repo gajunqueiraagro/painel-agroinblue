@@ -15,6 +15,9 @@ vi.mock('@/integrations/supabase/client', () => ({ supabase: { rpc: vi.fn(), fro
 import { AbaDocumentosLancamento, FormDocumento, CAMPOS_POR_ESPECIE, type SugestaoDocumento } from '@/components/financeiro-v2/AbaDocumentosLancamento';
 import { MemoryRouter } from 'react-router-dom';
 import { ESPECIES_LANC_DOC, type LancDocumento, type LancDocPayload, type LancamentoDocumentosApi } from '@/hooks/useLancamentoDocumentos';
+import { definirFornecedoresDoLeitor } from '@/test/leitorDeFornecedoresFake';
+/* FORN-SELETOR-PADRAO-01 fatia 2a — o emitente lê do leitor único (de mentira no teste) */
+vi.mock('@/hooks/useFornecedoresDoCliente', async () => (await import('@/test/leitorDeFornecedoresFake')).moduloDoLeitorFake());
 
 const FORNECEDORES = [
   { id: 'pan', nome: 'Comercial Pantanal de Rio Verde Ltda' },
@@ -37,7 +40,7 @@ function monta(p: { documento?: LancDocumento | null; sugestao?: SugestaoDocumen
     registrar, editar, cancelar: vi.fn().mockResolvedValue(true), anexar: vi.fn(), urlAssinada: vi.fn(), recarregar: vi.fn(),
   };
   const onFechar = vi.fn();
-  render(<FormDocumento api={api} documento={p.documento ?? null} fornecedores={FORNECEDORES} onFechar={onFechar}
+  render(<FormDocumento api={api} documento={p.documento ?? null} clienteId="cli" onFechar={onFechar}
     sugestao={p.sugestao} semBoleto={p.semBoleto} />);
   return { registrar, editar, onFechar };
 }
@@ -47,6 +50,7 @@ const rotulos = () => [...document.querySelectorAll('[role="dialog"] label')].ma
 const salvar = () => fireEvent.click(screen.getByRole('button', { name: /Registrar documento|Salvar documento/ }));
 
 beforeEach(() => {
+  definirFornecedoresDoLeitor(FORNECEDORES);
   Element.prototype.scrollIntoView = () => {};
   Element.prototype.hasPointerCapture = () => false;
   Element.prototype.releasePointerCapture = () => {};
@@ -162,34 +166,39 @@ describe('Comprovante: sem emitente, e a data sugerida é a do PAGAMENTO', () =>
   });
 });
 
-describe('emitente com busca', () => {
-  const abrir = () => fireEvent.click(within(screen.getByTestId('doc-emitente')).getByRole('button'));
-  const painel = () => screen.getByTestId('searchable-select-painel');
-  const nomesNaLista = () => within(painel()).getAllByRole('button').map(b => b.textContent);
-  it('abre com os fornecedores, SEM "Todos", e "Outro (informar…)" no rodapé; digitar filtra', () => {
+describe('emitente com busca — o DONO do seletor de fornecedor (FORN-SELETOR-PADRAO-01 fatia 2a)', () => {
+  const campo = () => within(screen.getByTestId('doc-emitente')).getByRole('combobox');
+  const abrir = () => fireEvent.click(campo());
+  const nomesNaLista = () => screen.queryAllByTestId('favorecido-opcao').map(o => o.querySelector('span')?.textContent);
+  const buscar = (q: string) => fireEvent.change(screen.getByPlaceholderText('Buscar por nome ou CNPJ/CPF...'), { target: { value: q } });
+  it('abre com os fornecedores e "Outro (informar…)" como ação fixa no pé da lista; digitar filtra', () => {
     monta();
-    expect(within(screen.getByTestId('doc-emitente')).getByRole('button').textContent).toBe('Selecione');
+    expect(campo().textContent).toBe('Selecione');
     abrir();
-    expect(nomesNaLista()).toEqual([...FORNECEDORES.map(f => f.nome), 'Outro (informar nome e CNPJ/CPF)']);
-    const busca = within(painel()).getByPlaceholderText('Digite para buscar…');
-    fireEvent.change(busca, { target: { value: 'pant' } });
-    expect(nomesNaLista()).toEqual(['Comercial Pantanal de Rio Verde Ltda', 'Outro (informar nome e CNPJ/CPF)']);
+    expect(nomesNaLista()).toEqual(FORNECEDORES.map(f => f.nome));
+    const outro = screen.getByTestId('favorecido-acao-final');
+    expect(outro.textContent).toBe('Outro (informar nome e CNPJ/CPF)');
+    expect(screen.getByTestId('favorecido-lista').contains(outro)).toBe(false);   /* fora da rolagem */
+    buscar('pant');
+    expect(nomesNaLista()).toEqual(['Comercial Pantanal de Rio Verde Ltda']);
+    expect(screen.getByTestId('favorecido-acao-final')).toBeInTheDocument();      /* a ação fica mesmo com a busca */
   });
   it('escolher um fornecedor grava emitenteId e o nome', async () => {
     const { registrar } = monta();
     abrir();
-    fireEvent.change(within(painel()).getByPlaceholderText('Digite para buscar…'), { target: { value: 'cleo' } });
-    fireEvent.click(within(painel()).getByText('Cleodir Supermercados Eireli-EPP'));
-    expect(within(screen.getByTestId('doc-emitente')).getByRole('button').textContent).toBe('Cleodir Supermercados Eireli-EPP');
+    buscar('cleo');
+    fireEvent.click(screen.getByText('Cleodir Supermercados Eireli-EPP'));
+    expect(campo().textContent).toBe('Cleodir Supermercados Eireli-EPP');
     salvar();
     await waitFor(() => expect(registrar).toHaveBeenCalledTimes(1));
     expect(registrar.mock.calls[0][0]).toMatchObject({ emitenteId: 'cle', emitenteNome: 'Cleodir Supermercados Eireli-EPP', emitenteDocumento: null });
   });
-  it('"Outro" abre Nome e CNPJ/CPF e grava os dois, sem emitenteId', async () => {
+  it('"Outro" abre Nome e CNPJ/CPF, o campo diz "Outro (…)", e grava os dois, sem emitenteId', async () => {
     const { registrar } = monta({ sugestao: SUGESTAO });
     expect(screen.queryByTestId('doc-emitente-nome')).toBeNull();
     abrir();
-    fireEvent.click(within(painel()).getByText('Outro (informar nome e CNPJ/CPF)'));
+    fireEvent.click(screen.getByTestId('favorecido-acao-final'));
+    expect(campo().textContent).toBe('Outro (informar nome e CNPJ/CPF)');
     fireEvent.change(screen.getByTestId('doc-emitente-nome'), { target: { value: 'Borracharia do Zé' } });
     fireEvent.change(screen.getByTestId('doc-emitente-documento'), { target: { value: '123.456.789-00' } });
     salvar();
@@ -198,9 +207,18 @@ describe('emitente com busca', () => {
   });
   it('emitente sugerido pelo lançamento: nome no campo, marcado em âmbar', () => {
     monta({ sugestao: SUGESTAO });
-    const campo = screen.getByTestId('doc-emitente');
-    expect(within(campo).getByRole('button').textContent).toBe('Comercial Pantanal de Rio Verde Ltda');
-    expect(campo.querySelector('.relative')?.className).toContain('[&>button]:bg-amber-50');
+    expect(campo().textContent).toBe('Comercial Pantanal de Rio Verde Ltda');
+    expect(campo().className).toContain('bg-amber-50');
+    expect(campo().className).toContain('border-amber-300');
+  });
+  it('o campo é opcional: "— nenhum —" esvazia o emitente', async () => {
+    const { registrar } = monta({ sugestao: SUGESTAO });
+    abrir();
+    fireEvent.click(screen.getByText('— nenhum —'));
+    expect(campo().textContent).toBe('Selecione');
+    salvar();
+    await waitFor(() => expect(registrar).toHaveBeenCalledTimes(1));
+    expect(registrar.mock.calls[0][0]).toMatchObject({ emitenteId: null, emitenteNome: null });
   });
 });
 
@@ -257,7 +275,7 @@ describe('a sugestão também no lançamento JÁ SALVO (a aba Documentos entrega
       registrar, editar: vi.fn().mockResolvedValue(true), cancelar: vi.fn().mockResolvedValue(true),
       anexar: vi.fn(), urlAssinada: vi.fn(), recarregar: vi.fn(),
     };
-    render(<MemoryRouter><AbaDocumentosLancamento api={api} fornecedores={FORNECEDORES} sugestao={sugestao} /></MemoryRouter>);
+    render(<MemoryRouter><AbaDocumentosLancamento api={api} clienteId="cli" sugestao={sugestao} /></MemoryRouter>);
     return { registrar };
   }
   it('lançamento realizado → Novo documento → Comprovante: data de pagamento e valor do lançamento, com a faixa âmbar', async () => {
@@ -298,21 +316,37 @@ describe('emitente: só fornecedores ATIVOS, mais o já gravado no documento em 
       registrar: vi.fn(), editar: vi.fn().mockResolvedValue(true), cancelar: vi.fn().mockResolvedValue(true),
       anexar: vi.fn(), urlAssinada: vi.fn(), recarregar: vi.fn(),
     };
-    render(<FormDocumento api={api} documento={documento} fornecedores={COM_INATIVOS} onFechar={() => {}} />);
+    render(<FormDocumento api={api} documento={documento} clienteId="cli" onFechar={() => {}} />);
   }
   const itensDaBusca = (texto: string) => {
-    fireEvent.click(within(screen.getByTestId('doc-emitente')).getByRole('button'));
-    const painel = screen.getByTestId('searchable-select-painel');
-    fireEvent.change(within(painel).getByPlaceholderText('Digite para buscar…'), { target: { value: texto } });
-    return within(painel).getAllByRole('button').map(b => b.textContent);
+    fireEvent.click(within(screen.getByTestId('doc-emitente')).getByRole('combobox'));
+    fireEvent.change(screen.getByPlaceholderText('Buscar por nome ou CNPJ/CPF...'), { target: { value: texto } });
+    return screen.queryAllByTestId('favorecido-opcao').map(o => o.querySelector('span')?.textContent);
   };
   it('inativo não aparece na busca: "pant" traz só o ativo (eram quatro cadastros do mesmo fornecedor)', () => {
+    definirFornecedoresDoLeitor(COM_INATIVOS);
     montaCom(null);
-    expect(itensDaBusca('pant')).toEqual(['Comercial Pantanal de Rio Verde Ltda', 'Outro (informar nome e CNPJ/CPF)']);
+    expect(COM_INATIVOS.filter(f => /pant/i.test(f.nome))).toHaveLength(3);   /* a base tem três "pant": a busca sabe achar */
+    expect(itensDaBusca('pant')).toEqual(['Comercial Pantanal de Rio Verde Ltda']);
   });
-  it('documento com emitente INATIVO abre mostrando o nome, e ele (só ele, dos inativos) está na lista', () => {
+  it('documento com emitente INATIVO abre mostrando o nome com a marca "inativo" — e ele NÃO entra na lista (regra do dono)', () => {
+    definirFornecedoresDoLeitor(COM_INATIVOS);
     montaCom(doc({ emitenteId: 'pec', emitenteNome: 'Pec.3M-Comercial Pantanal' }));
-    expect(within(screen.getByTestId('doc-emitente')).getByRole('button').textContent).toBe('Pec.3M-Comercial Pantanal');
-    expect(itensDaBusca('pant')).toEqual(['Comercial Pantanal de Rio Verde Ltda', 'Pec.3M-Comercial Pantanal', 'Outro (informar nome e CNPJ/CPF)']);
+    const campo = within(screen.getByTestId('doc-emitente')).getByRole('combobox');
+    expect(campo.textContent).toBe('Pec.3M-Comercial Pantanalinativo');
+    expect(within(campo).getByTestId('favorecido-inativo').textContent).toBe('inativo');
+    expect(itensDaBusca('pant')).toEqual(['Comercial Pantanal de Rio Verde Ltda']);
+  });
+  it('salvar o documento com o emitente inativo, sem mexer nele, mantém id e nome', async () => {
+    definirFornecedoresDoLeitor(COM_INATIVOS);
+    const editar = vi.fn().mockResolvedValue(true);
+    const api: LancamentoDocumentosApi = {
+      documentos: [], confronto: null, loading: false, saving: false, operacaoId: null, operacaoTipo: null,
+      registrar: vi.fn(), editar, cancelar: vi.fn().mockResolvedValue(true), anexar: vi.fn(), urlAssinada: vi.fn(), recarregar: vi.fn(),
+    };
+    render(<FormDocumento api={api} documento={doc({ emitenteId: 'pec', emitenteNome: 'Pec.3M-Comercial Pantanal' })} clienteId="cli" onFechar={() => {}} />);
+    salvar();
+    await waitFor(() => expect(editar).toHaveBeenCalledTimes(1));
+    expect(editar.mock.calls[0][2]).toMatchObject({ emitenteId: 'pec', emitenteNome: 'Pec.3M-Comercial Pantanal' });
   });
 });

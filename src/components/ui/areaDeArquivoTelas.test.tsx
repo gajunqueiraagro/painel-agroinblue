@@ -26,6 +26,8 @@ import { DocumentoFormOC, FORM_VAZIO } from '@/components/compra/DocumentoFormOC
 import { protegerSoltarFora } from '@/lib/arquivo/protegerSoltarFora';
 import type { LancDocPayload, LancamentoDocumentosApi } from '@/hooks/useLancamentoDocumentos';
 import type { DocumentosApi } from '@/hooks/useOperacaoDocumentos';
+/* FORN-SELETOR-PADRAO-01 fatia 2a — o emitente lê do leitor único (de mentira no teste) */
+vi.mock('@/hooks/useFornecedoresDoCliente', async () => (await import('@/test/leitorDeFornecedoresFake')).moduloDoLeitorFake());
 
 const soltar = (alvo: Element, arquivos: File[]) => fireEvent.drop(alvo, { dataTransfer: { files: arquivos, types: ['Files'] } });
 const txt = () => new File(['x'], 'nota.txt', { type: 'text/plain' });
@@ -98,14 +100,14 @@ describe('documento da OC — a recusa saiu do toast e foi para a área', () => 
 describe('aba Documentos do lançamento — o tipo errado é recusado ao escolher; `.xml` sem tipo vale', () => {
   it('tipo errado solto: a frase na área e nenhum arquivo escolhido', () => {
     const { api } = apiLanc();
-    render(<FormDocumento api={api} documento={null} fornecedores={[]} onFechar={() => {}} />);
+    render(<FormDocumento api={api} documento={null} clienteId="cli" onFechar={() => {}} />);
     soltar(screen.getByTestId('area-arquivo'), [txt()]);
     expect(screen.getByTestId('area-de-arquivo-recusa').textContent).toBe('Formato não aceito. Envie PDF, JPG, PNG ou XML.');
     expect(screen.queryByTestId('arquivo-escolhido')).toBeNull();
   });
   it('`.xml` que o navegador entrega SEM tipo: aceito, e o que vai ao anexar tem o tipo preenchido', async () => {
     const { api, anexar } = apiLanc();
-    render(<FormDocumento api={api} documento={null} fornecedores={[]} onFechar={() => {}} />);
+    render(<FormDocumento api={api} documento={null} clienteId="cli" onFechar={() => {}} />);
     soltar(screen.getByTestId('area-arquivo'), [new File(['<nfeProc/>'], 'NFe-12345.xml', { type: '' })]);
     expect(screen.getByTestId('arquivo-escolhido').textContent).toBe('NFe-12345.xml');
     fireEvent.click(screen.getByRole('button', { name: /Registrar documento/ }));
@@ -116,7 +118,7 @@ describe('aba Documentos do lançamento — o tipo errado é recusado ao escolhe
   });
   it('a área tem 40px fixos e o nome longo não empilha (corta, com o inteiro no `title`)', () => {
     const { api } = apiLanc();
-    render(<FormDocumento api={api} documento={null} fornecedores={[]} onFechar={() => {}} />);
+    render(<FormDocumento api={api} documento={null} clienteId="cli" onFechar={() => {}} />);
     const area = screen.getByTestId('area-arquivo');
     const nome = 'NFe 000.031.776 Comercial Pantanal de Rio Verde Ltda - via do destinatario - copia (2).pdf';
     soltar(area, [new File(['%PDF'], nome, { type: 'application/pdf' })]);
@@ -163,7 +165,7 @@ describe('a proteção global convive com as áreas', () => {
     const desligar = protegerSoltarFora();
     try {
       const { api } = apiLanc();
-      render(<FormDocumento api={api} documento={null} fornecedores={[]} onFechar={() => {}} />);
+      render(<FormDocumento api={api} documento={null} clienteId="cli" onFechar={() => {}} />);
       soltar(screen.getByTestId('area-arquivo'), [new File(['%PDF'], 'dentro.pdf', { type: 'application/pdf' })]);
       expect(screen.getByTestId('arquivo-escolhido').textContent).toBe('dentro.pdf');
       /* fora: o evento volta prevenido (fireEvent devolve false) e o arquivo escolhido não muda */

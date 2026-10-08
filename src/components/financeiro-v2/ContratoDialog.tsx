@@ -12,7 +12,13 @@ import { Search, Check, ChevronsUpDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import type { Contrato, ContratoForm } from '@/hooks/useContratos';
-import type { ContaBancariaV2, ClassificacaoItem, FornecedorV2 } from '@/hooks/useFinanceiroV2';
+import type { ContaBancariaV2, ClassificacaoItem } from '@/hooks/useFinanceiroV2';
+import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
+import { useCliente } from '@/contexts/ClienteContext';
+import type { FornecedorLido } from '@/lib/fornecedores/leitorDeFornecedores';
+
+/* FORN-SELETOR-PADRAO-01 fatia 2a — a linha fixa do documento sob o campo (D8). Medida no navegador: ver o CLAUDE.md. */
+const LINHA_DO_DOCUMENTO = true;
 import type { Fazenda } from '@/contexts/FazendaContext';
 import { hojeLocal } from '@/lib/datas/hojeLocal';
 
@@ -24,7 +30,6 @@ interface Props {
   fazendas: Fazenda[];
   contas: ContaBancariaV2[];
   classificacoes: ClassificacaoItem[];
-  fornecedores: FornecedorV2[];
   defaultFazendaId?: string;
 }
 
@@ -46,9 +51,10 @@ const TIPO_CONTA_ORDER: Record<string, number> = {
 };
 
 export function ContratoDialog({
-  open, onClose, onSave, contrato, fazendas, contas, classificacoes, fornecedores, defaultFazendaId,
+  open, onClose, onSave, contrato, fazendas, contas, classificacoes, defaultFazendaId,
 }: Props) {
   const isEdit = !!contrato;
+  const { clienteAtual } = useCliente();
 
   const [saving, setSaving] = useState(false);
   const [produto, setProduto] = useState('');
@@ -83,11 +89,7 @@ export function ContratoDialog({
   const [status, setStatus] = useState('ativo');
 
   // Fornecedor popover
-  const [fornecedorOpen, setFornecedorOpen] = useState(false);
   const [fornecedorSearch, setFornecedorSearch] = useState('');
-  const [fornecedorHighlight, setFornecedorHighlight] = useState(0);
-  const fornecedorItemRefs = useRef<(HTMLButtonElement | null)[]>([]);
-  const fornecedorInputRef = useRef<HTMLInputElement>(null);
 
   // Subcentro popover
   const [subcentroOpen, setSubcentroOpen] = useState(false);
@@ -112,12 +114,6 @@ export function ContratoDialog({
     return unique.filter(c => (c.subcentro || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(term));
   }, [classMap, subcentroSearch]);
 
-  const fornecedoresList = useMemo(() => fornecedores.filter(f => f.ativo !== false), [fornecedores]);
-  const filteredFornecedores = useMemo(() => {
-    if (!fornecedorSearch.trim()) return fornecedoresList;
-    const q = fornecedorSearch.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-    return fornecedoresList.filter(f => f.nome.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(q));
-  }, [fornecedoresList, fornecedorSearch]);
 
   // Sort contas: cc < inv < cartao, then by codigo_conta asc
   const sortedContas = useMemo(() => {
@@ -129,10 +125,6 @@ export function ContratoDialog({
     });
   }, [contas]);
 
-  const selectedFornecedorNome = useMemo(() => {
-    if (!fornecedorId) return '';
-    return fornecedores.find(f => f.id === fornecedorId)?.nome || '';
-  }, [fornecedorId, fornecedores]);
 
   useEffect(() => {
     if (contrato) {
@@ -196,11 +188,8 @@ export function ContratoDialog({
     setCentroCusto('');
   };
 
-  const handleFornecedorSelect = (fId: string) => {
-    setFornecedorId(fId);
-    setFornecedorOpen(false);
-    setFornecedorSearch('');
-    const f = fornecedores.find(x => x.id === fId);
+  /* o que escolher um fornecedor SUGERE (forma e dados de pagamento do cadastro) — o corpo de sempre; quem escolhe é o dono */
+  const aoEscolherFornecedor = (f: FornecedorLido) => {
     if (f?.tipo_recebimento) {
       setFormaPgto(f.tipo_recebimento);
       const lines: string[] = [];
@@ -216,23 +205,6 @@ export function ContratoDialog({
     }
   };
 
-  // Keyboard navigation for fornecedor
-  const handleFornecedorKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setFornecedorHighlight(h => Math.min(h + 1, filteredFornecedores.length - 1));
-      fornecedorItemRefs.current[Math.min(fornecedorHighlight + 1, filteredFornecedores.length - 1)]?.scrollIntoView({ block: 'nearest' });
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setFornecedorHighlight(h => Math.max(h - 1, 0));
-      fornecedorItemRefs.current[Math.max(fornecedorHighlight - 1, 0)]?.scrollIntoView({ block: 'nearest' });
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      if (filteredFornecedores[fornecedorHighlight]) handleFornecedorSelect(filteredFornecedores[fornecedorHighlight].id);
-    } else if (e.key === 'Escape') {
-      setFornecedorOpen(false);
-    }
-  };
 
   // Keyboard navigation for subcentro
   const handleSubcentroKeyDown = (e: React.KeyboardEvent) => {
@@ -314,37 +286,14 @@ export function ContratoDialog({
               {/* Fornecedor */}
               <div>
                 <Label className="text-xs">Fornecedor</Label>
-                <Popover open={fornecedorOpen} onOpenChange={v => { setFornecedorOpen(v); if (!v) { setFornecedorSearch(''); setFornecedorHighlight(0); } }}>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" role="combobox" className="w-full h-9 justify-between font-normal text-sm bg-[#f5f6f8] dark:bg-muted border-border/50" tabIndex={2}>
-                      <span className="truncate">{selectedFornecedorNome || 'Selecione o fornecedor...'}</span>
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                    <div className="flex items-center border-b px-3 py-2">
-                      <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-                      <input
-                        ref={fornecedorInputRef}
-                        className="flex h-7 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-                        placeholder="Buscar fornecedor..."
-                        value={fornecedorSearch}
-                        onChange={e => { setFornecedorSearch(e.target.value); setFornecedorHighlight(0); }}
-                        onKeyDown={handleFornecedorKeyDown}
-                        autoFocus
-                      />
-                    </div>
-                    <div className="max-h-48 overflow-y-auto p-1">
-                      {filteredFornecedores.map((f, idx) => (
-                        <button key={f.id} ref={el => { fornecedorItemRefs.current[idx] = el; }} className={cn("relative flex w-full cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none", idx === fornecedorHighlight ? "bg-accent text-accent-foreground" : "hover:bg-accent hover:text-accent-foreground")} onClick={() => handleFornecedorSelect(f.id)} onMouseEnter={() => setFornecedorHighlight(idx)}>
-                          <Check className={cn("mr-2 h-4 w-4", fornecedorId === f.id ? "opacity-100" : "opacity-0")} />
-                          <span className="truncate">{f.nome}</span>
-                        </button>
-                      ))}
-                      {filteredFornecedores.length === 0 && <p className="p-2 text-center text-sm text-muted-foreground">Nenhum encontrado</p>}
-                    </div>
-                  </PopoverContent>
-                </Popover>
+                {/* FORN-SELETOR-PADRAO-01 fatia 2a — era um Popover próprio (só nome, sem documento): agora é o DONO, pelo leitor único. */}
+                <FavorecidoSelect<FornecedorLido>
+                  value={fornecedorId} onChange={setFornecedorId} onSelected={aoEscolherFornecedor}
+                  clienteId={clienteAtual?.id ?? null} linhaDoDocumento={LINHA_DO_DOCUMENTO}
+                  search={fornecedorSearch} onSearchChange={setFornecedorSearch}
+                  placeholder="Selecione o fornecedor..." tabIndex={2}
+                  triggerClassName="h-9 text-sm bg-[#f5f6f8] dark:bg-muted border-border/50"
+                />
               </div>
             </div>
           </section>

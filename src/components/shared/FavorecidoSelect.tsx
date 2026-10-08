@@ -82,13 +82,18 @@ export interface FavorecidoSelectProps<F extends FavorecidoOpcao = FornecedorV2>
   /** Texto do gatilho vazio. Default 'Selecione fornecedor...'. */
   placeholder?: string;
   /**
-   * FORN-SELETOR-PADRAO-01 (D8) — a linha FIXA de 12px sob o campo, sempre presente, com o documento do escolhido.
+   * FORN-SELETOR-PADRAO-01 (D8) — a linha FIXA de 14px sob o campo, sempre presente, com o documento do escolhido.
    * Padrão: LIGADA no modo do leitor; no modo de transição (lista do hospedeiro) fica desligada até a fatia dele —
    * nenhum formulário muda de altura sem ter sido medido. Em célula de tabela: `false` (o documento vai no `title`).
    */
   linhaDoDocumento?: boolean;
   /** FORN-SELETOR-PADRAO-01 (D7) — cadastros "[META]" entram na lista (só modal de meta). */
   incluirMeta?: boolean;
+  /**
+   * FORN-SELETOR-PADRAO-01 fatia 2a — uma ação FIXA no pé da lista, fora da rolagem (o "Outro (informar nome e CNPJ/CPF)" do
+   * emitente do documento). Não é fornecedor: não muda `value` nem dispara `onSelected`; o hospedeiro decide o que ela faz.
+   */
+  acaoFinal?: { label: string; onSelect: () => void };
 }
 
 /** Rótulo de exibição do favorecido. Com showCpfCnpj + documento presente → "Nome (CPF/CNPJ)";
@@ -102,7 +107,7 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
   value, onChange, onSelected, fornecedores, clienteId,
   search, onSearchChange, onCriarNovo, novoButtonClassName,
   label, triggerClassName, size = 'default', tabIndex, disabled, showCpfCnpj = false,
-  limpavel = false, placeholder = 'Selecione fornecedor...', linhaDoDocumento, incluirMeta = false,
+  limpavel = false, placeholder = 'Selecione fornecedor...', linhaDoDocumento, incluirMeta = false, acaoFinal,
 }: FavorecidoSelectProps<F>) {
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
@@ -282,6 +287,14 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
                 </button>
               ))}
             </div>
+            {acaoFinal && (
+              <button type="button" data-testid="favorecido-acao-final"
+                className={cn("flex w-full cursor-pointer select-none items-center border-t border-zinc-500/40 outline-none", MENU_ITEM, MENU_REALCE_HOVER)}
+                onClick={() => { setOpen(false); onSearchChange(''); acaoFinal.onSelect(); }}>
+                <Plus className="mr-2 h-3.5 w-3.5 shrink-0" />
+                <span className="truncate" title={acaoFinal.label}>{acaoFinal.label}</span>
+              </button>
+            )}
             {rodape && (
               /* fora da rolagem: fica parado enquanto a lista anda */
               <div data-testid="favorecido-rodape" className={cn("border-t border-zinc-500/40 px-2 py-[3px]", MENU_VAZIO)}>{rodape}</div>
@@ -300,7 +313,8 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
       </div>
       {comLinha && (
         /* ⚠ ALTURA FIXA E SEMPRE PRESENTE (D8): escolher, trocar ou limpar o fornecedor não muda a altura do formulário */
-        <div data-testid="favorecido-documento" className="flex h-3 items-center gap-1.5 overflow-hidden text-[9.5px] leading-3 text-muted-foreground">
+        /* 14px com o texto encostado EMBAIXO (fatia 2a, visto na tela): com 12px o anel de foco do campo (4px) cobria o topo do texto */
+        <div data-testid="favorecido-documento" className="flex h-[14px] items-end gap-1.5 overflow-hidden text-[9.5px] leading-3 text-muted-foreground">
           {erroDoLeitor ? (
             <>
               <span className="min-w-0 truncate text-destructive" title={erroDoLeitor}>{erroDoLeitor}</span>

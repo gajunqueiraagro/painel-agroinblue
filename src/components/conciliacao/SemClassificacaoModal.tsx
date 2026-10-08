@@ -288,7 +288,7 @@ export function SemClassificacaoModal({ aberto, aoFechar, clienteId, clienteNome
                   return feita
                     ? <LinhaClassificada key={l.id} c={feita} ocupado={gravando !== null} erro={erros[l.id] ?? null}
                         aoDesfazer={() => { void desfazer(feita); }} aoAbrir={() => abrirLancamento(l.id)} />
-                    : <LinhaPendente key={l.id} l={l} escolha={escolhaDe(l)} planos={planos} fornecedores={fin.fornecedores}
+                    : <LinhaPendente key={l.id} l={l} escolha={escolhaDe(l)} planos={planos} clienteId={clienteId}
                         pronto={planoPronto} ocupado={gravando !== null} motivo={motivoDe(l)} erro={erros[l.id] ?? null}
                         aoEscolher={(e) => { setEscolhas((x) => ({ ...x, [l.id]: e })); marcarErro(l.id, null); }}
                         aoAceitar={() => { void aceitar(l); }} aoAbrir={() => abrirLancamento(l.id)} />;
@@ -354,8 +354,8 @@ const CEL = 'h-[19px] px-1.5 py-0 align-middle border-b border-border';
 const CORTA = 'overflow-hidden text-ellipsis whitespace-nowrap';
 const naoAbre = { onClick: (e: { stopPropagation: () => void }) => e.stopPropagation() };
 
-function LinhaPendente({ l, escolha, planos, fornecedores, pronto, ocupado, motivo, erro, aoEscolher, aoAceitar, aoAbrir }: {
-  l: LinhaSemClassificacao; escolha: Escolha; planos: ClassificacaoItem[]; fornecedores: FornecedorV2[];
+function LinhaPendente({ l, escolha, planos, clienteId, pronto, ocupado, motivo, erro, aoEscolher, aoAceitar, aoAbrir }: {
+  l: LinhaSemClassificacao; escolha: Escolha; planos: ClassificacaoItem[]; clienteId: string;
   pronto: boolean; ocupado: boolean; motivo: string | null; erro: string | null;
   aoEscolher: (e: Escolha) => void; aoAceitar: () => void; aoAbrir: () => void;
 }) {
@@ -374,7 +374,8 @@ function LinhaPendente({ l, escolha, planos, fornecedores, pronto, ocupado, moti
       <td className={`${CEL} text-center`}><Falta s f={!escolha.favorecidoId} c={l.falta.centro} /></td>
       <td className={CEL} {...naoAbre} data-testid="cel-fornecedor">
         <FavorecidoSelect value={escolha.favorecidoId} onChange={(id) => aoEscolher({ ...escolha, favorecidoId: id })}
-          fornecedores={fornecedores} search={buscaFornecedor} onSearchChange={setBuscaFornecedor}
+          /* FORN-SELETOR-PADRAO-01 fatia 2a — leitor único; CÉLULA DE TABELA: sem a linha fixa (D8), o documento vai no `title` do campo e na opção */
+          clienteId={clienteId} linhaDoDocumento={false} search={buscaFornecedor} onSearchChange={setBuscaFornecedor}
           size="compact" triggerClassName={GATILHO} placeholder="escolher…" disabled={!pronto || ocupado} />
       </td>
       <td className={CEL} {...naoAbre} title={tituloSubcentro} data-testid="cel-subcentro" data-sugestao={usaSugestao ? 'sim' : undefined}>

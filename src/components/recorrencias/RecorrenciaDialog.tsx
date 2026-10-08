@@ -66,13 +66,14 @@ const FORMAS = ['PIX', 'TED', 'Boleto', 'Cartão', 'Dinheiro', 'Débito', 'Outro
 export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }: Props) {
   const { fazendas } = useFazenda();
   const {
-    classificacoes, fornecedores, contasBancarias, safras,
-    loadClassificacoes, loadFornecedores, loadContas, loadSafras, criarFornecedor,
+    classificacoes, contasBancarias, safras,
+    loadClassificacoes, loadContas, loadSafras, criarFornecedor,
   } = useFinanceiroV2();
 
   useEffect(() => {
-    void loadClassificacoes(); void loadFornecedores(); void loadContas(); void loadSafras();
-  }, [loadClassificacoes, loadFornecedores, loadContas, loadSafras]);
+    /* FORN-SELETOR-PADRAO-01 fatia 2a — a lista de fornecedores é do leitor único (o seletor a lê); este diálogo não a carrega mais */
+    void loadClassificacoes(); void loadContas(); void loadSafras();
+  }, [loadClassificacoes, loadContas, loadSafras]);
 
   const ed = recorrencia ?? null;
   const [descricao, setDescricao] = useState(ed?.descricao ?? '');
@@ -350,7 +351,8 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
             <div className="min-w-0">
               <FavorecidoSelect
                 value={favorecidoId} onChange={setFavorecidoId}
-                fornecedores={fornecedores} search={fornecedorSearch} onSearchChange={setFornecedorSearch}
+                /* FORN-SELETOR-PADRAO-01 fatia 2a — a lista é a do leitor único (ativos com documento) */
+                clienteId={clienteId} search={fornecedorSearch} onSearchChange={setFornecedorSearch}
                 onCriarNovo={() => { /* cadastro inline: o "+" do próprio componente */ }}
                 label="Favorecido"
               />

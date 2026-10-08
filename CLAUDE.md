@@ -162,7 +162,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 08/10/2026 (FORN-SELETOR-PADRAO-01 passo 1b, +50: `src/lib/fornecedores/fornecedorTexto.test.ts` 22,
+  Baseline em 08/10/2026 (FORN-SELETOR-PADRAO-01 fatia 2a, +13: `src/components/shared/favorecidoSelectDono.test.tsx` 11,
+  `src/components/financeiro-v2/documentoFormPorTipo.test.tsx` 2 — 4587 depois dele; antes o
+  FORN-SELETOR-PADRAO-01 passo 1b, +50: `src/lib/fornecedores/fornecedorTexto.test.ts` 22,
   `src/components/shared/favorecidoSelectDono.test.tsx` 27, `src/hooks/useFornecedoresDoCliente.test.tsx` 1 — 4574 depois dele; antes o
   FORN-SELETOR-PADRAO-01 passo 1a, +22: `src/lib/fornecedores/leitorDeFornecedores.test.ts` 14,
   `src/hooks/useFornecedoresDoCliente.test.tsx` 8 — 4524 depois dele; antes o
@@ -257,7 +259,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4574
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4587
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -1261,6 +1263,65 @@ preview que o cabecalho nao sai da tela ao rolar.
     NAVEGADOR: o arrasto real do Finder (so' evento sintetico), boletos e OC dentro dos modais reais, o clique abrindo o seletor
     do sistema, e os tres `@dnd-kit` com a protecao ligada (so' por teste de fonte) · OC-DOCUMENTO-XML-REAL-01: subir e abrir um
     `.xml` real na OC e na aba Documentos (homologacao do Gabriel).
+- ⚠ FORNECEDOR NO FINANCEIRO: OS CINCO PONTOS USAM O DONO PELO LEITOR UNICO (FORN-SELETOR-PADRAO-01 fatia 2a, Gabriel 08/10/2026, so' tela).
+  Nenhum deles recebe mais a lista do hospedeiro; todos passam `clienteId` ao `FavorecidoSelect` (preso por teste de fonte, com
+  auto-teste do leitor de usos).
+  · RECORRENCIA (`RecorrenciaDialog`): leitor unico + linha fixa. O dialogo deixou de chamar `loadFornecedores`.
+  · CONTRATO (`ContratoDialog`): o Popover proprio (so' nome, sem documento, teclado e busca proprios) SAIU; entrou o dono, com a
+    linha fixa. O que escolher um fornecedor SUGERE (forma e dados de pagamento) e' o corpo de sempre, agora em `aoEscolherFornecedor`.
+    A prop `fornecedores` do dialogo saiu (o `ContratosTab` nao a passa mais).
+  · EMITENTE DO DOCUMENTO (`FormDocumento`, `AbaDocumentosLancamento.tsx`): o `SearchableSelect` SAIU; entrou o dono, com `limpavel`
+    ("— nenhum —") e a ACAO FIXA do pe' da lista "Outro (informar nome e CNPJ/CPF)" — prop nova do dono, `acaoFinal {label,
+    onSelect}`: fora da rolagem, nao e' fornecedor (nao muda `value` nem dispara `onSelected`), fecha a lista e chama o hospedeiro;
+    com "Outro" escolhido o campo diz "Outro (informar nome e CNPJ/CPF)". O NOME do emitente gravado sai do leitor (ativos, ou o
+    gravado por id). Vale nos QUATRO lugares de documentos, que passaram a receber `clienteId` no lugar de `fornecedores`:
+    a aba Documentos do lancamento, `DocumentosPendentes`, `DocumentosNaCriacao` (a prop `credor` saiu) e `DocumentosDoContrato`.
+    ⚠ MUDA DE COMPORTAMENTO, de proposito: (1) o emitente INATIVO ja' gravado aparece no campo com a marca "inativo" e NAO entra
+      mais na lista (antes entrava, so' ele); (2) em `DocumentosNaCriacao` e `DocumentosDoContrato` o formulario oferecia SO' o
+      credor do contrato (+ "Outro") e passa a oferecer todos os ativos do cliente; (3) a sugestao de emitente do lancamento deixa
+      de ser conferida contra a lista (ela e' o favorecido que o lancamento ja' tem; inativo, aparece com a marca).
+  · SEM CLASSIFICACAO (`SemClassificacaoModal`): CELULA DE TABELA — dono com `linhaDoDocumento={false}` (D8); o documento vai no
+    `title` do campo e na opcao. Linha de 19px e modal 1090 x 491, iguais.
+  · CRIAR PELA LINHA (`CriarLancamentoDaLinha`): monta o `LancamentoV2Dialog`; herdou o 1b e nada mais (nenhuma mudanca no arquivo).
+  · A LINHA FIXA TEM 14px, COM O TEXTO ENCOSTADO EMBAIXO (`h-[14px] items-end`): ⚠ VISTO NA TELA — com 12px o anel de foco do campo
+    (4px) cobria o topo do texto do documento. Vale tambem no modal do lancamento (remedido: nada mudou).
+  MEDIDO (janela de 1.166 x 523 — ⚠ nao 1.126: a extensao abriu outra janela e ela nao redimensionou; cliente Teste, sinteticos
+  criados por SQL e APAGADOS — 0 restantes), altura do modal COM a linha x SEM a linha (a linha escondida por script):
+      ponto                                   modal        corpo que rola (conteudo de visivel), sem -> com a linha
+      Novo lancamento                         1024 x 491   408 de 393 -> 408 de 393 (igual)
+      Editar lancamento                       1024 x 491   438 de 392 -> 452 de 392 (ja' rolava)
+      Recorrencia (nova)                      672 x 475    612 de 366 -> 624 de 366 (ja' rolava)  [medido com a linha de 12px]
+      Contrato (novo)                         512 x 471    1.108 de 325 -> 1.122 de 325 (ja' rolava)
+      Documento, pela aba do lancamento       512 x 491    566 de 395 -> 580 de 395 (ja' rolava)
+      Documento, pelos pendentes (Novo)       512 x 491    566 de 395 -> 580 de 395 (ja' rolava)
+      Documento, na criacao do parcelamento   512 x 491    514 de 395 -> 528 de 395 (ja' rolava)
+      Documento, no contrato (edicao)         512 x 491    514 de 395 -> 528 de 395 (ja' rolava)
+  ⚠ EM NENHUM PONTO A ALTURA DO MODAL MUDOU NEM ALGO PASSOU A ROLAR; em sete dos oito o corpo JA' ROLAVA nessa altura de janela e
+    o conteudo cresceu 14px dentro da rolagem que ja' existia. A linha ficou LIGADA nos quatro formularios — DECIDIDO pelo Gabriel
+    (08/10): crescer dentro de uma rolagem que ja' existia NAO e' motivo para desligar a linha; desliga-se so' quando a altura do
+    modal muda ou algo PASSA a rolar (e em celula de tabela).
+  PROVADO NO NAVEGADOR, em cada ponto: abrir a lista, buscar por nome e por digitos, escolher, conferir a linha (ou o `title`).
+  E as provas que ficaram do 1b: SETAS E ENTER (baixo, baixo, cima, baixo, Enter -> a terceira opcao); CRIAR PELO "+" e ver SEM F5
+  (o novo veio escolhido e no topo da lista); FALHA DO LEITOR (a leitura da lista derrubada por script: frase em vermelho na linha
+  de 14px, o valor escolhido continuou no campo, modal 491; "Tentar de novo" com a rede de volta trouxe a lista); TROCAR DE
+  CLIENTE SEM RECARREGAR (Teste -> NJ pelo seletor do menu, sem recarga: 100 opcoes, "Mostrando 100 de 2.593", zero cadastros do
+  Teste; e de volta ao Teste). No contrato: o foco vai para a busca ao abrir, Esc fecha a lista e o modal fica, 512 x 471 com a
+  lista aberta.
+  ⚠ "100 de 2.593" x 2.594 ativos no NJ: a diferenca e' UM cadastro ativo com "[META]" no nome, fora da lista pela regra D7.
+  ⚠ LEITORES ANTIGOS DEPOIS DESTA FATIA: nenhum ficou sem consumidor. `useFinanceiroV2.fornecedores` segue alimentando, nesses
+    pontos, OUTRAS coisas: a lista de contratos (`ContratosTab`, o nome do fornecedor de cada contrato), o Sem classificacao (o
+    nome na linha, o "catalogos prontos" e a lista entregue ao modal do lancamento) e o modal do lancamento (`fornecedorPorId`, a
+    trilha de auditoria, o cadastro de fornecedor). So' o `RecorrenciaDialog` deixou de carrega'-la. `DocumentosDoContrato` segue
+    lendo o credor por id para a conferencia da nota (nao e' lista de seletor).
+  ⚠ FOTOS REGRAVADAS, de proposito: as 4 de `valorComConta.fotos.json` (a linha passou de 12 a 14px).
+  ⚠ DIVIDAS: `RecorrenciaDialog` tem um "+" que nao abre nada (`onCriarNovo={() => {}}`, anterior a esta fatia; contraria "botao sem
+    destino e' pior que botao ausente") · no contrato o nome longo corta no campo (inteiro no `title`) · o rotulo do campo do
+    contrato e do documento e' o do hospedeiro (12px / 10px), nao o do dono.
+  ⚠ NAO PROVADO NO NAVEGADOR: A ABA EM PRIMEIRO PLANO (a janela que a extensao abre fica em segundo plano e eu nao tenho como
+    traze^-la a' frente: tudo foi medido por script, com tres capturas de tela para conferir) · a largura de 1.126 (foi 1.166; os
+    modais tem largura fixa) · SALVAR em qualquer um dos pontos (nada foi gravado, salvo o fornecedor criado pelo "+") · a
+    recorrencia remedida com a linha de 14px · Editar recorrencia / contrato com fornecedor INATIVO gravado (so' por teste do
+    dono; no navegador foi visto no lancamento e no emitente do documento) · "— nenhum —" no emitente (so' por teste).
 - ⚠ O SELETOR DE FORNECEDOR TEM UM DONO: `FavorecidoSelect` (FORN-SELETOR-PADRAO-01 passo 1b, Gabriel 08/10/2026, so' tela). Todo
   campo de fornecedor / favorecido / credor / comprador vai usar ESTE componente (`src/components/shared/FavorecidoSelect.tsx`); as
   regras puras moram em `src/lib/fornecedores/fornecedorTexto.ts` (normalizacao, formatacao, recorte). Ligado ao LEITOR UNICO, por
@@ -1275,7 +1336,7 @@ preview que o cabecalho nao sai da tela ao rolar.
     traco), tambem pelos digitos do documento. Numero que esta' no nome tambem acha.
   · NO MAXIMO 100 OPCOES DESENHADAS (`LIMITE_DE_OPCOES`): o corte nunca muda o resultado da busca; o JA' ESCOLHIDO vem sempre no
     topo, mesmo fora dos 100; rodape FIXO, fora da rolagem, "Mostrando 100 de N — digite para refinar".
-  · LINHA FIXA DE 12px SOB O CAMPO (`linhaDoDocumento`): o documento do escolhido, "sem CNPJ/CPF", ou vazia sem escolha — existe
+  · LINHA FIXA DE 14px SOB O CAMPO [eram 12 no 1b; a fatia 2a a levou a 14 com o texto encostado embaixo — ver a regra da 2a] (`linhaDoDocumento`): o documento do escolhido, "sem CNPJ/CPF", ou vazia sem escolha — existe
     sempre, para o formulario nao mudar de altura. Padrao: LIGADA no modo do leitor; ⚠ no modo de TRANSICAO (lista do hospedeiro)
     fica DESLIGADA ate' a fatia dele — nenhum formulario muda de altura sem ter sido medido. Em celula de tabela: `false`, e o
     documento vai no `title` do campo (nome · documento · inativo).

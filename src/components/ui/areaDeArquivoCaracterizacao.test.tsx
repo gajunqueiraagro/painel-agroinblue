@@ -26,6 +26,8 @@ import { DocumentoFormOC, FORM_VAZIO } from '@/components/compra/DocumentoFormOC
 import type { LancDocPayload, LancamentoDocumentosApi } from '@/hooks/useLancamentoDocumentos';
 import type { DocumentosApi } from '@/hooks/useOperacaoDocumentos';
 import { CTE, montarNFe, utf8 } from '@/lib/financeiro/nfe/__fixtures__/notas';
+/* FORN-SELETOR-PADRAO-01 fatia 2a — o emitente lê do leitor único (de mentira no teste) */
+vi.mock('@/hooks/useFornecedoresDoCliente', async () => (await import('@/test/leitorDeFornecedoresFake')).moduloDoLeitorFake());
 
 const pdf = (nome: string) => new File(['%PDF'], nome, { type: 'application/pdf' });
 const jpg = (nome: string) => new File(['x'], nome, { type: 'image/jpeg' });
@@ -49,7 +51,7 @@ describe('aba Documentos do lançamento (FormDocumento)', () => {
       registrar, editar: vi.fn(async () => true), cancelar: vi.fn().mockResolvedValue(true), anexar, urlAssinada: vi.fn(), recarregar: vi.fn(),
     };
     const onFechar = vi.fn();
-    render(<FormDocumento api={api} documento={null} fornecedores={[]} onFechar={onFechar} />);
+    render(<FormDocumento api={api} documento={null} clienteId="cli" onFechar={onFechar} />);
     /* ⚠ o jsdom não deixa atribuir uma lista comum a `input.files` (o navegador deixa a do `dataTransfer`): o setter é
        anulado só aqui, e nada no teste lê `input.files`. */
     const input = screen.getByTestId('doc-arquivo');

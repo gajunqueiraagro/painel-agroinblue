@@ -194,7 +194,7 @@ export function DocumentosDoContrato({ financiamentoId, clienteId, hoje, credorI
             desabilitado={ocupado} onArquivos={([f]) => { if (f) void lerXml(f); }} />
         </div>
         <AbaDocumentosLancamento api={apiDaCompra} semBoleto
-          fornecedores={credor ? [{ id: credor.id, nome: credor.nome, ativo: credor.ativo }] : []} />
+          clienteId={clienteId} />
         {/* a NF contra a COMPRA INTEIRA (a soma das parcelas ativas, do banco) — os dois números lado a lado; a tela só compara */}
         <p className="h-[14px] text-[10px] leading-[14px]" data-testid="nota-x-compra">
           {nf?.valorDocumento == null ? <span className="text-muted-foreground">Sem nota fiscal com valor para conferir contra a compra.</span>

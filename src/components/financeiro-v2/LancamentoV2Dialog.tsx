@@ -2922,7 +2922,7 @@ export function LancamentoV2Dialog({
             </section>
             {lancamento?.id ? (
               <AbaDocumentosLancamento api={documentosApi}
-                fornecedores={fornecedores.map(f => ({ id: f.id, nome: f.nome, ativo: f.ativo }))}
+                clienteId={clienteAtual?.id ?? null}
                 sugestao={sugestaoDoDocumento}
                 onAnexarBoletosDasParcelas={irmas ? () => setAnexarBoletos('irmas') : undefined} />
             ) : documentosAntesDeSalvar && formaPagamentoParc === 'parcelada' && numParcelas >= 2 ? (
@@ -2933,7 +2933,7 @@ export function LancamentoV2Dialog({
                   <p className="text-[11px] font-semibold">Documentos da compra <span className="font-normal text-muted-foreground">· valem para todas as parcelas</span></p>
                   <DocumentosPendentes pendentes={pendentes.filter(p => p.parcela == null)}
                     onMudar={f => setPendentes(l => [...f(l.filter(p => p.parcela == null)), ...l.filter(p => p.parcela != null)])}
-                    fornecedores={fornecedores.map(f => ({ id: f.id, nome: f.nome, ativo: f.ativo }))}
+                    clienteId={clienteAtual?.id ?? null}
                     ligadoA={numParcelas} travado={!!posSalvar} sugestao={sugestaoDoDocumento} />
                 </div>
                 <ParcelasDaCompra parcelas={parcelaRows}
@@ -2948,7 +2948,7 @@ export function LancamentoV2Dialog({
               </div>
             ) : documentosAntesDeSalvar ? (
               <DocumentosPendentes pendentes={pendentes} onMudar={setPendentes}
-                fornecedores={fornecedores.map(f => ({ id: f.id, nome: f.nome, ativo: f.ativo }))}
+                clienteId={clienteAtual?.id ?? null}
                 travado={!!posSalvar} sugestao={sugestaoDoDocumento} />
             ) : (
               <p className="rounded-md border bg-muted/20 px-3.5 py-3 text-[11px] text-muted-foreground">

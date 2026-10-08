@@ -17,12 +17,17 @@ vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 import { DocumentosPendentes, apiDePendentes } from '@/components/financeiro-v2/DocumentosPendentes';
 import { novoPendente, type DocumentoPendente } from '@/lib/financeiro/documentosPendentes';
+import { definirFornecedoresDoLeitor } from '@/test/leitorDeFornecedoresFake';
+/* FORN-SELETOR-PADRAO-01 fatia 2a — o emitente lê do leitor único (de mentira no teste) */
+vi.mock('@/hooks/useFornecedoresDoCliente', async () => (await import('@/test/leitorDeFornecedoresFake')).moduloDoLeitorFake());
+
+definirFornecedoresDoLeitor([{ id: 'f1', nome: 'St Repro' }]);
 
 function Palco({ inicial = [], ligadoA, travado = false }: { inicial?: DocumentoPendente[]; ligadoA?: number; travado?: boolean }) {
   const [lista, setLista] = useState<DocumentoPendente[]>(inicial);
   return (
     <>
-      <DocumentosPendentes pendentes={lista} onMudar={setLista} fornecedores={[{ id: 'f1', nome: 'St Repro' }]}
+      <DocumentosPendentes pendentes={lista} onMudar={setLista} clienteId="cli"
         ligadoA={ligadoA} travado={travado} />
       <output data-testid="n">{lista.length}</output>
     </>

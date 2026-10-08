@@ -12,6 +12,8 @@ import { novoPendente, type DocumentoPendente } from '@/lib/financeiro/documento
 import type { NotaLida } from '@/lib/financeiro/nfe/tipos';
 import { MOTIVO_SEM_PARCELAS } from '@/components/financeiro-v2/ParcelasDaCompra';
 import { DocumentosNaCriacao } from './DocumentosNaCriacao';
+/* FORN-SELETOR-PADRAO-01 fatia 2a — o emitente lê do leitor único (de mentira no teste) */
+vi.mock('@/hooks/useFornecedoresDoCliente', async () => (await import('@/test/leitorDeFornecedoresFake')).moduloDoLeitorFake());
 
 vi.mock('@/integrations/supabase/client', () => ({ supabase: { from: () => ({}), rpc: () => Promise.resolve({ data: null, error: null }) } }));
 
@@ -30,7 +32,7 @@ let lista: DocumentoPendente[] = [];
 function Hospedeiro({ inicio = [], parcelas = PARCELAS, travado = false, recado = null }: { inicio?: DocumentoPendente[]; parcelas?: typeof PARCELAS; travado?: boolean; recado?: string | null }) {
   const [pendentes, setPendentes] = useState<DocumentoPendente[]>(inicio);
   lista = pendentes;
-  return <DocumentosNaCriacao pendentes={pendentes} onMudar={setPendentes} parcelas={parcelas} credor={{ id: 'cr-1', nome: 'Somak' }}
+  return <DocumentosNaCriacao pendentes={pendentes} onMudar={setPendentes} parcelas={parcelas} clienteId="cli"
     travado={travado} onNotaDoXml={aoLer} recadoDoXml={recado} />;
 }
 

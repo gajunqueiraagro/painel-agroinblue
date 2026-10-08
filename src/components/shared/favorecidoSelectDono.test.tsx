@@ -118,7 +118,7 @@ describe('a linha fixa do documento sob o campo', () => {
     const linha = () => screen.getByTestId('favorecido-documento');
     expect(linha().textContent).toBe('');
     const classe = linha().className;
-    expect(classe).toContain('h-3');
+    expect(classe).toContain('h-[14px]');
     abrir(); fireEvent.click(opcoes()[0]);
     expect(linha().textContent).toBe('11.222.333/0001-81');
     abrir(); fireEvent.click(opcoes().find((o) => o.textContent?.includes('Sicrano')) as HTMLElement);
@@ -212,6 +212,88 @@ describe('o leitor único', () => {
     definirSituacaoDoLeitor({ carregando: true });
     render(<Campo modo="leitor" inicial="uni" />);
     expect(screen.getByRole('combobox').textContent).toBe('Carregando…');
+  });
+});
+
+describe('a ação fixa do pé da lista (o "Outro…" do emitente do documento)', () => {
+  function ComAcao({ aoAgir }: { aoAgir: () => void }) {
+    const [value, setValue] = useState('uni');
+    const [busca, setBusca] = useState('');
+    return <FavorecidoSelect value={value} onChange={setValue} clienteId="cli" search={busca} onSearchChange={setBusca}
+      acaoFinal={{ label: 'Outro (informar nome e CNPJ/CPF)', onSelect: aoAgir }} />;
+  }
+  it('fica FORA da rolagem, continua com a busca sem resultado, e ao clicar chama o hospedeiro, fecha a lista e NÃO muda o valor', () => {
+    const aoAgir = vi.fn();
+    render(<ComAcao aoAgir={aoAgir} />);
+    abrir();
+    const acao = screen.getByTestId('favorecido-acao-final');
+    expect(acao.textContent).toBe('Outro (informar nome e CNPJ/CPF)');
+    expect(screen.getByTestId('favorecido-lista').contains(acao)).toBe(false);
+    digitar('zzzz');
+    expect(opcoes()).toHaveLength(0);
+    fireEvent.click(screen.getByTestId('favorecido-acao-final'));
+    expect(aoAgir).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('favorecido-lista')).toBeNull();
+    expect(screen.getByRole('combobox').textContent).toContain('Beltrano');
+  });
+  it('sem a prop, a ação não existe', () => {
+    render(<Campo modo="leitor" />);
+    abrir();
+    expect(screen.queryByTestId('favorecido-acao-final')).toBeNull();
+  });
+});
+
+describe('fatia 2a (Financeiro) — os pontos usam o dono pelo LEITOR, sem lista do hospedeiro', () => {
+  const ler = (c: string) => readFileSync(resolve(process.cwd(), c), 'utf8');
+  /** os usos de <FavorecidoSelect …/> de um arquivo (do `<` ao `/>`) */
+  const usos = (fonte: string) => fonte.match(/<FavorecidoSelect(?:<[A-Za-z]+>)?\s+[a-zA-Z][\s\S]*?\/>/g) ?? [];   /* `<FavorecidoSelect />` em comentário não é uso */
+  it('AUTO-TESTE: o leitor de usos acha o uso e vê a lista passada por prop', () => {
+    const u = usos('<div><FavorecidoSelect value={a}\n  fornecedores={lista} /></div>');
+    expect(u).toHaveLength(1);
+    expect(/\bfornecedores=\{/.test(u[0])).toBe(true);
+  });
+  it.each([
+    ['src/components/recorrencias/RecorrenciaDialog.tsx', 1],
+    ['src/components/financeiro-v2/ContratoDialog.tsx', 1],
+    ['src/components/financeiro-v2/AbaDocumentosLancamento.tsx', 1],
+    ['src/components/conciliacao/SemClassificacaoModal.tsx', 1],
+    ['src/components/financeiro-v2/LancamentoV2Dialog.tsx', 1],
+  ])('%s: %i uso(s), todos com `clienteId` e nenhum com `fornecedores`', (arquivo, quantos) => {
+    const u = usos(ler(arquivo));
+    expect(u).toHaveLength(quantos);
+    for (const uso of u) {
+      expect(uso).toMatch(/\bclienteId=\{/);
+      expect(uso).not.toMatch(/\bfornecedores=\{/);
+    }
+  });
+  it('o contrato não tem mais seletor próprio de fornecedor (Popover, busca e teclado saíram)', () => {
+    const c = ler('src/components/financeiro-v2/ContratoDialog.tsx');
+    for (const resto of ['fornecedorOpen', 'filteredFornecedores', 'handleFornecedorKeyDown', 'fornecedorItemRefs', 'Buscar fornecedor...']) expect(c).not.toContain(resto);
+    expect(c).toContain('onSelected={aoEscolherFornecedor}');
+  });
+  it('Sem classificação é CÉLULA DE TABELA: a linha fixa fica desligada (o documento vai no title e na opção)', () => {
+    expect(usos(ler('src/components/conciliacao/SemClassificacaoModal.tsx'))[0]).toContain('linhaDoDocumento={false}');
+  });
+  it('o emitente do documento não usa mais o SearchableSelect, e os quatro lugares de documentos passam o cliente, não a lista', () => {
+    const aba = ler('src/components/financeiro-v2/AbaDocumentosLancamento.tsx');
+    expect(aba).not.toContain('SearchableSelect');
+    expect(aba).not.toMatch(/\bfornecedores\b\s*[:=]/);
+    for (const [arquivo, peca] of [
+      ['src/components/financeiro-v2/DocumentosPendentes.tsx', '<FormDocumento'],
+      ['src/components/financiamentos/DocumentosNaCriacao.tsx', '<DocumentosPendentes'],
+      ['src/components/financiamentos/DocumentosDoContrato.tsx', '<AbaDocumentosLancamento'],
+      ['src/components/financeiro-v2/LancamentoV2Dialog.tsx', '<AbaDocumentosLancamento'],
+      ['src/components/financeiro-v2/LancamentoV2Dialog.tsx', '<DocumentosPendentes'],
+    ] as const) {
+      const fonte = ler(arquivo);
+      const blocos = fonte.split(peca).slice(1).map((b) => b.slice(0, b.indexOf('/>')));
+      expect(blocos.length, `${arquivo} ${peca}`).toBeGreaterThan(0);
+      for (const b of blocos) {
+        expect(b, `${arquivo} ${peca}`).toMatch(/\bclienteId=\{/);
+        expect(b, `${arquivo} ${peca}`).not.toMatch(/\bfornecedores=\{/);
+        expect(b, `${arquivo} ${peca}`).not.toMatch(/\bclienteId=\{(null|undefined|'')\}/);   /* o cliente de verdade, não um vazio */
+      }
+    }
   });
 });
 

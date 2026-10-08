@@ -16,15 +16,19 @@ import { ParcelasDaCompra } from '@/components/financeiro-v2/ParcelasDaCompra';
 import {
   novoPendente, partesDoNome, numeroDaNotaDaCompra, type DocumentoPendente,
 } from '@/lib/financeiro/documentosPendentes';
+import { definirFornecedoresDoLeitor } from '@/test/leitorDeFornecedoresFake';
+/* FORN-SELETOR-PADRAO-01 fatia 2a — o emitente lê do leitor único (de mentira no teste) */
+vi.mock('@/hooks/useFornecedoresDoCliente', async () => (await import('@/test/leitorDeFornecedoresFake')).moduloDoLeitorFake());
 
 const FORNECEDORES = [{ id: 'f-agro', nome: 'Agro Insumos' }, { id: 'f-outro', nome: 'Outro Fornecedor' }];
 const SUGESTAO = { numero: '18112', dataEmissao: '2026-09-29', valor: 24052, emitenteId: 'f-agro' };
 const pdf = (nome: string) => new File(['%PDF'], nome, { type: 'application/pdf' });
 
 function monta(pendentes: DocumentoPendente[] = []) {
+  definirFornecedoresDoLeitor(FORNECEDORES);
   let lista = pendentes;
   const r = render(<DocumentosPendentes pendentes={lista} onMudar={f => { lista = f(lista); }}
-    fornecedores={FORNECEDORES} ligadoA={8} sugestao={SUGESTAO} />);
+    clienteId="cli" ligadoA={8} sugestao={SUGESTAO} />);
   return { ...r, lista: () => lista };
 }
 

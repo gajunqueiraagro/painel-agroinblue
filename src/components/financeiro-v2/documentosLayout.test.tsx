@@ -15,6 +15,8 @@ vi.mock('@/integrations/supabase/client', () => ({ supabase: { rpc: vi.fn(), fro
 
 import { AbaDocumentosLancamento } from '@/components/financeiro-v2/AbaDocumentosLancamento';
 import type { LancDocumento, LancamentoDocumentosApi } from '@/hooks/useLancamentoDocumentos';
+/* FORN-SELETOR-PADRAO-01 fatia 2a — o emitente lê do leitor único (de mentira no teste) */
+vi.mock('@/hooks/useFornecedoresDoCliente', async () => (await import('@/test/leitorDeFornecedoresFake')).moduloDoLeitorFake());
 
 const doc = (x: Partial<LancDocumento>): LancDocumento => ({
   id: 'd', origem: 'lancamento', operacaoId: null, especie: 'nf', especieOC: null, nome: 'nf', numero: null, serie: null,
@@ -37,7 +39,7 @@ function api(documentos: LancDocumento[]): LancamentoDocumentosApi {
   };
 }
 const monta = (documentos: LancDocumento[]) => render(
-  <MemoryRouter><AbaDocumentosLancamento api={api(documentos)} fornecedores={[]} /></MemoryRouter>);
+  <MemoryRouter><AbaDocumentosLancamento api={api(documentos)} clienteId="cli" /></MemoryRouter>);
 const linhas = () => screen.queryAllByTestId('linha-documento');
 const n = (s: string | null | undefined) => (s ?? '').replace(/\s/g, ' ');
 

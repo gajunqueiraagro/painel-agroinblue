@@ -25,7 +25,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Segmentado } from '@/components/ui/segmentado';
-import { SearchableSelect } from '@/components/ui/searchable-select';
+import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
+import { useFornecedoresDoCliente } from '@/hooks/useFornecedoresDoCliente';
+import type { FornecedorLido } from '@/lib/fornecedores/leitorDeFornecedores';
 import { CampoMoeda } from '@/components/ui/campo-moeda';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Paperclip, Pencil, Ban, Plus, X } from 'lucide-react';
@@ -65,13 +67,14 @@ const dataBr = (iso: string | null) => (iso ? iso.split('-').reverse().join('/')
 const GRADE_DOCUMENTOS = 'grid grid-cols-[max-content_minmax(0,1fr)_70px_92px_66px_72px] gap-x-[10px]';
 const LINHA_DOCUMENTOS = 'col-span-full grid [grid-template-columns:subgrid] items-center';
 
-export function AbaDocumentosLancamento({ api, somenteLeitura, fornecedores, onAnexarBoletosDasParcelas, sugestao, semBoleto }: {
+export function AbaDocumentosLancamento({ api, somenteLeitura, clienteId, onAnexarBoletosDasParcelas, sugestao, semBoleto }: {
   api: LancamentoDocumentosApi;
   /** Sem o tipo Boleto no formulário — PARC-LIVRES-01 passo 6: no CONTRATO esta lista é a dos documentos da COMPRA (valem para
    *  todas as parcelas); o boleto é de UMA parcela e entra pela grade das parcelas, logo abaixo. */
   semBoleto?: boolean;
   somenteLeitura?: boolean;
-  fornecedores: FornecedorDoDocumento[];
+  /** FORN-SELETOR-PADRAO-01 fatia 2a — o cliente de quem o emitente se escolhe (a lista é a do leitor único, não a do hospedeiro). */
+  clienteId: string | null;
   /** O que o lançamento SALVO já diz, para o documento NOVO nascer preenchido — FIN-DOCUMENTO-FORM-01. É a MESMA sugestão do
    *  lançamento novo, montada no mesmo ponto do `LancamentoV2Dialog`. Editar um documento existente nunca a recebe. */
   sugestao?: SugestaoDocumento;
@@ -295,7 +298,7 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, fornecedores, onA
       )}
 
       {formAberto && (
-        <FormDocumento api={api} documento={editando} fornecedores={fornecedores} sugestao={sugestao} semBoleto={semBoleto}
+        <FormDocumento api={api} documento={editando} clienteId={clienteId} sugestao={sugestao} semBoleto={semBoleto}
           onFechar={() => { setFormAberto(false); setEditando(null); }} />
       )}
 
@@ -351,8 +354,8 @@ export interface SugestaoDocumento {
  *   PRESENÇA mudam. Linha digitável, vencimento do boleto, "referente a" do recibo e autenticação como campo próprio pedem
  *   coluna nova — FIN-DOCUMENTO-FORM-02.
  */
-/** O fornecedor como o formulário o lê. `ativo` ausente conta como ativo (a regra do `FavorecidoSelect`: `ativo !== false`). */
-export interface FornecedorDoDocumento { id: string; nome: string; ativo?: boolean | null }
+/* FORN-SELETOR-PADRAO-01 fatia 2a — a linha fixa do documento sob o campo do emitente (D8). Medida no navegador: ver o CLAUDE.md. */
+const LINHA_DO_DOCUMENTO_DO_EMITENTE = true;
 
 export const CAMPOS_POR_ESPECIE: Record<EspecieLancDoc, {
   numero: string; data: string; valor: string;
@@ -369,10 +372,11 @@ export const CAMPOS_POR_ESPECIE: Record<EspecieLancDoc, {
   outro: { numero: 'Identificação', data: 'Data', valor: 'Valor', emitente: 'Emitente', serie: false, chave: false, dataNaSugestao: 'data' },
 };
 
-export function FormDocumento({ api, documento, fornecedores, onFechar, pendente, semBoleto, sugestao }: {
+export function FormDocumento({ api, documento, clienteId, onFechar, pendente, semBoleto, sugestao }: {
   api: LancamentoDocumentosApi;
   documento: LancDocumento | null;
-  fornecedores: FornecedorDoDocumento[];
+  /** O cliente de quem o emitente se escolhe — a lista é a do LEITOR ÚNICO (só ativos, com documento). */
+  clienteId: string | null;
   onFechar: () => void;
   pendente?: boolean;
   /** Documento da COMPRA no parcelado: o boleto é por parcela, na grade de parcelas (PR 2b). */
@@ -382,11 +386,10 @@ export function FormDocumento({ api, documento, fornecedores, onFechar, pendente
 }) {
   /* ⚠ SUGESTÃO NÃO ENTRA EM REGISTRO JÁ GRAVADO (RECLASS-PESO-01): com `documento`, vale o que ele tem. */
   const sug = documento ? null : (sugestao ?? null);
-  /* ⚠ SÓ FORNECEDOR ATIVO NA LISTA DO EMITENTE (a regra do `FavorecidoSelect`), MAIS o que já está gravado no documento em
-     edição, mesmo inativo — senão o valor atual sumiria do campo. Digitar "pant" trazia quatro cadastros do mesmo fornecedor,
-     três deles inativos. */
-  const fornecedoresDaLista = fornecedores.filter(f => f.ativo !== false || f.id === documento?.emitenteId);
-  const emitenteSugerido = sug?.emitenteId && fornecedoresDaLista.some(f => f.id === sug.emitenteId) ? sug.emitenteId : null;
+  /* ⚠ O EMITENTE É O DONO DO SELETOR DE FORNECEDOR (FORN-SELETOR-PADRAO-01 fatia 2a): só ATIVOS na lista, e o que já está
+     gravado no documento em edição, mesmo inativo, continua no campo com a marca "inativo" — não entra mais na lista.
+     A sugestão do lançamento é o emitente que ele já tem; o seletor a mostra como qualquer valor gravado. */
+  const emitenteSugerido = sug?.emitenteId || null;
   const [especie, setEspecie] = useState<EspecieLancDoc>(documento?.especie ?? 'nf');
   const [numero, setNumero] = useState(documento?.numero ?? sug?.numero ?? '');
   const [serie, setSerie] = useState(documento?.serie ?? '');
@@ -427,6 +430,11 @@ export function FormDocumento({ api, documento, fornecedores, onFechar, pendente
 
   const OUTRO = '__outro__';
   const emitenteEhOutro = emitenteId === OUTRO;
+  /* o NOME do emitente escolhido sai do leitor único (o mesmo cache do seletor): entre os ativos, ou o gravado inativo */
+  const [buscaEmitente, setBuscaEmitente] = useState('');
+  const doLeitor = useFornecedoresDoCliente(clienteId, emitenteEhOutro ? null : (emitenteId || null));
+  const nomeDoEmitente = emitenteEhOutro || !emitenteId ? null
+    : (doLeitor.fornecedores.find(f => f.id === emitenteId)?.nome ?? (doLeitor.gravado?.id === emitenteId ? doLeitor.gravado.nome : null));
   /* O documento que está sendo criado/editado pertence à OC? Documento novo segue o
      lançamento (`api.operacaoId`); documento existente segue a própria origem. */
   const destinoOC = documento ? documento.origem === 'operacao' : !!api.operacaoId;
@@ -451,7 +459,7 @@ export function FormDocumento({ api, documento, fornecedores, onFechar, pendente
     ...(campos.emitente ? {
       emitenteId: emitenteEhOutro ? null : (emitenteId || null),
       emitenteNome: emitenteEhOutro ? (emitenteNome.trim() || null)
-        : (fornecedores.find(f => f.id === emitenteId)?.nome ?? null),
+        : nomeDoEmitente,
       emitenteDocumento: emitenteEhOutro ? (emitenteDoc.trim() || null) : null,
     } : especieSoLeitura ? {
       emitenteId: documento?.emitenteId ?? null, emitenteNome: documento?.emitenteNome ?? null,
@@ -601,19 +609,20 @@ export function FormDocumento({ api, documento, fornecedores, onFechar, pendente
                 className={`h-8 text-[12px] mt-0.5${sugNumero ? AMBAR : ''}`} placeholder="Opcional" />
             </div>
           )}
-          {/* ── EMITENTE COM BUSCA — o `SearchableSelect` da casa (UI-DROPDOWN-PADRAO-01): digita e procura. Era um Select
-              com a lista inteira dos fornecedores, sem busca. "Outro" é a ação do rodapé da lista. ── */}
+          {/* ── EMITENTE — o DONO do seletor de fornecedor (FORN-SELETOR-PADRAO-01 fatia 2a): busca por nome e por CNPJ/CPF, só
+              ativos, documento à vista. "Outro (informar nome e CNPJ/CPF)" é a ação fixa do pé da lista. ── */}
           {campos.emitente && (
             <div className="col-span-2" data-testid="doc-emitente">
               <Label className="text-[10px]">{campos.emitente}</Label>
-              <SearchableSelect dense semTodos
-                value={emitenteEhOutro ? '' : emitenteId} allValue=""
-                allLabel={emitenteEhOutro ? 'Outro (informar nome e CNPJ/CPF)' : 'Selecione'}
-                onValueChange={setEmitenteId}
-                options={fornecedoresDaLista.map(f => ({ value: f.id, label: f.nome }))}
-                placeholder="Digite para buscar…"
-                acaoFinal={{ label: 'Outro (informar nome e CNPJ/CPF)', onSelect: () => setEmitenteId(OUTRO) }}
-                className={`mt-0.5${sugEmitente ? ' [&>button]:border-amber-300 [&>button]:bg-amber-50' : ''}`} />
+              <div className="mt-0.5">
+                <FavorecidoSelect<FornecedorLido>
+                  value={emitenteEhOutro ? '' : emitenteId} onChange={setEmitenteId}
+                  clienteId={clienteId} linhaDoDocumento={LINHA_DO_DOCUMENTO_DO_EMITENTE} limpavel
+                  search={buscaEmitente} onSearchChange={setBuscaEmitente}
+                  placeholder={emitenteEhOutro ? 'Outro (informar nome e CNPJ/CPF)' : 'Selecione'}
+                  acaoFinal={{ label: 'Outro (informar nome e CNPJ/CPF)', onSelect: () => setEmitenteId(OUTRO) }}
+                  triggerClassName={sugEmitente ? 'border-amber-300 bg-amber-50' : undefined} />
+              </div>
             </div>
           )}
           {campos.emitente && emitenteEhOutro && (<>

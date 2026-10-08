@@ -88,10 +88,11 @@ export function apiDePendentes(
   };
 }
 
-export function DocumentosPendentes({ pendentes, onMudar, fornecedores, ligadoA, travado, sugestao }: {
+export function DocumentosPendentes({ pendentes, onMudar, clienteId, ligadoA, travado, sugestao }: {
   pendentes: DocumentoPendente[];
   onMudar: (f: (l: DocumentoPendente[]) => DocumentoPendente[]) => void;
-  fornecedores: { id: string; nome: string }[];
+  /** FORN-SELETOR-PADRAO-01 fatia 2a — o cliente de quem o emitente se escolhe (leitor único). */
+  clienteId: string | null;
   /**
    * PARCELADO — FIN-NFE-PARCELAS-01 PR 2b: os documentos desta lista são os da COMPRA, registrados na
    * parcela 1 e ligados às N. A coluna "Ligado a" diz a quantas, e o boleto não é oferecido aqui (ele
@@ -186,7 +187,7 @@ export function DocumentosPendentes({ pendentes, onMudar, fornecedores, ligadoA,
       )}
 
       {formAberto && (
-        <FormDocumento api={api} documento={editando} fornecedores={fornecedores} pendente semBoleto={!!ligadoA}
+        <FormDocumento api={api} documento={editando} clienteId={clienteId} pendente semBoleto={!!ligadoA}
           sugestao={sugestao}
           onFechar={() => { setFormAberto(false); setEditando(null); }} />
       )}
