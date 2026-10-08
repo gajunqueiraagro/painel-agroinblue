@@ -162,7 +162,10 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 08/10/2026 (FORN-SELETOR-PADRAO-01 fatia 2a, +13: `src/components/shared/favorecidoSelectDono.test.tsx` 11,
+  Baseline em 08/10/2026 (FORN-SELETOR-PADRAO-01 conserto 2a-fix1, +7: `src/components/shared/favorecidoSelectDono.test.tsx` 3,
+  `src/components/recorrencias/recorrenciaDialog.test.tsx` 2, `src/components/financiamentos/documentosNaCriacao.test.tsx` 1,
+  `src/components/financiamentos/documentosDoContrato.test.tsx` 1 — 4594 depois dele; antes a
+  FORN-SELETOR-PADRAO-01 fatia 2a, +13: `src/components/shared/favorecidoSelectDono.test.tsx` 11,
   `src/components/financeiro-v2/documentoFormPorTipo.test.tsx` 2 — 4587 depois dele; antes o
   FORN-SELETOR-PADRAO-01 passo 1b, +50: `src/lib/fornecedores/fornecedorTexto.test.ts` 22,
   `src/components/shared/favorecidoSelectDono.test.tsx` 27, `src/hooks/useFornecedoresDoCliente.test.tsx` 1 — 4574 depois dele; antes o
@@ -259,7 +262,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4587
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4594
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -1263,6 +1266,30 @@ preview que o cabecalho nao sai da tela ao rolar.
     NAVEGADOR: o arrasto real do Finder (so' evento sintetico), boletos e OC dentro dos modais reais, o clique abrindo o seletor
     do sistema, e os tres `@dnd-kit` com a protecao ligada (so' por teste de fonte) · OC-DOCUMENTO-XML-REAL-01: subir e abrir um
     `.xml` real na OC e na aba Documentos (homologacao do Gabriel).
+- ⚠ O "+" DO SELETOR DE FORNECEDOR SO' EXISTE COM UM CADASTRO DE VERDADE ATRAS, E O EMITENTE NO CONTRATO NASCE COM O CREDOR
+  (FORN-SELETOR-PADRAO-01 conserto 2a-fix1, Gabriel 08/10/2026, so' tela).
+  · O dono (`FavorecidoSelect`) so' desenha o "+" quando o hospedeiro passa `onCriarNovo`; PROIBIDO passar handler vazio — preso
+    por teste de fonte com auto-teste do detector (`favorecidoSelectDono.test.tsx`, varre todo `onCriarNovo={…}` de `src`).
+    Nasce da recorrencia, que passava `() => { /* … */ }`: o botao aparecia e nao fazia nada.
+  · RECORRENCIA (`RecorrenciaDialog`): o "+" abre o MESMO `NovoFornecedorDialog` do modal do lancamento e grava por
+    `criarFornecedor` (que ja' avisa o leitor unico); o novo volta ESCOLHIDO, sem F5; se o dono devolve nulo, o cadastro continua
+    aberto. ⚠ DIFERENCA DECLARADA do modal do lancamento: la' o cadastro exige fazenda escolhida (toast); aqui vai a fazenda da
+    recorrencia se ja' houver, senao nula (a coluna aceita).
+  · ANTES o emitente do documento NAO nascia com o credor no contrato (`DocumentosNaCriacao`, `DocumentosDoContrato`: nenhum
+    passava `sugestao`). AGORA os dois passam `sugestao` so' com `emitenteId` = o credor do contrato e `origem: 'o contrato'`
+    (campo novo, opcional, de `SugestaoDocumento`): o emitente do documento NOVO nasce com ele em ambar, editavel, e a faixa diz
+    "Preenchido com o que o contrato diz (emitente) — confira. Mudar aqui não muda o contrato." Sem `origem` a frase e' a de
+    sempre ("o lançamento"). Sem credor, nasce vazio. Documento ja' gravado nao recebe sugestao (regra de sempre).
+    `DocumentosNaCriacao` voltou a receber `credorId` (o `ObrigacaoDialog` passa `form.credor_id`).
+  PROVA NO NAVEGADOR (cliente Teste, 08/10, aba em SEGUNDO PLANO, 1.168 x 579, sintetico criado e APAGADO): recorrencia nova, "+" ->
+  "Novo Fornecedor" -> salvo: o campo Favorecido mostrou o novo e a linha "sem CNPJ/CPF", sem recarregar; Nova obrigacao ›
+  Parcelamento com esse credor › Documentos › Adicionar documento: Emitente em ambar com o credor e a faixa "o contrato". 7 mutacoes mortas.
+  ⚠ NAO PROVADO NO NAVEGADOR: a edicao do contrato (`DocumentosDoContrato`, so' por teste da prop), trocar o emitente sugerido e
+    gravar, o cadastro que falha, e a largura 1.126.
+  ⚠ PARA A FATIA 2b (medido antes de trocar, 08/10): NENHUM dos oito pontos de OC tem lista restrita por tipo ou papel — todos
+    oferecem os fornecedores ATIVOS do cliente. Diferencas: `useOperacaoLiquidacao` poe na LISTA tambem o em uso inativo (no dono
+    ele fica no campo com a marca, fora da lista); so' o abate tira o "[META]" (no dono sai de todos, D7); o boitel e a venda nao
+    tem documento na lista.
 - ⚠ FORNECEDOR NO FINANCEIRO: OS CINCO PONTOS USAM O DONO PELO LEITOR UNICO (FORN-SELETOR-PADRAO-01 fatia 2a, Gabriel 08/10/2026, so' tela).
   Nenhum deles recebe mais a lista do hospedeiro; todos passam `clienteId` ao `FavorecidoSelect` (preso por teste de fonte, com
   auto-teste do leitor de usos).

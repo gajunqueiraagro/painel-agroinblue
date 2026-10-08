@@ -58,8 +58,8 @@ vi.mock('@/lib/financeiro/documentosPendentes', async (orig) => {
   } };
 });
 vi.mock('@/components/financeiro-v2/AbaDocumentosLancamento', () => ({
-  AbaDocumentosLancamento: ({ api, semBoleto }: { api: { documentos: { especie: string; numero: string }[]; confronto: unknown; registrar: (p: unknown) => Promise<unknown> }; semBoleto?: boolean }) => (
-    <div data-testid="lista-da-compra" data-sem-boleto={String(!!semBoleto)} data-confronto={String(api.confronto)}>
+  AbaDocumentosLancamento: ({ api, semBoleto, sugestao }: { api: { documentos: { especie: string; numero: string }[]; confronto: unknown; registrar: (p: unknown) => Promise<unknown> }; semBoleto?: boolean; sugestao?: { emitenteId: string | null; origem?: string; numero: unknown; valor: unknown; dataEmissao: unknown } }) => (
+    <div data-testid="lista-da-compra" data-sem-boleto={String(!!semBoleto)} data-sugestao={sugestao ? JSON.stringify(sugestao) : ''} data-confronto={String(api.confronto)}>
       {api.documentos.map((d, i) => <span key={i} data-testid="doc-da-lista">{d.especie}:{d.numero}</span>)}
       <button type="button" data-testid="registrar-pela-lista" onClick={() => void api.registrar({ especie: 'nf', numero: '900' })}>registrar</button>
     </div>
@@ -105,6 +105,14 @@ beforeEach(() => {
 });
 
 describe('documentos da compra', () => {
+  it('2a-fix1 — o emitente do documento novo é SUGERIDO com o credor do contrato (e só o emitente); sem credor, sem sugestão', async () => {
+    const { unmount } = montar();
+    expect(JSON.parse((await screen.findByTestId('lista-da-compra')).getAttribute('data-sugestao') ?? ''))
+      .toEqual({ numero: null, dataEmissao: null, valor: null, emitenteId: 'forn-1', origem: 'o contrato' });
+    unmount();
+    montar({ credorId: null });
+    expect((await screen.findByTestId('lista-da-compra')).getAttribute('data-sugestao')).toBe('');
+  });
   it('a lista é a dos documentos da 1ª parcela SEM o boleto, sem o confronto de uma parcela só, e o formulário não oferece Boleto', async () => {
     montar();
     const lista = await screen.findByTestId('lista-da-compra');

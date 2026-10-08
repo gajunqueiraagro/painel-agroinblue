@@ -31,7 +31,8 @@ const SAFRAS = vi.hoisted(() => [
 const FIN = vi.hoisted(() => {
   const noop = async () => undefined;
   return { classificacoes: [] as ClassificacaoItem[], fornecedores: [], contasBancarias: [], safras: [] as Safra[],
-    loadClassificacoes: noop, loadFornecedores: noop, loadContas: noop, loadSafras: noop, criarFornecedor: async () => null };
+    loadClassificacoes: noop, loadFornecedores: noop, loadContas: noop, loadSafras: noop,
+    criarFornecedor: vi.fn(async (_nome: string, _fazenda: string | null, _doc?: string): Promise<{ id: string; nome: string } | null> => null) };
 });
 vi.mock('@/hooks/useFinanceiroV2', () => ({ useFinanceiroV2: () => FIN }));
 vi.mock('@/contexts/FazendaContext', () => ({ useFazenda: () => ({ fazendas: [{ id: 'f-pur', nome: 'Faz. Pureza' }] }) }));
@@ -54,6 +55,13 @@ beforeEach(() => {
   Element.prototype.releasePointerCapture = () => {};
 });
 
+const ED_FIX1 = {
+  id: 'rec-1', descricao: 'Folha de Pagamento', favorecidoId: null, favorecidoNome: null, contaBancariaId: 'bb',
+  subcentro: 'Salários e Encargos Pecuária', safraId: 'sf-pec-2526', formaPagamento: null, observacao: null,
+  valorBase: -3085, tipoOperacao: '2-Saídas', diaVencimento: 5, dataInicio: '2026-10-01', primeiroVencimento: '2026-11-05',
+  dataFim: '2027-09-30', ativo: true, ultimoLancamentoGerado: null, fazendaId: 'f-pur', proximaCompetencia: null,
+  situacao: 'ativa', gerados: 0,
+} as Recorrencia;
 const VAZIO: ClassificacaoValor = { atividade: null, safra_id: '', cultura: '', fase: '', subcentro: '', macro_custo: '',
   grupo_custo: '', centro_custo: '', escopo_negocio: '', plano_conta_id: null };
 
@@ -93,6 +101,36 @@ describe('DiaVencimentoGrade', () => {
     fireEvent.click(within(grade).getByRole('button', { name: '28' }));
     expect(onChange).toHaveBeenCalledWith(28);
     await waitFor(() => expect(screen.queryByTestId('grade-dia-vencimento')).toBeNull());
+  });
+});
+
+describe('RecorrenciaDialog — 2a-fix1: o "+" do favorecido abre o cadastro de fornecedor', () => {
+  it('abre o Novo Fornecedor; salvo, o novo fica ESCOLHIDO e vai no payload da recorrência (sem recarregar nada)', async () => {
+    FIN.criarFornecedor.mockClear();
+    FIN.criarFornecedor.mockResolvedValueOnce({ id: 'forn-novo', nome: 'Fornecedor Novo Ltda' });
+    render(<RecorrenciaDialog recorrencia={ED_FIX1} clienteId="nj" aoFechar={() => {}} aoSalvar={() => {}} />);
+    expect(screen.queryByText('Novo Fornecedor')).toBeNull();
+    fireEvent.click(screen.getByTitle('Novo Fornecedor'));
+    const cadastro = await screen.findByRole('dialog', { name: 'Novo Fornecedor' });
+    fireEvent.change(within(cadastro).getAllByRole('textbox')[0], { target: { value: 'Fornecedor Novo Ltda' } });
+    fireEvent.click(within(cadastro).getByRole('button', { name: /salvar|criar|cadastrar/i }));
+    await waitFor(() => expect(FIN.criarFornecedor).toHaveBeenCalledTimes(1));
+    /* a fazenda da recorrência acompanha; o documento é opcional */
+    expect(FIN.criarFornecedor.mock.calls[0].slice(0, 2)).toEqual(['Fornecedor Novo Ltda', 'f-pur']);
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Novo Fornecedor' })).toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar' }));
+    await waitFor(() => expect(GRAVADO.payloads).toHaveLength(1));
+    expect(GRAVADO.payloads[0]).toMatchObject({ favorecido_id: 'forn-novo' });
+  });
+  it('cadastro que falha (o dono devolve nulo): nada é escolhido e o cadastro continua aberto', async () => {
+    FIN.criarFornecedor.mockClear();
+    render(<RecorrenciaDialog recorrencia={ED_FIX1} clienteId="nj" aoFechar={() => {}} aoSalvar={() => {}} />);
+    fireEvent.click(screen.getByTitle('Novo Fornecedor'));
+    const cadastro = await screen.findByRole('dialog', { name: 'Novo Fornecedor' });
+    fireEvent.change(within(cadastro).getAllByRole('textbox')[0], { target: { value: 'Outro' } });
+    fireEvent.click(within(cadastro).getByRole('button', { name: /salvar|criar|cadastrar/i }));
+    await waitFor(() => expect(FIN.criarFornecedor).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole('dialog', { name: 'Novo Fornecedor' })).not.toBeNull();
   });
 });
 

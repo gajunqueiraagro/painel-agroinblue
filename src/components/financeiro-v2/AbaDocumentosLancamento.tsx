@@ -339,6 +339,8 @@ export interface SugestaoDocumento {
   emitenteId: string | null;
   /** A data de PAGAMENTO do lançamento: é a data sugerida quando o documento é um COMPROVANTE (FIN-DOCUMENTO-FORM-01). */
   dataPagamento?: string | null;
+  /** De onde a sugestão veio, na frase da faixa âmbar ("o lançamento" por padrão; no contrato de parcelamento, "o contrato" — 2a-fix1). */
+  origem?: string;
 }
 
 /**
@@ -541,7 +543,7 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
 
         {(sugNumero || sugData || sugValor || sugEmitente) && (
           <p className="mx-4 mt-3 rounded border border-amber-300 bg-amber-50 px-2 py-1 text-[10px] text-amber-900" data-testid="sugestao-do-lancamento">
-            Preenchido com o que o lançamento diz ({[sugNumero && 'número', sugData && campos.dataNaSugestao, sugValor && 'valor', sugEmitente && 'emitente'].filter(Boolean).join(', ')}) — confira. Mudar aqui não muda o lançamento.
+            Preenchido com o que {sug?.origem ?? 'o lançamento'} diz ({[sugNumero && 'número', sugData && campos.dataNaSugestao, sugValor && 'valor', sugEmitente && 'emitente'].filter(Boolean).join(', ')}) — confira. Mudar aqui não muda {sug?.origem ?? 'o lançamento'}.
           </p>
         )}
         <div className="grid grid-cols-2 gap-2 px-4 py-3">

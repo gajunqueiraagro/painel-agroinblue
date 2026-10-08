@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useState } from 'react';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 
@@ -294,6 +294,48 @@ describe('fatia 2a (Financeiro) — os pontos usam o dono pelo LEITOR, sem lista
         expect(b, `${arquivo} ${peca}`).not.toMatch(/\bclienteId=\{(null|undefined|'')\}/);   /* o cliente de verdade, não um vazio */
       }
     }
+  });
+});
+
+describe('2a-fix1 — o "+" só existe com um cadastro de verdade atrás dele', () => {
+  /** os valores de toda prop `onCriarNovo={…}` de uma fonte (chaves balanceadas) */
+  const valoresDeOnCriarNovo = (fonte: string): string[] => {
+    const saida: string[] = []; const marca = 'onCriarNovo={';
+    for (let i = fonte.indexOf(marca); i >= 0; i = fonte.indexOf(marca, i + 1)) {
+      let nivel = 1; let j = i + marca.length;
+      for (; j < fonte.length && nivel > 0; j++) { if (fonte[j] === '{') nivel++; else if (fonte[j] === '}') nivel--; }
+      saida.push(fonte.slice(i + marca.length, j - 1));
+    }
+    return saida;
+  };
+  /** vazio = função cujo corpo não faz nada (só espaço ou comentário) */
+  const ehVazio = (valor: string) => {
+    const semComentario = valor.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+    return /^\s*(\(\s*\)|\w+)\s*=>\s*(\{\s*\}|undefined|null|void 0)\s*$/.test(semComentario) || /^\s*(noop|undefined|null)\s*$/.test(semComentario);
+  };
+  const arquivos = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+    e.isDirectory() ? arquivos(resolve(dir, e.name)) : /\.tsx$/.test(e.name) && !/\.test\.tsx$/.test(e.name) ? [resolve(dir, e.name)] : []);
+
+  it('AUTO-TESTE: o detector acha o handler vazio (com e sem comentário) e deixa passar o de verdade', () => {
+    expect(valoresDeOnCriarNovo('<X onCriarNovo={() => { /* cadastro inline */ }} a={1} />').map(ehVazio)).toEqual([true]);
+    expect(valoresDeOnCriarNovo('<X onCriarNovo={() => {}} />').map(ehVazio)).toEqual([true]);
+    expect(valoresDeOnCriarNovo('<X onCriarNovo={() => setAberto(true)} />').map(ehVazio)).toEqual([false]);
+    expect(valoresDeOnCriarNovo('<X onCriarNovo={f ? () => { abrir({ a: 1 }); } : undefined} />').map(ehVazio)).toEqual([false]);
+  });
+  it('nenhum hospedeiro passa `onCriarNovo` vazio', () => {
+    const achados = arquivos(resolve(process.cwd(), 'src')).flatMap((a) => valoresDeOnCriarNovo(readFileSync(a, 'utf8')).map((v) => ({ a, v })));
+    expect(achados.length).toBeGreaterThanOrEqual(6);   /* a busca achou os hospedeiros que existem */
+    expect(achados.filter((x) => ehVazio(x.v)).map((x) => x.a)).toEqual([]);
+  });
+  it('sem `onCriarNovo` o "+" não é desenhado; com ele, é e chama o hospedeiro', () => {
+    definirFornecedoresDoLeitor([{ id: 'a', nome: 'Alfa' }]);
+    const { unmount } = render(<FavorecidoSelect value="" onChange={() => {}} clienteId="c" search="" onSearchChange={() => {}} />);
+    expect(screen.queryByTitle('Novo Fornecedor')).toBeNull();
+    unmount();
+    const criar = vi.fn();
+    render(<FavorecidoSelect value="" onChange={() => {}} clienteId="c" search="" onSearchChange={() => {}} onCriarNovo={criar} />);
+    fireEvent.click(screen.getByTitle('Novo Fornecedor'));
+    expect(criar).toHaveBeenCalledTimes(1);
   });
 });
 

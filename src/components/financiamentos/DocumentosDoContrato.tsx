@@ -193,8 +193,10 @@ export function DocumentosDoContrato({ financiamentoId, clienteId, hoje, credorI
             testId="contrato-xml-area" inputTestId="contrato-xml-input" motivoExterno={recusaXml}
             desabilitado={ocupado} onArquivos={([f]) => { if (f) void lerXml(f); }} />
         </div>
+        {/* 2a-fix1 — o emitente do documento NOVO nasce com o credor do contrato, sugerido (âmbar) e editável */}
         <AbaDocumentosLancamento api={apiDaCompra} semBoleto
-          clienteId={clienteId} />
+          clienteId={clienteId}
+          sugestao={credorId ? { numero: null, dataEmissao: null, valor: null, emitenteId: credorId, origem: 'o contrato' } : undefined} />
         {/* a NF contra a COMPRA INTEIRA (a soma das parcelas ativas, do banco) — os dois números lado a lado; a tela só compara */}
         <p className="h-[14px] text-[10px] leading-[14px]" data-testid="nota-x-compra">
           {nf?.valorDocumento == null ? <span className="text-muted-foreground">Sem nota fiscal com valor para conferir contra a compra.</span>

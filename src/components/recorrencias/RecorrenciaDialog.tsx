@@ -26,6 +26,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { EXPLICACAO_A_CONFIRMAR, ROTULO_TIPO } from '@/lib/financeiro/recorrenciasDoMes';
 import { PropagarRecorrenciaDialog } from './PropagarRecorrenciaDialog';
 import { cn } from '@/lib/utils';
+import { NovoFornecedorDialog } from '@/components/financeiro-v2/NovoFornecedorDialog';
 
 /** As duas respostas. O rótulo diz o QUE, o exemplo diz QUANDO usar. */
 const OPCOES_MES_DO_FATO: readonly { valor: MesDoFato; rotulo: string; exemplo: string }[] = [
@@ -112,6 +113,7 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
     }));
   }, [classificacoes, classificacao.subcentro, classificacao.atividade]);
   const [fornecedorSearch, setFornecedorSearch] = useState('');
+  const [novoFornecedorAberto, setNovoFornecedorAberto] = useState(false);
   const [formaPgto, setFormaPgto] = useState(ed?.formaPagamento ?? '');
   const [observacao, setObservacao] = useState(ed?.observacao ?? '');
   /* ⚠ O SINAL VIVE NO VALOR, e o tipo DERIVA dele — a mesma doutrina da tabela,
@@ -265,6 +267,7 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
   }
 
   return (
+    <>
     <Dialog open onOpenChange={o => !o && aoFechar()}>
       <DialogContent className="w-[94vw] max-w-2xl gap-0 overflow-hidden p-0">
         <DialogHeader className="border-b bg-primary/10 px-4 py-2.5 pr-12 text-left">
@@ -353,7 +356,8 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
                 value={favorecidoId} onChange={setFavorecidoId}
                 /* FORN-SELETOR-PADRAO-01 fatia 2a — a lista é a do leitor único (ativos com documento) */
                 clienteId={clienteId} search={fornecedorSearch} onSearchChange={setFornecedorSearch}
-                onCriarNovo={() => { /* cadastro inline: o "+" do próprio componente */ }}
+                /* 2a-fix1 — o "+" abre o MESMO cadastro do modal do lançamento (`NovoFornecedorDialog`); o novo volta escolhido, sem F5 */
+                onCriarNovo={() => setNovoFornecedorAberto(true)}
                 label="Favorecido"
               />
             </div>
@@ -490,5 +494,18 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    {/* 2a-fix1 — o cadastro de fornecedor do "+": o mesmo `NovoFornecedorDialog` do modal do lançamento. A fazenda do fornecedor é
+        opcional (PR-FORNECEDOR-FAZENDA-01): vai a da recorrência, se já escolhida. Quem grava é `criarFornecedor`, que avisa o
+        leitor único — o novo aparece na lista e fica escolhido, sem F5. */}
+    <NovoFornecedorDialog
+      open={novoFornecedorAberto}
+      onClose={() => setNovoFornecedorAberto(false)}
+      defaultNome={fornecedorSearch}
+      onSave={async (nome, cpfCnpj) => {
+        const novo = await criarFornecedor(nome, fazendaId || null, cpfCnpj);
+        if (novo) { setFavorecidoId(novo.id); setFornecedorSearch(''); setNovoFornecedorAberto(false); }
+      }}
+    />
+    </>
   );
 }

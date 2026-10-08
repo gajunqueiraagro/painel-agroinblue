@@ -1527,7 +1527,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                     <div style={{ height: 'clamp(250px, calc(100vh - 262px), 420px)' }}>
                       {!ehEdicao ? (
                         <DocumentosNaCriacao pendentes={pendentesDaCriacao} onMudar={setPendentesDaCriacao}
-                          parcelas={parcelasParaOsBoletos} clienteId={clienteId || null}
+                          parcelas={parcelasParaOsBoletos} clienteId={clienteId || null} credorId={form.credor_id || null}
                           travado={!!posCriacao} onNotaDoXml={(nota, arquivo) => { void preencherPelaNota(nota, arquivo); }} recadoDoXml={recadoDoXml} />
                       ) : (
                       <DocumentosDoContrato financiamentoId={financiamentoId} clienteId={clienteId} hoje={hojeLocalDosDocumentos}
