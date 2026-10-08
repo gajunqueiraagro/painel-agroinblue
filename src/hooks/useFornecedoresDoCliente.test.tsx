@@ -116,6 +116,26 @@ describe('useFornecedoresDoCliente', () => {
     expect(result.current.erro).toBeNull();
   });
 
+  it('a LISTA falhou mas o valor gravado continua visível: ele é lido por id mesmo sem a lista (passo 1b)', async () => {
+    const dados = { X: [forn('x1')] };
+    let listaFalha = true;
+    const leitor = criarLeitorDeFornecedores({
+      lerPagina: async (c, de, ate, contar) => {
+        if (listaFalha) throw new Error('rede fora');
+        const a = (dados as Record<string, FornecedorLido[]>)[c] ?? [];
+        return { linhas: a.slice(de, ate + 1), total: contar ? a.length : null };
+      },
+      lerPorId: async (c, id) => ((dados as Record<string, FornecedorLido[]>)[c] ?? []).find((f) => f.id === id) ?? null,
+    });
+    const { result } = renderHook(() => useFornecedoresDoCliente('X', 'x1', leitor));
+    await waitFor(() => expect(result.current.erro).not.toBeNull());
+    await waitFor(() => expect(result.current.gravado?.id).toBe('x1'));
+    listaFalha = false;
+    act(() => { result.current.tentarDeNovo(); });
+    await waitFor(() => expect(result.current.fornecedores).toHaveLength(1));
+    expect(result.current.gravado).toBeNull();   /* agora está entre os ativos: não é "gravado à parte" */
+  });
+
   it('fonte: quem grava no cadastro avisa o leitor — e a busca prova que acha um escritor mudo', () => {
     /* arquivo -> quantos pontos de sucesso gravam nome, documento, ativo ou apagam (medido no passo 1a) */
     const ESCRITORES: Record<string, number> = {

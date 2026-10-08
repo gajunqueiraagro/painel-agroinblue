@@ -162,7 +162,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 08/10/2026 (FORN-SELETOR-PADRAO-01 passo 1a, +22: `src/lib/fornecedores/leitorDeFornecedores.test.ts` 14,
+  Baseline em 08/10/2026 (FORN-SELETOR-PADRAO-01 passo 1b, +50: `src/lib/fornecedores/fornecedorTexto.test.ts` 22,
+  `src/components/shared/favorecidoSelectDono.test.tsx` 27, `src/hooks/useFornecedoresDoCliente.test.tsx` 1 — 4574 depois dele; antes o
+  FORN-SELETOR-PADRAO-01 passo 1a, +22: `src/lib/fornecedores/leitorDeFornecedores.test.ts` 14,
   `src/hooks/useFornecedoresDoCliente.test.tsx` 8 — 4524 depois dele; antes o
   APP-VERSAO-NOVA-01, +14 em `src/lib/app/falhaDeVersao.test.tsx` — 4502 depois dele; antes o
   PARC-CADEIA-01 passo 4, +13 em `src/components/financiamentos/gestosDoContrato.test.tsx` — 4488 depois dele; antes o
@@ -255,7 +257,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4524
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4574
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -1259,6 +1261,58 @@ preview que o cabecalho nao sai da tela ao rolar.
     NAVEGADOR: o arrasto real do Finder (so' evento sintetico), boletos e OC dentro dos modais reais, o clique abrindo o seletor
     do sistema, e os tres `@dnd-kit` com a protecao ligada (so' por teste de fonte) · OC-DOCUMENTO-XML-REAL-01: subir e abrir um
     `.xml` real na OC e na aba Documentos (homologacao do Gabriel).
+- ⚠ O SELETOR DE FORNECEDOR TEM UM DONO: `FavorecidoSelect` (FORN-SELETOR-PADRAO-01 passo 1b, Gabriel 08/10/2026, so' tela). Todo
+  campo de fornecedor / favorecido / credor / comprador vai usar ESTE componente (`src/components/shared/FavorecidoSelect.tsx`); as
+  regras puras moram em `src/lib/fornecedores/fornecedorTexto.ts` (normalizacao, formatacao, recorte). Ligado ao LEITOR UNICO, por
+  enquanto, SO' no Novo/Editar lancamento (`LancamentoV2Dialog`); os outros 32 pontos migram no PASSO 2, fatia a fatia.
+  · O CAMPO e' claro como sempre; a LISTA ABERTA e' o menu escuro padrao (UI-DROPDOWN-PADRAO-01), item de 20px a 9,5px.
+  · A OPCAO, EM UMA LINHA: nome a' esquerda (o UNICO que corta; inteiro no `title`), selo "N iguais" quando N ativos tem o mesmo
+    nome normalizado (sem acento, sem caixa, espacos duplos = um), e o CNPJ/CPF a' direita, em tom apagado (`MENU_SECUNDARIO`,
+    nao menor), que NUNCA corta. Sem documento a area fica VAZIA. O sistema avisa; nao bloqueia nem escolhe.
+  · DOCUMENTO: `formatarDocumento` — 14 digitos 00.000.000/0000-00, 11 digitos 000.000.000-00; outro tamanho aparece COMO ESTA'. A
+    mascara tem um dono (`mascaraDoDocumento`); o `documentoFormatado` da nota fiscal delega a ela.
+  · BUSCA, em memoria, sobre TODOS: pelo nome (`normalizarNome`) e, quando o digitado e' so' numero (com ou sem ponto, barra,
+    traco), tambem pelos digitos do documento. Numero que esta' no nome tambem acha.
+  · NO MAXIMO 100 OPCOES DESENHADAS (`LIMITE_DE_OPCOES`): o corte nunca muda o resultado da busca; o JA' ESCOLHIDO vem sempre no
+    topo, mesmo fora dos 100; rodape FIXO, fora da rolagem, "Mostrando 100 de N — digite para refinar".
+  · LINHA FIXA DE 12px SOB O CAMPO (`linhaDoDocumento`): o documento do escolhido, "sem CNPJ/CPF", ou vazia sem escolha — existe
+    sempre, para o formulario nao mudar de altura. Padrao: LIGADA no modo do leitor; ⚠ no modo de TRANSICAO (lista do hospedeiro)
+    fica DESLIGADA ate' a fatia dele — nenhum formulario muda de altura sem ter sido medido. Em celula de tabela: `false`, e o
+    documento vai no `title` do campo (nome · documento · inativo).
+  · VALOR GRAVADO INATIVO: o campo mostra o nome com a marca "inativo" (ambar) e o documento; ele NAO esta' na lista.
+  · "[META]" NO NOME: fora da lista (e da contagem do selo), salvo `incluirMeta` (modal de meta). A regra mora no dono.
+  · DOIS MODOS NA TRANSICAO: SEM a prop `fornecedores` e com `clienteId`, a lista e' a do leitor unico; COM `fornecedores`, a do
+    hospedeiro. O hook do leitor roda sempre (regra dos hooks) e, sem cliente, nao le'. `onSelected` recebe o objeto da lista em
+    uso (no leitor, o `FornecedorLido`, com as colunas do `FornecedorV2`).
+  · FALHA DO LEITOR: a frase em vermelho na linha fixa, com "Tentar de novo" (e dentro da lista aberta); o valor gravado continua
+    visivel — o hook le' o gravado por id tambem quando a LISTA falhou. Lendo, com valor: o campo diz "Carregando…".
+  · NO MODAL DO LANCAMENTO: quem responde "quem e' este id?" e' `fornecedorPorId` (a lista do hospedeiro e, na falta, a do
+    leitor): o resumo, os dados de pagamento e a validacao do Salvar leem dele — fornecedor criado em outra tela depois de o
+    hospedeiro carregar nao vira "Favorecido inválido". O `showCpfCnpj` saiu dali (o documento esta' na linha fixa).
+  · CUSTO NO NJ (Novo lancamento, medido de forma sincrona; antes -> depois): primeira tecla 168 -> 26 ms; limpar a busca 159 ->
+    21 ms; opcoes na pagina 2.594 -> 100. A busca devolve os mesmos conjuntos ("ag" 201, "agr" 93, "agro" 62).
+  PROVA NO NAVEGADOR (1.126 x 523; cliente Teste com 8 fornecedores e 1 lancamento SINTETICOS, criados por SQL e APAGADOS; NJ so'
+  leitura): modal 1024 x 491 antes e depois; o corpo do modal ja' rolava 15px a 523 (408 de 393) e continua igual COM e SEM a
+  linha (o campo vizinho, Produto, ja' tinha 68px) — nada passou a rolar; lista de 448px com "3 iguais" nos tres repetidos
+  (um com acento e espaco duplo), documentos formatados, "1234567" como esta', o de meta e o inativo fora, o nome longo cortando
+  e o documento inteiro; buscas "repetido" (3), "UNICO comercio" (1), "11222333", "11.222.333/0001" e "123.456.789-09" (1 cada);
+  escolher o repetido -> campo com o nome, linha "123.456.789-09", e ele no topo ao reabrir; escolher o sem documento -> "sem
+  CNPJ/CPF"; lancamento com fornecedor inativo -> "SINT FORN Inativo" + marca "inativo" + linha "55.444.333/0001-22", pelo leitor
+  de verdade (gravado por id); no NJ, 100 opcoes e "Mostrando 100 de 2.593 — digite para refinar" (a paginacao real passou de 1.000).
+  ⚠ O QUE MUDA NOS OUTROS 9 HOSPEDEIROS DO `FavorecidoSelect` JA' NESTE PASSO (a lista aberta e' do componente): a opcao em
+    nome | selo | documento (o documento so' aparece onde a lista do hospedeiro o traz), o limite de 100 com o rodape, a busca
+    por digitos, o "[META]" fora, a marca "inativo" e o `title` do campo. Fechado, o HTML deles e' o de antes (fotos identicas);
+    a linha fixa NAO entrou neles.
+  ⚠ FOTOS REGRAVADAS, de proposito: as 4 de `valorComConta.fotos.json` (o modal do lancamento ganhou a linha fixa e o `title`).
+  ⚠ TESTE QUE MONTA TELA COM O SELETOR NO MODO DO LEITOR usa o leitor de mentira: `vi.mock('@/hooks/useFornecedoresDoCliente',
+    async () => (await import('@/test/leitorDeFornecedoresFake')).moduloDoLeitorFake())` + `definirFornecedoresDoLeitor(lista)`.
+  ⚠ DIVIDAS: os demais testes que montam o `LancamentoV2Dialog` sem o leitor de mentira seguem passando com a lista do leitor
+    VAZIA (nao conferem o nome do fornecedor) · no modo de transicao a lista vem do hospedeiro sem documento em varios pontos (o
+    documento aparece quando a fatia migrar) · o item do menu segue a 9,5px (a regra vigente; o briefing original dizia 10).
+  ⚠ NAO PROVADO NO NAVEGADOR: TROCAR DE CLIENTE SEM RECARREGAR (a troca foi feita com recarga, que zera o cache: o "nao vaza"
+    esta' provado por teste do leitor e do hook) · a falha do leitor com "Tentar de novo" · criar fornecedor pelo "+" e ve^-lo na
+    lista sem F5 (o aviso esta' provado por teste) · o teclado (setas, Enter) na lista de 100 · a janela em primeiro plano (a aba
+    estava oculta; as medidas sao de layout por script) · o tempo de ABRIR isolado (medidos: primeira tecla e limpar).
 - ⚠ FORNECEDOR TEM UM LEITOR SO', POR CLIENTE (FORN-SELETOR-PADRAO-01 passo 1a, Gabriel 08/10/2026, so' tela, sem banco). Lista de
   seletor de fornecedor / favorecido / credor / comprador sai de `useFornecedoresDoCliente(cliente, gravadoId)`
   (`src/hooks/useFornecedoresDoCliente.ts`), em cima do leitor puro `src/lib/fornecedores/leitorDeFornecedores.ts`. PROIBIDO
@@ -1279,7 +1333,7 @@ preview que o cabecalho nao sai da tela ao rolar.
     (`gravarDocumentoNoCadastro`), `FinV2FornecedoresTab` (criar da pendencia), `useFinanceiroV2.criarFornecedor` e os quatro
     "criar fornecedor" do `LancamentosTab`. Escritor novo de nome, documento ou `ativo` avisa no mesmo PR.
   · FALHA: o hook devolve `erro` ("Não foi possível carregar os fornecedores. (motivo)") e `tentarDeNovo`; o campo escreve ao lado.
-  ⚠ NINGUEM USA O LEITOR AINDA (o passo 1b liga o Novo/Editar lancamento; os sete leitores antigos migram no PASSO 2, fatia a
+  ⚠ SO' O NOVO/EDITAR LANCAMENTO USA O LEITOR (desde o passo 1b; os sete leitores antigos migram no PASSO 2, fatia a
     fatia): `useFinanceiroV2`, `useOperacaoLiquidacao`, `LancamentosTab`, `FornecedorSelect`, `CredorAutocomplete`,
     `useFinanciamentoCadastro` / `DestinacoesForm` e `MesaPareamentoModal`.
   ⚠ DIVIDAS: FORN-LEITOR-ESCRITORES-MUDOS-01 — gravam no cadastro e NAO avisam: `useFinanceiro.ts` ~:1127 (o importador legado

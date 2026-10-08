@@ -2,8 +2,10 @@
  * COMO A NOTA SE ESCREVE NA TELA — FIN-NFE-XML-01d. Puro: texto e centavos, sem `Intl` dependente de ambiente.
  */
 
-/** So' os digitos de um texto ("" quando nao ha'). */
-export const soDigitos = (t: string | null | undefined): string => (t ?? '').replace(/\D/g, '');
+import { mascaraDoDocumento, soDigitos } from '@/lib/fornecedores/fornecedorTexto';
+
+/** So' os digitos de um texto ("" quando nao ha') — o dono e' `fornecedorTexto` (FORN-SELETOR-PADRAO-01); o nome segue exportado daqui. */
+export { soDigitos };
 
 /** "NF 000.178.766": o numero com nove digitos, em grupos de tres. */
 export function numeroDaNota(nNF: string): string {
@@ -19,10 +21,9 @@ export function numeroFalado(nNF: string): string {
 
 /** CNPJ "00.000.000/0000-00" ou CPF "000.000.000-00" — o formato dos cadastros. Outro tamanho: os digitos como vieram. */
 export function documentoFormatado(doc: string | null | undefined): string {
+  /* a MASCARA tem um dono (`mascaraDoDocumento`, FORN-SELETOR-PADRAO-01); aqui o tamanho invalido segue saindo so' em digitos */
   const d = soDigitos(doc);
-  if (d.length === 14) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
-  if (d.length === 11) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
-  return d;
+  return mascaraDoDocumento(d) ?? d;
 }
 
 /** Centavos -> "16.238,00" (sem "R$"). Inteiros do começo ao fim. */

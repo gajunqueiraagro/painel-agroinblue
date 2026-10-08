@@ -40,6 +40,7 @@ vi.mock('@/integrations/supabase/client', () => {
     },
   };
 });
+vi.mock('@/hooks/useFornecedoresDoCliente', async () => (await import('@/test/leitorDeFornecedoresFake')).moduloDoLeitorFake());
 vi.mock('@/contexts/ClienteContext', () => ({ useCliente: () => ({ clienteAtual: { id: 'vera', nome: 'Vera' } }) }));
 vi.mock('@/v2/components/edicao/LancamentoZooModal', () => ({ LancamentoZooModal: () => null }));
 vi.mock('@/components/financeiro-v2/AbaDocumentosLancamento', () => ({ AbaDocumentosLancamento: () => null }));
@@ -58,6 +59,7 @@ vi.mock('sonner', () => ({ toast: toastMock }));
 
 import { LancamentoV2Dialog } from './LancamentoV2Dialog';
 import { esquecerAtividade } from '@/lib/financeiro/ultimaAtividade';
+import { definirFornecedoresDoLeitor } from '@/test/leitorDeFornecedoresFake';
 
 const FAZENDAS = [{ id: 'bg', nome: 'Faz Baia Grande' }] as Fazenda[];
 const CONTAS: ContaBancariaV2[] = [{
@@ -74,6 +76,8 @@ const PANTANAL = forn({ id: 'pan', nome: 'Comercial Pantanal de Rio Verde Ltda' 
 const OFICINA = forn({ id: 'ofi', nome: 'Oficina do Zé', tipo_recebimento: 'Transferência Bancária', banco: 'Sicredi',
   agencia: '0903', conta: '12345-6', tipo_conta: 'Corrente' });
 const FORNECEDORES = [AGNALDO, PANTANAL, OFICINA];
+/* FORN-SELETOR-PADRAO-01: o seletor lê do leitor único */
+definirFornecedoresDoLeitor(FORNECEDORES);
 const TEXTO_AGNALDO = 'PIX | Tipo: Telefone\nChave: 67999990000\nFavorecido: Agnaldo da Cruz Cunegundes';
 const CLASSIF: ClassificacaoItem[] = [
   { id: 'pl-sal', subcentro: 'Salários e Encargos Pecuária', centro_custo: 'Mão de Obra', grupo_custo: 'Custo Fixo Pecuária',

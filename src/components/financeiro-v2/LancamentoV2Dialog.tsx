@@ -57,6 +57,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { montarPayloadParcelamento, preverParcelas } from '@/lib/financiamentos/montarPayloadParcelamento';
 import type { LancamentoV2, LancamentoV2Form, ContaBancariaV2, ClassificacaoItem, FornecedorV2, Safra } from '@/hooks/useFinanceiroV2';
 import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
+import { useFornecedoresDoCliente } from '@/hooks/useFornecedoresDoCliente';
 import type { Fazenda } from '@/contexts/FazendaContext';
 import { NovoFornecedorDialog } from './NovoFornecedorDialog';
 import { formatMoeda } from '@/lib/calculos/formatters';
@@ -805,6 +806,17 @@ export function LancamentoV2Dialog({
   const [dataPagamento, setDataPagamento] = useState('');
   const [descricao, setDescricao] = useState('');
   const [favorecidoId, setFavorecidoId] = useState('');
+  /* FORN-SELETOR-PADRAO-01 passo 1b — o seletor de fornecedor lê do LEITOR ÚNICO (mesmo cache: nenhuma ida a mais). O modal
+     pergunta "quem é este id?" a UM lugar (`fornecedorPorId`): a lista do hospedeiro e, na falta, a do leitor — um fornecedor
+     criado em outra tela depois de o hospedeiro carregar existe no leitor e não pode virar "Favorecido inválido" no Salvar. */
+  const fornecedoresDoLeitor = useFornecedoresDoCliente(clienteAtual?.id ?? null, favorecidoId || null);
+  const fornecedorPorId = useCallback((id: string | null | undefined) => {
+    if (!id) return null;
+    return fornecedores.find((f) => f.id === id)
+      ?? fornecedoresDoLeitor.fornecedores.find((f) => f.id === id)
+      ?? (fornecedoresDoLeitor.gravado?.id === id ? fornecedoresDoLeitor.gravado : null);
+  }, [fornecedores, fornecedoresDoLeitor.fornecedores, fornecedoresDoLeitor.gravado]);
+
   /**
    * A chave da linha do plano escolhida — PR-FIN-PLANO-CHAVE-02 (front).
    *
@@ -1403,7 +1415,7 @@ export function LancamentoV2Dialog({
        fornecedor MUDAVAM, e gravava a cópia: lançamento que já nascia com PIX (recorrência, parcelamento, OC) abria vazio, e a
        cópia envelhecia. Agora o bloco é LIDO do cadastro a cada render e nada é copiado. */
   const fornecedorDoPgto = favorecidoId
-    ? (fornecedorRelido[favorecidoId] ?? fornecedores.find(x => x.id === favorecidoId) ?? null) : null;
+    ? (fornecedorRelido[favorecidoId] ?? fornecedorPorId(favorecidoId)) : null;
   /* R6 — "realizado" é o do REGISTRO, não o do select: o que foi usado para pagar é o que está gravado. */
   const pgtoJaRealizado = !!lancamento && (lancamento.status_transacao === 'realizado' || lancamento.status_transacao === 'conciliado');
   const formaEfetivaPgto = formaEfetiva(formaPgto, fornecedorDoPgto);
@@ -1532,7 +1544,7 @@ export function LancamentoV2Dialog({
 
   // PR-FIN-MODAL-02D — valores espelhados no painel de resumo (só apresentação; sem estado novo).
   const resumoFmtData = (d: string) => (d ? d.split('-').reverse().join('/') : null);
-  const resumoFavorecido = fornecedores.find(f => f.id === favorecidoId)?.nome ?? null;
+  const resumoFavorecido = fornecedorPorId(favorecidoId)?.nome ?? null;
   const resumoFazenda = fazendas.find(f => f.id === fazendaId)?.nome ?? null;
   const resumoContaOrigem = (() => { const c = contas.find(x => x.id === contaOrigemId); return c ? (c.nome_exibicao ?? c.nome_conta) : null; })();
   const resumoContaDestino = (() => { const c = contas.find(x => x.id === contaDestinoId); return c ? (c.nome_exibicao ?? c.nome_conta) : null; })();
@@ -1748,7 +1760,8 @@ export function LancamentoV2Dialog({
     let effectiveFavorecidoId = favorecidoId;
     const searchText = fornecedorSearch.trim();
     if (!effectiveFavorecidoId && searchText && fazendaId) {
-      const existente = fornecedores.find(f => f.nome.trim().toLowerCase() === searchText.toLowerCase());
+      const mesmoNome = (f: { nome: string }) => f.nome.trim().toLowerCase() === searchText.toLowerCase();
+      const existente = fornecedores.find(mesmoNome) ?? fornecedoresDoLeitor.fornecedores.find(mesmoNome);
       if (existente) {
         effectiveFavorecidoId = existente.id;
         setFavorecidoId(existente.id);
@@ -1767,7 +1780,7 @@ export function LancamentoV2Dialog({
     // fornecedores[]. Roda APÓS resolução inline porque favorecidoForForm
     // pode ser id recém-criado por onCriarFornecedor. setSaving(false)
     // antes do return — botão volta a "Salvar".
-    if (favorecidoForForm && !fornecedores.some(f => f.id === favorecidoForForm)) {
+    if (favorecidoForForm && !fornecedorPorId(favorecidoForForm)) {
       toast.error('Favorecido inválido — selecione um fornecedor cadastrado.');
       setSaving(false);
       return;
@@ -2485,7 +2498,9 @@ export function LancamentoV2Dialog({
                       setFormaPgto(normalizarFormaDoCadastro(f.tipo_recebimento));
                     }
                   }}
-                  fornecedores={fornecedores}
+                  /* FORN-SELETOR-PADRAO-01 passo 1b — a lista é a do LEITOR ÚNICO (ativos com documento, paginado até o fim);
+                     o hospedeiro não passa mais a lista. O valor gravado inativo vem por id e aparece marcado "inativo". */
+                  clienteId={clienteAtual?.id ?? null}
                   search={fornecedorSearch}
                   onSearchChange={setFornecedorSearch}
                   onCriarNovo={() => setFornecedorDialogOpen(true)}
@@ -2513,7 +2528,6 @@ export function LancamentoV2Dialog({
                      classificacao (subcentro/macro/grupo/centro) e as duas datas de
                      competencia/vencimento — os cinco compoem a obrigacao da OC e o writer
                      tambem os recusa, entao tela e gravador dizem a mesma coisa. */
-                  showCpfCnpj
                 />
               </div>
             </div>

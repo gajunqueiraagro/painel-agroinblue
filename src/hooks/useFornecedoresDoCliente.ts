@@ -105,7 +105,8 @@ export function useFornecedoresDoCliente(
   const doCliente = estado.cliente === cliente;
   const lista = (doCliente ? estado.lista : null) ?? (cliente ? leitor.doCache(cliente) : null);
   const erro = doCliente ? estado.erro : null;
-  const foraDosAtivos = !!cliente && !!idGravado && lista !== null && !lista.some((f) => f.id === idGravado);
+  /* o gravado se busca por id quando NÃO está entre os ativos — e também quando a lista falhou: o valor gravado continua visível */
+  const foraDosAtivos = !!cliente && !!idGravado && (lista !== null ? !lista.some((f) => f.id === idGravado) : erro !== null);
 
   useEffect(() => {
     if (!cliente || !idGravado || !foraDosAtivos) return;

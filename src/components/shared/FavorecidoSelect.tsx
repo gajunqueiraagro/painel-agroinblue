@@ -4,6 +4,19 @@
 // do LancamentoV2Dialog reaproveita o texto digitado para auto-criar fornecedor.
 // Efeito colateral (forma/dados de pagamento) sai via `onSelected(f)`; criação inline
 // via `onCriarNovo`. Consumido pelo LancamentoV2Dialog e (PR-U2c-2) pela Mesa.
+//
+// FORN-SELETOR-PADRAO-01 passo 1b (Gabriel, 08/10/2026) — ESTE É O DONO do seletor de fornecedor do sistema.
+//  · Opção em UMA linha: nome à esquerda (corta, inteiro no `title`), selo "N iguais" quando o nome se repete entre os
+//    ativos, e o CNPJ/CPF à direita, em tom apagado, que NUNCA corta. Sem documento a área fica vazia.
+//  · Busca em memória por nome (sem acento, sem caixa) e por dígitos do documento (ignora ponto, barra e traço).
+//  · No máximo 100 opções desenhadas; a busca corre sobre todas; o escolhido vem sempre no topo; rodapé fixo
+//    "Mostrando 100 de N — digite para refinar".
+//  · Linha FIXA sob o campo com o documento do escolhido ("sem CNPJ/CPF"; vazia sem escolha) — prop `linhaDoDocumento`.
+//  · Valor gravado inativo: aparece no campo com a marca "inativo" (não está na lista).
+//  · Cadastro "[META]": fora da lista, salvo `incluirMeta` (modal de meta).
+//  · DOIS MODOS NA TRANSIÇÃO: com `clienteId` e SEM `fornecedores`, a lista vem do LEITOR ÚNICO
+//    (`useFornecedoresDoCliente`); com `fornecedores`, vale a lista do hospedeiro, como sempre, até a fatia dele no PASSO 2.
+//  ⚠ As regras puras (normalização, formatação, recorte) moram em `@/lib/fornecedores/fornecedorTexto`.
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -15,6 +28,12 @@ import { COMBOBOX_CONTENT } from '@/components/ui/command';
 import {
   MENU_BUSCA, MENU_ESCOLHIDO, MENU_ITEM, MENU_REALCE, MENU_REALCE_HOVER, MENU_SECUNDARIO, MENU_VAZIO,
 } from '@/components/ui/menuPadrao';
+import { useFornecedoresDoCliente } from '@/hooks/useFornecedoresDoCliente';
+import type { FornecedorLido } from '@/lib/fornecedores/leitorDeFornecedores';
+import {
+  LIMITE_DE_OPCOES, formatarDocumento, fraseDoLimite, linhaDoDocumento as textoDaLinhaDoDocumento, montarOpcoes,
+  recortarOpcoes, seloDeIguais,
+} from '@/lib/fornecedores/fornecedorTexto';
 
 /** O minimo que o seletor le' de um fornecedor. OC-HOMOLOG-FIX-02: o `NovoCompromissoDialog` da OC so' conhece
  *  `{ id, nome }`, e o seletor passa a servi-lo sem cast; quem tem o `FornecedorV2` inteiro segue recebendo-o no
@@ -24,8 +43,15 @@ export type FavorecidoOpcao = Pick<FornecedorV2, 'id' | 'nome'> & Partial<Pick<F
 export interface FavorecidoSelectProps<F extends FavorecidoOpcao = FornecedorV2> {
   value: string;                          // favorecidoId ('' = nenhum)
   onChange: (id: string) => void;         // seta o id (sem side effect)
-  onSelected?: (f: F) => void;            // side effect: forma/dados de pagamento
-  fornecedores: F[];
+  /** side effect: forma/dados de pagamento. No modo do leitor o objeto é o `FornecedorLido` (as mesmas colunas do `FornecedorV2`). */
+  onSelected?: (f: F | FornecedorLido) => void;
+  /**
+   * A lista do hospedeiro (modo de TRANSIÇÃO). Ausente = a lista vem do leitor único, pelo `clienteId`.
+   * ⚠ No fim do PASSO 2 nenhum hospedeiro passa a lista: ela é do leitor.
+   */
+  fornecedores?: F[];
+  /** FORN-SELETOR-PADRAO-01 — o cliente de quem se leem os fornecedores (modo do leitor único). */
+  clienteId?: string | null;
   search: string;                         // busca CONTROLADA (o caller é dono)
   onSearchChange: (s: string) => void;
   /**
@@ -55,6 +81,14 @@ export interface FavorecidoSelectProps<F extends FavorecidoOpcao = FornecedorV2>
   limpavel?: boolean;
   /** Texto do gatilho vazio. Default 'Selecione fornecedor...'. */
   placeholder?: string;
+  /**
+   * FORN-SELETOR-PADRAO-01 (D8) — a linha FIXA de 12px sob o campo, sempre presente, com o documento do escolhido.
+   * Padrão: LIGADA no modo do leitor; no modo de transição (lista do hospedeiro) fica desligada até a fatia dele —
+   * nenhum formulário muda de altura sem ter sido medido. Em célula de tabela: `false` (o documento vai no `title`).
+   */
+  linhaDoDocumento?: boolean;
+  /** FORN-SELETOR-PADRAO-01 (D7) — cadastros "[META]" entram na lista (só modal de meta). */
+  incluirMeta?: boolean;
 }
 
 /** Rótulo de exibição do favorecido. Com showCpfCnpj + documento presente → "Nome (CPF/CNPJ)";
@@ -64,30 +98,41 @@ function favorecidoLabel(f: FavorecidoOpcao, showCpfCnpj: boolean): string {
   return showCpfCnpj && doc ? `${f.nome} (${doc})` : f.nome;
 }
 
-function normalizeSearch(s: string): string {
-  return s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-}
-
 export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
-  value, onChange, onSelected, fornecedores,
+  value, onChange, onSelected, fornecedores, clienteId,
   search, onSearchChange, onCriarNovo, novoButtonClassName,
   label, triggerClassName, size = 'default', tabIndex, disabled, showCpfCnpj = false,
-  limpavel = false, placeholder = 'Selecione fornecedor...',
+  limpavel = false, placeholder = 'Selecione fornecedor...', linhaDoDocumento, incluirMeta = false,
 }: FavorecidoSelectProps<F>) {
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
-  const fornecedoresList = useMemo(() =>
-    fornecedores.filter(f => f.ativo !== false),
-  [fornecedores]);
+  /* ── de onde vem a lista ── o hook roda SEMPRE (sem cliente ele não lê nada); quem decide o modo é a prop `fornecedores` */
+  const doLeitor = fornecedores === undefined;
+  const lidos = useFornecedoresDoCliente(doLeitor ? clienteId : null, doLeitor ? value : null);
+  const comLinha = linhaDoDocumento ?? doLeitor;
 
-  const filtered = useMemo(() => {
-    if (!search.trim()) return fornecedoresList;
-    const q = normalizeSearch(search);
-    return fornecedoresList.filter(f => normalizeSearch(f.nome).includes(q));
-  }, [fornecedoresList, search]);
+  const ativos: Array<F | FornecedorLido> = useMemo(
+    () => (doLeitor ? lidos.fornecedores : (fornecedores ?? []).filter(f => f.ativo !== false)),
+    [doLeitor, lidos.fornecedores, fornecedores]);
+
+  /* normalização, documento e "N iguais": UMA vez por lista (a busca corre sobre isto a cada tecla) */
+  const opcoes = useMemo(() => montarOpcoes(ativos, incluirMeta), [ativos, incluirMeta]);
+  const recorte = useMemo(() => recortarOpcoes(opcoes, search, value || null, LIMITE_DE_OPCOES), [opcoes, search, value]);
+  const visiveis = recorte.visiveis;
+  const rodape = fraseDoLimite(visiveis.length, recorte.total);
+
+  /* ── o escolhido ── entre os ativos; senão o gravado (inativo): do leitor por id, ou da lista inteira do hospedeiro */
+  const escolhido: F | FornecedorLido | null = useMemo(() => {
+    if (!value) return null;
+    const ativo = ativos.find(f => f.id === value);
+    if (ativo) return ativo;
+    if (doLeitor) return lidos.gravado;
+    return (fornecedores ?? []).find(f => f.id === value) ?? null;
+  }, [value, ativos, doLeitor, lidos.gravado, fornecedores]);
+  const inativo = !!escolhido && escolhido.ativo === false;
 
   /**
    * Abre POSICIONADO no fornecedor atual — 133h adendo item 14.
@@ -98,11 +143,12 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
    * escolhido.
    * ⚠ `search` CONTINUA ZERANDO: quando o operador digita, a lista é outra e o valor antigo
    * pode nem estar nela — aí o topo é o certo. É o mesmo efeito, com a posição certa.
+   * ⚠ FORN-SELETOR-PADRAO-01: o escolhido agora vem no TOPO da lista (mesmo fora dos 100), então a posição dele é a 0.
    */
   useEffect(() => {
-    const idx = value ? filtered.findIndex((f) => f.id === value) : -1;
+    const idx = value ? visiveis.findIndex((o) => o.f.id === value) : -1;
     setHighlight(idx >= 0 ? idx : 0);
-  }, [search, open, filtered, value]);
+  }, [search, open, visiveis, value]);
 
   useEffect(() => {
     const el = itemRefs.current[highlight];
@@ -113,7 +159,7 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
     onChange(fId);
     setOpen(false);
     onSearchChange('');
-    const f = fornecedores.find(x => x.id === fId);
+    const f = ativos.find(x => x.id === fId);
     if (f) onSelected?.(f);
   };
 
@@ -126,25 +172,29 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setHighlight(prev => Math.min(prev + 1, filtered.length - 1));
+      setHighlight(prev => Math.min(prev + 1, visiveis.length - 1));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       setHighlight(prev => Math.max(prev - 1, 0));
     } else if (e.key === 'Enter' || e.key === 'Tab') {
-      if (filtered[highlight]) {
+      if (visiveis[highlight]) {
         e.preventDefault();
-        handleSelect(filtered[highlight].id);
+        handleSelect(visiveis[highlight].f.id);
       }
     } else if (e.key === 'Escape') {
       setOpen(false);
     }
   };
 
-  const selectedNome = useMemo(() => {
-    if (!value) return '';
-    const f = fornecedores.find(x => x.id === value);
-    return f ? favorecidoLabel(f, showCpfCnpj) : '';
-  }, [value, fornecedores, showCpfCnpj]);
+  const selectedNome = escolhido ? favorecidoLabel(escolhido, showCpfCnpj) : '';
+  const documentoDoEscolhido = escolhido ? formatarDocumento(escolhido.cpf_cnpj) : '';
+  /* o que o campo diz quando ainda não tem o nome: lendo, ou o texto de sempre */
+  const textoDoGatilho = selectedNome || (value && doLeitor && lidos.carregando ? 'Carregando…' : placeholder);
+  /* D8 — em célula de tabela a linha fica desligada, e o documento vai aqui */
+  const tituloDoGatilho = escolhido
+    ? [escolhido.nome, textoDaLinhaDoDocumento(escolhido), inativo ? 'inativo' : ''].filter(Boolean).join(' · ')
+    : undefined;
+  const erroDoLeitor = doLeitor ? lidos.erro : null;
 
   return (
     <div>
@@ -156,9 +206,13 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
       <div className="flex items-center gap-1">
         <Popover open={open} onOpenChange={v => { setOpen(v); if (!v) onSearchChange(''); }}>
           <PopoverTrigger asChild>
-            <Button tabIndex={tabIndex} variant="outline" role="combobox" aria-expanded={open} disabled={disabled} className={cn("flex-1 min-w-0 h-8 justify-between font-normal text-[12px]", size === 'compact' && 'h-5 px-1.5 text-[11px] [&_svg]:h-3 [&_svg]:w-3', triggerClassName)}>
+            <Button tabIndex={tabIndex} variant="outline" role="combobox" aria-expanded={open} disabled={disabled} title={tituloDoGatilho} className={cn("flex-1 min-w-0 h-8 justify-between font-normal text-[12px]", size === 'compact' && 'h-5 px-1.5 text-[11px] [&_svg]:h-3 [&_svg]:w-3', triggerClassName)}>
               {/* UI-DROPDOWN-PADRAO-01: o texto que não cabe começa na borda esquerda (o botão centraliza por padrão) */}
-              <span className="min-w-0 flex-1 truncate text-left">{selectedNome || placeholder}</span>
+              <span className="min-w-0 flex-1 truncate text-left">{textoDoGatilho}</span>
+              {inativo && (
+                /* o gravado que não está mais entre os ativos: o campo não esvazia, e diz por quê */
+                <span data-testid="favorecido-inativo" className="ml-1 shrink-0 rounded border border-amber-400 bg-amber-50 px-1 text-[9.5px] leading-[14px] text-amber-800">inativo</span>
+              )}
               <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
             </Button>
           </PopoverTrigger>
@@ -169,14 +223,14 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
               <input
                 ref={inputRef}
                 className={cn("my-1 flex h-6 w-full rounded px-1.5 outline-none", MENU_BUSCA)}
-                placeholder="Buscar fornecedor..."
+                placeholder="Buscar por nome ou CNPJ/CPF..."
                 value={search}
                 onChange={e => onSearchChange(e.target.value)}
                 onKeyDown={handleKeyDown}
                 autoFocus
               />
             </div>
-            <div className="max-h-56 overflow-y-auto p-1">
+            <div className="max-h-56 overflow-y-auto p-1" data-testid="favorecido-lista">
               {limpavel && (
                 <button
                   type="button"
@@ -187,11 +241,22 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
                   <span>— nenhum —</span>
                 </button>
               )}
-              {filtered.length === 0 && <p className={cn("py-3 text-center", MENU_VAZIO)}>Nenhum fornecedor encontrado</p>}
-              {filtered.map((f, idx) => (
+              {erroDoLeitor && (
+                <p className={cn("flex items-center justify-center gap-2 py-3 text-center", MENU_VAZIO)} data-testid="favorecido-erro-na-lista">
+                  <span>{erroDoLeitor}</span>
+                  <button type="button" className="underline" onClick={lidos.tentarDeNovo}>Tentar de novo</button>
+                </p>
+              )}
+              {!erroDoLeitor && visiveis.length === 0 && (
+                <p className={cn("py-3 text-center", MENU_VAZIO)}>
+                  {doLeitor && lidos.carregando ? 'Carregando fornecedores…' : 'Nenhum fornecedor encontrado'}
+                </p>
+              )}
+              {visiveis.map((o, idx) => (
                 <button
-                  key={f.id}
+                  key={o.f.id}
                   ref={el => { itemRefs.current[idx] = el; }}
+                  data-testid="favorecido-opcao"
                   className={cn(
                     /* ⚠ UMA LINHA, SEMPRE — A23. Era `text-sm py-1.5` e o nome do fornecedor
                        quebrava em duas dentro do item; o nome inteiro fica no `title`.
@@ -200,16 +265,27 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
                     MENU_ITEM,
                     /* o realce vem do dono (`menuPadrao.ts`, fix1): zinc-700 / zinc-700/60 sobre o painel zinc-600; o texto herda o branco */
                     idx === highlight ? MENU_REALCE : MENU_REALCE_HOVER,
-                    value === f.id && idx !== highlight && MENU_ESCOLHIDO,
+                    value === o.f.id && idx !== highlight && MENU_ESCOLHIDO,
                   )}
-                  onClick={() => handleSelect(f.id)}
+                  onClick={() => handleSelect(o.f.id)}
                   onMouseEnter={() => setHighlight(idx)}
                 >
-                  <Check className={cn("mr-2 h-3.5 w-3.5 shrink-0", value === f.id ? "opacity-100" : "opacity-0")} />
-                  <span className="truncate" title={favorecidoLabel(f, showCpfCnpj)}>{favorecidoLabel(f, showCpfCnpj)}</span>
+                  <Check className={cn("mr-2 h-3.5 w-3.5 shrink-0", value === o.f.id ? "opacity-100" : "opacity-0")} />
+                  {/* nome à esquerda: é o ÚNICO que corta (inteiro no `title`) */}
+                  <span className="min-w-0 flex-1 truncate text-left" title={favorecidoLabel(o.f, showCpfCnpj)}>{o.f.nome}</span>
+                  {o.iguais > 0 && (
+                    <span data-testid="favorecido-iguais" className="ml-1.5 shrink-0 rounded-sm bg-amber-400/90 px-1 text-zinc-900"
+                      title={`${o.iguais} cadastros ativos com este nome — confira o CNPJ/CPF`}>{seloDeIguais(o.iguais)}</span>
+                  )}
+                  {/* documento à direita, em tom apagado: NUNCA corta. Sem documento a área fica vazia (D5). */}
+                  <span data-testid="favorecido-doc-da-opcao" className={cn("ml-2 shrink-0 whitespace-nowrap tabular-nums", MENU_SECUNDARIO)}>{o.documento}</span>
                 </button>
               ))}
             </div>
+            {rodape && (
+              /* fora da rolagem: fica parado enquanto a lista anda */
+              <div data-testid="favorecido-rodape" className={cn("border-t border-zinc-500/40 px-2 py-[3px]", MENU_VAZIO)}>{rodape}</div>
+            )}
           </PopoverContent>
         </Popover>
         {onCriarNovo && (
@@ -222,6 +298,19 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
           </Button>
         )}
       </div>
+      {comLinha && (
+        /* ⚠ ALTURA FIXA E SEMPRE PRESENTE (D8): escolher, trocar ou limpar o fornecedor não muda a altura do formulário */
+        <div data-testid="favorecido-documento" className="flex h-3 items-center gap-1.5 overflow-hidden text-[9.5px] leading-3 text-muted-foreground">
+          {erroDoLeitor ? (
+            <>
+              <span className="min-w-0 truncate text-destructive" title={erroDoLeitor}>{erroDoLeitor}</span>
+              <button type="button" className="shrink-0 underline text-destructive" onClick={lidos.tentarDeNovo}>Tentar de novo</button>
+            </>
+          ) : (
+            <span className="whitespace-nowrap tabular-nums" title={documentoDoEscolhido || undefined}>{textoDaLinhaDoDocumento(escolhido)}</span>
+          )}
+        </div>
+      )}
     </div>
   );
 }

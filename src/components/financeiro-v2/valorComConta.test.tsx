@@ -41,6 +41,7 @@ vi.mock('@/lib/financeiro/nfeConsultas', () => ({
   iePorFazenda: async () => ({}), fornecedorPeloNome: async () => null, notaJaRegistrada: async () => [],
   ultimaClassificacaoDoFornecedor: async () => null, gravarDocumentoNoCadastro: async () => null,
 }));
+vi.mock('@/hooks/useFornecedoresDoCliente', async () => (await import('@/test/leitorDeFornecedoresFake')).moduloDoLeitorFake());
 vi.mock('@/contexts/ClienteContext', () => ({ useCliente: () => ({ clienteAtual: { id: 'cli', nome: 'Cliente' } }) }));
 vi.mock('@/v2/components/edicao/LancamentoZooModal', () => ({ LancamentoZooModal: () => null }));
 vi.mock('@/components/financeiro-v2/AbaAuditoriaLancamento', () => ({ AbaAuditoriaLancamento: () => null }));
@@ -53,6 +54,7 @@ import { proporLancamento, type UltimaClassificacao } from '@/lib/financeiro/nfe
 import { resolverEmitente } from '@/lib/financeiro/nfe/resolverEmitente';
 import { arquivoXmlDaNota, prefillDaNota, type DoXml } from '@/lib/financeiro/nfePrefill';
 import { montarNFe, utf8 } from '@/lib/financeiro/nfe/__fixtures__/notas';
+import { definirFornecedoresDoLeitor } from '@/test/leitorDeFornecedoresFake';
 
 const FAZENDAS = [{ id: 'f-pur', nome: 'Faz. Pureza' }, { id: 'f-exp', nome: 'Faz. Sto. Expedito' }] as Fazenda[];
 const CONTAS: ContaBancariaV2[] = [{ id: 'bb', nome_conta: 'Banco do Brasil', banco: 'BB', fazenda_id: 'f-pur', tipo_conta: null, codigo_conta: null, nome_exibicao: 'Banco do Brasil', agencia: null, numero_conta: null, conta_digito: null }];
@@ -85,6 +87,7 @@ const LANCAMENTO = {
 } as unknown as LancamentoV2;
 
 function montar(props: Partial<React.ComponentProps<typeof LancamentoV2Dialog>> = {}) {
+  definirFornecedoresDoLeitor([AGRO]);   /* FORN-SELETOR-PADRAO-01: o seletor lê do leitor único */
   const onSave = vi.fn(async (_form: LancamentoV2Form, _id?: string): Promise<boolean | string> => 'lanc-novo');
   const onClose = vi.fn();
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });

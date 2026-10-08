@@ -42,6 +42,7 @@ const consultas = vi.hoisted(() => ({
   gravarDocumentoNoCadastro: vi.fn(async () => null as string | null),
 }));
 vi.mock('@/lib/financeiro/nfeConsultas', () => consultas);
+vi.mock('@/hooks/useFornecedoresDoCliente', async () => (await import('@/test/leitorDeFornecedoresFake')).moduloDoLeitorFake());
 vi.mock('@/contexts/ClienteContext', () => ({ useCliente: () => ({ clienteAtual: { id: 'cli', nome: 'Cliente' } }) }));
 vi.mock('@/v2/components/edicao/LancamentoZooModal', () => ({ LancamentoZooModal: () => null }));
 vi.mock('@/components/financeiro-v2/AbaAuditoriaLancamento', () => ({ AbaAuditoriaLancamento: () => null }));
@@ -57,6 +58,7 @@ import { CTE, EMITENTE_CNPJ, chaveDe, montarNFe, utf8, type OpcoesNota } from '@
 import type { OcorrenciaDaNota } from '@/lib/financeiro/nfeConsultas';
 import { TIPOS_ACEITOS } from '@/hooks/useLancamentoDocumentos';
 import { extensaoDoArquivo } from '@/lib/oc/caminhoDocumento';
+import { definirFornecedoresDoLeitor } from '@/test/leitorDeFornecedoresFake';
 
 const FAZENDAS = [{ id: 'f-pur', nome: 'Faz. Pureza' }, { id: 'f-exp', nome: 'Faz. Sto. Expedito' }] as Fazenda[];
 const CONTAS: ContaBancariaV2[] = [{ id: 'bb', nome_conta: 'Banco do Brasil', banco: 'BB', fazenda_id: 'f-pur', tipo_conta: null, codigo_conta: null, nome_exibicao: 'Banco do Brasil', agencia: null, numero_conta: null, conta_digito: null }];
@@ -93,6 +95,7 @@ beforeEach(() => {
 });
 
 function montarModal(props: Partial<React.ComponentProps<typeof LancamentoV2Dialog>>, fornecedores: FornecedorV2[] = [AGRO]) {
+  definirFornecedoresDoLeitor(fornecedores);   /* FORN-SELETOR-PADRAO-01: o seletor lê do leitor único */
   const onSave = vi.fn(async (_form: LancamentoV2Form, _id?: string): Promise<boolean | string> => 'lanc-novo');
   const onClose = vi.fn();
   const onLancamentoCriado = vi.fn();

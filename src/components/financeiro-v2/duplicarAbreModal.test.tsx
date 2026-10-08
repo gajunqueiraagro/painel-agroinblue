@@ -35,6 +35,7 @@ vi.mock('@/integrations/supabase/client', () => {
     },
   };
 });
+vi.mock('@/hooks/useFornecedoresDoCliente', async () => (await import('@/test/leitorDeFornecedoresFake')).moduloDoLeitorFake());
 vi.mock('@/contexts/ClienteContext', () => ({ useCliente: () => ({ clienteAtual: { id: 'nj', nome: 'NJ Pecuária' } }) }));
 vi.mock('@/v2/components/edicao/LancamentoZooModal', () => ({ LancamentoZooModal: () => null }));
 vi.mock('@/components/financeiro-v2/AbaDocumentosLancamento', () => ({ AbaDocumentosLancamento: () => null }));
@@ -43,6 +44,7 @@ vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.f
 
 import { LancamentoV2Dialog } from './LancamentoV2Dialog';
 import { prefillDeDuplicar } from '@/lib/financeiro/prefillDeDuplicar';
+import { definirFornecedoresDoLeitor } from '@/test/leitorDeFornecedoresFake';
 
 const FAZENDAS = [{ id: 'f-pur', nome: 'Faz. Pureza' }] as Fazenda[];
 const CONTAS: ContaBancariaV2[] = [{
@@ -50,6 +52,8 @@ const CONTAS: ContaBancariaV2[] = [{
   nome_exibicao: 'Banco do Brasil', agencia: null, numero_conta: null, conta_digito: null,
 }];
 const FORNECEDORES = [{ id: 'tel', nome: 'Telefonica Brasil S.A.', cpf_cnpj: null, fazenda_id: null, ativo: true, tipo_recebimento: null }] as FornecedorV2[];
+/* FORN-SELETOR-PADRAO-01: o seletor lê do leitor único */
+definirFornecedoresDoLeitor(FORNECEDORES);
 const CLASSIF: ClassificacaoItem[] = [
   { id: 'pl-tel', subcentro: 'Telefonia e Internet', centro_custo: 'Administração', grupo_custo: 'Despesas Administrativas',
     macro_custo: 'Custeio Produtivo', tipo_operacao: '2-Saídas', escopo_negocio: 'pecuaria' },
