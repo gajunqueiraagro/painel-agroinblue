@@ -5880,6 +5880,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setFazendaDestinoId: setOcFazendaDestinoId,
     compraFornecedorId, setCompraFornecedorId,
     fornecedores: abateFornecedores,
+    clienteId: clienteAtual?.id ?? null,
     setNovoFornecedorCompraOpen,
     compraDetalhes, setCompraDetalhes, setNotaFiscal,
     compraDialogOpen, setCompraDialogOpen,
@@ -6222,6 +6223,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           data={data} setData={setData}
           frigorificoId={abateFrigorificoId} setFrigorificoId={setAbateFrigorificoId}
           contrapartes={abateFornecedores}
+          clienteId={clienteAtual?.id ?? null}
           numeroDocumento={notaFiscal || null}
           semAlteracoes={ocStatusComercial === 'fechada' ? !ocDadosSujos : ocAbateSemAlteracoes}
           onNovoFrigorifico={() => setNovoFornecedorCompraOpen(true)}
@@ -6281,6 +6283,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           data={data} setData={setData}
           compradorId={vendaDestinoFornecedorId} setCompradorId={setVendaDestinoFornecedorId}
           contrapartes={abateFornecedores}
+          clienteId={clienteAtual?.id ?? null}
           onNovoComprador={() => setNovoFornecedorCompraOpen(true)}
           vendaFazendaId={vendaFazendaId} setVendaFazendaId={setVendaFazendaId}
           fazendasOC={fazendasOC}

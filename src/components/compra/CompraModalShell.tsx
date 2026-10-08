@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SearchableSelect } from '@/components/ui/searchable-select';
+import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
@@ -73,6 +74,8 @@ export interface CompraModalShellProps {
   compraFornecedorId: string;
   setCompraFornecedorId: (v: string) => void;
   fornecedores: { id: string; nome: string; cpfCnpj?: string | null }[];
+  /** FORN-SELETOR-PADRAO-01 fatia 2b — o cliente de quem o seletor de fornecedor lê a lista (leitor único). */
+  clienteId: string | null;
   setNovoFornecedorCompraOpen: (v: boolean) => void;
   // financeiro (compra)
   compraDetalhes: CompraDetalhes | null;
@@ -610,28 +613,20 @@ export function CompraModalShell(api: CompraModalShellProps) {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-3">
               <div className="min-w-0">
                 <Label className="text-[10px]">Fornecedor <span className="text-destructive">*</span></Label>
-                {/* A16 — o "+" na MESMA altura do campo (h-8), nao alinhado ao rotulo. */}
-                <div className="flex items-center gap-1 mt-[3px]">
-                  <div className="min-w-0 flex-1">
-                    <SearchableSelect
-                      value={api.compraFornecedorId || '__all__'}
-                      onValueChange={(v) => api.setCompraFornecedorId(v === '__all__' ? '' : v)}
-                      options={api.fornecedores.map(f => ({ value: f.id, label: f.nome }))}
-                      placeholder="Selecione ou cadastre o fornecedor"
-                      allLabel="Nenhum selecionado"
-                      allValue="__all__"
-                      dense
-                      disabled={permissoes.dadosOperacaoReadOnly}
-                      className={`[&>button]:h-8 [&>button]:text-[12px] [&>button]:px-2.5 ${permissoes.dadosOperacaoReadOnly ? CAMPO_TRAVADO : ''}`}
-                    />
-                  </div>
-                  <Button type="button" variant="outline" size="icon" className="h-8 w-8 shrink-0" aria-label="Novo fornecedor" disabled={permissoes.dadosOperacaoReadOnly} onClick={() => api.setNovoFornecedorCompraOpen(true)}>
-                    <Plus className="h-3.5 w-3.5" />
-                  </Button>
+                {/* FORN-SELETOR-PADRAO-01 fatia 2b — o DONO do seletor de fornecedor, pelo leitor único (ativos do cliente; o gravado
+                    inativo fica no campo com a marca). O "+" (h-8, A16) e a linha FIXA do documento são dele: a linha que só
+                    aparecia com documento saiu — escolher o fornecedor não muda mais a altura do formulário. */}
+                <div className="mt-[3px]">
+                  <FavorecidoSelect
+                    value={api.compraFornecedorId} onChange={api.setCompraFornecedorId}
+                    clienteId={api.clienteId}
+                    limpavel rotuloDoVazio="Nenhum selecionado" placeholder="Selecione ou cadastre o fornecedor"
+                    disabled={permissoes.dadosOperacaoReadOnly}
+                    triggerClassName={`px-2.5 ${permissoes.dadosOperacaoReadOnly ? CAMPO_TRAVADO : ''}`}
+                    onCriarNovo={() => api.setNovoFornecedorCompraOpen(true)}
+                    novoDesabilitado={permissoes.dadosOperacaoReadOnly} novoRotulo="Novo fornecedor"
+                  />
                 </div>
-                {fornecedorDocumento && (
-                  <div className="text-[10px] text-muted-foreground mt-[3px] leading-tight">{fornecedorDocumento}</div>
-                )}
               </div>
 
               <div className="min-w-0">

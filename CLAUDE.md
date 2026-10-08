@@ -162,7 +162,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 08/10/2026 (FORN-SELETOR-PADRAO-01 conserto 2a-fix1, +7: `src/components/shared/favorecidoSelectDono.test.tsx` 3,
+  Baseline em 08/10/2026 (FORN-SELETOR-PADRAO-01 fatia 2b, +20: `src/components/shared/favorecidoSelectDono.test.tsx` 16,
+  `src/components/compra/documentoFormEmitente.test.tsx` 4 — 4614 depois dele; antes o
+  FORN-SELETOR-PADRAO-01 conserto 2a-fix1, +7: `src/components/shared/favorecidoSelectDono.test.tsx` 3,
   `src/components/recorrencias/recorrenciaDialog.test.tsx` 2, `src/components/financiamentos/documentosNaCriacao.test.tsx` 1,
   `src/components/financiamentos/documentosDoContrato.test.tsx` 1 — 4594 depois dele; antes a
   FORN-SELETOR-PADRAO-01 fatia 2a, +13: `src/components/shared/favorecidoSelectDono.test.tsx` 11,
@@ -262,7 +264,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4594
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4614
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -1266,6 +1268,69 @@ preview que o cabecalho nao sai da tela ao rolar.
     NAVEGADOR: o arrasto real do Finder (so' evento sintetico), boletos e OC dentro dos modais reais, o clique abrindo o seletor
     do sistema, e os tres `@dnd-kit` com a protecao ligada (so' por teste de fonte) · OC-DOCUMENTO-XML-REAL-01: subir e abrir um
     `.xml` real na OC e na aba Documentos (homologacao do Gabriel).
+- ⚠ FORNECEDOR NA OC: OS OITO PONTOS USAM O DONO PELO LEITOR UNICO (FORN-SELETOR-PADRAO-01 fatia 2b, Gabriel 08/10/2026, so' tela).
+  ⚠ REGRA DAS FATIAS (Gabriel, 08/10): NAO ALARGAR NEM ESTREITAR O CONJUNTO QUE CADA TELA OFERECIA SEM REPORTAR ANTES DE MUDAR; lista
+    restrita (tipo, papel, credor, sugestoes) se mantem pela prop de opcoes restritas do dono (ainda nao existe: nenhum ponto ate'
+    aqui era restrito).
+  · O QUE CADA LISTA OFERECIA (medido antes de trocar): NENHUM dos oito era restrito por tipo ou papel — todos os fornecedores
+    ATIVOS do cliente. Diferencas que o dono uniformiza, as duas ja' decididas (D7 e passo 1b) e confirmadas pelo Gabriel antes
+    da troca: "[META]" FORA em todos (so' o abate e os tres que ja' usavam o dono o tiravam; compra, venda, liquidacao e
+    documento o ofereciam); o EM USO INATIVO fica no campo com a marca "inativo" e SAI da lista (a lista de
+    `useOperacaoLiquidacao` o punha entre as opcoes). O `CriarOCDoLegadoDialog` recebia a lista inteira do Financeiro e o dono ja'
+    a filtrava (ativos, sem "[META]"): conjunto igual.
+  · OS PONTOS (todos `<FavorecidoSelect clienteId=…>`, sem `fornecedores`; preso por teste de fonte):
+      `CompraModalShell` (fornecedor): `api.clienteId`; `limpavel` com "Nenhum selecionado"; o "+" e' o do dono, APAGADO em somente
+        leitura (`novoDesabilitado`); a linha que so' aparecia com documento SAIU (e' a linha fixa do dono).
+      `VendaModalShell` (comprador) e `AbateModalShell` (comprador): prop nova `clienteId` (opcional), entregue pelo
+        `LancamentosTab` (`clienteAtual?.id`). No abate o CNPJ deixou de ser segunda linha (vai a' direita, numa linha), o
+        "+ Cadastrar comprador" de dentro da lista e' a `acaoFinal` do dono, e `compradoresDoAbate` saiu.
+      `BoitelBlocosModais` (frigorifico da B): a prop `frigorificos` (lista) virou `clienteId`; `opcoesDeFavorecido` saiu; a opcao
+        passou a mostrar o documento.
+      `AbaLiquidacaoOC` (favorecido), `AbaCompromissosOC` (despesa), `DocumentoFormOC` (emitente; prop nova `clienteId`, que so' o
+        `AbaDocumentosOC` passa — no documento por lote do Recebimento a lista segue VAZIA, como era sem `fornecedores`) e
+        `CriarOCDoLegadoDialog` (comprador).
+  · O DONO GANHOU (opcionais; sem elas o HTML dos hospedeiros de antes e' identico — as fotos do modal nao mudaram): `search` /
+    `onSearchChange` OPCIONAIS (sem as duas a busca e' estado do seletor: os shells tem return antecipado e nao ganham estado so'
+    para isto); `novoDesabilitado`; `novoRotulo` (title e aria-label do "+"); `rotuloDoVazio` (o texto do item que esvazia: no
+    emitente da OC o vazio SIGNIFICA "Mesmo da operação — <contraparte>", e o item e o campo vazio dizem isso).
+  · EMITENTE DO DOCUMENTO DA OC: escolher grava id, nome e o documento DO CADASTRO (pelo `onSelected`, do leitor); esvaziar manda
+    os tres NULOS (a regra de sempre). `src/components/compra/documentoFormEmitente.test.tsx`.
+  · LINHA FIXA, POR MEDICAO: LIGADA em compra, venda e abate (modal de altura fixa: 549px a 579 de janela e 493 a 523, iguais com
+    e sem a linha; compra e abate sem rolagem; a venda a 523 JA' rolava 10px por dentro — 404/394 — e passa a 418/394, crescimento
+    dentro de rolagem que ja' existia). DESLIGADA, documento no `title`: despesa da OC (o dialogo tem altura pelo conteudo e ia
+    de 553 a 567px), liquidacao (mesma forma de dialogo; NAO medida), boitel (dialogo 393px, linhas proprias sob o campo),
+    documento (o CNPJ do emitente e' o campo de baixo) e a celula de tabela do "Criar OC do legado".
+  · LEITORES, depois da troca (nada apagado): a lista do `LancamentosTab` (`abateFornecedores`, so' ativos) segue alimentando os
+    NOMES do cartao do topo e do resumo lateral dos tres shells (`fornecedorNome`, `compradorNome`, `frigorificoNome`/`Doc`), a
+    hidratacao por `matchFornecedor`, o sentinela "[META]", os tres seletores do formulario legado inline (~:5438, :5490, :5547),
+    os shells de META (fatia 2e) e os textos de confirmacao; a de `useOperacaoLiquidacao` segue alimentando os nomes de
+    favorecido e contraparte em `AbaCompromissosOC`, e em `DocumentoFormOC` o rotulo "Mesmo da operação — nome" e o casamento do
+    emitente lido do PDF (CNPJ exato / candidatos por nome).
+  PROVA NO NAVEGADOR (cliente Teste, 08/10, aba em SEGUNDO PLANO, janela 1.115 x 579 e depois 523; 9 fornecedores e 3 OCs
+  sinteticos, criados e APAGADOS): compra — lista sem "[META]" e sem o inativo, "3 iguais", busca por nome e por digitos
+  ("99888"), Enter escolhe, linha "99.888.777/0001-66", modal 549 = 549; SALVA: `zoo_operacoes_comerciais.contraparte_id` = o
+  fornecedor escolhido (conferido no banco); reaberta por `?oc_id`, o campo traz o nome e a linha; com o fornecedor INATIVADO,
+  nome + marca "inativo" + documento (nunca vazio). Documento da OC — campo "Mesmo da operação — <nome>", busca por digitos,
+  escolhido preenche o CNPJ do emitente. Despesa — 553px, contraparte ja' escolhida com o documento no `title`; "+" cria
+  "…criado na OC" e ele volta ESCOLHIDO e aparece na lista, sem F5. Venda — nome ("repetido": 3 opcoes), digitos do CPF, linha
+  "123.456.789-09". Boitel (B) — 393px, nome e digitos, documento no `title`. Abate — 493 = 493, "Cadastrar comprador" no pe' da
+  lista, digitos do CNPJ, linha. 20 testes novos; 8 mutacoes mortas e 1 sobrevivente EQUIVALENTE (esvaziar o emitente sem limpar
+  nome/documento do estado: o payload ja' os manda nulos sem id).
+  ⚠ ARTEFATO DA ABA OCULTA, NAO DEFEITO: com a aba em segundo plano a animacao de fechar do Popover nao termina e a lista
+    (invisivel) continua recebendo clique — um clique meu no "Tipo de venda" trocou o comprador. Nao reproduz com a lista ja' fora
+    do DOM. Em prova por script, conferir `[data-testid=favorecido-lista]` antes de clicar perto do campo.
+  ⚠ ACHADOS, sem corrigir (fora do seletor): com o fornecedor INATIVO, o cartao do topo e o resumo lateral dos shells mostram "—"
+    (leem a lista de ativos do hospedeiro; ja' era assim) · o rotulo "Fornecedor/Comprador *" da coluna esquerda fica ~10px abaixo
+    do rotulo da direita nos tres shells (o `Label` em linha x o `flex` do vizinho; anterior a esta fatia) · o campo Fazenda da
+    compra e da venda no cliente Teste mostra o UUID da fazenda.
+  ⚠ NAO PROVADO NO NAVEGADOR: `AbaLiquidacaoOC` (o ramo legado nao abriu no Teste) e `CriarOCDoLegadoDialog` (nao ha' lancamento
+    legado elegivel no Teste) — os dois so' por teste de fonte; salvar documento, despesa, venda com o boitel preenchido e abate
+    (so' a COMPRA foi salva e conferida no banco; as outras duas OCs foram criadas vazias para chegar aos dialogos); o "+" da
+    compra, da venda e do documento; setas do teclado; a janela REAL de 1.126; a aba em primeiro plano; somente leitura (OC
+    fechada / cancelada) com o "+" apagado.
+  ⚠ DIVIDAS: FORN-OC-RESUMO-INATIVO-01 (cartao e resumo dos shells vazios para fornecedor inativo: trocar a fonte do nome para o
+    leitor) · a linha fixa da LIQUIDACAO e do BOITEL nao foi medida ligada · `fornecedores` segue como prop de `AbaCompromissosOC`,
+    `DocumentoFormOC`, `CriarOCDoLegadoDialog` e dos shells so' para NOMES (sai quando os nomes vierem do leitor, 2d/2f).
 - ⚠ O "+" DO SELETOR DE FORNECEDOR SO' EXISTE COM UM CADASTRO DE VERDADE ATRAS, E O EMITENTE NO CONTRATO NASCE COM O CREDOR
   (FORN-SELETOR-PADRAO-01 conserto 2a-fix1, Gabriel 08/10/2026, so' tela).
   · O dono (`FavorecidoSelect`) so' desenha o "+" quando o hospedeiro passa `onCriarNovo`; PROIBIDO passar handler vazio — preso

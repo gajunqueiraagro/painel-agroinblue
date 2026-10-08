@@ -52,8 +52,10 @@ export interface FavorecidoSelectProps<F extends FavorecidoOpcao = FornecedorV2>
   fornecedores?: F[];
   /** FORN-SELETOR-PADRAO-01 — o cliente de quem se leem os fornecedores (modo do leitor único). */
   clienteId?: string | null;
-  search: string;                         // busca CONTROLADA (o caller é dono)
-  onSearchChange: (s: string) => void;
+  /** A busca CONTROLADA pelo hospedeiro (quem precisa do texto: "criar com este nome"). Fatia 2b: OPCIONAIS — sem as duas, a
+   *  busca é estado do próprio seletor (os shells de OC têm return antecipado e não ganham um estado só para isto). */
+  search?: string;
+  onSearchChange?: (s: string) => void;
   /**
    * Botão "+" → abrir cadastro de fornecedor. OPCIONAL desde 133b-a: sem ele, o botão não
    * é renderizado.
@@ -94,6 +96,13 @@ export interface FavorecidoSelectProps<F extends FavorecidoOpcao = FornecedorV2>
    * emitente do documento). Não é fornecedor: não muda `value` nem dispara `onSelected`; o hospedeiro decide o que ela faz.
    */
   acaoFinal?: { label: string; onSelect: () => void };
+  /** Fatia 2b (OC) — o "+" fica APAGADO (não some) quando o hospedeiro trava o cadastro, como a compra em somente leitura. */
+  novoDesabilitado?: boolean;
+  /** Fatia 2b (OC) — o nome do "+" no `title` e no `aria-label` (padrão "Novo Fornecedor"; no documento da OC, "Cadastrar emitente"). */
+  novoRotulo?: string;
+  /** Fatia 2b (OC) — o texto do item que esvazia o campo `limpavel` (padrão "— nenhum —"). No emitente do documento da OC o
+   *  vazio SIGNIFICA "a própria contraparte", e o item diz isso. */
+  rotuloDoVazio?: string;
 }
 
 /** Rótulo de exibição do favorecido. Com showCpfCnpj + documento presente → "Nome (CPF/CNPJ)";
@@ -105,11 +114,15 @@ function favorecidoLabel(f: FavorecidoOpcao, showCpfCnpj: boolean): string {
 
 export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
   value, onChange, onSelected, fornecedores, clienteId,
-  search, onSearchChange, onCriarNovo, novoButtonClassName,
+  search: buscaDoHospedeiro, onSearchChange: aoBuscarNoHospedeiro, onCriarNovo, novoButtonClassName,
   label, triggerClassName, size = 'default', tabIndex, disabled, showCpfCnpj = false,
   limpavel = false, placeholder = 'Selecione fornecedor...', linhaDoDocumento, incluirMeta = false, acaoFinal,
+  novoDesabilitado = false, novoRotulo, rotuloDoVazio = '— nenhum —',
 }: FavorecidoSelectProps<F>) {
   const [open, setOpen] = useState(false);
+  const [buscaPropria, setBuscaPropria] = useState('');
+  const search = buscaDoHospedeiro ?? buscaPropria;
+  const onSearchChange = aoBuscarNoHospedeiro ?? setBuscaPropria;
   const [highlight, setHighlight] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -243,7 +256,7 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
                   onClick={handleLimpar}
                 >
                   <Check className={cn("mr-2 h-3.5 w-3.5 shrink-0", value ? "opacity-0" : "opacity-100")} />
-                  <span>— nenhum —</span>
+                  <span className="truncate" title={rotuloDoVazio}>{rotuloDoVazio}</span>
                 </button>
               )}
               {erroDoLeitor && (
@@ -304,9 +317,9 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
         {onCriarNovo && (
           /* ⚠ O ÍCONE ACOMPANHA O BOTÃO — 133g item 3: num "+" de 20px, um ícone de 14px
              ocupa a altura toda. `[&_svg]` do `novoButtonClassName` manda quando vem. */
-          <Button variant="outline" size="icon"
+          <Button variant="outline" size="icon" disabled={novoDesabilitado || undefined}
             className={cn('shrink-0 [&_svg]:h-3.5 [&_svg]:w-3.5', novoButtonClassName ?? 'h-8 w-8')}
-            onClick={onCriarNovo} title="Novo Fornecedor">
+            onClick={onCriarNovo} title={novoRotulo ?? 'Novo Fornecedor'} aria-label={novoRotulo}>
             <Plus />
           </Button>
         )}

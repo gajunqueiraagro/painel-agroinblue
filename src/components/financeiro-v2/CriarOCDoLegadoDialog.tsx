@@ -241,7 +241,9 @@ export function CriarOCDoLegadoDialog({ clienteId, lancamentoId, fornecedores, o
                     <td className={`${TD} text-muted-foreground`}>Comprador *</td>
                     <td className={`${TD} py-1`}>
                       <div className={`max-w-[340px] ${!comprador ? 'rounded ring-1 ring-destructive' : ''}`} data-testid="campo-comprador">
-                        <FavorecidoSelect value={comprador} onChange={setComprador} fornecedores={fornecedores}
+                        {/* FORN-SELETOR-PADRAO-01 fatia 2b — a lista é a do leitor único; em CÉLULA DE TABELA a linha fixa fica
+                            desligada (o documento vai no title do campo e na opção) */}
+                        <FavorecidoSelect value={comprador} onChange={setComprador} clienteId={clienteId} linhaDoDocumento={false}
                           search={buscaComprador} onSearchChange={setBuscaComprador} size="compact" />
                       </div>
                       {!comprador && <div className="text-[10px] text-destructive">Escolha o comprador do cadastro.</div>}

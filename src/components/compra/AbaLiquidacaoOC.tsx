@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { SearchableSelect } from '@/components/ui/searchable-select';
+import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
 import { DatePicker } from '@/components/ui/date-picker';
 /* ⚠ O campo de dinheiro E' o compartilhado (A19). Esta tela nao formatava nada: o
    valor do pagamento era um <Input> cru, e o operador digitava contra o saldo em
@@ -568,13 +568,13 @@ function GerarObrigacaoDialog({ api, onClose }: { api: LiquidacaoApi; onClose: (
           </div>
           <div className="col-span-2">
             <Label className="text-[11px]">Favorecido *</Label>
-            <SearchableSelect
-              value={favorecidoId || '__none__'}
-              onValueChange={(v) => setFavorecidoId(v === '__none__' ? '' : v)}
-              options={api.fornecedores.map(f => ({ value: f.id, label: f.nome }))}
-              placeholder="Selecione o favorecido"
-              allLabel="— selecione —" allValue="__none__" dense
-              className="[&>button]:h-8 [&>button]:text-[12px]"
+            {/* FORN-SELETOR-PADRAO-01 fatia 2b — o DONO do seletor de fornecedor, pelo leitor único (era o seletor genérico sobre a
+                lista da liquidação). */}
+            <FavorecidoSelect
+              value={favorecidoId} onChange={setFavorecidoId} clienteId={api.clienteId ?? null}
+              limpavel rotuloDoVazio="— selecione —" placeholder="Selecione o favorecido"
+              /* linha fixa DESLIGADA: diálogo de altura pelo conteúdo, como o do compromisso (lá medido: +14px); NÃO medido aqui */
+              linhaDoDocumento={false}
             />
           </div>
           <div>

@@ -41,7 +41,8 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { DatePicker } from '@/components/ui/date-picker';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import { Calendar, Building2, X, Plus, ArrowRight, Check, RotateCcw, Lock } from 'lucide-react';
+import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
+import { Calendar, Building2, X, ArrowRight, Check, RotateCcw, Lock } from 'lucide-react';
 import type { Categoria } from '@/types/cattle';
 import type { CompraLotesApi } from '@/hooks/useCompraLotes';
 import type { ExclusaoLoteOC } from '@/components/compra/AbaNegociacaoLotes';
@@ -154,6 +155,8 @@ export interface AbateModalShellProps {
      dentro do modal entra pelo caminho curto (`select('id, nome')`) e fica sem documento
      ate' a proxima carga. Precedente do campo: PR-OC-UX-LOTE-C1-01, na aba Compra. */
   contrapartes: { id: string; nome: string; cpfCnpj?: string | null }[];
+  /** FORN-SELETOR-PADRAO-01 fatia 2b — o cliente de quem o seletor de fornecedor lê a lista (leitor único). */
+  clienteId?: string | null;
   /** O numero da nota/OC — e' por ele que o operador reconhece a operacao, nao pelo id. */
   numeroDocumento?: string | null;
   onNovoFrigorifico: () => void;
@@ -240,7 +243,7 @@ function dataMaisDias(iso: string | null | undefined, dias: number): string | nu
 }
 
 export function AbateModalShell({
-  data, setData, frigorificoId, setFrigorificoId, contrapartes, onNovoFrigorifico,
+  data, setData, frigorificoId, setFrigorificoId, contrapartes, clienteId, onNovoFrigorifico,
   abateFazendaId, setAbateFazendaId, fazendasOC,
   observacao, setObservacao, numeroDocumento,
   ocOperacaoId, ocVersao, onOcVersaoChange, ocStatusComercial, lotesApi, exclusaoLoteOC = null,
@@ -278,22 +281,8 @@ export function AbateModalShell({
      o operador edita o lote, e sao duas decisoes. Zera ao trocar de OC. */
   const [motivoReaberturaSessao, setMotivoReaberturaSessao] = useState<string | null>(null);
   useEffect(() => { setMotivoReaberturaSessao(null); }, [ocOperacaoId]);
-  /* ⚠ O SENTINELA DO PLANEJAMENTO FICA DE FORA — ele e' fornecedor de projecao, nao
-     frigorifico, e nao deve poder ser escolhido como comprador de um abate real.
-     ⚠ FILTRADO POR NOME, e nao por `tipo`: a coluna existe em `financeiro_fornecedores` e
-     nao discrimina nada — vale 'frigorifico' em 6.885 de 6.885 linhas, inclusive nos nove
-     sentinelas. Dar-lhe vocabulario e' a frente [FORNECEDOR-TIPO]. */
-  const compradoresDoAbate = useMemo(
-    () => contrapartes
-      .filter(f => !f.nome.includes('[META]'))
-      .map(f => ({
-        value: f.id,
-        label: f.nome,
-        sub: f.cpfCnpj ? `CNPJ ${f.cpfCnpj}` : 'sem CNPJ cadastrado',
-        subAlerta: !f.cpfCnpj,
-      })),
-    [contrapartes],
-  );
+  /* ⚠ O SENTINELA DO PLANEJAMENTO ("[META]") FICA DE FORA do Comprador — quem o tira agora é o dono do seletor
+     (FORN-SELETOR-PADRAO-01, D7: fora por padrão), pelo nome, como este shell fazia. */
 
   const contraparteAtual = contrapartes.find(f => f.id === frigorificoId) ?? null;
   const frigorificoNome = contraparteAtual?.nome ?? null;
@@ -1029,17 +1018,15 @@ export function AbateModalShell({
                       ⚠ SEM CNPJ E' AVISO, NAO DADO: ambar, porque e' cadastro a completar.
                       ⚠ O "+" SAIU DE FORA E ENTROU NA LISTA: quem procurou e nao achou esta'
                       olhando a lista, nao o campo ao lado. */}
+                  {/* FORN-SELETOR-PADRAO-01 fatia 2b — o DONO do seletor de fornecedor, pelo leitor único: uma linha por opção com
+                      o CNPJ à direita (era segunda linha), busca por nome e por dígitos, "[META]" fora (D7, a regra que este
+                      campo já tinha) e o cadastro como ação fixa do pé da lista. */}
                   <div className="mt-[3px] min-w-0">
-                    <SearchableSelect
-                      value={frigorificoId || '__all__'}
-                      onValueChange={(v) => setFrigorificoId(v === '__all__' ? '' : v)}
-                      options={compradoresDoAbate}
-                      placeholder="Buscar por nome ou CNPJ…"
-                      allLabel="Nenhum selecionado"
-                      allValue="__all__"
-                      dense
-                      acaoFinal={{ label: '+ Cadastrar comprador', onSelect: onNovoFrigorifico }}
-                      className="[&_button]:h-8 [&_button]:text-[12px] [&_button]:px-2.5"
+                    <FavorecidoSelect
+                      value={frigorificoId} onChange={setFrigorificoId} clienteId={clienteId ?? null}
+                      limpavel rotuloDoVazio="Nenhum selecionado" placeholder="Buscar por nome ou CNPJ…"
+                      triggerClassName="px-2.5"
+                      acaoFinal={{ label: 'Cadastrar comprador', onSelect: onNovoFrigorifico }}
                     />
                   </div>
                 </div>

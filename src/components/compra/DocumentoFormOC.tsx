@@ -3,7 +3,8 @@ import { formatarNF } from '@/lib/calculos/formatters';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { SearchableSelect } from '@/components/ui/searchable-select';
+import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
+import type { FornecedorLido } from '@/lib/fornecedores/leitorDeFornecedores';
 import { DatePicker } from '@/components/ui/date-picker';
 /* ⚠ O CAMPO DE DINHEIRO DO SISTEMA, nao um segundo. Ele ja existia — dentro de
    AbaCompromissosOC, como funcao local e nao exportada — e era exatamente por isso que
@@ -97,6 +98,9 @@ interface Props {
   /* EMITENTE — a lista de fornecedores e a contraparte da operacao, que e' o default.
      `onCriarFornecedor` habilita o "+", como no modal de compromisso. */
   fornecedores?: { id: string; nome: string; cpfCnpj?: string | null }[];
+  /** FORN-SELETOR-PADRAO-01 fatia 2b — o cliente de quem o seletor do emitente lê os fornecedores (leitor único). Sem ele a
+   *  lista fica vazia, como ficava sem `fornecedores` (o documento por lote do Recebimento). */
+  clienteId?: string | null;
   contraparteId?: string | null;
   onCriarFornecedor?: (nome: string, cpfCnpj: string) => Promise<{ id: string; nome: string } | null>;
   /* Grava o CNPJ da nota num fornecedor ja existente — so com aval do operador. */
@@ -107,7 +111,7 @@ interface Props {
   onCancel: () => void;
 }
 
-export function DocumentoFormOC({ api, somenteLeitura, fornecedores, contraparteId, onCriarFornecedor, onGravarDocumentoFornecedor, initialForm, hideHeader, onSaved, onCancel }: Props) {
+export function DocumentoFormOC({ api, somenteLeitura, fornecedores, clienteId, contraparteId, onCriarFornecedor, onGravarDocumentoFornecedor, initialForm, hideHeader, onSaved, onCancel }: Props) {
   const [form, setForm] = useState<FormState>(initialForm);
   /* ⚠ O ARQUIVO NAO E' CAMPO DO FORMULARIO, e' um passo DEPOIS. Fica em estado proprio
      porque o upload so acontece quando ja existe `documento_id` — ver o submit. */
@@ -499,35 +503,19 @@ export function DocumentoFormOC({ api, somenteLeitura, fornecedores, contraparte
             Vazio = a propria contraparte, e a RPC grava NULL. */}
         <div className="lg:col-span-2">
           <Label className="text-[10px] text-muted-foreground">Emitente da nota</Label>
-          <div className="flex items-center gap-1">
-            <div className="flex-1 min-w-0">
-              {/* ⚠ SEARCHABLESELECT, e nao o `Select` do shadcn: com 2.571 fornecedores
-                  ativos so na NJ, uma lista sem busca e' um rolo infinito. E' o MESMO
-                  componente que a aba Compromissos usa para o Favorecido, sobre a MESMA
-                  lista — nao ha segundo seletor de fornecedor nesta familia.
-                  O "X" do componente devolve ao sentinela, que aqui significa "e' a
-                  propria contraparte": limpar o emitente e' exatamente isso. */}
-              <SearchableSelect
-                value={form.emitenteId || '__contraparte__'}
-                onValueChange={v => setForm(f => ({
-                  ...f,
-                  emitenteId: v === '__contraparte__' ? '' : v,
-                  emitenteNome: v === '__contraparte__' ? '' : (fornecedores?.find(x => x.id === v)?.nome ?? ''),
-                  emitenteDocumento: v === '__contraparte__' ? '' : (fornecedores?.find(x => x.id === v)?.cpfCnpj ?? ''),
-                }))}
-                options={(fornecedores ?? []).map(f => ({ value: f.id, label: f.nome }))}
-                allValue="__contraparte__" allLabel={rotuloContraparte}
-                placeholder="Buscar emitente…" disabled={somenteLeitura} dense
-                className="[&>button]:h-7 [&>button]:text-[11px]"
-              />
-            </div>
-            {onCriarFornecedor && !somenteLeitura && (
-              <Button type="button" variant="outline" size="icon" className="h-7 w-7 shrink-0"
-                aria-label="Novo emitente" title="Cadastrar emitente" onClick={() => setNovoFornecedorOpen(true)}>
-                <Plus className="h-3 w-3" />
-              </Button>
-            )}
-          </div>
+          {/* FORN-SELETOR-PADRAO-01 fatia 2b — o DONO do seletor de fornecedor, pelo leitor único (ativos do cliente; o gravado
+              inativo fica no campo com a marca). VAZIO = "é a própria contraparte" (a RPC grava NULL): o campo vazio e o item
+              que esvazia dizem isso. A linha fixa fica DESLIGADA: o CNPJ/CPF do emitente é o campo logo abaixo. */}
+          <FavorecidoSelect<FornecedorLido>
+            value={form.emitenteId} clienteId={clienteId ?? null}
+            onChange={id => setForm(f => (id ? { ...f, emitenteId: id } : { ...f, emitenteId: '', emitenteNome: '', emitenteDocumento: '' }))}
+            onSelected={x => setForm(f => ({ ...f, emitenteId: x.id, emitenteNome: x.nome, emitenteDocumento: x.cpf_cnpj ?? '' }))}
+            limpavel rotuloDoVazio={rotuloContraparte} placeholder={rotuloContraparte}
+            disabled={somenteLeitura} linhaDoDocumento={false}
+            triggerClassName="h-7 text-[11px]"
+            onCriarNovo={onCriarFornecedor && !somenteLeitura ? () => setNovoFornecedorOpen(true) : undefined}
+            novoButtonClassName="h-7 w-7 [&_svg]:h-3 [&_svg]:w-3" novoRotulo="Cadastrar emitente"
+          />
           {/* ⚠ "MESMO DA OPERACAO" NAO DIZ QUEM E'. O default estava certo no modelo e
               mudo na tela: quem le precisa do NOME, nao da palavra "mesmo". O nome vai
               no proprio rotulo do seletor; o documento da contraparte vem aqui embaixo,

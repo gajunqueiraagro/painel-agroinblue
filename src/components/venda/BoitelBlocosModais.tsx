@@ -32,7 +32,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DatePicker } from '@/components/ui/date-picker';
 import { Segmentado } from '@/components/ui/segmentado';
 import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
-import type { FornecedorV2 } from '@/hooks/useFinanceiroV2';
 import { CampoMoeda } from '@/components/ui/campo-moeda';
 import type { CenarioBoitel } from '@/components/venda/BoitelNegociacaoDerivado';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -677,19 +676,9 @@ export function pendenciaDoRealizado(d: BoitelEdicao | null): string | null {
 
 const MSG_OBRIGATORIO = 'Obrigatório no realizado — informe o valor do papel.';
 
-/** O que o Frigorifico da B precisa: as opcoes (favorecidos ATIVOS do cliente) e a busca controlada. */
-interface SeletorFrigorifico { opcoes: FornecedorV2[]; busca: string; setBusca: (s: string) => void }
-
-/* ⚠ ADAPTADOR SEM CAST — BOITEL-ABATE-PRODUTOR-01b. A OC carrega os favorecidos ATIVOS do cliente so' com
-   id/nome (a lista do Comprador); o `FavorecidoSelect` le' so' nome, documento e `ativo`, e os dados de
-   pagamento ficam nulos — o seletor nao os usa e esta tela nao os grava. */
-function opcoesDeFavorecido(lista: ReadonlyArray<{ id: string; nome: string }>): FornecedorV2[] {
-  return lista.map(f => ({
-    id: f.id, nome: f.nome, cpf_cnpj: null, fazenda_id: null, ativo: true,
-    tipo_recebimento: null, pix_tipo_chave: null, pix_chave: null, banco: null, agencia: null, conta: null,
-    tipo_conta: null, cpf_cnpj_pagamento: null, nome_favorecido: null, observacao_pagamento: null,
-  }));
-}
+/** O que o Frigorifico da B precisa: o cliente de quem o seletor lê os fornecedores ATIVOS (o leitor único —
+ *  FORN-SELETOR-PADRAO-01 fatia 2b; era a lista do Comprador, só com id e nome, adaptada aqui) e a busca controlada. */
+interface SeletorFrigorifico { clienteId: string | null; busca: string; setBusca: (s: string) => void }
 
 /* Os INDICADORES de cada cartao — o que a aba mostra sem abrir nada.
    ⚠ SEIS E DOIS, e nao um por grupo. Ate' aqui cada cartao trazia UMA frase por grupo
@@ -1167,7 +1156,9 @@ function corposDoBoitel(d: BoitelEdicao, set: <K extends keyof BoitelEdicao>(k: 
                 <FavorecidoSelect
                   value={d.frigorificoId ?? ''}
                   onChange={id => set('frigorificoId', id)}
-                  fornecedores={frig?.opcoes ?? []}
+                  /* fatia 2b — a lista é a do leitor único (ativos, com documento na opção); a linha fixa fica DESLIGADA: este
+                     campo só aparece na modalidade B, dentro de um diálogo que já tem linhas próprias embaixo (erro e dica) */
+                  clienteId={frig?.clienteId ?? null} linhaDoDocumento={false}
                   search={frig?.busca ?? ''}
                   onSearchChange={s => frig?.setBusca(s)}
                   disabled={somenteLeitura}
@@ -1334,12 +1325,12 @@ const ICONE_GRUPO: Record<IdGrupo, React.ReactNode> = {
   adiantamento: <Banknote className="h-3.5 w-3.5 shrink-0" />,
 };
 
-function DialogoGrupo({ card, valor, somenteLeitura, motivoTravado = null, onAplicar, onFechar, modoRealizado, projetado, dataEntrada, frigorificos }: {
+function DialogoGrupo({ card, valor, somenteLeitura, motivoTravado = null, onAplicar, onFechar, modoRealizado, projetado, dataEntrada, clienteId }: {
   card: IdCard;
   /** OC-EDITAR-CADASTRAL-01 — por que o dialogo esta' travado, escrito ao lado do Aplicar. */
   motivoTravado?: string | null;
-  /** Opcoes do Frigorifico (B) — os favorecidos ativos do cliente. */
-  frigorificos?: ReadonlyArray<{ id: string; nome: string }>;
+  /** O cliente de quem o Frigorifico (B) lê os fornecedores ativos (leitor único). */
+  clienteId?: string | null;
   valor: BoitelEdicao;
   somenteLeitura?: boolean;
   /** Modo realizado: peso de abate digitado, data do abate, "previsto: X" nos campos. */
@@ -1368,7 +1359,6 @@ function DialogoGrupo({ card, valor, somenteLeitura, motivoTravado = null, onApl
      campo preenchido deixa de ser vermelho enquanto se digita. Abrir o dialogo ja' pintado
      de vermelho acusaria o operador antes de ele fazer qualquer coisa. */
   const [buscaFrigorifico, setBuscaFrigorifico] = useState('');
-  const opcoesFrigorifico = useMemo(() => opcoesDeFavorecido(frigorificos ?? []), [frigorificos]);
   const [tentouAplicar, setTentouAplicar] = useState(false);
   const [tentativa, setTentativa] = useState(0);
   const corpoRef = useRef<HTMLDivElement>(null);
@@ -1391,7 +1381,7 @@ function DialogoGrupo({ card, valor, somenteLeitura, motivoTravado = null, onApl
     onFechar();
   };
   const corpos = corposDoBoitel(local, set, setLocal, somenteLeitura, modoRealizado, projetado, dataEntrada, erros,
-    { opcoes: opcoesFrigorifico, busca: buscaFrigorifico, setBusca: setBuscaFrigorifico });
+    { clienteId: clienteId ?? null, busca: buscaFrigorifico, setBusca: setBuscaFrigorifico });
   const ehProdutor = (local.quemAbate ?? 'boitel') === 'produtor';
   const ids = (Object.keys(GRUPOS) as IdGrupo[]).filter(id => GRUPOS[id].card === card);
   /* O veredito do painel de Custos, no proprio titulo — ver a nota em `Painel`. */
@@ -1585,7 +1575,7 @@ function DialogoGrupo({ card, valor, somenteLeitura, motivoTravado = null, onApl
 /* ═══ O COMPONENTE ═══════════════════════════════════════════════════════════════ */
 
 export function BoitelBlocosModais({ valor, onChange, somenteLeitura, cenario, detalheCenario, bolsoFormatado,
-  realizado = null, onChangeRealizado, onIniciarRealizado, dataEntrada, frigorificos,
+  realizado = null, onChangeRealizado, onIniciarRealizado, dataEntrada, clienteId,
   podeLancarRealizado, motivoLancarRealizado = null, motivoTravado = null }: {
   valor: BoitelEdicao; onChange: (proximo: BoitelEdicao) => void; somenteLeitura?: boolean;
   /**
@@ -1597,8 +1587,8 @@ export function BoitelBlocosModais({ valor, onChange, somenteLeitura, cenario, d
   motivoLancarRealizado?: string | null;
   /** Por que os blocos estao travados — vai ao lado do Aplicar do dialogo. */
   motivoTravado?: string | null;
-  /** BOITEL-ABATE-PRODUTOR-01 — os favorecidos ATIVOS do cliente, opcoes do Frigorifico na B. */
-  frigorificos?: ReadonlyArray<{ id: string; nome: string }>;
+  /** BOITEL-ABATE-PRODUTOR-01 — o cliente de quem o Frigorifico da B lê os fornecedores ATIVOS (leitor único, fatia 2b). */
+  clienteId?: string | null;
   /** Marca de projecao — UMA por cartao, no titulo. Ver `GrupoIndicadores`. */
   cenario?: CenarioBoitel;
   /** Texto que acompanha a pilula (mockup: "enviada em 13/05"). */
@@ -1733,7 +1723,7 @@ export function BoitelBlocosModais({ valor, onChange, somenteLeitura, cenario, d
           modoRealizado={editando.modo === 'realizado'}
           projetado={editando.modo === 'realizado' ? valor : null}
           dataEntrada={dataEntrada}
-          frigorificos={frigorificos}
+          clienteId={clienteId}
           onAplicar={editando.modo === 'realizado' ? (onChangeRealizado ?? onChange) : onChange}
           onFechar={() => setEditando(null)}
         />

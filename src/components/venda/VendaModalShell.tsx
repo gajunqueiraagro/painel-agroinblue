@@ -41,7 +41,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { DatePicker } from '@/components/ui/date-picker';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import { Calendar, Building2, X, Plus, ArrowRight, Check, RotateCcw, Lock } from 'lucide-react';
+import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
+import { Calendar, Building2, X, ArrowRight, Check, RotateCcw, Lock } from 'lucide-react';
 import type { Categoria } from '@/types/cattle';
 import type { CompraLotesApi } from '@/hooks/useCompraLotes';
 import { AbaNegociacaoLotes, type ExclusaoLoteOC } from '@/components/compra/AbaNegociacaoLotes';
@@ -128,6 +129,8 @@ export interface VendaModalShellProps {
   compradorId: string;
   setCompradorId: (v: string) => void;
   contrapartes: { id: string; nome: string }[];
+  /** FORN-SELETOR-PADRAO-01 fatia 2b — o cliente de quem os seletores de fornecedor leem a lista (leitor único). */
+  clienteId?: string | null;
   onNovoComprador: () => void;
   /** ⚠ A fazenda de ORIGEM: o gado sai dela. */
   vendaFazendaId: string;
@@ -220,7 +223,7 @@ const MESES_EXTENSO = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
 export function VendaModalShell({
-  data, setData, compradorId, setCompradorId, contrapartes, onNovoComprador,
+  data, setData, compradorId, setCompradorId, contrapartes, clienteId, onNovoComprador,
   vendaFazendaId, setVendaFazendaId, fazendasOC,
   propriedadeDestino, setPropriedadeDestino,
   vendaTipoVenda, setVendaTipoVenda, observacao, setObservacao,
@@ -838,8 +841,8 @@ export function VendaModalShell({
                           da OC: medido, `data_envio` do boitel esta' nula em 3 de 3
                           registros. No papel vivo, 13/05 -> 25/08 = 104 dias. */
                       dataEntrada={data}
-                      /* BOITEL-ABATE-PRODUTOR-01 — o Frigorifico da B usa a MESMA lista do Comprador (favorecidos ativos). */
-                      frigorificos={contrapartes}
+                      /* BOITEL-ABATE-PRODUTOR-01 — o Frigorifico da B lê do MESMO leitor do Comprador (fornecedores ativos). */
+                      clienteId={clienteId ?? null}
                     />
                   )}
                 </div>
@@ -888,21 +891,14 @@ export function VendaModalShell({
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-3">
               <div className="min-w-0">
                 <Label className="text-[10px] text-muted-foreground">Comprador <span className="text-destructive">*</span></Label>
-                <div className="mt-[3px] flex items-center gap-1">
-                  <div className="min-w-0 flex-1">
-                    <SearchableSelect
-                      value={compradorId || '__all__'}
-                      onValueChange={(v) => setCompradorId(v === '__all__' ? '' : v)}
-                      options={contrapartes.map(f => ({ value: f.id, label: f.nome }))}
-                      placeholder="Selecione ou cadastre o comprador"
-                      allLabel="Nenhum selecionado"
-                      allValue="__all__"
-                      className="[&_button]:h-8 [&_button]:text-[12px] [&_button]:px-2.5"
-                    />
-                  </div>
-                  <Button type="button" variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={onNovoComprador}>
-                    <Plus className="h-3.5 w-3.5" />
-                  </Button>
+                {/* FORN-SELETOR-PADRAO-01 fatia 2b — o DONO do seletor de fornecedor, pelo leitor único; o "+" e a linha fixa do
+                    documento são dele. */}
+                <div className="mt-[3px]">
+                  <FavorecidoSelect
+                    value={compradorId} onChange={setCompradorId} clienteId={clienteId ?? null}
+                    limpavel rotuloDoVazio="Nenhum selecionado" placeholder="Selecione ou cadastre o comprador"
+                    triggerClassName="px-2.5" onCriarNovo={onNovoComprador} novoRotulo="Novo comprador"
+                  />
                 </div>
               </div>
               <div className="min-w-0">

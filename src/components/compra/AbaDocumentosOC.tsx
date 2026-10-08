@@ -128,6 +128,7 @@ export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedo
         api={api}
         somenteLeitura={somenteLeitura}
         fornecedores={fornecedores}
+        clienteId={clienteId ?? null}
         contraparteId={contraparteId}
         onCriarFornecedor={clienteId ? criarFornecedor : undefined}
         onGravarDocumentoFornecedor={clienteId ? gravarDocumentoFornecedor : undefined}

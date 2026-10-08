@@ -339,6 +339,86 @@ describe('2a-fix1 — o "+" só existe com um cadastro de verdade atrás dele', 
   });
 });
 
+describe('fatia 2b (OC) — os oito pontos usam o dono pelo LEITOR', () => {
+  const ler = (c: string) => readFileSync(resolve(process.cwd(), c), 'utf8');
+  const usos = (fonte: string) => fonte.match(/<FavorecidoSelect(?:<[A-Za-z]+>)?\s+[a-zA-Z{/][\s\S]*?\/>/g) ?? [];
+  it.each([
+    ['src/components/compra/CompraModalShell.tsx', 'fornecedor da compra'],
+    ['src/components/venda/VendaModalShell.tsx', 'comprador'],
+    ['src/components/abate/AbateModalShell.tsx', 'comprador do abate'],
+    ['src/components/venda/BoitelBlocosModais.tsx', 'frigorífico do boitel'],
+    ['src/components/compra/AbaLiquidacaoOC.tsx', 'favorecido da liquidação'],
+    ['src/components/compra/AbaCompromissosOC.tsx', 'despesa da OC'],
+    ['src/components/compra/DocumentoFormOC.tsx', 'emitente'],
+    ['src/components/financeiro-v2/CriarOCDoLegadoDialog.tsx', 'comprador do legado'],
+  ])('%s (%s): um uso do dono, com `clienteId` e sem lista do hospedeiro', (arquivo) => {
+    const u = usos(ler(arquivo));
+    expect(u).toHaveLength(1);
+    expect(u[0]).toMatch(/\bclienteId=\{/);
+    expect(u[0]).not.toMatch(/\bfornecedores=\{/);
+    expect(u[0]).not.toMatch(/\bclienteId=\{(null|undefined|'')\}/);
+  });
+  it('nenhum seletor genérico sobra para FORNECEDOR nos shells (os que restam são os de fazenda)', () => {
+    for (const arquivo of ['src/components/compra/CompraModalShell.tsx', 'src/components/venda/VendaModalShell.tsx', 'src/components/abate/AbateModalShell.tsx']) {
+      const blocos = ler(arquivo).split('<SearchableSelect').slice(1).map((b) => b.slice(0, b.indexOf('/>')));
+      expect(blocos.length, arquivo).toBeGreaterThan(0);   /* a busca acha os de fazenda */
+      for (const b of blocos) expect(b, arquivo).toMatch(/options=\{opcoesFazenda/);
+    }
+    for (const arquivo of ['src/components/compra/AbaLiquidacaoOC.tsx', 'src/components/compra/DocumentoFormOC.tsx']) expect(ler(arquivo)).not.toContain('SearchableSelect');
+  });
+  it('quem entrega o cliente aos shells é o hospedeiro: compra, venda e abate recebem `clienteAtual?.id`', () => {
+    const tab = ler('src/pages/LancamentosTab.tsx');
+    expect(tab.match(/contrapartes=\{abateFornecedores\}\n\s+clienteId=\{clienteAtual\?\.id \?\? null\}/g)).toHaveLength(2);
+    expect(tab).toMatch(/fornecedores: abateFornecedores,\n\s+clienteId: clienteAtual\?\.id \?\? null,\n\s+setNovoFornecedorCompraOpen/);
+  });
+  it('linha fixa: ligada na compra, na venda e no abate (modal de altura fixa); desligada onde o diálogo cresce com ela (despesa, liquidação, boitel), no documento e na célula do legado', () => {
+    const uso = (arquivo: string) => usos(ler(arquivo))[0];
+    for (const a of ['src/components/compra/CompraModalShell.tsx', 'src/components/venda/VendaModalShell.tsx', 'src/components/abate/AbateModalShell.tsx']) expect(uso(a), a).not.toContain('linhaDoDocumento={false}');
+    for (const a of ['src/components/compra/AbaLiquidacaoOC.tsx', 'src/components/compra/AbaCompromissosOC.tsx', 'src/components/venda/BoitelBlocosModais.tsx', 'src/components/compra/DocumentoFormOC.tsx', 'src/components/financeiro-v2/CriarOCDoLegadoDialog.tsx']) expect(uso(a), a).toContain('linhaDoDocumento={false}');
+  });
+  it('o abate não filtra mais o "[META]" por conta própria nem monta segunda linha de CNPJ: é do dono', () => {
+    const abate = ler('src/components/abate/AbateModalShell.tsx');
+    expect(abate).not.toContain('compradoresDoAbate');
+    expect(abate).not.toContain('sem CNPJ cadastrado');
+    expect(usos(abate)[0]).toContain("acaoFinal={{ label: 'Cadastrar comprador', onSelect: onNovoFrigorifico }}");
+    expect(usos(abate)[0]).not.toContain('incluirMeta');
+  });
+});
+
+describe('fatia 2b — o que o dono ganhou para a OC', () => {
+  beforeEach(() => definirFornecedoresDoLeitor([{ id: 'a', nome: 'Alfa Agro' }, { id: 'b', nome: 'Beta Boi' }, { id: 'm', nome: 'Projeção [META]' }, { id: 'x', nome: 'Velho Ltda', ativo: false }]));
+  it('busca SEM controle do hospedeiro: o seletor guarda o texto e filtra', () => {
+    render(<FavorecidoSelect value="" onChange={() => {}} clienteId="c" />);
+    fireEvent.click(screen.getByRole('combobox'));
+    expect(screen.getAllByTestId('favorecido-opcao').map((e) => e.textContent)).toEqual(['Alfa Agro', 'Beta Boi']);   /* "[META]" e o inativo fora */
+    fireEvent.change(screen.getByPlaceholderText('Buscar por nome ou CNPJ/CPF...'), { target: { value: 'beta' } });
+    expect(screen.getAllByTestId('favorecido-opcao').map((e) => e.textContent)).toEqual(['Beta Boi']);
+  });
+  it('fornecedor de OC antiga hoje INATIVO: o campo abre com o nome e a marca "inativo", nunca vazio, e ele não está na lista', () => {
+    render(<FavorecidoSelect value="x" onChange={() => {}} clienteId="c" />);
+    expect(screen.getByRole('combobox').textContent).toContain('Velho Ltda');
+    expect(screen.getByTestId('favorecido-inativo').textContent).toBe('inativo');
+    fireEvent.click(screen.getByRole('combobox'));
+    expect(screen.getAllByTestId('favorecido-opcao').map((e) => e.textContent)).toEqual(['Alfa Agro', 'Beta Boi']);
+  });
+  it('`novoDesabilitado`: o "+" fica APAGADO (não some) e não chama; `novoRotulo` é o nome dele', () => {
+    const criar = vi.fn();
+    render(<FavorecidoSelect value="" onChange={() => {}} clienteId="c" onCriarNovo={criar} novoDesabilitado novoRotulo="Novo fornecedor" />);
+    const mais = screen.getByRole('button', { name: 'Novo fornecedor' });
+    expect(mais.hasAttribute('disabled')).toBe(true);
+    fireEvent.click(mais);
+    expect(criar).not.toHaveBeenCalled();
+  });
+  it('`rotuloDoVazio`: o item que esvazia diz o que o vazio significa, e devolve vazio sem `onSelected`', () => {
+    const mudar = vi.fn(); const escolhido = vi.fn();
+    render(<FavorecidoSelect value="a" onChange={mudar} onSelected={escolhido} clienteId="c" limpavel rotuloDoVazio="Contraparte da operação (Fulano)" />);
+    fireEvent.click(screen.getByRole('combobox'));
+    fireEvent.click(screen.getByText('Contraparte da operação (Fulano)'));
+    expect(mudar).toHaveBeenCalledWith('');
+    expect(escolhido).not.toHaveBeenCalled();
+  });
+});
+
 describe('fonte', () => {
   const fonte = readFileSync(resolve(process.cwd(), 'src/components/shared/FavorecidoSelect.tsx'), 'utf8');
   it('nenhum hook depois de return, e as regras puras vêm do dono (sem normalização nem máscara própria no componente)', () => {

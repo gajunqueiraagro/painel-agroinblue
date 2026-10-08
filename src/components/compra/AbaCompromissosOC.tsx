@@ -2867,7 +2867,10 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
                   dialogo na horizontal, o cabecalho navy ficava pela metade, os campos cortados a' esquerda e a
                   lista escura saia por fora do modal. O `FavorecidoSelect` abre em portal (Popover), fora da caixa. */}
               <FavorecidoSelect
-                value={favorecidoId} onChange={setFavorecidoId} fornecedores={fornecedores}
+                /* FORN-SELETOR-PADRAO-01 fatia 2b — a lista é a do leitor único (ativos do cliente, com documento).
+                   ⚠ LINHA FIXA DESLIGADA, POR MEDIÇÃO: o diálogo tem altura pelo conteúdo e passava de 553 para 567px
+                   (janela de 579); o documento vai no title do campo e na opção. */
+                value={favorecidoId} onChange={setFavorecidoId} clienteId={clienteId} linhaDoDocumento={false}
                 search={favorecidoBusca} onSearchChange={setFavorecidoBusca} limpavel placeholder="Opcional"
                 onCriarNovo={onCriarFornecedor ? () => setNovoFornecedorOpen(true) : undefined}
                 novoButtonClassName="h-6 w-6"

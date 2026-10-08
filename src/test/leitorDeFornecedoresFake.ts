@@ -7,7 +7,7 @@
  *   ...
  *   definirFornecedoresDoLeitor(FORNECEDORES);   // ativos e inativos; o hook separa como o de verdade
  */
-interface FornecedorDeTeste { id: string; nome: string; ativo?: boolean | null }
+interface FornecedorDeTeste { id: string; nome: string; ativo?: boolean | null; cpf_cnpj?: string | null }
 
 const estado: { todos: FornecedorDeTeste[]; ativos: FornecedorDeTeste[]; erro: string | null; carregando: boolean; tentativas: number } =
   { todos: [], ativos: [], erro: null, carregando: false, tentativas: 0 };

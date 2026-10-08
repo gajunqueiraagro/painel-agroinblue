@@ -23,18 +23,22 @@ vi.mock('@/hooks/useOcCompromissos', () => ({
   useOcCompromissos: () => ({ resumoOperacao: null, compromissos: [], loading: false, recarregar: async () => {} }),
 }));
 
+/* FORN-SELETOR-PADRAO-01 fatia 2b — o Comprador lê do leitor único (o de mentira, aqui) */
+vi.mock('@/hooks/useFornecedoresDoCliente', async () => (await import('@/test/leitorDeFornecedoresFake')).moduloDoLeitorFake());
+import { definirFornecedoresDoLeitor } from '@/test/leitorDeFornecedoresFake';
 import { VendaModalShell } from '@/components/venda/VendaModalShell';
 import { AbateModalShell } from '@/components/abate/AbateModalShell';
 import { BoitelBlocosModais, boitelVazio } from '@/components/venda/BoitelBlocosModais';
 
 const FAZ = [{ id: 'faz-ursa', nome: 'Faz. Ursa Maior' }];
 const CP = [{ id: 'ricardo', nome: 'Ricardo Goulart' }, { id: 'boitel-ricardo', nome: 'Boitel Ricardo Goulart' }];
+definirFornecedoresDoLeitor(CP);
 
 function venda(over: Partial<ComponentProps<typeof VendaModalShell>> = {}) {
   const onSalvarOperacao = vi.fn(async () => true);
   render(
     <VendaModalShell
-      data="2025-07-29" setData={() => {}} compradorId="ricardo" setCompradorId={() => {}} contrapartes={CP}
+      data="2025-07-29" setData={() => {}} compradorId="ricardo" setCompradorId={() => {}} contrapartes={CP} clienteId="c1"
       onNovoComprador={() => {}} vendaFazendaId="faz-ursa" setVendaFazendaId={() => {}} fazendasOC={FAZ}
       propriedadeDestino="" setPropriedadeDestino={() => {}} vendaTipoVenda="" setVendaTipoVenda={() => {}}
       observacao="" setObservacao={() => {}} ocOperacaoId="da0b8577" ocStatusComercial="fechada"
@@ -49,7 +53,7 @@ function abate(over: Partial<ComponentProps<typeof AbateModalShell>> = {}) {
   const onSalvarOperacao = vi.fn(async () => true);
   render(
     <AbateModalShell
-      data="2025-07-29" setData={() => {}} frigorificoId="ricardo" setFrigorificoId={() => {}} contrapartes={CP}
+      data="2025-07-29" setData={() => {}} frigorificoId="ricardo" setFrigorificoId={() => {}} contrapartes={CP} clienteId="c1"
       onNovoFrigorifico={() => {}} abateFazendaId="faz-ursa" setAbateFazendaId={() => {}} fazendasOC={FAZ}
       observacao="" setObservacao={() => {}} numeroDocumento={null} ocOperacaoId="op-abate" ocStatusComercial="fechada"
       categoria="" categoriasDisponiveis={[]} quantidadeNum={0} pesoKgNum={0} submitting={false}

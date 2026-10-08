@@ -15,6 +15,9 @@ import {
   BoitelBlocosModais, boitelVazio, faltamDoRealizado, pendenciaDoRealizado, realizadoNaoSalvo,
 } from '@/components/venda/BoitelBlocosModais';
 import type { BoitelEdicao } from '@/components/venda/BoitelNegociacaoDerivado';
+import { definirFornecedoresDoLeitor } from '@/test/leitorDeFornecedoresFake';
+
+vi.mock('@/hooks/useFornecedoresDoCliente', async () => (await import('@/test/leitorDeFornecedoresFake')).moduloDoLeitorFake());
 
 /* A projecao da Vera b58bf556 (110 cab, 104 dias), e o realizado como ele NASCE: copia dela,
    sem nenhum fato do papel. */
@@ -57,11 +60,13 @@ describe('faltamDoRealizado — so fato conta', () => {
 /* O cartao do realizado ja existe (rascunho semeado); o botao "Editar ..." do cartao REALIZADO e' o
    segundo de cada titulo — o primeiro e' o da projecao. */
 const FRIGORIFICOS = [{ id: 'jbs', nome: 'JBS' }, { id: 'jbs-anastacio', nome: 'JBS - Anastacio' }];
+/* FORN-SELETOR-PADRAO-01 fatia 2b — o Frigorífico da B lê do leitor único (o de mentira, aqui) */
+definirFornecedoresDoLeitor(FRIGORIFICOS);
 function montar(realizado: BoitelEdicao) {
   const onChange = vi.fn();
   const onChangeRealizado = vi.fn();
   render(
-    <BoitelBlocosModais valor={PROJETADO} onChange={onChange} cenario="projetado" frigorificos={FRIGORIFICOS}
+    <BoitelBlocosModais valor={PROJETADO} onChange={onChange} cenario="projetado" clienteId="cli"
       realizado={realizado} onChangeRealizado={onChangeRealizado} onIniciarRealizado={() => Promise.resolve(true)} />,
   );
   return { onChange, onChangeRealizado };
