@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 08/10/2026 (FORN-SELETOR-PADRAO-01 fatia 2b, +20: `src/components/shared/favorecidoSelectDono.test.tsx` 16,
+  Baseline em 08/10/2026 (APP-SEM-TRADUCAO-01, +5 em `src/lib/app/semTraducao.test.ts` — 4619 depois dele; antes a
+  FORN-SELETOR-PADRAO-01 fatia 2b, +20: `src/components/shared/favorecidoSelectDono.test.tsx` 16,
   `src/components/compra/documentoFormEmitente.test.tsx` 4 — 4614 depois dele; antes o
   FORN-SELETOR-PADRAO-01 conserto 2a-fix1, +7: `src/components/shared/favorecidoSelectDono.test.tsx` 3,
   `src/components/recorrencias/recorrenciaDialog.test.tsx` 2, `src/components/financiamentos/documentosNaCriacao.test.tsx` 1,
@@ -264,7 +265,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4614
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4619
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -1268,6 +1269,31 @@ preview que o cabecalho nao sai da tela ao rolar.
     NAVEGADOR: o arrasto real do Finder (so' evento sintetico), boletos e OC dentro dos modais reais, o clique abrindo o seletor
     do sistema, e os tres `@dnd-kit` com a protecao ligada (so' por teste de fonte) · OC-DOCUMENTO-XML-REAL-01: subir e abrir um
     `.xml` real na OC e na aba Documentos (homologacao do Gabriel).
+- ⚠ A PAGINA SE DECLARA EM PORTUGUES DO BRASIL E NAO SE TRADUZ (APP-SEM-TRADUCAO-01, Gabriel 08/10/2026, so' tela). `index.html`:
+  `<html lang="pt-BR" translate="no">` + `<meta name="google" content="notranslate">`; `public/site.webmanifest`: `"lang": "pt-BR"`.
+  PROIBIDO tirar qualquer uma das tres marcas ou trocar o idioma da pagina em tempo de execucao — preso por
+  `src/lib/app/semTraducao.test.ts` (le' a fonte, com auto-teste do leitor). NADA de marcar tela por tela: a declaracao mora no
+  `index.html` unico (o teste tambem prende que ele e' o unico HTML na raiz e em `public`).
+  ⚠ NASCE DO PILOTO: com `lang="en"` o Chrome oferecia traduzir, e o Novo Lançamento saia com "Competência de Dados" (era "Data
+    Competência"), "Pré-visualização" (era "Previsto"), "Contém origem" (era "Conta origem") e "SelecionarFaz. Sta. Tereza".
+  · MEDIDO ANTES DE MUDAR: nenhum codigo altera `document.documentElement.lang`; nenhum `:lang(` nem `hyphens` em `src`, no
+    `tailwind.config.ts` ou no `index.html` (o unico "hifen" do repo e' o `hyphenationCallback` do PDF, que nao le' a pagina);
+    `e2e/harness.html` ja' era pt-BR e nao e' servido; nao ha' pagina de erro, 404 nem PWA proprios (`vercel.json` so' reescreve
+    tudo para `/index.html`).
+  · NUMERO E DATA NAO DEPENDEM DO IDIOMA DA PAGINA (o `Intl` do navegador nunca le' o `lang` do HTML): dos 338 `toLocale*` de
+    `src`, 337 tem idioma explicito (334 'pt-BR', 3 'sv-SE') e 1 nao (`src/components/ui/chart.tsx:212`, `toLocaleString()` — segue
+    o idioma do NAVEGADOR, como antes); os 27 `Intl.NumberFormat` sao 'pt-BR'; dos 131 `localeCompare`, 41 tem idioma e 90 nao
+    (idioma do navegador, como antes). Corretor ortografico: `Input` e a busca dos menus ja' tem `spellCheck={false}`; nos demais
+    campos de texto o navegador passa a sugerir em portugues.
+  · Nenhuma foto e nenhum snapshot mudou.
+  ⚠ NAO PROVADO: o balao do tradutor em si (depende do Chrome de cada pessoa — quem ja' tem "traduzir sempre" ligado para o site
+    precisa desligar) e a pagina ja' aberta antes da publicacao (so' muda ao recarregar).
+  ⚠ DIVIDA MENU-CLIQUE-FECHANDO-01 (medida no mesmo dia, SEM conserto — aguarda texto do Gabriel): a lista do `FavorecidoSelect`
+    fica no DOM com `data-state="closed"` enquanto roda o `animate-out` do `PopoverContent` (150 ms; numa aba OCULTA a animacao
+    nao anda e ela fica indefinidamente) e a opcao aceita clique: `onClick={() => handleSelect(o.f.id)}` nao olha `open`, e nada
+    poe `pointer-events: none` no estado fechado. Teste que simula a animacao de saida FALHA com o codigo de hoje (o valor muda
+    de 'b' para 'c'); o `DropdownMenu` da casa tem o mesmo comportamento; o `SearchableSelect` nao (a lista sai do DOM ao
+    fechar); o `Select` do Radix nao anima a saida. O teste NAO foi commitado (fica vermelho ate' o conserto).
 - ⚠ FORNECEDOR NA OC: OS OITO PONTOS USAM O DONO PELO LEITOR UNICO (FORN-SELETOR-PADRAO-01 fatia 2b, Gabriel 08/10/2026, so' tela).
   ⚠ REGRA DAS FATIAS (Gabriel, 08/10): NAO ALARGAR NEM ESTREITAR O CONJUNTO QUE CADA TELA OFERECIA SEM REPORTAR ANTES DE MUDAR; lista
     restrita (tipo, papel, credor, sugestoes) se mantem pela prop de opcoes restritas do dono (ainda nao existe: nenhum ponto ate'

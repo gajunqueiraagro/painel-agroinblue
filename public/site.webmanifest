@@ -1,6 +1,7 @@
 {
   "name": "AGROinBLUE",
   "short_name": "AGROinBLUE",
+  "lang": "pt-BR",
   "description": "Plataforma de gestão pecuária e financeira para o agronegócio",
   "start_url": "/",
   "display": "standalone",
