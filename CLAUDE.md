@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 08/10/2026 (MENU-CLIQUE-FECHANDO-01, +14 em `src/components/ui/menuFechadoSemClique.test.tsx` — 4633 depois dele; antes o
+  Baseline em 09/10/2026 (CONC-DIVIDENDOS-PLANO-01, +10 em `src/lib/financeiro/dividendoNoPlano.test.ts` — 4643 depois dele; antes o
+  MENU-CLIQUE-FECHANDO-01, +14 em `src/components/ui/menuFechadoSemClique.test.tsx` — 4633 depois dele; antes o
   APP-SEM-TRADUCAO-01, +5 em `src/lib/app/semTraducao.test.ts` — 4619 depois dele; antes a
   FORN-SELETOR-PADRAO-01 fatia 2b, +20: `src/components/shared/favorecidoSelectDono.test.tsx` 16,
   `src/components/compra/documentoFormEmitente.test.tsx` 4 — 4614 depois dele; antes o
@@ -266,7 +267,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4633
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4643
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -719,7 +720,7 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   (c) `agri_safra_area` com mandioca ATIVA tambem na 24/25-Lav (34,8 + 15 ha, plantio 01/06/2025) duplicando a 25/26, e
   amendoim da 24/25-Lav com plantio 10/11/2026; (d) amendoim com safra fora da data: 52 lancamentos, nada corrigido (D5);
   (e) o `por_bloco` do `nao_apropriado` de `fn_dre_lavoura` nao listava a Mao de Obra Direta (6.045,20 no total da 26/27 e em
-  bloco nenhum) — medir · DIVIDENDOS-PLANO-01 · DRE-LEITOR-CHAVE-01 ·
+  bloco nenhum) — medir · [DIVIDENDOS-PLANO-01 fechada em 09/10/2026] · DRE-LEITOR-CHAVE-01 ·
   DESFRUTE-DEFINICAO-UNICA-01 (decisao) · RPC-NOMES-LUCRO-01 · RATEIO-PERIODOS-TELA-01 · SILVICULTURA-DRE-01 ·
   DRE-HOME-FONTE-UNICA (a Home le' a receita do zootecnico; em OC-VENDA-ENTREGAS-01b) · modal de valor: reconsulta
   da lavoura nao provada, e o editor aberto por ele sem `onAbrirOperacaoOC` (em DRE-MODAL-REFRESH-01).
@@ -2477,6 +2478,66 @@ docs/historico/frentes-ate-2026-09-29.md.)
     `LancamentoLeituraDialog.tsx`; e telas fora das abas da Conciliacao — `EstacaoConciliar.tsx`, `VincularMatchDireto.tsx`,
     `DecisaoDerivadosDialog.tsx` fora do Espelho, `CasarComBancoModal.tsx` (dentro do Espelho ja' passa pelo `onMudou`),
     `useConciliacaoDoMes.ts`, `useConciliarMes.ts` (o dialogo avisa).
+- ⚠ CADASTRO DE DIVIDENDO = APROVACAO: O NOME DO CADASTRO E' CONTA DO PLANO DAQUELE CLIENTE (CONC-DIVIDENDOS-PLANO-01, Gabriel
+  09/10/2026; migration 20261027195000, ⚠ registrada como 20261009085845; ledger = arquivo, md5 bd4f8343…). Decisoes do Gabriel:
+  todo nome de `financeiro_dividendos` vira conta do plano do cliente, com o MESMO nome ("Dividendos <nome>"), sem aprovacao caso
+  a caso; nada e' juntado com conta global, nada e' renomeado; PROIBIDO reclassificar (nenhum lancamento muda de subcentro, e a
+  descricao nao e' lida para decidir nada).
+  · O QUE FOI FEITO NO BANCO: 11 contas POR CLIENTE (Agnaldo 1, NJ 1, Raul 2, Teste 1, Vera 6), colunas copiadas do molde (a conta
+    por cliente da Santa Rita, df784cef: 2-Saidas / Dividendos / Dividendos / Dividendos / administrativo / compoe_dre false),
+    `ordem_exibicao` a partir de 17160, passo 10, POR CLIENTE, em ordem alfabetica (a ordem se REPETE entre clientes; nao ha'
+    unicidade nela). Backfill com guarda `plano_conta_id IS NULL`: 567 lancamentos vivos (17 · 190 · 23 · 1 · 5 · 30 · 32 · 1 ·
+    30 · 187 · 51) receberam a chave; a migration compara a contagem de cada nome e ABORTA se divergir. A lista e' por ID DO
+    CADASTRO (nenhum nome de pessoa no repositorio). Estado anterior em `conc_dividendos_plano_01_backfill` (uma linha por
+    lancamento); o gesto contrario esta' escrito no arquivo e foi ensaiado (residuo zero).
+  · O QUE O UPDATE MUDOU, MEDIDO: `updated_at` CARIMBADO nos 567; 567 linhas 'editou' em `audit_log` (usuario = o `updated_by`
+    gravado, a pratica dos backfills); `grupo_custo` de NULO a 'Dividendos' em 6 (Vera 3, Raul 2, Teste 1). NADA MAIS: valor,
+    datas, status, conta bancaria, fazenda, safra, as outras copias de texto, `compoe_dre` e os vinculos de extrato identicos por
+    md5 (125 dos 567 sao conciliados; nao ha' guarda de conciliado nem de mes fechado em `financeiro_lancamentos_v2`, e nao ha'
+    mes fechado no financeiro). O UPDATE rodou sob `app.propagando_plano = 'on'` (a marca da casa para "a copia que acompanha o
+    plano"): sem ela 1 lancamento importado do Raul viraria `editado_manual`. Nenhum gatilho foi desligado.
+  · DEPOIS: 0 lancamentos vivos "Dividendos …" sem plano e 0 lancamentos sem classificacao em TODOS os clientes (antes: Vera 331,
+    NJ 190, Raul 24, Agnaldo 17, Teste 5 — todos dividendos); o contador da Conciliacao e o aviso do DRE zeram por consequencia.
+  · ⚠ A UNICA UNICIDADE DE `financeiro_plano_contas` E' `uq_plano_contas_global`: tipo + macro + grupo + centro + subcentro entre
+    as ATIVAS, SEM O CLIENTE. Dois clientes NAO podem ter conta ativa de mesmo nome, e cliente nao pode ter conta com o nome de uma
+    global — nesse caso o nome do cadastro USA a global (`fn_plano_conta_do_texto`: a do cliente; na falta, a global). E' assim
+    que "Dividendos Despesas Pessoais" (global) serve aos cinco clientes que a tem no cadastro.
+  · ⚠ AS 15 CONTAS GLOBAIS DE MACRO DIVIDENDOS SAO NOMES DE CADASTROS DE CLIENTES (NJ e Agnaldo) gravados como globais antes de
+    existir conta por cliente. Por isso o carregador do plano CONTINUA excluindo o macro Dividendos da lista geral
+    (`loadPlanoContasCompleto`, `.neq('macro_custo', DIVIDENDO_MACRO)`): mostra'-las vazaria nome de um cliente no seletor de outro.
+  · TELA (decisao do Gabriel, 09/10: "so' o cadastro do cliente"): o carregador le^ A' PARTE as contas de macro Dividendos do
+    cliente e as globais e as usa SO' para dar a chave ao nome que o cadastro do cliente ja' tem — `contaDoDividendo`
+    (`src/lib/financeiro/planoContasBuilder.ts`, espelho declarado de `fn_plano_conta_do_texto`: a do cliente; na falta, a global;
+    duas do mesmo nivel = nenhuma). `buildDividendoEntries` devolve UMA entrada por nome do cadastro: com conta, o id da conta
+    (uuid) e sem `is_dividendo`; sem conta, a sintetica `dividendo-<uuid>` de sempre. Nunca as duas — o nome nao aparece em dobro,
+    e a posicao na lista e' a do cadastro, como antes. A busca do Sem classificacao (`contasDoPlano`) passa a acha'-los; o modal
+    do lancamento, a Mesa e Cadastros › Plano de Contas mostram a MESMA lista de antes, agora com chave (o save manda
+    `plano_conta_id`). ⚠ `ReclassificarItemDialog` e `DesvincularOperacaoDialog` filtravam "tem chave" e ganhariam os dividendos:
+    passaram a filtrar tambem `macro_custo !== DIVIDENDO_MACRO` (lista identica a' de antes).
+    Medido no navegador pelo carregador real, com a sessao do admin, so' leitura: Vera 6 nomes, 6 com chave, 6 oferecidos na busca
+    "divi", 0 em dobro; NJ 10 de 10; Teste 1 de 3 (os outros dois nao tem conta).
+  ⚠ DIVIDA ABERTA CONC-DIVIDENDOS-ESCRITOR-UNICO-01 (o texto seguinte): criar, renomear e inativar dividendo no cadastro
+    (`DividendosTab.tsx` grava direto em `financeiro_dividendos`) NAO cria, renomeia nem inativa a conta do plano. ENQUANTO ISSO
+    NAO ENTRA, DIVIDENDO NOVO CADASTRADO DEPOIS DE 09/10/2026 NASCE SEM CONTA: aparece no modal como entrada sintetica, o
+    lancamento fica sem `plano_conta_id` (o gatilho ainda aceita o texto de macro Dividendos) e volta a contar como "sem
+    classificacao". Proposta: uma funcao so', no banco (`fn_dividendo_salvar` / `_inativar`), que grava o cadastro e a conta na
+    mesma transacao — nome igual a uma global: usa a global, nao cria; renomear = UPDATE do subcentro da conta do cliente (o
+    gatilho `trg_propagar_plano_para_lancamentos` leva o nome aos lancamentos); inativar = conta inativa so' se nenhum lancamento
+    vivo a usa; colisao de nome com outro cliente (a unicidade e' global) vira frase. Ja' estao SEM CONTA hoje, sem lancamento
+    vivo: Teste 2 nomes e RRCC 2 nomes do cadastro (fora da lista dos 11).
+  ⚠ DIVIDAS E ACHADOS: os leitores que consultam `financeiro_plano_contas` sem filtro de cliente (`useImportLancamentosExcel`,
+    `CusteioTxtImportTab`, `FluxoFinanceiro`, e a lista geral do proprio carregador) entregam ao ADMIN as contas por cliente de
+    TODOS os clientes (a RLS so' restringe quem nao e' admin) — ja' era assim com as 8 da Santa Rita · a excecao "texto fora do
+    plano, exceto Dividendos" do gatilho `resolve_classificacao_from_plano` continua (sai com o escritor unico) ·
+    `MOTIVO_AGUARDA_CONTA` (`semClassificacao.ts`) cita este PR e segue valendo para nome sem conta · o gesto contrario carimba
+    `updated_at` e audita de novo (o `updated_at` anterior fica so' na tabela do backfill).
+  ⚠ NAO PROVADO NO NAVEGADOR: digitar "divi" numa LINHA do Sem classificacao da Vera em set/2026 — depois do backfill a Vera tem
+    0 linhas sem classificacao (nao ha' linha onde digitar); provado pelo carregador real + `contasDoPlano` na pagina, e por
+    teste. Cadastros › Plano de Contas, o modal do lancamento e a Mesa nao foram abertos (usam o mesmo carregador). Salvar um
+    lancamento de dividendo pela tela com a chave (nada foi gravado em cliente real).
+  Testes: `supabase/tests/conc_dividendos_plano_01_test.sql` (D0–D5, sintetico no Teste, termina em RAISE OK; 5 mutacoes mortas;
+  ⚠ a migration e' um bloco de uma vez so', entao D1–D5 exercitam um ESPELHO DECLARADO dos passos dela) e
+  `src/lib/financeiro/dividendoNoPlano.test.ts` (10; 5 mutacoes mortas). `seg_tenant_varredura_01c_test.sql` OK (nenhuma funcao nova).
 - ⚠ "SEM CLASSIFICACAO" TEM UMA REGRA, NO BANCO: LANCAMENTO ATIVO COM `plano_conta_id` NULO (CONC-SEM-CLASSIFICACAO-01, Gabriel
   06/10/2026; migration 20261027193900, ⚠ registrada como 20261006180307; ledger = arquivo, md5 daccbbd7…). 100% dos lancamentos tem
   de ter plano de contas, DIVIDENDOS INCLUSIVE: para esta regra a excecao "texto fora do plano, exceto Dividendos" NAO vale (o
@@ -2534,7 +2595,7 @@ docs/historico/frentes-ate-2026-09-29.md.)
     pelo gatilho, os 11 que nao coincidem ficam sem chave. Santa Rita ja' tem conta POR CLIENTE para cada nome (17160–17230).
   ⚠ DIVIDAS: SEM-CLASSIFICACAO-REGRA-UNICA-02 (as cinco regras do front que ainda decidem por texto — `isSemClassificacao`,
     `lancamentoCru`, `ehCru`, `distribuicaoEconomica`, `derivarPendenciasGerenciais` — mais `derivarDetalhePendencias`, que saiu
-    da Conciliacao e segue na `V2MesaOperacional`) · CONC-DIVIDENDOS-PLANO-01 (criar as contas e migrar os Dividendos por texto) ·
+    da Conciliacao e segue na `V2MesaOperacional`) · CONC-DIVIDENDOS-PLANO-01 [FECHADA em 09/10/2026 — ver a regra "CADASTRO DE DIVIDENDO = APROVACAO"] ·
     CONC-SUGESTAO-EXTRATO-01 (sugestao de classificacao a partir do TEXTO DO EXTRATO do banco: hoje 0 sugestoes nos crus, o
     resolvedor so' casa texto de planilha) · CONC-SEM-CLASSIFICACAO-NAO-PROVADO-01 (o modal a 1.126 x 523 — foi medido a 579;
     "Aceitar as N sugestões", o clique na linha abrindo o modal do lancamento e a recusa escrita ao lado do botao, no navegador;
