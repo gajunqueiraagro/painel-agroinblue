@@ -329,6 +329,20 @@ Commit NUNCA e feito neste passo.
   fica em estado "aguardando homologacao runtime" ate validacao no
   Claude Chat. Proibido declarar "validado" por conta propria.
 
+## GUARDAS DO CLAUDE CODE (hooks de `.claude/settings.json`)
+Duas guardas rodam antes de todo comando de shell do Code: `guard-push.sh` (envio so' na `proto`, nunca citando as branches
+proibidas) e `guard-commit-tsc.sh` (commit so' com o TSC dentro da baseline lida deste arquivo).
+- ⚠ A CHAMADA COMECA COM `cd "$CLAUDE_PROJECT_DIR" &&` (FORN-SELETOR-PADRAO-01 fatia 2c, commit 0, Gabriel 09/10/2026). De 04/07/2026
+  (f990761c) ate' 09/10 o caminho era RELATIVO (`bash .claude/hooks/…`): com o shell do Code parado numa subpasta o arquivo nao era
+  achado ("No such file or directory"), a falha NAO BLOQUEIA e a guarda simplesmente nao rodava. Reproduzido em 09/10 de dentro de
+  `src/lib`: um comando cujo texto citava o envio para a branch principal passou; com a chamada nova, o mesmo texto, da mesma
+  subpasta, foi barrado.
+- ⚠ O `cd` NAO E' SO' PARA ACHAR O ARQUIVO: a guarda do TSC roda `npx tsc -p tsconfig.app.json`, que de uma subpasta nao acha o
+  tsconfig, conta 1 "erro" e APROVA qualquer commit. Trocar por caminho absoluto do script sem o `cd` deixaria esse furo.
+- ⚠ A GUARDA LE^ O TEXTO DO COMANDO: comando que so' CITA o envio proibido (num `echo`, num texto a gravar) tambem e' barrado.
+  Texto de documentacao nao escreve a frase literal.
+- Hook que falha por nao achar o arquivo NAO bloqueia: guarda nova se prova rodando de uma subpasta.
+
 ## SECAO CHECKS
 Quando o briefing incluir uma secao CHECKS (greps verificaveis), rodar
 todos e reportar. Qualquer check falho = PARAR e reportar, mesmo que o

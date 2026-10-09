@@ -4,8 +4,8 @@
       {
         "matcher": "Bash",
         "hooks": [
-          { "type": "command", "command": "bash .claude/hooks/guard-push.sh" },
-          { "type": "command", "command": "bash .claude/hooks/guard-commit-tsc.sh" }
+          { "type": "command", "command": "cd \"$CLAUDE_PROJECT_DIR\" && bash .claude/hooks/guard-push.sh" },
+          { "type": "command", "command": "cd \"$CLAUDE_PROJECT_DIR\" && bash .claude/hooks/guard-commit-tsc.sh" }
         ]
       }
     ]
