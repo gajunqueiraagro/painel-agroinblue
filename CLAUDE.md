@@ -2478,6 +2478,49 @@ docs/historico/frentes-ate-2026-09-29.md.)
     `LancamentoLeituraDialog.tsx`; e telas fora das abas da Conciliacao — `EstacaoConciliar.tsx`, `VincularMatchDireto.tsx`,
     `DecisaoDerivadosDialog.tsx` fora do Espelho, `CasarComBancoModal.tsx` (dentro do Espelho ja' passa pelo `onMudou`),
     `useConciliacaoDoMes.ts`, `useConciliarMes.ts` (o dialogo avisa).
+- ⚠ QUEM PROCURA CONTA DO PLANO PELO NOME OLHA O CLIENTE, E PERGUNTA AO DONO (PLANO-LEITOR-POR-CLIENTE-01 passo 1, Gabriel 09/10/2026,
+  so' banco; migration 20261027195100, ⚠ registrada como 20261009094347; ledger = arquivo, md5 a4cc83b1…). REGRA: todo leitor do
+  plano pelo nome responde pela regra de `fn_plano_conta_do_texto(cliente, subcentro, tipo)` — a conta do cliente do lancamento; na
+  falta, a global; duas do cliente = nenhuma. Conta de OUTRO cliente nunca e' lida, nem para "existe?", nem para ordem, nem para
+  `compoe_dre` / `gera_lcdpr`. Nenhuma regra nova: tres leitores do banco passaram a perguntar ao dono (patch guardado por md5):
+  · `materializar_dre_lcdpr_from_plano` (gatilho do lancamento; prosrc 85a3e101… -> 9d07b448…): SEM chave, as duas buscas por nome
+    (com tipo e depois sem tipo, `LIMIT 1` SEM cliente) viram duas perguntas ao dono com o cliente do lancamento — com o tipo dele
+    e, na falta, EM QUALQUER TIPO (o dono, tipo a tipo). Sem conta: o de sempre (`v_found` falso -> `compoe_dre` pela matriz da
+    macro, senao NULO; `gera_lcdpr` nao e' tocado). PELA CHAVE a leitura ganhou o filtro "conta global ou do cliente do lancamento".
+    ⚠ VIROU SECURITY DEFINER com `search_path = public` (decisao do Gabriel; o molde do `guard_lancamento_mes_fechado_p1`): o dono
+      so' tem EXECUTE para postgres e service_role e SEGUE FECHADO a `authenticated` — como INVOKER o gatilho daria "permission
+      denied" na tela. Conferido no corpo: so' escreve em NEW (nenhum INSERT / UPDATE / DELETE / PERFORM; preso no teste).
+  · `fn_classificacao_apply_row` (85cc0df6… -> a9475cb1…) e `fn_classificacao_split_substituir` (33f4da7b… -> 8e1e1b49…), que ja'
+    eram SECURITY DEFINER: o "este subcentro existe no plano?" pergunta ao dono com o cliente da linha / da sessao, em qualquer
+    tipo (decisao do Gabriel: com o tipo do lancamento, 6 de 384 combinacoes reais do staging deixariam de existir; assim, 0).
+  · ⚠ O `OFFSET 0` NA LISTA DE TIPOS E' BARREIRA DE OTIMIZACAO: sem ele o planner empurra a chamada do dono para BAIXO do DISTINCT e
+    a executa uma vez por LINHA do plano (239 chamadas, 17 ms por lancamento, medido no ensaio) em vez de uma por tipo.
+    ⚠ FUNCAO NO WHERE SE CONFERE NO PLANO DE EXECUCAO: e `WHERE id = funcao_volatil()` roda a funcao uma vez por linha da tabela —
+      o `conc_dividendos_plano_01_test.sql` inseria ~87 mil lancamentos por isso e levava 83 s (consertado: o id vai primeiro
+      para a variavel; agora 6 s).
+  · MEDIDO (09/10): 0 lancamentos, vivos ou cancelados, com chave para conta de outro cliente (1.207 apontam para conta do
+    proprio cliente); 0 nomes de subcentro repetidos entre clientes, entre cliente e global ou dentro de um cliente; 0 apelidos
+    de subcentro apontando para conta de outro cliente; as 19 contas por cliente sao todas de macro Dividendos.
+  · NAO REGRESSAO (so' leitura, 87.540 lancamentos, 72.487 vivos; a busca antiga x a nova e a formula inteira do `compoe_dre`):
+    nos VIVOS, busca antiga = nova em 100% e `compoe_dre` gravado = formula nova em 100%. Diferem 38 lancamentos CANCELADOS do Raul
+    cujo nome so' existe na conta de OUTRO cliente: o gatilho antigo lia essa conta (o defeito), o novo nao le^ nada; o
+    `compoe_dre` deles e' o mesmo (false, pela matriz).
+  · CUSTO do gatilho, A/B na mesma transacao (6 series de 200, antigo -> novo, mediana por lancamento): insert COM chave 0,75 ->
+    0,75 ms; insert SEM chave e sem conta 0,88 -> 1,19 ms (o caso raro: ate' 4 chamadas ao dono); update 0,58 -> 0,59 ms.
+  Teste: `supabase/tests/plano_leitor_por_cliente_01_test.sql` (L0–L8: Teste + um segundo cliente criado na transacao, homonimos
+  com `compoe_dre` / `gera_lcdpr` opostos, global, nome so' do outro, chave alheia, o "existe?" da Mesa, e um usuario comum —
+  gestor real simulado por jwt — gravando sem chave sem "permission denied"; no corpo antigo cai em L1). 7 mutacoes mortas.
+  ⚠ ACHADO, sem corrigir: `resolve_classificacao_from_plano` aceita CHAVE de conta de outro cliente (o ramo "a chave manda" le^ a
+    conta so' pelo id e copia os textos dela); hoje 0 casos, e o gatilho do DRE ja' nao a le^. Divida PLANO-CHAVE-DE-OUTRO-CLIENTE-01.
+  ⚠ O "existe?" do desmembrar esta' provado pelo CORPO (montar um desmembramento inteiro pede extrato e vinculo); o comentario
+    acima dele no corpo ainda diz "sem filtro de cliente/tipo" (so' o trecho da busca foi trocado).
+  ⚠ FORA DESTE TRABALHO (dividas registradas, nao tocadas): NOMES FIXOS COM `LIMIT 1` SEM CLIENTE — `fn_estorno_aplicar`,
+    `fn_fatura_aplicar`, `fn_transferencia_aplicar`, `fn_transferencia_unir`, `agri_venda_avulsa_registrar`, `AbateFinanceiroPanel`,
+    `VendaFinanceiroPanel`, `CompraFinanceiroPanel`, `gerarFinanceiroCompra`, `boitelMapping` · DOBRO COM CLIENTE + GLOBAL DE MESMO
+    NOME (0 casos hoje) — `fn_dre_pecuaria`, `fn_dre_pecuaria_lancamentos`, `fn_rateio_admin_mes`,
+    `fn_classificacao_resolver_subcentro`, `fn_classificacao_resolver_contexto`, `catalogoCliente.ts:146`,
+    `FinV2SubcentroAliasesTab.tsx:109`, `usePlanoContasOC.ts:51`, `DestinacoesForm.tsx:85` · unicidade por cliente, escritor unico
+    de dividendos (suspenso ate' este trabalho fechar) e as 15 globais de dividendos.
 - ⚠ CADASTRO DE DIVIDENDO = APROVACAO: O NOME DO CADASTRO E' CONTA DO PLANO DAQUELE CLIENTE (CONC-DIVIDENDOS-PLANO-01, Gabriel
   09/10/2026; migration 20261027195000, ⚠ registrada como 20261009085845; ledger = arquivo, md5 bd4f8343…). Decisoes do Gabriel:
   todo nome de `financeiro_dividendos` vira conta do plano do cliente, com o MESMO nome ("Dividendos <nome>"), sem aprovacao caso

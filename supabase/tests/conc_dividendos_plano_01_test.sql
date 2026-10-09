@@ -44,7 +44,7 @@ DECLARE
   c_cli   constant uuid := '43f32d07-dba8-4670-900c-bf645440c04a';
   c_molde constant uuid := 'df784cef-da03-43c6-8e6b-bac7dc933dc7';
   c_sub   constant text := 'Dividendos SINT DIVPLANO';
-  v_outro uuid; v_a uuid; v_canc uuid; v_outro_sub uuid; v_de_outro uuid; v_novo uuid; v_conta uuid; v_n integer; v_foto text; v_edit boolean;
+  v_outro uuid; v_novo_outro uuid; v_a uuid; v_canc uuid; v_outro_sub uuid; v_de_outro uuid; v_novo uuid; v_conta uuid; v_n integer; v_foto text; v_edit boolean;
 BEGIN
   -- ── D0: o estado real ───────────────────────────────────────────────────────
   SELECT count(*) INTO v_n FROM conc_dividendos_plano_01_backfill;
@@ -126,7 +126,10 @@ BEGIN
   -- ── D4: depois da conta, o texto resolve a chave (so' no cliente dono) ──────
   v_novo := pg_temp.lan(c_cli, c_sub);
   IF (SELECT plano_conta_id FROM financeiro_lancamentos_v2 WHERE id = v_novo) IS DISTINCT FROM v_conta THEN RAISE EXCEPTION 'D4: lancamento novo nao resolveu o texto para a conta'; END IF;
-  IF (SELECT plano_conta_id FROM financeiro_lancamentos_v2 WHERE id = pg_temp.lan(v_outro, c_sub)) IS NOT NULL THEN
+  -- ⚠ o id vai PRIMEIRO para a variavel: `WHERE id = pg_temp.lan(...)` (funcao volatil no WHERE) roda a funcao uma vez por LINHA da
+  --   tabela — o teste inseria ~87 mil lancamentos e levava 83 s (achado no PLANO-LEITOR-POR-CLIENTE-01).
+  v_novo_outro := pg_temp.lan(v_outro, c_sub);
+  IF (SELECT plano_conta_id FROM financeiro_lancamentos_v2 WHERE id = v_novo_outro) IS NOT NULL THEN
     RAISE EXCEPTION 'D4: a conta de um cliente resolveu o texto de outro';
   END IF;
 
