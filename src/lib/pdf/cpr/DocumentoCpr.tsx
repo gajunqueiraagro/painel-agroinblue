@@ -171,23 +171,22 @@ function No({ n }: { n: NoDoGrafico }) {
   return <Text x={n.x} y={n.y} fill={n.fill} fillOpacity={n.fo} textAnchor={n.ancora} style={{ fontSize: n.tamanho, fontWeight: n.peso >= 600 ? 700 : 400 }}>{n.texto}</Text>;
 }
 
-/** O GRÁFICO DA ABA FLUXO — bloco INTEIRO (`wrap={false}`): se não couber no resto da página vai para a seguinte, nunca cortado. */
+/** O GRÁFICO DA ABA FLUXO — bloco INTEIRO (`wrap={false}`): se não couber no resto da página vai para a seguinte, nunca cortado.
+ *  Título, frase e legenda na família e nos tamanhos do resto da folha (o título é o das seções; frase e legenda a 7,5pt). */
 function GraficoDoFluxo({ g }: { g: GraficoDaFolha }) {
   return (
-    <View wrap={false} style={{ marginBottom: 8, paddingTop: 6, paddingHorizontal: 0, backgroundColor: g.fundo ?? undefined, borderRadius: 3 }}>
-      <View style={{ paddingHorizontal: 8 }}>
-        <Text style={{ fontSize: 11, fontWeight: 700, color: COR.cinza }}>{g.titulo}</Text>
-        {g.subtitulo ? <Text style={{ fontSize: 7, color: COR.cinzaMedio, marginTop: 2 }}>{g.subtitulo}</Text> : null}
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', marginTop: 4 }}>
-          {g.legenda.map((l) => (
-            <View key={l.rotulo} style={{ flexDirection: 'row', alignItems: 'center', marginRight: 10 }}>
-              <Svg width={l.ponto ? 8 : 18} height={8} style={{ marginRight: 3 }}>
-                {l.ponto ? <Circle cx={4} cy={4} r={3} fill={l.cor} /> : <Line x1={0} y1={4} x2={18} y2={4} stroke={l.cor} strokeWidth={2.2} strokeDasharray={l.tracejado ? '4 3' : undefined} />}
-              </Svg>
-              <Text style={{ fontSize: 7.5, color: COR.cinza }}>{l.rotulo}</Text>
-            </View>
-          ))}
-        </View>
+    <View wrap={false} style={{ marginBottom: 8 }}>
+      <Text style={{ ...estilos.secao, marginTop: 0, marginBottom: 4 }}>{g.titulo}</Text>
+      {g.subtitulo ? <Text style={{ fontSize: 7.5, color: COR.cinzaMedio, marginBottom: 3 }}>{g.subtitulo}</Text> : null}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', marginBottom: 2 }}>
+        {g.legenda.map((l) => (
+          <View key={l.rotulo} style={{ flexDirection: 'row', alignItems: 'center', marginRight: 10 }}>
+            <Svg width={l.ponto ? 8 : 18} height={8} style={{ marginRight: 3 }}>
+              {l.ponto ? <Circle cx={4} cy={4} r={3} fill={l.cor} /> : <Line x1={0} y1={4} x2={18} y2={4} stroke={l.cor} strokeWidth={2.2} strokeDasharray={l.tracejado ? '4 3' : undefined} />}
+            </Svg>
+            <Text style={{ fontSize: 7.5, color: COR.cinza }}>{l.rotulo}</Text>
+          </View>
+        ))}
       </View>
       <Svg width={g.largura} height={g.altura} viewBox={`0 0 ${g.largura} ${g.altura}`}>
         {g.nos.map((n, i) => <No key={i} n={n} />)}

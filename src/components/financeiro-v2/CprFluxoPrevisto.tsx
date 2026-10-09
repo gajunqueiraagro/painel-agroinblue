@@ -19,7 +19,7 @@ import {
 } from 'recharts';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import {
-  ajusteVencidoPorDia, combinarComPassado, escalaSimetrica, faixasSemColisao,
+  ajusteVencidoPorDia, combinarComPassado, escalaSimetrica, escalaPeloDado, faixasSemColisao,
   larguraEstimada, montarFluxoPrevisto, primeiroNegativo,
   type Granularidade, type LinhaFluxoPrevisto, type PontoLinha, type PontoPassadoEntrada,
   type ZonaFluxo,
@@ -60,6 +60,32 @@ const ALTURA_FAIXA = 18;
 const LARGURA_ROTULO_DIA = 34;
 
 /**
+ * AS MEDIDAS DO DESENHO — CPR-PDF-ACABAMENTO-01. A TELA usa `MEDIDAS_DA_TELA` (os números de sempre, movidos para cá sem mudar);
+ * a FOLHA do PDF (`folha`) usa `MEDIDAS_DA_FOLHA`: letra do corpo da tabela do PDF (7pt) nos eixos, rótulos de valor menores,
+ * margens e régua do eixo X proporcionais. A SÉRIE É A MESMA nos dois; só o desenho muda.
+ */
+interface MedidasDoGrafico {
+  eixoY: number; larguraEixoY: number; dia: number; larguraDia: number; mes: number; dyDia: number; dyMes: number; riscoDe: number; riscoAte: number;
+  alturaEixoX: number; topo: number; base: number; margemDir: number; offsetRotulo: number; alturaFaixa: number;
+  hoje: number; palavraHoje: number; conciliado: number; final: number; dataFinal: number; dyDataFinal: number;
+}
+const MEDIDAS_DA_TELA: MedidasDoGrafico = {
+  eixoY: 10, larguraEixoY: 56, dia: 9.5, larguraDia: LARGURA_ROTULO_DIA, mes: 12, dyDia: 11, dyMes: 29, riscoDe: 17, riscoAte: 32,
+  alturaEixoX: 38, topo: 22, base: 30, margemDir: 96, offsetRotulo: OFFSET_ROTULO, alturaFaixa: ALTURA_FAIXA,
+  hoje: 12, palavraHoje: 10, conciliado: 11, final: 13, dataFinal: 11, dyDataFinal: 15,
+};
+const MEDIDAS_DA_FOLHA: MedidasDoGrafico = {
+  eixoY: 7, larguraEixoY: 40, dia: 7, larguraDia: 17, mes: 7.5, dyDia: 8, dyMes: 18, riscoDe: 11, riscoAte: 20,
+  alturaEixoX: 24, topo: 30, base: 4, margemDir: 62, offsetRotulo: 7, alturaFaixa: 11,
+  hoje: 8, palavraHoje: 8, conciliado: 7.5, final: 9, dataFinal: 7, dyDataFinal: 10,
+};
+/** Na folha, período de até 31 dias tem uma marca por dia; acima disso o passo é de SEMANAS inteiras (7, 14, 21…). */
+export function passoDoEixoNaFolha(pontos: number, cabem: number): number {
+  if (pontos <= 32) return 1;
+  return 7 * Math.max(1, Math.ceil(pontos / cabem / 7));
+}
+
+/**
  * Escala curta — "1,83 mi", "462 mil", "0".
  *
  * ⚠ NUNCA O NÚMERO CHEIO NO EIXO: "1.832.544,83" repetido em sete linhas de grade rouba a
@@ -88,10 +114,11 @@ function fmtTag(v: number): string {
  * "set/26" sob cada dia encheria a base do gráfico com a mesma palavra trinta vezes. A faixa
  * é uma régua, não um rótulo por coluna.
  */
-function TickEixoX({ x, y, payload, index, pontos, passoRotulo, faixaCabe }: {
+function TickEixoX({ x, y, payload, index, pontos, passoRotulo, faixaCabe, m = MEDIDAS_DA_TELA }: {
   x?: number; y?: number; payload?: { value?: string | number }; index?: number;
   pontos: readonly PontoLinha[]; passoRotulo: number;
   faixaCabe: (faixa: string) => boolean;
+  m?: MedidasDoGrafico;
 }) {
   const i = index ?? 0;
   const ponto = pontos[i];
@@ -118,8 +145,8 @@ function TickEixoX({ x, y, payload, index, pontos, passoRotulo, faixaCabe }: {
       {/* ⚠ SÓ O DIA, SEM O MÊS: o mês já está na faixa logo abaixo, e "01/08" repetido em
           vinte colunas polui sem informar. "Hoje" continua escrito por extenso. */}
       {mostraDia && (
-        <text x={0} y={0} dy={11} textAnchor={i === 0 ? 'start' : 'middle'}
-          fill={COR_TEXTO} fontSize={9.5}>
+        <text x={0} y={0} dy={m.dyDia} textAnchor={i === 0 ? 'start' : 'middle'}
+          fill={COR_TEXTO} fontSize={m.dia}>
           {ponto?.rotulo === 'Hoje' ? 'Hoje' : (ponto?.rotulo ?? '').slice(0, 2)}
         </text>
       )}
@@ -128,10 +155,10 @@ function TickEixoX({ x, y, payload, index, pontos, passoRotulo, faixaCabe }: {
           uma segunda régua, e mora na sua própria faixa horizontal. */}
       {ponto?.abreFaixa && ponto.faixa && (
         <>
-          <line x1={0} y1={17} x2={0} y2={32} stroke={COR_TEXTO} strokeWidth={1} opacity={0.45} />
+          <line x1={0} y1={m.riscoDe} x2={0} y2={m.riscoAte} stroke={COR_TEXTO} strokeWidth={1} opacity={0.45} />
           {faixaCabe(ponto.faixa) && (
-            <text x={4} y={0} dy={29} textAnchor="start"
-              fill={COR_TEXTO} fontSize={12} fontWeight={700}>
+            <text x={4} y={0} dy={m.dyMes} textAnchor="start"
+              fill={COR_TEXTO} fontSize={m.mes} fontWeight={700}>
               {ponto.faixa}
             </text>
           )}
@@ -174,19 +201,21 @@ export function pontoEmContaHoje(saldoInicial: number | null, partidaDaLinha: nu
   return { emConta: saldoInicial, partida: partidaDaLinha, titulo: `em conta hoje: ${m(saldoInicial)} · a linha parte de ${m(partidaDaLinha)} após os vencidos` };
 }
 
-function RotuloDoTopo({ viewBox, texto, cor, tamanho, peso, faixa, ancora = 'middle' }: {
+function RotuloDoTopo({ viewBox, texto, cor, tamanho, peso, faixa, ancora = 'middle', offset = OFFSET_ROTULO, alturaFaixa = ALTURA_FAIXA, subir = 0 }: {
   viewBox?: { x?: number; y?: number };
   texto: string; cor: string; tamanho: number; peso?: number; faixa: number;
+  /** a régua vertical (a da tela por padrão) e, na folha, quanto o rótulo SOBE além dela para ficar acima da linha (com a guia) */
+  offset?: number; alturaFaixa?: number; subir?: number;
   /** 'start' = o texto começa a `RECUO_DA_TAG_DE_HOJE` px à direita do ponto (o traço continua no ponto) */
   ancora?: 'start' | 'middle';
 }) {
   const xPonto = viewBox?.x ?? 0;
   const x = ancora === 'start' ? xPonto + RECUO_DA_TAG_DE_HOJE : xPonto;
   const y = viewBox?.y ?? 0;
-  const yTexto = y - OFFSET_ROTULO - faixa * ALTURA_FAIXA;
+  const yTexto = y - offset - subir - faixa * alturaFaixa;
   return (
     <g>
-      {faixa > 0 && (
+      {(faixa > 0 || subir > 0) && (
         <line x1={xPonto} y1={y - 5} x2={xPonto} y2={yTexto + 4}
           stroke={cor} strokeWidth={1} opacity={0.5} />
       )}
@@ -250,8 +279,13 @@ function TooltipFluxo({ active, label, payload, emConta }: TooltipProps) {
 }
 
 export function CprFluxoPrevisto({
-  linhas, saldoInicial, caveat, granularidade, hoje, inicio, passado, conciliadoAte, vencidosForaDoSaldo = 0, barras = 'ambos',
+  linhas, saldoInicial, caveat, granularidade, hoje, inicio, passado, conciliadoAte, vencidosForaDoSaldo = 0, barras = 'ambos', folha = false,
 }: {
+  /**
+   * CPR-PDF-ACABAMENTO-01 — o desenho para a FOLHA do PDF: a MESMA série, com as medidas da folha (letra do corpo da tabela nos
+   * eixos, escala pelo dado, uma marca por dia até 31 dias, rótulos de valor acima da linha e sem se cruzar). A tela não passa.
+   */
+  folha?: boolean;
   linhas: readonly LinhaFluxoPrevisto[];
   /** O mesmo "Saldo em caixa (estimado)" do card. `null` quando não há âncora. */
   saldoInicial: number | null;
@@ -327,19 +361,22 @@ export function CprFluxoPrevisto({
    */
   const refPlot = useRef<HTMLDivElement | null>(null);
   const [largura, setLargura] = useState(0);
+  const [alturaDoPlot, setAlturaDoPlot] = useState(0);
   useEffect(() => {
     const el = refPlot.current;
     if (!el) return;
     const obs = new ResizeObserver((entradas) => {
       const w = entradas[0]?.contentRect.width ?? 0;
       setLargura(w);
+      setAlturaDoPlot(entradas[0]?.contentRect.height ?? 0);
     });
     obs.observe(el);
     setLargura(el.clientWidth);
+    setAlturaDoPlot(el.clientHeight);
     return () => obs.disconnect();
   }, []);
   const negativo = useMemo(() => primeiroNegativo(pontos), [pontos]);
-  const escala = useMemo(() => escalaSimetrica(pontos), [pontos]);
+  const escala = useMemo(() => (folha ? escalaPeloDado(pontos) : escalaSimetrica(pontos)), [pontos, folha]);
   const mapaPorRotulo = useMemo(
     () => new Map(pontos.map((p) => [p.rotulo, p])), [pontos]);
 
@@ -401,12 +438,13 @@ export function CprFluxoPrevisto({
   const ancoraHoje = ancoraDaTagDeHoje(pontos.findIndex((p) => p.chave === emHoje.chave));
   const emConta = pontoEmContaHoje(saldoInicial, emHoje.saldo);
 
+  const M = folha ? MEDIDAS_DA_FOLHA : MEDIDAS_DA_TELA;
   const MARGEM_ESQ = 8;
-  const MARGEM_DIR = 96;
-  const LARGURA_EIXO_Y = 56;
+  const MARGEM_DIR = M.margemDir;
+  const LARGURA_EIXO_Y = M.larguraEixoY;
   const larguraPlot = Math.max(0, largura - MARGEM_ESQ - MARGEM_DIR - LARGURA_EIXO_Y);
-  const cabemRotulos = Math.max(2, Math.floor(larguraPlot / LARGURA_ROTULO_DIA));
-  const passoRotulo = Math.max(1, Math.ceil(pontos.length / cabemRotulos));
+  const cabemRotulos = Math.max(2, Math.floor(larguraPlot / M.larguraDia));
+  const passoRotulo = folha ? passoDoEixoNaFolha(pontos.length, cabemRotulos) : Math.max(1, Math.ceil(pontos.length / cabemRotulos));
 
   /* Quantos pontos cada faixa tem — um mês estreito demais ganha só o traço, sem o nome. */
   const larguraPorPonto = pontos.length > 1 ? larguraPlot / (pontos.length - 1) : larguraPlot;
@@ -443,7 +481,7 @@ export function CprFluxoPrevisto({
    * sobre uma lista de no máximo três rótulos. Memoizar isso custa mais do que recalcular.
    * O corpo abaixo é o mesmo, byte a byte; só o envelope mudou.
    */
-  const faixasDosRotulos = ((): ReturnType<typeof faixasSemColisao> => {
+  const rotulosPosicionados = (() => {
     const lista: Parameters<typeof faixasSemColisao>[0][number][] = [];
     const emHojeLocal = pontos.find((p) => p.rotulo === 'Hoje');
     const fimConcLocal = [...pontos].reverse().find((p) => p.zona === 'conciliado');
@@ -454,12 +492,12 @@ export function CprFluxoPrevisto({
       const t = fmtTag(ultimo.saldo);
       lista.push({
         id: 'final', x: indiceDe(ultimo.chave) * larguraPorPonto,
-        paraEsquerda: 0, paraDireita: larguraEstimada(t, 13), prioridade: 2, fixo: true,
+        paraEsquerda: 0, paraDireita: larguraEstimada(t, M.final), prioridade: 2, fixo: true,
       });
     }
     if (emHojeLocal) {
-      const t = `${fmtTag(emHojeLocal.saldo)} *`;
-      const inteira = larguraEstimada(t, 12);
+      const t = folha ? `hoje · ${fmtTag(emHojeLocal.saldo)} *` : `${fmtTag(emHojeLocal.saldo)} *`;
+      const inteira = larguraEstimada(t, M.hoje);
       const meia = inteira / 2;
       /* ancorada pelo começo (hoje é o primeiro ponto) ela ocupa a largura toda À DIREITA do ponto */
       const aDireita = ancoraDaTagDeHoje(indiceDe(emHojeLocal.chave)) === 'start';
@@ -470,13 +508,45 @@ export function CprFluxoPrevisto({
     }
     if (fimConcLocal && emHojeLocal && fimConcLocal.chave !== emHojeLocal.chave) {
       const t = fmtTag(fimConcLocal.saldo);
-      const meia = larguraEstimada(t, 11) / 2;
+      const meia = larguraEstimada(t, M.conciliado) / 2;
       lista.push({
         id: 'conciliado', x: indiceDe(fimConcLocal.chave) * larguraPorPonto,
         paraEsquerda: meia, paraDireita: meia, prioridade: 1,
       });
     }
-    return faixasSemColisao(lista);
+    return { faixas: faixasSemColisao(lista), lista };
+  })();
+  const faixasDosRotulos = rotulosPosicionados.faixas;
+  /**
+   * NA FOLHA, OS RÓTULOS DE VALOR FICAM ACIMA DA LINHA — nunca sobre ela. Cada rótulo sobe até o ponto mais alto da linha do saldo
+   * dentro da sua largura, e a guia o liga ao ponto. Rótulos que se cruzam na horizontal partem da MESMA
+   * altura (a mais alta do grupo), para a pilha de faixas continuar valendo. Só geometria de desenho: nenhum valor da série muda.
+   */
+  const subirDe = ((): Map<string, number> => {
+    const m = new Map<string, number>();
+    if (!folha || larguraPorPonto <= 0) return m;
+    const alturaUtil = Math.max(0, alturaDoPlot - M.topo - M.base - M.alturaEixoX - 12);
+    const amplitude = escala.dominio[1] - escala.dominio[0];
+    if (alturaUtil <= 0 || amplitude <= 0) return m;
+    const pxPorReal = alturaUtil / amplitude;
+    const moveis = rotulosPosicionados.lista.filter((r) => !r.fixo);
+    const topoDe = (r: (typeof moveis)[number]): number => {
+      let topo = Number.NEGATIVE_INFINITY;
+      pontos.forEach((p, i) => {
+        const x = i * larguraPorPonto;
+        if (x >= r.x - r.paraEsquerda - larguraPorPonto && x <= r.x + r.paraDireita + larguraPorPonto) topo = Math.max(topo, p.saldo);
+      });
+      return topo;
+    };
+    const cruzam = (a: (typeof moveis)[number], b: (typeof moveis)[number]) =>
+      a.x - a.paraEsquerda < b.x + b.paraDireita && b.x - b.paraEsquerda < a.x + a.paraDireita;
+    for (const r of moveis) {
+      let topo = topoDe(r);
+      for (const o of moveis) if (o !== r && cruzam(r, o)) topo = Math.max(topo, topoDe(o));
+      const ponto = pontos[Math.round(r.x / larguraPorPonto)];
+      if (ponto && Number.isFinite(topo)) m.set(r.id, Math.max(0, (topo - ponto.saldo) * pxPorReal));
+    }
+    return m;
   })();
 
   return (
@@ -526,7 +596,7 @@ export function CprFluxoPrevisto({
       <div ref={refPlot} className="min-h-0 flex-1 px-1 pb-1 pt-2" data-grafico-plot>
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={pontos}
-            margin={{ top: 22, right: MARGEM_DIR, bottom: 30, left: MARGEM_ESQ }}>
+            margin={{ top: M.topo, right: MARGEM_DIR, bottom: M.base, left: MARGEM_ESQ }}>
 
             <CartesianGrid strokeDasharray="3 3" stroke="#ded6c9" vertical={false} />
             {/* ⚠ `interval={0}` — todos os ticks são RENDERIZADOS e o tick decide o que
@@ -534,12 +604,18 @@ export function CprFluxoPrevisto({
                 faixa de mês junto com o rótulo do dia. */}
             {/* ⚠ `tickLine` LIGADO nos dois eixos — a marca de escala do `ExtratoAnaliseFluxo`.
                 Sem ela o rótulo flutua e o olho não sabe a que altura exata ele pertence. */}
-            <XAxis dataKey="rotulo" interval={0} height={38}
+            <XAxis dataKey="rotulo" interval={0} height={M.alturaEixoX}
               tickLine={{ stroke: COR_TEXTO, opacity: 0.4 }} axisLine={{ stroke: '#ded6c9' }}
-              tick={<TickEixoX pontos={pontos} passoRotulo={passoRotulo} faixaCabe={faixaCabe} />} />
-            <YAxis domain={escala.dominio} ticks={escala.ticks} width={LARGURA_EIXO_Y}
+              tick={<TickEixoX pontos={pontos} passoRotulo={passoRotulo} faixaCabe={faixaCabe} m={M} />} />
+            {/* na FOLHA o rótulo do eixo Y é desenhado aqui, numa linha só (o `Text` do recharts quebrava "600 mil" em duas) */}
+            <YAxis domain={escala.dominio} ticks={escala.ticks} width={LARGURA_EIXO_Y} interval={folha ? 0 : undefined} allowDataOverflow={folha}
               tickLine={{ stroke: COR_TEXTO, opacity: 0.4 }} axisLine={false}
-              tick={{ fontSize: 10, fill: COR_TEXTO }} tickFormatter={fmtCurto} />
+              tick={folha
+                ? ((p: { x?: number; y?: number; payload?: { value?: number } }) => (
+                  <text x={p.x} y={p.y} dy={M.eixoY * 0.35} textAnchor="end" fill={COR_TEXTO} fontSize={M.eixoY}>{fmtCurto(p.payload?.value ?? 0)}</text>
+                ))
+                : { fontSize: 10, fill: COR_TEXTO }}
+              tickFormatter={fmtCurto} />
             <Tooltip content={<TooltipFluxo emConta={emConta} />} cursor={{ fill: '#00000008' }} />
             <ReferenceLine y={0} stroke={COR_TEXTO} strokeWidth={1.2} />
 
@@ -630,15 +706,20 @@ export function CprFluxoPrevisto({
                 {/* ⚠ A PALAVRA ACOMPANHA O VALOR: ela sobe junto quando o valor sobe, senão o
                     par se separaria e o "hoje" ficaria explicando um número que saiu de baixo
                     dele. Por isso as duas leem a MESMA faixa. */}
+                {/* NA FOLHA a palavra e o valor são UM rótulo só ("hoje · R$ X *"): a palavra solta, uma faixa acima, era o que
+                    caía por cima do rótulo do fim do conciliado quando os dois pontos estão próximos. */}
+                {!folha && (
                 <ReferenceDot x={emHoje.rotulo} y={emHoje.saldo} r={0} isFront
                   label={(props) => (
                     <RotuloDoTopo {...props} texto="hoje" cor={COR_SALDO} tamanho={10} ancora={ancoraHoje}
                       faixa={(faixasDosRotulos.get('hoje') ?? 0) + 0.85} />
                   )} />
+                )}
                 <ReferenceDot x={emHoje.rotulo} y={emHoje.saldo} r={0} isFront
                   label={(props) => (
-                    <RotuloDoTopo {...props} texto={`${fmtTag(emHoje.saldo)} *`} cor={COR_SALDO}
-                      tamanho={12} peso={600} ancora={ancoraHoje} faixa={faixasDosRotulos.get('hoje') ?? 0} />
+                    <RotuloDoTopo {...props} texto={folha ? `hoje · ${fmtTag(emHoje.saldo)} *` : `${fmtTag(emHoje.saldo)} *`} cor={COR_SALDO}
+                      tamanho={M.hoje} peso={600} ancora={ancoraHoje} faixa={faixasDosRotulos.get('hoje') ?? 0}
+                      offset={M.offsetRotulo} alturaFaixa={M.alturaFaixa} subir={subirDe.get('hoje') ?? 0} />
                   )} />
               </>
             )}
@@ -646,17 +727,18 @@ export function CprFluxoPrevisto({
               <ReferenceDot x={fimConciliado.rotulo} y={fimConciliado.saldo} r={0} isFront
                 label={(props) => (
                   <RotuloDoTopo {...props} texto={fmtTag(fimConciliado.saldo)}
-                    cor={COR_CONCILIADO} tamanho={11}
-                    faixa={faixasDosRotulos.get('conciliado') ?? 0} />
+                    cor={COR_CONCILIADO} tamanho={M.conciliado}
+                    faixa={faixasDosRotulos.get('conciliado') ?? 0}
+                    offset={M.offsetRotulo} alturaFaixa={M.alturaFaixa} subir={subirDe.get('conciliado') ?? 0} />
                 )} />
             )}
             <ReferenceDot x={final.rotulo} y={final.saldo} r={0} isFront
               label={{ value: fmtTag(final.saldo), position: 'right', offset: 10,
-                fontSize: 13, fontWeight: 600,
+                fontSize: M.final, fontWeight: 600,
                 fill: final.saldo < 0 ? COR_SAIDA : COR_TEXTO }} />
             <ReferenceDot x={final.rotulo} y={final.saldo} r={0} isFront
-              label={{ value: final.rotulo, position: 'right', offset: 10, dy: 15,
-                fontSize: 11, fill: COR_TEXTO }} />
+              label={{ value: final.rotulo, position: 'right', offset: 10, dy: M.dyDataFinal,
+                fontSize: M.dataFinal, fill: COR_TEXTO }} />
           </ComposedChart>
         </ResponsiveContainer>
       </div>

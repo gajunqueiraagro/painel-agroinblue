@@ -9,6 +9,8 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { lerGraficoDoDom, esperarGraficoNoDom } from '@/lib/pdf/cpr/graficoDoDom';
 import { hexDoStatus, STATUS_PALETA } from '@/lib/financeiro/statusFinanceiro';
+import { escalaPeloDado, escalaSimetrica } from '@/lib/financeiro/fluxoPrevisto';
+import { passoDoEixoNaFolha } from '@/components/financeiro-v2/CprFluxoPrevisto';
 import { contaDaFolha, montarModeloCpr, type EntradaDoModelo, type GrupoDaTela } from '@/lib/pdf/cpr/modeloCpr';
 import { montarPayloadExcelCpr } from '@/lib/financeiro/cprExcel';
 import { recortarCpr, serieDoSaldoCpr, chaveDaLinhaCpr, ehReceberCpr, ehTransferenciaCpr, type ContaCpr } from '@/lib/financeiro/cprRecorte';
@@ -91,6 +93,51 @@ describe('o leitor do gráfico — descreve o que a tela desenhou', () => {
     let i = 0;
     const mudando = () => montar(SVG.replace('cx="700"', `cx="${700 + (i++)}"`));
     expect(await esperarGraficoNoDom(mudando, { prazoMs: 60, passoMs: 10 })).toBeNull();
+  });
+});
+
+describe('CPR-PDF-ACABAMENTO-01 — o desenho da FOLHA: escala pelo dado e eixo por dia', () => {
+  const pt = (saldo: number) => ({ chave: 'x', rotulo: 'x', entradas: 0, saidas: 0, saldo, saldoPos: Math.max(saldo, 0), saldoNeg: Math.min(saldo, 0), faixa: '', abreFaixa: false });
+  it('do menor ao maior saldo, sempre com o zero, em passos redondos, com no máximo 10 linhas — e sem faixa negativa vazia', () => {
+    const e = escalaPeloDado([pt(296679.54), pt(430000), pt(504.52)]);
+    expect(e.dominio).toEqual([0, 450000]);
+    expect(e.passo).toBe(50000);
+    expect(e.ticks.length).toBe(10);
+    expect(Math.min(...e.ticks)).toBe(0);
+    /* a da tela (simétrica) abre faixa negativa mesmo sem valor negativo; a da folha não */
+    expect(escalaSimetrica([pt(296679.54), pt(430000), pt(504.52)]).dominio[0]).toBeLessThan(0);
+  });
+  it('com saldo negativo a faixa desce até ele; a barra de movimento não alarga a escala', () => {
+    const e = escalaPeloDado([pt(430000), pt(-318810.98), { ...pt(0), saidas: -5_000_000, entradas: 9_000_000 }]);
+    expect(e.dominio[0]).toBeLessThanOrEqual(-318810.98);
+    expect(e.dominio[1]).toBeGreaterThanOrEqual(430000);
+    expect(e.dominio[1]).toBeLessThan(1_000_000);
+    expect(e.ticks).toContain(0);
+    expect(e.ticks.length).toBeGreaterThanOrEqual(8);
+    expect(e.ticks.length).toBeLessThanOrEqual(10);
+  });
+  it('tudo zero, e um só valor', () => {
+    expect(escalaPeloDado([pt(0)]).ticks).toEqual([0, 1]);
+    const e = escalaPeloDado([pt(505)]);
+    expect([e.dominio[0], e.ticks.length <= 10, e.dominio[1] >= 505]).toEqual([0, true, true]);
+  });
+  it('eixo X da folha: até 31 dias uma marca por dia; acima, semanas inteiras, sem rótulo encostando', () => {
+    expect(passoDoEixoNaFolha(31, 37)).toBe(1);
+    expect(passoDoEixoNaFolha(32, 37)).toBe(1);
+    expect(passoDoEixoNaFolha(92, 37)).toBe(7);
+    expect(passoDoEixoNaFolha(180, 37)).toBe(7);
+    expect(passoDoEixoNaFolha(180, 10)).toBe(21);
+  });
+  it('lido da fonte: a tela desenha com as medidas de sempre; só a folha recebe `folha`, e o leitor não mudou de dono', () => {
+    const comp = readFileSync(resolve(__dirname, '../../../components/financeiro-v2/CprFluxoPrevisto.tsx'), 'utf8');
+    expect(comp).toContain('const M = folha ? MEDIDAS_DA_FOLHA : MEDIDAS_DA_TELA;');
+    expect(comp).toContain("eixoY: 10, larguraEixoY: 56, dia: 9.5, larguraDia: LARGURA_ROTULO_DIA, mes: 12, dyDia: 11, dyMes: 29, riscoDe: 17, riscoAte: 32,");
+    expect(comp).toContain('alturaEixoX: 38, topo: 22, base: 30, margemDir: 96, offsetRotulo: OFFSET_ROTULO, alturaFaixa: ALTURA_FAIXA,');
+    expect(comp).toContain('(folha ? escalaPeloDado(pontos) : escalaSimetrica(pontos))');
+    const tela = readFileSync(resolve(__dirname, '../../../components/financeiro-v2/ContasPagarReceberTab.tsx'), 'utf8');
+    expect(tela).toContain('graficoDoFluxo(false)');
+    expect(tela).toContain('{graficoDoFluxo(true)}');
+    expect(tela.match(/graficoDoFluxo\(true\)/g)?.length).toBe(1);
   });
 });
 

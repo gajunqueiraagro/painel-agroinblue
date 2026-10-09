@@ -136,7 +136,7 @@ export function lerGraficoDoDom(raiz: Element): GraficoDaFolha | null {
 }
 
 /** O tamanho em que o gráfico é montado para a folha (px = pt): a largura útil do A4 paisagem; a altura inclui título e legenda. */
-export const TAMANHO_DO_GRAFICO_NO_PDF = { largura: 798, altura: 330 };
+export const TAMANHO_DO_GRAFICO_NO_PDF = { largura: 798, altura: 240 };
 export const AVISO_PDF_SEM_GRAFICO = 'PDF gerado sem o gráfico: ele não terminou de desenhar. Gere de novo com a aba à vista.';
 
 /**

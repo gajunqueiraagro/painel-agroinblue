@@ -351,6 +351,34 @@ export function escalaSimetrica(pontos: readonly PontoFluxo[]): EscalaY {
   return { dominio: [-abaixo * passo, acima * passo], ticks, passo };
 }
 
+/**
+ * A ESCALA PELO DADO — CPR-PDF-ACABAMENTO-01, para a FOLHA do PDF. Vai do menor ao maior SALDO da série,
+ * sempre com o zero, em passos redondos, com 8 a 10 linhas de grade quando o dado deixa (nunca mais que `maxLinhas`). Sem a
+ * faixa negativa vazia da `escalaSimetrica` (que é a da tela: lá o zero não cola na borda).
+ * ⚠ SÓ ESCALA DE DESENHO: nenhum ponto da série muda.
+ */
+const PASSOS_DA_FOLHA = [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8];
+export function escalaPeloDado(pontos: readonly PontoFluxo[], maxLinhas = 10): EscalaY {
+  let menor = 0, maior = 0;
+  for (const p of pontos) {
+    maior = Math.max(maior, p.saldo);
+    menor = Math.min(menor, p.saldo);
+  }
+  if (maior === 0 && menor === 0) return { dominio: [0, 1], ticks: [0, 1], passo: 1 };
+  const amplitude = maior - menor;
+  for (let k = Math.floor(Math.log10(amplitude)) - 2; k < 15; k++) {
+    for (const m of PASSOS_DA_FOLHA) {
+      const passo = m * 10 ** k;
+      const lo = Math.floor(menor / passo), hi = Math.ceil(maior / passo);
+      if (hi - lo + 1 > maxLinhas) continue;
+      const ticks: number[] = [];
+      for (let i = lo; i <= hi; i++) ticks.push(arredondar(i * passo));
+      return { dominio: [arredondar(lo * passo), arredondar(hi * passo)], ticks, passo };
+    }
+  }
+  return { dominio: [menor, maior], ticks: [menor, 0, maior], passo: amplitude };
+}
+
 /* ─────────────────────────────────────────────────────────────────────────────
    AS TRÊS ZONAS DE TEMPO — PR-CPR-2B.3
 

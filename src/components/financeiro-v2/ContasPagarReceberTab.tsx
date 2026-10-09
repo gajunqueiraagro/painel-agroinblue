@@ -942,8 +942,9 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
      desenho pronto (`lerGraficoDoDom`) — o mesmo componente, as mesmas props, a mesma série do dono. Nada é recalculado para o PDF. */
   const [graficoParaPdf, setGraficoParaPdf] = useState(false);
   const refGraficoPdf = useRef<HTMLDivElement | null>(null);
-  const graficoDoFluxo = (
+  const graficoDoFluxo = (paraFolha: boolean) => (
     <CprFluxoPrevisto
+      folha={paraFolha}
       linhas={doFluxo}
       saldoInicial={serie.hoje}
       barras={segmento}
@@ -1116,7 +1117,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
       {graficoParaPdf && (
         <div ref={refGraficoPdf} aria-hidden data-testid="cpr-grafico-para-pdf"
           style={{ position: 'fixed', left: -10000, top: 0, width: TAMANHO_DO_GRAFICO_NO_PDF.largura, height: TAMANHO_DO_GRAFICO_NO_PDF.altura, pointerEvents: 'none' }}>
-          {graficoDoFluxo}
+          {graficoDoFluxo(true)}
         </div>
       )}
 
@@ -1318,7 +1319,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
           {visao === 'fluxo' ? (
             /* ⚠ AS MESMAS CONTAS EM ABERTO QUE A SÉRIE DO SALDO SOMA, dos dois lados; o segmento só escolhe as barras.
                O gráfico começa na data "de" do período. No Ampliado ele ocupa toda a área abaixo do cabeçalho. */
-            graficoDoFluxo
+            graficoDoFluxo(false)
           ) : (
           <>
 

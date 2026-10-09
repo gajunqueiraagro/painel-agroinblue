@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 09/10/2026 (CPR-TRANSFERENCIAS-NO-FLUXO-01 commit B, +11 em `src/lib/pdf/cpr/graficoNoPdf.test.tsx` — 4683 depois dele; antes o
+  Baseline em 09/10/2026 (CPR-PDF-ACABAMENTO-01 commit A, +5 em `src/lib/pdf/cpr/graficoNoPdf.test.tsx` — 4688 depois dele; antes o
+  CPR-TRANSFERENCIAS-NO-FLUXO-01 commit B, +11 em `src/lib/pdf/cpr/graficoNoPdf.test.tsx` — 4683 depois dele; antes o
   CPR-TRANSFERENCIAS-NO-FLUXO-01 commit A, +12 em `src/lib/financeiro/cprRecorte.test.ts` — 4672 depois dele; antes o
   UI-BOTOES-LUGAR-FIXO-01, +2 em `src/components/financeiro-v2/FinanceiroV2ControlesLista.test.tsx` (20 -> 22) — 4660 depois dele; antes o
   PLANO-LEITOR-POR-CLIENTE-01 passo 3, +5 em `src/lib/financeiro/planoLeitorUnico.test.ts` — 4658 depois dele; antes o
@@ -272,7 +273,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4683
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4688
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3527,6 +3528,33 @@ docs/historico/frentes-ate-2026-09-29.md.)
     bloco nao diz) · a ponta fora do caixa so' diz o motivo no `title` · `fluxoPrevisto.ts` passou a importar o dono (era sem
     import) · NAO PROVADO NO NAVEGADOR: ponta em conta fora do caixa (a Vera nao tem caso no mes), vencida de transferencia
     (Agnaldo / Santa Rita nao abertos), o Ampliado, e clique na linha de cada ponta abrindo o lancamento (mesmo `abrir(l.id)`).
+- ⚠ NA FOLHA DO PDF O GRAFICO DO FLUXO TEM DESENHO PROPRIO, COM A MESMA SERIE (CPR-PDF-ACABAMENTO-01 commit A, Gabriel 09/10/2026, so'
+  tela). O `CprFluxoPrevisto` ganhou a prop `folha` (so' a montagem fora da vista a passa: `graficoDoFluxo(true)`); a tela segue
+  com `MEDIDAS_DA_TELA`, os numeros de sempre movidos para uma tabela, e a folha usa `MEDIDAS_DA_FOLHA`. NADA DA SERIE MUDA.
+  · EIXO Y: letra do corpo da tabela do PDF (7pt), rotulo em UMA linha (tick proprio; o `Text` do recharts quebrava "600 mil"),
+    e a escala e' `escalaPeloDado` (`fluxoPrevisto.ts`): do menor ao maior SALDO, sempre com o zero, passos redondos, ate' 10
+    linhas (8 a 10 quando o dado deixa); sem a faixa negativa vazia da `escalaSimetrica` (que continua sendo a da TELA).
+    ⚠ `allowDataOverflow` e `interval={0}` na folha: sem o primeiro o recharts alarga o dominio pelas colunas `entradas`/`saidas`
+      dos pontos; sem o segundo ele some com metade dos rotulos.
+  · EIXO X: 7pt; ate' 31 dias uma marca por dia, com o mes so' na primeira e na virada; acima disso o passo e' de SEMANAS
+    inteiras (`passoDoEixoNaFolha`); acima de 180 dias a lib ja' rebaixa para mensal.
+  · ROTULOS DE VALOR: na folha "hoje" e o valor sao UM rotulo ("hoje · R$ 297 mil *"); cada rotulo sobe ate' o ponto mais alto da
+    linha dentro da sua largura (com a guia ate' o ponto), e os que se cruzam partem da mesma altura — nunca um sobre o outro
+    nem sobre a linha. Tamanhos: 8 / 7,5 / 9 + 7 (fim), todos abaixo do titulo do bloco.
+  · BLOCO: titulo no estilo das secoes da folha, frase e legenda a 7,5pt, sem o fundo creme; montado a 798 x 240
+    (`TAMANHO_DO_GRAFICO_NO_PDF`), ~1/3 da pagina, `wrap={false}`.
+  PDF GERADO (Vera · Itau Personalite, so' leitura): out/26 — 0 a 450 mil em passos de 50 mil (10 linhas), 21 marcas de dia,
+  "R$ 300 mil" empilhado acima de "hoje · R$ 297 mil *", fim "R$ 505 · 21/10" dentro do bloco; 01/10–31/12 — −400 a 500 mil em
+  passos de 100 mil (10 linhas), marcas semanais, out/nov/dez marcados.
+  ⚠ ACHADOS, sem mexer: (1) NA TELA do Fluxo a palavra "hoje" cai por cima do rotulo do fim do conciliado quando os dois pontos
+    estao proximos (visto na Vera, out/26: "R$ 300 mil" x "hoje") — a anti-colisao da tela trata "hoje" como uma faixa so', e a
+    palavra mora 0,85 faixa acima; (2) AS BARRAS DE MOVIMENTO (entradas / saidas) NAO SAO DESENHADAS — 0 retangulos no DOM, na
+    tela e na folha, embora os pontos tragam os valores (era isso que abria a faixa negativa da escala).
+  ⚠ PROVA DE PDF EM ABA CONTROLADA: o Chrome bloqueia o segundo download da mesma origem e o menu fechado fica no DOM em aba
+    oculta — a prova captura o `Blob` (gancho em `URL.createObjectURL`) e o manda a um servidor local; clicar so' no item do menu
+    com `data-state=open`.
+  ⚠ NAO PROVADO: periodo acima de 180 dias (eixo mensal) na folha · rotulos de valor com tres pontos proximos (so' dois casos
+    vistos) · a 1ª pagina com "Todas as contas".
 - ⚠ O PDF DA CPR TRAZ O GRAFICO DO FLUXO, EM VETOR, E O STATUS NAS CORES DO DONO DA LISTA (CPR-TRANSFERENCIAS-NO-FLUXO-01 commit B,
   Gabriel 09/10/2026, so' tela).
   · O GRAFICO NAO E' REDESENHADO NEM RECALCULADO: na hora de gerar, a tela monta FORA DA VISTA (798 x 330, tamanho fixo:
