@@ -22,6 +22,7 @@ vi.mock('@/integrations/supabase/client', () => ({ supabase: { rpc: (...a: unkno
 const notificar = vi.fn();
 vi.mock('@/hooks/useFinanceiroV2', () => ({ notificarLancamentosMudaram: (id: string) => notificar(id) }));
 vi.mock('@/lib/financeiro/planoContasBuilder', () => ({
+  DIVIDENDO_MACRO: 'Dividendos',
   loadPlanoContasCompleto: vi.fn(async () => []),
   planoToClassificacoes: () => [
     { id: P5010, subcentro: 'Adiantamento de Boitel', macro_custo: 'Saída Financeira', tipo_operacao: '2-Saídas' },

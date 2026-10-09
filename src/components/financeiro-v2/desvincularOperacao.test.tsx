@@ -35,6 +35,7 @@ const notificar = vi.fn();
 vi.mock('@/hooks/useFinanceiroV2', () => ({ notificarLancamentosMudaram: (id: string) => notificar(id) }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('@/lib/financeiro/planoContasBuilder', () => ({
+  DIVIDENDO_MACRO: 'Dividendos',
   loadPlanoContasCompleto: vi.fn(async () => []),
   planoToClassificacoes: () => [
     { id: PL_ESTORNO, subcentro: 'Pagamento Estornado', centro_custo: 'Ajustes', grupo_custo: 'Outras Saídas',

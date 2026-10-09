@@ -19,7 +19,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 import { notificarLancamentosMudaram, type ClassificacaoItem } from '@/hooks/useFinanceiroV2';
 import { PlanoSubcentroSelect } from '@/components/shared/PlanoSubcentroSelect';
-import { loadPlanoContasCompleto, planoToClassificacoes } from '@/lib/financeiro/planoContasBuilder';
+import { DIVIDENDO_MACRO, loadPlanoContasCompleto, planoToClassificacoes } from '@/lib/financeiro/planoContasBuilder';
 import { Secao, Par } from '@/components/financeiro-v2/modalVinculoOC';
 import { rotuloOC, dataBr, mensagemDeErro } from '@/lib/oc/vincularLancamento';
 import {
@@ -73,7 +73,7 @@ export function DesvincularOperacaoDialog({ open, lancamentoId, operacaoId, clie
       if (l.data) setLanc({ descricao: l.data.descricao, tipo_operacao: l.data.tipo_operacao, valor: Number(l.data.valor),
         data_competencia: l.data.data_competencia, subcentro: l.data.subcentro });
       if (o.data) setOc({ numero_documento: o.data.numero_documento, data_operacao: o.data.data_operacao });
-      setPlano(planoToClassificacoes(p).filter(c => !!c.id));
+      setPlano(planoToClassificacoes(p).filter(c => !!c.id && c.macro_custo !== DIVIDENDO_MACRO));
     })().catch(e => { if (!cancelado) setErroSim(mensagemDeErro(e)); });
     return () => { cancelado = true; };
   }, [open, lancamentoId, operacaoId, clienteId]);

@@ -155,33 +155,79 @@ export async function loadDividendos(clienteId: string): Promise<Dividendo[]> {
 }
 
 /**
- * Generate dynamic subcentro entries for dividendos
+ * Conta do plano de macro Dividendos que o cliente enxerga: a DELE (`cliente_id` = o cliente) ou a global de mesmo nome.
+ * É só o que `contaDoDividendo` precisa para dar a chave ao nome do cadastro.
  */
-export function buildDividendoEntries(dividendos: Dividendo[], baseOrdem: number = 9000): PlanoContasItem[] {
-  return dividendos.map((d, i) => ({
-    id: `dividendo-${d.id}`,
-    tipo_operacao: DIVIDENDO_TIPO,
-    macro_custo: DIVIDENDO_MACRO,
-    grupo_custo: DIVIDENDO_GRUPO,
-    centro_custo: DIVIDENDO_CENTRO,
-    subcentro: buildSubcentroDividendo(d.nome),
-    escopo_negocio: DIVIDENDO_ESCOPO,
-    ativo: true,
-    ordem_exibicao: baseOrdem + i,
-    is_dividendo: true,
-  }));
+export interface ContaDeDividendo {
+  id: string;
+  cliente_id: string | null;
+  tipo_operacao: string;
+  subcentro: string | null;
+  compoe_dre?: boolean | null;
+}
+
+/**
+ * A CONTA DO PLANO DE UM DIVIDENDO DO CADASTRO — CONC-DIVIDENDOS-PLANO-01 (Gabriel, 09/10/2026).
+ * O cadastro de dividendos é a aprovação: o nome do cadastro tem conta no plano do cliente, com o MESMO nome. A regra é a do
+ * banco (`fn_plano_conta_do_texto`): primeiro a conta DO CLIENTE com aquele subcentro; na falta, a GLOBAL; duas do mesmo
+ * nível = nenhuma (o banco também não escolhe). Conta de OUTRO cliente nunca serve.
+ */
+export function contaDoDividendo(
+  subcentro: string,
+  clienteId: string,
+  contas: readonly ContaDeDividendo[],
+): ContaDeDividendo | null {
+  const doNome = contas.filter(c => c.subcentro === subcentro && c.tipo_operacao === DIVIDENDO_TIPO);
+  const doCliente = doNome.filter(c => c.cliente_id === clienteId);
+  if (doCliente.length === 1) return doCliente[0];
+  if (doCliente.length > 1) return null;
+  const globais = doNome.filter(c => c.cliente_id === null);
+  return globais.length === 1 ? globais[0] : null;
+}
+
+/**
+ * Generate dynamic subcentro entries for dividendos.
+ *
+ * ⚠ UMA ENTRADA POR NOME DO CADASTRO, E ELA É A DO PLANO QUANDO A CONTA EXISTE (CONC-DIVIDENDOS-PLANO-01): com conta, a
+ * entrada leva o `id` da conta (uuid de verdade) e deixa de ser sintética — a Conciliação › Sem classificação a encontra e
+ * o save manda a chave. Sem conta (dividendo cadastrado depois do backfill, enquanto o escritor único do cadastro não
+ * existe), sobra a sintética `dividendo-<uuid>`, sem chave, como sempre. Nunca as duas: o nome não aparece em dobro.
+ * A posição na lista (`ordem_exibicao`) é a de sempre, a do cadastro — a lista das telas não muda de ordem.
+ */
+export function buildDividendoEntries(
+  dividendos: Dividendo[],
+  baseOrdem: number = 9000,
+  contas: readonly ContaDeDividendo[] = [],
+): PlanoContasItem[] {
+  return dividendos.map((d, i) => {
+    const subcentro = buildSubcentroDividendo(d.nome);
+    const conta = contaDoDividendo(subcentro, d.cliente_id, contas);
+    return {
+      id: conta ? conta.id : `dividendo-${d.id}`,
+      tipo_operacao: DIVIDENDO_TIPO,
+      macro_custo: DIVIDENDO_MACRO,
+      grupo_custo: DIVIDENDO_GRUPO,
+      centro_custo: DIVIDENDO_CENTRO,
+      subcentro,
+      escopo_negocio: DIVIDENDO_ESCOPO,
+      ativo: true,
+      ordem_exibicao: baseOrdem + i,
+      ...(conta ? { compoe_dre: conta.compoe_dre } : { is_dividendo: true }),
+    };
+  });
 }
 
 /**
  * Load the full plano de contas (global) merged with client dividendos.
  *
- * FONTE ÚNICA de dividendos é `financeiro_dividendos` filtrada por cliente.
- * Qualquer entrada com macro_custo='Dividendos' no plano global (ou
- * cliente_id=NULL pré-seed) é EXCLUÍDA aqui — evita vazar dividendos de
- * outros clientes nos seletores de subcentro.
+ * FONTE ÚNICA da LISTA de dividendos é `financeiro_dividendos` filtrada por cliente.
+ * Qualquer entrada com macro_custo='Dividendos' no plano é EXCLUÍDA da lista geral — evita vazar dividendos de
+ * outros clientes nos seletores de subcentro (as 15 contas globais de macro Dividendos são nomes de cadastros de
+ * clientes específicos). As contas de Dividendos são lidas À PARTE, só as do cliente e as globais, e servem SÓ para dar a
+ * chave ao nome que o cadastro do cliente já tem (`contaDoDividendo`) — nenhuma conta entra na lista por si.
  */
 export async function loadPlanoContasCompleto(clienteId: string): Promise<PlanoContasItem[]> {
-  const [planoRes, dividendos] = await Promise.all([
+  const [planoRes, dividendos, contasRes] = await Promise.all([
     supabase
       .from('financeiro_plano_contas')
       .select('id, tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro, escopo_negocio, ativo, ordem_exibicao, compoe_dre')
@@ -189,13 +235,20 @@ export async function loadPlanoContasCompleto(clienteId: string): Promise<PlanoC
       .neq('macro_custo', DIVIDENDO_MACRO)
       .order('ordem_exibicao'),
     loadDividendos(clienteId),
+    supabase
+      .from('financeiro_plano_contas')
+      .select('id, cliente_id, tipo_operacao, subcentro, compoe_dre')
+      .eq('ativo', true)
+      .eq('macro_custo', DIVIDENDO_MACRO)
+      .or(`cliente_id.is.null,cliente_id.eq.${clienteId}`),
   ]);
 
   const items: PlanoContasItem[] = (planoRes.data as PlanoContasItem[]) || [];
 
   if (dividendos.length > 0) {
     const maxOrdem = items.reduce((max, i) => Math.max(max, i.ordem_exibicao), 0);
-    const divEntries = buildDividendoEntries(dividendos, maxOrdem + 100);
+    const contas: ContaDeDividendo[] = contasRes.data ?? [];
+    const divEntries = buildDividendoEntries(dividendos, maxOrdem + 100, contas);
     items.push(...divEntries);
   }
 
@@ -213,7 +266,8 @@ export function planoToClassificacoes(items: PlanoContasItem[]) {
          `loadPlanoContasCompleto` sempre trouxe `id`; era descartado aqui, e por isso o
          modal só sabia o texto. Com ela o payload manda a chave, que o trigger
          `resolve_classificacao_from_plano` trata como fonte.
-         ⚠ DIVIDENDO NÃO TEM CHAVE, E MANDAR A DELE QUEBRARIA O SAVE. As entradas de
+         ⚠ DIVIDENDO SEM CONTA NO PLANO NÃO TEM CHAVE, E MANDAR A DELE QUEBRARIA O SAVE (o com conta
+         chega aqui com o uuid da conta e sem `is_dividendo` — CONC-DIVIDENDOS-PLANO-01). As entradas de
          dividendo são SINTETIZADAS por `buildDividendoEntries` a partir de
          `financeiro_dividendos`: o `id` delas é a string `dividendo-<uuid>`, que não é
          linha de `financeiro_plano_contas` nem sequer um uuid válido — e

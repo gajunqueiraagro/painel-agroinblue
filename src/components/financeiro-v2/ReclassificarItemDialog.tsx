@@ -18,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { cn } from '@/lib/utils';
 import { notificarLancamentosMudaram, type ClassificacaoItem } from '@/hooks/useFinanceiroV2';
 import { PlanoSubcentroSelect } from '@/components/shared/PlanoSubcentroSelect';
-import { loadPlanoContasCompleto, planoToClassificacoes } from '@/lib/financeiro/planoContasBuilder';
+import { DIVIDENDO_MACRO, loadPlanoContasCompleto, planoToClassificacoes } from '@/lib/financeiro/planoContasBuilder';
 import { Secao, Par } from '@/components/financeiro-v2/modalVinculoOC';
 import { rotuloComponente, mensagemDeErro } from '@/lib/oc/vincularLancamento';
 import {
@@ -72,7 +72,7 @@ export function ReclassificarItemDialog({ open, item, rotuloOperacao, clienteId,
     Promise.all([loadPlanoContasCompleto(clienteId), carregarMapaOC()])
       .then(([p, m]) => {
         if (cancelado) return;
-        setPlano(planoToClassificacoes(p).filter(c => !!c.id));
+        setPlano(planoToClassificacoes(p).filter(c => !!c.id && c.macro_custo !== DIVIDENDO_MACRO));
         setMapa(m);
       })
       .catch(e => { if (!cancelado) setErroSim(mensagemDeErro(e)); });
