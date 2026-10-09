@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 09/10/2026 (CPR-PDF-ACABAMENTO-01 commit B, +20: `src/lib/financeiro/saldoEmCaixa.test.ts` 5,
+  Baseline em 09/10/2026 (DIVIDENDO-ESCRITOR-UNICO-01 passo 4, +3 em `src/lib/financeiro/dividendoEscritorUnico.test.ts` — 4724 depois
+  dele; antes o passo 3, +13 em `src/pages/dividendosTab.test.tsx` — 4721 depois dele; antes o CPR-PDF-ACABAMENTO-01 commit B, +20: `src/lib/financeiro/saldoEmCaixa.test.ts` 5,
   `src/lib/financeiro/cprRecorte.test.ts` 8, `src/lib/pdf/cpr/exportCpr.test.tsx` 7 — 4708 depois dele; antes o
   CPR-PDF-ACABAMENTO-01 commit A, +5 em `src/lib/pdf/cpr/graficoNoPdf.test.tsx` — 4688 depois dele; antes o
   CPR-TRANSFERENCIAS-NO-FLUXO-01 commit B, +11 em `src/lib/pdf/cpr/graficoNoPdf.test.tsx` — 4683 depois dele; antes o
@@ -275,7 +276,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4708
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4724
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -2529,6 +2530,112 @@ docs/historico/frentes-ate-2026-09-29.md.)
     `LancamentoLeituraDialog.tsx`; e telas fora das abas da Conciliacao — `EstacaoConciliar.tsx`, `VincularMatchDireto.tsx`,
     `DecisaoDerivadosDialog.tsx` fora do Espelho, `CasarComBancoModal.tsx` (dentro do Espelho ja' passa pelo `onMudou`),
     `useConciliacaoDoMes.ts`, `useConciliarMes.ts` (o dialogo avisa).
+- ⚠ A TELA DE DIVIDENDOS NAO ESCREVE NA TABELA: CADA GESTO CHAMA A FUNCAO DO ESCRITOR UNICO, E A TRAVA DO FRONT E' UM TESTE DE FONTE
+  (DIVIDENDO-ESCRITOR-UNICO-01 passos 3 e 4, Gabriel 09/10/2026, so' tela). `src/pages/DividendosTab.tsx` (montada em
+  `V2Index.tsx`, `CadastrosTab.tsx` e `Index.tsx`) so' LE `financeiro_dividendos`; criar, renomear, inativar, reativar e
+  reordenar chamam `fn_dividendo_*` por `(supabase as any).rpc`. Os nomes das funcoes, o leitor da resposta e as frases moram em
+  `src/lib/financeiro/dividendosCadastro.ts` (puro): `FN_DIVIDENDO`, `lerRespostaDoDividendo` (erro do banco = a frase; recusa da
+  simulacao = `recusa.frase`; peca torta NUNCA vira sucesso), `fraseDoQueSegura(n)`, `ordemCompleta`.
+  · A RECUSA FICA ESCRITA, NUNCA EM TOAST, em lugar que existe sempre: sob o botao do formulario (`dividendo-recado-form`, 26px
+    reservados; o digitado fica), no cabecalho da lista ao lado dos botoes (`dividendo-recado-lista`: ativar, inativar e
+    reordenar; uma linha, corta com o inteiro no `title`) e dentro da confirmacao (`dividendo-recado-confirmacao`). O aviso de
+    SUCESSO segue em toast, como era; no renomear ele diz quantos lancamentos receberam o nome (o numero do banco).
+  · INATIVAR PERGUNTA ANTES AO BANCO (`p_simular`): com `lancamentos_que_seguram` > 0 abre a confirmacao com a frase ("N
+    lançamentos usam este dividendo. Ele deixa de ser oferecido em lançamentos novos; a conta continua no plano e os lançamentos
+    ficam como estão."); "Voltar" nao grava. Com zero, grava direto.
+  · REORDENAR E' UMA CHAMADA com a lista INTEIRA do cliente: `ordemCompleta(items, visiveis reordenados)` — os inativos
+    escondidos ficam onde estavam (a tela antiga fazia um UPDATE por linha, so' dos visiveis, e renumerava por cima dos escondidos).
+    Recusa: a frase na lista e a tela rele.
+  · SEM F5: depois de cada gesto a tela rele, invalida `['fin-classificacoes-plano', cliente]` e chama
+    `notificarLancamentosMudaram(cliente)`. ⚠ O `planoContasBuilder` NAO TEM CACHE: o seletor de subcentro le^ o plano ao montar
+    a tela, e a tela de Dividendos e' outra secao — voltar ao Financeiro ja' rele.
+  · PASSO 4 — `src/lib/financeiro/dividendoEscritorUnico.test.ts` varre `src` (com auto-teste do detector: quatro verbos, tres
+    aspas, o cast, a quebra de linha, a escrita em laco): NENHUM arquivo escreve em `financeiro_dividendos`; quem LE esta'
+    declarado com a contagem exata (`DividendosTab.tsx`, `planoContasBuilder.ts`, `usePlanejamentoFinanceiro.ts`, 1 cada); e
+    nome de `fn_dividendo_*` so' existe no dono.
+  PROVA NO NAVEGADOR (cliente Teste, 09/10, aba em SEGUNDO PLANO, 1.127 x 523, gestos por script sobre a tela real; sintetico
+  criado e DESFEITO — 0 dividendos, 0 contas e 0 lancamentos sinteticos; plano 249, ordem do Teste de volta a 0,1,2): CRIAR —
+  `fn_dividendo_criar` 200, a linha apareceu, dialogo de 226px; NOME REPETIDO (" sint dvd prova ") — 400, a frase "Já existe um
+  dividendo ativo com este nome. Nada foi gravado." sob o botao, sem corte, 0 toasts, dialogo com os MESMOS 226px, o digitado
+  ficou, cabecalho da lista 33,5px antes e depois; SEM F5 — em Lançamentos Financeiros › Novo, o seletor de Subcentro ofereceu
+  "Dividendos SINT DVD Prova" (busca "divid": os 4 nomes do Teste); RENOMEAR com 1 lancamento (sintetico, criado por SQL com a
+  chave da conta) — toast "1 lançamento(s) receberam o nome novo", e no banco o lancamento ficou com o subcentro novo, a MESMA
+  chave e `editado_manual` nulo; INATIVAR com lancamento — a simulacao primeiro, confirmacao 384 x 212 com "1 lançamento usa este
+  dividendo…", "Voltar" = 0 chamadas e a chave segue ligada, "Inativar" grava e a conta fica ativa; REATIVAR pela chave
+  "Inativos"; REORDENAR arrastando — UMA chamada, e a ordem nova veio do banco depois de recarregar a pagina; INATIVAR SEM
+  lancamento — simulacao + gravacao, sem pergunta, `conta_acao` 'inativada'.
+  13 + 3 testes; 12 mutacoes de tela mortas e 2 equivalentes (o `trim` do nome no renomear — o banco apara; o `'recusa' in data`
+  — sem ele a peca torta cai na mesma frase); a do passo 4 (uma escrita num arquivo de `src`) morta.
+  ⚠ NAO PROVADO NO NAVEGADOR: LANCAR PELA TELA com o subcentro novo e conferir a chave gravada (o Novo lancamento nao foi salvo —
+    o Teste nao tem fornecedor nem conta; a chave foi conferida num lancamento criado por SQL) · a aba em PRIMEIRO plano (os
+    gestos foram por script; o arrasto por eventos de ponteiro sinteticos — o arrasto do mouse pela extensao nao pegou) · a
+    recusa na lista (reativar com ativo de mesmo nome) e a recusa dentro da confirmacao, so' por teste · D1 (nome de conta
+    geral), D2 e D5 na tela, so' no teste SQL · perfil nao admin · a tela pelo `CadastrosTab` / `Index` (nao sao rota) · a
+    largura de 1.126 (foi 1.127).
+  ⚠ DIVIDAS: o recado da lista CORTA em uma linha (inteiro no `title`); a frase mais longa pede mais que o vao entre o titulo e
+    os botoes em tela estreita — nao medido com a frase na tela · o sucesso segue em toast · a confirmacao de inativar tem
+    altura pelo conteudo (212px com a frase de uma contagem; nao fixa) · o `audit_log` do Teste ficou com as linhas do
+    lancamento sintetico da prova (auditoria nao se apaga) · `usePlanejamentoFinanceiro.ts` le^ o cadastro por conta propria
+    (declarado no teste; so' leitura).
+- ⚠ O CADASTRO DE DIVIDENDOS TEM UM ESCRITOR SO', NO BANCO, E ELE MEXE NA CONTA DO PLANO JUNTO (DIVIDENDO-ESCRITOR-UNICO-01 passo 2, Gabriel
+  09/10/2026, so' banco; migrations 20261027195300 — internas, ⚠ registrada como 20261009185837, ledger = arquivo, md5 833042b2… — e
+  20261027195400 — publicas, indice, trava e backfill, ⚠ registrada como 20261009190211, ledger = arquivo, md5 dee28cc9…). FECHA a
+  divida CONC-DIVIDENDOS-ESCRITOR-UNICO-01 no banco (a tela troca no passo 3). Regra do Gabriel: o cadastro do cliente E' a
+  aprovacao — todo nome ATIVO tem conta ativa no plano, com o mesmo nome ("Dividendos <nome>"); cada cliente tem os seus;
+  proibido reclassificar lancamento e proibido ler a descricao para decidir.
+  · CINCO FUNCOES PUBLICAS, cada uma UMA transacao (cadastro + conta), todas com `p_simular` e `tenant_ok` (42501 "sem acesso a
+    este registro"; id inexistente e sem usuario tambem): `fn_dividendo_criar(cliente, nome)`, `fn_dividendo_renomear(id, nome)`,
+    `fn_dividendo_inativar(id)`, `fn_dividendo_reativar(id)`, `fn_dividendo_reordenar(cliente, ids[])`. GRANT a `authenticated`; as
+    internas (`_fn_dividendo_*`) fechadas. Nao ha' funcao de EXCLUIR (a tela nao exclui).
+  · RETORNO, igual na simulacao e na gravacao: `{antes, depois, recusa}`, com `antes`/`depois` = `{dividendo {id, nome, ativo,
+    ordem_exibicao}, conta {id, subcentro, ativo, geral, lancamentos_vivos} | null}` (no reordenar, a lista de ids em ordem);
+    `lancamentos_tocados` no renomear; `conta_acao` ('inativada' | 'mantida' | 'geral' | 'sem_conta') e `lancamentos_que_seguram`
+    no inativar. SIMULACAO = GRAVACAO: executa o mesmo caminho e desfaz (SQLSTATE 'DVSIM'). RECUSA: na simulacao volta em
+    `recusa {motivo, frase}`; na gravacao e' P0001 com a frase + " Nada foi gravado.".
+  · D1 — nome igual a conta GERAL ativa de macro Dividendos: o dividendo USA a geral, nao nasce conta do cliente (as 15 gerais nao
+    sao tocadas). D2 — nome igual a conta ativa FORA do macro Dividendos (geral ou do cliente): recusa `nome_de_outra_conta`,
+    dizendo qual. D3 — nome unico por cliente ENTRE OS ATIVOS, sem caixa e sem espaco nas pontas (`nome_repetido`; vale no criar,
+    no renomear e no REATIVAR), e no banco pelo indice `uq_fin_dividendos_cliente_nome_ativo`. D4 — reordenar escreve SO'
+    `ordem_exibicao` do cadastro (lista que nao e' exatamente a do cliente: `lista_diferente`). D5 — renomear dividendo que usa
+    conta GERAL: recusa `usa_conta_geral` ("Este dividendo usa uma conta geral do plano e ainda não pode ser renomeado."); renomear
+    PARA o nome de uma geral: `nome_de_conta_geral`. As funcoes recusam ANTES de chegar a' trava do plano (passo 1), que e' a
+    segunda barreira (provado por mutacao: sem a recusa propria, a trava segura e a frase vira a generica).
+  · CRIAR: a conta nasce no molde (2-Saídas / Dividendos / Dividendos / Dividendos / administrativo / `compoe_dre` false), ordem =
+    a maior das contas de dividendos do cliente (piso 17150) + 10; conta INATIVA do cliente com o mesmo nome e' REATIVADA (mesmo
+    id), nao duplicada. RENOMEAR: UPDATE do subcentro da MESMA conta — quem leva o nome aos lancamentos e' o gatilho de sempre
+    (`trg_propagar_plano_para_lancamentos`, sob `app.propagando_plano`: nao marca editado manual); no lancamento so' o subcentro
+    (e `updated_at`) muda, preso por md5 da linha. INATIVAR: o cadastro sempre inativa; a conta do cliente so' se NENHUM lancamento
+    vivo a usa (senao fica ativa, e a previa diz quantos seguram); a geral nunca. REATIVAR: reativa a conta.
+  · TRAVA NO DONO: `trg_guard_dividendo_escritor` (BEFORE INSERT OR UPDATE OR DELETE em `financeiro_dividendos`) recusa escrita
+    fora das cinco funcoes (chave `app.dividendo_escritor`, ligada so' em volta de cada comando): "O cadastro de dividendos só é
+    gravado pela tela de Dividendos, que ajusta o plano de contas junto. Nada foi gravado." Custo, A/B em amostra sintetica (3
+    series de 200 inserts de cada lado): ~0,020 ms por linha com a trava x ~0,016 sem.
+    ⚠ ENTRE ESTA MIGRATION E O PASSO 3 NO AR, a tela de Dividendos publicada recebe essa recusa (criar e renomear em toast;
+      inativar e reordenar sem aviso nenhum — ela nao lia o erro).
+  · BACKFILL: os 4 dividendos ativos sem conta (2 no Teste, 2 no RRCC; por id do cadastro) ganharam conta do cliente. Plano 245 ->
+    249 linhas; 0 dividendos ativos sem conta ativa em todos os clientes. Nenhum lancamento tocado.
+  · PIOR CASO DO RENOMEAR HOJE (lancamentos na maior conta de dividendos do cliente; 0 conciliados em todos): Santa Rita 194, NJ
+    190, Vera 187, Raul 23, Agnaldo 17, Teste 5. ⚠ NAO MEDIDO o tempo num cliente real (nao renomeei conta real em ensaio: a regra de 09/10
+    proibe em massa, e uma so' ja' propaga a lancamentos reais); `financeiro_lancamentos_v2.plano_conta_id` NAO TEM INDICE — cada renomear varre a tabela (no teste
+    sintetico, dentro do teto de 10 s com folga).
+  md5 (prosrc): `_fn_dividendo_executar` ba2a3353…, `_fn_dividendo_garantir_conta` e01a3872…, `_fn_dividendo_rodar` 2d791e15…,
+  `_fn_dividendo_conta_atual` f49684db…, `_fn_dividendo_foto` 67d60bb4…, `guard_dividendo_escritor` 8ee17276….
+  Testes (terminam em RAISE OK, no cliente Teste + um segundo cliente criado na transacao): `supabase/tests/
+  dividendo_escritor_unico_01_test.sql` (E1–E8: os gestos e D1–D5; 16 mutacoes mortas) e `dividendo_escritor_unico_01_trava_test.sql`
+  (E9–E12: ordem, trava de escrita direta, tenant — gestor real de outro cliente recusado nas cinco, e no PROPRIO cliente so' em
+  simulacao, no papel `authenticated` —, interna fechada, e cada cliente com a sua conta; 7 mutacoes mortas).
+  `seg_tenant_varredura_01c_test.sql` OK.
+  ⚠ TESTE SQL COMPARA COM `is distinct from`, NUNCA `<>`: duas mutacoes SOBREVIVERAM na primeira rodada porque `recusa->>'motivo'
+    <> 'x'` com a recusa AUSENTE da' NULL e o `if` nao dispara. Vale para todo teste novo.
+  ⚠ "Invalid or expired requestState" NAO E' (SO') TAMANHO: voltou numa chamada de 4 KB e passou na repeticao identica; cargas de
+    12 KB passaram. As duas migrations e os dois arquivos de teste foram divididos pela hipotese do tamanho (o cabecalho da
+    20261027195300 a afirma; nao foi provada).
+  ⚠ DIVIDAS: DIVIDENDO-RENOMEAR-GLOBAL-01 (D5: dividendo que usa conta geral nao se renomeia; pede decidir o que acontece com a
+    geral e com os lancamentos dos outros clientes nela) · conta do cliente que ficou ATIVA por ter lancamentos de um dividendo
+    INATIVO bloqueia outro dividendo de RENOMEAR para aquele nome (`nome_em_uso_no_plano`; criar com o nome reusa a conta) — sem
+    teste proprio · o renomear nao tem guarda propria de mes fechado nem de conciliado (so' o nome muda; 0 conciliados hoje nas
+    contas de dividendos) · a excecao "texto fora do plano, exceto Dividendos" de `resolve_classificacao_from_plano` continua no
+    gatilho (nao foi tocada) · o gesto contrario do backfill esta' escrito no cabecalho da migration, nao ensaiado.
 - ⚠ A UNICIDADE DO PLANO E' POR CLIENTE, E O PAR CLIENTE + GLOBAL E' RECUSADO POR UMA TRAVA (DIVIDENDO-ESCRITOR-UNICO-01 passo 1, Gabriel
   09/10/2026, so' banco; migration 20261027195200, ⚠ registrada como 20261009183912; ledger = arquivo, md5 d1770419…). REVOGA o
   "A UNICA UNICIDADE DE `financeiro_plano_contas` E' `uq_plano_contas_global` … SEM O CLIENTE" do CONC-DIVIDENDOS-PLANO-01.
@@ -2686,7 +2793,8 @@ docs/historico/frentes-ate-2026-09-29.md.)
     passaram a filtrar tambem `macro_custo !== DIVIDENDO_MACRO` (lista identica a' de antes).
     Medido no navegador pelo carregador real, com a sessao do admin, so' leitura: Vera 6 nomes, 6 com chave, 6 oferecidos na busca
     "divi", 0 em dobro; NJ 10 de 10; Teste 1 de 3 (os outros dois nao tem conta).
-  ⚠ DIVIDA ABERTA CONC-DIVIDENDOS-ESCRITOR-UNICO-01 (o texto seguinte): criar, renomear e inativar dividendo no cadastro
+  ⚠ [NO BANCO, FECHADA no DIVIDENDO-ESCRITOR-UNICO-01 passo 2 — ver a regra "O CADASTRO DE DIVIDENDOS TEM UM ESCRITOR SO'"; o texto
+    abaixo e' o registro de antes.] DIVIDA CONC-DIVIDENDOS-ESCRITOR-UNICO-01: criar, renomear e inativar dividendo no cadastro
     (`DividendosTab.tsx` grava direto em `financeiro_dividendos`) NAO cria, renomeia nem inativa a conta do plano. ENQUANTO ISSO
     NAO ENTRA, DIVIDENDO NOVO CADASTRADO DEPOIS DE 09/10/2026 NASCE SEM CONTA: aparece no modal como entrada sintetica, o
     lancamento fica sem `plano_conta_id` (o gatilho ainda aceita o texto de macro Dividendos) e volta a contar como "sem
