@@ -45,7 +45,7 @@ import { aplicarPlanoNaView, type LinhaViewDoc } from '@/lib/financeiro/listaPag
 import { montarPlanoBaseV2 } from '@/lib/financeiro/filtrosBaseV2';
 import { paginarTudo } from '@/lib/financeiro/paginarTudo';
 import {
-  contaSemExtrato, estimarSaldoEmCaixa, grupoDoTipoConta, serieDoSaldoPassado,
+  contaSemExtrato, estimarSaldoEmCaixa, grupoDoTipoConta, serieDoSaldoPassado, realizadoDoCaixa,
   type ContaEmCaixa, type SaldoEmCaixa, type SeriePassado,
 } from '@/lib/financeiro/saldoEmCaixa';
 import { movimentoNaConta, type LinhaDaPosicao } from '@/hooks/useExtratoDaConta';
@@ -281,6 +281,8 @@ interface Grupo {
   receber: number;
   /** O saldo depois do grupo; `undefined` = o grupo não tem saldo (anteriores, sem vencimento); `null` = não há saldo em caixa. */
   saldo: number | null | undefined;
+  /** dia antes de hoje: os totais e o saldo são os REALIZADOS (do dono do caixa) */
+  passado?: boolean;
 }
 
 export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento }: {
@@ -644,9 +646,18 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
     () => recortarCpr(linhas, { periodo, hoje: hojeIso, incluirVencidos, conta: contaSel, ancoras, estimadas }),
     [linhas, periodo, hojeIso, incluirVencidos, contaSel, ancoras, estimadas]);
   /* A SÉRIE DO SALDO — do dono, a partir do MESMO número do cartão Caixa. A caixa "Incluir vencidos" não entra nela (D3). */
+  /* CPR-PDF-ACABAMENTO-01 — o REALIZADO do período (Caixa inicial + o que entrou e saiu por dia, até hoje): do MESMO dono do cartão
+     Caixa, sobre a MESMA entrada dele e as mesmas contas (uma, ou todas). Nulo quando o dono não responde na véspera do período. */
+  const realizado = useMemo(() => {
+    if (!caixaTodas) return null;
+    const args = caixaDeUmaConta
+      ? { ...caixaTodas.argumentos, contas: caixaTodas.argumentos.contas.filter((c) => c.id === contaSel) }
+      : caixaTodas.argumentos;
+    return realizadoDoCaixa(args, periodo.de, periodo.ate);
+  }, [caixaTodas, caixaDeUmaConta, contaSel, periodo.de, periodo.ate]);
   const serie = useMemo(
-    () => serieDoSaldoCpr(recorte, caixa && caixa.ancoradas > 0 ? caixa.total : null),
-    [recorte, caixa]);
+    () => serieDoSaldoCpr(recorte, caixa && caixa.ancoradas > 0 ? caixa.total : null, realizado),
+    [recorte, caixa, realizado]);
   /* o resumo por conta (opções do seletor e a faixa): do MESMO dono, sobre os MESMOS dados, sempre de TODAS as contas */
   const recorteDeTodas = useMemo(
     () => (contaSel == null ? recorte : recortarCpr(linhas, { periodo, hoje: hojeIso, incluirVencidos, ancoras, estimadas })),
@@ -730,16 +741,23 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
     }
     /* TODO DIA DA SÉRIE TEM LINHA DE FECHAMENTO, mesmo sem conta listada no segmento: é ela que faz a coluna Saldo fechar
        (anterior − a pagar + a receber). Dia só com contas PAGAS repete o saldo anterior: paga aparece e não soma. */
-    const passos = new Map(serie.dias.map((d) => [d.data, d]));
-    let corrente = (serie.entreHojeEDe ?? serie.partida).saldo;
+    /* CPR-PDF-ACABAMENTO-01 — os dias ANTES de hoje são os REALIZADOS do dono do caixa (o que saiu e o que entrou no dia, pela
+       data do pagamento, e o saldo no fim dele), a partir do Caixa inicial; de hoje em diante, os projetados de sempre. A dobra
+       é hoje: ao chegar nela o saldo corrente passa a ser o de partida (caixa − vencidos que contam). */
+    const passos = new Map([...serie.realizados, ...serie.dias].map((d) => [d.data, d]));
+    const partidaDoFuturo = (serie.entreHojeEDe ?? serie.partida).saldo;
+    const temRealizado = serie.inicial != null && periodo.de <= hojeIso;
+    let corrente = temRealizado && serie.inicial ? serie.inicial.saldo : partidaDoFuturo;
+    let dobrou = !temRealizado;
     const chaves = Array.from(new Set([...mapa.keys(), ...passos.keys()])).sort();
     const dias: Grupo[] = chaves.map((chave) => {
       const faixa = faixaDaData(chave, hoje);
+      if (!dobrou && chave >= hojeIso) { dobrou = true; corrente = partidaDoFuturo; }
       const p = passos.get(chave);
       if (p) corrente = p.saldo;
       return {
-        chave, tipo: 'dia', titulo: faixa.dia, quando: faixa.quando, linhas: mapa.get(chave) ?? [],
-        pagar: p?.pagar.valor ?? 0, receber: p?.receber.valor ?? 0, saldo: corrente,
+        chave, tipo: 'dia', titulo: faixa.dia, quando: chave < hojeIso ? 'realizado' : faixa.quando, linhas: mapa.get(chave) ?? [],
+        pagar: p?.pagar.valor ?? 0, receber: p?.receber.valor ?? 0, saldo: corrente, passado: chave < hojeIso,
       };
     });
     const topo: Grupo[] = [];
@@ -750,7 +768,9 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
         chave: 'vencidos-contam', tipo: 'vencidos_contam', quando: '',
         titulo: `Vencidos · ${contas(nContam)} · contam no saldo`,
         dica: `vencimento posterior à última conciliação da conta: saem (ou entram) hoje${diasDaMaisAntiga != null ? ` · mais antiga do cartão Vencidos há ${diasDaMaisAntiga} dias` : ''}`,
-        linhas: doSeg(contam.linhas), pagar: contam.pagar.valor, receber: contam.receber.valor, saldo: serie.partida.saldo,
+        linhas: doSeg(contam.linhas), pagar: contam.pagar.valor, receber: contam.receber.valor,
+        /* no período encerrado os vencidos saem HOJE, depois do período: o grupo não tem saldo */
+        saldo: serie.encerrado ? undefined : serie.partida.saldo,
       });
       const nAnt = anteriores.pagar.contas + anteriores.receber.contas;
       if (nAnt > 0) {
@@ -778,7 +798,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
       linhas: doSeg(sv.linhas), pagar: sv.pagar.valor, receber: sv.receber.valor, saldo: undefined,
     }];
     return [...topo, ...dias, ...fim];
-  }, [doPeriodoNaLista, recorte, serie, segmento, incluirVencidos, contaSel, ancoras, periodo.de, hoje]);
+  }, [doPeriodoNaLista, recorte, serie, segmento, incluirVencidos, contaSel, ancoras, periodo.de, hoje, hojeIso]);
 
   // ── Abrir o lançamento ─────────────────────────────────────────────────────
   /**
@@ -853,10 +873,12 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
   };
   const alternarConta = (conta: string) => setContaSel((atual) => (atual === conta ? null : conta));
 
-  const motivoSemSaldo = caixaDeUmaConta
-    ? `${nomeConta(contaSel)} não entra no saldo em caixa (cartão ou conta sem saldo conferido)`
-    : 'sem saldo em caixa conferido';
-  const tituloMenorSaldo = serie.menor ? 'menor saldo previsto da conta no período' : motivoSemSaldo;
+  const motivoSemSaldo = serie.encerrado && serie.hoje != null
+    ? 'período encerrado anterior aos realizados carregados: sem saldo nessa data'
+    : caixaDeUmaConta
+      ? `${nomeConta(contaSel)} não entra no saldo em caixa (cartão ou conta sem saldo conferido)`
+      : 'sem saldo em caixa conferido';
+  const tituloMenorSaldo = serie.menor ? (serie.encerrado ? 'menor saldo realizado da conta no período' : 'menor saldo da conta no período (realizado até hoje, previsto daí em diante)') : motivoSemSaldo;
   const codigoDaSafra = (id: string | null): string => (id && fin.safras.find((x) => x.id === id)?.codigo) || '—';
   const codigoDaFazenda = (id: string | null): string => (id && fazendas.find((x) => x.id === id)?.codigo) || '—';
 
@@ -942,18 +964,24 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
      desenho pronto (`lerGraficoDoDom`) — o mesmo componente, as mesmas props, a mesma série do dono. Nada é recalculado para o PDF. */
   const [graficoParaPdf, setGraficoParaPdf] = useState(false);
   const refGraficoPdf = useRef<HTMLDivElement | null>(null);
+  /* o passado do gráfico é o MESMO realizado que a lista mostra (do dono do caixa, do início do período até hoje); sem ele (o dono
+     não responde na véspera do período), a série de sempre do cartão */
+  const passadoDoGrafico = realizado
+    ? realizado.dias.map((d) => ({ data: d.data, saldo: d.saldo, conciliado: d.conciliado, entradas: d.entradas, saidas: -d.saidas }))
+    : (caixa?.passado.pontos ?? []);
   const graficoDoFluxo = (paraFolha: boolean) => (
     <CprFluxoPrevisto
       folha={paraFolha}
       linhas={doFluxo}
-      saldoInicial={serie.hoje}
+      saldoInicial={serie.encerrado ? serie.fim : serie.hoje}
+      encerradoEm={serie.encerrado ? periodo.ate : null}
       barras={segmento}
       vencidosForaDoSaldo={recorte.vencidos.anteriores.linhas.length}
       caveat={rotuloCaixa}
       granularidade="dia"
       inicio={periodo.de}
       hoje={isoLocal(hoje)}
-      passado={caixa?.passado.pontos ?? []}
+      passado={passadoDoGrafico}
       conciliadoAte={caixa?.passado.boundary ?? null}
     />
   );
@@ -997,8 +1025,10 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
         segmento, incluirVencidos, emitidoEm: format(new Date(), 'dd/MM/yyyy HH:mm'),
         serie, grupos,
         cartoes: {
-          vencidosContamPagar: recorte.vencidos.contam.pagar, vencidosContamReceber: recorte.vencidos.contam.receber,
+          vencidosContamPagar: recorte.cartoes.vencidosContam.pagar, vencidosContamReceber: recorte.cartoes.vencidosContam.receber,
           pagarNoPeriodo: recorte.cartoes.periodo.pagar, receberNoPeriodo: recorte.cartoes.periodo.receber,
+          porStatus: recorte.cartoes.porStatus, transferencias: recorte.cartoes.transferencias,
+          hoje: hojeIso, conciliadoAte: caixa?.ancoraMaisAtrasada ?? null,
         },
         rodape: { pagar: recorte.total.pagar.valor, receber: recorte.total.receber.valor, contas: recorte.total.ambos.contas },
         semanas: resumoPorSemanaCpr(serie, periodo),
@@ -1360,18 +1390,31 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
 
               {/* SALDO HOJE — fixo sob o cabeçalho; é o cartão Caixa. Com "Incluir vencidos" DESLIGADA os subgrupos somem e a
                   linha mostra o saldo "após vencidos" (a partida da série): o saldo NÃO muda com a caixa (D3). */}
-              <Faixa
-                testId="cpr-saldo-hoje" regua={regua}
-                className="sticky top-[22px] z-20 h-[20px] border-b bg-card text-foreground"
-                titulo={`Saldo hoje · ${caixaDeUmaConta ? nomeConta(contaSel) : 'todas as contas'}${incluirVencidos ? '' : ' · após vencidos'}`}
-                dica={serie.hoje == null ? motivoSemSaldo
-                  : incluirVencidos ? 'o saldo em caixa de hoje — o mesmo número do cartão Caixa'
-                  : `Caixa ${moedaComSinal(serie.hoje)} − vencidos a pagar que contam ${formatMoeda(serie.partida.pagar.valor)} + vencidos a receber que contam ${formatMoeda(serie.partida.receber.valor)}`}
-                pagar={incluirVencidos ? undefined : serie.partida.pagar.valor}
-                receber={incluirVencidos ? undefined : serie.partida.receber.valor}
-                saldo={incluirVencidos ? serie.hoje : serie.partida.saldo}
-                motivoSemSaldo={motivoSemSaldo}
-              />
+              {serie.encerrado ? (
+                /* PERÍODO ENCERRADO: a linha fixa é o CAIXA INICIAL (o saldo na véspera do período) — nada aqui parte do caixa de hoje */
+                <Faixa
+                  testId="cpr-saldo-hoje" regua={regua}
+                  className="sticky top-[22px] z-20 h-[20px] border-b bg-card text-foreground"
+                  titulo={`Caixa inicial${serie.inicial ? ` · ${format(parseISO(serie.inicial.data), 'dd/MM/yyyy')}` : ''} · ${caixaDeUmaConta ? nomeConta(contaSel) : 'todas as contas'}`}
+                  dica={serie.inicial ? 'o saldo no fim do dia anterior ao período; os dias abaixo são o realizado' : motivoSemSaldo}
+                  pagar={undefined} receber={undefined}
+                  saldo={serie.inicial ? serie.inicial.saldo : null}
+                  motivoSemSaldo={motivoSemSaldo}
+                />
+              ) : (
+                <Faixa
+                  testId="cpr-saldo-hoje" regua={regua}
+                  className="sticky top-[22px] z-20 h-[20px] border-b bg-card text-foreground"
+                  titulo={`Saldo hoje · ${caixaDeUmaConta ? nomeConta(contaSel) : 'todas as contas'}${incluirVencidos ? '' : ' · após vencidos'}`}
+                  dica={serie.hoje == null ? motivoSemSaldo
+                    : incluirVencidos ? 'o saldo em caixa de hoje — o mesmo número do cartão Caixa'
+                    : `Caixa ${moedaComSinal(serie.hoje)} − vencidos a pagar que contam ${formatMoeda(serie.partida.pagar.valor)} + vencidos a receber que contam ${formatMoeda(serie.partida.receber.valor)}`}
+                  pagar={incluirVencidos ? undefined : serie.partida.pagar.valor}
+                  receber={incluirVencidos ? undefined : serie.partida.receber.valor}
+                  saldo={incluirVencidos ? serie.hoje : serie.partida.saldo}
+                  motivoSemSaldo={motivoSemSaldo}
+                />
+              )}
 
               {grupos.map((g) => (
                 <div key={g.chave} data-testid={`cpr-grupo-${g.tipo}`} data-total={Math.round((g.receber - g.pagar) * 100) / 100}
@@ -1418,7 +1461,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
                     const estimada = !paga && contaEstimadaCpr(l, estimadas);
                     const celValor = (
                       <span data-valor-da-linha className={cn('whitespace-nowrap text-right tabular-nums', estimada ? COR_ESTIMADO : receber ? COR_SINAL.pos : COR_SINAL.neg, (paga || foraDoCaixa) && 'opacity-50')}
-                        title={paga ? 'já paga — não entra nos totais nem no saldo' : foraDoCaixa ? 'ponta em conta que não entra no saldo em caixa — não soma; a outra ponta é o que mexe no saldo' : undefined}>
+                        title={paga ? 'já paga — está no realizado do dia do pagamento, não na projeção' : foraDoCaixa ? 'ponta em conta que não entra no saldo em caixa — não soma; a outra ponta é o que mexe no saldo' : undefined}>
                         {formatMoeda(valor)}
                       </span>
                     );

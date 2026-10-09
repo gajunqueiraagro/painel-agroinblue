@@ -8,7 +8,8 @@
  */
 import { nomeEParcela, type ParcelaDoContrato } from '@/lib/financiamentos/nomeDaParcela';
 import { formatMoeda } from '@/lib/calculos/formatters';
-import type { PeriodoCpr, SerieDoSaldoCpr, SemanaCpr, SaldoDaContaCpr, LadoCpr } from '@/lib/financeiro/cprRecorte';
+import { diasEntre, type PeriodoCpr, type SerieDoSaldoCpr, type SemanaCpr, type SaldoDaContaCpr, type LadoCpr } from '@/lib/financeiro/cprRecorte';
+import { STATUS_FINANCEIRO_ORDEM, STATUS_FINANCEIRO_LABEL } from '@/lib/financeiro/statusFinanceiro';
 import type { GraficoDaFolha } from '@/lib/pdf/cpr/graficoDoDom';
 
 export type TipoDeValor = 'pagar' | 'receber' | 'saldo';
@@ -57,7 +58,8 @@ export interface ModeloCpr {
   arquivo: string;
   cabecalho: { clienteNome: string; fazenda?: string; contaNome: string; periodo: string; linha2: string };
   /** o bloco de números: rótulo em cima, valor embaixo */
-  numeros: { rotulo: string; valor: string; detalhe?: string; tom: 'neg' | 'pos' | 'neutro' }[];
+  /** `detalhes`: as linhas pequenas sob o valor, uma por linha (data, status em aberto, transferências, conciliação) */
+  numeros: { rotulo: string; valor: string; detalhes: string[]; tom: 'neg' | 'pos' | 'neutro' }[];
   /** o gráfico da aba Fluxo, lido do que a tela desenhou (`graficoDoDom`); nulo = a folha sai sem ele */
   grafico: GraficoDaFolha | null;
   comColunaConta: boolean;
@@ -79,6 +81,8 @@ export interface GrupoDaTela<L> {
   tipo: 'vencidos_contam' | 'vencidos_anteriores' | 'entre' | 'dia' | 'sem_vencimento';
   titulo: string; quando: string; linhas: L[];
   pagar: number; receber: number; saldo: number | null | undefined;
+  /** dia ANTES de hoje (realizado): na folha vem logo depois do Caixa inicial, antes do "Saldo hoje" */
+  passado?: boolean;
 }
 export interface LinhaDaTela {
   data_competencia?: string | null; data_vencimento?: string | null; data_pagamento?: string | null;
@@ -88,7 +92,14 @@ export interface EntradaDoModelo<L extends LinhaDaTela> {
   clienteNome: string; fazendaNome?: string; contaNome: string; todasAsContas: boolean;
   periodo: PeriodoCpr; segmento: 'pagar' | 'receber' | 'ambos'; incluirVencidos: boolean; emitidoEm: string;
   serie: SerieDoSaldoCpr; grupos: GrupoDaTela<L>[];
-  cartoes: { vencidosContamPagar: LadoCpr; vencidosContamReceber: LadoCpr; pagarNoPeriodo: LadoCpr; receberNoPeriodo: LadoCpr };
+  cartoes: {
+    vencidosContamPagar: LadoCpr; vencidosContamReceber: LadoCpr; pagarNoPeriodo: LadoCpr; receberNoPeriodo: LadoCpr;
+    /** as contas em aberto do período por status e as pontas de transferência (do dono do recorte) — a linha pequena dos cartões */
+    porStatus: { pagar: Record<string, number>; receber: Record<string, number> };
+    transferencias: { pagar: LadoCpr; receber: LadoCpr };
+    /** hoje e a âncora da conciliação (a do cartão Caixa: a da conta, ou a mais antiga entre as contas do caixa) */
+    hoje: string; conciliadoAte: string | null;
+  };
   /** o rodapé da tela: totais a pagar e a receber da lista e a contagem */
   rodape: { pagar: number; receber: number; contas: number };
   semanas: SemanaCpr[];
@@ -131,48 +142,83 @@ export function contaDaFolha<L extends LinhaDaTela>(l: L, de: EntradaDoModelo<L>
   };
 }
 
+const semCifrao = (v: number): string => formatMoeda(v).replace(/^R\$\s*/, '');
+/**
+ * A LINHA PEQUENA dos cartões "A pagar / A receber no período": o valor por status em aberto, na ordem da casa (Previsto ·
+ * Programado · Agendado), sem o status zerado, e por último, à parte, as pontas de transferência. Uma informação por linha.
+ * Os números chegam do dono do recorte; aqui só viram texto.
+ */
+export function linhasPorStatus(porStatus: Record<string, number>, transferencias: number): string[] {
+  const linhas: string[] = [];
+  for (const st of STATUS_FINANCEIRO_ORDEM) {
+    const v = porStatus[st] ?? 0;
+    if (st !== 'realizado' && v > 0) linhas.push(`${STATUS_FINANCEIRO_LABEL[st]} ${semCifrao(v)}`);
+  }
+  if (transferencias > 0) linhas.push(`Transf. ${semCifrao(transferencias)}`);
+  return linhas;
+}
+/** "conciliado até dd/mm" quando a âncora é hoje; "conciliado até dd/mm" + "N dias a conferir" quando é anterior; sem âncora, nada. */
+export function situacaoDaConciliacao(conciliadoAte: string | null, hoje: string): string[] {
+  if (!conciliadoAte) return ['sem saldo conferido'];
+  const n = diasEntre(conciliadoAte.slice(0, 10), hoje);
+  return n <= 0 ? [`conciliado até ${dm(conciliadoAte)}`] : [`conciliado até ${dm(conciliadoAte)}`, `${n} ${n === 1 ? 'dia' : 'dias'} a conferir`];
+}
+
 export function montarModeloCpr<L extends LinhaDaTela>(e: EntradaDoModelo<L>): ModeloCpr {
   const s = e.serie;
   const saldoComData = (v: number | null) => (v == null ? '—' : `${v < 0 ? '-' : ''}${formatMoeda(Math.abs(v))}`);
   const tomDe = (v: number | null): 'neg' | 'pos' | 'neutro' => (v == null ? 'neutro' : v < 0 ? 'neg' : 'pos');
+  const c = e.cartoes;
   const numeros: ModeloCpr['numeros'] = [
-    e.incluirVencidos
-      ? { rotulo: 'Caixa hoje', valor: saldoComData(s.hoje), tom: 'neutro' }
-      : { rotulo: 'Saldo de partida', valor: saldoComData(s.partida.saldo), detalhe: `após vencidos · caixa ${saldoComData(s.hoje)}`, tom: tomDe(s.partida.saldo) },
-    { rotulo: 'Vencidos que contam', valor: formatMoeda(e.cartoes.vencidosContamPagar.valor),
-      detalhe: `${contas(e.cartoes.vencidosContamPagar.contas)} a pagar${e.cartoes.vencidosContamReceber.valor > 0 ? ` · a receber ${formatMoeda(e.cartoes.vencidosContamReceber.valor)}` : ''}`,
-      tom: e.cartoes.vencidosContamPagar.valor > 0 ? 'neg' : 'neutro' },
-    { rotulo: 'A pagar no período', valor: formatMoeda(e.cartoes.pagarNoPeriodo.valor), detalhe: contas(e.cartoes.pagarNoPeriodo.contas), tom: 'neg' },
-    { rotulo: 'A receber no período', valor: formatMoeda(e.cartoes.receberNoPeriodo.valor), detalhe: contas(e.cartoes.receberNoPeriodo.contas), tom: e.cartoes.receberNoPeriodo.valor > 0 ? 'pos' : 'neutro' },
-    { rotulo: 'Mínimo', valor: s.menor ? saldoComData(s.menor.valor) : '—', detalhe: s.menor ? (s.menor.data ? `em ${dm(s.menor.data)}` : 'hoje') : undefined, tom: tomDe(s.menor?.valor ?? null) },
-    { rotulo: 'Saldo no fim', valor: saldoComData(s.fim), detalhe: `em ${dma(e.periodo.ate)}`, tom: tomDe(s.fim) },
+    { rotulo: 'Caixa inicial', valor: saldoComData(s.inicial?.saldo ?? null), detalhes: [s.inicial ? `em ${dma(s.inicial.data)}` : 'sem saldo nessa data'], tom: s.inicial ? tomDe(s.inicial.saldo) : 'neutro' },
+    { rotulo: 'Vencidos que contam', valor: formatMoeda(c.vencidosContamPagar.valor),
+      detalhes: [`${contas(c.vencidosContamPagar.contas)} a pagar${c.vencidosContamReceber.valor > 0 ? ` · a receber ${formatMoeda(c.vencidosContamReceber.valor)}` : ''}`],
+      tom: c.vencidosContamPagar.valor > 0 ? 'neg' : 'neutro' },
+    { rotulo: 'A pagar no período', valor: formatMoeda(c.pagarNoPeriodo.valor), detalhes: linhasPorStatus(c.porStatus.pagar, c.transferencias.pagar.valor), tom: 'neg' },
+    { rotulo: 'A receber no período', valor: formatMoeda(c.receberNoPeriodo.valor), detalhes: linhasPorStatus(c.porStatus.receber, c.transferencias.receber.valor), tom: c.receberNoPeriodo.valor > 0 ? 'pos' : 'neutro' },
+    { rotulo: 'Mínimo', valor: s.menor ? saldoComData(s.menor.valor) : '—', detalhes: s.menor ? [s.menor.data ? `em ${dm(s.menor.data)}` : 'hoje'] : [], tom: tomDe(s.menor?.valor ?? null) },
+    { rotulo: 'Saldo no fim', valor: saldoComData(s.fim), detalhes: [`em ${dma(e.periodo.ate)}`], tom: tomDe(s.fim) },
+    { rotulo: 'Caixa hoje', valor: saldoComData(s.hoje), detalhes: [dma(c.hoje), ...situacaoDaConciliacao(c.conciliadoAte, c.hoje)], tom: 'neutro' },
   ];
 
-  const faixas: FaixaDaFolha[] = [{
+  const quem = e.todasAsContas ? 'todas as contas' : e.contaNome;
+  const faixaDeHoje: FaixaDaFolha = {
     tipo: 'saldo_hoje',
-    titulo: `Saldo hoje · ${e.todasAsContas ? 'todas as contas' : e.contaNome}${e.incluirVencidos ? '' : ' · após vencidos'}`,
-    pagar: e.incluirVencidos ? null : celulaDeValor('pagar', s.partida.pagar.valor),
-    receber: e.incluirVencidos ? null : celulaDeValor('receber', s.partida.receber.valor),
+    titulo: `Saldo hoje · ${quem}${e.incluirVencidos ? '' : ' · após vencidos'}`,
+    /* com os vencidos ligados, a linha de hoje mostra o que JÁ foi realizado hoje (o saldo dela já o contém) */
+    pagar: e.incluirVencidos ? (s.realizadoHoje && s.realizadoHoje.pagar.contas > 0 ? celulaDeValor('pagar', s.realizadoHoje.pagar.valor) : null) : celulaDeValor('pagar', s.partida.pagar.valor),
+    receber: e.incluirVencidos ? (s.realizadoHoje && s.realizadoHoje.receber.contas > 0 ? celulaDeValor('receber', s.realizadoHoje.receber.valor) : null) : celulaDeValor('receber', s.partida.receber.valor),
     saldo: celulaDeValor('saldo', e.incluirVencidos ? s.hoje : s.partida.saldo),
     contas: [],
-  }];
+  };
+  /* PERÍODO QUE COMEÇA ANTES DE HOJE: a folha anda no tempo — Caixa inicial, os dias realizados, o saldo de hoje e o que vem.
+     Sem o Caixa inicial (o dono não responde naquela data) fica a ordem de sempre, a partir do saldo de hoje. */
+  const comInicial = !!s.inicial && e.periodo.de <= c.hoje;
+  const faixaDe = (g: GrupoDaTela<L>): FaixaDaFolha | null => (g.tipo === 'vencidos_anteriores' || g.tipo === 'sem_vencimento' ? null : {
+    tipo: g.tipo, titulo: g.quando ? `${g.titulo} · ${g.quando}` : g.titulo,
+    pagar: celulaDeValor('pagar', g.pagar), receber: celulaDeValor('receber', g.receber),
+    saldo: celulaDeValor('saldo', g.saldo, { destacarNegativo: true }), contas: g.linhas.map((l) => contaDaFolha(l, e.de)),
+  });
+  const faixas: FaixaDaFolha[] = [];
+  if (comInicial && s.inicial) {
+    faixas.push({ tipo: 'saldo_hoje', titulo: `Caixa inicial · ${dma(s.inicial.data)} · ${quem}`, pagar: null, receber: null, saldo: celulaDeValor('saldo', s.inicial.saldo), contas: [] });
+    for (const g of e.grupos) { const f = g.passado ? faixaDe(g) : null; if (f) faixas.push(f); }
+  }
+  if (!s.encerrado) faixas.push(faixaDeHoje);
   let anteriores: BlocoSimplesDaFolha | null = null;
   let semVencimento: BlocoSimplesDaFolha | null = null;
   for (const g of e.grupos) {
-    const linhas = g.linhas.map((l) => contaDaFolha(l, e.de));
     if (g.tipo === 'vencidos_anteriores') {
-      anteriores = { titulo: `${g.titulo}`, frase: 'vencimento em mês já conciliado: confira se foi pago ou atualize a data', contas: linhas, pagar: formatMoeda(g.pagar), receber: formatMoeda(g.receber) };
+      anteriores = { titulo: `${g.titulo}`, frase: 'vencimento em mês já conciliado: confira se foi pago ou atualize a data', contas: g.linhas.map((l) => contaDaFolha(l, e.de)), pagar: formatMoeda(g.pagar), receber: formatMoeda(g.receber) };
       continue;
     }
     if (g.tipo === 'sem_vencimento') {
-      semVencimento = { titulo: g.titulo, frase: 'sem data de vencimento: fora dos números e do saldo', contas: linhas, pagar: formatMoeda(g.pagar), receber: formatMoeda(g.receber) };
+      semVencimento = { titulo: g.titulo, frase: 'sem data de vencimento: fora dos números e do saldo', contas: g.linhas.map((l) => contaDaFolha(l, e.de)), pagar: formatMoeda(g.pagar), receber: formatMoeda(g.receber) };
       continue;
     }
-    faixas.push({
-      tipo: g.tipo, titulo: g.quando ? `${g.titulo} · ${g.quando}` : g.titulo,
-      pagar: celulaDeValor('pagar', g.pagar), receber: celulaDeValor('receber', g.receber),
-      saldo: celulaDeValor('saldo', g.saldo, { destacarNegativo: true }), contas: linhas,
-    });
+    if (comInicial && g.passado) continue;
+    const f = faixaDe(g);
+    if (f) faixas.push(f);
   }
 
   /* o primeiro valor que não é número: a folha sai, e o aviso o nomeia (o motor recusa NaN em coordenada, não em texto) */

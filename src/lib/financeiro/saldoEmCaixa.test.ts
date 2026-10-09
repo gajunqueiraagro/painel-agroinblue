@@ -8,7 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   ancoraDaConta, ancoraSemExtrato, contaSemExtrato, estimarSaldoDaConta, estimarSaldoEmCaixa,
-  grupoDoTipoConta, posicaoDoSaldo, serieDoSaldoPassado,
+  grupoDoTipoConta, posicaoDoSaldo, serieDoSaldoPassado, saldoDaContaNaData, realizadoDoCaixa,
   type SaldoMesConta,
 } from './saldoEmCaixa';
 import type { LinhaDaPosicao } from '@/hooks/useExtratoDaConta';
@@ -525,5 +525,81 @@ describe('estimarSaldoEmCaixa · ancoraPorConta', () => {
   });
   it('sem nenhuma conta ancorada a lista é vazia', () => {
     expect(estimarSaldoEmCaixa({ contas: [contas[1], contas[3]], saldos, linhas, hoje: HOJE, mesMinimo: JANELA }).ancoraPorConta).toEqual([]);
+  });
+});
+
+
+/* CPR-PDF-ACABAMENTO-01 — o saldo numa data e o realizado do período: o MESMO cálculo do cartão Caixa, respondido em outra data. */
+describe('saldoDaContaNaData e realizadoDoCaixa — CPR-PDF-ACABAMENTO-01', () => {
+  const A = 'conta-a';
+  const B = 'conta-b';
+  const HOJE2 = '2026-10-09';
+  const contas = [{ id: A, nome: 'Conta A', tipo: 'cc' }, { id: B, nome: 'Conta B', tipo: 'cc' }, { id: 'cartao', nome: 'Cartão', tipo: 'cartao' }];
+  /* A conferida em 06/10 (500,00); B conferida em 30/09 (1.000,00) */
+  const saldos = [
+    saldo(A, '2026-09', 100, 300, '2026-09-30'),
+    saldo(A, '2026-10', 300, 500, '2026-10-06'),
+    saldo(B, '2026-09', 900, 1000, '2026-09-30'),
+  ];
+  const transferencia = (de: string, para: string, data: string, valor: number): LinhaDaPosicao => ({
+    valor, sinal: -1, tipo_operacao: '3-Transferências', data_pagamento: data, conta_bancaria_id: de, conta_destino_id: para,
+  });
+  const linhas = [
+    entrada(A, '2026-09-10', 250), saida(A, '2026-09-20', 50),         // setembro de A: 100 → 300
+    entrada(A, '2026-10-02', 400), saida(A, '2026-10-05', 200),        // até a âncora de A (06/10): 300 → 500
+    saida(A, '2026-10-08', 30),                                        // depois da âncora de A
+    entrada(B, '2026-09-15', 100),                                     // setembro de B: 900 → 1000
+    saida(B, '2026-10-03', 100), entrada(B, '2026-10-07', 10),         // depois da âncora de B
+    transferencia(A, B, '2026-10-08', 70),                             // entre contas do caixa: o total não muda
+    saida('cartao', '2026-10-04', 999),                                // cartão não entra no caixa
+  ];
+  const entradaDoCaixa = { contas, saldos, linhas, hoje: HOJE2, mesMinimo: '2026-08' };
+  const caixa = estimarSaldoEmCaixa(entradaDoCaixa);
+  const ancA = { contaId: A, anoMes: '2026-10', data: '2026-10-06', valor: 500 };
+
+  it('em HOJE é o número do cartão Caixa; para trás desfaz os movimentos; para a frente soma', () => {
+    expect(caixa.total).toBe(1380);                                    // A 500 − 30 − 70 = 400; B 1000 − 100 + 10 + 70 = 980
+    const a = caixa.ancoraPorConta.find((x) => x.contaId === A);
+    expect(a?.data).toBe('2026-10-06');
+    expect(saldoDaContaNaData(ancA, linhas, HOJE2)).toBe(400);
+    expect(saldoDaContaNaData(ancA, linhas, '2026-10-06')).toBe(500);
+    expect(saldoDaContaNaData(ancA, linhas, '2026-10-05')).toBe(500);  // fim do dia 05: a saída do dia já saiu
+    expect(saldoDaContaNaData(ancA, linhas, '2026-10-04')).toBe(700);  // desfaz a saída de 05/10
+    expect(saldoDaContaNaData(ancA, linhas, '2026-09-30')).toBe(300);  // = o saldo final conferido de setembro
+    expect(saldoDaContaNaData(ancA, linhas, '2026-08-31')).toBe(100);  // = o saldo inicial de setembro
+  });
+  it('realizadoDoCaixa: o Caixa inicial é o fim da véspera, os dias andam até min(até, hoje) e fecham no Caixa de hoje', () => {
+    const r = realizadoDoCaixa(entradaDoCaixa, '2026-10-01', '2026-10-31');
+    expect(r?.inicial).toEqual({ data: '2026-09-30', saldo: 1300 });
+    expect(r?.dias.map((d) => d.data)).toEqual(['2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04', '2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08', '2026-10-09']);
+    expect(r?.dias.find((d) => d.data === '2026-10-02')).toMatchObject({ entradas: 400, saidas: 0, nEntradas: 1, nSaidas: 0, saldo: 1700 });
+    expect(r?.dias.find((d) => d.data === '2026-10-04')).toMatchObject({ entradas: 0, saidas: 0, saldo: 1600 });   // o cartão não entra
+    /* a transferência entre contas do caixa aparece dos dois lados do dia e NÃO muda o saldo */
+    expect(r?.dias.find((d) => d.data === '2026-10-08')).toMatchObject({ entradas: 70, saidas: 100, saldo: 1380 });
+    expect(r?.dias[r.dias.length - 1].saldo).toBe(caixa.total);
+    /* a véspera é o dia ANTERIOR: começando em 03/10, o Caixa inicial já tem a entrada de 02/10 e ainda não a saída de 03/10 */
+    expect(realizadoDoCaixa(entradaDoCaixa, '2026-10-03', '2026-10-31')?.inicial).toEqual({ data: '2026-10-02', saldo: 1700 });
+    /* conciliado até a âncora MAIS ATRASADA (B, 30/09): nenhum dia de outubro */
+    expect(caixa.ancoraMaisAtrasada).toBe('2026-09-30');
+    expect(r?.dias.some((d) => d.conciliado)).toBe(false);
+  });
+  it('período inteiro no passado: para em "até"; o último dia é o saldo conferido do mês', () => {
+    const r = realizadoDoCaixa(entradaDoCaixa, '2026-09-01', '2026-09-30');
+    expect(r?.inicial).toEqual({ data: '2026-08-31', saldo: 1000 });   // A 100 + B 900
+    expect(r?.dias.length).toBe(30);
+    expect(r?.dias[29]).toMatchObject({ data: '2026-09-30', saldo: 1300, conciliado: true });
+  });
+  it('uma conta só: lê só a âncora dela', () => {
+    const r = realizadoDoCaixa({ ...entradaDoCaixa, contas: contas.filter((c) => c.id === A) }, '2026-10-01', '2026-10-31');
+    expect(r?.inicial.saldo).toBe(300);
+    expect(r?.dias[r.dias.length - 1].saldo).toBe(400);
+    expect(r?.dias.find((d) => d.data === '2026-10-06')?.conciliado).toBe(true);
+    expect(r?.dias.find((d) => d.data === '2026-10-07')?.conciliado).toBe(false);
+  });
+  it('nunca inventa: nulo fora da janela carregada, com início depois de amanhã e sem conta ancorada', () => {
+    expect(realizadoDoCaixa(entradaDoCaixa, '2026-08-01', '2026-09-30')).toBeNull();   // a véspera (31/07) é anterior à janela
+    expect(realizadoDoCaixa(entradaDoCaixa, '2026-10-11', '2026-10-31')).toBeNull();   // a véspera é depois de hoje
+    expect(realizadoDoCaixa(entradaDoCaixa, '2026-10-10', '2026-10-31')).toMatchObject({ inicial: { data: HOJE2, saldo: 1380 }, dias: [] });
+    expect(realizadoDoCaixa({ ...entradaDoCaixa, contas: contas.filter((c) => c.id === 'cartao') }, '2026-10-01', '2026-10-31')).toBeNull();
   });
 });

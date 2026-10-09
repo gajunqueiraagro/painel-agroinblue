@@ -436,8 +436,9 @@ describe('CPR-SALDO-DIA-01 — a tela só renderiza (lido da fonte)', () => {
   const shell = readFileSync(resolve(__dirname, '../../v2/V2Index.tsx'), 'utf8');
   it('âncoras e série vêm do dono, da mesma entrada do Caixa; lista e gráfico partem do MESMO saldo', () => {
     expect(tela).toContain('ancorasDoCaixaCpr(caixaTodas.ancoraPorConta)');
-    expect(tela).toContain('serieDoSaldoCpr(recorte, caixa && caixa.ancoradas > 0 ? caixa.total : null)');
-    expect(tela).toContain('saldoInicial={serie.hoje}');
+    /* CPR-PDF-ACABAMENTO-01: a série recebe também o REALIZADO do dono do caixa (o passado do período) */
+    expect(tela).toContain('serieDoSaldoCpr(recorte, caixa && caixa.ancoradas > 0 ? caixa.total : null, realizado)');
+    expect(tela).toContain('saldoInicial={serie.encerrado ? serie.fim : serie.hoje}');
     /* o gráfico não tem regra própria de vencido: desconta todo vencido que RECEBE, sem piso e sem "conciliado até" */
     expect(fluxo).toContain('ajusteVencidoPorDia(linhas, null, hoje, null)');
     expect(fluxo).not.toContain('ajusteVencidoPorDia(linhas, inicioDesenho');
@@ -483,7 +484,7 @@ describe('CPR-SALDO-DIA-01 (G/H) — saldo do gráfico sem segmento; Ampliado co
     expect(tela).not.toMatch(/linhasDoSaldoCpr\(recorte\)\.filter/);
     const montagem = tela.slice(tela.indexOf('<CprFluxoPrevisto'), tela.indexOf('/>', tela.indexOf('<CprFluxoPrevisto')));
     expect(montagem).toContain('linhas={doFluxo}');
-    expect(montagem).toContain('saldoInicial={serie.hoje}');
+    expect(montagem).toContain('saldoInicial={serie.encerrado ? serie.fim : serie.hoje}');
     expect(montagem).toContain('barras={segmento}');
     /* no componente, `barras` só aparece na prop e nas duas <Bar>: nenhuma série de saldo o lê */
     const usos = Array.from(fluxo.matchAll(/\bbarras (?:===|!==)/g)).length;
@@ -765,5 +766,125 @@ describe('CPR-TRANSFERENCIAS-NO-FLUXO-01 — a transferência tem duas pontas, e
     /* auto-teste do detector */
     expect("x.startsWith('3-')").toMatch(/startsWith\('[123]-'\)/);
     expect(src('./fluxoPrevisto.ts')).toContain("import { ehPagarCpr, ehReceberCpr, type PontaCpr } from '@/lib/financeiro/cprRecorte';");
+  });
+});
+
+
+/* CPR-PDF-ACABAMENTO-01 (commit B) — o período tem CAIXA INICIAL; o passado do período é o REALIZADO que o dono do caixa entrega,
+   e o cartão do período abre as contas por status, com as transferências à parte. Dado sintético. */
+describe('CPR-PDF-ACABAMENTO-01 — caixa inicial, realizado e cartões por status', () => {
+  const ANC = new Map([['A', '2026-09-30'], ['B', '2026-09-30']]);
+  const sai = (venc: string, valor: number, status: string) => conta(venc, valor, { conta_bancaria_id: 'A', status_transacao: status });
+  const linhas = [
+    sai('2026-10-02', 100, 'programado'),                                                         // vencido que conta
+    sai('2026-10-10', 500, 'programado'), sai('2026-10-12', 200, 'agendado'), sai('2026-10-15', 50, 'previsto'),
+    conta('2026-10-20', 900, { tipo_operacao: '1-Entradas', conta_destino_id: 'A', status_transacao: 'previsto' }),
+    conta('2026-10-11', 300, { tipo_operacao: '3-Transferências', conta_bancaria_id: 'A', conta_destino_id: 'B' }),
+  ];
+  const rec = (periodo: { de: string; ate: string }, contaSel: string | null = null) =>
+    recortarCpr(linhas, { periodo, hoje: HOJE, incluirVencidos: true, ancoras: ANC, conta: contaSel });
+  const dia = (data: string, entradas: number, saidas: number, saldo: number) => ({ data, entradas, saidas, nEntradas: entradas > 0 ? 1 : 0, nSaidas: saidas > 0 ? 1 : 0, saldo });
+  const OUT = { de: '2026-10-01', ate: '2026-10-31' };
+  /* o realizado de 01/10 a hoje (05/10): 1.000 → 1.500 → −300 → 1.000 → hoje 1.000 */
+  const REAL_OUT = { inicial: { data: '2026-09-30', saldo: 1000 }, dias: [dia('2026-10-01', 0, 0, 1000), dia('2026-10-02', 500, 0, 1500), dia('2026-10-03', 0, 1800, -300), dia('2026-10-04', 1300, 0, 1000), dia(HOJE, 0, 0, 1000)] };
+
+  it('período que começa ANTES de hoje: parte do Caixa inicial, anda pelo realizado até ontem e pelo em aberto de hoje em diante', () => {
+    const s = serieDoSaldoCpr(rec(OUT), 1000, REAL_OUT);
+    expect(s.inicial).toEqual({ data: '2026-09-30', saldo: 1000 });
+    expect(s.encerrado).toBe(false);
+    expect(s.realizados.map((d) => [d.data, d.saldo])).toEqual([['2026-10-02', 1500], ['2026-10-03', -300], ['2026-10-04', 1000]]);   // dia sem movimento não vira faixa
+    expect(s.realizadoHoje).not.toBeNull();
+    expect(s.totalRealizado).toEqual({ pagar: { valor: 1800, contas: 1 }, receber: { valor: 1800, contas: 2 } });
+    expect(s.partida.saldo).toBe(900);
+    expect(s.dias.map((d) => [d.data, d.saldo])).toEqual([['2026-10-10', 400], ['2026-10-11', 400], ['2026-10-12', 200], ['2026-10-15', 150], ['2026-10-20', 1050]]);
+    expect(s.fim).toBe(1050);
+    /* o MÍNIMO olha o período inteiro: o pior dia foi um dia REALIZADO */
+    expect(s.menor).toEqual({ valor: -300, data: '2026-10-03' });
+    /* antes deste PR (sem o realizado) a série só via de hoje em diante: mínimo 150 em 15/10, sem Caixa inicial */
+    const antes = serieDoSaldoCpr(rec(OUT), 1000);
+    expect(antes.menor).toEqual({ valor: 150, data: '2026-10-15' });
+    expect(antes.inicial).toBeNull();
+    expect(antes.fim).toBe(1050);                                                                // o fim NÃO muda
+    expect(antes.dias).toEqual(s.dias);
+  });
+  it('período que começa HOJE: o Caixa inicial é o fim de ontem, e não há dia realizado para trás', () => {
+    const s = serieDoSaldoCpr(rec(D30), 1000, { inicial: { data: '2026-10-04', saldo: 1000 }, dias: [dia(HOJE, 0, 0, 1000)] });
+    expect(s.inicial).toEqual({ data: '2026-10-04', saldo: 1000 });
+    expect(s.realizados).toEqual([]);
+    expect(s.fim).toBe(1050);
+    expect(s.menor).toEqual({ valor: 150, data: '2026-10-15' });
+  });
+  it('período que começa DEPOIS de hoje: o Caixa inicial é o saldo PROJETADO até a véspera; o realizado não entra', () => {
+    const P = { de: '2026-10-12', ate: '2026-10-31' };
+    for (const real of [null, REAL_OUT]) {
+      const s = serieDoSaldoCpr(rec(P), 1000, real);
+      expect(s.inicial).toEqual({ data: '2026-10-11', saldo: 400 });                             // 1.000 − 100 (vencido) − 500 (10/10) ± 300 (transferência)
+      expect(s.realizados).toEqual([]);
+      expect(s.totalRealizado.pagar.valor).toBe(0);
+      expect(s.dias[0]).toMatchObject({ data: '2026-10-12', saldo: 200 });
+      expect(s.fim).toBe(1050);
+    }
+  });
+  it('período INTEIRO NO PASSADO: fim e mínimo são do REALIZADO do período — o caixa de hoje não entra na conta', () => {
+    const SET = { de: '2026-09-01', ate: '2026-09-30' };
+    const real = { inicial: { data: '2026-08-31', saldo: 700 }, dias: [dia('2026-09-10', 500, 0, 1200), dia('2026-09-20', 0, 1500, -300), dia('2026-09-30', 600, 0, 300)] };
+    for (const caixaHoje of [1000, 987654.32]) {
+      const s = serieDoSaldoCpr(rec(SET), caixaHoje, real);
+      expect(s.encerrado).toBe(true);
+      expect(s.inicial).toEqual({ data: '2026-08-31', saldo: 700 });
+      expect(s.fim).toBe(300);
+      expect(s.menor).toEqual({ valor: -300, data: '2026-09-20' });
+      expect(s.dias).toEqual([]);
+      expect(s.partida.saldo).toBeNull();
+      expect([s.totalPagar.valor, s.totalReceber.valor]).toEqual([0, 0]);
+      expect(s.realizados.length).toBe(3);
+    }
+    /* sem o realizado (o dono não responde naquela data) o fim é "—", nunca o caixa de hoje */
+    const sem = serieDoSaldoCpr(rec(SET), 1000, null);
+    expect([sem.fim, sem.menor, sem.inicial]).toEqual([null, null, null]);
+    /* dia do realizado fora do período não entra */
+    const largo = serieDoSaldoCpr(rec(SET), 1000, { ...real, dias: [...real.dias, dia('2026-10-01', 0, 250, 50)] });
+    expect(largo.fim).toBe(300);
+    /* o Caixa inicial também disputa o mínimo: aqui o pior saldo do período foi o da véspera */
+    const subindo = serieDoSaldoCpr(rec(SET), 1000, { inicial: { data: '2026-08-31', saldo: -50 }, dias: [dia('2026-09-10', 500, 0, 450)] });
+    expect(subindo.menor).toEqual({ valor: -50, data: '2026-08-31' });
+    /* e o resumo por semana parte dele: a primeira semana, sem movimento, repete o Caixa inicial */
+    expect(resumoPorSemanaCpr(serieDoSaldoCpr(rec(SET), 1000, real), SET)[0]).toMatchObject({ de: '2026-09-01', pagar: 0, receber: 0, saldo: 700 });
+  });
+  it('sem saldo em caixa (cartão de crédito) nada do realizado é lido', () => {
+    const s = serieDoSaldoCpr(rec(OUT), null, REAL_OUT);
+    expect([s.inicial, s.fim, s.menor, s.realizados.length]).toEqual([null, null, null, 0]);
+  });
+  it('o resumo por semana parte do Caixa inicial e fecha no saldo no fim', () => {
+    const s = serieDoSaldoCpr(rec(OUT), 1000, REAL_OUT);
+    const sem = resumoPorSemanaCpr(s, OUT);
+    expect(sem[0]).toMatchObject({ de: '2026-10-01', ate: '2026-10-04', pagar: 1800, receber: 1800, saldo: 1000 });
+    expect(sem[sem.length - 1].saldo).toBe(1050);
+  });
+  it('cartões: o número grande é SÓ conta; por status só o em aberto do período; a transferência fica à parte', () => {
+    const todas = rec(OUT).cartoes;
+    expect(todas.periodo.pagar).toEqual({ valor: 750, contas: 3 });
+    expect(todas.periodo.receber).toEqual({ valor: 900, contas: 1 });
+    expect(todas.porStatus.pagar).toEqual({ programado: 500, agendado: 200, previsto: 50 });    // o vencido (programado, 100) NÃO entra
+    expect(todas.porStatus.receber).toEqual({ previsto: 900 });
+    expect(todas.transferencias).toEqual({ pagar: { valor: 300, contas: 1 }, receber: { valor: 300, contas: 1 } });
+    expect(todas.vencidosContam.pagar).toEqual({ valor: 100, contas: 1 });
+    /* uma conta: só a ponta dela */
+    expect(rec(OUT, 'A').cartoes.transferencias).toEqual({ pagar: { valor: 300, contas: 1 }, receber: { valor: 0, contas: 0 } });
+    expect(rec(OUT, 'B').cartoes.transferencias).toEqual({ pagar: { valor: 0, contas: 0 }, receber: { valor: 300, contas: 1 } });
+    expect(rec(OUT, 'B').cartoes.periodo.pagar.valor).toBe(0);
+    /* transferência VENCIDA que conta no saldo: fica fora do cartão "Vencidos que contam" (só contas) */
+    const comVencida = recortarCpr([...linhas, conta('2026-10-03', 80, { tipo_operacao: '3-Transferências', conta_bancaria_id: 'A', conta_destino_id: 'B' })],
+      { periodo: OUT, hoje: HOJE, incluirVencidos: true, ancoras: ANC, conta: 'A' });
+    expect(comVencida.vencidos.contam.pagar.valor).toBe(180);
+    expect(comVencida.cartoes.vencidosContam.pagar).toEqual({ valor: 100, contas: 1 });
+  });
+  it('o dono do recorte continua sem importar o dono do caixa (o realizado chega como objeto)', () => {
+    const fonte = readFileSync(resolve(__dirname, 'cprRecorte.ts'), 'utf8');
+    expect(fonte).not.toMatch(/from ['"][^'"]*saldoEmCaixa['"]/);
+    const tela = readFileSync(resolve(__dirname, '../../components/financeiro-v2/ContasPagarReceberTab.tsx'), 'utf8');
+    expect(tela).toContain('realizadoDoCaixa(');
+    /* a busca sabe achar */
+    expect(tela).toMatch(/from ['"][^'"]*saldoEmCaixa['"]/);
   });
 });

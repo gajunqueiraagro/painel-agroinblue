@@ -203,7 +203,8 @@ describe('a ponta de transferência chega escrita ao PDF e ao Excel', () => {
   });
   it('o modelo leva o gráfico como recebeu (ou nulo), e o saldo do fim é o da série com a ponta', () => {
     const base = { clienteNome: 'C', contaNome: 'Todas as contas', todasAsContas: true, periodo: P, segmento: 'ambos' as const, incluirVencidos: true, emitidoEm: 'x',
-      serie, grupos, cartoes: { vencidosContamPagar: recorte.vencidos.contam.pagar, vencidosContamReceber: recorte.vencidos.contam.receber, pagarNoPeriodo: recorte.cartoes.periodo.pagar, receberNoPeriodo: recorte.cartoes.periodo.receber },
+      serie, grupos, cartoes: { vencidosContamPagar: recorte.cartoes.vencidosContam.pagar, vencidosContamReceber: recorte.cartoes.vencidosContam.receber, pagarNoPeriodo: recorte.cartoes.periodo.pagar, receberNoPeriodo: recorte.cartoes.periodo.receber,
+        porStatus: recorte.cartoes.porStatus, transferencias: recorte.cartoes.transferencias, hoje: HOJE, conciliadoAte: '2026-09-30' },
       rodape: { pagar: recorte.total.pagar.valor, receber: recorte.total.receber.valor, contas: recorte.total.ambos.contas }, semanas: [], porConta: null, motivoSemSaldo: '', de };
     expect(montarModeloCpr<Linha>(base).grafico).toBeNull();
     const g = lerGraficoDoDom(montar(SVG));

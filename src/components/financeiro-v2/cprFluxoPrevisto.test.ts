@@ -45,7 +45,7 @@ describe('o ponto "em conta hoje"', () => {
     expect(pontoEmContaHoje(1000.01, 1000)).not.toBeNull();
   });
   it('ponto, legenda e tooltip só existem com ele (lido da fonte)', () => {
-    expect(fonte).toContain('const emConta = pontoEmContaHoje(saldoInicial, emHoje.saldo);');
+    expect(fonte).toContain('const emConta = encerradoEm ? null : pontoEmContaHoje(saldoInicial, emHoje.saldo);');
     expect(fonte).toMatch(/\{emConta && \(\s*<ReferenceDot x=\{emHoje\.rotulo\} y=\{emConta\.emConta\}/);
     expect(fonte).toMatch(/\{emConta && \(\s*<span className="flex items-center gap-1\.5 text-\[11px\]"[^>]*data-testid="legenda-em-conta-hoje">/);
     expect(fonte).toContain('<title>{emConta.titulo}</title>');

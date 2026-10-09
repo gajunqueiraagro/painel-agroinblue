@@ -237,11 +237,14 @@ export function DocumentoCpr({ modelo: m, logoData }: { modelo: ModeloCpr; logoD
         {/* O BLOCO DE NÚMEROS — os mesmos dos cartões e do rodapé da tela: rótulo em cima, valor embaixo */}
         <View style={{ flexDirection: 'row', borderWidth: 0.6, borderColor: COR.separador, borderRadius: 2, marginBottom: 8 }}>
           {m.numeros.map((n, i) => (
-            <View key={n.rotulo} style={{ flex: 1, paddingVertical: 5, paddingHorizontal: 6, borderLeftWidth: i === 0 ? 0 : 0.6, borderLeftColor: COR.separador }}>
+            <View key={n.rotulo} style={{ flex: 1, paddingVertical: 5, paddingHorizontal: 5, borderLeftWidth: i === 0 ? 0 : 0.6, borderLeftColor: COR.separador }}>
               <Text style={{ fontSize: 7.5, color: COR.cinzaMedio }}>{n.rotulo}</Text>
-              <Text style={{ fontSize: 11, fontWeight: 700, marginTop: 2, color: n.tom === 'neg' ? COR.vermelho : n.tom === 'pos' ? COR.verde : COR.azul }}>{n.valor}</Text>
-              {/* o detalhe ocupa UMA linha: o bloco de números tem a mesma altura com qualquer texto */}
-              <Text hyphenationCallback={semHifen} style={{ ...corta, fontSize: 7, color: COR.cinzaMedio, marginTop: 1 }}>{n.detalhe ?? ' '}</Text>
+              {/* SETE cartões numa linha: o valor a 9,5pt cabe inteiro até "-R$ 12.345.678,90" e NUNCA quebra nem corta */}
+              <Text hyphenationCallback={semHifen} style={{ fontSize: 9.5, fontWeight: 700, marginTop: 2, color: n.tom === 'neg' ? COR.vermelho : n.tom === 'pos' ? COR.verde : COR.azul }}>{n.valor}</Text>
+              {/* as linhas pequenas: uma informação por linha, cada uma numa linha só */}
+              {(n.detalhes.length > 0 ? n.detalhes : [' ']).map((d, k) => (
+                <Text key={k} hyphenationCallback={semHifen} style={{ ...corta, fontSize: 6, color: COR.cinzaMedio, marginTop: 1 }}>{d}</Text>
+              ))}
             </View>
           ))}
         </View>

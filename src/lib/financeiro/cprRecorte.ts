@@ -197,7 +197,15 @@ export interface RecorteCpr<T extends ContaCpr> {
   /** Pontas de transferência do período em conta que NÃO entra no caixa (`pontaForaDoCaixaCpr`): na lista do dia, nunca nos totais. */
   foraDoCaixa: T[];
   /** OS CARTÕES DO TOPO — só CONTAS a pagar e a receber, SEM as pontas de transferência (os totais da lista e o saldo as incluem). */
-  cartoes: { vencidos: SomaCpr; periodo: SomaCpr };
+  cartoes: {
+    vencidos: SomaCpr; periodo: SomaCpr;
+    /** os vencidos que CONTAM no saldo, só contas (sem as pontas) — o número do cartão "Vencidos que contam" da folha */
+    vencidosContam: SomaCpr;
+    /** CPR-PDF-ACABAMENTO-01: as contas EM ABERTO do período por status (centavos somados, em reais), dos dois lados … */
+    porStatus: { pagar: Record<string, number>; receber: Record<string, number> };
+    /** … e, à parte, as pontas de transferência em aberto do período (fora do número grande do cartão) */
+    transferencias: SomaCpr;
+  };
   /** O total do rodapé da lista, por segmento: vencidos (se ligados) + período. Em "ambos" é o líquido (receber − pagar). */
   total: Record<SegmentoCpr, LadoCpr>;
   /**
@@ -257,8 +265,17 @@ export function recortarCpr<T extends ContaCpr>(
   const contam = porBalde.vencido.filter((l) => vencidoContaNoSaldo(l, opcoes.ancoras));
   const anteriores = porBalde.vencido.filter((l) => !vencidoContaNoSaldo(l, opcoes.ancoras));
   const sc = somar(contam), sa = somar(anteriores), sx = somar(porBalde.antes_do_periodo);
+  const scc = somar(contam.filter((l) => !ehTransferenciaCpr(l)));
   const semPontas = (ls: readonly T[]) => ls.filter((l) => !ehTransferenciaCpr(l));
   const cv = somar(semPontas(porBalde.vencido)), cp = somar(semPontas(porBalde.periodo));
+  const ct = somar(porBalde.periodo.filter((l) => ehTransferenciaCpr(l)));
+  const stP = new Map<string, number>(), stR = new Map<string, number>();
+  for (const l of semPontas(porBalde.periodo)) {
+    const alvo = ehPagarCpr(l) ? stP : ehReceberCpr(l) ? stR : null;
+    const st = (l.status_transacao ?? '').toLowerCase();
+    if (alvo) alvo.set(st, (alvo.get(st) ?? 0) + centavosDaConta(l));
+  }
+  const emReais = (m: Map<string, number>) => Object.fromEntries(Array.from(m, ([k, v]) => [k, reais(v)]));
   const maisAntiga = porBalde.vencido.length > 0 ? (porBalde.vencido[0].data_vencimento ?? '').slice(0, 10) : null;
   const vP = incluirVencidos ? sv.cPagar : 0, vR = incluirVencidos ? sv.cReceber : 0;
   const nVP = incluirVencidos ? sv.pagar.contas : 0, nVR = incluirVencidos ? sv.receber.contas : 0;
@@ -281,7 +298,11 @@ export function recortarCpr<T extends ContaCpr>(
     semVencimento: { pagar: ss.pagar, receber: ss.receber, linhas: porBalde.sem_vencimento },
     pagas: porBalde.paga,
     foraDoCaixa,
-    cartoes: { vencidos: { pagar: cv.pagar, receber: cv.receber }, periodo: { pagar: cp.pagar, receber: cp.receber } },
+    cartoes: {
+      vencidos: { pagar: cv.pagar, receber: cv.receber }, periodo: { pagar: cp.pagar, receber: cp.receber },
+      vencidosContam: { pagar: scc.pagar, receber: scc.receber },
+      porStatus: { pagar: emReais(stP), receber: emReais(stR) }, transferencias: { pagar: ct.pagar, receber: ct.receber },
+    },
     total: {
       pagar: { valor: reais(vP + sp.cPagar), contas: nVP + sp.pagar.contas },
       receber: { valor: reais(vR + sp.cReceber), contas: nVR + sp.receber.contas },
@@ -365,36 +386,99 @@ export function contasDaFaixaCpr(resumo: readonly ContaNoResumoCpr[]): ContaNoRe
    ABERTO, dos DOIS lados (o saldo é da conta, não do segmento). Em centavos inteiros. A caixa "Incluir vencidos" NÃO entra
    aqui (D3): ela decide a lista e o total, nunca o saldo. Sem saldo de hoje (cartão de crédito, conta sem âncora): `null`. */
 export interface PassoDoSaldoCpr { pagar: LadoCpr; receber: LadoCpr; saldo: number | null }
+/**
+ * CPR-PDF-ACABAMENTO-01 — O REALIZADO DO PERÍODO, como o dono do caixa o entrega (`realizadoDoCaixa`, saldoEmCaixa.ts: a mesma
+ * âncora e a mesma régua do cartão Caixa). Este arquivo NÃO importa aquele: a tela passa o objeto, como já passa as âncoras.
+ */
+export interface RealizadoCpr {
+  inicial: { data: string; saldo: number };
+  dias: readonly { data: string; entradas: number; saidas: number; nEntradas: number; nSaidas: number; saldo: number }[];
+}
 export interface SerieDoSaldoCpr {
   /** o saldo de hoje (o cartão Caixa); `null` = não há (cartão de crédito, conta sem saldo conferido): os saldos ficam todos nulos */
   hoje: number | null;
-  /** depois dos vencidos que contam */
+  /** a data de hoje (a dobra entre o realizado e o projetado) */
+  dataDeHoje: string;
+  /**
+   * CAIXA INICIAL: o saldo no fim do dia ANTERIOR ao início do período. Período que começa até hoje: o do dono do caixa
+   * (realizado); que começa depois de hoje: o saldo projetado até a véspera. `null` = o dono não responde naquela data.
+   */
+  inicial: { data: string; saldo: number } | null;
+  /** os dias REALIZADOS do período ANTES de hoje que tiveram movimento (a pagar = o que saiu, a receber = o que entrou) */
+  realizados: (PassoDoSaldoCpr & { data: string })[];
+  /** o realizado de HOJE (já está dentro do saldo de hoje); nulo sem o realizado ou com hoje fora do período */
+  realizadoHoje: PassoDoSaldoCpr | null;
+  /** tudo o que foi realizado no período até hoje: inicial + a receber − a pagar = o saldo de hoje (ou o do fim, no período encerrado) */
+  totalRealizado: { pagar: LadoCpr; receber: LadoCpr };
+  /** PERÍODO INTEIRO NO PASSADO ("até" antes de hoje): o saldo no fim e o mínimo saem do REALIZADO, nunca do caixa de hoje */
+  encerrado: boolean;
+  /** depois dos vencidos que contam (no período encerrado o saldo é nulo: os vencidos saem hoje, depois do período) */
   partida: PassoDoSaldoCpr;
   entreHojeEDe: PassoDoSaldoCpr | null;
   dias: (PassoDoSaldoCpr & { data: string })[];
   fim: number | null;
-  /** o menor saldo da série, da partida ao fim; `data` nula = já na partida (hoje). */
+  /** o menor saldo da série, do Caixa inicial ao fim; `data` nula = já na partida (hoje). */
   menor: { valor: number; data: string | null } | null;
-  /** TUDO o que a série consome (vencidos que contam + entre hoje e "de" + período): hoje − a pagar + a receber = fim. */
+  /** TUDO o que a série projeta (vencidos que contam + entre hoje e "de" + período): hoje − a pagar + a receber = fim. */
   totalPagar: LadoCpr;
   totalReceber: LadoCpr;
 }
-export function serieDoSaldoCpr<T extends ContaCpr>(recorte: RecorteCpr<T>, saldoHoje: number | null): SerieDoSaldoCpr {
+export function serieDoSaldoCpr<T extends ContaCpr>(recorte: RecorteCpr<T>, saldoHoje: number | null, realizado?: RealizadoCpr | null): SerieDoSaldoCpr {
   const tem = saldoHoje != null && Number.isFinite(saldoHoje);
-  let saldo = tem ? Math.round(saldoHoje * 100) : 0;
+  const { periodo, hoje } = recorte;
+  const encerrado = periodo.ate < hoje;
+  const zero: LadoCpr = { valor: 0, contas: 0 };
   let menor: { valor: number; data: string | null } | null = null;
   let menorC = Number.POSITIVE_INFINITY;
+  const ver = (centavos: number, data: string | null) => { if (centavos < menorC) { menorC = centavos; menor = { valor: reais(centavos), data }; } };
+
+  /* ── o REALIZADO: do Caixa inicial até ontem (e hoje, à parte). Só com saldo em caixa e com o período começando até hoje. ── */
+  const usa = tem && !!realizado && periodo.de <= hoje;
+  const realizados: (PassoDoSaldoCpr & { data: string })[] = [];
+  let realizadoHoje: PassoDoSaldoCpr | null = null;
+  let rP = 0, rR = 0, rnP = 0, rnR = 0;
+  let fimRealizado: number | null = null;
+  if (usa && realizado) {
+    ver(Math.round(realizado.inicial.saldo * 100), realizado.inicial.data);
+    fimRealizado = realizado.inicial.saldo;
+    for (const d of realizado.dias) {
+      if (d.data < periodo.de || d.data > periodo.ate || d.data > hoje) continue;
+      const passo: PassoDoSaldoCpr = { pagar: { valor: d.saidas, contas: d.nSaidas }, receber: { valor: d.entradas, contas: d.nEntradas }, saldo: d.saldo };
+      rP += Math.round(d.saidas * 100); rR += Math.round(d.entradas * 100); rnP += d.nSaidas; rnR += d.nEntradas;
+      fimRealizado = d.saldo;
+      if (d.data === hoje) { realizadoHoje = passo; continue; }
+      ver(Math.round(d.saldo * 100), d.data);
+      if (d.nSaidas + d.nEntradas > 0) realizados.push({ ...passo, data: d.data });
+    }
+  }
+  const totalRealizado = { pagar: { valor: reais(rP), contas: rnP }, receber: { valor: reais(rR), contas: rnR } };
+  const hojeSaldo = tem ? reais(Math.round(saldoHoje * 100)) : null;
+
+  /* ── PERÍODO ENCERRADO: nada é projetado. O fim é o último saldo realizado; os vencidos que contam saem HOJE, depois dele. ── */
+  if (encerrado) {
+    const s = somar(recorte.vencidos.contam.linhas);
+    return {
+      hoje: hojeSaldo, dataDeHoje: hoje, inicial: usa && realizado ? realizado.inicial : null, realizados, realizadoHoje: null, totalRealizado, encerrado,
+      partida: { pagar: s.pagar, receber: s.receber, saldo: null }, entreHojeEDe: null, dias: [],
+      fim: usa ? fimRealizado : null, menor: usa ? menor : null, totalPagar: zero, totalReceber: zero,
+    };
+  }
+
+  let saldo = tem ? Math.round(saldoHoje * 100) : 0;
   let tP = 0, tR = 0, nP = 0, nR = 0;
   const passo = (linhas: readonly T[], data: string | null): PassoDoSaldoCpr => {
     const s = somar(linhas);
     saldo += s.cReceber - s.cPagar;
     tP += s.cPagar; tR += s.cReceber; nP += s.pagar.contas; nR += s.receber.contas;
-    if (tem && saldo < menorC) { menorC = saldo; menor = { valor: reais(saldo), data }; }
+    if (tem) ver(saldo, data);
     return { pagar: s.pagar, receber: s.receber, saldo: tem ? reais(saldo) : null };
   };
   const partida = passo(recorte.vencidos.contam.linhas, null);
   const antes = recorte.antesDoPeriodo.linhas;
   const entreHojeEDe = antes.length > 0 ? passo(antes, (antes[antes.length - 1].data_vencimento ?? recorte.hoje).slice(0, 10)) : null;
+  /* período que começa DEPOIS de hoje: o Caixa inicial é o saldo projetado até a véspera */
+  const inicial = usa && realizado ? realizado.inicial
+    : (tem && periodo.de > hoje ? { data: somarDiasIso(periodo.de, -1), saldo: reais(saldo) } : null);
   const porDia = new Map<string, T[]>();
   for (const l of recorte.periodoSoma.linhas) {
     const d = (l.data_vencimento ?? '').slice(0, 10);
@@ -402,7 +486,8 @@ export function serieDoSaldoCpr<T extends ContaCpr>(recorte: RecorteCpr<T>, sald
   }
   const dias = Array.from(porDia.keys()).sort().map((data) => ({ ...passo(porDia.get(data) ?? [], data), data }));
   return {
-    hoje: tem ? reais(Math.round(saldoHoje * 100)) : null, partida, entreHojeEDe, dias, fim: tem ? reais(saldo) : null, menor,
+    hoje: hojeSaldo, dataDeHoje: hoje, inicial, realizados, realizadoHoje, totalRealizado, encerrado,
+    partida, entreHojeEDe, dias, fim: tem ? reais(saldo) : null, menor,
     totalPagar: { valor: reais(tP), contas: nP }, totalReceber: { valor: reais(tR), contas: nR },
   };
 }
@@ -422,14 +507,20 @@ export interface SemanaCpr { de: string; ate: string; pagar: number; receber: nu
 export function resumoPorSemanaCpr(serie: SerieDoSaldoCpr, periodo: PeriodoCpr): SemanaCpr[] {
   if (!periodo.de || !periodo.ate || periodo.de > periodo.ate) return [];
   const semanas: SemanaCpr[] = [];
-  let corrente = (serie.entreHojeEDe ?? serie.partida).saldo;
+  /* o período parte do Caixa inicial quando ele existe; os dias REALIZADOS e os PROJETADOS andam na mesma régua */
+  let corrente = serie.inicial ? serie.inicial.saldo : (serie.entreHojeEDe ?? serie.partida).saldo;
+  /* hoje é a dobra: o que foi realizado hoje entra na semana, e o saldo passa a ser o de partida (caixa − vencidos que contam) */
+  const dobra = !serie.encerrado && serie.dataDeHoje >= periodo.de && serie.dataDeHoje <= periodo.ate
+    ? [{ data: serie.dataDeHoje, pagar: serie.realizadoHoje?.pagar ?? { valor: 0, contas: 0 }, receber: serie.realizadoHoje?.receber ?? { valor: 0, contas: 0 }, saldo: (serie.entreHojeEDe ?? serie.partida).saldo }]
+    : [];
+  const todos = [...serie.realizados, ...dobra, ...serie.dias];
   let ini = periodo.de;
   while (ini <= periodo.ate) {
     const dia = new Date(msDe(ini)).getUTCDay();                    // 0 = domingo
     const domingo = somarDiasIso(ini, (7 - dia) % 7);
     const fim = domingo < periodo.ate ? domingo : periodo.ate;
     let cP = 0, cR = 0;
-    for (const d of serie.dias) {
+    for (const d of todos) {
       if (d.data < ini || d.data > fim) continue;
       cP += Math.round(d.pagar.valor * 100); cR += Math.round(d.receber.valor * 100);
       corrente = d.saldo;

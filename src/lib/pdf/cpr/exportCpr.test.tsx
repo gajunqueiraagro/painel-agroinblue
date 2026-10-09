@@ -10,7 +10,8 @@ import { resolve } from 'node:path';
 
 vi.mock('@/lib/pdf/pdfChassi', () => ({ carregarLogoBase64: vi.fn(async () => undefined) }));
 
-import { celulaDeValor, montarModeloCpr, nomeDoArquivoCpr, type EntradaDoModelo, type GrupoDaTela } from '@/lib/pdf/cpr/modeloCpr';
+import { formatMoeda } from '@/lib/calculos/formatters';
+import { celulaDeValor, linhasPorStatus, montarModeloCpr, nomeDoArquivoCpr, situacaoDaConciliacao, type EntradaDoModelo, type GrupoDaTela } from '@/lib/pdf/cpr/modeloCpr';
 import { montarPayloadExcelCpr } from '@/lib/financeiro/cprExcel';
 import { gerarPdfCpr, motivoDaFalhaDoPdf } from '@/lib/pdf/cpr/gerarPdfCpr';
 import { PdfHeader } from '@/lib/pdf/analise/PdfHeader';
@@ -43,7 +44,8 @@ function entrada(linhas: Linha[] = LINHAS, caixa: number | null = 1000, extra: P
   return {
     clienteNome: 'NJ Pecuária', contaNome: 'Banco do Brasil', todasAsContas: false, periodo: P, segmento: 'ambos', incluirVencidos: true, emitidoEm: '05/10/2026 08:00',
     serie, grupos,
-    cartoes: { vencidosContamPagar: recorte.vencidos.contam.pagar, vencidosContamReceber: recorte.vencidos.contam.receber, pagarNoPeriodo: recorte.periodoSoma.pagar, receberNoPeriodo: recorte.periodoSoma.receber },
+    cartoes: { vencidosContamPagar: recorte.cartoes.vencidosContam.pagar, vencidosContamReceber: recorte.cartoes.vencidosContam.receber, pagarNoPeriodo: recorte.cartoes.periodo.pagar, receberNoPeriodo: recorte.cartoes.periodo.receber,
+      porStatus: recorte.cartoes.porStatus, transferencias: recorte.cartoes.transferencias, hoje: HOJE, conciliadoAte: '2026-09-30' },
     rodape: { pagar: recorte.total.pagar.valor, receber: recorte.total.receber.valor, contas: recorte.total.ambos.contas },
     semanas: resumoPorSemanaCpr(serie, P), porConta: null, motivoSemSaldo: 'Cartão não entra no saldo em caixa', de, ...extra,
   };
@@ -81,11 +83,11 @@ describe('o modelo — os mesmos números da tela, em texto', () => {
   it('bloco de números, faixas e fim leem a série e os cartões recebidos', () => {
     const m = montarModeloCpr(entrada());
     expect(m.numeros.map((x) => [x.rotulo, x.valor])).toEqual([
-      ['Caixa hoje', 'R$ 1.000,00'], ['Vencidos que contam', 'R$ 100,10'], ['A pagar no período', 'R$ 5.000,00'],
-      ['A receber no período', 'R$ 9.000,00'], ['Mínimo', '-R$ 4.100,10'], ['Saldo no fim', 'R$ 4.899,90'],
+      ['Caixa inicial', '—'], ['Vencidos que contam', 'R$ 100,10'], ['A pagar no período', 'R$ 5.000,00'],
+      ['A receber no período', 'R$ 9.000,00'], ['Mínimo', '-R$ 4.100,10'], ['Saldo no fim', 'R$ 4.899,90'], ['Caixa hoje', 'R$ 1.000,00'],
     ]);
-    expect(m.numeros[4].detalhe).toBe('em 10/10');
-    expect(m.numeros[5].detalhe).toBe('em 04/11/2026');
+    expect(m.numeros[4].detalhes).toEqual(['em 10/10']);
+    expect(m.numeros[5].detalhes).toEqual(['em 04/11/2026']);
     expect(m.faixas.map((f) => f.tipo)).toEqual(['saldo_hoje', 'vencidos_contam', 'dia', 'dia']);
     expect(m.faixas[0].saldo?.texto).toBe('R$ 1.000,00');
     expect(m.faixas[2]).toMatchObject({ pagar: { texto: 'R$ 5.000,00', seta: 'baixo', tom: 'neg' }, receber: { seta: null, tom: 'apagado' }, saldo: { texto: '-R$ 4.100,10', seta: 'baixo', tom: 'neg', destaque: true } });
@@ -106,10 +108,10 @@ describe('o modelo — os mesmos números da tela, em texto', () => {
     expect(celulaDeValor('saldo', null)).toMatchObject({ texto: '—', seta: null });
     expect(celulaDeValor('saldo', undefined)).toBeNull();
   });
-  it('caixa de vencidos desligada: "Saldo de partida · após vencidos"; cartão de crédito: "—" com a nota', () => {
+  it('caixa de vencidos desligada: a faixa do saldo de hoje diz "após vencidos" e os cartões não mudam; cartão de crédito: "—" com a nota', () => {
     const off = montarModeloCpr(entrada(LINHAS, 1000, { incluirVencidos: false }));
-    expect(off.numeros[0]).toMatchObject({ rotulo: 'Saldo de partida', valor: 'R$ 899,90' });
-    expect(off.numeros[0].detalhe).toContain('após vencidos');
+    expect(off.numeros.map((x) => x.rotulo)).toEqual(montarModeloCpr(entrada()).numeros.map((x) => x.rotulo));
+    expect(off.faixas[0].saldo?.texto).toBe('R$ 899,90');
     expect(off.faixas[0].titulo).toContain('após vencidos');
     const cartao = montarModeloCpr(entrada(LINHAS, null));
     expect(cartao.numeros.filter((x) => ['Caixa hoje', 'Mínimo', 'Saldo no fim'].includes(x.rotulo)).map((x) => x.valor)).toEqual(['—', '—', '—']);
@@ -223,14 +225,103 @@ describe('o bloco de números — o detalhe ocupa uma linha só (árvore do docu
     if (no.props.children === texto) return no.props;
     return achar(no.props.children, texto);
   };
-  it('"Saldo de partida": o detalhe é curto e o texto dele é de UMA linha, com reticência', () => {
+  it('cada linha pequena do cartão é de UMA linha, com reticência; o valor não corta', () => {
     const m = montarModeloCpr(entrada(LINHAS, 604088.31, { incluirVencidos: false }));
-    const detalhe = m.numeros[0].detalhe ?? '';
-    expect(detalhe).toBe('após vencidos · caixa R$\u00a0604.088,31');
+    const detalhe = m.numeros[6].detalhes[1] ?? '';
+    expect(detalhe).toBe('conciliado até 30/09');
     const el = achar(DocumentoCpr({ modelo: m }), detalhe);
     expect(el).not.toBeNull();
     expect(el?.style).toMatchObject({ maxLines: 1, textOverflow: 'ellipsis' });
     /* a busca sabe achar: o valor do número, que NÃO corta, não tem maxLines */
     expect(achar(DocumentoCpr({ modelo: m }), m.numeros[0].valor)?.style?.maxLines).toBeUndefined();
+  });
+});
+
+
+/* CPR-PDF-ACABAMENTO-01 (commit B) — os sete cartões da folha, com o Caixa inicial e a situação da conciliação. Dado sintético. */
+describe('CPR-PDF-ACABAMENTO-01 — os sete cartões da folha', () => {
+  const ROTULOS = ['Caixa inicial', 'Vencidos que contam', 'A pagar no período', 'A receber no período', 'Mínimo', 'Saldo no fim', 'Caixa hoje'];
+  const dia = (data: string, entradas: number, saidas: number, saldo: number) => ({ data, entradas, saidas, nEntradas: entradas > 0 ? 1 : 0, nSaidas: saidas > 0 ? 1 : 0, saldo });
+  /** a entrada com o realizado do dono do caixa, num período qualquer */
+  function comRealizado(periodo: { de: string; ate: string }, linhas: Linha[], real: Parameters<typeof serieDoSaldoCpr>[2], caixa: number | null = 1000, conciliadoAte: string | null = HOJE): EntradaDoModelo<Linha> {
+    const recorte = recortarCpr(linhas, { periodo, hoje: HOJE, incluirVencidos: true, ancoras: new Map([['A', '2026-09-30'], ['B', '2026-09-30']]) });
+    const serie = serieDoSaldoCpr(recorte, caixa, real);
+    const base = entrada(linhas, caixa);
+    const passado: GrupoDaTela<Linha>[] = serie.realizados.map((d) => ({ tipo: 'dia', titulo: d.data, quando: 'realizado', linhas: [], pagar: d.pagar.valor, receber: d.receber.valor, saldo: d.saldo, passado: true }));
+    const futuro: GrupoDaTela<Linha>[] = serie.dias.map((d) => ({ tipo: 'dia', titulo: d.data, quando: '', linhas: [], pagar: d.pagar.valor, receber: d.receber.valor, saldo: d.saldo }));
+    return { ...base, periodo, serie, grupos: [...passado, ...futuro],
+      cartoes: { ...base.cartoes, pagarNoPeriodo: recorte.cartoes.periodo.pagar, receberNoPeriodo: recorte.cartoes.periodo.receber, porStatus: recorte.cartoes.porStatus, transferencias: recorte.cartoes.transferencias, conciliadoAte } };
+  }
+  const OUT = { de: '2026-10-01', ate: '2026-10-31' };
+  const LIN = [
+    lin('2026-10-12', 1896.83, { status_transacao: 'agendado' }),
+    lin('2026-10-13', 294278.19, { tipo_operacao: '3-Transferências', conta_bancaria_id: 'A', conta_destino_id: 'B' }),
+  ];
+  const REAL = { inicial: { data: '2026-09-30', saldo: 5884.14 }, dias: [dia('2026-10-02', 470789.64, 0, 476673.78), dia('2026-10-03', 0, 179994.24, 296679.54), dia(HOJE, 0, 0, 296679.54)] };
+
+  it('linha pequena por status: na ordem da casa, status zerado omitido, sem "R$"; "Transf." por último e à parte', () => {
+    expect(linhasPorStatus({ agendado: 1896.83 }, 294278.19)).toEqual(['Agendado 1.896,83', 'Transf. 294.278,19']);
+    expect(linhasPorStatus({ agendado: 30, previsto: 10, programado: 20 }, 0)).toEqual(['Previsto 10,00', 'Programado 20,00', 'Agendado 30,00']);
+    expect(linhasPorStatus({ previsto: 0, programado: 5 }, 0)).toEqual(['Programado 5,00']);
+    expect(linhasPorStatus({}, 0)).toEqual([]);
+    expect(linhasPorStatus({}, 7)).toEqual(['Transf. 7,00']);
+    /* realizado nunca é "em aberto" */
+    expect(linhasPorStatus({ realizado: 99, previsto: 1 }, 0)).toEqual(['Previsto 1,00']);
+  });
+  it('situação da conciliação: âncora de hoje; âncora antiga com os dias a conferir; sem âncora', () => {
+    expect(situacaoDaConciliacao('2026-10-09', '2026-10-09')).toEqual(['conciliado até 09/10']);
+    expect(situacaoDaConciliacao('2026-09-30', '2026-10-09')).toEqual(['conciliado até 30/09', '9 dias a conferir']);
+    expect(situacaoDaConciliacao('2026-10-08', '2026-10-09')).toEqual(['conciliado até 08/10', '1 dia a conferir']);
+    expect(situacaoDaConciliacao(null, '2026-10-09')).toEqual(['sem saldo conferido']);
+  });
+  it('os sete, nesta ordem; o número grande de "A pagar" é só conta e a transferência vai na linha pequena', () => {
+    const m = montarModeloCpr(comRealizado(OUT, LIN, REAL, 296679.54));
+    expect(m.numeros.map((x) => x.rotulo)).toEqual(ROTULOS);
+    expect(m.numeros[0]).toMatchObject({ valor: formatMoeda(5884.14), detalhes: ['em 30/09/2026'] });
+    expect(m.numeros[2]).toMatchObject({ valor: formatMoeda(1896.83), detalhes: ['Agendado 1.896,83', 'Transf. 294.278,19'] });
+    expect(m.numeros[3]).toMatchObject({ valor: formatMoeda(0), detalhes: ['Transf. 294.278,19'] });   // em "Todas" a ponta de entrada também aparece
+    expect(m.numeros[5]).toMatchObject({ valor: formatMoeda(294782.71), detalhes: ['em 31/10/2026'] });  // todas as contas: a transferência não muda o saldo
+    expect(m.numeros[6]).toMatchObject({ valor: formatMoeda(296679.54), detalhes: ['05/10/2026', 'conciliado até 05/10'] });
+    /* a conta fecha: Caixa inicial + entradas − saídas realizadas = Caixa hoje; − a pagar = Saldo no fim */
+    expect(Math.round((5884.14 + 470789.64 - 179994.24) * 100)).toBe(Math.round(296679.54 * 100));
+    expect(Math.round((296679.54 - 1896.83) * 100)).toBe(Math.round(294782.71 * 100));
+  });
+  it('a folha anda no tempo: Caixa inicial, os dias realizados, o saldo de hoje e o que vem', () => {
+    const m = montarModeloCpr(comRealizado(OUT, LIN, REAL, 296679.54));
+    expect(m.faixas[0].titulo).toContain('Caixa inicial · 30/09/2026');
+    expect(m.faixas[0].saldo?.texto).toBe(formatMoeda(5884.14));
+    const titulos = m.faixas.map((f) => f.titulo);
+    const iHoje = titulos.findIndex((x) => x.startsWith('Saldo hoje'));
+    expect(titulos.findIndex((x) => x.startsWith('2026-10-03'))).toBeLessThan(iHoje);
+    expect(titulos.findIndex((x) => x.startsWith('2026-10-12'))).toBeGreaterThan(iHoje);
+    /* cada dia realizado aparece UMA vez (antes de hoje), nunca de novo depois */
+    expect(titulos.filter((x) => x.startsWith('2026-10-03')).length).toBe(1);
+  });
+  it('período inteiro no passado: Saldo no fim e Mínimo do realizado; sem "Saldo hoje" na tabela; o Caixa hoje segue no cartão', () => {
+    const SET = { de: '2026-09-01', ate: '2026-09-30' };
+    const real = { inicial: { data: '2026-08-31', saldo: 30943.91 }, dias: [dia('2026-09-10', 0, 31000, -56.09), dia('2026-09-30', 5940.23, 0, 5884.14)] };
+    const m = montarModeloCpr(comRealizado(SET, LIN, real, 296679.54, '2026-09-30'));
+    expect(m.numeros.map((x) => x.rotulo)).toEqual(ROTULOS);
+    expect(m.numeros[0].valor).toBe(formatMoeda(30943.91));
+    expect(m.numeros[4]).toMatchObject({ valor: `-${formatMoeda(56.09)}`, detalhes: ['em 10/09'], tom: 'neg' });
+    expect(m.numeros[5]).toMatchObject({ valor: formatMoeda(5884.14), detalhes: ['em 30/09/2026'] });
+    expect(m.numeros[6]).toMatchObject({ valor: formatMoeda(296679.54), detalhes: ['05/10/2026', 'conciliado até 30/09', '5 dias a conferir'] });
+    expect(m.faixas.some((f) => f.titulo.startsWith('Saldo hoje'))).toBe(false);
+    expect(m.fim.saldo?.texto).toBe(formatMoeda(5884.14));
+  });
+  it('período que começa depois de hoje: o Caixa inicial é o projetado e a tabela segue partindo do saldo de hoje', () => {
+    const m = montarModeloCpr(comRealizado({ de: '2026-10-13', ate: '2026-10-31' }, LIN, null, 296679.54));
+    expect(m.numeros[0]).toMatchObject({ valor: formatMoeda(294782.71), detalhes: ['em 12/10/2026'] });
+    expect(m.faixas[0].titulo.startsWith('Saldo hoje')).toBe(true);
+  });
+  it('na folha: sete cartões de largura igual; o valor grande não tem corte; cada linha pequena é de uma linha só, bem menor', () => {
+    const doc = readFileSync(resolve(__dirname, 'DocumentoCpr.tsx'), 'utf8');
+    const ini = doc.indexOf('m.numeros.map');
+    const bloco = doc.slice(ini, doc.indexOf('m.notaSemSaldo', ini));
+    expect(ini).toBeGreaterThan(0);
+    expect(bloco).toContain('flex: 1');
+    expect(bloco).toMatch(/fontSize: 9\.5[^>]*>\{n\.valor\}/);
+    expect(bloco).not.toMatch(/\.\.\.corta[^>]*>\{n\.valor\}/);
+    expect(bloco).toMatch(/n\.detalhes[\s\S]*\.\.\.corta, fontSize: 6/);
   });
 });

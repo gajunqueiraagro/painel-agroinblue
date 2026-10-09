@@ -279,8 +279,13 @@ function TooltipFluxo({ active, label, payload, emConta }: TooltipProps) {
 }
 
 export function CprFluxoPrevisto({
-  linhas, saldoInicial, caveat, granularidade, hoje, inicio, passado, conciliadoAte, vencidosForaDoSaldo = 0, barras = 'ambos', folha = false,
+  linhas, saldoInicial, caveat, granularidade, hoje, inicio, passado, conciliadoAte, vencidosForaDoSaldo = 0, barras = 'ambos', folha = false, encerradoEm = null,
 }: {
+  /**
+   * CPR-PDF-ACABAMENTO-01 — PERÍODO INTEIRO NO PASSADO: a data "até". O gráfico desenha SÓ o realizado, do início do período até
+   * ela — sem o ponto de hoje e sem projeção (nada ali parte do caixa de hoje).
+   */
+  encerradoEm?: string | null;
   /**
    * CPR-PDF-ACABAMENTO-01 — o desenho para a FOLHA do PDF: a MESMA série, com as medidas da folha (letra do corpo da tabela nos
    * eixos, escala pelo dado, uma marca por dia até 31 dias, rótulos de valor acima da linha e sem se cruzar). A tela não passa.
@@ -348,8 +353,11 @@ export function CprFluxoPrevisto({
     [linhas, saldoInicial, ajusteTotal, granularidade, hoje]);
   const { semVencimento, rebaixada, anteriores } = fluxo;
   const pontos = useMemo(
-    () => combinarComPassado(fluxo, passadoDoPeriodo, hoje, vencidoPorDia),
-    [fluxo, passadoDoPeriodo, hoje, vencidoPorDia]);
+    () => (encerradoEm
+      /* só o passado até "até": sem futuro, sem "Hoje", sem o ajuste dos vencidos (eles saem hoje, depois do período) */
+      ? combinarComPassado({ ...fluxo, pontos: [] }, passadoDoPeriodo.filter((p) => p.data <= encerradoEm), '9999-12-31')
+      : combinarComPassado(fluxo, passadoDoPeriodo, hoje, vencidoPorDia)),
+    [fluxo, passadoDoPeriodo, hoje, vencidoPorDia, encerradoEm]);
 
   /**
    * A largura medida do gráfico — é dela que sai o espaçamento dos rótulos.
@@ -436,7 +444,7 @@ export function CprFluxoPrevisto({
   const fimConciliado = [...pontos].reverse().find((p) => p.zona === 'conciliado') ?? null;
   /* CPR-SALDO-DIA-02: a etiqueta de hoje vai para a direita quando hoje é o primeiro ponto; e o ponto "em conta hoje" */
   const ancoraHoje = ancoraDaTagDeHoje(pontos.findIndex((p) => p.chave === emHoje.chave));
-  const emConta = pontoEmContaHoje(saldoInicial, emHoje.saldo);
+  const emConta = encerradoEm ? null : pontoEmContaHoje(saldoInicial, emHoje.saldo);
 
   const M = folha ? MEDIDAS_DA_FOLHA : MEDIDAS_DA_TELA;
   const MARGEM_ESQ = 8;
@@ -558,7 +566,7 @@ export function CprFluxoPrevisto({
         {/* ⚠ O CAVEAT DO SALDO VEM INTEIRO, e ganha o seu próprio: o gráfico parte de um saldo
             conciliado até certa data E assume que todo compromisso cai no vencimento. */}
         <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
-          {caveat ? `${caveat} · ` : ''}* de hoje em diante, assumindo que tudo cai no vencimento
+          {caveat ? `${caveat} · ` : ''}{encerradoEm ? 'período encerrado: só o realizado' : '* de hoje em diante, assumindo que tudo cai no vencimento'}
           {anteriores > 0 && ` · ${anteriores} já vencido${anteriores > 1 ? 's' : ''}, ${anteriores > 1 ? 'descontados' : 'descontado'} do saldo de hoje`}
           {vencidosForaDoSaldo > 0 && ` · ${vencidosForaDoSaldo} vencido${vencidosForaDoSaldo > 1 ? 's' : ''} anterior${vencidosForaDoSaldo > 1 ? 'es' : ''} à conciliação, fora do saldo`}
           {semVencimento > 0 && ` · ${semVencimento} sem vencimento, fora do gráfico`}
@@ -688,7 +696,7 @@ export function CprFluxoPrevisto({
                 que o operador confere contra o card é o de hoje.
                 ⚠ E O TEXTO VAI PARA A ESQUERDA DO PONTO (`dx` negativo) quando "hoje" está
                 perto da borda: colado no eixo Y ele ficava por cima dos números da escala. */}
-            {emHoje && (
+            {emHoje && !encerradoEm && (
               <>
                 {/* ⚠ DUAS LINHAS, "hoje" ACIMA do valor: numa linha só o rótulo empurrava o
                     número para cima da curva. Separados, o valor fica logo acima do ponto e a
@@ -723,7 +731,7 @@ export function CprFluxoPrevisto({
                   )} />
               </>
             )}
-            {fimConciliado && fimConciliado.chave !== emHoje.chave && (
+            {fimConciliado && !encerradoEm && fimConciliado.chave !== emHoje.chave && (
               <ReferenceDot x={fimConciliado.rotulo} y={fimConciliado.saldo} r={0} isFront
                 label={(props) => (
                   <RotuloDoTopo {...props} texto={fmtTag(fimConciliado.saldo)}

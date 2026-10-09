@@ -441,3 +441,93 @@ function proximoDia(iso: string): string {
   d.setUTCDate(d.getUTCDate() + 1);
   return d.toISOString().slice(0, 10);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   O SALDO NUMA DATA E O REALIZADO DO PERÍODO — CPR-PDF-ACABAMENTO-01 (fecha CPR-SALDO-INICIO-PERIODO-01)
+
+   ⚠ NÃO É UM SEGUNDO CÁLCULO DE SALDO: é o MESMO do cartão Caixa — a âncora de cada conta (`ancoraDaConta` /
+   `ancoraSemExtrato`) e os realizados pela MESMA régua (`movimentoNaConta`) —, respondido para uma data qualquer em vez de só
+   para hoje. Da âncora para a frente soma os movimentos; da âncora para trás, desfaz. Em `hoje` o resultado É o total do cartão,
+   por construção (há teste).
+   ⚠ SÓ RESPONDE DENTRO DA JANELA DOS REALIZADOS CARREGADOS (`mesMinimo`): antes dela não há como desfazer movimentos, e a resposta
+   é NULA — nunca um saldo inventado.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/** O saldo de UMA conta no fim do dia `data`, a partir da âncora dela (para a frente ou para trás). */
+export function saldoDaContaNaData(ancora: AncoraDaConta, linhas: readonly LinhaDaPosicao[], data: string): number {
+  if (data >= ancora.data) return estimarSaldoDaConta(ancora, linhas, data);
+  let movimento = 0;
+  for (const l of linhas) {
+    const d = (l.data_pagamento ?? '').slice(0, 10);
+    if (!d || d <= data || d > ancora.data) continue;
+    if (l.conta_bancaria_id !== ancora.contaId && l.conta_destino_id !== ancora.contaId) continue;
+    movimento += movimentoNaConta(l, ancora.contaId);
+  }
+  return roundCurrency(ancora.valor - movimento);
+}
+
+export interface DiaRealizado {
+  data: string;
+  /** o que entrou e o que saiu das contas do caixa no dia (saídas em módulo), e quantos movimentos de cada lado */
+  entradas: number; saidas: number; nEntradas: number; nSaidas: number;
+  /** o saldo no fim do dia */
+  saldo: number;
+  conciliado: boolean;
+}
+export interface RealizadoDoCaixa {
+  /** o saldo no fim do dia ANTERIOR a `de` — o "Caixa inicial" do período */
+  inicial: { data: string; saldo: number };
+  /** um ponto por dia, de `de` até min(`ate`, hoje) */
+  dias: DiaRealizado[];
+}
+
+/**
+ * O realizado das contas do caixa (as MESMAS do cartão: com âncora) de `de` até min(`ate`, hoje), partindo do saldo no fim do
+ * dia anterior a `de`. `null` quando não há conta ancorada, quando `de` é depois de hoje + 1 ou quando o dia anterior a `de` cai
+ * FORA da janela dos realizados carregados.
+ */
+export function realizadoDoCaixa(
+  entrada: { contas: readonly ContaEmCaixa[]; saldos: readonly SaldoMesConta[]; linhas: readonly LinhaDaPosicao[]; hoje: string; mesMinimo: string },
+  de: string, ate: string,
+): RealizadoDoCaixa | null {
+  const { contas, saldos, linhas, hoje, mesMinimo } = entrada;
+  const vespera = diaAnterior(de);
+  if (vespera < `${mesMinimo}-01` || vespera > hoje) return null;
+  const ancoras: AncoraDaConta[] = [];
+  for (const c of contas) {
+    if (grupoDoTipoConta(c.tipo) === 'fora') continue;
+    const a = contaSemExtrato(c.tipo) ? ancoraSemExtrato(c.id, saldos) : ancoraDaConta(c.id, saldos, linhas, mesMinimo);
+    if (a) ancoras.push(a);
+  }
+  if (ancoras.length === 0) return null;
+  const maisAtrasada = ancoras.reduce((m, a) => (a.data < m ? a.data : m), ancoras[0].data);
+  const inicial = roundCurrency(ancoras.reduce((s, a) => s + saldoDaContaNaData(a, linhas, vespera), 0));
+  const fim = ate < hoje ? ate : hoje;
+  const porDia = new Map<string, { entradas: number; saidas: number; nEntradas: number; nSaidas: number }>();
+  for (const l of linhas) {
+    const d = (l.data_pagamento ?? '').slice(0, 10);
+    if (!d || d < de || d > fim) continue;
+    for (const a of ancoras) {
+      if (l.conta_bancaria_id !== a.contaId && l.conta_destino_id !== a.contaId) continue;
+      const m = movimentoNaConta(l, a.contaId);
+      if (m === 0) continue;
+      const atual = porDia.get(d) ?? { entradas: 0, saidas: 0, nEntradas: 0, nSaidas: 0 };
+      if (m > 0) { atual.entradas += m; atual.nEntradas += 1; } else { atual.saidas -= m; atual.nSaidas += 1; }
+      porDia.set(d, atual);
+    }
+  }
+  const dias: DiaRealizado[] = [];
+  let acumulado = inicial;
+  for (let d = de; d <= fim; d = proximoDia(d)) {
+    const m = porDia.get(d) ?? { entradas: 0, saidas: 0, nEntradas: 0, nSaidas: 0 };
+    acumulado += m.entradas - m.saidas;
+    dias.push({ data: d, entradas: roundCurrency(m.entradas), saidas: roundCurrency(m.saidas), nEntradas: m.nEntradas, nSaidas: m.nSaidas, saldo: roundCurrency(acumulado), conciliado: d <= maisAtrasada });
+  }
+  return { inicial: { data: vespera, saldo: inicial }, dias };
+}
+
+function diaAnterior(iso: string): string {
+  const d = new Date(`${iso}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
