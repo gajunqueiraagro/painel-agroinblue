@@ -504,7 +504,7 @@ export function CprFluxoPrevisto({
       });
     }
     if (emHojeLocal) {
-      const t = folha ? `hoje · ${fmtTag(emHojeLocal.saldo)} *` : `${fmtTag(emHojeLocal.saldo)} *`;
+      const t = `hoje · ${fmtTag(emHojeLocal.saldo)} *`;
       const inteira = larguraEstimada(t, M.hoje);
       const meia = inteira / 2;
       /* ancorada pelo começo (hoje é o primeiro ponto) ela ocupa a largura toda À DIREITA do ponto */
@@ -561,7 +561,8 @@ export function CprFluxoPrevisto({
     <div className="flex h-full min-h-0 flex-col rounded-lg" style={{ background: COR_CREME }} data-grafico={COR_CREME}>
       <div className="shrink-0 px-4 pt-3">
         <h2 className="text-[17px] font-semibold leading-none" style={{ color: COR_TEXTO }}>
-          Fluxo de caixa previsto
+          {/* período ENCERRADO: só há realizado — o título diz o que o desenho mostra */}
+          {encerradoEm ? 'Fluxo de caixa realizado' : 'Fluxo de caixa previsto'}
         </h2>
         {/* ⚠ O CAVEAT DO SALDO VEM INTEIRO, e ganha o seu próprio: o gráfico parte de um saldo
             conciliado até certa data E assume que todo compromisso cai no vencimento. */}
@@ -714,18 +715,12 @@ export function CprFluxoPrevisto({
                 {/* ⚠ A PALAVRA ACOMPANHA O VALOR: ela sobe junto quando o valor sobe, senão o
                     par se separaria e o "hoje" ficaria explicando um número que saiu de baixo
                     dele. Por isso as duas leem a MESMA faixa. */}
-                {/* NA FOLHA a palavra e o valor são UM rótulo só ("hoje · R$ X *"): a palavra solta, uma faixa acima, era o que
-                    caía por cima do rótulo do fim do conciliado quando os dois pontos estão próximos. */}
-                {!folha && (
+                {/* A PALAVRA E O VALOR SÃO UM RÓTULO SÓ ("hoje · R$ X *"), NA TELA E NA FOLHA (CPR-CAIXA-INICIAL-SEMPRE-01): a palavra
+                    solta, uma faixa acima, era o que caía por cima do rótulo do fim do conciliado quando os dois pontos estão
+                    próximos — a anti-colisão reserva a faixa do rótulo, e a palavra morava fora dela. */}
                 <ReferenceDot x={emHoje.rotulo} y={emHoje.saldo} r={0} isFront
                   label={(props) => (
-                    <RotuloDoTopo {...props} texto="hoje" cor={COR_SALDO} tamanho={10} ancora={ancoraHoje}
-                      faixa={(faixasDosRotulos.get('hoje') ?? 0) + 0.85} />
-                  )} />
-                )}
-                <ReferenceDot x={emHoje.rotulo} y={emHoje.saldo} r={0} isFront
-                  label={(props) => (
-                    <RotuloDoTopo {...props} texto={folha ? `hoje · ${fmtTag(emHoje.saldo)} *` : `${fmtTag(emHoje.saldo)} *`} cor={COR_SALDO}
+                    <RotuloDoTopo {...props} texto={`hoje · ${fmtTag(emHoje.saldo)} *`} cor={COR_SALDO}
                       tamanho={M.hoje} peso={600} ancora={ancoraHoje} faixa={faixasDosRotulos.get('hoje') ?? 0}
                       offset={M.offsetRotulo} alturaFaixa={M.alturaFaixa} subir={subirDe.get('hoje') ?? 0} />
                   )} />

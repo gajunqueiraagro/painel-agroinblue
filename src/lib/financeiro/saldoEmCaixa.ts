@@ -526,6 +526,35 @@ export function realizadoDoCaixa(
   return { inicial: { data: vespera, saldo: inicial }, dias };
 }
 
+/**
+ * CPR-CAIXA-INICIAL-SEMPRE-01 — as contas do caixa (as MESMAS de `realizadoDoCaixa`: com âncora) que tiveram movimento REALIZADO
+ * de `de` até min(`ate`, hoje). É quem a tela mostra em dias realizados — e por isso quem o seletor de conta tem de oferecer,
+ * mesmo com a pílula Realizado desligada. Fora da janela (o mesmo corte de `realizadoDoCaixa`): nenhuma.
+ */
+export function contasComRealizadoNoPeriodo(
+  entrada: { contas: readonly ContaEmCaixa[]; saldos: readonly SaldoMesConta[]; linhas: readonly LinhaDaPosicao[]; hoje: string; mesMinimo: string },
+  de: string, ate: string,
+): string[] {
+  const { contas, saldos, linhas, hoje, mesMinimo } = entrada;
+  const vespera = diaAnterior(de);
+  if (vespera < `${mesMinimo}-01` || vespera > hoje) return [];
+  const fim = ate < hoje ? ate : hoje;
+  const achadas: string[] = [];
+  for (const c of contas) {
+    if (grupoDoTipoConta(c.tipo) === 'fora') continue;
+    const a = contaSemExtrato(c.tipo) ? ancoraSemExtrato(c.id, saldos) : ancoraDaConta(c.id, saldos, linhas, mesMinimo);
+    if (!a) continue;
+    const moveu = linhas.some((l) => {
+      const d = (l.data_pagamento ?? '').slice(0, 10);
+      if (!d || d < de || d > fim) return false;
+      if (l.conta_bancaria_id !== c.id && l.conta_destino_id !== c.id) return false;
+      return movimentoNaConta(l, c.id) !== 0;
+    });
+    if (moveu) achadas.push(c.id);
+  }
+  return achadas;
+}
+
 function diaAnterior(iso: string): string {
   const d = new Date(`${iso}T12:00:00Z`);
   d.setUTCDate(d.getUTCDate() - 1);

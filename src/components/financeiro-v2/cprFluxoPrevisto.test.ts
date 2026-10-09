@@ -16,15 +16,20 @@ describe('a etiqueta de hoje não encosta no eixo Y', () => {
     expect(ancoraDaTagDeHoje(35)).toBe('middle');
     expect(RECUO_DA_TAG_DE_HOJE).toBeGreaterThanOrEqual(4);          // a distância mínima pedida
   });
-  it('as DUAS linhas da etiqueta (palavra e valor) usam a mesma âncora; o traço continua no ponto', () => {
-    expect(Array.from(fonte.matchAll(/ancora=\{ancoraHoje\}/g)).length).toBe(2);
+  it('a etiqueta de hoje é UM rótulo só ("hoje · valor"), na tela e na folha, com a âncora de hoje; o traço continua no ponto', () => {
+    /* CPR-CAIXA-INICIAL-SEMPRE-01: a palavra solta, uma faixa acima, caía por cima do rótulo do fim do conciliado */
+    expect(Array.from(fonte.matchAll(/ancora=\{ancoraHoje\}/g)).length).toBe(1);
+    expect(fonte).not.toContain('texto="hoje"');
+    expect(fonte).toContain('texto={`hoje · ${fmtTag(emHoje.saldo)} *`}');
+    /* a anti-colisão reserva a largura do rótulo INTEIRO (palavra + valor) */
+    expect(fonte).toContain('const t = `hoje · ${fmtTag(emHojeLocal.saldo)} *`;');
     expect(fonte).toContain("const x = ancora === 'start' ? xPonto + RECUO_DA_TAG_DE_HOJE : xPonto;");
     expect(fonte).toContain('<line x1={xPonto} y1={y - 5} x2={xPonto} y2={yTexto + 4}');
     expect(fonte).toContain('textAnchor={ancora}');
     /* a anti-colisão sabe que, à direita, a etiqueta ocupa a largura inteira de um lado só */
     expect(fonte).toContain('paraEsquerda: aDireita ? 0 : meia, paraDireita: aDireita ? inteira + RECUO_DA_TAG_DE_HOJE : meia');
     /* as outras etiquetas (fim do conciliado, saldo final) não ganharam âncora nova */
-    expect(Array.from(fonte.matchAll(/ancora=/g)).length).toBe(2);
+    expect(Array.from(fonte.matchAll(/ancora=/g)).length).toBe(1);
   });
 });
 

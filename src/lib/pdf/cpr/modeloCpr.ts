@@ -78,7 +78,8 @@ export interface ModeloCpr {
 
 /** O grupo que a tela desenha (a MESMA lista da tela, na mesma ordem). */
 export interface GrupoDaTela<L> {
-  tipo: 'vencidos_contam' | 'vencidos_anteriores' | 'entre' | 'dia' | 'sem_vencimento';
+  /** 'hoje' = a marca de hoje no meio da lista da tela; na folha quem a escreve é a faixa "Saldo hoje" (o grupo é pulado) */
+  tipo: 'vencidos_contam' | 'vencidos_anteriores' | 'entre' | 'dia' | 'sem_vencimento' | 'hoje';
   titulo: string; quando: string; linhas: L[];
   pagar: number; receber: number; saldo: number | null | undefined;
   /** dia ANTES de hoje (realizado): na folha vem logo depois do Caixa inicial, antes do "Saldo hoje" */
@@ -101,7 +102,8 @@ export interface EntradaDoModelo<L extends LinhaDaTela> {
     hoje: string; conciliadoAte: string | null;
   };
   /** o rodapé da tela: totais a pagar e a receber da lista e a contagem */
-  rodape: { pagar: number; receber: number; contas: number };
+  /** `realizado`: período ENCERRADO — os totais e a contagem são do que foi realizado no período, não de contas em aberto */
+  rodape: { pagar: number; receber: number; contas: number; realizado?: boolean };
   semanas: SemanaCpr[];
   porConta: SaldoDaContaCpr[] | null;
   motivoSemSaldo: string;
@@ -191,20 +193,23 @@ export function montarModeloCpr<L extends LinhaDaTela>(e: EntradaDoModelo<L>): M
     saldo: celulaDeValor('saldo', e.incluirVencidos ? s.hoje : s.partida.saldo),
     contas: [],
   };
-  /* PERÍODO QUE COMEÇA ANTES DE HOJE: a folha anda no tempo — Caixa inicial, os dias realizados, o saldo de hoje e o que vem.
-     Sem o Caixa inicial (o dono não responde naquela data) fica a ordem de sempre, a partir do saldo de hoje. */
-  const comInicial = !!s.inicial && e.periodo.de <= c.hoje;
-  const faixaDe = (g: GrupoDaTela<L>): FaixaDaFolha | null => (g.tipo === 'vencidos_anteriores' || g.tipo === 'sem_vencimento' ? null : {
+  /* CPR-CAIXA-INICIAL-SEMPRE-01 — A FOLHA ANDA NO TEMPO E A PRIMEIRA LINHA É SEMPRE O CAIXA INICIAL (R1): Caixa inicial, os dias
+     realizados, o saldo de hoje (quando hoje está no período) e o que vem. Período futuro: o Caixa inicial é o previsto na
+     véspera. Sem o Caixa inicial (o dono não responde naquela data), a linha sai com "—". */
+  const futuro = e.periodo.de > c.hoje;
+  const vespera = (() => { const d = new Date(`${e.periodo.de}T12:00:00Z`); d.setUTCDate(d.getUTCDate() - 1); return d.toISOString().slice(0, 10); })();
+  const faixaDe = (g: GrupoDaTela<L>): FaixaDaFolha | null => (g.tipo === 'vencidos_anteriores' || g.tipo === 'sem_vencimento' || g.tipo === 'hoje' ? null : {
     tipo: g.tipo, titulo: g.quando ? `${g.titulo} · ${g.quando}` : g.titulo,
     pagar: celulaDeValor('pagar', g.pagar), receber: celulaDeValor('receber', g.receber),
     saldo: celulaDeValor('saldo', g.saldo, { destacarNegativo: true }), contas: g.linhas.map((l) => contaDaFolha(l, e.de)),
   });
   const faixas: FaixaDaFolha[] = [];
-  if (comInicial && s.inicial) {
-    faixas.push({ tipo: 'saldo_hoje', titulo: `Caixa inicial · ${dma(s.inicial.data)} · ${quem}`, pagar: null, receber: null, saldo: celulaDeValor('saldo', s.inicial.saldo), contas: [] });
-    for (const g of e.grupos) { const f = g.passado ? faixaDe(g) : null; if (f) faixas.push(f); }
-  }
-  if (!s.encerrado) faixas.push(faixaDeHoje);
+  faixas.push({
+    tipo: 'saldo_hoje', titulo: `Caixa inicial · ${dma(s.inicial?.data ?? vespera)}${s.inicial && futuro ? ' · previsto' : ''} · ${quem}`,
+    pagar: null, receber: null, saldo: celulaDeValor('saldo', s.inicial ? s.inicial.saldo : null), contas: [],
+  });
+  for (const g of e.grupos) { const f = g.passado ? faixaDe(g) : null; if (f) faixas.push(f); }
+  if (!s.encerrado && !futuro) faixas.push(faixaDeHoje);
   let anteriores: BlocoSimplesDaFolha | null = null;
   let semVencimento: BlocoSimplesDaFolha | null = null;
   for (const g of e.grupos) {
@@ -216,7 +221,7 @@ export function montarModeloCpr<L extends LinhaDaTela>(e: EntradaDoModelo<L>): M
       semVencimento = { titulo: g.titulo, frase: 'sem data de vencimento: fora dos números e do saldo', contas: g.linhas.map((l) => contaDaFolha(l, e.de)), pagar: formatMoeda(g.pagar), receber: formatMoeda(g.receber) };
       continue;
     }
-    if (comInicial && g.passado) continue;
+    if (g.passado) continue;
     const f = faixaDe(g);
     if (f) faixas.push(f);
   }
@@ -242,7 +247,7 @@ export function montarModeloCpr<L extends LinhaDaTela>(e: EntradaDoModelo<L>): M
     comColunaConta: e.todasAsContas,
     faixas,
     fim: {
-      titulo: `Fim do período · ${dma(e.periodo.ate)} · ${contas(e.rodape.contas)}`,
+      titulo: `Fim do período · ${dma(e.periodo.ate)} · ${e.rodape.realizado ? `${e.rodape.contas} ${e.rodape.contas === 1 ? 'lançamento realizado' : 'lançamentos realizados'}` : contas(e.rodape.contas)}`,
       pagar: celulaDeValor('pagar', e.rodape.pagar), receber: celulaDeValor('receber', e.rodape.receber), saldo: celulaDeValor('saldo', s.fim),
     },
     notaSemSaldo: s.hoje == null ? `Saldo "—": ${e.motivoSemSaldo}.` : null,

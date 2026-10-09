@@ -10,13 +10,15 @@ import type { SerieDoSaldoCpr } from '@/lib/financeiro/cprRecorte';
 import { contaDaFolha, datasDoModelo, type EntradaDoModelo, type GrupoDaTela, type LinhaDaTela } from '@/lib/pdf/cpr/modeloCpr';
 
 const ROTULO_DO_GRUPO: Record<GrupoDaTela<unknown>['tipo'], string> = {
-  vencidos_contam: 'vencido que conta', vencidos_anteriores: 'vencido anterior', entre: 'antes do período', dia: 'período', sem_vencimento: 'sem vencimento',
+  vencidos_contam: 'vencido que conta', vencidos_anteriores: 'vencido anterior', entre: 'antes do período', dia: 'período', sem_vencimento: 'sem vencimento', hoje: 'hoje',
 };
 const dataCheia = (iso: string | null | undefined): string => (iso && iso.length >= 10 ? datasDoModelo.dma(iso) : '');
 const numero = (v: unknown): number | null => { const n = Math.abs(Number(v ?? 0)); return Number.isFinite(n) ? n : null; };
 
 export function montarPayloadExcelCpr<L extends LinhaDaTela>(e: {
   arquivo: string; grupos: GrupoDaTela<L>[]; serie: SerieDoSaldoCpr; de: EntradaDoModelo<L>['de']; incluirVencidos: boolean; hoje: string;
+  /** o primeiro dia do período (`periodo.de`): depois de hoje, o Caixa inicial é o previsto e não há linha de hoje */
+  inicio: string;
 }): XlsxDownloadPayload {
   const contas: Record<string, XlsxCellValue>[] = [];
   for (const g of e.grupos) {
@@ -33,11 +35,18 @@ export function montarPayloadExcelCpr<L extends LinhaDaTela>(e: {
     }
   }
   const s = e.serie;
+  /* CPR-CAIXA-INICIAL-SEMPRE-01 — "Saldo por dia" COMEÇA NO CAIXA INICIAL e termina no Saldo no fim da tela: Caixa inicial, os
+     dias realizados (até ontem), hoje (o saldo em caixa), os vencidos que contam e o que vem. Tudo da série do dono; nada é somado. */
+  const futuro = e.inicio > s.dataDeHoje;
+  const deHoje: XlsxCellValue[][] = s.encerrado || futuro ? [] : [
+    [`Hoje · ${dataCheia(s.dataDeHoje)} · saldo em caixa`, s.realizadoHoje?.pagar.valor ?? null, s.realizadoHoje?.receber.valor ?? null, s.hoje],
+    ['Vencidos que contam no saldo', s.partida.pagar.valor, s.partida.receber.valor, s.partida.saldo],
+  ];
   const saldoPorDia: XlsxCellValue[][] = [
     ['Data', 'A pagar', 'A receber', 'Saldo depois do dia'],
-    ['Saldo hoje', null, null, s.hoje],
-    ['Vencidos que contam no saldo', s.partida.pagar.valor, s.partida.receber.valor, s.partida.saldo],
-    ...(s.entreHojeEDe ? [['Entre hoje e o início do período', s.entreHojeEDe.pagar.valor, s.entreHojeEDe.receber.valor, s.entreHojeEDe.saldo]] : []),
+    [`Caixa inicial${futuro ? ' (previsto)' : ''}${s.inicial ? ` · ${dataCheia(s.inicial.data)}` : ''}`, null, null, s.inicial ? s.inicial.saldo : null],
+    ...s.realizados.map((d): XlsxCellValue[] => [`${dataCheia(d.data)} · realizado`, d.pagar.valor, d.receber.valor, d.saldo]),
+    ...deHoje,
     ...s.dias.map((d): XlsxCellValue[] => [dataCheia(d.data), d.pagar.valor, d.receber.valor, d.saldo]),
   ];
   return {

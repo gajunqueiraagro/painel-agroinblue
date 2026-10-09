@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 09/10/2026 (DIVIDENDO-ESCRITOR-UNICO-01 passo 4, +3 em `src/lib/financeiro/dividendoEscritorUnico.test.ts` — 4724 depois
+  Baseline em 09/10/2026 (CPR-CAIXA-INICIAL-SEMPRE-01, +14: `src/lib/financeiro/cprRecorte.test.ts` 11 (69 -> 80),
+  `src/lib/pdf/cpr/exportCpr.test.tsx` 2 (22 -> 24), `src/lib/financeiro/saldoEmCaixa.test.ts` 1 — 4738 depois dele; antes o DIVIDENDO-ESCRITOR-UNICO-01 passo 4, +3 em `src/lib/financeiro/dividendoEscritorUnico.test.ts` — 4724 depois
   dele; antes o passo 3, +13 em `src/pages/dividendosTab.test.tsx` — 4721 depois dele; antes o CPR-PDF-ACABAMENTO-01 commit B, +20: `src/lib/financeiro/saldoEmCaixa.test.ts` 5,
   `src/lib/financeiro/cprRecorte.test.ts` 8, `src/lib/pdf/cpr/exportCpr.test.tsx` 7 — 4708 depois dele; antes o
   CPR-PDF-ACABAMENTO-01 commit A, +5 em `src/lib/pdf/cpr/graficoNoPdf.test.tsx` — 4688 depois dele; antes o
@@ -276,7 +277,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4724
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4738
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3686,6 +3687,59 @@ docs/historico/frentes-ate-2026-09-29.md.)
     bloco nao diz) · a ponta fora do caixa so' diz o motivo no `title` · `fluxoPrevisto.ts` passou a importar o dono (era sem
     import) · NAO PROVADO NO NAVEGADOR: ponta em conta fora do caixa (a Vera nao tem caso no mes), vencida de transferencia
     (Agnaldo / Santa Rita nao abertos), o Ampliado, e clique na linha de cada ponta abrindo o lancamento (mesmo `abrir(l.id)`).
+- ⚠ A PRIMEIRA LINHA DA CPR E' SEMPRE O CAIXA INICIAL DO PERIODO, E O SELETOR DE CONTA VEM DO DONO (CPR-CAIXA-INICIAL-SEMPRE-01, Gabriel
+  09/10/2026, so' tela, sem banco). Continua o CPR-PDF-ACABAMENTO-01; SUBSTITUI, nos blocos de baixo, "Saldo hoje" como linha fixa do
+  topo, "o MINIMO pode cair na data do Caixa inicial" e "o EXCEL nao tem o Caixa inicial".
+  · R1 — EM TODO FILTRO a linha fixa do topo e' UMA (`cpr-caixa-inicial`): "Caixa inicial · <vespera de 'de'> · <conta>", o saldo no
+    fim do dia anterior ao periodo, do MESMO dono (`realizadoDoCaixa`). O "saldo de hoje" NUNCA e' a primeira linha: HOJE fica
+    marcado no lugar dele (grupo `hoje`, "Hoje · dd/MM · saldo em caixa[ · apos vencidos]"), entre os dias realizados e o que vem.
+    Ordem da lista: dias realizados -> Hoje -> vencidos -> de hoje em diante -> fim. Periodo ENCERRADO: dias -> vencidos -> fim (sem
+    Hoje). Periodo FUTURO: o Caixa inicial e' o saldo PREVISTO na vespera, com a marca "previsto"; vencidos e "entre hoje e de" ficam
+    SEM saldo (ja' estao dentro do Caixa inicial previsto). Sem saldo conferido, ou vespera fora da janela: "—" com o motivo no
+    `title` (`motivoSemSaldo` / `motivoSemCaixa`), e o dia passado fica SEM saldo — nunca com o de hoje.
+    ⚠ A JANELA: `MESES_BUSCA_ANCORA` = 6 — em 09/10/2026 os realizados carregados comecam em 01/04/2026, entao o Caixa inicial
+      existe para periodo que comeca de 02/04/2026 em diante; antes disso, "—" com "a janela começa em dd/mm/aaaa".
+  · R2 — O SELETOR DE CONTA (`resumoPorContaCpr`, no dono): entra toda conta com QUALQUER linha no periodo nos status ligados — em
+    aberto, ou PAGA com vencimento dentro de [de, ate'] (a lista agrupa a paga pelo vencimento), ponta de transferencia inclusive —,
+    mais as dos vencidos com "Incluir vencidos" ligado; e a conta JA' ESCOLHIDA esta' sempre na lista (`contaEscolhida`; a opcao
+    montada a' mao na tela saiu). A paga entra com R$ 0,00 · 0 (nunca soma). A faixa "A pagar por conta" nao mudou.
+    ⚠ E ENTRA TAMBEM TODA CONTA COM MOVIMENTO REALIZADO NO PERIODO, EM QUALQUER PILULA (decisao do Gabriel, 09/10, antes do commit):
+      os dias realizados aparecem na lista com a pilula Realizado desligada (vem do caixa, nao das pilulas), entao a conta deles
+      tem de estar no seletor. Quem responde e' o dono do caixa, `contasComRealizadoNoPeriodo(entrada, de, ate')`
+      (`saldoEmCaixa.ts`: as MESMAS contas de `realizadoDoCaixa` — com saldo conferido —, movimento de "de" ate' min("ate'", hoje),
+      nenhuma fora da janela); a tela a entrega ao dono do recorte por `comRealizado` (ele segue sem importar o caixa). Nasce de
+      defeito visto na Vera, ago/26: com as pilulas padrao so' "Conta Fazenda" aparecia; agora Itau Personalite e Itau CDI tambem.
+  · R3 — O MINIMO OLHA SO' OS DIAS DE DENTRO DO PERIODO (`serieDoSaldoCpr`): a vespera nao concorre; a partida de hoje so' concorre
+    com `de` <= hoje; "entre hoje e de" nao concorre. Periodo futuro sem conta nenhuma: o Minimo e' o saldo da vespera no 1o dia.
+  · PERIODO ENCERRADO: o rodape diz "N lançamentos realizados" com os totais do REALIZADO (`serie.totalRealizado`; antes "0 contas ·
+    R$ 0,00"), na tela e na folha (`rodape.realizado`); o grafico se chama "Fluxo de caixa realizado". Fora do encerrado o rodape
+    segue so' com o em aberto.
+  · PDF (`modeloCpr.ts`) e EXCEL (`cprExcel.ts`, parametro novo `inicio`) leem a MESMA serie: a folha comeca na faixa "Caixa
+    inicial" (com " · previsto" no futuro) e pula o grupo `hoje` da tela (tem a faixa propria); "Saldo por dia" do Excel = Caixa
+    inicial -> "dd/mm/aaaa · realizado" -> "Hoje · … · saldo em caixa" -> "Vencidos que contam no saldo" -> os dias, e termina no
+    Saldo no fim da tela.
+  · GRAFICO DA TELA: "hoje" e o valor sao UM rotulo ("hoje · R$ 297 mil *"), a solucao da folha; a palavra solta saiu.
+  · TESTES TROCADOS COM O CONTRATO (nenhum afrouxado): em `cprRecorte.test.ts` os do Minimo (a vespera nao concorre; `subindo` passa a
+    450 em 10/09) e a leitura de fonte do seletor; em `exportCpr.test.tsx` a ordem das faixas da folha e as linhas de "Saldo por dia"
+    (a `entrada()` passou a levar o realizado); `graficoNoPdf.test.tsx` (o `inicio`); `cprFluxoPrevisto.test.ts` (um rotulo so').
+  PROVA (Vera · Itau Personalite, so' leitura, 09/10, 1.127 x 523, aba em segundo plano, por script): ago/26 — com as pilulas padrao (Realizado desligada) a conta esta' no
+  seletor; Caixa inicial 208.561,46 em 31/07, Saldo no fim 30.943,91, "42 lançamentos realizados"; set/26 — 30.943,91 em 31/08 -> 5.884,14, "54 lançamentos realizados";
+  "Este mês" — "Caixa inicial · 30/09/2026 · R$ 5.884,14", 02/10, 05/10 e 07/10 realizados, Hoje 296.679,54, fim 504,52; "30 dias" —
+  "Caixa inicial · 08/10/2026 · R$ 299.745,75", Hoje 296.679,54. Excel de outubro (o payload do clique, capturado): primeira linha
+  "Caixa inicial · 30/09/2026" 5.884,14, ultima "21/10/2026" 504,52. Grafico de outubro: 0 rotulos sobrepostos.
+  33 mutacoes, uma por regra: 30 mortas de primeira; tres sobreviveram (o rodape da tela; a conta sem saldo conferido e a janela
+  no seletor) e ganharam o caso que as mata.
+  · O QUE "ESTE MES" GANHA HOJE (09/10): a faixa "Hoje" em todo cliente, e uma faixa por dia realizado antes de hoje — Vera 3,
+    Agnaldo 2, os demais 0 (medido por data de pagamento em 01–08/10, todas as contas).
+  · AS BARRAS DE MOVIMENTO (so' relato, nada mexido): `<Bar dataKey="entradas">` e `"saidas"` estao no codigo desde o 7f767826 (a
+    primeira versao do Fluxo); a prop `barras` veio no de185201. Na tela de hoje o recharts monta os 21 grupos
+    (`.recharts-bar-rectangle`) VAZIOS — 0 retangulos desenhados. Se algum dia apareceram na tela nao foi medido.
+  ⚠ DIVIDAS: com "Incluir vencidos", o periodo ENCERRADO lista vencidos de DEPOIS do periodo
+    (visto: ago/26 com um vencido de 15/09) — ja' era assim · o cartao Caixa da tela segue sendo o de HOJE em todo periodo · os
+    cartoes da tela seguem na ordem antiga (CPR-CARTOES-TELA-ORDEM-01).
+  ⚠ NAO PROVADO: periodo FUTURO e periodo fora da janela no navegador (so' teste) · o PDF gerado depois deste PR (so' o modelo, por
+    teste) · o arquivo .xlsx ABERTO (conferido o payload enviado a' `export-xlsx`) · o grafico no periodo encerrado e o Ampliado ·
+    nenhuma captura de tela (aba oculta) · Agnaldo, NJ e Santa Rita nao abertos.
 - ⚠ O PERIODO TEM CAIXA INICIAL, E O PASSADO DO PERIODO E' O REALIZADO DO MESMO DONO DO CAIXA (CPR-PDF-ACABAMENTO-01 commit B, Gabriel
   09/10/2026, so' tela, sem banco; FECHA a divida CPR-SALDO-INICIO-PERIODO-01). Vale na LISTA, no FLUXO, no PDF e no resumo por semana.
   · NAO HA' SEGUNDO CALCULO DE SALDO: `saldoDaContaNaData(ancora, linhas, data)` e `realizadoDoCaixa(entrada, de, ate)`

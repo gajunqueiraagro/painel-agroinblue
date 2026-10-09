@@ -215,7 +215,7 @@ describe('a ponta de transferência chega escrita ao PDF e ao Excel', () => {
     expect(m.fim.pagar?.texto).toBe('R$ 290.040,00');
   });
   it('o Excel diz o grupo da ponta fora do caixa e traz o mesmo saldo do fim', () => {
-    const x = montarPayloadExcelCpr<Linha>({ arquivo: 'a', grupos, serie, de, incluirVencidos: true, hoje: HOJE });
+    const x = montarPayloadExcelCpr<Linha>({ arquivo: 'a', grupos, serie, de, incluirVencidos: true, hoje: HOJE, inicio: P.de });
     const contas = x.sheets[0].rows;
     expect(Array.isArray(contas) ? contas.length : 0).toBe(3);
     expect(JSON.stringify(contas)).toContain('transferência · conta fora do caixa (não soma)');

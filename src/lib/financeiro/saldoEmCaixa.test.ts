@@ -8,7 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   ancoraDaConta, ancoraSemExtrato, contaSemExtrato, estimarSaldoDaConta, estimarSaldoEmCaixa,
-  grupoDoTipoConta, posicaoDoSaldo, serieDoSaldoPassado, saldoDaContaNaData, realizadoDoCaixa,
+  grupoDoTipoConta, posicaoDoSaldo, serieDoSaldoPassado, saldoDaContaNaData, realizadoDoCaixa, contasComRealizadoNoPeriodo,
   type SaldoMesConta,
 } from './saldoEmCaixa';
 import type { LinhaDaPosicao } from '@/hooks/useExtratoDaConta';
@@ -567,6 +567,22 @@ describe('saldoDaContaNaData e realizadoDoCaixa — CPR-PDF-ACABAMENTO-01', () =
     expect(saldoDaContaNaData(ancA, linhas, '2026-10-04')).toBe(700);  // desfaz a saída de 05/10
     expect(saldoDaContaNaData(ancA, linhas, '2026-09-30')).toBe(300);  // = o saldo final conferido de setembro
     expect(saldoDaContaNaData(ancA, linhas, '2026-08-31')).toBe(100);  // = o saldo inicial de setembro
+  });
+  it('contasComRealizadoNoPeriodo: só conta do caixa com movimento no período, até hoje; fora da janela, nenhuma', () => {
+    expect(contasComRealizadoNoPeriodo(entradaDoCaixa, '2026-10-01', '2026-10-31').sort()).toEqual([A, B]);   // o cartão moveu e não entra
+    expect(contasComRealizadoNoPeriodo(entradaDoCaixa, '2026-10-02', '2026-10-02')).toEqual([A]);
+    expect(contasComRealizadoNoPeriodo(entradaDoCaixa, '2026-09-15', '2026-09-15')).toEqual([B]);
+    expect(contasComRealizadoNoPeriodo(entradaDoCaixa, '2026-10-06', '2026-10-06')).toEqual([]);              // dia sem movimento
+    expect(contasComRealizadoNoPeriodo(entradaDoCaixa, '2026-10-08', '2026-10-08').sort()).toEqual([A, B]);   // as duas pontas da transferência
+    expect(contasComRealizadoNoPeriodo({ ...entradaDoCaixa, hoje: '2026-10-04' }, '2026-10-01', '2026-10-31').sort()).toEqual([A, B]);
+    expect(contasComRealizadoNoPeriodo({ ...entradaDoCaixa, hoje: '2026-10-02' }, '2026-10-01', '2026-10-31')).toEqual([A]);  // depois de hoje não conta
+    expect(contasComRealizadoNoPeriodo(entradaDoCaixa, '2026-07-01', '2026-07-31')).toEqual([]);              // véspera fora da janela
+    expect(contasComRealizadoNoPeriodo(entradaDoCaixa, '2026-11-01', '2026-11-30')).toEqual([]);              // período futuro
+    /* conta do caixa SEM saldo conferido não entra (a tela não tem realizado para mostrar dela); e fora da janela nada entra,
+       mesmo havendo movimento carregado naquele mês */
+    const comOutras = { ...entradaDoCaixa, contas: [...contas, { id: 'sem-ancora', nome: 'Sem âncora', tipo: 'cc' }], linhas: [...linhas, saida('sem-ancora', '2026-10-02', 5), saida(A, '2026-07-10', 5)] };
+    expect(contasComRealizadoNoPeriodo(comOutras, '2026-10-02', '2026-10-02')).toEqual([A]);
+    expect(contasComRealizadoNoPeriodo(comOutras, '2026-07-01', '2026-07-31')).toEqual([]);
   });
   it('realizadoDoCaixa: o Caixa inicial é o fim da véspera, os dias andam até min(até, hoje) e fecham no Caixa de hoje', () => {
     const r = realizadoDoCaixa(entradaDoCaixa, '2026-10-01', '2026-10-31');
