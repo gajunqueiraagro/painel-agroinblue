@@ -3423,6 +3423,8 @@ export function LancamentoV2Dialog({
       <NovoFornecedorDialog
         open={fornecedorDialogOpen}
         onClose={() => setFornecedorDialogOpen(false)}
+        clienteId={clienteAtual?.id ?? null}
+        onSelecionar={(f) => setFavorecidoId(f.id)}
         onSave={async (nome, cpfCnpj) => {
           if (!fazendaId) {
             toast.error('Selecione uma fazenda antes de cadastrar o fornecedor.');

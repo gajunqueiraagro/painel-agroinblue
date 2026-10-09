@@ -146,6 +146,7 @@ describe('useFornecedoresDoCliente', () => {
       'src/lib/financeiro/nfeConsultas.ts': 1,
       'src/pages/FinV2FornecedoresTab.tsx': 1,
       'src/hooks/useFinanceiroV2.ts': 1,
+      'src/lib/fornecedores/cadastroDaCasaBanco.ts': 1,   /* a reativação do cadastro da casa (fatia 2c, 1a) */
       'src/pages/LancamentosTab.tsx': 4,
     };
     const avisos = (fonte: string) => (fonte.match(/^\s*notificarFornecedoresMudaram\(/gm) ?? []).length;

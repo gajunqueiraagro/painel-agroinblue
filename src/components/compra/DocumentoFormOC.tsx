@@ -376,6 +376,8 @@ export function DocumentoFormOC({ api, somenteLeitura, fornecedores, clienteId, 
     <NovoFornecedorDialog
       open={novoFornecedorOpen}
       onClose={() => setNovoFornecedorOpen(false)}
+      clienteId={clienteId ?? null}
+      onSelecionar={(f) => setForm(x => ({ ...x, emitenteId: f.id, emitenteNome: f.nome, emitenteDocumento: f.cpf_cnpj || x.emitenteDocumento }))}
       onSave={async (nome, cpfCnpj) => {
         const rec = await onCriarFornecedor(nome, cpfCnpj);
         if (rec) setForm(f => ({ ...f, emitenteId: rec.id, emitenteNome: rec.nome, emitenteDocumento: cpfCnpj || f.emitenteDocumento }));

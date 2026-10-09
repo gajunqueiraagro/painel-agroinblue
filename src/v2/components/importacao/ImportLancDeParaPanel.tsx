@@ -55,12 +55,14 @@ export interface ImportLancDeParaPanelProps {
   /** Textos que JÁ têm apelido gravado — só neles "esquecer" faz sentido. */
   temApelido?: Readonly<Record<string, string>>;
   onCriarFornecedor?: (nome: string, fazendaId: string | null, cpfCnpj?: string) => Promise<FornecedorV2 | null>;
+  /** o cliente da importação: o cadastro da casa procura repetido dentro dele (FORN-SELETOR-PADRAO-01 fatia 2c) */
+  clienteId?: string | null;
 }
 
 export function ImportLancDeParaPanel({
   titulo, campo, mapa, pendentes, tipoPorTexto,
   classificacoes, fazendas, fornecedores, contas, safras,
-  onResolver, onDescartar, onCriarFornecedor,
+  onResolver, onDescartar, onCriarFornecedor, clienteId,
   onSemClassificacao, onLimparSelecao, onEsquecerApelido, temApelido,
 }: ImportLancDeParaPanelProps) {
   const [busca, setBusca] = useState<Record<string, string>>({});
@@ -315,6 +317,8 @@ export function ImportLancDeParaPanel({
           open={novoFornecedorPara !== null}
           onClose={() => setNovoFornecedorPara(null)}
           defaultNome={novoFornecedorPara ?? ''}
+          clienteId={clienteId}
+          onSelecionar={(f) => { if (novoFornecedorPara !== null) onResolver('fornecedor', novoFornecedorPara, f.id, f.nome); }}
           onSave={async (nome, cpfCnpj) => {
             const criado = await onCriarFornecedor(nome, null, cpfCnpj);
             if (criado && novoFornecedorPara !== null) {

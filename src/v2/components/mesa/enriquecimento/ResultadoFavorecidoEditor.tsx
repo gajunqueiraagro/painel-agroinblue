@@ -19,13 +19,15 @@ export interface ResultadoFavorecidoEditorProps {
   valorAtual?: string | null;
   fornecedores: FornecedorV2[];
   fazendaId: string | null;   // fazenda proposta da linha (para cadastrar fornecedor)
+  /** o cliente da Mesa: o cadastro da casa procura repetido dentro dele (FORN-SELETOR-PADRAO-01 fatia 2c) */
+  clienteId: string | null | undefined;
   disabled?: boolean;
   onEditar: (patch: Record<string, unknown>) => Promise<void>;
   onCriarFornecedor: (nome: string, fazendaId: string | null, cpfCnpj?: string) => Promise<FornecedorV2 | null>;
 }
 
 export function ResultadoFavorecidoEditor({
-  value, valorAtual, fornecedores, fazendaId, disabled, onEditar, onCriarFornecedor,
+  value, valorAtual, fornecedores, fazendaId, clienteId, disabled, onEditar, onCriarFornecedor,
 }: ResultadoFavorecidoEditorProps) {
   const [search, setSearch] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -50,6 +52,8 @@ export function ResultadoFavorecidoEditor({
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
         defaultNome={defaultNome}
+        clienteId={clienteId}
+        onSelecionar={(f) => { void onEditar({ favorecido_id: f.id }); }}
         onSave={async (nome, cpfCnpj) => {
           // PR-FORNECEDOR-FAZENDA-01: sem guard de fazenda — fazenda é opcional.
           const f = await onCriarFornecedor(nome, fazendaId ?? null, cpfCnpj);

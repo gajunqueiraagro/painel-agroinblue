@@ -501,6 +501,8 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
       open={novoFornecedorAberto}
       onClose={() => setNovoFornecedorAberto(false)}
       defaultNome={fornecedorSearch}
+      clienteId={clienteId}
+      onSelecionar={(f) => { setFavorecidoId(f.id); setFornecedorSearch(''); }}
       onSave={async (nome, cpfCnpj) => {
         const novo = await criarFornecedor(nome, fazendaId || null, cpfCnpj);
         if (novo) { setFavorecidoId(novo.id); setFornecedorSearch(''); setNovoFornecedorAberto(false); }

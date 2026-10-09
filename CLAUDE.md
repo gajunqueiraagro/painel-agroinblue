@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 09/10/2026 (DIALOG-CLIQUE-FECHANDO-01, +12 em `src/components/ui/menuFechadoSemClique.test.tsx` (14 -> 26) — 4752 depois
+  Baseline em 09/10/2026 (FORN-SELETOR-PADRAO-01 fatia 2c commit 1a, +24: `src/lib/fornecedores/cadastroDaCasa.test.ts` 15,
+  `src/components/financeiro-v2/novoFornecedorDialog.test.tsx` 9 — 4776 depois dele; antes o DIALOG-CLIQUE-FECHANDO-01, +12 em `src/components/ui/menuFechadoSemClique.test.tsx` (14 -> 26) — 4752 depois
   dele; antes o CPR-FLUXO-BARRAS-01, +2 em `src/lib/pdf/cpr/graficoNoPdf.test.tsx` (16 -> 18) — 4740 depois dele; antes o
   CPR-CAIXA-INICIAL-SEMPRE-01, +14: `src/lib/financeiro/cprRecorte.test.ts` 11 (69 -> 80),
   `src/lib/pdf/cpr/exportCpr.test.tsx` 2 (22 -> 24), `src/lib/financeiro/saldoEmCaixa.test.ts` 1 — 4738 depois dele; antes o DIVIDENDO-ESCRITOR-UNICO-01 passo 4, +3 em `src/lib/financeiro/dividendoEscritorUnico.test.ts` — 4724 depois
@@ -279,7 +280,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4752
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4776
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -1444,6 +1445,60 @@ preview que o cabecalho nao sai da tela ao rolar.
     precisa desligar) e a pagina ja' aberta antes da publicacao (so' muda ao recarregar).
   [A divida MENU-CLIQUE-FECHANDO-01, medida neste passo, FECHOU no commit seguinte — ver a regra "LISTA OU MENU FECHANDO NAO
     ACEITA CLIQUE", acima.]
+- ⚠ O CADASTRO DA CASA NAO DUPLICA FORNECEDOR, E A REGRA MORA NUM LUGAR SO' (FORN-SELETOR-PADRAO-01 fatia 2c, commit 1a, Gabriel 09/10/2026,
+  so' tela, sem banco). Vale em TODO ponto que abre o "+" de um seletor de fornecedor (o `NovoFornecedorDialog`,
+  `src/components/financeiro-v2/`). A regra subiu do diálogo proprio do credor de Financiamentos (que sai no 1b).
+  · A REGRA (`src/lib/fornecedores/cadastroDaCasa.ts`, pura: `decidirCadastro`, `conferirCadastro`, `reativarDoCadastro`), pelo
+    nome NORMALIZADO e dentro do cliente, nesta ordem: (1) existe ATIVO com o nome -> nao cria; o existente e' selecionado e o
+    dialogo diz, ao lado do botao, "Já existe um fornecedor com este nome. Ele foi selecionado." (fica aberto ate' o Fechar);
+    (2) existe so' INATIVO -> pergunta: "Reativar e selecionar" (reativa, seleciona, fecha) ou "Não reativar" (volta ao
+    formulario, nada gravado); (3) o CPF/CNPJ informado (so' digitos) ja' e' de OUTRO fornecedor ATIVO -> nao cria; diz de quem
+    e' e oferece "Selecionar <nome>" ou "Voltar" — nunca escolhe sozinho; (4) nada disso -> cria como sempre (o `onSave` do
+    hospedeiro, com a fazenda que a tela passar; a recusa "sem fazenda" do credor NAO foi levada). Entre homonimos ativos vale o
+    mais antigo (`created_at`, id). Falha ao conferir vira frase — nunca vira "pode criar".
+  · O DIALOGO CONFERE ANTES DE CHAMAR O CRIAR DO HOSPEDEIRO; nenhuma tela reimplementa. Props novas e OBRIGATORIAS: `clienteId` e
+    `onSelecionar(fornecedor)` (o que a tela faz com o fornecedor que ja' existia). Os 10 usos (8 arquivos) presos por teste de
+    fonte: `LancamentoV2Dialog`, `RecorrenciaDialog`, `AbaCompromissosOC`, `DocumentoFormOC`, `LancamentosTab` (3),
+    `ResultadoFavorecidoEditor`, `EnriquecerTresPassos`, `ImportLancDeParaPanel`.
+  · A FONTE DO BANCO (`cadastroDaCasaBanco.ts`): os de mesmo nome por `nome_normalizado` (ativos E inativos, lidos na hora — o
+    lido agora vence o cache), os ativos pelo LEITOR UNICO, e a reativacao com o cliente no filtro, que avisa o leitor.
+  · TAMANHO FIXO: o recado tem lugar reservado (30px, duas linhas, o texto inteiro no `title`) e a linha dos botoes tem a mesma
+    altura em todo estado. Aviso e recusa ali, nunca em toast.
+  · ⚠ `normalizeFornecedorNome` PASSOU A TIRAR O ACENTO, COMO O BANCO. O gatilho `fn_normalizar_nome_fornecedor` faz `unaccent`
+    antes de tudo; a funcao do front nao fazia ("João" virava "JO O" aqui e "JOAO" no banco). MEDIDO: em 1.353 fornecedores (todos
+    os que tem acento) o `nome_normalizado` gravado era diferente do que o front calculava — para eles a checagem de repetido
+    do credor NUNCA casava. Depois do conserto a replica SQL da regra bate em 100%. ⚠ Muda tambem a checagem do cadastro
+    completo (`FornecedorFormDialog`, que compara pela mesma funcao): "João" e "Joao" passam a ser o mesmo nome la'.
+  MEDIDO ANTES (09/10, so' contagem, nada corrigido) — ATIVOS por cliente · nomes normalizados repetidos (fornecedores neles) ·
+  CPF/CNPJ repetido (com nomes diferentes) · ativos sem fazenda:
+      Agnaldo 1.496 · 7 (14) · 0 (0) · 78        NJ 2.594 · 19 (50) · 1 (0) · 268        Raul 30 · 2 (4) · 0 (0) · 1
+      RRCC 340 · 0 · 0 · 118                     Santa Rita 1.034 · 0 · 0 · 49            Vera 378 · 1 (2) · 2 (2) · 4
+      Teste 2 · 0 · 0 · 1
+    Nomes que tem ativo E inativo ao mesmo tempo: NJ 45, Vera 12, Agnaldo 6, RRCC 1, Santa Rita 1.
+  PROVA NO NAVEGADOR (cliente Teste, 09/10, aba em SEGUNDO PLANO, gestos por script; 2 fornecedores sinteticos criados por SQL, 2
+  pela tela, os 4 APAGADOS; 0 OCs e 0 lancamentos criados), nos DOIS pontos — Novo lançamento (Financeiro) e Nova compra (OC):
+  nome repetido ativo, digitado sem acento e em outra caixa -> a frase, o campo com o existente, 0 gravacoes; documento repetido
+  -> "Este CPF/CNPJ já é de … (11.222.333/0001-44)", "Voltar" (Financeiro, 0 gravacoes) e "Selecionar" (OC, o dono escolhido, 0
+  gravacoes); nome de inativo -> a pergunta, "Não reativar" (0 gravacoes) e "Reativar e selecionar" (1 PATCH, o campo com ele);
+  nome novo -> 1 POST e o novo escolhido. Dialogo 384 x 338 vazio e nos quatro estados; nenhum recado cortado.
+  Testes: `src/lib/fornecedores/cadastroDaCasa.test.ts` 15 e `src/components/financeiro-v2/novoFornecedorDialog.test.tsx` 9; 26
+  mutacoes mortas, uma por regra (⚠ a primeira rodada nao valia: havia um teste falhando ANTES das mutacoes — a base se confere
+  verde antes de mutar).
+  ⚠ TESTE QUE ABRE O CADASTRO DE VERDADE E SALVA simula a fonte (`vi.mock('@/lib/fornecedores/cadastroDaCasaBanco', …)` com o
+    cadastro vazio): o dialogo confere antes de criar. Mudou por isso `recorrenciaDialog.test.tsx` (os dois casos do "+").
+  ⚠ SUITE-TESTE-OSCILA-01, de novo: uma execucao deu 4 falhas (a quarta, `obrigacaoEdicao.test.tsx > foto > criação de
+    emprestimo`); sozinho o arquivo passou 2 de 2 e a suite seguinte deu as 3 de sempre.
+  ⚠ DIVIDA FORN-NOME-UNICO-BANCO-01: NAO HA' INDICE UNICO de nome em `financeiro_fornecedores` (so' a chave e id + cliente). A
+    checagem e' da tela: duas pessoas criando o mesmo nome ao mesmo tempo ainda duplicam, e quem cria fora do "+" tambem.
+  ⚠ FORA DESTA REGRA (criam sem passar pelo dialogo da casa): o cadastro completo (`FornecedorFormDialog`, checagem propria, em
+    toast), `FinV2FornecedoresTab` (criar da pendencia), `nfeConsultas`, o importador legado (`useFinanceiro.ts`) e o painel
+    legado de venda (`VendaFinanceiroPanel`, `onCreateFornecedor`).
+  ⚠ DIVIDAS: o SUCESSO e a FALHA do criar seguem em toast, do hospedeiro ("Fornecedor criado", "Erro ao salvar fornecedor") · o
+    Novo lançamento ainda exige fazenda para CRIAR (toast), nao para selecionar o existente · o reativado nao entra na lista em
+    memoria de quem ainda le^ lista propria (Mesa, `fin.fornecedores`) ate' recarregar — o seletor dono, pelo leitor, ja' o mostra ·
+    entre homonimos ativos o dialogo escolhe o mais antigo sem dizer que ha' mais de um.
+  ⚠ NAO PROVADO NO NAVEGADOR: a aba em primeiro plano · os outros seis pontos (recorrencia, compromisso e documento da OC, venda,
+    abate, Mesa, importador) — so' por teste de fonte · falha ao conferir e reativacao que falha (so' por teste) · perfil nao admin.
 - ⚠ FORNECEDOR NA OC: OS OITO PONTOS USAM O DONO PELO LEITOR UNICO (FORN-SELETOR-PADRAO-01 fatia 2b, Gabriel 08/10/2026, so' tela).
   ⚠ REGRA DAS FATIAS (Gabriel, 08/10): NAO ALARGAR NEM ESTREITAR O CONJUNTO QUE CADA TELA OFERECIA SEM REPORTAR ANTES DE MUDAR; lista
     restrita (tipo, papel, credor, sugestoes) se mantem pela prop de opcoes restritas do dono (ainda nao existe: nenhum ponto ate'

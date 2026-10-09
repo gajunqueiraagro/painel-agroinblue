@@ -21,6 +21,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { EnriquecerProgressoDialog } from '@/components/conciliacao/EnriquecerProgressoDialog';
 import { useImportLancamentosExcel } from '@/v2/hooks/useImportLancamentosExcel';
+import { useCliente } from '@/contexts/ClienteContext';
 import { ImportLancDeParaPanel } from '@/v2/components/importacao/ImportLancDeParaPanel';
 import { ImportLancPrevia } from '@/v2/components/importacao/ImportLancPrevia';
 import { tipoPorContaPlano } from '@/v2/lib/importLanc/importLancamentosView';
@@ -98,6 +99,7 @@ export function V2ImportLancamentosExcel({
   movimentosDoExtrato, contaNome, sufixoArquivo, somenteAtualizar = false,
   onVerNoFinanceiro, mesRef, anoRef, clienteNome, arquivoInicial,
 }: V2ImportLancamentosExcelProps = {}) {
+  const { clienteAtual } = useCliente();
   const {
     classificacoes, fornecedores, fazendas, contasBancarias, safras, criarFornecedor,
     arquivo, parse, dePara, previa, pendentes, lendo, erro,
@@ -452,6 +454,7 @@ export function V2ImportLancamentosExcel({
                 onResolver={resolverManualmente}
                 onDescartar={alternarDescarte}
                 onCriarFornecedor={criarFornecedor}
+                clienteId={clienteAtual?.id ?? null}
               />
             )}
             {grupoDePara === 'conta' && (

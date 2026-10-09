@@ -412,6 +412,8 @@ export function EnriquecerTresPassos({ ano, mes, clienteNome, contaNome, onVerNo
         open={novoFornecedorPara !== null}
         onClose={() => setNovoFornecedorPara(null)}
         defaultNome={novoFornecedorPara ?? ''}
+        clienteId={clienteId}
+        onSelecionar={(f) => { if (novoFornecedorPara !== null) resolverManualmente('fornecedor', novoFornecedorPara, f.id, f.nome); }}
         onSave={async (nome, cpfCnpj) => {
           const criado = await criarFornecedor(nome, null, cpfCnpj);
           if (criado && novoFornecedorPara !== null) {

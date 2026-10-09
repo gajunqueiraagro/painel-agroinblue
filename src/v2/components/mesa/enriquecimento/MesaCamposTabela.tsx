@@ -555,7 +555,7 @@ doExtrato ? (
                           ) : editavel && campo === 'Fornecedor' && fornecedores && onCriarFornecedor ? (
                             <ResultadoFavorecidoEditor value={row.edicao.favorecidoId} valorAtual={row.edicao.favorecidoIdAtual}
                               fornecedores={fornecedores}
-                              fazendaId={row.edicao.fazendaId} onEditar={onEditar} onCriarFornecedor={onCriarFornecedor} />
+                              fazendaId={row.edicao.fazendaId} clienteId={clienteId} onEditar={onEditar} onCriarFornecedor={onCriarFornecedor} />
                           ) : editavel && campo === 'Fazenda' && fazendas ? (
                             <ResultadoFazendaEditor value={row.edicao.fazendaId} fazendaIdAtual={row.edicao.fazendaIdAtual}
                               fazendas={fazendas} forcaAdministrativo={contaEhAdministrativa} onEditar={onEditar} />

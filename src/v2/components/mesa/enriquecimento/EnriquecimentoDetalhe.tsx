@@ -94,6 +94,7 @@ export function EnriquecimentoDetalhe({ row, classificacoes, fornecedores, fazen
                     value={row.edicao.favorecidoId}
                     fornecedores={fornecedores}
                     fazendaId={row.edicao.fazendaId}
+                    clienteId={clienteId}
                     onEditar={onEditar}
                     onCriarFornecedor={onCriarFornecedor}
                   />

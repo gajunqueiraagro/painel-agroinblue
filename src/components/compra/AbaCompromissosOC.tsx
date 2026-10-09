@@ -2887,6 +2887,8 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
         <NovoFornecedorDialog
           open={novoFornecedorOpen}
           onClose={() => setNovoFornecedorOpen(false)}
+          clienteId={clienteId}
+          onSelecionar={(f) => setFavorecidoId(f.id)}
           onSave={async (nome, cpfCnpj) => {
             const rec = await onCriarFornecedor?.(nome, cpfCnpj);
             if (rec) setFavorecidoId(rec.id);

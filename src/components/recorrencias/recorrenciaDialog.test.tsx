@@ -41,6 +41,10 @@ vi.mock('@/hooks/useRecorrencias', async (orig) => ({
   propagarRecorrencia: async () => ({ ok: true, dados: { futuros: 0, passados: 0 } }),
 }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+/* FORN-SELETOR-PADRAO-01 fatia 2c (1a): o cadastro da casa CONFERE antes de criar — aqui o cadastro está vazio (nome novo) */
+vi.mock('@/lib/fornecedores/cadastroDaCasaBanco', () => ({
+  fonteDoCadastroNoBanco: { lerPorNome: async () => [], lerAtivos: async () => [], reativar: async () => {} },
+}));
 
 import { RecorrenciaDialog } from './RecorrenciaDialog';
 import { DiaVencimentoGrade } from './DiaVencimentoGrade';

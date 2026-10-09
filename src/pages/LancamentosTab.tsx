@@ -6963,6 +6963,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         open={novoFornecedorAbateOpen}
         onClose={() => setNovoFornecedorAbateOpen(false)}
         defaultNome={!abateFornecedorId && abateFrigorificoNome ? abateFrigorificoNome : undefined}
+        clienteId={clienteAtual?.id ?? null}
+        onSelecionar={(f) => { setAbateFornecedores(prev => prev.some(x => x.id === f.id) ? prev : [...prev, { id: f.id, nome: f.nome }].sort((a, b) => a.nome.localeCompare(b.nome))); setAbateFornecedorId(f.id); }}
         onSave={async (nome, cpfCnpj) => {
           if (!clienteAtual || !fazendaAtual) return;
           const { data: rec, error } = await supabase
@@ -6986,6 +6988,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         open={novoFornecedorCompraOpen}
         onClose={() => setNovoFornecedorCompraOpen(false)}
         defaultNome={!compraFornecedorId && fazendaOrigem ? fazendaOrigem : undefined}
+        clienteId={clienteAtual?.id ?? null}
+        onSelecionar={(f) => { setAbateFornecedores(prev => prev.some(x => x.id === f.id) ? prev : [...prev, { id: f.id, nome: f.nome }].sort((a, b) => a.nome.localeCompare(b.nome))); setCompraFornecedorId(f.id); }}
         onSave={async (nome, cpfCnpj) => {
           if (!clienteAtual || !fazendaAtual) return;
           const { data: rec, error } = await supabase
@@ -7008,6 +7012,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       <NovoFornecedorDialog
         open={novoFornecedorVendaOpen}
         onClose={() => setNovoFornecedorVendaOpen(false)}
+        clienteId={clienteAtual?.id ?? null}
+        onSelecionar={(f) => { setAbateFornecedores(prev => prev.some(x => x.id === f.id) ? prev : [...prev, { id: f.id, nome: f.nome }].sort((a, b) => a.nome.localeCompare(b.nome))); setVendaDestinoFornecedorId(f.id); setFazendaDestino(f.nome); }}
         onSave={async (nome, cpfCnpj) => {
           if (!clienteAtual || !fazendaAtual) return;
           const { data: rec, error } = await supabase
