@@ -11,8 +11,8 @@
 -- D5 GESTO CONTRARIO devolve o estado: lancamento a nulo, conta removida.
 -- ⚠ A migration e' um bloco de uma vez so' (nao ha' funcao para chamar): `pg_temp.backfill` e' ESPELHO DECLARADO dos passos dela
 --   (conta pelo molde -> guarda de contagem -> UPDATE so' no vazio sob app.propagando_plano), sobre dado sintetico.
-set local statement_timeout = '90s';
-set local lock_timeout = '3s';
+set local lock_timeout = '2s';
+set local statement_timeout = '10s';
 
 create function pg_temp.lan(p_cli uuid, p_sub text, p_cancelado boolean default false) returns uuid language sql as $f$
   insert into financeiro_lancamentos_v2 (cliente_id, tipo_operacao, sinal, valor, status_transacao, data_competencia, data_vencimento,

@@ -1760,6 +1760,20 @@ docs/historico/frentes-ate-2026-09-29.md.)
 - ⚠ PROVA NO CANAL MCP LEVA `SET LOCAL statement_timeout` abaixo do tempo do canal. A rodada que estoura CONTINUA no
   servidor segurando os locks; antes de repetir, `pg_stat_activity` (e `pg_cancel_backend` na presa)
   (DRE-MODAL-VALOR-01a, OC-CC-CLASSIFICACAO-01).
+- ⚠ ENSAIO E MEDICAO NO PROTO: O BANCO E' O DOS CLIENTES (regra do Gabriel, 09/10/2026, DIVIDENDO-ESCRITOR-UNICO-01 passo 1). Antes de
+  qualquer transacao de ensaio que pegue trava em tabela compartilhada: `SET LOCAL lock_timeout = '2s'` e `SET LOCAL
+  statement_timeout = '10s'`. Estourou: a transacao e' revertida e o ensaio e' refeito em RECORTE MENOR ou fora do horario — nunca
+  repetido igual. Medicao de custo e' feita em AMOSTRA, so' com linhas sinteticas criadas na propria transacao, nunca com a tabela
+  inteira travada. A APLICACAO REAL de migration leva o mesmo `lock_timeout` de 2 s (escrito no arquivo): nao conseguiu a trava,
+  aborta e reporta, sem esperar na fila.
+  ⚠ NASCE DE ERRO MEU: em 09/10/2026, por volta das 14h25 (Campo Grande), um ensaio de custo (DROP INDEX do plano + renomear 200
+    contas sinteticas na mesma transacao, `statement_timeout` de 30 s) estourou o tempo e segurou `financeiro_plano_contas` com
+    trava exclusiva por 30 s; reverteu sem residuo. Se houve leitura ou escrita de usuario esperando nesse intervalo NAO da' mais
+    para ver (`pg_stat_activity` e' instantaneo; conferido logo depois: nada preso).
+- ⚠ PROIBIDO, EM ENSAIO OU MEDICAO, RENOMEAR OU ALTERAR EM MASSA LINHA DE `financeiro_plano_contas` (mesma regra, 09/10/2026): o
+  UPDATE de subcentro / macro / grupo / centro / escopo dispara `trg_propagar_plano_para_lancamentos`, que faz UPDATE em
+  `financeiro_lancamentos_v2` por `plano_conta_id` — e NAO HA' INDICE nessa coluna: cada conta renomeada varre a tabela de
+  lancamentos inteira (medido: 200 renomeadas nao terminaram em 30 s). Renomear UMA conta e' gesto de produto; em lote, nunca.
 - ⚠ `apply_migration` REGISTRA COM O TIMESTAMP DO DIA, nao com o do nome do arquivo: todo registro diz os dois
   ("⚠ registrada como ...") e confere ledger = arquivo por md5.
 - ⚠ REPLACE DE VIEW LEVA `WITH (security_invoker = true)` e se confere em `pg_class.reloptions`.
@@ -2515,6 +2529,40 @@ docs/historico/frentes-ate-2026-09-29.md.)
     `LancamentoLeituraDialog.tsx`; e telas fora das abas da Conciliacao — `EstacaoConciliar.tsx`, `VincularMatchDireto.tsx`,
     `DecisaoDerivadosDialog.tsx` fora do Espelho, `CasarComBancoModal.tsx` (dentro do Espelho ja' passa pelo `onMudou`),
     `useConciliacaoDoMes.ts`, `useConciliarMes.ts` (o dialogo avisa).
+- ⚠ A UNICIDADE DO PLANO E' POR CLIENTE, E O PAR CLIENTE + GLOBAL E' RECUSADO POR UMA TRAVA (DIVIDENDO-ESCRITOR-UNICO-01 passo 1, Gabriel
+  09/10/2026, so' banco; migration 20261027195200, ⚠ registrada como 20261009183912; ledger = arquivo, md5 d1770419…). REVOGA o
+  "A UNICA UNICIDADE DE `financeiro_plano_contas` E' `uq_plano_contas_global` … SEM O CLIENTE" do CONC-DIVIDENDOS-PLANO-01.
+  · DOIS INDICES, entre as ATIVAS, nas colunas de sempre (tipo, macro, COALESCE(grupo), centro, COALESCE(subcentro)):
+    `uq_plano_contas_cliente` (+ `cliente_id`; so' contas de cliente) e `uq_plano_contas_global` (so' as sem cliente). DOIS
+    CLIENTES PODEM TER CONTA ATIVA DE MESMO NOME; dentro do cliente, e entre as globais, nao.
+  · A TRAVA `trg_guard_plano_cliente_x_global` -> `guard_plano_cliente_x_global()` (md5 d7de5b15…; SECURITY DEFINER, fechada):
+    recusa (a) conta de CLIENTE com a hierarquia de uma GLOBAL ativa e (b) GLOBAL com a hierarquia de uma conta de CLIENTE ativa,
+    em INSERT e em UPDATE (reativar, trocar o `cliente_id`, trocar coluna da hierarquia). INATIVAR NUNCA E' BARRADO, e conta
+    inativa nunca e' julgada. Recusa com SQLSTATE 23505 (quem tratava `unique_violation` continua tratando) e frase: "O plano de
+    contas já tem a conta geral «X» (tipo · macro · centro) com esta classificação: uma conta do cliente não pode repetir uma
+    conta geral." / "Já existe conta de cliente «X» (…) com esta classificação (conta <id>): uma conta geral não pode repetir uma
+    conta de cliente." Compara COMO O INDICE (espelho declarado: quem mexer num confere o outro) e serializa por hierarquia
+    (`pg_advisory_xact_lock`) para dois gravadores simultaneos nao passarem um pelo outro.
+  · ⚠ QUEM DEPENDE DE "GLOBAL OU DO CLIENTE = EXATAMENTE 1" — A GARANTIA AGORA E' A TRAVA DO PLANO, NAO MAIS O INDICE:
+    `oc_criar_compromisso` (conta pelo subcentro), `oc_gerar_obrigacoes` (conta pela hierarquia inteira; o T12 de
+    `pr_oc_fin_contrato_obrigacao_01_test.sql` prende isso e segue valendo SEM mudanca, agora recusado pela trava),
+    `fn_classificacao_resolver_subcentro`, e os do "dobro com cliente + global" ja' registrados (`fn_dre_pecuaria`,
+    `fn_dre_pecuaria_lancamentos`, `fn_rateio_admin_mes`, `fn_classificacao_resolver_contexto`, `catalogoCliente.ts`,
+    `FinV2SubcentroAliasesTab.tsx`, `usePlanoContasOC.ts`, `DestinacoesForm.tsx`). As duas funcoes de OC NAO foram tocadas.
+    ⚠ A TRAVA OLHA A HIERARQUIA INTEIRA; `oc_criar_compromisso` conta SO' pelo subcentro: par cliente + global de mesmo subcentro
+      em macro / centro diferentes passaria pela trava (0 casos hoje, medido tambem por subcentro + tipo e so' por subcentro).
+  · MEDIDO (09/10): 245 contas, 239 ativas, 19 de cliente; 0 violacoes da unicidade nova e 0 pares antes de trocar; ninguem no
+    banco nem no front escreve em `financeiro_plano_contas` (so' migrations). CUSTO da trava (A/B na mesma transacao, 4 series de
+    200 contas sinteticas): +0,005 a 0,01 ms por linha quando sai cedo (conta inativa), +0,04 a 0,05 ms quando procura o par.
+  Teste: `supabase/tests/dividendo_escritor_unico_01_unicidade_test.sql` (U0–U9, cliente Teste + um segundo cliente criado na
+  transacao, termina em RAISE OK); 10 mutacoes mortas (as duas direcoes, UPDATE nao julgado, inativa julgada, grupo cru, centro
+  fora, os dois atalhos do UPDATE, codigo de erro, indice sem o cliente). Depois de aplicar, verdes no banco vivo:
+  `plano_leitor_por_cliente_01_test.sql`, `conc_dividendos_plano_01_test.sql` e `seg_tenant_varredura_01c_test.sql` (os dois
+  primeiros passaram a rodar com `lock_timeout` 2 s e `statement_timeout` 10 s).
+  ⚠ NAO RODADO INTEIRO: `pr_oc_fin_contrato_obrigacao_01_test.sql` (39 KB; o canal recusa carga desse tamanho) — so' o trecho
+    literal do T12, que passou.
+  ⚠ O CANAL DE ESCRITA RECUSA CARGA GRANDE: uma chamada de ~17 KB devolveu "Invalid or expired requestState" duas vezes, sem
+    executar; ate' ~13 KB passou. Ensaio que nao cabe se divide (a migration num ensaio, o teste depois de aplicar).
 - ⚠ ARQUIVO NOVO NAO CONSULTA `financeiro_plano_contas`: A TRAVA (PLANO-LEITOR-POR-CLIENTE-01 passo 3, Gabriel 09/10/2026).
   `src/lib/financeiro/planoLeitorUnico.test.ts` varre `src` (com auto-teste do detector: aspas simples, duplas, crase, o
   `(supabase as any)` e a quebra de linha): fora do dono (`planoContasBuilder.ts`, UMA consulta), so' as EXCECOES DECLARADAS, com a
@@ -2619,6 +2667,7 @@ docs/historico/frentes-ate-2026-09-29.md.)
     plano"): sem ela 1 lancamento importado do Raul viraria `editado_manual`. Nenhum gatilho foi desligado.
   · DEPOIS: 0 lancamentos vivos "Dividendos …" sem plano e 0 lancamentos sem classificacao em TODOS os clientes (antes: Vera 331,
     NJ 190, Raul 24, Agnaldo 17, Teste 5 — todos dividendos); o contador da Conciliacao e o aviso do DRE zeram por consequencia.
+  · [REVOGADO no DIVIDENDO-ESCRITOR-UNICO-01 passo 1: a unicidade passou a ser por cliente, com a trava cliente x global.]
   · ⚠ A UNICA UNICIDADE DE `financeiro_plano_contas` E' `uq_plano_contas_global`: tipo + macro + grupo + centro + subcentro entre
     as ATIVAS, SEM O CLIENTE. Dois clientes NAO podem ter conta ativa de mesmo nome, e cliente nao pode ter conta com o nome de uma
     global — nesse caso o nome do cadastro USA a global (`fn_plano_conta_do_texto`: a do cliente; na falta, a global). E' assim

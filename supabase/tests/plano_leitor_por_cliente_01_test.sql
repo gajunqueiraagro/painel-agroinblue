@@ -16,8 +16,8 @@
 -- L7 USUARIO COMUM (authenticated, nao admin, membro real simulado por jwt — `cliente_membros` nao e' tocada) grava lancamento sem
 --    chave no cliente dele: nao recebe "permission denied" e o gatilho resolve a conta.
 -- L8 o gatilho e' SECURITY DEFINER com search_path fixo, o dono segue FECHADO a authenticated, e o corpo so' escreve em NEW.
-set local statement_timeout = '90s';
-set local lock_timeout = '3s';
+set local lock_timeout = '2s';
+set local statement_timeout = '10s';
 
 create function pg_temp.conta(p_cli uuid, p_sub text, p_centro text, p_dre boolean, p_lcdpr boolean) returns uuid language sql as $f$
   insert into financeiro_plano_contas (cliente_id, tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro, escopo_negocio, ativo,
