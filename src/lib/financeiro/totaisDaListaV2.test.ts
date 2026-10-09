@@ -64,7 +64,9 @@ describe('totais do Financeiro V2: caixa x sem caixa', () => {
   it('D3: Contas a Pagar e Receber tira o sem caixa SEMPRE (lido da fonte: a consulta nao se monta em teste)', () => {
     const fonte = readFileSync(resolve(__dirname, '../../components/financeiro-v2/ContasPagarReceberTab.tsx'), 'utf8');
     expect(fonte).toContain(".or('sem_movimentacao_caixa.is.null,sem_movimentacao_caixa.eq.false')");
-    /* a busca sabe achar: o corte de transferencia, vizinho, esta' la' */
-    expect(fonte).toContain(".or('tipo_operacao.not.like.3-*')");
+    /* a busca sabe achar: o filtro de status, vizinho na mesma consulta, esta' la' */
+    expect(fonte).toContain(".in('status_transacao', statusLigados)");
+    /* CPR-TRANSFERENCIAS-NO-FLUXO-01: o corte de transferencia SAIU (a tela mostra o fluxo da conta; as pontas sao do dono do recorte) */
+    expect(fonte).not.toContain("tipo_operacao.not.like");
   });
 });

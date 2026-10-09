@@ -16,11 +16,15 @@
  * vencimento de todas as contas. Duas perguntas diferentes.
  */
 
+import { ehPagarCpr, ehReceberCpr, type PontaCpr } from '@/lib/financeiro/cprRecorte';
+
 /** O mínimo que o fluxo olha em cada lançamento. */
 export interface LinhaFluxoPrevisto {
   data_vencimento: string | null;
   valor: number | null;
   tipo_operacao: string | null;
+  /** a ponta de uma transferência (posta pelo dono do recorte, `pontasCpr`): a saída é barra de saída, a entrada, de entrada */
+  ponta?: PontaCpr;
 }
 
 export type Granularidade = 'dia' | 'mes';
@@ -139,11 +143,11 @@ export function montarFluxoPrevisto(
   let maiorVenc: string | null = null;
 
   for (const l of linhas) {
-    const tipo = (l.tipo_operacao ?? '');
-    /* Só entrada e saída. Transferência já não chega aqui (o recorte da tela a exclui), e
-       qualquer tipo desconhecido fica de fora em vez de virar dinheiro por omissão. */
-    const ehEntrada = tipo.startsWith('1-');
-    const ehSaida = tipo.startsWith('2-');
+    /* Só entrada e saída — quem diz é o dono do recorte (a PONTA de uma transferência é saída na origem e entrada no
+       destino; transferência que não foi aberta em pontas e tipo desconhecido ficam de fora em vez de virar dinheiro
+       por omissão). */
+    const ehEntrada = ehReceberCpr(l);
+    const ehSaida = ehPagarCpr(l);
     if (!ehEntrada && !ehSaida) continue;
 
     const venc = (l.data_vencimento ?? '').slice(0, 10);
@@ -438,9 +442,8 @@ export function ajusteVencidoPorDia(
 ): Map<string, number> {
   const porDia = new Map<string, number>();
   for (const l of linhas) {
-    const tipo = l.tipo_operacao ?? '';
-    const ehEntrada = tipo.startsWith('1-');
-    const ehSaida = tipo.startsWith('2-');
+    const ehEntrada = ehReceberCpr(l);
+    const ehSaida = ehPagarCpr(l);
     if (!ehEntrada && !ehSaida) continue;
     const venc = (l.data_vencimento ?? '').slice(0, 10);
     /* `< hoje`: o que vence HOJE já é barra do ponto de hoje (ver `montarFluxoPrevisto`). */

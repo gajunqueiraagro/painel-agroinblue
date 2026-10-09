@@ -35,7 +35,7 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   ATALHOS_CPR, periodoDoAtalho, recortarCpr, ramoDaConsultaCpr, doSegmentoCpr, contaEmAberto,
-  ehReceberCpr, contaDaConta, resumoPorContaCpr, contasDaFaixaCpr, SEM_CONTA,
+  ehReceberCpr, contaDaConta, resumoPorContaCpr, contasDaFaixaCpr, SEM_CONTA, ehTransferenciaCpr, chaveDaLinhaCpr, type ContaCpr,
   ancorasDoCaixaCpr, serieDoSaldoCpr, linhasDoSaldoCpr, resumoPorSemanaCpr, saldoPorContaCpr, contaEstimadaCpr,
   type AtalhoCpr, type PeriodoCpr, type FiltroContaCpr,
 } from '@/lib/financeiro/cprRecorte';
@@ -69,6 +69,8 @@ import { consumirRetornoCpr, guardarRetornoCpr } from '@/lib/financeiro/cprRetor
 // Vocabulário da tela
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** A linha da view, mais a PONTA quando é transferência (posta pelo dono do recorte, `pontasCpr`). */
+type LinhaCpr = LinhaViewDoc & Pick<ContaCpr, 'ponta' | 'chave'>;
 type Segmento = 'pagar' | 'receber' | 'ambos';
 /** As duas visões da tela. A Lista é o default; o Fluxo é a mesma pergunta acumulada. */
 type Visao = 'lista' | 'fluxo';
@@ -272,7 +274,7 @@ interface Grupo {
   quando: string;
   dica?: string;
   /** As linhas LISTADAS (o segmento governa a listagem). */
-  linhas: LinhaViewDoc[];
+  linhas: LinhaCpr[];
   /** Totais das contas EM ABERTO do grupo, dos DOIS lados (o saldo é da conta, não do segmento). */
   pagar: number;
   receber: number;
@@ -368,7 +370,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
     /* ⚠ SEM A VISÃO NA CHAVE: Lista e Fluxo leem a MESMA busca (período ∪ vencidos em aberto ∪ sem vencimento). */
     queryKey: ['cpr-lancs', clienteId, fazScope, periodo.de, periodo.ate, statusLigados.join(','), hojeIso],
     enabled: !!clienteId && statusLigados.length > 0,
-    queryFn: async (): Promise<LinhaViewDoc[]> => {
+    queryFn: async (): Promise<LinhaCpr[]> => {
       if (!clienteId) return [];
       const plano = montarPlanoBaseV2(
         clienteId,
@@ -376,13 +378,11 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
         { relacao: 'view', semRecorteTemporal: true },
       );
       const ramo = ramoDaConsultaCpr(periodo, hojeIso);
-      return paginarTudo<LinhaViewDoc>(async (de, tamanho) => {
+      return paginarTudo<LinhaCpr>(async (de, tamanho) => {
         let q = aplicarPlanoNaView(fin.abrirView('*'), plano)
           .in('status_transacao', statusLigados)
-          /* Transferência não é conta a pagar nem a receber: é dinheiro trocando de bolso.
-             São DUAS grafias no banco ('3-Transferência' e '3-Transferências'), então o
-             corte é pelo prefixo — igualdade deixaria as seis linhas do singular passarem. */
-          .or('tipo_operacao.not.like.3-*')
+          /* CPR-TRANSFERENCIAS-NO-FLUXO-01 (Gabriel, 09/10/2026): a tela mostra o FLUXO da conta — a transferência VEM, e o
+             dono do recorte a abre nas duas pontas (`pontasCpr`: saída na origem, entrada no destino). */
           /* OC-VENDA-ENTREGAS-01b (D3): sem caixa nao e' conta a pagar nem a receber — a entrega da conta corrente, o
              barter e o consumo nascem `realizado` sem conta e sem dinheiro. Sai SEMPRE, inclusive com o filtro
              Realizado ligado. NULL conta como caixa, como na lista. */
@@ -657,8 +657,10 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
   const contasNaFaixa = useMemo(() => contasDaFaixaCpr(resumoContas), [resumoContas]);
   /* o que a lista desenha por dia: o período em aberto + as pagas do período (pílula Realizado), que nunca somam */
   const doPeriodoNaLista = useMemo(
-    () => [...recorte.periodoSoma.linhas, ...recorte.pagas].filter((l) => doSegmentoCpr(l, segmento)),
+    () => [...recorte.periodoSoma.linhas, ...recorte.pagas, ...recorte.foraDoCaixa].filter((l) => doSegmentoCpr(l, segmento)),
     [recorte, segmento]);
+  /* as pontas de transferência em conta FORA do caixa (do dono): aparecem no dia, apagadas, e não somam */
+  const chavesForaDoCaixa = useMemo(() => new Set(recorte.foraDoCaixa.map(chaveDaLinhaCpr)), [recorte]);
   /* o que o gráfico desenha: EXATAMENTE as contas em aberto que a série do saldo soma (vencidos que contam + entre hoje e "de" +
      período), dos DOIS lados, em qualquer segmento — o saldo é da conta. O segmento vai à parte e só decide as barras (G). */
   const doFluxo = useMemo(() => linhasDoSaldoCpr(recorte), [recorte]);
@@ -714,8 +716,8 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
   });
 
   const grupos = useMemo((): Grupo[] => {
-    const doSeg = (ls: readonly LinhaViewDoc[]) => ls.filter((l) => doSegmentoCpr(l, segmento));
-    const mapa = new Map<string, LinhaViewDoc[]>();
+    const doSeg = (ls: readonly LinhaCpr[]) => ls.filter((l) => doSegmentoCpr(l, segmento));
+    const mapa = new Map<string, LinhaCpr[]>();
     for (const l of doPeriodoNaLista) {
       const chave = (l.data_vencimento ?? '').slice(0, 10);
       /* ⚠ CONTA PAGA SEM VENCIMENTO (pílula Realizado ligada) NÃO TEM DIA: sem esta guarda ela abria um grupo de chave vazia e a
@@ -935,7 +937,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
   const [exportando, setExportando] = useState<null | 'pdf' | 'excel'>(null);
   const [recadoExport, setRecadoExport] = useState<{ erro: boolean; texto: string } | null>(null);
   const semDados = statusLigados.length === 0 || grupos.length === 0;
-  const resolvedores: EntradaDoModelo<LinhaViewDoc>['de'] = {
+  const resolvedores: EntradaDoModelo<LinhaCpr>['de'] = {
     fornecedor: (l) => (l.favorecido_id && nomesFornecedores.get(l.favorecido_id)) || '—',
     conta: (l) => nomeConta(contaDaConta(l)),
     nomeDaConta: (id) => nomeConta(id),
@@ -948,6 +950,8 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
     origem: (l) => rotuloOrigem(l.origem_lancamento),
     doc: (l) => docDaLinha({ tipo_documento: l.tipo_documento, numero_documento: l.numero_documento }, null).rotulo,
     receber: (l) => ehReceber(l),
+    transferencia: (l) => ehTransferenciaCpr(l),
+    foraDoCaixa: (l) => chavesForaDoCaixa.has(chaveDaLinhaCpr(l)),
     parcela: (l) => parcelasDosLancamentos?.get(l.id) ?? null,
     paga: (l) => !contaEmAberto(l),
   };
@@ -964,14 +968,14 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
         const c = estimarSaldoEmCaixa({ ...caixaTodas.argumentos, contas: caixaTodas.argumentos.contas.filter((x) => x.id === id) });
         return c.ancoradas > 0 ? c.total : null;
       };
-      const modelo = montarModeloCpr<LinhaViewDoc>({
+      const modelo = montarModeloCpr<LinhaCpr>({
         ...identidadeDoArquivo,
         fazendaNome: fazScope ? (fazendaAtual?.nome ?? undefined) : undefined,
         segmento, incluirVencidos, emitidoEm: format(new Date(), 'dd/MM/yyyy HH:mm'),
         serie, grupos,
         cartoes: {
           vencidosContamPagar: recorte.vencidos.contam.pagar, vencidosContamReceber: recorte.vencidos.contam.receber,
-          pagarNoPeriodo: recorte.periodoSoma.pagar, receberNoPeriodo: recorte.periodoSoma.receber,
+          pagarNoPeriodo: recorte.cartoes.periodo.pagar, receberNoPeriodo: recorte.cartoes.periodo.receber,
         },
         rodape: { pagar: recorte.total.pagar.valor, receber: recorte.total.receber.valor, contas: recorte.total.ambos.contas },
         semanas: resumoPorSemanaCpr(serie, periodo),
@@ -996,7 +1000,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
   const exportarExcel = () => {
     setExportando('excel'); setRecadoExport(null);
     try {
-      triggerXlsxDownload(montarPayloadExcelCpr<LinhaViewDoc>({
+      triggerXlsxDownload(montarPayloadExcelCpr<LinhaCpr>({
         arquivo: nomeDoArquivoCpr(identidadeDoArquivo), grupos, serie, de: resolvedores, incluirVencidos, hoje: hojeIso,
       }));
     } catch (e) {
@@ -1106,9 +1110,9 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
           </div>
           <div data-testid="cpr-faixa-recolhida"
             className="grid h-[24px] grid-cols-[148px_142px_150px_136px_132px_minmax(0,1fr)_auto] items-center gap-2 rounded-md border bg-card px-2 text-[10px] whitespace-nowrap">
-            <CelRecolhida rotulo="Vencidos" valor={formatMoeda(recorte.vencidos.pagar.valor)} classe={recorte.vencidos.pagar.valor > 0 ? COR_SINAL.neg : undefined} />
-            <CelRecolhida rotulo="A pagar" valor={formatMoeda(recorte.periodoSoma.pagar.valor)} classe={COR_SINAL.neg} />
-            <CelRecolhida rotulo="A receber" valor={formatMoeda(recorte.periodoSoma.receber.valor)} classe={recorte.periodoSoma.receber.valor > 0 ? COR_SINAL.pos : undefined} />
+            <CelRecolhida rotulo="Vencidos" valor={formatMoeda(recorte.cartoes.vencidos.pagar.valor)} classe={recorte.cartoes.vencidos.pagar.valor > 0 ? COR_SINAL.neg : undefined} />
+            <CelRecolhida rotulo="A pagar" valor={formatMoeda(recorte.cartoes.periodo.pagar.valor)} classe={COR_SINAL.neg} />
+            <CelRecolhida rotulo="A receber" valor={formatMoeda(recorte.cartoes.periodo.receber.valor)} classe={recorte.cartoes.periodo.receber.valor > 0 ? COR_SINAL.pos : undefined} />
             <CelRecolhida rotulo="Mínimo" titulo={tituloMenorSaldo}
               valor={serie.menor ? moedaComSinal(serie.menor.valor) : '—'} classe={serie.menor ? (serie.menor.valor < 0 ? COR_SINAL.neg : COR_SINAL.pos) : undefined} />
             <CelRecolhida rotulo="Caixa" valor={serie.hoje != null ? moedaComSinal(serie.hoje) : '—'} titulo={serie.hoje == null ? motivoSemSaldo : undefined} />
@@ -1162,35 +1166,35 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
           <CardResumo
             testId="cpr-card-vencidos"
             rotulo="Vencidos"
-            contagem={`· ${contas(recorte.vencidos.pagar.contas)}`}
-            titulo={`Vencidos a pagar: ${formatMoeda(recorte.vencidos.pagar.valor)} em ${contas(recorte.vencidos.pagar.contas)} · vencidos a receber: ${formatMoeda(recorte.vencidos.receber.valor)} em ${contas(recorte.vencidos.receber.contas)} · ${recorte.vencidos.contam.pagar.contas + recorte.vencidos.contam.receber.contas} contam no saldo · ${recorte.vencidos.anteriores.pagar.contas + recorte.vencidos.anteriores.receber.contas} anteriores à conciliação (fora do saldo)`}
-            valor={formatMoeda(recorte.vencidos.pagar.valor)}
-            classeValor={recorte.vencidos.pagar.valor > 0 ? 'text-destructive' : 'text-muted-foreground'}
+            contagem={`· ${contas(recorte.cartoes.vencidos.pagar.contas)}`}
+            titulo={`Vencidos a pagar: ${formatMoeda(recorte.cartoes.vencidos.pagar.valor)} em ${contas(recorte.cartoes.vencidos.pagar.contas)} · vencidos a receber: ${formatMoeda(recorte.cartoes.vencidos.receber.valor)} em ${contas(recorte.cartoes.vencidos.receber.contas)} · ${recorte.vencidos.contam.pagar.contas + recorte.vencidos.contam.receber.contas} contam no saldo · ${recorte.vencidos.anteriores.pagar.contas + recorte.vencidos.anteriores.receber.contas} anteriores à conciliação (fora do saldo)`}
+            valor={formatMoeda(recorte.cartoes.vencidos.pagar.valor)}
+            classeValor={recorte.cartoes.vencidos.pagar.valor > 0 ? 'text-destructive' : 'text-muted-foreground'}
             borda="border-l-destructive"
             /* os DOIS lados à vista: o valor é o vencido a pagar; à direita do rótulo, o vencido a receber (some quando é zero).
                Não depende do segmento nem da visão. */
-            lado={recorte.vencidos.receber.valor > 0
-              ? [{ rotulo: 'a receber', valor: '', classe: 'text-success' }, { rotulo: '', valor: formatMoeda(recorte.vencidos.receber.valor), classe: 'text-success' }]
+            lado={recorte.cartoes.vencidos.receber.valor > 0
+              ? [{ rotulo: 'a receber', valor: '', classe: 'text-success' }, { rotulo: '', valor: formatMoeda(recorte.cartoes.vencidos.receber.valor), classe: 'text-success' }]
               : undefined}
           />
           <CardResumo
             testId="cpr-card-pagar"
             rotulo="A pagar"
-            contagem={`· ${recorte.periodoSoma.pagar.contas}`}
-            titulo={`A pagar no período: ${contas(recorte.periodoSoma.pagar.contas)}, sem os vencidos`
+            contagem={`· ${recorte.cartoes.periodo.pagar.contas}`}
+            titulo={`A pagar no período: ${contas(recorte.cartoes.periodo.pagar.contas)}, sem os vencidos`
               + (temEstimado ? `\nno total a pagar do recorte: confirmado ${formatMoeda(recorte.aPagarConfirmado.valor / 100)} · estimado ${formatMoeda(recorte.aPagarEstimado.valor / 100)} (${recorte.aPagarEstimado.qtd})` : '')
               + (avisoEstimadasIncompleto ? `\n${avisoEstimadasIncompleto}` : '')}
-            valor={formatMoeda(recorte.periodoSoma.pagar.valor)}
+            valor={formatMoeda(recorte.cartoes.periodo.pagar.valor)}
             classeValor="text-destructive"
             borda="border-l-destructive"
           />
           <CardResumo
             testId="cpr-card-receber"
             rotulo="A receber"
-            contagem={`· ${recorte.periodoSoma.receber.contas}`}
-            titulo={`A receber no período: ${contas(recorte.periodoSoma.receber.contas)}, sem os vencidos`}
-            valor={formatMoeda(recorte.periodoSoma.receber.valor)}
-            classeValor={recorte.periodoSoma.receber.valor > 0 ? 'text-success' : 'text-muted-foreground'}
+            contagem={`· ${recorte.cartoes.periodo.receber.contas}`}
+            titulo={`A receber no período: ${contas(recorte.cartoes.periodo.receber.contas)}, sem os vencidos`}
+            valor={formatMoeda(recorte.cartoes.periodo.receber.valor)}
+            classeValor={recorte.cartoes.periodo.receber.valor > 0 ? 'text-success' : 'text-muted-foreground'}
             borda="border-l-success"
           />
           {/* MÍNIMO — o menor saldo da série (da partida ao fim), do dono. Rótulo curto que NÃO corta: "Mínimo ▼ · DD/MM" (a data
@@ -1370,6 +1374,15 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
                     const receber = ehReceber(l);
                     const grande = valor >= CORTE_DESTAQUE;
                     const paga = !contaEmAberto(l);
+                    /* CPR-TRANSFERENCIAS-NO-FLUXO-01 — a ponta de transferência: a marca "Transf." da casa (a cor do total de
+                       transferências da lista de Lançamentos); a ponta em conta fora do caixa aparece apagada e não soma. */
+                    const transf = ehTransferenciaCpr(l);
+                    const { conta_bancaria_id: origemId, conta_destino_id: destinoId } = l;
+                    const foraDoCaixa = chavesForaDoCaixa.has(chaveDaLinhaCpr(l));
+                    const seloTransf = transf
+                      ? <span className="shrink-0 whitespace-nowrap font-medium text-sky-700 dark:text-sky-400" data-testid="cpr-selo-transf"
+                          title={`transferência · ${nomeConta(origemId)} → ${nomeConta(destinoId)} · esta linha é a ${l.ponta === 'entrada' ? 'entrada no destino' : 'saída da origem'}`}>Transf.</span>
+                      : null;
                     const status = (l.status_transacao ?? '').toLowerCase();
                     const fornecedor = (l.favorecido_id && nomesFornecedores.get(l.favorecido_id)) || '—';
                     const anexo = comAnexo?.has(l.id) ?? false;
@@ -1384,14 +1397,15 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
                     /* REC-VALOR-CERTO-02 — a conta ESTIMADA (pelo conjunto da regra única): selo depois da descrição e valor em âmbar. */
                     const estimada = !paga && contaEstimadaCpr(l, estimadas);
                     const celValor = (
-                      <span data-valor-da-linha className={cn('whitespace-nowrap text-right tabular-nums', estimada ? COR_ESTIMADO : receber ? COR_SINAL.pos : COR_SINAL.neg, paga && 'opacity-50')}
-                        title={paga ? 'já paga — não entra nos totais nem no saldo' : undefined}>
+                      <span data-valor-da-linha className={cn('whitespace-nowrap text-right tabular-nums', estimada ? COR_ESTIMADO : receber ? COR_SINAL.pos : COR_SINAL.neg, (paga || foraDoCaixa) && 'opacity-50')}
+                        title={paga ? 'já paga — não entra nos totais nem no saldo' : foraDoCaixa ? 'ponta em conta que não entra no saldo em caixa — não soma; a outra ponta é o que mexe no saldo' : undefined}>
                         {formatMoeda(valor)}
                       </span>
                     );
                     return (
                       <button
-                        key={l.id}
+                        key={chaveDaLinhaCpr(l)}
+                        data-ponta={l.ponta}
                         type="button"
                         disabled={!catalogosProntos || abrindo}
                         onClick={() => void abrir(l.id)}
@@ -1432,6 +1446,12 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
                           <span className="flex min-w-0 flex-1 items-center gap-1" data-celula-descricao>
                             <span className="min-w-0 truncate text-foreground" title={dicaDescricao}>{np.nome || '—'}</span>
                             {seloDaParcela}
+                          </span>
+                        ) : seloTransf ? (
+                          /* a marca "Transf." nunca corta; a descrição corta depois dela */
+                          <span className="flex min-w-0 flex-1 items-center gap-1" data-celula-descricao>
+                            {seloTransf}
+                            <span className="min-w-0 truncate text-foreground" title={dicaDescricao}>{l.descricao || '—'}</span>
                           </span>
                         ) : (
                           <span className="min-w-0 flex-1 truncate text-foreground" title={dicaDescricao} data-celula-descricao>

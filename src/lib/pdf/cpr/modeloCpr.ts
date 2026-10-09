@@ -40,6 +40,8 @@ export interface ContaDaFolha {
   macro: string; safra: string; faz: string; status: string; statusChave: string; origem: string; doc: string;
   /** o valor cai na coluna do SEU lado, sem seta */
   pagar: string; receber: string; paga: boolean;
+  /** ponta de transferência em conta fora do caixa: aparece e não soma (quem diz é o dono do recorte) */
+  foraDoCaixa: boolean;
 }
 /** Uma faixa (saldo hoje, vencidos, dia, intervalo) com as contas listadas nela. */
 export interface FaixaDaFolha {
@@ -94,6 +96,8 @@ export interface EntradaDoModelo<L extends LinhaDaTela> {
     centro: (l: L) => string; macro: (l: L) => string; safra: (l: L) => string; faz: (l: L) => string;
     status: (l: L) => { chave: string; rotulo: string }; origem: (l: L) => string; doc: (l: L) => string;
     receber: (l: L) => boolean; paga: (l: L) => boolean;
+    /** CPR-TRANSFERENCIAS-NO-FLUXO-01: a linha é ponta de transferência (a descrição leva "Transf. · ") / está em conta fora do caixa */
+    transferencia?: (l: L) => boolean; foraDoCaixa?: (l: L) => boolean;
     /** o número e o total da parcela NO CONTRATO (lidos do banco); ausente = a descrição como está */
     parcela?: (l: L) => ParcelaDoContrato | null;
   };
@@ -113,11 +117,12 @@ export function contaDaFolha<L extends LinhaDaTela>(l: L, de: EntradaDoModelo<L>
   const st = de.status(l);
   const texto = Number.isFinite(v) ? formatMoeda(v) : '—';
   const np = nomeEParcela(l.descricao, de.parcela ? de.parcela(l) : null);
+  const marca = de.transferencia?.(l) ? 'Transf. · ' : '';
   return {
     comp: ma(l.data_competencia), venc: dmaCurto(l.data_vencimento), pgto: paga ? dmaCurto(l.data_pagamento) : '',
-    descricao: (np.parcela ? np.nome : l.descricao) || '—', parcela: np.parcela ?? '', fornecedor: de.fornecedor(l), conta: de.conta(l), subcentro: de.subcentro(l), centro: de.centro(l),
+    descricao: `${marca}${(np.parcela ? np.nome : l.descricao) || '—'}`, parcela: np.parcela ?? '', fornecedor: de.fornecedor(l), conta: de.conta(l), subcentro: de.subcentro(l), centro: de.centro(l),
     macro: de.macro(l), safra: de.safra(l), faz: de.faz(l), status: st.rotulo, statusChave: st.chave, origem: de.origem(l), doc: de.doc(l),
-    pagar: receber ? '' : texto, receber: receber ? texto : '', paga,
+    pagar: receber ? '' : texto, receber: receber ? texto : '', paga, foraDoCaixa: !!de.foraDoCaixa?.(l),
   };
 }
 

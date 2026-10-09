@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 09/10/2026 (UI-BOTOES-LUGAR-FIXO-01, +2 em `src/components/financeiro-v2/FinanceiroV2ControlesLista.test.tsx` (20 -> 22) — 4660 depois dele; antes o
+  Baseline em 09/10/2026 (CPR-TRANSFERENCIAS-NO-FLUXO-01, +12 em `src/lib/financeiro/cprRecorte.test.ts` — 4672 depois dele; antes o
+  UI-BOTOES-LUGAR-FIXO-01, +2 em `src/components/financeiro-v2/FinanceiroV2ControlesLista.test.tsx` (20 -> 22) — 4660 depois dele; antes o
   PLANO-LEITOR-POR-CLIENTE-01 passo 3, +5 em `src/lib/financeiro/planoLeitorUnico.test.ts` — 4658 depois dele; antes o
   PLANO-LEITOR-POR-CLIENTE-01 passo 2, +10 em `src/lib/financeiro/dividendoNoPlano.test.ts` (10 -> 20) — 4653 depois dele; antes o
   CONC-DIVIDENDOS-PLANO-01, +10 em `src/lib/financeiro/dividendoNoPlano.test.ts` — 4643 depois dele; antes o
@@ -270,7 +271,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4660
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4672
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3483,6 +3484,48 @@ docs/historico/frentes-ate-2026-09-29.md.)
     contraste dos dois tons do rodape navy medido na tela (calculado: ~6,4:1 e ~8,8:1), sair da tela com o Ampliado ligado (so'
     por teste de fonte), e, no Ampliado, DIGITAR nas datas e ABRIR o seletor de conta (sao os mesmos nos da tela normal; no
     navegador foram trocados atalho, segmento e a caixa).
+- ⚠ CONTAS A PAGAR E RECEBER MOSTRA O FLUXO DA CONTA: A TRANSFERENCIA ENTRA, EM DUAS PONTAS, E A REGRA MORA NO DONO
+  (CPR-TRANSFERENCIAS-NO-FLUXO-01, Gabriel 09/10/2026, so' tela, sem banco). REGRA DO GABRIEL, que SUBSTITUI "transferencia nao e'
+  conta a pagar nem a receber": a tela mostra tudo o que mexe no saldo da conta, nos status marcados, e o saldo do fim fecha com isso.
+  Nasce da Vera, Itau Personalite, out/26: 4 transferencias fora da tela e do PDF, e o saldo parado em 296.679,54 depois de 09/10.
+  · A consulta `cpr-lancs` deixou de cortar o tipo '3-' (o corte de `sem_movimentacao_caixa` continua). No dono
+    (`src/lib/financeiro/cprRecorte.ts`): `pontasCpr` abre cada transferencia em DUAS linhas com o mesmo lancamento — SAIDA na
+    origem (`conta_bancaria_id`) e ENTRADA no destino (`conta_destino_id`), `chave` = `id:ponta` (`chaveDaLinhaCpr`) —; dai' em
+    diante a ponta e' uma linha como as outras: `ehPagarCpr` / `ehReceberCpr` / `contaDaConta` a conhecem. Duas grafias do tipo,
+    sempre pelo prefixo (`ehTransferenciaCpr`). `recortarCpr`, `resumoPorContaCpr` e `saldoPorContaCpr` abrem as pontas sozinhos
+    (idempotente); o grafico (`fluxoPrevisto.ts`) pergunta a direcao ao dono. PROIBIDO decidir direcao por prefixo do tipo fora
+    do dono (tela, grafico, modelo do PDF, Excel) — preso por teste de fonte.
+  · UMA CONTA ESCOLHIDA: a transferencia aparece uma vez (saida se a conta e' a origem, entrada se e' o destino). TODAS: duas
+    linhas, cada uma com a sua conta; o saldo nao muda quando as duas contas entram no caixa.
+  · ⚠ PONTA EM CONTA FORA DO CAIXA (`pontaForaDoCaixaCpr`): em "Todas" (e em "Sem conta") a ponta cuja conta NAO tem ancora
+    (sem conta, cartao de credito, conta sem saldo conferido) aparece no dia, APAGADA, e NAO SOMA (`recorte.foraDoCaixa`) — a
+    outra ponta, sozinha, e' o que mexe no saldo. Vale SO' para ponta de transferencia: a conta a pagar comum em cartao / sem
+    conta segue descontando no vencimento dela em "Todas" (a decisao pendente CPR-CARTAO-NO-SALDO-TODAS-01 NAO foi tocada; o
+    briefing supunha que a regra ja' valia para toda linha — so' vale para os VENCIDOS).
+  · PAGA / REALIZADA: vai para as pagas (aparece com a pilula Realizado, nunca soma) — o cartao Caixa ja' a contem
+    (`movimentoNaConta`: destino = entrada, origem pelo sinal; medido: toda transferencia viva tem sinal −1 e duas contas
+    diferentes). VENCIDA em aberto: a regra de sempre, pela ancora da conta DA PONTA.
+  · CARTOES DO TOPO (Vencidos · A pagar · A receber) SO' COM CONTAS: leem `recorte.cartoes` (sem pontas). Totais do dia, rodape
+    "Fim do periodo", seletor de conta, faixa "A pagar por conta", Minimo e saldo INCLUEM as pontas. Na conta do defeito
+    (out/26, quatro status): cartao A pagar 1.896,83 (2) x rodape a pagar 296.175,02 (4) — a diferenca, 294.278,19, sao as duas
+    pontas em aberto. Decisao do Gabriel se o cartao muda.
+  · NA LISTA: a marca "Transf." (sky-700, a cor do total de transferencias da lista de Lancamentos) antes da descricao, com
+    origem → destino e a ponta no `title`; valor na coluna do lado (saida em A pagar, entrada em A receber); nenhuma coluna nova.
+    PDF e Excel: a descricao leva "Transf. · ", e o Excel diz "transferência · conta fora do caixa (não soma)" no Grupo.
+  MEDIDO (so' leitura, 09/10): transferencias vivas — Agnaldo 795, NJ 834, Santa Rita 2.877, Vera 190; todas com as duas contas,
+  0 com a mesma conta nas duas pontas, 0 sem conta; 6 no singular (NJ). Em aberto e vencidas (passam a aparecer nos Vencidos):
+  Agnaldo 6, Santa Rita 9. Linhas a mais em out/26 em "Todas": Vera 8 (4 transferencias), NJ 2.
+  PROVA NA TELA (Vera, Itau Personalite, Este mes, quatro status, so' leitura): as 4 aparecem (2 realizadas apagadas); Caixa
+  296.679,54 -> 6.679,54 depois de 09/10 (−290.000,00) -> 504,52 depois de 21/10 (−4.278,19, e 1.896,83 de contas entre os
+  dois); Lista e Fluxo fecham em 504,52. Em "Todas", 30 dias: a de 290.000 em duas linhas e o saldo do dia igual.
+  12 testes novos; 15 mutacoes do dono mortas. Testes trocados com a regra: `totaisDaListaV2.test.ts` (o vizinho de prova
+  era o corte de transferencia) e tres leituras de fonte de `cprRecorte.test.ts` (cartoes em `recorte.cartoes`).
+  ⚠ DIVIDA CPR-SALDO-INICIO-PERIODO-01 (proximo trabalho, NAO tocado): com o periodo no PASSADO a tela parte do saldo de HOJE, e
+    nao do saldo do inicio do periodo.
+  ⚠ DIVIDAS: no "Resumo por conta" do PDF a ponta em conta fora do caixa entra na linha da conta e NAO no Total (a nota do
+    bloco nao diz) · a ponta fora do caixa so' diz o motivo no `title` · `fluxoPrevisto.ts` passou a importar o dono (era sem
+    import) · NAO PROVADO NO NAVEGADOR: ponta em conta fora do caixa (a Vera nao tem caso no mes), vencida de transferencia
+    (Agnaldo / Santa Rita nao abertos), o Ampliado, e clique na linha de cada ponta abrindo o lancamento (mesmo `abrir(l.id)`).
 - ⚠ CONTAS A PAGAR E RECEBER DIZ O QUE AINDA E' ESTIMATIVA, PELA REGRA UNICA DA RECORRENCIA (REC-VALOR-CERTO-02, Gabriel 06/10/2026,
   so' tela): "quando a gente tem uma previsão de contas a pagar, é legal ter uma ideia desse valor: muitos são previsão, outros já
   são confirmados."

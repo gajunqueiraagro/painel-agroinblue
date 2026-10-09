@@ -79,7 +79,7 @@ function CabecalhoDaTabela({ comConta, fixo }: { comConta: boolean; fixo?: boole
 
 function LinhaDaConta({ c, comConta, zebra }: { c: ContaDaFolha; comConta: boolean; zebra: boolean }) {
   const t = { fontSize: F, color: COR.cinzaMedio };
-  const apagada = c.paga ? 0.55 : 1;
+  const apagada = c.paga || c.foraDoCaixa ? 0.55 : 1;
   return (
     <View wrap={false} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 1.5, paddingHorizontal: 4, backgroundColor: zebra ? COR.zebra : COR.branco, borderBottomWidth: 0.3, borderBottomColor: COR.separador }}>
       <Text style={{ ...t, width: W.comp }}>{c.comp}</Text>

@@ -50,6 +50,32 @@ export interface ContaCpr {
   /** CPR-CONTA-01: os dois campos de conta do lançamento; quem vale é o da DIREÇÃO (`contaDaConta`). */
   conta_bancaria_id?: string | null;
   conta_destino_id?: string | null;
+  /** CPR-TRANSFERENCIAS-NO-FLUXO-01: a PONTA de uma transferência (posta por `pontasCpr`); ausente em conta a pagar / a receber. */
+  ponta?: PontaCpr;
+  /** a chave da LINHA na tela: o id, ou `id:ponta` (em "todas as contas" a transferência tem duas linhas com o mesmo id). */
+  chave?: string;
+}
+
+/* ─── CPR-TRANSFERENCIAS-NO-FLUXO-01 — A TRANSFERÊNCIA TEM DUAS PONTAS (Gabriel, 09/10/2026) ─────────────────────────────
+   A tela mostra o FLUXO da conta: tudo o que mexe no saldo. Uma transferência é SAÍDA na conta de origem (`conta_bancaria_id`)
+   e ENTRADA na de destino (`conta_destino_id`). `pontasCpr` abre cada transferência nas duas pontas — duas linhas com o mesmo
+   lançamento, cada uma com a SUA conta —, e daí em diante a ponta é uma linha como as outras: a saída é "a pagar", a entrada é
+   "a receber" (`ehPagarCpr` / `ehReceberCpr`), a conta é a da ponta (`contaDaConta`). São DUAS grafias do tipo no banco
+   ('3-Transferência' e '3-Transferências'): sempre pelo prefixo. A regra mora SÓ aqui; tela, gráfico, PDF e Excel só desenham. */
+export type PontaCpr = 'saida' | 'entrada';
+export const ehTransferenciaCpr = (c: Pick<ContaCpr, 'tipo_operacao'>) => (c.tipo_operacao ?? '').startsWith('3-');
+/** A chave da linha (única na lista): `id`, ou `id:ponta` na ponta de transferência. */
+export const chaveDaLinhaCpr = (c: Pick<ContaCpr, 'id' | 'chave'>): string => c.chave ?? c.id;
+/** Abre cada transferência nas duas pontas (saída primeiro). Idempotente: linha que já é ponta passa como está. */
+export function pontasCpr<T extends ContaCpr>(linhas: readonly T[]): T[] {
+  const saida: PontaCpr = 'saida', entrada: PontaCpr = 'entrada';
+  const out: T[] = [];
+  for (const l of linhas) {
+    if (!ehTransferenciaCpr(l) || l.ponta) { out.push(l); continue; }
+    out.push({ ...l, ponta: saida, chave: `${l.id}:saida` });
+    out.push({ ...l, ponta: entrada, chave: `${l.id}:entrada` });
+  }
+  return out;
 }
 
 /**
@@ -84,10 +110,12 @@ export function baldeDaConta(c: ContaCpr, periodo: PeriodoCpr, hoje: string): Ba
 export const SEM_CONTA = 'sem_conta';
 /** `null` = todas as contas; um id = aquela conta; `SEM_CONTA` = os lançamentos sem conta definida. */
 export type FiltroContaCpr = string | null;
-export function contaDaConta(c: Pick<ContaCpr, 'tipo_operacao' | 'conta_bancaria_id' | 'conta_destino_id'>): string | null {
-  return ((c.tipo_operacao ?? '').startsWith('1-') ? c.conta_destino_id : c.conta_bancaria_id) ?? null;
+export function contaDaConta(c: Pick<ContaCpr, 'tipo_operacao' | 'conta_bancaria_id' | 'conta_destino_id' | 'ponta'>): string | null {
+  /* a ponta de ENTRADA de uma transferência mora na conta de destino; a de saída, na de origem */
+  const entrada = ehTransferenciaCpr(c) ? c.ponta === 'entrada' : (c.tipo_operacao ?? '').startsWith('1-');
+  return (entrada ? c.conta_destino_id : c.conta_bancaria_id) ?? null;
 }
-export function daContaCpr(c: Pick<ContaCpr, 'tipo_operacao' | 'conta_bancaria_id' | 'conta_destino_id'>, filtro: FiltroContaCpr): boolean {
+export function daContaCpr(c: Pick<ContaCpr, 'tipo_operacao' | 'conta_bancaria_id' | 'conta_destino_id' | 'ponta'>, filtro: FiltroContaCpr): boolean {
   if (filtro == null) return true;
   const conta = contaDaConta(c);
   return filtro === SEM_CONTA ? conta == null : conta === filtro;
@@ -107,7 +135,7 @@ export function ancorasDoCaixaCpr(ancoraPorConta: readonly { contaId: string; da
   return new Map((ancoraPorConta ?? []).map((a) => [a.contaId, a.data.slice(0, 10)]));
 }
 export function vencidoContaNoSaldo(
-  c: Pick<ContaCpr, 'data_vencimento' | 'tipo_operacao' | 'conta_bancaria_id' | 'conta_destino_id'>, ancoras: AncorasCpr | undefined,
+  c: Pick<ContaCpr, 'data_vencimento' | 'tipo_operacao' | 'conta_bancaria_id' | 'conta_destino_id' | 'ponta'>, ancoras: AncorasCpr | undefined,
 ): boolean {
   const conta = contaDaConta(c);
   const ancora = conta ? ancoras?.get(conta) : undefined;
@@ -115,8 +143,26 @@ export function vencidoContaNoSaldo(
   return !!ancora && !!venc && venc > ancora;
 }
 
-export const ehPagarCpr = (c: Pick<ContaCpr, 'tipo_operacao'>) => (c.tipo_operacao ?? '').startsWith('2-');
-export const ehReceberCpr = (c: Pick<ContaCpr, 'tipo_operacao'>) => (c.tipo_operacao ?? '').startsWith('1-');
+/** Sai da conta: a conta a pagar e a ponta de SAÍDA de uma transferência. */
+export const ehPagarCpr = (c: Pick<ContaCpr, 'tipo_operacao' | 'ponta'>) =>
+  (c.tipo_operacao ?? '').startsWith('2-') || (ehTransferenciaCpr(c) && c.ponta === 'saida');
+/** Entra na conta: a conta a receber e a ponta de ENTRADA de uma transferência. */
+export const ehReceberCpr = (c: Pick<ContaCpr, 'tipo_operacao' | 'ponta'>) =>
+  (c.tipo_operacao ?? '').startsWith('1-') || (ehTransferenciaCpr(c) && c.ponta === 'entrada');
+
+/**
+ * A PONTA QUE NÃO MEXE NO SALDO EM CAIXA: em "todas as contas" (e em "sem conta") o saldo é o do caixa inteiro, e a ponta de uma
+ * transferência só o move quando a conta DELA entra no caixa (tem âncora). Ponta sem conta, em cartão de crédito ou em conta sem
+ * saldo conferido aparece na lista do dia, apagada, e NÃO soma — a outra ponta, sozinha, é o que sai do (ou entra no) caixa.
+ * Com UMA conta escolhida a ponta é dela e conta como qualquer linha.
+ */
+export function pontaForaDoCaixaCpr(
+  c: Pick<ContaCpr, 'tipo_operacao' | 'conta_bancaria_id' | 'conta_destino_id' | 'ponta'>, filtro: FiltroContaCpr, ancoras: AncorasCpr | undefined,
+): boolean {
+  if (!ehTransferenciaCpr(c) || (filtro != null && filtro !== SEM_CONTA)) return false;
+  const conta = contaDaConta(c);
+  return !conta || !ancoras?.has(conta);
+}
 
 /** O valor da conta em CENTAVOS inteiros, em módulo (a direção é do tipo, não do sinal). */
 export function centavosDaConta(c: Pick<ContaCpr, 'valor'>): number {
@@ -148,6 +194,10 @@ export interface RecorteCpr<T extends ContaCpr> {
   semVencimento: SomaCpr & { linhas: T[] };
   /** Pagas que a consulta trouxe (pílula "Realizado" ligada): aparecem na lista do dia, nunca nos totais. */
   pagas: T[];
+  /** Pontas de transferência do período em conta que NÃO entra no caixa (`pontaForaDoCaixaCpr`): na lista do dia, nunca nos totais. */
+  foraDoCaixa: T[];
+  /** OS CARTÕES DO TOPO — só CONTAS a pagar e a receber, SEM as pontas de transferência (os totais da lista e o saldo as incluem). */
+  cartoes: { vencidos: SomaCpr; periodo: SomaCpr };
   /** O total do rodapé da lista, por segmento: vencidos (se ligados) + período. Em "ambos" é o líquido (receber − pagar). */
   total: Record<SegmentoCpr, LadoCpr>;
   /**
@@ -180,10 +230,25 @@ export function recortarCpr<T extends ContaCpr>(
   const { periodo, hoje, incluirVencidos } = opcoes;
   const porBalde: Record<BaldeCpr, T[]> = { paga: [], sem_vencimento: [], vencido: [], periodo: [], antes_do_periodo: [], fora: [] };
   /* CPR-CONTA-01 — o filtro de conta entra AQUI, antes de tudo: cartões, grupos, total e gráfico leem o mesmo recorte. */
-  for (const l of linhas) if (daContaCpr(l, opcoes.conta ?? null)) porBalde[baldeDaConta(l, periodo, hoje)].push(l);
+  const filtro = opcoes.conta ?? null;
+  const foraDoCaixa: T[] = [];
+  for (const l of pontasCpr(linhas)) {
+    if (!daContaCpr(l, filtro)) continue;
+    const balde = baldeDaConta(l, periodo, hoje);
+    /* a ponta em conta fora do caixa não passa pelo saldo: no período fica à vista (sem somar); antes dele, nem é listada */
+    if ((balde === 'periodo' || balde === 'antes_do_periodo') && pontaForaDoCaixaCpr(l, filtro, opcoes.ancoras)) {
+      if (balde === 'periodo') foraDoCaixa.push(l);
+      continue;
+    }
+    porBalde[balde].push(l);
+  }
   const porData = (a: T, b: T) => {
     const x = a.data_vencimento ?? '', y = b.data_vencimento ?? '';
-    return x < y ? -1 : x > y ? 1 : (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+    if (x !== y) return x < y ? -1 : 1;
+    const p = chaveDaLinhaCpr(a), q = chaveDaLinhaCpr(b);
+    /* mesma transferência: a saída antes da entrada; o resto, pelo id */
+    if (a.id === b.id) return a.ponta === b.ponta ? 0 : a.ponta === 'saida' ? -1 : 1;
+    return p < q ? -1 : p > q ? 1 : 0;
   };
   porBalde.vencido.sort(porData); porBalde.periodo.sort(porData);
 
@@ -192,6 +257,8 @@ export function recortarCpr<T extends ContaCpr>(
   const contam = porBalde.vencido.filter((l) => vencidoContaNoSaldo(l, opcoes.ancoras));
   const anteriores = porBalde.vencido.filter((l) => !vencidoContaNoSaldo(l, opcoes.ancoras));
   const sc = somar(contam), sa = somar(anteriores), sx = somar(porBalde.antes_do_periodo);
+  const semPontas = (ls: readonly T[]) => ls.filter((l) => !ehTransferenciaCpr(l));
+  const cv = somar(semPontas(porBalde.vencido)), cp = somar(semPontas(porBalde.periodo));
   const maisAntiga = porBalde.vencido.length > 0 ? (porBalde.vencido[0].data_vencimento ?? '').slice(0, 10) : null;
   const vP = incluirVencidos ? sv.cPagar : 0, vR = incluirVencidos ? sv.cReceber : 0;
   const nVP = incluirVencidos ? sv.pagar.contas : 0, nVR = incluirVencidos ? sv.receber.contas : 0;
@@ -213,6 +280,8 @@ export function recortarCpr<T extends ContaCpr>(
     periodoSoma: { pagar: sp.pagar, receber: sp.receber, saldo: reais(sp.cReceber - sp.cPagar), linhas: porBalde.periodo },
     semVencimento: { pagar: ss.pagar, receber: ss.receber, linhas: porBalde.sem_vencimento },
     pagas: porBalde.paga,
+    foraDoCaixa,
+    cartoes: { vencidos: { pagar: cv.pagar, receber: cv.receber }, periodo: { pagar: cp.pagar, receber: cp.receber } },
     total: {
       pagar: { valor: reais(vP + sp.cPagar), contas: nVP + sp.pagar.contas },
       receber: { valor: reais(vR + sp.cReceber), contas: nVR + sp.receber.contas },
@@ -223,7 +292,7 @@ export function recortarCpr<T extends ContaCpr>(
 }
 
 /** A conta é do segmento? (em "ambos", toda conta a pagar ou a receber.) */
-export function doSegmentoCpr(c: Pick<ContaCpr, 'tipo_operacao'>, segmento: SegmentoCpr): boolean {
+export function doSegmentoCpr(c: Pick<ContaCpr, 'tipo_operacao' | 'ponta'>, segmento: SegmentoCpr): boolean {
   return segmento === 'ambos' ? (ehPagarCpr(c) || ehReceberCpr(c)) : segmento === 'pagar' ? ehPagarCpr(c) : ehReceberCpr(c);
 }
 
@@ -273,7 +342,7 @@ export function resumoPorContaCpr<T extends ContaCpr>(
   linhas: readonly T[], opcoes: { periodo: PeriodoCpr; hoje: string; incluirVencidos: boolean },
 ): ContaNoResumoCpr[] {
   const chaves = new Set<string>();
-  for (const l of linhas) {
+  for (const l of pontasCpr(linhas)) {
     const b = baldeDaConta(l, opcoes.periodo, opcoes.hoje);
     if (b === 'periodo' || (b === 'vencido' && opcoes.incluirVencidos)) chaves.add(contaDaConta(l) ?? SEM_CONTA);
   }
@@ -386,7 +455,7 @@ export function saldoPorContaCpr<T extends ContaCpr>(
 ): SaldoDaContaCpr[] {
   const vistas = new Set<string>();
   const ordem: string[] = [];
-  for (const l of linhas) {
+  for (const l of pontasCpr(linhas)) {
     const b = baldeDaConta(l, opcoes.periodo, opcoes.hoje);
     if (b !== 'vencido' && b !== 'periodo' && b !== 'antes_do_periodo') continue;
     const c = contaDaConta(l) ?? SEM_CONTA;
