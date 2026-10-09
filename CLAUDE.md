@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 09/10/2026 (CPR-FLUXO-BARRAS-01, +2 em `src/lib/pdf/cpr/graficoNoPdf.test.tsx` (16 -> 18) — 4740 depois dele; antes o
+  Baseline em 09/10/2026 (DIALOG-CLIQUE-FECHANDO-01, +12 em `src/components/ui/menuFechadoSemClique.test.tsx` (14 -> 26) — 4752 depois
+  dele; antes o CPR-FLUXO-BARRAS-01, +2 em `src/lib/pdf/cpr/graficoNoPdf.test.tsx` (16 -> 18) — 4740 depois dele; antes o
   CPR-CAIXA-INICIAL-SEMPRE-01, +14: `src/lib/financeiro/cprRecorte.test.ts` 11 (69 -> 80),
   `src/lib/pdf/cpr/exportCpr.test.tsx` 2 (22 -> 24), `src/lib/financeiro/saldoEmCaixa.test.ts` 1 — 4738 depois dele; antes o DIVIDENDO-ESCRITOR-UNICO-01 passo 4, +3 em `src/lib/financeiro/dividendoEscritorUnico.test.ts` — 4724 depois
   dele; antes o passo 3, +13 em `src/pages/dividendosTab.test.tsx` — 4721 depois dele; antes o CPR-PDF-ACABAMENTO-01 commit B, +20: `src/lib/financeiro/saldoEmCaixa.test.ts` 5,
@@ -278,7 +279,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4740
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4752
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -1311,6 +1312,49 @@ preview que o cabecalho nao sai da tela ao rolar.
     `FechamentoTab.tsx:951`, `PrecosMercadoHubTab.tsx:52`, `FinanciamentosListaPage.tsx:377`, `FinanciamentosPainelTab.tsx:85`,
     `MetaGmdTab.tsx:61`, `ValorRebanhoTab.tsx:1734`, `ConciliacaoBancariaTab.tsx:868`, `FinanceiroTab.tsx:981`,
     `PrecoMercadoTab.tsx:250` — e o ramo mobile do proprio `FinanceiroV2Tab.tsx` (~:1778).
+- ⚠ DIALOGO, CONFIRMACAO, FOLHA E GAVETA FECHANDO NAO ACEITAM CLIQUE (DIALOG-CLIQUE-FECHANDO-01, Gabriel 09/10/2026, so' tela; fecha a
+  divida de mesmo nome do MENU-CLIQUE-FECHANDO-01). A mesma regra dos menus, nos componentes base de `src/components/ui` — nenhum
+  ajuste tela por tela. Durante a saida (200 a 500 ms; indefinidamente em aba oculta) o conteudo fica no DOM com
+  `data-state="closed"`, e um segundo clique no mesmo ponto acertava o Salvar / Excluir / Confirmar do dialogo que ja' saia.
+  · MEDIDO, um por um (saida simulada em teste; os tres primeiros tambem na fonte e no navegador):
+        componente                 saida        conteudo / fundo clicavel fechando?   o que foi feito
+        `dialog.tsx`               200 ms       SIM / o fundo segurava o ponteiro     classe no conteudo e no fundo + trava de clique
+        `alert-dialog.tsx`         200 ms       SIM / idem                            idem
+        `sheet.tsx`                300 ms       SIM / idem                            idem
+        `drawer.tsx` (vaul)        500 ms       mesmo `data-state` do Radix           idem (SEM USO no sistema: so' pela fonte)
+        `tooltip.tsx`              150 ms       sem botao; a caixa segurava o ponteiro  classe no conteudo
+        `select.tsx`               —            NAO: a lista sai do DOM na hora        nada (as classes de saida dela nunca rodam)
+        `searchable-select.tsx`    —            NAO: `{open && <PopoverContent`       nada
+        `command.tsx` em popover   a do popover coberto pelo `PopoverContent` (MENU-CLIQUE-FECHANDO-01)   nada
+  · AS MESMAS DUAS TRAVAS, NO MESMO DONO (`src/components/ui/menuPadrao.ts`): (1) a classe
+    `data-[state=closed]:!pointer-events-none`, por extenso, no CONTEUDO e no FUNDO (o "!" vence o `pointer-events: auto` inline
+    que o Radix poe no conteudo do modal); (2) `recusarCliqueFechado`, no `onClickCapture` do conteudo de Dialog, AlertDialog,
+    Sheet e Drawer: com o conteudo em `closed` o clique para na captura e nenhum botao de dentro o recebe (a que o jsdom prova).
+    O `onClickCapture` de quem usa o primitivo segue valendo com o conteudo aberto.
+  · PARA ONDE VAI O CLIQUE DADO DURANTE A SAIDA: A NADA. Enquanto o conteudo do modal esta' no DOM o Radix mantem
+    `pointer-events: none` no `body`; com o conteudo e o fundo tambem em `none`, o clique cai na raiz da pagina.
+  · DIALOGO POR CIMA DE DIALOGO: fechar o de cima nao muda o `data-state` do de baixo (segue `open` e recebe clique) — preso em teste.
+  · Animacao, duracao, aparencia, foco e Esc: intocados. Nenhuma tela mudou.
+  PROVA NO NAVEGADOR (cliente Teste, 09/10, 1.127 x 523, aba em SEGUNDO PLANO, nada gravado): Novo lançamento aberto, fechado por
+  clique REAL no Cancelar — o dialogo ficou no DOM em `closed`, inline `auto`, computado `none`, o fundo `none`; nos pontos do
+  Cancelar e da aba Pagamento o `elementFromPoint` devolve a raiz da pagina; dois cliques REAIS nesses pontos cairam na raiz
+  (nenhum dentro do dialogo) e a aba seguiu "Geral". Lista de selecao (Status do Novo lançamento): escolhido "Programado", a lista
+  saiu do DOM na hora (0 opcoes) e os pontos das opcoes devolvem o campo de baixo.
+  Testes: `menuFechadoSemClique.test.tsx` 14 -> 26 (o gesto nos tres com a saida simulada, o dialogo por cima de dialogo, o Select
+  medido, e a fonte dos cinco arquivos). Sem rodada de mutacao (formato curto); conferido uma vez que o teste sabe falhar: sem a
+  trava no Dialog caem 3.
+  ⚠ FOTOS REGRAVADAS, de proposito (a classe nova entra no HTML do conteudo e do fundo de todo dialogo): as 4 de
+    `valorComConta.fotos.json`, as 15 de `obrigacaoDialog.fotos.json` e as 6 de `propagarValorDoMes.fotos.json`. Conferido: cada
+    uma das 25 cresceu EXATAMENTE 82 bytes = duas vezes a classe (41 bytes com o espaco), e nada mais. Nenhum outro teste mudou.
+  ⚠ SUITE-TESTE-OSCILA-01, de novo: UMA execucao da suite inteira deu 4 falhas — a quarta foi `valorComConta.test.tsx > prova 7 >
+    novo lançamento com valor digitado pela máscara` (ja' na lista das oscilantes); sozinho o arquivo passou 3 de 3 e a suite
+    seguinte deu as 3 de sempre.
+  ⚠ EM ABA OCULTA o modal fechado continua no DOM e o `body` segue em `pointer-events: none` ate' recarregar (a animacao nao anda):
+    artefato de prova por script, ja' registrado; com a aba a' vista dura os 200 ms da saida.
+  ⚠ NAO PROVADO: a aba em PRIMEIRO plano com o segundo clique dentro dos 200 ms · AlertDialog, Sheet e dialogo sobre dialogo NO
+    NAVEGADOR (so' por teste) · um botao que GRAVA clicado duas vezes numa tela real (o Salvar do Novo lançamento vazio nao grava;
+    os pontos usados foram Cancelar e a aba) · a gaveta (sem uso) e a dica na tela · clique que comeca DENTRO do dialogo aberto e
+    termina depois de ele fechar (pressionar, fechar por tecla, soltar).
 - ⚠ LISTA OU MENU FECHANDO NAO ACEITA CLIQUE (MENU-CLIQUE-FECHANDO-01, Gabriel 08/10/2026, so' tela). Regra de produto: NENHUM GESTO
   ACONTECE POR CLIQUE EM COISA QUE O OPERADOR JA' NAO ESTA' VENDO. Ao fechar, o conteudo do Radix continua no DOM com
   `data-state="closed"` enquanto roda o `animate-out` (150 ms; numa aba OCULTA a animacao nao anda e ele fica la' indefinidamente),
@@ -1353,7 +1397,7 @@ preview que o cabecalho nao sai da tela ao rolar.
   menu ficou `closed` no DOM, o ponto do "Duplicar" devolve o texto do modal e o clique real nao duplicou nada.
   Testes: `src/components/ui/menuFechadoSemClique.test.tsx` (14: gesto com a saida simulada, `conteudoFechado`, e a FONTE dos
   primitivos com auto-teste do detector — recusa a regra sem o "!" e montada em pedacos). 12 mutacoes mortas, uma por trava.
-  ⚠ DIVIDA DIALOG-CLIQUE-FECHANDO-01 (medida, NAO consertada — conserto de outro tamanho, texto proprio): em `Dialog`,
+  ⚠ [FECHADA no DIALOG-CLIQUE-FECHANDO-01 — a regra logo acima; o texto abaixo e' o registro de antes.] DIVIDA DIALOG-CLIQUE-FECHANDO-01 (medida, NAO consertada — conserto de outro tamanho, texto proprio): em `Dialog`,
     `AlertDialog` e `Sheet` o botao continua clicavel durante o fechamento (200–300 ms; indefinidamente em aba oculta). Na
     sondagem, o segundo clique num "Salvar" de `Dialog`/`Sheet` e num `AlertDialogAction` ("Excluir") chamou o handler DE NOVO
     com o conteudo ja' em `closed`. Se isso grava em dobro depende de cada tela ter a propria guarda (botao desabilitado

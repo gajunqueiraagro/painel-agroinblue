@@ -12,6 +12,7 @@
  * ⚠ NENHUMA TELA SOBRESCREVE: classe de tamanho ou de altura no item de menu de uma tela é a segunda forma que este
  *   padrão existe para eliminar.
  */
+import type { MouseEvent } from 'react';
 
 /** O painel: borda, fundo e texto. OPACO. */
 /* ⚠ UI-DROPDOWN-PADRAO-01-fix1 (Gabriel, 02/10 09:57): "é um cinza e não preto assim". O padrão antigo era
@@ -64,3 +65,18 @@ export function conteudoFechado(el: Element | null): boolean {
   return el?.closest('[data-state][role="menu"], [data-state][role="dialog"]')?.getAttribute('data-state') === 'closed';
 }
 
+/**
+ * DIALOGO, GAVETA E FOLHA FECHANDO NAO ACEITAM CLIQUE — DIALOG-CLIQUE-FECHANDO-01 (Gabriel, 09/10/2026).
+ *
+ * A mesma regra dos menus, para `Dialog`, `AlertDialog`, `Sheet` e `Drawer` (200 a 500 ms de saida): um segundo clique no mesmo
+ * lugar acertava o Salvar / Excluir / Confirmar do dialogo que ja' estava saindo. AS MESMAS DUAS TRAVAS: (1) a classe
+ * `data-[state=closed]:!pointer-events-none` no CONTEUDO e no FUNDO de cada primitivo, por extenso; (2) esta funcao, no
+ * `onClickCapture` do conteudo: com o conteudo em `closed`, o clique para na captura e nenhum botao de dentro o recebe (a que o
+ * jsdom prova). O `onClickCapture` de quem usa o primitivo segue valendo com o conteudo aberto.
+ */
+export function recusarCliqueFechado<E extends Element>(depois?: (e: MouseEvent<E>) => void) {
+  return (e: MouseEvent<E>): void => {
+    if (e.currentTarget.getAttribute('data-state') === 'closed') { e.preventDefault(); e.stopPropagation(); return; }
+    depois?.(e);
+  };
+}
