@@ -13,7 +13,8 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useFluxoCaixa, type FluxoMensal } from '@/hooks/useFluxoCaixa';
-import { supabase } from '@/integrations/supabase/client';
+import { useCliente } from '@/contexts/ClienteContext';
+import { loadContasDoPlanoDoCliente } from '@/lib/financeiro/planoContasBuilder';
 import { Card, CardContent } from '@/components/ui/card';
 import { Loader2, AlertTriangle, ChevronRight, ChevronDown } from 'lucide-react';
 import {
@@ -523,16 +524,18 @@ function FluxoTable({
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(['totalEntradas', 'totalSaidas']));
   const [ordemMap, setOrdemMap] = useState<PlanoOrdemMap>(new Map());
 
-  // Load plano ordem_exibicao once
+  /* A ordem do plano sai do carregador dono, SÓ do cliente em uso (as contas dele e as globais) — PLANO-LEITOR-POR-CLIENTE-01.
+     Lia o plano inteiro, de todos os clientes. Falha de leitura: a ordem fica a de reserva, como antes. */
+  const { clienteAtual } = useCliente();
+  const clienteId = clienteAtual?.id;
   useEffect(() => {
-    supabase
-      .from('financeiro_plano_contas')
-      .select('macro_custo, grupo_custo, centro_custo, subcentro, ordem_exibicao')
-      .eq('ativo', true)
-      .then(({ data }) => {
-        if (data) setOrdemMap(buildPlanoOrdemMap(data as any));
-      });
-  }, []);
+    if (!clienteId) return;
+    let cancelado = false;
+    loadContasDoPlanoDoCliente(clienteId)
+      .then((contas) => { if (!cancelado) setOrdemMap(buildPlanoOrdemMap(contas)); })
+      .catch(() => { /* fica a ordem de reserva */ });
+    return () => { cancelado = true; };
+  }, [clienteId]);
 
   const toggleExpand = useCallback((id: string) => {
     setExpanded(prev => {

@@ -23,6 +23,7 @@ import {
   type FornecedorComAliases,
 } from '@/v2/lib/custeio/memoriaCusteio';
 import { supabase } from '@/integrations/supabase/client';
+import { loadContasDoPlanoDoCliente, mapaDeContasPeloNome } from '@/lib/financeiro/planoContasBuilder';
 import { BlocoTopoAba } from '@/components/ui/bloco-topo-aba';
 import {
   parseCusteioTxtFile,
@@ -230,16 +231,17 @@ export default function CusteioTxtImportTab(
     let cancelado = false;
     void (async () => {
       try {
-        const [aliasRes, planoRes, fornRes] = await Promise.all([
+        /* PLANO-LEITOR-POR-CLIENTE-01: o plano sai do carregador dono, SÓ do cliente em uso (as contas dele e as globais). Lia
+           o plano inteiro — o admin enxerga as contas de todos os clientes — e o mapa nome → id era "o primeiro vence". */
+        const [aliasRes, contasDoPlano, fornRes] = await Promise.all([
           supabase.from('financeiro_subcentro_aliases')
             .select('id, cliente_id, alias_text, plano_conta_id, origem')
             .eq('ativo', true),
-          supabase.from('financeiro_plano_contas').select('id, subcentro').eq('ativo', true),
+          loadContasDoPlanoDoCliente(clienteId),
           supabase.from('financeiro_fornecedores').select('id, nome, aliases').eq('cliente_id', clienteId),
         ]);
         if (cancelado) return;
         if (aliasRes.error) throw aliasRes.error;
-        if (planoRes.error) throw planoRes.error;
         if (fornRes.error) throw fornRes.error;
 
         /* O RLS já limita o que volta; o filtro por cliente aqui deixa passar o alias
@@ -248,15 +250,12 @@ export default function CusteioTxtImportTab(
           .filter(a => a.cliente_id === null || a.cliente_id === clienteId));
 
         const porPlano = new Map<string, string>();
-        const porSubcentro = new Map<string, string>();
-        for (const linha of planoRes.data ?? []) {
-          if (!linha.subcentro) continue;
-          porPlano.set(linha.id, linha.subcentro);
-          // Primeiro vence: o mesmo subcentro pode aparecer em mais de uma linha do plano.
-          if (!porSubcentro.has(linha.subcentro)) porSubcentro.set(linha.subcentro, linha.id);
+        for (const linha of contasDoPlano) {
+          if (linha.subcentro) porPlano.set(linha.id, linha.subcentro);
         }
         setSubcentroPorPlano(porPlano);
-        setPlanoPorSubcentro(porSubcentro);
+        /* nome → id pela REGRA ÚNICA do plano: a conta do cliente vence a global; nome com duas contas do cliente não resolve. */
+        setPlanoPorSubcentro(mapaDeContasPeloNome(contasDoPlano, clienteId));
 
         /* `aliases` é `Json` no tipo gerado: conferir a forma em runtime, sem cast. */
         setFornecedoresComAliases((fornRes.data ?? []).map(f => ({

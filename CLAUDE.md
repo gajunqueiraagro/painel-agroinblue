@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 09/10/2026 (CONC-DIVIDENDOS-PLANO-01, +10 em `src/lib/financeiro/dividendoNoPlano.test.ts` — 4643 depois dele; antes o
+  Baseline em 09/10/2026 (PLANO-LEITOR-POR-CLIENTE-01 passo 2, +10 em `src/lib/financeiro/dividendoNoPlano.test.ts` (10 -> 20) — 4653 depois dele; antes o
+  CONC-DIVIDENDOS-PLANO-01, +10 em `src/lib/financeiro/dividendoNoPlano.test.ts` — 4643 depois dele; antes o
   MENU-CLIQUE-FECHANDO-01, +14 em `src/components/ui/menuFechadoSemClique.test.tsx` — 4633 depois dele; antes o
   APP-SEM-TRADUCAO-01, +5 em `src/lib/app/semTraducao.test.ts` — 4619 depois dele; antes a
   FORN-SELETOR-PADRAO-01 fatia 2b, +20: `src/components/shared/favorecidoSelectDono.test.tsx` 16,
@@ -267,7 +268,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4643
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4653
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -2478,6 +2479,30 @@ docs/historico/frentes-ate-2026-09-29.md.)
     `LancamentoLeituraDialog.tsx`; e telas fora das abas da Conciliacao — `EstacaoConciliar.tsx`, `VincularMatchDireto.tsx`,
     `DecisaoDerivadosDialog.tsx` fora do Espelho, `CasarComBancoModal.tsx` (dentro do Espelho ja' passa pelo `onMudou`),
     `useConciliacaoDoMes.ts`, `useConciliarMes.ts` (o dialogo avisa).
+- ⚠ NO FRONT, O PLANO SE LE^ POR UM CARREGADOR, DO CLIENTE EM USO, E O NOME SE RESOLVE PELA REGRA UNICA (PLANO-LEITOR-POR-CLIENTE-01 passo 2,
+  Gabriel 09/10/2026, so' tela). Dono: `src/lib/financeiro/planoContasBuilder.ts`.
+  · A LEITURA BASE E' UMA: `loadContasDoPlanoDoCliente(clienteId)` — as contas ATIVAS do cliente e as globais, com a ordem real; o
+    filtro de cliente vai NA CONSULTA (o admin enxerga, pela RLS, as contas de todos os clientes). `loadPlanoContasCompleto` passou a
+    montar a lista de sempre EM CIMA dela (antes lia o plano de todos os clientes; hoje nada muda: toda conta por cliente e' de
+    macro Dividendos, que a lista geral ja' excluia).
+  · A REGRA DO NOME E' UMA: `contaDoPlanoPeloNome(contas, cliente, subcentro, tipo?)`, espelho declarado de
+    `fn_plano_conta_do_texto` — uma do cliente: e' ela; duas do cliente: nenhuma; nenhuma do cliente: a global, se unica; de outro
+    cliente, nunca; sem `tipo`, qualquer tipo (homonimo em dois tipos nao resolve). `contaDoDividendo` delega a ela.
+    `mapaDeContasPeloNome(contas, cliente)` e' o mapa nome -> id; nome que nao resolve fica FORA.
+  · QUEM TROCOU: `useImportLancamentosExcel.ts` e `CusteioTxtImportTab.tsx` (liam o plano inteiro e montavam o mapa com "o primeiro
+    vence"; o id sai do mapa para `financeiro_subcentro_aliases.plano_conta_id` — `persistirApelidos.ts:103` e
+    `CusteioTxtImportTab.tsx`, o apelido aprendido) e `FluxoFinanceiro.tsx` (o mapa de ordem; passou a ler o cliente pelo
+    `useCliente`). Nenhuma mudanca de layout, texto ou coluna.
+  · O QUE O OPERADOR VE^: planilha com nome de subcentro que so' existia na conta de OUTRO cliente deixa de resolver — no importador
+    de lancamentos o texto cai no de-para como "a resolver"; no custeio, o apelido nao e' aprendido. E' o comportamento certo.
+  PROVA NO NAVEGADOR (sessao real do admin, so' leitura, o carregador e o mapa rodados na pagina contra a consulta antiga): o admin
+  enxerga 239 contas, 19 de cliente; para Teste, NJ, Vera e Santa Rita o carregador devolve 221 / 221 / 226 / 228 contas, 0 de outro
+  cliente; TODO nome que fica tem o MESMO id de antes (221 / 221 / 226 / 228, 0 diferentes) e os que saem (18 / 18 / 13 / 11) sao
+  exatamente as contas de outros clientes; a ordem do Fluxo e' identica em todas as chaves que ficam (353 / 353 / 358 / 360, 0
+  diferentes). 7 mutacoes mortas e 1 equivalente (juntar os nomes de todos os clientes antes da regra: ela ja' os descarta).
+  ⚠ NAO PROVADO NO NAVEGADOR: IMPORTAR UMA PLANILHA pela tela e conferir a chave gravada (o fluxo de importacao nao foi exercitado;
+    provado pelo mapa real acima e por teste) · a tela do Fluxo ABERTA (a ordem foi conferida pelo mapa, nao olhando as linhas) ·
+    perfil nao admin.
 - ⚠ QUEM PROCURA CONTA DO PLANO PELO NOME OLHA O CLIENTE, E PERGUNTA AO DONO (PLANO-LEITOR-POR-CLIENTE-01 passo 1, Gabriel 09/10/2026,
   so' banco; migration 20261027195100, ⚠ registrada como 20261009094347; ledger = arquivo, md5 a4cc83b1…). REGRA: todo leitor do
   plano pelo nome responde pela regra de `fn_plano_conta_do_texto(cliente, subcentro, tipo)` — a conta do cliente do lancamento; na

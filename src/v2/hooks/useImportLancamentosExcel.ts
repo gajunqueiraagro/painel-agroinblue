@@ -22,6 +22,7 @@ import type { LancamentoV2Form } from '@/hooks/useFinanceiroV2';
 import { montarPayloadConta, type TipoOperacaoFinanceira } from '@/lib/financeiro/contaPayload';
 import { persistirApelidos, mapaDeRepontamento, type ResultadoApelidos } from '@/v2/lib/importLanc/persistirApelidos';
 import { lerTodasAsPaginas } from '@/v2/lib/importLanc/lerTodasAsPaginas';
+import { loadContasDoPlanoDoCliente, mapaDeContasPeloNome } from '@/lib/financeiro/planoContasBuilder';
 import {
   montarDePara, mesclarDePara, montarPrevia, contarPendentes, chaveFechamento,
   textosParaOBanco, lerResolucoesDoBanco, type ResolucoesDoBanco,
@@ -218,25 +219,21 @@ export function useImportLancamentosExcel(somenteAtualizar = false) {
         .from('financeiro_subcentro_aliases')
         .select('id, cliente_id, alias_text, plano_conta_id, origem')
         .eq('ativo', true),
-      supabase
-        .from('financeiro_plano_contas')
-        .select('id, subcentro')
-        .eq('ativo', true),
-    ]).then(([aliasRes, planoRes]) => {
+      /* PLANO-LEITOR-POR-CLIENTE-01: o plano sai do carregador dono, SÓ do cliente em uso (as contas dele e as globais). Lia
+         o plano inteiro — o admin enxerga as contas de todos os clientes — e o mapa nome → id era "o primeiro vence". */
+      loadContasDoPlanoDoCliente(clienteId),
+    ]).then(([aliasRes, contasDoPlano]) => {
       if (cancelado) return;
       if (aliasRes.error) {
         console.error('[useImportLancamentosExcel] aliases subcentro', aliasRes.error);
         return;
       }
       const subPorPlano = new Map<string, string>();
-      const idPorSub: Record<string, string> = {};
-      for (const p of planoRes.data ?? []) {
-        if (!p.subcentro) continue;
-        subPorPlano.set(p.id, p.subcentro);
-        // Primeiro vence: o plano pode ter o mesmo subcentro em mais de uma linha.
-        if (!(p.subcentro in idPorSub)) idPorSub[p.subcentro] = p.id;
+      for (const p of contasDoPlano) {
+        if (p.subcentro) subPorPlano.set(p.id, p.subcentro);
       }
-      setPlanoIdPorSubcentro(idPorSub);
+      /* nome → id pela REGRA ÚNICA do plano: a conta do cliente vence a global; nome com duas contas do cliente não resolve. */
+      setPlanoIdPorSubcentro(Object.fromEntries(mapaDeContasPeloNome(contasDoPlano, clienteId)));
       // A resposta vem sem tipo (tabela ausente dos types): validar a forma em runtime
       // antes de usar, em vez de propagar `any`.
       const brutos: unknown[] = Array.isArray(aliasRes.data) ? aliasRes.data : [];

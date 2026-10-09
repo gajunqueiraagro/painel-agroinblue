@@ -155,34 +155,96 @@ export async function loadDividendos(clienteId: string): Promise<Dividendo[]> {
 }
 
 /**
- * Conta do plano de macro Dividendos que o cliente enxerga: a DELE (`cliente_id` = o cliente) ou a global de mesmo nome.
- * É só o que `contaDoDividendo` precisa para dar a chave ao nome do cadastro.
+ * UMA CONTA DO PLANO QUE O CLIENTE ENXERGA: a DELE (`cliente_id` = o cliente) ou uma global (`cliente_id` nulo). É a linha crua
+ * de `financeiro_plano_contas`, com a ordem real — o que `loadContasDoPlanoDoCliente` devolve.
  */
-export interface ContaDeDividendo {
+export interface ContaDoPlano {
   id: string;
   cliente_id: string | null;
   tipo_operacao: string;
+  macro_custo: string;
+  grupo_custo: string | null;
+  centro_custo: string;
   subcentro: string | null;
+  escopo_negocio?: string | null;
+  ativo: boolean;
+  ordem_exibicao: number;
   compoe_dre?: boolean | null;
+}
+
+/** O que a regra do nome precisa de uma conta (a `ContaDoPlano` inteira serve). */
+export type ContaDeDividendo = Pick<ContaDoPlano, 'id' | 'cliente_id' | 'tipo_operacao' | 'subcentro' | 'compoe_dre'>;
+
+/** O banco trata '3-Transferência' e '3-Transferências' como o mesmo tipo; o espelho também. */
+const tipoCanonico = (tipo: string) => (tipo === '3-Transferência' ? '3-Transferências' : tipo);
+
+/**
+ * A CONTA DO PLANO PELO NOME — A REGRA ÚNICA (PLANO-LEITOR-POR-CLIENTE-01, Gabriel 09/10/2026). Espelho declarado de
+ * `fn_plano_conta_do_texto(cliente, subcentro, tipo)` do banco: UMA conta do cliente com aquele nome (e tipo, quando informado):
+ * é ela; DUAS do cliente: nenhuma (o banco também não escolhe); nenhuma do cliente: a global, se for única. Conta de OUTRO
+ * cliente nunca é lida — nem que a lista a traga. Quem procura conta do plano pelo nome, no front, pergunta aqui.
+ * Sem `tipo`, vale qualquer tipo (o "existe em qualquer tipo" do banco): homônimo em dois tipos não resolve.
+ */
+export function contaDoPlanoPeloNome<C extends ContaDeDividendo>(
+  contas: readonly C[],
+  clienteId: string,
+  subcentro: string,
+  tipo?: string,
+): C | null {
+  const doNome = contas.filter(c => c.subcentro === subcentro
+    && (tipo === undefined || tipoCanonico(c.tipo_operacao) === tipoCanonico(tipo)));
+  const doCliente = doNome.filter(c => c.cliente_id === clienteId);
+  if (doCliente.length === 1) return doCliente[0];
+  if (doCliente.length > 1) return null;
+  const globais = doNome.filter(c => c.cliente_id === null);
+  return globais.length === 1 ? globais[0] : null;
+}
+
+/**
+ * O MAPA nome → id QUE OS IMPORTADORES USAM, pela regra única: cada nome de subcentro que o cliente enxerga aponta para a conta
+ * que `contaDoPlanoPeloNome` resolve (a do cliente vence a global); nome que não resolve fica FORA do mapa — acabou o
+ * "o primeiro vence" sobre o plano de todos os clientes.
+ */
+export function mapaDeContasPeloNome(contas: readonly ContaDoPlano[], clienteId: string): Map<string, string> {
+  const mapa = new Map<string, string>();
+  const nomes = new Set<string>();
+  for (const c of contas) {
+    if (c.subcentro && (c.cliente_id === null || c.cliente_id === clienteId)) nomes.add(c.subcentro);
+  }
+  for (const nome of nomes) {
+    const conta = contaDoPlanoPeloNome(contas, clienteId, nome);
+    if (conta) mapa.set(nome, conta.id);
+  }
+  return mapa;
 }
 
 /**
  * A CONTA DO PLANO DE UM DIVIDENDO DO CADASTRO — CONC-DIVIDENDOS-PLANO-01 (Gabriel, 09/10/2026).
- * O cadastro de dividendos é a aprovação: o nome do cadastro tem conta no plano do cliente, com o MESMO nome. A regra é a do
- * banco (`fn_plano_conta_do_texto`): primeiro a conta DO CLIENTE com aquele subcentro; na falta, a GLOBAL; duas do mesmo
- * nível = nenhuma (o banco também não escolhe). Conta de OUTRO cliente nunca serve.
+ * O cadastro de dividendos é a aprovação: o nome do cadastro tem conta no plano do cliente, com o MESMO nome. É a regra única
+ * (`contaDoPlanoPeloNome`), com o tipo do dividendo.
  */
 export function contaDoDividendo(
   subcentro: string,
   clienteId: string,
   contas: readonly ContaDeDividendo[],
 ): ContaDeDividendo | null {
-  const doNome = contas.filter(c => c.subcentro === subcentro && c.tipo_operacao === DIVIDENDO_TIPO);
-  const doCliente = doNome.filter(c => c.cliente_id === clienteId);
-  if (doCliente.length === 1) return doCliente[0];
-  if (doCliente.length > 1) return null;
-  const globais = doNome.filter(c => c.cliente_id === null);
-  return globais.length === 1 ? globais[0] : null;
+  return contaDoPlanoPeloNome(contas, clienteId, subcentro, DIVIDENDO_TIPO);
+}
+
+/**
+ * A LEITURA BASE DO PLANO, UMA SÓ: as contas ATIVAS que o cliente enxerga — as dele e as globais —, na ordem do plano. Toda
+ * lista de contas e todo mapa por nome do front saem daqui (`loadPlanoContasCompleto`, os importadores, o Fluxo). O filtro de
+ * cliente vai NA CONSULTA: o admin enxerga, pela RLS, as contas de todos os clientes.
+ */
+export async function loadContasDoPlanoDoCliente(clienteId: string): Promise<ContaDoPlano[]> {
+  const { data, error } = await supabase
+    .from('financeiro_plano_contas')
+    .select('id, cliente_id, tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro, escopo_negocio, ativo, ordem_exibicao, compoe_dre')
+    .eq('ativo', true)
+    .or(`cliente_id.is.null,cliente_id.eq.${clienteId}`)
+    .order('ordem_exibicao');
+  if (error) throw error;
+  return data ?? [];
 }
 
 /**
@@ -223,32 +285,34 @@ export function buildDividendoEntries(
  * FONTE ÚNICA da LISTA de dividendos é `financeiro_dividendos` filtrada por cliente.
  * Qualquer entrada com macro_custo='Dividendos' no plano é EXCLUÍDA da lista geral — evita vazar dividendos de
  * outros clientes nos seletores de subcentro (as 15 contas globais de macro Dividendos são nomes de cadastros de
- * clientes específicos). As contas de Dividendos são lidas À PARTE, só as do cliente e as globais, e servem SÓ para dar a
- * chave ao nome que o cadastro do cliente já tem (`contaDoDividendo`) — nenhuma conta entra na lista por si.
+ * clientes específicos). As contas de Dividendos servem SÓ para dar a chave ao nome que o cadastro do cliente já tem
+ * (`contaDoDividendo`) — nenhuma conta entra na lista por si.
+ * A LEITURA É UMA (`loadContasDoPlanoDoCliente`, cliente ou global): a lista geral deixou de ler o plano de todos os clientes.
  */
 export async function loadPlanoContasCompleto(clienteId: string): Promise<PlanoContasItem[]> {
-  const [planoRes, dividendos, contasRes] = await Promise.all([
-    supabase
-      .from('financeiro_plano_contas')
-      .select('id, tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro, escopo_negocio, ativo, ordem_exibicao, compoe_dre')
-      .eq('ativo', true)
-      .neq('macro_custo', DIVIDENDO_MACRO)
-      .order('ordem_exibicao'),
+  const [contas, dividendos] = await Promise.all([
+    loadContasDoPlanoDoCliente(clienteId).catch((): ContaDoPlano[] => []),
     loadDividendos(clienteId),
-    supabase
-      .from('financeiro_plano_contas')
-      .select('id, cliente_id, tipo_operacao, subcentro, compoe_dre')
-      .eq('ativo', true)
-      .eq('macro_custo', DIVIDENDO_MACRO)
-      .or(`cliente_id.is.null,cliente_id.eq.${clienteId}`),
   ]);
 
-  const items: PlanoContasItem[] = (planoRes.data as PlanoContasItem[]) || [];
+  const items: PlanoContasItem[] = contas
+    .filter(c => c.macro_custo !== DIVIDENDO_MACRO)
+    .map(c => ({
+      id: c.id,
+      tipo_operacao: c.tipo_operacao,
+      macro_custo: c.macro_custo,
+      grupo_custo: c.grupo_custo,
+      centro_custo: c.centro_custo,
+      subcentro: c.subcentro,
+      escopo_negocio: c.escopo_negocio,
+      ativo: c.ativo,
+      ordem_exibicao: c.ordem_exibicao,
+      compoe_dre: c.compoe_dre,
+    }));
 
   if (dividendos.length > 0) {
     const maxOrdem = items.reduce((max, i) => Math.max(max, i.ordem_exibicao), 0);
-    const contas: ContaDeDividendo[] = contasRes.data ?? [];
-    const divEntries = buildDividendoEntries(dividendos, maxOrdem + 100, contas);
+    const divEntries = buildDividendoEntries(dividendos, maxOrdem + 100, contas.filter(c => c.macro_custo === DIVIDENDO_MACRO));
     items.push(...divEntries);
   }
 
