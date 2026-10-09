@@ -9,6 +9,7 @@
 import { nomeEParcela, type ParcelaDoContrato } from '@/lib/financiamentos/nomeDaParcela';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import type { PeriodoCpr, SerieDoSaldoCpr, SemanaCpr, SaldoDaContaCpr, LadoCpr } from '@/lib/financeiro/cprRecorte';
+import type { GraficoDaFolha } from '@/lib/pdf/cpr/graficoDoDom';
 
 export type TipoDeValor = 'pagar' | 'receber' | 'saldo';
 /** Uma célula de valor: o texto, a seta (desenhada, não é letra) e o tom. `null` = célula vazia. */
@@ -57,6 +58,8 @@ export interface ModeloCpr {
   cabecalho: { clienteNome: string; fazenda?: string; contaNome: string; periodo: string; linha2: string };
   /** o bloco de números: rótulo em cima, valor embaixo */
   numeros: { rotulo: string; valor: string; detalhe?: string; tom: 'neg' | 'pos' | 'neutro' }[];
+  /** o gráfico da aba Fluxo, lido do que a tela desenhou (`graficoDoDom`); nulo = a folha sai sem ele */
+  grafico: GraficoDaFolha | null;
   comColunaConta: boolean;
   faixas: FaixaDaFolha[];
   fim: { titulo: string; pagar: CelulaValorCpr | null; receber: CelulaValorCpr | null; saldo: CelulaValorCpr | null };
@@ -91,6 +94,8 @@ export interface EntradaDoModelo<L extends LinhaDaTela> {
   semanas: SemanaCpr[];
   porConta: SaldoDaContaCpr[] | null;
   motivoSemSaldo: string;
+  /** o gráfico do Fluxo já lido do DOM (o mesmo componente e a mesma série da tela); ausente = sem gráfico */
+  grafico?: GraficoDaFolha | null;
   de: {
     fornecedor: (l: L) => string; conta: (l: L) => string; nomeDaConta: (id: string) => string; subcentro: (l: L) => string;
     centro: (l: L) => string; macro: (l: L) => string; safra: (l: L) => string; faz: (l: L) => string;
@@ -187,6 +192,7 @@ export function montarModeloCpr<L extends LinhaDaTela>(e: EntradaDoModelo<L>): M
       linha2: `${SEGMENTO[e.segmento]}${e.incluirVencidos ? '' : ' · sem listar os vencidos'}   ·   emitido em ${e.emitidoEm}`,
     },
     numeros,
+    grafico: e.grafico ?? null,
     comColunaConta: e.todasAsContas,
     faixas,
     fim: {

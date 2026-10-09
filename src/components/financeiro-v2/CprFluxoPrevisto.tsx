@@ -480,7 +480,7 @@ export function CprFluxoPrevisto({
   })();
 
   return (
-    <div className="flex h-full min-h-0 flex-col rounded-lg" style={{ background: COR_CREME }}>
+    <div className="flex h-full min-h-0 flex-col rounded-lg" style={{ background: COR_CREME }} data-grafico={COR_CREME}>
       <div className="shrink-0 px-4 pt-3">
         <h2 className="text-[17px] font-semibold leading-none" style={{ color: COR_TEXTO }}>
           Fluxo de caixa previsto
@@ -499,7 +499,7 @@ export function CprFluxoPrevisto({
       {/* ⚠ LEGENDA PRÓPRIA, não a do recharts: ela precisa mostrar o TRACEJADO do previsto, e
           o `<Legend>` desenha só um retângulo cheio por série — as três zonas sairiam iguais,
           que é justamente o que a legenda existe para distinguir. */}
-      <div className="flex shrink-0 flex-wrap items-center gap-3 px-4 pt-2">
+      <div className="flex shrink-0 flex-wrap items-center gap-3 px-4 pt-2" data-grafico-legenda>
         {([
           { cor: COR_CONCILIADO, rotulo: 'Conciliado', tracejado: false },
           { cor: COR_REALIZADO, rotulo: 'Realizado, a conferir', tracejado: false },
@@ -523,7 +523,7 @@ export function CprFluxoPrevisto({
         )}
       </div>
 
-      <div ref={refPlot} className="min-h-0 flex-1 px-1 pb-1 pt-2">
+      <div ref={refPlot} className="min-h-0 flex-1 px-1 pb-1 pt-2" data-grafico-plot>
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={pontos}
             margin={{ top: 22, right: MARGEM_DIR, bottom: 30, left: MARGEM_ESQ }}>

@@ -66,6 +66,17 @@ export const STATUS_PALETA: Record<StatusPaleta, { texto: string; pilula: string
 };
 
 /**
+ * A cor do status em HEXADECIMAL, para quem não desenha com classe (a folha do PDF) — LIDA da paleta acima (o `texto` de cada
+ * status), nunca uma segunda tabela de cores. Status fora da paleta devolve nulo, e quem chama usa o seu tom neutro.
+ */
+export function hexDoStatus(status: string | null | undefined): string | null {
+  const chave = (status ?? '').toLowerCase();
+  const entrada = Object.entries(STATUS_PALETA).find(([k]) => k === chave);
+  const m = entrada ? /#[0-9a-fA-F]{6}/.exec(entrada[1].texto) : null;
+  return m ? m[0] : null;
+}
+
+/**
  * A FORMA DA PÍLULA, uma só para todas as telas. 9,5px é o piso do sistema fora da Grade do DRE.
  * ⚠ NA LISTA DO FINANCEIRO ELA RENDERIZA A 9px: `.table-financeiro td *` (index.css) força 9px
  * com `!important` em tudo dentro da célula, e a lista inteira já está a 9px. Não é esta classe

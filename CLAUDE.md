@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 09/10/2026 (CPR-TRANSFERENCIAS-NO-FLUXO-01, +12 em `src/lib/financeiro/cprRecorte.test.ts` — 4672 depois dele; antes o
+  Baseline em 09/10/2026 (CPR-TRANSFERENCIAS-NO-FLUXO-01 commit B, +11 em `src/lib/pdf/cpr/graficoNoPdf.test.tsx` — 4683 depois dele; antes o
+  CPR-TRANSFERENCIAS-NO-FLUXO-01 commit A, +12 em `src/lib/financeiro/cprRecorte.test.ts` — 4672 depois dele; antes o
   UI-BOTOES-LUGAR-FIXO-01, +2 em `src/components/financeiro-v2/FinanceiroV2ControlesLista.test.tsx` (20 -> 22) — 4660 depois dele; antes o
   PLANO-LEITOR-POR-CLIENTE-01 passo 3, +5 em `src/lib/financeiro/planoLeitorUnico.test.ts` — 4658 depois dele; antes o
   PLANO-LEITOR-POR-CLIENTE-01 passo 2, +10 em `src/lib/financeiro/dividendoNoPlano.test.ts` (10 -> 20) — 4653 depois dele; antes o
@@ -271,7 +272,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4672
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4683
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3526,6 +3527,28 @@ docs/historico/frentes-ate-2026-09-29.md.)
     bloco nao diz) · a ponta fora do caixa so' diz o motivo no `title` · `fluxoPrevisto.ts` passou a importar o dono (era sem
     import) · NAO PROVADO NO NAVEGADOR: ponta em conta fora do caixa (a Vera nao tem caso no mes), vencida de transferencia
     (Agnaldo / Santa Rita nao abertos), o Ampliado, e clique na linha de cada ponta abrindo o lancamento (mesmo `abrir(l.id)`).
+- ⚠ O PDF DA CPR TRAZ O GRAFICO DO FLUXO, EM VETOR, E O STATUS NAS CORES DO DONO DA LISTA (CPR-TRANSFERENCIAS-NO-FLUXO-01 commit B,
+  Gabriel 09/10/2026, so' tela).
+  · O GRAFICO NAO E' REDESENHADO NEM RECALCULADO: na hora de gerar, a tela monta FORA DA VISTA (798 x 330, tamanho fixo:
+    `TAMANHO_DO_GRAFICO_NO_PDF`) o MESMO no' do `CprFluxoPrevisto` da aba Fluxo (`graficoDoFluxo`, um no' so', as mesmas props) e
+    `lerGraficoDoDom` (`src/lib/pdf/cpr/graficoDoDom.ts`) descreve o SVG que o recharts desenhou, no' a no' (caminho, linha,
+    retangulo, circulo, texto; `translate` dos grupos somado na posicao; `dy` em "em" pelo tamanho da letra), mais titulo, frase
+    e legenda. `esperarGraficoNoDom` so' entrega quando duas leituras seguidas sao iguais; passado o prazo (4 s) devolve nulo, a
+    folha sai SEM o grafico e a tela escreve `AVISO_PDF_SEM_GRAFICO` ao lado do botao. O `DocumentoCpr` so' repete os nos
+    (`GraficoDoFluxo`, `wrap={false}`: bloco inteiro, nunca cortado), depois do bloco de numeros e antes da tabela. VETORIAL.
+    ⚠ O leitor so' entende `translate`; `clipPath`, `<title>` e `<defs>` nao vao. Componente de grafico que passar a usar
+      `rotate` / `scale` ou recorte que importe pede olhar o PDF gerado.
+  · STATUS: `hexDoStatus` (`src/lib/financeiro/statusFinanceiro.ts`) LE o hexadecimal do `texto` de `STATUS_PALETA` — nenhuma
+    segunda paleta; o `COR_STATUS` proprio da folha SAIU (Realizado e Agendado saiam em dois verdes quase iguais). Previsto
+    #c2410c · Programado #1d4ed8 · Agendado #14532d · Realizado #15803d · Conciliado #166534. Preso por teste de fonte.
+  PROVA (PDF gerado pela tela, Vera · Itau Personalite · out/26, quatro status, so' leitura): 3 paginas; o grafico na 1ª, depois
+  dos numeros, inteiro, com a linha fechando em R$ 505 em 21/10; "Transf. · " nas 4 transferencias; faixa de 09/10 ▼ 290.000,00
+  -> 6.679,54; 21/10 -> 504,52; "Saldo no fim" e o rodape 504,52 — o mesmo da Lista e do Fluxo. Colunas, cabecalho, rodape e
+  paginacao como antes.
+  ⚠ NAO PROVADO: o EXCEL baixado de verdade (o clique por script nao gerou arquivo; preso por teste do payload) · o PDF em
+    "Todas as contas" (duas pontas por transferencia e a coluna Conta) · PDF com mais de uma pagina de tabela ANTES do grafico
+    nao existe (o grafico vem antes) · periodo longo (60 dias, eixo mensal) no PDF · a fonte do PDF e' a Helvetica do chassi
+    (os textos do grafico saem com a largura dela; as posicoes sao as da tela).
 - ⚠ CONTAS A PAGAR E RECEBER DIZ O QUE AINDA E' ESTIMATIVA, PELA REGRA UNICA DA RECORRENCIA (REC-VALOR-CERTO-02, Gabriel 06/10/2026,
   so' tela): "quando a gente tem uma previsão de contas a pagar, é legal ter uma ideia desse valor: muitos são previsão, outros já
   são confirmados."

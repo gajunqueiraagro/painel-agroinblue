@@ -30,6 +30,7 @@ import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialo
 import { PageHeader } from '@/components/ui/page-header';
 import { Segmentado } from '@/components/ui/segmentado';
 import { CprFluxoPrevisto } from '@/components/financeiro-v2/CprFluxoPrevisto';
+import { esperarGraficoNoDom, AVISO_PDF_SEM_GRAFICO, TAMANHO_DO_GRAFICO_NO_PDF } from '@/lib/pdf/cpr/graficoDoDom';
 import { lerEstimadasDoCliente } from '@/hooks/useRecorrencias';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -937,6 +938,24 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
   const [exportando, setExportando] = useState<null | 'pdf' | 'excel'>(null);
   const [recadoExport, setRecadoExport] = useState<{ erro: boolean; texto: string } | null>(null);
   const semDados = statusLigados.length === 0 || grupos.length === 0;
+  /* O GRÁFICO DO FLUXO É UM NÓ SÓ: a aba Fluxo o desenha, e a exportação do PDF o monta fora da vista (tamanho fixo) para ler o
+     desenho pronto (`lerGraficoDoDom`) — o mesmo componente, as mesmas props, a mesma série do dono. Nada é recalculado para o PDF. */
+  const [graficoParaPdf, setGraficoParaPdf] = useState(false);
+  const refGraficoPdf = useRef<HTMLDivElement | null>(null);
+  const graficoDoFluxo = (
+    <CprFluxoPrevisto
+      linhas={doFluxo}
+      saldoInicial={serie.hoje}
+      barras={segmento}
+      vencidosForaDoSaldo={recorte.vencidos.anteriores.linhas.length}
+      caveat={rotuloCaixa}
+      granularidade="dia"
+      inicio={periodo.de}
+      hoje={isoLocal(hoje)}
+      passado={caixa?.passado.pontos ?? []}
+      conciliadoAte={caixa?.passado.boundary ?? null}
+    />
+  );
   const resolvedores: EntradaDoModelo<LinhaCpr>['de'] = {
     fornecedor: (l) => (l.favorecido_id && nomesFornecedores.get(l.favorecido_id)) || '—',
     conta: (l) => nomeConta(contaDaConta(l)),
@@ -968,8 +987,11 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
         const c = estimarSaldoEmCaixa({ ...caixaTodas.argumentos, contas: caixaTodas.argumentos.contas.filter((x) => x.id === id) });
         return c.ancoradas > 0 ? c.total : null;
       };
+      setGraficoParaPdf(true);
+      const grafico = await esperarGraficoNoDom(() => refGraficoPdf.current);
+      setGraficoParaPdf(false);
       const modelo = montarModeloCpr<LinhaCpr>({
-        ...identidadeDoArquivo,
+        ...identidadeDoArquivo, grafico,
         fazendaNome: fazScope ? (fazendaAtual?.nome ?? undefined) : undefined,
         segmento, incluirVencidos, emitidoEm: format(new Date(), 'dd/MM/yyyy HH:mm'),
         serie, grupos,
@@ -987,13 +1009,14 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
       const { gerarPdfCpr } = await importarDoApp(() => import('@/lib/pdf/cpr/gerarPdfCpr'));
       const r = await gerarPdfCpr(modelo);
       if (r.ok === false) setRecadoExport({ erro: true, texto: r.frase });
-      else if (r.aviso) setRecadoExport({ erro: false, texto: r.aviso });
+      else if (r.aviso || !grafico) setRecadoExport({ erro: false, texto: [r.aviso, grafico ? null : AVISO_PDF_SEM_GRAFICO].filter(Boolean).join(' ') });
     } catch (e) {
       /* ⚠ A FRASE É A DO DONO, importado ESTATICAMENTE: o que cai aqui é sobretudo o `import()` do pedaço do PDF que não chegou
          (página aberta desde antes de uma publicação) — e a mensagem crua do navegador não diz o que fazer. */
       console.error('[PDF Contas a Pagar e Receber] falha antes de gerar:', e);
       setRecadoExport({ erro: true, texto: motivoDaFalhaDoPdf(e) });
     } finally {
+      setGraficoParaPdf(false);
       setExportando(null);
     }
   };
@@ -1089,6 +1112,13 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
        o `/v2` só a dá porque esta seção entrou em `SECOES_APP_SHELL`. Sem isso o `sticky`
        dos grupos não gruda em nada. `max-w-5xl` para a tela não encostar na margem. */
     <div className={cn('w-full min-w-0 h-full min-h-0 flex flex-col bg-background', !ampliado && 'max-w-5xl mx-auto')}>
+      {/* o gráfico montado FORA DA VISTA, só enquanto o PDF é gerado: tamanho fixo, para a folha sair igual em qualquer janela */}
+      {graficoParaPdf && (
+        <div ref={refGraficoPdf} aria-hidden data-testid="cpr-grafico-para-pdf"
+          style={{ position: 'fixed', left: -10000, top: 0, width: TAMANHO_DO_GRAFICO_NO_PDF.largura, height: TAMANHO_DO_GRAFICO_NO_PDF.altura, pointerEvents: 'none' }}>
+          {graficoDoFluxo}
+        </div>
+      )}
 
       {/* AMPLIADO — o modo principal: TRÊS linhas fixas. (1) a barra de filtros, 26px, com os MESMOS controles e o MESMO estado da
           tela normal; (2) a faixa dos cartões, 24px; (3) as pílulas de status, 20px (CPR-SALDO-DIA-02). Vale para Lista e Fluxo.
@@ -1288,18 +1318,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
           {visao === 'fluxo' ? (
             /* ⚠ AS MESMAS CONTAS EM ABERTO QUE A SÉRIE DO SALDO SOMA, dos dois lados; o segmento só escolhe as barras.
                O gráfico começa na data "de" do período. No Ampliado ele ocupa toda a área abaixo do cabeçalho. */
-            <CprFluxoPrevisto
-              linhas={doFluxo}
-              saldoInicial={serie.hoje}
-              barras={segmento}
-              vencidosForaDoSaldo={recorte.vencidos.anteriores.linhas.length}
-              caveat={rotuloCaixa}
-              granularidade="dia"
-              inicio={periodo.de}
-              hoje={isoLocal(hoje)}
-              passado={caixa?.passado.pontos ?? []}
-              conciliadoAte={caixa?.passado.boundary ?? null}
-            />
+            graficoDoFluxo
           ) : (
           <>
 

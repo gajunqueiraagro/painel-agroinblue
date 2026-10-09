@@ -5,10 +5,12 @@
  * ⚠ SÓ DESENHA. Recebe o `ModeloCpr` (texto pronto, vindo do dono pela tela) e não faz conta nenhuma: nenhuma soma, nenhum
  * filtro, nenhuma regra de sinal — a seta e o tom já vêm em cada célula. Há teste de fonte que prende isso.
  */
-import { Document, Page, View, Text, Svg, Polygon } from '@react-pdf/renderer';
+import { Document, Page, View, Text, Svg, Polygon, Path, Line, Rect, Circle, G } from '@react-pdf/renderer';
 import { estilos, COR } from '@/lib/pdf/analise/estilos';
 import { PdfHeader, PdfRodape } from '@/lib/pdf/analise/PdfHeader';
 import type { ModeloCpr, CelulaValorCpr, ContaDaFolha, FaixaDaFolha, BlocoSimplesDaFolha } from '@/lib/pdf/cpr/modeloCpr';
+import type { GraficoDaFolha, NoDoGrafico } from '@/lib/pdf/cpr/graficoDoDom';
+import { hexDoStatus } from '@/lib/financeiro/statusFinanceiro';
 
 const F = 7;
 /** A régua da tabela, em pontos (A4 paisagem: 798 úteis). A Descrição é o que sobra. Número, data e status não cortam. */
@@ -18,7 +20,6 @@ const W_COM_CONTA = { fornecedor: 100, subcentro: 94 };
 const wForn = (comConta: boolean) => (comConta ? W_COM_CONTA.fornecedor : W.fornecedor);
 const wSub = (comConta: boolean) => (comConta ? W_COM_CONTA.subcentro : W.subcentro);
 const TOM: Record<CelulaValorCpr['tom'], string> = { neg: COR.vermelho, pos: COR.verde, apagado: '#9aa5b1', neutro: COR.cinza };
-const COR_STATUS: Record<string, string> = { realizado: '#22784a', conciliado: '#166534', programado: '#2563eb', previsto: '#d77706', agendado: '#15803d' };
 const FUNDO_DIA = '#e3e8ef';
 const FUNDO_VENCIDOS = '#f9e9e9';
 const FUNDO_NEGATIVO = '#f6d5d5';
@@ -98,7 +99,7 @@ function LinhaDaConta({ c, comConta, zebra }: { c: ContaDaFolha; comConta: boole
       <Corta texto={c.subcentro} largura={wSub(comConta)} cor={COR.cinzaMedio} />
       <Text style={{ ...t, width: W.safra }}>{c.safra}</Text>
       <Text style={{ ...t, width: W.faz }}>{c.faz}</Text>
-      <Text style={{ width: W.status, fontSize: F, fontWeight: 700, textAlign: 'center', color: COR_STATUS[c.statusChave] ?? COR.cinzaMedio }}>{c.status}</Text>
+      <Text style={{ width: W.status, fontSize: F, fontWeight: 700, textAlign: 'center', color: hexDoStatus(c.statusChave) ?? COR.cinzaMedio }}>{c.status}</Text>
       <Text style={{ width: W.pagar, fontSize: F, textAlign: 'right', paddingRight: 3, color: COR.vermelho, opacity: apagada }}>{c.pagar}</Text>
       <Text style={{ width: W.receber, fontSize: F, textAlign: 'right', paddingRight: 3, color: COR.verde, opacity: apagada }}>{c.receber}</Text>
       <View style={{ width: W.saldo }} />
@@ -157,6 +158,44 @@ function BlocoSimples({ b, comConta, inteiro }: { b: BlocoSimplesDaFolha; comCon
   );
 }
 
+/** Um nó do gráfico, como a tela o desenhou (`graficoDoDom`): a folha só repete — nenhuma escala, nenhum ponto nasce aqui. */
+function No({ n }: { n: NoDoGrafico }) {
+  const cor = (c: string) => (c === 'none' ? undefined : c);
+  if (n.t === 'path') {
+    const p = <Path d={n.d} fill={cor(n.fill) ?? 'none'} stroke={cor(n.stroke)} strokeWidth={n.sw} strokeDasharray={n.dash ?? undefined} fillOpacity={n.fo} strokeOpacity={n.so} strokeLinecap={n.cap === 'round' ? 'round' : undefined} />;
+    return n.tx === 0 && n.ty === 0 ? p : <G transform={`translate(${n.tx}, ${n.ty})`}>{p}</G>;
+  }
+  if (n.t === 'line') return <Line x1={n.x1} y1={n.y1} x2={n.x2} y2={n.y2} stroke={cor(n.stroke)} strokeWidth={n.sw} strokeDasharray={n.dash ?? undefined} strokeOpacity={n.so} strokeLinecap={n.cap === 'round' ? 'round' : undefined} />;
+  if (n.t === 'rect') return <Rect x={n.x} y={n.y} width={n.w} height={n.h} fill={cor(n.fill) ?? 'none'} stroke={cor(n.stroke)} strokeWidth={n.sw} fillOpacity={n.fo} />;
+  if (n.t === 'circle') return <Circle cx={n.cx} cy={n.cy} r={n.r} fill={cor(n.fill) ?? 'none'} stroke={cor(n.stroke)} strokeWidth={n.sw} fillOpacity={n.fo} />;
+  return <Text x={n.x} y={n.y} fill={n.fill} fillOpacity={n.fo} textAnchor={n.ancora} style={{ fontSize: n.tamanho, fontWeight: n.peso >= 600 ? 700 : 400 }}>{n.texto}</Text>;
+}
+
+/** O GRÁFICO DA ABA FLUXO — bloco INTEIRO (`wrap={false}`): se não couber no resto da página vai para a seguinte, nunca cortado. */
+function GraficoDoFluxo({ g }: { g: GraficoDaFolha }) {
+  return (
+    <View wrap={false} style={{ marginBottom: 8, paddingTop: 6, paddingHorizontal: 0, backgroundColor: g.fundo ?? undefined, borderRadius: 3 }}>
+      <View style={{ paddingHorizontal: 8 }}>
+        <Text style={{ fontSize: 11, fontWeight: 700, color: COR.cinza }}>{g.titulo}</Text>
+        {g.subtitulo ? <Text style={{ fontSize: 7, color: COR.cinzaMedio, marginTop: 2 }}>{g.subtitulo}</Text> : null}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', marginTop: 4 }}>
+          {g.legenda.map((l) => (
+            <View key={l.rotulo} style={{ flexDirection: 'row', alignItems: 'center', marginRight: 10 }}>
+              <Svg width={l.ponto ? 8 : 18} height={8} style={{ marginRight: 3 }}>
+                {l.ponto ? <Circle cx={4} cy={4} r={3} fill={l.cor} /> : <Line x1={0} y1={4} x2={18} y2={4} stroke={l.cor} strokeWidth={2.2} strokeDasharray={l.tracejado ? '4 3' : undefined} />}
+              </Svg>
+              <Text style={{ fontSize: 7.5, color: COR.cinza }}>{l.rotulo}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+      <Svg width={g.largura} height={g.altura} viewBox={`0 0 ${g.largura} ${g.altura}`}>
+        {g.nos.map((n, i) => <No key={i} n={n} />)}
+      </Svg>
+    </View>
+  );
+}
+
 const COL_RESUMO = { rotulo: 150, valor: 96 };
 function CabecalhoResumo({ primeira, colunas }: { primeira: string; colunas: string[] }) {
   const h: { fontSize: number; color: string; fontWeight: 700 } = { fontSize: F, color: COR.branco, fontWeight: 700 };
@@ -209,6 +248,9 @@ export function DocumentoCpr({ modelo: m, logoData }: { modelo: ModeloCpr; logoD
         </View>
         {m.notaSemSaldo ? <Text style={{ fontSize: 7.5, color: COR.ambar, marginBottom: 4 }}>{m.notaSemSaldo}</Text> : null}
         {m.notaSegmento ? <Text style={{ fontSize: 7.5, color: COR.cinzaMedio, marginBottom: 4 }}>{m.notaSegmento}</Text> : null}
+
+        {/* DEPOIS DO RESUMO, o gráfico da aba Fluxo — o mesmo desenho e a mesma série da tela */}
+        {m.grafico ? <GraficoDoFluxo g={m.grafico} /> : null}
 
         <CabecalhoDaTabela comConta={m.comColunaConta} fixo />
         {m.faixas.map((f, i) => <Faixa key={i} f={f} comConta={m.comColunaConta} />)}
