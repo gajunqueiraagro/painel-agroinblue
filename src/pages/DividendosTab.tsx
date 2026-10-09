@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { Card, CardContent } from '@/components/ui/card';
@@ -7,6 +8,15 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import { Plus, Pencil, GripVertical } from 'lucide-react';
 import { toast } from 'sonner';
@@ -25,6 +35,14 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
+import {
+  FN_DIVIDENDO,
+  fraseDoQueSegura,
+  lerRespostaDoDividendo,
+  ordemCompleta,
+  type RespostaDoDividendo,
+} from '@/lib/financeiro/dividendosCadastro';
 
 interface Dividendo {
   id: string;
@@ -63,8 +81,16 @@ function SortableRow({ item, onEdit, onToggle }: {
   );
 }
 
+/* DIVIDENDO-ESCRITOR-UNICO-01: a tela NÃO escreve em `financeiro_dividendos` (o banco recusa). Cada gesto chama a função
+   do escritor único, que mexe no cadastro e na conta do plano na mesma transação; a recusa fica ESCRITA, nunca em toast. */
+async function chamarDividendo(fn: string, args: Record<string, unknown>): Promise<RespostaDoDividendo> {
+  const { data, error } = await (supabase as any).rpc(fn, args);
+  return lerRespostaDoDividendo(data, error);
+}
+
 export function DividendosTab() {
   const { clienteAtual } = useCliente();
+  const queryClient = useQueryClient();
   const [items, setItems] = useState<Dividendo[]>([]);
   const [loading, setLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -72,6 +98,11 @@ export function DividendosTab() {
   const [editItem, setEditItem] = useState<Dividendo | null>(null);
   const [nome, setNome] = useState('');
   const [showInativos, setShowInativos] = useState(false);
+  /* a recusa do gesto: no formulário (criar / renomear), na lista (ativar, inativar, reordenar) e na confirmação */
+  const [recadoDoForm, setRecadoDoForm] = useState('');
+  const [recadoDaLista, setRecadoDaLista] = useState('');
+  const [recadoDaConfirmacao, setRecadoDaConfirmacao] = useState('');
+  const [aInativar, setAInativar] = useState<{ item: Dividendo; seguram: number } | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
@@ -89,64 +120,102 @@ export function DividendosTab() {
 
   useEffect(() => { load(); }, [load]);
 
+  /* depois de gravar: a lista relê, e quem mostra o plano ou os lançamentos relê sem F5 */
+  const aposGravar = useCallback((clienteId: string) => {
+    load();
+    queryClient.invalidateQueries({ queryKey: ['fin-classificacoes-plano', clienteId] });
+    notificarLancamentosMudaram(clienteId);
+  }, [load, queryClient]);
+
   const filtered = showInativos ? items : items.filter(i => i.ativo);
 
   const handleSave = async () => {
     if (isSaving) return;
     if (!clienteAtual?.id || !nome.trim()) return;
     setIsSaving(true);
+    setRecadoDoForm('');
     try {
+      const r = editItem
+        ? await chamarDividendo(FN_DIVIDENDO.renomear, { p_id: editItem.id, p_nome: nome.trim(), p_simular: false })
+        : await chamarDividendo(FN_DIVIDENDO.criar, { p_cliente_id: clienteAtual.id, p_nome: nome.trim(), p_simular: false });
+      if (r.ok === false) { setRecadoDoForm(r.frase); return; }
       if (editItem) {
-        const { error } = await supabase
-          .from('financeiro_dividendos')
-          .update({ nome: nome.trim() })
-          .eq('id', editItem.id);
-        if (error) { toast.error(error.message); return; }
-        toast.success('Dividendo atualizado');
+        toast.success('Dividendo atualizado', r.lancamentosTocados > 0
+          ? { description: `${r.lancamentosTocados} lançamento(s) receberam o nome novo.` }
+          : undefined);
       } else {
-        const maxOrdem = items.reduce((m, i) => Math.max(m, i.ordem_exibicao), -1);
-        const { error } = await supabase
-          .from('financeiro_dividendos')
-          .insert({ cliente_id: clienteAtual.id, nome: nome.trim(), ordem_exibicao: maxOrdem + 1 });
-        if (error) { toast.error(error.message); return; }
         toast.success('Dividendo criado');
       }
       setDialogOpen(false);
       setEditItem(null);
       setNome('');
-      load();
+      aposGravar(clienteAtual.id);
     } finally {
       setIsSaving(false);
     }
   };
 
+  const inativar = async (item: Dividendo) => {
+    const r = await chamarDividendo(FN_DIVIDENDO.inativar, { p_id: item.id, p_simular: false });
+    if (r.ok === false) return r.frase;
+    setAInativar(null);
+    aposGravar(item.cliente_id);
+    return '';
+  };
+
   const toggleAtivo = async (item: Dividendo, ativo: boolean) => {
-    await supabase.from('financeiro_dividendos').update({ ativo }).eq('id', item.id);
-    load();
+    if (isSaving) return;
+    setIsSaving(true);
+    setRecadoDaLista('');
+    try {
+      if (ativo) {
+        const r = await chamarDividendo(FN_DIVIDENDO.reativar, { p_id: item.id, p_simular: false });
+        if (r.ok === false) { setRecadoDaLista(r.frase); return; }
+        aposGravar(item.cliente_id);
+        return;
+      }
+      /* inativar: o banco diz ANTES quantos lançamentos seguram a conta no plano */
+      const previa = await chamarDividendo(FN_DIVIDENDO.inativar, { p_id: item.id, p_simular: true });
+      if (previa.ok === false) { setRecadoDaLista(previa.frase); return; }
+      if (previa.lancamentosQueSeguram > 0) {
+        setRecadoDaConfirmacao('');
+        setAInativar({ item, seguram: previa.lancamentosQueSeguram });
+        return;
+      }
+      setRecadoDaLista(await inativar(item));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const confirmarInativar = async () => {
+    if (!aInativar || isSaving) return;
+    setIsSaving(true);
+    try {
+      setRecadoDaConfirmacao(await inativar(aInativar.item));
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
-    if (!over || active.id === over.id) return;
+    if (!over || active.id === over.id || !clienteAtual?.id) return;
     const oldIndex = filtered.findIndex(i => i.id === active.id);
     const newIndex = filtered.findIndex(i => i.id === over.id);
     if (oldIndex < 0 || newIndex < 0) return;
 
-    const reordered = arrayMove(filtered, oldIndex, newIndex);
-    setItems(prev => {
-      const map = new Map(prev.map(p => [p.id, p]));
-      reordered.forEach((r, i) => { const p = map.get(r.id); if (p) p.ordem_exibicao = i; });
-      return [...prev].sort((a, b) => a.ordem_exibicao - b.ordem_exibicao);
-    });
-
-    const updates = reordered.map((r, i) =>
-      supabase.from('financeiro_dividendos').update({ ordem_exibicao: i }).eq('id', r.id)
-    );
-    await Promise.all(updates);
+    /* UMA chamada, com a lista inteira do cliente (os escondidos ficam onde estavam) */
+    const ids = ordemCompleta(items, arrayMove(filtered, oldIndex, newIndex));
+    const porId = new Map(items.map(p => [p.id, p]));
+    setItems(ids.flatMap((id, i) => { const p = porId.get(id); return p ? [{ ...p, ordem_exibicao: i }] : []; }));
+    setRecadoDaLista('');
+    const r = await chamarDividendo(FN_DIVIDENDO.reordenar, { p_cliente_id: clienteAtual.id, p_ids: ids, p_simular: false });
+    if (r.ok === false) { setRecadoDaLista(r.frase); load(); }
   };
 
-  const openNew = () => { setEditItem(null); setNome(''); setDialogOpen(true); };
-  const openEdit = (item: Dividendo) => { setEditItem(item); setNome(item.nome); setDialogOpen(true); };
+  const openNew = () => { setEditItem(null); setNome(''); setRecadoDoForm(''); setDialogOpen(true); };
+  const openEdit = (item: Dividendo) => { setEditItem(item); setNome(item.nome); setRecadoDoForm(''); setDialogOpen(true); };
 
   return (
     <div className="w-full p-3 pb-20 space-y-2 animate-fade-in">
@@ -155,6 +224,15 @@ export function DividendosTab() {
           <h2 className="text-sm font-bold text-foreground">Dividendos</h2>
           <p className="text-[9px] text-muted-foreground">Cadastro de nomes para distribuição de dividendos</p>
         </div>
+        {/* o lugar da recusa da lista existe sempre: ativar, inativar e reordenar escrevem aqui, ao lado dos botões */}
+        <p
+          data-testid="dividendo-recado-lista"
+          role="status"
+          title={recadoDaLista || undefined}
+          className="flex-1 min-w-0 truncate text-right text-[10px] text-destructive"
+        >
+          {recadoDaLista}
+        </p>
         <div className="flex items-center gap-2">
           {items.some(i => !i.ativo) && (
             <div className="flex items-center gap-1">
@@ -214,9 +292,33 @@ export function DividendosTab() {
             <Button onClick={handleSave} disabled={!nome.trim() || isSaving} className="w-full">
               {editItem ? 'Salvar' : 'Criar'}
             </Button>
+            {/* o lugar da recusa existe sempre, sob o botão: o formulário não muda de altura quando ela aparece */}
+            <p data-testid="dividendo-recado-form" role="status" className="min-h-[26px] text-[10px] leading-[13px] text-destructive">
+              {recadoDoForm}
+            </p>
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!aInativar} onOpenChange={(aberto) => { if (!aberto) setAInativar(null); }}>
+        <AlertDialogContent className="max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-sm">Inativar {aInativar?.item.nome}?</AlertDialogTitle>
+            <AlertDialogDescription data-testid="dividendo-quem-segura" className="text-xs">
+              {aInativar ? fraseDoQueSegura(aInativar.seguram) : ''}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <p data-testid="dividendo-recado-confirmacao" role="status" className="min-h-[26px] text-[10px] leading-[13px] text-destructive">
+            {recadoDaConfirmacao}
+          </p>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="h-7 text-xs">Voltar</AlertDialogCancel>
+            <Button size="sm" className="h-7 text-xs" disabled={isSaving} onClick={confirmarInativar}>
+              Inativar
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
