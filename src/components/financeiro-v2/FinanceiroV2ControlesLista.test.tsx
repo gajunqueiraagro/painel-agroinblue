@@ -30,16 +30,44 @@ function montar(over: Partial<PropsControlesLista> = {}) {
 }
 
 describe('contrato visual dos controles', () => {
-  it('o bloco de ações é 2×2, na ordem congelada', () => {
-    montar();
+  /* UI-BOTOES-LUGAR-FIXO-01 — botão pontual tem lugar reservado: a grade é 2 × 3, com as MESMAS seis células na mesma ordem,
+     com e sem Voltar. O defeito: com `onVoltar` a segunda linha tinha três botões e vazava por cima dos filtros. */
+  const celulas = () => Array.from(screen.getByTestId('bloco-acoes').children).map((c) =>
+    c.getAttribute('data-testid') ?? c.querySelector('[data-testid]')?.getAttribute('data-testid') ?? '?');
+
+  it('o bloco de ações é uma grade fixa 2 × 3, de 190px, na ordem congelada', () => {
+    montar({ onVoltar: vi.fn(), onNovoDeXml: vi.fn() });
     const bloco = screen.getByTestId('bloco-acoes');
     expect(bloco.className).toContain('grid-cols-2');
-    // ordem no DOM = ordem visual do grid: Novo, Exportar, Limpar, Ampliar
-    const rotulos = Array.from(bloco.children).map((c) => c.textContent?.trim());
-    expect(rotulos[0]).toContain('Novo');
-    expect(rotulos[1]).toContain('Exportar');
-    expect(rotulos[2]).toContain('Limpar');
-    expect(rotulos[3]).toContain('Ampliar');
+    expect(bloco.className).toContain('w-[190px]');
+    expect(celulas()).toEqual(['btn-novo', 'slot-exportar', 'btn-novo-de-xml', 'btn-intensivo', 'btn-voltar', 'btn-limpar']);
+  });
+
+  it('SEM Voltar a célula dele continua lá, vazia e fora da tabulação — e os outros cinco não mudam de célula', () => {
+    const { unmount } = montar({ onVoltar: vi.fn(), onNovoDeXml: vi.fn() });
+    const com = celulas();
+    unmount();
+    montar({ onNovoDeXml: vi.fn() });
+    const sem = celulas();
+    expect(sem).toHaveLength(6);
+    expect(com).toHaveLength(6);
+    expect(sem[4]).toBe('celula-voltar');
+    expect(com[4]).toBe('btn-voltar');
+    for (const i of [0, 1, 2, 3, 5]) expect(sem[i]).toBe(com[i]);
+    const vazia = screen.getByTestId('celula-voltar');
+    expect(vazia.getAttribute('aria-hidden')).toBe('true');
+    expect(vazia.querySelector('button, a, input, [tabindex]')).toBeNull();
+    expect(screen.queryByTestId('btn-voltar')).toBeNull();
+  });
+
+  it('o Voltar mora DENTRO da grade (não numa linha a mais) e nenhum botão muda de texto ou title', () => {
+    montar({ onVoltar: vi.fn(), onNovoDeXml: vi.fn() });
+    const bloco = screen.getByTestId('bloco-acoes');
+    expect(within(bloco).getByTestId('btn-voltar').getAttribute('title')).toBe('Voltar');
+    expect(within(bloco).getByTestId('btn-limpar').getAttribute('title')).toBe('Limpar filtros');
+    expect(within(bloco).getByTestId('btn-novo-de-xml').textContent).toContain('Do XML');
+    expect(within(bloco).getByTestId('btn-intensivo').textContent).toContain('Ampliar');
+    expect(within(bloco).getByTestId('btn-novo').textContent).toContain('Novo');
   });
 
   it('Novo é amarelo e Aplicar é azul', () => {

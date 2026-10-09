@@ -1,8 +1,8 @@
 /**
  * PR-FIN-LISTA-VENCIMENTO-03 · 2C-4 — controles da lista por vencimento.
  *
- * Reúne o que a fase 2C-4 acrescenta: o botão "Aplicar filtros", o bloco 2×2 de
- * ações, o aviso de alterações pendentes, o contador de lançamentos sem
+ * Reúne o que a fase 2C-4 acrescenta: o botão "Aplicar filtros", o bloco de
+ * ações (grade fixa 2 × 3, UI-BOTOES-LUGAR-FIXO-01), o aviso de alterações pendentes, o contador de lançamentos sem
  * vencimento e a paginação real de 30.
  *
  * É um componente de APRESENTAÇÃO: recebe tudo por props e não conhece hook,
@@ -55,7 +55,7 @@ export interface PropsControlesLista {
   pendente: boolean;
   onLimpar: () => void;
   onNovo: () => void;
-  /** FIN-NFE-XML-01d — "Novo a partir de XML". Opcional: sem a prop, o bloco e' o 2x2 de sempre. */
+  /** FIN-NFE-XML-01d — "Novo a partir de XML". Opcional: sem a prop, a celula dele fica vazia (lugar reservado). */
   onNovoDeXml?: () => void;
   /** O menu de exportação existente, passado como slot para preservar sua identidade. */
   exportar?: React.ReactNode;
@@ -85,40 +85,43 @@ export function FinanceiroV2ControlesLista({
 
   return (
     <div data-testid="controles-lista" className="flex flex-col gap-1">
-      {/* Bloco 2x2 congelado no GO:  Novo | Exportar  /  Limpar | Intensivo.
-          O "Aplicar filtros" NAO mora aqui — ele fica ao lado de Atividade,
-          no fim da fileira de filtros. Ver BotaoAplicarFiltros. */}
+      {/* UI-BOTOES-LUGAR-FIXO-01 — GRADE FIXA de 2 colunas × 3 linhas, 190px, células de largura igual:
+              Novo   | Exportar
+              Do XML | Ampliar (ou Retornar)
+              Voltar | Limpar
+          BOTÃO PONTUAL TEM LUGAR RESERVADO: a célula do Voltar (e a do "Do XML") existe SEMPRE; sem o gesto ela fica vazia,
+          fora da tabulação. A entrada do Voltar nunca muda posição, tamanho ou linha de outro botão — eram três botões numa
+          linha de 190px, vazando por cima dos filtros. O "Aplicar filtros" NAO mora aqui (ver BotaoAplicarFiltros). */}
       <div className="flex flex-wrap items-start justify-end gap-2">
-        <div data-testid="bloco-acoes" className="grid grid-cols-2 gap-1">
+        <div data-testid="bloco-acoes" className="grid w-[190px] shrink-0 grid-cols-2 gap-1 [&>*]:min-w-0">
           <Button
             size="sm"
             data-testid="btn-novo"
             onClick={onNovo}
-            className="h-6 text-[10px] gap-0.5 px-1.5 bg-[#E7C873] text-foreground hover:bg-[#D9B95F]"
+            className="h-6 w-full text-[10px] gap-0.5 px-1.5 bg-[#E7C873] text-foreground hover:bg-[#D9B95F]"
             title="Novo Lançamento"
           >
             <Plus className="h-3 w-3" /> Novo
           </Button>
 
-          <div data-testid="slot-exportar" className="flex items-center">{exportar}</div>
+          <div data-testid="slot-exportar" className="flex items-center [&>*]:w-full [&_button]:w-full">{exportar}</div>
 
-          <Button
-            size="sm"
-            variant="outline"
-            data-testid="btn-limpar"
-            onClick={onLimpar}
-            className="h-6 text-[10px] gap-0.5 px-1.5 text-muted-foreground"
-            title="Limpar filtros"
-          >
-            <FilterX className="h-3 w-3" /> Limpar
-          </Button>
+          {onNovoDeXml ? (
+            <Button size="sm" data-testid="btn-novo-de-xml" onClick={onNovoDeXml}
+              className="h-6 w-full text-[10px] gap-0.5 px-1.5 bg-[#E7C873] text-foreground hover:bg-[#D9B95F]"
+              title="Novo a partir de XML" aria-label="Novo a partir de XML">
+              <Plus className="h-3 w-3" /> Do XML
+            </Button>
+          ) : (
+            <div data-testid="celula-novo-de-xml" aria-hidden="true" className="h-6" />
+          )}
 
           <Button
             size="sm"
             variant={modoIntensivo ? 'default' : 'outline'}
             data-testid="btn-intensivo"
             onClick={onToggleIntensivo}
-            className={cn('h-6 text-[10px] gap-0.5 px-1.5', modoIntensivo && 'bg-primary text-primary-foreground')}
+            className={cn('h-6 w-full text-[10px] gap-0.5 px-1.5', modoIntensivo && 'bg-primary text-primary-foreground')}
             title={modoIntensivo ? 'Retornar à lista normal' : 'Ampliar a lista (mais colunas)'}
           >
             {modoIntensivo ? <Minimize2 className="h-3 w-3" /> : <Maximize2 className="h-3 w-3" />}
@@ -128,24 +131,28 @@ export function FinanceiroV2ControlesLista({
                 mudam juntos ou a tela e o teste discordam em silêncio. */}
             {modoIntensivo ? 'Retornar' : 'Ampliar'}
           </Button>
-          {onNovoDeXml && (
-            <Button size="sm" data-testid="btn-novo-de-xml" onClick={onNovoDeXml}
-              className="col-span-2 h-6 text-[10px] gap-0.5 px-1.5 bg-[#E7C873] text-foreground hover:bg-[#D9B95F]"
-              title="Novo a partir de XML" aria-label="Novo a partir de XML">
-              <Plus className="h-3 w-3" /> Do XML
-            </Button>
-          )}
-        </div>
-      </div>
 
-      {onVoltar && (
-        <div>
-          <Button size="sm" variant="outline" data-testid="btn-voltar" onClick={onVoltar}
-                  className="h-6 text-[10px] gap-0.5 px-1.5" title="Voltar">
-            <ChevronLeft className="h-3 w-3" /> Voltar
+          {onVoltar ? (
+            <Button size="sm" variant="outline" data-testid="btn-voltar" onClick={onVoltar}
+                    className="h-6 w-full text-[10px] gap-0.5 px-1.5" title="Voltar">
+              <ChevronLeft className="h-3 w-3" /> Voltar
+            </Button>
+          ) : (
+            <div data-testid="celula-voltar" aria-hidden="true" className="h-6" />
+          )}
+
+          <Button
+            size="sm"
+            variant="outline"
+            data-testid="btn-limpar"
+            onClick={onLimpar}
+            className="h-6 w-full text-[10px] gap-0.5 px-1.5 text-muted-foreground"
+            title="Limpar filtros"
+          >
+            <FilterX className="h-3 w-3" /> Limpar
           </Button>
         </div>
-      )}
+      </div>
 
       {/* Aviso de pendência. A lista continua mostrando o ÚLTIMO filtro aplicado —
           o texto diz isso, para o operador não achar que está vendo o que digitou. */}

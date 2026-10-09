@@ -1667,6 +1667,61 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
      • o ramo com TESTE é o `FinanceiroV2ControlesLista`, que ninguém vê.
    Quem mexer em um tem de mexer no outro, ou a tela e o teste passam a discordar em
    silêncio — foi exatamente assim que o menu de exportação ficou meio ligado. */
+  /* UI-BOTOES-LUGAR-FIXO-01 — O BLOCO DE AÇÕES DO DESKTOP É UMA GRADE FIXA de 2 colunas × 3 linhas, 190px, células iguais:
+         Novo   | Exportar
+         Do XML | Ampliar (ou Retornar)
+         Voltar | Limpar
+     BOTÃO PONTUAL TEM LUGAR RESERVADO: a célula do Voltar existe SEMPRE; sem `onBack` fica vazia, fora da tabulação. Com
+     `onBack` eram TRÊS botões numa linha de 190px (Voltar + Do XML + Ampliar) e o bloco vazava por cima dos filtros Fazenda e
+     Documento. A entrada do Voltar não muda posição, tamanho nem linha de nenhum outro botão, e o cabeçalho tem a mesma altura
+     com e sem ele. O gêmeo com teste (`FinanceiroV2ControlesLista`) tem o MESMO desenho: os dois mudam juntos. */
+  const blocoDeAcoesDesktop = (
+    <div data-testid="bloco-acoes" className="grid w-[190px] shrink-0 grid-cols-2 gap-1 [&>*]:min-w-0">
+      <Button size="sm" onClick={openNew} className="h-6 w-full text-[10px] gap-0.5 px-1.5 bg-[#E7C873] text-foreground hover:bg-[#D9B95F]" title="Novo Lançamento">
+        <Plus className="h-3 w-3" /> Novo
+      </Button>
+      <div className="flex items-center [&>*]:w-full [&_button]:w-full">
+        <FinanceiroV2ExportMenu
+          carregarConjunto={carregarConjuntoExportacao}
+          fornecedores={hook.fornecedores}
+          ano={ano}
+          fazendaNome={fazOperacionais.find(f => f.id === fazendaId)?.nome}
+          totalCount={totalLancamentosFiltrados}
+          dimensao={dataPor}
+          fazendas={fazendas}
+          contas={contasParaExportar}
+          safras={hook.safras}
+        />
+      </div>
+      <Button size="sm" onClick={() => setXmlAberto(true)} data-testid="btn-novo-de-xml"
+        className="h-6 w-full text-[10px] gap-0.5 px-1.5 bg-[#E7C873] text-foreground hover:bg-[#D9B95F]" title="Novo a partir de XML" aria-label="Novo a partir de XML">
+        <Plus className="h-3 w-3" /> Do XML
+      </Button>
+      <Button
+        size="sm"
+        variant={modoIntensivo ? "default" : "outline"}
+        onClick={() => toggleIntensivo()}
+        className={cn("h-6 w-full text-[10px] gap-0.5 px-1.5", modoIntensivo && "bg-primary text-primary-foreground")}
+        title={modoIntensivo ? "Retornar à lista normal" : "Ampliar a lista (mais colunas)"}
+      >
+        {modoIntensivo ? <Minimize2 className="h-3 w-3" /> : <Maximize2 className="h-3 w-3" />}
+        {modoIntensivo ? 'Retornar' : 'Ampliar'}
+      </Button>
+      {onBack ? (
+        <Button size="sm" variant="outline" onClick={onBack} data-testid="btn-voltar" className="h-6 w-full text-[10px] gap-0.5 px-1.5" title="Voltar">
+          <ChevronLeft className="h-3 w-3" /> Voltar
+        </Button>
+      ) : (
+        <div data-testid="celula-voltar" aria-hidden="true" className="h-6" />
+      )}
+      <Button size="sm" variant="ghost" onClick={handleLimparFiltros} data-testid="btn-limpar"
+        className="h-6 w-full gap-0.5 px-1.5 text-[10px] text-muted-foreground">
+        <FilterX className="h-3 w-3" /> Limpar
+      </Button>
+    </div>
+  );
+
+  /* ⚠ `actionButtons` (o bloco em linhas) ficou SÓ para o ramo MOBILE, que não foi redesenhado; com a flag ligada ele é o gêmeo. */
   const actionButtons = LISTA_V2 ? (
     <FinanceiroV2ControlesLista
       pendente={pendenteAplicar}
@@ -2390,11 +2445,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     empurraria a grade de filtros para a esquerda — o mesmo reflow, por outra
                     porta. */}
                 <div className="flex w-[190px] shrink-0 flex-col items-end gap-1 pb-[1px]">
-                  {actionButtons}
-                  <Button size="sm" variant="ghost" onClick={handleLimparFiltros}
-                    className="h-6 gap-0.5 px-1.5 text-[10px] text-muted-foreground">
-                    <FilterX className="h-3 w-3" /> Limpar
-                  </Button>
+                  {/* UI-BOTOES-LUGAR-FIXO-01: a grade fixa (o Limpar mora na célula da linha 3). Com a flag da lista paginada,
+                      o gêmeo, que tem a mesma grade e o Limpar dele. */}
+                  {LISTA_V2 ? actionButtons : blocoDeAcoesDesktop}
                   {/* ⚠ OS TOTAIS SAÍRAM DAQUI — FIN-LISTA-TOTAIS-FAIXA-01. Empilhados nesta
                       coluna, eles cresciam e encolhiam com o filtro (o "Transf." só existia
                       quando havia transferência), e a tabela subia e descia junto. Agora vivem

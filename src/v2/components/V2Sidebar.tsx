@@ -77,8 +77,9 @@ export function V2Sidebar({
   }
 
   return (
+    /* UI-BOTOES-LUGAR-FIXO-01: 176px (era 208). Texto que não cabe corta em UMA linha, com o nome inteiro no `title`. */
     <aside className={cn(
-      'flex flex-col w-52 shrink-0 h-screen bg-primary text-primary-foreground overflow-hidden',
+      'flex flex-col w-44 shrink-0 h-screen bg-primary text-primary-foreground overflow-hidden',
       className,
     )}>
 
@@ -95,12 +96,12 @@ export function V2Sidebar({
       {(clienteSelector || fazendaSelector) && (
         <div className="px-3 py-2 border-b border-primary-foreground/10 space-y-1.5 shrink-0">
           {clienteSelector && (
-            <div className="[&_button]:w-full [&_button]:text-xs [&_button]:h-7 [&_button]:bg-primary-foreground/10 [&_button]:text-primary-foreground [&_button]:border-0">
+            <div className="[&_button]:w-full [&_button]:min-w-0 [&_button]:text-xs [&_button]:h-7 [&_button]:bg-primary-foreground/10 [&_button]:text-primary-foreground [&_button]:border-0">
               {clienteSelector}
             </div>
           )}
           {fazendaSelector && (
-            <div className="[&_button]:w-full [&_button]:text-xs [&_button]:h-7 [&_button]:bg-primary-foreground/10 [&_button]:text-primary-foreground [&_button]:border-0">
+            <div className="[&_button]:w-full [&_button]:min-w-0 [&_button]:text-xs [&_button]:h-7 [&_button]:bg-primary-foreground/10 [&_button]:text-primary-foreground [&_button]:border-0">
               {fazendaSelector}
             </div>
           )}
@@ -122,7 +123,7 @@ export function V2Sidebar({
           )}
         >
           <LayoutDashboard className="h-4 w-4 shrink-0" />
-          Visão Geral
+          <span className="min-w-0 truncate" title="Visão Geral">Visão Geral</span>
         </button>
         )}
 
@@ -147,9 +148,9 @@ export function V2Sidebar({
                   : 'text-primary-foreground/70 hover:bg-primary-foreground/10 hover:text-primary-foreground',
               )}
             >
-              <span className="flex items-center gap-2.5">
+              <span className="flex min-w-0 items-center gap-2.5">
                 <Icon className="h-4 w-4 shrink-0" />
-                {grupo.label}
+                <span className="min-w-0 truncate" title={grupo.label}>{grupo.label}</span>
               </span>
               <ChevronRight className={cn(
                 'h-3 w-3 shrink-0 transition-transform duration-200',
@@ -171,7 +172,7 @@ export function V2Sidebar({
           )}
         >
           <Settings className="h-4 w-4 shrink-0" />
-          Configurações
+          <span className="min-w-0 truncate" title="Configurações">Configurações</span>
         </button>
         )}
 

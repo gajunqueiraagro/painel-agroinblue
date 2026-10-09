@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 09/10/2026 (PLANO-LEITOR-POR-CLIENTE-01 passo 3, +5 em `src/lib/financeiro/planoLeitorUnico.test.ts` — 4658 depois dele; antes o
+  Baseline em 09/10/2026 (UI-BOTOES-LUGAR-FIXO-01, +2 em `src/components/financeiro-v2/FinanceiroV2ControlesLista.test.tsx` (20 -> 22) — 4660 depois dele; antes o
+  PLANO-LEITOR-POR-CLIENTE-01 passo 3, +5 em `src/lib/financeiro/planoLeitorUnico.test.ts` — 4658 depois dele; antes o
   PLANO-LEITOR-POR-CLIENTE-01 passo 2, +10 em `src/lib/financeiro/dividendoNoPlano.test.ts` (10 -> 20) — 4653 depois dele; antes o
   CONC-DIVIDENDOS-PLANO-01, +10 em `src/lib/financeiro/dividendoNoPlano.test.ts` — 4643 depois dele; antes o
   MENU-CLIQUE-FECHANDO-01, +14 em `src/components/ui/menuFechadoSemClique.test.tsx` — 4633 depois dele; antes o
@@ -269,7 +270,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4658
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4660
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -1273,6 +1274,35 @@ preview que o cabecalho nao sai da tela ao rolar.
     NAVEGADOR: o arrasto real do Finder (so' evento sintetico), boletos e OC dentro dos modais reais, o clique abrindo o seletor
     do sistema, e os tres `@dnd-kit` com a protecao ligada (so' por teste de fonte) · OC-DOCUMENTO-XML-REAL-01: subir e abrir um
     `.xml` real na OC e na aba Documentos (homologacao do Gabriel).
+- ⚠ BOTAO OU CARD PONTUAL TEM LUGAR RESERVADO SEMPRE (UI-BOTOES-LUGAR-FIXO-01, regra do Gabriel, 09/10/2026, so' tela). Voltar e
+  semelhantes — o que so' aparece em certos caminhos — tem a celula deles SEMPRE, mesmo quando nao aparecem: a entrada do botao
+  nunca muda posicao, tamanho ou linha de nenhum outro elemento, e BOTAO NUNCA FICA POR CIMA DE FILTRO.
+  · NASCE DE DEFEITO (print na Vera): em Lançamentos Financeiros, vindo da Conciliação (`onBack`), a segunda linha do bloco de acoes
+    tinha TRES botoes (Voltar + Do XML + Ampliar) numa coluna de 190px e vazava por cima dos filtros Fazenda e Documento.
+  · O BLOCO DE ACOES DA LISTA E' UMA GRADE FIXA de 2 colunas × 3 linhas, 190px, celulas de largura igual, botoes de 24px:
+        Novo   | Exportar
+        Do XML | Ampliar (ou Retornar)
+        Voltar | Limpar
+    A celula do Voltar existe sempre (`celula-voltar`, vazia, `aria-hidden`, fora da tabulacao; com `onBack`, o botao). O Limpar
+    saiu de baixo do bloco e mora na celula da linha 3. Nenhum botao mudou de texto, cor, icone, `title` ou gesto.
+  · OS DOIS RAMOS GEMEOS TEM O MESMO DESENHO: o inline do `FinanceiroV2Tab.tsx` (`blocoDeAcoesDesktop`, o que renderiza hoje) e o
+    `FinanceiroV2ControlesLista.tsx` (o da flag, com teste; nele a celula do "Do XML" tambem e' reservada quando a prop nao vem).
+    O RAMO MOBILE NAO FOI REDESENHADO: segue com o `actionButtons` em linhas, byte a byte o de antes.
+  · A BARRA LATERAL TEM 176px (`V2Sidebar.tsx`, `w-44`; eram 208): vale para todas as telas, que ganham 32px. Item de menu e
+    texto dos seletores cortam em UMA linha, com o nome inteiro no `title`. Nenhum outro arquivo dependia dos 208px (medido por
+    busca: nenhuma margem, calculo de largura ou teste com `w-52` / 208).
+  MEDIDO no navegador a 1.127 x 523 (a janela do dia; nao 1.135), cliente em uso do Gabriel, so' leitura: SEM Voltar e COM Voltar
+  (vindo da Conciliação pelo "↗ Lançamentos") o bloco ocupa os MESMOS 190 x 80px (x 920–1110), as seis celulas tem 93 x 24px nas
+  mesmas posicoes, 0 botoes fora do bloco, 0 controles de filtro sob ele, 0 textos estourando, e o cabecalho tem 119px nas duas.
+  A grade de filtros tem 721px uteis (+32 pela barra lateral; os 689 de antes sao por conta, nao medidos). Lateral: 176px, nenhum texto em duas linhas.
+  ⚠ NAO PROVADO: o ramo MOBILE a 390px, com e sem Voltar (a barra do celular nao leva a' tela; o ramo nao foi tocado) · a flag
+    da lista paginada ligada no navegador (o gemeo so' por teste) · nome de cliente LONGO no seletor da lateral (o cliente em uso
+    tem nome curto) · fotos de teste por largura: nenhuma mudou (a suite nao mede a lateral).
+  ⚠ DIVIDA UI-LUGAR-RESERVADO-VARREDURA-01 — outras telas com Voltar CONDICIONAL (`{onBack && …}`), so' listadas, nao corrigidas:
+    `ReclassificacaoResumoPanel.tsx:127`, `MetaPrecoTab.tsx:515`, `MapaPastosTab.tsx:324`, `PainelConsultorTab.tsx:2724`,
+    `FechamentoTab.tsx:951`, `PrecosMercadoHubTab.tsx:52`, `FinanciamentosListaPage.tsx:377`, `FinanciamentosPainelTab.tsx:85`,
+    `MetaGmdTab.tsx:61`, `ValorRebanhoTab.tsx:1734`, `ConciliacaoBancariaTab.tsx:868`, `FinanceiroTab.tsx:981`,
+    `PrecoMercadoTab.tsx:250` — e o ramo mobile do proprio `FinanceiroV2Tab.tsx` (~:1778).
 - ⚠ LISTA OU MENU FECHANDO NAO ACEITA CLIQUE (MENU-CLIQUE-FECHANDO-01, Gabriel 08/10/2026, so' tela). Regra de produto: NENHUM GESTO
   ACONTECE POR CLIQUE EM COISA QUE O OPERADOR JA' NAO ESTA' VENDO. Ao fechar, o conteudo do Radix continua no DOM com
   `data-state="closed"` enquanto roda o `animate-out` (150 ms; numa aba OCULTA a animacao nao anda e ele fica la' indefinidamente),
