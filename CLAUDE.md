@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 09/10/2026 (PLANO-LEITOR-POR-CLIENTE-01 passo 2, +10 em `src/lib/financeiro/dividendoNoPlano.test.ts` (10 -> 20) — 4653 depois dele; antes o
+  Baseline em 09/10/2026 (PLANO-LEITOR-POR-CLIENTE-01 passo 3, +5 em `src/lib/financeiro/planoLeitorUnico.test.ts` — 4658 depois dele; antes o
+  PLANO-LEITOR-POR-CLIENTE-01 passo 2, +10 em `src/lib/financeiro/dividendoNoPlano.test.ts` (10 -> 20) — 4653 depois dele; antes o
   CONC-DIVIDENDOS-PLANO-01, +10 em `src/lib/financeiro/dividendoNoPlano.test.ts` — 4643 depois dele; antes o
   MENU-CLIQUE-FECHANDO-01, +14 em `src/components/ui/menuFechadoSemClique.test.tsx` — 4633 depois dele; antes o
   APP-SEM-TRADUCAO-01, +5 em `src/lib/app/semTraducao.test.ts` — 4619 depois dele; antes a
@@ -268,7 +269,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4653
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4658
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -2479,6 +2480,23 @@ docs/historico/frentes-ate-2026-09-29.md.)
     `LancamentoLeituraDialog.tsx`; e telas fora das abas da Conciliacao — `EstacaoConciliar.tsx`, `VincularMatchDireto.tsx`,
     `DecisaoDerivadosDialog.tsx` fora do Espelho, `CasarComBancoModal.tsx` (dentro do Espelho ja' passa pelo `onMudou`),
     `useConciliacaoDoMes.ts`, `useConciliarMes.ts` (o dialogo avisa).
+- ⚠ ARQUIVO NOVO NAO CONSULTA `financeiro_plano_contas`: A TRAVA (PLANO-LEITOR-POR-CLIENTE-01 passo 3, Gabriel 09/10/2026).
+  `src/lib/financeiro/planoLeitorUnico.test.ts` varre `src` (com auto-teste do detector: aspas simples, duplas, crase, o
+  `(supabase as any)` e a quebra de linha): fora do dono (`planoContasBuilder.ts`, UMA consulta), so' as EXCECOES DECLARADAS, com a
+  contagem exata por arquivo — arquivo novo, ou excecao com uma consulta a mais OU A MENOS, reprova. Quem precisar do plano no
+  front chama `loadContasDoPlanoDoCliente` e, para achar conta pelo nome, `contaDoPlanoPeloNome` / `mapaDeContasPeloNome`.
+  · AS 15 EXCECOES (19 consultas), por motivo — sao as dividas que ficaram fora:
+      pela CHAVE (nao procura por nome): `ocResumo.ts`, `gerarFinanceiroConsumo.ts`, `DialogVerLancamentosOficiais.tsx`,
+        `ExtratoGerencialTab.tsx`;
+      LISTA para seletor, filtrada "cliente ou global" (dobraria com cliente + global de mesmo nome; 0 casos): `catalogoCliente.ts`,
+        `DestinacoesForm.tsx`, `usePlanoContasOC.ts`, `useFinanciamentoCadastro.ts` (3), `FinV2SubcentroAliasesTab.tsx`;
+      LISTA SEM CLIENTE: `useOcContaCorrente.ts` (contas de pecuaria que compoem o DRE; hoje nenhuma conta por cliente cai nesse
+        recorte) — divida PLANO-LISTA-SEM-CLIENTE-01;
+      NOME FIXO do plano global com `limit(1)`, sem cliente: `AbateFinanceiroPanel.tsx` (2), `VendaFinanceiroPanel.tsx` (2),
+        `CompraFinanceiroPanel.tsx`, `gerarFinanceiroCompra.ts`, `boitelMapping.ts`.
+  · 3 mutacoes mortas (arquivo novo consultando; excecao com uma consulta a mais; importador de volta a' consulta direta).
+  ⚠ A TRAVA E' DO FRONT: no banco, funcao nova que procure conta do plano pelo nome chama `fn_plano_conta_do_texto` — nada alem
+    desta regra forca isso.
 - ⚠ NO FRONT, O PLANO SE LE^ POR UM CARREGADOR, DO CLIENTE EM USO, E O NOME SE RESOLVE PELA REGRA UNICA (PLANO-LEITOR-POR-CLIENTE-01 passo 2,
   Gabriel 09/10/2026, so' tela). Dono: `src/lib/financeiro/planoContasBuilder.ts`.
   · A LEITURA BASE E' UMA: `loadContasDoPlanoDoCliente(clienteId)` — as contas ATIVAS do cliente e as globais, com a ordem real; o
