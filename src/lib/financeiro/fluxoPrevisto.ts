@@ -355,14 +355,20 @@ export function escalaSimetrica(pontos: readonly PontoFluxo[]): EscalaY {
  * A ESCALA PELO DADO — CPR-PDF-ACABAMENTO-01, para a FOLHA do PDF. Vai do menor ao maior SALDO da série,
  * sempre com o zero, em passos redondos, com 8 a 10 linhas de grade quando o dado deixa (nunca mais que `maxLinhas`). Sem a
  * faixa negativa vazia da `escalaSimetrica` (que é a da tela: lá o zero não cola na borda).
+ * CPR-FLUXO-BARRAS-01 (decisão do Gabriel, 09/10): com `barras`, a escala cobre TAMBÉM as barras de movimento que a folha desenha
+ * (entradas para cima, saídas para baixo, as do segmento) — sem isso a saída descia abaixo do zero por cima dos rótulos do
+ * eixo X e a entrada maior que o saldo era cortada no topo. Sem `barras`, a escala é a de antes (só o saldo).
  * ⚠ SÓ ESCALA DE DESENHO: nenhum ponto da série muda.
  */
 const PASSOS_DA_FOLHA = [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8];
-export function escalaPeloDado(pontos: readonly PontoFluxo[], maxLinhas = 10): EscalaY {
+export function escalaPeloDado(pontos: readonly PontoFluxo[], maxLinhas = 10, barras?: 'pagar' | 'receber' | 'ambos'): EscalaY {
   let menor = 0, maior = 0;
   for (const p of pontos) {
     maior = Math.max(maior, p.saldo);
     menor = Math.min(menor, p.saldo);
+    /* `saidas` já é negativo */
+    if (barras && barras !== 'pagar') maior = Math.max(maior, p.entradas);
+    if (barras && barras !== 'receber') menor = Math.min(menor, p.saidas);
   }
   if (maior === 0 && menor === 0) return { dominio: [0, 1], ticks: [0, 1], passo: 1 };
   const amplitude = maior - menor;

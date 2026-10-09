@@ -116,6 +116,28 @@ describe('CPR-PDF-ACABAMENTO-01 — o desenho da FOLHA: escala pelo dado e eixo 
     expect(e.ticks.length).toBeGreaterThanOrEqual(8);
     expect(e.ticks.length).toBeLessThanOrEqual(10);
   });
+  it('CPR-FLUXO-BARRAS-01: com `barras`, a escala da folha cobre as barras que ela desenha — as do segmento, e só elas', () => {
+    const pts = [pt(5884.14), { ...pt(426673.6), entradas: 470789.46, saidas: -50000 }, { ...pt(6679.54), saidas: -290000 }, pt(504.52)];
+    /* sem `barras`: só o saldo, como antes */
+    expect(escalaPeloDado(pts).dominio).toEqual([0, 450000]);
+    const ambos = escalaPeloDado(pts, 10, 'ambos');
+    expect(ambos.dominio).toEqual([-300000, 500000]);
+    expect(ambos.passo).toBe(100000);
+    expect(ambos.ticks).toContain(0);
+    expect(ambos.ticks.length).toBeLessThanOrEqual(10);
+    /* "A pagar" só desenha saídas: a entrada não alarga o topo; "A receber" só entradas: nada desce abaixo do zero */
+    const grande = [...pts, { ...pt(0), entradas: 9_000_000, saidas: -5_000_000 }];
+    const pagar = escalaPeloDado(grande, 10, 'pagar');
+    expect([pagar.dominio[0] <= -5_000_000, pagar.dominio[1] < 1_000_000]).toEqual([true, true]);
+    const receber = escalaPeloDado(grande, 10, 'receber');
+    expect([receber.dominio[0], receber.dominio[1] >= 9_000_000]).toEqual([0, true]);
+  });
+  it('lido da fonte: as barras de movimento não animam (nascem com a altura final, como as áreas e as linhas)', () => {
+    const comp = readFileSync(resolve(__dirname, '../../../components/financeiro-v2/CprFluxoPrevisto.tsx'), 'utf8');
+    const barras = comp.match(/<Bar [^>]*\/>/g) ?? [];
+    expect(barras.length).toBe(2);
+    expect(barras.every((b) => b.includes('isAnimationActive={false}'))).toBe(true);
+  });
   it('tudo zero, e um só valor', () => {
     expect(escalaPeloDado([pt(0)]).ticks).toEqual([0, 1]);
     const e = escalaPeloDado([pt(505)]);
@@ -133,7 +155,7 @@ describe('CPR-PDF-ACABAMENTO-01 — o desenho da FOLHA: escala pelo dado e eixo 
     expect(comp).toContain('const M = folha ? MEDIDAS_DA_FOLHA : MEDIDAS_DA_TELA;');
     expect(comp).toContain("eixoY: 10, larguraEixoY: 56, dia: 9.5, larguraDia: LARGURA_ROTULO_DIA, mes: 12, dyDia: 11, dyMes: 29, riscoDe: 17, riscoAte: 32,");
     expect(comp).toContain('alturaEixoX: 38, topo: 22, base: 30, margemDir: 96, offsetRotulo: OFFSET_ROTULO, alturaFaixa: ALTURA_FAIXA,');
-    expect(comp).toContain('(folha ? escalaPeloDado(pontos) : escalaSimetrica(pontos))');
+    expect(comp).toContain('(folha ? escalaPeloDado(pontos, 10, barras) : escalaSimetrica(pontos))');
     const tela = readFileSync(resolve(__dirname, '../../../components/financeiro-v2/ContasPagarReceberTab.tsx'), 'utf8');
     expect(tela).toContain('graficoDoFluxo(false)');
     expect(tela).toContain('{graficoDoFluxo(true)}');

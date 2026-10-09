@@ -384,7 +384,7 @@ export function CprFluxoPrevisto({
     return () => obs.disconnect();
   }, []);
   const negativo = useMemo(() => primeiroNegativo(pontos), [pontos]);
-  const escala = useMemo(() => (folha ? escalaPeloDado(pontos) : escalaSimetrica(pontos)), [pontos, folha]);
+  const escala = useMemo(() => (folha ? escalaPeloDado(pontos, 10, barras) : escalaSimetrica(pontos)), [pontos, folha, barras]);
   const mapaPorRotulo = useMemo(
     () => new Map(pontos.map((p) => [p.rotulo, p])), [pontos]);
 
@@ -632,8 +632,12 @@ export function CprFluxoPrevisto({
                 outra para baixo do zero. Empilhadas, o out/26 da Vera mostrava a saída
                 pendurada acima da entrada, cruzando o zero — dinheiro que sai desenhado como
                 se entrasse. */}
-            {barras !== 'pagar' && <Bar dataKey="entradas" name="Entradas" fill={COR_ENTRADA} maxBarSize={18} />}
-            {barras !== 'receber' && <Bar dataKey="saidas" name="Saídas" fill={COR_SAIDA} maxBarSize={18} />}
+            {/* ⚠ CPR-FLUXO-BARRAS-01 — `isAnimationActive={false}`, como as áreas e as linhas: a barra animada nasce com
+                altura ZERO (o recharts não desenha retângulo de altura zero) e só cresce por `requestAnimationFrame`. Em
+                aba oculta o quadro seguinte nunca vem, e a leitura do gráfico para o PDF pegava o desenho antes dele —
+                os grupos de barra ficavam montados e vazios. */}
+            {barras !== 'pagar' && <Bar dataKey="entradas" name="Entradas" fill={COR_ENTRADA} maxBarSize={18} isAnimationActive={false} />}
+            {barras !== 'receber' && <Bar dataKey="saidas" name="Saídas" fill={COR_SAIDA} maxBarSize={18} isAnimationActive={false} />}
 
             {/* ⚠ DUAS ÁREAS, UMA POR SINAL — e nenhum gradiente. Cada uma vai da sua metade do
                 saldo até o zero, então onde a linha é positiva só a azul tem altura e onde é
