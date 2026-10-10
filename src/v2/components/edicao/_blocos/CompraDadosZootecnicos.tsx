@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import type { Lancamento, Categoria } from '@/types/cattle';
 import { CATEGORIAS } from '@/types/cattle';
-import { FornecedorSelect } from '@/components/shared/FornecedorSelect';
+import { CampoDeFornecedor } from '@/components/shared/CampoDeFornecedor';
 import { Input } from '@/components/ui/input';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Label } from '@/components/ui/label';
@@ -131,14 +131,13 @@ export function CompraDadosZootecnicos({
       {/* Linha 2: Origem/Fornecedor · Destino */}
       <div className="grid grid-cols-[7fr_3fr] gap-1.5">
         <Campo label="Origem / Fornecedor">
-          <FornecedorSelect
-            fornecedorId={fornecedorId}
-            onFornecedorChange={onFornecedorChange}
+          {/* fatia 2e: o seletor dono, pelo encaixe único. O texto histórico (lançamento antigo sem id) aparece NO campo, na
+              mesma altura — a caixa âmbar do seletor antigo fazia o modal crescer e rolar. O campo não escreve o texto. */}
+          <CampoDeFornecedor
             clienteId={clienteId}
+            value={fornecedorId}
+            onChange={onFornecedorChange}
             textoLegado={textoLegado}
-            snapshotNome={snapshotNome}
-            modoResolucaoLegado="permitir"
-            label=""
             placeholder="Selecione ou cadastre"
           />
         </Campo>

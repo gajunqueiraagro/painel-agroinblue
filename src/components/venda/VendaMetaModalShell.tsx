@@ -25,7 +25,7 @@ import { Separator } from '@/components/ui/separator';
 import { DatePicker } from '@/components/ui/date-picker';
 import { useMemo } from 'react';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import { FornecedorSelect } from '@/components/shared/FornecedorSelect';
+import { CampoDeFornecedor } from '@/components/shared/CampoDeFornecedor';
 import { CampoPrecoVenda } from '@/components/venda/CampoPrecoVenda';
 import type { Categoria, BasePrecoVenda } from '@/types/cattle';
 import { LancamentoModalEnvelope } from '@/components/lancamento/LancamentoModalEnvelope';
@@ -248,10 +248,13 @@ export function VendaMetaModalShell({
             <Label className="text-[10px] text-muted-foreground">Comprador</Label>
             <div className="mt-[3px]">
               {isEdicao && clienteIdParaContraparte ? (
-                <FornecedorSelect
-                  fornecedorId={compradorId || null}
-                  onFornecedorChange={(id) => setCompradorId(id ?? '')}
+                /* fatia 2e: o seletor dono, pelo encaixe único. `incluirMeta`: o "[META] Planejamento" continua oferecido.
+                   O rótulo "Fornecedor" que o seletor antigo desenhava por baixo de "Comprador" saiu com ele. */
+                <CampoDeFornecedor
                   clienteId={clienteIdParaContraparte}
+                  value={compradorId || null}
+                  onChange={(id) => setCompradorId(id ?? '')}
+                  incluirMeta
                   placeholder="Selecione o comprador"
                 />
               ) : (

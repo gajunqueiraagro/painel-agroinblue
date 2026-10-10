@@ -27,7 +27,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { useBarterContratos, useTotaisPorContrato, type ContratoNaLista } from '@/hooks/useBarterContratos';
-import { FornecedorDaLavoura } from '@/components/agri/FornecedorDaLavoura';
+import { CampoDeFornecedor } from '@/components/shared/CampoDeFornecedor';
 import { FazendaSelect } from '@/components/shared/FazendaSelect';
 import { useBarterInsumos, type BarterInsumo, type InsumoPayload } from '@/hooks/useBarterInsumos';
 import { useBarterVenda, type BarterVenda, type VendaPayload } from '@/hooks/useBarterVenda';
@@ -134,7 +134,7 @@ export function AgriBarterTab() {
   /** `null` = criando; preenchido = editando aquele contrato. */
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [parceiroId, setParceiroId] = useState('');
-  /* ⚠ O NOME VEM DO SELETOR, não de uma segunda leitura. O `FornecedorDaLavoura` (o seletor dono; antes, o `FornecedorSelect`) entrega
+  /* ⚠ O NOME VEM DO SELETOR, não de uma segunda leitura. O `CampoDeFornecedor` (o seletor dono; antes, o `FornecedorSelect`) entrega
      `(id, nome)` no mesmo gesto, e é esse nome que a mensagem da conta de permuta usa. */
   const [parceiroNome, setParceiroNome] = useState('');
   const [nome, setNome] = useState('');
@@ -1007,7 +1007,7 @@ export function AgriBarterTab() {
                 de antes (`space-y-1`); o nome do parceiro continua vindo do seletor, no mesmo gesto. */}
             <div className="space-y-1">
               <Label className="text-[10px] text-muted-foreground">Parceiro<span className="ml-0.5 text-destructive">*</span></Label>
-              <FornecedorDaLavoura
+              <CampoDeFornecedor
                 disabled={!!editandoId}
                 value={parceiroId || null}
                 onChange={(id, n) => { setParceiroId(id ?? ''); setParceiroNome(n ?? ''); }}

@@ -22,7 +22,7 @@ import { Label } from '@/components/ui/label';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Segmentado } from '@/components/ui/segmentado';
-import { FornecedorDaLavoura } from '@/components/agri/FornecedorDaLavoura';
+import { CampoDeFornecedor } from '@/components/shared/CampoDeFornecedor';
 import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import { BlocoTopoAba } from '@/components/ui/bloco-topo-aba';
 import { useCompromissosDaCarga, useAlterarCompromisso } from '@/hooks/useCargaMandioca';
@@ -637,7 +637,7 @@ export function CargaMandiocaModal({
                     conta da ÚLTIMA carga deste talhão, no mesmo contrato âmbar dos preços de
                     serviço — proposta que o operador confere, nunca decisão da tela. */}
                 <div className="grid grid-cols-[2fr_1.4fr_1fr_1fr] items-end gap-2">
-                  {/* [10/10/2026: o campo é o `FornecedorDaLavoura` (o seletor dono), que NÃO desenha rótulo. O seletor antigo,
+                  {/* [10/10/2026: o campo é o `CampoDeFornecedor` (o seletor dono), que NÃO desenha rótulo. O seletor antigo,
                       sem `label=""`, imprimia o padrão "Fornecedor" por baixo do "Comprador" — dois rótulos empilhados, e a
                       linha inteira 28px mais alta. O segundo rótulo SAIU (decisão do Gabriel): Conta, NF e Ticket subiram
                       28px e ficaram alinhados com o comprador. O texto que segue é o registro de antes, e agora vale.]
@@ -658,7 +658,7 @@ export function CargaMandiocaModal({
                       </Label>
                       <div className="mt-0.5">
                         {/* FORN-SELETOR-PADRAO-01 fatia 2d — o seletor DONO, pelo leitor único; o nome vem dele */}
-                        <FornecedorDaLavoura
+                        <CampoDeFornecedor
                           clienteId={clienteId}
                           placeholder="A indústria que recebe a carga"
                           value={form.industriaId}
@@ -835,7 +835,7 @@ export function CargaMandiocaModal({
                           {clienteId ? (
                             /* `min-w-0` (fatia 2d): a coluna `2fr` não cresce com o nome do prestador */
                             <div className="min-w-0">
-                              <FornecedorDaLavoura
+                              <CampoDeFornecedor
                                 clienteId={clienteId}
                                 placeholder="Prestador"
                                 value={s.fornecedor_id}

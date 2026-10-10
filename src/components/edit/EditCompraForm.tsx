@@ -27,7 +27,7 @@
 import type { Lancamento, Categoria } from '@/types/cattle';
 import { CATEGORIAS } from '@/types/cattle';
 import { STATUS_OPTIONS_ZOOTECNICO_COM_META } from '@/lib/statusOperacional';
-import { FornecedorSelect } from '@/components/shared/FornecedorSelect';
+import { CampoDeFornecedor } from '@/components/shared/CampoDeFornecedor';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -69,11 +69,11 @@ interface EditCompraFormProps {
   /** Z4 — fornecedor soberano do zoo (controlado pelo caller). */
   fornecedorId: string | null;
   onFornecedorChange: (id: string | null, nome: string | null) => void;
-  /** Texto histórico sem UUID (para estado legado do FornecedorSelect). */
+  /** Texto histórico sem UUID (o campo o mostra enquanto não há id). */
   textoLegado?: string;
   /** Snapshot persistido (display readonly auxiliar). */
   snapshotNome?: string;
-  /** Cliente do lançamento — necessário para a query interna do FornecedorSelect. */
+  /** Cliente do lançamento — o leitor único de fornecedores lê por ele. */
   clienteId: string;
 
   /** Reservados para F4 — não acionados aqui. */
@@ -160,16 +160,17 @@ export function EditCompraForm({
         </div>
         <div className="col-span-2">
           {/* Z4 — Fornecedor soberano do zoo (separado da Origem física). */}
-          <FornecedorSelect
-            fornecedorId={fornecedorId}
-            onFornecedorChange={onFornecedorChange}
-            clienteId={clienteId}
-            textoLegado={textoLegado}
-            snapshotNome={snapshotNome}
-            modoResolucaoLegado="permitir"
-            label="Fornecedor"
-            placeholder="Selecione ou cadastre fornecedor"
-          />
+          {/* fatia 2e: o seletor dono, pelo encaixe único, que não desenha rótulo — o rótulo é o do seletor antigo, aqui. */}
+          <div className="space-y-1">
+            <Label className="text-[10px] text-muted-foreground">Fornecedor</Label>
+            <CampoDeFornecedor
+              clienteId={clienteId}
+              value={fornecedorId}
+              onChange={onFornecedorChange}
+              textoLegado={textoLegado}
+              placeholder="Selecione ou cadastre fornecedor"
+            />
+          </div>
         </div>
       </div>
       <div className="grid grid-cols-3 gap-2">

@@ -32,7 +32,7 @@ import { Separator } from '@/components/ui/separator';
 import { DatePicker } from '@/components/ui/date-picker';
 import { useMemo } from 'react';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import { FornecedorSelect } from '@/components/shared/FornecedorSelect';
+import { CampoDeFornecedor } from '@/components/shared/CampoDeFornecedor';
 import type { Categoria } from '@/types/cattle';
 import { LancamentoModalEnvelope } from '@/components/lancamento/LancamentoModalEnvelope';
 import { LinhaResumo, SecaoResumo } from '@/components/ui/linha-resumo';
@@ -83,7 +83,7 @@ export interface CompraMetaModalShellProps {
   /** Lista pronta — o caminho de CRIACAO ja a carrega paginada em LancamentosTab. */
   fornecedores: { id: string; nome: string }[];
   /** ⚠ SO' NA EDICAO. O modal soberano nao tem lista de fornecedores carregada, e
-   *  duplicar a consulta paginada aqui seria a segunda copia dela. `FornecedorSelect`
+   *  duplicar a consulta paginada aqui seria a segunda copia dela. [fatia 2e: hoje e' o `CampoDeFornecedor`, pelo leitor unico.] `FornecedorSelect`
    *  e' o componente compartilhado que o caminho de edicao ja usa (CompraDadosZootecnicos,
    *  VendaDadosZootecnicos): busca sozinho por cliente, com debounce e limite. */
   clienteIdParaFornecedor?: string;
@@ -267,10 +267,13 @@ export function CompraMetaModalShell({
             <Label className="text-[10px] text-muted-foreground">Fornecedor <span className="text-destructive">*</span></Label>
             <div className="mt-[3px]">
               {isEdicao && clienteIdParaFornecedor ? (
-                <FornecedorSelect
-                  fornecedorId={compraFornecedorId || null}
-                  onFornecedorChange={(id) => setCompraFornecedorId(id ?? '')}
+                /* fatia 2e: o seletor dono, pelo encaixe único. `incluirMeta`: o "[META] Planejamento" continua oferecido.
+                   O segundo rótulo "Fornecedor" que o seletor antigo desenhava por baixo deste saiu com ele. */
+                <CampoDeFornecedor
                   clienteId={clienteIdParaFornecedor}
+                  value={compraFornecedorId || null}
+                  onChange={(id) => setCompraFornecedorId(id ?? '')}
+                  incluirMeta
                   placeholder="Selecione o fornecedor"
                 />
               ) : (

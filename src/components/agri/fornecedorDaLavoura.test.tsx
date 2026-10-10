@@ -6,7 +6,7 @@ import { join, resolve } from 'node:path';
 /**
  * FORN-SELETOR-PADRAO-01 fatia 2d — a Lavoura usa o seletor DONO de fornecedor, pelo leitor único.
  *
- * O campo dos quatro modais é o `FornecedorDaLavoura` (o encaixe do dono na anatomia medida deles). Aqui: o campo montado
+ * O campo dos quatro modais é o `CampoDeFornecedor` (o encaixe do dono na anatomia medida deles). Aqui: o campo montado
  * (id e nome entregues num gesto, esvaziar, inativo gravado, travado, o "+") e a FONTE dos cinco pontos.
  */
 vi.mock('@/integrations/supabase/client', () => ({ supabase: {} }));
@@ -20,7 +20,7 @@ vi.mock('@/lib/fornecedores/cadastroDaCasaBanco', () => ({
   },
 }));
 
-import { FornecedorDaLavoura } from './FornecedorDaLavoura';
+import { CampoDeFornecedor } from '@/components/shared/CampoDeFornecedor';
 import { definirFornecedoresDoLeitor, pedidosAoLeitor } from '@/test/leitorDeFornecedoresFake';
 
 const FORNS = [
@@ -31,7 +31,7 @@ const FORNS = [
 type Chamada = [string | null, string | null];
 const montar = (p: { value?: string | null; disabled?: boolean } = {}) => {
   const chamadas: Chamada[] = [];
-  render(<FornecedorDaLavoura clienteId="cli" value={p.value ?? null} disabled={p.disabled}
+  render(<CampoDeFornecedor clienteId="cli" value={p.value ?? null} disabled={p.disabled}
     placeholder="Escolha" onChange={(id, nome) => chamadas.push([id, nome])} />);
   return chamadas;
 };
@@ -125,7 +125,7 @@ const PONTOS: Record<string, number> = {
 
 describe('fatia 2d — a fonte dos cinco pontos', () => {
   it('AUTO-TESTE: os detectores sabem achar', () => {
-    expect(usos('<FornecedorDaLavoura\n  value={a}\n/>\n<FornecedorSelect x />', 'FornecedorDaLavoura')).toHaveLength(1);
+    expect(usos('<CampoDeFornecedor\n  value={a}\n/>\n<FornecedorSelect x />', 'CampoDeFornecedor')).toHaveLength(1);
     expect(usos('<FornecedorSelect\n fornecedorId={a}\n/>', 'FornecedorSelect')).toHaveLength(1);
     expect(consultas("db.from('financeiro_fornecedores').select('id')")).toBe(1);
     expect(consultas('x\n .from(\n "financeiro_fornecedores"\n )')).toBe(1);
@@ -135,7 +135,7 @@ describe('fatia 2d — a fonte dos cinco pontos', () => {
   it('os cinco pontos usam o campo da Lavoura, com o cliente; nenhum usa mais o seletor antigo nem lê o cadastro para montar lista', () => {
     for (const [arquivo, quantos] of Object.entries(PONTOS)) {
       const fonte = semComentario(ler(arquivo));
-      const us = usos(fonte, 'FornecedorDaLavoura');
+      const us = usos(fonte, 'CampoDeFornecedor');
       expect(us, arquivo).toHaveLength(quantos);
       for (const u of us) {
         expect(/\bclienteId=\{/.test(u), arquivo).toBe(true);
@@ -147,7 +147,7 @@ describe('fatia 2d — a fonte dos cinco pontos', () => {
   });
 
   it('o campo da Lavoura é o DONO pelo leitor único: com o cliente, sem lista do hospedeiro, e o "+" com o cadastro da casa atrás', () => {
-    const fonte = semComentario(ler('src/components/agri/FornecedorDaLavoura.tsx'));
+    const fonte = semComentario(ler('src/components/shared/CampoDeFornecedor.tsx'));
     const dono = usos(fonte, 'FavorecidoSelect');
     expect(dono).toHaveLength(1);
     expect(dono[0]).toContain('clienteId={clienteId}');
@@ -178,11 +178,11 @@ describe('fatia 2d — a fonte dos cinco pontos', () => {
     expect(carga).toContain('value={s.fornecedor_id}');
     expect(carga).toContain('onChange={id => mudarServico(tipo, { fornecedor_id: id })}');
     const local = semComentario(ler('src/components/agri/LocalEstoqueModal.tsx'));
-    expect(local).toContain("<FornecedorDaLavoura value={fornecedorId || null}");
+    expect(local).toContain("<CampoDeFornecedor value={fornecedorId || null}");
     expect(local).toContain("onChange={id => setFornecedorId(id ?? '')}");
     expect(local).toContain("fornecedor_id: tipo === 'terceiro' ? (fornecedorId || null) : null,");
     const venda = semComentario(ler('src/components/agri/VendaGraosModal.tsx'));
-    expect(venda).toContain("<FornecedorDaLavoura value={compradorId || null}");
+    expect(venda).toContain("<CampoDeFornecedor value={compradorId || null}");
     expect(venda).toContain("onChange={id => setCompradorId(id ?? '')}");
     expect(venda).toContain('comprador_id: compradorId,');
     const barter = semComentario(ler('src/pages/AgriBarterTab.tsx'));
@@ -190,7 +190,7 @@ describe('fatia 2d — a fonte dos cinco pontos', () => {
     expect(barter).toContain('await abrir(parceiroId, nome.trim(), fazendaContratoId,');
   });
 
-  it('o seletor antigo NÃO saiu: sobra exatamente em Pecuária legado e meta (fatia 2e)', () => {
+  it('o arquivo do seletor antigo ainda existe, mas ninguém mais o importa (fatia 2e)', () => {
     const varrer = (dir: string, achados: string[] = []): string[] => {
       for (const e of readdirSync(dir, { withFileTypes: true })) {
         const c = join(dir, e.name);
@@ -202,12 +202,7 @@ describe('fatia 2d — a fonte dos cinco pontos', () => {
     const quemImporta = varrer(resolve(process.cwd(), 'src'))
       .filter((c) => /from '@\/components\/shared\/FornecedorSelect'/.test(readFileSync(c, 'utf8')))
       .map((c) => c.split('/src/')[1]).sort();
-    expect(quemImporta).toEqual([
-      'components/compra/CompraMetaModalShell.tsx',
-      'components/edit/EditCompraForm.tsx',
-      'components/venda/VendaMetaModalShell.tsx',
-      'v2/components/edicao/_blocos/CompraDadosZootecnicos.tsx',
-      'v2/components/edicao/_blocos/VendaDadosZootecnicos.tsx',
-    ]);
+    /* fatia 2e: os cinco de Pecuária legado e meta também saíram — ninguém mais importa o seletor antigo (ele sai no passo 4) */
+    expect(quemImporta).toEqual([]);
   });
 });

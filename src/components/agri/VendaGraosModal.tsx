@@ -28,7 +28,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { FornecedorDaLavoura } from '@/components/agri/FornecedorDaLavoura';
+import { CampoDeFornecedor } from '@/components/shared/CampoDeFornecedor';
 import { ContaBancariaSelect, type ContaSelecionavel } from '@/components/shared/ContaBancariaSelect';
 import { CINZA_CABECALHO, TH_CINZA as TH } from '@/lib/idiomaVisual';
 import { DatePicker, formatIsoToBr } from '@/components/ui/date-picker';
@@ -1068,7 +1068,7 @@ export function VendaGraosModal({
               QUANDO o dinheiro entra. Eram a mesma aba, e a tabela de parcelas pagava a conta. */}
           <TabsContent value="comprador" className="min-h-0 flex-1 overflow-auto p-0 data-[state=inactive]:hidden">
             <div className="flex min-h-full flex-col gap-2 px-3 py-2">
-              {/* [fatia 2d: o campo é o `FornecedorDaLavoura` (o seletor dono): o "✕" saiu (esvaziar é o "— nenhum —" da lista) e o
+              {/* [fatia 2d: o campo é o `CampoDeFornecedor` (o seletor dono): o "✕" saiu (esvaziar é o "— nenhum —" da lista) e o
                   "＋" segue a 6px do combobox, dentro da célula — a calha de 24px continua valendo.]
                   ⚠⚠ `gap-x-6` E NÃO `gap-2`, e a razão é medida: o `FornecedorSelect` já traz o
                   "＋" e o "✕" dentro do SEU grupo, a 6px do combobox — o arranjo da casa estava
@@ -1092,7 +1092,7 @@ export function VendaGraosModal({
                   <div ref={compradorRef} className={cn('mt-0.5',
                     editando && '[&_button[role=combobox]:focus]:ring-2 [&_button[role=combobox]:focus]:ring-ring [&_button[role=combobox]:focus]:ring-offset-1',
                     camposTravados && '[&_button[role=combobox]]:border-border/60 [&_button[role=combobox]]:bg-muted [&_button[role=combobox]]:text-muted-foreground')}>
-                    <FornecedorDaLavoura value={compradorId || null}
+                    <CampoDeFornecedor value={compradorId || null}
                       onChange={id => setCompradorId(id ?? '')}
                       clienteId={clienteId} placeholder="Escolha"
                       disabled={camposTravados} />

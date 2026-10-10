@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 10/10/2026 (FORN-SELETOR-PADRAO-01 fatia 2d, +12 em `src/components/agri/fornecedorDaLavoura.test.tsx` (novo) — 4800 depois dela; antes a
+  Baseline em 10/10/2026 (FORN-SELETOR-PADRAO-01 fatia 2e, +17 em `src/components/shared/campoDeFornecedor.test.tsx` (novo) — 4817 depois dela; antes a
+  fatia 2d, +12 em `src/components/agri/fornecedorDaLavoura.test.tsx` (novo) — 4800 depois dela; antes a
   fatia 2c commit 1b, +12: `src/components/financiamentos/fornecedorNoContrato.test.tsx` 7 (novo),
   `src/components/financiamentos/obrigacaoEdicao.test.tsx` 5 — 4788 depois dele; antes o commit 1a, +24: `src/lib/fornecedores/cadastroDaCasa.test.ts` 15,
   `src/components/financeiro-v2/novoFornecedorDialog.test.tsx` 9 — 4776 depois dele; antes o DIALOG-CLIQUE-FECHANDO-01, +12 em `src/components/ui/menuFechadoSemClique.test.tsx` (14 -> 26) — 4752 depois
@@ -282,7 +283,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4800
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4817
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -1447,6 +1448,76 @@ preview que o cabecalho nao sai da tela ao rolar.
     precisa desligar) e a pagina ja' aberta antes da publicacao (so' muda ao recarregar).
   [A divida MENU-CLIQUE-FECHANDO-01, medida neste passo, FECHOU no commit seguinte — ver a regra "LISTA OU MENU FECHANDO NAO
     ACEITA CLIQUE", acima.]
+- ⚠ PECUARIA LEGADO E META USAM O DONO PELO MESMO ENCAIXE DA LAVOURA, QUE VIROU COMPARTILHADO: `CampoDeFornecedor` (FORN-SELETOR-PADRAO-01
+  fatia 2e, Gabriel 10/10/2026, so' tela, sem banco). `src/components/agri/FornecedorDaLavoura.tsx` foi MOVIDO para
+  `src/components/shared/CampoDeFornecedor.tsx` (o bloco da 2d, abaixo, cita o nome antigo) e e' o encaixe UNICO: PROIBIDO nascer um
+  segundo (preso por teste). A anatomia dos cinco pontos e' a da Lavoura — era o MESMO `FornecedorSelect` antigo em volta (combobox
+  de 32px, "✕" e "+" de 32px, sem linha do documento). O encaixe ganhou duas props: `incluirMeta` e `textoLegado`.
+  · OS CINCO PONTOS: `EditCompraForm` (o rotulo "Fornecedor" que o seletor antigo desenhava passou ao hospedeiro),
+    `CompraDadosZootecnicos` e `VendaDadosZootecnicos` (os blocos do `LancamentoZooModal`), `CompraMetaModalShell` e
+    `VendaMetaModalShell` (so' o ramo de EDICAO; ver "fora", abaixo). NINGUEM MAIS IMPORTA `FornecedorSelect.tsx`: o arquivo fica
+    e sai no passo 4 (a trava).
+  · META — COMO O FORNECEDOR E' ESCOLHIDO HOJE, E O QUE NAO MUDOU: na CRIACAO, `LancamentosTab` (~:1425 e ~:1445) pre-seleciona o
+    cadastro "[META] Planejamento" do cliente quando o campo esta' vazio (lista `abateFornecedores`; `SearchableSelect`, INTOCADO);
+    na EDICAO, `CompraMetaEdicaoModal` / `VendaMetaEdicaoModal` abrem com `lancamento.fornecedorId` e o Salvar manda SO'
+    `fornecedorId: id || undefined` (sem nome, sem `cenario`, sem `statusOperacional` — o campo vazio nao apaga o gravado). Com o
+    dono (`incluirMeta`) o "[META]" continua oferecido e o que o Salvar entrega e' identico — preso pelos dois modais MONTADOS em
+    teste (salvar sem tocar = o mesmo id; escolher outro = o id dele; `cenario` fora do que e' gravado).
+    MEDIDO (10/10): lancamentos vivos de META (compra/venda/abate) por cliente · sem fornecedor · com outro fornecedor — Agnaldo
+    15 · 7 · 8 (os 8 em cadastro INATIVO), NJ 31 · 31 · 0, Raul 5 · 5 · 0, RRCC 2 · 2 · 0, Santa Rita 16 · 16 · 0, Vera 25 · 25 · 0,
+    Teste 0. NENHUM lancamento de meta tem o "[META] Planejamento" gravado (0 em todos os clientes), e nenhum realizado o tem.
+  · LEGADO (texto de fornecedor sem id): o texto mora em `lancamentos.comprador_fornecedor` e quem o le^ e' o `LancamentoZooModal`
+    (`textoLegadoInicial`, entregue so' enquanto nao ha' id). O campo NUNCA o escreve nem apaga: nao chama `onChange` ao abrir, e
+    o Salvar do modal so' manda `fornecedorId` quando ha' id. Enquanto nao ha' id o campo MOSTRA "<texto> · histórico, não
+    vinculado" em ambar, NA MESMA ALTURA (32px), com a frase inteira no `title` (`fornecedor-texto-legado`); escolher na lista
+    vincula; o "+" abre o cadastro da casa com o texto no nome. O sentinela '[nao informado]' nunca aparece.
+    ⚠ MUDA DE DESENHO, de proposito (layout fixo): o seletor antigo trocava o campo por uma CAIXA AMBAR de 81,5px ("Fornecedor
+      legado não vinculado" + "Vincular fornecedor" / "Criar novo"), que fazia o modal crescer de 495 para 521px e ligar rolagem.
+      SAIRAM com ela: o botao "Vincular fornecedor" que abria a busca JA' com o texto digitado, e o grupo "Sugerido" (o cadastro de
+      mesmo nome no topo). Hoje o operador abre a lista e digita.
+    MEDIDO (10/10) — vivos de compra/venda/abate com TEXTO e SEM id, por cliente (compra · venda · abate): Agnaldo 264 · 46 · 5,
+    NJ 24 · 66 · 238, Raul 2 · 21 · 25, RRCC 20 · 2 · 31, Santa Rita 4 · 91 · 95, Vera 0 · 0 · 0, Teste 0. Com fornecedor que NAO
+    EXISTE mais no cadastro: 0; de outro cliente: 0; em cadastro inativo (aparece com o nome e a marca): Agnaldo 8 (meta), NJ 1,
+    RRCC 2, Santa Rita 2.
+  · ANTES x DEPOIS (NJ, so' leitura, 1.127 x 579; posicao relativa ao dialogo, em px do layout):
+        ponto / estado                    antes                                   depois
+        compra de meta (edicao)           campo 328 x 32 em x400 y357,5; "+" x734  328 x 32 em x400 y329,5; "+" x734
+                                          dialogo 1024 x 549; corpo 479 de 654     1024 x 549; corpo 479 de 626
+        venda de meta (edicao)            campo 200,7 x 32 em x18 y357,5           200,7 x 32 em x18 y329,5; dialogo 1024 x 549
+        compra realizada, com id          campo 297,6 x 32 em x29 y198,6;          335,6 x 32 em x29 y198,6; "+" x370,6
+                                          "✕" x332,6; "+" x370,6; dialogo 1071 x 495   dialogo 1071 x 495, sem rolagem
+        compra realizada, so' texto       caixa ambar 373,6 x 81,5; dialogo        campo 335,6 x 32 com o texto; "+" x370,6;
+                                          1071 x 521, corpo 406 de 430 (rola)      dialogo 1071 x 495, sem rolagem
+        venda realizada, so' texto        caixa ambar 373,6 x 81,5 em x195,1;      campo 335,6 x 32 em x195,1 y198,6; "+" x536,7;
+                                          dialogo 1071 x 521, corpo 406 de 471     dialogo 1071 x 521, corpo 406 de 422
+    ⚠ NOS DOIS MODAIS DE META O CAMPO SUBIU 28px, de proposito: o seletor antigo desenhava um SEGUNDO rotulo "Fornecedor" por baixo
+      do rotulo do hospedeiro (na venda, "Fornecedor" sob "Comprador") — o mesmo defeito do rotulo duplo da carga de mandioca. Sem
+      ele o campo fica na linha dos vizinhos (y329,5, como "Peso médio") e no mesmo lugar do ramo de criacao.
+    ⚠ O "✕ Remover seleção" virou o item "— nenhum —" da lista (como na Lavoura): o campo ganhou os 38px dele e nao muda mais de
+      largura ao escolher. ⚠ A venda realizada JA' rolava 16px por conta propria; a caixa ambar somava os outros 49.
+    ⚠ O "+" abria o CADASTRO COMPLETO (`FornecedorFormDialog`); agora abre o cadastro da casa (`NovoFornecedorDialog`), que nao
+      duplica — a mesma troca da Lavoura.
+  PROVA NO NAVEGADOR (NJ, 10/10, so' leitura, NADA salvo; aba em segundo plano, gestos por script): compra de meta — lista com
+  "[META] Planejamento", "Mostrando 100 de 2.594", opcoes de 20px em uma linha, busca "[META]" 1 e "agro" 62, escolhido, dialogo
+  1024 x 549 antes / aberto / depois; venda de meta — busca por nome e por CNPJ (1 opcao), escolhido, 1024 x 549; compra realizada
+  com id — SEM "[META]" ("100 de 2.593"), 1071 x 495 igual; compra e venda realizadas so' com texto — o texto no campo, em ambar,
+  sem corte, e depois de escolher o campo mostra o escolhido (335 x 32).
+  Testes: `src/components/shared/campoDeFornecedor.test.tsx` 17 (o campo; os dois modais de meta MONTADOS salvando; o bloco da
+  compra montado com texto legado; a fonte dos cinco pontos). 10 mutacoes mortas (a regra "o id gravado e' o escolhido" em cada
+  ponto, o legado por cima do id, o "[META]"). Nenhuma foto mudou. `fornecedorDaLavoura.test.tsx` passou a prender que NINGUEM
+  importa o seletor antigo.
+  ⚠ SUITE-TESTE-OSCILA-01, de novo: uma execucao deu 4 falhas (a quarta, `valorComConta.test.tsx > prova 7 > novo lançamento com
+    valor digitado pela máscara`); sozinho o arquivo passou 26 de 26 e a suite seguinte deu as 3 de sempre.
+  ⚠ FORA DESTA FATIA: o ramo de CRIACAO dos dois modais de meta segue com o `SearchableSelect` e a lista do `LancamentosTab` (nao
+    era o seletor antigo; nao tem "+" nem documento) — decisao do Gabriel se entra na 2f.
+  ⚠ `EditCompraForm` NAO E' ALCANCAVEL NA TELA: o unico hospedeiro (`LancamentoDetalhe`) nunca abre a folha (`compraEditSheetOpen`
+    nao tem quem o ligue) e passa `fornecedorId={null}` com `onFornecedorChange` vazio. Trocado e preso so' pela fonte.
+  ⚠ NAO PROVADO NO NAVEGADOR: o CLIENTE TESTE (nao tem fazenda de pecuaria nem lancamento: a prova foi no NJ, sem salvar) · SALVAR
+    em qualquer ponto (o que e' gravado esta' provado pelos modais montados em teste) · meta com fornecedor PREENCHIDO (nenhum
+    lancamento de meta do NJ tem fornecedor; so' por teste) · inativo gravado na tela (so' por teste) · o "+" e o cadastro com o
+    texto legado no nome · venda realizada COM id no modal zootecnico · a aba em primeiro plano.
+  ⚠ DIVIDAS: `snapshotNome` segue como prop dos tres pontos de edicao e ninguem a le^ mais (o seletor antigo so' a usava travado) ·
+    o texto legado longo corta no campo (inteiro no `title`) · sem a busca pre-preenchida, vincular um legado pede digitar o nome.
 - ⚠ FORNECEDOR NA LAVOURA: OS CINCO PONTOS USAM O DONO PELO LEITOR UNICO, PELO CAMPO `FornecedorDaLavoura` (FORN-SELETOR-PADRAO-01 fatia 2d,
   Gabriel 10/10/2026, so' tela, sem banco). `src/components/agri/FornecedorDaLavoura.tsx` NAO e' um seletor: e' o encaixe do DONO
   (`FavorecidoSelect`) na anatomia que os quatro modais ja' tinham medida — combobox de 32px, "+" de 32px a 6px (os 4 do dono + `mr-0.5`
