@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 10/10/2026 (FORN-SELETOR-PADRAO-01 fatia 2c commit 1b, +12: `src/components/financiamentos/fornecedorNoContrato.test.tsx` 7 (novo),
+  Baseline em 10/10/2026 (FORN-SELETOR-PADRAO-01 fatia 2d, +12 em `src/components/agri/fornecedorDaLavoura.test.tsx` (novo) — 4800 depois dela; antes a
+  fatia 2c commit 1b, +12: `src/components/financiamentos/fornecedorNoContrato.test.tsx` 7 (novo),
   `src/components/financiamentos/obrigacaoEdicao.test.tsx` 5 — 4788 depois dele; antes o commit 1a, +24: `src/lib/fornecedores/cadastroDaCasa.test.ts` 15,
   `src/components/financeiro-v2/novoFornecedorDialog.test.tsx` 9 — 4776 depois dele; antes o DIALOG-CLIQUE-FECHANDO-01, +12 em `src/components/ui/menuFechadoSemClique.test.tsx` (14 -> 26) — 4752 depois
   dele; antes o CPR-FLUXO-BARRAS-01, +2 em `src/lib/pdf/cpr/graficoNoPdf.test.tsx` (16 -> 18) — 4740 depois dele; antes o
@@ -281,7 +282,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4788
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4800
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -1446,6 +1447,63 @@ preview que o cabecalho nao sai da tela ao rolar.
     precisa desligar) e a pagina ja' aberta antes da publicacao (so' muda ao recarregar).
   [A divida MENU-CLIQUE-FECHANDO-01, medida neste passo, FECHOU no commit seguinte — ver a regra "LISTA OU MENU FECHANDO NAO
     ACEITA CLIQUE", acima.]
+- ⚠ FORNECEDOR NA LAVOURA: OS CINCO PONTOS USAM O DONO PELO LEITOR UNICO, PELO CAMPO `FornecedorDaLavoura` (FORN-SELETOR-PADRAO-01 fatia 2d,
+  Gabriel 10/10/2026, so' tela, sem banco). `src/components/agri/FornecedorDaLavoura.tsx` NAO e' um seletor: e' o encaixe do DONO
+  (`FavorecidoSelect`) na anatomia que os quatro modais ja' tinham medida — combobox de 32px, "+" de 32px a 6px (os 4 do dono + `mr-0.5`
+  daqui), sem rotulo proprio, sem a linha do documento (vai no `title`) — com o "+" abrindo o CADASTRO DA CASA (`criarFornecedorDaCasa`).
+  · OS PONTOS (preso por teste de fonte): `CargaMandiocaModal` (comprador / industria, e o prestador de cada servico),
+    `LocalEstoqueModal` (cooperativa / armazem), `VendaGraosModal` (comprador) e `AgriBarterTab` (parceiro). Nenhum deles importa mais
+    o `FornecedorSelect` nem consulta `financeiro_fornecedores`.
+  · UM GESTO, UMA CHAMADA: `onChange(id, nome)` — o nome e' o do cadastro, entregue pelo dono no `onSelected`; esvaziar entrega
+    `(null, null)`. O nome do parceiro do barter (a frase da conta de permuta) e o da industria da carga (o resumo) continuam vindo
+    do seletor, no mesmo gesto do id — nenhuma segunda leitura nasceu. Nenhum dos cinco GRAVA texto de fornecedor (so' o id).
+  · INATIVO ja' gravado: nome + marca "inativo", fora da lista. TRAVADO (`disabled`: venda em "ver", barter em edicao): sem o "+",
+    largura inteira, texto legivel (`disabled:opacity-100`; o dono apagaria a 50%).
+  · MUDA DE COMPORTAMENTO, declarado: (1) a busca saiu do servidor (ilike, espera de 300 ms, teto de 50) para a memoria do leitor —
+    todos os ativos, por nome e por CNPJ/CPF, 100 desenhados com "Mostrando 100 de N"; (2) o "✕ Remover seleção" SAIU: esvaziar e' o
+    item "— nenhum —" da lista; (3) o "+" abre o cadastro da casa (nome + CNPJ/CPF, que nao duplica) no lugar do cadastro completo
+    (`FornecedorFormDialog`); (4) "[META]" fora da lista; a opcao mostra o documento.
+  · LAYOUT, MEDIDO ANTES x DEPOIS (px no espaco do dialogo, sem o zoom de 95%; x · y · largura x altura do combobox | x do "+"):
+        modal · estado                         antes                               depois
+        Barter · novo, vazio                   17 · 102 · 376 x 32 | 399           igual (448 x 530)
+        Barter · novo, escolhido               (nao medido)                        17 · 102 · 376 x 32 | 399
+        Barter · editar (travado)              (nao medido)                        17 · 102 · 414 x 32, sem "+"
+        Venda · ver (travado)                  13 · 148 · 329 x 32, sem "+"        igual (1024 x 533)
+        Venda · editar, escolhido              281 de largura, "✕" 300, "+" 338    13 · 148 · 291 x 32 | 310
+        Local · novo, vazio                    13 · 175 · 281 x 32 | 300           igual (672 x 413)
+        Local · editar, escolhido              281, "✕" 300, "+" 338               13 · 207 · 281 x 32 | 300 (672 x 481)
+        Carga · comprador, vazio               20 · 205 · 229 x 32 | 255           igual (1024 x 549)
+        Carga · comprador, escolhido           (nao medido)                        20 · 205 · 229 x 32 | 255
+        Carga · prestador, escolhido           135 · 139 · 250 x 32, "✕" 390, "+" 428   135 · 139 · 288 x 32 | 428
+    Rotulos e campos vizinhos nas MESMAS posicoes; dialogos do mesmo tamanho com a lista aberta e fechada; nenhum rola.
+    ⚠ O CAMPO NAO MUDA MAIS DE LARGURA AO ESCOLHER. Antes, com fornecedor escolhido: na VENDA e no LOCAL o "+" VAZAVA a celula em 28px
+      e invadia a coluna vizinha (o "✕" entrava e o combobox nao encolhia); na CARGA a coluna `2fr` crescia com o nome e empurrava
+      Conta, NF e Ticket — consertado no hospedeiro com `min-w-0` na celula (o nome corta, inteiro no `title`). O unico estado que
+      difere de antes e' esse: com fornecedor escolhido o combobox ocupa tambem o lugar do "✕" que saiu.
+  ⚠ ACHADO, NAO CORRIGIDO (decisao de layout): no COMPRADOR DA CARGA o seletor antigo nao recebia `label=""` e imprimia "Fornecedor"
+    por baixo do rotulo "Comprador *" — dois rotulos empilhados, e a linha inteira 28px mais alta. A troca MANTEM a linha como estava
+    (o segundo rotulo e' desenhado no hospedeiro, de proposito). Tira'-lo sobe Conta, NF e Ticket 28px.
+  · AS QUATRO LEITURAS DE NOME POR ID FICAM (medidas, certas): `useBarterContratos.ts`, `useCargaMandioca.ts`, `useColheita.ts` (as
+    tres por `.in('id', ids)` sem filtro de ativo: o inativo aparece) e a juncao de `useEstoqueGraos.ts`. Ids distintos hoje: 1 a 2
+    por tela — nenhuma corta. So' o NJ tem dado de Lavoura: barter 6 contratos, cargas 56, local 1, vendas 17; 0 fornecedor
+    inexistente e 0 inativo em todas.
+  · O SELETOR ANTIGO (`src/components/shared/FornecedorSelect.tsx`) NAO SAIU: sobra em `EditCompraForm`, `CompraMetaModalShell`,
+    `VendaMetaModalShell`, `VendaDadosZootecnicos` e `CompraDadosZootecnicos` (fatia 2e; a lista exata presa por teste).
+  PROVA NO NAVEGADOR (10/10, aba em SEGUNDO PLANO, gestos por script, 0 escritas): o Teste nao tem safra nem area de lavoura — so' o
+  Barter "novo" abriu la'; os outros modais foram abertos no NJ, SO' LEITURA (abrir, buscar, escolher, medir, fechar sem salvar).
+  Carga nova: busca por nome (5) e por CNPJ (1), opcoes de 20px em uma linha, escolhido com o documento no `title`, resumo com o
+  comprador; carga EXISTENTE: comprador e os tres prestadores preenchidos. Venda existente: "ver" e "Editar dados", lista com 100
+  de 2.593. Local: novo (nome, CNPJ, escolher) e editar o existente. Barter: novo e editar um contrato existente (parceiro travado,
+  legivel). Abrir o seletor no NJ: 60 ms.
+  Testes: 12 novos; 15 mutacoes mortas (uma sobreviveu na primeira rodada — o que ja' existia no cadastro nao voltar escolhido — e
+  ganhou o caso). Nenhum teste montava esses modais: NENHUMA FOTO mudou.
+  ⚠ DIVIDAS: os quatro modais NAO se montam em teste (o campo e' montado; a ligacao de cada modal e' lida da FONTE) · o criado pelo
+    "+" nasce sem fazenda · no "ver" da venda o comprador travado ficou com o fundo e o texto dos outros campos travados (antes,
+    caixa clara com texto escuro) · o comentario de `useBarterContratos.ts` ainda cita o seletor antigo.
+  ⚠ NAO PROVADO NO NAVEGADOR: SALVAR em qualquer um dos quatro (nada foi gravado) · o "+" abrindo o cadastro dentro desses modais
+    (so' por teste) · esvaziar pelo "— nenhum —" · inativo gravado (nao ha' caso real: so' por teste) · venda NOVA (sem grao em
+    estoque no NJ) · o foco indo ao comprador ao entrar em "Editar dados" · a aba em primeiro plano · a cor do texto do campo (em
+    aba oculta a transicao de cor nao anda; visto por captura).
 - ⚠ FORNECEDOR EM FINANCIAMENTOS: CREDOR, DESTINACAO E O HOOK USAM O DONO PELO LEITOR UNICO (FORN-SELETOR-PADRAO-01 fatia 2c, commit 1b,
   Gabriel 09–10/10/2026, so' tela, sem banco). `CredorAutocomplete.tsx` (o seletor proprio, com busca no servidor, e o dialogo
   "Novo credor" dele) SAIU do repositorio; nenhum arquivo de Financiamentos consulta `financeiro_fornecedores` por conta propria

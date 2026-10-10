@@ -25,7 +25,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DatePicker } from '@/components/ui/date-picker';
-import { FornecedorSelect } from '@/components/shared/FornecedorSelect';
+import { FornecedorDaLavoura } from '@/components/agri/FornecedorDaLavoura';
 import { FazendaSelect } from '@/components/shared/FazendaSelect';
 import { CampoNumero } from '@/components/ui/campo-moeda';
 import { parseMoeda } from '@/lib/calculos/numeroBR';
@@ -273,12 +273,13 @@ export function LocalEstoqueModal({
                         fazendas={fazendas} forcaAdministrativo={false}
                         triggerClassName="h-8 text-[12px]" hideAviso />
                     ) : (
-                      /* ⚠ `label=""` — `FornecedorSelect` tem `label = 'Fornecedor'` por DEFAULT, e
+                      /* [fatia 2d: o campo é o `FornecedorDaLavoura` (o seletor dono), que não desenha rótulo; o texto é o registro de antes]
+                         ⚠ `label=""` — `FornecedorSelect` tem `label = 'Fornecedor'` por DEFAULT, e
                          o rótulo desta célula é o de cima. Dois rótulos empilhados foi o defeito
                          que o a5b1fc58 corrigiu no modal de venda. */
-                      <FornecedorSelect fornecedorId={fornecedorId || null}
-                        onFornecedorChange={id => setFornecedorId(id ?? '')}
-                        clienteId={clienteId} label="" placeholder="Escolha" />
+                      <FornecedorDaLavoura value={fornecedorId || null}
+                        onChange={id => setFornecedorId(id ?? '')}
+                        clienteId={clienteId} placeholder="Escolha" />
                     )}
                   </div>
                 </div>

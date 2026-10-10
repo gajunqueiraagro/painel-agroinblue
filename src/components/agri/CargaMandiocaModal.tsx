@@ -22,7 +22,7 @@ import { Label } from '@/components/ui/label';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Segmentado } from '@/components/ui/segmentado';
-import { FornecedorSelect } from '@/components/shared/FornecedorSelect';
+import { FornecedorDaLavoura } from '@/components/agri/FornecedorDaLavoura';
 import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import { BlocoTopoAba } from '@/components/ui/bloco-topo-aba';
 import { useCompromissosDaCarga, useAlterarCompromisso } from '@/hooks/useCargaMandioca';
@@ -637,7 +637,12 @@ export function CargaMandiocaModal({
                     conta da ÚLTIMA carga deste talhão, no mesmo contrato âmbar dos preços de
                     serviço — proposta que o operador confere, nunca decisão da tela. */}
                 <div className="grid grid-cols-[2fr_1.4fr_1fr_1fr] items-end gap-2">
-                  {/* ⚠ O RÓTULO É DAQUI, NÃO DO SELETOR — A16, mesma altura na mesma linha. O
+                  {/* [fatia 2d, 10/10/2026: o campo é o `FornecedorDaLavoura` (o seletor dono). ⚠ ACHADO, NÃO CORRIGIDO: o seletor
+                      antigo NÃO ficava sem rótulo aqui — sem `label=""` ele imprimia o padrão "Fornecedor" por baixo do
+                      "Comprador" (dois rótulos empilhados, e a linha inteira 28px mais alta). A troca MANTÉM a linha como
+                      estava (o segundo rótulo é desenhado abaixo, de propósito); tirá-lo é decisão de layout. O texto que
+                      segue é o registro de antes.]
+                      ⚠ O RÓTULO É DAQUI, NÃO DO SELETOR — A16, mesma altura na mesma linha. O
                       `FornecedorSelect` separa rótulo e controle com `space-y-1` (4px) e todo o
                       resto desta linha usa `mt-0.5` (2px): dois pixels, e o bloco do Comprador
                       subia acima dos três vizinhos.
@@ -647,18 +652,24 @@ export function CargaMandiocaModal({
                       nada — então o alinhamento passa a ser o dos vizinhos. O `*` vem junto porque
                       era o `required` do seletor que o desenhava. */}
                   {clienteId ? (
-                    <div>
+                    /* `min-w-0` (fatia 2d): sem ele a coluna `2fr` cresce com o nome escolhido e empurra Conta, NF e Ticket */
+                    <div className="min-w-0">
                       <Label className="text-[10px] text-muted-foreground">
                         Comprador<span className="ml-0.5 text-destructive">*</span>
                       </Label>
                       <div className="mt-0.5">
-                        <FornecedorSelect
-                          clienteId={clienteId}
-                          placeholder="A indústria que recebe a carga"
-                          fornecedorId={form.industriaId}
-                          onFornecedorChange={(id, nome) =>
-                            onChange({ ...form, industriaId: id, industriaNome: nome, valorBruto: null })}
-                        />
+                        {/* FORN-SELETOR-PADRAO-01 fatia 2d — o seletor DONO, pelo leitor único; o nome vem dele. O rótulo
+                            "Fornecedor" e o `space-y-1` são os que o seletor antigo desenhava (mesma posição de antes). */}
+                        <div className="space-y-1">
+                          <Label className="text-[10px] text-muted-foreground">Fornecedor</Label>
+                          <FornecedorDaLavoura
+                            clienteId={clienteId}
+                            placeholder="A indústria que recebe a carga"
+                            value={form.industriaId}
+                            onChange={(id, nome) =>
+                              onChange({ ...form, industriaId: id, industriaNome: nome, valorBruto: null })}
+                          />
+                        </div>
                       </div>
                     </div>
                   ) : <div />}
@@ -827,13 +838,15 @@ export function CargaMandiocaModal({
                         <div key={tipo} className="grid grid-cols-[0.6fr_2fr_1fr_116px] items-end gap-2">
                           <span className="pb-2 text-[10px] text-muted-foreground">{rotulo}</span>
                           {clienteId ? (
-                            <FornecedorSelect
-                              clienteId={clienteId}
-                              label=""
-                              placeholder="Prestador"
-                              fornecedorId={s.fornecedor_id}
-                              onFornecedorChange={id => mudarServico(tipo, { fornecedor_id: id })}
-                            />
+                            /* `min-w-0` (fatia 2d): a coluna `2fr` não cresce com o nome do prestador */
+                            <div className="min-w-0">
+                              <FornecedorDaLavoura
+                                clienteId={clienteId}
+                                placeholder="Prestador"
+                                value={s.fornecedor_id}
+                                onChange={id => mudarServico(tipo, { fornecedor_id: id })}
+                              />
+                            </div>
                           ) : <div />}
                           <div>
                             <Label className="text-[10px]">R$/t</Label>

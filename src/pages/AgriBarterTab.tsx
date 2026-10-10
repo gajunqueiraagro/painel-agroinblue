@@ -27,7 +27,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { useBarterContratos, useTotaisPorContrato, type ContratoNaLista } from '@/hooks/useBarterContratos';
-import { FornecedorSelect } from '@/components/shared/FornecedorSelect';
+import { FornecedorDaLavoura } from '@/components/agri/FornecedorDaLavoura';
 import { FazendaSelect } from '@/components/shared/FazendaSelect';
 import { useBarterInsumos, type BarterInsumo, type InsumoPayload } from '@/hooks/useBarterInsumos';
 import { useBarterVenda, type BarterVenda, type VendaPayload } from '@/hooks/useBarterVenda';
@@ -134,7 +134,7 @@ export function AgriBarterTab() {
   /** `null` = criando; preenchido = editando aquele contrato. */
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [parceiroId, setParceiroId] = useState('');
-  /* ⚠ O NOME VEM DO SELETOR, não de uma segunda leitura. O `FornecedorSelect` entrega
+  /* ⚠ O NOME VEM DO SELETOR, não de uma segunda leitura. O `FornecedorDaLavoura` (o seletor dono; antes, o `FornecedorSelect`) entrega
      `(id, nome)` no mesmo gesto, e é esse nome que a mensagem da conta de permuta usa. */
   const [parceiroNome, setParceiroNome] = useState('');
   const [nome, setNome] = useState('');
@@ -996,20 +996,25 @@ export function AgriBarterTab() {
             </p>
           </div>
           <div className="space-y-2 p-4">
-            {/* ⚠ O SELETOR É O DA CASA, e a troca não é estética. O dropdown próprio que estava
+            {/* [fatia 2d, 10/10/2026: passou ao seletor DONO pelo leitor único — todos os ativos em memória, busca por nome e
+                CNPJ/CPF, 100 opções desenhadas; o texto abaixo é o registro da troca anterior.]
+                ⚠ O SELETOR É O DA CASA, e a troca não é estética. O dropdown próprio que estava
                 aqui despejava TODOS os fornecedores do cliente sem busca e sem filtro de ativo —
                 medido no Proto em 13/09/2026: 3.390 linhas no maior cliente, 838 delas INATIVAS.
                 O `FornecedorSelect` busca no servidor (ilike com debounce de 300ms, teto de 50),
                 filtra `ativo = true` na própria query e ainda traz o "+" de cadastrar novo. */}
-            <FornecedorSelect
-              label="Parceiro"
-              required
-              disabled={!!editandoId}
-              fornecedorId={parceiroId || null}
-              onFornecedorChange={(id, n) => { setParceiroId(id ?? ''); setParceiroNome(n ?? ''); }}
-              clienteId={clienteId ?? ''}
-              placeholder="Escolha o fornecedor parceiro"
-            />
+            {/* FORN-SELETOR-PADRAO-01 fatia 2d — o rótulo é daqui (o dono não o desenha neste arranjo), com o MESMO espaçamento
+                de antes (`space-y-1`); o nome do parceiro continua vindo do seletor, no mesmo gesto. */}
+            <div className="space-y-1">
+              <Label className="text-[10px] text-muted-foreground">Parceiro<span className="ml-0.5 text-destructive">*</span></Label>
+              <FornecedorDaLavoura
+                disabled={!!editandoId}
+                value={parceiroId || null}
+                onChange={(id, n) => { setParceiroId(id ?? ''); setParceiroNome(n ?? ''); }}
+                clienteId={clienteId}
+                placeholder="Escolha o fornecedor parceiro"
+              />
+            </div>
             <div>
               <Label className="text-[10px]">Nome do contrato <span className="text-destructive">*</span></Label>
               <Input value={nome} onChange={e => setNome(e.target.value)}
