@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 10/10/2026 (FORN-SELETOR-PADRAO-01 fatia 2e, +17 em `src/components/shared/campoDeFornecedor.test.tsx` (novo) — 4817 depois dela; antes a
+  Baseline em 10/10/2026 (RECORRENCIA-GERA-A-VIGENCIA-INTEIRA-01, +10: `src/components/recorrencias/gerarVagas.test.tsx` 8 (6 -> 14),
+  `src/lib/financeiro/recorrenciasDoMes.test.ts` 2 — 4827 depois dele; antes a FORN-SELETOR-PADRAO-01 fatia 2e, +17 em `src/components/shared/campoDeFornecedor.test.tsx` (novo) — 4817 depois dela; antes a
   fatia 2d, +12 em `src/components/agri/fornecedorDaLavoura.test.tsx` (novo) — 4800 depois dela; antes a
   fatia 2c commit 1b, +12: `src/components/financiamentos/fornecedorNoContrato.test.tsx` 7 (novo),
   `src/components/financiamentos/obrigacaoEdicao.test.tsx` 5 — 4788 depois dele; antes o commit 1a, +24: `src/lib/fornecedores/cadastroDaCasa.test.ts` 15,
@@ -283,7 +284,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4817
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4827
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -5311,9 +5312,72 @@ docs/historico/frentes-ate-2026-09-29.md.)
     `useRecorrencias` le' TODAS as ocorrencias vivas do cliente sem paginar (NJ: 1.044 — ja' corta) · o rotulo do primeiro e do
     ultimo cartao corta a 152px (inteiro no `title`) · o cabecalho da tabela tem 22px (o primitivo), nao 18 · os cartoes e o
     rodape mostram SAIDAS; as entradas so' aparecem no rodape e na lista · a tela nao se monta em teste (lida da fonte).
+- ⚠ A RECORRENCIA GERA A VIGENCIA INTEIRA, MESES PASSADOS INCLUSIVE, E NUNCA OMITE EM SILENCIO (RECORRENCIA-GERA-A-VIGENCIA-INTEIRA-01,
+  Gabriel 10/10/2026; SUBSTITUI a trava "nunca antes do mes corrente" de 30/09). "Se o sistema aceita a data de início, ele gera
+  TODA a vigência, inclusive os meses passados. O que não puder ser gerado aparece escrito, com o motivo." Sem pergunta "quer
+  gerar os passados?". Migrations 20261027195500 (busca de vagas; ⚠ registrada como 20261010211938; ledger = arquivo, md5
+  656f1bee…) e 20261027195600 (o Gerar; ⚠ registrada como 20261010212015; md5 5d845e15…) — DUAS porque o canal de aplicacao
+  recusou a carga de 12,5 KB. NENHUMA CARGA: nenhum lancamento foi criado; o Gabriel preenche regra a regra pelo Gerar.
+  · A CAUSA MEDIDA: UMA linha de `_fn_recorrencia_vagas` (a serie comecava em `greatest(mes corrente, inicio)`). A PRIMEIRA geracao
+    ja' partia do inicio da vigencia; o que nunca se preenchia era a regra JA' GERADA cuja vigencia foi levada para tras — a
+    edicao da regra nao deixa rastro (sem trilha; `updated_at` nao muda). Caso do defeito (Santa Rita, regra 16126a0a): vigencia
+    07/26–06/27, lancamentos criados em 19/09 a partir de 09/26, marca em 06/27.
+  · BANCO: `_fn_recorrencia_vagas(p_r, p_ocupadas, p_ate, p_marca, p_com_fechados DEFAULT false)` -> (competencia, vencimento,
+    motivo) comeca no INICIO DA VIGENCIA; ficam o fim, a marca, `p_ate`, cancelado = ocupado, comparacao por mes. Sem o 5o
+    parametro (a chamada do Propagar, NAO tocado, md5 6a932aa9…) devolve o de antes: mes fechado fora. Com ele devolve tambem a
+    competencia de mes fechado, com motivo 'mês fechado' — UM dono do "mes fechado". DROP + CREATE; interna, so' service_role
+    (md5 f5f85da4… -> f13b4eca…). `fn_recorrencia_gerar` (f1e01391… -> 9fb51f24…; assinatura, SECURITY DEFINER e ACL iguais):
+    MES FECHADO NAO GERA, NA VAGA E NO AVANCO (antes o avanco gerava em mes fechado — divida de 30/09, fechada aqui), e o retorno
+    ganha `nao_gerados` [{competencia, vencimento, motivo}], `gerado_de` e `gerado_ate` (a primeira e a ultima competencia
+    criadas, 'AAAA-MM'; nulas com zero). A passada nasce como as demais ('previsto', vencimento por
+    `_fn_recorrencia_vencimento`, sem pagamento); A CONFIRMAR e folha nao mudam nada (o valor e' o base, estimado como os
+    outros meses). SIMULACAO = GRAVACAO (o mesmo laco). O Propagar passa a PREVER as vagas passadas pela mesma funcao. A marca
+    nao recua. Gerar passada NAO dispara guarda nenhuma de lancamento.
+  · TELA (so' o Gerar e a lista; o dialogo de editar a regra nao gera e nao foi tocado):
+    - `GerarLancamentosDialog`: a previa, o resultado e a recusa moram num LUGAR RESERVADO de 57px (tres linhas, sempre
+      presente): "N lançamentos · de ago/26 a dez/26 · inclui meses passados", "preenche 07/26 (venc 10/08/26), …" e "não
+      gerado: 09/26 (venc 10/09/26) — mês fechado"; depois de gravar, "gerou 4: 08/26 a 12/26" (`textoDoGerado`,
+      `textoNaoGerados`, `useRecorrencias.ts`). ⚠ O DIALOGO NAO FECHA SOZINHO ao gravar e NAO HA' TOAST (sairam os tres).
+    - Lista (`linhasDoMes(regras, ocorrencias, mes, { canceladas, mesesFechados })`, `recorrenciasDoMes.ts`): a regra ATIVA,
+      vigente no mes e sem lancamento APARECE com `naoGerado` 'falta gerar' | 'mês fechado' (o mes fechado e' o da COMPETENCIA)
+      — a celula Situacao escreve "não gerado" em ambar, o motivo no `title`. So' NAO entra a competencia cujo lancamento foi
+      CANCELADO (lida do banco). ⚠ ANTES a tela SUPUNHA cancelada toda competencia abaixo da marca sem lancamento vivo, e a
+      regra sumia. A linha "não gerado" CONTA no total do mes pelo valor base (decisao do Gabriel, 10/10).
+    - "Gerar lançamentos" passou a ser oferecido a TODA regra ativa (`r.ativo`): a "gerada até o fim" — o caso da Santa Rita —
+      nem tinha o item no menu.
+    - `useOcorrenciasDoMes` le^ junto as competencias canceladas (12 meses para tras) e os meses fechados do cliente.
+  · MEDIDO (10/10, so' leitura; regra ativa, cancelado = ocupado): meses PASSADOS sem lancamento — NJ 14 regras / 14 meses,
+    RRCC 3 / 5, Santa Rita 2 / 4; FUTUROS — NJ 3 regras / 17, RRCC 3 / 27; mes fechado: 0 (nao ha' nenhum mes fechado no
+    financeiro, em cliente nenhum). Passados com lancamento AVULSO de mesmo valor, mes e favorecido (gerar faria dobro): NJ 3,
+    RRCC 1, Santa Rita 1 — o Gabriel confere antes de gerar.
+  · PROVAS: ensaio revertido com os corpos exatos (md5 de destino) + G1–G6; 7 mutacoes de banco e 16 de tela mortas. Testes SQL:
+    `supabase/tests/recorrencia_gera_a_vigencia_inteira_01_test.sql` (G1–G3) e `…_01_fechado_test.sql` (G4–G6; o G6 e' A TRAVA:
+    para toda regra ativa do cliente de teste, depois do gerar, nao existe competencia da vigencia sem lancamento e sem motivo —
+    com auto-teste do detector). No banco VIVO depois de aplicar: G1–G3, G4–G5, G6 e `rec_propagar_valor_do_mes_01_test.sql` OK;
+    0 funcoes do sistema abertas a `anon`.
+    NO NAVEGADOR (10/10, 1.127 x 579, aba em SEGUNDO PLANO, gestos por script): SANTA RITA, SO' LEITURA — a regra do defeito
+    aparece "não gerado" em ago e set/26 (54 de 66px, sem corte), e a previa do Gerar diz "2 lançamentos · inclui meses
+    passados / preenche 07/26 (venc 10/08/26), 08/26 (venc 10/09/26)"; fechado SEM gravar (10 lancamentos e a marca iguais).
+    TESTE, regra sintetica (inicio ago/26, setembro fechado; criada e APAGADA): fora da lista em julho, "falta gerar" em ago e
+    out, "mês fechado" em set; previa "4 lançamentos · de ago/26 a dez/26 · inclui meses passados / não gerado: 09/26 (venc
+    10/09/26) — mês fechado"; gravado: "gerou 4: 08/26 a 12/26" + o nao gerado, dialogo 448 x 319 em todo estado, 0 toasts,
+    aberto; a lista releu sem F5 (ago e out "certo", set segue "não gerado"); segunda vez "Nada a gerar…"; na CPR o de agosto
+    entrou nos Vencidos (2 contas, 6.607,45).
+  ⚠ O CANAL DE SQL/MIGRATION RECUSA CARGA GRANDE ("Invalid or expired requestState"): 12 KB falhou sempre, ~10 KB passou, e 7 KB
+    com `DELETE` dentro do bloco falhou duas vezes. Migration ou teste maior se DIVIDE em arquivos; o que nao couber no ensaio
+    se monta por patch do corpo vivo (`pg_get_functiondef` + `replace` com ancora contada).
+  ⚠ DIVIDAS: REC-VIGENCIA-DOBRO-LEGADO-01 (os 5 meses passados com lancamento avulso igual: o Gerar nao os ve^ e criaria o
+    segundo) · o AVANCO continua recriando competencia cuja unica linha esta' cancelada (30/09, nao tocada) · a edicao da regra
+    continua sem trilha e sem aviso de "ha' meses a gerar" ao salvar (a lista mostra) · "não gerado" conta no total do mes mesmo
+    em mes fechado · as canceladas sao lidas 12 meses para tras, com teto de 1.000 (acende o "mês incompleto") · leitura de
+    `financeiro_fechamentos` pela tela depende da RLS da tabela (provada com o admin).
+  ⚠ NAO PROVADO: `rec_valor_certo_01_test.sql`, `rec_valor_do_mes_modal_01_test.sql` e o `seg_tenant_varredura_01c_test.sql`
+    INTEIRO nao foram rodados depois de aplicar (do 01c, so' a contagem T1/T2 por leitura) · os dois ARQUIVOS de teste novos
+    foram rodados em recortes equivalentes (o canal recusou a parte B inteira) · gerar de verdade numa regra real (nenhuma foi
+    gerada) · perfil nao admin · a aba em primeiro plano · regra A CONFIRMAR / folha com passado, no navegador.
 - ⚠ O GERAR GARANTE A SERIE COMPLETA DA RECORRENCIA (FIN-RECORRENCIA-GERAR-PREENCHE-VAGA-01, Gabriel 30/09): alem de
-  avancar a marca, `fn_recorrencia_gerar` preenche a competencia VAGA abaixo dela; CANCELADO CONTA COMO OCUPADO; nunca
-  antes do mes corrente (competencia), nem em mes fechado. As travas moram so' em `_fn_recorrencia_vagas`, e o
+  avancar a marca, `fn_recorrencia_gerar` preenche a competencia VAGA abaixo dela; CANCELADO CONTA COMO OCUPADO; [o "nunca
+  antes do mes corrente" foi SUBSTITUIDO em 10/10/2026 — a regra logo acima]; nunca em mes fechado. As travas moram so' em `_fn_recorrencia_vagas`, e o
   vencimento so' em `_fn_recorrencia_vencimento` — o gerar grava e a propagacao preve pela MESMA funcao. As duas
   internas nao sao SECURITY DEFINER e nao se executam pela API.
 - ⚠ O "CRIAR" DA LINHA DO EXTRATO OFERECE O TIPO DO SINAL OU TRANSFERENCIAS, NUNCA O CONTRARIO (CONC-CRIAR-TRANSFERENCIA-01,
