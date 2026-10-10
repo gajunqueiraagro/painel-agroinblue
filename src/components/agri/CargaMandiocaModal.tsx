@@ -637,11 +637,10 @@ export function CargaMandiocaModal({
                     conta da ÚLTIMA carga deste talhão, no mesmo contrato âmbar dos preços de
                     serviço — proposta que o operador confere, nunca decisão da tela. */}
                 <div className="grid grid-cols-[2fr_1.4fr_1fr_1fr] items-end gap-2">
-                  {/* [fatia 2d, 10/10/2026: o campo é o `FornecedorDaLavoura` (o seletor dono). ⚠ ACHADO, NÃO CORRIGIDO: o seletor
-                      antigo NÃO ficava sem rótulo aqui — sem `label=""` ele imprimia o padrão "Fornecedor" por baixo do
-                      "Comprador" (dois rótulos empilhados, e a linha inteira 28px mais alta). A troca MANTÉM a linha como
-                      estava (o segundo rótulo é desenhado abaixo, de propósito); tirá-lo é decisão de layout. O texto que
-                      segue é o registro de antes.]
+                  {/* [10/10/2026: o campo é o `FornecedorDaLavoura` (o seletor dono), que NÃO desenha rótulo. O seletor antigo,
+                      sem `label=""`, imprimia o padrão "Fornecedor" por baixo do "Comprador" — dois rótulos empilhados, e a
+                      linha inteira 28px mais alta. O segundo rótulo SAIU (decisão do Gabriel): Conta, NF e Ticket subiram
+                      28px e ficaram alinhados com o comprador. O texto que segue é o registro de antes, e agora vale.]
                       ⚠ O RÓTULO É DAQUI, NÃO DO SELETOR — A16, mesma altura na mesma linha. O
                       `FornecedorSelect` separa rótulo e controle com `space-y-1` (4px) e todo o
                       resto desta linha usa `mt-0.5` (2px): dois pixels, e o bloco do Comprador
@@ -658,18 +657,14 @@ export function CargaMandiocaModal({
                         Comprador<span className="ml-0.5 text-destructive">*</span>
                       </Label>
                       <div className="mt-0.5">
-                        {/* FORN-SELETOR-PADRAO-01 fatia 2d — o seletor DONO, pelo leitor único; o nome vem dele. O rótulo
-                            "Fornecedor" e o `space-y-1` são os que o seletor antigo desenhava (mesma posição de antes). */}
-                        <div className="space-y-1">
-                          <Label className="text-[10px] text-muted-foreground">Fornecedor</Label>
-                          <FornecedorDaLavoura
-                            clienteId={clienteId}
-                            placeholder="A indústria que recebe a carga"
-                            value={form.industriaId}
-                            onChange={(id, nome) =>
-                              onChange({ ...form, industriaId: id, industriaNome: nome, valorBruto: null })}
-                          />
-                        </div>
+                        {/* FORN-SELETOR-PADRAO-01 fatia 2d — o seletor DONO, pelo leitor único; o nome vem dele */}
+                        <FornecedorDaLavoura
+                          clienteId={clienteId}
+                          placeholder="A indústria que recebe a carga"
+                          value={form.industriaId}
+                          onChange={(id, nome) =>
+                            onChange({ ...form, industriaId: id, industriaNome: nome, valorBruto: null })}
+                        />
                       </div>
                     </div>
                   ) : <div />}

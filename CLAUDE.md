@@ -1480,9 +1480,12 @@ preview que o cabecalho nao sai da tela ao rolar.
       e invadia a coluna vizinha (o "✕" entrava e o combobox nao encolhia); na CARGA a coluna `2fr` crescia com o nome e empurrava
       Conta, NF e Ticket — consertado no hospedeiro com `min-w-0` na celula (o nome corta, inteiro no `title`). O unico estado que
       difere de antes e' esse: com fornecedor escolhido o combobox ocupa tambem o lugar do "✕" que saiu.
-  ⚠ ACHADO, NAO CORRIGIDO (decisao de layout): no COMPRADOR DA CARGA o seletor antigo nao recebia `label=""` e imprimia "Fornecedor"
-    por baixo do rotulo "Comprador *" — dois rotulos empilhados, e a linha inteira 28px mais alta. A troca MANTEM a linha como estava
-    (o segundo rotulo e' desenhado no hospedeiro, de proposito). Tira'-lo sobe Conta, NF e Ticket 28px.
+  · O ROTULO DUPLICADO DO COMPRADOR DA CARGA SAIU (commit proprio, Gabriel 10/10): o seletor antigo nao recebia `label=""` e imprimia
+    "Fornecedor" por baixo do "Comprador *" — dois rotulos empilhados, a linha 28px mais alta. A 2d o tinha mantido; agora o campo
+    fica logo sob o "Comprador *". MEDIDO (NJ, so' leitura, Nova carga): dialogo 1024 x 549 antes e depois, sem rolagem; rotulos
+    Comprador / Conta / NF / Ticket em 159 / 187 / 187 / 187 -> os quatro em 159; o campo de 205 para 177 (229 x 32, "+" em 255,
+    iguais); Peso bruto, Observações e o bloco Nota subiram 28px (o Nota termina em 446 no lugar de 474). OS 28px FICARAM NO FIM DA
+    ABA, sob o bloco Nota. Na tabela acima, o "y" 205 da carga passou a 177.
   · AS QUATRO LEITURAS DE NOME POR ID FICAM (medidas, certas): `useBarterContratos.ts`, `useCargaMandioca.ts`, `useColheita.ts` (as
     tres por `.in('id', ids)` sem filtro de ativo: o inativo aparece) e a juncao de `useEstoqueGraos.ts`. Ids distintos hoje: 1 a 2
     por tela — nenhuma corta. So' o NJ tem dado de Lavoura: barter 6 contratos, cargas 56, local 1, vendas 17; 0 fornecedor
