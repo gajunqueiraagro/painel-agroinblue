@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { leitorDeFornecedores } from '@/hooks/useFornecedoresDoCliente';
 import {
   Dialog,
   DialogContent,
@@ -40,6 +41,7 @@ interface Props {
 
 interface LancamentoOficial {
   id: string;
+  cliente_id: string | null;
   valor: number;
   sinal: number | null;
   data_pagamento: string | null;
@@ -80,7 +82,7 @@ export default function DialogVerLancamentosOficiais({
       const { data: rows, error } = await supabase
         .from('financeiro_lancamentos_v2')
         .select(
-          'id, valor, sinal, data_pagamento, status_transacao, cancelado, origem_lancamento, origem_tipo, descricao, favorecido_id, conta_bancaria_id, plano_conta_id, observacao',
+          'id, cliente_id, valor, sinal, data_pagamento, status_transacao, cancelado, origem_lancamento, origem_tipo, descricao, favorecido_id, conta_bancaria_id, plano_conta_id, observacao',
         )
         .in('id', ids);
       if (error) throw error;
@@ -97,13 +99,14 @@ export default function DialogVerLancamentosOficiais({
       ) as string[];
 
       const [favs, contas, planos] = await Promise.all([
-        favIds.length
-          ? supabase
-              .from('financeiro_fornecedores')
-              .select('id, nome')
-              .in('id', favIds)
-              .then((r) => (r.data ?? []) as any[])
-          : Promise.resolve([] as any[]),
+        /* FORN-SELETOR-PADRAO-01 fatia 2c — o nome do favorecido vem do LEITOR ÚNICO, por id (ativo ou inativo), no cliente
+           do próprio lançamento. O que não se consegue ler fica sem nome; os lançamentos seguem na lista. */
+        Promise.all(
+          favIds.map((id) => {
+            const cliente = list.find((l) => l.favorecido_id === id)?.cliente_id;
+            return cliente ? leitorDeFornecedores.lerPorId(cliente, id).catch(() => null) : Promise.resolve(null);
+          }),
+        ).then((lidos) => lidos.flatMap((f) => (f ? [{ id: f.id, nome: f.nome }] : []))),
         contaIds.length
           ? supabase
               .from('financeiro_contas_bancarias')

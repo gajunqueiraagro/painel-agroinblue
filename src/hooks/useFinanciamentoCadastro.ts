@@ -1,3 +1,4 @@
+import { useFornecedoresDoCliente } from '@/hooks/useFornecedoresDoCliente';
 import { useState, useMemo, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -163,19 +164,9 @@ export function useFinanciamentoCadastro() {
   });
 
   /* ── Lookups ── */
-  const { data: fornecedores = [] } = useQuery({
-    queryKey: ['fin-fornecedores', clienteId],
-    enabled: !!clienteId,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('financeiro_fornecedores')
-        .select('id, nome')
-        .eq('cliente_id', clienteId)
-        .eq('ativo', true)
-        .order('nome');
-      return data ?? [];
-    },
-  });
+  /* FORN-SELETOR-PADRAO-01 fatia 2c — os fornecedores vêm do LEITOR ÚNICO (os ativos do cliente, TODOS: a consulta própria
+     daqui cortava em 1.000). Quem consome recebe a mesma forma (id e nome), agora com as demais colunas do leitor. */
+  const { fornecedores } = useFornecedoresDoCliente(clienteId);
 
   /* ⚠ CARTAO E CAIXA ENTRAM (PR-PARC-05c item 1). O filtro `IN ('cc','inv')` nasceu da
      CAPTACAO — "cartão não recebe captação" (PR-H1) — mas este campo nao e' o da captacao:

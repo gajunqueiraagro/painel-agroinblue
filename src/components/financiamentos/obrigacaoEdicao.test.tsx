@@ -120,7 +120,18 @@ vi.mock('@/lib/financeiro/planoContasBuilder', () => ({
   loadPlanoContasCompleto: async () => [],
   planoToClassificacoes: () => CLASSIFICACOES,
 }));
-vi.mock('@/components/financiamentos/CredorAutocomplete', () => ({ CredorAutocomplete: () => <div data-testid="credor" /> }));
+/* FORN-SELETOR-PADRAO-01 fatia 2c — o credor é o seletor DONO, pelo leitor único (o de mentira diz o que o "banco" tem) */
+vi.mock('@/hooks/useFornecedoresDoCliente', async () => (await import('@/test/leitorDeFornecedoresFake')).moduloDoLeitorFake());
+/* o cadastro da casa atrás do "+" do credor: a fonte (nenhum de mesmo nome) e o criar, sem banco */
+const casa = vi.hoisted(() => ({ criados: [] as Array<{ clienteId: string; dados: Record<string, unknown> }>, falha: null as string | null }));
+vi.mock('@/lib/fornecedores/cadastroDaCasaBanco', () => ({
+  fonteDoCadastroNoBanco: { lerPorNome: async () => [], lerAtivos: async () => [], reativar: async () => {} },
+  criarFornecedorDaCasa: async (clienteId: string, dados: Record<string, unknown>) => {
+    if (casa.falha) throw new Error(casa.falha);
+    casa.criados.push({ clienteId, dados });
+    return { id: 'forn-novo', nome: String(dados.nome), cpf_cnpj: null, fazenda_id: null, ativo: true };
+  },
+}));
 vi.mock('@/components/financiamentos/DestinacoesForm', () => ({ DestinacoesForm: () => <div data-testid="destinacoes" /> }));
 vi.mock('@/components/financiamentos/ModalBaixaParcela', () => ({ default: () => null }));
 vi.mock('@/components/financiamentos/DialogVerLancamentosOficiais', () => ({ default: () => null }));
@@ -133,6 +144,7 @@ vi.mock('sonner', () => ({
 
 import FinanciamentoDetalhe from '@/pages/FinanciamentoDetalhe';
 import { ObrigacaoDialog } from './ObrigacaoDialog';
+import { definirFornecedoresDoLeitor } from '@/test/leitorDeFornecedoresFake';
 
 const PARCELAMENTO = () => ({
   id: 'ctr-1', cliente_id: 'cli', natureza: 'parcelamento', descricao: 'Protocolo IATF', numero_contrato: null,
@@ -197,6 +209,7 @@ beforeEach(() => {
   banco.propagar = PREVIA(); banco.previas = [];
   banco.updates = []; banco.rpcs = []; banco.leituras = []; banco.toasts = []; banco.erroRpc = null; banco.ordem = [];
   banco.situacao = SITUACAO();
+  definirFornecedoresDoLeitor([]); casa.criados = []; casa.falha = null;
   qc = novoQc(0);
   Element.prototype.scrollIntoView = () => {};
   Element.prototype.hasPointerCapture = () => false;
@@ -206,7 +219,12 @@ beforeEach(() => {
    `OBRIG_FOTO=gravar` escreve o HTML do diálogo (rodado no commit publicado); sem a variável, o teste COMPARA com o gravado.
    Financiamento e empréstimo, em criação e em edição, não podem mudar um byte; a criação de parcelamento também não. */
 const ARQ_FOTOS = resolve(__dirname, 'obrigacaoDialog.fotos.json');
-const limpar = (html: string) => html.replace(/radix-:r[0-9a-z]+:/g, 'radix-ID').replace(/:r[0-9a-z]+:/g, ':ID:');
+/* ⚠ `style="animation-duration: 0s;"` é RUÍDO DE TEMPO, não conteúdo: o Radix o põe no conteúdo da aba INICIAL ao montar e só o
+   tira no render seguinte ao primeiro quadro — se há ou não esse render depende da ordem das respostas (medido em 10/10/2026: a
+   mesma foto saía com e sem ele, 23 bytes de diferença, e nada mais). Só as 5 fotos da aba Contrato o têm; nas outras 10 ele
+   nunca aparece (0 ocorrências), então a leitura delas não muda. */
+const limpar = (html: string) => html.replace(/radix-:r[0-9a-z]+:/g, 'radix-ID').replace(/:r[0-9a-z]+:/g, ':ID:')
+  .replace(/ style="animation-duration: 0s;"/g, ' style=""');
 /** A foto guardada é o md5 e o tamanho do HTML (o HTML inteiro pesaria ~270 KB no repositório). */
 async function conferirFoto(nome: string) {
   /* ⚠ A FOTO É DO DIÁLOGO ASSENTADO: com a suíte inteira rodando, uma resposta de catálogo ainda chegava depois do
@@ -899,5 +917,93 @@ describe('4 — a tela do contrato mostra o que o banco derivou do lançamento',
     expect(desenho.length).toBeGreaterThan(5000);
     expect(/differenceIn|getTime\(\)|Date\.parse|\.reduce\(/.test(desenho)).toBe(false);
     expect(fonte).toContain("const hj = hojeLocal();");
+  });
+});
+
+/* ── FORN-SELETOR-PADRAO-01 fatia 2c (commit 1b) — o credor do contrato é o seletor DONO, pelo leitor único ─────────────── */
+describe('fatia 2c — o credor do contrato', () => {
+  const FORNS = [
+    { id: 'forn-1', nome: 'Credor Antigo Ltda', ativo: false, cpf_cnpj: '11222333000181' },
+    { id: 'forn-2', nome: 'Banco Novo S.A.', ativo: true, cpf_cnpj: '99888777000166' },
+    { id: 'forn-3', nome: 'Cooperativa Três', ativo: true, cpf_cnpj: null },
+  ];
+  const campoCredor = () => {
+    const c = screen.getAllByRole('combobox', { hidden: true }).find((b) => /Credor Antigo|Banco Novo|Cooperativa|Selecionar credor|Fornecedor do Mais/.test(b.textContent ?? ''));
+    if (!c) throw new Error('campo do credor não encontrado');
+    return c;
+  };
+  const abrirContrato = async () => {
+    montarDetalhe();
+    await abrirEdicao();
+    await waitFor(() => expect(campoDescricao().value).toBe('Protocolo IATF'));
+  };
+
+  it('credor INATIVO gravado: o campo mostra o nome com a marca, o resumo também, e ele NÃO é oferecido para nova escolha', async () => {
+    definirFornecedoresDoLeitor(FORNS);
+    await abrirContrato();
+    const campo = campoCredor();
+    expect(campo.textContent).toContain('Credor Antigo Ltda');
+    expect(within(campo).getByTestId('favorecido-inativo').textContent).toBe('inativo');
+    /* no campo e no resumo lateral: dado que existe não parece ausente */
+    expect(screen.getAllByText('Credor Antigo Ltda').length).toBeGreaterThanOrEqual(2);
+    fireEvent.click(campo);
+    const opcoes = screen.getAllByTestId('favorecido-opcao').map((o) => o.textContent ?? '');
+    expect(opcoes.some((t) => t.includes('Banco Novo S.A.'))).toBe(true);
+    expect(opcoes.some((t) => t.includes('Credor Antigo'))).toBe(false);
+  });
+
+  it('o id gravado no contrato é o do fornecedor ESCOLHIDO — busca por nome e por CNPJ, uma linha por opção', async () => {
+    definirFornecedoresDoLeitor(FORNS);
+    await abrirContrato();
+    fireEvent.click(campoCredor());
+    const busca = screen.getByPlaceholderText('Buscar por nome ou CNPJ/CPF...');
+    fireEvent.change(busca, { target: { value: 'cooperativa' } });
+    expect(screen.getAllByTestId('favorecido-opcao').map((o) => o.textContent)).toEqual(['Cooperativa Três']);
+    fireEvent.change(busca, { target: { value: '99.888.777/0001' } });
+    const achadas = screen.getAllByTestId('favorecido-opcao');
+    expect(achadas).toHaveLength(1);
+    expect(achadas[0].textContent).toContain('Banco Novo S.A.');
+    expect(within(achadas[0]).getByTestId('favorecido-doc-da-opcao').textContent).toBe('99.888.777/0001-66');
+    fireEvent.click(achadas[0]);
+    expect(campoCredor().textContent).toContain('Banco Novo S.A.');
+    await salvar();
+    const gravado = updatesDoContrato();
+    expect(gravado).toHaveLength(1);
+    expect(gravado[0].payload.credor_id).toBe('forn-2');
+  });
+
+  it('sem mexer no credor, o Salvar regrava o MESMO id (o inativo não é trocado nem esvaziado)', async () => {
+    definirFornecedoresDoLeitor(FORNS);
+    await abrirContrato();
+    await salvar();
+    expect(updatesDoContrato()[0].payload.credor_id).toBe('forn-1');
+  });
+
+  it('o "+" abre o CADASTRO DA CASA; o criado volta ESCOLHIDO, com o cliente e a fazenda do contrato, e é o id que o Salvar grava', async () => {
+    definirFornecedoresDoLeitor(FORNS);
+    await abrirContrato();
+    fireEvent.click(screen.getByTitle('Novo Fornecedor'));
+    await screen.findByText('Cadastre um novo fornecedor ou frigorífico.');
+    fireEvent.change(screen.getByPlaceholderText('Nome do fornecedor'), { target: { value: 'Fornecedor do Mais' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar Fornecedor' }));
+    await waitFor(() => expect(casa.criados).toHaveLength(1));
+    expect(casa.criados[0]).toEqual({ clienteId: 'cli', dados: { nome: 'Fornecedor do Mais', cpfCnpj: undefined, fazendaId: 'faz-1' } });
+    await waitFor(() => expect(screen.queryByText('Cadastre um novo fornecedor ou frigorífico.')).toBeNull());
+    await salvar();
+    expect(updatesDoContrato()[0].payload.credor_id).toBe('forn-novo');
+  });
+
+  it('o criar FALHOU: o motivo fica escrito no cadastro, ao lado do botão; nada é escolhido e não há aviso flutuante', async () => {
+    definirFornecedoresDoLeitor(FORNS);
+    casa.falha = 'permissão negada';
+    await abrirContrato();
+    fireEvent.click(screen.getByTitle('Novo Fornecedor'));
+    await screen.findByText('Cadastre um novo fornecedor ou frigorífico.');
+    fireEvent.change(screen.getByPlaceholderText('Nome do fornecedor'), { target: { value: 'Fornecedor do Mais' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Salvar Fornecedor' }));
+    await waitFor(() => expect(screen.getByTestId('novo-fornecedor-recado').textContent).toBe('Não foi possível cadastrar o fornecedor. (permissão negada)'));
+    expect((screen.getByPlaceholderText('Nome do fornecedor') as HTMLInputElement).value).toBe('Fornecedor do Mais');
+    expect(banco.toasts).toEqual([]);
+    expect(campoCredor().textContent).toContain('Credor Antigo Ltda');
   });
 });

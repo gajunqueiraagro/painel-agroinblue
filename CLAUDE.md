@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 09/10/2026 (FORN-SELETOR-PADRAO-01 fatia 2c commit 1a, +24: `src/lib/fornecedores/cadastroDaCasa.test.ts` 15,
+  Baseline em 10/10/2026 (FORN-SELETOR-PADRAO-01 fatia 2c commit 1b, +12: `src/components/financiamentos/fornecedorNoContrato.test.tsx` 7 (novo),
+  `src/components/financiamentos/obrigacaoEdicao.test.tsx` 5 — 4788 depois dele; antes o commit 1a, +24: `src/lib/fornecedores/cadastroDaCasa.test.ts` 15,
   `src/components/financeiro-v2/novoFornecedorDialog.test.tsx` 9 — 4776 depois dele; antes o DIALOG-CLIQUE-FECHANDO-01, +12 em `src/components/ui/menuFechadoSemClique.test.tsx` (14 -> 26) — 4752 depois
   dele; antes o CPR-FLUXO-BARRAS-01, +2 em `src/lib/pdf/cpr/graficoNoPdf.test.tsx` (16 -> 18) — 4740 depois dele; antes o
   CPR-CAIXA-INICIAL-SEMPRE-01, +14: `src/lib/financeiro/cprRecorte.test.ts` 11 (69 -> 80),
@@ -280,7 +281,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4776
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4788
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -1445,6 +1446,72 @@ preview que o cabecalho nao sai da tela ao rolar.
     precisa desligar) e a pagina ja' aberta antes da publicacao (so' muda ao recarregar).
   [A divida MENU-CLIQUE-FECHANDO-01, medida neste passo, FECHOU no commit seguinte — ver a regra "LISTA OU MENU FECHANDO NAO
     ACEITA CLIQUE", acima.]
+- ⚠ FORNECEDOR EM FINANCIAMENTOS: CREDOR, DESTINACAO E O HOOK USAM O DONO PELO LEITOR UNICO (FORN-SELETOR-PADRAO-01 fatia 2c, commit 1b,
+  Gabriel 09–10/10/2026, so' tela, sem banco). `CredorAutocomplete.tsx` (o seletor proprio, com busca no servidor, e o dialogo
+  "Novo credor" dele) SAIU do repositorio; nenhum arquivo de Financiamentos consulta `financeiro_fornecedores` por conta propria
+  (preso por teste de fonte com auto-teste do detector, `fornecedorNoContrato.test.tsx`; as juncoes pelo contrato —
+  `financeiro_fornecedores!financiamentos_credor_id_fkey(nome)` da lista, do detalhe e do painel — nao sao consulta ao cadastro e ficam).
+  · CREDOR DO CONTRATO (`ObrigacaoDialog`): `<FavorecidoSelect clienteId=…>` com a linha fixa do documento e o "+" abrindo o
+    CADASTRO DA CASA (`NovoFornecedorDialog`, a regra do 1a). O criar e' `criarFornecedorDaCasa(cliente, {nome, cpfCnpj, fazendaId})`
+    (`cadastroDaCasaBanco.ts`: grava e avisa o leitor); a fazenda do fornecedor e' a do contrato, se houver, senao nula. O novo, o
+    que ja' existia e o reativado voltam ESCOLHIDOS.
+    ⚠ O `NovoFornecedorDialog` PASSOU A ESCREVER A FALHA DO CRIAR ao lado do botao quando o `onSave` do hospedeiro LANCA excecao
+      ("Não foi possível cadastrar o fornecedor. (motivo)"; o digitado fica). Os hospedeiros antigos, que tratam o erro em toast e
+      nao lancam, nao mudam.
+  · NOME POR ID: o resumo lateral do dialogo e a conferencia da nota (`DocumentosDoContrato`) leem `useFornecedoresDoCliente(cliente,
+    credorId)` — entre os ativos, ou o `gravado` por id quando INATIVO; `DialogVerLancamentosOficiais` (sem chamador) le^ por
+    `leitorDeFornecedores.lerPorId` com o cliente do proprio lancamento. Credor INATIVO ja' gravado aparece com o nome e a marca
+    "inativo", e NAO e' oferecido para nova escolha. As chaves `['credor-por-id']`, `['credor-busca']`, `['credor-total']`,
+    `['dest-fornecedores']`, `['fin-fornecedores']` e `['contrato-credor-documento']` deixaram de existir (so' o dialogo e o
+    seletor antigo usavam a primeira).
+  · DESTINACAO (`DestinacoesForm`): o dono, campo denso (28px, a largura de antes), SEM a linha fixa (o documento vai no `title`)
+    e sem "+" (nao havia cadastro neste ponto). HOOK (`useFinanciamentoCadastro`): `fornecedores` = os ativos do leitor (a mesma
+    forma, com mais colunas).
+  · MUDA DE COMPORTAMENTO, declarado: (1) as duas listas antigas (`dest-fornecedores`, `fin-fornecedores`) nao paginavam e CORTAVAM
+    EM 1.000 — Agnaldo (1.496 ativos), NJ (2.594) e Santa Rita (1.034) so' viam os primeiros 1.000 por nome; agora todos, pela
+    busca; (2) "[META]" sai da lista (D7); (3) a busca do credor passa a achar tambem pelo CNPJ/CPF e mostra o documento na opcao;
+    (4) "Importar XML da nota" na criacao acha o credor pelo CNPJ SO' ENTRE OS ATIVOS e por DIGITOS EXATOS (antes: qualquer
+    cadastro, ativo ou nao, com os digitos em ordem dentro do campo) — inativo deixa de ser escolhido sozinho; (5) o cadastro pelo
+    "+" nao exige mais fazenda (o antigo recusava sem fazenda no contexto) e aceita CNPJ/CPF.
+  · FOTOS: 5 das 15 de `obrigacaoDialog.fotos.json` REGRAVADAS (as cinco da aba Contrato: +2.030 a +2.053 bytes cada, o campo
+    Credor de verdade no lugar do boneco do teste); as outras 10 identicas ao commit anterior.
+    ⚠ O LEITOR DA FOTO TIRA `style="animation-duration: 0s;"` (so' em `obrigacaoEdicao.test.tsx`): e' RUIDO DE TEMPO — o Radix o poe
+      no conteudo da aba INICIAL ao montar e so' o tira no render seguinte ao primeiro quadro; a mesma foto saia com e sem ele
+      (23 bytes), conforme a ordem das respostas. Medido em 6 rodadas com o HTML guardado: o atributo so' aparece nas 5 fotos da aba
+      Contrato (as regravadas); nas outras 10 tem ZERO ocorrencias e o md5 delas e' o do commit anterior. Provavel causa da
+      oscilacao "foto do dialogo" da SUITE-TESTE-OSCILA-01 (nao provado para as rodadas antigas).
+  MEDIDO (10/10, so' contagem): ativos por cliente — Agnaldo 1.496 · NJ 2.594 · Raul 30 · RRCC 340 · Santa Rita 1.034 · Teste 2 ·
+  Vera 378. Contratos vivos com credor que nao existe mais: 0 em todos; com credor INATIVO: NJ 19, Vera 5; sem credor: Agnaldo 3,
+  NJ 2. INDICE UNICO DE NOME: NAO EXISTE no proto (`pg_indexes`: so' a chave, `(id, cliente_id)` duas vezes, o btree
+  `(cliente_id, nome_norm) WHERE ativo` e o GIN dos apelidos) — o `idx_financeiro_fornecedores_cliente_nome_norm_unique` da
+  migration 20260410022327 nao esta' no banco, e nao ha' migration no repositorio que o derrube; o comentario do
+  `FornecedorFormDialog` que o citava foi corrigido. A divida FORN-NOME-UNICO-BANCO-01 segue valendo.
+  PROVA NO NAVEGADOR (cliente Teste, 10/10, 1.127 x 523, aba em SEGUNDO PLANO, gestos por script; 3 fornecedores e 1 contrato
+  sinteticos criados por SQL e APAGADOS; nada gravado pela tela — 0 escritas): Nova obrigação › Financiamento — dialogo 1024 x 519
+  antes, com a lista aberta e depois de escolher; o painel da aba 304 de 304 com e sem a linha (so' o resumo lateral rola, 528 de
+  329, como ja' rolava); busca "credor alfa" e "11.222.333/0001" -> 1 opcao cada, opcoes de 20px em uma linha, documento a'
+  direita; escolhido: campo com o nome, linha "11.222.333/0001-81", resumo com o credor; "+" abre o cadastro (384 x 338), nome
+  repetido em outra caixa e com espaco duplo -> "Já existe um fornecedor com este nome. Ele foi selecionado." e o campo com ele;
+  destinacao "Pagamento direto a fornecedor" — campo 650 x 28, busca por digitos, escolhido com o documento no `title`, cartao
+  350px antes e depois; contrato existente com credor INATIVO — nome + marca "inativo" + linha do documento, resumo com o nome,
+  fora da lista; contrato com credor "[META] Planejamento" — nome no campo e no resumo. NJ, so' leitura: abrir o seletor 58 ms,
+  primeira tecla 46 ms, 100 opcoes, "Mostrando 100 de 2.593 — digite para refinar".
+  Testes: 12 novos; 14 mutacoes mortas (o id gravado no contrato e na destinacao, o criado escolhido, a fazenda, o inativo no
+  resumo, o cliente, o "+", a linha, o hook, a falha do criar, o aviso ao leitor).
+  ⚠ NO PARCELAMENTO o campo Credor tem ~134px (grade de tres colunas): o nome corta cedo, inteiro no `title` e no resumo.
+  ⚠ DIVIDA FORN-XML-CREDOR-INATIVO-01: no "Importar XML da nota" o credor e' procurado pelo CNPJ SO' ENTRE OS ATIVOS; nota de
+    fornecedor INATIVO nao casa ("credor não encontrado: escolha no contrato") e o caminho pode levar a um SEGUNDO cadastro com o
+    mesmo CNPJ — o cadastro da casa so' confere o documento contra os ATIVOS (pelo nome ele acha o inativo e oferece reativar).
+  ⚠ DIVIDA FORN-NOME-UNICO-BANCO-01, COM O ACHADO DE 10/10: a migration 20260410022327 CRIA o indice unico de nome
+    (`idx_financeiro_fornecedores_cliente_nome_norm_unique`) e ele NAO EXISTE no banco proto, sem migration no repositorio que o
+    derrube (repositorio e banco divergem; quem o tirou, e quando, nao foi medido). Sem ele a checagem de nome repetido e' so' da tela.
+  ⚠ DIVIDAS: a recusa "sem fazenda" do cadastro antigo saiu sem substituto (fornecedor criado sem contrato com fazenda nasce sem
+    fazenda) · `DialogVerLancamentosOficiais` segue sem chamador · a linha fixa do credor nao foi medida a 579 de altura.
+  ⚠ NAO PROVADO NO NAVEGADOR: SALVAR um contrato pela tela e conferir `credor_id` / `fornecedor_id` da destinacao no banco (so' por
+    teste) · criar fornecedor NOVO pelo "+" do credor, reativar inativo e documento de outro neste ponto (a regra foi provada no 1a
+    em dois outros pontos; aqui, so' o nome repetido) · a falha do criar escrita no dialogo · "Importar XML" achando o credor
+    pelo CNPJ · `DocumentosDoContrato` com credor inativo · a aba em primeiro plano · emprestimo e parcelamento na criacao (foi
+    visto o financiamento; o parcelamento, na edicao).
 - ⚠ O CADASTRO DA CASA NAO DUPLICA FORNECEDOR, E A REGRA MORA NUM LUGAR SO' (FORN-SELETOR-PADRAO-01 fatia 2c, commit 1a, Gabriel 09/10/2026,
   so' tela, sem banco). Vale em TODO ponto que abre o "+" de um seletor de fornecedor (o `NovoFornecedorDialog`,
   `src/components/financeiro-v2/`). A regra subiu do diálogo proprio do credor de Financiamentos (que sai no 1b).

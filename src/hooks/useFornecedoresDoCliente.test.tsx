@@ -140,13 +140,12 @@ describe('useFornecedoresDoCliente', () => {
     /* arquivo -> quantos pontos de sucesso gravam nome, documento, ativo ou apagam (medido no passo 1a) */
     const ESCRITORES: Record<string, number> = {
       'src/components/financeiro-v2/FornecedorFormDialog.tsx': 5,
-      'src/components/financiamentos/CredorAutocomplete.tsx': 2,
       'src/components/compra/AbaDocumentosOC.tsx': 2,
       'src/components/compra/AbaCompromissosOC.tsx': 1,
       'src/lib/financeiro/nfeConsultas.ts': 1,
       'src/pages/FinV2FornecedoresTab.tsx': 1,
       'src/hooks/useFinanceiroV2.ts': 1,
-      'src/lib/fornecedores/cadastroDaCasaBanco.ts': 1,   /* a reativação do cadastro da casa (fatia 2c, 1a) */
+      'src/lib/fornecedores/cadastroDaCasaBanco.ts': 2,   /* a reativação (fatia 2c, 1a) e o criar da casa (1b, o credor do contrato) */
       'src/pages/LancamentosTab.tsx': 4,
     };
     const avisos = (fonte: string) => (fonte.match(/^\s*notificarFornecedoresMudaram\(/gm) ?? []).length;

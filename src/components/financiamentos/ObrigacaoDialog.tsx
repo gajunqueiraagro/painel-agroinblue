@@ -13,7 +13,11 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { CampoMoeda, brl, parseMoeda } from '@/components/ui/campo-moeda';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
-import { CredorAutocomplete } from '@/components/financiamentos/CredorAutocomplete';
+import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
+import { NovoFornecedorDialog } from '@/components/financeiro-v2/NovoFornecedorDialog';
+import { leitorDeFornecedores, useFornecedoresDoCliente } from '@/hooks/useFornecedoresDoCliente';
+import { criarFornecedorDaCasa } from '@/lib/fornecedores/cadastroDaCasaBanco';
+import { soDigitos } from '@/lib/fornecedores/fornecedorTexto';
 import { DestinacoesForm, DestinacaoItem } from '@/components/financiamentos/DestinacoesForm';
 import { useFinanciamentoCadastro, FinanciamentoForm, NaturezaContrato } from '@/hooks/useFinanciamentoCadastro';
 /* PAR-01c — a MESMA classificação do modal do financeiro, reusada sem copiar a regra. */
@@ -649,21 +653,16 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
   const contarPendencias = (a: Aba) => pendencias.filter(p => p.aba === a).length;
 
   /* ── Nomes para o resumo ──────────────────────────────────────────────────────
-     O credor vem da MESMA query por id do CredorAutocomplete (mesma queryKey — o
-     react-query serve as duas da mesma entrada de cache, sem segunda ida ao banco). */
-  const { data: credor } = useQuery({
-    queryKey: ['credor-por-id', clienteId, form.credor_id],
-    enabled: !!clienteId && !!form.credor_id,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('financeiro_fornecedores')
-        .select('id, nome')
-        .eq('cliente_id', clienteId)
-        .eq('id', form.credor_id)
-        .maybeSingle();
-      return data ?? null;
-    },
-  });
+     FORN-SELETOR-PADRAO-01 fatia 2c — o credor vem do LEITOR ÚNICO, o mesmo do seletor: entre os ativos, ou o gravado por
+     id quando está INATIVO (dado que existe não pode parecer ausente). Nenhuma consulta própria ao cadastro. */
+  const fornecedoresDoCliente = useFornecedoresDoCliente(clienteId, form.credor_id || null);
+  const credor = useMemo(
+    () => (form.credor_id
+      ? fornecedoresDoCliente.fornecedores.find(f => f.id === form.credor_id) ?? fornecedoresDoCliente.gravado
+      : null),
+    [form.credor_id, fornecedoresDoCliente.fornecedores, fornecedoresDoCliente.gravado],
+  );
+  const [novoCredorAberto, setNovoCredorAberto] = useState(false);
 
   /* ── GUARD: a conta do contrato pode nao estar na lista ──────────────────────
      ⚠ CONTA QUE NAO APARECE E' CONTA QUE PARECE NAO EXISTIR. A lista traz so' as ATIVAS
@@ -861,10 +860,12 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
     const feito: string[] = [];
     let credorId: string | null = null;
     if (clienteId && nota.emitente.documento) {
-      /* o documento é gravado com máscaras variadas: procura pelos dígitos em ordem, com qualquer coisa entre eles */
-      const { data } = await supabase.from('financeiro_fornecedores').select('id, nome, cpf_cnpj')
-        .eq('cliente_id', clienteId).ilike('cpf_cnpj', `%${nota.emitente.documento.split('').join('%')}%`).limit(2);
-      if (data && data.length === 1) { credorId = data[0].id; set('credor_id', data[0].id); feito.push('credor'); }
+      /* fatia 2c — pelo LEITOR ÚNICO (os ativos do cliente, todos): o documento é gravado com máscaras variadas, então a
+         comparação é só pelos dígitos. Exatamente um = é ele; nenhum ou dois = o operador escolhe no contrato. */
+      const alvo = soDigitos(nota.emitente.documento);
+      const ativos = alvo ? await leitorDeFornecedores.ler(clienteId).catch(() => []) : [];
+      const achados = ativos.filter(f => soDigitos(f.cpf_cnpj) === alvo);
+      if (achados.length === 1) { credorId = achados[0].id; set('credor_id', achados[0].id); feito.push('credor'); }
     }
     const valorCent = nota.duplicatas.length > 0 ? nota.somaDuplicatasCent : nota.totais.notaCent;
     set('valor_total', valorCent / 100); feito.push('valor');
@@ -1082,10 +1083,14 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                     <div>
                       <Label className={ROTULO}>Credor</Label>
                       {clienteId && (
-                        <CredorAutocomplete
+                        /* FORN-SELETOR-PADRAO-01 fatia 2c — o seletor DONO, pelo leitor único; o "+" abre o cadastro da casa */
+                        <FavorecidoSelect
                           value={form.credor_id || ''}
                           onChange={(id) => set('credor_id', id)}
                           clienteId={clienteId}
+                          onCriarNovo={() => setNovoCredorAberto(true)}
+                          triggerClassName={CAMPO}
+                          placeholder="Selecionar credor..."
                         />
                       )}
                     </div>
@@ -1887,6 +1892,21 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
       <PropagarContratoDialog descricao={form.descricao || contrato?.descricao || ''} previa={propagar.previa}
         aoSalvar={salvarComEscopo} aoVoltar={() => setPropagar(null)} />
     )}
+    {/* FORN-SELETOR-PADRAO-01 fatia 2c — o "+" do credor abre o CADASTRO DA CASA (a regra de repetido, inativo e documento é
+        dele). O novo, o que já existia e o reativado voltam ESCOLHIDOS. A fazenda do fornecedor é opcional: vai a do contrato,
+        se já houver. A falha do criar fica escrita no diálogo, ao lado do botão. */}
+    <NovoFornecedorDialog
+      open={novoCredorAberto}
+      onClose={() => setNovoCredorAberto(false)}
+      clienteId={clienteId}
+      onSelecionar={(f) => { set('credor_id', f.id); }}
+      onSave={async (nome, cpfCnpj) => {
+        if (!clienteId) return;
+        const novo = await criarFornecedorDaCasa(clienteId, { nome, cpfCnpj, fazendaId: form.fazenda_id || null });
+        set('credor_id', novo.id);
+        setNovoCredorAberto(false);
+      }}
+    />
     </>
   );
 }

@@ -154,6 +154,7 @@ describe('fonte — a regra mora num lugar só, e todo "+" passa por ela', () =>
     expect(porArquivo).toEqual({
       'src/components/financeiro-v2/LancamentoV2Dialog.tsx': 1,
       'src/components/recorrencias/RecorrenciaDialog.tsx': 1,
+      'src/components/financiamentos/ObrigacaoDialog.tsx': 1,   /* fatia 2c, 1b — o "+" do credor do contrato */
       'src/components/compra/AbaCompromissosOC.tsx': 1,
       'src/components/compra/DocumentoFormOC.tsx': 1,
       'src/pages/LancamentosTab.tsx': 3,

@@ -1,14 +1,12 @@
-import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, Trash2, ChevronsUpDown } from 'lucide-react';
+import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList , COMBOBOX_CONTENT } from '@/components/ui/command';
+import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
 
 export interface DestinacaoItem {
   id: string;
@@ -49,20 +47,6 @@ const EMPTY_ITEM = (): DestinacaoItem => ({
 
 export function DestinacoesForm({ clienteId, valorContrato, destinacoes, onChange }: Props) {
   /* ── Lookups ── */
-  const { data: fornecedores = [] } = useQuery({
-    queryKey: ['dest-fornecedores', clienteId],
-    enabled: !!clienteId,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('financeiro_fornecedores')
-        .select('id, nome')
-        .eq('cliente_id', clienteId)
-        .eq('ativo', true)
-        .order('nome');
-      return data ?? [];
-    },
-  });
-
   const { data: contas = [] } = useQuery({
     queryKey: ['dest-contas', clienteId],
     enabled: !!clienteId,
@@ -113,7 +97,7 @@ export function DestinacoesForm({ clienteId, valorContrato, destinacoes, onChang
           key={item.id}
           item={item}
           idx={idx}
-          fornecedores={fornecedores}
+          clienteId={clienteId}
           contas={contas}
           planos={planos}
           onUpdate={update}
@@ -157,16 +141,14 @@ export function DestinacoesForm({ clienteId, valorContrato, destinacoes, onChang
 interface CardProps {
   item: DestinacaoItem;
   idx: number;
-  fornecedores: { id: string; nome: string }[];
+  clienteId: string;
   contas: { id: string; nome_conta: string; nome_exibicao: string | null; banco: string | null }[];
   planos: { id: string; subcentro: string | null; centro_custo: string | null; macro_custo: string | null; tipo_operacao: string | null }[];
   onUpdate: (idx: number, patch: Partial<DestinacaoItem>) => void;
   onRemove: (idx: number) => void;
 }
 
-function DestinacaoCard({ item, idx, fornecedores, contas, planos, onUpdate, onRemove }: CardProps) {
-  const [fornOpen, setFornOpen] = useState(false);
-
+function DestinacaoCard({ item, idx, clienteId, contas, planos, onUpdate, onRemove }: CardProps) {
   return (
     <div className="rounded-lg border bg-card p-3 space-y-2 relative">
       <Button
@@ -217,35 +199,16 @@ function DestinacaoCard({ item, idx, fornecedores, contas, planos, onUpdate, onR
       {item.tipo === 'pagamento_fornecedor' && (
         <div>
           <Label className="text-[10px]">Fornecedor</Label>
-          <Popover open={fornOpen} onOpenChange={setFornOpen}>
-            <PopoverTrigger asChild>
-              <Button variant="outline" role="combobox" className="w-full justify-between h-7 text-xs font-normal">
-                {item.fornecedor_id
-                  ? fornecedores.find(f => f.id === item.fornecedor_id)?.nome ?? 'Selecionar...'
-                  : 'Selecionar fornecedor...'}
-                <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className={COMBOBOX_CONTENT}>
-              <Command>
-                <CommandInput placeholder="Buscar fornecedor..." />
-                <CommandEmpty>Nenhum encontrado.</CommandEmpty>
-                <CommandList>
-                  <CommandGroup>
-                    {fornecedores.map(f => (
-                      <CommandItem
-                        key={f.id}
-                        value={f.nome}
-                        onSelect={() => { onUpdate(idx, { fornecedor_id: f.id }); setFornOpen(false); }}
-                      >
-                        {f.nome}
-                      </CommandItem>
-                    ))}
-                  </CommandGroup>
-                </CommandList>
-              </Command>
-            </PopoverContent>
-          </Popover>
+          {/* FORN-SELETOR-PADRAO-01 fatia 2c — o seletor DONO, pelo leitor único (todos os ativos do cliente, com busca por
+              nome e CNPJ/CPF). Campo denso: sem a linha fixa do documento (vai no `title`) e sem "+", como era. */}
+          <FavorecidoSelect
+            value={item.fornecedor_id}
+            onChange={(id) => onUpdate(idx, { fornecedor_id: id })}
+            clienteId={clienteId}
+            linhaDoDocumento={false}
+            triggerClassName="h-7 text-xs"
+            placeholder="Selecionar fornecedor..."
+          />
         </div>
       )}
 

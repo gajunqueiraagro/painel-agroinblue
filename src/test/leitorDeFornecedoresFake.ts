@@ -31,6 +31,14 @@ export function moduloDoLeitorFake() {
   return {
     FRASE_FALHA_AO_LER_FORNECEDORES: 'Não foi possível carregar os fornecedores.',
     notificarFornecedoresMudaram: () => {},
+    /* o leitor em si, para quem lê fora do hook (o credor pelo CNPJ da nota, o nome por id): os mesmos dados */
+    leitorDeFornecedores: {
+      ler: async (_clienteId: string) => { if (estado.erro) throw new Error(estado.erro); return estado.ativos; },
+      doCache: (_clienteId: string) => estado.ativos,
+      lerPorId: async (_clienteId: string, id: string) => estado.todos.find((f) => f.id === id) ?? null,
+      notificarMudou: () => {},
+      inscrever: () => () => {},
+    },
     useFornecedoresDoCliente: (clienteId: string | null | undefined, gravadoId?: string | null) => (pedidosAoLeitor.push(clienteId ?? null), {
       fornecedores: clienteId && !estado.erro && !estado.carregando ? estado.ativos : [],
       /* como o de verdade: o gravado só vem à parte quando NÃO está entre os ativos */

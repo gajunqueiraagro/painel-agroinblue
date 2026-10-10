@@ -9,6 +9,7 @@
  * ⚠ IMPORTAR XML CONFERE, NÃO SOBRESCREVE: a tabela contrato × nota vem de `conferirNota` (centavos, por igualdade); "Usar as
  *   duplicatas da nota" só leva a lista à aba Parcelas, sem gravar; parcela paga não muda.
  */
+import { useFornecedoresDoCliente } from '@/hooks/useFornecedoresDoCliente';
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -68,14 +69,12 @@ export function DocumentosDoContrato({ financiamentoId, clienteId, hoje, credorI
 
   /* os documentos da COMPRA são os da 1ª parcela (onde a NF é registrada) menos o boleto dela */
   const api = useLancamentoDocumentos(vivas[0]?.lancamentoId ?? null, clienteId);
-  const { data: credor } = useQuery({
-    queryKey: ['contrato-credor-documento', clienteId, credorId],
-    enabled: !!credorId,
-    queryFn: async () => {
-      const { data } = await supabase.from('financeiro_fornecedores').select('id, nome, cpf_cnpj, ativo').eq('cliente_id', clienteId).eq('id', credorId ?? '').maybeSingle();
-      return data ?? null;
-    },
-  });
+  /* FORN-SELETOR-PADRAO-01 fatia 2c — o credor (nome e documento, para a conferência da nota) vem do LEITOR ÚNICO: entre os
+     ativos, ou o gravado por id quando está inativo. */
+  const fornecedoresDoCliente = useFornecedoresDoCliente(clienteId, credorId);
+  const credor = credorId
+    ? fornecedoresDoCliente.fornecedores.find((f) => f.id === credorId) ?? fornecedoresDoCliente.gravado
+    : null;
   const chaveBoletos = ['contrato-boletos', financiamentoId, ids.join(',')];
   const { data: boletosGravados = [] } = useQuery({
     queryKey: chaveBoletos,

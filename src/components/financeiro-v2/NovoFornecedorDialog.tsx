@@ -84,7 +84,14 @@ export function NovoFornecedorDialog({ open, onClose, clienteId, onSave, onSelec
       setSaving(false);
       return;
     }
-    await onSave(nome.trim(), cpfCnpj.trim() || undefined);
+    /* o criar do hospedeiro que FALHA com exceção: o motivo fica aqui, ao lado do botão, e o digitado fica */
+    try {
+      await onSave(nome.trim(), cpfCnpj.trim() || undefined);
+    } catch (e) {
+      setRecado({ texto: `Não foi possível cadastrar o fornecedor. (${e instanceof Error ? e.message : String(e)})`, tom: 'erro' });
+      setSaving(false);
+      return;
+    }
     setSaving(false);
     setNome('');
     setCpfCnpj('');

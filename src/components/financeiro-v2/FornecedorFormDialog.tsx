@@ -171,8 +171,10 @@ export function FornecedorFormDialog({
     }
 
     // Pré-check de duplicata por nome_normalizado (mesma lógica do trigger no banco).
-    // Evita unique violation no índice idx_financeiro_fornecedores_cliente_nome_norm_unique
-    // e oferece reativação quando há fornecedor inativo com o mesmo nome.
+    // ⚠ NÃO HÁ índice único de nome no banco (conferido em pg_indexes em 10/10/2026: o
+    // idx_financeiro_fornecedores_cliente_nome_norm_unique da migration 20260410022327 não existe no proto) —
+    // esta checagem é a única barreira (dívida FORN-NOME-UNICO-BANCO-01). Oferece reativação quando há
+    // fornecedor inativo com o mesmo nome.
     if (!editing) {
       const normalizado = normalizeFornecedorNome(nome);
       const colidindo = allFornecedores.find(
