@@ -20,7 +20,7 @@ import { cn } from '@/lib/utils';
 import { useFinanceiroV2 } from '@/hooks/useFinanceiroV2';
 import { useRecorrencias, useOcorrenciasDoMes, cancelarRecorrencia, type Recorrencia, type SituacaoRecorrencia } from '@/hooks/useRecorrencias';
 import {
-  linhasDoMes, resumoDoMes, filtrarLinhas, totalDaLista, proporcoesDoMes, ROTULO_TIPO, ROTULO_SITUACAO_DO_MES,
+  linhasDoMes, resumoDoMes, filtrarLinhas, totalDaLista, proporcoesDoMes, ROTULO_TIPO, ROTULO_SITUACAO_DO_MES, ROTULO_NAO_GERADO, TITULO_NAO_GERADO,
   type LinhaDoMes, type FiltroDoTipo, type FiltroDaSituacao, type Fatia, type SituacaoDoMes,
 } from '@/lib/financeiro/recorrenciasDoMes';
 import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
@@ -130,12 +130,15 @@ export default function V2Recorrencias() {
   const [periodo, setPeriodo] = useState<Periodo>(() => mesCorrente());
   const mes = anoMes(periodo.de);
   const rotuloMes = `${MESES_CURTOS[periodo.de.mes - 1].toLowerCase()}/${String(periodo.de.ano).slice(2)}`;
-  const { ocorrencias, incompleto, recarregar: recarregarMes } = useOcorrenciasDoMes(clienteId, mes);
+  const { ocorrencias, canceladas, mesesFechados, incompleto, recarregar: recarregarMes } = useOcorrenciasDoMes(clienteId, mes);
   const [modo, setModo] = useState<Modo>('mes');
   const [filtroTipo, setFiltroTipo] = useState<FiltroDoTipo>('todas');
   const [filtroSituacao, setFiltroSituacao] = useState<FiltroDaSituacao>('todas');
 
-  const linhas = useMemo(() => linhasDoMes(recorrencias, ocorrencias, mes), [recorrencias, ocorrencias, mes]);
+  /* RECORRENCIA-GERA-A-VIGENCIA-INTEIRA-01: a regra vigente no mes e sem lancamento APARECE, como "nao gerado" — o dono
+     recebe as competencias canceladas (que nao sao previsao) e os meses fechados (o motivo). */
+  const linhas = useMemo(() => linhasDoMes(recorrencias, ocorrencias, mes, { canceladas, mesesFechados }),
+    [recorrencias, ocorrencias, mes, canceladas, mesesFechados]);
   const resumo = useMemo(() => resumoDoMes(linhas), [linhas]);
   const proporcoes = useMemo(() => proporcoesDoMes(resumo), [resumo]);
   const linhaDe = useMemo(() => new Map(linhas.map(l => [l.regraId, l])), [linhas]);
@@ -181,7 +184,7 @@ export default function V2Recorrencias() {
         case 'forma': return r.formaPagamento ? { texto: r.formaPagamento } : null;
         case 'previsto': return { numero: Math.abs(r.valorBase) };
         case 'valor': return l ? { numero: l.valor } : null;
-        case 'situacao': return l ? { texto: ROTULO_SITUACAO_DO_MES[l.situacao] } : null;
+        case 'situacao': return l ? { texto: l.naoGerado ? ROTULO_NAO_GERADO : ROTULO_SITUACAO_DO_MES[l.situacao] } : null;
       }
     };
     const copia = [...visiveis];
@@ -404,7 +407,8 @@ export default function V2Recorrencias() {
                           {l ? <Valor centavos={l.valor} entrada={entrada} estimado={l.situacao === 'estimado'} /> : <span className="text-muted-foreground">—</span>}
                         </TableCell>
                         <TableCell className={cn(TD, 'whitespace-nowrap')}>
-                          {l ? <span className={COR_DA_SITUACAO[l.situacao]}>{ROTULO_SITUACAO_DO_MES[l.situacao]}</span>
+                          {l?.naoGerado ? <span data-testid="rec-nao-gerado" className={AMBAR} title={TITULO_NAO_GERADO[l.naoGerado]}>{ROTULO_NAO_GERADO}</span>
+                            : l ? <span className={COR_DA_SITUACAO[l.situacao]}>{ROTULO_SITUACAO_DO_MES[l.situacao]}</span>
                             : <span className="text-muted-foreground" title="sem conta vencendo neste mês">—</span>}
                         </TableCell>
                         {/* `stopPropagation` no invólucro: abrir o menu não é abrir a linha. */}
@@ -421,8 +425,10 @@ export default function V2Recorrencias() {
                               <DropdownMenuItem onClick={() => setEditando(r)}>
                                 <Pencil className="mr-2 h-3 w-3" /> Editar
                               </DropdownMenuItem>
-                              {/* ⚠ GERAR SÓ ONDE HÁ O QUE GERAR: cancelada não gera (a RPC recusa), concluída não tem próxima. */}
-                              {r.situacao === 'ativa' && (
+                              {/* ⚠ GERAR EM TODA REGRA ATIVA, a "gerada até o fim" inclusive: a competência PASSADA sem lançamento
+                                  (vigência levada para trás) é preenchida pelo Gerar — RECORRENCIA-GERA-A-VIGENCIA-INTEIRA-01.
+                                  Sem nada a gerar, a prévia diz. Cancelada não gera (a RPC recusa). */}
+                              {r.ativo && (
                                 <DropdownMenuItem onClick={() => setGerando(r)}>
                                   <Play className="mr-2 h-3 w-3" /> Gerar lançamentos
                                 </DropdownMenuItem>

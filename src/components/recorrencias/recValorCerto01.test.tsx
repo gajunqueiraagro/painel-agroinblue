@@ -158,7 +158,7 @@ const fonte = (arq: string) => cru(arq).replace(/\{\/\*[\s\S]*?\*\/\}/g, '').rep
 describe('a tela de Recorrências (V2Recorrencias, lida da FONTE): a tela não soma', () => {
   const f = fonte('src/v2/pages/V2Recorrencias.tsx');
   it('cartões, barra, lista e rodapé leem o dono', () => {
-    expect(f).toContain('const linhas = useMemo(() => linhasDoMes(recorrencias, ocorrencias, mes), [recorrencias, ocorrencias, mes]);');
+    expect(f).toContain('const linhas = useMemo(() => linhasDoMes(recorrencias, ocorrencias, mes, { canceladas, mesesFechados }),');
     expect(f).toContain('const resumo = useMemo(() => resumoDoMes(linhas), [linhas]);');
     expect(f).toContain('const proporcoes = useMemo(() => proporcoesDoMes(resumo), [resumo]);');
     expect(f).toContain('filtrarLinhas(linhas, filtroTipo, filtroSituacao)');

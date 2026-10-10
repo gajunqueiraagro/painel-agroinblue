@@ -49,9 +49,33 @@ describe('a linha da recorrência no mês', () => {
     /* nunca gerou nada: também entra */
     expect(uma(regra({ id: 'r1', ultimoLancamentoGerado: null }), [])).toHaveLength(1);
   });
-  it('competência JÁ GERADA e sem ocorrência viva = conta cancelada: não entra (conta cancelada não é previsão)', () => {
-    expect(uma(regra({ id: 'r1', ultimoLancamentoGerado: '2026-10-01' }), [])).toEqual([]);
-    expect(uma(regra({ id: 'r1', ultimoLancamentoGerado: '2026-12-01' }), [])).toEqual([]);
+  it('competência CANCELADA (o contexto diz) e sem ocorrência viva: não entra (conta cancelada não é previsão)', () => {
+    const ctx = { canceladas: [{ recorrenciaId: 'r1', competencia: '2026-10-01' }], mesesFechados: [] };
+    expect(linhasDoMes([regra({ id: 'r1', ultimoLancamentoGerado: '2026-10-01' })], [], MES, ctx)).toEqual([]);
+    expect(linhasDoMes([regra({ id: 'r1', ultimoLancamentoGerado: '2026-12-01' })], [], MES, ctx)).toEqual([]);
+    /* a cancelada de OUTRA regra, ou de OUTRA competência, não esconde esta */
+    expect(linhasDoMes([regra({ id: 'r1' })], [], MES, { canceladas: [{ recorrenciaId: 'r9', competencia: '2026-10-01' }], mesesFechados: [] })).toHaveLength(1);
+    expect(linhasDoMes([regra({ id: 'r1' })], [], MES, { canceladas: [{ recorrenciaId: 'r1', competencia: '2026-09-01' }], mesesFechados: [] })).toHaveLength(1);
+  });
+  /* RECORRENCIA-GERA-A-VIGENCIA-INTEIRA-01 — ANTES, competência abaixo da marca sem ocorrência viva era SUPOSTA cancelada e a
+     regra sumia do mês (o defeito da Santa Rita: vigência levada para trás depois de gerar). */
+  it('regra vigente no mês e SEM lançamento aparece como NÃO GERADO — abaixo e acima da marca — com o motivo', () => {
+    for (const marca of ['2026-12-01', '2026-10-01', '2026-09-01', null]) {
+      const [l] = uma(regra({ id: 'r1', ultimoLancamentoGerado: marca }), []);
+      expect(l).toMatchObject({ regraId: 'r1', ocorrencias: 0, valor: 100000, situacao: 'certo', naoGerado: 'falta gerar' });
+    }
+    const [f] = linhasDoMes([regra({ id: 'r1' })], [], MES, { canceladas: [], mesesFechados: ['2026-10'] });
+    expect(f.naoGerado).toBe('mês fechado');
+    /* o mês fechado que conta é o da COMPETÊNCIA: outro mês fechado não muda o motivo */
+    expect(linhasDoMes([regra({ id: 'r1' })], [], MES, { canceladas: [], mesesFechados: ['2026-09', '2026-11'] })[0].naoGerado).toBe('falta gerar');
+    /* com deslocamento 1, a competência que vence em outubro é setembro: é ELA que se confere */
+    const desl = regra({ id: 'r2', dataInicio: '2026-01-01', primeiroVencimento: '2026-02-05', diaVencimento: 5 });
+    expect(linhasDoMes([desl], [], MES, { canceladas: [], mesesFechados: ['2026-09'] })[0].naoGerado).toBe('mês fechado');
+    expect(linhasDoMes([desl], [], MES, { canceladas: [{ recorrenciaId: 'r2', competencia: '2026-09-01' }], mesesFechados: [] })).toEqual([]);
+  });
+  it('com ocorrência viva a linha NÃO é "não gerado"; a regra pausada sem lançamento continua fora', () => {
+    expect(uma(regra({ id: 'r1' }), [oc('r1', 10)])[0].naoGerado).toBeNull();
+    expect(linhasDoMes([regra({ id: 'r1', ativo: false })], [], MES, { canceladas: [], mesesFechados: ['2026-10'] })).toEqual([]);
   });
   it('fora da vigência no mês (antes do início, depois do fim): não entra', () => {
     expect(uma(regra({ id: 'r1', dataInicio: '2026-11-01', primeiroVencimento: '2026-11-10', ultimoLancamentoGerado: null }), [])).toEqual([]);
@@ -68,7 +92,7 @@ describe('a linha da recorrência no mês', () => {
     expect(competenciaQueVenceNoMes(r, '2027-01')).toBe('2026-12-01');   // a última competência vence em janeiro
     expect(competenciaQueVenceNoMes(r, '2027-02')).toBeNull();
     /* ocorrência de outro mês de vencimento não conta neste */
-    expect(linhasDoMes([regra({ id: 'r2' })], [oc('r2', 500, { dataVencimento: '2026-11-10' })], MES)).toEqual([]);
+    expect(linhasDoMes([regra({ id: 'r2' })], [oc('r2', 500, { dataVencimento: '2026-11-10' })], MES)[0]).toMatchObject({ ocorrencias: 0, valor: 100000 });
   });
   it('duas ocorrências vivas no mês: SOMA, e a situação é a pior (estimado > confirmado)', () => {
     const r = regra({ id: 'r1', valorAConfirmar: true });

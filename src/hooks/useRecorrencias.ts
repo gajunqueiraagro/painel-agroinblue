@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
-import { ocorrenciaEstimada, type OcorrenciaDoMes } from '@/lib/financeiro/recorrenciasDoMes';
+import { ocorrenciaEstimada, type OcorrenciaDoMes, type CompetenciaCancelada } from '@/lib/financeiro/recorrenciasDoMes';
 
 /**
  * useRecorrencias — as regras de repetição e o que elas já produziram.
@@ -236,36 +236,68 @@ export function useRecorrencias() {
  *   (medido em 06/10/2026: o maior mês do proto tem 99 ocorrências).
  */
 export const TETO_OCORRENCIAS_DO_MES = 1000;
+/** Quantos meses para trás do mês pedido se leem as competências canceladas (o deslocamento competência -> vencimento cabe com folga). */
+const MESES_DE_CANCELADAS = 12;
 export function useOcorrenciasDoMes(clienteId: string | null, mes: string) {
   const [ocorrencias, setOcorrencias] = useState<OcorrenciaDoMes[]>([]);
+  /* RECORRENCIA-GERA-A-VIGENCIA-INTEIRA-01: o dono do mês precisa distinguir "competência cancelada" (não é previsão) de
+     "competência nunca gerada" (aparece como NÃO GERADO), e saber quais meses estão fechados (o motivo). */
+  const [canceladas, setCanceladas] = useState<CompetenciaCancelada[]>([]);
+  const [mesesFechados, setMesesFechados] = useState<string[]>([]);
   const [incompleto, setIncompleto] = useState(false);
   const [carregando, setCarregando] = useState(false);
   const carregar = useCallback(async () => {
-    if (!clienteId || !/^\d{4}-\d{2}$/.test(mes)) { setOcorrencias([]); setIncompleto(false); return; }
+    if (!clienteId || !/^\d{4}-\d{2}$/.test(mes)) { setOcorrencias([]); setCanceladas([]); setMesesFechados([]); setIncompleto(false); return; }
     const [a, m] = mes.split('-').map(Number);
     const fim = `${mes}-${String(new Date(Date.UTC(a, m, 0)).getUTCDate()).padStart(2, '0')}`;
+    const tras = a * 12 + (m - 1) - MESES_DE_CANCELADAS;
+    const desde = `${Math.floor(tras / 12)}-${String((tras % 12) + 1).padStart(2, '0')}-01`;
     setCarregando(true);
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- coluna fora de types.ts; idioma do RecorrenciaDialog
-      const { data } = await (supabase as any)
-        .from('financeiro_lancamentos_v2')
-        .select('recorrencia_id, valor, data_vencimento, status_transacao, valor_do_mes_em')
-        .eq('cliente_id', clienteId)
-        .eq('cancelado', false)
-        .not('recorrencia_id', 'is', null)
-        .gte('data_vencimento', `${mes}-01`)
-        .lte('data_vencimento', fim)
-        .limit(TETO_OCORRENCIAS_DO_MES);
+      const [vivas, mortas, fechados] = await Promise.all([
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- coluna fora de types.ts; idioma do RecorrenciaDialog
+        (supabase as any)
+          .from('financeiro_lancamentos_v2')
+          .select('recorrencia_id, valor, data_vencimento, status_transacao, valor_do_mes_em')
+          .eq('cliente_id', clienteId)
+          .eq('cancelado', false)
+          .not('recorrencia_id', 'is', null)
+          .gte('data_vencimento', `${mes}-01`)
+          .lte('data_vencimento', fim)
+          .limit(TETO_OCORRENCIAS_DO_MES),
+        supabase
+          .from('financeiro_lancamentos_v2')
+          .select('recorrencia_id, data_competencia')
+          .eq('cliente_id', clienteId)
+          .eq('cancelado', true)
+          .not('recorrencia_id', 'is', null)
+          .gte('data_competencia', desde)
+          .lte('data_competencia', fim)
+          .limit(TETO_OCORRENCIAS_DO_MES),
+        supabase
+          .from('financeiro_fechamentos')
+          .select('ano_mes')
+          .eq('cliente_id', clienteId)
+          .eq('status_fechamento', 'fechado'),
+      ]);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- linhas cruas
-      const linhas: any[] = Array.isArray(data) ? data : [];
-      setIncompleto(linhas.length >= TETO_OCORRENCIAS_DO_MES);
+      const linhas: any[] = Array.isArray(vivas.data) ? vivas.data : [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- linhas cruas
+      const canc: any[] = Array.isArray(mortas.data) ? mortas.data : [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- linhas cruas
+      const fech: any[] = Array.isArray(fechados.data) ? fechados.data : [];
+      setIncompleto(linhas.length >= TETO_OCORRENCIAS_DO_MES || canc.length >= TETO_OCORRENCIAS_DO_MES);
       setOcorrencias(linhas.map(lerOcorrencia));
+      setCanceladas(canc
+        .map((c) => ({ recorrenciaId: String(c?.recorrencia_id ?? ''), competencia: typeof c?.data_competencia === 'string' ? c.data_competencia : '' }))
+        .filter((c) => c.recorrenciaId !== '' && c.competencia !== ''));
+      setMesesFechados(fech.map((f) => String(f?.ano_mes ?? '')).filter((x) => x !== ''));
     } finally {
       setCarregando(false);
     }
   }, [clienteId, mes]);
   useEffect(() => { void carregar(); }, [carregar]);
-  return { ocorrencias, incompleto, carregando, recarregar: carregar };
+  return { ocorrencias, canceladas, mesesFechados, incompleto, carregando, recarregar: carregar };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- linha crua do PostgREST
@@ -361,21 +393,57 @@ export const textoVagas = (vagas: readonly VagaRecorrencia[]): string =>
     return `${c} (venc ${d})`;
   }).join(', ');
 
-export async function gerarRecorrencia(
-  recorrenciaId: string, ate: string | null, simular: boolean,
-): Promise<{ ok: boolean; gerados: number; de: string | null; ate: string | null; vagas: VagaRecorrencia[]; erro: string | null }> {
+/**
+ * O que o Gerar NÃO criou, com o motivo — RECORRENCIA-GERA-A-VIGENCIA-INTEIRA-01 (Gabriel, 10/10/2026): o sistema nunca omite
+ * em silêncio. Hoje o único motivo é "mês fechado"; quem o escreve é o banco (`fn_recorrencia_gerar`, chave `nao_gerados`).
+ */
+export interface NaoGeradoRecorrencia { competencia: string; vencimento: string; motivo: string }
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- jsonb da RPC
+const lerNaoGerados = (v: any): NaoGeradoRecorrencia[] => (Array.isArray(v) ? v : [])
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- jsonb da RPC
+  .map((x: any) => ({ competencia: String(x?.competencia ?? ''), vencimento: String(x?.vencimento ?? ''), motivo: String(x?.motivo ?? '') }))
+  .filter((x) => x.competencia !== '');
+
+const mesAno = (comp: string): string => (comp.length >= 7 ? `${comp.slice(5, 7)}/${comp.slice(2, 4)}` : comp);
+const diaMesAno = (d: string): string => (d.length >= 10 ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(2, 4)}` : '—');
+
+/** "não gerado: 08/26 (venc 10/09/26) — mês fechado"; vários, separados por vírgula. Sem motivo do banco: "sem motivo informado". */
+export const textoNaoGerados = (lista: readonly NaoGeradoRecorrencia[]): string =>
+  'não gerado: ' + lista.map((n) => `${mesAno(n.competencia)} (venc ${diaMesAno(n.vencimento)}) — ${n.motivo || 'sem motivo informado'}`).join(', ');
+
+/** "gerou 12: 07/26 a 06/27" · "gerou 1: 07/26" · sem as pontas (RPC antiga) "gerou 3" · zero: a frase de sempre. */
+export const FRASE_NADA_A_GERAR = 'Nada a gerar — este horizonte já está todo lançado.';
+export function textoDoGerado(r: { gerados: number; geradoDe: string | null; geradoAte: string | null }): string {
+  if (r.gerados <= 0) return FRASE_NADA_A_GERAR;
+  if (!r.geradoDe || !r.geradoAte) return `gerou ${r.gerados}`;
+  return r.geradoDe === r.geradoAte ? `gerou ${r.gerados}: ${mesAno(r.geradoDe)}` : `gerou ${r.gerados}: ${mesAno(r.geradoDe)} a ${mesAno(r.geradoAte)}`;
+}
+
+export interface RespostaDoGerar {
+  ok: boolean; gerados: number; de: string | null; ate: string | null; vagas: VagaRecorrencia[];
+  /** A primeira e a última competência criadas (ou que a simulação criaria), 'AAAA-MM' — meses passados inclusive. */
+  geradoDe: string | null; geradoAte: string | null;
+  naoGerados: NaoGeradoRecorrencia[];
+  erro: string | null;
+}
+
+export async function gerarRecorrencia(recorrenciaId: string, ate: string | null, simular: boolean): Promise<RespostaDoGerar> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
   const { data, error } = await (supabase as any).rpc('fn_recorrencia_gerar', {
     p_recorrencia_id: recorrenciaId,
     p_ate: ate,
     p_simular: simular,
   });
-  if (error) return { ok: false, gerados: 0, de: null, ate: null, vagas: [], erro: error.message };
+  if (error) return { ok: false, gerados: 0, de: null, ate: null, vagas: [], geradoDe: null, geradoAte: null, naoGerados: [], erro: error.message };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- jsonb da RPC
   const r: any = data ?? {};
   return {
     ok: r.ok !== false, gerados: Number(r.gerados ?? 0), de: r.de ?? null, ate: r.ate ?? null,
-    vagas: lerVagas(r.vagas), erro: null,
+    vagas: lerVagas(r.vagas),
+    geradoDe: typeof r.gerado_de === 'string' ? r.gerado_de : null,
+    geradoAte: typeof r.gerado_ate === 'string' ? r.gerado_ate : null,
+    naoGerados: lerNaoGerados(r.nao_gerados), erro: null,
   };
 }
 

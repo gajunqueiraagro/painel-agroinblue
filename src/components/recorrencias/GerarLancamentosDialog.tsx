@@ -5,9 +5,9 @@ import { Input } from '@/components/ui/input';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Label } from '@/components/ui/label';
 import { AlertTriangle, Loader2, Play } from 'lucide-react';
-import { toast } from 'sonner';
 import { formatMoeda } from '@/lib/calculos/formatters';
-import { gerarRecorrencia, textoVagas, type Recorrencia, type VagaRecorrencia } from '@/hooks/useRecorrencias';
+import { gerarRecorrencia, textoVagas, textoNaoGerados, textoDoGerado, type Recorrencia, type RespostaDoGerar } from '@/hooks/useRecorrencias';
+import { hojeLocal } from '@/lib/datas/hojeLocal';
 
 /**
  * GerarLancamentosDialog — a prévia e a execução, pela MESMA pergunta.
@@ -26,6 +26,12 @@ import { gerarRecorrencia, textoVagas, type Recorrencia, type VagaRecorrencia } 
  * ⚠ IDEMPOTENTE POR CONSTRUÇÃO: a segunda chamada devolve 0. O botão não
  * desabilita depois de gerar, porque o horizonte pode ser esticado — o que não
  * acontece é duplicar o que já existe.
+ *
+ * ⚠ RECORRENCIA-GERA-A-VIGENCIA-INTEIRA-01 (Gabriel, 10/10/2026): o Gerar cria TODA a vigência, meses passados inclusive, e
+ * NUNCA OMITE EM SILÊNCIO. A prévia e o resultado moram num LUGAR RESERVADO (altura fixa, sempre presente): o que vai ser /
+ * foi criado ("gerou 12: 07/26 a 06/27"), as competências preenchidas abaixo da marca e o que NÃO foi gerado, com o motivo
+ * do banco ("mês fechado"). Recusa e resultado ficam ESCRITOS ali — nenhum toast — e o diálogo NÃO fecha sozinho depois de
+ * gravar: o operador lê o que aconteceu e fecha.
  */
 interface Props {
   recorrencia: Recorrencia;
@@ -37,29 +43,34 @@ export function GerarLancamentosDialog({ recorrencia, aoFechar, aoGerar }: Props
   /* O horizonte nasce no fim da regra: o caso comum é gerar tudo o que falta.
      Encurtar é decisão de quem não quer inflar o ano ainda. */
   const [ate, setAte] = useState(recorrencia.dataFim.slice(0, 10));
-  const [previa, setPrevia] = useState<{ gerados: number; de: string | null; ate: string | null; vagas: VagaRecorrencia[] } | null>(null);
+  /* O que o banco respondeu por último: a prévia (simulação) ou o resultado (gravação). Mudar o horizonte apaga. */
+  const [resposta, setResposta] = useState<{ gravado: boolean; r: RespostaDoGerar } | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
 
   const chamar = async (simular: boolean) => {
     setOcupado(true);
+    setErro(null);
     try {
       const r = await gerarRecorrencia(recorrencia.id, ate || null, simular);
-      if (!r.ok || r.erro) { toast.error(r.erro ?? 'O banco recusou a geração.'); return; }
-      if (simular) { setPrevia({ gerados: r.gerados, de: r.de, ate: r.ate, vagas: r.vagas }); return; }
-      /* ⚠ ZERO É RESPOSTA, NÃO FALHA: significa que o horizonte pedido já está
-         inteiro gerado. Dizer "nenhum lançamento criado" sem explicar faria
-         parecer defeito. */
-      if (r.gerados === 0) {
-        toast.info('Nada a gerar — este horizonte já está todo lançado.');
-      } else {
-        toast.success(`${r.gerados} lançamento${r.gerados === 1 ? '' : 's'} previsto${r.gerados === 1 ? '' : 's'} criado${r.gerados === 1 ? '' : 's'}.`);
-      }
-      await aoGerar();
-      aoFechar();
+      if (!r.ok || r.erro) { setResposta(null); setErro(`Não foi possível gerar. (${r.erro ?? 'o banco recusou a geração'})`); return; }
+      setResposta({ gravado: !simular, r });
+      if (!simular) await aoGerar();
     } finally {
       setOcupado(false);
     }
   };
+
+  const r = resposta?.r ?? null;
+  const mesDeHoje = hojeLocal().slice(0, 7);
+  /* A janela de avanço só se mostra quando há avanço: com a marca no fim, "de" passa de "até". */
+  const janela = r && r.de && r.ate && r.de <= r.ate ? { de: r.de, ate: r.ate } : null;
+  const linhaPrincipal = !r ? '' : resposta?.gravado
+    ? textoDoGerado(r)
+    : r.gerados === 0 ? textoDoGerado(r)
+      : `${r.gerados} lançamento${r.gerados === 1 ? '' : 's'}${janela ? ` · de ${mesBr(janela.de)} a ${mesBr(janela.ate)}` : ''}${r.geradoDe && r.geradoDe < mesDeHoje ? ' · inclui meses passados' : ''}`;
+  const linhaVagas = r && r.vagas.length > 0 ? textoVagas(r.vagas) : '';
+  const linhaNaoGerados = r && r.naoGerados.length > 0 ? textoNaoGerados(r.naoGerados) : '';
 
   return (
     <Dialog open onOpenChange={o => !o && aoFechar()}>
@@ -79,7 +90,7 @@ export function GerarLancamentosDialog({ recorrencia, aoFechar, aoGerar }: Props
                 apagaria esse aviso. A frase — que e' a unica explicacao de que o campo so'
                 ENCURTA — foi para o wrapper, e o hover continua a mostrando. */}
             <span title="Só ENCURTA: o teto é sempre a última competência da regra." className="block">
-              <DatePicker value={ate} onChange={v => { setAte(v); setPrevia(null); }}
+              <DatePicker value={ate} onChange={v => { setAte(v); setResposta(null); setErro(null); }}
                 className="h-8 text-xs" />
             </span>
           </div>
@@ -94,35 +105,30 @@ export function GerarLancamentosDialog({ recorrencia, aoFechar, aoGerar }: Props
             </span>
           </div>
 
-          {previa && (
-            /* ⚠ A PRÉVIA MOSTRA A JANELA, e não só o número: "12" sem o de-até
-               não deixa conferir se o horizonte é o que se pediu. */
-            <div className="rounded border bg-muted/40 px-2 py-1.5 text-[11px]">
-              {previa.gerados === 0 ? (
-                <span className="text-muted-foreground">Nada a gerar — este horizonte já está todo lançado.</span>
-              ) : (
-                <span>
-                  <b className="tabular-nums">{previa.gerados}</b> lançamento{previa.gerados === 1 ? '' : 's'}
-                  {/* A janela só se mostra quando há avanço: com a marca no fim, "de" passa de "até". */}
-                  {previa.de && previa.ate && previa.de <= previa.ate && (
-                    <span className="text-muted-foreground">
-                      {' '}· de {mesBr(previa.de)} a {mesBr(previa.ate)}
-                    </span>
-                  )}
-                  {/* ⚠ AS VAGAS ABAIXO DA MARCA — FIN-RECORRENCIA-GERAR-PREENCHE-VAGA-01. Competência da regra sem
-                      lançamento (nunca antes do mês corrente; cancelado conta como ocupado): o Gerar a preenche. */}
-                  {previa.vagas.length > 0 && (
-                    <span className="block text-[10px] text-muted-foreground" data-testid="gerar-vagas">{textoVagas(previa.vagas)}</span>
-                  )}
-                </span>
-              )}
-            </div>
-          )}
+          {/* ⚠ LUGAR RESERVADO, SEMPRE PRESENTE (três linhas de 15px): a prévia, o resultado e a recusa moram aqui — o diálogo
+              não muda de altura. Cada linha corta com o texto inteiro no `title`. */}
+          <div data-testid="gerar-lugar" className="h-[57px] rounded border bg-muted/40 px-2 py-1.5 text-[11px] leading-[15px]">
+            {erro ? (
+              <div data-testid="gerar-erro" title={erro} className="line-clamp-3 text-destructive">{erro}</div>
+            ) : !r ? (
+              <div className="text-muted-foreground">Peça a prévia para ver o que será criado — meses passados inclusive.</div>
+            ) : (<>
+              <div data-testid={resposta?.gravado ? 'gerar-resultado' : 'gerar-previa'} title={linhaPrincipal}
+                className={`truncate ${resposta?.gravado && r.gerados > 0 ? 'font-medium text-emerald-700' : r.gerados === 0 ? 'text-muted-foreground' : ''}`}>
+                {linhaPrincipal}
+              </div>
+              {/* ⚠ AS VAGAS ABAIXO DA MARCA — competência da regra sem lançamento, PASSADAS inclusive (cancelado conta como
+                  ocupado): o Gerar as preenche. */}
+              <div data-testid={linhaVagas ? 'gerar-vagas' : undefined} title={linhaVagas || undefined} className="truncate text-[10px] text-muted-foreground">{linhaVagas}</div>
+              {/* ⚠ O QUE NÃO PODE SER GERADO APARECE ESCRITO, COM O MOTIVO DO BANCO. */}
+              <div data-testid={linhaNaoGerados ? 'gerar-nao-gerados' : undefined} title={linhaNaoGerados || undefined} className="truncate text-[10px] text-amber-700">{linhaNaoGerados}</div>
+            </>)}
+          </div>
         </div>
 
         <DialogFooter className="items-center gap-2 border-t bg-accent px-4 py-2.5 sm:justify-between">
           <Button variant="outline" size="sm" disabled={ocupado} onClick={() => { void chamar(true); }}>
-            {ocupado && !previa ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+            {ocupado && !resposta ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
             Prévia
           </Button>
           <span className="flex items-center gap-2">

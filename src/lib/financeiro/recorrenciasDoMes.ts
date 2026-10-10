@@ -58,7 +58,26 @@ export interface LinhaDoMes {
   situacao: SituacaoDoMes;
   /** Quantas ocorrências vivas a regra tem no mês (0 = ainda não gerada: vale o valor base). */
   ocorrencias: number;
+  /**
+   * RECORRENCIA-GERA-A-VIGENCIA-INTEIRA-01: a regra é vigente no mês e NÃO tem lançamento nele — com o motivo. Nulo quando
+   * há ocorrência viva. A linha continua valendo o valor base (é o que o Gerar criaria); a tela escreve "não gerado".
+   */
+  naoGerado: MotivoNaoGerado | null;
 }
+
+/** Por que a competência do mês não tem lançamento. "mês fechado" é a palavra do banco (`nao_gerados` do Gerar). */
+export type MotivoNaoGerado = 'falta gerar' | 'mês fechado';
+export const ROTULO_NAO_GERADO = 'não gerado';
+export const TITULO_NAO_GERADO: Record<MotivoNaoGerado, string> = {
+  'falta gerar': 'falta gerar: a regra vale neste mês e o lançamento ainda não foi criado — use o Gerar',
+  'mês fechado': 'mês fechado: o Gerar não cria lançamento em mês fechado; reabra o mês para gerar',
+};
+
+/** Uma competência da regra cujo lançamento foi CANCELADO: conta como ocupada (o Gerar não a recria) e não é previsão. */
+export interface CompetenciaCancelada { recorrenciaId: string; competencia: string }
+/** O que o dono precisa além das ocorrências vivas para dizer "não gerado" sem adivinhar. */
+export interface ContextoDoMes { canceladas: readonly CompetenciaCancelada[]; mesesFechados: readonly string[] }
+const SEM_CONTEXTO: ContextoDoMes = { canceladas: [], mesesFechados: [] };
 
 export interface Fatia { valor: number; qtd: number }
 export interface ResumoDoMes {
@@ -108,12 +127,16 @@ const pior = (a: SituacaoDoMes, b: SituacaoDoMes): SituacaoDoMes => (a === 'esti
  * A linha de cada recorrência NO MÊS (`mes` = 'AAAA-MM', o do vencimento).
  *   · com ocorrência viva vencendo no mês: entra, pelo valor dela (duas ocorrências: soma) — mesmo com a regra pausada, porque
  *     a conta existe;
- *   · sem ocorrência viva: entra pelo valor base SÓ se a regra está ativa, tem competência que vence no mês e essa
- *     competência AINDA NÃO FOI GERADA (está acima da marca d'água). Abaixo da marca e sem ocorrência viva, a conta daquele mês
- *     foi cancelada — e conta cancelada não é previsão;
+ *   · sem ocorrência viva: entra pelo valor base SÓ se a regra está ativa e tem competência que vence no mês — e aparece
+ *     como NÃO GERADO, com o motivo ("mês fechado" quando a competência cai em mês fechado; senão "falta gerar"). Vale acima
+ *     E ABAIXO da marca d'água (RECORRENCIA-GERA-A-VIGENCIA-INTEIRA-01: a regra vigente no mês nunca some em silêncio);
+ *   · competência cujo lançamento foi CANCELADO (`contexto.canceladas`) não entra: conta cancelada não é previsão, e o Gerar
+ *     não a recria. ⚠ ANTES de 10/10/2026 isto era SUPOSTO de toda competência abaixo da marca sem ocorrência viva — e a regra
+ *     com a vigência levada para trás sumia dos meses passados;
  *   · fora disso, a recorrência não entra no mês.
  */
-export function linhasDoMes(regras: readonly RegraDoMes[], ocorrencias: readonly OcorrenciaDoMes[], mes: string): LinhaDoMes[] {
+export function linhasDoMes(regras: readonly RegraDoMes[], ocorrencias: readonly OcorrenciaDoMes[], mes: string, contexto: ContextoDoMes = SEM_CONTEXTO): LinhaDoMes[] {
+  const canceladas = new Set(contexto.canceladas.map((c) => `${c.recorrenciaId}|${mesDe(c.competencia)}`));
   const porRegra = new Map<string, OcorrenciaDoMes[]>();
   for (const o of ocorrencias) {
     if (mesDe(o.dataVencimento) !== mes) continue;
@@ -135,14 +158,15 @@ export function linhasDoMes(regras: readonly RegraDoMes[], ocorrencias: readonly
           situacao = pior(situacao, estimada ? 'estimado' : 'confirmado');
         }
       }
-      linhas.push({ ...base, valor, situacao, ocorrencias: vivas.length });
+      linhas.push({ ...base, valor, situacao, ocorrencias: vivas.length, naoGerado: null });
       continue;
     }
     if (!r.ativo) continue;
     const comp = competenciaQueVenceNoMes(r, mes);
     if (!comp) continue;
-    if (r.ultimoLancamentoGerado && mesDe(comp) <= mesDe(r.ultimoLancamentoGerado)) continue;
-    linhas.push({ ...base, valor: base.previsto, situacao: tipo === 'certo' ? 'certo' : 'estimado', ocorrencias: 0 });
+    if (canceladas.has(`${r.id}|${mesDe(comp)}`)) continue;
+    const naoGerado: MotivoNaoGerado = contexto.mesesFechados.includes(mesDe(comp)) ? 'mês fechado' : 'falta gerar';
+    linhas.push({ ...base, valor: base.previsto, situacao: tipo === 'certo' ? 'certo' : 'estimado', ocorrencias: 0, naoGerado });
   }
   return linhas;
 }
