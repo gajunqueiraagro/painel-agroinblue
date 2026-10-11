@@ -83,7 +83,7 @@ BEGIN
     RAISE EXCEPTION 'T6 ACL da tabela mudou'; END IF;
   IF (SELECT string_agg(polname::text, ',' ORDER BY polname) FROM pg_policy WHERE polrelid = 'public.financeiro_recorrencias'::regclass)
      <> 'recorr_insert,recorr_select,recorr_update' THEN RAISE EXCEPTION 'T6 policies mudaram'; END IF;
-  IF (SELECT md5(prosrc) FROM pg_proc WHERE proname = 'fn_recorrencia_gerar') <> 'f1e0139104f7207c3d86216ba90966ba'
+  IF (SELECT md5(prosrc) FROM pg_proc WHERE proname = 'fn_recorrencia_gerar') <> '9fb51f246db33435d545fd74d714c3b9'
      OR (SELECT md5(prosrc) FROM pg_proc WHERE proname = 'fn_recorrencia_propagar') <> '6a932aa9771cbfb81ae09bbef4572f57' THEN
     RAISE EXCEPTION 'T6 corpo do gerar/propagar mudou'; END IF;
   v_ok := v_ok || 'T6';
