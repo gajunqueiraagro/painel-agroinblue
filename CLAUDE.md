@@ -3726,6 +3726,43 @@ docs/historico/frentes-ate-2026-09-29.md.)
   ⚠ NAO PROVADO: nenhuma RPC chamada PELA TELA (sob pg_safeupdate, pelo PostgREST) · nenhum caso real vinculado · o cadastro do
     4608772 · o custo do gatilho com o corpo novo (ramo do DELETE) · a mutacao de tenant no DESVINCULAR · a M2 nao foi refeita no
     arnes com reversao forcada (a leitura dela filtra pelo credor criado em cada rodada).
+  · PASSO 2 — A SITUACAO DO CONTRATO ENXERGA OS ENCARGOS, E A LISTA TEM UMA LEITURA POR CLIENTE (Gabriel 11/10/2026, so' banco, so'
+    leitura; migration 20261027196400, ⚠ registrada como 20261011133529; ledger = arquivo, md5 e19fe336…). Patch guardado por md5
+    de `fn_financiamento_situacao` (70a7d04b… -> 4eb6abf0…; 2 ancoras, cada uma 1x, e o CONCEITO contado: uma declaracao de
+    `v_cart`, um `return`, um `coalesce(p_detalhe, false)`, um fecho do bloco de detalhe). ACL, SECURITY DEFINER, STABLE e
+    `search_path` preservados; a definicao esta' no COMMENT da funcao.
+    - SO' COM `p_detalhe`: a chave `encargos` (ordem data desc) — um por vinculo VIVO cujo lancamento esta' vivo: {encargo_id,
+      lancamento_id, papel, data (pagamento se paga, senao vencimento, senao competencia), descricao, valor, status_transacao,
+      paga, conciliado (vinculo vivo de extrato), conta_id / conta_nome (`_fn_conta_do_lancamento`), subcentro, vinculado_em} — e,
+      nos `cartoes`: `encargos_qtde`, `encargos_pagos`, `encargos_a_pagar`, `encargos_orfaos`, `juros_pagos`, `custo_total`.
+      O vinculo vivo de lancamento CANCELADO (orfao) NAO entra na lista nem nas somas: so' e' contado em `encargos_orfaos`.
+    - PAGO = a regra de sempre da situacao (realizado ou conciliado); nenhuma segunda regra.
+    - `juros_pagos` = os juros ja' pagos das parcelas, PELA REGUA DO `valor_pago` DA PARCELA: com lancamento vivo, o lancamento de
+      juros realizado ou conciliado, pelo valor dele; sem lancamento vivo, os juros da parcela 'pago'. 0 no parcelamento.
+      `custo_total` = `encargos_pagos` + `juros_pagos` (somas no cru, arredondadas na saida).
+      ⚠ O briefing supunha que a situacao ja' tinha "juros pagos": nao tinha (so' `pago`, principal + juros juntos, e
+        `juros_previstos`). A definicao acima foi aceita pelo Gabriel (11/10). Medido: 101 de 211 contratos tem juros pagos (soma
+        11.557.553,62); nenhum parcelamento; em nenhum os juros pagos passam do `pago`.
+    - SEM `p_detalhe` NENHUMA CHAVE NOVA: antes x depois na mesma transacao, 211 de 211 contratos de todos os clientes com o md5
+      do retorno identico; com detalhe, as chaves de antes identicas em 211 de 211 e as novas = o esperado (0 encargos reais).
+      O lote (`fn_financiamentos_situacao_lote`), a lista e os paineis nao mudam.
+    - `fn_encargos_dos_lancamentos(cliente)` (md5 c0d6f5cd…; STABLE, SECURITY DEFINER, `tenant_ok` + 42501 sem usuario e com
+      cliente nulo, `plan_cache_mode = force_custom_plan`, GRANT a `authenticated` e `service_role`) -> {lancamento_id:
+      {financiamento_id, papel, contrato}}, so' vinculo vivo de contrato vivo. E' o leitor da marca na lista e na CPR (passo 5;
+      molde de `fn_parcelas_dos_lancamentos`). ⚠ O orfao (lancamento cancelado) ENTRA nesta leitura: o vinculo esta' vivo.
+    - TEMPO (10 chamadas, antes -> depois): dono com detalhe, contrato da Santa Rita com mais parcelas, 3,6–3,9 -> 3,8–7,5 ms;
+      lote do NJ 65–70 -> 62–65 ms; `fn_encargos_dos_lancamentos` na Santa Rita 0,3 ms (tabela vazia).
+    - Teste `supabase/tests/fin_contrato_encargo_02_test.sql` (S1–S5: 3 encargos vivos — 1 pago, 1 em aberto, 1 orfao —, 1
+      desfeito e 1 em contrato cancelado: lista de 2, pagos 100, a pagar 50, orfaos 1, juros pagos 30, custo total 130). 3
+      mutacoes mortas: somar o desfeito -> "S2 lista" (o S2 confere a lista antes do S3); orfao como pago -> "S2 cartoes"; tenant
+      fora na leitura por cliente -> "S4 outro cliente". No banco vivo depois de aplicar, INTEIROS: este, os dois do passo 1,
+      `parc_contrato_01_detalhe_test.sql`, `parc_fecha_02_situacao_lote_test.sql`, `parc_livres_01_4_test.sql` e o
+      `seg_tenant_varredura_01c_test.sql` — todos OK.
+    - ⚠ `parc_contrato_01_detalhe_test.sql` FOI ATUALIZADO AO CONTRATO NOVO: o D1 tira dos cartoes uma lista FIXA de chaves do
+      detalhe (`c_cart`) e ganhou as seis novas; com a lista antiga acusaria 211 de 211. CARTAO NOVO NO DETALHE ENTRA NESSA LISTA
+      NO MESMO PR. Os tres testes do contrato rodam com o `statement_timeout` do proprio arquivo (60–90 s; o D1 nao cabe em 10 s).
+    - ⚠ NAO PROVADO: nenhuma tela le^ as chaves novas · nenhum encargo real existe (lista, somas e orfao so' no sintetico) ·
+      `conciliado = true` num encargo nao tem caso no teste · o tempo da leitura por cliente com a tabela cheia.
   ⚠ FILA: passo 3 (tela do contrato: bloco Encargos, vincular / desvincular, e a conferencia antes do excluir) · passo 4 (o
     vincular pelo lancamento, no modal do Financeiro) · passo 5 (a marca na lista de Lancamentos e na CPR) · passo 6 (principal
     avulso que casa com parcela).
