@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 10/10/2026 (RECORRENCIA-GERA-A-VIGENCIA-INTEIRA-01, +10: `src/components/recorrencias/gerarVagas.test.tsx` 8 (6 -> 14),
+  Baseline em 11/10/2026 (RECORRENCIA-GERA-A-VIGENCIA-INTEIRA-01 parte 2, +15 em `src/components/recorrencias/geraAoSalvar.test.tsx` (novo) — 4842 depois dela;
+  antes o passo 2, +10: `src/components/recorrencias/gerarVagas.test.tsx` 8 (6 -> 14),
   `src/lib/financeiro/recorrenciasDoMes.test.ts` 2 — 4827 depois dele; antes a FORN-SELETOR-PADRAO-01 fatia 2e, +17 em `src/components/shared/campoDeFornecedor.test.tsx` (novo) — 4817 depois dela; antes a
   fatia 2d, +12 em `src/components/agri/fornecedorDaLavoura.test.tsx` (novo) — 4800 depois dela; antes a
   fatia 2c commit 1b, +12: `src/components/financiamentos/fornecedorNoContrato.test.tsx` 7 (novo),
@@ -284,7 +285,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4827
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4842
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -5368,13 +5369,66 @@ docs/historico/frentes-ate-2026-09-29.md.)
     se monta por patch do corpo vivo (`pg_get_functiondef` + `replace` com ancora contada).
   ⚠ DIVIDAS: REC-VIGENCIA-DOBRO-LEGADO-01 (os 5 meses passados com lancamento avulso igual: o Gerar nao os ve^ e criaria o
     segundo) · o AVANCO continua recriando competencia cuja unica linha esta' cancelada (30/09, nao tocada) · a edicao da regra
-    continua sem trilha e sem aviso de "ha' meses a gerar" ao salvar (a lista mostra) · "não gerado" conta no total do mes mesmo
+    continua sem trilha [o salvar da vigencia mais larga passou a GERAR — a regra seguinte] · "não gerado" conta no total do mes mesmo
     em mes fechado · as canceladas sao lidas 12 meses para tras, com teto de 1.000 (acende o "mês incompleto") · leitura de
     `financeiro_fechamentos` pela tela depende da RLS da tabela (provada com o admin).
   ⚠ NAO PROVADO: `rec_valor_certo_01_test.sql`, `rec_valor_do_mes_modal_01_test.sql` e o `seg_tenant_varredura_01c_test.sql`
     INTEIRO nao foram rodados depois de aplicar (do 01c, so' a contagem T1/T2 por leitura) · os dois ARQUIVOS de teste novos
     foram rodados em recortes equivalentes (o canal recusou a parte B inteira) · gerar de verdade numa regra real (nenhuma foi
     gerada) · perfil nao admin · a aba em primeiro plano · regra A CONFIRMAR / folha com passado, no navegador.
+- ⚠ SALVAR A EDICAO DA VIGENCIA GERA, POR ULTIMO, OS MESES QUE ELA PASSOU A COBRIR (RECORRENCIA-GERA-A-VIGENCIA-INTEIRA-01 parte 2,
+  Gabriel 10/10/2026, so' tela, sem migration). A ORDEM AO SALVAR: gravar a regra -> propagar (se o dialogo aparecer, pelo escopo
+  que o operador escolher, como sempre) -> GERAR POR ULTIMO, pela MESMA `fn_recorrencia_gerar` do item "Gerar lançamentos"
+  (`gerarRecorrencia(id, null, false)`: sem teto, ate' o fim da vigencia). Nenhuma segunda regra de geracao; NENHUMA VAGA E'
+  CALCULADA NO FRONT e nao ha' lista de meses nem pergunta antes de salvar.
+  · QUANDO GERA (`geraAoSalvarAEdicao`, `src/hooks/useRecorrencias.ts`): regra ATIVA, JA' GERADA (`ultimoLancamentoGerado`), cuja
+    vigencia ficou MAIS LARGA por MES — inicio para tras ou fim para a frente (`vigenciaPassouACobrir`). Quais meses nascem quem
+    diz e' o banco. Regra nao editada nao gera nada sozinha (as regras com mes faltando seguem pelo "Gerar lançamentos").
+    ⚠ DECIDIDO (Gabriel, 11/10): a regra que NUNCA gerou e a PAUSADA nao geram ao salvar — editar a vigencia delas nao cria a
+      serie inteira por conta propria; seguem pelo "Gerar lançamentos" (a lista mostra "falta gerar").
+    ⚠ O GERAR E' O DE SEMPRE: alem dos meses novos ele preenche qualquer vaga antiga da regra e avanca a marca ate' o fim.
+  · POR QUE POR ULTIMO: o propagar pode MOVER a competencia de lancamento que ja' existe. Provado no banco (S4): gerar ANTES e
+    propagar depois e' RECUSADO pelo propagar ("Nada foi propagado: competência … já ocupada …") e a serie fica com 3 de 6 meses
+    certos; propagar -> gerar fecha os 6, um lancamento por mes, sem dobro e sem bater em `uniq_lanc_recorrencia_competencia`.
+  · NO `PropagarRecorrenciaDialog`: um LUGAR FIXO de 14px (`propagar-gera-depois`), sempre presente, sob as tres opcoes; com a
+    vigencia mais larga (prop `geraDepois`) diz "Depois de propagar, os meses que a vigência passou a cobrir serão gerados."
+    (`FRASE_GERA_DEPOIS_DE_PROPAGAR`); vazio fora disso. QUALQUER SAIDA do dialogo (Propagar, "Não propagar", Fechar, X) leva ao
+    gerar: a regra ja' estava gravada — CANCELAR O PROPAGAR NUNCA DESFEZ A GRAVACAO DA REGRA, e continua assim.
+  · O RESULTADO FICA ESCRITO (`GeradoAposSalvarDialog`, `src/components/recorrencias/`; substitui o dialogo da regra, como o do
+    propagar): o lugar reservado de 57px do `GerarLancamentosDialog`, com as mesmas tres frases do dono — "gerou 2: 08/26 a
+    09/26", "preenche 08/26 (venc 10/08/26), …", "não gerado: 09/26 (venc 10/09/26) — mês fechado" — ou a recusa do banco em
+    vermelho; botao Fechar; SEM TOAST; nao fecha sozinho; a lista rele assim que o gerar responde, com o dialogo ainda aberto.
+  · VIGENCIA ENCURTADA, SO' MEDIDO (ensaio revertido, nada mudou): os lancamentos que ficam FORA da vigencia nova (antes do
+    inicio novo e depois do fim novo) CONTINUAM VIVOS; o propagar os trata como os demais (4 de 4 aplicados no ensaio) e nao
+    cancela nenhum; o gerar nao cria nem remove nada. Nao ha' aviso. Decisao do Gabriel se deve haver.
+  PROVA NO NAVEGADOR (cliente Teste, 11/10, aba em SEGUNDO PLANO, gestos por script; 2 regras sinteticas com inicio em out/26,
+  criadas por SQL e APAGADAS com os lancamentos — 0 restantes): (X, 3 lancamentos vivos) inicio -> 01/08/2026, Salvar: abriu o
+  Propagar (448 x 404, sem rolagem) com a frase inteira na linha de 14px (414 de 414px); "Propagar" -> "Lançamentos da vigência
+  nova" (448 x 188, lugar de 57px): "gerou 2: 08/26 a 09/26" / "preenche 08/26 (venc 10/08/26), 09/26 (venc 10/09/26)", sem
+  corte. (Y, os 3 cancelados: nada a propagar) inicio -> 01/08/2026, Salvar: o resultado direto, sem o Propagar, "gerou 2…".
+  (X de novo) fim -> 31/01/2027, Salvar, FECHAR o Propagar sem propagar: "gerou 1: 01/27". Em Contas a Pagar e Receber os de
+  10/08 e 10/09 das duas regras aparecem nos Vencidos (Previsto, 111,11 e 222,22).
+  Testes: `src/components/recorrencias/geraAoSalvar.test.tsx` 15 (a ordem das chamadas, as tres saidas do propagar, o lugar
+  fixo, a fonte); 17 mutacoes: 16 mortas de primeira + 1 (altura livre do lugar) morta depois da assercao apertada.
+  SQL `supabase/tests/recorrencia_gera_ao_salvar_01_test.sql` (S1 inicio −2 = exatamente 2 e a regra nao editada intocada; S2
+  fim +2; S3 mes fechado dito; S4 a ordem, com a ordem errada como contraprova), rodado INTEIRO no banco vivo: OK.
+  ⚠ FOTOS REGRAVADAS, de proposito: as 6 de `propagarValorDoMes.fotos.json` — cada uma cresceu EXATAMENTE 121 bytes, o lugar
+    vazio da frase.
+  ⚠ DIVIDAS: o toast "Recorrência atualizada." e o "N lançamentos atualizados." do propagar continuam (sao dos passos
+    anteriores) · se o gerar falhar, a regra e a propagacao ja' ficaram (tres idas ao banco, sem transacao unica) e o operador
+    refaz pelo "Gerar lançamentos" · REC-VIGENCIA-ENCURTADA-01 (lancamento fora da vigencia nova fica vivo, sem aviso; PROPOSTA A
+    DECIDIR PELO GABRIEL: ao encurtar a vigencia, a tela informa quantos lancamentos PREVISTOS ficaram fora e oferece
+    cancela'-los; os ja' pagos ficam) · o
+    dobro com lancamento AVULSO igual (REC-VIGENCIA-DOBRO-LEGADO-01) vale tambem aqui.
+  ⚠ DIVIDA SUITE-ERRO-NAO-TRATADO-USELOCATION-01 (medida em 11/10, NAO mexida — ja' existia antes da fatia 2c): o vitest acusa
+    "1 error" nao tratado, "useLocation() may be used only in the context of a <Router>", vindo de
+    `src/components/financiamentos/obrigacaoEdicao.test.tsx` (quem chama e' o `useSearchParams` de `AbaDocumentosLancamento.tsx`,
+    montada sem Router). Os testes do arquivo passam. Medido rodando so' esse arquivo em arvore separada: ausente ate' 0d0e2f80;
+    PRIMEIRA APARICAO em 1d36478d (PARC-CADEIA-01 passo 2, 07/10); presente em 411da86f (antes da 2c) e em fac0043e (2e).
+    ⚠ Uma execucao em b8c8d9f8 (logo depois do 1d36478d) NAO o mostrou: pode ser intermitente — nao investigado.
+  ⚠ NAO PROVADO: mes fechado e a recusa do gerar NO NAVEGADOR (so' por teste; nao ha' mes fechado no Teste) · a aba em primeiro
+    plano · perfil nao admin · regra A CONFIRMAR / folha · o X do Propagar e "Não propagar" no navegador (o Fechar foi visto; os
+    tres passam pelo mesmo `aoFechar`) · a janela a 523 de altura.
 - ⚠ O GERAR GARANTE A SERIE COMPLETA DA RECORRENCIA (FIN-RECORRENCIA-GERAR-PREENCHE-VAGA-01, Gabriel 30/09): alem de
   avancar a marca, `fn_recorrencia_gerar` preenche a competencia VAGA abaixo dela; CANCELADO CONTA COMO OCUPADO; [o "nunca
   antes do mes corrente" foi SUBSTITUIDO em 10/10/2026 — a regra logo acima]; nunca em mes fechado. As travas moram so' em `_fn_recorrencia_vagas`, e o

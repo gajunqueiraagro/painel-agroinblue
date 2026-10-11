@@ -1,26 +1,26 @@
 {
  "rpc-antiga-futuros": {
-  "md5": "60becf3c9ca01c6b50a480899cf03e19",
-  "bytes": 7320
+  "md5": "deadd24e34585ff91a31056591492bde",
+  "bytes": 7441
  },
  "rpc-antiga-todos": {
-  "md5": "fe9ced1dac6dde747a698813ba908d00",
-  "bytes": 7320
+  "md5": "dd96ef9740419708b00833215477fbe8",
+  "bytes": 7441
  },
  "rpc-antiga-nenhum": {
-  "md5": "7eaa7662c3015fc0752137e720974c7e",
-  "bytes": 7131
+  "md5": "cbb0d826f55f4e14666deb2da205fad1",
+  "bytes": 7252
  },
  "rpc-nova-sem-ajustada-futuros": {
-  "md5": "60becf3c9ca01c6b50a480899cf03e19",
-  "bytes": 7320
+  "md5": "deadd24e34585ff91a31056591492bde",
+  "bytes": 7441
  },
  "rpc-nova-sem-ajustada-todos": {
-  "md5": "fe9ced1dac6dde747a698813ba908d00",
-  "bytes": 7320
+  "md5": "dd96ef9740419708b00833215477fbe8",
+  "bytes": 7441
  },
  "rpc-nova-sem-ajustada-nenhum": {
-  "md5": "7eaa7662c3015fc0752137e720974c7e",
-  "bytes": 7131
+  "md5": "cbb0d826f55f4e14666deb2da205fad1",
+  "bytes": 7252
  }
 }

@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { OpcoesDeEscopo } from '@/components/financeiro-v2/OpcoesDeEscopo';
 import { AlertTriangle, Loader2, Check } from 'lucide-react';
 import { toast } from 'sonner';
-import { propagarRecorrencia, textoVagas, frasePuladasValorDoMes, type EscopoPropagacao, type ResultadoPropagacao } from '@/hooks/useRecorrencias';
+import { propagarRecorrencia, textoVagas, frasePuladasValorDoMes, FRASE_GERA_DEPOIS_DE_PROPAGAR, type EscopoPropagacao, type ResultadoPropagacao } from '@/hooks/useRecorrencias';
 
 /**
  * PropagarRecorrenciaDialog — até onde a edição da regra alcança o que ela gerou.
@@ -31,6 +31,8 @@ interface Props {
   previa: ResultadoPropagacao | null;
   /** A mensagem do banco quando a propagação é impossível. */
   recusa: string | null;
+  /** A vigência da regra ficou mais larga: quem abre este diálogo gera os meses novos DEPOIS de ele fechar (por qualquer saída). */
+  geraDepois?: boolean;
   aoFechar: () => void;
 }
 
@@ -105,7 +107,7 @@ export function BlocoCompetencia({ previa, escopo }: { previa: ResultadoPropagac
   );
 }
 
-export function PropagarRecorrenciaDialog({ recorrenciaId, descricao, previa, recusa, aoFechar }: Props) {
+export function PropagarRecorrenciaDialog({ recorrenciaId, descricao, previa, recusa, geraDepois = false, aoFechar }: Props) {
   const [escopo, setEscopo] = useState<EscopoPropagacao>('futuros');
   const [ocupado, setOcupado] = useState(false);
 
@@ -199,6 +201,13 @@ export function PropagarRecorrenciaDialog({ recorrenciaId, descricao, previa, re
 
               {/* As três opções moram em `OpcoesDeEscopo` (PARC-CONTRATO-01): a MESMA peça do contrato de parcelamento. */}
               <OpcoesDeEscopo opcoes={OPCOES} valor={escopo} aoMudar={setEscopo} />
+              {/* ⚠ LUGAR FIXO, SEMPRE PRESENTE (RECORRENCIA-GERA-A-VIGENCIA-INTEIRA-01, parte 2): com a vigência mais larga, diz
+                  que os meses novos serão gerados depois deste passo — afirmação, não pergunta; vale também para "Não
+                  propagar" e para o Fechar. Vazio quando a vigência não mudou. */}
+              <div data-testid="propagar-gera-depois" title={geraDepois ? FRASE_GERA_DEPOIS_DE_PROPAGAR : undefined}
+                className="h-[14px] truncate text-[10px] leading-[14px] text-muted-foreground">
+                {geraDepois ? FRASE_GERA_DEPOIS_DE_PROPAGAR : ''}
+              </div>
             </>
           )}
         </div>

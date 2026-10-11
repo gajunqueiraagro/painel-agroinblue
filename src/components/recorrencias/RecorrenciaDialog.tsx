@@ -18,13 +18,14 @@ import { escopoDoSubcentro } from '@/lib/financeiro/escopoDoSubcentro';
 import { DiaVencimentoGrade } from './DiaVencimentoGrade';
 import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import {
-  resumoVivo, primeiroVencimentoDe, mesDoFatoDe, propagarRecorrencia, mudouOQueSePropaga,
+  resumoVivo, primeiroVencimentoDe, mesDoFatoDe, propagarRecorrencia, mudouOQueSePropaga, geraAoSalvarAEdicao, gerarRecorrencia,
   type Recorrencia, type MesDoFato, type ResultadoPropagacao, type PayloadDaRegra,
 } from '@/hooks/useRecorrencias';
 import { Segmentado } from '@/components/ui/segmentado';
 import { Checkbox } from '@/components/ui/checkbox';
 import { EXPLICACAO_A_CONFIRMAR, ROTULO_TIPO } from '@/lib/financeiro/recorrenciasDoMes';
 import { PropagarRecorrenciaDialog } from './PropagarRecorrenciaDialog';
+import { GeradoAposSalvarDialog, type EstadoDoGerado } from './GeradoAposSalvarDialog';
 import { cn } from '@/lib/utils';
 import { NovoFornecedorDialog } from '@/components/financeiro-v2/NovoFornecedorDialog';
 
@@ -138,7 +139,21 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
   const [dataFim, setDataFim] = useState(ed?.dataFim?.slice(0, 10) ?? '');
   const [salvando, setSalvando] = useState(false);
   /* A regra já gravada, esperando a decisão de até onde alcançar o que ela gerou. */
-  const [propagar, setPropagar] = useState<{ previa: ResultadoPropagacao | null; recusa: string | null } | null>(null);
+  const [propagar, setPropagar] = useState<{ previa: ResultadoPropagacao | null; recusa: string | null; geraDepois: boolean } | null>(null);
+  /* O que o gerar-ao-salvar respondeu (RECORRENCIA-GERA-A-VIGENCIA-INTEIRA-01, parte 2): fica ESCRITO até o Fechar. */
+  const [gerado, setGerado] = useState<EstadoDoGerado | null>(null);
+
+  /**
+   * O ÚLTIMO PASSO DO SALVAR, quando a vigência ficou mais larga: a MESMA `fn_recorrencia_gerar` do "Gerar lançamentos", sem
+   * teto (`ate` nulo = até o fim da vigência). Nenhuma segunda regra de geração. A lista relê logo depois, com o diálogo
+   * do resultado ainda aberto.
+   */
+  const gerarAposSalvar = async (id: string) => {
+    setGerado({ rodando: true, resposta: null, erro: null });
+    const r = await gerarRecorrencia(id, null, false);
+    setGerado({ rodando: false, resposta: r.ok ? r : null, erro: r.ok ? null : (r.erro ?? 'O banco recusou a geração.') });
+    await aoSalvar();
+  };
 
   /**
    * ADMINISTRATIVO NÃO TEM SAFRA — FIN-SAFRA-ADM-01, agora também na regra.
@@ -237,14 +252,19 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
          diálogo — a regra já está salva, e não se chama de novo. */
       /* ⚠ REC-VALOR-CERTO-01 — TROCAR SÓ O TIPO DO VALOR OU A FOLHA NÃO PROPAGA: são atributos da regra, nenhum lançamento os
          tem. A pergunta "até onde propagar?" só aparece quando mudou algo que o Propagar leva aos lançamentos. */
+      /* ⚠ RECORRENCIA-GERA-A-VIGENCIA-INTEIRA-01, parte 2 — A ORDEM É: gravar a regra → propagar (se houver, pelo escopo que o
+         operador escolher) → GERAR POR ÚLTIMO. O propagar pode mover a competência de lançamento que já existe; gerar antes
+         criaria lançamento numa competência para onde outro ainda vai ser movido. */
+      const geraDepois = !!ed && geraAoSalvarAEdicao(ed, payload);
       if (ed && mudouOQueSePropaga(ed, payload)) {
         const sim = await propagarRecorrencia(ed.id, 'futuros', true);
-        if (!sim.ok) { setPropagar({ previa: null, recusa: sim.erro ?? 'O banco recusou a propagação.' }); return; }
+        if (!sim.ok) { setPropagar({ previa: null, recusa: sim.erro ?? 'O banco recusou a propagação.', geraDepois }); return; }
         if (sim.dados && sim.dados.futuros + sim.dados.passados > 0) {
-          setPropagar({ previa: sim.dados, recusa: null });
+          setPropagar({ previa: sim.dados, recusa: null, geraDepois });
           return;
         }
       }
+      if (ed && geraDepois) { await gerarAposSalvar(ed.id); return; }
       await aoSalvar();
       aoFechar();
     } finally {
@@ -254,6 +274,9 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
 
   /* ⚠ O DIÁLOGO DA PROPAGAÇÃO SUBSTITUI ESTE, não o cobre: a regra já foi gravada, e deixar
      o formulário visível atrás convidaria a editá-lo de novo sobre um estado já salvo. */
+  if (gerado) {
+    return <GeradoAposSalvarDialog descricao={descricao.trim()} estado={gerado} aoFechar={aoFechar} />;
+  }
   if (propagar) {
     return (
       <PropagarRecorrenciaDialog
@@ -261,7 +284,15 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
         descricao={descricao.trim()}
         previa={propagar.previa}
         recusa={propagar.recusa}
-        aoFechar={() => { setPropagar(null); void (async () => { await aoSalvar(); aoFechar(); })(); }}
+        geraDepois={propagar.geraDepois}
+        /* ⚠ QUALQUER SAÍDA do propagar (Propagar, "Não propagar", Fechar, X) passa por aqui — a regra já está gravada, como
+           sempre — e, com a vigência mais larga, o gerar roda DEPOIS dela, com o resultado escrito. */
+        aoFechar={() => {
+          const gera = propagar.geraDepois && !!ed;
+          setPropagar(null);
+          if (gera && ed) { void gerarAposSalvar(ed.id); return; }
+          void (async () => { await aoSalvar(); aoFechar(); })();
+        }}
       />
     );
   }

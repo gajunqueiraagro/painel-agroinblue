@@ -447,6 +447,28 @@ export async function gerarRecorrencia(recorrenciaId: string, ate: string | null
   };
 }
 
+/**
+ * SALVAR A EDIÇÃO DA VIGÊNCIA GERA OS MESES QUE ELA PASSOU A COBRIR — RECORRENCIA-GERA-A-VIGENCIA-INTEIRA-01, parte 2
+ * (Gabriel, 10/10/2026). A tela só responde "a vigência ficou mais larga?" (início para trás ou fim para a frente, por MÊS);
+ * QUAIS meses são gerados quem diz é o banco, pela mesma `fn_recorrencia_gerar` do item "Gerar lançamentos", chamada POR
+ * ÚLTIMO (depois do propagar, que pode mover competência). Nenhuma vaga é calculada aqui.
+ * ⚠ SÓ REGRA JÁ GERADA (`ultimoLancamentoGerado`): a que nunca gerou continua esperando o "Gerar lançamentos" do operador —
+ *   editar a vigência dela não cria a série inteira por conta própria.
+ */
+export function vigenciaPassouACobrir(
+  antes: { dataInicio: string; dataFim: string }, depois: { data_inicio: string | number | null; data_fim: string | number | null },
+): boolean {
+  const mes = (d: string | number | null) => String(d ?? '').slice(0, 7);
+  const [ia, fa, id, fd] = [mes(antes.dataInicio), mes(antes.dataFim), mes(depois.data_inicio), mes(depois.data_fim)];
+  if (!ia || !fa || !id || !fd) return false;
+  return id < ia || fd > fa;
+}
+export function geraAoSalvarAEdicao(ed: Pick<Recorrencia, 'dataInicio' | 'dataFim' | 'ultimoLancamentoGerado' | 'ativo'>,
+  p: { data_inicio: string | number | null; data_fim: string | number | null }): boolean {
+  return ed.ativo && !!ed.ultimoLancamentoGerado && vigenciaPassouACobrir(ed, p);
+}
+export const FRASE_GERA_DEPOIS_DE_PROPAGAR = 'Depois de propagar, os meses que a vigência passou a cobrir serão gerados.';
+
 /** Até onde a edição da regra alcança os lançamentos que ela gerou. */
 export type EscopoPropagacao = 'futuros' | 'todos' | 'nenhum';
 
