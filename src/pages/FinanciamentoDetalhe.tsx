@@ -32,6 +32,7 @@ import {
   SUBCENTRO_AMORTIZACAO, SUBCENTRO_JUROS, NOME_NATUREZA, PILULA_NATUREZA,
 } from '@/components/financiamentos/ObrigacaoDialog';
 import { FinanciamentoForm } from '@/hooks/useFinanciamentoCadastro';
+import { alinhamentoDoCabecalho, colunasDasParcelas, type ColunaDasParcelas } from '@/lib/financiamentos/reguaDasParcelas';
 
 const fmt = (v: number) =>
   v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -449,6 +450,7 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
      (100vh, mais alto que a area util) o conteudo era CORTADO sem barra nenhuma. Agora a
      rolagem mora aqui dentro, como na lista. */
   const ehParcelamento = fin.natureza === 'parcelamento';
+  const colunas = colunasDasParcelas(ehParcelamento);
   const escopo = fin.tipo_financiamento === 'agricultura' ? 'agricultura' : 'pecuaria';
   const nomeCredor = fin.financeiro_fornecedores?.nome ?? null;
   const nomeConta = fin.financeiro_contas_bancarias?.nome_exibicao || fin.financeiro_contas_bancarias?.nome_conta || null;
@@ -610,40 +612,14 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
           </div>
           <div className="min-h-0 flex-1">
             <Table density="dense" className="table-fixed" wrapperClassName="h-full overflow-x-hidden overflow-y-auto">
-              {/* ⚠ LARGURAS EM px, MEDIDAS: só a Conta (texto) fica com o resto e corta; número, valor e data têm a largura do pior caso. */}
+              {/* ⚠ A RÉGUA TEM UM DONO (`reguaDasParcelas.ts`): o `colgroup` e o cabeçalho saem da MESMA lista — largura medida no
+                  pior texto e o th alinhado como o conteúdo da coluna. Só a Conta (sem largura) fica com o resto e corta. */}
               <colgroup>
-                <col style={{ width: 40 }} />
-                <col style={{ width: 54 }} />
-                <col style={{ width: 54 }} />
-                <col style={{ width: 54 }} />
-                <col style={{ width: 108 }} />
-                <col />
-                {!ehParcelamento && <col style={{ width: 84 }} />}
-                {!ehParcelamento && <col style={{ width: 76 }} />}
-                <col style={{ width: 88 }} />
-                {/* Situação: 88 = "sem lançamento" (o pior rótulo, 78px medidos) + o respiro da célula */}
-                <col style={{ width: 88 }} />
-                {ehParcelamento && <col style={{ width: 118 }} />}
-                {ehParcelamento && <col style={{ width: 46 }} />}
-                {!ehParcelamento && <col style={{ width: 40 }} />}
-                <col style={{ width: 24 }} />
+                {colunas.map(c => <col key={c.chave} style={c.largura === null ? undefined : { width: c.largura }} />)}
               </colgroup>
               <TableHeader className="sticky top-0 z-10 bg-primary text-primary-foreground [&_tr]:border-b-0 [&_tr]:hover:bg-primary">
                 <TableRow>
-                  <ThDet>Nº</ThDet>
-                  <ThDet>Comp.</ThDet>
-                  <ThDet>Venc.</ThDet>
-                  <ThDet>Pgto.</ThDet>
-                  <ThDet>Prazo</ThDet>
-                  <ThDet>Conta</ThDet>
-                  {!ehParcelamento && <ThDet direita>Principal</ThDet>}
-                  {!ehParcelamento && <ThDet direita>Juros</ThDet>}
-                  <ThDet direita>{ehParcelamento ? 'Valor (R$)' : 'Total (R$)'}</ThDet>
-                  <ThDet>Situação</ThDet>
-                  {ehParcelamento && <ThDet>Nota fiscal</ThDet>}
-                  {ehParcelamento && <ThDet>Boleto</ThDet>}
-                  {!ehParcelamento && <ThDet />}
-                  <ThDet />
+                  {colunas.map(c => <ThDet key={c.chave} coluna={c} />)}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -861,10 +837,10 @@ function Cartao({ rotulo, contagem, valor, borda, tom }: { rotulo: string; conta
    entrega `uppercase tracking-wide` e `text-muted-foreground`; aqui o cabecalho e'
    escuro e em caixa normal. Local de proposito — mudar o dense trocaria o cabecalho
    de todas as tabelas densas do sistema. */
-function ThDet({ children, direita }: { children?: React.ReactNode; direita?: boolean }) {
+function ThDet({ coluna }: { coluna: ColunaDasParcelas }) {
   return (
-    <TableHead className={`text-primary-foreground normal-case tracking-normal ${direita ? 'text-right' : ''}`}>
-      {children}
+    <TableHead className={`text-primary-foreground normal-case tracking-normal ${alinhamentoDoCabecalho(coluna)}`} data-coluna={coluna.chave}>
+      {coluna.rotulo}
     </TableHead>
   );
 }

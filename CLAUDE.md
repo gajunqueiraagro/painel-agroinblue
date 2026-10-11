@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 11/10/2026 (CONC-SPLIT-FILHO-CANCELADO-01 passo 1, +5 em `src/components/financeiro-v2/conferenciaExtratoParcial.test.tsx` (novo) — 4864 depois dele; antes o
+  Baseline em 11/10/2026 (FIN-DETALHE-CABECALHO-ALINHADO-01, +6 em `src/lib/financiamentos/reguaDasParcelas.test.ts` (novo) — 4870 depois dele; antes o
+  CONC-SPLIT-FILHO-CANCELADO-01 passo 1, +5 em `src/components/financeiro-v2/conferenciaExtratoParcial.test.tsx` (novo) — 4864 depois dele; antes o
   REC-FALTA-GERAR-A-VISTA-01 commit B, +15: `src/lib/financeiro/recorrenciasDoMes.test.ts` 6 (21 -> 27),
   `src/v2/pages/recorrenciasFaltaGerar.test.tsx` 9 (novo) — 4859 depois dele; antes o CONC-SALDOS-LAYOUT-02, +2 em `src/pages/conciliacaoDono.test.tsx` — 4844 depois dele; antes a
   RECORRENCIA-GERA-A-VIGENCIA-INTEIRA-01 parte 2, +15 em `src/components/recorrencias/geraAoSalvar.test.tsx` (novo) — 4842 depois dela;
@@ -288,7 +289,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4864
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4870
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -1117,9 +1118,46 @@ preview que o cabecalho nao sai da tela ao rolar.
 - ⚠ PADRAO DE TABELA (regra permanente, Gabriel, 28/09/2026, no OC-VENDA-ENTREGAS-01c): 10px nas linhas, 9,5px no
   cabecalho, linha de 18px, datas dd/mm/aa; cabecalho navy em todos os niveis; cabecalho, totais e cards CONGELADOS (so' as
   linhas rolam); uma informacao por coluna e uma linha por registro; divisor vertical entre grupos de colunas; tipos de linha
-  diferentes com fundos diferentes; cor pelo sinal; cabecalho centralizado, numero a direita; texto que nao cabe corta na celula com o inteiro no `title`, numero,
+  diferentes com fundos diferentes; cor pelo sinal; O CABECALHO ALINHA COMO A COLUNA (texto a' esquerda, numero a' direita, icone ao
+  centro — a regra logo abaixo SUBSTITUI o "cabecalho centralizado" de antes nas tabelas com coluna de texto e de numero); texto que nao cabe corta na celula com o inteiro no `title`, numero,
   valor e data nunca (regra "UMA LINHA POR REGISTRO", abaixo).
   Detalhe: A31 do docs/PADROES-UI.md; exemplo vivo `AbaContaCorrenteOC`.
+- ⚠ O th ALINHA COMO O td, E A TABELA DE REGUA FIXA NAO ESTICA COM A JANELA (FIN-DETALHE-CABECALHO-ALINHADO-01, Gabriel 11/10/2026,
+  so' tela). Cabecalho e corpo na MESMA regua e no MESMO eixo: uma `<table>` so' (thead e tfoot presos no mesmo scrollport),
+  `table-layout: fixed`, `colgroup` em px medido no pior texto, e cada th com o alinhamento e o padding lateral da celula da
+  coluna. So' UMA coluna de texto fica sem largura e absorve a sobra (corta com o inteiro no `title`); numero, valor e data tem a
+  largura do pior caso + o padding. O th NUNCA tem largura nem alinhamento escritos a' mao.
+  · EXEMPLO VIVO: a tabela de parcelas do contrato (`FinanciamentoDetalhe.tsx`). A regua mora em
+    `src/lib/financiamentos/reguaDasParcelas.ts` (`colunasDasParcelas(ehParcelamento)`: chave, rotulo, largura, `alinha`
+    esquerda | direita | centro; `alinhamentoDoCabecalho`): o `colgroup` e o cabecalho saem da MESMA lista. Larguras (credito):
+    Nº 48 · Comp. 64 · Venc. 64 · Pgto. 64 · Prazo 116 · Conta (o resto) · Principal 84 · Juros 76 · Total 88 · Situação 88 ·
+    juros 40 · lapis 24; parcelamento: … · Valor 88 · Situação 88 · Nota fiscal 118 · Boleto 46 · lapis 24.
+  · O QUE ESTAVA ERRADO, MEDIDO (Range sobre o texto x a celula, 10px): a DATA "10/08/23" mede 46,3px e a coluna de 54 tinha 38
+    uteis — vazava 8,3px e encostava na data vizinha; o Nº "20/20" mede 29,6 em 24 uteis (coluna de 40); o Prazo "vence em
+    2912 dias" (caso real do NJ) mede 97,6 em 92 uteis (coluna de 108); e o th "Boleto" ficava a' esquerda com a celula
+    centralizada. Os 46px a mais sairam da Conta (191 -> 145 a 1.127 no credito; 227 -> 181 no parcelamento).
+  · ⚠ O DESALINHAMENTO DO PRINT (th a' direita do td, crescendo da esquerda para a direita) NAO FOI REPRODUZIDO: antes do
+    conserto, no localhost, th.x = td.x e th.largura = td.largura em todas as colunas a 1.127 e a 1.900 (o texto do th e o do td
+    comecam no mesmo pixel; os de numero terminam no mesmo pixel), e o CSS publicado e' byte a byte o do build local
+    (`index-CMi1l3xT.css` nos dois). A causa do que o print mostra nao foi achada — fica para o Gabriel conferir depois da
+    publicacao (navegador e zoom do print nao sao conhecidos).
+  MEDIDO DEPOIS (11/10, so' leitura, a 1.127 x 523, 1.440 x 800 e 1.900 x 900 — as duas maiores num IFRAME da aplicacao: a tela
+  desta maquina nao chega a 1.900): Santa Rita "Financiamento Rural" (1 parcela) e "05-FCO" (7); NJ "Armazem / Maquinas
+  Amendoim" (15, credito) e "Semen Bovino" (12, parcelamento). Em todos: 0 diferencas de posicao e largura entre th e td e
+  entre o texto do th e o do td; 0 textos vazando; 0 contas cortadas; datas com 9,7px de respiro; linhas de 19px; tabela 901
+  (1.127) e 974 (1.440 e 1.900: a pagina tem largura maxima); cabecalho e rodape parados ao rolar (15 parcelas a 523: 49px de
+  rolagem); pagina sem rolagem. Nomes de conta a 10px (45 contas do NJ e da Santa Rita): so' "Permuta · Cooperativa …" (240px)
+  corta, e ja' cortava; o segundo pior, 128,1px, cabe nos 129 uteis.
+  Teste: `src/lib/financiamentos/reguaDasParcelas.test.ts` (6: a regua, e a ligacao na tela lida da fonte com auto-teste dos
+  detectores). 5 mutacoes mortas (th centralizado na coluna numerica; segunda coluna esticando; tabela sem `table-fixed`; ThDet
+  alinhado a' mao; data de volta a 54).
+  ⚠ FOTOS REGRAVADAS, de proposito: as 6 de EDICAO de financiamento e emprestimo de `obrigacaoDialog.fotos.json` (a foto e' do
+    `body` inteiro e a pagina do contrato atras do dialogo mudou; cada uma cresceu EXATAMENTE 270 bytes); as outras 9 identicas.
+  ⚠ FOLGA DA CONTA A 1.127 NO CREDITO: 0,9px sobre o pior nome que cabe. Conta nova de nome mais longo corta (inteiro no `title`).
+  ⚠ "vencida há 9999 dias" (103px) ainda vazaria 3px do Prazo; sem caso real.
+  ⚠ NAO PROVADO: o "Dodge Ram" do NJ (nao esta' na lista de contratos: medido o "Armazem / Maquinas Amendoim", 15 parcelas) ·
+    a janela REAL de 1.440 e de 1.900 · a aba em primeiro plano (medidas por script) · o site publicado depois deste commit ·
+    parcela "sem lançamento" (os dois gestos no lugar de Nota fiscal + Boleto) e 'parcial' com a regua nova.
 - ⚠ UX-TOAST-01 (regra permanente, Gabriel, 26/09/2026): validacao e erro de preenchimento NUNCA em toast no
   canto — vao junto do campo ou do botao; toast que sobrar tem X e nao cobre area de digitacao. A recusa nao
   desfaz o digitado. Detalhe: A30 do docs/PADROES-UI.md.
