@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 11/10/2026 (FIN-DETALHE-CABECALHO-ALINHADO-01, +6 em `src/lib/financiamentos/reguaDasParcelas.test.ts` (novo) — 4870 depois dele; antes o
+  Baseline em 11/10/2026 (CONC-SPLIT-FILHO-CANCELADO-01 passo 2 commit B, +21: `src/lib/conciliacao/cancelarFilhoDeSplit.test.ts` 13 (novo),
+  `src/components/conciliacao/cancelarFilhoDeSplitDialog.test.tsx` 8 (novo) — 4891 depois dele; antes o FIN-DETALHE-CABECALHO-ALINHADO-01, +6 em `src/lib/financiamentos/reguaDasParcelas.test.ts` (novo) — 4870 depois dele; antes o
   CONC-SPLIT-FILHO-CANCELADO-01 passo 1, +5 em `src/components/financeiro-v2/conferenciaExtratoParcial.test.tsx` (novo) — 4864 depois dele; antes o
   REC-FALTA-GERAR-A-VISTA-01 commit B, +15: `src/lib/financeiro/recorrenciasDoMes.test.ts` 6 (21 -> 27),
   `src/v2/pages/recorrenciasFaltaGerar.test.tsx` 9 (novo) — 4859 depois dele; antes o CONC-SALDOS-LAYOUT-02, +2 em `src/pages/conciliacaoDono.test.tsx` — 4844 depois dele; antes a
@@ -289,7 +290,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4870
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4891
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -2557,10 +2558,65 @@ docs/historico/frentes-ate-2026-09-29.md.)
     - ⚠ NAO PROVADO: a leitura chamada PELA TELA (PostgREST) · as outras funcoes que escrevem `cancelado = true` direto
       (`fn_extrato_desfazer_arquivo`, `fn_invalidar_origem_extrato`, as da OC…) sobre um filho de split — recebem a frase da
       trava; nenhuma foi exercitada · os splits 30a12d86 e o do extrato 8a1c0dee seguem com filho cancelado e sem volta (passo 3).
-  ⚠ FILA: CONC-SPLIT-FILHO-CANCELADO-01 passo 2 commit B (a tela: aviso no cancelar, molde do `CancelarParcelaDialog`) · passo 3 (`fn_classificacao_desfazer_split` tolera filho ja' cancelado, e
+  · PASSO 2, COMMIT B — FILHO DE SPLIT NAO SE CANCELA SOZINHO: A TELA OFERECE DESFAZER O DESMEMBRAMENTO (Gabriel 11/10/2026, so'
+    tela + lib, sem migration). O molde e' o da parcela de parcelamento (`CancelarParcelaDialog`).
+    - "E' FILHO DE SPLIT VIVO?" QUEM RESPONDE E' O BANCO: `consultarSplitDoLancamento(id)` (`src/lib/conciliacao/
+      cancelarFilhoDeSplit.ts` = `fn_split_do_lancamento`); nulo (nao e', ou o banco nao respondeu) = o cancelamento de sempre, e
+      a trava do banco continua valendo. O mesmo arquivo e' o dono do leitor sem cast (`lerSplitDoLancamento`: peca torta = nulo),
+      das frases (`TITULO_DO_SPLIT`, `FRASE_DO_SPLIT`, `fraseDaTravaDoSplit`, `fraseDoLoteDeSplit`) e do desfazer (`desfazerSplit`).
+    - A ORDEM NAS PORTAS: parcela de compra parcelada -> filho de desmembramento -> a confirmacao de sempre.
+    - O DIALOGO E' UM: `CancelarFilhoDeSplitDialog` (`src/components/conciliacao/`), AlertDialog de 560 x 300 FIXO: titulo "Este
+      lançamento veio de um desmembramento"; a linha do extrato (data · conta · valor · historico, so' o historico corta); a
+      lista dos filhos num scrollport de 110px com cabecalho preso, linhas de 18px ("este lançamento" realcado, o cancelado
+      cinza e riscado); "soma dos vivos X · extrato Y · confere ✓ / não confere" (os dois numeros do banco; a tela so' compara);
+      a frase; motivo obrigatorio (`MOTIVO_OBRIGATORIO`); Voltar (fecha sem gravar) · "Desfazer desmembramento". O DIALOGO NAO
+      CANCELA O FILHO: desfaz o split INTEIRO pelo dono (`fn_classificacao_desfazer_split`, sem simulacao). `desfazivel` falso:
+      botao e motivo apagados, com o motivo do banco ESCRITO ao lado. Recusa da gravacao escrita ao lado do botao, sem toast.
+      Depois de gravar: `notificarLancamentosMudaram`, `invalidarDono` e as chaves `espelho-conciliacao`,
+      `classificacao-staging`, `extrato-ger-lancs`, `extrato-ger-concil`, `cpr-lancs`, `cpr-caixa`; a porta fecha o que abriu.
+    - ⚠ O `staging_id` QUE O DESFAZER PEDE NAO VEM NO RETORNO DE `fn_split_do_lancamento`: a tela o le^ da view que a Mesa ja' le^
+      (`vw_classificacao_staging_preview`, por `split_id` + `sessao_id`, uma linha). A tela NAO le^ `classificacao_split_itens`.
+      Leitura com `(supabase as any).from` (a view esta' fora do `types.ts`; divida declarada).
+    - PORTAS COM O DIALOGO: o "Cancelar lançamento" do `LancamentoV2Dialog` (`abrirCancelamento` — vale para a lista, a CPR, o
+      Espelho e o Fluxo Caixa, que montam o mesmo modal) e o `LancamentoLeituraDialog` (so' montado pelo Extrato Gerencial).
+    - PORTAS SEM DIALOGO, SO' A FRASE (as que cancelam pelo hook: o `onDelete` do Espelho, a Mesa do Enriquecer e o "Sem par
+      no sistema"): `excluirLancamento` pergunta ao banco ANTES de gravar e, sendo filho, escreve `fraseDaTravaDoSplit` (toast
+      de erro, o canal dessas portas) e nao grava.
+      ⚠ MEDIDO: A FRASE DA TRAVA DO BANCO NAO ATRAVESSA O HOOK. `normalizarErro` (`src/lib/erroOperacional.ts`) troca todo
+        P0001 por "Não foi possível concluir. Tente novamente; se persistir, procure o suporte." — por isso a frase e' escrita
+        pela tela, com os numeros da leitura. Vale para toda trava de banco que chegue por `reportarErro`.
+    - LOTE (`excluirLancamentosEmLote`, `useFinanceiroV2.ts`): os filhos de split vivo (`filhosDeSplitVivo`: prefiltro pela
+      origem 'mesa_split', depois o banco, um a um) sao PULADOS antes de qualquer escrita e voltam em `puladosSplit`; o resto
+      segue. A lista (`FinanceiroV2Tab.handleBulkDelete`) avisa "N partes de desmembramento: desfaça pela Mesa." (toast de
+      aviso, como `puladosOC` e `puladosParcela`).
+    PROVA NO NAVEGADOR (cliente Teste, 11/10, 1.127 x 523, aba em segundo plano, gestos por script; DOIS desmembramentos de 3
+    filhos montados pela funcao de verdade e APAGADOS — 0 restantes): PORTA 1 (modal do lancamento) — `fn_split_do_lancamento`
+    200 depois da consulta da parcela; dialogo 560 x 300, 3 linhas de 18px, lista sem rolagem, "confere ✓", frase em 28 de
+    28px sem corte, botao apagado com "Informe o motivo do cancelamento."; com motivo, desfeito em ~1 s, dialogo e modal
+    fechados, 0 toasts; banco: split desfeito, 3 filhos cancelados com o motivo, cru de volta com 1 vinculo `ofx_cru`, extrato
+    'conciliado'. PORTA 2 (Extrato Gerencial -> ficha de leitura) — o mesmo dialogo no lugar da confirmacao; "Voltar" fecha
+    sem gravar e a ficha fica; desfeito em ~1 s; banco igual; e SEM F5 a Conferencia (Casar lançamentos) mostra o extrato de
+    07/10 de novo contra o lancamento cru, "confere".
+    Testes: 21 novos; 12 mutacoes mortas (porta pulando a consulta, nas duas portas; botao vivo sem motivo; botao vivo com
+    `desfazivel` falso; recusa por toast; sem aviso ao canal; sem invalidar a Conferencia; hook com o toast generico; lote
+    sem pular; desfazer em simulacao; recusa do banco como sucesso; peca torta como split) e 1 sobrevivente EQUIVALENTE (a
+    guarda repetida do motivo no `gravar`). Testes de FONTE atualizados ao contrato novo, sem afrouxar:
+    `cancelarParcela.test.ts` (a ordem das portas, o lote), `concSemF5.test.tsx` e `useFinanceiroV2.cancelMotivo.test.ts`
+    (o retorno do lote ganhou `puladosSplit`).
+    ⚠ ACHADO NA PROVA, consertado no proprio dialogo: a lista do Extrato Gerencial (`extrato-ger-lancs`) NAO relia depois do
+      desfazer (a ficha de leitura nao recebe `onCancelado` ali — o cancelamento comum por essa porta tambem nao a rele^, e
+      isso NAO foi mexido). O dialogo passou a invalidar as duas chaves da tela; NAO REPROVADO no navegador depois do conserto.
+    ⚠ DIVIDAS: o hook faz UMA ida a mais ao banco em todo cancelar unitario (e o modal consulta o split antes; quando nao e'
+      filho, sao duas consultas) · o lote consulta o banco UM A UM para os de origem 'mesa_split' · o custo da leitura da view
+      pelo `split_id` nao foi medido · nas portas do hook e no lote a frase vai em toast.
+    ⚠ NAO PROVADO NO NAVEGADOR: as tres portas do hook e o lote com filho vivo (so' por teste) · `desfazivel` falso e a recusa
+      do banco escrita ao lado do botao (so' por teste; os splits 30a12d86 e o do extrato 8a1c0dee sao o caso real, em
+      clientes reais — nao abertos) · mais de 5 filhos (a lista rolando) · historico longo cortando · a aba em primeiro plano ·
+      perfil nao admin · o dialogo aberto pela CPR e pelo Espelho (e' o mesmo modal).
+  ⚠ FILA: CONC-SPLIT-FILHO-CANCELADO-01 passo 3 (`fn_classificacao_desfazer_split` tolera filho ja' cancelado, e
     "Desfazer desmembramento" entra no "⋯" da Conferencia, com leitura dos splits vivos por extrato) · SPLIT-FILHO-EXISTENTE-01
     (o desmembrar da Mesa aceita um lancamento EXISTENTE — ocorrencia de recorrencia, parcela — como filho, em vez de criar;
-    FASE 0 propria).
+    FASE 0 propria) · SPLIT-SEM-REGISTRO-TRAVA-01 (os 15 'mesa_split' vivos sem registro: fora da trava e do aviso).
   ⚠ NAO PROVADO: a linha no NAVEGADOR (so' teste montado; "falta 9.999.999,99" na celula nao foi medido — a celula corta no fim
     e a falta vem primeiro) · o caso real na tela depois do conserto · o dia com a linha parcial e o filtro, no navegador.
 - ⚠ A DATA DO BANCO MANDA NA CONFERENCIA (PR-CONC-CONFERENCIA-FECHAMENTO-DIA, Gabriel 03/10; so' tela). Dono:

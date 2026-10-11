@@ -121,7 +121,8 @@ describe('as quatro portas passam pelo mesmo dono', () => {
   it('(a) e (c) — o cancelar do modal do lançamento (lista e Contas a Pagar) pergunta ao banco antes da confirmação de sempre', () => {
     expect(modal).toContain('onCancelar={() => { void abrirCancelamento(); }}');
     expect(modal).toContain('const previa = id ? await consultarParcelaDoLancamento(id) : null;');
-    expect(modal).toContain('if (previa) setParcelaACancelar(previa);\n    else setConfirmandoCancelamento(true);');
+    /* CONC-SPLIT-FILHO-CANCELADO-01 passo 2B: entre a parcela e a confirmação de sempre entrou a pergunta do desmembramento */
+    expect(modal).toContain('if (previa) setParcelaACancelar(previa);\n    else if (split) setSplitACancelar(split);\n    else setConfirmandoCancelamento(true);');
     expect(modal).toContain('<CancelarParcelaDialog');
     /* o caminho antigo, direto na confirmação, saiu do botão */
     expect(modal).not.toContain("onCancelar={() => { setMotivoCancelamento(''); setConfirmandoCancelamento(true); }}");
@@ -133,7 +134,7 @@ describe('as quatro portas passam pelo mesmo dono', () => {
   });
   it('(b) — o lote pula as parcelas pelo dono, com a lista do banco, ANTES de qualquer escrita', () => {
     expect(hook).toContain("rpc('fn_parcelas_dos_lancamentos', { p_cliente_id: clienteId })");
-    expect(hook).toContain('const { cancelaveis, puladosParcela } = separarParcelas(semOC, parcelasVivas);');
+    expect(hook).toContain('const { cancelaveis: semParcela, puladosParcela } = separarParcelas(semOC, parcelasVivas);');
     expect(hook.indexOf('separarParcelas(semOC, parcelasVivas)')).toBeLessThan(hook.indexOf('// Universal soft delete in batches of 100'));
     expect(lista).toContain('toast.warning(fraseDoLote(result.puladosParcela.length));');
   });

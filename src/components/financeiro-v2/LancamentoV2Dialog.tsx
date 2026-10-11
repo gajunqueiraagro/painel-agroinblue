@@ -95,6 +95,8 @@ import { podeCriarOCDoLegado } from '@/lib/oc/criarDoLegado';
 import { RodapeCancelamento } from '@/components/financeiro-v2/RodapeCancelamento';
 import { CancelarParcelaDialog } from '@/components/financiamentos/CancelarParcelaDialog';
 import { consultarParcelaDoLancamento } from '@/lib/financiamentos/cancelarParcelaBanco';
+import { CancelarFilhoDeSplitDialog } from '@/components/conciliacao/CancelarFilhoDeSplitDialog';
+import { consultarSplitDoLancamento, type SplitDoLancamento } from '@/lib/conciliacao/cancelarFilhoDeSplit';
 import type { PreviaCancelarParcela } from '@/lib/financiamentos/cancelarParcela';
 import { edicaoDaParcela, podeSerParcelaDeContrato, MOTIVO_PARCELA_PAGA } from '@/lib/financiamentos/parcelaNoModal';
 import { gravarParcelaDoModal, lerContratoDaParcela, type ContratoDaParcela } from '@/lib/financiamentos/parcelaNoModalBanco';
@@ -626,6 +628,9 @@ export function LancamentoV2Dialog({
   /* PARC-CADEIA-01 — o lançamento é parcela viva de compra parcelada (quem diz é o BANCO, pela simulação): em vez da
      confirmação de sempre abre o aviso, que cancela a parcela e ajusta o contrato juntos. */
   const [parcelaACancelar, setParcelaACancelar] = useState<PreviaCancelarParcela | null>(null);
+  /* CONC-SPLIT-FILHO-CANCELADO-01 — o lançamento é filho de um desmembramento vivo (quem diz é o BANCO): em vez da
+     confirmação de sempre abre o aviso, que mostra o desmembramento e oferece desfazê-lo inteiro. */
+  const [splitACancelar, setSplitACancelar] = useState<SplitDoLancamento | null>(null);
   /* PARC-CADEIA-01 passo 3 — o contrato de que este lançamento é parcela viva (lido do dono da situação, só na edição de quem
      PODE ser parcela). Com ele, valor e vencimento da parcela mudam JUNTO com o lançamento; sem ele, o modal é o de sempre. */
   const [contratoDaParcela, setContratoDaParcela] = useState<ContratoDaParcela | null>(null);
@@ -644,8 +649,11 @@ export function LancamentoV2Dialog({
     const id = lancamento?.id;
     setConsultandoParcela(true);
     const previa = id ? await consultarParcelaDoLancamento(id) : null;
+    /* A ORDEM: parcela de compra parcelada -> filho de desmembramento -> a confirmação de sempre. */
+    const split = !previa && id ? await consultarSplitDoLancamento(id) : null;
     setConsultandoParcela(false);
     if (previa) setParcelaACancelar(previa);
+    else if (split) setSplitACancelar(split);
     else setConfirmandoCancelamento(true);
   };
   const [motivoCancelamento, setMotivoCancelamento] = useState('');
@@ -3331,6 +3339,16 @@ export function LancamentoV2Dialog({
           aoVoltar={() => setParcelaACancelar(null)}
           aoGravar={() => { setParcelaACancelar(null); onClose(); }}
           aoAbrirContrato={onAbrirContrato ? (finId) => { setParcelaACancelar(null); onClose(); onAbrirContrato(finId); } : undefined}
+        />
+      )}
+
+      {/* CONC-SPLIT-FILHO-CANCELADO-01 — filho de desmembramento: não se cancela sozinho; desfaz-se o desmembramento inteiro. */}
+      {splitACancelar && lancamento?.id && clienteAtual?.id && (
+        <CancelarFilhoDeSplitDialog
+          clienteId={clienteAtual.id}
+          split={splitACancelar}
+          aoVoltar={() => setSplitACancelar(null)}
+          aoDesfazer={() => { setSplitACancelar(null); onClose(); }}
         />
       )}
 

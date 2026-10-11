@@ -12,6 +12,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { CancelarParcelaDialog } from '@/components/financiamentos/CancelarParcelaDialog';
 import { consultarParcelaDoLancamento } from '@/lib/financiamentos/cancelarParcelaBanco';
+import { CancelarFilhoDeSplitDialog } from '@/components/conciliacao/CancelarFilhoDeSplitDialog';
+import { consultarSplitDoLancamento, type SplitDoLancamento } from '@/lib/conciliacao/cancelarFilhoDeSplit';
 import type { PreviaCancelarParcela } from '@/lib/financiamentos/cancelarParcela';
 
 interface LancRow {
@@ -70,13 +72,18 @@ export function LancamentoLeituraDialog({ open, lancamentoId, onClose, onResolve
   const [cancelando, setCancelando] = useState(false);
   /* PARC-CADEIA-01 — parcela viva de compra parcelada (quem diz é o banco): o cancelamento é o do contrato, pelo aviso. */
   const [parcelaACancelar, setParcelaACancelar] = useState<PreviaCancelarParcela | null>(null);
+  /* CONC-SPLIT-FILHO-CANCELADO-01 — filho de desmembramento vivo: abre o aviso que oferece desfazer o desmembramento. */
+  const [splitACancelar, setSplitACancelar] = useState<SplitDoLancamento | null>(null);
   const [consultandoParcela, setConsultandoParcela] = useState(false);
   const pedirCancelamento = async (id: string) => {
     if (consultandoParcela) return;
     setConsultandoParcela(true);
     const previa = await consultarParcelaDoLancamento(id);
+    /* A ORDEM: parcela de compra parcelada -> filho de desmembramento -> a confirmação de sempre. */
+    const split = !previa ? await consultarSplitDoLancamento(id) : null;
     setConsultandoParcela(false);
     if (previa) setParcelaACancelar(previa);
+    else if (split) setSplitACancelar(split);
     else setConfirmCancel(true);
   };
 
@@ -229,6 +236,14 @@ export function LancamentoLeituraDialog({ open, lancamentoId, onClose, onResolve
           previa={parcelaACancelar}
           aoVoltar={() => setParcelaACancelar(null)}
           aoGravar={() => { setParcelaACancelar(null); onClose(); onCancelado?.(); }}
+        />
+      )}
+      {splitACancelar && l && (
+        <CancelarFilhoDeSplitDialog
+          clienteId={l.cliente_id}
+          split={splitACancelar}
+          aoVoltar={() => setSplitACancelar(null)}
+          aoDesfazer={() => { setSplitACancelar(null); onClose(); onCancelado?.(); }}
         />
       )}
     </Dialog>

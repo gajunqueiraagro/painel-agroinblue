@@ -22,6 +22,7 @@ import { useParcelasDosLancamentos } from '@/hooks/useParcelasDosLancamentos';
 import { nomeEParcela } from '@/lib/financiamentos/nomeDaParcela';
 import { docDaLinha } from '@/lib/financeiro/documentoHelper';
 import { fraseDoLote } from '@/lib/financiamentos/cancelarParcela';
+import { fraseDoLoteDeSplit } from '@/lib/conciliacao/cancelarFilhoDeSplit';
 import { MinimodalOrigemLancamento } from '@/components/financeiro-v2/MinimodalOrigemLancamento';
 import { useCoberturaExtrato } from '@/hooks/useCoberturaExtrato';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -1453,6 +1454,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
       if (result.puladosParcela.length > 0) {
         /* PARC-CADEIA-01 — parcela de compra parcelada não sai em lote: cada uma muda o contrato. */
         toast.warning(fraseDoLote(result.puladosParcela.length));
+      }
+      if (result.puladosSplit.length > 0) {
+        /* CONC-SPLIT-FILHO-CANCELADO-01 — parte de desmembramento não sai em lote: desfaz-se o desmembramento inteiro. */
+        toast.warning(fraseDoLoteDeSplit(result.puladosSplit.length));
       }
       if (result.excluidos > 0) {
         toast.success(`${result.excluidos} lançamento${result.excluidos !== 1 ? 's' : ''} excluído${result.excluidos !== 1 ? 's' : ''}`);

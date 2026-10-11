@@ -48,6 +48,7 @@ import type { FiltrosV2, DimensaoDataFinanceiro } from '@/lib/financeiro/filtros
 import { paginarTudo } from '@/lib/financeiro/paginarTudo';
 import { colunasDoValorDoMes, type PedidoDoValorDoMes } from '@/lib/financeiro/valorDoMes';
 import { notificarFornecedoresMudaram } from '@/hooks/useFornecedoresDoCliente';
+import { consultarSplitDoLancamento, filhosDeSplitVivo, fraseDaTravaDoSplit, separarFilhosDeSplit } from '@/lib/conciliacao/cancelarFilhoDeSplit';
 
 
 export interface LancamentoV2 {
@@ -1238,6 +1239,11 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       .limit(1);
     if (erroParte) { reportarErro(erroParte, 'excluirLancamento:parteOC', toast.error); return false; }
     if ((parteViva ?? []).length > 0) { toast.error(MOTIVO_BLOQUEIO_TITULO_OC); return false; }
+    /* CONC-SPLIT-FILHO-CANCELADO-01 — filho de desmembramento vivo não se cancela sozinho. O banco recusa (a trava), mas a
+       mensagem dele não atravessa o normalizador de erros (viraria "Não foi possível concluir…"): a recusa é dita AQUI, antes
+       de escrever, com a frase da tela e os números da leitura. Quem responde se é filho é o banco. */
+    const split = await consultarSplitDoLancamento(id);
+    if (split) { toast.error(fraseDaTravaDoSplit(split)); return false; }
 
     // PR-STATUS-SYNC-01: ANTES de cancelar, coletar os extratos com vínculo ATIVO
     // deste lançamento (após o cancelamento o trigger trg_cbi_desfazer_on_cancelamento
@@ -1285,10 +1291,10 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
    * individual. E o lote PULA titulo com parte viva de OC e devolve quais pulou (`puladosOC`): o
    * caminho deles e' o "Desfazer compromisso" da OC.
    */
-  const excluirLancamentosEmLote = useCallback(async (ids: string[], motivo?: string): Promise<{ excluidos: number; bloqueados: string[]; puladosOC: string[]; puladosParcela: string[] }> => {
-    if (ids.length === 0) return { excluidos: 0, bloqueados: [], puladosOC: [], puladosParcela: [] };
+  const excluirLancamentosEmLote = useCallback(async (ids: string[], motivo?: string): Promise<{ excluidos: number; bloqueados: string[]; puladosOC: string[]; puladosParcela: string[]; puladosSplit: string[] }> => {
+    if (ids.length === 0) return { excluidos: 0, bloqueados: [], puladosOC: [], puladosParcela: [], puladosSplit: [] };
     const motivoOk = motivoInformado(motivo);
-    if (!motivoOk) { toast.error(MOTIVO_OBRIGATORIO); return { excluidos: 0, bloqueados: [], puladosOC: [], puladosParcela: [] }; }
+    if (!motivoOk) { toast.error(MOTIVO_OBRIGATORIO); return { excluidos: 0, bloqueados: [], puladosOC: [], puladosParcela: [], puladosSplit: [] }; }
 
     /* Quem tem parte viva de OC sai do lote ANTES de qualquer escrita. */
     const comParte = new Set<string>();
@@ -1298,7 +1304,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
         .select('financeiro_lancamento_id')
         .in('financeiro_lancamento_id', ids.slice(i, i + 100))
         .eq('cancelada', false);
-      if (error) { reportarErro(error, 'excluirEmLote:partesOC', toast.error); return { excluidos: 0, bloqueados: [], puladosOC: [], puladosParcela: [] }; }
+      if (error) { reportarErro(error, 'excluirEmLote:partesOC', toast.error); return { excluidos: 0, bloqueados: [], puladosOC: [], puladosParcela: [], puladosSplit: [] }; }
       for (const r of data ?? []) if (r.financeiro_lancamento_id) comParte.add(r.financeiro_lancamento_id);
     }
     const { cancelaveis: semOC, puladosOC } = separarTitulosOC(ids, comParte);
@@ -1307,10 +1313,13 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     let parcelasVivas: ReadonlySet<string> = new Set<string>();
     if (clienteId && semOC.length > 0) {
       const { data: mapa, error: erroParcelas } = await (supabase as any).rpc('fn_parcelas_dos_lancamentos', { p_cliente_id: clienteId });
-      if (erroParcelas) { reportarErro(erroParcelas, 'excluirEmLote:parcelas', toast.error); return { excluidos: 0, bloqueados: [], puladosOC, puladosParcela: [] }; }
+      if (erroParcelas) { reportarErro(erroParcelas, 'excluirEmLote:parcelas', toast.error); return { excluidos: 0, bloqueados: [], puladosOC, puladosParcela: [], puladosSplit: [] }; }
       parcelasVivas = new Set(lerParcelasDosLancamentos(mapa).keys());
     }
-    const { cancelaveis, puladosParcela } = separarParcelas(semOC, parcelasVivas);
+    const { cancelaveis: semParcela, puladosParcela } = separarParcelas(semOC, parcelasVivas);
+    /* CONC-SPLIT-FILHO-CANCELADO-01 — filho de desmembramento vivo sai do lote ANTES de qualquer escrita (um só na fatia
+       faria a trava do banco recusar a fatia inteira); o resto do lote segue. Quem diz quais são é o banco. */
+    const { cancelaveis, puladosSplit } = separarFilhosDeSplit(semParcela, await filhosDeSplitVivo(semParcela));
 
     // PR-STATUS-SYNC-01: acumula os extratos com vínculo ATIVO dos lançamentos-alvo,
     // DEDUPLICADOS (recompute uma vez por extrato ao final, mesmo com dezenas de
@@ -1359,7 +1368,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     }
 
     if (totalExcluidos > 0) avisarOsOutros();
-    return { excluidos: totalExcluidos, bloqueados: [], puladosOC, puladosParcela };
+    return { excluidos: totalExcluidos, bloqueados: [], puladosOC, puladosParcela, puladosSplit };
   }, [user, avisarOsOutros, clienteId]);
 
 

@@ -118,7 +118,7 @@ describe('cancelamento em lote', () => {
     const { result } = renderHook(() => useFinanceiroV2());
     let r: { excluidos: number; bloqueados: string[]; puladosOC: string[] } | undefined;
     await act(async () => { r = await result.current.excluirLancamentosEmLote([COMUM_1, IATRO, COMUM_2, ADIANT], 'limpeza de teste'); });
-    expect(r).toEqual({ excluidos: 2, bloqueados: [], puladosOC: [IATRO, ADIANT], puladosParcela: [] });
+    expect(r).toEqual({ excluidos: 2, bloqueados: [], puladosOC: [IATRO, ADIANT], puladosParcela: [], puladosSplit: [] });
     const c = cancelamentos();
     expect(c).toHaveLength(1);
     expect(c[0].ids).toEqual([COMUM_1, COMUM_2]);
