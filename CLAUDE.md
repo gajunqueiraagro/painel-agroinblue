@@ -3836,6 +3836,56 @@ docs/historico/frentes-ate-2026-09-29.md.)
   quem mexer num confere o outro. O selo do rodape (`SeloRegraDaLinha`) diz a regra da linha.
 
 ## REGRAS VIGENTES — OPERACAO COMERCIAL E FINANCEIRO
+- ⚠ MIGRAR UMA OC DE TITULO PARA CONTA CORRENTE E' UMA RPC SO', E O 01a E' SO' SIMULACAO (OC-TITULO-PARA-CC-01a, Gabriel 11/10/2026,
+  so' banco; migration `20261027196600_oc_titulo_para_cc_01a.sql`). ⚠ A MIGRATION NAO FOI APLICADA PELO CODE: quem aplica e' o
+  Chat, depois do GO, e confere `has_function_privilege('anon', oid, 'EXECUTE') = false` nas duas funcoes. Nenhuma OC real foi
+  migrada (isso e' o 01b); nenhuma tela chama a RPC.
+  · `oc_migrar_para_conta_corrente(p_operacao_id, p_simular DEFAULT true)` -> jsonb (SECURITY DEFINER, `tenant_ok` + 42501 "sem
+    acesso a este registro", GRANT a `authenticated` e `service_role`). GUARDAS (P0001, frase curta): "Operacao ja esta em conta
+    corrente" · "Conta corrente, por enquanto, so em venda e compra" · "Operacao em rascunho ou cancelada nao migra" · "Venda em
+    boitel nao usa conta corrente" · "Operacao de teste nao migra" · "Operacao sem lote negociado" · "Registre a saida dos animais
+    antes de migrar" (D3). ORDEM: foto do antes -> `_oc_fechar_casca_titulo` -> modelo = 'conta_corrente' (versao + 1, evento
+    'definir_modelo_financeiro', o molde de `oc_criar_do_legado`) -> cada lancamento vivo do principal vira recebimento pelo dono
+    `_oc_vincular_recebimento` (a chamada de `oc_vincular_lancamento`) -> `oc_sincronizar_entregas` -> `oc_conta_corrente` ->
+    relatorio {operacao_id, tipo, cliente_id, estorno_id, simulado, antes {dre, principal, liquidado, despesas, meses_titulo},
+    depois {dre, entregas, recebimentos, programado, saldo, situacao, meses_entrega}, casca, dre_diferenca, dre_bate, avisos} ->
+    evento 'migrar_para_conta_corrente'. SIMULACAO = GRAVACAO: com `p_simular` o mesmo caminho roda e e' desfeito por RAISE P0001
+    cuja MENSAGEM e' o relatorio em JSON (quem chama le^ `SQLERRM`).
+  · D1 — PARCELA PAGA / CONCILIADA MIGRA. `_oc_fechar_casca_titulo(operacao, estorno_id, motivo)` (interna, sem GRANT) fecha a
+    casca do titulo SEM TOCAR `financeiro_lancamentos_v2`: estorna a liquidacao AUTOMATICA (origem 'financeiro') -> cancela SO' a
+    parte principal/principal -> parcela 'cancelada' -> parcela 'prevista' que sobrou tambem -> programacao 'ativa' sem parcela
+    viva vira 'cancelada' (os valores de `oc_cancelar_programacao`) -> compromisso principal sem programacao ativa vira
+    'cancelado'. UM `estorno_id` e UM motivo fixo, "migracao titulo -> conta corrente (OC-TITULO-PARA-CC-01a)"; evento
+    'fechar_casca_titulo'. Recusa parte principal com componente <> 'principal' e liquidacao MANUAL ativa no principal.
+    ⚠ DESVIO DECLARADO: `oc_cancelar_programacao` devolve o compromisso a 'aberto'; aqui ele vira 'cancelado' — o precedente e' a
+      unica OC em conta corrente que tinha compromisso principal (a compra de homologacao de 29/09), e 'aberto' deixaria um
+      principal a programar numa OC que nao tem mais titulo. Decisao do Gabriel se fica.
+    ⚠ O LANCAMENTO SO' E' TOCADO DEPOIS, PELOS DONOS DE SEMPRE: `_oc_vincular_recebimento` zera `movimentacao_rebanho_id` e, na
+      VENDA, leva competencia e safra para as da primeira saida; o gatilho da parte tira o pagamento do DRE (`compoe_dre` false).
+      Valor, datas de vencimento e pagamento, status, conta e conciliacao ficam (preso no teste, coluna a coluna, fora
+      `updated_at`, `updated_by` e `compoe_dre`). A liquidacao automatica que a casca estornou e' REATIVADA pela ponte quando a
+      parte de recebimento nasce: o "liquidado" da OC nao muda.
+  · D2 — `dre_bate` E' AVISO, NUNCA TRAVA: |dre depois − dre antes| <= 0,005; a diferenca vira o aviso "DRE muda em R$ X". Avisos
+    obrigatorios: "mes do DRE muda de A para B" e, na venda, "competencia/safra do recebimento passam a ser as da saida".
+    DRE DA OC (definicao desta funcao): soma dos lancamentos vivos ligados por parte viva com `compoe_dre`, entrada +, saida −.
+  · ELEGIVEIS HOJE (11/10): 42 — compra 31 fechadas + 2 programadas, venda 9 fechadas. Dessas, 7 nao tem saida de gado (D3 as
+    recusa), 6 tem DRE do titulo ≠ valor acordado e 4 mudam de mes. FORA: abate (frente OC-CC-ABATE-01), boitel (18), rascunho (2),
+    cancelada e de teste.
+  Teste: `supabase/tests/oc_titulo_para_cc_01a_test.sql` (M1–M8, OCs sinteticas no Teste copiando a ESTRUTURA de uma OC real por
+  `jsonb_populate_record`; termina em RAISE OK). ENSAIADO em transacao revertida com as duas funcoes criadas na propria transacao:
+  M1 abate, M2 ja' conta corrente, M3 sem saida, M4 sem usuario, M5 simulacao nao grava (foto por md5 de operacao, partes,
+  liquidacoes, programacao, eventos e lancamentos), M6 compra com 2 parcelas pagas e 1 saida (estado final
+  "conta_corrente · 2 partes canceladas · 2 recebimentos · 1 entrega de 91.000 no DRE e sem caixa · parcela, programacao e
+  compromisso cancelados · 2 de 2 liquidacoes ativas · 3 eventos com o mesmo estorno_id", saldo 0, 'quitado', segunda chamada
+  recusada) — os seis PASSARAM.
+  ⚠ NA COMPRA O ADIANTADO AO FORNECEDOR TEM SALDO NEGATIVO: pago 93.000 num lote de 91.000 da' saldo −2.000,00 e situacao
+    'adiantado' (o briefing dizia "saldo 2.000"; vale o leitor `oc_conta_corrente`). O M7 foi corrigido para −2000.
+  ⚠ NAO PROVADO: o M7 so' foi conferido LENDO o relatorio devolvido pelo ensaio (todos os outros campos batem); o teste nao foi
+    rodado de novo depois da correcao do sinal · M8 (ACL) nao foi ensaiado — vale o bloco de conferencia da propria migration ao
+    aplicar · VENDA nao tem caso sintetico (o aviso de competencia/safra e o sinal do saldo na venda so' pelo corpo) · nenhuma
+    das 42 OCs reais foi simulada (o ensaio foi so' no Teste) · mes fechado na data da saida (a entrega nasce na competencia
+    dela) · OC com mais de um lote ou mais de uma saida · a formula do DRE da OC nao foi conferida contra `fn_dre_pecuaria`.
+  ⚠ FILA: 01b (migrar as OCs reais, uma a uma, com a simulacao a' vista) · tela · OC-CC-ABATE-01.
 - ⚠ O ENCARGO DO CONTRATO TEM TABELA PROPRIA E NAO TOCA O LANCAMENTO (FIN-CONTRATO-VINCULAR-ENCARGO-01 passo 1, Gabriel 11/10/2026, so'
   banco; migrations 20261027196100 — tabela e trava, ⚠ registrada como 20261011132222, ledger = arquivo, md5 f88ffba7… —,
   20261027196200 — donos e leituras, ⚠ registrada como 20261011132310, md5 cde712ef… — e 20261027196300 — vincular e desvincular,
