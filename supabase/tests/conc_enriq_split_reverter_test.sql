@@ -248,7 +248,18 @@ BEGIN
   -- filho cancelado por outro caminho
   c2 := pg_temp.split_cenario(ARRAY[14.00, 24.00]::numeric[], 'manual'); r := pg_temp.split_fazer(c2);
   v_fil := ARRAY(SELECT jsonb_array_elements_text(r -> 'lancamentos_criados')::uuid);
+  -- CONC-SPLIT-FILHO-CANCELADO-01 passo 2: o filho de split vivo so' se cancela pelo dono. Por fora, a trava recusa; aqui o
+  -- teste MONTA a quebra de proposito (com a chave do escritor) para exercitar a recusa 'filho_cancelado' dos casos antigos.
+  BEGIN
+    PERFORM public.fn_cancelar_lancamento_auditoria(v_fil[2], 'outro caminho');
+    v_ok := false; v_out := v_out || ' a_trava_nao_recusou=FALHOU';
+  EXCEPTION WHEN sqlstate 'P0001' THEN
+    v_out := v_out || format(' trava=%s', sqlerrm LIKE 'Este lançamento é parte do desmembramento do extrato de 05/10/2026 (R$ 38,00, 2 lançamentos).%');
+    IF sqlerrm NOT LIKE 'Este lançamento é parte do desmembramento do extrato de 05/10/2026 (R$ 38,00, 2 lançamentos).%' THEN v_ok := false; v_out := v_out || ' FALHOU ' || sqlerrm; END IF;
+  END;
+  PERFORM set_config('app.split_escritor', 'on', true);
   PERFORM public.fn_cancelar_lancamento_auditoria(v_fil[2], 'outro caminho');
+  PERFORM set_config('app.split_escritor', 'off', true);
   r := public.fn_classificacao_desfazer_split((c2 -> 'stg' ->> 0)::uuid, 'x', false);
   v_out := v_out || format(' filho_cancelado=%s', r ->> 'motivo' = 'filho_cancelado');
   IF r ->> 'motivo' IS DISTINCT FROM 'filho_cancelado' THEN v_ok := false; v_out := v_out || ' FALHOU ' || r::text; END IF;

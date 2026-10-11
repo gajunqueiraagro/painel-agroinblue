@@ -2099,6 +2099,14 @@ docs/historico/frentes-ate-2026-09-29.md.)
     contas sinteticas na mesma transacao, `statement_timeout` de 30 s) estourou o tempo e segurou `financeiro_plano_contas` com
     trava exclusiva por 30 s; reverteu sem residuo. Se houve leitura ou escrita de usuario esperando nesse intervalo NAO da' mais
     para ver (`pg_stat_activity` e' instantaneo; conferido logo depois: nada preso).
+- ⚠ MEDICAO DE CUSTO DE GATILHO NUNCA LIGA / DESLIGA O GATILHO COM `ALTER TABLE` NA TABELA REAL (regra do Gabriel, 11/10/2026):
+  `ALTER TABLE … ENABLE / DISABLE TRIGGER` pega trava forte na tabela e a segura ate' o fim da transacao. O A/B se faz com DUAS
+  FUNCOES — a nova e uma sem a logica — trocadas por `CREATE OR REPLACE` da FUNCAO do gatilho, ou numa TABELA CLONE sintetica
+  criada na propria transacao.
+  ⚠ INCIDENTE DE 11/10/2026 (CONC-SPLIT-FILHO-CANCELADO-01 passo 2, erro meu): o ensaio de custo da trava do filho de split
+    alternou o gatilho por `ALTER TABLE` em `financeiro_lancamentos_v2`, 14 vezes na mesma transacao, e segurou a tabela de
+    lancamentos por ~8 s; revertido, sem residuo. Se houve usuario gravando lancamento nesse intervalo, esperou (nao da' para
+    ver depois). O mesmo vale para o `CREATE TRIGGER` do ensaio: 1 a 2 s por rodada — ensaio de gatilho e' CURTO.
 - ⚠ PROIBIDO, EM ENSAIO OU MEDICAO, RENOMEAR OU ALTERAR EM MASSA LINHA DE `financeiro_plano_contas` (mesma regra, 09/10/2026): o
   UPDATE de subcentro / macro / grupo / centro / escopo dispara `trg_propagar_plano_para_lancamentos`, que faz UPDATE em
   `financeiro_lancamentos_v2` por `plano_conta_id` — e NAO HA' INDICE nessa coluna: cada conta renomeada varre a tabela de
@@ -2470,8 +2478,48 @@ docs/historico/frentes-ate-2026-09-29.md.)
     era ler a marca gravada, ou repetir o caso em regra sintetica.
   Teste: `src/components/financeiro-v2/conferenciaExtratoParcial.test.tsx` (5: a regra; o parcial com "!", "Parcial" e a falta;
   o fechado com ✓; "Só não conciliados"; o motivo). 2 mutacoes mortas (sinal fixo em ✓; status fixo em "conciliado").
-  ⚠ FILA: CONC-SPLIT-FILHO-CANCELADO-01 passo 2 (cancelar filho de desmembramento TRAVA no banco e AVISA na tela, molde do
-    parcelamento — decisao do Gabriel, 11/10) · passo 3 (`fn_classificacao_desfazer_split` tolera filho ja' cancelado, e
+  · PASSO 2, COMMIT A — CANCELAR FILHO DE DESMEMBRAMENTO TRAVA NO BANCO (Gabriel 11/10/2026, so' banco; migration 20261027196500,
+    ⚠ registrada como 20261011155704; ledger = arquivo, md5 240760b7…). O molde e' o da parcela de parcelamento.
+    - "E' FILHO DE SPLIT VIVO?" TEM UM DONO: `_fn_split_vivo_do_lancamento(lancamento)` -> (split_id, extrato_id, staging_id), o
+      item de `classificacao_split_itens` (a coluna e' `filho_id`) cujo split NAO esta' desfeito (md5 6621ae6a…; interna,
+      fechada; o indice `classificacao_split_itens_filho_idx` ja' existia). Leem dele a trava e a RPC da tela.
+    - A TRAVA: `trg_guard_split_filho_cancelar` (BEFORE UPDATE OF cancelado em `financeiro_lancamentos_v2`, quando passa a
+      cancelado) -> `guard_split_filho_cancelar()` (md5 1f3ce3a6…, SECURITY DEFINER, fechada). Com split vivo e SEM a chave
+      `app.split_escritor = 'on'` (transacao): P0001 "Este lançamento é parte do desmembramento do extrato de DD/MM/AAAA (R$ X, N
+      lançamentos). Cancelar por aqui deixaria o extrato parcial, sem como completar. Desfaça o desmembramento pela Mesa do
+      Enriquecer." — por UPDATE direto e por `fn_cancelar_lancamento_auditoria` (que desfaz TUDO o que ja' tinha escrito). Sem
+      split vivo (lancamento comum, filho de split desfeito): passa.
+    - O DONO LIGA A CHAVE: `fn_classificacao_desfazer_split` (patch guardado por md5, a4ff7cf6… -> 088982bf…; 1 ancora, e o
+      CONCEITO contado: um so' cancelamento de filho, um so' laco) liga a chave antes do laco que cancela os filhos e a desliga
+      logo depois. A recusa 'filho_cancelado' NAO foi tocada (passo 3). ACL preservada.
+    - `fn_split_do_lancamento(lancamento)` -> jsonb | NULL (md5 79325937…; SECURITY DEFINER, `tenant_ok` + 42501 sem usuario
+      tambem, GRANT a `authenticated` e `service_role`): {split_id, extrato {id, data, valor, descricao, conta_nome}, importacao
+      {sessao_id, criada_em}, filhos [{lancamento_id, descricao, valor, cancelado, este}], total_filhos, soma_vivos, desfazivel,
+      motivo_nao_desfazivel}. `desfazivel` e o motivo sao a SIMULACAO do proprio desfazer (por isso VOLATILE: executa e desfaz;
+      nao grava). NULL = nao e' filho de split vivo (nao e' erro).
+    - CUSTO da trava (200 cancelamentos sinteticos, 7 series alternadas): mediana 246,3 ms com x 244,1 ms sem (+0,9%, dentro
+      do teto de 2%; o ruido entre series e' maior que a diferenca).
+    - ⚠ RE-DESMEMBRAR UM FILHO JA' ERA RECUSADO, e nao pela trava: `fn_classificacao_split_substituir` so' aceita origem
+      'extrato' / 'ofx' / 'manual' (guarda do PR-CONC-ENRIQ-AGRUP-2a) e todo filho nasce 'mesa_split' — recusa
+      'origem_nao_desmembravel' ("Só se desmembra lançamento cru do extrato ou lançado à mão"), medido no Teste. A recusa
+      'filho_redesmembrado' do desfazer protege um caminho que nao existe. O substituir NAO foi tocado.
+    - ⚠ DIVIDA SPLIT-SEM-REGISTRO-TRAVA-01: 15 lancamentos 'mesa_split' vivos NAO estao em `classificacao_split_itens`
+      (desmembramentos antigos, sem registro) e ficam FORA da trava. Vem de 4 crus: 347b99bf, 7cfad218, ada6b1f6, bda6a68b — so' o
+      7cfad218 estava entre os 5 da divida SPLIT-REVERTER (a); os outros quatro daquela lista (720ea2d4, add72c81, d0352371,
+      ec7b5153) ja' nao tem filho vivo.
+    - Testes: `supabase/tests/conc_split_filho_cancelado_01_trava_test.sql` (F1–F7, o desmembramento montado PELA FUNCAO DE
+      VERDADE no Teste; termina em RAISE OK). 4 mutacoes mortas: trava sem a chave e chave nao ligada no desfazer -> F6
+      (`desfazivel` vira falso: o proprio desfazer e' bloqueado; o F6 simula antes do F3); tenant fora -> F6; trava que nao acha
+      o split -> F1. A mutacao "WHEN sem o NOT OLD" nao tem caso (e' so' custo). No vivo depois de aplicar, OK: este,
+      `parc_cadeia_01_test.sql`, `seg_tenant_varredura_01c_test.sql`, `conc_enriq_agrup_2a_split_test.sql` (saida condensada,
+      igual a' registrada) e `conc_enriq_split_reverter_test.sql`.
+      ⚠ `conc_enriq_split_reverter_test.sql` FOI ATUALIZADO AO CONTRATO NOVO: o caso "filho cancelado por outro caminho"
+        cancelava o filho por fora; agora ele prende a recusa da trava e MONTA a quebra com a chave do escritor.
+      ⚠ ESSES DOIS TESTES ANTIGOS RODAM NO NJ (cliente real, sintetico revertido; o agrup-2a usa sessao e cru reais do NJ).
+    - ⚠ NAO PROVADO: a leitura chamada PELA TELA (PostgREST) · as outras funcoes que escrevem `cancelado = true` direto
+      (`fn_extrato_desfazer_arquivo`, `fn_invalidar_origem_extrato`, as da OC…) sobre um filho de split — recebem a frase da
+      trava; nenhuma foi exercitada · os splits 30a12d86 e o do extrato 8a1c0dee seguem com filho cancelado e sem volta (passo 3).
+  ⚠ FILA: CONC-SPLIT-FILHO-CANCELADO-01 passo 2 commit B (a tela: aviso no cancelar, molde do `CancelarParcelaDialog`) · passo 3 (`fn_classificacao_desfazer_split` tolera filho ja' cancelado, e
     "Desfazer desmembramento" entra no "⋯" da Conferencia, com leitura dos splits vivos por extrato) · SPLIT-FILHO-EXISTENTE-01
     (o desmembrar da Mesa aceita um lancamento EXISTENTE — ocorrencia de recorrencia, parcela — como filho, em vez de criar;
     FASE 0 propria).
