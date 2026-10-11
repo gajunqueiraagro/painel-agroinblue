@@ -2846,6 +2846,54 @@ docs/historico/frentes-ate-2026-09-29.md.)
     `LancamentoLeituraDialog.tsx`; e telas fora das abas da Conciliacao — `EstacaoConciliar.tsx`, `VincularMatchDireto.tsx`,
     `DecisaoDerivadosDialog.tsx` fora do Espelho, `CasarComBancoModal.tsx` (dentro do Espelho ja' passa pelo `onMudou`),
     `useConciliacaoDoMes.ts`, `useConciliarMes.ts` (o dialogo avisa).
+- ⚠ A OC ENXERGA O RECEBIMENTO PARCIAL DA CONFERENCIA, E O 1:1 NAO ACEITA EXTRATO MENOR EM TITULO DE OC (CONC-PARCIAL-UM-ESTADO-01 passo 1,
+  Gabriel 11/10/2026, so' banco; migrations 20261027195700 — ponte + recusa, ⚠ registrada como 20261011100149, ledger = arquivo, md5
+  873a996c… — e 20261027195800 — gatilho + leitura, ⚠ registrada como 20261011100328, ledger = arquivo, md5 de9ab86a…). Nasce da
+  Santa Rita (OC 8eff43fa, titulo 17f14dbc de 150.000,00 programado): PIX de 100.000,00 casado pelo bloco, e a OC dizia liquidado 0.
+  · QUANTO ENTROU TEM UM DONO: `_fn_lancamento_aplicado_vivo(lancamento)` = soma dos vinculos VIVOS (interna, fechada).
+  · A PONTE (`oc_sincronizar_liquidacao_de_financeiro`, 208b60e1… -> 0235c5b3…, patch guardado por md5, 6 ancoras) ganhou UM ramo:
+    titulo NAO realizado com aplicado vivo > 0 grava a MESMA linha automatica (uma por titulo; os indices nao mudaram) com valor =
+    aplicado vivo e data = a do ULTIMO extrato vivo. Realizado: como antes (valor inteiro, data de pagamento). Sem aplicado:
+    estorna, como antes. Liquidacao MANUAL ativa: a recusa de sempre. O lancamento nao e' tocado; o DRE nao muda.
+  · QUEM CHAMA: o gatilho `trg_zz_oc_ponte_ao_conciliar` (AFTER INSERT OR UPDATE OF desfeito_em, valor_aplicado em
+    `conciliacao_bancaria_itens`; funcao `trg_fn_oc_ponte_ao_conciliar`, c62b1df5…, SECURITY DEFINER, fechada) — so' com parte VIVA
+    de OC, senao sai na primeira linha; nao decide nada. Bloco, 1:1, N:1 e os desfazer chegam a' OC pelo mesmo lugar, e desfazer
+    devolve a OC sozinho. O nome comeca por "trg_zz" para rodar DEPOIS do gatilho de promocao.
+  · D4 — `fn_vincular_extrato_lancamento` (6dbfb0dc… -> b090d0cd…, 1 ancora) RECUSA, P0001, extrato menor que o saldo livre de
+    lancamento com parte viva de OC: "Este título é de operação comercial e o valor do extrato é menor que o do título. Faça o
+    recebimento parcial pela Conferência (bloco). Nada foi gravado." Medido antes: o 1:1 aceitava e o gatilho de promocao
+    realizava o titulo INTEIRO (a OC liquidaria 150 com 100 no banco). Sem OC, e par exato: como sempre. O gatilho de promocao
+    NAO mudou. ⚠ A frase NAO esta' em mapa de frases do front (este passo nao toca `src`): a tela mostra o texto do banco.
+  · LEITURA `fn_lancamentos_parciais(cliente)` (978802b0…; `tenant_ok` + 42501; GRANT a authenticated e service_role): lancamento
+    vivo NAO realizado com 0 < aplicado < valor -> (lancamento_id, valor, aplicado, saldo, partes [{extrato_id, data, conta_id,
+    valor_aplicado}]). Sem chamador na tela ainda (passos 2 e 3). Hoje: 2 linhas (o 17f14dbc e o NJ d320635d, carga de mandioca).
+  · PROVAS: T1–T11 no ensaio revertido; no VIVO depois de aplicar, T1, T2, T3, T4a/T4b, T6, T8, T10 e T11
+    (`supabase/tests/conc_parcial_um_estado_01_test.sql`) e o `seg_tenant_varredura_01c_test.sql` inteiro. NAO REGRESSAO DA PONTE:
+    542 titulos de OC vivos, ponte antiga x nova na mesma transacao revertida — 0 erros dos dois lados, 1 difere, o 17f14dbc. D4:
+    `fn_vincular_exatos_mes` no NJ Banco do Brasil mai/26, 239 pares identicos por md5 (1.007 -> 641 ms). CUSTO do gatilho (A/B,
+    20 vinculos por grupo, mediana): sem OC 4,70 -> 4,89 ms; com OC 5,33 -> 5,44 ms. 10 mutacoes: 9 mortas (ramo parcial -> T1;
+    soma -> T2; data -> T2; gatilho so' no INSERT -> T4; gatilho que nao chama -> T1; sem estorno -> T4b; tenant -> T8; sem D4 ->
+    T10) e 1 SOBREVIVENTE EQUIVALENTE: tirar a saida cedo do gatilho (a ponte ja' nao faz nada sem parte de OC; so' custa tempo).
+  · CONSERTO DO 17f14dbc (`docs/investigacao/conc-parcial-um-estado-01-conserto-santa-rita.sql`, EXECUTADO em 11/10/2026 com o SIM
+    do Gabriel): uma chamada da ponte — liquidacao 100.000,00 em 04/09/2026, visao 100.000 / 50.000 / parcial, lancamento igual,
+    0 parciais de OC divergentes em todos os clientes, 380 -> 381 liquidacoes.
+  ⚠ DIVIDA CONC-ESPELHO-CASAR-REESCREVE-TITULO-OC-01 (medida em 11/10, NENHUMA linha mudada; entra no passo 2): `fn_espelho_casar`
+    (o "corrigir o valor do lançamento" do 1:1) NAO e' bloqueado em titulo de OC — reescreve o titulo para o valor do extrato e o
+    realiza. Medido em sintetico (titulo 150, extrato 100): lancamento 100 / realizado; a parte da OC segue 150; liquidacao 100; a
+    visao diz parcial com saldo 50, e esses 50 ficam SEM TITULO no financeiro. O D4 nao alcanca: depois da reescrita o valor e' "exato".
+  ⚠ DIVIDA OC-COMPROMISSO-PARCIAL-NAO-E-PAGO-01 (entra no passo 2): leitores que tratam "existe liquidacao / vinculo" como PAGO —
+    `_oc_vinculo_compromisso_liquidado`, `_oc_titulo_em_aberto`, `oc_candidatas_vinculo`, `oc_estornar_materializacao`; no front,
+    NAO auditados: `useOperacaoLiquidacao.ts` (~:448) e `ocResumo.ts`. Com a linha automatica parcial eles passam a ver liquidacao
+    onde antes nao havia.
+  ⚠ LIMITES DO ENSAIO, DECLARADOS: o comportamento foi ensaiado com um patch COMPACTO da ponte (sem comentarios; md5 diferente) —
+    o corpo exato foi provado por md5 e, depois de aplicar, pelos testes no vivo · o arquivo de teste (12,4 KB) nao cabe numa
+    chamada do canal: rodou em recortes; T5 (compra e abate), T7 (liquidacao manual) e T9 (leitura = contagem direta) so' no
+    ensaio, nao depois de aplicar · `fn_extrato_conciliar_mes` (limite 30) no NJ BB mai/26: prova FRACA — 0 lancamentos criados
+    dos dois lados e so' os 300 primeiros caracteres do retorno comparados · esse conta-mes tem 0 vinculos em titulo de OC (o pior
+    caso real mede a saida cedo, nao a ponte) · cada ensaio com `CREATE TRIGGER` segurou trava em `conciliacao_bancaria_itens` por
+    1 a 3 s, e UM estourou os 10 s (a copia da OC sintetica com `(f(x)).*` roda a funcao por coluna; refeito em recorte menor) —
+    se houve usuario esperando nesse intervalo nao da' para ver · o md5 do 17f14dbc "igual ao de antes" foi conferido DENTRO do
+    bloco do conserto (o valor de antes nao foi guardado fora) · nada disto foi visto na TELA (passos 2 e 3).
 - ⚠ A TELA DE DIVIDENDOS NAO ESCREVE NA TABELA: CADA GESTO CHAMA A FUNCAO DO ESCRITOR UNICO, E A TRAVA DO FRONT E' UM TESTE DE FONTE
   (DIVIDENDO-ESCRITOR-UNICO-01 passos 3 e 4, Gabriel 09/10/2026, so' tela). `src/pages/DividendosTab.tsx` (montada em
   `V2Index.tsx`, `CadastrosTab.tsx` e `Index.tsx`) so' LE `financeiro_dividendos`; criar, renomear, inativar, reativar e
