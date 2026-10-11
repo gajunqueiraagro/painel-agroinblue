@@ -3646,6 +3646,89 @@ docs/historico/frentes-ate-2026-09-29.md.)
   quem mexer num confere o outro. O selo do rodape (`SeloRegraDaLinha`) diz a regra da linha.
 
 ## REGRAS VIGENTES — OPERACAO COMERCIAL E FINANCEIRO
+- ⚠ O ENCARGO DO CONTRATO TEM TABELA PROPRIA E NAO TOCA O LANCAMENTO (FIN-CONTRATO-VINCULAR-ENCARGO-01 passo 1, Gabriel 11/10/2026, so'
+  banco; migrations 20261027196100 — tabela e trava, ⚠ registrada como 20261011132222, ledger = arquivo, md5 f88ffba7… —,
+  20261027196200 — donos e leituras, ⚠ registrada como 20261011132310, md5 cde712ef… — e 20261027196300 — vincular e desvincular,
+  ⚠ registrada como 20261011132341, md5 ab9bc7c9…; tres arquivos por causa do tamanho da carga). Pedido: juros, IOF, tarifa, seguro e
+  multa que o banco cobra num contrato sao lancamentos avulsos e passam a poder ser LIGADOS ao contrato, como na OC, sem virar
+  parcela. Nenhuma tela usa isto ainda (passos 3 a 6, na fila).
+  · AS CINCO DECISOES: (D1) o vinculo mora em TABELA PROPRIA, `financiamento_encargos`, e NAO em
+    `financeiro_lancamentos_v2.financiamento_id` — cinco leitores supoem "financiamento_id = parcela ou captacao" (`parcelaMirror`
+    ramo f, as candidatas / o vincular / os recebimentos da OC, o desmembrar); (D2) vale para as tres naturezas (financiamento,
+    emprestimo, parcelamento); (D3) contrato com encargo VIVO nao se cancela, e contrato com QUALQUER historico de encargo (vivo ou
+    desfeito) nao se apaga; (D4) principal avulso que casa com parcela fica FORA (passo 6); (D5) o contrato 4608772 da Santa Rita
+    sera' cadastrado pelo Gabriel pela tela — que exige ao menos 1 parcela ("Gere as parcelas antes de salvar",
+    `useFinanciamentoCadastro.ts`; o banco nao tem CHECK).
+  · A TABELA: id, cliente_id, financiamento_id e lancamento_id (FK, `ON DELETE RESTRICT`), papel (juros | iof | tarifa | seguro |
+    multa | outro), vinculado_em / por, desfeito_em / por / motivo (CHECK por extenso: os dois juntos). DESFAZER MARCA, NUNCA APAGA
+    (o padrao de `conciliacao_bancaria_itens`): QUEM LE^ FILTRA `desfeito_em IS NULL`. Indices: `uq_fin_encargo_vivo_por_lancamento`
+    (UNICO, so' vivos: um lancamento e' encargo de UM contrato por vez), `idx_fin_encargo_contrato` (NAO parcial: o DELETE do
+    contrato acha tambem a trilha desfeita), `idx_fin_encargo_cliente`. RLS ligada, UMA policy (`fin_encargos_select_tenant`,
+    SELECT, `tenant_ok(cliente_id)`); `authenticated` SO' LE^ — a escrita e' so' das duas funcoes.
+  · NAO ESCREVE NO LANCAMENTO: classificacao, valor, status, conciliacao e `financiamento_id` ficam como estao (preso por md5 da
+    linha, E3 e E6); desvincular e' a volta exata. O DRE nao muda.
+  · ELEGIVEL A ENCARGO TEM UM DONO, `_fn_lancamento_elegivel_a_encargo(id)` -> (ok, motivo, frase): vivo, de SAIDA ('2-'), que nao
+    e' parcela, juros de parcela nem captacao de contrato (`financiamento_id`, `financiamento_parcelas.lancamento_id` /
+    `lancamento_juros_id`, `financiamentos.lancamento_captacao_id`), nao e' titulo de OC (parte VIVA) e ainda nao e' encargo vivo.
+    Motivos: cancelado · nao_e_saida · parcela_ou_captacao · titulo_de_oc · ja_e_encargo (a frase diz o contrato). ⚠ Sem
+    `SET search_path`, de proposito (tudo qualificado): com ele o planner nao embute a funcao na leitura por contrato.
+    Contrato VIVO = `_fn_financiamento_vivo(status)` = nao 'cancelado' ('quitado' e' vivo; o predicado de `fn_parcelamento_excluir`).
+  · AS QUATRO PUBLICAS (SECURITY DEFINER; guarda de tenant na forma do 01A, 42501 "sem acesso a este registro", sem usuario
+    tambem; GRANT a `authenticated` e `service_role`, sem `anon` nem PUBLIC):
+      `fn_contrato_encargo_candidatas(lancamento)` -> {lancamento {…, papel_sugerido}, elegivel {ok, motivo, frase}, candidatas
+        [contratos VIVOS do cliente: mesmo_credor, numero_na_descricao, ja_vinculado]}, na ordem numero do contrato na descricao >
+        mesmo credor > data do contrato mais recente (md5 a46fd787…);
+      `fn_contrato_encargos_vinculaveis(contrato, de, ate)` -> {contrato, de, ate, total, linhas} — os elegiveis do CREDOR do
+        contrato no periodo (sem periodo: 36 meses); `numero_na_descricao` e `subcentro_financeiro` so' MARCAM e ordenam; teto de
+        500 linhas, `total` e' a contagem inteira (md5 82205461…);
+      `fn_contrato_encargo_vincular(contrato, itens [{lancamento_id, papel}], p_simular)` — lote TUDO OU NADA; recusas lista_vazia ·
+        contrato_cancelado · papel_invalido · lancamento_repetido · o motivo do inelegivel com "(lançamento <id>)"; AVISOS que nao
+        recusam: mes_fechado · favorecido_diferente_do_credor · lancamento_nao_realizado (md5 3bb7d3f5…);
+      `fn_contrato_encargo_desvincular(encargo, motivo, p_simular)` — motivo obrigatorio na gravacao; ja' desfeito recusa (md5
+        12eaab0b…).
+    SIMULACAO = GRAVACAO (o mesmo caminho, desfeito por SQLSTATE 'ENSIM'): na simulacao a recusa volta em `recusa {motivo, frase}`;
+    na gravacao e' P0001 com a frase + " Nada foi gravado.". Internas fechadas: `_fn_financiamento_vivo` 3bc11cf9…,
+    `_fn_numero_na_descricao` f4ea49c5… (4+ digitos do numero do contrato dentro dos digitos da descricao),
+    `_fn_encargo_papel_sugerido` 6500b159…, `_fn_lancamento_elegivel_a_encargo` 8fae4a50….
+  · ⚠ NENHUMA FUNCAO LE^ A DESCRICAO PARA DECIDIR: o numero na descricao so' ORDENA e MARCA, e o papel sugerido e' SUGESTAO.
+    ⚠ DOIS CONTRATOS PODEM CASAR O NUMERO no mesmo lancamento (medido num dos 40 fortes da Santa Rita): A TELA NUNCA PRE-ESCOLHE.
+  · A TRAVA NO CONTRATO: `trg_guard_financiamento_com_encargo` (BEFORE DELETE OR UPDATE OF status em `financiamentos`) ->
+    `guard_financiamento_com_encargo()` (md5 3b77c113…, SECURITY DEFINER, fechada). UPDATE que leva o status a 'cancelado': recusa
+    SO' com encargo VIVO — "Este contrato tem N encargo(s) vinculado(s). Desvincule-os no bloco Encargos antes de cancelar." (o
+    historico desfeito deixa cancelar). DELETE: QUALQUER linha de encargo do contrato, viva ou desfeita, recusa — "Este contrato
+    tem histórico de encargos e não pode ser apagado. Cancele o contrato em vez de excluir." (P0001; nunca o 23503 cru da FK).
+    Custo (200 contratos sinteticos, 6 series alternadas, com o corpo ANTERIOR ao ramo do DELETE): +0,02 ms por contrato cancelado.
+  · PASSO 0, MEDIDO (11/10): (0a) o excluir de financiamento com juros e de emprestimo APAGA a linha
+    (`FinanciamentoDetalhe.tsx`: cancela os lancamentos, apaga as parcelas e por ultimo o DELETE, tres idas soltas); o de
+    parcelamento e' `fn_parcelamento_excluir` (UPDATE para 'cancelado'). (0b) contrato sem parcela: a tela recusa; ha' 1
+    financiamento vivo real sem parcela viva. (0c) status: ativo 92, quitado 113, cancelado 6; naturezas financiamento 156,
+    parcelamento 55, emprestimo 0. (0d) CANDIDATAS FORTES (saida viva, sem contrato, favorecido = credor de contrato vivo e o
+    numero do contrato na descricao): Santa Rita 40 lancamentos / 1.433.434,63; Agnaldo 10 / 89.496,19; demais 0. Da FASE 0: o
+    contrato 4608772 NAO existe no cadastro; "IOF C_4608772" exato = 10 lancamentos / 5.272,03; com "4608772" = 56 / 80.109,22.
+  · TEMPO (Santa Rita, contrato do credor com 2.520 lancamentos vivos; 10 chamadas na mesma sessao, como authenticated):
+    vinculaveis padrao 29–33 ms (1a 184; 387 linhas, 138 KB); desde 2000, 61–66 ms (total 1.113, devolve 500); candidatas 3,7–4,9
+    ms (56 contratos).
+  Testes (terminam em RAISE OK, sinteticos no Teste): `supabase/tests/fin_contrato_encargo_01_a_test.sql` (E1–E4: candidatas,
+  vinculaveis e motivos, lote e simulacao, recusas) e `fin_contrato_encargo_01_b_test.sql` (E5–E9: unicidade, desvincular, a
+  trava a–c, tenant, ACL), rodados INTEIROS no banco vivo; `seg_tenant_varredura_01c_test.sql` OK. 7 mutacoes mortas: sem o
+  indice unico -> E5; sem o filtro de parte viva de OC -> E2; gravar com inelegivel -> E4; gatilho sem a contagem -> E7; DELETE
+  sem a frase -> E7 (voltou o 23503); tenant fora no vincular -> E8; tenant fora nas duas leituras -> E8.
+  ⚠ ARNES DE MUTACAO NA MESMA TRANSACAO: a rodada BASE que termina em "OK" NAO reverte os sinteticos e contamina a mutacao
+    seguinte (erro meu: a M5 "morreu" por contagem errada). O corpo do teste termina SEMPRE num RAISE sentinela capturado, ou as
+    mutacoes rodam antes da base.
+  ⚠ DIVIDA FIN-CONTRATO-EXCLUIR-PERGUNTA-ANTES-01: o excluir de financiamento / emprestimo cancela lancamentos e apaga parcelas
+    ANTES do DELETE; a trava recusa no terceiro passo e o contrato ficaria esvaziado. Conserto: a tela confere os encargos ANTES
+    do primeiro passo (vai com o passo 3, que ja' edita `FinanciamentoDetalhe.tsx`). Nenhuma tela vincula encargo ate' la': a
+    janela de risco e' zero.
+  ⚠ DIVIDA FIN-FINANCIAMENTO-SEM-CANCELAR-01: financiamento com juros e emprestimo so' tem DELETE pela tela, nao tem "cancelar" —
+    quem tiver historico de encargos fica sem caminho ate' a tela ganhar o cancelar (decisao de produto pendente do Gabriel).
+  ⚠ NAO HA' GATILHO lancamento -> encargo: cancelar o lancamento deixa o vinculo vivo (orfao).
+  ⚠ NAO PROVADO: nenhuma RPC chamada PELA TELA (sob pg_safeupdate, pelo PostgREST) · nenhum caso real vinculado · o cadastro do
+    4608772 · o custo do gatilho com o corpo novo (ramo do DELETE) · a mutacao de tenant no DESVINCULAR · a M2 nao foi refeita no
+    arnes com reversao forcada (a leitura dela filtra pelo credor criado em cada rodada).
+  ⚠ FILA: passo 3 (tela do contrato: bloco Encargos, vincular / desvincular, e a conferencia antes do excluir) · passo 4 (o
+    vincular pelo lancamento, no modal do Financeiro) · passo 5 (a marca na lista de Lancamentos e na CPR) · passo 6 (principal
+    avulso que casa com parcela).
 - ⚠ FINANCEIRO V2 — TODO RAMO DE `editarLancamento` REMENDA A LINHA COM O QUE O BANCO DEVOLVEU
   (FIN-V2-REFRESH-01, 25/09/2026). A lista não recarrega na edição (PR-FIN-SAVE-LENTO-01); quem
   mostra o gravado é o `remendarComOBanco`, chamado pelo ramo comum e pelo do título de OC. Ramo novo
