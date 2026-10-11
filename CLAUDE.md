@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 11/10/2026 (RECORRENCIA-GERA-A-VIGENCIA-INTEIRA-01 parte 2, +15 em `src/components/recorrencias/geraAoSalvar.test.tsx` (novo) — 4842 depois dela;
+  Baseline em 11/10/2026 (CONC-SALDOS-LAYOUT-02, +2 em `src/pages/conciliacaoDono.test.tsx` — 4844 depois dele; antes a
+  RECORRENCIA-GERA-A-VIGENCIA-INTEIRA-01 parte 2, +15 em `src/components/recorrencias/geraAoSalvar.test.tsx` (novo) — 4842 depois dela;
   antes o passo 2, +10: `src/components/recorrencias/gerarVagas.test.tsx` 8 (6 -> 14),
   `src/lib/financeiro/recorrenciasDoMes.test.ts` 2 — 4827 depois dele; antes a FORN-SELETOR-PADRAO-01 fatia 2e, +17 em `src/components/shared/campoDeFornecedor.test.tsx` (novo) — 4817 depois dela; antes a
   fatia 2d, +12 em `src/components/agri/fornecedorDaLavoura.test.tsx` (novo) — 4800 depois dela; antes a
@@ -285,7 +286,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4842
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4844
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3286,7 +3287,39 @@ docs/historico/frentes-ate-2026-09-29.md.)
     coluna Conta). A cor do mes e do ponto continua sendo o status.
   · OCULTAS: a interna fica visivel quando o status DELA nao e' conciliado OU o `par_status` (o da mae) nao e'.
   Fixture real: `src/lib/conciliacao/statusSaldo.fixture.json` (linhas do dono lidas do proto depois da 20261027192700).
-- ⚠ LAYOUT DE "SALDOS POR CONTA" (PR-CONC-SALDOS-LAYOUT-01, Gabriel 03-04/10, so' apresentacao, `ConciliacaoBancariaTab.tsx`):
+- ⚠ "SALDOS POR CONTA" LE^ DE RELANCE: TOTAL E GRUPOS DESTACADOS, UMA LINHA POR CONTA, REGUA FIXA (CONC-SALDOS-LAYOUT-02, Gabriel
+  11/10/2026, so' apresentacao, `ConciliacaoBancariaTab.tsx`; mock aprovado; SUBSTITUI o desenho do PR-CONC-SALDOS-LAYOUT-01, abaixo).
+  Nenhum dado, dono, ordem ou gesto mudou.
+  · REGUA: `table-layout: fixed` + colgroup em px (`REGUA_SALDOS`): Conta = o resto · Sistema 100 · Extrato 100 · Diferença 86 ·
+    lápis 22. A Conta e' a unica que estica (199,8 a 1.127 · 285,5 a 1.280 · 333,6 a 1.366).
+  · ALTURAS FIXAS: cabecalho 18 · TOTAL 24 (navy escuro `hsl(213 52% 16%)`, branco, 10px bold; negativo `#fca5a5`, "confere"
+    `#86efac`) · GRUPO 21 (18% de primary sobre o card, filete de 40% em cima e embaixo por sombra, rotulo em maiusculas 9,5px,
+    valores 10px bold navy) · CONTA 18 (9,5px; a linha de baixo e' sombra interna, nao borda).
+  · "falta saldo · N contas" ocupa Extrato + Diferença JUNTAS (`colSpan` 2), no Total (`#fcd9a6`) e no grupo (ambar `#b45309`) —
+    era ela que alargava a coluna Diferença. Com a frase, a celula `total-extrato` / `subtotal-extrato` nao existe.
+  · A LINHA DE CONTA TEM LUGARES FIXOS: ponto · NOME (o unico que corta; "· par" e "⚠" moram dentro dele e cortam junto) · data
+    (29px, 9,5px) · OFX (11px) · PDF (11px) · lápis (16 x 16). Os lugares existem SEMPRE, vazios sem dado: e' o que impede a quebra.
+  · O `title` DA LINHA COMECA PELO NOME: `<nome da conta>` + (par ? ` · <frase do par>` : '') + ' — ' + o texto do status de
+    sempre. O nome (e a marca "· par") cortado na celula esta' inteiro ali.
+  · A ESCOLHIDA TEM CONTORNO NAVY E FUNDO BRANCO, nunca preenchimento (nao parece faixa de grupo); as outras a 0,38.
+  · "← Todas" tem lugar reservado de 52px: o "+ Cadastrar" nao anda.
+  MEDIDO (Santa Rita set/26, so' leitura, 1.127 x 579, e 1.280 / 1.366 num iframe; 20 contas, 67 celulas de valor), IGUAL NAS TRES
+  LARGURAS: 0 valores cortados (por Range), a menor folga real 2,6px ("-R$ 500.734,62" na Diferença, 75,4 de 78 uteis); contas
+  todas a 18px, Total 24; 0 nomes cortados (o pior, "Sicredi-PJ Cap. Social", pede 100,5px; o lugar tem 103 / 188 / 237);
+  "30/09" a 9,5px mede 28,1px no lugar de 29. "R$ 46.684.158,00" em clone solto do Total (10px bold, 88,5px): cabe em Sistema e
+  em Extrato (92 uteis, folga 3,5).
+  ⚠ O LUGAR DA DATA TEM 29px, NAO 27: "30/09" a 9,5px mede 28,1 (o texto do ajuste esperava ~24) e vazava 1,1px do lugar de 27.
+    Com 29 o nome fica com 103px a 1.127 — 2,5px de folga sobre o pior nome da Santa Rita.
+  ⚠ NA DIFERENÇA (86px) UM VALOR DE DEZENAS DE MILHOES NAO CABE: "R$ 46.684.158,00" pede 88,5 dos 78 uteis (−10,5). Cabe ate'
+    "-R$ 9.999.999,99" (por conta, nao medido). Caber os oito digitos pede a coluna a 97px, tirados da Conta — que a 1.127 nao
+    tem de onde ceder sem cortar o pior nome. Decisao do Gabriel.
+  ⚠ NAO PROVADO: a janela a 523 de altura (estava em 579) · a aba em primeiro plano (as medidas sao por script; em aba oculta a
+    transicao de opacidade nao anda) · conta com "⚠" de saldo inicial · Total negativo e "confere" no Total, na tela (so' por
+    teste) · o Agnaldo (o par) REMEDIDO com a regua nova (na de antes, 3 nomes cortavam a 1.127) · sticky e "+ Cadastrar"
+    remedidos depois do ajuste (medidos com a regua de 95) · o `title` com a frase do par, no navegador (so' por teste; sem par,
+    visto: "Banco Bradesco — Não Conciliado: …") · perfil nao admin.
+- ⚠ [SUBSTITUIDA em 11/10/2026 pelo CONC-SALDOS-LAYOUT-02, a regra logo acima — fica o registro; a tecnica da emenda de subpixel
+  continua valendo] LAYOUT DE "SALDOS POR CONTA" (PR-CONC-SALDOS-LAYOUT-01, Gabriel 03-04/10, so' apresentacao, `ConciliacaoBancariaTab.tsx`):
   SEM a faixa amarela de orientacao ("Informe o saldo final REAL…"). Cabecalho das colunas NAVY opaco em duas camadas
   (`bg-primary` + 10% de `primary-foreground`), 9,5px, "Conta" a' esquerda e os valores a' direita. Total em `bg-card`, rotulo e
   valores a 10,5px bold. Faixa de grupo com rotulo a 10px `text-primary` (o cinza em duas camadas ficou). Contas a 10px com

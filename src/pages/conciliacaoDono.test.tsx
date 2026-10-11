@@ -251,17 +251,20 @@ describe('T4 — "Todas as contas": total, subtotais, contas não conciliadas, p
     montar();
     await waitFor(() => expect(screen.getByTestId('total-falta-saldo')).toBeInTheDocument());
     const pontos = [screen.getByTestId('total-falta-saldo'), screen.getByTestId('subtotal-falta-saldo-inv'), screen.getByTestId('resumo-falta-saldo')];
-    for (const p of pontos) {
+    /* CONC-SALDOS-LAYOUT-02: a cor depende do fundo — claro sobre o navy do Total, âmbar na faixa de grupo, e a do status
+       PENDENTE no Resumo. Nunca o verde do "confere" nem o vermelho da diferença. */
+    const tons = ['rgb(252, 217, 166)', 'rgb(180, 83, 9)', 'rgb(117, 117, 117)'];
+    for (const [i, p] of pontos.entries()) {
       expect(p.textContent).toBe('falta saldo · 1 conta');
       expect(p.getAttribute('title')).toBe('Invest Parado');
-      /* a cor do status PENDENTE da paleta da conciliação — nunca o verde do "confere" nem o vermelho da diferença */
-      expect(p.style.color).toBe('rgb(117, 117, 117)');
+      expect(p.style.color).toBe(tons[i]);
       expect(p.closest('td,span.text-success,span.text-destructive')?.className ?? '').not.toMatch(/text-success|text-destructive/);
     }
     expect(n(screen.getByTestId('status-motivos').textContent)).toContain('falta saldo · 1 conta');
     expect(n(screen.getByTestId('status-motivos').textContent)).not.toContain('contas sem saldo');
-    /* a coluna Extrato do agregado continua "—", e nada diz "confere" no Total nem no Resumo */
-    expect(screen.getByTestId('total-extrato').textContent).toBe('—');
+    /* CONC-SALDOS-LAYOUT-02: no Total a frase ocupa Extrato + Diferença JUNTAS (uma célula); nada diz "confere" no Total nem
+       no Resumo, e o Extrato do Resumo continua "—" */
+    expect(screen.queryByTestId('total-extrato')).toBeNull();
     expect(screen.getByTestId('total-diferenca').textContent).toBe('falta saldo · 1 conta');
     expect(screen.getByTestId('resumo-saldo-extrato').textContent).toBe('—');
   });
@@ -389,10 +392,13 @@ describe('T5 — o par do Agnaldo: a mãe em Conta corrente e a interna em Inves
     expect(marca('brad').getAttribute('title')).toBe(`conferida com Bradesco-Invest. Facil — ${TITULO_PAR('Bradesco-Invest. Facil')}`);
     expect(n(marca('if').textContent)).toBe('· par');
     expect(marca('if').getAttribute('title')).toBe(`conferida com Bradesco — ${TITULO_PAR('Bradesco')}`);
-    expect(marca('brad').className).toContain('whitespace-nowrap');
+    /* CONC-SALDOS-LAYOUT-02: a marca mora DENTRO do nome, que é uma linha só e corta (nunca quebra a linha da conta) */
+    expect(marca('brad').parentElement?.getAttribute('data-testid')).toBe('nome-conta');
+    expect(marca('brad').parentElement?.className).toContain('truncate');
     expect([linhaDaConta('brad').getAttribute('data-status'), linhaDaConta('if').getAttribute('data-status')]).toEqual(['nao_conciliado', 'conciliado']);
     expect(linhaDaConta('brad').getAttribute('title')).not.toContain('consolida');
-    expect(linhaDaConta('if').getAttribute('title')).toBe('Conciliado: conferida com Bradesco — 2ª prova · extrato: sem extrato');
+    /* o title começa pelo NOME e pela frase do par (o nome pode estar cortado na célula); depois, o texto de sempre */
+    expect(linhaDaConta('if').getAttribute('title')).toBe(`Bradesco-Invest. Facil · conferida com Bradesco — ${TITULO_PAR('Bradesco')} — Conciliado: conferida com Bradesco — 2ª prova · extrato: sem extrato`);
     expect(within(linhaDaConta('if')).queryByTestId('marca-aviso-conta')).toBeNull();   // "sem extrato" informa, não marca
   });
 
@@ -533,9 +539,9 @@ describe('STATUS-SALDO — conciliado pelo saldo com aviso do extrato: verde, 2�
     const linha = linhaDaConta(PESSOAL.conta_id);
     expect(linha.getAttribute('data-status')).toBe('conciliado');
     expect(within(linha).getByTestId('marca-aviso-conta')).toBeInTheDocument();
-    expect(n(linha.getAttribute('title'))).toBe('Conciliado — 2ª prova · extrato: 1 dia com diferença · o extrato não fecha com o saldo informado R$ 0,02 · 1 lançamento sem par');
+    expect(n(linha.getAttribute('title'))).toBe('Sicredi Pessoal — Conciliado — 2ª prova · extrato: 1 dia com diferença · o extrato não fecha com o saldo informado R$ 0,02 · 1 lançamento sem par');
     expect(within(linhaDaConta(ID_LAV)).queryByTestId('marca-aviso-conta')).toBeNull();
-    expect(linhaDaConta(ID_LAV).getAttribute('title')).toBe('Conciliado: confere em todos os dias');
+    expect(linhaDaConta(ID_LAV).getAttribute('title')).toBe('Sicredi Lavoura — Conciliado: confere em todos os dias');
   });
 
   it('conta SEM aviso nenhum (o Emerson): idêntica a antes — sem bloco de 2ª prova', async () => {
@@ -567,7 +573,7 @@ describe('STATUS-SALDO — conciliado pelo saldo com aviso do extrato: verde, 2�
 });
 
 /* ── PR-CONC-SALDOS-LAYOUT-01: só apresentação de "Saldos por conta" ── */
-describe('LAYOUT — "Saldos por conta": sem a faixa amarela, negativo vermelho no Extrato, selecionada em navy', () => {
+describe('LAYOUT — "Saldos por conta": sem a faixa amarela, negativo vermelho no Extrato, escolhida com contorno, régua fixa', () => {
   it('(a) a faixa "Informe o saldo final REAL…" não existe; o lápis da linha continua', async () => {
     montar();
     await screen.findAllByTestId('linha-saldo-conta');
@@ -592,34 +598,92 @@ describe('LAYOUT — "Saldos por conta": sem a faixa amarela, negativo vermelho 
     expect(sub('-R$ 55.734,67').className).toContain('text-destructive');      // Conta corrente
     expect(sub('R$ 0,00').className).not.toContain('text-destructive');        // Cartão: zero não é negativo
     expect(n(screen.getByTestId('total-extrato').textContent)).toBe('-R$ 55.738,69');
-    expect(screen.getByTestId('total-extrato').className).toContain('text-destructive');
+    /* CONC-SALDOS-LAYOUT-02: o Total é navy escuro — o negativo dele é o tom claro, não o vermelho do fundo branco */
+    expect(screen.getByTestId('total-extrato').className).toContain('text-[#fca5a5]');
     /* positivo e zero ficam na cor do texto */
     expect(n(extratoDa(ID_LAV).textContent)).toBe('R$ 155.972,29');
     expect(extratoDa(ID_LAV).className).not.toContain('text-destructive');
     expect(extratoDa('cartao').className).not.toContain('text-destructive');
     /* o Sistema segue a mesma regra, como antes */
-    expect(screen.getByTestId('total-sistema').className).toContain('text-destructive');
+    expect(screen.getByTestId('total-sistema').className).toContain('text-[#fca5a5]');
   });
 
-  it('(c) a conta selecionada tem o fundo navy a 10%, o filete e o nome em destaque; as demais ficam a 0,3', async () => {
+  it('(c) a conta escolhida tem CONTORNO navy e fundo branco (nunca preenchimento); as demais ficam a 0,38', async () => {
     await abrirConta(ID_LAV);
     await waitFor(() => expect(linhaDaConta(ID_LAV).getAttribute('data-ativa')).toBe('sim'));
     const ativa = linhaDaConta(ID_LAV);
-    expect(ativa.className).toContain('bg-primary/10');
+    expect(ativa.className).toContain('bg-card');
+    expect(ativa.className).not.toContain('bg-primary/10');
     expect(ativa.style.opacity).toBe('1');
-    expect(ativa.querySelector('td')?.className).toContain('shadow-[inset_3px_0_0_hsl(var(--primary))]');
+    const celulas = Array.from(ativa.querySelectorAll('td'));
+    expect(celulas).toHaveLength(5);
+    /* o contorno: em cima e embaixo em TODA célula, o filete de 3px na primeira e 1,5px na última */
+    for (const td of celulas) {
+      expect(td.className).toContain('inset_0_1.5px_0_hsl(var(--primary))');
+      expect(td.className).toContain('inset_0_-1.5px_0_hsl(var(--primary))');
+    }
+    expect(celulas[0].className).toContain('inset_3px_0_0_hsl(var(--primary))');
+    expect(celulas[4].className).toContain('inset_-1.5px_0_0_hsl(var(--primary))');
     expect(within(ativa).getByTestId('nome-conta').className).toContain('font-semibold text-primary');
     for (const id of ['cartao', 'parada']) {
       const outra = linhaDaConta(id);
-      expect(outra.style.opacity).toBe('0.3');
-      expect(outra.className).not.toContain('bg-primary/10');
-      expect(outra.querySelector('td')?.className).not.toContain('inset_3px');
+      expect(outra.style.opacity).toBe('0.38');
+      expect(outra.className).not.toContain('bg-card');
+      for (const td of Array.from(outra.querySelectorAll('td'))) expect(td.className).not.toMatch(/inset_3px|1\.5px/);
       expect(within(outra).getByTestId('nome-conta').className).not.toContain('font-semibold');
     }
+    /* o "+ Cadastrar" não anda: o lugar do "← Todas" existe com e sem conta escolhida */
+    expect(screen.getByTestId('lugar-todas').className).toContain('w-[52px]');
     /* sem seleção, ninguém apagado nem marcado */
     fireEvent.click(screen.getByText('← Todas'));
     await waitFor(() => expect(linhaDaConta(ID_LAV).getAttribute('data-ativa')).toBeNull());
     expect(screen.getAllByTestId('linha-saldo-conta').map((r) => r.style.opacity)).toEqual(['1', '1', '1']);
+    expect(screen.getByTestId('lugar-todas').className).toContain('w-[52px]');
+    expect(screen.getByTestId('lugar-todas').children).toHaveLength(0);
+  });
+
+  it('(d) a linha de conta tem os mesmos lugares com e sem dado: data, OFX, PDF e lápis existem sempre', async () => {
+    montar();
+    await screen.findAllByTestId('linha-saldo-conta');
+    const formas = screen.getAllByTestId('linha-saldo-conta').map((linha) => {
+      const cel = within(linha).getByTestId('celula-conta');
+      return {
+        filhos: cel.children.length,
+        data: within(linha).getByTestId('slot-data').textContent ?? '',
+        slots: ['slot-data', 'slot-ofx', 'slot-pdf', 'slot-lapis'].map((t) => within(linha).queryAllByTestId(t).length).join(''),
+        altura: Array.from(linha.querySelectorAll('td')).every((td) => td.className.includes('h-[18px]')),
+      };
+    });
+    /* a busca sabe achar: há conta COM data de saldo e conta SEM, e as duas têm a mesma forma */
+    expect(formas.some((f) => /^\d\d\/\d\d$/.test(f.data))).toBe(true);
+    expect(formas.some((f) => f.data === '')).toBe(true);
+    for (const f of formas) expect({ filhos: f.filhos, slots: f.slots, altura: f.altura }).toEqual({ filhos: 5, slots: '1111', altura: true });
+  });
+
+  it('(e) o Total é a faixa navy escura; "falta saldo" ocupa Extrato + Diferença juntas no Total e no grupo; a régua é fixa em px', async () => {
+    montar();
+    await waitFor(() => expect(screen.getByTestId('total-falta-saldo')).toBeInTheDocument());
+    const total = screen.getByTestId('linha-total');
+    expect(total.className).toContain('bg-[hsl(213_52%_16%)]');
+    for (const td of Array.from(total.querySelectorAll('td'))) expect(td.className).toContain('h-[24px]');
+    expect(screen.getByTestId('total-falta-saldo').closest('td')?.getAttribute('colspan')).toBe('2');
+    expect(screen.getByTestId('subtotal-falta-saldo-inv').closest('td')?.getAttribute('colspan')).toBe('2');
+    for (const f of screen.getAllByTestId('faixa-grupo')) {
+      expect(f.className).toContain('h-[21px]');
+      expect(f.className).toContain('bg-[color-mix(in_srgb,hsl(var(--primary))_18%,hsl(var(--card)))]');
+    }
+    /* a régua, lida da FONTE: tabela fixa e as quatro larguras em px (a Conta fica com o resto) */
+    const fonte = readFileSync(resolve(process.cwd(), 'src/pages/ConciliacaoBancariaTab.tsx'), 'utf8');
+    const temReguaFixa = (f: string) => /tableLayout:'fixed'/.test(f) && /const REGUA_SALDOS = \[100, 100, 86, 22\];/.test(f)
+      && /REGUA_SALDOS\.map\(\(w, i\) => <col key=\{i\} style=\{\{width:`\$\{w\}px`\}\} \/>\)/.test(f);
+    expect(temReguaFixa(fonte)).toBe(true);
+    expect(fonte).not.toMatch(/tableLayout:'auto'/);
+    /* a busca sabe achar: a tabela de antes (auto, sem a régua) é recusada */
+    expect(temReguaFixa(fonte.replace("tableLayout:'fixed'", "tableLayout:'auto'"))).toBe(false);
+    expect(temReguaFixa(fonte.replace('[100, 100, 86, 22]', '[95, 95, 112, 34]'))).toBe(false);
+    /* e o colgroup desenhado tem as quatro larguras */
+    const cols = Array.from(total.closest('table')!.querySelectorAll('col')).map((c) => c.style.width);
+    expect(cols).toEqual(['', '100px', '100px', '86px', '22px']);
   });
 });
 

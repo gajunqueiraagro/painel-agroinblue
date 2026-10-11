@@ -133,18 +133,42 @@ const STATUS_COR: Record<StatusDono, {bg:string;border:string;txt:string}> = {
  * das contas, um por linha) são os do dono das frases (`fraseFaltaSaldo`); aqui só a cor, a do status PENDENTE da paleta da
  * conciliação — nunca verde nem vermelho: não é "confere" nem diferença, é dado que falta.
  */
-function FaltaSaldo({ frase, testId }: { frase: { texto: string; titulo?: string }; testId: string }) {
+function FaltaSaldo({ frase, testId, tom }: { frase: { texto: string; titulo?: string }; testId: string; tom?: 'navy' | 'grupo' }) {
+  /* CONC-SALDOS-LAYOUT-02: no Total (fundo navy escuro) e na faixa de grupo a frase tem tom proprio e 9,5px semibold; sem `tom`
+     (o Resumo) e' a de sempre. */
+  if (tom) return <span data-testid={testId} title={frase.titulo} className="text-[9.5px] font-semibold" style={{ color: TOM_FALTA_SALDO[tom] }}>{frase.texto}</span>;
   return <span data-testid={testId} title={frase.titulo} className="font-medium" style={{ color: STATUS_COR.pendente.txt }}>{frase.texto}</span>;
 }
+const TOM_FALTA_SALDO = { navy: '#fcd9a6', grupo: '#b45309' };
 
 /** Negativo é vermelho em TODA coluna de valor de "Saldos por conta" (Sistema e Extrato; Total, grupo e conta). Só a COR do
  *  número que o dono mandou — nulo e não negativo ficam na cor do texto. PR-CONC-SALDOS-LAYOUT-01. */
 const corDoValor = (v: number | null | undefined): string => ((v ?? 0) < 0 ? 'text-destructive' : '');
 
-/** A faixa de grupo de "Saldos por conta": a sombra interna superior de sempre + 1px para cada lado NA COR COMPOSTA do fundo
- *  (`bg-card` + 15% de `muted-foreground` = `color-mix` de 85% card + 15% muted-foreground). Tapa a emenda de subpixel entre
- *  células vizinhas — o mesmo conserto do cabeçalho; sombra não ocupa espaço, a faixa segue com 20px. */
-const SOMBRA_FAIXA_GRUPO = 'shadow-[inset_0_1px_0_hsl(var(--border)),1px_0_0_color-mix(in_srgb,hsl(var(--card))_85%,hsl(var(--muted-foreground))),-1px_0_0_color-mix(in_srgb,hsl(var(--card))_85%,hsl(var(--muted-foreground)))]';
+/* ── "Saldos por conta" — CONC-SALDOS-LAYOUT-02 (Gabriel, 11/10/2026; mock aprovado). Alturas FIXAS: cabecalho 18 · Total 24 ·
+   grupo 21 · conta 18. A regua e' `table-layout: fixed` com colgroup em px (Conta = o resto · 100 · 100 · 86 · 22). ── */
+/** As quatro larguras fixas da regua, em px: Sistema · Extrato · Diferença · lápis. A Conta fica com o resto. */
+const REGUA_SALDOS = [100, 100, 86, 22];
+/** O TOTAL: navy ESCURO opaco (dois degraus abaixo do `primary`), texto branco, 24px. A sombra de 1px para cada lado, na cor do
+ *  proprio fundo, tapa a emenda de subpixel entre celulas vizinhas (a tecnica do cabecalho). */
+const TD_TOTAL = 'h-[24px] py-0 text-[10px] font-bold text-white bg-[hsl(213_52%_16%)] shadow-[1px_0_0_hsl(213_52%_16%),-1px_0_0_hsl(213_52%_16%)]';
+/** Os dois tons claros sobre o navy (os do rodape navy da CPR): negativo e "confere". */
+const TOM_NO_NAVY = { neg: 'text-[#fca5a5]', ok: 'text-[#86efac]' };
+const corNoNavy = (v: number | null | undefined): string => ((v ?? 0) < 0 ? TOM_NO_NAVY.neg : '');
+/** A FAIXA DE GRUPO: azul-acinzentado CHEIO e opaco (18% de primary sobre o card), filete de 1px em cima e embaixo por sombra
+ *  interna (40% de primary), e 1px para cada lado na cor do fundo (a emenda de subpixel). 21px. Nunca a cor da conta escolhida. */
+const SOMBRA_FAIXA_GRUPO = 'shadow-[inset_0_1px_0_color-mix(in_srgb,hsl(var(--primary))_40%,hsl(var(--card))),inset_0_-1px_0_color-mix(in_srgb,hsl(var(--primary))_40%,hsl(var(--card))),1px_0_0_color-mix(in_srgb,hsl(var(--primary))_18%,hsl(var(--card))),-1px_0_0_color-mix(in_srgb,hsl(var(--primary))_18%,hsl(var(--card)))]';
+const TD_GRUPO = `h-[21px] py-0 leading-[20px] sticky z-[8] bg-[color-mix(in_srgb,hsl(var(--primary))_18%,hsl(var(--card)))] ${SOMBRA_FAIXA_GRUPO}`;
+/** A LINHA DE CONTA: 18px, 9,5px. A linha de baixo e' sombra interna (borda colapsada nao tem altura fixa). */
+const TD_CONTA = 'h-[18px] py-0 leading-[17px] text-[9.5px]';
+const LINHA_DA_CONTA = 'shadow-[inset_0_-1px_0_hsl(var(--border))]';
+/** A CONTA ESCOLHIDA: fundo branco e CONTORNO navy por sombra interna — em cima e embaixo em toda celula, o filete de 3px na
+ *  primeira e 1,5px na ultima. Nunca preenchimento: conta escolhida nao parece faixa de grupo. */
+const CONTORNO_MEIO = 'shadow-[inset_0_1.5px_0_hsl(var(--primary)),inset_0_-1.5px_0_hsl(var(--primary))]';
+const CONTORNO_PRIMEIRA = 'shadow-[inset_3px_0_0_hsl(var(--primary)),inset_0_1.5px_0_hsl(var(--primary)),inset_0_-1.5px_0_hsl(var(--primary))]';
+const CONTORNO_ULTIMA = 'shadow-[inset_-1.5px_0_0_hsl(var(--primary)),inset_0_1.5px_0_hsl(var(--primary)),inset_0_-1.5px_0_hsl(var(--primary))]';
+/** Opacidade das contas NAO escolhidas quando ha' uma escolhida. */
+const OPACIDADE_DAS_OUTRAS = 0.38;
 
 /** A célula do cabeçalho das colunas de "Saldos por conta": navy opaco em duas camadas, 9,5px, sombra interna embaixo e 1px para
  *  cada lado NA MESMA COR do fundo (`color-mix` de 90% primary + 10% primary-foreground = as duas camadas compostas), que tapa
@@ -1491,12 +1515,16 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                 <div ref={refCabSaldos} className="px-3 py-1.5 border-b bg-primary text-primary-foreground flex items-center justify-between shrink-0 sticky top-0 z-10">
                   <span className="text-[9px] font-medium uppercase tracking-wider">Saldos por conta</span>
                   <div className="flex items-center gap-2">
-                    {selectedConta !== '__all__' && (
-                      <button onClick={() => setSelectedConta('__all__')}
-                        className="text-[9px] text-primary-foreground border border-primary-foreground/40 rounded px-1.5 py-0.5 bg-transparent hover:bg-primary-foreground/10 cursor-pointer">
-                        ← Todas
-                      </button>
-                    )}
+                    {/* ⚠ LUGAR RESERVADO (UI-BOTOES-LUGAR-FIXO-01): o "← Todas" so' existe com conta escolhida, e o lugar dele
+                        existe sempre — o "+ Cadastrar" nao anda. */}
+                    <span className="inline-flex w-[52px] shrink-0 justify-end" data-testid="lugar-todas">
+                      {selectedConta !== '__all__' && (
+                        <button onClick={() => setSelectedConta('__all__')}
+                          className="text-[9px] text-primary-foreground border border-primary-foreground/40 rounded px-1.5 py-0.5 bg-transparent hover:bg-primary-foreground/10 cursor-pointer whitespace-nowrap">
+                          ← Todas
+                        </button>
+                      )}
+                    </span>
                     {fechamentoSemMovimento.fechar.length > 0 && canEditSaldoFinal(anoMesSel) && (
                       <Button
                         variant="outline"
@@ -1523,19 +1551,14 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                     está em toda linha e a faixa gastava uma linha de altura acima da tabela. */}
 
                 {/* Tabela única — garante alinhamento perfeito entre todos os grupos */}
-                {/* ⚠ `table-layout:auto` — ajuste do PR-CONCILIA, valores colando em 1280. Com `fixed` as colunas eram % da
-                    tabela e o valor de milhão não cabia em 1280: colava no da coluna vizinha. No
-                    `auto` cada coluna de valor tem a largura do maior valor dela, e quem cede é o
-                    nome da conta (quebra linha). Medido no Chromium: 0 valores estourando em 1280 e
-                    1366, colunas alinhadas entre thead e os tbody, sticky intacto. Só o lápis fica
-                    pinado (34px), senão encolheria até o ícone. */}
-                <table className="w-full border-collapse" style={{fontSize:'10px', tableLayout:'auto'}}>
+                {/* ⚠ `table-layout: FIXED` COM COLGROUP EM px — CONC-SALDOS-LAYOUT-02. O `auto` de antes (cada coluna de valor com a
+                    largura do maior valor, o nome cedendo e QUEBRANDO a linha) nasceu porque o `fixed` antigo era em % da
+                    tabela e cortava valor de milhao a 1.280. Agora as quatro colunas da direita tem px medidos no pior texto
+                    (`REGUA_SALDOS`) e a Conta e' a unica que estica; o nome CORTA numa linha (inteiro no `title` da linha). */}
+                <table className="w-full border-collapse" style={{fontSize:'10px', tableLayout:'fixed'}}>
                   <colgroup>
                     <col />
-                    <col />
-                    <col />
-                    <col />
-                    <col style={{width:'34px'}} />
+                    {REGUA_SALDOS.map((w, i) => <col key={i} style={{width:`${w}px`}} />)}
                   </colgroup>
                   {/* O Total mora no `thead`: gruda junto com o cabeçalho das colunas, logo abaixo
                       do cabeçalho do card (top MEDIDO). A borda inferior é sombra interna nas
@@ -1558,25 +1581,30 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                       <th className={`${TH_SALDOS} px-1 text-right`}>Sistema</th>
                       <th className={`${TH_SALDOS} px-1 text-right`}>Extrato</th>
                       <th className={`${TH_SALDOS} px-1 text-right`}>Diferença</th>
-                      <th className={`${TH_SALDOS} w-7`} />
+                      <th className={TH_SALDOS} />
                     </tr>
-                    {/* ⚠ O TOTAL: fundo `bg-card` OPACO, rótulo e valores a 10,5px bold — PR-CONC-SALDOS-LAYOUT-01. O rótulo era
-                        12px `text-blue-900` em `bg-accent` e pesava mais que o número. A cor do valor é o SINAL: negativo é
-                        vermelho em Sistema E em Extrato (`corDoValor`). */}
+                    {/* ⚠ O TOTAL E' UMA FAIXA NAVY ESCURA, 24px, TEXTO BRANCO — CONC-SALDOS-LAYOUT-02 (era linha branca a 10,5px, que nao
+                        se distinguia das contas). Negativo e "confere" nos dois tons claros (`TOM_NO_NAVY`). Com conta que pesa
+                        sem saldo, a frase ocupa Extrato + Diferença JUNTAS (era ela que alargava a coluna Diferença). */}
                     <tr
-                      className="cursor-pointer transition-colors bg-card"
+                      className="cursor-pointer bg-[hsl(213_52%_16%)]"
                       onClick={() => setSelectedConta('__all__')}
                       data-testid="linha-total"
                     >
-                      <td className="py-[3px] px-2 font-bold text-[10.5px] text-primary shadow-[inset_0_-1px_0_hsl(var(--border))]">Total — todas as contas</td>
+                      <td className={`${TD_TOTAL} pl-2 pr-1 text-left tracking-wide truncate`}>TOTAL · todas as contas</td>
                       {/* O Total é a linha 'total' do dono. */}
-                      <td className={`py-[3px] px-1 text-right font-bold text-[10.5px] tabular-nums whitespace-nowrap shadow-[inset_0_-1px_0_hsl(var(--border))] ${corDoValor(linhaTotal?.saldo_sistema)}`} data-testid="total-sistema">{linhaTotal?.saldo_sistema != null ? formatMoeda(linhaTotal.saldo_sistema) : '—'}</td>
-                      <td className={`py-[3px] px-1 text-right font-bold text-[10.5px] tabular-nums whitespace-nowrap shadow-[inset_0_-1px_0_hsl(var(--border))] ${corDoValor(linhaTotal?.saldo_extrato)}`} data-testid="total-extrato">{linhaTotal?.saldo_extrato != null ? formatMoeda(linhaTotal.saldo_extrato) : '—'}</td>
-                      <td className={`py-[3px] px-1 text-right font-bold text-[10.5px] tabular-nums whitespace-nowrap shadow-[inset_0_-1px_0_hsl(var(--border))] ${linhaTotal?.diferenca == null?'text-muted-foreground':saldoConfere(linhaTotal.diferenca)?'text-success':'text-destructive'}`} data-testid="total-diferenca">
-                        {faltaSaldoTotal ? <FaltaSaldo frase={faltaSaldoTotal} testId="total-falta-saldo" />
-                          : linhaTotal?.diferenca == null ? '—' : saldoConfere(linhaTotal.diferenca) ? 'confere' : formatMoeda(linhaTotal.diferenca)}
-                      </td>
-                      <td className="py-[3px] shadow-[inset_0_-1px_0_hsl(var(--border))]" />
+                      <td className={`${TD_TOTAL} px-1 text-right tabular-nums whitespace-nowrap ${corNoNavy(linhaTotal?.saldo_sistema)}`} data-testid="total-sistema">{linhaTotal?.saldo_sistema != null ? formatMoeda(linhaTotal.saldo_sistema) : '—'}</td>
+                      {faltaSaldoTotal ? (
+                        <td colSpan={2} className={`${TD_TOTAL} px-1 text-right whitespace-nowrap`} data-testid="total-diferenca">
+                          <FaltaSaldo frase={faltaSaldoTotal} testId="total-falta-saldo" tom="navy" />
+                        </td>
+                      ) : (<>
+                        <td className={`${TD_TOTAL} px-1 text-right tabular-nums whitespace-nowrap ${corNoNavy(linhaTotal?.saldo_extrato)}`} data-testid="total-extrato">{linhaTotal?.saldo_extrato != null ? formatMoeda(linhaTotal.saldo_extrato) : '—'}</td>
+                        <td className={`${TD_TOTAL} px-1 text-right tabular-nums whitespace-nowrap ${linhaTotal?.diferenca == null ? 'text-white/60' : saldoConfere(linhaTotal.diferenca) ? TOM_NO_NAVY.ok : corNoNavy(linhaTotal.diferenca)}`} data-testid="total-diferenca">
+                          {linhaTotal?.diferenca == null ? '—' : saldoConfere(linhaTotal.diferenca) ? 'confere' : formatMoeda(linhaTotal.diferenca)}
+                        </td>
+                      </>)}
+                      <td className={TD_TOTAL} />
                     </tr>
                   </thead>
                   {/* ⚠ UM <tbody> POR GRUPO — estrutura que o sticky da faixa (etapa 2) vai exigir: o
@@ -1596,19 +1624,29 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                       depois no DOM); como as duas são opacas e da mesma altura, a troca é limpa. */}
                   {gruposSaldos.map(g => (
                     <tbody key={g.chave}>
+                      {/* ⚠ CONC-SALDOS-LAYOUT-02: fundo azul-acinzentado CHEIO com filete (`TD_GRUPO`), rotulo em maiusculas 9,5px,
+                          valores 10px bold navy. "falta saldo" ocupa Extrato + Diferença juntas, em ambar. */}
+                      {(() => {
+                        const topo = {top:`${alturaCabSaldos + alturaThead}px`};
+                        const falta = fraseFaltaSaldo(g.subtotal);
+                        return (
                       <tr>
-                        <td style={{top:`${alturaCabSaldos + alturaThead}px`}} className={`px-2 pt-[3px] pb-[2px] text-[10px] font-semibold text-primary sticky z-[8] bg-card bg-[linear-gradient(hsl(var(--muted-foreground)/0.15),hsl(var(--muted-foreground)/0.15))] ${SOMBRA_FAIXA_GRUPO}`} data-testid="faixa-grupo">{g.rotulo}</td>
-                        <td style={{top:`${alturaCabSaldos + alturaThead}px`}} className={`pt-[3px] pb-[2px] px-1 text-right text-[10px] font-semibold tabular-nums whitespace-nowrap sticky z-[8] bg-card bg-[linear-gradient(hsl(var(--muted-foreground)/0.15),hsl(var(--muted-foreground)/0.15))] ${SOMBRA_FAIXA_GRUPO} ${corDoValor(g.subtotal?.saldo_sistema)}`}>{g.subtotal?.saldo_sistema != null ? formatMoeda(g.subtotal.saldo_sistema) : '—'}</td>
-                        <td style={{top:`${alturaCabSaldos + alturaThead}px`}} className={`pt-[3px] pb-[2px] px-1 text-right text-[10px] font-semibold tabular-nums whitespace-nowrap sticky z-[8] bg-card bg-[linear-gradient(hsl(var(--muted-foreground)/0.15),hsl(var(--muted-foreground)/0.15))] ${SOMBRA_FAIXA_GRUPO} ${corDoValor(g.subtotal?.saldo_extrato)}`} data-testid="subtotal-extrato">{g.subtotal?.saldo_extrato == null ? '—' : formatMoeda(g.subtotal.saldo_extrato)}</td>
-                        <td style={{top:`${alturaCabSaldos + alturaThead}px`}} className={`pt-[3px] pb-[2px] px-1 text-right text-[10px] font-semibold tabular-nums whitespace-nowrap sticky z-[8] bg-card bg-[linear-gradient(hsl(var(--muted-foreground)/0.15),hsl(var(--muted-foreground)/0.15))] ${SOMBRA_FAIXA_GRUPO} ${g.subtotal?.diferenca == null?'text-muted-foreground':saldoConfere(g.subtotal.diferenca)?'text-success':'text-destructive'}`}>
-                          {(() => {
-                            const falta = fraseFaltaSaldo(g.subtotal);
-                            if (falta) return <FaltaSaldo frase={falta} testId={`subtotal-falta-saldo-${g.chave}`} />;
-                            return g.subtotal?.diferenca == null ? '—' : saldoConfere(g.subtotal.diferenca) ? 'confere' : formatMoeda(g.subtotal.diferenca);
-                          })()}
-                        </td>
-                        <td style={{top:`${alturaCabSaldos + alturaThead}px`}} className={`pt-[3px] pb-[2px] sticky z-[8] bg-card bg-[linear-gradient(hsl(var(--muted-foreground)/0.15),hsl(var(--muted-foreground)/0.15))] ${SOMBRA_FAIXA_GRUPO}`} />
+                        <td style={topo} className={`${TD_GRUPO} pl-2 pr-1 text-left text-[9.5px] font-bold uppercase tracking-wide text-primary truncate`} data-testid="faixa-grupo">{g.rotulo}</td>
+                        <td style={topo} className={`${TD_GRUPO} px-1 text-right text-[10px] font-bold tabular-nums whitespace-nowrap ${corDoValor(g.subtotal?.saldo_sistema) || 'text-primary'}`}>{g.subtotal?.saldo_sistema != null ? formatMoeda(g.subtotal.saldo_sistema) : '—'}</td>
+                        {falta ? (
+                          <td style={topo} colSpan={2} className={`${TD_GRUPO} px-1 text-right whitespace-nowrap`}>
+                            <FaltaSaldo frase={falta} testId={`subtotal-falta-saldo-${g.chave}`} tom="grupo" />
+                          </td>
+                        ) : (<>
+                          <td style={topo} className={`${TD_GRUPO} px-1 text-right text-[10px] font-bold tabular-nums whitespace-nowrap ${corDoValor(g.subtotal?.saldo_extrato) || 'text-primary'}`} data-testid="subtotal-extrato">{g.subtotal?.saldo_extrato == null ? '—' : formatMoeda(g.subtotal.saldo_extrato)}</td>
+                          <td style={topo} className={`${TD_GRUPO} px-1 text-right text-[10px] font-bold tabular-nums whitespace-nowrap ${g.subtotal?.diferenca == null?'text-muted-foreground':saldoConfere(g.subtotal.diferenca)?'text-success':'text-destructive'}`}>
+                            {g.subtotal?.diferenca == null ? '—' : saldoConfere(g.subtotal.diferenca) ? 'confere' : formatMoeda(g.subtotal.diferenca)}
+                          </td>
+                        </>)}
+                        <td style={topo} className={TD_GRUPO} />
                       </tr>
+                        );
+                      })()}
                       {g.contas.map(s=>(
                       <SaldoContaRow key={s.conta.id} data={s}
                         isActive={selectedConta===s.conta.id}
@@ -1918,27 +1956,26 @@ function SaldoContaRow({data, isActive, isDimmed, onClick, onEdit, canEdit, show
   /* CONC-SEM-CLASSIFICACAO-01: os dois avisos da classificação, do dono. Não mudam o ponto nem a cor da linha (D6). */
   const semClass = semClassificacaoDaLinha(linha);
   const semForn = semFornecedorDaLinha(linha);
-  const titulo = `${ROTULO_STATUS[linha.status]}${frases.length > 0 ? ': ' + frases.map(f => f.texto).join(' · ') : ''}`
+  /* CONC-SALDOS-LAYOUT-02: o `title` COMECA PELO NOME (e pela frase do par): o nome corta na linha e tem de estar inteiro aqui. */
+  const titulo = `${getContaLabel(conta)}${par ? ` · ${par.tituloLinha}` : ''} — ${ROTULO_STATUS[linha.status]}${frases.length > 0 ? ': ' + frases.map(f => f.texto).join(' · ') : ''}`
     + (avisos.length > 0 ? ` — 2ª prova · extrato: ${avisos.map(f => f.texto).join(' · ')}` : '')
     + (semClass ? ` — ${semClass.qtde} sem classificação` : '')
     + (semForn > 0 ? ` — ${semForn} sem fornecedor` : '');
   return (
     <tr
-      /* ⚠ A SELECIONADA É NAVY A 10% COM FILETE, NÃO `#E3F2FD` — PR-CONC-SALDOS-LAYOUT-01: o azul claro brigava com as faixas
-         de cima. `bg-primary/10` é o token do tema (classe, não estilo inline). O filete de 3px é sombra interna na PRIMEIRA
-         célula (borda colapsada não desenha). As outras seguem a 0,3. */
-      className={`border-b last:border-b-0 cursor-pointer transition-all ${isActive ? 'bg-primary/10' : 'hover:bg-muted/20'}`}
-      style={{opacity:isDimmed?0.3:1}}
+      /* ⚠ A ESCOLHIDA TEM CONTORNO NAVY E FUNDO BRANCO, NUNCA PREENCHIMENTO — CONC-SALDOS-LAYOUT-02: o `bg-primary/10` de antes
+         era a mesma cor da faixa de grupo. O contorno e' sombra interna em toda celula (borda colapsada nao desenha). As outras
+         ficam a 0,38. Sem selecao: todas a 1, sem contorno. */
+      className={`cursor-pointer transition-all ${isActive ? 'bg-card' : 'hover:bg-muted/20 last:[&>td]:shadow-none'}`}
+      style={{opacity:isDimmed?OPACIDADE_DAS_OUTRAS:1}}
       data-ativa={isActive ? 'sim' : undefined}
       onClick={onClick}
       title={titulo}
       data-testid="linha-saldo-conta" data-conta={conta.id} data-status={linha.status}
     >
-      {/* ⚠ RECUO DE 18px: a conta fica visivelmente DENTRO do grupo (a faixa do grupo começa em 8px). */}
-      <td className={`relative py-0.5 pl-[18px] pr-2 overflow-hidden ${isActive ? 'shadow-[inset_3px_0_0_hsl(var(--primary))]' : ''}`}>
-        {/* ⚠ O CONTADOR VERMELHO DA CONTA mora NO RECUO de 18px (posição absoluta): a coluna Conta não tem folga, e na célula do
-            lápis ele alargava a coluna e quebrava quatro nomes em duas linhas (medido a 1.126). Abre o modal desta conta. O
-            "sem fornecedor" da conta fica no `title` da linha e no card Status — não há lugar para um segundo contador. */}
+      <td className={`relative ${TD_CONTA} pl-0 pr-1 overflow-hidden ${isActive ? CONTORNO_PRIMEIRA : LINHA_DA_CONTA}`}>
+        {/* ⚠ O CONTADOR VERMELHO DA CONTA mora NO RECUO de 19px (posição absoluta): abre o modal desta conta. O "sem fornecedor"
+            da conta fica no `title` da linha e no card Status — não há lugar para um segundo contador. */}
         {semClass && (
           <button type="button" onClick={e => { e.stopPropagation(); onClassificar(); }}
             className="absolute left-[2px] top-1/2 h-[12px] min-w-[13px] -translate-y-1/2 rounded-[6px] bg-destructive px-[2px] text-[8.5px] font-semibold leading-[12px] text-destructive-foreground tabular-nums cursor-pointer"
@@ -1946,61 +1983,52 @@ function SaldoContaRow({data, isActive, isDimmed, onClick, onEdit, canEdit, show
             {semClass.qtde}
           </button>
         )}
-        {/* ⚠ O PONTO É O STATUS (o saldo). Conta CONCILIADA com aviso do extrato leva um ponto âmbar de 4px SOBRE o canto
-            do ponto de status (posição absoluta): avisa sem gastar um pixel da coluna Conta, que não tem folga. */}
-        <span style={{width:7,height:7,borderRadius:'50%',background:dotColor,display:'inline-block',marginRight:4,verticalAlign:'middle',flexShrink:0,position:'relative'}}>
-          {marcaAviso && (
-            <span aria-hidden data-testid="marca-aviso-conta" style={{position:'absolute',top:-2,right:-2,width:4,height:4,borderRadius:'50%',background:'#D97706',boxShadow:'0 0 0 1px #fff'}} />
-          )}
-        </span>
-        {/* ⚠ 10px, E NÃO 11 — PR-CONC-SALDOS-NOME-DATA-01. Medido antes de mexer: o nome estava
-            em 11px e era o maior texto da linha só porque os valores são 10px. Igualado a eles,
-            ele para de puxar o olho sem perder nada de legibilidade — a identidade da linha já
-            é dada pela posição e pelo ponto colorido do status. */}
-        <span className={`text-[10px] ${isActive ? 'font-semibold text-primary' : ''}`} style={{verticalAlign:'middle'}} data-testid="nome-conta">{getContaLabel(conta)}</span>
-        {/* ⚠ ATÉ QUANDO ESTA CONTA FOI CONFERIDA, ao lado do nome — a data do saldo do extrato do DONO.
-            ⚠ 9,5px MUTED: o piso da casa. Sem saldo de extrato não mostra nada, nem traço: ausência de conferência não é
-            um dado a exibir, e um "—" aqui pareceria erro numa conta que só está parada. */}
-        {ext !== null && linha.saldo_extrato_data && (
-          <span className="ml-1 text-[9.5px] text-muted-foreground" style={{verticalAlign:'middle'}}>
-            · {linha.saldo_extrato_data.slice(8, 10)}/{linha.saldo_extrato_data.slice(5, 7)}
+        {/* ⚠ UMA LINHA, SEMPRE — CONC-SALDOS-LAYOUT-02: ponto · NOME (o unico que corta; "· par" e "⚠" cortam junto, inteiros no
+            `title` da linha) · DATA (29px: "30/09" a 9,5px mede 28,1) · OFX (11px) · PDF (11px). Os tres slots da direita existem SEMPRE, vazios quando nao
+            ha' dado: nada entra ou sai do fluxo com o estado da conta — e' isto que impede a quebra de linha. */}
+        <div className="flex h-[17px] min-w-0 items-center gap-1 pl-[19px]" data-testid="celula-conta">
+          {/* O PONTO É O STATUS (o saldo). Conta CONCILIADA com aviso do extrato leva um ponto âmbar de 4px SOBRE o canto. */}
+          <span style={{width:7,height:7,borderRadius:'50%',background:dotColor,flexShrink:0,position:'relative'}}>
+            {marcaAviso && (
+              <span aria-hidden data-testid="marca-aviso-conta" style={{position:'absolute',top:-2,right:-2,width:4,height:4,borderRadius:'50%',background:'#D97706',boxShadow:'0 0 0 1px #fff'}} />
+            )}
           </span>
-        )}
-        {par && (
-          <span className="ml-1 text-[9.5px] text-muted-foreground whitespace-nowrap" style={{verticalAlign:'middle'}} title={par.tituloLinha} data-testid="marca-par">
-            · {par.curto}
+          <span className={`min-w-0 flex-1 truncate ${isActive ? 'font-semibold text-primary' : ''}`} data-testid="nome-conta">
+            {getContaLabel(conta)}
+            {par && (
+              <span className="ml-1 text-muted-foreground" title={par.tituloLinha} data-testid="marca-par">· {par.curto}</span>
+            )}
+            {showSaldoAlert && (
+              <span className="ml-1 font-semibold text-warning border border-amber-300 bg-warning/10 rounded px-0.5" title="Saldo inicial não definido">⚠</span>
+            )}
           </span>
-        )}
-        {showSaldoAlert && (
-          <span className="ml-1 text-[9.5px] font-semibold text-warning border border-amber-300 bg-warning/10 rounded px-0.5" title="Saldo inicial não definido">⚠</span>
-        )}
-        {/* Sem OFX e sem anexo, nenhum ícone: ausência não ganha marcador. */}
-        {temOfx && (
-          <span className="ml-1 inline-flex text-primary" style={{verticalAlign:'middle'}} title="Extrato OFX importado" aria-label="Extrato OFX importado">
-            <FileText className="h-2.5 w-2.5" aria-hidden />
+          {/* ATÉ QUANDO ESTA CONTA FOI CONFERIDA — a data do saldo do extrato do DONO. Sem saldo de extrato o lugar fica vazio. */}
+          <span className="w-[29px] shrink-0 text-right text-[9.5px] text-muted-foreground" data-testid="slot-data">
+            {ext !== null && linha.saldo_extrato_data ? `${linha.saldo_extrato_data.slice(8, 10)}/${linha.saldo_extrato_data.slice(5, 7)}` : ''}
           </span>
-        )}
-        {temPdf && (
-          <span className="ml-1 inline-flex text-purple-600" style={{verticalAlign:'middle'}} title="PDF do extrato anexado" aria-label="PDF do extrato anexado">
-            <Paperclip className="h-2.5 w-2.5" aria-hidden />
+          <span className="inline-flex h-[11px] w-[11px] shrink-0 text-primary" data-testid="slot-ofx"
+            title={temOfx ? 'Extrato OFX importado' : undefined} aria-label={temOfx ? 'Extrato OFX importado' : undefined}>
+            {temOfx && <FileText className="h-[11px] w-[11px]" aria-hidden />}
           </span>
-        )}
+          <span className="inline-flex h-[11px] w-[11px] shrink-0 text-purple-600" data-testid="slot-pdf"
+            title={temPdf ? 'PDF do extrato anexado' : undefined} aria-label={temPdf ? 'PDF do extrato anexado' : undefined}>
+            {temPdf && <Paperclip className="h-[11px] w-[11px]" aria-hidden />}
+          </span>
+        </div>
       </td>
-      {/* ⚠ VALORES A 10px (eram 9,5) E NEGATIVO VERMELHO NAS DUAS COLUNAS — PR-CONC-SALDOS-LAYOUT-01: o Extrato negativo saía
-          preto ao lado de um Sistema vermelho. `corDoValor` é a mesma regra nos três níveis (Total, grupo, conta). */}
-      <td className={`py-0.5 px-1 text-right text-[10px] tabular-nums whitespace-nowrap ${corDoValor(sis)}`}>{sis===null?'—':formatMoeda(sis)}</td>
-      <td className={`py-0.5 px-1 text-right text-[10px] tabular-nums whitespace-nowrap ${corDoValor(ext)}`} data-testid="conta-extrato">{ext===null?'—':formatMoeda(ext)}</td>
+      {/* ⚠ NEGATIVO VERMELHO NAS DUAS COLUNAS: `corDoValor` é a mesma regra nos três níveis (Total, grupo, conta). */}
+      <td className={`${TD_CONTA} px-1 text-right tabular-nums whitespace-nowrap ${isActive ? `font-semibold ${CONTORNO_MEIO}` : LINHA_DA_CONTA} ${corDoValor(sis)}`}>{sis===null?'—':formatMoeda(sis)}</td>
+      <td className={`${TD_CONTA} px-1 text-right tabular-nums whitespace-nowrap ${isActive ? `font-semibold ${CONTORNO_MEIO}` : LINHA_DA_CONTA} ${corDoValor(ext)}`} data-testid="conta-extrato">{ext===null?'—':formatMoeda(ext)}</td>
       {/* Sem extrato é "—" (dado ausente); com extrato, "confere" só com diferença ZERO. */}
-      <td className={`py-0.5 px-1 text-right text-[10px] tabular-nums whitespace-nowrap ${dif===null?'font-medium text-muted-foreground':saldoConfere(dif)?'font-medium text-success':'font-semibold text-destructive'}`}>
+      <td className={`${TD_CONTA} px-1 text-right tabular-nums whitespace-nowrap ${isActive ? CONTORNO_MEIO : LINHA_DA_CONTA} ${dif===null?'font-medium text-muted-foreground':saldoConfere(dif)?'font-medium text-success':'font-semibold text-destructive'}`}>
         {dif===null ? '—' : saldoConfere(dif) ? 'confere' : formatMoeda(dif)}
       </td>
-      {/* ⚠ A CÉLULA DO LÁPIS NÃO TEM PADDING VERTICAL NEM ENTRELINHA — PR-CONC-SALDOS-LAYOUT-01, por medição: o botão tem 16px e,
-          sentado na linha de base com 2 + 2 de padding, levava a linha a 21,5px. Sem eles a linha é a do texto: 19px. */}
-      <td className="py-0 px-1 text-center leading-none">
+      {/* O LÁPIS: célula de 22px, botão de 16 x 16 — sempre presente a célula; o botão, com `canEdit`. */}
+      <td className={`h-[18px] p-0 text-center leading-none ${isActive ? CONTORNO_ULTIMA : LINHA_DA_CONTA}`} data-testid="slot-lapis">
         {canEdit && (
-          <button className="border border-border rounded px-1 py-0.5 hover:bg-muted cursor-pointer align-middle"
+          <button className="inline-flex h-4 w-4 items-center justify-center border border-border rounded p-0 hover:bg-muted cursor-pointer align-middle"
             onClick={e=>{e.stopPropagation();onEdit();}}>
-            <Pencil className="h-2.5 w-2.5" />
+            <Pencil className="h-[9px] w-[9px]" />
           </button>
         )}
       </td>
