@@ -5,6 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   competenciaQueVenceNoMes, filtrarLinhas, linhasDoMes, proporcoesDoMes, resumoDoMes, totalDaLista,
+  faltaGerarDaRegra, lerAGerar, resumoFaltaGerar, seloFaltaGerar, tituloDoGerarNaLinha, SEM_A_GERAR,
   type OcorrenciaDoMes, type RegraDoMes,
 } from './recorrenciasDoMes';
 
@@ -162,5 +163,58 @@ describe('o resumo do mês', () => {
   it('centavos inteiros: 0,1 + 0,2 não vira 0,30000000000000004', () => {
     const rr = resumoDoMes(linhasDoMes([regra({ id: 'a' }), regra({ id: 'b' })], [oc('a', 0.1), oc('b', 0.2)], MES));
     expect(rr.total.valor).toBe(30);
+  });
+});
+
+/* ── REC-FALTA-GERAR-A-VISTA-01 — o que falta gerar: lido do banco, só contado aqui ───────────────────────────────────── */
+describe('o que falta gerar (a resposta de fn_recorrencias_a_gerar)', () => {
+  const RESPOSTA = [
+    { recorrencia_id: 'r1', a_gerar: 3, fechados: 0, passados: 2, primeira: '2026-08', ultima: '2026-12' },
+    { recorrencia_id: 'r2', a_gerar: 1, fechados: 1, passados: 1, primeira: '2026-08', ultima: '2026-08' },
+    { recorrencia_id: 'r3', a_gerar: 0, fechados: 2, passados: 0, primeira: null, ultima: null },
+  ];
+  const mapa = lerAGerar(RESPOSTA);
+  it('o leitor devolve o mapa por regra; resposta vazia é mapa vazio (nada a gerar), não erro', () => {
+    expect(mapa?.get('r1')).toEqual({ aGerar: 3, fechados: 0, passados: 2, primeira: '2026-08', ultima: '2026-12' });
+    expect(mapa?.size).toBe(3);
+    expect(lerAGerar([])?.size).toBe(0);
+  });
+  it('PEÇA TORTA = NULO INTEIRO (erro ≠ em dia): não é lista, linha sem id, número torto, mês torto', () => {
+    for (const torta of [null, undefined, {}, 'x', [null], [{ ...RESPOSTA[0], recorrencia_id: '' }], [{ ...RESPOSTA[0], a_gerar: '3' }],
+      [{ ...RESPOSTA[0], a_gerar: -1 }], [{ ...RESPOSTA[0], fechados: 1.5 }], [{ ...RESPOSTA[0], passados: undefined }],
+      [{ ...RESPOSTA[0], primeira: '08/2026' }], [RESPOSTA[0], { ...RESPOSTA[1], ultima: 7 }]]) {
+      expect(lerAGerar(torta)).toBeNull();
+    }
+  });
+  it('a linha expõe o que a REGRA tem para gerar, no mês em que a regra aparece — e `naoGerado`, valor e total não mudam', () => {
+    const regras = [regra({ id: 'r1' }), regra({ id: 'r2' }), regra({ id: 'limpa' })];
+    const ocs = [oc('r1', 1000), oc('r2', 1000), oc('limpa', 1000)];
+    const sem = linhasDoMes(regras, ocs, MES);
+    const com = linhasDoMes(regras, ocs, MES, { canceladas: [], mesesFechados: [], aGerar: mapa ?? SEM_A_GERAR });
+    expect(com.map(l => l.faltaGerar?.aGerar ?? null)).toEqual([3, 1, null]);
+    expect(sem.map(l => l.faltaGerar)).toEqual([null, null, null]);   // mapa vazio = nada marcado
+    expect(com.map(({ faltaGerar: _f, ...resto }) => resto)).toEqual(sem.map(({ faltaGerar: _f, ...resto }) => resto));
+    expect(resumoDoMes(com)).toEqual(resumoDoMes(sem));
+  });
+  it('fora do mês a regra não tem linha, e o que falta gerar se lê pelo id da regra', () => {
+    expect(faltaGerarDaRegra(mapa ?? SEM_A_GERAR, 'r1')?.aGerar).toBe(3);
+    expect(faltaGerarDaRegra(mapa ?? SEM_A_GERAR, 'limpa')).toBeNull();
+    expect(faltaGerarDaRegra(SEM_A_GERAR, 'r1')).toBeNull();
+    /* linha zerada do banco (não deveria vir) não vira selo */
+    expect(faltaGerarDaRegra(new Map([['z', { aGerar: 0, fechados: 0, passados: 0, primeira: null, ultima: null }]]), 'z')).toBeNull();
+  });
+  it('o cartão conta do MAPA: regras com mês a gerar e a soma dos meses (só fechado não conta)', () => {
+    expect(resumoFaltaGerar(mapa ?? SEM_A_GERAR)).toEqual({ regras: 2, meses: 4 });
+    expect(resumoFaltaGerar(SEM_A_GERAR)).toEqual({ regras: 0, meses: 0 });
+  });
+  it('o selo: "falta gerar · N meses" em âmbar, com passados e o intervalo no title; só fechado, cinza; nada, nulo', () => {
+    const r = (id: string) => seloFaltaGerar(faltaGerarDaRegra(mapa ?? SEM_A_GERAR, id));
+    expect(r('r1')).toEqual({ texto: 'falta gerar · 3 meses', tom: 'ambar', titulo: '3 meses · 2 passados · de 2026-08 a 2026-12 · gerar pela linha' });
+    expect(r('r2')).toEqual({ texto: 'falta gerar · 1 mês', tom: 'ambar', titulo: '1 mês · 1 passado · em 2026-08 · 1 em mês fechado · gerar pela linha' });
+    expect(r('r3')).toMatchObject({ texto: '2 em mês fechado', tom: 'cinza' });
+    expect(r('limpa')).toBeNull();
+    expect(seloFaltaGerar({ aGerar: 15, fechados: 0, passados: 0, primeira: '2026-10', ultima: '2027-12' })?.titulo).toBe('15 meses · de 2026-10 a 2027-12 · gerar pela linha');
+    expect(tituloDoGerarNaLinha({ aGerar: 1, fechados: 0, passados: 1, primeira: '2026-08', ultima: '2026-08' })).toBe('Gerar o mês que falta');
+    expect(tituloDoGerarNaLinha({ aGerar: 3, fechados: 0, passados: 2, primeira: '2026-08', ultima: '2026-12' })).toBe('Gerar os 3 meses que faltam');
   });
 });

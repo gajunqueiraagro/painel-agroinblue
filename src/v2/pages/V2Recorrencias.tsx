@@ -18,9 +18,10 @@ import {
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useFinanceiroV2 } from '@/hooks/useFinanceiroV2';
-import { useRecorrencias, useOcorrenciasDoMes, cancelarRecorrencia, type Recorrencia, type SituacaoRecorrencia } from '@/hooks/useRecorrencias';
+import { useRecorrencias, useOcorrenciasDoMes, useRecorrenciasAGerar, cancelarRecorrencia, type Recorrencia, type SituacaoRecorrencia } from '@/hooks/useRecorrencias';
 import {
   linhasDoMes, resumoDoMes, filtrarLinhas, totalDaLista, proporcoesDoMes, ROTULO_TIPO, ROTULO_SITUACAO_DO_MES, ROTULO_NAO_GERADO, TITULO_NAO_GERADO,
+  faltaGerarDaRegra, resumoFaltaGerar, seloFaltaGerar, tituloDoGerarNaLinha, mesesAGerar, AVISO_A_GERAR_NAO_LIDO,
   type LinhaDoMes, type FiltroDoTipo, type FiltroDaSituacao, type Fatia, type SituacaoDoMes,
 } from '@/lib/financeiro/recorrenciasDoMes';
 import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
@@ -94,6 +95,11 @@ function Valor({ centavos, entrada = false, estimado = false, className }: { cen
   );
 }
 
+/* REC-FALTA-GERAR-A-VISTA-01: a Situação tem DOIS lugares reservados — a situação do mês e o selo "falta gerar · N meses" (vazio
+   quando não há o que gerar). Larguras MEDIDAS no pior texto ("não gerado" e "falta gerar · 12 meses") — ver o CLAUDE.md. */
+const LARGURA_SITUACAO = 62;
+const LARGURA_SELO = 110;
+
 /** As colunas, em px (`table-layout: fixed`): so' a Descricao e' elastica. MEDIDAS — ver o CLAUDE.md (REC-VALOR-CERTO-01). */
 const COLUNAS: ReadonlyArray<{ campo: Coluna; rotulo: string; largura: number | null; direita?: boolean }> = [
   { campo: 'descricao', rotulo: 'Descrição', largura: null },
@@ -104,9 +110,11 @@ const COLUNAS: ReadonlyArray<{ campo: Coluna; rotulo: string; largura: number | 
   { campo: 'forma', rotulo: 'Forma', largura: 56 },
   { campo: 'previsto', rotulo: 'Previsto', largura: 84, direita: true },
   { campo: 'valor', rotulo: 'Valor', largura: 100, direita: true },
-  { campo: 'situacao', rotulo: 'Situação', largura: 66 },
+  { campo: 'situacao', rotulo: 'Situação', largura: LARGURA_SITUACAO + LARGURA_SELO },
 ];
-const LARGURA_ACOES = 22;
+/* REC-FALTA-GERAR-A-VISTA-01: o lugar do botão "Gerar" (reservado em toda linha) + o "⋯". */
+const LARGURA_GERAR = 40;
+const LARGURA_ACOES = LARGURA_GERAR + 22;
 
 export default function V2Recorrencias() {
   const { recorrencias, loading, recarregar, clienteId } = useRecorrencias();
@@ -135,6 +143,19 @@ export default function V2Recorrencias() {
   const [filtroTipo, setFiltroTipo] = useState<FiltroDoTipo>('todas');
   const [filtroSituacao, setFiltroSituacao] = useState<FiltroDaSituacao>('todas');
 
+  /* ── O QUE FALTA GERAR — REC-FALTA-GERAR-A-VISTA-01 ───────────────────────────────────────────────────────────────
+     Uma leitura por cliente (`fn_recorrencias_a_gerar`, o Gerar perguntado sem gravar). A tela só CONTA o que ela devolve: o
+     selo e o botão da linha, e o sexto cartão. Lida pelo id da REGRA (a linha existe também fora do mês, em "Todas as regras"). */
+  const { aGerar, erroAGerar, recarregar: recarregarAGerar } = useRecorrenciasAGerar(clienteId);
+  const faltaGerar = useMemo(() => resumoFaltaGerar(aGerar), [aGerar]);
+  const [soFaltaGerar, setSoFaltaGerar] = useState(false);
+  /* O cartão filtra as regras com mês a gerar — e liga "Todas as regras", porque a regra pode não vencer no mês escolhido. */
+  const alternarFaltaGerar = () => {
+    setSoFaltaGerar(v => !v);
+    setModo(soFaltaGerar ? 'mes' : 'regras');
+    setFiltroTipo('todas'); setFiltroSituacao('todas');
+  };
+
   /* RECORRENCIA-GERA-A-VIGENCIA-INTEIRA-01: a regra vigente no mes e sem lancamento APARECE, como "nao gerado" — o dono
      recebe as competencias canceladas (que nao sao previsao) e os meses fechados (o motivo). */
   const linhas = useMemo(() => linhasDoMes(recorrencias, ocorrencias, mes, { canceladas, mesesFechados }),
@@ -159,11 +180,12 @@ export default function V2Recorrencias() {
     const naBusca = (r: Recorrencia) => termo === ''
       || [r.descricao, r.favorecidoNome ?? '', nomeConta(r.contaBancariaId), r.subcentro, r.formaPagamento ?? '', rotuloSituacao(r)]
         .join(' ').toLowerCase().includes(termo);
+    if (soFaltaGerar) return recorrencias.filter(r => (faltaGerarDaRegra(aGerar, r.id)?.aGerar ?? 0) > 0 && naBusca(r));
     if (modo === 'regras') return recorrencias.filter(naBusca);
     const doFiltro = new Set(filtrarLinhas(linhas, filtroTipo, filtroSituacao).map(l => l.regraId));
     return recorrencias.filter(r => doFiltro.has(r.id) && naBusca(r));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [recorrencias, linhas, modo, filtroTipo, filtroSituacao, busca, contasBancarias]);
+  }, [recorrencias, linhas, modo, filtroTipo, filtroSituacao, busca, contasBancarias, soFaltaGerar, aGerar]);
 
   /* O rodape: o total do dono sobre as linhas DO MES que estao na lista (filtro e busca aplicados). */
   const total = useMemo(() => {
@@ -207,7 +229,7 @@ export default function V2Recorrencias() {
   const alternar = (campo: Coluna) => setOrdem(o =>
     o.campo === campo ? { campo, direcao: o.direcao === 'asc' ? 'desc' : 'asc' } : { campo, direcao: 'desc' });
 
-  const recarregarTudo = async () => { await Promise.all([recarregar(), recarregarMes()]); };
+  const recarregarTudo = async () => { await Promise.all([recarregar(), recarregarMes(), recarregarAGerar()]); };
 
   const confirmarCancelamento = async () => {
     if (!cancelando) return;
@@ -218,21 +240,23 @@ export default function V2Recorrencias() {
     await recarregarTudo();
   };
 
+  const sairDoFaltaGerar = () => { if (soFaltaGerar) { setSoFaltaGerar(false); setModo('mes'); } };
+
   /* ── OS CARTOES — do dono, e NAO mudam com o filtro (sao do mes). Clicar liga o filtro correspondente; de novo, desliga. */
   const cartoes: ReadonlyArray<{
     chave: string; rotulo: string; fatia: Fatia; estimado?: boolean; borda: string;
     ligado: boolean; ligar: () => void;
   }> = [
     { chave: 'total', rotulo: `Recorrente em ${rotuloMes}`, fatia: resumo.total, borda: 'border-l-primary',
-      ligado: false, ligar: () => { setFiltroTipo('todas'); setFiltroSituacao('todas'); } },
+      ligado: false, ligar: () => { sairDoFaltaGerar(); setFiltroTipo('todas'); setFiltroSituacao('todas'); } },
     { chave: 'certo', rotulo: 'Valor certo', fatia: resumo.certo, borda: 'border-l-primary',
-      ligado: filtroTipo === 'certo', ligar: () => { setFiltroTipo(t => (t === 'certo' ? 'todas' : 'certo')); setFiltroSituacao('todas'); } },
+      ligado: filtroTipo === 'certo', ligar: () => { sairDoFaltaGerar(); setFiltroTipo(t => (t === 'certo' ? 'todas' : 'certo')); setFiltroSituacao('todas'); } },
     { chave: 'confirmado', rotulo: 'A confirmar · já informado', fatia: resumo.confirmado, borda: 'border-l-[#15803d]',
-      ligado: filtroSituacao === 'confirmado', ligar: () => { setFiltroSituacao(x => (x === 'confirmado' ? 'todas' : 'confirmado')); setFiltroTipo('todas'); } },
+      ligado: filtroSituacao === 'confirmado', ligar: () => { sairDoFaltaGerar(); setFiltroSituacao(x => (x === 'confirmado' ? 'todas' : 'confirmado')); setFiltroTipo('todas'); } },
     { chave: 'estimado', rotulo: 'A confirmar · ainda estimado', fatia: resumo.estimado, estimado: true, borda: 'border-l-amber-500',
-      ligado: filtroSituacao === 'estimado', ligar: () => { setFiltroSituacao(x => (x === 'estimado' ? 'todas' : 'estimado')); setFiltroTipo('todas'); } },
+      ligado: filtroSituacao === 'estimado', ligar: () => { sairDoFaltaGerar(); setFiltroSituacao(x => (x === 'estimado' ? 'todas' : 'estimado')); setFiltroTipo('todas'); } },
     { chave: 'folha', rotulo: 'Folha de pagamento · dentro do total', fatia: resumo.folha, borda: 'border-l-muted-foreground/40',
-      ligado: filtroTipo === 'folha', ligar: () => { setFiltroTipo(t => (t === 'folha' ? 'todas' : 'folha')); setFiltroSituacao('todas'); } },
+      ligado: filtroTipo === 'folha', ligar: () => { sairDoFaltaGerar(); setFiltroTipo(t => (t === 'folha' ? 'todas' : 'folha')); setFiltroSituacao('todas'); } },
   ];
 
   const Cab = ({ campo, rotulo, direita }: { campo: Coluna; rotulo: string; direita?: boolean }) => {
@@ -284,7 +308,7 @@ export default function V2Recorrencias() {
 
         {/* OS CINCO CARTÕES — todos do dono. ⚠ VALOR NUNCA CORTA: `whitespace-nowrap`, sem `truncate`; só o rótulo corta,
             com o inteiro no `title`. */}
-        <div className="grid grid-cols-5 gap-1.5" data-testid="rec-cartoes">
+        <div className="grid grid-cols-6 gap-1.5" data-testid="rec-cartoes">
           {cartoes.map(c => {
             const rotulo = c.chave === 'total' ? `${c.rotulo} · ${c.fatia.qtd} ${c.fatia.qtd === 1 ? 'conta' : 'contas'}` : `${c.rotulo} · ${c.fatia.qtd}`;
             const titulo = c.chave === 'total' ? `${rotulo} · ${ativas} ${ativas === 1 ? 'regra ativa' : 'regras ativas'}` : rotulo;
@@ -300,6 +324,20 @@ export default function V2Recorrencias() {
               </button>
             );
           })}
+          {/* O SEXTO CARTÃO — REC-FALTA-GERAR-A-VISTA-01: quantas regras têm mês para gerar e quantos meses (CONTAGEM, sem R$), do
+              banco. Clicar filtra a lista para elas. */}
+          <button type="button" data-testid="rec-cartao-falta-gerar" aria-pressed={soFaltaGerar} onClick={alternarFaltaGerar}
+            title={erroAGerar ? AVISO_A_GERAR_NAO_LIDO
+              : `${faltaGerar.regras} ${faltaGerar.regras === 1 ? 'regra' : 'regras'} com mês da vigência sem lançamento · ${mesesAGerar(faltaGerar.meses)}`}
+            className={cn('h-[42px] min-w-0 rounded-md border border-l-[3px] border-l-amber-500 px-2 py-1.5 text-left transition-colors',
+              soFaltaGerar ? 'bg-primary/10 ring-1 ring-primary' : 'hover:bg-muted/40')}>
+            <div className={cn('truncate text-[10px] leading-none', AMBAR)}>
+              Falta gerar · {faltaGerar.regras} {faltaGerar.regras === 1 ? 'regra' : 'regras'}
+            </div>
+            <div className={cn('mt-0.5 whitespace-nowrap text-[13px] font-semibold leading-tight tabular-nums', erroAGerar || faltaGerar.meses === 0 ? 'text-muted-foreground' : AMBAR)}>
+              {erroAGerar ? '—' : mesesAGerar(faltaGerar.meses)}
+            </div>
+          </button>
         </div>
 
         {/* A BARRA DE PROPORÇÃO — certo (navy) · confirmado (verde) · estimado (âmbar), larguras do dono. Sempre presente. */}
@@ -325,7 +363,7 @@ export default function V2Recorrencias() {
               { valor: 'confirmado', rotulo: 'Confirmado', desabilitada: filtrosDoMesApagados, title: filtrosDoMesApagados ? MOTIVO_FILTRO_APAGADO : undefined },
               { valor: 'estimado', rotulo: 'Estimado', desabilitada: filtrosDoMesApagados, title: filtrosDoMesApagados ? MOTIVO_FILTRO_APAGADO : undefined },
             ]} />
-          <Segmentado altura={22} valor={modo} onEscolher={setModo}
+          <Segmentado altura={22} valor={modo} onEscolher={m => { setSoFaltaGerar(false); setModo(m); }}
             opcoes={[
               { valor: 'mes', rotulo: 'No mês', title: 'As recorrências com conta vencendo no mês escolhido' },
               { valor: 'regras', rotulo: 'Todas as regras', title: 'Todas as regras, inclusive as que estão fora da vigência neste mês' },
@@ -379,6 +417,8 @@ export default function V2Recorrencias() {
                     const forma = r.formaPagamento ?? '—';
                     const l = linhaDe.get(r.id);
                     const entrada = r.valorBase > 0;
+                    const falta = faltaGerarDaRegra(aGerar, r.id);
+                    const selo = seloFaltaGerar(falta);
                     /* ⚠ O QUE SAIU DA LISTA MORA AQUI: periodicidade, próxima competência e a situação da REGRA. */
                     const tituloDescricao = `${r.descricao} · mensal, dia ${r.diaVencimento} · próxima: ${r.proximaCompetencia ? mesBr(r.proximaCompetencia) : '—'} · regra: ${rotuloSituacao(r)}${r.gerados > 0 ? ` · ${r.gerados} geradas` : ''}${r.folha ? ' · folha de pagamento' : ''}`;
                     return (
@@ -406,14 +446,38 @@ export default function V2Recorrencias() {
                         <TableCell className={TD_NUM}>
                           {l ? <Valor centavos={l.valor} entrada={entrada} estimado={l.situacao === 'estimado'} /> : <span className="text-muted-foreground">—</span>}
                         </TableCell>
+                        {/* DOIS LUGARES RESERVADOS: a situação do mês e o selo do que falta gerar (vazio sem nada a gerar). */}
                         <TableCell className={cn(TD, 'whitespace-nowrap')}>
-                          {l?.naoGerado ? <span data-testid="rec-nao-gerado" className={AMBAR} title={TITULO_NAO_GERADO[l.naoGerado]}>{ROTULO_NAO_GERADO}</span>
-                            : l ? <span className={COR_DA_SITUACAO[l.situacao]}>{ROTULO_SITUACAO_DO_MES[l.situacao]}</span>
-                            : <span className="text-muted-foreground" title="sem conta vencendo neste mês">—</span>}
+                          <span className="flex items-center">
+                            <span className="shrink-0 overflow-hidden" style={{ width: LARGURA_SITUACAO - 4 }}>
+                              {l?.naoGerado ? <span data-testid="rec-nao-gerado" className={AMBAR} title={TITULO_NAO_GERADO[l.naoGerado]}>{ROTULO_NAO_GERADO}</span>
+                                : l ? <span className={COR_DA_SITUACAO[l.situacao]}>{ROTULO_SITUACAO_DO_MES[l.situacao]}</span>
+                                : <span className="text-muted-foreground" title="sem conta vencendo neste mês">—</span>}
+                            </span>
+                            <span className="shrink-0 overflow-hidden text-[9.5px]" style={{ width: LARGURA_SELO - 4 }} data-testid="rec-lugar-do-selo"
+                              aria-hidden={selo ? undefined : true}>
+                              {selo && (
+                                <span data-testid="rec-falta-gerar" title={selo.titulo}
+                                  className={selo.tom === 'ambar' ? AMBAR : 'text-muted-foreground'}>{selo.texto}</span>
+                              )}
+                            </span>
+                          </span>
                         </TableCell>
                         {/* `stopPropagation` no invólucro: abrir o menu não é abrir a linha. */}
                         <TableCell className={cn(TD, 'px-0 text-right select-none')}
                           onClick={e => e.stopPropagation()}>
+                          <span className="flex items-center justify-end">
+                          {/* GERAR NA LINHA — lugar RESERVADO em toda linha (vazio sem nada a gerar); o mesmo diálogo do "⋯". */}
+                          <span className="flex shrink-0 justify-center" style={{ width: LARGURA_GERAR }} data-testid="rec-lugar-do-gerar"
+                            aria-hidden={falta && falta.aGerar > 0 && r.ativo ? undefined : true}>
+                            {falta && falta.aGerar > 0 && r.ativo && (
+                              <button type="button" data-testid="rec-gerar-na-linha" title={tituloDoGerarNaLinha(falta)}
+                                onClick={() => setGerando(r)}
+                                className="h-[16px] rounded border border-amber-500/60 px-1 text-[9.5px] leading-none text-amber-700 hover:bg-amber-50">
+                                Gerar
+                              </button>
+                            )}
+                          </span>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="sm" className="h-[17px] w-5 p-0"
@@ -440,6 +504,7 @@ export default function V2Recorrencias() {
                               )}
                             </DropdownMenuContent>
                           </DropdownMenu>
+                          </span>
                         </TableCell>
                       </TableRow>
                     );
@@ -468,6 +533,7 @@ export default function V2Recorrencias() {
                       Total do mês · {total.qtd} {total.qtd === 1 ? 'conta' : 'contas'}
                       {total.entradasQtd > 0 && <span className="ml-2 font-normal">· {total.entradasQtd} {total.entradasQtd === 1 ? 'entrada' : 'entradas'} ▲ {dinheiro(total.entradasValor)} à parte</span>}
                       {incompleto && <span className="ml-2 font-normal text-amber-300">· mês incompleto</span>}
+                      {erroAGerar && <span className="ml-2 font-normal text-amber-300" data-testid="rec-aviso-a-gerar">· {AVISO_A_GERAR_NAO_LIDO}</span>}
                     </td>
                     <td className="whitespace-nowrap px-1 text-right text-[10px] tabular-nums" data-testid="rec-total-previsto">{dinheiro(total.previsto)}</td>
                     <td className="whitespace-nowrap px-1 text-right text-[10px] font-semibold tabular-nums" data-testid="rec-total-valor">

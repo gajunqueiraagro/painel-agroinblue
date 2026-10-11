@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
-import { ocorrenciaEstimada, type OcorrenciaDoMes, type CompetenciaCancelada } from '@/lib/financeiro/recorrenciasDoMes';
+import { ocorrenciaEstimada, lerAGerar, SEM_A_GERAR, type OcorrenciaDoMes, type CompetenciaCancelada, type MapaAGerar } from '@/lib/financeiro/recorrenciasDoMes';
+import { inscreverEmLancamentos } from '@/hooks/useFinanceiroV2';
+import { hojeLocal } from '@/lib/datas/hojeLocal';
 
 /**
  * useRecorrencias — as regras de repetição e o que elas já produziram.
@@ -298,6 +300,31 @@ export function useOcorrenciasDoMes(clienteId: string | null, mes: string) {
   }, [clienteId, mes]);
   useEffect(() => { void carregar(); }, [carregar]);
   return { ocorrencias, canceladas, mesesFechados, incompleto, carregando, recarregar: carregar };
+}
+
+/**
+ * O QUE CADA RECORRÊNCIA AINDA TEM PARA GERAR — REC-FALTA-GERAR-A-VISTA-01. UMA chamada por cliente a
+ * `fn_recorrencias_a_gerar` (o Gerar perguntado sem gravar); a tela só CONTA o que ela devolve — nenhuma vaga é calculada aqui.
+ * ⚠ `erro` QUANDO O BANCO RECUSA OU A RESPOSTA VEM TORTA: o mapa fica vazio E a tela avisa. Mapa vazio sem erro = nada a gerar.
+ * ⚠ RELIDA PELO CANAL DE LANÇAMENTOS (cancelar ou criar um lançamento de recorrência em outra tela muda o que falta) e por
+ *   quem chama `recarregar` depois de Gerar, Propagar, salvar e cancelar regra. Resposta de cliente trocado é descartada.
+ * `p_hoje` é a data LOCAL (`hojeLocal`): é ela que diz o que é "passado".
+ */
+export function useRecorrenciasAGerar(clienteId: string | null) {
+  const [estado, setEstado] = useState<{ aGerar: MapaAGerar; erro: boolean }>({ aGerar: SEM_A_GERAR, erro: false });
+  const pedido = useRef(0);
+  const carregar = useCallback(async () => {
+    const meu = ++pedido.current;
+    if (!clienteId) { setEstado({ aGerar: SEM_A_GERAR, erro: false }); return; }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RPC fora de types.ts
+    const { data, error } = await (supabase as any).rpc('fn_recorrencias_a_gerar', { p_cliente_id: clienteId, p_hoje: hojeLocal() });
+    if (meu !== pedido.current) return;
+    const lido = error ? null : lerAGerar(data);
+    setEstado(lido ? { aGerar: lido, erro: false } : { aGerar: SEM_A_GERAR, erro: true });
+  }, [clienteId]);
+  useEffect(() => { void carregar(); }, [carregar]);
+  useEffect(() => (clienteId ? inscreverEmLancamentos(clienteId, () => { void carregar(); }) : undefined), [clienteId, carregar]);
+  return { aGerar: estado.aGerar, erroAGerar: estado.erro, recarregar: carregar };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- linha crua do PostgREST

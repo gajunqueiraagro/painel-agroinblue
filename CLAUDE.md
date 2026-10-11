@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 11/10/2026 (CONC-SALDOS-LAYOUT-02, +2 em `src/pages/conciliacaoDono.test.tsx` — 4844 depois dele; antes a
+  Baseline em 11/10/2026 (REC-FALTA-GERAR-A-VISTA-01 commit B, +15: `src/lib/financeiro/recorrenciasDoMes.test.ts` 6 (21 -> 27),
+  `src/v2/pages/recorrenciasFaltaGerar.test.tsx` 9 (novo) — 4859 depois dele; antes o CONC-SALDOS-LAYOUT-02, +2 em `src/pages/conciliacaoDono.test.tsx` — 4844 depois dele; antes a
   RECORRENCIA-GERA-A-VIGENCIA-INTEIRA-01 parte 2, +15 em `src/components/recorrencias/geraAoSalvar.test.tsx` (novo) — 4842 depois dela;
   antes o passo 2, +10: `src/components/recorrencias/gerarVagas.test.tsx` 8 (6 -> 14),
   `src/lib/financeiro/recorrenciasDoMes.test.ts` 2 — 4827 depois dele; antes a FORN-SELETOR-PADRAO-01 fatia 2e, +17 em `src/components/shared/campoDeFornecedor.test.tsx` (novo) — 4817 depois dela; antes a
@@ -286,7 +287,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4844
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4859
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -5403,6 +5404,50 @@ docs/historico/frentes-ate-2026-09-29.md.)
     `useRecorrencias` le' TODAS as ocorrencias vivas do cliente sem paginar (NJ: 1.044 — ja' corta) · o rotulo do primeiro e do
     ultimo cartao corta a 152px (inteiro no `title`) · o cabecalho da tabela tem 22px (o primitivo), nao 18 · os cartoes e o
     rodape mostram SAIDAS; as entradas so' aparecem no rodape e na lista · a tela nao se monta em teste (lida da fonte).
+- ⚠ A REGRA QUE AINDA TEM MES PARA GERAR SE VE^ DE RELANCE, E O GERAR FICA NA LINHA (REC-FALTA-GERAR-A-VISTA-01 commit B, Gabriel
+  11/10/2026, so' tela, `src/v2/pages/V2Recorrencias.tsx`). A tela so' CONTA o que `fn_recorrencias_a_gerar` devolve (a regra logo
+  abaixo): nenhuma vaga e' calculada no front (preso por teste de fonte com auto-teste do detector).
+  · LEITURA: `useRecorrenciasAGerar(cliente)` (`useRecorrencias.ts`) — UMA chamada por cliente, com `p_hoje` = a data LOCAL; relida
+    pelo canal de lancamentos e pelo `recarregarTudo` da tela (depois de Gerar, salvar — o propagar incluso — e cancelar regra);
+    resposta de cliente trocado e' descartada. Leitor sem cast no dono: `lerAGerar` (`recorrenciasDoMes.ts`) — PECA TORTA OU ERRO DO
+    BANCO = `erroAGerar`, mapa vazio E AVISO ("não foi possível ler o que falta gerar", no rodape; o cartao mostra "—"): erro nunca
+    vira "tudo em dia". Resposta vazia e' mapa vazio: nada a gerar.
+  · DONO PURO (`recorrenciasDoMes.ts`): `faltaGerarDaRegra(mapa, regra)`, `resumoFaltaGerar(mapa)` (regras e meses, CONTADOS DO MAPA),
+    `seloFaltaGerar`, `tituloDoGerarNaLinha`; `linhasDoMes` aceita `contexto.aGerar` e expoe `faltaGerar` na linha. O `naoGerado` do
+    mes, o valor e o total do mes NAO mudaram.
+  · LINHA: a coluna Situacao tem DOIS lugares reservados — a situacao do mes (62px) e o selo (110px, vazio sem nada a gerar):
+    "falta gerar · N meses" em ambar (`title` "N meses · M passados · de AAAA-MM a AAAA-MM · gerar pela linha"); so' com mes
+    fechado, "N em mês fechado", cinza. Na celula das acoes, ANTES do "⋯", o botao "Gerar" (16px, 9,5px) num lugar reservado de
+    40px em toda linha (vazio e `aria-hidden` sem nada a gerar): abre o MESMO `GerarLancamentosDialog`. O item do "⋯" continua.
+  · SEXTO CARTAO "Falta gerar · N regras", valor "M meses" (contagem, sem R$), em ambar: clicar FILTRA a lista para as regras com
+    mes a gerar e liga "Todas as regras" (a regra pode nao vencer no mes escolhido); clicar de novo, outro cartao ou o seletor
+    "No mês | Todas as regras" sai do filtro. `grid-cols-6`.
+  ⚠ DESVIOS DO BRIEFING, DECLARADOS: (1) a tela le^ o que falta PELO ID DA REGRA (`faltaGerarDaRegra`), nao pela linha do mes, e o
+    cartao por `resumoFaltaGerar` — a linha existe tambem fora do mes, e as chamadas `linhasDoMes(…, { canceladas, mesesFechados })`
+    e `resumoDoMes(linhas)` da tela estao PRESAS, por texto, em dois testes de fonte fora do escopo (`gerarVagas.test.tsx`,
+    `recValorCerto01.test.tsx`); (2) o selo so' de mes fechado diz "N em mês fechado", sem o "falta gerar ·" na frente (com ele
+    nao caberia no lugar medido para "falta gerar · 12 meses").
+  ⚠ O CUSTO E' A DESCRICAO: ficou com 119px (111 uteis). No NJ, out/26: descricoes cortadas 0 -> 40 de 99; Santa Rita 10 de 32
+    (inteiras no `title`). DECIDIDO (Gabriel, 11/10): fica como esta', cortando com o inteiro no `title`.
+  ⚠ DIVIDA REC-DESCRICAO-LARGURA-01: a Descricao a 119px corta 40 de 99 descricoes no NJ em out/26 e 10 de 32 na Santa Rita; ou o
+    selo encurta ou outra coluna cede — decisao do Gabriel na homologacao.
+  MEDIDO (11/10, 1.127 x 579, so' leitura, aba em segundo plano, por script): colunas 119 · 118 · 100 · 70 · 36 · 56 · 84 · 100 ·
+  172 · 62 = 917; linhas de 19px com e sem selo e botao; 0 numeros cortados (Dia, Previsto, Valor); cabecalho em 209,5 e rodape em
+  551 iguais com o filtro do cartao ligado e com a lista rolada; sem rolagem horizontal nem da pagina. Selo: o pior real,
+  "falta gerar · 15 meses", pede 99,4 dos 106 do lugar ("… 12 meses" em clone solto: 98,2); "não gerado" 55 de 58; botao 35,4 x 16
+  no lugar de 40. Cartoes: 148,2 x 42, 128 uteis, "▼ 99.999.999,99" em clone solto pede 108,1; quatro ROTULOS cortam (inteiros no
+  `title`; ja' cortavam com cinco cartoes, agora mais cedo). NJ: 17 selos, 17 botoes, cartao "Falta gerar · 17 regras / 31 meses",
+  filtro com 17 linhas; "Gerar" numa linha abre o dialogo e a previa diz "1 lançamento · inclui meses passados / preenche 08/26
+  (venc 01/09/26)" — fechado SEM gravar. Santa Rita: cartao "2 regras / 4 meses", filtro com 2 linhas, 1 selo na lista de
+  out/26. Uma foto da lista do NJ.
+  Testes: `src/lib/financeiro/recorrenciasDoMes.test.ts` +6 (21 -> 27) e `src/v2/pages/recorrenciasFaltaGerar.test.tsx` 9 (novo).
+  3 mutacoes de tela mortas (selo sem o mapa; cartao que nao filtra; botao sem lugar reservado).
+  ⚠ A PALAVRA PROIBIDA DO VOCABULARIO DA RECORRENCIA PEGA COMENTARIO: escrevi "lugares f…os" num comentario da tela e o teste de
+    vocabulario (`recValorCerto01.test.tsx`) reprovou; nos arquivos da recorrencia diz-se "reservado".
+  ⚠ NAO PROVADO: GERAR DE VERDADE pela linha e ver selo, cartao e botao sumirem sem F5 (nada foi gravado; a releitura esta' presa
+    por teste de fonte) · o aviso de erro da leitura na tela (so' por teste do leitor e da fonte) · o selo cinza de mes fechado (nao
+    ha' mes fechado em cliente nenhum) · o filtro do cartao combinado com a busca · a aba em primeiro plano · a janela a 1.126 e a
+    523 de altura · perfil nao admin · a tela nao se monta em teste (lida da fonte).
 - ⚠ O QUE CADA RECORRENCIA AINDA TEM PARA GERAR E' UMA LEITURA DO BANCO, IGUAL AO GERAR (REC-FALTA-GERAR-A-VISTA-01 commit A, Gabriel
   11/10/2026, so' banco; migration 20261027196000, ⚠ registrada como 20261011112518; ledger = arquivo, md5 a4ef4218…). Pedido: "o
   Gerar so' aparece nos tres pontinhos; nao consigo saber qual precisa gerar". A tela (commit B) so' CONTA o que esta leitura

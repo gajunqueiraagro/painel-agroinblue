@@ -63,7 +63,88 @@ export interface LinhaDoMes {
    * há ocorrência viva. A linha continua valendo o valor base (é o que o Gerar criaria); a tela escreve "não gerado".
    */
   naoGerado: MotivoNaoGerado | null;
+  /**
+   * REC-FALTA-GERAR-A-VISTA-01: o que a REGRA ainda tem para gerar, em QUALQUER mês (não só neste) — o que o banco devolveu
+   * para ela, ou nulo. Não muda `naoGerado`, o valor nem o total: é só o que a linha mostra ao lado da situação.
+   */
+  faltaGerar: FaltaGerar | null;
 }
+
+/* ── O QUE FALTA GERAR — REC-FALTA-GERAR-A-VISTA-01 ───────────────────────────────────────────────────────────────────────
+   Quem diz QUAIS competências faltam é o banco (`fn_recorrencias_a_gerar`, o Gerar perguntado sem gravar). Aqui só se LÊ a
+   resposta e se CONTA o que ela traz. PROIBIDO calcular vaga neste arquivo ou na tela. */
+
+/** O que o banco diz de UMA regra: quantos meses o Gerar criaria, quantos caem em mês fechado, e de quando a quando. */
+export interface FaltaGerar { aGerar: number; fechados: number; passados: number; primeira: string | null; ultima: string | null }
+export type MapaAGerar = ReadonlyMap<string, FaltaGerar>;
+export const SEM_A_GERAR: MapaAGerar = new Map();
+
+const inteiro = (v: unknown): number | null => (typeof v === 'number' && Number.isInteger(v) && v >= 0 ? v : null);
+const mesOuNulo = (v: unknown): string | null | undefined =>
+  (v === null || v === undefined ? null : typeof v === 'string' && /^\d{4}-\d{2}$/.test(v) ? v : undefined);
+
+/**
+ * Lê a resposta de `fn_recorrencias_a_gerar`. ⚠ PEÇA TORTA = NULO INTEIRO, nunca um mapa parcial: "não consegui ler" não pode
+ * virar "está tudo em dia" (a tela escreve o aviso). Resposta vazia É um mapa vazio: nada a gerar.
+ */
+export function lerAGerar(resposta: unknown): Map<string, FaltaGerar> | null {
+  if (!Array.isArray(resposta)) return null;
+  const mapa = new Map<string, FaltaGerar>();
+  for (const l of resposta) {
+    if (typeof l !== 'object' || l === null) return null;
+    const o: Record<string, unknown> = { ...l };
+    const id = o.recorrencia_id;
+    const aGerar = inteiro(o.a_gerar), fechados = inteiro(o.fechados), passados = inteiro(o.passados);
+    const primeira = mesOuNulo(o.primeira), ultima = mesOuNulo(o.ultima);
+    if (typeof id !== 'string' || id === '' || aGerar === null || fechados === null || passados === null
+      || primeira === undefined || ultima === undefined) return null;
+    mapa.set(id, { aGerar, fechados, passados, primeira, ultima });
+  }
+  return mapa;
+}
+
+/** O que falta gerar numa regra, ou nulo. Só regra com algo a dizer (a gerar ou em mês fechado). */
+export function faltaGerarDaRegra(mapa: MapaAGerar, regraId: string): FaltaGerar | null {
+  const f = mapa.get(regraId);
+  return f && (f.aGerar > 0 || f.fechados > 0) ? f : null;
+}
+
+/** O cartão "Falta gerar": quantas regras têm mês para gerar e quantos meses são — CONTADO DO MAPA, não das linhas da lista. */
+export function resumoFaltaGerar(mapa: MapaAGerar): { regras: number; meses: number } {
+  const r = { regras: 0, meses: 0 };
+  for (const f of mapa.values()) if (f.aGerar > 0) { r.regras += 1; r.meses += f.aGerar; }
+  return r;
+}
+
+const meses = (n: number): string => (n === 1 ? '1 mês' : `${n} meses`);
+const intervalo = (f: FaltaGerar): string =>
+  (f.primeira && f.ultima ? (f.primeira === f.ultima ? `em ${f.primeira}` : `de ${f.primeira} a ${f.ultima}`) : '');
+
+/**
+ * O selo da linha. Com mês a gerar: "falta gerar · N meses", em âmbar. Só com mês fechado: "N em mês fechado", cinza (o Gerar
+ * não cria em mês fechado). O `title` diz quantos são passados e de quando a quando.
+ */
+export function seloFaltaGerar(f: FaltaGerar | null): { texto: string; tom: 'ambar' | 'cinza'; titulo: string } | null {
+  if (!f) return null;
+  if (f.aGerar > 0) {
+    const partes = [meses(f.aGerar)];
+    if (f.passados > 0) partes.push(f.passados === 1 ? '1 passado' : `${f.passados} passados`);
+    partes.push(intervalo(f));
+    if (f.fechados > 0) partes.push(`${f.fechados} em mês fechado`);
+    partes.push('gerar pela linha');
+    return { texto: `falta gerar · ${meses(f.aGerar)}`, tom: 'ambar', titulo: partes.filter(Boolean).join(' · ') };
+  }
+  if (f.fechados > 0) {
+    return { texto: `${f.fechados} em mês fechado`, tom: 'cinza', titulo: 'o Gerar não cria lançamento em mês fechado; reabra o mês para gerar' };
+  }
+  return null;
+}
+
+/** O `title` do botão Gerar da linha. */
+export const tituloDoGerarNaLinha = (f: FaltaGerar): string => (f.aGerar === 1 ? 'Gerar o mês que falta' : `Gerar os ${f.aGerar} meses que faltam`);
+/** O valor do cartão: contagem de meses, sem R$. */
+export const mesesAGerar = meses;
+export const AVISO_A_GERAR_NAO_LIDO = 'não foi possível ler o que falta gerar';
 
 /** Por que a competência do mês não tem lançamento. "mês fechado" é a palavra do banco (`nao_gerados` do Gerar). */
 export type MotivoNaoGerado = 'falta gerar' | 'mês fechado';
@@ -76,7 +157,7 @@ export const TITULO_NAO_GERADO: Record<MotivoNaoGerado, string> = {
 /** Uma competência da regra cujo lançamento foi CANCELADO: conta como ocupada (o Gerar não a recria) e não é previsão. */
 export interface CompetenciaCancelada { recorrenciaId: string; competencia: string }
 /** O que o dono precisa além das ocorrências vivas para dizer "não gerado" sem adivinhar. */
-export interface ContextoDoMes { canceladas: readonly CompetenciaCancelada[]; mesesFechados: readonly string[] }
+export interface ContextoDoMes { canceladas: readonly CompetenciaCancelada[]; mesesFechados: readonly string[]; aGerar?: MapaAGerar }
 const SEM_CONTEXTO: ContextoDoMes = { canceladas: [], mesesFechados: [] };
 
 export interface Fatia { valor: number; qtd: number }
@@ -143,10 +224,11 @@ export function linhasDoMes(regras: readonly RegraDoMes[], ocorrencias: readonly
     const lista = porRegra.get(o.recorrenciaId);
     if (lista) lista.push(o); else porRegra.set(o.recorrenciaId, [o]);
   }
+  const aGerar = contexto.aGerar ?? SEM_A_GERAR;
   const linhas: LinhaDoMes[] = [];
   for (const r of regras) {
     const tipo: TipoDoValor = r.valorAConfirmar ? 'a_confirmar' : 'certo';
-    const base = { regraId: r.id, tipo, folha: r.folha, entrada: r.valorBase > 0, previsto: centavos(r.valorBase) };
+    const base = { regraId: r.id, tipo, folha: r.folha, entrada: r.valorBase > 0, previsto: centavos(r.valorBase), faltaGerar: faltaGerarDaRegra(aGerar, r.id) };
     const vivas = porRegra.get(r.id) ?? [];
     if (vivas.length > 0) {
       let valor = 0;
