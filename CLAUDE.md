@@ -2084,6 +2084,15 @@ docs/historico/frentes-ate-2026-09-29.md.)
   repetido igual. Medicao de custo e' feita em AMOSTRA, so' com linhas sinteticas criadas na propria transacao, nunca com a tabela
   inteira travada. A APLICACAO REAL de migration leva o mesmo `lock_timeout` de 2 s (escrito no arquivo): nao conseguiu a trava,
   aborta e reporta, sem esperar na fila.
+  ⚠ OS DOIS TEMPOS-LIMITE VAO ANTES DO BLOCO `DO`, COMO COMANDOS DE TOPO DA TRANSACAO (`BEGIN; SET LOCAL lock_timeout = '2s'; SET
+    LOCAL statement_timeout = '10s'; DO …`): escritos DENTRO do bloco eles nao valem para ele (o `statement_timeout` so' passa a
+    valer no comando seguinte), e o ensaio roda sem teto ate' o canal desistir.
+  ⚠ A SIMULACAO DE `fn_recorrencia_gerar` TRAVA A REGRA (`SELECT … FOR UPDATE`, mesmo com `p_simular`): NUNCA em laco sobre regras
+    REAIS. Igualdade com o Gerar se prova em recorte sintetico, ou regra a regra com teto curto.
+  ⚠ INCIDENTE DE 11/10/2026 (REC-FALTA-GERAR-A-VISTA-01, erro meu): um ensaio com os tempos-limite DENTRO do `DO`, que chamava a
+    leitura inteira uma vez por regra (198 regras reais, cada uma com a simulacao do Gerar), rodou ~1 min no servidor segurando
+    trava de linha em recorrencias reais; cancelado por `pg_cancel_backend`, residuo zero (funcao ausente, nenhuma linha de
+    ensaio, nenhuma transacao presa). Se houve usuario esperando nesse minuto nao da' para ver.
   ⚠ NASCE DE ERRO MEU: em 09/10/2026, por volta das 14h25 (Campo Grande), um ensaio de custo (DROP INDEX do plano + renomear 200
     contas sinteticas na mesma transacao, `statement_timeout` de 30 s) estourou o tempo e segurou `financeiro_plano_contas` com
     trava exclusiva por 30 s; reverteu sem residuo. Se houve leitura ou escrita de usuario esperando nesse intervalo NAO da' mais
@@ -5394,6 +5403,37 @@ docs/historico/frentes-ate-2026-09-29.md.)
     `useRecorrencias` le' TODAS as ocorrencias vivas do cliente sem paginar (NJ: 1.044 — ja' corta) · o rotulo do primeiro e do
     ultimo cartao corta a 152px (inteiro no `title`) · o cabecalho da tabela tem 22px (o primitivo), nao 18 · os cartoes e o
     rodape mostram SAIDAS; as entradas so' aparecem no rodape e na lista · a tela nao se monta em teste (lida da fonte).
+- ⚠ O QUE CADA RECORRENCIA AINDA TEM PARA GERAR E' UMA LEITURA DO BANCO, IGUAL AO GERAR (REC-FALTA-GERAR-A-VISTA-01 commit A, Gabriel
+  11/10/2026, so' banco; migration 20261027196000, ⚠ registrada como 20261011112518; ledger = arquivo, md5 a4ef4218…). Pedido: "o
+  Gerar so' aparece nos tres pontinhos; nao consigo saber qual precisa gerar". A tela (commit B) so' CONTA o que esta leitura
+  devolve: PROIBIDO calcular vaga no front.
+  · `fn_recorrencias_a_gerar(p_cliente_id, p_hoje)` -> (recorrencia_id, a_gerar, fechados, passados, primeira 'AAAA-MM', ultima
+    'AAAA-MM'), uma linha por regra ATIVA com algo a dizer (md5 ca25c5e5…; so' leitura, STABLE, SECURITY DEFINER, `tenant_ok` +
+    42501 — sem usuario tambem —, GRANT a `authenticated` e `service_role`, nada para `anon`). E' O GERAR PERGUNTADO SEM GRAVAR:
+    copia OS DOIS RAMOS do corpo vivo de `fn_recorrencia_gerar` (9fb51f24…), com `p_ate` nulo — (1) as VAGAS abaixo da marca
+    (`_fn_recorrencia_vagas(regra, ocupadas, NULL, NULL, true)` com competencia < o inicio do avanco; cancelado = ocupado) e (2) o
+    AVANCO da marca + 1 (ou do inicio, se nunca gerou) ate' o fim da vigencia —, contando so' a competencia SEM lancamento vivo.
+    `a_gerar` = o que o Gerar criaria; `fechados` = o que ele deixaria em `nao_gerados`; `passados` = as a_gerar anteriores ao mes
+    de `p_hoje` (a data LOCAL da tela). Quem mexer no laco do Gerar confere esta leitura (o A7 do teste prende a igualdade).
+    ⚠ O BRIEFING PEDIA SO' A BUSCA DE VAGAS ATE' A MARCA: ela nao ve^ o avanco nem a regra que nunca gerou (as 3 da RRCC ficariam
+      de fora) — decisao do Gabriel (11/10): os dois ramos, "=" com o Gerar.
+    ⚠ ACIMA DA MARCA VALE O GERAR DE HOJE: competencia cuja unica linha esta' CANCELADA conta em `a_gerar`, porque o avanco a
+      recria (a divida de 30/09 do FIN-RECORRENCIA-GERAR-PREENCHE-VAGA-01, nao corrigida aqui). Abaixo da marca, cancelada = ocupada.
+    ⚠ AS "OCUPADAS" SAO LIDAS NUMA PASSADA para todas as regras (o mesmo conjunto do Gerar, outra forma): o unico indice por
+      recorrencia em lancamentos (`uniq_lanc_recorrencia_competencia`) e' PARCIAL (so' vivos), e a subconsulta por regra do Gerar
+      varre a tabela inteira uma vez por regra — 3.228 ms no NJ na forma literal, 43 ms assim.
+    ⚠ SO' EXISTE `ativo`: "pausada" e "cancelada" sao o mesmo `ativo = false` (ficam fora).
+  · NO VIVO (11/10, regras / meses / passados): NJ 17 / 31 / 14 · RRCC 3 / 32 / 5 · Santa Rita 2 / 4 / 4 · Agnaldo, Vera, Raul e
+    Teste 0; mes fechado 0 em todos. NJ 17 x os 14 de 10/10: as 14 com ago/26 faltando continuam; entram as 3 que a medicao de
+    10/10 contava como "futuros" — duas com dez/26 faltando no meio da serie (abaixo da marca) e uma criada em 03/10 e nunca
+    gerada (15 meses pelo avanco). Tempo no NJ, 20 chamadas na mesma sessao: mediana 41,3 ms, pior 43,1 ms (teto 300).
+  · PROVAS: `supabase/tests/rec_falta_gerar_a_vista_01_test.sql` (A1–A7, sintetico no Teste, termina em RAISE OK; no vivo depois de
+    aplicar: OK, e o `seg_tenant_varredura_01c_test.sql` inteiro OK). IGUALDADE COM A SIMULACAO DO GERAR nas regras REAIS, no
+    ensaio revertido: 198 ativas (NJ 100, Santa Rita 33, Vera 30, Agnaldo 25, RRCC 10), 0 diferentes em a gerar, fechados,
+    primeira e ultima. 3 mutacoes mortas: sem o filtro de ativa -> A5; cancelada nao ocupada -> A3; sem tenant -> A6.
+  ⚠ NAO PROVADO: o A7 do ARQUIVO compara so' as 2 regras sinteticas (o Teste nao tem regra real; a igualdade nas 198 reais foi
+    no ensaio, antes de aplicar) · competencia cancelada ACIMA da marca contando em `a_gerar` (sem caso real nem no teste; vale
+    pela igualdade com o Gerar) · a chamada pela tela, sob o PostgREST (commit B).
 - ⚠ A RECORRENCIA GERA A VIGENCIA INTEIRA, MESES PASSADOS INCLUSIVE, E NUNCA OMITE EM SILENCIO (RECORRENCIA-GERA-A-VIGENCIA-INTEIRA-01,
   Gabriel 10/10/2026; SUBSTITUI a trava "nunca antes do mes corrente" de 30/09). "Se o sistema aceita a data de início, ele gera
   TODA a vigência, inclusive os meses passados. O que não puder ser gerado aparece escrito, com o motivo." Sem pergunta "quer
