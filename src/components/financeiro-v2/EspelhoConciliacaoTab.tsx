@@ -297,6 +297,15 @@ function iconeDoLancamento(tipo: string | null) {
  * ou é filha — e a origem desce para um marcador ao lado da descrição.
  */
 const SINAL_CASADO = { simbolo: '\u2713', cor: 'text-success', titulo: 'extrato e lançamento casados' };
+/* CONC-SPLIT-FILHO-CANCELADO-01 passo 1: o extrato cujos vínculos vivos somam MENOS que o banco NÃO está casado — é o caso do
+   filho de desmembramento cancelado (o extrato fica 'parcial'). A linha desenha "!" e diz quanto falta; ✓ e "Conciliado" são
+   afirmações, e aqui seriam falsas. `diferenca` é a da linha (`montarMesa`: |extrato| − |soma|); só o que FALTA entra aqui —
+   soma maior que o banco é o "aplicado acima do lançamento", que já tem aviso próprio. */
+export const SINAL_PARCIAL = { simbolo: '!', cor: 'text-destructive', titulo: 'extrato parcial: os lançamentos somam menos que o banco' };
+export function faltaDoExtrato(diferenca: number): number | null {
+  return diferenca > 0.01 ? Math.round(diferenca * 100) / 100 : null;
+}
+export const MOTIVO_EXTRATO_PARCIAL = 'extrato parcial — desfaça o desmembramento na Mesa (em breve aqui)';
 
 /**
  * A origem, discreta, depois da descrição do sistema.
@@ -439,10 +448,11 @@ const SELO_CONFERENCIA_TEXTO = 'text-[8px] font-semibold leading-none align-midd
 function CelStatus({ status }: { status: string | null }) {
   const k = (status ?? '').trim().toLowerCase();
   const p = paletaDoStatus(k);
-  const rotulo = k === 'conciliado' ? 'Conciliado' : (STATUS_FILTRO_LABEL[k] ?? (status || ''));
+  const rotulo = k === 'conciliado' ? 'Conciliado' : k === 'parcial' ? 'Parcial' : (STATUS_FILTRO_LABEL[k] ?? (status || ''));
   return (
     <td className="px-[3px] text-right whitespace-nowrap" data-status={k || undefined}>
-      {!p ? <span className={cn(SELO_CONFERENCIA_TEXTO, 'text-muted-foreground')}>{rotulo}</span>
+      {k === 'parcial' ? <span className={cn(SELO_CONFERENCIA_TEXTO, 'text-amber-700')}>{rotulo}</span>
+        : !p ? <span className={cn(SELO_CONFERENCIA_TEXTO, 'text-muted-foreground')}>{rotulo}</span>
         : p.comCaixa ? <span className={cn(SELO_CONFERENCIA, p.pilula)}>{rotulo}</span>
         : <span className={cn(SELO_CONFERENCIA_TEXTO, p.texto)}>{rotulo}</span>}
     </td>
@@ -1277,7 +1287,8 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
                  fica mostra o fechamento com os totais do DIA INTEIRO, casados incluídos — o filtro esconde linhas, não
                  muda a conta. */
               soNaoConciliados && d.extratosSemPar.length === 0 && d.lancsSemPar.length === 0 && d.internas.length === 0
-                && d.restos.length === 0 && !(mostrarCandidatos && d.candidatos.length > 0) ? null :
+                && d.restos.length === 0 && !(mostrarCandidatos && d.candidatos.length > 0)
+                && !d.pareados.some((p) => faltaDoExtrato(p.diferenca) != null) ? null :
               <React.Fragment key={d.data ?? 'sem-data'}>
                 <tr className={cn(H18, 'bg-muted/40')} data-dia={d.data ?? undefined}>
                   <td colSpan={4} className="px-[5px] whitespace-nowrap font-medium text-muted-foreground">{fmtData(d.data)}</td>
@@ -1285,20 +1296,24 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
                   <td colSpan={6} />
                 </tr>
 
-                {!soNaoConciliados && d.pareados.map((p) => {
+                {/* o extrato PARCIAL não é linha conciliada: aparece também em "Só não conciliados" */}
+                {d.pareados.filter((p) => !soNaoConciliados || faltaDoExtrato(p.diferenca) != null).map((p) => {
                   const icone = iconeDoLancamento(p.tipoVencedor);
                   const agrupado = p.filhas.length > 1;
                   const unica = p.filhas.length === 1 ? p.filhas[0] : null;
                   const temDif = Math.abs(p.diferenca) > 0.01;
+                  const falta = faltaDoExtrato(p.diferenca);
+                  const sinal = falta != null ? SINAL_PARCIAL : SINAL_CASADO;
                   const somaAssinada = Math.sign(p.extrato.valor || 1) * p.soma;
                   return (
                     <React.Fragment key={p.extrato.extrato_id}>
-                      <tr className={cn(H18, 'border-b border-border/50', CONCILIADA)} data-conciliada="">
+                      <tr className={cn(H18, 'border-b border-border/50', falta == null && CONCILIADA)}
+                          {...(falta == null ? { 'data-conciliada': '' } : { 'data-extrato-parcial': '' })}>
                         <td />
                         <td className={CEL_DATA}>{fmtData(p.extrato.data)}</td>
                         <td className={cn(CEL, 'font-medium')} title={p.extrato.historico ?? ''}>{p.extrato.historico ?? '—'}</td>
                         <td className={cn(CEL, 'text-right font-medium tabular-nums', corVal(p.extrato.valor))}>{fmtBRL(p.extrato.valor)}</td>
-                        <td className={cn(MEIO, 'font-semibold', SINAL_CASADO.cor)} title={SINAL_CASADO.titulo}>{SINAL_CASADO.simbolo}</td>
+                        <td className={cn(MEIO, 'font-semibold', sinal.cor)} title={sinal.titulo} data-testid="sinal-do-extrato">{sinal.simbolo}</td>
                         <td />
                         <td className={cn(CEL, 'text-left font-medium tabular-nums', temDif ? 'text-amber-600' : corVal(somaAssinada))}
                             title={temDif ? `banco ${fmtBRL(Math.abs(p.diferenca))} ${p.diferenca > 0 ? 'a mais' : 'a menos'} que a soma` : undefined}>
@@ -1306,9 +1321,12 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
                         </td>
                         <CelDataSistema data={unica?.sis?.data} rotulo="data do lançamento" />
                         <td className={CEL} title={[
+                          falta != null ? `falta R$ ${fmtBRL(falta)}: os lançamentos somam menos que o extrato` : null,
                           ...tituloAvisos({ lancadoEm: unica?.lancadoEm ?? null, parte: unica?.parte, sobreAplicado: p.sobreAplicado }),
                           unica ? tituloLancamento(unica.sis) : null,
                         ].filter(Boolean).join(' · ') || undefined}>
+                          {/* a falta ANTES de tudo, escrita (não só no title): a célula corta no fim, e o número nunca é o pedaço cortado */}
+                          {falta != null && <span className="mr-1.5 font-semibold text-amber-700" data-testid="falta-do-extrato">falta {fmtBRL(falta)}</span>}
                           {/* PR-CONC-CONFERENCIA-FECHAMENTO-DIA: os avisos ANTES da descrição (a célula corta no fim). No agrupado
                               a mãe só diz o "aplicado acima"; data e parte de cada lançamento vão na filha dele. */}
                           <AvisosDoVinculo lancadoEm={unica?.lancadoEm ?? null} parte={unica?.parte ?? null} sobreAplicado={p.sobreAplicado} />
@@ -1319,7 +1337,7 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
                           {unica && unica.deN > 1 && <span className="text-muted-foreground">{' · '}1 de {unica.deN}</span>}
                           <MarcadorOrigem tipo={p.tipoVencedor} />
                         </td>
-                        <CelStatus status="conciliado" />
+                        <CelStatus status={falta != null ? 'parcial' : 'conciliado'} />
                         <CelAcoes itens={[
                           { rotulo: 'Abrir',
                             onClick: unica && onAbrir ? () => onAbrir(unica.lancamento_id) : undefined,
@@ -1335,7 +1353,7 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
                                 : await desfazerVinculo(p.extrato.extrato_id, 'desfeito_no_espelho');
                               if (r.ok) onMudou(); else setErro(r.erro ?? 'Não foi possível desconciliar.');
                             } : undefined,
-                            motivo: 'vínculos sem grupo: desconcilie cada um pelo lançamento' },
+                            motivo: falta != null ? MOTIVO_EXTRATO_PARCIAL : 'vínculos sem grupo: desconcilie cada um pelo lançamento' },
                         ]} />
                       </tr>
 

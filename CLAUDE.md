@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 11/10/2026 (REC-FALTA-GERAR-A-VISTA-01 commit B, +15: `src/lib/financeiro/recorrenciasDoMes.test.ts` 6 (21 -> 27),
+  Baseline em 11/10/2026 (CONC-SPLIT-FILHO-CANCELADO-01 passo 1, +5 em `src/components/financeiro-v2/conferenciaExtratoParcial.test.tsx` (novo) — 4864 depois dele; antes o
+  REC-FALTA-GERAR-A-VISTA-01 commit B, +15: `src/lib/financeiro/recorrenciasDoMes.test.ts` 6 (21 -> 27),
   `src/v2/pages/recorrenciasFaltaGerar.test.tsx` 9 (novo) — 4859 depois dele; antes o CONC-SALDOS-LAYOUT-02, +2 em `src/pages/conciliacaoDono.test.tsx` — 4844 depois dele; antes a
   RECORRENCIA-GERA-A-VIGENCIA-INTEIRA-01 parte 2, +15 em `src/components/recorrencias/geraAoSalvar.test.tsx` (novo) — 4842 depois dela;
   antes o passo 2, +10: `src/components/recorrencias/gerarVagas.test.tsx` 8 (6 -> 14),
@@ -287,7 +288,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4859
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4864
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -2429,6 +2430,53 @@ docs/historico/frentes-ate-2026-09-29.md.)
     (o antigo "Usar valor do banco", so' no 1:N). Linha de bloco tem "Desfazer bloco" no "⋯" (passo inline, motivo
     obrigatorio). O vinculado PARCIAL continua candidato, com o chip "Parcial — falta R$ X" (aplicado vivo lido de
     `conciliacao_bancaria_itens`; o saldo livre quem valida e' a RPC).
+- ⚠ NA CONFERENCIA, EXTRATO CUJOS VINCULOS SOMAM MENOS QUE O BANCO NAO E' LINHA CASADA: "!", "Parcial" E A FALTA ESCRITA
+  (CONC-SPLIT-FILHO-CANCELADO-01 passo 1, Gabriel 11/10/2026, so' tela, `EspelhoConciliacaoTab.tsx`). Nasce da Santa Rita (BB,
+  10/08/2026, extrato a4699176 de −13.760,35): era um desmembramento da Mesa em tres filhos; um (10.219,33) foi cancelado pelo
+  modal do lancamento, o gatilho `trg_cbi_desfazer_on_cancelamento` desfez o vinculo dele e o extrato ficou 'parcial' — e a
+  linha seguia com ✓ e "Conciliado". `montarMesa` JA' entregava a diferenca da linha (|extrato| − |soma|); quem afirmava "casado"
+  era o desenho (✓ e "Conciliado" escritos fixos na linha pareada).
+  · A REGRA: `faltaDoExtrato(diferenca)` = a diferenca quando > 0,01, senao nulo. Com falta, a linha desenha `SINAL_PARCIAL`
+    ("!", vermelho), o selo "Parcial" (ambar) e "falta 10.219,33" ESCRITO antes de tudo na celula da descricao (a celula corta
+    no fim; o numero nunca e' o pedaco cortado; a frase inteira, com "R$", no `title`); perde o fundo e a marca de conciliada e
+    APARECE em "Só não conciliados" (o dia tambem). Soma MAIOR que o banco nao entra aqui: e' o "aplicado acima do lançamento",
+    que ja' tem aviso. Extrato fechado: ✓ e "Conciliado", como sempre. O "Desconciliar" apagado, no parcial, diz
+    `MOTIVO_EXTRATO_PARCIAL` ("extrato parcial — desfaça o desmembramento na Mesa (em breve aqui)").
+    ⚠ DESVIO DO BRIEFING, DECLARADO: a falta vai na celula da DESCRICAO (296px), nao ao lado do valor do lado Sistema — essa
+      coluna tem 80px e o valor ja' a ocupa. Nenhuma altura mudou (a mesma linha de 18px).
+  · ⚠ EXTRATO PARCIAL NAO TEM PORTA EM FUNCAO NENHUMA (medido em 11/10, simulacao revertida): com vinculo vivo no extrato,
+    `fn_vincular_extrato_lancamento` recusa ("extrato ja possui vinculo ativo" — o ramo D4 do CONC-PARCIAL-UM-ESTADO-01 nem e'
+    lido: ele trata LANCAMENTO parcial, nao extrato parcial), `fn_espelho_casar` devolve 'extrato_ja_conciliado',
+    `fn_conciliar_bloco` recusa 'extrato_ja_vinculado', `fn_reativar_vinculo_extrato` recusa, e `fn_desfazer_vinculo_extrato`
+    recusa com 2+ vinculos ("desfazer bloqueado por seguranca") — o motivo antigo "desconcilie cada um pelo lançamento" mandava a
+    esse caminho, que nao existe para 2+ vinculos sem grupo (segue escrito na linha NAO parcial: divida). E
+    `fn_classificacao_desfazer_split` recusa 'filho_cancelado'. Na tela, a linha pareada nem tem caixa de selecao.
+  · NAO HA' GUARDA NO CANCELAR DE FILHO DE DESMEMBRAMENTO (`origem_lancamento = 'mesa_split'`): o modal so' pergunta se e'
+    parcela de parcelamento, e nenhum gatilho de `financeiro_lancamentos_v2` olha split. ESCALA (11/10): 1 extrato 'parcial' em
+    todos os clientes (este); 25 splits vivos, 80 filhos vivos; 2 splits vivos com filho cancelado — este e o do extrato 8a1c0dee
+    (outro cliente, filho cancelado em 08/10 como "duplicado"; o extrato segue 'conciliado' com 4 vinculos somando o valor
+    cheio, mas o split nao se desfaz mais).
+  · CONSERTO DO DADO: `docs/investigacao/conc-split-filho-cancelado-01-conserto-santa-rita.sql` (EXECUTADO em 11/10/2026 14:21
+    UTC, com o SIM do Gabriel; depois dele, 0 extratos 'parcial' em todos os clientes): a ocorrencia da recorrencia da folha 84575129 vai de 12.000,00 previsto a 10.219,33 realizado em 10/08 (o que o
+    `fn_espelho_casar` escreve) com a marca de valor do mes 'manual', ganha o terceiro vinculo por INSERT direto, e o extrato
+    volta a 'conciliado' por UPDATE explicito (nenhum gatilho de `conciliacao_bancaria_itens` mexe no status do extrato). O
+    split 30a12d86 fica vivo com um filho cancelado. ⚠ `ano_mes` do lancamento NAO muda com o pagamento:
+    `trg_00_ano_mes_from_competencia` restaura o anterior quando a competencia nao muda.
+  · ⚠ NUNCA RODAR `fn_recorrencia_gerar` NEM `fn_recorrencia_propagar`, NEM EM SIMULACAO, SOBRE REGRA REAL (regra do Gabriel,
+    11/10/2026): as duas pegam `FOR UPDATE` na regra, tambem com `p_simular`. Ensaio so' com regra SINTETICA criada no cliente
+    Teste, na propria transacao. ⚠ QUEBRA REGISTRADA (erro meu, 11/10): no ensaio deste conserto simulei
+    `fn_recorrencia_propagar` UMA vez na recorrencia REAL da folha da Santa Rita (8c478c01), para conferir que a marca de valor
+    do mes fazia o Propagar pular a conta — revertido, sem residuo, mas travou a regra durante a chamada. A conferencia certa
+    era ler a marca gravada, ou repetir o caso em regra sintetica.
+  Teste: `src/components/financeiro-v2/conferenciaExtratoParcial.test.tsx` (5: a regra; o parcial com "!", "Parcial" e a falta;
+  o fechado com ✓; "Só não conciliados"; o motivo). 2 mutacoes mortas (sinal fixo em ✓; status fixo em "conciliado").
+  ⚠ FILA: CONC-SPLIT-FILHO-CANCELADO-01 passo 2 (cancelar filho de desmembramento TRAVA no banco e AVISA na tela, molde do
+    parcelamento — decisao do Gabriel, 11/10) · passo 3 (`fn_classificacao_desfazer_split` tolera filho ja' cancelado, e
+    "Desfazer desmembramento" entra no "⋯" da Conferencia, com leitura dos splits vivos por extrato) · SPLIT-FILHO-EXISTENTE-01
+    (o desmembrar da Mesa aceita um lancamento EXISTENTE — ocorrencia de recorrencia, parcela — como filho, em vez de criar;
+    FASE 0 propria).
+  ⚠ NAO PROVADO: a linha no NAVEGADOR (so' teste montado; "falta 9.999.999,99" na celula nao foi medido — a celula corta no fim
+    e a falta vem primeiro) · o caso real na tela depois do conserto · o dia com a linha parcial e o filtro, no navegador.
 - ⚠ A DATA DO BANCO MANDA NA CONFERENCIA (PR-CONC-CONFERENCIA-FECHAMENTO-DIA, Gabriel 03/10; so' tela). Dono:
   `montarMesa` em `src/lib/conciliacao/mesaDoDia.ts` (lib pura, movida verbatim do `EspelhoConciliacaoTab`, que reexporta).
   R1 todo extrato fica no dia em que caiu, e NENHUM e' consumido: os vinculos dele sao as filhas, inclusive os do bloco N×N.
