@@ -5,6 +5,7 @@ import { mesCurto, totalDoRebanho, type LinhaDoResumoGlobal, type ResumoGlobal }
 /**
  * FECH-GLOBAL-RESUMO-01 — o Fechamento Área com o filtro em "Global": uma linha por fazenda e o caminho para os pastos
  * (mock v2 aprovado pelo Gabriel em 12/10/2026). Entra no lugar da frase "Selecione uma fazenda para o fechamento.".
+ * FECH-GLOBAL-RESUMO-01b: sem a coluna Atividade (só dizia "Pecuária"/"—"); os 70px dela foram para Fazenda, Último fechamento e Mês atual.
  *
  * ⚠ SÓ DESENHA. Os números vêm prontos de `fechamentoGlobal.ts` (o mesmo critério da tela por fazenda) e do `useFechamentoGlobal`;
  *   aqui não há soma, filtro nem regra. Campo sem dono = "—".
@@ -13,17 +14,16 @@ import { mesCurto, totalDoRebanho, type LinhaDoResumoGlobal, type ResumoGlobal }
  */
 
 export const COLUNAS_DO_RESUMO = [
-  { chave: 'fazenda', rotulo: 'Fazenda', largura: 190, alinha: 'esquerda' },
-  { chave: 'atividade', rotulo: 'Atividade', largura: 70, alinha: 'esquerda' },
+  { chave: 'fazenda', rotulo: 'Fazenda', largura: 220, alinha: 'esquerda' },
   { chave: 'cabecas', rotulo: 'Cabeças', largura: 70, alinha: 'direita' },
   { chave: 'area', rotulo: 'Área (ha)', largura: 80, alinha: 'direita' },
   { chave: 'pastos', rotulo: 'Pastos', largura: 54, alinha: 'direita' },
-  { chave: 'ultimo', rotulo: 'Último fechamento', largura: 120, alinha: 'esquerda' },
-  { chave: 'mes', rotulo: 'Mês atual', largura: 150, alinha: 'esquerda' },
+  { chave: 'ultimo', rotulo: 'Último fechamento', largura: 140, alinha: 'esquerda' },
+  { chave: 'mes', rotulo: 'Mês atual', largura: 170, alinha: 'esquerda' },
   { chave: 'acao', rotulo: '', largura: 104, alinha: 'direita' },
 ] as const;
 export const LARGURA_DA_TABELA = 838;
-export const LEGENDA_DO_RESUMO = 'Meses: verde = todas as fazendas fechadas no mês · âmbar = alguma aberta. Cabeças = o último mês fechado de cada fazenda.';
+export const LEGENDA_DO_RESUMO = 'Meses: verde = todas as fazendas fechadas no mês · âmbar = alguma aberta. Cabeças = o último mês fechado de cada fazenda. A fechar = pastos do mês ainda não fechados.';
 
 const AZUL = '#1e3a5f';
 const CAB = 'h-[22px] px-1.5 text-[10px] font-semibold whitespace-nowrap overflow-hidden';
@@ -107,7 +107,6 @@ export function FechamentoGlobalResumo({
                 <tr key={l.fazendaId} className="cursor-pointer border-b hover:bg-muted/40" data-testid="linha-fazenda"
                   data-situacao={l.mes.situacao} onClick={() => onAbrirFazenda(l.fazendaId)}>
                   <td className={`${CEL} text-left font-medium text-ellipsis`} title={l.nome} data-testid="cel-fazenda">{l.nome}</td>
-                  <td className={`${CEL} text-left text-muted-foreground`}>{l.atividade ?? '—'}</td>
                   <td className={`${CEL} text-right tabular-nums`} data-testid="cel-cabecas">{cab}</td>
                   <td className={`${CEL} text-right tabular-nums`} data-testid="cel-area">{formatNum(l.areaHa, 1)}</td>
                   <td className={`${CEL} text-right tabular-nums`} data-testid="cel-pastos">{formatNum(l.pastos)}</td>
@@ -135,7 +134,6 @@ export function FechamentoGlobalResumo({
             <tfoot>
               <tr style={{ background: '#f3f5f8' }} className="font-semibold" data-testid="rodape-do-resumo">
                 <td className={`${CEL} text-left`}>Total · {resumo.linhas.length} {resumo.linhas.length === 1 ? 'fazenda' : 'fazendas'}</td>
-                <td className={CEL} />
                 <td className={`${CEL} text-right tabular-nums`} data-testid="total-cabecas">{textoDoRebanho}</td>
                 <td className={`${CEL} text-right tabular-nums`} data-testid="total-area">{formatNum(resumo.totais.areaHa, 1)}</td>
                 <td className={`${CEL} text-right tabular-nums`} data-testid="total-pastos">{formatNum(resumo.totais.pastos)}</td>

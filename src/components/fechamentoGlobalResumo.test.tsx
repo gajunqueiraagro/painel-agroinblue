@@ -6,14 +6,14 @@ import {
   cabecasPorFazenda, mesCurto, mesDaFazenda, montarResumoGlobal, totalDoRebanho,
   type CardDoResumo, type FazendaDoResumo, type PastoDoResumo,
 } from '@/lib/pecuaria/fechamentoGlobal';
-import { COLUNAS_DO_RESUMO, FechamentoGlobalResumo, LARGURA_DA_TABELA } from './FechamentoGlobalResumo';
+import { COLUNAS_DO_RESUMO, FechamentoGlobalResumo, LARGURA_DA_TABELA, LEGENDA_DO_RESUMO } from './FechamentoGlobalResumo';
 
 /* Cenário sintético: três fazendas ativas e uma inativa, mês pedido = 2031-03. */
 const FAZENDAS: FazendaDoResumo[] = [
-  { id: 'fz-b', nome: 'Beta', tem_pecuaria: true, status_operacional: 'ativa' },
-  { id: 'fz-a', nome: 'Alfa', tem_pecuaria: true, status_operacional: 'ativa' },
-  { id: 'fz-c', nome: 'Céu', tem_pecuaria: false, status_operacional: 'ativa' },
-  { id: 'fz-x', nome: 'Inativa', tem_pecuaria: true, status_operacional: 'inativa' },
+  { id: 'fz-b', nome: 'Beta', status_operacional: 'ativa' },
+  { id: 'fz-a', nome: 'Alfa', status_operacional: 'ativa' },
+  { id: 'fz-c', nome: 'Céu', status_operacional: 'ativa' },
+  { id: 'fz-x', nome: 'Inativa', status_operacional: 'inativa' },
   { id: '__global__', nome: 'Global' },
 ];
 const pasto = (id: string, fazenda: string, area: number, extra: Partial<PastoDoResumo> = {}): PastoDoResumo =>
@@ -126,7 +126,7 @@ describe('FECH-GLOBAL-RESUMO-01 — o componente', () => {
     expect(within(alfa).getByTestId('abrir-fazenda').textContent).toBe('Ver pastos →');
     expect(within(alfa).getByTestId('cel-cabecas').textContent).toBe('120');
     expect(within(alfa).getByTestId('cel-area').textContent).toBe('150,5');
-    /* sem dono, "—": Céu não tem pasto, nem fechamento, nem a marca de pecuária */
+    /* sem dono, "—": Céu não tem pasto nem fechamento */
     expect(within(ceu).getByTestId('cel-mes').textContent).toBe('—');
     expect(within(ceu).getByTestId('cel-cabecas').textContent).toBe('—');
     expect(within(ceu).getByTestId('cel-ultimo').textContent).toBe('—');
@@ -192,6 +192,34 @@ describe('FECH-GLOBAL-RESUMO-01 — o componente', () => {
     expect(tabela.querySelector('thead tr')?.getAttribute('style')).toContain('rgb(238, 242, 247)');
     expect(screen.getByTestId('rodape-do-resumo').getAttribute('style')).toContain('rgb(243, 245, 248)');
     expect(screen.getByTestId('recado-do-resumo').className).toContain('h-[16px]');
+  });
+  it('01b: não há coluna Atividade — 7 colunas, cada linha e o rodapé com 7 células, largura mantida', () => {
+    montar();
+    expect(COLUNAS_DO_RESUMO.map(c => c.rotulo)).toEqual(['Fazenda', 'Cabeças', 'Área (ha)', 'Pastos', 'Último fechamento', 'Mês atual', '']);
+    const tabela = screen.getByTestId('tabela-do-resumo') as HTMLTableElement;
+    expect(tabela.querySelectorAll('thead th')).toHaveLength(7);
+    expect(tabela.textContent).not.toContain('Atividade');
+    expect(tabela.textContent).not.toContain('Pecuária');
+    for (const l of linhas()) expect(l.querySelectorAll('td')).toHaveLength(7);
+    expect(screen.getByTestId('rodape-do-resumo').querySelectorAll('td')).toHaveLength(7);
+    expect(LARGURA_DA_TABELA).toBe(838);
+    expect(Object.keys(resumo().linhas[0])).not.toContain('atividade');
+  });
+  it('01b: a legenda do rodapé explica "a fechar", o mesmo termo da célula do mês', () => {
+    montar();
+    const legenda = screen.getByTestId('legenda-do-resumo');
+    expect(legenda.textContent).toBe(LEGENDA_DO_RESUMO);
+    expect(LEGENDA_DO_RESUMO).toContain('A fechar = pastos do mês ainda não fechados');
+    expect(LEGENDA_DO_RESUMO).not.toMatch(/sem lançar/i);
+    expect(legenda.getAttribute('title')).toBe(LEGENDA_DO_RESUMO);
+    expect(within(linhas()[0]).getByTestId('cel-mes').textContent).toContain('a fechar');
+  });
+  it('01b: a área é a do cadastro do pasto (`area_produtiva_ha`), a mesma do card da tela por fazenda', () => {
+    const f = readFileSync(resolve(process.cwd(), 'src/pages/FechamentoTab.tsx'), 'utf8');
+    expect(f).toContain('{formatNum(p.area_produtiva_ha, 1)} ha');
+    expect(f).not.toMatch(/from\('fechamento_area_snapshot'\)/);
+    const g = readFileSync(resolve(process.cwd(), 'src/lib/pecuaria/fechamentoGlobal.ts'), 'utf8');
+    expect(g).toContain('areaHa += Number(p.area_produtiva_ha) || 0');
   });
   it('erro da leitura fica escrito; sem resumo não há linha nem zero inventado', () => {
     montar({ resumo: null, erro: 'Não foi possível ler os fechamentos. (x)' });

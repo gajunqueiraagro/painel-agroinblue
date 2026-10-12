@@ -14,7 +14,7 @@ import { isPastoDivergencia } from '@/lib/classificacaoArea';
  * ⚠ SEM FONTE, "—": campo que não tem dono único fica nulo aqui e a tela escreve "—"; nunca zero inventado.
  */
 
-export interface FazendaDoResumo { id: string; nome: string; tem_pecuaria?: boolean; status_operacional?: string | null }
+export interface FazendaDoResumo { id: string; nome: string; status_operacional?: string | null }
 export interface PastoDoResumo {
   id: string; fazenda_id: string; ativo: boolean; tipo_uso: string; area_produtiva_ha: number | null;
   data_inicio?: string | null; data_fim?: string | null;
@@ -27,9 +27,9 @@ export type StatusNaFita = 'fechado' | 'rascunho' | 'vazio';
 export interface LinhaDoResumoGlobal {
   fazendaId: string;
   nome: string;
-  /** Só o que o cadastro diz (`tem_pecuaria`); sem a marca, nulo ("—"). */
-  atividade: string | null;
   pastos: number;
+  /** Σ `area_produtiva_ha` do CADASTRO dos pastos do mês — a mesma área que o card do pasto mostra na tela por fazenda
+   *  (`FechamentoTab`, "{area_produtiva_ha} ha"); a tela por fazenda não mostra área da fazenda nem lê o snapshot de área. */
   areaHa: number;
   mes: { situacao: SituacaoDoMes; aFechar: number };
   /** O mês fechado mais recente da janela lida, e os cards dos pastos daquele mês (para somar as cabeças). Nulo = nenhum. */
@@ -106,7 +106,7 @@ export function montarResumoGlobal(entrada: {
       if (m.situacao === 'fechado') ultimo = { anoMes: janela[i], cardIds: m.cardIds };
     }
     return {
-      fazendaId: f.id, nome: f.nome, atividade: f.tem_pecuaria === true ? 'Pecuária' : null,
+      fazendaId: f.id, nome: f.nome,
       pastos: reais.length, areaHa, mes: { situacao: doMes.situacao, aFechar: doMes.aFechar }, ultimo,
     };
   });
