@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 12/10/2026 (OC-CC-PADRAO-NOVAS-01b, +13: `src/hooks/ocVersaoAposSaida.test.tsx` 5 (novo),
+  Baseline em 12/10/2026 (OC-CRIAR-DO-LEGADO-COMPRA-01, +11: `src/lib/oc/criarDoLegado.test.ts` 5,
+  `src/components/financeiro-v2/criarOCDoLegado.test.tsx` 6 — 4951 depois dele; antes o OC-CC-PADRAO-NOVAS-01b, +13: `src/hooks/ocVersaoAposSaida.test.tsx` 5 (novo),
   `src/components/venda/aguardandoSaida.test.tsx` 8 (novo) — 4940 depois dele; antes o OC-CC-EXPLICAR-CONGELA-01, +20:
   `src/components/venda/explicarCongela.test.tsx` 10 (novo),
   `src/components/compra/simulacaoUmaVez.test.tsx` 10 (novo) — 4927 depois dele; antes o
@@ -295,7 +296,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4940
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4951
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3858,6 +3859,55 @@ docs/historico/frentes-ate-2026-09-29.md.)
   quem mexer num confere o outro. O selo do rodape (`SeloRegraDaLinha`) diz a regra da linha.
 
 ## REGRAS VIGENTES — OPERACAO COMERCIAL E FINANCEIRO
+- ⚠ "CRIAR OC A PARTIR DESTE LANCAMENTO" COBRE A COMPRA, PELO MESMO ORQUESTRADOR E PELO MESMO DIALOGO (OC-CRIAR-DO-LEGADO-COMPRA-01, Gabriel
+  12/10/2026, banco + tela no mesmo PR; migration `20261027197000_oc_criar_do_legado_compra_01.sql`, md5 do arquivo
+  26e1adbdb4fd3e52e13f1eee1f242bdf — ⚠ NAO APLICADA: so' com o GO do Gabriel. ⚠ A TELA NAO VAI AO AR ANTES DA MIGRATION: contra o banco antigo
+  a acao aparece no pagamento de compra e o banco a recusa ("Recebimento tem de ser uma entrada"); a venda segue igual). Abate fora.
+  · D1 — O TIPO VEM DO LANCAMENTO: saida (2-Saídas) = compra; o resto = venda. Na tela o dono e' `ladoDoLancamento`
+    (`src/lib/oc/criarDoLegado.ts`: entrada em conta de venda / saida em conta de compra / nulo); `CONTAS_COMPRA_GADO` IMPORTA as
+    duas constantes do dono (`useOperacaoLiquidacao.ts`) — o nome da conta de compra nao e' escrito no arquivo (preso por teste de
+    fonte). No banco, `oc_criar_do_legado` deriva de `p_recebimentos[1]` e o dono do motivo recusa o resto.
+  · `_oc_legado_motivo_recebimento(uuid, p_lado text DEFAULT NULL)` — DROP + CREATE (cdc6dbbd… -> fb6f1bfd…); nulo = o lado do
+    proprio lancamento; a chamada de um argumento segue valendo. Na compra: "Pagamento tem de ser uma saida", "Lancamento sem
+    caixa nao e pagamento", "Pague primeiro: lancamento do modal antigo ainda programado." (D7), "Conta fora das compras de gado"
+    (so' as duas contas de compra de gado, 2-Saídas). "Lancamento ja esta ligado a uma operacao" e' a mesma regra nos dois lados.
+    Continua SQL, STABLE, INVOKER; ACL reconcedida na migration (authenticated e service_role; anon nao).
+  · `oc_criar_do_legado_sugestoes` (8fab586d… -> f989b2f4…, patch guardado por md5, 8 ancoras; INVOKER, como era): devolve `tipo`;
+    na compra lista ENTRADAS de compra (`lancamentos.tipo = 'compra'`), mesma janela (−60 a +120 dias), qualquer fazenda; a
+    semelhanca compara a `fazenda_origem` com o favorecido, e a chave `destino` leva a ORIGEM; as irmas sao so' do lado.
+  · `oc_criar_do_legado` (0206457b… -> 87c71b68…, 31 ancoras; SECURITY DEFINER, como era): o tipo derivado vai a
+    `oc_salvar_rascunho`; O PASSO 4 VIROU CONFERENCIA (D2) — se a OC nao nasceu em conta corrente, P0001 "Modelo inesperado ao
+    nascer (…)"; o criar NUNCA converte (o modelo e' de `_oc_modelo_ao_nascer`). Criterios espelhados (D4): na compra
+    'pagamentos' = 'recebimentos' e 'entradas' = 'saidas'. ANTI-DOBRA ESPELHADA (D6): entrada marcada com OUTRO pagamento de
+    compra vivo do modal antigo fora dos escolhidos -> "Entrada … tem outro pagamento do modal antigo fora desta OC (…): some-o
+    aos pagamentos". Comissao E frete do modal antigo (`compra_rebanho:comissao` / `:frete`, mesma movimentacao) entram como
+    despesa da operacao pelo Vincular (D5), fora do saldo. Categoria fora de `_oc_subcentro_compra`: "Entrada …: categoria X sem
+    conta de compra no plano". Vocabulario por lado (fornecedor / pagamento / entrada). Retorno e evento `criar_do_legado`
+    GANHAM `tipo`.
+  · NA COMPRA O PAGAMENTO NAO MUDA DE COMPETENCIA (o vinculo so' a leva para a saida na VENDA): a entrega nasce na data da
+    entrada (custo no DRE, sem caixa) e o pagamento sai do DRE pela parte viva.
+  · TELA: o MESMO `CriarOCDoLegadoDialog`; o lado vem do envelope das sugestoes e so' troca rotulos e cor — `TEXTOS_DO_LADO` (no
+    dono; mesmas chaves nos dois lados, os da venda letra por letra). `onCriada(operacaoId, tipo)`: as duas portas
+    (`FinanceiroV2Tab`, `LancamentoV2Dialog`) abrem a OC com o tipo que o BANCO devolveu, nunca 'venda' fixo (preso por teste de
+    fonte com auto-teste). `pareceComComprador` manteve o nome (uma funcao so'; na compra a contraparte e' o fornecedor).
+  · D8 — A VENDA NAO MUDOU: os tres casos (simples, modal antigo com comissao, gado de outra fazenda) rodados com o corpo ANTES e
+    o DEPOIS NA MESMA transacao revertida: foto identica (modelo, situacao, partes, valores, DRE, eventos; md5 77bf8cf2… dos
+    dois lados). Vitest de venda igual, salvo UMA assercao atualizada ao contrato novo (`onCriada('op-nova', 'venda')`).
+  Teste SQL: `supabase/tests/oc_criar_do_legado_compra_01_test.sql` (C1–C7, sintetico no Teste, termina em RAISE OK). ENSAIADO em
+  transacoes revertidas no Teste: a migration INTEIRA (guardas de md5 e de ACL do proprio arquivo); C1–C4 e C6; C5 e o dono do
+  motivo; C7 pelo antes x depois. Residuo zero (as tres funcoes nos md5 de origem; 0 linhas sinteticas).
+  ⚠ O ARQUIVO DE TESTE NAO RODOU INTEIRO NUMA CHAMADA: migration + teste (~30 KB) foi recusado pelo canal; rodou em recortes, e as
+    ASSERCOES do C7 do arquivo foram conferidas contra a foto impressa, nao executadas — roda inteiro depois de aplicar.
+  ⚠ SEM RODADA DE MUTACAO (banco e tela) neste PR.
+  ⚠ NAO PROVADO: nada no NAVEGADOR (a acao no pagamento de compra, o dialogo com dado real, abrir a OC de compra criada) · um caso
+    REAL de compra (so' sintetico) · a entrada cuja fazenda difere da do pagamento, no lado da compra (o codigo e' o da venda;
+    sem caso proprio) · `seg_tenant_varredura_01c` (so' depois de aplicar) · os 568 lancamentos de compra sem OC nao foram
+    simulados em massa.
+  ⚠ DIVIDAS: UI-MODAL-FIXO-CRIAR-DO-LEGADO-01 (o dialogo e' `max-h-[92vh]` com rolagem e celulas `break-words`; converter ao
+    padrao de modal fixo / linha unica e' PR proprio — layout intocado aqui) · no modal antigo de compra quase tudo esta'
+    PROGRAMADO (7 de 8 parcelas, as 3 comissoes e os 3 fretes, em 12/10): "pague primeiro" e a recusa do adotar ("financeiro
+    programado do modal antigo") os deixam de fora ate' serem pagos · a chave `destino` do envelope carrega a origem na compra
+    (nome herdado) · `oc_criar_do_legado_sugestoes` segue INVOKER sem guarda de tenant no corpo (depende da RLS, como era).
 - ⚠ VENDA E COMPRA NOVAS NASCEM EM CONTA CORRENTE; ABATE E BOITEL EM TITULO, E A REGRA TEM UM DONO (OC-CC-PADRAO-NOVAS-01a, Gabriel
   12/10/2026, so' banco; migration `20261027196800_oc_cc_padrao_novas_01a.sql`, md5 do arquivo 0d2c4412ea4f0fcf936390d35e5ebb6b —
   APLICADA no proto em 12/10/2026, com o GO do Gabriel: ledger `supabase_migrations.schema_migrations` versao 20261012121855, nome
@@ -3914,6 +3964,9 @@ docs/historico/frentes-ate-2026-09-29.md.)
         pr_oc_model_01_test                            cai     cai      Nmov-rasc: `oc_registrar_movimentacao` de 8 argumentos nao existe (42883)
     ⚠ Dos que caem, `lote_valor_01` foi transcrito inteiro; os outros seis, ate' a primeira queda (o que vem depois nao e'
       alcancado). O `compra_neg` foi rodado com a migration e, a' parte, o T1 dele sem ela.
+  ⚠ OC-TESTES-SQL-LEGADO-01, AMPLIADA (OC-CRIAR-DO-LEGADO-COMPRA-01, 12/10): os testes SQL de VENDA do criar-do-legado SO' EXISTEM a
+    partir de `oc_criar_do_legado_compra_01_test.sql` (C7) — as migrations 01 / 01b / 01c foram provadas por ensaio avulso, com o
+    arquivo de prova fora do repositorio.
   ⚠ DIVIDA OC-TESTES-SQL-LEGADO-01 (decisao do Gabriel, 12/10: NAO consertar neste PR): os sete testes da tabela que ja' caiam
     antes ficaram para tras de mudancas de contrato de outros PRs (peso obrigatorio no lote, lote obrigatorio na movimentacao,
     a assinatura de `oc_registrar_movimentacao`, o CHECK da conta por direcao, o caminho A do `oc_salvar_lotes`). E OS DEZ CRIAM

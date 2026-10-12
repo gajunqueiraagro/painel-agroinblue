@@ -13,7 +13,8 @@ import { rotuloDaConta } from '@/lib/financeiro/rotuloConta';
 import { corDoSaldo, dataCurta } from '@/lib/oc/contaCorrente';
 import {
   cabecasDaDescricao, confrontoComRecebido, fazendaDasMarcadas, lerResultado, lerSugestoes, ordenarIrmas, ordenarSaidas,
-  pareceComComprador, precoPorKg, saidasPreMarcadas, type RecebimentoResumo, type ResultadoCriar, type SaidaCandidata,
+  pareceComComprador, precoPorKg, saidasPreMarcadas, TEXTOS_DO_LADO, type LadoDoLegado, type RecebimentoResumo, type ResultadoCriar,
+  type SaidaCandidata,
 } from '@/lib/oc/criarDoLegado';
 
 /* OC-CRIAR-DO-LEGADO-01 — "Criar OC a partir deste lancamento" (mock docs/mocks/oc_criar_do_legado_mock_v1.html). O sistema
@@ -24,7 +25,9 @@ import {
      botao, sem toast.
    ⚠ A PREVIA E' A PROPRIA RPC SIMULADA: o extrato em conta corrente que ela devolve e' o que sera' gravado. Nenhuma conta aqui.
    ⚠ PADRAO A31 nas tabelas. OC-CC-CLASSIFICACAO-01: o recebimento fica na conta da venda (fora do DRE pela OC); a previa mostra
-     a conta como esta' no plano. */
+     a conta como esta' no plano.
+   ⚠ OC-CRIAR-DO-LEGADO-COMPRA-01: o MESMO dialogo serve a compra. O lado vem do envelope das sugestoes (o banco o deriva do
+     lancamento) e so' troca rotulos e cor (`TEXTOS_DO_LADO`, no dono); layout, colunas e passos sao os mesmos. */
 
 const TH = 'h-[17px] whitespace-nowrap bg-[#2E4B6E] px-[5px] text-center text-[9.5px] font-semibold text-white';
 const TD = 'h-[18px] border-b border-[#eceae4] px-[5px] text-[10px]';
@@ -44,7 +47,8 @@ interface Props {
   clienteId: string;
   lancamentoId: string;
   fornecedores: FornecedorV2[];
-  onCriada: (operacaoId: string) => void;
+  /** O tipo e' o que o BANCO devolveu ao criar (nunca fixo): quem abre a OC usa este. */
+  onCriada: (operacaoId: string, tipo: LadoDoLegado) => void;
   onFechar: () => void;
 }
 
@@ -77,6 +81,12 @@ export function CriarOCDoLegadoDialog({ clienteId, lancamentoId, fornecedores, o
   const [criando, setCriando] = useState(false);
   const [erroCriar, setErroCriar] = useState<string | null>(null);
   const [iniciado, setIniciado] = useState(false);
+  const [lado, setLado] = useState<LadoDoLegado>('venda');
+  const T = TEXTOS_DO_LADO[lado];
+  /* cor pelo lado: o dinheiro da venda entra (verde), o da compra sai (vermelho); a entrega e' o contrario */
+  const corCaixa = lado === 'compra' ? COR.neg : COR.pos;
+  const corEntrega = lado === 'compra' ? COR.pos : COR.neg;
+  const sinal = lado === 'compra' ? -1 : 1;
 
   const ids = useMemo(() => [lancamentoId, ...recebimentos.filter(r => r.id !== lancamentoId).map(r => r.id)], [lancamentoId, recebimentos]);
   const chaveIds = ids.join(',');
@@ -91,6 +101,7 @@ export function CriarOCDoLegadoDialog({ clienteId, lancamentoId, fornecedores, o
       if (!vivo) return;
       if (error) { setErroCarga(error.message ?? 'Falha ao carregar as sugestões.'); setCarregando(false); return; }
       const s = lerSugestoes(data);
+      setLado(s.tipo);
       setRecebimentos(s.recebimentos);
       setIrmas(ordenarIrmas(s.irmas, s.recebimentos[0]?.descricao ?? null));
       /* OC-CRIAR-DO-LEGADO-01c: o destino ORDENA (parecidas com o comprador primeiro), nao filtra */
@@ -129,7 +140,7 @@ export function CriarOCDoLegadoDialog({ clienteId, lancamentoId, fornecedores, o
   const argumentos = (simular: boolean) => ({
     p_cliente_id: clienteId,
     p_dados: { fazenda_id: fazendaOC?.fazendaId ?? base?.fazendaId ?? null, contraparte_id: comprador || null },
-    p_criterio_valor: criterio,
+    p_criterio_valor: T.criterio[criterio],
     p_valor_outro: criterio === 'outro' ? parseNumericValue(valorOutro) : null,
     p_recebimentos: ids,
     p_saidas: saidasMarcadas.map(s => ({ lancamento_id: s.id })),
@@ -147,7 +158,7 @@ export function CriarOCDoLegadoDialog({ clienteId, lancamentoId, fornecedores, o
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: RPC fora de types.ts
         const { data, error } = await (supabase as any).rpc('oc_criar_do_legado', argumentos(true));
         if (!vivo) return;
-        setPrevia(error ? { ok: false, simulado: true, operacaoId: null, pendencias: [error.message ?? 'Falha na prévia.'], total: null, lotes: [], contaCorrente: null } : lerResultado(data));
+        setPrevia(error ? { ok: false, simulado: true, tipo: null, operacaoId: null, pendencias: [error.message ?? 'Falha na prévia.'], total: null, lotes: [], contaCorrente: null } : lerResultado(data));
         setSimulando(false);
       })();
     }, 300);
@@ -166,12 +177,12 @@ export function CriarOCDoLegadoDialog({ clienteId, lancamentoId, fornecedores, o
     if (error) { setErroCriar(error.message ?? 'Falha ao criar a OC.'); return; }
     const r = lerResultado(data);
     if (!r.ok || !r.operacaoId) { setErroCriar(r.pendencias.join(' · ') || 'A OC não foi criada.'); return; }
-    onCriada(r.operacaoId);
+    onCriada(r.operacaoId, r.tipo ?? lado);
   };
 
   const opcoesValor: [Criterio, string][] = [
-    ['recebimentos', `Total dos recebimentos do financeiro (${formatMoeda(somaRecebida)}), rateado pelas saídas — a OC nasce com saldo zero`],
-    ['saidas', `Valor das saídas do zootécnico (${formatMoeda(valorMarcadas)}) — a diferença vira saldo da OC`],
+    ['recebimentos', T.opcaoFinanceiro(formatMoeda(somaRecebida))],
+    ['saidas', T.opcaoZootecnico(formatMoeda(valorMarcadas))],
     ['outro', 'Outro total, rateado do mesmo jeito'],
   ];
   const cc = previa?.contaCorrente ?? null;
@@ -184,14 +195,14 @@ export function CriarOCDoLegadoDialog({ clienteId, lancamentoId, fornecedores, o
         <DialogHeader>
           <DialogTitle className="text-[12px]">
             Criar OC a partir do legado
-            {base && <span className="ml-2 font-normal text-muted-foreground">{fazendaOC?.fazenda ?? base.fazenda ?? '—'} · Venda</span>}
+            {base && <span className="ml-2 font-normal text-muted-foreground">{fazendaOC?.fazenda ?? base.fazenda ?? '—'} · {T.nome}</span>}
           </DialogTitle>
         </DialogHeader>
         {erroCarga && <div className="text-[10px] text-destructive" role="alert">{erroCarga}</div>}
         {carregando && !base && <div className="text-[10.5px] text-muted-foreground">Carregando…</div>}
         {base && (
           <div className="space-y-2">
-            <Secao n={1} titulo="Recebimentos desta venda" dica="o lançamento escolhido; dá para somar outros do mesmo comprador">
+            <Secao n={1} titulo={T.secaoFinanceiro} dica={T.dicaFinanceiro}>
               <table className="w-full table-fixed border-separate border-spacing-0 tabular-nums">
                 <colgroup><col style={{ width: 70 }} /><col /><col style={{ width: 200 }} /><col style={{ width: 110 }} /><col style={{ width: 60 }} /></colgroup>
                 <thead><tr>{['Pagamento', 'Descrição', 'Favorecido', 'Valor', ''].map((h, i) => <th key={i} className={TH}>{h}</th>)}</tr></thead>
@@ -201,7 +212,7 @@ export function CriarOCDoLegadoDialog({ clienteId, lancamentoId, fornecedores, o
                       <td className={`${TD} text-center`}>{dataCurta(r.data)}</td>
                       <td className={`${TD} break-words`}>{r.descricao ?? '—'}{r.motivo ? <span className="ml-1 text-[#b91c1c]">· {r.motivo}</span> : null}</td>
                       <td className={`${TD} break-words`}>{r.favorecido ?? '—'}</td>
-                      <td className={`${NUM} ${COR.pos}`}>{num2(r.valor)}</td>
+                      <td className={`${NUM} ${corCaixa}`}>{num2(r.valor)}</td>
                       <td className={`${TD} text-center`}>
                         {r.id !== lancamentoId && (
                           <button type="button" className="text-[10px] text-muted-foreground hover:text-destructive"
@@ -214,16 +225,16 @@ export function CriarOCDoLegadoDialog({ clienteId, lancamentoId, fornecedores, o
               </table>
               <div className="px-2 py-1">
                 <button type="button" className="text-[10px] font-medium text-primary underline" onClick={() => setMostrarIrmas(v => !v)}>
-                  + Somar outro recebimento
+                  {T.somar}
                 </button>
                 {mostrarIrmas && (
                   <ul className="mt-1 space-y-0.5 text-[10px]" data-testid="irmas">
-                    {irmas.length === 0 && <li className="text-muted-foreground">Nenhum outro recebimento do mesmo comprador, fazenda e conta de venda.</li>}
+                    {irmas.length === 0 && <li className="text-muted-foreground">{T.semIrmas}</li>}
                     {irmas.map(r => (
                       <li key={r.id} className="flex items-center gap-2">
                         <span className="w-16">{dataCurta(r.data)}</span>
                         <span className="flex-1 break-words">{r.descricao ?? '—'}</span>
-                        <span className="w-24 text-right tabular-nums text-[#15803d]">{num2(r.valor)}</span>
+                        <span className={`w-24 text-right tabular-nums ${corCaixa}`}>{num2(r.valor)}</span>
                         <Button type="button" variant="outline" size="sm" className="h-[20px] px-2 text-[10px]"
                           onClick={() => { setRecebimentos(prev => [...prev, r]); setMostrarIrmas(false); }}>Somar</Button>
                       </li>
@@ -233,12 +244,12 @@ export function CriarOCDoLegadoDialog({ clienteId, lancamentoId, fornecedores, o
               </div>
             </Secao>
 
-            <Secao n={2} titulo="Dados da OC" dica="preenchido pelo que o legado tem; confira o comprador">
+            <Secao n={2} titulo="Dados da OC" dica={T.dicaDados}>
               <table className="w-full table-fixed border-separate border-spacing-0">
                 <colgroup><col style={{ width: 160 }} /><col /></colgroup>
                 <tbody>
                   <tr>
-                    <td className={`${TD} text-muted-foreground`}>Comprador *</td>
+                    <td className={`${TD} text-muted-foreground`}>{T.contraparte} *</td>
                     <td className={`${TD} py-1`}>
                       <div className={`max-w-[340px] ${!comprador ? 'rounded ring-1 ring-destructive' : ''}`} data-testid="campo-comprador">
                         {/* FORN-SELETOR-PADRAO-01 fatia 2b — a lista é a do leitor único; em CÉLULA DE TABELA a linha fixa fica
@@ -246,40 +257,40 @@ export function CriarOCDoLegadoDialog({ clienteId, lancamentoId, fornecedores, o
                         <FavorecidoSelect value={comprador} onChange={setComprador} clienteId={clienteId} linhaDoDocumento={false}
                           search={buscaComprador} onSearchChange={setBuscaComprador} size="compact" />
                       </div>
-                      {!comprador && <div className="text-[10px] text-destructive">Escolha o comprador do cadastro.</div>}
+                      {!comprador && <div className="text-[10px] text-destructive">{T.escolhaContraparte}</div>}
                     </td>
                   </tr>
                   <tr>
                     <td className={`${TD} text-muted-foreground`}>Fazenda</td>
                     <td className={`${TD} py-1`} data-testid="fazenda-da-oc">
-                      {fazGado.tipo === 'uma' && <span>{fazGado.fazenda ?? '—'} <span className="text-muted-foreground">· fazenda das saídas marcadas</span></span>}
-                      {fazGado.tipo === 'nenhuma' && <span className="text-muted-foreground">— · vem das saídas marcadas</span>}
+                      {fazGado.tipo === 'uma' && <span>{fazGado.fazenda ?? '—'} <span className="text-muted-foreground">· {T.fazendaUma}</span></span>}
+                      {fazGado.tipo === 'nenhuma' && <span className="text-muted-foreground">— · {T.fazendaNenhuma}</span>}
                       {fazGado.tipo === 'mistas' && (
                         <div className="text-[10px] text-destructive" role="alert" data-testid="fazendas-mistas">
-                          As saídas marcadas são de fazendas diferentes ({fazGado.fazendas.join(' e ')}): uma OC por fazenda — desmarque as de uma delas.
+                          {T.movimentosMarcados} são de fazendas diferentes ({fazGado.fazendas.join(' e ')}): uma OC por fazenda — desmarque as de uma delas.
                         </div>
                       )}
                       {fazendaDifere && (
                         <div className="mt-[3px] rounded border border-[#fde68a] bg-[#fffbeb] px-[6px] py-[2px] text-[10px] text-[#92400e]" data-testid="aviso-fazenda">
-                          Lançamento na {base.fazenda ?? 'outra fazenda'}; gado saiu da {fazendaOC?.fazenda ?? 'outra fazenda'}. A OC fica na fazenda do gado.
+                          Lançamento na {base.fazenda ?? 'outra fazenda'}; {T.gadoFez} {fazendaOC?.fazenda ?? 'outra fazenda'}. A OC fica na fazenda do gado.
                         </div>
                       )}
                     </td>
                   </tr>
-                  <tr><td className={`${TD} text-muted-foreground`}>Tipo</td><td className={TD}>Venda · modelo conta corrente · nasce concluída, com a entrega encerrada</td></tr>
-                  <tr><td className={`${TD} text-muted-foreground`}>Data da venda</td><td className={TD}>{saidasMarcadas[0] ? dataCurta([...saidasMarcadas].sort((a, b) => a.data.localeCompare(b.data))[0].data) : '—'} <span className="text-muted-foreground">· primeira saída marcada</span></td></tr>
+                  <tr><td className={`${TD} text-muted-foreground`}>Tipo</td><td className={TD}>{T.tipo}</td></tr>
+                  <tr><td className={`${TD} text-muted-foreground`}>{T.rotuloData}</td><td className={TD}>{saidasMarcadas[0] ? dataCurta([...saidasMarcadas].sort((a, b) => a.data.localeCompare(b.data))[0].data) : '—'} <span className="text-muted-foreground">· {T.primeiraMarcada}</span></td></tr>
                 </tbody>
               </table>
             </Secao>
 
-            <Secao n={3} titulo="Valor da venda" dica="critério do lote 'total'; R$/kg derivado">
-              <div className="space-y-1 px-2 py-1.5 text-[10.5px]" role="radiogroup" aria-label="Valor da venda">
+            <Secao n={3} titulo={T.valor} dica="critério do lote 'total'; R$/kg derivado">
+              <div className="space-y-1 px-2 py-1.5 text-[10.5px]" role="radiogroup" aria-label={T.valor}>
                 {opcoesValor.map(([v, texto]) => (
                   <label key={v} className="flex cursor-pointer items-center gap-2">
                     <input type="radio" name="criterio" checked={criterio === v} onChange={() => setCriterio(v)} />
                     <span>{texto}{v === 'recebimentos' && <span className="ml-1 text-muted-foreground">(padrão)</span>}</span>
                     {v === 'outro' && criterio === 'outro' && (
-                      <Input aria-label="Total da venda" value={valorOutro} onChange={e => setValorOutro(e.target.value)}
+                      <Input aria-label={T.total} value={valorOutro} onChange={e => setValorOutro(e.target.value)}
                         className={`h-6 w-36 text-right text-[10.5px] ${!(parseNumericValue(valorOutro) > 0) ? 'border-destructive' : ''}`} />
                     )}
                   </label>
@@ -308,26 +319,26 @@ export function CriarOCDoLegadoDialog({ clienteId, lancamentoId, fornecedores, o
               )}
             </Secao>
 
-            <Secao n={4} titulo="Saídas de gado sugeridas"
-              dica={`venda, sem OC, de 60 dias antes a 120 dias depois do pagamento, em qualquer fazenda do cliente · destino parecido com o comprador primeiro${alvo ? ` · ${alvo} cab pedidos na descrição` : ''}`}>
+            <Secao n={4} titulo={T.secaoGado}
+              dica={`${T.dicaGado}${alvo ? ` · ${alvo} cab pedidos na descrição` : ''}`}>
               <table className="w-full table-fixed border-separate border-spacing-0 tabular-nums" data-testid="saidas">
                 <colgroup>
                   <col style={{ width: 28 }} /><col style={{ width: 64 }} /><col style={{ width: 120 }} /><col style={{ width: 170 }} /><col />
                   <col style={{ width: 50 }} /><col style={{ width: 70 }} /><col style={{ width: 110 }} /><col style={{ width: 150 }} />
                 </colgroup>
-                <thead><tr>{['', 'Data', 'Fazenda', 'Destino', 'Categoria', 'Cab', 'Peso', 'Valor', 'Lançamento'].map((h, i) => <th key={i} className={TH}>{h}</th>)}</tr></thead>
+                <thead><tr>{['', 'Data', 'Fazenda', T.colunaLugar, 'Categoria', 'Cab', 'Peso', 'Valor', 'Lançamento'].map((h, i) => <th key={i} className={TH}>{h}</th>)}</tr></thead>
                 <tbody>
-                  {saidas.length === 0 && <tr><td colSpan={9} className={`${TD} text-center text-muted-foreground`}>Nenhuma saída de venda sem OC na janela.</td></tr>}
+                  {saidas.length === 0 && <tr><td colSpan={9} className={`${TD} text-center text-muted-foreground`}>{T.semGado}</td></tr>}
                   {saidas.map(s => (
                     <tr key={s.id} className={marcadas.has(s.id) ? 'bg-white' : 'bg-white text-[#9ca3af]'} data-saida={s.id}
                       data-parece={pareceComComprador(s) ? 'sim' : 'nao'}>
                       <td className={`${TD} text-center`}>
-                        <Checkbox checked={marcadas.has(s.id)} aria-label={`Marcar saída de ${dataCurta(s.data)}`} className="h-3 w-3"
+                        <Checkbox checked={marcadas.has(s.id)} aria-label={`${T.marcar} ${dataCurta(s.data)}`} className="h-3 w-3"
                           onCheckedChange={v => setMarcadas(prev => { const n = new Set(prev); if (v === true) n.add(s.id); else n.delete(s.id); return n; })} />
                       </td>
                       <td className={`${TD} text-center`}>{dataCurta(s.data)}</td>
                       <td className={`${TD} break-words`}>{s.fazenda_nome ?? '—'}</td>
-                      <td className={`${TD} break-words`} title={s.semelhanca == null ? undefined : `semelhança com o comprador: ${s.semelhanca.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}>
+                      <td className={`${TD} break-words`} title={s.semelhanca == null ? undefined : `${T.semelhanca}: ${s.semelhanca.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}>
                         {s.destino ?? '—'}
                       </td>
                       <td className={TD}>{rotuloCategoria(s.categoria)}</td>
@@ -347,7 +358,7 @@ export function CriarOCDoLegadoDialog({ clienteId, lancamentoId, fornecedores, o
                     {/* OC-CRIAR-DO-LEGADO-01c: o zootecnico marcado contra o recebido — informacao, nao bloqueio */}
                     <td className={`border-t-2 border-t-[#9aa7b6] bg-[#E8E6DF] px-[5px] text-[10px] font-normal ${confronto.bate ? 'text-[#15803d]' : 'text-[#b45309]'}`}
                       data-testid="confronto-recebido">
-                      {saidasMarcadas.length === 0 ? '' : `recebido ${num2(somaRecebida)} · ${confronto.bate ? 'bate' : `difere R$ ${num2(confronto.diferenca)}`}`}
+                      {saidasMarcadas.length === 0 ? '' : `${T.financeiroCurto} ${num2(somaRecebida)} · ${confronto.bate ? 'bate' : `difere R$ ${num2(confronto.diferenca)}`}`}
                     </td>
                   </tr>
                 </tfoot>
@@ -359,14 +370,14 @@ export function CriarOCDoLegadoDialog({ clienteId, lancamentoId, fornecedores, o
               {cc && (
                 <table className="w-full table-fixed border-separate border-spacing-0 tabular-nums" data-testid="previa">
                   <colgroup><col style={{ width: 56 }} /><col style={{ width: 30 }} /><col style={{ width: 34 }} /><col style={{ width: 82 }} /><col /><col style={{ width: 170 }} /><col style={{ width: 90 }} /><col style={{ width: 90 }} /><col style={{ width: 90 }} /></colgroup>
-                  <thead><tr>{['Data', 'Lote', 'Cab', 'Evento', 'Descrição', 'Conta', 'Entrega (DRE)', 'Recebido (caixa)', 'Saldo'].map(h => <th key={h} className={TH}>{h}</th>)}</tr></thead>
+                  <thead><tr>{['Data', 'Lote', 'Cab', 'Evento', 'Descrição', 'Conta', T.colunaEntrega, T.colunaCaixa, 'Saldo'].map(h => <th key={h} className={TH}>{h}</th>)}</tr></thead>
                   <tbody>
                     {cc.linhas.map(l => (
                       <tr key={l.parteId} className={l.tipo === 'recebimento' ? 'bg-[#EAF1F9]' : 'bg-white'} data-tipo={l.tipo}>
                         <td className={`${TD} text-center`}>{dataCurta(l.data)}</td>
                         <td className={`${TD} text-center`}>{l.loteOrdem ?? ''}</td>
                         <td className={NUM}>{l.cab ?? ''}</td>
-                        <td className={`${TD} text-center`}>{l.tipo === 'entrega' ? 'Entrega' : l.tipo === 'recebimento' ? 'Recebimento' : 'Explicação'}</td>
+                        <td className={`${TD} text-center`}>{l.tipo === 'entrega' ? T.eventoEntrega : l.tipo === 'recebimento' ? T.eventoCaixa : 'Explicação'}</td>
                         <td className={`${TD} break-words`}>{l.descricao ?? '—'}</td>
                         <td className={`${TD} break-words`}>{rotuloDaConta(l.conta) ?? '—'}</td>
                         <td className={`${NUM} ${COR[corDoSaldo(l.movEntrega)]}`}>{l.movEntrega == null ? '' : num2(l.movEntrega)}</td>
@@ -380,8 +391,8 @@ export function CriarOCDoLegadoDialog({ clienteId, lancamentoId, fornecedores, o
                       <td colSpan={2} className="h-[19px] border-t-2 border-t-[#9aa7b6] bg-[#E8E6DF] px-[5px] text-[10px]">Total</td>
                       <td className="border-t-2 border-t-[#9aa7b6] bg-[#E8E6DF] px-[5px] text-right text-[10px]">{cc.cabEntregue}</td>
                       <td colSpan={3} className="border-t-2 border-t-[#9aa7b6] bg-[#E8E6DF]" />
-                      <td className={`border-t-2 border-t-[#9aa7b6] bg-[#E8E6DF] px-[5px] text-right text-[10px] ${COR.neg}`}>{num2(-cc.entregue)}</td>
-                      <td className={`border-t-2 border-t-[#9aa7b6] bg-[#E8E6DF] px-[5px] text-right text-[10px] ${COR.pos}`}>{num2(cc.recebido)}</td>
+                      <td className={`border-t-2 border-t-[#9aa7b6] bg-[#E8E6DF] px-[5px] text-right text-[10px] ${corEntrega}`}>{num2(-sinal * cc.entregue)}</td>
+                      <td className={`border-t-2 border-t-[#9aa7b6] bg-[#E8E6DF] px-[5px] text-right text-[10px] ${corCaixa}`}>{num2(sinal * cc.recebido)}</td>
                       <td className={`border-t-2 border-t-[#9aa7b6] bg-[#E8E6DF] px-[5px] text-right text-[10px] ${COR[corDoSaldo(cc.saldo)]}`} data-testid="saldo-previa">{num2(cc.saldo)}</td>
                     </tr>
                   </tfoot>
@@ -389,8 +400,8 @@ export function CriarOCDoLegadoDialog({ clienteId, lancamentoId, fornecedores, o
               )}
               {cc && (
                 <div className="flex flex-wrap gap-x-4 px-2 py-1 text-[10px]" data-testid="resumo-previa">
-                  <span><span className="text-muted-foreground">Comprador</span> {fornecedores.find(f => f.id === comprador)?.nome ?? '—'}</span>
-                  <span><span className="text-muted-foreground">Receita no DRE</span> {mesesReceita.map(fmtMes).join(', ') || '—'}{base ? ` (hoje está em ${fmtMes(base.data.slice(0, 7))})` : ''}</span>
+                  <span><span className="text-muted-foreground">{T.contraparte}</span> {fornecedores.find(f => f.id === comprador)?.nome ?? '—'}</span>
+                  <span><span className="text-muted-foreground">{T.noDre}</span> {mesesReceita.map(fmtMes).join(', ') || '—'}{base ? ` (hoje está em ${fmtMes(base.data.slice(0, 7))})` : ''}</span>
                   <span><span className="text-muted-foreground">Saldo</span> <b className={COR[corDoSaldo(cc.saldo)]}>{num2(cc.saldo)}</b>{corDoSaldo(cc.saldo) !== 'zero' ? ' · explicar depois na OC' : ' · quitado'}</span>
                 </div>
               )}
@@ -424,7 +435,7 @@ export function CriarOCDoLegadoDialog({ clienteId, lancamentoId, fornecedores, o
           {erroCriar && <span className="mr-auto text-[10px] text-destructive" role="alert">{erroCriar}</span>}
           <Button type="button" variant="ghost" size="sm" className="h-[22px] px-[9px] text-[10px]" onClick={onFechar}>Cancelar</Button>
           <Button type="button" size="sm" className="h-[22px] px-[9px] text-[10px]" disabled={!podeCriar} onClick={criar}
-            title={podeCriar ? 'Cria a OC concluída, com as entregas e os recebimentos ligados' : 'Resolva as pendências para criar'}>
+            title={podeCriar ? T.tituloCriar : 'Resolva as pendências para criar'}>
             Criar OC
           </Button>
         </DialogFooter>

@@ -169,7 +169,8 @@ describe('Criar OC a partir do legado', () => {
     const botao = await screen.findByRole('button', { name: 'Criar OC' });
     await waitFor(() => expect(botao).toBeEnabled());
     fireEvent.click(botao);
-    await waitFor(() => expect(onCriada).toHaveBeenCalledWith('op-nova'));
+    /* OC-CRIAR-DO-LEGADO-COMPRA-01: o contrato ganhou o tipo — o envelope antigo (sem a chave) e' venda */
+    await waitFor(() => expect(onCriada).toHaveBeenCalledWith('op-nova', 'venda'));
     const gravou = chamadas.filter(c => c.nome === 'oc_criar_do_legado' && c.args.p_simular === false);
     expect(gravou).toHaveLength(1);
     const { p_simular: _s, ...resto } = gravou[0].args;
@@ -290,5 +291,108 @@ describe('OC-CRIAR-DO-LEGADO-01c — o gado de outra fazenda', () => {
     montar();
     await waitFor(() => expect(screen.getByTestId('cab-marcadas').textContent).toBe('315'));
     expect(screen.queryByTestId('aviso-fazenda')).toBeNull();
+  });
+});
+
+/* OC-CRIAR-DO-LEGADO-COMPRA-01 — o MESMO dialogo no lado da compra: o lado vem do envelope das sugestoes e so' troca rotulos e cor. */
+describe('OC-CRIAR-DO-LEGADO-COMPRA-01 — a compra', () => {
+  const SUG_COMPRA = {
+    tipo: 'compra',
+    recebimentos: [{ id: '692f1957', data: '2026-08-10', valor: 20000, descricao: 'Compra 10 Garrotes', favorecido_id: 'forn-1',
+      favorecido: 'Fornecedor Um', fazenda_id: 'faz-sr', fazenda: 'Faz. Sta. Rita', conta: 'Investimento Compra Bovinos Machos', motivo: null }],
+    irmas: [],
+    saidas: [{ id: 'ent-1', data: '2026-08-12', categoria: 'garrotes', quantidade: 10, peso_medio_kg: 300, valor: 18000, origem_registro: null,
+      fornecedor_id: null, fazenda_id: 'faz-sr', fazenda_nome: 'Faz. Sta. Rita', destino: 'Sítio do Fornecedor', semelhanca: 0.8 }],
+  };
+  const PREVIA_COMPRA = {
+    ok: true, simulado: true, tipo: 'compra', operacao_id: null, total: 20000, pendencias: [],
+    lotes: [{ ordem: 1, categoria_negociada: 'garrotes', qtd_negociada: 10, peso_medio_negociado_kg: 300, valor_informado: 20000 }],
+    conta_corrente: {
+      modelo: 'conta_corrente', entregue: 20000, cab_entregue: 10, recebido: 20000, saldo: 0, situacao: 'quitado',
+      linhas: [
+        { tipo: 'entrega', data: '2026-08-12', parte_id: 'c1', lote_ordem: 1, cab: 10, descricao: 'Compra 010 G', conta: 'Investimento Compra Bovinos Machos', mov_entrega: 20000, saldo: 20000 },
+        { tipo: 'recebimento', data: '2026-08-10', parte_id: 'c2', descricao: 'Compra 10 Garrotes', conta: 'Investimento Compra Bovinos Machos', mov_recebido: -20000, saldo: 0 },
+      ],
+    },
+  };
+  beforeEach(() => {
+    sugestoesTroca = SUG_COMPRA;
+    respostaCriar = (args) => (args.p_simular ? PREVIA_COMPRA : { ...PREVIA_COMPRA, simulado: false, operacao_id: 'op-compra' });
+  });
+
+  it('os rotulos sao os da compra, em todas as secoes; nenhum texto de venda sobra', async () => {
+    montar();
+    const dlg = await screen.findByTestId('dialogo-criar-do-legado');
+    await waitFor(() => expect(screen.getByTestId('previa')).toBeInTheDocument());
+    const t = dlg.textContent ?? '';
+    for (const frase of ['· Compra', 'Pagamentos desta compra', 'Fornecedor *', 'Entradas de gado', 'Valor da compra', 'Data da compra',
+      'primeira entrada marcada', 'Compra · modelo conta corrente · nasce concluída, com a entrega encerrada', '+ Somar outro pagamento',
+      'Total dos pagamentos do financeiro', 'Valor das entradas do zootécnico', 'Origem', 'Entrada (DRE)', 'Pago (caixa)', 'Custo no DRE',
+      'fazenda das entradas marcadas', 'pago 20.000,00']) {
+      expect(t, frase).toContain(frase);
+    }
+    /* a busca sabe achar: na venda estes textos existem (os casos de cima os leem) */
+    for (const frase of ['Recebimentos desta venda', 'Comprador *', 'Saídas de gado sugeridas', 'Valor da venda', 'Data da venda', 'Receita no DRE', 'Destino']) {
+      expect(t, frase).not.toContain(frase);
+    }
+    expect(screen.getByLabelText('Marcar entrada de 12/08/26')).toBeInTheDocument();
+  });
+
+  it('cor pelo lado: o pagamento sai (vermelho) e a entrada do gado entra (verde), nas linhas e no total', async () => {
+    montar();
+    await waitFor(() => expect(screen.getByTestId('previa')).toBeInTheDocument());
+    const dlg = screen.getByTestId('dialogo-criar-do-legado');
+    expect(dlg.querySelector('tr[data-recebimento="692f1957"] td:nth-child(4)')?.className).toContain('text-[#b91c1c]');
+    const previa = screen.getByTestId('previa');
+    expect(previa.querySelector('tr[data-tipo="entrega"] td:nth-child(7)')?.className).toContain('text-[#15803d]');
+    expect(previa.querySelector('tr[data-tipo="recebimento"] td:nth-child(8)')?.textContent).toBe('−20.000,00');
+    expect(previa.querySelector('tr[data-tipo="recebimento"] td:nth-child(8)')?.className).toContain('text-[#b91c1c]');
+    const total = previa.querySelectorAll('tfoot td');
+    expect(total[3].textContent).toBe('20.000,00');
+    expect(total[3].className).toContain('text-[#15803d]');
+    expect(total[4].textContent).toBe('−20.000,00');
+    expect(total[4].className).toContain('text-[#b91c1c]');
+    expect(previa.querySelector('tr[data-tipo="entrega"] td:nth-child(4)')?.textContent).toBe('Entrada');
+    expect(previa.querySelector('tr[data-tipo="recebimento"] td:nth-child(4)')?.textContent).toBe('Pagamento');
+  });
+
+  it('criterios espelhados (D4): a simulacao sai com "pagamentos"; escolher o valor das entradas manda "entradas"', async () => {
+    montar();
+    await waitFor(() => expect(ultimaSimulacao()?.p_criterio_valor).toBe('pagamentos'));
+    expect(ultimaSimulacao()?.p_saidas).toEqual([{ lancamento_id: 'ent-1' }]);
+    fireEvent.click(screen.getByText(/Valor das entradas do zootécnico/));
+    await waitFor(() => expect(ultimaSimulacao()?.p_criterio_valor).toBe('entradas'));
+    fireEvent.click(screen.getByText('Outro total, rateado do mesmo jeito'));
+    await waitFor(() => expect(ultimaSimulacao()?.p_criterio_valor).toBe('outro'));
+    expect(screen.getByLabelText('Total da compra')).toBeInTheDocument();
+  });
+
+  it('Criar OC devolve o id E o tipo que o banco criou — quem abre a OC nao fixa "venda"', async () => {
+    const onCriada = montar();
+    const botao = await screen.findByRole('button', { name: 'Criar OC' });
+    await waitFor(() => expect(botao).toBeEnabled());
+    expect(botao.getAttribute('title')).toBe('Cria a OC concluída, com as entradas e os pagamentos ligados');
+    fireEvent.click(botao);
+    await waitFor(() => expect(onCriada).toHaveBeenCalledWith('op-compra', 'compra'));
+  });
+
+  it('sem entrada na janela: a frase da compra', async () => {
+    sugestoesTroca = { ...SUG_COMPRA, saidas: [] };
+    montar();
+    expect(await screen.findByText('Nenhuma entrada de compra sem OC na janela.')).toBeInTheDocument();
+    expect(screen.getByTestId('fazenda-da-oc').textContent).toContain('vem das entradas marcadas');
+  });
+});
+
+describe('OC-CRIAR-DO-LEGADO-COMPRA-01 — as duas portas abrem a OC com o tipo criado (lido da fonte)', () => {
+  it('nenhuma das duas fixa "venda" no onCriada; o detector sabe achar', async () => {
+    const { readFileSync } = await import('node:fs');
+    const fixo = /onCriada=\{\(operacaoId[^)]*\) => \{[\s\S]{0,400}?\(operacaoId, 'venda'\)/;
+    expect(fixo.test("onCriada={(operacaoId) => { fechar(); abrirOCFinanceiro(operacaoId, 'venda'); }}")).toBe(true);
+    for (const arq of ['src/pages/FinanceiroV2Tab.tsx', 'src/components/financeiro-v2/LancamentoV2Dialog.tsx']) {
+      const fonte = readFileSync(arq, 'utf8');
+      expect(fixo.test(fonte), arq).toBe(false);
+      expect(/onCriada=\{\(operacaoId, tipo\) => \{[\s\S]{0,400}?\(operacaoId, tipo\)/.test(fonte), arq).toBe(true);
+    }
   });
 });

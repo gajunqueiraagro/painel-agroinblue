@@ -5,12 +5,22 @@
  * parcelas irmas. E a leitura dos envelopes, sem cast.
  */
 import { POR_CATEGORIA, SUBCENTRO_VENDA_BOITEL } from '@/lib/financeiro/subcentroVenda';
+import { SUBCENTRO_PRINCIPAL_COMPRA_FEMEAS, SUBCENTRO_PRINCIPAL_COMPRA_MACHOS } from '@/hooks/useOperacaoLiquidacao';
 import { lerContaCorrente, type ContaCorrente } from '@/lib/oc/contaCorrente';
 
 /** Contas de venda de gado em que a acao aparece (1110-1140). Boitel (1150) fica de fora (D3). */
 export const CONTAS_VENDA_GADO: ReadonlySet<string> = new Set(
   Object.values(POR_CATEGORIA).filter(c => c !== SUBCENTRO_VENDA_BOITEL),
 );
+
+/**
+ * OC-CRIAR-DO-LEGADO-COMPRA-01 — contas de compra de gado em que a acao aparece. As duas constantes sao do dono
+ * (`useOperacaoLiquidacao.ts`, espelho de `_oc_subcentro_compra` no banco): aqui nao se escreve o nome da conta.
+ */
+export const CONTAS_COMPRA_GADO: ReadonlySet<string> = new Set([SUBCENTRO_PRINCIPAL_COMPRA_FEMEAS, SUBCENTRO_PRINCIPAL_COMPRA_MACHOS]);
+
+/** O lado da OC que nasce do legado. Vem do LANCAMENTO (D1): entrada em conta de venda = venda; saida em conta de compra = compra. */
+export type LadoDoLegado = 'venda' | 'compra';
 
 export interface LancamentoCandidato {
   tipo_operacao?: string | null;
@@ -22,23 +32,34 @@ export interface LancamentoCandidato {
   conciliado_em?: string | null;
 }
 
-/** Recebido de verdade: realizado, conciliado ou com data de conciliacao — o mesmo teste de `_oc_legado_motivo_recebimento`. */
+/** Recebido (ou pago) de verdade: realizado, conciliado ou com data de conciliacao — o mesmo teste de `_oc_legado_motivo_recebimento`. */
 function jaRecebido(l: LancamentoCandidato): boolean {
   return l.status_transacao === 'realizado' || l.status_transacao === 'conciliado' || !!l.conciliado_em;
 }
 
 /**
- * A acao "Criar OC a partir deste lancamento" so' aparece onde o banco aceitaria o recebimento. Espelho da regra do banco.
+ * O lado que o lancamento pede, ou nulo quando a combinacao nao vale (entrada em conta de compra, saida em conta de venda,
+ * transferencia, conta fora das duas listas). Espelho de `_oc_legado_motivo_recebimento` no banco, que recusa o resto.
+ */
+export function ladoDoLancamento(l: Pick<LancamentoCandidato, 'tipo_operacao' | 'subcentro'>): LadoDoLegado | null {
+  if (!l.subcentro) return null;
+  if (l.tipo_operacao === '1-Entradas' && CONTAS_VENDA_GADO.has(l.subcentro)) return 'venda';
+  if (l.tipo_operacao === '2-Saídas' && CONTAS_COMPRA_GADO.has(l.subcentro)) return 'compra';
+  return null;
+}
+
+/**
+ * A acao "Criar OC a partir deste lancamento" so' aparece onde o banco aceitaria o recebimento / pagamento. Espelho da regra do banco.
  * OC-CRIAR-DO-LEGADO-01b: o lancamento do MODAL ANTIGO (origem 'movimentacao_rebanho') entra quando ja' RECEBIDO — a criacao
  * adota a saida dele, nunca cria gado. Programado/agendado fica de fora: "Receba primeiro".
+ * OC-CRIAR-DO-LEGADO-COMPRA-01: o mesmo vale para a compra ("Pague primeiro"); o lado sai de `ladoDoLancamento`.
  */
 export function podeCriarOCDoLegado(l: LancamentoCandidato, temOC: boolean): boolean {
   return !temOC
-    && l.tipo_operacao === '1-Entradas'
+    && ladoDoLancamento(l) !== null
     && l.cancelado !== true
     && l.sem_movimentacao_caixa !== true
-    && (l.origem_lancamento !== 'movimentacao_rebanho' || jaRecebido(l))
-    && !!l.subcentro && CONTAS_VENDA_GADO.has(l.subcentro);
+    && (l.origem_lancamento !== 'movimentacao_rebanho' || jaRecebido(l));
 }
 
 /**
@@ -89,6 +110,8 @@ export interface SaidaCandidata {
  *   (trigram >= 0,3) a 46 (nome igual) — o destino e' texto livre: fazenda ("Faz. Eldorado II"), apelido ("Valtinho") ou vazio.
  */
 export const SEMELHANCA_MINIMA = 0.3;
+/* OC-CRIAR-DO-LEGADO-COMPRA-01: o nome ficou (uma funcao so', sem gemea). Na COMPRA a "saida candidata" e' a ENTRADA de compra,
+   `destino` carrega a fazenda de ORIGEM do gado e a semelhanca e' com o FORNECEDOR — a contraparte, nos dois lados. */
 export const pareceComComprador = (s: Pick<SaidaCandidata, 'semelhanca'>) => (s.semelhanca ?? 0) >= SEMELHANCA_MINIMA;
 
 /** As parecidas com o comprador primeiro; dentro de cada grupo, por data (e id, para ser estavel). */
@@ -176,7 +199,9 @@ const lista = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 const txt = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null);
 const num = (v: unknown): number | null => { const n = Number(v); return v === null || v === undefined || !Number.isFinite(n) ? null : n; };
 
-export interface Sugestoes { recebimentos: RecebimentoResumo[]; irmas: RecebimentoResumo[]; saidas: SaidaCandidata[] }
+export interface Sugestoes { tipo: LadoDoLegado; recebimentos: RecebimentoResumo[]; irmas: RecebimentoResumo[]; saidas: SaidaCandidata[] }
+/** O lado vem do envelope do banco; envelope antigo (sem a chave) e' venda, como sempre foi. */
+const lado = (v: unknown): LadoDoLegado => (v === 'compra' ? 'compra' : 'venda');
 
 function lerRecebimento(v: unknown): RecebimentoResumo {
   const r = obj(v);
@@ -188,6 +213,7 @@ function lerRecebimento(v: unknown): RecebimentoResumo {
 export function lerSugestoes(raw: unknown): Sugestoes {
   const r = obj(raw);
   return {
+    tipo: lado(r.tipo),
     recebimentos: lista(r.recebimentos).map(lerRecebimento),
     irmas: lista(r.irmas).map(lerRecebimento),
     saidas: lista(r.saidas).map((v) => {
@@ -203,6 +229,8 @@ export interface LoteCriado { ordem: number; categoria: string | null; quantidad
 export interface ResultadoCriar {
   ok: boolean;
   simulado: boolean;
+  /** O tipo da OC criada, como o banco o derivou do lancamento. Nulo na recusa (o envelope de pendencias nao o traz). */
+  tipo: LadoDoLegado | null;
   operacaoId: string | null;
   pendencias: string[];
   total: number | null;
@@ -215,6 +243,7 @@ export function lerResultado(raw: unknown): ResultadoCriar {
   return {
     ok: r.ok === true,
     simulado: r.simulado === true,
+    tipo: r.tipo === 'compra' || r.tipo === 'venda' ? r.tipo : null,
     operacaoId: txt(r.operacao_id),
     pendencias: lista(r.pendencias).map(String),
     total: num(r.total),
@@ -232,3 +261,57 @@ export function precoPorKg(l: LoteCriado): number | null {
   if (!l.peso || l.peso <= 0 || l.quantidade <= 0) return null;
   return Math.round((l.valor / (l.peso * l.quantidade)) * 100) / 100;
 }
+
+/* ── OC-CRIAR-DO-LEGADO-COMPRA-01: os textos do dialogo, por lado. Venda e compra sao a mesma operacao espelhada: o dialogo e'
+   UM e so' le^ daqui (nenhum `if` de lado espalhado pelos rotulos). Os da venda sao os de sempre, letra por letra. ── */
+export interface TextosDoLado {
+  nome: string;
+  secaoFinanceiro: string; dicaFinanceiro: string; somar: string; semIrmas: string;
+  dicaDados: string; contraparte: string; escolhaContraparte: string;
+  fazendaUma: string; fazendaNenhuma: string; movimentosMarcados: string; gadoFez: string;
+  tipo: string; rotuloData: string; primeiraMarcada: string;
+  valor: string; total: string;
+  opcaoFinanceiro: (soma: string) => string; opcaoZootecnico: (soma: string) => string;
+  secaoGado: string; dicaGado: string; colunaLugar: string; semGado: string; marcar: string; semelhanca: string;
+  financeiroCurto: string; colunaEntrega: string; colunaCaixa: string; eventoEntrega: string; eventoCaixa: string;
+  noDre: string; tituloCriar: string;
+  /** D4: a chave do criterio que a RPC recebe, espelhada na compra. */
+  criterio: Record<'recebimentos' | 'saidas' | 'outro', string>;
+}
+
+export const TEXTOS_DO_LADO: Record<LadoDoLegado, TextosDoLado> = {
+  venda: {
+    nome: 'Venda',
+    secaoFinanceiro: 'Recebimentos desta venda', dicaFinanceiro: 'o lançamento escolhido; dá para somar outros do mesmo comprador',
+    somar: '+ Somar outro recebimento', semIrmas: 'Nenhum outro recebimento do mesmo comprador, fazenda e conta de venda.',
+    dicaDados: 'preenchido pelo que o legado tem; confira o comprador', contraparte: 'Comprador', escolhaContraparte: 'Escolha o comprador do cadastro.',
+    fazendaUma: 'fazenda das saídas marcadas', fazendaNenhuma: 'vem das saídas marcadas', movimentosMarcados: 'As saídas marcadas', gadoFez: 'gado saiu da',
+    tipo: 'Venda · modelo conta corrente · nasce concluída, com a entrega encerrada', rotuloData: 'Data da venda', primeiraMarcada: 'primeira saída marcada',
+    valor: 'Valor da venda', total: 'Total da venda',
+    opcaoFinanceiro: soma => `Total dos recebimentos do financeiro (${soma}), rateado pelas saídas — a OC nasce com saldo zero`,
+    opcaoZootecnico: soma => `Valor das saídas do zootécnico (${soma}) — a diferença vira saldo da OC`,
+    secaoGado: 'Saídas de gado sugeridas',
+    dicaGado: 'venda, sem OC, de 60 dias antes a 120 dias depois do pagamento, em qualquer fazenda do cliente · destino parecido com o comprador primeiro',
+    colunaLugar: 'Destino', semGado: 'Nenhuma saída de venda sem OC na janela.', marcar: 'Marcar saída de', semelhanca: 'semelhança com o comprador',
+    financeiroCurto: 'recebido', colunaEntrega: 'Entrega (DRE)', colunaCaixa: 'Recebido (caixa)', eventoEntrega: 'Entrega', eventoCaixa: 'Recebimento',
+    noDre: 'Receita no DRE', tituloCriar: 'Cria a OC concluída, com as entregas e os recebimentos ligados',
+    criterio: { recebimentos: 'recebimentos', saidas: 'saidas', outro: 'outro' },
+  },
+  compra: {
+    nome: 'Compra',
+    secaoFinanceiro: 'Pagamentos desta compra', dicaFinanceiro: 'o lançamento escolhido; dá para somar outros do mesmo fornecedor',
+    somar: '+ Somar outro pagamento', semIrmas: 'Nenhum outro pagamento do mesmo fornecedor, fazenda e conta de compra.',
+    dicaDados: 'preenchido pelo que o legado tem; confira o fornecedor', contraparte: 'Fornecedor', escolhaContraparte: 'Escolha o fornecedor do cadastro.',
+    fazendaUma: 'fazenda das entradas marcadas', fazendaNenhuma: 'vem das entradas marcadas', movimentosMarcados: 'As entradas marcadas', gadoFez: 'gado entrou na',
+    tipo: 'Compra · modelo conta corrente · nasce concluída, com a entrega encerrada', rotuloData: 'Data da compra', primeiraMarcada: 'primeira entrada marcada',
+    valor: 'Valor da compra', total: 'Total da compra',
+    opcaoFinanceiro: soma => `Total dos pagamentos do financeiro (${soma}), rateado pelas entradas — a OC nasce com saldo zero`,
+    opcaoZootecnico: soma => `Valor das entradas do zootécnico (${soma}) — a diferença vira saldo da OC`,
+    secaoGado: 'Entradas de gado',
+    dicaGado: 'compra, sem OC, de 60 dias antes a 120 dias depois do pagamento, em qualquer fazenda do cliente · origem parecida com o fornecedor primeiro',
+    colunaLugar: 'Origem', semGado: 'Nenhuma entrada de compra sem OC na janela.', marcar: 'Marcar entrada de', semelhanca: 'semelhança com o fornecedor',
+    financeiroCurto: 'pago', colunaEntrega: 'Entrada (DRE)', colunaCaixa: 'Pago (caixa)', eventoEntrega: 'Entrada', eventoCaixa: 'Pagamento',
+    noDre: 'Custo no DRE', tituloCriar: 'Cria a OC concluída, com as entradas e os pagamentos ligados',
+    criterio: { recebimentos: 'pagamentos', saidas: 'entradas', outro: 'outro' },
+  },
+};

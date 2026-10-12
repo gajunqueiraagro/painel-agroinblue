@@ -3401,11 +3401,11 @@ export function LancamentoV2Dialog({
           lancamentoId={lancamento.id}
           fornecedores={fornecedores}
           onFechar={() => setCriarOCAberto(false)}
-          onCriada={(operacaoId) => {
+          onCriada={(operacaoId, tipo) => {
             setCriarOCAberto(false);
             notificarLancamentosMudaram(clienteAtual.id);
             onClose();
-            onAbrirOperacaoOC?.(operacaoId, 'venda');
+            onAbrirOperacaoOC?.(operacaoId, tipo);
           }}
         />
       )}

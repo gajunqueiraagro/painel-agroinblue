@@ -8,8 +8,11 @@ import { describe, it, expect } from 'vitest';
 import {
   CONTAS_VENDA_GADO, podeCriarOCDoLegado, cabecasDaDescricao, combinacaoUnica, ordenarIrmas, lerResultado, precoPorKg, saidasPreMarcadas,
   ordenarSaidas, fazendaDasMarcadas, confrontoComRecebido, lerSugestoes, pareceComComprador, SEMELHANCA_MINIMA,
+  CONTAS_COMPRA_GADO, ladoDoLancamento, TEXTOS_DO_LADO,
   type SaidaCandidata, type RecebimentoResumo,
 } from './criarDoLegado';
+import { SUBCENTRO_PRINCIPAL_COMPRA_FEMEAS, SUBCENTRO_PRINCIPAL_COMPRA_MACHOS, subcentroCompraPorCategoria } from '@/hooks/useOperacaoLiquidacao';
+import { readFileSync } from 'node:fs';
 import { SUBCENTRO_VENDA_BOITEL } from '@/lib/financeiro/subcentroVenda';
 
 const RECEB = { tipo_operacao: '1-Entradas', subcentro: 'Venda de Desmama Machos', cancelado: false, origem_lancamento: 'importacao', sem_movimentacao_caixa: false };
@@ -174,5 +177,61 @@ describe('OC-CRIAR-DO-LEGADO-01c', () => {
     const r = lerSugestoes({ saidas: [{ id: 's', data: '2025-03-28', quantidade: 52, fazenda_id: 'se', fazenda_nome: 'Faz. Sto. Expedito',
       destino: 'Fernando Cesar Sanches', semelhanca: 1 }] });
     expect(r.saidas[0]).toMatchObject({ fazenda_id: 'se', fazenda_nome: 'Faz. Sto. Expedito', destino: 'Fernando Cesar Sanches', semelhanca: 1 });
+  });
+});
+
+/* OC-CRIAR-DO-LEGADO-COMPRA-01 — o lado da compra: quando a acao aparece, de onde vem o lado, e a leitura do tipo nos envelopes. */
+describe('OC-CRIAR-DO-LEGADO-COMPRA-01', () => {
+  const PAG = { tipo_operacao: '2-Saídas', subcentro: SUBCENTRO_PRINCIPAL_COMPRA_MACHOS, cancelado: false, origem_lancamento: 'importacao', sem_movimentacao_caixa: false };
+
+  it('as contas de compra sao as do DONO (importadas, nunca escritas aqui) e cobrem toda categoria que o dono conhece', () => {
+    expect([...CONTAS_COMPRA_GADO].sort()).toEqual([SUBCENTRO_PRINCIPAL_COMPRA_FEMEAS, SUBCENTRO_PRINCIPAL_COMPRA_MACHOS].sort());
+    for (const cat of ['mamotes_f', 'desmama_f', 'novilhas', 'vacas', 'mamotes_m', 'desmama_m', 'garrotes', 'bois', 'touros']) {
+      expect(CONTAS_COMPRA_GADO.has(subcentroCompraPorCategoria(cat) ?? ''), cat).toBe(true);
+    }
+    const fonte = readFileSync('src/lib/oc/criarDoLegado.ts', 'utf8');
+    expect(/Investimento Compra Bovinos/.test('const x = "Investimento Compra Bovinos Machos"')).toBe(true);
+    expect(/Investimento Compra Bovinos/.test(fonte)).toBe(false);
+  });
+
+  it('o lado vem do lancamento: entrada em conta de venda = venda; saida em conta de compra = compra; o resto = nenhum', () => {
+    expect(ladoDoLancamento(RECEB)).toBe('venda');
+    expect(ladoDoLancamento(PAG)).toBe('compra');
+    expect(ladoDoLancamento({ ...PAG, subcentro: SUBCENTRO_PRINCIPAL_COMPRA_FEMEAS })).toBe('compra');
+    expect(ladoDoLancamento({ ...PAG, tipo_operacao: '1-Entradas' })).toBeNull();
+    expect(ladoDoLancamento({ ...RECEB, tipo_operacao: '2-Saídas' })).toBeNull();
+    expect(ladoDoLancamento({ ...PAG, tipo_operacao: '3-Transferências' })).toBeNull();
+    expect(ladoDoLancamento({ ...PAG, subcentro: 'Investimento Frete/Comissão Compra Bovinos' })).toBeNull();
+    expect(ladoDoLancamento({ ...PAG, subcentro: null })).toBeNull();
+  });
+
+  it('a acao aparece no pagamento vivo de compra de gado; cada recusa do banco a tira ("pague primeiro" inclusive)', () => {
+    expect(podeCriarOCDoLegado(PAG, false)).toBe(true);
+    expect(podeCriarOCDoLegado(PAG, true)).toBe(false);
+    expect(podeCriarOCDoLegado({ ...PAG, cancelado: true }, false)).toBe(false);
+    expect(podeCriarOCDoLegado({ ...PAG, sem_movimentacao_caixa: true }, false)).toBe(false);
+    expect(podeCriarOCDoLegado({ ...PAG, tipo_operacao: '1-Entradas' }, false)).toBe(false);
+    expect(podeCriarOCDoLegado({ ...PAG, subcentro: 'Investimento Frete/Comissão Compra Bovinos' }, false)).toBe(false);
+    const MODAL = { ...PAG, origem_lancamento: 'movimentacao_rebanho' };
+    expect(podeCriarOCDoLegado({ ...MODAL, status_transacao: 'programado' }, false)).toBe(false);
+    expect(podeCriarOCDoLegado({ ...MODAL, status_transacao: 'realizado' }, false)).toBe(true);
+    expect(podeCriarOCDoLegado({ ...MODAL, status_transacao: 'conciliado' }, false)).toBe(true);
+  });
+
+  it('os envelopes leem o tipo: sugestoes sem a chave (banco antigo) = venda; o resultado so diz o tipo que o banco disse', () => {
+    expect(lerSugestoes({ tipo: 'compra', saidas: [] }).tipo).toBe('compra');
+    expect(lerSugestoes({ saidas: [] }).tipo).toBe('venda');
+    expect(lerSugestoes({ tipo: 'abate' }).tipo).toBe('venda');
+    expect(lerResultado({ ok: true, tipo: 'compra' }).tipo).toBe('compra');
+    expect(lerResultado({ ok: true, tipo: 'venda' }).tipo).toBe('venda');
+    expect(lerResultado({ ok: false, pendencias: ['Informe o fornecedor'] }).tipo).toBeNull();
+  });
+
+  it('os textos tem as mesmas chaves nos dois lados, e os criterios da compra sao os espelhados (D4)', () => {
+    expect(Object.keys(TEXTOS_DO_LADO.compra).sort()).toEqual(Object.keys(TEXTOS_DO_LADO.venda).sort());
+    expect(TEXTOS_DO_LADO.venda.criterio).toEqual({ recebimentos: 'recebimentos', saidas: 'saidas', outro: 'outro' });
+    expect(TEXTOS_DO_LADO.compra.criterio).toEqual({ recebimentos: 'pagamentos', saidas: 'entradas', outro: 'outro' });
+    expect(TEXTOS_DO_LADO.compra.contraparte).toBe('Fornecedor');
+    expect(TEXTOS_DO_LADO.compra.semGado).toBe('Nenhuma entrada de compra sem OC na janela.');
   });
 });

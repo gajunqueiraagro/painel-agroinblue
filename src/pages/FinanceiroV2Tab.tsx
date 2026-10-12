@@ -3026,7 +3026,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                                     <ExternalLink className="mr-1.5 h-3 w-3" /> Abrir OC
                                   </DropdownMenuItem>
                                 )}
-                                {/* OC-CRIAR-DO-LEGADO-01 — so' onde o banco aceitaria o recebimento (1110-1140, sem OC, vivo, fora do modal antigo). */}
+                                {/* OC-CRIAR-DO-LEGADO-01 — so' onde o banco aceitaria o recebimento (1110-1140, sem OC, vivo, fora do modal antigo).
+                                    OC-CRIAR-DO-LEGADO-COMPRA-01: e o pagamento de compra de gado (saida nas duas contas de compra). */}
                                 {podeAbrirOC && podeCriarOCDoLegado(l, !!lancamentosComOC.get(l.id)) && (
                                   <DropdownMenuItem onClick={() => setCriarOCDe(l.id)}>
                                     <FilePlus2 className="mr-1.5 h-3 w-3" /> Criar OC a partir deste lançamento
@@ -3129,10 +3130,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
           lancamentoId={criarOCDe}
           fornecedores={hook.fornecedores}
           onFechar={() => setCriarOCDe(null)}
-          onCriada={(operacaoId) => {
+          onCriada={(operacaoId, tipo) => {
             setCriarOCDe(null);
             notificarLancamentosMudaram(clienteAtual.id);
-            abrirOCFinanceiro(operacaoId, 'venda');
+            abrirOCFinanceiro(operacaoId, tipo);
           }}
         />
       )}
