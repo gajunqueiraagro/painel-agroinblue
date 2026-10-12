@@ -3927,8 +3927,10 @@ docs/historico/frentes-ate-2026-09-29.md.)
     antes de tirar o boitel") · [a OC 41904517 saiu da fila: migrada em 12/10 — ver o bloco do OC-TITULO-PARA-CC-01b].
 - ⚠ EM CONTA CORRENTE A ENTREGA ACOMPANHA O GADO: O GANCHO DA SAIDA, E AS SEIS FUNCOES DEVOLVEM A VERSAO GRAVADA (OC-CC-PADRAO-NOVAS-01b,
   Gabriel 12/10/2026, banco + tela no mesmo PR; migration `20261027196900_oc_cc_padrao_novas_01b.sql`, md5 do arquivo
-  d5bb13483c2ec92ce8f0ae5a68fac1cf — ⚠ NAO APLICADA: so' com o GO do Gabriel; ate' la' a tela nova roda contra o banco antigo
-  sem quebrar (registrar e estornar nao devolvem versao e a tela segue como era; "Aguardando saída" ja' vem do 01a).
+  d5bb13483c2ec92ce8f0ae5a68fac1cf — APLICADA no proto em 12/10/2026, com o GO do Gabriel: ledger 20261012130212 (⚠ registrada
+  com o timestamp do dia; ledger = arquivo por md5 d5bb13483c2ec92ce8f0ae5a68fac1cf); R1–R8 OK em chamada unica no banco vivo;
+  `seg_tenant_varredura_01c_test.sql` OK (T0–T4); residuo zero. ⚠ HOMOLOGACAO RUNTIME PENDENTE (Gabriel): venda nova nasce
+  "Aguardando saída"; registrar a saida -> a entrega aparece e a versao sobe sem F5.
   · O GANCHO TEM UM LUGAR: `_oc_cc_gancho_entregas(operacao)` (interna, fechada a `authenticated` e `anon`; md5 ae7406ad…). So' age
     em venda / compra em CONTA CORRENTE, fora de rascunho, nao cancelada e sem linha de boitel; chama o dono
     `oc_sincronizar_entregas(op, versao lida na hora, false)` — nenhum calculo novo — e devolve `{versao, sincronizou, avisos,
