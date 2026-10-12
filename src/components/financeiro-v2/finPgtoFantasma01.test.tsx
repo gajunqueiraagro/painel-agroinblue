@@ -62,7 +62,7 @@ describe('LancamentoV2Dialog — a ligação (fonte)', () => {
     expect(modal).toContain('const pagamentoMostrado = pagamentoParaMostrar(statusTransacao, dataPagamento, pagamentoTravado);');
   });
   it('M1 — o campo "Data Pagamento" mostra o que vai gravar, desabilitado e com o title de sempre', () => {
-    expect(modal).toContain("title={!pagamentoPermitido && !pagamentoTravado ? 'Só realizado tem data de pagamento' : undefined}> <Label className=\"text-[10px]\">Data Pagamento *</Label> <DatePicker value={pagamentoMostrado} onChange={handleDataPagamentoChange} disabled={pagamentoTravado || !pagamentoPermitido}");
+    expect(modal).toContain("title={!pagamentoPermitido && !pagamentoTravado ? 'Só realizado tem data de pagamento' : undefined}> <Label className=\"text-[10px]\">Data Pagamento *</Label> <DatePicker value={pagamentoMostrado} onChange={handleDataPagamentoChange} disabled={pagamentoTravado || !pagamentoPermitido || travaCasado.pagamento}");
     expect(modal).not.toContain('<DatePicker value={dataPagamento}');
   });
   it('M2 — o resumo lateral mostra o mesmo valor ("—" quando vazio)', () => {

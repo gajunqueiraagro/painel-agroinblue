@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 11/10/2026 (CONC-SPLIT-FILHO-CANCELADO-01 passo 2 commit B, +21: `src/lib/conciliacao/cancelarFilhoDeSplit.test.ts` 13 (novo),
+  Baseline em 12/10/2026 (FIN-CONCILIADO-NAO-REBAIXA-01, +16 em `src/components/financeiro-v2/casadoComExtrato.test.tsx` (novo) — 4907 depois dele; antes o
+  CONC-SPLIT-FILHO-CANCELADO-01 passo 2 commit B, +21: `src/lib/conciliacao/cancelarFilhoDeSplit.test.ts` 13 (novo),
   `src/components/conciliacao/cancelarFilhoDeSplitDialog.test.tsx` 8 (novo) — 4891 depois dele; antes o FIN-DETALHE-CABECALHO-ALINHADO-01, +6 em `src/lib/financiamentos/reguaDasParcelas.test.ts` (novo) — 4870 depois dele; antes o
   CONC-SPLIT-FILHO-CANCELADO-01 passo 1, +5 em `src/components/financeiro-v2/conferenciaExtratoParcial.test.tsx` (novo) — 4864 depois dele; antes o
   REC-FALTA-GERAR-A-VISTA-01 commit B, +15: `src/lib/financeiro/recorrenciasDoMes.test.ts` 6 (21 -> 27),
@@ -290,7 +291,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4891
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4907
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3836,6 +3837,69 @@ docs/historico/frentes-ate-2026-09-29.md.)
   quem mexer num confere o outro. O selo do rodape (`SeloRegraDaLinha`) diz a regra da linha.
 
 ## REGRAS VIGENTES — OPERACAO COMERCIAL E FINANCEIRO
+- ⚠ LANCAMENTO CASADO COM O EXTRATO NAO SAI DO ESTADO EM QUE O BANCO O POS (FIN-CONCILIADO-NAO-REBAIXA-01, Gabriel 12/10/2026; migration
+  `20261027196700_fin_conciliado_nao_rebaixa_01.sql`, md5 do arquivo 218b3320… — ⚠ NAO APLICADA: espera o GO do Gabriel; ate' la' o
+  modal ja' pergunta e a leitura falha calada = "nao casado", o modal de sempre). Nasce do d40adcfa (Agnaldo, 11/10): realizado e
+  casado com o extrato, voltou a 'previsto' sem data de pagamento pelo Salvar do modal do Financeiro (o ramo restrito do titulo de
+  OC); o vinculo seguiu vivo e a OC seguiu "Pago". Nenhum gatilho de `financeiro_lancamentos_v2` olhava o vinculo.
+  · "ESTA' CASADO?" TEM UM DONO: `_fin_lancamento_casado_com_extrato(lancamento)` (md5 6443dc76…) = existe vinculo VIVO em
+    `conciliacao_bancaria_itens` (`lancamento_id = id AND desfeito_em IS NULL`, o criterio de `fn_cbi_desfazer_on_cancelamento`);
+    `conciliado_em` entra no OU so' por coerencia. ⚠ `conciliado_em` ESTA' NULO EM TODOS OS LANCAMENTOS: guarda que le^ a coluna
+    e' cega. Interna, fechada. A TELA le^ `fn_lancamento_casado_com_extrato(lancamento)` (md5 2fedc627…; `tenant_ok` + 42501, sem
+    usuario e id inexistente tambem; GRANT a `authenticated` e `service_role`).
+    ⚠ DESVIO DO BRIEFING, DECLARADO: ele pedia GRANT a `authenticated` na `_fin_…`; pelo molde da casa (interna fechada + publica
+      com guarda de tenant, como `_fn_split_vivo_do_lancamento` / `fn_split_do_lancamento`) a interna ficou fechada.
+  · A TRAVA: `trg_guard_lancamento_casado` (BEFORE UPDATE; funcao `guard_lancamento_casado_nao_rebaixa`, md5 03f42e7f…, SECURITY
+    DEFINER, fechada). Com o lancamento casado, recusa SO' A SAIDA DO ESTADO (decisao A): `status_transacao` sai de
+    realizado/conciliado para qualquer outro · `data_pagamento` tinha valor e vira nula ou outra data · `valor` muda ·
+    `conta_bancaria_id` ou `conta_destino_id` tinha valor e muda (decisao C: saida protege a bancaria, entrada o destino,
+    transferencia as duas pernas — 4.440 / 540 / 394 casados em 12/10). P0001, "Lancamento casado com o extrato: desfaca a
+    conciliacao no Espelho para alterar". A PROMOCAO PASSA (programado/agendado -> realizado, pagamento nulo -> a data do extrato):
+    NENHUM escritor da conciliacao foi alterado e NAO HA' chave de bypass. NAO protege: descricao, observacao, classificacao,
+    documento, favorecido, competencia, vencimento. `cancelado` NAO e' olhado (decisao B: o cancelar tem dono e ja' desfaz o
+    vinculo). O nome ordena DEPOIS de `trg_00_conta_por_direcao`: a conta comparada e' a ja' normalizada. O gesto contrario ja'
+    existe: desfazer a conciliacao no Espelho. NENHUM DADO FOI ALTERADO.
+    ⚠ CUSTO ACEITO: o titulo PARCIAL casado e ainda programado pode trocar entre previsto / programado / agendado (2 casos hoje).
+  · ENSAIO DE CADA ESCRITOR COM A TRAVA (transacoes revertidas no Teste, 12/10) — NENHUM LEGITIMO BARRADO: vincular 1:1 +
+    promocao · `fn_desfazer_vinculo_extrato` · `fn_conciliar_bloco` exato 2x2 e parcial, e o segundo bloco quitando o parcial ·
+    `fn_desfazer_bloco` · `fn_espelho_casar` corrigindo o valor · `fn_espelho_casar_n1` · `fn_transferencia_aplicar` em saida e em
+    entrada casadas · `fn_transferencia_de_extratos` (criar e casar existente) · `fn_cancelar_lancamento_auditoria` (1 vinculo e
+    transferencia de duas pontas) · `fn_extrato_desfazer_arquivo` · `fn_financiamento_pagar_pelo_extrato`. BARRADOS, como
+    esperado, os UPDATE diretos como `authenticated`: status -> previsto, pagamento -> nulo, pagamento -> outra data, valor,
+    conta -> nula, conta de destino da entrada -> nula, valor do parcial casado.
+  · TELA (`LancamentoV2Dialog`; dono `src/lib/financeiro/casadoComExtrato.ts`): UMA leitura por abertura da edicao
+    (`consultarCasadoComExtrato`; erro ou sem resposta = nao casado). CASADO: ficam em leitura o Status (so' quando o gravado e'
+    realizado/conciliado), a Data de pagamento (quando gravada), o Valor e a conta gravada (`camposTravadosDoCasado`), e o rodape
+    escreve, em UMA linha ambar de 10px que corta com o inteiro no `title` (`casado-com-extrato`), "Casado com o extrato — desfaça
+    a conciliação no Espelho para alterar" (`FRASE_CASADO_COM_EXTRATO`); nenhum campo muda de tamanho nem de lugar. NAO CASADO: o
+    HTML e' o de antes (as fotos do modal nao mudaram).
+    AO SALVAR: `saiDoEstadoDoBanco(gravado, form)` — ESPELHO DECLARADO da condicao do gatilho (e de `trg_00_conta_por_direcao`
+    para a conta); quem mexer num confere o outro. Se o salvar tiraria o lancamento do estado, o modal PERGUNTA AO BANCO DE NOVO
+    antes de gravar (outra aba pode ter casado): casado, a frase vai ao lado do botao (`erro-antes-de-salvar`), nada e' gravado e
+    os campos fecham. ⚠ A TELA ESCREVE A FRASE: o P0001 do gatilho vira a generica do `normalizarErro`.
+    Custo: uma ida a mais ao banco em todo Salvar de edicao que muda status, pagamento, valor ou conta.
+  Testes: `supabase/tests/fin_conciliado_nao_rebaixa_01_test.sql` (R1–R7, sintetico no Teste, termina em RAISE OK) — rodado no
+  ENSAIO revertido com a migration na mesma transacao: OK; 6 mutacoes de banco mortas (sem o pagamento, sem a conta de destino,
+  sem o status e sem o valor no WHEN; guarda sem olhar o vinculo; leitura sem tenant). `casadoComExtrato.test.tsx` 16 (a regra, o
+  modal montado, a fonte); 8 mutacoes de tela mortas. ATUALIZADOS AO CONTRATO NOVO, sem afrouxar (leem a fonte do modal):
+  `finPgtoFantasma01.test.tsx`, `finV2StatusPgto01.test.tsx`, `parcelaNoModal.test.ts`.
+  ⚠ INCIDENTE DE 12/10/2026 (erro meu): o primeiro ensaio estourou os 10 s — o extrato sintetico era montado por
+    `(jsonb_populate_record(…)).*` sobre `order by created_at desc limit 1` — com o `CREATE TRIGGER` do ensaio ja' feito: a
+    tabela de lancamentos ficou travada ~10 s; revertido, sem residuo. Se houve usuario gravando nesse intervalo, esperou.
+    Conserto do metodo: INSERT explicito, e o gatilho do ensaio criado DEPOIS de montar o sintetico.
+  ⚠ NAO PROVADO / FICAM COMO ESTAO (o P0001 cru neles foi aceito por ora): escritores diretos do front fora do modal, NAO lidos um
+    a um — `parcelaMirror.ts`, `ModalBaixaParcela.tsx`, `AuditoriaDuplicidadeTab.tsx`, os paineis legados
+    (`AbateFinanceiroPanel`, `CompraFinanceiroPanel`, `VendaFinanceiroPanel`) e `useBoitelOperacoes.ts`; as portas que salvam pelo
+    hook sem o modal (importador por ID, realizar em lote, Mesa) recebem a frase generica em toast · no banco, NAO exercitados:
+    `oc_vincular_lancamento` / `oc_desvincular_lancamento` escrevendo `valor` num titulo PARCIAL casado (seriam barrados; 2
+    casos), `fn_recorrencia_propagar` e o ramo 'ofx_substituiu' de `fn_extrato_desfazer_arquivo` sobre lancamento com OUTRO
+    vinculo vivo, `fn_transferencia_segunda_ponta`, `oc_revalorar_lote` e os demais escritores de OC · valor com 3 casas: o
+    modal manda 2 casas e seria barrado num casado (0 casados com 3 casas hoje; 326 lancamentos vivos tem 3 casas) · o custo do
+    gatilho por UPDATE nao foi medido A/B (o WHEN so' chama a funcao quando uma das colunas muda) · NADA VISTO NO NAVEGADOR (a
+    funcao nao existe no banco ate' o GO) · depois de aplicar: rodar o teste R1–R7 e o `seg_tenant_varredura_01c_test.sql`.
+  ⚠ FILA — FIN-CONCILIADO-NAO-REBAIXA-02: trocar `conciliado_em` pela funcao nova nas 8 RPCs de OC que ainda leem a coluna (hoje
+    cega); frase propria nos escritores diretos do front e nas portas do hook; o titulo parcial casado (status e `valor` pela
+    OC); decidir o `cancelado`.
 - ⚠ MIGRAR UMA OC DE TITULO PARA CONTA CORRENTE E' UMA RPC SO' (OC-TITULO-PARA-CC-01a, Gabriel 11/10/2026, so' banco; migration
   `20261027196600_oc_titulo_para_cc_01a.sql`, APLICADA em 12/10/2026 pelo Code, pelo MCP, com o GO do Gabriel — ⚠ registrada como
   20261012095853; ledger = arquivo, md5 073c4e45…). md5 (prosrc): `_oc_fechar_casca_titulo` 1319b391…,

@@ -47,13 +47,14 @@ describe('pagamento x status — a regra', () => {
 
 describe('LancamentoV2Dialog — a regra está ligada (fonte)', () => {
   it('o select de status passa pela troca que zera, e o payload pela defesa', () => {
-    expect(dialogo).toContain('<Select value={statusTransacao} onValueChange={handleStatusChange}>');
+    /* FIN-CONCILIADO-NAO-REBAIXA-01: casado com o extrato e realizado, o status fica em leitura */
+    expect(dialogo).toContain('<Select value={statusTransacao} onValueChange={handleStatusChange} disabled={travaCasado.status || undefined}>');
     expect(dialogo).toContain('setDataPagamento(atual => pagamentoAoTrocarStatus(v, atual, pagamentoTravado));');
     expect(dialogo).toContain('data_pagamento: pagamentoParaGravar(statusPersistido, dataPagamento, pagamentoTravado),');
     expect(dialogo).toContain("const pagamentoTravado = lockedFields?.includes('data_pagamento') ?? false;");
   });
   it('o campo de pagamento fica desabilitado fora do realizado, e diz por quê', () => {
-    expect(dialogo).toContain('disabled={pagamentoTravado || !pagamentoPermitido}');
+    expect(dialogo).toContain('disabled={pagamentoTravado || !pagamentoPermitido || travaCasado.pagamento}');
     expect(dialogo).toContain("'Só realizado tem data de pagamento'");
   });
   it('a data de pagamento não escolhe mais o status', () => {

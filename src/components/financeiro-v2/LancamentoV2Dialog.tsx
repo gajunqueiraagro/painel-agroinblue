@@ -100,6 +100,7 @@ import { consultarSplitDoLancamento, type SplitDoLancamento } from '@/lib/concil
 import type { PreviaCancelarParcela } from '@/lib/financiamentos/cancelarParcela';
 import { edicaoDaParcela, podeSerParcelaDeContrato, MOTIVO_PARCELA_PAGA } from '@/lib/financiamentos/parcelaNoModal';
 import { gravarParcelaDoModal, lerContratoDaParcela, type ContratoDaParcela } from '@/lib/financiamentos/parcelaNoModalBanco';
+import { camposTravadosDoCasado, consultarCasadoComExtrato, saiDoEstadoDoBanco, FRASE_CASADO_COM_EXTRATO } from '@/lib/financeiro/casadoComExtrato';
 import { podeOferecerVinculo, subcentrosVinculaveis, lancamentoTemParteOC } from '@/lib/oc/vincularLancamento';
 import { podeOferecerDesvinculo } from '@/lib/oc/desvincularLancamento';
 import { DesvincularOperacaoDialog } from '@/components/financeiro-v2/DesvincularOperacaoDialog';
@@ -642,6 +643,19 @@ export function LancamentoV2Dialog({
     void lerContratoDaParcela(idDaPossivelParcela).then(c => { if (vivo) setContratoDaParcela(c); });
     return () => { vivo = false; };
   }, [idDaPossivelParcela]);
+  /* FIN-CONCILIADO-NAO-REBAIXA-01 — o lançamento está CASADO COM O EXTRATO? Quem diz é o banco, UMA leitura por abertura da
+     edição. Casado: status, pagamento, valor e a conta da direção ficam em leitura, com a frase no rodapé; não casado (ou
+     sem resposta): o modal é o de sempre, e a trava do banco continua valendo. */
+  const [casadoComExtrato, setCasadoComExtrato] = useState(false);
+  const idParaLerCasado = open && lancamento?.id ? lancamento.id : null;
+  useEffect(() => {
+    setCasadoComExtrato(false);
+    if (!idParaLerCasado) return;
+    let vivo = true;
+    void consultarCasadoComExtrato(idParaLerCasado).then(c => { if (vivo && c) setCasadoComExtrato(true); });
+    return () => { vivo = false; };
+  }, [idParaLerCasado]);
+  const travaCasado = camposTravadosDoCasado(casadoComExtrato, lancamento);
   const [consultandoParcela, setConsultandoParcela] = useState(false);
   const abrirCancelamento = async () => {
     if (consultandoParcela) return;
@@ -1970,6 +1984,16 @@ export function LancamentoV2Dialog({
     /* PARC-CADEIA-01 passo 3 — parcela NÃO paga de compra parcelada com valor ou vencimento mudado: os dois campos vão
        PRIMEIRO pela gravação do contrato (parcela + lançamento + contrato, numa transação). Recusou: a frase fica ao lado do
        botão e NADA é gravado. Passou: o gravador de sempre leva o resto (e os mesmos dois valores). */
+    /* FIN-CONCILIADO-NAO-REBAIXA-01 — o salvar tiraria o lançamento do estado do banco (status, pagamento, valor ou conta)?
+       Pergunta-se ao banco ANTES de gravar (outra aba pode ter casado depois da abertura): casado, a frase fica ESCRITA ao
+       lado do botão e nada é gravado — o P0001 do gatilho viraria a frase genérica do `normalizarErro`. */
+    if (currentIsEdit && lancamento && lancamento.id === currentEditId && saiDoEstadoDoBanco(lancamento, form)
+      && (casadoComExtrato || await consultarCasadoComExtrato(lancamento.id))) {
+      setCasadoComExtrato(true);
+      setErroAntesDeSalvar(FRASE_CASADO_COM_EXTRATO);
+      setSaving(false);
+      return;
+    }
     if (currentIsEdit && contratoDaParcela && edicaoParcela && edicaoParcela.mudou) {
       const recusa = await gravarParcelaDoModal(contratoDaParcela.financiamentoId, edicaoParcela.lista, edicaoParcela.totalDepoisCent);
       if (recusa) { setErroAntesDeSalvar(recusa); setSaving(false); return; }
@@ -2461,11 +2485,11 @@ export function LancamentoV2Dialog({
                 title={!pagamentoPermitido && !pagamentoTravado ? 'Só realizado tem data de pagamento' : undefined}>
                 <Label className="text-[10px]">Data Pagamento *</Label>
                 <DatePicker value={pagamentoMostrado} onChange={handleDataPagamentoChange}
-                  disabled={pagamentoTravado || !pagamentoPermitido} tabIndex={3} className={dateFieldCls} />
+                  disabled={pagamentoTravado || !pagamentoPermitido || travaCasado.pagamento} tabIndex={3} className={dateFieldCls} />
               </div>
               <div className="col-span-3">
                 <Label className="text-[10px]">Status *</Label>
-                <Select value={statusTransacao} onValueChange={handleStatusChange}>
+                <Select value={statusTransacao} onValueChange={handleStatusChange} disabled={travaCasado.status || undefined}>
                   <SelectTrigger tabIndex={4} className={cn("h-8", fieldBg)}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {STATUS_OPTIONS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
@@ -2555,7 +2579,7 @@ export function LancamentoV2Dialog({
                   valor={valorDisplay}
                   onValor={setValorDisplay}
                   className={cn("h-8 text-right font-mono", fieldBg, xmlCls('valor'))}
-                  disabled={lockedFields?.includes('valor') || isOCTitulo || parcelaPaga}
+                  disabled={lockedFields?.includes('valor') || isOCTitulo || parcelaPaga || travaCasado.valor}
                   contaAbertaRef={contaAbertaRef}
                 />
               </div>
@@ -2585,7 +2609,7 @@ export function LancamentoV2Dialog({
                       onValueChange={setContaOrigemId}
                       contas={contas}
                       placeholder="Selecione"
-                      disabled={lockedFields?.includes('conta_bancaria_id')}
+                      disabled={lockedFields?.includes('conta_bancaria_id') || travaCasado.contaOrigem}
                       prependItems={[{ value: '__none__', label: 'Nenhuma' }]}
                       excluirIds={contaDestinoId && contaDestinoId !== '__none__' ? [contaDestinoId] : undefined}
                       className={cn("h-8", fieldBg)}
@@ -2598,7 +2622,7 @@ export function LancamentoV2Dialog({
                       onValueChange={setContaDestinoId}
                       contas={contas}
                       placeholder="Selecione"
-                      disabled={lockedFields?.includes('conta_destino_id')}
+                      disabled={lockedFields?.includes('conta_destino_id') || travaCasado.contaDestino}
                       prependItems={[{ value: '__none__', label: 'Nenhuma' }]}
                       excluirIds={contaOrigemId && contaOrigemId !== '__none__' ? [contaOrigemId] : undefined}
                       className={cn("h-8", fieldBg)}
@@ -2613,7 +2637,7 @@ export function LancamentoV2Dialog({
                     onValueChange={setContaDestinoId}
                     contas={contas}
                     placeholder="Selecione"
-                    disabled={lockedFields?.includes('conta_destino_id')}
+                    disabled={lockedFields?.includes('conta_destino_id') || travaCasado.contaDestino}
                     prependItems={[{ value: '__none__', label: 'Nenhuma' }]}
                     className={cn("h-8", fieldBg)}
                   />
@@ -2626,7 +2650,7 @@ export function LancamentoV2Dialog({
                     onValueChange={setContaOrigemId}
                     contas={contas}
                     placeholder="Selecione"
-                    disabled={lockedFields?.includes('conta_bancaria_id')}
+                    disabled={lockedFields?.includes('conta_bancaria_id') || travaCasado.contaOrigem}
                     prependItems={[{ value: '__none__', label: 'Nenhuma' }]}
                     className={cn("h-8", fieldBg)}
                   />
@@ -3053,6 +3077,14 @@ export function LancamentoV2Dialog({
                 com o motivo quando não vale). Não marcada: só a intenção, e só enquanto há diferença. Lançamento comum: nada. */}
             {/* PARC-CADEIA-01 passo 3 — a parcela de compra parcelada fala AQUI (rodapé de altura fixa, uma linha): paga = o
                 motivo de valor e vencimento estarem em leitura; valor mudado = o total novo da compra, ANTES de salvar. */}
+            {/* FIN-CONCILIADO-NAO-REBAIXA-01 — o lançamento casado com o extrato diz AQUI por que status, pagamento, valor e
+                conta estão em leitura (uma linha, altura do rodapé; os campos não mudam de tamanho nem de lugar). */}
+            {casadoComExtrato && (
+              <span className="min-w-0 truncate whitespace-nowrap text-[10px] leading-tight text-amber-700 dark:text-amber-400"
+                title={FRASE_CASADO_COM_EXTRATO} data-testid="casado-com-extrato">
+                {FRASE_CASADO_COM_EXTRATO}
+              </span>
+            )}
             {edicaoParcela && (edicaoParcela.paga || edicaoParcela.frase) && (
               <span className="min-w-0 truncate whitespace-nowrap text-[10px] leading-tight text-amber-700 dark:text-amber-400"
                 title={edicaoParcela.paga ? MOTIVO_PARCELA_PAGA : (edicaoParcela.frase ?? undefined)} data-testid="parcela-do-contrato"

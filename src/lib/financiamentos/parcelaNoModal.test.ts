@@ -81,7 +81,7 @@ describe('o modal do lançamento, lido da FONTE', () => {
     expect(modal).toContain('if (recusa) { setErroAntesDeSalvar(recusa); setSaving(false); return; }');
   });
   it('parcela paga: valor e vencimento em leitura, com o motivo escrito no rodapé', () => {
-    expect(modal).toContain("disabled={lockedFields?.includes('valor') || isOCTitulo || parcelaPaga}");
+    expect(modal).toContain("disabled={lockedFields?.includes('valor') || isOCTitulo || parcelaPaga || travaCasado.valor}");
     expect(modal).toContain('disabled={isOCTitulo || parcelaPaga}');
     expect(modal).toContain('{edicaoParcela.paga ? MOTIVO_PARCELA_PAGA : edicaoParcela.frase}');
   });
