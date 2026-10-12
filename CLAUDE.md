@@ -3858,7 +3858,12 @@ docs/historico/frentes-ate-2026-09-29.md.)
 ## REGRAS VIGENTES — OPERACAO COMERCIAL E FINANCEIRO
 - ⚠ VENDA E COMPRA NOVAS NASCEM EM CONTA CORRENTE; ABATE E BOITEL EM TITULO, E A REGRA TEM UM DONO (OC-CC-PADRAO-NOVAS-01a, Gabriel
   12/10/2026, so' banco; migration `20261027196800_oc_cc_padrao_novas_01a.sql`, md5 do arquivo 0d2c4412ea4f0fcf936390d35e5ebb6b —
-  ⚠ NAO APLICADA: espera o GO direto do Gabriel). Nasce do incidente e8fec78b (NJ, 12/10): a OC-TITULO-PARA-CC-01b migrou as OCs
+  APLICADA no proto em 12/10/2026, com o GO do Gabriel: ledger `supabase_migrations.schema_migrations` versao 20261012121855, nome
+  `oc_cc_padrao_novas_01a` (⚠ registrada com o timestamp do dia; ledger = arquivo por md5); R1–R7 e o
+  `seg_tenant_varredura_01c_test.sql` OK no banco vivo; residuo zero). md5 (prosrc) depois de aplicar: `_oc_modelo_ao_nascer`
+  c0e1056252382f4abbc5edf8b5604b4f · `oc_salvar_rascunho` 51489be17b046424363d499e55dcd314 · `oc_salvar_boitel`
+  9490eab50bd5b32b8d1e0f5cd896de64 · `oc_conta_corrente` 578c1c664eee6d7f1927b84c1757a028 · `oc_criar_do_legado`
+  0206457bb46a349de358c70fc05f5ff2. Nasce do incidente e8fec78b (NJ, 12/10): a OC-TITULO-PARA-CC-01b migrou as OCs
   existentes e a OC NOVA de venda continuou nascendo 'titulo', com compromissos e "Parcial" — o unico INSERT em
   `zoo_operacoes_comerciais` (`oc_salvar_rascunho`) nao citava o modelo e valia o default da coluna.
   · D1 — O DEFAULT DA COLUNA `modelo_financeiro` CONTINUA 'titulo' (rede segura). O dono e'
@@ -3891,8 +3896,7 @@ docs/historico/frentes-ate-2026-09-29.md.)
   ⚠ NAO PROVADO: `oc_criar_do_legado` depois do patch NAO foi executada (so' o corpo, por md5 e ancoras) · nada visto na TELA (uma
     venda ou compra NOVA em conta corrente, em rascunho e depois de registrar a saida; o estado nunca existiu com dado real) ·
     trocar o TIPO de um rascunho que ja' existe (venda -> abate) nao muda o modelo: abate em conta corrente seria recusado adiante ·
-    recebimento so' PROGRAMADO, sem entrega: saldo zero e situacao 'quitado' · depois de aplicar: o teste R1–R7 e o
-    `seg_tenant_varredura_01c_test.sql`.
+    recebimento so' PROGRAMADO, sem entrega: saldo zero e situacao 'quitado'.
   · OS DEZ TESTES SQL ANTIGOS QUE CRIAM OC POR `oc_salvar_rascunho` — NENHUM MUDA DE RESULTADO COM A MIGRATION (12/10, ensaio
     revertido; cada um rodado ANTES e DEPOIS do patch na MESMA transacao; nenhum precisou de ajuste ao contrato novo):
         teste                                          antes   depois   onde cai (igual nos dois)
@@ -3919,7 +3923,7 @@ docs/historico/frentes-ate-2026-09-29.md.)
     rascunho, "Explicar diferença" nao oferecido sem entrega, a Central e o fluxo Concluir -> Financeiro conferidos) ·
     OC-BOITEL-DESMARCAR-01 (gesto na tela + RPC que apaga a linha projetada e aplica D2 no outro sentido: vira conta corrente
     se nao ha' compromisso nem liquidacao de titulo vivos; senao recusa "Esta venda ja tem financeiro no modelo titulo; desfaca
-    antes de tirar o boitel") · a migracao da OC 41904517 (NJ, venda nascida 'titulo' em 12/10), com GO proprio.
+    antes de tirar o boitel") · [a OC 41904517 saiu da fila: migrada em 12/10 — ver o bloco do OC-TITULO-PARA-CC-01b].
 - ⚠ PREVIA E SIMULACAO POR EFEITO DEPENDEM DE FUNCAO ESTAVEL E DE VALOR PRIMITIVO, NUNCA DE OBJETO RECRIADO POR RENDER; E A VERSAO DA
   OC SE CURA DEPOIS DA RECUSA (OC-CC-EXPLICAR-CONGELA-01, Gabriel 12/10/2026, so' tela, sem migration e sem mudar contrato de RPC).
   Nasce do "Explicar diferença" da OC fcdbe0bb (compra em conta corrente), que congelou duas vezes sem gravar.
@@ -4092,7 +4096,11 @@ docs/historico/frentes-ate-2026-09-29.md.)
     A e8fec78b (NJ, "Venda 140 N", criada pela tela em 12/10 ja' DEPOIS da rodada e nascida 'titulo') foi MIGRADA EM SEPARADO em
     12/10/2026, com GO do Gabriel: versao 9 -> 13, entregas 524.750,80, recebimentos 329.762,00, falta receber 194.988,80; o DRE
     de set/26 do NJ passou de 329.762,00 a 524.750,80 (+194.988,80: a entrega inteira vira receita). A 41904517 (NJ, mesma
-    origem) segue 'titulo'.
+    origem) foi MIGRADA EM SEPARADO em 12/10/2026, com GO do Gabriel: versao 7 -> 10; o DRE de set/26 do NJ ficou IGUAL (5.269,00
+    antes e depois); entregas 5.269,00, recebido 0,00, programado 5.269,00, falta receber 5.269,00.
+    RESTAM EM TITULO (12/10, depois das duas): 5 vendas e 6 compras fora de rascunho, nao canceladas e sem boitel — as da
+    segunda rodada (sem saida registrada, lote sem valor, a 1fbd595b e a 339c2e99). ⚠ Contadas, NAO abertas uma a uma:
+    conferir no OC-TITULO-PARA-CC-02.
     FICARAM FORA, E POR QUE: 339c2e99 (Santa Rita, 2022: inventario de abertura, nao e' compra)
     · 1fbd595b (Agnaldo, venda sem recebimento) · as 7 sem saida de gado (9b1e71e2, df7d1912, f71a8695, f74f95e5, 2090e12c,
     7016f2b5, 8eff43fa) · as 2 com lote sem valor (229ac98d, 4c5e8c86) · as 18 de boitel.
