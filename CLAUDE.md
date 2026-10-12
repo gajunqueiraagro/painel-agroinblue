@@ -3861,7 +3861,7 @@ docs/historico/frentes-ate-2026-09-29.md.)
 
 ## REGRAS VIGENTES — OPERACAO COMERCIAL E FINANCEIRO
 - ⚠ FECHAMENTO AREA EM "GLOBAL" MOSTRA O RESUMO POR FAZENDA E O CAMINHO PARA OS PASTOS (FECH-GLOBAL-RESUMO-01, Gabriel 12/10/2026, so'
-  tela, sem banco; mock v2 aprovado em 12/10). Commit local, sem push; ⚠ HOMOLOGACAO RUNTIME PENDENTE (nada visto no navegador).
+  tela, sem banco; mock v2 aprovado em 12/10). PUBLICADA em 12/10/2026 (03825b80 + o 01b 8c5f985f); ⚠ HOMOLOGACAO RUNTIME PENDENTE (nada visto no navegador).
   Entra no lugar da frase "Selecione uma fazenda para o fechamento." (`FechamentoTab.tsx`, so' o ramo `isGlobal`).
   · QUEM FAZ O QUE: `src/lib/pecuaria/fechamentoGlobal.ts` (dono puro: `montarResumoGlobal`, `mesDaFazenda`, `cabecasPorFazenda`,
     `totalDoRebanho`), `src/hooks/useFechamentoGlobal.ts` (as duas leituras, so' com a tela em Global) e
@@ -3927,10 +3927,14 @@ docs/historico/frentes-ate-2026-09-29.md.)
   ⚠ OUTRAS DIVIDAS: o resumo nao rele sozinho se outro usuario fechar um pasto
     (rele ao voltar ao Global ou trocar o ano) · `useFechamentoGlobal` usa `useEffect` + estado, sem cache entre visitas.
 - ⚠ "DOCUMENTOS DO MÊS" (O LIVRO DO CAMPEIRO): ARQUIVO POR FAZENDA + MES, UM BOTAO NAS DUAS TELAS, E NADA SE CALCULA (FECH-DOCS-01, Gabriel
-  12/10/2026, banco + tela; mock v2 aprovado em 12/10). ⚠ MIGRATION NAO APLICADA, AGUARDA GO:
-  `supabase/migrations/20261027197100_pecuaria_fechamento_documentos_01.sql` (md5 do arquivo e88643fed35cab14141c62bc872b8ff5). ⚠ A TELA NAO VAI
-  AO AR ANTES DELA: contra o banco de hoje o botao le^ uma tabela que nao existe e mostra "Documentos do mês · …" com o erro no
-  `title`; soltar um arquivo e' recusado na area. Commit local, sem push.
+  12/10/2026, banco + tela; mock v2 aprovado em 12/10). Migration
+  `supabase/migrations/20261027197100_pecuaria_fechamento_documentos_01.sql` (md5 do arquivo e88643fed35cab14141c62bc872b8ff5) —
+  APLICADA no proto em 12/10/2026, com o GO do Gabriel: ledger 20261012185414 (⚠ registrada com o timestamp do dia; ledger =
+  arquivo por md5 e88643fe…); conferidos no banco vivo: tabela, os 4 CHECKs, indice, RLS ligada com 3 policies (SELECT / INSERT /
+  UPDATE; nenhuma de DELETE), `authenticated` com SELECT/INSERT/UPDATE e SEM DELETE, `anon` sem nada, bucket `pec-documentos`
+  (privado, 10 MB, PDF/JPEG/PNG) e as 4 policies dele; `pecuaria_fechamento_documentos_01_test.sql` D0–D6 OK em transacao
+  revertida; `seg_tenant_varredura_01c` OK (T0–T4); residuo zero (0 linhas, 0 objetos, nenhum SINT). Tela publicada (a0ed102b +
+  o 01b 7932b92d). ⚠ HOMOLOGACAO RUNTIME PENDENTE (nada visto no navegador: upload real, URL assinada, as setas do mes).
   · BANCO (D1/D2): `pecuaria_fechamento_documentos`, irma de `financeiro_saldo_documentos` trocando a conta pela fazenda e ganhando
     `especie` (CHECK: mapa_rebanho | nascimentos | entradas | vendas | transferencias | mortes | outro; default 'outro'); CHECKs de
     mes ('AAAA-MM'), nome nao vazio e "cancelado exige motivo"; indice (cliente_id, fazenda_id, ano_mes); RLS com TRES policies
@@ -3991,7 +3995,7 @@ docs/historico/frentes-ate-2026-09-29.md.)
   transacao revertida: OK; residuo zero.
   ⚠ O `check:tdz` CASA POR NOME: metodo declarado em INTERFACE (`renomear(…)`, `cancelar(…)`) + `const renomear = …` mais abaixo no
     mesmo arquivo = falso "uso antes da declaracao". Os locais do hook se chamam `renomearNoMes` / `cancelarNoMes` por isso.
-  ⚠ NAO PROVADO: NADA NO NAVEGADOR (a tabela nao existe no proto; alturas e larguras sao o contrato declarado, sem medida
+  ⚠ NAO PROVADO: NADA NO NAVEGADOR (alturas e larguras sao o contrato declarado, sem medida
     renderizada — a coluna de acoes do Fechamento ganhou um botao e, com o ajuste a' vista, um lugar de 28px) · upload real,
     URL assinada e as policies do bucket exercitadas de verdade (so' a existencia delas, no ensaio) · usuario comum lendo o
     documento do PROPRIO cliente (o Teste so' tem o admin) · trocar a especie PELO SELECT em teste (o jsdom nao abre o Radix; o
