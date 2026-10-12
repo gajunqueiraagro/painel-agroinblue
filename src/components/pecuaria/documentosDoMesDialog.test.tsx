@@ -10,11 +10,12 @@ import { ALTURA_DA_LINHA, DocumentosDoMesDialog, GRADE_DA_LINHA, LINHAS_A_VISTA 
 import { BotaoDocumentosDoMes } from './BotaoDocumentosDoMes';
 
 function Hospedeiro({ fonte, abrir, aoFechar }: { fonte: FonteDeDocumentosDoMes; abrir?: (u: string) => void; aoFechar?: () => void }) {
-  const api = useDocumentosDoMes('cli', 'faz', '2031-03', fonte);
+  const [mes, setMes] = useState('2031-03');
+  const api = useDocumentosDoMes('cli', 'faz', mes, fonte);
   const [aberto, setAberto] = useState(true);
   return (
     <DocumentosDoMesDialog aberto={aberto} aoFechar={() => { setAberto(false); aoFechar?.(); }} fazendaNome="Faz. Sintética"
-      anoMes="2031-03" api={api} abrirEndereco={abrir} />
+      anoMes={mes} aoTrocarMes={setMes} api={api} abrirEndereco={abrir} />
   );
 }
 
@@ -23,12 +24,14 @@ async function soltar(arquivo: File) {
   await act(async () => { fireEvent.change(input, { target: { files: [arquivo] } }); });
 }
 const linhas = () => screen.queryAllByTestId('linha-documento');
+const tituloNaTela = () => screen.getByTestId('titulo-documentos-do-mes').textContent;
+const nomesNaTela = () => screen.queryAllByTestId('cel-nome').map(c => c.textContent);
 
 describe('FECH-DOCS-01 — o diálogo', () => {
   it('vazio: título, convite e "Nenhum documento neste mês."', async () => {
     const { fonte } = criarFonteFake();
     render(<Hospedeiro fonte={fonte} />);
-    expect(screen.getByText('Documentos do mês — Faz. Sintética · mar/2031')).toBeTruthy();
+    expect(tituloNaTela()).toBe('Documentos do mês — Faz. Sintética · ‹ mar/31 ›');
     expect(screen.getByTestId('area-documento-do-mes').textContent).toContain(CONVITE_DO_DOCUMENTO);
     await waitFor(() => expect(screen.getByTestId('sem-documentos').textContent).toBe(FRASE_SEM_DOCUMENTOS));
     expect(screen.getByTestId('contagem-documentos').textContent).toBe('0 documentos');
@@ -135,6 +138,110 @@ describe('FECH-DOCS-01 — o diálogo', () => {
   });
 });
 
+describe('FECH-DOCS-01b — navegação de mês no título do diálogo', () => {
+  const TRES_MESES = [
+    { id: 'f1', nome: 'fevereiro.pdf', ano_mes: '2031-02' },
+    { id: 'm1', nome: 'marco-1.pdf', ano_mes: '2031-03' }, { id: 'm2', nome: 'marco-2.pdf', ano_mes: '2031-03' },
+    { id: 'a1', nome: 'abril.pdf', ano_mes: '2031-04' },
+  ];
+  it('as setas trocam o mês do título e a lista; voltar traz a lista de volta', async () => {
+    const { fonte } = criarFonteFake(TRES_MESES);
+    render(<Hospedeiro fonte={fonte} />);
+    await waitFor(() => expect(nomesNaTela()).toEqual(['marco-1.pdf', 'marco-2.pdf']));
+    expect(screen.getByTestId('mes-do-dialogo').textContent).toBe('mar/31');
+    fireEvent.click(screen.getByTestId('mes-anterior'));
+    expect(tituloNaTela()).toBe('Documentos do mês — Faz. Sintética · ‹ fev/31 ›');
+    await waitFor(() => expect(nomesNaTela()).toEqual(['fevereiro.pdf']));
+    expect(screen.getByTestId('contagem-documentos').textContent).toBe('1 documento');
+    fireEvent.click(screen.getByTestId('mes-seguinte'));
+    fireEvent.click(screen.getByTestId('mes-seguinte'));
+    expect(screen.getByTestId('mes-do-dialogo').textContent).toBe('abr/31');
+    await waitFor(() => expect(nomesNaTela()).toEqual(['abril.pdf']));
+    fireEvent.click(screen.getByTestId('mes-seguinte'));
+    expect(screen.getByTestId('mes-do-dialogo').textContent).toBe('mai/31');
+    await waitFor(() => expect(screen.getByTestId('sem-documentos').textContent).toBe(FRASE_SEM_DOCUMENTOS));
+    expect(linhas()).toHaveLength(0);
+  });
+  it('trocar de mês desfaz a edição em curso (o gesto era do mês que saiu)', async () => {
+    const { fonte, idas } = criarFonteFake(TRES_MESES);
+    render(<Hospedeiro fonte={fonte} />);
+    await waitFor(() => expect(linhas()).toHaveLength(2));
+    fireEvent.click(screen.getAllByTestId('lapis-documento')[0]);
+    expect(screen.getByTestId('edicao-nome')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('mes-anterior'));
+    await waitFor(() => expect(nomesNaTela()).toEqual(['fevereiro.pdf']));
+    expect(screen.queryByTestId('edicao-nome')).toBeNull();
+    expect(idas.some(i => i.startsWith('renomear'))).toBe(false);
+  });
+  it('layout: setas e mês no cabeçalho de 36px, mês de largura fixa, sem campo novo, altura do diálogo inalterada', async () => {
+    const { fonte } = criarFonteFake(TRES_MESES);
+    render(<Hospedeiro fonte={fonte} />);
+    await waitFor(() => expect(linhas()).toHaveLength(2));
+    const titulo = screen.getByTestId('titulo-documentos-do-mes');
+    expect(titulo.parentElement?.className).toContain('h-9');
+    expect(titulo.contains(screen.getByTestId('mes-anterior'))).toBe(true);
+    expect(titulo.contains(screen.getByTestId('mes-seguinte'))).toBe(true);
+    expect(screen.getByTestId('mes-do-dialogo').className).toContain('w-[42px]');
+    expect(screen.getByTestId('mes-anterior').className).toContain('h-4');
+    expect(screen.getByTestId('mes-anterior').getAttribute('aria-label')).toBe('Mês anterior');
+    expect(screen.getByTestId('mes-seguinte').getAttribute('aria-label')).toBe('Próximo mês');
+    /* sem campo novo: nenhum input / select além do de arquivo */
+    expect(screen.getByTestId('documentos-do-mes').querySelectorAll('input:not([type="file"]), select, [role="combobox"]')).toHaveLength(0);
+    const lista = screen.getByTestId('lista-documentos-do-mes') as HTMLElement;
+    const altura = () => [lista.style.height, screen.getByTestId('lugar-do-recado').className, screen.getByTestId('area-documento-do-mes').className];
+    const antes = altura();
+    fireEvent.click(screen.getByTestId('mes-seguinte'));
+    await waitFor(() => expect(nomesNaTela()).toEqual(['abril.pdf']));
+    expect(altura()).toEqual(antes);
+    expect(lista.style.height).toBe(`${ALTURA_DA_LINHA * LINHAS_A_VISTA}px`);
+  });
+  it('o contador do botão NÃO muda com a navegação: é o do mês de abertura', async () => {
+    const { fonte } = criarFonteFake(TRES_MESES);
+    render(<BotaoDocumentosDoMes clienteId="cli" fazendaId="faz" fazendaNome="Faz. Sintética" anoMes="2031-03" fonte={fonte} />);
+    const botao = () => screen.getByTestId('botao-documentos-do-mes');
+    await waitFor(() => expect(botao().textContent).toBe('Documentos do mês · 2'));
+    fireEvent.click(botao());
+    await waitFor(() => expect(nomesNaTela()).toEqual(['marco-1.pdf', 'marco-2.pdf']));
+    fireEvent.click(screen.getByTestId('mes-anterior'));
+    await waitFor(() => expect(nomesNaTela()).toEqual(['fevereiro.pdf']));
+    expect(botao().textContent).toBe('Documentos do mês · 2');
+    fireEvent.click(screen.getByTestId('mes-seguinte'));
+    fireEvent.click(screen.getByTestId('mes-seguinte'));
+    await waitFor(() => expect(nomesNaTela()).toEqual(['abril.pdf']));
+    expect(botao().textContent).toBe('Documentos do mês · 2');
+  });
+  it('anexar em OUTRO mês grava naquele mês e não mexe no contador; voltar ao mês de abertura mostra a lista dele', async () => {
+    const { fonte, linhas: banco } = criarFonteFake(TRES_MESES);
+    render(<BotaoDocumentosDoMes clienteId="cli" fazendaId="faz" fazendaNome="Faz. Sintética" anoMes="2031-03" fonte={fonte} />);
+    const botao = () => screen.getByTestId('botao-documentos-do-mes');
+    await waitFor(() => expect(botao().textContent).toBe('Documentos do mês · 2'));
+    fireEvent.click(botao());
+    fireEvent.click(screen.getByTestId('mes-anterior'));
+    await waitFor(() => expect(nomesNaTela()).toEqual(['fevereiro.pdf']));
+    await soltar(arquivoFake('mortes-fev.pdf'));
+    await waitFor(() => expect(linhas()).toHaveLength(2));
+    expect(banco.find(l => l.nome === 'mortes-fev.pdf')?.ano_mes).toBe('2031-02');
+    expect(botao().textContent).toBe('Documentos do mês · 2');
+    fireEvent.keyDown(screen.getByTestId('edicao-nome'), { key: 'Escape' });
+    fireEvent.click(screen.getByTestId('mes-seguinte'));
+    await waitFor(() => expect(nomesNaTela()).toEqual(['marco-1.pdf', 'marco-2.pdf']));
+    expect(botao().textContent).toBe('Documentos do mês · 2');
+  });
+  it('fechar esquece o mês navegado: reabre no mês da tela', async () => {
+    const { fonte } = criarFonteFake(TRES_MESES);
+    render(<BotaoDocumentosDoMes clienteId="cli" fazendaId="faz" fazendaNome="Faz. Sintética" anoMes="2031-03" fonte={fonte} />);
+    await waitFor(() => expect(screen.getByTestId('botao-documentos-do-mes').textContent).toBe('Documentos do mês · 2'));
+    fireEvent.click(screen.getByTestId('botao-documentos-do-mes'));
+    fireEvent.click(screen.getByTestId('mes-anterior'));
+    expect(screen.getByTestId('mes-do-dialogo').textContent).toBe('fev/31');
+    fireEvent.click(screen.getByText('Fechar'));
+    await waitFor(() => expect(screen.queryByTestId('documentos-do-mes')).toBeNull());
+    fireEvent.click(screen.getByTestId('botao-documentos-do-mes'));
+    expect(screen.getByTestId('mes-do-dialogo').textContent).toBe('mar/31');
+    await waitFor(() => expect(nomesNaTela()).toEqual(['marco-1.pdf', 'marco-2.pdf']));
+  });
+});
+
 describe('FECH-DOCS-01 — o botão das duas telas', () => {
   it('aparece sempre, com zero também, e conta os vivos da fazenda + mês', async () => {
     const { fonte } = criarFonteFake([
@@ -167,7 +274,7 @@ describe('FECH-DOCS-01 — o botão das duas telas', () => {
     render(<BotaoDocumentosDoMes clienteId="cli" fazendaId="faz" fazendaNome="Faz. Sintética" anoMes="2031-03" fonte={fonte} />);
     await waitFor(() => expect(screen.getByTestId('botao-documentos-do-mes').textContent).toBe('Documentos do mês · 0'));
     fireEvent.click(screen.getByTestId('botao-documentos-do-mes'));
-    expect(screen.getByText('Documentos do mês — Faz. Sintética · mar/2031')).toBeTruthy();
+    expect(tituloNaTela()).toBe('Documentos do mês — Faz. Sintética · ‹ mar/31 ›');
     await soltar(arquivoFake('mapa.png', 'image/png'));
     await waitFor(() => expect(screen.getByTestId('botao-documentos-do-mes').textContent).toBe('Documentos do mês · 1'));
   });

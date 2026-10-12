@@ -118,8 +118,29 @@ export function mesPorExtenso(anoMes: string): string {
   return `${MESES[Number(m[2]) - 1]}/${m[1]}`;
 }
 
+/** '2026-09' -> 'set/26' — o mês entre as setas do título do diálogo. Texto fora do formato volta como veio. */
+export function mesCurtoDoDocumento(anoMes: string): string {
+  const m = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(anoMes);
+  if (!m) return anoMes;
+  return `${MESES[Number(m[2]) - 1]}/${m[1].slice(2)}`;
+}
+
+/** O mês vizinho: `passo` = -1 (anterior) ou +1 (seguinte). '2026-12' + 1 = '2027-01'. Texto fora do formato volta como veio. */
+export function mesVizinho(anoMes: string, passo: -1 | 1): string {
+  const m = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(anoMes);
+  if (!m) return anoMes;
+  const total = Number(m[1]) * 12 + (Number(m[2]) - 1) + passo;
+  return `${String(Math.floor(total / 12)).padStart(4, '0')}-${String((total % 12) + 1).padStart(2, '0')}`;
+}
+
+/** O começo do título, até o "·" (o mês e as setas vêm depois). */
+export function prefixoDoTituloDosDocumentos(fazendaNome: string): string {
+  return `Documentos do mês — ${fazendaNome} ·`;
+}
+
+/** FECH-DOCS-01b: "Documentos do mês — <fazenda> · ‹ set/26 ›" (as setas trocam o mês do diálogo). */
 export function tituloDosDocumentos(fazendaNome: string, anoMes: string): string {
-  return `Documentos do mês — ${fazendaNome} · ${mesPorExtenso(anoMes)}`;
+  return `${prefixoDoTituloDosDocumentos(fazendaNome)} ‹ ${mesCurtoDoDocumento(anoMes)} ›`;
 }
 
 /** O rótulo do botão nas duas telas. `null` = ainda não se sabe (lendo, ou sem fazenda): "…" / "—", nunca um zero inventado. */

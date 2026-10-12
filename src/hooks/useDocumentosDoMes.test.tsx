@@ -8,7 +8,7 @@ import {
 import { arquivoFake, criarFonteFake } from '@/test/fonteDeDocumentosDoMesFake';
 import {
   ESPECIES_DO_DOCUMENTO, FRASE_DOCUMENTO_MUDOU, FRASE_MOTIVO_OBRIGATORIO, FRASE_NOME_OBRIGATORIO, ROTULO_DA_ESPECIE,
-  dataETamanho, lerDocumentoDoMes, mesPorExtenso, rotuloDoBotaoDeDocumentos, textoDoTamanho, tituloDosDocumentos,
+  dataETamanho, lerDocumentoDoMes, mesCurtoDoDocumento, mesPorExtenso, mesVizinho, rotuloDoBotaoDeDocumentos, textoDoTamanho, tituloDosDocumentos,
 } from '@/lib/pecuaria/documentosDoMes';
 
 const CHAVE = { clienteId: 'cli', fazendaId: 'faz', anoMes: '2031-03' };
@@ -33,7 +33,15 @@ describe('FECH-DOCS-01 — dono puro', () => {
     expect(textoDoTamanho(1.2 * 1024 * 1024)).toBe('1,2 MB');
     expect(dataETamanho({ uploadedEm: '2031-03-05T12:00:00Z', tamanhoBytes: 2048 })).toBe('05/03 · 2 KB');
     expect(mesPorExtenso('2026-10')).toBe('out/2026');
-    expect(tituloDosDocumentos('Faz. Teste', '2026-10')).toBe('Documentos do mês — Faz. Teste · out/2026');
+    /* FECH-DOCS-01b: o título leva o mês curto entre as setas */
+    expect(mesCurtoDoDocumento('2026-09')).toBe('set/26');
+    expect(mesCurtoDoDocumento('torto')).toBe('torto');
+    expect(tituloDosDocumentos('Faz. Teste', '2026-09')).toBe('Documentos do mês — Faz. Teste · ‹ set/26 ›');
+    expect(mesVizinho('2026-09', -1)).toBe('2026-08');
+    expect(mesVizinho('2026-09', 1)).toBe('2026-10');
+    expect(mesVizinho('2026-12', 1)).toBe('2027-01');
+    expect(mesVizinho('2026-01', -1)).toBe('2025-12');
+    expect(mesVizinho('torto', 1)).toBe('torto');
     expect(rotuloDoBotaoDeDocumentos(0)).toBe('Documentos do mês · 0');
     expect(rotuloDoBotaoDeDocumentos(3)).toBe('Documentos do mês · 3');
     expect(rotuloDoBotaoDeDocumentos(null)).toBe('Documentos do mês · …');

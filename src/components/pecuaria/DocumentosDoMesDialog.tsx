@@ -8,7 +8,7 @@ import { AreaDeArquivo } from '@/components/ui/area-de-arquivo';
 import { REGRA_DO_DOCUMENTO_DO_MES, type DocumentosDoMesApi } from '@/hooks/useDocumentosDoMes';
 import {
   CONVITE_DO_DOCUMENTO, ESPECIES_DO_DOCUMENTO, FRASE_MOTIVO_OBRIGATORIO, FRASE_SEM_DOCUMENTOS, ROTULO_DA_ESPECIE, dataETamanho, ehEspecie,
-  tituloDosDocumentos, type DocumentoDoMes, type EspecieDoDocumento,
+  mesCurtoDoDocumento, mesVizinho, prefixoDoTituloDosDocumentos, tituloDosDocumentos, type DocumentoDoMes, type EspecieDoDocumento,
 } from '@/lib/pecuaria/documentosDoMes';
 
 /**
@@ -22,6 +22,9 @@ import {
  * ⚠ SOLTAR GRAVA NA HORA com o nome que veio e espécie "Outro"; a linha nasce em EDIÇÃO: Enter grava espécie + nome num gesto, Esc
  *   deixa como veio (e NÃO fecha o diálogo). O lápis reabre.
  * ⚠ Recado e recusa ficam ESCRITOS no lugar reservado, nunca em toast.
+ * ⚠ FECH-DOCS-01b — O MÊS SE TROCA NO TÍTULO: "… · ‹ set/26 ›". As setas pedem o mês vizinho ao hospedeiro (`aoTrocarMes`), que
+ *   troca o `anoMes` e a `api` (a lista). O mês tem largura fixa (as setas não andam) e o cabeçalho segue com 36px. Trocar de mês
+ *   desfaz edição / cancelamento em curso. Quem conta no botão da tela é o hospedeiro, pelo mês de ABERTURA — não este diálogo.
  */
 
 export const ALTURA_DA_LINHA = 24;
@@ -33,15 +36,21 @@ export interface DocumentosDoMesDialogProps {
   aberto: boolean;
   aoFechar: () => void;
   fazendaNome: string;
+  /** O mês que o diálogo mostra agora ('AAAA-MM'). */
   anoMes: string;
+  /** As setas do título: o hospedeiro troca o mês (e a `api`). */
+  aoTrocarMes: (anoMes: string) => void;
   api: DocumentosDoMesApi;
   /** Para o teste: quem abre o endereço assinado. Padrão: nova aba. */
   abrirEndereco?: (url: string) => void;
 }
 
+/** As setas do mês no título: 16px, dentro dos 36px do cabeçalho. */
+const SETA_DO_MES = 'flex h-4 w-4 shrink-0 items-center justify-center rounded text-[13px] leading-none text-primary hover:bg-primary/15 disabled:opacity-40';
+
 const abrirEmNovaAba = (url: string) => { window.open(url, '_blank', 'noopener,noreferrer'); };
 
-export function DocumentosDoMesDialog({ aberto, aoFechar, fazendaNome, anoMes, api, abrirEndereco = abrirEmNovaAba }: DocumentosDoMesDialogProps) {
+export function DocumentosDoMesDialog({ aberto, aoFechar, fazendaNome, anoMes, aoTrocarMes, api, abrirEndereco = abrirEmNovaAba }: DocumentosDoMesDialogProps) {
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [especie, setEspecie] = useState<EspecieDoDocumento>('outro');
   const [nome, setNome] = useState('');
@@ -55,6 +64,11 @@ export function DocumentosDoMesDialog({ aberto, aoFechar, fazendaNome, anoMes, a
   useEffect(() => {
     if (!aberto) { setEditandoId(null); setCancelandoId(null); setMotivo(''); setRecado(null); setErroAnexo(null); }
   }, [aberto]);
+
+  /* Outro mês, outra lista: o gesto em curso (edição, cancelamento, recado) era do mês que saiu. */
+  useEffect(() => {
+    setEditandoId(null); setCancelandoId(null); setMotivo(''); setRecado(null); setErroAnexo(null);
+  }, [anoMes]);
 
   const editar = (d: DocumentoDoMes) => {
     setCancelandoId(null); setMotivo(''); setRecado(null);
@@ -113,8 +127,17 @@ export function DocumentosDoMesDialog({ aberto, aoFechar, fazendaNome, anoMes, a
         }}
       >
         <DialogHeader className="flex h-9 shrink-0 flex-row items-center border-b bg-primary/10 px-3 pr-10 text-left">
-          <DialogTitle className="min-w-0 truncate text-[13px] font-medium leading-none text-primary" title={titulo}>
-            {titulo}
+          <DialogTitle className="flex min-w-0 items-center gap-1 text-[13px] font-medium leading-none text-primary" title={titulo}
+            data-testid="titulo-documentos-do-mes">
+            <span className="min-w-0 truncate">{prefixoDoTituloDosDocumentos(fazendaNome)}</span>
+            {' '}
+            <button type="button" className={SETA_DO_MES} data-testid="mes-anterior" aria-label="Mês anterior" title="Mês anterior"
+              disabled={ocupado} onClick={() => aoTrocarMes(mesVizinho(anoMes, -1))}>‹</button>
+            {' '}
+            <span className="w-[42px] shrink-0 text-center tabular-nums" data-testid="mes-do-dialogo">{mesCurtoDoDocumento(anoMes)}</span>
+            {' '}
+            <button type="button" className={SETA_DO_MES} data-testid="mes-seguinte" aria-label="Próximo mês" title="Próximo mês"
+              disabled={ocupado} onClick={() => aoTrocarMes(mesVizinho(anoMes, 1))}>›</button>
           </DialogTitle>
           <DialogDescription className="sr-only">Arquivos que o campo mandou neste mês.</DialogDescription>
         </DialogHeader>

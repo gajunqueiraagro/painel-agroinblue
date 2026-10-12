@@ -10,6 +10,9 @@ import { DocumentosDoMesDialog } from './DocumentosDoMesDialog';
  *
  * ⚠ APARECE SEMPRE, com zero também (lugar reservado): sem fazenda (Global) fica APAGADO com o motivo no `title`, nunca some.
  * ⚠ N = documentos NÃO cancelados da fazenda + mês recebidos; enquanto a leitura não chega, "…" — nunca um zero inventado.
+ * ⚠ FECH-DOCS-01b — O DIÁLOGO NAVEGA DE MÊS, O BOTÃO NÃO: o diálogo abre no `anoMes` da tela e as setas do título trocam o mês
+ *   DELE (e a lista); o N do botão continua sendo o do mês de ABERTURA (`anoMes`). Fechar esquece o mês navegado. No mês de
+ *   abertura o diálogo usa a MESMA leitura do botão (anexar ali muda o N); em outro mês, uma leitura própria, só com ele aberto.
  * ⚠ A aparência é do hospedeiro (`className`): cada tela o veste como os botões vizinhos. Aqui mora a leitura e o diálogo.
  */
 export interface BotaoDocumentosDoMesProps {
@@ -33,6 +36,12 @@ export function BotaoDocumentosDoMes({
   const semFazenda = !clienteId || !fazenda;
   const api = useDocumentosDoMes(clienteId, fazenda, anoMes, fonte);
   const rotulo = rotuloDoBotaoDeDocumentos(api.lendo || api.erro ? null : api.documentos.length, semFazenda);
+  /* O mês que o diálogo mostra: nulo = o de abertura (o da tela). */
+  const [mesNavegado, setMesNavegado] = useState<string | null>(null);
+  const mesDoDialogo = mesNavegado ?? anoMes;
+  const emOutroMes = aberto && mesDoDialogo !== anoMes;
+  const apiDoOutroMes = useDocumentosDoMes(clienteId, emOutroMes ? fazenda : null, emOutroMes ? mesDoDialogo : null, fonte);
+  const fechar = () => { setAberto(false); setMesNavegado(null); };
 
   return (
     <>
@@ -49,7 +58,8 @@ export function BotaoDocumentosDoMes({
         <span className={cn('min-w-0 truncate', classeDoTexto)}>{rotulo}</span>
       </button>
       {!semFazenda && (
-        <DocumentosDoMesDialog aberto={aberto} aoFechar={() => setAberto(false)} fazendaNome={fazendaNome} anoMes={anoMes} api={api} />
+        <DocumentosDoMesDialog aberto={aberto} aoFechar={fechar} fazendaNome={fazendaNome} anoMes={mesDoDialogo}
+          aoTrocarMes={(m) => setMesNavegado(m === anoMes ? null : m)} api={emOutroMes ? apiDoOutroMes : api} />
       )}
     </>
   );

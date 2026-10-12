@@ -162,7 +162,7 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 12/10/2026 (FECH-GLOBAL-RESUMO-01b, +3 em `src/components/fechamentoGlobalResumo.test.tsx` — 5000 depois dele; antes o FECH-GLOBAL-RESUMO-01, +19 no mesmo arquivo (novo) — 4997 depois dele; antes o FECH-DOCS-01, +27: `src/hooks/useDocumentosDoMes.test.tsx` 13,
+  Baseline em 12/10/2026 (FECH-DOCS-01b, +6 em `src/components/pecuaria/documentosDoMesDialog.test.tsx` — 5006 depois dele; antes o FECH-GLOBAL-RESUMO-01b, +3 em `src/components/fechamentoGlobalResumo.test.tsx` — 5000 depois dele; antes o FECH-GLOBAL-RESUMO-01, +19 no mesmo arquivo (novo) — 4997 depois dele; antes o FECH-DOCS-01, +27: `src/hooks/useDocumentosDoMes.test.tsx` 13,
   `src/components/pecuaria/documentosDoMesDialog.test.tsx` 14 — 4978 depois dele; antes o OC-CRIAR-DO-LEGADO-COMPRA-01, +11: `src/lib/oc/criarDoLegado.test.ts` 5,
   `src/components/financeiro-v2/criarOCDoLegado.test.tsx` 6 — 4951 depois dele; antes o OC-CC-PADRAO-NOVAS-01b, +13: `src/hooks/ocVersaoAposSaida.test.tsx` 5 (novo),
   `src/components/venda/aguardandoSaida.test.tsx` 8 (novo) — 4940 depois dele; antes o OC-CC-EXPLICAR-CONGELA-01, +20:
@@ -297,7 +297,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5000
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5006
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3955,6 +3955,16 @@ docs/historico/frentes-ate-2026-09-29.md.)
     veio e NAO fecha o dialogo; o lapis reabre. "visualizar" abre em nova aba pela URL assinada (60 s). Sem toast.
     ⚠ DESVIO DO MOCK, DECLARADO: fora da edicao a Especie e' TEXTO (o select so' existe na linha em edicao; um select vivo em toda
       linha gravaria a cada troca, fora do "num gesto").
+  · ⚠ O MES SE TROCA NO TITULO DO DIALOGO, NAS DUAS TELAS (FECH-DOCS-01b, Gabriel 12/10/2026, so' tela): "Documentos do mês —
+    <fazenda> · ‹ set/26 ›" (`tituloDosDocumentos`; mes curto por `mesCurtoDoDocumento`, vizinho por `mesVizinho` — vira o ano).
+    ABRE no mes que a tela tem (FechamentoTab) ou no mes corrente (Lançar › Pecuária); as setas trocam o mes e a LISTA; anexar
+    num mes navegado grava NAQUELE mes. ⚠ O CONTADOR DO BOTAO NAO NAVEGA: e' sempre o do mes de ABERTURA (o `anoMes` da tela).
+    Fechar esquece o mes navegado (reabre no da tela). Trocar de mes desfaz edicao / cancelamento em curso; as setas ficam
+    apagadas enquanto grava. SEM CAMPO NOVO; ALTURA INALTERADA (as setas, 16px, e o mes, 42px fixos, moram no cabecalho de 36).
+    COMO: o `BotaoDocumentosDoMes` guarda `mesNavegado` (nulo = o de abertura); no mes de abertura o dialogo usa a MESMA leitura
+    do botao (anexar ali muda o N); em outro mes, uma segunda `useDocumentosDoMes`, que so' le^ com o dialogo aberto fora do mes
+    de abertura. O dialogo recebe `anoMes` + `aoTrocarMes` e nao sabe do contador. Sem limite de mes (passado ou futuro).
+    ⚠ NAO PROVADO: nada no navegador (largura do titulo com nome de fazenda longo + as setas; clique nas setas no Radix real).
   · BOTAO (D5; `BotaoDocumentosDoMes`, o MESMO nas duas telas — dono da leitura e do dialogo; a aparencia e' do hospedeiro):
     "Documentos do mês · N", N = vivos da fazenda + mes; "…" enquanto le^ (nunca zero inventado); SEM FAZENDA (Global) fica APAGADO
     com o motivo no `title` ("· —"), nunca some. (a) `FechamentoTab`, coluna de acoes: sempre presente, depois de "Mapa de Pastos",
@@ -3972,8 +3982,10 @@ docs/historico/frentes-ate-2026-09-29.md.)
     documentos, declarado: tabela e bucket proprios; as regras de arquivo e de upload sao as mesmas. (e) fortalece a plataforma:
     um botao e um dialogo para qualquer tela de pecuaria que tenha fazenda + mes. (f) divida: +1 (`(supabase as any).from`, a
     tabela esta' fora do `types.ts`; regenerar depois de aplicar tira o cast).
-  Testes: `src/hooks/useDocumentosDoMes.test.tsx` 13 e `src/components/pecuaria/documentosDoMesDialog.test.tsx` 14 (dialogo,
-  botao, e os dois pontos de tela lidos da FONTE com auto-teste do detector); banco de mentira em
+  Testes: `src/hooks/useDocumentosDoMes.test.tsx` 13 e `src/components/pecuaria/documentosDoMesDialog.test.tsx` 20 (dialogo,
+  botao, e os dois pontos de tela lidos da FONTE com auto-teste do detector; 14 do 01 + 6 do 01b: as setas trocam a lista, a
+  edicao em curso se desfaz, layout / altura, o contador do botao nao muda com a navegacao — mutacao morta —, anexar em outro
+  mes, fechar esquece o mes); banco de mentira em
   `src/test/fonteDeDocumentosDoMesFake.ts`. 9 mutacoes: 8 mortas de primeira e 1 (lista sem o filtro de cancelado) morta depois da
   assercao apertada. SQL: `supabase/tests/pecuaria_fechamento_documentos_01_test.sql` (D0–D6) — ENSAIADO com a migration na mesma
   transacao revertida: OK; residuo zero.
