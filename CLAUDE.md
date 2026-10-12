@@ -3861,8 +3861,10 @@ docs/historico/frentes-ate-2026-09-29.md.)
 ## REGRAS VIGENTES — OPERACAO COMERCIAL E FINANCEIRO
 - ⚠ "CRIAR OC A PARTIR DESTE LANCAMENTO" COBRE A COMPRA, PELO MESMO ORQUESTRADOR E PELO MESMO DIALOGO (OC-CRIAR-DO-LEGADO-COMPRA-01, Gabriel
   12/10/2026, banco + tela no mesmo PR; migration `20261027197000_oc_criar_do_legado_compra_01.sql`, md5 do arquivo
-  26e1adbdb4fd3e52e13f1eee1f242bdf — ⚠ NAO APLICADA: so' com o GO do Gabriel. ⚠ A TELA NAO VAI AO AR ANTES DA MIGRATION: contra o banco antigo
-  a acao aparece no pagamento de compra e o banco a recusa ("Recebimento tem de ser uma entrada"); a venda segue igual). Abate fora.
+  26e1adbdb4fd3e52e13f1eee1f242bdf — APLICADA no proto em 12/10/2026, com o GO do Gabriel: ledger 20261012140103 (⚠ registrada com o
+  timestamp do dia; ledger = arquivo por md5 26e1adbd…); as tres funcoes nos md5 de destino, so' o criar SECURITY DEFINER, `anon` sem
+  EXECUTE; C1–C7 OK em chamada unica no banco vivo; `seg_tenant_varredura_01c` OK (T0–T4); residuo zero no Teste; tela publicada
+  (7e0252fd). ⚠ HOMOLOGACAO RUNTIME PENDENTE (Gabriel: Compra 034 Desm.M). Abate fora.
   · D1 — O TIPO VEM DO LANCAMENTO: saida (2-Saídas) = compra; o resto = venda. Na tela o dono e' `ladoDoLancamento`
     (`src/lib/oc/criarDoLegado.ts`: entrada em conta de venda / saida em conta de compra / nulo); `CONTAS_COMPRA_GADO` IMPORTA as
     duas constantes do dono (`useOperacaoLiquidacao.ts`) — o nome da conta de compra nao e' escrito no arquivo (preso por teste de
@@ -3896,12 +3898,17 @@ docs/historico/frentes-ate-2026-09-29.md.)
   Teste SQL: `supabase/tests/oc_criar_do_legado_compra_01_test.sql` (C1–C7, sintetico no Teste, termina em RAISE OK). ENSAIADO em
   transacoes revertidas no Teste: a migration INTEIRA (guardas de md5 e de ACL do proprio arquivo); C1–C4 e C6; C5 e o dono do
   motivo; C7 pelo antes x depois. Residuo zero (as tres funcoes nos md5 de origem; 0 linhas sinteticas).
-  ⚠ O ARQUIVO DE TESTE NAO RODOU INTEIRO NUMA CHAMADA: migration + teste (~30 KB) foi recusado pelo canal; rodou em recortes, e as
-    ASSERCOES do C7 do arquivo foram conferidas contra a foto impressa, nao executadas — roda inteiro depois de aplicar.
+  ⚠ O ARQUIVO DE TESTE SO' RODOU INTEIRO DEPOIS DE APLICAR, e a primeira execucao CAIU NO C7 POR DEFEITO DO PROPRIO TESTE:
+    `v->'v1'->'op' - 'fazenda'` (o `-` liga antes do `->`; 42725 "operator is not unique: unknown - unknown"). Corrigido com
+    parenteses (commit 95c5db4d) e rerodado inteiro: OK. C1–C6 ja' tinham passado na primeira execucao. ASSERCAO NUNCA EXECUTADA
+    NAO E' ASSERCAO: arquivo de teste que nao coube no canal se roda inteiro antes de ser dado por pronto.
+  ⚠ O CANAL DE ESCRITA PEDE CONFIRMACAO PARA `DROP` (e devolve "Invalid or expired requestState" quando ninguem confirma): o
+    `seg_tenant_varredura_01c_test.sql` foi rodado com os dois `DROP FUNCTION` trocados por REVOKE / nada (o bloco termina em
+    RAISE e desfaz tudo) — recorte equivalente, T0–T4 OK. E' a causa provavel dos "requestState" antigos atribuidos ao tamanho.
   ⚠ SEM RODADA DE MUTACAO (banco e tela) neste PR.
   ⚠ NAO PROVADO: nada no NAVEGADOR (a acao no pagamento de compra, o dialogo com dado real, abrir a OC de compra criada) · um caso
     REAL de compra (so' sintetico) · a entrada cuja fazenda difere da do pagamento, no lado da compra (o codigo e' o da venda;
-    sem caso proprio) · `seg_tenant_varredura_01c` (so' depois de aplicar) · os 568 lancamentos de compra sem OC nao foram
+    sem caso proprio) · os 568 lancamentos de compra sem OC nao foram
     simulados em massa.
   ⚠ DIVIDAS: UI-MODAL-FIXO-CRIAR-DO-LEGADO-01 (o dialogo e' `max-h-[92vh]` com rolagem e celulas `break-words`; converter ao
     padrao de modal fixo / linha unica e' PR proprio — layout intocado aqui) · no modal antigo de compra quase tudo esta'
