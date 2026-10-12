@@ -3836,10 +3836,11 @@ docs/historico/frentes-ate-2026-09-29.md.)
   quem mexer num confere o outro. O selo do rodape (`SeloRegraDaLinha`) diz a regra da linha.
 
 ## REGRAS VIGENTES — OPERACAO COMERCIAL E FINANCEIRO
-- ⚠ MIGRAR UMA OC DE TITULO PARA CONTA CORRENTE E' UMA RPC SO', E O 01a E' SO' SIMULACAO (OC-TITULO-PARA-CC-01a, Gabriel 11/10/2026,
-  so' banco; migration `20261027196600_oc_titulo_para_cc_01a.sql`). ⚠ A MIGRATION NAO FOI APLICADA PELO CODE: quem aplica e' o
-  Chat, depois do GO, e confere `has_function_privilege('anon', oid, 'EXECUTE') = false` nas duas funcoes. Nenhuma OC real foi
-  migrada (isso e' o 01b); nenhuma tela chama a RPC.
+- ⚠ MIGRAR UMA OC DE TITULO PARA CONTA CORRENTE E' UMA RPC SO' (OC-TITULO-PARA-CC-01a, Gabriel 11/10/2026, so' banco; migration
+  `20261027196600_oc_titulo_para_cc_01a.sql`, APLICADA em 12/10/2026 pelo Code, pelo MCP, com o GO do Gabriel — ⚠ registrada como
+  20261012095853; ledger = arquivo, md5 073c4e45…). md5 (prosrc): `_oc_fechar_casca_titulo` 1319b391…,
+  `oc_migrar_para_conta_corrente` 22b24acb…; `anon` nao executa nenhuma das duas, `authenticated` so' a publica;
+  `seg_tenant_varredura_01c_test.sql` OK depois de aplicar. Nenhuma tela chama a RPC. As OCs reais migradas estao no 01b, abaixo.
   · `oc_migrar_para_conta_corrente(p_operacao_id, p_simular DEFAULT true)` -> jsonb (SECURITY DEFINER, `tenant_ok` + 42501 "sem
     acesso a este registro", GRANT a `authenticated` e `service_role`). GUARDAS (P0001, frase curta): "Operacao ja esta em conta
     corrente" · "Conta corrente, por enquanto, so em venda e compra" · "Operacao em rascunho ou cancelada nao migra" · "Venda em
@@ -3880,12 +3881,44 @@ docs/historico/frentes-ate-2026-09-29.md.)
   recusada) — os seis PASSARAM.
   ⚠ NA COMPRA O ADIANTADO AO FORNECEDOR TEM SALDO NEGATIVO: pago 93.000 num lote de 91.000 da' saldo −2.000,00 e situacao
     'adiantado' (o briefing dizia "saldo 2.000"; vale o leitor `oc_conta_corrente`). O M7 foi corrigido para −2000.
-  ⚠ NAO PROVADO: o M7 so' foi conferido LENDO o relatorio devolvido pelo ensaio (todos os outros campos batem); o teste nao foi
-    rodado de novo depois da correcao do sinal · M8 (ACL) nao foi ensaiado — vale o bloco de conferencia da propria migration ao
-    aplicar · VENDA nao tem caso sintetico (o aviso de competencia/safra e o sinal do saldo na venda so' pelo corpo) · nenhuma
-    das 42 OCs reais foi simulada (o ensaio foi so' no Teste) · mes fechado na data da saida (a entrega nasce na competencia
-    dela) · OC com mais de um lote ou mais de uma saida · a formula do DRE da OC nao foi conferida contra `fn_dre_pecuaria`.
-  ⚠ FILA: 01b (migrar as OCs reais, uma a uma, com a simulacao a' vista) · tela · OC-CC-ABATE-01.
+    O ENSAIO FOI RERODADO INTEIRO em 12/10 com o M7 corrigido: M1–M7 PASSARAM.
+  ⚠ NAO PROVADO: o M8 (ACL) do arquivo de teste nao foi rodado (a ACL foi conferida pelo bloco da propria migration ao aplicar e
+    por consulta depois) · VENDA nao tem caso sintetico (as 4 vendas reais do 01b migraram e conferiram) · mes fechado na data da
+    saida (a entrega nasce na competencia dela) · a formula do DRE da OC nao foi conferida contra `fn_dre_pecuaria`.
+  · 01b — 30 OCs REAIS MIGRADAS EM 12/10/2026 (GO do Gabriel; nenhuma tela; uma OC por transacao, usuario simulado = o admin).
+    ANTES, a SIMULACAO nas 60 OCs em modelo titulo de venda/compra (transacao revertida, 0 eventos gravados): 33 relatorios e 27
+    recusas — 18 de boitel, 7 "Registre a saida dos animais antes de migrar" e 2 "Lote … sem valor: a entrega de … nao tem o que
+    faturar" (recusa do `oc_sincronizar_entregas`, nao desta funcao). Na migracao, cada OC foi SIMULADA DE NOVO e so' gravou com
+    `antes.dre`, `dre_diferenca`, `casca.partes` e `depois.saldo` iguais aos da simulacao: 30 de 30 bateram e migraram; em cada
+    uma, modelo 'conta_corrente', 1 evento 'migrar_para_conta_corrente' com o relatorio e `oc_conta_corrente` = saldo e situacao
+    do relatorio. AS 30: Agnaldo compra 20 (411dc6a3, 92ca9c06, df62fcfb, 2fd157be, 6cf548a1, 765058f8, f33a1432, f6d3e180,
+    41d5dffe, 6a44fb9b, dbda3338, e3825547, fcdbe0bb, d2d69110, 20b1316d, 2452b25c, 5713ac31, bf05667a, add62385, da9c27ee) e
+    venda 1 (b84a1c50); NJ compra 3 (f56c50d3, 156b793b, 69115ef9) e venda 1 (ceabd850); Raul compra 1 (dda0ce08); Santa Rita
+    compra 1 (8c4dcf3f) e venda 1 (4866360d); Vera compra 1 (262c9c02) e venda 1 (26967535).
+    SALDOS QUE FICARAM A' VISTA (o resto, 'quitado' com 0,00): 2fd157be falta pagar 0,50 · 6cf548a1 adiantado 0,42 · d2d69110
+    adiantado 0,80 · da9c27ee falta pagar 35,00 · fcdbe0bb falta pagar 64.440,00 · bf05667a falta pagar 8.250,00 · 4866360d
+    falta receber 15.000,00. Aviso `favorecido_diferente` em 14 OCs do Agnaldo (lancamento com favorecido ≠ contraparte; nao recusa).
+    DRE POR CLIENTE E MES DAS 30 (lancamentos vivos com `compoe_dre` ligados por parte viva), antes x depois: NJ, Raul, Santa Rita
+    e Vera IDENTICOS em todo mes. Agnaldo: jun/26 −27.062,00 -> −27.062,50 (−0,50); jul/26 184.571,58 -> 481.172,00
+    (+296.600,42); ago/26 −344.348,80 -> −649.198,00 (−304.849,20); set/26 −240.685,00 -> −232.435,00 (+8.250,00); jan, mar e
+    abr iguais; liquido +0,72 (−0,50 +0,42 +0,80).
+    ⚠ DE JULHO PARA AGOSTO MOVERAM 296.600,00, NAO OS 305.543,00 ESPERADOS NO BRIEFING: o que muda de mes e' a ENTREGA (3.100,00 +
+      158.500,00 + 135.000,00, das OCs 6a44fb9b, dbda3338 e e3825547); os 8.943,00 de diferenca (7.443,00 + 1.500,00) sao a
+      parte do DRE dessas duas OCs que nao e' principal e FICOU em julho (por conta: `antes.dre` − entregas; os lancamentos nao
+      foram abertos um a um). De setembro para agosto, 8.250,00 (bf05667a), como esperado.
+    CONTAGENS DEPOIS (todas as OCs): conta corrente — compra 27, venda 126; titulo — compra 15, venda 27, abate 47. Entre as nao
+    canceladas, fora de rascunho e de teste: titulo compra 7 e venda 23 (18 de boitel).
+    FICARAM FORA, E POR QUE: a2df4ec1 (Agnaldo, compra sem titulo principal na OC: os pagamentos estao soltos no financeiro —
+    religar antes; migrada assim levaria −315.000,00 ao DRE) · 339c2e99 (Santa Rita, 2022: inventario de abertura, nao e' compra)
+    · 1fbd595b (Agnaldo, venda sem recebimento) · as 7 sem saida de gado (9b1e71e2, df7d1912, f71a8695, f74f95e5, 2090e12c,
+    7016f2b5, 8eff43fa) · as 2 com lote sem valor (229ac98d, 4c5e8c86) · as 18 de boitel.
+    ⚠ NAO EXISTE GESTO CONTRARIO: a migracao nao tem "voltar ao titulo". A trilha esta' nos eventos ('fechar_casca_titulo' guarda
+      as partes canceladas; os tres eventos de cada OC levam o mesmo `estorno_id`).
+    ⚠ NAO PROVADO: nenhuma das 30 foi aberta na TELA depois de migrar (aba Financeiro / conta corrente, lista de Lancamentos, DRE)
+      · o DRE da tela (`fn_dre_pecuaria`) nao foi comparado antes x depois — a leitura acima e' a soma dos lancamentos das OCs ·
+      os gatilhos disparados pelos escritores (cache, ponte de liquidacao) nao foram conferidos um a um.
+  ⚠ FILA: segunda rodada do 01b (religar a "Compra 110 DM" a2df4ec1, registrar as 7 saidas, informar o valor dos 2 lotes) · tela ·
+    abate fora (OC-CC-ABATE-01) · boitel fora do conta corrente.
 - ⚠ O ENCARGO DO CONTRATO TEM TABELA PROPRIA E NAO TOCA O LANCAMENTO (FIN-CONTRATO-VINCULAR-ENCARGO-01 passo 1, Gabriel 11/10/2026, so'
   banco; migrations 20261027196100 — tabela e trava, ⚠ registrada como 20261011132222, ledger = arquivo, md5 f88ffba7… —,
   20261027196200 — donos e leituras, ⚠ registrada como 20261011132310, md5 cde712ef… — e 20261027196300 — vincular e desvincular,
