@@ -87,14 +87,25 @@ interface Opts {
   aoMudarLotes?: () => void | Promise<unknown>;
 }
 
+/** OC-CC-EXPLICAR-CONGELA-01 — erro que NAO e' frase do produto (trava, tempo esgotado, rede): nunca a mensagem crua do PostgREST. */
+export const FRASE_BANCO_OCUPADO = 'Não foi possível gravar agora (banco ocupado). Tente de novo.';
+/** Os codigos cuja frase e' do produto: conflito de versao, permissao, operacao inexistente e a regra de negocio (verbatim do banco). */
+const CODIGOS_COM_FRASE = new Set(['40001', '42501', 'P0002', 'P0001']);
+export function fraseDoErroAoExplicar(error: { code?: string | null; message?: string | null } | null | undefined): string {
+  const codigo = error?.code ?? '';
+  if (!error || !CODIGOS_COM_FRASE.has(codigo)) return FRASE_BANCO_OCUPADO;
+  return normalizarErroRpc({ code: codigo, message: error.message ?? '' }).message || FRASE_BANCO_OCUPADO;
+}
+
 export function useOcContaCorrente({ operacaoId, enabled, versao, onVersaoChange, aoMudarLotes }: Opts): OcContaCorrenteApi {
   const [contaCorrente, setContaCorrente] = useState<ContaCorrente | null>(null);
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
 
-  const recarregar = useCallback(async () => {
-    if (!operacaoId || !enabled) { setContaCorrente(null); return; }
+  /* A leitura devolve o que leu: quem acabou de ser recusado por versao precisa da versao RELIDA (OC-CC-EXPLICAR-CONGELA-01). */
+  const ler = useCallback(async (): Promise<ContaCorrente | null> => {
+    if (!operacaoId || !enabled) { setContaCorrente(null); return null; }
     setLoading(true);
     try {
       const { data, error } = await (supabase as any).rpc('oc_conta_corrente', { p_operacao_id: operacaoId });
@@ -102,12 +113,15 @@ export function useOcContaCorrente({ operacaoId, enabled, versao, onVersaoChange
       const cc = lerContaCorrente(data);
       setContaCorrente(cc);
       setErro(null);
+      return cc;
     } catch (e) {
       setErro(e instanceof Error ? e.message : 'Falha ao carregar a conta corrente.');
+      return null;
     } finally {
       setLoading(false);
     }
   }, [operacaoId, enabled]);
+  const recarregar = useCallback(async () => { await ler(); }, [ler]);
 
   useEffect(() => { void recarregar(); }, [recarregar]);
 
@@ -183,16 +197,26 @@ export function useOcContaCorrente({ operacaoId, enabled, versao, onVersaoChange
           p_simular: false,
         });
         /* os itens anteriores ja' gravaram (inclusive um ajuste): reler os lotes tambem na recusa */
-        if (error) { await Promise.all([recarregar(), aoMudarLotes?.()]); return normalizarErroRpc(error).message; }
+        if (error) {
+          const [relida] = await Promise.all([ler(), aoMudarLotes?.()]);
+          /* ⚠ A VERSAO SE CURA (OC-CC-EXPLICAR-CONGELA-01): recusada por versao, a relida sobe pelo canal de sempre — o dono
+             continua sendo quem recebe `onVersaoChange` — e o proximo Salvar ja' vai com ela. Antes a tela ficava presa na
+             versao velha e todo Salvar recusava ate' o F5. */
+          if (error.code === '40001' && relida && Number.isFinite(relida.versao)) onVersaoChange(relida.versao);
+          return fraseDoErroAoExplicar(error);
+        }
         const v = Number(data?.operacao_versao);
         if (Number.isFinite(v)) { versaoCorrente = v; onVersaoChange(v); }
       }
       await Promise.all([recarregar(), aoMudarLotes?.()]);
       return null;
+    } catch {
+      /* falha de rede / excecao: nada de mensagem crua na tela */
+      return FRASE_BANCO_OCUPADO;
     } finally {
       setOcupado(false);
     }
-  }, [operacaoId, versaoAtual, onVersaoChange, recarregar, aoMudarLotes]);
+  }, [operacaoId, versaoAtual, onVersaoChange, recarregar, ler, aoMudarLotes]);
 
   /* OC-CC-VOLTA-01b — A PREVIA E' A PROPRIA RPC com `p_simular` (desfeita por SQLSTATE 'OCSIM'): o rateio por kg, os centavos no
      lote de maior peso e as entregas por data saem do banco, nunca de uma copia da regra aqui. Sem `ocupado`: e' leitura. */

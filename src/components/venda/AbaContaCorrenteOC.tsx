@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -717,6 +717,7 @@ export function DialogoExplicarDiferenca({ api, somenteLeitura, lado = 'venda', 
   const [motivoRemover, setMotivoRemover] = useState('');
   const [tentouRemover, setTentouRemover] = useState(false);
   const [previa, setPrevia] = useState<EstadoPrevia | null>(null);
+  const [salvando, setSalvando] = useState(false);
   const { listarLotes, listarContas, simularExplicacao } = api;
 
   useEffect(() => {
@@ -728,19 +729,29 @@ export function DialogoExplicarDiferenca({ api, somenteLeitura, lado = 'venda', 
   }, [listarLotes, listarContas]);
 
   /* OC-CC-VOLTA-01b (regra 5) — a PREVIA antes de salvar, do primeiro ajuste do rascunho: a propria RPC em simulacao. So' com lote e
-     valor; refeita quando a linha do ajuste muda (o objeto da linha so' troca quando ela e' editada). */
+     valor.
+     ⚠ SO' O QUE MUDA A RESPOSTA REFAZ A PREVIA (OC-CC-EXPLICAR-CONGELA-01): lote, sentido e valor — valores primitivos, nunca o
+     objeto da linha. Editar o Motivo recriava a linha e disparava uma simulacao por pausa de digitacao, e cada simulacao executa
+     o ajuste inteiro no banco antes de desfazer. A linha mais recente e' lida pela referencia. */
   const ajusteRasc = rascunhos.find(r => r.tipo === 'ajuste_preco');
+  const ajusteRef = useRef(ajusteRasc);
+  ajusteRef.current = ajusteRasc;
+  const temAjuste = !!ajusteRasc;
+  const ajusteLote = ajusteRasc?.loteId ?? '';
+  const ajusteSentido = ajusteRasc?.sentido ?? null;
+  const ajusteValor = ajusteRasc?.valor ?? '';
   useEffect(() => {
-    if (!ajusteRasc || !ajusteRasc.loteId || !(parseNumericValue(ajusteRasc.valor) > 0)) { setPrevia(null); return; }
+    const linha = ajusteRef.current;
+    if (!temAjuste || !linha || !ajusteLote || !(parseNumericValue(ajusteValor) > 0)) { setPrevia(null); return; }
     let vivo = true;
     setPrevia({ carregando: true, linhas: [], erro: null });
     const t = setTimeout(() => {
-      void simularExplicacao(itemDoRascunho(ajusteRasc)).then(res => {
+      void simularExplicacao(itemDoRascunho(linha)).then(res => {
         if (vivo) setPrevia({ carregando: false, linhas: linhasDaPreviaAjuste(res.previa), erro: res.erro });
       });
     }, 350);
     return () => { vivo = false; clearTimeout(t); };
-  }, [ajusteRasc, simularExplicacao]);
+  }, [temAjuste, ajusteLote, ajusteSentido, ajusteValor, simularExplicacao]);
 
   if (!cc) return null;
   const itens: ExplicacaoRascunho[] = rascunhos.map(itemDoRascunho);
@@ -775,7 +786,9 @@ export function DialogoExplicarDiferenca({ api, somenteLeitura, lado = 'venda', 
     setErro(null);
     if (rascunhos.length === 0) { onFechar(); return; }
     if (faltando.length > 0) return;
-    const e = await api.explicarSaldo(itens);
+    setSalvando(true);
+    let e: string | null;
+    try { e = await api.explicarSaldo(itens); } finally { setSalvando(false); }
     if (e) { setErro(e); return; }
     onFechar();
   };
@@ -931,10 +944,12 @@ export function DialogoExplicarDiferenca({ api, somenteLeitura, lado = 'venda', 
               informada. Devolver ao comprador programa um pagamento de caixa.</>}
         </div>
         <DialogFooter className="items-center">
-          {erro && <span className="mr-auto text-[10px] text-destructive" role="alert">{erro}</span>}
+          {erro && <span className="mr-auto min-w-0 truncate whitespace-nowrap text-[10px] text-destructive" role="alert" title={erro} data-testid="erro-explicar">{erro}</span>}
           <Button type="button" variant="ghost" size="sm" className={BOTAO} onClick={onFechar}>Cancelar</Button>
           {!somenteLeitura && (
-            <Button type="button" size="sm" className={`${BOTAO} bg-[#15803d] hover:bg-[#15803d]/90`} disabled={api.ocupado} onClick={salvar}>Salvar explicação</Button>
+            <Button type="button" size="sm" className={`${BOTAO} bg-[#15803d] hover:bg-[#15803d]/90`} disabled={api.ocupado || salvando} onClick={salvar}>
+              {salvando ? 'Salvando...' : 'Salvar explicação'}
+            </Button>
           )}
         </DialogFooter>
       </DialogContent>

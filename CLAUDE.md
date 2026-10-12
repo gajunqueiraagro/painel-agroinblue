@@ -162,7 +162,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 12/10/2026 (FIN-CONCILIADO-NAO-REBAIXA-01, +16 em `src/components/financeiro-v2/casadoComExtrato.test.tsx` (novo) — 4907 depois dele; antes o
+  Baseline em 12/10/2026 (OC-CC-EXPLICAR-CONGELA-01, +20: `src/components/venda/explicarCongela.test.tsx` 10 (novo),
+  `src/components/compra/simulacaoUmaVez.test.tsx` 10 (novo) — 4927 depois dele; antes o
+  FIN-CONCILIADO-NAO-REBAIXA-01, +16 em `src/components/financeiro-v2/casadoComExtrato.test.tsx` (novo) — 4907 depois dele; antes o
   CONC-SPLIT-FILHO-CANCELADO-01 passo 2 commit B, +21: `src/lib/conciliacao/cancelarFilhoDeSplit.test.ts` 13 (novo),
   `src/components/conciliacao/cancelarFilhoDeSplitDialog.test.tsx` 8 (novo) — 4891 depois dele; antes o FIN-DETALHE-CABECALHO-ALINHADO-01, +6 em `src/lib/financiamentos/reguaDasParcelas.test.ts` (novo) — 4870 depois dele; antes o
   CONC-SPLIT-FILHO-CANCELADO-01 passo 1, +5 em `src/components/financeiro-v2/conferenciaExtratoParcial.test.tsx` (novo) — 4864 depois dele; antes o
@@ -291,7 +293,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4907
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4927
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -2147,6 +2149,17 @@ docs/historico/frentes-ate-2026-09-29.md.)
     alternou o gatilho por `ALTER TABLE` em `financeiro_lancamentos_v2`, 14 vezes na mesma transacao, e segurou a tabela de
     lancamentos por ~8 s; revertido, sem residuo. Se houve usuario gravando lancamento nesse intervalo, esperou (nao da' para
     ver depois). O mesmo vale para o `CREATE TRIGGER` do ensaio: 1 a 2 s por rodada — ensaio de gatilho e' CURTO.
+- ⚠ ENSAIO COM `CREATE TRIGGER` / DDL EM TABELA DE USO CORRENTE SO' EM TABELA CLONE OU FORA DO HORARIO DE USO (regra do Gabriel,
+  12/10/2026, OC-CC-EXPLICAR-CONGELA-01): em `financeiro_lancamentos_v2` e nas demais tabelas que a tela grava o tempo todo, o
+  ensaio que cria gatilho, indice ou coluna roda numa TABELA CLONE sintetica criada na propria transacao, ou antes das 07h /
+  depois das 20h (horario de Brasilia) — NUNCA em horario em que o Gabriel esta' operando. `CREATE TRIGGER` pede uma trava que
+  barra TODA escrita na tabela ate' a transacao terminar, e quem chega depois entra na fila atras dela; o papel da tela desiste
+  em 5–8 s (`lock_timeout` / `statement_timeout` do `authenticator`) e a gravacao falha sem gravar nada.
+  ⚠ INCIDENTE DE 12/10/2026 (erro meu, FIN-CONCILIADO-NAO-REBAIXA-01): seis ensaios com `CREATE TRIGGER` em
+    `financeiro_lancamentos_v2` entre 10:55 e 11:09 UTC (um deles segurou a tabela ~10 s), com o Gabriel operando a OC fcdbe0bb
+    nos mesmos minutos — o "Explicar diferença" dele congelou duas vezes e nao gravou. A relacao NAO foi provada (o log do
+    Postgres daquele intervalo nao foi lido); e' o correlato mais forte achado na FASE 0, e a hipotese de laco no front foi
+    descartada por reproducao (2 previas + 1 gravacao por clique) e pelo `pg_stat_statements` (24 chamadas no total).
 - ⚠ PROIBIDO, EM ENSAIO OU MEDICAO, RENOMEAR OU ALTERAR EM MASSA LINHA DE `financeiro_plano_contas` (mesma regra, 09/10/2026): o
   UPDATE de subcentro / macro / grupo / centro / escopo dispara `trg_propagar_plano_para_lancamentos`, que faz UPDATE em
   `financeiro_lancamentos_v2` por `plano_conta_id` — e NAO HA' INDICE nessa coluna: cada conta renomeada varre a tabela de
@@ -3837,6 +3850,36 @@ docs/historico/frentes-ate-2026-09-29.md.)
   quem mexer num confere o outro. O selo do rodape (`SeloRegraDaLinha`) diz a regra da linha.
 
 ## REGRAS VIGENTES — OPERACAO COMERCIAL E FINANCEIRO
+- ⚠ PREVIA E SIMULACAO POR EFEITO DEPENDEM DE FUNCAO ESTAVEL E DE VALOR PRIMITIVO, NUNCA DE OBJETO RECRIADO POR RENDER; E A VERSAO DA
+  OC SE CURA DEPOIS DA RECUSA (OC-CC-EXPLICAR-CONGELA-01, Gabriel 12/10/2026, so' tela, sem migration e sem mudar contrato de RPC).
+  Nasce do "Explicar diferença" da OC fcdbe0bb (compra em conta corrente), que congelou duas vezes sem gravar.
+  · EXPLICAR — A VERSAO SE CURA (`useOcContaCorrente.explicarSaldo`): recusado com 40001, o hook rele a conta corrente e os lotes e
+    SOBE A VERSAO RELIDA por `onVersaoChange` — o dono continua sendo `ocVersao` (`LancamentosTab`), nenhuma segunda fonte. A
+    frase "A operação mudou enquanto você trabalhava…" continua, o dialogo fica aberto, e o segundo Salvar vai com a versao
+    atual. Antes `versaoAtual = versao ?? …` ficava na da prop e TODO Salvar seguinte recusava ate' o F5. A leitura interna
+    (`ler`) devolve o que leu; `recarregar` continua `Promise<void>`.
+    ⚠ `oc_explicar_saldo` com versao velha e' RAISE 40001 (nunca `ok:false`), e a SIMULACAO PULA a conferencia de versao.
+  · EXPLICAR — A ESPERA FALA: o botao diz "Salvando..." enquanto grava (estado do proprio dialogo). Erro que NAO e' frase do
+    produto — trava (55P03), tempo esgotado (57014), rede, qualquer codigo fora de 40001 / 42501 / P0002 / P0001 — vira
+    `FRASE_BANCO_OCUPADO` ("Não foi possível gravar agora (banco ocupado). Tente de novo."), dono `fraseDoErroAoExplicar`
+    (`useOcContaCorrente.ts`); nunca a mensagem crua do PostgREST. O erro do rodape e' UMA linha (corta com o inteiro no `title`).
+  · EXPLICAR — A PREVIA SO' REFAZ COM O QUE MUDA A RESPOSTA: o efeito depende de lote, sentido e valor do ajuste (primitivos) e de
+    `simularExplicacao`; a linha mais recente e' lida por referencia. Editar o MOTIVO nao dispara previa (antes, uma por pausa de
+    digitacao — e cada previa executa o ajuste inteiro no banco, trava a linha da OC e desfaz). Os 350 ms ficam.
+  · "ATUALIZAR COMPROMISSO" E "EXCLUIR LOTE" SIMULAM UMA VEZ POR ABERTURA: o efeito depende de `[simular, loteId]` (a funcao ja' era
+    `useCallback` com operacao e cliente), nunca do objeto `api`, que os hooks recriam a cada render. MEDIDO NO BANCO em 12/10:
+    `oc_reprogramar_compromisso_do_lote` somava 29.124 chamadas (1.669 s de banco) desde 29/09, para uma simulacao que roda uma
+    vez por abertura; em teste, 4 chamadas por abertura antes e 1 depois, e 0 novas em 3 renders do pai.
+  Testes: `src/components/venda/explicarCongela.test.tsx` 10 (o hook de verdade, banco falso contando com a versao pedida) e
+  `src/components/compra/simulacaoUmaVez.test.tsx` 10 (os dois hooks de verdade + a fonte). 7 mutacoes mortas.
+  ⚠ A CAUSA DO CONGELAMENTO DE 12/10 NAO FOI PROVADA — ver o incidente na regra "ENSAIO COM `CREATE TRIGGER`" (DADO, BANCO E METODO).
+  ⚠ NAO PROVADO: nada visto no NAVEGADOR (o gesto real na fcdbe0bb e' do Gabriel) · o ajuste de preco de verdade DEPOIS do gatilho
+    `trg_guard_lancamento_casado` (ele altera o valor dos titulos de ENTREGA, que nao tem vinculo com extrato: deve passar; nao
+    exercitado) · o laco sem fim do "Atualizar compromisso" nao reproduziu em teste (4 chamadas e para); as 29 mil nao tem data.
+  ⚠ DIVIDAS: a frase do 40001 ainda diz "Recarregue" (a versao ja' se cura sozinha) · so' o `explicarSaldo` cura a versao e
+    troca o erro cru; os outros gestos do hook (sincronizar, vincular, desfazer explicacao, programar) seguem como eram ·
+    `useReprogramarCompromissoLote` e `useExcluirLoteOC` continuam devolvendo objeto novo a cada render (quem depender do objeto
+    num efeito repete o defeito).
 - ⚠ LANCAMENTO CASADO COM O EXTRATO NAO SAI DO ESTADO EM QUE O BANCO O POS (FIN-CONCILIADO-NAO-REBAIXA-01, Gabriel 12/10/2026; migration
   `20261027196700_fin_conciliado_nao_rebaixa_01.sql`, md5 do arquivo 218b33201da6fdb0f49d1c0552b34d74 — APLICADA no proto em 12/10/2026, com o GO do Gabriel: ledger
   `supabase_migrations.schema_migrations` versao 20261012111654, nome `fin_conciliado_nao_rebaixa_01` (⚠ registrada com o

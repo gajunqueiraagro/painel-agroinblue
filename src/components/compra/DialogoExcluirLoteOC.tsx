@@ -37,11 +37,14 @@ export function DialogoExcluirLoteOC({
   const [simulacao, setSimulacao] = useState<SimulacaoExclusao | null>(null);
   const [motivo, setMotivo] = useState('');
 
+  /* ⚠ A SIMULACAO RODA UMA VEZ POR ABERTURA (OC-CC-EXPLICAR-CONGELA-01): o efeito depende da FUNCAO (`useCallback` estavel no
+     hook) e do lote — nunca do objeto `api`, que e' recriado a cada render e refazia a simulacao a cada render do pai. */
+  const { simular } = api;
   useEffect(() => {
     let vivo = true;
-    void api.simular(loteId).then(s => { if (vivo) setSimulacao(s); });
+    void simular(loteId).then(s => { if (vivo) setSimulacao(s); });
     return () => { vivo = false; };
-  }, [api, loteId]);
+  }, [simular, loteId]);
 
   const bloqueado = !!simulacao && simulacao.bloqueios.length > 0;
   /* OC-VENDA-ENTREGAS-01a-fix — o bloqueio nao e' mais so' "titulo conciliado": lote com saida ativa tambem nao se exclui, e
