@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 12/10/2026 (OC-CRIAR-DO-LEGADO-COMPRA-01, +11: `src/lib/oc/criarDoLegado.test.ts` 5,
+  Baseline em 12/10/2026 (FECH-DOCS-01, +27: `src/hooks/useDocumentosDoMes.test.tsx` 13,
+  `src/components/pecuaria/documentosDoMesDialog.test.tsx` 14 — 4978 depois dele; antes o OC-CRIAR-DO-LEGADO-COMPRA-01, +11: `src/lib/oc/criarDoLegado.test.ts` 5,
   `src/components/financeiro-v2/criarOCDoLegado.test.tsx` 6 — 4951 depois dele; antes o OC-CC-PADRAO-NOVAS-01b, +13: `src/hooks/ocVersaoAposSaida.test.tsx` 5 (novo),
   `src/components/venda/aguardandoSaida.test.tsx` 8 (novo) — 4940 depois dele; antes o OC-CC-EXPLICAR-CONGELA-01, +20:
   `src/components/venda/explicarCongela.test.tsx` 10 (novo),
@@ -296,7 +297,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4951
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4978
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3859,6 +3860,66 @@ docs/historico/frentes-ate-2026-09-29.md.)
   quem mexer num confere o outro. O selo do rodape (`SeloRegraDaLinha`) diz a regra da linha.
 
 ## REGRAS VIGENTES — OPERACAO COMERCIAL E FINANCEIRO
+- ⚠ "DOCUMENTOS DO MÊS" (O LIVRO DO CAMPEIRO): ARQUIVO POR FAZENDA + MES, UM BOTAO NAS DUAS TELAS, E NADA SE CALCULA (FECH-DOCS-01, Gabriel
+  12/10/2026, banco + tela; mock v2 aprovado em 12/10). ⚠ MIGRATION NAO APLICADA, AGUARDA GO:
+  `supabase/migrations/20261027197100_pecuaria_fechamento_documentos_01.sql` (md5 do arquivo e88643fed35cab14141c62bc872b8ff5). ⚠ A TELA NAO VAI
+  AO AR ANTES DELA: contra o banco de hoje o botao le^ uma tabela que nao existe e mostra "Documentos do mês · …" com o erro no
+  `title`; soltar um arquivo e' recusado na area. Commit local, sem push.
+  · BANCO (D1/D2): `pecuaria_fechamento_documentos`, irma de `financeiro_saldo_documentos` trocando a conta pela fazenda e ganhando
+    `especie` (CHECK: mapa_rebanho | nascimentos | entradas | vendas | transferencias | mortes | outro; default 'outro'); CHECKs de
+    mes ('AAAA-MM'), nome nao vazio e "cancelado exige motivo"; indice (cliente_id, fazenda_id, ano_mes); RLS com TRES policies
+    (SELECT / INSERT / UPDATE: admin do AGROinBLUE ou cliente do usuario); SEM DELETE — nem policy nem privilegio (`authenticated`
+    so' tem SELECT, INSERT, UPDATE; `anon` nada). Bucket privado `pec-documentos` (10 MB; PDF, JPEG, PNG) com as MESMAS quatro
+    policies do `fin-documentos` (a primeira pasta do caminho e' o cliente). NENHUMA FUNCAO criada.
+    ⚠ DIFERENCAS DO MOLDE, DECLARADAS: sem `tipo`, `updated_at` / `updated_by` (o briefing listou as colunas; o rastro da edicao
+      e' a `versao`); o bucket NAO aceita XML (o convite do mock diz PDF, JPG, PNG).
+  · DONOS: `src/lib/pecuaria/documentosDoMes.ts` (puro: vocabulario — ESPELHO DECLARADO do CHECK —, rotulos, frases, leitor da
+    linha sem cast, caminho `{cliente}/{fazenda}/{AAAA-MM}/{id}.{ext}`, titulo e o rotulo do botao) e
+    `src/hooks/useDocumentosDoMes.ts` (`useDocumentosDoMes(clienteId, fazendaId, anoMes)` -> documentos, lendo, erro, anexar,
+    renomear, cancelar, urlAssinada; a fonte do banco e' INJETAVEL para o teste). REGISTRAR PRIMEIRO, SUBIR DEPOIS (a lei do molde);
+    a chave do arquivo e' o id da linha. A regra do arquivo e' a do BOLETO (`REGRA_ARQUIVO_DO_BOLETO`: PDF, JPG, PNG, 10 MB),
+    pelo dono `aceitarArquivo`. RENOMEAR = UPDATE de especie + nome com `versao` lida no filtro e versao + 1 (versao velha: "O
+    documento mudou em outra tela…"). CANCELAR exige motivo (sem ele nem vai ao banco) e nao apaga linha nem arquivo.
+  · DIALOGO (D3/D4; `DocumentosDoMesDialog`, `src/components/pecuaria/`): `max-w-md`, ALTURA FIXA — cabecalho 36 · area de soltar
+    24 (`AreaDeArquivo`, convite "Clique ou arraste o documento (PDF, JPG, PNG · até 10 MB)") · lista de 72px (tres linhas de 24;
+    rola sozinha a partir do 4o) · LUGAR RESERVADO de 26px (o motivo do cancelamento, a dica "Enter grava · Esc deixa como veio"
+    ou o recado em vermelho; existe sempre) · rodape 32 (contagem + Fechar). Linha em grade de px: Especie 96 | Nome (o unico que
+    corta, inteiro no `title`) | data · tamanho 78 | visualizar 56 | lapis 16 | cancelar 48; 10px. SOLTAR GRAVA NA HORA ('outro' +
+    o nome que veio) e a linha NASCE EM EDICAO (Select da casa + campo do nome): Enter grava os dois num gesto; Esc deixa como
+    veio e NAO fecha o dialogo; o lapis reabre. "visualizar" abre em nova aba pela URL assinada (60 s). Sem toast.
+    ⚠ DESVIO DO MOCK, DECLARADO: fora da edicao a Especie e' TEXTO (o select so' existe na linha em edicao; um select vivo em toda
+      linha gravaria a cada troca, fora do "num gesto").
+  · BOTAO (D5; `BotaoDocumentosDoMes`, o MESMO nas duas telas — dono da leitura e do dialogo; a aparencia e' do hospedeiro):
+    "Documentos do mês · N", N = vivos da fazenda + mes; "…" enquanto le^ (nunca zero inventado); SEM FAZENDA (Global) fica APAGADO
+    com o motivo no `title` ("· —"), nunca some. (a) `FechamentoTab`, coluna de acoes: sempre presente, depois de "Mapa de Pastos",
+    28px, largura cheia; dentro do bloco do ajuste o "Ver sugestões" tem lugar RESERVADO (28px vazio sem sugestao), acima de
+    "Ajustar Conciliação". (b) Lançar › Pecuária (`V2LancamentosWrapper`, `V2Index.tsx`): primeiro cartao da barra de atalhos,
+    antes de "Movimentações por foto" (a grade passou de 2 a 3 colunas). ⚠ ESSA BARRA NAO TEM MES SELECIONADO (o periodo da lista
+    mora na URL e nasce no ano inteiro): o botao usa o MES CORRENTE local (`mesLocal()`) — decisao do Gabriel se deve seguir o
+    periodo da lista quando ele for um mes so'. Os dois "por foto" nao foram tocados.
+  · ENCAIXE ARQUITETURAL (o briefing delegou: "decidir e registrar no ENCAIXE"; as seis perguntas do Titulo IV):
+    (a) ja' existe? Nao para a pecuaria; existe para o extrato (`financeiro_saldo_documentos`, `SaldoRealDialog`). (b) reuso:
+    `AreaDeArquivo`, `aceitarArquivo`, `extensaoDoArquivo`, a regra do boleto e o padrao registrar-subir do
+    `anexarSaldoDocumento`. NAO se extraiu um componente comum do `SaldoRealDialog`: a lista de la' e' nome | visualizar |
+    cancelar com o motivo abrindo linha a mais; a daqui tem especie, edicao e altura fixa — extrair mudaria o extrato. (c) fonte
+    soberana: a tabela nova (cadastro de arquivo; nenhum numero do rebanho sai dela). (d) segunda forma? Segundo hook de
+    documentos, declarado: tabela e bucket proprios; as regras de arquivo e de upload sao as mesmas. (e) fortalece a plataforma:
+    um botao e um dialogo para qualquer tela de pecuaria que tenha fazenda + mes. (f) divida: +1 (`(supabase as any).from`, a
+    tabela esta' fora do `types.ts`; regenerar depois de aplicar tira o cast).
+  Testes: `src/hooks/useDocumentosDoMes.test.tsx` 13 e `src/components/pecuaria/documentosDoMesDialog.test.tsx` 14 (dialogo,
+  botao, e os dois pontos de tela lidos da FONTE com auto-teste do detector); banco de mentira em
+  `src/test/fonteDeDocumentosDoMesFake.ts`. 9 mutacoes: 8 mortas de primeira e 1 (lista sem o filtro de cancelado) morta depois da
+  assercao apertada. SQL: `supabase/tests/pecuaria_fechamento_documentos_01_test.sql` (D0–D6) — ENSAIADO com a migration na mesma
+  transacao revertida: OK; residuo zero.
+  ⚠ O `check:tdz` CASA POR NOME: metodo declarado em INTERFACE (`renomear(…)`, `cancelar(…)`) + `const renomear = …` mais abaixo no
+    mesmo arquivo = falso "uso antes da declaracao". Os locais do hook se chamam `renomearNoMes` / `cancelarNoMes` por isso.
+  ⚠ NAO PROVADO: NADA NO NAVEGADOR (a tabela nao existe no proto; alturas e larguras sao o contrato declarado, sem medida
+    renderizada — a coluna de acoes do Fechamento ganhou um botao e, com o ajuste a' vista, um lugar de 28px) · upload real,
+    URL assinada e as policies do bucket exercitadas de verdade (so' a existencia delas, no ensaio) · usuario comum lendo o
+    documento do PROPRIO cliente (o Teste so' tem o admin) · trocar a especie PELO SELECT em teste (o jsdom nao abre o Radix; o
+    gesto esta' provado pelo hook e pelo Enter com o nome) · Esc com o select aberto · nome de fazenda longo no titulo.
+  ⚠ DIVIDAS: linha "sem arquivo" (registro sem upload) so' sai cancelando · o botao de Lançar › Pecuária usa o mes corrente ·
+    perfil `campo` / `leitura` gravam se abrirem a tela (a trava por perfil e' o 01F) · `types.ts` nao regenerado.
 - ⚠ "CRIAR OC A PARTIR DESTE LANCAMENTO" COBRE A COMPRA, PELO MESMO ORQUESTRADOR E PELO MESMO DIALOGO (OC-CRIAR-DO-LEGADO-COMPRA-01, Gabriel
   12/10/2026, banco + tela no mesmo PR; migration `20261027197000_oc_criar_do_legado_compra_01.sql`, md5 do arquivo
   26e1adbdb4fd3e52e13f1eee1f242bdf — APLICADA no proto em 12/10/2026, com o GO do Gabriel: ledger 20261012140103 (⚠ registrada com o

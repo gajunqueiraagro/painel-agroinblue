@@ -18,6 +18,8 @@ import { PrecoMercadoTab } from '@/pages/PrecoMercadoTab';
 import V2NaoEncontrada from '@/v2/pages/V2NaoEncontrada';
 import V2SemAcesso from '@/v2/pages/V2SemAcesso';
 import { usePodeAbrirRotaSoAdmin } from '@/v2/hooks/usePodeAbrir';
+import { BotaoDocumentosDoMes } from '@/components/pecuaria/BotaoDocumentosDoMes';
+import { mesLocal } from '@/lib/datas/hojeLocal';
 import { MOTIVO_SEM_META, nivelDaTela, podeVerMeta, primeiraTelaPermitida } from '@/v2/lib/acessoTelas';
 import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
@@ -177,7 +179,8 @@ interface V2LancamentosWrapperProps {
 }
 function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEdit, onNavegarChuvas, onNavegarMapaRebanho, cenarioInicial, cenariosPermitidos, onFecharOperacaoOC, onNovaCompraOC, onNovaVendaOC, onNovoAbateOC, somenteOperacao = false }: V2LancamentosWrapperProps = {}) {
   const navigate = useNavigate();
-  const { isGlobal } = useFazenda();
+  const { isGlobal, fazendaAtual: fazendaDosDocumentos } = useFazenda();
+  const clienteDosDocumentos = useCliente().clienteAtual?.id ?? null;
   const { canEdit, canEditMeta } = usePermissions();
   const {
     lancamentos,
@@ -292,7 +295,18 @@ function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEd
            explica melhor.
            ⚠ `pb-[18px]` amarra o ritmo com os grupos de cartoes, que rolam em
            LancamentosTab com o mesmo respiro. Sao dois arquivos, uma tela so. */
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 px-4 pt-3 pb-[18px]">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 px-4 pt-3 pb-[18px]">
+          {/* FECH-DOCS-01 — "Documentos do mês · N", antes dos atalhos de foto; sempre presente (apagado em Global).
+              ⚠ Esta barra não tem mês selecionado (o período da lista mora na URL e nasce no ano inteiro): o mês é o CORRENTE. */}
+          <BotaoDocumentosDoMes
+            clienteId={clienteDosDocumentos}
+            fazendaId={fazendaDosDocumentos?.id ?? null}
+            fazendaNome={fazendaDosDocumentos?.nome ?? ''}
+            anoMes={mesLocal()}
+            classeDoIcone="h-[15px] w-[15px] shrink-0 text-primary"
+            classeDoTexto="text-[11px] font-medium text-foreground"
+            className="group flex items-center gap-2 text-left rounded-md border border-border bg-card px-2.5 py-1.5 hover:shadow-md transition-all"
+          />
           {/* Card 1: Movimentações por Foto — navega para /caderno-importacao */}
           {podeAbrirCaderno && (
           <button

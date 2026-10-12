@@ -9,7 +9,8 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { useLancamentos } from '@/hooks/useLancamentos';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { BotaoDocumentosDoMes } from '@/components/pecuaria/BotaoDocumentosDoMes';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -1225,9 +1226,19 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
               </Button>
             )}
 
+            {/* FECH-DOCS-01 — "Documentos do mês · N": aparece SEMPRE (com zero também), no lugar que era do "Ver sugestões";
+                vem primeiro, e o "Ver sugestões" tem o lugar DELE reservado logo abaixo (28px, vazio sem sugestão). */}
+            <BotaoDocumentosDoMes
+              clienteId={clienteAtual?.id ?? null}
+              fazendaId={fazendaAtual?.id ?? null}
+              fazendaNome={fazendaAtual?.nome ?? ''}
+              anoMes={anoMes}
+              className={buttonVariants({ variant: 'outline', size: 'sm', className: 'h-7 text-[10px] px-2.5 font-bold gap-1 w-full justify-start' })}
+            />
+
             {showAdjustButton && (
               <div className="flex flex-col gap-1 w-full">
-                {sugestoes.length > 0 && (
+                {sugestoes.length > 0 ? (
                   <Button
                     size="sm"
                     variant="outline"
@@ -1236,6 +1247,8 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                   >
                     <Lightbulb className="h-3.5 w-3.5" /> Ver sugestões
                   </Button>
+                ) : (
+                  <div className="h-7 w-full" aria-hidden data-testid="lugar-ver-sugestoes" />
                 )}
                 <Button
                   size="sm"
