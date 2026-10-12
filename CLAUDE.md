@@ -3838,8 +3838,9 @@ docs/historico/frentes-ate-2026-09-29.md.)
 
 ## REGRAS VIGENTES — OPERACAO COMERCIAL E FINANCEIRO
 - ⚠ LANCAMENTO CASADO COM O EXTRATO NAO SAI DO ESTADO EM QUE O BANCO O POS (FIN-CONCILIADO-NAO-REBAIXA-01, Gabriel 12/10/2026; migration
-  `20261027196700_fin_conciliado_nao_rebaixa_01.sql`, md5 do arquivo 218b3320… — ⚠ NAO APLICADA: espera o GO do Gabriel; ate' la' o
-  modal ja' pergunta e a leitura falha calada = "nao casado", o modal de sempre). Nasce do d40adcfa (Agnaldo, 11/10): realizado e
+  `20261027196700_fin_conciliado_nao_rebaixa_01.sql`, md5 do arquivo 218b33201da6fdb0f49d1c0552b34d74 — APLICADA no proto em 12/10/2026, com o GO do Gabriel: ledger
+  `supabase_migrations.schema_migrations` versao 20261012111654, nome `fin_conciliado_nao_rebaixa_01` (⚠ registrada com o
+  timestamp do dia; ledger = arquivo por md5); R1–R7 e o `seg_tenant_varredura_01c_test.sql` OK no banco vivo; residuo zero). Nasce do d40adcfa (Agnaldo, 11/10): realizado e
   casado com o extrato, voltou a 'previsto' sem data de pagamento pelo Salvar do modal do Financeiro (o ramo restrito do titulo de
   OC); o vinculo seguiu vivo e a OC seguiu "Pago". Nenhum gatilho de `financeiro_lancamentos_v2` olhava o vinculo.
   · "ESTA' CASADO?" TEM UM DONO: `_fin_lancamento_casado_com_extrato(lancamento)` (md5 6443dc76…) = existe vinculo VIVO em
@@ -3895,8 +3896,8 @@ docs/historico/frentes-ate-2026-09-29.md.)
     casos), `fn_recorrencia_propagar` e o ramo 'ofx_substituiu' de `fn_extrato_desfazer_arquivo` sobre lancamento com OUTRO
     vinculo vivo, `fn_transferencia_segunda_ponta`, `oc_revalorar_lote` e os demais escritores de OC · valor com 3 casas: o
     modal manda 2 casas e seria barrado num casado (0 casados com 3 casas hoje; 326 lancamentos vivos tem 3 casas) · o custo do
-    gatilho por UPDATE nao foi medido A/B (o WHEN so' chama a funcao quando uma das colunas muda) · NADA VISTO NO NAVEGADOR (a
-    funcao nao existe no banco ate' o GO) · depois de aplicar: rodar o teste R1–R7 e o `seg_tenant_varredura_01c_test.sql`.
+    gatilho por UPDATE nao foi medido A/B (o WHEN so' chama a funcao quando uma das colunas muda) · NADA VISTO NO NAVEGADOR (o
+    modal casado, a frase e a recusa ao salvar so' por teste).
   ⚠ FILA — FIN-CONCILIADO-NAO-REBAIXA-02: trocar `conciliado_em` pela funcao nova nas 8 RPCs de OC que ainda leem a coluna (hoje
     cega); frase propria nos escritores diretos do front e nas portas do hook; o titulo parcial casado (status e `valor` pela
     OC); decidir o `cancelado`.
@@ -3972,8 +3973,10 @@ docs/historico/frentes-ate-2026-09-29.md.)
       foram abertos um a um). De setembro para agosto, 8.250,00 (bf05667a), como esperado.
     CONTAGENS DEPOIS (todas as OCs): conta corrente — compra 27, venda 126; titulo — compra 15, venda 27, abate 47. Entre as nao
     canceladas, fora de rascunho e de teste: titulo compra 7 e venda 23 (18 de boitel).
-    FICARAM FORA, E POR QUE: a2df4ec1 (Agnaldo, compra sem titulo principal na OC: os pagamentos estao soltos no financeiro —
-    religar antes; migrada assim levaria −315.000,00 ao DRE) · 339c2e99 (Santa Rita, 2022: inventario de abertura, nao e' compra)
+    A a2df4ec1 ("Compra 110 DM", Agnaldo) NAO ESTA' MAIS FORA: foi MIGRADA EM SEPARADO em 11/10/2026 (versao 24 da OC), com os
+    pagamentos de 50.000,00 + 248.000,00 vinculados pela tela; fica o saldo "falta pagar" 17.000,00 em aberto — DECISAO DO
+    GABRIEL PENDENTE: o combinado e' 315.000,00 ou 298.000,00. (As 30 e as contagens acima sao as da rodada de 12/10 e nao a incluem.)
+    FICARAM FORA, E POR QUE: 339c2e99 (Santa Rita, 2022: inventario de abertura, nao e' compra)
     · 1fbd595b (Agnaldo, venda sem recebimento) · as 7 sem saida de gado (9b1e71e2, df7d1912, f71a8695, f74f95e5, 2090e12c,
     7016f2b5, 8eff43fa) · as 2 com lote sem valor (229ac98d, 4c5e8c86) · as 18 de boitel.
     ⚠ NAO EXISTE GESTO CONTRARIO: a migracao nao tem "voltar ao titulo". A trilha esta' nos eventos ('fechar_casca_titulo' guarda
@@ -3981,7 +3984,7 @@ docs/historico/frentes-ate-2026-09-29.md.)
     ⚠ NAO PROVADO: nenhuma das 30 foi aberta na TELA depois de migrar (aba Financeiro / conta corrente, lista de Lancamentos, DRE)
       · o DRE da tela (`fn_dre_pecuaria`) nao foi comparado antes x depois — a leitura acima e' a soma dos lancamentos das OCs ·
       os gatilhos disparados pelos escritores (cache, ponte de liquidacao) nao foram conferidos um a um.
-  ⚠ FILA: segunda rodada do 01b (religar a "Compra 110 DM" a2df4ec1, registrar as 7 saidas, informar o valor dos 2 lotes) · tela ·
+  ⚠ FILA: segunda rodada do 01b (o combinado da "Compra 110 DM" a2df4ec1 — 315.000 ou 298.000 —, registrar as 7 saidas, informar o valor dos 2 lotes) · tela ·
     abate fora (OC-CC-ABATE-01) · boitel fora do conta corrente.
 - ⚠ O ENCARGO DO CONTRATO TEM TABELA PROPRIA E NAO TOCA O LANCAMENTO (FIN-CONTRATO-VINCULAR-ENCARGO-01 passo 1, Gabriel 11/10/2026, so'
   banco; migrations 20261027196100 — tabela e trava, ⚠ registrada como 20261011132222, ledger = arquivo, md5 f88ffba7… —,
