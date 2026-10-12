@@ -161,7 +161,7 @@ export function ResumoLateralOC({
           <div data-testid="resumo-conta-corrente">
             <LinhaResumo rotulo="Entrada" valor={formatMoeda(contaCorrente.entregue)} cor={contaCorrente.entregue > 0 ? 'text-[#15803d]' : undefined} />
             <LinhaResumo rotulo="Pago" valor={formatMoeda(-contaCorrente.recebido)} cor={contaCorrente.recebido > 0 ? 'text-[#b91c1c]' : undefined} />
-            <LinhaResumo rotulo={rotuloDoSaldo(contaCorrente.saldo, 'compra')} forte valor={formatMoeda(contaCorrente.saldo)}
+            <LinhaResumo rotulo={rotuloDoSaldo(contaCorrente.saldo, 'compra', contaCorrente.situacao)} forte valor={formatMoeda(contaCorrente.saldo)}
               cor={corDoSaldo(contaCorrente.saldo) === 'neg' ? 'text-[#b91c1c]' : corDoSaldo(contaCorrente.saldo) === 'pos' ? 'text-[#15803d]' : undefined} />
           </div>
         ) : (

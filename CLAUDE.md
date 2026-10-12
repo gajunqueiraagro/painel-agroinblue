@@ -162,7 +162,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 12/10/2026 (OC-CC-EXPLICAR-CONGELA-01, +20: `src/components/venda/explicarCongela.test.tsx` 10 (novo),
+  Baseline em 12/10/2026 (OC-CC-PADRAO-NOVAS-01b, +13: `src/hooks/ocVersaoAposSaida.test.tsx` 5 (novo),
+  `src/components/venda/aguardandoSaida.test.tsx` 8 (novo) — 4940 depois dele; antes o OC-CC-EXPLICAR-CONGELA-01, +20:
+  `src/components/venda/explicarCongela.test.tsx` 10 (novo),
   `src/components/compra/simulacaoUmaVez.test.tsx` 10 (novo) — 4927 depois dele; antes o
   FIN-CONCILIADO-NAO-REBAIXA-01, +16 em `src/components/financeiro-v2/casadoComExtrato.test.tsx` (novo) — 4907 depois dele; antes o
   CONC-SPLIT-FILHO-CANCELADO-01 passo 2 commit B, +21: `src/lib/conciliacao/cancelarFilhoDeSplit.test.ts` 13 (novo),
@@ -293,7 +295,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4927
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4940
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3917,13 +3919,72 @@ docs/historico/frentes-ate-2026-09-29.md.)
     a assinatura de `oc_registrar_movimentacao`, o CHECK da conta por direcao, o caminho A do `oc_salvar_lotes`). E OS DEZ CRIAM
     A OC NO CLIENTE DO PRIMEIRO ADMIN que acharem em `cliente_membros` — cliente REAL, mesmo revertido: quando forem tocados,
     migram para o cliente Teste. Ate' la', nenhum deles roda em horario de uso fora de transacao revertida.
-  ⚠ FILA: OC-CC-PADRAO-NOVAS-01b (banco + tela juntos: o gancho de `oc_sincronizar_entregas` em registrar, estornar, adotar,
-    encerrar, receber_lotes e desvincular, devolvendo a versao REAL, com a tela lendo e repassando por `onVersaoChange`; e as
-    telas do estado "conta corrente sem entrega": rotulo "Aguardando saida", "Atualizar entregas" apagado com motivo em
-    rascunho, "Explicar diferença" nao oferecido sem entrega, a Central e o fluxo Concluir -> Financeiro conferidos) ·
+  ⚠ FILA: [o gancho da saida, a versao REAL nas seis funcoes, o rotulo "Aguardando saída", o "Atualizar entregas" apagado em
+    rascunho e o "Explicar diferença" so' com entrega FECHARAM no OC-CC-PADRAO-NOVAS-01b — a regra logo abaixo; FICA da lista
+    de antes: a Central (OC-LISTA-FINANC-CC-01, PR proprio) e o fluxo Concluir -> Financeiro conferido no navegador] ·
     OC-BOITEL-DESMARCAR-01 (gesto na tela + RPC que apaga a linha projetada e aplica D2 no outro sentido: vira conta corrente
     se nao ha' compromisso nem liquidacao de titulo vivos; senao recusa "Esta venda ja tem financeiro no modelo titulo; desfaca
     antes de tirar o boitel") · [a OC 41904517 saiu da fila: migrada em 12/10 — ver o bloco do OC-TITULO-PARA-CC-01b].
+- ⚠ EM CONTA CORRENTE A ENTREGA ACOMPANHA O GADO: O GANCHO DA SAIDA, E AS SEIS FUNCOES DEVOLVEM A VERSAO GRAVADA (OC-CC-PADRAO-NOVAS-01b,
+  Gabriel 12/10/2026, banco + tela no mesmo PR; migration `20261027196900_oc_cc_padrao_novas_01b.sql`, md5 do arquivo
+  d5bb13483c2ec92ce8f0ae5a68fac1cf — ⚠ NAO APLICADA: so' com o GO do Gabriel; ate' la' a tela nova roda contra o banco antigo
+  sem quebrar (registrar e estornar nao devolvem versao e a tela segue como era; "Aguardando saída" ja' vem do 01a).
+  · O GANCHO TEM UM LUGAR: `_oc_cc_gancho_entregas(operacao)` (interna, fechada a `authenticated` e `anon`; md5 ae7406ad…). So' age
+    em venda / compra em CONTA CORRENTE, fora de rascunho, nao cancelada e sem linha de boitel; chama o dono
+    `oc_sincronizar_entregas(op, versao lida na hora, false)` — nenhum calculo novo — e devolve `{versao, sincronizou, avisos,
+    criadas, atualizadas, canceladas}` (contagens). Em OC titulo / boitel / rascunho nao age, nao avisa e a versao e' a de sempre.
+  · AS SEIS (patch guardado por md5, 2 ancoras cada, cada uma 1x; assinatura, tipo de retorno e ACL iguais) chamam o gancho NO FIM e
+    devolvem `versao` = a GRAVADA (lida depois do gancho) e `entregas` = o retorno dele:
+        oc_registrar_movimentacao   78d438c7… -> 6c4e0fcc31475d7f4e370a6deaa9ac8d   (passa a devolver `versao`)
+        oc_adotar_movimentacao      5a260b0b… -> 790f704c8f2d3b73ff5f44b5dc9c331b
+        oc_estornar_movimentacao    27a56ed5… -> 3c1eba11608ccd0e2675418f29001dec   (passa a devolver `versao` e `operacao_id`)
+        oc_encerrar_entrega         4d05fe60… -> f21e288aa736cb430be5dd570c870522
+        oc_receber_lotes            7a89fdc4… -> cb3e43db4f291518826eaac9129da751   (cada registro ja' sincronizou; aqui so' le^ a versao)
+        oc_desvincular_movimentacao 9dc0a38f… -> f6779beccea005c7bff7d20897f6d656
+    ⚠ REGRA — A VERSAO SOMA (+1 PROPRIO + SINCRONIZADOR; aceita pelo Gabriel, 12/10): adotar, encerrar, receber_lotes e desvincular seguem com o +1 PROPRIO (`versao = versao + 1`, relativo) e o
+      sincronizador soma +1 quando cria / atualiza / cancela entrega — adotar uma saida leva a OC de N a N+2. O que mudou e' que o
+      numero DEVOLVIDO e' o gravado (antes era `v_op.versao + 1`, calculado). Tirar o +1 proprio nao foi feito (mudaria o contrato
+      das quatro em OC titulo).
+    ⚠ `oc_criar_do_legado` chama adotar e encerrar relendo a versao antes de cada chamada: segue valendo.
+  · A SAIDA NUNCA E' RECUSADA POR CAUSA DO FINANCEIRO (decisao do briefing, e DESVIO DECLARADO no como): recusa de REGRA do
+    sincronizador (P0001: lote sem valor, categoria sem conta no plano) NAO derruba o gesto — vira o aviso
+    `entregas_nao_sincronizadas {motivo}`, a saida fica gravada e pendente (a aba mostra "saida sem entrega" com o "Atualizar
+    entregas", como hoje). Conflito de versao (40001) e os demais erros PROPAGAM.
+  · MES FECHADO, MEDIDO: `oc_sincronizar_entregas` nao olha mes fechado e nenhum gatilho do financeiro recusa por isso. O gancho
+    AVISA (`mes_fechado {mes}`, pelo criterio do vincular: P1 'oficial' da fazenda no mes da entrega criada / atualizada) e grava.
+    Havendo qualquer aviso, fica o evento `aviso_entregas` na trilha da OC.
+    ⚠ DIVIDA OC-CC-AVISO-MES-FECHADO-01: o aviso `mes_fechado` do gancho NAO APARECE NA TELA (so' no retorno e na trilha), e o
+      ramo NAO TEM TESTE (nao ha' mes fechado no Teste). O mesmo vale para a exibicao de `entregas_nao_sincronizadas`.
+  · TELA: (5) `useOperacaoRecebimento.registrar` e `.estornar` leem `versao` do retorno e repassam por `onVersaoChange` (os outros
+    quatro ja' repassavam); `useOcContaCorrente` RELE a conta corrente UMA vez quando a versao da OC anda por fora dele (guardas:
+    leitura em curso e a versao que a ultima leitura ja' trouxe — sem laco; os gestos do proprio hook nao leem em dobro). (6) o
+    rotulo "Aguardando saída" mora no dicionario de sempre — `rotuloDoSaldo(saldo, lado, situacao)` e `ROTULO_AGUARDANDO_SAIDA`
+    (`src/lib/oc/contaCorrente.ts`); `SituacaoContaCorrente` ganhou 'aguardando_saida' (o leitor a rebaixava a 'quitado'). Usam:
+    o card do saldo (`AbaContaCorrenteOC`), o resumo lateral da compra (`ResumoLateralOC`) e o da venda (`VendaModalShell`, pela
+    mesma constante). O MESMO rotulo na venda e na compra. (7) "Atualizar entregas" em RASCUNHO: apagado com
+    `MOTIVO_ATUALIZAR_EM_RASCUNHO` ("Conclua a negociação antes"), antes do motivo de acesso; a venda ganhou a prop `ocRascunho`
+    (o `LancamentosTab` a entrega). (8) "Explicar diferença" JA' so' era oferecido com entrega (`barraDaDiferenca` e a barra
+    "Quitado." da compra exigem linha de entrega): nada mudou, ficou PRESO por teste. (9) a Central nao foi tocada.
+  · PROVAS (12/10, ensaio revertido, cliente Teste, usuario simulado; so' funcoes, nenhum DDL em tabela): a migration INTEIRA numa
+    transacao (os seis md5 de destino e a ACL conferidos pelo proprio arquivo); R1–R8 em TRES recortes com o corpo exato por md5
+    (o canal recusa a carga inteira): R1 registrar -> entrega 10.000, 0 pendentes, 'falta_receber'; R2 estornar -> entrega
+    cancelada, 'aguardando_saida', versao +1; R3 adotar; R6 desvincular; R4 encerrar acerta a entrega de lote que mudou de valor
+    por fora (12.000); R5 receber_lotes na compra; R7 titulo / boitel / rascunho sem acao e sem aviso, e lote sem valor -> saida
+    gravada com o aviso e o evento; R8 versao devolvida = gravada nas seis. 12 mutacoes de banco mortas, 12 de 12: no gancho — sem a
+    chamada -> R5; sem o modelo -> R7a; sem o boitel -> R7b; sem o rascunho -> R7c; sem a captura do P0001 -> R7d; versao lida
+    antes -> R8; e cada funcao SEM o gancho — registrar -> R7a/R8; estornar -> R2 (entrega segue em 10.000); adotar -> R3
+    (saida pendente); desvincular -> R6; encerrar -> R4 (entrega fica em 10.000); receber_lotes com o corpo de antes -> R8
+    (devolve 3, gravou 4). ⚠ EM `oc_receber_lotes` O GANCHO SO' LE^ A VERSAO (a entrega nasce no gancho do registrar de cada
+    item): trocar a chamada por uma leitura da versao e' mutante EQUIVALENTE (sobrevive, de proposito). Tela: 13 testes, 9
+    mutacoes mortas.
+    ⚠ `acessoCapacidadesOC.test.tsx` FOI ATUALIZADO AO CONTRATO NOVO (lia por texto a prop `motivoAtualizarEntregas` dos shells).
+  ⚠ OS 10 TESTES SQL ANTIGOS DE OC — CRITERIO DO 01a CUMPRIDO POR LEITURA (aceito pelo Gabriel, 12/10), NAO POR EXECUCAO: 7 nao
+    chamam nenhuma das seis funcoes; os 3 que chamam (`receb_01`, `lote_valor_01`, `model_01`) caem ANTES de chegar a elas (peso
+    medio no `oc_salvar_lotes`; C1; chamada de 8 argumentos, 42883). Com o prefixo da migration nao cabem no canal.
+  ⚠ NAO PROVADO: nada no NAVEGADOR (registrar a saida e ver a entrega e o saldo mudarem sem "Atualizar entregas"; o rotulo; o botao
+    apagado em rascunho) · o arquivo de teste rodado INTEIRO (so' em recortes) · `seg_tenant_varredura_01c` (so' depois de
+    aplicar) · o custo do gancho por saida (uma chamada a mais de `oc_sincronizar_entregas`) · saida registrada com a OC em
+    rascunho (o gancho nao age; se o banco aceita a saida em rascunho nao foi medido aqui).
 - ⚠ PREVIA E SIMULACAO POR EFEITO DEPENDEM DE FUNCAO ESTAVEL E DE VALOR PRIMITIVO, NUNCA DE OBJETO RECRIADO POR RENDER; E A VERSAO DA
   OC SE CURA DEPOIS DA RECUSA (OC-CC-EXPLICAR-CONGELA-01, Gabriel 12/10/2026, so' tela, sem migration e sem mudar contrato de RPC).
   Nasce do "Explicar diferença" da OC fcdbe0bb (compra em conta corrente), que congelou duas vezes sem gravar.

@@ -30,6 +30,7 @@ import { CompraResumoPanel } from './CompraResumoPanel';
 import { ResumoLateralOC } from './ResumoLateralOC';
 import { CompraDetalhesDialog, EMPTY_COMPRA_DETALHES, type CompraDetalhes } from './CompraDetalhesDialog';
 import { useOcContaCorrente } from '@/hooks/useOcContaCorrente';
+import { MOTIVO_ATUALIZAR_EM_RASCUNHO } from '@/lib/oc/contaCorrente';
 import { GestoDeOperacao } from '@/components/financeiro-v2/GestoDeOperacao';
 import {
   ACESSO_TOTAL, MOTIVO_GADO, MOTIVO_SEM_CAPACIDADE, motivoFisicoTravado, motivoReabrirTravado, ocTemGadoMovido, type AcessoOperacao,
@@ -529,7 +530,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
               darkSelectClass={DARK_SELECT_CONTENT}
               financeiroLegadoReadOnly={permissoes.financeiroLegadoReadOnly}
               financeiroNovoReadOnly={permissoes.financeiroNovoReadOnly}
-              motivoAtualizarEntregas={acessoOC.atualizar_entregas ? null : MOTIVO_SEM_CAPACIDADE}
+              motivoAtualizarEntregas={api.ocRascunho ? MOTIVO_ATUALIZAR_EM_RASCUNHO : acessoOC.atualizar_entregas ? null : MOTIVO_SEM_CAPACIDADE}
               onIrParaDocumentos={() => irParaAba('documentos')}
               onIrParaEntrega={() => irParaAba('recebimento')}
               operacaoId={api.ocOperacaoId ?? null}

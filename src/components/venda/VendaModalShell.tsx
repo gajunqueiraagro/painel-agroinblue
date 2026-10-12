@@ -53,7 +53,7 @@ import { AbaFinanceiroOC } from '@/components/compra/AbaFinanceiroOC';
 import { useOcCompromissos } from '@/hooks/useOcCompromissos';
 import { useOcContaCorrente } from '@/hooks/useOcContaCorrente';
 import { CancelarContaCorrenteDialog } from '@/components/venda/CancelarContaCorrenteDialog';
-import { corDoSaldo, COR_SINAL } from '@/lib/oc/contaCorrente';
+import { corDoSaldo, COR_SINAL, MOTIVO_ATUALIZAR_EM_RASCUNHO, ROTULO_AGUARDANDO_SAIDA } from '@/lib/oc/contaCorrente';
 import { linhasPainelBoitel, linhaIdentificacaoBoitel, entregaEmUmaLinha, classeDaCorPainel } from '@/components/venda/painelBoitel';
 import type { ReactNode } from 'react';
 import type { LinhaPrevisao, RotulosCompromissos } from '@/components/compra/AbaCompromissosOC';
@@ -146,6 +146,8 @@ export interface VendaModalShellProps {
   ocOperacaoId: string | null;
   /** A versão da operação e seu setter — o pai é dono único (OC-VERSAO-FONTE-UNICA-01). */
   ocVersao?: number | null;
+  /** Rascunho tecnico da OC (OC-CC-PADRAO-NOVAS-01b): em rascunho o "Atualizar entregas" fica apagado com o motivo. */
+  ocRascunho?: boolean;
   /* ⚠ ADITIVO — [OC-EXCLUIR-LOTE] (128). Montado no `LancamentosTab`; o shell só repassa. */
   exclusaoLoteOC?: ExclusaoLoteOC | null;
   /* ⚠ ADITIVO — [OC-EDITAR-LOTE-FECHADA] (128b). O modal do lote de uma OC fechada oferece
@@ -227,7 +229,7 @@ export function VendaModalShell({
   vendaFazendaId, setVendaFazendaId, fazendasOC,
   propriedadeDestino, setPropriedadeDestino,
   vendaTipoVenda, setVendaTipoVenda, observacao, setObservacao,
-  ocOperacaoId, ocVersao, onOcVersaoChange, ocStatusComercial, lotesApi, exclusaoLoteOC = null,
+  ocOperacaoId, ocVersao, ocRascunho = false, onOcVersaoChange, ocStatusComercial, lotesApi, exclusaoLoteOC = null,
   onReabrirLoteParaEditar = null, boitelData = null, onBoitelChange,
   boitelReal = null, onAplicarRealizado, onIniciarRealizado,
   boitelRealSalvo = null, pendenciaRealizado = null, erroRealizado = null,
@@ -715,7 +717,7 @@ export function VendaModalShell({
               darkSelectClass=""
               financeiroLegadoReadOnly={ocStatusComercial === 'cancelada'}
               financeiroNovoReadOnly={ocStatusComercial === 'cancelada'}
-              motivoAtualizarEntregas={acessoOC.atualizar_entregas ? null : MOTIVO_SEM_CAPACIDADE}
+              motivoAtualizarEntregas={ocRascunho ? MOTIVO_ATUALIZAR_EM_RASCUNHO : acessoOC.atualizar_entregas ? null : MOTIVO_SEM_CAPACIDADE}
               operacaoId={ocOperacaoId}
               clienteId={liquidacaoApi.clienteId ?? null}
               /* A instancia que o resumo lateral ja monta — uma leitura, dois consumidores. */
@@ -1077,7 +1079,7 @@ export function VendaModalShell({
                 <div data-testid="resumo-conta-corrente">
                   <LinhaResumo rotulo="Entregue" valor={formatMoeda(cc.entregue)} />
                   <LinhaResumo rotulo="Recebido" valor={formatMoeda(cc.recebido)} cor={cc.recebido > 0 ? COR_SINAL.pos : undefined} />
-                  <LinhaResumo rotulo={corDoSaldo(cc.saldo) === 'neg' ? 'Saldo · falta receber' : corDoSaldo(cc.saldo) === 'pos' ? 'Saldo · adiantado' : 'Saldo · quitado'}
+                  <LinhaResumo rotulo={cc.situacao === 'aguardando_saida' ? ROTULO_AGUARDANDO_SAIDA : corDoSaldo(cc.saldo) === 'neg' ? 'Saldo · falta receber' : corDoSaldo(cc.saldo) === 'pos' ? 'Saldo · adiantado' : 'Saldo · quitado'}
                     forte valor={formatMoeda(cc.saldo)}
                     cor={corDoSaldo(cc.saldo) === 'neg' ? COR_SINAL.neg : corDoSaldo(cc.saldo) === 'pos' ? COR_SINAL.pos : undefined} />
                 </div>

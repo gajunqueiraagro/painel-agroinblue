@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { normalizarErroRpc } from '@/hooks/useOcCompromissos';
 import { lerContaCorrente, type ContaCorrente, type TipoExplicacao } from '@/lib/oc/contaCorrente';
@@ -102,15 +102,19 @@ export function useOcContaCorrente({ operacaoId, enabled, versao, onVersaoChange
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  const versaoLidaRef = useRef<number | null>(null);
+  const lendoRef = useRef(0);
 
   /* A leitura devolve o que leu: quem acabou de ser recusado por versao precisa da versao RELIDA (OC-CC-EXPLICAR-CONGELA-01). */
   const ler = useCallback(async (): Promise<ContaCorrente | null> => {
     if (!operacaoId || !enabled) { setContaCorrente(null); return null; }
     setLoading(true);
+    lendoRef.current += 1;
     try {
       const { data, error } = await (supabase as any).rpc('oc_conta_corrente', { p_operacao_id: operacaoId });
       if (error) throw normalizarErroRpc(error);
       const cc = lerContaCorrente(data);
+      versaoLidaRef.current = cc.versao;
       setContaCorrente(cc);
       setErro(null);
       return cc;
@@ -118,12 +122,21 @@ export function useOcContaCorrente({ operacaoId, enabled, versao, onVersaoChange
       setErro(e instanceof Error ? e.message : 'Falha ao carregar a conta corrente.');
       return null;
     } finally {
+      lendoRef.current -= 1;
       setLoading(false);
     }
   }, [operacaoId, enabled]);
   const recarregar = useCallback(async () => { await ler(); }, [ler]);
 
   useEffect(() => { void recarregar(); }, [recarregar]);
+
+  /* OC-CC-PADRAO-NOVAS-01b — a versao da OC andou POR FORA deste hook (registrar / estornar / adotar a saida agora sincronizam
+     a entrega no banco): rele a conta corrente UMA vez por versao nova. Nao rele o que este hook ja' esta' lendo (os gestos
+     daqui avisam a versao e releem em seguida) nem a versao que a ultima leitura ja' trouxe — sem laco. */
+  useEffect(() => {
+    if (versao == null || lendoRef.current > 0 || versaoLidaRef.current == null || versaoLidaRef.current === versao) return;
+    void recarregar();
+  }, [versao, recarregar]);
 
   const versaoAtual = versao ?? contaCorrente?.versao ?? null;
 

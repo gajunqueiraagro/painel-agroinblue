@@ -459,9 +459,12 @@ describe('a ligacao: o hospedeiro le uma vez e desce por prop; ninguem pergunta 
     expect(f).toContain('const motivoGado = acessoOC.movimentar_gado ? null : MOTIVO_GADO;');
   });
   it('"Atualizar entregas" e uma celula do dono, nos tres shells', () => {
-    for (const p of ['src/components/compra/CompraModalShell.tsx', 'src/components/venda/VendaModalShell.tsx', 'src/components/abate/AbateModalShell.tsx']) {
-      expect(fonte(p)).toContain('motivoAtualizarEntregas={acessoOC.atualizar_entregas ? null : MOTIVO_SEM_CAPACIDADE}');
-    }
+    /* OC-CC-PADRAO-NOVAS-01b: na compra e na venda o motivo do RASCUNHO vem antes; a celula do dono continua sendo a do acesso */
+    expect(fonte('src/components/compra/CompraModalShell.tsx'))
+      .toContain('motivoAtualizarEntregas={api.ocRascunho ? MOTIVO_ATUALIZAR_EM_RASCUNHO : acessoOC.atualizar_entregas ? null : MOTIVO_SEM_CAPACIDADE}');
+    expect(fonte('src/components/venda/VendaModalShell.tsx'))
+      .toContain('motivoAtualizarEntregas={ocRascunho ? MOTIVO_ATUALIZAR_EM_RASCUNHO : acessoOC.atualizar_entregas ? null : MOTIVO_SEM_CAPACIDADE}');
+    expect(fonte('src/components/abate/AbateModalShell.tsx')).toContain('motivoAtualizarEntregas={acessoOC.atualizar_entregas ? null : MOTIVO_SEM_CAPACIDADE}');
   });
   it('nenhum `if` de perfil nos pontos de uso: so o dono compara perfil', () => {
     const arquivos = [

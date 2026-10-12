@@ -6280,6 +6280,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                compromissos, montado lá dentro, guardava a própria e deixava esta
                para trás. Agora os três escrevem no mesmo estado. */
             ocVersao={ocVersao} onOcVersaoChange={setOcVersao}
+            ocRascunho={ocRascunho}
           data={data} setData={setData}
           compradorId={vendaDestinoFornecedorId} setCompradorId={setVendaDestinoFornecedorId}
           contrapartes={abateFornecedores}

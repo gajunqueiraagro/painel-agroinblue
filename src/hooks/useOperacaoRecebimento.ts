@@ -223,33 +223,37 @@ const concluirNegociacao = useCallback(async (opts?: { versaoOverride?: number; 
     if (!guardOp()) return;
     setSaving(true);
     try {
-      const { error } = await (supabase as any).rpc('oc_registrar_movimentacao', {
+      const { data, error } = await (supabase as any).rpc('oc_registrar_movimentacao', {
         p_operacao_id: operacaoId, p_cliente_id: clienteId, p_lote_id: loteId,
         p_data: dados.data, p_categoria: dados.categoria, p_quantidade: dados.quantidade,
         p_peso_medio_kg: dados.pesoMedio, p_peso_total_kg: null, p_observacao: dados.observacao || null,
       });
       if (error) throw normalizarErroRpc(error);
+      /* OC-CC-PADRAO-NOVAS-01b: em conta corrente o registro sincroniza a entrega e a versao da OC anda; o banco
+         devolve a gravada, e o proximo gesto vai com ela (sem isso, 40001 no gesto seguinte). */
+      if (data?.versao != null) onVersaoChange(data.versao);
       toast.success('Recebimento registrado.');
       await carregar();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Falha ao registrar recebimento.');
     } finally { setSaving(false); }
-  }, [operacaoId, clienteId, carregar]);
+  }, [operacaoId, clienteId, onVersaoChange, carregar]);
 
   const estornar = useCallback(async (movimentacaoId: string, motivo: string) => {
     if (!guardOp()) return;
     setSaving(true);
     try {
-      const { error } = await (supabase as any).rpc('oc_estornar_movimentacao', {
+      const { data, error } = await (supabase as any).rpc('oc_estornar_movimentacao', {
         p_movimentacao_id: movimentacaoId, p_cliente_id: clienteId, p_motivo: motivo || null,
       });
       if (error) throw normalizarErroRpc(error);
+      if (data?.versao != null) onVersaoChange(data.versao);   // OC-CC-PADRAO-NOVAS-01b: a entrega e' cancelada junto
       toast.success('Movimentação estornada.');
       await carregar();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Falha ao estornar.');
     } finally { setSaving(false); }
-  }, [operacaoId, clienteId, carregar]);
+  }, [operacaoId, clienteId, onVersaoChange, carregar]);
 
   /* ── OC-VENDA-ENTREGAS-01a — ADOTAR SAIDA JA LANCADA ─────────────────────────────────────────
      Adotar so' cria o vinculo lote -> movimentacao; o banco decide quem pode (`_oc_motivo_nao_adotavel`,

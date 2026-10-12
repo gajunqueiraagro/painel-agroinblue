@@ -300,7 +300,7 @@ export function AbaContaCorrenteOC({ api, somenteLeitura, lado = 'venda', despes
           <div className="grid flex-none gap-[6px]" style={{ gridTemplateColumns: '1fr 1fr 170px 1fr 1fr' }} data-testid="cards-conta-corrente">
             <CardEmPe rotulo={t.cardEntrega} valor={cc.entregue} cor={COR.pos} testid="card-entrega" />
             <CardEmPe rotulo={t.cardDinheiro} valor={-sinalEntrega * cc.recebido} cor={lado === 'compra' ? COR.neg : COR.pos} testid="card-dinheiro" />
-            <CardEmPe rotulo={rotuloDoSaldo(cc.saldo, lado)} valor={cc.saldo} cor={COR[corSaldo]} destaque={corSaldo !== 'zero'} testid="card-saldo" />
+            <CardEmPe rotulo={rotuloDoSaldo(cc.saldo, lado, cc.situacao)} valor={cc.saldo} cor={COR[corSaldo]} destaque={corSaldo !== 'zero'} testid="card-saldo" />
             <CardEmPe rotulo="Despesas lançadas" valor={totaisDespesas?.lancadas ?? null} cor={COR.neg} divisor testid="card-despesas-lancadas" />
             <CardEmPe rotulo="Despesas pagas" valor={totaisDespesas?.pagas ?? null} cor={COR.neg} testid="card-despesas-pagas" />
           </div>

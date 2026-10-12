@@ -13,7 +13,8 @@ export type TipoExplicacao = 'ajuste_preco' | 'desconto_comercial' | 'permuta_de
 export type StatusLinhaContaCorrente =
   | 'sem_caixa' | 'sem_conta_bancaria' | 'conciliado' | 'programado' | 'realizado' | 'ajuste';
 /** 'falta_pagar' so' na compra (OC-CONTA-CORRENTE-TODOS-01a): o extrato da compra e' o espelho do da venda. */
-export type SituacaoContaCorrente = 'falta_receber' | 'falta_pagar' | 'adiantado' | 'quitado';
+/** 'aguardando_saida' (OC-CC-PADRAO-NOVAS-01a/01b): a OC nasceu em conta corrente e ainda nao tem entrega nem recebimento. */
+export type SituacaoContaCorrente = 'falta_receber' | 'falta_pagar' | 'adiantado' | 'quitado' | 'aguardando_saida';
 /** De que lado da operacao a conta corrente fala: a venda recebe do comprador, a compra paga ao fornecedor. */
 export type LadoContaCorrente = 'venda' | 'compra';
 
@@ -118,7 +119,7 @@ function statusDe(v: unknown): StatusLinhaContaCorrente {
     ? v : 'realizado';
 }
 function situacaoDe(v: unknown): SituacaoContaCorrente {
-  return v === 'falta_receber' || v === 'falta_pagar' || v === 'adiantado' ? v : 'quitado';
+  return v === 'falta_receber' || v === 'falta_pagar' || v === 'adiantado' || v === 'aguardando_saida' ? v : 'quitado';
 }
 function tipoLinhaDe(v: unknown): TipoLinhaContaCorrente {
   return v === 'entrega' || v === 'explicacao' ? v : 'recebimento';
@@ -223,8 +224,14 @@ export function corDoSaldo(valor: number | null): 'neg' | 'pos' | 'zero' {
   return c < 0 ? 'neg' : c > 0 ? 'pos' : 'zero';
 }
 
+/** OC-CC-PADRAO-NOVAS-01b — a situacao que o banco devolve enquanto nada saiu e nada foi pago: nao e' "quitado". */
+export const ROTULO_AGUARDANDO_SAIDA = 'Aguardando saída';
+/** "Atualizar entregas" nao vale em rascunho (o banco recusa): o botao fica apagado com este motivo. */
+export const MOTIVO_ATUALIZAR_EM_RASCUNHO = 'Conclua a negociação antes';
+
 /** O rotulo do card do saldo, que segue o sinal. Na compra o sinal e' o espelho: positivo falta pagar, negativo adiantado. */
-export function rotuloDoSaldo(saldo: number, lado: LadoContaCorrente = 'venda'): string {
+export function rotuloDoSaldo(saldo: number, lado: LadoContaCorrente = 'venda', situacao?: SituacaoContaCorrente): string {
+  if (situacao === 'aguardando_saida') return ROTULO_AGUARDANDO_SAIDA;
   const c = corDoSaldo(saldo);
   if (lado === 'compra') {
     return c === 'pos' ? 'Saldo · falta pagar' : c === 'neg' ? 'Saldo · adiantado ao fornecedor' : 'Saldo · quitado';
