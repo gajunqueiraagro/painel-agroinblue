@@ -162,7 +162,7 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 12/10/2026 (FECH-DOCS-01, +27: `src/hooks/useDocumentosDoMes.test.tsx` 13,
+  Baseline em 12/10/2026 (FECH-GLOBAL-RESUMO-01, +19 em `src/components/fechamentoGlobalResumo.test.tsx` (novo) — 4997 depois dele; antes o FECH-DOCS-01, +27: `src/hooks/useDocumentosDoMes.test.tsx` 13,
   `src/components/pecuaria/documentosDoMesDialog.test.tsx` 14 — 4978 depois dele; antes o OC-CRIAR-DO-LEGADO-COMPRA-01, +11: `src/lib/oc/criarDoLegado.test.ts` 5,
   `src/components/financeiro-v2/criarOCDoLegado.test.tsx` 6 — 4951 depois dele; antes o OC-CC-PADRAO-NOVAS-01b, +13: `src/hooks/ocVersaoAposSaida.test.tsx` 5 (novo),
   `src/components/venda/aguardandoSaida.test.tsx` 8 (novo) — 4940 depois dele; antes o OC-CC-EXPLICAR-CONGELA-01, +20:
@@ -297,7 +297,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4978
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 4997
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3860,6 +3860,58 @@ docs/historico/frentes-ate-2026-09-29.md.)
   quem mexer num confere o outro. O selo do rodape (`SeloRegraDaLinha`) diz a regra da linha.
 
 ## REGRAS VIGENTES — OPERACAO COMERCIAL E FINANCEIRO
+- ⚠ FECHAMENTO AREA EM "GLOBAL" MOSTRA O RESUMO POR FAZENDA E O CAMINHO PARA OS PASTOS (FECH-GLOBAL-RESUMO-01, Gabriel 12/10/2026, so'
+  tela, sem banco; mock v2 aprovado em 12/10). Commit local, sem push; ⚠ HOMOLOGACAO RUNTIME PENDENTE (nada visto no navegador).
+  Entra no lugar da frase "Selecione uma fazenda para o fechamento." (`FechamentoTab.tsx`, so' o ramo `isGlobal`).
+  · QUEM FAZ O QUE: `src/lib/pecuaria/fechamentoGlobal.ts` (dono puro: `montarResumoGlobal`, `mesDaFazenda`, `cabecasPorFazenda`,
+    `totalDoRebanho`), `src/hooks/useFechamentoGlobal.ts` (as duas leituras, so' com a tela em Global) e
+    `src/components/FechamentoGlobalResumo.tsx` (so' desenha: sem soma, filtro nem regra — preso por teste de fonte).
+  · NENHUMA REGRA NOVA — ESPELHO DECLARADO DA TELA POR FAZENDA (quem mexer num criterio de la' confere o dono):
+        campo                    de onde vem
+        lista                    fazendas do contexto com `status_operacional` ≠ 'inativa' (a inativa fica fora)
+        Pastos / Area (ha)       `pastosAtivosNoMes(pastos, mes)` SEM o pseudo-pasto de divergencia; area = Σ `area_produtiva_ha`
+                                 do CADASTRO do pasto (nao e' o snapshot de area do fechamento)
+        Mes atual                'fechado' = todo pasto do mes (o de divergencia inclusive) tem card 'fechado' e ha' ao menos um
+                                 pasto — o `allClosed` do selo "Mês fechado"; senao "aberto · N a fechar", N = o `pendentesCount`
+                                 do "Fechar N pasto(s)"; fazenda sem pasto no mes: "—" e fora do "X de Y"
+        Ultimo fechamento        o mes 'fechado' mais recente da janela lida (jan do ano anterior a dez do ano escolhido)
+        Cabecas                  Σ `fechamento_pasto_itens.quantidade` dos cards dos pastos DAQUELE mes — a linha "Pasto" da
+                                 conciliacao da tela por fazenda (`reconciliacaoFechIds`)
+        Atividade                "Pecuária" quando `fazendas.tem_pecuaria`; senao "—"
+        fita (12 meses)          verde = toda fazenda com pastos no mes esta' fechada; ambar = alguma aberta e ja' ha' card no
+                                 mes; neutro sem card
+    Ordem: abertas no mes primeiro, depois o nome. Cartoes (46px): Rebanho · ultimo fechamento (+ o mes, ou "meses diferentes")
+    · Area de pastos (ha) · Pastos · Fechamento do mes "X de Y fazendas". Rodape = os totais do dono. Cabecas que ainda nao
+    chegaram: "…"; leitura que falhou ou fazenda sem fechamento na janela: "—" — o total NUNCA e' soma parcial calada.
+  · ⚠ DIVERGENCIAS DO BRIEFING / DO MOCK, DECLARADAS (o proprio briefing mandava "—" e relatar, sem inventar):
+    (1) "N sem lançar" virou "N A FECHAR": a tela por fazenda nao tem contagem de "sem lancar" sem ler os itens de todos os cards
+        (o `nao_iniciado` depende deles); o numero que tem dono e' o de pastos nao fechados.
+    (2) ATIVIDADE: o cadastro da fazenda so' tem `tem_pecuaria` (marca manual, que erra nos dois sentidos — ver
+        `useFazendasPecuariaAtivas`); nao ha' campo de tipo de atividade. Fazenda sem a marca mostra "—".
+    (3) A TELA POR FAZENDA TEM DOIS CRITERIOS DE "MES FECHADO": a fita (`resumirStatusPorMes`: so' os cards que existem) e o
+        selo (`allClosed`: todo pasto do mes). O resumo usa o do SELO na linha, no "X de Y" e na fita dele — a fita da fazenda
+        pode estar verde com a linha "aberto" aqui (pasto do mes sem card). Nao unificado.
+    (4) "Ultimo fechamento" nao olha antes de janeiro do ano anterior ao escolhido ("—" se nao houver na janela).
+  · A FITA ANO + MESES E' UMA: `src/components/FechamentoFitaMeses.tsx`, MOVIDA VERBATIM do `FechamentoTab` (diff do trecho vazio,
+    51 linhas); a tela por fazenda e o resumo usam o mesmo componente (preso por teste).
+  · D3: clicar na linha ou em "Abrir pastos →" / "Ver pastos →" chama `setFazendaAtual(fazenda)` e a MESMA tela abre nela, no
+    mesmo ano e mes (o estado e' do componente). "← Resumo" so' aparece para quem veio do resumo, num LUGAR RESERVADO de 28px no
+    topo da coluna 1 (`lugar-do-voltar`, onde ja' morava a seta de voltar; a linha existe sempre), e volta ao Global
+    (`GLOBAL_FAZENDA`) sem passar pelo seletor; chegar ao Global por outro caminho apaga a marca.
+  · LAYOUT (D4): tabela `table-fixed`, colgroup em px — Fazenda 190 · Atividade 70 · Cabeças 70 · Área 80 · Pastos 54 · Último
+    fechamento 120 · Mês atual 150 · acao 104 = 838 (cabe nos 886 uteis da janela de 1.126 e em 1.100); linhas, cabecalho
+    (#eef2f7, texto navy) e rodape (#f3f5f8) de 22px, 10px, uma linha por registro (so' o nome da fazenda corta, inteiro no
+    `title`); lugar de 16px para o recado (lendo / erro), sempre presente.
+  · LEITURAS: os cards das fazendas ativas na janela, PAGINADOS (o maior cliente tem ~980 por ano: sem paginar cortaria em
+    1.000) e, por fazenda, os itens do mes do ultimo fechamento. Erro na primeira = recado escrito e nenhum numero.
+  Testes: `src/components/fechamentoGlobalResumo.test.tsx` 19 (dono, componente, e a ligacao no `FechamentoTab` lida da fonte).
+  11 mutacoes mortas, 11 de 11.
+  ⚠ NAO PROVADO: NADA NO NAVEGADOR — as duas consultas reais (a juncao `fechamento_pastos!inner` dos itens tem o molde do
+    `useSeriePorFazenda`), os numeros contra a tela por fazenda num cliente real, o tempo de carga (NJ: ~2.000 cards + 5 leituras
+    de itens), larguras e alturas renderizadas, o ir-e-voltar ("← Resumo"), a fita no resumo · as 28px a mais no topo da coluna 1
+    da tela por fazenda (quando nao ha' seta de voltar) nao foram medidas · perfil nao admin.
+  ⚠ DIVIDAS: FECH-GLOBAL-DOIS-CRITERIOS-01 (fita x selo, item 3) · o resumo nao rele sozinho se outro usuario fechar um pasto
+    (rele ao voltar ao Global ou trocar o ano) · `useFechamentoGlobal` usa `useEffect` + estado, sem cache entre visitas.
 - ⚠ "DOCUMENTOS DO MÊS" (O LIVRO DO CAMPEIRO): ARQUIVO POR FAZENDA + MES, UM BOTAO NAS DUAS TELAS, E NADA SE CALCULA (FECH-DOCS-01, Gabriel
   12/10/2026, banco + tela; mock v2 aprovado em 12/10). ⚠ MIGRATION NAO APLICADA, AGUARDA GO:
   `supabase/migrations/20261027197100_pecuaria_fechamento_documentos_01.sql` (md5 do arquivo e88643fed35cab14141c62bc872b8ff5). ⚠ A TELA NAO VAI

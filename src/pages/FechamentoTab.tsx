@@ -3,12 +3,14 @@ import { ArrowLeft, CheckCircle, AlertTriangle, Lock, Unlock, Pencil, BarChart3,
 import { ResumoAtividadesView } from '@/components/ResumoAtividadesView';
 import { usePastos, isPastoAtivoNoMes, pastosAtivosNoMes, type Pasto } from '@/hooks/usePastos';
 import { useFechamento, type FechamentoPasto, type FechamentoItem } from '@/hooks/useFechamento';
-import { useFazenda } from '@/contexts/FazendaContext';
+import { useFazenda, GLOBAL_FAZENDA } from '@/contexts/FazendaContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useLancamentos } from '@/hooks/useLancamentos';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { FechamentoFitaMeses } from '@/components/FechamentoFitaMeses';
+import { FechamentoGlobalResumo } from '@/components/FechamentoGlobalResumo';
+import { useFechamentoGlobal } from '@/hooks/useFechamentoGlobal';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { BotaoDocumentosDoMes } from '@/components/pecuaria/BotaoDocumentosDoMes';
 import {
@@ -174,7 +176,7 @@ function gmdColor(gmd: number | null): string {
 }
 
 export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConciliacao, onNavigateToReclass, onNavigateToValorRebanho, onNavigateToConferenciaGmd, onNavigateToMapaPastos, onBack }: Props = {}) {
-  const { isGlobal, fazendaAtual } = useFazenda();
+  const { isGlobal, fazendaAtual, fazendas, setFazendaAtual } = useFazenda();
   const { clienteAtual } = useCliente();
   const { canEdit } = usePermissions();
 
@@ -197,6 +199,21 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   const mesDefault = filtroMesInicial || (anoNum2 === new Date().getFullYear() ? new Date().getMonth() + 1 : 12);
   const [mesFiltro, setMesFiltro] = useState(mesDefault);
   const anoMes = `${anoFiltro}-${String(mesFiltro).padStart(2, '0')}`;
+
+  /* FECH-GLOBAL-RESUMO-01 — em Global a tela mostra o resumo por fazenda (só lê quando está em Global). Clicar numa fazenda
+     troca a fazenda do contexto e esta MESMA tela abre nela, no mesmo ano e mês (o estado é deste componente); "← Resumo"
+     só aparece para quem veio do resumo e volta ao Global sem passar pelo seletor de fazenda. */
+  const resumoGlobal = useFechamentoGlobal({ enabled: isGlobal, fazendas, pastos, ano: Number(anoFiltro), mes: mesFiltro });
+  const [veioDoResumo, setVeioDoResumo] = useState(false);
+  const abrirFazendaDoResumo = (fazendaId: string) => {
+    const f = fazendas.find(x => x.id === fazendaId);
+    if (!f) return;
+    setVeioDoResumo(true);
+    setFazendaAtual(f);
+  };
+  const voltarAoResumo = () => { setVeioDoResumo(false); setFazendaAtual(GLOBAL_FAZENDA); };
+  /* Chegou ao Global por outro caminho (o seletor lateral): a marca "veio do resumo" não vale mais. */
+  useEffect(() => { if (isGlobal) setVeioDoResumo(false); }, [isGlobal]);
 
   /**
    * A LAVOURA DO MÊS VEM DA SAFRA, NÃO DO FECHAMENTO — AGRI-AREA-POR-SAFRA-01.
@@ -887,7 +904,15 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   /* A trava e o motivo vivem no hook desde o RECLASS-PESO-01 — fonte unica para as tres telas. */
   const reclassCanRegister = reclassState.podeSalvar;
 
-  if (isGlobal) return <div className="p-6 text-center text-muted-foreground">Selecione uma fazenda para o fechamento.</div>;
+  if (isGlobal) return (
+    <FechamentoGlobalResumo
+      resumo={resumoGlobal.resumo} cabecas={resumoGlobal.cabecas} lendo={resumoGlobal.lendo}
+      lendoCabecas={resumoGlobal.lendoCabecas} erro={resumoGlobal.erro}
+      anoFiltro={anoFiltro} setAnoFiltro={setAnoFiltro} anosDisp={anosDisp}
+      mesFiltro={mesFiltro} setMesFiltro={setMesFiltro}
+      onAbrirFazenda={abrirFazendaDoResumo}
+    />
+  );
 
   if (showResumoAtividades) {
     return (
@@ -949,6 +974,9 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                 onde a seta cabe sem redesenhar nada. Fora do grid ela roubaria largura
                 da COL 2, que tres PRs seguidos trabalharam para preservar.
                 Idioma copiado de ValorRebanhoTab.tsx:1113. */}
+            {/* FECH-GLOBAL-RESUMO-01 — LUGAR RESERVADO de 28px: a seta de voltar e o "← Resumo" moram aqui e a linha existe
+                sempre, vazia quando nenhum dos dois aparece — a entrada deles não empurra os selos de baixo. */}
+            <div className="flex h-7 items-center gap-1" data-testid="lugar-do-voltar">
             {onBack && (
               <Button
                 type="button"
@@ -961,6 +989,14 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
                 <ArrowLeft className="h-4 w-4" />
               </Button>
             )}
+            {veioDoResumo && (
+              <button type="button" data-testid="voltar-ao-resumo" onClick={voltarAoResumo}
+                className="h-6 whitespace-nowrap rounded border border-border bg-muted px-2 text-[10px] font-bold text-muted-foreground hover:bg-muted/80"
+                title="Voltar ao resumo de todas as fazendas">
+                ← Resumo
+              </button>
+            )}
+            </div>
             <div className="flex flex-col gap-1">
               <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 text-[10px] font-bold gap-1 w-fit">
                 <CheckCircle className="h-3 w-3" />
@@ -1052,57 +1088,8 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
               * exatamente onde estava, e trocar 2026 por 2023 não muda nada de tamanho.
               * Sem o espelho, os doze meses andariam 30px para a direita.
               */}
-            <div className="flex items-center gap-1.5">
-              <Select value={anoFiltro} onValueChange={setAnoFiltro}>
-                <SelectTrigger
-                  className="h-6 w-[56px] shrink-0 justify-center gap-0.5 rounded border border-border bg-muted px-1 text-[10px] font-bold text-muted-foreground [&>svg]:h-3 [&>svg]:w-3 [&>svg]:opacity-100"
-                  title="Ano do fechamento"
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {anosDisp.map(a => (
-                    <SelectItem key={a} value={a}>{a}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <div className="grid grid-cols-12 gap-0.5 w-full max-w-[400px] mx-auto">
-              {MESES_COLS.map((m, idx) => {
-                const mesNum = idx + 1;
-                const status = statusPorMes[mesNum] || 'vazio';
-                const isSelected = mesFiltro === mesNum;
-                let cls = '';
-                let dotCls = '';
-                if (isSelected) {
-                  cls = 'bg-[#185FA5] text-white border border-[#185FA5]';
-                  dotCls = 'bg-white/60';
-                } else if (status === 'fechado') {
-                  cls = 'bg-[#EAF3DE] text-[#3B6D11] border border-[#639922] hover:brightness-95';
-                  dotCls = 'bg-[#639922]';
-                } else if (status === 'rascunho') {
-                  cls = 'bg-[#FAEEDA] text-[#854F0B] border border-[#BA7517] hover:brightness-95';
-                  dotCls = 'bg-[#BA7517]';
-                } else {
-                  cls = 'bg-muted text-muted-foreground border border-border hover:bg-muted/80';
-                  dotCls = 'bg-transparent border border-border';
-                }
-                return (
-                  <button
-                    key={m.key}
-                    type="button"
-                    onClick={() => setMesFiltro(mesNum)}
-                    className={`flex flex-col items-center justify-center py-1 px-0 min-w-[28px] rounded text-[10px] font-bold transition-colors ${cls}`}
-                  >
-                    <span>{m.label}</span>
-                    <span className={`mt-0.5 h-1 w-1 rounded-full ${dotCls}`} />
-                  </button>
-                );
-              })}
-              </div>
-              {/* O espelho do card de ano: existe para a fita não se deslocar. Não é
-                  decoração — é a metade direita da conta que a mantém centrada. */}
-              <div className="h-6 w-[56px] shrink-0" aria-hidden="true" />
-            </div>
+            <FechamentoFitaMeses anoFiltro={anoFiltro} setAnoFiltro={setAnoFiltro} anosDisp={anosDisp}
+              mesFiltro={mesFiltro} setMesFiltro={setMesFiltro} statusPorMes={statusPorMes} />
 
             <div className="flex justify-center overflow-x-auto">
             <TooltipProvider delayDuration={150}>
