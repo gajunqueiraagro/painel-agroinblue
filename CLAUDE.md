@@ -2149,6 +2149,12 @@ docs/historico/frentes-ate-2026-09-29.md.)
     alternou o gatilho por `ALTER TABLE` em `financeiro_lancamentos_v2`, 14 vezes na mesma transacao, e segurou a tabela de
     lancamentos por ~8 s; revertido, sem residuo. Se houve usuario gravando lancamento nesse intervalo, esperou (nao da' para
     ver depois). O mesmo vale para o `CREATE TRIGGER` do ensaio: 1 a 2 s por rodada — ensaio de gatilho e' CURTO.
+- ⚠ REGRA DO NASCIMENTO (Gabriel, 12/10/2026, OC-CC-PADRAO-NOVAS-01a): TODA FRENTE QUE CONVERTE DADO EXISTENTE PARA UM PADRAO NOVO MEDE
+  E FECHA O CAMINHO DE CRIACAO NA FASE 0 — quem cria o registro (todo INSERT, no banco e no front), com que valor ele nasce
+  (default da coluna, valor explicito, gatilho) e o que a tela faz com o registro que ja' nasce no padrao novo. Migrar o que
+  existe sem trocar o nascimento deixa o padrao velho voltando a cada registro novo.
+  ⚠ NASCE DO INCIDENTE e8fec78b (12/10/2026): a OC-TITULO-PARA-CC-01b migrou 30 OCs para conta corrente em 12/10 e, no mesmo dia,
+    duas vendas novas do NJ nasceram 'titulo' pela tela (41904517 e e8fec78b), porque o unico INSERT nao citava o modelo.
 - ⚠ ENSAIO COM `CREATE TRIGGER` / DDL EM TABELA DE USO CORRENTE SO' EM TABELA CLONE OU FORA DO HORARIO DE USO (regra do Gabriel,
   12/10/2026, OC-CC-EXPLICAR-CONGELA-01): em `financeiro_lancamentos_v2` e nas demais tabelas que a tela grava o tempo todo, o
   ensaio que cria gatilho, indice ou coluna roda numa TABELA CLONE sintetica criada na propria transacao, ou antes das 07h /
@@ -3850,6 +3856,70 @@ docs/historico/frentes-ate-2026-09-29.md.)
   quem mexer num confere o outro. O selo do rodape (`SeloRegraDaLinha`) diz a regra da linha.
 
 ## REGRAS VIGENTES — OPERACAO COMERCIAL E FINANCEIRO
+- ⚠ VENDA E COMPRA NOVAS NASCEM EM CONTA CORRENTE; ABATE E BOITEL EM TITULO, E A REGRA TEM UM DONO (OC-CC-PADRAO-NOVAS-01a, Gabriel
+  12/10/2026, so' banco; migration `20261027196800_oc_cc_padrao_novas_01a.sql`, md5 do arquivo 0d2c4412ea4f0fcf936390d35e5ebb6b —
+  ⚠ NAO APLICADA: espera o GO direto do Gabriel). Nasce do incidente e8fec78b (NJ, 12/10): a OC-TITULO-PARA-CC-01b migrou as OCs
+  existentes e a OC NOVA de venda continuou nascendo 'titulo', com compromissos e "Parcial" — o unico INSERT em
+  `zoo_operacoes_comerciais` (`oc_salvar_rascunho`) nao citava o modelo e valia o default da coluna.
+  · D1 — O DEFAULT DA COLUNA `modelo_financeiro` CONTINUA 'titulo' (rede segura). O dono e'
+    `_oc_modelo_ao_nascer(p_tipo, p_boitel)` (md5 c0e10562…; interna, fechada, IMUTAVEL): venda e compra sem boitel ->
+    'conta_corrente'; abate, boitel e tipo desconhecido -> 'titulo'. `oc_salvar_rascunho` (a0962e25… -> 51489be1…) grava o valor
+    dele EXPLICITO no INSERT e deixa o evento 'definir_modelo_financeiro' (de nulo para o valor); salvar de novo um rascunho que
+    ja' existe NAO mexe no modelo nem repete o evento.
+  · D2 — BOITEL E' TITULO, E O BANCO SO' SABE QUE E' BOITEL DEPOIS DE NASCER (boitel = existe linha em `zoo_operacao_boitel`,
+    gravada por `oc_salvar_boitel`; `modalidade_comercial` esta' nula em todas as OCs). Por isso a venda nasce em conta corrente e
+    `oc_salvar_boitel` (8dae7c1b… -> 9490eab5…) a leva a 'titulo' AO MARCAR, se nao ha' entrega, explicacao nem recebimento de
+    conta corrente vivos (evento 'definir_modelo_financeiro'; o +1 da versao e' o da propria chamada, um so'); se ha', recusa
+    P0001 "Esta venda ja tem financeiro em conta corrente; desfaca antes de marcar boitel". `oc_salvar_boitel` segue recusando
+    OC fechada. ⚠ SO' O SENTIDO "MARCAR": "desmarcar boitel" NAO EXISTE no banco nem na tela (nenhuma funcao apaga a linha).
+  · D3 — `oc_conta_corrente` (9e1a80a8… -> 578c1c66…): sem entrega viva nem recebimento, `situacao` = 'aguardando_saida' (era
+    'quitado' com tudo zerado); com recebimento e sem entrega, 'adiantado', como ja' era. Nada mais muda no leitor. Ate' o 01b
+    a tela nao conhece o valor: `situacaoDe` (`src/lib/oc/contaCorrente.ts`) o le^ como 'quitado', o que ela ja' mostrava.
+  · `oc_criar_do_legado` (722da435… -> 0206457b…): o UPDATE do modelo, o evento e o +1 so' rodam quando a OC ainda nao e' conta
+    corrente (hoje ela ja' nasce; o trecho fica como rede), e a sincronizacao das entregas recebe a versao LIDA.
+  · Patch guardado por md5 (origem, cada ancora 1x, destino) numa funcao temporaria da propria migration; reexecutar sobre o
+    corpo ja' corrigido nao faz nada. Nenhuma assinatura muda; ACL, SECURITY e search_path preservados. NENHUM DADO ALTERADO.
+  ⚠ O GANCHO DA SAIDA NAO ESTA' AQUI (decisao do Gabriel, 12/10): hoje registrar, estornar, adotar, encerrar, receber conforme e
+    desvincular NAO sincronizam as entregas — a OC em conta corrente so' ganha a entrega (e o DRE) no "Atualizar entregas", a'
+    mao. `oc_registrar_movimentacao` e `oc_estornar_movimentacao` nem recebem, nem avancam, nem devolvem versao, e a tela
+    (`useOperacaoRecebimento.ts`) nao a le^: por o gancho so' no banco deixaria a versao da tela atrasada em toda OC em conta
+    corrente. Vai no 01b, banco + tela juntos.
+  Teste: `supabase/tests/oc_cc_padrao_novas_01a_test.sql` (R1–R7, sintetico no Teste, termina em RAISE OK), rodado no ENSAIO
+  revertido com a migration na mesma transacao: OK. 10 mutacoes mortas (venda nasce titulo; abate nasce conta corrente; boitel
+  ignorado pelo dono; rascunho sem o evento; rascunho sem gravar o modelo; boitel sem a recusa; boitel sem trocar o modelo;
+  recebimento fora da recusa; leitor sem 'aguardando_saida'; recebimento fora da contagem).
+  ⚠ NAO PROVADO: `oc_criar_do_legado` depois do patch NAO foi executada (so' o corpo, por md5 e ancoras) · nada visto na TELA (uma
+    venda ou compra NOVA em conta corrente, em rascunho e depois de registrar a saida; o estado nunca existiu com dado real) ·
+    trocar o TIPO de um rascunho que ja' existe (venda -> abate) nao muda o modelo: abate em conta corrente seria recusado adiante ·
+    recebimento so' PROGRAMADO, sem entrega: saldo zero e situacao 'quitado' · depois de aplicar: o teste R1–R7 e o
+    `seg_tenant_varredura_01c_test.sql`.
+  · OS DEZ TESTES SQL ANTIGOS QUE CRIAM OC POR `oc_salvar_rascunho` — NENHUM MUDA DE RESULTADO COM A MIGRATION (12/10, ensaio
+    revertido; cada um rodado ANTES e DEPOIS do patch na MESMA transacao; nenhum precisou de ajuste ao contrato novo):
+        teste                                          antes   depois   onde cai (igual nos dois)
+        pr_oc_model_02a_test                           —       verde    (so' rodado com a migration)
+        pr_oc_catalogo_01_test                         —       verde    (so' rodado com a migration)
+        pr_oc_model_02b_test                           verde   verde
+        pr_oc_compra_neg_01_lotes_acordado_test        cai     cai      T1: `oc_salvar_lotes` exige peso medio no lote por cabeca
+        pr_oc_doc_model_01_documentos_test             cai     cai      o mesmo, no primeiro `oc_salvar_lotes`
+        pr_oc_receb_01_recebimento_por_lote_test       cai     cai      o mesmo (lote 2 sem peso)
+        pr_oc_04a_test                                 cai     cai      P1: `zoo_operacao_movimentacoes.operacao_lote_id` e' NOT NULL
+        pr_oc_lote_valor_01_test                       cai     cai      C1: "caminho A deveria reinserir com id novo"
+        pr_oc_liq_02_test                              cai     cai      T1: INSERT direto no financeiro viola `chk_conta_por_direcao`
+        pr_oc_model_01_test                            cai     cai      Nmov-rasc: `oc_registrar_movimentacao` de 8 argumentos nao existe (42883)
+    ⚠ Dos que caem, `lote_valor_01` foi transcrito inteiro; os outros seis, ate' a primeira queda (o que vem depois nao e'
+      alcancado). O `compra_neg` foi rodado com a migration e, a' parte, o T1 dele sem ela.
+  ⚠ DIVIDA OC-TESTES-SQL-LEGADO-01 (decisao do Gabriel, 12/10: NAO consertar neste PR): os sete testes da tabela que ja' caiam
+    antes ficaram para tras de mudancas de contrato de outros PRs (peso obrigatorio no lote, lote obrigatorio na movimentacao,
+    a assinatura de `oc_registrar_movimentacao`, o CHECK da conta por direcao, o caminho A do `oc_salvar_lotes`). E OS DEZ CRIAM
+    A OC NO CLIENTE DO PRIMEIRO ADMIN que acharem em `cliente_membros` — cliente REAL, mesmo revertido: quando forem tocados,
+    migram para o cliente Teste. Ate' la', nenhum deles roda em horario de uso fora de transacao revertida.
+  ⚠ FILA: OC-CC-PADRAO-NOVAS-01b (banco + tela juntos: o gancho de `oc_sincronizar_entregas` em registrar, estornar, adotar,
+    encerrar, receber_lotes e desvincular, devolvendo a versao REAL, com a tela lendo e repassando por `onVersaoChange`; e as
+    telas do estado "conta corrente sem entrega": rotulo "Aguardando saida", "Atualizar entregas" apagado com motivo em
+    rascunho, "Explicar diferença" nao oferecido sem entrega, a Central e o fluxo Concluir -> Financeiro conferidos) ·
+    OC-BOITEL-DESMARCAR-01 (gesto na tela + RPC que apaga a linha projetada e aplica D2 no outro sentido: vira conta corrente
+    se nao ha' compromisso nem liquidacao de titulo vivos; senao recusa "Esta venda ja tem financeiro no modelo titulo; desfaca
+    antes de tirar o boitel") · a migracao da OC 41904517 (NJ, venda nascida 'titulo' em 12/10), com GO proprio.
 - ⚠ PREVIA E SIMULACAO POR EFEITO DEPENDEM DE FUNCAO ESTAVEL E DE VALOR PRIMITIVO, NUNCA DE OBJETO RECRIADO POR RENDER; E A VERSAO DA
   OC SE CURA DEPOIS DA RECUSA (OC-CC-EXPLICAR-CONGELA-01, Gabriel 12/10/2026, so' tela, sem migration e sem mudar contrato de RPC).
   Nasce do "Explicar diferença" da OC fcdbe0bb (compra em conta corrente), que congelou duas vezes sem gravar.
@@ -4019,6 +4089,10 @@ docs/historico/frentes-ate-2026-09-29.md.)
     A a2df4ec1 ("Compra 110 DM", Agnaldo) NAO ESTA' MAIS FORA: foi MIGRADA EM SEPARADO em 11/10/2026 (versao 24 da OC), com os
     pagamentos de 50.000,00 + 248.000,00 vinculados pela tela; fica o saldo "falta pagar" 17.000,00 em aberto — DECISAO DO
     GABRIEL PENDENTE: o combinado e' 315.000,00 ou 298.000,00. (As 30 e as contagens acima sao as da rodada de 12/10 e nao a incluem.)
+    A e8fec78b (NJ, "Venda 140 N", criada pela tela em 12/10 ja' DEPOIS da rodada e nascida 'titulo') foi MIGRADA EM SEPARADO em
+    12/10/2026, com GO do Gabriel: versao 9 -> 13, entregas 524.750,80, recebimentos 329.762,00, falta receber 194.988,80; o DRE
+    de set/26 do NJ passou de 329.762,00 a 524.750,80 (+194.988,80: a entrega inteira vira receita). A 41904517 (NJ, mesma
+    origem) segue 'titulo'.
     FICARAM FORA, E POR QUE: 339c2e99 (Santa Rita, 2022: inventario de abertura, nao e' compra)
     · 1fbd595b (Agnaldo, venda sem recebimento) · as 7 sem saida de gado (9b1e71e2, df7d1912, f71a8695, f74f95e5, 2090e12c,
     7016f2b5, 8eff43fa) · as 2 com lote sem valor (229ac98d, 4c5e8c86) · as 18 de boitel.
