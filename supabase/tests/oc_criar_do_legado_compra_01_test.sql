@@ -206,7 +206,7 @@ begin
 
   -- ── C7 VENDA (D8): os numeros de antes ──
   v := pg_temp._venda3();
-  if v->'v1'->'op' - 'fazenda' is distinct from '{"tipo": "venda", "modelo": "conta_corrente", "status": "fechada", "rascunho": false, "encerrada": true, "data": "2031-05-12", "acordado": 10000.00, "qtd": 10}'::jsonb
+  if (v->'v1'->'op') - 'fazenda' is distinct from '{"tipo": "venda", "modelo": "conta_corrente", "status": "fechada", "rascunho": false, "encerrada": true, "data": "2031-05-12", "acordado": 10000.00, "qtd": 10}'::jsonb
      or v->'v1'->'cc' is distinct from '{"situacao": "quitado", "saldo": 0.00, "entregue": 10000.00, "recebido": 10000.00, "programado": 0.00, "pendentes": 0, "despesas": 0}'::jsonb
      or (v->'v1'->>'dre')::numeric is distinct from 10000 then raise exception 'C7 V1: %', v->'v1'; end if;
   if v->'v2'->'cc' is distinct from '{"situacao": "quitado", "saldo": 0.00, "entregue": 12000.00, "recebido": 12000.00, "programado": 0.00, "pendentes": 0, "despesas": 1}'::jsonb
