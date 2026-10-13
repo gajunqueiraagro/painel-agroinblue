@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 13/10/2026 (CUSTEIO-TXT-03, +15: `src/v2/lib/custeio/parseCusteioTxt.test.ts` 4, `src/v2/pages/custeioLote.test.tsx` 7,
+  Baseline em 13/10/2026 (CUSTEIO-HASH-01, +8: `src/v2/lib/custeio/hashItemCusteio.test.ts` 3 (6 -> 9), `src/v2/pages/custeioLote.test.tsx` 5
+  (7 -> 12) — 5032 depois dele; antes o CUSTEIO-TXT-03, +15: `src/v2/lib/custeio/parseCusteioTxt.test.ts` 4, `src/v2/pages/custeioLote.test.tsx` 7,
   `src/hooks/useFinanceiroV2.lote.test.ts` 4 — 5024 depois dele; antes o OC-CC-PROGRAMAR-RECEBIMENTO-01, +3 em `src/components/venda/abaContaCorrente.test.tsx` — 5009 depois dele; antes o FECH-DOCS-01b, +6 em `src/components/pecuaria/documentosDoMesDialog.test.tsx` — 5006 depois dele; antes o FECH-GLOBAL-RESUMO-01b, +3 em `src/components/fechamentoGlobalResumo.test.tsx` — 5000 depois dele; antes o FECH-GLOBAL-RESUMO-01, +19 no mesmo arquivo (novo) — 4997 depois dele; antes o FECH-DOCS-01, +27: `src/hooks/useDocumentosDoMes.test.tsx` 13,
   `src/components/pecuaria/documentosDoMesDialog.test.tsx` 14 — 4978 depois dele; antes o OC-CRIAR-DO-LEGADO-COMPRA-01, +11: `src/lib/oc/criarDoLegado.test.ts` 5,
   `src/components/financeiro-v2/criarOCDoLegado.test.tsx` 6 — 4951 depois dele; antes o OC-CC-PADRAO-NOVAS-01b, +13: `src/hooks/ocVersaoAposSaida.test.tsx` 5 (novo),
@@ -298,7 +299,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5024
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5032
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3861,6 +3862,51 @@ docs/historico/frentes-ate-2026-09-29.md.)
   quem mexer num confere o outro. O selo do rodape (`SeloRegraDaLinha`) diz a regra da linha.
 
 ## REGRAS VIGENTES — OPERACAO COMERCIAL E FINANCEIRO
+- ⚠ O HASH EXPLÍCITO É MARCA DE ORIGEM: o gatilho não apaga hash de quem não tem lote (CUSTEIO-HASH-01, Gabriel 13/10/2026, banco + dado
+  + tela; ⚠ HOMOLOGACAO RUNTIME PENDENTE — nada visto no navegador). O gatilho so' CALCULA o hash de quem tem lote de Excel e NUNCA
+  apaga o que veio explicito.
+  · O DEFEITO: `trg_financeiro_lancamento_v2_hash` -> `set_financeiro_lancamento_v2_hash()` fazia `NEW.hash_importacao := NULL` com
+    `lote_importacao_id` nulo, em INSERT e UPDATE. O custeio grava o hash do item SEM lote (`buildInsertRow`); o gatilho o apagava, e
+    a previa (`conferirLancados`, `.in('hash_importacao', hashes)`) nunca reconhecia o que ja' tinha sido lancado — propunha o
+    arquivo inteiro (48 de 48, com 24 ja' lancados). No banco: 0 lancamentos com hash e sem lote, de 88.306.
+  · BANCO: migration `supabase/migrations/20261027197200_custeio_hash_01.sql` (md5 do arquivo bc02959356a96ecad3013e8cb9f5e9b2) —
+    APLICADA no proto em 13/10/2026, com o GO do Gabriel: ledger 20261013113010 (⚠ registrada com o timestamp do dia; ledger =
+    arquivo por md5 bc029593…). Patch guardado por md5 (09380837… -> 0db2f21916a79511aac98bc534131691; a ancora do ELSE 1x, e o
+    CONCEITO contado: o corpo zerava o hash num lugar so'). O ramo ELSE deixou de existir; com lote o hash segue CALCULADO (o
+    explicito e' sobrescrito). So' `CREATE OR REPLACE` da funcao: nenhum `ALTER TABLE`, nenhum gatilho criado. ACL, SECURITY
+    INVOKER e `search_path` iguais; `anon` nao executa. `supabase/tests/custeio_hash_01_test.sql` (H1–H5, Teste, termina em RAISE
+    OK) OK no ensaio revertido e no vivo; no corpo antigo cai em H1; `seg_tenant_varredura_01c` OK (T0–T4, com os `DROP` trocados
+    por REVOKE / nada). Residuo zero.
+    ⚠ NAO ENTRA INDICE UNICO NO HASH (PECUARIA: LANCAMENTOS IGUAIS SAO NORMAIS): a guarda do custeio continua sendo a previa;
+      `enforce_financeiro_lancamento_v2_unique_hash` segue so' para lote de Excel, intocada.
+    ⚠ `mark_financeiro_lancamento_v2_editado_manual` so' age em lancamento COM lote e nao compara `hash_importacao`: gravar o
+      hash de quem nao tem lote nao marca `editado_manual`.
+  · DADO (`docs/investigacao/custeio-hash-01-conserto-raul.sql`, EXECUTADO em 13/10/2026 com o SIM do Gabriel): cliente a6793f65,
+    set/26 — o segundo "F.G.T.S - FAZENDA 971,09" (5c1d3c94) cancelado pelo dono `fn_cancelar_lancamento_auditoria` (fica o
+    89dbc18d; no TXT ha' um so'), e os 23 vivos lancados pelo custeio em 13/10 ganharam o hash (23 distintos). Formula SQL =
+    espelho de `hashItemCusteio.ts`: sha256(cliente|AAAA-MM|valor com 2 casas|upper(unaccent(trim(espacos colapsados)))) em
+    hexadecimal (`extensions.digest`, `public.unaccent`). Gesto contrario escrito no cabecalho do script.
+  · TELA — A OCORRENCIA NO HASH: `hashesDoCusteio(itens, clienteId, competencia)` (`src/v2/lib/custeio/hashItemCusteio.ts`) e' o
+    UNICO que numera: a 1a ocorrencia de um conteudo e' o hash de sempre (o gravado continua valendo); da 2a em diante o conteudo
+    ganha `|N` antes do SHA-256, na ordem do arquivo — a regra do `hashesDoArquivo` do extrato. `conferirLancados` usa ela; a tela
+    nao chama mais `hashItemCusteio` item a item.
+  · TELA — LAYOUT (A18, `CusteioTxtImportTab.tsx`): o `BlocoTopoAba` saiu; o topo e' UMA linha de 18px (`custeio-linha-topo`, 10px
+    muted): "<fazenda> · set/26 · N itens · R$ soma" — a fazenda e' o NOME DO CADASTRO quando resolve, senao o texto do TXT em
+    ambar com "fazenda não reconhecida no cadastro — lance item a item" no `title`; so' ela corta; os numeros a 12px/500. O mes
+    sai de `mesCurto` (`src/lib/pecuaria/fechamentoGlobal.ts`; nenhum formatador novo). Botao do lote `h-[22px] text-[10px]`;
+    item da lista em 18 + 14px (`custeio-item`), caixa de 12px, "lançar" / "lançado" com 16px a 9,5px.
+  Testes: `hashItemCusteio.test.ts` +3 e `custeioLote.test.tsx` +5 (a tela lida da FONTE, com auto-teste dos detectores). 14
+  mutacoes mortas (C1 5, C2 4, C3 1, C4 4).
+  ⚠ DIVIDA HASH-LOTE-NAO-RECALCULA-01: lancamento COM lote editado na descricao nao muda de hash (visto no ensaio H4: o hash
+    gravado ficou igual depois do UPDATE da descricao, embora `compute_financeiro_lancamento_v2_hash` leia a descricao).
+    Comportamento anterior a este PR; causa nao investigada.
+  ⚠ DIVIDAS: o item separa por 1px (`divide-y`): 32px de conteudo + 1 de divisor · `text-[9px]` no cabecalho da tabela da previa
+    do lote (anterior a este PR, nao tocado) · a formula SQL usa `unaccent` e o front NFD sem diacriticos: iguais nas 24
+    descricoes do caso (sem acento) e nas 4 conferidas pelo arquiteto; texto acentuado nao foi comparado em massa · o custeio
+    (Financeiro) importa `mesCurto` de `src/lib/pecuaria/` · lancamento do custeio feito ANTES deste PR em outros clientes
+    continua sem hash (so' o caso medido foi carimbado; 0 outros lancamentos com hash e sem lote no banco).
+  ⚠ NAO PROVADO: NADA NO NAVEGADOR — a previa reconhecendo os 23 como "lançado" e propondo so' o resto, a linha do topo sem corte
+    a 1.126, a lista com itens de 32px, o topo preso antes x depois · a 2a ocorrencia num arquivo real (so' por teste).
 - ⚠ O LOTE DO CUSTEIO ENTRA INTEIRO: classificado pela chave quando há sugestão, sem classificação quando não há; a classificação em
   massa é da Conciliação › Sem classificação; o parser não trata palavra solta como ruído (o caso 'EMISSAO GUIA - GTA'); a recusa
   do banco fica escrita no diálogo da prévia com a frase do banco (CUSTEIO-TXT-03, Gabriel 13/10/2026, so' tela, sem banco; ⚠

@@ -109,3 +109,61 @@ describe('CUSTEIO-TXT-03 — o lote entra inteiro', () => {
     expect(contar(HOOK, "reportarErro(error, 'criarLancamentosEmLote', toast.error);")).toBe(1);
   });
 });
+
+describe('CUSTEIO-HASH-01 — o topo numa linha, o botão e a lista compactos, e o hash por arquivo', () => {
+  const conferir = (t: string) => trecho(t, 'const conferirLancados = useCallback(async () => {', '}, [');
+
+  it('auto-teste: os detectores acham o card antigo, o botão alto e o hash item a item', () => {
+    const ANTIGO = `
+    const conferirLancados = useCallback(async () => {
+      const pares = await Promise.all(itens.map(async (it) => [it.linha_num, await hashItemCusteio({ clienteId })]));
+    }, [itens]);
+    <BlocoTopoAba itens={[]} /><Button size="sm" className="h-7 text-[11px]">Lançar</Button>`;
+    expect(contar(ANTIGO, 'BlocoTopoAba')).toBe(1);
+    expect(conferir(ANTIGO)).toContain('hashItemCusteio(');
+    expect(conferir(ANTIGO)).not.toContain('hashesDoCusteio(');
+    expect(ANTIGO).not.toContain('className="h-[22px] text-[10px]"');
+  });
+
+  it('o card do topo saiu do arquivo (nem import, nem uso)', () => {
+    expect(contar(TELA, 'BlocoTopoAba')).toBe(0);
+    expect(TELA).not.toContain("bloco-topo-aba'");
+  });
+
+  it('a linha do topo existe, com 18px, a fazenda do cadastro e os números que não cortam', () => {
+    expect(contar(TELA, 'data-testid="custeio-linha-topo"')).toBe(1);
+    const linha = trecho(TELA, '<p data-testid="custeio-linha-topo"', '</p>');
+    expect(linha).toContain('h-[18px]');
+    expect(linha).toContain('text-[10px]');
+    expect(linha).toContain('{fazendaDoCadastro ?? resultado.fazenda_raw');
+    expect(linha).toContain('fazenda não reconhecida no cadastro — lance item a item');
+    expect(linha).toContain('mesCurto(resultado.ano_mes)');
+    expect(contar(linha, 'text-[12px] font-medium tabular-nums')).toBe(2);
+    // só o nome da fazenda corta; as outras três partes não encolhem
+    expect(contar(linha, 'truncate')).toBe(1);
+    expect(contar(linha, 'shrink-0')).toBe(3);
+  });
+
+  it('o botão do lote tem 22px / 10px, e a lista tem linha de 18 + 14px com caixa de 12px e botões de 16px a 9,5px', () => {
+    expect(contar(TELA, '<Button size="sm" className="h-[22px] text-[10px]"')).toBe(1);
+    expect(TELA).not.toContain('className="h-7 text-[11px]"');
+    const item = trecho(TELA, 'data-testid="custeio-item"', 'Sem memória para este item ainda');
+    expect(item).toContain('flex h-[18px] items-center gap-2 leading-[18px]');
+    expect(item).toContain('flex h-[14px] min-w-0 items-center gap-1.5 text-[10px] leading-[14px]');
+    expect(contar(item, 'h-3 w-3 shrink-0')).toBe(2);
+    expect(item).not.toContain('h-3.5');
+    expect(contar(item, 'text-[9.5px]')).toBe(2);
+    expect(contar(item, 'h-4 shrink-0')).toBe(2);
+    expect(item).toContain('shrink-0 text-[12px] font-medium tabular-nums');
+    // nada abaixo de 9,5px na linha do item (o detector se prova num tamanho menor)
+    expect(item).not.toMatch(/text-\[(?:[0-8](?:\.\d+)?|9(?:\.[0-4]\d*)?)px\]/);
+    expect('text-[9px]').toMatch(/text-\[(?:[0-8](?:\.\d+)?|9(?:\.[0-4]\d*)?)px\]/);
+  });
+
+  it('a conferência dos lançados usa o hash do ARQUIVO (com a ocorrência), nunca o hash item a item', () => {
+    const corpo = conferir(TELA);
+    expect(corpo).toContain('await hashesDoCusteio(itens, clienteId, competencia)');
+    expect(corpo).not.toContain('hashItemCusteio(');
+    expect(TELA).not.toContain('hashItemCusteio(');
+  });
+});

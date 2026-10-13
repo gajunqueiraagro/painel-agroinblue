@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { safraSugerida } from '@/lib/agri/safraSugerida';
-import { hashItemCusteio } from '@/v2/lib/custeio/hashItemCusteio';
+import { hashesDoCusteio } from '@/v2/lib/custeio/hashItemCusteio';
 import {
   sugerirAliasDoItem,
   sugerirFornecedor,
@@ -24,7 +24,7 @@ import {
 } from '@/v2/lib/custeio/memoriaCusteio';
 import { supabase } from '@/integrations/supabase/client';
 import { loadContasDoPlanoDoCliente, mapaDeContasPeloNome } from '@/lib/financeiro/planoContasBuilder';
-import { BlocoTopoAba } from '@/components/ui/bloco-topo-aba';
+import { mesCurto } from '@/lib/pecuaria/fechamentoGlobal';
 import {
   parseCusteioTxtFile,
   type CusteioParseResult,
@@ -193,6 +193,11 @@ export default function CusteioTxtImportTab(
     return semPrefixo.length === 1 ? semPrefixo[0].id : undefined;
   }, [resultado?.fazenda_raw, fazendasReais]);
 
+  /* O nome que a linha do topo mostra: o do CADASTRO, quando o relatório resolve a fazenda. */
+  const fazendaDoCadastro = fazendaResolvidaId
+    ? fazendasReais.find((f) => f.id === fazendaResolvidaId)?.nome
+    : undefined;
+
   const dataMes = ultimoDiaDoMes(resultado?.ano_mes);
 
   const clienteId = clienteAtual?.id ?? null;
@@ -212,13 +217,12 @@ export default function CusteioTxtImportTab(
       return;
     }
     try {
-      const pares = await Promise.all(itens.map(async (it) => [
-        it.linha_num,
-        await hashItemCusteio({ clienteId, competencia, valor: it.valor, descricao: it.produto_raw }),
-      ] as const));
-      setHashPorLinha(new Map(pares));
+      /* ⚠ O HASH É DO ARQUIVO, NÃO DO ITEM SOZINHO — CUSTEIO-HASH-01: `hashesDoCusteio` numera
+         os itens de conteúdo idêntico, e a 2ª ocorrência tem hash próprio. */
+      const porLinha = await hashesDoCusteio(itens, clienteId, competencia);
+      setHashPorLinha(porLinha);
 
-      const hashes = Array.from(new Set(pares.map(([, h]) => h)));
+      const hashes = Array.from(new Set(porLinha.values()));
       const { data, error } = await supabase
         .from('financeiro_lancamentos_v2')
         .select('id, hash_importacao')
@@ -705,13 +709,25 @@ export default function CusteioTxtImportTab(
               A altura vem do app-shell: a seção `conciliacao` já está em
               `SECOES_APP_SHELL` (V2Index) desde antes do 117. */}
           <div className="sticky top-[30px] z-20 space-y-3 bg-card pb-2">
-          {/* O mesmo bloco cinza das abas da OC: o operador aprende a olhar um lugar só. */}
-          <BlocoTopoAba itens={[
-            { rotulo: 'Fazenda', valor: resultado.fazenda_raw ?? null },
-            { rotulo: 'Competência', valor: resultado.ano_mes ?? resultado.periodo_raw ?? null },
-            { rotulo: 'Itens', valor: String(resultado.total_itens) },
-            { rotulo: 'Soma dos itens', valor: brl(resultado.soma_valores) },
-          ]} />
+          {/* ⚠ O TOPO É UMA LINHA DE 18px, SEM CARD — CUSTEIO-HASH-01 (A18). Eram quatro cartões
+              cinza para dizer quatro coisas curtas. A fazenda é o NOME DO CADASTRO quando o
+              relatório a resolve; senão, o texto do TXT em âmbar, com o porquê no `title`. Só o
+              nome da fazenda corta; os números (12px/500) nunca. */}
+          <p data-testid="custeio-linha-topo"
+            className="flex h-[18px] items-center gap-1 whitespace-nowrap text-[10px] leading-[18px] text-muted-foreground">
+            <span data-testid="custeio-topo-fazenda"
+              className={`min-w-0 truncate ${fazendaDoCadastro ? '' : 'text-amber-700 dark:text-amber-400'}`}
+              title={fazendaDoCadastro ?? 'fazenda não reconhecida no cadastro — lance item a item'}>
+              {fazendaDoCadastro ?? resultado.fazenda_raw ?? '—'}
+            </span>
+            <span className="shrink-0">· {resultado.ano_mes ? mesCurto(resultado.ano_mes) : (resultado.periodo_raw ?? '—')}</span>
+            <span className="shrink-0">
+              · <b className="text-[12px] font-medium tabular-nums text-foreground">{resultado.total_itens}</b> itens
+            </span>
+            <span className="shrink-0">
+              · <b className="text-[12px] font-medium tabular-nums text-foreground">{brl(resultado.soma_valores)}</b>
+            </span>
+          </p>
 
           {/* ⚠ A AÇÃO DO LOTE MORA NO BLOCO FIXO, junto dos números que ela vai mexer —
               A21. No fim da lista, ela sairia da tela justamente enquanto o operador
@@ -720,7 +736,7 @@ export default function CusteioTxtImportTab(
               "sem conta bancária na régua" são coisas diferentes, e um botão cinza sem
               motivo faz o operador procurar defeito onde não há. */}
           <div className="flex items-center gap-2">
-            <Button size="sm" className="h-7 text-[11px]"
+            <Button size="sm" className="h-[22px] text-[10px]"
               disabled={motivoLoteBloqueado !== null || salvandoLote}
               title={motivoLoteBloqueado ?? 'Conferir e lançar as linhas selecionadas'}
               onClick={() => { setRecusaDoLote(null); setPreviaLoteAberta(true); }}>
@@ -731,7 +747,7 @@ export default function CusteioTxtImportTab(
             )}
             {itensDoLote.length > 0 && (
               <span className="ml-auto text-[10px] text-muted-foreground tabular-nums">
-                Soma do lote <b className="text-foreground">{brl(totalDoLote)}</b>
+                Soma do lote <b className="text-[12px] font-medium text-foreground">{brl(totalDoLote)}</b>
               </span>
             )}
           </div>
@@ -789,19 +805,21 @@ export default function CusteioTxtImportTab(
                     const lancada = !!lancamentoId;
                     return (
                       <div key={it.linha_num}
-                           className={`px-3 py-[7px] leading-[1.35] ${lancada ? 'bg-emerald-50/40 dark:bg-emerald-950/20' : ''}`}>
-                        <div className="flex items-baseline gap-2">
+                           data-testid="custeio-item"
+                           className={`px-3 ${lancada ? 'bg-emerald-50/40 dark:bg-emerald-950/20' : ''}`}>
+                        {/* Linha 1 em 18px e linha 2 em 14px: 32px por item, sem respiro vertical. */}
+                        <div className="flex h-[18px] items-center gap-2 leading-[18px]">
                           {/* ⚠ O CHECKBOX SÓ APARECE NA LINHA QUE O LOTE CONSEGUE LANÇAR:
                               com competência, conta da régua e ainda não lançada. Ter ou
                               não sugestão não muda isso desde o CUSTEIO-TXT-03 — a linha
                               sem sugestão entra no lote sem classificação. */}
                           {elegivelAoLote(it.linha_num) ? (
-                            <Checkbox className="h-3.5 w-3.5 shrink-0"
+                            <Checkbox className="h-3 w-3 shrink-0"
                               checked={estaSelecionada(it.linha_num)}
                               onCheckedChange={() => alternarSelecao(it.linha_num)}
                               aria-label={`Selecionar ${it.produto_raw}`} />
                           ) : (
-                            <span className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                            <span className="h-3 w-3 shrink-0" aria-hidden />
                           )}
                           <span className="min-w-0 flex-1 truncate text-[12px] font-medium">{it.produto_raw}</span>
                           <span className="shrink-0 text-[12px] font-medium tabular-nums">{brl(it.valor)}</span>
@@ -813,14 +831,14 @@ export default function CusteioTxtImportTab(
                             <button type="button"
                               title="Abrir o lançamento no Financeiro"
                               onClick={() => navigate(`/v2?section=financeiro-lanc&flancId=${lancamentoId}`)}
-                              className="shrink-0 rounded-full bg-emerald-100 px-1.5 py-px text-[10px] text-emerald-700 underline-offset-2 hover:underline dark:bg-emerald-900/40 dark:text-emerald-300">
+                              className="h-4 shrink-0 rounded-full bg-emerald-100 px-1.5 text-[9.5px] leading-4 text-emerald-700 underline-offset-2 hover:underline dark:bg-emerald-900/40 dark:text-emerald-300">
                               lançado
                             </button>
                           ) : (
                             <button type="button" disabled={!auxLoaded}
                               title={auxLoaded ? 'Abrir o formulário oficial de lançamento' : 'Carregando contas e classificações…'}
                               onClick={() => setDialogRow(it)}
-                              className="shrink-0 rounded-full border px-2 py-px text-[10px] text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50">
+                              className="box-border h-4 shrink-0 rounded-full border px-2 text-[9.5px] leading-[14px] text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50">
                               lançar
                             </button>
                           )}
@@ -832,7 +850,7 @@ export default function CusteioTxtImportTab(
                             segunda linha, em 10px, e a sugestão em azul para não se
                             confundir com o que o arquivo disse. Sem memória, traço —
                             "não sei" escrito, e não um campo que some. */}
-                        <div className="flex min-w-0 items-baseline gap-1.5 text-[10px]">
+                        <div className="flex h-[14px] min-w-0 items-center gap-1.5 text-[10px] leading-[14px]">
                           <span className="truncate text-muted-foreground">
                             {it.familia_raw} › {it.subfamilia_raw}
                           </span>

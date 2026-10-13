@@ -35,6 +35,11 @@ export interface HashItemCusteioInput {
   competencia: string;
   valor: number;
   descricao: string | null | undefined;
+  /**
+   * A posição entre itens de CONTEÚDO IDÊNTICO no mesmo arquivo (1 = a primeira). Só entra no
+   * hash da 2ª em diante — quem a decide é `hashesDoCusteio`, nunca o chamador.
+   */
+  ocorrencia?: number;
 }
 
 export async function hashItemCusteio(input: HashItemCusteioInput): Promise<string> {
@@ -43,6 +48,7 @@ export async function hashItemCusteio(input: HashItemCusteioInput): Promise<stri
     input.competencia,
     input.valor.toFixed(2),
     normalizarTexto(input.descricao),
+    ...(input.ocorrencia && input.ocorrencia > 1 ? [String(input.ocorrencia)] : []),
   ].join('|');
 
   const buffer = new TextEncoder().encode(partes);
@@ -50,4 +56,35 @@ export async function hashItemCusteio(input: HashItemCusteioInput): Promise<stri
   return Array.from(new Uint8Array(hashBuffer))
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
+}
+
+/**
+ * O hash de CADA item do arquivo, por número de linha — CUSTEIO-HASH-01.
+ *
+ * ⚠ DOIS ITENS IGUAIS NO MESMO ARQUIVO SÃO DOIS ITENS. Com descrição e valor iguais os dois
+ * tinham o MESMO hash, e lançar um marcaria os dois como lançados (a prévia guarda um
+ * lançamento por hash). É a regra do extrato (`hashesDoArquivo`, PR-CONC-IMPORT-BANCO-01B):
+ * a 1ª ocorrência fica com o hash de sempre — o que já foi gravado continua valendo —, e da
+ * 2ª em diante o conteúdo ganha `|N` (N = 2, 3…) ANTES do SHA-256, na ordem do arquivo.
+ * ⚠ SÓ ESTA FUNÇÃO NUMERA: quem calcula item a item não enxerga o irmão.
+ */
+export async function hashesDoCusteio(
+  itens: ReadonlyArray<{ linha_num: number; valor: number; produto_raw: string | null | undefined }>,
+  clienteId: string,
+  competencia: string,
+): Promise<Map<number, string>> {
+  const base = await Promise.all(itens.map((it) => hashItemCusteio({
+    clienteId, competencia, valor: it.valor, descricao: it.produto_raw,
+  })));
+  const vistos = new Map<string, number>();
+  const pares = await Promise.all(base.map(async (h, i) => {
+    const ocorrencia = (vistos.get(h) ?? 0) + 1;
+    vistos.set(h, ocorrencia);
+    const it = itens[i];
+    if (ocorrencia === 1) return [it.linha_num, h] as const;
+    return [it.linha_num, await hashItemCusteio({
+      clienteId, competencia, valor: it.valor, descricao: it.produto_raw, ocorrencia,
+    })] as const;
+  }));
+  return new Map(pares);
 }
