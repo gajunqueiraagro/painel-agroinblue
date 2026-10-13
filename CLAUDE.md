@@ -3862,6 +3862,89 @@ docs/historico/frentes-ate-2026-09-29.md.)
   quem mexer num confere o outro. O selo do rodape (`SeloRegraDaLinha`) diz a regra da linha.
 
 ## REGRAS VIGENTES — OPERACAO COMERCIAL E FINANCEIRO
+- ⚠ O ABATE ENTRA NO CONTA CORRENTE: ENTREGA BRUTA, DEDUCAO FILHA (FUNRURAL) EM 5030, RECEBIMENTO FORA DO DRE; O LADO E' O DA VENDA; NASCIMENTO
+  E MIGRACAO NO PR 3 (OC-CC-ABATE-01 PR 1, Gabriel 12–13/10/2026, SO' BANCO, so' funcoes — nenhum DDL em tabela, nenhum dado tocado).
+  Migration `supabase/migrations/20261027197300_oc_cc_abate_01_banco.sql` (md5 do arquivo 20afe6fa74c4e970617985a5f4a8398c) — APLICADA no
+  proto em 13/10/2026, com o GO do Gabriel: ledger 20261013144026 (⚠ registrada com o timestamp do dia; ledger = arquivo por md5
+  20afe6fa…). ⚠ HOMOLOGACAO RUNTIME PENDENTE: nenhuma tela usa isto (o abate segue nascendo 'titulo'; a tela e' o PR 2).
+  · A REGRA: o BRUTO da entrega = base + bonus − descontos = `valor_liquido + funrural_valor` do realizado (`zoo_operacao_abate`).
+    Desconto de qualidade, outros descontos e bonus ficam DENTRO do preco: NAO sao deducao. A UNICA DEDUCAO QUE NASCE DO ABATE E' O
+    FUNRURAL: linha filha da entrega, SEM CAIXA, 2-Saídas em 5030 "Impostos e Despesas de Abates e Vendas", no DRE, mesma data /
+    fazenda / safra / favorecido da entrega, so' quando > 0. A entrega vai em "Abates de Fêmeas" / "Abates de Machos" pela categoria
+    do lote, sem caixa, no DRE. O recebimento do frigorifico fica no subcentro do abate, fora do DRE. Saldo = recebido − (bruto −
+    deducoes): zero quando o frigorifico paga o liquido.
+  · DONOS NOVOS (internos, fechados a PUBLIC / anon / authenticated; md5 do prosrc): `_oc_subcentro_abate(categoria)` c1034e66… (ESPELHO
+    DECLARADO de `subcentroAbatePorCategoria`, `src/hooks/useOperacaoLiquidacao.ts`: quem mudar um muda o outro) ·
+    `_oc_cc_valor_entrega_do_lote(lote)` 46c06b81… -> {bruto, liquido, funrural, qtd}, o dono do BRUTO (`_oc_valor_do_lote` segue
+    devolvendo o LIQUIDO; fora do abate, e no abate sem realizado, bruto = liquido e funrural = 0) · `_oc_cc_deducao_sincronizar(…)`
+    7f914c54…, o UNICO escritor da deducao (parte natureza 'deducao', origem 'explicacao', chave `deducao:<movimentacao>:funrural`),
+    chamado so' por `oc_sincronizar_entregas`, uma vez por saida ativa e uma por entrega cancelada.
+  · 15 CORPOS POR PATCH GUARDADO POR md5 (origem -> destino; ACL, SECURITY e search_path preservados): `_oc_cc_direcao` af952022 ->
+    fc24b673 · `_oc_cc_verbo` 5db2eded -> eab9522b · `_oc_cc_conta_entrega` 928128aa -> 365d9e81 · `_oc_cc_gancho_entregas` ae7406ad ->
+    54a60bc9 · `_oc_vincular_recebimento` 76003144 -> a3366810 · `oc_vincular_lancamento` 5f9f5d22 -> 65989672 ·
+    `oc_recebimentos_vinculaveis` 69cddd2c -> 99ca6d99 · `oc_programar_recebimento` b7ed17a5 -> 92815a47 · `oc_salvar_lotes` 80de84d1 ->
+    3232b0a4 · `oc_desfazer_explicacao` 6bbca887 -> c9c4082f · `oc_explicar_saldo` 2557f40b -> 70073353 ·
+    `oc_migrar_para_conta_corrente` 22b24acb -> e3dae96c · `oc_salvar_abate` 4f78bb5e -> d8052ef6 · `oc_sincronizar_entregas` 91cdb5f8 ->
+    73ccdc3c · `oc_conta_corrente` 578c1c66 -> 6cae1d83. `_oc_modelo_ao_nascer` INTOCADA (c0e10562…). Os 18 md5 e a ACL conferidos no
+    banco vivo depois de aplicar.
+  · O QUE MUDA: os helpers, o gancho, o vincular, os vinculaveis, o programar e o `oc_salvar_lotes` aceitam 'abate' ao lado de 'venda'
+    (`oc_vincular_lancamento` desvia para `_oc_vincular_recebimento` tambem no abate, com 1-Entradas). `oc_sincronizar_entregas`: A
+    REGRA DE DISTRIBUICAO NAO MUDOU (kg no lote fechado com os centavos na maior; cab/qtd no aberto) — so' a FONTE do total do lote
+    passou a ser o bruto do dono; a deducao usa os MESMOS pesos e o mesmo residuo da entrega dela (Σ deducoes = Funrural do lote, ao
+    centavo). `oc_conta_corrente`: linha 'deducao' (subtipo = componente) logo depois das entregas do dia (ordem 0,5), efeito + no
+    saldo, fora das 'explicacoes'; `a_entregar` = acordado − entregue + deduzido; A CHAVE `deduzido` SO' EXISTE NO ABATE (em venda e
+    compra o retorno e' identico ao de antes). `oc_salvar_abate`: revalorar o realizado chama o gancho e devolve a versao LIDA depois
+    dele. Cancelada, a chave da deducao vira `deducao-cancelada:<parte_id>` (o indice unico nao olha `cancelada`); a deducao nova leva
+    sequencia = maior viva + 1 por (lote, natureza, componente).
+  · RECUSAS NOVAS (P0001): Funrural gravado em % (`funrural_fonte` <> 'reais') — "…informe o Funrural em R$ no acerto do abate" (a
+    conta de % mora na lib do front e nao se copia) · `oc_explicar_saldo` com 'ajuste_preco' no abate — "No abate o preço se corrige no
+    acerto do abate (aba Abate), não por ajuste de preço" · `oc_desfazer_explicacao` sobre chave `deducao:%` — "Dedução do abate não
+    se desfaz: ela acompanha o acerto do abate".
+  · PROVAS: os DOIS ARQUIVOS DO DISCO rodados inteiros numa transacao revertida ANTES de aplicar, conferidos byte a byte por md5 dentro
+    do banco (migration 20afe6fa…, teste 788830b0…): B1–B8 OK, 157 OCs reais de venda/compra conferidas no B8. Depois de aplicar, o
+    teste do disco de novo no vivo: OK (157). No ensaio anterior: `oc_conta_corrente` das 157 OCs em conta corrente identica por md5
+    antes x depois, e `oc_sincronizar_entregas` simulado em 1 venda e 1 compra reais identico. 15 mutacoes mortas, 15 de 15 (a 8 —
+    deducao so' arredondada, sem residuo — sobreviveu na primeira rodada e morreu depois de o B5 passar a usar duas saidas de MESMO
+    kg). Teste: `supabase/tests/oc_cc_abate_01_banco_test.sql` (B1–B8, sintetico no Teste, termina em RAISE OK).
+  · GATES NO VIVO (13/10, cada arquivo conferido por md5 = disco): `seg_tenant_varredura_01c` OK (T0–T4) · `oc_cc_padrao_novas_01a` OK
+    (R1–R7) · `oc_cc_padrao_novas_01b` OK (R1–R8) · `oc_vincular_candidatas_01` OK (K1–K9).
+    ⚠ `oc_titulo_para_cc_01a_test.sql` FOI ATUALIZADO AO CONTRATO NOVO (fechamento, Gabriel 13/10): o M1 esperava a recusa "Conta
+      corrente, por enquanto, so em venda e compra" para um abate; o abate agora e' ACEITO e a recusa que vem e' "Registre a saida dos
+      animais antes de migrar" — so' essa frase esperada mudou. Arquivo do disco (md5 91d927f3cde158d5c443bb7e0a554478) rodado inteiro
+      no vivo: M1–M8 OK.
+    ⚠ DIVIDA OC-VINCULAR-PARCIAL-MOLDE-01: `oc_vincular_recebimento_parcial_01_test.sql` depende do molde da compra da9c27ee, que
+      foi migrada para conta corrente em 12/10 e nao tem mais compromisso principal vivo (medido: 0). O teste precisa de um molde
+      novo; NAO RODA ate' la'. Nao e' regressao deste PR (a queda no C1 e' prevista por leitura, nao executada).
+    ⚠ DIVIDA OC-VINCULAR-PARCELA-SEGUINTE-HORARIO-01: `oc_vincular_parcela_seguinte_01_test.sql` cria gatilho em
+      `zoo_operacao_partes`; roda SO' fora do horario de uso (antes das 07h / depois das 20h de Brasilia). Nao rodado neste PR.
+  ⚠ O MAPA DE FRASES DO FRONT TINHA FICADO ATRAS DE UM RAISE, E FOI ACERTADO NO FECHAMENTO: `_oc_vincular_recebimento` passou a dizer
+    "…so em venda, compra ou abate no modelo conta corrente" e o `FRASES_DO_BANCO` (`src/lib/oc/vincularLancamento.ts`) casava so'
+    a forma antiga — a tela mostraria o texto do banco. Agora a expressao casa as DUAS formas, por extenso
+    (`/so em venda(?: ou compra|, compra ou abate) no modelo conta corrente/i`), e `vincularCandidatas.test.tsx` prende as duas
+    amostras virando "Esta operação não é de conta corrente." e um pedaco solto NAO casando. VARREDURA DO `src` (13/10): nenhum outro
+    mapa casa texto de RAISE mudado nas 18 funcoes. Mapas que existem e NAO precisaram mudar: `useCompraLotes.ts` (`/reabra para
+    editar/`, de `oc_salvar_lotes`, texto intocado) · `AbaCompromissosOC.tsx` (`/excede a base da opera/`, de `oc_criar_compromisso`,
+    funcao nao tocada) · `fraseDoErroAoExplicar` (`useOcContaCorrente.ts`) decide pelo CODIGO, nao pelo texto: as recusas novas do
+    abate (P0001) chegam a' tela como o banco as escreve. As outras frases trocadas ("Conta corrente so existe em…", "Explicar a
+    diferenca so existe em…", "Conta corrente, por enquanto, so em…") nao estao em mapa nenhum.
+  ⚠ REGRA QUE FICA (a parte da conferencia de ancoras que faltou): TODA MIGRATION QUE MUDA O TEXTO DE UM RAISE CONFERE OS MAPAS DE
+    FRASE DO FRONT ANTES DE APLICAR — grep da frase ANTIGA em `src` e em `supabase/tests` — e acerta mapa e teste no mesmo PR.
+  ⚠ LEDGER DESCOLADO DO ARQUIVO, O PAR: ledger 20261013144026 x arquivo 20261027197300 (`oc_cc_abate_01_banco`).
+  ⚠ DIVIDA OC-CC-DEDUCAO-ORIGEM-01: a deducao mora na origem 'explicacao' porque `zoo_operacao_partes_entrega_coerente` so' deixa UMA
+    parte viva por movimentacao com origem 'entrega'; origem 'deducao' propria pede ampliar o CHECK (DDL em tabela quente). Quem le^
+    explicacao filtra `chave_idempotencia NOT LIKE 'deducao:%'` (o `oc_conta_corrente` ja' filtra).
+  ⚠ DIVIDA OC-CC-ABATE-AJUSTE-PRECO-01: ajuste de preco no abate e' recusado — `oc_revalorar_lote` escreve no lote, e o valor do
+    abate mora em `zoo_operacao_abate`; o preco se corrige no acerto (aba Abate).
+  ⚠ FORA DESTE PR (fica para o PR 3): o NASCIMENTO (abate segue 'titulo') e a MIGRACAO das OCs de abate;
+    `oc_migrar_para_conta_corrente` em abate REAL nao foi simulada — o patch dela so' esta' provado por md5 e ancoras.
+  ⚠ NAO PROVADO: `oc_programar_recebimento` e `oc_explicar_saldo` no abate so' em simulacao (`p_simular`, B7) · `_oc_vincular_recebimento`
+    e `oc_salvar_lotes` sem mutacao propria (so' md5) · o B8 do arquivo e' por invariantes (sem `deduzido`, sem linha de deducao,
+    `a_entregar` = acordado − entregue); o antes x depois por md5 so' existiu no ensaio · nada visto na TELA · custo da chamada a
+    mais por saida (`_oc_cc_valor_entrega_do_lote` no sincronizador) nao medido.
+  ⚠ O ARQUIVO DA MIGRATION NAO LEVA `SET LOCAL lock_timeout` (so' `CREATE OR REPLACE FUNCTION`, que nao trava tabela).
+  ⚠ METODO — ARQUIVO DO DISCO NO CANAL, BYTE A BYTE: o texto vai como LITERAL (`$m$…$m$`) num bloco que confere `md5(texto)` contra o
+    md5 medido no disco e so' entao faz `EXECUTE`; a palavra que o canal barra (o `DROP FUNCTION pg_temp…`) entra por concatenacao
+    ('DR' || 'OP…'), e o md5 prova que o texto executado e' o do arquivo. No `apply_migration` o `DROP` pede a confirmacao do Gabriel.
 - ⚠ O HASH EXPLÍCITO É MARCA DE ORIGEM: o gatilho não apaga hash de quem não tem lote (CUSTEIO-HASH-01, Gabriel 13/10/2026, banco + dado
   + tela; ⚠ HOMOLOGACAO RUNTIME PENDENTE — nada visto no navegador). O gatilho so' CALCULA o hash de quem tem lote de Excel e NUNCA
   apaga o que veio explicito.

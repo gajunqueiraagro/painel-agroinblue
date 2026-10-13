@@ -279,7 +279,8 @@ describe('recusas — toda recusa chega em frase, por um mapa só', () => {
       'Componente informado (frete) diverge do compromisso escolhido (comissao)', 'Informe o componente (frete, comissao)',
       'Componente frete nao cabe no subcentro "X"', 'Componente obrigacao/frete inexistente ou inativo no catalogo',
       'Parcela abc nao pertence a programacao ativa do compromisso', 'Vincular mudaria o hash de importacao do lancamento abc (de x para y); abortado',
-      'Recebimento ou pagamento de conta corrente so em venda ou compra no modelo conta corrente', 'Pagamento tem de ser uma saida',
+      'Recebimento ou pagamento de conta corrente so em venda ou compra no modelo conta corrente',
+      'Recebimento ou pagamento de conta corrente so em venda, compra ou abate no modelo conta corrente', 'Pagamento tem de ser uma saida',
       'Recebimento tem de ser uma entrada', 'Lancamento sem movimentacao de caixa nao e recebimento',
       'Vincular recebimento nao muda o lancamento; valor, datas, conta do plano ou conta bancaria mudariam',
       'Competencia pela saida mudaria valor, pagamento, conta ou hash do lancamento abc; abortado',
@@ -296,6 +297,12 @@ describe('recusas — toda recusa chega em frase, por um mapa só', () => {
     }
     expect(mensagemDeErro({ message: 'Parte abc sem parcela de programacao: fora do modelo vivo, nao se desvincula por aqui' }))
       .toBe('Recebimento ou pagamento de operação em conta corrente ainda não se desvincula por aqui.');
+    // OC-CC-ABATE-01: a forma antiga e a nova do RAISE viram a MESMA frase; pedaco solto nao casa
+    for (const m of ['Recebimento ou pagamento de conta corrente so em venda ou compra no modelo conta corrente',
+      'Recebimento ou pagamento de conta corrente so em venda, compra ou abate no modelo conta corrente']) {
+      expect(mensagemDeErro({ message: m }), m).toBe('Esta operação não é de conta corrente.');
+    }
+    expect(mensagemDeErro({ message: 'so em venda no modelo conta corrente' })).toBe('so em venda no modelo conta corrente');
     expect(FRASES_DO_BANCO.length).toBeGreaterThan(30);
   });
   it('os três diálogos passam pelo MESMO dono (lido da fonte)', () => {

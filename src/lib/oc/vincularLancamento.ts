@@ -547,7 +547,8 @@ export const FRASES_DO_BANCO: ReadonlyArray<readonly [RegExp, string]> = [
   [/inexistente ou inativo no catalogo/i, 'O item escolhido não existe mais no catálogo de itens.'],
   [/Parcela .* nao pertence a programacao ativa/i, 'A parcela escolhida não é mais deste compromisso. Reabra o vínculo.'],
   [/mudaria o hash de importacao/i, 'O vínculo mudaria a identidade de importação deste lançamento, e por isso não foi feito. Nada foi gravado.'],
-  [/so em venda ou compra no modelo conta corrente/i, 'Esta operação não é de conta corrente.'],
+  // as DUAS formas do RAISE de `_oc_vincular_recebimento`: a de antes e a do OC-CC-ABATE-01 (que aceita abate)
+  [/so em venda(?: ou compra|, compra ou abate) no modelo conta corrente/i, 'Esta operação não é de conta corrente.'],
   [/Pagamento tem de ser uma saida/i, 'Numa compra, o pagamento tem de ser um lançamento de saída.'],
   [/Recebimento tem de ser uma entrada/i, 'Numa venda, o recebimento tem de ser um lançamento de entrada.'],
   [/sem movimentacao de caixa nao e recebimento/i, 'Lançamento sem movimentação de caixa não é recebimento nem pagamento.'],

@@ -96,7 +96,7 @@ begin
   -- §M1 a M3: as guardas
   a := pg_temp.oc('abate', '{}', 1000, false);
   v_t := pg_temp.rec(format('select oc_migrar_para_conta_corrente(%L, true)::text', a));
-  if v_t is distinct from 'P0001 Conta corrente, por enquanto, so em venda e compra' then raise exception 'M1 abate: %', v_t; end if;
+  if v_t is distinct from 'P0001 Registre a saida dos animais antes de migrar' then raise exception 'M1 abate: %', v_t; end if;
   b := pg_temp.oc('compra', array[500], 500, true);
   update zoo_operacoes_comerciais set modelo_financeiro = 'conta_corrente' where id = b;
   v_t := pg_temp.rec(format('select oc_migrar_para_conta_corrente(%L, true)::text', b));
