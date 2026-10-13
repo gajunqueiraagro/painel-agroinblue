@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 12/10/2026 (OC-CC-PROGRAMAR-RECEBIMENTO-01, +3 em `src/components/venda/abaContaCorrente.test.tsx` — 5009 depois dele; antes o FECH-DOCS-01b, +6 em `src/components/pecuaria/documentosDoMesDialog.test.tsx` — 5006 depois dele; antes o FECH-GLOBAL-RESUMO-01b, +3 em `src/components/fechamentoGlobalResumo.test.tsx` — 5000 depois dele; antes o FECH-GLOBAL-RESUMO-01, +19 no mesmo arquivo (novo) — 4997 depois dele; antes o FECH-DOCS-01, +27: `src/hooks/useDocumentosDoMes.test.tsx` 13,
+  Baseline em 13/10/2026 (CUSTEIO-TXT-03, +15: `src/v2/lib/custeio/parseCusteioTxt.test.ts` 4, `src/v2/pages/custeioLote.test.tsx` 7,
+  `src/hooks/useFinanceiroV2.lote.test.ts` 4 — 5024 depois dele; antes o OC-CC-PROGRAMAR-RECEBIMENTO-01, +3 em `src/components/venda/abaContaCorrente.test.tsx` — 5009 depois dele; antes o FECH-DOCS-01b, +6 em `src/components/pecuaria/documentosDoMesDialog.test.tsx` — 5006 depois dele; antes o FECH-GLOBAL-RESUMO-01b, +3 em `src/components/fechamentoGlobalResumo.test.tsx` — 5000 depois dele; antes o FECH-GLOBAL-RESUMO-01, +19 no mesmo arquivo (novo) — 4997 depois dele; antes o FECH-DOCS-01, +27: `src/hooks/useDocumentosDoMes.test.tsx` 13,
   `src/components/pecuaria/documentosDoMesDialog.test.tsx` 14 — 4978 depois dele; antes o OC-CRIAR-DO-LEGADO-COMPRA-01, +11: `src/lib/oc/criarDoLegado.test.ts` 5,
   `src/components/financeiro-v2/criarOCDoLegado.test.tsx` 6 — 4951 depois dele; antes o OC-CC-PADRAO-NOVAS-01b, +13: `src/hooks/ocVersaoAposSaida.test.tsx` 5 (novo),
   `src/components/venda/aguardandoSaida.test.tsx` 8 (novo) — 4940 depois dele; antes o OC-CC-EXPLICAR-CONGELA-01, +20:
@@ -297,7 +298,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5009
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5024
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3860,6 +3861,54 @@ docs/historico/frentes-ate-2026-09-29.md.)
   quem mexer num confere o outro. O selo do rodape (`SeloRegraDaLinha`) diz a regra da linha.
 
 ## REGRAS VIGENTES — OPERACAO COMERCIAL E FINANCEIRO
+- ⚠ O LOTE DO CUSTEIO ENTRA INTEIRO: classificado pela chave quando há sugestão, sem classificação quando não há; a classificação em
+  massa é da Conciliação › Sem classificação; o parser não trata palavra solta como ruído (o caso 'EMISSAO GUIA - GTA'); a recusa
+  do banco fica escrita no diálogo da prévia com a frase do banco (CUSTEIO-TXT-03, Gabriel 13/10/2026, so' tela, sem banco; ⚠
+  HOMOLOGACAO RUNTIME PENDENTE — nada visto no navegador). Importar Banco › Relatorio de custeio (`CusteioTxtImportTab.tsx`,
+  `parseCusteioTxt.ts`) e o escritor unico do lote (`useFinanceiroV2.criarLancamentosEmLote`). Nasce do TXT de set/26 do Raul (47
+  itens): o lote so' levava linha com subcentro sugerido, o operador lancou item a item, a memoria de apelidos preencheu as
+  irmas e ele as tomou por lancadas — o sistema ficou com MENOS lancamentos que o TXT; e o "Lançar 47" caiu com a frase generica.
+  · ELEGIVEL AO LOTE (`elegivelAoLote`) = competencia + conta da regua + ainda nao lancado (hash). A sugestao NAO e' condicao; a
+    linha sem sugestao nasce marcada como as outras, e a caixa por linha continua.
+  · O FORM DO LOTE MANDA A CHAVE: `plano_conta_id: sug?.planoContaId || null` e `subcentro: sug?.subcentro || null`. Sem sugestao —
+    ou com sugestao SO' DE FORNECEDOR (plano vazio) — plano e subcentro vao NULOS e o lancamento nasce "sem classificacao", com o
+    favorecido; nunca string vazia. Antes ia so' o texto, e texto que `resolve_classificacao_from_plano` nao resolvia dava P0001 e
+    derrubava o INSERT inteiro (e' um statement so').
+  · FAZENDA: `motivoLoteBloqueado` ganhou, ANTES da conta, "Fazenda do relatório não reconhecida no cadastro: lance item a item e
+    escolha a fazenda no modal."; o botao obedece ao motivo (`disabled={motivoLoteBloqueado !== null || salvandoLote}`) e
+    `lancarLote` sai cedo sem fazenda — o `?? ''` (uuid vazio) saiu. Sem seletor de fazenda na regua (fora deste PR).
+  · A RECUSA: `criarLancamentosEmLote(forms, hashes, opcoes?: { aoRecusar?: (frase) => void })`. COM `aoRecusar` nao ha' toast e ele
+    recebe `error.message` quando o codigo e' P0001 (o RAISE das regras do proprio sistema), senao a frase do normalizador; o log
+    (`reportarErro`) continua. SEM ele, identico a antes — o `onSaveBatch` do `FinanceiroV2Tab` nao passa o parametro. Na previa:
+    lugar reservado de 14px sob a lista (`lote-recusa`, sempre presente, 10px, vermelho, uma linha, inteiro no `title`) e o
+    dialogo FICA ABERTO na recusa; no sucesso fecha, como antes.
+    ⚠ E' A UNICA PORTA EM QUE A MENSAGEM DO BANCO ATRAVESSA O HOOK: `normalizarErro` continua trocando todo P0001 pela generica.
+  · A PREVIA DIZ O QUE VAI SEM CLASSIFICACAO: linha de 14px no topo (`lote-resumo`) "N classificados · M sem classificação
+    (classifique depois em Conciliação › Sem classificação)" — com M = 0, so' "N classificados"; na lista, o selo ambar "sem
+    classificação" (`lote-sem-classificacao`) no lugar do subcentro. Classificado = a linha leva `planoContaId`.
+  · PARSER: o padrao de ruido do cabecalho de pagina e' `/^\s*emiss[ãa]o\s+\d{2}\/\d{2}\/\d{4}/i` (a linha "Emissão dd/mm/aaaa
+    Hr. …"); a palavra solta engolia o item "EMISSAO GUIA - GTA 110,00" (`ehRuido` roda antes de olhar o valor) e a sub-familia
+    divergia do impresso em −110,00. Nenhum outro padrao mudou.
+  · FONTES (A18): os quatro `Alert` de 14px sairam. Bloco `custeio-reconciliacao`: status numa linha de 18px sempre presente
+    (verde OK · ambar arredondamento ate' 5 centavos · vermelho "Divergência de reconciliação — N escopos" · muted "Sem subtotais
+    para conferir — soma dos itens R$ X"), a explicacao no `title`; divergencias e avisos do parser em linhas de 16px
+    (`LinhasCurtas`: 3 a' vista + "… e mais N" com todas no `title`; lista vazia nao ocupa altura). O erro de leitura do arquivo
+    e' uma linha de 10px na linha do seletor (`custeio-erro-leitura`). O import de `Alert` saiu do arquivo.
+  ⚠ DESVIOS DO BRIEFING, DECLARADOS: (1) o motivo "Nenhuma linha com sugestão completa selecionada." virou "Nenhuma linha
+    selecionada." (a sugestao deixou de ser condicao); (2) `subcentro: … || null` num campo tipado `string | undefined` do
+    `LancamentoV2Form` — compila porque o gate roda com `strict: false`, e `buildInsertRow` ja' grava `form.subcentro || null`.
+  Testes: `src/v2/lib/custeio/parseCusteioTxt.test.ts` 4 (TXT sintetico), `src/v2/pages/custeioLote.test.tsx` 7 (a tela lida da
+  FONTE, com auto-teste dos detectores) e `src/hooks/useFinanceiroV2.lote.test.ts` 4 (hook montado, banco de mentira). 19 mutacoes
+  mortas, ao menos uma por item (parser 2, elegibilidade 1, chave 2, fazenda 4, recusa 6, previa 2, fontes 2).
+  ⚠ NAO PROVADO: NADA NO NAVEGADOR — alturas de 18 / 16 / 14px e o topo preso antes x depois (so' o contrato declarado), o dialogo
+    da previa com as duas linhas novas, a recusa real do banco escrita, e o lote gravando de verdade linhas sem classificacao ·
+    a tela nao se monta em teste (lida da fonte) · o TXT real do Raul nao foi relido (so' o sintetico) · o log do Postgres do
+    lote que caiu nao foi lido (22P02 x P0001 nao confirmado).
+  ⚠ DIVIDAS: os lancamentos que o operador fez item a item ANTES deste PR nao sao reconciliados com o TXT por este PR (a previa
+    os reconhece pelo hash e nao os propoe de novo) · linha gravada sem classificacao nao ensina a memoria de apelidos (so' o
+    fornecedor, quando ha') · o cabecalho do arquivo `CusteioTxtImportTab.tsx` ainda diz "SEM importação em lote" (comentario
+    antigo, nao tocado) · as referencias de linha a este arquivo em outras regras deste documento (~:483, ~:588, ~:795,
+    :322/522) ficaram deslocadas.
 - ⚠ FECHAMENTO AREA EM "GLOBAL" MOSTRA O RESUMO POR FAZENDA E O CAMINHO PARA OS PASTOS (FECH-GLOBAL-RESUMO-01, Gabriel 12/10/2026, so'
   tela, sem banco; mock v2 aprovado em 12/10). PUBLICADA em 12/10/2026 (03825b80 + o 01b 8c5f985f); ⚠ HOMOLOGACAO RUNTIME PENDENTE (nada visto no navegador).
   Entra no lugar da frase "Selecione uma fazenda para o fechamento." (`FechamentoTab.tsx`, so' o ramo `isGlobal`).

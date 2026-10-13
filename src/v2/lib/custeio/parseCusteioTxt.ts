@@ -89,7 +89,10 @@ export const CUSTEIO_FORMAT = {
     /p[áa]g(?:ina)?\.?\s*\d+/i,     // "Pag. 1" / "Página 2"
     /^r\s*j\s*$/i,                  // "R J"
     /sistema\s+de\s+compras/i,
-    /emiss[ãa]o/i,
+    // ⚠ SÓ O CABEÇALHO DE PÁGINA ("Emissão 06/10/2026 Hr. 14:29:06 Pag. 2"), ancorado no começo
+    // e na data — CUSTEIO-TXT-03. A palavra solta engolia item de verdade: "EMISSAO GUIA - GTA
+    // 110,00" sumia do preview e a sub-família divergia do impresso exatamente nesse valor.
+    /^\s*emiss[ãa]o\s+\d{2}\/\d{2}\/\d{4}/i,
     /valor\s+em\s+real/i,           // cabeçalho de coluna "Descrição ... Valor em Real"
   ],
 } as const;

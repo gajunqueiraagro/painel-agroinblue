@@ -1438,6 +1438,13 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
    */
   const criarLancamentosEmLote = useCallback(async (
     forms: LancamentoV2Form[], hashes?: Array<string | null | undefined>,
+    /* ⚠ A RECUSA ESCRITA NO LUGAR, COM A FRASE DO BANCO — CUSTEIO-TXT-03 (UX-TOAST-01). Quem
+       passa `aoRecusar` tem onde escrever a recusa (o diálogo da prévia do custeio) e por isso
+       NÃO recebe toast. P0001 é o RAISE das nossas próprias regras ("Subcentro … nao existe no
+       plano de contas"): a frase foi escrita para o operador e é ela que diz o que corrigir;
+       qualquer outro código segue pelo normalizador. Sem `aoRecusar`, tudo como sempre foi —
+       o `onSaveBatch` do Financeiro V2 não passa este parâmetro. */
+    opcoes?: { aoRecusar?: (frase: string) => void },
   ) => {
     if (!clienteId || !user || forms.length === 0) return false;
 
@@ -1452,6 +1459,12 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     if (error) {
       // Antes: `Erro ao salvar lote: ${error.message}` — despejava a mensagem
       // crua do PostgREST na tela (nome de constraint, SQL, valor da coluna).
+      const aoRecusar = opcoes?.aoRecusar;
+      if (aoRecusar) {
+        const n = reportarErro(error, 'criarLancamentosEmLote', () => {});
+        aoRecusar(error.code === 'P0001' ? error.message : n.mensagem);
+        return false;
+      }
       reportarErro(error, 'criarLancamentosEmLote', toast.error);
       return false;
     }

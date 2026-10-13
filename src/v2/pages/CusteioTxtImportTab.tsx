@@ -37,8 +37,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AlertTriangle, CheckCircle2, Upload } from 'lucide-react';
+import { Upload } from 'lucide-react';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useFinanceiroV2, type LancamentoV2Form } from '@/hooks/useFinanceiroV2';
@@ -46,6 +45,27 @@ import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialo
 
 const brl = (n: number) =>
   n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+/* As linhas curtas do bloco de reconciliação — CUSTEIO-TXT-03. Uma informação por linha, 16px
+   de altura e 10px de letra (A18); três à vista e o resto contado, com TODAS no `title`.
+   Lista vazia não desenha nada: a altura aqui é da própria lista. */
+const LINHAS_CURTAS_VISIVEIS = 3;
+function LinhasCurtas({ linhas, className, testId }: { linhas: string[]; className: string; testId: string }) {
+  if (linhas.length === 0) return null;
+  const resto = linhas.length - LINHAS_CURTAS_VISIVEIS;
+  return (
+    <div data-testid={testId}>
+      {linhas.slice(0, LINHAS_CURTAS_VISIVEIS).map((l, idx) => (
+        <p key={idx} title={l} className={`h-4 truncate text-[10px] leading-4 ${className}`}>{l}</p>
+      ))}
+      {resto > 0 && (
+        <p title={linhas.join('\n')} className={`h-4 truncate text-[10px] leading-4 ${className}`}>
+          … e mais {resto}
+        </p>
+      )}
+    </div>
+  );
+}
 
 /** Normaliza nome para match exato (trim, lower, sem acento). */
 function normNome(s: string): string {
@@ -113,13 +133,15 @@ export default function CusteioTxtImportTab(
      em sequência tentaria INSERIR o alias duas vezes e a segunda bateria no UNIQUE. */
   const [recarregarMemoria, setRecarregarMemoria] = useState(0);
 
-  /* ⚠ SELEÇÃO EXPLÍCITA, NÃO DERIVADA — 121 item 3. O padrão marca as linhas com sugestão
-     completa, mas o operador desmarca e marca à vontade; guardar só o "padrão" e recalcular
+  /* ⚠ SELEÇÃO EXPLÍCITA, NÃO DERIVADA — 121 item 3. O padrão marca todas as linhas que o
+     lote pode levar (CUSTEIO-TXT-03), mas o operador desmarca e marca à vontade; guardar só o "padrão" e recalcular
      faria a marcação dele voltar sozinha a cada render da lista. `null` = ainda não houve
      gesto nenhum, e aí vale o padrão. */
   const [selecao, setSelecao] = useState<ReadonlySet<number> | null>(null);
   const [previaLoteAberta, setPreviaLoteAberta] = useState(false);
   const [salvandoLote, setSalvandoLote] = useState(false);
+  /* O que o banco respondeu ao recusar o lote, escrito no diálogo da prévia — nunca em toast. */
+  const [recusaDoLote, setRecusaDoLote] = useState<string | null>(null);
 
   const { clienteAtual } = useCliente();
   const { fazendas } = useFazenda();
@@ -395,15 +417,18 @@ export default function CusteioTxtImportTab(
     }
   }
 
-  /* Elegível ao lote: tem para onde ir sozinho. Sem subcentro sugerido, sem conta da régua
-     ou sem competência, a linha fica para o modal um a um — é lá que se escolhe o que
-     falta, e adivinhar aqui gravaria classificação que ninguém conferiu. */
+  /* Elegível ao lote: competência, conta da régua e ainda não lançado.
+     ⚠ O LOTE ENTRA INTEIRO — CUSTEIO-TXT-03 (Gabriel, 13/10/2026). A classificação NÃO é
+     condição: a linha com sugestão vai classificada pela chave do plano, a linha sem sugestão
+     vai sem classificação, e quem a cobra depois é a Conciliação › Sem classificação, em
+     bloco. O filtro antigo deixava a linha sem sugestão para o modal, um a um — e o sistema
+     ficava com MENOS lançamentos que o TXT, porque a memória de apelidos preenchia as irmãs
+     e o operador as tomava por lançadas. */
   const elegivelAoLote = useCallback((linhaNum: number) => {
     if (!competencia || !contaBancariaId) return false;
     const hash = hashPorLinha.get(linhaNum);
-    if (hash && lancadoPorHash.has(hash)) return false;      // já lançado não se propõe
-    return !!sugestaoPorLinha.get(linhaNum)?.subcentro;
-  }, [competencia, contaBancariaId, hashPorLinha, lancadoPorHash, sugestaoPorLinha]);
+    return !(hash && lancadoPorHash.has(hash));               // já lançado não se propõe
+  }, [competencia, contaBancariaId, hashPorLinha, lancadoPorHash]);
 
   const marcadaPorPadrao = useCallback((linhaNum: number) => elegivelAoLote(linhaNum), [elegivelAoLote]);
 
@@ -426,6 +451,13 @@ export default function CusteioTxtImportTab(
     [itens, estaSelecionada, elegivelAoLote],
   );
   const totalDoLote = useMemo(() => itensDoLote.reduce((acc, i) => acc + i.valor, 0), [itensDoLote]);
+  /* Quantas linhas do lote levam a chave do plano. A sugestão só de fornecedor (plano vazio)
+     conta como SEM classificação: é o que ela grava. */
+  const classificadosNoLote = useMemo(
+    () => itensDoLote.filter(i => !!sugestaoPorLinha.get(i.linha_num)?.planoContaId).length,
+    [itensDoLote, sugestaoPorLinha],
+  );
+  const semClassificacaoNoLote = itensDoLote.length - classificadosNoLote;
 
   /**
    * O que o operador confirmou no modal vira memória para o mês que vem — 121 item 2.
@@ -500,10 +532,19 @@ export default function CusteioTxtImportTab(
    * modal para o mesmo item — que é como duas fontes nascem.
    * ⚠ FORNECEDOR PODE FICAR VAZIO: o custeio não nomeia fornecedor, e exigir um aqui
    * pararia o lote inteiro por um dado que o relatório não traz.
+   * ⚠ A CLASSIFICAÇÃO VAI PELA CHAVE, E PODE NÃO IR — CUSTEIO-TXT-03. Com sugestão, o form
+   * leva `plano_conta_id` (o gatilho copia o texto a partir dela); antes ia só o texto, e um
+   * texto que o gatilho não resolvia derrubava o INSERT inteiro. Sem sugestão — ou com
+   * sugestão só de fornecedor —, plano e subcentro vão NULOS: o lançamento nasce "sem
+   * classificação", nunca com string vazia.
+   * ⚠ SEM FAZENDA RESOLVIDA O LOTE NEM ABRE (`motivoLoteBloqueado`); a guarda aqui é a
+   * segunda tranca — '' no lugar do uuid era recusa certa do banco.
+   * ⚠ RECUSOU, O DIÁLOGO FICA ABERTO com a frase do banco escrita abaixo da lista.
    */
   async function lancarLote() {
-    if (!clienteId || !dataMes || itensDoLote.length === 0) return;
+    if (!clienteId || !dataMes || !fazendaResolvidaId || itensDoLote.length === 0) return;
     setSalvandoLote(true);
+    setRecusaDoLote(null);
     try {
       const forms: LancamentoV2Form[] = itensDoLote.map((it) => {
         const sug = sugestaoPorLinha.get(it.linha_num);
@@ -511,7 +552,7 @@ export default function CusteioTxtImportTab(
           ? hookFin.classificacoes.find(c => c.subcentro === sug.subcentro)
           : undefined;
         return {
-          fazenda_id: fazendaResolvidaId ?? '',
+          fazenda_id: fazendaResolvidaId,
           conta_bancaria_id: contaBancariaId ?? null,
           data_competencia: dataMes,
           data_vencimento: dataMes,
@@ -520,7 +561,8 @@ export default function CusteioTxtImportTab(
           tipo_operacao: '2-Saídas',
           status_transacao: 'realizado',
           descricao: it.produto_raw,
-          subcentro: sug?.subcentro,
+          plano_conta_id: sug?.planoContaId || null,
+          subcentro: sug?.subcentro || null,
           macro_custo: clsDoItem?.macro_custo,
           grupo_custo: clsDoItem?.grupo_custo,
           centro_custo: clsDoItem?.centro_custo,
@@ -529,7 +571,7 @@ export default function CusteioTxtImportTab(
         };
       });
       const hashes = itensDoLote.map(it => hashPorLinha.get(it.linha_num));
-      const ok = await hookFin.criarLancamentosEmLote(forms, hashes);
+      const ok = await hookFin.criarLancamentosEmLote(forms, hashes, { aoRecusar: setRecusaDoLote });
       if (!ok) return;
       setPreviaLoteAberta(false);
       /* O que o lote gravou também é resposta do operador: as sugestões que ele deixou
@@ -549,12 +591,14 @@ export default function CusteioTxtImportTab(
      discordar entre si. */
   const motivoLoteBloqueado = !auxLoaded
     ? 'Carregando contas e classificações…'
+    : !fazendaResolvidaId
+      ? 'Fazenda do relatório não reconhecida no cadastro: lance item a item e escolha a fazenda no modal.'
     : !contaBancariaId
       ? 'Sem conta bancária na régua: escolha a conta acima ou lance item a item.'
       : !competencia
         ? 'O arquivo não trouxe competência.'
         : itensDoLote.length === 0
-          ? 'Nenhuma linha com sugestão completa selecionada.'
+          ? 'Nenhuma linha selecionada.'
           : null;
 
   const recOk = resultado?.reconciliacao.ok ?? false;
@@ -571,6 +615,42 @@ export default function CusteioTxtImportTab(
     [resultado],
   );
 
+  /* ⚠ A RECONCILIAÇÃO FALA A 10px, NUMA LINHA — CUSTEIO-TXT-03 (A18). Eram quatro `Alert` do
+     shadcn a 14px, com ícone, título e parágrafo: o maior texto da tela para dizer "bateu".
+     O status vai numa linha de 18px sempre presente; a explicação de cada caso vai para o
+     `title`; as divergências e os avisos, uma linha de 16px cada.
+     ⚠ CENTAVO DE RELATÓRIO NÃO É ERRO DE LEITURA — CUSTEIO-TXT-02. Em ago/2026 a família
+     INVESTIMENTOS divergiu R$ 0,01: os itens somam 54.962,05 e o impresso traz 54.962,04,
+     porque o relatório arredonda o subtotal. Em vermelho, isso diz ao operador que o parser
+     errou — e ele para de confiar nos alarmes que importam. Âmbar até 5 centavos nomeia o
+     que é; acima disso continua vermelho, porque aí a hipótese de dupla contagem ou linha
+     perdida volta a valer. ⚠ A LINHA NÃO SOME EM NENHUM CASO: divergência é informação. */
+  const statusReconciliacao = !recConferido
+    ? {
+        tom: 'text-muted-foreground',
+        texto: `Sem subtotais para conferir — soma dos itens ${brl(resultado?.soma_valores ?? 0)}`,
+        dica: 'O TXT não trouxe subtotais/total reconhecíveis. Confira manualmente a soma dos itens contra o total do relatório.',
+      }
+    : recOk
+      ? {
+          tom: 'text-emerald-700 dark:text-emerald-400',
+          texto: 'Reconciliação OK — soma dos itens = subtotais impressos',
+          dica: `A soma dos itens-folha bate com os subtotais impressos no TXT.${subtotalGeral !== null ? ` Total geral impresso: ${brl(subtotalGeral)}.` : ''}`,
+        }
+      : soArredondamento
+        ? {
+            tom: 'text-amber-700 dark:text-amber-400',
+            texto: 'Diferença de arredondamento do relatório — até 5 centavos',
+            dica: 'A soma dos itens difere do subtotal impresso por centavos — o relatório arredonda o subtotal. Os itens são a fonte.',
+          }
+        : {
+            tom: 'text-destructive',
+            texto: `Divergência de reconciliação — ${divergencias.length} escopo${divergencias.length === 1 ? '' : 's'}`,
+            dica: 'A soma dos itens não bate com algum subtotal impresso. Verifique se um subtotal foi lido como item (dupla contagem) ou se o parser perdeu linhas.',
+          };
+  const linhasDeDivergencia = divergencias.map(d =>
+    `${d.escopo}: itens ${brl(d.soma_itens)} × impresso ${brl(d.subtotal_impresso)} (dif. ${brl(d.diferenca)})`);
+
   return (
     <div className="space-y-4">
       {/* ⚠ SEM TÍTULO E SEM O PARÁGRAFO — CUSTEIO-TXT-02. A aba de cima já diz que isto é
@@ -580,36 +660,37 @@ export default function CusteioTxtImportTab(
       <Card className={arquivoInicial ? 'border-0 shadow-none' : undefined}>
         <CardContent className={`space-y-3 ${arquivoInicial ? 'p-0' : 'pt-6'}`}>
 
-          {/* No modo hub quem escolhe o arquivo é a aba de cima. */}
-          {!arquivoInicial && (
-            <label className="inline-flex">
-              <input
-                type="file"
-                accept=".txt"
-                className="hidden"
-                onChange={onFile}
-              />
-              <Button asChild variant="outline" disabled={parsing}>
-                <span className="cursor-pointer">
-                  <Upload className="mr-2 h-4 w-4" />
-                  {parsing ? 'Lendo...' : 'Selecionar arquivo .txt'}
+          {/* No modo hub quem escolhe o arquivo é a aba de cima.
+              ⚠ O ERRO DE LEITURA É UMA LINHA DE 10px NA LINHA DO SELETOR — CUSTEIO-TXT-03; corta
+              com o inteiro no `title`. Era um `Alert` de 14px com ícone e título.
+              ⚠ O NOME DO ARQUIVO NÃO SE REPETE — CUSTEIO-TXT-02b. A faixa da seção acima já
+              o mostra ("Relatório de custeio · 082026.txt", 10px mono). `fileName` continua
+              no state porque o modo sem hub ainda o usa no fluxo de leitura. */}
+          {(!arquivoInicial || erro) && (
+            <div className="flex items-center gap-2">
+              {!arquivoInicial && (
+                <label className="inline-flex shrink-0">
+                  <input
+                    type="file"
+                    accept=".txt"
+                    className="hidden"
+                    onChange={onFile}
+                  />
+                  <Button asChild variant="outline" disabled={parsing}>
+                    <span className="cursor-pointer">
+                      <Upload className="mr-2 h-4 w-4" />
+                      {parsing ? 'Lendo...' : 'Selecionar arquivo .txt'}
+                    </span>
+                  </Button>
+                </label>
+              )}
+              {erro && (
+                <span data-testid="custeio-erro-leitura" title={erro}
+                  className="min-w-0 truncate text-[10px] text-destructive">
+                  Erro ao ler o arquivo: {erro}
                 </span>
-              </Button>
-            </label>
-          )}
-
-          {/* ⚠ O NOME DO ARQUIVO NÃO SE REPETE — CUSTEIO-TXT-02b. A faixa da seção acima já
-              o mostra ("Relatório de custeio · 082026.txt", 10px mono); aqui ele saía de
-              novo em `text-sm`, 14px — o maior texto da tela, para dizer o que já estava
-              dito dois centímetros acima. `fileName` continua no state porque o modo sem
-              hub (seleção pelo próprio card) ainda o usa no fluxo de leitura. */}
-
-          {erro && (
-            <Alert variant="destructive">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Erro ao ler o arquivo</AlertTitle>
-              <AlertDescription>{erro}</AlertDescription>
-            </Alert>
+              )}
+            </div>
           )}
         </CardContent>
       </Card>
@@ -640,9 +721,9 @@ export default function CusteioTxtImportTab(
               motivo faz o operador procurar defeito onde não há. */}
           <div className="flex items-center gap-2">
             <Button size="sm" className="h-7 text-[11px]"
-              disabled={itensDoLote.length === 0 || !auxLoaded || salvandoLote}
+              disabled={motivoLoteBloqueado !== null || salvandoLote}
               title={motivoLoteBloqueado ?? 'Conferir e lançar as linhas selecionadas'}
-              onClick={() => setPreviaLoteAberta(true)}>
+              onClick={() => { setRecusaDoLote(null); setPreviaLoteAberta(true); }}>
               Lançar {itensDoLote.length} selecionado{itensDoLote.length === 1 ? '' : 's'}
             </Button>
             {motivoLoteBloqueado && (
@@ -655,76 +736,16 @@ export default function CusteioTxtImportTab(
             )}
           </div>
 
-          {/* Reconciliação */}
-          {recConferido ? (
-            recOk ? (
-              <Alert>
-                <CheckCircle2 className="h-4 w-4" />
-                <AlertTitle>Reconciliação OK</AlertTitle>
-                <AlertDescription>
-                  A soma dos itens-folha bate com os subtotais impressos no TXT.
-                  {subtotalGeral !== null && (
-                    <> Total geral impresso: <strong>{brl(subtotalGeral)}</strong>.</>
-                  )}
-                </AlertDescription>
-              </Alert>
-            ) : (
-              /* ⚠ CENTAVO DE RELATÓRIO NÃO É ERRO DE LEITURA — CUSTEIO-TXT-02. Em ago/2026 a
-                 família INVESTIMENTOS divergiu R$ 0,01: os itens somam 54.962,05 e o impresso
-                 traz 54.962,04, porque o relatório arredonda o subtotal. Em vermelho, isso diz
-                 ao operador que o parser errou e que o arquivo não presta — e ele para de
-                 confiar nos alarmes que importam. Âmbar até 5 centavos nomeia o que é:
-                 arredondamento do relatório. Acima disso continua vermelho, porque aí a
-                 hipótese de dupla contagem ou linha perdida volta a valer.
-                 ⚠ A FAIXA NÃO SOME EM NENHUM DOS DOIS CASOS: divergência é informação. */
-              <Alert variant={soArredondamento ? 'default' : 'destructive'}
-                     className={soArredondamento ? 'border-amber-400 bg-amber-50 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200' : undefined}>
-                <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>
-                  {soArredondamento ? 'Diferença de arredondamento do relatório' : 'Divergência de reconciliação'}
-                </AlertTitle>
-                <AlertDescription className="space-y-1">
-                  <p>
-                    {soArredondamento
-                      ? 'A soma dos itens difere do subtotal impresso por centavos — o relatório arredonda o subtotal. Os itens são a fonte.'
-                      : 'A soma dos itens não bate com algum subtotal impresso. Verifique se um subtotal foi lido como item (dupla contagem) ou se o parser perdeu linhas.'}
-                  </p>
-                  <ul className="ml-4 list-disc text-sm">
-                    {resultado.reconciliacao.divergencias.map((d, idx) => (
-                      <li key={idx}>
-                        {d.escopo}: itens {brl(d.soma_itens)} × impresso{' '}
-                        {brl(d.subtotal_impresso)} (dif. {brl(d.diferenca)})
-                      </li>
-                    ))}
-                  </ul>
-                </AlertDescription>
-              </Alert>
-            )
-          ) : (
-            <Alert>
-              <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Sem subtotais para conferir</AlertTitle>
-              <AlertDescription>
-                O TXT não trouxe subtotais/total reconhecíveis. A soma dos itens é{' '}
-                <strong>{brl(resultado.soma_valores)}</strong> — confira manualmente contra o total do relatório.
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {/* Avisos do parser */}
-          {resultado.avisos.length > 0 && (
-            <Alert>
-              <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Avisos do parser</AlertTitle>
-              <AlertDescription>
-                <ul className="ml-4 list-disc text-sm">
-                  {resultado.avisos.map((a, idx) => (
-                    <li key={idx}>{a}</li>
-                  ))}
-                </ul>
-              </AlertDescription>
-            </Alert>
-          )}
+          {/* Reconciliação e avisos do parser: o texto e a cor vêm de `statusReconciliacao`. */}
+          <div data-testid="custeio-reconciliacao">
+            <p data-testid="custeio-reconciliacao-status" title={statusReconciliacao.dica}
+              className={`h-[18px] truncate text-[10px] font-medium leading-[18px] ${statusReconciliacao.tom}`}>
+              {statusReconciliacao.texto}
+            </p>
+            <LinhasCurtas testId="custeio-divergencias" linhas={linhasDeDivergencia}
+              className={soArredondamento ? 'text-amber-700 dark:text-amber-400' : 'text-destructive'} />
+            <LinhasCurtas testId="custeio-avisos" linhas={resultado.avisos} className="text-muted-foreground" />
+          </div>
 
           </div>{/* fim do topo fixo */}
 
@@ -770,10 +791,10 @@ export default function CusteioTxtImportTab(
                       <div key={it.linha_num}
                            className={`px-3 py-[7px] leading-[1.35] ${lancada ? 'bg-emerald-50/40 dark:bg-emerald-950/20' : ''}`}>
                         <div className="flex items-baseline gap-2">
-                          {/* ⚠ O CHECKBOX SÓ APARECE NA LINHA QUE O LOTE CONSEGUE LANÇAR.
-                              Um checkbox marcável numa linha sem sugestão prometeria um
-                              lançamento que a conferência recusaria depois — e o operador
-                              descobriria só no fim. Quem não é elegível segue no modal. */}
+                          {/* ⚠ O CHECKBOX SÓ APARECE NA LINHA QUE O LOTE CONSEGUE LANÇAR:
+                              com competência, conta da régua e ainda não lançada. Ter ou
+                              não sugestão não muda isso desde o CUSTEIO-TXT-03 — a linha
+                              sem sugestão entra no lote sem classificação. */}
                           {elegivelAoLote(it.linha_num) ? (
                             <Checkbox className="h-3.5 w-3.5 shrink-0"
                               checked={estaSelecionada(it.linha_num)}
@@ -859,6 +880,16 @@ export default function CusteioTxtImportTab(
               Conferir {itensDoLote.length} lançamento{itensDoLote.length === 1 ? '' : 's'}
             </DialogTitle>
           </DialogHeader>
+          {/* ⚠ A PRÉVIA DIZ O QUE VAI SEM CLASSIFICAÇÃO, antes da lista e numa linha fixa de
+              14px — CUSTEIO-TXT-03. O operador sabe o que fica para a Conciliação antes de
+              gravar, e não depois, pelo contador vermelho. */}
+          <p data-testid="lote-resumo" className="h-[14px] truncate text-[10px] leading-[14px] text-muted-foreground">
+            {classificadosNoLote} classificado{classificadosNoLote === 1 ? '' : 's'}
+            {semClassificacaoNoLote > 0 && (
+              <> · <span className="text-amber-700 dark:text-amber-400">{semClassificacaoNoLote} sem classificação</span>
+                {' '}(classifique depois em Conciliação › Sem classificação)</>
+            )}
+          </p>
           <div className="max-h-[50vh] overflow-y-auto rounded-md border">
             <table className="w-full text-[10px] tabular-nums">
               <thead className="sticky top-0 z-10 bg-card text-left text-[9px] text-muted-foreground">
@@ -875,7 +906,13 @@ export default function CusteioTxtImportTab(
                   return (
                     <tr key={it.linha_num} className="border-b last:border-0">
                       <td className="max-w-[240px] truncate px-2 py-1">{it.produto_raw}</td>
-                      <td className="px-2 py-1">{sug?.subcentro || '—'}</td>
+                      <td className="px-2 py-1">
+                        {sug?.subcentro || (
+                          <span data-testid="lote-sem-classificacao" className="text-amber-700 dark:text-amber-400">
+                            sem classificação
+                          </span>
+                        )}
+                      </td>
                       <td className="px-2 py-1 text-muted-foreground">{sug?.fornecedorNome ?? '—'}</td>
                       <td className="px-2 py-1 text-right">{brl(it.valor)}</td>
                     </tr>
@@ -884,6 +921,12 @@ export default function CusteioTxtImportTab(
               </tbody>
             </table>
           </div>
+          {/* ⚠ LUGAR RESERVADO DA RECUSA: 14px sempre presentes, para o diálogo não pular
+              quando o banco recusa. Uma linha; corta com a frase inteira no `title`. */}
+          <p data-testid="lote-recusa" title={recusaDoLote ?? undefined}
+            className="h-[14px] truncate text-[10px] leading-[14px] text-destructive">
+            {recusaDoLote}
+          </p>
           <p className="text-[10px] leading-tight text-muted-foreground">
             Competência {competencia ?? '—'} · conta da régua · status Realizado, como no
             lançamento item a item. Fornecedor vazio é aceito — o relatório de custeio não o traz.
