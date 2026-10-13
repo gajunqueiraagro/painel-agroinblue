@@ -162,7 +162,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 13/10/2026 (CUSTEIO-HASH-01, +8: `src/v2/lib/custeio/hashItemCusteio.test.ts` 3 (6 -> 9), `src/v2/pages/custeioLote.test.tsx` 5
+  Baseline em 13/10/2026 (OC-CC-MODAL-FINANCEIRO-01, +24: `src/components/financeiro-v2/modoOC.test.tsx` 21 (novo),
+  `src/components/venda/abaContaCorrente.test.tsx` 1 (43 -> 44), `src/lib/oc/desfazerTituloCancelado.test.ts` 1 (2 -> 3),
+  `src/components/compra/despesasContaCorrente.test.tsx` 1 (19 -> 20) — 5056 depois dele; antes o CUSTEIO-HASH-01, +8: `src/v2/lib/custeio/hashItemCusteio.test.ts` 3 (6 -> 9), `src/v2/pages/custeioLote.test.tsx` 5
   (7 -> 12) — 5032 depois dele; antes o CUSTEIO-TXT-03, +15: `src/v2/lib/custeio/parseCusteioTxt.test.ts` 4, `src/v2/pages/custeioLote.test.tsx` 7,
   `src/hooks/useFinanceiroV2.lote.test.ts` 4 — 5024 depois dele; antes o OC-CC-PROGRAMAR-RECEBIMENTO-01, +3 em `src/components/venda/abaContaCorrente.test.tsx` — 5009 depois dele; antes o FECH-DOCS-01b, +6 em `src/components/pecuaria/documentosDoMesDialog.test.tsx` — 5006 depois dele; antes o FECH-GLOBAL-RESUMO-01b, +3 em `src/components/fechamentoGlobalResumo.test.tsx` — 5000 depois dele; antes o FECH-GLOBAL-RESUMO-01, +19 no mesmo arquivo (novo) — 4997 depois dele; antes o FECH-DOCS-01, +27: `src/hooks/useDocumentosDoMes.test.tsx` 13,
   `src/components/pecuaria/documentosDoMesDialog.test.tsx` 14 — 4978 depois dele; antes o OC-CRIAR-DO-LEGADO-COMPRA-01, +11: `src/lib/oc/criarDoLegado.test.ts` 5,
@@ -299,7 +301,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5032
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5056
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3862,6 +3864,103 @@ docs/historico/frentes-ate-2026-09-29.md.)
   quem mexer num confere o outro. O selo do rodape (`SeloRegraDaLinha`) diz a regra da linha.
 
 ## REGRAS VIGENTES — OPERACAO COMERCIAL E FINANCEIRO
+- ⚠ A OC EM CONTA CORRENTE LANCA PELO MODAL DO FINANCEIRO (MODO OC), E O DESFAZER E' ATOMICO NO BANCO (OC-CC-MODAL-FINANCEIRO-01, Gabriel
+  13/10/2026, banco + tela; ⚠ HOMOLOGACAO RUNTIME PENDENTE — a tela foi ABERTA e MEDIDA, nada foi SALVO por ela).
+  Migration `supabase/migrations/20261027197400_oc_cc_modal_financeiro_01.sql` (md5 do arquivo 0175f4993ace930a5df0311da0ce32a3) —
+  APLICADA no proto em 13/10/2026, com o GO do Gabriel: ledger 20261013164154 (⚠ registrada com o timestamp do dia; ledger =
+  arquivo por md5 0175f499…). So' DUAS FUNCOES NOVAS (nenhum dono muda, nenhum DDL em tabela, nenhum dado tocado); md5 do prosrc:
+  `oc_lancar_pelo_modal` 26cdf425a87e9d5cc1cbec36e2b7e708 · `oc_desfazer_compromisso` bd6c112ab79d1efa6fe9a5468911b84f; as duas
+  SECURITY DEFINER, `anon` e PUBLIC sem EXECUTE, `authenticated` com.
+  · A REGRA: na aba Financeiro da OC em conta corrente, "+ Programar recebimento/pagamento" (o principal) e "+ Nova despesa" abrem o
+    MESMO `LancamentoV2Dialog` do Financeiro, com a prop `origemOC` (so' vale no lancamento NOVO). O `DialogoProgramarRecebimento`
+    e o metodo `programarRecebimento` do hook SAIRAM; o `NovoCompromissoDialog` perdeu o ramo "so' obrigacao" (segue para a OC no
+    modelo titulo); a RPC `oc_programar_recebimento` fica no banco, sem chamador no front.
+  · QUEM E' DONO DO QUE: `src/lib/oc/lancarPeloModal.ts` (o que trava, o que sugere, o que vai ao banco, o leitor do retorno sem
+    cast); `src/lib/oc/frasesDoBancoOC.ts` (o mapa de frases); `src/components/operacao-comercial/LancamentoDaOCDialog.tsx` (so'
+    HOSPEDA: catalogos, a fazenda da operacao, o pre-preenchimento que nasce UMA vez por abertura); `AbaFinanceiroOC` monta o
+    hospedeiro e entrega `onProgramar` / `onNovaDespesa` / `cancelarProgramado` as duas sub-abas.
+  · `lockedFields` E' A UNICA TRAVA POR CAMPO DO MODAL, e a uniao ganhou `fazenda_id`, `favorecido_id`, `classificacao` e
+    `status_transacao` (`CampoTravavelDoModal`). PROIBIDO prop paralela de trava. `TRAVAS_DO_MODO_OC`: principal = tipo, fazenda,
+    favorecido (a contraparte), classificacao (a conta da OC) e status; despesa = tipo, fazenda e status. O status nasce e fica
+    Programado. Sem as chaves novas o modal normal e' o de sempre (as fotos do modal nao mudaram).
+  · NO MODO OC O MODAL: mostra a faixa "Origem: OC #xxxxxxxx · <Verbo NNN Categoria>" com "voltar à operação" (em todas as abas);
+    ESCONDE competencia, pagamento, safra, cultura/fase, o aviso de rateio e a dica de recorrencia; a despesa ganha "Item da
+    operação *" (o catalogo `zoo_componentes_financeiros` de natureza 'obrigacao', `SearchableSelect`); "Tipo Documento" fica
+    apagado (a RPC grava so' o numero). "Compõe DRE" do principal diz "Não · quem compõe o DRE é a entrega do gado".
+  · SALVAR NO MODO OC SAI ANTES DO PARCELADO E DO `onSave`: vai a `oc_lancar_pelo_modal` (compromisso -> programacao com as N
+    parcelas da PROPRIA OC -> um titulo programado por parcela -> forma, dados de pagamento, documento e observacao nos N
+    lancamentos; uma transacao). NUNCA `fn_parcelamento_cadastrar`. Depois: `notificarLancamentosMudaram`, a versao sobe e as duas
+    leituras da aba releem. As duas pendencias proprias (item e vencimento) NAO apagam o Salvar: o clique as escreve em vermelho
+    no rotulo e ao lado do botao, e nao grava.
+  · SIMULACAO = GRAVACAO (`p_simular`, desfeita por SQLSTATE 'OCSIM'). Dela a tela le^: (a) o aviso AMBAR "R$ X acima do saldo a
+    receber/pagar da operação — pode salvar" (`acima_do_saldo`: recebido + programado − base > 0; NAO bloqueia); (b) a recusa do
+    banco, em vermelho, antes do Salvar; (c) a CLASSIFICACAO DO PRINCIPAL — o retorno traz `classificacao {subcentro,
+    plano_conta_id}`, e o hospedeiro faz UMA simulacao de 1 centavo ao abrir so' para le^-la (a interna `_oc_cc_conta_principal`
+    nao e' executavel pela tela no abate). A previa so' refaz com o que muda a resposta (chave de primitivos, espera de 400 ms).
+  · O VALOR SUGERIDO E O BOTAO APAGADO SAEM DA MESMA CONTA: `saldoAProgramar` = acordado − recebido − programado. Com saldo <= 0
+    (`principalJaCoberto`) o botao "+ Programar …" fica APAGADO com "Principal já programado até o valor da operação" escrito ao
+    lado — a tela nao abre o modal para o banco recusar.
+  · DESFAZER: `oc_desfazer_compromisso(operacao, versao, compromisso, motivo, p_simular)` encadeia `oc_estornar_materializacao`
+    (uma por parcela com titulo) -> `oc_cancelar_programacao` -> `oc_cancelar_compromisso`, com UM motivo e UM `estorno_id`, numa
+    transacao: ou tudo, ou nada. `src/lib/oc/desfazerCompromisso.ts` faz UMA chamada (a cadeia de tres idas do OC-MOTIVO-UNICO-01
+    SAIU do front; `REGEX_JA_DESFEITO`, `rolDoEstado` e `ErroDesfazer` ficam). Dois chamadores: o "Desfazer" da linha de despesa
+    (`AbaCompromissosOC`) e o "Cancelar recebimento/pagamento programado" do extrato (`AbaContaCorrenteOC`, dialogo com motivo
+    obrigatorio; num compromisso de N parcelas saem as N juntas, e o dialogo diz).
+  · MAPA DE FRASES (`fraseDoBancoOC`, lido por `fraseDoErroAoLancar` e `fraseDoErroDoDesfazer` no P0001): casa pela EXPRESSAO
+    COMPLETA, nunca por pedaco solto; fora do mapa o texto passa como veio; o RAISE do banco NAO mudou.
+        "Soma dos compromissos principais excede a base da operacao…"   -> "A programação passa do valor da operação."
+        "A classificacao escolhida nao e a que o plano resolve para "…"" -> "Esta classificação não corresponde à conta desta operação."
+        "Classificacao nao encontrada no plano de contas deste cliente"  -> "Classificação não encontrada no plano de contas deste cliente."
+        "Estorne a liquidacao ou conciliacao financeira antes de estornar esta materializacao."
+                                                                          -> "Este lançamento já foi pago ou conciliado. Desfaça o pagamento ou a conciliação no Financeiro antes."
+        "Compromisso ja cancelado"                                        -> "Este lançamento já foi cancelado."
+    RAISE novo nas duas RPCs (ou nos donos que elas encadeiam) entra no mapa no mesmo PR.
+  · PROVAS: os dois arquivos do disco rodados inteiros numa transacao revertida, por md5, antes de aplicar (L0–L7 OK). Mutacao no
+    banco: 12 de 12 mortas no corpo anterior a' chave `classificacao`, e mais 2 sobre ela no arquivo final (subcentro trocado e
+    `plano_conta_id` errado: as duas caem em "L1 classificacao"; controle OK). No VIVO depois de aplicar, cada arquivo conferido
+    por md5 = disco: `oc_cc_modal_financeiro_01_test.sql` (md5 3fe2c72b9b3f594b4b45a8d658e1cbe7) OK (L0–L7),
+    `seg_tenant_varredura_01c` OK (T0–T4), `oc_cc_abate_01_banco_test` OK (B1–B8, 157 OCs reais), `oc_cc_padrao_novas_01a` OK
+    (R1–R7) e `_01b` OK (R1–R8). Tela: 11 mutacoes mortas, 11 de 11.
+  · PROVA NO NAVEGADOR (13/10, NJ · Venda 140 Novilhas e8fec78b, so' leitura; quadro de 1000 x 800 dentro da pagina, porque a janela
+    desta maquina nao redimensiona): "+ Programar recebimento" abre o modal em modo OC — dialogo 1000 x 768, corpo 669 de 669 (SEM
+    rolagem), o conteudo da aba Geral termina em 355px e o da Pagamento em 191px; valor sugerido 194.988,80; tipo, status
+    ("Programado"), fazenda, favorecido e classificacao travados; "+ Nova despesa" — dialogo 1000 x 768, corpo 669 de 669, conteudo
+    em 340px, "Item da operação *" presente, fornecedor livre. NADA GRAVADO (a OC segue na versao 13, 0 eventos
+    'lancar_pelo_modal' no banco).
+  ⚠ DESVIOS DO BRIEFING, DECLARADOS: (1) o "Item da operação" fica na PRIMEIRA linha do modal (o lugar que competencia e pagamento
+    liberam), nao no lugar de cultura/fase — esse mora dentro de `ClassificacaoLancamento`; (2) o ITEM NAO FILTRA as classificacoes:
+    quem filtra e' o TIPO da OC, como no "Nova despesa" de antes (compra: so' o centro "Compra de Bovinos", com a lista inteira se
+    o filtro esvaziar; venda e abate: a lista como veio) — `classificacoesDaDespesa`; (3) a despesa e' sempre SAIDA no modo OC (o
+    dialogo antigo oferecia as duas direcoes na venda); (4) a CONTA BANCARIA e' obrigatoria, como no modal normal (o "Programar"
+    antigo gravava sem conta); (5) a sugestao do valor desconta o ja' programado (antes era so' o que faltava receber); (6)
+    `ClassificacaoLancamento` ganhou a prop `motivoTravado` (a frase do campo travado quando nao e' a transferencia).
+  ⚠ DIVIDA FIN-MODAL-SEM-ROLAGEM-01: o modo OC cabe sem rolar a 1000 x 800 porque esconde o que nao se aplica; o modal NORMAL do
+    Financeiro continua rolando em janela baixa (a 523 de altura o corpo da aba Geral rola 15px; a edicao e a aba Documentos,
+    mais). Levar o modal inteiro a "nunca rola" e' PR proprio de layout.
+  ⚠ DIVIDA OC-CC-CANCELAR-PROGRAMADO-LEGADO-01: o "Cancelar … programado" so' acende para o programado que TEM compromisso (o que
+    nasce pelo modal). Os 7 programados que existem hoje em conta corrente NAO tem (0 de 7), e NENHUM veio de
+    `oc_programar_recebimento` (que cria compromisso): 6 vem da MIGRACAO titulo -> conta corrente de 12/10 (o `fechar_casca_titulo`
+    cancela o compromisso e o lancamento vira recebimento por `_oc_vincular_recebimento`, parte de origem 'manual') e 1 do
+    `criar_do_legado` de 29/09 (lancamento do modal antigo, 'previsto'). Lista (OC · cliente · tipo · valor · vencimento · origem):
+        858acb08 · Santa Rita · venda  · 160.000,00 · 30/06/26 · criar do legado (29/09), lancamento 'previsto' do modal antigo
+        fcdbe0bb · Agnaldo    · compra ·  35.000,00 · 01/09/26 · migracao de 12/10
+        fcdbe0bb · Agnaldo    · compra ·  29.440,00 · 01/09/26 · migracao de 12/10
+        bf05667a · Agnaldo    · compra ·   8.250,00 · 01/09/26 · migracao de 12/10
+        da9c27ee · Agnaldo    · compra ·      35,00 · 09/10/26 · migracao de 12/10
+        4866360d · Santa Rita · venda  ·  15.000,00 · 25/11/26 · migracao de 12/10
+        41904517 · NJ         · venda  ·   5.269,00 · 11/09/26 · migracao de 12/10
+    Para eles o item segue APAGADO com "programado antes do modal, sem compromisso na operação · ainda sem gesto de cancelar".
+    O gesto pede RPC propria (cancelar o lancamento programado + a parte de recebimento sem compromisso) — decisao do Gabriel.
+  ⚠ DIVIDAS: o resumo lateral do modal ainda mostra "Data Competência" e "Safra" no modo OC (campos escondidos no formulario) ·
+    na despesa as pilulas de Atividade seguem clicaveis · com o principal coberto e o `valor_acordado` nulo o botao nao apaga (nao
+    se afirma sem acordado) e a recusa vem da simulacao de abertura, na aba · a simulacao trava a linha da OC (`FOR UPDATE`) a
+    cada previa · documentos pendentes (aba Documentos antes de salvar) nao existem no modo OC · `LancamentoDaOCDialog` nao tem
+    teste montado (o modal e a lib tem; a ligacao em `AbaFinanceiroOC` so' por tsc e pelo navegador).
+  ⚠ NAO PROVADO: SALVAR pela tela (principal, despesa e parcelado) e ver a aba e o Financeiro atualizarem sem F5 · o "Cancelar …
+    programado" na tela (nao ha' programado com compromisso em dado real) · o "Desfazer" da despesa pela RPC nova, na tela ·
+    compra e abate no modo OC no navegador (so' a venda) · o aviso ambar e a recusa da simulacao na tela (so' por teste) · o
+    botao apagado por principal coberto, na tela (so' por teste) · o parcelado no modo OC montado em teste · a janela REAL de
+    1000 x 800 (foi um quadro dentro da pagina) · perfil nao admin.
 - ⚠ O ABATE ENTRA NO CONTA CORRENTE: ENTREGA BRUTA, DEDUCAO FILHA (FUNRURAL) EM 5030, RECEBIMENTO FORA DO DRE; O LADO E' O DA VENDA; NASCIMENTO
   E MIGRACAO NO PR 3 (OC-CC-ABATE-01 PR 1, Gabriel 12–13/10/2026, SO' BANCO, so' funcoes — nenhum DDL em tabela, nenhum dado tocado).
   Migration `supabase/migrations/20261027197300_oc_cc_abate_01_banco.sql` (md5 do arquivo 20afe6fa74c4e970617985a5f4a8398c) — APLICADA no
@@ -4867,6 +4966,8 @@ docs/historico/frentes-ate-2026-09-29.md.)
     (`programarRecebimento`) e a RPC `oc_programar_recebimento` FICAM, sem ponto de entrada: voltam pelo "Parcelar".
     ⚠ VOLTOU no OC-CC-PROGRAMAR-RECEBIMENTO-01 (12/10/2026): com toda OC nova em conta corrente (OC-CC-PADRAO-NOVAS-01a) nao
     havia como programar o recebimento pela OC — "+ Programar recebimento/pagamento" antes do "+ Buscar …", sugerindo o em aberto.
+  ⚠ [OC-CC-MODAL-FINANCEIRO-01, 13/10: o "Programar" passou a abrir o MODAL DO FINANCEIRO em modo OC e o "Cancelar … programado"
+    ACENDEU para o programado com compromisso — ver a regra no topo desta secao; o resto da fila segue.]
   ⚠ FILA DO PR 3 (banco), que ACENDE os itens hoje em "disponível em breve": desvincular recebimento de conta corrente
     (`oc_desvincular_lancamento` recusa parte de conta corrente) · parcelar recebimento programado · cancelar recebimento
     programado (nao existe gesto nem RPC).

@@ -9,12 +9,11 @@
  * FOLHA -> RAIZ que o proprio banco impoe (a programacao recusa cancelar com titulo vivo; o
  * compromisso recusa com programacao ativa), com o MESMO motivo e o MESMO `p_estorno_id` — que as
  * tres ja' aceitavam e ninguem mandava.
- * ⚠ NAO E' TRANSACAO: cada RPC e' a sua. Por isso, antes de cada nivel, o estado e' RELIDO e o que ja'
- * esta' desfeito e' pulado — o mesmo botao retoma uma cadeia interrompida. E uma recusa do banco
- * (E3: titulo realizado, conciliado, liquidacao ativa) PARA a cadeia e diz o que ja' foi e o que falta.
- * Contornar a recusa nao e' opcao.
+ * ⚠ DESDE O OC-CC-MODAL-FINANCEIRO-01 E' TRANSACAO: quem encadeia e' o banco (`oc_desfazer_compromisso`), e uma
+ * recusa (E3: titulo realizado, conciliado, liquidacao ativa) desfaz tudo. Contornar a recusa nao e' opcao.
  */
 import { supabase } from '@/integrations/supabase/client';
+import { fraseDoBancoOC } from '@/lib/oc/frasesDoBancoOC';
 
 /** As tres mensagens de "ja' esta' desfeito" do banco (P0001, verbatim) — o mesmo teste do hook. */
 export const REGEX_JA_DESFEITO = /j[áa] (est[áa] estornad|cancelad)/i;
@@ -27,19 +26,12 @@ export interface TituloADesfazer {
   vencimento: string | null;
 }
 
-/** O que existe hoje, relido do banco antes de cada nivel. */
+/** O que a tela conhece do compromisso: e' dele que sai o rol que a etapa 1 lista. */
 export interface EstadoDoDesfazer {
   versao: number;
   titulos: TituloADesfazer[];
   programacaoAtivaId: string | null;
   compromissoCancelado: boolean;
-}
-
-export interface DepsDesfazer {
-  lerEstado: () => Promise<EstadoDoDesfazer>;
-  estornar: (v: number, programacaoId: string, parcelaId: string, motivo: string, estornoId: string) => Promise<number>;
-  cancelarProgramacao: (v: number, programacaoId: string, motivo: string, estornoId: string) => Promise<number>;
-  cancelarCompromisso: (v: number, compromissoId: string, motivo: string, estornoId: string) => Promise<number>;
 }
 
 const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -60,84 +52,83 @@ export class ErroDesfazer extends Error {
 }
 
 /**
- * PERCORRE A CADEIA. Devolve o que foi feito; recusa do banco vira `ErroDesfazer` com feito e falta.
- *
- * ⚠ MOTIVO VAZIO NAO EXECUTA NADA — nem a leitura. Quem inicia o gesto continua obrigado a dizer por
- * que (auditoria); so' a repeticao some.
- * ⚠ VERSAO PELO RETORNO de cada escrita. So' quando o banco responde "ja' desfeito" (idempotencia, nao
- * erro) a versao e' relida, porque essa resposta nao a traz.
+ * O RETORNO DE `oc_desfazer_compromisso`, lido sem cast — OC-CC-MODAL-FINANCEIRO-01. Peca torta = nulo (nunca sucesso inventado).
  */
-export async function executarDesfazerCompromisso({ compromissoId, motivo, estornoId, deps }: {
-  compromissoId: string; motivo: string; estornoId: string; deps: DepsDesfazer;
-}): Promise<{ feito: string[] }> {
-  const m = motivo.trim();
-  if (m === '') throw new ErroDesfazer('Informe o motivo.', [], []);
-  const feito: string[] = [];
-  let est = await deps.lerEstado();
-  let v = est.versao;
-
-  const passo = async (rotulo: string, escrever: () => Promise<number>) => {
-    try {
-      v = await escrever();
-      feito.push(rotulo);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (REGEX_JA_DESFEITO.test(msg)) { est = await deps.lerEstado(); v = est.versao; return; }
-      const agora = await deps.lerEstado().catch(() => est);
-      throw new ErroDesfazer(msg, feito, rolDoEstado(agora));
-    }
+export interface RetornoDesfazer {
+  estornoId: string;
+  simulado: boolean;
+  titulos: { sequencia: number; valor: number }[];
+  programacoesCanceladas: number;
+  versao: number;
+}
+const ehObjeto = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+export function lerRetornoDoDesfazer(data: unknown): RetornoDesfazer | null {
+  if (!ehObjeto(data) || data.ok !== true) return null;
+  const versao = Number(data.operacao_versao);
+  if (typeof data.estorno_id !== 'string' || !Number.isFinite(versao) || !Array.isArray(data.titulos_estornados)) return null;
+  const titulos: RetornoDesfazer['titulos'] = [];
+  for (const t of data.titulos_estornados) {
+    if (!ehObjeto(t)) return null;
+    const sequencia = Number(t.sequencia); const valor = Number(t.valor);
+    if (!Number.isFinite(sequencia) || !Number.isFinite(valor)) return null;
+    titulos.push({ sequencia, valor });
+  }
+  return {
+    estornoId: data.estorno_id, simulado: data.simulado === true, titulos,
+    programacoesCanceladas: Number(data.programacoes_canceladas) || 0, versao,
   };
+}
 
-  /* 1. Cada titulo vivo, um por um. */
-  for (const t of est.titulos) {
-    await passo(`estornado o ${rotuloTitulo(t)}`,
-      () => deps.estornar(v, t.programacaoId, t.parcelaId, m, estornoId));
+/** O que o gesto fez, nas palavras de sempre — escrito do retorno do banco. */
+export function feitoDoRetorno(r: RetornoDesfazer): string[] {
+  const feito = r.titulos.map(t => `estornado o título de ${brl(t.valor)} (parcela ${t.sequencia})`);
+  if (r.programacoesCanceladas > 0) feito.push('cancelada a programação');
+  feito.push('cancelado o compromisso');
+  return feito;
+}
+
+/** A chamada ao banco, injetavel para o teste. Devolve o que o PostgREST devolve. */
+export type RpcDesfazer = (args: {
+  p_operacao_id: string; p_versao: number; p_compromisso_id: string; p_motivo: string; p_simular: boolean;
+}) => Promise<{ data: unknown; error: { code?: string | null; message: string } | null }>;
+
+const rpcDoBanco: RpcDesfazer = async (args) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: RPC fora de types.ts
+  const { data, error } = await (supabase as any).rpc('oc_desfazer_compromisso', args);
+  return { data, error };
+};
+
+/** As frases de quem NAO e' regra de negocio; a regra (P0001) sobe com o texto do banco, como nos gestos avulsos. */
+export function fraseDoErroDoDesfazer(error: { code?: string | null; message: string }): string {
+  switch (error.code) {
+    case '40001': return 'A operação mudou enquanto você trabalhava. Recarregue e tente de novo.';
+    case '42501': return 'Sem permissão para esta operação.';
+    case 'P0002': return 'Operação não encontrada.';
+    case 'P0001': return fraseDoBancoOC(error.message);
+    default: return 'Não foi possível desfazer agora. Tente de novo.';
   }
-  /* 2. A programacao — relida: o estorno a deixa ativa, e ela pode ja' ter sido cancelada antes. */
-  est = await deps.lerEstado();
-  if (est.programacaoAtivaId) {
-    const progId = est.programacaoAtivaId;
-    await passo('cancelada a programação', () => deps.cancelarProgramacao(v, progId, m, estornoId));
-  }
-  /* 3. O compromisso. */
-  est = await deps.lerEstado();
-  if (!est.compromissoCancelado) {
-    await passo('cancelado o compromisso', () => deps.cancelarCompromisso(v, compromissoId, m, estornoId));
-  }
-  return { feito };
 }
 
 /**
- * LE DO BANCO o que existe para desfazer — a versao da operacao, os titulos vivos (parcelas
- * materializadas ou pagas das programacoes ativas), a programacao ativa e o estado do compromisso.
- * ⚠ DIRETO DAS TABELAS, nao das views da tela: e' a mesma pergunta que as guardas das RPCs fazem, e
- * o retrato da tela pode estar um passo atras dentro da propria cadeia.
+ * DESFAZ O COMPROMISSO NUM GESTO SO', ATOMICO — OC-CC-MODAL-FINANCEIRO-01 (Gabriel, 13/10/2026).
+ *
+ * ⚠ A CADEIA DE TRES IDAS QUE MORAVA AQUI SAIU: estornar cada titulo, cancelar a programacao e cancelar o compromisso eram
+ *   tres RPCs, cada uma a sua transacao, e uma recusa no meio deixava o gesto pela metade ("o mesmo botao retoma"). Quem
+ *   encadeia agora e' o BANCO (`oc_desfazer_compromisso`): os tres donos de sempre, um motivo, um `estorno_id`, UMA transacao —
+ *   ou desfaz tudo, ou nada. Recusa de qualquer dono (titulo realizado, conciliado, liquidacao ativa) aborta a chamada inteira
+ *   e sobe como `ErroDesfazer`, com `feito` VAZIO (nada foi feito) e `falta` = o rol que o chamador conhece.
+ * ⚠ MOTIVO VAZIO NAO VAI AO BANCO.
  */
-export async function lerEstadoDoDesfazer(operacaoId: string, compromissoId: string): Promise<EstadoDoDesfazer> {
-  const [op, comp, progs] = await Promise.all([
-    supabase.from('zoo_operacoes_comerciais').select('versao').eq('id', operacaoId).single(),
-    supabase.from('zoo_operacao_compromissos').select('status').eq('id', compromissoId).single(),
-    supabase.from('zoo_operacao_programacoes').select('id').eq('compromisso_id', compromissoId).eq('status', 'ativa'),
-  ]);
-  if (op.error) throw op.error;
-  if (comp.error) throw comp.error;
-  if (progs.error) throw progs.error;
-  const progIds = (progs.data ?? []).map(p => p.id);
-  let titulos: TituloADesfazer[] = [];
-  if (progIds.length > 0) {
-    const parc = await supabase.from('zoo_operacao_parcelas_programacao')
-      .select('id, programacao_id, sequencia, valor, vencimento, status')
-      .in('programacao_id', progIds).in('status', ['materializada', 'paga']).order('sequencia');
-    if (parc.error) throw parc.error;
-    titulos = (parc.data ?? []).map(p => ({
-      programacaoId: p.programacao_id, parcelaId: p.id, sequencia: p.sequencia,
-      valor: Number(p.valor), vencimento: p.vencimento,
-    }));
-  }
-  return {
-    versao: op.data.versao,
-    titulos,
-    programacaoAtivaId: progIds[0] ?? null,
-    compromissoCancelado: comp.data.status === 'cancelado',
-  };
+export async function executarDesfazerCompromisso({ operacaoId, versao, compromissoId, motivo, simular = false, falta = [], rpc = rpcDoBanco }: {
+  operacaoId: string; versao: number; compromissoId: string; motivo: string; simular?: boolean; falta?: string[]; rpc?: RpcDesfazer;
+}): Promise<{ feito: string[]; retorno: RetornoDesfazer }> {
+  const m = motivo.trim();
+  if (m === '') throw new ErroDesfazer('Informe o motivo.', [], falta);
+  const { data, error } = await rpc({
+    p_operacao_id: operacaoId, p_versao: versao, p_compromisso_id: compromissoId, p_motivo: m, p_simular: simular,
+  });
+  if (error) throw new ErroDesfazer(fraseDoErroDoDesfazer(error), [], falta);
+  const retorno = lerRetornoDoDesfazer(data);
+  if (!retorno) throw new ErroDesfazer('O banco respondeu fora do esperado. Recarregue antes de continuar.', [], falta);
+  return { feito: feitoDoRetorno(retorno), retorno };
 }

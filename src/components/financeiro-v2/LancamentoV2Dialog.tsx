@@ -117,6 +117,11 @@ import {
   novoPendente, todosGravados, type DocumentoPendente, type ParcelaGravada, type ParcelaIrma,
 } from '@/lib/financeiro/documentosPendentes';
 import { hojeLocal } from '@/lib/datas/hojeLocal';
+import { SearchableSelect } from '@/components/ui/searchable-select';
+import {
+  type OrigemOC, type CampoTravavelDoModal, lancarPeloModal, parcelasParaRpc, classificacoesDaDespesa, fraseAcimaDoSaldo,
+  tituloDoModoOC, MOTIVO_ITEM_OBRIGATORIO, MOTIVO_VENCIMENTO_OBRIGATORIO, MOTIVO_STATUS_TRAVADO_OC, MOTIVO_CLASSIFICACAO_DA_OC,
+} from '@/lib/oc/lancarPeloModal';
 
 interface Props {
   open: boolean;
@@ -236,13 +241,16 @@ interface Props {
    * os três, como sempre.
    */
   tiposOperacaoPermitidos?: readonly string[];
-  lockedFields?: Array<
-    | 'valor'
-    | 'data_pagamento'
-    | 'conta_bancaria_id'
-    | 'conta_destino_id'
-    | 'tipo_operacao'
-  >;
+  /* OC-CC-MODAL-FINANCEIRO-01 — a uniao ganhou fazenda, favorecido, classificacao e status (dono: `lancarPeloModal.ts`).
+     E' a UNICA trava por campo do modal: quem precisa travar um campo o poe aqui, nunca numa prop paralela. */
+  lockedFields?: CampoTravavelDoModal[];
+  /**
+   * MODO OC — OC-CC-MODAL-FINANCEIRO-01. "Programar recebimento/pagamento" e "Nova despesa" da OC em conta corrente abrem
+   * ESTE modal: faixa de origem no topo, o que nao se aplica some (competencia, pagamento, safra, cultura/fase, a dica de
+   * recorrencia), a despesa ganha o "Item da operação", e o Salvar vai a `oc_lancar_pelo_modal` — NUNCA ao `onSave` nem ao
+   * parcelamento do Financeiro. So' vale no lancamento NOVO. Sem a prop, o modal e' o de sempre.
+   */
+  origemOC?: OrigemOC | null;
   // PR2.2 — Box informativo (read-only) com dados da referência operacional
   // que originou esta criação. Puramente visual: NÃO resolve UUIDs por nome.
   // Operador continua escolhendo fornecedor/fazenda/plano oficial manualmente.
@@ -558,7 +566,7 @@ function getMonthLabel(dateStr: string): string {
 export function LancamentoV2Dialog({
   open, carregando, onClose, onSave, onDelete, lancamento, fazendas, contas, classificacoes,
   fornecedores, safras, defaultFazendaId, onCriarFornecedor, prefill, lockedFields, onLancamentoCriado,
-  ocultarParcelamento, tiposOperacaoPermitidos,
+  ocultarParcelamento, tiposOperacaoPermitidos, origemOC,
   referenciaOperacionalInfo, excelContext, permiteEditarFavorecidoOC, onAbrirOperacaoOC, onAbrirContrato,
   documentosAntesDeSalvar,
 }: Props) {
@@ -612,6 +620,13 @@ export function LancamentoV2Dialog({
   //   de proveniência persistido (origem_lancamento), nunca por texto de UI. O writer
   //   (useFinanceiroV2.editarLancamento) aplica a mesma proteção de forma independente.
   const isOCTitulo = isEdit && lancamento?.origem_lancamento === 'operacao_comercial';
+  /* OC-CC-MODAL-FINANCEIRO-01 — o modo OC so' existe no lancamento NOVO; `travado` e' a leitura unica de `lockedFields`
+     para os quatro campos novos (fazenda, favorecido, classificacao, status). */
+  const modoOC = !isEdit && origemOC ? origemOC : null;
+  const travado = (campo: CampoTravavelDoModal) => lockedFields?.includes(campo) ?? false;
+  const [itemOC, setItemOC] = useState('');
+  const [tentouOC, setTentouOC] = useState(false);
+  const [simOC, setSimOC] = useState<{ aviso: string | null; erro: string | null } | null>(null);
   /* ⚠ `permiteEditarFavorecidoOC` DEIXOU DE SER CONDICAO — FIN-FORNECEDOR-OC-EDIT (B-19).
      O favorecido passou a ser editavel nos DOIS caminhos; a prop continua no contrato
      porque e' por ela que a aba Financeiro da OC declara a sua abertura, e remove-la
@@ -1300,6 +1315,7 @@ export function LancamentoV2Dialog({
     setPosSalvar(null);
     setAnexarBoletos(null);
     setErroAntesDeSalvar(null);
+    setItemOC(''); setTentouOC(false); setSimOC(null);
   }, [open, lancamento, defaultFazendaId, prefill, lockedFields]);
 
   // FIN-MODAL-FECHO-01 item 2 — resolve o operacao_id do título OC pelo vínculo
@@ -1538,7 +1554,7 @@ export function LancamentoV2Dialog({
   /* PARC-FECHA-02 item 1 — NO PARCELADO O DOCUMENTO DA COMPRA TEM UM DONO (o registro ligado às N parcelas, logo abaixo): o
      "Tipo / Nº Documento" do topo fica em LEITURA, com o motivo escrito. No Novo parcelado ele nunca viajou para
      `fn_parcelamento_cadastrar` (o operador digitava e perdia); o que já estiver digitado ali é OFERECIDO à lista da compra. */
-  const topoTravado = topoDoDocumentoTravado({ novo: !isEdit, modalidadeParcelada: formaPagamentoParc === 'parcelada', lancamento });
+  const topoTravado = topoDoDocumentoTravado({ novo: !isEdit, modalidadeParcelada: !modoOC && formaPagamentoParc === 'parcelada', lancamento });
   /* PARC-CADEIA-01 passo 3 — o que o Salvar faz com valor e vencimento desta parcela (dono puro). Nulo = não é parcela. */
   const edicaoParcela = contratoDaParcela && lancamento?.id
     ? edicaoDaParcela(contratoDaParcela.situacao, lancamento.id, valorNum, dataVencimento || null)
@@ -1602,6 +1618,54 @@ export function LancamentoV2Dialog({
   /* ⚠ `carregando` VENCE A VALIDAÇÃO: com os catálogos vazios o formulário até pode parecer
      válido — os campos estão "preenchidos" com nada —, e é justamente esse o caso perigoso. */
   const canSave = validacao.canSave && !carregando && motivoDasParcelas === null;
+
+  /* ── MODO OC — OC-CC-MODAL-FINANCEIRO-01 ───────────────────────────────────────────────────────────────────────────────
+     As parcelas que vao ao banco sao as da PROPRIA OC: a lista da grade (mensal ou livres) ou, a' vista, uma so'. A conta e'
+     a da direcao (entrada -> destino; saida -> origem). As duas pendencias proprias do modo (item e vencimento) NAO apagam
+     o Salvar: o clique as acende em vermelho e nao grava (UX-OBRIGATORIOS-01). */
+  const contaDoModoOC = isEntrada ? contaDestinoId : contaOrigemId;
+  const linhasDoModoOC = useMemo(
+    () => (formaPagamentoParc === 'parcelada'
+      ? parcelaRows.map(r => ({ valor: r.valor, vencimento: r.dataVencimento }))
+      : [{ valor: valorNum, vencimento: dataVencimento }]),
+    [formaPagamentoParc, parcelaRows, valorNum, dataVencimento],
+  );
+  const faltaItemOC = !!modoOC && modoOC.natureza === 'obrigacao' && !itemOC;
+  const faltaVencimentoOC = !!modoOC && linhasDoModoOC.some(l => !l.vencimento);
+  const favorecidoDoModoOC = favorecidoId && favorecidoId !== '__none_forn__' ? favorecidoId : null;
+  const classificacoesDoModal = useMemo(
+    () => (modoOC?.natureza === 'obrigacao' ? [...classificacoesDaDespesa(classificacoes, modoOC.tipoOperacao)] : classificacoes),
+    [modoOC?.natureza, modoOC?.tipoOperacao, classificacoes],
+  );
+  /* A PREVIA E' A PROPRIA RPC COM `p_simular`, e so' refaz com o que muda a resposta (valores primitivos numa chave). Dela
+     vem o aviso AMBAR de "acima do saldo" (nao bloqueia) e, se houver, a recusa do banco, antes do Salvar. */
+  const chaveDaSimulacaoOC = modoOC && open && canSave && !faltaItemOC && !faltaVencimentoOC
+    ? JSON.stringify([modoOC.operacaoId, modoOC.versao, modoOC.natureza, linhasDoModoOC, contaDoModoOC, itemOC, planoContaId ?? null,
+        modoOC.natureza === 'obrigacao' ? favorecidoDoModoOC : null])
+    : null;
+  const pedidoDoModoOCRef = useRef<Parameters<typeof lancarPeloModal>[0] | null>(null);
+  pedidoDoModoOCRef.current = modoOC ? {
+    operacaoId: modoOC.operacaoId, versao: modoOC.versao, natureza: modoOC.natureza,
+    componente: itemOC || null, planoContaId: planoContaId ?? null, favorecidoId: favorecidoDoModoOC,
+    parcelas: parcelasParaRpc(linhasDoModoOC, contaDoModoOC && contaDoModoOC !== '__none__' ? contaDoModoOC : null),
+    forma: formaPgto || null, dadosPagamento: dadosPagamentoParaGravar, documento: notaFiscal.trim() || null,
+    observacao: observacao.trim() || null, descricao: descricao.trim() || null, simular: true,
+  } : null;
+  const tipoDaOCDoModo = modoOC?.tipoOperacao ?? null;
+  useEffect(() => {
+    if (!chaveDaSimulacaoOC || !tipoDaOCDoModo) { setSimOC(null); return; }
+    let vivo = true;
+    const t = setTimeout(async () => {
+      const pedido = pedidoDoModoOCRef.current;
+      if (!pedido) return;
+      const r = await lancarPeloModal({ ...pedido, simular: true });
+      if (!vivo) return;
+      /* `r.ok === true`: com `strict: false` o `if (!r.ok)` nao estreita a uniao */
+      if (r.ok === true) setSimOC({ aviso: r.retorno.acimaDoSaldo ? fraseAcimaDoSaldo(r.retorno.acimaDoSaldo, tipoDaOCDoModo) : null, erro: null });
+      else setSimOC({ aviso: null, erro: r.erro });
+    }, 400);
+    return () => { vivo = false; clearTimeout(t); };
+  }, [chaveDaSimulacaoOC, tipoDaOCDoModo]);
   // PR-FIN-V2-STATUS-01-AJUSTE item 2 — mensagem clara da pendência principal (regra/campo).
   const pendenciaMsg = statusTransacao === 'realizado' && !dataPagamento
     ? 'Data de pagamento obrigatória quando status = Realizado.'
@@ -1670,6 +1734,13 @@ export function LancamentoV2Dialog({
 
   const handleSubmit = async (voltar?: { valor: number; vencimento: string }) => {
     if (!canSave) return;
+    /* MODO OC — as duas pendencias proprias: acende em vermelho, diz ao lado do botao e NAO grava. */
+    if (modoOC && (faltaItemOC || faltaVencimentoOC)) {
+      setTentouOC(true);
+      setErroAntesDeSalvar(faltaItemOC ? MOTIVO_ITEM_OBRIGATORIO : MOTIVO_VENCIMENTO_OBRIGATORIO);
+      setAbaAtiva(faltaItemOC || formaPagamentoParc !== 'parcelada' ? 'geral' : 'pagamento');
+      return;
+    }
     // PR-FIN-V2-STATUS-01 — 'Realizado' exige data de pagamento; previsto/agendado/programado podem salvar null.
     if (statusTransacao === 'realizado' && !dataPagamento) {
       toast.error('Status "Realizado" exige data de pagamento.');
@@ -1821,6 +1892,27 @@ export function LancamentoV2Dialog({
       // Exits: money flows OUT → account goes to conta_bancaria_id (origin)
       contaBancariaId = contaOrigemId && contaOrigemId !== '__none__' ? contaOrigemId : null;
       contaDestinoFinal = null;
+    }
+
+    /* ═══ MODO OC: QUEM GRAVA E' A OPERACAO — OC-CC-MODAL-FINANCEIRO-01 ═══════════════════════════════════════════════
+       ⚠ ANTES DO PARCELADO E DO `onSave`, E SAI AQUI: no modo OC as parcelas sao as da PROPRIA OC
+       (`oc_lancar_pelo_modal`: compromisso -> programacao -> um titulo por parcela, uma transacao). Nunca
+       `fn_parcelamento_cadastrar`, nunca o gravador do Financeiro. Recusa do banco: escrita ao lado do botao, nada gravado. */
+    if (modoOC) {
+      const contaOC = isEntrada ? contaDestinoFinal : contaBancariaId;
+      const r = await lancarPeloModal({
+        operacaoId: modoOC.operacaoId, versao: modoOC.versao, natureza: modoOC.natureza,
+        componente: itemOC || null, planoContaId: planoContaId ?? null, favorecidoId: favorecidoForForm,
+        parcelas: parcelasParaRpc(linhasDoModoOC, contaOC),
+        forma: formaPgto || null, dadosPagamento: dadosPagamentoParaGravar, documento: notaFiscal.trim() || null,
+        observacao: observacao.trim() || null, descricao: descricao.trim() || null, simular: false,
+      });
+      if (r.ok !== true) { setErroAntesDeSalvar(r.ok === false ? r.erro : null); setSaving(false); return; }
+      if (clienteAtual?.id) notificarLancamentosMudaram(clienteAtual.id);
+      await modoOC.aoLancar(r.retorno);
+      setSaving(false);
+      onClose();
+      return;
     }
 
     /* ═══ PARCELADA: O BANCO É QUEM ESCREVE — PAR-02 ══════════════════════════════════════
@@ -2088,6 +2180,7 @@ export function LancamentoV2Dialog({
   const getSubmitLabel = () => {
     if (saving) return 'Salvando...';
     if (isEdit) return 'Salvar Alterações';
+    if (modoOC) return formaPagamentoParc === 'parcelada' ? `Programar ${numParcelas} parcelas` : modoOC.natureza === 'obrigacao' ? 'Lançar despesa' : 'Programar';
     if (formaPagamentoParc === 'parcelada') return `Criar ${numParcelas} Parcelas`;
     return 'Criar Lançamento';
   };
@@ -2245,7 +2338,7 @@ export function LancamentoV2Dialog({
           {/* MODAIS-PADRAO-01e — faixa de 36px, uma linha, titulo 13px (era `px-5 py-2.5`, ~46px). No fluxo
               Excel o subtitulo vem na MESMA linha, depois do titulo. */}
           <DialogHeader className={cn("h-9 shrink-0 px-4 pr-10 flex-row items-center gap-2 space-y-0 border-b border-primary/20 bg-primary", !excelContext && "col-span-2 row-start-1")}>
-            <DialogTitle className="shrink-0 text-[13px] font-semibold leading-none tracking-tight text-primary-foreground">{isEdit ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
+            <DialogTitle className="shrink-0 text-[13px] font-semibold leading-none tracking-tight text-primary-foreground">{modoOC ? tituloDoModoOC(modoOC.natureza, modoOC.tipoOperacao) : isEdit ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
             {xml && <PilulaDoXml rotuloNota={xml.proposta.rotuloNota} />}
             {excelContext && (
               <div className="min-w-0 truncate text-[10px] font-normal leading-none text-primary-foreground/80">
@@ -2297,6 +2390,17 @@ export function LancamentoV2Dialog({
           <div className="flex-1 flex min-h-0 overflow-hidden">
           {/* Scrollable body */}
           <div className="flex-1 overflow-y-auto px-4 py-2 space-y-1.5 bg-background">
+
+            {/* OC-CC-MODAL-FINANCEIRO-01 — a faixa de origem (o molde do "Do XML"): de qual operacao este lancamento e', com o
+                caminho de volta. Uma linha de 24px, em todas as abas; so' o texto corta (inteiro no `title`). */}
+            {modoOC && (
+              <div className="flex h-6 items-center gap-2 rounded border border-sky-200 bg-sky-50/60 px-2 text-[10px] text-sky-800 dark:border-sky-800 dark:bg-sky-950/30 dark:text-sky-300" data-testid="faixa-origem-oc">
+                <span className="min-w-0 truncate" title={`Origem: ${modoOC.rotulo}`}><span className="font-semibold">Origem:</span> {modoOC.rotulo}</span>
+                {modoOC.onVoltar && (
+                  <button type="button" className="ml-auto shrink-0 font-medium underline" onClick={modoOC.onVoltar} data-testid="voltar-para-oc">voltar à operação</button>
+                )}
+              </div>
+            )}
 
             {/* ═══ ABA GERAL ═══ */}
             <TabsContent value="geral" className="mt-0 space-y-2 focus-visible:outline-none">
@@ -2467,35 +2571,52 @@ export function LancamentoV2Dialog({
                   </SelectContent>
                 </Select>
               </div>
+              {!modoOC && (
               <div className="col-span-2">
                 <Label className="text-[10px]">{/* em ambar o rotulo encurta: "Data Competência *" + a origem nao cabem na coluna (medido a 1.135) e quebravam a linha */}
                   {xmlAmbar('competencia') ? xmlRot('Competência *', 'competencia') : 'Data Competência *'}</Label>
                 <DatePicker value={dataCompetencia} onChange={setDataCompetencia} disabled={isOCTitulo} tabIndex={2} className={cn(dateFieldCls, xmlCls('competencia'))} />
               </div>
+              )}
               {/* Data Vencimento — PR-FIN-MODAL-VENCIMENTO-02B: campo funcional (mesmo DatePicker de
                   Competência/Pagamento). Editável em lançamento manual; read-only para título OC
                   (governado pela Operação Comercial). Grava SEMPRE em data_vencimento, nunca em
                   data_pagamento. Contrato de Data Pagamento do manual permanece inalterado. */}
-              <div className="col-span-2">
-                <Label className="text-[10px]">{xmlAmbar('vencimento') ? xmlRot('Vencimento', 'vencimento') : 'Data Vencimento'}</Label>
+              <div className={modoOC ? 'col-span-3' : 'col-span-2'}>
+                <Label className={cn("text-[10px]", modoOC && tentouOC && faltaVencimentoOC && 'text-destructive')} data-testid={modoOC ? 'rotulo-vencimento-oc' : undefined}>
+                  {modoOC ? (tentouOC && faltaVencimentoOC ? `Vencimento * · ${MOTIVO_VENCIMENTO_OBRIGATORIO}` : 'Vencimento *')
+                    : xmlAmbar('vencimento') ? xmlRot('Vencimento', 'vencimento') : 'Data Vencimento'}</Label>
                 {/* parcela paga: em leitura; o motivo está escrito no rodapé (`parcela-do-contrato`) — sem invólucro aqui, o HTML do lançamento comum não muda */}
-                <DatePicker value={dataVencimento} onChange={setDataVencimento} disabled={isOCTitulo || parcelaPaga} className={cn(dateFieldCls, xmlCls('vencimento'))} />
+                <DatePicker value={dataVencimento} onChange={setDataVencimento} disabled={isOCTitulo || parcelaPaga} className={cn(dateFieldCls, xmlCls('vencimento'), modoOC && tentouOC && faltaVencimentoOC && 'border-destructive')} />
               </div>
+              {!modoOC && (
               <div className="col-span-2"
                 title={!pagamentoPermitido && !pagamentoTravado ? 'Só realizado tem data de pagamento' : undefined}>
                 <Label className="text-[10px]">Data Pagamento *</Label>
                 <DatePicker value={pagamentoMostrado} onChange={handleDataPagamentoChange}
                   disabled={pagamentoTravado || !pagamentoPermitido || travaCasado.pagamento} tabIndex={3} className={dateFieldCls} />
               </div>
-              <div className="col-span-3">
+              )}
+              <div className="col-span-3" title={modoOC ? MOTIVO_STATUS_TRAVADO_OC : undefined}>
                 <Label className="text-[10px]">Status *</Label>
-                <Select value={statusTransacao} onValueChange={handleStatusChange} disabled={travaCasado.status || undefined}>
+                <Select value={statusTransacao} onValueChange={handleStatusChange} disabled={travaCasado.status || travado('status_transacao') || undefined}>
                   <SelectTrigger tabIndex={4} className={cn("h-8", fieldBg)}><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {STATUS_OPTIONS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
+              {/* MODO OC, despesa — o ITEM DA OPERACAO (frete, comissao, taxas…): o mesmo catalogo do "Nova despesa", no lugar
+                  que competencia e pagamento liberam. Obrigatorio; a pendencia fica escrita no rotulo, em vermelho. */}
+              {modoOC?.natureza === 'obrigacao' && (
+                <div className="col-span-3" data-testid="campo-item-oc">
+                  <Label className={cn("text-[10px]", tentouOC && faltaItemOC && 'text-destructive')} data-testid="rotulo-item-oc">
+                    {tentouOC && faltaItemOC ? `Item * · ${MOTIVO_ITEM_OBRIGATORIO}` : 'Item da operação *'}</Label>
+                  <SearchableSelect value={itemOC} onValueChange={v => { setItemOC(v); if (erroAntesDeSalvar === MOTIVO_ITEM_OBRIGATORIO) setErroAntesDeSalvar(null); }}
+                    options={modoOC.itens.map(i => ({ value: i.codigo, label: i.nome }))} allValue="" allLabel="Selecione o item" placeholder="Selecione o item" semTodos
+                    className={cn("h-8", fieldBg, tentouOC && faltaItemOC && 'border-destructive')} />
+                </div>
+              )}
             </div>
             {/* FIN-PGTO-FANTASMA-01 — só no caso legado (data de pagamento no banco sem estar realizado): o salvar remove a
                 data, e é a única vez em que ele apaga algo que o usuário não tocou — a tela diz antes. */}
@@ -2536,6 +2657,8 @@ export function LancamentoV2Dialog({
                   search={fornecedorSearch}
                   onSearchChange={setFornecedorSearch}
                   onCriarNovo={() => setFornecedorDialogOpen(true)}
+                  disabled={travado('favorecido_id') || undefined}
+                  novoDesabilitado={travado('favorecido_id') || undefined}
                   label={xmlRotTexto('Fornecedor *', 'fornecedor')}
                   triggerClassName={cn(fieldBg, xmlCls('fornecedor'))}
                   tabIndex={6}
@@ -2592,6 +2715,7 @@ export function LancamentoV2Dialog({
                 label={xmlRotTexto('Fazenda *', 'fazenda')}
                 /* FIN-FAZENDA-PADRAO-01 — com o filtro Global o campo nasce VAZIO (nunca a primeira da lista), e o
                    vazio aparece aqui, em vermelho, antes de qualquer clique. */
+                disabled={travado('fazenda_id') || undefined}
                 obrigatorio
                 id="campo-fazenda-financeiro"
                 className="col-span-4"
@@ -2681,13 +2805,16 @@ export function LancamentoV2Dialog({
                   `next(classificacao)`: seria recriar, do lado do pai, exatamente o bug do
                   closure que este fix tirou do filho. */
               onChange={setClassificacao}
-              classificacoes={classificacoes}
+              classificacoes={classificacoesDoModal}
               safras={safras}
               dataCompetencia={dataCompetencia}
               culturasDaSafra={culturasDaSafra}
               tipoOperacao={tipoOperacao}
-              travado={subcentroTravado}
-              subcentroDesabilitado={isOCTitulo || subcentroTravado}
+              travado={subcentroTravado || travado('classificacao')}
+              motivoTravado={travado('classificacao') ? MOTIVO_CLASSIFICACAO_DA_OC : undefined}
+              subcentroDesabilitado={isOCTitulo || subcentroTravado || travado('classificacao')}
+              ocultarCulturaFase={!!modoOC || undefined}
+              ocultarLinhaDaSafra={!!modoOC || undefined}
               erroSubcentro={erroDirecao && erroDirecao.subcentro === subcentro && erroDirecao.tipo === tipoOperacao
                 ? erroDirecao.texto : null}
             />
@@ -2748,9 +2875,12 @@ export function LancamentoV2Dialog({
                 (c) => (c.subcentro || '').trim().toLowerCase() === (subcentro || '').trim().toLowerCase(),
               )?.compoe_dre;
               const usaPlano = !isEdit || subcentro !== subcentroDeAbertura;
-              const cd = usaPlano ? doPlano : lancamento?.compoe_dre;
+              /* MODO OC — o PRINCIPAL da conta corrente fica FORA do DRE (quem compoe e' a entrega do gado), qualquer que seja a
+                 conta; a despesa segue a linha do plano. E cultura/fase nao se aplicam: o aviso de rateio nao aparece. */
+              const principalDaOC = modoOC?.natureza === 'principal';
+              const cd = principalDaOC ? false : usaPlano ? doPlano : lancamento?.compoe_dre;
               const mostraDre = isEdit || !!subcentro;
-              const aviso = atividade === 'agricultura' ? avisoCultura(cultura, culturasDaSafra)
+              const aviso = modoOC ? null : atividade === 'agricultura' ? avisoCultura(cultura, culturasDaSafra)
                 : atividade === 'pecuaria' ? avisoFase(fase)
                 : null;
               if (!mostraDre && !aviso) return null;
@@ -2763,7 +2893,8 @@ export function LancamentoV2Dialog({
                     <span className="text-muted-foreground">
                       Compõe DRE:{' '}
                       <span className={cn('font-medium', cd === true ? 'text-success' : 'text-muted-foreground')}>{label}</span>
-                      {usaPlano && cd != null && <span className="ml-1">ao salvar</span>}
+                      {principalDaOC ? <span className="ml-1" data-testid="dre-do-principal-oc">· quem compõe o DRE é a entrega do gado</span>
+                        : usaPlano && cd != null && <span className="ml-1">ao salvar</span>}
                     </span>
                   )}
                 </div>
@@ -2828,6 +2959,7 @@ export function LancamentoV2Dialog({
                         mês seguinte, e gerar de novo duplicava. A recorrência agora
                         é uma REGRA, na tela própria, com âncora de competência e
                         geração idempotente. O que fica aqui é o caminho para lá. */}
+                    {!modoOC && (
                     <div className="col-span-3 flex items-baseline gap-2 rounded border border-dashed px-2 py-1">
                       <Repeat className="h-3 w-3 shrink-0 text-muted-foreground" />
                       <span className="text-[10px] leading-snug text-muted-foreground">
@@ -2835,6 +2967,7 @@ export function LancamentoV2Dialog({
                         Recorrências — a regra fica salva e gera os lançamentos do período de uma vez.
                       </span>
                     </div>
+                    )}
                     {(
                       <div>
                         <Label className="text-[10px]">{xmlRot('Modalidade', 'parcelamento')}</Label>
@@ -2929,7 +3062,7 @@ export function LancamentoV2Dialog({
               <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">
                 <div>
                   <Label className="text-[10px]">Tipo Documento</Label>
-                  <Select disabled={topoTravado} value={tipoDocumento || '__none_td__'} onValueChange={v => { setTipoDocumento(v === '__none_td__' ? '' : v as TipoDocumento); if (v !== 'Nota Fiscal') { /* keep raw */ } }}>
+                  <Select disabled={topoTravado || !!modoOC} value={tipoDocumento || '__none_td__'} onValueChange={v => { setTipoDocumento(v === '__none_td__' ? '' : v as TipoDocumento); if (v !== 'Nota Fiscal') { /* keep raw */ } }}>
                     <SelectTrigger tabIndex={12} className={cn("h-8 text-[11px]", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__none_td__">Nenhum</SelectItem>
@@ -3156,6 +3289,17 @@ export function LancamentoV2Dialog({
             {/* FIN-NFE-PARCELAS-01 — depois do salvar, com documento que nao gravou: a frase ao lado do botao
                 (UX-TOAST-01) e o "Tentar de novo" no lugar do salvar, que criaria OUTRO lancamento. */}
             {/* PARC-LIVRES-01 — por que o Salvar está apagado nas parcelas livres: o motivo escrito ao lado dele. */}
+            {/* MODO OC — o que a simulacao do banco disse: acima do saldo AVISA em ambar (nao bloqueia); recusa, em vermelho. */}
+            {modoOC && !posSalvar && !erroAntesDeSalvar && !motivoDasParcelas && simOC?.aviso && (
+              <span className="max-w-[520px] truncate text-[10px] leading-tight text-amber-700 dark:text-amber-400" title={simOC.aviso} data-testid="aviso-acima-do-saldo">
+                {simOC.aviso}
+              </span>
+            )}
+            {modoOC && !posSalvar && !erroAntesDeSalvar && !motivoDasParcelas && simOC?.erro && (
+              <span className="max-w-[520px] truncate text-[10px] leading-tight text-destructive" title={simOC.erro} data-testid="recusa-da-simulacao">
+                {simOC.erro}
+              </span>
+            )}
             {!posSalvar && !erroAntesDeSalvar && motivoDasParcelas && (
               <span className="max-w-[520px] truncate text-[10px] leading-tight text-destructive" title={motivoDasParcelas} data-testid="motivo-das-parcelas">
                 {motivoDasParcelas}

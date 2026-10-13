@@ -73,7 +73,7 @@ export const atividadeValida = (v: string | null | undefined): Atividade | null 
 
 export function ClassificacaoLancamento({
   value, onChange, classificacoes, safras, dataCompetencia,
-  culturasDaSafra = [], subcentroDesabilitado = false, tipoOperacao, travado = false, erroSubcentro = null,
+  culturasDaSafra = [], subcentroDesabilitado = false, tipoOperacao, travado = false, motivoTravado, erroSubcentro = null,
   ocultarCulturaFase = false, ocultarLinhaDaSafra = false,
 }: {
   value: ClassificacaoValor;
@@ -108,6 +108,8 @@ export function ClassificacaoLancamento({
    */
   tipoOperacao: string;
   travado?: boolean;
+  /** OC-CC-MODAL-FINANCEIRO-01 — por que esta' travado, quando NAO e' a transferencia (ex.: a conta do principal e' a da OC). Sem a prop, a frase de sempre. */
+  motivoTravado?: string;
   /** A recusa do save sobre o subcentro (direcao x conta do plano) — mora embaixo do campo. */
   erroSubcentro?: string | null;
   /**
@@ -384,8 +386,8 @@ export function ClassificacaoLancamento({
                     que ele não escolheu e procura o defeito. */}
                 {subcentroTravado && (
                   <div className="mt-0.5 text-[10px] leading-snug text-muted-foreground">
-                    transferência entre contas usa esta conta do plano e nenhuma outra (fora
-                    da DRE); troque o Tipo Operação para liberar
+                    {motivoTravado ?? <>transferência entre contas usa esta conta do plano e nenhuma outra (fora
+                    da DRE); troque o Tipo Operação para liberar</>}
                   </div>
                 )}
                 {/* Resumo automático dos derivados (Macro › Grupo › Centro). Somente leitura;

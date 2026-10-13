@@ -9,7 +9,8 @@ import { describe, it, expect, vi } from 'vitest';
 import { createPortal } from 'react-dom';
 import { readFileSync } from 'node:fs';
 import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
-import { AbaContaCorrenteOC, DialogoProgramarRecebimento, acoesDaLinha, itemDoRascunho, motivoSomenteLeitura, valorEmAberto, type Rascunho } from './AbaContaCorrenteOC';
+import { saldoAProgramar, principalJaCoberto } from '@/lib/oc/lancarPeloModal';
+import { AbaContaCorrenteOC, acoesDaLinha, itemDoRascunho, motivoSomenteLeitura, type Rascunho } from './AbaContaCorrenteOC';
 import { CancelarContaCorrenteDialog } from './CancelarContaCorrenteDialog';
 import { lerContaCorrente, type ContaCorrente, type LinhaContaCorrente } from '@/lib/oc/contaCorrente';
 import type { OcContaCorrenteApi, RolCancelamento } from '@/hooks/useOcContaCorrente';
@@ -46,7 +47,6 @@ function api(c: ContaCorrente, over: Partial<OcContaCorrenteApi> = {}): OcContaC
     explicarSaldo: vi.fn(async () => null),
     desfazerExplicacao: vi.fn(async () => null),
     simularExplicacao: vi.fn(async () => ({ previa: null, erro: null })),
-    programarRecebimento: vi.fn(async () => null),
     lerRolCancelamento: vi.fn(async () => ({ rol: null, erro: null })),
     listarLotes: vi.fn(async () => []),
     listarContas: vi.fn(async () => []),
@@ -161,23 +161,6 @@ describe('aba conta corrente da OC — extrato pelo caixa da fazenda', () => {
     fireEvent.change(within(dlg).getByLabelText('Motivo *'), { target: { value: 'lancado errado' } });
     fireEvent.click(within(dlg).getByRole('button', { name: 'Remover explicação' }));
     await waitFor(() => expect(a.desfazerExplicacao).toHaveBeenCalledWith('p9', 'lancado errado'));
-  });
-
-  it('PROGRAMAR RECEBIMENTO: nasce com o que falta receber; sem vencimento nao grava; com ele, grava valor e data', async () => {
-    /* OC-CC-ACOES-LINHA-02 — o botao do topo saiu (uso medido: zero); o dialogo fica e volta pelo "Parcelar" da linha. Aqui ele e'
-       montado direto, com o sugerido que a aba calculava (o que falta receber). */
-    const a = api(cc());
-    render(<DialogoProgramarRecebimento api={a} lado="venda" sugerido={1357.89} onFechar={() => {}} />);
-    const valor = await screen.findByLabelText('Valor *');
-    expect(valor).toHaveProperty('value', '1.357,89');
-    fireEvent.click(screen.getByRole('button', { name: 'Programar' }));
-    expect(screen.getByText('Informe o vencimento.')).toBeTruthy();
-    expect(a.programarRecebimento).not.toHaveBeenCalled();
-    const data = screen.getByPlaceholderText('dd/mm/aaaa');
-    fireEvent.change(data, { target: { value: '25/10/2025' } });
-    fireEvent.keyDown(data, { key: 'Enter' });
-    fireEvent.click(screen.getByRole('button', { name: 'Programar' }));
-    await waitFor(() => expect(a.programarRecebimento).toHaveBeenCalledWith(1357.89, '2025-10-25'));
   });
 
   it('saida sem entrega pede "Atualizar entregas", e a recusa do banco aparece ao lado, sem toast', async () => {
@@ -570,7 +553,7 @@ describe('OC-CC-ACOES-LINHA-02 — clique e menu "⋯" em toda linha do extrato'
       ['Abrir lançamento', null],
       ['Parcelar este recebimento', 'disponível em breve'],
       ['Desvincular da operação', 'disponível em breve'],
-      ['Cancelar recebimento programado', 'disponível em breve'],
+      ['Cancelar recebimento programado', 'programado antes do modal, sem compromisso na operação · ainda sem gesto de cancelar'],
     ]);
     expect(par(linha({ lancamentoId: null }))[0]).toEqual(['Abrir lançamento', 'esta linha não tem lançamento']);
     /* so' o cancelar e' vermelho */
@@ -756,40 +739,75 @@ describe('OC-CC-ACOES-LINHA-02 — clique e menu "⋯" em toda linha do extrato'
   });
 });
 
-describe('OC-CC-PROGRAMAR-RECEBIMENTO-01 — o botão "Programar" volta à sub-aba conta', () => {
-  it('valorEmAberto: o que falta receber/pagar, em módulo; quitado, adiantado e aguardando saída não sugerem nada', () => {
-    expect(valorEmAberto({ saldo: -169500, situacao: 'falta_receber' })).toBe(169500);
-    expect(valorEmAberto({ saldo: 2000, situacao: 'falta_pagar' })).toBe(2000);
-    expect(valorEmAberto({ saldo: 0, situacao: 'quitado' })).toBeNull();
-    expect(valorEmAberto({ saldo: -500, situacao: 'adiantado' })).toBeNull();
-    expect(valorEmAberto({ saldo: 0, situacao: 'aguardando_saida' })).toBeNull();
-    expect(valorEmAberto(null)).toBeNull();
+describe('OC-CC-MODAL-FINANCEIRO-01 — "Programar" abre o modal do Financeiro; "Cancelar … programado" acende com compromisso', () => {
+  it('saldoAProgramar: acordado − recebido − programado; sem acordado ou sem saldo, nada sugere', () => {
+    expect(saldoAProgramar({ valorAcordado: 10000, recebido: 3000, programado: 2000 })).toBe(5000);
+    expect(saldoAProgramar({ valorAcordado: 10000, recebido: -3000, programado: 2000 })).toBe(5000);
+    expect(saldoAProgramar({ valorAcordado: 993496.13, recebido: 992138.24, programado: 0 })).toBe(1357.89);
+    expect(saldoAProgramar({ valorAcordado: 10000, recebido: 7000, programado: 3000 })).toBeNull();
+    expect(saldoAProgramar({ valorAcordado: 10000, recebido: 9000, programado: 3000 })).toBeNull();
+    expect(saldoAProgramar({ valorAcordado: null, recebido: 0, programado: 0 })).toBeNull();
+    expect(saldoAProgramar(null)).toBeNull();
   });
 
-  it('o botão existe antes do "Buscar" e abre o diálogo com o em aberto no Valor; na compra, "pagamento"', async () => {
-    const { unmount } = render(<AbaContaCorrenteOC api={api(cc())} somenteLeitura={false} />);
+  it('o botão existe antes do "Buscar" e CHAMA quem abre o modal (nenhum diálogo próprio); na compra, "pagamento"', () => {
+    const onProgramar = vi.fn();
+    const { unmount } = render(<AbaContaCorrenteOC api={api(cc())} somenteLeitura={false} onProgramar={onProgramar} />);
     const botoes = within(screen.getByTestId('botoes-conta')).getAllByRole('button');
     expect(botoes.map(b => b.textContent)).toEqual(['+ Programar recebimento', '+ Buscar recebimento no Financeiro']);
     expect(botoes[0]).toBe(screen.getByTestId('botao-programar'));
     expect(botoes[0].className).toBe(botoes[1].className);
     fireEvent.click(screen.getByTestId('botao-programar'));
-    expect(await screen.findByText('Programar recebimento futuro')).toBeTruthy();
-    expect(screen.getByLabelText('Valor *')).toHaveProperty('value', '1.357,89');
-    unmount();
-
-    render(<AbaContaCorrenteOC api={api(cc({ saldo: 2000, situacao: 'falta_pagar' }))} somenteLeitura={false} lado="compra" />);
-    expect(screen.getByTestId('botao-programar').textContent).toBe('+ Programar pagamento');
-    fireEvent.click(screen.getByTestId('botao-programar'));
-    expect(await screen.findByText('Programar pagamento futuro')).toBeTruthy();
-    expect(screen.getByLabelText('Valor *')).toHaveProperty('value', '2.000,00');
-  });
-
-  it('somenteLeitura apaga o botão e o clique não abre nada', () => {
-    render(<AbaContaCorrenteOC api={api(cc())} somenteLeitura />);
-    const botao = screen.getByTestId('botao-programar') as HTMLButtonElement;
-    expect(botao.disabled).toBe(true);
-    fireEvent.click(botao);
+    expect(onProgramar).toHaveBeenCalledTimes(1);
     expect(screen.queryByText('Programar recebimento futuro')).toBeNull();
     expect(screen.queryByLabelText('Valor *')).toBeNull();
+    unmount();
+
+    render(<AbaContaCorrenteOC api={api(cc({ saldo: 2000, situacao: 'falta_pagar' }))} somenteLeitura={false} lado="compra" onProgramar={onProgramar} />);
+    expect(screen.getByTestId('botao-programar').textContent).toBe('+ Programar pagamento');
+  });
+
+  it('somenteLeitura — ou sem quem abra o modal — apaga o botão, e o clique não chama nada', () => {
+    const onProgramar = vi.fn();
+    const { unmount } = render(<AbaContaCorrenteOC api={api(cc())} somenteLeitura onProgramar={onProgramar} />);
+    const botao = screen.getByTestId('botao-programar');
+    expect(botao).toHaveProperty('disabled', true);
+    fireEvent.click(botao);
+    expect(onProgramar).not.toHaveBeenCalled();
+    unmount();
+    render(<AbaContaCorrenteOC api={api(cc())} somenteLeitura={false} />);
+    expect(screen.getByTestId('botao-programar')).toHaveProperty('disabled', true);
+  });
+
+  it('principal JÁ COBERTO (acordado − recebido − programado ≤ 0): o botão fica apagado com o motivo ESCRITO ao lado; com saldo, aceso e sem motivo', () => {
+    expect(principalJaCoberto({ valorAcordado: 10000, recebido: 4000, programado: 6000 })).toBe(true);
+    expect(principalJaCoberto({ valorAcordado: 10000, recebido: 4000, programado: 7000 })).toBe(true);
+    expect(principalJaCoberto({ valorAcordado: 10000, recebido: 4000, programado: 5999.99 })).toBe(false);
+    expect(principalJaCoberto({ valorAcordado: null, recebido: 0, programado: 0 })).toBe(false);
+    expect(principalJaCoberto(null)).toBe(false);
+    const onProgramar = vi.fn();
+    const coberto = cc({ recebido: 500000, programado: 493496.13 });
+    const { unmount } = render(<AbaContaCorrenteOC api={api(coberto)} somenteLeitura={false} onProgramar={onProgramar} />);
+    expect(screen.getByTestId('botao-programar')).toHaveProperty('disabled', true);
+    expect(screen.getByTestId('motivo-programar').textContent).toBe('Principal já programado até o valor da operação');
+    fireEvent.click(screen.getByTestId('botao-programar'));
+    expect(onProgramar).not.toHaveBeenCalled();
+    unmount();
+    render(<AbaContaCorrenteOC api={api(cc())} somenteLeitura={false} onProgramar={onProgramar} />);
+    expect(screen.getByTestId('botao-programar')).toHaveProperty('disabled', false);
+    expect(screen.queryByTestId('motivo-programar')).toBeNull();
+  });
+
+  it('"Cancelar recebimento programado": com compromisso VALE; sem compromisso (programado antes do modal) fica apagado com o motivo', () => {
+    const prog = cc().linhas.find(l => l.tipo === 'recebimento');
+    if (!prog) throw new Error('fixture sem recebimento');
+    const l = { ...prog, status: 'programado' as const, noSaldo: false };
+    const item = (tem: boolean, leitura = false) => acoesDaLinha(l, 'venda', leitura, tem).find(a => a.chave === 'cancelar_programado');
+    expect(item(true)?.motivo).toBeNull();
+    expect(item(false)?.motivo).toMatch(/sem compromisso na operação/);
+    expect(item(true, true)?.motivo).toBe(motivoSomenteLeitura('venda'));
+    /* o que ja' foi pago nao e' "programado": o motivo de sempre, com ou sem compromisso */
+    expect(acoesDaLinha({ ...l, status: 'realizado' }, 'venda', false, true).find(a => a.chave === 'cancelar_programado')?.motivo)
+      .toBe('só para recebimento programado');
   });
 });

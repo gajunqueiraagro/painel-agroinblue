@@ -133,13 +133,13 @@ function ocApi(compromissos = COMPROMISSOS, parcelas = PARCELAS): OcCompromissos
 
 let local = '';
 function Onde() { local = useLocation().search; return null; }
-function montar(soDespesas: boolean, api = ocApi(), tipo: 'venda' | 'compra' = 'venda') {
+function montar(soDespesas: boolean, api = ocApi(), tipo: 'venda' | 'compra' = 'venda', onNovaDespesa?: () => void) {
   return render(
     <MemoryRouter initialEntries={['/v2?oc_venda=1&oc_id=' + OC]}>
       <Onde />
       <AbaCompromissosOC ocApi={api} bloqueado={false} clienteId="cli" tipoOperacao={tipo} fornecedores={FORNECEDORES}
         valorAcordado={87500} lotes={[]} contraparteId={null} dataOperacao="2026-05-04" dataChegada={null} darkSelectClass=""
-        soDespesas={soDespesas} />
+        soDespesas={soDespesas} onNovaDespesa={onNovaDespesa} />
     </MemoryRouter>,
   );
 }
@@ -236,21 +236,24 @@ describe('a OC em conta corrente nao tem caminho de principal', () => {
     expect(recusaNaContaCorrente(['principal'], false)).toBeNull();
   });
 
-  it('sem Gerar compromissos, Gerar previsão, Novo compromisso nem Lançar realizado; "+ Nova despesa" abre travado em obrigacao', async () => {
-    const api = ocApi([], []);
-    montar(true, api);
+  it('sem Gerar compromissos, Gerar previsão, Novo compromisso nem Lançar realizado; "+ Nova despesa" chama o MODAL DO FINANCEIRO (modo OC), nao o dialogo antigo', async () => {
+    /* OC-CC-MODAL-FINANCEIRO-01 — o ramo "so' obrigacao" do `NovoCompromissoDialog` saiu: quem abre a despesa e' o hospedeiro do
+       modal do Financeiro, por `onNovaDespesa`. */
+    const onNovaDespesa = vi.fn();
+    montar(true, ocApi([], []), 'venda', onNovaDespesa);
     expect(screen.queryByRole('button', { name: 'Gerar compromissos' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Gerar previsão' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Novo compromisso' })).toBeNull();
     expect(document.body.textContent).not.toContain('Lançar realizado');
     fireEvent.click(screen.getByRole('button', { name: '+ Nova despesa' }));
-    const titulo = await screen.findByText('Nova despesa');
-    const dlg = titulo.closest('[role="dialog"]');
-    if (!(dlg instanceof HTMLElement)) throw new Error('sem dialogo');
-    const natureza = within(dlg).getByRole('combobox', { name: 'Natureza' });
-    expect(natureza.textContent).toBe('obrigacao');
-    expect(natureza).toHaveProperty('disabled', true);
-    /* a busca sabe achar: fora da conta corrente o mesmo dialogo nasce em principal e deixa trocar */
+    expect(onNovaDespesa).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('Nova despesa')).toBeNull();
+    expect(screen.queryByRole('combobox', { name: 'Natureza' })).toBeNull();
+  });
+
+  it('"+ Nova despesa" sem quem abra o modal fica APAGADO (botao sem destino nao se oferece)', () => {
+    montar(true, ocApi([], []));
+    expect(screen.getByRole('button', { name: '+ Nova despesa' })).toHaveProperty('disabled', true);
   });
 
   it('fora da conta corrente o dialogo de sempre: "Novo compromisso", natureza principal, trocavel', async () => {
@@ -432,7 +435,7 @@ describe('a regua das duas tabelas soma 764 (largura interna medida)', () => {
       sincronizarEntregas: vi.fn(async () => null), listarVinculaveis: vi.fn(async () => ({ erro: null, itens: [] })),
       vincularRecebimento: vi.fn(async () => null), explicarSaldo: vi.fn(async () => null), desfazerExplicacao: vi.fn(async () => null),
       simularExplicacao: vi.fn(async () => ({ previa: null, erro: null })),
-      programarRecebimento: vi.fn(async () => null), lerRolCancelamento: vi.fn(async () => ({ rol: null, erro: null })),
+      lerRolCancelamento: vi.fn(async () => ({ rol: null, erro: null })),
       listarLotes: vi.fn(async () => []), listarContas: vi.fn(async () => []),
     };
     const { container } = render(<AbaContaCorrenteOC api={api} somenteLeitura />);

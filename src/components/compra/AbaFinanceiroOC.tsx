@@ -8,7 +8,13 @@ import { paramsAbrirLancamentoDaOC } from '@/lib/oc/abrirLancamentoDaOC';
 import { linhasDeDespesa, totaisDeDespesa } from '@/lib/oc/despesasDaOperacao';
 import { useSearchParams } from 'react-router-dom';
 import { AlertTriangle } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { LancamentoDaOCDialog } from '@/components/operacao-comercial/LancamentoDaOCDialog';
+import { saldoAProgramar, type NaturezaDoModalOC, type RetornoLancarPeloModal } from '@/lib/oc/lancarPeloModal';
+import { executarDesfazerCompromisso, ErroDesfazer } from '@/lib/oc/desfazerCompromisso';
+import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
+import { produtoOCCompromisso, verboOC } from '@/lib/financeiro/produtoOC';
+import { CATEGORIAS } from '@/types/cattle';
 import type { LiquidacaoApi } from '@/hooks/useOperacaoLiquidacao';
 
 // Aba Financeiro (PR-OC-UI-FIN-VIEW) — ROTEADOR por modo (soberano da view, nunca inferido):
@@ -112,6 +118,54 @@ export function AbaFinanceiroOC(props: Props) {
       { replace: true });
   };
 
+  /* ═══ OC-CC-MODAL-FINANCEIRO-01 — a OC em conta corrente lanca pelo MODAL DO FINANCEIRO ═══════════════════════════════════
+     "Programar recebimento/pagamento" (extrato) e "+ Nova despesa" (despesas) abrem o mesmo `LancamentoDaOCDialog`; depois de
+     gravar, a versao sobe pelo dono e as duas leituras da aba (conta corrente e compromissos) releem — sem F5. */
+  const [modalOC, setModalOC] = useState<NaturezaDoModalOC | null>(null);
+  const [erroModalOC, setErroModalOC] = useState<string | null>(null);
+  const subirVersao = props.onOcVersaoChange ?? setVersaoLocal;
+  const { recarregar: recarregarCompromissos } = ocApi;
+  const { recarregar: recarregarContaCorrente } = ccApi;
+  const relerAba = useCallback(async () => {
+    await Promise.all([recarregarCompromissos(), recarregarContaCorrente()]);
+  }, [recarregarCompromissos, recarregarContaCorrente]);
+  const fecharModalOC = useCallback(() => setModalOC(null), []);
+  const aoLancarPeloModal = useCallback(async (r: RetornoLancarPeloModal) => {
+    subirVersao(r.versao);
+    await relerAba();
+  }, [subirVersao, relerAba]);
+  const aoFalharModalOC = useCallback((frase: string) => { setModalOC(null); setErroModalOC(frase); }, []);
+  /** "Venda 140 Novilhas" — a identidade da operacao (o mesmo formato da descricao do compromisso principal). */
+  const descricaoDaOC = useMemo(() => {
+    const qtd = api.lotes.reduce((s, l) => s + (l.qtd ?? 0), 0);
+    const cats = Array.from(new Set(api.lotes.map(l => l.categoria).filter(Boolean)));
+    const rotulo = cats.map(slug => CATEGORIAS.find(c => c.value === slug)?.label ?? slug).join('/');
+    return qtd > 0 ? produtoOCCompromisso(api.tipoOperacao ?? 'venda', qtd, rotulo) : verboOC(api.tipoOperacao ?? 'venda');
+  }, [api.lotes, api.tipoOperacao]);
+  /* O "Cancelar … programado" do extrato: o gesto contrario, atomico no banco. O compromisso da linha vem das parcelas que a aba
+     ja' le^ (o titulo da parcela e' o lancamento da linha); sem compromisso (programado antes do modal), o item segue apagado. */
+  const versaoDaOC = ocApi.versao;
+  const parcelasDaOC = ocApi.parcelas;
+  const cancelarProgramado = useMemo(() => ({
+    compromissoDe: (lancamentoId: string) => {
+      const p = parcelasDaOC.find(x => x.tituloId === lancamentoId && !!x.compromissoId);
+      if (!p?.compromissoId) return null;
+      return { id: p.compromissoId, parcelas: parcelasDaOC.filter(x => x.compromissoId === p.compromissoId && !!x.tituloId).length };
+    },
+    executar: async (compromissoId: string, motivo: string): Promise<string | null> => {
+      if (!operacaoId || versaoDaOC == null) return 'Operação não carregada.';
+      try {
+        const { retorno } = await executarDesfazerCompromisso({ operacaoId, versao: versaoDaOC, compromissoId, motivo });
+        subirVersao(retorno.versao);
+        if (clienteId) notificarLancamentosMudaram(clienteId);
+        await relerAba();
+        return null;
+      } catch (e) {
+        return e instanceof ErroDesfazer ? e.message : 'Não foi possível desfazer agora. Tente de novo.';
+      }
+    },
+  }), [parcelasDaOC, operacaoId, versaoDaOC, clienteId, subirVersao, relerAba]);
+
   const legado = (
     <AbaLiquidacaoOC
       api={api}
@@ -130,7 +184,13 @@ export function AbaFinanceiroOC(props: Props) {
        enquanto eles nao chegaram, "—". */
     const despesasLidas = !(ocApi.loading && !ocApi.resumoOperacao);
     return (
+      <>
+      {erroModalOC && <div className="text-[10px] text-destructive" role="alert" data-testid="erro-modal-oc">{erroModalOC}</div>}
+      <LancamentoDaOCDialog natureza={modalOC} operacaoId={operacaoId} versao={ocApi.versao} tipoOperacao={api.tipoOperacao}
+        contraparteId={api.contraparteId} descricaoDaOC={descricaoDaOC} sugerido={saldoAProgramar(ccApi.contaCorrente)}
+        aoFechar={fecharModalOC} aoLancar={aoLancarPeloModal} aoFalhar={aoFalharModalOC} />
       <AbaContaCorrenteOC api={ccApi} somenteLeitura={props.financeiroNovoReadOnly}
+        onProgramar={() => { setErroModalOC(null); setModalOC('principal'); }} cancelarProgramado={cancelarProgramado}
         lado={api.tipoOperacao === 'compra' ? 'compra' : 'venda'}
         totaisDespesas={despesasLidas ? totaisDeDespesa(ocApi.compromissos) : null}
         /* o contador conta as MESMAS linhas que a tabela mostra (`linhasDeDespesa`; os titulos so' mudam status, nao quantas) */
@@ -143,8 +203,10 @@ export function AbaFinanceiroOC(props: Props) {
             tipoOperacao={api.tipoOperacao} fornecedores={api.fornecedores} valorAcordado={api.valorAcordado} lotes={api.lotes}
             contraparteId={api.contraparteId} dataOperacao={props.dataOperacao ?? null} dataChegada={props.dataChegada ?? null}
             darkSelectClass={props.darkSelectClass} recarregarDados={api.recarregar} rotulos={props.rotulos}
-            motivoReabertura={props.motivoReabertura ?? null} hostBotoesDespesa={host} topoFixo={topo} />
+            motivoReabertura={props.motivoReabertura ?? null} hostBotoesDespesa={host} topoFixo={topo}
+            onNovaDespesa={() => { setErroModalOC(null); setModalOC('obrigacao'); }} />
         )} />
+      </>
     );
   }
   if ((api.tipoOperacao === 'venda' || api.tipoOperacao === 'compra') && !ccApi.contaCorrente && !ccApi.erro) {

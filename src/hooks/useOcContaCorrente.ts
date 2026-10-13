@@ -66,7 +66,6 @@ export interface OcContaCorrenteApi {
   desfazerExplicacao: (parteId: string, motivo: string) => Promise<string | null>;
   /** A previa de UMA explicacao: a propria `oc_explicar_saldo` com `p_simular` (nada grava). `previa` e' o jsonb cru da RPC. */
   simularExplicacao: (item: ExplicacaoRascunho) => Promise<{ previa: unknown; erro: string | null }>;
-  programarRecebimento: (valor: number, vencimento: string) => Promise<string | null>;
   lerRolCancelamento: () => Promise<{ rol: RolCancelamento | null; erro: string | null }>;
   /** Lotes da OC com entrega, para o ajuste de preco. */
   listarLotes: () => Promise<LoteParaAjuste[]>;
@@ -262,24 +261,6 @@ export function useOcContaCorrente({ operacaoId, enabled, versao, onVersaoChange
     }
   }, [operacaoId, versaoAtual, onVersaoChange, recarregar, aoMudarLotes]);
 
-  const programarRecebimento = useCallback(async (valor: number, vencimento: string): Promise<string | null> => {
-    if (!operacaoId || versaoAtual == null) return 'Operação não carregada.';
-    setOcupado(true);
-    try {
-      const { data, error } = await (supabase as any).rpc('oc_programar_recebimento', {
-        p_operacao_id: operacaoId, p_versao_esperada: versaoAtual, p_valor: valor, p_vencimento: vencimento,
-        p_conta_bancaria_id: null, p_simular: false,
-      });
-      if (error) return normalizarErroRpc(error).message;
-      const v = Number(data?.operacao_versao);
-      if (Number.isFinite(v)) onVersaoChange(v);
-      await recarregar();
-      return null;
-    } finally {
-      setOcupado(false);
-    }
-  }, [operacaoId, versaoAtual, onVersaoChange, recarregar]);
-
   const lerRolCancelamento = useCallback(async () => {
     if (!operacaoId) return { rol: null, erro: 'Operação não carregada.' };
     const { data, error } = await (supabase as any).rpc('oc_cancelar_rol', { p_operacao_id: operacaoId });
@@ -313,7 +294,7 @@ export function useOcContaCorrente({ operacaoId, enabled, versao, onVersaoChange
 
   return {
     contaCorrente, loading, erro, ocupado, recarregar, sincronizarEntregas, listarVinculaveis, vincularRecebimento,
-    explicarSaldo, desfazerExplicacao, simularExplicacao, programarRecebimento, lerRolCancelamento, listarLotes, listarContas,
+    explicarSaldo, desfazerExplicacao, simularExplicacao, lerRolCancelamento, listarLotes, listarContas,
   };
 }
 

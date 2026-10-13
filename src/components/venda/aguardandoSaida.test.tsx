@@ -26,7 +26,7 @@ function api(c: ContaCorrente): OcContaCorrenteApi {
     contaCorrente: c, loading: false, erro: null, ocupado: false, recarregar: vi.fn(async () => {}),
     sincronizarEntregas: vi.fn(async () => null), listarVinculaveis: vi.fn(async () => ({ erro: null, itens: [] })),
     vincularRecebimento: vi.fn(async () => null), explicarSaldo: vi.fn(async () => null), desfazerExplicacao: vi.fn(async () => null),
-    simularExplicacao: vi.fn(async () => ({ previa: null, erro: null })), programarRecebimento: vi.fn(async () => null),
+    simularExplicacao: vi.fn(async () => ({ previa: null, erro: null })),
     lerRolCancelamento: vi.fn(async () => ({ rol: null, erro: null })), listarLotes: vi.fn(async () => []), listarContas: vi.fn(async () => []),
   };
 }

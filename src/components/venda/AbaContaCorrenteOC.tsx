@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Segmentado } from '@/components/ui/segmentado';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { formatMoeda } from '@/lib/calculos/formatters';
+import { principalJaCoberto, MOTIVO_PRINCIPAL_COBERTO } from '@/lib/oc/lancarPeloModal';
 import { CATEGORIAS } from '@/types/cattle';
 import { parseNumericValue } from '@/lib/calculos/abate';
 import { rotuloCurtoDaConta, rotuloDaConta } from '@/lib/financeiro/rotuloConta';
@@ -130,6 +131,7 @@ export interface AcaoDaLinha {
 export const MOTIVO_ACAO = {
   semLancamento: 'esta linha não tem lançamento',
   emBreve: 'disponível em breve',
+  semCompromisso: 'programado antes do modal, sem compromisso na operação · ainda sem gesto de cancelar',
   conciliado: 'conciliado · desfaça a conciliação primeiro',
   explicacaoSemLancamento: 'esta explicação não gera lançamento',
 } as const;
@@ -142,7 +144,9 @@ export const motivoSomenteLeitura = (lado: LadoContaCorrente): string =>
   (lado === 'compra' ? 'operação em rascunho ou cancelada · somente leitura' : 'operação cancelada · somente leitura');
 
 /** Os itens do menu da linha, na ordem em que aparecem. Funcao pura: o teste a percorre por tipo e por status. */
-export function acoesDaLinha(l: LinhaContaCorrente, lado: LadoContaCorrente, somenteLeitura: boolean): AcaoDaLinha[] {
+export function acoesDaLinha(l: LinhaContaCorrente, lado: LadoContaCorrente, somenteLeitura: boolean,
+  /** OC-CC-MODAL-FINANCEIRO-01 — o programado TEM compromisso (nasceu pelo modal)? So' entao o "Cancelar … programado" vale. */
+  temCompromisso = false): AcaoDaLinha[] {
   const t = TEXTOS[lado];
   const semLanc = l.lancamentoId ? null : MOTIVO_ACAO.semLancamento;
   /* o item de GRAVAR numa operacao em somente leitura diz primeiro isso; depois, o motivo do proprio item */
@@ -170,7 +174,7 @@ export function acoesDaLinha(l: LinhaContaCorrente, lado: LadoContaCorrente, som
     { chave: 'desvincular', texto: 'Desvincular da operação',
       motivo: gravar(l.status === 'conciliado' ? MOTIVO_ACAO.conciliado : MOTIVO_ACAO.emBreve) },
     { chave: 'cancelar_programado', texto: `Cancelar ${t.nomeDinheiro} programado`, perigo: true,
-      motivo: gravar(programado ? MOTIVO_ACAO.emBreve : `só para ${t.nomeDinheiro} programado`) },
+      motivo: gravar(programado ? (temCompromisso ? null : MOTIVO_ACAO.semCompromisso) : `só para ${t.nomeDinheiro} programado`) },
   ];
 }
 
@@ -224,19 +228,25 @@ interface Props {
   onIrParaEntrega?: () => void;
   /** ACESSOS-OC-03a — "Atualizar entregas" APAGADO com este motivo (capacidade 'atualizar_entregas'). Nulo = como antes. */
   motivoAtualizarEntregas?: string | null;
+  /** OC-CC-MODAL-FINANCEIRO-01 — "+ Programar recebimento/pagamento": abre o modal do Financeiro em modo OC (quem monta tem a
+   *  operacao). Ausente = o botao fica apagado. */
+  onProgramar?: () => void;
+  /** OC-CC-MODAL-FINANCEIRO-01 — o "Cancelar … programado" da linha. Ausente = o item segue apagado. */
+  cancelarProgramado?: CancelarProgramadoApi;
 }
 
 /* O bloco fixo tem 34 (cards) + 5 + 26 (sub-abas) + 5 de folga; medido depois de montar (o aviso de saidas o aumenta). */
 const TOPO_PADRAO = 70;
 
 export function AbaContaCorrenteOC({ api, somenteLeitura, lado = 'venda', despesas, totaisDespesas = null, qtdDespesas = null,
-  subAba, onSubAba, onAbrirLancamento, onIrParaEntrega, motivoAtualizarEntregas = null }: Props) {
+  subAba, onSubAba, onAbrirLancamento, onIrParaEntrega, motivoAtualizarEntregas = null, onProgramar, cancelarProgramado }: Props) {
   const cc = api.contaCorrente;
   const t = TEXTOS[lado];
   /* sinal da coluna da entrega no total: a venda mostra o gado que saiu negativo; a compra, o que entrou positivo */
   const sinalEntrega = lado === 'compra' ? 1 : -1;
   const [erroAcao, setErroAcao] = useState<string | null>(null);
-  const [dialogo, setDialogo] = useState<'buscar' | 'programar' | 'explicar' | null>(null);
+  const [dialogo, setDialogo] = useState<'buscar' | 'explicar' | null>(null);
+  const [cancelarAlvo, setCancelarAlvo] = useState<{ id: string; parcelas: number } | null>(null);
   /* a explicacao cujo "Desfazer" abriu o dialogo: ele nasce no passo de remocao DAQUELA linha (nada sai sem o motivo e o confirmar) */
   const [removerAlvo, setRemoverAlvo] = useState<string | null>(null);
   const [subLocal, setSubLocal] = useState<SubAbaContaCorrente>('conta');
@@ -279,6 +289,7 @@ export function AbaContaCorrenteOC({ api, somenteLeitura, lado = 'venda', despes
     if (chave === 'abrir') { if (l.lancamentoId) onAbrirLancamento?.(l.lancamentoId); return; }
     if (chave === 'ir_entrega') { onIrParaEntrega?.(); return; }
     if (chave === 'abrir_explicacoes') { setRemoverAlvo(null); setDialogo('explicar'); return; }
+    if (chave === 'cancelar_programado') { setCancelarAlvo(l.lancamentoId ? cancelarProgramado?.compromissoDe(l.lancamentoId) ?? null : null); return; }
     if (chave === 'desfazer_explicacao') {
       setRemoverAlvo(cc.explicacoes.some(e => e.parteId === l.parteId) ? l.parteId : null);
       setDialogo('explicar');
@@ -340,8 +351,14 @@ export function AbaContaCorrenteOC({ api, somenteLeitura, lado = 'venda', despes
             )}
             {sub === 'conta' || !temDespesas ? (
               <span className="ml-auto flex gap-[5px]" data-testid="botoes-conta">
-                <Button type="button" variant="outline" size="sm" className={BOTAO} disabled={somenteLeitura || api.ocupado}
-                  data-testid="botao-programar" onClick={() => { setErroAcao(null); setDialogo('programar'); }}>
+                {/* OC-CC-MODAL-FINANCEIRO-01 — principal ja' coberto (acordado − recebido − programado <= 0): o botao fica apagado com o
+                    motivo ESCRITO ao lado, em vez de abrir o modal para o banco recusar. */}
+                {principalJaCoberto(cc) && (
+                  <span className="self-center whitespace-nowrap text-[10px] text-muted-foreground" data-testid="motivo-programar">{MOTIVO_PRINCIPAL_COBERTO}</span>
+                )}
+                <Button type="button" variant="outline" size="sm" className={BOTAO} disabled={somenteLeitura || api.ocupado || !onProgramar || principalJaCoberto(cc)}
+                  title={principalJaCoberto(cc) ? MOTIVO_PRINCIPAL_COBERTO : undefined}
+                  data-testid="botao-programar" onClick={() => { setErroAcao(null); onProgramar?.(); }}>
                   {t.programar}
                 </Button>
                 <Button type="button" variant="outline" size="sm" className={BOTAO} disabled={somenteLeitura || api.ocupado}
@@ -385,7 +402,7 @@ export function AbaContaCorrenteOC({ api, somenteLeitura, lado = 'venda', despes
               <tbody>
                 {cc.linhas.map(l => (
                   <LinhaExtrato key={l.parteId} l={l} linhas={cc.linhas} lado={lado}
-                    acoes={acoesDaLinha(l, lado, somenteLeitura)} onAcao={chave => executarAcao(l, chave)} />
+                    acoes={acoesDaLinha(l, lado, somenteLeitura, !!(l.lancamentoId && cancelarProgramado?.compromissoDe(l.lancamentoId)))} onAcao={chave => executarAcao(l, chave)} />
                 ))}
                 {cc.linhas.length === 0 && (
                   <tr><td colSpan={11} className={`${TD} py-4 text-center text-muted-foreground`}>{t.vazio}</td></tr>
@@ -446,8 +463,9 @@ export function AbaContaCorrenteOC({ api, somenteLeitura, lado = 'venda', despes
       {erroAcao && <div className="flex-none text-[10px] text-destructive" role="alert">{erroAcao}</div>}
 
       {dialogo === 'buscar' && <DialogoBuscarRecebimento api={api} lado={lado} onFechar={() => setDialogo(null)} />}
-      {dialogo === 'programar' && (
-        <DialogoProgramarRecebimento api={api} lado={lado} sugerido={valorEmAberto(cc)} onFechar={() => setDialogo(null)} />
+      {cancelarAlvo && cancelarProgramado && (
+        <DialogoCancelarProgramado lado={lado} parcelas={cancelarAlvo.parcelas}
+          onConfirmar={motivo => cancelarProgramado.executar(cancelarAlvo.id, motivo)} onFechar={() => setCancelarAlvo(null)} />
       )}
       {dialogo === 'explicar' && (
         <DialogoExplicarDiferenca api={api} somenteLeitura={somenteLeitura} lado={lado} removerAoAbrir={removerAlvo}
@@ -626,59 +644,57 @@ function CampoMotivo({ id, valor, onChange, falta }: { id: string; valor: string
   );
 }
 
-/* ─── Programar recebimento futuro: compromisso sem lote na conta da OC (a categoria do lote de maior valor), fora do DRE ───
-   ⚠ OC-CC-PROGRAMAR-RECEBIMENTO-01 (12/10): a porta VOLTOU — botao "+ Programar recebimento/pagamento" antes do "+ Buscar …" na
-   sub-aba conta. Saiu em 04/10 (OC-CC-ACOES-LINHA-02) e, com toda OC nova nascendo em conta corrente (OC-CC-PADRAO-NOVAS-01a), a
-   OC ficou sem como programar o recebimento. O "Parcelar" da linha continua na fila. Exportado para o teste dele. */
-/** OC-CC-PROGRAMAR-RECEBIMENTO-01 — o valor que o diálogo sugere: o que ainda falta receber/pagar (em módulo), só nessas
-    situações; quitado, adiantado ou aguardando saída não sugerem nada. Exportado para o teste. */
-export function valorEmAberto(cc: Pick<ContaCorrente, 'saldo' | 'situacao'> | null): number | null {
-  if (!cc || cc.saldo === null) return null;
-  if (cc.situacao !== 'falta_receber' && cc.situacao !== 'falta_pagar') return null;
-  const v = Math.round(Math.abs(cc.saldo) * 100) / 100;
-  return v > 0 ? v : null;
+/* ─── Programar recebimento/pagamento: desde o OC-CC-MODAL-FINANCEIRO-01 a porta abre o MODAL DO FINANCEIRO em modo OC
+   (`LancamentoDaOCDialog`, montado por quem tem a operacao — o roteador da aba). O `DialogoProgramarRecebimento` que morava aqui
+   saiu com o metodo `programarRecebimento` do hook; a RPC `oc_programar_recebimento` fica no banco, sem chamador. ─── */
+
+/* ─── Cancelar o recebimento/pagamento PROGRAMADO: o gesto contrario do modal, atomico no banco (`oc_desfazer_compromisso`).
+   Desfaz o compromisso INTEIRO — todas as parcelas dele —, com um motivo. Recusa do banco: escrita aqui, nada desfeito. ─── */
+export interface CancelarProgramadoApi {
+  /** O compromisso de que o lancamento da linha e' parcela, e quantas parcelas ele tem. Nulo = a linha nao tem compromisso. */
+  compromissoDe: (lancamentoId: string) => { id: string; parcelas: number } | null;
+  /** Desfaz; devolve a frase da recusa, ou nulo. */
+  executar: (compromissoId: string, motivo: string) => Promise<string | null>;
 }
-export function DialogoProgramarRecebimento({ api, lado, sugerido, onFechar }: { api: OcContaCorrenteApi; lado: LadoContaCorrente; sugerido: number | null; onFechar: () => void }) {
-  const compra = lado === 'compra';
-  const [valor, setValor] = useState(sugerido ? sugerido.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '');
-  const [vencimento, setVencimento] = useState('');
+function DialogoCancelarProgramado({ lado, parcelas, onConfirmar, onFechar }: {
+  lado: LadoContaCorrente; parcelas: number; onConfirmar: (motivo: string) => Promise<string | null>; onFechar: () => void;
+}) {
+  const t = TEXTOS[lado];
+  const [motivo, setMotivo] = useState('');
   const [tentou, setTentou] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
-  const v = parseNumericValue(valor);
-  const faltaValor = tentou && !(v > 0);
-  const faltaVenc = tentou && !vencimento;
-  const salvar = async () => {
+  const [rodando, setRodando] = useState(false);
+  const falta = tentou && motivo.trim() === '';
+  const confirmar = async () => {
     setTentou(true);
-    if (!(v > 0) || !vencimento) return;
-    const e = await api.programarRecebimento(v, vencimento);
+    if (motivo.trim() === '') return;
+    setRodando(true); setErro(null);
+    const e = await onConfirmar(motivo.trim());
+    setRodando(false);
     if (e) { setErro(e); return; }
     onFechar();
   };
   return (
-    <Dialog open onOpenChange={o => { if (!o) onFechar(); }}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader><DialogTitle className="text-[12px]">{compra ? 'Programar pagamento futuro' : 'Programar recebimento futuro'}</DialogTitle></DialogHeader>
+    <Dialog open onOpenChange={o => { if (!o && !rodando) onFechar(); }}>
+      <DialogContent className="max-w-sm" data-testid="dialogo-cancelar-programado">
+        <DialogHeader><DialogTitle className="text-[12px]">Cancelar {t.nomeDinheiro} programado</DialogTitle></DialogHeader>
         <div className="text-[10px] text-muted-foreground">
-          {compra
-            ? 'Nasce um pagamento programado na conta da compra (a do lote de maior valor), fora do DRE. Ele entra no saldo quando for pago.'
-            : 'Nasce um recebimento programado na conta da venda (a do lote de maior valor), fora do DRE. Ele entra no saldo quando for pago.'}
+          {parcelas > 1
+            ? `Este ${t.nomeDinheiro} foi programado em ${parcelas} parcelas: as ${parcelas} saem juntas, com a programação e o compromisso.`
+            : `O lançamento programado sai, com a programação e o compromisso.`} O que já foi pago ou conciliado não se desfaz por aqui.
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className="text-[10px] font-medium" htmlFor="valor-programar">Valor *</label>
-            <Input id="valor-programar" value={valor} onChange={e => setValor(e.target.value)} className={`h-7 text-right text-[11px] ${faltaValor ? 'border-destructive' : ''}`} />
-            {faltaValor && <div className="text-[10px] text-destructive">Informe o valor.</div>}
-          </div>
-          <div>
-            <span className="text-[10px] font-medium">Vencimento *</span>
-            <DatePicker value={vencimento} onChange={setVencimento} size="compact" className={faltaVenc ? 'border-destructive' : ''} />
-            {faltaVenc && <div className="text-[10px] text-destructive">Informe o vencimento.</div>}
-          </div>
+        <div>
+          <label className={`text-[10px] font-medium ${falta ? 'text-destructive' : ''}`} htmlFor="motivo-cancelar-programado">Motivo *</label>
+          <Textarea id="motivo-cancelar-programado" value={motivo} onChange={e => setMotivo(e.target.value)} rows={2} disabled={rodando}
+            className={`min-h-[44px] text-[11px] ${falta ? 'border-destructive' : ''}`} />
+          <div className="h-[14px] text-[10px] text-destructive">{falta ? 'Informe o motivo.' : ''}</div>
         </div>
         <DialogFooter className="items-center">
-          {erro && <span className="mr-auto text-[10px] text-destructive" role="alert">{erro}</span>}
-          <Button type="button" variant="ghost" size="sm" className={BOTAO} onClick={onFechar}>Cancelar</Button>
-          <Button type="button" size="sm" className={BOTAO} disabled={api.ocupado} onClick={salvar}>Programar</Button>
+          {erro && <span className="mr-auto text-[10px] text-destructive" role="alert" data-testid="erro-cancelar-programado">{erro}</span>}
+          <Button type="button" variant="ghost" size="sm" className={BOTAO} disabled={rodando} onClick={onFechar}>Voltar</Button>
+          <Button type="button" variant="destructive" size="sm" className={BOTAO} disabled={rodando} onClick={confirmar}>
+            {rodando ? 'Cancelando…' : 'Cancelar programado'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

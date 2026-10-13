@@ -76,7 +76,7 @@ function api(c: ContaCorrente, over: Partial<OcContaCorrenteApi> = {}): OcContaC
     contaCorrente: c, loading: false, erro: null, ocupado: false, recarregar: vi.fn(async () => {}),
     sincronizarEntregas: vi.fn(async () => null), listarVinculaveis: vi.fn(async () => ({ erro: null, itens: [] })),
     vincularRecebimento: vi.fn(async () => null), explicarSaldo: vi.fn(async () => null),
-    desfazerExplicacao: vi.fn(async () => null), programarRecebimento: vi.fn(async () => null),
+    desfazerExplicacao: vi.fn(async () => null),
     simularExplicacao: vi.fn(async () => ({ previa: null, erro: null })),
     lerRolCancelamento: vi.fn(async () => ({ rol: null, erro: null })),
     listarLotes: vi.fn(async () => [{ id: 'l1', ordem: 1, categoria: 'desmama_m', cab: 121, total: 307460 }]),
@@ -254,7 +254,8 @@ describe('compra em conta corrente — extrato espelho da venda (mock v1)', () =
    e o cancelar dizendo que o recebimento sai da OC e volta ao DRE. A diferenca para os de antes e' so' essa (conferida no diff). */
 describe('a VENDA nao muda', () => {
   it('aba conta corrente da 232c05aa: o HTML e o de antes do PR', () => {
-    const { container } = render(<AbaContaCorrenteOC api={api(venda())} somenteLeitura={false} />);
+    /* OC-CC-MODAL-FINANCEIRO-01 — quem monta a aba (o roteador) sempre entrega quem abre o modal; sem ele o botao nasce apagado */
+    const { container } = render(<AbaContaCorrenteOC api={api(venda())} somenteLeitura={false} onProgramar={() => {}} />);
     expect(semIdRadix(container.innerHTML)).toMatchSnapshot();
     expect(container.querySelector('[data-testid="despesas-operacao"]')).toBeNull();
     expect(container.querySelector('[data-testid="barra-quitado"]')).toBeNull();

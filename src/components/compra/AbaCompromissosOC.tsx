@@ -23,7 +23,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { executarDesfazerCompromisso, lerEstadoDoDesfazer, rolDoEstado, ErroDesfazer, type TituloADesfazer } from '@/lib/oc/desfazerCompromisso';
+import { executarDesfazerCompromisso, rolDoEstado, ErroDesfazer, type TituloADesfazer } from '@/lib/oc/desfazerCompromisso';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { SearchableSelect } from '@/components/ui/searchable-select';
@@ -139,6 +139,9 @@ interface Props {
   /** OC-VENDA-FINANCEIRO-COMPLETO-01a-fix2 — onde os botoes das despesas moram: a faixa de sub-abas da conta corrente. Ausente, a
    *  lista desenha o titulo e os botoes em cima, como antes; `null`, o host ainda nao montou (nada se desenha). */
   hostBotoesDespesa?: HTMLElement | null;
+  /** OC-CC-MODAL-FINANCEIRO-01 — "+ Nova despesa" (conta corrente) abre o MODAL DO FINANCEIRO em modo OC, montado por quem tem a
+   *  operacao. O ramo "so' obrigacao" do `NovoCompromissoDialog` saiu com o botao que o abria. Ausente = o botao fica apagado. */
+  onNovaDespesa?: () => void;
   /** Altura do bloco fixo acima da tabela das despesas: o cabecalho dela gruda logo abaixo (um scrollport so', o do modal). */
   topoFixo?: number;
 }
@@ -481,7 +484,7 @@ const ROTULOS_PADRAO: RotulosCompromissos = {
   mostrarBaseDaOperacao: true, mostrarSentidoDoDinheiro: false,
 };
 
-export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, ehBoitel, fornecedores, valorAcordado, lotes, contraparteId, dataOperacao, dataChegada, darkSelectClass, recarregarDados, linhasPrevisao, bloqueioPrevisao = null, seloProjecao, propostasExtras, propostasDoMotor, abrirGerarAoMontar, rotulos = ROTULOS_PADRAO, motivoReabertura = null, soDespesas = false, hostBotoesDespesa, topoFixo, liquidacao = null }: Props) {
+export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, ehBoitel, fornecedores, valorAcordado, lotes, contraparteId, dataOperacao, dataChegada, darkSelectClass, recarregarDados, linhasPrevisao, bloqueioPrevisao = null, seloProjecao, propostasExtras, propostasDoMotor, abrirGerarAoMontar, rotulos = ROTULOS_PADRAO, motivoReabertura = null, soDespesas = false, hostBotoesDespesa, topoFixo, onNovaDespesa, liquidacao = null }: Props) {
   const { resumoOperacao, compromissos, parcelas, versao, saving } = ocApi;
   const [searchParams, setSearchParams] = useSearchParams();
   /* ⚠ OS DOIS CATALOGOS SUBIRAM PARA CA — PR-OC-VENDA-FIN-PREVISAO-01D (adendo 2). Eles
@@ -685,13 +688,12 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
     onSucesso: ocApi.recarregar,
   });
   /* Qual estorno esta em confirmacao, e em que etapa. `null` fechado. */
-  /* ⚠ `desfazer` E' O GESTO EM CADEIA — OC-MOTIVO-UNICO-01: `rol` e' o que a etapa 1 lista, e
-     `estornoId` nasce na ABERTURA e vale ate' fechar, para uma retomada depois de recusa continuar o
-     MESMO gesto na auditoria. */
+  /* ⚠ `desfazer` E' O GESTO EM CADEIA — OC-MOTIVO-UNICO-01: `rol` e' o que a etapa 1 lista. O `estorno_id`
+     nasce no BANCO (OC-CC-MODAL-FINANCEIRO-01: a cadeia e' uma transacao; nao ha' retomada). */
   const [estAlvo, setEstAlvo] = useState<null | {
     nivel: 'materializacao' | 'programacao' | 'compromisso' | 'desfazer';
     programacaoId?: string; parcelaId?: string; compromissoId?: string; descricao: string;
-    rol?: string[]; estornoId?: string;
+    rol?: string[];
   }>(null);
   const [estEtapa, setEstEtapa] = useState<1 | 2>(1);
   const [estMotivo, setEstMotivo] = useState('');
@@ -778,24 +780,17 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
         await estorno.cancelarProgramacao(versao, estAlvo.programacaoId, estMotivo.trim());
       } else if (estAlvo.nivel === 'compromisso' && estAlvo.compromissoId) {
         await estorno.cancelarCompromisso(versao, estAlvo.compromissoId, estMotivo.trim());
-      } else if (estAlvo.nivel === 'desfazer' && estAlvo.compromissoId && estAlvo.estornoId && resumoOperacao?.operacaoId) {
-        /* ⚠ UM MOTIVO, UM `estorno_id`, TRES NIVEIS — OC-MOTIVO-UNICO-01. Os passos vao calados
-           (`silencioso`); o resumo sai uma vez no fim. Recusa do banco vira `ErroDesfazer`, que o
-           dialogo mostra com o que ja' foi e o que falta — e o mesmo botao retoma. */
-        const opId = resumoOperacao.operacaoId;
-        const compId = estAlvo.compromissoId;
-        const opts = { estornoId: estAlvo.estornoId, silencioso: true };
+      } else if (estAlvo.nivel === 'desfazer' && estAlvo.compromissoId && resumoOperacao?.operacaoId) {
+        /* ⚠ UM GESTO, UMA CHAMADA, UMA TRANSACAO — OC-CC-MODAL-FINANCEIRO-01: quem encadeia estornar ->
+           cancelar programacao -> cancelar compromisso e' o banco (`oc_desfazer_compromisso`), com um motivo
+           e um `estorno_id`. Recusa do banco: NADA foi desfeito, e o dialogo diz o motivo e o que falta. */
         try {
           const { feito } = await executarDesfazerCompromisso({
-            compromissoId: compId, motivo: estMotivo, estornoId: estAlvo.estornoId,
-            deps: {
-              lerEstado: () => lerEstadoDoDesfazer(opId, compId),
-              estornar: (v, prog, parc, m) => estorno.estornarMaterializacao(v, prog, parc, m, opts),
-              cancelarProgramacao: (v, prog, m) => estorno.cancelarProgramacao(v, prog, m, opts),
-              cancelarCompromisso: (v, id, m) => estorno.cancelarCompromisso(v, id, m, opts),
-            },
+            operacaoId: resumoOperacao.operacaoId, versao, compromissoId: estAlvo.compromissoId,
+            motivo: estMotivo, falta: estAlvo.rol ?? [],
           });
-          toast.success(feito.length ? `Compromisso desfeito: ${feito.join(', ')}.` : 'Nada a desfazer: o compromisso já estava cancelado.');
+          toast.success(`Compromisso desfeito: ${feito.join(', ')}.`);
+          await ocApi.recarregar();
         } catch (e) {
           if (e instanceof ErroDesfazer) { setEstResultado({ erro: e.message, feito: e.feito, falta: e.falta }); }
           throw e;
@@ -1426,7 +1421,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
         + Buscar despesa no Financeiro
       </Button>
       <Button type="button" size="sm" className="h-[22px] px-[9px] text-[10px] font-medium"
-        disabled={!podeEscrever} onClick={abrirNovo}>
+        disabled={!podeEscrever || !onNovaDespesa} onClick={() => onNovaDespesa?.()} data-testid="botao-nova-despesa">
         + Nova despesa
       </Button>
     </>
@@ -1514,7 +1509,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
             desabilitado={conciliadoNoCompromisso || !g.pode || estRodando}
             onEscolher={() => abrirEstorno({ nivel: 'desfazer', compromissoId: c.compromissoId ?? undefined,
               descricao: `o compromisso ${c.natureza ?? ''}/${c.componente ?? ''} de ${brl(c.valorCompromisso)}`,
-              rol: rolDoDesfazer(c), estornoId: crypto.randomUUID() })} />
+              rol: rolDoDesfazer(c) })} />
         </DropdownMenuContent>
       </DropdownMenu>
     );
@@ -1845,7 +1840,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
                           title={g.motivo || undefined}
                           onSelect={() => abrirEstorno({ nivel: 'desfazer', compromissoId: c.compromissoId ?? undefined,
                             descricao: `o compromisso ${c.natureza ?? ''}/${c.componente ?? ''} de ${brl(c.valorCompromisso)}`,
-                            rol: rolDoDesfazer(c), estornoId: crypto.randomUUID() })}>
+                            rol: rolDoDesfazer(c) })}>
                           Desfazer compromisso
                         </DropdownMenuItem>
                         {/* ⚠ `text-zinc-300`, NAO `text-muted-foreground` — OC-MOTIVO-UNICO-01, medido na tela:
@@ -2264,7 +2259,6 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
           avisoBaseCoberta={avisoBaseCoberta}
           bloqueioPrevisao={bloqueioPrevisao}
           plano={plano} comps={comps}
-          soObrigacao={soDespesas}
         />
       )}
       {buscarDespesaAberto && clienteId && (
@@ -2482,9 +2476,8 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm"
               />
             )}
-            {/* ⚠ A CADEIA PAROU NO MEIO — o banco recusou um nivel (E3: titulo realizado, conciliado,
-                liquidacao ativa). Diz o que ja' foi e o que falta; o mesmo "Confirmar" retoma, pulando
-                o que ja' esta' desfeito. */}
+            {/* ⚠ O BANCO RECUSOU (E3: titulo realizado, conciliado, liquidacao ativa) — a cadeia e' uma transacao:
+                nada foi desfeito. Diz o motivo e o que falta; resolvido, o mesmo "Confirmar" tenta de novo. */}
             {estResultado && (
               <div className="rounded-md border border-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2 py-1.5 text-[11px] leading-snug text-amber-800 dark:text-amber-200" data-resultado="desfazer">
                 <p className="font-medium">{estResultado.erro}</p>
@@ -2533,11 +2526,10 @@ function ResumoCard({ rotulo, valor }: { rotulo: string; valor: number }) {
 }
 
 // ===== Dialog: Novo compromisso =====
-function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOperacao, ehBoitel, fornecedores, darkSelectClass, valorAcordado, sugestaoSubcentro, descricaoDefault, contraparteId, lotesProntos, lotes, avisoBaseCoberta, onCriarFornecedor, plano, comps, bloqueioPrevisao = null, soObrigacao = false }: {
+function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOperacao, ehBoitel, fornecedores, darkSelectClass, valorAcordado, sugestaoSubcentro, descricaoDefault, contraparteId, lotesProntos, lotes, avisoBaseCoberta, onCriarFornecedor, plano, comps, bloqueioPrevisao = null }: {
   onClose: () => void; onSubmit: (p: CriarCompromissoPayload[]) => void; saving: boolean;
   /** OC-VENDA-FINANCEIRO-COMPLETO-01a — "+ Nova despesa" da OC em conta corrente: nasce e fica em obrigacao; principal nao e'
       oferecido (a receita/custo e' a entrega). Ausente = o dialogo de sempre, abrindo em principal. */
-  soObrigacao?: boolean;
   /** A recusa do A3, repassada — so' a principal a obedece. Ver `recusaDaPrincipalManual`. */
   bloqueioPrevisao?: string | null;
   clienteId: string | null; tipoOperacao: string | null; ehBoitel?: boolean; fornecedores: { id: string; nome: string }[]; darkSelectClass: string;
@@ -2550,7 +2542,7 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
   plano: ReturnType<typeof usePlanoContasOC>;
   comps: ReturnType<typeof useComponentesFinanceiros>;
 }) {
-  const [natureza, setNatureza] = useState<'principal' | 'obrigacao'>(soObrigacao ? 'obrigacao' : 'principal');
+  const [natureza, setNatureza] = useState<'principal' | 'obrigacao'>('principal');
   const [componente, setComponente] = useState('');
   const [valor, setValor] = useState<number | null>(null);
   const [subcentro, setSubcentro] = useState('');
@@ -2775,7 +2767,7 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
           padding proprio; sem isso o azul flutuaria com moldura branca em volta. */}
       <DialogContent className="max-w-md">
         <DialogHeader className="-mx-6 -mt-6 mb-1 space-y-0 bg-primary px-6 py-3">
-          <DialogTitle className="text-[12px] text-primary-foreground">{soObrigacao ? 'Nova despesa' : 'Novo compromisso'}</DialogTitle>
+          <DialogTitle className="text-[12px] text-primary-foreground">Novo compromisso</DialogTitle>
         </DialogHeader>
         {avisoBaseCoberta && (
           <div className="rounded-md border border-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2 py-1.5 text-[11px] leading-snug text-amber-800 dark:text-amber-200">
@@ -2786,11 +2778,11 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
           <div className="grid grid-cols-2 gap-2">
             <div>
               <Label className="text-[11px]">Natureza</Label>
-              <Select value={natureza} disabled={soObrigacao}
-                onValueChange={(v) => setNatureza(!soObrigacao && v === 'principal' ? 'principal' : 'obrigacao')}>
+              <Select value={natureza}
+                onValueChange={(v) => setNatureza(v === 'principal' ? 'principal' : 'obrigacao')}>
                 <SelectTrigger className="mt-0.5 h-6 text-[11px]" aria-label="Natureza"><SelectValue /></SelectTrigger>
                 <SelectContent className={darkSelectClass}>
-                  {!soObrigacao && <SelectItem value="principal">principal</SelectItem>}
+                  <SelectItem value="principal">principal</SelectItem>
                   <SelectItem value="obrigacao">obrigacao</SelectItem>
                 </SelectContent>
               </Select>

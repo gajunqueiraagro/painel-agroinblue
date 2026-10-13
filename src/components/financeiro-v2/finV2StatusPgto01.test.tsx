@@ -48,7 +48,8 @@ describe('pagamento x status — a regra', () => {
 describe('LancamentoV2Dialog — a regra está ligada (fonte)', () => {
   it('o select de status passa pela troca que zera, e o payload pela defesa', () => {
     /* FIN-CONCILIADO-NAO-REBAIXA-01: casado com o extrato e realizado, o status fica em leitura */
-    expect(dialogo).toContain('<Select value={statusTransacao} onValueChange={handleStatusChange} disabled={travaCasado.status || undefined}>');
+    /* OC-CC-MODAL-FINANCEIRO-01: e pela trava de `lockedFields` ('status_transacao'), que so' o modo OC passa */
+    expect(dialogo).toContain("<Select value={statusTransacao} onValueChange={handleStatusChange} disabled={travaCasado.status || travado('status_transacao') || undefined}>");
     expect(dialogo).toContain('setDataPagamento(atual => pagamentoAoTrocarStatus(v, atual, pagamentoTravado));');
     expect(dialogo).toContain('data_pagamento: pagamentoParaGravar(statusPersistido, dataPagamento, pagamentoTravado),');
     expect(dialogo).toContain("const pagamentoTravado = lockedFields?.includes('data_pagamento') ?? false;");
