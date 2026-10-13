@@ -80,7 +80,7 @@ const moeda = (v: number | null) => (v === null ? '' : num2(v));
    da entrega; a compra, do fornecedor e da entrada do gado. O extrato da compra e' o ESPELHO do da venda: entrada positiva, pagamento
    negativo, saldo positivo = falta pagar. O sinal vem do banco (`oc_conta_corrente` ja' o vira); aqui so' os rotulos e os totais. */
 const TEXTOS: Record<LadoContaCorrente, {
-  cardEntrega: string; cardDinheiro: string; titulo: string; buscar: string; grupoSaldo: string;
+  cardEntrega: string; cardDinheiro: string; titulo: string; buscar: string; programar: string; grupoSaldo: string;
   colEntrega: string; colDinheiro: string; vazio: string; seloEntrega: string; seloDinheiro: string; verbo: string;
   pendente1: string; pendenteN: (n: number) => string; atualizar: string;
   /* OC-CC-ACOES-LINHA-02 — os textos do menu "⋯" de cada linha, espelhados por lado. */
@@ -89,6 +89,7 @@ const TEXTOS: Record<LadoContaCorrente, {
   venda: {
     cardEntrega: 'Entregue · DRE R$', cardDinheiro: 'Recebido', titulo: 'Conta corrente do comprador',
     buscar: '+ Buscar recebimento no Financeiro', grupoSaldo: 'Comprador',
+    programar: '+ Programar recebimento',
     colEntrega: 'Entrega (DRE)', colDinheiro: 'Recebido (caixa)', vazio: 'Nenhuma entrega nem recebimento ainda.',
     seloEntrega: 'Entrega', seloDinheiro: 'Recebimento', verbo: 'Venda',
     pendente1: '1 saída ainda não virou entrega no financeiro.', pendenteN: n => `${n} saídas ainda não viraram entrega no financeiro.`,
@@ -99,6 +100,7 @@ const TEXTOS: Record<LadoContaCorrente, {
   compra: {
     cardEntrega: 'Entrada · DRE R$', cardDinheiro: 'Pago', titulo: 'Conta corrente do fornecedor',
     buscar: '+ Buscar pagamento no Financeiro', grupoSaldo: 'Fornecedor',
+    programar: '+ Programar pagamento',
     colEntrega: 'Entrada (DRE)', colDinheiro: 'Pago (caixa)', vazio: 'Nenhuma entrada nem pagamento ainda.',
     seloEntrega: 'Entrada', seloDinheiro: 'Pagamento', verbo: 'Compra',
     pendente1: '1 entrada de gado ainda não virou lançamento no financeiro.',
@@ -234,7 +236,7 @@ export function AbaContaCorrenteOC({ api, somenteLeitura, lado = 'venda', despes
   /* sinal da coluna da entrega no total: a venda mostra o gado que saiu negativo; a compra, o que entrou positivo */
   const sinalEntrega = lado === 'compra' ? 1 : -1;
   const [erroAcao, setErroAcao] = useState<string | null>(null);
-  const [dialogo, setDialogo] = useState<'buscar' | 'explicar' | null>(null);
+  const [dialogo, setDialogo] = useState<'buscar' | 'programar' | 'explicar' | null>(null);
   /* a explicacao cujo "Desfazer" abriu o dialogo: ele nasce no passo de remocao DAQUELA linha (nada sai sem o motivo e o confirmar) */
   const [removerAlvo, setRemoverAlvo] = useState<string | null>(null);
   const [subLocal, setSubLocal] = useState<SubAbaContaCorrente>('conta');
@@ -339,6 +341,10 @@ export function AbaContaCorrenteOC({ api, somenteLeitura, lado = 'venda', despes
             {sub === 'conta' || !temDespesas ? (
               <span className="ml-auto flex gap-[5px]" data-testid="botoes-conta">
                 <Button type="button" variant="outline" size="sm" className={BOTAO} disabled={somenteLeitura || api.ocupado}
+                  data-testid="botao-programar" onClick={() => { setErroAcao(null); setDialogo('programar'); }}>
+                  {t.programar}
+                </Button>
+                <Button type="button" variant="outline" size="sm" className={BOTAO} disabled={somenteLeitura || api.ocupado}
                   onClick={() => { setErroAcao(null); setDialogo('buscar'); }}>
                   {t.buscar}
                 </Button>
@@ -440,6 +446,9 @@ export function AbaContaCorrenteOC({ api, somenteLeitura, lado = 'venda', despes
       {erroAcao && <div className="flex-none text-[10px] text-destructive" role="alert">{erroAcao}</div>}
 
       {dialogo === 'buscar' && <DialogoBuscarRecebimento api={api} lado={lado} onFechar={() => setDialogo(null)} />}
+      {dialogo === 'programar' && (
+        <DialogoProgramarRecebimento api={api} lado={lado} sugerido={valorEmAberto(cc)} onFechar={() => setDialogo(null)} />
+      )}
       {dialogo === 'explicar' && (
         <DialogoExplicarDiferenca api={api} somenteLeitura={somenteLeitura} lado={lado} removerAoAbrir={removerAlvo}
           onFechar={() => { setDialogo(null); setRemoverAlvo(null); }} />
@@ -618,8 +627,17 @@ function CampoMotivo({ id, valor, onChange, falta }: { id: string; valor: string
 }
 
 /* ─── Programar recebimento futuro: compromisso sem lote na conta da OC (a categoria do lote de maior valor), fora do DRE ───
-   ⚠ SEM PONTO DE ENTRADA desde o OC-CC-ACOES-LINHA-02: o botao "+ Programar … futuro" saiu do topo (uso medido: zero). O dialogo, o
-   hook (`programarRecebimento`) e a RPC ficam: voltam pelo "Parcelar" da linha, no PR de banco. Exportado para o teste dele. */
+   ⚠ OC-CC-PROGRAMAR-RECEBIMENTO-01 (12/10): a porta VOLTOU — botao "+ Programar recebimento/pagamento" antes do "+ Buscar …" na
+   sub-aba conta. Saiu em 04/10 (OC-CC-ACOES-LINHA-02) e, com toda OC nova nascendo em conta corrente (OC-CC-PADRAO-NOVAS-01a), a
+   OC ficou sem como programar o recebimento. O "Parcelar" da linha continua na fila. Exportado para o teste dele. */
+/** OC-CC-PROGRAMAR-RECEBIMENTO-01 — o valor que o diálogo sugere: o que ainda falta receber/pagar (em módulo), só nessas
+    situações; quitado, adiantado ou aguardando saída não sugerem nada. Exportado para o teste. */
+export function valorEmAberto(cc: Pick<ContaCorrente, 'saldo' | 'situacao'> | null): number | null {
+  if (!cc || cc.saldo === null) return null;
+  if (cc.situacao !== 'falta_receber' && cc.situacao !== 'falta_pagar') return null;
+  const v = Math.round(Math.abs(cc.saldo) * 100) / 100;
+  return v > 0 ? v : null;
+}
 export function DialogoProgramarRecebimento({ api, lado, sugerido, onFechar }: { api: OcContaCorrenteApi; lado: LadoContaCorrente; sugerido: number | null; onFechar: () => void }) {
   const compra = lado === 'compra';
   const [valor, setValor] = useState(sugerido ? sugerido.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '');

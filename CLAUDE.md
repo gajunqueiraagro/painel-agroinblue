@@ -162,7 +162,7 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 12/10/2026 (FECH-DOCS-01b, +6 em `src/components/pecuaria/documentosDoMesDialog.test.tsx` — 5006 depois dele; antes o FECH-GLOBAL-RESUMO-01b, +3 em `src/components/fechamentoGlobalResumo.test.tsx` — 5000 depois dele; antes o FECH-GLOBAL-RESUMO-01, +19 no mesmo arquivo (novo) — 4997 depois dele; antes o FECH-DOCS-01, +27: `src/hooks/useDocumentosDoMes.test.tsx` 13,
+  Baseline em 12/10/2026 (OC-CC-PROGRAMAR-RECEBIMENTO-01, +3 em `src/components/venda/abaContaCorrente.test.tsx` — 5009 depois dele; antes o FECH-DOCS-01b, +6 em `src/components/pecuaria/documentosDoMesDialog.test.tsx` — 5006 depois dele; antes o FECH-GLOBAL-RESUMO-01b, +3 em `src/components/fechamentoGlobalResumo.test.tsx` — 5000 depois dele; antes o FECH-GLOBAL-RESUMO-01, +19 no mesmo arquivo (novo) — 4997 depois dele; antes o FECH-DOCS-01, +27: `src/hooks/useDocumentosDoMes.test.tsx` 13,
   `src/components/pecuaria/documentosDoMesDialog.test.tsx` 14 — 4978 depois dele; antes o OC-CRIAR-DO-LEGADO-COMPRA-01, +11: `src/lib/oc/criarDoLegado.test.ts` 5,
   `src/components/financeiro-v2/criarOCDoLegado.test.tsx` 6 — 4951 depois dele; antes o OC-CC-PADRAO-NOVAS-01b, +13: `src/hooks/ocVersaoAposSaida.test.tsx` 5 (novo),
   `src/components/venda/aguardandoSaida.test.tsx` 8 (novo) — 4940 depois dele; antes o OC-CC-EXPLICAR-CONGELA-01, +20:
@@ -297,7 +297,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5006
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5009
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -4687,6 +4687,8 @@ docs/historico/frentes-ate-2026-09-29.md.)
     sub-aba de onde saiu (sem `oc_sub` = extrato). PROIBIDO segundo caminho de abrir.
   · O BOTAO "+ Programar recebimento/pagamento futuro" SAIU DO TOPO (uso medido: zero). `DialogoProgramarRecebimento`, o hook
     (`programarRecebimento`) e a RPC `oc_programar_recebimento` FICAM, sem ponto de entrada: voltam pelo "Parcelar".
+    ⚠ VOLTOU no OC-CC-PROGRAMAR-RECEBIMENTO-01 (12/10/2026): com toda OC nova em conta corrente (OC-CC-PADRAO-NOVAS-01a) nao
+    havia como programar o recebimento pela OC — "+ Programar recebimento/pagamento" antes do "+ Buscar …", sugerindo o em aberto.
   ⚠ FILA DO PR 3 (banco), que ACENDE os itens hoje em "disponível em breve": desvincular recebimento de conta corrente
     (`oc_desvincular_lancamento` recusa parte de conta corrente) · parcelar recebimento programado · cancelar recebimento
     programado (nao existe gesto nem RPC).

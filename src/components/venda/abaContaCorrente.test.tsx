@@ -9,7 +9,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { createPortal } from 'react-dom';
 import { readFileSync } from 'node:fs';
 import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
-import { AbaContaCorrenteOC, DialogoProgramarRecebimento, acoesDaLinha, itemDoRascunho, motivoSomenteLeitura, type Rascunho } from './AbaContaCorrenteOC';
+import { AbaContaCorrenteOC, DialogoProgramarRecebimento, acoesDaLinha, itemDoRascunho, motivoSomenteLeitura, valorEmAberto, type Rascunho } from './AbaContaCorrenteOC';
 import { CancelarContaCorrenteDialog } from './CancelarContaCorrenteDialog';
 import { lerContaCorrente, type ContaCorrente, type LinhaContaCorrente } from '@/lib/oc/contaCorrente';
 import type { OcContaCorrenteApi, RolCancelamento } from '@/hooks/useOcContaCorrente';
@@ -753,5 +753,43 @@ describe('OC-CC-ACOES-LINHA-02 — clique e menu "⋯" em toda linha do extrato'
     expect(colunas.querySelectorAll('th')).toHaveLength(11);
     expect(Array.from(tab.querySelectorAll('tfoot td')).reduce((n, td) => n + ((td as HTMLTableCellElement).colSpan || 1), 0)).toBe(11);
     for (const tr of Array.from(tab.querySelectorAll('tbody tr'))) expect(tr.querySelectorAll('td')).toHaveLength(11);
+  });
+});
+
+describe('OC-CC-PROGRAMAR-RECEBIMENTO-01 — o botão "Programar" volta à sub-aba conta', () => {
+  it('valorEmAberto: o que falta receber/pagar, em módulo; quitado, adiantado e aguardando saída não sugerem nada', () => {
+    expect(valorEmAberto({ saldo: -169500, situacao: 'falta_receber' })).toBe(169500);
+    expect(valorEmAberto({ saldo: 2000, situacao: 'falta_pagar' })).toBe(2000);
+    expect(valorEmAberto({ saldo: 0, situacao: 'quitado' })).toBeNull();
+    expect(valorEmAberto({ saldo: -500, situacao: 'adiantado' })).toBeNull();
+    expect(valorEmAberto({ saldo: 0, situacao: 'aguardando_saida' })).toBeNull();
+    expect(valorEmAberto(null)).toBeNull();
+  });
+
+  it('o botão existe antes do "Buscar" e abre o diálogo com o em aberto no Valor; na compra, "pagamento"', async () => {
+    const { unmount } = render(<AbaContaCorrenteOC api={api(cc())} somenteLeitura={false} />);
+    const botoes = within(screen.getByTestId('botoes-conta')).getAllByRole('button');
+    expect(botoes.map(b => b.textContent)).toEqual(['+ Programar recebimento', '+ Buscar recebimento no Financeiro']);
+    expect(botoes[0]).toBe(screen.getByTestId('botao-programar'));
+    expect(botoes[0].className).toBe(botoes[1].className);
+    fireEvent.click(screen.getByTestId('botao-programar'));
+    expect(await screen.findByText('Programar recebimento futuro')).toBeTruthy();
+    expect(screen.getByLabelText('Valor *')).toHaveProperty('value', '1.357,89');
+    unmount();
+
+    render(<AbaContaCorrenteOC api={api(cc({ saldo: 2000, situacao: 'falta_pagar' }))} somenteLeitura={false} lado="compra" />);
+    expect(screen.getByTestId('botao-programar').textContent).toBe('+ Programar pagamento');
+    fireEvent.click(screen.getByTestId('botao-programar'));
+    expect(await screen.findByText('Programar pagamento futuro')).toBeTruthy();
+    expect(screen.getByLabelText('Valor *')).toHaveProperty('value', '2.000,00');
+  });
+
+  it('somenteLeitura apaga o botão e o clique não abre nada', () => {
+    render(<AbaContaCorrenteOC api={api(cc())} somenteLeitura />);
+    const botao = screen.getByTestId('botao-programar') as HTMLButtonElement;
+    expect(botao.disabled).toBe(true);
+    fireEvent.click(botao);
+    expect(screen.queryByText('Programar recebimento futuro')).toBeNull();
+    expect(screen.queryByLabelText('Valor *')).toBeNull();
   });
 });
