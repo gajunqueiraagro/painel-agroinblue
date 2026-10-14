@@ -75,9 +75,10 @@ describe('OC-LISTA-LAYOUT-01 — colunas na ordem do processo', () => {
     expect(tds[9].textContent).toContain('S/ lanc.');
   });
 
-  it('colgroup: as larguras do briefing, o Tipo em 68 (decisao do Gabriel)', () => {
+  it('colgroup: as larguras do briefing, o Tipo em 68 (decisao do Gabriel); Comercializacao e Financeiro com o clipe', () => {
     const cols = [...FONTE.slice(FONTE.indexOf('<colgroup>'), FONTE.indexOf('</colgroup>')).matchAll(/<col className="w-\[(\d+)px\]"/g)].map(m => Number(m[1]));
-    expect(cols).toEqual([64, 56, 68, 34, 84, 66, 62, 96, 110, 74, 22]);
+    /* OC-LISTA-FINANC-CC-01 — +5 e +7 (o clipe de 10px + gap), tirados da Contraparte; o resto como em c80ed84a */
+    expect(cols).toEqual([64, 56, 68, 34, 84, 66, 62, 101, 117, 74, 22]);
   });
 });
 

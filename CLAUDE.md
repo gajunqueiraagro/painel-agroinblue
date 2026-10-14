@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 14/10/2026 (OC-SHELL-ROTULO-ALINHADO-01, +4: `src/components/shared/rotuloAlinhadoShells.test.tsx` 4 (novo) — 5140
+  Baseline em 14/10/2026 (OC-LISTA-FINANC-CC-01, +10: `src/components/operacao-comercial/central/centralFinancCC.test.tsx` 10
+  (novo) — 5150 depois dele; antes o OC-SHELL-ROTULO-ALINHADO-01, +4: `src/components/shared/rotuloAlinhadoShells.test.tsx` 4 (novo) — 5140
   depois dele; antes o OC-CC-TOTAL-LIQUIDO-01, +3 em `src/components/venda/contaCorrenteAbate.test.tsx` (17 -> 20) — 5136
   depois dele; antes o LOTE-PESO-CALC-01, +28: `src/components/compra/loteContaNoCampo.test.tsx` 23 (novo),
   `src/hooks/useCompraLotes.recusa.test.ts` 5 (4 -> 9) — 5133 depois dele; antes o OC-LOTE-FISICO-POS-SAIDA-01, +16:
@@ -311,7 +312,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5140
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5150
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3880,6 +3881,50 @@ docs/historico/frentes-ate-2026-09-29.md.)
   quem mexer num confere o outro. O selo do rodape (`SeloRegraDaLinha`) diz a regra da linha.
 
 ## REGRAS VIGENTES — OPERACAO COMERCIAL E FINANCEIRO
+- ⚠ A CENTRAL DE OCs LE^ CADA LINHA POR UMA FONTE SO', PELO MODELO DA OC (OC-LISTA-FINANC-CC-01, Gabriel 14/10/2026, banco + tela).
+  Nasce da Vera (filtro Abate): o abate 2d39d7e9, quitado na aba Financeiro, dizia "S/ lanc." / "Parcial"; 02be1a41 "−3.057
+  Parcial". As colunas Financeiro e Pagto liam as views do modelo TITULO (`vw_oc_operacao_compromissos_resumo`,
+  `vw_oc_operacao_liquidacao`), que nao olham `modelo_financeiro`: o "−3.057" eram as despesas da OC (Iagro + Fundersul), e o
+  "Parcial" era o bruto da entrega contra o recebido liquido (a diferenca = o Funrural).
+  · BANCO: `oc_conta_corrente_lote(p_cliente_id, p_operacao_ids uuid[]) -> jsonb` (migration
+    `supabase/migrations/20261027197700_oc_lista_financ_cc_01.sql`, md5 do arquivo 8468c194b8b3c1837f179f50dbb9545e — APLICADA no
+    proto em 14/10/2026 com o OK do Gabriel: ledger 20261014142257, ⚠ registrada com o timestamp do dia; ledger = arquivo por md5;
+    prosrc b5125bb434578c019f7beeddaea31ee3). SO' FUNCAO, SEM REGRA PROPRIA: por OC do cliente, `{modelo, envelope, docs_operacao,
+    docs_financeiro}`; `envelope` = `oc_conta_corrente(id) - 'linhas' - 'explicacoes' - 'despesas'` em conta corrente, nulo no
+    titulo; `docs_operacao` = documentos vivos da OC; `docs_financeiro` = documentos vivos dos lancamentos da OC (parte viva),
+    diretos ou por `financeiro_documento_vinculos`. STABLE, SECURITY INVOKER (como o dono), `tenant_ok` + 42501 (sem usuario
+    tambem), OC de outro cliente fora do retorno; GRANT a `authenticated` e `service_role`, `anon` sem EXECUTE.
+    Teste `supabase/tests/oc_lista_financ_cc_01_test.sql` (L1–L5): ensaiado revertido e de novo AO VIVO depois de aplicar, OK
+    com 193 OCs em conta corrente — o envelope do lote = o topo do dono em todas. Custo: o dono uma vez por OC (Agnaldo 36 em
+    244 ms, NJ 46 em 232 ms, Santa Rita 64 em 180 ms).
+  · TELA (`CentralOperacoesComerciais.tsx`; dono puro `src/lib/oc/listaContaCorrente.ts`, que NAO soma): uma chamada ao lote no
+    mesmo `Promise.all`. Linha com `modelo_financeiro = 'conta_corrente'` le' o dono; o resto (titulo, e fixture sem a coluna) segue
+    nas views, IDENTICO (provado com e sem o lote).
+    - FINANCEIRO (`financeiroDaLinhaCC`): o SALDO do dono no sinal da fazenda (`saldoNaTela`, cor `classeDoSaldoNaTela`) — o
+      liquido ja' esta' em Valor; quitado SEM numero. Pilula pela situacao: quitado "Liquidado" (sucesso), programado "Progr."
+      (neutro, `title` "Programado"), falta sem programacao "A receber" / "A pagar" na compra (atencao), `aguardando_saida`
+      "Aguard." (neutro), adiantado "Adiantado" (atencao forte). As despesas da OC NAO entram nessa coluna.
+    - PAGTO (`pagtoDaLinhaCC`): no vocabulario da view — quitado 'quitada' ("Paga"), adiantado 'excedente', recebido > 0 com falta
+      'parcial' (% = recebido ÷ liquido no `title`), nada recebido 'nao_liquidada' ("aguardando"). O mapa EFETIVO (`liqMap`, um
+      `useMemo` sobre a view crua `liqView`) alimenta a celula, o filtro "Pagamento", as opcoes e a ordenacao: o filtro nao
+      contradiz mais a coluna. O ponto ambar de despesa pendente segue vindo da view.
+    - CAB · KG: o kg pelos LOTES (`zoo_operacao_lotes`, somado por `totaisDosLotes`): `peso_total_negociado_kg` estava vazio nas
+      223 OCs vivas (so' o lote unico o gravava). O "Cab" (`qtd_negociada`) ja' batia com os lotes nas 223.
+    - CLIPE de 10px na Comercializacao (documentos da OC) e no Financeiro (documentos dos lancamentos), contagem no `title`
+      ("2 documentos da operação" / "1 documento no financeiro"); sem documento o lugar fica reservado. A REGUA: Comercializacao
+      96 -> 101 e Financeiro 110 -> 117, os 12px tirados da Contraparte (substitui as duas larguras do OC-LISTA-LAYOUT-01).
+      MEDIDO no Chromium (Playwright do repo, Inter carregada, replica da linha com os mesmos paddings e grades): Comercializacao
+      com as duas pilulas + clipe sem estouro (100 de 100); Financeiro com o pior numero real, 2.505.586 (45,7px numa caixa de 46),
+      e −396.975 sem estouro; Contraparte 137px numa tabela de 886 (177 em 926), o nome longo com reticencia.
+      ⚠ FOLGA DE 0,3px NO FINANCEIRO: numero maior que 2.505.586 corta.
+  Testes: `centralFinancCC.test.tsx` (10: o dono, os sete abates da Vera com o fixture REAL `listaFinancCC.fixture.json`, a linha
+  titulo igual com e sem o lote, kg multilote, o clipe); `centralListaLayout.test.tsx` trocado ao contrato novo (as duas larguras).
+  7 mutacoes mortas.
+  ⚠ FORA, NA FILA: o Resumo / PDF (`ResumoOperacoesModal`) segue lendo a view para OC em conta corrente (OC-LISTA-FINANC-CC-01b) ·
+    o `title` do ponto ambar ainda diz so' o valor ("Despesas pendentes: R$ X"), sem o nome de cada despesa — a view so' da' o
+    total; listar os nomes pede uma fonte — VAI PARA O 01b, junto com o Resumo / PDF (Gabriel, 14/10) · a Graxaria duplicada da c80ebe9e (73a183eb / 6b349b87, 5.056,00 cada) fica
+    sob OC-DESVINCULAR-01, sem correcao · NAO PROVADO NO NAVEGADOR (a lista real da Vera e a regua renderizada na tela; a medida
+    foi numa replica).
 - ⚠ ROTULO DE CAMPO AO LADO DE ROTULO FLEX TAMBEM E' FLEX (OC-SHELL-ROTULO-ALINHADO-01, Gabriel 14/10/2026, so' tela). O `Label` da casa
   e' um `<label>` INLINE: dentro de um `div` de bloco ele fica na caixa de linha do pai (a entrelinha do modal), e o `leading-none`
   dele nao a encolhe; o vizinho com `flex items-center gap-1` (o que leva o cadeado) tem so' a altura do texto. Resultado: o campo

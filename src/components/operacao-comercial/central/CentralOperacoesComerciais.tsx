@@ -24,11 +24,17 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
 import { DatePicker } from '@/components/ui/date-picker';
-import { MoreVertical, Search, Eye, Filter, Ban, ArrowUp, ArrowDown, Lock, Trash2, FileText } from 'lucide-react';
+import { MoreVertical, Search, Eye, Filter, Ban, ArrowUp, ArrowDown, Lock, Trash2, FileText, Paperclip } from 'lucide-react';
 import { ItemDeMenuOC } from '@/components/venda/AbaContaCorrenteOC';
 import { normalizarErroRpc } from '@/hooks/useOcCompromissos';
 import { useFiltroUrl } from '@/v2/hooks/useFiltroUrl';
 import { FILTRO_DESPESAS_PENDENTES, passaFiltroPagamento, temDespesaPendente, pctPagoPeloLado } from '@/lib/oc/estadoPeloLado';
+import {
+  lerLoteContaCorrente, ladoDaOC, pagtoDaLinhaCC, financeiroDaLinhaCC, fraseDosDocumentos,
+  type ResumoListaOC, type TomFinanceiroCC,
+} from '@/lib/oc/listaContaCorrente';
+import { classeDoSaldoNaTela } from '@/lib/oc/contaCorrente';
+import { totaisDosLotes } from '@/hooks/useCompraLotes';
 
 // Central de Operações Comerciais — PR-OC-CENTRAL-UX-01 (UX/operacional; sem backend novo).
 //   Lê em LOTE (ZERO N+1): operações + 3 views soberanas + nomes, filtradas por cliente, mapeadas por
@@ -47,7 +53,11 @@ interface OpRow {
   status_comercial: string; rascunho: boolean; entrega_encerrada: boolean;
   qtd_negociada: number | null; peso_total_negociado_kg: number | null;
   valor_acordado: number | null; valor_total: number | null;
+  /* OC-LISTA-FINANC-CC-01 — UMA FONTE POR MODELO: 'conta_corrente' le' o lote do dono; o resto (titulo, e fixture antigo sem a
+     coluna) segue nas views, como sempre. */
+  modelo_financeiro?: string | null;
 }
+interface LoteKgRow { operacao_id: string; qtd_negociada: number | null; peso_medio_negociado_kg: number | null; criterio_valor: string | null; valor_informado: number | null; }
 interface FinRow {
   operacao_id: string; modo: string; n_compromissos: number;
   obrigacao_total: number; total_programado: number; total_materializado: number; total_liquidado: number;
@@ -165,6 +175,19 @@ const TOM_SUCESSO = 'bg-success text-success-foreground';
 const TOM_ATENCAO = 'bg-warning text-warning-foreground';
 const TOM_ATENCAO_FORTE = 'bg-warning text-warning-foreground font-semibold ring-1 ring-warning-foreground/40';
 const TOM_NEUTRO = 'bg-muted text-muted-foreground';
+/* OC-LISTA-FINANC-CC-01 — o tom da pilula do Financeiro em conta corrente, pelas CORES QUE JA' EXISTEM (nenhuma nova). */
+const TOM_DO_FIN_CC: Record<TomFinanceiroCC, string> = {
+  sucesso: TOM_SUCESSO, neutro: TOM_NEUTRO, atencao: TOM_ATENCAO, atencao_forte: TOM_ATENCAO_FORTE,
+};
+/* O clipe: 10px, a contagem no `title`. Sem documento o LUGAR fica (a celula nao danca); vazio = sem icone. */
+function Clipe({ titulo, testid }: { titulo: string | null; testid: string }) {
+  if (!titulo) return <span className="inline-block w-[10px]" aria-hidden data-testid={`${testid}-vazio`} />;
+  return (
+    <span className="inline-flex w-[10px] items-center justify-center text-muted-foreground" title={titulo} data-testid={testid}>
+      <Paperclip className="h-2.5 w-2.5" />
+    </span>
+  );
+}
 
 /* Recebimento passou a falar a MESMA lingua de Comercial e Liquidacao. Era a
    unica coluna em cor literal (bg-slate/amber/emerald/rose/blue-100): duas
@@ -346,7 +369,7 @@ function ThOrd({ col, rotulo, ord, onOrdenar, direita, grupo }: {
   );
 }
 
-function BadgeComercial({ status, rascunho }: { status: string; rascunho: boolean }) {
+function BadgeComercial({ status, rascunho, docs }: { status: string; rascunho: boolean; docs: string | null }) {
   // Mesmos tokens da Liquidação, para os dois eixos se lerem juntos sem traduzir paleta.
   const cor =
     status === 'fechada' ? TOM_SUCESSO
@@ -359,11 +382,13 @@ function BadgeComercial({ status, rascunho }: { status: string; rascunho: boolea
      os dois numa pilula so' apagaria um dos dois. A grade fixa 44+34 faz a celula ter a mesma
      largura com e sem rascunho: nada pula ao ordenar ou filtrar. */
   return (
-    <span className="grid grid-cols-[44px_34px] items-center gap-1 whitespace-nowrap">
+    <span className="grid grid-cols-[44px_34px_10px] items-center gap-1 whitespace-nowrap">
       <span className={`${PILULA_FIXA} ${cor}`} title={status}>{label}</span>
       {rascunho
         ? <span className={`${PILULA_RASC} ${TOM_ATENCAO}`} title="Rascunho">Rasc.</span>
         : <span />}
+      {/* OC-LISTA-FINANC-CC-01 — o clipe dos documentos da OPERACAO */}
+      <Clipe titulo={docs} testid="clipe-operacao" />
     </span>
   );
 }
@@ -410,7 +435,11 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
   const [fazendas, setFazendas] = useState<Record<string, FazendaRef>>({});
   const [contrapartes, setContrapartes] = useState<Record<string, string>>({});
   const [finMap, setFinMap] = useState<Record<string, FinRow>>({});
-  const [liqMap, setLiqMap] = useState<Record<string, LiqRow>>({});
+  /* A view do modelo titulo, crua; quem le' e' o `liqMap` efetivo (abaixo), que troca a linha em conta corrente pelo dono. */
+  const [liqView, setLiqView] = useState<Record<string, LiqRow>>({});
+  /* OC-LISTA-FINANC-CC-01 — o lote do conta corrente (envelope do dono + contagens do clipe) e o kg pelos lotes. */
+  const [ccMap, setCcMap] = useState<Record<string, ResumoListaOC>>({});
+  const [kgMap, setKgMap] = useState<Record<string, number>>({});
   const [recMap, setRecMap] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(false);
 
@@ -492,12 +521,12 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
   //   filtradas pelos IDs da lista (nunca por cliente inteiro; nunca .in([]); nunca consulta no render/map).
   //   Requests FIXOS: 1 (lista) + até 5 (auxiliares) — independentes do nº de linhas.
   const carregar = useCallback(async () => {
-    if (!clienteId) { setRows([]); setFazendas({}); setContrapartes({}); setFinMap({}); setLiqMap({}); setRecMap({}); return; }
+    if (!clienteId) { setRows([]); setFazendas({}); setContrapartes({}); setFinMap({}); setLiqView({}); setRecMap({}); setCcMap({}); setKgMap({}); return; }
     setLoading(true);
     try {
       // FASE 1 — lista de operações (bounded por cliente + limit).
       const ops = await sb.from('zoo_operacoes_comerciais')
-        .select('id, versao, data_operacao, tipo_operacao, contraparte_id, fazenda_id, status_comercial, rascunho, entrega_encerrada, qtd_negociada, peso_total_negociado_kg, valor_acordado, valor_total')
+        .select('id, versao, data_operacao, tipo_operacao, contraparte_id, fazenda_id, status_comercial, rascunho, entrega_encerrada, qtd_negociada, peso_total_negociado_kg, valor_acordado, valor_total, modelo_financeiro')
         .eq('cliente_id', clienteId).order('data_operacao', { ascending: false }).limit(1000);
       if (ops?.error) throw new Error(ops.error.message);
       const operacoes = (ops.data as OpRow[] | null) ?? [];
@@ -505,14 +534,14 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
 
       const operacaoIds = operacoes.map(op => op.id);
       if (operacaoIds.length === 0) {
-        setFazendas({}); setContrapartes({}); setFinMap({}); setLiqMap({}); setRecMap({});
+        setFazendas({}); setContrapartes({}); setFinMap({}); setLiqView({}); setRecMap({}); setCcMap({}); setKgMap({});
         return;   // sem operações → mapas vazios, sem chamar as views com .in([])
       }
       const fazendaIds = Array.from(new Set(operacoes.map(o => o.fazenda_id).filter((v): v is string => !!v)));
       const contraparteIds = Array.from(new Set(operacoes.map(o => o.contraparte_id).filter((v): v is string => !!v)));
 
       // FASE 2 — auxiliares em lote, filtradas pelo CONJUNTO FECHADO de IDs da lista carregada.
-      const [faz, forn, fin, liq, rec] = await Promise.all([
+      const [faz, forn, fin, liq, rec, lotesKg, lote] = await Promise.all([
         fazendaIds.length ? sb.from('fazendas').select('id, nome, codigo').in('id', fazendaIds) : Promise.resolve({ data: [] }),
         contraparteIds.length ? sb.from('financeiro_fornecedores').select('id, nome').in('id', contraparteIds) : Promise.resolve({ data: [] }),
         sb.from('vw_oc_operacao_compromissos_resumo')
@@ -520,6 +549,8 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
           .eq('cliente_id', clienteId).in('operacao_id', operacaoIds),
         sb.from('vw_oc_operacao_liquidacao').select('operacao_id, estado_liquidacao, base, total_liquidado_valido, despesas_pendentes').eq('cliente_id', clienteId).in('operacao_id', operacaoIds),
         sb.from('vw_oc_lotes_recebimento').select('operacao_id, estado_recebimento').eq('cliente_id', clienteId).in('operacao_id', operacaoIds),
+        sb.from('zoo_operacao_lotes').select('operacao_id, qtd_negociada, peso_medio_negociado_kg, criterio_valor, valor_informado').in('operacao_id', operacaoIds),
+        sb.rpc('oc_conta_corrente_lote', { p_cliente_id: clienteId, p_operacao_ids: operacaoIds }),
       ]);
 
       const fmap: Record<string, FazendaRef> = {};
@@ -534,13 +565,27 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
       setFinMap(finmap);
       const liqmap: Record<string, LiqRow> = {};
       ((liq?.data as LiqRow[] | null) ?? []).forEach(x => { liqmap[x.operacao_id] = x; });
-      setLiqMap(liqmap);
+      setLiqView(liqmap);
       const recmap: Record<string, string[]> = {};
       ((rec?.data as RecLoteRow[] | null) ?? []).forEach(x => {
         if (!recmap[x.operacao_id]) recmap[x.operacao_id] = [];
         recmap[x.operacao_id].push(x.estado_recebimento);
       });
       setRecMap(recmap);
+      /* O kg pelos LOTES, pelo dono dos totais (`totaisDosLotes`): `peso_total_negociado_kg` da OC so' o lote unico gravava. */
+      const porOp: Record<string, LoteKgRow[]> = {};
+      ((lotesKg?.data as LoteKgRow[] | null) ?? []).forEach(l => { (porOp[l.operacao_id] ??= []).push(l); });
+      const kgmap: Record<string, number> = {};
+      Object.entries(porOp).forEach(([id, ls]) => {
+        kgmap[id] = totaisDosLotes(ls.map(l => ({
+          quantidade: String(l.qtd_negociada ?? ''), pesoMedioKg: String(l.peso_medio_negociado_kg ?? ''),
+          valorInformado: String(l.valor_informado ?? ''), criterioValor: l.criterio_valor,
+        }))).pesoTotal;
+      });
+      setKgMap(kgmap);
+      /* Falha do lote nao derruba a lista: as linhas caem no modelo titulo, como antes (o aviso vai ao toast da tela). */
+      if (lote?.error) toast.error(`Resumo do conta corrente indisponível: ${lote.error.message}`);
+      setCcMap(lote?.error ? {} : lerLoteContaCorrente(lote?.data));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Falha ao carregar operações.');
     } finally {
@@ -549,6 +594,27 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
   }, [clienteId]);
 
   useEffect(() => { carregar(); }, [carregar]);
+
+  /* OC-LISTA-FINANC-CC-01 — o PAGTO EFETIVO: a linha em conta corrente le' o dono (`pagtoDaLinhaCC`, no vocabulario da view),
+     a do modelo titulo segue na view. Celula, filtro "Pagamento", opcoes e ordenacao leem ESTE mapa — uma fonte so' por linha. */
+  const liqMap = useMemo(() => {
+    const m: Record<string, LiqRow> = { ...liqView };
+    rows.forEach(r => {
+      const cc = r.modelo_financeiro === 'conta_corrente' ? ccMap[r.id]?.cc : null;
+      const lado = ladoDaOC(r.tipo_operacao);
+      if (!cc || !lado) return;
+      const p = pagtoDaLinhaCC(cc, lado, liqView[r.id]?.despesas_pendentes);
+      m[r.id] = { operacao_id: r.id, estado_liquidacao: p.estado_liquidacao, base: p.base ?? null,
+        total_liquidado_valido: p.total_liquidado_valido ?? null, despesas_pendentes: p.despesas_pendentes ?? null };
+    });
+    return m;
+  }, [rows, ccMap, liqView]);
+  /* O Financeiro da linha em conta corrente (o saldo do dono e a pilula da situacao); nulo = a linha segue no modelo titulo. */
+  const finCC = (r: OpRow) => {
+    const cc = r.modelo_financeiro === 'conta_corrente' ? ccMap[r.id]?.cc : null;
+    const lado = ladoDaOC(r.tipo_operacao);
+    return cc && lado ? financeiroDaLinhaCC(cc, lado) : null;
+  };
 
   /* Opcoes derivadas do que FOI CARREGADO: lista
      fixa criaria opcao morta (estado que a base nao tem) e esconderia estado novo. */
@@ -638,7 +704,11 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
            negativo sao RESPOSTAS (entradas e saidas se anulando; compra consumindo caixa),
            e o antigo `> 0` as trataria como ausencia. Quem diz se ha figura financeira e'
            o nivel, nao o sinal do numero. */
-        case 'financeiro': { const f = finResumo(finMap[r.id]); return f && f.rotulo ? f.valor : null; }
+        case 'financeiro': {
+          const c = finCC(r);
+          if (c) return c.valor;
+          const f = finResumo(finMap[r.id]); return f && f.rotulo ? f.valor : null;
+        }
         case 'liquidacao': return posicao(ORD_LIQUIDACAO, liqMap[r.id]?.estado_liquidacao);
       }
     };
@@ -656,7 +726,8 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
         : String(ka).localeCompare(String(kb), 'pt-BR');
       return base * dir;
     });
-  }, [filtradas, ord, contrapartes, fazendas, finMap, liqMap, recMap]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `finCC` le' `ccMap`, que esta' na lista
+  }, [filtradas, ord, contrapartes, fazendas, finMap, liqMap, recMap, ccMap]);
 
   const totalPages = Math.max(1, Math.ceil(ordenadas.length / PAGE_SIZE));
   const pageSafe = Math.min(page, totalPages);
@@ -905,8 +976,9 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
                 (encerramento, nao chegada) e nao pode sumir para a coluna fechar. Os 10px saem
                 da Contraparte, que tem 283 e precisa de 130. */}
             <col className="w-[62px]" />{/* Entrega — pilula 44 + gap + cadeado 8 */}
-            <col className="w-[96px]" />{/* Comercializacao — pilula 44 + "Rasc." 34 + gap; o rotulo por extenso */}
-            <col className="w-[110px]" />{/* Financeiro — valor 58 + pilula 44 + gap */}
+            {/* OC-LISTA-FINANC-CC-01 — +5 e +7, tirados da Contraparte (a unica que estica), para o clipe de 10px + gap 4. */}
+            <col className="w-[101px]" />{/* Comercializacao — pilula 44 + "Rasc." 34 + clipe 10 + gaps */}
+            <col className="w-[117px]" />{/* Financeiro — valor + pilula 44 + clipe 10 + gaps */}
             <col className="w-[74px]" />{/* Pagto — pilula 44, ou "aguardando" + o ponto */}
             <col className="w-[22px]" />{/* Ações */}
           </colgroup>
@@ -943,6 +1015,9 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
             {!loading && pageRows.map(r => {
               const rec = recStatus(recMap[r.id]);
               const fin = finResumo(finMap[r.id]);
+              const cc = finCC(r);
+              const docsFin = fraseDosDocumentos(ccMap[r.id]?.docsFinanceiro ?? 0, 'financeiro');
+              const kgLotes = kgMap[r.id] ?? 0;
               const valorOp = r.valor_acordado ?? r.valor_total ?? 0;
               return (
                 <TableRow key={r.id}
@@ -971,8 +1046,9 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
                         a altura da tabela inteira. O "cab" saiu do numero — o cabecalho ja' diz. */}
                     <span className="whitespace-nowrap">
                       <span>{r.qtd_negociada != null ? r.qtd_negociada : '—'}</span>
-                      {r.peso_total_negociado_kg != null && r.peso_total_negociado_kg > 0 && (
-                        <span className="text-muted-foreground">{' · '}{kg(r.peso_total_negociado_kg)} kg</span>
+                      {/* OC-LISTA-FINANC-CC-01 — o kg pelos LOTES (`totaisDosLotes`); o campo da OC so' o lote unico gravava. */}
+                      {kgLotes > 0 && (
+                        <span className="text-muted-foreground">{' · '}{kg(kgLotes)} kg</span>
                       )}
                     </span>
                   </TableCell>
@@ -998,12 +1074,25 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
                       )}
                     </span>
                   </TableCell>
-                  <TableCell className={TD_PIL}><BadgeComercial status={r.status_comercial} rascunho={r.rascunho} /></TableCell>
+                  <TableCell className={TD_PIL}><BadgeComercial status={r.status_comercial} rascunho={r.rascunho}
+                    docs={fraseDosDocumentos(ccMap[r.id]?.docsOperacao ?? 0, 'operacao')} /></TableCell>
                   <TableCell className={`${TD} whitespace-nowrap overflow-hidden ${DIV_GRUPO}`}>
                     {/* ⚠ GRADE, NÃO `inline-flex`: em linha, a pílula começava onde o valor
                         terminava e a coluna inteira parecia desalinhada. Valor à direita do seu
                         espaço, pílula numa faixa fixa — o olho desce a coluna em linha reta. */}
-                    {fin && fin.rotulo
+                    {cc
+                      ? (
+                        /* OC-LISTA-FINANC-CC-01 — conta corrente: o SALDO do dono (o liquido ja' esta' em Valor); quitado sem numero. */
+                        <span className="grid grid-cols-[1fr_44px_10px] items-center gap-1 whitespace-nowrap" data-testid="fin-cc">
+                          <span className={`text-right tabular-nums font-medium ${cc.valor == null ? '' : classeDoSaldoNaTela(cc.valor)}`}
+                            title={cc.valor == null ? undefined : brlCent(cc.valor)}>
+                            {cc.valor == null ? '' : num0(cc.valor)}
+                          </span>
+                          <span className={`${PILULA_FIXA} ${TOM_DO_FIN_CC[cc.tom]}`} title={cc.titulo}>{cc.pilula}</span>
+                          <Clipe titulo={docsFin} testid="clipe-financeiro" />
+                        </span>
+                      )
+                      : fin && fin.rotulo
                       ? (() => {
                           const est = liqMap[r.id]?.estado_liquidacao;
                           const pilula = est === 'parcial'
@@ -1012,12 +1101,13 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
                               ? { texto: FIN_CURTO.liquidado, tom: TOM_SUCESSO }
                               : { texto: FIN_CURTO[fin.rotulo] ?? fin.rotulo, tom: TOM_NEUTRO };
                           return (
-                            <span className="grid grid-cols-[1fr_44px] items-center gap-1 whitespace-nowrap">
+                            <span className="grid grid-cols-[1fr_44px_10px] items-center gap-1 whitespace-nowrap">
                               <span className={`text-right tabular-nums font-medium ${fin.valor < 0 ? 'text-destructive' : 'text-success'}`}
                                 title={brlCent(fin.valor)}>
                                 {num0(fin.valor)}
                               </span>
                               <span className={`${PILULA_FIXA} ${pilula.tom}`}>{pilula.texto}</span>
+                              <Clipe titulo={docsFin} testid="clipe-financeiro" />
                             </span>
                           );
                         })()
@@ -1025,9 +1115,10 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
                         /* ⚠ "S/ lanc." E' DO EIXO FINANCEIRO, nao do pagamento: ela diz que a
                            operacao nao tem compromisso NENHUM, o que e' diferente de ter e nao
                            ter pago. Sem ela, as duas ausencias virariam a mesma celula vazia. */
-                        <span className="grid grid-cols-[1fr_44px] items-center gap-1 whitespace-nowrap">
+                        <span className="grid grid-cols-[1fr_44px_10px] items-center gap-1 whitespace-nowrap">
                           <span />
                           <span className={`${PILULA_FIXA} ${TOM_NEUTRO}`} title="Sem lançamento financeiro">S/ lanc.</span>
+                          <Clipe titulo={docsFin} testid="clipe-financeiro" />
                         </span>
                       )}
                   </TableCell>

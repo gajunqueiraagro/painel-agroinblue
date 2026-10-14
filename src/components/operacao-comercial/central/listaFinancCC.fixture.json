@@ -1,0 +1,375 @@
+{
+ "_origem": "proto, 14/10/2026: oc_conta_corrente_lote e as duas views do modelo titulo, cliente Vera (so ids e numeros)",
+ "ops": [
+  {
+   "id": "02be1a41-6d1d-4f6d-9d73-387cd758658c",
+   "tipo": "abate",
+   "data": "2026-09-02",
+   "cab": 70,
+   "acordado": 367783.4
+  },
+  {
+   "id": "26fd02c1-c700-411c-9239-53b0df468560",
+   "tipo": "abate",
+   "data": "2026-10-13",
+   "cab": 36,
+   "acordado": 212449.03
+  },
+  {
+   "id": "2d39d7e9-6c58-42dd-abef-ea0484edd504",
+   "tipo": "abate",
+   "data": "2026-09-02",
+   "cab": 18,
+   "acordado": 103006.06
+  },
+  {
+   "id": "48972205-4a83-4792-b7b5-d197d595cfc9",
+   "tipo": "abate",
+   "data": "2025-01-22",
+   "cab": 1,
+   "acordado": 5453
+  },
+  {
+   "id": "6336c7fc-b8b5-4fd6-b985-0bd97ae8d738",
+   "tipo": "abate",
+   "data": "2025-01-23",
+   "cab": 28,
+   "acordado": 147380.11
+  },
+  {
+   "id": "c80ebe9e-e00e-48c6-a7bd-9af27e4f6362",
+   "tipo": "abate",
+   "data": "2025-01-17",
+   "cab": 20,
+   "acordado": 102311.46
+  },
+  {
+   "id": "f93f1a2b-0b4a-452b-8095-9ebcec355139",
+   "tipo": "abate",
+   "data": "2024-08-04",
+   "cab": 48,
+   "acordado": 174629.27
+  }
+ ],
+ "lote": {
+  "02be1a41-6d1d-4f6d-9d73-387cd758658c": {
+   "modelo": "conta_corrente",
+   "envelope": {
+    "modelo": "conta_corrente",
+    "entregue": 373877.6,
+    "deduzido": 6094.2,
+    "recebido": 367783.4,
+    "programado": 0,
+    "saldo": 0,
+    "situacao": "quitado",
+    "valor_acordado": 367783.4,
+    "devolvido": 0,
+    "explicado": 0,
+    "a_entregar": 0,
+    "cab_entregue": 70
+   },
+   "docs_operacao": 11,
+   "docs_financeiro": 0
+  },
+  "26fd02c1-c700-411c-9239-53b0df468560": {
+   "modelo": "conta_corrente",
+   "envelope": {
+    "modelo": "conta_corrente",
+    "entregue": 215969.33,
+    "deduzido": 3520.3,
+    "recebido": 0,
+    "programado": 212449.03,
+    "saldo": -212449.03,
+    "situacao": "falta_receber",
+    "valor_acordado": 212449.03,
+    "devolvido": 0,
+    "explicado": 0,
+    "a_entregar": 0,
+    "cab_entregue": 36
+   },
+   "docs_operacao": 3,
+   "docs_financeiro": 0
+  },
+  "2d39d7e9-6c58-42dd-abef-ea0484edd504": {
+   "modelo": "conta_corrente",
+   "envelope": {
+    "modelo": "conta_corrente",
+    "entregue": 104712.87,
+    "deduzido": 1706.81,
+    "recebido": 103006.06,
+    "programado": 0,
+    "saldo": 0,
+    "situacao": "quitado",
+    "valor_acordado": 103006.06,
+    "devolvido": 0,
+    "explicado": 0,
+    "a_entregar": 0,
+    "cab_entregue": 18
+   },
+   "docs_operacao": 4,
+   "docs_financeiro": 0
+  },
+  "48972205-4a83-4792-b7b5-d197d595cfc9": {
+   "modelo": "conta_corrente",
+   "envelope": {
+    "modelo": "conta_corrente",
+    "entregue": 5453,
+    "deduzido": 0,
+    "recebido": 5453,
+    "programado": 0,
+    "saldo": 0,
+    "situacao": "quitado",
+    "valor_acordado": 5453,
+    "devolvido": 0,
+    "explicado": 0,
+    "a_entregar": 0,
+    "cab_entregue": 1
+   },
+   "docs_operacao": 0,
+   "docs_financeiro": 0
+  },
+  "6336c7fc-b8b5-4fd6-b985-0bd97ae8d738": {
+   "modelo": "conta_corrente",
+   "envelope": {
+    "modelo": "conta_corrente",
+    "entregue": 149624.48,
+    "deduzido": 2244.37,
+    "recebido": 147380.11,
+    "programado": 0,
+    "saldo": 0,
+    "situacao": "quitado",
+    "valor_acordado": 147380.11,
+    "devolvido": 0,
+    "explicado": 0,
+    "a_entregar": 0,
+    "cab_entregue": 28
+   },
+   "docs_operacao": 5,
+   "docs_financeiro": 0
+  },
+  "c80ebe9e-e00e-48c6-a7bd-9af27e4f6362": {
+   "modelo": "conta_corrente",
+   "envelope": {
+    "modelo": "conta_corrente",
+    "entregue": 103869.5,
+    "deduzido": 1558.04,
+    "recebido": 102311.46,
+    "programado": 0,
+    "saldo": 0,
+    "situacao": "quitado",
+    "valor_acordado": 102311.46,
+    "devolvido": 0,
+    "explicado": 0,
+    "a_entregar": 0,
+    "cab_entregue": 20
+   },
+   "docs_operacao": 1,
+   "docs_financeiro": 0
+  },
+  "f93f1a2b-0b4a-452b-8095-9ebcec355139": {
+   "modelo": "conta_corrente",
+   "envelope": {
+    "modelo": "conta_corrente",
+    "entregue": 177288.6,
+    "deduzido": 2659.33,
+    "recebido": 174629.27,
+    "programado": 0,
+    "saldo": 0,
+    "situacao": "quitado",
+    "valor_acordado": 174629.27,
+    "devolvido": 0,
+    "explicado": 0,
+    "a_entregar": 0,
+    "cab_entregue": 48
+   },
+   "docs_operacao": 2,
+   "docs_financeiro": 0
+  }
+ },
+ "vw_oc_operacao_compromissos_resumo": [
+  {
+   "operacao_id": "02be1a41-6d1d-4f6d-9d73-387cd758658c",
+   "modo": "misto_inconsistente",
+   "n_compromissos": 2,
+   "obrigacao_total": 3057.06,
+   "total_programado": 3057.06,
+   "total_materializado": 3057.06,
+   "total_liquidado": 3057.06,
+   "tem_compromissos": true,
+   "tem_partes_legadas": true,
+   "entrada_obrigacao": 0,
+   "saida_obrigacao": 3057.06,
+   "entrada_liquidado": 0,
+   "saida_liquidado": 3057.06,
+   "entrada_materializado": 0,
+   "saida_materializado": 3057.06,
+   "entrada_programado": 0,
+   "saida_programado": 3057.06
+  },
+  {
+   "operacao_id": "26fd02c1-c700-411c-9239-53b0df468560",
+   "modo": "misto_inconsistente",
+   "n_compromissos": 2,
+   "obrigacao_total": 0,
+   "total_programado": 0,
+   "total_materializado": 0,
+   "total_liquidado": 0,
+   "tem_compromissos": true,
+   "tem_partes_legadas": true,
+   "entrada_obrigacao": 0,
+   "saida_obrigacao": 0,
+   "entrada_liquidado": 0,
+   "saida_liquidado": 0,
+   "entrada_materializado": 0,
+   "saida_materializado": 0,
+   "entrada_programado": 0,
+   "saida_programado": 0
+  },
+  {
+   "operacao_id": "2d39d7e9-6c58-42dd-abef-ea0484edd504",
+   "modo": "misto_inconsistente",
+   "n_compromissos": 2,
+   "obrigacao_total": 0,
+   "total_programado": 0,
+   "total_materializado": 0,
+   "total_liquidado": 0,
+   "tem_compromissos": true,
+   "tem_partes_legadas": true,
+   "entrada_obrigacao": 0,
+   "saida_obrigacao": 0,
+   "entrada_liquidado": 0,
+   "saida_liquidado": 0,
+   "entrada_materializado": 0,
+   "saida_materializado": 0,
+   "entrada_programado": 0,
+   "saida_programado": 0
+  },
+  {
+   "operacao_id": "48972205-4a83-4792-b7b5-d197d595cfc9",
+   "modo": "misto_inconsistente",
+   "n_compromissos": 2,
+   "obrigacao_total": 0,
+   "total_programado": 0,
+   "total_materializado": 0,
+   "total_liquidado": 0,
+   "tem_compromissos": true,
+   "tem_partes_legadas": true,
+   "entrada_obrigacao": 0,
+   "saida_obrigacao": 0,
+   "entrada_liquidado": 0,
+   "saida_liquidado": 0,
+   "entrada_materializado": 0,
+   "saida_materializado": 0,
+   "entrada_programado": 0,
+   "saida_programado": 0
+  },
+  {
+   "operacao_id": "6336c7fc-b8b5-4fd6-b985-0bd97ae8d738",
+   "modo": "misto_inconsistente",
+   "n_compromissos": 2,
+   "obrigacao_total": 1080.85,
+   "total_programado": 1080.85,
+   "total_materializado": 1080.85,
+   "total_liquidado": 1080.85,
+   "tem_compromissos": true,
+   "tem_partes_legadas": true,
+   "entrada_obrigacao": 0,
+   "saida_obrigacao": 1080.85,
+   "entrada_liquidado": 0,
+   "saida_liquidado": 1080.85,
+   "entrada_materializado": 0,
+   "saida_materializado": 1080.85,
+   "entrada_programado": 0,
+   "saida_programado": 1080.85
+  },
+  {
+   "operacao_id": "c80ebe9e-e00e-48c6-a7bd-9af27e4f6362",
+   "modo": "misto_inconsistente",
+   "n_compromissos": 2,
+   "obrigacao_total": 10828.83,
+   "total_programado": 10828.83,
+   "total_materializado": 5772.83,
+   "total_liquidado": 5772.83,
+   "tem_compromissos": true,
+   "tem_partes_legadas": true,
+   "entrada_obrigacao": 5056,
+   "saida_obrigacao": 5772.83,
+   "entrada_liquidado": 0,
+   "saida_liquidado": 5772.83,
+   "entrada_materializado": 0,
+   "saida_materializado": 5772.83,
+   "entrada_programado": 5056,
+   "saida_programado": 5772.83
+  },
+  {
+   "operacao_id": "f93f1a2b-0b4a-452b-8095-9ebcec355139",
+   "modo": "misto_inconsistente",
+   "n_compromissos": 2,
+   "obrigacao_total": 541.84,
+   "total_programado": 541.84,
+   "total_materializado": 541.84,
+   "total_liquidado": 541.84,
+   "tem_compromissos": true,
+   "tem_partes_legadas": true,
+   "entrada_obrigacao": 0,
+   "saida_obrigacao": 541.84,
+   "entrada_liquidado": 0,
+   "saida_liquidado": 541.84,
+   "entrada_materializado": 0,
+   "saida_materializado": 541.84,
+   "entrada_programado": 0,
+   "saida_programado": 541.84
+  }
+ ],
+ "vw_oc_operacao_liquidacao": [
+  {
+   "operacao_id": "02be1a41-6d1d-4f6d-9d73-387cd758658c",
+   "estado_liquidacao": "parcial",
+   "base": 373877.6,
+   "total_liquidado_valido": 367783.4,
+   "despesas_pendentes": null
+  },
+  {
+   "operacao_id": "26fd02c1-c700-411c-9239-53b0df468560",
+   "estado_liquidacao": "nao_liquidada",
+   "base": 215969.33,
+   "total_liquidado_valido": 0,
+   "despesas_pendentes": null
+  },
+  {
+   "operacao_id": "2d39d7e9-6c58-42dd-abef-ea0484edd504",
+   "estado_liquidacao": "parcial",
+   "base": 104712.87,
+   "total_liquidado_valido": 103006.06,
+   "despesas_pendentes": null
+  },
+  {
+   "operacao_id": "48972205-4a83-4792-b7b5-d197d595cfc9",
+   "estado_liquidacao": "quitada",
+   "base": 5453,
+   "total_liquidado_valido": 5453,
+   "despesas_pendentes": null
+  },
+  {
+   "operacao_id": "6336c7fc-b8b5-4fd6-b985-0bd97ae8d738",
+   "estado_liquidacao": "parcial",
+   "base": 149624.48,
+   "total_liquidado_valido": 147380.11,
+   "despesas_pendentes": null
+  },
+  {
+   "operacao_id": "c80ebe9e-e00e-48c6-a7bd-9af27e4f6362",
+   "estado_liquidacao": "parcial",
+   "base": 103869.5,
+   "total_liquidado_valido": 102311.46,
+   "despesas_pendentes": null
+  },
+  {
+   "operacao_id": "f93f1a2b-0b4a-452b-8095-9ebcec355139",
+   "estado_liquidacao": "parcial",
+   "base": 177288.6,
+   "total_liquidado_valido": 174629.27,
+   "despesas_pendentes": null
+  }
+ ]
+}
