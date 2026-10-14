@@ -1,6 +1,7 @@
 -- OC-CC-ABATE-01 PR 1 — o abate no modelo conta corrente: entrega pelo BRUTO, Funrural como deducao filha, saldo fecha no liquido.
 -- Sintetico no cliente Teste (OCs construidas pelas RPCs reais), numa transacao revertida; termina em RAISE 'OK …'.
--- Compara com `is distinct from`, nunca `<>`. O modelo e' levado a 'conta_corrente' por UPDATE direto SO' AQUI (o nascimento nao muda neste PR).
+-- Compara com `is distinct from`, nunca `<>`. Desde o PR 3 (14/10/2026) o abate NASCE em conta corrente; o UPDATE do B3 ficou
+-- como rede (nao muda nada) e o preparo e o fecho conferem o nascimento novo.
 --   B1 helpers: direcao / verbo / conta da entrega para abate; _oc_subcentro_abate nas 13 categorias e NULL fora; venda e compra iguais
 --   B2 _oc_cc_valor_entrega_do_lote: bruto = liquido + Funrural no abate; = total em lote de venda; Funrural em % e' recusado
 --   B3 saida registrada: entrega 107.384,74 em Abates de Fêmeas + deducao Funrural 209,77 em 5030, as duas sem caixa e no DRE;
@@ -48,7 +49,7 @@ begin
   if n <> 0 or public._oc_subcentro_abate('categoria_x') is not null or public._oc_subcentro_abate(null) is not null then
     raise exception 'B1 femeas / fora do mapa'; end if;
 
-  -- a OC de abate do mock: 18 vacas, liquido 107.174,97, Funrural 209,77 — NASCE titulo (o nascimento nao muda neste PR)
+  -- a OC de abate do mock: 18 vacas, liquido 107.174,97, Funrural 209,77 — NASCE conta corrente (OC-CC-ABATE-01 PR 3)
   x := public.oc_salvar_rascunho(null, k, null, fp || '{"tipo_operacao": "abate"}'); oa := (x->>'operacao_id')::uuid;
   x := public.oc_salvar_lotes(oa, k, (x->>'versao')::int,
          '[{"ordem": 1, "categoria_negociada": "vacas", "qtd_negociada": 18, "peso_medio_negociado_kg": 450, "criterio_valor": "kg"}]');
@@ -58,10 +59,10 @@ begin
          'operacao_lote_id', la, 'peso_carcaca_kg', 4320, 'peso_carcaca_fonte', 'total', 'rendimento_carcaca_pct', 53, 'preco_arroba', 372.86, 'preco_fonte', 'arroba',
          'funrural_valor', 209.77, 'funrural_fonte', 'reais', 'valor_liquido', 107174.97)));
   select versao into v_real from zoo_operacoes_comerciais where id = oa;
-  if (select modelo_financeiro from zoo_operacoes_comerciais where id = oa) is distinct from 'titulo'
+  if (select modelo_financeiro from zoo_operacoes_comerciais where id = oa) is distinct from 'conta_corrente'
      or (select rascunho from zoo_operacoes_comerciais where id = oa) is distinct from false
      or (x->>'versao')::int is distinct from v_real or v_real is distinct from v_antes + 1 then
-    raise exception 'preparo: o abate nasce titulo, sai do rascunho e a versao devolvida e'' a gravada (% · gravada % · antes %)', x->>'versao', v_real, v_antes; end if;
+    raise exception 'preparo: o abate nasce conta corrente, sai do rascunho e a versao devolvida e'' a gravada (% · gravada % · antes %)', x->>'versao', v_real, v_antes; end if;
 
   -- B2
   ve := public._oc_cc_valor_entrega_do_lote(la);
@@ -247,8 +248,9 @@ begin
   if has_function_privilege('authenticated', 'public._oc_cc_deducao_sincronizar(uuid, uuid, uuid, text, numeric, date, uuid, text, uuid)', 'EXECUTE')
      or has_function_privilege('authenticated', 'public._oc_cc_valor_entrega_do_lote(uuid)', 'EXECUTE')
      or has_function_privilege('authenticated', 'public._oc_subcentro_abate(text)', 'EXECUTE') then raise exception 'interna aberta a authenticated'; end if;
-  if (select md5(prosrc) from pg_proc where proname = '_oc_modelo_ao_nascer' and pronamespace = 'public'::regnamespace) is distinct from 'c0e1056252382f4abbc5edf8b5604b4f'
-     or public._oc_modelo_ao_nascer('abate', false) is distinct from 'titulo' then raise exception 'o nascimento mudou'; end if;
+  -- OC-CC-ABATE-01 PR 3: o nascimento mudou de proposito (c0e10562… -> d4bbf320…); o abate nasce em conta corrente
+  if (select md5(prosrc) from pg_proc where proname = '_oc_modelo_ao_nascer' and pronamespace = 'public'::regnamespace) is distinct from 'd4bbf3204ddc9f8e8911e2d2c1578e11'
+     or public._oc_modelo_ao_nascer('abate', false) is distinct from 'conta_corrente' then raise exception 'o nascimento nao e'' o do PR 3'; end if;
   raise exception 'OK oc_cc_abate_01_banco (B1-B8; % OCs reais de venda/compra conferidas no B8)', v_antes;
 end $teste$;
 ROLLBACK;

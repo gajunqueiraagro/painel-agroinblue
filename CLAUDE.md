@@ -749,7 +749,9 @@ CONSULTAM: a lateral (`V2Sidebar`, por `gruposVisiveis`), o drawer (`V2ContextDr
 - Fechadas por ultimo: OC-CONTA-CORRENTE-TODOS-01a (75cdd7ba), OC-CC-CLASSIFICACAO-01 (28a72522), FIN-V2-HOMOLOG-FIX-01 (6ed7e148).
 - Banco proto: aplicado ate' `20261027174000_fin_v2_homolog_fix_01.sql` (ledger 20260929105928), incluindo os dados da 173100; as migrations parked (2026080312*, 2026081312*/13*) nao sao desta fila.
 - Proxima frente: FIN-NFE-PARCELAS-01.
-- Fila: PR 2 conta corrente do ABATE; migracao das OCs existentes para conta corrente; criar-do-legado para abate/compra; 105 abates do modal antigo.
+- Fila: [conta corrente do ABATE FECHADA no OC-CC-ABATE-01 PR 2 e PR 3 (14/10/2026): 34 abates migrados; a 1645ba75 do NJ segue em titulo
+  ate' registrar a saida] · migracao das OCs existentes para conta corrente (vendas e compras restantes) · criar-do-legado para abate ·
+  105 abates do modal antigo.
 
 ## FILA E DIVIDAS ABERTAS
 Indice. O texto integral, com as medicoes, esta' em docs/DIVIDAS-ABERTAS.md; as que nasceram dentro de uma frente
@@ -3963,9 +3965,39 @@ docs/historico/frentes-ate-2026-09-29.md.)
     compra e abate no modo OC no navegador (so' a venda) · o aviso ambar e a recusa da simulacao na tela (so' por teste) · o
     botao apagado por principal coberto, na tela (so' por teste) · o parcelado no modo OC montado em teste · a janela REAL de
     1000 x 800 (foi um quadro dentro da pagina) · perfil nao admin.
+- ⚠ O ABATE NASCE EM CONTA CORRENTE E OS ABATES MIGRARAM (OC-CC-ABATE-01 PR 3, Gabriel 14/10/2026, banco + dado; nenhum `src` mudou).
+  Migration `supabase/migrations/20261027197500_oc_cc_abate_01_pr3_nascimento.sql` (md5 do arquivo 54c2878ac58fc4dc639d171176b284cf) —
+  APLICADA no proto em 14/10/2026, com o GO do Gabriel: ledger 20261014101931 (⚠ registrada com o timestamp do dia; ledger = arquivo
+  por md5 54c2878a…). So' `CREATE OR REPLACE` de funcao, patch guardado por md5; nenhum DDL em tabela, nenhum dado pela migration.
+  · A REGRA VIGENTE: o UNICO dono do modelo ao nascer, `_oc_modelo_ao_nascer(tipo, boitel)` (c0e10562… -> d4bbf3204ddc9f8e8911e2d2c1578e11),
+    manda venda, compra E ABATE sem boitel para 'conta_corrente'; boitel e tipo desconhecido seguem 'titulo'. ACL, IMMUTABLE e
+    search_path iguais (postgres e service_role; `authenticated` e `anon` nao executam). `oc_salvar_rascunho` (51489be1…) NAO mudou:
+    ja' chamava o dono com `p_boitel` false. Isto REVOGA, para o abate, o "abate e boitel em titulo" do OC-CC-PADRAO-NOVAS-01a.
+  · A MIGRACAO (14/10/2026, pelo MCP, uma OC por transacao, simulando de novo imediatamente antes e so' gravando com a simulacao
+    igual a' do passo 0 — DRE antes, diferenca, entrega, recebido, deducao, saldo, partes — e sem aviso novo): 34 abates em
+    `oc_migrar_para_conta_corrente`. 33 quitados com saldo 0 e `dre_bate` (os de set/26 primeiro: Vera 02be1a41 e 2d39d7e9, Agnaldo
+    c5bb32e5); a 26fd02c1 (Vera, 13/10) por ultimo e sozinha, depois de o Gabriel tê-la trabalhado no dia (passou a ter titulo
+    programado): `dre_bate` verdadeiro, entrega 215.969,33, deducao 3.520,30, programado 212.449,03, saldo −212.449,03 (falta receber).
+    DRE por cliente e mes das 35 OCs, antes x depois: IDENTICO nas 22 linhas (o bruto entra e o Funrural sai: o liquido nao muda).
+    0 recusadas. ⚠ NAO EXISTE GESTO CONTRARIO: a trilha e' o evento 'migrar_para_conta_corrente' com o relatorio.
+  · FICA EM TITULO: a 1645ba75 (NJ, 14/10) ate' registrar a saida (sem saida a migracao recusa: "Registre a saida dos animais antes
+    de migrar"). Depois: abate em conta corrente 34, em titulo 1 viva.
+  · TESTES: `supabase/tests/oc_cc_abate_01_pr3_test.sql` (N1 abate nasce cc com o evento; N2 venda/compra iguais, boitel e
+    desconhecido titulo, o dono fechado; N3 abate em titulo migrado: entrega BRUTA, deducao Funrural, `deduzido`, saldo 0, `dre_bate`;
+    N4 Funrural em % recusado; N5 sem saida recusado). 3 mutacoes mortas (abate titulo -> N1; boitel em cc -> N2; sem a recusa do %
+    -> N4). ATUALIZADOS AO CONTRATO NOVO, sem afrouxar: `oc_cc_padrao_novas_01a` (R3 e o dono: abate nasce cc) e
+    `oc_cc_abate_01_banco` (o preparo espera cc; o fecho confere d4bbf320…). No vivo, inteiros e conferidos por md5 contra o disco:
+    pr3, padrao_novas_01a e 01b, titulo_para_cc_01a, abate_01_banco (antes e depois da migracao, 157 OCs no B8) e
+    seg_tenant_varredura_01c.
+  · O M1 DE `oc_titulo_para_cc_01a_test.sql` E' SINTETICO (o abate nasce pelas RPCs e vai a titulo por UPDATE so' no teste): depois
+    da migracao nao sobra abate em titulo para molde.
+  ⚠ DIVIDA OC-TITULO-PARA-CC-MOLDE-COMPRA-01: M2–M7 do mesmo teste ainda copiam uma COMPRA REAL em titulo (`pg_temp.oc`, 1 lote e
+    1 saida) como molde; se as compras em titulo acabarem, eles caem com "sem operacao compra de molde". Trocar por OC sintetica.
+  ⚠ HOMOLOGACAO RUNTIME PENDENTE (Gabriel): a tela do PR 2 se prova com a Vera 02be1a41 — aba Financeiro = extrato com Entrega
+    (bruto 373.877,60), Dedução Funrural (6.094,20), Recebimento e saldo; resumo lateral com "Funrural retido".
 - ⚠ A TELA DO CONTA CORRENTE FALA ABATE (OC-CC-ABATE-01 PR 2, Gabriel 14/10/2026, so' tela — sem migration, sem RPC nova, sem dado).
-  ⚠ HOMOLOGACAO RUNTIME PENDENTE: nenhum abate esta' em conta corrente ate' o PR 3 — a tela se prova com o primeiro abate migrado
-  (Vera 02be1a41). Nos 34 abates em 'titulo' a RPC devolve modelo 'titulo' e a aba segue na `AbaCompromissosOC`, como antes.
+  ⚠ HOMOLOGACAO RUNTIME PENDENTE: [no PR 3, 14/10, 34 abates migraram e o abate novo nasce em conta corrente — ver a regra logo
+  acima] a tela se prova com o primeiro abate migrado (Vera 02be1a41).
   · O QUARTO TIPO DE LINHA, 'deducao' (`src/lib/oc/contaCorrente.ts`): o leitor a conhece (`tipoLinhaDe` nao a rebaixa mais a
     recebimento), o componente vem em `componente` (o `subtipo` do banco; so' na deducao) e a chave `deduzido` do envelope vira `cc.deduzido` —
     SO' quando o banco a manda (`'deduzido' in r`); fora do abate e' null, nunca zero inventado. Descricao = `rotuloDeducao`
@@ -4000,7 +4032,7 @@ docs/historico/frentes-ate-2026-09-29.md.)
   E MIGRACAO NO PR 3 (OC-CC-ABATE-01 PR 1, Gabriel 12–13/10/2026, SO' BANCO, so' funcoes — nenhum DDL em tabela, nenhum dado tocado).
   Migration `supabase/migrations/20261027197300_oc_cc_abate_01_banco.sql` (md5 do arquivo 20afe6fa74c4e970617985a5f4a8398c) — APLICADA no
   proto em 13/10/2026, com o GO do Gabriel: ledger 20261013144026 (⚠ registrada com o timestamp do dia; ledger = arquivo por md5
-  20afe6fa…). ⚠ HOMOLOGACAO RUNTIME PENDENTE: nenhuma tela usa isto (o abate segue nascendo 'titulo'; a tela e' o PR 2).
+  20afe6fa…). ⚠ HOMOLOGACAO RUNTIME PENDENTE: [a tela veio no PR 2 e o nascimento e a migracao no PR 3 — ver as regras logo acima].
   · A REGRA: o BRUTO da entrega = base + bonus − descontos = `valor_liquido + funrural_valor` do realizado (`zoo_operacao_abate`).
     Desconto de qualidade, outros descontos e bonus ficam DENTRO do preco: NAO sao deducao. A UNICA DEDUCAO QUE NASCE DO ABATE E' O
     FUNRURAL: linha filha da entrega, SEM CAIXA, 2-Saídas em 5030 "Impostos e Despesas de Abates e Vendas", no DRE, mesma data /
@@ -4019,7 +4051,7 @@ docs/historico/frentes-ate-2026-09-29.md.)
     `oc_recebimentos_vinculaveis` 69cddd2c -> 99ca6d99 · `oc_programar_recebimento` b7ed17a5 -> 92815a47 · `oc_salvar_lotes` 80de84d1 ->
     3232b0a4 · `oc_desfazer_explicacao` 6bbca887 -> c9c4082f · `oc_explicar_saldo` 2557f40b -> 70073353 ·
     `oc_migrar_para_conta_corrente` 22b24acb -> e3dae96c · `oc_salvar_abate` 4f78bb5e -> d8052ef6 · `oc_sincronizar_entregas` 91cdb5f8 ->
-    73ccdc3c · `oc_conta_corrente` 578c1c66 -> 6cae1d83. `_oc_modelo_ao_nascer` INTOCADA (c0e10562…). Os 18 md5 e a ACL conferidos no
+    73ccdc3c · `oc_conta_corrente` 578c1c66 -> 6cae1d83. `_oc_modelo_ao_nascer` intocada no PR 1 (c0e10562…) — MUDOU NO PR 3 (d4bbf320…). Os 18 md5 e a ACL conferidos no
     banco vivo depois de aplicar.
   · O QUE MUDA: os helpers, o gancho, o vincular, os vinculaveis, o programar e o `oc_salvar_lotes` aceitam 'abate' ao lado de 'venda'
     (`oc_vincular_lancamento` desvia para `_oc_vincular_recebimento` tambem no abate, com 1-Entradas). `oc_sincronizar_entregas`: A
@@ -4370,7 +4402,8 @@ docs/historico/frentes-ate-2026-09-29.md.)
     PROGRAMADO (7 de 8 parcelas, as 3 comissoes e os 3 fretes, em 12/10): "pague primeiro" e a recusa do adotar ("financeiro
     programado do modal antigo") os deixam de fora ate' serem pagos · a chave `destino` do envelope carrega a origem na compra
     (nome herdado) · `oc_criar_do_legado_sugestoes` segue INVOKER sem guarda de tenant no corpo (depende da RLS, como era).
-- ⚠ VENDA E COMPRA NOVAS NASCEM EM CONTA CORRENTE; ABATE E BOITEL EM TITULO, E A REGRA TEM UM DONO (OC-CC-PADRAO-NOVAS-01a, Gabriel
+- ⚠ [ABATE: REVOGADO no OC-CC-ABATE-01 PR 3 (14/10/2026) — o abate tambem nasce em conta corrente; boitel segue em titulo.]
+  VENDA E COMPRA NOVAS NASCEM EM CONTA CORRENTE; ABATE E BOITEL EM TITULO, E A REGRA TEM UM DONO (OC-CC-PADRAO-NOVAS-01a, Gabriel
   12/10/2026, so' banco; migration `20261027196800_oc_cc_padrao_novas_01a.sql`, md5 do arquivo 0d2c4412ea4f0fcf936390d35e5ebb6b —
   APLICADA no proto em 12/10/2026, com o GO do Gabriel: ledger `supabase_migrations.schema_migrations` versao 20261012121855, nome
   `oc_cc_padrao_novas_01a` (⚠ registrada com o timestamp do dia; ledger = arquivo por md5); R1–R7 e o

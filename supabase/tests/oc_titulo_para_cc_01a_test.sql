@@ -2,7 +2,7 @@
 -- Roda como `postgres`, DEPOIS da migration 20261027196600, e TERMINA EM RAISE: nada fica no banco.
 -- Sucesso = a excecao final comeca com "OK". Tudo sintetico no cliente Teste (43f32d07); a operacao, o lote e a saida do gado sao
 -- copiados de uma compra real SO' NA ESTRUTURA (cliente e fazenda sao os do Teste; sem contraparte). Comparacoes com IS DISTINCT FROM.
--- M1 abate: recusa.   M2 operacao ja' em conta corrente: recusa.   M3 compra fechada SEM saida de gado: recusa (D3).
+-- M1 abate sem saida: recusa (abate SINTETICO pelas RPCs, sem molde real — OC-CC-ABATE-01 PR 3).   M2 operacao ja' em conta corrente: recusa.   M3 compra fechada SEM saida de gado: recusa (D3).
 -- M4 sem usuario: 42501.
 -- M5 SIMULACAO nao grava: partes, liquidacoes, parcelas, eventos e as linhas dos lancamentos identicos antes x depois; o relatorio
 --    vem no MESSAGE (compra de 2 parcelas pagas de 45.500 e lote de 91.000: dre_bate, saldo 0, quitado).
@@ -88,13 +88,25 @@ create function pg_temp.foto(p_op uuid) returns text language sql as $f$
 
 do $teste$
 declare
-  a uuid; b uuid; c uuid; d uuid; v_t text; v_f text; r jsonb; v_ok text := ''; v_l uuid[]; v_antes jsonb; v_depois jsonb;
+  a uuid; b uuid; c uuid; d uuid; v_t text; v_f text; r jsonb; v_ok text := ''; v_l uuid[]; v_antes jsonb; v_depois jsonb; x jsonb;
   c_fora constant text[] := array['updated_at', 'updated_by', 'compoe_dre'];
 begin
   perform set_config('request.jwt.claims', json_build_object('sub', '7bd0b6ad-2527-4be1-af58-f2cc0c0edd8e', 'role', 'authenticated')::text, true);
 
   -- §M1 a M3: as guardas
-  a := pg_temp.oc('abate', '{}', 1000, false);
+  -- M1: o abate nasce pelas RPCs (desde o PR 3 ele nasce em conta corrente; o UPDATE o leva a titulo SO' AQUI), com lote e sem saida.
+  -- Nao copia OC real: depois da migracao dos abates (PR 3, passo 2) pode nao sobrar abate em titulo para servir de molde.
+  x := public.oc_salvar_rascunho(null, '43f32d07-dba8-4670-900c-bf645440c04a', null, jsonb_build_object('tipo_operacao', 'abate',
+         'fazenda_id', 'c2498ace-8478-410c-a697-d3f2e2934d1f', 'data_operacao', '2031-03-10',
+         'contraparte_id', (select id from financeiro_fornecedores where cliente_id = '43f32d07-dba8-4670-900c-bf645440c04a' and ativo order by created_at limit 1)));
+  a := (x->>'operacao_id')::uuid;
+  update zoo_operacoes_comerciais set modelo_financeiro = 'titulo' where id = a;
+  x := public.oc_salvar_lotes(a, '43f32d07-dba8-4670-900c-bf645440c04a', (select versao from zoo_operacoes_comerciais where id = a),
+         '[{"ordem": 1, "categoria_negociada": "vacas", "qtd_negociada": 10, "peso_medio_negociado_kg": 450, "criterio_valor": "total", "valor_informado": 1000}]');
+  if (select modelo_financeiro from zoo_operacoes_comerciais where id = a) is distinct from 'titulo'
+     or (select rascunho from zoo_operacoes_comerciais where id = a) is distinct from false
+     or not exists (select 1 from zoo_operacao_lotes z where z.operacao_id = a) then
+    raise exception 'M1 preparo: o abate sintetico deveria estar em titulo, fora de rascunho e com lote'; end if;
   v_t := pg_temp.rec(format('select oc_migrar_para_conta_corrente(%L, true)::text', a));
   if v_t is distinct from 'P0001 Registre a saida dos animais antes de migrar' then raise exception 'M1 abate: %', v_t; end if;
   b := pg_temp.oc('compra', array[500], 500, true);

@@ -1,8 +1,9 @@
--- OC-CC-PADRAO-NOVAS-01a — venda e compra novas nascem em conta corrente; abate e boitel em titulo.
+-- OC-CC-PADRAO-NOVAS-01a — venda e compra novas nascem em conta corrente; boitel em titulo.
+-- OC-CC-ABATE-01 PR 3 (14/10/2026): o abate passou a nascer em conta corrente — o R3 e o dono foram atualizados ao contrato novo.
 -- Sintetico no cliente Teste, numa transacao revertida; termina em RAISE 'OK …'. Compara com `is distinct from`, nunca `<>`.
 --   R1 venda nova nasce 'conta_corrente', com o evento 'definir_modelo_financeiro' (de nulo para o valor)
 --   R2 compra nova: idem
---   R3 abate novo nasce 'titulo' (o evento diz 'titulo')
+--   R3 abate novo nasce 'conta_corrente' (o evento diz 'conta_corrente') — OC-CC-ABATE-01 PR 3
 --   R4 marcar boitel numa venda em conta corrente sem nada vivo: vira 'titulo', com o evento, e a versao devolvida e' a gravada
 --   R5 marcar boitel numa venda em conta corrente com recebimento vivo: recusa P0001 com a frase; nada muda
 --   R6 salvar de novo um rascunho que ja' existe NAO mexe no modelo nem repete o evento
@@ -47,7 +48,7 @@ begin
   ab := (x->>'operacao_id')::uuid;
   select o.modelo_financeiro m, (select e.dados_novos->>'modelo_financeiro' from zoo_operacao_eventos e where e.operacao_id = o.id and e.acao = 'definir_modelo_financeiro') para
     into q from zoo_operacoes_comerciais o where o.id = ab;
-  if q.m is distinct from 'titulo' or q.para is distinct from 'titulo' then raise exception 'R3 abate: % / %', q.m, q.para; end if;
+  if q.m is distinct from 'conta_corrente' or q.para is distinct from 'conta_corrente' then raise exception 'R3 abate: % / %', q.m, q.para; end if;
 
   -- R7 (a): nada saiu e nada foi pago
   if public.oc_conta_corrente(a)->>'situacao' is distinct from 'aguardando_saida' then
@@ -96,7 +97,7 @@ begin
 
   -- o dono, e a ACL
   if public._oc_modelo_ao_nascer('venda', false) is distinct from 'conta_corrente' or public._oc_modelo_ao_nascer('compra', false) is distinct from 'conta_corrente'
-     or public._oc_modelo_ao_nascer('venda', true) is distinct from 'titulo' or public._oc_modelo_ao_nascer('abate', false) is distinct from 'titulo'
+     or public._oc_modelo_ao_nascer('venda', true) is distinct from 'titulo' or public._oc_modelo_ao_nascer('abate', false) is distinct from 'conta_corrente'
      or public._oc_modelo_ao_nascer(null, null) is distinct from 'titulo' then raise exception 'dono: tabela errada'; end if;
   if has_function_privilege('authenticated', 'public._oc_modelo_ao_nascer(text, boolean)', 'EXECUTE') then raise exception 'dono aberto a authenticated'; end if;
 
