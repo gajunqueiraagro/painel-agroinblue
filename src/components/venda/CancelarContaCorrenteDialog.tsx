@@ -34,6 +34,12 @@ const TEXTOS: Record<LadoContaCorrente, { entregas: string; recebimentos: string
     saidas: 'Entradas adotadas desvinculadas (o gado continua no zootécnico)',
     rodape: 'Nenhum título é apagado; valor, datas, conta bancária e conciliação dos pagamentos não mudam. O dinheiro saiu de verdade: sem a OC, cada pagamento volta a ser uma compra comum no DRE, na conta em que está.',
   },
+  /* OC-CC-ABATE-01 PR 2 — so' para o tipo fechar; o cancelar do abate e' do PR 3. */
+  abate: {
+    entregas: 'Entregas canceladas (saem do DRE)', recebimentos: 'Recebimentos que saem da OC (voltam a compor o DRE como venda)',
+    saidas: 'Saídas adotadas desvinculadas (o gado continua no zootécnico)',
+    rodape: 'Nenhum título é apagado; valor, datas, conta bancária e conciliação dos recebimentos não mudam. O dinheiro entrou de verdade: sem a OC, cada recebimento volta a ser um abate comum no DRE, na conta em que está.',
+  },
 };
 
 /* No nivel do modulo: declarado dentro do componente, cada render criaria um tipo novo e remontaria a lista

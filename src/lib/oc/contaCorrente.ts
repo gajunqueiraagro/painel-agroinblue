@@ -7,7 +7,7 @@
  * ⚠ O SALDO E' DO BANCO (`oc_conta_corrente`), linha a linha e no fim. Esta lib so' le o envelope e o sinal; nao soma regra.
  */
 
-export type TipoLinhaContaCorrente = 'entrega' | 'recebimento' | 'explicacao';
+export type TipoLinhaContaCorrente = 'entrega' | 'recebimento' | 'explicacao' | 'deducao';
 export type TipoExplicacao = 'ajuste_preco' | 'desconto_comercial' | 'permuta_despesa' | 'outra_receita' | 'devolucao_comprador';
 /** D6: sem conta bancaria nunca aparece como conciliado. */
 export type StatusLinhaContaCorrente =
@@ -15,8 +15,8 @@ export type StatusLinhaContaCorrente =
 /** 'falta_pagar' so' na compra (OC-CONTA-CORRENTE-TODOS-01a): o extrato da compra e' o espelho do da venda. */
 /** 'aguardando_saida' (OC-CC-PADRAO-NOVAS-01a/01b): a OC nasceu em conta corrente e ainda nao tem entrega nem recebimento. */
 export type SituacaoContaCorrente = 'falta_receber' | 'falta_pagar' | 'adiantado' | 'quitado' | 'aguardando_saida';
-/** De que lado da operacao a conta corrente fala: a venda recebe do comprador, a compra paga ao fornecedor. */
-export type LadoContaCorrente = 'venda' | 'compra';
+/** De que lado da operacao a conta corrente fala: a venda recebe do comprador, a compra paga ao fornecedor, o abate recebe do frigorifico. */
+export type LadoContaCorrente = 'venda' | 'compra' | 'abate';
 
 /** Despesa da operacao (frete, comissao, ICMS): titulo comum pago a terceiro, FORA do saldo. Venda e compra (OC-CRIAR-DO-LEGADO-01b). */
 export interface DespesaOperacao {
@@ -37,6 +37,8 @@ export interface DespesaOperacao {
 export interface LinhaContaCorrente {
   tipo: TipoLinhaContaCorrente;
   subtipo: TipoExplicacao | null;
+  /** OC-CC-ABATE-01 PR 2 — so' na linha 'deducao': o componente que o banco manda em `subtipo` ('funrural'). */
+  componente: string | null;
   data: string;
   parteId: string;
   lancamentoId: string | null;
@@ -89,6 +91,8 @@ export interface ContaCorrente {
   faltaExplicar: number;
   situacao: SituacaoContaCorrente;
   aEntregar: number;
+  /** OC-CC-ABATE-01 PR 2 — a chave `deduzido` SO' EXISTE no abate; fora dele, null (nunca zero inventado). */
+  deduzido: number | null;
   ultimaEntrega: string | null;
   recebimentosSemContaBancaria: number;
   saidasSemEntrega: number;
@@ -122,7 +126,7 @@ function situacaoDe(v: unknown): SituacaoContaCorrente {
   return v === 'falta_receber' || v === 'falta_pagar' || v === 'adiantado' || v === 'aguardando_saida' ? v : 'quitado';
 }
 function tipoLinhaDe(v: unknown): TipoLinhaContaCorrente {
-  return v === 'entrega' || v === 'explicacao' ? v : 'recebimento';
+  return v === 'entrega' || v === 'explicacao' || v === 'deducao' ? v : 'recebimento';
 }
 
 /** Le o jsonb de `oc_conta_corrente`. Campo fora do contrato cai no neutro, nunca inventa numero. */
@@ -148,6 +152,7 @@ export function lerContaCorrente(raw: unknown): ContaCorrente | null {
     faltaExplicar: num(r.falta_explicar),
     situacao: situacaoDe(r.situacao),
     aEntregar: num(r.a_entregar),
+    deduzido: 'deduzido' in r ? num(r.deduzido) : null,
     ultimaEntrega: texto(r.ultima_entrega),
     recebimentosSemContaBancaria: num(r.recebimentos_sem_conta_bancaria),
     saidasSemEntrega: num(r.saidas_sem_entrega),
@@ -156,6 +161,7 @@ export function lerContaCorrente(raw: unknown): ContaCorrente | null {
       return {
         tipo: tipoLinhaDe(l.tipo),
         subtipo: tipoExplicacaoDe(l.subtipo),
+        componente: l.tipo === 'deducao' ? texto(l.subtipo) : null,
         data: String(l.data ?? ''),
         parteId: String(l.parte_id ?? ''),
         lancamentoId: texto(l.lancamento_id),
@@ -236,6 +242,9 @@ export function rotuloDoSaldo(saldo: number, lado: LadoContaCorrente = 'venda', 
   if (lado === 'compra') {
     return c === 'pos' ? 'Saldo · falta pagar' : c === 'neg' ? 'Saldo · adiantado ao fornecedor' : 'Saldo · quitado';
   }
+  if (lado === 'abate') {
+    return c === 'neg' ? 'Saldo · falta receber' : c === 'pos' ? 'Saldo · adiantado pelo frigorífico' : 'Saldo · quitado';
+  }
   return c === 'neg' ? 'Saldo · falta receber' : c === 'pos' ? 'Saldo · adiantado pelo comprador' : 'Saldo · quitado';
 }
 
@@ -292,11 +301,14 @@ export function rotuloRecebimento(linhas: readonly LinhaContaCorrente[], parteId
 export const TIPOS_EXPLICACAO_DO_LADO: Record<LadoContaCorrente, readonly TipoExplicacao[]> = {
   venda: ['ajuste_preco', 'desconto_comercial', 'permuta_despesa', 'outra_receita', 'devolucao_comprador'],
   compra: ['ajuste_preco', 'permuta_despesa', 'devolucao_comprador'],
+  /* No abate o preco se corrige no acerto (aba Abate): o banco recusa 'ajuste_preco' (OC-CC-ABATE-01). */
+  abate: ['desconto_comercial', 'permuta_despesa', 'outra_receita', 'devolucao_comprador'],
 };
 
 /** O nome da explicacao na tela. A devolucao da contraparte e' um componente so' no banco; o rotulo segue o lado. */
 export function rotuloExplicacao(tipo: TipoExplicacao, lado: LadoContaCorrente = 'venda'): string {
   if (lado === 'compra' && tipo === 'devolucao_comprador') return 'Devolução do fornecedor';
+  if (lado === 'abate' && tipo === 'devolucao_comprador') return 'Devolução do frigorífico';
   return ROTULO_EXPLICACAO[tipo];
 }
 
@@ -436,6 +448,12 @@ export function rotuloCurtoExplicacao(tipo: TipoExplicacao, lado: LadoContaCorre
   return ROTULO_EXPLICACAO_CURTO[tipo];
 }
 
+/** OC-CC-ABATE-01 PR 2 — a deducao do abate na Descricao (texto gerado, uma linha). */
+const ROTULO_DEDUCAO: Record<string, string> = { funrural: 'Funrural' };
+export function rotuloDeducao(componente: string | null): string {
+  return (componente && ROTULO_DEDUCAO[componente]) || 'Dedução';
+}
+
 /**
  * A Descricao de cada linha do extrato — UM lugar, nao a celula. Entrega: a categoria ("Desmama M"; o Evento ja' diz Entrega e a
  * Conta diz Venda/Compra — "Compra Desmama M" pedia 99,3px para 92). Recebimento: "Receb. 2/4". Explicacao: o nome curto.
@@ -444,6 +462,7 @@ export function rotuloCurtoExplicacao(tipo: TipoExplicacao, lado: LadoContaCorre
 export function descricaoDoEvento(l: LinhaContaCorrente, linhas: readonly LinhaContaCorrente[], lado: LadoContaCorrente,
   rotuloCategoria: (slug: string | null) => string): string {
   if (l.tipo === 'entrega') return rotuloCategoria(l.categoria);
+  if (l.tipo === 'deducao') return rotuloDeducao(l.componente);
   if (l.tipo === 'recebimento') return rotuloRecebimento(linhas, l.parteId, lado);
   return l.subtipo ? rotuloCurtoExplicacao(l.subtipo, lado) : 'Explicação';
 }

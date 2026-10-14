@@ -464,7 +464,9 @@ describe('a ligacao: o hospedeiro le uma vez e desce por prop; ninguem pergunta 
       .toContain('motivoAtualizarEntregas={api.ocRascunho ? MOTIVO_ATUALIZAR_EM_RASCUNHO : acessoOC.atualizar_entregas ? null : MOTIVO_SEM_CAPACIDADE}');
     expect(fonte('src/components/venda/VendaModalShell.tsx'))
       .toContain('motivoAtualizarEntregas={ocRascunho ? MOTIVO_ATUALIZAR_EM_RASCUNHO : acessoOC.atualizar_entregas ? null : MOTIVO_SEM_CAPACIDADE}');
-    expect(fonte('src/components/abate/AbateModalShell.tsx')).toContain('motivoAtualizarEntregas={acessoOC.atualizar_entregas ? null : MOTIVO_SEM_CAPACIDADE}');
+    /* OC-CC-ABATE-01 PR 2 — o abate entrou no mesmo desenho: o rascunho primeiro, depois a celula do dono */
+    expect(fonte('src/components/abate/AbateModalShell.tsx'))
+      .toContain('motivoAtualizarEntregas={ocRascunho ? MOTIVO_ATUALIZAR_EM_RASCUNHO : acessoOC.atualizar_entregas ? null : MOTIVO_SEM_CAPACIDADE}');
   });
   it('nenhum `if` de perfil nos pontos de uso: so o dono compara perfil', () => {
     const arquivos = [

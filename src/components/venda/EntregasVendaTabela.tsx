@@ -30,6 +30,7 @@ const TEXTOS: Record<LadoContaCorrente, {
 }> = {
   venda: { mov: 'saída', movs: 'saídas', Mov: 'Saída', valor: 'Valor da entrega', contraparte: nome => ` para ${nome} ou sem comprador gravado` },
   compra: { mov: 'entrada', movs: 'entradas', Mov: 'Entrada', valor: 'Valor da entrada', contraparte: nome => ` de ${nome} ou sem fornecedor gravado` },
+  abate: { mov: 'saída', movs: 'saídas', Mov: 'Saída', valor: 'Valor da entrega', contraparte: nome => ` para ${nome} ou sem frigorífico gravado` },
 };
 
 function origemDoLancamento(s: SaidaAdotavel): string {

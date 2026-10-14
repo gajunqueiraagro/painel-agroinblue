@@ -6226,6 +6226,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           clienteId={clienteAtual?.id ?? null}
           numeroDocumento={notaFiscal || null}
           semAlteracoes={ocStatusComercial === 'fechada' ? !ocDadosSujos : ocAbateSemAlteracoes}
+          ocRascunho={ocRascunho}
           onNovoFrigorifico={() => setNovoFornecedorCompraOpen(true)}
           abateFazendaId={abateFazendaId} setAbateFazendaId={setAbateFazendaId}
           fazendasOC={fazendasOC}

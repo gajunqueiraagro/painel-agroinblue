@@ -58,6 +58,8 @@ import { AbaAuditoriaOC } from '@/components/compra/AbaAuditoriaOC';
 import { AbaRecebimentoLotes } from '@/components/compra/AbaRecebimentoLotes';
 import { AbaFinanceiroOC } from '@/components/compra/AbaFinanceiroOC';
 import { useOcCompromissos } from '@/hooks/useOcCompromissos';
+import { useOcContaCorrente } from '@/hooks/useOcContaCorrente';
+import { corDoSaldo, COR_SINAL, MOTIVO_ATUALIZAR_EM_RASCUNHO, rotuloDoSaldo } from '@/lib/oc/contaCorrente';
 import type { ReactNode } from 'react';
 import type { LinhaPrevisao, RotulosCompromissos } from '@/components/compra/AbaCompromissosOC';
 import { siglaCategoria } from '@/lib/financeiro/produtoOC';
@@ -179,6 +181,8 @@ export interface AbateModalShellProps {
   acessoOC?: AcessoOperacao;
   onOcVersaoChange?: (v: number) => void;
   ocStatusComercial: string | null;
+  /** OC-CC-ABATE-01 PR 2 — OC em rascunho: "Atualizar entregas" fica apagado (o banco recusa). O pai sabe. */
+  ocRascunho?: boolean;
   /** Lotes da negociação — o mesmo hook da compra, que opera sobre `zoo_operacao_lotes`. */
   lotesApi?: CompraLotesApi;
   /* ─── OS DOIS CENARIOS — mesmo desenho do boitel na venda ────────────────────
@@ -246,7 +250,7 @@ export function AbateModalShell({
   data, setData, frigorificoId, setFrigorificoId, contrapartes, clienteId, onNovoFrigorifico,
   abateFazendaId, setAbateFazendaId, fazendasOC,
   observacao, setObservacao, numeroDocumento,
-  ocOperacaoId, ocVersao, onOcVersaoChange, ocStatusComercial, lotesApi, exclusaoLoteOC = null,
+  ocOperacaoId, ocVersao, ocRascunho = false, onOcVersaoChange, ocStatusComercial, lotesApi, exclusaoLoteOC = null,
   onReabrirLoteParaEditar = null,
   abateApi, abateLinhas, onAbateLinhaChange,
   cenarioAbate = 'projetado', onCenarioAbateChange, onIniciarRealizado,
@@ -462,6 +466,15 @@ export function AbateModalShell({
     versao: ocVersao ?? null,
     onVersaoChange: onOcVersaoChange ?? (() => {}),
   });
+  /* OC-CC-ABATE-01 PR 2 — a conta corrente sobe para ca', como na venda: o resumo lateral e a aba leem UMA instancia. */
+  const ccApi = useOcContaCorrente({
+    operacaoId: ocOperacaoId ?? null,
+    enabled: !!ocOperacaoId,
+    versao: ocVersao ?? null,
+    onVersaoChange: onOcVersaoChange ?? (() => {}),
+    aoMudarLotes: lotesApi?.recarregar,
+  });
+  const cc = ccApi.contaCorrente?.modelo === 'conta_corrente' ? ccApi.contaCorrente : null;
   const fin = ocCompromissosApi.resumoOperacao;
   const temFin = !!fin && fin.temCompromissos;
   /* ⚠ AS TRES LINHAS PRECISAM FECHAR ENTRE SI. "A receber" mostrava `obrigacao −
@@ -881,12 +894,15 @@ export function AbateModalShell({
               <div className="space-y-2">
               {/* As mesmas três linhas do resumo lateral, e pela mesma fonte — a view, que
                   resolve o sentido pelo plano de contas. */}
+              {/* OC-CC-ABATE-01 PR 2 — com conta corrente a aba tem os cinco cards proprios; em 'titulo' nada muda. */}
+              {!cc && (
               <BlocoTopoAba escala="modal" itens={[
                 { rotulo: 'A receber', valor: finAReceber == null ? null : formatMoeda(finAReceber) },
                 { rotulo: 'Recebido', valor: finRecebido == null ? null : formatMoeda(finRecebido) },
                 { rotulo: 'Falta receber', valor: finFaltaReceber == null ? null : formatMoeda(finFaltaReceber),
                   contexto: finAReceber == null ? 'grava ao concluir a negociação' : null },
               ]} />
+              )}
               {/* ⚠ A MESMA ABA DA COMPRA. Medido na FASE 0: ela e' tipo-agnostica por desenho
                   — `planoTipo` vira '1-Entradas' numa venda, a descricao ja sai "Venda 110 G"
                   pelo `verboOC`, e o filtro de centro de custo da compra se desliga sozinho.
@@ -899,11 +915,15 @@ export function AbateModalShell({
                 darkSelectClass=""
                 financeiroLegadoReadOnly={ocStatusComercial === 'cancelada'}
                 financeiroNovoReadOnly={ocStatusComercial === 'cancelada'}
-                motivoAtualizarEntregas={acessoOC.atualizar_entregas ? null : MOTIVO_SEM_CAPACIDADE}
+                motivoAtualizarEntregas={ocRascunho ? MOTIVO_ATUALIZAR_EM_RASCUNHO : acessoOC.atualizar_entregas ? null : MOTIVO_SEM_CAPACIDADE}
                 operacaoId={ocOperacaoId}
                 clienteId={liquidacaoApi.clienteId ?? null}
                 /* A instancia que o resumo lateral ja monta — uma leitura, dois consumidores. */
                 ocApiExterno={ocCompromissosApi}
+                ccApiExterno={ccApi}
+                ocVersao={ocVersao}
+                onOcVersaoChange={onOcVersaoChange}
+                onIrParaEntrega={() => setAbaAtiva('entrega')}
                 dataOperacao={data}
                 linhasPrevisao={linhasPrevisao}
                 rotulos={rotulosCompromissos}
@@ -1200,6 +1220,16 @@ export function AbateModalShell({
                   da mesma regra. Por isso as despesas aparecem pelo TOTAL: quebra-las por
                   nome (frete, Fundersul, Iagro) exige o plano de contas linha a linha, que
                   hoje so' a aba Financeiro carrega. */}
+              {/* OC-CC-ABATE-01 PR 2 — com conta corrente o resumo le' o `cc` do banco (4 linhas, zero aritmetica). */}
+              {cc ? (
+                <div className="" data-testid="resumo-cc-abate">
+                  <LinhaResumo rotulo="Entregue · bruto" valor={formatMoeda(cc.entregue)} />
+                  <LinhaResumo rotulo="Funrural retido" valor={cc.deduzido == null ? null : formatMoeda(cc.deduzido)} />
+                  <LinhaResumo rotulo="Recebido" valor={formatMoeda(cc.recebido)} cor={cc.recebido > 0 ? COR_SINAL.pos : undefined} />
+                  <LinhaResumo rotulo={rotuloDoSaldo(cc.saldo, 'abate', cc.situacao)} forte valor={formatMoeda(cc.saldo)}
+                    cor={corDoSaldo(cc.saldo) === 'neg' ? COR_SINAL.neg : corDoSaldo(cc.saldo) === 'pos' ? COR_SINAL.pos : undefined} />
+                </div>
+              ) : (
               <div className="">
                 {/* ⚠ A CAUSA VEM NA MESMA LINHA, à esquerda do traço: embaixo ela virava
                     uma linha inteira de altura para dizer meia frase. */}
@@ -1232,6 +1262,7 @@ export function AbateModalShell({
                     valor={formatMoeda(finLiquidoProdutor / totaisAbate.arrobas)} />
                 )}
               </div>
+              )}
           </AsideResumo>
         </div>
       </div>

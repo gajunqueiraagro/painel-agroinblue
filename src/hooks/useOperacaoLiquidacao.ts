@@ -71,9 +71,11 @@ export function subcentroVendaPorCategoria(categoria: string, temBoitel = false)
  * existe para consertar depois. Categoria fora do mapa e' erro de cadastro, e erro de
  * cadastro se mostra na hora.
  */
-const SEXO_POR_CATEGORIA: Record<string, 'macho' | 'femea'> = {
-  mamotes_m: 'macho', desmama_m: 'macho', garrotes: 'macho', bois: 'macho', touros: 'macho',
-  mamotes_f: 'femea', desmama_f: 'femea', novilhas: 'femea', vacas: 'femea',
+/* ⚠ ESPELHO DECLARADO de `_oc_subcentro_abate` (banco, OC-CC-ABATE-01): quem mudar um, muda o outro — preso por teste que
+   le' a migration (`contaCorrenteAbate.test.tsx`). */
+export const SEXO_POR_CATEGORIA: Record<string, 'macho' | 'femea'> = {
+  mamotes_m: 'macho', desmama_m: 'macho', bezerros_m: 'macho', garrotes: 'macho', bois: 'macho', touros: 'macho', machos_adultos: 'macho',
+  mamotes_f: 'femea', desmama_f: 'femea', bezerras_f: 'femea', novilhas: 'femea', vacas: 'femea', femeas_adultas: 'femea',
 };
 export const SUBCENTRO_ABATE_MACHOS = 'Abates de Machos';
 export const SUBCENTRO_ABATE_FEMEAS = 'Abates de Fêmeas';

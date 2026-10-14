@@ -96,8 +96,9 @@ export function AbaFinanceiroOC(props: Props) {
      das partes. Hook sempre chamado; so' liga na venda. */
   const ccApiProprio = useOcContaCorrente({
     operacaoId: operacaoId ?? null,
-    /* OC-CONTA-CORRENTE-TODOS-01a — a compra tambem pode estar em conta corrente (o abate e' o PR 2). */
-    enabled: !props.ccApiExterno && !!operacaoId && (api.tipoOperacao === 'venda' || api.tipoOperacao === 'compra'),
+    /* OC-CONTA-CORRENTE-TODOS-01a / OC-CC-ABATE-01 PR 2 — podem estar em conta corrente: venda, compra e abate. */
+    enabled: !props.ccApiExterno && !!operacaoId
+      && (api.tipoOperacao === 'venda' || api.tipoOperacao === 'compra' || api.tipoOperacao === 'abate'),
     versao: props.ocVersao ?? versaoLocal,
     onVersaoChange: props.onOcVersaoChange ?? setVersaoLocal,
   });
@@ -191,7 +192,7 @@ export function AbaFinanceiroOC(props: Props) {
         aoFechar={fecharModalOC} aoLancar={aoLancarPeloModal} aoFalhar={aoFalharModalOC} />
       <AbaContaCorrenteOC api={ccApi} somenteLeitura={props.financeiroNovoReadOnly}
         onProgramar={() => { setErroModalOC(null); setModalOC('principal'); }} cancelarProgramado={cancelarProgramado}
-        lado={api.tipoOperacao === 'compra' ? 'compra' : 'venda'}
+        lado={api.tipoOperacao === 'compra' ? 'compra' : api.tipoOperacao === 'abate' ? 'abate' : 'venda'}
         totaisDespesas={despesasLidas ? totaisDeDespesa(ocApi.compromissos) : null}
         /* o contador conta as MESMAS linhas que a tabela mostra (`linhasDeDespesa`; os titulos so' mudam status, nao quantas) */
         qtdDespesas={despesasLidas ? linhasDeDespesa(ocApi.compromissos, ocApi.parcelas, null).length : null}
@@ -209,7 +210,8 @@ export function AbaFinanceiroOC(props: Props) {
       </>
     );
   }
-  if ((api.tipoOperacao === 'venda' || api.tipoOperacao === 'compra') && !ccApi.contaCorrente && !ccApi.erro) {
+  if ((api.tipoOperacao === 'venda' || api.tipoOperacao === 'compra' || api.tipoOperacao === 'abate')
+    && !ccApi.contaCorrente && !ccApi.erro) {
     return <div className="py-10 text-center text-[11px] text-muted-foreground">Carregando…</div>;
   }
   if (ocApi.loading && !ocApi.resumoOperacao) {

@@ -294,7 +294,8 @@ describe('a VENDA nao muda', () => {
     expect(fonte).toContain('contaCorrente={cc}');
     expect(fonte).toContain("lado: 'compra'");
     const fin = readFileSync('src/components/compra/AbaFinanceiroOC.tsx', 'utf8');
-    expect(fin).toContain("(api.tipoOperacao === 'venda' || api.tipoOperacao === 'compra')");
+    /* OC-CC-ABATE-01 PR 2 — o `enabled` do hook proprio liga venda, compra E abate (o `),` final e' o do `enabled`, nao o do gate) */
+    expect(fin).toContain("&& (api.tipoOperacao === 'venda' || api.tipoOperacao === 'compra' || api.tipoOperacao === 'abate'),");
   });
 });
 

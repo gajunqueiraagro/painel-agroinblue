@@ -529,7 +529,7 @@ describe('sub-abas do Financeiro em conta corrente', () => {
 /* ═══ OC-CC-ACOES-LINHA-02 — toda linha do extrato e' clicavel e tem "⋯"; item que nao vale fica apagado com o motivo ═══ */
 describe('OC-CC-ACOES-LINHA-02 — clique e menu "⋯" em toda linha do extrato', () => {
   const linha = (o: Partial<LinhaContaCorrente>): LinhaContaCorrente => ({
-    tipo: 'recebimento', subtipo: null, data: '2025-04-17', parteId: 'r1', lancamentoId: 'L1', loteOrdem: null, categoria: null, cab: null,
+    tipo: 'recebimento', subtipo: null, componente: null, data: '2025-04-17', parteId: 'r1', lancamentoId: 'L1', loteOrdem: null, categoria: null, cab: null,
     descricao: null, contaOrdem: 1120, conta: 'Venda de Desmama Machos', banco: 'Bradesco', movEntrega: null, movRecebido: 100,
     status: 'realizado', noSaldo: true, saldo: 0, motivo: null, ...o,
   });

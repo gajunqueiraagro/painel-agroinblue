@@ -49,6 +49,8 @@ const TF = 'sticky bottom-0 z-10 h-[19px] whitespace-nowrap border-t-2 border-t-
 const COR = { neg: 'text-[#b91c1c]', pos: 'text-[#15803d]', zero: '' };
 const FUNDO: Record<LinhaContaCorrente['tipo'], string> = {
   entrega: 'bg-white', recebimento: 'bg-[#EAF1F9]', explicacao: 'bg-[#fffbeb]',
+  /* OC-CC-ABATE-01 PR 2 — a deducao do abate (Funrural), laranja como o selo. */
+  deducao: 'bg-[#fff7ed]',
 };
 const BOTAO = 'h-[22px] px-[9px] text-[10px] font-medium';
 
@@ -110,6 +112,18 @@ const TEXTOS: Record<LadoContaCorrente, {
     nomeDinheiro: 'pagamento', jaDinheiro: 'já pago', irEntrega: 'Ir para a entrada',
     entregaEDaOperacao: 'a entrada é da operação · corrija na aba Recebimento',
   },
+  /* OC-CC-ABATE-01 PR 2 — o abate fala como a venda, com o frigorifico; a entrega e' o BRUTO (liquido + Funrural) no DRE. */
+  abate: {
+    cardEntrega: 'Entregue · bruto no DRE', cardDinheiro: 'Recebido', titulo: 'Conta corrente do frigorífico',
+    buscar: '+ Buscar recebimento no Financeiro', grupoSaldo: 'Frigorífico',
+    programar: '+ Programar recebimento',
+    colEntrega: 'Entrega (DRE)', colDinheiro: 'Recebido (caixa)', vazio: 'Nenhuma entrega nem recebimento ainda.',
+    seloEntrega: 'Entrega', seloDinheiro: 'Recebimento', verbo: 'Abate',
+    pendente1: '1 abate ainda não virou entrega no financeiro.', pendenteN: n => `${n} abates ainda não viraram entrega no financeiro.`,
+    atualizar: 'Atualizar entregas',
+    nomeDinheiro: 'recebimento', jaDinheiro: 'já recebido', irEntrega: 'Ir para a entrega',
+    entregaEDaOperacao: 'a entrega é da operação · corrija na aba Entrega',
+  },
 };
 
 /* ═══ O MENU "⋯" DE CADA LINHA DO EXTRATO — OC-CC-ACOES-LINHA-02 ═══════════════════════════════════════════════════════════════
@@ -134,6 +148,8 @@ export const MOTIVO_ACAO = {
   semCompromisso: 'programado antes do modal, sem compromisso na operação · ainda sem gesto de cancelar',
   conciliado: 'conciliado · desfaça a conciliação primeiro',
   explicacaoSemLancamento: 'esta explicação não gera lançamento',
+  /* OC-CC-ABATE-01 PR 2 — o banco recusa desfazer a deducao: ela segue o acerto do abate. */
+  deducaoDoAcerto: 'a dedução acompanha o acerto do abate · corrija o Funrural na aba Abate',
 } as const;
 
 /** O motivo do item de GRAVAR numa operacao em somente leitura, pelo lado. ⚠ O somente leitura do Financeiro da OC
@@ -156,6 +172,12 @@ export function acoesDaLinha(l: LinhaContaCorrente, lado: LadoContaCorrente, som
       { chave: 'ir_entrega', texto: t.irEntrega, motivo: null },
       { chave: 'abrir_leitura', texto: 'Abrir lançamento (só leitura)', motivo: semLanc ?? MOTIVO_ACAO.emBreve },
       { chave: 'desvincular', texto: 'Desvincular da operação', motivo: t.entregaEDaOperacao },
+    ];
+  }
+  if (l.tipo === 'deducao') {
+    return [
+      { chave: 'abrir', texto: 'Abrir lançamento', motivo: semLanc },
+      { chave: 'desfazer_explicacao', texto: 'Desfazer explicação', perigo: true, motivo: MOTIVO_ACAO.deducaoDoAcerto },
     ];
   }
   if (l.tipo === 'explicacao') {
@@ -413,7 +435,12 @@ export function AbaContaCorrenteOC({ api, somenteLeitura, lado = 'venda', despes
                   <td className={TF}>Total</td>
                   <td className={TF} />
                   <td className={`${TF} text-right`}>{cc.cabEntregue}</td>
-                  <td className={TF} colSpan={4} />
+                  {/* OC-CC-ABATE-01 PR 2 — so' o abate escreve o Funrural retido; na venda e na compra a celula e' a de antes, byte a byte. */}
+                  {lado === 'abate' ? (
+                    <td className={`${TF} text-[9.5px] font-normal text-[#c2410c]`} colSpan={4} data-testid="total-deduzido">
+                      {cc.deduzido != null ? `Funrural retido +${num2(cc.deduzido)}` : ''}
+                    </td>
+                  ) : <td className={TF} colSpan={4} />}
                   <td className={`${TF} text-right ${lado === 'compra' ? COR.pos : COR.neg} ${DV}`}>{num2(sinalEntrega * cc.entregue)}</td>
                   <td className={`${TF} text-right ${lado === 'compra' ? COR.neg : COR.pos}`}>{num2(-sinalEntrega * cc.recebido)}</td>
                   <td className={`${TF} text-right ${COR[corSaldo]} ${DV}`} data-testid="total-saldo">{num2(cc.saldo)}</td>
@@ -500,10 +527,16 @@ function Card({ rotulo, valor, cor, destaque, testid }: { rotulo: string; valor:
   );
 }
 
+const ESTILO_SELO: Record<LinhaContaCorrente['tipo'], string> = {
+  entrega: 'bg-[#f0fdf4] text-[#15803d]', recebimento: 'bg-[#dbe7f6] text-[#1d4ed8]',
+  deducao: 'bg-[#ffedd5] text-[#c2410c]', explicacao: 'bg-[#fde68a] text-[#b45309]',
+};
 function Selo({ tipo, lado }: { tipo: LinhaContaCorrente['tipo']; lado: LadoContaCorrente }) {
-  const estilo = tipo === 'entrega' ? 'bg-[#f0fdf4] text-[#15803d]' : tipo === 'recebimento' ? 'bg-[#dbe7f6] text-[#1d4ed8]' : 'bg-[#fde68a] text-[#b45309]';
-  const texto = tipo === 'entrega' ? TEXTOS[lado].seloEntrega : tipo === 'recebimento' ? TEXTOS[lado].seloDinheiro : 'Explicação';
-  return <span className={`rounded-[3px] px-[5px] text-[9.5px] font-semibold ${estilo}`}>{texto}</span>;
+  const estilo = ESTILO_SELO[tipo];
+  const texto: Record<LinhaContaCorrente['tipo'], string> = {
+    entrega: TEXTOS[lado].seloEntrega, recebimento: TEXTOS[lado].seloDinheiro, deducao: 'Dedução', explicacao: 'Explicação',
+  };
+  return <span className={`rounded-[3px] px-[5px] text-[9.5px] font-semibold ${estilo}`}>{texto[tipo]}</span>;
 }
 
 function LinhaExtrato({ l, linhas, lado, acoes, onAcao }: {
@@ -914,7 +947,7 @@ export function DialogoExplicarDiferenca({ api, somenteLeitura, lado = 'venda', 
                           </SelectContent>
                         </Select>
                       ) : r.tipo === 'devolucao_comprador' ? (
-                        <span>{lado === 'compra' ? 'conta da compra' : 'conta da venda'}</span>
+                        <span>{lado === 'compra' ? 'conta da compra' : lado === 'abate' ? 'conta do abate' : 'conta da venda'}</span>
                       ) : (
                         <span>5020 Deduções Outras Operações Pecuária</span>
                       )}
@@ -974,6 +1007,8 @@ export function DialogoExplicarDiferenca({ api, somenteLeitura, lado = 'venda', 
           {lado === 'compra'
             ? <>Ajuste de preço muda o valor dos lotes (em “Todos”, rateio pelo kg negociado) e o de cada entrada, na data dela. Permuta fica
               na data informada. Devolução do fornecedor programa uma entrada de caixa na conta da compra, fora do DRE.</>
+            : lado === 'abate'
+            ? <>Desconto é preço: muda cada entrega, por kg, na data da saída dela. Outra receita e permuta ficam na data informada. Devolver ao frigorífico programa um pagamento de caixa. O preço do abate se corrige no acerto (aba Abate).</>
             : <>Ajuste de preço e desconto são preço: mudam cada entrega, por kg, na data da saída dela. Outra receita e permuta ficam na data
               informada. Devolver ao comprador programa um pagamento de caixa.</>}
         </div>

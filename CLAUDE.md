@@ -162,7 +162,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 13/10/2026 (OC-CC-MODAL-FINANCEIRO-01, +24: `src/components/financeiro-v2/modoOC.test.tsx` 21 (novo),
+  Baseline em 14/10/2026 (OC-CC-ABATE-01 PR 2, +11: `src/components/venda/contaCorrenteAbate.test.tsx` 11 (novo) — 5074 depois dele;
+  antes o DRE-MODAIS-02a, +7: `src/components/agri/dreModais02.test.tsx` 7 (novo) — 5063 depois dele; antes o
+  OC-CC-MODAL-FINANCEIRO-01, +24: `src/components/financeiro-v2/modoOC.test.tsx` 21 (novo),
   `src/components/venda/abaContaCorrente.test.tsx` 1 (43 -> 44), `src/lib/oc/desfazerTituloCancelado.test.ts` 1 (2 -> 3),
   `src/components/compra/despesasContaCorrente.test.tsx` 1 (19 -> 20) — 5056 depois dele; antes o CUSTEIO-HASH-01, +8: `src/v2/lib/custeio/hashItemCusteio.test.ts` 3 (6 -> 9), `src/v2/pages/custeioLote.test.tsx` 5
   (7 -> 12) — 5032 depois dele; antes o CUSTEIO-TXT-03, +15: `src/v2/lib/custeio/parseCusteioTxt.test.ts` 4, `src/v2/pages/custeioLote.test.tsx` 7,
@@ -301,7 +303,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5056
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5074
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3961,6 +3963,39 @@ docs/historico/frentes-ate-2026-09-29.md.)
     compra e abate no modo OC no navegador (so' a venda) · o aviso ambar e a recusa da simulacao na tela (so' por teste) · o
     botao apagado por principal coberto, na tela (so' por teste) · o parcelado no modo OC montado em teste · a janela REAL de
     1000 x 800 (foi um quadro dentro da pagina) · perfil nao admin.
+- ⚠ A TELA DO CONTA CORRENTE FALA ABATE (OC-CC-ABATE-01 PR 2, Gabriel 14/10/2026, so' tela — sem migration, sem RPC nova, sem dado).
+  ⚠ HOMOLOGACAO RUNTIME PENDENTE: nenhum abate esta' em conta corrente ate' o PR 3 — a tela se prova com o primeiro abate migrado
+  (Vera 02be1a41). Nos 34 abates em 'titulo' a RPC devolve modelo 'titulo' e a aba segue na `AbaCompromissosOC`, como antes.
+  · O QUARTO TIPO DE LINHA, 'deducao' (`src/lib/oc/contaCorrente.ts`): o leitor a conhece (`tipoLinhaDe` nao a rebaixa mais a
+    recebimento), o componente vem em `componente` (o `subtipo` do banco; so' na deducao) e a chave `deduzido` do envelope vira `cc.deduzido` —
+    SO' quando o banco a manda (`'deduzido' in r`); fora do abate e' null, nunca zero inventado. Descricao = `rotuloDeducao`
+    ("Funrural"; componente desconhecido = "Dedução"); o "Receb. n/N" nao a conta. No extrato (`AbaContaCorrenteOC`): selo "Dedução"
+    laranja (`bg-[#ffedd5] text-[#c2410c]`), fundo `bg-[#fff7ed]`, Cab e Banco vazios, valor na coluna Entrega (DRE) com o sinal do
+    banco. Menu "⋯": "Abrir lançamento" (o clique na linha; apagado so' sem lancamento) e "Desfazer explicação" SEMPRE APAGADO com "a
+    dedução acompanha o acerto do abate · corrija o Funrural na aba Abate" (`MOTIVO_ACAO.deducaoDoAcerto`; o banco recusa). Rodape: so'
+    no abate a celula de colSpan 4 escreve "Funrural retido +X" (`cc.deduzido`, `data-testid="total-deduzido"`); na venda e na compra
+    ela e' `<td className={TF} colSpan={4} />`, byte a byte (o snapshot "a VENDA nao muda" prende). A tela nao soma: o total da
+    Entrega segue −entregue (BRUTO), o Saldo e' o do banco.
+  · O LADO 'abate' (`LadoContaCorrente`): fala como a venda, com o frigorifico — "Conta corrente do frigorífico", card "Entregue · bruto
+    no DRE", "Recebido", "Saldo · falta receber" / "Saldo · adiantado pelo frigorífico" / "Saldo · quitado", "Aguardando saída".
+    `AbaFinanceiroOC` liga o hook, o lado e o gate tambem no abate; o `AbateModalShell` monta `useOcContaCorrente` UMA vez (colado
+    ao `useOcCompromissos`) e a desce por `ccApiExterno`; com conta corrente o `BlocoTopoAba` de 3 da aba some (a aba tem os 5 cards
+    proprios). "Atualizar entregas" em rascunho: apagado com `MOTIVO_ATUALIZAR_EM_RASCUNHO` (o `LancamentosTab` passa `ocRascunho`
+    ao shell do abate, como ao da venda).
+  · RESUMO LATERAL DO ABATE: com conta corrente, 4 linhas lidas de `cc` (Entregue · bruto / Funrural retido / Recebido / Saldo), zero
+    aritmetica; sem ela (modelo 'titulo'), o bloco de antes, movido verbatim.
+  · `TIPOS_EXPLICACAO_DO_LADO.abate` = desconto comercial, permuta/despesa, outra receita, devolucao — SEM 'ajuste_preco' (o banco
+    recusa; o preco se corrige no acerto). `rotuloExplicacao` diz "Devolução do frigorífico".
+  · ESPELHO PRESO POR TESTE: `SEXO_POR_CATEGORIA` (`src/hooks/useOperacaoLiquidacao.ts`, agora exportado) ganhou bezerros_m,
+    machos_adultos, bezerras_f, femeas_adultas; `contaCorrenteAbate.test.tsx` le' as duas listas de `_oc_subcentro_abate` na
+    migration 20261027197300 e exige conjunto igual por sexo.
+  · DIVIDAS: `rotuloCurtoExplicacao` no abate segue "Devol. comprador" (o curto com "frigorífico" nao foi medido; o longo diz
+    "Devolução do frigorífico") · "Cancelar conta corrente" NAO e' oferecido no abate (o shell nao tem `onCancelarContaCorrente`; o
+    `TEXTOS.abate` do `CancelarContaCorrenteDialog` existe so' para o tipo fechar) — e' do PR 3.
+  · DESVIOS DECLARADOS (erros do briefing consertados aqui, com o OK do Gabriel 14/10): (1) o D4 dizia "HTML da venda nao muda" e o
+    item 2f punha classe e testid para todos os lados — ficou a guarda `lado === 'abate'` na propria celula; (2) o T7 do briefing
+    (venda SEM `deduzido`) deixava viva a mutacao "tirar a guarda": agora monta a venda COM o envelope do abate e exige a celula
+    ausente; (3) o C1 pedia ≥ 4 `'abate'` em `contaCorrente.ts` — sao 3 (a chave `abate:` nao tem aspas).
 - ⚠ O ABATE ENTRA NO CONTA CORRENTE: ENTREGA BRUTA, DEDUCAO FILHA (FUNRURAL) EM 5030, RECEBIMENTO FORA DO DRE; O LADO E' O DA VENDA; NASCIMENTO
   E MIGRACAO NO PR 3 (OC-CC-ABATE-01 PR 1, Gabriel 12–13/10/2026, SO' BANCO, so' funcoes — nenhum DDL em tabela, nenhum dado tocado).
   Migration `supabase/migrations/20261027197300_oc_cc_abate_01_banco.sql` (md5 do arquivo 20afe6fa74c4e970617985a5f4a8398c) — APLICADA no
