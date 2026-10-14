@@ -162,8 +162,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 14/10/2026 (OC-LOTE-FISICO-POS-SAIDA-01, +16: `src/components/compra/loteFisicoPosSaida.test.tsx` 12 (novo),
-  `src/hooks/useCompraLotes.recusa.test.ts` 4 (novo) — 5105 depois dele; antes o OC-LISTA-LAYOUT-01, +5: `src/components/operacao-comercial/central/centralListaLayout.test.tsx` 8 (novo),
+  Baseline em 14/10/2026 (LOTE-PESO-CALC-01, +28: `src/components/compra/loteContaNoCampo.test.tsx` 23 (novo),
+  `src/hooks/useCompraLotes.recusa.test.ts` 5 (4 -> 9) — 5133 depois dele; antes o OC-LOTE-FISICO-POS-SAIDA-01, +16:
+  `src/components/compra/loteFisicoPosSaida.test.tsx` 12 (novo), `src/hooks/useCompraLotes.recusa.test.ts` 4 (novo) — 5105 depois dele; antes o OC-LISTA-LAYOUT-01, +5: `src/components/operacao-comercial/central/centralListaLayout.test.tsx` 8 (novo),
   `src/v2/lib/acessoOperacao.test.tsx` −3 (sairam os 4 dos botoes de criar da lista, com eles; entrou 1) — 5089 depois dele; antes o
   OC-CC-SINAL-FAZENDA-01, +7 em `src/lib/oc/contaCorrente.test.ts` (12 -> 19) — 5084 depois dele; antes o
   FIX OC-CC-ABATE-01, +3 em `src/components/venda/contaCorrenteAbate.test.tsx` (11 -> 14) — 5077 depois dele; antes o
@@ -308,7 +309,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5105
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5133
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3877,6 +3878,35 @@ docs/historico/frentes-ate-2026-09-29.md.)
   quem mexer num confere o outro. O selo do rodape (`SeloRegraDaLinha`) diz a regra da linha.
 
 ## REGRAS VIGENTES — OPERACAO COMERCIAL E FINANCEIRO
+- ⚠ QUANTIDADE, PESO MEDIO E VALOR DO LOTE ACEITAM CONTA, PELO DONO, E O SALVAR NUNCA LE^ CONTA NEM TRUNCA (LOTE-PESO-CALC-01, Gabriel
+  14/10/2026, so' tela). Nasce de defeito medido: o `parseNumericValue` tira o que nao e' digito — "36+18" virava 3618 cabecas, em
+  silencio — e o salvar truncava "54,5" para 54. O operador junta dois lotes do frigorifico fazendo a conta no campo.
+  · DONO: `resolverCampoDoLote(texto, 'quantidade' | 'peso' | 'valor')` e `textoComOperador` (`src/lib/oc/numeroDoLote.ts`), em cima do
+    `contaNoCampo` (PROIBIDO parser novo). COM operador a conta e' do `calcularConta`; SEM operador o numero e' do leitor de sempre do
+    lote (`parseNumericValue`) — ⚠ o `parseMoeda` le^ o texto de MAQUINA do banco ("481.780", numeric de 3 casas) como 481 MIL
+    (medido). Quantidade so' inteira (conta que da' fracao e "54,5" direto recusam com `FRASE_QUANTIDADE_INTEIRA`, "quantidade
+    precisa ser inteira"); peso sai a 2 casas; o VALOR sai a 2 casas so' quando e' CONTA (a regra do contaNoCampo) — numero simples
+    vai com as casas digitadas ("14,125" R$/kg; ajuste do Gabriel, 14/10). Na quantidade o ponto de milhar pt-BR ("1.200") e' MILHAR
+    (`lerQuantidadeDoLote`: quantidade nao tem decimal); "1.200,5" e "54,5" recusam. Recusa da conta = a frase do `FRASE_DA_CONTA`.
+    ⚠ `zoo_operacao_lotes.valor_informado` E' numeric DE ESCALA 2 (medido 14/10): o banco guarda "14,125" como 14,13 — a tela manda
+    as tres casas, a coluna arredonda. `qtd_negociada` e' integer: o lote do banco chega como "1200", sem ponto, e sem tocar no campo
+    nunca passa pelo dono (0 lotes >= 1.000 hoje; o maior, 490).
+    valor_informado é numeric(.,2); 3ª casa digitada é arredondada pelo banco — frente OC-LOTE-VALOR-3-CASAS-01 (DDL só fora do
+    horário), não aberta.
+  · `LoteDialog` (compra, venda e abate): resolve AO SAIR DO CAMPO E NO ENTER (o padrao da `GradeDeParcelas`), SO' o texto que o
+    operador mudou desde que entrou no campo (o que veio do banco fica como veio); recusada, o campo volta ao que tinha ao entrar e
+    "<Campo>: <frase>" fica no LUGAR RESERVADO de 14px sob a linha do Peso (`lote-recusa-conta`, sempre presente). O Valor (`ValorInput`,
+    compra/venda) usa o mesmo caminho; o abate (`semValor`) nao tem Valor. O Aplicar resolve os tres contra o valor do LOTE antes de
+    tudo — recusa = nao aplica — e o aviso pos-saida recebe os numeros JA' CALCULADOS. Os derivados ao vivo leem o campo pelo dono
+    (conta digitada mostra o resultado; conta incompleta conta como vazio). A formatacao do peso ao sair do campo SAIU (o dono a faz).
+  · `useCompraLotes.salvar`: texto com operador em quantidade, peso ou valor -> recusa ("Lote X (ordem N) — <Campo>: conta não
+    calculada. Abra o lote e saia do campo para calcular.") e NADA vai ao banco; quantidade nao inteira -> recusa; o `Math.trunc`
+    SAIU; o peso vai a duas casas. A recusa vai pelo `aoRecusar` (o modal centrado) ou toast, como as outras.
+  Testes: `loteContaNoCampo.test.tsx` 18 e +5 em `useCompraLotes.recusa.test.ts`; 11 mutacoes mortas (trunca de volta; salvar sem a
+  guarda de operador; Aplicar sem resolver; sair sem resolver; dono sem o inteiro; lugar condicional; peso sem 2 casas; Enter sem resolver; valor simples arredondado; quantidade sem
+  milhar; salvar lendo a quantidade pelo leitor antigo).
+  ⚠ NAO PROVADO NO NAVEGADOR (sem ferramenta nesta sessao): o lugar de 14px e o modal sem mudar de altura, o clique no Aplicar com a conta
+    aberta (no navegador o blur vem antes do clique), e a lista de lotes depois de aplicar.
 - ⚠ QUANTIDADE E PESO DO LOTE MUDAM DEPOIS DA SAIDA, E A SAIDA REGISTRADA ACOMPANHA (OC-LOTE-FISICO-POS-SAIDA-01, Gabriel 14/10/2026,
   banco + tela; SUBSTITUI "quantidade e peso nao mudam depois do recebimento" do OC-VENDA-ENTREGAS-01a D1 e do ACESSOS-OC-03a).
   Nasce da Vera (abate 2d39d7e9, lote Vacas 18 cab · 481,78 kg): "lancei um peso errado de saida… nao pode ser burocratico".

@@ -26,12 +26,14 @@ const toastErro = vi.fn();
 vi.mock('sonner', () => ({ toast: { error: (...a: unknown[]) => toastErro(...a), success: vi.fn(), warning: vi.fn() } }));
 
 import { useCompraLotes } from '@/hooks/useCompraLotes';
+import { supabase } from '@/integrations/supabase/client';
+import { FRASE_QUANTIDADE_INTEIRA } from '@/lib/oc/numeroDoLote';
 
 const montar = (onReabrir?: () => void) => renderHook(() => useCompraLotes({
   operacaoId: 'op-1', clienteId: 'cli-1', versao: 3, onVersaoChange: vi.fn(), enabled: true, onReabrir,
 }));
 
-beforeEach(() => { toastErro.mockReset(); banco.mensagem = FRASE; });
+beforeEach(() => { toastErro.mockReset(); banco.mensagem = FRASE; vi.mocked(supabase.rpc).mockClear(); });
 
 describe('useCompraLotes.salvar — a recusa', () => {
   it('com aoRecusar: a frase do banco chega ao callback, verbatim, e NAO ha toast', async () => {
@@ -70,5 +72,58 @@ describe('useCompraLotes.salvar — a recusa', () => {
     await act(async () => { await result.current.salvar(); });
     expect(toastErro).toHaveBeenCalledTimes(1);
     expect(toastErro.mock.calls[0][1]).toMatchObject({ action: { label: 'Reabrir' } });
+  });
+});
+
+/* LOTE-PESO-CALC-01 — o salvar nao trunca nem arredonda a quantidade, e conta nao resolvida nunca vai ao `parseNumericValue`. */
+describe('useCompraLotes.salvar — conta e quantidade', () => {
+  const comLote = async (patch: Record<string, string>) => {
+    const h = montar();
+    await waitFor(() => expect(h.result.current.lotes).toHaveLength(1));
+    act(() => { h.result.current.editarLote(h.result.current.lotes[0].idLocal, patch); });
+    return h;
+  };
+  it('texto com operador nao resolvido: recusado com a frase, nada vai ao banco (nunca 3618 de "36+18")', async () => {
+    for (const p of [{ quantidade: '36+18' }, { pesoMedioKg: '(36*461,72+18*456,61)/54' }, { valorInformado: '10000*2+500' }]) {
+      const { result } = await comLote(p);
+      const aoRecusar = vi.fn();
+      let r: number | null = 0;
+      await act(async () => { r = await result.current.salvar({ aoRecusar }); });
+      expect(r).toBeNull();
+      expect(aoRecusar).toHaveBeenCalledTimes(1);
+      expect(aoRecusar.mock.calls[0][0]).toMatch(/^Lote vacas \(ordem 1\) — (Quantidade|Peso médio|Valor): conta não calculada\./);
+    }
+    expect(supabase.rpc).not.toHaveBeenCalled();
+  });
+  it('quantidade "54,5": recusada (sem truncar para 54)', async () => {
+    const { result } = await comLote({ quantidade: '54,5' });
+    const aoRecusar = vi.fn();
+    await act(async () => { await result.current.salvar({ aoRecusar }); });
+    expect(aoRecusar).toHaveBeenCalledWith(`Lote vacas (ordem 1) — Quantidade: ${FRASE_QUANTIDADE_INTEIRA}.`);
+    expect(supabase.rpc).not.toHaveBeenCalled();
+  });
+  it('resolvido: quantidade inteira como esta' + "'" + ' e o peso a duas casas', async () => {
+    const { result } = await comLote({ quantidade: '54', pesoMedioKg: '460,016' });
+    await act(async () => { await result.current.salvar({ aoRecusar: vi.fn() }); });
+    expect(supabase.rpc).toHaveBeenCalledTimes(1);
+    const lotes = vi.mocked(supabase.rpc).mock.calls[0][1] as { p_lotes: { qtd_negociada: number; peso_medio_negociado_kg: number }[] };
+    expect(lotes.p_lotes[0]).toMatchObject({ qtd_negociada: 54, peso_medio_negociado_kg: 460.02 });
+  });
+  it('ajuste (B): lote de 1200 cab, sem tocar, salva (nao e' + "'" + ' recusado); "1.200" vai como 1200', async () => {
+    for (const quantidade of ['1200', '1.200']) {
+      vi.mocked(supabase.rpc).mockClear();
+      const { result } = await comLote({ quantidade });
+      const aoRecusar = vi.fn();
+      await act(async () => { await result.current.salvar({ aoRecusar }); });
+      const p = vi.mocked(supabase.rpc).mock.calls[0][1] as { p_lotes: { qtd_negociada: number }[] };
+      expect(p.p_lotes[0].qtd_negociada).toBe(1200);
+      expect(aoRecusar).toHaveBeenCalledWith(FRASE);   // a frase que veio do banco de mentira, nao uma recusa da tela
+    }
+  });
+  it('ajuste (A): valor simples "14,125" vai ao banco com as tres casas', async () => {
+    const { result } = await comLote({ valorInformado: '14,125' });
+    await act(async () => { await result.current.salvar({ aoRecusar: vi.fn() }); });
+    const p = vi.mocked(supabase.rpc).mock.calls[0][1] as { p_lotes: { valor_informado: number }[] };
+    expect(p.p_lotes[0].valor_informado).toBe(14.125);
   });
 });

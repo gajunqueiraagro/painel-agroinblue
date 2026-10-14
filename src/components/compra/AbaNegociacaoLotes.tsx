@@ -19,6 +19,7 @@ import type { ExcluirLoteApi } from '@/hooks/useExcluirLoteOC';
 import { DialogoExcluirLoteOC } from '@/components/compra/DialogoExcluirLoteOC';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { dataCurta } from '@/lib/oc/contaCorrente';
+import { resolverCampoDoLote, lerQuantidadeDoLote, type CampoDoLote } from '@/lib/oc/numeroDoLote';
 
 // Aba Negociação.
 //   • Modo OC (lotesApi): grade EDITÁVEL de múltiplos lotes — fonte única = camada OC
@@ -220,8 +221,11 @@ function loteTotal(criterio: CriterioValor, quantidade: string, pesoMedioKg: str
 // Campo Valor — apresentação monetária pt-BR SEM prejudicar a edição (format-on-blur):
 //   foco → string crua editável (a que é persistida); blur → exibe brl(valor). O valor persistido
 //   (valorInformado) NUNCA é reformatado; cursor, arredondamento, unidade e cálculo permanecem intactos.
-function ValorInput({ value, onChange, disabled, placeholder, className }: {
+function ValorInput({ value, onChange, disabled, placeholder, className, onResolver, onEntrar }: {
   value: string; onChange: (v: string) => void; disabled?: boolean; placeholder?: string;
+  /** LOTE-PESO-CALC-01 — ao sair do campo e no Enter, a conta digitada se resolve (o dono decide; ausente = como antes). */
+  onResolver?: () => void;
+  onEntrar?: () => void;
   /* Regra (b): a altura vem de QUEM USA. Fixa-la aqui era o motivo de o Valor ficar
      mais baixo que os vizinhos dentro do modal. O default preserva a grade legada. */
   className?: string;
@@ -231,7 +235,8 @@ function ValorInput({ value, onChange, disabled, placeholder, className }: {
   const display = focused ? value : (num > 0 ? brl(num) : '');
   return (
     <Input inputMode="decimal" value={display} onChange={e => onChange(e.target.value)}
-      onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
+      onFocus={() => { setFocused(true); onEntrar?.(); }} onBlur={() => { setFocused(false); onResolver?.(); }}
+      onKeyDown={e => { if (e.key === 'Enter' && onResolver) { e.preventDefault(); onResolver(); } }}
       placeholder={placeholder} disabled={disabled}
       className={className ?? 'h-6 text-[11px] text-right tabular-nums'} />
   );
@@ -700,13 +705,43 @@ export function LoteDialog({
   const [criterioValor, setCriterioValor] = useState<CriterioValor>(lote.criterioValor);
   const [valorInformado, setValorInformado] = useState(lote.valorInformado);
   const [observacao, setObservacao] = useState(lote.observacao);
+  /* LOTE-PESO-CALC-01 — a CONTA nos campos do lote (Quantidade, Peso medio, Valor), pelo dono `resolverCampoDoLote` (em cima do
+     `contaNoCampo`). Resolve ao sair do campo e no Enter; recusada, o campo volta ao valor que tinha ao entrar e a frase fica no
+     lugar reservado sob os campos. O que o campo tinha ao entrar fica aqui. */
+  const [recusaConta, setRecusaConta] = useState<string | null>(null);
+  const [noFoco, setNoFoco] = useState<Record<CampoDoLote, string>>({ quantidade: lote.quantidade, peso: lote.pesoMedioKg, valor: lote.valorInformado });
+  const ROTULO_CAMPO: Record<CampoDoLote, string> = { quantidade: 'Quantidade', peso: 'Peso médio', valor: 'Valor' };
+  const SETTER: Record<CampoDoLote, (v: string) => void> = { quantidade: setQuantidade, peso: setPesoMedioKg, valor: setValorInformado };
+  const entrar = (campo: CampoDoLote, atual: string) => setNoFoco(prev => ({ ...prev, [campo]: atual }));
+  /* So' o texto que o operador MUDOU passa pelo dono: o que chegou do banco ("481.780", texto de maquina) fica como esta'. */
+  const resolver = (campo: CampoDoLote, texto: string, original: string): string | null => {
+    if (texto === original) return texto;
+    const r = resolverCampoDoLote(texto, campo);
+    if (r.ok === true) { SETTER[campo](r.texto); return r.texto; }
+    SETTER[campo](original);
+    setRecusaConta(`${ROTULO_CAMPO[campo]}: ${r.frase}`);
+    return null;
+  };
+  /* A frase fica ate' a proxima conta resolvida (ou o Aplicar): sair de novo do campo sem mexer nao a apaga. */
+  const sair = (campo: CampoDoLote, texto: string) => {
+    if (texto === noFoco[campo]) return;
+    if (resolver(campo, texto, noFoco[campo]) !== null) setRecusaConta(null);
+  };
+  const enterResolve = (campo: CampoDoLote, texto: string) => (e: { key: string; preventDefault: () => void }) => {
+    if (e.key === 'Enter') { e.preventDefault(); sair(campo, texto); }
+  };
 
-  const pm = parseNumericValue(pesoMedioKg) || 0;
-  const qtdNum = parseNumericValue(quantidade) || 0;
+  /* Os derivados AO VIVO leem o campo pelo dono: conta digitada mostra o resultado (nunca "36+18" lido como 3618); conta que nao
+     resolve conta como vazio ate' o operador sair do campo. */
+  const vivo = (texto: string, campo: CampoDoLote) => { const r = resolverCampoDoLote(texto, campo); return r.ok === true ? r.texto : ''; };
+  const qtdViva = vivo(quantidade, 'quantidade');
+  const pesoVivo = vivo(pesoMedioKg, 'peso');
+  const pm = parseNumericValue(pesoVivo) || 0;
+  const qtdNum = lerQuantidadeDoLote(qtdViva) || 0;
   const pesoTotal = qtdNum * pm;
   const semPeso = pm <= 0;
   const unidade = CRITERIOS.find(c => c.value === criterioValor)?.unidade || 'Valor';
-  const total = loteTotal(criterioValor, quantidade, pesoMedioKg, valorInformado);
+  const total = loteTotal(criterioValor, qtdViva, pesoVivo, vivo(valorInformado, 'valor'));
   const patch = { categoria, quantidade, pesoMedioKg, criterioValor, valorInformado, observacao };
 
   /* PESO OBRIGATORIO na porta do modal, e nao so no salvar: `oc_salvar_lotes` recusa a
@@ -741,13 +776,22 @@ export function LoteDialog({
   /* (D3) o aviso antes de aplicar: o lote tem saida ATIVA e quantidade ou peso mudaram. ⚠ Pela SAIDA, nao por
      `bloqueadoPorRecebimento`: na venda a trava so' liga pelo acesso, e o aviso tem de valer nos tres lados. */
   const saidasAtivas = (lote.id ? saidas.filter(s => s.loteId === lote.id && s.cancelado !== true) : []);
-  const qtdAntes = parseNumericValue(lote.quantidade) || 0;
+  const qtdAntes = lerQuantidadeDoLote(lote.quantidade) || 0;
   const pesoAntes = parseNumericValue(lote.pesoMedioKg) || 0;
-  const mudouFisico = saidasAtivas.length > 0 && (qtdNum !== qtdAntes || pm !== pesoAntes);
-  const [avisando, setAvisando] = useState<'aplicar' | 'adicionar' | null>(null);
+  const [avisando, setAvisando] = useState<{ modo: 'aplicar' | 'adicionar'; patch: typeof patch; depois: { qtd: number; peso: number } } | null>(null);
   const pedirAplicar = (modo: 'aplicar' | 'adicionar') => {
-    if (mudouFisico) { setAvisando(modo); return; }
-    if (modo === 'aplicar') onAplicar(patch); else onAplicarEAdicionar(patch);
+    /* LOTE-PESO-CALC-01 — nada sai daqui com conta nao resolvida: os tres campos passam pelo dono (contra o valor do lote); recusa
+       para o Aplicar, com a frase no lugar reservado. */
+    const rq = resolver('quantidade', quantidade, lote.quantidade);
+    const rp = resolver('peso', pesoMedioKg, lote.pesoMedioKg);
+    const rv = semValor || valorProjetado ? valorInformado : resolver('valor', valorInformado, lote.valorInformado);
+    if (rq === null || rp === null || rv === null) return;
+    setRecusaConta(null);
+    const resolvido = { ...patch, quantidade: rq, pesoMedioKg: rp, valorInformado: rv };
+    const q = lerQuantidadeDoLote(rq) || 0;
+    const p = parseNumericValue(rp) || 0;
+    if (saidasAtivas.length > 0 && (q !== qtdAntes || p !== pesoAntes)) { setAvisando({ modo, patch: resolvido, depois: { qtd: q, peso: p } }); return; }
+    if (modo === 'aplicar') onAplicar(resolvido); else onAplicarEAdicionar(resolvido);
   };
 
   return (
@@ -820,7 +864,9 @@ export function LoteDialog({
             </div>
             <div>
               <Label className="text-[10px]">Quantidade <span className="text-destructive">*</span></Label>
-              <Input inputMode="numeric" value={quantidade} onChange={e => setQuantidade(e.target.value)} placeholder="0"
+              <Input inputMode="decimal" value={quantidade} onChange={e => setQuantidade(e.target.value)} placeholder="0"
+                onFocus={() => entrar('quantidade', quantidade)} onBlur={() => sair('quantidade', quantidade)}
+                onKeyDown={enterResolve('quantidade', quantidade)} data-testid="lote-quantidade"
                 disabled={fisicoTravado} title={motivoFisico ?? undefined}
                 className="h-6 text-[11px] mt-0.5 text-right tabular-nums" />
             </div>
@@ -830,7 +876,8 @@ export function LoteDialog({
             <div>
               <Label className="text-[10px]">Peso méd. (kg) <span className="text-destructive">*</span></Label>
               <Input inputMode="decimal" value={pesoMedioKg} onChange={e => setPesoMedioKg(e.target.value)}
-                onBlur={() => { const n = parseNumericValue(pesoMedioKg); if (n) setPesoMedioKg(n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })); }}
+                onFocus={() => entrar('peso', pesoMedioKg)} onBlur={() => sair('peso', pesoMedioKg)}
+                onKeyDown={enterResolve('peso', pesoMedioKg)} data-testid="lote-peso"
                 placeholder="0,00" disabled={fisicoTravado} title={titleFisico}
                 className={`h-6 text-[11px] mt-0.5 text-right tabular-nums ${semPeso ? 'border-destructive focus-visible:ring-destructive' : ''}`} />
             </div>
@@ -866,6 +913,7 @@ export function LoteDialog({
                 ) : (
                 /* Regra (b) — a altura vem daqui, nao do componente. */
                 <ValorInput value={valorInformado} onChange={setValorInformado} placeholder={unidade}
+                  onEntrar={() => entrar('valor', valorInformado)} onResolver={() => sair('valor', valorInformado)}
                   disabled={somenteLeitura} className="h-6 text-[11px] text-right tabular-nums" />
                 )}
               </div>
@@ -881,6 +929,9 @@ export function LoteDialog({
             </div>
             </>)}
           </div>
+          {/* LOTE-PESO-CALC-01 — o lugar reservado da recusa da conta: existe sempre (14px), vazio sem recusa. */}
+          <div className="h-[14px] -mt-1 text-[10px] leading-[14px] text-destructive truncate" data-testid="lote-recusa-conta"
+            title={recusaConta ?? undefined} aria-live="polite">{recusaConta ?? ''}</div>
 
           {comObservacao && (
             <div>
@@ -928,9 +979,9 @@ export function LoteDialog({
           <Button size="sm" className="h-[22px] px-[9px] text-[10px] font-medium " disabled={!podeAplicar} title={motivoBloqueio} onClick={() => pedirAplicar('aplicar')}>Aplicar</Button>
         </DialogFooter>
         {avisando && (
-          <AvisoSaidaAtualizada antes={{ qtd: qtdAntes, peso: pesoAntes }} depois={{ qtd: qtdNum, peso: pm }} saidas={saidasAtivas}
+          <AvisoSaidaAtualizada antes={{ qtd: qtdAntes, peso: pesoAntes }} depois={avisando.depois} saidas={saidasAtivas}
             onVoltar={() => setAvisando(null)}
-            onAplicar={() => { const modo = avisando; setAvisando(null); if (modo === 'aplicar') onAplicar(patch); else onAplicarEAdicionar(patch); }} />
+            onAplicar={() => { const a = avisando; setAvisando(null); if (a.modo === 'aplicar') onAplicar(a.patch); else onAplicarEAdicionar(a.patch); }} />
         )}
       </DialogContent>
     </Dialog>

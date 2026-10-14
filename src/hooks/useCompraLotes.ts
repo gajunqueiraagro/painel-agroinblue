@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { parseNumericValue } from '@/lib/calculos/abate';
 import { normalizarErroRpc } from '@/hooks/useOcCompromissos';
+import { textoComOperador, lerQuantidadeDoLote, FRASE_QUANTIDADE_INTEIRA } from '@/lib/oc/numeroDoLote';
 
 // Estado + operações dos LOTES comerciais de uma operação OC (COM-3). Fonte única = camada OC
 // (zoo_operacao_lotes via RLS; escrita por oc_salvar_lotes). Sem lancamentos, sem físico, sem
@@ -143,6 +144,19 @@ export function useCompraLotes({ operacaoId, clienteId, versao, onVersaoChange, 
        corrigir sem esperar a ida ao servidor. Mensagem no mesmo formato da RPC. */
     const semPeso = fonte.find(l => (parseNumericValue(l.pesoMedioKg) || 0) <= 0);
     const recusarNaTela = (frase: string) => { if (opts?.aoRecusar) opts.aoRecusar(frase); else toast.error(frase); };
+    /* LOTE-PESO-CALC-01 — o salvar NAO trunca nem arredonda sozinho, e conta nao resolvida NUNCA vai ao `parseNumericValue`
+       ("36+18" virava 3618). Quem resolve a conta e' o LoteDialog (ao sair do campo e no Enter); aqui so' se recusa. */
+    const rotuloLote = (l: LoteForm) => `Lote ${l.categoria || 'sem categoria'} (ordem ${l.ordem})`;
+    for (const l of fonte) {
+      const campos: [string, string][] = [['Quantidade', l.quantidade], ['Peso médio', l.pesoMedioKg], ['Valor', l.valorInformado]];
+      const comConta = campos.find(([, t]) => textoComOperador(t));
+      if (comConta) {
+        recusarNaTela(`${rotuloLote(l)} — ${comConta[0]}: conta não calculada. Abra o lote e saia do campo para calcular.`);
+        return null;
+      }
+      const q = lerQuantidadeDoLote(l.quantidade);
+      if (q && !Number.isInteger(q)) { recusarNaTela(`${rotuloLote(l)} — Quantidade: ${FRASE_QUANTIDADE_INTEIRA}.`); return null; }
+    }
     if (semPeso) {
       recusarNaTela(`Informe o peso médio do lote ${semPeso.categoria || 'sem categoria'} (ordem ${semPeso.ordem}). Lote sem peso não pode ser salvo.`);
       return null;
@@ -151,12 +165,13 @@ export function useCompraLotes({ operacaoId, clienteId, versao, onVersaoChange, 
     setSaving(true);
     try {
       const payload = fonte.map(l => {
-        const q = parseNumericValue(l.quantidade);
+        const q = lerQuantidadeDoLote(l.quantidade);
         return {
           ordem: l.ordem,
           categoria_negociada: l.categoria || null,
-          qtd_negociada: q ? Math.trunc(q) : null,
-          peso_medio_negociado_kg: parseNumericValue(l.pesoMedioKg) || null,
+          qtd_negociada: q || null,
+          /* (3) o peso medio vai a DUAS casas (o banco guarda tres; o lote e' negociado em duas). */
+          peso_medio_negociado_kg: Math.round((parseNumericValue(l.pesoMedioKg) || 0) * 100) / 100 || null,
           criterio_valor: l.criterioValor,
           valor_informado: parseNumericValue(l.valorInformado) || null,
           /* Vazio vira `null`: string vazia no banco seria "o operador escreveu nada",
