@@ -139,7 +139,7 @@ describe('T6 — o extrato do abate', () => {
     expect(tr.className).toContain('bg-[#fff7ed]');
     expect(screen.getByTestId('total-deduzido').textContent).toBe('Funrural retido +2.500,10');
     expect(screen.getAllByText('Conta corrente do frigorífico').length).toBeGreaterThan(0);
-    expect(screen.getByTestId('card-entrega').textContent).toContain('Entregue · bruto no DRE');
+    expect(screen.getByTestId('card-entrega').textContent).toContain('Entregue · bruto');
     expect(tr.getAttribute('data-clicavel')).toBe('sim');
     fireEvent.click(tr);
     expect(abrir).toHaveBeenCalledWith('ld1');
@@ -180,6 +180,42 @@ describe('T8 — o espelho das categorias do abate, preso a\' migration', () => 
     expect(doBanco('Abates de Machos')).toEqual(doFront('macho'));
     expect(doBanco('Abates de Fêmeas')).toEqual(doFront('femea'));
     expect(doFront('macho').length).toBeGreaterThan(0);
+  });
+});
+
+describe('T10 — FIX: o modal do abate nao transborda (coluna principal encolhe, rotulos do tamanho da venda)', () => {
+  const ler = (p: string) => readFileSync(resolve(process.cwd(), p), 'utf8');
+  /* a classe da coluna logo abaixo do grid de duas colunas do shell */
+  const colunaPrincipal = (src: string) => {
+    const i = src.indexOf('lg:grid-cols-[1fr_240px]');
+    if (i < 0) return null;
+    const m = src.slice(i).match(/<div className="([^"]*)">/);
+    return m ? m[1] : null;
+  };
+  it('auto-teste do leitor', () => {
+    expect(colunaPrincipal('x lg:grid-cols-[1fr_240px]">\n  <div className="flex min-w-0">')).toBe('flex min-w-0');
+    expect(colunaPrincipal('sem grid')).toBeNull();
+  });
+  it('a coluna principal do shell do abate tem min-w-0, como a da venda e a da compra', () => {
+    for (const p of ['src/components/abate/AbateModalShell.tsx', 'src/components/venda/VendaModalShell.tsx', 'src/components/compra/CompraModalShell.tsx']) {
+      const c = colunaPrincipal(ler(p));
+      expect(c, p).not.toBeNull();
+      expect((c ?? '').split(/\s+/), p).toContain('min-w-0');
+    }
+  });
+  it('os rotulos do abate nao passam dos da venda (o titulo do frigorifico e o grupo do saldo sao as excecoes declaradas)', () => {
+    const rotulos = (lado: 'abate' | 'venda') => {
+      const r = render(<AbaContaCorrenteOC api={api(cc())} somenteLeitura={false} lado={lado} />);
+      const card = screen.getByTestId('card-entrega').querySelector('span')?.textContent ?? '';
+      const botoes = [...document.querySelectorAll('button')].map(b => (b.textContent ?? '').trim()).filter(t => t.startsWith('+'));
+      r.unmount();
+      return { card, botoes };
+    };
+    const a = rotulos('abate'); const v = rotulos('venda');
+    expect(a.card.length).toBeGreaterThan(0);
+    expect(a.card.length).toBeLessThanOrEqual(v.card.length);
+    expect(a.botoes.length).toBe(v.botoes.length);
+    a.botoes.forEach((t, i) => expect(t.length).toBeLessThanOrEqual(v.botoes[i].length));
   });
 });
 

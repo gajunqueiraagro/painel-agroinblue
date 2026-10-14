@@ -773,8 +773,10 @@ export function AbateModalShell({
       {/* ⚠ O RESUMO COMECA NO CABECALHO E VAI ATE O RODAPE: as abas ficam DENTRO da
           coluna da esquerda. Com as abas por cima das duas colunas, o resumo perdia os
           44px delas e cortava no fim — e a barra de abas nao diz nada sobre o resumo. */}
+      {/* ⚠ `min-w-0` NA COLUNA PRINCIPAL, como na venda e na compra: sem ele o `1fr` nao encolhe abaixo do conteudo, e a linha de
+          botoes do conta corrente empurrava o resumo lateral e o X para fora do modal (FIX OC-CC-ABATE-01, 14/10/2026). */}
       <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[1fr_240px]">
-        <div className="flex min-h-0 flex-col">
+        <div className="flex min-h-0 min-w-0 flex-col">
         {/* BARRA DE ABAS — template do CompraModalShell (bg-card, border-b, px-6 py-3). */}
         <div className="shrink-0 bg-card border-b px-2 py-1 flex items-center gap-1">
           {abasDoAbate(!!ocOperacaoId).map(a => {

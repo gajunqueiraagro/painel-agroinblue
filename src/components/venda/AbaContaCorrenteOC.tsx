@@ -114,7 +114,8 @@ const TEXTOS: Record<LadoContaCorrente, {
   },
   /* OC-CC-ABATE-01 PR 2 — o abate fala como a venda, com o frigorifico; a entrega e' o BRUTO (liquido + Funrural) no DRE. */
   abate: {
-    cardEntrega: 'Entregue · bruto no DRE', cardDinheiro: 'Recebido', titulo: 'Conta corrente do frigorífico',
+    /* FIX OC-CC-ABATE-01 (14/10): o rotulo do card no tamanho do da venda ("Entregue · DRE R$"); o valor e' o BRUTO. */
+    cardEntrega: 'Entregue · bruto', cardDinheiro: 'Recebido', titulo: 'Conta corrente do frigorífico',
     buscar: '+ Buscar recebimento no Financeiro', grupoSaldo: 'Frigorífico',
     programar: '+ Programar recebimento',
     colEntrega: 'Entrega (DRE)', colDinheiro: 'Recebido (caixa)', vazio: 'Nenhuma entrega nem recebimento ainda.',

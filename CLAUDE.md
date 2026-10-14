@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 14/10/2026 (OC-CC-ABATE-01 PR 2, +11: `src/components/venda/contaCorrenteAbate.test.tsx` 11 (novo) — 5074 depois dele;
+  Baseline em 14/10/2026 (FIX OC-CC-ABATE-01, +3 em `src/components/venda/contaCorrenteAbate.test.tsx` (11 -> 14) — 5077 depois dele; antes o
+  OC-CC-ABATE-01 PR 2, +11: `src/components/venda/contaCorrenteAbate.test.tsx` 11 (novo) — 5074 depois dele;
   antes o DRE-MODAIS-02a, +7: `src/components/agri/dreModais02.test.tsx` 7 (novo) — 5063 depois dele; antes o
   OC-CC-MODAL-FINANCEIRO-01, +24: `src/components/financeiro-v2/modoOC.test.tsx` 21 (novo),
   `src/components/venda/abaContaCorrente.test.tsx` 1 (43 -> 44), `src/lib/oc/desfazerTituloCancelado.test.ts` 1 (2 -> 3),
@@ -303,7 +304,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5074
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5077
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -4008,12 +4009,18 @@ docs/historico/frentes-ate-2026-09-29.md.)
     no abate a celula de colSpan 4 escreve "Funrural retido +X" (`cc.deduzido`, `data-testid="total-deduzido"`); na venda e na compra
     ela e' `<td className={TF} colSpan={4} />`, byte a byte (o snapshot "a VENDA nao muda" prende). A tela nao soma: o total da
     Entrega segue −entregue (BRUTO), o Saldo e' o do banco.
-  · O LADO 'abate' (`LadoContaCorrente`): fala como a venda, com o frigorifico — "Conta corrente do frigorífico", card "Entregue · bruto
-    no DRE", "Recebido", "Saldo · falta receber" / "Saldo · adiantado pelo frigorífico" / "Saldo · quitado", "Aguardando saída".
+  · O LADO 'abate' (`LadoContaCorrente`): fala como a venda, com o frigorifico — "Conta corrente do frigorífico", card "Entregue · bruto" [era "Entregue · bruto
+    no DRE"; encurtado no FIX de 14/10, abaixo], "Recebido", "Saldo · falta receber" / "Saldo · adiantado pelo frigorífico" / "Saldo · quitado", "Aguardando saída".
     `AbaFinanceiroOC` liga o hook, o lado e o gate tambem no abate; o `AbateModalShell` monta `useOcContaCorrente` UMA vez (colado
     ao `useOcCompromissos`) e a desce por `ccApiExterno`; com conta corrente o `BlocoTopoAba` de 3 da aba some (a aba tem os 5 cards
     proprios). "Atualizar entregas" em rascunho: apagado com `MOTIVO_ATUALIZAR_EM_RASCUNHO` (o `LancamentosTab` passa `ocRascunho`
     ao shell do abate, como ao da venda).
+  · ⚠ FIX 14/10/2026 — O MODAL DO ABATE TRANSBORDAVA na aba Financeiro em conta corrente (o resumo lateral e o X de fechar saiam
+    pela direita): a coluna principal do grid `lg:grid-cols-[1fr_240px]` do `AbateModalShell` nao tinha `min-w-0` (a venda e a compra
+    ja tinham), e o `1fr` nao encolhia abaixo da linha de botoes do conta corrente. Conserto: `min-w-0` na coluna, e o rotulo do card
+    da entrega no tamanho do da venda. Os demais textos do abate ja tinham o tamanho dos da venda; "Conta corrente do frigorífico" e o
+    grupo "Frigorífico" do cabecalho ficam (excecoes declaradas). Preso por T10 de `contaCorrenteAbate.test.tsx` (as tres colunas com
+    `min-w-0`; rotulos do abate <= os da venda), com as duas mutacoes mortas. ⚠ NAO PROVADO NO NAVEGADOR (sem ferramenta nesta sessao).
   · RESUMO LATERAL DO ABATE: com conta corrente, 4 linhas lidas de `cc` (Entregue · bruto / Funrural retido / Recebido / Saldo), zero
     aritmetica; sem ela (modelo 'titulo'), o bloco de antes, movido verbatim.
   · `TIPOS_EXPLICACAO_DO_LADO.abate` = desconto comercial, permuta/despesa, outra receita, devolucao — SEM 'ajuste_preco' (o banco
