@@ -17,7 +17,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ModalNegociarLote } from '@/components/abate/ModalNegociarLote';
-import { linhaVazia, type LoteAbate } from '@/components/abate/calculoDoLote';
+import { linhaVazia, paraCalculo, totaisDoAbate, type LoteAbate } from '@/components/abate/calculoDoLote';
+import { buildAbateCalculation } from '@/lib/calculos/abate';
 import type { LinhaAbate } from '@/hooks/useOperacaoAbate';
 
 const M: LoteAbate = {
@@ -82,11 +83,15 @@ describe('Modal do lote — a unidade vem da conta', () => {
   });
 });
 
-describe('Rendimento e arrobas — derivados, nunca digitados', () => {
-  it('o rendimento aparece fora de card e não tem campo', () => {
+/* ⚠ ABATE-PROJETADO-01b (Gabriel, 14/10/2026) REVOGOU "Rendimento e arrobas — derivados, nunca digitados": o rendimento PODE
+   ser digitado (forma "RC %" do seletor da carcaca) e a carcaca e' entao derivada pelo dono. Fora do RC %, segue derivado. */
+describe('Rendimento: derivado em cabeça/total, digitável em RC % (a carcaça sai do dono)', () => {
+  it('em cabeça/total o rendimento aparece derivado e não tem campo', () => {
     montar(linha());
-    /* 250 kg de carcaça sobre 500 kg de peso vivo = 50,00%. */
-    expect(screen.getByText(/50\.00%|50,00%/)).toBeInTheDocument();
+    /* 250 kg de carcaça sobre 500 kg de peso vivo = 50,00%. ABATE-PROJETADO-01b: aparece no Rendimento E em cinza ao lado
+       do seletor da carcaça ("RC 50,00%"), as duas leituras do mesmo dono. */
+    expect(screen.getAllByText(/50\.00%|50,00%/)).toHaveLength(2);
+    expect(screen.getByTestId('carcaca-derivada').textContent).toBe('RC 50,00%');
     const valores = [...document.querySelectorAll('input[type="number"]')].map(i => (i as HTMLInputElement).value);
     expect(valores).not.toContain('50');
   });
@@ -103,6 +108,95 @@ describe('Rendimento e arrobas — derivados, nunca digitados', () => {
     /* Digitou 250 no lado `cab`; grava o total das 10 cabeças. */
     expect(proxima.pesoCarcacaKg).toBe(2500);
     expect(proxima.pesoCarcacaFonte).toBe('cabeca');
+  });
+});
+
+describe('ABATE-PROJETADO-01b — rendimento pode ser digitado; carcaça derivada pelo dono', () => {
+  const vazio = () => linha({ pesoCarcacaKg: null, pesoCarcacaFonte: null, rendimentoCarcacaPct: null });
+  const escolherRc = () => fireEvent.click(screen.getByText('RC %'));
+  const digitar = (v: string) => { fireEvent.change(campoPorRotulo('Carcaça'), { target: { value: v } }); fireEvent.blur(campoPorRotulo('Carcaça')); };
+
+  it('a unidade escolhida ANTES de digitar vale: RC % 52 → carcaça 260 kg/cab (total 2.600) pelo dono, fonte cabeça', () => {
+    const onAplicar = montar(vazio());
+    escolherRc();
+    digitar('52');
+    expect(screen.getByTestId('carcaca-derivada').textContent).toBe('= 260,00 kg/cab');
+    fireEvent.click(screen.getByText('Aplicar'));
+    const p = onAplicar.mock.calls[0][0];
+    expect(p.rendimentoCarcacaPct).toBe(52);
+    expect(p.pesoCarcacaKg).toBe(2600);
+    expect(p.pesoCarcacaFonte).toBe('cabeca');
+    /* arrobas e valor seguem o dono: 260 / 15 × 10 × R$ 300 = R$ 52.000,00 */
+    expect(screen.getAllByText('R$ 52.000,00').length).toBeGreaterThan(0);
+  });
+
+  it('o RC aceita conta (pelo dono do lote), 2 casas; conta que nao fecha vira recusa com a frase do dono', () => {
+    const onAplicar = montar(vazio());
+    escolherRc();
+    digitar('51+0,96');
+    expect(campoPorRotulo('Carcaça').value).toBe('51,96');
+    digitar('52+');
+    expect(screen.getByTestId('linha-carcaca').className).toContain('text-destructive');
+    expect(campoPorRotulo('Carcaça').value).toBe('51,96');
+    fireEvent.click(screen.getByText('Aplicar'));
+    expect(onAplicar.mock.calls[0][0].rendimentoCarcacaPct).toBe(51.96);
+  });
+
+  it('o RC digitado nao vira o derivado da carcaça arredondada, nem quando outro campo muda (3 cab × 333,33 kg, RC 51,37)', () => {
+    /* 333,33 × 51,37% = 171,2316 kg/cab -> total 513,69 (2 casas); dele o RC derivado seria 51,3695 — o digitado tem de ficar */
+    const T: LoteAbate = { id: 'l1', ordem: 1, categoria: 'bois', categoriaLabel: 'Bois', quantidade: 3, pesoMedioKg: 333.33 };
+    const onAplicar = vi.fn();
+    render(<ModalNegociarLote lote={T} linha={vazio()} cenario="projetado" onAplicar={onAplicar} onFechar={vi.fn()} />);
+    escolherRc();
+    digitar('51,37');
+    irPara('Preço');
+    const preco = screen.getAllByText('Preço base').find(el => el.tagName === 'LABEL')!.parentElement!.querySelector('input')!;
+    fireEvent.change(preco, { target: { value: '310' } });
+    fireEvent.blur(preco);
+    fireEvent.click(screen.getByText('Aplicar'));
+    expect(onAplicar.mock.calls[0][0]).toMatchObject({ rendimentoCarcacaPct: 51.37, pesoCarcacaKg: 513.69 });
+  });
+
+  it('trocar RC → cabeça mantém o número coerente (260,00 kg/cab, RC derivado 52%)', () => {
+    const onAplicar = montar(vazio());
+    escolherRc();
+    digitar('52');
+    fireEvent.click(screen.getByText('cabeça'));
+    expect(campoPorRotulo('Carcaça').value).toBe('260,00');
+    expect(screen.getByTestId('carcaca-derivada').textContent).toBe('RC 52,00%');
+    fireEvent.click(screen.getByText('Aplicar'));
+    expect(onAplicar.mock.calls[0][0]).toMatchObject({ pesoCarcacaKg: 2600, pesoCarcacaFonte: 'cabeca', rendimentoCarcacaPct: 52 });
+  });
+
+  it('reabre em RC % quando a carcaça gravada é exatamente a do RC de 2 casas; RC derivado (4 casas) reabre pela fonte', () => {
+    montar(linha({ pesoCarcacaKg: 2600, pesoCarcacaFonte: 'cabeca', rendimentoCarcacaPct: 52 }));
+    expect(campoPorRotulo('Carcaça').value).toBe('52,00');
+    expect(screen.getByTestId('carcaca-derivada').textContent).toBe('= 260,00 kg/cab');
+  });
+
+  it('NJ 30/09, um lote de 54 cab, PV 460,02, RC 51,96% → o dono deriva 239,03 kg/cab (12.907,43 kg)', () => {
+    const NJ: LoteAbate = { id: 'l1', ordem: 1, categoria: 'vacas', categoriaLabel: 'Vacas', quantidade: 54, pesoMedioKg: 460.02 };
+    const onAplicar = vi.fn();
+    render(<ModalNegociarLote lote={NJ} linha={vazio()} cenario="projetado" onAplicar={onAplicar} onFechar={vi.fn()} />);
+    escolherRc();
+    digitar('51,96');
+    expect(screen.getByTestId('carcaca-derivada').textContent).toBe('= 239,03 kg/cab');
+    fireEvent.click(screen.getByText('Aplicar'));
+    expect(onAplicar.mock.calls[0][0]).toMatchObject({ pesoCarcacaKg: 12907.43, rendimentoCarcacaPct: 51.96 });
+  });
+
+  it('o 239,01 / 51,96 do Resumo da OC c109ba8a vem do AGREGADO dos dois lotes reais (36 × 461,72 e 18 × 456,61)', () => {
+    const l1: LoteAbate = { id: 'a', ordem: 1, categoria: 'vacas', categoriaLabel: 'Vacas', quantidade: 36, pesoMedioKg: 461.72 };
+    const l2: LoteAbate = { id: 'b', ordem: 2, categoria: 'vacas', categoriaLabel: 'Vacas', quantidade: 18, pesoMedioKg: 456.61 };
+    const calc = new Map([
+      ['a', buildAbateCalculation(paraCalculo({ ...linhaVazia('a'), pesoCarcacaKg: 8695.5, pesoCarcacaFonte: 'total' }, l1))],
+      ['b', buildAbateCalculation(paraCalculo({ ...linhaVazia('b'), pesoCarcacaKg: 4211, pesoCarcacaFonte: 'total' }, l2))],
+    ]);
+    const t = totaisDoAbate([l1, l2], calc);
+    expect(t.cabecas).toBe(54);
+    expect(t.pesoMedio.toFixed(2)).toBe('460.02');
+    expect(t.carcacaCab.toFixed(2)).toBe('239.01');
+    expect(t.rc.toFixed(2)).toBe('51.96');
   });
 });
 

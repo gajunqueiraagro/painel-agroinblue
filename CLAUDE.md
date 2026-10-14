@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 14/10/2026 (OC-LISTA-CAB-KG-COLUNAS-01, +1 em `src/components/operacao-comercial/central/centralListaLayout.test.tsx`
+  Baseline em 14/10/2026 (ABATE-PROJETADO-01b, +7 em `src/components/abate/modalNegociarLoteUnidades.test.tsx` (27 -> 34) — 5188
+  depois dele; antes o OC-LISTA-CAB-KG-COLUNAS-01, +1 em `src/components/operacao-comercial/central/centralListaLayout.test.tsx`
   (8 -> 9) — 5181 depois dele; antes o OC-LISTA-FINANC-CC-01c, +5 em `src/components/operacao-comercial/central/centralFinancCC.test.tsx` (12 -> 17) —
   5180 depois dele; antes o ABATE-PROJETADO-01a, +17: `src/components/abate/modalNegociarLoteUnidades.test.tsx` 14 (13 -> 27),
   `src/components/compra/excluirLoteDialogo.test.tsx` 3 (3 -> 6) — 5175 depois dele; antes o OC-LISTA-FINANC-CC-01b, +8: `src/components/operacao-comercial/central/resumoFinancCC.test.tsx` 6
@@ -317,7 +318,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5181
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5188
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3918,6 +3919,21 @@ docs/historico/frentes-ate-2026-09-29.md.)
 - ⚠ NO MODAL DO LOTE DO ABATE A UNIDADE ESCOLHIDA VALE MESMO COM O CAMPO VAZIO (ABATE-PROJETADO-01a, so' tela). `CampoComUnidade`
   (`ModalNegociarLote.tsx`, os 6 campos de bonus e desconto) guarda a unidade num estado local que sobe JUNTO com o valor; a fonte
   gravada manda ao abrir. Antes, escolher "@" ou "%" com o campo vazio se perdia e o numero entrava em R$.
+- ⚠ O RENDIMENTO DE CARCACA PODE SER DIGITADO (RC %), E A CARCACA SAI DO DONO (ABATE-PROJETADO-01b, Gabriel 14/10/2026, so' tela;
+  REVOGA "rendimento e arrobas: derivados, nunca digitados"). No Desempenho do `ModalNegociarLote` o seletor da carcaca tem TRES
+  formas: cabeça | total | RC %. Em RC % o campo recebe o rendimento (aceita conta pelo dono do lote, `resolverCampoDoLote`, 2
+  casas) e a carcaca e' DERIVADA pelo dono (`buildAbateCalculation`: PV × RC% ÷ 100), em cinza ao lado ("= 239,03 kg/cab"); em
+  cabeça/total, como antes, com o RC derivado em cinza. A forma escolhida vale antes de digitar.
+  · GRAVA: o RC DIGITADO em `rendimento_carcaca_pct` (nao o recalculado da carcaca arredondada) e a carcaca que o dono derivou,
+    TOTAL do lote a 2 casas, com fonte 'cabeca' — o CHECK do banco segue cabeca|total, SEM DDL. `oc_salvar_abate` aceita carcaca
+    nula com RC (so' recusa sem os dois) e grava os dois como vem; `_oc_sync_abate_lancamento` copia o RC para
+    `lancamentos.rendimento_carcaca`. Nenhum numero gravado muda ate' o lote ser salvo de novo.
+  · REABRIR (sem coluna para lembrar a forma): em RC % quando ha' so' o RC, ou quando o RC gravado tem ate' 2 casas E a carcaca
+    gravada e' EXATAMENTE a que o dono deriva dele (`modoDaCarcacaAoAbrir`); senao, pela fonte gravada. ⚠ AMBIGUIDADE ACEITA: lote
+    digitado por cabeça cujo RC derivado da' 2 casas exatas (a NJ 1645ba75: 260 kg/cab sobre 500 = 52%) reabre em RC %.
+  ⚠ O 239,01 kg/cab / 51,96% DO NJ 30/09 (c109ba8a) E' O AGREGADO dos dois lotes reais (36 × 461,72 e 18 × 456,61, carcaca 12.906,5
+    kg); num lote so', PV 460,02 × RC 51,96% da' 239,03 kg/cab (provado nos dois testes).
+  ⚠ NAO PROVADO NO NAVEGADOR: o seletor de 132px e a linha do derivado na tela real.
 - ⚠ FUNRURAL / SENAR EM % INCIDE SOBRE O BRUTO E E' GRAVADO EM R$ (ABATE-PROJETADO-01a, Gabriel 14/10/2026). O bruto e' o valor
   da NF — base ± bonus e descontos —, o mesmo que vira "entregue" no conta corrente; NUNCA o preco base.
   · DONO: `buildAbateCalculation` (`src/lib/calculos/abate.ts`) tira o bruto da MESMA `cascataAbate` (com Funrural zero) e aplica o %
