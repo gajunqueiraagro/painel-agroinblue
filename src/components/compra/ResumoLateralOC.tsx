@@ -5,7 +5,7 @@ import { pesoMedioPorCabeca, valorPorKgNegociado, type CompraLotesApi } from '@/
 import type { LoteRecebimento, EstadoRecebimento } from '@/hooks/useOperacaoRecebimento';
 import type { DocumentoLista } from '@/hooks/useOperacaoDocumentos';
 import type { ResumoLiquidacao, ObrigacaoLinha } from '@/hooks/useOperacaoLiquidacao';
-import { corDoSaldo, rotuloDoSaldo, type ContaCorrente } from '@/lib/oc/contaCorrente';
+import { classeDaEntregaNaTela, classeDoDinheiroNaTela, classeDoSaldoNaTela, rotuloDoSaldo, totaisNaTela, type ContaCorrente } from '@/lib/oc/contaCorrente';
 
 // Resumo lateral OC (PR-RESUMO-LATERAL-01a). Painel PERMANENTE das 6 etapas, independente
 //   da aba ativa. Espelho sintético das fontes OFICIAIS já montadas (uma única vez) em
@@ -159,10 +159,14 @@ export function ResumoLateralOC({
         {contaCorrente ? (
           /* entrada positiva (verde), pago negativo (vermelho), saldo pela cor do extrato: positivo (falta pagar) verde como na tabela */
           <div data-testid="resumo-conta-corrente">
-            <LinhaResumo rotulo="Entrada" valor={formatMoeda(contaCorrente.entregue)} cor={contaCorrente.entregue > 0 ? 'text-[#15803d]' : undefined} />
-            <LinhaResumo rotulo="Pago" valor={formatMoeda(-contaCorrente.recebido)} cor={contaCorrente.recebido > 0 ? 'text-[#b91c1c]' : undefined} />
-            <LinhaResumo rotulo={rotuloDoSaldo(contaCorrente.saldo, 'compra', contaCorrente.situacao)} forte valor={formatMoeda(contaCorrente.saldo)}
-              cor={corDoSaldo(contaCorrente.saldo) === 'neg' ? 'text-[#b91c1c]' : corDoSaldo(contaCorrente.saldo) === 'pos' ? 'text-[#15803d]' : undefined} />
+            {/* OC-CC-SINAL-FAZENDA-01 — o lado da fazenda, do dono: entrada e pago positivos (custo e saida de caixa, vermelhos);
+                saldo positivo = falta pagar (vermelho), negativo = adiantado (verde). */}
+            <LinhaResumo rotulo="Entrada" valor={formatMoeda(totaisNaTela(contaCorrente, 'compra').entrega)}
+              cor={classeDaEntregaNaTela(totaisNaTela(contaCorrente, 'compra').entrega, 'compra', 'total') || undefined} />
+            <LinhaResumo rotulo="Pago" valor={formatMoeda(totaisNaTela(contaCorrente, 'compra').dinheiro)}
+              cor={classeDoDinheiroNaTela(totaisNaTela(contaCorrente, 'compra').dinheiro, 'compra') || undefined} />
+            <LinhaResumo rotulo={rotuloDoSaldo(totaisNaTela(contaCorrente, 'compra').saldo, 'compra', contaCorrente.situacao)} forte
+              valor={formatMoeda(totaisNaTela(contaCorrente, 'compra').saldo)} cor={classeDoSaldoNaTela(totaisNaTela(contaCorrente, 'compra').saldo) || undefined} />
           </div>
         ) : (
         <div>

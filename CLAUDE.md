@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 14/10/2026 (FIX OC-CC-ABATE-01, +3 em `src/components/venda/contaCorrenteAbate.test.tsx` (11 -> 14) — 5077 depois dele; antes o
+  Baseline em 14/10/2026 (OC-CC-SINAL-FAZENDA-01, +7 em `src/lib/oc/contaCorrente.test.ts` (12 -> 19) — 5084 depois dele; antes o
+  FIX OC-CC-ABATE-01, +3 em `src/components/venda/contaCorrenteAbate.test.tsx` (11 -> 14) — 5077 depois dele; antes o
   OC-CC-ABATE-01 PR 2, +11: `src/components/venda/contaCorrenteAbate.test.tsx` 11 (novo) — 5074 depois dele;
   antes o DRE-MODAIS-02a, +7: `src/components/agri/dreModais02.test.tsx` 7 (novo) — 5063 depois dele; antes o
   OC-CC-MODAL-FINANCEIRO-01, +24: `src/components/financeiro-v2/modoOC.test.tsx` 21 (novo),
@@ -304,7 +305,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5077
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5084
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3869,6 +3870,39 @@ docs/historico/frentes-ate-2026-09-29.md.)
   quem mexer num confere o outro. O selo do rodape (`SeloRegraDaLinha`) diz a regra da linha.
 
 ## REGRAS VIGENTES — OPERACAO COMERCIAL E FINANCEIRO
+- ⚠ O EXTRATO DO CONTA CORRENTE LE^ PELO LADO DA FAZENDA, NOS TRES LADOS, NUM DONO SO' (OC-CC-SINAL-FAZENDA-01, Gabriel 14/10/2026, so'
+  tela — o banco NAO muda). `oc_conta_corrente` manda os numeros no sinal "da conta da contraparte"; a TELA so' multiplica cada um
+  pelo fator do lado, e quem sabe o fator e' `sinalDaFazenda(lado)` (`src/lib/oc/contaCorrente.ts`). PROIBIDO escrever o fator a'
+  mao em tela (o `sinalEntrega` da aba, os `-cc.recebido` / `-contaCorrente.recebido`): preso por teste de fonte com auto-teste
+  do detector (`src/lib/oc/contaCorrente.test.ts`).
+  · FATORES (tela = fator × banco), MEDIDOS no banco em 14/10 (so' leitura):
+        lado            entrega   dinheiro   saldo
+        venda / abate   −1        +1         −1
+        compra          +1        −1         +1
+    abate 02be1a41: entrega −373.877,60 -> +373.877,60 · Funrural +6.094,20 -> −6.094,20 · recebido +367.783,40 igual · saldo 0;
+    abate 26fd02c1: saldo −212.449,03 -> +212.449,03 (falta receber); compra fcdbe0bb: entradas +35.000 / +29.440 iguais, pago
+    −63.440 -> +63.440, saldo +1.000 igual (falta pagar). A explicacao tem o sinal do SALDO no banco e mora na coluna da entrega:
+    os dois fatores sao iguais nos tres lados (`noSinalDaFazenda`).
+  · NA TELA: entrega positiva (venda/abate verde = receita; compra vermelha = custo); deducao e explicacao que reduz, negativas
+    vermelhas; explicacao que aumenta, positiva verde; recebido / pago positivos (recebido verde, pago vermelho), devolucao
+    negativa; SALDO POSITIVO = FALTA (vermelho), ZERO = quitado (sem cor), NEGATIVO = adiantado (verde); o programado fica fora
+    do saldo, em cinza. `0 × −1` nunca vira "−0,00".
+  · O DONO: `sinalDaFazenda`, `linhaNaTela(l, lado)`, `saldoNaTela(cc, lado)`, `totaisNaTela(cc, lado)` (entregue e recebido do
+    envelope ja' vem em modulo), `noSinalDaFazenda(v, lado)` (saldo a explicar, explicado, falta, valor de explicacao, Funrural),
+    `corDoSaldoNaTela` ('falta' | 'quitado' | 'adiantado') e as classes `classeDoSaldoNaTela`, `classeDaEntregaNaTela`,
+    `classeDoDinheiroNaTela`, `classeDoAjusteNaTela` (as cores de `COR_SINAL`). `rotuloDoSaldo` PASSOU A RECEBER O SALDO NA TELA
+    (positivo = falta, negativo = adiantado; nao ha' `rotuloDoSaldoNaTela`). `barraDaDiferenca` decide a frase pelo falta na tela e
+    devolve `valor` na tela. `corDoSaldo` (sinal cru) e `efeitoNoSaldo` (sinal do banco) ficam, para a CONTA, nunca para a tela.
+  · ONDE VALE: `AbaContaCorrenteOC` (linhas, rodape — "Funrural retido −X" —, cards, o dialogo "Explicar diferença": cards, tabela
+    e total), os tres resumos laterais (`VendaModalShell`, `AbateModalShell` `resumo-cc-abate`, `ResumoLateralOC` da compra — "Pago"
+    positivo vermelho, "Funrural retido" negativo vermelho) e a previa do `CriarOCDoLegadoDialog`. No "Buscar pagamento" da compra
+    o valor do pagamento passou a positivo (vermelho). Classes, regua e testids NAO mudaram: so' o sinal do texto e a cor escolhida.
+  · TESTES TROCADOS COM O CONTRATO, sem afrouxar: `abaContaCorrente`, `contaCorrenteAbate` (T3, T6 — agora a montagem do abate
+    com o envelope do banco —, T7), `contaCorrenteCompra` (e o snapshot "a VENDA nao muda", REGRAVADO: 8 trocas, todas de sinal ou
+    de cor de valor), `aguardandoSaida`, `criarOCDoLegado` e os casos de `rotuloDoSaldo` / `barraDaDiferenca` da lib. 4 mutacoes
+    mortas (o dono devolvendo o sinal do banco -> 18 casos; a cor do saldo pelo `corDoSaldo` cru -> 8; a compra sem o fator do
+    dinheiro -> 4; `-contaCorrente.recebido` de volta no resumo da compra -> o teste de fonte).
+  ⚠ NAO PROVADO NO NAVEGADOR (sem ferramenta nesta sessao): as tres OCs medidas (02be1a41, 26fd02c1, fcdbe0bb) abertas na tela.
 - ⚠ A OC EM CONTA CORRENTE LANCA PELO MODAL DO FINANCEIRO (MODO OC), E O DESFAZER E' ATOMICO NO BANCO (OC-CC-MODAL-FINANCEIRO-01, Gabriel
   13/10/2026, banco + tela; ⚠ HOMOLOGACAO RUNTIME PENDENTE — a tela foi ABERTA e MEDIDA, nada foi SALVO por ela).
   Migration `supabase/migrations/20261027197400_oc_cc_modal_financeiro_01.sql` (md5 do arquivo 0175f4993ace930a5df0311da0ce32a3) —

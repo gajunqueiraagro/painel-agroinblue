@@ -5,9 +5,12 @@
  * 01c (saldo -1.357,89; ajuste de 1.000 no lote 5 + permuta de 357,89 zeram).
  */
 import { describe, it, expect } from 'vitest';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   lerContaCorrente, corDoSaldo, rotuloDoSaldo, barraDaDiferenca, rotuloRecebimento, dataCurta, contaComNumero, efeitoNoSaldo,
-  totalDoRascunho, type TipoExplicacao,
+  totalDoRascunho, sinalDaFazenda, linhaNaTela, saldoNaTela, totaisNaTela, noSinalDaFazenda, corDoSaldoNaTela, classeDoSaldoNaTela,
+  classeDaEntregaNaTela, classeDoDinheiroNaTela, classeDoAjusteNaTela, COR_SINAL, type TipoExplicacao, type ContaCorrente,
 } from './contaCorrente';
 
 const ent = (data: string, valor: number, saldo: number, lote: number, cab: number, categoria = 'desmama_m') => ({
@@ -52,8 +55,9 @@ describe('conta corrente da venda — leitura e sinal do caixa', () => {
     expect(cc.linhas[0].movEntrega).toBe(-565521.66);
     expect(cc.linhas[2].movRecebido).toBe(992140.99);
     expect(cc.linhas[10].saldo).toBe(cc.saldo);
-    expect(rotuloDoSaldo(cc.saldo)).toBe('Saldo · falta receber');
-    expect(barraDaDiferenca(cc)).toEqual({ frase: 'Recebeu R$ 1.357,89 a menos do que entregou.', valor: -1357.89 });
+    /* OC-CC-SINAL-FAZENDA-01 — o rotulo recebe o saldo NA TELA, e a barra devolve o que falta na tela (positivo = falta) */
+    expect(rotuloDoSaldo(saldoNaTela(cc, 'venda'))).toBe('Saldo · falta receber');
+    expect(barraDaDiferenca(cc)).toEqual({ frase: 'Recebeu R$ 1.357,89 a menos do que entregou.', valor: 1357.89 });
     expect(rotuloRecebimento(cc.linhas, 'r-2025-05-22')).toBe('Receb. 2/4');
   });
 
@@ -63,7 +67,9 @@ describe('conta corrente da venda — leitura e sinal do caixa', () => {
     expect(corDoSaldo(0)).toBe('zero');
     expect(corDoSaldo(0.004)).toBe('zero');
     expect(corDoSaldo(null)).toBe('zero');
-    expect(rotuloDoSaldo(2.75)).toBe('Saldo · adiantado pelo comprador');
+    /* OC-CC-SINAL-FAZENDA-01 — `rotuloDoSaldo` recebe o saldo NA TELA: positivo falta, negativo adiantado */
+    expect(rotuloDoSaldo(-2.75)).toBe('Saldo · adiantado pelo comprador');
+    expect(rotuloDoSaldo(2.75)).toBe('Saldo · falta receber');
     expect(rotuloDoSaldo(0)).toBe('Saldo · quitado');
   });
 
@@ -89,7 +95,7 @@ describe('conta corrente da venda — leitura e sinal do caixa', () => {
 
   it('A MAIS: recebeu mais do que entregou — a frase diz "a mais"', () => {
     const cc = lerContaCorrente({ ...HELDER, saldo: 398.74, saldo_a_explicar: 398.74, falta_explicar: 398.74, situacao: 'adiantado' });
-    expect(cc && barraDaDiferenca(cc)).toEqual({ frase: 'Recebeu R$ 398,74 a mais do que entregou.', valor: 398.74 });
+    expect(cc && barraDaDiferenca(cc)).toEqual({ frase: 'Recebeu R$ 398,74 a mais do que entregou.', valor: -398.74 });
   });
 
   it('COMBINACAO ATE ZERAR: ajuste de 1.000 + permuta de 357,89 explicam os 1.357,89; outra receita e devolucao vao no sentido oposto', () => {
@@ -148,5 +154,100 @@ describe('rotulos curtos do extrato (fix2)', () => {
       .filter((x): x is NonNullable<typeof x> => !!x);
     expect(descricaoDoEvento(rs[1], rs, 'venda', cat)).toBe('Receb. 2/4');
     expect(descricaoDoEvento(rs[3], rs, 'compra', cat)).toBe('Pgto. 4/4');
+  });
+});
+
+/* OC-CC-SINAL-FAZENDA-01 — o extrato le' pelo lado da FAZENDA. Numeros MEDIDOS no banco (14/10/2026, so' leitura): abate 02be1a41
+   e 26fd02c1 (Vera), compra fcdbe0bb (Agnaldo). A tela so' multiplica cada numero do banco pelo fator do lado. */
+const ccDe = (linhas: unknown[], extra: Record<string, unknown>) => {
+  const cc = lerContaCorrente({ entregue: 0, recebido: 0, saldo: 0, situacao: 'quitado', a_entregar: 0, cab_entregue: 0,
+    saldo_a_explicar: 0, explicado: 0, falta_explicar: 0, saidas_sem_entrega: 0, linhas, explicacoes: [], ...extra });
+  if (!cc) throw new Error('envelope nao leu');
+  return cc;
+};
+describe('OC-CC-SINAL-FAZENDA-01 — o dono do sinal de apresentacao', () => {
+  it('os fatores por lado: venda e abate viram entrega e saldo; a compra vira o dinheiro', () => {
+    expect(sinalDaFazenda('venda')).toEqual({ entrega: -1, dinheiro: 1, saldo: -1 });
+    expect(sinalDaFazenda('abate')).toEqual({ entrega: -1, dinheiro: 1, saldo: -1 });
+    expect(sinalDaFazenda('compra')).toEqual({ entrega: 1, dinheiro: -1, saldo: 1 });
+  });
+
+  it('abate 02be1a41: entrega +373.877,60, Funrural −6.094,20, recebido +367.783,40, saldo 0 quitado', () => {
+    const cc = ccDe([
+      { tipo: 'entrega', data: '2026-09-02', parte_id: 'e', lote_ordem: 1, cab: 60, mov_entrega: -373877.6, mov_recebido: null, status: 'sem_caixa', no_saldo: true, saldo: -373877.6 },
+      { tipo: 'deducao', subtipo: 'funrural', data: '2026-09-02', parte_id: 'd', lote_ordem: 1, mov_entrega: 6094.2, mov_recebido: null, status: 'sem_caixa', no_saldo: true, saldo: -367783.4 },
+      { tipo: 'recebimento', data: '2026-09-10', parte_id: 'r', mov_entrega: null, mov_recebido: 367783.4, status: 'conciliado', no_saldo: true, saldo: 0 },
+    ], { entregue: 373877.6, recebido: 367783.4, deduzido: 6094.2, saldo: 0 });
+    expect(cc.linhas.map(l => linhaNaTela(l, 'abate'))).toEqual([
+      { entrega: 373877.6, dinheiro: null, saldo: 373877.6 },
+      { entrega: -6094.2, dinheiro: null, saldo: 367783.4 },
+      { entrega: null, dinheiro: 367783.4, saldo: 0 },
+    ]);
+    expect(totaisNaTela(cc, 'abate')).toEqual({ entrega: 373877.6, dinheiro: 367783.4, saldo: 0 });
+    expect(noSinalDaFazenda(6094.2, 'abate')).toBe(-6094.2);
+    expect(Object.is(saldoNaTela(cc, 'abate'), 0)).toBe(true); // nunca −0
+    expect(rotuloDoSaldo(saldoNaTela(cc, 'abate'), 'abate')).toBe('Saldo · quitado');
+    expect(classeDaEntregaNaTela(373877.6, 'abate', 'entrega')).toBe(COR_SINAL.pos);
+    expect(classeDaEntregaNaTela(-6094.2, 'abate', 'deducao')).toBe(COR_SINAL.neg);
+    expect(classeDoDinheiroNaTela(367783.4, 'abate')).toBe(COR_SINAL.pos);
+  });
+
+  it('abate 26fd02c1: saldo do banco −212.449,03 vira +212.449,03 na tela = falta receber, vermelho', () => {
+    const cc: ContaCorrente = ccDe([], { entregue: 215969.33, recebido: 0, deduzido: 3520.3, saldo: -212449.03, situacao: 'falta_receber' });
+    expect(saldoNaTela(cc, 'abate')).toBe(212449.03);
+    expect(corDoSaldoNaTela(saldoNaTela(cc, 'abate'))).toBe('falta');
+    expect(classeDoSaldoNaTela(saldoNaTela(cc, 'abate'))).toBe(COR_SINAL.neg);
+    expect(rotuloDoSaldo(saldoNaTela(cc, 'abate'), 'abate', cc.situacao)).toBe('Saldo · falta receber');
+  });
+
+  it('compra fcdbe0bb: entradas +35.000 / +29.440 iguais, pago −63.440 vira +63.440 vermelho, saldo +1.000 = falta pagar', () => {
+    const cc = ccDe([
+      { tipo: 'entrega', data: '2026-09-01', parte_id: 'e1', mov_entrega: 35000, mov_recebido: null, status: 'sem_caixa', no_saldo: true, saldo: 35000 },
+      { tipo: 'entrega', data: '2026-09-01', parte_id: 'e2', mov_entrega: 29440, mov_recebido: null, status: 'sem_caixa', no_saldo: true, saldo: 64440 },
+      { tipo: 'recebimento', data: '2026-09-05', parte_id: 'p', mov_entrega: null, mov_recebido: -63440, status: 'realizado', no_saldo: true, saldo: 1000 },
+    ], { entregue: 64440, recebido: 63440, saldo: 1000, situacao: 'falta_receber' });
+    expect(cc.linhas.map(l => linhaNaTela(l, 'compra'))).toEqual([
+      { entrega: 35000, dinheiro: null, saldo: 35000 },
+      { entrega: 29440, dinheiro: null, saldo: 64440 },
+      { entrega: null, dinheiro: 63440, saldo: 1000 },
+    ]);
+    expect(totaisNaTela(cc, 'compra')).toEqual({ entrega: 64440, dinheiro: 63440, saldo: 1000 });
+    expect(classeDaEntregaNaTela(35000, 'compra', 'entrega')).toBe(COR_SINAL.neg); // custo
+    expect(classeDoDinheiroNaTela(63440, 'compra')).toBe(COR_SINAL.neg);            // pago = saida de caixa
+    expect(classeDoDinheiroNaTela(-500, 'compra')).toBe(COR_SINAL.pos);             // devolucao do fornecedor
+    expect(rotuloDoSaldo(saldoNaTela(cc, 'compra'), 'compra')).toBe('Saldo · falta pagar');
+    expect(rotuloDoSaldo(-1000, 'compra')).toBe('Saldo · adiantado ao fornecedor');
+    expect(classeDoSaldoNaTela(1000)).toBe(COR_SINAL.neg);
+  });
+
+  it("a explicacao que reduz e' negativa vermelha; a que aumenta, positiva verde; o adiantado e' verde; o quitado sem cor", () => {
+    expect(noSinalDaFazenda(efeitoNoSaldo('desconto_comercial', 100), 'venda')).toBe(-100);
+    expect(classeDoAjusteNaTela(-100)).toBe(COR_SINAL.neg);
+    expect(noSinalDaFazenda(efeitoNoSaldo('outra_receita', 100), 'venda')).toBe(100);
+    expect(classeDoAjusteNaTela(100)).toBe(COR_SINAL.pos);
+    expect(classeDoSaldoNaTela(-5)).toBe(COR_SINAL.pos);
+    expect(classeDoSaldoNaTela(0.004)).toBe('');
+    expect(corDoSaldoNaTela(null)).toBe('quitado');
+  });
+});
+
+/* OC-CC-SINAL-FAZENDA-01 — o sinal de apresentacao tem UM dono. Nenhum arquivo de `src` (fora do dono) escreve o fator a' mao:
+   nem o antigo `sinalEntrega`, nem o dinheiro virado por "-cc.recebido" / "-contaCorrente.recebido". */
+const SINAL_A_MAO = /\bsinalEntrega\b|[-−]\s*\(?\s*(?:cc|contaCorrente)\??\.recebido\b/;
+const fontesDeSrc = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap(d => {
+  const p = join(dir, d.name);
+  if (d.isDirectory()) return fontesDeSrc(p);
+  return /\.(ts|tsx)$/.test(d.name) && !/\.test\.tsx?$/.test(d.name) ? [p] : [];
+});
+describe('OC-CC-SINAL-FAZENDA-01 — ninguem escreve o sinal de apresentacao fora do dono', () => {
+  it('o detector sabe achar (auto-teste)', () => {
+    for (const caso of ['const sinalEntrega = 1;', 'valor={-cc.recebido}', 'formatMoeda(-contaCorrente.recebido)', 'num2(- cc.recebido)',
+      'x = -(cc.recebido)', 'formatMoeda(−contaCorrente?.recebido)']) expect(SINAL_A_MAO.test(caso), caso).toBe(true);
+    for (const caso of ['cc.recebido', 'totaisNaTela(cc, lado).dinheiro', 'a - b.recebido', 'formatMoeda(r.valor)']) expect(SINAL_A_MAO.test(caso), caso).toBe(false);
+  });
+  it('nenhum arquivo de src, fora do dono', () => {
+    const arquivos = fontesDeSrc('src').filter(f => !f.endsWith(join('lib', 'oc', 'contaCorrente.ts')));
+    expect(arquivos.length).toBeGreaterThan(500);
+    expect(arquivos.filter(f => SINAL_A_MAO.test(readFileSync(f, 'utf8')))).toEqual([]);
   });
 });

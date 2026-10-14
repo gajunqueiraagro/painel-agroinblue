@@ -10,7 +10,9 @@ import { formatMoeda } from '@/lib/calculos/formatters';
 import { parseNumericValue } from '@/lib/calculos/abate';
 import { CATEGORIAS } from '@/types/cattle';
 import { rotuloDaConta } from '@/lib/financeiro/rotuloConta';
-import { corDoSaldo, dataCurta } from '@/lib/oc/contaCorrente';
+import {
+  classeDaEntregaNaTela, classeDoDinheiroNaTela, classeDoSaldoNaTela, corDoSaldo, corDoSaldoNaTela, dataCurta, linhaNaTela, totaisNaTela,
+} from '@/lib/oc/contaCorrente';
 import {
   cabecasDaDescricao, confrontoComRecebido, fazendaDasMarcadas, lerResultado, lerSugestoes, ordenarIrmas, ordenarSaidas,
   pareceComComprador, precoPorKg, saidasPreMarcadas, TEXTOS_DO_LADO, type LadoDoLegado, type RecebimentoResumo, type ResultadoCriar,
@@ -83,10 +85,9 @@ export function CriarOCDoLegadoDialog({ clienteId, lancamentoId, fornecedores, o
   const [iniciado, setIniciado] = useState(false);
   const [lado, setLado] = useState<LadoDoLegado>('venda');
   const T = TEXTOS_DO_LADO[lado];
-  /* cor pelo lado: o dinheiro da venda entra (verde), o da compra sai (vermelho); a entrega e' o contrario */
+  /* cor pelo lado: o dinheiro da venda entra (verde), o da compra sai (vermelho). A previa da conta corrente le^ o sinal do dono
+     (OC-CC-SINAL-FAZENDA-01: `linhaNaTela` / `totaisNaTela`), nao daqui. */
   const corCaixa = lado === 'compra' ? COR.neg : COR.pos;
-  const corEntrega = lado === 'compra' ? COR.pos : COR.neg;
-  const sinal = lado === 'compra' ? -1 : 1;
 
   const ids = useMemo(() => [lancamentoId, ...recebimentos.filter(r => r.id !== lancamentoId).map(r => r.id)], [lancamentoId, recebimentos]);
   const chaveIds = ids.join(',');
@@ -372,7 +373,7 @@ export function CriarOCDoLegadoDialog({ clienteId, lancamentoId, fornecedores, o
                   <colgroup><col style={{ width: 56 }} /><col style={{ width: 30 }} /><col style={{ width: 34 }} /><col style={{ width: 82 }} /><col /><col style={{ width: 170 }} /><col style={{ width: 90 }} /><col style={{ width: 90 }} /><col style={{ width: 90 }} /></colgroup>
                   <thead><tr>{['Data', 'Lote', 'Cab', 'Evento', 'Descrição', 'Conta', T.colunaEntrega, T.colunaCaixa, 'Saldo'].map(h => <th key={h} className={TH}>{h}</th>)}</tr></thead>
                   <tbody>
-                    {cc.linhas.map(l => (
+                    {cc.linhas.map(l => { const lt = linhaNaTela(l, lado); return (
                       <tr key={l.parteId} className={l.tipo === 'recebimento' ? 'bg-[#EAF1F9]' : 'bg-white'} data-tipo={l.tipo}>
                         <td className={`${TD} text-center`}>{dataCurta(l.data)}</td>
                         <td className={`${TD} text-center`}>{l.loteOrdem ?? ''}</td>
@@ -380,20 +381,20 @@ export function CriarOCDoLegadoDialog({ clienteId, lancamentoId, fornecedores, o
                         <td className={`${TD} text-center`}>{l.tipo === 'entrega' ? T.eventoEntrega : l.tipo === 'recebimento' ? T.eventoCaixa : 'Explicação'}</td>
                         <td className={`${TD} break-words`}>{l.descricao ?? '—'}</td>
                         <td className={`${TD} break-words`}>{rotuloDaConta(l.conta) ?? '—'}</td>
-                        <td className={`${NUM} ${COR[corDoSaldo(l.movEntrega)]}`}>{l.movEntrega == null ? '' : num2(l.movEntrega)}</td>
-                        <td className={`${NUM} ${COR[corDoSaldo(l.movRecebido)]}`}>{l.movRecebido == null ? '' : num2(l.movRecebido)}</td>
-                        <td className={`${NUM} font-bold ${COR[corDoSaldo(l.saldo)]}`}>{num2(l.saldo)}</td>
+                        <td className={`${NUM} ${classeDaEntregaNaTela(lt.entrega, lado, l.tipo)}`}>{lt.entrega == null ? '' : num2(lt.entrega)}</td>
+                        <td className={`${NUM} ${classeDoDinheiroNaTela(lt.dinheiro, lado)}`}>{lt.dinheiro == null ? '' : num2(lt.dinheiro)}</td>
+                        <td className={`${NUM} font-bold ${classeDoSaldoNaTela(lt.saldo)}`}>{num2(lt.saldo)}</td>
                       </tr>
-                    ))}
+                    ); })}
                   </tbody>
                   <tfoot>
                     <tr className="font-bold">
                       <td colSpan={2} className="h-[19px] border-t-2 border-t-[#9aa7b6] bg-[#E8E6DF] px-[5px] text-[10px]">Total</td>
                       <td className="border-t-2 border-t-[#9aa7b6] bg-[#E8E6DF] px-[5px] text-right text-[10px]">{cc.cabEntregue}</td>
                       <td colSpan={3} className="border-t-2 border-t-[#9aa7b6] bg-[#E8E6DF]" />
-                      <td className={`border-t-2 border-t-[#9aa7b6] bg-[#E8E6DF] px-[5px] text-right text-[10px] ${corEntrega}`}>{num2(-sinal * cc.entregue)}</td>
-                      <td className={`border-t-2 border-t-[#9aa7b6] bg-[#E8E6DF] px-[5px] text-right text-[10px] ${corCaixa}`}>{num2(sinal * cc.recebido)}</td>
-                      <td className={`border-t-2 border-t-[#9aa7b6] bg-[#E8E6DF] px-[5px] text-right text-[10px] ${COR[corDoSaldo(cc.saldo)]}`} data-testid="saldo-previa">{num2(cc.saldo)}</td>
+                      <td className={`border-t-2 border-t-[#9aa7b6] bg-[#E8E6DF] px-[5px] text-right text-[10px] ${classeDaEntregaNaTela(totaisNaTela(cc, lado).entrega, lado, 'total')}`}>{num2(totaisNaTela(cc, lado).entrega)}</td>
+                      <td className={`border-t-2 border-t-[#9aa7b6] bg-[#E8E6DF] px-[5px] text-right text-[10px] ${classeDoDinheiroNaTela(totaisNaTela(cc, lado).dinheiro, lado)}`}>{num2(totaisNaTela(cc, lado).dinheiro)}</td>
+                      <td className={`border-t-2 border-t-[#9aa7b6] bg-[#E8E6DF] px-[5px] text-right text-[10px] ${classeDoSaldoNaTela(totaisNaTela(cc, lado).saldo)}`} data-testid="saldo-previa">{num2(totaisNaTela(cc, lado).saldo)}</td>
                     </tr>
                   </tfoot>
                 </table>
@@ -402,7 +403,7 @@ export function CriarOCDoLegadoDialog({ clienteId, lancamentoId, fornecedores, o
                 <div className="flex flex-wrap gap-x-4 px-2 py-1 text-[10px]" data-testid="resumo-previa">
                   <span><span className="text-muted-foreground">{T.contraparte}</span> {fornecedores.find(f => f.id === comprador)?.nome ?? '—'}</span>
                   <span><span className="text-muted-foreground">{T.noDre}</span> {mesesReceita.map(fmtMes).join(', ') || '—'}{base ? ` (hoje está em ${fmtMes(base.data.slice(0, 7))})` : ''}</span>
-                  <span><span className="text-muted-foreground">Saldo</span> <b className={COR[corDoSaldo(cc.saldo)]}>{num2(cc.saldo)}</b>{corDoSaldo(cc.saldo) !== 'zero' ? ' · explicar depois na OC' : ' · quitado'}</span>
+                  <span><span className="text-muted-foreground">Saldo</span> <b className={classeDoSaldoNaTela(totaisNaTela(cc, lado).saldo)}>{num2(totaisNaTela(cc, lado).saldo)}</b>{corDoSaldoNaTela(totaisNaTela(cc, lado).saldo) !== 'quitado' ? ' · explicar depois na OC' : ' · quitado'}</span>
                 </div>
               )}
               {/* OC-CRIAR-DO-LEGADO-01b — a comissao do modal antigo presa a' saida entra na OC como despesa da operacao, fora do

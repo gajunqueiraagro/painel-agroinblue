@@ -111,7 +111,7 @@ describe('Criar OC a partir do legado', () => {
     expect(a?.p_recebimentos).toEqual(['692f1957']);
   });
 
-  it('a previa: lotes com R$/kg, o recebimento na conta da venda (OC-CC-CLASSIFICACAO-01), entrega negativa e saldo zero', async () => {
+  it('a previa: lotes com R$/kg, o recebimento na conta da venda (OC-CC-CLASSIFICACAO-01), entrega positiva (lado da fazenda) e saldo zero', async () => {
     montar();
     await waitFor(() => expect(screen.getByTestId('previa')).toBeInTheDocument());
     const previa = screen.getByTestId('previa');
@@ -122,8 +122,9 @@ describe('Criar OC a partir do legado', () => {
     expect(previa.textContent).toContain('Venda 200 DM');
     const entrega = previa.querySelector('tr[data-tipo="entrega"]');
     const celulaEntrega = entrega?.querySelectorAll('td')[6];
-    expect(celulaEntrega?.textContent).toBe('−707.751,47');
-    expect(celulaEntrega?.className).toContain('text-[#b91c1c]');
+    /* OC-CC-SINAL-FAZENDA-01 — a previa le' pelo lado da fazenda: a entrega da venda e' receita, positiva verde */
+    expect(celulaEntrega?.textContent).toBe('707.751,47');
+    expect(celulaEntrega?.className).toContain('text-[#15803d]');
     const receb = previa.querySelector('tr[data-tipo="recebimento"] td:nth-child(8)');
     expect(receb?.className).toContain('text-[#15803d]');
     expect(screen.getByTestId('saldo-previa').textContent).toBe('0,00');
@@ -338,19 +339,20 @@ describe('OC-CRIAR-DO-LEGADO-COMPRA-01 — a compra', () => {
     expect(screen.getByLabelText('Marcar entrada de 12/08/26')).toBeInTheDocument();
   });
 
-  it('cor pelo lado: o pagamento sai (vermelho) e a entrada do gado entra (verde), nas linhas e no total', async () => {
+  /* OC-CC-SINAL-FAZENDA-01 — na compra a entrada do gado e' custo (positiva vermelha) e o pagamento sai do caixa (positivo vermelho) */
+  it('cor pelo lado: o pagamento sai (positivo vermelho) e a entrada do gado e\' custo (positiva vermelha), nas linhas e no total', async () => {
     montar();
     await waitFor(() => expect(screen.getByTestId('previa')).toBeInTheDocument());
     const dlg = screen.getByTestId('dialogo-criar-do-legado');
     expect(dlg.querySelector('tr[data-recebimento="692f1957"] td:nth-child(4)')?.className).toContain('text-[#b91c1c]');
     const previa = screen.getByTestId('previa');
-    expect(previa.querySelector('tr[data-tipo="entrega"] td:nth-child(7)')?.className).toContain('text-[#15803d]');
-    expect(previa.querySelector('tr[data-tipo="recebimento"] td:nth-child(8)')?.textContent).toBe('−20.000,00');
+    expect(previa.querySelector('tr[data-tipo="entrega"] td:nth-child(7)')?.className).toContain('text-[#b91c1c]');
+    expect(previa.querySelector('tr[data-tipo="recebimento"] td:nth-child(8)')?.textContent).toBe('20.000,00');
     expect(previa.querySelector('tr[data-tipo="recebimento"] td:nth-child(8)')?.className).toContain('text-[#b91c1c]');
     const total = previa.querySelectorAll('tfoot td');
     expect(total[3].textContent).toBe('20.000,00');
-    expect(total[3].className).toContain('text-[#15803d]');
-    expect(total[4].textContent).toBe('−20.000,00');
+    expect(total[3].className).toContain('text-[#b91c1c]');
+    expect(total[4].textContent).toBe('20.000,00');
     expect(total[4].className).toContain('text-[#b91c1c]');
     expect(previa.querySelector('tr[data-tipo="entrega"] td:nth-child(4)')?.textContent).toBe('Entrada');
     expect(previa.querySelector('tr[data-tipo="recebimento"] td:nth-child(4)')?.textContent).toBe('Pagamento');

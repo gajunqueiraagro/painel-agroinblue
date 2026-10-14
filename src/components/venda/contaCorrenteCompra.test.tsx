@@ -93,11 +93,13 @@ const linhasDoTipo = (tipo: string) =>
     .map(r => Array.from(r.querySelectorAll('td')));
 
 describe('compra em conta corrente — extrato espelho da venda (mock v1)', () => {
-  it('cards, cabecalhos e linhas pelo lado da compra: entrada positiva verde, pagamento negativo vermelho, saldo zero quitado', () => {
+  /* OC-CC-SINAL-FAZENDA-01 — o envelope do BANCO (pago −) lido pelo lado da fazenda: entrada positiva (custo, vermelha), pago POSITIVO
+     vermelho (saida de caixa), saldo zero quitado. */
+  it('cards, cabecalhos e linhas pelo lado da compra: entrada positiva vermelha, pagamento positivo vermelho, saldo zero quitado', () => {
     render(<AbaContaCorrenteOC api={api(compra())} somenteLeitura={false} lado="compra" />);
     /* OC-VENDA-FINANCEIRO-COMPLETO-01a (mock v4): rotulo curto em cima, valor sem "R$" embaixo, com o sinal tipografico */
     expect(txt(screen.getByTestId('card-entrega'))).toBe('Entrada · DRE R$307.460,00');
-    expect(txt(screen.getByTestId('card-dinheiro'))).toBe('Pago−307.460,00');
+    expect(txt(screen.getByTestId('card-dinheiro'))).toBe('Pago307.460,00');
     expect(txt(screen.getByTestId('card-saldo'))).toContain('Saldo · quitado');
     const tabela = screen.getByTestId('conta-corrente-tabela');
     expect(tabela.textContent).toContain('Fornecedor');
@@ -108,7 +110,7 @@ describe('compra em conta corrente — extrato espelho da venda (mock v1)', () =
     expect(e[3].textContent).toBe('Entrada');
     expect(e[4].textContent).toBe('Desmama M'); // fix2: a Descricao gerada e' a categoria ("Compra Desmama M" pedia 99,3px para 92)
     expect(e[7].textContent).toBe('307.460,00');
-    expect(e[7].className).toContain('text-[#15803d]');
+    expect(e[7].className).toContain('text-[#b91c1c]');
     expect(e[9].textContent).toBe('307.460,00');
     const [p] = linhasDoTipo('recebimento');
     expect(p[3].textContent).toBe('Pagamento');
@@ -116,15 +118,15 @@ describe('compra em conta corrente — extrato espelho da venda (mock v1)', () =
     expect(p[5].getAttribute('title')).toBe('15020 Investimento Compra Bovinos Machos'); // OC-CC-CLASSIFICACAO-01: o pagamento fica na conta da compra
     expect(p[5].textContent).toBe('Invest. Compra Bov. Machos'); // OC-VENDA-FINANCEIRO-COMPLETO-01a: o nome curto na celula, o inteiro no title
     expect(p[6].textContent).toBe('Sicredi');
-    expect(txt(p[8])).toBe('−307.460,00');
+    expect(txt(p[8])).toBe('307.460,00');
     expect(p[8].className).toContain('text-[#b91c1c]');
     expect(p[9].textContent).toBe('0,00');
-    /* o total da compra: entrada positiva, pago negativo */
+    /* o total da compra: entrada e pago positivos, os dois vermelhos */
     const tfoot = tabela.querySelector('tfoot tr');
     const tds = Array.from(tfoot?.querySelectorAll('td') ?? []);
     expect(txt(tds[4])).toBe('307.460,00');
-    expect(tds[4].className).toContain('text-[#15803d]');
-    expect(txt(tds[5])).toBe('−307.460,00');
+    expect(tds[4].className).toContain('text-[#b91c1c]');
+    expect(txt(tds[5])).toBe('307.460,00');
     expect(tds[5].className).toContain('text-[#b91c1c]');
     expect(screen.getByTestId('barra-quitado').textContent).toContain('Quitado.');
   });
@@ -159,8 +161,9 @@ describe('compra em conta corrente — extrato espelho da venda (mock v1)', () =
     expect(rotuloDoSaldo(1000, 'compra')).toBe('Saldo · falta pagar');
     expect(rotuloDoSaldo(-1000, 'compra')).toBe('Saldo · adiantado ao fornecedor');
     expect(rotuloDoSaldo(0, 'compra')).toBe('Saldo · quitado');
-    expect(rotuloDoSaldo(-1000)).toBe('Saldo · falta receber');
-    expect(rotuloDoSaldo(1000)).toBe('Saldo · adiantado pelo comprador');
+    /* OC-CC-SINAL-FAZENDA-01 — o rotulo recebe o saldo NA TELA: na venda tambem positivo = falta */
+    expect(rotuloDoSaldo(1000)).toBe('Saldo · falta receber');
+    expect(rotuloDoSaldo(-1000)).toBe('Saldo · adiantado pelo comprador');
     expect(compra({ situacao: 'falta_pagar', saldo: 1000 }).situacao).toBe('falta_pagar');
     render(<AbaContaCorrenteOC api={api(compra({ saldo: 1000, falta_explicar: 1000, situacao: 'falta_pagar' }))} somenteLeitura={false} lado="compra" />);
     expect(txt(screen.getByTestId('card-saldo'))).toContain('Saldo · falta pagar');

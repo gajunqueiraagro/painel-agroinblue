@@ -63,22 +63,31 @@ const celulas = (tipo: string) => {
 };
 
 describe('aba conta corrente da OC — extrato pelo caixa da fazenda', () => {
-  it('entrega NEGATIVA vermelha na coluna do DRE, recebimento POSITIVO verde no caixa, saldo corrido pelo sinal; D6 "sem conta"', () => {
+  /* OC-CC-SINAL-FAZENDA-01 — o envelope do BANCO (entrega −, saldo − = falta receber) e' lido pelo lado da fazenda: entrega POSITIVA
+     verde (receita), recebimento positivo verde, saldo POSITIVO vermelho (falta receber). */
+  it('VENDA pelo lado da fazenda: entrega POSITIVA verde, recebimento positivo verde, saldo corrido positivo vermelho = falta; D6 "sem conta"', () => {
     render(<AbaContaCorrenteOC api={api(cc())} somenteLeitura={false} />);
     const [e1] = celulas('entrega');
     expect(e1[0].textContent).toBe('19/03/25');
     /* a conta vai sem o numero (largura medida: com ele a linha nao cabe nos 766px da tabela); o numero fica no title */
     expect(e1[5].textContent).toBe('Venda de Desmama Machos');
     expect(e1[5].getAttribute('title')).toBe('1120 Venda de Desmama Machos');
-    expect(txt(e1[7])).toBe('\u2212566.879,55');
-    expect(e1[7].className).toContain('text-[#b91c1c]');
+    expect(txt(e1[7])).toBe('566.879,55');
+    expect(e1[7].className).toContain('text-[#15803d]');
     expect(e1[8].textContent).toBe('');
     const [r1] = celulas('recebimento');
     expect(r1[7].textContent).toBe('');
     expect(r1[8].textContent).toContain('992.138,24');
     expect(r1[8].className).toContain('text-[#15803d]');
-    expect(txt(r1[9])).toBe('\u22121.357,89');
+    expect(txt(r1[9])).toBe('1.357,89');
     expect(r1[9].className).toContain('text-[#b91c1c]');
+    /* o rodape: entrega e dinheiro positivos, o saldo na tela; os cards iguais */
+    const rodape = Array.from(screen.getByTestId('conta-corrente-tabela').querySelectorAll('tfoot td'));
+    expect(rodape.some(td => txt(td) === '\u2212' + txt(td).slice(1))).toBe(false);
+    expect(txt(screen.getByTestId('total-saldo'))).toBe('1.357,89');
+    expect(txt(screen.getByTestId('card-saldo'))).toContain('1.357,89');
+    expect(txt(screen.getByTestId('card-saldo'))).not.toContain('\u2212');
+    expect(screen.getByTestId('card-entrega').querySelector('span:last-child')?.className).toContain('text-[#15803d]');
     expect(r1[6].textContent).toBe('s/ conta'); // fix2: texto gerado curto e numa linha
     expect(r1[4].textContent).toBe('Receb. 1/1');
     expect(screen.getByTestId('conta-corrente-tabela').textContent).not.toContain('conciliado');
@@ -108,12 +117,16 @@ describe('aba conta corrente da OC — extrato pelo caixa da fazenda', () => {
     render(<AbaContaCorrenteOC api={a} somenteLeitura={false} />);
     fireEvent.click(screen.getByRole('button', { name: 'Explicar diferença' }));
     const dlg = await screen.findByTestId('dialogo-explicar');
-    expect(txt(within(dlg).getByTestId('card-falta-explicar'))).toContain('-R$ 1.357,89');
+    /* OC-CC-SINAL-FAZENDA-01 — o que falta explicar na tela e' POSITIVO (o dinheiro ficou abaixo do gado), vermelho */
+    expect(txt(within(dlg).getByTestId('card-falta-explicar'))).toContain('R$ 1.357,89');
+    expect(txt(within(dlg).getByTestId('card-falta-explicar'))).not.toContain('-');
+    expect(within(dlg).getByTestId('card-falta-explicar').querySelector('span:last-child')?.className).toContain('text-[#b91c1c]');
     fireEvent.click(within(dlg).getByRole('button', { name: '+ Desconto comercial' }));
     const valores = () => within(dlg).getAllByLabelText('Valor');
     expect(valores()[0]).toHaveProperty('value', '1.357,89');
     fireEvent.change(valores()[0], { target: { value: '1.000,00' } });
-    expect(txt(within(dlg).getByTestId('card-falta-explicar'))).toContain('-R$ 357,89');
+    expect(txt(within(dlg).getByTestId('card-falta-explicar'))).toContain('R$ 357,89');
+    expect(txt(within(dlg).getByTestId('card-falta-explicar'))).not.toContain('-');
     fireEvent.click(within(dlg).getByRole('button', { name: '+ Desconto comercial' }));
     expect(valores()[1]).toHaveProperty('value', '357,89');
     expect(within(dlg).getByTestId('card-falta-explicar').textContent).toContain('0,00');
@@ -246,7 +259,8 @@ describe('resumo lateral da venda em conta corrente (lido da FONTE)', () => {
     expect(fonte.match(/useOcContaCorrente\(/g)).toHaveLength(1);
     expect(fonte).toContain('ccApiExterno={ccApi}');
     expect(fonte).toContain('data-testid="resumo-conta-corrente"');
-    expect(fonte).toMatch(/corDoSaldo\(cc\.saldo\) === 'neg' \? 'Saldo · falta receber'/);
+    /* OC-CC-SINAL-FAZENDA-01 — o resumo le' o saldo NA TELA pelo dono */
+    expect(fonte).toMatch(/corDoSaldoNaTela\(saldoNaTela\(cc, 'venda'\)\) === 'falta' \? 'Saldo · falta receber'/);
     expect(fonte).toContain('<CancelarContaCorrenteDialog');
   });
 });

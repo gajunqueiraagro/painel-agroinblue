@@ -53,7 +53,7 @@ import { AbaFinanceiroOC } from '@/components/compra/AbaFinanceiroOC';
 import { useOcCompromissos } from '@/hooks/useOcCompromissos';
 import { useOcContaCorrente } from '@/hooks/useOcContaCorrente';
 import { CancelarContaCorrenteDialog } from '@/components/venda/CancelarContaCorrenteDialog';
-import { corDoSaldo, COR_SINAL, MOTIVO_ATUALIZAR_EM_RASCUNHO, ROTULO_AGUARDANDO_SAIDA } from '@/lib/oc/contaCorrente';
+import { classeDoDinheiroNaTela, classeDoSaldoNaTela, COR_SINAL, corDoSaldoNaTela, MOTIVO_ATUALIZAR_EM_RASCUNHO, ROTULO_AGUARDANDO_SAIDA, saldoNaTela } from '@/lib/oc/contaCorrente';
 import { linhasPainelBoitel, linhaIdentificacaoBoitel, entregaEmUmaLinha, classeDaCorPainel } from '@/components/venda/painelBoitel';
 import type { ReactNode } from 'react';
 import type { LinhaPrevisao, RotulosCompromissos } from '@/components/compra/AbaCompromissosOC';
@@ -1078,10 +1078,11 @@ export function VendaModalShell({
               {cc ? (
                 <div data-testid="resumo-conta-corrente">
                   <LinhaResumo rotulo="Entregue" valor={formatMoeda(cc.entregue)} />
-                  <LinhaResumo rotulo="Recebido" valor={formatMoeda(cc.recebido)} cor={cc.recebido > 0 ? COR_SINAL.pos : undefined} />
-                  <LinhaResumo rotulo={cc.situacao === 'aguardando_saida' ? ROTULO_AGUARDANDO_SAIDA : corDoSaldo(cc.saldo) === 'neg' ? 'Saldo · falta receber' : corDoSaldo(cc.saldo) === 'pos' ? 'Saldo · adiantado' : 'Saldo · quitado'}
-                    forte valor={formatMoeda(cc.saldo)}
-                    cor={corDoSaldo(cc.saldo) === 'neg' ? COR_SINAL.neg : corDoSaldo(cc.saldo) === 'pos' ? COR_SINAL.pos : undefined} />
+                  {/* OC-CC-SINAL-FAZENDA-01 — o saldo NA TELA, do dono: positivo = falta receber (vermelho), negativo = adiantado. */}
+                  <LinhaResumo rotulo="Recebido" valor={formatMoeda(cc.recebido)} cor={classeDoDinheiroNaTela(cc.recebido, 'venda') || undefined} />
+                  <LinhaResumo rotulo={cc.situacao === 'aguardando_saida' ? ROTULO_AGUARDANDO_SAIDA : corDoSaldoNaTela(saldoNaTela(cc, 'venda')) === 'falta' ? 'Saldo · falta receber' : corDoSaldoNaTela(saldoNaTela(cc, 'venda')) === 'adiantado' ? 'Saldo · adiantado' : 'Saldo · quitado'}
+                    forte valor={formatMoeda(saldoNaTela(cc, 'venda'))}
+                    cor={classeDoSaldoNaTela(saldoNaTela(cc, 'venda')) || undefined} />
                 </div>
               ) : (
               <div>

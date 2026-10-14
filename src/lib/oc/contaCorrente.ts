@@ -49,14 +49,16 @@ export interface LinhaContaCorrente {
   contaOrdem: number | null;
   conta: string | null;
   banco: string | null;
-  /** Coluna "Entrega (DRE)" com o sinal do caixa: entrega negativa, explicacao que reduz o devido positiva. */
+  /** Coluna "Entrega (DRE)" com o SINAL DO BANCO (venda/abate: entrega negativa, explicacao que reduz o devido positiva; a compra e'
+   *  o espelho). A tela aplica `sinalDaFazenda` (`linhaNaTela`) — nunca desenha este numero cru. */
   movEntrega: number | null;
-  /** Coluna "Recebido (caixa)": recebimento positivo, devolucao negativa. */
+  /** Coluna "Recebido (caixa)" com o SINAL DO BANCO (venda/abate: recebimento positivo, devolucao negativa; a compra e' o espelho).
+   *  A tela aplica `sinalDaFazenda`. */
   movRecebido: number | null;
   status: StatusLinhaContaCorrente;
   /** Programado nao entra no saldo (ainda nao e' dinheiro). */
   noSaldo: boolean;
-  /** Saldo corrido depois desta linha. */
+  /** Saldo corrido depois desta linha, com o SINAL DO BANCO. A tela aplica `sinalDaFazenda`. */
   saldo: number;
   motivo: string | null;
 }
@@ -230,43 +232,120 @@ export function corDoSaldo(valor: number | null): 'neg' | 'pos' | 'zero' {
   return c < 0 ? 'neg' : c > 0 ? 'pos' : 'zero';
 }
 
+/* ═══ OC-CC-SINAL-FAZENDA-01 — O EXTRATO LE PELO LADO DA FAZENDA, NUM DONO SO' (Gabriel, 14/10/2026) ═══════════════════════════
+   O banco (`oc_conta_corrente`) manda os numeros com o sinal "da conta da contraparte com a fazenda": na venda e no abate a entrega
+   e' negativa (o comprador passou a dever), o recebimento soma e o saldo negativo e' "falta receber"; a compra e' o espelho. A TELA
+   le pelo lado da FAZENDA: entrega positiva, deducao e o que reduz a operacao negativos, dinheiro positivo, e SALDO POSITIVO = FALTA
+   (receber ou pagar), NEGATIVO = ADIANTADO. A tela NAO SOMA: so' multiplica cada numero do banco pelo fator do lado.
+   FATORES MEDIDOS NO BANCO (14/10, so' leitura):
+     abate 02be1a41  entrega −373.877,60 -> +373.877,60 · Funrural +6.094,20 -> −6.094,20 · recebido +367.783,40 -> igual · saldo 0
+     abate 26fd02c1  saldo −212.449,03 (falta receber) -> +212.449,03
+     compra fcdbe0bb entrega +35.000,00 -> igual · pago −63.440,00 -> +63.440,00 · saldo +1.000,00 (falta pagar) -> igual
+   venda = abate (mesmo sinal no banco). Em todo lado: saldo na tela = entrega − deducoes/explicacoes que reduzem − dinheiro. */
+export interface SinalDaFazenda { entrega: 1 | -1; dinheiro: 1 | -1; saldo: 1 | -1 }
+const SINAL_DA_FAZENDA: Record<LadoContaCorrente, SinalDaFazenda> = {
+  venda: { entrega: -1, dinheiro: 1, saldo: -1 },
+  abate: { entrega: -1, dinheiro: 1, saldo: -1 },
+  compra: { entrega: 1, dinheiro: -1, saldo: 1 },
+};
+/** O fator que leva cada numero do banco ao numero que a fazenda ve^, por lado. O UNICO lugar que sabe o sinal de apresentacao. */
+export function sinalDaFazenda(lado: LadoContaCorrente): SinalDaFazenda {
+  return SINAL_DA_FAZENDA[lado];
+}
+/* `0 * -1` da' −0; a tela nao mostra "−0,00" */
+const vezes = (f: 1 | -1, v: number): number => (v === 0 ? 0 : f * v);
+/** A linha do extrato como a fazenda a le: entrega, dinheiro e saldo corrido. */
+export function linhaNaTela(l: LinhaContaCorrente, lado: LadoContaCorrente): { entrega: number | null; dinheiro: number | null; saldo: number } {
+  const s = sinalDaFazenda(lado);
+  return {
+    entrega: l.movEntrega == null ? null : vezes(s.entrega, l.movEntrega),
+    dinheiro: l.movRecebido == null ? null : vezes(s.dinheiro, l.movRecebido),
+    saldo: vezes(s.saldo, l.saldo),
+  };
+}
+/** Qualquer valor com o sinal do SALDO do banco (saldo, saldo a explicar, explicado, falta explicar, valor de explicacao), na tela.
+ *  ⚠ Explicacao tem o sinal do saldo no banco (reduz o que falta = positivo na venda) e, na tela, mora na coluna da entrega: o fator
+ *  do saldo e o da entrega sao iguais nos tres lados. */
+export function noSinalDaFazenda(valorDoBanco: number, lado: LadoContaCorrente): number {
+  return vezes(sinalDaFazenda(lado).saldo, valorDoBanco);
+}
+/** O saldo da OC na tela: positivo = falta receber/pagar, zero = quitado, negativo = adiantado. */
+export function saldoNaTela(cc: ContaCorrente, lado: LadoContaCorrente): number {
+  return noSinalDaFazenda(cc.saldo, lado);
+}
+/** Os totais do extrato na tela: o entregue (bruto) e o dinheiro, positivos, e o saldo. O banco ja' os manda em modulo. */
+export function totaisNaTela(cc: ContaCorrente, lado: LadoContaCorrente): { entrega: number; dinheiro: number; saldo: number } {
+  return { entrega: cc.entregue, dinheiro: cc.recebido, saldo: saldoNaTela(cc, lado) };
+}
+/** O estado do saldo NA TELA: positivo = falta (vermelho), zero = quitado (neutro), negativo = adiantado (verde).
+ *  ⚠ NAO e' `corDoSaldo` (que pinta pelo sinal cru: negativo vermelho). */
+export function corDoSaldoNaTela(saldoTela: number | null): 'falta' | 'quitado' | 'adiantado' {
+  if (saldoTela === null) return 'quitado';
+  const c = Math.round(saldoTela * 100);
+  return c > 0 ? 'falta' : c < 0 ? 'adiantado' : 'quitado';
+}
+/** A cor de um saldo na tela, pelas cores do dono (`COR_SINAL`): falta vermelho, adiantado verde, quitado sem cor. */
+export function classeDoSaldoNaTela(saldoTela: number | null): string {
+  const e = corDoSaldoNaTela(saldoTela);
+  return e === 'falta' ? COR_SINAL.neg : e === 'adiantado' ? COR_SINAL.pos : '';
+}
+/** A cor da coluna da ENTREGA na tela: a entrega e' receita (verde) na venda e no abate, custo (vermelho) na compra; deducao e
+ *  explicacao pelo sinal na tela (reduz = negativo vermelho, aumenta = positivo verde). */
+export function classeDaEntregaNaTela(valorTela: number | null, lado: LadoContaCorrente, tipo: TipoLinhaContaCorrente | 'total'): string {
+  if (valorTela === null || Math.round(valorTela * 100) === 0) return '';
+  if (tipo === 'entrega' || tipo === 'total') return lado === 'compra' ? COR_SINAL.neg : COR_SINAL.pos;
+  return valorTela < 0 ? COR_SINAL.neg : COR_SINAL.pos;
+}
+/** A cor da coluna do DINHEIRO na tela: recebido (venda/abate) verde; pago (compra) vermelho, saida de caixa; devolucao, o oposto. */
+export function classeDoDinheiroNaTela(valorTela: number | null, lado: LadoContaCorrente): string {
+  if (valorTela === null || Math.round(valorTela * 100) === 0) return '';
+  const entra = lado === 'compra' ? valorTela < 0 : valorTela > 0;
+  return entra ? COR_SINAL.pos : COR_SINAL.neg;
+}
+/** A cor de um valor que muda o valor da operacao (explicacao, "Explicado"): reduz = negativo vermelho, aumenta = positivo verde. */
+export function classeDoAjusteNaTela(valorTela: number | null): string {
+  if (valorTela === null || Math.round(valorTela * 100) === 0) return '';
+  return valorTela < 0 ? COR_SINAL.neg : COR_SINAL.pos;
+}
+
 /** OC-CC-PADRAO-NOVAS-01b — a situacao que o banco devolve enquanto nada saiu e nada foi pago: nao e' "quitado". */
 export const ROTULO_AGUARDANDO_SAIDA = 'Aguardando saída';
 /** "Atualizar entregas" nao vale em rascunho (o banco recusa): o botao fica apagado com este motivo. */
 export const MOTIVO_ATUALIZAR_EM_RASCUNHO = 'Conclua a negociação antes';
 
-/** O rotulo do card do saldo, que segue o sinal. Na compra o sinal e' o espelho: positivo falta pagar, negativo adiantado. */
-export function rotuloDoSaldo(saldo: number, lado: LadoContaCorrente = 'venda', situacao?: SituacaoContaCorrente): string {
+/** O rotulo do card do saldo. ⚠ RECEBE O SALDO NA TELA (`saldoNaTela`, OC-CC-SINAL-FAZENDA-01): positivo = falta, negativo =
+ *  adiantado, nos tres lados. */
+export function rotuloDoSaldo(saldoTela: number, lado: LadoContaCorrente = 'venda', situacao?: SituacaoContaCorrente): string {
   if (situacao === 'aguardando_saida') return ROTULO_AGUARDANDO_SAIDA;
-  const c = corDoSaldo(saldo);
-  if (lado === 'compra') {
-    return c === 'pos' ? 'Saldo · falta pagar' : c === 'neg' ? 'Saldo · adiantado ao fornecedor' : 'Saldo · quitado';
-  }
-  if (lado === 'abate') {
-    return c === 'neg' ? 'Saldo · falta receber' : c === 'pos' ? 'Saldo · adiantado pelo frigorífico' : 'Saldo · quitado';
-  }
-  return c === 'neg' ? 'Saldo · falta receber' : c === 'pos' ? 'Saldo · adiantado pelo comprador' : 'Saldo · quitado';
+  const e = corDoSaldoNaTela(saldoTela);
+  if (e === 'quitado') return 'Saldo · quitado';
+  if (lado === 'compra') return e === 'falta' ? 'Saldo · falta pagar' : 'Saldo · adiantado ao fornecedor';
+  if (lado === 'abate') return e === 'falta' ? 'Saldo · falta receber' : 'Saldo · adiantado pelo frigorífico';
+  return e === 'falta' ? 'Saldo · falta receber' : 'Saldo · adiantado pelo comprador';
 }
 
 /**
  * A barra da diferenca: so' existe com as entregas concluidas (nada mais a entregar) e algo ainda sem explicacao. Antes disso o
- * saldo e' so' o andamento do contrato. A OC fecha mesmo sem explicar.
+ * saldo e' so' o andamento do contrato. A OC fecha mesmo sem explicar. `valor` e' o que falta NA TELA (positivo = o dinheiro ficou
+ * abaixo do gado), OC-CC-SINAL-FAZENDA-01.
  */
 export function barraDaDiferenca(cc: ContaCorrente, lado: LadoContaCorrente = 'venda'): { frase: string; valor: number } | null {
   if (!cc.linhas.some(l => l.tipo === 'entrega')) return null;
   if (Math.round(cc.aEntregar * 100) > 0) return null;
-  const c = Math.round(cc.faltaExplicar * 100);
+  /* OC-CC-SINAL-FAZENDA-01 — o que falta explicar NA TELA: positivo = o dinheiro ficou abaixo do gado, nos tres lados. */
+  const falta = noSinalDaFazenda(cc.faltaExplicar, lado);
+  const c = Math.round(falta * 100);
   if (c === 0) return null;
   const v = Math.abs(c) / 100;
   const fmt = v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   if (lado === 'compra') {
     return c > 0
-      ? { frase: `Pagou R$ ${fmt} a menos do que o gado que entrou.`, valor: cc.faltaExplicar }
-      : { frase: `Pagou R$ ${fmt} a mais do que o gado que entrou.`, valor: cc.faltaExplicar };
+      ? { frase: `Pagou R$ ${fmt} a menos do que o gado que entrou.`, valor: falta }
+      : { frase: `Pagou R$ ${fmt} a mais do que o gado que entrou.`, valor: falta };
   }
-  return c < 0
-    ? { frase: `Recebeu R$ ${fmt} a menos do que entregou.`, valor: cc.faltaExplicar }
-    : { frase: `Recebeu R$ ${fmt} a mais do que entregou.`, valor: cc.faltaExplicar };
+  return c > 0
+    ? { frase: `Recebeu R$ ${fmt} a menos do que entregou.`, valor: falta }
+    : { frase: `Recebeu R$ ${fmt} a mais do que entregou.`, valor: falta };
 }
 
 export const ROTULO_STATUS: Record<StatusLinhaContaCorrente, string> = {
@@ -326,7 +405,7 @@ export function contaComNumero(ordem: number | null, conta: string | null): stri
 }
 
 /**
- * O que cada explicacao faz no saldo, com o sinal do caixa da fazenda: a que REDUZ o que falta receber (ajuste para baixo,
+ * O que cada explicacao faz no saldo, com o SINAL DO BANCO (a tela o leva ao lado da fazenda por `noSinalDaFazenda`): a que REDUZ o que falta receber (ajuste para baixo,
  * desconto, permuta) e' positiva; a que aumenta (ajuste para cima, outra receita, devolucao) e' negativa. O mesmo sinal que o
  * banco devolve em `explicacoes[].valor` — a tela usa isto so' para o RASCUNHO do dialogo, antes de salvar.
  */

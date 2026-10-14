@@ -42,7 +42,8 @@ describe('"Aguardando saída" — um dicionário só', () => {
     /* sem a situação (ou com outra), o rótulo é o do sinal, como sempre */
     expect(rotuloDoSaldo(0, 'venda')).toBe('Saldo · quitado');
     expect(rotuloDoSaldo(0, 'venda', 'quitado')).toBe('Saldo · quitado');
-    expect(rotuloDoSaldo(-5, 'venda', 'falta_receber')).toBe('Saldo · falta receber');
+    /* OC-CC-SINAL-FAZENDA-01 — o rotulo recebe o saldo NA TELA: positivo = falta */
+    expect(rotuloDoSaldo(5, 'venda', 'falta_receber')).toBe('Saldo · falta receber');
   });
   it('o card do saldo da aba diz "Aguardando saída"; com entrega volta ao rótulo do sinal', () => {
     const { unmount } = render(<AbaContaCorrenteOC api={api(cc())} somenteLeitura={false} />);
@@ -54,7 +55,7 @@ describe('"Aguardando saída" — um dicionário só', () => {
   });
   it('resumo lateral: o da compra lê o dono com a situação; o da venda usa a MESMA constante (lido da fonte)', () => {
     const compra = readFileSync('src/components/compra/ResumoLateralOC.tsx', 'utf8');
-    expect(compra).toContain("rotuloDoSaldo(contaCorrente.saldo, 'compra', contaCorrente.situacao)");
+    expect(compra).toContain("rotuloDoSaldo(totaisNaTela(contaCorrente, 'compra').saldo, 'compra', contaCorrente.situacao)");
     const venda = readFileSync('src/components/venda/VendaModalShell.tsx', 'utf8');
     expect(venda).toContain("cc.situacao === 'aguardando_saida' ? ROTULO_AGUARDANDO_SAIDA :");
     /* nenhum segundo dicionário: a frase só está escrita no dono */

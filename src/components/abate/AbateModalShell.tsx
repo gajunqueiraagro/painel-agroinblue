@@ -59,7 +59,9 @@ import { AbaRecebimentoLotes } from '@/components/compra/AbaRecebimentoLotes';
 import { AbaFinanceiroOC } from '@/components/compra/AbaFinanceiroOC';
 import { useOcCompromissos } from '@/hooks/useOcCompromissos';
 import { useOcContaCorrente } from '@/hooks/useOcContaCorrente';
-import { corDoSaldo, COR_SINAL, MOTIVO_ATUALIZAR_EM_RASCUNHO, rotuloDoSaldo } from '@/lib/oc/contaCorrente';
+import {
+  classeDaEntregaNaTela, classeDoDinheiroNaTela, classeDoSaldoNaTela, MOTIVO_ATUALIZAR_EM_RASCUNHO, noSinalDaFazenda, rotuloDoSaldo, saldoNaTela,
+} from '@/lib/oc/contaCorrente';
 import type { ReactNode } from 'react';
 import type { LinhaPrevisao, RotulosCompromissos } from '@/components/compra/AbaCompromissosOC';
 import { siglaCategoria } from '@/lib/financeiro/produtoOC';
@@ -1226,10 +1228,12 @@ export function AbateModalShell({
               {cc ? (
                 <div className="" data-testid="resumo-cc-abate">
                   <LinhaResumo rotulo="Entregue · bruto" valor={formatMoeda(cc.entregue)} />
-                  <LinhaResumo rotulo="Funrural retido" valor={cc.deduzido == null ? null : formatMoeda(cc.deduzido)} />
-                  <LinhaResumo rotulo="Recebido" valor={formatMoeda(cc.recebido)} cor={cc.recebido > 0 ? COR_SINAL.pos : undefined} />
-                  <LinhaResumo rotulo={rotuloDoSaldo(cc.saldo, 'abate', cc.situacao)} forte valor={formatMoeda(cc.saldo)}
-                    cor={corDoSaldo(cc.saldo) === 'neg' ? COR_SINAL.neg : corDoSaldo(cc.saldo) === 'pos' ? COR_SINAL.pos : undefined} />
+                  {/* OC-CC-SINAL-FAZENDA-01 — o lado da fazenda, do dono: o Funrural reduz (negativo), o saldo positivo e' o que falta. */}
+                  <LinhaResumo rotulo="Funrural retido" valor={cc.deduzido == null ? null : formatMoeda(noSinalDaFazenda(cc.deduzido, 'abate'))}
+                    cor={cc.deduzido == null ? undefined : classeDaEntregaNaTela(noSinalDaFazenda(cc.deduzido, 'abate'), 'abate', 'deducao') || undefined} />
+                  <LinhaResumo rotulo="Recebido" valor={formatMoeda(cc.recebido)} cor={classeDoDinheiroNaTela(cc.recebido, 'abate') || undefined} />
+                  <LinhaResumo rotulo={rotuloDoSaldo(saldoNaTela(cc, 'abate'), 'abate', cc.situacao)} forte valor={formatMoeda(saldoNaTela(cc, 'abate'))}
+                    cor={classeDoSaldoNaTela(saldoNaTela(cc, 'abate')) || undefined} />
                 </div>
               ) : (
               <div className="">

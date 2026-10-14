@@ -95,8 +95,9 @@ describe('T2 — a Descricao da deducao', () => {
 
 describe('T3 — o saldo do abate fala do frigorifico', () => {
   it('falta receber / adiantado pelo frigorífico / quitado / aguardando saída', () => {
-    expect(rotuloDoSaldo(-1, 'abate')).toBe('Saldo · falta receber');
-    expect(rotuloDoSaldo(1, 'abate')).toBe('Saldo · adiantado pelo frigorífico');
+    /* OC-CC-SINAL-FAZENDA-01 — o rotulo recebe o saldo NA TELA: positivo falta, negativo adiantado */
+    expect(rotuloDoSaldo(1, 'abate')).toBe('Saldo · falta receber');
+    expect(rotuloDoSaldo(-1, 'abate')).toBe('Saldo · adiantado pelo frigorífico');
     expect(rotuloDoSaldo(0, 'abate')).toBe('Saldo · quitado');
     expect(rotuloDoSaldo(0, 'abate', 'aguardando_saida')).toBe(ROTULO_AGUARDANDO_SAIDA);
   });
@@ -135,9 +136,22 @@ describe('T6 — o extrato do abate', () => {
     expect(tds[4].textContent).toBe('Funrural');
     expect(tds[2].textContent).toBe('');
     expect(tr.querySelector('[data-celula="banco"]')?.textContent).toBe('');
-    expect(tds[7].textContent).toBe('2.500,10');
+    /* OC-CC-SINAL-FAZENDA-01 — no banco a deducao vem +2.500,10 (efeito no saldo); na tela ela REDUZ: negativa, vermelha */
+    expect(tds[7].textContent).toBe('\u22122.500,10');
+    expect(tds[7].className).toContain('text-[#b91c1c]');
     expect(tr.className).toContain('bg-[#fff7ed]');
-    expect(screen.getByTestId('total-deduzido').textContent).toBe('Funrural retido +2.500,10');
+    expect(screen.getByTestId('total-deduzido').textContent).toBe('Funrural retido \u22122.500,10');
+    /* a entrega positiva verde (receita), o recebido positivo verde, o saldo do banco −1.357,89 vira +1.357,89 = falta, vermelho */
+    const ent = tabela.querySelector('tr[data-tipo="entrega"]')?.querySelectorAll('td')[7];
+    expect(ent?.textContent).toBe('566.879,55');
+    expect(ent?.className).toContain('text-[#15803d]');
+    const rec = tabela.querySelector('tr[data-tipo="recebimento"]')?.querySelectorAll('td');
+    expect(rec?.[8].textContent).toBe('992.138,24');
+    expect(rec?.[8].className).toContain('text-[#15803d]');
+    expect(rec?.[9].textContent).toBe('1.357,89');
+    expect(rec?.[9].className).toContain('text-[#b91c1c]');
+    expect(screen.getByTestId('total-saldo').textContent).toBe('1.357,89');
+    expect(screen.getByTestId('card-saldo').textContent).toContain('Saldo · falta receber');
     expect(screen.getAllByText('Conta corrente do frigorífico').length).toBeGreaterThan(0);
     expect(screen.getByTestId('card-entrega').textContent).toContain('Entregue · bruto');
     expect(tr.getAttribute('data-clicavel')).toBe('sim');
@@ -147,13 +161,13 @@ describe('T6 — o extrato do abate', () => {
 });
 
 describe('T7 — o rodape do Funrural e\' so\' do abate', () => {
-  it('o MESMO envelope (com deduzido): na venda a celula nao existe; no abate, "Funrural retido +2.500,10"', () => {
+  it('o MESMO envelope (com deduzido): na venda a celula nao existe; no abate, "Funrural retido −2.500,10"', () => {
     const r = render(<AbaContaCorrenteOC api={api(cc())} somenteLeitura={false} lado="venda" />);
     expect(screen.queryByTestId('total-deduzido')).toBeNull();
     expect(within(screen.getByTestId('conta-corrente-tabela')).queryAllByText(/Funrural retido/)).toHaveLength(0);
     r.unmount();
     render(<AbaContaCorrenteOC api={api(cc())} somenteLeitura={false} lado="abate" />);
-    expect(screen.getByTestId('total-deduzido').textContent).toBe('Funrural retido +2.500,10');
+    expect(screen.getByTestId('total-deduzido').textContent).toBe('Funrural retido \u22122.500,10');
   });
 });
 

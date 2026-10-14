@@ -13,7 +13,8 @@ import { CATEGORIAS } from '@/types/cattle';
 import { parseNumericValue } from '@/lib/calculos/abate';
 import { rotuloCurtoDaConta, rotuloDaConta } from '@/lib/financeiro/rotuloConta';
 import {
-  barraDaDiferenca, contaComNumero, corDoSaldo, dataCurta, descricaoDoEvento, efeitoNoSaldo, linhasDaPreviaAjuste, rotuloDoSaldo, rotuloExplicacao,
+  barraDaDiferenca, classeDaEntregaNaTela, classeDoAjusteNaTela, classeDoDinheiroNaTela, classeDoSaldoNaTela, contaComNumero, corDoSaldoNaTela,
+  dataCurta, descricaoDoEvento, efeitoNoSaldo, linhaNaTela, linhasDaPreviaAjuste, noSinalDaFazenda, rotuloDoSaldo, rotuloExplicacao, totaisNaTela,
   rotuloSentidoAjuste, sugestaoAjuste, totalDoRascunho, valorAjusteParaRpc, ROTULO_STATUS, TIPOS_EXPLICACAO_DO_LADO,
   type ContaCorrente, type LadoContaCorrente, type LinhaContaCorrente, type LinhaPreviaAjuste, type SentidoAjuste, type TipoExplicacao,
 } from '@/lib/oc/contaCorrente';
@@ -22,9 +23,11 @@ import type {
 } from '@/hooks/useOcContaCorrente';
 
 /* OC-VENDA-ENTREGAS-01c — a aba Financeiro da venda no modelo CONTA CORRENTE, em formato de EXTRATO LIDO PELO CAIXA DA FAZENDA
-   (mock docs/mocks/oc_conta_corrente_mock_v7.html, ADR-2026-21): recebimento soma (verde), entrega abate (vermelho), explicacao
-   soma quando reduz o que falta receber; o Saldo corre linha a linha — negativo falta receber, positivo adiantado, zero quitado.
-   O saldo e' do banco (`oc_conta_corrente`); esta tela nao soma nada.
+   (mock docs/mocks/oc_conta_corrente_mock_v7.html, ADR-2026-21).
+   ⚠ OC-CC-SINAL-FAZENDA-01 (14/10/2026): o extrato LE PELO LADO DA FAZENDA, pelo dono (`linhaNaTela`, `totaisNaTela`,
+   `noSinalDaFazenda` em `src/lib/oc/contaCorrente.ts`): entrega positiva (receita verde na venda/abate, custo vermelho na compra),
+   deducao e o que reduz a operacao negativos vermelhos, dinheiro positivo, Saldo POSITIVO = falta (vermelho), NEGATIVO = adiantado
+   (verde), zero quitado. O saldo e' do banco (`oc_conta_corrente`); esta tela nao soma nada e nao escreve fator de sinal.
    ⚠ PADRAO DE TABELA (regra permanente, 28/09/2026): 10px nas linhas, 9,5px no cabecalho, linha de 18px, datas dd/mm/aa; cabecalho
      navy nos dois niveis; cards, titulo, cabecalho, Total e barra congelados — so' as linhas rolam; uma informacao por coluna;
      divisor vertical entre grupos; fundo por tipo de linha; cor pelo sinal; cabecalho centralizado, numero a direita; uma linha por registro (texto livre corta com `title`, numero e data nunca).
@@ -80,8 +83,8 @@ const num2 = (v: number) => {
 const moeda = (v: number | null) => (v === null ? '' : num2(v));
 
 /* OC-CONTA-CORRENTE-TODOS-01a — os textos de cada lado (mock oc_conta_corrente_compra_abate_mock_v1). A venda fala do comprador e
-   da entrega; a compra, do fornecedor e da entrada do gado. O extrato da compra e' o ESPELHO do da venda: entrada positiva, pagamento
-   negativo, saldo positivo = falta pagar. O sinal vem do banco (`oc_conta_corrente` ja' o vira); aqui so' os rotulos e os totais. */
+   da entrega; a compra, do fornecedor e da entrada do gado. Na tela os tres lados leem igual (OC-CC-SINAL-FAZENDA-01): entrada e
+   pagamento positivos, saldo positivo = falta pagar; o fator vem do dono. Aqui so' os rotulos. */
 const TEXTOS: Record<LadoContaCorrente, {
   cardEntrega: string; cardDinheiro: string; titulo: string; buscar: string; programar: string; grupoSaldo: string;
   colEntrega: string; colDinheiro: string; vazio: string; seloEntrega: string; seloDinheiro: string; verbo: string;
@@ -265,8 +268,6 @@ export function AbaContaCorrenteOC({ api, somenteLeitura, lado = 'venda', despes
   subAba, onSubAba, onAbrirLancamento, onIrParaEntrega, motivoAtualizarEntregas = null, onProgramar, cancelarProgramado }: Props) {
   const cc = api.contaCorrente;
   const t = TEXTOS[lado];
-  /* sinal da coluna da entrega no total: a venda mostra o gado que saiu negativo; a compra, o que entrou positivo */
-  const sinalEntrega = lado === 'compra' ? 1 : -1;
   const [erroAcao, setErroAcao] = useState<string | null>(null);
   const [dialogo, setDialogo] = useState<'buscar' | 'explicar' | null>(null);
   const [cancelarAlvo, setCancelarAlvo] = useState<{ id: string; parcelas: number } | null>(null);
@@ -299,7 +300,8 @@ export function AbaContaCorrenteOC({ api, somenteLeitura, lado = 'venda', despes
   }
 
   const barra = barraDaDiferenca(cc, lado);
-  const corSaldo = corDoSaldo(cc.saldo);
+  /* OC-CC-SINAL-FAZENDA-01 — os totais e o saldo NA TELA (o lado da fazenda), do dono; nenhum sinal escrito aqui. */
+  const tot = totaisNaTela(cc, lado);
   const atualizarEntregas = async () => {
     setErroAcao(null);
     const erro = await api.sincronizarEntregas();
@@ -334,9 +336,10 @@ export function AbaContaCorrenteOC({ api, somenteLeitura, lado = 'venda', despes
               "Saldo · adiantado ao fornecedor" 144, e com cinco iguais o card teria 132 uteis. Os outros rotulos pedem ate' 90,5 e o
               maior valor real (4.730.486,74 a 12px) 87,3, para 127 uteis. */}
           <div className="grid flex-none gap-[6px]" style={{ gridTemplateColumns: '1fr 1fr 170px 1fr 1fr' }} data-testid="cards-conta-corrente">
-            <CardEmPe rotulo={t.cardEntrega} valor={cc.entregue} cor={COR.pos} testid="card-entrega" />
-            <CardEmPe rotulo={t.cardDinheiro} valor={-sinalEntrega * cc.recebido} cor={lado === 'compra' ? COR.neg : COR.pos} testid="card-dinheiro" />
-            <CardEmPe rotulo={rotuloDoSaldo(cc.saldo, lado, cc.situacao)} valor={cc.saldo} cor={COR[corSaldo]} destaque={corSaldo !== 'zero'} testid="card-saldo" />
+            <CardEmPe rotulo={t.cardEntrega} valor={tot.entrega} cor={classeDaEntregaNaTela(tot.entrega, lado, 'total')} testid="card-entrega" />
+            <CardEmPe rotulo={t.cardDinheiro} valor={tot.dinheiro} cor={classeDoDinheiroNaTela(tot.dinheiro, lado)} testid="card-dinheiro" />
+            <CardEmPe rotulo={rotuloDoSaldo(tot.saldo, lado, cc.situacao)} valor={tot.saldo} cor={classeDoSaldoNaTela(tot.saldo)}
+              destaque={corDoSaldoNaTela(tot.saldo) !== 'quitado'} testid="card-saldo" />
             <CardEmPe rotulo="Despesas lançadas" valor={totaisDespesas?.lancadas ?? null} cor={COR.neg} divisor testid="card-despesas-lancadas" />
             <CardEmPe rotulo="Despesas pagas" valor={totaisDespesas?.pagas ?? null} cor={COR.neg} testid="card-despesas-pagas" />
           </div>
@@ -439,12 +442,12 @@ export function AbaContaCorrenteOC({ api, somenteLeitura, lado = 'venda', despes
                   {/* OC-CC-ABATE-01 PR 2 — so' o abate escreve o Funrural retido; na venda e na compra a celula e' a de antes, byte a byte. */}
                   {lado === 'abate' ? (
                     <td className={`${TF} text-[9.5px] font-normal text-[#c2410c]`} colSpan={4} data-testid="total-deduzido">
-                      {cc.deduzido != null ? `Funrural retido +${num2(cc.deduzido)}` : ''}
+                      {cc.deduzido != null ? `Funrural retido ${num2(noSinalDaFazenda(cc.deduzido, lado))}` : ''}
                     </td>
                   ) : <td className={TF} colSpan={4} />}
-                  <td className={`${TF} text-right ${lado === 'compra' ? COR.pos : COR.neg} ${DV}`}>{num2(sinalEntrega * cc.entregue)}</td>
-                  <td className={`${TF} text-right ${lado === 'compra' ? COR.neg : COR.pos}`}>{num2(-sinalEntrega * cc.recebido)}</td>
-                  <td className={`${TF} text-right ${COR[corSaldo]} ${DV}`} data-testid="total-saldo">{num2(cc.saldo)}</td>
+                  <td className={`${TF} text-right ${classeDaEntregaNaTela(tot.entrega, lado, 'total')} ${DV}`}>{num2(tot.entrega)}</td>
+                  <td className={`${TF} text-right ${classeDoDinheiroNaTela(tot.dinheiro, lado)}`}>{num2(tot.dinheiro)}</td>
+                  <td className={`${TF} text-right ${classeDoSaldoNaTela(tot.saldo)} ${DV}`} data-testid="total-saldo">{num2(tot.saldo)}</td>
                   <td className={TF} />
                 </tr>
               </tfoot>
@@ -550,7 +553,8 @@ function LinhaExtrato({ l, linhas, lado, acoes, onAcao }: {
     ? (l.banco ?? (l.status === 'programado' ? ROTULO_STATUS.programado : ROTULO_STATUS.sem_conta_bancaria))
     : '';
   const bancoAmbar = !l.banco && (l.tipo === 'recebimento' || l.subtipo === 'devolucao_comprador');
-  const cSaldo = corDoSaldo(l.saldo);
+  /* OC-CC-SINAL-FAZENDA-01 — a linha como a fazenda a le^ (o dono aplica o fator do lado; o banco nao muda). */
+  const lt = linhaNaTela(l, lado);
   /* OC-CC-ACOES-LINHA-02 — o clique na linha e' o PRIMEIRO item do menu dela; se ele nao vale, a linha nao e' clicavel (o "⋯"
      continua la', dizendo por que). ⚠ O evento do menu SOBE pela arvore do React mesmo estando num portal: a celula do "⋯" o segura
      (`stopPropagation`), e o Enter so' vale com o foco na PROPRIA linha — senao abrir o menu pelo teclado abriria o lancamento. */
@@ -570,9 +574,9 @@ function LinhaExtrato({ l, linhas, lado, acoes, onAcao }: {
       <td className={TDQ} title={contaComNumero(l.contaOrdem, l.conta)} data-celula="conta">{rotuloCurtoDaConta(l.conta) ?? '—'}</td>
       {/* o nome do banco e' dado (corta, com o nome inteiro no `title`); "s/ conta" e "programado" sao gerados e curtos */}
       <td className={`${l.banco ? TDQ : TD} text-center ${bancoAmbar ? 'text-[#b45309]' : ''}`} title={l.banco ?? undefined} data-celula="banco">{banco}</td>
-      <td className={`${NUM} ${DV} ${COR[corDoSaldo(l.movEntrega)]}`}>{moeda(l.movEntrega)}</td>
-      <td className={`${NUM} ${l.noSaldo ? COR[corDoSaldo(l.movRecebido)] : 'text-muted-foreground'}`}>{moeda(l.movRecebido)}</td>
-      <td className={`${NUM} ${DV} font-bold ${COR[cSaldo]}`}>{num2(l.saldo)}</td>
+      <td className={`${NUM} ${DV} ${classeDaEntregaNaTela(lt.entrega, lado, l.tipo)}`}>{moeda(lt.entrega)}</td>
+      <td className={`${NUM} ${l.noSaldo ? classeDoDinheiroNaTela(lt.dinheiro, lado) : 'text-muted-foreground'}`}>{moeda(lt.dinheiro)}</td>
+      <td className={`${NUM} ${DV} font-bold ${classeDoSaldoNaTela(lt.saldo)}`}>{num2(lt.saldo)}</td>
       <td className={TD_MENU} data-celula="menu" onClick={e => e.stopPropagation()}>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -649,7 +653,7 @@ function DialogoBuscarRecebimento({ api, lado, onFechar }: { api: OcContaCorrent
                   <td className={`${TD} whitespace-normal break-words`}>{r.descricao ?? '—'}{!r.mesmoFavorecido ? ' · outro favorecido' : ''}</td>
                   <td className={`${TD} whitespace-normal break-words`}>{rotuloDaConta(r.subcentro) ?? '—'}</td>
                   <td className={`${TD} text-center ${r.semContaBancaria ? 'text-[#b45309]' : ''}`}>{r.conciliado ? 'conciliado' : (r.semContaBancaria ? 'sem conta' : (r.status ?? '—'))}</td>
-                  <td className={`${NUM} ${compra ? COR.neg : COR.pos}`}>{formatMoeda(compra ? -r.valor : r.valor)}</td>
+                  <td className={`${NUM} ${compra ? COR.neg : COR.pos}`}>{formatMoeda(r.valor)}</td>
                 </tr>
               ))}
             </tbody>
@@ -874,9 +878,10 @@ export function DialogoExplicarDiferenca({ api, somenteLeitura, lado = 'venda', 
       <DialogContent className="max-w-[920px]" data-testid="dialogo-explicar">
         <DialogHeader><DialogTitle className="text-[12px]">Explicar diferença</DialogTitle></DialogHeader>
         <div className="grid grid-cols-3 gap-[5px]">
-          <Card rotulo="Saldo a explicar" valor={cc.saldoAExplicar} cor={COR[corDoSaldo(cc.saldoAExplicar)]} testid="card-saldo-a-explicar" />
-          <Card rotulo="Explicado" valor={explicadoTotal} cor={COR[corDoSaldo(explicadoTotal)]} testid="card-explicado" />
-          <Card rotulo="Falta explicar" valor={falta} cor={COR[corDoSaldo(falta)]} testid="card-falta-explicar" />
+          {/* OC-CC-SINAL-FAZENDA-01 — a conta segue no sinal do banco; a tela so' aplica o fator do lado (`noSinalDaFazenda`). */}
+          <Card rotulo="Saldo a explicar" valor={noSinalDaFazenda(cc.saldoAExplicar, lado)} cor={classeDoSaldoNaTela(noSinalDaFazenda(cc.saldoAExplicar, lado))} testid="card-saldo-a-explicar" />
+          <Card rotulo="Explicado" valor={noSinalDaFazenda(explicadoTotal, lado)} cor={classeDoAjusteNaTela(noSinalDaFazenda(explicadoTotal, lado))} testid="card-explicado" />
+          <Card rotulo="Falta explicar" valor={noSinalDaFazenda(falta, lado)} cor={classeDoSaldoNaTela(noSinalDaFazenda(falta, lado))} testid="card-falta-explicar" />
         </div>
         <div className="max-h-[45vh] overflow-auto rounded border">
           <table className="w-full table-fixed border-separate border-spacing-0 tabular-nums">
@@ -896,7 +901,7 @@ export function DialogoExplicarDiferenca({ api, somenteLeitura, lado = 'venda', 
                   <td className={TD} />
                   <td className={`${TD} whitespace-normal break-words`}>{contaComNumero(e.contaOrdem, rotuloDaConta(e.conta))}</td>
                   <td className={`${TD} whitespace-normal break-words`}>{e.motivo ?? ''}</td>
-                  <td className={`${NUM} ${COR[corDoSaldo(e.valor)]}`}>{formatMoeda(e.valor)}</td>
+                  <td className={`${NUM} ${classeDoAjusteNaTela(noSinalDaFazenda(e.valor, lado))}`}>{formatMoeda(noSinalDaFazenda(e.valor, lado))}</td>
                   <td className={`${TD} text-center`}>
                     {!somenteLeitura && (
                       <button type="button" className="text-[10px] text-muted-foreground hover:text-destructive"
@@ -975,7 +980,7 @@ export function DialogoExplicarDiferenca({ api, somenteLeitura, lado = 'venda', 
             <tfoot>
               <tr className="font-bold">
                 <td colSpan={5} className="sticky bottom-0 h-[19px] border-t-2 border-[#9aa7b6] bg-[#E8E6DF] px-[5px] text-[10px]">Total explicado</td>
-                <td className={`sticky bottom-0 h-[19px] border-t-2 border-[#9aa7b6] bg-[#E8E6DF] px-[5px] text-right text-[10px] ${COR[corDoSaldo(explicadoTotal)]}`}>{formatMoeda(explicadoTotal)}</td>
+                <td className={`sticky bottom-0 h-[19px] border-t-2 border-[#9aa7b6] bg-[#E8E6DF] px-[5px] text-right text-[10px] ${classeDoAjusteNaTela(noSinalDaFazenda(explicadoTotal, lado))}`}>{formatMoeda(noSinalDaFazenda(explicadoTotal, lado))}</td>
                 <td className="sticky bottom-0 border-t-2 border-[#9aa7b6] bg-[#E8E6DF]" />
               </tr>
             </tfoot>
