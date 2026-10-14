@@ -99,17 +99,27 @@ export interface FinanceiroDaLinhaCC {
 }
 
 /**
+ * OC-LISTA-FINANC-CC-01c — A REGRA UNICA DO NUMERO DA COLUNA FINANCEIRO, para os dois modelos: o numero aparece so' quando ha'
+ * falta a receber / pagar; quitada = sem numero. A FONTE de cada modelo nao muda (conta corrente: o saldo do dono; titulo: o
+ * liquido da obrigacao, das views) — este helper decide so' se ele aparece. Zero ao centavo tambem nao aparece.
+ */
+export function numeroDoFinanceiro(valor: number | null | undefined, quitado: boolean): number | null {
+  if (quitado || valor == null || !Number.isFinite(valor) || centavos(valor) === 0) return null;
+  return valor;
+}
+
+/**
  * A coluna FINANCEIRO da linha em conta corrente: o SALDO do dono (nao o liquido, que ja' esta' na coluna Valor) e a pilula pela
- * situacao do dono. Pilula de 44px: "Liquidado" e "A receber" cabem por extenso (medido: 37,6 e 37,5px a 8px); "Progr." e
- * "Aguard." curtos, com a palavra inteira no `title` ("Programado" e "Aguardando" pedem 46,9 e 47,0px).
+ * situacao do dono. OC-LISTA-FINANC-CC-01c: pilulas POR EXTENSO numa pilula de 52px (medido a 8px no Chromium com a Inter:
+ * "Programado" 46,9 e "Aguardando" 47,0 sao as maiores).
  */
 export function financeiroDaLinhaCC(cc: ContaCorrente, lado: LadoContaCorrente): FinanceiroDaLinhaCC {
   const saldo = saldoNaTela(cc, lado);
-  const valor = centavos(saldo) === 0 ? null : saldo;
+  const valor = numeroDoFinanceiro(saldo, cc.situacao === 'quitado');
   if (cc.situacao === 'quitado') return { valor: null, pilula: 'Liquidado', titulo: 'Liquidado', tom: 'sucesso' };
-  if (cc.situacao === 'aguardando_saida') return { valor, pilula: 'Aguard.', titulo: 'Aguardando a saída do gado', tom: 'neutro' };
+  if (cc.situacao === 'aguardando_saida') return { valor, pilula: 'Aguardando', titulo: 'Aguardando a saída do gado', tom: 'neutro' };
   if (corDoSaldoNaTela(saldo) === 'adiantado') return { valor, pilula: 'Adiantado', titulo: 'Adiantado', tom: 'atencao_forte' };
-  if (centavos(cc.programado) > 0) return { valor, pilula: 'Progr.', titulo: 'Programado', tom: 'neutro' };
+  if (centavos(cc.programado) > 0) return { valor, pilula: 'Programado', titulo: 'Programado', tom: 'neutro' };
   const falta = lado === 'compra' ? 'A pagar' : 'A receber';
   return { valor, pilula: falta, titulo: falta, tom: 'atencao' };
 }

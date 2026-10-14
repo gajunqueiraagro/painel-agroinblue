@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 14/10/2026 (ABATE-PROJETADO-01a, +17: `src/components/abate/modalNegociarLoteUnidades.test.tsx` 14 (13 -> 27),
+  Baseline em 14/10/2026 (OC-LISTA-FINANC-CC-01c, +5 em `src/components/operacao-comercial/central/centralFinancCC.test.tsx` (12 -> 17) —
+  5180 depois dele; antes o ABATE-PROJETADO-01a, +17: `src/components/abate/modalNegociarLoteUnidades.test.tsx` 14 (13 -> 27),
   `src/components/compra/excluirLoteDialogo.test.tsx` 3 (3 -> 6) — 5175 depois dele; antes o OC-LISTA-FINANC-CC-01b, +8: `src/components/operacao-comercial/central/resumoFinancCC.test.tsx` 6
   (novo), `src/components/operacao-comercial/central/centralFinancCC.test.tsx` 2 (10 -> 12) — 5158 depois dele; antes o
   OC-LISTA-FINANC-CC-01, +10: `src/components/operacao-comercial/central/centralFinancCC.test.tsx` 10
@@ -315,7 +316,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5175
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5180
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3992,6 +3993,28 @@ docs/historico/frentes-ate-2026-09-29.md.)
       conta corrente (o ramo so' existe `pelo_lado`). Modelo titulo: so' o total da view, como antes (sem segunda regua).
       MEDIDO (14/10): hoje nenhuma OC, em modelo nenhum, tem despesa pendente — as 58 despesas do dono estao realizadas.
     Testes: `resumoFinancCC.test.tsx` 6 e +2 em `centralFinancCC.test.tsx`; 7 mutacoes mortas.
+  · 01c (Gabriel, 14/10/2026, so' tela; mock mock-central-ajuste-v1) — AJUSTE DE HOMOLOGACAO:
+    - "Cab · kg méd.": o PESO MEDIO dos lotes (kg total ÷ cab, 0 casas), pelo dono da media `pesoMedioPorCabeca` sobre
+      `totaisDosLotes`. "Valor R$" no cabecalho (a celula segue sem R$).
+    - FINANCEIRO: pilula a' esquerda, o clipe colado nela, o NUMERO A' DIREITA. A REGRA DO NUMERO E' UMA, para os dois modelos:
+      `numeroDoFinanceiro(valor, quitado)` (`listaContaCorrente.ts`) — so' aparece com falta (≠ 0 ao centavo); quitada = sem
+      numero. A FONTE nao mudou: conta corrente = o saldo do dono; titulo = o liquido da obrigacao das views, escondido quando a
+      view diz 'quitada' (antes o titulo quitado mostrava o numero: NJ 3260d1c8 2.505.586, 8b211cae 882.609, 6a808c4c 797.374).
+    - COMERCIALIZACAO: pilula · clipe (colado, lugar reservado) · "Rasc.". PAGTO: pilula centralizada; "aguardando" virou a
+      pilula neutra "Aguardando".
+    - PILULAS POR EXTENSO numa pilula de 52px (`PILULA_LONGA`) em Comercializacao, Financeiro e Pagto: Programada, Cancelada,
+      Liquidado, Programado, Aguardando, Obrigação, Excedente. MEDIDO a 8px/500 no Chromium com a Inter: a maior, "Aguardando",
+      47,0 (tabela das medidas presa no teste). A Entrega segue na de 44 (fora do pedido).
+    - LARGURAS MEDIDAS (replica da linha no Chromium, piores casos reais "Venda em Pé", "779 · 880 kg", 2.505.586 / −396.975 com
+      pilula): OC 64 · Data 56 · Tipo 66 · Faz 34 · Cab·kg méd. 76 · Valor 70 · Entrega 66 · Comercializacao 100 · Financeiro 126 ·
+      Pagto 70 · Acoes 22 = 750 em Global (716 numa fazenda); piso da tabela 880 -> Contraparte >= 130 (136 a 886, 176 a 926).
+      ⚠ DESVIOS DO MOCK, medidos: Tipo 50 -> 66 ("Venda em Pé" 56,0 + padding); Comercializacao 86 -> 100 (o "Rasc." de 26 nao
+      cabia); Cab·kg 92 -> 76 (sobrava; a Contraparte precisava). O ponto ambar do Pagto fica 0,5px a' direita da pilula.
+    ⚠ NAO PROVADO NO NAVEGADOR (medida numa replica): a lista real do NJ / Vera com as pilulas novas.
+  ⚠ DIVIDA DE DADO OC-PROGRAMADA-REABERTA-01 (medida no 01c, NAO corrigida — decisao do Gabriel): 5 OCs vivas com status comercial
+    'programada' e financeiro quitado — todas REABERTAS ('reabrir') depois de fechadas e nunca concluidas de novo: NJ b74cfd38 e
+    af334f9c (criadas do legado ja' fechadas em 29/09, reabertas em 29/09 pelo admin), Agnaldo 3513d916 e e5719192, Vera 7d1f8590 —
+    todas em conta corrente. Proposta: o operador conclui pela tela (Concluir), ou uma correcao guardada que so' grava 'fechada'.
   ⚠ FORA: a Graxaria duplicada da c80ebe9e (73a183eb / 6b349b87, 5.056,00 cada) fica
     sob OC-DESVINCULAR-01, sem correcao · NAO PROVADO NO NAVEGADOR (a lista real da Vera e a regua renderizada na tela; a medida
     foi numa replica).

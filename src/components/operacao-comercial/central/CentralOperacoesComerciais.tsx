@@ -31,11 +31,11 @@ import { useFiltroUrl } from '@/v2/hooks/useFiltroUrl';
 import { FILTRO_DESPESAS_PENDENTES, passaFiltroPagamento, temDespesaPendente, pctPagoPeloLado } from '@/lib/oc/estadoPeloLado';
 import {
   lerLoteContaCorrente, ladoDaOC, pagtoDaLinhaCC, financeiroDaLinhaCC, fraseDosDocumentos,
-  totalDespesasEmAbertoCC, tituloDasDespesasEmAberto,
+  totalDespesasEmAbertoCC, tituloDasDespesasEmAberto, numeroDoFinanceiro,
   type ResumoListaOC, type TomFinanceiroCC,
 } from '@/lib/oc/listaContaCorrente';
 import { classeDoSaldoNaTela } from '@/lib/oc/contaCorrente';
-import { totaisDosLotes } from '@/hooks/useCompraLotes';
+import { totaisDosLotes, pesoMedioPorCabeca } from '@/hooks/useCompraLotes';
 
 // Central de Operações Comerciais — PR-OC-CENTRAL-UX-01 (UX/operacional; sem backend novo).
 //   Lê em LOTE (ZERO N+1): operações + 3 views soberanas + nomes, filtradas por cliente, mapeadas por
@@ -137,7 +137,11 @@ const TD = `px-1 h-[18px] py-0 align-middle text-[9px] leading-none ${DIV}`;
    com `px` a pilula de "Paga" nascia menor que a de "Parcial" e a coluna inteira parecia
    desalinhada linha a linha. Os rotulos ficaram em <= 7 caracteres para caber nos 44px. */
 const PILULA_FIXA = 'inline-block rounded text-[8px] font-medium leading-[12px] text-center align-middle w-[44px] overflow-hidden';
-const PILULA_RASC = 'inline-block rounded text-[8px] font-medium leading-[12px] text-center align-middle w-[34px] overflow-hidden';
+/* OC-LISTA-FINANC-CC-01c — PILULAS POR EXTENSO (Gabriel, 14/10): Comercializacao, Financeiro e Pagto numa pilula de 52px. Medido
+   a 8px/500 no Chromium com a Inter: "Aguardando" 47,0, "Programado" 46,9 e "Programada" 46,6 sao as maiores. A Entrega segue na
+   de 44 (rotulos curtos, fora do pedido). "Rasc." mede 21,0: 26px. */
+const PILULA_LONGA = 'inline-block rounded text-[8px] font-medium leading-[12px] text-center align-middle w-[52px] overflow-hidden';
+const PILULA_RASC = 'inline-block rounded text-[8px] font-medium leading-[12px] text-center align-middle w-[26px] overflow-hidden';
 /* ⚠ PADDING MENOR NAS COLUNAS DE PILULA, e a conta explica: a coluna tem 50px e a pilula 44;
    com os 8px de `px-1` sobram 42 e a pilula NAO CABE. Medido na tela (Agnaldo): as celulas
    de Entrega e Pagto vinham com `scrollWidth` 52-62 contra `clientWidth` 49. Com `px-0.5`
@@ -204,8 +208,9 @@ const REC_CURTO: Record<string, string> = {
   'Concluído': 'OK', Parcial: 'Parcial', 'Não iniciado': 'Pend.', 'Com diferença': 'Difer.',
 };
 /* O estagio do compromisso na coluna Financeiro — outro eixo que o estado de pagamento. */
-const FIN_CURTO: Record<string, string> = {
-  liquidado: 'Liquid.', 'lançado': 'Lançado', programado: 'Progr.', 'obrigação': 'Obrig.',
+/* OC-LISTA-FINANC-CC-01c — por extenso (a pilula passou a 52px). */
+const FIN_ROTULO: Record<string, string> = {
+  liquidado: 'Liquidado', 'lançado': 'Lançado', programado: 'Programado', 'obrigação': 'Obrigação',
 };
 const REC_TONE: Record<string, string> = {
   'Não iniciado': TOM_NEUTRO,
@@ -277,13 +282,13 @@ function finResumo(f: FinRow | undefined): { valor: number; rotulo: string; prog
    o vocabulario publicado da view e tambem o `value` do filtro; mexer nelas repetiria o
    defeito do `nao_iniciada` documentado logo acima. */
 const LIQ_LABEL: Record<string, string> = {
-  quitada: 'Paga', parcial: 'Parcial', excedente: 'Exced.',
+  quitada: 'Paga', parcial: 'Parcial', excedente: 'Excedente',
   nao_liquidada: 'N/ paga', base_indefinida: 'S/ base', sem_base: 'S/ base', em_aberto: 'Aberto',
 };
 function liqLabel(estado: string | null | undefined): string {
   if (!estado) return '—';
-  /* Estado novo da view: primeiras 7 letras, que e' o que a pilula comporta. */
-  return LIQ_LABEL[estado] ?? (estado.charAt(0).toUpperCase() + estado.slice(1).replace(/_/g, ' ')).slice(0, 7);
+  /* Estado novo da view: o nome dele (a pilula corta com o inteiro no `title`). */
+  return LIQ_LABEL[estado] ?? (estado.charAt(0).toUpperCase() + estado.slice(1).replace(/_/g, ' '));
 }
 
 /* ORDEM DOS EIXOS POR GRAVIDADE, nunca alfabetica: alfabetica poria "Liquidada"
@@ -376,20 +381,21 @@ function BadgeComercial({ status, rascunho, docs }: { status: string; rascunho: 
     status === 'fechada' ? TOM_SUCESSO
     : status === 'cancelada' ? TOM_NEUTRO
     : 'bg-secondary text-secondary-foreground';
-  /* Rotulos de <= 7 caracteres, para a pilula fixa de 44px. */
-  const label = status === 'fechada' ? 'Fechada' : status === 'cancelada' ? 'Cancel.' : 'Progr.';
+  /* OC-LISTA-FINANC-CC-01c — por extenso, na pilula de 52px. */
+  const label = status === 'fechada' ? 'Fechada' : status === 'cancelada' ? 'Cancelada' : 'Programada';
   /* ⚠ DUAS PILULAS, E O ESPACO DA SEGUNDA E' RESERVADO SEMPRE — OC-LISTA-COMPACTA-01. Rascunho
      e' EIXO SEPARADO do estado comercial (uma OC programada pode ser rascunho), entao colapsar
      os dois numa pilula so' apagaria um dos dois. A grade fixa 44+34 faz a celula ter a mesma
      largura com e sem rascunho: nada pula ao ordenar ou filtrar. */
   return (
-    <span className="grid grid-cols-[44px_34px_10px] items-center gap-1 whitespace-nowrap">
-      <span className={`${PILULA_FIXA} ${cor}`} title={status}>{label}</span>
+    /* OC-LISTA-FINANC-CC-01c — o clipe COLADO na pilula (gap 4), o lugar dele reservado sempre; o "Rasc." depois, no lugar dele. */
+    <span className="grid grid-cols-[52px_10px_26px] items-center gap-1 whitespace-nowrap" data-testid="comercial">
+      <span className={`${PILULA_LONGA} ${cor}`} title={status}>{label}</span>
+      {/* OC-LISTA-FINANC-CC-01 — o clipe dos documentos da OPERACAO */}
+      <Clipe titulo={docs} testid="clipe-operacao" />
       {rascunho
         ? <span className={`${PILULA_RASC} ${TOM_ATENCAO}`} title="Rascunho">Rasc.</span>
         : <span />}
-      {/* OC-LISTA-FINANC-CC-01 — o clipe dos documentos da OPERACAO */}
-      <Clipe titulo={docs} testid="clipe-operacao" />
     </span>
   );
 }
@@ -573,15 +579,16 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
         recmap[x.operacao_id].push(x.estado_recebimento);
       });
       setRecMap(recmap);
-      /* O kg pelos LOTES, pelo dono dos totais (`totaisDosLotes`): `peso_total_negociado_kg` da OC so' o lote unico gravava. */
+      /* O kg pelos LOTES, pelo dono dos totais (`totaisDosLotes`): `peso_total_negociado_kg` da OC so' o lote unico gravava.
+         OC-LISTA-FINANC-CC-01c — a coluna mostra o PESO MEDIO (kg total ÷ cab), pelo dono da media (`pesoMedioPorCabeca`). */
       const porOp: Record<string, LoteKgRow[]> = {};
       ((lotesKg?.data as LoteKgRow[] | null) ?? []).forEach(l => { (porOp[l.operacao_id] ??= []).push(l); });
       const kgmap: Record<string, number> = {};
       Object.entries(porOp).forEach(([id, ls]) => {
-        kgmap[id] = totaisDosLotes(ls.map(l => ({
+        kgmap[id] = pesoMedioPorCabeca(totaisDosLotes(ls.map(l => ({
           quantidade: String(l.qtd_negociada ?? ''), pesoMedioKg: String(l.peso_medio_negociado_kg ?? ''),
           valorInformado: String(l.valor_informado ?? ''), criterioValor: l.criterio_valor,
-        }))).pesoTotal;
+        })))) ?? 0;
       });
       setKgMap(kgmap);
       /* Falha do lote nao derruba a lista: as linhas caem no modelo titulo, como antes (o aviso vai ao toast da tela). */
@@ -954,7 +961,7 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
             vence classe no pai. É a MESMA régua 9/10/21 de `<Table density="dense">`; a
             tabela aqui é crua por causa do scrollport do `thead sticky`, não por régua. */}
         <TableDensityContext.Provider value="dense">
-        <table className="w-full min-w-[760px] table-fixed caption-bottom text-[9px]">
+        <table className="w-full min-w-[880px] table-fixed caption-bottom text-[9px]">
           {/* ⚠ MEDIDO NO DOM, nao estimado — OC-LISTA-COMPACTA-01. Cada largura e' o maior
               entre o rotulo (8px) e o conteudo (9px). Somam 610 fixos; com o piso de 760 do
               `<table>` sobram >= 150 para a Contraparte, acima do minimo de 130.
@@ -963,26 +970,23 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
               numeros e o olho pulava a coluna do meio para comparar. */}
           <colgroup>
             {/* ⚠ OC-LISTA-LAYOUT-01 (Gabriel, 14/10): a ordem do PROCESSO — a operacao, [divisor] o gado (Entrega e
-                Comercializacao), [divisor] o dinheiro (Financeiro e Pagto). As larguras do briefing; o Tipo FICOU em 68 (com 44
-                "Venda em Pé" cortaria) e a Contraparte paga a diferenca. Fixos: 736 em Global, 702 numa fazenda. */}
+                Comercializacao), [divisor] o dinheiro (Financeiro e Pagto). [As larguras mudaram no 01c, logo abaixo.] */}
+            {/* ⚠ OC-LISTA-FINANC-CC-01c (Gabriel, 14/10; mock mock-central-ajuste-v1): larguras MEDIDAS no Chromium com a Inter, com
+                as pilulas por extenso, "Venda em Pé" e os piores numeros reais (2.505.586 / −396.975 com pilula; "779 · 880 kg").
+                Fixos: 750 em Global, 716 numa fazenda; a Contraparte fica com o resto (>= 136 numa tabela de 886). */}
             <col className="w-[64px]" />{/* OC — 8 hex mono em 8px, sem "#" */}
             <col className="w-[56px]" />{/* Data — 31/07/26 em 8px */}
-            <col className="w-[68px]" />{/* Tipo — "Venda em Pé" mede 64 em 9px; 68 com o padding */}
+            <col className="w-[66px]" />{/* Tipo — "Venda em Pé" mede 56,0 a 9px; 66 com o padding (o mock pedia 50: cortaria) */}
             <col />{/* Contraparte — TODA a sobra, e nunca menos que 130px */}
             {/* Faz — a sigla (PUR/SM/LUZ). SO' EM GLOBAL, como a Lista (FinanceiroTab:381): com uma
                 fazenda escolhida a coluna repetiria a mesma sigla em toda linha. */}
             {!fazendaSel && <col className="w-[34px]" />}
-            <col className="w-[84px]" />{/* Cab · kg — "24 · 10.240 kg" em 9px */}
-            <col className="w-[66px]" />{/* Valor — 1.234.567, sem R$ nem centavos */}
-            {/* ⚠ 60, NAO 50 — MEDIDO. A pilula de 44 mais o cadeado de 8 mais o gap nao cabem em
-                50: a celula vinha com `scrollWidth` 58 contra 49. O cadeado e' eixo SEPARADO
-                (encerramento, nao chegada) e nao pode sumir para a coluna fechar. Os 10px saem
-                da Contraparte, que tem 283 e precisa de 130. */}
-            <col className="w-[62px]" />{/* Entrega — pilula 44 + gap + cadeado 8 */}
-            {/* OC-LISTA-FINANC-CC-01 — +5 e +7, tirados da Contraparte (a unica que estica), para o clipe de 10px + gap 4. */}
-            <col className="w-[101px]" />{/* Comercializacao — pilula 44 + "Rasc." 34 + clipe 10 + gaps */}
-            <col className="w-[117px]" />{/* Financeiro — valor + pilula 44 + clipe 10 + gaps */}
-            <col className="w-[74px]" />{/* Pagto — pilula 44, ou "aguardando" + o ponto */}
+            <col className="w-[76px]" />{/* Cab · kg méd. — pior real "779 · 880 kg"; o cabecalho com a seta pede 72,6 (o mock pedia 92) */}
+            <col className="w-[70px]" />{/* Valor R$ — 2.505.586 (45,7) */}
+            <col className="w-[66px]" />{/* Entrega — pilula 44 + gap + cadeado 8 */}
+            <col className="w-[100px]" />{/* Comercializacao — pilula 52 + clipe 10 + "Rasc." 26 + gaps (o mock pedia 86: o "Rasc." nao cabia) */}
+            <col className="w-[126px]" />{/* Financeiro — pilula 52 + clipe 10 + numero 45,7 + gaps + 2 de folga */}
+            <col className="w-[70px]" />{/* Pagto — pilula 52 centralizada; o ponto ambar fica 0,5px a' direita dela */}
             <col className="w-[22px]" />{/* Ações */}
           </colgroup>
           <TableHeader className="sticky top-0 z-10 bg-primary">
@@ -994,8 +998,8 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
               <ThOrd col="tipo" rotulo="Tipo" ord={ord} onOrdenar={alternarOrd} />
               <ThOrd col="contraparte" rotulo="Contraparte" ord={ord} onOrdenar={alternarOrd} />
               {!fazendaSel && <ThOrd col="fazenda" rotulo="Faz" ord={ord} onOrdenar={alternarOrd} />}
-              <ThOrd col="animais" rotulo="Cab · kg" ord={ord} onOrdenar={alternarOrd} direita />
-              <ThOrd col="valor" rotulo="Valor" ord={ord} onOrdenar={alternarOrd} direita />
+              <ThOrd col="animais" rotulo="Cab · kg méd." ord={ord} onOrdenar={alternarOrd} direita />
+              <ThOrd col="valor" rotulo="Valor R$" ord={ord} onOrdenar={alternarOrd} direita />
 
               {/* ⚠ "Entrega" cobre os dois sentidos do animal — na COMPRA ele chega, na VENDA
                   ele sai. O rotulo longo ("Receb./Envio") nao cabe em 50px e dizia o mesmo. */}
@@ -1020,7 +1024,7 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
               const fin = finResumo(finMap[r.id]);
               const cc = finCC(r);
               const docsFin = fraseDosDocumentos(ccMap[r.id]?.docsFinanceiro ?? 0, 'financeiro');
-              const kgLotes = kgMap[r.id] ?? 0;
+              const kgMedio = kgMap[r.id] ?? 0;
               const valorOp = r.valor_acordado ?? r.valor_total ?? 0;
               return (
                 <TableRow key={r.id}
@@ -1049,9 +1053,9 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
                         a altura da tabela inteira. O "cab" saiu do numero — o cabecalho ja' diz. */}
                     <span className="whitespace-nowrap">
                       <span>{r.qtd_negociada != null ? r.qtd_negociada : '—'}</span>
-                      {/* OC-LISTA-FINANC-CC-01 — o kg pelos LOTES (`totaisDosLotes`); o campo da OC so' o lote unico gravava. */}
-                      {kgLotes > 0 && (
-                        <span className="text-muted-foreground">{' · '}{kg(kgLotes)} kg</span>
+                      {/* OC-LISTA-FINANC-CC-01c — o PESO MEDIO dos lotes (kg/cab, 0 casas), pelo dono da media. */}
+                      {kgMedio > 0 && (
+                        <span className="text-muted-foreground" data-testid="kg-medio">{' · '}{kg(kgMedio)} kg</span>
                       )}
                     </span>
                   </TableCell>
@@ -1081,18 +1085,19 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
                     docs={fraseDosDocumentos(ccMap[r.id]?.docsOperacao ?? 0, 'operacao')} /></TableCell>
                   <TableCell className={`${TD} whitespace-nowrap overflow-hidden ${DIV_GRUPO}`}>
                     {/* ⚠ GRADE, NÃO `inline-flex`: em linha, a pílula começava onde o valor
-                        terminava e a coluna inteira parecia desalinhada. Valor à direita do seu
-                        espaço, pílula numa faixa fixa — o olho desce a coluna em linha reta. */}
+                        terminava e a coluna inteira parecia desalinhada.
+                        OC-LISTA-FINANC-CC-01c — a PILULA A' ESQUERDA, o clipe colado nela e o NUMERO A' DIREITA (tabular), so' quando
+                        ha' falta a receber/pagar: a regra e' UMA, `numeroDoFinanceiro`, para os dois modelos. */}
                     {cc
                       ? (
                         /* OC-LISTA-FINANC-CC-01 — conta corrente: o SALDO do dono (o liquido ja' esta' em Valor); quitado sem numero. */
-                        <span className="grid grid-cols-[1fr_44px_10px] items-center gap-1 whitespace-nowrap" data-testid="fin-cc">
+                        <span className="grid grid-cols-[52px_10px_1fr] items-center gap-1 whitespace-nowrap" data-testid="fin-cc">
+                          <span className={`${PILULA_LONGA} ${TOM_DO_FIN_CC[cc.tom]}`} title={cc.titulo}>{cc.pilula}</span>
+                          <Clipe titulo={docsFin} testid="clipe-financeiro" />
                           <span className={`text-right tabular-nums font-medium ${cc.valor == null ? '' : classeDoSaldoNaTela(cc.valor)}`}
-                            title={cc.valor == null ? undefined : brlCent(cc.valor)}>
+                            title={cc.valor == null ? undefined : brlCent(cc.valor)} data-testid="fin-numero">
                             {cc.valor == null ? '' : num0(cc.valor)}
                           </span>
-                          <span className={`${PILULA_FIXA} ${TOM_DO_FIN_CC[cc.tom]}`} title={cc.titulo}>{cc.pilula}</span>
-                          <Clipe titulo={docsFin} testid="clipe-financeiro" />
                         </span>
                       )
                       : fin && fin.rotulo
@@ -1101,16 +1106,18 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
                           const pilula = est === 'parcial'
                             ? { texto: 'Parcial', tom: TOM_ATENCAO }
                             : fin.rotulo === 'liquidado'
-                              ? { texto: FIN_CURTO.liquidado, tom: TOM_SUCESSO }
-                              : { texto: FIN_CURTO[fin.rotulo] ?? fin.rotulo, tom: TOM_NEUTRO };
+                              ? { texto: FIN_ROTULO.liquidado, tom: TOM_SUCESSO }
+                              : { texto: FIN_ROTULO[fin.rotulo] ?? fin.rotulo, tom: TOM_NEUTRO };
+                          /* OC-LISTA-FINANC-CC-01c — a fonte (o liquido da obrigacao, das views) NAO muda; quitada pela view = sem numero. */
+                          const numero = numeroDoFinanceiro(fin.valor, est === 'quitada');
                           return (
-                            <span className="grid grid-cols-[1fr_44px_10px] items-center gap-1 whitespace-nowrap">
-                              <span className={`text-right tabular-nums font-medium ${fin.valor < 0 ? 'text-destructive' : 'text-success'}`}
-                                title={brlCent(fin.valor)}>
-                                {num0(fin.valor)}
-                              </span>
-                              <span className={`${PILULA_FIXA} ${pilula.tom}`}>{pilula.texto}</span>
+                            <span className="grid grid-cols-[52px_10px_1fr] items-center gap-1 whitespace-nowrap">
+                              <span className={`${PILULA_LONGA} ${pilula.tom}`}>{pilula.texto}</span>
                               <Clipe titulo={docsFin} testid="clipe-financeiro" />
+                              <span className={`text-right tabular-nums font-medium ${numero == null ? '' : numero < 0 ? 'text-destructive' : 'text-success'}`}
+                                title={numero == null ? undefined : brlCent(numero)} data-testid="fin-numero">
+                                {numero == null ? '' : num0(numero)}
+                              </span>
                             </span>
                           );
                         })()
@@ -1118,14 +1125,15 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
                         /* ⚠ "S/ lanc." E' DO EIXO FINANCEIRO, nao do pagamento: ela diz que a
                            operacao nao tem compromisso NENHUM, o que e' diferente de ter e nao
                            ter pago. Sem ela, as duas ausencias virariam a mesma celula vazia. */
-                        <span className="grid grid-cols-[1fr_44px_10px] items-center gap-1 whitespace-nowrap">
-                          <span />
-                          <span className={`${PILULA_FIXA} ${TOM_NEUTRO}`} title="Sem lançamento financeiro">S/ lanc.</span>
+                        <span className="grid grid-cols-[52px_10px_1fr] items-center gap-1 whitespace-nowrap">
+                          <span className={`${PILULA_LONGA} ${TOM_NEUTRO}`} title="Sem lançamento financeiro">S/ lanc.</span>
                           <Clipe titulo={docsFin} testid="clipe-financeiro" />
+                          <span />
                         </span>
                       )}
                   </TableCell>
-                  <TableCell className={`${TD_PIL} relative`}>{(() => {
+                  {/* OC-LISTA-FINANC-CC-01c — a pilula CENTRALIZADA na coluna. */}
+                  <TableCell className={`${TD_PIL} relative text-center`} data-testid="pagto">{(() => {
                     const est = liqMap[r.id]?.estado_liquidacao;
                     // Sem estado = a fonte não classifica: '—' de texto, NUNCA pílula colorida.
                     if (!est) return <span className="text-muted-foreground">—</span>;
@@ -1145,10 +1153,12 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
                         recém-fechada não está inadimplente: está aguardando. Texto muted, sem
                         pílula — pílula é para estado que exige leitura, e esperar não exige.
                         Decisão mantida em OC-LISTA-COMPACTA-01; só o texto encurtou. */
+                    /* OC-LISTA-FINANC-CC-01c — "aguardando" passou a pilula NEUTRA por extenso (Gabriel, 14/10): o tom neutro segue
+                       dizendo que esperar nao e' inadimplencia. */
                     if (est === 'nao_liquidada') {
-                      return comMarca(<span className="text-[8px] text-muted-foreground" title="Aguardando pagamento">aguardando</span>);
+                      return comMarca(<span className={`${PILULA_LONGA} ${TOM_NEUTRO}`} title="Aguardando pagamento">Aguardando</span>);
                     }
-                    if (est === 'quitada') return comMarca(<span className={`${PILULA_FIXA} ${TOM_SUCESSO}`}>Paga</span>);
+                    if (est === 'quitada') return comMarca(<span className={`${PILULA_LONGA} ${TOM_SUCESSO}`}>Paga</span>);
                     if (est === 'parcial') {
                       /* A porcentagem sai do MESMO dado que a coluna Financeiro já leu — nenhuma
                          consulta a mais. Sem obrigação conhecida, o title não inventa número.
@@ -1157,10 +1167,10 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
                       /* OC-STATUS-LADO-01: liquidado do lado ÷ base do lado, os dois da view. Dividia
                          tudo por tudo, e a venda de boitel com so' o adiantamento pago saia "Paga 14%". */
                       const pct = pctPagoPeloLado(liqMap[r.id]);
-                      return comMarca(<span className={`${PILULA_FIXA} ${TOM_ATENCAO}`}
+                      return comMarca(<span className={`${PILULA_LONGA} ${TOM_ATENCAO}`}
                         title={pct == null ? 'Paga em parte' : `Paga ${pct}%`}>Parcial</span>);
                     }
-                    return comMarca(<span className={`${PILULA_FIXA} ${LIQ_TOM[est] ?? TOM_NEUTRO}`} title={est}>{liqLabel(est)}</span>);
+                    return comMarca(<span className={`${PILULA_LONGA} ${LIQ_TOM[est] ?? TOM_NEUTRO}`} title={est}>{liqLabel(est)}</span>);
                   })()}</TableCell>
                   {/* stopPropagation: sem isto, abrir o menu abriria a operacao junto. */}
                   {/* ⚠ O BOTAO MANDAVA NA ALTURA DA LINHA INTEIRA. Com `h-6` (24px) a `<tr>`
