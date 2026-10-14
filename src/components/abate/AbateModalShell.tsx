@@ -1174,7 +1174,7 @@ export function AbateModalShell({
                   ? formatMoeda(totaisAbate.bruto) : null} />
                 {/* ⚠ VERMELHO E COM SINAL: e' o que sai do bruto antes de virar NF, e
                     negativo em vermelho vale em toda a tela. */}
-                <LinhaResumo rotulo="Funrural" cor="text-destructive"
+                <LinhaResumo rotulo="Retenções" cor="text-destructive"
                   valor={totaisAbate.funrural > 0 ? `− ${formatMoeda(totaisAbate.funrural)}` : null} />
                 {/* ⚠ DOIS RÓTULOS PARA DUAS COISAS DIFERENTES. Com rascunho na tela, o
                     número é o que a conta diz e ainda não existe no banco — chamá-lo de
@@ -1235,7 +1235,7 @@ export function AbateModalShell({
                 <div className="" data-testid="resumo-cc-abate">
                   <LinhaResumo rotulo="Entregue · bruto" valor={formatMoeda(cc.entregue)} />
                   {/* OC-CC-SINAL-FAZENDA-01 — o lado da fazenda, do dono: o Funrural reduz (negativo), o saldo positivo e' o que falta. */}
-                  <LinhaResumo rotulo="Funrural retido" valor={cc.deduzido == null ? null : formatMoeda(noSinalDaFazenda(cc.deduzido, 'abate'))}
+                  <LinhaResumo rotulo="Retenções" valor={cc.deduzido == null ? null : formatMoeda(noSinalDaFazenda(cc.deduzido, 'abate'))}
                     cor={cc.deduzido == null ? undefined : classeDaEntregaNaTela(noSinalDaFazenda(cc.deduzido, 'abate'), 'abate', 'deducao') || undefined} />
                   <LinhaResumo rotulo="Recebido" valor={formatMoeda(cc.recebido)} cor={classeDoDinheiroNaTela(cc.recebido, 'abate') || undefined} />
                   <LinhaResumo rotulo={rotuloDoSaldo(saldoNaTela(cc, 'abate'), 'abate', cc.situacao)} forte valor={formatMoeda(saldoNaTela(cc, 'abate'))}

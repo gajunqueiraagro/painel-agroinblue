@@ -11,7 +11,7 @@ import { resolve } from 'node:path';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { AbaContaCorrenteOC, acoesDaLinha, MOTIVO_ACAO } from './AbaContaCorrenteOC';
 import {
-  lerContaCorrente, descricaoDoEvento, rotuloDeducao, rotuloRecebimento, rotuloDoSaldo, ROTULO_AGUARDANDO_SAIDA,
+  lerContaCorrente, descricaoDoEvento, rotuloDeducao, liquidoNaTela, rotuloRecebimento, rotuloDoSaldo, ROTULO_AGUARDANDO_SAIDA,
   TIPOS_EXPLICACAO_DO_LADO, type ContaCorrente, type LinhaContaCorrente,
 } from '@/lib/oc/contaCorrente';
 import {
@@ -84,9 +84,9 @@ describe('T1 — o leitor conhece a deducao e o deduzido', () => {
 });
 
 describe('T2 — a Descricao da deducao', () => {
-  it('"Funrural"; componente desconhecido = "Dedução"; o "Receb. n/N" nao conta a deducao', () => {
+  it('"Retenções da NF"; componente desconhecido = "Dedução"; o "Receb. n/N" nao conta a deducao', () => {
     const c = cc();
-    expect(descricaoDoEvento(deducaoDe(c), c.linhas, 'abate', s => s ?? '')).toBe('Funrural');
+    expect(descricaoDoEvento(deducaoDe(c), c.linhas, 'abate', s => s ?? '')).toBe('Retenções da NF');
     expect(rotuloDeducao('xyz')).toBe('Dedução');
     expect(rotuloDeducao(null)).toBe('Dedução');
     expect(rotuloRecebimento(c.linhas, 'r1', 'abate')).toBe('Receb. 1/1');
@@ -118,29 +118,29 @@ describe('T5 — o menu da deducao', () => {
     expect(a.map(x => x.chave)).toEqual(['abrir', 'desfazer_explicacao']);
     expect(a[0].motivo).toBeNull();
     expect(a[1].motivo).toBe(MOTIVO_ACAO.deducaoDoAcerto);
-    expect(a[1].motivo).toBe('a dedução acompanha o acerto do abate · corrija o Funrural na aba Abate');
+    expect(a[1].motivo).toBe('a dedução acompanha o acerto do abate · corrija as retenções na aba Abate');
     const sem = acoesDaLinha({ ...d, lancamentoId: null }, 'abate', false);
     expect(sem[0].motivo).toBe(MOTIVO_ACAO.semLancamento);
   });
 });
 
 describe('T6 — o extrato do abate', () => {
-  it('a linha Dedução, o rodape "Funrural retido", o titulo e o card do frigorifico; o clique abre o lancamento', () => {
+  it('a linha Retenções, o rodape "bruto − retenções", o titulo e o card do frigorifico; o clique abre o lancamento', () => {
     const abrir = vi.fn();
     render(<AbaContaCorrenteOC api={api(cc())} somenteLeitura={false} lado="abate" onAbrirLancamento={abrir} />);
     const tabela = screen.getByTestId('conta-corrente-tabela');
     const tr = tabela.querySelector('tr[data-tipo="deducao"]');
     if (!tr) throw new Error('sem a linha deducao');
     const tds = [...tr.querySelectorAll('td')];
-    expect(tds[3].textContent).toBe('Dedução');
-    expect(tds[4].textContent).toBe('Funrural');
+    expect(tds[3].textContent).toBe('Retenções');
+    expect(tds[4].textContent).toBe('Retenções da NF');
     expect(tds[2].textContent).toBe('');
     expect(tr.querySelector('[data-celula="banco"]')?.textContent).toBe('');
     /* OC-CC-SINAL-FAZENDA-01 — no banco a deducao vem +2.500,10 (efeito no saldo); na tela ela REDUZ: negativa, vermelha */
     expect(tds[7].textContent).toBe('\u22122.500,10');
     expect(tds[7].className).toContain('text-[#b91c1c]');
     expect(tr.className).toContain('bg-[#fff7ed]');
-    expect(screen.getByTestId('total-deduzido').textContent).toBe('Funrural retido \u22122.500,10');
+    expect(screen.getByTestId('total-deduzido').textContent).toBe('bruto 993.496,13 \u2212 retenções 2.500,10');
     /* a entrega positiva verde (receita), o recebido positivo verde, o saldo do banco −1.357,89 vira +1.357,89 = falta, vermelho */
     const ent = tabela.querySelector('tr[data-tipo="entrega"]')?.querySelectorAll('td')[7];
     expect(ent?.textContent).toBe('566.879,55');
@@ -153,21 +153,25 @@ describe('T6 — o extrato do abate', () => {
     expect(screen.getByTestId('total-saldo').textContent).toBe('1.357,89');
     expect(screen.getByTestId('card-saldo').textContent).toContain('Saldo · falta receber');
     expect(screen.getAllByText('Conta corrente do frigorífico').length).toBeGreaterThan(0);
-    expect(screen.getByTestId('card-entrega').textContent).toContain('Entregue · bruto');
+    expect(screen.getByTestId('card-entrega').textContent).toContain('Líquido entregue');
+    expect(screen.getByTestId('card-entrega').textContent).toContain('990.996,03');
     expect(tr.getAttribute('data-clicavel')).toBe('sim');
     fireEvent.click(tr);
     expect(abrir).toHaveBeenCalledWith('ld1');
   });
 });
 
-describe('T7 — o rodape do Funrural e\' so\' do abate', () => {
-  it('o MESMO envelope (com deduzido): na venda a celula nao existe; no abate, "Funrural retido −2.500,10"', () => {
+describe('T7 — o rodape das retencoes e\' so\' do abate', () => {
+  it('o MESMO envelope (com deduzido): na venda a celula nao existe; no abate, "bruto − retenções"', () => {
     const r = render(<AbaContaCorrenteOC api={api(cc())} somenteLeitura={false} lado="venda" />);
     expect(screen.queryByTestId('total-deduzido')).toBeNull();
-    expect(within(screen.getByTestId('conta-corrente-tabela')).queryAllByText(/Funrural retido/)).toHaveLength(0);
+    /* so' o RODAPE: o envelope de teste traz uma linha de deducao, que tambem se chama "Retenções" (na venda real nao ha). */
+    const rodape = screen.getByTestId('conta-corrente-tabela').querySelector('tfoot');
+    if (!rodape) throw new Error('sem rodape');
+    expect(within(rodape as HTMLElement).queryAllByText(/retenções/i)).toHaveLength(0);
     r.unmount();
     render(<AbaContaCorrenteOC api={api(cc())} somenteLeitura={false} lado="abate" />);
-    expect(screen.getByTestId('total-deduzido').textContent).toBe('Funrural retido \u22122.500,10');
+    expect(screen.getByTestId('total-deduzido').textContent).toBe('bruto 993.496,13 \u2212 retenções 2.500,10');
   });
 });
 
@@ -246,5 +250,53 @@ describe('T9 — as ligacoes nos hospedeiros (fonte)', () => {
     expect(conta(shell, 'useOcContaCorrente(')).toBe(1);
     expect(conta(shell, 'ccApiExterno={ccApi}')).toBe(1);
     expect(conta(ler('src/pages/LancamentosTab.tsx'), 'ocRascunho={ocRascunho}')).toBe(2);
+  });
+});
+
+/* OC-CC-TOTAL-LIQUIDO-01 — o liquido do abate: bruto − retencoes, do envelope (nunca a soma das linhas, que tem explicacoes). */
+describe('T11 — o liquido do abate no card, no total da coluna e no rodape', () => {
+  /* O abate da Vera (2d39d7e9): entrega 104.712,87, retencoes 1.706,81, recebido 103.006,06, quitado. */
+  const vera = () => {
+    const r = lerContaCorrente({
+      modelo: 'conta_corrente', versao: 9, valor_acordado: 104712.87, entregue: 104712.87, cab_entregue: 18,
+      recebido: 103006.06, programado: 0, devolvido: 0, saldo: 0, explicado: 0, saldo_a_explicar: 0, falta_explicar: 0,
+      situacao: 'quitado', a_entregar: 0, ultima_entrega: '2026-09-15', recebimentos_sem_conta_bancaria: 0, saidas_sem_entrega: 0,
+      deduzido: 1706.81,
+      linhas: [
+        { tipo: 'entrega', data: '2026-09-15', parte_id: 'e1', lote_ordem: 1, cab: 18, categoria: 'vacas', conta_ordem: 1155,
+          conta: 'Abates de Fêmeas', mov_entrega: -104712.87, status: 'sem_caixa', no_saldo: true, saldo: -104712.87 },
+        { ...DEDUCAO, data: '2026-09-15', mov_entrega: 1706.81, saldo: -103006.06 },
+        { tipo: 'recebimento', data: '2026-09-20', parte_id: 'r1', conta_ordem: 1155, conta: 'Abates de Fêmeas',
+          mov_recebido: 103006.06, status: 'realizado', no_saldo: true, saldo: 0 },
+      ],
+      explicacoes: [],
+    });
+    if (!r) throw new Error('fixture');
+    return r;
+  };
+  const totalEntrega = () => {
+    const tf = screen.getByTestId('conta-corrente-tabela').querySelector('tfoot tr');
+    const tds = [...(tf?.querySelectorAll('td') ?? [])];
+    return { entrega: tds[4]?.textContent, recebido: tds[5]?.textContent };
+  };
+  it('o helper: abate = bruto − retencoes; venda e compra = entregue, mesmo com a chave (em centavos)', () => {
+    expect(liquidoNaTela(vera(), 'abate')).toBe(103006.06);
+    expect(liquidoNaTela(cc(), 'abate')).toBe(990996.03);
+    expect(liquidoNaTela(cc(), 'venda')).toBe(993496.13);
+    expect(liquidoNaTela(cc(), 'compra')).toBe(993496.13);
+    expect(liquidoNaTela(cc({}, false), 'abate')).toBe(993496.13);
+  });
+  it('Vera: card e total 103.006,06 (= o recebido); rodape "bruto 104.712,87 − retenções 1.706,81"', () => {
+    render(<AbaContaCorrenteOC api={api(vera())} somenteLeitura={false} lado="abate" />);
+    expect(screen.getByTestId('card-entrega').textContent).toBe('Líquido entregue103.006,06');
+    expect(totalEntrega()).toEqual({ entrega: '103.006,06', recebido: '103.006,06' });
+    expect(screen.getByTestId('total-deduzido').textContent).toBe('bruto 104.712,87 \u2212 retenções 1.706,81');
+    expect(screen.getByTestId('total-deduzido').className).toContain('text-[#c2410c]');
+  });
+  it('venda sem deducao: card e total = entregue, sem a celula do rodape (o de hoje)', () => {
+    render(<AbaContaCorrenteOC api={api(cc({}, false))} somenteLeitura={false} lado="venda" />);
+    expect(screen.getByTestId('card-entrega').textContent).toBe('Entregue · DRE R$993.496,13');
+    expect(totalEntrega().entrega).toBe('993.496,13');
+    expect(screen.queryByTestId('total-deduzido')).toBeNull();
   });
 });

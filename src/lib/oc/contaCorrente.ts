@@ -277,6 +277,15 @@ export function saldoNaTela(cc: ContaCorrente, lado: LadoContaCorrente): number 
 export function totaisNaTela(cc: ContaCorrente, lado: LadoContaCorrente): { entrega: number; dinheiro: number; saldo: number } {
   return { entrega: cc.entregue, dinheiro: cc.recebido, saldo: saldoNaTela(cc, lado) };
 }
+/**
+ * OC-CC-TOTAL-LIQUIDO-01 — o ENTREGUE LIQUIDO na tela: no abate, o bruto menos as retencoes da NF (`entregue − deduzido`, os dois
+ * do envelope do banco, o mesmo `cc`); fora do abate, o `entregue` como sempre. ⚠ NUNCA a soma das linhas da coluna Entrega: ela
+ * tem tambem as explicacoes. Alimenta o card, o total da coluna e o rodape do abate. Em centavos.
+ */
+export function liquidoNaTela(cc: ContaCorrente, lado: LadoContaCorrente): number {
+  if (lado !== 'abate' || cc.deduzido == null) return cc.entregue;
+  return (Math.round(cc.entregue * 100) - Math.round(cc.deduzido * 100)) / 100;
+}
 /** O estado do saldo NA TELA: positivo = falta (vermelho), zero = quitado (neutro), negativo = adiantado (verde).
  *  ⚠ NAO e' `corDoSaldo` (que pinta pelo sinal cru: negativo vermelho). */
 export function corDoSaldoNaTela(saldoTela: number | null): 'falta' | 'quitado' | 'adiantado' {
@@ -528,7 +537,7 @@ export function rotuloCurtoExplicacao(tipo: TipoExplicacao, lado: LadoContaCorre
 }
 
 /** OC-CC-ABATE-01 PR 2 — a deducao do abate na Descricao (texto gerado, uma linha). */
-const ROTULO_DEDUCAO: Record<string, string> = { funrural: 'Funrural' };
+const ROTULO_DEDUCAO: Record<string, string> = { funrural: 'Retenções da NF' };
 export function rotuloDeducao(componente: string | null): string {
   return (componente && ROTULO_DEDUCAO[componente]) || 'Dedução';
 }

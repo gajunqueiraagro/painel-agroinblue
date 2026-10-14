@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 14/10/2026 (LOTE-PESO-CALC-01, +28: `src/components/compra/loteContaNoCampo.test.tsx` 23 (novo),
+  Baseline em 14/10/2026 (OC-CC-TOTAL-LIQUIDO-01, +3 em `src/components/venda/contaCorrenteAbate.test.tsx` (17 -> 20) — 5136
+  depois dele; antes o LOTE-PESO-CALC-01, +28: `src/components/compra/loteContaNoCampo.test.tsx` 23 (novo),
   `src/hooks/useCompraLotes.recusa.test.ts` 5 (4 -> 9) — 5133 depois dele; antes o OC-LOTE-FISICO-POS-SAIDA-01, +16:
   `src/components/compra/loteFisicoPosSaida.test.tsx` 12 (novo), `src/hooks/useCompraLotes.recusa.test.ts` 4 (novo) — 5105 depois dele; antes o OC-LISTA-LAYOUT-01, +5: `src/components/operacao-comercial/central/centralListaLayout.test.tsx` 8 (novo),
   `src/v2/lib/acessoOperacao.test.tsx` −3 (sairam os 4 dos botoes de criar da lista, com eles; entrou 1) — 5089 depois dele; antes o
@@ -309,7 +310,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5133
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5136
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3878,6 +3879,25 @@ docs/historico/frentes-ate-2026-09-29.md.)
   quem mexer num confere o outro. O selo do rodape (`SeloRegraDaLinha`) diz a regra da linha.
 
 ## REGRAS VIGENTES — OPERACAO COMERCIAL E FINANCEIRO
+- ⚠ NO CONTA CORRENTE DO ABATE O CARD E O TOTAL DA ENTREGA SAO O LIQUIDO, E A DEDUCAO SE CHAMA RETENCOES (OC-CC-TOTAL-LIQUIDO-01, Gabriel
+  14/10/2026, so' tela). Nasce da Vera (2d39d7e9): "Entregue · bruto 104.712,87", "Recebido 103.006,06" e "Saldo · quitado 0,00" nao
+  fechavam a' vista. Dono: `liquidoNaTela(cc, lado)` (`src/lib/oc/contaCorrente.ts`, ao lado de `totaisNaTela`, que NAO mudou) =
+  `entregue − deduzido` do MESMO envelope do `oc_conta_corrente`, em centavos, SO' no lado 'abate' (a guarda da celula do rodape);
+  fora do abate, ou sem `deduzido`, o `entregue`. ⚠ NUNCA a soma das linhas da coluna Entrega: ela tem tambem as explicacoes.
+  · `AbaContaCorrenteOC`: card 1 do abate "Líquido entregue" (16 caracteres; o T10 exige <= os 17 da venda) com o liquido; total da
+    coluna Entrega (DRE) = o liquido (fecha com o Recebido quando quitado); a celula `total-deduzido` diz "bruto X − retenções Y"
+    (bruto = `tot.entrega`, Y = o modulo do deduzido no lado da fazenda; mesma cor). Selo da linha "Retenções" e a descricao
+    `rotuloDeducao('funrural')` = "Retenções da NF" (desconhecido / nulo seguem "Dedução"); o motivo do menu: "corrija as
+    retenções na aba Abate". Grid, alturas e os outros 4 cards iguais; venda e compra identicas (o snapshot da venda passou).
+  · `AbateModalShell`: "Funrural retido" (FINANCEIRO) e "Funrural" (NEGOCIACAO) viraram "Retenções" — so' rotulo, mesmos numeros;
+    "Entregue · bruto" fica no resumo (la' a cadeia bruto -> retencoes -> recebido -> saldo esta' escrita).
+  · A DEDUCAO E' `funrural_valor` DO REALIZADO, QUE NA NF PODE SER FUNRURAL + SENAR + SEGURO (NJ LT10, NF 000.008.812: 1.295,39 +
+    196,27 + 107,95 = 1.599,61) OU SO' SENAR (NJ 2 lotes, NF 000.008.815: 617,43 = 0,195% de 317.106,79). Por isso o rotulo e' generico.
+  ⚠ FORA: o campo "Funrural + SENAR" do `ModalNegociarLote`, as telas legadas e a Central de OCs seguem com "Funrural".
+  Testes: `contaCorrenteAbate.test.tsx` (T2, T5, T6, T7 trocados ao contrato novo — no T7 a busca "nenhuma retenção na venda" ficou
+  restrita ao RODAPE: o envelope de teste tem uma linha de deducao, que na venda tambem se chama "Retenções"; T11 novo: Vera e venda).
+  5 mutacoes do helper e da ligacao mortas. ⚠ NAO PROVADO NO NAVEGADOR (sem ferramenta nesta sessao): a Vera aberta, o rodape cabendo
+    nos 4 colspan, o resumo lateral.
 - ⚠ QUANTIDADE, PESO MEDIO E VALOR DO LOTE ACEITAM CONTA, PELO DONO, E O SALVAR NUNCA LE^ CONTA NEM TRUNCA (LOTE-PESO-CALC-01, Gabriel
   14/10/2026, so' tela). Nasce de defeito medido: o `parseNumericValue` tira o que nao e' digito — "36+18" virava 3618 cabecas, em
   silencio — e o salvar truncava "54,5" para 54. O operador junta dois lotes do frigorifico fazendo a conta no campo.

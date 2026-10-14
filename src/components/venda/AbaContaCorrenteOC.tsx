@@ -14,7 +14,7 @@ import { parseNumericValue } from '@/lib/calculos/abate';
 import { rotuloCurtoDaConta, rotuloDaConta } from '@/lib/financeiro/rotuloConta';
 import {
   barraDaDiferenca, classeDaEntregaNaTela, classeDoAjusteNaTela, classeDoDinheiroNaTela, classeDoSaldoNaTela, contaComNumero, corDoSaldoNaTela,
-  dataCurta, descricaoDoEvento, efeitoNoSaldo, linhaNaTela, linhasDaPreviaAjuste, noSinalDaFazenda, rotuloDoSaldo, rotuloExplicacao, totaisNaTela,
+  dataCurta, descricaoDoEvento, efeitoNoSaldo, linhaNaTela, linhasDaPreviaAjuste, noSinalDaFazenda, rotuloDoSaldo, rotuloExplicacao, totaisNaTela, liquidoNaTela,
   rotuloSentidoAjuste, sugestaoAjuste, totalDoRascunho, valorAjusteParaRpc, ROTULO_STATUS, TIPOS_EXPLICACAO_DO_LADO,
   type ContaCorrente, type LadoContaCorrente, type LinhaContaCorrente, type LinhaPreviaAjuste, type SentidoAjuste, type TipoExplicacao,
 } from '@/lib/oc/contaCorrente';
@@ -118,7 +118,7 @@ const TEXTOS: Record<LadoContaCorrente, {
   /* OC-CC-ABATE-01 PR 2 — o abate fala como a venda, com o frigorifico; a entrega e' o BRUTO (liquido + Funrural) no DRE. */
   abate: {
     /* FIX OC-CC-ABATE-01 (14/10): o rotulo do card no tamanho do da venda ("Entregue · DRE R$"); o valor e' o BRUTO. */
-    cardEntrega: 'Entregue · bruto', cardDinheiro: 'Recebido', titulo: 'Conta corrente do frigorífico',
+    cardEntrega: 'Líquido entregue', cardDinheiro: 'Recebido', titulo: 'Conta corrente do frigorífico',
     buscar: '+ Buscar recebimento no Financeiro', grupoSaldo: 'Frigorífico',
     programar: '+ Programar recebimento',
     colEntrega: 'Entrega (DRE)', colDinheiro: 'Recebido (caixa)', vazio: 'Nenhuma entrega nem recebimento ainda.',
@@ -153,7 +153,7 @@ export const MOTIVO_ACAO = {
   conciliado: 'conciliado · desfaça a conciliação primeiro',
   explicacaoSemLancamento: 'esta explicação não gera lançamento',
   /* OC-CC-ABATE-01 PR 2 — o banco recusa desfazer a deducao: ela segue o acerto do abate. */
-  deducaoDoAcerto: 'a dedução acompanha o acerto do abate · corrija o Funrural na aba Abate',
+  deducaoDoAcerto: 'a dedução acompanha o acerto do abate · corrija as retenções na aba Abate',
 } as const;
 
 /** O motivo do item de GRAVAR numa operacao em somente leitura, pelo lado. ⚠ O somente leitura do Financeiro da OC
@@ -302,6 +302,8 @@ export function AbaContaCorrenteOC({ api, somenteLeitura, lado = 'venda', despes
   const barra = barraDaDiferenca(cc, lado);
   /* OC-CC-SINAL-FAZENDA-01 — os totais e o saldo NA TELA (o lado da fazenda), do dono; nenhum sinal escrito aqui. */
   const tot = totaisNaTela(cc, lado);
+  /* OC-CC-TOTAL-LIQUIDO-01 — card e total da coluna Entrega: o liquido (no abate, bruto − retencoes; fora dele, o entregue). */
+  const liquido = liquidoNaTela(cc, lado);
   const atualizarEntregas = async () => {
     setErroAcao(null);
     const erro = await api.sincronizarEntregas();
@@ -336,7 +338,7 @@ export function AbaContaCorrenteOC({ api, somenteLeitura, lado = 'venda', despes
               "Saldo · adiantado ao fornecedor" 144, e com cinco iguais o card teria 132 uteis. Os outros rotulos pedem ate' 90,5 e o
               maior valor real (4.730.486,74 a 12px) 87,3, para 127 uteis. */}
           <div className="grid flex-none gap-[6px]" style={{ gridTemplateColumns: '1fr 1fr 170px 1fr 1fr' }} data-testid="cards-conta-corrente">
-            <CardEmPe rotulo={t.cardEntrega} valor={tot.entrega} cor={classeDaEntregaNaTela(tot.entrega, lado, 'total')} testid="card-entrega" />
+            <CardEmPe rotulo={t.cardEntrega} valor={liquido} cor={classeDaEntregaNaTela(liquido, lado, 'total')} testid="card-entrega" />
             <CardEmPe rotulo={t.cardDinheiro} valor={tot.dinheiro} cor={classeDoDinheiroNaTela(tot.dinheiro, lado)} testid="card-dinheiro" />
             <CardEmPe rotulo={rotuloDoSaldo(tot.saldo, lado, cc.situacao)} valor={tot.saldo} cor={classeDoSaldoNaTela(tot.saldo)}
               destaque={corDoSaldoNaTela(tot.saldo) !== 'quitado'} testid="card-saldo" />
@@ -442,10 +444,10 @@ export function AbaContaCorrenteOC({ api, somenteLeitura, lado = 'venda', despes
                   {/* OC-CC-ABATE-01 PR 2 — so' o abate escreve o Funrural retido; na venda e na compra a celula e' a de antes, byte a byte. */}
                   {lado === 'abate' ? (
                     <td className={`${TF} text-[9.5px] font-normal text-[#c2410c]`} colSpan={4} data-testid="total-deduzido">
-                      {cc.deduzido != null ? `Funrural retido ${num2(noSinalDaFazenda(cc.deduzido, lado))}` : ''}
+                      {cc.deduzido != null ? `bruto ${num2(tot.entrega)} − retenções ${num2(Math.abs(noSinalDaFazenda(cc.deduzido, lado)))}` : ''}
                     </td>
                   ) : <td className={TF} colSpan={4} />}
-                  <td className={`${TF} text-right ${classeDaEntregaNaTela(tot.entrega, lado, 'total')} ${DV}`}>{num2(tot.entrega)}</td>
+                  <td className={`${TF} text-right ${classeDaEntregaNaTela(liquido, lado, 'total')} ${DV}`}>{num2(liquido)}</td>
                   <td className={`${TF} text-right ${classeDoDinheiroNaTela(tot.dinheiro, lado)}`}>{num2(tot.dinheiro)}</td>
                   <td className={`${TF} text-right ${classeDoSaldoNaTela(tot.saldo)} ${DV}`} data-testid="total-saldo">{num2(tot.saldo)}</td>
                   <td className={TF} />
@@ -538,7 +540,7 @@ const ESTILO_SELO: Record<LinhaContaCorrente['tipo'], string> = {
 function Selo({ tipo, lado }: { tipo: LinhaContaCorrente['tipo']; lado: LadoContaCorrente }) {
   const estilo = ESTILO_SELO[tipo];
   const texto: Record<LinhaContaCorrente['tipo'], string> = {
-    entrega: TEXTOS[lado].seloEntrega, recebimento: TEXTOS[lado].seloDinheiro, deducao: 'Dedução', explicacao: 'Explicação',
+    entrega: TEXTOS[lado].seloEntrega, recebimento: TEXTOS[lado].seloDinheiro, deducao: 'Retenções', explicacao: 'Explicação',
   };
   return <span className={`rounded-[3px] px-[5px] text-[9.5px] font-semibold ${estilo}`}>{texto[tipo]}</span>;
 }
