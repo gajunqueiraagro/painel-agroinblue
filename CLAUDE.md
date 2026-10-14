@@ -162,7 +162,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 14/10/2026 (OC-CC-SINAL-FAZENDA-01, +7 em `src/lib/oc/contaCorrente.test.ts` (12 -> 19) — 5084 depois dele; antes o
+  Baseline em 14/10/2026 (OC-LISTA-LAYOUT-01, +5: `src/components/operacao-comercial/central/centralListaLayout.test.tsx` 8 (novo),
+  `src/v2/lib/acessoOperacao.test.tsx` −3 (sairam os 4 dos botoes de criar da lista, com eles; entrou 1) — 5089 depois dele; antes o
+  OC-CC-SINAL-FAZENDA-01, +7 em `src/lib/oc/contaCorrente.test.ts` (12 -> 19) — 5084 depois dele; antes o
   FIX OC-CC-ABATE-01, +3 em `src/components/venda/contaCorrenteAbate.test.tsx` (11 -> 14) — 5077 depois dele; antes o
   OC-CC-ABATE-01 PR 2, +11: `src/components/venda/contaCorrenteAbate.test.tsx` 11 (novo) — 5074 depois dele;
   antes o DRE-MODAIS-02a, +7: `src/components/agri/dreModais02.test.tsx` 7 (novo) — 5063 depois dele; antes o
@@ -305,7 +307,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5084
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5089
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -503,7 +505,8 @@ CONSULTAM: a lateral (`V2Sidebar`, por `gruposVisiveis`), o drawer (`V2ContextDr
   (`telaDaOCNova('lancamentos-zoot')`) e fecham no hub.
   · PORTAS: `abrirOperacaoOC` (lista, Financeiro, modal do lancamento), `?oc_compra=1` e `?oc_id` caem na secao nova; as telas
     que hospedam a OC sao `TELAS_QUE_HOSPEDAM_A_OC` (`atalhosProducao.ts`), lidas por `saiDoLancarComOC`.
-  · A LISTA CRIA: "Nova compra", "Nova venda" e "Novo abate" (`CentralOperacoesComerciais`, classes do "Nova recorrência") chamam os
+  · [REVOGADO no OC-LISTA-LAYOUT-01 (14/10/2026): a lista nao cria mais OC; gestor e financeiro criam pelos cards de "Lançar
+    movimentação".] A LISTA CRIA: "Nova compra", "Nova venda" e "Novo abate" (`CentralOperacoesComerciais`, classes do "Nova recorrência") chamam os
     `abrirNova*` do `V2Index`. Medido a 1.135: os tres em 430px, sem rolagem horizontal.
   · A FAIXA DE ATALHOS da Producao so' mostra telas com acesso (`opcoesDoAtalho(podeAbrir)`) e some com menos de duas.
   · "EXCLUIR DEFINITIVAMENTE" so' para o admin; para os outros, apagado com "só o administrador exclui definitivamente"
@@ -3870,6 +3873,35 @@ docs/historico/frentes-ate-2026-09-29.md.)
   quem mexer num confere o outro. O selo do rodape (`SeloRegraDaLinha`) diz a regra da linha.
 
 ## REGRAS VIGENTES — OPERACAO COMERCIAL E FINANCEIRO
+- ⚠ A CENTRAL DE OCs LE^ NA ORDEM DO PROCESSO, COM A BARRA A 24px E O FILTRO DE FAZENDA (OC-LISTA-LAYOUT-01, Gabriel 14/10/2026, so'
+  tela, `src/components/operacao-comercial/central/CentralOperacoesComerciais.tsx`; mock v1 aprovado).
+  · COLUNAS (colgroup, px): OC 64 · Data 56 · Tipo 68 · Contraparte (o resto) · Faz 34 (so' em Global) · Cab · kg 84 · Valor 66 ·
+    [divisor] Entrega 62 · Comercialização 96 · [divisor] Financeiro 110 · Pagto 74 · ⋯ 22 — fixos 736 em Global. O divisor de grupo
+    e' `DIV_GRUPO` (`border-l-2 border-l-[#9aa7b6]`, o filete do extrato do conta corrente), no th (`ThOrd grupo`) e na td.
+    ⚠ O TIPO FICOU EM 68, NAO NOS 44 DO BRIEFING (decisao do Gabriel): "Venda em Pé" mede 64 a 9px; a Contraparte pagou.
+    As celulas foram MOVIDAS VERBATIM (conferido: cada uma aparece uma vez, igual a' de antes, so' com a classe do divisor);
+    ordenacao por coluna, altura de 18px, fontes e pilulas nao mudaram.
+  · BARRA EM DUAS LINHAS FIXAS DE 24px (decisao do Gabriel: numa linha so' nao cabe — ~1.340px pedidos para ~926 uteis a 1.126):
+    linha 1 Data inicial 124 · Data final 124 · Fazenda 150 · Tipo 120 · Contraparte… 190; linha 2 Entrega · Comercial · Pagamento
+    (136 cada, a ordem das colunas) · Rascunhos · Resumo. Os selects levam `CTL` = `h-6 py-0 text-[11px]` NO USO (o `SelectTrigger`
+    da casa nasce h-8 com py-1.5; o componente nao mudou). Rotulos: "Toda entrega", "Todo pagamento" (os valores das views nao
+    mudaram). A barra passou de 76 a 60px e o `max-h` da lista de `100vh-204px` a `100vh-188px` (por conta, nao medido).
+  · FILTRO DE FAZENDA EM MEMORIA (`fFazenda`), so' em Global: "Todas as fazendas" + as fazendas das OCs lidas (o mapa `fazendas`),
+    por nome. ESTADO LOCAL, FORA DA URL (decisao do Gabriel): o `f_fazenda` antigo continua sendo apagado na montagem. Com a lateral
+    numa fazenda o select mostra a dela, apagado, com "a fazenda vem do seletor lateral" no `title`. O resumo/PDF escreve a fazenda
+    filtrada.
+  · CRIAR OC NAO MORA NA LISTA: "Nova compra", "Nova venda" e "Novo abate" sairam (e as props `onNova*` da Central e o
+    `motivo-nova-oc`). GESTOR E FINANCEIRO CRIAM POR "LANÇAR MOVIMENTAÇÃO" ('lancamentos-zoot' e' 'editar' para os dois em
+    `NIVEL_POR_TELA`), pelos tres cards, com as MESMAS `abrirNova*OC` do V2Index. O contador "N operação(ões)" foi para a linha do
+    titulo (12px muted).
+    ⚠ O APAGADO DO "Novo abate" PARA O FINANCEIRO (MOTIVO_ABATE_BOITEL) MORAVA SO' NA LISTA: o card de abate de "Lançar
+      movimentação" nao o consulta (medido: `LancamentosTab.tsx` nao cita `negociar_abate_boitel` nem o motivo) — o financeiro
+      abre abate novo por la'; se deve ficar apagado tambem, e' decisao do Gabriel.
+  Teste: `centralListaLayout.test.tsx` (8; o `Select` vira `<select>` nativo so' nele). 3 mutacoes mortas (coluna fora da ordem;
+  filtro ignorando a fazenda; um select em h-8).
+  ⚠ NAO PROVADO NO NAVEGADOR (sem ferramenta nesta sessao): a barra a 1.126 e a ~1.560, os 24px renderizados (o texto de 11px no
+    select de 24px), as 13 linhas de 18px da Vera, 0 celulas cortadas, "aguardando" + o ponto em 74px, e Fazenda = BG com 4 linhas.
+  ⚠ FICA PARA O OC-LISTA-FINANC-CC-01: o conteudo de Financeiro e Pagto em OC de conta corrente ("−542 Parcial" / "S/ lanc.").
 - ⚠ O EXTRATO DO CONTA CORRENTE LE^ PELO LADO DA FAZENDA, NOS TRES LADOS, NUM DONO SO' (OC-CC-SINAL-FAZENDA-01, Gabriel 14/10/2026, so'
   tela — o banco NAO muda). `oc_conta_corrente` manda os numeros no sinal "da conta da contraparte"; a TELA so' multiplica cada um
   pelo fator do lado, e quem sabe o fator e' `sinalDaFazenda(lado)` (`src/lib/oc/contaCorrente.ts`). PROIBIDO escrever o fator a'

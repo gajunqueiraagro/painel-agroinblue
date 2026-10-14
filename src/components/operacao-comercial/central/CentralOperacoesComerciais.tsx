@@ -5,7 +5,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useAcessoOperacao } from '@/v2/hooks/usePodeAbrir';
-import { MOTIVO_ABATE_BOITEL, MOTIVO_SEM_CAPACIDADE } from '@/v2/lib/acessoOperacao';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useOperacaoComercial } from '@/hooks/useOperacaoComercial';
 import { Button } from '@/components/ui/button';
@@ -25,7 +24,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
 import { DatePicker } from '@/components/ui/date-picker';
-import { MoreVertical, Search, Eye, Filter, Ban, ArrowUp, ArrowDown, Lock, Trash2, FileText, Plus } from 'lucide-react';
+import { MoreVertical, Search, Eye, Filter, Ban, ArrowUp, ArrowDown, Lock, Trash2, FileText } from 'lucide-react';
 import { ItemDeMenuOC } from '@/components/venda/AbaContaCorrenteOC';
 import { normalizarErroRpc } from '@/hooks/useOcCompromissos';
 import { useFiltroUrl } from '@/v2/hooks/useFiltroUrl';
@@ -96,6 +95,9 @@ const brlCent = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', cu
    linha de 26px deixa de ser uma faixa de texto solta e vira grade — o olho desce a coluna
    sem perder a linha. `last:border-r-0` evita a borda dupla contra a borda da tabela. */
 const DIV = 'border-r border-border/60 last:border-r-0';
+/* OC-LISTA-LAYOUT-01 — o divisor de GRUPO, antes de Entrega e antes de Financeiro: a operacao (o que, com quem, quanto), o gado
+   (entrega e comercializacao) e o dinheiro (financeiro e pagamento). O filete da casa (o `DV` do extrato do conta corrente). */
+const DIV_GRUPO = 'border-l-2 border-l-[#9aa7b6]';
 /**
  * ⚠ CAIXA NORMAL — PR-OC-LISTA-02 item 1. "CONTRAPARTE" em versalete gasta ~18% mais
  * largura que "Contraparte" para dizer o mesmo, e nesta tabela largura é a moeda: era o
@@ -322,14 +324,14 @@ const ORD = {
    coluna ativa; sobre o azul opaco ela herda text-primary-foreground, e o realce
    de hover e' o mesmo `primary-foreground/10` que o resto do /v2 usa sobre azul.
    AÇÕES nao usa este componente: nao ordena, nao tem cursor nem seta. */
-function ThOrd({ col, rotulo, ord, onOrdenar, direita }: {
+function ThOrd({ col, rotulo, ord, onOrdenar, direita, grupo }: {
   col: ColunaOrd; rotulo: string; ord: Ordenacao | null;
-  onOrdenar: (col: ColunaOrd) => void; direita?: boolean;
+  onOrdenar: (col: ColunaOrd) => void; direita?: boolean; grupo?: boolean;
 }) {
   const dirAtiva = ord && ord.col === col ? ord.dir : null;
   return (
     <TableHead
-      className={`${TH}${direita ? ' text-right' : ''} cursor-pointer select-none hover:bg-primary-foreground/10`}
+      className={`${TH}${direita ? ' text-right' : ''}${grupo ? ` ${DIV_GRUPO}` : ''} cursor-pointer select-none hover:bg-primary-foreground/10`}
       onClick={() => onOrdenar(col)}
       onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOrdenar(col); } }}
       tabIndex={0}
@@ -378,27 +380,21 @@ interface CentralOperacoesComerciaisProps {
      estruturalmente compativeis e o TSC nao reclamava. Exigi-lo faz o desencontro virar
      erro de compilacao. */
   onAbrirOperacao?: (ocId: string, tipo: string) => void;
-  /** ACESSOS-OC-02 — criar OC pela lista. As tres funcoes sao as MESMAS dos cards de "Lançar movimentação" (`abrirNova*OC` do
-   *  V2Index): a lista so' as chama. Ausentes, os botoes nao sao desenhados (quem monta a lista sem elas nao cria OC por aqui). */
-  onNovaCompra?: () => void;
-  onNovaVenda?: () => void;
-  onNovoAbate?: () => void;
 }
 
 /** ACESSOS-OC-02 (M8) — "Excluir definitivamente" e' so' do administrador do AGROinBLUE; para os demais o item fica apagado com
  *  este motivo (gesto fica apagado com motivo, nunca some). */
 export const MOTIVO_EXCLUIR_SO_ADMIN = 'só o administrador exclui definitivamente';
 
-/* O botao de acao do topo das listas do V2 — as mesmas classes do "Nova recorrência" (`V2Recorrencias.tsx`), sem estilo novo. */
-const BOTAO_NOVA_OC = 'h-7 gap-1 bg-cta px-2.5 text-xs font-semibold text-cta-foreground hover:bg-cta-hover';
+/* OC-LISTA-LAYOUT-01 — a barra de filtros: DUAS linhas fixas, todo controle a 24px e 11px. O `SelectTrigger` da casa nasce com
+   h-8 e py-1.5: aqui vai h-6 com py-0 NO USO (o componente nao muda), senao o texto de 11px ficaria espremido em 12px uteis. */
+const CTL = 'h-6 py-0 text-[11px]';
 
-export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao, onNovaCompra, onNovaVenda, onNovoAbate }: CentralOperacoesComerciaisProps = {}) {
+export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: CentralOperacoesComerciaisProps = {}) {
   const { clienteAtual } = useCliente();
-  /* ACESSOS-OC-03a — criar OC e excluir definitivamente sao CAPACIDADES do dono (`acessoOperacao.ts`), nao `if` de perfil.
-     "Novo abate" fica apagado, com o motivo, para quem ainda nao negocia abate (o financeiro, ate' o 03b). */
+  /* ACESSOS-OC-03a — excluir definitivamente e' CAPACIDADE do dono (`acessoOperacao.ts`), nao `if` de perfil.
+     OC-LISTA-LAYOUT-01: criar OC SAIU desta lista — gestor e financeiro criam por "Lançar movimentação" (os tres cards). */
   const acessoOC = useAcessoOperacao();
-  const motivoCriar = acessoOC.criar ? null : MOTIVO_SEM_CAPACIDADE;
-  const motivoNovoAbate = motivoCriar ?? (acessoOC.negociar_abate_boitel ? null : MOTIVO_ABATE_BOITEL);
   const clienteId = clienteAtual?.id ?? '';
   /* OC-FAZENDA-GLOBAL-01 — A CENTRAL SEGUE O SELETOR LATERAL, como o Lancar movimentacao e a
      Lista (`useLancamentos`): fazenda escolhida -> so' as OCs dela; Global -> todas. O filtro
@@ -441,6 +437,9 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao, onNov
      Financeiro segue SEM filtro — pendencia registrada. */
   const [fLiquidacao, setFLiquidacao] = useFiltroUrl('f_liq', '__all__', TEXTO.ler, TEXTO.escrever);
   const [fRecebimento, setFRecebimento] = useFiltroUrl('f_receb', '__all__', TEXTO.ler, TEXTO.escrever);
+  /* OC-LISTA-LAYOUT-01 — o filtro de FAZENDA, em memoria, so' em Global (com a lateral numa fazenda quem recorta e' ela).
+     ESTADO LOCAL, fora da URL (decisao do Gabriel, 14/10): o `f_fazenda` antigo continua sendo apagado na montagem. */
+  const [fFazenda, setFFazenda] = useState('__all__');
   const [dtIni, setDtIni] = useFiltroUrl('f_ini', '', TEXTO.ler, TEXTO.escrever);   // '' = sem limite naquela ponta
   const [dtFim, setDtFim] = useFiltroUrl('f_fim', '', TEXTO.ler, TEXTO.escrever);
   const [mostrarRascunhos, setMostrarRascunhos] = useFiltroUrl('f_rasc', false, BOOL.ler, BOOL.escrever);
@@ -459,7 +458,8 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao, onNov
     if (fRecebimento !== '__all__') chips.push(`recebimento: ${fRecebimento}`);
     if (mostrarRascunhos) chips.push('inclui rascunhos');
     const br = (iso: string) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '');
-    const nomeFaz = fazendaSel ? (fazendaAtual?.nome ?? '—') : 'todas as fazendas';
+    const nomeFaz = fazendaSel ? (fazendaAtual?.nome ?? '—')
+      : fFazenda !== '__all__' ? (fazendas[fFazenda]?.nome ?? '—') : 'todas as fazendas';
     return {
       produtor: clienteAtual?.nome ?? '—',
       fazenda: nomeFaz,
@@ -468,7 +468,7 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao, onNov
       tipo: fTipo === '__all__' ? 'todas as operações' : (TIPO_LABEL[fTipo] ?? fTipo),
       chips,
     };
-  }, [busca, fComercial, fLiquidacao, fRecebimento, mostrarRascunhos, fazendaSel, fazendaAtual?.nome, dtIni, dtFim, fTipo, clienteAtual]);
+  }, [busca, fComercial, fLiquidacao, fRecebimento, mostrarRascunhos, fazendaSel, fazendaAtual?.nome, fFazenda, fazendas, dtIni, dtFim, fTipo, clienteAtual]);
   const [page, setPage] = useFiltroUrl('f_pag', 1, NUM.ler, NUM.escrever);
 
   // Ação de escrita (menu): cancelar/reabrir com motivo obrigatório e saving anti-duplo-clique.
@@ -576,6 +576,7 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao, onNov
       /* ⚠ OC SEM FAZENDA (`fazenda_id` nulo): aparece em Global e some com uma fazenda
          escolhida — o criterio da Lista. 0 casos em 25/09/2026, e o schema os permite. */
       if (fazendaSel && r.fazenda_id !== fazendaSel) return false;
+      if (!fazendaSel && fFazenda !== '__all__' && r.fazenda_id !== fFazenda) return false;
       if (!passaFiltroPagamento(fLiquidacao, liqMap[r.id])) return false;
       if (fRecebimento !== '__all__' && (recStatus(recMap[r.id]) ?? '') !== fRecebimento) return false;
       /* data_operacao e' 'yyyy-MM-dd' e o DatePicker devolve o mesmo formato:
@@ -589,7 +590,12 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao, onNov
       }
       return true;
     });
-  }, [rows, busca, fTipo, fComercial, fazendaSel, fLiquidacao, fRecebimento, dtIni, dtFim, mostrarRascunhos, contrapartes, liqMap, recMap]);
+  }, [rows, busca, fTipo, fComercial, fazendaSel, fFazenda, fLiquidacao, fRecebimento, dtIni, dtFim, mostrarRascunhos, contrapartes, liqMap, recMap]);
+  /* As opcoes do filtro de fazenda: as fazendas das OCs lidas (o mapa que a tela ja' carrega), por nome. */
+  const fazendaOptions = useMemo(
+    () => Object.entries(fazendas).map(([id, f]) => ({ id, nome: f.nome })).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')),
+    [fazendas],
+  );
 
   const nomeContraparte = (r: OpRow) => (r.contraparte_id ? contrapartes[r.contraparte_id] ?? '—' : '—');
   const fazendaRef = (r: OpRow): FazendaRef | null => (r.fazenda_id ? fazendas[r.fazenda_id] ?? null : null);
@@ -671,7 +677,7 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao, onNov
        rodar a cada mudança de URL — inclusive na que o próprio `setPage` provoca — e
        zeraria a página que este PR existe para preservar. */
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [busca, fTipo, fComercial, fazendaSel, fLiquidacao, fRecebimento, dtIni, dtFim, mostrarRascunhos, ord]);
+  }, [busca, fTipo, fComercial, fazendaSel, fFazenda, fLiquidacao, fRecebimento, dtIni, dtFim, mostrarRascunhos, ord]);
 
   /* Abertura soberana por tipo. Compra e VENDA vao para o parent, cada uma para o seu
      modal; abate segue indisponivel na Central, como antes.
@@ -746,47 +752,36 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao, onNov
   return (
     <div className="space-y-2 w-full px-3 pt-3">
       {/* Cabeçalho compacto (sem banner, sem botão do fluxo legado) */}
-      <div className="flex items-center justify-between gap-2">
+      {/* OC-LISTA-LAYOUT-01 — o titulo e, na MESMA linha, a contagem do recorte. Os botoes de criar OC sairam: gestor e financeiro
+          criam pelos tres cards de "Lançar movimentação" (as mesmas `abrirNova*OC` do V2Index). */}
+      <div className="flex items-baseline gap-2">
         <h2 className="text-[15px] font-semibold leading-none">Operações Comerciais</h2>
-        {/* ACESSOS-OC-02 — criar OC pela lista (antes so' pelos cards de "Lançar movimentação"). */}
-        <div className="flex items-center gap-1.5">
-          {onNovaCompra && (
-            <Button size="sm" className={BOTAO_NOVA_OC} onClick={onNovaCompra} data-testid="nova-compra"
-              disabled={!!motivoCriar} title={motivoCriar ?? undefined}>
-              <Plus className="size-3.5" /> Nova compra
-            </Button>
-          )}
-          {onNovaVenda && (
-            <Button size="sm" className={BOTAO_NOVA_OC} onClick={onNovaVenda} data-testid="nova-venda"
-              disabled={!!motivoCriar} title={motivoCriar ?? undefined}>
-              <Plus className="size-3.5" /> Nova venda
-            </Button>
-          )}
-          {onNovoAbate && (
-            <Button size="sm" className={BOTAO_NOVA_OC} onClick={onNovoAbate} data-testid="novo-abate"
-              disabled={!!motivoNovoAbate} title={motivoNovoAbate ?? undefined}>
-              <Plus className="size-3.5" /> Novo abate
-            </Button>
-          )}
-          <span className="text-[10px] text-muted-foreground">{filtradas.length} operação(ões)</span>
-        </div>
+        <span className="text-[12px] text-muted-foreground" data-testid="contador-oc">{filtradas.length} operação(ões)</span>
       </div>
-      {/* O motivo do botao apagado fica ESCRITO (so' para quem tem botao apagado): linha propria, para nao alargar a faixa. */}
-      {(onNovaCompra || onNovoAbate) && (motivoCriar ?? motivoNovoAbate) && (
-        <p className="text-right text-[10px] leading-tight text-muted-foreground" data-testid="motivo-nova-oc">{motivoCriar ?? motivoNovoAbate}</p>
-      )}
 
       {/* Barra de filtros — DUAS LINHAS FIXAS, nao `flex-wrap`: a quebra e' decidida
           aqui, nao pelo espaco que sobrar. Linha 1 = recorte da operacao (quando,
-          o que, com quem, onde); linha 2 = os TRES EIXOS de estado, que sao lidos
-          juntos porque respondem a mesma pergunta, mais o pedal de Rascunhos.
-          A altura desta barra (32 + 6 + 32 + 6 = 76px) entra no calc da tabela. */}
-      <div className="sticky top-0 z-20 space-y-1.5 bg-background pb-1.5">
+          onde, o que, com quem); linha 2 = os TRES EIXOS de estado, na ordem das colunas
+          (entrega, comercializacao, pagamento), mais Rascunhos e Resumo.
+          ⚠ OC-LISTA-LAYOUT-01: TODO CONTROLE A 24px (o DatePicker compact ja' e' h-6). Uma linha so' nao cabe a 1.126: as
+          larguras pedem ~1.340px para ~926 uteis (decisao do Gabriel, 14/10: duas linhas de 24).
+          A altura desta barra (24 + 6 + 24 + 6 = 60px) entra no calc da tabela. */}
+      <div className="sticky top-0 z-20 space-y-1.5 bg-background pb-1.5" data-testid="barra-filtros-oc">
         <div className="flex items-center gap-1.5">
           <DatePicker value={dtIni} onChange={setDtIni} placeholder="Data inicial" size="compact" className="w-[124px]" />
           <DatePicker value={dtFim} onChange={setDtFim} placeholder="Data final" size="compact" className="w-[124px]" />
+          {/* OC-LISTA-LAYOUT-01 — a fazenda, em memoria. Com a lateral numa fazenda ela manda: o select mostra a dela, apagado. */}
+          <Select value={fazendaSel ?? fFazenda} onValueChange={setFFazenda} disabled={!!fazendaSel}>
+            <SelectTrigger className={`${CTL} w-[150px]`} data-testid="filtro-fazenda"
+              title={fazendaSel ? 'a fazenda vem do seletor lateral' : undefined}><SelectValue placeholder="Fazenda" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">Todas as fazendas</SelectItem>
+              {fazendaSel && !fazendas[fazendaSel] && <SelectItem value={fazendaSel}>{fazendaAtual?.nome ?? '—'}</SelectItem>}
+              {fazendaOptions.map(f => <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>)}
+            </SelectContent>
+          </Select>
           <Select value={fTipo} onValueChange={setFTipo}>
-            <SelectTrigger className="h-8 w-32 text-[11px]"><SelectValue placeholder="Tipo" /></SelectTrigger>
+            <SelectTrigger className={`${CTL} w-[120px]`}><SelectValue placeholder="Tipo" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="__all__">Todos os tipos</SelectItem>
               <SelectItem value="compra">Compra</SelectItem>
@@ -796,12 +791,21 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao, onNov
           </Select>
           <div className="relative">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
-            <Input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Contraparte…" className="h-8 w-40 pl-7 text-[11px]" />
+            <Input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Contraparte…" className="h-6 w-[190px] pl-7 text-[11px]" />
           </div>
         </div>
         <div className="flex items-center gap-1.5">
+          {/* OC-LISTA-LAYOUT-01 — na ordem das colunas: Entrega, Comercializacao, Pagamento. Os rotulos seguem as colunas;
+              os valores (vocabulario das views) nao mudaram. */}
+          <Select value={fRecebimento} onValueChange={setFRecebimento}>
+            <SelectTrigger className={`${CTL} w-[136px]`}><SelectValue placeholder="Entrega" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">Toda entrega</SelectItem>
+              {recebimentoOptions.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
+            </SelectContent>
+          </Select>
           <Select value={fComercial} onValueChange={setFComercial}>
-            <SelectTrigger className="h-8 w-36 text-[11px]"><SelectValue placeholder="Comercial" /></SelectTrigger>
+            <SelectTrigger className={`${CTL} w-[136px]`}><SelectValue placeholder="Comercial" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="__all__">Todo comercial</SelectItem>
               <SelectItem value="programada">Programada</SelectItem>
@@ -809,30 +813,23 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao, onNov
               <SelectItem value="cancelada">Cancelada</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={fRecebimento} onValueChange={setFRecebimento}>
-            <SelectTrigger className="h-8 w-36 text-[11px]"><SelectValue placeholder="Recebimento" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">Todo recebimento</SelectItem>
-              {recebimentoOptions.map(e => <SelectItem key={e} value={e}>{e}</SelectItem>)}
-            </SelectContent>
-          </Select>
           <Select value={fLiquidacao} onValueChange={setFLiquidacao}>
-            <SelectTrigger className="h-8 w-36 text-[11px]"><SelectValue placeholder="Pagamento" /></SelectTrigger>
+            <SelectTrigger className={`${CTL} w-[136px]`}><SelectValue placeholder="Pagamento" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="__all__">Toda liquidação</SelectItem>
+              <SelectItem value="__all__">Todo pagamento</SelectItem>
               {liquidacaoOptions.map(e => <SelectItem key={e} value={e}>{liqLabel(e)}</SelectItem>)}
               {/* OC-STATUS-LADO-01: nao e' estado — e' o OUTRO lado (frete, taxas, adiantamento) em aberto. */}
               <SelectItem value={FILTRO_DESPESAS_PENDENTES}>Despesas pendentes</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant={mostrarRascunhos ? 'secondary' : 'outline'} size="sm" className="h-8 gap-1 text-[11px]"
+          <Button variant={mostrarRascunhos ? 'secondary' : 'outline'} size="sm" className="h-6 gap-1 text-[11px]"
             onClick={() => setMostrarRascunhos(v => !v)}>
             <Filter className="h-3 w-3" /> Rascunhos
           </Button>
           {/* ⚠ O RESUMO HERDA O RECORTE, e é por isso que mora aqui e não num menu: o botão
               fica ao lado dos filtros que o alimentam. Vai `filtradas` — todas as linhas do
               recorte —, não `pageRows`: um resumo da página 2 não resume nada. */}
-          <Button variant="outline" size="sm" className="h-8 gap-1 text-[11px]"
+          <Button variant="outline" size="sm" className="h-6 gap-1 text-[11px]"
             disabled={filtradas.length === 0}
             title={filtradas.length === 0 ? 'Nenhuma operação no recorte' : 'Resumo do recorte atual'}
             onClick={() => setResumoAberto(true)}>
@@ -860,8 +857,10 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao, onNov
 
           ALTURA MEDIDA, nao arbitrada. Acima: V2FilterBar 45 (py-2 + h-7 + border) +
           pt-3 12 + titulo 15 + space-y-2 8 + barra 76 (32+6+32+6) + space-y-2 8 = 164.
-          Abaixo: space-y-2 8 + paginacao h-6 24 + respiro 8 = 40. Total 204. */}
-      <div className="rounded-md border overflow-y-auto max-h-[calc(100vh-204px)]">
+          Abaixo: space-y-2 8 + paginacao h-6 24 + respiro 8 = 40. Total 204.
+          ⚠ OC-LISTA-LAYOUT-01: a barra passou a 60 (24 + 6 + 24 + 6) e o titulo voltou a 15 (os botoes de 28px sairam):
+          45 + 12 + 15 + 8 + 60 + 8 = 148 acima, 40 abaixo — 188. Por conta, NAO medido no navegador. */}
+      <div className="rounded-md border overflow-y-auto max-h-[calc(100vh-188px)]">
         {/* ⚠ A RÉGUA É DO `<table>`, e `text-sm` eram 14px vazando para toda célula que não
             declara tamanho — o mesmo defeito que a mesa do Espelho teve duas vezes hoje.
             11px aqui é o piso de leitura; quem precisa de menos desce, ninguém sobe. */}
@@ -889,24 +888,27 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao, onNov
               dinheiro com dinheiro, estado com estado. Antes o Comercial separava os dois
               numeros e o olho pulava a coluna do meio para comparar. */}
           <colgroup>
-            <col className="w-[46px]" />{/* OC — 8 hex mono em 8px, sem "#" */}
-            <col className="w-[44px]" />{/* Data — 31/07/26 em 8px */}
+            {/* ⚠ OC-LISTA-LAYOUT-01 (Gabriel, 14/10): a ordem do PROCESSO — a operacao, [divisor] o gado (Entrega e
+                Comercializacao), [divisor] o dinheiro (Financeiro e Pagto). As larguras do briefing; o Tipo FICOU em 68 (com 44
+                "Venda em Pé" cortaria) e a Contraparte paga a diferenca. Fixos: 736 em Global, 702 numa fazenda. */}
+            <col className="w-[64px]" />{/* OC — 8 hex mono em 8px, sem "#" */}
+            <col className="w-[56px]" />{/* Data — 31/07/26 em 8px */}
             <col className="w-[68px]" />{/* Tipo — "Venda em Pé" mede 64 em 9px; 68 com o padding */}
             <col />{/* Contraparte — TODA a sobra, e nunca menos que 130px */}
             {/* Faz — a sigla (PUR/SM/LUZ). SO' EM GLOBAL, como a Lista (FinanceiroTab:381): com uma
                 fazenda escolhida a coluna repetiria a mesma sigla em toda linha. */}
-            {!fazendaSel && <col className="w-[28px]" />}
-            <col className="w-[70px]" />{/* Cab · kg — "24 · 10.240 kg" em 9px */}
-            <col className="w-[58px]" />{/* Valor — 1.234.567, sem R$ nem centavos */}
-            <col className="w-[104px]" />{/* Financ. — valor 58 + pilula 44 + gap */}
-            <col className="w-[84px]" />{/* Comerc. — pilula 44 + "Rasc." 34 + gap */}
+            {!fazendaSel && <col className="w-[34px]" />}
+            <col className="w-[84px]" />{/* Cab · kg — "24 · 10.240 kg" em 9px */}
+            <col className="w-[66px]" />{/* Valor — 1.234.567, sem R$ nem centavos */}
             {/* ⚠ 60, NAO 50 — MEDIDO. A pilula de 44 mais o cadeado de 8 mais o gap nao cabem em
                 50: a celula vinha com `scrollWidth` 58 contra 49. O cadeado e' eixo SEPARADO
                 (encerramento, nao chegada) e nao pode sumir para a coluna fechar. Os 10px saem
                 da Contraparte, que tem 283 e precisa de 130. */}
-            <col className="w-[60px]" />{/* Entrega — pilula 44 + gap + cadeado 8 */}
-            <col className="w-[50px]" />{/* Pagto — pilula 44 */}
-            <col className="w-[14px]" />{/* Ações */}
+            <col className="w-[62px]" />{/* Entrega — pilula 44 + gap + cadeado 8 */}
+            <col className="w-[96px]" />{/* Comercializacao — pilula 44 + "Rasc." 34 + gap; o rotulo por extenso */}
+            <col className="w-[110px]" />{/* Financeiro — valor 58 + pilula 44 + gap */}
+            <col className="w-[74px]" />{/* Pagto — pilula 44, ou "aguardando" + o ponto */}
+            <col className="w-[22px]" />{/* Ações */}
           </colgroup>
           <TableHeader className="sticky top-0 z-10 bg-primary">
             {/* ⚠ A ALTURA VAI NA `<tr>`, NAO NA `<th>` — medido: com `h-4` na celula o
@@ -919,11 +921,12 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao, onNov
               {!fazendaSel && <ThOrd col="fazenda" rotulo="Faz" ord={ord} onOrdenar={alternarOrd} />}
               <ThOrd col="animais" rotulo="Cab · kg" ord={ord} onOrdenar={alternarOrd} direita />
               <ThOrd col="valor" rotulo="Valor" ord={ord} onOrdenar={alternarOrd} direita />
-              <ThOrd col="financeiro" rotulo="Financ." ord={ord} onOrdenar={alternarOrd} />
-              <ThOrd col="comercial" rotulo="Comerc." ord={ord} onOrdenar={alternarOrd} />
+
               {/* ⚠ "Entrega" cobre os dois sentidos do animal — na COMPRA ele chega, na VENDA
                   ele sai. O rotulo longo ("Receb./Envio") nao cabe em 50px e dizia o mesmo. */}
-              <ThOrd col="recebimento" rotulo="Entrega" ord={ord} onOrdenar={alternarOrd} />
+              <ThOrd col="recebimento" rotulo="Entrega" ord={ord} onOrdenar={alternarOrd} grupo />
+              <ThOrd col="comercial" rotulo="Comercialização" ord={ord} onOrdenar={alternarOrd} />
+              <ThOrd col="financeiro" rotulo="Financeiro" ord={ord} onOrdenar={alternarOrd} grupo />
               <ThOrd col="liquidacao" rotulo="Pagto" ord={ord} onOrdenar={alternarOrd} />
               <TableHead className={`${TH} text-right`} />
             </TableRow>
@@ -980,7 +983,23 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao, onNov
                     title={valorOp > 0 ? brlCent(valorOp) : undefined}>
                     {valorOp > 0 ? num0(valorOp) : '—'}
                   </TableCell>
-                  <TableCell className={`${TD} whitespace-nowrap overflow-hidden`}>
+                  <TableCell className={`${TD_PIL} ${DIV_GRUPO}`}>
+                    {/* Cadeado = EIXO SEPARADO, ao lado da pilula e nunca dentro dela: o
+                        encerramento nao responde "chegou?", so "ainda mexe?". Por isso
+                        aparece igual sobre 'OK', 'Parcial' ou '—'. */}
+                    <span className="inline-flex items-center gap-0.5 whitespace-nowrap">
+                      {rec
+                        ? <span className={`${PILULA_FIXA} ${REC_TONE[rec] ?? TOM_NEUTRO}`} title={rec}>{REC_CURTO[rec] ?? rec}</span>
+                        : <span className="text-muted-foreground">—</span>}
+                      {r.entrega_encerrada && (
+                        <span title="Entrega encerrada" className="text-muted-foreground">
+                          <Lock className="h-2 w-2" />
+                        </span>
+                      )}
+                    </span>
+                  </TableCell>
+                  <TableCell className={TD_PIL}><BadgeComercial status={r.status_comercial} rascunho={r.rascunho} /></TableCell>
+                  <TableCell className={`${TD} whitespace-nowrap overflow-hidden ${DIV_GRUPO}`}>
                     {/* ⚠ GRADE, NÃO `inline-flex`: em linha, a pílula começava onde o valor
                         terminava e a coluna inteira parecia desalinhada. Valor à direita do seu
                         espaço, pílula numa faixa fixa — o olho desce a coluna em linha reta. */}
@@ -1011,22 +1030,6 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao, onNov
                           <span className={`${PILULA_FIXA} ${TOM_NEUTRO}`} title="Sem lançamento financeiro">S/ lanc.</span>
                         </span>
                       )}
-                  </TableCell>
-                  <TableCell className={TD_PIL}><BadgeComercial status={r.status_comercial} rascunho={r.rascunho} /></TableCell>
-                  <TableCell className={TD_PIL}>
-                    {/* Cadeado = EIXO SEPARADO, ao lado da pilula e nunca dentro dela: o
-                        encerramento nao responde "chegou?", so "ainda mexe?". Por isso
-                        aparece igual sobre 'OK', 'Parcial' ou '—'. */}
-                    <span className="inline-flex items-center gap-0.5 whitespace-nowrap">
-                      {rec
-                        ? <span className={`${PILULA_FIXA} ${REC_TONE[rec] ?? TOM_NEUTRO}`} title={rec}>{REC_CURTO[rec] ?? rec}</span>
-                        : <span className="text-muted-foreground">—</span>}
-                      {r.entrega_encerrada && (
-                        <span title="Entrega encerrada" className="text-muted-foreground">
-                          <Lock className="h-2 w-2" />
-                        </span>
-                      )}
-                    </span>
                   </TableCell>
                   <TableCell className={`${TD_PIL} relative`}>{(() => {
                     const est = liqMap[r.id]?.estado_liquidacao;

@@ -1206,10 +1206,7 @@ export default function V2Index() {
         /* A Central e' a origem, e ela o DIZ — OC-ABRIR-PERDE-ID-01. Antes dependia de
            `sectionRef`, que so' acertava quando nenhum `oc_return` velho estava na URL. */
         onAbrirOperacao={(ocId, tipo) => abrirOperacaoOC(ocId, undefined, tipo, 'operacoes-comerciais')}
-        /* ACESSOS-OC-02 — criar OC pela lista: as MESMAS tres funcoes dos cards de "Lançar movimentação". */
-        onNovaCompra={abrirNovaCompraOC}
-        onNovaVenda={abrirNovaVendaOC}
-        onNovoAbate={abrirNovoAbateOC}
+        /* OC-LISTA-LAYOUT-01 — a lista NAO cria OC (os botoes sairam): as `abrirNova*OC` seguem nos cards de "Lançar movimentação". */
       />
     );
     /* ACESSOS-OC-02 — A TELA PROPRIA DA OPERACAO COMERCIAL: o MESMO hospedeiro (`LancamentosTab`, onde vivem o estado e os tres

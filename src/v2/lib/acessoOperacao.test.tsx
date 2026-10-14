@@ -60,10 +60,12 @@ describe('a rota (V2Index, lida da FONTE): toda OC abre na tela própria dela', 
     /* o fechar não mudou: origem conhecida, senão a lista */
     expect(rota).toContain("setSection(ehSectionConhecida(retorno) ? retorno : 'operacoes-comerciais');");
   });
-  it('OC NOVA: as três funções de sempre; pedida dos cards do rebanho fica lá, pedida da lista vai para a tela da operação', () => {
+  /* OC-LISTA-LAYOUT-01 — a lista deixou de criar OC: as tres funcoes ficam so' nos cards de "Lançar movimentação". */
+  it('OC NOVA: as três funções de sempre; pedida dos cards do rebanho fica lá; a lista não as recebe mais', () => {
     expect(rota).toContain("function telaDaOCNova(origem: V2Section): V2Section { return origem === 'lancamentos-zoot' ? 'lancamentos-zoot' : TELA_OPERACAO_COMERCIAL; }");
     expect(rota.match(/setSection\(telaDaOCNova\(origem\)\);/g)).toHaveLength(3);
-    expect(rota).toContain('onNovaCompra={abrirNovaCompraOC} onNovaVenda={abrirNovaVendaOC} onNovoAbate={abrirNovoAbateOC}');
+    expect(rota).not.toContain('onNovaCompra={abrirNovaCompraOC}');
+    expect(rota).not.toContain('onNovoAbate={abrirNovoAbateOC}');
   });
   it('em `lancamentos-zoot` nada mudou: o hospedeiro sem o modo, com os três cards ligados às mesmas funções', () => {
     expect(rota).toContain("if (section === 'lancamentos-zoot') return ( <V2LancamentosWrapper abateParaEditar={abateParaEditar}");
@@ -129,46 +131,23 @@ describe('a lista de Operações Comerciais: criar OC e excluir', () => {
     window.history.replaceState(null, '', '/');
     return render(<BrowserRouter><CentralOperacoesComerciais {...props} /></BrowserRouter>);
   };
-  it('M6 — "Nova compra", "Nova venda" e "Novo abate": cada botão chama a função do seu tipo, uma vez', async () => {
-    const [compra, venda, abate] = [vi.fn(), vi.fn(), vi.fn()];
-    montar({ onNovaCompra: compra, onNovaVenda: venda, onNovoAbate: abate });
-    await waitFor(() => expect(screen.getByTestId('nova-compra')).toBeInTheDocument());
-    expect(['nova-compra', 'nova-venda', 'novo-abate'].map((t) => screen.getByTestId(t).textContent?.trim())).toEqual(['Nova compra', 'Nova venda', 'Novo abate']);
-    fireEvent.click(screen.getByTestId('nova-venda'));
-    expect([compra.mock.calls.length, venda.mock.calls.length, abate.mock.calls.length]).toEqual([0, 1, 0]);
-    fireEvent.click(screen.getByTestId('nova-compra'));
-    fireEvent.click(screen.getByTestId('novo-abate'));
-    expect([compra.mock.calls.length, venda.mock.calls.length, abate.mock.calls.length]).toEqual([1, 1, 1]);
-  });
-  it('ACESSOS-OC-03a — financeiro: cria compra e venda; "Novo abate" apagado com o motivo escrito, e o clique nao dispara', async () => {
-    como('financeiro');
-    const [compra, venda, abate] = [vi.fn(), vi.fn(), vi.fn()];
-    montar({ onNovaCompra: compra, onNovaVenda: venda, onNovoAbate: abate });
-    await waitFor(() => expect(screen.getByTestId('nova-compra')).toBeInTheDocument());
-    expect(screen.getByTestId('nova-compra').hasAttribute('disabled')).toBe(false);
-    expect(screen.getByTestId('nova-venda').hasAttribute('disabled')).toBe(false);
-    const b = screen.getByTestId('novo-abate');
-    expect(b.hasAttribute('disabled')).toBe(true);
-    expect(b.getAttribute('title')).toBe('Abate e boitel: edição pelo financeiro chega na próxima etapa.');
-    expect(screen.getByTestId('motivo-nova-oc').textContent).toBe('Abate e boitel: edição pelo financeiro chega na próxima etapa.');
-    fireEvent.click(b);
-    fireEvent.click(screen.getByTestId('nova-compra'));
-    expect([compra.mock.calls.length, venda.mock.calls.length, abate.mock.calls.length]).toEqual([1, 0, 0]);
-  });
-  it('ACESSOS-OC-03a — gestor e admin: os tres habilitados e nenhum motivo escrito', async () => {
-    for (const [p, adm] of [['gestor_cliente', false], ['admin_agroinblue', true]] as const) {
+  /* OC-LISTA-LAYOUT-01 (Gabriel, 14/10): a lista NAO cria OC — os botoes sairam (com eles, os testes M6 e os dois do 03a que os
+     liam). Gestor e financeiro criam pelos tres cards de "Lançar movimentação", com as MESMAS `abrirNova*OC` do V2Index. */
+  it('OC-LISTA-LAYOUT-01 — nenhum perfil ve botao de criar na lista; o caminho segue em "Lançar movimentação"', async () => {
+    for (const [p, adm] of [['gestor_cliente', false], ['financeiro', false], ['admin_agroinblue', true]] as const) {
       como(p, adm);
-      const r = montar({ onNovaCompra: vi.fn(), onNovaVenda: vi.fn(), onNovoAbate: vi.fn() });
-      await waitFor(() => expect(screen.getByTestId('novo-abate')).toBeInTheDocument());
-      for (const t of ['nova-compra', 'nova-venda', 'novo-abate']) expect(screen.getByTestId(t).hasAttribute('disabled')).toBe(false);
-      expect(screen.queryByTestId('motivo-nova-oc')).toBeNull();
+      const r = montar();
+      await waitFor(() => expect(screen.getByText('Operações Comerciais')).toBeInTheDocument());
+      for (const t of ['nova-compra', 'nova-venda', 'novo-abate', 'motivo-nova-oc']) expect(screen.queryByTestId(t)).toBeNull();
       r.unmount();
     }
-  });
-  it('sem as funções (quem monta a lista sem criar), os botões não existem', async () => {
-    montar();
-    await waitFor(() => expect(screen.getByText('Operações Comerciais')).toBeInTheDocument());
-    for (const t of ['nova-compra', 'nova-venda', 'novo-abate']) expect(screen.queryByTestId(t)).toBeNull();
+    const v2 = fonte('src/v2/V2Index.tsx');
+    expect(v2.match(/onNovaCompraOC=\{abrirNovaCompraOC\}/g)).toHaveLength(1);
+    expect(v2).toContain('onNovaVendaOC={abrirNovaVendaOC}');
+    expect(v2).toContain('onNovoAbateOC={abrirNovoAbateOC}');
+    expect(v2).not.toMatch(/onNovaCompra=\{abrirNovaCompraOC\}/);
+    expect(nivelDaTela('financeiro', false, 'lancamentos-zoot')).toBe('editar');
+    expect(nivelDaTela('gestor_cliente', false, 'lancamentos-zoot')).toBe('editar');
   });
   it('M8 — "Excluir definitivamente": habilitado só para o admin; para os demais, apagado com o motivo exato (fonte)', () => {
     const lista = fonte('src/components/operacao-comercial/central/CentralOperacoesComerciais.tsx');
