@@ -54,7 +54,8 @@ export interface LancDocumento {
   operacaoId: string | null;
   especie: EspecieLancDoc;
   /**
-   * A espécie CRUA do documento da OC (`nf_principal`, `nf_complementar`, `recibo`, `outro`) —
+   * A espécie CRUA do documento da OC (`nf_principal`, `nf_complementar`, `recibo`, `outro`; no abate também `npr`, `acerto`,
+   * `romaneio` — OC-DOC-ESPECIE-ABATE-01) —
    * OC-DOC-ESPECIE-01. `especie` acima é a tradução para o vocabulário do lançamento, e perde a
    * diferença entre NF principal e complementar; o rótulo lê daqui. `null` no documento próprio.
    */
@@ -262,10 +263,15 @@ export const especieValida = (e: unknown): EspecieLancDoc =>
  * aparecia como "Outro" na aba do lançamento.
  */
 export const especieDaOCNoLancamento = (e: unknown): EspecieLancDoc =>
-  e === 'nf_principal' || e === 'nf_complementar' ? 'nf' : especieValida(e);
+  e === 'nf_principal' || e === 'nf_complementar' ? 'nf'
+    /* OC-DOC-ESPECIE-ABATE-01 — NPR, acerto e romaneio nao tem par no vocabulario do lancamento: viram 'outro', e o ROTULO
+       (pela `especieOC`) diz o que sao. */
+    : e === 'npr' || e === 'acerto' || e === 'romaneio' ? 'outro'
+    : especieValida(e);
 
 const ROTULO_ESPECIE_OC: Record<string, string> = {
   nf_principal: 'NF', nf_complementar: 'NF complementar', recibo: 'Recibo', outro: 'Outro',
+  npr: 'NPR', acerto: 'Acerto', romaneio: 'Romaneio',
 };
 /** O rótulo curto da espécie de um documento, das DUAS origens (a da OC distingue a complementar). */
 export function rotuloEspecieDoc(d: Pick<LancDocumento, 'origem' | 'especie' | 'especieOC'>): string {

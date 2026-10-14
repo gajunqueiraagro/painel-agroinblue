@@ -10,7 +10,9 @@ import { normalizarErroRpc } from '@/hooks/useOcCompromissos';
 //   cancelar. Para edição lê componentes/lotes/versão das tabelas-base (SELECT tenant). Sem upload,
 //   sem FINV2/liquidação, sem tocar negociação/recebimento.
 
-export type EspecieDoc = 'nf_principal' | 'nf_complementar' | 'recibo' | 'outro';
+/* OC-DOC-ESPECIE-ABATE-01 — `npr`, `acerto` e `romaneio` sao documentos do ABATE (o banco recusa nas outras OCs). No abate so' a NF
+   soma no valor dos documentos (`_oc_documento_soma_no_valor`); a view ja' entrega `valor_liquido` com a regra aplicada. */
+export type EspecieDoc = 'nf_principal' | 'nf_complementar' | 'recibo' | 'outro' | 'npr' | 'acerto' | 'romaneio';
 export type NaturezaComp = 'acrescimo' | 'desconto_comercial' | 'retencao_sem_caixa' | 'despesa_desembolso' | 'informativo';
 
 export interface DocumentoLista {

@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 14/10/2026 (ABATE-PROJETADO-01c, +12: `src/lib/oc/cenarioDoAbate.test.ts` 7 (novo),
+  Baseline em 14/10/2026 (OC-DOC-ESPECIE-ABATE-01 passo 1, +1 em `src/hooks/useLancamentoDocumentos.especie.test.ts` (11 -> 12) —
+  5201 depois dele; antes o ABATE-PROJETADO-01c, +12: `src/lib/oc/cenarioDoAbate.test.ts` 7 (novo),
   `src/components/venda/recebimentoPrevisto.test.tsx` 5 (novo) — 5200 depois dele; antes o
   ABATE-PROJETADO-01b, +7 em `src/components/abate/modalNegociarLoteUnidades.test.tsx` (27 -> 34) — 5188
   depois dele; antes o OC-LISTA-CAB-KG-COLUNAS-01, +1 em `src/components/operacao-comercial/central/centralListaLayout.test.tsx`
@@ -320,7 +321,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5200
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5201
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3900,6 +3901,33 @@ docs/historico/frentes-ate-2026-09-29.md.)
   quem mexer num confere o outro. O selo do rodape (`SeloRegraDaLinha`) diz a regra da linha.
 
 ## REGRAS VIGENTES — OPERACAO COMERCIAL E FINANCEIRO
+- ⚠ NO ABATE OS DOCUMENTOS SAO NF, NPR, ACERTO, ROMANEIO E OUTRO, E SO' A NF SOMA; O VALOR DO DOCUMENTO E' O LIQUIDO (OC-DOC-ESPECIE-ABATE-01
+  passo 1, Gabriel 14/10/2026, banco + vocabulario da tela). Migration `supabase/migrations/20261027198200_oc_doc_especie_abate_01.sql`
+  (md5 do arquivo 02729abc56b7c29d6820d48ad4dc15cf) — APLICADA no proto em 14/10/2026 com o OK do Gabriel: ledger 20261014214022
+  (⚠ registrada com o timestamp do dia; o ledger guarda o arquivo SEM a quebra de linha final: md5 1e8917de…). A correcao do valor
+  no Financeiro vale para TODOS os tipos de OC (decisao do Gabriel): NF 98.644 (77d963be) 969.706,21 -> 965.835,15 e NF 103.489
+  (cd4c54b0) 747.926,74 -> 744.941,00; os recibos de boitel so' de "despesa" ficaram NEGATIVOS (581d075c "Adiantamento" −42.235,00;
+  77d963be "Acerto Boitel" −308.877,97), aceito — e' informacao sobre o cadastro desses componentes.
+  · ESPECIES: `npr`, `acerto`, `romaneio` entram no CHECK; `oc_documento_registrar` (9fa70022… -> fe274801…) as aceita SO' no abate
+    ("Especie % so existe no abate"). COLUNAS nulas `cab`, `peso_kg`, `data_abate`, `vencimento` e `dados jsonb` (ordem_compra,
+    lote_frigorifico, preco_arroba, nf_referida); os VALORES seguem nos componentes — um lugar so'.
+  · A REGRA TEM UM DONO: `_oc_documento_soma_no_valor(tipo_operacao, especie)` — no abate so' `nf_principal`/`nf_complementar`;
+    compra e venda: tudo soma, como antes. IMUTAVEL; EXECUTE para `authenticated` (as views sao `security_invoker`).
+  · `vw_oc_documentos.valor_liquido` = o liquido so' do que soma (0 no resto); NO FIM `soma_no_valor` e `liquido_proprio`.
+    `vw_lancamento_documentos.valor_documento` (ramo da OC) = o LIQUIDO, so' do que soma — antes era a soma de TODOS os componentes,
+    retencoes inclusive (FIN-DOC-OC-VALOR-LIQUIDO-01): a NF 8812 do LT10 ia de 99.734,92 a 96.535,70.
+  · BACKFILL por id: 20 acerto, 10 romaneio, 8 npr (pelo que o operador escreveu no numero); os 14 "outro" restantes ficam.
+  · TELA (so' vocabulario): `EspecieDoc` e os rotulos (`ESPECIE_LABEL`, `PREFIXO_ESPECIE`, `CONTAGEM_ROTULO`, `ROTULO_ESPECIE_OC`);
+    no Financeiro as tres viram 'outro' com o rotulo NPR / Acerto / Romaneio. O formulario segue com as 4 especies antigas (passo 2).
+  · PROVAS: tres ensaios revertidos com a migration (A1 E1–E2, A2 E3–E5, B E6), residuo zero; DEPOIS DE APLICAR,
+    `supabase/tests/oc_doc_especie_abate_01_test.sql` (E1–E6) inteiro ao vivo: OK. No banco: NF 8812 = 96.535,70 nos 3 lancamentos;
+    02be1a41 total documentado 367.783,40 = so' a NF (Iagro 377,85 e Fundersul 765,49 / 1.913,72 fora); 20/10/8.
+  ⚠ O CANAL DE LEITURA DO MCP (`supabase_read_only_user`) NAO EXECUTA `_oc_documento_soma_no_valor`: consulta nas duas views por ele
+    da' "permission denied for function" — consultar pelo canal de escrita (so' SELECT). A tela (`authenticated`) tem o grant.
+  ⚠ FILA (decisao do Gabriel, 14/10): OC-DOC-COMPONENTE-DESPESA-RECIBO-01 (os dois recibos de boitel negativos: cadastro dos
+    componentes) · SEG-VW-LANCAMENTO-DOCUMENTOS-ANON-01 (`vw_lancamento_documentos` da' todos os privilegios ao `anon`; hoje ele nao
+    le^ nada, sem grant nas tabelas de baixo) · `fn_documento_chave_ja_registrada` ainda devolve o valor da nota da OC como a soma de
+    TODOS os componentes (fora deste passo).
 - ⚠ EXCLUIR LOTE: A SIMULACAO E A GRAVACAO DAO O MESMO RESULTADO, E A TELA MOSTRA A MENSAGEM DO BANCO (ABATE-PROJETADO-01a, Gabriel
   14/10/2026). Nasce da NJ 1645ba75 ("Abate 036 N"): "Excluir lote" dizia "Falha ao excluir o lote." e a simulacao prometia ok.
   · BANCO: migration `supabase/migrations/20261027197900_abate_projetado_01a_excluir_lote.sql` (md5 do arquivo

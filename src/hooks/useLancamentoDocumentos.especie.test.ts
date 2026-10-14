@@ -210,6 +210,19 @@ describe('leitura na aba do lancamento', () => {
     /* A busca sabe achar o "Outro" de verdade — nao e' tudo NF. */
     expect(rotuloEspecieDoc(por('oc-o'))).toBe('Outro');
   });
+
+  /* OC-DOC-ESPECIE-ABATE-01 — as especies do abate: no vocabulario do lancamento viram 'outro', e o rotulo diz o que sao. */
+  it('npr, acerto e romaneio da OC sao "outro" no lancamento, com o rotulo NPR / Acerto / Romaneio', async () => {
+    operacao = OP;
+    oc.set('oc-n', { id: 'oc-n', especie: 'npr', nome: 'npr 8812/A', versao: 1, url: null, origem: 'operacao' });
+    oc.set('oc-a', { id: 'oc-a', especie: 'acerto', nome: 'acerto OC 10352', versao: 1, url: null, origem: 'operacao' });
+    oc.set('oc-r', { id: 'oc-r', especie: 'romaneio', nome: 'romaneio OP 46323', versao: 1, url: null, origem: 'operacao' });
+    const { result } = await montar();
+    await waitFor(() => expect(result.current.documentos).toHaveLength(3));
+    const por = (id: string) => result.current.documentos.find(d => d.id === id)!;
+    expect(['oc-n', 'oc-a', 'oc-r'].map(id => por(id).especie)).toEqual(['outro', 'outro', 'outro']);
+    expect(['oc-n', 'oc-a', 'oc-r'].map(id => rotuloEspecieDoc(por(id)))).toEqual(['NPR', 'Acerto', 'Romaneio']);
+  });
 });
 
 describe('o banco falso recusa especie no anexo', () => {

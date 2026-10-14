@@ -30,6 +30,7 @@ const fmtData = (iso: string | null) => (iso ? iso.split('-').reverse().join('/'
    especie precisa carregar a linha sozinha. */
 const PREFIXO_ESPECIE: Record<EspecieDoc, string> = {
   nf_principal: 'NF', nf_complementar: 'NF compl.', recibo: 'Recibo', outro: 'Doc.',
+  npr: 'NPR', acerto: 'Acerto', romaneio: 'Romaneio',
 };
 
 /* "2 notas · 1 recibo". Conta o que ESTA VALENDO; cancelado vira um termo proprio, e
@@ -37,6 +38,7 @@ const PREFIXO_ESPECIE: Record<EspecieDoc, string> = {
 const CONTAGEM_ROTULO: Record<EspecieDoc, [string, string]> = {
   nf_principal: ['nota', 'notas'], nf_complementar: ['nota compl.', 'notas compl.'],
   recibo: ['recibo', 'recibos'], outro: ['outro documento', 'outros documentos'],
+  npr: ['NPR', 'NPRs'], acerto: ['acerto', 'acertos'], romaneio: ['romaneio', 'romaneios'],
 };
 
 export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedores, contraparteId, clienteId, recarregarFornecedores, valorNegociado }: Props) {
