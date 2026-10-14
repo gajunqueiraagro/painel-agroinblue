@@ -7,10 +7,15 @@
  * (`saldoNaTela`, `liquidoNaTela`, `corDoSaldoNaTela`). Este arquivo NAO SOMA NADA: so' le e escolhe o rotulo.
  */
 import {
-  lerContaCorrente, liquidoNaTela, saldoNaTela, corDoSaldoNaTela,
+  lerContaCorrente, liquidoNaTela, saldoNaTela, corDoSaldoNaTela, sinalDaFazenda,
   type ContaCorrente, type LadoContaCorrente,
 } from '@/lib/oc/contaCorrente';
 import type { LiquidacaoPeloLado } from '@/lib/oc/estadoPeloLado';
+
+/** OC-LISTA-FINANC-CC-01b — uma despesa da OC como o dono a devolve (valor no sinal dele: entrada +, saida −). */
+export interface DespesaDoDono { descricao: string; favorecido: string | null; valor: number; status: string; vencimento: string | null }
+/** Um recebimento/pagamento programado do dono; `valor` no sinal do BANCO (a tela aplica o lado: `programadosNaTela`). */
+export interface ProgramadoDoDono { data: string; valor: number }
 
 export interface ResumoListaOC {
   modelo: 'conta_corrente' | 'titulo';
@@ -18,10 +23,31 @@ export interface ResumoListaOC {
   cc: ContaCorrente | null;
   docsOperacao: number;
   docsFinanceiro: number;
+  /** 01b — o bloco `despesas` do dono, enxuto; [] no modelo titulo. */
+  despesas: DespesaDoDono[];
+  /** 01b — as linhas de recebimento programado do dono; [] no modelo titulo. */
+  programados: ProgramadoDoDono[];
 }
 
 const obj = (v: unknown): Record<string, unknown> => (v && typeof v === 'object' ? (v as Record<string, unknown>) : {});
 const inteiro = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? Math.max(0, Math.trunc(v)) : 0);
+const numero = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+const textoOuNulo = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null);
+/* Item torto sai da lista (nunca vira zero inventado). */
+function lerDespesas(v: unknown): DespesaDoDono[] {
+  return (Array.isArray(v) ? v : []).flatMap(x => {
+    const d = obj(x); const valor = numero(d.valor);
+    if (valor == null) return [];
+    return [{ descricao: textoOuNulo(d.descricao) ?? '—', favorecido: textoOuNulo(d.favorecido), valor,
+      status: textoOuNulo(d.status) ?? '', vencimento: textoOuNulo(d.vencimento) }];
+  });
+}
+function lerProgramados(v: unknown): ProgramadoDoDono[] {
+  return (Array.isArray(v) ? v : []).flatMap(x => {
+    const p = obj(x); const valor = numero(p.valor); const data = textoOuNulo(p.data);
+    return valor == null || !data ? [] : [{ data, valor }];
+  });
+}
 
 /** Le o retorno de `oc_conta_corrente_lote`. Peca torta = a OC fica fora (a linha cai no modelo titulo), nunca numero inventado. */
 export function lerLoteContaCorrente(raw: unknown): Record<string, ResumoListaOC> {
@@ -31,7 +57,11 @@ export function lerLoteContaCorrente(raw: unknown): Record<string, ResumoListaOC
     const modelo = r.modelo === 'conta_corrente' ? 'conta_corrente' : 'titulo';
     const cc = modelo === 'conta_corrente' ? lerContaCorrente(r.envelope) : null;
     if (modelo === 'conta_corrente' && !cc) continue;
-    out[id] = { modelo, cc, docsOperacao: inteiro(r.docs_operacao), docsFinanceiro: inteiro(r.docs_financeiro) };
+    out[id] = {
+      modelo, cc, docsOperacao: inteiro(r.docs_operacao), docsFinanceiro: inteiro(r.docs_financeiro),
+      despesas: modelo === 'conta_corrente' ? lerDespesas(r.despesas) : [],
+      programados: modelo === 'conta_corrente' ? lerProgramados(r.programados) : [],
+    };
   }
   return out;
 }
@@ -89,4 +119,53 @@ export function fraseDosDocumentos(n: number, onde: 'operacao' | 'financeiro'): 
   if (!(n > 0)) return null;
   const nome = n === 1 ? 'documento' : 'documentos';
   return onde === 'operacao' ? `${n} ${nome} da operação` : `${n} ${nome} no financeiro`;
+}
+
+/* ---------------------------------------------------------------------------------------------------------------------------
+ * OC-LISTA-FINANC-CC-01b — as despesas e os programados do dono, para o ponto ambar e o Resumo / PDF / Excel.
+ * ⚠ "Em aberto" = status do lancamento FORA de realizado / conciliado (o status que o dono devolve). O modelo titulo NAO passa por
+ *   aqui: la' o ponto e o Resumo seguem a view, so' com o total (decisao do Gabriel: sem segunda regua).
+ * ------------------------------------------------------------------------------------------------------------------------- */
+const PAGO = new Set(['realizado', 'conciliado']);
+/** As despesas do dono ainda em aberto. */
+export function despesasEmAbertoCC(r: ResumoListaOC): DespesaDoDono[] {
+  return r.despesas.filter(d => !PAGO.has(d.status));
+}
+/** Soma em CENTAVOS do modulo de uma lista de valores (o Resumo mostra Despesas em modulo, como no modelo titulo). */
+const somaModulo = (vs: readonly number[]) => vs.reduce((a, v) => a + Math.abs(Math.round(v * 100)), 0) / 100;
+/** O TOTAL das despesas do dono (modulo) — a coluna Despesas do Resumo. Sem despesa: nulo (traco), como no titulo. */
+export function totalDespesasCC(r: ResumoListaOC): number | null {
+  return r.despesas.length === 0 ? null : somaModulo(r.despesas.map(d => d.valor));
+}
+/** O total das em aberto (modulo) — o que acende o ponto ambar. */
+export function totalDespesasEmAbertoCC(r: ResumoListaOC): number {
+  return somaModulo(despesasEmAbertoCC(r).map(d => d.valor));
+}
+const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+/** O `title` do ponto ambar: "descrição · favorecido — R$ valor", uma por linha; nulo sem despesa em aberto. */
+export function tituloDasDespesasEmAberto(r: ResumoListaOC): string | null {
+  const ds = despesasEmAbertoCC(r);
+  if (ds.length === 0) return null;
+  return ds.map(d => `${d.descricao}${d.favorecido ? ` · ${d.favorecido}` : ''} — ${brl(Math.abs(d.valor))}`).join('\n');
+}
+/** Os programados no lado da fazenda (positivo = o que se espera receber / pagar), pelo fator do dono. */
+export function programadosNaTela(r: ResumoListaOC, lado: LadoContaCorrente): ProgramadoDoDono[] {
+  const f = sinalDaFazenda(lado).dinheiro;
+  return r.programados.map(p => ({ data: p.data, valor: p.valor === 0 ? 0 : f * p.valor }));
+}
+
+/** A linha do Resumo da OC em conta corrente: Valor = liquido, Pago = recebido, Falta = max(0, saldo), Despesas = o total do dono,
+ *  e o estado efetivo (o mesmo do Pagto da lista). Nenhuma soma alem do total das despesas do dono. */
+export function linhaDoResumoCC(r: ResumoListaOC, lado: LadoContaCorrente): {
+  valor: number; pago: number; falta: number; despesas: number | null; estado: string | null;
+} | null {
+  if (!r.cc) return null;
+  const saldo = saldoNaTela(r.cc, lado);
+  return {
+    valor: liquidoNaTela(r.cc, lado),
+    pago: r.cc.recebido,
+    falta: Math.max(0, saldo),
+    despesas: totalDespesasCC(r),
+    estado: pagtoDaLinhaCC(r.cc, lado, null).estado_liquidacao,
+  };
 }

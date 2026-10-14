@@ -93,7 +93,8 @@ describe('o dono puro', () => {
   it('le o lote; envelope torto nao vira numero; titulo sem cc', () => {
     const m = lerLoteContaCorrente({ a: { modelo: 'conta_corrente', envelope: null }, b: { modelo: 'titulo', envelope: null, docs_operacao: 2 } });
     expect(m.a).toBeUndefined();
-    expect(m.b).toEqual({ modelo: 'titulo', cc: null, docsOperacao: 2, docsFinanceiro: 0 });
+    /* 01b: os blocos `despesas` e `programados` vem vazios no modelo titulo */
+    expect(m.b).toEqual({ modelo: 'titulo', cc: null, docsOperacao: 2, docsFinanceiro: 0, despesas: [], programados: [] });
     /* `linhas` ausente vira [] (o lote nao manda as linhas) */
     expect(lerContaCorrente({ modelo: 'conta_corrente', entregue: 1 })?.linhas).toEqual([]);
   });
@@ -174,5 +175,24 @@ describe('Cab · kg pelos lotes', () => {
     await montar();
     expect(texto(celulas(OC_MULTI)[5])).toBe('54 · 24.841 kg');
     expect(texto(celulas(OC_TITULO)[5])).toBe('10');
+  });
+});
+
+/* OC-LISTA-FINANC-CC-01b — o ponto ambar da linha em conta corrente le' as despesas do DONO (a view devolve nulo para essas OCs). */
+describe('o ponto ambar em conta corrente', () => {
+  it('todas as despesas pagas: nao acende (02be1a41, Fundersul e Iagro realizados)', async () => {
+    await montar();
+    expect(pagto(id8('02be1a41')).querySelector('[data-testid="despesa-pendente"]')).toBeNull();
+  });
+  it('uma despesa programada: acende e o title lista "descrição · favorecido — R$ valor"', async () => {
+    const id = id8('02be1a41');
+    const lote = banco.lote as Record<string, { despesas: unknown[] }>;
+    lote[id] = { ...lote[id], despesas: [...lote[id].despesas,
+      { descricao: 'Frete 070 Vacas', favorecido: 'Transp. Exemplo', valor: -1500, status: 'programado', vencimento: '2026-11-01' }] };
+    await montar();
+    const ponto = pagto(id).querySelector('[data-testid="despesa-pendente"]');
+    expect(ponto?.getAttribute('title')).toBe('Frete 070 Vacas · Transp. Exemplo — R$\u00a01.500,00');
+    /* o Pagto continua "Paga" (a despesa e' o outro lado) */
+    expect(texto(pagto(id))).toBe('Paga');
   });
 });

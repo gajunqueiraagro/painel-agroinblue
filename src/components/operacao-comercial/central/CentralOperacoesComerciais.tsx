@@ -31,6 +31,7 @@ import { useFiltroUrl } from '@/v2/hooks/useFiltroUrl';
 import { FILTRO_DESPESAS_PENDENTES, passaFiltroPagamento, temDespesaPendente, pctPagoPeloLado } from '@/lib/oc/estadoPeloLado';
 import {
   lerLoteContaCorrente, ladoDaOC, pagtoDaLinhaCC, financeiroDaLinhaCC, fraseDosDocumentos,
+  totalDespesasEmAbertoCC, tituloDasDespesasEmAberto,
   type ResumoListaOC, type TomFinanceiroCC,
 } from '@/lib/oc/listaContaCorrente';
 import { classeDoSaldoNaTela } from '@/lib/oc/contaCorrente';
@@ -600,10 +601,12 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
   const liqMap = useMemo(() => {
     const m: Record<string, LiqRow> = { ...liqView };
     rows.forEach(r => {
-      const cc = r.modelo_financeiro === 'conta_corrente' ? ccMap[r.id]?.cc : null;
+      const res = r.modelo_financeiro === 'conta_corrente' ? ccMap[r.id] : undefined;
+      const cc = res?.cc;
       const lado = ladoDaOC(r.tipo_operacao);
-      if (!cc || !lado) return;
-      const p = pagtoDaLinhaCC(cc, lado, liqView[r.id]?.despesas_pendentes);
+      if (!res || !cc || !lado) return;
+      /* 01b — em conta corrente a despesa pendente e' a do DONO (status em aberto); a view devolve nulo para essas OCs. */
+      const p = pagtoDaLinhaCC(cc, lado, totalDespesasEmAbertoCC(res));
       m[r.id] = { operacao_id: r.id, estado_liquidacao: p.estado_liquidacao, base: p.base ?? null,
         total_liquidado_valido: p.total_liquidado_valido ?? null, despesas_pendentes: p.despesas_pendentes ?? null };
     });
@@ -1134,7 +1137,8 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
                        e presente no DOM. Absoluto ele nao disputa largura com a pilula. */
                     const desp = temDespesaPendente(liqMap[r.id])
                       ? <span data-testid="despesa-pendente" className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-amber-500"
-                          title={`Despesas pendentes: ${brlCent(Number(liqMap[r.id]?.despesas_pendentes ?? 0))}`} />
+                          title={(cc ? tituloDasDespesasEmAberto(ccMap[r.id]) : null)
+                            ?? `Despesas pendentes: ${brlCent(Number(liqMap[r.id]?.despesas_pendentes ?? 0))}`} />
                       : null;
                     const comMarca = (pil: ReactNode) => (desp ? <>{pil}{desp}</> : pil);
                     /* ⚠ "NÃO PAGA" ERA UMA ACUSAÇÃO onde havia só uma espera. A operação
@@ -1295,6 +1299,7 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
         onClose={() => setResumoAberto(false)}
         clienteId={clienteId}
         operacoes={filtradas}
+        contaCorrente={ccMap}
         filtros={filtrosDoResumo}
         nomeContraparte={(cid) => (cid ? contrapartes[cid] ?? '—' : '—')}
       />

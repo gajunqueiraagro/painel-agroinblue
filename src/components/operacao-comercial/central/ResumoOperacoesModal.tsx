@@ -18,6 +18,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { X, FileText, Download } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { carregarLogoBase64, addLogoToDoc, PALETA } from '@/lib/pdf/pdfChassi';
+import type { ResumoListaOC } from '@/lib/oc/listaContaCorrente';
 import {
   carregarResumoOC, totalLinhas,
   type OcResumo, type OcResumoLinha, type OcResumoParcela, type TomSituacao,
@@ -96,13 +97,16 @@ interface Props {
     id: string; tipo_operacao: string; data_operacao: string;
     contraparte_id: string | null; qtd_negociada: number | null;
     valor_acordado: number | null; valor_total: number | null; status_comercial: string;
+    modelo_financeiro?: string | null;
   }[];
+  /** OC-LISTA-FINANC-CC-01b — o lote do conta corrente que a Central JA' carregou (sem nova busca); ausente = so' as views. */
+  contaCorrente?: Record<string, ResumoListaOC>;
   filtros: FiltrosResumo;
   nomeContraparte: (id: string | null) => string;
 }
 
 export function ResumoOperacoesModal({
-  open, onClose, clienteId, operacoes, filtros, nomeContraparte,
+  open, onClose, clienteId, operacoes, contaCorrente, filtros, nomeContraparte,
 }: Props) {
   const [resumo, setResumo] = useState<OcResumo | null>(null);
   const [carregando, setCarregando] = useState(false);
@@ -111,11 +115,11 @@ export function ResumoOperacoesModal({
     if (!open) { setResumo(null); return; }
     let cancelado = false;
     setCarregando(true);
-    carregarResumoOC(clienteId, operacoes, nomeContraparte)
+    carregarResumoOC(clienteId, operacoes, nomeContraparte, contaCorrente)
       .then((r) => { if (!cancelado) { setResumo(r); setCarregando(false); } })
       .catch((e) => { if (!cancelado) { setCarregando(false); toast.error(`Não foi possível montar o resumo: ${e.message}`); } });
     return () => { cancelado = true; };
-  }, [open, clienteId, operacoes, nomeContraparte]);
+  }, [open, clienteId, operacoes, nomeContraparte, contaCorrente]);
 
   /* Com um tipo só, o título é dele; com vários, é genérico — e cada tipo vira um bloco. */
   const tituloDoc = useMemo(() => {

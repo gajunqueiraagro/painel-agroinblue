@@ -13,6 +13,9 @@
  */
 import { supabase } from '@/integrations/supabase/client';
 import { verboOC, siglaCategoria } from '@/lib/financeiro/produtoOC';
+import {
+  ladoDaOC, linhaDoResumoCC, programadosNaTela, despesasEmAbertoCC, type ResumoListaOC,
+} from '@/lib/oc/listaContaCorrente';
 
 export interface OcResumoLinha {
   operacao_id: string;
@@ -77,6 +80,8 @@ interface OpBase {
   contraparte_id: string | null; qtd_negociada: number | null;
   valor_acordado: number | null; valor_total: number | null;
   status_comercial: string;
+  /* OC-LISTA-FINANC-CC-01b — 'conta_corrente' le' o dono (o lote da Central); ausente ou 'titulo' = as views, como sempre. */
+  modelo_financeiro?: string | null;
 }
 
 /**
@@ -177,6 +182,7 @@ export async function carregarResumoOC(
   clienteId: string,
   operacoes: readonly OpBase[],
   nomeContraparte: (id: string | null) => string,
+  contaCorrente?: Record<string, ResumoListaOC>,
 ): Promise<OcResumo> {
   const ids = operacoes.map((o) => o.id);
   if (ids.length === 0) return { blocos: [], geradoEm: new Date() };
@@ -323,13 +329,28 @@ export async function carregarResumoOC(
     return { vencimento: v, diasVencida: Math.max(0, dias(v)) };
   };
 
+  /* OC-LISTA-FINANC-CC-01b — a OC em CONTA CORRENTE le' o DONO (o lote que a Central ja' carregou): uma fonte por linha. Sem o
+     lote dela (ou modelo titulo), o caminho de sempre. */
+  const ccDe = (op: OpBase): { r: ResumoListaOC; lado: NonNullable<ReturnType<typeof ladoDaOC>> } | null => {
+    if (op.modelo_financeiro !== 'conta_corrente') return null;
+    const r = contaCorrente?.[op.id];
+    const lado = ladoDaOC(op.tipo_operacao);
+    return r?.cc && lado ? { r, lado } : null;
+  };
+  const programadosDe = (op: OpBase) => {
+    const c = ccDe(op);
+    return c ? programadosNaTela(c.r, c.lado).filter(p => p.valor > 0).sort((a, b) => (a.data < b.data ? -1 : a.data > b.data ? 1 : 0)) : [];
+  };
+
   const linhaDe = (op: OpBase): OcResumoLinha => {
     const rec = recebido.get(op.id) ?? { negociada: 0, recebida: 0 };
     const l = liqPorOp.get(op.id);
     const ds = (datasMov.get(op.id) ?? []).sort();
     /* OC-LIQ-SINAL-01 (B): com compromisso, PELO LADO DA OC (`valoresPeloLado`); sem, o caminho de
        antes, que segue abaixo intacto. */
-    const lado = valoresPeloLado(op.tipo_operacao, ladosPorOp.get(op.id));
+    const doDono = ccDe(op);
+    const cc = doDono ? linhaDoResumoCC(doDono.r, doDono.lado) : null;
+    const lado = cc ? null : valoresPeloLado(op.tipo_operacao, ladosPorOp.get(op.id));
     const valorAntigo = valorDaOperacao(op);
     const pagoAntigo = Number(l?.total_liquidado_valido ?? 0);
     const saldo = Number(l?.saldo_operacao ?? 0);
@@ -339,12 +360,14 @@ export async function carregarResumoOC(
        números que a tela mostra — e nunca menos que zero, porque pagar a mais não é dever
        negativo. Quando o saldo responde, ele manda: é a régua do banco. */
     const faltaAntiga = saldo !== 0 ? saldo : Math.max(0, valorAntigo - pagoAntigo);
-    const valor = lado ? lado.valor : valorAntigo;
-    const pago = lado ? lado.pago : pagoAntigo;
-    const faltaPagar = lado ? lado.falta : faltaAntiga;
-    const despesas = lado ? lado.despesas : null;
-    const prox = proximoEmAberto(op.id);
-    const sit = situacaoDaOperacao(l?.estado_liquidacao ?? null, valor, pago, prox.vencimento, prox.diasVencida);
+    const valor = cc ? cc.valor : lado ? lado.valor : valorAntigo;
+    const pago = cc ? cc.pago : lado ? lado.pago : pagoAntigo;
+    const faltaPagar = cc ? cc.falta : lado ? lado.falta : faltaAntiga;
+    const despesas = cc ? cc.despesas : lado ? lado.despesas : null;
+    /* em conta corrente o proximo em aberto e' o primeiro programado do dono; o estado, o efetivo (o do Pagto da lista) */
+    const progr = cc ? programadosDe(op)[0] : undefined;
+    const prox = cc ? { vencimento: progr?.data ?? null, diasVencida: Math.max(0, dias(progr?.data ?? null)) } : proximoEmAberto(op.id);
+    const sit = situacaoDaOperacao(cc ? cc.estado : (l?.estado_liquidacao ?? null), valor, pago, prox.vencimento, prox.diasVencida);
     return {
       operacao_id: op.id,
       data: op.data_operacao,
@@ -378,13 +401,35 @@ export async function carregarResumoOC(
     const emAberto: OcResumoParcela[] = [];
     const despesasEmAberto: OcResumoParcela[] = [];
     for (const op of ops) {
-      const lista = (parcPorOp.get(op.id) ?? []).filter((p) => Number(p.saldo_titulo ?? 0) > 0);
-      const total = (parcPorOp.get(op.id) ?? []).length;
       const rec = recebido.get(op.id) ?? { negociada: 0, recebida: 0 };
       const ds = (datasMov.get(op.id) ?? []).sort();
       const gado = rec.recebida === 0 ? 'não entrou'
         : rec.negociada > 0 && rec.recebida < rec.negociada ? `entrou ${rec.recebida} de ${rec.negociada}`
         : `entrou ${ddmm(ds[0] ?? null)}`;
+      /* OC-LISTA-FINANC-CC-01b — CONTA CORRENTE: "Falta receber/pagar" = os programados do dono; "Despesas em aberto" = as
+         despesas do dono fora de realizado/conciliado. As parcelas da view NAO entram para essas OCs. */
+      const doDono = ccDe(op);
+      if (doDono) {
+        const progs = programadosDe(op);
+        progs.forEach((p, i) => {
+          const diasVencida = Math.max(0, dias(p.data));
+          const sit = situacaoDaParcela(p.valor, p.data, diasVencida);
+          emAberto.push({ operacao_id: op.id, vencimento: p.data, descricao: descricaoPadrao(op, lotesPorOp.get(op.id) ?? []),
+            fornecedor: nomeContraparte(op.contraparte_id), sequencia: progs.length > 1 ? i + 1 : null, totalParcelas: progs.length,
+            gado, valor: p.valor, situacao: sit.texto, tomSituacao: sit.tom, diasVencida });
+        });
+        for (const d of despesasEmAbertoCC(doDono.r)) {
+          const diasVencida = Math.max(0, dias(d.vencimento));
+          const valorD = Math.abs(d.valor);
+          const sit = situacaoDaParcela(valorD, d.vencimento, diasVencida);
+          despesasEmAberto.push({ operacao_id: op.id, vencimento: d.vencimento, descricao: d.descricao,
+            fornecedor: d.favorecido ?? '—', sequencia: null, totalParcelas: 1, gado, valor: valorD,
+            situacao: sit.texto, tomSituacao: sit.tom, diasVencida });
+        }
+        continue;
+      }
+      const lista = (parcPorOp.get(op.id) ?? []).filter((p) => Number(p.saldo_titulo ?? 0) > 0);
+      const total = (parcPorOp.get(op.id) ?? []).length;
       for (const p of lista) {
         const diasVencida = Math.max(0, dias(p.vencimento));
         /* ⚠ A SITUAÇÃO SAI DA MESMA FAMÍLIA DE PALAVRAS DA OPERAÇÃO, e não do

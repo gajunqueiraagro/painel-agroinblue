@@ -162,7 +162,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 14/10/2026 (OC-LISTA-FINANC-CC-01, +10: `src/components/operacao-comercial/central/centralFinancCC.test.tsx` 10
+  Baseline em 14/10/2026 (OC-LISTA-FINANC-CC-01b, +8: `src/components/operacao-comercial/central/resumoFinancCC.test.tsx` 6
+  (novo), `src/components/operacao-comercial/central/centralFinancCC.test.tsx` 2 (10 -> 12) — 5158 depois dele; antes o
+  OC-LISTA-FINANC-CC-01, +10: `src/components/operacao-comercial/central/centralFinancCC.test.tsx` 10
   (novo) — 5150 depois dele; antes o OC-SHELL-ROTULO-ALINHADO-01, +4: `src/components/shared/rotuloAlinhadoShells.test.tsx` 4 (novo) — 5140
   depois dele; antes o OC-CC-TOTAL-LIQUIDO-01, +3 em `src/components/venda/contaCorrenteAbate.test.tsx` (17 -> 20) — 5136
   depois dele; antes o LOTE-PESO-CALC-01, +28: `src/components/compra/loteContaNoCampo.test.tsx` 23 (novo),
@@ -312,7 +314,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5150
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5158
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3920,9 +3922,29 @@ docs/historico/frentes-ate-2026-09-29.md.)
   Testes: `centralFinancCC.test.tsx` (10: o dono, os sete abates da Vera com o fixture REAL `listaFinancCC.fixture.json`, a linha
   titulo igual com e sem o lote, kg multilote, o clipe); `centralListaLayout.test.tsx` trocado ao contrato novo (as duas larguras).
   7 mutacoes mortas.
-  ⚠ FORA, NA FILA: o Resumo / PDF (`ResumoOperacoesModal`) segue lendo a view para OC em conta corrente (OC-LISTA-FINANC-CC-01b) ·
-    o `title` do ponto ambar ainda diz so' o valor ("Despesas pendentes: R$ X"), sem o nome de cada despesa — a view so' da' o
-    total; listar os nomes pede uma fonte — VAI PARA O 01b, junto com o Resumo / PDF (Gabriel, 14/10) · a Graxaria duplicada da c80ebe9e (73a183eb / 6b349b87, 5.056,00 cada) fica
+  · 01b (Gabriel, 14/10/2026) — O RESUMO / PDF / EXCEL E O PONTO AMBAR TAMBEM LEEM O DONO NA OC EM CONTA CORRENTE.
+    - BANCO: `oc_conta_corrente_lote` ganhou, por OC, dois blocos ENXUTOS lidos do envelope do dono, sem regra nova: `despesas`
+      [{descricao, favorecido, valor, status, vencimento}] (o bloco `despesas` do dono; `valor` no sinal dele, `status` o do
+      lancamento) e `programados` [{data, valor}] (as linhas de recebimento 'programado'; `valor` = `mov_recebido`, sinal do banco).
+      Topo, contagens, assinatura e ACL iguais. Migration `supabase/migrations/20261027197800_oc_lista_financ_cc_01b.sql` (md5 do
+      arquivo 778d784ecfa8537af87c6f539b601c33) — APLICADA no proto em 14/10/2026 com o OK do Gabriel: ledger 20261014151050
+      (⚠ registrada com o timestamp do dia; ledger = arquivo por md5); prosrc 87e896f4f753b2cd171979b66c09b8e6; STABLE, INVOKER,
+      ACL postgres / service_role / authenticated, `anon` sem EXECUTE. O teste (L1 compara tambem os dois blocos com o dono; L2
+      exige os dois vazios no titulo) ensaiado revertido e AO VIVO: OK, 193 OCs, 58 despesas e 8 programados. Smoke na Vera:
+      02be1a41 = Fundersul 2.679,21 + Iagro 377,85, realizadas; 26fd02c1 = 1 programado de 212.449,03 em 12/11/2026.
+    - RESUMO (`carregarResumoOC`, `src/v2/lib/ocResumo.ts`): o modal recebe o lote que a Central JA' carregou (prop `contaCorrente`,
+      sem nova busca). Linha em conta corrente (`linhaDoResumoCC`): Valor = `liquidoNaTela`, Pago = recebido, Falta =
+      max(0, `saldoNaTela`), Despesas = o TOTAL das despesas do dono em modulo (nulo sem despesa), Situacao pelo estado efetivo
+      (o mesmo do Pagto da lista). "Falta receber" = os programados do dono no lado da fazenda; "Despesas em aberto" = as
+      despesas do dono com status fora de realizado/conciliado; as parcelas da view NAO entram para essas OCs (saiu a Graxaria
+      73a183eb da c80ebe9e). Previa, PDF e Excel leem o mesmo resumo. Linha do modelo titulo: identica (os 15 testes antigos do
+      Resumo verdes sem mudar o esperado).
+    - PONTO AMBAR: em conta corrente acende com despesa do dono em aberto (`totalDespesasEmAbertoCC`), com o `title` "descrição ·
+      favorecido — R$ valor", uma por linha (`tituloDasDespesasEmAberto`). A view devolve `despesas_pendentes` NULO para OC em
+      conta corrente (o ramo so' existe `pelo_lado`). Modelo titulo: so' o total da view, como antes (sem segunda regua).
+      MEDIDO (14/10): hoje nenhuma OC, em modelo nenhum, tem despesa pendente — as 58 despesas do dono estao realizadas.
+    Testes: `resumoFinancCC.test.tsx` 6 e +2 em `centralFinancCC.test.tsx`; 7 mutacoes mortas.
+  ⚠ FORA: a Graxaria duplicada da c80ebe9e (73a183eb / 6b349b87, 5.056,00 cada) fica
     sob OC-DESVINCULAR-01, sem correcao · NAO PROVADO NO NAVEGADOR (a lista real da Vera e a regua renderizada na tela; a medida
     foi numa replica).
 - ⚠ ROTULO DE CAMPO AO LADO DE ROTULO FLEX TAMBEM E' FLEX (OC-SHELL-ROTULO-ALINHADO-01, Gabriel 14/10/2026, so' tela). O `Label` da casa

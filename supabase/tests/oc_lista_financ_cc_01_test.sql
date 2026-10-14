@@ -1,8 +1,9 @@
 -- OC-LISTA-FINANC-CC-01 — `oc_conta_corrente_lote` nao tem regra propria: para cada OC em conta corrente o envelope do lote e'
 -- o topo de `oc_conta_corrente(id)` (sem linhas, explicacoes e despesas); no modelo titulo, nulo. So' leitura, numa transacao
 -- revertida; termina em RAISE 'OK …'. Compara com `is distinct from`, nunca `<>`.
---   L1 para TODA OC em conta corrente de cada cliente (como o admin, papel authenticated): envelope do lote = topo do dono
---   L2 OC no modelo titulo: envelope nulo, modelo 'titulo', contagens presentes
+--   L1 para TODA OC em conta corrente de cada cliente (como o admin, papel authenticated): envelope do lote = topo do dono, e
+--      (01b) `despesas` e `programados` = os campos do bloco `despesas` e das linhas de recebimento programado do dono
+--   L2 OC no modelo titulo: envelope nulo, modelo 'titulo', contagens presentes, `despesas` e `programados` vazios
 --   L3 contagens: docs_operacao = documentos vivos da OC, contados direto
 --   L4 sem usuario e gestor de outro cliente: 42501; id de outro cliente fica fora do retorno
 --   L5 ACL: anon nao executa; authenticated executa
@@ -11,7 +12,7 @@ SET LOCAL lock_timeout = '2s';
 SET LOCAL statement_timeout = '30s';
 DO $teste$
 DECLARE
-  k record; n_oc int := 0; n_dif int := 0; v jsonb; e jsonb; t record; d int;
+  k record; n_oc int := 0; n_dif int := 0; n_desp int := 0; n_prog int := 0; v jsonb; e jsonb; cc jsonb; t record; d int;
   c_admin constant text := '{"sub":"7bd0b6ad-2527-4be1-af58-f2cc0c0edd8e","role":"authenticated"}';
   c_gestor_nj constant text := '{"sub":"9200e0d0-095f-4ab8-a31a-3052a0faaf56","role":"authenticated"}';
   v_nj uuid; v_outro uuid; v_op_outro uuid;
@@ -25,12 +26,29 @@ BEGIN
            ARRAY(SELECT o.id FROM zoo_operacoes_comerciais o WHERE o.cliente_id = k.cliente_id));
     FOR t IN SELECT o.id FROM zoo_operacoes_comerciais o WHERE o.cliente_id = k.cliente_id AND o.modelo_financeiro = 'conta_corrente' LOOP
       n_oc := n_oc + 1;
-      e := public.oc_conta_corrente(t.id) - 'linhas' - 'explicacoes' - 'despesas';
+      cc := public.oc_conta_corrente(t.id);
+      e := cc - 'linhas' - 'explicacoes' - 'despesas';
       IF (v -> t.id::text -> 'envelope') IS DISTINCT FROM e THEN n_dif := n_dif + 1; END IF;
+      IF jsonb_array_length(v -> t.id::text -> 'despesas') IS DISTINCT FROM jsonb_array_length(COALESCE(cc -> 'despesas', '[]'))
+         OR EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(cc -> 'despesas', '[]')) WITH ORDINALITY a(x, i)
+                     WHERE jsonb_build_object('descricao', x -> 'descricao', 'favorecido', x -> 'favorecido', 'valor', x -> 'valor',
+                             'status', x -> 'status', 'vencimento', x -> 'vencimento')
+                           IS DISTINCT FROM (v -> t.id::text -> 'despesas' -> (i::int - 1))) THEN
+        RAISE EXCEPTION 'L1: despesas do lote diferentes do dono na OC %', t.id;
+      END IF;
+      n_desp := n_desp + jsonb_array_length(v -> t.id::text -> 'despesas');
+      IF (v -> t.id::text -> 'programados') IS DISTINCT FROM COALESCE((
+           SELECT jsonb_agg(jsonb_build_object('data', x -> 'data', 'valor', x -> 'mov_recebido') ORDER BY i)
+             FROM jsonb_array_elements(COALESCE(cc -> 'linhas', '[]')) WITH ORDINALITY a(x, i)
+            WHERE x ->> 'tipo' = 'recebimento' AND x ->> 'status' = 'programado'), '[]'::jsonb) THEN
+        RAISE EXCEPTION 'L1: programados do lote diferentes do dono na OC %', t.id;
+      END IF;
+      n_prog := n_prog + jsonb_array_length(v -> t.id::text -> 'programados');
     END LOOP;
   END LOOP;
   IF n_oc = 0 THEN RAISE EXCEPTION 'L1: conjunto vazio nao e'' prova'; END IF;
   IF n_dif <> 0 THEN RAISE EXCEPTION 'L1: % de % OCs com envelope diferente do dono', n_dif, n_oc; END IF;
+  IF n_desp = 0 OR n_prog = 0 THEN RAISE EXCEPTION 'L1: blocos vazios nao sao prova (despesas %, programados %)', n_desp, n_prog; END IF;
 
   -- L2
   SELECT o.id, o.cliente_id INTO t FROM zoo_operacoes_comerciais o WHERE o.modelo_financeiro = 'titulo' LIMIT 1;
@@ -38,7 +56,8 @@ BEGIN
   v := public.oc_conta_corrente_lote(t.cliente_id, ARRAY[t.id]);
   IF (v -> t.id::text ->> 'modelo') IS DISTINCT FROM 'titulo'
      OR jsonb_typeof(v -> t.id::text -> 'envelope') IS DISTINCT FROM 'null'
-     OR (v -> t.id::text -> 'docs_operacao') IS NULL OR (v -> t.id::text -> 'docs_financeiro') IS NULL THEN
+     OR (v -> t.id::text -> 'docs_operacao') IS NULL OR (v -> t.id::text -> 'docs_financeiro') IS NULL
+     OR (v -> t.id::text -> 'despesas') IS DISTINCT FROM '[]'::jsonb OR (v -> t.id::text -> 'programados') IS DISTINCT FROM '[]'::jsonb THEN
     RAISE EXCEPTION 'L2: titulo devolveu %', v -> t.id::text;
   END IF;
 
@@ -73,6 +92,6 @@ BEGIN
   IF has_function_privilege('anon', 'public.oc_conta_corrente_lote(uuid, uuid[])', 'EXECUTE') THEN RAISE EXCEPTION 'L5: anon executa'; END IF;
   IF NOT has_function_privilege('authenticated', 'public.oc_conta_corrente_lote(uuid, uuid[])', 'EXECUTE') THEN RAISE EXCEPTION 'L5: authenticated nao executa'; END IF;
 
-  RAISE EXCEPTION 'OK oc_lista_financ_cc_01 (L1-L5; % OCs em conta corrente conferidas no L1)', n_oc;
+  RAISE EXCEPTION 'OK oc_lista_financ_cc_01 (L1-L5; % OCs em conta corrente conferidas no L1; % despesas e % programados)', n_oc, n_desp, n_prog;
 END $teste$;
 ROLLBACK;
