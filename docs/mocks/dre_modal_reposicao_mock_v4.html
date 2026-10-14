@@ -1,0 +1,208 @@
+<title>Modal Reposição v4</title>
+<style>
+/* O ModalValorDre de hoje (RateioDetalheModal.tsx), so' com a regua trocada. Tokens = index.css do proto. */
+:root{
+  --bg:#e9ecef; --card:#fff; --ink:#1f2937; --muted-fg:#6b7280; --muted:hsl(220 17% 97%); --border:hsl(218 12% 89%);
+  --primary:hsl(213 52% 24%); --primary-fg:#fff; --destructive:hsl(0 79% 63%);
+  --quadro-cab:#E8E6DF; --quadro-total:#D6D4CC; --zebra:#F5F4F0; --ativo:#dfe8f3; --rateio-bg:#fbfaf6;
+  --sans:"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#15191f; --card:#1d232b; --ink:#e6e9ed; --muted-fg:#9aa3ad; --muted:#232a33; --border:#2d353f;
+  --primary:hsl(213 52% 30%); --quadro-cab:#2a2f36; --quadro-total:#363c45; --zebra:#1a2028; --ativo:#24303f; --rateio-bg:#1f242b; color-scheme:dark } }
+:root[data-theme="dark"]{
+  --bg:#15191f; --card:#1d232b; --ink:#e6e9ed; --muted-fg:#9aa3ad; --muted:#232a33; --border:#2d353f;
+  --primary:hsl(213 52% 30%); --quadro-cab:#2a2f36; --quadro-total:#363c45; --zebra:#1a2028; --ativo:#24303f; --rateio-bg:#1f242b; color-scheme:dark }
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:12px/1.3 var(--sans);margin:0;padding-block:16px;padding-inline:16px}
+.wrap{max-width:1020px;margin:0 auto;display:flex;flex-direction:column;gap:8px}
+.nota{font-size:11px;color:var(--muted-fg);display:flex;flex-wrap:wrap;gap:4px 16px;align-items:center}
+.nota b{color:var(--ink);font-weight:600}
+.nota label{display:inline-flex;gap:4px;align-items:center;cursor:pointer}
+
+/* DialogContent: h-[min(640px,calc(100vh-64px))] max-w-[980px] flex-col gap-0 overflow-hidden p-0 */
+.modal{background:var(--card);border:1px solid var(--border);border-radius:8px;width:100%;max-width:980px;height:640px;
+  display:flex;flex-direction:column;overflow:hidden;box-shadow:0 8px 28px rgba(0,0,0,.18)}
+@media (max-width:700px){ .modal{height:auto} }
+
+/* cabecalho: bg-primary px-3.5 py-2 — h2 15px, contexto 10px */
+.cab{flex:none;display:flex;align-items:flex-start;gap:12px;background:var(--primary);color:var(--primary-fg);padding:8px 14px}
+.cab .t{font-size:15px;font-weight:600;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cab .c{margin-top:2px;font-size:10px;opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cab .x{margin-left:auto;opacity:.8;font-size:16px;line-height:1;cursor:pointer}
+
+/* barra: border-b bg-muted/40 px-3.5 py-1.5, Segmentado altura 22 */
+.barra{flex:none;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border);background:var(--muted);padding:6px 14px}
+.seg{display:inline-flex;height:22px;border:1px solid var(--border);border-radius:5px;overflow:hidden;background:var(--card)}
+.seg span{padding:0 9px;font-size:11px;line-height:20px;color:var(--muted-fg);cursor:pointer;user-select:none}
+.seg span.on{background:var(--primary);color:var(--primary-fg)}
+.seg span.off{opacity:.45;cursor:default}
+.seg.invisivel{visibility:hidden}
+.barra .dica{margin-left:auto;font-size:10px;color:var(--muted-fg)}
+
+/* corpo: min-h-0 flex-1 overflow-y-auto px-3.5 — UM scrollport */
+.corpo{min-height:0;flex:1;overflow-y:auto;overflow-x:hidden;padding:0 14px}
+
+table{border-collapse:collapse;table-layout:fixed;font-variant-numeric:tabular-nums}
+th{font-size:9.5px;font-weight:600;color:var(--muted-fg);padding:0 8px;height:18px;white-space:nowrap;text-align:left;
+  box-shadow:inset 0 -1px 0 0 var(--border);background:var(--card)}
+th.n{text-align:right} th.c{text-align:center}
+td{font-size:10px;line-height:18px;height:18px;padding:0 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-top:1px solid #f1f5f9}
+td.n{text-align:right} td.dt{font-size:9.5px;padding:0 4px;text-align:center}
+td.stc{padding:0 4px;overflow:visible}
+.neg{color:var(--destructive)}
+
+/* Por subcentro — DRE-MODAL-SUBCENTRO-01, regua reduzida: NAO ocupa a largura inteira */
+.quadro{margin:4px 0 8px;border:1px solid var(--border);border-radius:6px;overflow:hidden;width:520px;max-width:100%}
+.quadro .cabq{display:flex;align-items:baseline;gap:8px;background:var(--quadro-cab);padding:3px 8px;font-size:10px;font-weight:600}
+.quadro .cabq span{margin-left:auto;font-weight:400;color:var(--muted-fg)}
+.quadro table{width:100%}
+.quadro th{text-align:center}
+.quadro tbody tr{cursor:pointer}
+.quadro tbody tr:nth-child(even){background:var(--zebra)}
+.quadro tbody tr:hover{background:var(--ativo)}
+.quadro tbody tr.on{background:var(--ativo);font-weight:600}
+.quadro tr.total{background:var(--quadro-total);font-weight:600;border-top:1px solid var(--border)}
+.barra-pct{height:5px;border-radius:2px;background:#e2e8f0;overflow:hidden}
+.barra-pct i{display:block;height:100%;background:#94a3b8}
+
+/* linha de filtro FIXA (18px, lugar reservado — o chip saiu do cabecalho da Descricao) */
+.filtro{height:18px;display:flex;align-items:center;gap:6px;font-size:10px;color:var(--muted-fg);padding:0 2px}
+.filtro .chip{display:inline-flex;align-items:center;gap:4px;height:14px;padding:0 6px;border-radius:9px;background:var(--ativo);color:var(--primary);font-weight:500;font-size:9.5px}
+.filtro .chip b{font-weight:400;cursor:pointer}
+
+.lista{width:100%}
+.lista thead th{position:sticky;top:0;z-index:1}
+.lista tbody tr:nth-child(even){background:var(--muted)}
+.lista tbody tr{cursor:pointer}
+.lista tbody tr:hover{background:var(--ativo)}
+.st{display:inline-block;border-radius:9px;padding:0 6px;font-size:9.5px;font-weight:600;line-height:14px}
+.st.real{background:#f0fdf4;color:#15803d} .st.prog{background:#fffbeb;color:#b45309}
+td.lapis{text-align:center;color:var(--muted-fg);padding:0}
+.ord{font-size:8px;margin-left:2px;color:var(--primary)}
+
+/* rodape: border-t bg-muted/40 px-3.5 py-1.5 text-[11px] */
+.rod{flex:none;display:flex;justify-content:space-between;align-items:center;gap:8px;border-top:1px solid var(--border);background:var(--muted);padding:6px 14px;font-size:11px}
+.rod b{font-size:12px;font-variant-numeric:tabular-nums}
+:focus-visible{outline:2px solid var(--primary);outline-offset:1px}
+</style>
+
+<div class="wrap">
+  <div class="nota">
+    <span><b>DRE-MODAIS-02 · mock v4 · ModalValorDre, linha Reposição</b> — mesma casca e colunas de hoje; só régua (dados de exemplo)</span>
+    <label><input type="checkbox" id="chkMacro" checked> filtrado: coluna Subcentro mostra o <b>Macro</b></label>
+    <span>clique numa linha do quadro para filtrar · cabeçalho ordena</span>
+  </div>
+
+  <div class="modal" role="dialog" aria-label="Reposição">
+    <div class="cab">
+      <div style="min-width:0;flex:1">
+        <div class="t">Reposição · <span id="cabValor">R$ 151.300,00</span></div>
+        <div class="c" title="Reposição pecuária · Faz. Monterrey · set/26">Reposição pecuária · Faz. Monterrey · set/26</div>
+      </div>
+      <span class="x" aria-label="Fechar">✕</span>
+    </div>
+
+    <div class="barra">
+      <div class="seg"><span class="on">Lançamentos</span><span class="off" title="sem rateio neste recorte">Rateio</span></div>
+      <div class="seg invisivel"><span class="on">Direto</span><span>Com rateio</span></div>
+      <span class="dica">clique na linha abre no Financeiro</span>
+    </div>
+
+    <div class="corpo">
+      <div class="quadro" data-testid="quadro-subcentro">
+        <div class="cabq">Por subcentro <span>clique numa linha para filtrar a lista · clique de novo para ver todos</span></div>
+        <table id="tabSub">
+          <colgroup><col><col style="width:110px"><col style="width:66px"><col style="width:100px"></colgroup>
+          <thead><tr><th>Subcentro</th><th>Valor</th><th>%</th><th></th></tr></thead>
+          <tbody></tbody>
+          <tfoot><tr class="total"><td>Total do grupo</td><td class="n neg" id="subTot"></td><td class="n">100,0%</td><td></td></tr></tfoot>
+        </table>
+      </div>
+
+      <div class="filtro" data-testid="filtro-subcentro">
+        <span id="filtroTxt">todos os subcentros</span>
+        <span class="chip" id="chip" hidden><span id="chipTxt"></span><b id="chipX" title="voltar a todos os subcentros">✕</b></span>
+      </div>
+
+      <table class="lista" id="tabLan">
+        <colgroup>
+          <col style="width:64px"><col style="width:64px"><col><col style="width:130px"><col style="width:120px"><col style="width:72px"><col style="width:92px"><col style="width:86px"><col style="width:22px">
+        </colgroup>
+        <thead><tr>
+          <th class="c" data-k="comp">Comp.</th><th class="c" data-k="pgto">Pgto</th><th class="c" data-k="desc">Descrição</th>
+          <th class="c" data-k="fav">Favorecido</th><th class="c" data-k="sub" id="thSub">Subcentro</th><th class="c" data-k="faz">Fazenda</th>
+          <th class="n" data-k="valor">Valor</th><th class="c" data-k="st">Status</th><th></th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="rod">
+      <span id="rodTxt"></span>
+      <b class="neg" id="rodTot"></b>
+    </div>
+  </div>
+</div>
+
+<script>
+const SUBS=[
+  {nome:'Investimento Compra Bovinos Machos',macro:'Investimento'},
+  {nome:'Investimento Compra Bovinos Fêmeas',macro:'Investimento'},
+  {nome:'Investimento Frete/Comissão Compra Bovinos',macro:'Investimento'},
+];
+const L=[
+ ['2026-09-04','2026-09-04','Compra 42 bezerros desmama · NF 1187','Agropecuária Serra Azul Ltda','Monterrey',0,63000,'realizado'],
+ ['2026-09-04','2026-09-04','Compra 18 garrotes 12-18m · NF 1188','Agropecuária Serra Azul Ltda','Monterrey',0,35000,'realizado'],
+ ['2026-09-12','2026-09-12','Frete bezerros Serra Azul → Monterrey · 2 carretas','Transp. Boi Bom','Monterrey',2,4800,'realizado'],
+ ['2026-09-12','2026-09-12','Comissão compra 60 cab · 1%','José Carlos Corretor','Monterrey',2,980,'realizado'],
+ ['2026-09-18','2026-09-18','Compra 30 novilhas 18-24m · NF 2210 · 1ª parcela','Fazenda Boa Vista','Monterrey',1,30000,'realizado'],
+ ['2026-09-25','2026-09-25','Frete novilhas Boa Vista · 1 carreta','Transp. Boi Bom','Monterrey',2,2520,'realizado'],
+ ['2026-09-18',null,'Compra 30 novilhas · NF 2210 · 2ª parcela','Fazenda Boa Vista','Monterrey',1,15000,'programado'],
+];
+const num=v=>v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+const moeda=v=>'R$ '+num(v);
+const dataBR=d=>d?d.slice(8,10)+'/'+d.slice(5,7)+'/'+d.slice(2,4):'—';
+let filtro=null, ord={k:'comp',asc:false};
+
+function render(){
+  const tot=L.reduce((s,r)=>s+r[6],0);
+  const tb=document.querySelector('#tabSub tbody'); tb.innerHTML='';
+  SUBS.map((s,i)=>({i,s,v:L.filter(r=>r[5]===i).reduce((a,r)=>a+r[6],0)})).sort((a,b)=>b.v-a.v).forEach(({i,s,v})=>{
+    const p=v/tot*100, tr=document.createElement('tr'); tr.className=filtro===i?'on':'';
+    tr.title=filtro===i?'clique para ver todos':'clique para filtrar a lista';
+    tr.innerHTML=`<td title="${s.nome}">${s.nome}</td><td class="n neg">${num(v)}</td><td class="n">${p.toFixed(1).replace('.',',')}%</td><td><div class="barra-pct"><i style="width:${p}%"></i></div></td>`;
+    tr.onclick=()=>{filtro=filtro===i?null:i;render();};
+    tb.appendChild(tr);
+  });
+  document.getElementById('subTot').textContent=num(tot);
+
+  const macro=document.getElementById('chkMacro').checked;
+  const rows=L.map((r,i)=>({i,comp:r[0],pgto:r[1]||'',desc:r[2],fav:r[3],faz:r[4],sub:r[5],valor:r[6],st:r[7]})).filter(r=>!filtro||r.sub===filtro);
+  const key=r=>ord.k==='sub'?SUBS[r.sub].nome:r[ord.k];
+  rows.sort((a,b)=>{const x=key(a),y=key(b);return (x>y?1:x<y?-1:0)*(ord.asc?1:-1);});
+  const lb=document.querySelector('#tabLan tbody'); lb.innerHTML='';
+  rows.forEach(r=>{
+    const col=(filtro!==null&&macro)?SUBS[r.sub].macro:SUBS[r.sub].nome;
+    const tr=document.createElement('tr'); tr.title='abrir o lançamento no Financeiro';
+    tr.innerHTML=`<td class="dt">${dataBR(r.comp)}</td><td class="dt">${dataBR(r.pgto)}</td><td title="${r.desc}">${r.desc}</td><td title="${r.fav}" style="color:var(--muted-fg)">${r.fav}</td><td title="${col}">${col}</td><td>${r.faz}</td><td class="n neg">${num(r.valor)}</td><td class="stc"><span class="st ${r.st==='realizado'?'real':'prog'}">${r.st[0].toUpperCase()+r.st.slice(1)}</span></td><td class="lapis">✎</td>`;
+    lb.appendChild(tr);
+  });
+  document.querySelectorAll('#tabLan th[data-k]').forEach(th=>{
+    th.querySelector('.ord')?.remove();
+    if(th.dataset.k===ord.k){const i=document.createElement('span');i.className='ord';i.textContent=ord.asc?'▲':'▼';th.appendChild(i);}
+    th.onclick=()=>{ord=ord.k===th.dataset.k?{k:ord.k,asc:!ord.asc}:{k:th.dataset.k,asc:true};render();};
+  });
+  document.getElementById('thSub').firstChild.textContent=(filtro!==null&&macro)?'Macro':'Subcentro';
+  const soma=rows.reduce((s,r)=>s+r.valor,0);
+  document.getElementById('rodTot').textContent=moeda(soma);
+  document.getElementById('rodTxt').textContent=`${rows.length} lançamento${rows.length===1?'':'s'}`+(filtro!==null?` em “${SUBS[filtro].nome}” · de ${L.length} no grupo`:'');
+  document.getElementById('chip').hidden=filtro===null;
+  document.getElementById('filtroTxt').hidden=filtro!==null;
+  if(filtro!==null) document.getElementById('chipTxt').textContent='filtrando: '+SUBS[filtro].nome;
+}
+document.getElementById('chipX').onclick=()=>{filtro=null;render();};
+document.getElementById('chkMacro').onchange=render;
+render();
+</script>

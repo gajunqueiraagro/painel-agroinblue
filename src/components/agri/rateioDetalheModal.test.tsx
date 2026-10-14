@@ -336,7 +336,7 @@ describe('pecuária: a soma das linhas é a célula', () => {
 describe('a ordenação da tabela é estável', () => {
   const L = (chave: string, competencia: string, valor: number): LinhaValorDre => ({
     chave, idEditavel: null, competencia, pagamento: null, descricao: chave, favorecido: null, fazenda: null,
-    subcentro: null, valor, status: null, rateioPct: null,
+    subcentro: null, centro: null, valor, status: null, rateioPct: null,
   });
   const linhas = [L('a', '2026-01-01', 10), L('b', '2026-01-01', 20), L('c', '2026-02-01', 10), L('d', '2026-01-01', 10)];
   it('empates guardam a ordem de origem, nos dois sentidos e em qualquer coluna', () => {
@@ -348,9 +348,9 @@ describe('a ordenação da tabela é estável', () => {
     const v1 = ordenarPorColuna(linhas, col('valor'), 'desc').map(l => l.chave);
     expect(ordenarPorColuna(linhas, col('valor'), 'desc').map(l => l.chave)).toEqual(v1);
   });
-  /* DRE-MODAL-SUBCENTRO-01: entrou a coluna Subcentro, logo depois da Descricao (de onde sai a largura). */
+  /* DRE-MODAL-SUBCENTRO-01: entrou a coluna Subcentro; DRE-MODAIS-02a: na ordem da casa, depois do Favorecido. */
   it('todas as oito colunas de dado são ordenáveis', () => {
-    expect(COLUNAS_VALOR_DRE.map(c => c.coluna)).toEqual(['comp', 'pgto', 'descricao', 'subcentro', 'favorecido', 'fazenda', 'valor', 'status']);
+    expect(COLUNAS_VALOR_DRE.map(c => c.coluna)).toEqual(['comp', 'pgto', 'descricao', 'favorecido', 'subcentro', 'fazenda', 'valor', 'status']);
   });
 });
 

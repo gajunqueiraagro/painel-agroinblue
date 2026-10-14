@@ -159,14 +159,20 @@ describe('o quadro no modal', () => {
     montar(v);
     const antes = listaDescricoes().length;
     expect(antes).toBe(7); // 5 diretos + 2 de rateio do grupo
+    // DRE-MODAIS-02a: a linha de filtro existe antes de filtrar, sem selo
+    expect(screen.getByTestId('filtro-subcentro-linha').textContent).toBe('todos os subcentros');
+    expect(screen.queryByTestId('selo-filtro-subcentro')).toBeNull();
     fireEvent.click(within(quadro()).getByText('Salários e Encargos Pecuária'));
     expect(listaDescricoes().sort()).toEqual(['Lanc d1', 'Lanc d2']);
     expect(screen.getByTestId('selo-filtro-subcentro').textContent).toContain('Salários e Encargos Pecuária');
+    // o selo mora na linha de filtro
+    expect(within(screen.getByTestId('filtro-subcentro-linha')).getByTestId('selo-filtro-subcentro')).toBeTruthy();
     expect(rodape()).toBe('2 lançamentos em “Salários e Encargos Pecuária” · de 7 no grupo');
     expect(document.body.textContent).toContain(formatMoeda(938.35));
     fireEvent.click(screen.getByTestId('selo-filtro-subcentro'));
     expect(listaDescricoes()).toHaveLength(7);
     expect(screen.queryByTestId('selo-filtro-subcentro')).toBeNull();
+    expect(screen.getByTestId('filtro-subcentro-linha').textContent).toBe('todos os subcentros');
   });
 
   it('clicar de novo na mesma linha tambem volta a todos', () => {
@@ -201,7 +207,7 @@ describe('o quadro no modal', () => {
     fireEvent.click(screen.getByTitle('Ordenar por Subcentro'));
     const subs = [...document.querySelectorAll('tbody tr')]
       .filter(tr => !tr.closest('[data-testid="quadro-subcentro"]'))
-      .map(tr => tr.querySelector('td:nth-child(4)')?.textContent ?? '');
+      .map(tr => tr.querySelector('td:nth-child(5)')?.textContent ?? ''); // DRE-MODAIS-02a: o Favorecido vem antes
     // alfabetica, e a ausencia vai para o fim (a regra do `useOrdenacaoTabela`), nunca para o topo
     expect(subs).toEqual([
       'Benefícios e Premiações Administrativo', 'Benefícios e Premiações Pecuária', 'Rescisões e Acertos Pecuária',
