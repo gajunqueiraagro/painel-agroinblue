@@ -65,22 +65,42 @@ describe('OC-LISTA-LAYOUT-01 — colunas na ordem do processo', () => {
     await waitFor(() => expect(visiveis()).toHaveLength(3));
     const ths = Array.from(document.querySelectorAll('thead th'));
     expect(ths.map(th => th.textContent?.trim())).toEqual(
-      ['OC', 'Data', 'Tipo', 'Contraparte', 'Faz', 'Cab · kg méd.', 'Valor R$', 'Entrega', 'Comercialização', 'Financeiro', 'Pagto', '']);
+      ['OC', 'Data', 'Tipo', 'Contraparte', 'Faz', 'Cab', 'kg méd.', 'Valor R$', 'Entrega', 'Comercialização', 'Financeiro', 'Pagto', '']);
     const comDivisor = ths.filter(th => th.className.includes('border-l-2')).map(th => th.textContent?.trim());
     expect(comDivisor).toEqual(['Entrega', 'Financeiro']);
-    /* a linha: a pilula comercial ("Fechada") e' a 9a celula, depois da Entrega; a do Financeiro ("S/ lanc.") a 10a */
+    /* a linha: Entrega e' a 9a celula (com o divisor), o Financeiro ("S/ lanc.") a 11a */
     const tds = Array.from(document.querySelector(`td[title="${OC_A1}"]`)?.closest('tr')?.querySelectorAll('td') ?? []);
-    expect(tds[7].className).toContain('border-l-2');
-    expect(tds[9].className).toContain('border-l-2');
-    expect(tds[9].textContent).toContain('S/ lanc.');
+    expect(tds[8].className).toContain('border-l-2');
+    expect(tds[10].className).toContain('border-l-2');
+    expect(tds[10].textContent).toContain('S/ lanc.');
+    /* OC-LISTA-CAB-KG-COLUNAS-01 — Cab e kg méd. em celulas separadas, os dois a' direita; sem lote o kg e' "—" */
+    expect(tds[5].textContent).toBe('10');
+    expect(tds[6].textContent).toBe('—');
+    expect(tds[5].className).toContain('text-right');
+    expect(tds[6].className).toContain('text-right');
   });
 
-  it('colgroup: as larguras MEDIDAS do OC-LISTA-FINANC-CC-01c, e a Contraparte >= 130 no piso da tabela', () => {
+  it('colgroup: as larguras MEDIDAS (01c + OC-LISTA-CAB-KG-COLUNAS-01), e a Contraparte >= 130 no piso de 893', () => {
     const cols = [...FONTE.slice(FONTE.indexOf('<colgroup>'), FONTE.indexOf('</colgroup>')).matchAll(/<col className="w-\[(\d+)px\]"/g)].map(m => Number(m[1]));
-    /* OC Data Tipo Faz Cab·kg méd. Valor | Entrega Comercializacao | Financeiro Pagto Acoes (medido no Chromium com a Inter) */
-    expect(cols).toEqual([64, 56, 66, 34, 76, 70, 66, 100, 126, 70, 22]);
+    /* OC Data Tipo Faz Cab kg méd. Valor | Entrega Comercializacao | Financeiro Pagto Acoes (medido no Chromium com a Inter) */
+    expect(cols).toEqual([64, 56, 66, 34, 37, 52, 70, 66, 100, 126, 70, 22]);
     const piso = Number(FONTE.match(/<table className="w-full min-w-\[(\d+)px\] table-fixed/)?.[1]);
+    expect(piso).toBe(893);
     expect(piso - cols.reduce((a, b) => a + b, 0)).toBeGreaterThanOrEqual(130);
+  });
+});
+
+describe('OC-LISTA-CAB-KG-COLUNAS-01 — Cab e kg méd. ordenam', () => {
+  it('as duas colunas ordenaveis: os cabecalhos tem a seta ao clicar, e a chave do kg medio existe', async () => {
+    montar();
+    await waitFor(() => expect(visiveis()).toHaveLength(3));
+    for (const rotulo of ['Cab', 'kg méd.']) {
+      const th = Array.from(document.querySelectorAll('thead th')).find(t => t.textContent?.trim() === rotulo) as HTMLElement;
+      expect(th.className, rotulo).toContain('text-right');
+      fireEvent.click(th);
+      await waitFor(() => expect(th.getAttribute('aria-sort'), rotulo).not.toBe('none'));
+    }
+    expect(FONTE).toContain("case 'kgmedio':");
   });
 });
 

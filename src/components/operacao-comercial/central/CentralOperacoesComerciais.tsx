@@ -331,7 +331,7 @@ function posicao(mapa: Record<string, number>, estado: string | null | undefined
 }
 
 type ColunaOrd =
-  | 'oc' | 'data' | 'tipo' | 'contraparte' | 'fazenda' | 'animais'
+  | 'oc' | 'data' | 'tipo' | 'contraparte' | 'fazenda' | 'animais' | 'kgmedio'
   | 'valor' | 'comercial' | 'recebimento' | 'financeiro' | 'liquidacao';
 interface Ordenacao { col: ColunaOrd; dir: 'asc' | 'desc'; }
 
@@ -705,6 +705,8 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
         case 'contraparte': return (r.contraparte_id ? contrapartes[r.contraparte_id] : null) ?? null;
         case 'fazenda': { const f = fazendaRef(r); return f ? (f.codigo ?? f.nome) : null; }
         case 'animais': return r.qtd_negociada ?? null;
+        /* OC-LISTA-CAB-KG-COLUNAS-01 — o peso medio dos lotes (o mesmo mapa da celula); sem lote = ausencia. */
+        case 'kgmedio': { const k = kgMap[r.id]; return k && k > 0 ? k : null; }
         case 'valor': return r.valor_acordado ?? r.valor_total ?? null;
         case 'comercial': return posicao(ORD_COMERCIAL, r.status_comercial);
         case 'recebimento': return posicao(ORD_RECEBIMENTO, recStatus(recMap[r.id]));
@@ -737,7 +739,7 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
       return base * dir;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `finCC` le' `ccMap`, que esta' na lista
-  }, [filtradas, ord, contrapartes, fazendas, finMap, liqMap, recMap, ccMap]);
+  }, [filtradas, ord, contrapartes, fazendas, finMap, liqMap, recMap, ccMap, kgMap]);
 
   const totalPages = Math.max(1, Math.ceil(ordenadas.length / PAGE_SIZE));
   const pageSafe = Math.min(page, totalPages);
@@ -961,7 +963,7 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
             vence classe no pai. É a MESMA régua 9/10/21 de `<Table density="dense">`; a
             tabela aqui é crua por causa do scrollport do `thead sticky`, não por régua. */}
         <TableDensityContext.Provider value="dense">
-        <table className="w-full min-w-[880px] table-fixed caption-bottom text-[9px]">
+        <table className="w-full min-w-[893px] table-fixed caption-bottom text-[9px]">
           {/* ⚠ MEDIDO NO DOM, nao estimado — OC-LISTA-COMPACTA-01. Cada largura e' o maior
               entre o rotulo (8px) e o conteudo (9px). Somam 610 fixos; com o piso de 760 do
               `<table>` sobram >= 150 para a Contraparte, acima do minimo de 130.
@@ -973,7 +975,8 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
                 Comercializacao), [divisor] o dinheiro (Financeiro e Pagto). [As larguras mudaram no 01c, logo abaixo.] */}
             {/* ⚠ OC-LISTA-FINANC-CC-01c (Gabriel, 14/10; mock mock-central-ajuste-v1): larguras MEDIDAS no Chromium com a Inter, com
                 as pilulas por extenso, "Venda em Pé" e os piores numeros reais (2.505.586 / −396.975 com pilula; "779 · 880 kg").
-                Fixos: 750 em Global, 716 numa fazenda; a Contraparte fica com o resto (>= 136 numa tabela de 886). */}
+                Fixos: 763 em Global, 729 numa fazenda (com as duas colunas do OC-LISTA-CAB-KG-COLUNAS-01); a Contraparte fica com o
+                resto (130 no piso de 893, 163 numa tabela de 926). */}
             <col className="w-[64px]" />{/* OC — 8 hex mono em 8px, sem "#" */}
             <col className="w-[56px]" />{/* Data — 31/07/26 em 8px */}
             <col className="w-[66px]" />{/* Tipo — "Venda em Pé" mede 56,0 a 9px; 66 com o padding (o mock pedia 50: cortaria) */}
@@ -981,7 +984,11 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
             {/* Faz — a sigla (PUR/SM/LUZ). SO' EM GLOBAL, como a Lista (FinanceiroTab:381): com uma
                 fazenda escolhida a coluna repetiria a mesma sigla em toda linha. */}
             {!fazendaSel && <col className="w-[34px]" />}
-            <col className="w-[76px]" />{/* Cab · kg méd. — pior real "779 · 880 kg"; o cabecalho com a seta pede 72,6 (o mock pedia 92) */}
+            {/* OC-LISTA-CAB-KG-COLUNAS-01 (Gabriel, 14/10): UMA INFORMACAO POR COLUNA, numero a' direita, unidade no cabecalho. Medido no
+                Chromium com a Inter: o cabecalho com a seta de ordenacao pede 27,4 ("Cab") e 42,6 ("kg méd."), + 8 de padding + 1 de
+                borda; o pior numero real (779 / 880) mede 17,5. Os 13px a mais subiram o piso da tabela de 880 para 893. */}
+            <col className="w-[37px]" />{/* Cab — quantidade, inteiro */}
+            <col className="w-[52px]" />{/* kg méd. — peso medio dos lotes, 0 casas, sem "kg" na celula */}
             <col className="w-[70px]" />{/* Valor R$ — 2.505.586 (45,7) */}
             <col className="w-[66px]" />{/* Entrega — pilula 44 + gap + cadeado 8 */}
             <col className="w-[100px]" />{/* Comercializacao — pilula 52 + clipe 10 + "Rasc." 26 + gaps (o mock pedia 86: o "Rasc." nao cabia) */}
@@ -998,7 +1005,8 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
               <ThOrd col="tipo" rotulo="Tipo" ord={ord} onOrdenar={alternarOrd} />
               <ThOrd col="contraparte" rotulo="Contraparte" ord={ord} onOrdenar={alternarOrd} />
               {!fazendaSel && <ThOrd col="fazenda" rotulo="Faz" ord={ord} onOrdenar={alternarOrd} />}
-              <ThOrd col="animais" rotulo="Cab · kg méd." ord={ord} onOrdenar={alternarOrd} direita />
+              <ThOrd col="animais" rotulo="Cab" ord={ord} onOrdenar={alternarOrd} direita />
+              <ThOrd col="kgmedio" rotulo="kg méd." ord={ord} onOrdenar={alternarOrd} direita />
               <ThOrd col="valor" rotulo="Valor R$" ord={ord} onOrdenar={alternarOrd} direita />
 
               {/* ⚠ "Entrega" cobre os dois sentidos do animal — na COMPRA ele chega, na VENDA
@@ -1012,10 +1020,10 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
           </TableHeader>
           <TableBody>
             {loading && Array.from({ length: 6 }).map((_, i) => (
-              <TableRow key={`sk-${i}`}><TableCell colSpan={12} className={TD}><Skeleton className="h-4 w-full" /></TableCell></TableRow>
+              <TableRow key={`sk-${i}`}><TableCell colSpan={13} className={TD}><Skeleton className="h-4 w-full" /></TableCell></TableRow>
             ))}
             {!loading && pageRows.length === 0 && (
-              <TableRow><TableCell colSpan={12} className="py-6 text-center text-[11px] text-muted-foreground">
+              <TableRow><TableCell colSpan={13} className="py-6 text-center text-[11px] text-muted-foreground">
                 Nenhuma operação comercial.
               </TableCell></TableRow>
             )}
@@ -1048,16 +1056,13 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
                       `title`: todas as outras tem largura maior que o pior conteudo medido. */}
                   <TableCell className={`${TD} truncate`} title={nomeContraparte(r)}>{nomeContraparte(r)}</TableCell>
                   {!fazendaSel && <TableCell className={`${TD} whitespace-nowrap overflow-hidden`} title={nomeFazenda(r)}>{siglaFazenda(r)}</TableCell>}
-                  <TableCell className={`${TD} text-right whitespace-nowrap tabular-nums overflow-hidden`}>
-                    {/* Uma linha só: cabeça e peso são a mesma resposta, e empilhá-los dobrava
-                        a altura da tabela inteira. O "cab" saiu do numero — o cabecalho ja' diz. */}
-                    <span className="whitespace-nowrap">
-                      <span>{r.qtd_negociada != null ? r.qtd_negociada : '—'}</span>
-                      {/* OC-LISTA-FINANC-CC-01c — o PESO MEDIO dos lotes (kg/cab, 0 casas), pelo dono da media. */}
-                      {kgMedio > 0 && (
-                        <span className="text-muted-foreground" data-testid="kg-medio">{' · '}{kg(kgMedio)} kg</span>
-                      )}
-                    </span>
+                  {/* OC-LISTA-CAB-KG-COLUNAS-01 — Cab e kg méd. em colunas separadas, os dois a' direita; o "kg" so' no cabecalho. */}
+                  <TableCell className={`${TD} text-right whitespace-nowrap tabular-nums overflow-hidden`} data-testid="cab">
+                    {r.qtd_negociada != null ? r.qtd_negociada : '—'}
+                  </TableCell>
+                  {/* O PESO MEDIO dos lotes (kg/cab, 0 casas), pelo dono da media; OC sem lote = dado ausente, "—". */}
+                  <TableCell className={`${TD} text-right whitespace-nowrap tabular-nums overflow-hidden text-muted-foreground`} data-testid="kg-medio">
+                    {kgMedio > 0 ? kg(kgMedio) : '—'}
                   </TableCell>
                   {/* ⚠ SEM "R$" E SEM CENTAVOS na celula, os centavos no `title`: a coluna existe
                       para COMPARAR ordens de grandeza linha a linha, e o simbolo repetido doze

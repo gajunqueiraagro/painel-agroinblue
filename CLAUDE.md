@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 14/10/2026 (OC-LISTA-FINANC-CC-01c, +5 em `src/components/operacao-comercial/central/centralFinancCC.test.tsx` (12 -> 17) —
+  Baseline em 14/10/2026 (OC-LISTA-CAB-KG-COLUNAS-01, +1 em `src/components/operacao-comercial/central/centralListaLayout.test.tsx`
+  (8 -> 9) — 5181 depois dele; antes o OC-LISTA-FINANC-CC-01c, +5 em `src/components/operacao-comercial/central/centralFinancCC.test.tsx` (12 -> 17) —
   5180 depois dele; antes o ABATE-PROJETADO-01a, +17: `src/components/abate/modalNegociarLoteUnidades.test.tsx` 14 (13 -> 27),
   `src/components/compra/excluirLoteDialogo.test.tsx` 3 (3 -> 6) — 5175 depois dele; antes o OC-LISTA-FINANC-CC-01b, +8: `src/components/operacao-comercial/central/resumoFinancCC.test.tsx` 6
   (novo), `src/components/operacao-comercial/central/centralFinancCC.test.tsx` 2 (10 -> 12) — 5158 depois dele; antes o
@@ -316,7 +317,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5180
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5181
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3994,8 +3995,9 @@ docs/historico/frentes-ate-2026-09-29.md.)
       MEDIDO (14/10): hoje nenhuma OC, em modelo nenhum, tem despesa pendente — as 58 despesas do dono estao realizadas.
     Testes: `resumoFinancCC.test.tsx` 6 e +2 em `centralFinancCC.test.tsx`; 7 mutacoes mortas.
   · 01c (Gabriel, 14/10/2026, so' tela; mock mock-central-ajuste-v1) — AJUSTE DE HOMOLOGACAO:
-    - "Cab · kg méd.": o PESO MEDIO dos lotes (kg total ÷ cab, 0 casas), pelo dono da media `pesoMedioPorCabeca` sobre
-      `totaisDosLotes`. "Valor R$" no cabecalho (a celula segue sem R$).
+    - [OC-LISTA-CAB-KG-COLUNAS-01, Gabriel 14/10: SEPARADO EM DUAS COLUNAS — uma informacao por coluna, numero a' direita,
+      unidade no cabecalho] "Cab" (a quantidade) e "kg méd." (o PESO MEDIO dos lotes, kg total ÷ cab, 0 casas, pelo dono da media
+      `pesoMedioPorCabeca` sobre `totaisDosLotes`; sem lote "—"), as duas ordenaveis. "Valor R$" no cabecalho (a celula segue sem R$).
     - FINANCEIRO: pilula a' esquerda, o clipe colado nela, o NUMERO A' DIREITA. A REGRA DO NUMERO E' UMA, para os dois modelos:
       `numeroDoFinanceiro(valor, quitado)` (`listaContaCorrente.ts`) — so' aparece com falta (≠ 0 ao centavo); quitada = sem
       numero. A FONTE nao mudou: conta corrente = o saldo do dono; titulo = o liquido da obrigacao das views, escondido quando a
@@ -4008,6 +4010,10 @@ docs/historico/frentes-ate-2026-09-29.md.)
     - LARGURAS MEDIDAS (replica da linha no Chromium, piores casos reais "Venda em Pé", "779 · 880 kg", 2.505.586 / −396.975 com
       pilula): OC 64 · Data 56 · Tipo 66 · Faz 34 · Cab·kg méd. 76 · Valor 70 · Entrega 66 · Comercializacao 100 · Financeiro 126 ·
       Pagto 70 · Acoes 22 = 750 em Global (716 numa fazenda); piso da tabela 880 -> Contraparte >= 130 (136 a 886, 176 a 926).
+      [OC-LISTA-CAB-KG-COLUNAS-01: o 76 virou Cab 37 + kg méd. 52 — o cabecalho com a seta de ordenacao pede 27,4 e 42,6 a 8px, + 8
+      de padding + 1 de borda; o pior numero real (779 / 880) 17,5. Fixos 763 em Global (729 numa fazenda) e o PISO DA TABELA
+      SUBIU A 893 (decisao do Gabriel), para a Contraparte seguir com 130 no piso (163 a 926). Folga: 1,6px no Cab, 0,4px no
+      kg méd.]
       ⚠ DESVIOS DO MOCK, medidos: Tipo 50 -> 66 ("Venda em Pé" 56,0 + padding); Comercializacao 86 -> 100 (o "Rasc." de 26 nao
       cabia); Cab·kg 92 -> 76 (sobrava; a Contraparte precisava). O ponto ambar do Pagto fica 0,5px a' direita da pilula.
     ⚠ NAO PROVADO NO NAVEGADOR (medida numa replica): a lista real do NJ / Vera com as pilulas novas.

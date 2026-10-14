@@ -83,9 +83,9 @@ const celulas = (id: string) => {
   if (!tr) throw new Error(`sem a linha ${id}`);
   return [...tr.querySelectorAll('td')];
 };
-/* OC Data Tipo Contraparte Faz Cab·kg Valor | Entrega Comercializacao | Financeiro Pagto ⋯ (em Global) */
-const fin = (id: string) => celulas(id)[9];
-const pagto = (id: string) => celulas(id)[10];
+/* OC Data Tipo Contraparte Faz Cab kg·méd. Valor | Entrega Comercializacao | Financeiro Pagto ⋯ (em Global) */
+const fin = (id: string) => celulas(id)[10];
+const pagto = (id: string) => celulas(id)[11];
 const texto = (td: Element) => (td.textContent ?? '').replace(/\s+/g, ' ').trim();
 
 beforeEach(() => reset());
@@ -144,9 +144,9 @@ describe('os sete abates da Vera, na lista', () => {
   });
   it('o clipe dos documentos da operação (02be1a41: 11) e o lugar vazio reservado (48972205: 0)', async () => {
     await montar();
-    expect(within(celulas(id8('02be1a41'))[8]).getByTestId('clipe-operacao').getAttribute('title')).toBe('11 documentos da operação');
-    expect(within(celulas(id8('48972205'))[8]).queryByTestId('clipe-operacao')).toBeNull();
-    expect(within(celulas(id8('48972205'))[8]).getByTestId('clipe-operacao-vazio')).toBeTruthy();
+    expect(within(celulas(id8('02be1a41'))[9]).getByTestId('clipe-operacao').getAttribute('title')).toBe('11 documentos da operação');
+    expect(within(celulas(id8('48972205'))[9]).queryByTestId('clipe-operacao')).toBeNull();
+    expect(within(celulas(id8('48972205'))[9]).getByTestId('clipe-operacao-vazio')).toBeTruthy();
     expect(within(fin(id8('02be1a41'))).getByTestId('clipe-financeiro-vazio')).toBeTruthy();
   });
   it('o filtro Pagamento lê o MESMO estado da coluna: as opcoes nao oferecem "parcial" (nenhuma linha o mostra)', async () => {
@@ -160,7 +160,7 @@ describe('os sete abates da Vera, na lista', () => {
 describe('a linha do modelo titulo nao muda', () => {
   it('fixture antigo sem modelo_financeiro: Financeiro e Pagto pelas views, iguais com e sem o lote', async () => {
     const um = await montar();
-    const com = celulas(OC_TITULO).slice(9, 11).map(texto);
+    const com = celulas(OC_TITULO).slice(10, 12).map(texto);
     /* OC-LISTA-FINANC-CC-01c: quitada pela view = sem numero (a regra unica), a pilula por extenso */
     expect(com).toEqual(['Liquidado', 'Paga']);
     /* o clipe do lote vale tambem para o titulo */
@@ -168,15 +168,18 @@ describe('a linha do modelo titulo nao muda', () => {
     um.unmount();
     reset(false);
     await montar();
-    expect(celulas(OC_TITULO).slice(9, 11).map(texto)).toEqual(com);
+    expect(celulas(OC_TITULO).slice(10, 12).map(texto)).toEqual(com);
   });
 });
 
 describe('Cab · kg méd. pelos lotes', () => {
   it('multilote: (36 × 461,72 + 18 × 456,61) ÷ 54 = 460 kg de peso medio; OC sem lote fica so com a cabeca', async () => {
     await montar();
-    expect(texto(celulas(OC_MULTI)[5])).toBe('54 · 460 kg');
+    /* OC-LISTA-CAB-KG-COLUNAS-01 — "54" e "460" em celulas separadas; o "kg" so' no cabecalho */
+    expect(texto(celulas(OC_MULTI)[5])).toBe('54');
+    expect(texto(celulas(OC_MULTI)[6])).toBe('460');
     expect(texto(celulas(OC_TITULO)[5])).toBe('10');
+    expect(texto(celulas(OC_TITULO)[6])).toBe('—');
   });
 });
 
@@ -229,10 +232,10 @@ describe('OC-LISTA-FINANC-CC-01c', () => {
   });
   it('Comercializacao: o clipe colado na pilula (pilula · clipe · Rasc.), o lugar do clipe reservado', async () => {
     await montar();
-    const g = within(celulas(id8('02be1a41'))[8]).getByTestId('comercial');
+    const g = within(celulas(id8('02be1a41'))[9]).getByTestId('comercial');
     expect(g.className).toContain('grid-cols-[52px_10px_26px]');
     expect(g.children[1].getAttribute('data-testid')).toBe('clipe-operacao');
-    expect(within(celulas(id8('48972205'))[8]).getByTestId('comercial').children[1].getAttribute('data-testid')).toBe('clipe-operacao-vazio');
+    expect(within(celulas(id8('48972205'))[9]).getByTestId('comercial').children[1].getAttribute('data-testid')).toBe('clipe-operacao-vazio');
   });
   /* MEDIDO no Chromium com a Inter (8px, peso 500), 14/10/2026: a largura do texto de cada rotulo da pilula de 52px. A pilula
      comporta 49px de texto (1,5 de respiro de cada lado). Rotulo novo entra nesta tabela medido, ou o teste reprova. */
