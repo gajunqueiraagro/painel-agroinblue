@@ -206,13 +206,16 @@ describe('Negociacao — quem nao altera o fisico, COM gado movido: fisico apaga
     expect(patch).toMatchObject({ categoria: 'desmama_m', quantidade: '178', pesoMedioKg: '248,21' });
     expect(String(patch.valorInformado)).toContain('13,5');
   });
-  it('a MESMA trava sem o motivo de acesso (o gestor, com recebimento) e a de sempre: categoria aberta, lixeira e incluir como eram', () => {
+  /* OC-LOTE-FISICO-POS-SAIDA-01 — sem o motivo de acesso, quantidade e peso ABREM depois da saida (a saida acompanha no banco); o
+     incluir lote segue travado, como era. */
+  it('sem o motivo de acesso (o gestor, com recebimento): categoria, quantidade e peso abertos; lixeira e incluir como eram', () => {
     negociacao(lotesFalsos(), { fisicoBloqueado: true });
     expect(screen.queryByTestId('motivo-fisico')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Adicionar lote' })).toBeNull();
     abrirLote();
     expect(campo(/^Categoria/).hasAttribute('disabled')).toBe(false);
-    expect(campo(/^Quantidade/).hasAttribute('disabled')).toBe(true);
+    expect(campo(/^Quantidade/).hasAttribute('disabled')).toBe(false);
+    expect(campo(/^Peso méd/).hasAttribute('disabled')).toBe(false);
   });
   it('"Reabrir e editar" do lote (OC fechada): apagado, com o motivo escrito', () => {
     const reabrir = vi.fn(async () => true);

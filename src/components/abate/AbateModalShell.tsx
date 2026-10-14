@@ -52,7 +52,7 @@ import { AbaLotesAbate, temNegociacao } from '@/components/abate/AbaLotesAbate';
 import { totaisDoAbate } from '@/components/abate/calculoDoLote';
 import { buildAbateCalculation, parseNumericValue, type AbateCalculation } from '@/lib/calculos/abate';
 import { paraCalculo, linhaVazia } from '@/components/abate/calculoDoLote';
-import { AbaNegociacaoLotes } from '@/components/compra/AbaNegociacaoLotes';
+import { AbaNegociacaoLotes, RecusaNegociacaoDialog, TEXTO_SAIDA_REGISTRADA } from '@/components/compra/AbaNegociacaoLotes';
 import { AbaDocumentosOC } from '@/components/compra/AbaDocumentosOC';
 import { AbaAuditoriaOC } from '@/components/compra/AbaAuditoriaOC';
 import { AbaRecebimentoLotes } from '@/components/compra/AbaRecebimentoLotes';
@@ -213,6 +213,10 @@ export interface AbateModalShellProps {
      CompraModalShell, cujo rodape de Negociacao chama `lotesApi.salvar()`. */
   /** Devolve a VERSÃO vigente depois de gravar, ou `false` se falhou. */
   onSalvarNegociacao: () => void | Promise<unknown>;
+  /** OC-LOTE-FISICO-POS-SAIDA-01 (D4) — a recusa do Salvar da negociacao (a frase do banco), mostrada num modal centrado; quem
+   *  a guarda e' o `LancamentosTab` (dono do salvar). Nulo = nada a mostrar. */
+  recusaNegociacao?: string | null;
+  onFecharRecusaNegociacao?: () => void;
   /* As tres apis da OC, as MESMAS que a compra usa. A venda as monta; nao as edita. */
   documentosApi?: DocumentosApi;
   eventosApi?: EventosApi;
@@ -258,7 +262,7 @@ export function AbateModalShell({
   cenarioAbate = 'projetado', onCenarioAbateChange, onIniciarRealizado,
   documentosApi, eventosApi, liquidacaoApi, recebimentoApi, ocEntregaEncerrada = false,
   categoria, categoriasDisponiveis,
-  quantidadeNum, pesoKgNum, submitting, onSalvarOperacao, onSalvarNegociacao, semAlteracoes = false,
+  quantidadeNum, pesoKgNum, submitting, onSalvarOperacao, onSalvarNegociacao, recusaNegociacao = null, onFecharRecusaNegociacao, semAlteracoes = false,
   onConcluirNegociacao, onReabrirNegociacao, onFechar, erroSalvar = null, abaInicial = null, acessoOC = ACESSO_TOTAL,
 }: AbateModalShellProps) {
   /* ACESSOS-OC-03a — no ABATE a Negociacao INTEIRA fica so' leitura para quem nao tem 'negociar_abate_boitel' (ate' o 03b
@@ -724,6 +728,7 @@ export function AbateModalShell({
       operacaoPronta={!!ocOperacaoId}
       lotesApi={lotesApi}
       somenteLeitura={ocStatusComercial === 'cancelada'}
+      saidas={recebimentoApi?.movimentacoes ?? []}
       onVoltarCompra={() => setAbaAtiva('abate')}
       /* ⚠ AS TRES NULAS NO ABATE, e de proposito. Elas existem para a venda boitel,
          onde o valor do lote e' DERIVADO do planejamento e o embarque e' unico. O abate
@@ -736,7 +741,7 @@ export function AbateModalShell({
         salveIdentificacao: 'Salve a identificação do abate para adicionar os lotes da negociação.',
         voltarParaIdentificacao: 'Voltar para Abate',
         salveOperacaoPrimeiro: 'Salve a operação na aba Abate primeiro',
-        fisicoBloqueado: 'Esta venda já teve entrega: quantidade e peso não mudam. Categoria, observação, critério e valor seguem editáveis.',
+        fisicoBloqueado: TEXTO_SAIDA_REGISTRADA,   // OC-LOTE-FISICO-POS-SAIDA-01: quantidade e peso mudam, a saida acompanha
       }}
     />
   );
@@ -983,6 +988,7 @@ export function AbateModalShell({
                     categoriasDisponiveis={categoriasDisponiveis}
                     somenteLeitura={ocStatusComercial === 'fechada' || ocStatusComercial === 'cancelada' || !!motivoAbateAcesso}
                     fisicoBloqueado={temAbateAtivo}
+                    saidas={recebimentoApi?.movimentacoes ?? []}
                     onLinhaChange={onAbateLinhaChange ?? (() => {})}
                   />
                 )}
@@ -1402,6 +1408,8 @@ export function AbateModalShell({
           fazendaId={abateFazendaId} anoMes={anoMesDaData}
           onReaberto={() => { void pilares.refetch(); }} />
       )}
+
+      <RecusaNegociacaoDialog frase={recusaNegociacao} onFechar={() => onFecharRecusaNegociacao?.()} />
 
       <Dialog open={reabrirAberto} onOpenChange={setReabrirAberto}>
         <DialogContent className="max-w-sm">

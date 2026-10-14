@@ -23,7 +23,7 @@ import { Pencil, Ban, ChevronRight, AlertTriangle } from 'lucide-react';
 import { BotaoAdicionarLote } from '@/components/ui/botao-adicionar-lote';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { buildAbateCalculation, type AbateCalculation } from '@/lib/calculos/abate';
-import { LoteDialog } from '@/components/compra/AbaNegociacaoLotes';
+import { LoteDialog, type SaidaDoLote } from '@/components/compra/AbaNegociacaoLotes';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { paraCalculo, linhaVazia, totaisDoAbate, type LoteAbate } from '@/components/abate/calculoDoLote';
 import { ModalNegociarLote } from '@/components/abate/ModalNegociarLote';
@@ -121,8 +121,10 @@ function ColunaTopo({ rotulo, valor, unidade, linhaAt, subs, evidente, extra }: 
 export function AbaLotesAbate({
   lotes, linhas, cenario, cenariosExistentes, onCenarioChange,
   lotesApi, categoriasDisponiveis, somenteLeitura, fisicoBloqueado, onLinhaChange, exclusaoOC = null,
-  onReabrirParaEditar = null, motivoSomenteLeitura = null,
+  onReabrirParaEditar = null, motivoSomenteLeitura = null, saidas = [],
 }: {
+  /** OC-LOTE-FISICO-POS-SAIDA-01 — as saidas da OC; o modal do lote avisa antes de aplicar quantidade ou peso novos. */
+  saidas?: readonly SaidaDoLote[];
   lotes: LoteAbate[];
   linhas: Map<string, LinhaAbate>;
   cenario: CenarioAbate;
@@ -133,7 +135,8 @@ export function AbaLotesAbate({
   somenteLeitura?: boolean;
   /** ACESSOS-OC-03a — POR QUE a negociacao esta' so' leitura para esta pessoa (o shell liga `somenteLeitura` junto). Nulo = como antes. */
   motivoSomenteLeitura?: string | null;
-  /** Já há movimentação de abate ativa: quantidade e peso do lote deixam de mudar. */
+  /** Já há movimentação de abate ativa. Desde o OC-LOTE-FISICO-POS-SAIDA-01 quantidade e peso do lote MUDAM (a saída acompanha);
+   *  a trava segue valendo para incluir lote. */
   fisicoBloqueado?: boolean;
   /** O rascunho do pai — quem persiste é o rodapé do shell. */
   onLinhaChange: (loteId: string, proxima: LinhaAbate) => void;
@@ -435,6 +438,7 @@ export function AbaLotesAbate({
           somenteLeitura={!!somenteLeitura}
           acesso={motivoSomenteLeitura ? { motivoSomenteLeitura } : null}
           onReabrirParaEditar={onReabrirParaEditar}
+          saidas={saidas}
           /* Aplicar CONFIRMA o nascimento: o lote deixa de ser "recem-criado". */
           onAplicar={(patch) => { lotesApi.editarLote(emEdicao.idLocal, patch); setNascidoAgora(null); setEditandoId(null); }}
           onAplicarEAdicionar={(patch) => { lotesApi.editarLote(emEdicao.idLocal, patch); abrirNovo(); }}

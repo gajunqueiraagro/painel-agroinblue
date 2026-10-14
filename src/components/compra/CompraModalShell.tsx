@@ -15,7 +15,7 @@ import { Plus, Edit, Lock, ShoppingCart, X, Trash2, Calendar, Building2, Check, 
 import { toast } from 'sonner';
 import { parseNumericValue } from '@/lib/calculos/abate';
 import { STATUS_LABEL, META_VISUAL, type StatusOperacional } from '@/lib/statusOperacional';
-import { AbaNegociacaoLotes } from './AbaNegociacaoLotes';
+import { AbaNegociacaoLotes, RecusaNegociacaoDialog } from './AbaNegociacaoLotes';
 import { AbaRecebimentoLotes } from './AbaRecebimentoLotes';
 import { AbaDocumentosOC } from './AbaDocumentosOC';
 import { AbaFinanceiroOC } from './AbaFinanceiroOC';
@@ -280,6 +280,8 @@ export function CompraModalShell(api: CompraModalShellProps) {
   // FIX-01 item 6 — data de chegada = 1ª movimentação de recebimento (referência de contexto).
   const dataChegada = (api.recebimentoApi?.movimentacoes ?? []).map(m => m.data).filter(Boolean).sort()[0] ?? null;
   const [fluxoNeg, setFluxoNeg] = useState<null | 'salvando' | 'concluindo'>(null);   // fluxo "Concluir lotes e continuar"
+  /* OC-LOTE-FISICO-POS-SAIDA-01 (D4) — a recusa do Salvar da negociacao, num modal centrado (nunca toast). */
+  const [recusaNegociacao, setRecusaNegociacao] = useState<string | null>(null);
 
   // Guarda de completude (UI) — orienta o fluxo; NÃO substitui a validação oficial do backend nem
   //   duplica fórmula: verifica só se há ao menos um lote preenchido (ignora linha-fantasma).
@@ -295,7 +297,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
       return;
     }
     setFluxoNeg('salvando');
-    const novaVersao = await api.lotesApi?.salvar({ silent: true });      // 1) salva
+    const novaVersao = await api.lotesApi?.salvar({ silent: true, aoRecusar: setRecusaNegociacao });      // 1) salva
     if (novaVersao == null) { setFluxoNeg(null); return; }                //    falha → permanece
     setFluxoNeg('concluindo');
     const ok = await api.recebimentoApi?.concluirNegociacao({ versaoOverride: novaVersao, silent: true });  // 2) conclui c/ versão fresca
@@ -472,6 +474,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
               somenteLeitura={permissoes.negociacaoReadOnly}
               fisicoBloqueado={temRecebimentoAtivo || !!motivoFisicoAcesso}
               acesso={{ motivoFisico: motivoFisicoAcesso, motivoReabrir: motivoReabrirAcesso }}
+              saidas={api.recebimentoApi?.movimentacoes ?? []}
               onVoltarCompra={() => irParaAba('compra')}
             />
           ) : abaAtiva === 'recebimento' && api.recebimentoApi ? (
@@ -936,7 +939,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
                   {abaAtiva === 'negociacao' ? (
                     <Button type="button" variant="secondary"
                       disabled={!api.ocOperacaoId || !!api.lotesApi?.saving || !!api.acaoOcLoading}
-                      onClick={() => api.lotesApi?.salvar()} className="h-[22px] px-[9px] text-[10px] gap-1">
+                      onClick={() => api.lotesApi?.salvar({ aoRecusar: setRecusaNegociacao })} className="h-[22px] px-[9px] text-[10px] gap-1">
                       {api.lotesApi?.saving ? 'Salvando...' : 'Salvar rascunho'}
                     </Button>
                   ) : (abaAtiva === 'recebimento' || abaAtiva === 'documentos' || abaAtiva === 'financeiro') ? null : (
@@ -1008,7 +1011,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
             <>
               <Button type="button" variant="secondary"
                 disabled={!api.modoOC || !api.ocOperacaoId || !!api.lotesApi?.saving || fluxoNeg !== null}
-                onClick={() => api.lotesApi?.salvar()}
+                onClick={() => api.lotesApi?.salvar({ aoRecusar: setRecusaNegociacao })}
                 className="h-[22px] px-[9px] text-[10px] gap-1"
                 title={api.modoOC ? (api.ocOperacaoId ? undefined : 'Salve a operação na aba Compra primeiro') : 'em breve'}>
                 {(api.lotesApi?.saving && fluxoNeg === null) ? 'Salvando...' : 'Salvar rascunho'}
@@ -1157,6 +1160,8 @@ export function CompraModalShell(api: CompraModalShellProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <RecusaNegociacaoDialog frase={recusaNegociacao} onFechar={() => setRecusaNegociacao(null)} />
 
       {cancelarCcAberto && api.onCancelarContaCorrente && (
         <CancelarContaCorrenteDialog api={ccApi} lado="compra" onCancelar={api.onCancelarContaCorrente}

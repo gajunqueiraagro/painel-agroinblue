@@ -870,6 +870,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   /* OC-EDITAR-CADASTRAL-01 — a recusa do Salvar da OC (venda/abate/compra) mora AO LADO do botao, nunca em toast
      (UX-TOAST-01). Hoje: pendencia do cadastral com a OC fechada e a negociacao chamada com a OC fechada. */
   const [erroSalvarOC, setErroSalvarOC] = useState<string | null>(null);
+  /* OC-LOTE-FISICO-POS-SAIDA-01 (D4) — a recusa do Salvar da negociacao (venda e abate), mostrada num modal centrado pelo shell. */
+  const [recusaNegociacaoOC, setRecusaNegociacaoOC] = useState<string | null>(null);
   /* PR-OC-VENDA-REABRIR-01E — A ASSINATURA DO QUE FOI GRAVADO NA ULTIMA VEZ.
      ⚠ O botao da venda ficava aceso para sempre: nao havia estado de sujo/pristino, entao
      "Salvar alteracoes" parecia prometer que havia algo a salvar mesmo logo depois de
@@ -3211,7 +3213,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
        senão o Concluir cai no state velho justamente no caminho mais comum (abrir uma OC
        já negociada e só concluir). */
     if (ocAbateSemAlteracoes) return ocVersao ?? false;
-    const versaoNova = await lotesApi.salvar();
+    const versaoNova = await lotesApi.salvar({ aoRecusar: setRecusaNegociacaoOC });
     if (versaoNova === null) return false;
 
     /* ⚠ A VERSAO DEVOLVIDA, NUNCA A DO STATE. `oc_salvar_lotes` acabou de incrementar a
@@ -3419,7 +3421,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
       /* `silent` porque o aviso de sucesso sai daqui: numa venda boitel ainda falta gravar
          o planejamento, e dois toasts seguidos para um clique so' e' ruido. */
-      const novaVersao = await lotesApi.salvar({ silent: true, lotesSobrescritos: sobrescritos });
+      const novaVersao = await lotesApi.salvar({ silent: true, lotesSobrescritos: sobrescritos, aoRecusar: setRecusaNegociacaoOC });
       if (novaVersao == null) return false;   // o hook ja avisou o que impediu
       let versaoFinal = novaVersao;
       if (boitelDaVenda) {
@@ -6259,6 +6261,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           onSalvarOperacao={() => (caminhoDoSalvarOC(ocStatusComercial) === 'editar_dados' ? salvarDadosOperacaoOC() : salvarOperacaoAbateOC())}
           erroSalvar={erroSalvarOC}
           onSalvarNegociacao={() => salvarNegociacaoAbateOC()}
+          recusaNegociacao={recusaNegociacaoOC}
+          onFecharRecusaNegociacao={() => setRecusaNegociacaoOC(null)}
           documentosApi={documentosApi}
           eventosApi={eventosApi}
           liquidacaoApi={liquidacaoApi}
@@ -6321,6 +6325,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           /* OC-EDITAR-CADASTRAL-01 — mesmo roteamento do abate e da compra. */
           onSalvarOperacao={() => (caminhoDoSalvarOC(ocStatusComercial) === 'editar_dados' ? salvarDadosOperacaoOC() : salvarOperacaoVendaOC())}
           onSalvarNegociacao={() => salvarNegociacaoVendaOC()}
+          recusaNegociacao={recusaNegociacaoOC}
+          onFecharRecusaNegociacao={() => setRecusaNegociacaoOC(null)}
           onCancelarContaCorrente={cancelarVendaContaCorrenteOC}
           /* OC-BOITEL-REVALORAR-SALVAR-01 — lote divergente do acerto E' o que salvar: o botao acende sem nada editado. */
           semAlteracoes={ocStatusComercial === 'fechada' ? !ocDadosSujos : (ocVendaSemAlteracoes && decisaoRealizado !== 'gravar')}

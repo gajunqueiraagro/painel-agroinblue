@@ -42,7 +42,7 @@ export interface CompraLotesApi {
      precisa gravar um valor derivado passa o array pronto.
      ⚠ ADITIVO: sem o parametro, nada muda. A compra nao o passa em nenhum dos tres
      call sites (CompraModalShell 253, 789 e 852). */
-  salvar: (opts?: { silent?: boolean; lotesSobrescritos?: LoteForm[] }) => Promise<number | null>;   // retorna a nova versão oficial | null em falha
+  salvar: (opts?: { silent?: boolean; lotesSobrescritos?: LoteForm[]; aoRecusar?: (frase: string) => void }) => Promise<number | null>;   // retorna a nova versão oficial | null em falha
   /* ⚠ RELER O BANCO — B-12. Quem escreve nos lotes POR FORA deste hook (hoje
      `oc_revalorar_lote`, no Aplicar do realizado) deixa o estado local velho, e o proximo
      `salvar` despeja o velho por cima do que a RPC acabou de gravar. Era metade da
@@ -128,7 +128,9 @@ export function useCompraLotes({ operacaoId, clienteId, versao, onVersaoChange, 
 
   // Retorna a NOVA versão oficial da operação em sucesso, null em falha (permite encadear
   //   salvar → concluir sem versão stale). `silent` controla APENAS o toast — não muda regra/persistência.
-  const salvar = useCallback(async (opts?: { silent?: boolean; lotesSobrescritos?: LoteForm[] }): Promise<number | null> => {
+  /* OC-LOTE-FISICO-POS-SAIDA-01 (D4) — `aoRecusar`: com ele NAO HA TOAST; toda recusa (a do banco, a de "reabra para editar", as da
+     tela) vai ao callback, e quem chama a mostra num modal centrado. Sem ele, identico a antes. */
+  const salvar = useCallback(async (opts?: { silent?: boolean; lotesSobrescritos?: LoteForm[]; aoRecusar?: (frase: string) => void }): Promise<number | null> => {
     /* A FONTE DA VERDADE DESTA GRAVACAO. Sem sobrescrita, e' o estado local — o
        comportamento de sempre, e o unico que a compra exercita. */
     const fonte = opts?.lotesSobrescritos ?? lotes;
@@ -140,11 +142,12 @@ export function useCompraLotes({ operacaoId, clienteId, versao, onVersaoChange, 
        continua sendo a soberana — esta aqui existe para o operador saber QUAL lote
        corrigir sem esperar a ida ao servidor. Mensagem no mesmo formato da RPC. */
     const semPeso = fonte.find(l => (parseNumericValue(l.pesoMedioKg) || 0) <= 0);
+    const recusarNaTela = (frase: string) => { if (opts?.aoRecusar) opts.aoRecusar(frase); else toast.error(frase); };
     if (semPeso) {
-      toast.error(`Informe o peso médio do lote ${semPeso.categoria || 'sem categoria'} (ordem ${semPeso.ordem}). Lote sem peso não pode ser salvo.`);
+      recusarNaTela(`Informe o peso médio do lote ${semPeso.categoria || 'sem categoria'} (ordem ${semPeso.ordem}). Lote sem peso não pode ser salvo.`);
       return null;
     }
-    if (!operacaoId || !clienteId) { toast.error('Operação não iniciada (salve a operação na aba Compra).'); return null; }
+    if (!operacaoId || !clienteId) { recusarNaTela('Operação não iniciada (salve a operação na aba Compra).'); return null; }
     setSaving(true);
     try {
       const payload = fonte.map(l => {
@@ -183,7 +186,9 @@ export function useCompraLotes({ operacaoId, clienteId, versao, onVersaoChange, 
          Confirmar FECHA, e voltou a bater na mesma recusa sem achar a saida.
          ⚠ SO' NESTA RECUSA: as outras (peso faltando, conflito de versao, quantidade)
          nao se resolvem reabrindo, e oferecer o botao nelas ensinaria a clicar por reflexo. */
-      if (onReabrir && /reabra para editar/i.test(msg)) {
+      if (opts?.aoRecusar) {
+        opts.aoRecusar(msg);
+      } else if (onReabrir && /reabra para editar/i.test(msg)) {
         toast.error(msg, { action: { label: 'Reabrir', onClick: () => { void onReabrir(); } } });
       } else {
         toast.error(msg);

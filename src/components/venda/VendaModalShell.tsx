@@ -45,7 +45,7 @@ import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
 import { Calendar, Building2, X, ArrowRight, Check, RotateCcw, Lock } from 'lucide-react';
 import type { Categoria } from '@/types/cattle';
 import type { CompraLotesApi } from '@/hooks/useCompraLotes';
-import { AbaNegociacaoLotes, type ExclusaoLoteOC } from '@/components/compra/AbaNegociacaoLotes';
+import { AbaNegociacaoLotes, RecusaNegociacaoDialog, TEXTO_SAIDA_REGISTRADA, type ExclusaoLoteOC } from '@/components/compra/AbaNegociacaoLotes';
 import { AbaDocumentosOC } from '@/components/compra/AbaDocumentosOC';
 import { AbaAuditoriaOC } from '@/components/compra/AbaAuditoriaOC';
 import { AbaRecebimentoLotes } from '@/components/compra/AbaRecebimentoLotes';
@@ -194,6 +194,10 @@ export interface VendaModalShellProps {
      duas acoes, porque e' sempre "salvar o que esta' na tela" — e e' o mesmo desenho do
      CompraModalShell, cujo rodape de Negociacao chama `lotesApi.salvar()`. */
   onSalvarNegociacao: () => void | Promise<unknown>;
+  /** OC-LOTE-FISICO-POS-SAIDA-01 (D4) — a recusa do Salvar da negociacao (a frase do banco), mostrada num modal centrado; quem
+   *  a guarda e' o `LancamentosTab` (dono do salvar). Nulo = nada a mostrar. */
+  recusaNegociacao?: string | null;
+  onFecharRecusaNegociacao?: () => void;
   /** OC-VENDA-ENTREGAS-01c — cancelar a venda em CONTA CORRENTE; devolve o texto da recusa (ou null) para o dialogo. */
   onCancelarContaCorrente?: (motivo: string) => Promise<string | null>;
   /* As tres apis da OC, as MESMAS que a compra usa. A venda as monta; nao as edita. */
@@ -235,7 +239,7 @@ export function VendaModalShell({
   boitelRealSalvo = null, pendenciaRealizado = null, erroRealizado = null,
   documentosApi, eventosApi, liquidacaoApi, recebimentoApi, ocEntregaEncerrada = false,
   categoria, categoriasDisponiveis,
-  quantidadeNum, pesoKgNum, submitting, onSalvarOperacao, onSalvarNegociacao, onCancelarContaCorrente, semAlteracoes = false,
+  quantidadeNum, pesoKgNum, submitting, onSalvarOperacao, onSalvarNegociacao, recusaNegociacao = null, onFecharRecusaNegociacao, onCancelarContaCorrente, semAlteracoes = false,
   onConcluirNegociacao, onReabrirNegociacao, onFechar, erroSalvar = null, abaInicial = null, acessoOC = ACESSO_TOTAL,
 }: VendaModalShellProps) {
   /* A lista de fazendas no formato do combobox — FAZ-ATIVIDADE-01c. Deriva de `fazendasOC`, que já
@@ -553,6 +557,7 @@ export function VendaModalShell({
       operacaoPronta={!!ocOperacaoId}
       lotesApi={lotesApi}
       somenteLeitura={operacionalTravado || !!motivoBoitelAcesso}
+      saidas={recebimentoApi?.movimentacoes ?? []}
       onVoltarCompra={() => setAbaAtiva('venda')}
       /* ⚠ SO NA VENDA BOITEL. Numa venda comum e numa compra as duas props sao nulas e a
          grade e' exatamente a de antes: valor digitavel, criterio livre, quantos lotes
@@ -576,7 +581,7 @@ export function VendaModalShell({
         salveIdentificacao: 'Salve a identificação da venda para adicionar os lotes da negociação.',
         voltarParaIdentificacao: 'Voltar para Venda',
         salveOperacaoPrimeiro: 'Salve a operação na aba Venda primeiro',
-        fisicoBloqueado: 'Esta venda já teve entrega: quantidade e peso não mudam. Categoria, observação, critério e valor seguem editáveis.',
+        fisicoBloqueado: TEXTO_SAIDA_REGISTRADA,   // OC-LOTE-FISICO-POS-SAIDA-01: quantidade e peso mudam, a saida acompanha
       }}
     />
   );
@@ -1220,6 +1225,7 @@ export function VendaModalShell({
       {cancelarCcAberto && onCancelarContaCorrente && (
         <CancelarContaCorrenteDialog api={ccApi} onCancelar={onCancelarContaCorrente} onFechar={() => setCancelarCcAberto(false)} />
       )}
+      <RecusaNegociacaoDialog frase={recusaNegociacao} onFechar={() => onFecharRecusaNegociacao?.()} />
       <Dialog open={reabrirAberto} onOpenChange={setReabrirAberto}>
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle className="text-[13px]">Reabrir negociação</DialogTitle></DialogHeader>

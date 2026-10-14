@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 14/10/2026 (OC-LISTA-LAYOUT-01, +5: `src/components/operacao-comercial/central/centralListaLayout.test.tsx` 8 (novo),
+  Baseline em 14/10/2026 (OC-LOTE-FISICO-POS-SAIDA-01, +16: `src/components/compra/loteFisicoPosSaida.test.tsx` 12 (novo),
+  `src/hooks/useCompraLotes.recusa.test.ts` 4 (novo) — 5105 depois dele; antes o OC-LISTA-LAYOUT-01, +5: `src/components/operacao-comercial/central/centralListaLayout.test.tsx` 8 (novo),
   `src/v2/lib/acessoOperacao.test.tsx` −3 (sairam os 4 dos botoes de criar da lista, com eles; entrou 1) — 5089 depois dele; antes o
   OC-CC-SINAL-FAZENDA-01, +7 em `src/lib/oc/contaCorrente.test.ts` (12 -> 19) — 5084 depois dele; antes o
   FIX OC-CC-ABATE-01, +3 em `src/components/venda/contaCorrenteAbate.test.tsx` (11 -> 14) — 5077 depois dele; antes o
@@ -307,7 +308,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5089
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5105
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -543,9 +544,11 @@ CONSULTAM: a lateral (`V2Sidebar`, por `gruposVisiveis`), o drawer (`V2ContextDr
     sem a prop vale `ACESSO_TOTAL` (o DOM do gestor e' identico ao de quem nao a recebe — preso por teste). A lista
     (`CentralOperacoesComerciais`) le' o mesmo hook. Nenhum `if` de perfil fora do dono (teste por grep).
   · `fisicoBloqueado` (`AbaNegociacaoLotes`) E' A TRAVA "DEPOIS DO MOVIMENTO", e foi REUTILIZADA: a compra ja' a ligava com
-    recebimento ativo (quantidade e peso travados, incluir lote escondido, preco aberto); a venda passou a liga'-la SO' pelo acesso.
+    recebimento ativo (quantidade e peso travados [REVOGADO no OC-LOTE-FISICO-POS-SAIDA-01, 14/10/2026: quantidade e peso ABREM e a
+    saida acompanha; a trava segue para incluir lote], incluir lote escondido, preco aberto); a venda passou a liga'-la SO' pelo acesso.
     Vinda do acesso (`acesso.motivoFisico`), ela alcanca tambem CATEGORIA, LIXEIRA e INCLUIR LOTE, que ficam APAGADOS com o motivo
-    escrito em vez de sumir. Para o gestor a venda segue como era (o banco trava quantidade e peso por lote com saida ativa).
+    escrito em vez de sumir. Para o gestor a venda segue como era (o banco trava quantidade e peso por lote com saida ativa
+    [REVOGADO no OC-LOTE-FISICO-POS-SAIDA-01: o banco PROPAGA para a saida registrada]).
   · ITEM QUE NAO VALE FICA APAGADO COM O MOTIVO (lista unica no dono: `MOTIVO_GADO`, `MOTIVO_APOS_MOVIMENTO`,
     `MOTIVO_REABRIR_APOS_MOVIMENTO`, `MOTIVO_ABATE_BOITEL`, `MOTIVO_SEM_CAPACIDADE`). Botao de rodape apagado = `GestoDeOperacao`
     (o do 02c). ⚠ EXCECAO DECLARADA: a aba Entrega/Recebimento em leitura NAO desenha os gestos apagados — ela usa o modo so'
@@ -558,7 +561,8 @@ CONSULTAM: a lateral (`V2Sidebar`, por `gruposVisiveis`), o drawer (`V2ContextDr
     gatilho em `zoo_operacoes_comerciais`); `oc_salvar_lotes` SEM movimento so' escreve lotes; COM movimento (caminho B) trocar a
     CATEGORIA de um lote reescreve `lancamentos.categoria` da movimentacao registrada — e' rebanho, e por isso a categoria fecha
     para o financeiro depois do movimento. `oc_reabrir` NAO tem guarda de movimento: quem reabre depois do recebimento muda preco e
-    categoria, inclui lote e remove lote sem saida ativa; quantidade e peso do lote com saida ativa o banco recusa.
+    categoria, inclui lote e remove lote sem saida ativa; quantidade e peso do lote com saida ativa o banco recusa [REVOGADO no
+    OC-LOTE-FISICO-POS-SAIDA-01: com UMA saida REGISTRADA o banco os propaga para ela; adotada, 2+ saidas e mes fechado recusam].
     `oc_sincronizar_entregas` ("Atualizar entregas") grava titulos financeiros e partes, nunca movimentacao.
   ⚠ PARA O 03b: abate e boitel campo a campo — carcaca e seletor do `ModalNegociarLote`; os ~30 campos de `BoitelBlocosModais`
     LIDOS UM A UM (dias, mortes e data do abate = fisico); o R$/@ derivado do total usa as arrobas gravadas, e sem arrobas o campo
@@ -3873,6 +3877,54 @@ docs/historico/frentes-ate-2026-09-29.md.)
   quem mexer num confere o outro. O selo do rodape (`SeloRegraDaLinha`) diz a regra da linha.
 
 ## REGRAS VIGENTES — OPERACAO COMERCIAL E FINANCEIRO
+- ⚠ QUANTIDADE E PESO DO LOTE MUDAM DEPOIS DA SAIDA, E A SAIDA REGISTRADA ACOMPANHA (OC-LOTE-FISICO-POS-SAIDA-01, Gabriel 14/10/2026,
+  banco + tela; SUBSTITUI "quantidade e peso nao mudam depois do recebimento" do OC-VENDA-ENTREGAS-01a D1 e do ACESSOS-OC-03a).
+  Nasce da Vera (abate 2d39d7e9, lote Vacas 18 cab · 481,78 kg): "lancei um peso errado de saida… nao pode ser burocratico".
+  Migration `supabase/migrations/20261027197600_oc_lote_fisico_pos_saida_01.sql` (md5 do arquivo 131cd0a7004f74029791ce7c23414e7f) —
+  APLICADA no proto em 14/10/2026, com o SIM do Gabriel: ledger 20261014123401 (⚠ registrada com o timestamp do dia; ledger =
+  arquivo por md5 131cd0a7…). Patch guardado por md5 de `oc_salvar_lotes` 3232b0a4… -> 6ae8bdb902f32ed0a23f6e8ecf4f4c78
+  (3 ancoras, cada uma 1x; ACL, SECURITY DEFINER e search_path conferidos pelo proprio arquivo). So' o caminho B, no trecho que ja'
+  propagava a CATEGORIA:
+  · lote com saida ativa cuja quantidade OU peso medio mudou: nenhuma saida REGISTRADA (so' adotada) -> P0001 "Lote X (ordem N) tem
+    saída adotada (…): quantidade e peso dessa saída se corrigem em Lançar movimentação, não pela operação."; 2 ou mais ativas ->
+    P0001 "… tem N saídas ativas (…): estorne pela aba Entrega e registre de novo para alterar quantidade ou peso."; exatamente 1
+    registrada -> propaga: `quantidade`, `peso_medio_kg`, `peso_vivo_total` (`_oc_conciliar_peso(qtd, peso, NULL)`) e, em VENDA e
+    COMPRA, `valor_total` = ROUND(R$/cab do lote ja' gravado × qtd, 2) (a regra de `oc_registrar_movimentacao`); no ABATE o
+    `valor_total` NAO e' tocado (e' do acerto, `_oc_sync_abate_lancamento`). Evento 'ajustar_fisico_apos_saida' {lote_id, ordem,
+    saida_id, qtd_antes, qtd_depois, peso_antes, peso_depois}. A recusa antiga saiu.
+  · ⚠ A GUARDA DE MES FECHADO DE `lancamentos` NAO COBRE PESO (`guard_lancamento_mes_fechado_p1` so' olha campos estruturais:
+    data, tipo, QUANTIDADE, categoria, fazenda, cancelado, status). Por isso a propagacao le' o mes da DATA DA SAIDA pela MESMA
+    interna (`_fn_status_pilares_fechamento(...) #>> '{p1_mapa_pastos,status}' = 'oficial'`) e recusa com a MESMA frase do guard
+    ("Mês AAAA-MM está fechado no Mapa de Pastos (P1 oficial). Reabra o período para alterar campos estruturais.") — quantidade e
+    peso pela mesma porta (decisao (a) do Gabriel). Nenhuma segunda regra de "mes fechado".
+  · O `oc_sincronizar_entregas` do fim do corpo (conta corrente) roda DEPOIS do laco: a entrega da venda em kg acompanha o peso, e a
+    versao devolvida segue sendo a gravada.
+  · TELA: no `LoteDialog` (compra, venda e abate) Quantidade e Peso so' travam por `somenteLeitura` e pelo ACESSO (`motivoFisico`);
+    o cabecalho com saida diz `TEXTO_SAIDA_REGISTRADA` ("Saída registrada: mudar quantidade ou peso atualiza a saída junto.", tambem
+    nos `rotulos.fisicoBloqueado` da venda e do abate). Aplicar com quantidade OU peso diferentes num lote com saida ATIVA abre o
+    aviso CENTRADO (`AvisoSaidaAtualizada`, 520 × 240 fixo): Antes · Depois (quantidade, peso medio, peso total = qtd × peso, so'
+    exibicao), "Saída de DD/MM/AA · N cab · X kg" (lida de `RecebimentoApi.movimentacoes`, prop `saidas` dos tres shells) e
+    `FRASE_AVISO_SAIDA`; Voltar nao aplica, Aplicar so' aplica o patch local (quem grava e' o Salvar da negociacao).
+    ⚠ DESVIO DECLARADO: o aviso liga pela SAIDA ATIVA DO LOTE, nao por `bloqueadoPorRecebimento` — na venda o `fisicoBloqueado`
+      so' liga pelo acesso, e o aviso tem de valer nos tres lados.
+  · A RECUSA DO SALVAR NUNCA E' TOAST NESSE CAMINHO: `useCompraLotes.salvar({ aoRecusar })` entrega a frase ao callback (todas: as
+    do banco, "reabra para editar" e as da tela); sem o callback, identico a antes. Compra: os tres Salvar do `CompraModalShell`.
+    Venda e abate: quem salva e' o `LancamentosTab` (`salvarNegociacaoAbateOC` / `salvarNegociacaoVendaOC`, incluido no escopo pelo
+    Gabriel), que guarda a frase e a entrega aos shells (`recusaNegociacao`). Os tres mostram `RecusaNegociacaoDialog` ("Não foi
+    possível salvar a negociação" + a frase + Fechar).
+  · INCLUIR / REMOVER LOTE DEPOIS DA SAIDA NAO MUDOU.
+  · MEDIDO (14/10): 0 lotes com 2+ saidas ativas; 113 saidas vivas registradas e 165 adotadas (as adotadas caem na recusa).
+  Testes: `supabase/tests/oc_lote_fisico_pos_saida_01_test.sql` (F1–F7, sintetico no Teste, termina em RAISE OK; ENSAIADO com a
+  migration na mesma transacao revertida, os dois conferidos por md5 contra o disco); 4 mutacoes de banco mortas (sem contar saidas
+  -> F3; propagar adotada, pela recusa e pelo filtro -> F4; sem checar o mes -> F7 do peso) com o controle OK.
+  `loteFisicoPosSaida.test.tsx` (12) e `useCompraLotes.recusa.test.ts` (4); 3 mutacoes de tela mortas (Aplicar sem o aviso; o
+  Aplicar do aviso fazendo outra coisa; a recusa de volta ao toast). `acessoCapacidadesOC.test.tsx` atualizado ao contrato novo
+  (quantidade e peso abertos sem o motivo de acesso).
+  NO VIVO depois de aplicar (cada arquivo conferido por md5 = disco): este teste OK (F1–F7), `seg_tenant_varredura_01c` OK
+  (T0–T4), `oc_cc_padrao_novas_01b` OK (R1–R8), `oc_cc_abate_01_banco` OK (B1–B8, 157 OCs reais); `oc_salvar_lotes` no md5 de
+  destino com ACL, SECURITY DEFINER e search_path iguais, `anon` sem EXECUTE.
+  ⚠ NAO PROVADO: nada no NAVEGADOR (o modal centrado, o Salvar real na 2d39d7e9, o valor
+    do abate e o DRE de set/26 iguais) · compra real com R$/cab (so' venda em kg e abate no teste).
 - ⚠ A CENTRAL DE OCs LE^ NA ORDEM DO PROCESSO, COM A BARRA A 24px E O FILTRO DE FAZENDA (OC-LISTA-LAYOUT-01, Gabriel 14/10/2026, so'
   tela, `src/components/operacao-comercial/central/CentralOperacoesComerciais.tsx`; mock v1 aprovado).
   · COLUNAS (colgroup, px): OC 64 · Data 56 · Tipo 68 · Contraparte (o resto) · Faz 34 (so' em Global) · Cab · kg 84 · Valor 66 ·

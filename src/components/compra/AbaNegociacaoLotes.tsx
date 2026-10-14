@@ -6,6 +6,7 @@
 import { useState } from 'react';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogContent, AlertDialogTitle, AlertDialogDescription } from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -17,6 +18,7 @@ import type { CompraLotesApi, CriterioValor, LoteForm } from '@/hooks/useCompraL
 import type { ExcluirLoteApi } from '@/hooks/useExcluirLoteOC';
 import { DialogoExcluirLoteOC } from '@/components/compra/DialogoExcluirLoteOC';
 import { formatMoeda } from '@/lib/calculos/formatters';
+import { dataCurta } from '@/lib/oc/contaCorrente';
 
 // Aba Negociação.
 //   • Modo OC (lotesApi): grade EDITÁVEL de múltiplos lotes — fonte única = camada OC
@@ -100,6 +102,8 @@ interface Props {
   onReabrirParaEditar?: ((motivo: string) => Promise<boolean>) | null;
   /* ACESSOS-OC-03a — os MOTIVOS de acesso, ja' resolvidos pelo shell (dono: `acessoOperacao.ts`). Sem a prop, tudo como antes. */
   acesso?: AcessoNaNegociacao | null;
+  /** OC-LOTE-FISICO-POS-SAIDA-01 — as saidas da OC (`RecebimentoApi.movimentacoes`); o modal do lote avisa antes de aplicar. */
+  saidas?: readonly SaidaDoLote[];
   rotulos?: {
     salveIdentificacao?: string;
     voltarParaIdentificacao?: string;
@@ -121,6 +125,71 @@ const GRID_LEG = 'grid grid-cols-[1.3fr_0.7fr_0.9fr_1fr_1.1fr_1fr_1fr] gap-2';
 const brl = (n: number) => (n > 0 ? n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ —');
 // Regra (a) do topo: peso SEMPRE com duas casas.
 const fmtKg = (n: number) => (n > 0 ? `${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg` : '—');
+
+/** OC-LOTE-FISICO-POS-SAIDA-01 — uma saida do lote, como o shell ja' a tem (`RecebimentoApi.movimentacoes`). So' leitura: o modal
+ *  de aviso a mostra; quem decide se a saida acompanha e' o banco (`oc_salvar_lotes`). */
+export interface SaidaDoLote {
+  loteId: string; data: string; quantidade: number; pesoMedio: number | null; cancelado: boolean;
+}
+/** O texto do cabecalho do lote com saida registrada (os tres lados). */
+export const TEXTO_SAIDA_REGISTRADA = 'Saída registrada: mudar quantidade ou peso atualiza a saída junto.';
+/** A frase fixa do aviso antes de aplicar. */
+export const FRASE_AVISO_SAIDA = 'A alteração entra ao salvar a negociação. Se o mês da saída estiver fechado, reabra-o antes.';
+
+/* OC-LOTE-FISICO-POS-SAIDA-01 (D3) — o AVISO ANTES DE APLICAR: centrado, tamanho fixo, sem rolagem. So' mostra; nao grava (o
+   Aplicar dele aplica o patch local, como o Aplicar do lote). Peso total = qtd × peso, so' exibicao. */
+function AvisoSaidaAtualizada({ antes, depois, saidas, onVoltar, onAplicar }: {
+  antes: { qtd: number; peso: number }; depois: { qtd: number; peso: number };
+  saidas: readonly SaidaDoLote[]; onVoltar: () => void; onAplicar: () => void;
+}) {
+  const linhaSaida = saidas.map(s => `Saída de ${dataCurta(s.data)} · ${s.quantidade} cab · ${fmtKg(s.pesoMedio ?? 0)}`).join(' · ');
+  const L = 'h-[18px] border-b border-border/60 px-2 text-[10px]';
+  return (
+    <AlertDialog open onOpenChange={(o) => { if (!o) onVoltar(); }}>
+      <AlertDialogContent className="h-[240px] w-[520px] max-w-[520px] gap-2 overflow-hidden p-4" data-testid="aviso-saida-atualizada">
+        <AlertDialogTitle className="text-[13px]">A saída registrada vai ser atualizada</AlertDialogTitle>
+        <AlertDialogDescription asChild>
+          <div className="space-y-2 text-[11px] text-foreground">
+            <table className="w-full table-fixed border-separate border-spacing-0 tabular-nums" data-testid="aviso-antes-depois">
+              <colgroup><col /><col style={{ width: 130 }} /><col style={{ width: 130 }} /></colgroup>
+              <thead><tr className="bg-primary text-primary-foreground">
+                <th className="h-[18px] px-2 text-left text-[9.5px] font-medium" />
+                <th className="h-[18px] px-2 text-right text-[9.5px] font-medium">Antes</th>
+                <th className="h-[18px] px-2 text-right text-[9.5px] font-medium">Depois</th>
+              </tr></thead>
+              <tbody>
+                <tr><td className={L}>Quantidade</td><td className={`${L} text-right`}>{antes.qtd} cab</td><td className={`${L} text-right font-semibold`}>{depois.qtd} cab</td></tr>
+                <tr><td className={L}>Peso médio</td><td className={`${L} text-right`}>{fmtKg(antes.peso)}</td><td className={`${L} text-right font-semibold`}>{fmtKg(depois.peso)}</td></tr>
+                <tr><td className={L}>Peso total</td><td className={`${L} text-right`}>{fmtKg(antes.qtd * antes.peso)}</td><td className={`${L} text-right font-semibold`}>{fmtKg(depois.qtd * depois.peso)}</td></tr>
+              </tbody>
+            </table>
+            <p className="truncate text-[10px] text-muted-foreground" title={linhaSaida} data-testid="aviso-linha-saida">{linhaSaida}</p>
+            <p className="text-[10px] leading-tight">{FRASE_AVISO_SAIDA}</p>
+          </div>
+        </AlertDialogDescription>
+        <div className="mt-auto flex justify-end gap-1.5">
+          <Button variant="outline" size="sm" className="h-[22px] px-[9px] text-[10px] font-medium" onClick={onVoltar}>Voltar</Button>
+          <Button size="sm" className="h-[22px] px-[9px] text-[10px] font-medium" onClick={onAplicar} data-testid="aviso-aplicar">Aplicar</Button>
+        </div>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
+/** OC-LOTE-FISICO-POS-SAIDA-01 (D4) — a recusa do Salvar da negociacao, centrada, com a frase do banco. Usada pelos tres shells. */
+export function RecusaNegociacaoDialog({ frase, onFechar }: { frase: string | null; onFechar: () => void }) {
+  return (
+    <AlertDialog open={frase !== null} onOpenChange={(o) => { if (!o) onFechar(); }}>
+      <AlertDialogContent className="w-[480px] max-w-[480px] gap-3 p-4" data-testid="recusa-negociacao">
+        <AlertDialogTitle className="text-[13px]">Não foi possível salvar a negociação</AlertDialogTitle>
+        <AlertDialogDescription className="text-[11px] leading-snug text-foreground" data-testid="recusa-negociacao-frase">{frase}</AlertDialogDescription>
+        <div className="flex justify-end">
+          <Button size="sm" className="h-[22px] px-[9px] text-[10px] font-medium" onClick={onFechar}>Fechar</Button>
+        </div>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
 
 function loteTotal(criterio: CriterioValor, quantidade: string, pesoMedioKg: string, valorInformado: string): number {
   const q = parseNumericValue(quantidade) || 0;
@@ -186,7 +255,7 @@ export interface AcessoNaNegociacao {
 export function AbaNegociacaoLotes({
   categoria, categoriasDisponiveis, quantidadeNum, pesoKgNum, darkSelectClass,
   modoOC, operacaoPronta, lotesApi, somenteLeitura, fisicoBloqueado, onVoltarCompra, rotulos, valorProjetado = null, loteUnico = null,
-  linhaMagra = false, exclusaoOC = null, onReabrirParaEditar = null, acesso = null,
+  linhaMagra = false, exclusaoOC = null, onReabrirParaEditar = null, acesso = null, saidas = [],
 }: Props) {
   /* ── MODO OC — delegado a um componente PROPRIO (PR-OC-UX-LOTE-C2-01) ──────
      O modal de lote precisa de estado (qual lote esta aberto), e hook nao pode
@@ -209,6 +278,7 @@ export function AbaNegociacaoLotes({
         exclusaoOC={exclusaoOC}
         onReabrirParaEditar={onReabrirParaEditar}
         acesso={acesso}
+        saidas={saidas}
       />
     );
   }
@@ -235,7 +305,7 @@ export function AbaNegociacaoLotes({
    seria mentir para o operador. */
 function NegociacaoOC({
   lotesApi, categoriasDisponiveis, darkSelectClass, operacaoPronta, somenteLeitura, fisicoBloqueado, onVoltarCompra, rotulos,
-  linhaMagra, loteUnico, valorProjetado, exclusaoOC, onReabrirParaEditar, acesso,
+  linhaMagra, loteUnico, valorProjetado, exclusaoOC, onReabrirParaEditar, acesso, saidas,
 }: {
   lotesApi: NonNullable<Props['lotesApi']>;
   categoriasDisponiveis: Props['categoriasDisponiveis'];
@@ -251,6 +321,7 @@ function NegociacaoOC({
   exclusaoOC: Props['exclusaoOC'];
   onReabrirParaEditar: Props['onReabrirParaEditar'];
   acesso: Props['acesso'];
+  saidas: readonly SaidaDoLote[];
 }) {
   /* ⚠ OC-VENDA-ENTREGAS-01a — ESTA FUNCAO SAIU DE DENTRO DE `AbaNegociacaoLotes` e os cinco valores que ela lia pelo
      closure (`linhaMagra`, `loteUnico`, `valorProjetado`, `exclusaoOC`, `onReabrirParaEditar`) chegam agora so' por prop.
@@ -522,6 +593,7 @@ function NegociacaoOC({
           somenteLeitura={somenteLeitura}
           onReabrirParaEditar={onReabrirParaEditar}
           acesso={acesso}
+          saidas={saidas}
           rotuloCategoria={rotuloCategoria}
           /* Aplicar CONFIRMA o nascimento: o lote deixa de ser "recem-criado" e um
              cancelamento posterior nao o alcanca mais. */
@@ -572,9 +644,11 @@ export function LoteDialog({
   rotulos,
   lote, categoriasDisponiveis, darkSelectClass, fisicoRO, somenteLeitura, rotuloCategoria,
   onAplicar, onAplicarEAdicionar, onFechar, valorProjetado = null, semValor = false,
-  comObservacao = false, onReabrirParaEditar = null, acesso = null,
+  comObservacao = false, onReabrirParaEditar = null, acesso = null, saidas = [],
 }: {
   rotulos?: AbaNegociacaoLotesRotulos;
+  /** OC-LOTE-FISICO-POS-SAIDA-01 — as saidas do lote (o shell as tem); as ATIVAS ligam o aviso antes de aplicar. */
+  saidas?: readonly SaidaDoLote[];
   lote: NonNullable<Props['lotesApi']>['lotes'][number];
   categoriasDisponiveis: Props['categoriasDisponiveis'];
   darkSelectClass?: string;
@@ -660,8 +734,21 @@ export function LoteDialog({
   /* ACESSOS-OC-03a — vindo do ACESSO, a trava do fisico leva tambem a categoria e o "adicionar outro", e o texto e' o motivo
      do dono (nao "estorne o recebimento", que a pessoa nao pode fazer). */
   const motivoFisico = !somenteLeitura ? (acesso?.motivoFisico ?? null) : null;
-  const TITLE_POS_RECEBIMENTO = motivoFisico ?? 'não muda depois do recebimento; estorne o recebimento para alterar';
-  const titleFisico = motivoBloqueio ?? (bloqueadoPorRecebimento ? TITLE_POS_RECEBIMENTO : undefined);
+  /* OC-LOTE-FISICO-POS-SAIDA-01 (D2) — quantidade e peso deixam de travar pela saida: mudar os dois ATUALIZA A SAIDA junto (o
+     banco propaga, como a categoria). Seguem travados por `somenteLeitura` e pelo ACESSO (`motivoFisico`). */
+  const fisicoTravado = somenteLeitura || !!motivoFisico;
+  const titleFisico = motivoBloqueio ?? motivoFisico ?? undefined;
+  /* (D3) o aviso antes de aplicar: o lote tem saida ATIVA e quantidade ou peso mudaram. ⚠ Pela SAIDA, nao por
+     `bloqueadoPorRecebimento`: na venda a trava so' liga pelo acesso, e o aviso tem de valer nos tres lados. */
+  const saidasAtivas = (lote.id ? saidas.filter(s => s.loteId === lote.id && s.cancelado !== true) : []);
+  const qtdAntes = parseNumericValue(lote.quantidade) || 0;
+  const pesoAntes = parseNumericValue(lote.pesoMedioKg) || 0;
+  const mudouFisico = saidasAtivas.length > 0 && (qtdNum !== qtdAntes || pm !== pesoAntes);
+  const [avisando, setAvisando] = useState<'aplicar' | 'adicionar' | null>(null);
+  const pedirAplicar = (modo: 'aplicar' | 'adicionar') => {
+    if (mudouFisico) { setAvisando(modo); return; }
+    if (modo === 'aplicar') onAplicar(patch); else onAplicarEAdicionar(patch);
+  };
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onFechar(); }}>
@@ -676,8 +763,8 @@ export function LoteDialog({
               ? (acesso?.motivoSomenteLeitura ?? (onReabrirParaEditar
                   ? 'Operação fechada. Editar reabre a negociação.'
                   : 'Operação aberta em leitura: nada aqui é editável.'))
-              : bloqueadoPorRecebimento
-                ? (motivoFisico ?? rotulos?.fisicoBloqueado ?? 'Recebimento registrado: quantidade e peso não mudam. Categoria, observação, critério e valor seguem editáveis.')
+              : bloqueadoPorRecebimento || saidasAtivas.length > 0
+                ? (motivoFisico ?? rotulos?.fisicoBloqueado ?? TEXTO_SAIDA_REGISTRADA)
                 : 'Os campos do lote negociado.'}
           </DialogDescription>
         </DialogHeader>
@@ -734,7 +821,7 @@ export function LoteDialog({
             <div>
               <Label className="text-[10px]">Quantidade <span className="text-destructive">*</span></Label>
               <Input inputMode="numeric" value={quantidade} onChange={e => setQuantidade(e.target.value)} placeholder="0"
-                disabled={fisicoRO} title={bloqueadoPorRecebimento ? TITLE_POS_RECEBIMENTO : undefined}
+                disabled={fisicoTravado} title={motivoFisico ?? undefined}
                 className="h-6 text-[11px] mt-0.5 text-right tabular-nums" />
             </div>
           </div>
@@ -744,7 +831,7 @@ export function LoteDialog({
               <Label className="text-[10px]">Peso méd. (kg) <span className="text-destructive">*</span></Label>
               <Input inputMode="decimal" value={pesoMedioKg} onChange={e => setPesoMedioKg(e.target.value)}
                 onBlur={() => { const n = parseNumericValue(pesoMedioKg); if (n) setPesoMedioKg(n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })); }}
-                placeholder="0,00" disabled={fisicoRO} title={titleFisico}
+                placeholder="0,00" disabled={fisicoTravado} title={titleFisico}
                 className={`h-6 text-[11px] mt-0.5 text-right tabular-nums ${semPeso ? 'border-destructive focus-visible:ring-destructive' : ''}`} />
             </div>
             {!semValor && (<>
@@ -834,12 +921,17 @@ export function LoteDialog({
           <Button variant="outline" size="sm" className="h-[22px] px-[9px] text-[10px] font-medium " onClick={onFechar}>Cancelar</Button>
           {(!fisicoRO || !!motivoFisico) && (
             <Button variant="secondary" size="sm" className="h-[22px] px-[9px] text-[10px] font-medium " disabled={!podeAplicar || !!motivoFisico} title={motivoFisico ?? motivoBloqueio}
-              onClick={() => onAplicarEAdicionar(patch)}>
+              onClick={() => pedirAplicar('adicionar')}>
               Aplicar e adicionar outro
             </Button>
           )}
-          <Button size="sm" className="h-[22px] px-[9px] text-[10px] font-medium " disabled={!podeAplicar} title={motivoBloqueio} onClick={() => onAplicar(patch)}>Aplicar</Button>
+          <Button size="sm" className="h-[22px] px-[9px] text-[10px] font-medium " disabled={!podeAplicar} title={motivoBloqueio} onClick={() => pedirAplicar('aplicar')}>Aplicar</Button>
         </DialogFooter>
+        {avisando && (
+          <AvisoSaidaAtualizada antes={{ qtd: qtdAntes, peso: pesoAntes }} depois={{ qtd: qtdNum, peso: pm }} saidas={saidasAtivas}
+            onVoltar={() => setAvisando(null)}
+            onAplicar={() => { const modo = avisando; setAvisando(null); if (modo === 'aplicar') onAplicar(patch); else onAplicarEAdicionar(patch); }} />
+        )}
       </DialogContent>
     </Dialog>
   );
