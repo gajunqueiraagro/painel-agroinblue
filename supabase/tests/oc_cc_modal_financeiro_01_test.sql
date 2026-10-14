@@ -37,7 +37,7 @@ begin
     ('oc_criar_compromisso', 'a2509aa677198acd542588638e54b535'), ('oc_programar_compromisso', 'b9ff64062f559309d664fdf2bfecf289'),
     ('oc_materializar_programacao', '9478957cd385c005ce4c66d45c43c031'), ('oc_estornar_materializacao', '4c278e56ca80a0aa2ab9ff26e7f18c83'),
     ('oc_cancelar_programacao', '45bfcd3718cc52065ce3bd3baee27ab0'), ('oc_cancelar_compromisso', '3194de1ea117d19ae4344c4858d80f50'),
-    ('oc_conta_corrente', '6cae1d831171a7b8a9507d011f11f837'));
+    ('oc_conta_corrente', '41692a133d12f9bc35bc10d6f8ab822f'));
   if n is distinct from 7 then raise exception 'L0: um dono encadeado mudou de corpo (% de 7 no md5 esperado)', n; end if;
   select count(*) into n from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname in ('oc_lancar_pelo_modal', 'oc_desfazer_compromisso')
      and p.prosecdef and has_function_privilege('authenticated', p.oid, 'EXECUTE') and not has_function_privilege('anon', p.oid, 'EXECUTE');
@@ -194,7 +194,10 @@ begin
       (select cancelado from financeiro_lancamentos_v2 where id = v_t1), (select status from zoo_operacao_compromissos where id = v_comp); end if;
 
   -- L7 fora da conta corrente recusa; sem usuario 42501
-  x := public.oc_salvar_rascunho(null, k, null, fp || '{"tipo_operacao": "abate"}'); oa := (x->>'operacao_id')::uuid;
+  -- (ABATE-PROJETADO-01c: o molde era um ABATE; desde o OC-CC-ABATE-01 PR 3 o abate nasce em conta corrente — o molde e' uma venda
+  --  no modelo TITULO, montada aqui; a assercao e' a mesma)
+  x := public.oc_salvar_rascunho(null, k, null, fp || '{"tipo_operacao": "venda"}'); oa := (x->>'operacao_id')::uuid;
+  update zoo_operacoes_comerciais set modelo_financeiro = 'titulo' where id = oa;
   t := null;
   begin perform public.oc_lancar_pelo_modal(oa, (x->>'versao')::int, 'principal', null, null, null, p2, null, null, null, null, null, false);
   exception when sqlstate 'P0001' then t := sqlerrm; end;

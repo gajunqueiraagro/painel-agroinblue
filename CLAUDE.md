@@ -162,7 +162,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 14/10/2026 (ABATE-PROJETADO-01b, +7 em `src/components/abate/modalNegociarLoteUnidades.test.tsx` (27 -> 34) — 5188
+  Baseline em 14/10/2026 (ABATE-PROJETADO-01c, +12: `src/lib/oc/cenarioDoAbate.test.ts` 7 (novo),
+  `src/components/venda/recebimentoPrevisto.test.tsx` 5 (novo) — 5200 depois dele; antes o
+  ABATE-PROJETADO-01b, +7 em `src/components/abate/modalNegociarLoteUnidades.test.tsx` (27 -> 34) — 5188
   depois dele; antes o OC-LISTA-CAB-KG-COLUNAS-01, +1 em `src/components/operacao-comercial/central/centralListaLayout.test.tsx`
   (8 -> 9) — 5181 depois dele; antes o OC-LISTA-FINANC-CC-01c, +5 em `src/components/operacao-comercial/central/centralFinancCC.test.tsx` (12 -> 17) —
   5180 depois dele; antes o ABATE-PROJETADO-01a, +17: `src/components/abate/modalNegociarLoteUnidades.test.tsx` 14 (13 -> 27),
@@ -318,7 +320,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5188
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5200
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3919,6 +3921,55 @@ docs/historico/frentes-ate-2026-09-29.md.)
 - ⚠ NO MODAL DO LOTE DO ABATE A UNIDADE ESCOLHIDA VALE MESMO COM O CAMPO VAZIO (ABATE-PROJETADO-01a, so' tela). `CampoComUnidade`
   (`ModalNegociarLote.tsx`, os 6 campos de bonus e desconto) guarda a unidade num estado local que sobe JUNTO com o valor; a fonte
   gravada manda ao abrir. Antes, escolher "@" ou "%" com o campo vazio se perdia e o numero entrava em R$.
+- ⚠ O ABATE EXISTENTE ABRE NO CENARIO QUE TEM, E O FUTURO ABRE EM PROJETADO (ABATE-PROJETADO-01c item 3, Gabriel 14/10/2026, so' tela).
+  Dono puro `cenarioInicialDoAbate` (`src/lib/oc/cenarioDoAbate.ts`): ha' linha realizada -> 'realizado'; data do abate futura (e sem
+  realizado) -> 'projetado'; so' projetado -> 'projetado'; senao 'realizado'. O `LancamentosTab` decide UMA vez por OC EXISTENTE aberta,
+  depois que `useOperacaoAbate` leu os cenarios DELA (campo novo `carregadoPara`; `loading` ainda e' falso no render em que a OC chega),
+  com a data local (`hojeLocal`); daí em diante quem troca e' o seletor. OC nova nasce em 'realizado', como antes. Medido em 14/10: 1 dos
+  50 abates vivos foi criado com data futura (a 1645ba75, so' realizado: segue em realizado). ⚠ NAO PROVADO NO NAVEGADOR.
+- ⚠ O ABATE SO' PROJETADO TEM ACORDADO, E O RECEBIMENTO DELE NASCE PREVISTO; A SAIDA O PROMOVE A PROGRAMADO (ABATE-PROJETADO-01c itens
+  1, 4 e 5, Gabriel 14/10/2026, banco + tela). Migration `supabase/migrations/20261027198100_abate_projetado_01c_previsto.sql` (md5 do
+  arquivo eb525ae3bc70482456ea3f5d17a7693c) — APLICADA no proto em 14/10/2026 com o OK do Gabriel: ledger 20261014205310 (⚠ registrada
+  com o timestamp do dia; ledger = arquivo por md5 eb525ae3…). Patch guardado por md5, cinco corpos (ACL, SECURITY e search_path
+  preservados, conferidos pelo proprio arquivo) + uma interna nova (prosrc 0f3133ff…):
+      oc_salvar_abate         d8052ef6… -> 82d87c69…   oc_lancar_pelo_modal   26cdf425… -> 1cb63f21…
+      _oc_cc_gancho_entregas  54a60bc9… -> c780657e…   oc_conta_corrente      6cae1d83… -> 41692a13…
+      oc_conta_corrente_lote  87e896f4… -> b431d3de…   _oc_cc_recebimento_previsto (nova, fechada: so' service_role)
+  · D1 — O ACORDADO DO SO' PROJETADO TEM UM DONO, `oc_salvar_abate`, E SO' VALE EM CONTA CORRENTE (ajuste do Gabriel antes de aplicar):
+    no modelo TITULO salvar o projetado fica EXATAMENTE como antes (nao preenche acordado, nao tira do rascunho) — la' o compromisso
+    gerado iria ao DRE como receita (o DRE nao filtra status). Em conta corrente, enquanto a OC de abate nao tem linha REALIZADA, salvar o projetado
+    grava `valor_acordado` = soma do `valor_liquido` do projetado e recalcula o RASCUNHO (a mesma regra de sempre) — a OC sai do
+    rascunho e o modal pode lancar. Com realizado, vale o realizado, como sempre; salvar o projetado de uma OC que ja' tem realizado
+    nao toca o cabecalho. Carcaca e rendimento do cabecalho e o espelho no lancamento zootecnico (`_oc_sync_abate_lancamento`) seguem
+    so' do realizado. O gancho de entregas roda nos dois casos (idempotente). Sem calculo paralelo.
+  · D2 — "O RECEBIMENTO NASCE PREVISTO?" TEM UM DONO, `_oc_cc_recebimento_previsto(op)`: abate, conta corrente, com linha projetada,
+    SEM linha realizada e SEM saida viva. `oc_lancar_pelo_modal` le^ dela: o PRINCIPAL nasce 'previsto' (e o retorno ganha
+    `status_transacao`); despesa / obrigacao da OC segue 'programado'. Titulo (modelo antigo) nao muda (la' o titulo compoe o DRE).
+  · D3 — A SAIDA PROMOVE: `_oc_cc_gancho_entregas` (chamado pela saida, pelo salvar do abate e pelos demais gestos da saida), quando a
+    regra deixa de valer, leva o recebimento principal 'previsto' a 'programado' — o MESMO lancamento, o MESMO valor; a diferenca
+    para o realizado aparece no saldo do conta corrente. Retorno do gancho ganha `promovidos`.
+  · D4 — A TELA LE^ O QUE O BANCO DEVOLVE (item 4): `oc_conta_corrente` devolve status 'previsto' na linha de recebimento (antes caia no
+    ELSE e saia 'realizado'); `oc_conta_corrente_lote` conta o previsto nos `programados` (o "Falta receber" do Resumo / PDF da
+    Central). No front, `StatusLinhaContaCorrente` ganhou 'previsto', `dinheiroEmAberto(status)` (`src/lib/oc/contaCorrente.ts`) e'
+    o dono de "programado ou previsto", e o extrato (`AbaContaCorrenteOC`) escreve "previsto" na coluna Banco, na cor de
+    `STATUS_PALETA.previsto` (o banco no `title`); parcelar e cancelar valem para o previsto como para o programado.
+  · ⚠ A OC GRAVA 'previsto' (item 5): e' o primeiro escritor de OC com esse status. COORDENACAO COM O FIN-LR-SYNC-01: a importacao /
+    sincronizacao do Lucro Rural DEVE IGNORAR lancamento com parte VIVA de OC (`zoo_operacao_partes.cancelada = false`) — senao
+    trataria o recebimento previsto do abate como previsao do Lucro Rural.
+  · MEDIDO (14/10, so' leitura): OCs vivas de abate so' com projetado = 1 (335ded5e, RRCC, TITULO, rascunho, acordado nulo) — pelo
+    guarda do titulo ela NAO muda: provado no ensaio (salva de novo, versao 5 -> 6 revertida, acordado nulo e rascunho).
+  · PROVAS: ensaios revertidos no Teste com os blocos de patch byte a byte iguais aos do arquivo (A1 P0–P3, A2 P4–P6, B P7 titulo +
+    335ded5e), residuo zero; DEPOIS DE APLICAR, `supabase/tests/abate_projetado_01c_previsto_test.sql` INTEIRO ao vivo: OK P0–P7.
+    `oc_cc_modal_financeiro_01_test.sql`: o L0 passou ao md5 novo de `oc_conta_corrente` (41692a13…); rodado em dois recortes (o
+    arquivo nao cabe no canal).
+    O L7 usava um ABATE como "OC fora da conta corrente" (desde o OC-CC-ABATE-01 PR 3 o abate nasce em conta corrente): o molde passou
+      a ser uma venda no modelo TITULO montada no teste, com a MESMA assercao; L0–L7 OK ao vivo.
+    Tela: `src/components/venda/recebimentoPrevisto.test.tsx` (5), 2 mutacoes mortas.
+  ⚠ NAO PROVADO: nada no NAVEGADOR (o "previsto" no extrato, o Salvar do projetado tirando a OC do rascunho, o modal lancando) · o
+    previsto em outras telas que leem `status_transacao` (lista de Lancamentos, CPR) — sao as regras de sempre de 'previsto'.
+  ⚠ FRENTE OC-TITULO-ACOMPANHA-REALIZADO-01 (NAO ABERTA, 14/10/2026): no modelo TITULO, salvar o realizado do abate reescreve so' o
+    cabecalho da OC (`valor_acordado`, carcaca, rendimento) — o compromisso e o titulo ficam com o valor antigo (nenhum gatilho leva o
+    valor; o gancho so' age em conta corrente).
 - ⚠ O RENDIMENTO DE CARCACA PODE SER DIGITADO (RC %), E A CARCACA SAI DO DONO (ABATE-PROJETADO-01b, Gabriel 14/10/2026, so' tela;
   REVOGA "rendimento e arrobas: derivados, nunca digitados"). No Desempenho do `ModalNegociarLote` o seletor da carcaca tem TRES
   formas: cabeça | total | RC %. Em RC % o campo recebe o rendimento (aceita conta pelo dono do lote, `resolverCampoDoLote`, 2

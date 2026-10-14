@@ -54,6 +54,8 @@ import { useCompraLotes, pesoMedioPorCabeca } from '@/hooks/useCompraLotes';
 import { useOperacaoRecebimento } from '@/hooks/useOperacaoRecebimento';
 import { useOperacaoDocumentos } from '@/hooks/useOperacaoDocumentos';
 import { useOperacaoAbate, type LinhaAbate } from '@/hooks/useOperacaoAbate';
+import { cenarioInicialDoAbate } from '@/lib/oc/cenarioDoAbate';
+import { hojeLocal } from '@/lib/datas/hojeLocal';
 import { useOperacaoEventos } from '@/hooks/useOperacaoEventos';
 import { useOperacaoLiquidacao } from '@/hooks/useOperacaoLiquidacao';
 import { useExcluirLoteOC } from '@/hooks/useExcluirLoteOC';
@@ -581,6 +583,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     onVersaoChange: setOcVersao,
     enabled: ocAbateParam,
   });
+  /* ABATE-PROJETADO-01c — a OC de abate para a qual o cenario de abertura ja' foi decidido (o efeito mora depois de `data`). */
+  const cenarioDecididoParaRef = useRef<string | null>(null);
   const documentosApi = useOperacaoDocumentos({
     operacaoId: ocOperacaoId,
     clienteId: clienteAtual?.id ?? null,
@@ -697,6 +701,15 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [categoria, setCategoria] = useState<Categoria | ''>('');
   const [quantidade, setQuantidade] = useState('');
   const [data, setData] = useState(format(new Date(), 'yyyy-MM-dd'));
+  /* ABATE-PROJETADO-01c — o CENARIO EM QUE O ABATE EXISTENTE ABRE, pelo dono (`cenarioInicialDoAbate`): realizado se ha' linha
+     realizada; projetado se a data do abate e' futura ou so' ha' projetado. Decide UMA vez por OC aberta, depois que o hook leu os
+     cenarios DELA (`carregadoPara`); daí em diante quem troca e' o operador, pelo seletor. OC nova nao entra: nasce em realizado. */
+  useEffect(() => {
+    if (!ocAbateParam || !ocAberturaExistente || !ocOperacaoId) return;
+    if (abateApi.carregadoPara !== ocOperacaoId || cenarioDecididoParaRef.current === ocOperacaoId) return;
+    cenarioDecididoParaRef.current = ocOperacaoId;
+    setCenarioAbate(cenarioInicialDoAbate({ dataAbate: data, hoje: hojeLocal(), cenarios: abateApi.cenarios }));
+  }, [ocAbateParam, ocAberturaExistente, ocOperacaoId, abateApi.carregadoPara, abateApi.cenarios, data]);
   const [fazendaOrigem, setFazendaOrigem] = useState('');
   const [fazendaDestino, setFazendaDestino] = useState('');
   const [pesoKg, setPesoKg] = useState(abaInicial === 'entrada' || !abaInicial ? '30' : '');
@@ -2721,7 +2734,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setData(format(new Date(), 'yyyy-MM-dd')); setObservacao(''); setNotaFiscal('');
     setStatusOp('realizado');
     setAbateFrigorificoId(''); setAbateFazendaId('');
-    setAbateLinhas(new Map()); setCenarioAbate('realizado');
+    setAbateLinhas(new Map()); setCenarioAbate('realizado'); cenarioDecididoParaRef.current = null;
     setOcAbateAssinaturaSalva(null);
     setErroSalvarOC(null);
     setOcAberturaExistente(false); setOcTemTitulo(false); setOcRascunho(false); setOcHidratacaoErro(null);

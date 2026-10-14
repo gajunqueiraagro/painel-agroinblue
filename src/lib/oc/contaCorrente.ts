@@ -11,7 +11,7 @@ export type TipoLinhaContaCorrente = 'entrega' | 'recebimento' | 'explicacao' | 
 export type TipoExplicacao = 'ajuste_preco' | 'desconto_comercial' | 'permuta_despesa' | 'outra_receita' | 'devolucao_comprador';
 /** D6: sem conta bancaria nunca aparece como conciliado. */
 export type StatusLinhaContaCorrente =
-  | 'sem_caixa' | 'sem_conta_bancaria' | 'conciliado' | 'programado' | 'realizado' | 'ajuste';
+  | 'sem_caixa' | 'sem_conta_bancaria' | 'conciliado' | 'programado' | 'previsto' | 'realizado' | 'ajuste';
 /** 'falta_pagar' so' na compra (OC-CONTA-CORRENTE-TODOS-01a): o extrato da compra e' o espelho do da venda. */
 /** 'aguardando_saida' (OC-CC-PADRAO-NOVAS-01a/01b): a OC nasceu em conta corrente e ainda nao tem entrega nem recebimento. */
 export type SituacaoContaCorrente = 'falta_receber' | 'falta_pagar' | 'adiantado' | 'quitado' | 'aguardando_saida';
@@ -121,8 +121,13 @@ function tipoExplicacaoDe(v: unknown): TipoExplicacao | null {
   return TIPOS_EXPLICACAO.find(t => t === v) ?? null;
 }
 function statusDe(v: unknown): StatusLinhaContaCorrente {
-  return v === 'sem_caixa' || v === 'sem_conta_bancaria' || v === 'conciliado' || v === 'programado' || v === 'ajuste'
+  return v === 'sem_caixa' || v === 'sem_conta_bancaria' || v === 'conciliado' || v === 'programado' || v === 'previsto' || v === 'ajuste'
     ? v : 'realizado';
+}
+/** ABATE-PROJETADO-01c — dinheiro que ainda nao entrou: o programado e o PREVISTO (o recebimento do abate so' projetado, que o
+ *  banco devolve como 'previsto' ate' a saida do gado). Quem pergunta "esta' em aberto?" pergunta aqui. */
+export function dinheiroEmAberto(status: StatusLinhaContaCorrente): boolean {
+  return status === 'programado' || status === 'previsto';
 }
 function situacaoDe(v: unknown): SituacaoContaCorrente {
   return v === 'falta_receber' || v === 'falta_pagar' || v === 'adiantado' || v === 'aguardando_saida' ? v : 'quitado';
@@ -363,6 +368,7 @@ export const ROTULO_STATUS: Record<StatusLinhaContaCorrente, string> = {
   sem_conta_bancaria: 's/ conta',
   conciliado: 'conciliado',
   programado: 'programado',
+  previsto: 'previsto',
   realizado: 'realizado',
   ajuste: 'ajuste',
 };

@@ -12,9 +12,10 @@ import { principalJaCoberto, MOTIVO_PRINCIPAL_COBERTO } from '@/lib/oc/lancarPel
 import { CATEGORIAS } from '@/types/cattle';
 import { parseNumericValue } from '@/lib/calculos/abate';
 import { rotuloCurtoDaConta, rotuloDaConta } from '@/lib/financeiro/rotuloConta';
+import { STATUS_PALETA } from '@/lib/financeiro/statusFinanceiro';
 import {
   barraDaDiferenca, classeDaEntregaNaTela, classeDoAjusteNaTela, classeDoDinheiroNaTela, classeDoSaldoNaTela, contaComNumero, corDoSaldoNaTela,
-  dataCurta, descricaoDoEvento, efeitoNoSaldo, linhaNaTela, linhasDaPreviaAjuste, noSinalDaFazenda, rotuloDoSaldo, rotuloExplicacao, totaisNaTela, liquidoNaTela,
+  dataCurta, descricaoDoEvento, dinheiroEmAberto, efeitoNoSaldo, linhaNaTela, linhasDaPreviaAjuste, noSinalDaFazenda, rotuloDoSaldo, rotuloExplicacao, totaisNaTela, liquidoNaTela,
   rotuloSentidoAjuste, sugestaoAjuste, totalDoRascunho, valorAjusteParaRpc, ROTULO_STATUS, TIPOS_EXPLICACAO_DO_LADO,
   type ContaCorrente, type LadoContaCorrente, type LinhaContaCorrente, type LinhaPreviaAjuste, type SentidoAjuste, type TipoExplicacao,
 } from '@/lib/oc/contaCorrente';
@@ -192,7 +193,8 @@ export function acoesDaLinha(l: LinhaContaCorrente, lado: LadoContaCorrente, som
         motivo: gravar(l.status === 'conciliado' ? MOTIVO_ACAO.conciliado : null) },
     ];
   }
-  const programado = l.status === 'programado';
+  /* ABATE-PROJETADO-01c — o PREVISTO (abate so' projetado) e' dinheiro em aberto como o programado: parcela-se e cancela-se igual. */
+  const programado = dinheiroEmAberto(l.status);
   return [
     { chave: 'abrir', texto: 'Abrir lançamento', motivo: semLanc },
     { chave: 'parcelar', texto: `Parcelar este ${t.nomeDinheiro}`,
@@ -551,10 +553,14 @@ function LinhaExtrato({ l, linhas, lado, acoes, onAcao }: {
 }) {
   /* OC-VENDA-FINANCEIRO-COMPLETO-01a-fix2 — a Descricao sai da lib (`descricaoDoEvento`) e e' texto GERADO: curta e numa linha. */
   const descricao = descricaoDoEvento(l, linhas, lado, rotuloCategoria);
+  /* ABATE-PROJETADO-01c — o recebimento PREVISTO diz "previsto" no lugar do banco, na cor do status (`STATUS_PALETA`): e' o que o
+     banco devolve (`oc_conta_corrente`), a tela nao decide. O nome do banco vai no `title`. */
+  const previsto = l.status === 'previsto';
   const banco = l.tipo === 'recebimento' || l.subtipo === 'devolucao_comprador'
-    ? (l.banco ?? (l.status === 'programado' ? ROTULO_STATUS.programado : ROTULO_STATUS.sem_conta_bancaria))
+    ? (previsto ? ROTULO_STATUS.previsto
+      : l.banco ?? (l.status === 'programado' ? ROTULO_STATUS.programado : ROTULO_STATUS.sem_conta_bancaria))
     : '';
-  const bancoAmbar = !l.banco && (l.tipo === 'recebimento' || l.subtipo === 'devolucao_comprador');
+  const bancoAmbar = !previsto && !l.banco && (l.tipo === 'recebimento' || l.subtipo === 'devolucao_comprador');
   /* OC-CC-SINAL-FAZENDA-01 — a linha como a fazenda a le^ (o dono aplica o fator do lado; o banco nao muda). */
   const lt = linhaNaTela(l, lado);
   /* OC-CC-ACOES-LINHA-02 — o clique na linha e' o PRIMEIRO item do menu dela; se ele nao vale, a linha nao e' clicavel (o "⋯"
@@ -575,7 +581,9 @@ function LinhaExtrato({ l, linhas, lado, acoes, onAcao }: {
       <td className={TD}>{descricao}</td>
       <td className={TDQ} title={contaComNumero(l.contaOrdem, l.conta)} data-celula="conta">{rotuloCurtoDaConta(l.conta) ?? '—'}</td>
       {/* o nome do banco e' dado (corta, com o nome inteiro no `title`); "s/ conta" e "programado" sao gerados e curtos */}
-      <td className={`${l.banco ? TDQ : TD} text-center ${bancoAmbar ? 'text-[#b45309]' : ''}`} title={l.banco ?? undefined} data-celula="banco">{banco}</td>
+      <td className={`${l.banco && !previsto ? TDQ : TD} text-center ${bancoAmbar ? 'text-[#b45309]' : ''}${previsto ? ` ${STATUS_PALETA.previsto.texto}` : ''}`}
+        title={previsto ? `previsto · vira programado quando o gado sair${l.banco ? ` · ${l.banco}` : ''}` : l.banco ?? undefined}
+        data-celula="banco">{banco}</td>
       <td className={`${NUM} ${DV} ${classeDaEntregaNaTela(lt.entrega, lado, l.tipo)}`}>{moeda(lt.entrega)}</td>
       <td className={`${NUM} ${l.noSaldo ? classeDoDinheiroNaTela(lt.dinheiro, lado) : 'text-muted-foreground'}`}>{moeda(lt.dinheiro)}</td>
       <td className={`${NUM} ${DV} font-bold ${classeDoSaldoNaTela(lt.saldo)}`}>{num2(lt.saldo)}</td>

@@ -102,6 +102,9 @@ export interface AbateApi {
   linhas: Map<string, LinhaAbate>;
   /** Quais cenários já existem nesta operação — é o que diz se há comparativo. */
   cenarios: CenarioAbate[];
+  /** ABATE-PROJETADO-01c — a operacao cuja leitura TERMINOU (os `cenarios` acima sao dela); nulo antes da primeira. E' o sinal
+   *  confiavel de "ja' sei os cenarios desta OC" — `loading` ainda e' falso no render em que a OC acaba de chegar. */
+  carregadoPara: string | null;
   loading: boolean;
   saving: boolean;
   recarregar: () => Promise<void>;
@@ -252,6 +255,7 @@ export function useOperacaoAbate({
 }: Params): AbateApi {
   const [linhas, setLinhas] = useState<Map<string, LinhaAbate>>(new Map());
   const [cenarios, setCenarios] = useState<CenarioAbate[]>([]);
+  const [carregadoPara, setCarregadoPara] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -259,6 +263,7 @@ export function useOperacaoAbate({
     if (!operacaoId || !clienteId || !enabled) {
       setLinhas(new Map());
       setCenarios([]);
+      setCarregadoPara(null);
       return;
     }
     setLoading(true);
@@ -281,6 +286,7 @@ export function useOperacaoAbate({
       }
       setLinhas(doCenario);
       setCenarios([...vistos].sort());
+      setCarregadoPara(operacaoId);
     } finally {
       setLoading(false);
     }
@@ -315,5 +321,5 @@ export function useOperacaoAbate({
     }
   }, [operacaoId, clienteId, versao, cenario, onVersaoChange, recarregar]);
 
-  return { linhas, cenarios, loading, saving, recarregar, salvar };
+  return { linhas, cenarios, carregadoPara, loading, saving, recarregar, salvar };
 }
