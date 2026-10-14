@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 14/10/2026 (OC-LISTA-FINANC-CC-01b, +8: `src/components/operacao-comercial/central/resumoFinancCC.test.tsx` 6
+  Baseline em 14/10/2026 (ABATE-PROJETADO-01a, +17: `src/components/abate/modalNegociarLoteUnidades.test.tsx` 14 (13 -> 27),
+  `src/components/compra/excluirLoteDialogo.test.tsx` 3 (3 -> 6) — 5175 depois dele; antes o OC-LISTA-FINANC-CC-01b, +8: `src/components/operacao-comercial/central/resumoFinancCC.test.tsx` 6
   (novo), `src/components/operacao-comercial/central/centralFinancCC.test.tsx` 2 (10 -> 12) — 5158 depois dele; antes o
   OC-LISTA-FINANC-CC-01, +10: `src/components/operacao-comercial/central/centralFinancCC.test.tsx` 10
   (novo) — 5150 depois dele; antes o OC-SHELL-ROTULO-ALINHADO-01, +4: `src/components/shared/rotuloAlinhadoShells.test.tsx` 4 (novo) — 5140
@@ -314,7 +315,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5158
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5175
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3883,6 +3884,42 @@ docs/historico/frentes-ate-2026-09-29.md.)
   quem mexer num confere o outro. O selo do rodape (`SeloRegraDaLinha`) diz a regra da linha.
 
 ## REGRAS VIGENTES — OPERACAO COMERCIAL E FINANCEIRO
+- ⚠ EXCLUIR LOTE: A SIMULACAO E A GRAVACAO DAO O MESMO RESULTADO, E A TELA MOSTRA A MENSAGEM DO BANCO (ABATE-PROJETADO-01a, Gabriel
+  14/10/2026). Nasce da NJ 1645ba75 ("Abate 036 N"): "Excluir lote" dizia "Falha ao excluir o lote." e a simulacao prometia ok.
+  · BANCO: migration `supabase/migrations/20261027197900_abate_projetado_01a_excluir_lote.sql` (md5 do arquivo
+    ec3c4cb172b185437aff6e54425546b1; patch guardado por md5 de `oc_excluir_lote` 8a61566d… -> d9a07242f1698f595bd7bc3e1152c588,
+    4 ancoras) — APLICADA no proto em 14/10/2026 com o OK do Gabriel: ledger 20261014155216 (⚠ registrada com o timestamp do dia;
+    ledger = arquivo por md5 ec3c4cb1…); ACL, SECURITY DEFINER e search_path iguais; o teste ao vivo OK (E1–E3). Antes do DELETE do lote, solta o `lote_id` de TODAS as partes do
+    lote (vivas e canceladas) e dos compromissos que ainda o apontam; o evento 'excluir_lote' guarda `lote_id`, `partes_soltas`
+    [{parte_id, cancelada}] e `compromissos_soltos`. O rol sai em pt-BR (`translate(to_char(v,'FM999,999,999,990.00'), ',.',
+    '.,')`). Nada mais muda na regra.
+    ⚠ DESVIO DO BRIEFING, ACEITO pelo Gabriel (14/10): os COMPROMISSOS JA' CANCELADOS tambem soltam o lote — `zoo_operacao_compromissos_lote_fk`
+      barraria o mesmo DELETE logo depois das partes (78 compromissos cancelados com `lote_id` no proto em 14/10).
+    ⚠ `oc_excluir_lote` NAO TEM GUARDA PROPRIA DE MES FECHADO: o lote com saida ativa ja' e' recusado antes, e o ramo que cancela
+      movimentacao nao e' alcancado.
+    Teste: `supabase/tests/abate_projetado_01a_excluir_lote_test.sql` (E1–E3, sintetico no Teste). `to_char` com G/D nas funcoes
+    de OC: so' esta (fora de OC: `agri_carga_mandioca_registrar` e `agri_venda_graos_registrar`, nao tocadas).
+  · TELA: `useExcluirLoteOC` le^ a `message` do erro do supabase (objeto, nao `Error`) e a passa por `FRASES_DO_EXCLUIR_LOTE` e
+    por `fraseDoBancoOC` (`fraseDoErroAoExcluirLote`); o texto fixo so' sobra para erro sem mensagem. A frase aparece no lugar que
+    o `DialogoExcluirLoteOC` ja' tinha, ao lado do botao.
+- ⚠ NO MODAL DO LOTE DO ABATE A UNIDADE ESCOLHIDA VALE MESMO COM O CAMPO VAZIO (ABATE-PROJETADO-01a, so' tela). `CampoComUnidade`
+  (`ModalNegociarLote.tsx`, os 6 campos de bonus e desconto) guarda a unidade num estado local que sobe JUNTO com o valor; a fonte
+  gravada manda ao abrir. Antes, escolher "@" ou "%" com o campo vazio se perdia e o numero entrava em R$.
+- ⚠ FUNRURAL / SENAR EM % INCIDE SOBRE O BRUTO E E' GRAVADO EM R$ (ABATE-PROJETADO-01a, Gabriel 14/10/2026). O bruto e' o valor
+  da NF — base ± bonus e descontos —, o mesmo que vira "entregue" no conta corrente; NUNCA o preco base.
+  · DONO: `buildAbateCalculation` (`src/lib/calculos/abate.ts`) tira o bruto da MESMA `cascataAbate` (com Funrural zero) e aplica o %
+    sobre ele; com reais informados, os reais vencem (como antes). PROIBIDO calculo paralelo na tela. Leem o dono: o modal do lote
+    (`ModalNegociarLote`), a grade e o resumo do abate (`AbaLotesAbate`, `ModalResumoLotes`, `AbateModalShell`), o modal legado
+    (`LancamentosTab`) e o detalhe (`AbateDetalhesDialog`).
+  · MEDIDO ANTES DE MUDAR (nenhum numero gravado muda): `zoo_operacao_abate` 0 linhas em 'pct' (44 'reais', 5 nulas); snapshots dos
+    abates do modal antigo com `funruralPct` > 0: 105 (75 vivos, 30 cancelados), TODOS com `funruralReais` > 0 — o % nunca e' o
+    que o dono usa neles.
+  · TELA: no `ModalNegociarLote` o Funrural em % aceita conta no campo ("1,63+0,3" = 1,93%, pelo `resolverCampoDoLote`, ao sair e
+    no Enter; recusa = a frase do dono, escrita sob o campo) e, AO APLICAR, vira R$ pelo dono com `fonte = 'reais'` (o conta
+    corrente recusa 'pct'). Sem bruto o Aplicar fica apagado com "Funrural em %: informe preço e carcaça para converter em R$."
+    Em R$, a sub-linha diz "= X% do bruto"; em %, "= R$ X". Reabrir mostra o R$ gravado.
+  ⚠ FORA, so' registrado: a VENDA tem calculo proprio (`src/lib/calculos/venda.ts:157`) com o Funrural em % sobre o PRECO BASE; e
+    os comentarios de `src/hooks/useOperacaoAbate.ts` (~:42 e ~:45) ainda dizem "percentual do valor base".
 - ⚠ A CENTRAL DE OCs LE^ CADA LINHA POR UMA FONTE SO', PELO MODELO DA OC (OC-LISTA-FINANC-CC-01, Gabriel 14/10/2026, banco + tela).
   Nasce da Vera (filtro Abate): o abate 2d39d7e9, quitado na aba Financeiro, dizia "S/ lanc." / "Parcial"; 02be1a41 "−3.057
   Parcial". As colunas Financeiro e Pagto liam as views do modelo TITULO (`vw_oc_operacao_compromissos_resumo`,

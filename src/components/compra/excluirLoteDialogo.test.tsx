@@ -11,11 +11,20 @@
  *   simulacao e' falsa e o teste trava o que a TELA faz com ela: a frase inline, sem botao de excluir, e a dica da
  *   conciliacao so' quando o bloqueio e' dela.
  */
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor, renderHook, act } from '@testing-library/react';
 import { AbaNegociacaoLotes, type ExclusaoLoteOC } from './AbaNegociacaoLotes';
+import { DialogoExcluirLoteOC } from './DialogoExcluirLoteOC';
 import type { CompraLotesApi, LoteForm } from '@/hooks/useCompraLotes';
-import type { ExcluirLoteApi, SimulacaoExclusao } from '@/hooks/useExcluirLoteOC';
+import {
+  useExcluirLoteOC, fraseDoErroAoExcluirLote, type ExcluirLoteApi, type SimulacaoExclusao,
+} from '@/hooks/useExcluirLoteOC';
+
+/* ABATE-PROJETADO-01a — o banco de mentira devolve o que cada caso pede (o erro do supabase e' um OBJETO, nao um Error). */
+const rpcResposta = vi.hoisted(() => ({ atual: { data: null as unknown, error: null as unknown } }));
+vi.mock('@/integrations/supabase/client', () => ({
+  supabase: { rpc: vi.fn(async () => rpcResposta.atual) },
+}));
 
 const LOTE: LoteForm = {
   idLocal: 'loc1', id: 'lote-1', ordem: 1, categoria: 'desmama_m', quantidade: '178', pesoMedioKg: '248,21',
@@ -64,5 +73,40 @@ describe('lixeira do lote da OC', () => {
     render(montar(exclusao({ ok: false, rol: [], bloqueios: [{ tipo: 'conciliado', descricao: 'X tem titulo conciliado; estorne a conciliacao antes' }] })));
     fireEvent.click(screen.getByLabelText('Remover lote Desmama M'));
     await waitFor(() => expect(screen.getByText(/Estorne a conciliação do título/)).toBeTruthy());
+  });
+});
+
+describe('ABATE-PROJETADO-01a — a mensagem real do banco', () => {
+  beforeEach(() => { rpcResposta.atual = { data: null, error: null }; });
+
+  it('o erro do supabase (objeto, nao Error) chega com a mensagem do banco em pt-BR, nao o texto fixo', async () => {
+    rpcResposta.atual = { data: null, error: { message: 'Excluir lote exige motivo', code: 'P0001', details: null, hint: null } };
+    const { result } = renderHook(() => useExcluirLoteOC('op-1', 'cli-1'));
+    await act(async () => { await result.current.excluir('lote-1', 3, 'x'); });
+    expect(result.current.erro).toBe('Informe o motivo da exclusão.');
+  });
+
+  it('a FK que recusava o DELETE vira frase; texto que o mapa nao conhece passa como veio; sem mensagem, o texto fixo', () => {
+    expect(fraseDoErroAoExcluirLote({ message: 'update or delete on table "zoo_operacao_lotes" violates foreign key constraint "zoo_operacao_partes_lote_fk" on table "zoo_operacao_partes"' }, 'R'))
+      .toBe('O lote ainda está ligado a outros registros no banco e não foi excluído. Nada foi gravado.');
+    expect(fraseDoErroAoExcluirLote({ message: 'Lote vacas (ordem 1) tem saida ativa: 11/04/2031 · 36 cab. Estorne a saida primeiro.' }, 'R'))
+      .toBe('Lote vacas (ordem 1) tem saida ativa: 11/04/2031 · 36 cab. Estorne a saida primeiro.');
+    expect(fraseDoErroAoExcluirLote(new Error('Conflito de versao (esperada 3, atual 4)'), 'R'))
+      .toBe('A operação mudou em outra tela. Feche e abra a operação de novo antes de excluir.');
+    expect(fraseDoErroAoExcluirLote({ code: '23503' }, 'Falha ao excluir o lote.')).toBe('Falha ao excluir o lote.');
+    expect(fraseDoErroAoExcluirLote(null, 'Falha ao excluir o lote.')).toBe('Falha ao excluir o lote.');
+  });
+
+  it('a mensagem aparece DENTRO do dialogo, no lugar ao lado do botao', async () => {
+    const sim: SimulacaoExclusao = { ok: true, rol: [{ tipo: 'lote', descricao: 'exclui o lote novilhas · 36 cab', id: 'lote-1' }], bloqueios: [] };
+    const api: ExcluirLoteApi = {
+      simulando: false, excluindo: false, erro: 'O lote ainda está ligado a outros registros no banco e não foi excluído. Nada foi gravado.',
+      simular: vi.fn(async () => sim), excluir: vi.fn(async () => null),
+    };
+    render(<DialogoExcluirLoteOC api={api} loteId="lote-1" rotulo="Novilhas · 36 cab" versao={10} onFechar={vi.fn()} onExcluido={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText('· exclui o lote novilhas · 36 cab')).toBeTruthy());
+    const alerta = screen.getByRole('alert');
+    expect(alerta.textContent).toBe('O lote ainda está ligado a outros registros no banco e não foi excluído. Nada foi gravado.');
+    expect(screen.queryByText('Falha ao excluir o lote.')).toBeNull();
   });
 });

@@ -18,6 +18,7 @@
 import { useCallback, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import type { Json } from '@/integrations/supabase/types';
+import { fraseDoBancoOC } from '@/lib/oc/frasesDoBancoOC';
 
 /** Um item do que será desfeito. `tipo` vem do banco: movimentacao | compromisso | lote. */
 export interface ItemDoRol {
@@ -79,6 +80,42 @@ function lerBloqueios(j: Json | undefined): Bloqueio[] {
   return lerRol(j).map(({ tipo, descricao }) => ({ tipo, descricao }));
 }
 
+/**
+ * ABATE-PROJETADO-01a — A MENSAGEM REAL DO BANCO, EM PORTUGUES. O erro do supabase (`PostgrestError`) NAO e' `instanceof Error`:
+ * antes, todo erro da RPC virava "Falha ao excluir o lote." e o operador nao sabia o que impedia. Agora a `message` do erro e'
+ * lida (de Error ou do objeto do supabase) e passa pelo mapa abaixo e pelo das outras RPCs de OC (`fraseDoBancoOC`); texto que
+ * nenhum mapa conhece passa como veio. O texto fixo so' sobra para erro SEM mensagem.
+ * ⚠ CASA PELA EXPRESSAO COMPLETA, nunca por pedaco solto (a regra de `frasesDoBancoOC.ts`). RAISE novo em `oc_excluir_lote`
+ *   entra aqui no mesmo PR.
+ */
+export const FRASES_DO_EXCLUIR_LOTE: ReadonlyArray<readonly [RegExp, string]> = [
+  [/^Excluir lote exige motivo$/, 'Informe o motivo da exclusão.'],
+  [/^Conflito de versao \(esperada \d+, atual \d+\)$/,
+    'A operação mudou em outra tela. Feche e abra a operação de novo antes de excluir.'],
+  [/^Sem permissao nesta operacao$/, 'Sem permissão nesta operação.'],
+  [/^Acesso negado ao cliente [0-9a-f-]+$/, 'Sem permissão nesta operação.'],
+  [/^Operacao [0-9a-f-]+ nao encontrada$/, 'Operação não encontrada. Feche e abra a operação de novo.'],
+  [/^Lote [0-9a-f-]+ nao pertence a operacao [0-9a-f-]+$/,
+    'Este lote não pertence mais a esta operação. Feche e abra a operação de novo.'],
+  [/^update or delete on table "zoo_operacao_lotes" violates foreign key constraint "[a-z0-9_]+" on table "[a-z0-9_]+"$/,
+    'O lote ainda está ligado a outros registros no banco e não foi excluído. Nada foi gravado.'],
+];
+
+/* A `message` do erro, sem cast: de um Error ou do objeto do supabase; vazia = nao ha' mensagem. */
+function mensagemDoErro(e: unknown): string | null {
+  const m = e instanceof Error ? e.message
+    : e && typeof e === 'object' && 'message' in e && typeof e.message === 'string' ? e.message
+    : null;
+  return m && m.trim() ? m.trim() : null;
+}
+
+/** A frase do erro para o diálogo: o mapa desta RPC, depois o das OCs, senão o texto do banco; sem mensagem, `reserva`. */
+export function fraseDoErroAoExcluirLote(e: unknown, reserva: string): string {
+  const m = mensagemDoErro(e);
+  if (!m) return reserva;
+  return FRASES_DO_EXCLUIR_LOTE.find(([expressao]) => expressao.test(m))?.[1] ?? fraseDoBancoOC(m);
+}
+
 export function useExcluirLoteOC(
   operacaoId: string | null | undefined,
   clienteId: string | null | undefined,
@@ -107,7 +144,7 @@ export function useExcluirLoteOC(
         bloqueios: lerBloqueios(env.bloqueios),
       };
     } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Falha ao simular a exclusão do lote.');
+      setErro(fraseDoErroAoExcluirLote(e, 'Falha ao simular a exclusão do lote.'));
       return null;
     } finally {
       setSimulando(false);
@@ -142,7 +179,7 @@ export function useExcluirLoteOC(
         valorAcordado: Number.isFinite(acordado) ? acordado : null,
       };
     } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Falha ao excluir o lote.');
+      setErro(fraseDoErroAoExcluirLote(e, 'Falha ao excluir o lote.'));
       return null;
     } finally {
       setExcluindo(false);

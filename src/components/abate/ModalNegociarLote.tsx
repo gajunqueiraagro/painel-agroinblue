@@ -43,6 +43,7 @@ import { X } from 'lucide-react';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { buildAbateCalculation, parseNumericValue } from '@/lib/calculos/abate';
 import { paraCalculo, linhaVazia, type LoteAbate } from '@/components/abate/calculoDoLote';
+import { resolverCampoDoLote } from '@/lib/oc/numeroDoLote';
 import { BlocoResumoLote } from '@/components/abate/AbaLotesAbate';
 import type { LinhaAbate, CenarioAbate } from '@/hooks/useOperacaoAbate';
 
@@ -104,31 +105,67 @@ function Derivado({ rotulo, valor }: { rotulo: string; valor: string }) {
   );
 }
 
+/* O percentual como o operador o escreveu ("0,195"), sem casas inventadas. */
+const textoDoPct = (v: number | null) => (v == null ? '' : v.toLocaleString('pt-BR', { maximumFractionDigits: 6 }));
+
 /** Um bônus/desconto: campo + toggle de 46px, com as leituras derivadas embaixo. */
-function CampoComUnidade({ rotulo, valor, fonteA, rotuloA, total, arrobas, cabecas, onChange, somenteLeitura, vermelho, subExtra }: {
+function CampoComUnidade({ rotulo, valor, fonteA, rotuloA, total, arrobas, cabecas, onChange, somenteLeitura, vermelho, subExtra, contaNaUnidadeA }: {
   rotulo: string;
   valor: { valor: number | null; fonte: string | null };
   fonteA: string; rotuloA: string;
   total: number; arrobas: number; cabecas: number;
   onChange: (v: { valor: number | null; fonte: string | null }) => void;
   somenteLeitura?: boolean; vermelho?: boolean; subExtra?: string | null;
+  /** ABATE-PROJETADO-01a — na unidade A o campo aceita CONTA ("1,63+0,3"), pelo dono do lote (`resolverCampoDoLote`), ao sair
+   *  do campo e no Enter. So' o Funrural em %. */
+  contaNaUnidadeA?: boolean;
 }) {
-  const fonte = valor.fonte ?? 'reais';
+  /* ⚠ A UNIDADE ESCOLHIDA VALE MESMO COM O CAMPO VAZIO (ABATE-PROJETADO-01a). O par sobe como `{valor, fonte}` e o vazio
+     sobe como `{null, null}`: guardada so' no par, a escolha feita ANTES de digitar se perdia e o numero entrava em R$. A
+     escolha mora aqui e sobe JUNTO com o valor; o que vem gravado (fonte nao nula) manda. */
+  const [fonteEscolhida, setFonteEscolhida] = useState<string>(valor.fonte ?? 'reais');
+  useEffect(() => { if (valor.fonte != null) setFonteEscolhida(valor.fonte); }, [valor.fonte]);
+  const fonte = valor.fonte ?? fonteEscolhida;
   const cor = vermelho ? 'text-destructive' : 'text-muted-foreground';
+  const comConta = !!contaNaUnidadeA && fonte === fonteA;
+  const [textoConta, setTextoConta] = useState(textoDoPct(valor.valor));
+  const [editandoConta, setEditandoConta] = useState(false);
+  const [recusaConta, setRecusaConta] = useState<string | null>(null);
+  useEffect(() => { if (!editandoConta) setTextoConta(textoDoPct(valor.valor)); }, [valor.valor, editandoConta]);
+  /* Recusada, a conta nao vale: o campo volta ao numero de antes e a frase do dono fica escrita embaixo. */
+  const resolverConta = () => {
+    setEditandoConta(false);
+    const r = resolverCampoDoLote(textoConta, 'valor');
+    if (r.ok === false) { setRecusaConta(r.frase); setTextoConta(textoDoPct(valor.valor)); return; }
+    setRecusaConta(null);
+    const n = r.texto ? parseNumericValue(r.texto) : 0;
+    setTextoConta(n > 0 ? textoDoPct(n) : '');
+    onChange(n > 0 ? { valor: n, fonte } : { valor: null, fonte: null });
+  };
   return (
     <div className="flex min-w-0 flex-col gap-[3px]">
       <Label className={`whitespace-nowrap text-[10px] ${cor}`}>{rotulo}</Label>
       <div className="flex min-w-0 gap-1">
-        <CampoMoeda valor={valor.valor} className={`${CAMPO} flex-1`} disabled={somenteLeitura}
-          onChange={n => onChange(n == null ? { valor: null, fonte: null } : { valor: n, fonte })} />
+        {comConta ? (
+          <Input inputMode="decimal" className={`${CAMPO} flex-1`} disabled={somenteLeitura} value={textoConta}
+            title="Aceita conta: 1,63+0,3"
+            onFocus={() => setEditandoConta(true)}
+            onChange={e => setTextoConta(e.target.value)}
+            onBlur={resolverConta}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); resolverConta(); } }} />
+        ) : (
+          <CampoMoeda valor={valor.valor} className={`${CAMPO} flex-1`} disabled={somenteLeitura}
+            onChange={n => onChange(n == null ? { valor: null, fonte: null } : { valor: n, fonte })} />
+        )}
         <Toggle largura="w-[46px]" fonte="text-[9px]" valor={fonte} somenteLeitura={somenteLeitura}
           opcoes={[{ v: fonteA, label: rotuloA }, { v: 'reais', label: 'R$' }]}
-          onChange={f => onChange({ valor: valor.valor, fonte: valor.valor == null ? null : f })} />
+          onChange={f => { setFonteEscolhida(f); if (valor.valor != null) onChange({ valor: valor.valor, fonte: f }); }} />
       </div>
       {/* ⚠ UMA LEITURA POR LINHA, e não separadas por ` · `: a coluna tem ~150px e o par
           "R$ 10,29/@ · R$ 205,12/cab" quebraria no meio de um número (A22). */}
       <div className={`text-[10px] leading-[1.3] ${cor}`}>
-        {valor.valor == null ? '—' : (<>
+        {recusaConta ? <span className="text-destructive" data-testid="recusa-conta-funrural">{recusaConta}</span>
+        : valor.valor == null ? '—' : (<>
           {subExtra && <>{subExtra}<br /></>}
           {formatMoeda(arrobas > 0 ? total / arrobas : 0)}/@<br />
           {formatMoeda(cabecas > 0 ? total / cabecas : 0)}/cab
@@ -220,6 +257,21 @@ export function ModalNegociarLote({ lote, linha, cenario, onAplicar, onFechar, s
       rendimentoCarcacaPct: calc.rendCalc > 0 ? calc.rendCalc : null,
       valorLiquido: buildAbateCalculation(paraCalculo({ ...proxima, precoArroba: precoDerivado }, lote)).valorLiquido,
     });
+  };
+
+  /**
+   * ABATE-PROJETADO-01a — O FUNRURAL EM % VIRA R$ AO APLICAR, PELO DONO (sobre o bruto). O conta corrente do abate so' aceita
+   * Funrural em reais (o banco recusa `pct`), entao o lote sai daqui com `fonte = 'reais'` e o total que o dono calculou; o
+   * percentual fica so' como leitura ("= 1,93% do bruto"). Sem bruto nao ha' o que converter: o Aplicar fica apagado com o motivo.
+   */
+  const funruralEmPct = atual.funrural.fonte === 'pct' && atual.funrural.valor != null;
+  const motivoNaoAplica = funruralEmPct && !(c.valorBruto > 0)
+    ? 'Funrural em %: informe preço e carcaça para converter em R$.' : null;
+  const paraAplicar = (l: LinhaAbate): LinhaAbate => {
+    if (l.funrural.fonte !== 'pct' || l.funrural.valor == null) return l;
+    const funrural: LinhaAbate['funrural'] = { valor: buildAbateCalculation(paraCalculo(l, lote)).funruralTotal, fonte: 'reais' };
+    const convertida = { ...l, funrural };
+    return { ...convertida, valorLiquido: buildAbateCalculation(paraCalculo(convertida, lote)).valorLiquido };
   };
 
   const carcacaPorCab = atual.pesoCarcacaKg != null && lote.quantidade > 0
@@ -425,10 +477,14 @@ export function ModalNegociarLote({ lote, linha, cenario, onAplicar, onFechar, s
                     valor={atual.outrosDescontos} total={c.descOutrosTotal} arrobas={c.totalArrobas} cabecas={lote.quantidade}
                     onChange={v => trocar({ outrosDescontos: { valor: v.valor, fonte: v.fonte === 'reais' || v.fonte === 'arroba' ? v.fonte : null } })} />
                   {/* ⚠ O FUNRURAL É PERCENTUAL, não R$/@ — e a sub-linha mostra o percentual
-                      efetivo sobre o bruto, que é como ele se confere na nota. */}
+                      efetivo sobre o bruto, que é como ele se confere na nota.
+                      ABATE-PROJETADO-01a: em % aceita conta e vira R$ no Aplicar (paraAplicar). */}
                   <CampoComUnidade rotulo="Funrural + SENAR" fonteA="pct" rotuloA="%" vermelho somenteLeitura={somenteLeitura}
                     valor={atual.funrural} total={c.funruralTotal} arrobas={c.totalArrobas} cabecas={lote.quantidade}
-                    subExtra={c.valorBruto > 0 ? `${num((c.funruralTotal / c.valorBruto) * 100)}%` : null}
+                    contaNaUnidadeA
+                    subExtra={atual.funrural.fonte === 'pct'
+                      ? `= ${formatMoeda(c.funruralTotal)}`
+                      : c.valorBruto > 0 ? `= ${num((c.funruralTotal / c.valorBruto) * 100)}% do bruto` : null}
                     onChange={v => trocar({ funrural: { valor: v.valor, fonte: v.fonte === 'pct' || v.fonte === 'reais' ? v.fonte : null } })} />
                 </div>
               </>)}
@@ -472,11 +528,14 @@ export function ModalNegociarLote({ lote, linha, cenario, onAplicar, onFechar, s
         </div>
 
         <div className="h-8 shrink-0 flex items-center justify-between gap-2 border-t bg-card px-2">
-          <span className="text-[10px] text-muted-foreground">Líquido é derivado e gravado, nunca digitado.</span>
+          <span className={`text-[10px] ${motivoNaoAplica ? 'text-destructive' : 'text-muted-foreground'}`}>
+            {motivoNaoAplica ?? 'Líquido é derivado e gravado, nunca digitado.'}
+          </span>
           <div className="flex items-center gap-1.5">
             <Button type="button" variant="ghost" className="h-[22px] px-[9px] text-[10px] font-medium " onClick={onFechar}>Cancelar</Button>
-            <Button type="button" className="h-[22px] px-[9px] text-[10px] font-medium " disabled={somenteLeitura}
-              onClick={() => { onAplicar(atual); onFechar(); }}>Aplicar</Button>
+            <Button type="button" className="h-[22px] px-[9px] text-[10px] font-medium " disabled={somenteLeitura || !!motivoNaoAplica}
+              title={motivoNaoAplica ?? undefined}
+              onClick={() => { onAplicar(paraAplicar(atual)); onFechar(); }}>Aplicar</Button>
           </div>
         </div>
       </DialogContent>

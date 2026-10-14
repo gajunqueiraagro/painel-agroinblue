@@ -146,10 +146,6 @@ export function buildAbateCalculation(input: AbateCalculationInput): AbateCalcul
   const valorBaseOverride = input.valorBaseOverride;
   const valorBaseRaw = (valorBaseOverride && valorBaseOverride > 0) ? valorBaseOverride : totalArrobasRaw * precoArroba;
 
-  const funruralReais = parseNumericValue(input.funruralReais);
-  const funruralPct = parseNumericValue(input.funruralPct);
-  const funruralTotalRaw = funruralReais > 0 ? funruralReais : (valorBaseRaw * funruralPct) / 100;
-
   const bonusPrecoce = parseNumericValue(input.bonusPrecoce);
   const bonusPrecoceReais = parseNumericValue(input.bonusPrecoceReais);
   const bonusPrecoceTotalRaw = bonusPrecoce > 0 ? bonusPrecoce * totalArrobasRaw : bonusPrecoceReais;
@@ -173,6 +169,15 @@ export function buildAbateCalculation(input: AbateCalculationInput): AbateCalcul
   const descOutrosTotalRaw = outrosDescontosArroba > 0 ? outrosDescontosArroba * totalArrobasRaw : outrosDescontos;
 
   const totalDescontosRaw = descQualidadeTotalRaw + descOutrosTotalRaw;
+
+  /* ⚠ O FUNRURAL / SENAR EM % INCIDE SOBRE O BRUTO (ABATE-PROJETADO-01a, Gabriel 14/10/2026): o valor da NF = base ± bonus e
+     descontos, o mesmo bruto que vira "entregue" no conta corrente — nao sobre o preco base. Medido antes de mudar: nenhum
+     lote gravado tem Funrural em % efetivo (zoo_operacao_abate: 0 em 'pct'; snapshots antigos com % trazem tambem os reais,
+     que vencem). O bruto sai da MESMA cascata (com Funrural zero), nunca de uma conta paralela. */
+  const funruralReais = parseNumericValue(input.funruralReais);
+  const funruralPct = parseNumericValue(input.funruralPct);
+  const brutoParaFunruralRaw = cascataAbate(valorBaseRaw, totalBonusRaw, totalDescontosRaw, 0).valorBruto;
+  const funruralTotalRaw = funruralReais > 0 ? funruralReais : (brutoParaFunruralRaw * funruralPct) / 100;
   const { valorBruto: valorBrutoRaw, valorLiquido: valorLiquidoRaw } =
     cascataAbate(valorBaseRaw, totalBonusRaw, totalDescontosRaw, funruralTotalRaw);
 
