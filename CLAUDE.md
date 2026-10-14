@@ -793,6 +793,17 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   DRE-HOME-FONTE-UNICA (a Home le' a receita do zootecnico; em OC-VENDA-ENTREGAS-01b) · modal de valor: reconsulta
   da lavoura nao provada, e o editor aberto por ele sem `onAbrirOperacaoOC` (em DRE-MODAL-REFRESH-01).
 - OC e Financeiro:
+  FIN-CAIXA-REALIZADO-POR-PAGAMENTO-01 (NAO ABERTA; registrada no DADO-2448E772-COMPETENCIA-01, Gabriel 14/10/2026): leitores de
+  REALIZADO que agrupam pelo `ano_mes` (= mes da COMPETENCIA, 99,3% das linhas realizadas do NJ) e nao pela data de pagamento —
+  o modal Fluxo de Caixa Realizado (`useFluxoCaixaModalData.ts`), a Analise Trimestral (`useAnaliseTrimestral.ts`), a Auditoria
+  de desfrutes (`useAuditoriaDesfrutes.ts`) e a base do planejamento (`usePlanejamentoFinanceiro.ts` ~:809/~:943). Caso que a
+  mostrou: o 2448e772 do NJ (pago 13/07/2026, competencia 10/06/2026) aparece em junho no caixa realizado. Medir os leitores e
+  decidir (caixa = data de pagamento) e' PR proprio · DADO-2448E772-COMPETENCIA-01 (APLICADA no proto em 14/10/2026 com o OK do
+  Gabriel; migration `20261027198000_dado_2448e772_competencia_01.sql`, md5 fc6db770…, ⚠ registrada como 20261014183644; ledger
+  = arquivo): o recebimento 2448e772 voltou a competencia 10/06/2026 (ano_mes 2026-06 pelo gatilho; era 2026-07 antes do
+  vinculo errado a' OC 1645ba75) e a `movimentacao_rebanho_id` 5e92f3b2; trilha em `audit_log` 'restaurar_competencia'; teste
+  `supabase/tests/dado_2448e772_competencia_01_test.sql` OK no vivo · o defeito de origem (o desvincular que nao restaura sem
+  snapshot e nao devolve a `movimentacao_rebanho_id`) NAO foi corrigido ·
   MANDIOCA-OBS-CARGA-01: a observacao da carga (`agri_colheita.observacoes`, o campo do modal) NAO chega ao lancamento
   do frete — `_agri_carga_inserir_papel` nao grava `observacao`; o motorista no lancamento se poe hoje pelo Financeiro
   (medido no MANDIOCA-FRETE-SILVIO-01) · `ConciliarExtratoDialog.tsx` (`src/components/financeiro-v2/`) SEM IMPORTADOR — o
