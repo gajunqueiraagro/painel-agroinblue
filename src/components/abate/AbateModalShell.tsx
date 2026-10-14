@@ -1041,7 +1041,7 @@ export function AbateModalShell({
                   linha; a observacao, sozinha, na seguinte. */}
               <div className="grid grid-cols-1 lg:grid-cols-[1fr_150px_220px] gap-x-3 gap-y-3">
                 <div className="min-w-0">
-                  <Label className="text-[10px] text-muted-foreground">Comprador <span className="text-destructive">*</span></Label>
+                  <Label className="text-[10px] text-muted-foreground flex items-center gap-1">Comprador <span className="text-destructive">*</span></Label>
                   {/* ⚠ O CNPJ NA SEGUNDA LINHA, e ele entra na busca: dois frigorificos com
                       nome parecido so' se distinguem pelo documento, e o operador tem a nota
                       na mao — procurar pelo CNPJ e' o gesto natural.

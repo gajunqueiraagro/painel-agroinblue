@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 14/10/2026 (OC-CC-TOTAL-LIQUIDO-01, +3 em `src/components/venda/contaCorrenteAbate.test.tsx` (17 -> 20) — 5136
+  Baseline em 14/10/2026 (OC-SHELL-ROTULO-ALINHADO-01, +4: `src/components/shared/rotuloAlinhadoShells.test.tsx` 4 (novo) — 5140
+  depois dele; antes o OC-CC-TOTAL-LIQUIDO-01, +3 em `src/components/venda/contaCorrenteAbate.test.tsx` (17 -> 20) — 5136
   depois dele; antes o LOTE-PESO-CALC-01, +28: `src/components/compra/loteContaNoCampo.test.tsx` 23 (novo),
   `src/hooks/useCompraLotes.recusa.test.ts` 5 (4 -> 9) — 5133 depois dele; antes o OC-LOTE-FISICO-POS-SAIDA-01, +16:
   `src/components/compra/loteFisicoPosSaida.test.tsx` 12 (novo), `src/hooks/useCompraLotes.recusa.test.ts` 4 (novo) — 5105 depois dele; antes o OC-LISTA-LAYOUT-01, +5: `src/components/operacao-comercial/central/centralListaLayout.test.tsx` 8 (novo),
@@ -310,7 +311,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5136
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5140
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3879,6 +3880,14 @@ docs/historico/frentes-ate-2026-09-29.md.)
   quem mexer num confere o outro. O selo do rodape (`SeloRegraDaLinha`) diz a regra da linha.
 
 ## REGRAS VIGENTES — OPERACAO COMERCIAL E FINANCEIRO
+- ⚠ ROTULO DE CAMPO AO LADO DE ROTULO FLEX TAMBEM E' FLEX (OC-SHELL-ROTULO-ALINHADO-01, Gabriel 14/10/2026, so' tela). O `Label` da casa
+  e' um `<label>` INLINE: dentro de um `div` de bloco ele fica na caixa de linha do pai (a entrelinha do modal), e o `leading-none`
+  dele nao a encolhe; o vizinho com `flex items-center gap-1` (o que leva o cadeado) tem so' a altura do texto. Resultado: o campo
+  do rotulo inline comecava ~10px abaixo (medido na fatia 2b do FORN-SELETOR). Conserto: a contraparte (Comprador no abate e na
+  venda, Fornecedor na compra) ganhou a MESMA classe do rotulo da Data, nos tres shells; grids e layout de 2 colunas da venda e da
+  compra iguais. Preso por `src/components/shared/rotuloAlinhadoShells.test.tsx` (fonte, com auto-teste; 3 mutacoes mortas).
+  ⚠ NAO SE APLICA ONDE TODOS OS ROTULOS DA LINHA SAO INLINE (`CompraMetaModalShell`, `VendaGraosModal`): ali ja' estao alinhados
+    entre si, e por `flex` so' na contraparte CRIARIA o desnivel. ⚠ NAO PROVADO NO NAVEGADOR (sem ferramenta nesta sessao).
 - ⚠ NO CONTA CORRENTE DO ABATE O CARD E O TOTAL DA ENTREGA SAO O LIQUIDO, E A DEDUCAO SE CHAMA RETENCOES (OC-CC-TOTAL-LIQUIDO-01, Gabriel
   14/10/2026, so' tela). Nasce da Vera (2d39d7e9): "Entregue · bruto 104.712,87", "Recebido 103.006,06" e "Saldo · quitado 0,00" nao
   fechavam a' vista. Dono: `liquidoNaTela(cc, lado)` (`src/lib/oc/contaCorrente.ts`, ao lado de `totaisNaTela`, que NAO mudou) =

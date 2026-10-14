@@ -616,7 +616,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
                 como um so. */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-3">
               <div className="min-w-0">
-                <Label className="text-[10px]">Fornecedor <span className="text-destructive">*</span></Label>
+                <Label className="text-[10px] flex items-center gap-1">Fornecedor <span className="text-destructive">*</span></Label>
                 {/* FORN-SELETOR-PADRAO-01 fatia 2b — o DONO do seletor de fornecedor, pelo leitor único (ativos do cliente; o gravado
                     inativo fica no campo com a marca). O "+" (h-8, A16) e a linha FIXA do documento são dele: a linha que só
                     aparecia com documento saiu — escolher o fornecedor não muda mais a altura do formulário. */}

@@ -897,7 +897,7 @@ export function VendaModalShell({
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-3">
               <div className="min-w-0">
-                <Label className="text-[10px] text-muted-foreground">Comprador <span className="text-destructive">*</span></Label>
+                <Label className="text-[10px] text-muted-foreground flex items-center gap-1">Comprador <span className="text-destructive">*</span></Label>
                 {/* FORN-SELETOR-PADRAO-01 fatia 2b — o DONO do seletor de fornecedor, pelo leitor único; o "+" e a linha fixa do
                     documento são dele. */}
                 <div className="mt-[3px]">
