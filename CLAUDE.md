@@ -4011,10 +4011,20 @@ docs/historico/frentes-ate-2026-09-29.md.)
       ⚠ DESVIOS DO MOCK, medidos: Tipo 50 -> 66 ("Venda em Pé" 56,0 + padding); Comercializacao 86 -> 100 (o "Rasc." de 26 nao
       cabia); Cab·kg 92 -> 76 (sobrava; a Contraparte precisava). O ponto ambar do Pagto fica 0,5px a' direita da pilula.
     ⚠ NAO PROVADO NO NAVEGADOR (medida numa replica): a lista real do NJ / Vera com as pilulas novas.
-  ⚠ DIVIDA DE DADO OC-PROGRAMADA-REABERTA-01 (medida no 01c, NAO corrigida — decisao do Gabriel): 5 OCs vivas com status comercial
-    'programada' e financeiro quitado — todas REABERTAS ('reabrir') depois de fechadas e nunca concluidas de novo: NJ b74cfd38 e
-    af334f9c (criadas do legado ja' fechadas em 29/09, reabertas em 29/09 pelo admin), Agnaldo 3513d916 e e5719192, Vera 7d1f8590 —
-    todas em conta corrente. Proposta: o operador conclui pela tela (Concluir), ou uma correcao guardada que so' grava 'fechada'.
+  · OC-PROGRAMADA-REABERTA-01 (FECHADA em 14/10/2026, com o OK do Gabriel): as 5 OCs vivas 'programada' com financeiro quitado —
+    REABERTAS e nunca concluidas de novo: NJ b74cfd38 e af334f9c (criadas do legado ja' fechadas em 29/09, reabertas no mesmo dia
+    pelo admin), Agnaldo 3513d916 e e5719192, Vera 7d1f8590, todas venda em conta corrente — foram concluidas pela MESMA RPC do
+    botao, `oc_confirmar`, pelo script `docs/investigacao/oc-programada-reaberta-01-concluir.sql` (md5 8a635e6d…; guarda por OC:
+    programada, quitado com saldo 0, nada a entregar nem programado; idempotente; rodado 2x — o segundo nao mudou nada). Trilha: o
+    evento 'fechar' da RPC + um `audit_log` 'concluir_apos_reabertura' por OC com o motivo ("concluída após reabertura — autorizado
+    pelo Gabriel em 14/10").
+    ⚠ CONCLUIDAS COM O P1 DO MES FECHADO, DE PROPOSITO (decisao do Gabriel, 14/10): concluir so' troca o status para 'fechada' e grava
+      o evento; nao toca rebanho, financeiro nem DRE, e o P1 protege numeros. A tela trava o Concluir em mes fechado; a RPC nao.
+  ⚠ FRENTE OC-CONCLUIR-REABERTA-01 (NAO ABERTA; registrada em 14/10/2026): (a) o "Concluir negociação" da venda (e do abate) so' existe
+    na aba NEGOCIACAO (`VendaModalShell.tsx` ~:1148, `naNegociacao && … && ocStatusComercial === 'programada'`), e o modal abre na aba
+    Venda (`abaInicial` sem `oc_aba` = 'venda'), onde so' ha' o Salvar — o operador nao acha o Concluir (o Gabriel na b74cfd38);
+    (b) a trava de P1 do Concluir (`concluirTravadoPor` -> `mesFechadoMotivo`, "… está fechado (P1) — reabra o período") bloqueia
+    uma mudanca que so' mexe no status — a revisar.
   ⚠ FORA: a Graxaria duplicada da c80ebe9e (73a183eb / 6b349b87, 5.056,00 cada) fica
     sob OC-DESVINCULAR-01, sem correcao · NAO PROVADO NO NAVEGADOR (a lista real da Vera e a regua renderizada na tela; a medida
     foi numa replica).
