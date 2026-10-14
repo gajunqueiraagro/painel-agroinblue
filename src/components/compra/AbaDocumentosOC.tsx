@@ -1,12 +1,17 @@
 import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Plus, Pencil, Ban, Paperclip } from 'lucide-react';
+import { Plus, Pencil, Ban, Paperclip, MoreHorizontal } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { DocumentosApi, EspecieDoc } from '@/hooks/useOperacaoDocumentos';
 import { DocumentoFormOC, FORM_VAZIO, ESPECIE_LABEL, brl, fmtNumeroDoc, type FormState } from './DocumentoFormOC';
 import { notificarFornecedoresMudaram } from '@/hooks/useFornecedoresDoCliente';
+import { DocumentoFormAbate } from './DocumentoFormAbate';
+import { formAbateDoDetalhe, formAbateVazio, type FormAbate } from '@/lib/oc/formDocumentoAbate';
+import { ROTULO_SEGMENTO } from '@/lib/oc/camposDaEspecie';
+import { formatCasas } from '@/lib/calculos/numeroBR';
 
 // Aba Documentos (PR-OC-DOC-UI-01). Tela OFICIAL de consulta e manutenção completa. O cadastro/edição
 //   é o form REUTILIZÁVEL DocumentoFormOC (mesma persistência/validação usada pelo registro rápido na
@@ -21,6 +26,9 @@ interface Props {
   /* `valor_acordado` da operacao — a ancora contra a qual o documentado se confronta.
      Nulo = operacao ainda sem valor negociado; o confronto nao acontece. */
   valorNegociado?: number | null;
+  /** OC-DOC-ESPECIE-ABATE-01 passo 2 — 'abate' troca o formulario pela grade por especie e a lista pela tabela do abate.
+   *  Ausente: compra e venda, como sempre. */
+  tipoOperacao?: string | null;
 }
 
 const fmtData = (iso: string | null) => (iso ? iso.split('-').reverse().join('/') : '—');
@@ -41,7 +49,8 @@ const CONTAGEM_ROTULO: Record<EspecieDoc, [string, string]> = {
   npr: ['NPR', 'NPRs'], acerto: ['acerto', 'acertos'], romaneio: ['romaneio', 'romaneios'],
 };
 
-export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedores, contraparteId, clienteId, recarregarFornecedores, valorNegociado }: Props) {
+export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedores, contraparteId, clienteId, recarregarFornecedores, valorNegociado, tipoOperacao }: Props) {
+  const ehAbate = tipoOperacao === 'abate';
   /* Cadastro rapido do emitente — MESMO mecanismo de AbaCompromissosOC:1 insert direto e
      `recarregar` da lista que o alimenta. Nao ha segundo cadastro nem segunda lista; a
      fonte e a mesma `liquidacaoApi`.
@@ -78,6 +87,7 @@ export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedo
   };
   const [modo, setModo] = useState<'lista' | 'form'>('lista');
   const [formInicial, setFormInicial] = useState<FormState>(FORM_VAZIO);
+  const [formAbateInicial, setFormAbateInicial] = useState<FormAbate>(() => formAbateVazio());
   const [formKey, setFormKey] = useState(0);
   const [cancelId, setCancelId] = useState<string | null>(null);
   const [cancelMotivo, setCancelMotivo] = useState('');
@@ -97,10 +107,11 @@ export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedo
     if (url) window.open(url, '_blank', 'noopener,noreferrer');
   };
 
-  const abrirNovo = () => { setFormInicial(FORM_VAZIO); setFormKey(k => k + 1); setModo('form'); };
+  const abrirNovo = () => { setFormInicial(FORM_VAZIO); setFormAbateInicial(formAbateVazio()); setFormKey(k => k + 1); setModo('form'); };
   const abrirEdicao = async (docId: string) => {
     const d = await api.carregarDetalhe(docId);
     if (!d) return;
+    if (ehAbate) { setFormAbateInicial(formAbateDoDetalhe(d)); setFormKey(k => k + 1); setModo('form'); return; }
     setFormInicial({
       documentoId: d.documentoId, versao: d.versao, especie: d.especie, numero: d.numero, serie: d.serie,
       chaveAcesso: d.chaveAcesso, dataEmissao: d.dataEmissao, observacao: d.observacao, url: d.url,
@@ -123,6 +134,23 @@ export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedo
   };
 
   // ── FORM (reutiliza o componente extraído) ──
+  if (modo === 'form' && ehAbate) {
+    return (
+      <DocumentoFormAbate
+        key={formKey}
+        api={api}
+        somenteLeitura={somenteLeitura}
+        fornecedores={fornecedores}
+        clienteId={clienteId ?? null}
+        contraparteId={contraparteId}
+        onCriarFornecedor={clienteId ? criarFornecedor : undefined}
+        onGravarDocumentoFornecedor={clienteId ? gravarDocumentoFornecedor : undefined}
+        initialForm={formAbateInicial}
+        onSaved={() => setModo('lista')}
+        onCancel={() => setModo('lista')}
+      />
+    );
+  }
   if (modo === 'form') {
     return (
       <DocumentoFormOC
@@ -232,6 +260,11 @@ export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedo
           Linha 2 CONTEXTO (11px cinza): emitente e data.
           ⚠ NAO SAIR APLICANDO NAS OUTRAS TELAS: e' referencia, cada tela sera avaliada
           uma a uma. Registrado como A18 em docs/PADROES-UI.md. */}
+      {ehAbate ? (
+        <TabelaDocumentosAbate documentos={api.documentos} loading={api.loading} somenteLeitura={somenteLeitura}
+          onAbrir={c => void abrirArquivo(c)} onEditar={id => void abrirEdicao(id)}
+          onCancelar={id => { setCancelId(id); setCancelMotivo(''); }} />
+      ) : (
       <div className="rounded-md border divide-y">
         {api.documentos.length === 0 && (
           <div className="px-3.5 py-4 text-center text-[10px] text-muted-foreground">
@@ -304,6 +337,7 @@ export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedo
           );
         })}
       </div>
+      )}
 
       {/* Cancelamento com motivo obrigatório */}
       {cancelId && (
@@ -316,6 +350,102 @@ export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedo
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ── LISTA DO ABATE (OC-DOC-ESPECIE-ABATE-01 passo 2) ─────────────────────────────────────────────────────────────────
+   Uma coluna por informacao, uma linha por registro (18px): Tipo | Numero | Data | Venc. | Cab | Peso kg | Valor R$ |
+   Conferencia (reservada: passo 3) | anexo | ⋯. O Valor e' o LIQUIDO PROPRIO do documento, da view; o que nao soma no valor da
+   operacao (NPR, Acerto, Romaneio, Outro) fica em cinza, e o "Outro" diz "informativo · não soma". */
+const PILULA: Partial<Record<EspecieDoc, string>> = {
+  nf_principal: 'bg-primary text-primary-foreground', nf_complementar: 'bg-primary/80 text-primary-foreground',
+  npr: 'bg-amber-100 text-amber-800', acerto: 'bg-emerald-100 text-emerald-800', romaneio: 'bg-sky-100 text-sky-800',
+};
+const TH = 'h-[18px] px-1 text-[9.5px] font-medium text-primary-foreground whitespace-nowrap';
+const TD = 'h-[18px] px-1 py-0 align-middle text-[10px] leading-[17px] whitespace-nowrap overflow-hidden text-ellipsis';
+const TD_ICONE = 'h-[18px] px-0 py-0 align-middle text-center leading-none';
+/* dd/mm/aa — o padrao de tabela da casa (data nunca corta). */
+const dataCurta = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(2, 4)}` : '—');
+const textoDe = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+
+function TabelaDocumentosAbate({ documentos, loading, somenteLeitura, onAbrir, onEditar, onCancelar }: {
+  documentos: DocumentosApi['documentos']; loading: boolean; somenteLeitura?: boolean;
+  onAbrir: (caminho: string) => void; onEditar: (id: string) => void; onCancelar: (id: string) => void;
+}) {
+  return (
+    <div className="rounded-md border overflow-hidden">
+      <table data-testid="tabela-docs-abate" className="w-full table-fixed border-collapse">
+        <colgroup>
+          <col style={{ width: 64 }} /><col /><col style={{ width: 58 }} /><col style={{ width: 58 }} /><col style={{ width: 36 }} />
+          <col style={{ width: 66 }} /><col style={{ width: 86 }} /><col style={{ width: 84 }} /><col style={{ width: 20 }} /><col style={{ width: 22 }} />
+        </colgroup>
+        <thead className="bg-primary">
+          <tr className="h-[18px]">
+            <th className={`${TH} text-left`}>Tipo</th><th className={`${TH} text-left`}>Número</th>
+            <th className={`${TH} text-left`}>Data</th><th className={`${TH} text-left`}>Venc.</th>
+            <th className={`${TH} text-right`}>Cab</th><th className={`${TH} text-right`}>Peso kg</th>
+            <th className={`${TH} text-right`}>Valor R$</th><th className={`${TH} text-left`}>Conferência</th>
+            <th className={TH} /><th className={TH} />
+          </tr>
+        </thead>
+        <tbody>
+          {documentos.length === 0 && (
+            <tr><td colSpan={10} className="px-2 py-3 text-center text-[10px] text-muted-foreground">{loading ? 'Carregando…' : 'Nenhum documento.'}</td></tr>
+          )}
+          {documentos.map(d => {
+            const soma = d.somaNoValor !== false;
+            const numero = fmtNumeroDoc(d.numero, d.especie) ?? textoDe(d.dados?.ordem_compra) ?? textoDe(d.dados?.op) ?? '—';
+            const outro = d.especie === 'outro' || d.especie === 'recibo';
+            const data = d.dataEmissao ?? d.dataAbate;
+            const valor = d.liquidoProprio ?? d.valorLiquido;
+            const url = d.url;
+            return (
+              <tr key={d.documentoId} data-testid="linha-doc-abate"
+                className={`h-[18px] border-b border-border/60 last:border-b-0 ${d.cancelado ? 'line-through opacity-50' : ''} ${soma ? '' : 'text-muted-foreground'}`}
+                title={d.cancelado ? 'cancelado' : soma ? undefined : 'não soma no valor da operação'}>
+                <td className={TD}>
+                  <span className={`inline-block rounded px-1 align-middle text-[9.5px] leading-[14px] ${PILULA[d.especie] ?? 'bg-muted text-muted-foreground'}`}>
+                    {ROTULO_SEGMENTO[d.especie] ?? ESPECIE_LABEL[d.especie]}
+                  </span>
+                </td>
+                <td className={TD} title={numero}>
+                  {numero}{outro && <span className="ml-1 text-[9.5px] text-muted-foreground">informativo · não soma</span>}
+                </td>
+                <td className={`${TD} tabular-nums`}>{dataCurta(data)}</td>
+                <td className={`${TD} tabular-nums`}>{dataCurta(d.vencimento ?? null)}</td>
+                <td className={`${TD} text-right tabular-nums`}>{d.cab ?? '—'}</td>
+                <td className={`${TD} text-right tabular-nums`}>{d.pesoKg == null ? '—' : formatCasas(d.pesoKg, 1)}</td>
+                <td className={`${TD} text-right tabular-nums`}>{formatCasas(valor, 2)}</td>
+                <td className={TD} data-testid="celula-conferencia" />
+                <td className={TD_ICONE}>
+                  {url && (
+                    <button type="button" title="Abrir arquivo" aria-label="Abrir arquivo" onClick={() => onAbrir(url)}
+                      className="inline-flex h-4 w-4 items-center justify-center text-muted-foreground hover:text-foreground">
+                      <Paperclip className="h-3 w-3" />
+                    </button>
+                  )}
+                </td>
+                <td className={TD_ICONE}>
+                  {!somenteLeitura && !d.cancelado && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button type="button" aria-label="Ações do documento" className="inline-flex h-4 w-4 items-center justify-center text-muted-foreground hover:text-foreground">
+                          <MoreHorizontal className="h-3 w-3" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onSelect={() => onEditar(d.documentoId)}><Pencil className="mr-2 h-3 w-3" /> Editar</DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => onCancelar(d.documentoId)}><Ban className="mr-2 h-3 w-3" /> Cancelar documento</DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }

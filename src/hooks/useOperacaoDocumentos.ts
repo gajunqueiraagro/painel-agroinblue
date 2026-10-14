@@ -46,6 +46,15 @@ export interface DocumentoLista {
      nao o do cadastro: sao coisas diferentes e a nota e' que vale aqui. Emitente
      proprio ausente => nulo, e quem exibe usa o documento da CONTRAPARTE. */
   emitenteDocumento: string | null;
+  /* OC-DOC-ESPECIE-ABATE-01 passo 2 — os campos do abate (colunas no fim da view) e o liquido do PROPRIO documento, some ou
+     nao no valor da operacao. Opcionais: quem monta a lista a' mao (testes, fixtures) nao precisa deles. */
+  cab?: number | null;
+  pesoKg?: number | null;
+  dataAbate?: string | null;
+  vencimento?: string | null;
+  dados?: Record<string, unknown> | null;
+  liquidoProprio?: number;
+  somaNoValor?: boolean;
 }
 
 export interface ComponentePayload { tipo: string; natureza: NaturezaComp; valor: number; descricao?: string; ordem: number; }
@@ -66,6 +75,13 @@ export interface DocumentoPayload {
   emitenteDocumento?: string | null;
   componentes: ComponentePayload[];
   lotes: string[];
+  /* OC-DOC-ESPECIE-ABATE-01 passo 2 — so' o formulario do abate os manda. AUSENTE (undefined) nao vai no payload, e o banco
+     mantem o gravado: o formulario de compra e venda nunca apaga o que nao conhece. */
+  cab?: number | null;
+  pesoKg?: number | null;
+  dataAbate?: string | null;
+  vencimento?: string | null;
+  dados?: Record<string, unknown> | null;
 }
 
 export interface DocumentoDetalhe {
@@ -84,9 +100,15 @@ export interface DocumentoDetalhe {
   emitenteDocumento: string;
   componentes: ComponentePayload[];
   loteIds: string[];
+  cab?: number | null;
+  pesoKg?: number | null;
+  dataAbate?: string | null;
+  vencimento?: string | null;
+  dados?: Record<string, unknown> | null;
 }
 
-export interface LoteOpcao { loteId: string; ordem: number; categoria: string | null; }
+/* `qtd` (cabecas negociadas do lote) — o seletor de lote do abate escreve "Lote 1 · 18 cab". */
+export interface LoteOpcao { loteId: string; ordem: number; categoria: string | null; qtd?: number | null; }
 
 export interface DocumentosApi {
   documentos: DocumentoLista[];
@@ -114,10 +136,13 @@ interface DocRow {
   qtd_componentes: number; qtd_lotes: number; documento_origem_id: string | null;
   url: string | null;
   emitente_id: string | null; emitente_nome: string | null; emitente_documento: string | null;
+  liquido_proprio?: number | null; soma_no_valor?: boolean | null;
+  cab?: number | null; peso_kg?: number | null; data_abate?: string | null; vencimento?: string | null;
+  dados?: Record<string, unknown> | null;
 }
-interface LoteRow { id: string; ordem: number; categoria_negociada: string | null; }
+interface LoteRow { id: string; ordem: number; categoria_negociada: string | null; qtd_negociada?: number | null; }
 
-function payloadJson(p: DocumentoPayload): Record<string, unknown> {
+export function payloadJson(p: DocumentoPayload): Record<string, unknown> {
   return {
     especie: p.especie,
     numero: p.numero ?? null,
@@ -134,6 +159,11 @@ function payloadJson(p: DocumentoPayload): Record<string, unknown> {
       tipo: c.tipo, natureza: c.natureza, valor: c.valor, ordem: c.ordem, descricao: c.descricao ?? null,
     })),
     lotes: p.lotes,
+    ...(p.cab !== undefined ? { cab: p.cab } : {}),
+    ...(p.pesoKg !== undefined ? { peso_kg: p.pesoKg } : {}),
+    ...(p.dataAbate !== undefined ? { data_abate: p.dataAbate } : {}),
+    ...(p.vencimento !== undefined ? { vencimento: p.vencimento } : {}),
+    ...(p.dados !== undefined ? { dados: p.dados } : {}),
   };
 }
 
@@ -149,7 +179,7 @@ export function useOperacaoDocumentos({ operacaoId, clienteId, enabled }: Params
     try {
       const [docs, los] = await Promise.all([
         (supabase as any).from('vw_oc_documentos').select('*').eq('operacao_id', operacaoId),
-        (supabase as any).from('zoo_operacao_lotes').select('id, ordem, categoria_negociada').eq('operacao_id', operacaoId).order('ordem'),
+        (supabase as any).from('zoo_operacao_lotes').select('id, ordem, categoria_negociada, qtd_negociada').eq('operacao_id', operacaoId).order('ordem'),
       ]);
       if (docs.error) throw new Error(docs.error.message);
       if (los.error) throw new Error(los.error.message);
@@ -162,8 +192,12 @@ export function useOperacaoDocumentos({ operacaoId, clienteId, enabled }: Params
         url: d.url ?? null,
         emitenteId: d.emitente_id ?? null, emitenteNome: d.emitente_nome ?? null,
         emitenteDocumento: d.emitente_documento ?? null,
+        cab: d.cab ?? null, pesoKg: d.peso_kg == null ? null : Number(d.peso_kg),
+        dataAbate: d.data_abate ?? null, vencimento: d.vencimento ?? null, dados: d.dados ?? null,
+        liquidoProprio: d.liquido_proprio == null ? Number(d.valor_liquido) : Number(d.liquido_proprio),
+        somaNoValor: d.soma_no_valor ?? true,
       })));
-      setLotes(((los.data ?? []) as LoteRow[]).map(l => ({ loteId: l.id, ordem: l.ordem, categoria: l.categoria_negociada })));
+      setLotes(((los.data ?? []) as LoteRow[]).map(l => ({ loteId: l.id, ordem: l.ordem, categoria: l.categoria_negociada, qtd: l.qtd_negociada ?? null })));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Falha ao carregar documentos.');
     } finally {
@@ -297,7 +331,7 @@ export function useOperacaoDocumentos({ operacaoId, clienteId, enabled }: Params
           /* O detalhe le da TABELA-BASE porque ja lia (versao, componentes, lotes vem
              dali). A view tambem expoe o emitente desde que foi recriada — as duas
              fontes concordam; esta e' so a mais curta para este caso. */
-          .select('id, versao, especie, numero, serie, chave_acesso, data_emissao, observacao, url, documento_origem_id, emitente_id, emitente_nome, emitente_documento')
+          .select('id, versao, especie, numero, serie, chave_acesso, data_emissao, observacao, url, documento_origem_id, emitente_id, emitente_nome, emitente_documento, cab, peso_kg, data_abate, vencimento, dados')
           .eq('id', documentoId).maybeSingle(),
         (supabase as any).from('zoo_operacao_documento_componentes')
           .select('tipo, natureza, valor, ordem, descricao').eq('documento_id', documentoId).eq('cancelado', false).order('ordem'),
@@ -306,7 +340,9 @@ export function useOperacaoDocumentos({ operacaoId, clienteId, enabled }: Params
       if (hdr.error) throw new Error(hdr.error.message);
       const h = hdr.data as { id: string; versao: number; especie: EspecieDoc; numero: string | null; serie: string | null;
         chave_acesso: string | null; data_emissao: string | null; observacao: string | null; url: string | null; documento_origem_id: string | null;
-        emitente_id: string | null; emitente_nome: string | null; emitente_documento: string | null } | null;
+        emitente_id: string | null; emitente_nome: string | null; emitente_documento: string | null;
+        cab: number | null; peso_kg: number | null; data_abate: string | null; vencimento: string | null;
+        dados: Record<string, unknown> | null } | null;
       if (!h) return null;
       return {
         documentoId: h.id, versao: h.versao, especie: h.especie,
@@ -317,6 +353,8 @@ export function useOperacaoDocumentos({ operacaoId, clienteId, enabled }: Params
         componentes: ((comp.data ?? []) as { tipo: string; natureza: NaturezaComp; valor: number; ordem: number; descricao: string | null }[])
           .map(c => ({ tipo: c.tipo, natureza: c.natureza, valor: Number(c.valor), ordem: c.ordem, descricao: c.descricao ?? '' })),
         loteIds: ((links.data ?? []) as { operacao_lote_id: string }[]).map(l => l.operacao_lote_id),
+        cab: h.cab ?? null, pesoKg: h.peso_kg == null ? null : Number(h.peso_kg),
+        dataAbate: h.data_abate ?? null, vencimento: h.vencimento ?? null, dados: h.dados ?? null,
       };
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Falha ao carregar o documento.');

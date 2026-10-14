@@ -877,7 +877,7 @@ export function AbateModalShell({
                 mostrar a mesma conta duas vezes na mesma tela, e a primeira vez que
                 divergissem por arredondamento ninguém saberia qual vale. */}
             {abaAtiva === 'documentos' && documentosApi ? (
-              <AbaDocumentosOC api={documentosApi} operacaoPronta={!!ocOperacaoId}
+              <AbaDocumentosOC api={documentosApi} operacaoPronta={!!ocOperacaoId} tipoOperacao="abate"
                 somenteLeitura={ocStatusComercial === 'cancelada'}
                 fornecedores={liquidacaoApi?.fornecedores}
                 contraparteId={frigorificoId || null}

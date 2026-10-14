@@ -1,7 +1,7 @@
 -- OC-DOC-ESPECIE-ABATE-01 passo 1 — as especies do abate, so' a NF soma, e o valor do documento e' o LIQUIDO. Termina em RAISE 'OK'.
 -- Compara com `is distinct from`.
 --   E1 esquema: CHECK com as 7 especies, as 5 colunas, a regra com ACL (authenticated sim, anon nao), as views security_invoker,
---      o registrar no md5 de destino
+--      o registrar no md5 de destino (ff4b1f93, desde o passo 2 — o passo 1 deixou fe274801)
 --   E2 LT10 (OC 8c8a864d, real, so' leitura): a NF 8812 = 96.535,70 no Financeiro (era 99.734,92); NPR e Romaneio com a especie nova
 --      e valor 0
 --   E3 02be1a41 (real, so' leitura): o total documentado do abate = so' as NFs; as guias (Iagro, Fundersul) valem 0 no total e
@@ -28,7 +28,7 @@ begin
      or (select reloptions from pg_class where oid = 'public.vw_oc_documentos'::regclass) is distinct from array['security_invoker=true']
      or (select reloptions from pg_class where oid = 'public.vw_lancamento_documentos'::regclass) is distinct from array['security_invoker=true']
      or (select md5(prosrc) from pg_proc where proname = 'oc_documento_registrar' and pronamespace = 'public'::regnamespace)
-          is distinct from 'fe2748011c770db16c4985ffe0ad8969' then
+          is distinct from 'ff4b1f93d7f6c6c73e1c013c961426a4' then
     raise exception 'E1 esquema'; end if;
   if public._oc_documento_soma_no_valor('abate', 'acerto') or not public._oc_documento_soma_no_valor('abate', 'nf_principal')
      or not public._oc_documento_soma_no_valor('venda', 'recibo') or not public._oc_documento_soma_no_valor('compra', 'outro') then

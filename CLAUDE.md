@@ -162,8 +162,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 14/10/2026 (OC-DOC-ESPECIE-ABATE-01 passo 1, +1 em `src/hooks/useLancamentoDocumentos.especie.test.ts` (11 -> 12) —
-  5201 depois dele; antes o ABATE-PROJETADO-01c, +12: `src/lib/oc/cenarioDoAbate.test.ts` 7 (novo),
+  Baseline em 14/10/2026 (OC-DOC-ESPECIE-ABATE-01 passo 2, +21: `src/lib/oc/camposDaEspecie.test.ts` 14 (novo),
+  `src/components/compra/documentoFormAbate.test.tsx` 9 (novo) — 5224 depois dele; antes o passo 1, +1 em
+  `src/hooks/useLancamentoDocumentos.especie.test.ts` (11 -> 12) — 5201 depois dele; antes o ABATE-PROJETADO-01c, +12: `src/lib/oc/cenarioDoAbate.test.ts` 7 (novo),
   `src/components/venda/recebimentoPrevisto.test.tsx` 5 (novo) — 5200 depois dele; antes o
   ABATE-PROJETADO-01b, +7 em `src/components/abate/modalNegociarLoteUnidades.test.tsx` (27 -> 34) — 5188
   depois dele; antes o OC-LISTA-CAB-KG-COLUNAS-01, +1 em `src/components/operacao-comercial/central/centralListaLayout.test.tsx`
@@ -321,7 +322,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5201
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5224
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3924,6 +3925,44 @@ docs/historico/frentes-ate-2026-09-29.md.)
     02be1a41 total documentado 367.783,40 = so' a NF (Iagro 377,85 e Fundersul 765,49 / 1.913,72 fora); 20/10/8.
   ⚠ O CANAL DE LEITURA DO MCP (`supabase_read_only_user`) NAO EXECUTA `_oc_documento_soma_no_valor`: consulta nas duas views por ele
     da' "permission denied for function" — consultar pelo canal de escrita (so' SELECT). A tela (`authenticated`) tem o grant.
+  · PASSO 2 — A ABA DOCUMENTOS DO ABATE (Gabriel, 14/10/2026, banco + tela). Migration
+    `supabase/migrations/20261027198300_oc_doc_especie_abate_02.sql` (md5 do arquivo 878f01171f73fa00ea9aa29be6870a08) — APLICADA no
+    proto em 14/10/2026 com o OK do Gabriel: ledger 20261014220633 (⚠ registrada com o timestamp do dia; o ledger guarda o arquivo SEM
+    a quebra de linha final: md5 b9e4f093…). Patch guardado por md5: `oc_documento_registrar` fe274801… -> ff4b1f93…,
+    `oc_documento_editar` bbbb340b… -> a744b4c7… (ACL, SECURITY DEFINER e search_path iguais): gravam `cab`, `peso_kg`, `data_abate`,
+    `vencimento` e `dados`; no editar a chave AUSENTE mantem o gravado e `dados` substitui o objeto ({} vira nulo). A ESPECIE NAO SE
+    EDITA (decisao do Gabriel: cancela e registra de novo; a tela a mostra so' leitura com "espécie não muda depois de registrado").
+    `vw_oc_documentos` ganhou NO FIM `cab`, `peso_kg`, `data_abate`, `vencimento`, `dados`. O SEGURO TEM TIPO PROPRIO, 'seguro': o unico
+    'outros' que era seguro (022f21b0, NF 8812 do LT10, 107,95) foi convertido POR ID (gesto contrario no cabecalho); a tela reconhece
+    SO' o tipo, nunca a descricao. Teste `supabase/tests/oc_doc_especie_abate_02_test.sql` (F1–F4) OK ao vivo; o
+    `oc_doc_especie_abate_01_test.sql` passou ao md5 novo do registrar (E1) e segue OK.
+    · DONO DOS CAMPOS: `camposDaEspecie(tipoOC, especie)` e `especiesDaOC` (`src/lib/oc/camposDaEspecie.ts`); nulo = compra e venda, que
+      seguem com o `DocumentoFormOC` e a lista de hoje. O formulario <-> documento e' `src/lib/oc/formDocumentoAbate.ts`
+      (`formAbateDoDetalhe`, `payloadDoFormAbate`, `pendenciasDoFormAbate`): na EDICAO o que a especie nao desenha volta como foi lido
+      (o numero "Acerto OC …" do backfill), no NOVO so' o que ela desenha; componente que a especie nao mapeia e' PRESERVADO; o acerto
+      grava bruto + UMA retencao (tipo `retencao_acerto`, "Retenções do acerto") = bruto − liquido digitado. Os calculados (@ = kg/15,
+      retencoes, liquido, media) sao so' exibicao; o que soma e' do banco.
+    · TELA (`DocumentoFormAbate`, `AbaDocumentosOC` com `tipoOperacao="abate"` vindo do `AbateModalShell`): seletor [NF | NPR | Acerto |
+      Romaneio | Outro] + area de arquivo numa linha de 26px; AREA DE CAMPOS DE 250px FIXOS (a da NF), grade de 5 colunas, rotulo 10px e
+      controle 22px; faixa de 22px; rodape fixo. Lista: Tipo | Numero | Data | Venc. | Cab | Peso kg | Valor R$ (o liquido PROPRIO, da
+      view; o que nao soma em cinza) | Conferencia (reservada) | anexo | ⋯, linhas de 18px, datas dd/mm/aa.
+      MEDIDO na bancada (Chromium, a casca do modal, 1.127 x 523 e 1.440 x 900), IGUAL nas 5 especies: modal 1024 x 493 / 1024 x 870,
+      formulario 766 x 374, area 250 (scrollHeight 250), faixa 22, topo do rodape 417, corpo scrollHeight = clientHeight (394 / 771), 0
+      campos fora da area; lista com 12 linhas de 18px sem rolar e 0 numeros/datas cortados. Fotos em ~/Downloads/oc-doc-especie-passo2/.
+    · O EMITENTE DA NOTA NA FAIXA DE 22px (Gabriel, 14/10): CNPJ exato escolhe sozinho; sem ele, a faixa AMBAR diz "Emitente não
+      achado pelo CNPJ · parecido: <nome>" com "usar este" (grava o CNPJ no cadastro com o aval e escolhe) e "nenhum"; o parecido que ja'
+      tem OUTRO CNPJ nao e' sobrescrito — a faixa diz de quem e' e "nada foi alterado" (o "conflito de documento" do formulario antigo).
+      Prioridade na faixa: o que falta (vermelho) > o emitente (ambar) > o que a leitura disse > a frase da especie. Medido com a faixa
+      acesa (1.127 x 523): modal, formulario, area, faixa e rodape iguais.
+    ⚠ NOTA JA' REGISTRADA (FASE 0 de 14/10, so' leitura): o BANCO NAO BLOQUEIA documento duplicado — sem indice unico em
+      `zoo_operacao_documentos` nem em `financeiro_lancamento_documentos`, sem gatilho, e o `oc_documento_registrar` nao confere. Hoje:
+      1 chave de acesso repetida entre documentos vivos de OC, e 1 (OC, emitente, numero, serie) de NF repetido. NENHUM formulario de OC
+      avisava (o "conflito de documento" antigo era o CNPJ do fornecedor). O dono da pergunta existe, `fn_documento_chave_ja_registrada`
+      (so' pela CHAVE; avisa e nao bloqueia, decisao do FIN-NFE-XML-01b1) — o aviso no abate aguarda decisao do Gabriel.
+    ⚠ DESVIOS DECLARADOS: a "frase da OC" da faixa e' a da especie ("NF · é o valor da operação (soma)", "Acerto · confere com a NF · não
+      soma no valor"…); o Valor R$ da lista e' o liquido PROPRIO.
+    ⚠ NAO PROVADO: a tela REAL no navegador (so' a bancada com a casca do modal e dados ficticios) · upload e leitura de PDF real · o
+      escolher o emitente / o "+" dentro da grade · perfil nao admin.
   ⚠ FILA (decisao do Gabriel, 14/10): OC-DOC-COMPONENTE-DESPESA-RECIBO-01 (os dois recibos de boitel negativos: cadastro dos
     componentes) · SEG-VW-LANCAMENTO-DOCUMENTOS-ANON-01 (`vw_lancamento_documentos` da' todos os privilegios ao `anon`; hoje ele nao
     le^ nada, sem grant nas tabelas de baixo) · `fn_documento_chave_ja_registrada` ainda devolve o valor da nota da OC como a soma de
