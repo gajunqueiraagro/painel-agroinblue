@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 15/10/2026 (OC-DOC-ESPECIE-ABATE-01 passo 7e, +19: `src/lib/oc/leitura/leituraAbate7e.test.ts` 18 (novo),
+  Baseline em 15/10/2026 (OC-DOC-SAIDA-FAZENDA-01, +20: `src/lib/oc/leitura/leituraSaida7f.test.ts` 19 (novo),
+  `src/components/compra/documentoFormAbate.test.tsx` 1 (16 -> 17) — 5310 depois dele; antes o OC-DOC-ESPECIE-ABATE-01 passo 7e, +19: `src/lib/oc/leitura/leituraAbate7e.test.ts` 18 (novo),
   `src/components/compra/documentoFormAbate.test.tsx` 1 (15 -> 16) — 5290 depois dele; antes o OC-ENTREGA-COMPACTA-01, +9 em `src/components/venda/entregasVenda.test.tsx` (10 -> 19) — 5271 depois
   dele; antes o OC-DOC-ESPECIE-ABATE-01 passo 4 + 4b, +26: `src/lib/oc/leitura/leituraAbate.test.ts` 21 (novo),
   `src/components/compra/documentoFormAbate.test.tsx` 4 (11 -> 15), `src/lib/oc/camposDaEspecie.test.ts` 1 (14 -> 15) — 5262 depois
@@ -327,7 +328,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5290
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5310
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -4060,6 +4061,44 @@ docs/historico/frentes-ate-2026-09-29.md.)
     Medido a 1.127 x 523 e 1.440 x 900: area 250/250, faixa 22, rodape em 417, corpo sem rolar, 0 campos fora, nos 5 vazios e lidos.
     ⚠ NAO PROVADO: a tela real no navegador · o Registrar gravando incentivo e lote · o SENAR 617,44 (NF) x 617,43 (Acerto) segue
       como esta' (a diferenca de 0,01 fica a' vista, decisao do Gabriel).
+  · PASSO 7f — OC-DOC-SAIDA-FAZENDA-01: OS PAPEIS DA SAIDA DA FAZENDA NA ABA DOCUMENTOS (Gabriel 15/10/2026, banco + tela). Migration
+    `supabase/migrations/20261027198500_oc_doc_saida_fazenda_01.sql` (md5 do arquivo e2241eb1a15318da7f2d77153c82f277) — APLICADA no proto
+    em 15/10/2026 com o OK do Gabriel: ledger 20261015121511 (⚠ registrada com o timestamp do dia; o ledger guarda o arquivo SEM a quebra
+    final: md5 dbd20e1d…). ESPECIES NOVAS: `nf_produtor` (NFP-e de saida, SO' NO ABATE), `gta`, `guia`, `declaracao` (abate e venda).
+    REGRA DE SOMA (`_oc_documento_soma_no_valor` 34fe537f… -> 363dd22b…, ACL igual): abate = so' NF; VENDA = tudo MENOS gta, guia e
+    declaracao; compra = tudo. `oc_documento_registrar` ff4b1f93… -> f3e2d13d… (patch por md5, 2 ancoras); `oc_documento_editar` NAO
+    mudou (nao conhece especie). Na VENDA e na COMPRA a NFP-e CONTINUA sendo a nota da operacao (nf_principal) — decisao do Gabriel.
+    O VALOR da NFP-e e da guia e' componente de natureza 'informativo' (as views nao o somam); a lista o le^ dos componentes da OC
+    (`totalInformativo`, uma leitura por OC no `useOperacaoDocumentos`) e o mostra em cinza — nunca 0,00 por o liquido proprio ser 0.
+    CONVERSAO POR ID (17): 3 nf_principal -> nf_produtor (02be1a41 x2, 2d39d7e9), 9 outro -> guia (as 3 com valor da 02be1a41 passaram
+    a informativo), 5 outro -> gta; total documentado das 9 OCs tocadas igual antes x depois (conferido dentro da migration);
+    reaplicar = 0 linhas. Boitel (b58bf556, 7f7de76f, 8dcafa8e): nada convertido. Teste `supabase/tests/oc_doc_saida_fazenda_01_test.sql`
+    (S1–S4) OK ao vivo.
+    TELA: seletor em dois grupos (ABATE: NF · NPR · Acerto · Romaneio | SAÍDA: NF produtor · GTA · Guia · Declaração · Outro); grades das 4
+    (`camposDaEspecie`, area de 250px); NF produtor e GTA nascem com todos os lotes; lista em dois blocos ("ABATE · FRIGORÍFICO" e "SAÍDA
+    DA FAZENDA", faixa de largura inteira #cbd5e1 de 18px, bloco vazio sem faixa). CONFERENCIA: GTA = soma das cabecas das GTAs contra
+    as cabecas da OC (soma dos lotes; sem elas, nao conferida); NF produtor = as citadas na NF do frigorifico (`dados.nfs_produtor`)
+    registradas ("NF produtor 2 de 2"; faltando, cinza "falta NF produtor N"); linha da NF produtor "✓ citada na NF · GTA Q-745856".
+    LEITORES: NFP-e MS (titulo + chave com DV), e-GTA IAGRO (titulo por partes + quadro Fêmea/Macho/Total), Modelo B, Carta de garantia;
+    a guia em imagem so' anexa. A mascara de NF so' vale para NF e NF produtor (a GTA "745856" nao vira "000.745.856").
+    PROVA (bancada, 15/10, sem gravar): os 6 PDFs da Vera lidos; os 12 anteriores IDENTICOS ao 7e; a lista da Vera com 9 documentos verde
+    "… · GTA 18 + 18 = 36 cab · NF produtor 2 de 2"; area 250, faixa 22, rodape 417 e corpo sem rolar nas 9 especies, vazias e lidas,
+    a 1.127 x 523 e 1.440 x 900.
+    ⚠ O CORPO DO MODAL NUNCA ROLA (Gabriel 15/10): o quadro "Total documentado / Negociado" virou UMA linha de 24px (a altura da
+      faixa de conferencia; `quadro-documentado`: rotulo | valor a' direita | rotulo | valor a' direita | confronto em 120px). Ganhou
+      18px; e a LINHA DE DOCUMENTO passou de 18 para 16px (Gabriel 15/10; faixas dos blocos, cabecalho, fontes e colunas iguais;
+      nenhum texto cortado na vertical, botoes de 16 x 16 inteiros e clicaveis). MEDIDO (bancada, lista da Vera repetida): 12
+      documentos cabem a 1.127 x 523 (corpo 394 de 394); 13 rolam (401 de 394). MAXIMO SEM ROLAR: 12 a 1.127 x 523 e 36 a
+      1.440 x 900. Acima disso: decisao do Gabriel, nao tomada.
+    · TESTES SQL SEM DADO REAL QUE MUDA (Gabriel 15/10): `oc_doc_especie_abate_01_test.sql` E2 e E5 criam a OC, os documentos, os
+      componentes, os lancamentos e as partes dentro da transacao (E5 e' ESPELHO DECLARADO do bloco 6 da migration 20261027198200);
+      `oc_doc_especie_abate_02_test.sql` F1 acha o Seguro pela NF 8812 viva + tipo 'seguro' (um so', com natureza e valor), nunca
+      pelo id. Os tres (abate_01, abate_02, saida_fazenda_01) OK ao vivo em 15/10.
+      ⚠ AINDA PRESOS A DADO REAL (nao pedidos neste ajuste): abate_01 E3 (02be1a41), abate_02 F1/F2/F4 (a NF 8812 do LT10 e os 3
+        lancamentos dela; F2/F3 escrevem documentos no LT10 dentro da transacao), saida_fazenda_01 S3 (os 17 ids) e S4 (totais das 9 OCs).
+    ⚠ FILA: OC-DOC-SAIDA-COMPRA-01 (compra fica para depois: o formulario da compra e' o antigo, sem a grade por especie; falta a regra
+      de soma da compra para as especies novas; e decidir quando a NFP-e do vendedor e' a nota da compra) · o formulario da VENDA
+      (antigo) ainda nao oferece gta / guia / declaracao — o banco ja' aceita: OC-DOC-SAIDA-VENDA-01, na fila do Gabriel.
   ⚠ FILA (decisao do Gabriel, 14/10): OC-DOC-DUPLICADO-01 (aviso de NF ja' registrada — o banco NAO bloqueia: sem indice unico,
     sem gatilho, o registrar nao confere; a tela NUNCA avisou; no proto 1 chave de acesso repetida e 1 NF repetida por OC + emitente +
     numero + serie entre documentos vivos; o dono existente `fn_documento_chave_ja_registrada` compara SO' pela chave; a decisao do

@@ -262,4 +262,18 @@ describe('aba Documentos do abate', () => {
     fireEvent.click(within(screen.getByTestId('linha-especie')).getByRole('button', { name: 'Acerto' }));
     expect(screen.getByTestId('seletor-lotes').textContent).toBe('Todos os lotes · 54 cab');
   });
+
+  it('7f: lista em dois blocos com faixa; o valor da guia e o informativo (cinza), a GTA sem valor e "—"; bloco vazio sem faixa', () => {
+    const a = api([
+      doc({ documentoId: 'g1', especie: 'gta', numero: '745856', serie: 'Q', cab: 18, qtdComponentes: 0, somaNoValor: false, liquidoProprio: 0, totalInformativo: null }),
+      doc({ documentoId: 'gu', especie: 'guia', numero: 'Taxa Iagro', qtdComponentes: 1, somaNoValor: false, liquidoProprio: 0, totalInformativo: 377.85 }),
+    ]);
+    montar('abate', a);
+    expect(screen.queryByTestId('faixa-bloco-abate')).toBeNull();
+    expect(screen.getByTestId('faixa-bloco-saida').textContent).toBe('SAÍDA DA FAZENDA');
+    const valores = screen.getAllByTestId('valor-doc').map(x => x.textContent);
+    expect(valores).toEqual(['—', '377,85']);
+    expect(screen.getAllByTestId('linha-doc-abate').every(l => l.className.includes('text-muted-foreground'))).toBe(true);
+    expect(screen.getAllByTestId('linha-doc-abate')[0].textContent).toContain('Q-745856');
+  });
 });

@@ -12,7 +12,11 @@ import { normalizarErroRpc } from '@/hooks/useOcCompromissos';
 
 /* OC-DOC-ESPECIE-ABATE-01 — `npr`, `acerto` e `romaneio` sao documentos do ABATE (o banco recusa nas outras OCs). No abate so' a NF
    soma no valor dos documentos (`_oc_documento_soma_no_valor`); a view ja' entrega `valor_liquido` com a regra aplicada. */
-export type EspecieDoc = 'nf_principal' | 'nf_complementar' | 'recibo' | 'outro' | 'npr' | 'acerto' | 'romaneio';
+/* OC-DOC-SAIDA-FAZENDA-01 (7f) — os documentos da SAIDA DA FAZENDA: `nf_produtor` (NFP-e, so' no abate), `gta`, `guia` e
+   `declaracao` (abate e venda). NUNCA somam no valor da OC (`_oc_documento_soma_no_valor`); o valor da NFP-e e da guia e' componente
+   de natureza 'informativo'. */
+export type EspecieDoc = 'nf_principal' | 'nf_complementar' | 'recibo' | 'outro' | 'npr' | 'acerto' | 'romaneio'
+  | 'nf_produtor' | 'gta' | 'guia' | 'declaracao';
 export type NaturezaComp = 'acrescimo' | 'desconto_comercial' | 'retencao_sem_caixa' | 'despesa_desembolso' | 'informativo';
 
 export interface DocumentoLista {
@@ -55,6 +59,8 @@ export interface DocumentoLista {
   dados?: Record<string, unknown> | null;
   liquidoProprio?: number;
   somaNoValor?: boolean;
+  /** 7f: soma dos componentes INFORMATIVOS vivos (a view nao a traz: ela so' soma o que entra no liquido). Nulo = sem informativo. */
+  totalInformativo?: number | null;
 }
 
 export interface ComponentePayload { tipo: string; natureza: NaturezaComp; valor: number; descricao?: string; ordem: number; }
@@ -167,6 +173,13 @@ export function payloadJson(p: DocumentoPayload): Record<string, unknown> {
   };
 }
 
+/** Soma, em centavos, os componentes informativos de cada documento. */
+export function totaisInformativos(linhas: { documento_id: string; valor: number }[]): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const l of linhas) m.set(l.documento_id, (m.get(l.documento_id) ?? 0) + Math.round(Number(l.valor) * 100));
+  return new Map([...m].map(([k, v]) => [k, v / 100]));
+}
+
 export function useOperacaoDocumentos({ operacaoId, clienteId, enabled }: Params): DocumentosApi {
   const [documentos, setDocumentos] = useState<DocumentoLista[]>([]);
   const [lotes, setLotes] = useState<LoteOpcao[]>([]);
@@ -177,12 +190,17 @@ export function useOperacaoDocumentos({ operacaoId, clienteId, enabled }: Params
     if (!enabled || !operacaoId) { setDocumentos([]); setLotes([]); return; }
     setLoading(true);
     try {
-      const [docs, los] = await Promise.all([
+      const [docs, los, infos] = await Promise.all([
         (supabase as any).from('vw_oc_documentos').select('*').eq('operacao_id', operacaoId),
         (supabase as any).from('zoo_operacao_lotes').select('id, ordem, categoria_negociada, qtd_negociada').eq('operacao_id', operacaoId).order('ordem'),
+        /* 7f: o valor do documento informativo (guia, NFP-e) — uma leitura por OC, nunca por linha. */
+        (supabase as any).from('zoo_operacao_documento_componentes').select('documento_id, valor')
+          .eq('operacao_id', operacaoId).eq('natureza', 'informativo').eq('cancelado', false),
       ]);
       if (docs.error) throw new Error(docs.error.message);
       if (los.error) throw new Error(los.error.message);
+      if (infos.error) throw new Error(infos.error.message);
+      const informativo = totaisInformativos((infos.data ?? []) as { documento_id: string; valor: number }[]);
       setDocumentos(((docs.data ?? []) as DocRow[]).map(d => ({
         documentoId: d.documento_id, especie: d.especie, numero: d.numero, serie: d.serie, dataEmissao: d.data_emissao,
         situacao: d.situacao, cancelado: d.cancelado, valorLiquido: Number(d.valor_liquido),
@@ -196,6 +214,7 @@ export function useOperacaoDocumentos({ operacaoId, clienteId, enabled }: Params
         dataAbate: d.data_abate ?? null, vencimento: d.vencimento ?? null, dados: d.dados ?? null,
         liquidoProprio: d.liquido_proprio == null ? Number(d.valor_liquido) : Number(d.liquido_proprio),
         somaNoValor: d.soma_no_valor ?? true,
+        totalInformativo: informativo.get(d.documento_id) ?? null,
       })));
       setLotes(((los.data ?? []) as LoteRow[]).map(l => ({ loteId: l.id, ordem: l.ordem, categoria: l.categoria_negociada, qtd: l.qtd_negociada ?? null })));
     } catch (e) {

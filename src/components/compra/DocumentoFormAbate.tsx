@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/ui/date-picker';
 import { CampoMoeda } from '@/components/ui/campo-moeda';
 import { Segmentado } from '@/components/ui/segmentado';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { AreaDeArquivo } from '@/components/ui/area-de-arquivo';
 import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
@@ -20,12 +21,13 @@ import { brl, formatCasas, parseMoeda } from '@/lib/calculos/numeroBR';
 import { cn } from '@/lib/utils';
 import type { DocumentosApi, EspecieDoc, LoteOpcao } from '@/hooks/useOperacaoDocumentos';
 import {
-  camposDaEspecie, especiesDaOC, ROTULO_SEGMENTO, arrobasDoPeso, retencoesDaNF, retencoesDoAcerto, mediaDoRomaneio, pctDoBruto,
+  camposDaEspecie, ROTULO_SEGMENTO, arrobasDoPeso, retencoesDaNF, retencoesDoAcerto, mediaDoRomaneio, pctDoBruto,
+  GRUPOS_DO_SELETOR_ABATE, TIPOS_DE_GUIA, TIPOS_DE_DECLARACAO,
   type CampoDef, type ChaveCampo,
 } from '@/lib/oc/camposDaEspecie';
 import {
   nfsProdutorDoTexto, payloadDoFormAbate, pendenciasDoFormAbate, textoDasNfsProdutor, valorDasNfsProdutor,
-  lotesPadraoDaEspecie, loteSugeridoPelaQuantidade, totalDosIncentivos, FRASE_LOTE_SUGERIDO, DESCRICAO_INCENTIVO,
+  lotesPadraoDaEspecie, loteSugeridoPelaQuantidade, totalDosIncentivos, FRASE_LOTE_SUGERIDO, DESCRICAO_INCENTIVO, cabDaGta,
   type FormAbate, type NfProdutor,
 } from '@/lib/oc/formDocumentoAbate';
 import { conferenciaAoVivo, type DocConferencia } from '@/lib/oc/conferirDocumentosAbate';
@@ -55,6 +57,11 @@ const FRASE_DA_ESPECIE: Partial<Record<EspecieDoc, string>> = {
   npr: 'NPR · confere com a NF · não soma no valor',
   acerto: 'Acerto · confere com a NF · não soma no valor',
   romaneio: 'Romaneio · confere cab e peso com a NF · não soma no valor',
+  /* 7f — saida da fazenda: nunca soma */
+  nf_produtor: 'NF produtor · nota de saída da fazenda · não soma no valor',
+  gta: 'GTA · confere as cabeças com a OC · não soma no valor',
+  guia: 'Guia · informativo · não soma no valor',
+  declaracao: 'Declaração · informativo · não soma no valor',
 };
 const FRASE_OUTRO = 'Outro · informativo · não soma';
 export const FRASE_ESPECIE_FIXA = 'espécie não muda depois de registrado';
@@ -194,6 +201,7 @@ export function DocumentoFormAbate({ api, somenteLeitura, fornecedores, clienteI
     switch (k) {
       case 'arrobas': return f2(arrobasDoPeso(form.pesoKg));
       case 'mediaKg': return f2(mediaDoRomaneio(form.cab, form.pesoKg));
+      case 'cabGta': { const n = cabDaGta(form); return n == null ? '—' : formatCasas(n, 0); }
       case 'retencoes':
         if (form.especie === 'acerto') { const r = retencoesDoAcerto(form.bruto, form.liquido, incentivo); return r == null ? '—' : brl(r); }
         return brl(retNF);
@@ -228,11 +236,13 @@ export function DocumentoFormAbate({ api, somenteLeitura, fornecedores, clienteI
       const pdf = await extrairLinhasPdf(file);
       const r = lerPdfDoAbate(pdf, { especie: form.especie, cnpjContraparte: contraparte?.cpfCnpj ?? null });
       if (r.tipo === 'lido') {
-        const n = aplicarLeitura(form, r.campos, r.dados, numeroEmRepouso).preenchidos.length;
+        /* 7f: o numero so' ganha a mascara de NF nas notas (frigorifico e produtor); GTA e declaracao ficam como o PDF escreve. */
+        const mascara = ehNotaFiscal(form.especie) || form.especie === 'nf_produtor' ? numeroEmRepouso : undefined;
+        const n = aplicarLeitura(form, r.campos, r.dados, mascara).preenchidos.length;
         /* passo 7e: o Romaneio sem lote ganha o lote cuja quantidade de cabecas e' a do romaneio, se for UM so'. */
         const sugerido = r.grupo === 'romaneio' && form.loteIds.length === 0 ? loteSugeridoPelaQuantidade(api.lotes, r.campos.cab) : null;
         setForm(f => {
-          const g = aplicarLeitura(f, r.campos, r.dados, numeroEmRepouso).form;
+          const g = aplicarLeitura(f, r.campos, r.dados, mascara).form;
           return sugerido && g.loteIds.length === 0 ? { ...g, loteIds: [sugerido] } : g;
         });
         const exato = r.grupo === 'nf' ? emitenteDaNota(r.campos.emitenteCnpj ?? null, r.campos.emitenteNome ?? null) : null;
@@ -303,8 +313,15 @@ export function DocumentoFormAbate({ api, somenteLeitura, fornecedores, clienteI
     onSaved();
   };
 
-  const opcoes = especiesDaOC('abate').map(e => ({ valor: e, rotulo: ROTULO_SEGMENTO[e] ?? ESPECIE_LABEL[e], desabilitada: editando && e !== form.especie }));
-  if (!opcoes.some(o => o.valor === form.especie)) opcoes.push({ valor: form.especie, rotulo: ESPECIE_LABEL[form.especie], desabilitada: false });
+  /* 7f: o seletor em DOIS grupos (ABATE · SAÍDA), numa linha; a especie que nao esta' em grupo nenhum (legado) entra no segundo. */
+  const grupos = GRUPOS_DO_SELETOR_ABATE.map((g, i) => {
+    const especies = i === GRUPOS_DO_SELETOR_ABATE.length - 1 && !GRUPOS_DO_SELETOR_ABATE.some(x => x.especies.includes(form.especie))
+      ? [...g.especies, form.especie] : g.especies;
+    return { rotulo: g.rotulo, opcoes: especies.map(e => ({ valor: e, rotulo: ROTULO_SEGMENTO[e] ?? ESPECIE_LABEL[e], desabilitada: editando && e !== form.especie })) };
+  });
+  const escolherEspecie = (e: EspecieDoc) => {
+    if (!editando) { setForm(f => ({ ...f, especie: e, loteIds: lotesPadraoDaEspecie(e, api.lotes) })); setTentou(false); }
+  };
 
   const rotuloContraparte = contraparte?.nome ? `Mesmo da operação — ${contraparte.nome}` : 'Mesmo da operação';
 
@@ -316,20 +333,37 @@ export function DocumentoFormAbate({ api, somenteLeitura, fornecedores, clienteI
     switch (k) {
       case 'numero':
         return <Input value={form.numero} disabled={somenteLeitura} aria-invalid={inv || undefined}
-          inputMode={ehNotaFiscal(form.especie) ? 'numeric' : undefined}
-          onChange={e => set('numero', ehNotaFiscal(form.especie) ? numeroDigitando(e.target.value) : e.target.value)}
-          onBlur={() => setForm(f => (ehNotaFiscal(f.especie) && f.numero ? { ...f, numero: numeroEmRepouso(f.numero) } : f))}
+          inputMode={ehNotaFiscal(form.especie) || form.especie === 'nf_produtor' ? 'numeric' : undefined}
+          onChange={e => set('numero', ehNotaFiscal(form.especie) || form.especie === 'nf_produtor' ? numeroDigitando(e.target.value) : e.target.value)}
+          onBlur={() => setForm(f => ((ehNotaFiscal(f.especie) || f.especie === 'nf_produtor') && f.numero ? { ...f, numero: numeroEmRepouso(f.numero) } : f))}
           className={cn(CTL, borda)} />;
       case 'serie': case 'chaveAcesso': case 'observacao': case 'ordemCompra': case 'loteFrigorifico': case 'op': case 'nfRefNumero':
+      case 'destinatario': case 'gtaCitada': case 'finalidade': case 'destino':
         return <Input value={form[k]} disabled={somenteLeitura} aria-invalid={inv || undefined}
           onChange={e => set(k, e.target.value)} className={cn(CTL, borda)} title={form[k] || undefined} />;
-      case 'dataEmissao': case 'dataAbate': case 'vencimento':
+      case 'dataEmissao': case 'dataAbate': case 'vencimento': case 'dataSaida': case 'validade': case 'embarque': case 'pagoEm':
         return <DatePicker value={form[k]} onChange={v => set(k, v)} size="compact" disabled={somenteLeitura}
           className={cn('h-[22px] text-[11px]', borda)} />;
       case 'cab':
         return <CampoNumero valor={form.cab} onChange={n => set('cab', n)} casas={0} invalido={inv} className={borda} />;
       case 'pesoKg':
         return <CampoNumero valor={form.pesoKg} onChange={n => set('pesoKg', n)} casas={2} invalido={inv} className={borda} />;
+      case 'femeas': case 'machos':
+        return <CampoNumero valor={form[k]} onChange={n => set(k, n)} casas={0} invalido={inv} className={borda} />;
+      case 'valorInformativo':
+        return <CampoMoeda valor={form.valorInformativo} onChange={n => set('valorInformativo', n)} disabled={somenteLeitura}
+          className={cn(CTL, NUM, borda)} />;
+      case 'tipoGuia': case 'tipoDeclaracao': {
+        const opcoesTipo = k === 'tipoGuia' ? TIPOS_DE_GUIA : TIPOS_DE_DECLARACAO;
+        return (
+          <Select value={form[k] || undefined} onValueChange={v => set(k, v)} disabled={somenteLeitura}>
+            <SelectTrigger data-testid={`select-${k}`} aria-invalid={inv || undefined} className={cn('h-[22px] px-1.5 text-[11px]', borda)}>
+              <SelectValue placeholder="—" />
+            </SelectTrigger>
+            <SelectContent>{opcoesTipo.map(o => <SelectItem key={o.valor} value={o.valor}>{o.rotulo}</SelectItem>)}</SelectContent>
+          </Select>
+        );
+      }
       case 'precoArroba': case 'bruto': case 'funrural': case 'senar': case 'seguro': case 'rat': case 'liquido': case 'valor': case 'nfRefValor':
         return <CampoMoeda valor={form[k]} onChange={n => set(k, n)} disabled={somenteLeitura}
           className={cn(CTL, NUM, borda)} />;
@@ -421,8 +455,12 @@ export function DocumentoFormAbate({ api, somenteLeitura, fornecedores, clienteI
       </div>
 
       <div data-testid="linha-especie" className="flex shrink-0 items-center gap-2" style={{ height: ALTURA_LINHA_ESPECIE }}>
-        <Segmentado<EspecieDoc> valor={form.especie} altura={26} opcoes={opcoes}
-          onEscolher={e => { if (!editando) { setForm(f => ({ ...f, especie: e, loteIds: lotesPadraoDaEspecie(e, api.lotes) })); setTentou(false); } }} />
+        {grupos.map(g => (
+          <span key={g.rotulo} className="flex shrink-0 items-center gap-1" data-testid={`grupo-especie-${g.rotulo}`}>
+            <span className="text-[9.5px] font-semibold text-muted-foreground">{g.rotulo}</span>
+            <Segmentado<EspecieDoc> valor={form.especie} altura={26} fonte={9.5} opcoes={g.opcoes} onEscolher={escolherEspecie} />
+          </span>
+        ))}
         {/* LUGAR RESERVADO da frase da edicao: existe sempre (vazio no documento novo). */}
         <span data-testid="especie-fixa" className="w-[150px] shrink-0 truncate text-[9.5px] text-muted-foreground" title={editando ? FRASE_ESPECIE_FIXA : undefined}>
           {editando ? FRASE_ESPECIE_FIXA : ''}

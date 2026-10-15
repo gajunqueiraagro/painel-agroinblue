@@ -25,7 +25,9 @@ export const CNPJS_DO_FRIGORIFICO: Record<Frigorifico, string[]> = {
   minerva: ['52168923000231'],
   jbs: ['02916265007768'],
 };
-type GrupoDoc = 'nf' | 'acerto' | 'romaneio';
+/* 7f (OC-DOC-SAIDA-FAZENDA-01): os documentos da SAIDA DA FAZENDA — a NFP-e do produtor, a e-GTA e as declaracoes (Modelo B,
+   Carta de garantia). Nao sao do frigorifico: o vinculo e' o proprio texto (titulo + chave / codigos), nunca a contraparte. */
+type GrupoDoc = 'nf' | 'acerto' | 'romaneio' | 'nf_produtor' | 'gta' | 'declaracao';
 
 export interface CamposLidos {
   numero?: string; serie?: string; chaveAcesso?: string; dataEmissao?: string;
@@ -34,6 +36,10 @@ export interface CamposLidos {
   cab?: number; pesoKg?: number; precoArroba?: number; bruto?: number;
   funrural?: number; senar?: number; seguro?: number; rat?: number; liquido?: number;
   nfsProdutor?: NfProdutor[];
+  /* 7f — saida da fazenda. `gtas`: as GTAs citadas ("Q-745856"); `valorNota`: o valor da NFP-e (vai como componente informativo). */
+  dataSaida?: string; destinatario?: string; gtas?: string[]; valorNota?: number;
+  femeas?: number; machos?: number; finalidade?: string; destino?: string; validade?: string; embarque?: string;
+  tipoDeclaracao?: string;
   /** Passo 7e: creditos do documento (o incentivo PROAPE-PRECOCE/MS da Minerva), um por linha do PDF. */
   incentivos?: Incentivo[];
 }
@@ -83,7 +89,8 @@ const somaCent = (xs: number[]) => xs.reduce((s, x) => s + centavos(x), 0);
 type Ler = (t: Texto) => { ok: true; campos: CamposLidos; dados?: Record<string, unknown>; avisos?: string[]; dispensados?: (keyof CamposLidos)[] }
   | { ok: false; motivo: 'incompleto' | 'nao_fecha'; detalhe: string };
 interface Layout {
-  id: string; rotulo: string; frigorifico: Frigorifico; grupo: GrupoDoc;
+  /** Nulo nos documentos da saida da fazenda (7f): o vinculo e' o proprio texto. */
+  id: string; rotulo: string; frigorifico: Frigorifico | null; grupo: GrupoDoc;
   /** true = o CNPJ do frigorifico vem do proprio texto (chave da NF, "CNPJ:" do acerto); false = da contraparte (regra 5). */
   cnpjNoTexto: boolean;
   reconhece: (t: Texto) => boolean;
@@ -390,16 +397,137 @@ const ROMANEIO_JBS: Layout = {
   },
 };
 
-export const LAYOUTS_DO_ABATE: readonly Layout[] = [NF_MINERVA, NF_JBS, ACERTO_MINERVA, ACERTO_JBS, ROMANEIO_MINERVA, ROMANEIO_JBS];
+/* ── 7f · SAIDA DA FAZENDA (OC-DOC-SAIDA-FAZENDA-01) ─────────────────────────────────────────────────────────────────
+   Mesmas regras do passo 4: ancoras fixas, tudo ou nada e a conta interna do proprio PDF. Medidos nos PDFs reais da Vera (13/10):
+   NFP-e de saida (SEFAZ-MS), e-GTA (IAGRO-MS), Declaracao do Produtor Modelo B e Carta de Garantia do Produtor. */
+
+/** A GTA como o sistema a escreve: "Q-745856" (serie + numero). Aceita "Q- 745856", "745856/Q" e "Q 745856". */
+export function gtaNormalizada(texto: string): string | null {
+  const t = texto.replace(/\s+/g, ' ').trim();
+  const a = t.match(/^([A-Z])\s*-?\s*(\d{4,})$/);
+  if (a) return `${a[1]}-${a[2]}`;
+  const b = t.match(/^(\d{4,})\s*\/\s*([A-Z])$/);
+  return b ? `${b[2]}-${b[1]}` : null;
+}
+/** A celula logo abaixo de um rotulo, na MESMA coluna (cabecalho de grade do DANFE: rotulos numa linha, valores na seguinte). */
+function abaixoNaColuna(t: Texto, rotulo: string, aPartirDe = 0): string | undefined {
+  for (let i = aPartirDe; i < t.linhas.length - 1; i++) {
+    const c = celulas(t.linhas[i]);
+    const k = c.indexOf(rotulo);
+    if (k >= 0) return celulas(t.linhas[i + 1])[k];
+  }
+  return undefined;
+}
+
+const NFPE_MS: Layout = {
+  id: 'nfpe_ms', rotulo: 'NFP-e', frigorifico: null, grupo: 'nf_produtor', cnpjNoTexto: true,
+  /* o titulo da NFP-e + uma chave com DV valido (a da SEFAZ-MS). */
+  reconhece: t => temTodos(t, ['NOTA FISCAL DO PRODUTOR ELETRÔNICA - NFPe']) && acharChaveNFe(t.comQuebras) != null,
+  obrigatorios: ['numero', 'dataEmissao', 'cab', 'valorNota'],
+  ler: t => {
+    const prods = produtosDaNf(t);
+    const iDest = t.linhas.findIndex(l => l.trim() === 'DESTINATÁRIO');
+    const dest = iDest >= 0 && t.linhas[iDest + 2] ? celulas(t.linhas[iDest + 2]) : [];
+    const gta = t.corrido.match(/Nº GTA:\s*([A-Z])\s*-\s*\|?\s*(\d{4,})/);
+    const total = num(abaixoNaColuna(t, 'VALOR TOTAL DA NOTA'));
+    const campos: CamposLidos = {
+      numero: depoisDe(t, 'Nº'), serie: depoisDe(t, 'SÉRIE:'), chaveAcesso: acharChaveNFe(t.comQuebras) ?? undefined,
+      dataEmissao: data(abaixoNaColuna(t, 'DATA DE EMISSÃO')), dataSaida: data(abaixoNaColuna(t, 'DATA DE ENTRADA/SAÍDA')),
+      destinatario: dest[0] ? [dest[0], dest[1]].filter(Boolean).join(' · ') : undefined,
+      gtas: gta ? [`${gta[1]}-${gta[2]}`] : undefined, valorNota: total,
+    };
+    if (prods.length === 0 || prods.some(p => p.total == null || p.quant == null)) return { ok: false, motivo: 'incompleto', detalhe: 'produtos da nota' };
+    const cab = prods.reduce((s, p) => s + (p.quant ?? 0), 0);
+    if (!Number.isInteger(cab) || cab <= 0) return { ok: false, motivo: 'nao_fecha', detalhe: 'quantidade de cabeças não inteira' };
+    campos.cab = cab;
+    if (total != null && somaCent(prods.map(p => p.total ?? 0)) !== centavos(total))
+      return { ok: false, motivo: 'nao_fecha', detalhe: 'soma dos produtos ≠ total da nota' };
+    if (prods.some(p => p.unit != null && p.quant != null && p.total != null && centavos(p.unit * p.quant) !== centavos(p.total)))
+      return { ok: false, motivo: 'nao_fecha', detalhe: 'quantidade × valor unitário ≠ total do produto' };
+    return { ok: true, campos };
+  },
+};
+
+const EGTA_MS: Layout = {
+  id: 'egta_ms', rotulo: 'e-GTA', frigorifico: null, grupo: 'gta', cnpjNoTexto: true,
+  /* o titulo vem em celulas ("Guia de Trânsito Animal | ( | e-GTA | )"): as partes, mais o quadro Fêmea / Macho / Total. */
+  reconhece: t => temTodos(t, ['Guia de Trânsito Animal', 'e-GTA', 'Fêmea | Macho | Total']),
+  obrigatorios: ['serie', 'numero', 'dataEmissao', 'cab'],
+  ler: t => {
+    const linhas = t.linhas.map(celulas);
+    const iCab = linhas.findIndex(c => c.includes('Série') && c.includes('Número'));
+    const id = iCab >= 0 ? linhas[iCab + 1] ?? [] : [];
+    const iFm = linhas.findIndex(c => c[0] === 'Fêmea' && c[1] === 'Macho' && c[2] === 'Total');
+    const fm = iFm >= 0 ? linhas[iFm + 1] ?? [] : [];
+    const estab = linhas.filter(c => c[0] === 'Estabelecimento:')[0] ?? [];
+    const k2 = estab.lastIndexOf('Estabelecimento:');
+    const femeas = num(fm[0]), machos = num(fm[1]), total = num(fm[2]);
+    const campos: CamposLidos = {
+      serie: id.length >= 2 ? id[id.length - 2] : undefined, numero: id.length >= 2 ? id[id.length - 1] : undefined,
+      dataEmissao: data(depoisDe(t, 'Data:')), validade: data(depoisDe(t, 'Validade:')),
+      embarque: data(re1(t.corrido, /Data\/Hora de Embarque:\s*(\d{2}\/\d{2}\/\d{4})/)),
+      femeas, machos, cab: total, finalidade: depoisDe(t, 'FINALIDADE:'),
+      destino: k2 > 0 ? estab[k2 + 1] : undefined,
+    };
+    if (femeas == null || machos == null || total == null) return { ok: false, motivo: 'incompleto', detalhe: 'Fêmea / Macho / Total' };
+    if (femeas + machos !== total || !Number.isInteger(total) || total <= 0) return { ok: false, motivo: 'nao_fecha', detalhe: 'fêmeas + machos ≠ total' };
+    return { ok: true, campos };
+  },
+};
+
+/** As GTAs de um trecho ("745856/Q ,745874/Q", "745856/Q e 745874/Q"), normalizadas; nulo se alguma nao for GTA. */
+function gtasDoTexto(trecho: string | undefined): string[] | null {
+  if (!trecho) return null;
+  const partes = trecho.split(/\s*(?:,|\be\b)\s*/).map(x => x.trim()).filter(Boolean);
+  const l = partes.map(gtaNormalizada);
+  return l.length && l.every(x => x != null) ? l.filter((x): x is string => x != null) : null;
+}
+
+const MODELO_B: Layout = {
+  id: 'modelo_b', rotulo: 'Modelo B', frigorifico: null, grupo: 'declaracao', cnpjNoTexto: true,
+  reconhece: t => temTodos(t, ['Declaração do Produtor', 'Modelo B']),
+  obrigatorios: ['numero', 'dataEmissao'],
+  ler: t => {
+    const gtas = gtasDoTexto(re1(t.corrido, /GTA\(s\) série e número\s+(.+?)\s+constantes/));
+    const campos: CamposLidos = {
+      tipoDeclaracao: 'modelo_b', numero: re1(t.corrido, /Documento No\.\s*(\d+)/),
+      dataEmissao: data(re1(t.corrido, /Data e Hora de Emissão:\s*\|?\s*(\d{2}\/\d{2}\/\d{4})/)),
+      gtas: gtas ?? undefined,
+    };
+    if (re1(t.corrido, /GTA\(s\) série e número\s+(.+?)\s+constantes/) && !gtas) return { ok: false, motivo: 'incompleto', detalhe: 'as GTAs citadas' };
+    return { ok: true, campos };
+  },
+};
+
+const CARTA_GARANTIA: Layout = {
+  id: 'carta_garantia', rotulo: 'Carta de garantia', frigorifico: null, grupo: 'declaracao', cnpjNoTexto: true,
+  reconhece: t => temTodos(t, ['Carta de Garantia do Produtor']),
+  obrigatorios: ['dataEmissao', 'cab'],
+  ler: t => {
+    const gtas = gtasDoTexto(re1(t.corrido, /GTA\(s\) Nº:\s*(.+?)\./));
+    const cab = num(re1(t.corrido, /destinados\s+(\d+)\s+animais/));
+    const campos: CamposLidos = {
+      tipoDeclaracao: 'carta_garantia', dataEmissao: data(re1(t.corrido, /Data Embarque:\s*(\d{2}\/\d{2}\/\d{4})/)),
+      cab, gtas: gtas ?? undefined,
+    };
+    if (cab != null && (!Number.isInteger(cab) || cab <= 0)) return { ok: false, motivo: 'nao_fecha', detalhe: 'cab não inteiro' };
+    return { ok: true, campos };
+  },
+};
+
+export const LAYOUTS_DO_ABATE: readonly Layout[] = [NF_MINERVA, NF_JBS, ACERTO_MINERVA, ACERTO_JBS, ROMANEIO_MINERVA, ROMANEIO_JBS,
+  NFPE_MS, EGTA_MS, MODELO_B, CARTA_GARANTIA];
 
 /* ── A LEITURA ────────────────────────────────────────────────────────────────────────────── */
-const ROTULO_DO_GRUPO: Record<GrupoDoc, string> = { nf: 'NF', acerto: 'Acerto', romaneio: 'Romaneio' };
+const ROTULO_DO_GRUPO: Record<GrupoDoc, string> = { nf: 'NF', acerto: 'Acerto', romaneio: 'Romaneio', nf_produtor: 'NF produtor', gta: 'GTA', declaracao: 'Declaração' };
 export const grupoDaEspecie = (e: EspecieDoc): GrupoDoc | null =>
-  (e === 'nf_principal' || e === 'nf_complementar' ? 'nf' : e === 'acerto' || e === 'romaneio' ? e : null);
+  (e === 'nf_principal' || e === 'nf_complementar' ? 'nf'
+    : e === 'acerto' || e === 'romaneio' || e === 'nf_produtor' || e === 'gta' || e === 'declaracao' ? e : null);
 
 const ROTULO_DO_CAMPO: Partial<Record<keyof CamposLidos, string>> = {
   chaveAcesso: 'a chave de acesso', dataEmissao: 'a emissão', cab: 'a quantidade de cabeças', pesoKg: 'o peso', bruto: 'o valor bruto',
   funrural: 'o Funrural', ordemCompra: 'a ordem de compra / pedido', dataAbate: 'a data do abate', liquido: 'o líquido',
+  numero: 'o número', serie: 'a série', valorNota: 'o valor da nota',
 };
 
 export const FRASE_SEM_TEXTO = 'PDF sem texto (imagem): só anexado, preencha os campos';
@@ -419,7 +547,7 @@ export function lerPdfDoAbate(
   const grupo = grupoDaEspecie(ctx.especie);
   if (grupo !== L.grupo)
     return { tipo: 'nao_lido', motivo: 'especie_trocada', frase: `Este PDF é ${L.rotulo}; a espécie escolhida é ${grupo ? ROTULO_DO_GRUPO[grupo] : 'outra'} · nada preenchido` };
-  if (!L.cnpjNoTexto && !daLista(L.frigorifico, ctx.cnpjContraparte ? digitos(ctx.cnpjContraparte) : null))
+  if (!L.cnpjNoTexto && L.frigorifico && !daLista(L.frigorifico, ctx.cnpjContraparte ? digitos(ctx.cnpjContraparte) : null))
     return { tipo: 'nao_lido', motivo: 'contraparte', frase: `${L.rotulo}, mas a contraparte da operação não é desse frigorífico: arquivo anexado, preencha os campos` };
   const r = L.ler(t);
   /* `=== false`: com `strict: false` o `!r.ok` nao estreita a uniao. */

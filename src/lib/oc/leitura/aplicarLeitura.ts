@@ -7,10 +7,12 @@ import { camposDaEspecie, type ChaveCampo } from '@/lib/oc/camposDaEspecie';
 import type { FormAbate } from '@/lib/oc/formDocumentoAbate';
 import type { CamposLidos } from '@/lib/oc/leitura/layoutsAbate';
 
-type ChaveTexto = 'numero' | 'serie' | 'chaveAcesso' | 'dataEmissao' | 'dataAbate' | 'vencimento' | 'ordemCompra' | 'loteFrigorifico' | 'op';
-type ChaveNumero = 'cab' | 'pesoKg' | 'precoArroba' | 'bruto' | 'funrural' | 'senar' | 'seguro' | 'rat' | 'liquido';
-const TEXTOS: ChaveTexto[] = ['numero', 'serie', 'chaveAcesso', 'dataEmissao', 'dataAbate', 'vencimento', 'ordemCompra', 'loteFrigorifico', 'op'];
-const NUMEROS: ChaveNumero[] = ['cab', 'pesoKg', 'precoArroba', 'bruto', 'funrural', 'senar', 'seguro', 'rat', 'liquido'];
+type ChaveTexto = 'numero' | 'serie' | 'chaveAcesso' | 'dataEmissao' | 'dataAbate' | 'vencimento' | 'ordemCompra' | 'loteFrigorifico' | 'op'
+  | 'dataSaida' | 'destinatario' | 'validade' | 'embarque' | 'finalidade' | 'destino' | 'tipoDeclaracao';
+type ChaveNumero = 'cab' | 'pesoKg' | 'precoArroba' | 'bruto' | 'funrural' | 'senar' | 'seguro' | 'rat' | 'liquido' | 'femeas' | 'machos';
+const TEXTOS: ChaveTexto[] = ['numero', 'serie', 'chaveAcesso', 'dataEmissao', 'dataAbate', 'vencimento', 'ordemCompra', 'loteFrigorifico', 'op',
+  'dataSaida', 'destinatario', 'validade', 'embarque', 'finalidade', 'destino', 'tipoDeclaracao'];
+const NUMEROS: ChaveNumero[] = ['cab', 'pesoKg', 'precoArroba', 'bruto', 'funrural', 'senar', 'seguro', 'rat', 'liquido', 'femeas', 'machos'];
 
 export function aplicarLeitura(
   form: FormAbate, campos: CamposLidos, dados: Record<string, unknown>,
@@ -41,6 +43,14 @@ export function aplicarLeitura(
     f.incentivos = campos.incentivos;
     if (desenha.has('incentivo')) preenchidos.push('incentivo');
   }
+  /* 7f: o valor da NFP-e vai para o campo informativo; a GTA citada (NFP-e) para o campo; as GTAs das declaracoes para `dados.gtas`. */
+  if (desenha.has('valorInformativo') && campos.valorNota != null && f.valorInformativo == null) {
+    f.valorInformativo = campos.valorNota; preenchidos.push('valorInformativo');
+  }
+  if (desenha.has('gtaCitada') && campos.gtas?.length && f.gtaCitada.trim() === '') {
+    f.gtaCitada = campos.gtas.join(' · '); preenchidos.push('gtaCitada');
+  }
+  if (form.especie === 'declaracao' && campos.gtas?.length && f.dadosLidos.gtas == null) f.dadosLidos.gtas = campos.gtas;
   for (const [k, v] of Object.entries(dados)) {
     const atual = f.dadosLidos[k];
     if (v != null && v !== '' && (atual == null || atual === '')) f.dadosLidos[k] = v;

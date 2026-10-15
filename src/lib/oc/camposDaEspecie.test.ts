@@ -8,8 +8,8 @@ const rotulos = (tipo: string, e: Parameters<typeof camposDaEspecie>[1]) =>
   (camposDaEspecie(tipo, e) ?? []).map(l => l.map(c => `${c.rotulo}${c.obrigatorio ? '*' : ''}${c.calculado ? '=' : ''}`));
 
 describe('camposDaEspecie', () => {
-  it('abate oferece NF, NPR, Acerto, Romaneio e Outro; compra e venda as 4 de sempre', () => {
-    expect(especiesDaOC('abate')).toEqual(['nf_principal', 'npr', 'acerto', 'romaneio', 'outro']);
+  it('abate oferece NF, NPR, Acerto, Romaneio | NF produtor, GTA, Guia, Declaração e Outro (7f); compra e venda as 4 de sempre', () => {
+    expect(especiesDaOC('abate')).toEqual(['nf_principal', 'npr', 'acerto', 'romaneio', 'nf_produtor', 'gta', 'guia', 'declaracao', 'outro']);
     expect(especiesDaOC('compra')).toEqual(['nf_principal', 'nf_complementar', 'recibo', 'outro']);
     expect(especiesDaOC('venda')).toEqual(['nf_principal', 'nf_complementar', 'recibo', 'outro']);
   });

@@ -10,7 +10,7 @@ import { DocumentoFormOC, FORM_VAZIO, ESPECIE_LABEL, brl, fmtNumeroDoc, type For
 import { notificarFornecedoresMudaram } from '@/hooks/useFornecedoresDoCliente';
 import { DocumentoFormAbate } from './DocumentoFormAbate';
 import { formAbateDoDetalhe, formAbateVazio, type FormAbate } from '@/lib/oc/formDocumentoAbate';
-import { ROTULO_SEGMENTO } from '@/lib/oc/camposDaEspecie';
+import { ROTULO_SEGMENTO, ESPECIES_DA_SAIDA } from '@/lib/oc/camposDaEspecie';
 import { formatCasas } from '@/lib/calculos/numeroBR';
 import { conferirDocumentosAbate, conferenciaDoDocumento, faixaDaConferencia, type ResultadoConferencia } from '@/lib/oc/conferirDocumentosAbate';
 
@@ -40,6 +40,7 @@ const fmtData = (iso: string | null) => (iso ? iso.split('-').reverse().join('/'
 const PREFIXO_ESPECIE: Record<EspecieDoc, string> = {
   nf_principal: 'NF', nf_complementar: 'NF compl.', recibo: 'Recibo', outro: 'Doc.',
   npr: 'NPR', acerto: 'Acerto', romaneio: 'Romaneio',
+  nf_produtor: 'NF prod.', gta: 'GTA', guia: 'Guia', declaracao: 'Decl.',
 };
 
 /* "2 notas · 1 recibo". Conta o que ESTA VALENDO; cancelado vira um termo proprio, e
@@ -48,6 +49,7 @@ const CONTAGEM_ROTULO: Record<EspecieDoc, [string, string]> = {
   nf_principal: ['nota', 'notas'], nf_complementar: ['nota compl.', 'notas compl.'],
   recibo: ['recibo', 'recibos'], outro: ['outro documento', 'outros documentos'],
   npr: ['NPR', 'NPRs'], acerto: ['acerto', 'acertos'], romaneio: ['romaneio', 'romaneios'],
+  nf_produtor: ['NF produtor', 'NFs produtor'], gta: ['GTA', 'GTAs'], guia: ['guia', 'guias'], declaracao: ['declaração', 'declarações'],
 };
 
 export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedores, contraparteId, clienteId, recarregarFornecedores, valorNegociado, tipoOperacao }: Props) {
@@ -177,7 +179,9 @@ export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedo
 
   const ativos = api.documentos.filter(d => !d.cancelado);
   /* OC-DOC-ESPECIE-ABATE-01 passo 3 — a conferencia entre os documentos (so' leitura; o dono e' `conferirDocumentosAbate`). */
-  const conferencia = conferirDocumentosAbate(api.documentos);
+  /* 7f: as cabecas da OC (soma dos lotes) — a GTA confere contra elas; sem a quantidade de algum lote, nulo (nao conferido). */
+  const cabDaOC = api.lotes.length && api.lotes.every(l => l.qtd != null) ? api.lotes.reduce((s, l) => s + (l.qtd ?? 0), 0) : null;
+  const conferencia = conferirDocumentosAbate(api.documentos, { cabDaOC });
   const totalDocumentado = ativos.reduce((s, d) => s + d.valorLiquido, 0);
 
   /* ⚠ TOLERANCIA DE R$ 0,01, a mesma regra canonica de saldo da OC (PR-OC2-SALDO):
@@ -232,23 +236,18 @@ export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedo
             "falta R$ 495.000,00" antes de existir qualquer documento nao compara coisa
             alguma: anuncia que a operacao acabou de comecar.
             ⚠ `valorNegociado` nulo e' AUSENCIA e imprime "—" (sentinela do CLAUDE.md):
-            operacao sem valor_acordado ainda nao tem com o que confrontar. */}
-        <div className="grid grid-cols-2 gap-2 rounded-md border bg-muted/20 px-3 py-1.5">
-          <div className="min-w-0">
-            <div className="text-[11px] text-muted-foreground leading-none">Total documentado</div>
-            <div className="mt-0.5 text-[15px] font-medium tabular-nums leading-none">{brl(totalDocumentado)}</div>
-          </div>
-          <div className="min-w-0">
-            <div className="text-[11px] text-muted-foreground leading-none">Negociado</div>
-            <div className="mt-0.5 text-[15px] font-medium tabular-nums leading-none">
-              {valorNegociado == null ? <span className="text-muted-foreground">—</span> : brl(valorNegociado)}
-              {confronto && (
-                <span className={`ml-2 text-[11px] font-normal ${confronto.ok
-                  ? 'text-emerald-700 dark:text-emerald-500'
-                  : 'text-amber-700 dark:text-amber-500'}`}>{confronto.texto}</span>
-              )}
-            </div>
-          </div>
+            operacao sem valor_acordado ainda nao tem com o que confrontar.
+            ⚠ 7f (Gabriel 15/10): UMA LINHA, na altura da faixa de conferencia (24px) — o corpo do modal nunca rola, e o quadro
+            de duas alturas tirava o espaco de 2 linhas da lista. Um dado por coluna, numeros a' direita, nada empilhado. */}
+        <div data-testid="quadro-documentado" className="grid h-6 grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)_120px] items-center gap-2 rounded-md border bg-muted/20 px-2 text-[10px] leading-none">
+          <span className="text-muted-foreground">Total documentado</span>
+          <span data-testid="total-documentado" className="text-right text-[12px] font-medium tabular-nums whitespace-nowrap">{brl(totalDocumentado)}</span>
+          <span className="text-muted-foreground">Negociado</span>
+          <span data-testid="total-negociado" className="text-right text-[12px] font-medium tabular-nums whitespace-nowrap">
+            {valorNegociado == null ? <span className="text-muted-foreground">—</span> : brl(valorNegociado)}
+          </span>
+          <span data-testid="confronto-documentado" title={confronto?.texto}
+            className={`truncate text-right ${confronto?.ok ? 'text-emerald-700 dark:text-emerald-500' : 'text-amber-700 dark:text-amber-500'}`}>{confronto?.texto ?? ''}</span>
         </div>
         {ehAbate && <FaixaConferenciaAbate r={conferencia} />}
       </div>
@@ -359,7 +358,7 @@ export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedo
 }
 
 /* ── LISTA DO ABATE (OC-DOC-ESPECIE-ABATE-01 passo 2) ─────────────────────────────────────────────────────────────────
-   Uma coluna por informacao, uma linha por registro (18px): Tipo | Numero | Data | Venc. | Cab | Peso kg | Valor R$ |
+   Uma coluna por informacao, uma linha por registro (16px desde o 7f, Gabriel 15/10; eram 18): Tipo | Numero | Data | Venc. | Cab | Peso kg | Valor R$ |
    Conferencia (reservada: passo 3) | anexo | ⋯. O Valor e' o LIQUIDO PROPRIO do documento, da view; o que nao soma no valor da
    operacao (NPR, Acerto, Romaneio, Outro) fica em cinza, e o "Outro" diz "informativo · não soma". */
 const PILULA: Partial<Record<EspecieDoc, string>> = {
@@ -367,12 +366,18 @@ const PILULA: Partial<Record<EspecieDoc, string>> = {
   npr: 'bg-amber-100 text-amber-800', acerto: 'bg-emerald-100 text-emerald-800', romaneio: 'bg-sky-100 text-sky-800',
 };
 const TH = 'h-[18px] px-1 text-[9.5px] font-medium text-primary-foreground whitespace-nowrap';
-const TD = 'h-[18px] px-1 py-0 align-middle text-[10px] leading-[17px] whitespace-nowrap overflow-hidden text-ellipsis';
-const TD_ICONE = 'h-[18px] px-0 py-0 align-middle text-center leading-none';
+const TD = 'h-[16px] px-1 py-0 align-middle text-[10px] leading-[15px] whitespace-nowrap overflow-hidden text-ellipsis';
+const TD_ICONE = 'h-[16px] px-0 py-0 align-middle text-center leading-none';
 /* dd/mm/aa — o padrao de tabela da casa (data nunca corta). */
 const dataCurta = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(2, 4)}` : '—');
 const textoDe = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
 
+/* 7f — o rotulo da pilula na coluna Tipo (64px): os longos encurtam (o nome inteiro vai no `title` da linha). */
+const PILULA_CURTA: Partial<Record<EspecieDoc, string>> = { nf_produtor: 'NF prod.', declaracao: 'Decl.' };
+/* 7f — os dois blocos da lista do abate. */
+const BLOCOS: { chave: 'abate' | 'saida'; rotulo: string }[] = [
+  { chave: 'abate', rotulo: 'ABATE · FRIGORÍFICO' }, { chave: 'saida', rotulo: 'SAÍDA DA FAZENDA' },
+];
 const TOM_CONFERENCIA = { verde: 'text-emerald-700', vermelho: 'text-destructive', neutro: 'text-muted-foreground' };
 
 /* A faixa de 24px do topo: verde (comparado e bate), vermelha (diverge, com a diferenca) ou cinza (nada a conferir); "falta" em
@@ -395,40 +400,25 @@ function TabelaDocumentosAbate({ documentos, loading, somenteLeitura, conferenci
   documentos: DocumentosApi['documentos']; loading: boolean; somenteLeitura?: boolean; conferencia: ResultadoConferencia;
   onAbrir: (caminho: string) => void; onEditar: (id: string) => void; onCancelar: (id: string) => void;
 }) {
-  return (
-    <div className="rounded-md border overflow-hidden">
-      <table data-testid="tabela-docs-abate" className="w-full table-fixed border-collapse">
-        <colgroup>
-          <col style={{ width: 64 }} /><col /><col style={{ width: 58 }} /><col style={{ width: 58 }} /><col style={{ width: 36 }} />
-          <col style={{ width: 66 }} /><col style={{ width: 86 }} /><col style={{ width: 140 }} /><col style={{ width: 20 }} /><col style={{ width: 22 }} />
-        </colgroup>
-        <thead className="bg-primary">
-          <tr className="h-[18px]">
-            <th className={`${TH} text-left`}>Tipo</th><th className={`${TH} text-left`}>Número</th>
-            <th className={`${TH} text-left`}>Data</th><th className={`${TH} text-left`}>Venc.</th>
-            <th className={`${TH} text-right`}>Cab</th><th className={`${TH} text-right`}>Peso kg</th>
-            <th className={`${TH} text-right`}>Valor R$</th><th className={`${TH} text-left`}>Conferência</th>
-            <th className={TH} /><th className={TH} />
-          </tr>
-        </thead>
-        <tbody>
-          {documentos.length === 0 && (
-            <tr><td colSpan={10} className="px-2 py-3 text-center text-[10px] text-muted-foreground">{loading ? 'Carregando…' : 'Nenhum documento.'}</td></tr>
-          )}
-          {documentos.map(d => {
+  const linha = (d: DocumentosApi['documentos'][number], daSaida: boolean) => {
             const soma = d.somaNoValor !== false;
-            const numero = fmtNumeroDoc(d.numero, d.especie) ?? textoDe(d.dados?.ordem_compra) ?? textoDe(d.dados?.op) ?? '—';
+            const numero = (d.especie === 'gta' && d.serie && d.numero ? `${d.serie}-${d.numero}` : null)
+              ?? fmtNumeroDoc(d.numero, d.especie) ?? textoDe(d.dados?.ordem_compra) ?? textoDe(d.dados?.op) ?? '—';
             const data = d.dataEmissao ?? d.dataAbate;
-            const valor = d.liquidoProprio ?? d.valorLiquido;
+            /* 7f: na saida da fazenda o valor e' o do componente INFORMATIVO (guia, NFP-e), em cinza; sem valor, "—" — nunca 0,00
+               so' porque o liquido proprio e' 0. */
+            const valor: number | null = daSaida
+              ? (d.totalInformativo ?? (d.qtdComponentes > 0 ? (d.liquidoProprio ?? d.valorLiquido) : null))
+              : (d.liquidoProprio ?? d.valorLiquido);
             const url = d.url;
-            const conf = conferenciaDoDocumento(conferencia, d.especie, d.cancelado);
+            const conf = conferenciaDoDocumento(conferencia, d.especie, d.cancelado, d);
             return (
               <tr key={d.documentoId} data-testid="linha-doc-abate"
-                className={`h-[18px] border-b border-border/60 last:border-b-0 ${d.cancelado ? 'line-through opacity-50' : ''} ${soma ? '' : 'text-muted-foreground'}`}
+                className={`h-[16px] [&>td]:shadow-[inset_0_-1px_0_hsl(var(--border)/0.6)] ${d.cancelado ? 'line-through opacity-50' : ''} ${soma ? '' : 'text-muted-foreground'}`}
                 title={d.cancelado ? 'cancelado' : soma ? undefined : 'não soma no valor da operação'}>
                 <td className={TD}>
-                  <span className={`inline-block rounded px-1 align-middle text-[9.5px] leading-[14px] ${PILULA[d.especie] ?? 'bg-muted text-muted-foreground'}`}>
-                    {ROTULO_SEGMENTO[d.especie] ?? ESPECIE_LABEL[d.especie]}
+                  <span title={ESPECIE_LABEL[d.especie]} className={`inline-block rounded px-1 align-middle text-[9.5px] leading-[14px] ${PILULA[d.especie] ?? 'bg-muted text-muted-foreground'}`}>
+                    {PILULA_CURTA[d.especie] ?? ROTULO_SEGMENTO[d.especie] ?? ESPECIE_LABEL[d.especie]}
                   </span>
                 </td>
                 <td className={TD} title={numero}>
@@ -438,7 +428,7 @@ function TabelaDocumentosAbate({ documentos, loading, somenteLeitura, conferenci
                 <td className={`${TD} tabular-nums`}>{dataCurta(d.vencimento ?? null)}</td>
                 <td className={`${TD} text-right tabular-nums`}>{d.cab ?? '—'}</td>
                 <td className={`${TD} text-right tabular-nums`}>{d.pesoKg == null ? '—' : formatCasas(d.pesoKg, 1)}</td>
-                <td className={`${TD} text-right tabular-nums`}>{formatCasas(valor, 2)}</td>
+                <td className={`${TD} text-right tabular-nums`} data-testid="valor-doc">{valor == null ? '—' : formatCasas(valor, 2)}</td>
                 <td className={`${TD} ${TOM_CONFERENCIA[conf.tom]}`} data-testid="celula-conferencia" data-tom={conf.tom} title={conf.texto || undefined}>
                   {conf.texto}
                 </td>
@@ -467,6 +457,39 @@ function TabelaDocumentosAbate({ documentos, loading, somenteLeitura, conferenci
                 </td>
               </tr>
             );
+          };
+  return (
+    <div className="rounded-md border overflow-hidden">
+      <table data-testid="tabela-docs-abate" className="w-full table-fixed border-collapse">
+        <colgroup>
+          <col style={{ width: 64 }} /><col /><col style={{ width: 58 }} /><col style={{ width: 58 }} /><col style={{ width: 36 }} />
+          <col style={{ width: 66 }} /><col style={{ width: 86 }} /><col style={{ width: 140 }} /><col style={{ width: 20 }} /><col style={{ width: 22 }} />
+        </colgroup>
+        <thead className="bg-primary">
+          <tr className="h-[18px]">
+            <th className={`${TH} text-left`}>Tipo</th><th className={`${TH} text-left`}>Número</th>
+            <th className={`${TH} text-left`}>Data</th><th className={`${TH} text-left`}>Venc.</th>
+            <th className={`${TH} text-right`}>Cab</th><th className={`${TH} text-right`}>Peso kg</th>
+            <th className={`${TH} text-right`}>Valor R$</th><th className={`${TH} text-left`}>Conferência</th>
+            <th className={TH} /><th className={TH} />
+          </tr>
+        </thead>
+        <tbody>
+          {documentos.length === 0 && (
+            <tr><td colSpan={10} className="px-2 py-3 text-center text-[10px] text-muted-foreground">{loading ? 'Carregando…' : 'Nenhum documento.'}</td></tr>
+          )}
+          {/* 7f — DOIS BLOCOS, cada um aberto por uma faixa de LARGURA INTEIRA (18px); bloco vazio nao mostra a faixa. */}
+          {BLOCOS.map(b => {
+            const docs = documentos.filter(d => (ESPECIES_DA_SAIDA.includes(d.especie) ? 'saida' : 'abate') === b.chave);
+            if (!docs.length) return null;
+            return [
+              <tr key={`faixa-${b.chave}`} data-testid={`faixa-bloco-${b.chave}`} className="h-[18px]">
+                <td colSpan={10} className="h-[18px] bg-[#cbd5e1] px-1.5 py-0 align-middle text-[9.5px] font-semibold leading-[18px] text-slate-800">
+                  {b.rotulo}
+                </td>
+              </tr>,
+              ...docs.map(d => linha(d, b.chave === 'saida')),
+            ];
           })}
         </tbody>
       </table>

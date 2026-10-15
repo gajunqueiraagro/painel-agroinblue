@@ -20,7 +20,9 @@ export const totalDosIncentivos = (l: Incentivo[]): number => Math.round(l.reduc
 /** Passo 7e — o lote com que o documento NOVO nasce (regra do Gabriel, 15/10): NF, Acerto e NPR sao da OPERACAO (todos os lotes);
  *  o Romaneio e' POR LOTE (nenhum, e o lote e' obrigatorio); o resto, como hoje (nenhum). A edicao nunca passa por aqui. */
 export function lotesPadraoDaEspecie(especie: EspecieDoc, lotes: { loteId: string }[]): string[] {
-  return especie === 'nf_principal' || especie === 'nf_complementar' || especie === 'acerto' || especie === 'npr' ? lotes.map(l => l.loteId) : [];
+  /* 7f: a NF do produtor e a GTA tambem nascem com todos os lotes ("Todos os lotes"). */
+  return especie === 'nf_principal' || especie === 'nf_complementar' || especie === 'acerto' || especie === 'npr'
+    || especie === 'nf_produtor' || especie === 'gta' ? lotes.map(l => l.loteId) : [];
 }
 /** Passo 7e: o Romaneio lido sugere o lote quando EXATAMENTE um lote da OC tem a mesma quantidade de cabecas; senao, nenhum. */
 export function loteSugeridoPelaQuantidade(lotes: { loteId: string; qtd?: number | null }[], cab: number | null | undefined): string | null {
@@ -46,6 +48,11 @@ export interface FormAbate {
   liquido: number | null; valor: number | null; nfRefValor: number | null;
   /** NF e Acerto: os incentivos (todos os componentes tipo 'incentivo'). */
   incentivos: Incentivo[];
+  /* 7f — saida da fazenda. Valor da NFP-e / da guia = componente INFORMATIVO; o resto em `dados` (cab e vencimento em coluna). */
+  valorInformativo: number | null;
+  dataSaida: string; destinatario: string; gtaCitada: string; validade: string; embarque: string;
+  finalidade: string; destino: string; tipoGuia: string; pagoEm: string; tipoDeclaracao: string;
+  femeas: number | null; machos: number | null;
   /** So' na NF: as NFs do produtor (a NPR segue com `nfRefNumero`/`nfRefValor`, em `dados.nf_referida`). */
   nfsProdutor: NfProdutor[];
   loteIds: string[];
@@ -63,11 +70,13 @@ export function formAbateVazio(especie: EspecieDoc = 'nf_principal'): FormAbate 
     dataAbate: '', vencimento: '', ordemCompra: '', loteFrigorifico: '', op: '', nfRefNumero: '',
     cab: null, pesoKg: null, precoArroba: null, bruto: null, funrural: null, senar: null, seguro: null, rat: null,
     liquido: null, valor: null, nfRefValor: null, incentivos: [], nfsProdutor: [], loteIds: [], preservados: [], dadosLidos: {},
+    valorInformativo: null, dataSaida: '', destinatario: '', gtaCitada: '', validade: '', embarque: '',
+    finalidade: '', destino: '', tipoGuia: '', pagoEm: '', tipoDeclaracao: '', femeas: null, machos: null,
   };
 }
 
 /* Que componente vira qual campo, por especie. So' o PRIMEIRO de cada (tipo, natureza). */
-type Mapa = { campo: 'bruto' | 'funrural' | 'senar' | 'seguro' | 'rat' | 'retAcerto' | 'valor'; tipo: string; natureza: NaturezaComp }[];
+type Mapa = { campo: 'bruto' | 'funrural' | 'senar' | 'seguro' | 'rat' | 'retAcerto' | 'valor' | 'valorInformativo'; tipo: string; natureza: NaturezaComp }[];
 export const TIPO_RETENCAO_ACERTO = 'retencao_acerto';
 export const DESCRICAO_RETENCAO_ACERTO = 'Retenções do acerto';
 function mapaDaEspecie(e: EspecieDoc): Mapa {
@@ -83,7 +92,9 @@ function mapaDaEspecie(e: EspecieDoc): Mapa {
       { campo: 'bruto', tipo: 'valor_bruto', natureza: 'acrescimo' },
       { campo: 'retAcerto', tipo: TIPO_RETENCAO_ACERTO, natureza: 'retencao_sem_caixa' },
     ];
-    case 'romaneio': return [];
+    case 'romaneio': case 'gta': case 'declaracao': return [];
+    /* 7f: o valor da NFP-e e da guia NUNCA soma — e' componente de natureza 'informativo' (o mesmo das guias convertidas). */
+    case 'nf_produtor': case 'guia': return [{ campo: 'valorInformativo', tipo: 'valor_bruto', natureza: 'informativo' }];
     default: return [{ campo: 'valor', tipo: 'valor_bruto', natureza: 'acrescimo' }];
   }
 }
@@ -148,7 +159,10 @@ export function formAbateDoDetalhe(d: DocumentoDetalhe): FormAbate {
     cab: d.cab ?? null, pesoKg: d.pesoKg ?? null,
     bruto, funrural: valores.funrural ?? null, senar: valores.senar ?? null, seguro: valores.seguro ?? null, rat: valores.rat ?? null,
     nfsProdutor: nfsProdutorDe(dados.nfs_produtor),
-    valor: valores.valor ?? null, incentivos,
+    valor: valores.valor ?? null, incentivos, valorInformativo: valores.valorInformativo ?? null,
+    dataSaida: txt(dados.data_saida), destinatario: txt(dados.destinatario), gtaCitada: txt(dados.gta), validade: txt(dados.validade),
+    embarque: txt(dados.embarque), finalidade: txt(dados.finalidade), destino: txt(dados.destino), tipoGuia: txt(dados.tipo_guia),
+    pagoEm: txt(dados.pago_em), tipoDeclaracao: txt(dados.tipo_declaracao), femeas: num(dados.femeas), machos: num(dados.machos),
     /* No acerto o operador digita o LIQUIDO; ao abrir, ele e' o bruto + incentivo menos a retencao gravada. */
     liquido: d.especie === 'acerto' && bruto != null ? Math.round((bruto + totalDosIncentivos(incentivos) - (retAcerto ?? 0)) * 100) / 100 : null,
     loteIds: d.loteIds, preservados, dadosLidos: dados,
@@ -183,11 +197,20 @@ export function valorDoCampo(f: FormAbate, chave: ChaveCampo): string | number |
       return f[chave];
     case 'nfsProdutor': return textoDasNfsProdutor(f.nfsProdutor);
     case 'incentivo': return f.incentivos.length ? totalDosIncentivos(f.incentivos) : null;
+    case 'dataSaida': case 'destinatario': case 'gtaCitada': case 'validade': case 'embarque': case 'finalidade': case 'destino':
+    case 'tipoGuia': case 'pagoEm': case 'tipoDeclaracao':
+      return f[chave];
+    case 'valorInformativo': case 'femeas': case 'machos': return f[chave];
+    case 'cabGta': return cabDaGta(f);
     case 'lote': return f.loteIds.length ? f.loteIds.join(',') : null;
     case 'nfsProdutorValor': return valorDasNfsProdutor(f.nfsProdutor);
     default: return null;
   }
 }
+
+/** 7f: o Cab da GTA = Fêmeas + Machos (nulo se faltar um dos dois). */
+export const cabDaGta = (f: Pick<FormAbate, 'femeas' | 'machos'>): number | null =>
+  (f.femeas == null || f.machos == null ? null : Math.round(f.femeas + f.machos));
 
 const temCampo = (e: EspecieDoc, chave: ChaveCampo) => (camposDaEspecie('abate', e) ?? []).flat().some(c => c.chave === chave);
 const ouNada = (s: string) => (vazio(s) ? undefined : s.trim());
@@ -212,6 +235,7 @@ export function payloadDoFormAbate(f: FormAbate): DocumentoPayload {
     if (pos(ret)) comps.push({ tipo: TIPO_RETENCAO_ACERTO, natureza: 'retencao_sem_caixa', valor: ret!, descricao: DESCRICAO_RETENCAO_ACERTO });
   }
   if (tem('valor') && pos(f.valor)) comps.push({ tipo: 'valor_bruto', natureza: 'acrescimo', valor: f.valor! });
+  if (tem('valorInformativo') && pos(f.valorInformativo)) comps.push({ tipo: 'valor_bruto', natureza: 'informativo', valor: f.valorInformativo! });
   const componentes: ComponentePayload[] = [...comps, ...f.preservados.map(({ ordem: _o, ...c }) => c)]
     .map((c, i) => ({ ...c, ordem: i + 1 }));
 
@@ -228,6 +252,19 @@ export function payloadDoFormAbate(f: FormAbate): DocumentoPayload {
     if (tem('nfRefValor') && f.nfRefValor != null) ref.valor = f.nfRefValor;
     poe('nf_referida', Object.keys(ref).length ? ref : null);
   }
+  /* 7f — saida da fazenda */
+  if (tem('dataSaida')) poe('data_saida', f.dataSaida);
+  if (tem('destinatario')) poe('destinatario', f.destinatario.trim());
+  if (tem('gtaCitada')) poe('gta', f.gtaCitada.trim());
+  if (tem('validade')) poe('validade', f.validade);
+  if (tem('embarque')) poe('embarque', f.embarque);
+  if (tem('finalidade')) poe('finalidade', f.finalidade.trim());
+  if (tem('destino')) poe('destino', f.destino.trim());
+  if (tem('tipoGuia')) poe('tipo_guia', f.tipoGuia);
+  if (tem('pagoEm')) poe('pago_em', f.pagoEm);
+  if (tem('tipoDeclaracao')) poe('tipo_declaracao', f.tipoDeclaracao);
+  if (tem('femeas')) poe('femeas', f.femeas);
+  if (tem('machos')) poe('machos', f.machos);
   if (tem('nfsProdutor')) {
     const l = f.nfsProdutor.filter(n => n.numero.trim() !== '' || n.valor != null)
       .map(n => ({ numero: n.numero.trim(), data: n.data || null, valor: n.valor }));
@@ -251,6 +288,8 @@ export function payloadDoFormAbate(f: FormAbate): DocumentoPayload {
     lotes: f.loteIds,
     /* As colunas do abate so' quando a especie as desenha; ausentes, o banco mantem o gravado. */
     ...(tem('cab') ? { cab: f.cab == null ? null : Math.round(f.cab) } : {}),
+    /* 7f: na GTA a coluna `cab` e' o total Fêmeas + Machos (e' por ela que a conferencia soma as GTAs). */
+    ...(tem('cabGta') ? { cab: cabDaGta(f) } : {}),
     ...(tem('pesoKg') ? { pesoKg: f.pesoKg } : {}),
     ...(tem('dataAbate') ? { dataAbate: f.dataAbate || null } : {}),
     ...(tem('vencimento') ? { vencimento: f.vencimento || null } : {}),

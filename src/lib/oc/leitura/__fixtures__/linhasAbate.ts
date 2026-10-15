@@ -169,3 +169,60 @@ export const ROMANEIO_MINERVA_LT12 = [
   'Fornecedor: | PRODUTOR TESTE | Qtd. Programada: | 36 | Data Abate: | 01/10/2026',
   'Total | 36 | 8.695,50 | Média Total (KG): | 241,54',
 ];
+
+/* ── 7f · saida da fazenda (OC-DOC-SAIDA-FAZENDA-01): copiadas dos PDFs reais da Vera (13/10) e ANONIMIZADAS — produtor, CPF, IE,
+   codigos e endereco sairam; a chave da NFP-e e' sintetica (DV certo, com o CNPJ da SEFAZ-MS, que e' quem esta' na chave real). */
+export const CHAVE_NFPE = chaveSintetica('02935843000105', 890, 9444790);
+
+export const NFPE_SAIDA = [
+  'DANFE', 'NOTA FISCAL ELETRÔNICA', '1 - SAÍDA', 'CHAVE DE ACESSO',
+  'Nº | 009.444.790',
+  'CNPJ: 02.935.843/0001-05',
+  em4(CHAVE_NFPE),
+  'SÉRIE: | 890',
+  'NOTA FISCAL DO PRODUTOR ELETRÔNICA - NFPe',
+  'NATUREZA DE OPERAÇÃO | PROTOCOLO DE AUTORIZAÇÃO DE USO',
+  'REMETENTE',
+  'NOME / RAZÃO SOCIAL | CNPJ/CPF | DATA DE EMISSÃO',
+  'PRODUTOR TESTE | 000.000.000-00 | 09/10/2026 08:32:14',
+  'ENDEREÇO | BAIRRO/DISTRITO | CEP | DATA DE ENTRADA/SAÍDA',
+  'FAZENDA TESTE | ZONA RURAL | 79000-000 | 12/10/2026 07:00:00',
+  'DESTINATÁRIO',
+  'NOME / RAZÃO SOCIAL | CNPJ/CPF',
+  'FRIGORIFICO TESTE | 02.916.265/0077-68',
+  'VALOR DO FRETE | VALOR DO SEGURO | DESCONTO | OUTRAS DESPESAS ACESSÓRIAS | VALOR DO IPI | VALOR TOTAL DA NOTA',
+  '0,00 | 0,00 | 0,00 | 0,00 | 0,00 | 75.483,72',
+  'FEMEA PARA ABATE 36M - OP INTERNA - GADO BOVINO',
+  '837 | 01022990 | 051 | 5101 | UN | 18,0000 | 4.193,5400 | 75.483,72 | 0,00 | 0,00 | 0,00 | 0,00 | 0,00',
+  'Nº GTA: Q- | 745856 | ; TRANSPORTADOR DESCONHECIDO NO MOMENTO DA EMISSÃO DA NOTA FISCAL; Via de',
+];
+
+export const EGTA_SAIDA = [
+  'Guia de Trânsito Animal | ( | e-GTA | ) | UF | Série | Número',
+  '(Válida em todo o Território Nacional) | MS | Q | 745856',
+  'PROCEDÊNCIA | DESTINO',
+  'Estabelecimento: | FAZENDA TESTE | Estabelecimento: | FRIGORIFICO TESTE',
+  'FINALIDADE: | ABATE | MEIO DE TRANSPORTE: | RODOVIÁRIO',
+  'Fêmea | Macho | Total | Total por Extenso',
+  '18 | 0 | 18 | DEZOITO ANIMAIS',
+  'OBSERVAÇÕES | Data/Hora de Embarque: 12/10/2026 07:00:00. Não há registro de Ingresso',
+  'Data: | 09/10/2026 08:30:59 | PRODUTOR TESTE',
+  'Validade: | 15/10/2026 | Cargo: PRODUTOR',
+];
+
+export const MODELO_B_SAIDA = [
+  'Declaração do Produtor',
+  'Modelo B | Documento No. 27666194',
+  'As informações da propriedade de origem dos animais relacionados na(s) GTA(s) série e número',
+  '745856/Q ,745874/Q',
+  'constantes na declaração do produtor MOD-B estão arquivadas neste Serviço Veterinário.',
+  'Data e Hora de Emissão: | 09/10/2026 08:39 | Páginas: | 1 de 1',
+];
+
+export const CARTA_GARANTIA_SAIDA = [
+  'Carta de Garantia do Produtor',
+  'Eu, PRODUTOR TESTE, abaixo assinado, responsável pela propriedade rural FAZENDA TESTE, declaro que foram destinados 36 animais para serem abatidos no',
+  'estabelecimento FRIGORIFICO TESTE sob SIF 0000 no dia 13/10/2026',
+  'acompanhados da(s) GTA(s) Nº: 745856/Q e 745874/Q.',
+  'Data Embarque: 09/10/2026',
+];

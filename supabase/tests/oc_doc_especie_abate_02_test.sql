@@ -1,6 +1,7 @@
 -- OC-DOC-ESPECIE-ABATE-01 passo 2 — as RPCs gravam os campos do abate e a view os le^. Termina em RAISE 'OK'.
 -- Compara com `is distinct from`. Os documentos de teste nascem no LT10 (OC 8c8a864d, real) DENTRO desta transacao revertida.
 --   F1 esquema: md5 de destino das duas RPCs, as 5 colunas no fim da view, security_invoker e ACL da view, o seguro com tipo proprio
+--      (achado pela NF 8812 + tipo 'seguro', nao pelo id)
 --   F2 registrar: Acerto com as 5 chaves e NPR com `dados.nf_referida`; na view as colunas novas, valor 0 na soma, liquido proprio
 --   F3 editar: chave ausente mantem; `cab: null` zera; `dados` substitui o objeto; `dados: {}` vira nulo
 --   F4 a NF 8812 intacta: 96.535,70 na vw_oc_documentos e nos 3 lancamentos (vw_lancamento_documentos)
@@ -16,7 +17,7 @@ begin
 
   -- F1
   if (select md5(prosrc) from pg_proc where proname = 'oc_documento_registrar' and pronamespace = 'public'::regnamespace)
-       is distinct from 'ff4b1f93d7f6c6c73e1c013c961426a4'
+       is distinct from 'f3e2d13d8a0ced0cac40cedcaf76c40d'   -- OC-DOC-SAIDA-FAZENDA-01 (7f) sobre o ff4b1f93 do passo 2
      or (select md5(prosrc) from pg_proc where proname = 'oc_documento_editar' and pronamespace = 'public'::regnamespace)
        is distinct from 'a744b4c763131d628f78065349e2046b'
      or (select string_agg(column_name, ',' order by ordinal_position) from information_schema.columns
@@ -25,8 +26,15 @@ begin
      or (select reloptions from pg_class where oid = 'public.vw_oc_documentos'::regclass) is distinct from array['security_invoker=true']
      or (select relacl::text from pg_class where oid = 'public.vw_oc_documentos'::regclass)
        is distinct from '{postgres=arwdDxtm/postgres,authenticated=r/postgres,service_role=r/postgres}'
-     or (select tipo || ' ' || valor from zoo_operacao_documento_componentes where id = '022f21b0-e5b2-4a10-86b0-62d968ef56fb')
-       is distinct from 'seguro 107.95' then
+     /* 7f (Gabriel 15/10): o Seguro se acha por ATRIBUTO — o documento NF 8812 vivo da OC e o tipo 'seguro' —, nunca pelo id
+        (a NF editada pela tela regrava os componentes com id novo). Um documento so', um seguro so', com o valor e a natureza. */
+     or (select count(*) from zoo_operacao_documentos where operacao_id = op and numero = '000.008.812'
+          and especie = 'nf_principal' and cancelado is not true) is distinct from 1::bigint
+     or (select string_agg(c.tipo || ' ' || c.natureza || ' ' || c.valor, ',') from zoo_operacao_documento_componentes c
+          join zoo_operacao_documentos d on d.id = c.documento_id
+         where d.operacao_id = op and d.numero = '000.008.812' and d.especie = 'nf_principal' and d.cancelado is not true
+           and c.tipo = 'seguro' and c.cancelado is not true)
+       is distinct from 'seguro retencao_sem_caixa 107.95' then
     raise exception 'F1 esquema'; end if;
 
   -- F2

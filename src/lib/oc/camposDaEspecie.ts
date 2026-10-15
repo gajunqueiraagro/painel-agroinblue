@@ -19,7 +19,10 @@ export type ChaveCampo =
   | 'cab' | 'pesoKg' | 'arrobas' | 'precoArroba' | 'bruto'
   | 'funrural' | 'senar' | 'seguro' | 'rat' | 'retencoes' | 'incentivo' | 'liquido'
   | 'nfRefNumero' | 'nfRefValor' | 'nfsProdutor' | 'nfsProdutorValor' | 'observacao'
-  | 'ordemCompra' | 'loteFrigorifico' | 'op' | 'mediaKg' | 'valor';
+  | 'ordemCompra' | 'loteFrigorifico' | 'op' | 'mediaKg' | 'valor'
+  /* 7f — saida da fazenda */
+  | 'dataSaida' | 'destinatario' | 'valorInformativo' | 'gtaCitada' | 'validade' | 'embarque' | 'femeas' | 'machos' | 'cabGta'
+  | 'finalidade' | 'destino' | 'tipoGuia' | 'pagoEm' | 'tipoDeclaracao';
 
 export interface CampoDef {
   chave: ChaveCampo;
@@ -36,13 +39,31 @@ export interface CampoDef {
 /** As especies que a OC oferece, na ordem do seletor. */
 export function especiesDaOC(tipo: TipoOperacaoOC): EspecieDoc[] {
   return tipo === 'abate'
-    ? ['nf_principal', 'npr', 'acerto', 'romaneio', 'outro']
+    ? GRUPOS_DO_SELETOR_ABATE.flatMap(g => g.especies)
     : ['nf_principal', 'nf_complementar', 'recibo', 'outro'];
 }
+
+/** 7f — o seletor do abate em DOIS grupos, numa linha: os papeis do frigorifico e os da saida da fazenda ("Outro" fica na saida). */
+export const GRUPOS_DO_SELETOR_ABATE: { rotulo: string; especies: EspecieDoc[] }[] = [
+  { rotulo: 'ABATE', especies: ['nf_principal', 'npr', 'acerto', 'romaneio'] },
+  { rotulo: 'SAÍDA', especies: ['nf_produtor', 'gta', 'guia', 'declaracao', 'outro'] },
+];
+/** As especies do bloco "SAÍDA DA FAZENDA" da lista (o resto vai em "ABATE · FRIGORÍFICO"). */
+export const ESPECIES_DA_SAIDA: EspecieDoc[] = ['nf_produtor', 'gta', 'guia', 'declaracao', 'outro', 'recibo'];
+
+/** As opcoes do Tipo da guia e da declaracao (gravadas em `dados.tipo_guia` / `dados.tipo_declaracao`). */
+export const TIPOS_DE_GUIA: { valor: string; rotulo: string }[] = [
+  { valor: 'fundersul', rotulo: 'Fundersul' }, { valor: 'taxa_iagro', rotulo: 'Taxa Iagro' },
+  { valor: 'dare_icms', rotulo: 'DARE/ICMS' }, { valor: 'outra', rotulo: 'Outra' },
+];
+export const TIPOS_DE_DECLARACAO: { valor: string; rotulo: string }[] = [
+  { valor: 'modelo_b', rotulo: 'Modelo B' }, { valor: 'carta_garantia', rotulo: 'Carta de garantia' }, { valor: 'outra', rotulo: 'Outra' },
+];
 
 /** Rotulo curto do seletor do abate. */
 export const ROTULO_SEGMENTO: Partial<Record<EspecieDoc, string>> = {
   nf_principal: 'NF', npr: 'NPR', acerto: 'Acerto', romaneio: 'Romaneio', outro: 'Outro',
+  nf_produtor: 'NF produtor', gta: 'GTA', guia: 'Guia', declaracao: 'Declaração',
 };
 
 const c = (chave: ChaveCampo, rotulo: string, colunas: CampoDef['colunas'] = 1, extra: Partial<CampoDef> = {}): CampoDef =>
@@ -87,6 +108,31 @@ const ROMANEIO: CampoDef[][] = [
   [c('mediaKg', 'Média kg', 1, { calculado: true, numerico: true }), c('lote', 'Lote', 1, { obrigatorio: true }), c('observacao', 'Observação', 3)],
 ];
 
+/* ── 7f · SAIDA DA FAZENDA ─────────────────────────────────────────────────────────────────────────────────── */
+const NF_PRODUTOR: CampoDef[][] = [
+  [c('numero', 'Número', 1, { obrigatorio: true }), c('serie', 'Série'), c('dataEmissao', 'Emissão', 1, { obrigatorio: true }),
+   c('dataSaida', 'Saída da fazenda'), c('lote', 'Lote')],
+  [c('destinatario', 'Destinatário', 3), c('chaveAcesso', 'Chave de acesso', 2)],
+  [c('cab', 'Cab', 1, { obrigatorio: true, numerico: true }), c('valorInformativo', 'Valor da nota R$', 1, { numerico: true }),
+   c('gtaCitada', 'GTA citada'), c('observacao', 'Observação', 2)],
+];
+const GTA: CampoDef[][] = [
+  [c('serie', 'Série', 1, { obrigatorio: true }), c('numero', 'Número', 1, { obrigatorio: true }),
+   c('dataEmissao', 'Emissão', 1, { obrigatorio: true }), c('validade', 'Validade'), c('embarque', 'Embarque')],
+  [c('femeas', 'Fêmeas', 1, { numerico: true }), c('machos', 'Machos', 1, { numerico: true }),
+   c('cabGta', 'Cab', 1, { calculado: true, numerico: true }), c('finalidade', 'Finalidade'), c('destino', 'Destino')],
+];
+const GUIA: CampoDef[][] = [
+  [c('tipoGuia', 'Tipo', 1, { obrigatorio: true }), c('numero', 'Identificação'), c('dataEmissao', 'Emissão'),
+   c('vencimento', 'Vencimento', 1, { obrigatorio: true }), c('valorInformativo', 'Valor R$', 1, { obrigatorio: true, numerico: true })],
+  [c('pagoEm', 'Pago em'), c('observacao', 'Observação', 3)],
+];
+const DECLARACAO: CampoDef[][] = [
+  [c('tipoDeclaracao', 'Tipo', 1, { obrigatorio: true }), c('numero', 'Número'), c('dataEmissao', 'Data', 1, { obrigatorio: true }),
+   c('cab', 'Cab', 1, { numerico: true })],
+  [c('observacao', 'Observação', 3)],
+];
+
 /* "Outro" = os campos de hoje do formulario (numero, serie, emissao, valor, emitente, chave, observacao). No abate ele e'
    INFORMATIVO: a lista o mostra em cinza e o banco nao o soma. */
 const OUTRO: CampoDef[][] = [
@@ -106,6 +152,10 @@ export function camposDaEspecie(tipo: TipoOperacaoOC, especie: EspecieDoc): Camp
     case 'acerto': return ACERTO;
     case 'npr': return NPR;
     case 'romaneio': return ROMANEIO;
+    case 'nf_produtor': return NF_PRODUTOR;
+    case 'gta': return GTA;
+    case 'guia': return GUIA;
+    case 'declaracao': return DECLARACAO;
     default: return OUTRO;
   }
 }

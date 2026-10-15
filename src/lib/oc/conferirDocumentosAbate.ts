@@ -24,6 +24,10 @@ export interface DocConferencia {
   valorLiquido: number;
   cab?: number | null;
   pesoKg?: number | null;
+  /* 7f — para a conferencia da saida da fazenda (NF produtor citada, GTA citada). */
+  numero?: string | null;
+  serie?: string | null;
+  dados?: Record<string, unknown> | null;
 }
 
 export type GrupoConferencia = 'nf' | 'acerto' | 'npr' | 'romaneio';
@@ -81,6 +85,64 @@ export interface ResultadoConferencia {
   retencoesNF: number | null;
   /** Os textos das divergencias, na ordem dos itens. */
   textosDivergencia: string[];
+  /** 7f — a saida da fazenda. */
+  saida: ConferenciaSaida;
+}
+
+/* ── 7f · SAIDA DA FAZENDA ────────────────────────────────────────────────────────────────────────────────────────────
+   GTA: a soma das cabecas das GTAs = as cabecas da OC (soma dos lotes). NF produtor: as NFs citadas na NF do frigorifico
+   (`dados.nfs_produtor`) estao todas registradas como NF produtor. Vazio nunca vira "confere": sem GTA com cab, ou sem as
+   cabecas da OC, a GTA nao e' conferida; sem NF do frigorifico citando NFs, a NF produtor nao e' conferida. */
+export interface ConferenciaSaida {
+  gta: { cabs: number[]; total: number; cabOC: number; confere: boolean } | null;
+  nfProdutor: { citadas: string[]; registradas: string[]; faltam: string[] } | null;
+  /** As GTAs registradas, normalizadas ("Q-745856"). */
+  gtasRegistradas: string[];
+}
+/** Numero de nota so' com digitos e sem zero a' esquerda ("009.444.790" = "9444790"). */
+export const numeroDeNota = (s: unknown): string => (typeof s === 'string' || typeof s === 'number' ? String(s).replace(/\D/g, '').replace(/^0+/, '') : '');
+/** A GTA de um documento GTA: serie + numero ("Q-745856"). */
+export const gtaDoDocumento = (d: Pick<DocConferencia, 'serie' | 'numero'>): string | null => {
+  const n = (d.numero ?? '').replace(/\D/g, '').replace(/^0+/, ''); const sr = (d.serie ?? '').trim().toUpperCase();
+  return n && sr ? `${sr}-${n}` : null;
+};
+/** "Q-745856", "Q- 745856", "745856/Q" -> "Q-745856". */
+export function gtaCanonica(s: string): string | null {
+  const t = s.replace(/\s+/g, ' ').trim().toUpperCase();
+  const a = t.match(/^([A-Z])\s*-?\s*(\d{4,})$/); if (a) return `${a[1]}-${a[2].replace(/^0+/, '')}`;
+  const b = t.match(/^(\d{4,})\s*\/\s*([A-Z])$/); return b ? `${b[2]}-${b[1].replace(/^0+/, '')}` : null;
+}
+function conferirSaida(docs: DocConferencia[], cabDaOC: number | null | undefined): ConferenciaSaida {
+  const vivos = docs.filter(d => !d.cancelado);
+  const gtas = vivos.filter(d => d.especie === 'gta');
+  const cabs = gtas.map(d => d.cab).filter((x): x is number => x != null).map(Number);
+  const gta = cabs.length && cabs.length === gtas.length && cabDaOC != null
+    ? { cabs, total: cabs.reduce((a, b) => a + b, 0), cabOC: cabDaOC, confere: cabs.reduce((a, b) => a + b, 0) === cabDaOC }
+    : null;
+  const nfsFrig = vivos.filter(d => d.especie === 'nf_principal' || d.especie === 'nf_complementar');
+  const citadas = [...new Set(nfsFrig.flatMap(d => {
+    const l = d.dados?.nfs_produtor;
+    return Array.isArray(l) ? l.map(x => numeroDeNota(x != null && typeof x === 'object' && 'numero' in x ? x.numero : '')).filter(Boolean) : [];
+  }))];
+  const registradas = vivos.filter(d => d.especie === 'nf_produtor').map(d => numeroDeNota(d.numero)).filter(Boolean);
+  const nfProdutor = citadas.length ? { citadas, registradas, faltam: citadas.filter(n => !registradas.includes(n)) } : null;
+  const gtasRegistradas = gtas.map(gtaDoDocumento).filter((x): x is string => x != null);
+  return { gta, nfProdutor, gtasRegistradas };
+}
+/** As partes da faixa da saida: verde ("GTA 18 + 18 = 36 cab", "NF produtor 2 de 2"), vermelha (GTA ≠ OC) e o que falta. */
+export function partesDaSaida(s: ConferenciaSaida): { verde: string[]; vermelho: string[]; falta: string[] } {
+  const verde: string[] = []; const vermelho: string[] = []; const falta: string[] = [];
+  if (s.gta) {
+    const conta = `GTA ${s.gta.cabs.map(c => formatCasas(c, 0)).join(' + ')}`;
+    if (s.gta.confere) verde.push(`${conta} = ${formatCasas(s.gta.total, 0)} cab`);
+    else vermelho.push(`${conta} = ${formatCasas(s.gta.total, 0)} ≠ ${formatCasas(s.gta.cabOC, 0)} cab da OC`);
+  }
+  if (s.nfProdutor) {
+    const n = s.nfProdutor.citadas.length - s.nfProdutor.faltam.length;
+    if (s.nfProdutor.faltam.length === 0) verde.push(`NF produtor ${n} de ${s.nfProdutor.citadas.length}`);
+    else falta.push(`falta NF produtor ${s.nfProdutor.faltam.join(', ')}`);
+  }
+  return { verde, vermelho, falta };
 }
 
 type Medida = Record<ItemConferencia, number | null>;
@@ -112,7 +174,7 @@ export function textoDivergencia(item: ItemConferencia, a: LadoItem, b: LadoItem
     + `${escreverItem(item, b.valor)} · diferença ${escreverItem(item, diferenca)}${un}`;
 }
 
-export function conferirDocumentosAbate(docs: DocConferencia[]): ResultadoConferencia {
+export function conferirDocumentosAbate(docs: DocConferencia[], opcoes: { cabDaOC?: number | null } = {}): ResultadoConferencia {
   const totais = totaisPorGrupo(docs);
   const presentes = ORDEM_GRUPOS.filter(g => totais.has(g));
   const faltam = ORDEM_GRUPOS.filter(g => !totais.has(g));
@@ -133,10 +195,13 @@ export function conferirDocumentosAbate(docs: DocConferencia[]): ResultadoConfer
   const naoConferidos = itens.filter(i => !i.comparado).map(i => i.item);
   const textosDivergencia = itens.flatMap(i => i.divergencias.map(d => textoDivergencia(i.item, d.a, d.b, d.diferenca)));
   const algumComparado = itens.some(i => i.comparado);
-  const estado: EstadoConferencia = textosDivergencia.length > 0 ? 'vermelho' : algumComparado ? 'verde' : 'neutro';
+  const saida = conferirSaida(docs, opcoes.cabDaOC);
+  const ps = partesDaSaida(saida);
+  const estado: EstadoConferencia = textosDivergencia.length > 0 || ps.vermelho.length > 0 ? 'vermelho'
+    : algumComparado || ps.verde.length > 0 ? 'verde' : 'neutro';
   return {
     estado, itens, presentes, faltam, semValores, naoConferidos,
-    retencoesNF: totais.get('nf')?.retencoes ?? null, textosDivergencia,
+    retencoesNF: totais.get('nf')?.retencoes ?? null, textosDivergencia, saida,
   };
 }
 
@@ -157,13 +222,20 @@ export interface FaixaConferencia {
 
 /** A faixa de 24px da lista do abate. */
 export function faixaDaConferencia(r: ResultadoConferencia): FaixaConferencia {
-  const falta = r.faltam.length ? `falta: ${r.faltam.map(g => ROTULO_GRUPO[g]).join(', ')}` : null;
+  const ps = partesDaSaida(r.saida);
+  const faltaPartes = [...(r.faltam.length ? [`falta: ${r.faltam.map(g => ROTULO_GRUPO[g]).join(', ')}`] : []), ...ps.falta];
+  const falta = faltaPartes.length ? faltaPartes.join(' · ') : null;
   let texto: string;
   let titulo: string;
+  const divergencias = [...r.textosDivergencia, ...ps.vermelho];
   if (r.estado === 'vermelho') {
-    const mais = r.textosDivergencia.length - 1;
-    texto = `${r.textosDivergencia[0]}${mais > 0 ? ` (+${mais})` : ''}`;
-    titulo = r.textosDivergencia.join('\n');
+    const mais = divergencias.length - 1;
+    texto = `${divergencias[0]}${mais > 0 ? ` (+${mais})` : ''}`;
+    titulo = divergencias.join('\n');
+  } else if (r.estado === 'verde' && !r.itens.some(i => i.comparado)) {
+    /* so' a saida da fazenda conferiu */
+    texto = `✓ ${ps.verde.join(' · ')}`;
+    titulo = texto;
   } else if (r.estado === 'verde') {
     const partes: string[] = ['✓ Confere'];
     const it = (i: ItemConferencia) => r.itens.find(x => x.item === i)!;
@@ -176,6 +248,7 @@ export function faixaDaConferencia(r: ResultadoConferencia): FaixaConferencia {
     if (it('liquido').comparado) {
       partes.push(`Líquido ${it('liquido').lados.map(l => ROTULO_GRUPO[l.grupo]).join(' = ')} ${escreverItem('liquido', it('liquido').lados[0].valor)}`);
     }
+    partes.push(...ps.verde);
     if (r.naoConferidos.length) partes.push(`não conferido: ${juntar(r.naoConferidos.map(i => ROTULO_ITEM[i]))}`);
     texto = partes.join(' · ');
     titulo = texto;
@@ -191,8 +264,21 @@ export function faixaDaConferencia(r: ResultadoConferencia): FaixaConferencia {
 export interface CelulaConferencia { texto: string; tom: 'verde' | 'vermelho' | 'neutro'; }
 
 /** A celula "Conferência" de um documento da lista. */
-export function conferenciaDoDocumento(r: ResultadoConferencia, especie: EspecieDoc, cancelado = false): CelulaConferencia {
+export function conferenciaDoDocumento(r: ResultadoConferencia, especie: EspecieDoc, cancelado = false,
+  doc?: Pick<DocConferencia, 'numero' | 'serie' | 'dados'>): CelulaConferencia {
   if (cancelado) return { texto: '', tom: 'neutro' };
+  /* 7f — a linha de cada NF produtor: citada na NF do frigorifico? e a GTA que ela cita esta' registrada? */
+  if (especie === 'nf_produtor' && r.saida.nfProdutor) {
+    const n = numeroDeNota(doc?.numero);
+    const gta = typeof doc?.dados?.gta === 'string' ? gtaCanonica(doc.dados.gta) : null;
+    const comGta = gta && r.saida.gtasRegistradas.includes(gta) ? ` · GTA ${gta}` : '';
+    return r.saida.nfProdutor.citadas.includes(n)
+      ? { texto: `✓ citada na NF${comGta}`, tom: 'verde' } : { texto: 'não citada na NF', tom: 'neutro' };
+  }
+  if (especie === 'gta' && r.saida.gta) {
+    return r.saida.gta.confere ? { texto: `✓ soma ${formatCasas(r.saida.gta.total, 0)} cab = OC`, tom: 'verde' }
+      : { texto: `≠ OC: ${formatCasas(r.saida.gta.total, 0)} de ${formatCasas(r.saida.gta.cabOC, 0)} cab`, tom: 'vermelho' };
+  }
   const g = grupoDaEspecie(especie);
   if (g === 'nf') return { texto: 'soma no valor da OC', tom: 'neutro' };
   if (!g) return { texto: 'informativo · não soma', tom: 'neutro' };

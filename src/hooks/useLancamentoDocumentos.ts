@@ -272,6 +272,7 @@ export const especieDaOCNoLancamento = (e: unknown): EspecieLancDoc =>
 const ROTULO_ESPECIE_OC: Record<string, string> = {
   nf_principal: 'NF', nf_complementar: 'NF complementar', recibo: 'Recibo', outro: 'Outro',
   npr: 'NPR', acerto: 'Acerto', romaneio: 'Romaneio',
+  nf_produtor: 'NF produtor', gta: 'GTA', guia: 'Guia', declaracao: 'Declaração',
 };
 /** O rótulo curto da espécie de um documento, das DUAS origens (a da OC distingue a complementar). */
 export function rotuloEspecieDoc(d: Pick<LancDocumento, 'origem' | 'especie' | 'especieOC'>): string {

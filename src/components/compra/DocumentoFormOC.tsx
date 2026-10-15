@@ -32,7 +32,8 @@ import type {
 /* 'recibo' entrou em 20260903120000: compra de animais vem com NF OU recibo, e deixa-lo
    em "outro" faria o balde do desconhecido virar maioria. */
 export const ESPECIE_LABEL: Record<EspecieDoc, string> = { nf_principal: 'NF principal', nf_complementar: 'NF complementar', recibo: 'Recibo', outro: 'Outro documento',
-  npr: 'NPR', acerto: 'Acerto', romaneio: 'Romaneio' };
+  npr: 'NPR', acerto: 'Acerto', romaneio: 'Romaneio',
+  nf_produtor: 'NF produtor', gta: 'GTA', guia: 'Guia', declaracao: 'Declaração' };
 const ESPECIES: EspecieDoc[] = ['nf_principal', 'nf_complementar', 'recibo', 'outro'];
 const NATUREZA_LABEL: Record<NaturezaComp, string> = {
   acrescimo: 'Acréscimo', desconto_comercial: 'Desconto comercial', retencao_sem_caixa: 'Retenção (sem caixa)',
