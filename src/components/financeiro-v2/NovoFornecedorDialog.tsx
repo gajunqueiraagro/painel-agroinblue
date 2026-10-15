@@ -8,6 +8,7 @@ import {
   type FonteDoCadastro, type FornecedorDoCadastro,
 } from '@/lib/fornecedores/cadastroDaCasa';
 import { fonteDoCadastroNoBanco } from '@/lib/fornecedores/cadastroDaCasaBanco';
+import { mascararAoDigitar, validarDocumento } from '@/lib/fornecedores/documentoFiscal';
 
 /**
  * O CADASTRO DA CASA — o "+" de todo seletor de fornecedor abre ESTE diálogo.
@@ -59,11 +60,14 @@ export function NovoFornecedorDialog({ open, onClose, clienteId, onSave, onSelec
   const limpar = () => { setNome(''); setCpfCnpj(''); setEstado({ tipo: 'form' }); setRecado(null); };
   const voltarAoFormulario = () => { setEstado({ tipo: 'form' }); setRecado(null); };
 
+  /* FORN-EDITAR-01 — o documento pelo validador único: inválido trava o Salvar, e o motivo vai no lugar reservado do recado */
+  const documento = validarDocumento(cpfCnpj);
+
   const handleSubmit = async () => {
-    if (!nome.trim() || saving) return;
+    if (!nome.trim() || saving || !documento.valido) return;
     if (!clienteId) { setRecado({ texto: 'Selecione o cliente antes de cadastrar o fornecedor.', tom: 'erro' }); return; }
     setSaving(true);
-    const r = await conferirCadastro(fonte, clienteId, { nome: nome.trim(), cpfCnpj: cpfCnpj.trim() });
+    const r = await conferirCadastro(fonte, clienteId, { nome: nome.trim(), cpfCnpj: documento.formatado });
     if (r.tipo === 'erro') { setRecado({ texto: r.frase, tom: 'erro' }); setSaving(false); return; }
     if (r.tipo === 'ja_existe') {
       await onSelecionar(r.fornecedor);
@@ -86,7 +90,7 @@ export function NovoFornecedorDialog({ open, onClose, clienteId, onSave, onSelec
     }
     /* o criar do hospedeiro que FALHA com exceção: o motivo fica aqui, ao lado do botão, e o digitado fica */
     try {
-      await onSave(nome.trim(), cpfCnpj.trim() || undefined);
+      await onSave(nome.trim(), documento.formatado || undefined);
     } catch (e) {
       setRecado({ texto: `Não foi possível cadastrar o fornecedor. (${e instanceof Error ? e.message : String(e)})`, tom: 'erro' });
       setSaving(false);
@@ -136,16 +140,18 @@ export function NovoFornecedorDialog({ open, onClose, clienteId, onSave, onSelec
           </div>
           <div>
             <Label className="text-xs">CPF/CNPJ</Label>
-            <Input value={cpfCnpj} onChange={e => { setCpfCnpj(e.target.value); setRecado(null); }} className="h-9" placeholder="Opcional" disabled={travado} />
+            <Input value={cpfCnpj} onChange={e => { setCpfCnpj(mascararAoDigitar(e.target.value)); setRecado(null); }}
+              className={`h-9 ${documento.valido ? '' : 'border-destructive'}`} placeholder="Opcional" disabled={travado}
+              aria-invalid={!documento.valido || undefined} />
           </div>
           {/* o recado tem lugar RESERVADO (duas linhas): o diálogo não muda de tamanho com aviso, recusa ou nada */}
-          <div data-testid="novo-fornecedor-recado" title={recado?.texto ?? undefined}
-            className={`h-[30px] overflow-hidden text-[11px] leading-[15px] ${corDoRecado}`}>
-            {recado?.texto ?? ''}
+          <div data-testid="novo-fornecedor-recado" title={recado?.texto ?? (documento.motivo || undefined)}
+            className={`h-[30px] overflow-hidden text-[11px] leading-[15px] ${recado ? corDoRecado : 'text-destructive'}`}>
+            {recado?.texto ?? documento.motivo ?? ''}
           </div>
           <div className="flex h-10 items-center gap-2">
             {estado.tipo === 'form' && (
-              <Button onClick={handleSubmit} disabled={saving || !nome.trim()} className="w-full">
+              <Button onClick={handleSubmit} disabled={saving || !nome.trim() || !documento.valido} className="w-full">
                 {saving ? 'Salvando...' : 'Salvar Fornecedor'}
               </Button>
             )}

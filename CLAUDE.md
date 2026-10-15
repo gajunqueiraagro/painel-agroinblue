@@ -162,7 +162,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 15/10/2026 (RESUMO-ATIVIDADE-01a, +2: `src/lib/fechamento/resumoPorAtividade.test.ts` 7 (novo); saiu
+  Baseline em 15/10/2026 (FORN-EDITAR-01, +39: `src/lib/fornecedores/documentoFiscal.test.ts` 16 (novo),
+  `src/lib/fornecedores/repetidosDoCadastro.test.ts` 7 (novo), `src/lib/fornecedores/documentoFiscalNosEscritores.test.ts` 6 (novo),
+  `src/components/financeiro-v2/fornecedorEditar.test.tsx` 10 (novo) — 5368 depois dele; antes o RESUMO-ATIVIDADE-01a, +2: `src/lib/fechamento/resumoPorAtividade.test.ts` 7 (novo); saiu
   `src/components/resumoAtividadesTipoDoMes.test.tsx` 5, com a tela que testava (as duas regras dela foram portadas) — 5329 depois dele;
   antes o FIN-LISTA-COMPACTA-01, +4: `src/pages/financiamentosListaCompacta.test.tsx` 4 (novo) — 5327 depois dele;
   antes o FIN-LR-SYNC-01a, +5: `src/v2/lib/lucroRural/lerArquivoLr.test.ts` 5 (novo) — 5323 depois dele;
@@ -336,7 +338,7 @@ no mesmo arquivo.
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
   `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5327
-  passando [5329 desde o RESUMO-ATIVIDADE-01a], 22 skipped, e
+  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01], 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -1554,6 +1556,45 @@ preview que o cabecalho nao sai da tela ao rolar.
     precisa desligar) e a pagina ja' aberta antes da publicacao (so' muda ao recarregar).
   [A divida MENU-CLIQUE-FECHANDO-01, medida neste passo, FECHOU no commit seguinte — ver a regra "LISTA OU MENU FECHANDO NAO
     ACEITA CLIQUE", acima.]
+- ⚠ CPF/CNPJ DO CADASTRO TEM UM VALIDADOR SO', O FORNECEDOR SE EDITA PELO LAPIS DO SELETOR, E A MESCLAGEM ESTA' TRAVADA (FORN-EDITAR-01,
+  Gabriel 15/10/2026, so' tela, sem banco).
+  · VALIDADOR UNICO (`src/lib/fornecedores/documentoFiscal.ts`, puro): `validarDocumento(texto) -> {valido, tipo cpf|cnpj|null,
+    formatado, digitos, motivo}` (vazio e' valido); CPF com DV e sem sequencia repetida; CNPJ com DV e o ALFANUMERICO da Receita (12
+    posicoes com letra, DV numerico, valor = ASCII − 48; provado pelo exemplo OFICIAL do Serpro, 12.ABC.345/01DE-35); formato gravado
+    000.000.000-00 / 00.000.000/0000-00. `mascararAoDigitar`, `chaveDoDocumento` (a chave de comparacao: digitos E letras) e
+    `situacaoDoGravado` (ok | vazio | fora_do_padrao, com o motivo). ⚠ Sequencia repetida de CNPJ tambem e' recusada (o briefing so'
+    pedia no CPF). Os QUATRO escritores passam por ele (preso por teste de fonte com auto-teste): `FornecedorFormDialog` (criar e
+    editar), `NovoFornecedorDialog` (entrega ao hospedeiro o formatado), `criarFornecedorDaCasa` (recusa o invalido com o motivo) e
+    `gravarDocumentoNoCadastro` (XML: invalido nao grava, o motivo volta como erro). `decidirCadastro` (cadastro da casa) passou a
+    comparar pela `chaveDoDocumento` (antes `soDigitos`, que apagava as letras do alfanumerico).
+  · CADASTRO COMPLETO: mascara ao digitar; invalido = motivo no lugar RESERVADO de 14px sob o campo e Salvar apagado. Gravado fora do
+    padrao abre COMO ESTA' com "Fora do padrão · <motivo>" em ambar e NAO trava o Salvar enquanto ninguem mexe no campo (vai
+    formatado se for valido; senao, como estava) — decisao minha, a homologar. Ao salvar (criar e editar) confere REPETIDO no mesmo
+    cliente, ativos e inativos, fora o proprio (`src/lib/fornecedores/repetidosDoCadastro.ts`): documento sempre, nome na edicao;
+    aviso ESCRITO no lugar reservado de 30px acima dos botoes ("Este CPF/CNPJ já está em: X (inativo).") e o botao vira "Salvar
+    mesmo assim" — nao bloqueia. A leitura do documento le' TODOS os fornecedores com documento do cliente (paginado) a cada Salvar.
+    Na CRIACAO a checagem de nome antiga (ativo = toast e nao cria; inativo = reativar) NAO mudou.
+  · MESCLAR TRAVADO (`MESCLAR_LIGADO = false`): o botao fica apagado com o motivo no `title`, e a frase "Indisponível: hoje a mesclagem
+    move só os lançamentos financeiros. Será refeita (FORN-MESCLAR-01)." fica escrita no painel de sugestoes. `handleMerge` ficou.
+  · LAPIS NO SELETOR (`FavorecidoSelect`): com a linha do documento ligada E a lista do leitor, um LUGAR RESERVADO do tamanho do "+"
+    entre o campo e o "+", sempre presente; com fornecedor escolhido, o lapis abre o `FornecedorFormDialog` EXISTENTE em modo edicao
+    por cima da tela (le' o registro por `leitorDeFornecedores.lerPorId` e as fazendas do `FazendaContext`, montado so' no clique).
+    Salvar avisa o leitor (o proprio cadastro ja' chamava `notificarFornecedoresMudaram`) e campo e linha do documento releem.
+    Celula de tabela e modo da lista do hospedeiro: sem lapis. ⚠ TODO FORMULARIO COM O SELETOR NO MODO DO LEITOR PERDEU ~36px DE
+    LARGURA NO CAMPO (o lugar do lapis) — nao medido tela a tela.
+  · CADASTROS › FORNECEDORES: status em `Segmentado` (Ativos | Inativos | Todos, padrao Ativos); "Sem CPF/CNPJ" combinavel (vazio OU
+    fora do padrao pelo validador; com ele ligado o recorte e' lido INTEIRO e paginado na tela); o total filtrado no cabecalho; tabela
+    `table-fixed`, uma linha por registro, o documento com a marca "vazio" ou "fora do padrão" (o motivo no `title`). Titulo 16px.
+  ⚠ FOTOS REGRAVADAS, de proposito: as 4 de `valorComConta.fotos.json` e 5 das 15 de `obrigacaoDialog.fotos.json` — cada uma cresceu
+    EXATAMENTE 87 bytes (o lugar vazio) ou 1.110 (o lugar com o lapis).
+  ⚠ FRENTE FORN-VALIDADOR-RESTANTE-01 (aberta, Gabriel 15/10/2026): ainda gravam `cpf_cnpj` SEM o validador unico — `AbaDocumentosOC`
+    (emitente), `AbaCompromissosOC`, `useFinanceiroV2.criarFornecedor` e os quatro inserts do `LancamentosTab` (estes recebem o
+    formatado quando vem do `NovoFornecedorDialog`); e o campo do `FavorecidoSelect` ficou ~36px mais estreito nos formularios (o
+    lugar do lapis) — A MEDIR TELA A TELA na homologacao.
+  · As seis decisoes do Code neste PR (legado intocado nao trava; nome na criacao como antes; CNPJ repetido recusado; frase do
+    Mesclar no painel; `decidirCadastro` pela chave; leitura do cadastro a cada Salvar) foram ACEITAS pelo Chat em 15/10/2026.
+  ⚠ NAO PROVADO NO NAVEGADOR: nada (lapis por cima do modal do lancamento, a linha do documento relendo sem F5, a lista com os
+    filtros, larguras e alturas renderizadas) · perfil nao admin · os 13 cadastros de tamanho invalido abertos na tela.
 - ⚠ PECUARIA LEGADO E META USAM O DONO PELO MESMO ENCAIXE DA LAVOURA, QUE VIROU COMPARTILHADO: `CampoDeFornecedor` (FORN-SELETOR-PADRAO-01
   fatia 2e, Gabriel 10/10/2026, so' tela, sem banco). `src/components/agri/FornecedorDaLavoura.tsx` foi MOVIDO para
   `src/components/shared/CampoDeFornecedor.tsx` (o bloco da 2d, abaixo, cita o nome antigo) e e' o encaixe UNICO: PROIBIDO nascer um

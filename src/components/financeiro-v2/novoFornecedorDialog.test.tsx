@@ -37,10 +37,11 @@ const salvarClique = () => fireEvent.click(screen.getByText('Salvar Fornecedor')
 describe('NovoFornecedorDialog — não duplica', () => {
   it('nome NOVO: cria pelo hospedeiro, com o nome e o documento digitados — e não seleciona nada', async () => {
     const t = montar([f('a', 'Alfa')]);
-    t.digitar('  Novo de Verdade ', ' 123 ');
+    /* FORN-EDITAR-01: o documento passa pelo validador único e vai ao hospedeiro no formato gravado */
+    t.digitar('  Novo de Verdade ', ' 52998224725 ');
     salvarClique();
     await waitFor(() => expect(t.salvar).toHaveBeenCalledTimes(1));
-    expect(t.salvar).toHaveBeenCalledWith('Novo de Verdade', '123');
+    expect(t.salvar).toHaveBeenCalledWith('Novo de Verdade', '529.982.247-25');
     expect(t.selecionar).not.toHaveBeenCalled();
     expect(t.recado().textContent).toBe('');
   });
@@ -96,11 +97,11 @@ describe('NovoFornecedorDialog — não duplica', () => {
   });
 
   it('DOCUMENTO de outro fornecedor ativo: não cria nem seleciona sozinho; mostra de quem é; "Voltar" desfaz', async () => {
-    const dono = f('d', 'Dono do Documento', { cpf_cnpj: '11.222.333/0001-44' });
+    const dono = f('d', 'Dono do Documento', { cpf_cnpj: '11.222.333/0001-81' });
     const t = montar([dono]);
-    t.digitar('Nome Diferente', '11222333000144');
+    t.digitar('Nome Diferente', '11222333000181');
     salvarClique();
-    await waitFor(() => expect(t.recado().textContent).toBe('Este CPF/CNPJ já é de Dono do Documento (11.222.333/0001-44).'));
+    await waitFor(() => expect(t.recado().textContent).toBe('Este CPF/CNPJ já é de Dono do Documento (11.222.333/0001-81).'));
     expect([t.salvar.mock.calls.length, t.selecionar.mock.calls.length]).toEqual([0, 0]);
     fireEvent.click(screen.getByText('Voltar'));
     expect(screen.getByText('Salvar Fornecedor')).toBeTruthy();
@@ -108,9 +109,9 @@ describe('NovoFornecedorDialog — não duplica', () => {
   });
 
   it('DOCUMENTO de outro, "Selecionar …": o dono do documento é o selecionado, e nada é criado', async () => {
-    const dono = f('d', 'Dono do Documento', { cpf_cnpj: '11.222.333/0001-44' });
+    const dono = f('d', 'Dono do Documento', { cpf_cnpj: '11.222.333/0001-81' });
     const t = montar([dono]);
-    t.digitar('Nome Diferente', '11.222.333/0001-44');
+    t.digitar('Nome Diferente', '11.222.333/0001-81');
     salvarClique();
     fireEvent.click(await screen.findByText('Selecionar Dono do Documento'));
     await waitFor(() => expect(t.fechar).toHaveBeenCalledTimes(1));

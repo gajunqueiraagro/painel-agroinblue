@@ -17,18 +17,26 @@
 //  · DOIS MODOS NA TRANSIÇÃO: com `clienteId` e SEM `fornecedores`, a lista vem do LEITOR ÚNICO
 //    (`useFornecedoresDoCliente`); com `fornecedores`, vale a lista do hospedeiro, como sempre, até a fatia dele no PASSO 2.
 //  ⚠ As regras puras (normalização, formatação, recorte) moram em `@/lib/fornecedores/fornecedorTexto`.
+//
+// FORN-EDITAR-01 (Gabriel, 15/10/2026) — O LÁPIS: nos usos de formulário (linha do documento ligada, lista do leitor), com
+// fornecedor escolhido, um lápis ao lado do campo abre o cadastro EXISTENTE (`FornecedorFormDialog`) em modo edição, por cima
+// da tela (o que já foi digitado nela fica). O lugar do lápis é RESERVADO: o campo não muda de largura quando ele aparece ou
+// some. Ao salvar, o próprio cadastro avisa o leitor (`notificarFornecedoresMudaram`) e o campo e a linha do documento relêem.
+// Célula de tabela (linha do documento desligada) fica sem lápis.
 import { useState, useMemo, useEffect, useRef } from 'react';
+import { useFazenda } from '@/contexts/FazendaContext';
+import { FornecedorFormDialog } from '@/components/financeiro-v2/FornecedorFormDialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Search, Check, ChevronsUpDown, Plus } from 'lucide-react';
+import { Search, Check, ChevronsUpDown, Plus, Pencil } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { FornecedorV2 } from '@/hooks/useFinanceiroV2';
 import { COMBOBOX_CONTENT } from '@/components/ui/command';
 import {
   MENU_BUSCA, MENU_ESCOLHIDO, MENU_ITEM, MENU_REALCE, MENU_REALCE_HOVER, MENU_SECUNDARIO, MENU_VAZIO,
 } from '@/components/ui/menuPadrao';
-import { useFornecedoresDoCliente } from '@/hooks/useFornecedoresDoCliente';
+import { leitorDeFornecedores, useFornecedoresDoCliente } from '@/hooks/useFornecedoresDoCliente';
 import type { FornecedorLido } from '@/lib/fornecedores/leitorDeFornecedores';
 import {
   LIMITE_DE_OPCOES, formatarDocumento, fraseDoLimite, linhaDoDocumento as textoDaLinhaDoDocumento, montarOpcoes,
@@ -105,6 +113,33 @@ export interface FavorecidoSelectProps<F extends FavorecidoOpcao = FornecedorV2>
   rotuloDoVazio?: string;
 }
 
+export const FRASE_FALHA_AO_ABRIR_CADASTRO = 'Não foi possível abrir o cadastro do fornecedor.';
+
+/**
+ * FORN-EDITAR-01 — o cadastro EXISTENTE do fornecedor escolhido, em modo edição. Só é montado quando o lápis é clicado (é aqui
+ * que se lê o registro inteiro, por id, e as fazendas do contexto).
+ */
+function EditarCadastroDoEscolhido({ clienteId, fornecedorId, semelhantes, onClose, onErro }: {
+  clienteId: string; fornecedorId: string; semelhantes: FornecedorLido[]; onClose: () => void; onErro: (frase: string) => void;
+}) {
+  const { fazendas } = useFazenda();
+  const [registro, setRegistro] = useState<FornecedorLido | null>(null);
+  const onErroRef = useRef(onErro);
+  onErroRef.current = onErro;
+  useEffect(() => {
+    let vivo = true;
+    leitorDeFornecedores.lerPorId(clienteId, fornecedorId)
+      .then((f) => { if (!vivo) return; if (f) setRegistro(f); else onErroRef.current(FRASE_FALHA_AO_ABRIR_CADASTRO); })
+      .catch(() => { if (vivo) onErroRef.current(FRASE_FALHA_AO_ABRIR_CADASTRO); });
+    return () => { vivo = false; };
+  }, [clienteId, fornecedorId]);
+  if (!registro) return null;
+  return (
+    <FornecedorFormDialog open onClose={onClose} editing={registro} allFornecedores={semelhantes} fazendas={fazendas}
+      clienteId={clienteId} onSaved={() => { /* o cadastro já avisou o leitor: o campo relê sozinho */ }} />
+  );
+}
+
 /** Rótulo de exibição do favorecido. Com showCpfCnpj + documento presente → "Nome (CPF/CNPJ)";
  *  sem documento (ou desabilitado) → apenas o nome. Não altera valor/seleção/identidade. */
 function favorecidoLabel(f: FavorecidoOpcao, showCpfCnpj: boolean): string {
@@ -131,6 +166,11 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
   const doLeitor = fornecedores === undefined;
   const lidos = useFornecedoresDoCliente(doLeitor ? clienteId : null, doLeitor ? value : null);
   const comLinha = linhaDoDocumento ?? doLeitor;
+  /* FORN-EDITAR-01 — o lápis vale nos usos de formulário com a lista do leitor (é ele que relê depois de salvar) */
+  const comLapis = comLinha && doLeitor && !!clienteId;
+  const [editandoCadastro, setEditandoCadastro] = useState(false);
+  const [erroDoLapis, setErroDoLapis] = useState<string | null>(null);
+  useEffect(() => { setErroDoLapis(null); }, [value]);
 
   const ativos: Array<F | FornecedorLido> = useMemo(
     () => (doLeitor ? lidos.fornecedores : (fornecedores ?? []).filter(f => f.ativo !== false)),
@@ -217,7 +257,7 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
   const tituloDoGatilho = escolhido
     ? [escolhido.nome, textoDaLinhaDoDocumento(escolhido), inativo ? 'inativo' : ''].filter(Boolean).join(' · ')
     : undefined;
-  const erroDoLeitor = doLeitor ? lidos.erro : null;
+  const erroDoLeitor = (doLeitor ? lidos.erro : null) ?? erroDoLapis;
 
   return (
     <div>
@@ -319,6 +359,19 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
             )}
           </PopoverContent>
         </Popover>
+        {comLapis && (
+          /* ⚠ LUGAR RESERVADO (layout fixo): a caixa existe sempre, do tamanho do "+"; o lápis só aparece com fornecedor escolhido */
+          <span data-testid="favorecido-lapis-lugar" className={cn('inline-flex shrink-0', novoButtonClassName ?? 'h-8 w-8')}>
+            {value && (
+              <Button variant="outline" size="icon" data-testid="favorecido-lapis" disabled={disabled || undefined}
+                className={cn('shrink-0 [&_svg]:h-3.5 [&_svg]:w-3.5', novoButtonClassName ?? 'h-8 w-8')}
+                onClick={() => { setErroDoLapis(null); setEditandoCadastro(true); }}
+                title="Editar cadastro do fornecedor" aria-label="Editar cadastro do fornecedor">
+                <Pencil />
+              </Button>
+            )}
+          </span>
+        )}
         {onCriarNovo && (
           /* ⚠ O ÍCONE ACOMPANHA O BOTÃO — 133g item 3: num "+" de 20px, um ícone de 14px
              ocupa a altura toda. `[&_svg]` do `novoButtonClassName` manda quando vem. */
@@ -342,6 +395,11 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
             <span className="whitespace-nowrap tabular-nums" title={documentoDoEscolhido || undefined}>{textoDaLinhaDoDocumento(escolhido)}</span>
           )}
         </div>
+      )}
+      {comLapis && editandoCadastro && clienteId && value && (
+        <EditarCadastroDoEscolhido clienteId={clienteId} fornecedorId={value} semelhantes={lidos.fornecedores}
+          onClose={() => setEditandoCadastro(false)}
+          onErro={(frase) => { setEditandoCadastro(false); setErroDoLapis(frase); }} />
       )}
     </div>
   );

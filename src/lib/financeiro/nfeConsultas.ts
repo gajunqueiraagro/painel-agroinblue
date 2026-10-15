@@ -5,9 +5,10 @@
  */
 import { supabase } from '@/integrations/supabase/client';
 import { lerResolucoesDoBanco } from '@/v2/lib/importLanc/importLancamentosView';
-import { documentoFormatado, soDigitos } from '@/lib/financeiro/nfe/formatos';
+import { soDigitos } from '@/lib/financeiro/nfe/formatos';
 import type { UltimaClassificacao } from '@/lib/financeiro/nfe/proporLancamento';
 import { notificarFornecedoresMudaram } from '@/hooks/useFornecedoresDoCliente';
+import { validarDocumento } from '@/lib/fornecedores/documentoFiscal';
 
 /** Onde uma nota ja' esta' registrada — uma linha de `fn_documento_chave_ja_registrada`. */
 export interface OcorrenciaDaNota {
@@ -91,9 +92,11 @@ export async function iePorFazenda(clienteId: string): Promise<Record<string, st
  * sobrescrever um documento que alguem digitou entre a leitura e o salvar. Devolve a mensagem de erro, ou `null`.
  */
 export async function gravarDocumentoNoCadastro(clienteId: string, fornecedorId: string, documento: string): Promise<string | null> {
-  const formatado = documentoFormatado(documento);
-  if (!formatado) return null;
-  const { error } = await supabase.from('financeiro_fornecedores').update({ cpf_cnpj: formatado })
+  /* FORN-EDITAR-01 — pelo validador único: documento inválido NÃO é gravado, e o motivo volta como erro */
+  const validado = validarDocumento(documento);
+  if (!validado.valido) return validado.motivo;
+  if (!validado.formatado) return null;
+  const { error } = await supabase.from('financeiro_fornecedores').update({ cpf_cnpj: validado.formatado })
     .eq('id', fornecedorId).eq('cliente_id', clienteId).or('cpf_cnpj.is.null,cpf_cnpj.eq.');
   if (error) return error.message;
   notificarFornecedoresMudaram(clienteId);   /* FORN-SELETOR-PADRAO-01: o documento do cadastro mudou */

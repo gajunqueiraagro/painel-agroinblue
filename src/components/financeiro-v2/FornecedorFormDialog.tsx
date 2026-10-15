@@ -12,10 +12,23 @@ import { toast } from 'sonner';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { normalizeFornecedorNome } from '@/lib/financeiro/normalizeFornecedorNome';
 import { notificarFornecedoresMudaram } from '@/hooks/useFornecedoresDoCliente';
+import { mascararAoDigitar, situacaoDoGravado, validarDocumento } from '@/lib/fornecedores/documentoFiscal';
+import {
+  acharRepetidos, fraseDosRepetidos, lerCadastroParaConferir, temRepetido, FRASE_FALHA_AO_CONFERIR_REPETIDO,
+  type FornecedorParaConferir,
+} from '@/lib/fornecedores/repetidosDoCadastro';
 
 // PR-FORNECEDOR-FAZENDA-01: fazenda é opcional. Sentinela do "— Sem fazenda —"
 // (Radix Select não aceita SelectItem com value vazio) → mapeado para null no save.
 const SEM_FAZENDA = '__sem_fazenda__';
+
+/**
+ * FORN-EDITAR-01 — a mesclagem move SÓ `financeiro_lancamentos_v2.favorecido_id` e inativa o duplicado; as outras tabelas com
+ * FK para o fornecedor ficam apontando para o inativado. TRAVADA até a frente própria (FORN-MESCLAR-01): o código fica, a
+ * entrada não.
+ */
+const MESCLAR_LIGADO = false;
+export const MOTIVO_MESCLAR_TRAVADO = 'Indisponível: hoje a mesclagem move só os lançamentos financeiros. Será refeita (FORN-MESCLAR-01).';
 
 interface Fornecedor {
   id: string;
@@ -49,6 +62,8 @@ interface Props {
   clienteId: string;
   onSaved: () => void;
   onSelectExisting?: (fornecedor: Fornecedor) => void;
+  /** só para teste: quem lê o cadastro para a conferência de repetido (padrão: o banco) */
+  lerCadastro?: (clienteId: string, nome: string) => Promise<FornecedorParaConferir[]>;
 }
 
 function normalize(s: string) {
@@ -86,6 +101,7 @@ function wordSimilarity(input: string, candidate: string): number {
 
 export function FornecedorFormDialog({
   open, onClose, editing, allFornecedores, fazendas, clienteId, onSaved, onSelectExisting,
+  lerCadastro = lerCadastroParaConferir,
 }: Props) {
   const [nome, setNome] = useState('');
   const [cpfCnpj, setCpfCnpj] = useState('');
@@ -97,6 +113,10 @@ export function FornecedorFormDialog({
   const [reativando, setReativando] = useState(false);
   const [lancamentoCount, setLancamentoCount] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
+  /* FORN-EDITAR-01 — o documento só é julgado pelo validador depois de mexido; o gravado fora do padrão abre como está */
+  const [docTocado, setDocTocado] = useState(false);
+  /* o aviso de repetido (ou a falha da conferência), escrito no lugar reservado acima dos botões */
+  const [recado, setRecado] = useState<{ texto: string; tom: 'aviso' | 'erro' } | null>(null);
 
   // Payment fields
   const [tipoRecebimento, setTipoRecebimento] = useState('');
@@ -150,8 +170,24 @@ export function FornecedorFormDialog({
       }
       setReviewId(null);
       setDeleting(false);
+      setDocTocado(false);
+      setRecado(null);
     }
   }, [open, editing, fazendas]);
+
+  /* FORN-EDITAR-01 — o documento pelo validador único */
+  const validado = validarDocumento(cpfCnpj);
+  const gravado = editing ? situacaoDoGravado(editing.cpf_cnpj) : null;
+  /* o gravado fora do padrão que ninguém mexeu: aparece como está, com o aviso; não trava o Salvar (vai como está, ou
+     formatado se for válido) */
+  const legadoIntocado = !docTocado && gravado?.situacao === 'fora_do_padrao';
+  const documentoBloqueia = !validado.valido && !legadoIntocado;
+  const documentoParaGravar: string | null = validado.valido ? (validado.formatado || null) : (cpfCnpj.trim() || null);
+  const recadoDoDocumento: { texto: string; tom: 'erro' | 'aviso' } | null = documentoBloqueia
+    ? { texto: validado.motivo ?? '', tom: 'erro' }
+    : legadoIntocado
+      ? { texto: `Fora do padrão · ${gravado?.motivo ?? ''}${validado.valido && validado.formatado ? ` Ao salvar, grava ${validado.formatado}.` : ''}`, tom: 'aviso' }
+      : null;
 
   const suggestions = useMemo(() => {
     if (nome.trim().length < 3) return [];
@@ -163,8 +199,9 @@ export function FornecedorFormDialog({
       .slice(0, 5);
   }, [nome, allFornecedores, editing]);
 
-  const save = useCallback(async () => {
+  const save = useCallback(async (forcar = false) => {
     if (saving) return;
+    if (documentoBloqueia) return;
     if (!clienteId || !nome.trim()) {
       toast.error('Preencha o nome');
       return;
@@ -192,12 +229,32 @@ export function FornecedorFormDialog({
     }
 
     setSaving(true);
+
+    /* FORN-EDITAR-01 — conferência de repetido no MESMO cliente (ativos e inativos, fora o próprio): o documento sempre; o nome
+       na edição (na criação a checagem de nome é a de cima). Avisa no formulário; quem decide é o operador. */
+    if (!forcar) {
+      let doCliente: FornecedorParaConferir[];
+      try {
+        doCliente = await lerCadastro(clienteId, nome);
+      } catch {
+        setRecado({ texto: FRASE_FALHA_AO_CONFERIR_REPETIDO, tom: 'erro' });
+        setSaving(false);
+        return;
+      }
+      const repetidos = acharRepetidos({ proprioId: editing?.id ?? null, nome, cpfCnpj: documentoParaGravar, conferirNome: !!editing }, doCliente);
+      if (temRepetido(repetidos)) {
+        setRecado({ texto: fraseDosRepetidos(repetidos), tom: 'aviso' });
+        setSaving(false);
+        return;
+      }
+    }
+
     const payload: any = {
       cliente_id: clienteId,
       // PR-FORNECEDOR-FAZENDA-01: '' (nasce vazio) e o sentinela → null; nunca ''.
       fazenda_id: fazendaId && fazendaId !== SEM_FAZENDA ? fazendaId : null,
       nome: nome.trim(),
-      cpf_cnpj: cpfCnpj.trim() || null,
+      cpf_cnpj: documentoParaGravar,   /* FORN-EDITAR-01: o formato do validador único */
       ativo,
       tipo_recebimento: tipoRecebimento || null,
       pix_tipo_chave: pixTipoChave || null,
@@ -224,7 +281,7 @@ export function FornecedorFormDialog({
     notificarFornecedoresMudaram(clienteId);   /* FORN-SELETOR-PADRAO-01: o leitor único relê */
     onClose();
     onSaved();
-  }, [saving, clienteId, nome, cpfCnpj, fazendaId, ativo, editing, onClose, onSaved, allFornecedores, tipoRecebimento, pixTipoChave, pixChave, banco, agencia, conta, tipoConta, cpfCnpjPagamento, nomeFavorecido, observacaoPagamento]);
+  }, [saving, clienteId, nome, fazendaId, ativo, editing, onClose, onSaved, allFornecedores, tipoRecebimento, pixTipoChave, pixChave, banco, agencia, conta, tipoConta, cpfCnpjPagamento, nomeFavorecido, observacaoPagamento, documentoBloqueia, documentoParaGravar, lerCadastro]);
 
   const reativarExistente = useCallback(async () => {
     if (!reativarTarget) return;
@@ -297,7 +354,7 @@ export function FornecedorFormDialog({
             <Label className="text-xs">Nome *</Label>
             <Input
               value={nome}
-              onChange={e => setNome(e.target.value)}
+              onChange={e => { setNome(e.target.value); setRecado(null); }}
               placeholder="Nome do fornecedor"
               className="h-9"
               autoFocus
@@ -312,6 +369,9 @@ export function FornecedorFormDialog({
                 <span className="text-[11px] font-semibold">Já existem cadastros semelhantes. Revise antes de criar um novo.</span>
               </div>
               <p className="text-[10px] text-muted-foreground">Sugestões de cadastro semelhante:</p>
+              {editing && !MESCLAR_LIGADO && (
+                <p data-testid="mesclar-travado" className="text-[10px] text-amber-700 truncate" title={MOTIVO_MESCLAR_TRAVADO}>Mesclar · {MOTIVO_MESCLAR_TRAVADO}</p>
+              )}
               <div className="space-y-1">
                 {suggestions.map(s => (
                   <div key={s.id} className="flex items-center gap-1.5 bg-background/80 rounded px-2 py-1 border border-border/50">
@@ -339,8 +399,10 @@ export function FornecedorFormDialog({
                           size="sm"
                           variant="outline"
                           className="h-5 text-[9px] px-1.5 gap-0.5"
-                          onClick={() => handleMerge(s)}
-                          title="Mesclar: mover lançamentos para este"
+                          data-testid="botao-mesclar"
+                          disabled={!MESCLAR_LIGADO}
+                          onClick={MESCLAR_LIGADO ? () => handleMerge(s) : undefined}
+                          title={MESCLAR_LIGADO ? 'Mesclar: mover lançamentos para este' : MOTIVO_MESCLAR_TRAVADO}
                         >
                           <Merge className="h-2.5 w-2.5" />Mesclar
                         </Button>
@@ -373,7 +435,18 @@ export function FornecedorFormDialog({
 
           <div>
             <Label className="text-xs">CPF/CNPJ</Label>
-            <Input value={cpfCnpj} onChange={e => setCpfCnpj(e.target.value)} className="h-9" placeholder="000.000.000-00" />
+            <Input
+              value={cpfCnpj}
+              onChange={e => { setCpfCnpj(mascararAoDigitar(e.target.value)); setDocTocado(true); setRecado(null); }}
+              className={`h-9 ${documentoBloqueia ? 'border-destructive' : ''}`}
+              placeholder="000.000.000-00 ou 00.000.000/0000-00"
+              aria-invalid={documentoBloqueia || undefined}
+            />
+            {/* FORN-EDITAR-01 — lugar RESERVADO de 14px, sempre presente: a recusa (vermelho) ou o "fora do padrão" (âmbar) */}
+            <div data-testid="cpf-cnpj-recado" title={recadoDoDocumento?.texto || undefined}
+              className={`h-[14px] truncate text-[10px] leading-[14px] ${recadoDoDocumento?.tom === 'erro' ? 'text-destructive' : 'text-amber-700'}`}>
+              {recadoDoDocumento?.texto ?? ''}
+            </div>
           </div>
           <div>
             <Label className="text-xs">Fazenda</Label>
@@ -478,6 +551,11 @@ export function FornecedorFormDialog({
           </div>
         </div>
 
+        {/* FORN-EDITAR-01 — lugar RESERVADO (duas linhas) para o aviso de repetido e a falha da conferência: nunca toast */}
+        <div data-testid="fornecedor-recado" title={recado?.texto || undefined}
+          className={`h-[30px] overflow-hidden text-[11px] leading-[15px] ${recado?.tom === 'erro' ? 'text-destructive' : 'text-amber-700'}`}>
+          {recado?.texto ?? ''}
+        </div>
         <DialogFooter className="gap-1 flex-wrap">
           {editing && lancamentoCount !== null && (
             lancamentoCount > 0 ? (
@@ -538,8 +616,9 @@ export function FornecedorFormDialog({
             )
           )}
           <Button variant="outline" size="sm" onClick={onClose}>Cancelar</Button>
-          <Button size="sm" onClick={save} disabled={saving || !nome.trim()}>
-            {saving ? 'Salvando...' : editing ? 'Salvar' : 'Criar'}
+          <Button size="sm" onClick={() => save(recado?.tom === 'aviso')} disabled={saving || !nome.trim() || documentoBloqueia}
+            title={documentoBloqueia ? (validado.motivo ?? undefined) : undefined}>
+            {saving ? 'Salvando...' : recado?.tom === 'aviso' ? 'Salvar mesmo assim' : editing ? 'Salvar' : 'Criar'}
           </Button>
         </DialogFooter>
       </DialogContent>

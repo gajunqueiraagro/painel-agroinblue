@@ -5,6 +5,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import { leitorDeFornecedores, notificarFornecedoresMudaram } from '@/hooks/useFornecedoresDoCliente';
 import type { FonteDoCadastro, FornecedorDoCadastro } from './cadastroDaCasa';
+import { validarDocumento } from './documentoFiscal';
 
 export const fonteDoCadastroNoBanco: FonteDoCadastro = {
   lerPorNome: async (clienteId, nomeNormalizado) => {
@@ -41,9 +42,12 @@ export const fonteDoCadastroNoBanco: FonteDoCadastro = {
 export async function criarFornecedorDaCasa(
   clienteId: string, dados: { nome: string; cpfCnpj?: string | null; fazendaId?: string | null },
 ): Promise<FornecedorDoCadastro> {
+  /* FORN-EDITAR-01 — o documento passa pelo validador único: inválido não grava (a frase vai ao lado do botão) */
+  const documento = validarDocumento(dados.cpfCnpj);
+  if (!documento.valido) throw new Error(documento.motivo ?? 'CPF/CNPJ inválido.');
   const { data, error } = await supabase
     .from('financeiro_fornecedores')
-    .insert({ cliente_id: clienteId, fazenda_id: dados.fazendaId || null, nome: dados.nome, cpf_cnpj: dados.cpfCnpj || null })
+    .insert({ cliente_id: clienteId, fazenda_id: dados.fazendaId || null, nome: dados.nome, cpf_cnpj: documento.formatado || null })
     .select('id, nome, cpf_cnpj, fazenda_id, ativo')
     .single();
   if (error) throw new Error(error.message);

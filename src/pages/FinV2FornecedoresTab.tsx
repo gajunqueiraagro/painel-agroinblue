@@ -13,6 +13,21 @@ import { Plus, Pencil, Search, Link2, AlertTriangle } from 'lucide-react';
 import { FornecedorFormDialog } from '@/components/financeiro-v2/FornecedorFormDialog';
 import { toast } from 'sonner';
 import { notificarFornecedoresMudaram } from '@/hooks/useFornecedoresDoCliente';
+import { Segmentado } from '@/components/ui/segmentado';
+import { cn } from '@/lib/utils';
+import { lerTodasAsPaginas } from '@/v2/lib/importLanc/lerTodasAsPaginas';
+import { situacaoDoGravado } from '@/lib/fornecedores/documentoFiscal';
+
+type FiltroStatus = 'ativos' | 'inativos' | 'todos';
+
+/**
+ * FORN-EDITAR-01 — "Sem CPF/CNPJ" = campo vazio OU fora do padrão (só dígitos, outro formato, tamanho ou dígito verificador
+ * errado), pelo validador único (`situacaoDoGravado`). Combina com o status e com a busca. Como "fora do padrão" não se filtra
+ * no banco (o gravado tem formatos misturados), com o filtro ligado a lista do recorte é lida INTEIRA e paginada aqui.
+ */
+export function precisaDeDocumento(cpfCnpj: string | null | undefined): boolean {
+  return situacaoDoGravado(cpfCnpj).situacao !== 'ok';
+}
 
 interface Fornecedor {
   id: string;
@@ -55,7 +70,8 @@ export function FinV2FornecedoresTab() {
   const [editing, setEditing] = useState<Fornecedor | null>(null);
   const [searchText, setSearchText] = useState('');
   const [searchDebounced, setSearchDebounced] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'todos' | 'ativos' | 'inativos'>('ativos');
+  const [statusFilter, setStatusFilter] = useState<FiltroStatus>('ativos');
+  const [semDocumento, setSemDocumento] = useState(false);
   const [activeTab, setActiveTab] = useState('cadastro');
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
@@ -67,32 +83,49 @@ export function FinV2FornecedoresTab() {
   const load = useCallback(async () => {
     if (!clienteAtual?.id) return;
     setLoading(true);
-    let query = supabase
-      .from('financeiro_fornecedores')
-      .select('*', { count: 'exact' })
-      .eq('cliente_id', clienteAtual.id);
+    const clienteId = clienteAtual.id;
+    const consulta = (contar: boolean) => {
+      let query = supabase
+        .from('financeiro_fornecedores')
+        .select('*', { count: contar ? 'exact' : undefined })
+        .eq('cliente_id', clienteId);
 
-    if (statusFilter === 'ativos') query = query.eq('ativo', true);
-    else if (statusFilter === 'inativos') query = query.eq('ativo', false);
+      if (statusFilter === 'ativos') query = query.eq('ativo', true);
+      else if (statusFilter === 'inativos') query = query.eq('ativo', false);
 
-    const q = searchDebounced.trim();
-    if (q) {
-      const safe = q.replace(/[%,()]/g, ' ').trim();
-      if (safe) {
-        query = query.or(
-          `nome_normalizado.ilike.%${safe}%,nome.ilike.%${safe}%,cpf_cnpj.ilike.%${safe}%`
-        );
+      const q = searchDebounced.trim();
+      if (q) {
+        const safe = q.replace(/[%,()]/g, ' ').trim();
+        if (safe) {
+          query = query.or(
+            `nome_normalizado.ilike.%${safe}%,nome.ilike.%${safe}%,cpf_cnpj.ilike.%${safe}%`
+          );
+        }
       }
-    }
+      return query.order('nome').order('id');
+    };
 
     const from = (page - 1) * PAGE_SIZE;
     const to = page * PAGE_SIZE - 1;
-    const { data, count } = await query.order('nome').range(from, to);
+    if (semDocumento) {
+      /* FORN-EDITAR-01 — o recorte inteiro, filtrado pelo validador único, paginado aqui */
+      const todos = await lerTodasAsPaginas<Fornecedor>(async (de, ate, contar) => {
+        const { data, error, count } = await consulta(contar).range(de, ate);
+        if (error) throw new Error(error.message);
+        return { data: (data as Fornecedor[]) ?? [], count: typeof count === 'number' ? count : null };
+      }).catch(() => [] as Fornecedor[]);
+      const filtrados = todos.filter(f => precisaDeDocumento(f.cpf_cnpj));
+      setItems(filtrados.slice(from, to + 1));
+      setTotalCount(filtrados.length);
+      setLoading(false);
+      return;
+    }
+    const { data, count } = await consulta(true).range(from, to);
 
     setItems((data as Fornecedor[]) || []);
     setTotalCount(count ?? 0);
     setLoading(false);
-  }, [clienteAtual?.id, statusFilter, searchDebounced, page]);
+  }, [clienteAtual?.id, statusFilter, searchDebounced, page, semDocumento]);
 
   const loadPending = useCallback(async () => {
     if (!clienteAtual?.id) return;
@@ -144,7 +177,7 @@ export function FinV2FornecedoresTab() {
   }, [searchText]);
 
   // Reset para página 1 a cada nova busca/filtro
-  useEffect(() => { setPage(1); }, [searchDebounced, statusFilter]);
+  useEffect(() => { setPage(1); }, [searchDebounced, statusFilter, semDocumento]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { if (activeTab === 'pendentes') loadPending(); }, [activeTab, loadPending]);
@@ -209,7 +242,13 @@ export function FinV2FornecedoresTab() {
   return (
     <div className="w-full p-4 pb-20 space-y-3 animate-fade-in">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-foreground">Fornecedores</h2>
+        {/* FORN-EDITAR-01 — título contido, com o total do recorte filtrado ao lado */}
+        <h2 className="flex min-w-0 items-baseline gap-2 whitespace-nowrap text-[16px] font-semibold text-foreground">
+          Fornecedores
+          <span data-testid="fornecedores-contador" className="text-[11px] font-normal text-muted-foreground tabular-nums">
+            {loading ? '…' : `${totalCount.toLocaleString('pt-BR')} ${totalCount === 1 ? 'fornecedor' : 'fornecedores'}`}
+          </span>
+        </h2>
         <Button size="sm" onClick={openNew}><Plus className="h-4 w-4 mr-1" /> Novo</Button>
       </div>
 
@@ -233,36 +272,62 @@ export function FinV2FornecedoresTab() {
                 className="h-8 text-xs pl-7"
               />
             </div>
-            <Select value={statusFilter} onValueChange={v => setStatusFilter(v as any)}>
-              <SelectTrigger className="h-8 w-28 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos</SelectItem>
-                <SelectItem value="ativos">Ativos</SelectItem>
-                <SelectItem value="inativos">Inativos</SelectItem>
-              </SelectContent>
-            </Select>
+            <Segmentado<FiltroStatus>
+              valor={statusFilter}
+              onEscolher={setStatusFilter}
+              altura={26}
+              opcoes={[
+                { valor: 'ativos', rotulo: 'Ativos' },
+                { valor: 'inativos', rotulo: 'Inativos' },
+                { valor: 'todos', rotulo: 'Todos' },
+              ]}
+            />
+            <button type="button" data-testid="filtro-sem-documento" aria-pressed={semDocumento}
+              onClick={() => setSemDocumento(v => !v)}
+              title="Campo vazio ou fora do padrão (só dígitos, outro formato, tamanho ou dígito verificador errado)"
+              className={cn('h-[26px] shrink-0 whitespace-nowrap rounded-md border px-2.5 text-[11px]',
+                semDocumento ? 'border-primary bg-primary text-primary-foreground' : 'bg-transparent text-muted-foreground hover:bg-muted')}>
+              Sem CPF/CNPJ
+            </button>
           </div>
           <Card>
             <CardContent className="p-0">
-              <Table>
+              {/* FORN-EDITAR-01 — uma linha por registro: só o nome corta (inteiro no `title`); documento e status não quebram */}
+              <Table className="table-fixed">
+                <colgroup>
+                  <col />
+                  <col style={{ width: 230 }} />
+                  <col style={{ width: 72 }} />
+                  <col style={{ width: 36 }} />
+                </colgroup>
                 <TableHeader>
                   <TableRow className="h-7">
                     <TableHead className="text-[10px]">Nome</TableHead>
                     <TableHead className="text-[10px]">CPF/CNPJ</TableHead>
                     <TableHead className="text-[10px]">Status</TableHead>
-                    <TableHead className="w-8" />
+                    <TableHead />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {loading && <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-6 text-xs">Carregando...</TableCell></TableRow>}
                   {!loading && items.length === 0 && <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-6 text-xs">Nenhum fornecedor</TableCell></TableRow>}
-                  {items.map(f => (
+                  {items.map(f => {
+                    const doc = situacaoDoGravado(f.cpf_cnpj);
+                    return (
                     <TableRow key={f.id} className="h-7 text-[11px]">
-                      <TableCell className="py-0.5 font-medium">{f.nome}</TableCell>
-                      <TableCell className="py-0.5 text-muted-foreground">{f.cpf_cnpj || '-'}</TableCell>
-                      <TableCell className="py-0.5">
+                      <TableCell className="py-0.5 font-medium truncate whitespace-nowrap" title={f.nome}>{f.nome}</TableCell>
+                      <TableCell className="py-0.5 whitespace-nowrap text-muted-foreground" title={doc.motivo ?? undefined}>
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          <span className="min-w-0 truncate tabular-nums">{f.cpf_cnpj || '-'}</span>
+                          {doc.situacao === 'vazio' && (
+                            <span data-testid="doc-vazio" className="shrink-0 text-[9.5px] text-amber-700">vazio</span>
+                          )}
+                          {doc.situacao === 'fora_do_padrao' && (
+                            <span data-testid="doc-fora-do-padrao" className="shrink-0 rounded border border-amber-400 bg-amber-50 px-1 text-[9.5px] leading-[14px] text-amber-800">fora do padrão</span>
+                          )}
+                        </span>
+                      </TableCell>
+                      <TableCell className="py-0.5 whitespace-nowrap">
                         <Badge variant={f.ativo ? 'default' : 'secondary'} className="text-[9px] px-1 py-0">
                           {f.ativo ? 'Ativo' : 'Inativo'}
                         </Badge>
@@ -273,7 +338,8 @@ export function FinV2FornecedoresTab() {
                         </Button>
                       </TableCell>
                     </TableRow>
-                  ))}
+                    );
+                  })}
                 </TableBody>
               </Table>
             </CardContent>

@@ -12,7 +12,8 @@
  *   nome ao mesmo tempo ainda duplicam.
  */
 import { normalizeFornecedorNome } from '@/lib/financeiro/normalizeFornecedorNome';
-import { formatarDocumento, soDigitos } from './fornecedorTexto';
+import { formatarDocumento } from './fornecedorTexto';
+import { chaveDoDocumento } from './documentoFiscal';
 
 export interface FornecedorDoCadastro {
   id: string;
@@ -56,9 +57,10 @@ export function decidirCadastro(
   if (ativo) return { tipo: 'ja_existe', fornecedor: ativo };
   const inativo = mesmoNome.find((f) => !f.ativo);
   if (inativo) return { tipo: 'inativo', fornecedor: inativo };
-  const doc = soDigitos(entrada.cpfCnpj);
+  /* FORN-EDITAR-01: a chave do validador único (dígitos E letras — o CNPJ alfanumérico não perde as letras) */
+  const doc = chaveDoDocumento(entrada.cpfCnpj);
   if (doc !== '') {
-    const dono = doCliente.filter((f) => f.ativo && soDigitos(f.cpf_cnpj) === doc).sort(maisAntigoPrimeiro)[0];
+    const dono = doCliente.filter((f) => f.ativo && chaveDoDocumento(f.cpf_cnpj) === doc).sort(maisAntigoPrimeiro)[0];
     if (dono) return { tipo: 'documento_de_outro', fornecedor: dono };
   }
   return { tipo: 'criar' };
