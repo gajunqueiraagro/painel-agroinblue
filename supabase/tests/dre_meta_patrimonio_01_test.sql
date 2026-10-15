@@ -13,6 +13,9 @@ do $do$
 declare
   v_raul uuid; j jsonb; fz jsonb; pat jsonb; v_prod numeric; v_merc numeric;
 begin
+  /* SEG-DRE-TENANT-01: fn_dre_pecuaria passou a exigir usuario com acesso ao cliente (42501 sem JWT). O teste le^ Raul e NJ:
+     simula o admin do AGROinBLUE (as asserções nao mudaram). */
+  perform set_config('request.jwt.claims', json_build_object('sub', '7bd0b6ad-2527-4be1-af58-f2cc0c0edd8e', 'role', 'authenticated')::text, true);
   select id into v_raul from clientes where nome = 'Raul Juliato';
 
   -- M1) 25/26 meta

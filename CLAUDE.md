@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 15/10/2026 (OC-DOC-SAIDA-FAZENDA-01 fix1 + fix1b, +3 em `src/components/compra/documentoFormAbate.test.tsx` (17 -> 20) — 5313
+  Baseline em 15/10/2026 (SEG-DRE-TENANT-01, +3: `src/lib/acessos/guardaDeClienteNasMigrations.test.ts` 3 (novo) — 5316 depois dele;
+  antes o OC-DOC-SAIDA-FAZENDA-01 fix1 + fix1b, +3 em `src/components/compra/documentoFormAbate.test.tsx` (17 -> 20) — 5313
   depois deles; antes o OC-DOC-SAIDA-FAZENDA-01, +20: `src/lib/oc/leitura/leituraSaida7f.test.ts` 19 (novo),
   `src/components/compra/documentoFormAbate.test.tsx` 1 (16 -> 17) — 5310 depois dele; antes o OC-DOC-ESPECIE-ABATE-01 passo 7e, +19: `src/lib/oc/leitura/leituraAbate7e.test.ts` 18 (novo),
   `src/components/compra/documentoFormAbate.test.tsx` 1 (15 -> 16) — 5290 depois dele; antes o OC-ENTREGA-COMPACTA-01, +9 em `src/components/venda/entregasVenda.test.tsx` (10 -> 19) — 5271 depois
@@ -329,7 +330,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5313
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5316
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3804,6 +3805,36 @@ docs/historico/frentes-ate-2026-09-29.md.)
     `fn_conciliacao_status_ano` e mais uma — hoje `anon` ja' nao as executa; sobra o canal SQL) · 01D escrita agricola (barter,
     mandioca, graos, estoque, locais) e `fn_promover_staging`, ~18 corpos · 01E leitura restante (DRE pecuaria, painel de safra,
     estoque de graos, auditorias), ~20 corpos · 01F PERFIL (`tenant_ok` e as policies nao distinguem leitura de escrita).
+- ⚠ AS LEITURAS SECURITY DEFINER DO DRE EXIGEM CLIENTE COM ACESSO (SEG-DRE-TENANT-01, Gabriel 15/10/2026; migration
+  `supabase/migrations/20261027198600_seg_dre_tenant_01.sql`, md5 do arquivo 254c598ed0cf8e427f5b05a25ee7aa03 — APLICADA no proto em
+  15/10/2026 com o OK do Gabriel: ledger 20261015142807 (⚠ registrada com o timestamp do dia; desta vez o ledger guarda o arquivo
+  INTEIRO, com a quebra final: md5 do ledger = 254c598e…, nao o af5f1940… "sem newline" previsto). Reaplicar nao toca as 7 (ctid
+  igual). Depois de aplicar, OK no vivo: `seg_dre_tenant_01_test.sql` (T1–T5), `dre_meta_patrimonio_01_test.sql` e
+  `seg_tenant_varredura_01c_test.sql` (recorte de sempre); nj@: DRE do NJ responde, o da Vera 42501. MEDIDO ANTES: com o usuario de teste do NJ (gestor so' do NJ),
+  `fn_dre_pecuaria` da Vera devolvia 8.512 bytes, `fn_dre_pecuaria_patrimonio` 2.867 e `fn_painel_rateio_detalhe` 72.723, com a
+  leitura direta das tabelas da Vera em 0 linhas (a RLS fecha; SECURITY DEFINER a atravessa).
+  · AS 7: `fn_dre_pecuaria`, `fn_dre_pecuaria_lancamentos`, `fn_dre_pecuaria_patrimonio`, `fn_painel_rateio_detalhe`, `fn_painel_safra`,
+    `fn_painel_safra_comparativo`, `fn_painel_safra_entrega`. Patch guardado por md5; SO' A GUARDA no inicio do corpo — plpgsql:
+    `if not coalesce(public.tenant_ok(p_cliente), false) then raise exception 'acesso negado ao cliente' using errcode = '42501'`;
+    LANGUAGE sql (sem RAISE): primeira instrucao `select public._fn_exigir_tenant(p_cliente);` (interna nova, fechada, o mesmo IF).
+    Tirando a guarda volta o corpo antigo EXATO (conferido na propria migration). ACL: sem PUBLIC/anon; authenticated e service_role.
+  · ⚠ SEM USUARIO `tenant_ok` E' FALSO: service_role e rotina sem JWT recebem 42501. Nenhum cron, view ou edge function chama as 7;
+    teste SQL que as chame simula usuario (`dre_meta_patrimonio_01_test.sql` ganhou o JWT do admin).
+  · ENSAIO (15/10): nj@ no NJ = antes nas 7 (md5 do resultado); nj@ na Vera e no Agnaldo 42501 nas 14; sem usuario 42501 nas 7;
+    admin na Vera e no Agnaldo = antes; `anon` "permission denied"; `seg_tenant_varredura_01c` OK com a migration; residuo zero.
+    Teste: `supabase/tests/seg_dre_tenant_01_test.sql` (T1–T5, OK ao vivo depois de aplicar). Fonte: `src/lib/acessos/guardaDeClienteNasMigrations.test.ts`
+    (toda funcao SECURITY DEFINER com parametro de cliente em migration a partir de 20261027198600 tem `tenant_ok` ou
+    `is_admin_agroinblue` + 42501; com auto-teste do detector).
+  ⚠ DIVIDA SEG-TENANT-GRUPO-B-01 (medida em 15/10, NAO corrigida; SECURITY DEFINER com parametro de cliente, sem `tenant_ok`,
+    `cliente_membros` nem `is_admin_agroinblue`, guarda nao provada chamando):
+    LEITURA (graos e estoque, `useEstoqueGraos.ts`): `fn_estoque_graos`, `fn_estoque_graos_resumo`, `fn_estoque_graos_balanco`,
+      `fn_estoque_movimentacoes`, `fn_estoque_graos_por_local`, `fn_locais_estoque`, `fn_vendas_graos`;
+    ESCRITA: `agri_carga_mandioca_registrar`, `agri_venda_graos_registrar`, `agri_venda_graos_corrigir`, `agri_quebra_registrar`,
+      `agri_cotacao_graos_registrar`, `agri_local_estoque_salvar`, `agri_contrato_armazenagem_salvar`, `agri_venda_avulsa_registrar`
+      e `agri_local_estoque_resolver` (sem chamador no front);
+    AUDITORIA: `buscar_duplicados_retroativo`, `auditar_integridade_classificacao` (sem chamador).
+    Delegam a guarda (fora da divida): `fn_dividendo_criar` / `_reordenar` -> `_fn_dividendo_rodar`; `oc_criar_rascunho` -> `oc_salvar_rascunho`.
+    As ~63 com a guarda propria `is_admin_agroinblue` + 42501 (OC, documentos, conciliacao) foram medidas so' pelo texto.
 - ⚠ A GRAVACAO DO EXTRATO E' DO BANCO, E O DESFAZER DIZ O QUE FAZ E RECUSA O QUE NAO PODE (PR-CONC-IMPORT-BANCO-01B, 03/10,
   migration 20261027192000, ⚠ registrada como 20261003174631; ledger = arquivo, md5 4966be59…).
   · IDENTIDADE DO MOVIMENTO: `hashMovimento` + a OCORRENCIA entre movimentos de CONTEUDO IDENTICO no arquivo, na ordem dele
