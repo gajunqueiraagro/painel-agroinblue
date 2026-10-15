@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 15/10/2026 (FORN-EDITAR-01, +39: `src/lib/fornecedores/documentoFiscal.test.ts` 16 (novo),
+  Baseline em 15/10/2026 (ZOOT-MES-FECHADO-MODAL-01, +21: `src/components/lancamento/avisoMesFechado.test.tsx` 21 (novo) — 5389
+  depois dele; antes o FORN-EDITAR-01, +39: `src/lib/fornecedores/documentoFiscal.test.ts` 16 (novo),
   `src/lib/fornecedores/repetidosDoCadastro.test.ts` 7 (novo), `src/lib/fornecedores/documentoFiscalNosEscritores.test.ts` 6 (novo),
   `src/components/financeiro-v2/fornecedorEditar.test.tsx` 10 (novo) — 5368 depois dele; antes o RESUMO-ATIVIDADE-01a, +2: `src/lib/fechamento/resumoPorAtividade.test.ts` 7 (novo); saiu
   `src/components/resumoAtividadesTipoDoMes.test.tsx` 5, com a tela que testava (as duas regras dela foram portadas) — 5329 depois dele;
@@ -338,7 +339,7 @@ no mesmo arquivo.
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
   `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5327
-  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01], 22 skipped, e
+  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01], 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -2076,6 +2077,31 @@ preview que o cabecalho nao sai da tela ao rolar.
   proposito: mexe na animacao de todos os dialogos.
 
 ## REGRAS VIGENTES — DADO, BANCO E METODO
+- ⚠ O MOTIVO DO BOTAO TRAVADO POR MES FECHADO MORA DENTRO DO MODAL, NUMA FAIXA COMUM ACIMA DOS BOTOES (ZOOT-MES-FECHADO-MODAL-01,
+  Gabriel 15/10/2026, so' tela, sem banco). Premissa corrigida na FASE 0: o P1 ja' tinha faixa no modal desde 50ccf379 (23/09); o que
+  ficava ATRAS do modal era a TRAVA MASTER (`MasterLockBanner` da pagina + toast no clique) e o `p1BloqueioMsg` de Transferencia/Consumo.
+  · A FAIXA E' UMA: `AvisoMesFechado` (`src/components/lancamento/AvisoMesFechado.tsx`), lugar RESERVADO de 40px logo acima do rodape,
+    sempre presente (vazio = mesma altura); duas linhas fixas de 18px — P1 primeiro, trava master embaixo; o gesto de reabrir ao lado do
+    P1 (o botao "Reabrir mês…" que cada modal ja' tinha FICA). Usam: Nascimento, Morte, Compra, Venda, Abate e o formulario generico
+    (Transferencia e Consumo; o envelope ganhou a prop `aviso`). Meta de compra e de venda nao passam a prop e nao ganham o lugar.
+  · AS FRASES TEM UMA FONTE (`src/lib/zootecnico/mesFechadoP1.ts`): `mesFechadoMotivo` -> "Setembro/2026 fechado no Mapa de Pastos (P1)
+    para <fazenda>. Reabra pelo botão ao lado ou em Produção › Fechamento Área."; `travaMasterMotivo` -> "Mês set/2026 com trava master
+    (<fazenda>). Desbloqueie com a senha master."; `tituloDaTrava` (o `title` do botao = as mesmas frases). Compra, Venda e Abate perderam a
+    copia local (`MESES_EXTENSO`) e leem daqui (preso por teste de fonte). Ao lado do Salvar/Concluir da Venda e do Abate a dica e' CURTA
+    (`DICA_MES_FECHADO`, "mês fechado (P1) — veja o aviso acima"); a frase inteira esta' na faixa e no `title`.
+  · TRAVA MASTER: a REGRA NAO MUDOU (`useMasterLock`, fazenda do CABECALHO, senha no navegador). O `LancamentosTab` le^ o mes do formulario
+    pelo mesmo hook (`travaMasterDoForm.isReadOnly(formAnoMes)` = o que o gate do `handleSubmit` testa) e passa a frase a Nascimento, Morte e
+    ao formulario generico: o botao trava, e no lancamento NOVO o gate deixa de dar toast (rele a trava; a faixa explica). Na EDICAO o gate
+    e o toast seguem como eram. ⚠ COMPRA/VENDA/ABATE DE OC NAO TEM A TRAVA MASTER: eles gravam por RPC propria e o gate nunca os alcancou —
+    levar a master para eles seria mudar a regra (nao feito).
+  · TRANSFERENCIA E CONSUMO: o botao passou a travar pelo P1 (e pela master) no lancamento NOVO, como os outros; na edicao segue o gate
+    seletivo de sempre. O `p1BloqueioMsg` da pagina FICA; o aviso do `renderForm` so' aparece fora do envelope (ramo antigo).
+  · SEM F5: `useAoVoltarAoFoco` (`src/hooks/`) rele o P1 (`refetch` do `useStatusPilares` de cada modal) e a trava master (`refreshLock`)
+    quando a janela volta ao foco ou a aba fica visivel — mes reaberto em outra tela/aba destrava o botao sem fechar o modal. Sem cache novo.
+  · ⚠ EVOLUIR CATEGORIA (`ReclassificacaoForm`) NAO PERGUNTA P1 NA TELA: o botao nunca trava por mes fechado (so' o banco recusa). Frente
+    propria a decidir (ZOOT-RECLASS-P1-TELA-01).
+  ⚠ NAO PROVADO NO NAVEGADOR: nada (a faixa a 1.126 x 523 e a 579, as duas linhas juntas, o foco destravando, a trava master real) ·
+    Compra e o formulario generico so' por teste de fonte (nao se montam) · o Abate passou o "Reabrir mês…" de botao a link.
 - ⚠ O RESUMO POR ATIVIDADE TEM UMA FONTE POR NUMERO, E A TELA NAO FAZ CONTA (RESUMO-ATIVIDADE-01a, Gabriel 15/10/2026, so' tela, sem
   banco). Substitui a `ResumoAtividadesView` (apagada com o teste dela). Aberta pelo botao "Resumo por Atividade" do Fechamento Area.
   · A AGREGACAO E' PURA: `src/lib/fechamento/resumoPorAtividade.ts` (`montarResumoDoMes`, `totalDaPecuariaDoCache`,

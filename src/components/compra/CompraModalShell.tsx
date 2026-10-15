@@ -36,6 +36,9 @@ import {
   ACESSO_TOTAL, MOTIVO_GADO, MOTIVO_SEM_CAPACIDADE, motivoFisicoTravado, motivoReabrirTravado, ocTemGadoMovido, type AcessoOperacao,
 } from '@/v2/lib/acessoOperacao';
 import { CancelarContaCorrenteDialog } from '@/components/venda/CancelarContaCorrenteDialog';
+import { mesFechadoMotivo as fraseDoMesFechado } from '@/lib/zootecnico/mesFechadoP1';
+import { AvisoMesFechado } from '@/components/lancamento/AvisoMesFechado';
+import { useAoVoltarAoFoco } from '@/hooks/useAoVoltarAoFoco';
 
 // Controlador de input mascarado (retorno de useIntegerInput/useDecimalInput no monólito).
 interface MaskedInput {
@@ -179,8 +182,6 @@ export interface CompraPermissoesPorEixo {
   financeiroNovoReadOnly: boolean;
 }
 
-const MESES_EXTENSO = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
 export function CompraModalShell(api: CompraModalShellProps) {
   /* A lista de fazendas no formato do combobox — FAZ-ATIVIDADE-01c. Deriva de `api.fazendas`, que já
@@ -344,9 +345,11 @@ export function CompraModalShell(api: CompraModalShellProps) {
   const anoMesDaData = api.data ? api.data.slice(0, 7) : undefined;
   const pilaresMes = useStatusPilares(api.fazendaDestinoId || undefined, anoMesDaData,
     !!api.fazendaDestinoId && !!anoMesDaData);
-  const mesFechadoMotivo = pilaresMes.status.p1_mapa_pastos.status === 'oficial' && anoMesDaData
-    ? `${MESES_EXTENSO[Number(anoMesDaData.slice(5, 7)) - 1]}/${anoMesDaData.slice(0, 4)} está fechado (P1) para ${api.fazendas.find(f => f.id === api.fazendaDestinoId)?.nome ?? 'esta fazenda'}`
-    : null;
+  /* ZOOT-MES-FECHADO-MODAL-01 — a frase tem UMA fonte (`mesFechadoP1.ts`); a cópia local saiu */
+  const mesFechadoMotivo = fraseDoMesFechado(pilaresMes.status.p1_mapa_pastos.status === 'oficial', anoMesDaData,
+    api.fazendas.find(f => f.id === api.fazendaDestinoId)?.nome);
+  /* mês reaberto em outra tela/aba: ao voltar o foco o P1 é relido e o botão destrava */
+  useAoVoltarAoFoco(() => { void pilaresMes.refetch(); }, !!api.fazendaDestinoId && !!anoMesDaData);
 
   const canOpenModal = !!(api.data && api.quantidadeNum > 0 && api.pesoKgNum > 0 && api.categoria);
   // Peso Total = derivado de exibição (Peso Médio × Quantidade). O estado legado `pesoKg`
@@ -644,15 +647,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
                   <DatePicker value={api.data} onChange={api.setData} disabled={dataTravada}
                     className={`px-2.5 ${dataTravada ? CAMPO_TRAVADO : ''}`} />
                 </div>
-                {/* ⚠ AMBAR E LOGO ABAIXO DA DATA: e' estado do periodo, nao erro do
-                    operador, e aparece no instante em que a data cai no mes fechado — nao
-                    na gravacao, quando a compra inteira ja' esta' preenchida. */}
-                {mesFechadoMotivo && (
-                  <div className="mt-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-[10px] leading-snug text-amber-800">
-                    <b className="font-semibold">{mesFechadoMotivo}.</b>{' '}
-                    <ReabrirMesNaOC forma="link" onAbrir={() => setReabrirP1Aberto(true)} />
-                  </div>
-                )}
+                {/* ZOOT-MES-FECHADO-MODAL-01 — o aviso de mês fechado SAIU daqui: mora na faixa comum acima dos botões. */}
               </div>
 
               <div className="min-w-0">
@@ -812,6 +807,9 @@ export function CompraModalShell(api: CompraModalShellProps) {
       {/* RODAPÉ — template do modal aprovado (bg-primary, px-6 py-3), FIXO (fora do scroll do corpo) */}
       {/* ⚠ 32px COM BOTOES 22px/10px, a medida do Abate e da Venda (era `px-6 py-2`, 48px).
           Mesmos botoes, mesma ordem, mesmo alinhamento (`justify-between`). */}
+      {/* ZOOT-MES-FECHADO-MODAL-01 — a faixa do mês fechado, logo acima dos botões, em lugar reservado */}
+      <AvisoMesFechado p1={mesFechadoMotivo}
+        acaoP1={<span className="shrink-0"><ReabrirMesNaOC forma="link" onAbrir={() => setReabrirP1Aberto(true)} /></span>} />
       <div className="h-8 shrink-0 bg-primary px-2 flex items-center justify-between gap-2">
         <div className="min-w-0">
           {/* OC-CONTA-CORRENTE-TODOS-01a — em conta corrente o cancelar lista o rol antes (o mesmo dialogo da venda). */}
@@ -945,7 +943,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
                   ) : (abaAtiva === 'recebimento' || abaAtiva === 'documentos' || abaAtiva === 'financeiro') ? null : (
                     <Button onClick={api.handleRequestRegister}
                       disabled={api.submitting || !!api.acaoOcLoading || !api.ocFazendaValida || !!mesFechadoMotivo}
-                      title={mesFechadoMotivo ? `${mesFechadoMotivo} — reabra o período para lançar` : undefined}
+                      title={mesFechadoMotivo ?? undefined}
                       className="h-[22px] px-[9px] text-[10px] bg-white text-primary hover:bg-white/90 font-bold gap-1 disabled:opacity-60">
                       <ShoppingCart className="h-3 w-3" /> {api.submitting ? 'Salvando...' : 'Salvar'}
                     </Button>

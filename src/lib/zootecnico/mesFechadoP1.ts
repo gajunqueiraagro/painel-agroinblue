@@ -39,5 +39,33 @@ export function mesFechadoMotivo(
 ): string | null {
   if (!fechado || !anoMes) return null;
   const mes = MESES_EXTENSO[Number(anoMes.slice(5, 7)) - 1];
-  return `${mes}/${anoMes.slice(0, 4)} está fechado (P1) para ${fazendaNome ?? 'esta fazenda'}`;
+  /* ZOOT-MES-FECHADO-MODAL-01 (Gabriel, 15/10/2026): a frase diz O QUE trava e ONDE destrava — os dois caminhos. */
+  return `${mes}/${anoMes.slice(0, 4)} fechado no Mapa de Pastos (P1) para ${fazendaNome ?? 'esta fazenda'}. `
+    + 'Reabra pelo botão ao lado ou em Produção › Fechamento Área.';
+}
+
+/** ZOOT-MES-FECHADO-MODAL-01 — a dica CURTA ao lado do botão: a frase inteira está na faixa logo acima e no `title`. */
+export const DICA_MES_FECHADO = 'mês fechado (P1) — veja o aviso acima';
+
+export const MESES_CURTOS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'] as const;
+
+/**
+ * ZOOT-MES-FECHADO-MODAL-01 — a frase da TRAVA MASTER (`useMasterLock`: todos os pastos fechados E valor do rebanho
+ * preenchido, pela fazenda do cabeçalho), ou `null`. A regra da trava não mora aqui: quem chama passa o MESMO estado que
+ * recusava o clique (`isReadOnly`). Mesma sentinela única do P1: o mesmo valor desenha a faixa e trava o botão.
+ */
+export function travaMasterMotivo(
+  travado: boolean,
+  anoMes: string | undefined,
+  fazendaNome: string | null | undefined,
+): string | null {
+  if (!travado || !anoMes) return null;
+  const mes = MESES_CURTOS[Number(anoMes.slice(5, 7)) - 1];
+  return `Mês ${mes}/${anoMes.slice(0, 4)} com trava master (${fazendaNome ?? 'esta fazenda'}). Desbloqueie com a senha master.`;
+}
+
+/** O `title` do botão travado: as mesmas frases da faixa, P1 primeiro. `undefined` quando nada trava. */
+export function tituloDaTrava(p1: string | null | undefined, master: string | null | undefined): string | undefined {
+  const partes = [p1, master].filter((t): t is string => !!t);
+  return partes.length > 0 ? partes.join(' ') : undefined;
 }

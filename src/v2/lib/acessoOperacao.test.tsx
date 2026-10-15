@@ -204,8 +204,8 @@ describe('M9 — "Reabrir mês…" de dentro da OC', () => {
     });
   }
   it('os três modais usam a mesma peça, e é ela quem arma o diálogo', () => {
-    expect(fonte('src/components/abate/AbateModalShell.tsx')).toContain('<ReabrirMesNaOC forma="botao" onAbrir={() => setReabrirP1Aberto(true)} />');
-    for (const f of ['src/components/venda/VendaModalShell.tsx', 'src/components/compra/CompraModalShell.tsx']) {
+    /* ZOOT-MES-FECHADO-MODAL-01: os três passaram à faixa comum acima dos botões, todos na forma "link" (cabe na linha de 18px) */
+    for (const f of ['src/components/abate/AbateModalShell.tsx', 'src/components/venda/VendaModalShell.tsx', 'src/components/compra/CompraModalShell.tsx']) {
       const s = fonte(f);
       expect(s).toContain('<ReabrirMesNaOC forma="link" onAbrir={() => setReabrirP1Aberto(true)} />');
       expect(s.match(/setReabrirP1Aberto\(true\)/g)).toHaveLength(1);

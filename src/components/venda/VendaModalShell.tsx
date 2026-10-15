@@ -68,6 +68,9 @@ import { pesoMedioPorCabeca } from '@/hooks/useCompraLotes';
 import { LinhaResumo, AsideResumo, FaixaTituloResumo, SecaoResumo } from '@/components/ui/linha-resumo';
 import { consolidarRecebimento } from '@/components/compra/ResumoLateralOC';
 import { formatMoeda } from '@/lib/calculos/formatters';
+import { DICA_MES_FECHADO, mesFechadoMotivo as fraseDoMesFechado } from '@/lib/zootecnico/mesFechadoP1';
+import { AvisoMesFechado } from '@/components/lancamento/AvisoMesFechado';
+import { useAoVoltarAoFoco } from '@/hooks/useAoVoltarAoFoco';
 
 /* ⚠ "RECEBIMENTO" CHAMA-SE ENTREGA NA VENDA — o gado SAI. A coluna do banco já é
    genérica (`entrega_encerrada`), então o vocabulário muda só na tela.
@@ -225,8 +228,6 @@ export interface VendaModalShellProps {
 }
 
 
-const MESES_EXTENSO = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
 export function VendaModalShell({
   data, setData, compradorId, setCompradorId, contrapartes, clienteId, onNovoComprador,
@@ -499,13 +500,14 @@ export function VendaModalShell({
   const anoMesDaData = data ? data.slice(0, 7) : undefined;
   const pilaresMes = useStatusPilares(vendaFazendaId || undefined, anoMesDaData,
     !!vendaFazendaId && !!anoMesDaData);
-  const mesFechadoMotivo = pilaresMes.status.p1_mapa_pastos.status === 'oficial' && anoMesDaData
-    ? `${MESES_EXTENSO[Number(anoMesDaData.slice(5, 7)) - 1]}/${anoMesDaData.slice(0, 4)} está fechado (P1) para ${fazendaNome ?? 'esta fazenda'}`
-    : null;
+  /* ZOOT-MES-FECHADO-MODAL-01 — a frase tem UMA fonte (`mesFechadoP1.ts`); a cópia local saiu */
+  const mesFechadoMotivo = fraseDoMesFechado(pilaresMes.status.p1_mapa_pastos.status === 'oficial', anoMesDaData, fazendaNome);
+  /* mês reaberto em outra tela/aba: ao voltar o foco o P1 é relido e o botão destrava */
+  useAoVoltarAoFoco(() => { void pilaresMes.refetch(); }, !!vendaFazendaId && !!anoMesDaData);
 
   const concluirTravadoPor: string | null =
     motivoBoitelAcesso ? motivoBoitelAcesso
-    : mesFechadoMotivo ? `${mesFechadoMotivo} — reabra o período`
+    : mesFechadoMotivo ? mesFechadoMotivo
     : pendenciaRealizado ? pendenciaRealizado
     : submitting ? 'salvando…'
     : recebimentoApi?.saving ? 'aguarde a entrega terminar'
@@ -515,7 +517,7 @@ export function VendaModalShell({
   const motivoNaoSalva = naNegociacao && motivoBoitelAcesso
     ? motivoBoitelAcesso
     : mesFechadoMotivo && !fechada
-    ? `${mesFechadoMotivo} — reabra o período para lançar`
+    ? mesFechadoMotivo
     : naNegociacao && fechada
     ? 'Operação fechada · reabra para editar'
     : naNegociacao
@@ -887,13 +889,7 @@ export function VendaModalShell({
                 {/* A20 — DatePicker do sistema, nunca `<input type="date">`. */}
                 <DatePicker value={data} onChange={setData} disabled={operacionalTravado}
                   className={`mt-[3px] h-8 px-2.5 text-[12px] ${operacionalTravado ? CAMPO_TRAVADO : ''}`} />
-                {/* Âmbar: estado do período, não erro do operador — e no instante da data. */}
-                {mesFechadoMotivo && (
-                  <div className="mt-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-[10px] leading-snug text-amber-800">
-                    <b className="font-semibold">{mesFechadoMotivo}.</b>{' '}
-                    <ReabrirMesNaOC forma="link" onAbrir={() => setReabrirP1Aberto(true)} />
-                  </div>
-                )}
+                {/* ZOOT-MES-FECHADO-MODAL-01 — o aviso de mês fechado SAIU daqui: mora na faixa comum acima dos botões. */}
               </div>
               <div className="min-w-0">
                 {/* ⚠ ORIGEM, e nao destino: numa venda o gado SAI da fazenda. */}
@@ -1077,6 +1073,9 @@ export function VendaModalShell({
 
       {/* RODAPE — 32px com botoes 22px/10px, a medida do Abate (era `px-6 py-2`, 48px). Mesmos
           botoes, mesma ordem, mesmos textos. */}
+      {/* ZOOT-MES-FECHADO-MODAL-01 — a faixa do mês fechado, logo acima dos botões, em lugar reservado */}
+      <AvisoMesFechado p1={mesFechadoMotivo}
+        acaoP1={<span className="shrink-0"><ReabrirMesNaOC forma="link" onAbrir={() => setReabrirP1Aberto(true)} /></span>} />
       <div className="h-8 shrink-0 bg-primary px-2 flex items-center justify-end gap-2">
         {/* OC-VENDA-ENTREGAS-01c, decisao 2 — a venda em conta corrente ganha o Cancelar; o dialogo lista o que sera desfeito. */}
         {cc && onCancelarContaCorrente && ocStatusComercial !== 'cancelada' && (
@@ -1117,7 +1116,7 @@ export function VendaModalShell({
           </Button>
         )}
         {naNegociacao && !!ocOperacaoId && ocStatusComercial === 'programada' && recebimentoApi && (<>
-          <DicaBotao texto={concluirTravadoPor} />
+          <DicaBotao texto={concluirTravadoPor && concluirTravadoPor === mesFechadoMotivo ? DICA_MES_FECHADO : concluirTravadoPor} />
           <Button type="button" variant="secondary" className="h-[22px] px-[9px] text-[10px] gap-1"
             /* ⚠ O CONCLUIR NAO ESTAVA QUEBRADO — ele ACORDAVA depois do Salvar. O defeito
                era o SILENCIO: cinza, sem dizer o que faltava, e o operador concluia que o
@@ -1163,7 +1162,7 @@ export function VendaModalShell({
             provocou — e o rascunho continua na tela para corrigir e salvar de novo. */}
         <DicaBotao texto={erroRealizado} erro />
         <DicaBotao texto={erroSalvar} erro />
-        <DicaBotao texto={salvarTravadoPor} />
+        <DicaBotao texto={salvarTravadoPor && salvarTravadoPor === mesFechadoMotivo ? DICA_MES_FECHADO : salvarTravadoPor} />
         <Button type="button"
           onClick={async () => {
             if (naNegociacao) { await onSalvarNegociacao(); return; }

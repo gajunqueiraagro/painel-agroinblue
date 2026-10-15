@@ -102,7 +102,7 @@ describe('venda fechada', () => {
     p1.status = 'oficial';
     const { onSalvarOperacao } = venda({ semAlteracoes: false, erroSalvar: 'Selecione o comprador.' });
     expect(salvar().hasAttribute('disabled')).toBe(false);
-    expect(screen.queryByText(/reabra o período para lançar/)).toBeNull();
+    expect(screen.queryByText(/mês fechado \(P1\) — veja o aviso acima/)).toBeNull();
     fireEvent.click(salvar());
     expect(onSalvarOperacao).toHaveBeenCalledTimes(1);
     expect(screen.getByText('Selecione o comprador.')).toBeTruthy();
@@ -115,8 +115,9 @@ describe('venda fechada', () => {
     expect(screen.queryByText('Operação fechada · reabra para editar')).toBeNull();
     expect(campoData().hasAttribute('disabled')).toBe(false);
     expect(seletorFazenda()?.hasAttribute('disabled')).toBe(false);
-    /* a busca sabe achar: e' a mesma frase que some na OC fechada */
-    expect(screen.getByText(/reabra o período para lançar/)).toBeTruthy();
+    /* a busca sabe achar: e' a mesma dica que some na OC fechada (ZOOT-MES-FECHADO-MODAL-01: a frase inteira foi para a faixa
+       acima dos botões; ao lado do Salvar fica a dica curta) */
+    expect(screen.getByText(/mês fechado \(P1\) — veja o aviso acima/)).toBeTruthy();
     p1.status = 'aberto';
   });
 });
@@ -129,7 +130,7 @@ describe('abate fechado', () => {
     expect(campoData().hasAttribute('disabled')).toBe(true);
     expect(seletorFazenda()?.hasAttribute('disabled')).toBe(true);
     expect(screen.getByPlaceholderText('Opcional').hasAttribute('disabled')).toBe(false);
-    expect(screen.queryByText(/reabra o período para lançar/)).toBeNull();
+    expect(screen.queryByText(/mês fechado \(P1\) — veja o aviso acima/)).toBeNull();
     const botao = screen.getByRole('button', { name: 'Salvar abate' });
     expect(botao.hasAttribute('disabled')).toBe(false);
     fireEvent.click(botao);

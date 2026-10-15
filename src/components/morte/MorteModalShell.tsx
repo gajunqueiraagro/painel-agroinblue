@@ -42,7 +42,9 @@ import { LinhaResumo, SecaoResumo } from '@/components/ui/linha-resumo';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useStatusPilares } from '@/hooks/useStatusPilares';
 import { ReabrirP1Dialog } from '@/components/ReabrirP1Dialog';
-import { anoMesDaData, mesFechadoMotivo } from '@/lib/zootecnico/mesFechadoP1';
+import { anoMesDaData, mesFechadoMotivo, tituloDaTrava } from '@/lib/zootecnico/mesFechadoP1';
+import { AvisoMesFechado } from '@/components/lancamento/AvisoMesFechado';
+import { useAoVoltarAoFoco } from '@/hooks/useAoVoltarAoFoco';
 
 /* O par rotulo-valor e' o `LinhaResumo` de `ui/linha-resumo` desde o MODAIS-PADRAO-01d — esta copia
    local saiu (mesma API, mesmo texto). A variante da Fazenda FICA: ela pinta o "—" de vermelho quando a
@@ -100,6 +102,8 @@ export interface MorteModalShellProps {
    *  rótulo e cor não têm como discordar. */
   cenario?: 'meta' | 'realizado';
   submitting: boolean;
+  /** ZOOT-MES-FECHADO-MODAL-01 — a frase da trava master (o MESMO estado que recusava o clique); nula quando não trava. */
+  motivoTravaMaster?: string | null;
   handleRequestRegister: () => void;
   fecharModalOCComAutosave: () => void;
 }
@@ -115,7 +119,7 @@ export function MorteModalShell({
   motivoMorte, setMotivoMorte, motivoMorteCustom, setMotivoMorteCustom, motivosDisponiveis,
   valorMorte, setValorMorte,
   morteQtd, mortePeso, cenario = 'realizado', submitting,
-  handleRequestRegister, fecharModalOCComAutosave,
+  handleRequestRegister, fecharModalOCComAutosave, motivoTravaMaster = null,
 }: MorteModalShellProps) {
   const isEdicao = modo === 'edicao';
   /* ⚠ SO OS SINAIS MUDAM: faixa, pilula, rotulo de data, titulo do resumo e botao.
@@ -134,6 +138,9 @@ export function MorteModalShell({
   const motivoMesFechado = mesFechadoMotivo(
     !isMeta && pilares.status.p1_mapa_pastos.status === 'oficial', anoMes, morteFazendaNome);
   const [reabrirP1Aberto, setReabrirP1Aberto] = useState(false);
+  /* ZOOT-MES-FECHADO-MODAL-01 — mês reaberto em outra tela/aba: ao voltar o foco o P1 é relido e o botão destrava */
+  useAoVoltarAoFoco(() => { void pilares.refetch(); }, !!morteFazendaId && !!anoMes);
+  const tituloTravado = tituloDaTrava(motivoMesFechado, motivoTravaMaster);
   const opcoesFazenda = useMemo(() => fazendasOC.map(f => ({ value: f.id, label: f.nome })), [fazendasOC]);
 
   /* ⚠ AUSENCIA E' TRACO. Sem quantidade ou sem peso nao ha peso total — nao ha "peso
@@ -200,6 +207,9 @@ export function MorteModalShell({
       data={data}
       fazendaNome={morteFazendaNome}
       onFechar={fecharModalOCComAutosave}
+      aviso={<AvisoMesFechado p1={motivoMesFechado} master={motivoTravaMaster}
+        acaoP1={<button type="button" data-testid="reabrir-mes" className="shrink-0 underline underline-offset-2"
+          onClick={() => setReabrirP1Aberto(true)}>Reabrir mês…</button>} />}
       resumo={<>
             <div>
               <SecaoResumo titulo="Identificação" />
@@ -240,9 +250,9 @@ export function MorteModalShell({
         {/* O botao diz o que faz: registrar cria, salvar altera. */}
         {/* ⚠ O MÊS FECHADO VEM PRIMEIRO na cadeia de motivos: não adianta pedir o motivo da
             morte se, preenchido tudo, o período recusa. */}
-        <Button type="button" onClick={handleRequestRegister} disabled={submitting || morteFazendaFalta || motivoFalta || pesoFalta || qtdFalta || !!motivoMesFechado}
+        <Button type="button" onClick={handleRequestRegister} disabled={submitting || morteFazendaFalta || motivoFalta || pesoFalta || qtdFalta || !!tituloTravado}
           className="h-[22px] px-[9px] text-[10px] bg-white text-primary hover:bg-white/90 font-bold disabled:opacity-60"
-          title={motivoMesFechado ? `${motivoMesFechado} — reabra o período para lançar`
+          title={tituloTravado ? tituloTravado
             : morteFazendaFalta ? 'Selecione a fazenda do lançamento'
             : motivoFalta ? 'Informe o motivo da morte'
             : pesoFalta ? 'Informe o peso médio'
@@ -309,20 +319,7 @@ export function MorteModalShell({
                 {/* A20 — DatePicker do sistema, nunca `<input type="date">`. */}
                 <DatePicker value={data} onChange={setData} className="mt-[3px] h-8 px-2.5 text-[12px]" />
               </div>
-              {/* ⚠ LARGURA CHEIA ABAIXO DA DATA — a grade é de 3 colunas e o aviso fala da data,
-                  não de um campo. `lg:col-span-3` o tira do fluxo sem desalinhar rótulo nenhum. */}
-              {motivoMesFechado && (
-                <div className="min-w-0 lg:col-span-3 flex items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
-                  <span>
-                    <b className="font-semibold">{motivoMesFechado}.</b>{' '}
-                    Lançamentos nesse mês só depois de reabrir o período.
-                  </span>
-                  <Button type="button" variant="outline" size="sm"
-                    className="h-6 shrink-0 text-[10px]" onClick={() => setReabrirP1Aberto(true)}>
-                    Reabrir mês…
-                  </Button>
-                </div>
-              )}
+              {/* ZOOT-MES-FECHADO-MODAL-01 — o aviso de mês fechado SAIU daqui: mora na faixa comum acima dos botões. */}
               <div className="min-w-0">
                 {/* ⚠ O AVISO ACOMPANHA O BLOQUEIO. A quantidade sempre foi exigida pelo
                     funil e agora tambem trava o botao, porque a conversao "por cabeca"

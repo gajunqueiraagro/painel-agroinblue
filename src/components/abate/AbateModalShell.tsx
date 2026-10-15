@@ -74,6 +74,9 @@ import type { LiquidacaoApi } from '@/hooks/useOperacaoLiquidacao';
 import { pesoMedioPorCabeca } from '@/hooks/useCompraLotes';
 import { consolidarRecebimento } from '@/components/compra/ResumoLateralOC';
 import { formatMoeda } from '@/lib/calculos/formatters';
+import { DICA_MES_FECHADO, mesFechadoMotivo as fraseDoMesFechado } from '@/lib/zootecnico/mesFechadoP1';
+import { AvisoMesFechado } from '@/components/lancamento/AvisoMesFechado';
+import { useAoVoltarAoFoco } from '@/hooks/useAoVoltarAoFoco';
 
 /* ⚠ "RECEBIMENTO" CHAMA-SE ENTREGA NA VENDA — o gado SAI. A coluna do banco já é
    genérica (`entrega_encerrada`), então o vocabulário muda só na tela.
@@ -142,8 +145,6 @@ const ROTULO_STATUS: Record<string, string> = {
   rascunho: 'Rascunho', programada: 'Programada', fechada: 'Fechada', cancelada: 'Cancelada',
 };
 
-const MESES_EXTENSO = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
 /** Duas casas, como em toda a tela do abate. */
 const num2 = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -432,9 +433,10 @@ export function AbateModalShell({
   const anoMesDaData = data ? data.slice(0, 7) : undefined;
   const pilares = useStatusPilares(abateFazendaId || undefined, anoMesDaData, !!abateFazendaId && !!anoMesDaData);
   const mesFechado = pilares.status.p1_mapa_pastos.status === 'oficial';
-  const mesFechadoMotivo = mesFechado && anoMesDaData
-    ? `${MESES_EXTENSO[Number(anoMesDaData.slice(5, 7)) - 1]}/${anoMesDaData.slice(0, 4)} está fechado (P1) para ${fazendaNome ?? 'esta fazenda'}`
-    : null;
+  /* ZOOT-MES-FECHADO-MODAL-01 — a frase tem UMA fonte (`mesFechadoP1.ts`); a cópia local saiu */
+  const mesFechadoMotivo = fraseDoMesFechado(mesFechado, anoMesDaData, fazendaNome);
+  /* mês reaberto em outra tela/aba: ao voltar o foco o P1 é relido e o botão destrava */
+  useAoVoltarAoFoco(() => { void pilares.refetch(); }, !!abateFazendaId && !!anoMesDaData);
 
   const entrega = consolidarRecebimento(recebimentoApi?.lotes ?? null);
 
@@ -579,7 +581,7 @@ export function AbateModalShell({
   const motivoNaoSalva = naNegociacao && motivoAbateAcesso
     ? motivoAbateAcesso
     : mesFechadoMotivo && !fechada
-    ? `${mesFechadoMotivo} — reabra o período para lançar`
+    ? mesFechadoMotivo
     : naNegociacao
       ? (!ocOperacaoId ? 'Salve a operação na aba Abate primeiro' : fechada ? 'Operação fechada · reabra para editar' : undefined)
       : (identificacaoPronta ? undefined : fechada ? 'Selecione o comprador' : 'Informe frigorífico, data e fazenda');
@@ -657,7 +659,7 @@ export function AbateModalShell({
    */
   const concluirTravadoPor: string | null =
     motivoAbateAcesso ? motivoAbateAcesso
-    : mesFechadoMotivo ? `${mesFechadoMotivo} — reabra o período`
+    : mesFechadoMotivo ? mesFechadoMotivo
     : submitting ? 'salvando…'
     : lotesSemNegociacao.length > 0
       ? `falta negociar ${lotesSemNegociacao.length} ${lotesSemNegociacao.length === 1 ? 'lote' : 'lotes'}`
@@ -1047,26 +1049,7 @@ export function AbateModalShell({
                     <p className="mt-[3px] text-[10px] text-destructive">Selecione a fazenda de origem.</p>
                   )}
                 </div>
-                {/* ⚠ O AVISO APARECE QUANDO A DATA E' ESCOLHIDA, nao na gravacao. O banco
-                    recusa por trigger (`trg_guard_lancamento_mes_fechado_p1`) e a recusa
-                    chegava no fim, depois de preencher comprador, lotes e negociacao —
-                    trabalho inteiro perdido por uma informacao que a tela ja podia ter dado.
-                    ⚠ AMBAR, NAO VERMELHO: nao e' erro do operador, e' estado do periodo.
-                    ⚠ E DIZ ONDE SE RESOLVE: reabrir o P1 invalida o realizado do mes E a
-                    cadeia dos meses seguintes, com motivo auditado — e' ato do Fechamento,
-                    nao botao de passagem dentro de um modal de abate. */}
-                {mesFechadoMotivo && (
-                  <div className="min-w-0 lg:col-span-3 flex items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
-                    <span>
-                      <b className="font-semibold">{mesFechadoMotivo}.</b>{' '}
-                      Lançamentos nesse mês só depois de reabrir o período.
-                    </span>
-                    {/* ⚠ O MESMO DIALOGO DO ZOOT, nao um botao solto: ele pede motivo, diz o
-                        que a reabertura faz e mostra o que foi reaberto. Uma peca para as
-                        quatro superficies. */}
-                    <ReabrirMesNaOC forma="botao" onAbrir={() => setReabrirP1Aberto(true)} />
-                  </div>
-                )}
+                {/* ZOOT-MES-FECHADO-MODAL-01 — o aviso de mês fechado SAIU daqui: mora na faixa comum acima dos botões. */}
                 <div className="min-w-0 lg:col-span-3">
                   <Label className="text-[12px] font-medium text-muted-foreground">Observações / Lote</Label>
                   <Input value={observacao} onChange={e => setObservacao(e.target.value)} placeholder="Opcional"
@@ -1239,6 +1222,9 @@ export function AbateModalShell({
       {/* ⚠ RODAPE FIXO E PRESENTE EM TODA ABA. `justify-between` poe o Fechar a esquerda e
           os botoes da aba a direita; antes era `justify-end` e o Fechar viajava junto dos
           outros, mudando de lugar conforme a aba tivesse ou nao Salvar. */}
+      {/* ZOOT-MES-FECHADO-MODAL-01 — a faixa do mês fechado, logo acima dos botões, em lugar reservado */}
+      <AvisoMesFechado p1={mesFechadoMotivo}
+        acaoP1={<span className="shrink-0"><ReabrirMesNaOC forma="link" onAbrir={() => setReabrirP1Aberto(true)} /></span>} />
       <div className="h-8 shrink-0 bg-primary px-2 flex items-center justify-between gap-2">
         <Button type="button" variant="ghost" onClick={onFechar}
           className="h-[22px] px-[9px] text-[10px] text-white/90 hover:bg-white/10 hover:text-white" title="Fechar sem salvar" aria-label="Fechar">
@@ -1279,7 +1265,7 @@ export function AbateModalShell({
             branco (Salvar) e procurava o proximo passo onde ele nao estava. */}
         {rodapeTemSalvar && (<>
         <DicaBotao texto={erroSalvar} erro />
-        <DicaBotao texto={salvarTravadoPor} />
+        <DicaBotao texto={salvarTravadoPor && salvarTravadoPor === mesFechadoMotivo ? DICA_MES_FECHADO : salvarTravadoPor} />
         <Button type="button"
           onClick={async () => {
             if (naNegociacao) { await onSalvarNegociacao(); return; }
@@ -1303,7 +1289,7 @@ export function AbateModalShell({
         </Button>
         </>)}
         {naNegociacao && !!ocOperacaoId && ocStatusComercial === 'programada' && recebimentoApi && (<>
-          <DicaBotao texto={concluirTravadoPor} />
+          <DicaBotao texto={concluirTravadoPor && concluirTravadoPor === mesFechadoMotivo ? DICA_MES_FECHADO : concluirTravadoPor} />
           <Button type="button" className="h-[22px] px-[9px] text-[10px] gap-1"
             /* ⚠ O CONCLUIR NAO ESTAVA QUEBRADO — ele ACORDAVA depois do Salvar. O defeito
                era o SILENCIO: cinza, sem dizer o que faltava, e o operador concluia que o

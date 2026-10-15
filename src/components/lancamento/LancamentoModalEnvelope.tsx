@@ -51,10 +51,13 @@ export interface LancamentoModalEnvelopeProps {
   /** Botão de ação do rodapé. O "Fechar" já vem no envelope.
    *  ⚠ NA MEDIDA DO RODAPE DE 32px: 22px / 10px (MODAIS-PADRAO-01d). O envelope nao o redimensiona. */
   acao: ReactNode;
+  /** ZOOT-MES-FECHADO-MODAL-01 — a faixa do mês fechado (`AvisoMesFechado`), logo acima do rodapé, num lugar reservado.
+   *  Quem não passa a prop (meta de compra e de venda) não ganha o lugar: nada muda nesses modais. */
+  aviso?: ReactNode;
 }
 
 export function LancamentoModalEnvelope({
-  titulo, cenario = 'realizado', data, fazendaNome, onFechar, children, resumo, acao, tituloResumo,
+  titulo, cenario = 'realizado', data, fazendaNome, onFechar, children, resumo, acao, tituloResumo, aviso,
 }: LancamentoModalEnvelopeProps) {
   const isMeta = cenario === 'meta';
   const faixa = isMeta ? META_VISUAL.faixa : 'bg-primary';
@@ -107,6 +110,7 @@ export function LancamentoModalEnvelope({
             </div>
           </div>
 
+          {aviso}
           <div className={`h-8 shrink-0 ${faixa} px-2 flex items-center justify-end gap-2`}>
             <Button type="button" variant="ghost" onClick={onFechar}
               className="h-[22px] px-[9px] text-[10px] text-white/90 hover:bg-white/10 hover:text-white" title="Fechar sem registrar" aria-label="Fechar">

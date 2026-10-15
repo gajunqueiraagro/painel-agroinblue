@@ -35,7 +35,9 @@ import { LinhaResumo, SecaoResumo } from '@/components/ui/linha-resumo';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useStatusPilares } from '@/hooks/useStatusPilares';
 import { ReabrirP1Dialog } from '@/components/ReabrirP1Dialog';
-import { anoMesDaData, mesFechadoMotivo } from '@/lib/zootecnico/mesFechadoP1';
+import { anoMesDaData, mesFechadoMotivo, tituloDaTrava } from '@/lib/zootecnico/mesFechadoP1';
+import { AvisoMesFechado } from '@/components/lancamento/AvisoMesFechado';
+import { useAoVoltarAoFoco } from '@/hooks/useAoVoltarAoFoco';
 import { useMemo, useState } from 'react';
 
 /* O par rotulo-valor e' o `LinhaResumo` de `ui/linha-resumo` desde o MODAIS-PADRAO-01d — esta copia
@@ -86,6 +88,9 @@ export interface NascimentoModalShellProps {
    *  não têm como discordar. */
   cenario?: 'meta' | 'realizado';
   submitting: boolean;
+  /** ZOOT-MES-FECHADO-MODAL-01 — a frase da trava master (calculada por quem abre o modal, com o MESMO estado que recusava o
+   *  clique); nula quando não trava. Trava o botão e entra na faixa, embaixo do P1. */
+  motivoTravaMaster?: string | null;
   handleRequestRegister: () => void;
   fecharModalOCComAutosave: () => void;
 }
@@ -100,6 +105,7 @@ export function NascimentoModalShell({
   categoriasDisponiveis, observacao, setObservacao,
   nascFazendaId, setNascFazendaId, fazendasOC, nascFazendaNome, nascFazendaFalta,
   nascQtd, nascPeso, cenario = 'realizado', submitting, handleRequestRegister, fecharModalOCComAutosave,
+  motivoTravaMaster = null,
 }: NascimentoModalShellProps) {
   const isEdicao = modo === 'edicao';
   /* ⚠ SO OS SINAIS MUDAM: faixa, pilula, rotulo de data, titulo do resumo e botao.
@@ -121,6 +127,9 @@ export function NascimentoModalShell({
   const motivoMesFechado = mesFechadoMotivo(
     !isMeta && pilares.status.p1_mapa_pastos.status === 'oficial', anoMes, nascFazendaNome);
   const [reabrirP1Aberto, setReabrirP1Aberto] = useState(false);
+  /* ZOOT-MES-FECHADO-MODAL-01 — mês reaberto em outra tela/aba: ao voltar o foco o P1 é relido e o botão destrava */
+  useAoVoltarAoFoco(() => { void pilares.refetch(); }, !!nascFazendaId && !!anoMes);
+  const tituloTravado = tituloDaTrava(motivoMesFechado, motivoTravaMaster);
   const opcoesFazenda = useMemo(() => fazendasOC.map(f => ({ value: f.id, label: f.nome })), [fazendasOC]);
   /* ── RESUMO DO NASCIMENTO (PR-UI-NASCIMENTO-SHELL-02) ────────────────────────
      ⚠ AUSENCIA E' TRACO. `nascPesoTotal` e' NULL quando falta quantidade ou peso —
@@ -136,6 +145,9 @@ export function NascimentoModalShell({
       data={data}
       fazendaNome={nascFazendaNome}
       onFechar={fecharModalOCComAutosave}
+      aviso={<AvisoMesFechado p1={motivoMesFechado} master={motivoTravaMaster}
+        acaoP1={<button type="button" data-testid="reabrir-mes" className="shrink-0 underline underline-offset-2"
+          onClick={() => setReabrirP1Aberto(true)}>Reabrir mês…</button>} />}
       resumo={<>
                 {/* ⚠ FAIXA DE BLOCO EM 10px — a `SecaoResumo` do Abate desde o MODAIS-PADRAO-01d. A
                     divergencia de 1px contra o ResumoLateralOC (9px) que este comentario declarava
@@ -181,9 +193,9 @@ export function NascimentoModalShell({
             {/* ⚠ O MÊS FECHADO VEM ANTES DOS OUTROS MOTIVOS, como no Abate: não adianta dizer
                 "selecione a fazenda" se, selecionada, o mês recusa. E o motivo é UM só — o mesmo
                 valor governa o `disabled` e o `title`, então não há como travar em silêncio. */}
-            <Button type="button" onClick={handleRequestRegister} disabled={submitting || nascFazendaFalta || !!motivoMesFechado}
+            <Button type="button" onClick={handleRequestRegister} disabled={submitting || nascFazendaFalta || !!tituloTravado}
               className="h-[22px] px-[9px] text-[10px] bg-white text-primary hover:bg-white/90 font-bold disabled:opacity-60"
-              title={motivoMesFechado ? `${motivoMesFechado} — reabra o período para lançar` : nascFazendaFalta ? 'Selecione a fazenda do lançamento' : isEdicao ? 'Salvar as alterações do nascimento' : 'Registrar o nascimento'}
+              title={tituloTravado ? tituloTravado : nascFazendaFalta ? 'Selecione a fazenda do lançamento' : isEdicao ? 'Salvar as alterações do nascimento' : 'Registrar o nascimento'}
               aria-label={isEdicao ? 'Salvar alterações' : 'Registrar nascimento'}>
               {isEdicao
                 ? (submitting ? 'Salvando…' : 'Salvar alterações')
@@ -247,21 +259,8 @@ export function NascimentoModalShell({
                     {/* A20 — DatePicker do sistema, nunca `<input type="date">`. */}
                     <DatePicker value={data} onChange={setData} className="mt-[3px] h-8 px-2.5 text-[12px]" />
                   </div>
-                  {/* ⚠ LARGURA CHEIA, ABAIXO DA DATA: a grade é de 2 colunas e o aviso fala da
-                      data, não de um dos campos. `lg:col-span-2` o tira do fluxo das colunas sem
-                      desalinhar nenhum rótulo — o mesmo recurso do `lg:col-span-3` no Abate. */}
-                  {motivoMesFechado && (
-                    <div className="min-w-0 lg:col-span-2 flex items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
-                      <span>
-                        <b className="font-semibold">{motivoMesFechado}.</b>{' '}
-                        Lançamentos nesse mês só depois de reabrir o período.
-                      </span>
-                      <Button type="button" variant="outline" size="sm"
-                        className="h-6 shrink-0 text-[10px]" onClick={() => setReabrirP1Aberto(true)}>
-                        Reabrir mês…
-                      </Button>
-                    </div>
-                  )}
+                  {/* ZOOT-MES-FECHADO-MODAL-01 — o aviso de mês fechado SAIU daqui: mora na faixa comum acima dos botões
+                      (`AvisoMesFechado`, lugar reservado), onde está o botão que ele trava. */}
                   <div className="min-w-0">
                     <Label className="text-[10px] text-muted-foreground">Quantidade <span className="text-destructive">*</span></Label>
                     <Input inputMode="numeric" value={qtdInput.displayValue} onChange={qtdInput.onChange} onBlur={qtdInput.onBlur} onFocus={qtdInput.onFocus}

@@ -18,7 +18,9 @@ import {
   type TipoPesoAbate,
 } from '@/types/cattle';
 import { useStatusPilares } from '@/hooks/useStatusPilares';
-import { mesFechadoMotivo } from '@/lib/zootecnico/mesFechadoP1';
+import { mesFechadoMotivo, tituloDaTrava, travaMasterMotivo } from '@/lib/zootecnico/mesFechadoP1';
+import { AvisoMesFechado } from '@/components/lancamento/AvisoMesFechado';
+import { useAoVoltarAoFoco } from '@/hooks/useAoVoltarAoFoco';
 import { ReabrirP1Dialog } from '@/components/ReabrirP1Dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -750,6 +752,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      finalmente existe. Duas fontes para "este mês está fechado?" era o desenho anterior, não uma
      dívida deste PR. */
   const [showReabrirP1, setShowReabrirP1] = useState(false);
+  /* ZOOT-MES-FECHADO-MODAL-01 — a TRAVA MASTER do mês do formulário, pelo MESMO hook e pela MESMA fazenda (a do cabeçalho)
+     que o `handleSubmit` consulta antes de recusar. A regra não muda: só o motivo entra no modal e trava o botão. */
+  const travaMasterDoForm = useMasterLock(formAnoMes);
 
   // Snapshot completo do contexto operacional ao abrir uma edição. Restaurado
   // ao salvar/cancelar para que o usuário retorne EXATAMENTE ao grid original
@@ -1510,6 +1515,14 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const mesFechadoNoForm = !isCenarioMeta
     && pilaresDoLancamento.status.p1_mapa_pastos.status === 'oficial';
   const motivoMesFechado = mesFechadoMotivo(mesFechadoNoForm, formAnoMes, fazendaDoLancamentoNome);
+  /* ZOOT-MES-FECHADO-MODAL-01 — `isReadOnly` = travado E não desbloqueado E não é o master: o mesmo que o gate do
+     `handleSubmit` testa. Meta não é barrada (o gate também a libera). */
+  const motivoTravaMaster = travaMasterMotivo(
+    !isCenarioMeta && !!formAnoMes && travaMasterDoForm.isReadOnly(formAnoMes), formAnoMes,
+    fazendaAtual?.id !== '__global__' ? fazendaAtual?.nome : null);
+  const tituloTravaDoForm = tituloDaTrava(motivoMesFechado, motivoTravaMaster);
+  /* mês reaberto (ou desbloqueado) em outra tela/aba: ao voltar o foco, P1 e trava master são relidos */
+  useAoVoltarAoFoco(() => { void pilaresDoLancamento.refetch(); void travaMasterDoForm.refreshLock(); }, !!formAnoMes);
   const morteFazendaFalta = isMorte && !morteFazendaId;
   const morteQtd = parseNumericValue(quantidade) || 0;
   const mortePeso = parseDecimalInput(pesoKg) ?? 0;
@@ -3877,6 +3890,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               String(orig.fazendaDestino || '') !== String(fazendaDestino || '')
             );
           if (zooChanged) {
+            /* ZOOT-MES-FECHADO-MODAL-01 — no lançamento NOVO o botão já fica travado pela faixa do modal; chegar aqui é
+               estado velho: relê a trava (a faixa aparece) em vez do toast. A edição segue com o aviso de sempre. */
+            if (!isEditing) { void travaMasterDoForm.refreshLock(); return; }
             toast.error(
               `🔒 Mês ${anoMesData} fechado — alterações zootécnicas exigem autorização master.`
             );
@@ -5355,7 +5371,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             "Reabrir mês…". Mês fechado não é erro do operador — é estado do período, com caminho.
           ⚠ E O BOTÃO ABRE O DIÁLOGO QUE JÁ EXISTE no fim deste arquivo, o mesmo `showReabrirP1`:
             uma peça para todas as superfícies, que pede motivo e audita. */}
-      {motivoMesFechado && (
+      {/* ZOOT-MES-FECHADO-MODAL-01 — no envelope (Transferência e Consumo) o aviso mora na faixa comum acima dos botões;
+          aqui fica só para o ramo antigo do formulário genérico. */}
+      {motivoMesFechado && !envelopeSimples && (
         <div className="flex items-center justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
           <span>
             <b className="font-semibold">{motivoMesFechado}.</b>{' '}
@@ -5958,6 +5976,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      seu proprio bag no LancamentoZooModal, com `modo: 'edicao'`. */
   const nascFormApi = {
     modo: 'criacao' as const,
+    motivoTravaMaster,
     data, setData,
     qtdInput, pesoInput,
     categoria, setCategoria: (v: Categoria) => setCategoria(v),
@@ -6041,6 +6060,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      "Realizado" ali faria a tela mentir sobre o que vai gravar. */
   const morteFormApi = {
     modo: 'criacao' as const,
+    motivoTravaMaster,
     data, setData,
     qtdInput, pesoInput,
     categoria, setCategoria: (v: Categoria) => setCategoria(v),
@@ -6409,6 +6429,13 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
              escolhem a fazenda; vazio e' vazio (o campo esta' em vermelho), e nao o nome do filtro por cima. */
           fazendaNome={aba === 'reclassificacao' ? (fazendasOC.find(f => f.id === reclassFazendaId)?.nome ?? null) : fazendaEscolhidaNome}
           onFechar={fecharModalOCComAutosave}
+          /* ZOOT-MES-FECHADO-MODAL-01 — Transferência e Consumo: a faixa comum acima dos botões. Evoluir categoria não
+             pergunta P1 na tela (frente própria) e fica sem o lugar. */
+          aviso={aba === 'reclassificacao' ? undefined : (
+            <AvisoMesFechado p1={motivoMesFechado} master={motivoTravaMaster}
+              acaoP1={<button type="button" data-testid="reabrir-mes" className="shrink-0 underline underline-offset-2"
+                onClick={() => setShowReabrirP1(true)}>Reabrir mês…</button>} />
+          )}
           tituloResumo={aba !== 'reclassificacao' && isConsumo ? 'Valor do consumo' : undefined}
           resumo={aba === 'reclassificacao' ? (<>
             {/* Os mesmos pares do `ReclassificacaoResumoPanel`, com os mesmos formatos. */}
@@ -6575,7 +6602,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               🔄 Atualizar Rebanho
             </Button>
           </>) : isConsumo ? (
-            <Button type="button" className="h-[22px] px-[9px] text-[10px] bg-white text-primary hover:bg-white/90 font-bold disabled:opacity-60" onClick={handleRequestRegister} disabled={submitting}>
+            <Button type="button" className="h-[22px] px-[9px] text-[10px] bg-white text-primary hover:bg-white/90 font-bold disabled:opacity-60" onClick={handleRequestRegister}
+              disabled={submitting || (!editingAbateId && !!tituloTravaDoForm)} title={!editingAbateId ? tituloTravaDoForm : undefined}>
               {editingAbateId ? 'Salvar Alterações do Consumo' : 'Registrar Consumo'}
             </Button>
           ) : (<>
@@ -6602,7 +6630,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                 Completar Detalhes
               </Button>
             </>)}
-            <Button type="button" className="h-[22px] px-[9px] text-[10px] bg-white text-primary hover:bg-white/90 font-bold disabled:opacity-60" onClick={handleRequestRegister} disabled={submitting}>
+            <Button type="button" className="h-[22px] px-[9px] text-[10px] bg-white text-primary hover:bg-white/90 font-bold disabled:opacity-60" onClick={handleRequestRegister}
+              disabled={submitting || (!editingAbateId && !!tituloTravaDoForm)} title={!editingAbateId ? tituloTravaDoForm : undefined}>
               {submitting ? 'Registrando...' : editingAbateId ? 'Salvar Alterações' : 'Registrar Transferência'}
             </Button>
           </>)}
