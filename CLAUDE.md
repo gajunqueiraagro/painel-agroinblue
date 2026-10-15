@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 15/10/2026 (FIN-LR-SYNC-01a, +5: `src/v2/lib/lucroRural/lerArquivoLr.test.ts` 5 (novo) — 5323 depois dele;
+  Baseline em 15/10/2026 (FIN-LISTA-COMPACTA-01, +4: `src/pages/financiamentosListaCompacta.test.tsx` 4 (novo) — 5327 depois dele;
+  antes o FIN-LR-SYNC-01a, +5: `src/v2/lib/lucroRural/lerArquivoLr.test.ts` 5 (novo) — 5323 depois dele;
   antes o SEG-AGRI-TENANT-01, +2 em `src/lib/acessos/guardaDeClienteNasMigrations.test.ts` (3 -> 5) — 5318 depois dele;
   antes o SEG-DRE-TENANT-01, +3: `src/lib/acessos/guardaDeClienteNasMigrations.test.ts` 3 (novo) — 5316 depois dele;
   antes o OC-DOC-SAIDA-FAZENDA-01 fix1 + fix1b, +3 em `src/components/compra/documentoFormAbate.test.tsx` (17 -> 20) — 5313
@@ -332,7 +333,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5323
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5327
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -4012,6 +4013,21 @@ docs/historico/frentes-ate-2026-09-29.md.)
   quem mexer num confere o outro. O selo do rodape (`SeloRegraDaLinha`) diz a regra da linha.
 
 ## REGRAS VIGENTES — OPERACAO COMERCIAL E FINANCEIRO
+- ⚠ A LISTA DE PARCELAMENTOS E FINANCIAMENTOS TEM COLUNA "Nº contrato" E LARGURAS FIXAS (FIN-LISTA-COMPACTA-01, Gabriel 11 e 15/10/2026,
+  so' layout, `src/pages/FinanciamentosListaPage.tsx`). O numero do contrato SAIU da Descricao para coluna propria logo depois dela
+  (116px, 9px, zinc-600, uma linha, ordenavel; vazio ou "Atualizar" aparecem como gravados); a Descricao fica com o sufixo "· PEC/AGR".
+  Sem a trava `max-w-5xl`. Colgroup em px: Tipo 52 · Descricao (o resto, a UNICA que estica e corta, inteira no `title`) · No contrato
+  116 · Credor 92 (corta nome longo com `title`, como antes) · Contratado 66 · Principal 98 · Saldo devedor 104 · Parcela 98 · Proxima
+  66 · Status + fracao 72 (sem `truncate`) · olho 22 = 786 — medidas no Chromium com a Inter sobre os 56 contratos ativos do NJ (pior
+  texto + 16 de padding; folgas apertadas: Status 0,4px, Principal 0,7px — fracao de tres digitos ou valor maior corta). Titulo 16px,
+  cartoes 40px, "Contratado em" -> "Contratado", filtros em `flex-wrap` (ainda duas linhas a 1.440: os dois grupos pedem ~1.320px).
+  Ordenar por No contrato trata vazio como texto vazio (antes caia em subtracao numerica e dava NaN).
+  ⚠ DECISAO PROVISORIA (Gabriel/Chat, 15/10): a tabela tem `minWidth` 946 (786 + 160 para a Descricao) e, em janela estreita (~1.000px),
+    ROLA NA HORIZONTAL DENTRO DO CARD — a pagina nunca rola. A HOMOLOGAR NA JANELA REAL DO GABRIEL; se ele recusar, o proximo passo e'
+    esconder Principal e Contratado abaixo de ~1.100px.
+  ⚠ PRE-EXISTENTE, nao mexido: as linhas medem 23,5–24px, nao os 21px do dense (o HEAD anterior mede igual).
+  ⚠ NAO PROVADO: a tela real no navegador com login (medido numa bancada com a pagina real e os dados do NJ lidos do proto; a largura
+    do conteudo simulada = janela − 176px da barra lateral) · perfil nao admin.
 - ⚠ "ATUALIZAR DO LUCRO RURAL": O BANCO COMPARA, NADA E' GRAVADO EM LANCAMENTO (FIN-LR-SYNC-01a passo a1, Gabriel 15/10/2026; migration
   `supabase/migrations/20261027198800_fin_lr_sync_01a.sql`, md5 do arquivo bf848e7aa80d5daa3315d51ed9d1d41b — APLICADA no proto em
   15/10/2026 com o OK do Gabriel, pelo `supabase db query --linked` (project-ref conferido = binbcdfbisgscrifztia), migration + linha do

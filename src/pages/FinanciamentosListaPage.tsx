@@ -283,6 +283,9 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
     } else if (sortCol === 'valor_total') {
       vA = Number(vA);
       vB = Number(vB);
+    } else if (sortCol === 'numero_contrato') {
+      vA = vA ?? '';
+      vB = vB ?? '';
     } else if (sortCol === 'parcelas') {
       vA = a.total_parcelas > 0 ? a.parcelas_pagas / a.total_parcelas : 0;
       vB = b.total_parcelas > 0 ? b.parcelas_pagas / b.total_parcelas : 0;
@@ -352,7 +355,9 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
        para a pagina. `h-full` mede contra a caixa de conteudo nos dois casos: no v2
        preenche a coluna; no Index preenche o espaco acima do `pb-20` reservado a'
        BottomNav. Um conjunto de classes, dois pais, nenhuma ramificacao. */
-    <div className="w-full max-w-5xl mx-auto flex flex-col bg-background h-full min-h-0">
+    /* FIN-LISTA-COMPACTA-01 — SEM A TRAVA `max-w-5xl`: a pagina usa a largura do conteudo. Era ela que deixava a
+       Descricao com ~23% de 1024px e cortava o numero do contrato que vinha dentro dela. */
+    <div className="w-full flex flex-col bg-background h-full min-h-0">
       {/* ═══ BARRA SUPERIOR — PR-PARC-01 item 1 ═══════════════════════════════════
           ⚠ SÓ NESTA TELA, e dentro do container que já desconta 60px: ela custa 32px
           do corpo, e o envelope aceitou o preço. `sticky` aqui é redundante com o
@@ -383,7 +388,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
                 ainda deve". Ele nomeia a pergunta que a tela responde, e a segunda
                 metade é exatamente a coluna que faltava. */}
             <div className="min-w-0">
-              <h1 className="text-xl font-bold tracking-tight leading-none text-foreground">
+              <h1 className="text-[16px] font-bold tracking-tight leading-none text-foreground">
                 Parcelamentos e Financiamentos
               </h1>
               <p className="mt-0.5 text-[11px] text-muted-foreground">
@@ -427,7 +432,8 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
                  com o `mt-0.5`), valor 14px/leading-tight (18) e `py-1.5` (12). Em 38px o
                  valor era CORTADO por baixo, e como a caixa nao tem `overflow-hidden` o
                  corte aparecia como numero encostado na borda. */
-              className={`h-[42px] rounded-md border border-l-[3px] px-3 py-1.5 ${c.borda} ${c.fundo}`}>
+              /* FIN-LISTA-COMPACTA-01 — 40px com `py-1`: 8 + 13 (rotulo) + 18 (valor) = 39, o numero nao encosta. */
+              className={`h-[40px] rounded-md border border-l-[3px] px-3 py-1 ${c.borda} ${c.fundo}`}>
               <div className="text-[10px] leading-none text-muted-foreground truncate">{c.rotulo}</div>
               <div className="mt-0.5 text-[14px] font-semibold tabular-nums leading-tight truncate">{fmt(c.valor)}</div>
             </div>
@@ -447,7 +453,9 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
           pede 5px, e 12 devolviam parte da faixa que o item 1 acabou de recuperar. */}
       <div className="min-h-0 flex-1 px-4 pb-1">
         <div className="flex h-full min-h-0 flex-col rounded-lg border border-border bg-card px-3 pt-2 pb-0 shadow-[0_1px_3px_0_rgb(0_0_0/0.04)]">
-        <div className="relative mb-1.5 shrink-0 flex flex-col gap-y-1.5">
+        {/* FIN-LISTA-COMPACTA-01 — os dois grupos de filtros numa linha so' quando cabem (`flex-wrap`); sem largura,
+            o grupo das datas desce, como antes. */}
+        <div className="relative mb-1.5 shrink-0 flex flex-wrap items-center gap-x-3 gap-y-1.5" data-testid="filtros-financiamentos">
         {/* ═══ FILTROS — PR-PARC-01 item 4 ════════════════════════════════════════
             ⚠ DUAS LINHAS DE 28px, e os rótulos "Contrato de:" / "Venc. de:" saíram: em
             24 caracteres de largura fixa cada, os quatro rótulos gastavam mais espaço
@@ -596,33 +604,32 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
             <Table
               density="dense"
               className="table-fixed"
-              wrapperClassName="h-full overflow-x-hidden overflow-y-auto"
+              /* FIN-LISTA-COMPACTA-01 — piso de largura: as colunas fixas (786) + 160 para a Descricao. Abaixo disso
+                 (janela ~1.000px) a TABELA rola na horizontal dentro do card; a pagina nunca. */
+              style={{ minWidth: 946 }}
+              wrapperClassName="h-full overflow-x-auto overflow-y-auto"
             >
-              {/* ⚠ A SOMA É 100 E ISSO NÃO É OPCIONAL: `table-fixed` + colgroup em
-                  PORCENTAGEM é o que impede rolagem horizontal e faz o `truncate` sair
-                  com reticências em vez de quebrar a linha.
-                  6 + 26 + 14 + 11 + 12 + 11 + 8 + 9 + 3 = 100
-                  ⚠ QUEM CEDEU (PR-PARC-04b item C): Principal 12->11, Saldo devedor
-                  13->12, Status 13->9 e ações 4->3 pagam os 4 pontos da Descrição
-                  (22->26) e os 3 do Credor (11->14) — os dois únicos campos de TEXTO da
-                  linha, e os únicos que truncam. Os números têm largura conhecida e não
-                  ganham nada com folga; texto ganha caractere por ponto.
-                  ⚠ STATUS VOLTOU A ENCOLHER, e o risco está medido: em 8% o badge mais a
-                  fração "2/12" saíam cortados, e foi por isso que ele tinha 13%. 9% é UM
-                  ponto acima do que já falhou — se a fração cortar de novo na homologação,
-                  é daqui que sai o ponto que falta. */}
+              {/* ⚠ O COLGROUP EM PORCENTAGEM SAIU (FIN-LISTA-COMPACTA-01): com a pagina sem trava de largura, porcentagem
+                  daria ao numero do contrato e aos valores mais ou menos espaco conforme a janela. `table-fixed` segue
+                  com a Descricao absorvendo o resto; as colunas em px somam 786. */}
+              {/* FIN-LISTA-COMPACTA-01 — LARGURAS EM px nas colunas de tamanho conhecido e SO' a Descricao estica (a
+                  `col` sem largura fica com o resto e corta com reticencia; o texto inteiro vai no `title`). Medidas no
+                  Chromium com a Inter sobre os 56 contratos ativos do NJ (pior texto + padding de 16):
+                  Tipo 52 ("PARC" pede 51) · No contrato 116 ("Energia Solar Faz." deixa 2px) · Credor 92 (corta com
+                  `title`, como antes) · Contratado 66 · Principal 98 · Saldo devedor 104 ("R$ 16.380.000,00" pede 103) ·
+                  Parcela 98 · Proxima 66 (data pede 64) · Status + fracao 72 · olho 22 = 786. */}
               <colgroup>
-                {/* 5 + 23 + 12 + 7 + 12 + 13 + 12 + 7 + 7 + 2 = 100 */}
-                <col className="w-[5%]" />
-                <col className="w-[23%]" />
-                <col className="w-[12%]" />
-                <col className="w-[7%]" />
-                <col className="w-[12%]" />
-                <col className="w-[13%]" />
-                <col className="w-[12%]" />
-                <col className="w-[7%]" />
-                <col className="w-[7%]" />
-                <col className="w-[2%]" />
+                <col style={{ width: 52 }} />
+                <col />
+                <col style={{ width: 116 }} data-testid="col-numero-contrato" />
+                <col style={{ width: 92 }} />
+                <col style={{ width: 66 }} />
+                <col style={{ width: 98 }} />
+                <col style={{ width: 104 }} />
+                <col style={{ width: 98 }} />
+                <col style={{ width: 66 }} />
+                <col style={{ width: 72 }} />
+                <col style={{ width: 22 }} />
               </colgroup>
               {/* ⚠ A BORDA MORA NO `thead`, NÃO NA LINHA — item 3. Na linha, ela
                   é filha do que rola e some por um instante a cada quadro do
@@ -648,11 +655,13 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
                     direcao={sortDir} aoOrdenar={() => handleSort('natureza')} />
                   <CabecalhoOrdenavel rotulo="Descrição" ativo={sortCol === 'descricao'}
                     direcao={sortDir} aoOrdenar={() => handleSort('descricao')} />
+                  <CabecalhoOrdenavel rotulo="Nº contrato" ativo={sortCol === 'numero_contrato'}
+                    direcao={sortDir} aoOrdenar={() => handleSort('numero_contrato')} />
                   <CabecalhoOrdenavel rotulo="Credor" ativo={sortCol === 'credor_nome'}
                     direcao={sortDir} aoOrdenar={() => handleSort('credor_nome')} />
                   {/* PR-PARC-05d item 4 — a data que responde "de quando e' esse contrato".
                       A coluna JA' vinha na query e no tipo; so' nunca foi exibida. */}
-                  <CabecalhoOrdenavel rotulo="Contratado em" ativo={sortCol === 'data_contrato'}
+                  <CabecalhoOrdenavel rotulo="Contratado" ativo={sortCol === 'data_contrato'}
                     direcao={sortDir} aoOrdenar={() => handleSort('data_contrato')} />
                   <CabecalhoOrdenavel rotulo="Principal" ativo={sortCol === 'valor_total'}
                     direcao={sortDir} aoOrdenar={() => handleSort('valor_total')} direita />
@@ -698,13 +707,16 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
                         a coluna trunca mesmo depois do alargamento (22% ≈ 225px)
                         e o sufixo é o primeiro pedaço a ser cortado — sem isso, o
                         escopo ficaria ilegível nas descrições mais longas. */}
-                    <TableCell className="truncate"
-                      title={`${f.descricao}${f.numero_contrato ? ` ${f.numero_contrato}` : ''} · ${escopoSigla(f.tipo_financiamento)}`}>
+                    {/* FIN-LISTA-COMPACTA-01 — o numero do contrato SAIU daqui para a coluna propria; o escopo fica. */}
+                    <TableCell className="truncate" data-testid="cel-descricao"
+                      title={`${f.descricao} · ${escopoSigla(f.tipo_financiamento)}`}>
                       <span className="font-medium leading-tight">{f.descricao}</span>
-                      {f.numero_contrato && (
-                        <span className="ml-1 text-[10px] text-muted-foreground">{f.numero_contrato}</span>
-                      )}
                       <span className="ml-1 text-[10px] text-muted-foreground">· {escopoSigla(f.tipo_financiamento)}</span>
+                    </TableCell>
+                    {/* FIN-LISTA-COMPACTA-01 — No contrato sempre visivel, uma linha, como esta' gravado (vazio fica vazio). */}
+                    <TableCell className="whitespace-nowrap text-[9px] text-zinc-600" data-testid="cel-numero-contrato"
+                      title={f.numero_contrato ?? undefined}>
+                      {f.numero_contrato}
                     </TableCell>
                     <TableCell className="truncate" title={f.credor_nome}>{f.credor_nome}</TableCell>
                     <TableCell className="font-mono tabular-nums whitespace-nowrap">
@@ -724,7 +736,8 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
                         ? format(new Date(f.prox_vencimento + 'T12:00:00'), 'dd/MM/yy')
                         : '—'}
                     </TableCell>
-                    <TableCell className="truncate">
+                    {/* FIN-LISTA-COMPACTA-01 — sem `truncate`: a fracao de pagas fica inteira ao lado do status. */}
+                    <TableCell className="whitespace-nowrap" data-testid="cel-status">
                       <span className={`inline-flex items-center rounded px-1 py-0 text-[9px] font-normal leading-tight ${statusColor[f.status] ?? ''}`}>
                         {f.status}
                       </span>
