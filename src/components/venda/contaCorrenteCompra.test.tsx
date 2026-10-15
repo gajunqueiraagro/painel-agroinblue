@@ -243,10 +243,11 @@ describe('compra em conta corrente — extrato espelho da venda (mock v1)', () =
     };
     const { container } = render(<EntregasVendaTabela api={r} catLabel={() => 'Desmama M'} readOnly={false} fazendaNome="Faz. Sta. Tereza"
       contraparteNome="Vendedor X" onRegistrarNova={vi.fn()} onEstornar={vi.fn()} lado="compra" />);
-    expect(container.textContent).toContain('Data da entrada');
-    expect(container.textContent).toContain('Valor da entrada');
+    /* OC-ENTREGA-COMPACTA-01: a tabela unica — a linha que falta diz "a receber" e a acao e' "receber ▾" (Adotar · Registrar). */
+    expect(container.textContent).toContain('a receber');
     expect(container.textContent).not.toContain('saída');
-    fireEvent.click(screen.getByRole('button', { name: 'Adotar entrada já lançada' }));
+    fireEvent.keyDown(screen.getByTestId('acao-pendente'), { key: 'Enter' });
+    fireEvent.click(await screen.findByText('Adotar entrada já lançada'));
     const s = await screen.findByTestId('seletor-adocao');
     expect(s.textContent).toContain('de Vendedor X ou sem fornecedor gravado');
     await waitFor(() => expect(s.textContent).toContain('Nenhuma entrada desta categoria disponível para adotar.'));

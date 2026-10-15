@@ -1,65 +1,89 @@
 import { useState } from 'react';
+import { MoreHorizontal, Paperclip } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { formatNum } from '@/lib/calculos/formatters';
-import { linhasDaEntrega, precoDoContrato, itensEnviarTodos, datasFaltando } from '@/lib/oc/entregasPorLote';
+import {
+  linhasDaEntrega, totaisDaEntrega, precoDoContrato, itensEnviarTodos, datasFaltando, rotuloDaSituacao, VOCABULARIO_ENTREGA,
+  type SituacaoDaLinha,
+} from '@/lib/oc/entregasPorLote';
 import type { RecebimentoApi, LoteRecebimento, SaidaAdotavel } from '@/hooks/useOperacaoRecebimento';
 import type { LadoContaCorrente } from '@/lib/oc/contaCorrente';
+import { cn } from '@/lib/utils';
 
-/* OC-VENDA-ENTREGAS-01a — a aba Entrega da VENDA, uma linha por saida de cada lote (mock
-   docs/mocks/oc_venda_entregas_mock_v2.html). Cada lote ADOTA a saida que ja esta lancada no zootecnico
-   ("Adotar saida ja lancada") ou registra uma nova ("Registrar nova saida", o modal de sempre).
-
-   ⚠ SO' NA VENDA: o `AbaRecebimentoLotes` monta esta tabela quando recebe `adocao`, e so' o `VendaModalShell`
-     a passa. O abate tambem usa `isCompra={false}` e fica como estava (D4a: abate e compra no OC-ADOTAR-TODOS-01).
-   ⚠ NADA TRUNCADO: rotulo, lancamento e contexto quebram linha — reticencia e' proibida (27/09/2026).
-   ⚠ RECUSA AO LADO DO BOTAO, nunca em toast (UX-TOAST-01): as funcoes de adocao devolvem a mensagem. */
+/* OC-ENTREGA-COMPACTA-01 (Gabriel, 15/10/2026) — A TABELA UNICA DA ABA ENTREGA/RECEBIMENTO, nos tres tipos (abate, venda,
+   compra) e nos dois estados (aberta, encerrada). Saiu a lista de lotes em duas linhas e a tabela "Movimentacoes registradas".
+   ⚠ A TELA SO' DESENHA: linhas, total e numeros sao de `linhasDaEntrega` / `totaisDaEntrega` (src/lib/oc/entregasPorLote.ts);
+     as palavras, de `VOCABULARIO_ENTREGA`.
+   ⚠ UMA LINHA POR REGISTRO: linha de 22px, cabecalho de 20px, nada quebra; texto que nao cabe corta com o inteiro no `title`;
+     numero e data nunca cortam (colunas medidas). Mais de 12 linhas: so' o corpo rola, cabecalho e total parados.
+   ⚠ ACOES (so' com a entrega aberta): venda e compra — "⋯" na saida (desvincular a adotada, estornar a registrada) e
+     "<verbo> ▾" na linha que falta (Adotar · Registrar nova); abate — "estornar" e "<verbo>" diretos. O 📎 do documento do
+     lote fica onde ja' existia (o abate). Menu e seletor abrem POR CIMA (dropdown e dialogo): nada empurra a tabela. */
 
 const fmtBr = (iso: string | null) => (iso ? iso.split('-').reverse().join('/') : '—');
+const fmtCurta = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(2, 4)}` : '—');
 const idCurto = (id: string) => id.slice(0, 8);
-const TH = 'px-1.5 py-1 text-center text-[10px] font-medium text-muted-foreground';
-const TD = 'px-1.5 py-1 align-top text-[11px]';
-const VERDE = 'text-emerald-700 dark:text-emerald-400';
+const fmtDif = (n: number | null) => (n == null ? '' : n > 0 ? `+${n}` : n < 0 ? `−${-n}` : '0');
 
-/* OC-CONTA-CORRENTE-TODOS-01a — a compra adota ENTRADA ja' lancada (o mesmo `oc_adotar_movimentacao`, que ja' casava o tipo). So' as
-   palavras mudam: a venda segue com as frases de antes. */
-const TEXTOS: Record<LadoContaCorrente, {
-  mov: string; movs: string; Mov: string; valor: string; contraparte: (nome: string) => string;
-}> = {
-  venda: { mov: 'saída', movs: 'saídas', Mov: 'Saída', valor: 'Valor da entrega', contraparte: nome => ` para ${nome} ou sem comprador gravado` },
-  compra: { mov: 'entrada', movs: 'entradas', Mov: 'Entrada', valor: 'Valor da entrada', contraparte: nome => ` de ${nome} ou sem fornecedor gravado` },
-  abate: { mov: 'saída', movs: 'saídas', Mov: 'Saída', valor: 'Valor da entrega', contraparte: nome => ` para ${nome} ou sem frigorífico gravado` },
+/** A regua (px). Categoria e' a unica sem largura: absorve a sobra e corta com o inteiro no `title`. */
+export const COLUNAS_DA_ENTREGA: { chave: string; rotulo: string; largura: number | null; alinha: 'esq' | 'dir' | 'centro' }[] = [
+  { chave: 'lote', rotulo: 'Lote', largura: 34, alinha: 'centro' },
+  { chave: 'categoria', rotulo: 'Categoria', largura: null, alinha: 'esq' },
+  { chave: 'negCab', rotulo: 'Neg. cab', largura: 50, alinha: 'dir' },
+  { chave: 'negKg', rotulo: 'Neg. kg', largura: 54, alinha: 'dir' },
+  { chave: 'data', rotulo: 'Data', largura: 54, alinha: 'centro' },
+  { chave: 'cab', rotulo: 'Cab', largura: 40, alinha: 'dir' },
+  { chave: 'kgMed', rotulo: 'Kg méd.', largura: 54, alinha: 'dir' },
+  { chave: 'dif', rotulo: 'Dif.', largura: 38, alinha: 'dir' },
+  { chave: 'valor', rotulo: 'Valor R$', largura: 80, alinha: 'dir' },
+  { chave: 'situacao', rotulo: 'Situação', largura: 66, alinha: 'esq' },
+  { chave: 'acoes', rotulo: 'Ações', largura: 72, alinha: 'centro' },
+];
+export const ALTURA_LINHA_ENTREGA = 22;
+export const ALTURA_CABECALHO_ENTREGA = 20;
+export const LINHAS_VISIVEIS_ENTREGA = 12;
+const ALINHA: Record<'esq' | 'dir' | 'centro', string> = { esq: 'text-left', dir: 'text-right tabular-nums', centro: 'text-center tabular-nums' };
+const TD = 'h-[22px] overflow-hidden text-ellipsis whitespace-nowrap px-1 py-0 text-[10px] leading-[22px]';
+const TH = 'h-[20px] overflow-hidden whitespace-nowrap px-1 py-0 text-[9.5px] font-medium leading-[20px]';
+const TOM_SITUACAO: Record<SituacaoDaLinha, string> = {
+  feita: 'text-emerald-700', parcial: 'text-blue-700', falta: 'text-amber-700 font-medium',
 };
-
-function origemDoLancamento(s: SaidaAdotavel): string {
-  const quando = s.criadoEm ? fmtBr(s.criadoEm.slice(0, 10)).slice(0, 5) : null;
-  const como = s.origemRegistro === 'importacao_historica' ? 'importado' : 'lançado';
-  return `${idCurto(s.lancamentoId)} · ${como}${quando ? ` ${quando}` : ''}`;
-}
+const ACAO = 'text-[10px] text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline';
 
 interface Props {
   api: RecebimentoApi;
   catLabel: (slug: string | null | undefined) => string;
   readOnly: boolean;
-  fazendaNome: string | null;
-  contraparteNome: string | null;
+  lado?: LadoContaCorrente;
+  /** venda e compra: adotar a saida/entrada ja' lancada; o abate registra direto. */
+  comAdocao?: boolean;
+  fazendaNome?: string | null;
+  contraparteNome?: string | null;
   onRegistrarNova: (loteId: string) => void;
   onEstornar: (movimentacaoId: string) => void;
-  lado?: LadoContaCorrente;
+  /** O 📎 do documento do lote (onde ja' existia: o abate). Ausente = sem 📎. */
+  onDocumento?: (loteId: string) => void;
+  /** Recusa do banco (desvincular): o pai a escreve na linha do aviso, nunca em toast. */
+  onRecusa?: (mensagem: string | null) => void;
 }
 
-export function EntregasVendaTabela({ api, catLabel, readOnly, fazendaNome, contraparteNome, onRegistrarNova, onEstornar, lado = 'venda' }: Props) {
-  const t = TEXTOS[lado];
+export function EntregasVendaTabela({
+  api, catLabel, readOnly, lado = 'venda', comAdocao = true, fazendaNome = null, contraparteNome = null,
+  onRegistrarNova, onEstornar, onDocumento, onRecusa,
+}: Props) {
+  const v = VOCABULARIO_ENTREGA[lado];
   const [loteAdotando, setLoteAdotando] = useState<LoteRecebimento | null>(null);
   const [saidas, setSaidas] = useState<SaidaAdotavel[]>([]);
   const [carregando, setCarregando] = useState(false);
   const [marcadas, setMarcadas] = useState<Set<string>>(new Set());
   const [erroSeletor, setErroSeletor] = useState<string | null>(null);
-  const [erroTabela, setErroTabela] = useState<string | null>(null);
 
   const linhas = linhasDaEntrega(api.lotes, api.movimentacoes);
+  const tot = totaisDaEntrega(api.lotes, api.movimentacoes);
 
   const abrirSeletor = async (lote: LoteRecebimento) => {
     setLoteAdotando(lote); setMarcadas(new Set()); setErroSeletor(null); setSaidas([]); setCarregando(true);
@@ -72,163 +96,214 @@ export function EntregasVendaTabela({ api, catLabel, readOnly, fazendaNome, cont
   });
   const confirmarAdocao = async () => {
     if (!loteAdotando) return;
-    if (marcadas.size === 0) { setErroSeletor(`Selecione ao menos uma ${t.mov}.`); return; }
-    // na ordem da lista, para a trilha sair na mesma ordem que o operador viu
+    if (marcadas.size === 0) { setErroSeletor(`Selecione ao menos uma ${v.mov}.`); return; }
     const ids = saidas.filter(s => marcadas.has(s.lancamentoId)).map(s => s.lancamentoId);
     const erro = await api.adotar(loteAdotando.loteId, ids);
     if (erro) { setErroSeletor(erro); return; }
     fecharSeletor();
   };
   const desvincular = async (movimentacaoId: string) => {
-    setErroTabela(null);
+    onRecusa?.(null);
     const erro = await api.desvincular(movimentacaoId);
-    if (erro) setErroTabela(erro);
+    if (erro) onRecusa?.(erro);
   };
 
+  const clip = (loteId: string) => onDocumento && (
+    <button type="button" onClick={() => onDocumento(loteId)} title="Registrar documento deste lote"
+      aria-label="Registrar documento do lote" className="text-muted-foreground/70 hover:text-foreground">
+      <Paperclip className="h-3 w-3" />
+    </button>
+  );
+  const alturaMax = ALTURA_CABECALHO_ENTREGA + LINHAS_VISIVEIS_ENTREGA * ALTURA_LINHA_ENTREGA + ALTURA_LINHA_ENTREGA;
+
   return (
-    <div className="space-y-1.5">
-      <table className="w-full border-collapse" data-testid="entregas-venda">
-        <thead>
-          <tr className="border-b">
-            <th className={TH}>Lote</th><th className={TH}>Contratado</th><th className={TH}>Data da {t.mov}</th>
-            <th className={TH}>Cab</th><th className={TH}>Peso</th><th className={TH}>{t.valor}</th>
-            <th className={TH}>Origem da {t.mov}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {linhas.length === 0 && (
-            <tr><td colSpan={7} className={`${TD} text-center text-muted-foreground`}>{api.loading ? 'Carregando…' : 'Nenhum lote negociado.'}</td></tr>
-          )}
-          {linhas.map(ln => {
-            const l = ln.lote;
-            const rotuloLote = `${catLabel(l.categoria)} · ${precoDoContrato(l)}`;
-            const chave = ln.tipo === 'saida' ? ln.mov.id : `pend-${l.loteId}`;
-            return (
-              <tr key={chave} className="border-b border-border/60" data-linha={ln.tipo}>
-                <td className={`${TD} break-words`}>{rotuloLote}</td>
-                <td className={`${TD} text-center tabular-nums`}>{l.qtdNegociada != null ? `${l.qtdNegociada} cab` : '—'}</td>
-                {ln.tipo === 'saida' ? (
-                  <>
-                    <td className={`${TD} text-center tabular-nums`}>{fmtBr(ln.mov.data || null)}</td>
-                    <td className={`${TD} text-right tabular-nums`}>{ln.mov.quantidade}</td>
-                    <td className={`${TD} text-right tabular-nums`}>{ln.mov.pesoMedio != null ? `${formatNum(ln.mov.pesoMedio, 2)} kg` : '—'}</td>
-                    <td className={`${TD} text-right tabular-nums ${VERDE}`}>{ln.mov.valorTotal != null ? formatNum(ln.mov.valorTotal, 2) : '—'}</td>
-                    <td className={`${TD} text-center`}>
-                      <span className="inline-flex flex-wrap items-center justify-center gap-1.5">
-                        {ln.mov.origem === 'adotada' ? (
-                          <span className="rounded-full bg-emerald-100 px-1.5 py-px text-[10px] text-emerald-700" data-selo="adotada">
-                            adotada · {idCurto(ln.mov.lancamentoId)}
-                          </span>
-                        ) : (
-                          <span className="rounded-full bg-slate-100 px-1.5 py-px text-[10px] text-slate-600" data-selo="registrada">registrada</span>
+    <>
+      <div data-testid="tabela-entrega-rolagem" className="overflow-y-auto rounded-md border" style={{ maxHeight: alturaMax }}>
+        <table className="w-full table-fixed border-collapse" data-testid="entregas-venda">
+          <colgroup>{COLUNAS_DA_ENTREGA.map(c => <col key={c.chave} style={c.largura ? { width: c.largura } : undefined} />)}</colgroup>
+          <thead className="sticky top-0 z-10">
+            <tr className="bg-primary text-primary-foreground">
+              {COLUNAS_DA_ENTREGA.map(c => <th key={c.chave} className={cn(TH, ALINHA[c.alinha])}>{c.rotulo}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {linhas.length === 0 && (
+              <tr><td colSpan={COLUNAS_DA_ENTREGA.length} className={`${TD} text-center text-muted-foreground`}>
+                {api.loading ? 'Carregando…' : 'Nenhum lote negociado.'}</td></tr>
+            )}
+            {linhas.map(ln => {
+              const l = ln.lote;
+              const cat = catLabel(l.categoria);
+              const tituloLote = `Lote ${l.ordem} · ${precoDoContrato(l)}`;
+              const negCab = ln.negCab != null ? String(ln.negCab) : '';
+              const negKg = ln.negKg != null ? formatNum(ln.negKg, 2) : '';
+              if (ln.tipo === 'saida') {
+                const m = ln.mov;
+                return (
+                  <tr key={m.id} className="[&>td]:shadow-[inset_0_-1px_0_hsl(var(--border)/0.6)]" data-linha="saida">
+                    <td className={cn(TD, ALINHA.centro)} title={tituloLote}>{l.ordem}</td>
+                    <td className={TD} title={cat}>{cat}</td>
+                    <td className={cn(TD, ALINHA.dir)}>{negCab}</td>
+                    <td className={cn(TD, ALINHA.dir)}>{negKg}</td>
+                    <td className={cn(TD, ALINHA.centro)} title={fmtBr(m.data || null)}>{fmtCurta(m.data || null)}</td>
+                    <td className={cn(TD, ALINHA.dir)}>{m.quantidade}</td>
+                    <td className={cn(TD, ALINHA.dir)}>{m.pesoMedio != null ? formatNum(m.pesoMedio, 2) : '—'}</td>
+                    <td className={cn(TD, ALINHA.dir, ln.dif != null && ln.dif !== 0 ? 'text-amber-700' : 'text-muted-foreground')}>{fmtDif(ln.dif)}</td>
+                    <td className={cn(TD, ALINHA.dir)}>{m.valorTotal != null ? formatNum(m.valorTotal, 2) : '—'}</td>
+                    <td className={cn(TD, TOM_SITUACAO[ln.situacao])}
+                      title={m.origem === 'adotada' ? `adotada · lançamento ${idCurto(m.lancamentoId)}` : 'registrada pela operação'}>
+                      {rotuloDaSituacao(ln.situacao, v)}
+                    </td>
+                    <td className={cn(TD, ALINHA.centro)}>
+                      <span className="inline-flex items-center justify-center gap-1.5">
+                        {!readOnly && comAdocao && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button type="button" disabled={api.saving} aria-label={`Ações da ${v.mov}`} data-testid="acoes-saida"
+                                className="inline-flex h-4 w-5 items-center justify-center rounded hover:bg-muted disabled:opacity-50">
+                                <MoreHorizontal className="h-3 w-3" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              {m.origem === 'adotada'
+                                ? <DropdownMenuItem onSelect={() => void desvincular(m.id)}>desvincular</DropdownMenuItem>
+                                : <DropdownMenuItem onSelect={() => onEstornar(m.id)}>estornar</DropdownMenuItem>}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         )}
-                        {!readOnly && ln.mov.origem === 'adotada' && (
-                          <button type="button" disabled={api.saving} onClick={() => void desvincular(ln.mov.id)}
-                            className="text-[10px] text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground">
-                            desvincular
-                          </button>
+                        {!readOnly && !comAdocao && (
+                          <button type="button" disabled={api.saving} onClick={() => onEstornar(m.id)}
+                            className="text-[10px] text-muted-foreground hover:text-destructive disabled:cursor-not-allowed">estornar</button>
                         )}
-                        {!readOnly && ln.mov.origem === 'registrada' && (
-                          <button type="button" disabled={api.saving} onClick={() => onEstornar(ln.mov.id)}
-                            className="text-[10px] text-muted-foreground hover:text-destructive disabled:cursor-not-allowed">
-                            estornar
-                          </button>
-                        )}
+                        {clip(l.loteId)}
                       </span>
                     </td>
-                  </>
-                ) : (
-                  <>
-                    <td className={`${TD} text-center text-muted-foreground`}>—</td>
-                    <td className={`${TD} text-right text-muted-foreground`}>{ln.falta != null ? `falta ${ln.falta}` : '—'}</td>
-                    <td className={`${TD} text-right text-muted-foreground`}>—</td>
-                    <td className={`${TD} text-right text-muted-foreground`}>—</td>
-                    <td className={`${TD} text-center`}>
-                      <span className="inline-flex flex-wrap items-center justify-center gap-1.5">
-                        <span className="rounded-full bg-amber-100 px-1.5 py-px text-[10px] text-amber-700" data-selo="pendente">pendente</span>
-                        {!readOnly && (
-                          <>
-                            <button type="button" disabled={api.saving} onClick={() => void abrirSeletor(l)}
-                              className="text-[10px] text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground">
-                              Adotar {t.mov} já lançada
-                            </button>
-                            <button type="button" disabled={api.saving} onClick={() => onRegistrarNova(l.loteId)}
-                              className="text-[10px] text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground">
-                              Registrar nova {t.mov}
-                            </button>
-                          </>
-                        )}
-                      </span>
-                    </td>
-                  </>
-                )}
+                  </tr>
+                );
+              }
+              return (
+                <tr key={`pend-${l.loteId}`} className="bg-amber-50 [&>td]:shadow-[inset_0_-1px_0_hsl(var(--border)/0.6)] dark:bg-amber-950/20" data-linha="pendente">
+                  <td className={cn(TD, ALINHA.centro)} title={tituloLote}>{l.ordem}</td>
+                  <td className={TD} title={cat}>{cat}</td>
+                  <td className={cn(TD, ALINHA.dir)}>{negCab}</td>
+                  <td className={cn(TD, ALINHA.dir)}>{negKg}</td>
+                  <td className={cn(TD, ALINHA.centro, 'text-muted-foreground')}>—</td>
+                  <td className={cn(TD, ALINHA.dir, 'font-semibold text-amber-700')} data-testid="saldo-do-lote">{ln.falta != null ? ln.falta : '—'}</td>
+                  <td className={cn(TD, ALINHA.dir, 'text-muted-foreground')}>—</td>
+                  <td className={cn(TD, ALINHA.dir, 'text-muted-foreground')}>—</td>
+                  <td className={cn(TD, ALINHA.dir, 'text-muted-foreground')}>—</td>
+                  <td className={cn(TD, TOM_SITUACAO.falta)}>{rotuloDaSituacao('falta', v)}</td>
+                  <td className={cn(TD, ALINHA.centro)}>
+                    <span className="inline-flex items-center justify-center gap-1.5">
+                      {!readOnly && comAdocao && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button type="button" disabled={api.saving} data-testid="acao-pendente" className={ACAO}>{v.verbo} ▾</button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onSelect={() => void abrirSeletor(l)}>Adotar {v.mov} já lançada</DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => onRegistrarNova(l.loteId)}>Registrar nova {v.mov}</DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                      {!readOnly && !comAdocao && (
+                        <button type="button" disabled={api.saving} onClick={() => onRegistrarNova(l.loteId)} data-testid="acao-pendente"
+                          aria-label={`${v.Verbo} lote ${cat}`} className={ACAO}>{v.verbo}</button>
+                      )}
+                      {clip(l.loteId)}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+          {!tot.semLote && (
+            <tfoot className="sticky bottom-0 z-10">
+              <tr className="bg-[#E8E6DF] font-semibold dark:bg-muted" data-testid="total-entrega">
+                <td className={TD} colSpan={2}>Total</td>
+                <td className={cn(TD, ALINHA.dir)}>{tot.negociado}</td>
+                <td className={TD} />
+                <td className={TD} />
+                <td className={cn(TD, ALINHA.dir)}>{tot.cab}</td>
+                <td className={cn(TD, ALINHA.dir)}>{tot.kgMedio != null ? formatNum(tot.kgMedio, 2) : '—'}</td>
+                <td className={cn(TD, ALINHA.dir, tot.dif !== 0 ? 'text-amber-700' : '')}>{fmtDif(tot.dif)}</td>
+                <td className={cn(TD, ALINHA.dir)}>{tot.valor != null ? formatNum(tot.valor, 2) : '—'}</td>
+                <td className={TD} />
+                <td className={TD} />
               </tr>
-            );
-          })}
-        </tbody>
-      </table>
-      {erroTabela && <div className="text-[10px] text-destructive" role="alert">{erroTabela}</div>}
+            </tfoot>
+          )}
+        </table>
+      </div>
 
       {loteAdotando && (
-        <div className="rounded-md border bg-muted/10 p-1.5 space-y-1" data-testid="seletor-adocao">
-          <div className="text-[11px] font-medium text-foreground break-words">
-            Adotar {t.mov} já lançada · {catLabel(loteAdotando.categoria)}
-            {loteAdotando.qtdNegociada != null ? `, ${Math.max(loteAdotando.qtdNegociada - loteAdotando.qtdRecebida, 0)} cab` : ''}
-            <span className="font-normal text-muted-foreground">
-              {' '}· mostrando {t.movs} da {fazendaNome ?? 'fazenda da operação'} de {catLabel(loteAdotando.categoria)}
-              {contraparteNome ? t.contraparte(contraparteNome) : ''} ainda sem OC, as mais perto da data da operação primeiro
-            </span>
-          </div>
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="border-b">
-                <th className={TH}><span className="sr-only">Selecionar</span></th>
-                <th className={TH}>Data</th><th className={TH}>Categoria</th><th className={TH}>Cab</th>
-                <th className={TH}>Peso</th><th className={TH}>Valor</th><th className={TH}>Lançamento</th>
-              </tr>
-            </thead>
-            <tbody>
-              {carregando && (<tr><td colSpan={7} className={`${TD} text-center text-muted-foreground`}>Carregando…</td></tr>)}
-              {!carregando && saidas.length === 0 && !erroSeletor && (
-                <tr><td colSpan={7} className={`${TD} text-center text-muted-foreground`}>Nenhuma {t.mov} desta categoria disponível para adotar.</td></tr>
-              )}
-              {saidas.map(s => (
-                <tr key={s.lancamentoId} className="border-b border-border/60" data-adotavel={s.lancamentoId}>
-                  <td className={`${TD} text-center`}>
-                    <Checkbox checked={marcadas.has(s.lancamentoId)} onCheckedChange={() => alternar(s.lancamentoId)}
-                      aria-label={`Selecionar ${t.mov} de ${fmtBr(s.data)}`} className="h-3.5 w-3.5" />
-                  </td>
-                  <td className={`${TD} text-center tabular-nums`}>{fmtBr(s.data)}</td>
-                  <td className={`${TD} text-center`}>{catLabel(s.categoria)}</td>
-                  <td className={`${TD} text-right tabular-nums`}>{s.quantidade}</td>
-                  <td className={`${TD} text-right tabular-nums`}>{s.pesoMedio != null ? `${formatNum(s.pesoMedio, 2)} kg` : '—'}</td>
-                  <td className={`${TD} text-right tabular-nums ${VERDE}`}>{s.valorTotal != null ? formatNum(s.valorTotal, 2) : '—'}</td>
-                  <td className={`${TD} text-center break-words`}>{origemDoLancamento(s)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            {erroSeletor && <span className="text-[10px] text-destructive" role="alert">{erroSeletor}</span>}
-            <Button type="button" variant="ghost" size="sm" className="h-[22px] px-[9px] text-[10px] font-medium" onClick={fecharSeletor}>Cancelar</Button>
-            <Button type="button" size="sm" className="h-[22px] px-[9px] text-[10px] font-medium" disabled={api.saving}
-              onClick={() => void confirmarAdocao()}>
-              {api.saving ? 'Adotando…' : `Adotar ${marcadas.size} ${marcadas.size === 1 ? t.mov : t.movs}`}
-            </Button>
-          </div>
-        </div>
+        <Dialog open onOpenChange={o => { if (!o) fecharSeletor(); }}>
+          <DialogContent className="max-w-2xl">
+            <div data-testid="seletor-adocao" className="space-y-1">
+              <DialogHeader><DialogTitle className="text-[12px]">Adotar {v.mov} já lançada · {catLabel(loteAdotando.categoria)}
+                {loteAdotando.qtdNegociada != null ? `, ${Math.max(loteAdotando.qtdNegociada - loteAdotando.qtdRecebida, 0)} cab` : ''}</DialogTitle></DialogHeader>
+              <div className="text-[10px] text-muted-foreground">
+                mostrando {v.movs} da {fazendaNome ?? 'fazenda da operação'} de {catLabel(loteAdotando.categoria)}
+                {contraparteNome ? v.contraparte(contraparteNome) : ''} ainda sem OC, as mais perto da data da operação primeiro
+              </div>
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="border-b">
+                    <th className={TH}><span className="sr-only">Selecionar</span></th>
+                    <th className={cn(TH, 'text-center')}>Data</th><th className={cn(TH, 'text-left')}>Categoria</th><th className={cn(TH, 'text-right')}>Cab</th>
+                    <th className={cn(TH, 'text-right')}>Peso</th><th className={cn(TH, 'text-right')}>Valor</th><th className={cn(TH, 'text-left')}>Lançamento</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {carregando && (<tr><td colSpan={7} className={`${TD} text-center text-muted-foreground`}>Carregando…</td></tr>)}
+                  {!carregando && saidas.length === 0 && !erroSeletor && (
+                    <tr><td colSpan={7} className={`${TD} text-center text-muted-foreground`}>Nenhuma {v.mov} desta categoria disponível para adotar.</td></tr>
+                  )}
+                  {saidas.map(s => (
+                    <tr key={s.lancamentoId} className="border-b border-border/60" data-adotavel={s.lancamentoId}>
+                      <td className={`${TD} text-center`}>
+                        <Checkbox checked={marcadas.has(s.lancamentoId)} onCheckedChange={() => alternar(s.lancamentoId)}
+                          aria-label={`Selecionar ${v.mov} de ${fmtBr(s.data)}`} className="h-3.5 w-3.5" />
+                      </td>
+                      <td className={`${TD} text-center tabular-nums`}>{fmtBr(s.data)}</td>
+                      <td className={TD}>{catLabel(s.categoria)}</td>
+                      <td className={`${TD} text-right tabular-nums`}>{s.quantidade}</td>
+                      <td className={`${TD} text-right tabular-nums`}>{s.pesoMedio != null ? `${formatNum(s.pesoMedio, 2)} kg` : '—'}</td>
+                      <td className={`${TD} text-right tabular-nums`}>{s.valorTotal != null ? formatNum(s.valorTotal, 2) : '—'}</td>
+                      <td className={TD}>{origemDoLancamento(s)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <DialogFooter className="items-center gap-2">
+                {erroSeletor && <span className="text-[10px] text-destructive" role="alert">{erroSeletor}</span>}
+                <Button type="button" variant="ghost" size="sm" className="h-[22px] px-[9px] text-[10px] font-medium" onClick={fecharSeletor}>Cancelar</Button>
+                <Button type="button" size="sm" className="h-[22px] px-[9px] text-[10px] font-medium" disabled={api.saving}
+                  onClick={() => void confirmarAdocao()}>
+                  {api.saving ? 'Adotando…' : `Adotar ${marcadas.size} ${marcadas.size === 1 ? v.mov : v.movs}`}
+                </Button>
+              </DialogFooter>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
-    </div>
+    </>
   );
 }
 
-/* "Enviar todos" da venda (D3): uma data POR LINHA, editavel, sem gravar no lote. Vazia fica vermelha com a
-   frase embaixo e nada grava (UX-OBRIGATORIOS-01). */
+function origemDoLancamento(s: SaidaAdotavel): string {
+  const quando = s.criadoEm ? fmtBr(s.criadoEm.slice(0, 10)).slice(0, 5) : null;
+  const como = s.origemRegistro === 'importacao_historica' ? 'importado' : 'lançado';
+  return `${idCurto(s.lancamentoId)} · ${como}${quando ? ` ${quando}` : ''}`;
+}
+
+/* "<Verbo> todos": uma data POR LINHA, editavel, sem gravar no lote. Vazia fica vermelha com a frase embaixo e nada grava
+   (UX-OBRIGATORIOS-01). */
 export function EnviarTodosDialog({ lotes, dataPadrao, catLabel, saving, onConfirmar, onFechar, lado = 'venda' }: {
   lotes: LoteRecebimento[]; dataPadrao: string; catLabel: (slug: string | null | undefined) => string;
   saving: boolean; onConfirmar: (datas: Record<string, string>) => void; onFechar: () => void; lado?: LadoContaCorrente;
 }) {
-  const t = TEXTOS[lado];
+  const v = VOCABULARIO_ENTREGA[lado];
   const [itens, setItens] = useState(() => itensEnviarTodos(lotes, dataPadrao));
   const [cobrar, setCobrar] = useState(false);
   const faltando = datasFaltando(itens);
@@ -237,13 +312,15 @@ export function EnviarTodosDialog({ lotes, dataPadrao, catLabel, saving, onConfi
     if (faltando.size > 0) { setCobrar(true); return; }
     onConfirmar(Object.fromEntries(itens.map(i => [i.loteId, i.data])));
   };
+  const TDD = 'px-1.5 py-1 align-top text-[11px]';
+  const THD = 'px-1.5 py-1 text-[10px] font-medium text-muted-foreground';
   return (
     <Dialog open onOpenChange={o => { if (!o) onFechar(); }}>
       <DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle className="text-[12px]">Enviar todos conforme negociado</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle className="text-[12px]">{v.Verbo} todos conforme negociado</DialogTitle></DialogHeader>
         <table className="w-full border-collapse">
           <thead>
-            <tr className="border-b"><th className={TH}>Lote</th><th className={TH}>Cab</th><th className={TH}>Data da {t.mov} *</th></tr>
+            <tr className="border-b"><th className={cn(THD, 'text-left')}>Lote</th><th className={cn(THD, 'text-right')}>Cab</th><th className={cn(THD, 'text-left')}>Data da {v.mov} *</th></tr>
           </thead>
           <tbody>
             {itens.map(i => {
@@ -251,13 +328,13 @@ export function EnviarTodosDialog({ lotes, dataPadrao, catLabel, saving, onConfi
               const vermelho = cobrar && faltando.has(i.loteId);
               return (
                 <tr key={i.loteId} className="border-b border-border/60" data-enviar={i.loteId}>
-                  <td className={`${TD} break-words`}>{catLabel(lote?.categoria)}{lote ? ` · ${precoDoContrato(lote)}` : ''}</td>
-                  <td className={`${TD} text-right tabular-nums`}>{i.falta}</td>
-                  <td className={TD}>
+                  <td className={`${TDD} break-words`}>{catLabel(lote?.categoria)}{lote ? ` · ${precoDoContrato(lote)}` : ''}</td>
+                  <td className={`${TDD} text-right tabular-nums`}>{i.falta}</td>
+                  <td className={TDD}>
                     <DatePicker value={i.data} size="compact"
-                      onChange={v => setItens(prev => prev.map(x => (x.loteId === i.loteId ? { ...x, data: v } : x)))}
+                      onChange={d => setItens(prev => prev.map(x => (x.loteId === i.loteId ? { ...x, data: d } : x)))}
                       className={vermelho ? 'border-destructive' : undefined} />
-                    {vermelho && <div className="mt-0.5 text-[10px] text-destructive">Informe a data da {t.mov}.</div>}
+                    {vermelho && <div className="mt-0.5 text-[10px] text-destructive">Informe a data da {v.mov}.</div>}
                   </td>
                 </tr>
               );
@@ -267,7 +344,7 @@ export function EnviarTodosDialog({ lotes, dataPadrao, catLabel, saving, onConfi
         <DialogFooter>
           <Button type="button" variant="ghost" size="sm" className="h-[22px] px-[9px] text-[10px] font-medium" onClick={onFechar}>Cancelar</Button>
           <Button type="button" size="sm" className="h-[22px] px-[9px] text-[10px] font-medium" disabled={saving} onClick={enviar}>
-            {`Enviar ${itens.length} lote${itens.length === 1 ? '' : 's'}`}
+            {`${v.Verbo} ${itens.length} lote${itens.length === 1 ? '' : 's'}`}
           </Button>
         </DialogFooter>
       </DialogContent>

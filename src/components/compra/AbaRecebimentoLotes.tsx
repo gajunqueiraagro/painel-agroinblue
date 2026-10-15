@@ -1,18 +1,21 @@
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Undo2, Lock, FileText, AlertTriangle } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { DatePicker } from '@/components/ui/date-picker';
 import { parseNumericValue } from '@/lib/calculos/abate';
 import { formatMed2 } from '@/lib/calculos/formatters';
-import type { RecebimentoApi, EstadoRecebimento, LoteRecebimento } from '@/hooks/useOperacaoRecebimento';
+import type { RecebimentoApi, LoteRecebimento } from '@/hooks/useOperacaoRecebimento';
 import type { DocumentosApi } from '@/hooks/useOperacaoDocumentos';
 import { DocumentoFormOC, FORM_VAZIO } from './DocumentoFormOC';
 import { EntregasVendaTabela, EnviarTodosDialog } from '@/components/venda/EntregasVendaTabela';
 import type { LadoContaCorrente } from '@/lib/oc/contaCorrente';
 import { hojeLocal } from '@/lib/datas/hojeLocal';
+import { totaisDaEntrega, VOCABULARIO_ENTREGA, type VocabularioEntrega } from '@/lib/oc/entregasPorLote';
+import { formatNum } from '@/lib/calculos/formatters';
+import { cn } from '@/lib/utils';
 
 // Aba Recebimento (PR-OC-RECEB-01). Lotes negociados aparecem automaticamente; registro/estorno
 //   por lote; "Receber todos conforme negociado"; divergência por lote; encerrar recebimento.
@@ -36,97 +39,19 @@ interface Props {
      nao move gado: a aba abre igual, sem gesto, e diz isto no lugar da frase do titulo financeiro. Sem a prop, a frase de hoje. */
   motivoSomenteLeitura?: string;
   onVoltarNegociacao?: () => void;
-  /* ⚠ TEXTOS COM DEFAULT IGUAL AO DE HOJE — PR-OC-VENDA-ENTREGA-01. Mesmo idioma dos
-     `rotulos` do AbaNegociacaoLotes: o `CompraModalShell` nao passa nada e continua
-     identico. Na venda o mesmo gesto se chama ENTREGA — o gado sai —, e o que muda e' o
-     VERBO, nunca o campo: quantidade, data e categoria descrevem o mesmo fato nos dois.
-     ⚠ SO TEXTO DE TELA. Nenhum identificador, nenhum nome de prop, nenhuma chave de api. */
-  rotulos?: RotulosEntrega;
-  /* OC-VENDA-ENTREGAS-01a — liga a entrega por SAIDA (mock oc_venda_entregas_mock_v2): uma linha por saida de cada
-     lote, "Adotar saida ja lancada" e o "Enviar todos" com uma data por linha. So' o `VendaModalShell` passa: o
-     abate tambem usa `isCompra={false}` e fica como estava (D4a). Os nomes vao so' para o texto do seletor. */
+  /* OC-ENTREGA-COMPACTA-01 — o LADO decide as palavras (`VOCABULARIO_ENTREGA`, um dicionario so'; o `rotulos` que cada shell
+     passava saiu). Sem a prop: o da `adocao`, senao compra/venda pelo `isCompra`. O abate passa 'abate'. */
+  lado?: LadoContaCorrente;
+  /* OC-VENDA-ENTREGAS-01a — venda e compra ADOTAM a saida/entrada ja' lancada ("Adotar … já lançada" na linha que falta);
+     o abate registra direto. Os nomes vao so' para o texto do seletor. */
   adocao?: { fazendaNome: string | null; contraparteNome: string | null; lado?: LadoContaCorrente };
 }
 
-export interface RotulosEntrega {
-  tituloSecao?: string;
-  tituloDialogo?: (rotulo: string) => string;
-  jaMovimentado?: string;
-  informeQuantidade?: string;
-  indisponivelTitulo?: string;
-  indisponivelDetalhe?: string;
-  /* ⚠ CINCO CHAVES NOVAS — PR-OC-VENDA-ENTREGA-01C. Duas delas existiam pela METADE: eu
-     traduzi o `aria-label` do "Receber todos" e o `title` do "Receber" por lote, e deixei o
-     TEXTO VISIVEL cru. Leitor de tela dizia uma coisa e o olho lia outra — a mesma familia
-     de duas copias com uma atualizada, em miniatura.
-     ⚠ E o contador do topo aparece DUAS VEZES no arquivo: ha' um ramo para entrega aberta e
-     outro para encerrada. Uma chave, dois pontos. */
-  movimentarTodos?: string;          // aria-label do atalho
-  movimentarTodosTexto?: string;     // o texto visivel do mesmo atalho
-  acaoLote?: string;                 // o texto do botao de cada lote
-  acaoLoteAria?: (categoria: string) => string;
-  rotuloTotalTopo?: string;          // o contador do topo (X / Y), nos dois ramos
-  avisoEncerrado?: string;           // o aviso do ramo ENCERRADO, que so aparece depois de encerrar
-  registrarDoLote?: string;
-  colunaData?: string;
-  rotuloTotal?: string;
-  tituloEncerrar?: string;
-  nenhumMovimentado?: string;
-  placeholderJustificativa?: string;
-  tituloReabrir?: string;
-  /* ⚠ `ReactNode`, e nao `string`: o aviso da compra usa <b> em "auditada" e em "Nao", e
-     reabrir e' ato serio nos dois sentidos — a venda mantem a mesma enfase. Caso aditivo:
-     com dicionario nulo, o JSX de sempre continua no `??`. */
-  avisoReabrir?: ReactNode;
-  motivoEncerrarPadrao?: string;
-  motivoEstornoPadrao?: string;
-}
-
-/* ⚠ AS GRADES DE LOTE SAIRAM. `GRID` (onze colunas, com tres campos de entrada),
-   `GRID_ENC` (seis, so leitura) e os seus `min-w`/`max-w` morreram com o cabecalho de
-   coluna: PR-OC-A18-RECEBIMENTO-01 trocou a versao encerrada por lista de duas alturas
-   e PR-OC-RECEB-REGISTRO-02 fez o mesmo com a aberta, levando os campos para um modal
-   por lote. Sem coluna nao ha o que alinhar, e sem largura minima nao ha rolagem
-   lateral — que era o defeito que aqueles pesos em pixel tentavam administrar.
-   O bloco abaixo permanece porque a grade de MOVIMENTACOES continua sendo tabela. */
-/* MOVIMENTACOES: era texto corrido separado por bolinhas, que nao alinha coluna
-   nenhuma. Mesmas regras de cima. Acoes some junto com o "Estornar" que ela abriga
-   — em somente leitura a coluna nao existe: coluna vazia ocupa espaco e ainda sugere
-   que falta preencher algo.
-     Data 72 · Categoria 110 · Quantidade 80 · Peso med. 80 · Acoes 90 = 432 (+24 de gap) */
-const GRID_MOV = 'grid grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,0.9fr)] gap-1.5';
-const GRID_MOV_RO = 'grid grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,0.8fr)_minmax(0,0.8fr)] gap-1.5';
-/* ⚠ PR-OC-UX-LOTE-C1-01 — `max-w` ENTROU, e e' ele que resolve o espaco em branco.
-   `min-w` e' PISO, nao teto: o wrapper e' bloco e ocupava a largura inteira do corpo
-   do modal (~1.100px), enquanto as colunas `minmax(0,Nfr)` esticavam para preencher.
-   Conteudo de 456px espalhado em ~1.100px = ~130px de vazio POR COLUNA, que era o que
-   se via entre Data, Categoria, Quantidade e Peso. O problema NUNCA foi altura de
-   linha nem tamanho de fonte — esta aba ja usa text-[10px]/h-6/py-0.5, das mais densas
-   do sistema. Com piso = teto a grade fica do tamanho do conteudo, e o
-   `overflow-x-auto` do pai continua cobrindo tela estreita. */
-/* +28px em cada: a 1a coluna foi de 0.72 para 1.0fr para caber "Recebimento", e a
-   largura total acompanha para os outros pesos nao encolherem em troca. */
-const MINW_MOV = 'min-w-[484px] max-w-[484px]';
-const MINW_MOV_RO = 'min-w-[388px] max-w-[388px]';
-// Caixa horizontal COMUM ao cabecalho e a linha: a linha tem `border`, e borda entra
-//   na largura. Sem a transparente aqui o cabecalho comeca 1px antes e distribui as
-//   colunas sobre 2px a mais.
-const CX_CAB = 'border border-transparent px-1';
-const CX_LIN = 'border px-1';
-/* Formatacao de data do arquivo — UMA so. A copia inline que vivia na grade de
-   movimentacoes saiu em PR-OC-RECEB-REGISTRO-02, quando aquele ramo deixou de estar
-   congelado. */
-const fmtBr = (iso: string | null) => (iso ? iso.split('-').reverse().join('/') : null);
-
-const TONE: Record<EstadoRecebimento, string> = {
-  nao_iniciado: 'bg-slate-100 text-slate-600',
-  parcial: 'bg-amber-100 text-amber-700',
-  completo: 'bg-emerald-100 text-emerald-700',
-  excedente: 'bg-rose-100 text-rose-700',
-};
-const LABEL: Record<EstadoRecebimento, string> = {
-  nao_iniciado: 'Não iniciado', parcial: 'Parcial', completo: 'Completo', excedente: 'Excedente',
-};
+/* ⚠ AS GRADES DE LOTE SAIRAM (PR-OC-A18-RECEBIMENTO-01, PR-OC-RECEB-REGISTRO-02), e no OC-ENTREGA-COMPACTA-01 sairam tambem a
+   lista de lotes em duas linhas e a tabela "Movimentacoes registradas": a aba e' uma faixa de 26px, um aviso de 20px e UMA
+   tabela (`EntregasVendaTabela`), nos tres tipos e nos dois estados. O modal nunca muda de tamanho. */
+export const ALTURA_FAIXA_ENTREGA = 26;
+export const ALTURA_AVISO_ENTREGA = 20;
 
 /* MODAL DE UM LOTE (PR-OC-RECEB-REGISTRO-02). Mesmo padrao que a Negociacao adotou em
    PR-OC-UX-LOTE-C2-01: a linha vira leitura e a edicao acontece num lugar so, com espaco.
@@ -136,9 +61,9 @@ const LABEL: Record<EstadoRecebimento, string> = {
    ⚠ ESTADO INICIALIZADO NO MOUNT, e o pai monta com `key={loteId}`: sem isso, abrir o
    lote B depois do A traria os numeros do A. E' a mesma armadilha que a Negociacao ja
    documentou no seu proprio modal. */
-function ReceberLoteDialog({ lote, rotulo, pesoSugerido, hoje, isCompra, saving, onGravar, onFechar, r }: {
+function ReceberLoteDialog({ lote, rotulo, pesoSugerido, hoje, saving, onGravar, onFechar, v }: {
   lote: LoteRecebimento; rotulo: string; pesoSugerido: string; hoje: string;
-  isCompra: boolean; saving: boolean; r?: RotulosEntrega;
+  saving: boolean; v: VocabularioEntrega;
   onGravar: (dados: { quantidade: string; pesoMedio: string; data: string }) => void;
   onFechar: () => void;
 }) {
@@ -153,9 +78,9 @@ function ReceberLoteDialog({ lote, rotulo, pesoSugerido, hoje, isCompra, saving,
   return (
     <Dialog open onOpenChange={o => { if (!o) onFechar(); }}>
       <DialogContent className="max-w-sm">
-        <DialogHeader><DialogTitle className="text-[12px]">{r?.tituloDialogo ? r.tituloDialogo(rotulo) : `Receber · ${rotulo}`}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle className="text-[12px]">{`${v.Verbo} · ${rotulo}`}</DialogTitle></DialogHeader>
         <div className="text-[11px] text-muted-foreground">
-          negociado {lote.qtdNegociada ?? '—'} · {r?.jaMovimentado ?? 'já recebido'} {lote.qtdRecebida === 0 ? '—' : lote.qtdRecebida}
+          negociado {lote.qtdNegociada ?? '—'} · já {v.feito} {lote.qtdRecebida === 0 ? '—' : lote.qtdRecebida}
         </div>
         {/* A16 — os tres campos com a MESMA altura. */}
         <div className="grid grid-cols-2 gap-2">
@@ -166,11 +91,7 @@ function ReceberLoteDialog({ lote, rotulo, pesoSugerido, hoje, isCompra, saving,
           </div>
           {/* A15 — peso em kg com duas casas; o sugerido e' o peso medio NEGOCIADO do
               lote, e e' EDITAVEL: o embarque real diverge do negociado com frequencia.
-              ⚠ TAMBEM NA VENDA — PR-OC-VENDA-ENTREGA-01F. O campo era escondido fora da
-              compra por desenho anterior a esta frente, e a saida nascia sem peso: na lista
-              de vendas, P.Vivo, P.@, R$/@ e R$/kg ficavam em travessao, porque os quatro
-              derivam dele. A RPC sempre aceitou o peso e o lancamento sempre o gravou —
-              so' o front nao mandava. */}
+              ⚠ TAMBEM NA VENDA — PR-OC-VENDA-ENTREGA-01F: os derivados da lista de vendas dependem dele. */}
           <div>
             <label className="text-[10px] text-muted-foreground">Peso médio (kg)</label>
             <Input inputMode="decimal" value={pesoMedio} onChange={e => setPesoMedio(e.target.value)}
@@ -185,8 +106,8 @@ function ReceberLoteDialog({ lote, rotulo, pesoSugerido, hoje, isCompra, saving,
         <DialogFooter>
           <Button type="button" variant="ghost" size="sm" className="h-[22px] px-[9px] text-[10px] font-medium " onClick={onFechar}>Cancelar</Button>
           <Button type="button" size="sm" className="h-[22px] px-[9px] text-[10px] font-medium " disabled={!podeGravar}
-            title={podeGravar ? undefined : (r?.informeQuantidade ?? 'Informe a quantidade recebida')}
-            aria-label={`Registrar recebimento do lote ${rotulo}`}
+            title={podeGravar ? undefined : `Informe a quantidade ${v.quantidadeFeita}`}
+            aria-label={`Registrar ${v.mov} do lote ${rotulo}`}
             onClick={() => onGravar({ quantidade, pesoMedio, data })}>
             {saving ? 'Registrando…' : 'Registrar'}
           </Button>
@@ -196,13 +117,11 @@ function ReceberLoteDialog({ lote, rotulo, pesoSugerido, hoje, isCompra, saving,
   );
 }
 
-export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada, isCompra, categoriasDisponiveis, documentosApi, dataOperacao, somenteLeitura, motivoSomenteLeitura, onVoltarNegociacao, rotulos, adocao }: Props) {
-  /* ⚠ AS TRES TABELAS POR LINHA (`qtd`, `peso`, `dataReb`) SAIRAM em
-     PR-OC-RECEB-REGISTRO-02. Elas so existiam para alimentar os inputs inline da
-     grade de onze colunas; com os campos dentro do modal, os valores viajam por
-     PARAMETRO ate `registrar`. Guardar em estado do pai era, alem de sobra, a
-     armadilha de closure conhecida: `setX` seguido de `registrar` no MESMO clique
-     leria o valor ANTERIOR. */
+const BOTAO_FAIXA = 'h-[20px] px-2 text-[10px] font-medium';
+
+export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada, isCompra, categoriasDisponiveis, documentosApi, dataOperacao, somenteLeitura, motivoSomenteLeitura, onVoltarNegociacao, lado, adocao }: Props) {
+  const ladoEfetivo: LadoContaCorrente = lado ?? adocao?.lado ?? (isCompra ? 'compra' : 'venda');
+  const v = VOCABULARIO_ENTREGA[ladoEfetivo];
   const [receberLoteId, setReceberLoteId] = useState<string | null>(null);
   const [docLoteId, setDocLoteId] = useState<string | null>(null);   // lote-contexto do registro rápido de documento
   const [encerrarOpen, setEncerrarOpen] = useState(false);
@@ -210,6 +129,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
   const [reabrirOpen, setReabrirOpen] = useState(false);
   const [motivoReabrir, setMotivoReabrir] = useState('');
   const [enviarTodosOpen, setEnviarTodosOpen] = useState(false);
+  const [recusa, setRecusa] = useState<string | null>(null);
   const hoje = hojeLocal();
   /* O que o campo de data traz aberto. Editavel: o operador corrige quando a saida (ou a
      chegada) nao aconteceu no dia da operacao. */
@@ -229,13 +149,13 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
     );
   }
   // Entrega encerrada tem precedência de exibição sobre a negociação não concluída: uma operação
-  //   programada+encerrada mostra os lotes em consulta + "Reabrir recebimento". Só quando NÃO encerrada
+  //   programada+encerrada mostra os lotes em consulta + "Reabrir". Só quando NÃO encerrada
   //   e negociação não concluída é que exibimos o aviso de indisponibilidade (estado pós-reabertura).
   if (!concluida && !encerrada) {
     return (
       <div className="rounded-md border border-dashed bg-muted/10 px-3 py-5 text-center space-y-1">
-        <div className="text-[11px] font-semibold text-foreground">{rotulos?.indisponivelTitulo ?? 'Recebimento indisponível — negociação ainda não concluída'}</div>
-        <div className="text-[11px] text-muted-foreground">{rotulos?.indisponivelDetalhe ?? 'Conclua a negociação (botão “Concluir negociação”) para registrar o recebimento físico.'}</div>
+        <div className="text-[11px] font-semibold text-foreground">{`${v.Aba} indisponível — negociação ainda não concluída`}</div>
+        <div className="text-[11px] text-muted-foreground">{`Conclua a negociação (botão “Concluir negociação”) para registrar ${v.artigoAba} ${v.fisico}.`}</div>
       </div>
     );
   }
@@ -245,10 +165,8 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
   const pesoInicial = (l: LoteRecebimento) =>
     (l.pesoMedioNegociadoKg != null && Number.isFinite(l.pesoMedioNegociadoKg)) ? formatMed2(l.pesoMedioNegociadoKg) : '';
 
-  /* ⚠ CAMINHO UNICO DE ESCRITA desta tela, e continua sendo este. O modal nao chama
-     `api.registrar`: ele devolve os valores e quem grava e' esta funcao. O que mudou em
-     PR-OC-RECEB-REGISTRO-02 foi de onde os valores vem — antes de tres tabelas de
-     estado por linha, agora por parametro. Payload, validacao e chamada intactos. */
+  /* ⚠ CAMINHO UNICO DE ESCRITA desta tela. O modal nao chama `api.registrar`: ele devolve os valores e quem grava e' esta
+     funcao (os valores viajam por PARAMETRO, nunca por estado — a armadilha de closure de `setX` + `registrar` no mesmo clique). */
   const registrar = (l: LoteRecebimento, dados: { quantidade: string; pesoMedio: string; data: string }) => {
     const q = parseNumericValue(dados.quantidade) || 0;
     if (q <= 0) return;
@@ -258,63 +176,23 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
       data: dados.data || dataPadrao,
       categoria: l.categoria ?? '',
       quantidade: Math.trunc(q),
-      /* ⚠ SEM `isCompra` — PR-OC-VENDA-ENTREGA-01F. O peso vale nos dois sentidos: na
-         compra descreve o que chegou, na venda o que saiu, e os derivados da lista de
-         vendas dependem dele. Null so' quando nao ha numero. */
+      /* ⚠ SEM `isCompra` — PR-OC-VENDA-ENTREGA-01F. O peso vale nos dois sentidos. Null so' quando nao ha numero. */
       pesoMedio: pm || null,
       observacao: '',
     });
   };
 
-  const movsAtivas = api.movimentacoes.filter(m => !m.cancelado);
   const receberLote = api.lotes.find(l => l.loteId === receberLoteId) ?? null;
 
-  /* SALDO — nao confundir com o gate de leitura. `readOnly` responde "pode
-     escrever?"; isto responde "sobrou o que receber?". Faltava a segunda, e por
-     isso uma entrega 29/29 ainda oferecia "Receber".
-     Le o MESMO saldo que a linha exibe (Negociado x Recebido), sem derivar de
-     outra fonte. `estado === 'completo'` cobre o que a view ja fechou.
-     qtdNegociada NULA e' negociado DESCONHECIDO, nao zero: sem saber o alvo nao
-     da' para afirmar que nao ha saldo, entao o botao fica. */
-  const semSaldo = (l: LoteRecebimento) =>
-    l.estado === 'completo' || (l.qtdNegociada != null && l.qtdRecebida >= l.qtdNegociada);
-  const algumLoteComSaldo = api.lotes.some(l => !semSaldo(l));
-
-  // Totais soberanos (soma dos lotes) para o dialog de encerramento. Motivo obrigatório quando há
-  //   diferença ou zero recebido — a UI torna a consequência explícita; o writer já exige o motivo.
-  const totalNegociado = api.lotes.reduce((s, l) => s + (l.qtdNegociada ?? 0), 0);
-  const totalRecebido = api.lotes.reduce((s, l) => s + l.qtdRecebida, 0);
+  /* OS NUMEROS SAO DO DONO (`totaisDaEntrega`): a faixa, o total da tabela e o dialogo de encerrar leem a mesma conta. */
+  const tot = totaisDaEntrega(api.lotes, api.movimentacoes);
+  const totalNegociado = tot.negociado;
+  const totalRecebido = tot.entregue;
   const diferencaTotal = totalNegociado - totalRecebido;
   const zeroRecebido = totalRecebido === 0;
+  /* SALDO — nao confundir com o gate de leitura. `readOnly` responde "pode escrever?"; isto, "sobrou o que mover?". */
+  const algumLoteComSaldo = tot.saldo > 0 || api.lotes.some(l => l.qtdNegociada == null && l.estado !== 'completo');
 
-  /* ── DERIVACOES DA LISTA ENCERRADA (PR-OC-A18-RECEBIMENTO-01) ────────────────
-     ⚠ O ESTADO GERAL COMPOE OS VEREDITOS DOS LOTES, nao refaz o limiar.
-     `estado_recebimento` vem da VIEW, por lote; recalcular aqui recebido x
-     negociado seria a segunda copia de uma regra que ja tem dono. Compor os
-     quatro estados existentes nao inventa nenhum quinto. */
-  const semLote = api.lotes.length === 0;
-  const estadoGeral: EstadoRecebimento | null =
-    semLote ? null
-    : api.lotes.some(l => l.estado === 'excedente') ? 'excedente'
-    : api.lotes.every(l => l.estado === 'completo') ? 'completo'
-    : api.lotes.every(l => l.estado === 'nao_iniciado') ? 'nao_iniciado'
-    : 'parcial';
-
-  /* Quantas entradas cada lote teve, e a mais recente. `MovimentacaoOC` ja carrega
-     `loteId`, entao e' agrupamento do que a aba tem em maos — nenhuma consulta nova.
-     Canceladas ficam de fora porque a fonte e' `movsAtivas`, a MESMA lista que a
-     grade de movimentacoes exibe.
-     ⚠ Comparacao lexicografica sobre a ISO: 'AAAA-MM-DD' ordena como string, sem
-     Date e sem fuso. Movimentacao SEM data nao vira "ultima" — ausencia nao ganha
-     de data conhecida. */
-  const entradasPorLote = new Map<string, { n: number; ultimaIso: string | null }>();
-  for (const m of movsAtivas) {
-    const a = entradasPorLote.get(m.loteId);
-    entradasPorLote.set(m.loteId, {
-      n: (a?.n ?? 0) + 1,
-      ultimaIso: m.data && (!a?.ultimaIso || m.data > a.ultimaIso) ? m.data : (a?.ultimaIso ?? null),
-    });
-  }
   const motivoEncerrarObrigatorio = diferencaTotal !== 0 || zeroRecebido;
   const podeEncerrar = !api.saving && (!motivoEncerrarObrigatorio || motivoEncerrar.trim() !== '');
   const podeReabrir = !api.saving && motivoReabrir.trim() !== '';
@@ -324,7 +202,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
     if (!podeEncerrar) return;
     const m = motivoEncerrar.trim();
     setEncerrarOpen(false); setMotivoEncerrar('');
-    void api.encerrar(m || (rotulos?.motivoEncerrarPadrao ?? 'encerramento pela aba Recebimento'));
+    void api.encerrar(m || v.motivoEncerrarPadrao);
   };
   const submitReabrir = () => {
     if (!podeReabrir) return;
@@ -333,247 +211,65 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
     void api.reabrir(m);
   };
 
+  /* ⚠ RECEBIDO ZERO E' AUSENCIA, NAO NUMERO: "— / 10 cab" diz que ainda nao comecou; sem lote nenhum, tudo "—". */
+  const quadro = tot.semLote ? `${v.Feito} — · Saldo — · Kg méd. — · Última ${v.mov} —`
+    : `${v.Feito} ${totalRecebido === 0 ? '—' : totalRecebido} / ${totalNegociado} cab · Saldo ${tot.saldo} · Kg méd. ${tot.kgMedio != null ? formatNum(tot.kgMedio, 2) : '—'} · Última ${v.mov} ${tot.ultimaData ? `${tot.ultimaData.slice(8, 10)}/${tot.ultimaData.slice(5, 7)}/${tot.ultimaData.slice(2, 4)}` : '—'}`;
+  const avisoTexto = recusa
+    ?? (somenteLeitura ? (motivoSomenteLeitura ?? 'Operação fechada com título financeiro. Para editar, estorne o lançamento na aba Financeiro e reabra a operação.')
+      : encerrada ? `${v.encerradaTexto} · só leitura · para corrigir, reabra`
+        : `${v.abertaTexto} · uma linha por ${v.mov}; o que falta aparece em amarelo`);
+
   return (
-    <div className="rounded-md border bg-card p-1.5 shadow-sm space-y-1.5 min-w-0">{/* PR-OC-UX-DENSIDADE-01 item 5 — padding/gap reduzidos */}
-      {/* ══ BIFURCACAO POR ESTADO (PR-OC-A18-RECEBIMENTO-01) ══════════════════════
-          Os dois estados desta aba sao telas diferentes: ENCERRADO e' consulta, e
-          ABERTO e' formulario — dez colunas com DatePicker, dois Inputs e os botoes
-          Receber e Doc. por linha. Ate aqui os dois dividiam o MESMO `map`, com
-          ternarios e guardas inline; reescrever a linha de um mexia na peca do outro.
-          A bifurcacao acontece no CONTAINER: cada ramo monta a sua propria lista, e
-          nenhuma peca e' compartilhada entre os dois. */}
-      {encerrada ? (
-        <>
-          {/* ── A21 — TITULO E NUMEROS NAO ROLAM ────────────────────────────────
-              ⚠ `-mt-1.5 pt-1.5` e nao `-mt-2 pt-2`: o cartao desta aba e' `p-1.5`
-              (PR-OC-UX-DENSIDADE-01), nao `p-2` como o das irmas. A compensacao tem
-              de casar com o padding REAL, senao sobra faixa por onde as linhas
-              aparecem ao rolar. So no eixo vertical. */}
-          <div className="sticky top-0 z-10 -mt-1.5 space-y-1.5 border-b bg-card pt-1.5 pb-1.5">
-            <div className="flex items-baseline justify-between gap-3">
-              <span className="text-[12px] font-medium text-foreground min-w-0 break-words">{rotulos?.tituloSecao ?? 'Recebimento por lote na fazenda'}</span>
-              <span className="text-[11px] font-normal text-muted-foreground shrink-0">encerrado</span>
-            </div>
-            {/* ── DOIS NUMEROS ────────────────────────────────────────────────
-                `totalRecebido` e `totalNegociado` sao os MESMOS que o dialog de
-                encerramento ja usa — nao ha soma nova aqui.
-                ⚠ SEM LOTE NENHUM os dois imprimem traco. Zero seria mentira: dizer
-                "0 / 0" afirma que nada foi recebido de nada negociado, quando o que
-                ha e' ausencia de negociacao. */}
-            <div className="grid grid-cols-2 gap-2 rounded-md border bg-muted/20 px-3.5 py-[11px]">
-              <div className="min-w-0">
-                <div className="text-[11px] font-normal text-muted-foreground leading-none">{rotulos?.rotuloTotalTopo ?? 'Recebido'}</div>
-                <div className="mt-1 flex items-baseline gap-2">
-                  <span className="text-[15px] font-medium tabular-nums leading-none">
-                    {semLote ? '—' : `${totalRecebido} / ${totalNegociado}`}
-                  </span>
-                  {estadoGeral && (
-                    <span className={`shrink-0 rounded-full px-1.5 py-px text-[10px] font-normal ${TONE[estadoGeral]}`}>
-                      {LABEL[estadoGeral]}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="min-w-0">
-                <div className="text-[11px] font-normal text-muted-foreground leading-none">Cabeças</div>
-                <div className="mt-0.5 text-[15px] font-medium tabular-nums leading-none">
-                  {semLote ? '—' : `${totalNegociado} negociadas`}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* O aviso permanece com o texto e o comportamento atuais. */}
-          <div className="text-[11px] text-muted-foreground">
-            {rotulos?.avisoEncerrado ?? 'Recebimento encerrado. Use Reabrir recebimento para registrar mais movimentações.'}
-          </div>
-
-          {/* ── LISTA A18 ───────────────────────────────────────────────────────
-              Sem cabecalho de coluna, sem `#`, sem `min-w`, sem rolagem lateral — a
-              grade encerrada carregava `min-w-[427px] max-w-[427px]` e um
-              `overflow-x-auto`; nenhum dos dois sobreviveu em lote — o ramo aberto
-              perdeu os seus em PR-OC-RECEB-REGISTRO-02.
-              ⚠ DIFERENCA ZERO NAO E' RENDERIZADA: "0" numa coluna de diferenca e'
-              ruido que o operador aprende a ignorar, e ai deixa de ver o que nao e'
-              zero. Havendo falta, ela OCUPA a linha 2 inteira em ambar e a data sai:
-              o que falta vale mais que quando chegou. */}
-          {api.lotes.length === 0 ? (
-            <div className="rounded-md border border-dashed bg-muted/10 px-3 py-3 text-center text-[11px] text-muted-foreground">
-              {api.loading ? 'Carregando…' : 'Nenhum lote negociado.'}
-            </div>
-          ) : (
-            <div className="rounded-md border divide-y divide-border/60">
-              {api.lotes.map(l => {
-                const ent = entradasPorLote.get(l.loteId);
-                const falta = l.qtdNegociada != null ? l.qtdNegociada - l.qtdRecebida : 0;
-                const temFalta = falta > 0;
-                const contexto = temFalta
-                  ? `negociado ${l.qtdNegociada} · recebido ${l.qtdRecebida} · falta ${falta}`
-                  : [
-                      `negociado ${l.qtdNegociada ?? '—'}`,
-                      `recebido ${l.qtdRecebida}`,
-                      /* Uma entrada diz so a data; varias dizem quantas foram e a
-                         ultima — "3 entradas" sem data nao situa, e a data sozinha
-                         esconderia que houve mais de uma remessa. */
-                      ent == null ? null
-                        : ent.n > 1 ? `${ent.n} entradas, última ${fmtBr(ent.ultimaIso) ?? '—'}`
-                        : fmtBr(ent.ultimaIso),
-                    ].filter(Boolean).join(' · ');
-                return (
-                  <div key={l.loteId} className="px-3.5 py-1.5 leading-[1.35]">
-                    <div className="flex items-baseline justify-between gap-3">
-                      <span className="min-w-0 break-words text-[11px] font-medium text-foreground">{catLabel(l.categoria)}</span>
-                      <span className={`shrink-0 rounded-full px-1.5 py-px text-[10px] font-normal ${TONE[l.estado]}`}>
-                        {LABEL[l.estado]}
-                      </span>
-                    </div>
-                    <div className={`break-words text-[10px] font-normal ${temFalta ? 'text-amber-700 dark:text-amber-500' : 'text-muted-foreground'}`}>
-                      {contexto}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+    <div className="rounded-md border bg-card p-1.5 shadow-sm space-y-1.5 min-w-0">
+      {/* ── FAIXA DO TOPO (26px, uma linha): os numeros a' esquerda; os gestos a' direita num LUGAR RESERVADO — nada se move quando
+          um botao some. No abate, os cartoes do shell sairam: esta faixa e' o unico lugar desses numeros. */}
+      <div data-testid="faixa-entrega" className="flex items-center gap-2" style={{ height: ALTURA_FAIXA_ENTREGA }}>
+        <div data-testid="quadro-entrega" title={quadro}
+          className="flex h-full min-w-0 flex-1 items-center truncate rounded-md border bg-muted/20 px-2 text-[10.5px] tabular-nums text-foreground">
+          {quadro}
+        </div>
+        <div data-testid="gestos-entrega" className="flex w-[220px] shrink-0 items-center justify-end gap-1.5">
+          {!readOnly && algumLoteComSaldo && (
+            <Button type="button" variant="outline" size="sm" className={BOTAO_FAIXA} disabled={api.saving}
+              title="Registrar em todos os lotes a quantidade negociada" aria-label={`${v.Verbo} todos conforme negociado`}
+              onClick={() => { if (adocao) setEnviarTodosOpen(true); else void api.receberTodos(); }}>
+              {v.Verbo} todos
+            </Button>
           )}
-        </>
-      ) : (
-        <>
-          {/* ── A21 — TITULO E NUMEROS NAO ROLAM ────────────────────────────────
-              `-mt-1.5 pt-1.5` porque o cartao desta aba e' `p-1.5`, nao `p-2`. */}
-          <div className="sticky top-0 z-10 -mt-1.5 space-y-1.5 border-b bg-card pt-1.5 pb-1.5">
-            <div className="flex items-baseline justify-between gap-3">
-              <span className="text-[12px] font-medium text-foreground min-w-0 break-words">{rotulos?.tituloSecao ?? 'Recebimento por lote na fazenda'}</span>
-              {/* ATALHO DO CASO COMUM: resolve a entrega conforme negociada sem abrir
-                  modal nenhum. Some quando nao ha saldo — acao que nao faz nada e' pior
-                  que acao ausente. */}
-              {!readOnly && algumLoteComSaldo && (
-                <button type="button" disabled={api.saving}
-                  onClick={() => { if (adocao) setEnviarTodosOpen(true); else void api.receberTodos(); }}
-                  title="Registrar em todos os lotes a quantidade negociada"
-                  aria-label={rotulos?.movimentarTodos ?? 'Receber todos conforme negociado'}
-                  className="shrink-0 text-[11px] font-normal text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline">
-                  {rotulos?.movimentarTodosTexto ?? 'Receber todos conforme negociado'}
-                </button>
-              )}
-            </div>
-            <div className="grid grid-cols-2 gap-2 rounded-md border bg-muted/20 px-3.5 py-[11px]">
-              <div className="min-w-0">
-                <div className="text-[11px] font-normal text-muted-foreground leading-none">{rotulos?.rotuloTotalTopo ?? 'Recebido'}</div>
-                <div className="mt-1 flex items-baseline gap-2">
-                  {/* ⚠ RECEBIDO ZERO E' AUSENCIA, NAO NUMERO. "0 / 10" afirma que se
-                      contou e deu zero; "— / 10" diz que ainda nao comecou. */}
-                  <span className="text-[15px] font-medium tabular-nums leading-none">
-                    {semLote ? '—' : `${totalRecebido === 0 ? '—' : totalRecebido} / ${totalNegociado}`}
-                  </span>
-                  {estadoGeral && (
-                    <span className={`shrink-0 rounded-full px-1.5 py-px text-[10px] font-normal ${TONE[estadoGeral]}`}>
-                      {LABEL[estadoGeral]}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="min-w-0">
-                <div className="text-[11px] font-normal text-muted-foreground leading-none">Cabeças</div>
-                <div className="mt-0.5 text-[15px] font-medium tabular-nums leading-none">
-                  {semLote ? '—' : `${totalNegociado} negociadas`}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {somenteLeitura && (
-            <div className="text-[11px] text-muted-foreground" data-testid={motivoSomenteLeitura ? 'entrega-somente-leitura' : undefined}>
-              {motivoSomenteLeitura ?? 'Operação fechada com título financeiro. Para editar, estorne o lançamento na aba Financeiro e reabra a operação.'}
-            </div>
+          {!readOnly && (
+            <Button type="button" size="sm" className={BOTAO_FAIXA} disabled={api.saving}
+              onClick={() => { setMotivoEncerrar(''); setEncerrarOpen(true); }}>Encerrar</Button>
           )}
-
-          {/* ── LISTA A18 ───────────────────────────────────────────────────────
-              Eram ONZE colunas, tres delas de entrada. Nao cabiam: a data renderizava
-              "28/08/202" com o ano cortado dentro do input, e "QTD. A RECEBER" quebrava
-              em duas linhas no cabecalho. Os campos sairam da linha e foram para um
-              modal por lote — mesmo caminho que a Negociacao adotou em
-              PR-OC-UX-LOTE-C2-01, pela mesma razao.
-              ⚠ AMBAR SO ONDE HA DESVIO. Faltar tudo antes de comecar e' o estado normal
-              de partida, e pintar isso de ambar ensina o operador a ignorar o ambar —
-              ai ele perde o parcial, que e' o caso que importa.
-              ⚠ ESTADO E DIFERENCA DIZIAM O MESMO em duas colunas. Sobrou um: a pilula
-              aparece quando nao ha mais o que receber; havendo saldo, o lugar e' da
-              ACAO, que e' o que o operador precisa ali. */}
-          {adocao ? (
-            <EntregasVendaTabela
-              api={api}
-              catLabel={catLabel}
-              readOnly={!!readOnly}
-              fazendaNome={adocao.fazendaNome}
-              contraparteNome={adocao.contraparteNome}
-              lado={adocao.lado}
-              onRegistrarNova={setReceberLoteId}
-              onEstornar={(id) => void api.estornar(id, rotulos?.motivoEstornoPadrao ?? 'estorno pela aba Recebimento')}
-            />
-          ) : api.lotes.length === 0 ? (
-            <div className="rounded-md border border-dashed bg-muted/10 px-3 py-3 text-center text-[11px] text-muted-foreground">
-              {api.loading ? 'Carregando…' : 'Nenhum lote negociado.'}
-            </div>
-          ) : (
-            <div className="rounded-md border divide-y divide-border/60">
-              {api.lotes.map(l => {
-                const ent = entradasPorLote.get(l.loteId);
-                const falta = l.qtdNegociada != null ? l.qtdNegociada - l.qtdRecebida : null;
-                const naoIniciado = l.qtdRecebida === 0;
-                const excede = falta != null && falta < 0;
-                const temFalta = falta != null && falta > 0;
-                const atencao = excede || (temFalta && !naoIniciado);
-                const neg = l.qtdNegociada ?? '—';
-                const contexto =
-                  naoIniciado ? `negociado ${neg} · a receber ${falta ?? neg}`
-                  : excede ? `negociado ${neg} · recebido ${l.qtdRecebida} · excedente ${-falta!}`
-                  : temFalta ? `negociado ${neg} · recebido ${l.qtdRecebida} · falta ${falta}`
-                  : [
-                      `negociado ${neg}`, `recebido ${l.qtdRecebida}`,
-                      ent == null ? null
-                        : ent.n > 1 ? `${ent.n} entradas, última ${fmtBr(ent.ultimaIso) ?? '—'}`
-                        : fmtBr(ent.ultimaIso),
-                    ].filter(Boolean).join(' · ');
-                return (
-                  <div key={l.loteId} className="flex items-center gap-3 px-3.5 py-1.5 leading-[1.35]">
-                    <div className="min-w-0 flex-1">
-                      <div className="break-words text-[11px] font-medium text-foreground">{catLabel(l.categoria)}</div>
-                      <div className={`break-words text-[10px] font-normal ${atencao ? 'text-amber-700 dark:text-amber-500' : 'text-muted-foreground'}`}>
-                        {contexto}
-                      </div>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-[11px]">
-                      {!readOnly && !semSaldo(l) ? (
-                        <button type="button" disabled={api.saving} onClick={() => setReceberLoteId(l.loteId)}
-                          title={rotulos?.registrarDoLote ?? 'Registrar o recebimento deste lote'}
-                          aria-label={rotulos?.acaoLoteAria ? rotulos.acaoLoteAria(catLabel(l.categoria)) : `Receber lote ${catLabel(l.categoria)}`}
-                          className="text-[11px] font-normal text-primary hover:underline disabled:cursor-not-allowed disabled:text-muted-foreground disabled:no-underline">
-                          {rotulos?.acaoLote ?? 'Receber'}
-                        </button>
-                      ) : (
-                        <span className={`rounded-full px-1.5 py-px text-[10px] font-normal ${TONE[l.estado]}`}>{LABEL[l.estado]}</span>
-                      )}
-                      {!readOnly && documentosApi && (
-                        <button type="button" onClick={() => setDocLoteId(l.loteId)}
-                          title="Registrar documento deste lote"
-                          aria-label={`Registrar documento do lote ${catLabel(l.categoria)}`}
-                          className="text-muted-foreground/70 hover:text-foreground">
-                          <FileText className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+          {encerrada && !somenteLeitura && (
+            <Button type="button" variant="outline" size="sm" className={BOTAO_FAIXA} disabled={api.saving}
+              onClick={() => { setMotivoReabrir(''); setReabrirOpen(true); }}>Reabrir</Button>
           )}
-        </>
-      )}
+        </div>
+      </div>
 
-      {/* ⚠ MESMO CAMINHO DE GRAVACAO. O modal nao chama `api.registrar` direto: ele
-          devolve os valores e quem grava continua sendo `registrar`, a unica funcao de
-          escrita desta tela. Ver o comentario dela sobre por que os valores viajam por
-          PARAMETRO e nao por estado. */}
+      {/* ── AVISO (20px, uma linha): o estado da aba, o motivo da leitura, ou a recusa do banco (sempre aqui, nunca em toast). */}
+      <div data-testid={somenteLeitura && motivoSomenteLeitura && !recusa ? 'entrega-somente-leitura' : 'aviso-entrega'} title={avisoTexto}
+        className={cn('truncate text-[10px] leading-[20px]', recusa ? 'text-destructive' : 'text-muted-foreground')}
+        role={recusa ? 'alert' : undefined} style={{ height: ALTURA_AVISO_ENTREGA }}>
+        {avisoTexto}
+      </div>
+
+      <EntregasVendaTabela
+        api={api}
+        catLabel={catLabel}
+        readOnly={!!readOnly}
+        lado={ladoEfetivo}
+        comAdocao={!!adocao}
+        fazendaNome={adocao?.fazendaNome ?? null}
+        contraparteNome={adocao?.contraparteNome ?? null}
+        onRegistrarNova={setReceberLoteId}
+        onEstornar={(id) => void api.estornar(id, v.motivoEstornoPadrao)}
+        /* o 📎 fica onde ja' existia (sem adocao: o abate); com a entrega encerrada so' ele resta, salvo somente leitura */
+        onDocumento={!adocao && documentosApi && !somenteLeitura ? setDocLoteId : undefined}
+        onRecusa={setRecusa}
+      />
+
+      {/* ⚠ MESMO CAMINHO DE GRAVACAO: o modal devolve os valores e quem grava e' `registrar`. */}
       {receberLote && (
         <ReceberLoteDialog
           key={receberLote.loteId}
@@ -581,73 +277,11 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
           rotulo={catLabel(receberLote.categoria)}
           pesoSugerido={pesoInicial(receberLote)}
           hoje={dataPadrao}
-          isCompra={isCompra}
-          r={rotulos}
+          v={v}
           saving={api.saving}
           onFechar={() => setReceberLoteId(null)}
           onGravar={(dados) => { registrar(receberLote, dados); setReceberLoteId(null); }}
         />
-      )}
-
-      {/* Movimentações registradas (com estorno antes do encerramento). Com `adocao` e a entrega aberta, a tabela
-          por saida ja' mostra cada uma, com estornar/desvincular na linha. */}
-      {movsAtivas.length > 0 && !(adocao && !encerrada) && (
-        <div className="space-y-0.5">
-          <div className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">Movimentações registradas</div>
-          {/* Era uma frase por movimentacao, com os campos separados por bolinhas: nada
-              alinhava com nada e comparar duas linhas exigia ler a frase inteira.
-              Vira tabela, com as MESMAS regras da tabela de lotes. */}
-          <div className="overflow-x-auto">
-            <div className={readOnly ? MINW_MOV_RO : MINW_MOV}>
-              <div className={`${readOnly ? GRID_MOV_RO : GRID_MOV} ${CX_CAB} pb-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground [&>span]:text-center`}>
-                {/* "Data" era ambiguo: a mesma operacao tem data de compra, de
-                    vencimento e de chegada.
-                    ⚠ "Data do recebimento" NAO CABE: a coluna tem ~72px (0.72fr de 432px
-                    uteis) e o rotulo pede ~124px a 10px — quebraria em duas linhas.
-                    "Recebimento" sozinho ja desambigua e cabe. Abreviar para "Dt. Receb."
-                    devolveria a duvida que o rotulo existe para tirar. A coluna foi
-                    alargada de 0.72 para 1.0fr para receber o rotulo com folga. */}
-                <span>{rotulos?.colunaData ?? 'Recebimento'}</span><span>Categoria</span><span>Quantidade</span><span>Peso méd.</span>
-                {!readOnly && <span>Ações</span>}
-              </div>
-              {movsAtivas.map(m => (
-                <div key={m.id} className={`${readOnly ? GRID_MOV_RO : GRID_MOV} items-center rounded-md ${CX_LIN} bg-muted/10 py-0.5`}>
-                  <div className="text-[11px] text-center tabular-nums">{fmtBr(m.data) ?? '—'}</div>
-                  <div className="text-[11px] break-words">{catLabel(m.categoria)}</div>
-                  <div className="text-[11px] text-right tabular-nums">{m.quantidade} cab</div>
-                  <div className="text-[11px] text-right tabular-nums">{m.pesoMedio != null ? `${formatMed2(m.pesoMedio)} kg` : '—'}</div>
-                  {!readOnly && (
-                    <div className="flex items-center justify-center">
-                      <Button type="button" variant="ghost" size="sm" className="h-5 px-1.5 text-[10px] text-muted-foreground hover:text-destructive gap-1"
-                        disabled={api.saving} onClick={() => void api.estornar(m.id, rotulos?.motivoEstornoPadrao ?? 'estorno pela aba Recebimento')}>
-                        <Undo2 className="h-3 w-3" /> Estornar
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {!readOnly && (
-        <div className="flex justify-end pt-1">
-          <Button type="button" variant="outline" size="sm" className="h-[22px] px-[9px] text-[10px] font-medium gap-1" disabled={api.saving}
-            onClick={() => { setMotivoEncerrar(''); setEncerrarOpen(true); }}>
-            <Lock className="h-3 w-3" /> Encerrar recebimento
-          </Button>
-        </div>
-      )}
-      {/* Reabertura: só quando a entrega está encerrada e a operação não é somente-leitura (ex.: cancelada).
-          Não altera a negociação — se programada, após reabrir volta a "indisponível" pelos gates. */}
-      {encerrada && !somenteLeitura && (
-        <div className="flex justify-end pt-1">
-          <Button type="button" variant="outline" size="sm" className="h-[22px] px-[9px] text-[10px] font-medium gap-1" disabled={api.saving}
-            onClick={() => { setMotivoReabrir(''); setReabrirOpen(true); }}>
-            <Undo2 className="h-3 w-3" /> Reabrir recebimento
-          </Button>
-        </div>
       )}
 
       {enviarTodosOpen && (
@@ -656,55 +290,54 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
           dataPadrao={dataPadrao}
           catLabel={catLabel}
           saving={api.saving}
-          lado={adocao?.lado}
+          lado={ladoEfetivo}
           onFechar={() => setEnviarTodosOpen(false)}
           onConfirmar={(datas) => { setEnviarTodosOpen(false); void api.receberTodos(datas); }}
         />
       )}
 
-      {/* Encerramento com consequência EXPLÍCITA (substitui a confirmação fraca). Motivo obrigatório quando
-          há diferença ou zero recebido; alerta forte + botão destrutivo quando nada foi recebido. */}
+      {/* Encerramento com consequência EXPLÍCITA. Motivo obrigatório quando há diferença ou zero movimentado. */}
       <Dialog open={encerrarOpen} onOpenChange={o => { if (!o) setEncerrarOpen(false); }}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle className="text-[12px]">{rotulos?.tituloEncerrar ?? 'Encerrar recebimento'}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="text-[12px]">{`Encerrar ${v.Aba.toLowerCase()}`}</DialogTitle></DialogHeader>
           <div className="space-y-2 text-[11px]">
             <div className="grid grid-cols-3 gap-1.5">
               <div className="rounded border bg-muted/30 px-1.5 py-1"><div className="text-[10px] text-muted-foreground">Negociado</div><div className="font-semibold tabular-nums">{totalNegociado}</div></div>
-              <div className="rounded border bg-muted/30 px-1.5 py-1"><div className="text-[10px] text-muted-foreground">{rotulos?.rotuloTotal ?? 'Recebido'}</div><div className="font-semibold tabular-nums">{totalRecebido}</div></div>
+              <div className="rounded border bg-muted/30 px-1.5 py-1"><div className="text-[10px] text-muted-foreground">{v.Feito}</div><div className="font-semibold tabular-nums">{totalRecebido}</div></div>
               <div className={`rounded border px-1.5 py-1 ${diferencaTotal !== 0 ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/30' : 'bg-muted/30'}`}><div className="text-[10px] text-muted-foreground">Diferença</div><div className={`font-semibold tabular-nums ${diferencaTotal !== 0 ? 'text-amber-700 dark:text-amber-300' : ''}`}>{diferencaTotal}</div></div>
             </div>
             {zeroRecebido ? (
               <div className="flex items-start gap-1.5 rounded border border-destructive bg-destructive/10 px-2 py-1.5 text-[11px] text-destructive">
                 <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                <span>{rotulos?.nenhumMovimentado ?? 'Nenhum animal foi recebido. Deseja encerrar esta entrega mesmo assim?'}</span>
+                <span>{`Nenhum animal foi ${v.feito}. Deseja encerrar ${v.artigoAba} mesmo assim?`}</span>
               </div>
             ) : (
               <div className="text-[11px] text-muted-foreground">
-                Após encerrar, novos recebimentos ficarão bloqueados e a reabertura exigirá justificativa.
+                {`Após encerrar, novas ${v.movs} ficarão bloqueadas e a reabertura exigirá justificativa.`}
               </div>
             )}
             <div>
               <div className="text-[11px] font-medium">Motivo{motivoEncerrarObrigatorio ? ' *' : ' (opcional)'}</div>
               <Textarea value={motivoEncerrar} onChange={e => setMotivoEncerrar(e.target.value)} rows={2}
-                className="mt-0.5 text-[11px]" placeholder={motivoEncerrarObrigatorio ? (rotulos?.placeholderJustificativa ?? 'Justifique a diferença / ausência de recebimento') : 'Opcional'} />
+                className="mt-0.5 text-[11px]" placeholder={motivoEncerrarObrigatorio ? `Justifique a diferença / ausência de ${v.movs}` : 'Opcional'} />
             </div>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" size="sm" className="h-[22px] px-[9px] text-[10px] font-medium " onClick={() => setEncerrarOpen(false)}>Cancelar</Button>
             <Button type="button" size="sm" className="h-[22px] px-[9px] text-[10px] font-medium " variant={zeroRecebido ? 'destructive' : 'default'} disabled={!podeEncerrar} onClick={submitEncerrar}>
-              Encerrar entrega
+              {`Encerrar ${v.Aba.toLowerCase()}`}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Reabertura AUDITADA da entrega (não altera a negociação). Motivo obrigatório. */}
+      {/* Reabertura AUDITADA (não altera a negociação). Motivo obrigatório. */}
       <Dialog open={reabrirOpen} onOpenChange={o => { if (!o) setReabrirOpen(false); }}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle className="text-[12px]">{rotulos?.tituloReabrir ?? 'Reabrir recebimento'}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="text-[12px]">{`Reabrir ${v.Aba.toLowerCase()}`}</DialogTitle></DialogHeader>
           <div className="space-y-2 text-[11px]">
             <div className="text-[11px] text-muted-foreground">
-              {rotulos?.avisoReabrir ? rotulos.avisoReabrir : (<>Esta ação é <b>auditada</b>: reabre a entrega para novos recebimentos e fica registrada com o motivo informado. <b>Não</b> altera a negociação — se a operação estiver programada, o recebimento seguirá indisponível até a negociação ser concluída.</>)}
+              Esta ação é <b>auditada</b>: reabre {v.artigoAba} para novas {v.movs} e fica registrada com o motivo informado. <b>Não</b> altera a negociação — se a operação estiver programada, {v.artigoAba} seguirá indisponível até a negociação ser concluída.
             </div>
             <div>
               <div className="text-[11px] font-medium">Motivo *</div>
@@ -720,8 +353,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
       </Dialog>
 
       {/* Registro rápido de documento no contexto do lote — reutiliza o cadastro OFICIAL (DocumentoFormOC)
-          com a instância única documentosApi. Ao salvar: fecha, dados atualizam (mesmo hook) e permanece aqui.
-          A aba Documentos segue sendo a tela oficial de consulta/manutenção completa. */}
+          com a instância única documentosApi. A aba Documentos segue sendo a tela oficial. */}
       {documentosApi && (
         <Dialog open={!!docLoteId} onOpenChange={o => { if (!o) setDocLoteId(null); }}>
           <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">

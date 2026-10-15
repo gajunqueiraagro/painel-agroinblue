@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 15/10/2026 (OC-DOC-ESPECIE-ABATE-01 passo 4 + 4b, +26: `src/lib/oc/leitura/leituraAbate.test.ts` 21 (novo),
+  Baseline em 15/10/2026 (OC-ENTREGA-COMPACTA-01, +9 em `src/components/venda/entregasVenda.test.tsx` (10 -> 19) — 5271 depois
+  dele; antes o OC-DOC-ESPECIE-ABATE-01 passo 4 + 4b, +26: `src/lib/oc/leitura/leituraAbate.test.ts` 21 (novo),
   `src/components/compra/documentoFormAbate.test.tsx` 4 (11 -> 15), `src/lib/oc/camposDaEspecie.test.ts` 1 (14 -> 15) — 5262 depois
   dele; antes o passo 3, +12: `src/lib/oc/conferirDocumentosAbate.test.ts` 10 (novo),
   `src/components/compra/documentoFormAbate.test.tsx` 2 (9 -> 11) — 5236 depois dele; antes o passo 2, +21: `src/lib/oc/camposDaEspecie.test.ts` 14 (novo),
@@ -325,7 +326,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5262
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5271
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -1279,8 +1280,8 @@ preview que o cabecalho nao sai da tela ao rolar.
     quebrar e passou a cortar — nao ha' terceira variante).
   · ⚠ O RESUMO LATERAL FICA FORA, POR DECISAO: `LinhaResumo` com `quebra` (texto livre em ate' duas linhas, 16 usos) nao e'
     tabela e nao mudou — o paragrafo abaixo continua valendo PARA ELE.
-  · ⚠ DIVIDA — tabelas que ainda empilham texto: `AbaRecebimentoLotes.tsx`, `EntregasVendaTabela.tsx`,
-    `BuscarDespesaOCDialog.tsx` e a lista de DATAS na previa do ajuste de preco (`TD_DATAS_DA_PREVIA` em `AbaContaCorrenteOC`:
+  · ⚠ DIVIDA — tabelas que ainda empilham texto [`AbaRecebimentoLotes.tsx` e `EntregasVendaTabela.tsx` sairam no
+    OC-ENTREGA-COMPACTA-01, 15/10/2026: uma tabela de linha de 22px, nada quebra]: `BuscarDespesaOCDialog.tsx` e a lista de DATAS na previa do ajuste de preco (`TD_DATAS_DA_PREVIA` em `AbaContaCorrenteOC`:
     data nao se corta e a coluna nao foi medida). Os comentarios ⚠ de ~24 arquivos que citam a regra antiga ("reticencia
     proibida") NAO foram varridos — so' os dos arquivos tocados.
 - ⚠ NO RESUMO LATERAL O TEXTO LIVRE QUEBRA EM DUAS LINHAS (regra do Gabriel de 27/09/2026, no MODAIS-PADRAO-01e — vale so' para

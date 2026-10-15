@@ -673,14 +673,6 @@ export function AbateModalShell({
      ao guard, e só o front é que não sabia. Movimentação CANCELADA não conta. */
   const temAbateAtivo = (recebimentoApi?.movimentacoes ?? []).some(m => m.cancelado !== true);
 
-  const dataEntrega = useMemo(() => {
-    const datas = (recebimentoApi?.movimentacoes ?? [])
-      .filter(m => !m.cancelado && m.data)
-      .map(m => m.data)
-      .sort();
-    return datas.length > 0 ? datas[datas.length - 1] : null;
-  }, [recebimentoApi?.movimentacoes]);
-
   /* ⚠ "M PESSOAS" CONTA `usuarioId` DISTINTO, e o `null` (acao do proprio banco, por
      trigger ou RPC de sistema) NAO entra: ele nao e' uma pessoa. */
   const auditoria = useMemo(() => {
@@ -812,14 +804,8 @@ export function AbateModalShell({
                 dois lados, e por isso nenhum rotulo de CAMPO entra no dicionario. */}
             {abaAtiva === 'entrega' && recebimentoApi ? (
               <div className="space-y-2">
-              <BlocoTopoAba escala="modal" itens={[
-                { rotulo: 'Entregue', valor: entrega.recebido == null ? null
-                    : `${entrega.recebido} / ${entrega.negociado ?? '—'} cab` },
-                { rotulo: 'Saldo a entregar', valor: entrega.diferenca == null ? null
-                    : `${Math.max(0, -entrega.diferenca)} cab` },
-                { rotulo: 'Data da entrega', valor: dataEntrega ? dataEntrega.split('-').reverse().join('/') : null,
-                  contexto: dataEntrega ? 'última saída registrada' : null },
-              ]} />
+              {/* OC-ENTREGA-COMPACTA-01 — os cartoes (Entregue · Saldo a entregar · Data da entrega) SAIRAM daqui: a faixa da
+                  aba e' o unico lugar desses numeros. O `BlocoTopoAba` das outras abas fica. */}
               <AbaRecebimentoLotes
                 api={recebimentoApi}
                 operacaoPronta={!!ocOperacaoId}
@@ -833,36 +819,7 @@ export function AbateModalShell({
                 somenteLeitura={ocStatusComercial === 'cancelada' || !!motivoGado}
                 motivoSomenteLeitura={motivoGado ?? undefined}
                 onVoltarNegociacao={() => setAbaAtiva('negociacao')}
-                rotulos={{
-                  /* ⚠ EIXO "SAIDA/ENVIAR", e nao "entrega/entregar" — decisao do Gabriel.
-                     A ABA continua se chamando Entrega, e os motivos gravados no banco
-                     continuam dizendo "aba Entrega": o nome do lugar nao muda, o verbo do
-                     ato sim. Quem le a auditoria daqui a um ano precisa achar a aba. */
-                  tituloSecao: 'Saída dos animais da fazenda',
-                  tituloDialogo: (r) => `Enviar · ${r}`,
-                  jaMovimentado: 'já entregue',
-                  informeQuantidade: 'Informe a quantidade entregue',
-                  indisponivelTitulo: 'Entrega indisponível — negociação ainda não concluída',
-                  indisponivelDetalhe: 'Conclua a negociação (botão “Concluir negociação”) para registrar a entrega física.',
-                  movimentarTodos: 'Enviar todos conforme negociado',
-                  movimentarTodosTexto: 'Enviar todos conforme negociado',
-                  acaoLote: 'Enviar',
-                  acaoLoteAria: (cat) => `Enviar lote ${cat}`,
-                  rotuloTotalTopo: 'Saídas',
-                  avisoEncerrado: 'Saída encerrada. Use Reabrir entrega para registrar mais movimentações.',
-                  registrarDoLote: 'Registrar a saída deste lote',
-                  colunaData: 'Entrega',
-                  /* ⚠ TAMBEM "Saídas" no dialogo de encerrar, por coerencia com o topo — e'
-                     o mesmo contador. Inferido do eixo aprovado, e nao pedido item a item. */
-                  rotuloTotal: 'Saídas',
-                  tituloEncerrar: 'Encerrar entrega',
-                  nenhumMovimentado: 'Nenhum animal foi entregue. Deseja encerrar esta entrega mesmo assim?',
-                  placeholderJustificativa: 'Justifique a diferença / ausência de entrega',
-                  tituloReabrir: 'Reabrir entrega',
-                  avisoReabrir: (<>Esta ação é <b>auditada</b>: reabre a entrega para novas saídas e fica registrada com o motivo informado. <b>Não</b> altera a negociação — se a operação estiver programada, a entrega seguirá indisponível até a negociação ser concluída.</>),
-                  motivoEncerrarPadrao: 'encerramento pela aba Entrega',
-                  motivoEstornoPadrao: 'estorno pela aba Entrega',
-                }}
+                lado="abate"
               />
               </div>
             ) : (<>
