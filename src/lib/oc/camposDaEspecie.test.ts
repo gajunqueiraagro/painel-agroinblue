@@ -23,14 +23,14 @@ describe('camposDaEspecie', () => {
       ['Número*', 'Série*', 'Emissão*', 'Data do abate', 'Lote'],
       ['Emitente*', 'Chave de acesso'],
       ['Cab*', 'Carcaça kg*', '@=', 'R$/@', 'Bruto R$*'],
-      ['Funrural', 'SENAR', 'Seguro', 'Retenções R$=', 'Líquido R$='],
-      ['NF produtor ref.', 'Valor NF produtor', 'Observação'],
+      ['Funrural', 'SENAR', 'Seguro', 'RAT', 'Retenções R$='],
+      ['Líquido R$=', 'NF produtor', 'Valor NF produtor', 'Observação'],
     ]);
   });
 
   it('Acerto: sem serie; o liquido digitado e as retencoes calculadas', () => {
     expect(rotulos('abate', 'acerto')).toEqual([
-      ['Ordem de compra*', 'Lote frigorífico', 'Data do abate*', 'Vencimento', 'Lote'],
+      ['Ordem compra / Pedido*', 'Lote frigorífico', 'Data do abate*', 'Vencimento', 'Lote'],
       ['Cab*', 'Carcaça kg*', '@=', 'R$/@', 'Bruto R$*'],
       ['Retenções R$=', 'Líquido R$*', 'Observação'],
     ]);
@@ -87,6 +87,20 @@ describe('formDocumentoAbate', () => {
       .toEqual(['1:valor_bruto:98135.31', '2:funrural:1295.39', '3:senar:196.27', '4:seguro:107.95', '5:bonificacao:10']);
   });
 
+  it('passo 4: o RAT tem tipo proprio na NF; as NFs do produtor vao para dados.nfs_produtor (a NPR segue com nf_referida)', () => {
+    const f = formAbateDoDetalhe(detalhe({ componentes: [
+      { tipo: 'valor_bruto', natureza: 'acrescimo', valor: 215969.33, ordem: 1 },
+      { tipo: 'rat', natureza: 'retencao_sem_caixa', valor: 237.57, ordem: 2 },
+      { tipo: 'outros', natureza: 'retencao_sem_caixa', valor: 237.57, ordem: 3, descricao: 'RAT' },
+    ], dados: { nfs_produtor: [{ numero: '9444845', data: '2026-10-09', valor: null }] } }));
+    expect(f.rat).toBe(237.57);
+    expect(f.preservados.map(c => c.tipo)).toEqual(['outros']);
+    expect(f.nfsProdutor).toEqual([{ numero: '9444845', data: '2026-10-09', valor: null }]);
+    const p = payloadDoFormAbate({ ...f, nfsProdutor: [...f.nfsProdutor, { numero: '9444790', data: null, valor: null }] });
+    expect(p.componentes.map(c => c.tipo)).toEqual(['valor_bruto', 'rat', 'outros']);
+    expect(p.dados).toEqual({ nfs_produtor: [{ numero: '9444845', data: '2026-10-09', valor: null }, { numero: '9444790', data: null, valor: null }] });
+  });
+
   it('o "outros" de descricao Seguro NAO vira Seguro na tela (so o tipo decide)', () => {
     const f = formAbateDoDetalhe(detalhe({
       componentes: [{ tipo: 'outros', natureza: 'retencao_sem_caixa', valor: 107.95, ordem: 1, descricao: 'Seguro' }],
@@ -133,7 +147,7 @@ describe('formDocumentoAbate', () => {
 
   it('pendencias pelos rotulos; o emitente vazio vale como a contraparte', () => {
     expect(pendenciasDoFormAbate(formAbateVazio('acerto'), 'f1').map(p => p.rotulo))
-      .toEqual(['Ordem de compra', 'Data do abate', 'Cab', 'Carcaça kg', 'Bruto R$', 'Líquido R$']);
+      .toEqual(['Ordem compra / Pedido', 'Data do abate', 'Cab', 'Carcaça kg', 'Bruto R$', 'Líquido R$']);
     expect(pendenciasDoFormAbate(formAbateVazio('nf_principal'), 'f1').map(p => p.rotulo)).not.toContain('Emitente');
     expect(pendenciasDoFormAbate(formAbateVazio('nf_principal'), null).map(p => p.rotulo)).toContain('Emitente');
     const errado = { ...formAbateVazio('acerto'), bruto: 10, liquido: 20 };

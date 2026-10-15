@@ -11,7 +11,9 @@ import type { DocumentosApi, DocumentoDetalhe, DocumentoLista, DocumentoPayload 
 vi.mock('@/integrations/supabase/client', () => ({ supabase: { rpc: vi.fn(), from: vi.fn(), storage: { from: vi.fn() } } }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() } }));
 vi.mock('@/hooks/useFornecedoresDoCliente', async () => (await import('@/test/leitorDeFornecedoresFake')).moduloDoLeitorFake());
-vi.mock('@/lib/financeiro/parser/extractPdfText', () => ({ extractPdfText: vi.fn(async () => ({ text: 'DANFE', hasTextLayer: true })) }));
+/* passo 4: o formulario le' o PDF em LINHAS; o texto padrao nao bate com layout nenhum e cai no DANFE de sempre (mockado). */
+const leitorLinhas = vi.hoisted(() => ({ extrairLinhasPdf: vi.fn(async (_f: File) => ({ linhas: ['DANFE'], paginas: 1, temTexto: true })) }));
+vi.mock('@/lib/oc/leitura/linhasDoPdf', () => leitorLinhas);
 vi.mock('@/lib/oc/extrairDanfe', () => ({ extrairDanfe: vi.fn(() => ({
   chaveAcesso: null, numero: '8812', serie: '2', dataEmissao: '2026-10-01', emitenteCnpj: '11.222.333/0001-81',
   emitenteNome: 'FRIGORIFICO BOI GORDO LTDA', destinatarioNome: null, valorTotal: 98135.31, daChave: false,
@@ -21,6 +23,8 @@ import { AbaDocumentosOC } from './AbaDocumentosOC';
 import { ALTURA_AREA_CAMPOS, DocumentoFormAbate, FRASE_ESPECIE_FIXA } from './DocumentoFormAbate';
 import { formAbateVazio } from '@/lib/oc/formDocumentoAbate';
 import { definirFornecedoresDoLeitor } from '@/test/leitorDeFornecedoresFake';
+import { ACERTO_MINERVA, ROMANEIO_MINERVA } from '@/lib/oc/leitura/__fixtures__/linhasAbate';
+import { FRASE_SEM_TEXTO } from '@/lib/oc/leitura/layoutsAbate';
 
 const registrar = vi.fn(async (_p: DocumentoPayload) => 'doc-1');
 const doc = (p: Partial<DocumentoLista>): DocumentoLista => ({
@@ -70,7 +74,7 @@ describe('aba Documentos do abate', () => {
       expect(assinatura()).toBe(base);
       vistos[e] = area.querySelectorAll('[data-campo]').length;
     }
-    expect(vistos).toEqual({ NF: 20, NPR: 6, Acerto: 13, Romaneio: 7, Outro: 8 });
+    expect(vistos).toEqual({ NF: 21, NPR: 6, Acerto: 13, Romaneio: 7, Outro: 8 });
   });
 
   it('obrigatorio que falta fica vermelho e a faixa diz o que falta; nada e gravado', () => {
@@ -78,7 +82,7 @@ describe('aba Documentos do abate', () => {
     fireEvent.click(screen.getByRole('button', { name: /Novo documento/ }));
     fireEvent.click(within(screen.getByTestId('linha-especie')).getByRole('button', { name: 'Acerto' }));
     fireEvent.click(screen.getByRole('button', { name: /Registrar documento/ }));
-    expect(screen.getByTestId('faixa-conferencia').textContent).toMatch(/^falta: Ordem de compra, Data do abate, Cab, Carcaça kg, Bruto R\$, Líquido R\$/);
+    expect(screen.getByTestId('faixa-conferencia').textContent).toMatch(/^falta: Ordem compra \/ Pedido, Data do abate, Cab, Carcaça kg, Bruto R\$, Líquido R\$/);
     expect(registrar).not.toHaveBeenCalled();
   });
 
@@ -187,6 +191,55 @@ describe('aba Documentos do abate', () => {
     fireEvent.click(await screen.findByTestId('usar-candidato'));
     expect(await screen.findByText(/já tem o CNPJ 11.222.333\/0002-62.*mesma raiz: outra filial\?.*nada foi alterado/)).toBeInTheDocument();
     expect(gravar).not.toHaveBeenCalled();
+  });
+
+  it('passo 4 — NF: o RAT entra nas retencoes e vai como componente proprio', async () => {
+    montar('abate');
+    fireEvent.click(screen.getByRole('button', { name: /Novo documento/ }));
+    const campo = (k: string) => screen.getByTestId('area-campos').querySelector(`[data-campo=${k}] input`)!;
+    const moeda = (k: string, v: string) => { fireEvent.focus(campo(k)); fireEvent.change(campo(k), { target: { value: v } }); fireEvent.blur(campo(k)); };
+    moeda('bruto', '215.969,33'); moeda('funrural', '2.850,79'); moeda('senar', '431,94'); moeda('rat', '237,57');
+    expect(screen.getByTestId('area-campos').querySelector('[data-campo=retencoes]')!.textContent).toContain('3.520,30');
+    expect(screen.getByTestId('area-campos').querySelector('[data-campo=liquido]')!.textContent).toContain('212.449,03');
+    fireEvent.click(screen.getByRole('button', { name: /Registrar documento/ }));
+    expect(registrar).not.toHaveBeenCalled(); /* faltam numero, serie etc.: so' o calculo foi provado */
+  });
+
+  it('passo 4 — NF produtor: numeros por virgula, " · " em repouso, e o valor vira a soma (calculado) com 2+', () => {
+    render(<DocumentoFormAbate api={api()} initialForm={formAbateVazio('nf_principal')} contraparteId="cp" clienteId="cli"
+      onSaved={() => {}} onCancel={() => {}} />);
+    const nfs = screen.getByTestId('nfs-produtor');
+    fireEvent.focus(nfs); fireEvent.change(nfs, { target: { value: '9444845, 9444790' } }); fireEvent.blur(nfs);
+    expect((nfs as HTMLInputElement).value).toBe('9444845 · 9444790');
+    const valor = screen.getByTestId('area-campos').querySelector('[data-campo=nfsProdutorValor]')!;
+    expect(valor.querySelector('[data-calculado]')!.textContent).toBe('—');
+  });
+
+  it('passo 4 — soltar o PDF na EDICAO preenche so os vazios e a faixa diz quantos', async () => {
+    leitorLinhas.extrairLinhasPdf.mockResolvedValueOnce({ linhas: ACERTO_MINERVA, paginas: 1, temTexto: true });
+    const inicial = { ...formAbateVazio('acerto'), documentoId: 'ac', versao: 2, bruto: 1 };
+    render(<DocumentoFormAbate api={api()} initialForm={inicial} contraparteId="cp" clienteId="cli" onSaved={() => {}} onCancel={() => {}} />);
+    fireEvent.change(screen.getByTestId('arquivo-abate'), { target: { files: [new File(['%PDF'], 'acerto.pdf', { type: 'application/pdf' })] } });
+    const faixa = await screen.findByText('lido do PDF (Acerto Minerva): 8 campos · confira antes de salvar');
+    expect(faixa.closest('[data-testid=faixa-conferencia]')!.getAttribute('data-tom')).toBe('neutro');
+    const campo = (k: string) => screen.getByTestId('area-campos').querySelector(`[data-campo=${k}] input`) as HTMLInputElement;
+    expect(campo('ordemCompra').value).toBe('10352');
+    expect(campo('bruto').value).toMatch(/1,00$/); /* o que ja' tinha fica */
+  });
+
+  it('passo 4 — NPR imagem: so anexa, com o aviso; especie trocada: so avisa', async () => {
+    leitorLinhas.extrairLinhasPdf.mockResolvedValueOnce({ linhas: [], paginas: 1, temTexto: false });
+    const { unmount } = render(<DocumentoFormAbate api={api()} initialForm={formAbateVazio('npr')} contraparteId="cp" clienteId="cli"
+      onSaved={() => {}} onCancel={() => {}} />);
+    fireEvent.change(screen.getByTestId('arquivo-abate'), { target: { files: [new File(['%PDF'], 'npr.pdf', { type: 'application/pdf' })] } });
+    expect((await screen.findByText(FRASE_SEM_TEXTO)).closest('[data-testid=faixa-conferencia]')!.getAttribute('data-tom')).toBe('atencao');
+    unmount();
+    leitorLinhas.extrairLinhasPdf.mockResolvedValueOnce({ linhas: ROMANEIO_MINERVA, paginas: 1, temTexto: true });
+    render(<DocumentoFormAbate api={api()} initialForm={formAbateVazio('acerto')} contraparteId="cp" clienteId="cli"
+      onSaved={() => {}} onCancel={() => {}} />);
+    fireEvent.change(screen.getByTestId('arquivo-abate'), { target: { files: [new File(['%PDF'], 'rom.pdf', { type: 'application/pdf' })] } });
+    await screen.findByText('Este PDF é Romaneio Minerva; a espécie escolhida é Acerto · nada preenchido');
+    expect((screen.getByTestId('area-campos').querySelector('[data-campo=cab] input') as HTMLInputElement).value).toBe('');
   });
 
   it('fonte: a tela do abate nao escreve campo por especie (so desenha o que o dono devolve)', () => {

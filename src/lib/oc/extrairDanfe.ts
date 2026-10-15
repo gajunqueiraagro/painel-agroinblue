@@ -32,6 +32,8 @@
  * ele substitui este arquivo inteiro.
  */
 
+import { acharChaveNFe } from '@/lib/oc/leitura/chaveNFe';
+
 export interface DanfeExtraido {
   chaveAcesso: string | null;
   numero: string | null;
@@ -52,9 +54,25 @@ export const VAZIO: DanfeExtraido = {
 };
 
 /** Ver o bloco do "!" no cabeçalho. Também colapsa espaços: o pdfjs junta os itens de
- *  texto com um espaço cada, e rótulos saem com espaçamento irregular. */
+ *  texto com um espaço cada, e rótulos saem com espaçamento irregular. A quebra de linha FICA
+ *  (o texto em linhas de `extrairLinhasPdf`: o emitente para no fim da linha). */
 export function normalizarTextoDanfe(texto: string): string {
   return texto.replace(/!/g, 'N').replace(/[ \t]+/g, ' ');
+}
+
+/* Texto em linhas com células " | " (OC-DOC-ESPECIE-ABATE-01 passo 4): o valor do rótulo mora na MESMA célula da linha de
+   baixo (o DANFE desenha rótulo em cima, valor embaixo). Sem linhas, nulo — e vale a busca de sempre. */
+function valorNaCelulaDeBaixo(texto: string, rotulo: RegExp): string | null {
+  const linhas = texto.split('\n');
+  for (let i = 0; i + 1 < linhas.length; i++) {
+    const cel = linhas[i].split(' | ');
+    const k = cel.findIndex(c => rotulo.test(c));
+    if (k < 0) continue;
+    const baixo = linhas[i + 1].split(' | ');
+    const v = baixo.length === cel.length ? baixo[k] : null;
+    if (v && /^[\d.]+,\d{2}$/.test(v.trim())) return v.trim();
+  }
+  return null;
 }
 
 const soDigitos = (s: string) => s.replace(/\D/g, '');
@@ -75,10 +93,11 @@ export function extrairDanfe(textoBruto: string): DanfeExtraido {
   const out: DanfeExtraido = { ...VAZIO };
 
   /* ── CHAVE: 44 dígitos. No DANFE ela aparece agrupada de 4 em 4, então a busca
-     tolera separadores e só depois confere o tamanho. */
-  const mChave = texto.match(/(?:\d[\s.]*){44}/);
-  if (mChave) {
-    const d = soDigitos(mChave[0]);
+     tolera separadores. ⚠ SÓ VALE COM DV MÓDULO 11 CERTO, procurando em TODAS as janelas de 44
+     dígitos (`acharChaveNFe`): os "primeiros 44 dígitos" liam a chave errada na NF da JBS. */
+  const chaveAchada = acharChaveNFe(texto);
+  if (chaveAchada) {
+    const d = soDigitos(chaveAchada);
     if (d.length === 44) {
       out.chaveAcesso = d;
       out.daChave = true;
@@ -109,16 +128,33 @@ export function extrairDanfe(textoBruto: string): DanfeExtraido {
      O DANFE põe a razão social logo após o rótulo do bloco. Se o layout do gerador
      for outro, estes dois vêm nulos e o operador digita — que é o comportamento
      correto, e não um palpite. */
-  const mEmit = texto.match(/(?:EMITENTE|EMISSOR)[:\s]+([A-ZÀ-Ú][A-ZÀ-Ú\s.&'-]{4,60})/);
-  if (mEmit) out.emitenteNome = mEmit[1].trim().replace(/\s+/g, ' ');
+  /* Texto em LINHAS (`extrairLinhasPdf`): o nome e' a primeira célula em maiúsculas logo abaixo de
+     "Identificação do Emitente" (pulando DANFE / "Documento Auxiliar…" / "0 - ENTRADA") e PARA NO FIM
+     DA CÉLULA — antes, no texto corrido, saía "FORTUNCERES S A RODOVIA BR" (o endereço junto). */
+  const emitenteDasLinhas = (() => {
+    if (!texto.includes('\n')) return undefined;
+    const linhas = texto.split('\n');
+    const i = linhas.findIndex(l => /IDENTIFICA[ÇC][ÃA]O DO EMITENTE/i.test(l));
+    if (i < 0) return null;
+    for (const l of linhas.slice(i + 1, i + 7)) {
+      const cel = l.split(' | ')[0].trim();
+      if (/^[A-ZÀ-Ú][A-ZÀ-Ú0-9 .&'/-]{3,60}$/.test(cel) && !/^DANFE$|ENTRADA|SA[ÍI]DA/.test(cel)) return cel.replace(/\s+/g, ' ');
+    }
+    return null;
+  })();
+  const mEmit = emitenteDasLinhas === undefined ? texto.match(/(?:EMITENTE|EMISSOR)[:\s]+([A-ZÀ-Ú][A-ZÀ-Ú\s.&'-]{4,60})/) : null;
+  if (emitenteDasLinhas) out.emitenteNome = emitenteDasLinhas;
+  else if (mEmit) out.emitenteNome = mEmit[1].trim().replace(/\s+/g, ' ');
   const mDest = texto.match(/DESTINAT[ÁA]RIO[^A-ZÀ-Ú]{0,20}([A-ZÀ-Ú][A-ZÀ-Ú\s.&'-]{4,60})/);
   if (mDest) out.destinatarioNome = mDest[1].trim().replace(/\s+/g, ' ');
 
   /* ── VALOR TOTAL DA NOTA. O DANFE traz vários valores; o rótulo "VALOR TOTAL DA
      NOTA" é o que interessa. "VALOR TOTAL DOS PRODUTOS" fica de fora de propósito:
      eles divergem quando há frete ou desconto, e a nota vale pelo total. */
-  const mValor = texto.match(/VALOR TOTAL DA NOTA[^\d]{0,40}([\d.]+,\d{2})/);
-  if (mValor) out.valorTotal = paraNumero(mValor[1]);
+  const naCelula = valorNaCelulaDeBaixo(texto, /VALOR TOTAL DA NOTA/);
+  const mValor = naCelula ? null : texto.match(/VALOR TOTAL DA NOTA[^\d]{0,40}([\d.]+,\d{2})/);
+  if (naCelula) out.valorTotal = paraNumero(naCelula);
+  else if (mValor) out.valorTotal = paraNumero(mValor[1]);
 
   return out;
 }

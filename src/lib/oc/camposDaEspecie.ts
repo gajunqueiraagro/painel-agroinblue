@@ -3,8 +3,9 @@
    ⚠ SO' O ABATE TEM GRADE POR ESPECIE. Compra e venda seguem com as 4 especies e o formulario de hoje
      (`camposDaEspecie` devolve nulo para elas).
    ⚠ ONDE CADA CAMPO GRAVA (um lugar so', como no passo 1):
-     valores (bruto, Funrural, SENAR, Seguro, retencoes do acerto, valor da NPR / do "outro") -> COMPONENTES;
-     cab, peso_kg, data_abate, vencimento -> colunas; ordem_compra, lote_frigorifico, preco_arroba, op e nf_referida -> `dados`.
+     valores (bruto, Funrural, SENAR, Seguro, RAT, retencoes do acerto, valor da NPR / do "outro") -> COMPONENTES;
+     cab, peso_kg, data_abate, vencimento -> colunas; ordem_compra, lote_frigorifico, preco_arroba, op, nf_referida (NPR) e
+     nfs_produtor (NF, a lista) -> `dados`.
    ⚠ O QUE SOMA NO VALOR DA OPERACAO E' DO BANCO (`_oc_documento_soma_no_valor`); os calculados daqui (@, retencoes, liquido,
      media) sao SO' PARA EXIBIR. */
 import type { EspecieDoc } from '@/hooks/useOperacaoDocumentos';
@@ -16,8 +17,8 @@ export type ChaveCampo =
   | 'numero' | 'serie' | 'dataEmissao' | 'dataAbate' | 'vencimento' | 'lote'
   | 'emitente' | 'chaveAcesso'
   | 'cab' | 'pesoKg' | 'arrobas' | 'precoArroba' | 'bruto'
-  | 'funrural' | 'senar' | 'seguro' | 'retencoes' | 'liquido'
-  | 'nfRefNumero' | 'nfRefValor' | 'observacao'
+  | 'funrural' | 'senar' | 'seguro' | 'rat' | 'retencoes' | 'liquido'
+  | 'nfRefNumero' | 'nfRefValor' | 'nfsProdutor' | 'nfsProdutorValor' | 'observacao'
   | 'ordemCompra' | 'loteFrigorifico' | 'op' | 'mediaKg' | 'valor';
 
 export interface CampoDef {
@@ -54,13 +55,16 @@ const NF: CampoDef[][] = [
   [c('cab', 'Cab', 1, { obrigatorio: true, numerico: true }), c('pesoKg', 'Carcaça kg', 1, { obrigatorio: true, numerico: true }),
    c('arrobas', '@', 1, { calculado: true, numerico: true }), c('precoArroba', 'R$/@', 1, { numerico: true }),
    c('bruto', 'Bruto R$', 1, { obrigatorio: true, numerico: true })],
+  /* passo 4: o RAT (JBS) tem tipo proprio, e o liquido desce para a linha 5 (decisao do Gabriel, 15/10). */
   [c('funrural', 'Funrural', 1, { numerico: true }), c('senar', 'SENAR', 1, { numerico: true }), c('seguro', 'Seguro', 1, { numerico: true }),
-   c('retencoes', 'Retenções R$', 1, { calculado: true, numerico: true }), c('liquido', 'Líquido R$', 1, { calculado: true, numerico: true })],
-  [c('nfRefNumero', 'NF produtor ref.'), c('nfRefValor', 'Valor NF produtor', 1, { numerico: true }), c('observacao', 'Observação', 3)],
+   c('rat', 'RAT', 1, { numerico: true }), c('retencoes', 'Retenções R$', 1, { calculado: true, numerico: true })],
+  [c('liquido', 'Líquido R$', 1, { calculado: true, numerico: true }), c('nfsProdutor', 'NF produtor'),
+   c('nfsProdutorValor', 'Valor NF produtor', 1, { numerico: true }), c('observacao', 'Observação', 2)],
 ];
 
 const ACERTO: CampoDef[][] = [
-  [c('ordemCompra', 'Ordem de compra', 1, { obrigatorio: true }), c('loteFrigorifico', 'Lote frigorífico'),
+  /* "Ordem compra / Pedido": o numero da compra no frigorifico (a Ordem de compra da Minerva = o Pedido da JBS). */
+  [c('ordemCompra', 'Ordem compra / Pedido', 1, { obrigatorio: true }), c('loteFrigorifico', 'Lote frigorífico'),
    c('dataAbate', 'Data do abate', 1, { obrigatorio: true }), c('vencimento', 'Vencimento'), c('lote', 'Lote')],
   [c('cab', 'Cab', 1, { obrigatorio: true, numerico: true }), c('pesoKg', 'Carcaça kg', 1, { obrigatorio: true, numerico: true }),
    c('arrobas', '@', 1, { calculado: true, numerico: true }), c('precoArroba', 'R$/@', 1, { numerico: true }),
@@ -110,9 +114,9 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 /** @ = kg / 15 (2 casas). Nulo sem kg. */
 export const arrobasDoPeso = (kg: number | null): number | null => (kg == null || kg <= 0 ? null : r2(kg / 15));
 
-/** Retencoes da NF = Funrural + SENAR + Seguro + as outras retencoes que o documento ja' tinha. */
-export const retencoesDaNF = (funrural: number | null, senar: number | null, seguro: number | null, outras = 0): number =>
-  r2((funrural ?? 0) + (senar ?? 0) + (seguro ?? 0) + outras);
+/** Retencoes da NF = Funrural + SENAR + Seguro + RAT + as outras retencoes que o documento ja' tinha. */
+export const retencoesDaNF = (funrural: number | null, senar: number | null, seguro: number | null, outras = 0, rat: number | null = null): number =>
+  r2((funrural ?? 0) + (senar ?? 0) + (seguro ?? 0) + (rat ?? 0) + outras);
 
 /** Retencoes do acerto = Bruto − Liquido (o liquido vem impresso). Nulo sem os dois. */
 export const retencoesDoAcerto = (bruto: number | null, liquido: number | null): number | null =>

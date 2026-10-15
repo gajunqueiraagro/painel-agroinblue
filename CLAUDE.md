@@ -162,7 +162,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 14/10/2026 (OC-DOC-ESPECIE-ABATE-01 passo 3, +12: `src/lib/oc/conferirDocumentosAbate.test.ts` 10 (novo),
+  Baseline em 15/10/2026 (OC-DOC-ESPECIE-ABATE-01 passo 4 + 4b, +26: `src/lib/oc/leitura/leituraAbate.test.ts` 21 (novo),
+  `src/components/compra/documentoFormAbate.test.tsx` 4 (11 -> 15), `src/lib/oc/camposDaEspecie.test.ts` 1 (14 -> 15) — 5262 depois
+  dele; antes o passo 3, +12: `src/lib/oc/conferirDocumentosAbate.test.ts` 10 (novo),
   `src/components/compra/documentoFormAbate.test.tsx` 2 (9 -> 11) — 5236 depois dele; antes o passo 2, +21: `src/lib/oc/camposDaEspecie.test.ts` 14 (novo),
   `src/components/compra/documentoFormAbate.test.tsx` 9 (novo) — 5224 depois dele; antes o passo 1, +1 em
   `src/hooks/useLancamentoDocumentos.especie.test.ts` (11 -> 12) — 5201 depois dele; antes o ABATE-PROJETADO-01c, +12: `src/lib/oc/cenarioDoAbate.test.ts` 7 (novo),
@@ -323,7 +325,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5236
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5262
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3987,6 +3989,57 @@ docs/historico/frentes-ate-2026-09-29.md.)
       soma no valor"…); o Valor R$ da lista e' o liquido PROPRIO.
     ⚠ NAO PROVADO: a tela REAL no navegador (so' a bancada com a casca do modal e dados ficticios) · upload e leitura de PDF real · o
       escolher o emitente / o "+" dentro da grade · perfil nao admin.
+  · PASSO 4 — A LEITURA DO PDF DO ABATE (Gabriel, 15/10/2026, so' tela, sem banco). Donos em `src/lib/oc/leitura/`:
+    `montarLinhas` (puro) / `extrairLinhasPdf` (o texto em LINHAS pela posicao: itens agrupados pela altura com 2pt de tolerancia,
+    da esquerda para a direita, celulas por " | "; `extractPdfText` INTOCADO), `numeroDoPdf` ("1 295,39", "2850,79", "9.512,600"…),
+    `acharChaveNFe` (a chave so' vale com DV modulo 11, UF, mes, modelo 55 e CNPJ com DV certos, procurando em TODAS as janelas de 44
+    digitos), `lerPdfDoAbate` (os 6 layouts) e `aplicarLeitura` (so' campo vazio, so' o que a especie desenha).
+    · AS REGRAS 1–8 (aprovadas): layout por ANCORAS + lista explicita de CNPJ (`CNPJS_DO_FRIGORIFICO`: Minerva 52.168.923/0002-31,
+      JBS 02.916.265/0077-68 — unidade nova entra na lista, nunca pela raiz nem pelo nome); nenhum ou dois layouts = so' anexa e a
+      faixa diz por que; TUDO OU NADA (obrigatorio do layout faltando = nada); a CONTA INTERNA DO PDF fecha ao centavo (bruto −
+      despesas = liquido, kg/cab = media, soma dos produtos = total, cab e kg dos produtos = os do rodape, total − descontos =
+      fatura); especie trocada so' avisa; sem CNPJ no texto (Acerto JBS, os dois Romaneios) o vinculo e' o CNPJ da CONTRAPARTE da OC;
+      preencher e' sugestao, so' em campo vazio, no documento NOVO e na EDICAO ("lido do PDF (NF JBS): 11 campos · confira antes de
+      salvar"); NPR imagem: "PDF sem texto (imagem): só anexado, preencha os campos". O que nao foi lido fica em AMBAR na faixa.
+    · `extrairDanfe` (vale para o `DocumentoFormOC` tambem, que passou a ler pelas linhas): chave pelo DV (regressao: na NF da JBS
+      lia CNPJ 35.026.100/2916-26, numero 685500400, serie 77); emitente = a primeira celula maiuscula abaixo de "Identificação do
+      Emitente", parando no fim da celula (antes "FORTUNCERES S A RODOVIA BR"); valor da nota pela MESMA celula da linha de baixo.
+    · GRADE DA NF (5 linhas, area 250): linha 4 Funrural | SENAR | Seguro | RAT | Retenções (calc); linha 5 Líquido (calc) | NF
+      produtor | Valor NF produtor | Observação (2). `retencoesDaNF` soma o RAT.
+    · DECISOES DO GABRIEL: (A) RAT tem tipo de componente proprio, 'rat' (retencao sem caixa, como funrural/senar; no banco tudo
+      e' por `natureza` — nenhuma lista fechada de tipo; so' o `TIPOS` do `DocumentoFormOC` ganhou 'rat'). (B) Pedido da JBS =
+      Ordem de compra (rotulo "Ordem compra / Pedido", `dados.ordem_compra`); Documento, Instrução e Carga em `dados.documento_frig`,
+      `instrucao`, `carga`, so' informativos. (C) NF: `dados.nfs_produtor` [{numero, data, valor|null}], na grade os numeros por
+      " · " (lista no `title`), edicao por virgula, valor = a soma dos informados; NPR segue em `dados.nf_referida` (0 NFs tinham
+      `nf_referida`: sem migracao de dado). (D) JBS sem R$/@ na NF; no Acerto JBS o R$/@ medio impresso (340,55). (E) leitura tambem
+      na edicao.
+    · PASSO 4c — O RAT JA' GRAVADO VIROU 'rat', POR ID (decisao do Gabriel, 15/10/2026: os componentes de NF com RAT ESCRITO NA
+      DESCRICAO). Migration `supabase/migrations/20261027198400_oc_doc_rat_por_id.sql` (md5 do arquivo
+      2592ca013b4bed1d3fee35dd893395dd) — APLICADA no proto em 15/10/2026 com o OK do Gabriel: ledger 20261015101321 (⚠ registrada
+      com o timestamp do dia; o ledger guarda o arquivo SEM a quebra de linha final: md5 fafaa220e4d49f0d9fd9ce2494523527). Os 4:
+      36db5a7a (OC 2d39d7e9, NF f5fa2c7e, "DESCONTO DA RAT", 115,18) · 61f63242 (02be1a41, NF 55fe3bff, "DESCONTO DA RAT", 411,27) ·
+      b0cd54fe (96776ccb, NF a8e4a80a, "RAT", 269,68) · b345ea96 (26fd02c1, NF 51aae43c, a Vera, "RAT", 237,57). Guarda: os 4 no
+      estado medido ou ja' 'rat', senao aborta; so' o `tipo` muda; o liquido das 4 NFs nas duas views conferido antes x depois
+      dentro da migration (103.006,06 · 367.783,40 · 265.639,15 · 212.449,03, iguais). Reaplicada depois: 4 de 4 na guarda, 0
+      linhas. Gesto contrario no cabecalho. Teste ao vivo `supabase/tests/oc_doc_rat_por_id_test.sql` (R1–R2) OK. Na bancada as 4
+      NFs abrem na edicao com o RAT no campo e as retencoes = Funrural + SENAR + RAT (sem 'outros' sobrando: o liquido = o da view).
+      ⚠ ERRO MEU, corrigido antes de aplicar: no relatorio do passo 4 o 61f63242 saiu "sem descricao"; ele tem "DESCONTO DA RAT".
+    ⚠ DESVIOS DECLARADOS: NF de layout desconhecido segue lida pelo DANFE de sempre ("Nota lida pelo DANFE (frigorífico não
+      reconhecido)") — o leitor do passo 2 nao saiu; "Valor NF produtor" e' digitavel com 0 ou 1 NF e calculado (a soma) com 2+; o
+      Romaneio Minerva guarda a Ordem Compra em `dados.ordem_compra`, informativa.
+    · PASSO 4b — JBS FATURA NO DIA DO ABATE (Gabriel 15/10/2026): no layout Acerto JBS o "Data:" do cabecalho ("Documento: … |
+      Instrução: … | Data: | dd/mm/aaaa") E' a data do abate e preenche `data_abate`, que passou a OBRIGATORIA nesse layout (tudo ou
+      nada). Vale SO' para a JBS; a Minerva segue lendo "Data Abate -". PDF real da Vera: 13/10/2026.
+    · PROVA REAL (bancada, 15/10, os 7 PDFs de ~/Downloads pelo leitor real, sem gravar): os 6 layouts leem tudo, a NPR cai em
+      "sem texto"; simulado o documento como a view o entregaria, a faixa do passo 3 fica VERDE — LT10 "18 cab · 4.095 kg · Bruto NF
+      = Acerto 98.135,31 · Retenções 1.599,61 · Líquido NF = Acerto 96.535,70" (NPR "sem valores"); Vera "36 cab · 9.512,60 kg ·
+      Bruto 215.969,33 · Retenções 3.520,30 · Líquido 212.449,03 · falta: NPR". MEDIDO no Chromium com o PDF REAL da NF JBS solto no
+      campo (1.127 x 523 e 1.440 x 900): modal 1024 x 493 / 870, formulario 766 x 374, area 250/250, faixa 22, topo do rodape 417,
+      corpo 394/394 e 771/771, iguais antes e depois de ler. Foto em ~/Downloads/oc-doc-especie-passo4/.
+    ⚠ A CHAVE DE ACESSO CORTA no campo de 2 colunas (44 digitos pedem 320px, o campo tem 291; inteira no `title`): ja' era assim no
+      passo 2, so' aparece agora porque a leitura a preenche.
+    ⚠ NAO PROVADO: a tela REAL no navegador · a leitura gravada (Registrar/Salvar) · PDF de outra unidade da Minerva/JBS ·
+      Acerto/Romaneio de layout novo · OCR da NPR (fora).
   ⚠ FILA (decisao do Gabriel, 14/10): OC-DOC-DUPLICADO-01 (aviso de NF ja' registrada — o banco NAO bloqueia: sem indice unico,
     sem gatilho, o registrar nao confere; a tela NUNCA avisou; no proto 1 chave de acesso repetida e 1 NF repetida por OC + emitente +
     numero + serie entre documentos vivos; o dono existente `fn_documento_chave_ja_registrada` compara SO' pela chave; a decisao do

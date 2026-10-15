@@ -16,7 +16,7 @@ import { NovoFornecedorDialog } from '@/components/financeiro-v2/NovoFornecedorD
 import { motivoArquivoInvalido, REGRA_ARQUIVO_DA_OC } from '@/lib/oc/caminhoDocumento';
 import { AreaDeArquivo } from '@/components/ui/area-de-arquivo';
 import { resumoDaRegra } from '@/lib/arquivo/aceitarArquivo';
-import { extractPdfText } from '@/lib/financeiro/parser/extractPdfText';
+import { extrairLinhasPdf } from '@/lib/oc/leitura/linhasDoPdf';
 import { extrairDanfe, type DanfeExtraido } from '@/lib/oc/extrairDanfe';
 import { candidatosPorNome, soDigitosDoc, raizCnpj, type CandidatoFornecedor } from '@/lib/oc/similaridadeFornecedor';
 import { parseNumericValue } from '@/lib/calculos/abate';
@@ -41,7 +41,7 @@ const NATUREZA_LABEL: Record<NaturezaComp, string> = {
 const NATUREZAS: NaturezaComp[] = ['acrescimo', 'desconto_comercial', 'retencao_sem_caixa', 'despesa_desembolso', 'informativo'];
 const TIPOS: { value: string; label: string }[] = [
   { value: 'valor_bruto', label: 'Valor bruto' }, { value: 'bonificacao', label: 'Bonificação' }, { value: 'premio', label: 'Prêmio' },
-  { value: 'funrural', label: 'Funrural' }, { value: 'senar', label: 'SENAR' }, { value: 'inss', label: 'INSS' },
+  { value: 'funrural', label: 'Funrural' }, { value: 'senar', label: 'SENAR' }, { value: 'rat', label: 'RAT' }, { value: 'inss', label: 'INSS' },
   { value: 'frete', label: 'Frete' }, { value: 'comissao', label: 'Comissão' }, { value: 'outros', label: 'Outros' },
 ];
 export const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -238,7 +238,11 @@ export function DocumentoFormOC({ api, somenteLeitura, fornecedores, clienteId, 
     if (file.type !== 'application/pdf') { setAvisoLeitura(null); setSugeridos(new Set()); return; }
     setLendoNota(true); setAvisoLeitura(null);
     try {
-      const { text, hasTextLayer } = await extractPdfText(file);
+      /* OC-DOC-ESPECIE-ABATE-01 passo 4: o texto em LINHAS (a chave so' com DV certo e o emitente parando no fim da
+         linha valem aqui tambem). */
+      const pdf = await extrairLinhasPdf(file);
+      const hasTextLayer = pdf.temTexto;
+      const text = pdf.linhas.join('\n');
       /* ⚠ O LIMIAR E' `hasTextLayer`, do proprio extrator, e nao um numero de
          caracteres inventado: a NF real deu 2.653 e um scan da ~0, mas qualquer corte
          entre os dois seria arbitrario. "Tem camada de texto ou nao" e' a pergunta

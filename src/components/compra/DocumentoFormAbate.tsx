@@ -11,8 +11,10 @@ import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
 import type { FornecedorLido } from '@/lib/fornecedores/leitorDeFornecedores';
 import { NovoFornecedorDialog } from '@/components/financeiro-v2/NovoFornecedorDialog';
 import { motivoArquivoInvalido, REGRA_ARQUIVO_DA_OC } from '@/lib/oc/caminhoDocumento';
-import { extractPdfText } from '@/lib/financeiro/parser/extractPdfText';
 import { extrairDanfe } from '@/lib/oc/extrairDanfe';
+import { extrairLinhasPdf } from '@/lib/oc/leitura/linhasDoPdf';
+import { lerPdfDoAbate } from '@/lib/oc/leitura/layoutsAbate';
+import { aplicarLeitura, fraseDaLeitura } from '@/lib/oc/leitura/aplicarLeitura';
 import { candidatosPorNome, raizCnpj, soDigitosDoc, type CandidatoFornecedor } from '@/lib/oc/similaridadeFornecedor';
 import { brl, formatCasas, parseMoeda } from '@/lib/calculos/numeroBR';
 import { cn } from '@/lib/utils';
@@ -21,7 +23,10 @@ import {
   camposDaEspecie, especiesDaOC, ROTULO_SEGMENTO, arrobasDoPeso, retencoesDaNF, retencoesDoAcerto, mediaDoRomaneio, pctDoBruto,
   type CampoDef, type ChaveCampo,
 } from '@/lib/oc/camposDaEspecie';
-import { payloadDoFormAbate, pendenciasDoFormAbate, type FormAbate } from '@/lib/oc/formDocumentoAbate';
+import {
+  nfsProdutorDoTexto, payloadDoFormAbate, pendenciasDoFormAbate, textoDasNfsProdutor, valorDasNfsProdutor,
+  type FormAbate, type NfProdutor,
+} from '@/lib/oc/formDocumentoAbate';
 import { conferenciaAoVivo, type DocConferencia } from '@/lib/oc/conferirDocumentosAbate';
 import { ESPECIE_LABEL, ehNotaFiscal, numeroDigitando, numeroEmRepouso } from './DocumentoFormOC';
 
@@ -104,9 +109,27 @@ function SeletorLotes({ lotes, valor, onChange, invalido }: {
   );
 }
 
-function Calculado({ texto }: { texto: string }) {
+/** NF produtor (passo 4): a LISTA de `dados.nfs_produtor`. Em repouso, os numeros com " · " (a lista inteira no `title`);
+ *  focado, separados por virgula, e e' assim que se edita. Data e valor de quem ja' existia ficam. */
+function CampoNfsProdutor({ lista, onChange, disabled, className }: {
+  lista: NfProdutor[]; onChange: (l: NfProdutor[]) => void; disabled?: boolean; className?: string;
+}) {
+  const [texto, setTexto] = useState('');
+  const [editando, setEditando] = useState(false);
+  const titulo = lista.map(n => [n.numero, n.data ? `de ${n.data.split('-').reverse().join('/')}` : null, n.valor != null ? brl(n.valor) : null]
+    .filter(Boolean).join(' ')).join(' · ');
   return (
-    <div data-calculado="" title={texto}
+    <Input data-testid="nfs-produtor" value={editando ? texto : textoDasNfsProdutor(lista)} disabled={disabled} title={titulo || undefined}
+      onFocus={() => { setTexto(lista.map(n => n.numero).filter(Boolean).join(', ')); setEditando(true); }}
+      onChange={e => setTexto(e.target.value)}
+      onBlur={() => { setEditando(false); onChange(nfsProdutorDoTexto(texto, lista)); }}
+      className={cn(CTL, className)} />
+  );
+}
+
+function Calculado({ texto, titulo }: { texto: string; titulo?: string }) {
+  return (
+    <div data-calculado="" title={titulo ?? texto}
       className={cn('flex h-[22px] items-center justify-end truncate rounded-md border border-dashed border-muted-foreground/40 bg-muted/50 px-1.5 text-[11px] text-muted-foreground', NUM)}>
       {texto}
     </div>
@@ -132,6 +155,8 @@ export function DocumentoFormAbate({ api, somenteLeitura, fornecedores, clienteI
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [lendo, setLendo] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
+  /* o tom do aviso da leitura: 'atencao' (ambar) quando o PDF nao foi lido; neutro quando foi. */
+  const [avisoAtencao, setAvisoAtencao] = useState(false);
   const [tentou, setTentou] = useState(false);
   const [novoFornecedorOpen, setNovoFornecedorOpen] = useState(false);
   /* ── O EMITENTE DA NOTA QUE NAO SE ACHA PELO CNPJ (as situacoes do formulario antigo, PR-OC-DOC-ENRIQUECER-FORNECEDOR-01) ──
@@ -143,6 +168,7 @@ export function DocumentoFormAbate({ api, somenteLeitura, fornecedores, clienteI
   const [conflitoCnpj, setConflitoCnpj] = useState<string | null>(null);
 
   const editando = form.documentoId != null;
+  const contraparte = (fornecedores ?? []).find(f => f.id === contraparteId) ?? null;
   const linhas = camposDaEspecie('abate', form.especie) ?? [];
   const pendencias = pendenciasDoFormAbate(form, contraparteId ?? null);
   const pendente = new Set<ChaveCampo>(tentou ? pendencias.map(p => p.chave) : []);
@@ -153,7 +179,7 @@ export function DocumentoFormAbate({ api, somenteLeitura, fornecedores, clienteI
   const outrosAcrescimos = form.preservados.filter(c => c.natureza === 'acrescimo').reduce((s, c) => s + Number(c.valor), 0);
   const outrasDeducoes = form.preservados.filter(c => c.natureza === 'desconto_comercial' || c.natureza === 'despesa_desembolso')
     .reduce((s, c) => s + Number(c.valor), 0);
-  const retNF = retencoesDaNF(form.funrural, form.senar, form.seguro, outrasRetencoes);
+  const retNF = retencoesDaNF(form.funrural, form.senar, form.seguro, outrasRetencoes, form.rat);
   const liquidoNF = form.bruto == null ? null : Math.round((form.bruto + outrosAcrescimos - retNF - outrasDeducoes) * 100) / 100;
   const calculado = (k: ChaveCampo): string => {
     const f2 = (n: number | null) => (n == null ? '—' : formatCasas(n, 2));
@@ -168,44 +194,64 @@ export function DocumentoFormAbate({ api, somenteLeitura, fornecedores, clienteI
     }
   };
   const rotuloDe = (c: CampoDef) => {
-    if (c.chave === 'funrural' || c.chave === 'senar' || c.chave === 'seguro') {
+    if (c.chave === 'funrural' || c.chave === 'senar' || c.chave === 'seguro' || c.chave === 'rat') {
       const p = pctDoBruto(form[c.chave], form.bruto);
       return p == null ? c.rotulo : `${c.rotulo} · ${formatCasas(p, 2)}%`;
     }
     return c.rotulo;
   };
 
-  const lerNota = async (file: File) => {
-    if (file.type !== 'application/pdf' || !ehNotaFiscal(form.especie)) { setAviso(null); return; }
-    setLendo(true); setAviso(null);
+  /* O emitente da nota pelo CNPJ: exato escolhe; sem ele, a faixa sugere o parecido (as situacoes de sempre). */
+  const emitenteDaNota = (cnpj: string | null, nome: string | null) => {
+    const exato = cnpj ? (fornecedores ?? []).find(x => soDigitosDoc(x.cpfCnpj) === soDigitosDoc(cnpj)) : null;
+    setCnpjDaNota(cnpj); setConflitoCnpj(null);
+    setCandidatos(!exato && cnpj && nome ? candidatosPorNome(nome, fornecedores ?? []) : []);
+    if (exato) setForm(f => (f.emitenteId ? f : { ...f, emitenteId: exato.id, emitenteNome: exato.nome, emitenteDocumento: cnpj ?? '' }));
+    else if (cnpj) setForm(f => (f.emitenteId ? f : { ...f, emitenteNome: nome ?? f.emitenteNome, emitenteDocumento: cnpj }));
+    return exato;
+  };
+
+  /* A LEITURA DO PDF (passo 4): o layout do frigorifico, tudo ou nada, SO' nos campos vazios — no documento novo e na edicao.
+     O que nao foi lido fica escrito na faixa, e o arquivo segue anexado. NF sem layout conhecido: o DANFE de sempre. */
+  const lerArquivo = async (file: File) => {
+    if (file.type !== 'application/pdf') { setAviso(null); return; }
+    setLendo(true); setAviso(null); setAvisoAtencao(false);
     try {
-      const { text, hasTextLayer } = await extractPdfText(file);
-      if (!hasTextLayer) { setAviso('Nota sem texto (foto ou digitalização): preencha os campos.'); return; }
-      const d = extrairDanfe(text);
-      if (!d.chaveAcesso && !d.numero && !d.valorTotal) { setAviso('Não reconheci o formato de DANFE: preencha os campos.'); return; }
-      const exato = d.emitenteCnpj ? (fornecedores ?? []).find(x => soDigitosDoc(x.cpfCnpj) === soDigitosDoc(d.emitenteCnpj)) : null;
-      setCnpjDaNota(d.emitenteCnpj); setConflitoCnpj(null);
-      setCandidatos(!exato && d.emitenteCnpj && d.emitenteNome ? candidatosPorNome(d.emitenteNome, fornecedores ?? []) : []);
-      setForm(f => ({
-        ...f,
-        numero: f.numero.trim() || !d.numero ? f.numero : numeroEmRepouso(d.numero),
-        serie: f.serie.trim() || !d.serie ? f.serie : d.serie,
-        dataEmissao: f.dataEmissao || !d.dataEmissao ? f.dataEmissao : d.dataEmissao,
-        chaveAcesso: f.chaveAcesso.trim() || !d.chaveAcesso ? f.chaveAcesso : d.chaveAcesso,
-        bruto: f.bruto != null || !d.valorTotal ? f.bruto : d.valorTotal,
-        ...(exato && !f.emitenteId ? { emitenteId: exato.id, emitenteNome: exato.nome, emitenteDocumento: d.emitenteCnpj ?? '' } : {}),
-      }));
-      setAviso(`Nota lida${d.valorTotal ? ` · total ${brl(d.valorTotal)}` : ''}`
-        + (d.emitenteCnpj && !exato ? ` · emitente ${d.emitenteNome ?? ''} ${d.emitenteCnpj} fora do cadastro` : '') + ' · confira antes de registrar');
-      if (d.emitenteCnpj && !exato) setForm(f => (f.emitenteId ? f : { ...f, emitenteNome: d.emitenteNome ?? f.emitenteNome, emitenteDocumento: d.emitenteCnpj ?? '' }));
+      const pdf = await extrairLinhasPdf(file);
+      const r = lerPdfDoAbate(pdf, { especie: form.especie, cnpjContraparte: contraparte?.cpfCnpj ?? null });
+      if (r.tipo === 'lido') {
+        const n = aplicarLeitura(form, r.campos, r.dados, numeroEmRepouso).preenchidos.length;
+        setForm(f => aplicarLeitura(f, r.campos, r.dados, numeroEmRepouso).form);
+        const exato = r.grupo === 'nf' ? emitenteDaNota(r.campos.emitenteCnpj ?? null, r.campos.emitenteNome ?? null) : null;
+        setAviso(fraseDaLeitura(r.rotulo, n)
+          + (r.grupo === 'nf' && r.campos.emitenteCnpj && !exato ? ` · emitente ${r.campos.emitenteCnpj} fora do cadastro` : ''));
+        return;
+      }
+      if (r.motivo === 'desconhecido' && ehNotaFiscal(form.especie)) {
+        const d = extrairDanfe(pdf.linhas.join('\n'));
+        if (!d.chaveAcesso && !d.numero && !d.valorTotal) { setAviso('Não reconheci o formato de DANFE: preencha os campos.'); setAvisoAtencao(true); return; }
+        const exato = emitenteDaNota(d.emitenteCnpj, d.emitenteNome);
+        setForm(f => ({
+          ...f,
+          numero: f.numero.trim() || !d.numero ? f.numero : numeroEmRepouso(d.numero),
+          serie: f.serie.trim() || !d.serie ? f.serie : d.serie,
+          dataEmissao: f.dataEmissao || !d.dataEmissao ? f.dataEmissao : d.dataEmissao,
+          chaveAcesso: f.chaveAcesso.trim() || !d.chaveAcesso ? f.chaveAcesso : d.chaveAcesso,
+          bruto: f.bruto != null || !d.valorTotal ? f.bruto : d.valorTotal,
+        }));
+        setAviso(`Nota lida pelo DANFE (frigorífico não reconhecido)${d.valorTotal ? ` · total ${brl(d.valorTotal)}` : ''}`
+          + (d.emitenteCnpj && !exato ? ` · emitente ${d.emitenteNome ?? ''} ${d.emitenteCnpj} fora do cadastro` : '') + ' · confira antes de registrar');
+        return;
+      }
+      setAviso(r.frase); setAvisoAtencao(true);
     } catch {
-      setAviso('Falha ao ler o arquivo: preencha os campos.');
+      setAviso('Falha ao ler o arquivo: preencha os campos.'); setAvisoAtencao(true);
     } finally { setLendo(false); }
   };
   const receberArquivo = (f: File | null) => {
     if (!f || motivoArquivoInvalido(f)) { setArquivo(null); return; }
     setArquivo(f);
-    void lerNota(f);
+    void lerArquivo(f);
   };
 
   /* "usar este": o mesmo gesto do formulario antigo (`escolherCandidato`). */
@@ -245,7 +291,6 @@ export function DocumentoFormAbate({ api, somenteLeitura, fornecedores, clienteI
   const opcoes = especiesDaOC('abate').map(e => ({ valor: e, rotulo: ROTULO_SEGMENTO[e] ?? ESPECIE_LABEL[e], desabilitada: editando && e !== form.especie }));
   if (!opcoes.some(o => o.valor === form.especie)) opcoes.push({ valor: form.especie, rotulo: ESPECIE_LABEL[form.especie], desabilitada: false });
 
-  const contraparte = (fornecedores ?? []).find(f => f.id === contraparteId) ?? null;
   const rotuloContraparte = contraparte?.nome ? `Mesmo da operação — ${contraparte.nome}` : 'Mesmo da operação';
 
   const controle = (c: CampoDef) => {
@@ -270,9 +315,21 @@ export function DocumentoFormAbate({ api, somenteLeitura, fornecedores, clienteI
         return <CampoNumero valor={form.cab} onChange={n => set('cab', n)} casas={0} invalido={inv} className={borda} />;
       case 'pesoKg':
         return <CampoNumero valor={form.pesoKg} onChange={n => set('pesoKg', n)} casas={2} invalido={inv} className={borda} />;
-      case 'precoArroba': case 'bruto': case 'funrural': case 'senar': case 'seguro': case 'liquido': case 'valor': case 'nfRefValor':
+      case 'precoArroba': case 'bruto': case 'funrural': case 'senar': case 'seguro': case 'rat': case 'liquido': case 'valor': case 'nfRefValor':
         return <CampoMoeda valor={form[k]} onChange={n => set(k, n)} disabled={somenteLeitura}
           className={cn(CTL, NUM, borda)} />;
+      case 'nfsProdutor':
+        return <CampoNfsProdutor lista={form.nfsProdutor} onChange={l => set('nfsProdutor', l)} disabled={somenteLeitura} className={borda} />;
+      case 'nfsProdutorValor': {
+        /* Com 2+ NFs do produtor o valor e' a SOMA dos informados (so' exibicao); com 0 ou 1, digita-se o valor dela. */
+        const l = form.nfsProdutor;
+        if (l.length > 1) {
+          const soma = valorDasNfsProdutor(l);
+          return <Calculado texto={soma == null ? '—' : brl(soma)} titulo="soma dos valores informados das NFs do produtor" />;
+        }
+        return <CampoMoeda valor={l[0]?.valor ?? null} disabled={somenteLeitura} className={cn(CTL, NUM, borda)}
+          onChange={n => set('nfsProdutor', l.length ? [{ ...l[0], valor: n }] : n == null ? [] : [{ numero: '', data: null, valor: n }])} />;
+      }
       case 'emitente':
         return <FavorecidoSelect<FornecedorLido>
           value={form.emitenteId} clienteId={clienteId ?? null}
@@ -315,7 +372,7 @@ export function DocumentoFormAbate({ api, somenteLeitura, fornecedores, clienteI
   const emitenteTexto = conflitoCnpj
     ?? (candidato ? `Emitente não achado pelo CNPJ · parecido: ${candidato.nome}${candidatos.length > 1 ? ` (+${candidatos.length - 1})` : ''}` : null);
   const fraseFaixa = faltaTexto ?? emitenteTexto ?? aviso ?? aoVivo?.texto ?? FRASE_DA_ESPECIE[form.especie] ?? FRASE_OUTRO;
-  const tomFaixa = faltaTexto ? 'erro' : emitenteTexto ? 'emitente' : aviso ? 'neutro'
+  const tomFaixa = faltaTexto ? 'erro' : emitenteTexto ? 'emitente' : aviso ? (avisoAtencao ? 'atencao' : 'neutro')
     : aoVivo?.tom === 'vermelho' ? 'diverge' : aoVivo?.tom === 'verde' ? 'confere' : 'neutro';
   const tituloFaixa = candidatos.length > 1 && !faltaTexto && !conflitoCnpj
     ? `${fraseFaixa} — parecidos: ${candidatos.map(c => c.nome).join(', ')}` : fraseFaixa;
@@ -373,7 +430,7 @@ export function DocumentoFormAbate({ api, somenteLeitura, fornecedores, clienteI
       <div data-testid="faixa-conferencia" data-tom={tomFaixa} title={tituloFaixa}
         className={cn('flex shrink-0 items-center gap-2 overflow-hidden rounded-md border px-2 text-[10px]',
           tomFaixa === 'erro' ? 'border-destructive/50 bg-destructive/5 text-destructive'
-            : tomFaixa === 'emitente' ? 'border-amber-400 bg-amber-50 text-amber-800'
+            : tomFaixa === 'emitente' || tomFaixa === 'atencao' ? 'border-amber-400 bg-amber-50 text-amber-800'
               : tomFaixa === 'diverge' ? 'border-destructive/50 bg-destructive/5 text-destructive'
                 : tomFaixa === 'confere' ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
                   : 'bg-muted/30 text-muted-foreground')}

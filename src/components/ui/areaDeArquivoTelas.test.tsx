@@ -12,6 +12,9 @@ import { resolve } from 'node:path';
 const leitorPdf = vi.hoisted(() => ({ extractPdfText: vi.fn(async (_f: File) => ({ text: '', pageCount: 1, hasTextLayer: false })) }));
 const toastErro = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/financeiro/parser/extractPdfText', () => leitorPdf);
+/* OC-DOC-ESPECIE-ABATE-01 passo 4: o documento da OC le' o PDF em LINHAS (`extrairLinhasPdf`). */
+const leitorLinhas = vi.hoisted(() => ({ extrairLinhasPdf: vi.fn(async (_f: File) => ({ linhas: [], paginas: 1, temTexto: false })) }));
+vi.mock('@/lib/oc/leitura/linhasDoPdf', () => leitorLinhas);
 vi.mock('@/integrations/supabase/client', () => ({ supabase: { rpc: vi.fn(), from: vi.fn(), storage: { from: vi.fn() } } }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: toastErro, info: vi.fn(), warning: vi.fn() } }));
 vi.mock('@/lib/financeiro/nfeConsultas', () => ({
@@ -50,7 +53,7 @@ beforeEach(() => {
   Element.prototype.scrollIntoView = () => {};
   Element.prototype.hasPointerCapture = () => false;
   Element.prototype.releasePointerCapture = () => {};
-  leitorPdf.extractPdfText.mockClear(); toastErro.mockClear();
+  leitorPdf.extractPdfText.mockClear(); leitorLinhas.extrairLinhasPdf.mockClear(); toastErro.mockClear();
 });
 
 describe('documento da OC — a recusa saiu do toast e foi para a área', () => {
@@ -61,7 +64,7 @@ describe('documento da OC — a recusa saiu do toast e foi para a área', () => 
     soltar(area(), [txt()]);
     expect(screen.getByTestId('area-de-arquivo-recusa').textContent).toBe('Formato não aceito. Envie PDF, JPG, PNG ou XML.');
     expect(toastErro).not.toHaveBeenCalled();
-    expect(leitorPdf.extractPdfText).not.toHaveBeenCalled();
+    expect(leitorLinhas.extrairLinhasPdf).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Escolher' })).toBeTruthy();
   });
   it('XML ENTRA na OC (como desde o 01b1), com o tipo informado ou sem ele — e não vai ao leitor de PDF', async () => {
@@ -72,7 +75,7 @@ describe('documento da OC — a recusa saiu do toast e foi para a área', () => 
       expect(screen.queryByTestId('area-de-arquivo-recusa')).toBeNull();
       unmount();
     }
-    expect(leitorPdf.extractPdfText).not.toHaveBeenCalled();
+    expect(leitorLinhas.extrairLinhasPdf).not.toHaveBeenCalled();
   });
   it('acima de 10 MB: a frase diz o tamanho', () => {
     render(<DocumentoFormOC api={apiOC()} initialForm={FORM_VAZIO} onSaved={() => {}} onCancel={() => {}} />);

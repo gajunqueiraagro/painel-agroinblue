@@ -173,8 +173,8 @@ describe('fonte: todo import() dinâmico passa pelo dono', () => {
       for (const l of semTratamento(fonte)) crus.push(`${p.replace(raiz, 'src')}: ${l}`);
     }
     expect(crus).toEqual([]);
-    /* 11 pedaços sob demanda + 3 telas em lazy( */
-    expect(tratados).toBe(14);
+    /* 12 pedaços sob demanda (+1 no OC-DOC-ESPECIE-ABATE-01 passo 4: o pdfjs de `extrairLinhasPdf`) + 3 telas em lazy( */
+    expect(tratados).toBe(15);
   });
   it('quem usa o dono o importa ESTATICAMENTE', () => {
     for (const p of arquivos(resolve(process.cwd(), 'src'))) {

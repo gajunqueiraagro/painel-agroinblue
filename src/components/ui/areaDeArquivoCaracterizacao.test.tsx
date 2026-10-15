@@ -12,6 +12,9 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 
 const leitorPdf = vi.hoisted(() => ({ extractPdfText: vi.fn(async (_f: File) => ({ text: '', pageCount: 1, hasTextLayer: false })) }));
 vi.mock('@/lib/financeiro/parser/extractPdfText', () => leitorPdf);
+/* OC-DOC-ESPECIE-ABATE-01 passo 4: o documento da OC le' o PDF em LINHAS (`extrairLinhasPdf`); os boletos seguem no `extractPdfText`. */
+const leitorLinhas = vi.hoisted(() => ({ extrairLinhasPdf: vi.fn(async (_f: File) => ({ linhas: [], paginas: 1, temTexto: false })) }));
+vi.mock('@/lib/oc/leitura/linhasDoPdf', () => leitorLinhas);
 vi.mock('@/integrations/supabase/client', () => ({ supabase: { rpc: vi.fn(), from: vi.fn(), storage: { from: vi.fn() } } }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() } }));
 vi.mock('@/lib/financeiro/nfeConsultas', () => ({
@@ -40,6 +43,7 @@ beforeEach(() => {
   Element.prototype.hasPointerCapture = () => false;
   Element.prototype.releasePointerCapture = () => {};
   leitorPdf.extractPdfText.mockClear();
+  leitorLinhas.extrairLinhasPdf.mockClear();
 });
 
 describe('aba Documentos do lançamento (FormDocumento)', () => {
@@ -122,13 +126,13 @@ describe('Documento da operação comercial (DocumentoFormOC)', () => {
     const arquivo = pdf('NF 84.pdf');
     soltar(area(), [arquivo]);
     await waitFor(() => expect(area().textContent).toContain('NF 84.pdf'));
-    await waitFor(() => expect(leitorPdf.extractPdfText).toHaveBeenCalledTimes(1));
-    expect(leitorPdf.extractPdfText.mock.calls[0][0]).toBe(arquivo);
+    await waitFor(() => expect(leitorLinhas.extrairLinhasPdf).toHaveBeenCalledTimes(1));
+    expect(leitorLinhas.extrairLinhasPdf.mock.calls[0][0]).toBe(arquivo);
   });
   it('imagem solta: o nome aparece e o leitor de PDF NÃO é chamado', async () => {
     render(<DocumentoFormOC api={api()} initialForm={FORM_VAZIO} onSaved={() => {}} onCancel={() => {}} />);
     soltar(area(), [jpg('recibo.jpg')]);
     await waitFor(() => expect(area().textContent).toContain('recibo.jpg'));
-    expect(leitorPdf.extractPdfText).not.toHaveBeenCalled();
+    expect(leitorLinhas.extrairLinhasPdf).not.toHaveBeenCalled();
   });
 });

@@ -9,6 +9,9 @@
 import type { ComponentePayload, DocumentoDetalhe, DocumentoPayload, EspecieDoc, NaturezaComp } from '@/hooks/useOperacaoDocumentos';
 import { camposDaEspecie, retencoesDoAcerto, type ChaveCampo } from '@/lib/oc/camposDaEspecie';
 
+/** Uma NF do produtor referida pela NF do frigorifico (`dados.nfs_produtor`). A JBS cita duas, sem valor. */
+export interface NfProdutor { numero: string; data: string | null; valor: number | null }
+
 /** Os valores digitaveis. Numero = number | null (vazio e' ausencia, nao zero); texto = string. */
 export interface FormAbate {
   documentoId: string | null;
@@ -21,8 +24,10 @@ export interface FormAbate {
   dataAbate: string; vencimento: string;
   ordemCompra: string; loteFrigorifico: string; op: string; nfRefNumero: string;
   cab: number | null; pesoKg: number | null; precoArroba: number | null;
-  bruto: number | null; funrural: number | null; senar: number | null; seguro: number | null;
+  bruto: number | null; funrural: number | null; senar: number | null; seguro: number | null; rat: number | null;
   liquido: number | null; valor: number | null; nfRefValor: number | null;
+  /** So' na NF: as NFs do produtor (a NPR segue com `nfRefNumero`/`nfRefValor`, em `dados.nf_referida`). */
+  nfsProdutor: NfProdutor[];
   loteIds: string[];
   /** Componentes que a especie nao representa — voltam como vieram. */
   preservados: ComponentePayload[];
@@ -36,13 +41,13 @@ export function formAbateVazio(especie: EspecieDoc = 'nf_principal'): FormAbate 
     numero: '', serie: '', chaveAcesso: '', dataEmissao: '', observacao: '',
     emitenteId: '', emitenteNome: '', emitenteDocumento: '',
     dataAbate: '', vencimento: '', ordemCompra: '', loteFrigorifico: '', op: '', nfRefNumero: '',
-    cab: null, pesoKg: null, precoArroba: null, bruto: null, funrural: null, senar: null, seguro: null,
-    liquido: null, valor: null, nfRefValor: null, loteIds: [], preservados: [], dadosLidos: {},
+    cab: null, pesoKg: null, precoArroba: null, bruto: null, funrural: null, senar: null, seguro: null, rat: null,
+    liquido: null, valor: null, nfRefValor: null, nfsProdutor: [], loteIds: [], preservados: [], dadosLidos: {},
   };
 }
 
 /* Que componente vira qual campo, por especie. So' o PRIMEIRO de cada (tipo, natureza). */
-type Mapa = { campo: 'bruto' | 'funrural' | 'senar' | 'seguro' | 'retAcerto' | 'valor'; tipo: string; natureza: NaturezaComp }[];
+type Mapa = { campo: 'bruto' | 'funrural' | 'senar' | 'seguro' | 'rat' | 'retAcerto' | 'valor'; tipo: string; natureza: NaturezaComp }[];
 export const TIPO_RETENCAO_ACERTO = 'retencao_acerto';
 export const DESCRICAO_RETENCAO_ACERTO = 'Retenções do acerto';
 function mapaDaEspecie(e: EspecieDoc): Mapa {
@@ -52,6 +57,7 @@ function mapaDaEspecie(e: EspecieDoc): Mapa {
       { campo: 'funrural', tipo: 'funrural', natureza: 'retencao_sem_caixa' },
       { campo: 'senar', tipo: 'senar', natureza: 'retencao_sem_caixa' },
       { campo: 'seguro', tipo: 'seguro', natureza: 'retencao_sem_caixa' },
+      { campo: 'rat', tipo: 'rat', natureza: 'retencao_sem_caixa' },
     ];
     case 'acerto': return [
       { campo: 'bruto', tipo: 'valor_bruto', natureza: 'acrescimo' },
@@ -67,6 +73,25 @@ const objeto = (v: unknown): Record<string, unknown> =>
   (v != null && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v)) : {});
 const txt = (v: unknown) => (typeof v === 'string' ? v : v == null ? '' : String(v));
 const num = (v: unknown): number | null => (v == null || v === '' || Number.isNaN(Number(v)) ? null : Number(v));
+
+/** Le `dados.nfs_produtor` sem cast; o que nao e' lista de objetos com numero vira []. */
+export function nfsProdutorDe(v: unknown): NfProdutor[] {
+  if (!Array.isArray(v)) return [];
+  return v.map(objeto).filter(o => txt(o.numero).trim() !== '' || num(o.valor) != null)
+    .map(o => ({ numero: txt(o.numero).trim(), data: txt(o.data) || null, valor: num(o.valor) }));
+}
+/** Os numeros como a grade os mostra ("9444845 · 9444790"). */
+export const textoDasNfsProdutor = (l: NfProdutor[]): string => l.map(n => n.numero).filter(Boolean).join(' · ');
+/** Soma dos valores INFORMADOS; nulo quando nenhuma tem valor (vazio nunca vira zero). */
+export function valorDasNfsProdutor(l: NfProdutor[]): number | null {
+  const com = l.filter(n => n.valor != null);
+  return com.length === 0 ? null : Math.round(com.reduce((s, n) => s + (n.valor ?? 0), 0) * 100) / 100;
+}
+/** Edicao: numeros separados por virgula (ou " · "); o que ja' existia com o mesmo numero guarda data e valor. */
+export function nfsProdutorDoTexto(texto: string, atuais: NfProdutor[]): NfProdutor[] {
+  const nums = texto.split(/[,;·]+/).map(t => t.trim()).filter(Boolean);
+  return nums.map(n => atuais.find(a => a.numero === n) ?? { numero: n, data: null, valor: null });
+}
 
 export function formAbateDoDetalhe(d: DocumentoDetalhe): FormAbate {
   const f = formAbateVazio(d.especie);
@@ -94,7 +119,8 @@ export function formAbateDoDetalhe(d: DocumentoDetalhe): FormAbate {
     ordemCompra: txt(dados.ordem_compra), loteFrigorifico: txt(dados.lote_frigorifico), op: txt(dados.op),
     nfRefNumero: txt(ref.numero), nfRefValor: num(ref.valor), precoArroba: num(dados.preco_arroba),
     cab: d.cab ?? null, pesoKg: d.pesoKg ?? null,
-    bruto, funrural: valores.funrural ?? null, senar: valores.senar ?? null, seguro: valores.seguro ?? null,
+    bruto, funrural: valores.funrural ?? null, senar: valores.senar ?? null, seguro: valores.seguro ?? null, rat: valores.rat ?? null,
+    nfsProdutor: nfsProdutorDe(dados.nfs_produtor),
     valor: valores.valor ?? null,
     /* No acerto o operador digita o LIQUIDO; ao abrir, ele e' o bruto menos a retencao gravada. */
     liquido: d.especie === 'acerto' && bruto != null ? Math.round((bruto - (retAcerto ?? 0)) * 100) / 100 : null,
@@ -125,9 +151,11 @@ export function valorDoCampo(f: FormAbate, chave: ChaveCampo): string | number |
     case 'numero': case 'serie': case 'chaveAcesso': case 'dataEmissao': case 'observacao':
     case 'dataAbate': case 'vencimento': case 'ordemCompra': case 'loteFrigorifico': case 'op': case 'nfRefNumero':
       return f[chave];
-    case 'cab': case 'pesoKg': case 'precoArroba': case 'bruto': case 'funrural': case 'senar': case 'seguro':
+    case 'cab': case 'pesoKg': case 'precoArroba': case 'bruto': case 'funrural': case 'senar': case 'seguro': case 'rat':
     case 'liquido': case 'valor': case 'nfRefValor':
       return f[chave];
+    case 'nfsProdutor': return textoDasNfsProdutor(f.nfsProdutor);
+    case 'nfsProdutorValor': return valorDasNfsProdutor(f.nfsProdutor);
     default: return null;
   }
 }
@@ -146,6 +174,7 @@ export function payloadDoFormAbate(f: FormAbate): DocumentoPayload {
   if (tem('funrural') && pos(f.funrural)) comps.push({ tipo: 'funrural', natureza: 'retencao_sem_caixa', valor: f.funrural! });
   if (tem('senar') && pos(f.senar)) comps.push({ tipo: 'senar', natureza: 'retencao_sem_caixa', valor: f.senar! });
   if (tem('seguro') && pos(f.seguro)) comps.push({ tipo: 'seguro', natureza: 'retencao_sem_caixa', valor: f.seguro! });
+  if (tem('rat') && pos(f.rat)) comps.push({ tipo: 'rat', natureza: 'retencao_sem_caixa', valor: f.rat! });
   if (e === 'acerto') {
     const ret = retencoesDoAcerto(f.bruto, f.liquido);
     if (pos(ret)) comps.push({ tipo: TIPO_RETENCAO_ACERTO, natureza: 'retencao_sem_caixa', valor: ret!, descricao: DESCRICAO_RETENCAO_ACERTO });
@@ -166,6 +195,11 @@ export function payloadDoFormAbate(f: FormAbate): DocumentoPayload {
     if (!vazio(f.nfRefNumero)) ref.numero = f.nfRefNumero.trim();
     if (tem('nfRefValor') && f.nfRefValor != null) ref.valor = f.nfRefValor;
     poe('nf_referida', Object.keys(ref).length ? ref : null);
+  }
+  if (tem('nfsProdutor')) {
+    const l = f.nfsProdutor.filter(n => n.numero.trim() !== '' || n.valor != null)
+      .map(n => ({ numero: n.numero.trim(), data: n.data || null, valor: n.valor }));
+    poe('nfs_produtor', l.length ? l : null);
   }
 
   const novo = f.documentoId == null;
