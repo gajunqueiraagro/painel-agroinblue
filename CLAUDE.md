@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 15/10/2026 (OC-ENTREGA-COMPACTA-01, +9 em `src/components/venda/entregasVenda.test.tsx` (10 -> 19) — 5271 depois
+  Baseline em 15/10/2026 (OC-DOC-ESPECIE-ABATE-01 passo 7e, +19: `src/lib/oc/leitura/leituraAbate7e.test.ts` 18 (novo),
+  `src/components/compra/documentoFormAbate.test.tsx` 1 (15 -> 16) — 5290 depois dele; antes o OC-ENTREGA-COMPACTA-01, +9 em `src/components/venda/entregasVenda.test.tsx` (10 -> 19) — 5271 depois
   dele; antes o OC-DOC-ESPECIE-ABATE-01 passo 4 + 4b, +26: `src/lib/oc/leitura/leituraAbate.test.ts` 21 (novo),
   `src/components/compra/documentoFormAbate.test.tsx` 4 (11 -> 15), `src/lib/oc/camposDaEspecie.test.ts` 1 (14 -> 15) — 5262 depois
   dele; antes o passo 3, +12: `src/lib/oc/conferirDocumentosAbate.test.ts` 10 (novo),
@@ -326,7 +327,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5271
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5290
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -4041,6 +4042,24 @@ docs/historico/frentes-ate-2026-09-29.md.)
       passo 2, so' aparece agora porque a leitura a preenche.
     ⚠ NAO PROVADO: a tela REAL no navegador · a leitura gravada (Registrar/Salvar) · PDF de outra unidade da Minerva/JBS ·
       Acerto/Romaneio de layout novo · OCR da NPR (fora).
+  · PASSO 7e — VARIOS LOTES, CREDITO E NF SEM FUNRURAL (Gabriel 15/10/2026, so' tela, sem banco). LOTE PADRAO por especie
+    (`lotesPadraoDaEspecie`, `formDocumentoAbate.ts`): NF, Acerto e NPR nascem com TODOS os lotes ("Todos os lotes · N cab"); o Romaneio
+    nasce sem lote e o lote e' OBRIGATORIO (campo novo na grade); lido, ganha o lote UNICO de mesma quantidade de cabecas
+    (`loteSugeridoPelaQuantidade`, "lote sugerido pela quantidade · confira"); edicao vale o gravado; sem trava de NF unica.
+    ACERTO MINERVA com varios blocos de lote: cab, kg e bruto = soma dos "TOTAL Animais"; despesas e creditos ("Total Créditos", 0 sem
+    a secao) com as linhas conferidas contra os totais; tudo ou nada em bruto − despesas + creditos = Total Geral e soma dos lotes =
+    "VALOR TOTAL DO PRODUTO"; R$/@ com varios lotes = bruto ÷ (kg ÷ 15); data/vencimento diferentes entre lotes ficam vazios e
+    avisados; `dados.lotes_frigorifico` informativo. NF MINERVA: reconhece pela chave + "REF NOTA FISCAL DE PRODUTOR" + "SENAR R$"
+    (sem "Inf. Contribuinte:"); Funrural e Seguro NAO sao obrigatorios (vazio = vazio, aviso "NF sem Funrural destacado"); linha de
+    produto com NCM 00000000 = INCENTIVO; Bruto = so' o gado, conta gado + incentivos = total da nota; varias NFs do produtor com um VR
+    -> `dados.nfs_produtor_valor`. CREDITO = componente tipo 'incentivo', natureza acrescimo, um por linha (nenhuma lista de tipo no
+    banco: views e conferencia leem a natureza). Grade do Acerto: linha 3 Retenções | Incentivo | Líquido * | Observação (2); retencoes
+    = Bruto + Incentivo − Liquido. Celula de produto com dois numeros colados ("359,4700 122.411,52") se reparte (`celulasDoProduto`).
+    PROVA (bancada, 15/10, os 5 PDFs da c109ba8a + os 7 do LT10 e da Vera, sem gravar): LT10 e Vera iguais ao passo 4; c109ba8a — NF
+    acr 317.106,79 · ret 617,44 · liq 316.489,35; Acerto 317.106,79 · 617,43 · 316.489,36; faixa VERMELHA so' pelo liquido ("0,01").
+    Medido a 1.127 x 523 e 1.440 x 900: area 250/250, faixa 22, rodape em 417, corpo sem rolar, 0 campos fora, nos 5 vazios e lidos.
+    ⚠ NAO PROVADO: a tela real no navegador · o Registrar gravando incentivo e lote · o SENAR 617,44 (NF) x 617,43 (Acerto) segue
+      como esta' (a diferenca de 0,01 fica a' vista, decisao do Gabriel).
   ⚠ FILA (decisao do Gabriel, 14/10): OC-DOC-DUPLICADO-01 (aviso de NF ja' registrada — o banco NAO bloqueia: sem indice unico,
     sem gatilho, o registrar nao confere; a tela NUNCA avisou; no proto 1 chave de acesso repetida e 1 NF repetida por OC + emitente +
     numero + serie entre documentos vivos; o dono existente `fn_documento_chave_ja_registrada` compara SO' pela chave; a decisao do

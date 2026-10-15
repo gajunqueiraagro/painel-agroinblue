@@ -11,6 +11,24 @@ import { camposDaEspecie, retencoesDoAcerto, type ChaveCampo } from '@/lib/oc/ca
 
 /** Uma NF do produtor referida pela NF do frigorifico (`dados.nfs_produtor`). A JBS cita duas, sem valor. */
 export interface NfProdutor { numero: string; data: string | null; valor: number | null }
+/** Passo 7e: um credito do documento (componente tipo 'incentivo', natureza acrescimo), um por linha do PDF. */
+export interface Incentivo { descricao: string; valor: number }
+export const TIPO_INCENTIVO = 'incentivo';
+export const DESCRICAO_INCENTIVO = 'Incentivo';
+/** Soma dos incentivos (2 casas). */
+export const totalDosIncentivos = (l: Incentivo[]): number => Math.round(l.reduce((s, i) => s + i.valor, 0) * 100) / 100;
+/** Passo 7e — o lote com que o documento NOVO nasce (regra do Gabriel, 15/10): NF, Acerto e NPR sao da OPERACAO (todos os lotes);
+ *  o Romaneio e' POR LOTE (nenhum, e o lote e' obrigatorio); o resto, como hoje (nenhum). A edicao nunca passa por aqui. */
+export function lotesPadraoDaEspecie(especie: EspecieDoc, lotes: { loteId: string }[]): string[] {
+  return especie === 'nf_principal' || especie === 'nf_complementar' || especie === 'acerto' || especie === 'npr' ? lotes.map(l => l.loteId) : [];
+}
+/** Passo 7e: o Romaneio lido sugere o lote quando EXATAMENTE um lote da OC tem a mesma quantidade de cabecas; senao, nenhum. */
+export function loteSugeridoPelaQuantidade(lotes: { loteId: string; qtd?: number | null }[], cab: number | null | undefined): string | null {
+  if (cab == null) return null;
+  const iguais = lotes.filter(l => l.qtd != null && l.qtd === cab);
+  return iguais.length === 1 ? iguais[0].loteId : null;
+}
+export const FRASE_LOTE_SUGERIDO = 'lote sugerido pela quantidade · confira';
 
 /** Os valores digitaveis. Numero = number | null (vazio e' ausencia, nao zero); texto = string. */
 export interface FormAbate {
@@ -26,6 +44,8 @@ export interface FormAbate {
   cab: number | null; pesoKg: number | null; precoArroba: number | null;
   bruto: number | null; funrural: number | null; senar: number | null; seguro: number | null; rat: number | null;
   liquido: number | null; valor: number | null; nfRefValor: number | null;
+  /** NF e Acerto: os incentivos (todos os componentes tipo 'incentivo'). */
+  incentivos: Incentivo[];
   /** So' na NF: as NFs do produtor (a NPR segue com `nfRefNumero`/`nfRefValor`, em `dados.nf_referida`). */
   nfsProdutor: NfProdutor[];
   loteIds: string[];
@@ -42,7 +62,7 @@ export function formAbateVazio(especie: EspecieDoc = 'nf_principal'): FormAbate 
     emitenteId: '', emitenteNome: '', emitenteDocumento: '',
     dataAbate: '', vencimento: '', ordemCompra: '', loteFrigorifico: '', op: '', nfRefNumero: '',
     cab: null, pesoKg: null, precoArroba: null, bruto: null, funrural: null, senar: null, seguro: null, rat: null,
-    liquido: null, valor: null, nfRefValor: null, nfsProdutor: [], loteIds: [], preservados: [], dadosLidos: {},
+    liquido: null, valor: null, nfRefValor: null, incentivos: [], nfsProdutor: [], loteIds: [], preservados: [], dadosLidos: {},
   };
 }
 
@@ -108,6 +128,13 @@ export function formAbateDoDetalhe(d: DocumentoDetalhe): FormAbate {
     valores[m.campo] = Number(d.componentes[i].valor);
   }
   if (valores.retAcerto != null) retAcerto = valores.retAcerto;
+  /* Passo 7e: TODOS os incentivos da NF e do acerto viram a lista (nao so' o primeiro). */
+  const incentivos: Incentivo[] = [];
+  if (d.especie === 'nf_principal' || d.especie === 'nf_complementar' || d.especie === 'acerto')
+    d.componentes.forEach((c, j) => {
+      if (usados.has(j) || c.tipo !== TIPO_INCENTIVO || c.natureza !== 'acrescimo') return;
+      usados.add(j); incentivos.push({ descricao: c.descricao ?? DESCRICAO_INCENTIVO, valor: Number(c.valor) });
+    });
   const preservados = d.componentes.filter((_, j) => !usados.has(j));
   const bruto = valores.bruto ?? null;
   return {
@@ -121,9 +148,9 @@ export function formAbateDoDetalhe(d: DocumentoDetalhe): FormAbate {
     cab: d.cab ?? null, pesoKg: d.pesoKg ?? null,
     bruto, funrural: valores.funrural ?? null, senar: valores.senar ?? null, seguro: valores.seguro ?? null, rat: valores.rat ?? null,
     nfsProdutor: nfsProdutorDe(dados.nfs_produtor),
-    valor: valores.valor ?? null,
-    /* No acerto o operador digita o LIQUIDO; ao abrir, ele e' o bruto menos a retencao gravada. */
-    liquido: d.especie === 'acerto' && bruto != null ? Math.round((bruto - (retAcerto ?? 0)) * 100) / 100 : null,
+    valor: valores.valor ?? null, incentivos,
+    /* No acerto o operador digita o LIQUIDO; ao abrir, ele e' o bruto + incentivo menos a retencao gravada. */
+    liquido: d.especie === 'acerto' && bruto != null ? Math.round((bruto + totalDosIncentivos(incentivos) - (retAcerto ?? 0)) * 100) / 100 : null,
     loteIds: d.loteIds, preservados, dadosLidos: dados,
   };
 }
@@ -140,8 +167,8 @@ export function pendenciasDoFormAbate(f: FormAbate, contraparteId: string | null
     const ausente = campo.chave === 'emitente' ? !(f.emitenteId || contraparteId) : v == null || (typeof v === 'string' && vazio(v));
     if (ausente) falta.push({ chave: campo.chave, rotulo: campo.rotulo });
   }
-  if (f.especie === 'acerto' && f.bruto != null && f.liquido != null && f.liquido > f.bruto)
-    falta.push({ chave: 'liquido', rotulo: 'Líquido maior que o bruto' });
+  if (f.especie === 'acerto' && f.bruto != null && f.liquido != null && f.liquido > f.bruto + totalDosIncentivos(f.incentivos))
+    falta.push({ chave: 'liquido', rotulo: 'Líquido maior que o bruto + incentivo' });
   return falta;
 }
 
@@ -155,6 +182,8 @@ export function valorDoCampo(f: FormAbate, chave: ChaveCampo): string | number |
     case 'liquido': case 'valor': case 'nfRefValor':
       return f[chave];
     case 'nfsProdutor': return textoDasNfsProdutor(f.nfsProdutor);
+    case 'incentivo': return f.incentivos.length ? totalDosIncentivos(f.incentivos) : null;
+    case 'lote': return f.loteIds.length ? f.loteIds.join(',') : null;
     case 'nfsProdutorValor': return valorDasNfsProdutor(f.nfsProdutor);
     default: return null;
   }
@@ -175,8 +204,11 @@ export function payloadDoFormAbate(f: FormAbate): DocumentoPayload {
   if (tem('senar') && pos(f.senar)) comps.push({ tipo: 'senar', natureza: 'retencao_sem_caixa', valor: f.senar! });
   if (tem('seguro') && pos(f.seguro)) comps.push({ tipo: 'seguro', natureza: 'retencao_sem_caixa', valor: f.seguro! });
   if (tem('rat') && pos(f.rat)) comps.push({ tipo: 'rat', natureza: 'retencao_sem_caixa', valor: f.rat! });
+  /* Passo 7e: os incentivos da NF e do acerto, um componente por linha (acrescimo). */
+  if (e === 'nf_principal' || e === 'nf_complementar' || e === 'acerto')
+    for (const i of f.incentivos) if (pos(i.valor)) comps.push({ tipo: TIPO_INCENTIVO, natureza: 'acrescimo', valor: i.valor, descricao: i.descricao || DESCRICAO_INCENTIVO });
   if (e === 'acerto') {
-    const ret = retencoesDoAcerto(f.bruto, f.liquido);
+    const ret = retencoesDoAcerto(f.bruto, f.liquido, totalDosIncentivos(f.incentivos));
     if (pos(ret)) comps.push({ tipo: TIPO_RETENCAO_ACERTO, natureza: 'retencao_sem_caixa', valor: ret!, descricao: DESCRICAO_RETENCAO_ACERTO });
   }
   if (tem('valor') && pos(f.valor)) comps.push({ tipo: 'valor_bruto', natureza: 'acrescimo', valor: f.valor! });

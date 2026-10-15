@@ -25,6 +25,7 @@ import {
 } from '@/lib/oc/camposDaEspecie';
 import {
   nfsProdutorDoTexto, payloadDoFormAbate, pendenciasDoFormAbate, textoDasNfsProdutor, valorDasNfsProdutor,
+  lotesPadraoDaEspecie, loteSugeridoPelaQuantidade, totalDosIncentivos, FRASE_LOTE_SUGERIDO, DESCRICAO_INCENTIVO,
   type FormAbate, type NfProdutor,
 } from '@/lib/oc/formDocumentoAbate';
 import { conferenciaAoVivo, type DocConferencia } from '@/lib/oc/conferirDocumentosAbate';
@@ -81,7 +82,11 @@ function SeletorLotes({ lotes, valor, onChange, invalido }: {
 }) {
   const [aberto, setAberto] = useState(false);
   const escolhidos = lotes.filter(l => valor.includes(l.loteId));
+  /* passo 7e: com TODOS os lotes da OC (2+) escolhidos, "Todos os lotes · N cab". */
+  const todos = lotes.length > 1 && lotes.every(l => valor.includes(l.loteId));
+  const cabDeTodos = lotes.every(l => l.qtd != null) ? lotes.reduce((s, l) => s + (l.qtd ?? 0), 0) : null;
   const rotulo = valor.length === 0 ? '—'
+    : todos ? `Todos os lotes${cabDeTodos != null ? ` · ${cabDeTodos} cab` : ''}`
     : valor.length === 1 && escolhidos[0]
       ? `Lote ${escolhidos[0].ordem}${escolhidos[0].qtd != null ? ` · ${escolhidos[0].qtd} cab` : ''}`
       : `${valor.length} lotes`;
@@ -151,7 +156,9 @@ interface Props {
 }
 
 export function DocumentoFormAbate({ api, somenteLeitura, fornecedores, clienteId, contraparteId, onCriarFornecedor, onGravarDocumentoFornecedor, initialForm, onSaved, onCancel }: Props) {
-  const [form, setForm] = useState<FormAbate>(initialForm);
+  /* passo 7e: o documento NOVO nasce com o lote padrao da especie; a edicao vale o gravado. */
+  const [form, setForm] = useState<FormAbate>(() => (initialForm.documentoId == null && initialForm.loteIds.length === 0
+    ? { ...initialForm, loteIds: lotesPadraoDaEspecie(initialForm.especie, api.lotes) } : initialForm));
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [lendo, setLendo] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
@@ -180,14 +187,15 @@ export function DocumentoFormAbate({ api, somenteLeitura, fornecedores, clienteI
   const outrasDeducoes = form.preservados.filter(c => c.natureza === 'desconto_comercial' || c.natureza === 'despesa_desembolso')
     .reduce((s, c) => s + Number(c.valor), 0);
   const retNF = retencoesDaNF(form.funrural, form.senar, form.seguro, outrasRetencoes, form.rat);
-  const liquidoNF = form.bruto == null ? null : Math.round((form.bruto + outrosAcrescimos - retNF - outrasDeducoes) * 100) / 100;
+  const incentivo = totalDosIncentivos(form.incentivos);
+  const liquidoNF = form.bruto == null ? null : Math.round((form.bruto + incentivo + outrosAcrescimos - retNF - outrasDeducoes) * 100) / 100;
   const calculado = (k: ChaveCampo): string => {
     const f2 = (n: number | null) => (n == null ? '—' : formatCasas(n, 2));
     switch (k) {
       case 'arrobas': return f2(arrobasDoPeso(form.pesoKg));
       case 'mediaKg': return f2(mediaDoRomaneio(form.cab, form.pesoKg));
       case 'retencoes':
-        if (form.especie === 'acerto') { const r = retencoesDoAcerto(form.bruto, form.liquido); return r == null ? '—' : brl(r); }
+        if (form.especie === 'acerto') { const r = retencoesDoAcerto(form.bruto, form.liquido, incentivo); return r == null ? '—' : brl(r); }
         return brl(retNF);
       case 'liquido': return liquidoNF == null ? '—' : brl(liquidoNF);
       default: return '—';
@@ -221,10 +229,17 @@ export function DocumentoFormAbate({ api, somenteLeitura, fornecedores, clienteI
       const r = lerPdfDoAbate(pdf, { especie: form.especie, cnpjContraparte: contraparte?.cpfCnpj ?? null });
       if (r.tipo === 'lido') {
         const n = aplicarLeitura(form, r.campos, r.dados, numeroEmRepouso).preenchidos.length;
-        setForm(f => aplicarLeitura(f, r.campos, r.dados, numeroEmRepouso).form);
+        /* passo 7e: o Romaneio sem lote ganha o lote cuja quantidade de cabecas e' a do romaneio, se for UM so'. */
+        const sugerido = r.grupo === 'romaneio' && form.loteIds.length === 0 ? loteSugeridoPelaQuantidade(api.lotes, r.campos.cab) : null;
+        setForm(f => {
+          const g = aplicarLeitura(f, r.campos, r.dados, numeroEmRepouso).form;
+          return sugerido && g.loteIds.length === 0 ? { ...g, loteIds: [sugerido] } : g;
+        });
         const exato = r.grupo === 'nf' ? emitenteDaNota(r.campos.emitenteCnpj ?? null, r.campos.emitenteNome ?? null) : null;
-        setAviso(fraseDaLeitura(r.rotulo, n)
+        const avisos = [...r.avisos, ...(sugerido ? [FRASE_LOTE_SUGERIDO] : [])];
+        setAviso([fraseDaLeitura(r.rotulo, n), ...avisos].join(' · ')
           + (r.grupo === 'nf' && r.campos.emitenteCnpj && !exato ? ` · emitente ${r.campos.emitenteCnpj} fora do cadastro` : ''));
+        setAvisoAtencao(avisos.length > 0);
         return;
       }
       if (r.motivo === 'desconhecido' && ehNotaFiscal(form.especie)) {
@@ -320,11 +335,21 @@ export function DocumentoFormAbate({ api, somenteLeitura, fornecedores, clienteI
           className={cn(CTL, NUM, borda)} />;
       case 'nfsProdutor':
         return <CampoNfsProdutor lista={form.nfsProdutor} onChange={l => set('nfsProdutor', l)} disabled={somenteLeitura} className={borda} />;
+      case 'incentivo': {
+        /* passo 7e: com 2+ linhas de incentivo o campo e' a SOMA (so' exibicao); com 0 ou 1, digita-se. */
+        const l = form.incentivos;
+        if (l.length > 1)
+          return <Calculado texto={brl(incentivo)} titulo={l.map(i => `${i.descricao} ${brl(i.valor)}`).join(' · ')} />;
+        return <CampoMoeda valor={l[0]?.valor ?? null} disabled={somenteLeitura} className={cn(CTL, NUM, borda)}
+          onChange={n => set('incentivos', n == null ? [] : [{ descricao: l[0]?.descricao ?? DESCRICAO_INCENTIVO, valor: n }])} />;
+      }
       case 'nfsProdutorValor': {
-        /* Com 2+ NFs do produtor o valor e' a SOMA dos informados (so' exibicao); com 0 ou 1, digita-se o valor dela. */
+        /* Com 2+ NFs do produtor o valor e' a SOMA dos informados (so' exibicao); com 0 ou 1, digita-se o valor dela.
+           passo 7e: a NF que cita varias NFs do produtor com UM "VR" guarda o VR em `dados.nfs_produtor_valor` (sem repartir). */
         const l = form.nfsProdutor;
         if (l.length > 1) {
-          const soma = valorDasNfsProdutor(l);
+          const vr = form.dadosLidos.nfs_produtor_valor;
+          const soma = valorDasNfsProdutor(l) ?? (typeof vr === 'number' ? vr : null);
           return <Calculado texto={soma == null ? '—' : brl(soma)} titulo="soma dos valores informados das NFs do produtor" />;
         }
         return <CampoMoeda valor={l[0]?.valor ?? null} disabled={somenteLeitura} className={cn(CTL, NUM, borda)}
@@ -352,13 +377,13 @@ export function DocumentoFormAbate({ api, somenteLeitura, fornecedores, clienteI
     const e = form.especie;
     const nf = e === 'nf_principal' || e === 'nf_complementar';
     const bruto = nf || e === 'acerto' ? form.bruto : e === 'npr' ? form.valor : null;
-    const liquido = nf ? liquidoNF : e === 'acerto' ? (form.liquido ?? form.bruto) : e === 'npr' ? form.valor : null;
+    const liquido = nf ? liquidoNF : e === 'acerto' ? (form.liquido ?? (form.bruto == null ? null : form.bruto + incentivo)) : e === 'npr' ? form.valor : null;
     const comValor = bruto != null;
     return {
       documentoId: form.documentoId ?? '__novo__', especie: e, cancelado: false,
       qtdComponentes: comValor ? 1 : 0,
-      totalAcrescimos: comValor ? (bruto ?? 0) + (nf ? outrosAcrescimos : 0) : 0,
-      totalRetencoesSemCaixa: nf ? retNF : e === 'acerto' && comValor ? (bruto ?? 0) - (liquido ?? 0) : 0,
+      totalAcrescimos: comValor ? (bruto ?? 0) + (nf || e === 'acerto' ? incentivo : 0) + (nf ? outrosAcrescimos : 0) : 0,
+      totalRetencoesSemCaixa: nf ? retNF : e === 'acerto' && comValor ? (bruto ?? 0) + incentivo - (liquido ?? 0) : 0,
       liquidoProprio: comValor ? (liquido ?? 0) : 0, valorLiquido: 0,
       cab: form.cab, pesoKg: form.pesoKg,
     };
@@ -397,7 +422,7 @@ export function DocumentoFormAbate({ api, somenteLeitura, fornecedores, clienteI
 
       <div data-testid="linha-especie" className="flex shrink-0 items-center gap-2" style={{ height: ALTURA_LINHA_ESPECIE }}>
         <Segmentado<EspecieDoc> valor={form.especie} altura={26} opcoes={opcoes}
-          onEscolher={e => { if (!editando) { set('especie', e); setTentou(false); } }} />
+          onEscolher={e => { if (!editando) { setForm(f => ({ ...f, especie: e, loteIds: lotesPadraoDaEspecie(e, api.lotes) })); setTentou(false); } }} />
         {/* LUGAR RESERVADO da frase da edicao: existe sempre (vazio no documento novo). */}
         <span data-testid="especie-fixa" className="w-[150px] shrink-0 truncate text-[9.5px] text-muted-foreground" title={editando ? FRASE_ESPECIE_FIXA : undefined}>
           {editando ? FRASE_ESPECIE_FIXA : ''}

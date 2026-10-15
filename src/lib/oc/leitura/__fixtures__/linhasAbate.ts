@@ -101,3 +101,71 @@ export const ROMANEIO_JBS = [
   'O giro do boi vai ao ar das 7h às 8h (Horário de Brasília) | Romaneio de Abate - cFBED340 | Pag. | 1',
   'Total Abatido | 36,0 | 100,00% | 9.512,600 | 264,239 | 17,62 @',
 ];
+
+/* ── passo 7e: a OC de 2 lotes (LT11 + LT12), copiadas dos PDFs reais e ANONIMIZADAS do mesmo jeito ─────────────────────── */
+export const CHAVE_MINERVA_8815 = chaveSintetica('52168923000231', 2, 8815);
+
+/** Acerto com DOIS blocos de lote e a secao de creditos (o incentivo PROAPE-PRECOCE/MS). Os resumos foram encurtados para uma
+ *  linha por bloco com o total do bloco (a soma do resumo = o total do bloco continua valendo). */
+export const ACERTO_MINERVA_2LOTES = [
+  'FORTUNCERES S.A.',
+  'CNPJ: 52.168.923/0002-31 INSC. EST.: 284881082',
+  'Ordem Compra - 10315 - PRODUTOR TESTE',
+  'Lote - 11 | Data Abate - 01/10/2026',
+  'Resumo de Abate | Cabeça | Peso | Valor @ | Total',
+  '1 - Novilha Normal (X) - Indicador | 18 | 4.211,00 | 358,47 | 100.635,67',
+  'TOTAL Animais | 18 | 4.211,00 | 100.635,67',
+  'Vencimento: 05/10/2026',
+  'Impresso em : 01/10/2026 - 17:31:47 | 1 de 3',
+  'Ordem Compra - 10314 - PRODUTOR TESTE',
+  'Lote - 12 | Data Abate - 01/10/2026',
+  'Resumo de Abate | Cabeça | Peso | Valor @ | Total',
+  '8 - Novilha Normal (X) - Indicador | 20 | 4.900,00 | 359,00 | 117.000,00',
+  '16 - Novilha Normal (X) - Indicador | 16 | 3.795,50 | 359,47 | 91.080,69',
+  'TOTAL Animais | 36 | 8.695,50 | 208.080,69',
+  'Vencimento: 05/10/2026',
+  'Acertos no Pagamento | Valor',
+  'Impresso em : 01/10/2026 - 17:31:47 | 2 de 3',
+  'OC: 10314 - SENAR (0,2%) | 416,16',
+  'OC: 10315 - SENAR (0,2%) | 201,27',
+  'Total Despesas | 617,43',
+  'OC: 10314 - INCENTIVO PROAPE-PRECOCE/MS | 5.540,50',
+  'OC: 10315 - INCENTIVO PROAPE-PRECOCE/MS | 2.849,93',
+  'Total Créditos | 8.390,43',
+  'Total Geral | 316.489,36',
+  'VALOR TOTAL DO PRODUTO R$ 308.716,36 Base de cálculo: R$ 308.716,36 x 0.2 (SENAR) R$ 617,43 = R$ 308.098,93',
+];
+
+/** A NF 8815: 15 linhas de gado (aqui, 3 que somam o mesmo), duas de incentivo (NCM 00000000), Funrural VAZIO ("FUNR R$ %"),
+ *  duas NFs do produtor com um VR so'. Duas celulas COLADAS ("359,4700 122.411,52", "1,0000 5.540,5000") como a montagem as deu. */
+export const NF_MINERVA_INCENTIVO = [
+  'IDENTIFICAÇÃO DO EMITENTE', 'DANFE', 'Documento Auxiliar da Nota', 'Fiscal Eletrônica', 'FORTUNCERES S A',
+  'RODOVIA BR 267, KM 35 | 0 | CHAVE DE ACESSO',
+  em4(CHAVE_MINERVA_8815),
+  'COMPRA P/ INDUSTRIALIZ | 150260044983025 - 01/10/2026 | 15:47:01',
+  'VALOR DO FRETE | VALOR DO SEGURO | DESCONTO | OUTRAS DESPESAS | VALOR TOTAL DO IPI | VALOR DA COFINS | VALOR TOTAL DA NOTA',
+  '0,00 | 0,00 | 0,00 | 0,00 | 0,00 | 0,00 | 317.106,79',
+  'QUANTIDADE | ESPÉCIE | MARCA | NUMERAÇÃO | PESO BRUTO | PESO LÍQUIDO',
+  '54 | BOVINOS | 12.906,500 | 12.906,500',
+  '3010 | NOVILHA PARA ABATE | 01029000 | 051 | 1101 | Ar | 340,5333 | 359,4700 122.411,52 | 0,00 | 0,00 | 0,00',
+  '3010 | NOVILHA PARA ABATE | 01029000 | 051 | 1101 | Ar | 181,6667 | 359,4700 | 65.303,72 | 0,00 | 0,00 | 0,00',
+  '3010 | NOVILHA PARA ABATE | 01029000 | 051 | 1101 | Ar | 338,2334 | 358,4410 | 121.001,12 | 0,00 | 0,00 | 0,00',
+  'INP14526 | INCENTIVO PROAPEPRECOCE/MS | 00000000 | 041 | 1101 | Un | 1,0000 5.540,5000 | 5.540,50 | 0,00 | 0,00 | 0,00',
+  'INP14526 | INCENTIVO PROAPEPRECOCE/MS | 00000000 | 041 | 1101 | Un | 1,0000 2.849,9300 | 2.849,93 | 0,00 | 0,00 | 0,00',
+  'Inf. Contribuinte: REF NOTA FISCAL DE PRODUTOR 9412557, 9412508 EMITIDA EM 29/09/2026 VR : 217 567,08 // DATA',
+  'ABATE: 01/10/2026 // FAZENDA: FAZENDA TESTE // FUNR R$ % //',
+  'SENAR R$ 617,44 0,200000 % // SEGURO R$ % // PRECOCE_MS PROAPE PRECOCE/MS DECRETO NO 11 176/2003',
+];
+
+export const ROMANEIO_MINERVA_LT11 = [
+  'ROMANEIO DE ABATE',
+  'Lote: | 11 | Ordem Compra: | 10315 | Ord. Prod.: | 46323',
+  'Fornecedor: | PRODUTOR TESTE | Qtd. Programada: | 18 | Data Abate: | 01/10/2026',
+  'Total | 18 | 4.211,00 | Média Total (KG): | 233,94',
+];
+export const ROMANEIO_MINERVA_LT12 = [
+  'ROMANEIO DE ABATE',
+  'Lote: | 12 | Ordem Compra: | 10314 | Ord. Prod.: | 46323',
+  'Fornecedor: | PRODUTOR TESTE | Qtd. Programada: | 36 | Data Abate: | 01/10/2026',
+  'Total | 36 | 8.695,50 | Média Total (KG): | 241,54',
+];

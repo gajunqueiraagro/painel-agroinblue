@@ -13,7 +13,7 @@ const TEXTOS: ChaveTexto[] = ['numero', 'serie', 'chaveAcesso', 'dataEmissao', '
 const NUMEROS: ChaveNumero[] = ['cab', 'pesoKg', 'precoArroba', 'bruto', 'funrural', 'senar', 'seguro', 'rat', 'liquido'];
 
 export function aplicarLeitura(
-  form: FormAbate, campos: CamposLidos, dados: Record<string, string>,
+  form: FormAbate, campos: CamposLidos, dados: Record<string, unknown>,
   formatarNumero: (n: string) => string = n => n,
 ): { form: FormAbate; preenchidos: ChaveCampo[] } {
   const desenha = new Set((camposDaEspecie('abate', form.especie) ?? []).flat().map(c => c.chave));
@@ -35,9 +35,15 @@ export function aplicarLeitura(
     f.nfsProdutor = campos.nfsProdutor;
     preenchidos.push('nfsProdutor');
   }
+  /* Passo 7e: os incentivos lidos (NF e acerto) entram so' com a lista VAZIA; na NF eles nao tem campo na grade (vao como componente). */
+  const comIncentivo = form.especie === 'nf_principal' || form.especie === 'nf_complementar' || form.especie === 'acerto';
+  if (comIncentivo && campos.incentivos?.length && f.incentivos.length === 0) {
+    f.incentivos = campos.incentivos;
+    if (desenha.has('incentivo')) preenchidos.push('incentivo');
+  }
   for (const [k, v] of Object.entries(dados)) {
     const atual = f.dadosLidos[k];
-    if (v && (atual == null || atual === '')) f.dadosLidos[k] = v;
+    if (v != null && v !== '' && (atual == null || atual === '')) f.dadosLidos[k] = v;
   }
   return { form: f, preenchidos };
 }

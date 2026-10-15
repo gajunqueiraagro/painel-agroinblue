@@ -32,7 +32,7 @@ describe('camposDaEspecie', () => {
     expect(rotulos('abate', 'acerto')).toEqual([
       ['Ordem compra / Pedido*', 'Lote frigorífico', 'Data do abate*', 'Vencimento', 'Lote'],
       ['Cab*', 'Carcaça kg*', '@=', 'R$/@', 'Bruto R$*'],
-      ['Retenções R$=', 'Líquido R$*', 'Observação'],
+      ['Retenções R$=', 'Incentivo R$', 'Líquido R$*', 'Observação'],
     ]);
   });
 
@@ -43,7 +43,7 @@ describe('camposDaEspecie', () => {
     ]);
     expect(rotulos('abate', 'romaneio')).toEqual([
       ['Data do abate*', 'OP', 'Lote frigorífico', 'Cab', 'Peso total kg'],
-      ['Média kg=', 'Observação'],
+      ['Média kg=', 'Lote*', 'Observação'],
     ]);
   });
 
@@ -151,6 +151,6 @@ describe('formDocumentoAbate', () => {
     expect(pendenciasDoFormAbate(formAbateVazio('nf_principal'), 'f1').map(p => p.rotulo)).not.toContain('Emitente');
     expect(pendenciasDoFormAbate(formAbateVazio('nf_principal'), null).map(p => p.rotulo)).toContain('Emitente');
     const errado = { ...formAbateVazio('acerto'), bruto: 10, liquido: 20 };
-    expect(pendenciasDoFormAbate(errado, 'f1').map(p => p.rotulo)).toContain('Líquido maior que o bruto');
+    expect(pendenciasDoFormAbate(errado, 'f1').map(p => p.rotulo)).toContain('Líquido maior que o bruto + incentivo');
   });
 });

@@ -12,7 +12,8 @@
    O que NAO esta' no PDF fica vazio: R$/@ na NF da JBS (a nota traz R$/kg; converter seria palpite), OP e lote no Romaneio da
    JBS. (A data do abate do Acerto da JBS e' o "Data:" do cabecalho — regra do Gabriel, ver o layout.) */
 import type { EspecieDoc } from '@/hooks/useOperacaoDocumentos';
-import type { NfProdutor } from '@/lib/oc/formDocumentoAbate';
+import type { Incentivo, NfProdutor } from '@/lib/oc/formDocumentoAbate';
+import { formatCasas } from '@/lib/calculos/numeroBR';
 import { extrairDanfe } from '@/lib/oc/extrairDanfe';
 import { acharChaveNFe } from '@/lib/oc/leitura/chaveNFe';
 import { centavos, dataDoPdf, numeroDoPdf } from '@/lib/oc/leitura/numeroDoPdf';
@@ -33,11 +34,13 @@ export interface CamposLidos {
   cab?: number; pesoKg?: number; precoArroba?: number; bruto?: number;
   funrural?: number; senar?: number; seguro?: number; rat?: number; liquido?: number;
   nfsProdutor?: NfProdutor[];
+  /** Passo 7e: creditos do documento (o incentivo PROAPE-PRECOCE/MS da Minerva), um por linha do PDF. */
+  incentivos?: Incentivo[];
 }
 
 export type MotivoNaoLido = 'sem_texto' | 'desconhecido' | 'dois_layouts' | 'especie_trocada' | 'contraparte' | 'incompleto' | 'nao_fecha';
 export type LeituraDoAbate =
-  | { tipo: 'lido'; layout: string; rotulo: string; grupo: GrupoDoc; campos: CamposLidos; dados: Record<string, string> }
+  | { tipo: 'lido'; layout: string; rotulo: string; grupo: GrupoDoc; campos: CamposLidos; dados: Record<string, unknown>; avisos: string[] }
   | { tipo: 'nao_lido'; motivo: MotivoNaoLido; frase: string };
 
 /* ── O TEXTO ──────────────────────────────────────────────────────────────────────────────── */
@@ -75,7 +78,10 @@ const igualCent = (a: number, b: number) => centavos(a) === centavos(b);
 const somaCent = (xs: number[]) => xs.reduce((s, x) => s + centavos(x), 0);
 
 /* ── OS LAYOUTS ───────────────────────────────────────────────────────────────────────────── */
-type Ler = (t: Texto) => { ok: true; campos: CamposLidos; dados?: Record<string, string> } | { ok: false; motivo: 'incompleto' | 'nao_fecha'; detalhe: string };
+/* `avisos`: o que a faixa escreve em ambar sem impedir a leitura. `dispensados`: obrigatorio que o PROPRIO PDF nao permite preencher
+   (datas diferentes entre os lotes do acerto) — fica vazio e avisado, nunca inventado. */
+type Ler = (t: Texto) => { ok: true; campos: CamposLidos; dados?: Record<string, unknown>; avisos?: string[]; dispensados?: (keyof CamposLidos)[] }
+  | { ok: false; motivo: 'incompleto' | 'nao_fecha'; detalhe: string };
 interface Layout {
   id: string; rotulo: string; frigorifico: Frigorifico; grupo: GrupoDoc;
   /** true = o CNPJ do frigorifico vem do proprio texto (chave da NF, "CNPJ:" do acerto); false = da contraparte (regra 5). */
@@ -96,14 +102,28 @@ function cabecalhoDaNf(t: Texto): CamposLidos {
     bruto: d.valorTotal ?? undefined,
   };
 }
-/** As linhas de produto do DANFE: a celula do NCM do gado (0102xxxx) ancora as outras. */
-function produtosDaNf(t: Texto) {
-  return t.linhas.map(celulas).flatMap(c => {
-    const k = c.findIndex(x => /^0102\d{4}$/.test(x));
+/* Passo 7e: a montagem das linhas cola dois numeros vizinhos numa celula quando o espaco entre eles e' curto ("359,4700 122.411,52",
+   medido na NF 8815). Na linha de PRODUTO a celula so' se reparte quando TODAS as partes sao numero com virgula decimal — "1 295,39"
+   (milhar com espaco) nao se reparte. */
+const NUMERO_COM_VIRGULA = /^\d{1,3}(\.\d{3})*,\d+$/;
+const celulasDoProduto = (l: string) => celulas(l).flatMap(x => {
+  const partes = x.split(/\s+/);
+  return partes.length > 1 && partes.every(p => NUMERO_COM_VIRGULA.test(p)) ? partes : [x];
+});
+/** As linhas de produto do DANFE: a celula do NCM ancora as outras. `ncm` = o padrao da celula (gado 0102xxxx). */
+function linhasDeProduto(t: Texto, ncm: RegExp) {
+  return t.linhas.map(celulasDoProduto).flatMap(c => {
+    const k = c.findIndex(x => ncm.test(x));
     if (k < 0) return [];
-    return [{ cb: k === 3 ? num(c[2]) : undefined, un: c[k + 3], quant: num(c[k + 4]), unit: num(c[k + 5]), total: num(c[k + 6]) }];
+    return [{ descricao: c[k - 1] ?? '', cb: k === 3 ? num(c[2]) : undefined, un: c[k + 3], quant: num(c[k + 4]), unit: num(c[k + 5]), total: num(c[k + 6]) }];
   });
 }
+const produtosDaNf = (t: Texto) => linhasDeProduto(t, /^0102\d{4}$/);
+/** Passo 7e: na NF da Minerva o incentivo PROAPE-PRECOCE/MS e' linha de produto com NCM 00000000 (regra do Gabriel, 15/10). */
+const incentivosDaNf = (t: Texto) => linhasDeProduto(t, /^0{8}$/);
+const fmt2 = (n: number) => formatCasas(n, 2);
+export const fraseDoIncentivo = (total: number) => `Incentivo ${fmt2(total)} incluído`;
+export const FRASE_NF_SEM_FUNRURAL = 'NF sem Funrural destacado';
 /** A linha dos volumes ("QUANTIDADE | ESPÉCIE | … | PESO LÍQUIDO" e os valores embaixo). */
 function volumesDaNf(t: Texto) {
   const i = t.linhas.findIndex(l => celulas(l)[0] === 'QUANTIDADE' && l.includes('PESO LÍQUIDO'));
@@ -114,16 +134,29 @@ function volumesDaNf(t: Texto) {
 
 const NF_MINERVA: Layout = {
   id: 'nf_minerva', rotulo: 'NF Minerva', frigorifico: 'minerva', grupo: 'nf', cnpjNoTexto: true,
-  reconhece: t => daLista('minerva', cnpjDaChave(t)) && temTodos(t, ['Inf. Contribuinte:', 'FUNR R$']),
-  obrigatorios: ['chaveAcesso', 'dataEmissao', 'cab', 'pesoKg', 'bruto', 'funrural'],
+  /* Passo 7e: a chave (com DV valido) e' da Minerva e o texto tem a referencia da NF do produtor e o SENAR. "Inf. Contribuinte:" nao
+     e' ancora (uma impressao da NF 8815 nao o traz), nem "FUNR R$" (a NF pode vir sem Funrural destacado). */
+  reconhece: t => daLista('minerva', cnpjDaChave(t)) && temTodos(t, ['REF NOTA FISCAL DE PRODUTOR', 'SENAR R$']),
+  /* Funrural e Seguro NAO sao obrigatorios: "FUNR R$ %" (vazio) e' campo vazio, nunca zero. */
+  obrigatorios: ['chaveAcesso', 'dataEmissao', 'cab', 'pesoKg', 'bruto'],
   ler: t => {
     const cab0 = cabecalhoDaNf(t);
     const prods = produtosDaNf(t);
+    const incs = incentivosDaNf(t);
     const vol = volumesDaNf(t);
     const ret = (rot: string) => num(re1(t.corrido, new RegExp(`${rot} R\\$ ([\\d .]+,\\d{2})`)));
-    const nfs: NfProdutor[] = [...t.corrido.matchAll(/NOTA FISCAL DE PRODUTOR (\d+) EMITIDA EM (\d{2}\/\d{2}\/\d{4}) VR : ([\d .]+,\d{2})/g)]
-      .map(m => ({ numero: m[1], data: dataDoPdf(m[2]), valor: numeroDoPdf(m[3]) }));
+    /* A referencia pode citar varias NFs do produtor ("9412557, 9412508 … VR : 217 567,08"): o VR e' de todas, e fica com a SOMA
+       (em `dados.nfs_produtor_valor`), sem repartir; com uma so', e' o valor dela. */
+    const dados: Record<string, unknown> = {};
+    const nfs: NfProdutor[] = [...t.corrido.matchAll(/NOTA FISCAL DE PRODUTOR ([\d, ]+?) EMITIDA EM (\d{2}\/\d{2}\/\d{4}) VR : ([\d .]+,\d{2})/g)]
+      .flatMap(m => {
+        const numeros = m[1].split(',').map(x => x.trim()).filter(Boolean);
+        const vr = numeroDoPdf(m[3]);
+        if (numeros.length > 1 && vr != null) dados.nfs_produtor_valor = vr;
+        return numeros.map(n => ({ numero: n, data: dataDoPdf(m[2]), valor: numeros.length === 1 ? vr : null }));
+      });
     const emAr = prods.filter(p => p.un === 'Ar');
+    const totalNota = cab0.bruto;
     const campos: CamposLidos = {
       ...cab0, cab: vol.quantidade, pesoKg: vol.pesoLiquido,
       precoArroba: emAr.length === 1 ? emAr[0].unit : undefined,
@@ -132,11 +165,20 @@ const NF_MINERVA: Layout = {
       nfsProdutor: nfs.length ? nfs : undefined,
     };
     if (prods.length === 0 || prods.some(p => p.total == null)) return { ok: false, motivo: 'incompleto', detalhe: 'produtos da nota' };
-    if (campos.bruto != null && somaCent(prods.map(p => p.total ?? 0)) !== centavos(campos.bruto))
+    if (incs.some(p => p.total == null)) return { ok: false, motivo: 'incompleto', detalhe: 'incentivos da nota' };
+    /* Bruto R$ = so' o gado; o total da nota = gado + incentivos (a conta interna, ao centavo). */
+    const gado = somaCent(prods.map(p => p.total ?? 0));
+    const incentivo = somaCent(incs.map(p => p.total ?? 0));
+    if (totalNota != null && gado + incentivo !== centavos(totalNota))
       return { ok: false, motivo: 'nao_fecha', detalhe: 'soma dos produtos ≠ total da nota' };
+    campos.bruto = totalNota == null ? undefined : gado / 100;
+    if (incs.length) campos.incentivos = incs.map(p => ({ descricao: p.descricao, valor: p.total ?? 0 }));
     if (emAr.length && campos.pesoKg != null && somaCent(emAr.map(p => (p.quant ?? 0) * 15)) !== centavos(campos.pesoKg))
       return { ok: false, motivo: 'nao_fecha', detalhe: 'arrobas × 15 ≠ peso líquido' };
-    return { ok: true, campos };
+    const avisos: string[] = [];
+    if (campos.funrural == null) avisos.push(FRASE_NF_SEM_FUNRURAL);
+    if (incs.length) avisos.push(fraseDoIncentivo(incentivo / 100));
+    return { ok: true, campos, dados, avisos };
   },
 };
 
@@ -183,27 +225,83 @@ const ACERTO_MINERVA: Layout = {
   reconhece: t => daLista('minerva', digitos(re1(t.corrido, /CNPJ:\s*([\d./-]{14,18})/) ?? ''))
     && temTodos(t, ['Ordem Compra -', 'Resumo de Abate', 'Acertos no Pagamento', 'Total Geral']),
   obrigatorios: ['ordemCompra', 'dataAbate', 'cab', 'pesoKg', 'bruto', 'liquido'],
+  /* Passo 7e — VARIOS LOTES E CREDITOS (medido no acerto LT11-12, 15/10): um BLOCO por lote ("Ordem Compra - N", "Lote - N | Data
+     Abate -", o "Resumo de Abate", "TOTAL Animais | cab | kg | total", "Vencimento:") e um fecho comum: "Acertos no Pagamento" com as
+     linhas "OC: N - <despesa>", "Total Despesas", as linhas "OC: N - <credito>", "Total Créditos" e "Total Geral".
+     cab, kg e bruto (gado) = SOMA dos blocos; despesas = "Total Despesas"; creditos = "Total Créditos" (0 sem a secao).
+     A CONTA, tudo ou nada: cada bloco = o seu resumo; as linhas de despesa = "Total Despesas"; as de credito = "Total Créditos";
+     soma dos blocos = "VALOR TOTAL DO PRODUTO" (quando existe); bruto − despesas + creditos = "Total Geral".
+     R$/@: com UM bloco, o impresso (o resumo de uma linha); com varios, a MEDIA PONDERADA = bruto do gado ÷ (kg ÷ 15), 2 casas.
+     Vencimento e data do abate: os dos blocos; se diferirem entre os lotes, nao preenche e a faixa avisa. */
   ler: t => {
-    const total = linhaQueComeca(t, 'TOTAL Animais');
-    const despesas = num(linhaQueComeca(t, 'Total Despesas')?.[1]);
-    const iIni = t.linhas.findIndex(l => l.startsWith('Resumo de Abate'));
-    const iFim = t.linhas.findIndex(l => l.startsWith('TOTAL Animais'));
-    const prods = iIni >= 0 && iFim > iIni ? t.linhas.slice(iIni + 1, iFim).map(celulas).filter(c => c.length === 5) : [];
-    const campos: CamposLidos = {
-      ordemCompra: re1(t.corrido, /Ordem Compra - (\d+)/), loteFrigorifico: re1(t.corrido, /Lote - (\d+)/),
-      dataAbate: data(re1(t.corrido, /Data Abate - (\d{2}\/\d{2}\/\d{4})/)),
-      vencimento: data(re1(t.corrido, /Vencimento:\s*(\d{2}\/\d{2}\/\d{4})/)),
-      cab: num(total?.[1]), pesoKg: num(total?.[2]), bruto: num(total?.[3]),
-      precoArroba: prods.length === 1 ? num(prods[0][3]) : undefined,
-      liquido: num(linhaQueComeca(t, 'Total Geral')?.[1]),
-    };
+    const linhas = t.linhas.map(celulas);
+    type Bloco = { ordem: string; lote: string; data?: string; venc?: string; prods: string[][]; total?: string[] };
+    const blocos: Bloco[] = [];
+    let atual: Bloco | null = null;
+    let noResumo = false;
+    for (const c of linhas) {
+      const oc = (c[0] ?? '').match(/^Ordem Compra - (\d+)/);
+      if (oc) { atual = { ordem: oc[1], lote: '', prods: [] }; blocos.push(atual); noResumo = false; continue; }
+      if (!atual) continue;
+      const lt = (c[0] ?? '').match(/^Lote - (\d+)$/);
+      if (lt) { atual.lote = lt[1]; const d = c.join(' ').match(/Data Abate - (\d{2}\/\d{2}\/\d{4})/); if (d) atual.data = data(d[1]); continue; }
+      if ((c[0] ?? '').startsWith('Resumo de Abate')) { noResumo = true; continue; }
+      if (c[0] === 'TOTAL Animais') { atual.total = c; noResumo = false; continue; }
+      if (noResumo && c.length === 5) { atual.prods.push(c); continue; }
+      const v = (c[0] ?? '').match(/^Vencimento:\s*(\d{2}\/\d{2}\/\d{4})/);
+      if (v && atual.venc == null) atual.venc = data(v[1]);
+    }
+    if (blocos.length === 0 || blocos.some(bl => !bl.total)) return { ok: false, motivo: 'incompleto', detalhe: 'TOTAL Animais' };
+    for (const bl of blocos)
+      if (bl.prods.length && somaCent(bl.prods.map(p => num(p[4]) ?? 0)) !== centavos(num(bl.total?.[3]) ?? NaN))
+        return { ok: false, motivo: 'nao_fecha', detalhe: 'soma do resumo ≠ total' };
+    const cabs = blocos.map(bl => num(bl.total?.[1])), kgs = blocos.map(bl => num(bl.total?.[2])), brutos = blocos.map(bl => num(bl.total?.[3]));
+    const soma = (xs: (number | undefined)[]) => (xs.some(x => x == null) ? undefined : somaCent(xs.map(x => x ?? 0)) / 100);
+    /* As linhas do fecho: "OC: N - <texto> | valor", ate' o total de cada secao. */
+    const iDesp = linhas.findIndex(c => c[0] === 'Total Despesas');
+    const iCred = linhas.findIndex(c => c[0] === 'Total Créditos');
+    const iIniAc = linhas.findIndex(c => (c[0] ?? '').startsWith('Acertos no Pagamento'));
+    const linhaOC = (c: string[]) => /^OC: \d+ - /.test(c[0] ?? '') && c.length >= 2;
+    const despLinhas = iIniAc >= 0 && iDesp > iIniAc ? linhas.slice(iIniAc + 1, iDesp).filter(linhaOC) : [];
+    const credLinhas = iCred > iDesp && iDesp >= 0 ? linhas.slice(iDesp + 1, iCred).filter(linhaOC) : [];
+    const despesas = num(linhas[iDesp]?.[1]);
+    const creditos = iCred >= 0 ? num(linhas[iCred]?.[1]) : 0;
+    const totalGeral = num(linhaQueComeca(t, 'Total Geral')?.[1]);
+    const valorProduto = num(re1(t.corrido, /VALOR TOTAL DO PRODUTO R\$ ([\d.]+,\d{2})/));
     if (despesas == null) return { ok: false, motivo: 'incompleto', detalhe: 'Total Despesas' };
-    if (campos.bruto != null && campos.liquido != null && centavos(campos.bruto) - centavos(despesas) !== centavos(campos.liquido))
-      return { ok: false, motivo: 'nao_fecha', detalhe: 'bruto − despesas ≠ total geral' };
-    if (prods.length && campos.bruto != null && somaCent(prods.map(p => num(p[4]) ?? 0)) !== centavos(campos.bruto))
-      return { ok: false, motivo: 'nao_fecha', detalhe: 'soma do resumo ≠ total' };
-    if (campos.cab != null && !Number.isInteger(campos.cab)) return { ok: false, motivo: 'nao_fecha', detalhe: 'cab não inteiro' };
-    return { ok: true, campos };
+    if (creditos == null) return { ok: false, motivo: 'incompleto', detalhe: 'Total Créditos' };
+    const bruto = soma(brutos), cab = soma(cabs), pesoKg = soma(kgs);
+    if (despLinhas.length && somaCent(despLinhas.map(c => num(c[c.length - 1]) ?? NaN)) !== centavos(despesas))
+      return { ok: false, motivo: 'nao_fecha', detalhe: 'despesas ≠ Total Despesas' };
+    if (somaCent(credLinhas.map(c => num(c[c.length - 1]) ?? NaN)) !== centavos(creditos))
+      return { ok: false, motivo: 'nao_fecha', detalhe: 'créditos ≠ Total Créditos' };
+    if (bruto != null && valorProduto != null && centavos(bruto) !== centavos(valorProduto))
+      return { ok: false, motivo: 'nao_fecha', detalhe: 'soma dos lotes ≠ valor total do produto' };
+    if (bruto != null && totalGeral != null && centavos(bruto) - centavos(despesas) + centavos(creditos) !== centavos(totalGeral))
+      return { ok: false, motivo: 'nao_fecha', detalhe: 'bruto − despesas + créditos ≠ total geral' };
+    if (cab != null && !Number.isInteger(cab)) return { ok: false, motivo: 'nao_fecha', detalhe: 'cab não inteiro' };
+    const unico = <T,>(xs: (T | undefined)[]) => { const u = [...new Set(xs.filter((x): x is T => x != null))]; return u.length === 1 && xs.every(x => x != null) ? u[0] : undefined; };
+    const dataAbate = unico(blocos.map(bl => bl.data));
+    const vencimento = unico(blocos.map(bl => bl.venc));
+    const varios = blocos.length > 1;
+    const campos: CamposLidos = {
+      ordemCompra: blocos.map(bl => bl.ordem).join(' · '),
+      loteFrigorifico: blocos.every(bl => bl.lote) ? blocos.map(bl => bl.lote).join(' · ') : undefined,
+      dataAbate, vencimento, cab, pesoKg, bruto,
+      precoArroba: !varios ? (blocos[0].prods.length === 1 ? num(blocos[0].prods[0][3]) : undefined)
+        : bruto != null && pesoKg ? Math.round((bruto / (pesoKg / 15)) * 100) / 100 : undefined,
+      liquido: totalGeral,
+      incentivos: credLinhas.length
+        ? credLinhas.map(c => ({ descricao: (c[0] ?? '').replace(/^OC: \d+ - /, '').trim(), valor: num(c[c.length - 1]) ?? 0 })) : undefined,
+    };
+    const dados: Record<string, unknown> = {};
+    if (varios) dados.lotes_frigorifico = blocos.map((bl, i) => ({ lote: bl.lote, ordem_compra: bl.ordem, cab: cabs[i], kg: kgs[i], bruto: brutos[i] }));
+    const avisos: string[] = [];
+    const dispensados: (keyof CamposLidos)[] = [];
+    if (dataAbate == null && blocos.some(bl => bl.data)) { avisos.push('data do abate diferente entre os lotes: preencha'); dispensados.push('dataAbate'); }
+    if (vencimento == null && blocos.some(bl => bl.venc)) avisos.push('vencimento diferente entre os lotes: preencha');
+    if (creditos > 0) avisos.push(fraseDoIncentivo(creditos));
+    return { ok: true, campos, dados, avisos, dispensados };
   },
 };
 
@@ -332,7 +430,7 @@ export function lerPdfDoAbate(
   }
   if (r.ok !== true) return { tipo: 'nao_lido', motivo: 'incompleto', frase: FRASE_NAO_RECONHECIDO };
   const lido = r;
-  const falta = L.obrigatorios.find(k => lido.campos[k] == null || lido.campos[k] === '');
+  const falta = L.obrigatorios.find(k => !(lido.dispensados ?? []).includes(k) && (lido.campos[k] == null || lido.campos[k] === ''));
   if (falta) return { tipo: 'nao_lido', motivo: 'incompleto', frase: `${L.rotulo} reconhecido, mas falta ${ROTULO_DO_CAMPO[falta] ?? falta} no PDF · nada preenchido` };
-  return { tipo: 'lido', layout: L.id, rotulo: L.rotulo, grupo: L.grupo, campos: lido.campos, dados: lido.dados ?? {} };
+  return { tipo: 'lido', layout: L.id, rotulo: L.rotulo, grupo: L.grupo, campos: lido.campos, dados: lido.dados ?? {}, avisos: lido.avisos ?? [] };
 }

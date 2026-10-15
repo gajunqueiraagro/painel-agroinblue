@@ -74,7 +74,7 @@ describe('aba Documentos do abate', () => {
       expect(assinatura()).toBe(base);
       vistos[e] = area.querySelectorAll('[data-campo]').length;
     }
-    expect(vistos).toEqual({ NF: 21, NPR: 6, Acerto: 13, Romaneio: 7, Outro: 8 });
+    expect(vistos).toEqual({ NF: 21, NPR: 6, Acerto: 14, Romaneio: 8, Outro: 8 });
   });
 
   it('obrigatorio que falta fica vermelho e a faixa diz o que falta; nada e gravado', () => {
@@ -247,5 +247,19 @@ describe('aba Documentos do abate', () => {
     expect(src).toContain('camposDaEspecie(');
     expect(src).not.toMatch(/especie\s*===\s*'(npr|romaneio)'/);
     expect(readFileSync('src/components/abate/AbateModalShell.tsx', 'utf8')).toContain('tipoOperacao="abate"');
+  });
+
+  it('passo 7e: NF nasce com TODOS os lotes ("Todos os lotes · 54 cab"); Romaneio nasce sem lote e o lote e obrigatorio', () => {
+    const a = { ...api(), lotes: [{ loteId: 'l1', ordem: 1, categoria: 'novilhas', qtd: 36 }, { loteId: 'l2', ordem: 2, categoria: 'novilhas', qtd: 18 }] };
+    montar('abate', a);
+    fireEvent.click(screen.getByRole('button', { name: /Novo documento/ }));
+    expect(screen.getByTestId('seletor-lotes').textContent).toBe('Todos os lotes · 54 cab');
+    fireEvent.click(within(screen.getByTestId('linha-especie')).getByRole('button', { name: 'Romaneio' }));
+    expect(screen.getByTestId('seletor-lotes').textContent).toBe('—');
+    fireEvent.click(screen.getByRole('button', { name: /Registrar documento/ }));
+    expect(screen.getByTestId('faixa-conferencia').textContent).toContain('Lote');
+    expect(registrar).not.toHaveBeenCalled();
+    fireEvent.click(within(screen.getByTestId('linha-especie')).getByRole('button', { name: 'Acerto' }));
+    expect(screen.getByTestId('seletor-lotes').textContent).toBe('Todos os lotes · 54 cab');
   });
 });

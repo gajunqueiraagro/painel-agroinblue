@@ -17,7 +17,7 @@ export type ChaveCampo =
   | 'numero' | 'serie' | 'dataEmissao' | 'dataAbate' | 'vencimento' | 'lote'
   | 'emitente' | 'chaveAcesso'
   | 'cab' | 'pesoKg' | 'arrobas' | 'precoArroba' | 'bruto'
-  | 'funrural' | 'senar' | 'seguro' | 'rat' | 'retencoes' | 'liquido'
+  | 'funrural' | 'senar' | 'seguro' | 'rat' | 'retencoes' | 'incentivo' | 'liquido'
   | 'nfRefNumero' | 'nfRefValor' | 'nfsProdutor' | 'nfsProdutorValor' | 'observacao'
   | 'ordemCompra' | 'loteFrigorifico' | 'op' | 'mediaKg' | 'valor';
 
@@ -69,8 +69,9 @@ const ACERTO: CampoDef[][] = [
   [c('cab', 'Cab', 1, { obrigatorio: true, numerico: true }), c('pesoKg', 'Carcaça kg', 1, { obrigatorio: true, numerico: true }),
    c('arrobas', '@', 1, { calculado: true, numerico: true }), c('precoArroba', 'R$/@', 1, { numerico: true }),
    c('bruto', 'Bruto R$', 1, { obrigatorio: true, numerico: true })],
-  [c('retencoes', 'Retenções R$', 1, { calculado: true, numerico: true }), c('liquido', 'Líquido R$', 1, { obrigatorio: true, numerico: true }),
-   c('observacao', 'Observação', 3)],
+  /* passo 7e: o credito do acerto (o incentivo PROAPE-PRECOCE/MS) tem campo; as retencoes passam a ser Bruto + Incentivo − Liquido. */
+  [c('retencoes', 'Retenções R$', 1, { calculado: true, numerico: true }), c('incentivo', 'Incentivo R$', 1, { numerico: true }),
+   c('liquido', 'Líquido R$', 1, { obrigatorio: true, numerico: true }), c('observacao', 'Observação', 2)],
 ];
 
 const NPR: CampoDef[][] = [
@@ -82,7 +83,8 @@ const NPR: CampoDef[][] = [
 const ROMANEIO: CampoDef[][] = [
   [c('dataAbate', 'Data do abate', 1, { obrigatorio: true }), c('op', 'OP'), c('loteFrigorifico', 'Lote frigorífico'),
    c('cab', 'Cab', 1, { numerico: true }), c('pesoKg', 'Peso total kg', 1, { numerico: true })],
-  [c('mediaKg', 'Média kg', 1, { calculado: true, numerico: true }), c('observacao', 'Observação', 3)],
+  /* passo 7e: o Romaneio e' POR LOTE (regra do Gabriel, 15/10): o lote e' obrigatorio. */
+  [c('mediaKg', 'Média kg', 1, { calculado: true, numerico: true }), c('lote', 'Lote', 1, { obrigatorio: true }), c('observacao', 'Observação', 3)],
 ];
 
 /* "Outro" = os campos de hoje do formulario (numero, serie, emissao, valor, emitente, chave, observacao). No abate ele e'
@@ -118,9 +120,9 @@ export const arrobasDoPeso = (kg: number | null): number | null => (kg == null |
 export const retencoesDaNF = (funrural: number | null, senar: number | null, seguro: number | null, outras = 0, rat: number | null = null): number =>
   r2((funrural ?? 0) + (senar ?? 0) + (seguro ?? 0) + (rat ?? 0) + outras);
 
-/** Retencoes do acerto = Bruto − Liquido (o liquido vem impresso). Nulo sem os dois. */
-export const retencoesDoAcerto = (bruto: number | null, liquido: number | null): number | null =>
-  (bruto == null || liquido == null ? null : r2(bruto - liquido));
+/** Retencoes do acerto = Bruto + Incentivo − Liquido (o liquido vem impresso; sem incentivo, Bruto − Liquido). Nulo sem bruto e liquido. */
+export const retencoesDoAcerto = (bruto: number | null, liquido: number | null, incentivo = 0): number | null =>
+  (bruto == null || liquido == null ? null : r2(bruto + incentivo - liquido));
 
 /** Media do romaneio = peso total / cab. */
 export const mediaDoRomaneio = (cab: number | null, pesoKg: number | null): number | null =>
