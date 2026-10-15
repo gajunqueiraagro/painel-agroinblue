@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 15/10/2026 (SEG-AGRI-TENANT-01, +2 em `src/lib/acessos/guardaDeClienteNasMigrations.test.ts` (3 -> 5) — 5318 depois dele;
+  Baseline em 15/10/2026 (FIN-LR-SYNC-01a, +5: `src/v2/lib/lucroRural/lerArquivoLr.test.ts` 5 (novo) — 5323 depois dele;
+  antes o SEG-AGRI-TENANT-01, +2 em `src/lib/acessos/guardaDeClienteNasMigrations.test.ts` (3 -> 5) — 5318 depois dele;
   antes o SEG-DRE-TENANT-01, +3: `src/lib/acessos/guardaDeClienteNasMigrations.test.ts` 3 (novo) — 5316 depois dele;
   antes o OC-DOC-SAIDA-FAZENDA-01 fix1 + fix1b, +3 em `src/components/compra/documentoFormAbate.test.tsx` (17 -> 20) — 5313
   depois deles; antes o OC-DOC-SAIDA-FAZENDA-01, +20: `src/lib/oc/leitura/leituraSaida7f.test.ts` 19 (novo),
@@ -331,7 +332,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5318
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5323
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3978,6 +3979,61 @@ docs/historico/frentes-ate-2026-09-29.md.)
   quem mexer num confere o outro. O selo do rodape (`SeloRegraDaLinha`) diz a regra da linha.
 
 ## REGRAS VIGENTES — OPERACAO COMERCIAL E FINANCEIRO
+- ⚠ "ATUALIZAR DO LUCRO RURAL": O BANCO COMPARA, NADA E' GRAVADO EM LANCAMENTO (FIN-LR-SYNC-01a passo a1, Gabriel 15/10/2026; migration
+  `supabase/migrations/20261027198800_fin_lr_sync_01a.sql`, md5 do arquivo bf848e7aa80d5daa3315d51ed9d1d41b — APLICADA no proto em
+  15/10/2026 com o OK do Gabriel, pelo `supabase db query --linked` (project-ref conferido = binbcdfbisgscrifztia), migration + linha do
+  ledger NUMA transacao: ledger 20261015165534 `fin_lr_sync_01a` (⚠ registrada com o timestamp do dia; o ledger guarda o arquivo
+  BYTE A BYTE, com a quebra final: md5 = bf848e7a…, conferido dentro da transacao). Body md5 de `fn_lr_sync_comparar` 8eb04018…).
+  · TABELAS: `lr_vinculos` (cliente, chave do LR, `lancamento_id` SEM FK — nada de FK para `financeiro_lancamentos_v2` —, `ignorar`,
+    `foto` jsonb da linha do LR no momento do vinculo; UNIQUE (cliente, chave)) e `lr_sync_sessoes` (id = o uuid da tela, arquivos,
+    resumo, status 'comparada'). RLS so' leitura por `tenant_ok`; escrita so' pela funcao. Nasceram VAZIAS.
+  · `fn_lr_sync_comparar(p_cliente, p_sessao, p_linhas jsonb)` (SECURITY DEFINER, `tenant_ok` + 42501, `plan_cache_mode =
+    force_custom_plan`, EXECUTE so' `authenticated`/`service_role`; as 4 internas `_fn_lr_*` fechadas; `anon` nada): LE lancamentos,
+    grava SO' a linha da sessao. CHAVE DA LINHA = tp|Numero|digitos do CPF/CNPJ|Data Cadastro|AAAA-MM do vencimento; repetida ganha
+    |valor_c e depois |n (ordem). Estavel entre 14/10 e 15/10 nos arquivos reais (355 de 355).
+  · CASAMENTO, nesta ordem: (1) vinculo (`ignorar` -> 'ignorada'); (2) mesma direcao + mesmo fornecedor + mesmo valor ao centavo +
+    vencimento OU pagamento iguais; (3) idem com vencimento no mesmo mes; (4) diferenca de 1 a 100 centavos no mesmo mes; (5) VALOR
+    DO MES: fornecedor (documento, cadastro ou nome com 2+ palavras em comum fora de banco/brasil/companhia/seguros/distribuidora/
+    servicos/comercio/ltda) + ocorrencia de recorrencia/contrato/serie no mes — varias linhas disputando a MESMA ocorrencia: fica a de
+    valor MAIS PROXIMO (empate: ordem da chave), as outras seguem o caminho normal (paga sem par = 'pago_no_lr' / 'sem_lancamento').
+  · FINANCIAMENTO (decisoes do Gabriel, 15/10): (a) lancamento de FINANCIAMENTO / EMPRESTIMO (`financiamentos.natureza` <>
+    'parcelamento') nao entra em (4) nem em (5): so' casa por 1–3; COMPRA PARCELADA casa como as outras (Weightech 4.618,35 x
+    4.618,36 segue 'decidir_centavos'); (b) linha do LR com `Tipo` = 'Parcela de Financiamento' (pagar ou receber) so' casa por 1–3, e
+    sem par = 'decidir' / motivo 'financiamento' / acao 'decidir' (nunca 'nova', nunca atualiza parcela); (c) o fornecedor SER
+    CREDOR de financiamento NAO decide nada (tarifa / juros de conta do banco seguem o caminho normal) — a regra pelo credor foi
+    ensaiada e REJEITADA (pegava as tarifas do Banco do Brasil).
+  · SITUACOES: nova ('criar_programada', 'falta_classificar' quando o de-para nao resolve fornecedor, fazenda ou plano) · sem_mudanca
+    (acao 'nada' SEMPRE, decisao do Gabriel) · mudou · pago_no_lr ('aguardar_extrato'; com valor diferente do sistema, motivo
+    'pago_no_lr_com_valor_diferente' e a diferenca de valor em `diferencas`, para o a2) · decidir (diferenca <= R$ 1,00 ->
+    'decidir_centavos'; fatura de cartao -> 'nao_importar_fatura'; 'financiamento') · ignorada; e no envelope `so_no_sistema`
+    (previsto/programado/agendado do mes sem par) e `da_oc` (contagem). PARTE VIVA DE OC NUNCA E' CANDIDATA: a linha que so' casaria
+    com ela vira 'da_oc', e o lancamento da OC conta em `da_oc_no_sistema`, nunca em `so_no_sistema`. Com vinculo + foto, campo que
+    o LR nao mudou desde a foto NAO e' proposto. Classificacao, fornecedor e fazenda NUNCA sao diferenca aplicavel: vao em `informa`.
+    Fatura: palavra inteira cartao/visa/master/mastercard na contraparte, ou conta do tipo cartao ("Lubrimaster" nao e').
+  · FRONT (sem tela): `lerArquivoLr` (`src/v2/lib/lucroRural/lerArquivoLr.ts`, puro, SheetJS; linhas cruas com o cabecalho do LR —
+    `Tipo` inclusive, intacto — + `_arquivo`, `_tipo_arquivo`, `_ordem`; data de celula pelo numero de serie arredondado ao minuto) e
+    `useLrSyncComparar` / `compararComLr` (`src/v2/hooks/`), que manda as linhas a' RPC e devolve o envelope como veio. ARQUIVOS DO
+    LR NUNCA NO REPO.
+  · PROVAS: `supabase/tests/fin_lr_sync_01a_test.sql` (C1–C6 + C1b valor do mes disputado + C1c financiamento pela coluna Tipo, 20
+    linhas sinteticas no Teste) OK no vivo depois de aplicar; mutacoes mortas: ordem da chave antes da proximidade (C1b), sem a regra
+    do Tipo (C1), linha 'Parcela de Financiamento' entrando no valor do mes (C1). Depois de aplicar, OK no vivo:
+    `seg_dre_tenant_01_test.sql`, `seg_agri_tenant_01_test.sql` e `seg_tenant_varredura_01c_test.sql` INTEIRO (pelo CLI, com os DROP).
+    PROVA REAL INTEIRA (ensaio revertido no proto, migration + duas chamadas numa transacao; lancamentos do NJ identicos por md5,
+    33.555 linhas; ~3,7 s por chamada):
+        situacao          14/10 (355)          15/10 (379)
+        sem_mudanca       134    404.992,24    133    379.992,24
+        pago_no_lr         91    375.316,01     91    375.316,01
+        mudou              27    111.941,32     30    149.758,70
+        nova               85    273.480,34     96    349.979,80
+        decidir            15     60.010,98     26  1.651.041,91   (15/10: inclui os 6 do BRDE de 01/10, 'financiamento')
+        da_oc               3    646.251,36      3    646.251,36
+        so_no_sistema      26    909.619,64     24    899.083,42   (15/10: inclui as 2 parcelas de juros do BRDE, 57.388,20 e 612.000,00)
+        da_oc_no_sistema    3    641.425,06      3    641.425,06   (o "Abate 036 N" 228.400 da 1645ba75 inclusive)
+    Rony (folha, recorrencia 3.419,75): 2.414,38 casa com a diferenca; 1.381,92 'pago_no_lr' sem lancamento. Contas a receber de
+    15/10 em pago_no_lr / nova: nenhuma com recebimento de OC de mesmo valor (±1 R$).
+  ⚠ NAO PROVADO: a RPC chamada pelo PostgREST (sob pg_safeupdate; todo UPDATE do corpo tem WHERE, conferido por leitura) · a mutacao
+    "linha Tipo financiamento entrando nos centavos" SOBREVIVE (nenhum caso sintetico com 1–100 centavos de diferenca nessa linha) ·
+    nenhuma tela (passo b) · a escrita (a2: aplicar e desfazer, `lr_vinculos`) ainda nao existe.
 - ⚠ NO ABATE OS DOCUMENTOS SAO NF, NPR, ACERTO, ROMANEIO E OUTRO, E SO' A NF SOMA; O VALOR DO DOCUMENTO E' O LIQUIDO (OC-DOC-ESPECIE-ABATE-01
   passo 1, Gabriel 14/10/2026, banco + vocabulario da tela). Migration `supabase/migrations/20261027198200_oc_doc_especie_abate_01.sql`
   (md5 do arquivo 02729abc56b7c29d6820d48ad4dc15cf) — APLICADA no proto em 14/10/2026 com o OK do Gabriel: ledger 20261014214022
