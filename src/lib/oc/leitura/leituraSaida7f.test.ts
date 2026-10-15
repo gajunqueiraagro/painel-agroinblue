@@ -119,20 +119,24 @@ describe('conferencia · a OC da Vera 26fd02c1 com os papeis da saida', () => {
     ['p1', form(NFPE_SAIDA, 'nf_produtor')], ['p2', nfp2()], ['g1', form(EGTA_SAIDA, 'gta')], ['g2', gta2()],
     ['mb', form(MODELO_B_SAIDA, 'declaracao')], ['cg', form(CARTA_GARANTIA_SAIDA, 'declaracao')],
   ].filter(([id]) => !sem.includes(String(id))).map(([id, f]) => comoAView(payloadDoFormAbate(f as FormAbate), String(id)));
-  it('faixa verde: "GTA 18 + 18 = 36 cab · NF produtor 2 de 2"', () => {
+  it('faixa verde curta: "GTA 36 cab · NF prod. 2/2"; a conta inteira no title', () => {
     const c = conferirDocumentosAbate(docs(), { cabDaOC: 36 });
     expect(c.estado).toBe('verde');
-    expect(faixaDaConferencia(c).texto).toContain('GTA 18 + 18 = 36 cab · NF produtor 2 de 2');
+    expect(faixaDaConferencia(c).texto)
+      .toBe('✓ 36 cab · 9.512,60 kg · Bruto 215.969,33 · Retenções 3.520,30 · Líquido 212.449,03 · GTA 36 cab · NF prod. 2/2');
+    expect(faixaDaConferencia(c).titulo).toContain('GTA 18 + 18 = 36 cab · NF produtor 2 de 2');
   });
   it('a linha de cada NF produtor: citada na NF e a GTA que ela cita, registrada', () => {
     const d = docs();
     const c = conferirDocumentosAbate(d, { cabDaOC: 36 });
-    expect(conferenciaDoDocumento(c, 'nf_produtor', false, d.find(x => x.documentoId === 'p1')).texto).toBe('✓ citada na NF · GTA Q-745856');
+    expect(conferenciaDoDocumento(c, 'nf_produtor', false, d.find(x => x.documentoId === 'p1')))
+      .toEqual({ texto: '✓ GTA Q-745856', tom: 'verde', titulo: 'citada na NF do frigorífico · GTA Q-745856' });
   });
   it('faltando uma NF produtor: cinza "falta NF produtor 9444845" (nunca "confere")', () => {
     const f = faixaDaConferencia(conferirDocumentosAbate(docs(['p2']), { cabDaOC: 36 }));
     expect(f.falta).toContain('falta NF produtor 9444845');
-    expect(f.texto).not.toContain('NF produtor 1 de 2');
+    expect(f.texto).not.toContain('NF prod.');
+    expect(f.titulo).not.toContain('NF produtor 1 de 2');
   });
   it('GTAs que nao somam as cabecas da OC: vermelho', () => {
     const c = conferirDocumentosAbate(docs(), { cabDaOC: 40 });
@@ -142,7 +146,7 @@ describe('conferencia · a OC da Vera 26fd02c1 com os papeis da saida', () => {
   it('a GTA gravada com zeros a esquerda ("000.745.856") e a mesma que a NF produtor cita ("Q-745856")', () => {
     const d = docs().map(x => (x.documentoId === 'g1' ? { ...x, numero: '000.745.856' } : x));
     const c = conferirDocumentosAbate(d, { cabDaOC: 36 });
-    expect(conferenciaDoDocumento(c, 'nf_produtor', false, d.find(x => x.documentoId === 'p1')).texto).toBe('✓ citada na NF · GTA Q-745856');
+    expect(conferenciaDoDocumento(c, 'nf_produtor', false, d.find(x => x.documentoId === 'p1')).texto).toBe('✓ GTA Q-745856');
   });
   it('sem as cabecas da OC, a GTA nao e conferida (vazio nao vira confere)', () => {
     expect(faixaDaConferencia(conferirDocumentosAbate(docs())).texto).not.toContain('GTA');

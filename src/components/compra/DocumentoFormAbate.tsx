@@ -448,7 +448,14 @@ export function DocumentoFormAbate({ api, somenteLeitura, fornecedores, clienteI
           }} />
       )}
       <div className="flex h-5 shrink-0 items-center justify-between">
-        <div className="text-[12px] font-semibold text-foreground">{editando ? 'Editar documento' : 'Novo documento'}</div>
+        <div className="flex min-w-0 items-baseline gap-2">
+          <span className="shrink-0 text-[12px] font-semibold text-foreground">{editando ? 'Editar documento' : 'Novo documento'}</span>
+          {/* 7f-fix1: a frase da edicao mora no cabecalho (lugar reservado, vazio no novo); a linha da especie ficou toda para o
+              arquivo, cujo nome nao cabia nos 122px que sobravam. */}
+          <span data-testid="especie-fixa" className="min-w-0 truncate text-[9.5px] text-muted-foreground" title={editando ? FRASE_ESPECIE_FIXA : undefined}>
+            {editando ? FRASE_ESPECIE_FIXA : ''}
+          </span>
+        </div>
         <Button type="button" variant="ghost" size="sm" className="h-5 gap-1 px-1.5 text-[11px]" onClick={onCancel}>
           <ArrowLeft className="h-3 w-3" /> Voltar
         </Button>
@@ -461,14 +468,11 @@ export function DocumentoFormAbate({ api, somenteLeitura, fornecedores, clienteI
             <Segmentado<EspecieDoc> valor={form.especie} altura={26} fonte={9.5} opcoes={g.opcoes} onEscolher={escolherEspecie} />
           </span>
         ))}
-        {/* LUGAR RESERVADO da frase da edicao: existe sempre (vazio no documento novo). */}
-        <span data-testid="especie-fixa" className="w-[150px] shrink-0 truncate text-[9.5px] text-muted-foreground" title={editando ? FRASE_ESPECIE_FIXA : undefined}>
-          {editando ? FRASE_ESPECIE_FIXA : ''}
-        </span>
         {!somenteLeitura && (
           <AreaDeArquivo regra={REGRA_ARQUIVO_DA_OC} className="h-[26px] min-w-0 flex-1" inputTestId="arquivo-abate"
             convite="Clique ou arraste o PDF / XML" detalhe="preenche os campos"
             conteudo={arquivo ? arquivo.name : form.url ? 'arquivo anexado · enviar outro substitui' : undefined}
+            tituloDoConteudo={arquivo ? arquivo.name : form.url ? 'arquivo anexado · enviar outro substitui' : undefined}
             fixo={lendo ? 'lendo…' : undefined} rotuloDoBotao={arquivo ? 'Trocar' : 'Escolher'}
             onArquivos={([f]) => receberArquivo(f ?? null)} />
         )}

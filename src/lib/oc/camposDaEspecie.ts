@@ -52,13 +52,27 @@ export const GRUPOS_DO_SELETOR_ABATE: { rotulo: string; especies: EspecieDoc[] }
 export const ESPECIES_DA_SAIDA: EspecieDoc[] = ['nf_produtor', 'gta', 'guia', 'declaracao', 'outro', 'recibo'];
 
 /** As opcoes do Tipo da guia e da declaracao (gravadas em `dados.tipo_guia` / `dados.tipo_declaracao`). */
-export const TIPOS_DE_GUIA: { valor: string; rotulo: string }[] = [
-  { valor: 'fundersul', rotulo: 'Fundersul' }, { valor: 'taxa_iagro', rotulo: 'Taxa Iagro' },
-  { valor: 'dare_icms', rotulo: 'DARE/ICMS' }, { valor: 'outra', rotulo: 'Outra' },
+/* 7f-fix1: `curto` = a coluna Tipo da lista; `contagem` = [singular, plural] da linha de contagem do topo. Um lugar so'. */
+export interface TipoDoDocumento { valor: string; rotulo: string; curto: string; contagem: [string, string] }
+export const TIPOS_DE_GUIA: TipoDoDocumento[] = [
+  { valor: 'fundersul', rotulo: 'Fundersul', curto: 'Fundersul', contagem: ['Fundersul', 'Fundersul'] },
+  { valor: 'taxa_iagro', rotulo: 'Taxa Iagro', curto: 'Taxa Iagro', contagem: ['taxa Iagro', 'taxas Iagro'] },
+  { valor: 'dare_icms', rotulo: 'DARE/ICMS', curto: 'DARE/ICMS', contagem: ['DARE/ICMS', 'DARE/ICMS'] },
+  { valor: 'outra', rotulo: 'Outra', curto: 'Guia', contagem: ['outra guia', 'outras guias'] },
 ];
-export const TIPOS_DE_DECLARACAO: { valor: string; rotulo: string }[] = [
-  { valor: 'modelo_b', rotulo: 'Modelo B' }, { valor: 'carta_garantia', rotulo: 'Carta de garantia' }, { valor: 'outra', rotulo: 'Outra' },
+export const TIPOS_DE_DECLARACAO: TipoDoDocumento[] = [
+  { valor: 'modelo_b', rotulo: 'Modelo B', curto: 'Modelo B', contagem: ['Modelo B', 'Modelo B'] },
+  { valor: 'carta_garantia', rotulo: 'Carta de garantia', curto: 'Carta garantia', contagem: ['carta garantia', 'cartas garantia'] },
+  { valor: 'outra', rotulo: 'Outra', curto: 'Decl.', contagem: ['outra declaração', 'outras declarações'] },
 ];
+
+/** O tipo gravado em `dados.tipo_guia` / `dados.tipo_declaracao`; nulo sem tipo (ou tipo fora da lista) e nas outras especies. */
+export function tipoDoDocumento(especie: EspecieDoc, dados: Record<string, unknown> | null | undefined): TipoDoDocumento | null {
+  const lista = especie === 'guia' ? TIPOS_DE_GUIA : especie === 'declaracao' ? TIPOS_DE_DECLARACAO : null;
+  const chave = especie === 'guia' ? 'tipo_guia' : 'tipo_declaracao';
+  const v = lista && dados ? dados[chave] : null;
+  return typeof v === 'string' ? lista!.find(t => t.valor === v) ?? null : null;
+}
 
 /** Rotulo curto do seletor do abate. */
 export const ROTULO_SEGMENTO: Partial<Record<EspecieDoc, string>> = {

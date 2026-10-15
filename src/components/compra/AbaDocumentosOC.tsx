@@ -10,7 +10,7 @@ import { DocumentoFormOC, FORM_VAZIO, ESPECIE_LABEL, brl, fmtNumeroDoc, type For
 import { notificarFornecedoresMudaram } from '@/hooks/useFornecedoresDoCliente';
 import { DocumentoFormAbate } from './DocumentoFormAbate';
 import { formAbateDoDetalhe, formAbateVazio, type FormAbate } from '@/lib/oc/formDocumentoAbate';
-import { ROTULO_SEGMENTO, ESPECIES_DA_SAIDA } from '@/lib/oc/camposDaEspecie';
+import { ROTULO_SEGMENTO, ESPECIES_DA_SAIDA, tipoDoDocumento } from '@/lib/oc/camposDaEspecie';
 import { formatCasas } from '@/lib/calculos/numeroBR';
 import { conferirDocumentosAbate, conferenciaDoDocumento, faixaDaConferencia, type ResultadoConferencia } from '@/lib/oc/conferirDocumentosAbate';
 
@@ -51,6 +51,33 @@ const CONTAGEM_ROTULO: Record<EspecieDoc, [string, string]> = {
   npr: ['NPR', 'NPRs'], acerto: ['acerto', 'acertos'], romaneio: ['romaneio', 'romaneios'],
   nf_produtor: ['NF produtor', 'NFs produtor'], gta: ['GTA', 'GTAs'], guia: ['guia', 'guias'], declaracao: ['declaração', 'declarações'],
 };
+
+/* 7f-fix1b: no ABATE a contagem mora na faixa de cada bloco (18px, 9,5px): rotulos curtos ("1 NF · 1 acerto", "2 NF prod. · 2 GTA"). */
+const CONTAGEM_DA_FAIXA: Record<EspecieDoc, [string, string]> = {   // na ordem de leitura do bloco; "outro" por ultimo
+  nf_principal: ['NF', 'NF'], nf_complementar: ['NF compl.', 'NF compl.'], npr: ['NPR', 'NPR'], acerto: ['acerto', 'acertos'],
+  romaneio: ['romaneio', 'romaneios'], nf_produtor: ['NF prod.', 'NF prod.'], gta: ['GTA', 'GTA'], guia: ['guia', 'guias'],
+  declaracao: ['declaração', 'declarações'], recibo: ['recibo', 'recibos'], outro: ['outro', 'outros'],
+};
+
+/** A contagem dos documentos. 7f-fix1: guia e declaracao COM tipo gravado contam pelo tipo (`tipoDoDocumento`: "1 Modelo B ·
+    1 carta garantia"); sem tipo, pela especie. Ordem: a das especies, e dentro delas a de entrada. Cancelado vira termo proprio. */
+export function partesDaContagem(docs: Pick<DocumentosApi['documentos'][number], 'especie' | 'dados' | 'cancelado'>[],
+  rotulos: Record<EspecieDoc, [string, string]> = CONTAGEM_ROTULO): string[] {
+  const ativos = docs.filter(d => !d.cancelado);
+  const termos = new Map<string, { n: number; r: [string, string] }>();
+  for (const e of Object.keys(rotulos) as EspecieDoc[]) {
+    for (const d of ativos.filter(x => x.especie === e)) {
+      const t = tipoDoDocumento(e, d.dados);
+      const chave = t ? `${e}:${t.valor}` : e;
+      const atual = termos.get(chave) ?? { n: 0, r: t ? t.contagem : rotulos[e] };
+      termos.set(chave, { ...atual, n: atual.n + 1 });
+    }
+  }
+  const partes = [...termos.values()].map(x => `${x.n} ${x.n === 1 ? x.r[0] : x.r[1]}`);
+  const cancelados = docs.length - ativos.length;
+  if (cancelados > 0) partes.push(`${cancelados} cancelado${cancelados > 1 ? 's' : ''}`);
+  return partes;
+}
 
 export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedores, contraparteId, clienteId, recarregarFornecedores, valorNegociado, tipoOperacao }: Props) {
   const ehAbate = tipoOperacao === 'abate';
@@ -193,12 +220,8 @@ export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedo
       ? { ok: true, texto: 'confere' }
       : { ok: false, texto: diferenca > 0 ? `faltam ${brl(diferenca)}` : `sobram ${brl(-diferenca)}` };
 
-  const contagem = (Object.keys(CONTAGEM_ROTULO) as EspecieDoc[])
-    .map(e => ({ n: ativos.filter(d => d.especie === e).length, r: CONTAGEM_ROTULO[e] }))
-    .filter(x => x.n > 0)
-    .map(x => `${x.n} ${x.n === 1 ? x.r[0] : x.r[1]}`);
-  const cancelados = api.documentos.length - ativos.length;
-  if (cancelados > 0) contagem.push(`${cancelados} cancelado${cancelados > 1 ? 's' : ''}`);
+  /* 7f-fix1b: no abate a contagem vai para as faixas dos blocos; o topo fica so' com o titulo e o botao. */
+  const contagem = ehAbate ? [] : partesDaContagem(api.documentos);
 
   // ── LISTA ──
   return (
@@ -216,13 +239,13 @@ export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedo
           vertical: margem negativa lateral comeria as bordas do cartao. */}
       <div className="sticky top-0 z-10 -mt-2 space-y-2 border-b bg-card pt-2 pb-2">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-[12px] font-semibold text-foreground min-w-0 truncate">Documentos da operação</span>
-          <div className="flex items-center gap-2 shrink-0">
+          <span className="text-[12px] font-semibold text-foreground shrink-0">Documentos da operação</span>
+          <div className="flex min-w-0 items-center gap-2">
             {contagem.length > 0 && (
-              <span className="text-[10px] text-muted-foreground">{contagem.join(' · ')}</span>
+              <span data-testid="contagem-docs" className="min-w-0 truncate text-[10px] text-muted-foreground" title={contagem.join(' · ')}>{contagem.join(' · ')}</span>
             )}
             {!somenteLeitura && (
-              <Button type="button" variant="outline" size="sm" className="h-[22px] px-[9px] text-[10px] font-medium gap-1" onClick={abrirNovo}><Plus className="h-3 w-3" /> Novo documento</Button>
+              <Button type="button" variant="outline" size="sm" className="h-[22px] shrink-0 px-[9px] text-[10px] font-medium gap-1" onClick={abrirNovo}><Plus className="h-3 w-3" /> Novo documento</Button>
             )}
           </div>
         </div>
@@ -412,13 +435,16 @@ function TabelaDocumentosAbate({ documentos, loading, somenteLeitura, conferenci
               : (d.liquidoProprio ?? d.valorLiquido);
             const url = d.url;
             const conf = conferenciaDoDocumento(conferencia, d.especie, d.cancelado, d);
+            /* 7f-fix1: a declaracao mostra o TIPO gravado ("Modelo B", "Carta garantia"); a guia segue "Guia" (o nome dela ja' vai
+               no Numero). */
+            const tipoNaLista = d.especie === 'declaracao' ? tipoDoDocumento(d.especie, d.dados) : null;
             return (
               <tr key={d.documentoId} data-testid="linha-doc-abate"
                 className={`h-[16px] [&>td]:shadow-[inset_0_-1px_0_hsl(var(--border)/0.6)] ${d.cancelado ? 'line-through opacity-50' : ''} ${soma ? '' : 'text-muted-foreground'}`}
                 title={d.cancelado ? 'cancelado' : soma ? undefined : 'não soma no valor da operação'}>
                 <td className={TD}>
-                  <span title={ESPECIE_LABEL[d.especie]} className={`inline-block rounded px-1 align-middle text-[9.5px] leading-[14px] ${PILULA[d.especie] ?? 'bg-muted text-muted-foreground'}`}>
-                    {PILULA_CURTA[d.especie] ?? ROTULO_SEGMENTO[d.especie] ?? ESPECIE_LABEL[d.especie]}
+                  <span title={tipoNaLista ? `${ESPECIE_LABEL[d.especie]} · ${tipoNaLista.rotulo}` : ESPECIE_LABEL[d.especie]} className={`inline-block rounded px-1 align-middle text-[9.5px] leading-[14px] ${PILULA[d.especie] ?? 'bg-muted text-muted-foreground'}`}>
+                    {tipoNaLista?.curto ?? PILULA_CURTA[d.especie] ?? ROTULO_SEGMENTO[d.especie] ?? ESPECIE_LABEL[d.especie]}
                   </span>
                 </td>
                 <td className={TD} title={numero}>
@@ -429,7 +455,7 @@ function TabelaDocumentosAbate({ documentos, loading, somenteLeitura, conferenci
                 <td className={`${TD} text-right tabular-nums`}>{d.cab ?? '—'}</td>
                 <td className={`${TD} text-right tabular-nums`}>{d.pesoKg == null ? '—' : formatCasas(d.pesoKg, 1)}</td>
                 <td className={`${TD} text-right tabular-nums`} data-testid="valor-doc">{valor == null ? '—' : formatCasas(valor, 2)}</td>
-                <td className={`${TD} ${TOM_CONFERENCIA[conf.tom]}`} data-testid="celula-conferencia" data-tom={conf.tom} title={conf.texto || undefined}>
+                <td className={`${TD} ${TOM_CONFERENCIA[conf.tom]}`} data-testid="celula-conferencia" data-tom={conf.tom} title={conf.titulo ?? (conf.texto || undefined)}>
                   {conf.texto}
                 </td>
                 <td className={TD_ICONE}>
@@ -462,7 +488,7 @@ function TabelaDocumentosAbate({ documentos, loading, somenteLeitura, conferenci
     <div className="rounded-md border overflow-hidden">
       <table data-testid="tabela-docs-abate" className="w-full table-fixed border-collapse">
         <colgroup>
-          <col style={{ width: 64 }} /><col /><col style={{ width: 58 }} /><col style={{ width: 58 }} /><col style={{ width: 36 }} />
+          <col style={{ width: 80 }} /><col /><col style={{ width: 58 }} /><col style={{ width: 58 }} /><col style={{ width: 36 }} />
           <col style={{ width: 66 }} /><col style={{ width: 86 }} /><col style={{ width: 140 }} /><col style={{ width: 20 }} /><col style={{ width: 22 }} />
         </colgroup>
         <thead className="bg-primary">
@@ -485,7 +511,12 @@ function TabelaDocumentosAbate({ documentos, loading, somenteLeitura, conferenci
             return [
               <tr key={`faixa-${b.chave}`} data-testid={`faixa-bloco-${b.chave}`} className="h-[18px]">
                 <td colSpan={10} className="h-[18px] bg-[#cbd5e1] px-1.5 py-0 align-middle text-[9.5px] font-semibold leading-[18px] text-slate-800">
-                  {b.rotulo}
+                  {/* 7f-fix1b: o nome num lugar de LARGURA FIXA, para a contagem comecar na mesma coluna nos dois blocos */}
+                  <div className="flex items-center whitespace-nowrap">
+                    <span className="w-[128px] shrink-0">{b.rotulo}</span>
+                    <span data-testid={`contagem-bloco-${b.chave}`} className="min-w-0 truncate font-normal text-slate-700"
+                      title={partesDaContagem(docs, CONTAGEM_DA_FAIXA).join(' · ')}>{partesDaContagem(docs, CONTAGEM_DA_FAIXA).join(' · ')}</span>
+                  </div>
                 </td>
               </tr>,
               ...docs.map(d => linha(d, b.chave === 'saida')),

@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 15/10/2026 (OC-DOC-SAIDA-FAZENDA-01, +20: `src/lib/oc/leitura/leituraSaida7f.test.ts` 19 (novo),
+  Baseline em 15/10/2026 (OC-DOC-SAIDA-FAZENDA-01 fix1 + fix1b, +3 em `src/components/compra/documentoFormAbate.test.tsx` (17 -> 20) — 5313
+  depois deles; antes o OC-DOC-SAIDA-FAZENDA-01, +20: `src/lib/oc/leitura/leituraSaida7f.test.ts` 19 (novo),
   `src/components/compra/documentoFormAbate.test.tsx` 1 (16 -> 17) — 5310 depois dele; antes o OC-DOC-ESPECIE-ABATE-01 passo 7e, +19: `src/lib/oc/leitura/leituraAbate7e.test.ts` 18 (novo),
   `src/components/compra/documentoFormAbate.test.tsx` 1 (15 -> 16) — 5290 depois dele; antes o OC-ENTREGA-COMPACTA-01, +9 em `src/components/venda/entregasVenda.test.tsx` (10 -> 19) — 5271 depois
   dele; antes o OC-DOC-ESPECIE-ABATE-01 passo 4 + 4b, +26: `src/lib/oc/leitura/leituraAbate.test.ts` 21 (novo),
@@ -328,7 +329,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5310
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5313
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -4090,6 +4091,18 @@ docs/historico/frentes-ate-2026-09-29.md.)
       nenhum texto cortado na vertical, botoes de 16 x 16 inteiros e clicaveis). MEDIDO (bancada, lista da Vera repetida): 12
       documentos cabem a 1.127 x 523 (corpo 394 de 394); 13 rolam (401 de 394). MAXIMO SEM ROLAR: 12 a 1.127 x 523 e 36 a
       1.440 x 900. Acima disso: decisao do Gabriel, nao tomada.
+    · FIX1 (homologacao 15/10, so' tela): (1) o lugar reservado de 150px da frase da edicao saiu da linha da especie e foi para o
+      cabecalho do formulario; o quadro de arquivo ocupa o resto da linha (122 -> 291px, igual nas 9 especies, vazio e com arquivo),
+      nome inteiro no `title`. (2) O TIPO da declaracao/guia tem um dono, `tipoDoDocumento` (`camposDaEspecie.ts`, de
+      `dados.tipo_declaracao` / `dados.tipo_guia`): a coluna Tipo da lista mostra "Modelo B" / "Carta garantia" (Tipo 64 -> 80px,
+      tirados do Numero) e a contagem do topo conta pelo tipo (`partesDaContagem`). (3) A faixa verde diz so' os numeros, curtos
+      ("✓ 36 cab · … · GTA 36 cab · NF prod. 2/2"), a conta inteira no `title`; cabe a 1.127 com "falta: NPR" (676 + 46 de 746).
+      (4) Celula da NF produtor "✓ GTA Q-745856" ("citada na NF" no `title`).
+    · FIX1b (Gabriel 15/10): no ABATE a contagem saiu do topo (fica so' "Documentos da operação" + "Novo documento") e mora na
+      FAIXA DE CADA BLOCO, depois do nome (lugar fixo de 128px: a contagem comeca na mesma coluna nos dois blocos), com rotulos
+      curtos (`CONTAGEM_DA_FAIXA`: "1 NF · 1 acerto · 1 romaneio", "2 NF prod. · 2 GTA · 1 Modelo B · 1 carta garantia · 1 outro")
+      e o tipo pelo dono `tipoDoDocumento`; cancelado e' termo proprio. Compra e venda seguem com a contagem no topo. Medido a 1.127
+      e 1.440: disponivel 606px por faixa; Vera real pede 125 (abate) e 260 (saida); a lista de 12 da bancada, 161 e 342.
     · TESTES SQL SEM DADO REAL QUE MUDA (Gabriel 15/10): `oc_doc_especie_abate_01_test.sql` E2 e E5 criam a OC, os documentos, os
       componentes, os lancamentos e as partes dentro da transacao (E5 e' ESPELHO DECLARADO do bloco 6 da migration 20261027198200);
       `oc_doc_especie_abate_02_test.sql` F1 acha o Seguro pela NF 8812 viva + tipo 'seguro' (um so', com natureza e valor), nunca

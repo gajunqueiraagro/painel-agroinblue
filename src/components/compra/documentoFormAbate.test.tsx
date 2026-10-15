@@ -270,10 +270,52 @@ describe('aba Documentos do abate', () => {
     ]);
     montar('abate', a);
     expect(screen.queryByTestId('faixa-bloco-abate')).toBeNull();
-    expect(screen.getByTestId('faixa-bloco-saida').textContent).toBe('SAÍDA DA FAZENDA');
+    expect(screen.getByTestId('faixa-bloco-saida').textContent).toBe('SAÍDA DA FAZENDA1 GTA · 1 guia');
     const valores = screen.getAllByTestId('valor-doc').map(x => x.textContent);
     expect(valores).toEqual(['—', '377,85']);
     expect(screen.getAllByTestId('linha-doc-abate').every(l => l.className.includes('text-muted-foreground'))).toBe(true);
     expect(screen.getAllByTestId('linha-doc-abate')[0].textContent).toContain('Q-745856');
+  });
+
+  it('7f-fix1: a declaracao mostra o TIPO gravado na coluna Tipo e na contagem; guia com tipo conta pelo tipo, sem tipo pela especie', () => {
+    const decl = (id: string, tipo: string | null) => doc({ documentoId: id, especie: 'declaracao', numero: null, qtdComponentes: 0,
+      somaNoValor: false, liquidoProprio: 0, dados: tipo ? { tipo_declaracao: tipo } : null });
+    const a = api([
+      decl('mb', 'modelo_b'), decl('cg', 'carta_garantia'), decl('sem', null),
+      doc({ documentoId: 'gf', especie: 'guia', numero: 'F1', somaNoValor: false, liquidoProprio: 0, dados: { tipo_guia: 'fundersul' } }),
+      doc({ documentoId: 'gs', especie: 'guia', numero: 'G1', somaNoValor: false, liquidoProprio: 0, dados: null }),
+    ]);
+    montar('abate', a);
+    const tipos = screen.getAllByTestId('linha-doc-abate').map(l => l.querySelector('td')!.textContent);
+    expect(tipos).toEqual(['Modelo B', 'Carta garantia', 'Decl.', 'Guia', 'Guia']);
+    /* 7f-fix1b: a contagem mora na faixa do bloco; o topo do abate fica so' com o titulo e o botao */
+    expect(screen.queryByTestId('contagem-docs')).toBeNull();
+    expect(screen.getByTestId('contagem-bloco-saida').textContent).toBe('1 Fundersul · 1 guia · 1 Modelo B · 1 carta garantia · 1 declaração');
+    expect(screen.queryByTestId('contagem-bloco-abate')).toBeNull();
+  });
+
+  it('7f-fix1: a linha da especie e toda do arquivo — sem o lugar reservado de 150px; a frase da edicao mora no cabecalho', () => {
+    montar('abate');
+    fireEvent.click(screen.getByRole('button', { name: /Novo documento/ }));
+    const linha = screen.getByTestId('linha-especie');
+    expect(within(linha).queryByTestId('especie-fixa')).toBeNull();
+    expect(screen.getByTestId('especie-fixa').textContent).toBe('');
+    const fonte = readFileSync('src/components/compra/DocumentoFormAbate.tsx', 'utf8');
+    expect(fonte).toMatch(/AreaDeArquivo[^>]*className="h-\[26px\] min-w-0 flex-1"/);
+    expect(fonte).toMatch(/tituloDoConteudo=\{arquivo \? arquivo\.name/);
+  });
+
+  it('7f-fix1b: cada faixa conta o SEU bloco, com o cancelado como termo proprio; a contagem comeca no mesmo lugar nos dois blocos', () => {
+    montar('abate', api([
+      doc({ documentoId: 'nf' }), doc({ documentoId: 'ac', especie: 'acerto', numero: null, somaNoValor: false }),
+      doc({ documentoId: 'ac2', especie: 'acerto', numero: null, somaNoValor: false, cancelado: true }),
+      doc({ documentoId: 'p1', especie: 'nf_produtor', somaNoValor: false }), doc({ documentoId: 'p2', especie: 'nf_produtor', somaNoValor: false }),
+      doc({ documentoId: 'ou', especie: 'outro', somaNoValor: false }),
+    ]));
+    expect(screen.getByTestId('contagem-bloco-abate').textContent).toBe('1 NF · 1 acerto · 1 cancelado');
+    expect(screen.getByTestId('contagem-bloco-saida').textContent).toBe('2 NF prod. · 1 outro');
+    for (const b of ['abate', 'saida']) {
+      expect(screen.getByTestId(`contagem-bloco-${b}`).previousElementSibling!.className).toContain('w-[128px] shrink-0');
+    }
   });
 });

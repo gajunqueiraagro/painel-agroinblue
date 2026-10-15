@@ -130,19 +130,21 @@ function conferirSaida(docs: DocConferencia[], cabDaOC: number | null | undefine
   return { gta, nfProdutor, gtasRegistradas };
 }
 /** As partes da faixa da saida: verde ("GTA 18 + 18 = 36 cab", "NF produtor 2 de 2"), vermelha (GTA ≠ OC) e o que falta. */
-export function partesDaSaida(s: ConferenciaSaida): { verde: string[]; vermelho: string[]; falta: string[] } {
-  const verde: string[] = []; const vermelho: string[] = []; const falta: string[] = [];
+export function partesDaSaida(s: ConferenciaSaida): { verde: string[]; verdeCurto: string[]; vermelho: string[]; falta: string[] } {
+  const verde: string[] = []; const verdeCurto: string[] = []; const vermelho: string[] = []; const falta: string[] = [];
   if (s.gta) {
     const conta = `GTA ${s.gta.cabs.map(c => formatCasas(c, 0)).join(' + ')}`;
-    if (s.gta.confere) verde.push(`${conta} = ${formatCasas(s.gta.total, 0)} cab`);
+    if (s.gta.confere) { verde.push(`${conta} = ${formatCasas(s.gta.total, 0)} cab`); verdeCurto.push(`GTA ${formatCasas(s.gta.total, 0)} cab`); }
     else vermelho.push(`${conta} = ${formatCasas(s.gta.total, 0)} ≠ ${formatCasas(s.gta.cabOC, 0)} cab da OC`);
   }
   if (s.nfProdutor) {
     const n = s.nfProdutor.citadas.length - s.nfProdutor.faltam.length;
-    if (s.nfProdutor.faltam.length === 0) verde.push(`NF produtor ${n} de ${s.nfProdutor.citadas.length}`);
+    if (s.nfProdutor.faltam.length === 0) {
+      verde.push(`NF produtor ${n} de ${s.nfProdutor.citadas.length}`); verdeCurto.push(`NF prod. ${n}/${s.nfProdutor.citadas.length}`);
+    }
     else falta.push(`falta NF produtor ${s.nfProdutor.faltam.join(', ')}`);
   }
-  return { verde, vermelho, falta };
+  return { verde, verdeCurto, vermelho, falta };
 }
 
 type Medida = Record<ItemConferencia, number | null>;
@@ -234,24 +236,32 @@ export function faixaDaConferencia(r: ResultadoConferencia): FaixaConferencia {
     titulo = divergencias.join('\n');
   } else if (r.estado === 'verde' && !r.itens.some(i => i.comparado)) {
     /* so' a saida da fazenda conferiu */
-    texto = `✓ ${ps.verde.join(' · ')}`;
-    titulo = texto;
+    texto = `✓ ${ps.verdeCurto.join(' · ')}`;
+    titulo = `✓ ${ps.verde.join(' · ')}`;
   } else if (r.estado === 'verde') {
-    const partes: string[] = ['✓ Confere'];
+    /* 7f-fix1: TEXTO DO SISTEMA NAO CORTA. A faixa diz so' os numeros, curtos; quem bate com quem ("Bruto NF = Acerto",
+       "GTA 18 + 18 = 36 cab", "NF produtor 2 de 2") vai inteiro no `title`. */
+    const partes: string[] = ['✓ Confere']; const curtas: string[] = [];
     const it = (i: ItemConferencia) => r.itens.find(x => x.item === i)!;
-    if (it('cab').comparado) partes.push(`${escreverItem('cab', it('cab').lados[0].valor)} cab`);
-    if (it('kg').comparado) partes.push(`${escreverItem('kg', it('kg').lados[0].valor)} kg`);
+    const dois = (txt: string, curto = txt) => { partes.push(txt); curtas.push(curto); };
+    if (it('cab').comparado) dois(`${escreverItem('cab', it('cab').lados[0].valor)} cab`);
+    if (it('kg').comparado) dois(`${escreverItem('kg', it('kg').lados[0].valor)} kg`);
     if (it('bruto').comparado) {
-      partes.push(`Bruto ${it('bruto').lados.map(l => ROTULO_GRUPO[l.grupo]).join(' = ')} ${escreverItem('bruto', it('bruto').lados[0].valor)}`);
-      if (r.retencoesNF != null) partes.push(`Retenções ${formatCasas(r.retencoesNF, 2)}`);
+      dois(`Bruto ${it('bruto').lados.map(l => ROTULO_GRUPO[l.grupo]).join(' = ')} ${escreverItem('bruto', it('bruto').lados[0].valor)}`,
+        `Bruto ${escreverItem('bruto', it('bruto').lados[0].valor)}`);
+      if (r.retencoesNF != null) dois(`Retenções ${formatCasas(r.retencoesNF, 2)}`);
     }
     if (it('liquido').comparado) {
-      partes.push(`Líquido ${it('liquido').lados.map(l => ROTULO_GRUPO[l.grupo]).join(' = ')} ${escreverItem('liquido', it('liquido').lados[0].valor)}`);
+      dois(`Líquido ${it('liquido').lados.map(l => ROTULO_GRUPO[l.grupo]).join(' = ')} ${escreverItem('liquido', it('liquido').lados[0].valor)}`,
+        `Líquido ${escreverItem('liquido', it('liquido').lados[0].valor)}`);
     }
-    partes.push(...ps.verde);
-    if (r.naoConferidos.length) partes.push(`não conferido: ${juntar(r.naoConferidos.map(i => ROTULO_ITEM[i]))}`);
-    texto = partes.join(' · ');
-    titulo = texto;
+    partes.push(...ps.verde); curtas.push(...ps.verdeCurto);
+    if (r.naoConferidos.length) {
+      partes.push(`não conferido: ${juntar(r.naoConferidos.map(i => ROTULO_ITEM[i]))}`);
+      curtas.push(`não conf.: ${r.naoConferidos.map(i => ROTULO_ITEM[i].toLowerCase()).join(', ')}`);
+    }
+    texto = `✓ ${curtas.join(' · ')}`;
+    titulo = partes.join(' · ');
   } else {
     texto = r.semValores.length
       ? `Nada a conferir · ${juntar(r.semValores.map(g => ROTULO_GRUPO[g]))} sem valores`
@@ -261,7 +271,7 @@ export function faixaDaConferencia(r: ResultadoConferencia): FaixaConferencia {
   return { estado: r.estado, texto, falta, titulo: falta ? `${titulo}\n${falta}` : titulo };
 }
 
-export interface CelulaConferencia { texto: string; tom: 'verde' | 'vermelho' | 'neutro'; }
+export interface CelulaConferencia { texto: string; tom: 'verde' | 'vermelho' | 'neutro'; /** o texto inteiro, quando `texto` e' curto */ titulo?: string; }
 
 /** A celula "Conferência" de um documento da lista. */
 export function conferenciaDoDocumento(r: ResultadoConferencia, especie: EspecieDoc, cancelado = false,
@@ -272,8 +282,10 @@ export function conferenciaDoDocumento(r: ResultadoConferencia, especie: Especie
     const n = numeroDeNota(doc?.numero);
     const gta = typeof doc?.dados?.gta === 'string' ? gtaCanonica(doc.dados.gta) : null;
     const comGta = gta && r.saida.gtasRegistradas.includes(gta) ? ` · GTA ${gta}` : '';
+    /* 7f-fix1: curto na celula ("✓ GTA Q-745856"); "citada na NF" vai no `title`. */
     return r.saida.nfProdutor.citadas.includes(n)
-      ? { texto: `✓ citada na NF${comGta}`, tom: 'verde' } : { texto: 'não citada na NF', tom: 'neutro' };
+      ? { texto: gta && comGta ? `✓ GTA ${gta}` : '✓ citada', tom: 'verde', titulo: `citada na NF do frigorífico${comGta}` }
+      : { texto: 'não citada', tom: 'neutro', titulo: 'não citada na NF do frigorífico' };
   }
   if (especie === 'gta' && r.saida.gta) {
     return r.saida.gta.confere ? { texto: `✓ soma ${formatCasas(r.saida.gta.total, 0)} cab = OC`, tom: 'verde' }

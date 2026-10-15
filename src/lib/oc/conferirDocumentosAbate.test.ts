@@ -43,7 +43,9 @@ describe('conferirDocumentosAbate', () => {
   it('tudo bate: VERDE, com o que foi comparado', () => {
     const r = conferirDocumentosAbate(BATE());
     expect(r.estado).toBe('verde');
-    expect(faixaDaConferencia(r).texto)
+    /* 7f-fix1: a faixa diz so' os numeros, curtos; quem bate com quem vai inteiro no `title` */
+    expect(faixaDaConferencia(r).texto).toBe('✓ 18 cab · 4.095 kg · Bruto 98.135,31 · Retenções 1.599,61 · Líquido 96.535,70');
+    expect(faixaDaConferencia(r).titulo)
       .toBe('✓ Confere · 18 cab · 4.095 kg · Bruto NF = Acerto 98.135,31 · Retenções 1.599,61 · Líquido NF = Acerto = NPR 96.535,70');
     expect(faixaDaConferencia(r).falta).toBeNull();
     expect(conferenciaDoDocumento(r, 'acerto')).toEqual({ texto: '✓ bate com a NF', tom: 'verde' });
@@ -90,7 +92,8 @@ describe('conferirDocumentosAbate', () => {
     const r = conferirDocumentosAbate([doc('nf_principal', comValor(98135.31, 96535.70)), doc('npr', comValor(96535.70, 96535.70))]);
     expect(r.estado).toBe('verde');
     const f = faixaDaConferencia(r);
-    expect(f.texto).toBe('✓ Confere · Líquido NF = NPR 96.535,70 · não conferido: Bruto, Cab e Peso');
+    expect(f.texto).toBe('✓ Líquido 96.535,70 · não conf.: bruto, cab, peso');
+    expect(f.titulo).toBe('✓ Confere · Líquido NF = NPR 96.535,70 · não conferido: Bruto, Cab e Peso\nfalta: Acerto, Romaneio');
     expect(f.falta).toBe('falta: Acerto, Romaneio');
   });
 
@@ -110,7 +113,8 @@ describe('conferirDocumentosAbate', () => {
     ];
     const r = conferirDocumentosAbate(docs);
     expect(r.estado).toBe('verde');
-    expect(faixaDaConferencia(r).texto).toContain('Bruto NF = Acerto 98.135,31');
+    expect(faixaDaConferencia(r).titulo).toContain('Bruto NF = Acerto 98.135,31');
+    expect(faixaDaConferencia(r).texto).toContain('Bruto 98.135,31');
   });
 
   it('conferencia ao vivo: o Acerto digitado contra a NF e a NPR registradas', () => {
