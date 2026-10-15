@@ -2032,6 +2032,39 @@ preview que o cabecalho nao sai da tela ao rolar.
   proposito: mexe na animacao de todos os dialogos.
 
 ## REGRAS VIGENTES — DADO, BANCO E METODO
+- ⚠ O LEGADO DE 2025 DA FAZ. PUREZA ESTA' POR PASTO, CONFORME A PLANILHA DO CAMPEIRO (LEGADO-POR-PASTO-01, Gabriel 15/10/2026; migration
+  de DADOS `supabase/migrations/20261027198900_legado_por_pasto_pur_2025.sql`, md5 do arquivo c6c3b793376ceadbea0a58468711c3f5, 143.424
+  bytes — APLICADA no proto em 15/10/2026 com o OK condicional do Gabriel, pelo `supabase db query --linked` (project-ref conferido =
+  binbcdfbisgscrifztia), migration + ledger numa transacao: ledger 20261015171238 `legado_por_pasto_pur_2025` (⚠ timestamp do dia; o
+  ledger guarda o arquivo BYTE A BYTE, com a quebra final: md5 = c6c3b793…, conferido dentro da transacao)). Fonte:
+  `docs/legado/legado_por_pasto_PUR_2025.csv` (md5 8cfd0dd63dec171b4394f451977ed507; 933 cards ano_mes x pasto, 1.137 itens; planilha
+  MR25-PUR), embutido no .sql como VALUES (o gerador ficou fora do repositorio).
+  · O QUE MUDOU: Pureza (d3396cdd, NJ), 2025-01..12. O rebanho estava inteiro no P5A (83 itens); agora esta' em 43 a 62 pastos por mes,
+    1.137 itens. Cards: os 77 pastos do CSV tiveram itens e `tipo_uso_mes` / `lote_mes` / `observacao_mes` trocados (status NAO);
+    nasceram 9 cards do pasto Divergencia (4377f738, fev-mai e ago-dez); cards fora do CSV (Reserva Legal, APP, Benfeitorias, IND.05,
+    IND.06 e as desmembradas) intocados. O pasto Divergencia passou a `data_inicio` 2020-01-01 (era 2026-02-01: a trava de vigencia
+    recusava o card em 2025); ele segue fora do P1 e dos aplicaveis (tipo 'divergencia'). P2 aberto e devolvido dentro da transacao
+    ('em_revisao_legado' -> 'validado'; 'aberto' -> 'fechado'); conjunto P1 rematerializado nos 12 meses; 12 linhas em
+    `fechamento_reaberturas_log` (pilar 'p2_valor_rebanho', motivo 'LEGADO-POR-PASTO-01: …').
+  · O QUE NAO MUDOU (provado na propria migration, tudo ou nada, e de novo depois de aplicar): cabecas por mes x categoria identicas e
+    peso medio ponderado com diferenca <= 0,01 kg (83 de 83 pares contra o backup; maior diferenca 0,0057 kg); nenhum card mudou de
+    status; Valor do Rebanho dos 12 meses (realizado validado: valor, cabecas, peso medio; fechamento: valor, peso total) identico;
+    `saldos_iniciais` 2026/1 identicos (7 linhas, 4.951 cab = dez/25); 2026 intocado (831 itens / 45.627 cab, 9 validados, md5 dos
+    itens 31005cdc… e do valor do rebanho iguais); P1 'oficial' nos 12 meses; nenhuma cascata 'cadeia_quebrada'.
+  · EFEITOS COLATERAIS declarados: `updated_at` carimbado no realizado validado, no fechamento P2, nos cards e no pasto Divergencia;
+    snapshot P1 novo por mes; cache zootecnico de (Pureza, 2025) reconstruido no fim da transacao.
+  · ⚠ COMO FOI FEITO, PARA QUEM REPETIR EM OUTRA FAZENDA: abrir o P2 dos 12 meses ANTES de tocar card (os guardas de card e item recusam
+    com P2 validado/fechado, e com os meses abertos a invalidacao em cascata nao dispara); DELETE + INSERT dos itens (o guarda de item
+    e' so' BEFORE UPDATE); nunca mexer em status de card (dispararia a propagacao do saldo de dezembro e a invalidacao do conjunto);
+    INSERT de card invalida o snapshot P1 do mes (fn_invalidar_snapshot_conjunto) -> rematerializar com fn_materializar_conjunto_mes
+    (claims de admin); NAO chamar fn_regenerar_area_do_mes. O pilar P1 'oficial' e' derivado (todos os cards vigentes fechados, fora
+    divergencia), nao a coluna `fechamento_p1.status` (que e' 'aberto' nos 12 meses).
+  · BACKUP (o caminho de volta, FORA do repositorio): `~/Downloads/legado_backup_PUR_2025/` (copiado do scratchpad da sessao em
+    15/10/2026, md5 conferidos) — `pur_2025_cards.csv` (994 cards, md5 e7bb4053d0d001cb2cf06241376d020b), `pur_2025_itens.csv` (83 itens, md5
+    cb2879873c9c55ceb2ba297b50773c9c), `pasto_divergencia.json` (md5 e30ae44fe741a5042814ca7e59462476). Nao vai ao repo.
+  ⚠ NAO PROVADO: a tela do Fechamento Area e o Resumo por Atividade com o legado redistribuido (nao abertos) · o valor do rebanho
+    depois de aplicar foi provado pela prova 2.8 DENTRO da transacao (a foto de antes so' existiu nela); fora dela foram conferidos
+    status, totais de itens contra o backup e as assinaturas de 2026.
 (Cada regra cita a frente em que nasceu; o bloco integral, com a medicao que a justifica, esta' em
 docs/historico/frentes-ate-2026-09-29.md.)
 - PLANO-ORDEM-01 — REGRA FIRMADA em 23/09/2026: dentro de um grupo, `ordem_exibicao` numera de 10
