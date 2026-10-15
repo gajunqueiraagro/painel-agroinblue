@@ -139,7 +139,9 @@ export function payloadDoFormAbate(f: FormAbate): DocumentoPayload {
   const e = f.especie;
   const tem = (k: ChaveCampo) => temCampo(e, k);
   const comps: Omit<ComponentePayload, 'ordem'>[] = [];
-  const pos = (v: number | null) => v != null && v > 0;
+  /* R$ 0 DIGITADO E' DADO (passo 3, regra das sentinelas): vira componente de valor 0 — so' o campo vazio fica sem componente, e
+     e' isso que a conferencia le como "sem valor". */
+  const pos = (v: number | null) => v != null && v >= 0;
   if (tem('bruto') && pos(f.bruto)) comps.push({ tipo: 'valor_bruto', natureza: 'acrescimo', valor: f.bruto! });
   if (tem('funrural') && pos(f.funrural)) comps.push({ tipo: 'funrural', natureza: 'retencao_sem_caixa', valor: f.funrural! });
   if (tem('senar') && pos(f.senar)) comps.push({ tipo: 'senar', natureza: 'retencao_sem_caixa', valor: f.senar! });

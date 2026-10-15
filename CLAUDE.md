@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 14/10/2026 (OC-DOC-ESPECIE-ABATE-01 passo 2, +21: `src/lib/oc/camposDaEspecie.test.ts` 14 (novo),
+  Baseline em 14/10/2026 (OC-DOC-ESPECIE-ABATE-01 passo 3, +12: `src/lib/oc/conferirDocumentosAbate.test.ts` 10 (novo),
+  `src/components/compra/documentoFormAbate.test.tsx` 2 (9 -> 11) — 5236 depois dele; antes o passo 2, +21: `src/lib/oc/camposDaEspecie.test.ts` 14 (novo),
   `src/components/compra/documentoFormAbate.test.tsx` 9 (novo) — 5224 depois dele; antes o passo 1, +1 em
   `src/hooks/useLancamentoDocumentos.especie.test.ts` (11 -> 12) — 5201 depois dele; antes o ABATE-PROJETADO-01c, +12: `src/lib/oc/cenarioDoAbate.test.ts` 7 (novo),
   `src/components/venda/recebimentoPrevisto.test.tsx` 5 (novo) — 5200 depois dele; antes o
@@ -322,7 +323,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5224
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5236
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3959,11 +3960,37 @@ docs/historico/frentes-ate-2026-09-29.md.)
       1 chave de acesso repetida entre documentos vivos de OC, e 1 (OC, emitente, numero, serie) de NF repetido. NENHUM formulario de OC
       avisava (o "conflito de documento" antigo era o CNPJ do fornecedor). O dono da pergunta existe, `fn_documento_chave_ja_registrada`
       (so' pela CHAVE; avisa e nao bloqueia, decisao do FIN-NFE-XML-01b1) — o aviso no abate aguarda decisao do Gabriel.
+  · PASSO 3 — A CONFERENCIA ENTRE OS DOCUMENTOS (Gabriel, 14/10/2026, so' tela, so' leitura). Dono: `conferirDocumentosAbate(docs)`
+    (`src/lib/oc/conferirDocumentosAbate.ts`), sobre o que a view ja' entrega; a tela so' desenha (`faixaDaConferencia`,
+    `conferenciaDoDocumento`, `conferenciaAoVivo`). Totais da OC por especie (NF = principal + complementares; cancelado fora): Bruto
+    NF = Acerto · Liquido NF = Acerto = NPR · Cab e Peso NF = Acerto = Romaneio. SEM TOLERANCIA (centavos, cab inteiro, kg com 2
+    casas). VAZIO: valor = documento SEM componente (R$ 0 digitado e' dado, e o formulario passou a grava'-lo como componente 0);
+    cab/kg = coluna nula. TRES ESTADOS, nunca confundidos: CINZA "Nada a conferir · <especies> sem valores" (nenhum item com dois
+    lados), VERDE (ao menos um comparado e todos bateram; termina em "· não conferido: <itens>"), VERMELHO (a primeira divergencia com
+    os dois valores e a diferenca, "(+N)", a lista no `title`); "falta: <especie>" em cinza no fim. VAZIO NUNCA E' "CONFERE".
+    · LISTA: faixa de 24px no topo do bloco fixo; coluna Conferência por linha (NF "soma no valor da OC"; Acerto "✓ bate com a NF" /
+      "≠ NF: <item> <dif>"; NPR "✓ = líquido" / "≠ líquido: <dif>"; Romaneio "✓ média <kg/cab> kg" / "≠ cab|kg <dif>"; Outro
+      "informativo · não soma"; "sem valores" / "não conferido"), POR GRUPO (toda linha do grupo diz o mesmo). A coluna passou de 84 a
+      140px (a Numero cedeu). FORMULARIO: a faixa de 22px compara AO VIVO o documento em digitacao com os registrados (prioridade: o
+      que falta > emitente > leitura > conferencia > frase da especie).
+    · MEDIDO na bancada (1.127 x 523 e 1.440 x 900, faixa cinza, verde e vermelha): modal 1024 x 493 / 1024 x 870, faixa 748 x 24, 12
+      linhas de 18px sem rolar (corpo 394/394 e 771/771), 0 numeros e 0 conferencias cortados. Fotos em
+      ~/Downloads/oc-doc-especie-passo3/.
+    · PROVA REAL: o LT10 (8c8a864d) sai CINZA — "Nada a conferir · NPR e Romaneio sem valores · falta: Acerto".
+    ⚠ ACHADO (14/10, so' leitura): OS DOCUMENTOS DO ABATE ESTAO SEM VALORES / CAB / KG ate' serem preenchidos pelo formulario (passo
+      2) ou pela leitura de PDF (passo 4). Nas 21 OCs de abate com 2+ especies: Acerto 0 de 17 com valor, NPR 0 de 8, Romaneio 0 de
+      10, NF 22 de 25; NENHUM documento com cab ou kg. Os 38 do backfill do passo 1 eram "outro" so' com o numero. Hoje nenhuma OC
+      tem item comparavel.
+    ⚠ NAO PROVADO: a tela real no navegador · a conferencia com documentos reais preenchidos (nao ha') · a faixa ao vivo medida na
+      bancada (so' por teste; a altura dela e' a do passo 2).
     ⚠ DESVIOS DECLARADOS: a "frase da OC" da faixa e' a da especie ("NF · é o valor da operação (soma)", "Acerto · confere com a NF · não
       soma no valor"…); o Valor R$ da lista e' o liquido PROPRIO.
     ⚠ NAO PROVADO: a tela REAL no navegador (so' a bancada com a casca do modal e dados ficticios) · upload e leitura de PDF real · o
       escolher o emitente / o "+" dentro da grade · perfil nao admin.
-  ⚠ FILA (decisao do Gabriel, 14/10): OC-DOC-COMPONENTE-DESPESA-RECIBO-01 (os dois recibos de boitel negativos: cadastro dos
+  ⚠ FILA (decisao do Gabriel, 14/10): OC-DOC-DUPLICADO-01 (aviso de NF ja' registrada — o banco NAO bloqueia: sem indice unico,
+    sem gatilho, o registrar nao confere; a tela NUNCA avisou; no proto 1 chave de acesso repetida e 1 NF repetida por OC + emitente +
+    numero + serie entre documentos vivos; o dono existente `fn_documento_chave_ja_registrada` compara SO' pela chave; a decisao do
+    FIN-NFE-XML-01b1 e' avisar e NAO bloquear) · OC-DOC-COMPONENTE-DESPESA-RECIBO-01 (os dois recibos de boitel negativos: cadastro dos
     componentes) · SEG-VW-LANCAMENTO-DOCUMENTOS-ANON-01 (`vw_lancamento_documentos` da' todos os privilegios ao `anon`; hoje ele nao
     le^ nada, sem grant nas tabelas de baixo) · `fn_documento_chave_ja_registrada` ainda devolve o valor da nota da OC como a soma de
     TODOS os componentes (fora deste passo).

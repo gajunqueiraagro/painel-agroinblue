@@ -117,7 +117,39 @@ describe('aba Documentos do abate', () => {
     expect(linhas[0].textContent).toContain('000.008.812');
     expect(linhas[0].textContent).toContain('01/10/26');
     expect(linhas[1].textContent).toContain('informativo · não soma');
-    expect(screen.getAllByTestId('celula-conferencia').every(c => c.textContent === '')).toBe(true);
+    expect(screen.getAllByTestId('celula-conferencia').map(c => c.textContent)).toEqual(['soma no valor da OC', 'informativo · não soma']);
+    /* so' NF: nada a conferir (cinza), e o que falta no fim */
+    const faixa = screen.getByTestId('faixa-conferencia-abate');
+    expect(faixa.getAttribute('data-estado')).toBe('neutro');
+    expect(faixa.textContent).toBe('Nada a conferirfalta: Acerto, NPR, Romaneio');
+  });
+
+  it('faixa da lista: verde quando bate, vermelha com a diferenca; a coluna diz cada um', () => {
+    const v = (p: Partial<DocumentoLista>) => doc({ qtdComponentes: 1, totalAcrescimos: 98135.31, totalRetencoesSemCaixa: 1599.61, ...p });
+    const { unmount } = montar('abate', api([v({ documentoId: 'nf' }), v({ documentoId: 'npr', especie: 'npr', liquidoProprio: 96535.7, cab: null, pesoKg: null, somaNoValor: false })]));
+    expect(screen.getByTestId('faixa-conferencia-abate').getAttribute('data-estado')).toBe('verde');
+    expect(screen.getAllByTestId('celula-conferencia')[1].textContent).toBe('✓ = líquido');
+    unmount();
+    montar('abate', api([v({ documentoId: 'nf' }), v({ documentoId: 'npr', especie: 'npr', liquidoProprio: 96000, cab: null, pesoKg: null, somaNoValor: false })]));
+    const faixa = screen.getByTestId('faixa-conferencia-abate');
+    expect(faixa.getAttribute('data-estado')).toBe('vermelho');
+    expect(faixa.textContent).toContain('Líquido NF 96.535,70 ≠ NPR 96.000,00 · diferença 535,70');
+    expect(screen.getAllByTestId('celula-conferencia')[1].getAttribute('data-tom')).toBe('vermelho');
+  });
+
+  it('formulario: a faixa compara ao vivo o Acerto digitado com a NF registrada', () => {
+    montar('abate', api([doc({ qtdComponentes: 1, totalAcrescimos: 98135.31, totalRetencoesSemCaixa: 1599.61 })]));
+    fireEvent.click(screen.getByRole('button', { name: /Novo documento/ }));
+    fireEvent.click(within(screen.getByTestId('linha-especie')).getByRole('button', { name: 'Acerto' }));
+    const campo = (k: string) => screen.getByTestId('area-campos').querySelector(`[data-campo=${k}] input`)!;
+    const moeda = (k: string, v: string) => { fireEvent.focus(campo(k)); fireEvent.change(campo(k), { target: { value: v } }); fireEvent.blur(campo(k)); };
+    moeda('bruto', '98.135,31'); moeda('liquido', '96.000,00');
+    const faixa = screen.getByTestId('faixa-conferencia');
+    expect(faixa.getAttribute('data-tom')).toBe('diverge');
+    expect(faixa.textContent).toContain('Bruto 98.135,31 = NF ✓');
+    expect(faixa.textContent).toContain('Líquido Acerto 96.000,00 ≠ NF 96.535,70 · diferença 535,70');
+    moeda('liquido', '96.535,70');
+    expect(faixa.getAttribute('data-tom')).toBe('confere');
   });
 
   it('compra e venda seguem com o formulario e a lista de hoje', () => {

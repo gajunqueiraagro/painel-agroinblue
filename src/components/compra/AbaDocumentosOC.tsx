@@ -12,6 +12,7 @@ import { DocumentoFormAbate } from './DocumentoFormAbate';
 import { formAbateDoDetalhe, formAbateVazio, type FormAbate } from '@/lib/oc/formDocumentoAbate';
 import { ROTULO_SEGMENTO } from '@/lib/oc/camposDaEspecie';
 import { formatCasas } from '@/lib/calculos/numeroBR';
+import { conferirDocumentosAbate, conferenciaDoDocumento, faixaDaConferencia, type ResultadoConferencia } from '@/lib/oc/conferirDocumentosAbate';
 
 // Aba Documentos (PR-OC-DOC-UI-01). Tela OFICIAL de consulta e manutenção completa. O cadastro/edição
 //   é o form REUTILIZÁVEL DocumentoFormOC (mesma persistência/validação usada pelo registro rápido na
@@ -175,6 +176,8 @@ export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedo
   const contraparte = (fornecedores ?? []).find(f => f.id === contraparteId) ?? null;
 
   const ativos = api.documentos.filter(d => !d.cancelado);
+  /* OC-DOC-ESPECIE-ABATE-01 passo 3 — a conferencia entre os documentos (so' leitura; o dono e' `conferirDocumentosAbate`). */
+  const conferencia = conferirDocumentosAbate(api.documentos);
   const totalDocumentado = ativos.reduce((s, d) => s + d.valorLiquido, 0);
 
   /* ⚠ TOLERANCIA DE R$ 0,01, a mesma regra canonica de saldo da OC (PR-OC2-SALDO):
@@ -247,6 +250,7 @@ export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedo
             </div>
           </div>
         </div>
+        {ehAbate && <FaixaConferenciaAbate r={conferencia} />}
       </div>
 
       {/* ── LISTA DENSA DE REGISTROS (PR-OC-DOC-TABELA-02 · padrao A18) ───────────
@@ -261,7 +265,7 @@ export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedo
           ⚠ NAO SAIR APLICANDO NAS OUTRAS TELAS: e' referencia, cada tela sera avaliada
           uma a uma. Registrado como A18 em docs/PADROES-UI.md. */}
       {ehAbate ? (
-        <TabelaDocumentosAbate documentos={api.documentos} loading={api.loading} somenteLeitura={somenteLeitura}
+        <TabelaDocumentosAbate documentos={api.documentos} loading={api.loading} somenteLeitura={somenteLeitura} conferencia={conferencia}
           onAbrir={c => void abrirArquivo(c)} onEditar={id => void abrirEdicao(id)}
           onCancelar={id => { setCancelId(id); setCancelMotivo(''); }} />
       ) : (
@@ -369,8 +373,26 @@ const TD_ICONE = 'h-[18px] px-0 py-0 align-middle text-center leading-none';
 const dataCurta = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(2, 4)}` : '—');
 const textoDe = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
 
-function TabelaDocumentosAbate({ documentos, loading, somenteLeitura, onAbrir, onEditar, onCancelar }: {
-  documentos: DocumentosApi['documentos']; loading: boolean; somenteLeitura?: boolean;
+const TOM_CONFERENCIA = { verde: 'text-emerald-700', vermelho: 'text-destructive', neutro: 'text-muted-foreground' };
+
+/* A faixa de 24px do topo: verde (comparado e bate), vermelha (diverge, com a diferenca) ou cinza (nada a conferir); "falta" em
+   cinza no fim. Uma linha so', altura fixa; o texto inteiro no `title`. */
+function FaixaConferenciaAbate({ r }: { r: ResultadoConferencia }) {
+  const f = faixaDaConferencia(r);
+  return (
+    <div data-testid="faixa-conferencia-abate" data-estado={f.estado} title={f.titulo}
+      className={`flex h-6 items-center gap-2 overflow-hidden rounded-md border px-2 text-[10px] ${
+        f.estado === 'verde' ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
+          : f.estado === 'vermelho' ? 'border-destructive/50 bg-destructive/5 text-destructive'
+            : 'bg-muted/30 text-muted-foreground'}`}>
+      <span className="min-w-0 flex-1 truncate">{f.texto}</span>
+      {f.falta && <span className="shrink-0 text-muted-foreground">{f.falta}</span>}
+    </div>
+  );
+}
+
+function TabelaDocumentosAbate({ documentos, loading, somenteLeitura, conferencia, onAbrir, onEditar, onCancelar }: {
+  documentos: DocumentosApi['documentos']; loading: boolean; somenteLeitura?: boolean; conferencia: ResultadoConferencia;
   onAbrir: (caminho: string) => void; onEditar: (id: string) => void; onCancelar: (id: string) => void;
 }) {
   return (
@@ -378,7 +400,7 @@ function TabelaDocumentosAbate({ documentos, loading, somenteLeitura, onAbrir, o
       <table data-testid="tabela-docs-abate" className="w-full table-fixed border-collapse">
         <colgroup>
           <col style={{ width: 64 }} /><col /><col style={{ width: 58 }} /><col style={{ width: 58 }} /><col style={{ width: 36 }} />
-          <col style={{ width: 66 }} /><col style={{ width: 86 }} /><col style={{ width: 84 }} /><col style={{ width: 20 }} /><col style={{ width: 22 }} />
+          <col style={{ width: 66 }} /><col style={{ width: 86 }} /><col style={{ width: 140 }} /><col style={{ width: 20 }} /><col style={{ width: 22 }} />
         </colgroup>
         <thead className="bg-primary">
           <tr className="h-[18px]">
@@ -396,10 +418,10 @@ function TabelaDocumentosAbate({ documentos, loading, somenteLeitura, onAbrir, o
           {documentos.map(d => {
             const soma = d.somaNoValor !== false;
             const numero = fmtNumeroDoc(d.numero, d.especie) ?? textoDe(d.dados?.ordem_compra) ?? textoDe(d.dados?.op) ?? '—';
-            const outro = d.especie === 'outro' || d.especie === 'recibo';
             const data = d.dataEmissao ?? d.dataAbate;
             const valor = d.liquidoProprio ?? d.valorLiquido;
             const url = d.url;
+            const conf = conferenciaDoDocumento(conferencia, d.especie, d.cancelado);
             return (
               <tr key={d.documentoId} data-testid="linha-doc-abate"
                 className={`h-[18px] border-b border-border/60 last:border-b-0 ${d.cancelado ? 'line-through opacity-50' : ''} ${soma ? '' : 'text-muted-foreground'}`}
@@ -410,14 +432,16 @@ function TabelaDocumentosAbate({ documentos, loading, somenteLeitura, onAbrir, o
                   </span>
                 </td>
                 <td className={TD} title={numero}>
-                  {numero}{outro && <span className="ml-1 text-[9.5px] text-muted-foreground">informativo · não soma</span>}
+                  {numero}
                 </td>
                 <td className={`${TD} tabular-nums`}>{dataCurta(data)}</td>
                 <td className={`${TD} tabular-nums`}>{dataCurta(d.vencimento ?? null)}</td>
                 <td className={`${TD} text-right tabular-nums`}>{d.cab ?? '—'}</td>
                 <td className={`${TD} text-right tabular-nums`}>{d.pesoKg == null ? '—' : formatCasas(d.pesoKg, 1)}</td>
                 <td className={`${TD} text-right tabular-nums`}>{formatCasas(valor, 2)}</td>
-                <td className={TD} data-testid="celula-conferencia" />
+                <td className={`${TD} ${TOM_CONFERENCIA[conf.tom]}`} data-testid="celula-conferencia" data-tom={conf.tom} title={conf.texto || undefined}>
+                  {conf.texto}
+                </td>
                 <td className={TD_ICONE}>
                   {url && (
                     <button type="button" title="Abrir arquivo" aria-label="Abrir arquivo" onClick={() => onAbrir(url)}

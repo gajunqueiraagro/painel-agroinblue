@@ -22,6 +22,7 @@ import {
   type CampoDef, type ChaveCampo,
 } from '@/lib/oc/camposDaEspecie';
 import { payloadDoFormAbate, pendenciasDoFormAbate, type FormAbate } from '@/lib/oc/formDocumentoAbate';
+import { conferenciaAoVivo, type DocConferencia } from '@/lib/oc/conferirDocumentosAbate';
 import { ESPECIE_LABEL, ehNotaFiscal, numeroDigitando, numeroEmRepouso } from './DocumentoFormOC';
 
 /* OC-DOC-ESPECIE-ABATE-01 passo 2 — O FORMULARIO DE DOCUMENTO DO ABATE.
@@ -288,13 +289,34 @@ export function DocumentoFormAbate({ api, somenteLeitura, fornecedores, clienteI
     }
   };
 
-  /* A faixa, por prioridade: o que falta (vermelho) > o emitente da nota (ambar) > o que a leitura disse > a frase da especie. */
+  /* A CONFERENCIA AO VIVO (passo 3): o que esta' sendo digitado como um documento virtual, contra os ja' registrados da OC. O
+     documento virtual tem o que o banco calcularia ao gravar (bruto = acrescimos; liquido = o da especie); sem valor = vazio. */
+  const virtual: DocConferencia = (() => {
+    const e = form.especie;
+    const nf = e === 'nf_principal' || e === 'nf_complementar';
+    const bruto = nf || e === 'acerto' ? form.bruto : e === 'npr' ? form.valor : null;
+    const liquido = nf ? liquidoNF : e === 'acerto' ? (form.liquido ?? form.bruto) : e === 'npr' ? form.valor : null;
+    const comValor = bruto != null;
+    return {
+      documentoId: form.documentoId ?? '__novo__', especie: e, cancelado: false,
+      qtdComponentes: comValor ? 1 : 0,
+      totalAcrescimos: comValor ? (bruto ?? 0) + (nf ? outrosAcrescimos : 0) : 0,
+      totalRetencoesSemCaixa: nf ? retNF : e === 'acerto' && comValor ? (bruto ?? 0) - (liquido ?? 0) : 0,
+      liquidoProprio: comValor ? (liquido ?? 0) : 0, valorLiquido: 0,
+      cab: form.cab, pesoKg: form.pesoKg,
+    };
+  })();
+  const aoVivo = conferenciaAoVivo(api.documentos, virtual);
+
+  /* A faixa, por prioridade: o que falta (vermelho) > o emitente da nota (ambar) > o que a leitura disse > a conferencia ao vivo
+     > a frase da especie. */
   const faltaTexto = tentou && pendencias.length > 0 ? `falta: ${pendencias.map(p => p.rotulo).join(', ')}` : null;
   const candidato = candidatos[0] ?? null;
   const emitenteTexto = conflitoCnpj
     ?? (candidato ? `Emitente não achado pelo CNPJ · parecido: ${candidato.nome}${candidatos.length > 1 ? ` (+${candidatos.length - 1})` : ''}` : null);
-  const fraseFaixa = faltaTexto ?? emitenteTexto ?? aviso ?? FRASE_DA_ESPECIE[form.especie] ?? FRASE_OUTRO;
-  const tomFaixa = faltaTexto ? 'erro' : emitenteTexto ? 'emitente' : 'neutro';
+  const fraseFaixa = faltaTexto ?? emitenteTexto ?? aviso ?? aoVivo?.texto ?? FRASE_DA_ESPECIE[form.especie] ?? FRASE_OUTRO;
+  const tomFaixa = faltaTexto ? 'erro' : emitenteTexto ? 'emitente' : aviso ? 'neutro'
+    : aoVivo?.tom === 'vermelho' ? 'diverge' : aoVivo?.tom === 'verde' ? 'confere' : 'neutro';
   const tituloFaixa = candidatos.length > 1 && !faltaTexto && !conflitoCnpj
     ? `${fraseFaixa} — parecidos: ${candidatos.map(c => c.nome).join(', ')}` : fraseFaixa;
 
@@ -352,7 +374,9 @@ export function DocumentoFormAbate({ api, somenteLeitura, fornecedores, clienteI
         className={cn('flex shrink-0 items-center gap-2 overflow-hidden rounded-md border px-2 text-[10px]',
           tomFaixa === 'erro' ? 'border-destructive/50 bg-destructive/5 text-destructive'
             : tomFaixa === 'emitente' ? 'border-amber-400 bg-amber-50 text-amber-800'
-              : 'bg-muted/30 text-muted-foreground')}
+              : tomFaixa === 'diverge' ? 'border-destructive/50 bg-destructive/5 text-destructive'
+                : tomFaixa === 'confere' ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
+                  : 'bg-muted/30 text-muted-foreground')}
         style={{ height: ALTURA_FAIXA }}>
         <span className="min-w-0 flex-1 truncate">{fraseFaixa}</span>
         {tomFaixa === 'emitente' && candidato && !conflitoCnpj && (
