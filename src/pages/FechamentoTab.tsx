@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { ArrowLeft, CheckCircle, AlertTriangle, Lock, Unlock, Pencil, BarChart3, Lightbulb, Activity, Map as MapIcon, RefreshCw } from 'lucide-react';
-import { ResumoAtividadesView } from '@/components/ResumoAtividadesView';
+import { ResumoPorAtividade } from '@/components/resumoAtividade/ResumoPorAtividade';
 import { usePastos, isPastoAtivoNoMes, pastosAtivosNoMes, type Pasto } from '@/hooks/usePastos';
 import { useFechamento, type FechamentoPasto, type FechamentoItem } from '@/hooks/useFechamento';
 import { useFazenda, GLOBAL_FAZENDA } from '@/contexts/FazendaContext';
@@ -916,12 +916,16 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
 
   if (showResumoAtividades) {
     return (
-      <ResumoAtividadesView
+      <ResumoPorAtividade
+        fazenda={{ id: fazendaAtual?.id ?? '', nome: fazendaAtual?.nome ?? '', codigo: fazendaAtual?.codigo }}
+        clienteNome={clienteAtual?.nome ?? ''}
         pastos={pastos}
-        fechamentos={operationalFechamentos}
+        fechamentos={fechamentos}
         itensMap={itensMap}
-        categorias={categorias}
+        culturasPorPasto={areaLavouraPorPasto}
         anoMes={anoMes}
+        anoFiltro={anoFiltro} setAnoFiltro={setAnoFiltro} anosDisp={anosDisp}
+        mesFiltro={mesFiltro} setMesFiltro={setMesFiltro} statusPorMes={statusPorMes}
         onBack={() => setShowResumoAtividades(false)}
       />
     );

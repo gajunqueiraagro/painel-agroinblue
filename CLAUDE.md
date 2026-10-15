@@ -162,7 +162,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 15/10/2026 (FIN-LISTA-COMPACTA-01, +4: `src/pages/financiamentosListaCompacta.test.tsx` 4 (novo) — 5327 depois dele;
+  Baseline em 15/10/2026 (RESUMO-ATIVIDADE-01a, +2: `src/lib/fechamento/resumoPorAtividade.test.ts` 7 (novo); saiu
+  `src/components/resumoAtividadesTipoDoMes.test.tsx` 5, com a tela que testava (as duas regras dela foram portadas) — 5329 depois dele;
+  antes o FIN-LISTA-COMPACTA-01, +4: `src/pages/financiamentosListaCompacta.test.tsx` 4 (novo) — 5327 depois dele;
   antes o FIN-LR-SYNC-01a, +5: `src/v2/lib/lucroRural/lerArquivoLr.test.ts` 5 (novo) — 5323 depois dele;
   antes o SEG-AGRI-TENANT-01, +2 em `src/lib/acessos/guardaDeClienteNasMigrations.test.ts` (3 -> 5) — 5318 depois dele;
   antes o SEG-DRE-TENANT-01, +3: `src/lib/acessos/guardaDeClienteNasMigrations.test.ts` 3 (novo) — 5316 depois dele;
@@ -334,7 +336,7 @@ no mesmo arquivo.
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
   `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5327
-  passando, 22 skipped, e
+  passando [5329 desde o RESUMO-ATIVIDADE-01a], 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -2033,6 +2035,27 @@ preview que o cabecalho nao sai da tela ao rolar.
   proposito: mexe na animacao de todos os dialogos.
 
 ## REGRAS VIGENTES — DADO, BANCO E METODO
+- ⚠ O RESUMO POR ATIVIDADE TEM UMA FONTE POR NUMERO, E A TELA NAO FAZ CONTA (RESUMO-ATIVIDADE-01a, Gabriel 15/10/2026, so' tela, sem
+  banco). Substitui a `ResumoAtividadesView` (apagada com o teste dela). Aberta pelo botao "Resumo por Atividade" do Fechamento Area.
+  · A AGREGACAO E' PURA: `src/lib/fechamento/resumoPorAtividade.ts` (`montarResumoDoMes`, `totalDaPecuariaDoCache`,
+    `divergenciaDasFases`, `indicadoresDaParte`, `colunasDaArea`, `mesesDoAnoCivil`); a tela
+    (`src/components/resumoAtividade/ResumoPorAtividade.tsx`) so' formata e desenha; as tres leituras que faltam (cards de dez do ano
+    anterior a dez, paginados; `zoot_mensal_cache` CRU; `area_pecuaria_ha` do snapshot) moram em `src/hooks/useResumoPorAtividade.ts`.
+  · FONTE (D4): TOTAL da pecuaria = `zoot_mensal_cache` SEM `aplicarOverlayFechamento` (cab, peso medio, @ estoque, @ produzidas,
+    GMD); LOTACAO do total = peso ÷ 450 ÷ `fechamento_area_snapshot.area_pecuaria_ha`; ATIVIDADE = `tipo_uso_mes` do card (na falta,
+    `pastos.tipo_uso`); AREA = `pastos.area_produtiva_ha`; FASES = `fechamento_pasto_itens`. Pasto sem card no mes: balde proprio, fora
+    de toda atividade e de todo denominador. Vedado e reforma sao fatias da pecuaria (D2). @ produzidas, GMD e custo so' no total (D3).
+  · A DIVERGENCIA NUNCA E' AJUSTADA: total do cache − soma das fases aparece numa linha discreta (PUR set/26: 5.872 x 5.871, o +1 cab
+    do pasto "Divergencia do Campeiro", 0 ha).
+  · So' "No mes" funciona; "Acumulado", "Safra" e Exportar PDF/Excel estao desenhados e desligados. Fora: mes a mes, Pecuaria do mes,
+    conferencia por categoria, jovem x adulto, custo por fase.
+  · O ALINHAMENTO DAS CELULAS MORA NA CONSTANTE (`TD`, `TD_L`, `TD_RECUO`): `text-left` acrescentado a uma classe que ja' tem
+    `text-right` NAO vence (vale a ordem do CSS do Tailwind) — a primeira coluna saiu a' direita na primeira medida.
+  MEDIDO (bancada com a tela real e a fixture do PUR, 15/10, janelas de 1.000 / 1.280 / 1.440 com a lateral de 176): 0 celulas
+  cortadas nas duas tabelas, sem rolagem horizontal; a 1.000 o grafico de colunas desce para baixo do donut e a 6a aba vai para a
+  segunda linha. Fotos em ~/Downloads/resumo-atividade-01a/.
+  ⚠ NAO PROVADO: a tela real no navegador com login (so' a bancada) · outro cliente / fazenda com silvicultura ou cana · perfil nao
+    admin · mes aberto e mes sem snapshot de area (lotacao do total "—").
 - ⚠ O LEGADO DE 2025 DA FAZ. PUREZA ESTA' POR PASTO, CONFORME A PLANILHA DO CAMPEIRO (LEGADO-POR-PASTO-01, Gabriel 15/10/2026; migration
   de DADOS `supabase/migrations/20261027198900_legado_por_pasto_pur_2025.sql`, md5 do arquivo c6c3b793376ceadbea0a58468711c3f5, 143.424
   bytes — APLICADA no proto em 15/10/2026 com o OK condicional do Gabriel, pelo `supabase db query --linked` (project-ref conferido =

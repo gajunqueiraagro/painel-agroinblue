@@ -192,9 +192,10 @@ export function labelDoTipoUso(t: string | null | undefined): string {
 // no neutro por omissão — agora é escolha declarada.
 //
 // ATENÇÃO — esta paleta AINDA NÃO é a da aplicação inteira.
-// ResumoPastosTab.tsx:38 e ResumoAtividadesView.tsx:11 mantêm tabelas próprias,
-// e nelas LARANJA significa CRIA — aqui significa RECRIA. A mesma cor diz coisas
-// opostas em telas diferentes até o PR-UI-PASTO-CORES-03 migrar as duas.
+// ResumoPastosTab.tsx:38 e o Resumo por Atividade (src/components/resumoAtividade/,
+// RESUMO-ATIVIDADE-01a, cores do mock) mantêm tabelas próprias, e nelas LARANJA
+// significa CRIA — aqui significa RECRIA. A mesma cor diz coisas opostas em telas
+// diferentes até o PR-UI-PASTO-CORES-03 migrar as duas.
 // Não "corrigir" uma ponta só: isso troca a divergência de lugar.
 
 export function corDoTipoUso(t: string | null | undefined): string {
