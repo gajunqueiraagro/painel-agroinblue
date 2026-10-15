@@ -2,6 +2,8 @@
  * SEG-DRE-TENANT-01 — toda funcao SECURITY DEFINER com parametro de cliente criada numa migration NOVA (a partir de
  * 20261027198600) tem guarda de cliente: `tenant_ok`, ou a guarda propria `is_admin_agroinblue` + 42501.
  * SECURITY DEFINER atravessa a RLS: sem a guarda, quem souber o id de outro cliente le^ o dado dele (medido no DRE em 15/10/2026).
+ * SEG-AGRI-TENANT-01: a que recebe SO' O ID da linha (sem parametro de cliente) tambem tem guarda — pelo cliente da linha
+ * (`_fn_exigir_tenant_das_linhas`, molde 01A) ou uma das formas acima. Interna (`_fn_…`) nasce fechada e fica de fora.
  * O detector se auto-testa antes de varrer (a lei do `check:tdz`: "nenhum" so' vale quando a busca provou que sabe achar).
  */
 import { describe, it, expect } from 'vitest';
@@ -18,8 +20,12 @@ export function semGuarda(sql: string): string[] {
     const cab = p.match(/^CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+([\w.]+)\s*\(([^)]*)\)/i);
     if (!cab) return [];
     const [, nome, params] = cab;
-    if (!/SECURITY\s+DEFINER/i.test(p) || !/cliente/i.test(params)) return [];
-    const guardada = /tenant_ok\s*\(/i.test(p) || (/is_admin_agroinblue\s*\(/i.test(p) && /42501/.test(p));
+    if (!/SECURITY\s+DEFINER/i.test(p)) return [];
+    const temCliente = /cliente/i.test(params);
+    const soId = !temCliente && /\buuid\b/i.test(params) && !/^(public\.)?_/.test(nome);
+    if (!temCliente && !soId) return [];
+    const guardada = /tenant_ok\s*\(/i.test(p) || /_fn_exigir_tenant(_das_linhas)?\s*\(/i.test(p)
+      || (/is_admin_agroinblue\s*\(/i.test(p) && /42501/.test(p));
     return guardada ? [] : [nome];
   });
 }
@@ -32,9 +38,18 @@ describe('guarda de cliente nas migrations novas', () => {
     const comAdmin = `CREATE FUNCTION public.fn_z(p_cliente uuid) RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
       begin if not public.is_admin_agroinblue(auth.uid()) then raise exception using errcode = '42501'; end if; end $$;`;
     const invoker = `CREATE FUNCTION public.fn_w(p_cliente uuid) RETURNS void LANGUAGE sql AS $$ select 1 $$;`;
-    const semCliente = `CREATE FUNCTION public.fn_v(p_id uuid) RETURNS void LANGUAGE sql SECURITY DEFINER AS $$ select 1 $$;`;
     expect(semGuarda(sem)).toEqual(['public.fn_x']);
-    expect(semGuarda([sem, comTenant, comAdmin, invoker, semCliente].join('\n'))).toEqual(['public.fn_x']);
+    expect(semGuarda([sem, comTenant, comAdmin, invoker].join('\n'))).toEqual(['public.fn_x']);
+  });
+
+  it('o detector acha a SECURITY DEFINER que recebe so\' o id sem guarda, e aceita a guarda pela linha', () => {
+    const soIdSem = `CREATE FUNCTION public.fn_v(p_id uuid) RETURNS void LANGUAGE sql SECURITY DEFINER AS $$ select 1 $$;`;
+    const soIdComLinha = `CREATE FUNCTION public.fn_u(p_id uuid) RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
+      begin perform public._fn_exigir_tenant_das_linhas(array[(select cliente_id from public.t where id = p_id)]); end $$;`;
+    const interna = `CREATE FUNCTION public._fn_t(p_id uuid) RETURNS void LANGUAGE sql SECURITY DEFINER AS $$ select 1 $$;`;
+    const semUuid = `CREATE FUNCTION public.fn_s(p_n int) RETURNS int LANGUAGE sql SECURITY DEFINER AS $$ select 1 $$;`;
+    expect(semGuarda(soIdSem)).toEqual(['public.fn_v']);
+    expect(semGuarda([soIdSem, soIdComLinha, interna, semUuid].join('\n'))).toEqual(['public.fn_v']);
   });
 
   it('nenhuma migration nova tem funcao SECURITY DEFINER com parametro de cliente sem guarda', () => {
@@ -51,5 +66,18 @@ describe('guarda de cliente nas migrations novas', () => {
     expect(sql).toMatch(/if not coalesce\(public\.tenant_ok\(p_cliente\), false\) then raise exception ''acesso negado ao cliente'' using errcode = ''42501''/);
     expect(sql).toMatch(/REVOKE ALL ON FUNCTION public\._fn_exigir_tenant\(uuid\) FROM PUBLIC, anon, authenticated/);
     expect(sql).toMatch(/REVOKE ALL ON FUNCTION %s FROM PUBLIC, anon/);
+  });
+
+  it('a migration da agricultura poe a guarda nas 27 e fecha as tres sem chamador na tela', () => {
+    const sql = readFileSync(join(DIR, '20261027198700_seg_agri_tenant_01.sql'), 'utf8');
+    const alvos = [...sql.matchAll(/\['(\w+)',\s+'[0-9a-f]{32}', '[0-9a-f]{32}', '(cliente|linha)', '[^']*', '(S?)'\]/g)];
+    expect(alvos).toHaveLength(27);
+    expect(alvos.filter((a) => a[2] === 'linha')).toHaveLength(9);
+    expect(alvos.filter((a) => a[3] === 'S').map((a) => a[1]).sort()).toEqual(
+      ['agri_local_estoque_resolver', 'agri_venda_avulsa_registrar', 'auditar_integridade_classificacao']);
+    expect(sql).toMatch(/if not coalesce\(public\.tenant_ok\(%s\), false\) then raise exception ''acesso negado ao cliente'' using errcode = ''42501''/);
+    expect(sql).toMatch(/perform public\._fn_exigir_tenant_das_linhas\(array\[%s\]\);/);
+    expect(sql).toMatch(/REVOKE ALL ON FUNCTION public\._fn_exigir_tenant_das_linhas\(uuid\[\]\) FROM PUBLIC, anon, authenticated/);
+    expect(sql).toMatch(/REVOKE ALL ON FUNCTION %s FROM PUBLIC, anon, authenticated/);
   });
 });

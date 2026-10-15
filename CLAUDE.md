@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 15/10/2026 (SEG-DRE-TENANT-01, +3: `src/lib/acessos/guardaDeClienteNasMigrations.test.ts` 3 (novo) — 5316 depois dele;
+  Baseline em 15/10/2026 (SEG-AGRI-TENANT-01, +2 em `src/lib/acessos/guardaDeClienteNasMigrations.test.ts` (3 -> 5) — 5318 depois dele;
+  antes o SEG-DRE-TENANT-01, +3: `src/lib/acessos/guardaDeClienteNasMigrations.test.ts` 3 (novo) — 5316 depois dele;
   antes o OC-DOC-SAIDA-FAZENDA-01 fix1 + fix1b, +3 em `src/components/compra/documentoFormAbate.test.tsx` (17 -> 20) — 5313
   depois deles; antes o OC-DOC-SAIDA-FAZENDA-01, +20: `src/lib/oc/leitura/leituraSaida7f.test.ts` 19 (novo),
   `src/components/compra/documentoFormAbate.test.tsx` 1 (16 -> 17) — 5310 depois dele; antes o OC-DOC-ESPECIE-ABATE-01 passo 7e, +19: `src/lib/oc/leitura/leituraAbate7e.test.ts` 18 (novo),
@@ -330,7 +331,7 @@ no mesmo arquivo.
   PR-CONC-SALDO-UMA-REGUA-01c, +17 em `src/lib/conciliacao/resumoMes.test.ts`; antes o
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
-  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5316
+  `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5318
   passando, 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
@@ -3825,16 +3826,53 @@ docs/historico/frentes-ate-2026-09-29.md.)
     Teste: `supabase/tests/seg_dre_tenant_01_test.sql` (T1–T5, OK ao vivo depois de aplicar). Fonte: `src/lib/acessos/guardaDeClienteNasMigrations.test.ts`
     (toda funcao SECURITY DEFINER com parametro de cliente em migration a partir de 20261027198600 tem `tenant_ok` ou
     `is_admin_agroinblue` + 42501; com auto-teste do detector).
-  ⚠ DIVIDA SEG-TENANT-GRUPO-B-01 (medida em 15/10, NAO corrigida; SECURITY DEFINER com parametro de cliente, sem `tenant_ok`,
-    `cliente_membros` nem `is_admin_agroinblue`, guarda nao provada chamando):
-    LEITURA (graos e estoque, `useEstoqueGraos.ts`): `fn_estoque_graos`, `fn_estoque_graos_resumo`, `fn_estoque_graos_balanco`,
-      `fn_estoque_movimentacoes`, `fn_estoque_graos_por_local`, `fn_locais_estoque`, `fn_vendas_graos`;
-    ESCRITA: `agri_carga_mandioca_registrar`, `agri_venda_graos_registrar`, `agri_venda_graos_corrigir`, `agri_quebra_registrar`,
-      `agri_cotacao_graos_registrar`, `agri_local_estoque_salvar`, `agri_contrato_armazenagem_salvar`, `agri_venda_avulsa_registrar`
-      e `agri_local_estoque_resolver` (sem chamador no front);
-    AUDITORIA: `buscar_duplicados_retroativo`, `auditar_integridade_classificacao` (sem chamador).
-    Delegam a guarda (fora da divida): `fn_dividendo_criar` / `_reordenar` -> `_fn_dividendo_rodar`; `oc_criar_rascunho` -> `oc_salvar_rascunho`.
-    As ~63 com a guarda propria `is_admin_agroinblue` + 42501 (OC, documentos, conciliacao) foram medidas so' pelo texto.
+  [DIVIDA SEG-TENANT-GRUPO-B-01 FECHADA no SEG-AGRI-TENANT-01 — a regra logo abaixo.]
+- ⚠ AS 27 FUNCOES SECURITY DEFINER DA AGRICULTURA E DA AUDITORIA EXIGEM CLIENTE COM ACESSO; A QUE RECEBE SO' O ID GUARDA PELO CLIENTE DA
+  LINHA (SEG-AGRI-TENANT-01, Gabriel 15/10/2026; migration `supabase/migrations/20261027198700_seg_agri_tenant_01.sql`, md5 do arquivo
+  c1e6f228fc7febf352bb4272472a3518 — APLICADA no proto em 15/10/2026 com o OK do Gabriel: ledger 20261015151926 (⚠ registrada com o
+  timestamp do dia; o ledger guarda o arquivo BYTE A BYTE, com a quebra final: md5 do ledger = c1e6f228…). Reaplicar nao muda nada
+  (31 funcoes conferidas). MEDIDO ANTES (Passo 1): o gestor so' do Agnaldo lia o NJ por 8 leituras (fn_vendas_graos 14.250 bytes,
+  buscar_duplicados_retroativo 25 linhas) e gravava no NJ por 9 escritas (cotacao, local, contrato, carga, venda avulsa, editar e
+  cancelar avulsa, abrir barter), com a leitura direta das tabelas do NJ em 0 linhas.
+  · POR PARAMETRO DE CLIENTE (18) — o molde do SEG-DRE-TENANT-01 (plpgsql: o IF de `tenant_ok` logo depois do `begin`, `BEGIN` na
+    auditar_integridade; LANGUAGE sql: `select public._fn_exigir_tenant(<param>);` primeiro): `agri_carga_mandioca_registrar`,
+    `agri_venda_graos_registrar`, `agri_venda_graos_corrigir`, `agri_quebra_registrar`, `agri_cotacao_graos_registrar`,
+    `agri_local_estoque_salvar`, `agri_contrato_armazenagem_salvar`, `agri_venda_avulsa_registrar`, `agri_local_estoque_resolver`,
+    `fn_estoque_graos`, `fn_estoque_graos_resumo`, `fn_estoque_graos_balanco`, `fn_estoque_graos_por_local`, `fn_locais_estoque`,
+    `fn_vendas_graos`, `fn_estoque_movimentacoes`, `buscar_duplicados_retroativo`, `auditar_integridade_classificacao`.
+  · SO' O ID (9) — `perform public._fn_exigir_tenant_das_linhas(array[cliente de cada linha recebida])`: `agri_carga_mandioca_cancelar`
+    e `_corrigir` (agri_colheita), `agri_quebra_cancelar` e `_editar` (agri_estoque_movimentacoes), `agri_venda_avulsa_cancelar` e
+    `_editar` (agri_operacoes_comerciais), `agri_barter_estornar_contrato` e `_materializar_contrato` (agri_barter_contratos),
+    `agri_barter_abrir_contrato` (o fornecedor E a fazenda, do mesmo cliente).
+  · A INTERNA `_fn_exigir_tenant_das_linhas(uuid[])` (plpgsql, STABLE, `search_path = public`, so' postgres e service_role): 42501 "sem
+    acesso a este registro" se a lista e' vazia, se alguma linha nao existe (cliente nulo), se ha' clientes diferentes ou se `tenant_ok`
+    e' falso. FUNCAO NOVA QUE RECEBE SO' O ID DE LINHA DE CLIENTE USA ELA (o detector do vitest cobra).
+  · ⚠ MENSAGEM NOVA PARA ID INEXISTENTE: nas 9, id que nao existe da' 42501 "sem acesso a este registro" PARA TODOS, admin inclusive
+    (antes, a mensagem de negocio "… nao encontrada"). Medido antes de aplicar: nenhuma tela compara esses textos ou codigos — todas
+    mostram `error.message` como veio.
+  · A GUARDA VEM ANTES DA REGRA DE NEGOCIO (venda de graos e quebra, que paravam na regra de saldo, dao 42501). Sem usuario: 42501.
+    Admin passa. Nenhum cron, view ou edge function chama as 27; as chamadas entre elas levam o JWT e rodam como o dono.
+  · ACL: as 24 com {postgres, service_role, authenticated}; `agri_venda_avulsa_registrar`, `agri_local_estoque_resolver` e
+    `auditar_integridade_classificacao` (sem chamador na tela) so' {postgres, service_role} — quebra e venda de graos seguem chamando
+    a resolver como dono (provado). Sem PUBLIC nem anon.
+  Provas no vivo: `supabase/tests/seg_agri_tenant_01_test.sql` (T1–T5; os 27 md5 de destino pelo agregado 2bf020d7) OK;
+  `seg_dre_tenant_01_test.sql` OK; `seg_tenant_varredura_01c_test.sql` (recorte de sempre) OK; `fin_safra_modal_01_test.sql` OK;
+  gestor do Agnaldo grava cotacao no NJ -> 42501; nj@ le^ `fn_estoque_graos` do NJ -> responde (681 bytes).
+  ⚠ `mandioca_retencao_nf_01_test.sql` CAI NO P1 POR DERIVA DO DADO, NAO PELA GUARDA: `fn_conciliar_bloco` (que nao cita nenhuma das 27)
+    recusa CBLOC "extrato_ja_vinculado" — o extrato 316f43d1 de 28/08 tem 3 vinculos vivos fora de bloco desde 01/10/2026, e o teste
+    espera um bloco. A parte dele que chama a agricultura (P5) rodada a' parte da' o resultado de sempre. O teste nao foi mexido.
+  ⚠ DIVIDA SEG-TENANT-SO-ID-02 (varredura de 15/10, so' pelo TEXTO do corpo, NADA corrigido): SECURITY DEFINER executavel por
+    `authenticated`, sem parametro de cliente, sem `tenant_ok` / `cliente_membros` / `is_admin_agroinblue` / `_fn_exigir_tenant` no
+    corpo, que toca tabela com `cliente_id` — 13 fora das 9 acima (nome · md5 · chamador):
+      `fn_dividendo_inativar` 0af7c9e9, `fn_dividendo_reativar` 5910d2b7, `fn_dividendo_renomear` 5e6fece2 (dividendosCadastro.ts) —
+        DELEGAM, PROVADO (`_fn_dividendo_rodar`, com `tenant_ok`; o teste da trava do DIVIDENDO-ESCRITOR-UNICO-01, E9–E12, recusa o gestor de outro cliente nas cinco);
+      `oc_desfazer_compromisso` bd6c112a (AbaContaCorrenteOC, AbaCompromissosOC), `oc_lancar_pelo_modal` 1cb63f21 (LancamentoV2Dialog,
+        LancamentoDaOCDialog), `oc_programar_recebimento` 92815a47 (AbaContaCorrenteOC, useLancamentosComOC) — DELEGACAO PROVAVEL, NAO PROVADA;
+      `fn_promover_staging` 0020ac0a (MesaStagingTab, staging/mutations); `fn_reativar_vinculo_extrato` 60b10d6b, `fn_saldo_inicial_pasto`
+        161ad989, `fn_transferir_vinculo_extrato` 1f6e9b63 (sem chamador no front); `_oc_cc_fora_do_dre` d89c5bde
+        (materializar_dre_lcdpr_from_plano); `fn_financiamento_sincronizar_status` c5071eba (gatilho de parcelas);
+        `fn_pastos_aplicaveis_mes` d2f64f93 (fn_materializar_conjunto_mes, fn_regenerar_area_do_mes).
+    Proximo passo: medir CHAMANDO (gestor de outro cliente), como no Passo 1 deste PR, antes de por guarda.
 - ⚠ A GRAVACAO DO EXTRATO E' DO BANCO, E O DESFAZER DIZ O QUE FAZ E RECUSA O QUE NAO PODE (PR-CONC-IMPORT-BANCO-01B, 03/10,
   migration 20261027192000, ⚠ registrada como 20261003174631; ledger = arquivo, md5 4966be59…).
   · IDENTIDADE DO MOVIMENTO: `hashMovimento` + a OCORRENCIA entre movimentos de CONTEUDO IDENTICO no arquivo, na ordem dele
