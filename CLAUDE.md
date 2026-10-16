@@ -2129,8 +2129,15 @@ preview que o cabecalho nao sai da tela ao rolar.
   · OS LANCAMENTOS: depois das parcelas o `salvar` chama `fn_reconciliar_financiamento(fin, false, true)` — o laco do MESMO
     `fn_reconciliar_parcela_financiamento` que o lapis da parcela usa (status pelo vencimento: previsto ate' hoje, programado depois).
     Falhou: o contrato fica e o aviso diz (o lapis da parcela recria). Parcelamento nao passa por aqui (tem o escritor proprio).
-  · DADO: o c518161d tem o script de regeracao em `docs/investigacao/fin-parcelas-taxa-zero-01-agnaldo-c518161d.sql` (ENSAIO, nao
-    aplicado; aplicar so' com o GO do Gabriel). As outras 141 parcelas de mesmo caminho e as 68 do legado do NJ nao foram tocadas.
+  · DADO: o c518161d (consorcio John Deere do Agnaldo) foi REGERADO no proto em 16/10/2026 21:49 UTC com o GO do Gabriel, pela
+    migration `supabase/migrations/20261027199800_fin_parcelas_taxa_zero_01_c518161d.sql` (= o ensaio de
+    `docs/investigacao/fin-parcelas-taxa-zero-01-agnaldo-c518161d.sql` com `c_aplicar = true`; md5 do arquivo
+    7c463b96bcce1de95fdab5aa401afa21; ledger 20261016214911, ⚠ timestamp do dia; ledger = arquivo). Provado depois: 80 parcelas,
+    total 224.292,80, de 18/07/2026 a 18/02/2033 (80 meses distintos); 80 lancamentos vivos (3 previstos, 77 programados), cada um
+    com valor e vencimento da parcela e competencia / ano_mes no mes do vencimento (2026-07 a 2033-02); o 3db22677 da parcela 1
+    mantido, com vencimento e competencia em 18/07/2026; o resto do cliente identico por md5 (14.538 lancamentos, 41 contratos,
+    163 parcelas; o cliente passou de 14.539 a 14.618 lancamentos, os 79 novos). As outras 141 parcelas de mesmo caminho e as 68
+    do legado do NJ nao foram tocadas (item 28).
   ⚠ [CONSERTADO no FIN-AMORT-COMPETENCIA-VENC-01, a regra logo abaixo: a amortizacao nasce no mes do vencimento.] O motor
     gravava a competencia do principal = a data do contrato: as 80 parcelas do c518161d cairiam todas em 2026-06.
   Testes: `src/hooks/useFinanciamentoCadastro.cronograma.test.tsx` 6 (a conta pura e o hook com banco de mentira); 5 mutacoes mortas.
