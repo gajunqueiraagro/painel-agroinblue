@@ -74,7 +74,7 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial, peri
   const { pastos, categorias, editarPasto } = usePastos();
   const {
     fechamentos, loadFechamentos, loadItens, setPesoAtualizadoPasto,
-    criarFechamento, salvarItens, fecharPasto, reabrirPasto, copiarMesAnterior,
+    criarFechamento, fecharPasto, copiarMesAnterior,
   } = useFechamento();
   /* FECH-MAPA-PASTO-MODAL-01 — o nome do pasto abre o MESMO modal do Fechamento Área */
   const [pastoAberto, setPastoAberto] = useState<Pasto | null>(null);
@@ -416,9 +416,7 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial, peri
           pasto={pastoAberto}
           fechamento={fechamentoAberto}
           categorias={categorias}
-          onSave={async (items, aoRecusar) => salvarItens(fechamentoAberto.id, items, { aoRecusar })}
           onFechar={async () => fecharPasto(fechamentoAberto.id)}
-          onReabrir={async () => reabrirPasto(fechamentoAberto.id)}
           onCopiar={async () => copiarMesAnterior(pastoAberto.id, anoMes, categorias)}
           pastosDaFazenda={pastos}
           onRenomear={async (nome, aoRecusar) => editarPasto(pastoAberto.id, { nome }, { aoRecusar })}

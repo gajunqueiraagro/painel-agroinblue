@@ -125,22 +125,26 @@ export function useFechamento() {
     return true;
   }, [qc]);
 
-  const reabrirPasto = useCallback(async (fechamentoId: string) => {
-    const { error } = await supabase.from('fechamento_pastos').update({ status: 'rascunho' }).eq('id', fechamentoId);
-    if (error) { toast.error('Erro ao reabrir pasto'); return false; }
+  /* FECH-PASTO-SALVAR-TRANSACAO-01 — o card do pasto tem DOIS escritores, no banco, cada um numa transacao:
+     `fn_fechamento_pasto_salvar` (campos do mes + itens; P2 e card fechado recusam e desfazem tudo) e
+     `fn_fechamento_pasto_reabrir` (so' este card volta a rascunho, com a linha em `fechamento_reaberturas_log`).
+     Os antigos `reabrirPasto` e `atualizarCamposMensais` (UPDATE direto) sairam: o modal do pasto era o unico chamador. */
+  const salvarCardDoPasto = useCallback(async (
+    fechamentoId: string,
+    campos: { lote_mes: string | null; tipo_uso_mes: string | null; qualidade_mes: number | null; observacao_mes: string | null },
+    itens: { categoria_id: string; quantidade: number; peso_medio_kg: number | null; lote: string | null; observacoes: string | null; origem_dado: string }[],
+  ): Promise<{ ok: boolean; erro: string | null }> => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `(supabase as any).rpc` do repo
+    const { error } = await (supabase as any).rpc('fn_fechamento_pasto_salvar', { p_fechamento_id: fechamentoId, p_campos: campos, p_itens: itens });
+    if (error) { console.error(error); return { ok: false, erro: error.message || 'Não foi possível salvar o pasto.' }; }
     await qc.invalidateQueries({ queryKey: ['snapshot-area-anual'] });
-    toast.success('Pasto reaberto');
-    return true;
+    return { ok: true, erro: null };
   }, [qc]);
 
-  /* FECH-MAPA-PASTO-MODAL-01: devolve o erro (antes so' `console.error`, e o modal seguia para os itens). */
-  const atualizarCamposMensais = useCallback(async (
-    fechamentoId: string,
-    campos: { lote_mes?: string | null; tipo_uso_mes?: string | null; qualidade_mes?: number | null; observacao_mes?: string | null }
-  ): Promise<{ ok: boolean; erro: string | null }> => {
-    const { error } = await supabase.from('fechamento_pastos').update(campos).eq('id', fechamentoId);
-    if (error) { console.error(error); return { ok: false, erro: error.message || 'Não foi possível salvar os dados do mês.' }; }
-    // tipo_uso_mes altera o recálculo de área pecuária → invalida a área snapshot.
+  const reabrirCardDoPasto = useCallback(async (fechamentoId: string, motivo: string): Promise<{ ok: boolean; erro: string | null }> => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `(supabase as any).rpc` do repo
+    const { error } = await (supabase as any).rpc('fn_fechamento_pasto_reabrir', { p_fechamento_id: fechamentoId, p_motivo: motivo });
+    if (error) { console.error(error); return { ok: false, erro: error.message || 'Não foi possível reabrir o pasto.' }; }
     await qc.invalidateQueries({ queryKey: ['snapshot-area-anual'] });
     return { ok: true, erro: null };
   }, [qc]);
@@ -199,5 +203,5 @@ export function useFechamento() {
     };
   }, [loadItens]);
 
-  return { fechamentos, loading, loadFechamentos, criarFechamento, loadItens, salvarItens, fecharPasto, reabrirPasto, atualizarCamposMensais, copiarMesAnterior, setPesoAtualizadoPasto };
+  return { fechamentos, loading, loadFechamentos, criarFechamento, loadItens, salvarItens, fecharPasto, salvarCardDoPasto, reabrirCardDoPasto, copiarMesAnterior, setPesoAtualizadoPasto };
 }

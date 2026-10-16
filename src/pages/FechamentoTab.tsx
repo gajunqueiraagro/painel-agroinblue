@@ -186,7 +186,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
 
   const { pastos, categorias, editarPasto } = usePastos();
   const { lancamentos, saldosIniciais, adicionarLancamento } = useLancamentos();
-  const { fechamentos, loading, loadFechamentos, criarFechamento, loadItens, salvarItens, fecharPasto, reabrirPasto, copiarMesAnterior } = useFechamento();
+  const { fechamentos, loading, loadFechamentos, criarFechamento, loadItens, salvarItens, fecharPasto, copiarMesAnterior } = useFechamento();
   const { user } = useAuth();
 
   const anosDisp = useMemo(() => {
@@ -1424,10 +1424,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             pasto={selectedPasto}
             fechamento={activeFechamento}
             categorias={categorias}
-            onSave={async (items, aoRecusar) => salvarItens(activeFechamento.id, items, { aoRecusar })}
             onFechar={async () => fecharPasto(activeFechamento.id)}
-            /* FECH-MAPA-PASTO-MODAL-01 — o Reabrir do modal reabre SO' este pasto (antes reabria o mes inteiro da fazenda) */
-            onReabrir={async () => reabrirPasto(activeFechamento.id)}
             pastosDaFazenda={pastos}
             onRenomear={async (nome, aoRecusar) => editarPasto(selectedPasto.id, { nome }, { aoRecusar })}
             onCopiar={async () => copiarMesAnterior(selectedPasto.id, anoMes, categorias)}

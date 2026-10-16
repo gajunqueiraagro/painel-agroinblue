@@ -16,11 +16,14 @@ import { calcUA } from '@/lib/calculos/zootecnicos';
 import { formatNum } from '@/lib/calculos/formatters';
 import { useMasterLock } from '@/hooks/useMasterLock';
 import { MasterLockBanner } from '@/components/MasterLockBanner';
+import { toast } from 'sonner';
 import { motivoDoNomeDoPasto, NOTA_NOME_DO_CADASTRO } from '@/lib/pastos/nomeDoPasto';
 
 /* FECH-MAPA-PASTO-MODAL-01 — ALTURA FIXA (o corpo nao rola): topo + grade das 9 categorias + rodape. So' o painel da
    lavoura rola dentro do proprio quadro. */
 export const ALTURA_DO_MODAL_DO_PASTO = 'h-[524px]';
+/** o motivo gravado em `fechamento_reaberturas_log` (a RPC acrescenta o nome do pasto) */
+export const MOTIVO_REABRIR_PASTO = 'Reabertura individual via modal de pasto';
 
 const QUALIDADE_OPTIONS = Array.from({ length: 10 }, (_, i) => i + 1);
 
@@ -144,19 +147,16 @@ interface Props {
   pasto: Pasto;
   fechamento: FechamentoPasto;
   categorias: CategoriaRebanho[];
-  /** `aoRecusar` recebe a frase da recusa: o modal a escreve em vermelho e nao fecha */
-  onSave: (items: FechamentoItem[], aoRecusar: (frase: string) => void) => Promise<boolean>;
   /** o nome e' do cadastro (`editarPasto`); os pastos da fazenda servem para recusar nome repetido */
   pastosDaFazenda: readonly Pasto[];
   onRenomear: (nome: string, aoRecusar: (frase: string) => void) => Promise<boolean>;
   onFechar: () => Promise<boolean>;
-  onReabrir: () => Promise<boolean>;
   onCopiar: () => Promise<{ itens: FechamentoItem[]; dadosMes: { lote_mes: string | null; tipo_uso_mes: string | null; qualidade_mes: number | null; observacao_mes: string | null } }>;
 }
 
 export function FechamentoPastoDialog({
   open, onOpenChange, pasto, fechamento,
-  categorias, onSave, onReabrir, onCopiar, pastosDaFazenda, onRenomear,
+  categorias, onCopiar, pastosDaFazenda, onRenomear,
 }: Props) {
   const { clienteAtual } = useCliente();
   const [itens, setItens] = useState<FechamentoItem[]>([]);
@@ -172,7 +172,8 @@ export function FechamentoPastoDialog({
   const [erroSalvar, setErroSalvar] = useState<string | null>(null);
 
   const isFechado = status === 'fechado';
-  const { loadItens, atualizarCamposMensais } = useFechamento();
+  /* FECH-PASTO-SALVAR-TRANSACAO-01: o modal grava e reabre so' pelas duas RPCs do card (uma transacao cada) */
+  const { loadItens, salvarCardDoPasto, reabrirCardDoPasto } = useFechamento();
   const { isReadOnly: isMesReadOnly } = useMasterLock(fechamento.ano_mes);
   const masterReadOnly = isMesReadOnly(fechamento.ano_mes);
   // Inputs ficam disabled se já fechado OU se mês está bloqueado pelo master lock
@@ -268,14 +269,14 @@ export function FechamentoPastoDialog({
     try {
       setSaving(true);
       if (nomeMudou && !(await onRenomear(nomePasto.trim(), setErroNome))) return;
-      const campos = await atualizarCamposMensais(fechamento.id, {
+      const r = await salvarCardDoPasto(fechamento.id, {
         lote_mes: loteMes || null,
         tipo_uso_mes: tipoUsoMes || null,
         qualidade_mes: qualidadeMes,
         observacao_mes: observacaoMes || null,
-      });
-      if (!campos.ok) { setErroSalvar(campos.erro); return; }
-      if (!(await onSave(itens, setErroSalvar))) return;
+      }, itens);
+      if (!r.ok) { setErroSalvar(r.erro); return; }
+      toast.success('Fechamento salvo');
       // Não fechar o pasto aqui. O fechamento oficial ocorre via "Fechar Mês".
       onOpenChange(false);
     } finally {
@@ -294,8 +295,10 @@ export function FechamentoPastoDialog({
 
   const handleReabrir = async () => {
     setErroSalvar(null);
-    const ok = await onReabrir();
-    if (ok) setStatus('rascunho');
+    const r = await reabrirCardDoPasto(fechamento.id, MOTIVO_REABRIR_PASTO);
+    if (!r.ok) { setErroSalvar(r.erro); return; }
+    toast.success('Pasto reaberto');
+    setStatus('rascunho');
   };
 
   const [cancelAlertOpen, setCancelAlertOpen] = useState(false);
