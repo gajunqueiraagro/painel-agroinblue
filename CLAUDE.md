@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 16/10/2026 (FIN-LR-SYNC-01 passo a2, +4: `src/v2/hooks/useLrSyncAplicar.test.ts` 4 (novo) — 5393 depois dele; antes o
+  Baseline em 16/10/2026 (CONC-CARDS-ORDEM-01, +1 em `src/pages/conciliacaoDono.test.tsx` (40 -> 41) — 5394 depois dele; antes o
+  FIN-LR-SYNC-01 passo a2, +4: `src/v2/hooks/useLrSyncAplicar.test.ts` 4 (novo) — 5393 depois dele; antes o
   ZOOT-MES-FECHADO-MODAL-01, +21: `src/components/lancamento/avisoMesFechado.test.tsx` 21 (novo) — 5389
   depois dele; antes o FORN-EDITAR-01, +39: `src/lib/fornecedores/documentoFiscal.test.ts` 16 (novo),
   `src/lib/fornecedores/repetidosDoCadastro.test.ts` 7 (novo), `src/lib/fornecedores/documentoFiscalNosEscritores.test.ts` 6 (novo),
@@ -340,7 +341,7 @@ no mesmo arquivo.
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
   `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5327
-  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2], 22 skipped, e
+  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01], 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de

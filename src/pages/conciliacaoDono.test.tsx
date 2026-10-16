@@ -827,3 +827,20 @@ describe('T9 — nenhum arquivo tocado importa a conta antiga', () => {
     expect(antigo.match(/import\s*\{[^}]*\}\s*from[^;]+;/g)?.join('\n')).toMatch(/calcConciliacaoMensal/);
   });
 });
+
+/* ── CONC-CARDS-ORDEM-01: só a ordem dos 3 cards do topo ── */
+describe('ORDEM — os 3 cards do topo: Saldos por conta | Status | Resumo das movimentações', () => {
+  it('a ordem na tela e a régua do grid acompanham (cada card mantém a trilha dele)', async () => {
+    montar();
+    await screen.findAllByTestId('linha-saldo-conta');
+    const saldos = screen.getByText('Saldos por conta');
+    const status = screen.getByTestId('card-status');
+    const resumo = screen.getByText('Resumo das movimentações');
+    const antes = (a: Node, b: Node) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+    expect(antes(saldos, status)).toBe(true);
+    expect(antes(status, resumo)).toBe(true);
+    const grid = status.parentElement!;
+    expect(grid.style.gridTemplateColumns).toBe('3.05fr 0.7fr 1.7fr');
+    expect(grid.children[1]).toBe(status);
+  });
+});

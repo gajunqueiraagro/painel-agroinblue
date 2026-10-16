@@ -1290,225 +1290,12 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
               <span className="text-[13px] font-medium text-[#185FA5]">{contaAtual}</span>
             </div>
 
-            {/* ════ 3 CARDS: [Resumo] [Status] [Saldos por conta] ════
+            {/* ════ 3 CARDS: [Saldos por conta] [Status] [Resumo] — CONC-CARDS-ORDEM-01 (Gabriel 16/10/2026): so' a ORDEM mudou;
+                as tres trilhas sao as mesmas (3.05fr · 0.7fr · 1.7fr), trocadas de lugar com os cards: cada um mantem a largura.
+                Os rotulos "COL 1/2/3" abaixo sao os de antes (o bloco foi movido verbatim). ════
                 Resumo encurta um pouco; Saldos ganha espaço para evitar corte
                 em Sistema/Extrato/Diferença. Status mantido compacto. */}
-            <div className="grid gap-2" style={{gridTemplateColumns:'1.7fr 0.7fr 3.05fr', alignItems:'start'}}>
-
-              {/* ── COL 1: Resumo das movimentações ── */}
-              <div className="rounded-lg border overflow-hidden bg-card">
-                {/* ⚠ O CABEÇALHO NÃO MUDA DE ALTURA (A27). O nome da conta morava aqui e saiu para a
-                    faixa do mês, abaixo das abas (PR-CONCILIA-FAIXA-MES-CONTA-01). O `min-h-[32px]`
-                    fica: é a altura que a pílula dava, e sem ele este cabeçalho encolheria ~5,5px e
-                    desalinharia dos cards Status e Saldos. */}
-                <div className="px-3 py-1.5 border-b bg-primary text-primary-foreground flex items-center justify-between min-h-[32px]">
-                  <span className="text-[9px] font-medium uppercase tracking-wider whitespace-nowrap shrink-0">Resumo das movimentações</span>
-                </div>
-                {/* ⚠ TUDO DA LINHA DO DONO — PR-CONC-SALDO-UMA-REGUA-02 (D1): a conta aberta, ou o total no Todas. A abertura
-                    terceiros × transferências vale nas duas visões (o dono a dá no total também). Nulo é "—", nunca zero.
-                    As saídas vêm com o sinal do dono (negativas, em vermelho). */}
-                <div className="px-3 pt-1.5 flex justify-between">
-                  <span className="text-[10px] text-muted-foreground">Saldo inicial</span>
-                  <span className="text-[11px] font-medium text-muted-foreground tabular-nums" data-testid="resumo-saldo-inicial">
-                    {saldosSel.saldo_inicial != null ? formatMoeda(saldosSel.saldo_inicial) : '—'}
-                  </span>
-                </div>
-                <div className="mx-3 my-1 h-px bg-border" />
-                <div className="px-3 flex justify-between bg-success/10">
-                  <span className="text-[10px] text-muted-foreground">Entradas</span>
-                  <span className="text-[11px] font-semibold text-success tabular-nums" data-testid="resumo-entradas">{linhaSel ? formatMoeda(saldosSel.entradas) : '—'}</span>
-                </div>
-                <div className="px-5 space-y-0.5 pb-0.5">
-                  <div className="flex justify-between text-[9.5px] text-muted-foreground">
-                    <span>↳ terceiros</span><span className="tabular-nums">{linhaSel ? formatMoeda(saldosSel.entradas_terceiros) : '—'}</span>
-                  </div>
-                  <div className="flex justify-between text-[9.5px] text-muted-foreground">
-                    <span>↳ transferências</span><span className="tabular-nums">{linhaSel ? formatMoeda(saldosSel.entradas_transferencias) : '—'}</span>
-                  </div>
-                  {retido && (
-                    <div className="flex justify-between text-[9.5px] text-muted-foreground" title={retido.titulo} data-testid="resumo-retido">
-                      <span>↳ {retido.texto}</span>
-                    </div>
-                  )}
-                </div>
-                <div className="px-3 flex justify-between bg-destructive/10">
-                  <span className="text-[10px] text-muted-foreground">Saídas</span>
-                  <span className="text-[11px] font-semibold text-destructive tabular-nums" data-testid="resumo-saidas">{linhaSel ? formatMoeda(saldosSel.saidas) : '—'}</span>
-                </div>
-                <div className="px-5 space-y-0.5 pb-0.5">
-                  <div className="flex justify-between text-[9.5px] text-muted-foreground">
-                    <span>↳ terceiros</span><span className="tabular-nums">{linhaSel ? formatMoeda(saldosSel.saidas_terceiros) : '—'}</span>
-                  </div>
-                  <div className="flex justify-between text-[9.5px] text-muted-foreground">
-                    <span>↳ transferências</span><span className="tabular-nums">{linhaSel ? formatMoeda(saldosSel.saidas_transferencias) : '—'}</span>
-                  </div>
-                </div>
-                {semConta && (
-                  <div className="px-3 pb-0.5 text-[9.5px] leading-snug text-warning" title={semConta.titulo} data-testid="resumo-sem-conta">
-                    {semConta.texto}
-                  </div>
-                )}
-                <div className="mx-3 my-1 h-px bg-border" />
-                <div className="px-3 flex justify-between bg-accent">
-                  <span className="text-[10px] text-muted-foreground">Saldo no sistema</span>
-                  <span className={`text-[11px] font-bold tabular-nums ${(saldosSel.saldo_sistema ?? 0) >= 0 ? 'text-success' : 'text-destructive'}`} data-testid="resumo-saldo-sistema">
-                    {saldosSel.saldo_sistema != null ? formatMoeda(saldosSel.saldo_sistema) : '—'}
-                  </span>
-                </div>
-                <div className="mx-3 my-1 h-px bg-border" />
-                {/* ⚠ A DATA DO SALDO DO EXTRATO É A DO DONO (`saldo_extrato_data`); sem ela, o rótulo não afirma data nenhuma. */}
-                <div className="px-3 py-1 bg-muted/20 flex justify-between">
-                  <span className="text-[10px] text-muted-foreground">
-                    Saldo extrato {posicaoDoCard && <span className="opacity-60">({posicaoDoCard})</span>}
-                  </span>
-                  <span className="text-[11px] font-medium tabular-nums whitespace-nowrap shrink-0" data-testid="resumo-saldo-extrato">
-                    {saldosSel.saldo_extrato != null ? formatMoeda(saldosSel.saldo_extrato) : '—'}
-                  </span>
-                </div>
-                {/* Diferença — sem extrato é "—" e sem fundo: ausência nunca aparenta "confere". */}
-                <div className={`px-3 py-1 flex justify-between mb-1 ${difResumo === null ? '' : difResumoConfere ? 'bg-success/10' : 'bg-destructive/10'}`}>
-                  {/* CONC-TOTAL-SEM-SALDO-01b — com "falta saldo · N contas" a dica "(o mês fecha?)" sai: medido a 1.135, rótulo + dica +
-                      frase pedem ~286px dos 251 do card e o rótulo quebrava em duas linhas. A frase já responde à pergunta. */}
-                  <span className="text-[10px] text-muted-foreground whitespace-nowrap">Diferença de saldo{!faltaSaldoSel && <> <span className="opacity-60">(o mês fecha?)</span></>}</span>
-                  <span className={`text-[11px] font-bold tabular-nums whitespace-nowrap shrink-0 ${difResumo === null ? 'text-muted-foreground' : difResumoConfere ? 'text-success' : 'text-destructive'}`} data-testid="resumo-diferenca">
-                    {faltaSaldoSel ? <FaltaSaldo frase={faltaSaldoSel} testId="resumo-falta-saldo" />
-                      : difResumo === null ? '—' : difResumoConfere ? 'confere' : formatMoeda(difResumo)}
-                  </span>
-                </div>
-                  {/* ⚠ A POSIÇÃO É DO DONO (D5): `posicao` só existe com o saldo declarado ANTES do fim do mês, e traz quantos
-                      realizados vieram depois dela. A posição no meio do mês é declaração TEMPORÁRIA: sem esta linha o operador
-                      fecharia o mês achando que conferiu o mês inteiro. */}
-                  {avisoAposPosicao > 0 && (
-                    <div className="mx-3 mb-1 rounded bg-destructive/5 px-2 py-1 text-[9.5px] leading-snug text-destructive" data-testid="resumo-realizados-apos">
-                      {avisoAposPosicao} realizado{avisoAposPosicao === 1 ? '' : 's'} após {ddmmPosicao} não
-                      conferido{avisoAposPosicao === 1 ? '' : 's'} — informe o saldo de uma data mais recente
-                      para o mês fechar.
-                    </div>
-                  )}
-                  {/* A frase de rodapé: qual data o saldo do extrato usou. */}
-                  {saldosSel.saldo_extrato != null && (posicaoDono || posicaoDoCard) && (
-                    <div className="px-3 pb-1 text-[9.5px] leading-snug text-muted-foreground" data-testid="resumo-rodape"
-                      title={posicaoDono && difNaPosicao.indisponivel ? TITULO_DIFERENCA_NA_POSICAO_INDISPONIVEL : undefined}>
-                      {posicaoDono
-                        ? `Posição declarada em ${ddmmPosicao}: na data, a diferença é ${difNaPosicao.valor != null ? formatMoeda(difNaPosicao.valor) : '—'}.`
-                        : `A diferença compara o saldo do extrato de ${posicaoDoCard}.`}
-                    </div>
-                  )}
-              {/* Transação — footer do card como badges */}
-              <div className="px-2 pt-2 pb-2 border-t mt-1 flex items-center gap-1 flex-wrap">
-                <button onClick={()=>{setFiltroModal('todos');setShowLancModal(true);}}
-                  className="px-2 py-0.5 rounded text-[9px] font-bold bg-primary/10 text-primary hover:bg-primary/20 cursor-pointer">
-                  Todos ({loading ? '…' : selectedCard.lancamentos.length})
-                </button>
-                <button onClick={()=>{setFiltroModal('entradas');setShowLancModal(true);}}
-                  className="px-2 py-0.5 rounded text-[9px] font-bold bg-success/10 text-success hover:bg-success/20 cursor-pointer">
-                  Entradas ({loading ? '…' : entradas.length})
-                </button>
-                <button onClick={()=>{setFiltroModal('saidas');setShowLancModal(true);}}
-                  className="px-2 py-0.5 rounded text-[9px] font-bold bg-destructive/10 text-destructive hover:bg-destructive/20 cursor-pointer">
-                  Saídas ({loading ? '…' : saidas.length})
-                </button>
-                {transfEntrada.length > 0 && (
-                  <button onClick={()=>{setFiltroModal('transf_entrada');setShowLancModal(true);}}
-                    className="px-2 py-0.5 rounded text-[9px] font-bold border border-primary/20 bg-primary/5 text-primary hover:bg-primary/10 cursor-pointer">
-                    Transf. Ent. ({transfEntrada.length})
-                  </button>
-                )}
-                {transfSaida.length > 0 && (
-                  <button onClick={()=>{setFiltroModal('transf_saida');setShowLancModal(true);}}
-                    className="px-2 py-0.5 rounded text-[9px] font-bold border border-warning/30 bg-warning/10 text-warning-foreground hover:bg-warning/20 cursor-pointer">
-                    Transf. Saída ({transfSaida.length})
-                  </button>
-                )}
-              </div>
-            </div>
-
-              {/* ── COL 2: Status ── */}
-              {/* ⚠ O STATUS É O DO DONO — PR-CONC-SALDO-UMA-REGUA-02 (D2), o mesmo da Conferência, e o card ESCREVE os
-                  motivos dele: "N dias com diferença" leva à Conferência no primeiro dia; "saldo diverge", "o extrato não
-                  fecha com o saldo informado", "saldo não informado", "sem extrato". No Todas, as contas não conciliadas
-                  (nome por nome) e as pendentes. 'parcial' não existe. O pareamento e o "sem classificação" seguem como
-                  INFORMAÇÃO — não decidem a cor. */}
-              <div className={`rounded-lg overflow-hidden flex flex-col border ${cardStatus === 'nao_conciliado' ? 'border-destructive' : cardStatus === 'conciliado' ? 'border-success' : ''}`}
-                   style={cardStatus === 'nao_conciliado' || cardStatus === 'conciliado' ? undefined : {borderColor:cor.border}}
-                   data-testid="card-status" data-status={cardStatus}>
-                <div className={`px-3 py-1.5 border-b text-[9px] font-medium uppercase tracking-wider ${cardStatus === 'nao_conciliado' ? 'bg-destructive text-destructive-foreground border-destructive' : cardStatus === 'conciliado' ? 'bg-success text-success-foreground border-success' : 'bg-primary text-primary-foreground'}`}>
-                  Status
-                </div>
-                <div className="flex-1 flex flex-col items-center justify-center gap-1.5 p-3 text-center"
-                     style={{background:cor.bg}}>
-                  <StatusIcon className="h-7 w-7" style={{color:cor.txt}} />
-                  <div className="text-[11px] font-bold" style={{color:cor.txt}}>{ROTULO_STATUS[cardStatus]}</div>
-                  <div className="w-full space-y-0.5 text-[9.5px] leading-tight" style={{color:cor.txt}} data-testid="status-motivos">
-                    {frasesStatus.map(f => (
-                      <LinhaMotivo key={f.chave} frase={f}
-                        onDia={f.dia && selectedConta !== '__all__' ? () => irParaConferencia(selectedConta, f.dia ?? '') : undefined}
-                        onDiaConta={irParaConferencia} />
-                    ))}
-                  </div>
-                  {/* ⚠ A 2ª PROVA · EXTRATO — PR-CONC-STATUS-SALDO-01b: o que o extrato importado diz NÃO decide o status e
-                      por isso mora fora das frases dele, em cor neutra (sem extrato) ou âmbar (pede olho), NUNCA vermelho.
-                      Sem aviso, o bloco não existe: a conta sem aviso fica como sempre foi. O "N dias com diferença"
-                      segue sendo o link da Conferência no primeiro dia. */}
-                  {frasesAvisos.length > 0 && (
-                    <div className="w-full border-t border-black/10 pt-1 space-y-0.5 text-[9.5px] leading-tight" data-testid="segunda-prova">
-                      <div className="text-muted-foreground">2ª prova · extrato</div>
-                      {frasesAvisos.map(f => (
-                        <div key={f.chave} className={f.marca ? 'text-amber-700' : 'text-muted-foreground'} data-aviso={f.chave}>
-                          <LinhaMotivo frase={f}
-                            onDia={f.dia && selectedConta !== '__all__' ? () => irParaConferencia(selectedConta, f.dia ?? '') : undefined}
-                            onDiaConta={irParaConferencia} />
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {/* O pareamento — informação, do mesmo hook da aba Importar; sem conta ou sem extrato, "—". */}
-                  <div className="text-[9.5px] leading-tight tabular-nums text-muted-foreground">
-                    {pareamento.todos === 0
-                      ? 'pareamento —'
-                      : `pareamento ${pareamento.conciliado}/${pareamento.todos}`}
-                  </div>
-                  {/* ⚠ SEM CLASSIFICAÇÃO — CONC-SEM-CLASSIFICACAO-01: a quantidade e o valor fora do DRE são do DONO (realizados do
-                      mês e da conta sem plano de contas). INFORMAM: o status e a cor do card não mudam (D6). "Sem fornecedor" é
-                      aviso SEPARADO, em âmbar (D2). O bloco só existe com quantidade > 0. */}
-                  {semClassificacaoSel && (
-                    <div className="w-full border-t border-black/10 pt-1 text-[9.5px] leading-tight" data-testid="bloco-sem-classificacao">
-                      <div className="text-[12px] font-bold leading-none text-destructive tabular-nums" data-testid="sem-classificacao-qtde">{semClassificacaoSel.qtde}</div>
-                      <div className="font-semibold text-destructive whitespace-nowrap">sem classificação</div>
-                      <table className="mx-auto mt-0.5 border-collapse" title="valor fora do DRE: lançamento sem plano de contas não entra em linha nenhuma do DRE">
-                        <tbody>
-                          <tr><td className="pr-1 text-left text-muted-foreground" colSpan={2}>fora do DRE</td></tr>
-                          <ValorForaDoDre valor={semClassificacaoSel.valorEntradas} entrada />
-                          <ValorForaDoDre valor={semClassificacaoSel.valorSaidas} entrada={false} />
-                        </tbody>
-                      </table>
-                      <button type="button"
-                        onClick={() => setSemClassificacaoDe({ contaId: selectedConta === '__all__' ? null : selectedConta })}
-                        className="mt-1 h-[18px] rounded-[3px] bg-destructive px-[3px] text-[9.5px] font-medium leading-none text-destructive-foreground whitespace-nowrap cursor-pointer hover:opacity-90"
-                        data-testid="classificar-agora">
-                        Classificar agora
-                      </button>
-                    </div>
-                  )}
-                  {semFornecedorSel > 0 && (
-                    <div className="text-[9.5px] leading-tight font-medium text-amber-700 whitespace-nowrap" data-testid="sem-fornecedor-qtde"
-                         title="lançamentos realizados com plano de contas e sem fornecedor">
-                      {semFornecedorSel} sem fornecedor
-                    </div>
-                  )}
-                  {diagPendencias.duplicadosCount > 0 && (
-                    <div className="text-[9.5px] leading-tight font-medium text-destructive">
-                      🔴 {diagPendencias.duplicadosCount} duplicados
-                    </div>
-                  )}
-                  {diagPendencias.duplicadosCount > 0 && (
-                    <button type="button" onClick={() => setShowPendencias(true)}
-                      className="text-[9.5px] underline text-muted-foreground hover:text-foreground mt-0.5">
-                      Ver detalhes
-                    </button>
-                  )}
-                </div>
-              </div>
+            <div className="grid gap-2" style={{gridTemplateColumns:'3.05fr 0.7fr 1.7fr', alignItems:'start'}}>
 
               {/* ── COL 3: Saldos por conta ── */}
               <div className="rounded-lg border bg-card" style={{display:'flex',flexDirection:'column',overflowY:'auto',maxHeight:'calc(100vh - 230px)'}}>
@@ -1675,6 +1462,221 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                   </div>
                 )}
               </div>
+
+              {/* ── COL 2: Status ── */}
+              {/* ⚠ O STATUS É O DO DONO — PR-CONC-SALDO-UMA-REGUA-02 (D2), o mesmo da Conferência, e o card ESCREVE os
+                  motivos dele: "N dias com diferença" leva à Conferência no primeiro dia; "saldo diverge", "o extrato não
+                  fecha com o saldo informado", "saldo não informado", "sem extrato". No Todas, as contas não conciliadas
+                  (nome por nome) e as pendentes. 'parcial' não existe. O pareamento e o "sem classificação" seguem como
+                  INFORMAÇÃO — não decidem a cor. */}
+              <div className={`rounded-lg overflow-hidden flex flex-col border ${cardStatus === 'nao_conciliado' ? 'border-destructive' : cardStatus === 'conciliado' ? 'border-success' : ''}`}
+                   style={cardStatus === 'nao_conciliado' || cardStatus === 'conciliado' ? undefined : {borderColor:cor.border}}
+                   data-testid="card-status" data-status={cardStatus}>
+                <div className={`px-3 py-1.5 border-b text-[9px] font-medium uppercase tracking-wider ${cardStatus === 'nao_conciliado' ? 'bg-destructive text-destructive-foreground border-destructive' : cardStatus === 'conciliado' ? 'bg-success text-success-foreground border-success' : 'bg-primary text-primary-foreground'}`}>
+                  Status
+                </div>
+                <div className="flex-1 flex flex-col items-center justify-center gap-1.5 p-3 text-center"
+                     style={{background:cor.bg}}>
+                  <StatusIcon className="h-7 w-7" style={{color:cor.txt}} />
+                  <div className="text-[11px] font-bold" style={{color:cor.txt}}>{ROTULO_STATUS[cardStatus]}</div>
+                  <div className="w-full space-y-0.5 text-[9.5px] leading-tight" style={{color:cor.txt}} data-testid="status-motivos">
+                    {frasesStatus.map(f => (
+                      <LinhaMotivo key={f.chave} frase={f}
+                        onDia={f.dia && selectedConta !== '__all__' ? () => irParaConferencia(selectedConta, f.dia ?? '') : undefined}
+                        onDiaConta={irParaConferencia} />
+                    ))}
+                  </div>
+                  {/* ⚠ A 2ª PROVA · EXTRATO — PR-CONC-STATUS-SALDO-01b: o que o extrato importado diz NÃO decide o status e
+                      por isso mora fora das frases dele, em cor neutra (sem extrato) ou âmbar (pede olho), NUNCA vermelho.
+                      Sem aviso, o bloco não existe: a conta sem aviso fica como sempre foi. O "N dias com diferença"
+                      segue sendo o link da Conferência no primeiro dia. */}
+                  {frasesAvisos.length > 0 && (
+                    <div className="w-full border-t border-black/10 pt-1 space-y-0.5 text-[9.5px] leading-tight" data-testid="segunda-prova">
+                      <div className="text-muted-foreground">2ª prova · extrato</div>
+                      {frasesAvisos.map(f => (
+                        <div key={f.chave} className={f.marca ? 'text-amber-700' : 'text-muted-foreground'} data-aviso={f.chave}>
+                          <LinhaMotivo frase={f}
+                            onDia={f.dia && selectedConta !== '__all__' ? () => irParaConferencia(selectedConta, f.dia ?? '') : undefined}
+                            onDiaConta={irParaConferencia} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {/* O pareamento — informação, do mesmo hook da aba Importar; sem conta ou sem extrato, "—". */}
+                  <div className="text-[9.5px] leading-tight tabular-nums text-muted-foreground">
+                    {pareamento.todos === 0
+                      ? 'pareamento —'
+                      : `pareamento ${pareamento.conciliado}/${pareamento.todos}`}
+                  </div>
+                  {/* ⚠ SEM CLASSIFICAÇÃO — CONC-SEM-CLASSIFICACAO-01: a quantidade e o valor fora do DRE são do DONO (realizados do
+                      mês e da conta sem plano de contas). INFORMAM: o status e a cor do card não mudam (D6). "Sem fornecedor" é
+                      aviso SEPARADO, em âmbar (D2). O bloco só existe com quantidade > 0. */}
+                  {semClassificacaoSel && (
+                    <div className="w-full border-t border-black/10 pt-1 text-[9.5px] leading-tight" data-testid="bloco-sem-classificacao">
+                      <div className="text-[12px] font-bold leading-none text-destructive tabular-nums" data-testid="sem-classificacao-qtde">{semClassificacaoSel.qtde}</div>
+                      <div className="font-semibold text-destructive whitespace-nowrap">sem classificação</div>
+                      <table className="mx-auto mt-0.5 border-collapse" title="valor fora do DRE: lançamento sem plano de contas não entra em linha nenhuma do DRE">
+                        <tbody>
+                          <tr><td className="pr-1 text-left text-muted-foreground" colSpan={2}>fora do DRE</td></tr>
+                          <ValorForaDoDre valor={semClassificacaoSel.valorEntradas} entrada />
+                          <ValorForaDoDre valor={semClassificacaoSel.valorSaidas} entrada={false} />
+                        </tbody>
+                      </table>
+                      <button type="button"
+                        onClick={() => setSemClassificacaoDe({ contaId: selectedConta === '__all__' ? null : selectedConta })}
+                        className="mt-1 h-[18px] rounded-[3px] bg-destructive px-[3px] text-[9.5px] font-medium leading-none text-destructive-foreground whitespace-nowrap cursor-pointer hover:opacity-90"
+                        data-testid="classificar-agora">
+                        Classificar agora
+                      </button>
+                    </div>
+                  )}
+                  {semFornecedorSel > 0 && (
+                    <div className="text-[9.5px] leading-tight font-medium text-amber-700 whitespace-nowrap" data-testid="sem-fornecedor-qtde"
+                         title="lançamentos realizados com plano de contas e sem fornecedor">
+                      {semFornecedorSel} sem fornecedor
+                    </div>
+                  )}
+                  {diagPendencias.duplicadosCount > 0 && (
+                    <div className="text-[9.5px] leading-tight font-medium text-destructive">
+                      🔴 {diagPendencias.duplicadosCount} duplicados
+                    </div>
+                  )}
+                  {diagPendencias.duplicadosCount > 0 && (
+                    <button type="button" onClick={() => setShowPendencias(true)}
+                      className="text-[9.5px] underline text-muted-foreground hover:text-foreground mt-0.5">
+                      Ver detalhes
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* ── COL 1: Resumo das movimentações ── */}
+              <div className="rounded-lg border overflow-hidden bg-card">
+                {/* ⚠ O CABEÇALHO NÃO MUDA DE ALTURA (A27). O nome da conta morava aqui e saiu para a
+                    faixa do mês, abaixo das abas (PR-CONCILIA-FAIXA-MES-CONTA-01). O `min-h-[32px]`
+                    fica: é a altura que a pílula dava, e sem ele este cabeçalho encolheria ~5,5px e
+                    desalinharia dos cards Status e Saldos. */}
+                <div className="px-3 py-1.5 border-b bg-primary text-primary-foreground flex items-center justify-between min-h-[32px]">
+                  <span className="text-[9px] font-medium uppercase tracking-wider whitespace-nowrap shrink-0">Resumo das movimentações</span>
+                </div>
+                {/* ⚠ TUDO DA LINHA DO DONO — PR-CONC-SALDO-UMA-REGUA-02 (D1): a conta aberta, ou o total no Todas. A abertura
+                    terceiros × transferências vale nas duas visões (o dono a dá no total também). Nulo é "—", nunca zero.
+                    As saídas vêm com o sinal do dono (negativas, em vermelho). */}
+                <div className="px-3 pt-1.5 flex justify-between">
+                  <span className="text-[10px] text-muted-foreground">Saldo inicial</span>
+                  <span className="text-[11px] font-medium text-muted-foreground tabular-nums" data-testid="resumo-saldo-inicial">
+                    {saldosSel.saldo_inicial != null ? formatMoeda(saldosSel.saldo_inicial) : '—'}
+                  </span>
+                </div>
+                <div className="mx-3 my-1 h-px bg-border" />
+                <div className="px-3 flex justify-between bg-success/10">
+                  <span className="text-[10px] text-muted-foreground">Entradas</span>
+                  <span className="text-[11px] font-semibold text-success tabular-nums" data-testid="resumo-entradas">{linhaSel ? formatMoeda(saldosSel.entradas) : '—'}</span>
+                </div>
+                <div className="px-5 space-y-0.5 pb-0.5">
+                  <div className="flex justify-between text-[9.5px] text-muted-foreground">
+                    <span>↳ terceiros</span><span className="tabular-nums">{linhaSel ? formatMoeda(saldosSel.entradas_terceiros) : '—'}</span>
+                  </div>
+                  <div className="flex justify-between text-[9.5px] text-muted-foreground">
+                    <span>↳ transferências</span><span className="tabular-nums">{linhaSel ? formatMoeda(saldosSel.entradas_transferencias) : '—'}</span>
+                  </div>
+                  {retido && (
+                    <div className="flex justify-between text-[9.5px] text-muted-foreground" title={retido.titulo} data-testid="resumo-retido">
+                      <span>↳ {retido.texto}</span>
+                    </div>
+                  )}
+                </div>
+                <div className="px-3 flex justify-between bg-destructive/10">
+                  <span className="text-[10px] text-muted-foreground">Saídas</span>
+                  <span className="text-[11px] font-semibold text-destructive tabular-nums" data-testid="resumo-saidas">{linhaSel ? formatMoeda(saldosSel.saidas) : '—'}</span>
+                </div>
+                <div className="px-5 space-y-0.5 pb-0.5">
+                  <div className="flex justify-between text-[9.5px] text-muted-foreground">
+                    <span>↳ terceiros</span><span className="tabular-nums">{linhaSel ? formatMoeda(saldosSel.saidas_terceiros) : '—'}</span>
+                  </div>
+                  <div className="flex justify-between text-[9.5px] text-muted-foreground">
+                    <span>↳ transferências</span><span className="tabular-nums">{linhaSel ? formatMoeda(saldosSel.saidas_transferencias) : '—'}</span>
+                  </div>
+                </div>
+                {semConta && (
+                  <div className="px-3 pb-0.5 text-[9.5px] leading-snug text-warning" title={semConta.titulo} data-testid="resumo-sem-conta">
+                    {semConta.texto}
+                  </div>
+                )}
+                <div className="mx-3 my-1 h-px bg-border" />
+                <div className="px-3 flex justify-between bg-accent">
+                  <span className="text-[10px] text-muted-foreground">Saldo no sistema</span>
+                  <span className={`text-[11px] font-bold tabular-nums ${(saldosSel.saldo_sistema ?? 0) >= 0 ? 'text-success' : 'text-destructive'}`} data-testid="resumo-saldo-sistema">
+                    {saldosSel.saldo_sistema != null ? formatMoeda(saldosSel.saldo_sistema) : '—'}
+                  </span>
+                </div>
+                <div className="mx-3 my-1 h-px bg-border" />
+                {/* ⚠ A DATA DO SALDO DO EXTRATO É A DO DONO (`saldo_extrato_data`); sem ela, o rótulo não afirma data nenhuma. */}
+                <div className="px-3 py-1 bg-muted/20 flex justify-between">
+                  <span className="text-[10px] text-muted-foreground">
+                    Saldo extrato {posicaoDoCard && <span className="opacity-60">({posicaoDoCard})</span>}
+                  </span>
+                  <span className="text-[11px] font-medium tabular-nums whitespace-nowrap shrink-0" data-testid="resumo-saldo-extrato">
+                    {saldosSel.saldo_extrato != null ? formatMoeda(saldosSel.saldo_extrato) : '—'}
+                  </span>
+                </div>
+                {/* Diferença — sem extrato é "—" e sem fundo: ausência nunca aparenta "confere". */}
+                <div className={`px-3 py-1 flex justify-between mb-1 ${difResumo === null ? '' : difResumoConfere ? 'bg-success/10' : 'bg-destructive/10'}`}>
+                  {/* CONC-TOTAL-SEM-SALDO-01b — com "falta saldo · N contas" a dica "(o mês fecha?)" sai: medido a 1.135, rótulo + dica +
+                      frase pedem ~286px dos 251 do card e o rótulo quebrava em duas linhas. A frase já responde à pergunta. */}
+                  <span className="text-[10px] text-muted-foreground whitespace-nowrap">Diferença de saldo{!faltaSaldoSel && <> <span className="opacity-60">(o mês fecha?)</span></>}</span>
+                  <span className={`text-[11px] font-bold tabular-nums whitespace-nowrap shrink-0 ${difResumo === null ? 'text-muted-foreground' : difResumoConfere ? 'text-success' : 'text-destructive'}`} data-testid="resumo-diferenca">
+                    {faltaSaldoSel ? <FaltaSaldo frase={faltaSaldoSel} testId="resumo-falta-saldo" />
+                      : difResumo === null ? '—' : difResumoConfere ? 'confere' : formatMoeda(difResumo)}
+                  </span>
+                </div>
+                  {/* ⚠ A POSIÇÃO É DO DONO (D5): `posicao` só existe com o saldo declarado ANTES do fim do mês, e traz quantos
+                      realizados vieram depois dela. A posição no meio do mês é declaração TEMPORÁRIA: sem esta linha o operador
+                      fecharia o mês achando que conferiu o mês inteiro. */}
+                  {avisoAposPosicao > 0 && (
+                    <div className="mx-3 mb-1 rounded bg-destructive/5 px-2 py-1 text-[9.5px] leading-snug text-destructive" data-testid="resumo-realizados-apos">
+                      {avisoAposPosicao} realizado{avisoAposPosicao === 1 ? '' : 's'} após {ddmmPosicao} não
+                      conferido{avisoAposPosicao === 1 ? '' : 's'} — informe o saldo de uma data mais recente
+                      para o mês fechar.
+                    </div>
+                  )}
+                  {/* A frase de rodapé: qual data o saldo do extrato usou. */}
+                  {saldosSel.saldo_extrato != null && (posicaoDono || posicaoDoCard) && (
+                    <div className="px-3 pb-1 text-[9.5px] leading-snug text-muted-foreground" data-testid="resumo-rodape"
+                      title={posicaoDono && difNaPosicao.indisponivel ? TITULO_DIFERENCA_NA_POSICAO_INDISPONIVEL : undefined}>
+                      {posicaoDono
+                        ? `Posição declarada em ${ddmmPosicao}: na data, a diferença é ${difNaPosicao.valor != null ? formatMoeda(difNaPosicao.valor) : '—'}.`
+                        : `A diferença compara o saldo do extrato de ${posicaoDoCard}.`}
+                    </div>
+                  )}
+              {/* Transação — footer do card como badges */}
+              <div className="px-2 pt-2 pb-2 border-t mt-1 flex items-center gap-1 flex-wrap">
+                <button onClick={()=>{setFiltroModal('todos');setShowLancModal(true);}}
+                  className="px-2 py-0.5 rounded text-[9px] font-bold bg-primary/10 text-primary hover:bg-primary/20 cursor-pointer">
+                  Todos ({loading ? '…' : selectedCard.lancamentos.length})
+                </button>
+                <button onClick={()=>{setFiltroModal('entradas');setShowLancModal(true);}}
+                  className="px-2 py-0.5 rounded text-[9px] font-bold bg-success/10 text-success hover:bg-success/20 cursor-pointer">
+                  Entradas ({loading ? '…' : entradas.length})
+                </button>
+                <button onClick={()=>{setFiltroModal('saidas');setShowLancModal(true);}}
+                  className="px-2 py-0.5 rounded text-[9px] font-bold bg-destructive/10 text-destructive hover:bg-destructive/20 cursor-pointer">
+                  Saídas ({loading ? '…' : saidas.length})
+                </button>
+                {transfEntrada.length > 0 && (
+                  <button onClick={()=>{setFiltroModal('transf_entrada');setShowLancModal(true);}}
+                    className="px-2 py-0.5 rounded text-[9px] font-bold border border-primary/20 bg-primary/5 text-primary hover:bg-primary/10 cursor-pointer">
+                    Transf. Ent. ({transfEntrada.length})
+                  </button>
+                )}
+                {transfSaida.length > 0 && (
+                  <button onClick={()=>{setFiltroModal('transf_saida');setShowLancModal(true);}}
+                    className="px-2 py-0.5 rounded text-[9px] font-bold border border-warning/30 bg-warning/10 text-warning-foreground hover:bg-warning/20 cursor-pointer">
+                    Transf. Saída ({transfSaida.length})
+                  </button>
+                )}
+              </div>
+            </div>
             </div>
 
             {/* ⚠ A LISTA ANTIGA SAIU — PR-CONCILIACAO-CARDS-01a. Aqui era montado o
