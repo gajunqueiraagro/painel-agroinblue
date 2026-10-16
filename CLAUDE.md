@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 16/10/2026 (FIN-V2-COLUNAS-02, +12: `src/components/financeiro-v2/colunasDaListaV2.test.tsx` 12 (novo) — 5406 depois dele; antes o
+  Baseline em 16/10/2026 (FIN-LR-SYNC-01 passo b, +10: `src/components/lucroRural/telaAtualizarLr.test.tsx` 10 (novo) — 5416 depois dele; antes o
+  FIN-V2-COLUNAS-02, +12: `src/components/financeiro-v2/colunasDaListaV2.test.tsx` 12 (novo) — 5406 depois dele; antes o
   CONC-CARDS-ORDEM-01, +1 em `src/pages/conciliacaoDono.test.tsx` (40 -> 41) — 5394 depois dele; antes o
   FIN-LR-SYNC-01 passo a2, +4: `src/v2/hooks/useLrSyncAplicar.test.ts` 4 (novo) — 5393 depois dele; antes o
   ZOOT-MES-FECHADO-MODAL-01, +21: `src/components/lancamento/avisoMesFechado.test.tsx` 21 (novo) — 5389
@@ -342,7 +343,7 @@ no mesmo arquivo.
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
   `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5327
-  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02], 22 skipped, e
+  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b], 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -4318,6 +4319,40 @@ docs/historico/frentes-ate-2026-09-29.md.)
   ⚠ PARA O PASSO b (Chat, 16/10/2026): CONTAR quantas contas novas do NJ nascem SEM SAFRA pela regra da atividade e MOSTRAR na tela
     (a linha diz "sem safra: a do LR é de outra atividade"), nunca esconder. As duas decisoes do Code no a2 (linhas guardadas na sessao
     com o patch md5 do comparar; safra so' da mesma atividade da conta do plano) foram ACEITAS pelo Chat em 16/10/2026.
+    [CUMPRIDO no passo b, a regra logo abaixo: 34 das 96 novas do NJ nascem sem safra, e a tela mostra.]
+- ⚠ "ATUALIZAR DO LUCRO RURAL" TEM TELA: A ENTRADA E' CONCILIACAO › IMPORTAR BANCO, E A TELA SO' JUNTA AS ESCOLHAS (FIN-LR-SYNC-01 passo b,
+  Gabriel 16/10/2026, so' tela, sem migration; mock aprovado `docs/mocks/mock-lr-sync.png`). A regra e' do banco (o envelope de
+  `fn_lr_sync_comparar`, o `fn_lr_sync_aplicar` / `fn_lr_sync_desfazer` do a2); a tela nao decide situacao, nao soma e nao grava por fora.
+  · ENTRADA: botao "Atualizar do Lucro Rural" na linha do seletor de `ImportarBancoInline.tsx` (lugar `shrink-0`, antes das acoes; nada
+    da aba foi reorganizado). NADA MUDOU em Lançamentos Financeiros (preso por teste de fonte). ⚠ O IMPORTADOR ANTIGO DA PLANILHA
+    (`V2ImportLancamentosExcel`, o ramo `excel` da mesma aba) CONTINUA COMO ESTA' e SERA' APOSENTADO DEPOIS DA HOMOLOGACAO DO NOVO.
+  · PECAS: `src/v2/lib/lucroRural/telaLr.ts` (puro: leitor do envelope sem cast, `acoesDaLinha` = espelho das permissoes do aplicar,
+    `acaoInicial` — a padrao do banco; "decidir" e as acoes de decisao nascem SEM acao —, pendencias, `decisoesParaGravar` ('nada' nao
+    vai), `textoDoGravar`, `nasceSemSafra` — a regra do aplicar: sem safra no LR, ou safra de outra atividade que a conta do plano —,
+    frases dos motivos); `src/components/lucroRural/TelaAtualizarLr.tsx` (tela 1), `HistoricoLucroRural.tsx` (tela 2) e
+    `AtualizarLucroRuralDialog.tsx` (o modal: le^ os arquivos por `lerArquivoLr`, compara, hospeda as duas telas). Modal de TAMANHO FIXO
+    (`100vh-32` x 1.100); a tabela rola por dentro com o cabecalho preso; uma linha por registro, so' Fornecedor e Tipo de contas cortam.
+  · TELA 1: cabecalho navy (cliente, faixa de vencimentos) · os dois arquivos + area de trocar + "Histórico e desfazer (N)" · cartoes-filtro
+    (novas, mudaram, pagas no LR, decidir, sem mudanca, so' no sistema, da OC; quantidade e valor DO RESUMO DO BANCO) + "N novas nascem
+    sem safra" (lugar reservado, invisivel com zero; a linha leva "· sem safra" com o porque no `title`) · tabela Situacao | Venc. |
+    Fornecedor | Tipo de contas (LR) → classificacao | Faz. | Valor LR | No sistema | Acao ▾ — vencimento mudado e valor do sistema
+    diferente em ambar (o antigo no `title`), decisao pendente com o seletor em vermelho · rodape "Faltam N decisões e N
+    classificações" + Cancelar + Simular + Gravar ("Gravar · N novas · N atualizam · N vínculos · N aguardam extrato"; so' acende sem
+    pendencia). GRAVAR SIMULA ANTES e so' grava na confirmacao; a simulacao lista as recusas com o motivo em portugues. Nova sem
+    classificacao abre o dialogo (conta do plano, fazenda, fornecedor pelos seletores da casa); vincular escolhe entre os "so' no
+    sistema" da mesma direcao. Classificacao, fornecedor e fazenda do sistema so' informam.
+  · TELA 2 ("Atualizações do Lucro Rural"): as aplicacoes do cliente (quando, quem, arquivos, novas / atualizadas / vinculos / aguardam
+    do `resumo.por_acao`); DESFAZER so' na ULTIMA nao desfeita (`desfazivel`), SIMULANDO ANTES e mostrando o que nao volta e por que.
+  · PROVA REAL (NJ, relatorios do LR de 15/10, BEGIN…ROLLBACK, `fn_lr_sync_aplicar` com `p_simular`, as decisoes padrao da TELA —
+    decidir sem acao e 'nada' fora): 215 decisoes; 204 seriam aplicadas (criar 93 · atualizar 19 · aguardar extrato 85 · manter 7), 11
+    recusadas (parcela_de_contrato 8, falta_classificar 3); 26 'decidir' ficam esperando o operador. SEM SAFRA: 34 das 96 novas (11 sem
+    safra no LR, 23 com safra de outra atividade). Lancamentos do NJ identicos (md5 sem carimbos); 0 aplicacoes gravadas.
+  Testes: `src/components/lucroRural/telaAtualizarLr.test.tsx` 10 (envelope sintetico); 3 mutacoes mortas (decidir com acao padrao, sem
+  safra contado como com safra, desfazer sem simular).
+  ⚠ DIVIDAS: as tabelas `lr_*` e `financeiro_safras` sao lidas com `(supabase as any).from` (fora do `types.ts`) · as listas e o
+    historico ficam no estado do modal (fechar perde as escolhas) · NAO PROVADO NO NAVEGADOR: nada (abrir pelo Importar Banco, soltar os
+    dois arquivos reais, a tabela a 1.126, o ▾ real do Radix, o dialogo de classificar, gravar e desfazer de verdade) · perfil nao admin ·
+    a pasta Downloads automatica e' o passo c.
 - ⚠ NO ABATE OS DOCUMENTOS SAO NF, NPR, ACERTO, ROMANEIO E OUTRO, E SO' A NF SOMA; O VALOR DO DOCUMENTO E' O LIQUIDO (OC-DOC-ESPECIE-ABATE-01
   passo 1, Gabriel 14/10/2026, banco + vocabulario da tela). Migration `supabase/migrations/20261027198200_oc_doc_especie_abate_01.sql`
   (md5 do arquivo 02729abc56b7c29d6820d48ad4dc15cf) — APLICADA no proto em 14/10/2026 com o OK do Gabriel: ledger 20261014214022

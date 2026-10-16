@@ -12,6 +12,7 @@ import { useImportacaoExtrato } from '@/hooks/useImportacaoExtrato';
 import { detectarTipoArquivo, type TipoArquivoImport } from '@/lib/financeiro/parser/detectarTipoArquivo';
 import { V2ImportLancamentosExcel } from '@/v2/pages/V2ImportLancamentosExcel';
 import CusteioTxtImportTab from '@/v2/pages/CusteioTxtImportTab';
+import { AtualizarLucroRuralDialog } from '@/components/lucroRural/AtualizarLucroRuralDialog';
 import { decodeTxtParcial } from '@/v2/lib/custeio/parseCusteioTxt';
 
 /**
@@ -71,6 +72,8 @@ const REGRA_DO_IMPORTAR_BANCO: RegraDeAceite = {
 export function ImportarBancoInline({ contas, contaId, onContaChange, onImportado, acoes }: Props) {
   /* UI-ARRASTAR-ARQUIVO-01b — o que o DETECTOR (conteúdo) ou o leitor recusam aparece NA ÁREA, não em toast. */
   const [recusaDoArquivo, setRecusaDoArquivo] = useState<string | null>(null);
+  /* FIN-LR-SYNC-01 passo b — o modal novo do Lucro Rural; o importador antigo (planilha) segue como está. */
+  const [lrAberto, setLrAberto] = useState(false);
   const { preview, loading, gerarPreview, confirmarImportacao, reset,
     toggleImportar, marcarTodasImportaveis } = useImportacaoExtrato();
   const [arquivo, setArquivo] = useState<File | null>(null);
@@ -230,6 +233,13 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
               {recusaDoArquivo}
             </span>
           )}
+          {/* FIN-LR-SYNC-01 passo b — lugar reservado (shrink-0): a entrada do Lucro Rural não mexe no resto da linha. */}
+          <Button type="button" variant="outline" size="sm" className="h-7 shrink-0 px-2 text-[11px]" data-testid="abrir-atualizar-lr"
+            onClick={() => setLrAberto(true)}>
+            Atualizar do Lucro Rural
+          </Button>
+          {/* montado SÓ aberto: os leitores dele (cliente, fazendas, plano) não rodam a cada abertura da aba */}
+          {lrAberto && <AtualizarLucroRuralDialog open onOpenChange={setLrAberto} />}
           {acoes}
           {resultado?.tipo === 'ok' && (
             <span data-testid="resultado-importacao" title={resultado.texto}
