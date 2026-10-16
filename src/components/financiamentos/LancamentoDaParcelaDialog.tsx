@@ -4,6 +4,8 @@
  * nele que se paga, se edita e se vê a conciliação. Ao salvar, avisa o canal do Financeiro — o contrato relê sozinho.
  */
 import { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { CHAVE_SITUACAO_DO_CONTRATO } from '@/hooks/useSituacaoDoContrato';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
 import { useFinanceiroV2, notificarLancamentosMudaram, type LancamentoV2 } from '@/hooks/useFinanceiroV2';
 import { useFazenda } from '@/contexts/FazendaContext';
@@ -12,6 +14,7 @@ export function LancamentoDaParcelaDialog({ lancamentoId, clienteId, aoFechar }:
   lancamentoId: string | null; clienteId: string | null | undefined; aoFechar: () => void;
 }) {
   const fin = useFinanceiroV2();
+  const qc = useQueryClient();
   const { fazendas } = useFazenda();
   const [linha, setLinha] = useState<LancamentoV2 | null>(null);
 
@@ -43,7 +46,15 @@ export function LancamentoDaParcelaDialog({ lancamentoId, clienteId, aoFechar }:
       onClose={aoFechar}
       onSave={async (form, id) => {
         const ok = id ? await fin.editarLancamento(id, form) : false;
-        if (ok) { aoFechar(); if (clienteId) notificarLancamentosMudaram(clienteId); }
+        if (ok) {
+          aoFechar();
+          if (clienteId) notificarLancamentosMudaram(clienteId);
+          /* FIN-CONTRATO-JUROS-SYNC-01 — o banco leva o valor do lançamento à parcela (gatilho); o contrato, a lista de contratos
+             e as parcelas releem já, sem depender de quem está ouvindo o canal */
+          void qc.invalidateQueries({ queryKey: [CHAVE_SITUACAO_DO_CONTRATO] });
+          void qc.invalidateQueries({ queryKey: ['financiamento-parcelas'] });
+          void qc.invalidateQueries({ queryKey: ['financiamentos-lista'] });
+        }
         return ok;
       }}
     />

@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 16/10/2026 (RESUMO-CLIENTES-01 passo b, +10: `src/components/consultor/esteiraDoMes.test.tsx` 10 (novo) — 5458 depois dele; antes o
+  Baseline em 16/10/2026 (FIN-CONTRATO-JUROS-SYNC-01, +1: `src/components/financiamentos/lancamentoDaParcelaSync.test.tsx` 1 (novo) — 5459 depois dele; antes o
+  RESUMO-CLIENTES-01 passo b, +10: `src/components/consultor/esteiraDoMes.test.tsx` 10 (novo) — 5458 depois dele; antes o
   RESUMO-CLIENTES-01 passo a, +11: `src/components/consultor/resumoClientes.test.tsx` 11 (novo) — 5448 depois dele; antes o
   FECH-MES-SELECIONADO-01, +6: `src/hooks/usePeriodoDaTela.test.tsx` 6 (novo) — 5437 depois dele; antes o
   FIN-LR-SYNC-01 passo c, +15: `src/v2/lib/lucroRural/pastaLr.test.ts` 5 (novo), `src/components/lucroRural/pastaDownloadsLr.test.tsx` 10
@@ -347,7 +348,7 @@ no mesmo arquivo.
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
   `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5327
-  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b], 22 skipped, e
+  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01], 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -2110,6 +2111,35 @@ preview que o cabecalho nao sai da tela ao rolar.
     propria a decidir (ZOOT-RECLASS-P1-TELA-01).
   ⚠ NAO PROVADO NO NAVEGADOR: nada (a faixa a 1.126 x 523 e a 579, as duas linhas juntas, o foco destravando, a trava master real) ·
     Compra e o formulario generico so' por teste de fonte (nao se montam) · o Abate passou o "Reabrir mês…" de botao a link.
+- ⚠ NO FINANCIAMENTO, O VALOR DO LANCAMENTO VINCULADO A' PARCELA MANDA NA PARCELA, POR UM DONO SO' NO BANCO (FIN-CONTRATO-JUROS-SYNC-01, Gabriel
+  16/10/2026; migration `supabase/migrations/20261027199300_fin_contrato_juros_sync_01.sql`, md5 do arquivo 0f1bc3490bea1dfa1ab647810d65a073
+  — APLICADA no proto em 16/10/2026: ledger 20261016123504 `fin_contrato_juros_sync_01`, ⚠ timestamp do dia; ledger = arquivo byte a
+  byte). Nasce da Santa Rita, C_14130608-0, parcela 3: o juros corrigido no lancamento (c3ff68f8) e a parcela seguia 128.602,00 — o
+  resumo do contrato (`fn_financiamento_situacao`) le^ principal e juros da PARCELA, e nada levava o lancamento a' parcela (o motor
+  `fn_reconciliar_parcela_financiamento` vai no sentido contrario, parcela -> lancamento).
+  · O DONO: `_fn_parcela_acompanha_lancamento(lancamento)` (md5 fda1bfda…; SECURITY DEFINER, so' service_role): para a parcela viva de
+    contrato vivo, de natureza que NAO e' parcelamento e do MESMO cliente do lancamento (a guarda), cujo `lancamento_id` (principal) ou
+    `lancamento_juros_id` (juros) e' o lancamento vivo, grava |valor| no campo e `valor_total` = principal + juros; so' escreve quando
+    difere (o motor escreve o mesmo valor de volta e nada muda: sem laco). Chamado pelo gatilho `trg_zz_parcela_acompanha_lancamento`
+    (AFTER UPDATE OF valor em `financeiro_lancamentos_v2`, so' quando o valor muda; o filtro mora na funcao porque 4 lancamentos de
+    parcela nao tem `financiamento_id`) — vale para QUALQUER tela que edite o lancamento. PARCELAMENTO FICA FORA: o dono dele e'
+    `fn_parcelamento_editar_parcelas` (o modal do lancamento ja' passa por ela, PARC-CADEIA-01 passo 3).
+  · CORRECAO DE DADO, pelo dono, na mesma migration: parcela 3 do C_14130608-0 juros 128.602,00 -> 128.579,30, total 357.938,73 ->
+    357.916,03 (o valor do lancamento depois da ultima edicao, 11:59 UTC; DECISAO DO GABRIEL — o briefing dizia 12.579,30, que fora
+    trocado na tela). ⚠ As 5 amortizacoes do contrato seguem com competencia 23/03/2021 (fica para o item 28).
+  · A TELA: o diálogo do lancamento da parcela (`LancamentoDaParcelaDialog`) avisa o canal E invalida a situacao do contrato, a lista
+    de contratos e as parcelas — o resumo nao precisava de F5, precisava de a parcela mudar.
+  · ⚠ VARREDURA DE 16/10 (nada corrigido; decisao do Gabriel caso a caso), parcela viva x lancamento vivo vinculado: NJ C_40/04122-0 p1
+    juros 345.234,37 x 350.460,33; NJ C_441204330 p1 juros 100.500,00 x 128.999,98; Santa Rita C_237/1702/2025/005 p1 juros 564.778,50 x
+    573.267,88 (todos realizados); e os 4 de parcelamento do NJ (PARC-CADEIA-PAGA-VALOR-DIFERENTE-01). O gatilho so' age na PROXIMA
+    edicao do lancamento: os antigos ficam como estao ate' alguem os editar ou o Gabriel decidir.
+  ⚠ EXCECAO DE HORARIO: `CREATE TRIGGER` em `financeiro_lancamentos_v2` (tabela quente) ensaiado e aplicado as ~09h30 de 16/10/2026,
+    com a autorizacao do Gabriel ("hoje so' o Gabriel esta' usando o proto"); a regra 07h/20h CONTINUA valendo.
+  Testes: `supabase/tests/fin_contrato_juros_sync_01_test.sql` (S1–S6: juros, principal, lancamento sem parcela, parcelamento fora,
+  cancelado e outro cliente fora, a correcao ficou; sem sobra) OK no ensaio e no vivo; 3 mutacoes mortas (sem a exclusao do
+  parcelamento -> S4; sem a guarda de cliente -> S5; sem o gatilho -> S1). `src/components/financiamentos/lancamentoDaParcelaSync.test.tsx` 1
+  (1 mutacao morta).
+  ⚠ NAO PROVADO NO NAVEGADOR: editar o juros pelo contrato e ver o resumo, a lista de contratos e Lancamentos Financeiros mudarem sem F5.
 - ⚠ "RESUMO DOS CLIENTES" E' UMA ENTRADA VIRTUAL DO SELETOR, SO' DO ADMIN, E AS PENDENCIAS DO CONSULTOR TEM TABELA PROPRIA (RESUMO-CLIENTES-01
   passo a, Gabriel 16/10/2026; mocks `docs/mocks/mock-resumo-clientes-v9.html` (parte Pendencias) e `-v3.html` (parte 2, o ⚑)).
   · TABELA `consultor_pendencias` (migration `supabase/migrations/20261027199200_resumo_clientes_01_pendencias.sql`, md5 do arquivo
