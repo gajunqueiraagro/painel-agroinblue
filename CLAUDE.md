@@ -2145,8 +2145,16 @@ preview que o cabecalho nao sai da tela ao rolar.
     principal passa de `v_contrato.data_contrato` a `COALESCE(v_parcela.data_vencimento, v_contrato.data_contrato)` — a mesma
     expressao do juros. Corpo integral, uma linha trocada: md5(prosrc) d8063b41… -> 368310fa…; SECURITY INVOKER e ACL iguais.
   · VALE PARA O LANCAMENTO NOVO (criar e substituir). O QUE JA' EXISTE O MOTOR NAO TOCA (competencia nao e' campo comparado): os
-    antigos sao o backfill `docs/investigacao/fin-amort-competencia-venc-01-backfill.sql` (ENSAIO; 45 a acertar, 1 conciliado
-    fora; so' com GO, depois da homologacao — o script do c518161d tambem). DECIDIDO (Gabriel, 16/10): as 412 amortizacoes com o
+    antigos: BACKFILL APLICADO no proto em 16/10/2026 21:45 UTC com o GO do Gabriel (homologado na tela), pela migration
+    `supabase/migrations/20261027199700_fin_amort_competencia_venc_01_backfill.sql` (md5 do arquivo e6dbb25f30c224f225be60319a71bf9d;
+    ledger 20261016214514 `fin_amort_competencia_venc_01_backfill`, ⚠ timestamp do dia; ledger = arquivo): 45 lancamentos — Santa
+    Rita 23 (9 deles com ano_mes NULO, que nao apareciam no fluxo por mes), NJ 15, 537661af 5, a1b2c3d4 2 — com
+    data_competencia = vencimento e ano_mes no mes do vencimento; guarda que aborta fora de 45. O ANTES (competencia, ano_mes e
+    o md5 de valor/status/contas/favorecido/plano/datas) fica em `fin_amort_competencia_venc_01_backfill` (RLS ligada, sem
+    acesso para anon/authenticated); o gesto contrario esta' no cabecalho da migration. Provado depois: 45 de 45 no vencimento,
+    45 de 45 campos intactos por md5, total do fluxo (cenario realizado, com caixa) de cada cliente igual ao de antes — so' o
+    mes muda. O ensaio `docs/investigacao/fin-amort-competencia-venc-01-backfill.sql` fica como registro. O script do
+    c518161d NAO foi aplicado (GO proprio). DECIDIDO (Gabriel, 16/10): as 412 amortizacoes com o
     ano_mes ja' no mes do vencimento e a competencia antiga FICAM COMO ESTAO; o conciliado e0982c1c do Agnaldo (ano_mes 2024-08,
     vencimento 13/08/2026) NAO e' tocado — vai para a limpeza do Agnaldo no item 28.
   Teste: `supabase/tests/fin_amort_competencia_venc_01_test.sql` (A1–A4); contra o corpo antigo cai no A1 (0 de 12).
