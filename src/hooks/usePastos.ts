@@ -308,10 +308,15 @@ export function usePastos() {
   // `data_fim` existe no banco desde 20260717140000 mas AINDA NÃO está em types.ts,
   // daí o idioma do repositório para relação/coluna sem tipo gerado. Ao regenerar
   // types.ts, remover o `as any` — é o mesmo lote das outras 81 ocorrências.
-  const editarPasto = useCallback(async (id: string, updates: Partial<Pasto>) => {
+  /* FECH-MAPA-PASTO-MODAL-01: com `aoRecusar` a recusa vai para quem chamou (o modal do pasto escreve ao lado do campo). */
+  const editarPasto = useCallback(async (id: string, updates: Partial<Pasto>, opcoes?: { aoRecusar?: (frase: string) => void }) => {
     if (clienteId) invalidatePastosForCliente(clienteId);
     const { error } = await (supabase as any).from('pastos').update(updates).eq('id', id);
-    if (error) { toast.error('Erro ao atualizar pasto'); console.error(error); return false; }
+    if (error) {
+      console.error(error);
+      if (opcoes?.aoRecusar) opcoes.aoRecusar(`Erro ao atualizar pasto: ${error.message}`); else toast.error('Erro ao atualizar pasto');
+      return false;
+    }
     toast.success('Pasto atualizado');
     if (clienteId) notifyPastosChanged(clienteId);
     return true;

@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { usePeriodoDaTela, type PeriodoControlado } from '@/hooks/usePeriodoDaTela';
 import { usePastos, isPastoAtivoNoMes, type Pasto, type CategoriaRebanho } from '@/hooks/usePastos';
-import { useFechamento } from '@/hooks/useFechamento';
+import { useFechamento, type FechamentoPasto } from '@/hooks/useFechamento';
+import { FechamentoPastoDialog } from '@/components/FechamentoPastoDialog';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
@@ -70,8 +71,14 @@ interface MapaPastosTabProps extends PeriodoControlado {
 
 export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial, periodo, onPeriodoChange }: MapaPastosTabProps = {}) {
   const { isGlobal, fazendaAtual } = useFazenda();
-  const { pastos, categorias } = usePastos();
-  const { fechamentos, loadFechamentos, loadItens, setPesoAtualizadoPasto } = useFechamento();
+  const { pastos, categorias, editarPasto } = usePastos();
+  const {
+    fechamentos, loadFechamentos, loadItens, setPesoAtualizadoPasto,
+    criarFechamento, salvarItens, fecharPasto, reabrirPasto, copiarMesAnterior,
+  } = useFechamento();
+  /* FECH-MAPA-PASTO-MODAL-01 — o nome do pasto abre o MESMO modal do Fechamento Área */
+  const [pastoAberto, setPastoAberto] = useState<Pasto | null>(null);
+  const [fechamentoAberto, setFechamentoAberto] = useState<FechamentoPasto | null>(null);
 
   const curYear = new Date().getFullYear();
   const [anosDisp, setAnosDisp] = useState<string[]>(() => {
@@ -295,6 +302,19 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial, peri
     }
   }, [setPesoAtualizadoPasto]);
 
+  /* sem card no mes, cria pelo mesmo `fn_obter_ou_criar_fechamento_pasto` do Fechamento */
+  const abrirPasto = useCallback(async (pasto: Pasto) => {
+    const fech = fechamentos.find(f => f.pasto_id === pasto.id) ?? await criarFechamento(pasto.id, anoMes);
+    if (!fech) return;
+    setFechamentoAberto(fech);
+    setPastoAberto(pasto);
+  }, [fechamentos, criarFechamento, anoMes]);
+  const fecharModalDoPasto = useCallback(() => {
+    setPastoAberto(null);
+    setFechamentoAberto(null);
+    loadFechamentos(anoMes);
+  }, [loadFechamentos, anoMes]);
+
   const getUaHaColor = (uaHa: number | null) => {
     if (!uaHa) return '';
     if (uaHa > 3) return 'text-red-600 font-bold';
@@ -384,9 +404,26 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial, peri
             getUaHaColor={getUaHaColor}
             getQualidadeColor={getQualidadeColor}
             onTogglePesoAtualizado={handleTogglePesoAtualizado}
+            onAbrirPasto={abrirPasto}
           />
         )}
       </div>
+
+      {pastoAberto && fechamentoAberto && (
+        <FechamentoPastoDialog
+          open
+          onOpenChange={(o) => { if (!o) fecharModalDoPasto(); }}
+          pasto={pastoAberto}
+          fechamento={fechamentoAberto}
+          categorias={categorias}
+          onSave={async (items, aoRecusar) => salvarItens(fechamentoAberto.id, items, { aoRecusar })}
+          onFechar={async () => fecharPasto(fechamentoAberto.id)}
+          onReabrir={async () => reabrirPasto(fechamentoAberto.id)}
+          onCopiar={async () => copiarMesAnterior(pastoAberto.id, anoMes, categorias)}
+          pastosDaFazenda={pastos}
+          onRenomear={async (nome, aoRecusar) => editarPasto(pastoAberto.id, { nome }, { aoRecusar })}
+        />
+      )}
 
     </TooltipProvider>
   );
@@ -409,13 +446,15 @@ function isBlockSeparator(catIdx: number, categorias: CategoriaRebanho[]) {
   return false;
 }
 
-function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor, onTogglePesoAtualizado }: {
+function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor, onTogglePesoAtualizado, onAbrirPasto }: {
   rows: PastoMapaRow[];
   categorias: CategoriaRebanho[];
   totais: MapaTotais;
   getUaHaColor: (v: number | null) => string;
   getQualidadeColor: (v: number | null) => string;
   onTogglePesoAtualizado: (row: PastoMapaRow, value: boolean) => void;
+  /** clicar no NOME abre o modal do pasto (a linha inteira nao e' clicavel) */
+  onAbrirPasto: (pasto: Pasto) => void;
 }) {
   const colWidths = useMemo(() => {
     const base = [95, 80, 120];
@@ -583,7 +622,10 @@ function MapaTable({ rows, categorias, totais, getUaHaColor, getQualidadeColor, 
                   return (
                     <tr key={row.pasto.id} className="h-6" style={bgStyle}>
                       <td className="sticky left-0 z-10 px-1.5 py-0.5 text-[11px] font-semibold border-r border-border/30 whitespace-nowrap overflow-hidden text-ellipsis" style={bgStyle}>
-                        {row.pasto.nome}
+                        <button type="button" onClick={() => onAbrirPasto(row.pasto)} title={`Abrir ${row.pasto.nome}`}
+                          className="max-w-full cursor-pointer truncate text-left hover:underline" data-testid="abrir-pasto">
+                          {row.pasto.nome}
+                        </button>
                       </td>
                       <td className="px-1 py-0.5 text-[11px] border-r border-border/30 whitespace-nowrap overflow-hidden text-ellipsis">
                         <span className={`inline-flex items-center px-1.5 py-px rounded border text-[10px] font-medium ${corDoTipoUso(row.tipoUso)}`}>

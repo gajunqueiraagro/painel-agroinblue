@@ -184,7 +184,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
   const { clienteAtual } = useCliente();
   const { canEdit } = usePermissions();
 
-  const { pastos, categorias } = usePastos();
+  const { pastos, categorias, editarPasto } = usePastos();
   const { lancamentos, saldosIniciais, adicionarLancamento } = useLancamentos();
   const { fechamentos, loading, loadFechamentos, criarFechamento, loadItens, salvarItens, fecharPasto, reabrirPasto, copiarMesAnterior } = useFechamento();
   const { user } = useAuth();
@@ -1424,28 +1424,12 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
             pasto={selectedPasto}
             fechamento={activeFechamento}
             categorias={categorias}
-            onSave={async (items) => salvarItens(activeFechamento.id, items)}
+            onSave={async (items, aoRecusar) => salvarItens(activeFechamento.id, items, { aoRecusar })}
             onFechar={async () => fecharPasto(activeFechamento.id)}
-            onReabrir={async () => {
-              if (!fazendaAtual || fazendaAtual.id === '__global__') return false;
-              const { data, error } = await supabase.rpc('reabrir_pilar_fechamento', {
-                _fazenda_id: fazendaAtual.id,
-                _ano_mes: anoMes,
-                _pilar: 'p1_mapa_pastos',
-                _motivo: 'Reabertura individual via modal de pasto',
-              });
-              if (error) {
-                toast.error(`Erro ao reabrir: ${error.message}`);
-                return false;
-              }
-              if (data && typeof data === 'object' && !Array.isArray(data) && 'error' in data) {
-                toast.error(`Erro: ${(data as any).error}`);
-                return false;
-              }
-              toast.success('Mês reaberto com sucesso.');
-              await loadFechamentos(anoMes);
-              return true;
-            }}
+            /* FECH-MAPA-PASTO-MODAL-01 — o Reabrir do modal reabre SO' este pasto (antes reabria o mes inteiro da fazenda) */
+            onReabrir={async () => reabrirPasto(activeFechamento.id)}
+            pastosDaFazenda={pastos}
+            onRenomear={async (nome, aoRecusar) => editarPasto(selectedPasto.id, { nome }, { aoRecusar })}
             onCopiar={async () => copiarMesAnterior(selectedPasto.id, anoMes, categorias)}
           />
         )}

@@ -16,6 +16,11 @@ import { calcUA } from '@/lib/calculos/zootecnicos';
 import { formatNum } from '@/lib/calculos/formatters';
 import { useMasterLock } from '@/hooks/useMasterLock';
 import { MasterLockBanner } from '@/components/MasterLockBanner';
+import { motivoDoNomeDoPasto, NOTA_NOME_DO_CADASTRO } from '@/lib/pastos/nomeDoPasto';
+
+/* FECH-MAPA-PASTO-MODAL-01 — ALTURA FIXA (o corpo nao rola): topo + grade das 9 categorias + rodape. So' o painel da
+   lavoura rola dentro do proprio quadro. */
+export const ALTURA_DO_MODAL_DO_PASTO = 'h-[524px]';
 
 const QUALIDADE_OPTIONS = Array.from({ length: 10 }, (_, i) => i + 1);
 
@@ -139,7 +144,11 @@ interface Props {
   pasto: Pasto;
   fechamento: FechamentoPasto;
   categorias: CategoriaRebanho[];
-  onSave: (items: FechamentoItem[]) => Promise<boolean>;
+  /** `aoRecusar` recebe a frase da recusa: o modal a escreve em vermelho e nao fecha */
+  onSave: (items: FechamentoItem[], aoRecusar: (frase: string) => void) => Promise<boolean>;
+  /** o nome e' do cadastro (`editarPasto`); os pastos da fazenda servem para recusar nome repetido */
+  pastosDaFazenda: readonly Pasto[];
+  onRenomear: (nome: string, aoRecusar: (frase: string) => void) => Promise<boolean>;
   onFechar: () => Promise<boolean>;
   onReabrir: () => Promise<boolean>;
   onCopiar: () => Promise<{ itens: FechamentoItem[]; dadosMes: { lote_mes: string | null; tipo_uso_mes: string | null; qualidade_mes: number | null; observacao_mes: string | null } }>;
@@ -147,7 +156,7 @@ interface Props {
 
 export function FechamentoPastoDialog({
   open, onOpenChange, pasto, fechamento,
-  categorias, onSave, onFechar, onReabrir, onCopiar
+  categorias, onSave, onReabrir, onCopiar, pastosDaFazenda, onRenomear,
 }: Props) {
   const { clienteAtual } = useCliente();
   const [itens, setItens] = useState<FechamentoItem[]>([]);
@@ -158,6 +167,9 @@ export function FechamentoPastoDialog({
   const [tipoUsoMes, setTipoUsoMes] = useState(fechamento.tipo_uso_mes || pasto.tipo_uso || '');
   const [qualidadeMes, setQualidadeMes] = useState<number | null>(fechamento.qualidade_mes);
   const [observacaoMes, setObservacaoMes] = useState(fechamento.observacao_mes || '');
+  const [nomePasto, setNomePasto] = useState(pasto.nome);
+  const [erroNome, setErroNome] = useState<string | null>(null);
+  const [erroSalvar, setErroSalvar] = useState<string | null>(null);
 
   const isFechado = status === 'fechado';
   const { loadItens, atualizarCamposMensais } = useFechamento();
@@ -173,6 +185,7 @@ export function FechamentoPastoDialog({
   // Load items + meta when modal opens
   useEffect(() => {
     if (!open || !fechamento) return;
+    setNomePasto(pasto.nome); setErroNome(null); setErroSalvar(null);
     const blank = categorias.map(c => ({ categoria_id: c.id, quantidade: 0, peso_medio_kg: null, lote: null, observacoes: null, origem_dado: 'manual' }));
     setItens(blank);
 
@@ -231,7 +244,7 @@ export function FechamentoPastoDialog({
       // Set snapshot after items load (slight delay)
       const t = setTimeout(() => {
         setInitialItens(JSON.stringify(itens));
-        setInitialMeta(JSON.stringify({ loteMes, tipoUsoMes, qualidadeMes, observacaoMes }));
+        setInitialMeta(JSON.stringify({ loteMes, tipoUsoMes, qualidadeMes, observacaoMes, nomePasto }));
       }, 300);
       return () => clearTimeout(t);
     }
@@ -239,19 +252,30 @@ export function FechamentoPastoDialog({
 
   const isDirty = () => {
     return JSON.stringify(itens) !== initialItens ||
-      JSON.stringify({ loteMes, tipoUsoMes, qualidadeMes, observacaoMes }) !== initialMeta;
+      JSON.stringify({ loteMes, tipoUsoMes, qualidadeMes, observacaoMes, nomePasto }) !== initialMeta;
   };
 
+  /* O nome so' e' julgado quando mudou; a frase fica ao lado do campo. */
+  const nomeMudou = nomePasto.trim() !== pasto.nome;
+  const motivoDoNome = nomeMudou ? motivoDoNomeDoPasto(nomePasto, pasto, pastosDaFazenda) : null;
+
+  /* FECH-MAPA-PASTO-MODAL-01 — a ordem: nome (cadastro) -> campos do mes -> itens. Recusa em qualquer passo PARA ali e
+     fica escrita no modal; o toast "Fechamento salvo" (dos itens) so' sai se tudo gravou. */
   const handleSave = async () => {
+    setErroSalvar(null);
+    setErroNome(null);
+    if (motivoDoNome) { setErroNome(motivoDoNome); return; }
     try {
       setSaving(true);
-      await atualizarCamposMensais(fechamento.id, {
+      if (nomeMudou && !(await onRenomear(nomePasto.trim(), setErroNome))) return;
+      const campos = await atualizarCamposMensais(fechamento.id, {
         lote_mes: loteMes || null,
         tipo_uso_mes: tipoUsoMes || null,
         qualidade_mes: qualidadeMes,
         observacao_mes: observacaoMes || null,
       });
-      await onSave(itens);
+      if (!campos.ok) { setErroSalvar(campos.erro); return; }
+      if (!(await onSave(itens, setErroSalvar))) return;
       // Não fechar o pasto aqui. O fechamento oficial ocorre via "Fechar Mês".
       onOpenChange(false);
     } finally {
@@ -269,6 +293,7 @@ export function FechamentoPastoDialog({
   };
 
   const handleReabrir = async () => {
+    setErroSalvar(null);
     const ok = await onReabrir();
     if (ok) setStatus('rascunho');
   };
@@ -360,13 +385,21 @@ export function FechamentoPastoDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] sm:max-h-[95vh] min-h-0 sm:min-h-[70vh] flex flex-col max-w-3xl p-0 gap-0 overflow-hidden">
+      <DialogContent className={`${ALTURA_DO_MODAL_DO_PASTO} flex flex-col max-w-3xl p-0 gap-0 overflow-hidden`} data-testid="modal-do-pasto">
         {/* ── HEADER ESCURO ── */}
         <div className="shrink-0 bg-[hsl(215,30%,18%)] text-white px-5 pt-4 pb-3 space-y-2">
           {/* Row 1: Name + status + copy */}
           <div className="flex items-center gap-2">
-            <span className="font-extrabold text-2xl leading-none tracking-tight">{pasto.nome}</span>
-            {pasto.area_produtiva_ha && <span className="text-base font-medium text-white/70">{pasto.area_produtiva_ha} ha</span>}
+            <div className="flex min-w-0 flex-col">
+              <Input value={nomePasto} onChange={e => { setNomePasto(e.target.value); setErroNome(null); }} disabled={inputsDisabled}
+                aria-label="Nome do pasto" data-testid="nome-do-pasto"
+                className={`h-8 w-[220px] px-2 text-lg font-extrabold tracking-tight bg-white/10 border-white/15 text-white ${erroNome || motivoDoNome ? 'border-red-400' : ''}`} />
+              {/* lugar fixo de 14px: a nota do cadastro, ou a recusa do nome */}
+              <span className={`h-[14px] whitespace-nowrap text-[9px] leading-[14px] ${erroNome || motivoDoNome ? 'text-red-300' : 'text-white/50'}`} data-testid="nota-do-nome">
+                {erroNome || motivoDoNome || NOTA_NOME_DO_CADASTRO}
+              </span>
+            </div>
+            {pasto.area_produtiva_ha && <span className="self-start pt-1 text-base font-medium text-white/70">{pasto.area_produtiva_ha} ha</span>}
             {isFechado && <Badge className="h-5 text-[10px] px-1.5 bg-white/15 text-white border-white/20"><Lock className="h-3 w-3 mr-0.5" />Fechado</Badge>}
             <div className="flex-1" />
             {!isFechado && !masterReadOnly && (
@@ -469,12 +502,14 @@ export function FechamentoPastoDialog({
         </div>
 
         {/* ── GRADE PRINCIPAL ── */}
-        <div className="overflow-y-auto flex-1 px-5 py-3 space-y-4 bg-background">
-          <MasterLockBanner anoMes={fechamento.ano_mes} />
+        <div className="flex-1 min-h-0 overflow-hidden px-5 py-3 space-y-4 bg-background" data-testid="corpo-do-pasto">
+          {/* lugar FIXO de 22px para o aviso da trava master (vazio quando nao ha'): nada muda de altura */}
+          <div className="h-[22px]" data-testid="lugar-trava-master"><MasterLockBanner anoMes={fechamento.ano_mes} compacto /></div>
           {ehLavoura ? (
             /* ⚠ O PAINEL SUBSTITUI A GRADE, não convive com ela: as categorias de gado não são
                "opcionais" num talhão de amendoim — são a pergunta errada. Deixá-las abaixo
                ensinaria que existe rebanho a informar. */
+            <div className="h-full overflow-y-auto" data-testid="quadro-lavoura">
             <AreaPlantadaPanel
               clienteId={clienteAtual?.id ?? null}
               pastoId={pasto.id}
@@ -487,6 +522,7 @@ export function FechamentoPastoDialog({
               anoMes={fechamento.ano_mes}
               somenteLeitura={inputsDisabled}
             />
+            </div>
           ) : (
             <>
               {renderGrupo('MACHOS', catsMachos, 'text-blue-600 dark:text-blue-400', 100)}
@@ -510,18 +546,22 @@ export function FechamentoPastoDialog({
             )}
           </div>
           <div className="flex-1" />
+          {/* a recusa do banco (ex.: P2 validado) fica escrita aqui, nunca so' em toast */}
+          <span className="min-w-0 max-w-[360px] truncate text-[11px] font-medium text-red-600" title={erroSalvar ?? undefined} data-testid="erro-do-pasto">
+            {erroSalvar}
+          </span>
           {!isFechado ? (
             <div className="flex gap-2">
               <Button variant="outline" size="sm" className="h-7 text-[11px] px-4" onClick={handleCancel}>
                 Cancelar
               </Button>
-              <Button onClick={handleSave} disabled={saving || masterReadOnly} size="sm" className="h-7 text-[11px] px-4">
+              <Button onClick={handleSave} disabled={saving || masterReadOnly || !!motivoDoNome} size="sm" className="h-7 text-[11px] px-4">
                 <Save className="h-3 w-3 mr-1" />{saving ? 'Salvando...' : 'Salvar'}
               </Button>
             </div>
           ) : (
             <Button variant="outline" onClick={handleReabrir} disabled={masterReadOnly} size="sm" className="h-7 text-[11px] px-4">
-              <LockOpen className="h-3 w-3 mr-1" />Reabrir
+              <LockOpen className="h-3 w-3 mr-1" />Reabrir pasto
             </Button>
           )}
         </div>

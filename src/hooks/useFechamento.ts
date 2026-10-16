@@ -79,10 +79,18 @@ export function useFechamento() {
     return data || [];
   }, []);
 
+  /* FECH-MAPA-PASTO-MODAL-01: com `aoRecusar` a recusa vai para quem chamou (o modal escreve), sem toast de erro;
+     DELETE que falha PARA aqui (antes o INSERT seguia). O sucesso segue com o toast de sempre. */
   const salvarItens = useCallback(async (
     fechamentoId: string,
-    itens: { categoria_id: string; quantidade: number; peso_medio_kg: number | null; lote: string | null; observacoes: string | null; origem_dado: string; peso_atualizado?: boolean }[]
+    itens: { categoria_id: string; quantidade: number; peso_medio_kg: number | null; lote: string | null; observacoes: string | null; origem_dado: string; peso_atualizado?: boolean }[],
+    opcoes?: { aoRecusar?: (frase: string) => void },
   ) => {
+    const recusar = (frase: string, error: unknown) => {
+      console.error(error);
+      if (opcoes?.aoRecusar) opcoes.aoRecusar(frase); else toast.error(frase);
+      return false;
+    };
     // Preservação: ler peso_atualizado atual por categoria antes do DELETE+INSERT
     // para que salvar o fechamento nunca zere a marca já feita pelo operador.
     const { data: existentes } = await supabase
@@ -93,7 +101,8 @@ export function useFechamento() {
       (existentes || []).map(e => [e.categoria_id, e.peso_atualizado])
     );
 
-    await supabase.from('fechamento_pasto_itens').delete().eq('fechamento_id', fechamentoId);
+    const { error: erroDelete } = await supabase.from('fechamento_pasto_itens').delete().eq('fechamento_id', fechamentoId);
+    if (erroDelete) return recusar(`Não foi possível salvar as quantidades: ${erroDelete.message}`, erroDelete);
     const toInsert = itens.filter(i => i.quantidade > 0).map(i => ({
       ...i,
       fechamento_id: fechamentoId,
@@ -101,7 +110,7 @@ export function useFechamento() {
     }));
     if (toInsert.length > 0) {
       const { error } = await supabase.from('fechamento_pasto_itens').insert(toInsert);
-      if (error) { toast.error('Erro ao salvar itens'); console.error(error); return false; }
+      if (error) return recusar(`Erro ao salvar itens: ${error.message}`, error);
     }
     toast.success('Fechamento salvo');
     return true;
@@ -124,15 +133,16 @@ export function useFechamento() {
     return true;
   }, [qc]);
 
+  /* FECH-MAPA-PASTO-MODAL-01: devolve o erro (antes so' `console.error`, e o modal seguia para os itens). */
   const atualizarCamposMensais = useCallback(async (
     fechamentoId: string,
     campos: { lote_mes?: string | null; tipo_uso_mes?: string | null; qualidade_mes?: number | null; observacao_mes?: string | null }
-  ) => {
+  ): Promise<{ ok: boolean; erro: string | null }> => {
     const { error } = await supabase.from('fechamento_pastos').update(campos).eq('id', fechamentoId);
-    if (error) { console.error(error); return false; }
+    if (error) { console.error(error); return { ok: false, erro: error.message || 'Não foi possível salvar os dados do mês.' }; }
     // tipo_uso_mes altera o recálculo de área pecuária → invalida a área snapshot.
     await qc.invalidateQueries({ queryKey: ['snapshot-area-anual'] });
-    return true;
+    return { ok: true, erro: null };
   }, [qc]);
 
   const setPesoAtualizadoPasto = useCallback(async (fechamentoId: string, value: boolean) => {

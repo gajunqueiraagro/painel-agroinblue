@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 16/10/2026 (RESUMO-ATIVIDADE-01b, +20: `src/lib/fechamento/resumoPecuaria.test.ts` 16 (novo), `src/components/resumoAtividade/abaPecuaria.test.tsx` 4 (novo) — 5479 depois dele; antes o
+  Baseline em 16/10/2026 (FECH-MAPA-PASTO-MODAL-01 passo A, +11: `src/components/fechamento/modalDoPasto.test.tsx` 8 (novo), `src/hooks/useFechamento.salvar.test.tsx` 3 (novo) — 5490 depois dele; antes o
+  RESUMO-ATIVIDADE-01b, +20: `src/lib/fechamento/resumoPecuaria.test.ts` 16 (novo), `src/components/resumoAtividade/abaPecuaria.test.tsx` 4 (novo) — 5479 depois dele; antes o
   FIN-CONTRATO-JUROS-SYNC-01, +1: `src/components/financiamentos/lancamentoDaParcelaSync.test.tsx` 1 (novo) — 5459 depois dele; antes o
   RESUMO-CLIENTES-01 passo b, +10: `src/components/consultor/esteiraDoMes.test.tsx` 10 (novo) — 5458 depois dele; antes o
   RESUMO-CLIENTES-01 passo a, +11: `src/components/consultor/resumoClientes.test.tsx` 11 (novo) — 5448 depois dele; antes o
@@ -349,7 +350,7 @@ no mesmo arquivo.
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
   `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5327
-  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b], 22 skipped, e
+  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A], 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -2200,6 +2201,32 @@ preview que o cabecalho nao sai da tela ao rolar.
   Testes do passo b: `src/components/consultor/esteiraDoMes.test.tsx` 10; 2 mutacoes mortas. `acessoTelas.test.tsx` e
   `resumoClientes.test.tsx` trocados ao contrato novo (o ramo do painel virou `painelDoResumo`).
   ⚠ NAO PROVADO NO NAVEGADOR: a esteira com os clientes reais, o clique abrindo cada etapa no mes certo e a seta de volta.
+- ⚠ O MODAL DO PASTO E' UM SO' (FechamentoPastoDialog), ABERTO PELO FECHAMENTO AREA E PELO MAPA DE PASTOS; O REABRIR DELE REABRE SO' O
+  PASTO; AS RECUSAS FICAM ESCRITAS NO MODAL (FECH-MAPA-PASTO-MODAL-01 passo A, Gabriel 16/10/2026, so' tela, sem migration).
+  · MAPA: clicar no NOME do pasto (link, sublinhado no hover; a linha inteira nao) abre o MESMO `FechamentoPastoDialog`, montado como no
+    `FechamentoTab`; pasto sem card no mes cria pelo mesmo `fn_obter_ou_criar_fechamento_pasto` (`criarFechamento`); fechar rele o mes.
+  · NOME editavel no topo, gravado SO' pelo `editarPasto` (`usePastos.ts`), com a nota fixa de 14px "nome do cadastro · vale para todos
+    os meses"; vazio ou repetido na fazenda (sem caixa, sem acento, espacos colapsados; ativo ou nao) e' recusado ao lado do campo
+    (`src/lib/pastos/nomeDoPasto.ts`). A atividade do topo e' a do MES (`tipo_uso_mes`); o `tipo_uso` do cadastro nao entra no modal.
+  · SALVAR, nesta ordem, parando na primeira recusa: nome (se mudou) -> campos do mes (`atualizarCamposMensais`, que agora DEVOLVE
+    `{ok, erro}`) -> itens (`salvarItens(…, { aoRecusar })`, que agora PARA se o DELETE falhar). A recusa (ex.: a frase do P2 validado) fica
+    escrita no rodape do modal, em vermelho; o toast "Fechamento salvo" so' sai se tudo gravou.
+  · REABRIR (decisao do Gabriel, 16/10): o botao "Reabrir pasto" chama `reabrirPasto` (o card volta a rascunho), nas duas telas que montam
+    o modal; antes chamava `reabrir_pilar_fechamento(p1)`, que reabria TODOS os cards do mes da fazenda. O "Reabrir Mês" em lote do
+    Fechamento segue no pilar. ⚠ `reabrirPasto` NAO grava em `fechamento_reaberturas_log`: a reabertura de um pasto so' fica no
+    `updated_at` do card (decisao do Gabriel pendente se precisa de trilha — e' banco).
+  · ALTURA FIXA, o corpo nao rola: `h-[524px]` (`ALTURA_DO_MODAL_DO_PASTO`), com um lugar fixo de 22px para o aviso da trava master
+    (compacto). Medido na bancada (Chromium, 1.126 x 579): topo 174 · corpo 307 (conteudo 295 + 12 de padding) · rodape 41; 0 controles
+    fora do modal, iguais aberto, fechado e com a trava master. So' o painel da lavoura rola, dentro do proprio quadro.
+    ⚠ A 1.126 x 523 o modal (524) passa da janela: o limite e' a janela de 579.
+  ⚠ PASSO B PENDENTE — FECH-PASTO-SALVAR-TRANSACAO-01 (banco, migration propria, fora do horario de uso), os 5 defeitos medidos na FASE 0:
+    (1) `guard_pasto_itens_snapshot` e' so' BEFORE UPDATE e `salvarItens` faz DELETE + INSERT: com o card aberto o salvar passa por cima do
+    P2 validado; (2) [front, consertado no passo A] o DELETE que falhava seguia para o INSERT; (3) [front, consertado no passo A] o erro dos
+    campos do mes era engolido e o modal dizia "Fechamento salvo"; (4) [consertado no passo A] o Reabrir do modal reabria o mes inteiro;
+    (5) salvar sao tres idas ao banco sem transacao (nome, campos do mes, itens) — o passo B poe campos do mes + itens numa RPC so'.
+  ⚠ NAO PROVADO NO NAVEGADOR: nada (o clique no Mapa com login, a recusa real do P2, o Reabrir de um pasto deixando os outros fechados) ·
+    o X de fechar do dialogo encosta no "Copiar anterior" (anterior a este PR) · o nome so' se edita com o card aberto (com o card fechado
+    o rodape so' tem "Reabrir pasto").
 - ⚠ O MES DO FECHAMENTO, DO RESUMO POR ATIVIDADE E DO MAPA DE PASTOS E' O ANO/MES DO SHELL (FECH-MES-SELECIONADO-01, Gabriel 16/10/2026, so'
   tela). Nasce do relato: escolhido ago/26 no Fechamento, ir ao Resumo ou ao Mapa e voltar abria em outubro — Fechamento e Mapa sao
   secoes separadas do `V2Index` e cada montagem recomecava em `new Date()`. DECISAO DO GABRIEL (pergunta de 16/10): REUSAR o `ano`/`mes`
