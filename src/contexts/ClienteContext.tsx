@@ -18,6 +18,10 @@ interface ClienteContextType {
   loading: boolean;
   reloadClientes: () => Promise<void>;
   isAdmin: boolean;
+  /* RESUMO-CLIENTES-01 — "Resumo dos clientes", a entrada virtual do seletor (só admin). NÃO é cliente: o cliente real continua em
+     `clienteAtual`, e quem desenha o painel no lugar das telas é o V2Index. Sem localStorage: F5 volta ao cliente. */
+  resumoClientes: boolean;
+  setResumoClientes: (ligado: boolean) => void;
 }
 
 const ClienteContext = createContext<ClienteContextType | undefined>(undefined);
@@ -28,6 +32,7 @@ export function ClienteProvider({ children }: { children: ReactNode }) {
   const [clienteAtual, setClienteAtualState] = useState<Cliente | null>(null);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [resumoLigado, setResumoLigado] = useState(false);
 
   // Cache de is_admin_agroinblue por userId (1 RPC por sessão).
   // TODO: limpar adminCheckedRef/adminResultRef no logout se necessário
@@ -160,6 +165,8 @@ export function ClienteProvider({ children }: { children: ReactNode }) {
   }, [loadClientes]);
 
   const setClienteAtual = (c: Cliente) => {
+    /* escolher um cliente desliga o "Resumo dos clientes" */
+    setResumoLigado(false);
     setClienteAtualState(c);
     localStorage.setItem('cliente-ativo', c.id);
     // Reset fazenda ativa ao trocar cliente (evita cruzamento de dados)
@@ -171,7 +178,8 @@ export function ClienteProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <ClienteContext.Provider value={{ clientes, clienteAtual, setClienteAtual, loading, reloadClientes: loadClientes, isAdmin }}>
+    <ClienteContext.Provider value={{ clientes, clienteAtual, setClienteAtual, loading, reloadClientes: loadClientes, isAdmin,
+      resumoClientes: isAdmin && resumoLigado, setResumoClientes: (b: boolean) => setResumoLigado(b && isAdmin) }}>
       {children}
     </ClienteContext.Provider>
   );

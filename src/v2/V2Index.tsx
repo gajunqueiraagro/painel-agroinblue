@@ -9,6 +9,8 @@ import { useLancamento } from '@/hooks/useLancamento';
 import type { Lancamento } from '@/types/cattle';
 import { usePermissions } from '@/hooks/usePermissions';
 import { ClienteSelector } from '@/components/ClienteSelector';
+import { ResumoClientesPainel } from '@/components/consultor/ResumoClientesPainel';
+import { AvisoPendenciasCliente, LARGURA_DO_AVISO } from '@/components/consultor/AvisoPendenciasCliente';
 import { FazendaSelector } from '@/components/FazendaSelector';
 import { useCliente } from '@/contexts/ClienteContext';
 /* PR-VALIDAR-01 — as tres telas da bancada do admin, embutidas como estao. */
@@ -846,7 +848,7 @@ export default function V2Index() {
     }
   }, [section]); // eslint-disable-line react-hooks/exhaustive-deps
   const rotulo = rotuloDaSecao(section);
-  const { clientes, clienteAtual, isAdmin } = useCliente();
+  const { clientes, clienteAtual, isAdmin, resumoClientes, setResumoClientes } = useCliente();
   const { fazendas, isGlobal, setFazendaAtual } = useFazenda();
   const { canEditMeta } = usePermissions();
 
@@ -1505,7 +1507,20 @@ export default function V2Index() {
   }
 
   const clienteSelector = clientes.length > 1 ? <ClienteSelector /> : undefined;
-  const fazendaSelector = fazendas.length > 1 ? <FazendaSelector /> : undefined;
+  /* RESUMO-CLIENTES-01 — no "Resumo dos clientes" (só admin) nenhuma tela de cliente é montada (o desenho das seções não roda), o
+     seletor de fazenda some e o menu do cliente vira a aba do painel. */
+  const modoResumo = isAdmin && resumoClientes;
+  const fazendaSelector = fazendas.length > 1 && !modoResumo ? <FazendaSelector /> : undefined;
+  const menuDoPainel = modoResumo ? (
+    <button type="button" data-testid="aba-pendencias"
+      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs font-medium text-left bg-primary-foreground/15 text-primary-foreground">
+      <span className="min-w-0 truncate">Pendências</span>
+    </button>
+  ) : undefined;
+  const avisoDoConsultor = isAdmin ? (modoResumo
+    ? <span className="shrink-0" style={{ width: LARGURA_DO_AVISO }} aria-hidden />
+    : <AvisoPendenciasCliente cliente={clienteAtual ? { id: clienteAtual.id, nome: clienteAtual.nome } : null}
+        onVerNoResumo={() => { setDrawerAtivo(null); setResumoClientes(true); }} />) : undefined;
 
   /* ⚠ SAIR DE "LANCAR MOVIMENTACAO" COM OC ABERTA LIMPA OS `oc_*` — ATALHOS-PRODUCAO-01, decisao do
      Gabriel. Pelo menu e pelo atalho, o mesmo limpador do fechar da OC (`semParamsOC`). Sem isto,
@@ -1558,7 +1573,7 @@ export default function V2Index() {
      "fixo" de qualquer lista interna sobe junto. Foi o caso da colheita
      (`lancamentos-agricultura`), que nasceu escrita para app-shell e estava fora da lista. */
   const SECOES_APP_SHELL = new Set(['conciliacao', 'mapa-pastos', 'conferencia-lancamentos', 'financiamentos', 'recorrencias', 'lancamentos-agricultura', 'barter-contratos', 'contas-a-pagar-receber', 'config-acessos']);
-  const appShell = SECOES_APP_SHELL.has(section);
+  const appShell = modoResumo || SECOES_APP_SHELL.has(section);
 
   return (
     <div className="h-screen bg-background overflow-hidden flex">
@@ -1572,6 +1587,7 @@ export default function V2Index() {
           onDrawerToggle={setDrawerAtivo}
           clienteSelector={clienteSelector}
           fazendaSelector={fazendaSelector}
+          menuDoPainel={menuDoPainel}
           className="hidden md:flex"
         />
       )}
@@ -1608,8 +1624,10 @@ export default function V2Index() {
             `bg-card` para ler sobre a barra azul. ABAIXO DE md ELE SOME (`hidden md:inline-flex`):
             tres rotulos nao cabem numa barra de 32px no celular, e a regra e' nao quebrar a barra em
             duas linhas. */}
-        <BarraSecao area={rotulo.area} secao={rotulo.secao}
+        <BarraSecao area={modoResumo ? 'Resumo dos clientes' : rotulo.area} secao={modoResumo ? 'Pendências' : rotulo.secao}
+          aviso={avisoDoConsultor}
           atalho={(() => {
+            if (modoResumo) return undefined;
             /* ACESSOS-02a — sem acesso a' tela, nenhum atalho para as vizinhas. */
             if (semAcesso) return undefined;
             const ativa = secaoDoAtalho(section);
@@ -1626,7 +1644,7 @@ export default function V2Index() {
         {/* ACESSOS-FIN-01 — "Fluxo Caixa" passou a ser tela liberada, e a faixa oferecia tres vizinhas que nao sao: so' entram as
             telas que a pessoa abre (`SUBNAV_FINANCEIRO.filter`), e sobrando so' a propria a faixa some — a regra do atalho de
             Producao. Para o admin, as quatro de sempre. */}
-        {!semAcesso && SUBNAV_FINANCEIRO.some((o) => o.id === section)
+        {!semAcesso && !modoResumo && SUBNAV_FINANCEIRO.some((o) => o.id === section)
           && SUBNAV_FINANCEIRO.filter((o) => podeAbrirTela(o.id)).length > 1 && (
           <div className="hidden md:flex shrink-0 items-center gap-1 px-4 py-1.5 border-b border-border bg-background" data-testid="subnav-financeiro">
             <span className="text-[11px] font-bold text-foreground mr-2">Financeiro</span>
@@ -1673,7 +1691,7 @@ export default function V2Index() {
           }>
             {/* ⚠ A GUARDA DA ROTA, NUM PONTO SO' — ACESSOS-02a. Qualquer `section` com nivel 'nao' para a pessoa (endereco
                 digitado, parametro de URL, `sessionStorage`, navegacao interna de outra tela) desenha o aviso, NUNCA a tela. */}
-            {semAcesso ? (
+            {modoResumo ? <ResumoClientesPainel /> : semAcesso ? (
               <V2SemAcesso primeira={primeiraPermitida
                 ? { rotulo: rotuloDaSecao(primeiraPermitida).secao, ir: () => navegarPeloMenu(primeiraPermitida) }
                 : null} />
@@ -1684,7 +1702,7 @@ export default function V2Index() {
         {/* Drawer overlay desktop — ancorado no MAIN (relative). No mobile drawerAtivo
             sempre é null (V2MobileNav não dispara onDrawerToggle), então retorna null. */}
         <V2ContextDrawer
-          grupoAtivo={drawerAtivo}
+          grupoAtivo={modoResumo ? null : drawerAtivo}
           activeSection={section}
           onSelect={handleSelect}
           onClose={() => setDrawerAtivo(null)}

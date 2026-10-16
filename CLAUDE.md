@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 16/10/2026 (FECH-MES-SELECIONADO-01, +6: `src/hooks/usePeriodoDaTela.test.tsx` 6 (novo) — 5437 depois dele; antes o
+  Baseline em 16/10/2026 (RESUMO-CLIENTES-01 passo a, +11: `src/components/consultor/resumoClientes.test.tsx` 11 (novo) — 5448 depois dele; antes o
+  FECH-MES-SELECIONADO-01, +6: `src/hooks/usePeriodoDaTela.test.tsx` 6 (novo) — 5437 depois dele; antes o
   FIN-LR-SYNC-01 passo c, +15: `src/v2/lib/lucroRural/pastaLr.test.ts` 5 (novo), `src/components/lucroRural/pastaDownloadsLr.test.tsx` 10
   (novo) — 5431 depois dele; antes o FIN-LR-SYNC-01 passo b, +10: `src/components/lucroRural/telaAtualizarLr.test.tsx` 10 (novo) — 5416 depois dele; antes o
   FIN-V2-COLUNAS-02, +12: `src/components/financeiro-v2/colunasDaListaV2.test.tsx` 12 (novo) — 5406 depois dele; antes o
@@ -345,7 +346,7 @@ no mesmo arquivo.
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
   `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5327
-  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01], 22 skipped, e
+  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a], 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -2108,6 +2109,34 @@ preview que o cabecalho nao sai da tela ao rolar.
     propria a decidir (ZOOT-RECLASS-P1-TELA-01).
   ⚠ NAO PROVADO NO NAVEGADOR: nada (a faixa a 1.126 x 523 e a 579, as duas linhas juntas, o foco destravando, a trava master real) ·
     Compra e o formulario generico so' por teste de fonte (nao se montam) · o Abate passou o "Reabrir mês…" de botao a link.
+- ⚠ "RESUMO DOS CLIENTES" E' UMA ENTRADA VIRTUAL DO SELETOR, SO' DO ADMIN, E AS PENDENCIAS DO CONSULTOR TEM TABELA PROPRIA (RESUMO-CLIENTES-01
+  passo a, Gabriel 16/10/2026; mocks `docs/mocks/mock-resumo-clientes-v9.html` (parte Pendencias) e `-v3.html` (parte 2, o ⚑)).
+  · TABELA `consultor_pendencias` (migration `supabase/migrations/20261027199200_resumo_clientes_01_pendencias.sql`, md5 do arquivo
+    46dd998c66228f5e5f71f6374b8bf3c8 — APLICADA no proto em 16/10/2026: ledger 20261016114130 `resumo_clientes_01_pendencias`, ⚠
+    timestamp do dia; ledger = arquivo byte a byte): cliente (FK, RESTRICT), prazo, cobrar_de e o_que (CHECK nao vazio), origem_tipo
+    (oc | conciliacao | fechamento | outro) + origem_ref, status aberta | cobrada | resolvida, ultima_cobranca_em + _canal (whatsapp |
+    email | telefone; os dois juntos), resolvida_em (= status resolvida), criada/atualizada em/por (gatilho de carimbo; o repo NAO tem
+    gatilho generico de `audit_log` — os tres que existem sao de chuvas, lancamentos e financeiro). RLS: SELECT/INSERT/UPDATE so' com
+    `is_admin_agroinblue(auth.uid())`; SEM DELETE (resolve, nao apaga); GRANT so' a `authenticated` (anon nada). O CLIENTE NUNCA VE.
+    Teste `supabase/tests/resumo_clientes_01_pendencias_test.sql` (P1–P5: admin insere, cobra e resolve; CHECKs recusam vazio; nj@ le^
+    0, nao insere, nao altera; anon sem privilegio; sem delete; sem sobra) OK no ensaio e no vivo; mutacao (leitura aberta) morta.
+  · O MODO (`ClienteContext`: `resumoClientes` / `setResumoClientes`): so' admin; NAO e' cliente falso — o cliente real fica em
+    `clienteAtual`; sem localStorage (F5 volta ao cliente); escolher um cliente no seletor desliga. O seletor (`ClienteSelector`) tem a
+    entrada `RESUMO_DOS_CLIENTES` so' para admin. No modo, o `V2Index` NAO chama `renderContent()` (nenhuma tela de cliente montada),
+    tira o seletor de fazenda, troca o menu do cliente pela aba "Pendências" (`V2Sidebar` `menuDoPainel`) e desenha
+    `ResumoClientesPainel`. A esteira do mes e' o passo b.
+  · O ⚑ (`AvisoPendenciasCliente`, pela prop `aviso` da `BarraSecao`): so' admin, lugar de 40px reservado ao lado do nome; ambar com o
+    numero das em aberto (aberta + cobrada) do cliente, cinza "⚑ 0" sem nenhuma; abre o modal de altura fixa (a lista rola a partir da
+    6a linha) com "+ nova deste cliente" e "Ver no Resumo dos clientes".
+  · Donos: `src/lib/consultor/pendencias.ts` (puro: leitor, em aberto, vencida, rodape, ordem), `src/hooks/usePendenciasConsultor.ts`
+    (leitura e escrita direta sob RLS, `(supabase as any).from` — tabela fora do `types.ts`), `src/components/consultor/`.
+  · FONTES DA ESTEIRA (passo b, FASE 0 de 16/10): Pasto P1 e Valor reb. = `get_status_pilares_ano(cliente, ano)` (p1 / p2 por
+    fazenda); Conciliacao = `fn_conciliacao_resumo_mes(cliente, mes)`, linha `total` (o status do card da Conciliacao); Fechamento =
+    "—" (nenhuma fonte confiavel: `fechamento_executivo` so' tem linhas antigas da tela legada e a Leitura Executiva nao grava); datas
+    nos ✓ so' do carimbo da propria tabela dona do pilar, senao sem data; chamadas por cliente em paralelo, sem RPC agregadora.
+  Testes: `src/components/consultor/resumoClientes.test.tsx` 11; 2 mutacoes mortas.
+  ⚠ NAO PROVADO NO NAVEGADOR: nada (a entrada no seletor, o painel, o ⚑ e o modal, Cobrei/Resolvida gravando de verdade, nj@ sem ver).
+    No celular a barra de baixo segue trocando de secao por baixo do painel.
 - ⚠ O MES DO FECHAMENTO, DO RESUMO POR ATIVIDADE E DO MAPA DE PASTOS E' O ANO/MES DO SHELL (FECH-MES-SELECIONADO-01, Gabriel 16/10/2026, so'
   tela). Nasce do relato: escolhido ago/26 no Fechamento, ir ao Resumo ou ao Mapa e voltar abria em outubro — Fechamento e Mapa sao
   secoes separadas do `V2Index` e cada montagem recomecava em `new Date()`. DECISAO DO GABRIEL (pergunta de 16/10): REUSAR o `ano`/`mes`

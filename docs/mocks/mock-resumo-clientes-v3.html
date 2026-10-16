@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mock Resumo dos clientes v3</title>
+<style>
+  :root{--navy:#1f3b63;--navy2:#2a4a78;--navy3:#0f2746;--bg:#f6f7f9;--card:#fff;--border:#e2e5ea;--muted:#6b7280;--amber:#b45309;--amber-bg:#fff7e6;--amber-b:#f3c77a;--green:#15803d;--green-bg:#edf7ef;--red:#b91c1c;--red-bg:#fdecec}
+  body{margin:0;background:var(--bg);font-family:Inter,system-ui,Segoe UI,Arial,sans-serif;color:#111827;font-size:11px}
+  .wrap{max-width:1200px;margin:16px auto;padding:0 16px}
+  h1{font-size:13px;font-weight:600;margin:0 0 4px}
+  .sub{font-size:10px;color:var(--muted);margin:0 0 14px}
+  .panel{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:16px}
+  .panel h2{font-size:11px;font-weight:600;margin:0 0 8px;color:var(--navy)}
+  .note{font-size:10px;color:var(--muted);margin-top:8px;line-height:1.35}
+  .app{display:flex;border:1px solid var(--border);border-radius:6px;overflow:hidden;background:#fff;min-height:330px}
+  .side{width:170px;background:var(--navy);color:#fff;padding:8px;flex:none}
+  .brand{font-size:11px;font-weight:700;margin-bottom:6px}
+  .sel{background:var(--navy2);border-radius:4px;padding:5px 8px;margin:6px 0;display:flex;align-items:center;gap:6px;font-size:10px;font-weight:600}
+  .dd{background:#fff;color:#111827;border-radius:4px;margin-top:2px;font-size:10px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,.25)}
+  .dd div{padding:4px 8px;border-top:1px solid var(--border)}
+  .dd div:first-child{border-top:0}
+  .dd .me{background:#eef2f7;color:var(--navy);font-weight:700;border-top:2px solid var(--navy)}
+  .dd .teste{color:var(--muted)}
+  .menu{font-size:10px;opacity:.85;padding:3px 6px}
+  .menu.on{background:rgba(255,255,255,.12);border-radius:4px;opacity:1}
+  .main{flex:1;min-width:0;background:var(--bg)}
+  .crumb{background:var(--navy);color:#fff;font-size:10px;padding:6px 12px;display:flex;align-items:center;gap:10px}
+  .crumb .r{margin-left:auto;opacity:.85;display:flex;align-items:center;gap:10px}
+  .flag{display:inline-flex;align-items:center;gap:3px;background:#f59e0b;color:#1f2937;border-radius:9px;padding:0 6px;height:16px;font-size:9px;font-weight:700;cursor:pointer}
+  .flag.zero{background:rgba(255,255,255,.18);color:#fff;font-weight:600}
+  .content{padding:10px 12px}
+  /* resumo dos clientes */
+  .blocos{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .bloco{background:#fff;border:1px solid var(--border);border-radius:4px;padding:8px}
+  .bloco.full{grid-column:1/3}
+  .bloco h3{font-size:10px;font-weight:600;color:var(--navy);margin:0 0 6px;display:flex;align-items:center;gap:6px}
+  .bloco h3 .pr{margin-left:auto;font-weight:500;color:var(--muted);font-size:9px}
+  .bloco.skel{border-style:dashed;background:#fbfbfc}
+  .bloco.skel h3{color:var(--muted)}
+  table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:10px}
+  th{text-align:left;font-weight:600;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.03em;height:18px;border-bottom:1px solid var(--border);padding:0 6px;white-space:nowrap}
+  td{height:22px;border-bottom:1px solid #f0f2f5;padding:0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  td.num{font-variant-numeric:tabular-nums;text-align:right}
+  .venc{color:var(--red);font-weight:600}
+  .st{display:inline-block;border-radius:8px;padding:0 6px;height:15px;line-height:15px;font-size:9px;font-weight:600}
+  .st.ab{background:#eef2f7;color:var(--navy)} .st.co{background:var(--amber-bg);color:var(--amber)} .st.ok{background:var(--green-bg);color:var(--green)} .st.rd{background:var(--red-bg);color:var(--red)}
+  .b{height:18px;border:1px solid var(--border);border-radius:3px;background:#fff;font-size:9px;font-weight:600;padding:0 6px;cursor:pointer;color:#111827}
+  .b.ok{border-color:#86c89b;color:var(--green)}
+  .b.p{background:var(--navy);color:#fff;border-color:var(--navy)}
+  .tb{display:flex;gap:6px;align-items:center;margin-bottom:6px}
+  .f{height:20px;border:1px solid var(--border);border-radius:3px;background:#fff;font-size:10px;padding:0 6px;display:flex;align-items:center;color:#374151}
+  .seg{display:flex;border:1px solid var(--border);border-radius:3px;overflow:hidden}
+  .seg div{padding:0 8px;height:20px;line-height:20px;font-size:10px;color:#374151}
+  .seg div.on{background:var(--navy);color:#fff}
+  .grp td{background:#f3f5f8;font-weight:600;color:var(--navy);height:18px;font-size:9px;text-transform:uppercase;letter-spacing:.03em}
+  .lk{color:var(--navy);text-decoration:underline;cursor:pointer}
+  .hist{font-size:9px;color:var(--muted)}
+  .skl{height:22px;border-bottom:1px solid #eef0f3;display:flex;align-items:center;gap:8px;font-size:10px;color:#9ca3af}
+  .skl .bar{height:8px;background:#e5e7eb;border-radius:4px}
+  /* cliente: cards */
+  .cards{display:flex;gap:8px}
+  .card{flex:1;background:#fff;border:1px solid var(--border);border-radius:4px;height:46px;display:flex;flex-direction:column;justify-content:center;padding:0 8px}
+  .card .l{font-size:9px;color:var(--muted)} .card .v{font-size:12px;font-weight:600}
+  /* modal */
+  .overlay{position:absolute;inset:0;background:rgba(0,0,0,.35);display:flex;justify-content:center;align-items:flex-start;padding-top:40px}
+  .rel{position:relative}
+  .dlg{width:560px;background:#fff;border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.25);overflow:hidden}
+  .dlg .hd{padding:12px 16px 0}
+  .dlg .hd .t{font-size:14px;font-weight:500;color:var(--navy);line-height:1}
+  .dlg .hd .d{font-size:11px;color:var(--muted);margin-top:4px}
+  .dlg .bd{padding:10px 16px}
+  .dlg .ft{display:flex;justify-content:space-between;gap:6px;padding:8px 16px 12px;border-top:1px solid var(--border)}
+  .dlg .ft .b{height:26px;font-size:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Resumo dos clientes — mock v3 (só admin AGROinBLUE)</h1>
+  <p class="sub">Entrada virtual no seletor de cliente (como o "Global" no seletor de fazenda). Ao escolher, a tela muda de cara: some o menu do cliente, entra o seu painel. Dentro do cliente só fica um aviso discreto que abre um modal. Cliente nunca vê nada disso.</p>
+
+  <!-- 1. Resumo dos clientes -->
+  <div class="panel">
+    <h2>1 · Seletor → "Resumo dos clientes" → painel do consultor</h2>
+    <div class="app">
+      <div class="side">
+        <div class="brand">Agroinblue</div>
+        <div class="sel">☰ Resumo dos clientes ▾</div>
+        <div class="dd">
+          <div class="me">☰ Resumo dos clientes</div>
+          <div>NJ Pecuária</div>
+          <div>Santa Rita Agro</div>
+          <div>Vera Milani</div>
+          <div>Agnaldo Cedenho</div>
+          <div>Raul Juliato</div>
+          <div class="teste">Cliente Teste</div>
+        </div>
+        <div class="menu on" style="margin-top:8px">Pendências</div>
+        <div class="menu">Status dos clientes</div>
+        <div class="menu">Pagamentos e boletos</div>
+        <div class="menu">Benchmark</div>
+      </div>
+      <div class="main">
+        <div class="crumb">Resumo dos clientes <span class="r">Gabriel Junqueira</span></div>
+        <div class="content">
+          <div class="blocos">
+            <div class="bloco full">
+              <h3>⚑ Pendências — 5 abertas · 3 vencidas <span class="pr">PR 1 · tabela própria</span></h3>
+              <div class="tb">
+                <div class="f">Cliente: Todos ▾</div><div class="f">Cobrar de: Todos ▾</div>
+                <div class="seg"><div class="on">Abertas · 5</div><div>Cobradas · 2</div><div>Resolvidas · 14</div></div>
+                <button class="b p" style="margin-left:auto;height:20px">+ Nova pendência</button>
+              </div>
+              <table>
+                <colgroup><col style="width:50px"><col style="width:76px"><col style="width:auto"><col style="width:130px"><col style="width:66px"><col style="width:120px"><col style="width:128px"></colgroup>
+                <thead><tr><th>Prazo</th><th>Cobrar de</th><th>O que</th><th>Origem</th><th>Status</th><th>Última cobrança</th><th></th></tr></thead>
+                <tbody>
+                  <tr class="grp"><td colspan="7">NJ Pecuária · 3</td></tr>
+                  <tr><td class="num venc">10/10</td><td>Amanda</td><td>Acertos dos abates de setembro (3 OCs sem acerto)</td><td><span class="lk">OCs set/26</span></td><td><span class="st co">Cobrada</span></td><td class="hist">12/10 · WhatsApp</td><td><button class="b">Cobrei</button> <button class="b ok">Resolvida</button></td></tr>
+                  <tr><td class="num venc">11/10</td><td>Amanda</td><td>Nota do frete das 140 N (Venda 19/09) para vincular</td><td><span class="lk">OC #e8fec78b</span></td><td><span class="st ab">Aberta</span></td><td class="hist">—</td><td><button class="b">Cobrei</button> <button class="b ok">Resolvida</button></td></tr>
+                  <tr><td class="num">17/10</td><td>Paulinha</td><td>Planilha de mandioca da semana (cargas T Cortez)</td><td>—</td><td><span class="st ab">Aberta</span></td><td class="hist">—</td><td><button class="b">Cobrei</button> <button class="b ok">Resolvida</button></td></tr>
+                  <tr class="grp"><td colspan="7">Santa Rita Agro · 1</td></tr>
+                  <tr><td class="num venc">09/10</td><td>Tito</td><td>Extratos OFX + PDF set/26: Bradesco, Sicredi, Itaú</td><td><span class="lk">Conciliação set/26</span></td><td><span class="st co">Cobrada</span></td><td class="hist">10/10 · e-mail</td><td><button class="b">Cobrei</button> <button class="b ok">Resolvida</button></td></tr>
+                  <tr class="grp"><td colspan="7">Vera Milani · 1</td></tr>
+                  <tr><td class="num">15/10</td><td>João</td><td>Ajustes de conciliação do mapa do rebanho (Baia Grande, set/26)</td><td><span class="lk">Fechamento set/26</span></td><td><span class="st ab">Aberta</span></td><td class="hist">—</td><td><button class="b">Cobrei</button> <button class="b ok">Resolvida</button></td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="bloco skel">
+              <h3>Status dos clientes <span class="pr">PR 2 · lê o que já existe</span></h3>
+              <table>
+                <colgroup><col style="width:auto"><col style="width:64px"><col style="width:70px"><col style="width:70px"><col style="width:74px"></colgroup>
+                <thead><tr><th>Cliente</th><th>Mês</th><th>Área</th><th>Conciliação</th><th>Financeiro</th></tr></thead>
+                <tbody>
+                  <tr><td>NJ Pecuária</td><td>set/26</td><td><span class="st ok">fechado</span></td><td><span class="st co">âmbar</span></td><td><span class="st ok">em dia</span></td></tr>
+                  <tr><td>Santa Rita Agro</td><td>set/26</td><td><span class="st ok">fechado</span></td><td><span class="st rd">sem extrato</span></td><td><span class="st co">3 atrasados</span></td></tr>
+                  <tr><td>Vera Milani</td><td>set/26</td><td><span class="st co">aberto</span></td><td><span class="st ok">verde</span></td><td><span class="st ok">em dia</span></td></tr>
+                  <tr><td>Agnaldo Cedenho</td><td>set/26</td><td><span class="st ok">fechado</span></td><td><span class="st ok">verde</span></td><td><span class="st ok">em dia</span></td></tr>
+                  <tr><td>Raul Juliato</td><td>ago/26</td><td><span class="st rd">2 meses</span></td><td><span class="st co">âmbar</span></td><td><span class="st ok">em dia</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="bloco skel">
+              <h3>Pagamentos e boletos — vencidos e próximos 7 dias <span class="pr">PR 3 · lê o Contas a Pagar</span></h3>
+              <table>
+                <colgroup><col style="width:auto"><col style="width:70px"><col style="width:80px"><col style="width:70px"><col style="width:80px"></colgroup>
+                <thead><tr><th>Cliente</th><th>Vencidos</th><th>R$</th><th>Até 7 dias</th><th>R$</th></tr></thead>
+                <tbody>
+                  <tr><td>NJ Pecuária</td><td class="num">0</td><td class="num">—</td><td class="num">6</td><td class="num">84.300</td></tr>
+                  <tr><td>Santa Rita Agro</td><td class="num venc">3</td><td class="num venc">27.669</td><td class="num">4</td><td class="num">112.950</td></tr>
+                  <tr><td>Vera Milani</td><td class="num">0</td><td class="num">—</td><td class="num">2</td><td class="num">9.800</td></tr>
+                  <tr><td>Agnaldo Cedenho</td><td class="num">0</td><td class="num">—</td><td class="num">5</td><td class="num">61.200</td></tr>
+                  <tr><td>Raul Juliato</td><td class="num">1</td><td class="num venc">4.150</td><td class="num">1</td><td class="num">3.300</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="bloco skel full">
+              <h3>Benchmark entre clientes <span class="pr">BENCHMARK-01 · depois</span></h3>
+              <div class="skl"><span style="width:110px">Cliente</span><span class="bar" style="width:120px"></span><span class="bar" style="width:90px"></span><span class="bar" style="width:140px"></span><span style="margin-left:auto">@/ha · R$/@ · custo/cab · lucro/ha</span></div>
+              <div class="skl"><span style="width:110px">—</span><span class="bar" style="width:160px"></span><span class="bar" style="width:70px"></span><span class="bar" style="width:110px"></span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="note">A entrada "Resumo dos clientes" aparece só para admin e não é tenant: nada é gravado "nela". O menu lateral troca pelos 4 blocos (cada um é uma aba; na abertura, Pendências). Blocos 2–4 tracejados = esqueleto do destino, fora do PR 1; todos render-only sobre fontes que já existem (fechamento_pastos, status da Conciliação, Contas a Pagar, DRE). Origem de uma pendência troca o seletor para o cliente certo, abre a tela e volta para cá.</p>
+  </div>
+
+  <!-- 2. Dentro do cliente -->
+  <div class="panel">
+    <h2>2 · Dentro do cliente — só o aviso no cabeçalho; clicar abre o modal</h2>
+    <div class="app rel">
+      <div class="side">
+        <div class="brand">Agroinblue</div>
+        <div class="sel">🏢 NJ Pecuária ▾</div>
+        <div class="sel">🌐 Global ▾</div>
+        <div class="menu on">Visão Geral</div>
+        <div class="menu">Produção</div>
+        <div class="menu">Financeiro</div>
+        <div class="menu">Auditoria</div>
+      </div>
+      <div class="main">
+        <div class="crumb">Início / Visão Geral <span class="r"><span class="flag">⚑ 3</span> Gabriel Junqueira</span></div>
+        <div class="content">
+          <div class="cards">
+            <div class="card"><div class="l">Área do mês</div><div class="v">1.842 ha</div></div>
+            <div class="card"><div class="l">Caixa do mês</div><div class="v">R$ 312.400</div></div>
+            <div class="card"><div class="l">Rebanho</div><div class="v">4.118 cab</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="overlay">
+        <div class="dlg">
+          <div class="hd"><div class="t">Pendências — NJ Pecuária</div><div class="d">3 abertas · 2 vencidas. Só você vê isto.</div></div>
+          <div class="bd">
+            <table>
+              <colgroup><col style="width:50px"><col style="width:70px"><col style="width:auto"><col style="width:128px"></colgroup>
+              <thead><tr><th>Prazo</th><th>Cobrar de</th><th>O que</th><th></th></tr></thead>
+              <tbody>
+                <tr><td class="num venc">10/10</td><td>Amanda</td><td>Acertos dos abates de setembro (3 OCs sem acerto)</td><td><button class="b">Cobrei</button> <button class="b ok">Resolvida</button></td></tr>
+                <tr><td class="num venc">11/10</td><td>Amanda</td><td>Nota do frete das 140 N (Venda 19/09) para vincular</td><td><button class="b">Cobrei</button> <button class="b ok">Resolvida</button></td></tr>
+                <tr><td class="num">17/10</td><td>Paulinha</td><td>Planilha de mandioca da semana (cargas T Cortez)</td><td><button class="b">Cobrei</button> <button class="b ok">Resolvida</button></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="ft"><button class="b">+ Nova pendência deste cliente</button><div><button class="b">Ver no Resumo dos clientes</button> <button class="b p">Fechar</button></div></div>
+        </div>
+      </div>
+    </div>
+    <p class="note">O aviso ⚑ fica no cabeçalho (onde já está o nome do usuário), âmbar com número quando há pendência aberta deste cliente, cinza "⚑ 0" quando não há — espaço reservado, nunca reorganiza. Só admin vê o ícone. O modal tem altura fixa (lista rola a partir da 6ª linha), as mesmas ações da Mesa e o atalho "Ver no Resumo dos clientes".</p>
+  </div>
+</div>
+</body>
+</html>

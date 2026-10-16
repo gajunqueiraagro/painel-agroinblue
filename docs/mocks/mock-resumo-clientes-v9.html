@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mock Resumo dos clientes v9</title>
+<style>
+  :root{--navy:#1f3b63;--navy2:#2a4a78;--bg:#f6f7f9;--border:#e2e5ea;--muted:#6b7280;--amber:#b45309;--amber-bg:#fff7e6;--green:#15803d;--green-bg:#edf7ef;--red:#b91c1c;--red-bg:#fdecec;--ink:#111827}
+  body{margin:0;background:var(--bg);font-family:Inter,system-ui,Segoe UI,Arial,sans-serif;color:var(--ink);font-size:11px}
+  .wrap{max-width:1240px;margin:16px auto;padding:0 16px}
+  h1{font-size:13px;font-weight:600;margin:0 0 4px}
+  .sub{font-size:10px;color:var(--muted);margin:0 0 14px;line-height:1.4}
+  .panel{background:#fff;border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:16px}
+  .note{font-size:10px;color:var(--muted);margin-top:8px;line-height:1.4}
+  .app{display:flex;border:1px solid var(--border);border-radius:6px;overflow:hidden;background:#fff}
+  .side{width:170px;background:var(--navy);color:#fff;padding:8px;flex:none}
+  .brand{font-size:11px;font-weight:700;margin-bottom:6px}
+  .sel{background:var(--navy2);border-radius:4px;padding:5px 8px;margin:6px 0;display:flex;align-items:center;gap:6px;font-size:10px;font-weight:600}
+  .menu{font-size:10px;opacity:.85;padding:3px 6px;margin-top:2px}
+  .menu.on{background:rgba(255,255,255,.12);border-radius:4px;opacity:1}
+  .main{flex:1;min-width:0;background:var(--bg)}
+  .crumb{background:var(--navy);color:#fff;font-size:10px;padding:6px 12px;display:flex;align-items:center}
+  .crumb span{margin-left:auto;opacity:.85}
+  .content{padding:10px 12px;display:flex;flex-direction:column;gap:10px}
+  .top{display:flex;align-items:center;gap:8px}
+  .mes{height:24px;border:1px solid var(--navy);background:#fff;border-radius:4px;padding:0 8px;display:flex;align-items:center;font-size:11px;font-weight:600;color:var(--navy)}
+  .top .d{font-size:10px;color:var(--muted)}
+  .kp{margin-left:auto;display:flex;gap:6px}
+  .kp div{height:24px;border:1px solid var(--border);background:#fff;border-radius:4px;padding:0 8px;display:flex;align-items:center;gap:5px;font-size:10px}
+  .kp b{font-size:12px} .kp .r b{color:var(--red)} .kp .a b{color:var(--amber)} .kp .g b{color:var(--green)}
+  .bl{background:#fff;border:1px solid var(--border);border-radius:4px}
+  .bl .hd{display:flex;align-items:center;gap:8px;height:26px;padding:0 10px;border-bottom:1px solid var(--border)}
+  .bl .hd .t{font-size:11px;font-weight:600;color:var(--navy)}
+  .bl .hd .s{font-size:10px;color:var(--muted)}
+  .bl .hd .r{margin-left:auto;font-size:9px;color:var(--navy);text-decoration:underline;cursor:pointer}
+  table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:10px}
+  thead th{background:#eef2f7;text-align:left;font-weight:600;color:var(--navy);font-size:9px;text-transform:uppercase;letter-spacing:.03em;height:20px;border-bottom:1px solid var(--border);padding:0 8px;white-space:nowrap}
+  tr.foot td{background:#f3f5f8;color:var(--navy);font-weight:600;height:20px;border-top:1px solid var(--border)}
+  .legend{background:#f3f5f8}
+  th.step{text-align:left}
+  td{height:22px;border-bottom:1px solid #f0f2f5;padding:0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
+  tr:last-child td{border-bottom:0}
+  td.c{font-weight:600;color:var(--navy);cursor:pointer}
+  td.c small{display:none}
+  /* celula de etapa */
+  .cell{display:flex;flex-direction:row;align-items:center;justify-content:flex-start;gap:4px;cursor:pointer;min-width:0}
+  .cell .ic{width:12px;height:12px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:#fff}
+  .ic.g{background:#22a05b} .ic.a{background:#f59e0b} .ic.r{background:#dc2626} .ic.e{background:#e5e7eb;color:#9ca3af} .ic.n{background:#fff;border:1px dashed #cbd5e1;color:#cbd5e1}
+  .cell .lb{font-size:9px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  .cell .lb.r{color:var(--red);font-weight:600}
+  td.next{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  td.next .q{color:var(--muted)}
+  .b{height:16px;border:1px solid var(--border);border-radius:3px;background:#fff;font-size:9px;font-weight:600;padding:0 6px;cursor:pointer;color:#111827}
+  .b.ok{border-color:#86c89b;color:var(--green)} .b.p{background:var(--navy);color:#fff;border-color:var(--navy)}
+  .st{display:inline-block;border-radius:8px;padding:0 6px;height:15px;line-height:15px;font-size:9px;font-weight:600}
+  .st.ok{background:var(--green-bg);color:var(--green)} .st.am{background:var(--amber-bg);color:var(--amber)} .st.rd{background:var(--red-bg);color:var(--red)} .st.na{background:#f3f4f6;color:#9ca3af;font-weight:500}
+  .venc{color:var(--red);font-weight:600} .mu{color:var(--muted)}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  .legend{display:flex;gap:12px;font-size:9px;color:var(--muted);padding:4px 10px;border-top:1px solid var(--border);background:#f3f5f8}
+  .legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:3px;vertical-align:middle}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Resumo dos clientes — mock v9 (só admin) · a esteira do mês · compacto</h1>
+  <p class="sub">A sua manhã, em uma tela: <b>para cada cliente, em que etapa do fechamento do mês ele está e o que está travando.</b> As etapas são as suas, na sua ordem: Documentos → Pasto (P1) → Valor do rebanho → Conciliação → Fechamento entregue. Cobrança vale desde o dia 1 do mês seguinte. Abaixo, as pendências que você registra e os boletos da consultoria.</p>
+
+  <div class="panel">
+    <div class="app">
+      <div class="side">
+        <div class="brand">Agroinblue</div>
+        <div class="sel">☰ Resumo dos clientes ▾</div>
+        <div class="menu on" style="margin-top:8px">Esteira do mês</div>
+        <div class="menu">Pendências</div>
+        <div class="menu">Boletos da consultoria</div>
+        <div class="menu">Benchmark</div>
+      </div>
+      <div class="main">
+        <div class="crumb">Resumo dos clientes <span>Gabriel Junqueira</span></div>
+        <div class="content">
+
+          <div class="top">
+            <div class="mes">◀ set/26 ▶</div><div class="d">hoje 13/10 · dia 13 da cobrança</div>
+            <div class="kp"><div class="g"><b>1</b> entregue</div><div class="a"><b>3</b> em andamento</div><div class="r"><b>1</b> travado em documentos</div></div>
+          </div>
+
+          <!-- Esteira -->
+          <div class="bl">
+            <div class="hd"><span class="t">Esteira do fechamento · set/26</span><span class="s">clique na bolinha abre a etapa · mais atrasado primeiro</span></div>
+            <table>
+              <colgroup><col style="width:118px"><col style="width:104px"><col style="width:108px"><col style="width:92px"><col style="width:116px"><col style="width:84px"><col style="width:auto"><col style="width:58px"></colgroup>
+              <thead><tr><th>Cliente</th><th class="step">Documentos</th><th class="step">Pasto P1</th><th class="step">Valor reb.</th><th class="step">Conciliação</th><th class="step">Fechamento</th><th>Próximo passo · o que trava</th><th></th></tr></thead>
+              <tbody>
+                <tr>
+                  <td class="c">Santa Rita Agro<small>Santa Rita · 2.930 cab</small></td>
+                  <td><div class="cell"><div class="ic r">!</div><div class="lb r" title="faltam 3 OFX">3 OFX faltam</div></div></td>
+                  <td><div class="cell"><div class="ic g">✓</div><div class="lb">03/10</div></div></td>
+                  <td><div class="cell"><div class="ic g">✓</div><div class="lb">03/10</div></div></td>
+                  <td><div class="cell"><div class="ic e">–</div><div class="lb" title="aguarda docs">aguarda</div></div></td>
+                  <td><div class="cell"><div class="ic e">–</div></div></td>
+                  <td class="next" title="Cobrar Tito: extratos OFX+PDF Bradesco, Sicredi, Itaú · cobrado 10/10"><span class="q">Tito ·</span> extratos OFX Bradesco, Sicredi, Itaú <span class="mu">· cobrado 10/10</span></td><td><button class="b">Cobrei</button></td>
+                </tr>
+                <tr>
+                  <td class="c">Raul Juliato<small>Monterrey · 1.340 cab</small></td>
+                  <td><div class="cell"><div class="ic a">2</div><div class="lb" title="falta foto ago">foto ago</div></div></td>
+                  <td><div class="cell"><div class="ic r">!</div><div class="lb r" title="ago e set abertos">ago+set</div></div></td>
+                  <td><div class="cell"><div class="ic e">–</div></div></td>
+                  <td><div class="cell"><div class="ic a">●</div><div class="lb" title="BB 5 sem par">BB 5 s/par</div></div></td>
+                  <td><div class="cell"><div class="ic e">–</div></div></td>
+                  <td class="next"><span class="q">Otávio ·</span> mapa de rebanho de agosto <span class="mu">· sem cobrança</span></td><td><button class="b">Cobrei</button></td>
+                </tr>
+                <tr>
+                  <td class="c">Vera Milani<small>Baia Grande · 3 Muchachas · 1.760 cab</small></td>
+                  <td><div class="cell"><div class="ic g">✓</div><div class="lb">02/10</div></div></td>
+                  <td><div class="cell"><div class="ic a">●</div><div class="lb" title="Baia Grande aberto">B.Grande</div></div></td>
+                  <td><div class="cell"><div class="ic e">–</div></div></td>
+                  <td><div class="cell"><div class="ic g">✓</div><div class="lb">08/10</div></div></td>
+                  <td><div class="cell"><div class="ic e">–</div></div></td>
+                  <td class="next"><span class="q">Você ·</span> fechar pastos da Baia Grande (mapa chegou 02/10)</td><td><button class="b p">Abrir</button></td>
+                </tr>
+                <tr>
+                  <td class="c">NJ Pecuária<small>Pureza · Retiro · 4.118 cab · agri</small></td>
+                  <td><div class="cell"><div class="ic g">✓</div><div class="lb">01/10</div></div></td>
+                  <td><div class="cell"><div class="ic g">✓</div><div class="lb">06/10</div></div></td>
+                  <td><div class="cell"><div class="ic g">✓</div><div class="lb">06/10</div></div></td>
+                  <td><div class="cell"><div class="ic a">●</div><div class="lb" title="Sicredi 12 sem par">Sicredi 12 s/par</div></div></td>
+                  <td><div class="cell"><div class="ic e">–</div></div></td>
+                  <td class="next"><span class="q">Você ·</span> conciliar Sicredi (12 sem par, saldo –1.116)</td><td><button class="b p">Abrir</button></td>
+                </tr>
+                <tr>
+                  <td class="c">Agnaldo Cedenho<small>Sta. Maria · Sta. Tereza · 2.210 cab</small></td>
+                  <td><div class="cell"><div class="ic g">✓</div><div class="lb">01/10</div></div></td>
+                  <td><div class="cell"><div class="ic g">✓</div><div class="lb">04/10</div></div></td>
+                  <td><div class="cell"><div class="ic g">✓</div><div class="lb">04/10</div></div></td>
+                  <td><div class="cell"><div class="ic g">✓</div><div class="lb">07/10</div></div></td>
+                  <td><div class="cell"><div class="ic g">✓</div><div class="lb">09/10</div></div></td>
+                  <td class="next mu">Entregue 09/10 · reunião 15/10</td><td></td>
+                </tr>
+                <tr class="foot"><td>5 clientes</td><td>3 ok · 2 faltam</td><td>3 ok · 2 abertos</td><td>3 ok</td><td>2 ok · 3 em curso</td><td>1 entregue</td><td colspan="2">dia 13 da cobrança · 1 travado em documentos</td></tr>
+              </tbody>
+            </table>
+            <div class="legend"><span><i style="background:#22a05b"></i>feito (data)</span><span><i style="background:#f59e0b"></i>em andamento / parcial</span><span><i style="background:#dc2626"></i>travado · cobrar</span><span><i style="background:#e5e7eb"></i>ainda não chegou nessa etapa</span><span>Documentos = foto do campeiro + extratos OFX do mês</span></div>
+          </div>
+
+          <!-- Pendencias -->
+          <div class="bl">
+            <div class="hd"><span class="t">Pendências registradas</span><span class="s">5 abertas · 3 vencidas</span><span class="r">+ nova</span></div>
+            <table>
+              <colgroup><col style="width:118px"><col style="width:46px"><col style="width:64px"><col style="width:auto"><col style="width:112px"><col style="width:122px"></colgroup>
+              <thead><tr><th>Cliente</th><th>Prazo</th><th>Cobrar de</th><th>O que</th><th>Última cobrança</th><th></th></tr></thead>
+              <tbody>
+                <tr><td class="c">Santa Rita Agro</td><td class="venc">09/10</td><td>Tito</td><td>Extratos OFX + PDF set/26 (Bradesco, Sicredi, Itaú)</td><td class="mu">10/10 · e-mail</td><td><button class="b">Cobrei</button> <button class="b ok">Resolvida</button></td></tr>
+                <tr><td class="c">NJ Pecuária</td><td class="venc">10/10</td><td>Amanda</td><td>Acertos dos abates de setembro (3 OCs)</td><td class="mu">12/10 · WhatsApp</td><td><button class="b">Cobrei</button> <button class="b ok">Resolvida</button></td></tr>
+                <tr><td class="c">NJ Pecuária</td><td class="venc">11/10</td><td>Amanda</td><td>Nota do frete das 140 N (Venda 19/09) para vincular</td><td class="mu">—</td><td><button class="b">Cobrei</button> <button class="b ok">Resolvida</button></td></tr>
+                <tr><td class="c">Vera Milani</td><td>15/10</td><td>João</td><td>Ajustes do mapa do rebanho (Baia Grande, set/26)</td><td class="mu">—</td><td><button class="b">Cobrei</button> <button class="b ok">Resolvida</button></td></tr>
+                <tr><td class="c">NJ Pecuária</td><td>17/10</td><td>Paulinha</td><td>Planilha de mandioca da semana (cargas T Cortez)</td><td class="mu">—</td><td><button class="b">Cobrei</button> <button class="b ok">Resolvida</button></td></tr>
+                <tr class="foot"><td colspan="6">5 abertas · 3 vencidas · 2 cobradas esta semana · 14 resolvidas no mês</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Boletos -->
+          <div class="bl">
+            <div class="hd"><span class="t">Boletos da consultoria · set/26</span><span class="s">emissão é sua; "pago" vem do financeiro do cliente</span><span class="r">+ registrar emissão</span></div>
+            <table>
+              <colgroup><col style="width:118px"><col style="width:64px"><col style="width:50px"><col style="width:120px"><col style="width:auto"><col style="width:70px"></colgroup>
+              <thead><tr><th>Cliente</th><th class="num">Valor</th><th>Venc.</th><th>Situação</th><th>No financeiro do cliente</th><th></th></tr></thead>
+              <tbody>
+                <tr><td class="c">Santa Rita Agro</td><td class="num">4.500</td><td>10/10</td><td><span class="st rd">vencido · 3 dias</span></td><td class="mu">previsto 10/10, não pago</td><td><button class="b">Cobrei</button></td></tr>
+                <tr><td class="c">Raul Juliato</td><td class="num">2.800</td><td>10/10</td><td><span class="st rd">vencido · 3 dias</span></td><td class="mu">previsto 10/10, não pago</td><td><button class="b">Cobrei</button></td></tr>
+                <tr><td class="c">NJ Pecuária</td><td class="num">6.000</td><td>15/10</td><td><span class="st am">emitido</span></td><td class="mu">previsto 15/10</td><td></td></tr>
+                <tr><td class="c">Agnaldo Cedenho</td><td class="num">3.500</td><td>10/10</td><td><span class="st ok">pago 09/10</span></td><td class="mu">realizado 09/10 · conciliado</td><td></td></tr>
+                <tr><td class="c">Vera Milani</td><td class="num">3.000</td><td>10/10</td><td><span class="st ok">pago 10/10</span></td><td class="mu">realizado 10/10 · conciliado</td><td></td></tr>
+                <tr class="foot"><td colspan="6">Set/26: a receber 19.800 · recebido 6.500 · vencido 7.300 · a vencer 6.000</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+        </div>
+      </div>
+    </div>
+    <p class="note">
+      <b>De onde vem cada bolinha (tudo existente, render-only):</b> Documentos = FECH-DOCS-01 (foto do campeiro por fazenda/mês) + extratos importados na Conciliação por conta/mês; Pasto P1 = status de fechamento_pastos do mês; Valor rebanho = valor_rebanho_mensal do mês; Conciliação = status do mês (regra "verde é saldo batendo"); Fechamento = Leitura Executiva gerada no mês. Boleto "pago" = lançamento do cliente para o fornecedor AGROinBLUE na competência (realizado/conciliado); só a emissão (valor, vencimento) é cadastro seu.<br>
+      <b>Próximo passo:</b> o sistema escreve a primeira etapa não verde e de quem depende (contato do cliente ou "Você"); "Cobrei" registra a cobrança sem precisar abrir modal.<br>
+      <b>PRs:</b> 1 = entrada no seletor + esteira com Pasto/Valor/Conciliação/Fechamento (Documentos entra quando a FECH-DOCS-01 existir) + pendências (tabela nova) + aviso/modal no cliente; 2 = coluna Documentos + boletos (tabela de emissão + leitura do financeiro do cliente).
+    </p>
+  </div>
+</div>
+</body>
+</html>

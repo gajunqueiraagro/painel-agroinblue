@@ -39,6 +39,8 @@ export interface V2SidebarProps {
   clienteSelector?: ReactNode;
   fazendaSelector?: ReactNode;
   className?: string;
+  /** RESUMO-CLIENTES-01 — no "Resumo dos clientes" o menu do cliente some e entram as abas do painel. */
+  menuDoPainel?: ReactNode;
 }
 
 // Ícones dos grupos (ordem idêntica ao NAV_GRUPOS)
@@ -62,6 +64,7 @@ export function V2Sidebar({
   clienteSelector,
   fazendaSelector,
   className,
+  menuDoPainel,
 }: V2SidebarProps) {
   const { isAdmin, clienteAtual } = useCliente();
   /* ACESSOS-02a — o que se OFERECE vem de UM dono (`nivelDaTela`): grupo sem item visivel some, e os dois botoes soltos
@@ -110,6 +113,7 @@ export function V2Sidebar({
 
       {/* Navegação — 5 itens top-level */}
       <nav className="flex-1 overflow-y-auto py-2 px-2 space-y-0.5">
+        {menuDoPainel ?? (<>
 
         {/* Visão Geral */}
         {veHome && (
@@ -175,6 +179,7 @@ export function V2Sidebar({
           <span className="min-w-0 truncate" title="Configurações">Configurações</span>
         </button>
         )}
+        </>)}
 
       </nav>
 

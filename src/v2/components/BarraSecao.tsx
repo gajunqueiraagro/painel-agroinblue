@@ -33,9 +33,11 @@ export interface BarraSecaoProps {
    * que o clique faz) é o `V2Index`. Aqui é só o encaixe. Ausente, a barra fica como sempre foi.
    */
   atalho?: ReactNode;
+  /** RESUMO-CLIENTES-01 — o ⚑ do consultor (só admin; quem passa reserva a largura). */
+  aviso?: ReactNode;
 }
 
-export function BarraSecao({ area, secao, atalho }: BarraSecaoProps) {
+export function BarraSecao({ area, secao, atalho, aviso }: BarraSecaoProps) {
   const { nome } = useProfileAtual();
   const { signOut } = useAuth();
   return (
@@ -72,6 +74,7 @@ export function BarraSecao({ area, secao, atalho }: BarraSecaoProps) {
           automatica e' o que o gruda a' direita, colado no nome — em vez de flutuar no meio. */}
       {atalho && <span className="ml-auto flex shrink-0 items-center">{atalho}</span>}
       <span className="flex shrink-0 items-center" style={{ gap: '8px' }}>
+        {aviso}
         <span className="max-w-[260px] truncate text-[10px] font-normal text-white/65" title={nome}>{nome}</span>
         {/* ⚠ "SAIR" PASSA A VIVER AQUI — adendo do 01c. Ele estava no rodapé da sidebar, que
             no mobile nem existe: quem operava pelo celular não tinha por onde sair. Um
