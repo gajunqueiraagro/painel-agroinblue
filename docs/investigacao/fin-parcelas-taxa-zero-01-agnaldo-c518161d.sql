@@ -1,5 +1,5 @@
 -- FIN-PARCELAS-TAXA-ZERO-01 — regeração das 80 parcelas do consórcio c518161d (cliente a2d41cda), PROPOSTA.
--- NÃO APLICADO. Roda em ENSAIO (c_aplicar = false): faz tudo, mostra antes x depois no erro final e desfaz (o RAISE reverte).
+-- NÃO APLICADO. EXIGE a migration 20261027199600 (FIN-AMORT-COMPETENCIA-VENC-01) aplicada. Roda em ENSAIO (c_aplicar = false): faz tudo, mostra antes x depois no erro final e desfaz (o RAISE reverte).
 -- Para aplicar, SÓ COM O GO DO GABRIEL: trocar c_aplicar para true (o bloco termina sem erro e a transação do canal grava).
 --
 -- O que faz, nesta ordem:
@@ -68,6 +68,17 @@ begin
   -- 2. os lançamentos, pelo escritor de sempre
   v_motor := public.fn_reconciliar_financiamento(c_fin, false, true);
 
+  -- 2b. FIN-AMORT-COMPETENCIA-VENC-01: com o motor novo as 79 amortizações criadas já nascem com a competência no vencimento;
+  --     o lançamento da parcela 1, que JÁ existia (3db22677), o motor não toca na competência — ela vai ao vencimento aqui,
+  --     pela regra do backfill (só o que não está realizado nem conciliado).
+  update public.financeiro_lancamentos_v2 l
+     set data_competencia = q.data_vencimento, updated_at = now()
+    from public.financiamento_parcelas q
+   where q.financiamento_id = c_fin and l.id = q.lancamento_id and not coalesce(l.cancelado, false)
+     and l.data_competencia is distinct from q.data_vencimento
+     and l.status_transacao not in ('realizado', 'conciliado')
+     and not exists (select 1 from public.conciliacao_bancaria_itens ci where ci.lancamento_id = l.id and ci.desfeito_em is null);
+
   -- 3. o depois
   select jsonb_build_object(
       'parcelas', count(*),
@@ -78,12 +89,16 @@ begin
       'com_lancamento_vivo', count(*) filter (where l.id is not null),
       'lanc_venc_igual_parcela', count(*) filter (where l.data_vencimento = q.data_vencimento),
       'lanc_valor_igual_parcela', count(*) filter (where round(abs(l.valor), 2) = round(q.valor_total, 2)),
+      'lanc_ano_mes_do_vencimento', count(*) filter (where l.ano_mes = to_char(q.data_vencimento, 'YYYY-MM')
+                                                       and l.data_competencia = q.data_vencimento),
+      'lanc_ano_mes_distintos', count(distinct l.ano_mes),
+      'lanc_ano_mes_de', min(l.ano_mes), 'lanc_ano_mes_ate', max(l.ano_mes),
       'status_dos_lancamentos', (select jsonb_object_agg(s, c) from (
           select l2.status_transacao s, count(*) c from public.financiamento_parcelas q2
             join public.financeiro_lancamentos_v2 l2 on l2.id = q2.lancamento_id and not coalesce(l2.cancelado, false)
            where q2.financiamento_id = c_fin and coalesce(q2.status, '') <> 'cancelado' group by 1) x),
-      'competencias_dos_lancamentos', (select jsonb_object_agg(cp, c) from (
-          select to_char(l3.data_competencia, 'YYYY-MM') cp, count(*) c from public.financiamento_parcelas q3
+      'ano_mes_dos_lancamentos', (select jsonb_object_agg(cp, c) from (
+          select l3.ano_mes cp, count(*) c from public.financiamento_parcelas q3
             join public.financeiro_lancamentos_v2 l3 on l3.id = q3.lancamento_id and not coalesce(l3.cancelado, false)
            where q3.financiamento_id = c_fin and coalesce(q3.status, '') <> 'cancelado' group by 1) y)
     ) into v_depois
@@ -103,6 +118,8 @@ begin
      or (v_depois->>'com_lancamento_vivo')::int is distinct from 80
      or (v_depois->>'lanc_venc_igual_parcela')::int is distinct from 80
      or (v_depois->>'lanc_valor_igual_parcela')::int is distinct from 80
+     or (v_depois->>'lanc_ano_mes_do_vencimento')::int is distinct from 80
+     or (v_depois->>'lanc_ano_mes_distintos')::int is distinct from 80
      or (v_depois->>'lancamentos_vivos')::int is distinct from 80 then
     raise exception 'Depois fora do esperado (nada gravado): %', v_depois;
   end if;

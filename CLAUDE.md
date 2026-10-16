@@ -2131,10 +2131,25 @@ preview que o cabecalho nao sai da tela ao rolar.
     Falhou: o contrato fica e o aviso diz (o lapis da parcela recria). Parcelamento nao passa por aqui (tem o escritor proprio).
   · DADO: o c518161d tem o script de regeracao em `docs/investigacao/fin-parcelas-taxa-zero-01-agnaldo-c518161d.sql` (ENSAIO, nao
     aplicado; aplicar so' com o GO do Gabriel). As outras 141 parcelas de mesmo caminho e as 68 do legado do NJ nao foram tocadas.
-  ⚠ O MOTOR GRAVA A COMPETENCIA DO PRINCIPAL = A DATA DO CONTRATO (`fn_reconciliar_parcela_financiamento`, a amortizacao; o juros
-    leva o vencimento): as 80 parcelas do c518161d caem todas em 2026-06. E' a regra do motor, nao deste PR (item 28).
+  ⚠ [CONSERTADO no FIN-AMORT-COMPETENCIA-VENC-01, a regra logo abaixo: a amortizacao nasce no mes do vencimento.] O motor
+    gravava a competencia do principal = a data do contrato: as 80 parcelas do c518161d cairiam todas em 2026-06.
   Testes: `src/hooks/useFinanciamentoCadastro.cronograma.test.tsx` 6 (a conta pura e o hook com banco de mentira); 5 mutacoes mortas.
   ⚠ NAO PROVADO NO NAVEGADOR: nada (cadastrar o consorcio de teste e ver a lista e o Financeiro).
+- ⚠ A AMORTIZACAO DE FINANCIAMENTO E' EVENTO DE CAIXA: COMPETENCIA E ANO_MES = O VENCIMENTO DA PARCELA (FIN-AMORT-COMPETENCIA-VENC-01,
+  Gabriel 16/10/2026; migration `supabase/migrations/20261027199600_fin_amort_competencia_venc_01.sql`, md5 do arquivo
+  2a9d14a4a4a5d65373157a2525f1d496 — APLICADA no proto em 16/10/2026 21:31 UTC com o GO do Gabriel: ledger 20261016213120
+  `fin_amort_competencia_venc_01`, ⚠ timestamp do dia; ledger = arquivo byte a byte; no banco depois: md5(prosrc) 368310fa…, ACL
+  postgres / authenticated / service_role, `anon` sem EXECUTE; o teste A1–A4 OK contra a funcao aplicada).
+  · O UNICO ESCRITOR do lancamento de amortizacao e' `fn_reconciliar_parcela_financiamento` (o cadastro, o lapis da parcela e
+    `fn_financiamento_pagar_pelo_extrato` passam por ele; `parcelaMirror` nao tem chamador). A linha `'data_competencia'` do
+    principal passa de `v_contrato.data_contrato` a `COALESCE(v_parcela.data_vencimento, v_contrato.data_contrato)` — a mesma
+    expressao do juros. Corpo integral, uma linha trocada: md5(prosrc) d8063b41… -> 368310fa…; SECURITY INVOKER e ACL iguais.
+  · VALE PARA O LANCAMENTO NOVO (criar e substituir). O QUE JA' EXISTE O MOTOR NAO TOCA (competencia nao e' campo comparado): os
+    antigos sao o backfill `docs/investigacao/fin-amort-competencia-venc-01-backfill.sql` (ENSAIO; 45 a acertar, 1 conciliado
+    fora; so' com GO, depois da homologacao — o script do c518161d tambem). DECIDIDO (Gabriel, 16/10): as 412 amortizacoes com o
+    ano_mes ja' no mes do vencimento e a competencia antiga FICAM COMO ESTAO; o conciliado e0982c1c do Agnaldo (ano_mes 2024-08,
+    vencimento 13/08/2026) NAO e' tocado — vai para a limpeza do Agnaldo no item 28.
+  Teste: `supabase/tests/fin_amort_competencia_venc_01_test.sql` (A1–A4); contra o corpo antigo cai no A1 (0 de 12).
 - ⚠ NO FINANCIAMENTO, O VALOR DO LANCAMENTO VINCULADO A' PARCELA MANDA NA PARCELA, POR UM DONO SO' NO BANCO (FIN-CONTRATO-JUROS-SYNC-01, Gabriel
   16/10/2026; migration `supabase/migrations/20261027199300_fin_contrato_juros_sync_01.sql`, md5 do arquivo 0f1bc3490bea1dfa1ab647810d65a073
   — APLICADA no proto em 16/10/2026: ledger 20261016123504 `fin_contrato_juros_sync_01`, ⚠ timestamp do dia; ledger = arquivo byte a
