@@ -924,6 +924,7 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
       <ResumoPorAtividade
         fazenda={{ id: fazendaAtual?.id ?? '', nome: fazendaAtual?.nome ?? '', codigo: fazendaAtual?.codigo }}
         clienteNome={clienteAtual?.nome ?? ''}
+        clienteId={clienteAtual?.id ?? null}
         pastos={pastos}
         fechamentos={fechamentos}
         itensMap={itensMap}

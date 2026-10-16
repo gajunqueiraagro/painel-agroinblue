@@ -18,6 +18,8 @@ import { calcUA } from '@/lib/calculos/zootecnicos';
 import type { Pasto } from '@/hooks/usePastos';
 import type { FechamentoPasto, FechamentoItem } from '@/hooks/useFechamento';
 import { useResumoPorAtividade } from '@/hooks/useResumoPorAtividade';
+import { AbaPecuaria } from '@/components/resumoAtividade/AbaPecuaria';
+import { montarPorFase, colunasDeCabecas, rebanhoDoPeriodo, linhasDoRebanho, numerosRapidos } from '@/lib/fechamento/resumoPecuaria';
 import {
   montarResumoDoMes, totalDaPecuariaDoCache, divergenciaDasFases, indicadoresDaParte, colunasDaArea,
   FASES_PECUARIA, ROTULO_FASE, ROTULO_GRUPO, GRUPOS_ATIVIDADE,
@@ -27,9 +29,6 @@ import {
 /* ── Cores do mock ──────────────────────────────────────────────────────────────────────────────── */
 const COR_GRUPO: Record<GrupoAtividade, string> = {
   pecuaria: '#1d4f86', agricultura: '#b8860b', silvicultura: '#4d7c0f', cana: '#7a9a3a', nao_produtiva: '#5f6b78',
-};
-const COR_FASE: Record<string, string> = {
-  cria: '#c0582b', recria: '#2f7a52', engorda: '#1d4f86', reforma_pecuaria: '#9a8f7a', vedado: '#c9ced6',
 };
 const COR_NAO_PRODUTIVA: Record<string, string> = { reserva: '#5f6b78', app: '#8a96a3', benfeitorias: '#3f4955' };
 const CORES_CULTURA = ['#b8860b', '#d4a937', '#8c6a12', '#e3c46a', '#6f5410'];
@@ -45,6 +44,8 @@ type Aba = 'fazenda' | 'pecuaria' | 'agricultura' | 'silvicultura' | 'cana' | 'n
 export interface ResumoPorAtividadeProps {
   fazenda: { id: string; nome: string; codigo?: string | null };
   clienteNome: string;
+  /** RESUMO-ATIVIDADE-01b: o R$ do Rebanho do mes vem do DRE do cliente */
+  clienteId?: string | null;
   pastos: readonly Pasto[];
   fechamentos: readonly FechamentoPasto[];
   itensMap: ReadonlyMap<string, readonly FechamentoItem[]>;
@@ -63,7 +64,7 @@ export function ResumoPorAtividade(props: ResumoPorAtividadeProps) {
   const { fazenda, anoMes } = props;
   const ano = Number(props.anoFiltro);
   const [aba, setAba] = useState<Aba>('fazenda');
-  const dados = useResumoPorAtividade(fazenda.id, ano, anoMes);
+  const dados = useResumoPorAtividade(fazenda.id, ano, anoMes, props.clienteId ?? null);
 
   const culturas = useMemo(() => new Map([...props.culturasPorPasto].map(([k, v]) => [k, v.culturas])), [props.culturasPorPasto]);
   const cardsDoMes: CardDoResumo[] = useMemo(() => props.fechamentos.map(f => ({
@@ -82,6 +83,14 @@ export function ResumoPorAtividade(props: ResumoPorAtividadeProps) {
     [dados.meses, props.pastos, dados.cardsDoAno]);
   const colPecuaria = useMemo(() => colunasDaArea({ meses: dados.meses, modo: 'pecuaria', pastos: props.pastos, cards: dados.cardsDoAno }),
     [dados.meses, props.pastos, dados.cardsDoAno]);
+
+  /* 01b — aba Pecuaria: tudo pronto da lib */
+  const porFase = useMemo(() => montarPorFase({ anoMes, pastos: props.pastos, cards: cardsDoMes, resumo, total, areaPecuariaHa: dados.areaPecuariaHa }),
+    [anoMes, props.pastos, cardsDoMes, resumo, total, dados.areaPecuariaHa]);
+  const colCabecas = useMemo(() => colunasDeCabecas({ meses: dados.meses, pastos: props.pastos, cards: dados.cardsDoAno, itens: dados.itensDoAno }),
+    [dados.meses, props.pastos, dados.cardsDoAno, dados.itensDoAno]);
+  const rebanho = useMemo(() => rebanhoDoPeriodo([anoMes], dados.movimentosDoAno, dados.receitasDoMes),
+    [anoMes, dados.movimentosDoAno, dados.receitasDoMes]);
 
   const g = resumo.grupos;
   const mesFechado = props.statusPorMes[props.mesFiltro] === 'fechado';
@@ -168,17 +177,14 @@ export function ResumoPorAtividade(props: ResumoPorAtividadeProps) {
       )}
 
       {aba === 'pecuaria' && (
-        <>
-          <Card titulo="Área da pecuária por fase" nota={`donut: ${mesAno(anoMes)} · colunas: % da área mês a mês`}>
-            <UsoDaArea
-              partes={FASES_PECUARIA.map(f => ({ chave: f, rotulo: ROTULO_FASE[f], areaHa: g.pecuaria.filhas.find(x => x.chave === f)?.areaHa ?? 0, cor: COR_FASE[f] }))}
-              colunas={colPecuaria} cores={COR_FASE} mesSel={anoMes} rotuloDonut={`Área da pecuária ${mesAno(anoMes)}`} />
-          </Card>
-          <Card titulo={`Por fase · ${mesAno(anoMes)}`} nota="vedado na área total · @ produzidas, GMD e custo só no total">
-            <TabelaPorFase resumo={resumo} total={total} />
-            <LinhaDivergencia divergencia={divergencia} somaFases={g.pecuaria.cab} totalCab={total.cab} />
-          </Card>
-        </>
+        <AbaPecuaria
+          rotuloMes={mesAno(anoMes).replace(/\/20(\d\d)$/, '/$1')} anoMes={anoMes}
+          areaPecuariaHa={g.pecuaria.areaHa} porFase={porFase}
+          areaPorFase={FASES_PECUARIA.map(f => ({ chave: f, rotulo: ROTULO_FASE[f], valor: g.pecuaria.filhas.find(x => x.chave === f)?.areaHa ?? 0 }))}
+          areaPorFaseTotal={g.pecuaria.areaHa}
+          colunasArea={colPecuaria} colunasCabecas={colCabecas}
+          linhasRebanho={linhasDoRebanho(rebanho)} naoFecha={rebanho.naoFecha} foraVendaGeral={rebanho.foraVendaGeral}
+          rapidos={numerosRapidos(rebanho)} erroReceitas={dados.erroReceitas} />
       )}
 
       {aba === 'agricultura' && (
@@ -405,43 +411,6 @@ function TabelaPorAtividade({ resumo, totalCab, totalPeso, totalLotacao }: {
           <td className={`${TD} ${TOT}`}>{totalPeso != null ? formatNum(totalPeso, 1) : VAZIO}</td>
           <td className={`${TD} ${TOT}`}>{uaHaFazenda != null ? formatNum(uaHaFazenda, 2) : VAZIO}</td>
         </tr>
-      </tbody>
-    </table>
-  );
-}
-
-function TabelaPorFase({ resumo, total }: { resumo: ReturnType<typeof montarResumoDoMes>; total: ReturnType<typeof totalDaPecuariaDoCache> }) {
-  const fases = ['cria', 'recria', 'engorda'].map(k => {
-    const f = resumo.grupos.pecuaria.filhas.find(x => x.chave === k)!;
-    return { f, i: indicadoresDaParte(f) };
-  });
-  const T = 'bg-[#dfe4ea] text-[11px] font-bold text-[#1b2533]';
-  const v = (x: number | null, dec: number, un = '') => (x == null ? VAZIO : `${formatNum(x, dec)}${un}`);
-  const linhas: Array<{ rotulo: string; fases: React.ReactNode[]; total: React.ReactNode }> = [
-    { rotulo: 'Cabeças', fases: fases.map(({ f }) => formatNum(f.cab)), total: v(total.cab, 0) },
-    { rotulo: 'Peso médio (kg)', fases: fases.map(({ i }) => v(i.pesoMedio, 1, ' kg')), total: v(total.pesoMedio, 1, ' kg') },
-    { rotulo: 'Área (ha)', fases: fases.map(({ f }) => `${formatNum(f.areaHa, 1)} ha`), total: `${formatNum(resumo.grupos.pecuaria.areaHa, 1)} ha` },
-    { rotulo: 'Lotação UA/ha', fases: fases.map(({ i }) => v(i.lotacao, 2)), total: v(total.lotacao, 2) },
-    { rotulo: '@ em estoque', fases: fases.map(({ i }) => v(i.arrobasEstoque, 1, ' @')), total: v(total.arrobasEstoque, 1, ' @') },
-    { rotulo: '@ produzidas', fases: fases.map(() => VAZIO), total: v(total.arrobasProduzidas, 1, ' @') },
-    { rotulo: 'GMD kg', fases: fases.map(() => VAZIO), total: v(total.gmd, 3) },
-    { rotulo: 'Custo por @ prod.', fases: fases.map(() => VAZIO), total: <span className="text-[#b0b8c2]">R$ —</span> },
-  ];
-  return (
-    <table className="w-full border-collapse" data-testid="tabela-por-fase">
-      <thead><tr>
-        <th className={TH_L}>Indicador</th>
-        {fases.map(({ f }) => <th key={f.chave} className={TH}>{f.rotulo}</th>)}
-        <th className={`${TH} ${T}`}>Pecuária</th>
-      </tr></thead>
-      <tbody>
-        {linhas.map(l => (
-          <tr key={l.rotulo}>
-            <td className={`${TD_L} font-medium`}>{l.rotulo}</td>
-            {l.fases.map((c, i) => <td key={i} className={TD}>{c}</td>)}
-            <td className={`${TD} ${T}`}>{l.total}</td>
-          </tr>
-        ))}
       </tbody>
     </table>
   );

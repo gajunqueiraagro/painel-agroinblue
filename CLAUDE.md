@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 16/10/2026 (FIN-CONTRATO-JUROS-SYNC-01, +1: `src/components/financiamentos/lancamentoDaParcelaSync.test.tsx` 1 (novo) — 5459 depois dele; antes o
+  Baseline em 16/10/2026 (RESUMO-ATIVIDADE-01b, +20: `src/lib/fechamento/resumoPecuaria.test.ts` 16 (novo), `src/components/resumoAtividade/abaPecuaria.test.tsx` 4 (novo) — 5479 depois dele; antes o
+  FIN-CONTRATO-JUROS-SYNC-01, +1: `src/components/financiamentos/lancamentoDaParcelaSync.test.tsx` 1 (novo) — 5459 depois dele; antes o
   RESUMO-CLIENTES-01 passo b, +10: `src/components/consultor/esteiraDoMes.test.tsx` 10 (novo) — 5458 depois dele; antes o
   RESUMO-CLIENTES-01 passo a, +11: `src/components/consultor/resumoClientes.test.tsx` 11 (novo) — 5448 depois dele; antes o
   FECH-MES-SELECIONADO-01, +6: `src/hooks/usePeriodoDaTela.test.tsx` 6 (novo) — 5437 depois dele; antes o
@@ -348,7 +349,7 @@ no mesmo arquivo.
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
   `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5327
-  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01], 22 skipped, e
+  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b], 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -2234,6 +2235,30 @@ preview que o cabecalho nao sai da tela ao rolar.
   segunda linha. Fotos em ~/Downloads/resumo-atividade-01a/.
   ⚠ NAO PROVADO: a tela real no navegador com login (so' a bancada) · outro cliente / fazenda com silvicultura ou cana · perfil nao
     admin · mes aberto e mes sem snapshot de area (lotacao do total "—").
+- ⚠ A ABA PECUARIA DO RESUMO POR ATIVIDADE: LOTACAO POR FASE PELO DONO DA 01a, VEDADO PELO CADASTRO, REBANHO DO MES DO CACHE E R$ DO DRE
+  (RESUMO-ATIVIDADE-01b, Gabriel 16/10/2026, so' tela, sem banco; mock `docs/mocks/mock-resumo-atividade-01b-v3.html`). Regras puras em
+  `src/lib/fechamento/resumoPecuaria.ts`; a tela (`src/components/resumoAtividade/AbaPecuaria.tsx`) so' desenha (sem `reduce`, preso
+  por teste); as leituras novas moram em `useResumoPorAtividade` (itens do ano, cache com movimentos nos dois cenarios, DRE do mes).
+  · POR FASE (cria/recria/engorda) o DONO e' o da 01a (card do mes + `fechamento_pasto_itens`): EFETIVA = UA da fase ÷ area OCUPADA
+    (pastos com `tipo_uso_mes` = a fase); GLOBAL = UA ÷ (ocupada + NAO OCUPADA). NAO OCUPADA = pasto do mes com `tipo_uso_mes` vedado ou
+    reforma_pecuaria, atribuido a' fase pela ATIVIDADE DO CADASTRO (`pastos.tipo_uso`); cadastro fora de cria/recria/engorda entra so' na
+    coluna Pecuaria (`vedadaForaDasFases`, dito no rodape). % vedado = nao ocupada ÷ (ocupada + nao ocupada). Lotacao = peso ÷ 450 ÷ area.
+  · COLUNA PECUARIA = o cache (`totalDaPecuariaDoCache`): efetiva = UA total ÷ Σ ocupada; global = UA total ÷ `area_pecuaria_ha` do
+    snapshot. AS DUAS DIVERGENCIAS (Σ fases x cache, cabecas e peso) saem no rodape, NUNCA ajustadas. PUR set/26: efetiva 1,37/1,16/4,83/1,45;
+    global 1,13/1,04/2,28/1,17; % vedado 17,3/10,0/52,8/19,4; cab 5.871 x 5.872; peso ≈1.813,7 x ≈1.746,3 mil kg.
+  · REBANHO DO MES (`rebanhoDoPeriodo(meses, cache, receitas)`): cab do `zoot_mensal_cache`, realizado E meta, somado por mes (todas as
+    categorias): inicio = saldo_inicial do 1o mes COM cache no cenario; nascimentos; compras + transf. entrada; abate; venda + venda em pe;
+    consumo; mortes; transf. saida (a linha so' aparece com valor); fim = saldo_final do ultimo mes com cache. A conta que nao fecha sai no
+    rodape. A lista de meses ja' serve ao Acumulado (`mesesDoAcumulado`: civil jan..mes, safra jul..mes), que segue desligado na tela.
+  · R$ (realizado E meta, a MESMA fonte): as linhas da fazenda em `fn_dre_pecuaria(cliente, mes, mes, cenario)` — bloco 'venda', centro
+    "Abates" = abate, "Venda Peso Vivo" = venda; "Venda Geral" (nao e' gado) fica FORA e o rodape diz quanto. NUNCA o liquido do conta
+    corrente da OC. PUR set/26: realizado abate 415.242,10 (o bruto) e venda 335.031,00; meta abate 488.217,60 e venda 0.
+  · NUMEROS RAPIDOS: mortalidade = mortes ÷ inicio; desfrute = (abate + venda) ÷ inicio; R$/cab = R$ ÷ cab do cache; R$/@ venda = R$ venda ÷
+    (peso de venda do cache ÷ 30), PUR set/26 264,77; nascimentos x meta = realizado ÷ meta − 1. Sem fonte = "—".
+  · COR DA DIFERENCA pelo efeito (`tomDaDiferenca`): mais nascimento, mais fim e menos morte = verde; menos abate / venda = vermelho;
+    consumo, inicio e compras neutros.
+  ⚠ NAO PROVADO NO NAVEGADOR: nada (a tela com login, os cards empilhando abaixo de ~1100px, larguras e alturas renderizadas, o DRE pela
+    tela) · a leitura dos itens do ano (juncao paginada) com dado real · os numeros do DRE do mes so' foram medidos na FASE 0.
 - ⚠ O LEGADO DE 2025 DA FAZ. PUREZA ESTA' POR PASTO, CONFORME A PLANILHA DO CAMPEIRO (LEGADO-POR-PASTO-01, Gabriel 15/10/2026; migration
   de DADOS `supabase/migrations/20261027198900_legado_por_pasto_pur_2025.sql`, md5 do arquivo c6c3b793376ceadbea0a58468711c3f5, 143.424
   bytes — APLICADA no proto em 15/10/2026 com o OK condicional do Gabriel, pelo `supabase db query --linked` (project-ref conferido =
