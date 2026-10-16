@@ -149,7 +149,7 @@ describe('a ligação no shell', () => {
   const cc = readFileSync('src/contexts/ClienteContext.tsx', 'utf8');
   it('no painel nenhuma tela de cliente é montada; o ⚑ só para admin; trocar de cliente desliga o modo', () => {
     expect(v2).toContain('const modoResumo = isAdmin && resumoClientes;');
-    expect(v2).toContain('{modoResumo ? <ResumoClientesPainel /> : semAcesso ? (');
+    expect(v2).toContain('{modoResumo ? painelDoResumo : semAcesso ? (');
     expect(v2).toContain('const avisoDoConsultor = isAdmin ? (modoResumo');
     expect(cc).toMatch(/const setClienteAtual = \(c: Cliente\) => \{[\s\S]{0,120}setResumoLigado\(false\);/);
     expect(cc).toContain('resumoClientes: isAdmin && resumoLigado');

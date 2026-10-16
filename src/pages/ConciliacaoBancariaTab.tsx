@@ -29,7 +29,7 @@ import { format, parseISO } from 'date-fns';
 import { belongsToConta, saldoConfere } from '@/lib/financeiro/conciliacaoCalc';
 import { useResumoMes, useStatusAno, invalidarDono, useReleDonoAoVoltarAVista } from '@/hooks/useResumoConciliacao';
 import {
-  ROTULO_STATUS, frasesDoStatus, fraseFaltaSaldo, fraseDoRetido, fraseSemConta, contasParaFecharSemMovimento,
+  ROTULO_STATUS, STATUS_COR, frasesDoStatus, fraseFaltaSaldo, fraseDoRetido, fraseSemConta, contasParaFecharSemMovimento,
   saldosDaLinha, marcaDoPar, diferencaNaPosicao, TITULO_DIFERENCA_NA_POSICAO_INDISPONIVEL,
   frasesDosAvisos, marcaDeAviso, semClassificacaoDaLinha, semFornecedorDaLinha,
   type SemClassificacao,
@@ -122,11 +122,7 @@ const MESES_LABELS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out
 /** Inline colors — avoids CSS class conflicts with host */
 /* ⚠ AS CHAVES SÃO O STATUS DO DONO — PR-CONC-SALDO-UMA-REGUA-02: 'conciliado' (era 'realizado', o nome do status de
    lançamento que a tela emprestava), 'nao_conciliado', 'pendente'. 'parcial' SAIU: o dono não o tem. Cores iguais. */
-const STATUS_COR: Record<StatusDono, {bg:string;border:string;txt:string}> = {
-  conciliado:     {bg:'#EAF3DE', border:'#66BB6A', txt:'#2E7D32'},
-  nao_conciliado: {bg:'#FCEBEB', border:'#E57373', txt:'#A32D2D'},
-  pendente:       {bg:'#F5F5F5', border:'#BDBDBD', txt:'#757575'},
-};
+/* RESUMO-CLIENTES-01 passo b — a paleta mora no dono (`resumoDoDono.ts`); a esteira do consultor lê a mesma. */
 
 /**
  * "falta saldo · N conta(s)" no lugar do "—" da DIFERENÇA de um agregado — CONC-TOTAL-SEM-SALDO-01b. A frase e o `title` (os nomes

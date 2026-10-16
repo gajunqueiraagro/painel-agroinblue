@@ -10,6 +10,8 @@ import type { Lancamento } from '@/types/cattle';
 import { usePermissions } from '@/hooks/usePermissions';
 import { ClienteSelector } from '@/components/ClienteSelector';
 import { ResumoClientesPainel } from '@/components/consultor/ResumoClientesPainel';
+import { EsteiraDoMes, type EtapaDaEsteira } from '@/components/consultor/EsteiraDoMes';
+import { mesDaCobranca } from '@/lib/consultor/esteira';
 import { AvisoPendenciasCliente, LARGURA_DO_AVISO } from '@/components/consultor/AvisoPendenciasCliente';
 import { FazendaSelector } from '@/components/FazendaSelector';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -463,6 +465,15 @@ export default function V2Index() {
   /* FECH-MES-SELECIONADO-01 — o mês do Fechamento, do Resumo por Atividade e do Mapa de Pastos É o ano/mês do shell (sem cópia). */
   const periodoDoFechamento = { ano, mes: mesVisivel };
   const mudarPeriodoDoFechamento = (a: string, m: number) => { setAno(a); setMes(String(m)); };
+  /* RESUMO-CLIENTES-01 passo b — a aba do painel e o mês DA ESTEIRA (o da cobrança, o anterior ao de hoje; NÃO o do shell), aqui
+     para sobreviverem à ida a uma etapa e à volta. `voltaAoResumoRef` = o mês da esteira de onde o operador saiu (a seta das três
+     telas da etapa volta para lá); `periodoForcadoRef` = o mês que a troca de cliente deve respeitar. */
+  const [abaResumo, setAbaResumo] = useState<'esteira' | 'pendencias'>('esteira');
+  const [mesDaEsteira, setMesDaEsteira] = useState(() => mesDaCobranca());
+  const [filtroPendencias, setFiltroPendencias] = useState<string | null>(null);
+  const voltaAoResumoRef = useRef<string | null>(null);
+  const periodoForcadoRef = useRef<{ ano: string; mes: string } | null>(null);
+  const abaAoEntrarRef = useRef<'esteira' | 'pendencias' | null>(null);
   // Período do Fechamento — state global para sobreviver à navegação entre
   // seções. Default vazio; V2FechamentoPeriodo popula via calcularDefaultPeriodo
   // assim que statusPilDefault + fazendasComPecuaria carregam.
@@ -848,7 +859,7 @@ export default function V2Index() {
     }
   }, [section]); // eslint-disable-line react-hooks/exhaustive-deps
   const rotulo = rotuloDaSecao(section);
-  const { clientes, clienteAtual, isAdmin, resumoClientes, setResumoClientes } = useCliente();
+  const { clientes, clienteAtual, setClienteAtual, isAdmin, resumoClientes, setResumoClientes } = useCliente();
   const { fazendas, isGlobal, setFazendaAtual } = useFazenda();
   const { canEditMeta } = usePermissions();
 
@@ -871,8 +882,19 @@ export default function V2Index() {
     if (sectionRef.current === 'home') setSection(primeiraPermitida);
   }, [clienteAtual?.id, perfilAcesso, isAdmin, primeiraPermitida]);
 
+  /* RESUMO-CLIENTES-01 passo b — entrar no "Resumo dos clientes" abre a Esteira (ou a aba que o gesto pediu). */
+  useEffect(() => {
+    if (!resumoClientes) return;
+    setAbaResumo(abaAoEntrarRef.current ?? 'esteira');
+    abaAoEntrarRef.current = null;
+    voltaAoResumoRef.current = null;
+  }, [resumoClientes]);
+
   useEffect(() => {
     if (!clienteAtual?.id) return;
+    /* vindo da esteira: o mês é o da esteira, não o último fechado do cliente */
+    const forcado = periodoForcadoRef.current;
+    if (forcado) { periodoForcadoRef.current = null; setAno(forcado.ano); setMes(forcado.mes); return; }
     (async () => {
       const { data } = await supabase
         .from('fechamento_pastos')
@@ -918,6 +940,27 @@ export default function V2Index() {
   /* Volta para a origem registrada, consumindo o ref. Usado pelos dois destinos da
      faixa — sem os DOIS consumidores o ref vazaria: quem chegasse ao Valor do Rebanho
      pelo menu voltaria para a Home. */
+  /* RESUMO-CLIENTES-01 passo b — a bolinha da esteira: troca o cliente (desliga o modo), põe o mês do shell = o da esteira e abre a
+     tela da etapa; a seta da tela volta para a esteira, no mesmo mês. */
+  const abrirEtapaDaEsteira = (clienteId: string, etapa: EtapaDaEsteira) => {
+    const c = clientes.find(x => x.id === clienteId);
+    if (!c) return;
+    const a = mesDaEsteira.slice(0, 4); const m = String(Number(mesDaEsteira.slice(5, 7)));
+    if (c.id !== clienteAtual?.id) { periodoForcadoRef.current = { ano: a, mes: m }; setClienteAtual(c); }
+    else setResumoClientes(false);
+    setAno(a); setMes(m);
+    setDrawerAtivo(null);
+    setSection(etapa === 'p1' ? 'fechamento' : etapa === 'p2' ? 'valor-rebanho' : 'conciliacao');
+    voltaAoResumoRef.current = mesDaEsteira;
+  };
+  const voltarAoResumo = () => {
+    const m = voltaAoResumoRef.current;
+    voltaAoResumoRef.current = null;
+    if (m) setMesDaEsteira(m);
+    abaAoEntrarRef.current = 'esteira';
+    setResumoClientes(true);
+  };
+
   const voltarParaOrigem = (): V2Section | null => {
     const o = origemPendenciaRef.current;
     origemPendenciaRef.current = null;
@@ -961,6 +1004,10 @@ export default function V2Index() {
     if (section === 'auditoria-anual') return <V2AuditoriaAnual ano={ano} onAnoChange={setAno} />;
     if (section === 'conciliacao') return (
       <ConciliacaoBancariaTab
+        /* RESUMO-CLIENTES-01 passo b — vindo da esteira: o mês dela e a seta de volta ao painel (props que a tela já tinha) */
+        onBack={voltaAoResumoRef.current ? voltarAoResumo : undefined}
+        initialAno={voltaAoResumoRef.current ? ano : undefined}
+        initialMes={voltaAoResumoRef.current ? String(mesVisivel).padStart(2, '0') : undefined}
         /* ⚠ `'08'`, NÃO `8` — dívida do B-26, paga aqui. A prop é `string` e o
            `selectedMes` é comparado com `c.mes`, que nasce
            `String(m).padStart(2,'0')` (`ConciliacaoBancariaTab:183`). Um
@@ -1097,11 +1144,13 @@ export default function V2Index() {
                quando quem a chamou sabia o ano. É o mesmo idioma de `MapaPastosTab` e
                `AnaliseEconomica`. Ela só é lida na MONTAGEM, e basta — a section remonta. */
             filtroAnoInicial={String(ano)}
+            /* RESUMO-CLIENTES-01 passo b — vindo da esteira, também o mês dela */
+            filtroMesInicial={voltaAoResumoRef.current ? mesVisivel : undefined}
             /* ⚠ A SETA SÓ EXISTE QUANDO HÁ ORIGEM PARA VOLTAR — VALOR-REBANHO-COMPACTO-01. O
                `onBack` era passado SEMPRE, então quem chegava pelo menu via um "voltar" que caía na
                Home: um caminho que ele não percorreu. É o mesmo idioma que a faixa de pendências já
                usa logo abaixo. */
-            onBack={origemPendenciaRef.current
+            onBack={voltaAoResumoRef.current ? voltarAoResumo : origemPendenciaRef.current
               ? () => { const o = voltarParaOrigem(); setSection(o ?? 'rebanho-home'); }
               : undefined}
           />
@@ -1323,7 +1372,7 @@ export default function V2Index() {
     if (section === 'fechamento') return (
       <FechamentoTab
         periodo={periodoDoFechamento} onPeriodoChange={mudarPeriodoDoFechamento}
-        onBack={origemPendenciaRef.current
+        onBack={voltaAoResumoRef.current ? voltarAoResumo : origemPendenciaRef.current
           ? () => { const o = voltarParaOrigem(); if (o) setSection(o); }
           : undefined}
         onNavigateToReclass={(filtro) => {
@@ -1511,16 +1560,22 @@ export default function V2Index() {
      seletor de fazenda some e o menu do cliente vira a aba do painel. */
   const modoResumo = isAdmin && resumoClientes;
   const fazendaSelector = fazendas.length > 1 && !modoResumo ? <FazendaSelector /> : undefined;
-  const menuDoPainel = modoResumo ? (
-    <button type="button" data-testid="aba-pendencias"
-      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs font-medium text-left bg-primary-foreground/15 text-primary-foreground">
-      <span className="min-w-0 truncate">Pendências</span>
+  const abaDoPainel = (id: 'esteira' | 'pendencias', rotuloAba: string) => (
+    <button key={id} type="button" data-testid={`aba-${id}`} onClick={() => { setAbaResumo(id); if (id === 'esteira') setFiltroPendencias(null); }}
+      className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-xs font-medium text-left ${abaResumo === id
+        ? 'bg-primary-foreground/15 text-primary-foreground' : 'text-primary-foreground/70 hover:bg-primary-foreground/10 hover:text-primary-foreground'}`}>
+      <span className="min-w-0 truncate">{rotuloAba}</span>
     </button>
-  ) : undefined;
+  );
+  const menuDoPainel = modoResumo ? <>{abaDoPainel('esteira', 'Esteira do mês')}{abaDoPainel('pendencias', 'Pendências')}</> : undefined;
+  const painelDoResumo = abaResumo === 'esteira'
+    ? <EsteiraDoMes mes={mesDaEsteira} onMes={setMesDaEsteira} clientes={clientes} onAbrirEtapa={abrirEtapaDaEsteira}
+        onVerPendencias={(id) => { setFiltroPendencias(id); setAbaResumo('pendencias'); }} />
+    : <ResumoClientesPainel filtroCliente={filtroPendencias} onLimparFiltro={() => setFiltroPendencias(null)} />;
   const avisoDoConsultor = isAdmin ? (modoResumo
     ? <span className="shrink-0" style={{ width: LARGURA_DO_AVISO }} aria-hidden />
     : <AvisoPendenciasCliente cliente={clienteAtual ? { id: clienteAtual.id, nome: clienteAtual.nome } : null}
-        onVerNoResumo={() => { setDrawerAtivo(null); setResumoClientes(true); }} />) : undefined;
+        onVerNoResumo={() => { setDrawerAtivo(null); setFiltroPendencias(clienteAtual?.id ?? null); abaAoEntrarRef.current = 'pendencias'; setResumoClientes(true); }} />) : undefined;
 
   /* ⚠ SAIR DE "LANCAR MOVIMENTACAO" COM OC ABERTA LIMPA OS `oc_*` — ATALHOS-PRODUCAO-01, decisao do
      Gabriel. Pelo menu e pelo atalho, o mesmo limpador do fechar da OC (`semParamsOC`). Sem isto,
@@ -1542,11 +1597,13 @@ export default function V2Index() {
      MENU LATERAL, e iam direto a `setSection` — escapavam da limpeza. Passam por aqui, e so' ganham
      isso: nada mais do `handleSelect` (drawer, intensivo, origem do mapa) muda para eles. */
   function navegarPeloMenu(s: V2Section) {
+    voltaAoResumoRef.current = null;
     limparOCAoSairDoLancar(s);
     setSection(s);
   }
 
   function handleSelect(s: V2Section) {
+    voltaAoResumoRef.current = null;
     limparOCAoSairDoLancar(s);
     setSection(s);
     setDrawerAtivo(null);
@@ -1624,7 +1681,7 @@ export default function V2Index() {
             `bg-card` para ler sobre a barra azul. ABAIXO DE md ELE SOME (`hidden md:inline-flex`):
             tres rotulos nao cabem numa barra de 32px no celular, e a regra e' nao quebrar a barra em
             duas linhas. */}
-        <BarraSecao area={modoResumo ? 'Resumo dos clientes' : rotulo.area} secao={modoResumo ? 'Pendências' : rotulo.secao}
+        <BarraSecao area={modoResumo ? 'Resumo dos clientes' : rotulo.area} secao={modoResumo ? (abaResumo === 'esteira' ? 'Esteira do mês' : 'Pendências') : rotulo.secao}
           aviso={avisoDoConsultor}
           atalho={(() => {
             if (modoResumo) return undefined;
@@ -1691,7 +1748,7 @@ export default function V2Index() {
           }>
             {/* ⚠ A GUARDA DA ROTA, NUM PONTO SO' — ACESSOS-02a. Qualquer `section` com nivel 'nao' para a pessoa (endereco
                 digitado, parametro de URL, `sessionStorage`, navegacao interna de outra tela) desenha o aviso, NUNCA a tela. */}
-            {modoResumo ? <ResumoClientesPainel /> : semAcesso ? (
+            {modoResumo ? painelDoResumo : semAcesso ? (
               <V2SemAcesso primeira={primeiraPermitida
                 ? { rotulo: rotuloDaSecao(primeiraPermitida).secao, ir: () => navegarPeloMenu(primeiraPermitida) }
                 : null} />

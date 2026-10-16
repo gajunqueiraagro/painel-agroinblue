@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 16/10/2026 (RESUMO-CLIENTES-01 passo a, +11: `src/components/consultor/resumoClientes.test.tsx` 11 (novo) — 5448 depois dele; antes o
+  Baseline em 16/10/2026 (RESUMO-CLIENTES-01 passo b, +10: `src/components/consultor/esteiraDoMes.test.tsx` 10 (novo) — 5458 depois dele; antes o
+  RESUMO-CLIENTES-01 passo a, +11: `src/components/consultor/resumoClientes.test.tsx` 11 (novo) — 5448 depois dele; antes o
   FECH-MES-SELECIONADO-01, +6: `src/hooks/usePeriodoDaTela.test.tsx` 6 (novo) — 5437 depois dele; antes o
   FIN-LR-SYNC-01 passo c, +15: `src/v2/lib/lucroRural/pastaLr.test.ts` 5 (novo), `src/components/lucroRural/pastaDownloadsLr.test.tsx` 10
   (novo) — 5431 depois dele; antes o FIN-LR-SYNC-01 passo b, +10: `src/components/lucroRural/telaAtualizarLr.test.tsx` 10 (novo) — 5416 depois dele; antes o
@@ -346,7 +347,7 @@ no mesmo arquivo.
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
   `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5327
-  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a], 22 skipped, e
+  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b], 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -2137,6 +2138,37 @@ preview que o cabecalho nao sai da tela ao rolar.
   Testes: `src/components/consultor/resumoClientes.test.tsx` 11; 2 mutacoes mortas.
   ⚠ NAO PROVADO NO NAVEGADOR: nada (a entrada no seletor, o painel, o ⚑ e o modal, Cobrei/Resolvida gravando de verdade, nj@ sem ver).
     No celular a barra de baixo segue trocando de secao por baixo do painel.
+  · PASSO b — A "ESTEIRA DO MÊS" (Gabriel 16/10/2026, so' tela, sem migration): primeira aba do painel e a que abre ao entrar no modo
+    (`EsteiraDoMes.tsx`; regras puras em `src/lib/consultor/esteira.ts`). Um cliente por linha: Cliente (nome + fazendas · N cab, uma
+    linha) | Pasto P1 | Valor reb. | Conciliação | Fechamento | Próximo passo · o que trava; linhas de 22px, colunas em px (so' o
+    Proximo passo estica), cabecalho navy e rodape "N ok · M faltam" presos. RENDER-ONLY, cada cliente em PARALELO (React Query),
+    cada celula com o proprio "…" e o proprio "?" (o erro no `title`; um cliente nao derruba os outros):
+      P1 / Valor reb. = `get_status_pilares_ano(cliente, ano)` por fazenda; "nao_aplicavel" nao conta; todas 'oficial' = ✓, alguma
+        'oficial' ou 'pendente' = ● "k de n faz.", nenhuma = –. ⚠ 'pendente' (cards existem, nem todos fechados) com zero 'oficial'
+        tambem e' ● — o briefing dizia "nenhuma ✓ → –"; interpretado como "em andamento", a homologar;
+      data do ✓: so' o Valor reb., pelo `fechado_em` de `valor_rebanho_fechamento` (a tabela dona do p2), e so' quando TODAS as
+        fazendas que contam tem carimbo (a mais recente); o P1 nao tem carimbo de fechamento (`fechamento_pastos` so' tem
+        created/updated_at): ✓ sem data;
+      Conciliação = `fn_conciliacao_resumo_mes`, linha `total`, pela MESMA consulta da Conciliacao (`consultaDoResumoMes`, extraida
+        de `useResumoMes`: a esteira divide o cache dela) e a MESMA cor (`STATUS_COR`, movida verbatim de `ConciliacaoBancariaTab`
+        para `resumoDoDono.ts`); não conciliado mostra a diferenca; pendente = –;
+      Fechamento = "—" para todos (`title` "ainda sem registro de entrega");
+      cabeças = soma do `saldo_final` de `zoot_mensal_cache` (realizado) do mes, por cliente.
+    Ordem: mais etapas nao ✓, depois a travada mais a' esquerda, depois o nome. Proximo passo = a primeira etapa nao ✓ ("fechar
+    pastos (fazendas)", "valor do rebanho (…)", "conciliar (−506,51)"), "pronto para fechar" com tudo ✓, e " · ⚑ N" (pendencias
+    nao resolvidas) que abre a aba Pendencias filtrada pelo cliente. Clientes: TODOS os do admin, o "Teste Cliente" inclusive —
+    `clientes` nao tem marca de teste (so' `ativo`, `slug`, `config` vazio).
+  · O MES DA ESTEIRA NAO E' O DO SHELL: `mesDaEsteira` no `V2Index`, padrao = o anterior ao de hoje (`mesDaCobranca`), ◀ ▶, "dia N da
+    cobrança" so' nele; cache por mes, relido ao voltar ao painel (invalida as chaves da esteira e o dono da conciliacao).
+  · CLIQUE NA BOLINHA (`abrirEtapaDaEsteira`): troca o cliente (desliga o modo), poe o mes do shell = o da esteira (a troca de cliente
+    respeita esse mes por `periodoForcadoRef` em vez do "ultimo mes fechado") e abre P1 -> Fechamento Área, Valor reb. -> Valor do
+    Rebanho (com `filtroMesInicial`), Conciliação -> Conciliação (`initialAno`/`initialMes`). A VOLTA e' a seta `onBack` que as tres
+    telas ja' tinham (`voltaAoResumoRef` -> `voltarAoResumo`: religa o modo na Esteira, no mesmo mes); menu ou drawer apagam a origem.
+    ⚠ So' o Fechamento tem o lugar reservado do Voltar; na Conciliação e no Valor do Rebanho a seta e' condicional (a divida
+      UI-LUGAR-RESERVADO-VARREDURA-01): ela aparece e empurra o resto da barra.
+  Testes do passo b: `src/components/consultor/esteiraDoMes.test.tsx` 10; 2 mutacoes mortas. `acessoTelas.test.tsx` e
+  `resumoClientes.test.tsx` trocados ao contrato novo (o ramo do painel virou `painelDoResumo`).
+  ⚠ NAO PROVADO NO NAVEGADOR: a esteira com os clientes reais, o clique abrindo cada etapa no mes certo e a seta de volta.
 - ⚠ O MES DO FECHAMENTO, DO RESUMO POR ATIVIDADE E DO MAPA DE PASTOS E' O ANO/MES DO SHELL (FECH-MES-SELECIONADO-01, Gabriel 16/10/2026, so'
   tela). Nasce do relato: escolhido ago/26 no Fechamento, ir ao Resumo ou ao Mapa e voltar abria em outubro — Fechamento e Mapa sao
   secoes separadas do `V2Index` e cada montagem recomecava em `new Date()`. DECISAO DO GABRIEL (pergunta de 16/10): REUSAR o `ano`/`mes`

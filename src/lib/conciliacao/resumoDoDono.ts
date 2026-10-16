@@ -319,6 +319,13 @@ export function lerStatusAno(dado: unknown): StatusAnoDono[] {
 
 /* ── o que a tela escreve ─────────────────────────────────────────────────────── */
 
+/** As cores do status do mês (o card, a régua, os saldos) — movidas de `ConciliacaoBancariaTab` (RESUMO-CLIENTES-01 passo b). */
+export const STATUS_COR: Record<StatusDono, {bg:string;border:string;txt:string}> = {
+  conciliado:     {bg:'#EAF3DE', border:'#66BB6A', txt:'#2E7D32'},
+  nao_conciliado: {bg:'#FCEBEB', border:'#E57373', txt:'#A32D2D'},
+  pendente:       {bg:'#F5F5F5', border:'#BDBDBD', txt:'#757575'},
+};
+
 export const ROTULO_STATUS: Record<StatusDono, string> = {
   conciliado: 'Conciliado',
   nao_conciliado: 'Não Conciliado',

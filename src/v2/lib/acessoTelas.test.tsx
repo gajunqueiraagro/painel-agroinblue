@@ -355,7 +355,7 @@ describe('a rota (V2Index, lida da FONTE) e a decisao que ela consulta', () => {
   it('um ponto so de decisao: `renderContent()` e chamada UMA vez, e so no ramo de quem tem acesso', () => {
     expect(fonte.match(/renderContent\(\)/g)).toHaveLength(2);          // a declaracao e a UNICA chamada
     expect(fonte).toContain("const semAcesso = nivelDaTela(perfilAcesso, isAdmin, section) === 'nao';");
-    expect(fonte.replace(/\s+/g, ' ')).toMatch(/\{modoResumo \? <ResumoClientesPainel \/> : semAcesso \? \( <V2SemAcesso primeira=\{primeiraPermitida \? \{ rotulo: rotuloDaSecao\(primeiraPermitida\)\.secao, ir: \(\) => navegarPeloMenu\(primeiraPermitida\) \} : null\} \/> \) : renderContent\(\)\}/);
+    expect(fonte.replace(/\s+/g, ' ')).toMatch(/\{modoResumo \? painelDoResumo : semAcesso \? \( <V2SemAcesso primeira=\{primeiraPermitida \? \{ rotulo: rotuloDaSecao\(primeiraPermitida\)\.secao, ir: \(\) => navegarPeloMenu\(primeiraPermitida\) \} : null\} \/> \) : renderContent\(\)\}/);
   });
   it('a tela inicial: o efeito leva a primeira permitida quem esta na home (e so quem esta nela), e nao mexe com o admin', () => {
     const f = fonte.replace(/\s+/g, ' ');

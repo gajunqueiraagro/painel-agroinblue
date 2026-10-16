@@ -26,10 +26,18 @@ export function useResumoMes(
   clienteId: string | null | undefined, anoMes: string, contaIds: readonly string[] | null,
   opcoes?: { servirDoCache?: boolean },
 ) {
-  const contas = contaIds ? [...contaIds].sort() : null;
   return useQuery({
-    queryKey: [CHAVE_RESUMO_MES, clienteId, anoMes, contas],
+    ...consultaDoResumoMes(clienteId, anoMes, contaIds),
     ...(opcoes?.servirDoCache ? { staleTime: 60_000 } : {}),
+  });
+}
+
+/** A chave e a leitura do resumo do mês — UMA definição, usada por `useResumoMes` e pela esteira do consultor (RESUMO-CLIENTES-01
+ *  passo b, `useQueries`), que assim divide o MESMO cache da Conciliação. */
+export function consultaDoResumoMes(clienteId: string | null | undefined, anoMes: string, contaIds: readonly string[] | null) {
+  const contas = contaIds ? [...contaIds].sort() : null;
+  return {
+    queryKey: [CHAVE_RESUMO_MES, clienteId, anoMes, contas],
     enabled: !!clienteId && /^\d{4}-\d{2}$/.test(anoMes) && (contas === null || contas.length > 0),
     queryFn: async (): Promise<LinhaResumo[]> => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
@@ -39,7 +47,7 @@ export function useResumoMes(
       if (error) throw error;
       return lerResumo(data);
     },
-  });
+  };
 }
 
 export function useStatusAno(clienteId: string | null | undefined, ano: number) {
