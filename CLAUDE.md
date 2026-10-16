@@ -825,8 +825,8 @@ Quem retomar uma delas LE O BLOCO INTEIRO antes: a medicao e a decisao pendente 
   Gabriel; migration `20261027198000_dado_2448e772_competencia_01.sql`, md5 fc6db770…, ⚠ registrada como 20261014183644; ledger
   = arquivo): o recebimento 2448e772 voltou a competencia 10/06/2026 (ano_mes 2026-06 pelo gatilho; era 2026-07 antes do
   vinculo errado a' OC 1645ba75) e a `movimentacao_rebanho_id` 5e92f3b2; trilha em `audit_log` 'restaurar_competencia'; teste
-  `supabase/tests/dado_2448e772_competencia_01_test.sql` OK no vivo · o defeito de origem (o desvincular que nao restaura sem
-  snapshot e nao devolve a `movimentacao_rebanho_id`) NAO foi corrigido ·
+  `supabase/tests/dado_2448e772_competencia_01_test.sql` OK no vivo · [o defeito de origem (o desvincular que nao restaura sem
+  snapshot e nao devolve a `movimentacao_rebanho_id`) FECHOU no OC-DESVINCULAR-COMPETENCIA-01 — ver a regra "DESVINCULAR DEVOLVE"] ·
   MANDIOCA-OBS-CARGA-01: a observacao da carga (`agri_colheita.observacoes`, o campo do modal) NAO chega ao lancamento
   do frete — `_agri_carga_inserir_papel` nao grava `observacao`; o motorista no lancamento se poe hoje pelo Financeiro
   (medido no MANDIOCA-FRETE-SILVIO-01) · `ConciliarExtratoDialog.tsx` (`src/components/financeiro-v2/`) SEM IMPORTADOR — o
@@ -4103,6 +4103,44 @@ docs/historico/frentes-ate-2026-09-29.md.)
   quem mexer num confere o outro. O selo do rodape (`SeloRegraDaLinha`) diz a regra da linha.
 
 ## REGRAS VIGENTES — OPERACAO COMERCIAL E FINANCEIRO
+- ⚠ DESVINCULAR DEVOLVE O QUE O VINCULO TROCOU: COMPETENCIA, SAFRA E MOVIMENTACAO, POR UM RESTAURADOR SO' (OC-DESVINCULAR-COMPETENCIA-01,
+  Gabriel 16/10/2026; migration `supabase/migrations/20261027199000_oc_desvincular_competencia_01.sql`, md5 do arquivo
+  b63bc874ddb6c2a12c4be53d0f56fc92, 17.744 bytes — APLICADA no proto em 16/10/2026 com o OK condicional do Gabriel, pelo
+  `supabase db query --linked` (project-ref conferido = binbcdfbisgscrifztia), migration + ledger numa transacao: ledger 20261016091446
+  `oc_desvincular_competencia_01` (⚠ timestamp do dia; o ledger guarda o arquivo BYTE A BYTE, com a quebra final: md5 = b63bc874…,
+  conferido dentro da transacao)). Nasce da FASE 0 de 15/10: 12 desvinculos no proto, 0 restaurados; o restaurador antigo so' agia
+  com a marca da saida e nunca devolvia a `movimentacao_rebanho_id`.
+  · O DONO: `_oc_restaurar_competencia(lancamento, evento)` (dcc05aa9… -> bfab7fb49c6210083a2dda61394e0080; interna, INVOKER,
+    so' postgres e service_role). O ANTES vem do PRIMEIRO evento de vinculo da parte (`vincular_lancamento` / `vincular_recebimento`,
+    mesmo `parte_id`, `dados_anteriores.lancamento`); o DEPOIS, do evento que o chamador passa (o ultimo da parte;
+    `dados_novos.lancamento`). ⚠ O `corrigir_competencia_pela_saida` guarda como "anterior" a competencia de DEPOIS do vinculo: o
+    antes nunca vem dele. Vale para TITULO e CONTA CORRENTE, com ou sem a marca da saida (decisao do Gabriel, 16/10: nos 27
+    vinculos de CC sem a regra da saida, a volta devolve a competencia de antes). A movimentacao so' volta se existe e esta' viva.
+    TRAVAS: competencia ou safra diferentes das gravadas pelo vinculo, ou movimentacao religada a outra = 'editado depois do vinculo'
+    (nao restaura); valor, pagamento, contas, plano e hash nunca mudam (aborta). Motivos: 'sem evento de vinculo', 'sem registro do
+    estado anterior', 'editado depois do vinculo', 'nada a restaurar'. `ano_mes` acompanha pelo gatilho.
+  · `oc_desvincular_lancamento` (f568e7cb… -> 7d7e8d36bb06107064000ff0f4a96fa0) ja' chamava o restaurador; ganhou a guarda
+    `tenant_ok` (42501; o caminho `service_role` como era). `_oc_cancelar_conta_corrente` (5f585988… -> ce1df3214bc973d23df784bba32ce70a)
+    ganhou a guarda `tenant_ok` (fora do `service_role`) e chama o MESMO restaurador para cada recebimento que fica (volta a' conta
+    original ou fica manual); o retorno ganha `restauros` [{titulo_id, restauro}]. Patches guardados por md5; ACL conferida.
+  · DADO: os 2 da Vera desvinculados sem restaurar — bb30fcce 2026-09-02 -> 2026-08-06 (ano_mes 2026-09 -> 2026-08) e 323d5bc8
+    2025-01-22 -> 2025-01-20 — pelo restaurador novo com o evento do vinculo, conferido pelo `audit_log` do vinculo, so' no estado
+    medido e sem parte viva; safra e movimentacao ja' eram as de antes; trilha `audit_log` 'restaurar_competencia'.
+  · PROVAS: `supabase/tests/oc_desvincular_competencia_01_test.sql` (T1–T7, sintetico no Teste) OK no ensaio e no vivo; contra as
+    funcoes antigas cai em T1. Ensaio revertido: md5 dos demais lancamentos dos 7 clientes identico antes x depois (88.576 linhas);
+    os 2 da Vera so' com competencia e `ano_mes` mudados. No vivo depois de aplicar: `seg_dre_tenant_01`, `seg_agri_tenant_01`,
+    `fin_lr_sync_01a`, `seg_tenant_varredura_01c` e o novo, OK; residuo zero.
+  ⚠ `fin_competencia_venda_01a_test.sql` (dado real) JA' CAIA antes da migration, e cai IGUAL depois: "Parte 299f3056 … sem parcela de
+    programacao" (o abate 9b2b5e6b migrou para conta corrente). O caso B1 dele ("sem snapshot") e' contrato antigo: hoje restauraria.
+    Nao foi mexido. FRENTE FIN-COMPETENCIA-TESTE-SINTETICO-01 (aberta, Gabriel 16/10/2026): refazer o teste com molde sintetico
+    no cliente Teste e o B1 no contrato novo (restaura).
+  ⚠ O DETECTOR `guardaDeClienteNasMigrations` NAO ENXERGA PATCH POR SUBSTITUICAO DE TEXTO (`pg_get_functiondef` + `replace`, os dois
+    patches daqui) e isenta funcao interna (o restaurador): passa sem ver esta migration. A guarda de cliente foi provada pelo T5
+    (42501 com o gestor de outro cliente no desvincular e no cancelar).
+  ⚠ NAO PROVADO: nada na TELA (desvincular pelo modal do Financeiro e "Cancelar conta corrente" pela OC) · o ramo 'fica_manual' do
+    cancelar com movimentacao a religar (o T4 caiu no 'volta_para_conta_original', que ja' religa a movimentacao: 'nada a
+    restaurar') · movimentacao de origem cancelada (a nota) · os vinculos antigos do proto alem dos 2 da Vera nao foram restaurados
+    (so' daqui para frente) · `oc_desvincular_lancamento` chamado pelo PostgREST.
 - ⚠ A LISTA DE PARCELAMENTOS E FINANCIAMENTOS TEM COLUNA "Nº contrato" E LARGURAS FIXAS (FIN-LISTA-COMPACTA-01, Gabriel 11 e 15/10/2026,
   so' layout, `src/pages/FinanciamentosListaPage.tsx`). O numero do contrato SAIU da Descricao para coluna propria logo depois dela
   (116px, 9px, zinc-600, uma linha, ordenavel; vazio ou "Atualizar" aparecem como gravados); a Descricao fica com o sufixo "· PEC/AGR".
@@ -5927,6 +5965,8 @@ docs/historico/frentes-ate-2026-09-29.md.)
   ⚠ FILA DO PR 3 (banco), que ACENDE os itens hoje em "disponível em breve": desvincular recebimento de conta corrente
     (`oc_desvincular_lancamento` recusa parte de conta corrente) · parcelar recebimento programado · cancelar recebimento
     programado (nao existe gesto nem RPC).
+    ⚠ A PORTA DE DESVINCULAR DA CONTA CORRENTE CHAMA `_oc_restaurar_competencia` (OC-DESVINCULAR-COMPETENCIA-01): nenhum
+      restaurador proprio.
   ⚠ DIVIDAS: FIN-MODAL-SOMENTE-LEITURA-01 — modo so' leitura no `LancamentoV2Dialog` (prop + repasse no `FinanceiroV2Tab` +
     parametro no `V2Index`), que acende o "Abrir lançamento (só leitura)" da entrega (hoje o modal trava 5 campos do titulo de OC
     e deixa gravar fornecedor, safra e observacao) · EDITAR EXPLICACAO GRAVADA NO LUGAR (hoje so' remover e acrescentar) · a
