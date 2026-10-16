@@ -7,12 +7,13 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { mensagemDoErro } from '@/lib/supabase/mensagemDoErro';
-import { addMonths, format } from 'date-fns';
+import { format } from 'date-fns';
 import { montarPayloadConta } from '@/lib/financeiro/contaPayload';
 import { loadPlanoContasCompleto, planoToClassificacoes } from '@/lib/financeiro/planoContasBuilder';
 import type { ClassificacaoItem, Safra } from '@/hooks/useFinanceiroV2';
 import type { ClassificacaoValor } from '@/components/shared/ClassificacaoLancamento';
 import { montarPayloadParcelamento, type ParcelaDoPayload } from '@/lib/financiamentos/montarPayloadParcelamento';
+import { montarCronograma, linhasDasParcelas } from '@/lib/financiamentos/cronogramaDoFinanciamento';
 
 /* ── Types ── */
 export interface ParcelaPreview {
@@ -302,7 +303,6 @@ export function useFinanciamentoCadastro() {
     if (!valor_total || !total_parcelas || !data_primeira_parcela) return;
 
     const mesesPorParcela = MESES_POR_FREQUENCIA[frequencia_parcela] ?? 1;
-    const base = (valor_total - valor_entrada) / total_parcelas;
 
     /* PR-PARC-02 — 1c — PARCELAMENTO NÃO TEM JUROS. A taxa é forçada a 0 AQUI,
        na origem do cálculo, e não escondendo o campo na tela: o campo escondido
@@ -310,23 +310,16 @@ export function useFinanciamentoCadastro() {
        e as parcelas nasceriam com juros que ninguém vê. */
     const taxaAnual = natureza === 'parcelamento' ? 0 : taxa_juros_anual;
 
-    // Juros compostos: anual → mensal → período
-    const taxaMensal = taxaAnual > 0
-      ? Math.pow(1 + taxaAnual / 100, 1 / 12) - 1
-      : 0;
-    const taxaPeriodo = taxaMensal > 0
-      ? Math.pow(1 + taxaMensal, mesesPorParcela) - 1
-      : 0;
-    const juros = base * taxaPeriodo;
-
-    const baseDate = new Date(data_primeira_parcela + 'T12:00:00');
-
-    const novas: ParcelaPreview[] = Array.from({ length: total_parcelas }, (_, i) => ({
-      numero: i + 1,
-      data_vencimento: format(addMonths(baseDate, i * mesesPorParcela), 'yyyy-MM-dd'),
-      valor_principal: Math.round(base * 100) / 100,
-      valor_juros: Math.round(juros * 100) / 100,
-    }));
+    /* FIN-PARCELAS-TAXA-ZERO-01 — a conta mora em `montarCronograma` (a mesma de antes, e o centavo do
+       arredondamento na última parcela). */
+    const novas: ParcelaPreview[] = montarCronograma({
+      valorTotal: valor_total,
+      valorEntrada: valor_entrada,
+      totalParcelas: total_parcelas,
+      taxaJurosAnual: taxaAnual,
+      dataPrimeiraParcela: data_primeira_parcela,
+      mesesPorParcela,
+    });
     setParcelas(novas);
   }, [form]);
 
@@ -500,16 +493,8 @@ export function useFinanciamentoCadastro() {
 
       if (errFin || !fin) throw new Error(errFin?.message ?? 'Erro ao salvar financiamento');
 
-      // 2 – Insert parcelas
-      const parcelasInsert = parcelas.map(p => ({
-        financiamento_id: fin.id,
-        cliente_id: clienteId,
-        numero_parcela: p.numero,
-        data_vencimento: p.data_vencimento,
-        valor_principal: p.valor_principal,
-        valor_juros: p.valor_juros,
-        status: 'pendente' as const,
-      }));
+      // 2 – Insert parcelas (FIN-PARCELAS-TAXA-ZERO-01: com o valor_total, nunca o default 0 do banco)
+      const parcelasInsert = linhasDasParcelas(fin.id, clienteId, parcelas);
 
       const { data: parcelasSalvas, error: errParcelas } = await supabase
         .from('financiamento_parcelas')
@@ -519,6 +504,20 @@ export function useFinanciamentoCadastro() {
       if (errParcelas) {
         await supabase.from('financiamentos').delete().eq('id', fin.id);
         throw new Error(errParcelas.message);
+      }
+
+      /* FIN-PARCELAS-TAXA-ZERO-01 — TODA parcela nasce com o seu lançamento programado/previsto, pelo MESMO escritor que
+         o lápis da parcela usa (`fn_reconciliar_parcela_financiamento`, aqui pelo laço do contrato). Antes o cadastro não
+         criava lançamento nenhum: só a parcela editada à mão ganhava o dela. O contrato já está gravado; a falha aqui é
+         avisada e o lançamento se recria pelo lápis da parcela. */
+      const { error: errLancParcelas } = await supabase.rpc('fn_reconciliar_financiamento', {
+        p_financiamento_id: fin.id,
+        p_dry_run: false,
+        p_recalcula_vt: true,
+      });
+      if (errLancParcelas) {
+        console.error('Erro ao gerar os lançamentos das parcelas:', errLancParcelas);
+        toast.warning('Financiamento salvo, mas os lançamentos das parcelas falharam: ' + mensagemDoErro(errLancParcelas, 'erro desconhecido'));
       }
 
       // Espelha cada parcela em financeiro_lancamentos_v2 e planejamento_financeiro

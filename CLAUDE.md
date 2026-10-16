@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 16/10/2026 (FECH-PASTO-SALVAR-TRANSACAO-01, +2: `src/components/fechamento/modalDoPasto.test.tsx` 8 -> 9, `src/hooks/useFechamento.salvar.test.tsx` 3 -> 4 — 5492 depois dele; antes o
+  Baseline em 16/10/2026 (FIN-PARCELAS-TAXA-ZERO-01, +6: `src/hooks/useFinanciamentoCadastro.cronograma.test.tsx` 6 (novo) — 5498 depois dele; antes o
+  FECH-PASTO-SALVAR-TRANSACAO-01, +2: `src/components/fechamento/modalDoPasto.test.tsx` 8 -> 9, `src/hooks/useFechamento.salvar.test.tsx` 3 -> 4 — 5492 depois dele; antes o
   FECH-MAPA-PASTO-MODAL-01 passo A, +11: `src/components/fechamento/modalDoPasto.test.tsx` 8 (novo), `src/hooks/useFechamento.salvar.test.tsx` 3 (novo) — 5490 depois dele; antes o
   RESUMO-ATIVIDADE-01b, +20: `src/lib/fechamento/resumoPecuaria.test.ts` 16 (novo), `src/components/resumoAtividade/abaPecuaria.test.tsx` 4 (novo) — 5479 depois dele; antes o
   FIN-CONTRATO-JUROS-SYNC-01, +1: `src/components/financiamentos/lancamentoDaParcelaSync.test.tsx` 1 (novo) — 5459 depois dele; antes o
@@ -351,7 +352,7 @@ no mesmo arquivo.
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
   `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5327
-  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01], 22 skipped, e
+  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01], 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -2114,6 +2115,26 @@ preview que o cabecalho nao sai da tela ao rolar.
     propria a decidir (ZOOT-RECLASS-P1-TELA-01).
   ⚠ NAO PROVADO NO NAVEGADOR: nada (a faixa a 1.126 x 523 e a 579, as duas linhas juntas, o foco destravando, a trava master real) ·
     Compra e o formulario generico so' por teste de fonte (nao se montam) · o Abate passou o "Reabrir mês…" de botao a link.
+- ⚠ O CADASTRO DE FINANCIAMENTO / EMPRESTIMO GRAVA O TOTAL DE CADA PARCELA E PEDE O LANCAMENTO DE CADA UMA AO ESCRITOR DE SEMPRE
+  (FIN-PARCELAS-TAXA-ZERO-01, Gabriel 16/10/2026, so' tela, sem migration). Nasce do consorcio c518161d do Agnaldo (80 parcelas, taxa 0):
+  parcela 1 com total e lancamento, 79 com `valor_total` 0 e sem lancamento.
+  · A CAUSA (nao era a taxa 0): o INSERT de `financiamento_parcelas` em `useFinanciamentoCadastro.salvar` nao mandava `valor_total`
+    (o banco punha o default 0) e o cadastro nao criava lancamento nenhum (o espelho estava comentado). So' a parcela editada a' mao
+    pelo lapis ganhava total e lancamento, pelo motor. O "mes pulado" do c518161d foi essa edicao manual (a parcela 1 movida de 18/07
+    para 18/06), nao o gerador.
+  · O CRONOGRAMA TEM UM DONO PURO: `montarCronograma` / `linhasDasParcelas` (`src/lib/financiamentos/cronogramaDoFinanciamento.ts`) —
+    a conta de antes (principal = (valor − entrada) / N; juros compostos anual -> mensal -> periodo; vencimento = 1ª + i periodos pelo
+    `addMonths`, que no dia 31 cai no ultimo dia do mes curto), MAIS o centavo do arredondamento na ultima parcela (a soma fecha com
+    o contrato) e o `valor_total` = principal + juros no INSERT.
+  · OS LANCAMENTOS: depois das parcelas o `salvar` chama `fn_reconciliar_financiamento(fin, false, true)` — o laco do MESMO
+    `fn_reconciliar_parcela_financiamento` que o lapis da parcela usa (status pelo vencimento: previsto ate' hoje, programado depois).
+    Falhou: o contrato fica e o aviso diz (o lapis da parcela recria). Parcelamento nao passa por aqui (tem o escritor proprio).
+  · DADO: o c518161d tem o script de regeracao em `docs/investigacao/fin-parcelas-taxa-zero-01-agnaldo-c518161d.sql` (ENSAIO, nao
+    aplicado; aplicar so' com o GO do Gabriel). As outras 141 parcelas de mesmo caminho e as 68 do legado do NJ nao foram tocadas.
+  ⚠ O MOTOR GRAVA A COMPETENCIA DO PRINCIPAL = A DATA DO CONTRATO (`fn_reconciliar_parcela_financiamento`, a amortizacao; o juros
+    leva o vencimento): as 80 parcelas do c518161d caem todas em 2026-06. E' a regra do motor, nao deste PR (item 28).
+  Testes: `src/hooks/useFinanciamentoCadastro.cronograma.test.tsx` 6 (a conta pura e o hook com banco de mentira); 5 mutacoes mortas.
+  ⚠ NAO PROVADO NO NAVEGADOR: nada (cadastrar o consorcio de teste e ver a lista e o Financeiro).
 - ⚠ NO FINANCIAMENTO, O VALOR DO LANCAMENTO VINCULADO A' PARCELA MANDA NA PARCELA, POR UM DONO SO' NO BANCO (FIN-CONTRATO-JUROS-SYNC-01, Gabriel
   16/10/2026; migration `supabase/migrations/20261027199300_fin_contrato_juros_sync_01.sql`, md5 do arquivo 0f1bc3490bea1dfa1ab647810d65a073
   — APLICADA no proto em 16/10/2026: ledger 20261016123504 `fin_contrato_juros_sync_01`, ⚠ timestamp do dia; ledger = arquivo byte a
