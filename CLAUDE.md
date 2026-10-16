@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 16/10/2026 (FIN-LR-SYNC-01 passo c, +15: `src/v2/lib/lucroRural/pastaLr.test.ts` 5 (novo), `src/components/lucroRural/pastaDownloadsLr.test.tsx` 10
+  Baseline em 16/10/2026 (FECH-MES-SELECIONADO-01, +6: `src/hooks/usePeriodoDaTela.test.tsx` 6 (novo) — 5437 depois dele; antes o
+  FIN-LR-SYNC-01 passo c, +15: `src/v2/lib/lucroRural/pastaLr.test.ts` 5 (novo), `src/components/lucroRural/pastaDownloadsLr.test.tsx` 10
   (novo) — 5431 depois dele; antes o FIN-LR-SYNC-01 passo b, +10: `src/components/lucroRural/telaAtualizarLr.test.tsx` 10 (novo) — 5416 depois dele; antes o
   FIN-V2-COLUNAS-02, +12: `src/components/financeiro-v2/colunasDaListaV2.test.tsx` 12 (novo) — 5406 depois dele; antes o
   CONC-CARDS-ORDEM-01, +1 em `src/pages/conciliacaoDono.test.tsx` (40 -> 41) — 5394 depois dele; antes o
@@ -344,7 +345,7 @@ no mesmo arquivo.
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
   `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5327
-  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c], 22 skipped, e
+  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01], 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -2107,6 +2108,20 @@ preview que o cabecalho nao sai da tela ao rolar.
     propria a decidir (ZOOT-RECLASS-P1-TELA-01).
   ⚠ NAO PROVADO NO NAVEGADOR: nada (a faixa a 1.126 x 523 e a 579, as duas linhas juntas, o foco destravando, a trava master real) ·
     Compra e o formulario generico so' por teste de fonte (nao se montam) · o Abate passou o "Reabrir mês…" de botao a link.
+- ⚠ O MES DO FECHAMENTO, DO RESUMO POR ATIVIDADE E DO MAPA DE PASTOS E' O ANO/MES DO SHELL (FECH-MES-SELECIONADO-01, Gabriel 16/10/2026, so'
+  tela). Nasce do relato: escolhido ago/26 no Fechamento, ir ao Resumo ou ao Mapa e voltar abria em outubro — Fechamento e Mapa sao
+  secoes separadas do `V2Index` e cada montagem recomecava em `new Date()`. DECISAO DO GABRIEL (pergunta de 16/10): REUSAR o `ano`/`mes`
+  do `V2Index` (`useState` ~:455), a fonte que o PC-100, a Conciliacao e os atalhos do proprio Fechamento ja' usavam; proibido segundo mes.
+  · COMO: `usePeriodoDaTela({ periodo, onPeriodoChange }, inicial)` (`src/hooks/usePeriodoDaTela.ts`): com as duas props a tela LE E
+    ESCREVE no shell e nao guarda mes; sem elas (o `pages/Index.tsx` legado), o estado e' da tela, como sempre. O `V2Index` passa o
+    MESMO `periodoDoFechamento` / `mudarPeriodoDoFechamento` a `FechamentoTab` e a `MapaPastosTab`; o Resumo por Atividade e' desenhado
+    pelo Fechamento com os mesmos setters. Layout intocado (o Mapa segue com os seletores; `filtroAnoInicial` os esconderia).
+  · CONSEQUENCIAS ACEITAS: o padrao ja' nao e' o mes atual — e' o do shell (nasce no mes ANTERIOR e, ao trocar de cliente, vai ao ULTIMO
+    MES FECHADO daquele cliente, `V2Index` ~:868); o mes e' o mesmo das outras telas do shell (PC-100, Conciliacao…); F5 volta ao padrao
+    (nenhum periodo do sistema sobrevive ao recarregar). Trocar de FAZENDA nao mexe no mes.
+  Teste: `src/hooks/usePeriodoDaTela.test.tsx` 6 (shell de mentira com o hook de verdade: ida e volta nos tres pares, troca numa tela
+  aparecendo na outra, padrao; a ligacao lida da fonte). 1 mutacao morta (a tela ignorando o shell: caem 4).
+  ⚠ NAO PROVADO NO NAVEGADOR: a ida e volta real, a troca de cliente, o modo Global do Fechamento.
 - ⚠ O RESUMO POR ATIVIDADE TEM UMA FONTE POR NUMERO, E A TELA NAO FAZ CONTA (RESUMO-ATIVIDADE-01a, Gabriel 15/10/2026, so' tela, sem
   banco). Substitui a `ResumoAtividadesView` (apagada com o teste dela). Aberta pelo botao "Resumo por Atividade" do Fechamento Area.
   · A AGREGACAO E' PURA: `src/lib/fechamento/resumoPorAtividade.ts` (`montarResumoDoMes`, `totalDaPecuariaDoCache`,

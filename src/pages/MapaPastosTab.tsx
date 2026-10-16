@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { usePeriodoDaTela, type PeriodoControlado } from '@/hooks/usePeriodoDaTela';
 import { usePastos, isPastoAtivoNoMes, type Pasto, type CategoriaRebanho } from '@/hooks/usePastos';
 import { useFechamento } from '@/hooks/useFechamento';
 import { useFazenda } from '@/contexts/FazendaContext';
@@ -61,13 +62,13 @@ const CAT_SIGLAS: Record<string, string> = {
 // Eram locais e não exportadas: uma segunda tela teria de copiar o switch, e cor nova
 // entraria numa cópia só. Aparência inalterada — só mudou de onde vem.
 
-interface MapaPastosTabProps {
+interface MapaPastosTabProps extends PeriodoControlado {
   onBack?: () => void;
   filtroAnoInicial?: string;
   filtroMesInicial?: number;
 }
 
-export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial }: MapaPastosTabProps = {}) {
+export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial, periodo, onPeriodoChange }: MapaPastosTabProps = {}) {
   const { isGlobal, fazendaAtual } = useFazenda();
   const { pastos, categorias } = usePastos();
   const { fechamentos, loadFechamentos, loadItens, setPesoAtualizadoPasto } = useFechamento();
@@ -113,9 +114,11 @@ export function MapaPastosTab({ onBack, filtroAnoInicial, filtroMesInicial }: Ma
     return () => { cancelled = true; };
   }, [fazendaAtual?.id, curYear]);
 
-  const [anoFiltro, setAnoFiltro] = useState(filtroAnoInicial || String(curYear));
-  const mesDefault = filtroMesInicial || (Number(anoFiltro) === curYear ? curYear === new Date().getFullYear() ? new Date().getMonth() + 1 : 12 : 12);
-  const [mesFiltro, setMesFiltro] = useState(mesDefault);
+  /* FECH-MES-SELECIONADO-01 — com `periodo` (o ano/mês do shell) a tela não guarda mês próprio; sem ele, o de sempre. */
+  const anoInicial = filtroAnoInicial || String(curYear);
+  const mesDefault = filtroMesInicial || (Number(anoInicial) === curYear ? curYear === new Date().getFullYear() ? new Date().getMonth() + 1 : 12 : 12);
+  const { ano: anoFiltro, setAno: setAnoFiltro, mes: mesFiltro, setMes: setMesFiltro } =
+    usePeriodoDaTela({ periodo, onPeriodoChange }, { ano: anoInicial, mes: mesDefault });
 
   useEffect(() => {
     if (filtroAnoInicial !== undefined) setAnoFiltro(filtroAnoInicial);

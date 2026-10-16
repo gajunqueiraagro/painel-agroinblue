@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { ArrowLeft, CheckCircle, AlertTriangle, Lock, Unlock, Pencil, BarChart3, Lightbulb, Activity, Map as MapIcon, RefreshCw } from 'lucide-react';
+import { usePeriodoDaTela, type PeriodoControlado } from '@/hooks/usePeriodoDaTela';
 import { ResumoPorAtividade } from '@/components/resumoAtividade/ResumoPorAtividade';
 import { usePastos, isPastoAtivoNoMes, pastosAtivosNoMes, type Pasto } from '@/hooks/usePastos';
 import { useFechamento, type FechamentoPasto, type FechamentoItem } from '@/hooks/useFechamento';
@@ -106,6 +107,9 @@ interface Props {
      onBackToConciliacao: aquele e destino NOMEADO ("Voltar para Conciliação de
      Categoria") e continua no rodape. Os dois parecem diferentes porque sao. */
   onBack?: () => void;
+  /* FECH-MES-SELECIONADO-01 — o ano/mês do shell (V2Index): com eles a tela não guarda mês próprio (usePeriodoDaTela). */
+  periodo?: PeriodoControlado['periodo'];
+  onPeriodoChange?: PeriodoControlado['onPeriodoChange'];
 }
 
 const FECHAMENTO_GLOBAL_MARKER = 'fechamento_global_administrativo';
@@ -175,7 +179,7 @@ function gmdColor(gmd: number | null): string {
   return 'text-emerald-600 dark:text-emerald-400';
 }
 
-export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConciliacao, onNavigateToReclass, onNavigateToValorRebanho, onNavigateToConferenciaGmd, onNavigateToMapaPastos, onBack }: Props = {}) {
+export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConciliacao, onNavigateToReclass, onNavigateToValorRebanho, onNavigateToConferenciaGmd, onNavigateToMapaPastos, onBack, periodo, onPeriodoChange }: Props = {}) {
   const { isGlobal, fazendaAtual, fazendas, setFazendaAtual } = useFazenda();
   const { clienteAtual } = useCliente();
   const { canEdit } = usePermissions();
@@ -194,10 +198,11 @@ export function FechamentoTab({ filtroAnoInicial, filtroMesInicial, onBackToConc
     return Array.from(set).sort().reverse();
   }, [lancamentos, saldosIniciais]);
 
-  const [anoFiltro, setAnoFiltro] = useState(filtroAnoInicial || String(new Date().getFullYear()));
+  const anoInicial = filtroAnoInicial || String(new Date().getFullYear());
+  const mesDefault = filtroMesInicial || (Number(anoInicial) === new Date().getFullYear() ? new Date().getMonth() + 1 : 12);
+  const { ano: anoFiltro, setAno: setAnoFiltro, mes: mesFiltro, setMes: setMesFiltro } =
+    usePeriodoDaTela({ periodo, onPeriodoChange }, { ano: anoInicial, mes: mesDefault });
   const anoNum2 = Number(anoFiltro);
-  const mesDefault = filtroMesInicial || (anoNum2 === new Date().getFullYear() ? new Date().getMonth() + 1 : 12);
-  const [mesFiltro, setMesFiltro] = useState(mesDefault);
   const anoMes = `${anoFiltro}-${String(mesFiltro).padStart(2, '0')}`;
 
   /* FECH-GLOBAL-RESUMO-01 — em Global a tela mostra o resumo por fazenda (só lê quando está em Global). Clicar numa fazenda

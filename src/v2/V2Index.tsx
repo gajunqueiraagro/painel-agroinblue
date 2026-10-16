@@ -458,6 +458,9 @@ export default function V2Index() {
   /* O mês do shell, já resolvido: `'0'` era o "ano inteiro" do 01b e não é um mês. */
   const mesVisivel = mes === '0' ? new Date().getMonth() + 1 : Number(mes);
   const [modo, setModo] = useState<'mes' | 'acum'>('mes');
+  /* FECH-MES-SELECIONADO-01 — o mês do Fechamento, do Resumo por Atividade e do Mapa de Pastos É o ano/mês do shell (sem cópia). */
+  const periodoDoFechamento = { ano, mes: mesVisivel };
+  const mudarPeriodoDoFechamento = (a: string, m: number) => { setAno(a); setMes(String(m)); };
   // Período do Fechamento — state global para sobreviver à navegação entre
   // seções. Default vazio; V2FechamentoPeriodo popula via calcularDefaultPeriodo
   // assim que statusPilDefault + fazendasComPecuaria carregam.
@@ -1191,6 +1194,8 @@ export default function V2Index() {
     if (section === 'mapa-pastos') return (
       <MapaPastosTab
         onBack={mapaPastosOriginRef.current ? () => { mapaPastosOriginRef.current = false; setSection('fechamento'); } : undefined}
+        /* FECH-MES-SELECIONADO-01 — Fechamento, Resumo por Atividade e Mapa de Pastos leem e escrevem o MESMO ano/mês do shell. */
+        periodo={periodoDoFechamento} onPeriodoChange={mudarPeriodoDoFechamento}
       />
     );
     if (section === 'operacoes-comerciais') return (
@@ -1315,6 +1320,7 @@ export default function V2Index() {
     );
     if (section === 'fechamento') return (
       <FechamentoTab
+        periodo={periodoDoFechamento} onPeriodoChange={mudarPeriodoDoFechamento}
         onBack={origemPendenciaRef.current
           ? () => { const o = voltarParaOrigem(); if (o) setSection(o); }
           : undefined}
