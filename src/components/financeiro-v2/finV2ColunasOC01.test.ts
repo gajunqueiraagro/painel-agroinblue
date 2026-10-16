@@ -11,79 +11,76 @@ const tela = readFileSync(resolve(__dirname, '../../pages/FinanceiroV2Tab.tsx'),
 const css = readFileSync(resolve(__dirname, '../../index.css'), 'utf8');
 
 const colgroup = tela.slice(tela.indexOf('<colgroup>'), tela.indexOf('</colgroup>'));
-/** As larguras do colgroup num modo: `modoIntensivo ? A : B` resolve pelo modo; `{modoIntensivo && <col …/>}` só existe no Ampliado. */
-function larguras(ampliado: boolean): number[] {
+/** FIN-V2-COLUNAS-02 — as larguras do colgroup num modo: 'normal', 'amp' (Ampliado com as contas) e 'ampSem' (Ampliado com o chip
+    das contas desligado). `modoIntensivo ? (contasAmpliado ? A : B) : C`, `modoIntensivo ? A : C` e `{modoIntensivo && contasAmpliado && <col …/>}`. */
+type Modo = 'normal' | 'amp' | 'ampSem';
+function larguras(modo: Modo): number[] {
   const out: number[] = [];
-  for (const m of colgroup.matchAll(/(\{modoIntensivo && )?<col style=\{\{ width: (?:modoIntensivo \? (\d+) : (\d+)|(\d+)) \}\} \/>/g)) {
-    if (m[1] && !ampliado) continue;
-    out.push(Number(m[4] ?? (ampliado ? m[2] : m[3])));
+  const re = /(\{modoIntensivo && contasAmpliado && )?<col style=\{\{ width: (?:modoIntensivo \? \(contasAmpliado \? (\d+) : (\d+)\) : (\d+)|modoIntensivo \? (\d+) : (\d+)|(\d+)) \}\} \/>/g;
+  for (const m of colgroup.matchAll(re)) {
+    if (m[1] && modo !== 'amp') continue;
+    if (m[2]) out.push(Number(modo === 'normal' ? m[4] : modo === 'amp' ? m[2] : m[3]));
+    else if (m[5]) out.push(Number(modo === 'normal' ? m[6] : m[5]));
+    else out.push(Number(m[7]));
   }
   return out;
 }
 const soma = (v: number[]) => v.reduce((a, b) => a + b, 0);
 
-describe('a coluna OC', () => {
+describe('a coluna Vínc. (FIN-V2-COLUNAS-02; era "OC")', () => {
   const linha = tela.slice(tela.indexOf('<tr key={l.id}'), tela.indexOf('<DropdownMenuTrigger asChild>', tela.indexOf('<tr key={l.id}')));
   const celulaProduto = linha.slice(linha.indexOf('title={isParcelaFinanciamento ? `Parcela de financiamento'), linha.indexOf('title={fornNome || \'\'}'));
-  const celulaOC = linha.slice(linha.indexOf('data-testid="celula-oc"'), linha.indexOf('title={isParcelaFinanciamento ? `Parcela de financiamento'));
-  it('a busca sabe achar: a célula do Produto e a da OC foram recortadas da linha', () => {
+  const celulaVinc = linha.slice(linha.indexOf('data-testid="celula-oc"'), linha.indexOf('title={isParcelaFinanciamento ? `Parcela de financiamento'));
+  it('a busca sabe achar: a célula do Produto e a dos vínculos foram recortadas da linha', () => {
     expect(celulaProduto).toContain('{descExibida || \'-\'}');
-    expect(celulaProduto).toContain('Gerado a partir de lançamento zootécnico');   // o ícone do zootécnico e o 🏦 ficam no Produto
-    expect(celulaProduto).toContain('🏦');
-    expect(celulaOC.length).toBeGreaterThan(200);
+    expect(celulaProduto).toContain('Gerado a partir de lançamento zootécnico');   // o ícone do zootécnico (não é vínculo) fica
+    expect(celulaVinc.length).toBeGreaterThan(200);
   });
-  it('o ícone da OC NÃO está dentro da célula do Produto: mora na coluna própria, uma vez só', () => {
-    expect(celulaProduto).not.toContain('icone-oc');
-    expect(celulaProduto).not.toContain('marca-oc');
-    expect(celulaProduto).not.toContain('lancamentosComOC');
-    expect(celulaOC).toContain('data-testid="icone-oc"');
-    expect(celulaOC).toContain('data-testid="marca-oc"');
-    expect(celulaOC).toContain('onClick={e => { e.stopPropagation(); abrirOCFinanceiro(oc.operacaoId, oc.tipo); }}');
-    expect(celulaOC).toContain('if (!podeAbrirOC) return (');
-    expect(tela.match(/data-testid="icone-oc"/g)?.length).toBe(1);
-    expect(tela.match(/data-testid="marca-oc"/g)?.length).toBe(1);
+  it('os vínculos NÃO estão no Produto: moram na coluna própria, pelo dono, uma vez só; o 🏦 saiu (o selo F diz)', () => {
+    for (const x of ['icone-oc', 'marca-oc', 'lancamentosComOC', 'CelulaVinculos', '🏦']) expect(celulaProduto, x).not.toContain(x);
+    expect(celulaVinc).toContain('<CelulaVinculos vinculos={vinculos} abrir={{');
+    expect(celulaVinc).toContain('const vinculos = vinculosDaLinha({');
+    expect(celulaVinc).toContain('O: oc && podeAbrirOC ? () => abrirOCFinanceiro(oc.operacaoId, oc.tipo) : undefined,');
+    expect(tela.match(/<CelulaVinculos /g)?.length).toBe(1);
+    expect(linha).not.toContain('🏦');
   });
-  it('vem depois das congeladas e NÃO é sticky; a cadeia é 0/28/68/108 (PARC-FECHA-02 item 6: o clipe saiu da esquerda)', () => {
+  it('vem depois das congeladas e NÃO é sticky; a cadeia é 0/28/68/108', () => {
     expect(linha.indexOf('data-testid="celula-oc"')).toBeGreaterThan(linha.indexOf('sticky left-[108px]'));
     expect(/<td className="[^"]*sticky[^"]*" data-testid="celula-oc"/.test(linha)).toBe(false);
     for (const left of ['left-0', 'left-[28px]', 'left-[68px]', 'left-[108px]']) expect(linha, left).toContain(`sticky ${left}`);
-    /* a cadeia velha não sobrou em lugar nenhum (cabeçalho e linha): uma sobra abriria fresta no Ampliado */
     for (const velho of ['left-[42px]', 'left-[82px]', 'left-[122px]']) expect(tela, velho).not.toContain(`sticky ${velho}`);
     expect(tela.match(/sticky left-\[(28|68|108)px\]/g)?.length).toBe(6);
-    expect(larguras(false).slice(0, 4)).toEqual([28, 40, 40, 40]);      // 0 → 28 → 68 → 108
-    expect(tela).toContain('title="Operação comercial">OC</th>');
+    expect(larguras('normal').slice(0, 4)).toEqual([28, 40, 40, 40]);
+    expect(tela).toContain('>Vínc.</th>');
   });
 });
 
-describe('as larguras', () => {
-  it('a soma do colgroup normal NÃO passa de 874, com a coluna OC de 16 e o Produto com pelo menos 130', () => {
-    const n = larguras(false);
-    /* PARC-LIVRES-01 passo 3: Produto 136→130 e Macro/Centro 56→49 devolvem 20px à coluna Doc. (70→90), que passou a escrever o tipo */
-    /* fechamento C: Fornecedor 100→124, tirando 16 de Macro (49→33) e 8 de Centro (49→41) */
-    /* PARC-FECHA-02 item 6: os 14px do clipe foram da 2ª posição para entre Valor e Doc.; as outras larguras e a soma não mudaram */
-    expect(n).toEqual([28, 40, 40, 40, 16, 130, 124, 33, 41, 30, 66, 90, 14, 90, 64, 28]);
-    expect(soma(n)).toBe(874);
-    expect(soma(n)).toBeLessThanOrEqual(874);
-    expect(n[5]).toBeGreaterThanOrEqual(130);
+describe('as larguras (FIN-V2-COLUNAS-02)', () => {
+  it('normal: Vínc 36 · Produto 128 · Fornecedor 122 · Classificação 124 · Faz 30 · Safra 50 · Valor 88 · Doc 78 · Status 60 = 906', () => {
+    const n = larguras('normal');
+    expect(n).toEqual([28, 40, 40, 40, 36, 128, 122, 124, 30, 50, 88, 14, 78, 60, 28]);
+    expect(soma(n)).toBe(906);
   });
-  it('o Ampliado tem as duas contas a mais e o Produto com o mesmo ganho; a linha vazia ocupa todas as colunas nos dois modos', () => {
-    const a = larguras(true);
-    expect(a.length).toBe(18);
-    expect(larguras(false).length).toBe(16);
-    expect(a[5] - 125).toBe(larguras(false)[5] - 111);
-    expect(tela).toContain('<td colSpan={modoIntensivo ? 18 : 16}');
+  it('Ampliado com e sem as contas: a mesma soma (1.088); desligadas, os 184px vão para Produto, Fornecedor e Classificação', () => {
+    const a = larguras('amp'); const s = larguras('ampSem');
+    expect(a).toEqual([28, 40, 40, 40, 36, 140, 116, 116, 30, 50, 92, 92, 88, 14, 78, 60, 28]);
+    expect(s).toEqual([28, 40, 40, 40, 36, 202, 177, 177, 30, 50, 88, 14, 78, 60, 28]);
+    expect(soma(a)).toBe(1088); expect(soma(s)).toBe(1088);
+    expect((s[5] - a[5]) + (s[6] - a[6]) + (s[7] - a[7])).toBe(92 + 92);
+    expect(tela).toContain('<td colSpan={modoIntensivo && contasAmpliado ? 17 : 15}');
   });
-  it('não cedem: datas 40, Fornecedor 124, Safra 66, Valor 90, Doc. 90, ações 28, check 28, clipe 14', () => {
-    const n = larguras(false);
-    expect([n[0], n[12], n[1], n[2], n[3], n[6], n[10], n[11], n[13], n[15]]).toEqual([28, 14, 40, 40, 40, 124, 66, 90, 90, 28]);
+  it('as contas do Ampliado obedecem ao chip, no colgroup, no cabeçalho e na linha', () => {
+    expect(colgroup.match(/\{modoIntensivo && contasAmpliado && <col style=\{\{ width: 92 \}\} \/>\}/g)?.length).toBe(2);
+    expect(tela.match(/\{modoIntensivo && contasAmpliado && \(/g)?.length).toBe(4);
+    expect(tela).not.toMatch(/\{modoIntensivo && \(\s*<t[hd]/);
   });
 });
 
 describe('as fontes — exceção ao piso só nesta lista, por classe da tabela (o dono do status não muda)', () => {
-  it('Status a 8px e Macro/Centro a 8,5px no index.css; as células levam a classe', () => {
+  it('Status a 8px e a Classificação a 8,5px no index.css; as células levam a classe', () => {
     expect(css).toMatch(/\.table-financeiro td\.celula-status,\s*\.table-financeiro td\.celula-status \* \{\s*font-size: 8px !important;/);
     expect(css).toMatch(/\.table-financeiro td\.celula-classe,\s*\.table-financeiro td\.celula-classe \* \{\s*font-size: 8\.5px !important;/);
-    expect(tela.match(/<td className="celula-classe truncate /g)?.length).toBe(2);
+    expect(tela.match(/<td className="celula-classe truncate /g)?.length).toBe(1);   // FIN-V2-COLUNAS-02: uma coluna, a Classificação
     expect(tela).toContain('<td className="celula-status px-0.5 py-1 text-center align-middle leading-tight"');
     /* forma e cor continuam do dono */
     expect(tela).toContain('<span className={cn(STATUS_PILULA_BASE, stPilula)} data-status={stKey}>{stLabel}</span>');
@@ -110,12 +107,11 @@ describe('passo 3 — clipe, Doc. e origem (lidos da fonte da lista)', () => {
     const [thValor, thClipe, thDoc] = ordem(tela, "toggleSort('valor')}", 'aria-label="Documentos" title="Documentos"', "toggleSort('doc')}");
     expect(thClipe).toBeGreaterThan(thValor);
     expect(thDoc).toBeGreaterThan(thClipe);
-    for (const amp of [false, true]) {
-      const n = larguras(amp);
-      expect(n.slice(-5)).toEqual([90, 14, 90, 64, 28]);
-      expect(n[1]).toBe(40);                                          // a 2ª coluna voltou a ser a Comp.: nenhuma vazia no lugar
+    for (const modo of ['normal', 'amp', 'ampSem'] as const) {
+      const n = larguras(modo);
+      expect(n.slice(-5)).toEqual([88, 14, 78, 60, 28]);               // FIN-V2-COLUNAS-02: Valor 88, clipe 14, Doc 78, Status 60
+      expect(n[1]).toBe(40);
     }
-    expect(soma(larguras(true)) - soma(larguras(false))).toBe(14 + 92 + 92);
   });
   it('o clipe acende por `doc.clipe`, com o que tem no `title`', () => {
     expect(tela).toContain('aria-label="Documentos" title="Documentos"');

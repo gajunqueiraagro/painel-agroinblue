@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 16/10/2026 (CONC-CARDS-ORDEM-01, +1 em `src/pages/conciliacaoDono.test.tsx` (40 -> 41) — 5394 depois dele; antes o
+  Baseline em 16/10/2026 (FIN-V2-COLUNAS-02, +12: `src/components/financeiro-v2/colunasDaListaV2.test.tsx` 12 (novo) — 5406 depois dele; antes o
+  CONC-CARDS-ORDEM-01, +1 em `src/pages/conciliacaoDono.test.tsx` (40 -> 41) — 5394 depois dele; antes o
   FIN-LR-SYNC-01 passo a2, +4: `src/v2/hooks/useLrSyncAplicar.test.ts` 4 (novo) — 5393 depois dele; antes o
   ZOOT-MES-FECHADO-MODAL-01, +21: `src/components/lancamento/avisoMesFechado.test.tsx` 21 (novo) — 5389
   depois dele; antes o FORN-EDITAR-01, +39: `src/lib/fornecedores/documentoFiscal.test.ts` 16 (novo),
@@ -341,7 +342,7 @@ no mesmo arquivo.
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
   `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5327
-  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01], 22 skipped, e
+  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02], 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -4105,6 +4106,47 @@ docs/historico/frentes-ate-2026-09-29.md.)
   quem mexer num confere o outro. O selo do rodape (`SeloRegraDaLinha`) diz a regra da linha.
 
 ## REGRAS VIGENTES — OPERACAO COMERCIAL E FINANCEIRO
+- ⚠ LANCAMENTOS FINANCEIROS: CLASSIFICACAO POR NIVEL, "SEM CAIXA" EM TRES POSICOES, COLUNA "VINC." COM TODOS OS SELOS, SAFRA EM DUAS
+  LINHAS E AS CONTAS DO AMPLIADO LIGA/DESLIGA (FIN-V2-COLUNAS-02, Gabriel 16/10/2026, so' tela; mock-lancamentos-colunas-v4). A lista
+  (`src/pages/FinanceiroV2Tab.tsx`) so' desenha; o que cada coluna mostra mora em `src/lib/financeiro/colunasDaListaV2.ts` (puro) e as
+  celulas em `src/components/financeiro-v2/ColunasDaListaV2.tsx`. SUBSTITUI, nos blocos de baixo, "Macro 33 · Centro 41", "a coluna OC
+  de 16px", o checkbox "Mostrar lancamentos sem caixa" e "Safra e cultura numa linha".
+  · CLASSIFICACAO: Macro e Centro viraram UMA coluna; o cabecalho e' o nivel escolhido no `Segmentado` da faixa dos totais (Macro |
+    Centro | Subcentro, padrao Centro); corta com reticencia e o `title` e' "Macro › Centro › Subcentro"; a ordenacao segue o nivel.
+  · SEM CAIXA [Ocultar | Mostrar | So' c/ DRE]: Ocultar = so' caixa (o desmarcado de antes, padrao); Mostrar = o marcado de antes (a
+    secao sem caixa embaixo); So' c/ DRE = a GRADE so' com `sem_movimentacao_caixa = true` E `compoe_dre = true`, e os totais do topo
+    passam a ser os desse recorte (`entradasSemCaixa` / `saidasSemCaixa`). A exportacao segue o modo. O total "Sem caixa (so' DRE)"
+    SAIU da faixa (com os dois seletores ela nao cabia numa linha: 846px medidos sem ele, ~1.040 com ele no pior numero) e vai no
+    `title` do "Mostrar" — e' o mesmo numero do rodape da secao. ⚠ Com a flag LISTA_PAGINADA_V2 (desligada) o So' c/ DRE so' vale na
+    exportacao e na secao; a grade paginada vem do servidor (sem o filtro de `compoe_dre`).
+  · VINC. (era "OC"), 36px: os selos que JA' existem no dado, na ordem F financiamento (`financiamento_id`, ou origem de parcela /
+    captacao, que nao seja parcela de compra parcelada) · R recorrencia (`recorrencia_id`) · P parcelamento (parcela viva de contrato de
+    natureza parcelamento, pelo mapa de `fn_parcelas_dos_lancamentos`) · O OC (parte viva). 13px, cores claras, nome no `title`. Clique:
+    O abre a OC (com acesso; sem acesso, so' a marca — ACESSOS-02b); F e P abrem o contrato (com acesso a Financiamentos); R so' o nome.
+    O 🏦 saiu do Produto (o selo F diz); o icone do zootecnico (movimentacao de rebanho, nao e' vinculo) ficou. ⚠ Encargo de contrato
+    (FIN-CONTRATO-VINCULAR-ENCARGO-01) NAO tem selo: o front ainda nao le^ `fn_encargos_dos_lancamentos`. ⚠ Tres selos (R + P + O)
+    nao cabem nos 32px uteis (dois cabem): sem caso medido.
+  · SAFRA, 50px, duas linhas: linha 1 o periodo do codigo + a atividade DA SAFRA ("25/26 Pec", "25/26 Agr"; sem periodo no codigo, o
+    codigo); linha 2 (7px, cinza, `.safra-atividade` — EXCECAO (6) AO PISO, so' nesta lista) a fase do lancamento (pecuaria) ou a
+    cultura (agricultura), SO' QUANDO EXISTE; sem fase / cultura, so' a linha 1. Sem safra, "—". Nunca pelo texto da descricao.
+    ⚠ SEM FASE NAO E' RATEIO (decisao do Chat, 16/10, revogando o fallback "rateio" do relatorio): MEDIDO desde jul/25, so' 92 de 9.764
+      lancamentos de pecuaria tem fase e 640 de 1.188 de agricultura tem cultura — "rateio" ali seria dado inventado.
+    ⚠ FRENTE FIN-V2-SAFRA-RATEIO-01 (aberta): achar a FONTE PROPRIA que diga que o lancamento vai para o rateio; so' entao "rateio"
+      volta a aparecer na coluna.
+  · AMPLIADO: o chip "Contas origem/destino" liga/desliga C. Origem e C. Destino; desligado, os 184px vao para Produto, Fornecedor e
+    Classificacao. As tres escolhas (nivel, sem caixa, contas) ficam no `localStorage` com try/catch (sem dado ou indisponivel = o
+    padrao). ⚠ A CHAVE NAO TEM O USUARIO: e' por navegador (a tela nao tem o usuario sem o `AuthContext`, que os testes nao montam).
+  · LARGURAS (colgroup): normal 28·40·40·40·Vinc 36·Produto 128·Fornecedor 122·Classificacao 124·Faz 30·Safra 50·Valor 88·clipe 14·Doc 78·
+    Status 60·acoes 28 = 906 (cabe nos ~919 que o Chat mediu a 1.133); Ampliado 1.088 com e sem as contas (com: Produto 140, Fornecedor
+    116, Classificacao 116, contas 92+92; sem: 202 · 177 · 177). MEDIDO com a Inter real (Chromium, texto isolado na fonte da celula):
+    Valor "-R$ 9.999.999,99" 63,5px em 80 uteis; Safra "25/26 Agr" 36,7 em 42, linha 2 "Amendoim" 31,5; Doc "NF 000.000.518" 67,4 em 70
+    (12 digitos 57,8); Status igual ao de antes (Conciliado com o selo 55,1 em 56). Cortam com reticencia so' Produto, Fornecedor e
+    Classificacao. ⚠ Doc de 13+ digitos ou texto livre segue cortando (FIN-V2-DOC-CORTA-01), agora com 70 uteis em vez de 82.
+  · ⚠ JANELA ESTREITA, DECISAO PROVISORIA (a da lista de financiamentos, a homologar): abaixo da largura da tabela ela ROLA DENTRO DO
+    CARD (o container ja' rola na horizontal); a pagina nunca rola.
+  ⚠ NAO PROVADO NO NAVEGADOR: nada (a tabela renderizada a 1.133 / 1.440, a faixa numa linha com nomes e valores reais, o Ampliado
+    com e sem as contas, a altura da linha com a Safra em duas linhas — a soma 9px·1,1 + 7px + o padding da 21,4px, abaixo dos 24–25 de
+    hoje, por conta; sem fase ela tem uma linha so') · os selos F / P abrindo o contrato · o So' c/ DRE com dado real · perfil nao admin.
 - ⚠ DESVINCULAR DEVOLVE O QUE O VINCULO TROCOU: COMPETENCIA, SAFRA E MOVIMENTACAO, POR UM RESTAURADOR SO' (OC-DESVINCULAR-COMPETENCIA-01,
   Gabriel 16/10/2026; migration `supabase/migrations/20261027199000_oc_desvincular_competencia_01.sql`, md5 do arquivo
   b63bc874ddb6c2a12c4be53d0f56fc92, 17.744 bytes — APLICADA no proto em 16/10/2026 com o OK condicional do Gabriel, pelo

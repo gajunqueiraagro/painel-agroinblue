@@ -183,6 +183,12 @@
 .table-financeiro td.celula-classe * {
   font-size: 8.5px !important;
 }
+/* FIN-V2-COLUNAS-02 — EXCEÇÃO (6) AO PISO, SÓ NESTA LISTA (Gabriel, 16/10/2026, mock v4): a 2ª linha da Safra (a fase / cultura
+   / "rateio") a 7px, cinza, embaixo do período. Mais específica que `td *` e `td span`, que forçam 9px. */
+.table-financeiro td .safra-atividade {
+  font-size: 7px !important;
+  line-height: 1 !important;
+}
 /* Forçar herança em elementos internos */
 .table-financeiro td span,
 .table-financeiro td div {

@@ -14,6 +14,13 @@ import { isTransferenciaTipo } from '@/lib/financeiro/v2Transferencia';
 import { contaEmFoco, formatarValorLinha } from '@/lib/financeiro/sinalPorConta';
 import { totaisDaListaV2 } from '@/lib/financeiro/totaisDaListaV2';
 import { SecaoSemCaixa, totalSemCaixa } from '@/components/financeiro-v2/SecaoSemCaixa';
+import { CelulaSafra, CelulaVinculos } from '@/components/financeiro-v2/ColunasDaListaV2';
+import { Segmentado } from '@/components/ui/segmentado';
+import {
+  CHAVE_PREF, MODOS_SEM_CAIXA, NIVEIS_CLASSIFICACAO, ROTULO_NIVEL, caminhoDaClassificacao, gravarPreferencia,
+  lerPreferencia, linhasDaGradePorModo, safraNaLista, secaoSemCaixaVisivel, textoDaClassificacao, vinculosDaLinha,
+  SIM_NAO, type ModoSemCaixa, type NivelClassificacao,
+} from '@/lib/financeiro/colunasDaListaV2';
 import { useLancamentosConciliados, desfazerVinculo, desfazerGrupo } from '@/hooks/useConciliacaoDoMes';
 import { useLancamentosComOC, rotuloOrigemOC } from '@/hooks/useLancamentosComOC';
 import { iconeOrigemLancamento } from '@/v2/lib/origemLancamento';
@@ -69,7 +76,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { normalizarAtividade, casaTipoOperacao } from '@/lib/financeiro/filtrosListaV2';
 import { temFiltroLimitante, FRASE_SEM_FILTRO, SEM_SAFRA, SEM_CULTURA } from '@/lib/financeiro/filtroLimitante';
 import { CULTURAS_LANCAMENTO } from '@/lib/agri/rateioLancamento';
-import { labelDaCultura } from '@/lib/agri/areaPlantada';
 /* ⚠ A LISTA DE ATIVIDADES É A DO CARD DO MODAL — adendo do PR-FIN-SAFRA-ADM-01. Duplicá-la
    aqui é como o filtro ficou dois anos oferecendo Pecuária e Agricultura enquanto o resto do
    sistema já conhecia quatro: uma lista escrita à mão não sabe quando a outra cresce. */
@@ -470,7 +476,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
       if (instantaneo) {
         const extras = extrasDoRetornoOC(f);
         if (extras.dataPor !== undefined) setDataPor(extras.dataPor);
-        if (extras.mostrarSemCaixa !== undefined) setMostrarSemCaixa(extras.mostrarSemCaixa);
+        if (extras.mostrarSemCaixa !== undefined) setModoSemCaixa(extras.mostrarSemCaixa ? 'mostrar' : 'ocultar');
       }
       if (f.fazendaId !== undefined) setFazendaId(f.fazendaId);
       /* Compatibilidade com o que foi guardado antes da multisseleção: um `ano` solto vira
@@ -996,7 +1002,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     try {
       /* OC-HOMOLOG-FIX-02 — mais os tres que o painel tambem ajusta; sem eles a volta trazia "Financeira", a chave do
          sem caixa desligada e a cultura em "Todas" (src/lib/financeiro/retornoOC.ts). */
-      const extras: ExtrasRetornoOC = { dataPor, mostrarSemCaixa, culturaFiltro };
+      const extras: ExtrasRetornoOC = { dataPor, mostrarSemCaixa: modoSemCaixa !== 'ocultar', culturaFiltro };
       sessionStorage.setItem(CHAVE_RETORNO_OC, JSON.stringify({
         fazendaId, anosSelecionados, mesesSelecionados, statusSelecionados, tipoOperacao,
         contaOrigem, contaDestino, macroFiltro, grupoFiltro, centroFiltro,
@@ -1058,6 +1064,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
 
   const safraCodigoMap = useMemo(
     () => new Map((hook.safras ?? []).map(s => [s.id, s.codigo || s.nome])),
+    [hook.safras],
+  );
+  /* FIN-V2-COLUNAS-02: a atividade DA SAFRA (a sigla "Pec" / "Agr" da linha 1 da coluna). */
+  const safraEscopoMap = useMemo(
+    () => new Map((hook.safras ?? []).map(s => [s.id, s.escopo_negocio])),
     [hook.safras],
   );
 
@@ -1197,13 +1208,26 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   /* FIN-V2-SEM-CAIXA-01 — a lista padrao e' SO' DINHEIRO. O sem caixa (entrega da conta corrente, barter, consumo) entrou no DRE
      e nao no banco: vai para a secao propria, que so' aparece com a chave. `sortedLancamentos` alimenta a grade, os totais, a
      contagem e a selecao em lote — todos passam a ver so' caixa. O nulo conta como caixa, como nos totais. */
-  const [mostrarSemCaixa, setMostrarSemCaixa] = useState(false);
+  /* FIN-V2-COLUNAS-02 — o "sem caixa" em TRES posicoes (Ocultar | Mostrar | So' c/ DRE), lembrada no navegador. Ocultar e'
+     o desmarcado de antes, Mostrar o marcado; So' c/ DRE poe NA GRADE so' o sem caixa que compoe o DRE (`linhasDaGradePorModo`),
+     e os totais do topo passam a ser os dele. */
+  const [modoSemCaixa, setModoSemCaixaEstado] = useState<ModoSemCaixa>(() => lerPreferencia(CHAVE_PREF.semCaixa, null, MODOS_SEM_CAIXA, 'ocultar'));
+  const setModoSemCaixa = useCallback((m: ModoSemCaixa) => { setModoSemCaixaEstado(m); gravarPreferencia(CHAVE_PREF.semCaixa, null, m); }, []);
+  const mostrarSemCaixa = secaoSemCaixaVisivel(modoSemCaixa);
+  /* FIN-V2-COLUNAS-02 — a coluna de Classificacao no nivel escolhido (padrao Centro) e, no Ampliado, as duas contas ligadas ou
+     nao; as duas escolhas lembradas no navegador. */
+  const [nivelClassif, setNivelClassifEstado] = useState<NivelClassificacao>(() => lerPreferencia(CHAVE_PREF.nivel, null, NIVEIS_CLASSIFICACAO, 'centro'));
+  const setNivelClassif = useCallback((n: NivelClassificacao) => { setNivelClassifEstado(n); gravarPreferencia(CHAVE_PREF.nivel, null, n); }, []);
+  const [contasAmpliado, setContasAmpliadoEstado] = useState<boolean>(() => lerPreferencia(CHAVE_PREF.contas, null, SIM_NAO, 'sim') === 'sim');
+  const alternarContasAmpliado = useCallback(() => {
+    setContasAmpliadoEstado(v => { gravarPreferencia(CHAVE_PREF.contas, null, v ? 'nao' : 'sim'); return !v; });
+  }, []);
   const semCaixaLocal = useMemo(
     () => filteredLancamentos.filter(l => l.sem_movimentacao_caixa === true),
     [filteredLancamentos],
   );
   const sortedLancamentos = useMemo(() => {
-    const items = filteredLancamentos.filter(l => l.sem_movimentacao_caixa !== true);
+    const items = linhasDaGradePorModo(filteredLancamentos, modoSemCaixa);
     items.sort((a, b) => {
       if (sortField === 'default') {
         return compareDefaultOrder(a, b);
@@ -1251,7 +1275,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
           break;
         }
         case 'centro':
-          primary = dir * (a.centro_custo || '').localeCompare(b.centro_custo || '', 'pt-BR');
+          /* FIN-V2-COLUNAS-02: ordena pelo NIVEL que a coluna mostra */
+          primary = dir * textoDaClassificacao(a, nivelClassif).localeCompare(textoDaClassificacao(b, nivelClassif), 'pt-BR');
           break;
         case 'status':
           primary = dir * (a.status_transacao || '').localeCompare(b.status_transacao || '', 'pt-BR');
@@ -1268,7 +1293,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
       return compareDefaultOrder(a, b);
     });
     return items;
-  }, [filteredLancamentos, sortField, sortDir, compareDefaultOrder, fornecedoresMap, safraCodigoMap]);
+  }, [filteredLancamentos, sortField, sortDir, compareDefaultOrder, fornecedoresMap, safraCodigoMap, modoSemCaixa, nivelClassif]);
 
   const totalLancamentosFiltrados = sortedLancamentos.length;
 
@@ -1367,9 +1392,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     /* A exportacao segue a TELA (decisao do Gabriel): so' caixa com a chave desligada; caixa e sem caixa com ela ligada. */
     () => hook.buscarConjuntoFiltrado(filtrosAplicados, {
       incluirSemVencimento: incluirSemVencimentoAplicado,
-      caixa: mostrarSemCaixa ? undefined : 'com',
-    }),
-    [hook.buscarConjuntoFiltrado, filtrosAplicados, incluirSemVencimentoAplicado, mostrarSemCaixa],
+      caixa: modoSemCaixa === 'ocultar' ? 'com' : modoSemCaixa === 'so_dre' ? 'sem' : undefined,
+    }).then(ls => (modoSemCaixa === 'so_dre' ? linhasDaGradePorModo(ls, 'so_dre') : ls)),
+    [hook.buscarConjuntoFiltrado, filtrosAplicados, incluirSemVencimentoAplicado, modoSemCaixa],
   );
 
   /* A secao sem caixa: no caminho em memoria ja' esta' filtrada (`semCaixaLocal`); no paginado vem do servidor, pelo MESMO plano
@@ -1557,8 +1582,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
      entrada. Uma função só, um foco só. */
   const valorDaLinha = (l: LancamentoV2) => formatarValorLinha(l, foco);
 
-  const totalEntradas = totais.entradas;
-  const totalSaidas = totais.saidas;
+  /* FIN-V2-COLUNAS-02: no So' c/ DRE a grade e' so' sem caixa, e os totais do topo sao os dela. */
+  const totalEntradas = modoSemCaixa === 'so_dre' ? totais.entradasSemCaixa : totais.entradas;
+  const totalSaidas = modoSemCaixa === 'so_dre' ? totais.saidasSemCaixa : totais.saidas;
   const totalTransferencias = totais.transferencias;
 
   const toggleMes = (val: string) => {
@@ -2483,9 +2509,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         <div className="flex h-6 shrink-0 flex-wrap items-center gap-x-2 px-1 text-[10px] tabular-nums">
           {/* FIN-V2-SEM-CAIXA-01: no padrao so' dinheiro — Entradas, Saidas, Transf. e a contagem. O total sem caixa so' existe
               com a chave ligada, e e' o mesmo numero do rodape da secao (`totalSemCaixa`). */}
-          <span className="font-bold text-success" title="Só o que movimenta caixa.">Entradas: {formatMoeda(totalEntradas)}</span>
+          <span className="font-bold text-success" title={modoSemCaixa === 'so_dre' ? 'Só os lançamentos sem caixa que compõem o DRE.' : 'Só o que movimenta caixa.'}>Entradas: {formatMoeda(totalEntradas)}</span>
           <span className="text-muted-foreground/40">|</span>
-          <span className="font-bold text-destructive" title="Só o que movimenta caixa.">Saídas: {formatMoeda(totalSaidas)}</span>
+          <span className="font-bold text-destructive" title={modoSemCaixa === 'so_dre' ? 'Só os lançamentos sem caixa que compõem o DRE.' : 'Só o que movimenta caixa.'}>Saídas: {formatMoeda(totalSaidas)}</span>
           <span className="text-muted-foreground/40">|</span>
           <span className="font-bold text-sky-700 dark:text-sky-400"
             title="Transferências entre contas do próprio cliente: não são entrada nem saída do caixa, por isso ficam fora dos dois totais.">
@@ -2493,18 +2519,32 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
           </span>
           <span className="text-muted-foreground/40">|</span>
           <span className="text-muted-foreground">{totalLancamentosFiltrados} lanç.</span>
-          {mostrarSemCaixa && (<>
-            <span className="text-muted-foreground/40">|</span>
-            <span className="font-bold text-amber-700 dark:text-amber-500" data-testid="topo-sem-caixa"
-              title="Entrou no DRE e não no banco: entrega da conta corrente, barter, consumo.">
-              Sem caixa (só DRE): {formatMoeda(totalSemCaixa(linhasSemCaixa))}
-            </span>
-          </>)}
-          <label className="ml-auto flex cursor-pointer items-center gap-1 text-[10px] text-muted-foreground">
-            <Checkbox checked={mostrarSemCaixa} onCheckedChange={v => setMostrarSemCaixa(v === true)} className="h-3 w-3"
-              aria-label="Mostrar lançamentos sem caixa (entregas, barter, consumo)" />
-            Mostrar lançamentos sem caixa (entregas, barter, consumo)
-          </label>
+          {/* FIN-V2-COLUNAS-02: o total sem caixa saiu da faixa (com os dois seletores ela não cabe numa linha, medido: 846px dos
+              ~919 sem ele, ~1.040 com ele no pior número). Ele é o MESMO número do rodapé da seção sem caixa, e vai no `title`
+              do "Mostrar". */}
+          {/* FIN-V2-COLUNAS-02 — os controles da lista, na MESMA linha dos totais (altura 20 numa faixa de 24): no Ampliado o chip
+              das contas; a Classificação por nível; o "sem caixa" em três posições. Alinhados à direita: o chip que muda de
+              largura ("✓") cresce para a esquerda e não move os seletores. */}
+          <span className="ml-auto flex shrink-0 items-center gap-1.5" data-testid="controles-da-lista">
+            {modoIntensivo && (
+              <button type="button" data-testid="chip-contas" aria-pressed={contasAmpliado} onClick={alternarContasAmpliado}
+                title="Mostrar ou esconder as colunas C. Origem e C. Destino"
+                className={`h-5 shrink-0 rounded-md border px-2 text-[10px] font-medium ${contasAmpliado ? 'border-primary bg-primary text-primary-foreground' : 'bg-card text-muted-foreground'}`}>
+                {contasAmpliado ? '✓ ' : ''}Contas origem/destino
+              </button>
+            )}
+            <span className="text-muted-foreground">Classificação</span>
+            <Segmentado altura={20} valor={nivelClassif} onEscolher={setNivelClassif}
+              opcoes={NIVEIS_CLASSIFICACAO.map(n => ({ valor: n, rotulo: ROTULO_NIVEL[n] }))} />
+            <span className="text-muted-foreground">Sem caixa</span>
+            <Segmentado altura={20} valor={modoSemCaixa} onEscolher={setModoSemCaixa} opcoes={[
+              { valor: 'ocultar', rotulo: 'Ocultar', title: 'Só o que movimenta caixa' },
+              { valor: 'mostrar', rotulo: 'Mostrar', title: mostrarSemCaixa
+                ? `Sem caixa (só DRE): ${formatMoeda(totalSemCaixa(linhasSemCaixa))} — na seção abaixo da lista`
+                : 'Também o sem caixa (entregas, barter, consumo), na seção abaixo da lista' },
+              { valor: 'so_dre', rotulo: 'Só c/ DRE', title: 'Só os lançamentos sem caixa que compõem o DRE' },
+            ]} />
+          </span>
         </div>
       )}
 
@@ -2616,19 +2656,22 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     ⚠ FIN-V2-COLUNAS-OC-01 (as larguras de HOJE): 28·14·40·40·40·OC 16·Produto 136·Fornecedor 100·Macro 56·
                     Centro 56·Faz. 30·Safra 66·Valor 90·Doc. 70·Status 64·ações 28 = 874. */}
                 {/* FIN-V2-COLUNAS-OC-01 — coluna OC: 16px (o ícone de 12 + os 4 da margem dele). Não congelada. */}
-                <col style={{ width: 16 }} />
+                {/* FIN-V2-COLUNAS-02: a coluna "Vínc." (era "OC") leva TODOS os selos de vínculo lado a lado, 36px (até dois selos de 13). */}
+                <col style={{ width: 36 }} />
                 {/* ⚠ FIN-V2-COLUNAS-OC-01 (Gabriel, 05/10): Produto 111→136 (Ampliado 125→150) — recebe o que Status, Faz., Macro e
                     Centro devolveram, menos os 16 da coluna OC. A soma normal segue 874. */}
                 {/* PARC-LIVRES-01 passo 3: Produto 136→130 (Ampliado 150→144) e Macro/Centro 56→49 devolvem 20px à coluna Doc. */}
-                <col style={{ width: modoIntensivo ? 144 : 130 }} />
+                {/* FIN-V2-COLUNAS-02 — larguras novas (normal 906; Ampliado 1.088 com e sem as contas: desligadas, os 184px delas vão para
+                    Produto, Fornecedor e Classificação). Produto, Fornecedor e Classificação são as únicas que cortam (inteiro no `title`). */}
+                <col style={{ width: modoIntensivo ? (contasAmpliado ? 140 : 202) : 128 }} />
                 {/* Fornecedor 140→120 — FIN-LISTA-VISUAL-06; 120→100 no fix1. Trunca com o nome inteiro no `title`. */}
                 {/* ⚠ 100 → 124 — PARC-LIVRES-01 fechamento C (pedido do Gabriel: Fornecedor mais largo). Os 24px saem de Macro (49→33,
                     que já cortava em 5.250 de 5.251 linhas do NJ) e de Centro (49→41). Medido no NJ a 1.126. */}
-                <col style={{ width: 124 }} />
+                <col style={{ width: modoIntensivo ? (contasAmpliado ? 116 : 177) : 122 }} />
                 {/* Macro e Centro 66→56, a 8,5px (`.celula-classe`, exceção ao piso só nesta lista): cortam com o texto inteiro no
                     `title`, como já cortavam — medido no NJ: 3 das 11 macros cabiam em 66 a 9px, e as mesmas 3 cabem em 56 a 8,5. */}
-                <col style={{ width: 33 }} />
-                <col style={{ width: 41 }} />
+                {/* FIN-V2-COLUNAS-02: Macro e Centro viram UMA coluna, a Classificação no nível escolhido. */}
+                <col style={{ width: modoIntensivo ? (contasAmpliado ? 116 : 177) : 124 }} />
                 {/* FIN-V2-HOMOLOG-FIX-01: a coluna OC (58px, do FIN-V2-SEM-CAIXA-01) SAIU — empurrava a tabela para a rolagem
                     horizontal e escondia o "…" (onde mora "Criar OC a partir deste lançamento"). A OC continua a um clique: o
                     icone ao lado do produto abre a operacao na aba Financeiro, e o "…" ganhou "Abrir OC". */}
@@ -2644,7 +2687,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     código mais longo do cadastro (medido: 10 caracteres, os demais têm 9),
                     não cabia nos 56 e saía "25/26-M…". Na lista normal a diferença é nenhuma,
                     porque lá as faixas esticam. */}
-                <col style={{ width: 66 }} />
+                {/* FIN-V2-COLUNAS-02: Safra 66→50, em duas linhas (o período + a atividade embaixo). */}
+                <col style={{ width: 50 }} />
                 {/* As duas contas só no Ampliado: 130→105 (VISUAL-06), 78 e de volta a 105 no
                     revert da geometria, agora 92 — e o 92 sai dos NOMES REAIS, medidos no
                     proto, não de estimativa: a célula renderiza a 9px, e dos nomes do NJ os
@@ -2661,9 +2705,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     trás de um corte anterior. Agora são 105, e o nome longo ("Cartão Banco do
                     Brasil - Pecuária") passa a truncar mais cedo; o nome inteiro está no
                     `title`, e o que a coluna precisa responder é QUAL conta, não o nome todo. */}
-                {modoIntensivo && <col style={{ width: 92 }} />}
-                {modoIntensivo && <col style={{ width: 92 }} />}
-                <col style={{ width: 90 }} />
+                {modoIntensivo && contasAmpliado && <col style={{ width: 92 }} />}
+                {modoIntensivo && contasAmpliado && <col style={{ width: 92 }} />}
+                {/* FIN-V2-COLUNAS-02: Valor 90→88. */}
+                <col style={{ width: 88 }} />
                 {/* PARC-FECHA-02 item 6 — o CLIPE, 14px, entre Valor e Doc. (vale também no Ampliado). Não é congelada. */}
                 <col style={{ width: 14 }} />
                 {/* Doc: 55 na normal, 90→60 no Ampliado — FIN-LISTA-VISUAL-06.
@@ -2678,7 +2723,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     "Doc. 21474298649"). Medido no NJ com um Range (mono 8px): NF 67,4px; "Doc." + 11 dígitos 77,1; + 12 dígitos
                     81,9 — os mesmos números que cabiam sem o prefixo em 70 cabem com ele em 90 (82 úteis). 13 dígitos ou mais
                     já cortavam e seguem cortando (dívida FIN-V2-DOC-CORTA-01). */}
-                <col style={{ width: 90 }} />
+                {/* FIN-V2-COLUNAS-02: Doc. 90→78. */}
+                <col style={{ width: 78 }} />
                 {/* ⚠ 64 → 84 → 77. Com 64 o status saía cortado colado nos pontinhos ("Ag"); o
                     PR-FIN-V2-STATUS-PGTO-01 foi a 84 pela pílula em "Programado", e o fix1 a 77: previsto, programado e agendado viraram
                     TEXTO (sem o padding da pílula), e a caixa ficou só para realizado e conciliado.
@@ -2688,7 +2734,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     55,1px; "Realizado" com a caixa 51,7; "Programado" (texto) 47,4. Com `px-0.5` a célula tem 60 úteis: folga de
                     4,9px. O status NUNCA corta. Os dois LEGADOS: "Meta (legado)" 54,3 cabe; "Conciliado (legado)" pede 75,7 e CORTA
                     com o rótulo inteiro no `title` (uma linha por registro — antes quebrava em duas). */}
-                <col style={{ width: 64 }} />
+                {/* FIN-V2-COLUNAS-02: Status 64→60 (o maior, "Conciliado" com o selo, 55,1px em 56 úteis). */}
+                <col style={{ width: 60 }} />
                 {/* Ações 36→28: um botão "…" em vez de dois ícones. */}
                 <col style={{ width: 28 }} />
               </colgroup>
@@ -2711,17 +2758,16 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       números em oito lugares (th + td). */}
                   <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[68px] z-30 bg-primary" onClick={() => toggleSort('venc')}>Venc.<SortIndicator field="venc" /></th>
                   <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[108px] z-30 bg-primary" onClick={() => toggleSort('pgto')}>Pgto.<SortIndicator field="pgto" /></th>
-                  <th className="px-0 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground" title="Operação comercial">OC</th>
+                  <th className="px-0 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground" title="Vínculos: O operação comercial · F financiamento · R recorrência · P parcelamento">Vínc.</th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('produto')}>Produto<SortIndicator field="produto" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('fornecedor')}>Fornecedor<SortIndicator field="fornecedor" /></th>
-                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground">Macro</th>
-                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('centro')}>Centro<SortIndicator field="centro" /></th>
+                  <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" data-testid="th-classificacao" onClick={() => toggleSort('centro')}>{ROTULO_NIVEL[nivelClassif]}<SortIndicator field="centro" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground" title="Fazenda">Faz.</th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('safra')}>Safra<SortIndicator field="safra" /></th>
-                  {modoIntensivo && (
+                  {modoIntensivo && contasAmpliado && (
                     <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground">C. Origem</th>
                   )}
-                  {modoIntensivo && (
+                  {modoIntensivo && contasAmpliado && (
                     <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground">C. Destino</th>
                   )}
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('valor')}>Valor<SortIndicator field="valor" /></th>
@@ -2739,7 +2785,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
               <tbody className="[&_tr:last-child]:border-0">
                 {linhasDaGrade.length === 0 ? (
                   <tr className="border-b">
-                    <td colSpan={modoIntensivo ? 18 : 16} className="text-center text-muted-foreground py-4 text-[10px]">
+                    <td colSpan={modoIntensivo && contasAmpliado ? 17 : 15} className="text-center text-muted-foreground py-4 text-[10px]">
                       Nenhum lançamento encontrado.
                     </td>
                   </tr>
@@ -2835,41 +2881,37 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                             VERBATIM: com acesso, o botão que abre a operação (e para a propagação — a linha não abre); sem acesso, só a
                             marca (ACESSOS-02b). Sem OC, célula vazia. ⚠ NÃO É CONGELADA: vem depois das cinco `sticky` e rola com o
                             Produto; a cadeia congelada (hoje 0/28/68/108) não passa por ela. */}
-                        <td className="px-0 py-1 align-middle text-left" data-testid="celula-oc">
+                        <td className="px-0.5 py-1 align-middle text-left" data-testid="celula-oc">
+                          {/* FIN-V2-COLUNAS-02 — TODOS os selos de vínculo (F financiamento · R recorrência · P parcelamento · O OC), do que
+                              JÁ existe no dado (`vinculosDaLinha`). O da OC abre a operação (com acesso; sem acesso, só a marca —
+                              ACESSOS-02b); F e P abrem o contrato para quem tem a tela; R só tem o nome. */}
                           {(() => {
                             const oc = lancamentosComOC.get(l.id);
-                            if (!oc) return null;
-                            /* ACESSOS-02b — sem acesso a' tela da OC a MARCA fica (o lancamento e' de uma OC) e o atalho sai. */
-                            if (!podeAbrirOC) return (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <span data-testid="marca-oc" className="inline-flex align-middle ml-1 shrink-0">
-                                    <Beef className="h-3 w-3 text-amber-600 dark:text-amber-400" />
-                                  </span>
-                                </TooltipTrigger>
-                                <TooltipContent>{rotuloOrigemOC(oc)}</TooltipContent>
-                              </Tooltip>
-                            );
+                            const parcela = parcelasDosLancamentos?.get(l.id);
+                            /* `financiamento_id` vem no `select('*')` mas não está no tipo da linha: lido sem cast. */
+                            const fid = Reflect.get(l, 'financiamento_id');
+                            const contratoId = typeof fid === 'string' && fid ? fid : null;
+                            const vinculos = vinculosDaLinha({
+                              financiamentoId: contratoId || (isParcelaFinanciamento ? 'origem' : null),
+                              recorrenciaId: l.recorrencia_id,
+                              parcelaDeParcelamento: parcela ? `${parcela.numero}/${parcela.total}` : null,
+                              oc: oc ? rotuloOrigemOC(oc) : null,
+                            });
+                            if (vinculos.length === 0) return null;
+                            const abrirContrato = podeAbrirFinanciamento ? onAbrirFinanciamento : undefined;
                             return (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  {/* O clique abre a OC — e nao a linha: o botao para a propagacao. */}
-                                  <button type="button" data-testid="icone-oc"
-                                    onClick={e => { e.stopPropagation(); abrirOCFinanceiro(oc.operacaoId, oc.tipo); }}
-                                    className="inline-flex align-middle ml-1 shrink-0">
-                                    <Beef className="h-3 w-3 text-amber-600 dark:text-amber-400" />
-                                  </button>
-                                </TooltipTrigger>
-                                <TooltipContent>{rotuloOrigemOC(oc)} — clique para abrir</TooltipContent>
-                              </Tooltip>
+                              <CelulaVinculos vinculos={vinculos} abrir={{
+                                O: oc && podeAbrirOC ? () => abrirOCFinanceiro(oc.operacaoId, oc.tipo) : undefined,
+                                F: abrirContrato ? () => { void abrirFinanciamentoDaParcela(l); } : undefined,
+                                P: abrirContrato && contratoId ? () => abrirContrato(contratoId) : undefined,
+                              }} />
                             );
                           })()}
                         </td>
                         <td className="truncate px-1 py-1 align-middle text-[12px] font-medium leading-tight" title={isParcelaFinanciamento ? `Parcela de financiamento (origem automática) — ${np.inteiro || ''}` : (np.inteiro || '')}>
-                          {isParcelaFinanciamento && !np.parcela && <span className="mr-1" title="Parcela de financiamento">🏦</span>}
                           {np.parcela ? (
                             <span className="flex min-w-0 items-baseline gap-1" data-testid="nome-com-parcela">
-                              <span className="min-w-0 truncate">{isParcelaFinanciamento && <span className="mr-1" title="Parcela de financiamento">🏦</span>}{np.nome || '-'}</span>
+                              <span className="min-w-0 truncate">{np.nome || '-'}</span>
                               <span className="shrink-0 whitespace-nowrap tabular-nums" data-testid="parcela-i-n">{np.parcela}</span>
                             </span>
                           ) : <>{descExibida || '-'}</>}
@@ -2885,8 +2927,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                         <td className="truncate px-1 py-1 align-middle text-[12px] leading-tight text-muted-foreground" title={fornNome || ''}>
                           {fornNome || (!l.favorecido_id ? '-' : <span className="text-warning">n/c</span>)}
                         </td>
-                        <td className="celula-classe truncate px-1 py-1 align-middle text-[11px] font-medium leading-tight text-muted-foreground" title={l.macro_custo || ''}>{l.macro_custo || '-'}</td>
-                        <td className="celula-classe truncate px-1 py-1 align-middle text-[11px] leading-tight text-muted-foreground" title={l.centro_custo || ''}>{l.centro_custo || '-'}</td>
+                        {/* FIN-V2-COLUNAS-02 — a Classificação no nível escolhido; o caminho inteiro no `title`. */}
+                        <td className="celula-classe truncate px-1 py-1 align-middle text-[11px] leading-tight text-muted-foreground" data-testid="celula-classificacao"
+                          title={caminhoDaClassificacao(l)}>{textoDaClassificacao(l, nivelClassif)}</td>
                         <td className="whitespace-nowrap px-0.5 py-1 align-middle text-center text-[11px] font-medium leading-tight text-muted-foreground" title={fazendaNameMap.get(l.fazenda_id) || ''}>{fazendaCodigoMap.get(l.fazenda_id) || '-'}</td>
                         {/* ⚠ "—" É AUSÊNCIA, e aqui ela é informação: financiamento de
                             investimento e administrativo NÃO têm safra por regra. Um traço
@@ -2901,21 +2944,22 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                             numa lista que se lê pela densidade. Safra e cultura vão na MESMA linha e
                             truncam; o texto inteiro fica no `title`. Safra pode truncar; valor, status e
                             data não. */}
-                        <td className="truncate px-1 py-1 align-middle text-[10px] font-medium leading-tight text-muted-foreground"
-                          title={[
-                            l.safra_id ? (safraCodigoMap.get(l.safra_id) || '') : 'Sem safra',
-                            l.cultura ? labelDaCultura(l.cultura) : null,
-                          ].filter(Boolean).join(' · ')}>
-                          {l.safra_id ? (safraCodigoMap.get(l.safra_id) || '—') : '—'}
-                          {l.cultura && ` · ${labelDaCultura(l.cultura)}`}
+                        <td className="px-1 py-[1px] align-middle text-[10px] leading-tight text-muted-foreground" data-testid="celula-safra">
+                          {/* FIN-V2-COLUNAS-02 — o período + a atividade DA SAFRA; embaixo a fase / cultura do lançamento SÓ quando existe
+                              (sem fase não é rateio). A altura da linha da tabela não muda. */}
+                          <CelulaSafra safra={safraNaLista({
+                            codigo: l.safra_id ? safraCodigoMap.get(l.safra_id) : null,
+                            escopo: l.safra_id ? safraEscopoMap.get(l.safra_id) : null,
+                            fase: l.fase, cultura: l.cultura,
+                          })} />
                         </td>
-                        {modoIntensivo && (
+                        {modoIntensivo && contasAmpliado && (
                           <td className="truncate px-1 py-1 align-middle text-[10px] leading-tight text-muted-foreground"
                             title={l.conta_bancaria_id ? (contaNomeMap.get(l.conta_bancaria_id) || '') : ''}>
                             {l.conta_bancaria_id ? (contaNomeMap.get(l.conta_bancaria_id) || '—') : '—'}
                           </td>
                         )}
-                        {modoIntensivo && (
+                        {modoIntensivo && contasAmpliado && (
                           <td className="truncate px-1 py-1 align-middle text-[10px] leading-tight text-muted-foreground"
                             title={l.conta_destino_id ? (contaNomeMap.get(l.conta_destino_id) || '') : ''}>
                             {l.conta_destino_id ? (contaNomeMap.get(l.conta_destino_id) || '—') : '—'}

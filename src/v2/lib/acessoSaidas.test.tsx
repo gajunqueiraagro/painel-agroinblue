@@ -111,16 +111,19 @@ describe('a lista de lancamentos (FinanceiroV2Tab, lida da FONTE): um caso por p
     expect(tela).toContain("const podeAbrirFinanciamento = usePodeAbrir('financiamentos');");
     expect(tela).not.toMatch(/perfil === '|isAdmin/);
   });
-  it('icone do produto: sem acesso vira a MARCA da OC (mesmo icone, mesmo rotulo de origem), sem botao; com acesso, o botao de antes', () => {
-    expect(tela).toMatch(/if \(!podeAbrirOC\) return \( <Tooltip> <TooltipTrigger asChild> <span data-testid="marca-oc"[^>]*> <Beef [^>]*\/> <\/span> <\/TooltipTrigger> <TooltipContent>\{rotuloOrigemOC\(oc\)\}<\/TooltipContent> <\/Tooltip> \);/);
-    expect(tela).toContain('<button type="button" data-testid="icone-oc" onClick={e => { e.stopPropagation(); abrirOCFinanceiro(oc.operacaoId, oc.tipo); }}');
+  /* ⚠ CONTRATO MUDOU NO FIN-V2-COLUNAS-02: a marca da OC e' o selo "O" da coluna Vinc. (`CelulaVinculos`). Sem acesso o gesto nao e'
+     entregue e o selo fica so' marca (`marca-oc`, sem botao) — provado montando o componente em `colunasDaListaV2.test.tsx`. */
+  it('selo da OC: o gesto de abrir so com acesso (sem ele, so a marca, com o rotulo de origem)', () => {
+    expect(tela).toContain('oc: oc ? rotuloOrigemOC(oc) : null,');
+    expect(tela).toContain('O: oc && podeAbrirOC ? () => abrirOCFinanceiro(oc.operacaoId, oc.tipo) : undefined,');
   });
   it('"Abrir OC" do menu da linha: so com acesso', () => {
     expect(tela).toContain('{podeAbrirOC && lancamentosComOC.get(l.id) && ( <DropdownMenuItem data-testid="menu-abrir-oc"');
   });
-  it('"Ver contrato" da parcela de financiamento: so com acesso; o 🏦 da linha nao depende dele', () => {
+  it('"Ver contrato" da parcela de financiamento: so com acesso; o selo F da linha nao depende dele (sem acesso, so a marca)', () => {
     expect(tela).toContain('{isParcelaFinanciamento ? ( podeAbrirFinanciamento ? ( <DropdownMenuItem data-testid="menu-ver-contrato" onClick={() => abrirFinanciamentoDaParcela(l)}>');
-    expect(tela).toContain('{isParcelaFinanciamento && <span className="mr-1" title="Parcela de financiamento">🏦</span>}');
+    expect(tela).toContain('financiamentoId: contratoId || (isParcelaFinanciamento ? \'origem\' : null),');
+    expect(tela).toContain('const abrirContrato = podeAbrirFinanciamento ? onAbrirFinanciamento : undefined;');
   });
   it('"Criar OC a partir deste lançamento" (abre a OC criada): so com acesso', () => {
     expect(tela).toContain('{podeAbrirOC && podeCriarOCDoLegado(l, !!lancamentosComOC.get(l.id)) && (');

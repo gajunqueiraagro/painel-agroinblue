@@ -109,11 +109,12 @@ describe('a cor do status tem um dono', () => {
 describe('FinanceiroV2Tab — a coluna ST', () => {
   /* ⚠ CONTRATO MUDOU NO FIN-V2-COLUNAS-OC-01 (Gabriel, 05/10): o status renderiza a 8px (`.celula-status`) e a coluna foi
      remedida — 77 → 64. A pílula e a cor continuam vindo do dono. */
-  it('ST com 64px (a 8px), Doc com 90 (70 até o PARC-LIVRES-01 passo 3: a coluna passou a escrever o tipo), e o status em pílula', () => {
-    expect(tela).toContain('<col style={{ width: 64 }} />');
-    expect(tela).not.toContain('<col style={{ width: 77 }} />');
-    expect(tela.split('<col style={{ width: 90 }} />').length - 1).toBe(2);   // Valor e Doc.
-    expect(tela).not.toContain('<col style={{ width: 70 }} />');
+  /* ⚠ CONTRATO MUDOU NO FIN-V2-COLUNAS-02 (Gabriel, 16/10, mock v4): Status 64→60, Valor 90→88, Doc 90→78. */
+  it('ST com 60px (a 8px), Valor 88, Doc 78, e o status em pílula', () => {
+    expect(tela).toContain('<col style={{ width: 60 }} />');
+    expect(tela).toContain('<col style={{ width: 88 }} />');
+    expect(tela).toContain('<col style={{ width: 78 }} />');
+    for (const velho of [64, 77, 70, 90]) expect(tela).not.toContain(`<col style={{ width: ${velho} }} />`);
     expect(tela).toContain('<span className={cn(STATUS_PILULA_BASE, stPilula)} data-status={stKey}>{stLabel}</span>');
     expect(tela).not.toContain('text-[10px] leading-tight ${stColor}`}');
   });
@@ -126,14 +127,17 @@ describe('FinanceiroV2Tab — a coluna ST', () => {
   /* ⚠ A CONTA DE LARGURA, MEDIDA NA TELA (fix1): na janela do Gabriel o scroller tem 909px de `clientWidth` (innerWidth 1.135) e
      o `respiro-lista` tira 20 — 889 úteis. Com 15 de barra clássica (Windows, ou macOS "mostrar sempre"), 874. A soma do colgroup
      no modo NORMAL (sem as duas contas do Ampliado, e o lado `: N` do ternário) tem de caber nesse piso. */
-  it('a soma do colgroup no modo normal cabe nos 874px úteis medidos', () => {
+  /* FIN-V2-COLUNAS-02: a barra lateral tem 176px desde o UI-BOTOES-LUGAR-FIXO-01 — o Chat mediu a tabela normal em 919px na
+     janela de 1.133. A soma nova (906) cabe nesse piso. */
+  it('a soma do colgroup no modo normal cabe nos 919px medidos', () => {
     const grupo = tela.slice(tela.indexOf('<colgroup>'), tela.indexOf('</colgroup>'));
     const cols = grupo.split('\n').filter(l => l.includes('<col style') && !l.includes('modoIntensivo &&'));
     const larguras = cols.map(l => {
-      const tern = l.match(/modoIntensivo \? \d+ : (\d+)/);
+      const tern = l.match(/modoIntensivo \? .+ : (\d+) \}\}/);
       return Number(tern ? tern[1] : l.match(/width: (\d+)/)![1]);
     });
-    expect(larguras.length).toBe(16);   // FIN-V2-COLUNAS-OC-01: +1, a coluna do ícone da OC (16px); a soma segue ≤ 874
-    expect(larguras.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(874);
+    expect(larguras.length).toBe(15);   // FIN-V2-COLUNAS-02: Macro e Centro viraram UMA coluna
+    expect(larguras.reduce((a, b) => a + b, 0)).toBe(906);
+    expect(larguras.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(919);
   });
 });

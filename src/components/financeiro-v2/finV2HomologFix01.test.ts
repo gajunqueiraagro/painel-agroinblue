@@ -20,11 +20,12 @@ const migration = readFileSync(resolve(__dirname, '../../../supabase/migrations/
 describe('item 3 — lista sem a coluna OC de 58px, "..." sempre visivel, "Abrir OC" no menu', () => {
   /* ⚠ CONTRATO MUDOU NO FIN-V2-COLUNAS-OC-01 (Gabriel, 05/10): a coluna OC VOLTOU, mas com 16px e so' o ICONE (a de 58px, com o
      codigo da OC — `CelulaOC` — continua fora da lista: era ela que empurrava a tabela para a rolagem). A soma segue 874. */
-  it('a celula de 58px da OC segue fora das linhas; a coluna do icone tem 16px e a linha vazia ocupa todas as colunas', () => {
-    expect(tela).toContain('title="Operação comercial">OC</th>');
+  /* ⚠ CONTRATO MUDOU DE NOVO NO FIN-V2-COLUNAS-02 (Gabriel, 16/10): a coluna e' a "Vinc.", com todos os selos de vinculo. */
+  it('a celula de 58px da OC segue fora das linhas; a coluna dos vinculos e a linha vazia ocupa todas as colunas', () => {
+    expect(tela).toContain('>Vínc.</th>');
     expect(tela).not.toContain('<CelulaOC oc={lancamentosComOC.get(l.id)}');
-    expect(tela).toContain('<td colSpan={modoIntensivo ? 18 : 16}');
-    expect(tela).not.toContain('<td colSpan={15}');
+    expect(tela).toContain('<td colSpan={modoIntensivo && contasAmpliado ? 17 : 15}');
+    expect(tela).not.toContain('<td colSpan={16}');
     /* a busca sabe achar: a secao sem caixa ainda usa a celula OC (cabe sem rolagem la') */
     expect(tela).toContain("import { SecaoSemCaixa, totalSemCaixa } from '@/components/financeiro-v2/SecaoSemCaixa';");
   });
@@ -37,13 +38,13 @@ describe('item 3 — lista sem a coluna OC de 58px, "..." sempre visivel, "Abrir
     expect(tela).not.toContain('sticky right-0');
   });
 
-  it('"Abrir OC" so na linha com OC, abrindo a OC na aba Financeiro; o icone ao lado do produto continua', () => {
+  it('"Abrir OC" so na linha com OC, abrindo a OC na aba Financeiro; o selo O da coluna Vinc. tambem abre', () => {
     const menu = tela.slice(tela.indexOf('data-testid="menu-abrir-oc"') - 200, tela.indexOf('data-testid="menu-abrir-oc"') + 300);
     /* ACESSOS-02b: e so' para quem acessa a tela da OC (`podeAbrirOC`, de `usePodeAbrir`) — atalho para tela sem acesso nao se oferece */
     expect(menu).toContain('{podeAbrirOC && lancamentosComOC.get(l.id) && (');
     expect(menu).toContain('abrirOCFinanceiro(oc.operacaoId, oc.tipo)');
     expect(menu).toContain('Abrir OC');
-    expect(tela).toContain('onClick={e => { e.stopPropagation(); abrirOCFinanceiro(oc.operacaoId, oc.tipo); }}');
+    expect(tela).toContain('O: oc && podeAbrirOC ? () => abrirOCFinanceiro(oc.operacaoId, oc.tipo) : undefined,');
   });
 });
 

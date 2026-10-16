@@ -49,16 +49,19 @@ describe('totais do Financeiro V2: caixa x sem caixa', () => {
     /* FIN-V2-HOMOLOG-FIX-01 (item 3): a coluna de 58px com o CODIGO da OC (`CelulaOC`) saiu da lista e continua fora.
        ⚠ CONTRATO MUDOU NO FIN-V2-COLUNAS-OC-01: o ICONE da OC ganhou uma coluna propria de 16px, antes do Produto (ver
        finV2ColunasOC01.test.ts) — o cabecalho "OC" voltou, a celula do codigo nao. */
-    expect(tela).toContain('title="Operação comercial">OC</th>');
+    expect(tela).toContain('>Vínc.</th>');   // FIN-V2-COLUNAS-02: a coluna OC virou Vinc.
     expect(tela).not.toContain('<CelulaOC oc={lancamentosComOC.get(l.id)}');
     for (const rotulo of ['Entradas:', 'Saídas:', 'Transf.:', 'lanç.']) expect(tela).toContain(rotulo);
     /* os dois totais sem caixa sairam da faixa padrao; o total sem caixa so' existe dentro de `mostrarSemCaixa &&` */
     expect(tela).not.toContain('Receita sem caixa:');
     expect(tela).not.toContain('Despesa sem caixa:');
-    const topo = tela.slice(tela.indexOf('{mostrarSemCaixa && (<>'), tela.indexOf('Mostrar lançamentos sem caixa (entregas, barter, consumo)\n'));
-    expect(topo).toContain('Sem caixa (só DRE):');
-    /* a busca sabe achar: a chave e' a do mock, desligada por padrao */
-    expect(tela).toContain('const [mostrarSemCaixa, setMostrarSemCaixa] = useState(false);');
+    /* FIN-V2-COLUNAS-02: o total sem caixa saiu da faixa (nao cabia numa linha com os seletores) e vai no `title` do "Mostrar" —
+       o mesmo numero do rodape da secao. */
+    expect(tela).not.toContain('data-testid="topo-sem-caixa"');
+    expect(tela).toContain('? `Sem caixa (só DRE): ${formatMoeda(totalSemCaixa(linhasSemCaixa))} — na seção abaixo da lista`');
+    /* FIN-V2-COLUNAS-02: a chave virou o seletor de tres posicoes; o padrao e' "Ocultar" (o desligado de antes) */
+    expect(tela).toContain("lerPreferencia(CHAVE_PREF.semCaixa, null, MODOS_SEM_CAIXA, 'ocultar')");
+    expect(tela).toContain('const mostrarSemCaixa = secaoSemCaixaVisivel(modoSemCaixa);');
   });
 
   it('D3: Contas a Pagar e Receber tira o sem caixa SEMPRE (lido da fonte: a consulta nao se monta em teste)', () => {
