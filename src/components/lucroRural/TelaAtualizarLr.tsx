@@ -8,7 +8,7 @@
  * rodapé com as pendências, Cancelar, Simular e Gravar (descreve o que faz; só acende sem pendência).
  * ⚠ ALTURA FIXA: o corpo é a tabela, que rola por dentro com o cabeçalho preso; cartões e rodapé não andam.
  */
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { RotateCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
@@ -28,6 +28,7 @@ import {
   fraseDoMotivo, frasePendencias, itensDoRetorno, nasceSemSafra, pendencias, textoDeDecisao, textoDoGravar,
   type AcaoLr, type EnvelopeLr, type EscolhaDaLinha, type ItemDoRetorno, type LinhaLrTela, type SituacaoLr,
 } from '@/v2/lib/lucroRural/telaLr';
+import { textoDoTamanho } from '@/v2/lib/lucroRural/pastaLr';
 
 export const REGRA_ARQUIVOS_LR: RegraDeAceite = { tipos: ['xlsx', 'xls'], varios: true };
 
@@ -54,7 +55,7 @@ const AMBAR = 'text-[#b45309]';
 const fmtData = (d: string | null) => (d ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(2, 4)}` : '—');
 const fmtValor = (c: number | null) => (c == null ? '—' : formatMoeda(c / 100).replace('R$', '').trim());
 
-export interface ArquivoLrNaTela { tipo: 'pagar' | 'receber'; nome: string; data: string | null; linhas: number }
+export interface ArquivoLrNaTela { tipo: 'pagar' | 'receber'; nome: string; data: string | null; linhas: number; tamanho?: number | null }
 
 export interface TelaAtualizarLrProps {
   envelope: EnvelopeLr;
@@ -73,6 +74,8 @@ export interface TelaAtualizarLrProps {
   onCancelar: () => void;
   /** Depois de GRAVAR e fechar o resultado: quem hospeda compara de novo (a tela antiga ficou velha). */
   onGravado?: () => void;
+  /** Passo c: o que acompanha os arquivos (aviso da data, "trocar arquivos"), ao lado deles. */
+  extraArquivos?: ReactNode;
 }
 
 export function TelaAtualizarLr(p: TelaAtualizarLrProps) {
@@ -128,9 +131,10 @@ export function TelaAtualizarLr(p: TelaAtualizarLrProps) {
           <span key={a.tipo} className="flex h-8 shrink-0 items-center gap-1.5 rounded border border-[#86efac] bg-[#f0fdf4] px-2 text-[10px]" data-testid={`arquivo-${a.tipo}`}
             title={a.nome}>
             <b>{a.tipo === 'pagar' ? 'Contas a pagar' : 'Contas a receber'}</b>
-            <span className="text-muted-foreground">{a.data ?? ''} · {a.linhas} linhas</span>
+            <span className="text-muted-foreground">{a.data ?? ''} · {a.linhas} linhas{a.tamanho != null ? ` · ${textoDoTamanho(a.tamanho)}` : ''}</span>
           </span>
         ))}
+        {p.extraArquivos}
         <AreaDeArquivo regra={REGRA_ARQUIVOS_LR} modo="lote" className="h-8 w-[290px] shrink-0" testId="area-trocar-lr"
           convite="trocar arquivos: clique ou arraste os dois relatórios do LR" detalhe=""
           onArquivos={fs => { if (fs.length > 0) p.onTrocarArquivos(fs); }} />

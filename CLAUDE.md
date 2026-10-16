@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 16/10/2026 (FIN-LR-SYNC-01 passo b, +10: `src/components/lucroRural/telaAtualizarLr.test.tsx` 10 (novo) — 5416 depois dele; antes o
+  Baseline em 16/10/2026 (FIN-LR-SYNC-01 passo c, +15: `src/v2/lib/lucroRural/pastaLr.test.ts` 5 (novo), `src/components/lucroRural/pastaDownloadsLr.test.tsx` 10
+  (novo) — 5431 depois dele; antes o FIN-LR-SYNC-01 passo b, +10: `src/components/lucroRural/telaAtualizarLr.test.tsx` 10 (novo) — 5416 depois dele; antes o
   FIN-V2-COLUNAS-02, +12: `src/components/financeiro-v2/colunasDaListaV2.test.tsx` 12 (novo) — 5406 depois dele; antes o
   CONC-CARDS-ORDEM-01, +1 em `src/pages/conciliacaoDono.test.tsx` (40 -> 41) — 5394 depois dele; antes o
   FIN-LR-SYNC-01 passo a2, +4: `src/v2/hooks/useLrSyncAplicar.test.ts` 4 (novo) — 5393 depois dele; antes o
@@ -343,7 +344,7 @@ no mesmo arquivo.
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
   `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5327
-  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b], 22 skipped, e
+  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c], 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -4352,7 +4353,30 @@ docs/historico/frentes-ate-2026-09-29.md.)
   ⚠ DIVIDAS: as tabelas `lr_*` e `financeiro_safras` sao lidas com `(supabase as any).from` (fora do `types.ts`) · as listas e o
     historico ficam no estado do modal (fechar perde as escolhas) · NAO PROVADO NO NAVEGADOR: nada (abrir pelo Importar Banco, soltar os
     dois arquivos reais, a tabela a 1.126, o ▾ real do Radix, o dialogo de classificar, gravar e desfazer de verdade) · perfil nao admin ·
-    a pasta Downloads automatica e' o passo c.
+    a pasta Downloads automatica e' o passo c [FEITO — a regra logo abaixo].
+- ⚠ O MODAL DO LUCRO RURAL PEGA SOZINHO OS DOIS RELATORIOS MAIS NOVOS DA PASTA DOWNLOADS, COM PERMISSAO PEDIDA NA TELA (FIN-LR-SYNC-01
+  passo c, Gabriel 14 e 16/10/2026, so' tela, sem migration). File System Access API (`showDirectoryPicker`); a pasta e' autorizada UMA
+  vez e o handle fica no IndexedDB do navegador (`agroinblue-lucro-rural` / `pasta` / `downloads`). Nada sai do navegador alem das
+  linhas que ja' iam para `fn_lr_sync_comparar`; o leitor e' o de sempre (`lerArquivoLr`).
+  · DONOS: `src/v2/lib/lucroRural/pastaLr.ts` (puro: `tipoDoRelatorio` — nome comecando por "relatorio-contas-pagar-unificado" /
+    "relatorio-contas-receber-unificado", extensao .xlsx —, `escolherRelatorios` — o mais novo de cada pelo `lastModified`, o que
+    falta, o que tem MAIS DE 3 DIAS pela data local —, as frases); `src/v2/lib/lucroRural/pastaDownloads.ts` (`FontePastaLr` /
+    `fonteDoNavegador`: a API e o IndexedDB, TUDO COM try/catch — sem API, IndexedDB ausente ou bloqueado, handle torto = "sem pasta",
+    nunca lanca; `comoPasta` olha o NOME antes de abrir o arquivo: so' os relatorios do LR sao lidos); `PastaDownloadsLr.tsx` (a linha
+    de 32px na tela inicial do modal).
+  · OS ESTADOS: sem a API (Safari/Firefox) -> so' a frase do porque, o arrastar continua · sem pasta -> "Usar a pasta Downloads" (o
+    seletor do navegador) · permissao expirada -> "Permitir acesso à pasta Downloads": `requestPermission` SO' NO CLIQUE, nunca em
+    silencio (ao abrir o modal so' `queryPermission`) · pasta ok -> os relatorios achados (nome, data, tamanho) e a comparacao ja'
+    carrega · depois de "trocar arquivos" a pasta nao e' lida sozinha ("Ler a pasta Downloads de novo") · "esquecer pasta" apaga o
+    handle.
+  · FALTA UM: o que foi achado e' LIDO mas nao comparado; a tela diz qual falta e o arrastar completa (a comparacao roda com os dois).
+    DATA VELHA: "relatório de 12/10 — baixe o de hoje no LR?", em ambar, sem bloquear (tambem na linha dos arquivos da comparacao,
+    ao lado de "trocar arquivos").
+  Testes: `src/v2/lib/lucroRural/pastaLr.test.ts` 5 e `src/components/lucroRural/pastaDownloadsLr.test.tsx` 10 (estados com fonte de
+  mentira, o navegador sem API e com IndexedDB que lanca, o adaptador do handle, o encaixe no modal lido da fonte); 3 mutacoes mortas.
+  ⚠ NAO PROVADO (so' com o Chrome real; roteiro no relatorio de 16/10): o seletor de pasta, a permissao lembrada entre sessoes e a
+    reconfirmacao, o handle sobrevivendo ao recarregar, Downloads com muitos arquivos (a listagem percorre a pasta inteira, abrindo so'
+    os relatorios), Edge, e o Safari/Firefox mostrando a frase.
 - ⚠ NO ABATE OS DOCUMENTOS SAO NF, NPR, ACERTO, ROMANEIO E OUTRO, E SO' A NF SOMA; O VALOR DO DOCUMENTO E' O LIQUIDO (OC-DOC-ESPECIE-ABATE-01
   passo 1, Gabriel 14/10/2026, banco + vocabulario da tela). Migration `supabase/migrations/20261027198200_oc_doc_especie_abate_01.sql`
   (md5 do arquivo 02729abc56b7c29d6820d48ad4dc15cf) — APLICADA no proto em 14/10/2026 com o OK do Gabriel: ledger 20261014214022
