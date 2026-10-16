@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 15/10/2026 (ZOOT-MES-FECHADO-MODAL-01, +21: `src/components/lancamento/avisoMesFechado.test.tsx` 21 (novo) — 5389
+  Baseline em 16/10/2026 (FIN-LR-SYNC-01 passo a2, +4: `src/v2/hooks/useLrSyncAplicar.test.ts` 4 (novo) — 5393 depois dele; antes o
+  ZOOT-MES-FECHADO-MODAL-01, +21: `src/components/lancamento/avisoMesFechado.test.tsx` 21 (novo) — 5389
   depois dele; antes o FORN-EDITAR-01, +39: `src/lib/fornecedores/documentoFiscal.test.ts` 16 (novo),
   `src/lib/fornecedores/repetidosDoCadastro.test.ts` 7 (novo), `src/lib/fornecedores/documentoFiscalNosEscritores.test.ts` 6 (novo),
   `src/components/financeiro-v2/fornecedorEditar.test.tsx` 10 (novo) — 5368 depois dele; antes o RESUMO-ATIVIDADE-01a, +2: `src/lib/fechamento/resumoPorAtividade.test.ts` 7 (novo); saiu
@@ -339,7 +340,7 @@ no mesmo arquivo.
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
   `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5327
-  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01], 22 skipped, e
+  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2], 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -4210,7 +4211,70 @@ docs/historico/frentes-ate-2026-09-29.md.)
     15/10 em pago_no_lr / nova: nenhuma com recebimento de OC de mesmo valor (±1 R$).
   ⚠ NAO PROVADO: a RPC chamada pelo PostgREST (sob pg_safeupdate; todo UPDATE do corpo tem WHERE, conferido por leitura) · a mutacao
     "linha Tipo financiamento entrando nos centavos" SOBREVIVE (nenhum caso sintetico com 1–100 centavos de diferenca nessa linha) ·
-    nenhuma tela (passo b) · a escrita (a2: aplicar e desfazer, `lr_vinculos`) ainda nao existe.
+    nenhuma tela (passo b) · [a escrita FECHOU no a2 — a regra logo abaixo].
+- ⚠ "ATUALIZAR DO LUCRO RURAL": O BANCO APLICA O QUE O OPERADOR CONFIRMOU E DESFAZ A ULTIMA ATUALIZACAO INTEIRA (FIN-LR-SYNC-01 passo
+  a2, Gabriel 16/10/2026, banco + hook, sem tela; migration `supabase/migrations/20261027199100_fin_lr_sync_02.sql`, md5 do arquivo
+  392647ae2e27a8c0c56ffdb5201a09a4, 30.877 bytes — APLICADA no proto em 16/10/2026 com o OK condicional do Gabriel, pelo
+  `supabase db query --linked` (project-ref conferido = binbcdfbisgscrifztia), migration + ledger numa transacao: ledger 20261016093847
+  `fin_lr_sync_02` (⚠ timestamp do dia; o ledger guarda o arquivo BYTE A BYTE, com a quebra final: md5 = 392647ae…)).
+  · O ESCRITOR (FASE 0, decisao do Gabriel 16/10): NAO EXISTE NO BANCO escritor generico de lancamento avulso — o canonico e' o do front
+    (`src/hooks/useFinanceiroV2.ts`: `buildInsertRow` :725 / `criarLancamento` :807 / `editarLancamento` :896, insert e update diretos
+    sob RLS). Nasceu UMA interna, `_fn_lancamento_programado_gravar(op, id, campos)` (md5 344617a8…), ESPELHO DECLARADO desses dois:
+    cria PROGRAMADO (pagamento nulo, origem 'lucro_rural') e, na edicao, SO' valor, vencimento e a marca do valor do mes; os gatilhos de
+    sempre fazem classificacao, `ano_mes`, hash e trilha. Quem mexer num confere o outro. Cancelar (no desfazer) e' o dono de sempre,
+    `fn_cancelar_lancamento_auditoria`; nunca DELETE. ⚠ DIVIDA FIN-LANCAMENTO-ESCRITOR-UNICO-01: levar o front a ela.
+  · TABELAS (todas lr_*, frias): `lr_sync_aplicacoes` (cliente, sessao, aplicada/desfeita em/por, resumo, resumo_desfazer) e
+    `lr_sync_aplicacao_itens` (seq, chave, acao, lancamento, `antes`/`depois` = o lancamento inteiro sem carimbos, `vinculo_antes`,
+    `vinculo_tocado`, status aplicado | recusado | desfeito | nao_desfeito, motivo); RLS so' leitura por `tenant_ok`, escrita so' pelas
+    funcoes. `lr_vinculos.pago_no_lr_em` (date) e `lr_sync_sessoes.linhas` (as linhas cruas comparadas) — colunas novas.
+    `fn_lr_sync_comparar` (8eb04018… -> f7d9ebb8…, patch guardado por md5, 3 ancoras) passou a guardar as linhas na sessao.
+  · `fn_lr_sync_aplicar(cliente, sessao, decisoes, p_simular DEFAULT true)` (md5 251f79fd…; SECURITY DEFINER, `tenant_ok` + 42501;
+    GRANT a authenticated/service_role): COMPARA DE NOVO a partir das linhas da sessao e recusa a decisao cuja situacao (ou lancamento
+    visto) mudou ('mudou_desde_a_comparacao'). Decisao = {chave, acao, situacao, lancamento_visto?, lancamento_id?, classificacao?}.
+    Acoes: criar_programada (de-para resolvido ou a classificacao do operador; sem plano, fazenda ou fornecedor = 'falta_classificar';
+    a SAFRA so' entra se for da mesma atividade da conta do plano — senao nasce sem safra, a regra do modal; achado na prova real:
+    sem isso o gatilho recusava o INSERT e a transacao inteira caia) · atualizar (SO' os campos que o LR mudou desde a foto — valor e
+    vencimento; ocorrencia de recorrencia ganha a marca do valor do mes 'planilha'; classificacao, fornecedor e fazenda NUNCA) ·
+    vincular / manter (so' vinculo + foto; o alvo nao pode ser cancelado, de outra direcao, parte viva de OC nem ja' vinculado a outra
+    chave) · aguardar_extrato (vinculo + foto + `pago_no_lr_em`; o LANCAMENTO FICA INTACTO) · ignorar (vinculo `ignorar`) · nada.
+    'decidir', 'decidir_centavos' e 'nao_importar_fatura' NAO SE EXECUTAM: 'decisao_do_operador' (centavos, fatura e financiamento sao
+    sempre decisao). Financiamento: so' vincular ou ignorar; parcela de contrato (lancamento com `financiamento_id`) NAO e' atualizada
+    ('parcela_de_contrato'). TRAVAS por linha, com o motivo: ja_realizado (realizado/conciliado/pago/vinculo de extrato), parte_viva_de_oc,
+    parcela_de_contrato, importacao_historica (nao admin), mes_fechado (a regra do cancelamento canonico), lancamento_cancelado. As outras
+    linhas seguem; erro inesperado aborta tudo. SIMULACAO = GRAVACAO (SQLSTATE 'LRSIM').
+  · `fn_lr_sync_desfazer(cliente, aplicacao DEFAULT a ultima, p_simular DEFAULT true)` (md5 36664ec7…): SO' A ULTIMA aplicacao nao
+    desfeita do cliente (outra: P0001 "So' a ultima … desfaca-a antes"); ordem reversa; criado -> cancelado pelo dono; atualizado -> volta
+    valor, vencimento e marca; os dois SO' se o lancamento esta' exatamente como o aplicar o deixou (senao 'editado_depois' /
+    'pago_ou_conciliado_depois' / 'mes_fechado', e o vinculo dele fica); vinculo -> volta o de antes.
+  · HOOK sem tela: `src/v2/hooks/useLrSyncAplicar.ts` (`aplicarLr`, `desfazerLr`, simular por padrao; o erro do banco como veio).
+  · PROVA REAL (NJ, relatorios do LR de 15/10 — pagar md5 2fd68747…, receber 8503583d…, fora do repo; 379 linhas; BEGIN…ROLLBACK;
+    acao padrao do a1 em todas):
+        acao                      aplicadas   recusadas (motivo)
+        criar_programada          93          3 (falta_classificar)
+        atualizar                 19          8 (parcela_de_contrato)
+        aguardar_extrato          85          —
+        manter                    7           —
+        decidir / centavos / fatura —          6 / 6 / 14 (decisao_do_operador)
+    204 aplicadas, 37 recusadas, 135 sem_mudanca e 3 da_oc sem decisao. Desfazer: 204 desfeitas, 0 nao desfeitas; os 33.556 lancamentos
+    do NJ identicos aos de antes do aplicar (md5 sem `updated_at`/`updated_by`), os 93 criados cancelados, `lr_vinculos` igual.
+  · ⚠ O DESFAZER NAO DEIXA O CLIENTE BYTE A BYTE COMO ESTAVA: `updated_at`/`updated_by` dos atualizados mudam (gatilho), os criados
+    ficam CANCELADOS (nunca apagados) e o `audit_log` guarda tudo. A prova compara sem os carimbos.
+  Testes: `supabase/tests/fin_lr_sync_02_test.sql` (S1, A1–A4, D1, D2, T1; sintetico no Teste) OK no ensaio e no vivo; 2 mutacoes mortas
+  (desfazer sem conferir o "editado depois" -> D2; atualizar sem a marca do valor do mes -> A1/A2) e 1 EQUIVALENTE (aplicar sem a
+  propria guarda de tenant: o comparar chamado por dentro recusa com 42501). `src/v2/hooks/useLrSyncAplicar.test.ts` 4. No vivo:
+  `fin_lr_sync_01a`, `seg_tenant_varredura_01c`, `oc_desvincular_competencia_01` OK.
+  ⚠ DESVIOS E LIMITES: o comentario do a1 dizia que o a2 "atualiza o valor do mes" no pago_no_lr com valor diferente — o briefing do a2
+    manda o lancamento ficar intacto, e e' o que vale · a OBSERVACAO nao e' aplicada (o a1 nao a compara) · a sessao comparada ANTES desta
+    migration nao tem as linhas: o aplicar recusa ("compare de novo") · a parcela de COMPRA PARCELADA tambem cai em 'parcela_de_contrato'
+    (o caminho seria `fn_parcelamento_editar_parcelas`) · o detector `guardaDeClienteNasMigrations` passa (as duas publicas tem
+    `tenant_ok` + 42501).
+  ⚠ NAO PROVADO: nada na tela (passo b) · as RPCs chamadas pelo PostgREST (sob pg_safeupdate; todo UPDATE/DELETE tem WHERE, conferido
+    por leitura) · quantas contas novas do NJ nasceriam sem safra pela regra da atividade (nao contado) · `mes_fechado`,
+    `importacao_historica` e `parte_viva_de_oc` sem caso no teste sintetico (so' por leitura do corpo) · vinculo manual (`lancamento_id`
+    escolhido) sem caso proprio.
+  ⚠ PARA O PASSO b (Chat, 16/10/2026): CONTAR quantas contas novas do NJ nascem SEM SAFRA pela regra da atividade e MOSTRAR na tela
+    (a linha diz "sem safra: a do LR é de outra atividade"), nunca esconder. As duas decisoes do Code no a2 (linhas guardadas na sessao
+    com o patch md5 do comparar; safra so' da mesma atividade da conta do plano) foram ACEITAS pelo Chat em 16/10/2026.
 - ⚠ NO ABATE OS DOCUMENTOS SAO NF, NPR, ACERTO, ROMANEIO E OUTRO, E SO' A NF SOMA; O VALOR DO DOCUMENTO E' O LIQUIDO (OC-DOC-ESPECIE-ABATE-01
   passo 1, Gabriel 14/10/2026, banco + vocabulario da tela). Migration `supabase/migrations/20261027198200_oc_doc_especie_abate_01.sql`
   (md5 do arquivo 02729abc56b7c29d6820d48ad4dc15cf) — APLICADA no proto em 14/10/2026 com o OK do Gabriel: ledger 20261014214022
