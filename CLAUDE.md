@@ -162,7 +162,10 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 16/10/2026 (FIN-PARCELAS-TAXA-ZERO-01, +6: `src/hooks/useFinanciamentoCadastro.cronograma.test.tsx` 6 (novo) — 5498 depois dele; antes o
+  Baseline em 17/10/2026 (FIN-FINANC-28-P3, +25: `src/lib/financiamentos/listaDeFinanciamentos.test.ts` 12 (novo),
+  `src/components/financiamentos/listaDeFinanciamentos.test.tsx` 11 (novo), `src/pages/financiamentosListaCompacta.test.tsx` 2
+  (4 -> 6) — 5523 depois dele; antes o
+  FIN-PARCELAS-TAXA-ZERO-01, +6: `src/hooks/useFinanciamentoCadastro.cronograma.test.tsx` 6 (novo) — 5498 depois dele; antes o
   FECH-PASTO-SALVAR-TRANSACAO-01, +2: `src/components/fechamento/modalDoPasto.test.tsx` 8 -> 9, `src/hooks/useFechamento.salvar.test.tsx` 3 -> 4 — 5492 depois dele; antes o
   FECH-MAPA-PASTO-MODAL-01 passo A, +11: `src/components/fechamento/modalDoPasto.test.tsx` 8 (novo), `src/hooks/useFechamento.salvar.test.tsx` 3 (novo) — 5490 depois dele; antes o
   RESUMO-ATIVIDADE-01b, +20: `src/lib/fechamento/resumoPecuaria.test.ts` 16 (novo), `src/components/resumoAtividade/abaPecuaria.test.tsx` 4 (novo) — 5479 depois dele; antes o
@@ -352,7 +355,7 @@ no mesmo arquivo.
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
   `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5327
-  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01], 22 skipped, e
+  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3], 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -2142,6 +2145,36 @@ preview que o cabecalho nao sai da tela ao rolar.
     gravava a competencia do principal = a data do contrato: as 80 parcelas do c518161d cairiam todas em 2026-06.
   Testes: `src/hooks/useFinanciamentoCadastro.cronograma.test.tsx` 6 (a conta pura e o hook com banco de mentira); 5 mutacoes mortas.
   ⚠ NAO PROVADO NO NAVEGADOR: nada (cadastrar o consorcio de teste e ver a lista e o Financeiro).
+- ⚠ A LISTA DE FINANCIAMENTOS TEM DUAS ABAS, E A ABA NOVA SO' AGRUPA E SOMA O QUE O LOTE MANDOU (FIN-FINANC-28-P3, item 28 passo 3,
+  Gabriel 17/10/2026, so' tela; mock `docs/mocks/mock-financiamentos-v1_1.html`, partes 1 e 4). `FinanciamentosListaPage.tsx` abre na
+  aba "Financiamentos" (financiamento e emprestimo); "Compras parceladas" e' a lista de antes, so' com os parcelamentos — MESMO
+  CONTEUDO (colunas, ordem, valores; preso montado em `financiamentosListaCompacta.test.tsx`, e o mesmo teste passou contra a
+  pagina do HEAD), so' a regua de fonte e as larguras mudaram. SEM TITULO NEM SUBTITULO: a tela se nomeia pela barra do topo.
+  · OS NUMEROS SAO A CHAVE `saldo` DO LOTE (`fn_financiamentos_situacao_lote`), lida por `lerSaldo` (`situacaoDoContrato.ts`; peca
+    torta invalida a leitura). Dono puro: `src/lib/financiamentos/listaDeFinanciamentos.ts` (`montarListaDeFinanciamentos`): agrupa os
+    VIGENTES por linha de credito, senao por banco (credor); soma em centavos; liberado / saldo NULO = "?" em ambar, FORA da soma, e a
+    soma diz quantos ficaram de fora ("+ ?"); contrato sem a chave `saldo` = "?" em tudo. Encerrados (quitado, rolado, cancelado)
+    recolhidos numa linha, fora do total vigente; o rolado diz "→ <nº do sucessor>". Proximo vencimento = o de
+    `resumoDoContratoNaLista` (decisao do Gabriel). Pendencias em portugues (`TEXTO_PENDENCIA`); nº vazio ou sem digito = "sem nº".
+  · OS FILTROS SAO OS MESMOS NAS DUAS ABAS (a fileira da lista antiga, um no' so', no mesmo card e na mesma posicao; um predicado,
+    `passaNosFiltros`); so' a situacao e' por aba (na nova nasce "Todas", com Rolado e "Encerrados") e a natureza fica fixa e
+    apagada em "Compras parceladas".
+  · A REGUA DE FONTE E' A DE LANCAMENTOS FINANCEIROS, NAS DUAS TABELAS: a classe `table-financeiro` (index.css: cabecalho 8px/600
+    maiusculo, celula 9px/400) e as celulas nomeadas `celula-valor` (9px/600, sem mono), `celula-data` (mono 8px), `celula-status`
+    (o selo `SeloDoContrato` = `STATUS_PILULA_BASE` a 8px); linha de 25px. Grupo e total: 27px a 9,5px/600, pela classe nova
+    `celula-grupo` (index.css). As strings moram em `ListaDeFinanciamentos.tsx` (`TH_LANC`, `TD_DATA_LANC`, `TD_VALOR_LANC`,
+    `LINHA_LANC`) e sao copias das de `FinanceiroV2Tab.tsx` — quem mexer la' confere aqui.
+  · REGUAS (px), MEDIDAS no Chromium (17/10) a 1.126 e 1.440 com o pior nº real ("C_102.022.070.010200", 20 caracteres) e valores de
+    50.000.000,00 / 99.999.999,99 (+ ?): aba nova Nº 116 · Banco 56 · Descricao o resto (118 a 1.126) · Situacao 64 · Contratado 80 ·
+    Liberado 96 · Amortizado 80 · Saldo 96 · Prox. venc. 72 · Pendencia 110; "Compras parceladas" Tipo 52 · Descricao o resto (88) ·
+    Nº 124 · Credor 84 · Contratado 80 · Principal 98 · Saldo 98 · Parcela 98 · Proxima 60 · Status 88 · olho 22 (minWidth 870). 0
+    cortes de numero, data, situacao e nº; sem rolagem horizontal; filtros e cards na mesma posicao nas duas abas e com filtro.
+  ⚠ DOCUMENTO DO CONTRATO (a "cedula") NAO TEM FONTE: o botao "Documentos" do contrato (`FinanciamentoDetalhe.tsx` ~:528) so' abre em
+    PARCELAMENTO e grava nos LANCAMENTOS das parcelas (`financeiro_lancamento_documentos` + `financeiro_documento_vinculos`, bucket
+    `fin-documentos`, lido por `vw_lancamento_documentos`); em financiamento e emprestimo fica apagado. Nenhuma tabela guarda
+    documento por `financiamento_id` — a pendencia "sem documento" fica para o passo 4.
+  ⚠ NAO PROVADO NO NAVEGADOR: nada com login (bancada com a pagina real e o banco simulado) · hoje os 41 ativos estao com "?" e
+    `sem_liberacao` (a tabela de liberacoes esta' vazia).
 - ⚠ O SALDO DEVEDOR DO FINANCIAMENTO TEM UMA FONTE SO': `fn_financiamento_saldo` — NENHUM LEITOR NOVO CALCULA SALDO POR CONTA
   PROPRIA (FIN-FINANC-28-P2, item 28 passo 2, Gabriel 17/10/2026; migration `supabase/migrations/20261027200000_fin_financ_28_p2_saldo.sql`,
   md5 do arquivo 8a7612075b44e4ee175df166abb6cb63 — APLICADA no proto em 17/10/2026 06:01 (Brasilia) com o GO do Gabriel: ledger

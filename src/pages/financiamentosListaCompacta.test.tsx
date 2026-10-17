@@ -10,15 +10,18 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const FINS = [
-  { id: 'f1', descricao: 'Recuperação de Solo', numero_contrato: 'PR-78.192', data_contrato: '2024-03-10', natureza: 'financiamento',
+  { id: 'f1', descricao: 'Recuperação de Solo', numero_contrato: 'PR-78.192', data_contrato: '2024-03-10', natureza: 'parcelamento',
     tipo_financiamento: 'agricultura', credor_id: 'c1', valor_total: 1000, total_parcelas: 7, status: 'ativo', created_at: '2024-03-10',
     financeiro_fornecedores: { nome: 'BRDE' } },
-  { id: 'f2', descricao: 'Armazem', numero_contrato: null, data_contrato: '2024-01-05', natureza: 'financiamento',
+  { id: 'f2', descricao: 'Armazem', numero_contrato: null, data_contrato: '2024-01-05', natureza: 'parcelamento',
     tipo_financiamento: 'pecuaria', credor_id: 'c1', valor_total: 2000, total_parcelas: 1, status: 'ativo', created_at: '2024-01-05',
     financeiro_fornecedores: { nome: 'BRDE' } },
   { id: 'f3', descricao: 'Trator', numero_contrato: 'Atualizar', data_contrato: '2024-02-01', natureza: 'parcelamento',
     tipo_financiamento: 'agricultura', credor_id: 'c2', valor_total: 3000, total_parcelas: 3, status: 'ativo', created_at: '2024-02-01',
     financeiro_fornecedores: { nome: 'Concessionaria' } },
+  { id: 'f4', descricao: 'Custeio BB', numero_contrato: 'C_4608772', data_contrato: '2025-05-02', natureza: 'financiamento',
+    tipo_financiamento: 'pecuaria', credor_id: 'c3', valor_total: 9000, total_parcelas: 4, status: 'ativo', created_at: '2025-05-02',
+    financeiro_fornecedores: { nome: 'Banco do Brasil' } },
 ];
 
 vi.mock('@/integrations/supabase/client', () => {
@@ -33,9 +36,13 @@ vi.mock('@/components/financiamentos/ObrigacaoDialog', () => ({ ObrigacaoDialog:
 
 import FinanciamentosListaPage from './FinanciamentosListaPage';
 
+/* FIN-FINANC-28-P3 — esta lista e' agora a da aba "Compras parceladas" (so' parcelamentos); a pagina abre em
+   "Financiamentos", entao o teste troca de aba antes de olhar a tabela. */
 function montar() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(<QueryClientProvider client={qc}><FinanciamentosListaPage /></QueryClientProvider>);
+  const r = render(<QueryClientProvider client={qc}><FinanciamentosListaPage /></QueryClientProvider>);
+  fireEvent.click(screen.getByText('Compras parceladas'));
+  return r;
 }
 
 const ordemDosNumeros = () => screen.getAllByTestId('cel-numero-contrato').map((c) => c.textContent);
@@ -86,6 +93,34 @@ describe('FIN-LISTA-COMPACTA-01', () => {
     const cols = cg.match(/<col\b[^>]*\/>/g) ?? [];
     expect(cols).toHaveLength(11);
     expect(cols.filter((c) => !/width:/.test(c))).toHaveLength(1);
-    expect(cols.map((c) => Number(c.match(/width: (\d+)/)?.[1] ?? 0)).reduce((a, b) => a + b, 0)).toBe(786);
+    expect(cols.map((c) => Number(c.match(/width: (\d+)/)?.[1] ?? 0)).reduce((a, b) => a + b, 0)).toBe(804);
+  });
+
+  /* FIN-FINANC-28-P3 — "Compras parceladas" mostra o MESMO CONTEUDO da lista de antes (colunas, ordem, valores); o estilo mudou
+     (regua de fonte de Lancamentos) e por isso o teste prende o texto, nao as classes. */
+  it('Compras parceladas: colunas, ordem e valores da lista de antes, so com parcelamentos', async () => {
+    montar();
+    await screen.findAllByTestId('cel-numero-contrato');
+    const cab = screen.getAllByRole('columnheader').map((th) => th.textContent?.trim());
+    expect(cab).toEqual(['Tipo', 'Descrição', 'Nº contrato', 'Credor', 'Contratado', 'Principal', 'Saldo devedor', 'Parcela',
+      'Próxima', 'Status', '']);
+    const linhas = screen.getAllByRole('link').map((tr) => Array.from(tr.querySelectorAll('td')).map((td) => td.textContent?.replace(/\u00a0/g, ' ').trim()));
+    expect(linhas).toEqual([
+      ['PARC', 'Armazem· PEC', '', 'BRDE', '05/01/24', 'R$ 2.000,00', 'R$ 0,00', '—', '—', 'ativo0/1', ''],
+      ['PARC', 'Trator· AGR', 'Atualizar', 'Concessionaria', '01/02/24', 'R$ 3.000,00', 'R$ 0,00', '—', '—', 'ativo0/3', ''],
+      ['PARC', 'Recuperação de Solo· AGR', 'PR-78.192', 'BRDE', '10/03/24', 'R$ 1.000,00', 'R$ 0,00', '—', '—', 'ativo0/7', ''],
+    ]);
+    expect(screen.queryByText('Custeio BB')).toBeNull();
+  });
+
+  it('a aba Financiamentos (a que abre) traz o financiamento, e o filtro de busca vale nela', async () => {
+    cleanup();
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<QueryClientProvider client={qc}><FinanciamentosListaPage /></QueryClientProvider>);
+    await screen.findByText('Custeio BB');
+    expect(screen.queryByText('Trator')).toBeNull();
+    expect(screen.getByTestId('filtros-financiamentos')).toBeTruthy();
+    fireEvent.change(screen.getByPlaceholderText('Buscar descrição...'), { target: { value: 'nada disso' } });
+    expect(screen.queryByText('Custeio BB')).toBeNull();
   });
 });

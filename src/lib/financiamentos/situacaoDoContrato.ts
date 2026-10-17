@@ -59,7 +59,29 @@ export interface CartoesDoContrato {
   detalhe: DetalheDosCartoes | null;
 }
 
-export interface SituacaoDoContrato { parcelas: ParcelaDoContrato[]; cartoes: CartoesDoContrato }
+/** FIN-FINANC-28-P2 — a chave `saldo` da situação, lida de `_fn_financiamento_saldo` (a fonte única). Nulo = o banco não mandou. */
+export interface SaldoDoContrato {
+  aplicaSaldo: boolean;
+  regra: string | null;
+  contratado: number | null;
+  /** nulo = o contrato não tem nenhuma liberação gravada ("?" na tela, nunca deduzido) */
+  liberado: number | null;
+  liberacoes: number;
+  amortizado: number | null;
+  /** nulo quando o liberado é nulo (contrato ativo sem liberação) */
+  saldo: number | null;
+  jurosPagos: number | null;
+  jurosPrevistos: number | null;
+  foraDasSomas: boolean;
+  pendencias: string[];
+}
+
+export interface SituacaoDoContrato {
+  parcelas: ParcelaDoContrato[];
+  cartoes: CartoesDoContrato;
+  /** FIN-FINANC-28-P2 — opcional: quem monta a situação à mão (testes, telas antigas) não precisa dela */
+  saldo?: SaldoDoContrato | null;
+}
 
 const obj = (v: unknown): Record<string, unknown> | null => (typeof v === 'object' && v !== null && !Array.isArray(v) ? Object.fromEntries(Object.entries(v)) : null);
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
@@ -97,6 +119,22 @@ function lerDetalheDaParcela(p: Record<string, unknown>): DetalheDaParcela | nul
   };
 }
 
+/** A chave `saldo`: ausente = nulo (banco antigo); presente e torta = `undefined` (invalida a leitura inteira). */
+function lerSaldo(raiz: Record<string, unknown>): SaldoDoContrato | null | undefined {
+  if (!('saldo' in raiz) || raiz.saldo === null) return null;
+  const s = obj(raiz.saldo);
+  if (!s || typeof s.aplica_saldo !== 'boolean' || !Array.isArray(s.pendencias)) return undefined;
+  const pendencias: string[] = [];
+  for (const p of s.pendencias) { if (typeof p !== 'string') return undefined; pendencias.push(p); }
+  const liberacoes = num(s.liberacoes);
+  if (liberacoes === null) return undefined;
+  return {
+    aplicaSaldo: s.aplica_saldo, regra: txt(s.regra), contratado: num(s.contratado), liberado: num(s.liberado), liberacoes,
+    amortizado: num(s.amortizado), saldo: num(s.saldo), jurosPagos: num(s.juros_pagos), jurosPrevistos: num(s.juros_previstos),
+    foraDasSomas: s.fora_das_somas === true, pendencias,
+  };
+}
+
 function lerDetalheDosCartoes(c: Record<string, unknown>): DetalheDosCartoes | null | undefined {
   if (!('notas_qtde' in c)) return null;
   const aVencerQtde = num(c.a_vencer_qtde); const vencidoQtde = num(c.vencido_qtde); const notasQtde = num(c.notas_qtde); const boletos = num(c.boletos);
@@ -129,7 +167,9 @@ export function lerSituacaoDoContrato(dado: unknown): SituacaoDoContrato | null 
   }
   const detalheDosCartoes = lerDetalheDosCartoes(c);
   if (detalheDosCartoes === undefined) return null;
-  return { parcelas, cartoes: { valorContrato, pago, aVencer, vencido, pagas, parcelas: parcelasN, jurosPrevistos, somaPrincipal, somaTotal, divergentes, detalhe: detalheDosCartoes } };
+  const saldo = lerSaldo(raiz);
+  if (saldo === undefined) return null;
+  return { parcelas, cartoes: { valorContrato, pago, aVencer, vencido, pagas, parcelas: parcelasN, jurosPrevistos, somaPrincipal, somaTotal, divergentes, detalhe: detalheDosCartoes }, saldo };
 }
 
 /* PARC-CONTRATO-01: a não paga por vencer é "A vencer" (a palavra do cartão), não "Pendente". */

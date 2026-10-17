@@ -189,6 +189,12 @@
   font-size: 7px !important;
   line-height: 1 !important;
 }
+/* FIN-FINANC-28-P3 — linha de GRUPO e de TOTAL da lista de financiamentos (que usa esta mesma tabela): 9,5px, um degrau acima
+   das linhas (decisão do Chat, 17/10). Depois de `celula-valor` de propósito: a célula de valor do grupo leva as duas classes. */
+.table-financeiro td.celula-grupo,
+.table-financeiro td.celula-grupo * {
+  font-size: 9.5px !important;
+}
 /* Forçar herança em elementos internos */
 .table-financeiro td span,
 .table-financeiro td div {

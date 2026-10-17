@@ -15,6 +15,11 @@ import { lerSituacaoEmLoteDoBanco } from '@/hooks/useSituacaoDoContrato';
 import { inscreverEmLancamentos } from '@/hooks/useFinanceiroV2';
 import { resumoDoContratoNaLista, totaisDaLista } from '@/lib/financiamentos/situacaoEmLote';
 import { hojeLocal } from '@/lib/datas/hojeLocal';
+import { Segmentado } from '@/components/ui/segmentado';
+import {
+  ListaDeFinanciamentos, SeloDoContrato, TABELA_LANC, TD_DATA_LANC, TD_VALOR_LANC, LINHA_LANC, TH_LANC,
+} from '@/components/financiamentos/ListaDeFinanciamentos';
+import { contratoDaLista, ehCompraParcelada, ENCERRADOS, type ContratoDaLista } from '@/lib/financiamentos/listaDeFinanciamentos';
 
 /* ── Types ── */
 /* ⚠ CLASSES LIDAS DO CÓDIGO DA REFERÊNCIA, não estimadas: `NUM` e `APOIO` são
@@ -31,7 +36,7 @@ const NUM = 'text-right font-mono tabular-nums whitespace-nowrap';
    viola a linha de 21px do dense. Sobra encolher o digito — e digito mono a 9px continua
    legivel porque nao ha' ambiguidade de largura entre caracteres.
    ⚠ NAO VALE PARA TEXTO: descricao, credor e rotulo seguem em 10px. */
-const MOEDA = 'text-right font-mono tabular-nums whitespace-nowrap text-[9px]';
+const MOEDA = TD_VALOR_LANC;
 
 interface FinanciamentoRow {
   /** Valor da PRÓXIMA parcela pendente — a coluna "Parcela" da referência. */
@@ -55,6 +60,8 @@ interface FinanciamentoRow {
   total_pendente: number;
   /** PR-PARC-03 — a metade "juros" de `total_pendente`, para o total do topo. */
   juros_pendente: number;
+  /** FIN-FINANC-28-P3 — a mesma linha na forma da aba "Financiamentos" (o saldo vem do lote, chave `saldo`). */
+  paraLista: ContratoDaLista;
 }
 
 const fmt = (v: number) =>
@@ -74,11 +81,7 @@ const PILULA_NATUREZA: Record<string, { sigla: string; rotulo: string; classe: s
 /** O escopo (`tipo_financiamento`), que saiu da pílula e virou sufixo da descrição. */
 const escopoSigla = (tipo: string) => (tipo === 'pecuaria' ? 'PEC' : 'AGR');
 
-const statusColor: Record<string, string> = {
-  ativo: 'bg-emerald-100 text-emerald-800',
-  quitado: 'bg-muted text-muted-foreground',
-  cancelado: 'bg-red-100 text-red-800',
-};
+/* (o selo da situação passou a ser o `SeloDoContrato`, a forma do status de Lançamentos — FIN-FINANC-28-P3) */
 
 interface FinanciamentosListaProps {
   onNovo?: () => void;
@@ -99,6 +102,11 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
      passa (e o ramo `finView.mode === 'novo'` continua la', agora inalcancavel); remove-la
      seria mexer em arquivo fora do escopo deste PR. */
   const [novaObrigacaoAberta, setNovaObrigacaoAberta] = useState(false);
+  /* FIN-FINANC-28-P3 — duas abas: "Financiamentos" (financiamento e empréstimo, a lista nova) e "Compras parceladas" (a lista
+     de sempre, só com os parcelamentos). Os encerrados da aba nova nascem recolhidos. */
+  const [aba, setAba] = useState<'financiamentos' | 'parcelas'>('financiamentos');
+  const [encerradosAbertos, setEncerradosAbertos] = useState(false);
+  const [filtroSituacaoFin, setFiltroSituacaoFin] = useState('todos');
 
   /* PR-PARC-04b item 3 — ABRIR O CONTRATO. Um caminho so', chamado pela linha inteira e
      pelo olho: eram o mesmo gesto escrito duas vezes, e duas copias de "grava os filtros
@@ -197,6 +205,18 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
       // 2) a situação de cada contrato, do dono, numa chamada
       const lote = await lerSituacaoEmLoteDoBanco(clienteId!, hoje);
 
+      // 3) FIN-FINANC-28-P3 — o nome das linhas de crédito do cliente (para o agrupamento) e o número de cada contrato
+      //    (para o rolado dizer "→ <sucessor>")
+      const { data: linhas, error: e3 } = await supabase
+        .from('financiamento_linhas_credito')
+        .select('id, programa, descricao')
+        .eq('cliente_id', clienteId!);
+      if (e3) throw e3;
+      const nomeDaLinha = new Map<string, string>();
+      for (const l of linhas ?? []) nomeDaLinha.set(l.id, l.programa || l.descricao || 'Linha de crédito');
+      const numeroPorId = new Map<string, string | null>();
+      for (const f of fins ?? []) numeroPorId.set(f.id, f.numero_contrato ?? null);
+
       return (fins ?? []).map((f: any): FinanciamentoRow => {
         const r = resumoDoContratoNaLista(lote.get(f.id));
 
@@ -221,6 +241,18 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
           total_pendente: r.totalPendente,
           juros_pendente: r.jurosPendente,
             valor_parcela: r.valorDaProxParcela,
+          paraLista: contratoDaLista({
+            id: f.id,
+            numeroContrato: f.numero_contrato ?? null,
+            banco: f.financeiro_fornecedores?.nome ?? null,
+            descricao: f.descricao,
+            status: f.status,
+            linhaCreditoId: f.linha_credito_id ?? null,
+            linhaCreditoNome: f.linha_credito_id ? (nomeDaLinha.get(f.linha_credito_id) ?? null) : null,
+            sucessorNumero: f.contrato_sucessor_id ? (numeroPorId.get(f.contrato_sucessor_id) ?? null) : null,
+            saldo: lote.get(f.id)?.saldo,
+            proxVencimento: r.proxVencimento,
+          }),
         };
       });
     },
@@ -240,13 +272,15 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
   }, [financiamentos]);
 
   /* ── Filtros (client-side, sobre dados já carregados) ── */
-  const filtered = useMemo(() => {
+  /* FIN-FINANC-28-P3 — UM PREDICADO PARA AS DUAS ABAS. A situação vem de fora (cada aba tem a sua) e a natureza fica fora
+     daqui: em "Compras parceladas" ela é fixa (o select fica apagado), em "Financiamentos" é aplicada por quem chama. */
+  const passaNosFiltros = useMemo(() => {
     const descQ = filtroDescricao.trim().toLowerCase();
     const contQ = filtroContrato.trim().toLowerCase();
-    return financiamentos.filter(f => {
-      if (filtroStatus !== 'todos' && f.status !== filtroStatus) return false;
+    return (f: FinanciamentoRow, situacao: string): boolean => {
+      if (situacao === 'encerrados') { if (!ENCERRADOS.includes(f.status)) return false; }
+      else if (situacao !== 'todos' && f.status !== situacao) return false;
       if (filtroTipo !== 'todos' && f.tipo_financiamento !== filtroTipo) return false;
-      if (filtroNatureza !== 'todas' && f.natureza !== filtroNatureza) return false;
       /* ⚠ A BUSCA ALCANÇA O QUE A LINHA MOSTRA, inclusive o que veio de outro
          cadastro — a regra da referência: procurar pelo credor e não achar a
          obrigação dele seria a busca mentindo sobre o próprio alcance. Antes
@@ -270,9 +304,14 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
       if (isoVencDe && (f.prox_vencimento ?? '') < isoVencDe) return false;
       if (isoVencAte && (f.prox_vencimento ?? '') > isoVencAte) return false;
       return true;
-    });
-  }, [financiamentos, filtroStatus, filtroTipo, filtroNatureza, filtroDescricao, filtroContrato, filtroCredor,
+    };
+  }, [filtroTipo, filtroDescricao, filtroContrato, filtroCredor,
       filtroDataContratoDe, filtroDataContratoAte, filtroVencDe, filtroVencAte]);
+
+  /* a lista da aba "Compras parceladas": só os parcelamentos */
+  const filtered = useMemo(
+    () => financiamentos.filter(f => ehCompraParcelada(f.natureza) && passaNosFiltros(f, filtroStatus)),
+    [financiamentos, passaNosFiltros, filtroStatus]);
 
   const dadosOrdenados = [...filtered].sort((a: any, b: any) => {
     let vA = a[sortCol];
@@ -320,6 +359,16 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
     aPagar: totaisDaLista(filtered).aPagar,
   }), [filtered]);
 
+  /* FIN-FINANC-28-P3 — a aba "Financiamentos": financiamento e empréstimo, sem os filtros da lista antiga (a lista nova agrupa,
+     soma e recolhe os encerrados sozinha). */
+  const contratosFinanciamento = useMemo(
+    () => financiamentos
+      .filter(f => !ehCompraParcelada(f.natureza)
+        && (filtroNatureza === 'todas' || f.natureza === filtroNatureza)
+        && passaNosFiltros(f, filtroSituacaoFin))
+      .map(f => f.paraLista),
+    [financiamentos, filtroNatureza, passaNosFiltros, filtroSituacaoFin]);
+
   const hasExtraFilters = !!(filtroDescricao || filtroContrato || filtroCredor !== 'todos' ||
     filtroDataContratoDe || filtroDataContratoAte || filtroVencDe || filtroVencAte);
 
@@ -342,119 +391,11 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
     );
   }
 
-  return (
-    /* ⚠ SEM NUMERO MAGICO: a altura vem do PAI. Antes era `calc(100vh - 60px)`, e os
-       60px eram o `Header` do shell ANTIGO (`pages/Index.tsx`) — no /v2 esse cabecalho
-       nao existe, e por isso a lista terminava dezenas de pixels acima do rodape. Trocar
-       por outra constante so' mudaria o erro de lugar: a `V2FilterBar` e' `flex-wrap` e
-       muda de altura conforme a largura da janela.
-       ⚠ `h-full`, E NAO `flex-1`, PORQUE ESTA TELA TEM DOIS PAIS. No /v2 o pai e' coluna
-       flex com altura (`V2Index:1465`, ja com 'financiamentos' no `SECOES_APP_SHELL`) e
-       os dois funcionariam; em `pages/Index.tsx:468` o pai tem altura mas NAO e' flex —
-       ali `flex-1` seria inerte e a tela perderia a altura, levando a rolagem de volta
-       para a pagina. `h-full` mede contra a caixa de conteudo nos dois casos: no v2
-       preenche a coluna; no Index preenche o espaco acima do `pb-20` reservado a'
-       BottomNav. Um conjunto de classes, dois pais, nenhuma ramificacao. */
-    /* FIN-LISTA-COMPACTA-01 — SEM A TRAVA `max-w-5xl`: a pagina usa a largura do conteudo. Era ela que deixava a
-       Descricao com ~23% de 1024px e cortava o numero do contrato que vinha dentro dela. */
-    <div className="w-full flex flex-col bg-background h-full min-h-0">
-      {/* ═══ BARRA SUPERIOR — PR-PARC-01 item 1 ═══════════════════════════════════
-          ⚠ SÓ NESTA TELA, e dentro do container que já desconta 60px: ela custa 32px
-          do corpo, e o envelope aceitou o preço. `sticky` aqui é redundante com o
-          `shrink-0` do flex — mantido porque é a classe da referência, e divergir dela
-          num PR de paridade seria criar a segunda régua que este PR veio apagar.
-          ⚠ SEM BOTÃO SAIR: o menu lateral já tem, e um segundo caminho para sair é um
-          caminho que ninguém testa. */}
-      {/* A faixa saiu daqui para `v2/components/BarraSecao` quando a Recorrências passou a
-          precisar da mesma — move verbatim, zero mudança visual. */}
-      {/* ⚠ A FAIXA SAIU DAQUI — PR-BARRA-UNICA-01a: o `V2Index` monta a `BarraSecao`
-          uma vez, para todas as seções. Mantê-la aqui empilharia duas barras azuis. */}
-
-      {/* Cabeçalho fixo: título + totais. Os FILTROS desceram para dentro do card
-          (PR-PARC-03 item 2).
-          ⚠ SAÍRAM O `border-b` E O `shadow-sm`: com o card logo abaixo, a régua
-          de largura total virava uma segunda linha horizontal a 8px da borda do
-          card — duas molduras para uma separação só. Quem separa o topo da lista
-          agora é a borda do card. */}
-      <div className="shrink-0 bg-background px-4 pt-3 pb-2 space-y-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            {onVoltar && (
-              <Button variant="ghost" size="icon" onClick={onVoltar}>
-                <ArrowLeft className="h-5 w-5" />
-              </Button>
-            )}
-            {/* ⚠ SUBTÍTULO DA REFERÊNCIA, verbatim: "O que você contratou — e quanto
-                ainda deve". Ele nomeia a pergunta que a tela responde, e a segunda
-                metade é exatamente a coluna que faltava. */}
-            <div className="min-w-0">
-              <h1 className="text-[16px] font-bold tracking-tight leading-none text-foreground">
-                Parcelamentos e Financiamentos
-              </h1>
-              <p className="mt-0.5 text-[11px] text-muted-foreground">
-                O que você contratou — e quanto ainda deve
-              </p>
-            </div>
-          </div>
-          {/* CTA da casa: o mesmo `bg-cta` do resto do sistema, em 28px. */}
-          <Button size="sm" className="h-7 gap-1 bg-cta px-2.5 text-xs font-semibold text-cta-foreground hover:bg-cta-hover"
-            onClick={() => setNovaObrigacaoAberta(true)}>
-            <Plus className="size-3.5" /> Nova obrigação
-          </Button>
-        </div>
-
-        {/* ═══ TOTAIS — PR-PARC-01 item 3 ══════════════════════════════════════════
-            ⚠ SAÍRAM DA LINHA DE FILTROS, onde eram dois pares de 10px espremidos
-            contra a borda direita: são os dois números que respondem à pergunta do
-            subtítulo, e ficavam menores que os rótulos dos filtros.
-            ⚠ E VOLTARAM A SER VALOR COMPLETO (A19). O `fmtCompact` local abreviava
-            "R$ 17.6M": abreviação esconde a ordem de grandeza exata justamente no
-            número que se confere contra o banco. Ele era local a este arquivo — não
-            um formatador compartilhado — e saiu junto. */}
-        {/* ⚠ OS DOIS DO MEIO SÃO O PONTO — item 5. Sozinhos, "financiado 17,6M" e
-            "a pagar 22,2M" liam-se como erro de sistema. Com o principal em aberto e os
-            juros entre eles, a conta se fecha à vista de todos: 11,6M + 10,6M = 22,2M, e
-            o que se deve a mais que o contratado É o juro. Nenhum operador precisa abrir
-            contrato para entender. A ORDEM É A DA CONTA e não muda.
-            ⚠ CAIXAS, E MENORES QUE OS PARES SOLTOS (PR-PARC-04b item B): 38px contra os
-            ~46px de antes (11px de rótulo + 20px de valor + `py-1`). A cor à esquerda faz
-            o trabalho que o tamanho fazia — "A pagar" é a única com fundo, porque é a
-            resposta do subtítulo. */}
-        <div className="grid grid-cols-4 gap-2">
-          {([
-            { rotulo: 'Total financiado',    valor: totais.financiado,     borda: 'border-l-muted-foreground/40', fundo: '' },
-            { rotulo: 'Principal em aberto', valor: totais.principalAberto, borda: 'border-l-primary',             fundo: '' },
-            { rotulo: 'Juros a pagar',       valor: totais.juros,           borda: 'border-l-amber-500',           fundo: '' },
-            { rotulo: 'A pagar',             valor: totais.aPagar,          borda: 'border-l-primary',             fundo: 'bg-primary/5' },
-          ] as const).map(c => (
-            <div key={c.rotulo}
-              /* ⚠ 42px, E NAO 38: o conteudo sempre foi 43px — rotulo 10px/leading-none (13
-                 com o `mt-0.5`), valor 14px/leading-tight (18) e `py-1.5` (12). Em 38px o
-                 valor era CORTADO por baixo, e como a caixa nao tem `overflow-hidden` o
-                 corte aparecia como numero encostado na borda. */
-              /* FIN-LISTA-COMPACTA-01 — 40px com `py-1`: 8 + 13 (rotulo) + 18 (valor) = 39, o numero nao encosta. */
-              className={`h-[40px] rounded-md border border-l-[3px] px-3 py-1 ${c.borda} ${c.fundo}`}>
-              <div className="text-[10px] leading-none text-muted-foreground truncate">{c.rotulo}</div>
-              <div className="mt-0.5 text-[14px] font-semibold tabular-nums leading-tight truncate">{fmt(c.valor)}</div>
-            </div>
-          ))}
-        </div>
-
-      </div>
-
-      {/* ═══ O CARD — PR-PARC-03 item 2 ═══════════════════════════════════════════
-          Busca e tabela vivem dentro de um card com recuo, como na referência do
-          Finanças. Título, subtítulo, botão e os três números ficam FORA.
-          ⚠ `min-h-0` NOS DOIS NÍVEIS: sem ele um filho flex recusa-se a encolher
-          abaixo do conteúdo, o card cresce além da tela e a rolagem escapa para a
-          página — que é exatamente o defeito que este PR veio corrigir. */}
-      {/* `pb-1` (4px) e nao `pb-3` (12px): com o container terminando rente ao rodape,
-          este recuo E' a distancia final da lista ate' a borda da tela — a regra da Mesa
-          pede 5px, e 12 devolviam parte da faixa que o item 1 acabou de recuperar. */}
-      <div className="min-h-0 flex-1 px-4 pb-1">
-        <div className="flex h-full min-h-0 flex-col rounded-lg border border-border bg-card px-3 pt-2 pb-0 shadow-[0_1px_3px_0_rgb(0_0_0/0.04)]">
-        {/* FIN-LISTA-COMPACTA-01 — os dois grupos de filtros numa linha so' quando cabem (`flex-wrap`); sem largura,
-            o grupo das datas desce, como antes. */}
+  /* FIN-FINANC-28-P3 — A MESMA FILEIRA DE FILTROS NAS DUAS ABAS (movida verbatim do card da lista antiga; só a situação e a
+     natureza conhecem a aba). Na aba "Financiamentos" ela fica entre os cards e a tabela, como em "Compras parceladas". */
+  const filtros = (
+        /* FIN-LISTA-COMPACTA-01 — os dois grupos de filtros numa linha so' quando cabem (`flex-wrap`); sem largura,
+            o grupo das datas desce, como antes. */
         <div className="relative mb-1.5 shrink-0 flex flex-wrap items-center gap-x-3 gap-y-1.5" data-testid="filtros-financiamentos">
         {/* ═══ FILTROS — PR-PARC-01 item 4 ════════════════════════════════════════
             ⚠ DUAS LINHAS DE 28px, e os rótulos "Contrato de:" / "Venc. de:" saíram: em
@@ -477,6 +418,21 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
             onChange={e => setFiltroContrato(e.target.value)}
             className="h-6 w-28 text-[11px]"
           />
+          {/* FIN-FINANC-28-P3 — na aba "Financiamentos" a situação tem estado próprio (nasce "Todas": os encerrados ficam na linha
+              recolhida) e oferece rolado e "Encerrados"; em "Compras parceladas" é o select de sempre. */}
+          {aba === 'financiamentos' ? (
+            <Select value={filtroSituacaoFin} onValueChange={setFiltroSituacaoFin}>
+              <SelectTrigger className="h-6 w-24 text-[11px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todas</SelectItem>
+                <SelectItem value="ativo">Ativo</SelectItem>
+                <SelectItem value="encerrados">Encerrados</SelectItem>
+                <SelectItem value="quitado">Quitado</SelectItem>
+                <SelectItem value="rolado">Rolado</SelectItem>
+                <SelectItem value="cancelado">Cancelado</SelectItem>
+              </SelectContent>
+            </Select>
+          ) : (
           <Select value={filtroStatus} onValueChange={setFiltroStatus}>
             <SelectTrigger className="h-6 w-24 text-[11px]"><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -486,6 +442,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
               <SelectItem value="cancelado">Cancelado</SelectItem>
             </SelectContent>
           </Select>
+          )}
           {/* ⚠ 3d — ESTE SELECT PASSOU A SER O "ESCOPO". Ele nunca teve rótulo:
               filtra `tipo_financiamento`, e com a natureza ao lado um item
               "Todos" solto não diria mais QUAL eixo. O item ganhou o nome do
@@ -499,8 +456,9 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
               <SelectItem value="agricultura">Agricultura</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={filtroNatureza} onValueChange={setFiltroNatureza}>
-            <SelectTrigger className="h-6 w-28 text-[11px]"><SelectValue /></SelectTrigger>
+          {/* FIN-FINANC-28-P3 — a aba já é "Compras parceladas": a natureza fica fixa e apagada (lugar mantido). */}
+          <Select value={aba === 'parcelas' ? 'parcelamento' : filtroNatureza} onValueChange={setFiltroNatureza} disabled={aba === 'parcelas'}>
+            <SelectTrigger className="h-6 w-28 text-[11px]" title={aba === 'parcelas' ? 'a aba já é Compras parceladas' : undefined}><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="todas">Todas</SelectItem>
               <SelectItem value="financiamento">Financiamento</SelectItem>
@@ -564,6 +522,139 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
           />
         </div>
       </div>
+  );
+
+  return (
+    /* ⚠ SEM NUMERO MAGICO: a altura vem do PAI. Antes era `calc(100vh - 60px)`, e os
+       60px eram o `Header` do shell ANTIGO (`pages/Index.tsx`) — no /v2 esse cabecalho
+       nao existe, e por isso a lista terminava dezenas de pixels acima do rodape. Trocar
+       por outra constante so' mudaria o erro de lugar: a `V2FilterBar` e' `flex-wrap` e
+       muda de altura conforme a largura da janela.
+       ⚠ `h-full`, E NAO `flex-1`, PORQUE ESTA TELA TEM DOIS PAIS. No /v2 o pai e' coluna
+       flex com altura (`V2Index:1465`, ja com 'financiamentos' no `SECOES_APP_SHELL`) e
+       os dois funcionariam; em `pages/Index.tsx:468` o pai tem altura mas NAO e' flex —
+       ali `flex-1` seria inerte e a tela perderia a altura, levando a rolagem de volta
+       para a pagina. `h-full` mede contra a caixa de conteudo nos dois casos: no v2
+       preenche a coluna; no Index preenche o espaco acima do `pb-20` reservado a'
+       BottomNav. Um conjunto de classes, dois pais, nenhuma ramificacao. */
+    /* FIN-LISTA-COMPACTA-01 — SEM A TRAVA `max-w-5xl`: a pagina usa a largura do conteudo. Era ela que deixava a
+       Descricao com ~23% de 1024px e cortava o numero do contrato que vinha dentro dela. */
+    <div className="w-full flex flex-col bg-background h-full min-h-0">
+      {/* ═══ BARRA SUPERIOR — PR-PARC-01 item 1 ═══════════════════════════════════
+          ⚠ SÓ NESTA TELA, e dentro do container que já desconta 60px: ela custa 32px
+          do corpo, e o envelope aceitou o preço. `sticky` aqui é redundante com o
+          `shrink-0` do flex — mantido porque é a classe da referência, e divergir dela
+          num PR de paridade seria criar a segunda régua que este PR veio apagar.
+          ⚠ SEM BOTÃO SAIR: o menu lateral já tem, e um segundo caminho para sair é um
+          caminho que ninguém testa. */}
+      {/* A faixa saiu daqui para `v2/components/BarraSecao` quando a Recorrências passou a
+          precisar da mesma — move verbatim, zero mudança visual. */}
+      {/* ⚠ A FAIXA SAIU DAQUI — PR-BARRA-UNICA-01a: o `V2Index` monta a `BarraSecao`
+          uma vez, para todas as seções. Mantê-la aqui empilharia duas barras azuis. */}
+
+      {/* Cabeçalho fixo: título + totais. Os FILTROS desceram para dentro do card
+          (PR-PARC-03 item 2).
+          ⚠ SAÍRAM O `border-b` E O `shadow-sm`: com o card logo abaixo, a régua
+          de largura total virava uma segunda linha horizontal a 8px da borda do
+          card — duas molduras para uma separação só. Quem separa o topo da lista
+          agora é a borda do card. */}
+      <div className="shrink-0 bg-background px-4 pt-3 pb-2 space-y-2">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            {onVoltar && (
+              <Button variant="ghost" size="icon" onClick={onVoltar}>
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+            )}
+            {/* FIN-FINANC-28-P3 (ajuste do Chat, 17/10) — SEM TÍTULO NEM SUBTÍTULO: como em Lançamentos Financeiros, a tela se
+                nomeia só pela barra do topo (o caminho, 11px). Ficam as abas. */}
+            <Segmentado
+              className="shrink-0"
+              altura={22}
+              valor={aba}
+              onEscolher={setAba}
+              opcoes={[
+                { valor: 'financiamentos', rotulo: 'Financiamentos' },
+                { valor: 'parcelas', rotulo: 'Compras parceladas' },
+              ]}
+            />
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            {/* LUGAR RESERVADO: na aba "Compras parceladas" o botão fica invisível, e o "Nova obrigação" não anda. */}
+            <Button variant="outline" size="sm"
+              className={`h-7 w-[132px] px-2 text-xs ${aba === 'financiamentos' ? '' : 'invisible'}`}
+              aria-hidden={aba !== 'financiamentos'} tabIndex={aba === 'financiamentos' ? 0 : -1}
+              data-testid="mostrar-encerrados" aria-pressed={encerradosAbertos}
+              onClick={() => setEncerradosAbertos(v => !v)}>
+              {encerradosAbertos ? 'Ocultar encerrados' : 'Mostrar encerrados'}
+            </Button>
+            {/* CTA da casa: o mesmo `bg-cta` do resto do sistema, em 28px. */}
+            <Button size="sm" className="h-7 gap-1 bg-cta px-2.5 text-xs font-semibold text-cta-foreground hover:bg-cta-hover"
+              onClick={() => setNovaObrigacaoAberta(true)}>
+              <Plus className="size-3.5" /> Nova obrigação
+            </Button>
+          </div>
+        </div>
+
+        {/* ═══ TOTAIS — PR-PARC-01 item 3 ══════════════════════════════════════════
+            ⚠ SAÍRAM DA LINHA DE FILTROS, onde eram dois pares de 10px espremidos
+            contra a borda direita: são os dois números que respondem à pergunta do
+            subtítulo, e ficavam menores que os rótulos dos filtros.
+            ⚠ E VOLTARAM A SER VALOR COMPLETO (A19). O `fmtCompact` local abreviava
+            "R$ 17.6M": abreviação esconde a ordem de grandeza exata justamente no
+            número que se confere contra o banco. Ele era local a este arquivo — não
+            um formatador compartilhado — e saiu junto. */}
+        {/* ⚠ OS DOIS DO MEIO SÃO O PONTO — item 5. Sozinhos, "financiado 17,6M" e
+            "a pagar 22,2M" liam-se como erro de sistema. Com o principal em aberto e os
+            juros entre eles, a conta se fecha à vista de todos: 11,6M + 10,6M = 22,2M, e
+            o que se deve a mais que o contratado É o juro. Nenhum operador precisa abrir
+            contrato para entender. A ORDEM É A DA CONTA e não muda.
+            ⚠ CAIXAS, E MENORES QUE OS PARES SOLTOS (PR-PARC-04b item B): 38px contra os
+            ~46px de antes (11px de rótulo + 20px de valor + `py-1`). A cor à esquerda faz
+            o trabalho que o tamanho fazia — "A pagar" é a única com fundo, porque é a
+            resposta do subtítulo. */}
+        {aba === 'parcelas' && (
+        <div className="grid grid-cols-4 gap-2">
+          {([
+            { rotulo: 'Total financiado',    valor: totais.financiado,     borda: 'border-l-muted-foreground/40', fundo: '' },
+            { rotulo: 'Principal em aberto', valor: totais.principalAberto, borda: 'border-l-primary',             fundo: '' },
+            { rotulo: 'Juros a pagar',       valor: totais.juros,           borda: 'border-l-amber-500',           fundo: '' },
+            { rotulo: 'A pagar',             valor: totais.aPagar,          borda: 'border-l-primary',             fundo: 'bg-primary/5' },
+          ] as const).map(c => (
+            <div key={c.rotulo}
+              /* ⚠ 42px, E NAO 38: o conteudo sempre foi 43px — rotulo 10px/leading-none (13
+                 com o `mt-0.5`), valor 14px/leading-tight (18) e `py-1.5` (12). Em 38px o
+                 valor era CORTADO por baixo, e como a caixa nao tem `overflow-hidden` o
+                 corte aparecia como numero encostado na borda. */
+              /* FIN-LISTA-COMPACTA-01 — 40px com `py-1`: 8 + 13 (rotulo) + 18 (valor) = 39, o numero nao encosta. */
+              className={`h-[40px] rounded-md border border-l-[3px] px-3 py-1 ${c.borda} ${c.fundo}`}>
+              <div className="text-[10px] leading-none text-muted-foreground truncate">{c.rotulo}</div>
+              <div className="mt-0.5 text-[14px] font-semibold tabular-nums leading-tight truncate">{fmt(c.valor)}</div>
+            </div>
+          ))}
+        </div>
+        )}
+
+      </div>
+
+      {/* ═══ O CARD — PR-PARC-03 item 2 ═══════════════════════════════════════════
+          Busca e tabela vivem dentro de um card com recuo, como na referência do
+          Finanças. Título, subtítulo, botão e os três números ficam FORA.
+          ⚠ `min-h-0` NOS DOIS NÍVEIS: sem ele um filho flex recusa-se a encolher
+          abaixo do conteúdo, o card cresce além da tela e a rolagem escapa para a
+          página — que é exatamente o defeito que este PR veio corrigir. */}
+      {/* `pb-1` (4px) e nao `pb-3` (12px): com o container terminando rente ao rodape,
+          este recuo E' a distancia final da lista ate' a borda da tela — a regra da Mesa
+          pede 5px, e 12 devolviam parte da faixa que o item 1 acabou de recuperar. */}
+      <div className="min-h-0 flex-1 px-4 pb-1">
+        {aba === 'financiamentos' ? (
+          isLoading
+            ? <p className="text-sm text-muted-foreground p-4">Carregando…</p>
+            : <ListaDeFinanciamentos contratos={contratosFinanciamento} encerradosAbertos={encerradosAbertos}
+                aoAlternarEncerrados={() => setEncerradosAbertos(v => !v)} aoAbrir={abrirContrato} filtros={filtros} />
+        ) : (
+        <div className="flex h-full min-h-0 flex-col rounded-lg border border-border bg-card px-3 pt-2 pb-0 shadow-[0_1px_3px_0_rgb(0_0_0/0.04)]">
+        {filtros}
 
       {/* ═══ ROLAGEM — PR-PARC-03 item 3 ══════════════════════════════════════════
           ⚠ AQUI ESTAVA O DEFEITO DO CABEÇALHO QUE SUMIA, e não era falta de
@@ -603,10 +694,11 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
                referência não tem (descrição com nº de contrato + escopo, e credor). */
             <Table
               density="dense"
-              className="table-fixed"
-              /* FIN-LISTA-COMPACTA-01 — piso de largura: as colunas fixas (786) + 160 para a Descricao. Abaixo disso
-                 (janela ~1.000px) a TABELA rola na horizontal dentro do card; a pagina nunca. */
-              style={{ minWidth: 946 }}
+              /* o primitivo põe `font-medium` (500) em toda célula; em Lançamentos o texto é 400 e só o valor é 600 */
+              className={`${TABELA_LANC} table-fixed [&_td:not(.celula-valor)]:font-normal`}
+              /* FIN-LISTA-COMPACTA-01 — piso de largura, abaixo do qual a TABELA rola dentro do card (a pagina nunca).
+                 FIN-FINANC-28-P3: as fixas (804) + 66 para a Descricao = 870, abaixo dos 892 uteis a 1.126 — sem rolagem ali. */
+              style={{ minWidth: 870 }}
               wrapperClassName="h-full overflow-x-auto overflow-y-auto"
             >
               {/* ⚠ O COLGROUP EM PORCENTAGEM SAIU (FIN-LISTA-COMPACTA-01): com a pagina sem trava de largura, porcentagem
@@ -618,17 +710,22 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
                   Tipo 52 ("PARC" pede 51) · No contrato 116 ("Energia Solar Faz." deixa 2px) · Credor 92 (corta com
                   `title`, como antes) · Contratado 66 · Principal 98 · Saldo devedor 104 ("R$ 16.380.000,00" pede 103) ·
                   Parcela 98 · Proxima 66 (data pede 64) · Status + fracao 72 · olho 22 = 786. */}
+              {/* FIN-FINANC-28-P3 — REMEDIDA com a régua de Lançamentos (cabeçalho 8px maiúsculo, célula 9px, selo do status) no
+                  Chromium a 1.126 (892px úteis no card): Nº 124 (o maior nº real, "C_102.022.070.010200", pede 121,2) · Credor 84
+                  (corta, como antes) · Contratado 80 (o cabeçalho com a seta pede 77,7) · Principal, Saldo e Parcela 98
+                  ("R$ 99.999.999,99" pede 95,7) · Próxima 60 (cabeçalho 58,5) · Status 88 (o selo "ativo" + "119/120" pede 87) =
+                  804; a Descrição fica com o resto (88 a 1.126). */}
               <colgroup>
                 <col style={{ width: 52 }} />
                 <col />
-                <col style={{ width: 116 }} data-testid="col-numero-contrato" />
-                <col style={{ width: 92 }} />
-                <col style={{ width: 66 }} />
+                <col style={{ width: 124 }} data-testid="col-numero-contrato" />
+                <col style={{ width: 84 }} />
+                <col style={{ width: 80 }} />
                 <col style={{ width: 98 }} />
-                <col style={{ width: 104 }} />
                 <col style={{ width: 98 }} />
-                <col style={{ width: 66 }} />
-                <col style={{ width: 72 }} />
+                <col style={{ width: 98 }} />
+                <col style={{ width: 60 }} />
+                <col style={{ width: 88 }} />
                 <col style={{ width: 22 }} />
               </colgroup>
               {/* ⚠ A BORDA MORA NO `thead`, NÃO NA LINHA — item 3. Na linha, ela
@@ -689,7 +786,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
                     tabIndex={0}
                     onClick={() => abrirContrato(f.id)}
                     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); abrirContrato(f.id); } }}
-                    className={`cursor-pointer hover:bg-muted/40 ${encerrado ? 'opacity-50' : ''}`}
+                    className={`${LINHA_LANC} cursor-pointer hover:bg-muted/40 ${encerrado ? 'opacity-50' : ''}`}
                   >
                     {/* ⚠ PÍLULA DE NATUREZA — PR-PARC-02 item 3b. A forma é a da
                         referência (`border`, 9px bold, `rounded`); o eixo deixou
@@ -719,7 +816,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
                       {f.numero_contrato}
                     </TableCell>
                     <TableCell className="truncate" title={f.credor_nome}>{f.credor_nome}</TableCell>
-                    <TableCell className="font-mono tabular-nums whitespace-nowrap">
+                    <TableCell className={TD_DATA_LANC}>
                       {f.data_contrato ? format(new Date(f.data_contrato + 'T12:00:00'), 'dd/MM/yy') : '—'}
                     </TableCell>
                     <TableCell className={MOEDA}>{fmt(f.valor_total)}</TableCell>
@@ -731,16 +828,14 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
                     <TableCell className={MOEDA}>
                       {f.valor_parcela != null ? fmt(f.valor_parcela) : '—'}
                     </TableCell>
-                    <TableCell className="font-mono tabular-nums">
+                    <TableCell className={TD_DATA_LANC}>
                       {f.prox_vencimento
                         ? format(new Date(f.prox_vencimento + 'T12:00:00'), 'dd/MM/yy')
                         : '—'}
                     </TableCell>
                     {/* FIN-LISTA-COMPACTA-01 — sem `truncate`: a fracao de pagas fica inteira ao lado do status. */}
-                    <TableCell className="whitespace-nowrap" data-testid="cel-status">
-                      <span className={`inline-flex items-center rounded px-1 py-0 text-[9px] font-normal leading-tight ${statusColor[f.status] ?? ''}`}>
-                        {f.status}
-                      </span>
+                    <TableCell className="celula-status whitespace-nowrap" data-testid="cel-status">
+                      <SeloDoContrato status={f.status} />
                       <span className="ml-1 text-[10px] text-muted-foreground">
                         {f.parcelas_pagas}/{f.total_parcelas}
                       </span>
@@ -773,6 +868,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
         )}
         </div>
         </div>
+        )}
       </div>
 
       {/* ⚠ INVALIDA AS DUAS FAMILIAS. `financiamentos-lista` e' a desta tela — sem ela a
@@ -830,7 +926,7 @@ function CabecalhoOrdenavel({ rotulo, ativo, direcao, aoOrdenar, direita }: {
          e lê-se pior. O override é DESTA TELA — mudar o dense trocaria o cabeçalho
          de todas as tabelas densas do sistema, e isso é decisão sua, não deste PR.
          O 9px/600 do primitivo continua valendo. */
-      className={`cursor-pointer select-none text-primary-foreground normal-case tracking-normal ${direita ? 'text-right' : ''}`}
+      className={`cursor-pointer select-none ${TH_LANC} ${direita ? 'text-right' : ''}`}
       onClick={aoOrdenar}
       aria-sort={ativo ? (direcao === 'asc' ? 'ascending' : 'descending') : 'none'}
     >
