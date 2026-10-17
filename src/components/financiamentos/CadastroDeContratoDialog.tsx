@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { DatePicker } from '@/components/ui/date-picker';
-import { CampoMoeda } from '@/components/ui/campo-moeda';
+import { CampoMoeda, CampoPercentual } from '@/components/ui/campo-moeda';
 import { Segmentado } from '@/components/ui/segmentado';
 import { SearchableSelect, type OpcaoSearchable } from '@/components/ui/searchable-select';
 import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
@@ -25,7 +25,7 @@ import { FazendaSelect } from '@/components/shared/FazendaSelect';
 import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import { PlanoSubcentroSelect } from '@/components/shared/PlanoSubcentroSelect';
 import { NovoFornecedorDialog } from '@/components/financeiro-v2/NovoFornecedorDialog';
-import { BlocoDestinacoes, BlocoDocumentos, BlocoLiberacoes } from '@/components/financiamentos/ContratoDeCredito';
+import { BLOCO_DO_CONTRATO, BlocoDestinacoes, BlocoDocumentos, BlocoLiberacoes, Titulo } from '@/components/financiamentos/ContratoDeCredito';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFinanciamentoCadastro } from '@/hooks/useFinanciamentoCadastro';
@@ -33,15 +33,26 @@ import { useContratoDeCredito } from '@/hooks/useContratoDeCredito';
 import { criarFornecedorDaCasa } from '@/lib/fornecedores/cadastroDaCasaBanco';
 import { supabase } from '@/integrations/supabase/client';
 import {
-  ROTULO_DA_MODALIDADE, ROTULO_DA_PERIODICIDADE, ROTULO_DO_SISTEMA, formVazio, lerCronograma, oQueFalta, pedidoDeCriacao, pedidoDoCronograma, textoDasParcelas,
+  ROTULO_DA_MODALIDADE, ROTULO_DA_PERIODICIDADE, ROTULO_DO_SISTEMA, faltaNoResumo, formVazio, lerCronograma, oQueFalta, pedidoDeCriacao, pedidoDoCronograma,
+  recusaAlemDaLista, textoDasParcelas,
   type Cronograma, type FormDoCadastro, type Modalidade, type NaturezaDoCadastro, type Periodicidade, type SistemaDoCadastro,
 } from '@/lib/financiamentos/cadastroDoContrato';
 
 export interface PrefillDoCadastro { natureza?: NaturezaDoCadastro; credorId?: string | null; valor?: number; data?: string | null; descricao?: string }
 
 type Aba = 'contrato' | 'liberacoes' | 'condicoes' | 'destinacao' | 'documentos' | 'consorcio' | 'parcelas';
-const ROTULO = 'text-[8.5px] font-medium uppercase tracking-wide text-muted-foreground';
-const CAMPO = 'h-[26px] text-[10px]';
+/* A RÉGUA DO CADASTRO (acabamento 17/10): rótulo 10px cinza em sentence case; campo e seletor de 28px com texto de 11px. */
+const ROTULO = 'mb-0.5 truncate text-[10px] leading-[13px] text-muted-foreground';
+const CAMPO = 'h-7 text-[11px]';
+/* O corpo do modal é cinza (bg-muted da casa) e os campos moram em blocos brancos — o bloco da tela do contrato, reusado. */
+function Bloco({ nome, children, grade, testId, className = '' }: { nome: string; children: React.ReactNode; grade: string; testId: string; className?: string }) {
+  return (
+    <section className={`${BLOCO_DO_CONTRATO} ${className}`} data-testid={testId}>
+      <Titulo nome={nome} />
+      <div className={`grid items-start gap-x-3 gap-y-1.5 ${grade}`}>{children}</div>
+    </section>
+  );
+}
 const num2 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const br = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '—');
 export const MOTIVO_SALVE_ANTES = 'Salve o contrato primeiro: liberações, destinação e documentos gravam direto no contrato.';
@@ -50,7 +61,7 @@ const SUBCENTRO_CONSORCIO = 'Consórcio a contemplar';
 function Campo({ rotulo, obrig, children, className = '' }: { rotulo: string; obrig?: boolean; children: React.ReactNode; className?: string }) {
   return (
     <div className={`min-w-0 ${className}`}>
-      <div className={ROTULO}>{rotulo}{obrig ? ' *' : ''}</div>
+      <div className={ROTULO} title={rotulo}>{rotulo}{obrig ? ' *' : ''}</div>
       {children}
     </div>
   );
@@ -150,7 +161,7 @@ export function CadastroDeContratoDialog({ aberto, aoFechar, onAbrirCompraParcel
   const travado = !!salvoId;
 
   const tabela = (
-    <div className="min-h-0 flex-1 overflow-y-auto rounded border" data-testid="cronograma-previa">
+    <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border bg-card" data-testid="cronograma-previa">
       <table className="w-full table-fixed border-collapse">
         <colgroup><col style={{ width: 40 }} /><col style={{ width: 84 }} /><col /><col /><col /><col /></colgroup>
         <thead><tr className="sticky top-0 z-10 bg-primary text-primary-foreground">
@@ -204,93 +215,116 @@ export function CadastroDeContratoDialog({ aberto, aoFechar, onAbrirCompraParcel
           </div>
         ) : (
           <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_240px]">
-            <div className="flex min-h-0 min-w-0 flex-col px-3 pt-2">
-              <div className="mb-2 shrink-0">
+            <div className="flex min-h-0 min-w-0 flex-col bg-muted px-3 pt-2" data-testid="corpo-do-cadastro">
+              <div className="mb-1.5 shrink-0">
                 <Segmentado altura={22} valor={aba} onEscolher={setAba}
                   opcoes={abas.map((a) => ({ valor: a.valor, rotulo: a.rotulo, desabilitada: !!a.antes && !travado, title: a.antes && !travado ? MOTIVO_SALVE_ANTES : undefined }))} />
               </div>
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden" data-testid={`aba-${aba}`}>
                 {(aba === 'contrato' || aba === 'consorcio') && (
-                  <fieldset disabled={travado} className="grid grid-cols-3 content-start gap-x-3 gap-y-1">
-                    <Campo rotulo="Descrição" obrig className="col-span-2">
-                      <Input className={CAMPO} value={form.descricao} onChange={(e) => set('descricao', e.target.value)} placeholder={cons ? 'Consórcio John Deere · trator' : 'Investimento pecuário · reforma de pastagem'} />
-                    </Campo>
-                    <Campo rotulo="Atividade" obrig>
-                      <Segmentado altura={22} valor={form.atividade} onEscolher={(v) => set('atividade', v)} opcoes={[{ valor: 'pecuaria', rotulo: 'Pecuária' }, { valor: 'agricultura', rotulo: 'Agricultura' }]} />
-                    </Campo>
-                    <Campo rotulo={cons ? 'Administradora' : 'Credor (banco)'} obrig className="col-span-2">
-                      <FavorecidoSelect value={form.credorId ?? ''} onChange={(id) => set('credorId', id || null)} clienteId={clienteId} onCriarNovo={() => setNovoCredor(true)} />
-                    </Campo>
-                    {cons ? (
-                      <Campo rotulo="Grupo / cota" obrig>
-                        <div className="flex gap-1"><Input className={CAMPO} value={form.grupo} onChange={(e) => set('grupo', e.target.value)} placeholder="grupo" />
-                          <Input className={CAMPO} value={form.cota} onChange={(e) => set('cota', e.target.value)} placeholder="cota" /></div>
+                  <fieldset disabled={travado} className="flex min-h-0 flex-col gap-1.5">
+                    <Bloco nome="Identificação" testId="bloco-identificacao"
+                      grade={cons ? 'grid-cols-[minmax(0,2fr)_minmax(0,2fr)_minmax(0,1fr)_auto]' : 'grid-cols-[minmax(0,1.6fr)_minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]'}>
+                      <Campo rotulo="Descrição" obrig>
+                        <Input className={CAMPO} value={form.descricao} onChange={(e) => set('descricao', e.target.value)} placeholder={cons ? 'Consórcio John Deere · trator' : 'Investimento pecuário · reforma de pastagem'} />
                       </Campo>
+                      <Campo rotulo={cons ? 'Administradora' : 'Credor (banco)'} obrig>
+                        <FavorecidoSelect value={form.credorId ?? ''} onChange={(id) => set('credorId', id || null)} clienteId={clienteId} onCriarNovo={() => setNovoCredor(true)}
+                          triggerClassName={CAMPO} novoButtonClassName="h-7 w-7" />
+                      </Campo>
+                      {cons ? (
+                        <Campo rotulo="Grupo / cota" obrig>
+                          <div className="flex gap-1"><Input className={CAMPO} value={form.grupo} onChange={(e) => set('grupo', e.target.value)} placeholder="grupo" />
+                            <Input className={CAMPO} value={form.cota} onChange={(e) => set('cota', e.target.value)} placeholder="cota" /></div>
+                        </Campo>
+                      ) : (
+                        <Campo rotulo="Nº do contrato (cédula)" obrig><Input className={CAMPO} value={form.numeroContrato} onChange={(e) => set('numeroContrato', e.target.value)} /></Campo>
+                      )}
+                      {!cons && <Campo rotulo="Linha de crédito"><SearchableSelect value={form.linhaCreditoId ?? ''} onValueChange={(v) => set('linhaCreditoId', v || null)} options={linhas} placeholder="—" semTodos triggerClassName={CAMPO} /></Campo>}
+                      <Campo rotulo="Atividade" obrig>
+                        <Segmentado altura={26} valor={form.atividade} onEscolher={(v) => set('atividade', v)} opcoes={[{ valor: 'pecuaria', rotulo: 'Pecuária' }, { valor: 'agricultura', rotulo: 'Agricultura' }]} />
+                      </Campo>
+                      {!cons && (
+                        <Campo rotulo="Modalidade" obrig className="col-span-3">
+                          <Segmentado altura={26} valor={form.modalidade} onEscolher={(v: Modalidade) => set('modalidade', v)}
+                            opcoes={(['custeio', 'investimento', 'comercializacao', 'outro'] satisfies Modalidade[]).map((m) => ({ valor: m, rotulo: ROTULO_DA_MODALIDADE[m] }))} />
+                        </Campo>
+                      )}
+                    </Bloco>
+                    {cons ? (
+                      <Bloco nome="Carta e prazo" testId="bloco-carta" grade="grid-cols-4">
+                        <Campo rotulo="Valor da carta de crédito" obrig><CampoMoeda className={CAMPO} valor={form.valorTotal} onChange={(v) => set('valorTotal', v ?? 0)} /></Campo>
+                        <Campo rotulo="Prazo (meses)" obrig><Input className={CAMPO} inputMode="numeric" value={form.prazo || ''} onChange={(e) => set('prazo', Number(e.target.value.replace(/\D/g, '').slice(0, 3)) || 0)} /></Campo>
+                        <Campo rotulo="1ª parcela" obrig><DatePicker size="compact" className={CAMPO} value={form.primeiroVencimento ?? ''} onChange={(v) => set('primeiroVencimento', v || null)} /></Campo>
+                        <Campo rotulo="Reajuste da carta"><Input className={CAMPO} value={form.reajuste} onChange={(e) => set('reajuste', e.target.value)} placeholder="preço do bem (anual)" /></Campo>
+                      </Bloco>
                     ) : (
-                      <Campo rotulo="Nº do contrato (cédula)" obrig><Input className={CAMPO} value={form.numeroContrato} onChange={(e) => set('numeroContrato', e.target.value)} /></Campo>
+                      <Bloco nome="Valores e datas" testId="bloco-valores" grade="grid-cols-4">
+                        <Campo rotulo="Valor contratado" obrig><CampoMoeda className={CAMPO} valor={form.valorTotal} onChange={(v) => set('valorTotal', v ?? 0)} /></Campo>
+                        <Campo rotulo="Data do contrato" obrig><DatePicker size="compact" className={CAMPO} value={form.dataContrato ?? ''} onChange={(v) => set('dataContrato', v || null)} /></Campo>
+                        <Campo rotulo="1º vencimento" obrig><DatePicker size="compact" className={CAMPO} value={form.primeiroVencimento ?? ''} onChange={(v) => set('primeiroVencimento', v || null)} /></Campo>
+                      </Bloco>
                     )}
-                    {!cons && <Campo rotulo="Linha de crédito"><SearchableSelect value={form.linhaCreditoId ?? ''} onValueChange={(v) => set('linhaCreditoId', v || null)} options={linhas} placeholder="—" semTodos /></Campo>}
+                    {cons && (
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <Bloco nome="Custos" testId="bloco-custos" grade="grid-cols-3">
+                          <Campo rotulo="Taxa adm. (% total)" obrig><CampoPercentual className={CAMPO} valor={form.taxaAdmPct} onChange={(v) => set('taxaAdmPct', v ?? 0)} /></Campo>
+                          <Campo rotulo="Fundo reserva (% total)"><CampoPercentual className={CAMPO} valor={form.fundoReservaPct} onChange={(v) => set('fundoReservaPct', v ?? 0)} /></Campo>
+                          <Campo rotulo="Seguro (% a.m.)"><CampoPercentual className={CAMPO} valor={form.seguroPctMes} onChange={(v) => set('seguroPctMes', v ?? 0)} casas={3} /></Campo>
+                        </Bloco>
+                        <Bloco nome="Contemplação" testId="bloco-contemplacao" grade="grid-cols-1">
+                          <div className="flex h-[41px] items-end gap-2" data-testid="contemplacao">
+                            <Segmentado altura={26} valor={form.contemplado ? 's' : 'n'} onEscolher={(v) => set('contemplado', v === 's')} opcoes={[{ valor: 'n', rotulo: 'Não contemplado' }, { valor: 's', rotulo: 'Contemplado' }]} />
+                            {form.contemplado && <div className="w-[110px]"><DatePicker size="compact" className={CAMPO} value={form.dataContemplacao ?? ''} onChange={(v) => set('dataContemplacao', v || null)} /></div>}
+                            {form.contemplado && <Segmentado altura={26} valor={form.formaContemplacao ?? 'sorteio'} onEscolher={(v) => set('formaContemplacao', v)} opcoes={[{ valor: 'sorteio', rotulo: 'Sorteio' }, { valor: 'lance', rotulo: 'Lance' }]} />}
+                            {form.contemplado && form.formaContemplacao === 'lance' && <div className="w-[110px]"><CampoMoeda className={CAMPO} valor={form.lanceValor} onChange={(v) => set('lanceValor', v ?? 0)} /></div>}
+                          </div>
+                        </Bloco>
+                      </div>
+                    )}
+                    <Bloco nome="Pagamento e classificação" testId="bloco-pagamento" grade="grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,1.6fr)_minmax(0,1.6fr)]">
+                      <Campo rotulo="Fazenda" obrig><FazendaSelect value={form.fazendaId ?? ''} onChange={(id) => set('fazendaId', id || null)} fazendas={fazendas} forcaAdministrativo={false} triggerClassName={CAMPO} hideAviso comBusca /></Campo>
+                      <Campo rotulo={cons ? 'Conta de pagamento' : 'Conta de captação'} obrig>
+                        <ContaBancariaSelect value={form.contaId ?? ''} onValueChange={(v) => set('contaId', v || null)} contas={contas} placeholder="Selecione" showBankDetails="banco" className={CAMPO} comBusca />
+                      </Campo>
+                      <Campo rotulo={cons ? 'Plano das parcelas' : 'Plano · parcela de principal'} obrig>
+                        {cons ? <span className="flex h-7 items-center truncate rounded-md bg-muted px-2 text-[11px] text-muted-foreground" data-testid="plano-do-consorcio"
+                          title="a parcela NÃO é despesa: vira crédito acumulado na carta">{SUBCENTRO_CONSORCIO} · fora do DRE</span>
+                          : <PlanoSubcentroSelect value={subDe(form.planoPrincipalId)} onChange={() => undefined} onSelected={(_s, c) => set('planoPrincipalId', c?.id ?? null)}
+                              classificacoes={classificacoes} tipoOperacao="2-Saídas" search={buscaP} onSearchChange={setBuscaP} triggerClassName={CAMPO} />}
+                      </Campo>
+                      <Campo rotulo={cons ? 'Plano da taxa adm. e seguro' : 'Plano · juros e encargos'} obrig>
+                        <PlanoSubcentroSelect value={subDe(form.planoJurosId)} onChange={() => undefined} onSelected={(_s, c) => set('planoJurosId', c?.id ?? null)}
+                          classificacoes={classificacoes} tipoOperacao="2-Saídas" search={buscaJ} onSearchChange={setBuscaJ} triggerClassName={CAMPO} />
+                      </Campo>
+                    </Bloco>
                     {!cons && (
-                      <Campo rotulo="Modalidade" obrig>
-                        <Segmentado altura={22} valor={form.modalidade} onEscolher={(v: Modalidade) => set('modalidade', v)}
-                          opcoes={(['custeio', 'investimento', 'comercializacao', 'outro'] satisfies Modalidade[]).map((m) => ({ valor: m, rotulo: ROTULO_DA_MODALIDADE[m] }))} />
-                      </Campo>
-                    )}
-                    {!cons && <Campo rotulo="Data do contrato" obrig><DatePicker size="compact" value={form.dataContrato ?? ''} onChange={(v) => set('dataContrato', v || null)} /></Campo>}
-                    <Campo rotulo={cons ? 'Valor da carta de crédito' : 'Valor contratado'} obrig><CampoMoeda valor={form.valorTotal} onChange={(v) => set('valorTotal', v)} /></Campo>
-                    {cons && <Campo rotulo="Prazo (meses)" obrig><Input className={CAMPO} inputMode="numeric" value={form.prazo || ''} onChange={(e) => set('prazo', Number(e.target.value.replace(/\D/g, '').slice(0, 3)) || 0)} /></Campo>}
-                    {cons && <Campo rotulo="1ª parcela" obrig><DatePicker size="compact" value={form.primeiroVencimento ?? ''} onChange={(v) => set('primeiroVencimento', v || null)} /></Campo>}
-                    {cons && <Campo rotulo="Taxa de administração (% total)" obrig><CampoMoeda valor={form.taxaAdmPct} onChange={(v) => set('taxaAdmPct', v)} casas={2} /></Campo>}
-                    {cons && <Campo rotulo="Fundo de reserva (% total)"><CampoMoeda valor={form.fundoReservaPct} onChange={(v) => set('fundoReservaPct', v)} casas={2} /></Campo>}
-                    {cons && <Campo rotulo="Seguro (% a.m.)"><CampoMoeda valor={form.seguroPctMes} onChange={(v) => set('seguroPctMes', v)} casas={3} /></Campo>}
-                    <Campo rotulo="Fazenda" obrig><FazendaSelect value={form.fazendaId ?? ''} onChange={(id) => set('fazendaId', id || null)} fazendas={fazendas} forcaAdministrativo={false} triggerClassName={CAMPO} hideAviso comBusca /></Campo>
-                    <Campo rotulo={cons ? 'Conta de pagamento' : 'Conta de captação'} obrig className="col-span-2">
-                      <ContaBancariaSelect value={form.contaId ?? ''} onValueChange={(v) => set('contaId', v || null)} contas={contas} placeholder="Selecione" showBankDetails="banco" className={CAMPO} comBusca />
-                    </Campo>
-                    {!cons && <Campo rotulo="Garantias" className="col-span-3"><Input className={CAMPO} value={form.garantias} onChange={(e) => set('garantias', e.target.value)} placeholder="Alienação fiduciária · hipoteca" /></Campo>}
-                    {cons && <Campo rotulo="Reajuste da carta"><Input className={CAMPO} value={form.reajuste} onChange={(e) => set('reajuste', e.target.value)} placeholder="preço do bem (anual)" /></Campo>}
-                    <Campo rotulo={cons ? 'Plano · parcelas (fundo comum)' : 'Plano · parcela de principal'} obrig className="col-span-3">
-                      {cons ? <div className={`${CAMPO} flex items-center rounded-md border bg-muted/40 px-2 text-muted-foreground`} title="a parcela NÃO é despesa: vira crédito acumulado na carta">{SUBCENTRO_CONSORCIO} · fora do DRE</div>
-                        : <PlanoSubcentroSelect value={subDe(form.planoPrincipalId)} onChange={() => undefined} onSelected={(_s, c) => set('planoPrincipalId', c?.id ?? null)}
-                            classificacoes={classificacoes} tipoOperacao="2-Saídas" search={buscaP} onSearchChange={setBuscaP} triggerClassName={CAMPO} size="compact" />}
-                    </Campo>
-                    <Campo rotulo={cons ? 'Plano · taxa adm. e seguro' : 'Plano · juros e encargos'} obrig className="col-span-3">
-                      <PlanoSubcentroSelect value={subDe(form.planoJurosId)} onChange={() => undefined} onSelected={(_s, c) => set('planoJurosId', c?.id ?? null)}
-                        classificacoes={classificacoes} tipoOperacao="2-Saídas" search={buscaJ} onSearchChange={setBuscaJ} triggerClassName={CAMPO} size="compact" />
-                    </Campo>
-                    {cons ? (
-                      <Campo rotulo="Contemplação" className="col-span-3">
-                        <div className="flex items-center gap-2" data-testid="contemplacao">
-                          <Segmentado altura={22} valor={form.contemplado ? 's' : 'n'} onEscolher={(v) => set('contemplado', v === 's')} opcoes={[{ valor: 'n', rotulo: 'Não contemplado' }, { valor: 's', rotulo: 'Contemplado' }]} />
-                          {form.contemplado && <div className="w-[120px]"><DatePicker size="compact" value={form.dataContemplacao ?? ''} onChange={(v) => set('dataContemplacao', v || null)} /></div>}
-                          {form.contemplado && <Segmentado altura={22} valor={form.formaContemplacao ?? 'sorteio'} onEscolher={(v) => set('formaContemplacao', v)} opcoes={[{ valor: 'sorteio', rotulo: 'Sorteio' }, { valor: 'lance', rotulo: 'Lance' }]} />}
-                          {form.contemplado && form.formaContemplacao === 'lance' && <div className="w-[120px]"><CampoMoeda valor={form.lanceValor} onChange={(v) => set('lanceValor', v)} /></div>}
-                        </div>
-                      </Campo>
-                    ) : (
-                      <Campo rotulo="Finalidade (texto livre)" className="col-span-3"><Input className={CAMPO} value={form.observacao} onChange={(e) => set('observacao', e.target.value)} /></Campo>
+                      <Bloco nome="Garantias" testId="bloco-garantias" grade="grid-cols-2">
+                        <Campo rotulo="Garantias"><Input className={CAMPO} value={form.garantias} onChange={(e) => set('garantias', e.target.value)} placeholder="Alienação fiduciária · hipoteca" /></Campo>
+                        <Campo rotulo="Finalidade (texto livre)"><Input className={CAMPO} value={form.observacao} onChange={(e) => set('observacao', e.target.value)} /></Campo>
+                      </Bloco>
                     )}
                   </fieldset>
                 )}
                 {aba === 'condicoes' && (
-                  <fieldset disabled={travado} className="flex min-h-0 flex-1 flex-col gap-2">
-                    <div className="grid shrink-0 grid-cols-4 gap-x-3 gap-y-2">
-                      <Campo rotulo="Sistema de amortização" obrig className="col-span-2">
-                        <Segmentado altura={22} valor={form.sistema} onEscolher={(v: SistemaDoCadastro) => set('sistema', v)}
+                  <fieldset disabled={travado} className="flex min-h-0 flex-1 flex-col gap-1.5">
+                    <Bloco nome="Condições" testId="bloco-condicoes" grade="grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)] shrink-0">
+                      <Campo rotulo="Sistema de amortização" obrig>
+                        <Segmentado altura={26} valor={form.sistema} onEscolher={(v: SistemaDoCadastro) => set('sistema', v)}
                           opcoes={(['sac', 'price', 'bullet', 'livre'] satisfies SistemaDoCadastro[]).map((s) => ({ valor: s, rotulo: ROTULO_DO_SISTEMA[s] }))} />
                       </Campo>
-                      <Campo rotulo="Taxa de juros (% a.a.)" obrig><CampoMoeda valor={form.taxaAa} onChange={(v) => set('taxaAa', v)} casas={2} /></Campo>
-                      <Campo rotulo="Tipo de taxa"><Segmentado altura={22} valor={form.tipoTaxa} onEscolher={(v) => set('tipoTaxa', v)} opcoes={[{ valor: 'pre', rotulo: 'Pré' }, { valor: 'pos', rotulo: 'Pós (CDI/TLP)' }]} /></Campo>
-                      <Campo rotulo="Periodicidade" obrig className="col-span-2">
-                        <Segmentado altura={22} valor={form.periodicidade} onEscolher={(v: Periodicidade) => set('periodicidade', v)}
+                      <Campo rotulo="Taxa de juros (% a.a.)" obrig><CampoPercentual className={CAMPO} valor={form.taxaAa} onChange={(v) => set('taxaAa', v ?? 0)} /></Campo>
+                      <Campo rotulo="Tipo de taxa"><Segmentado altura={26} valor={form.tipoTaxa} onEscolher={(v) => set('tipoTaxa', v)} opcoes={[{ valor: 'pre', rotulo: 'Pré' }, { valor: 'pos', rotulo: 'Pós (CDI/TLP)' }]} /></Campo>
+                      <Campo rotulo="Carência de principal até"><DatePicker size="compact" className={CAMPO} value={form.carenciaAte ?? ''} onChange={(v) => set('carenciaAte', v || null)} /></Campo>
+                      <Campo rotulo="Periodicidade" obrig>
+                        <Segmentado altura={26} valor={form.periodicidade} onEscolher={(v: Periodicidade) => set('periodicidade', v)}
                           opcoes={(['mensal', 'trimestral', 'semestral', 'anual'] satisfies Periodicidade[]).map((p) => ({ valor: p, rotulo: ROTULO_DA_PERIODICIDADE[p] }))} />
                       </Campo>
-                      <Campo rotulo="Carência de principal até"><DatePicker size="compact" value={form.carenciaAte ?? ''} onChange={(v) => set('carenciaAte', v || null)} /></Campo>
-                      <Campo rotulo="1º vencimento" obrig><DatePicker size="compact" value={form.primeiroVencimento ?? ''} onChange={(v) => set('primeiroVencimento', v || null)} /></Campo>
-                      {form.sistema !== 'bullet' && form.sistema !== 'livre' && (
-                        <Campo rotulo="Nº parcelas de principal" obrig><Input className={CAMPO} inputMode="numeric" value={form.n || ''} onChange={(e) => set('n', Number(e.target.value.replace(/\D/g, '').slice(0, 3)) || 0)} data-testid="n-parcelas" /></Campo>
-                      )}
-                    </div>
+                      <div />
+                      {form.sistema !== 'bullet' && form.sistema !== 'livre'
+                        ? <Campo rotulo="Nº parcelas de principal (prazo)" obrig><Input className={CAMPO} inputMode="numeric" value={form.n || ''} onChange={(e) => set('n', Number(e.target.value.replace(/\D/g, '').slice(0, 3)) || 0)} data-testid="n-parcelas" /></Campo>
+                        : <div />}
+                    </Bloco>
                     {form.sistema === 'livre' && (
                       <div className="flex shrink-0 items-center gap-2 text-[10px]" data-testid="parcelas-digitadas">
                         <span className="text-muted-foreground">{form.parcelas.length} parcela(s) digitada(s)</span>
@@ -302,9 +336,9 @@ export function CadastroDeContratoDialog({ aberto, aoFechar, onAbrirCompraParcel
                         {form.parcelas.map((p, i) => (
                           <div key={i} className="grid grid-cols-[30px_130px_140px_140px_20px] items-center gap-2 text-[10px]">
                             <span className="tabular-nums">{i + 1}</span>
-                            <DatePicker size="compact" value={p.vencimento ?? ''} onChange={(v) => set('parcelas', form.parcelas.map((x, j) => (j === i ? { ...x, vencimento: v || null } : x)))} />
-                            <CampoMoeda valor={p.principal} onChange={(v) => set('parcelas', form.parcelas.map((x, j) => (j === i ? { ...x, principal: v } : x)))} />
-                            <CampoMoeda valor={p.juros} onChange={(v) => set('parcelas', form.parcelas.map((x, j) => (j === i ? { ...x, juros: v } : x)))} />
+                            <DatePicker size="compact" className={CAMPO} value={p.vencimento ?? ''} onChange={(v) => set('parcelas', form.parcelas.map((x, j) => (j === i ? { ...x, vencimento: v || null } : x)))} />
+                            <CampoMoeda className={CAMPO} valor={p.principal} onChange={(v) => set('parcelas', form.parcelas.map((x, j) => (j === i ? { ...x, principal: v ?? 0 } : x)))} />
+                            <CampoMoeda className={CAMPO} valor={p.juros} onChange={(v) => set('parcelas', form.parcelas.map((x, j) => (j === i ? { ...x, juros: v ?? 0 } : x)))} />
                             <button type="button" className="text-muted-foreground hover:text-destructive" onClick={() => set('parcelas', form.parcelas.filter((_x, j) => j !== i))}><X className="size-3" /></button>
                           </div>
                         ))}
@@ -340,12 +374,12 @@ export function CadastroDeContratoDialog({ aberto, aoFechar, onAbrirCompraParcel
                 <LinhaResumo rotulo="Juros previstos" valor={cronograma ? `R$ ${num2(cronograma.jurosTotal)}` : '—'} />
                 <LinhaResumo rotulo="Total a pagar" valor={cronograma ? `R$ ${num2(cronograma.total)}` : '—'} forte />
               </>)}
-              <div className="mb-0.5 mt-2 border-t pt-1 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">O que falta</div>
+              <div className="mb-0.5 mt-2 border-t pt-1 text-[11px] font-semibold text-foreground">O que falta</div>
               <div className="min-h-0 flex-1 overflow-hidden text-[10px] leading-[15px]" data-testid="o-que-falta">
                 {falta.length === 0 && !travado && <div className="text-[#15803d]">✓ pronto para salvar</div>}
-                {falta.slice(0, 6).map((f) => <div key={f} className="truncate text-amber-700" title={f}>! {f}</div>)}
-                {falta.length > 6 && <div className="text-muted-foreground">… e mais {falta.length - 6}</div>}
-                {cronograma?.recusa && <div className="line-clamp-2 text-destructive" title={cronograma.recusa}>! {cronograma.recusa}</div>}
+                {faltaNoResumo(falta).visiveis.map((f) => <div key={f} className="truncate text-amber-700" title={f}>! {f}</div>)}
+                {faltaNoResumo(falta).resto.length > 0 && <div className="text-muted-foreground" title={faltaNoResumo(falta).resto.join('\n')} data-testid="falta-mais">+{faltaNoResumo(falta).resto.length}</div>}
+                {recusaAlemDaLista(cronograma?.recusa, falta) && <div className="line-clamp-2 text-destructive" title={cronograma?.recusa ?? undefined}>! {cronograma?.recusa}</div>}
                 {travado && !(credito.documentos ?? []).some((d) => d.especie === 'cedula') && <div className="text-amber-700">! cédula não anexada</div>}
               </div>
             </aside>

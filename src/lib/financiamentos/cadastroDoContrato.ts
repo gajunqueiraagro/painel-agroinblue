@@ -56,6 +56,17 @@ export function oQueFalta(f: FormDoCadastro): string[] {
   return falta;
 }
 
+/** "O que falta" no resumo: tudo quando cabe (até 10 linhas — medido: cabem 13 a 1.126 x 579); senão os 3 primeiros e o resto num "+N"
+ *  (com a lista no `title`). */
+export function faltaNoResumo(falta: string[], cabe = 10): { visiveis: string[]; resto: string[] } {
+  return falta.length <= cabe ? { visiveis: falta, resto: [] } : { visiveis: falta.slice(0, 3), resto: falta.slice(3) };
+}
+/** A recusa do cronograma só aparece quando diz algo que a lista não diz: o "Informe …" repete os campos que faltam. */
+export function recusaAlemDaLista(recusa: string | null | undefined, falta: string[]): string | null {
+  if (!recusa) return null;
+  return falta.length > 0 && /^Informe /.test(recusa) ? null : recusa;
+}
+
 /** o pedido ao gerador (o mesmo objeto vai ao criar, com o resto do contrato) */
 export function pedidoDoCronograma(f: FormDoCadastro): Record<string, unknown> {
   if (f.natureza === 'consorcio') {

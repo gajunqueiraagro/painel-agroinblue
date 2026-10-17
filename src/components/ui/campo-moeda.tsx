@@ -75,6 +75,38 @@ export function CampoMoeda({ valor, onChange, placeholder, className, disabled, 
 }
 
 /**
+ * CAMPO DE PERCENTUAL — FIN-FINANC-28 (acabamento do cadastro, Gabriel 17/10/2026). O irmão do `CampoMoeda` para taxa: o mesmo
+ * parser e o mesmo arredondamento, sem "R$" e com o "%" fixo à direita, dentro do campo ("1,50 %"). Percentual nunca usa o campo de
+ * moeda (ele escreveria "R$ 1,50").
+ */
+export function CampoPercentual({ valor, onChange, casas = 2, placeholder, className, disabled, title }: {
+  valor: number | null; onChange: (n: number | null) => void; casas?: number; placeholder?: string; className?: string;
+  disabled?: boolean; title?: string;
+}) {
+  const escrever = (n: number) => formatCasas(n, casas);
+  const [texto, setTexto] = useState(valor != null ? escrever(valor) : '');
+  const [editando, setEditando] = useState(false);
+  useEffect(() => { if (!editando) setTexto(valor != null ? escrever(valor) : ''); }, [valor, editando, casas]);
+  return (
+    <div className="relative" data-testid="campo-percentual">
+      <Input
+        inputMode="decimal" value={texto} placeholder={placeholder} className={`${className ?? ''} pr-5 text-right`} disabled={disabled} title={title}
+        onFocus={() => setEditando(true)}
+        onChange={(e) => { setTexto(e.target.value); onChange(parseMoeda(e.target.value)); }}
+        onBlur={() => {
+          setEditando(false);
+          const n = parseMoeda(texto);
+          const r = n != null ? roundCasas(n, casas) : null;
+          onChange(r);
+          setTexto(r != null ? escrever(r) : '');
+        }}
+      />
+      <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">%</span>
+    </div>
+  );
+}
+
+/**
  * CAMPO DE NÚMERO FORMATADO — AGRI-COLHEITA-FIX-05.
  *
  * ⚠ MESMO PARSER DO DINHEIRO, OUTRA SAÍDA. `parseMoeda` fica sendo o único lugar do sistema

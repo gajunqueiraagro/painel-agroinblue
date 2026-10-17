@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 17/10/2026 (FIN-LANC-DESCRICAO-CONTRATO-01, +3: `src/components/financeiro-v2/colunasDaListaV2.test.tsx` 3 (12 -> 15) — 5623
+  Baseline em 17/10/2026 (FIN-FINANC-28 CADASTRO-ACABAMENTO, +5: `src/components/financiamentos/cadastroAcabamento.test.tsx` 5 (novo) — 5628
+  depois dele; antes o FIN-LANC-DESCRICAO-CONTRATO-01, +3: `src/components/financeiro-v2/colunasDaListaV2.test.tsx` 3 (12 -> 15) — 5623
   depois dele; antes o FIN-FINANC-28 FIX 4b, +5: `src/components/financiamentos/buscarNoContrato.test.tsx` 5 (7 -> 12; o caso do "mover" passou a achar a
   caixa dentro de `confirmar-mover`, porque o dialogo ganhou a caixa "todas as saídas") — 5620 depois dele; antes o RECORRENCIAS-COLUNAS-01, +1: `src/v2/pages/recorrenciasFaltaGerar.test.tsx` 1 (9 -> 10); ele e `recValorCerto01`
   trocados ao contrato novo da Situacao e da regua — 5615 depois dele; antes o FORN-MESCLAR-01, +5: `src/components/financeiro-v2/mesclarFornecedores.test.tsx` 5 (novo); `documentoFiscalNosEscritores`
@@ -377,7 +378,7 @@ no mesmo arquivo.
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
   `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5327
-  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO; 5568 desde o FIN-FINANC-28 PASSO 4; 5571 desde o FIN-FINANC-28 RESUMO-A18; 5573 desde o FIN-FINANC-28 PASSO 4c; 5581 desde o FIN-FINANC-28 PASSO 4b; 5586 desde o FIN-FINANC-28 PASSO 5; 5593 desde o FIN-FINANC-28 PASSO 6; 5607 desde o FIN-FINANC-28 PASSO 7; 5609 desde o FIN-FINANC-28 PASSO 8; 5614 desde o FORN-MESCLAR-01; 5615 desde o RECORRENCIAS-COLUNAS-01; 5620 desde o FIN-FINANC-28 FIX 4b; 5623 desde o FIN-LANC-DESCRICAO-CONTRATO-01], 22 skipped, e
+  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO; 5568 desde o FIN-FINANC-28 PASSO 4; 5571 desde o FIN-FINANC-28 RESUMO-A18; 5573 desde o FIN-FINANC-28 PASSO 4c; 5581 desde o FIN-FINANC-28 PASSO 4b; 5586 desde o FIN-FINANC-28 PASSO 5; 5593 desde o FIN-FINANC-28 PASSO 6; 5607 desde o FIN-FINANC-28 PASSO 7; 5609 desde o FIN-FINANC-28 PASSO 8; 5614 desde o FORN-MESCLAR-01; 5615 desde o RECORRENCIAS-COLUNAS-01; 5620 desde o FIN-FINANC-28 FIX 4b; 5623 desde o FIN-LANC-DESCRICAO-CONTRATO-01; 5628 desde o FIN-FINANC-28 CADASTRO-ACABAMENTO], 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -2452,6 +2453,19 @@ preview que o cabecalho nao sai da tela ao rolar.
   -> B4; desvincular sempre chamando o motor -> B9) e 1 de tela (o botao sem a trava da recusa / do mover).
   ⚠ NAO PROVADO: nada com login · as RPCs pelo PostgREST · candidatas e vinculo com dado real (nenhum vinculado) · os dialogos com
     resposta real (a bancada nao tem a RPC: medida so' a casca) · o fluxo de quitacao do P3-FIX4 disparado pela tela.
+- ⚠ O CADASTRO DE CONTRATO TEM CORPO CINZA E CAMPOS EM BLOCOS BRANCOS; PERCENTUAL NUNCA E' CAMPO DE MOEDA (FIN-FINANC-28 CADASTRO-ACABAMENTO,
+  Gabriel 17/10/2026 14:57, so' tela, `CadastroDeContratoDialog.tsx`). Corpo `bg-muted`; os campos moram no BLOCO DA TELA DO CONTRATO,
+  reusado (`BLOCO_DO_CONTRATO` + `Titulo`, exportados de `ContratoDeCredito.tsx`: borda fina, fundo branco, titulo 11px/600 sentence case).
+  Consorcio: Identificação · Carta e prazo · [Custos | Contemplação] · Pagamento e classificação. Financiamento: Identificação · Valores e
+  datas (valor, data do contrato, 1º vencimento — saiu da aba Condições) · Pagamento e classificação · Garantias; na aba Condições, o bloco
+  Condições + o cronograma. REGUA: rotulo 10px cinza sentence case numa linha (corta com `title`), campo e seletor de 28px a 11px (o
+  `CampoMoeda` sem classe caia no `Input` padrao — eram os campos grandes do print). PERCENTUAL: `CampoPercentual`
+  (`src/components/ui/campo-moeda.tsx`, irmao do `CampoMoeda`: mesmo parser, "%" fixo dentro do campo) nas tres taxas do consorcio e na
+  taxa de juros. "Plano das parcelas" do consorcio e' SELO (texto), nao campo. "O que falta": sentence case, lista unica (ate' 10, senao 3
+  + "+N" com a lista no `title`; `faltaNoResumo`), e a recusa "Informe …" do cronograma so' aparece quando a lista esta' vazia
+  (`recusaAlemDaLista`). MEDIDO na bancada (1.126 x 579 e 1.440 x 800, as duas naturezas e a aba Condições): sem rolagem (aba 414/414 e
+  451/451), todo campo e seletor com 28px, 0 rotulos cortados, nenhum texto acima de 11px no corpo. Fotos em ~/Downloads/cadastro-acabamento/.
+  ⚠ NAO PROVADO com login · o lugar reservado do lapis (FORN-EDITAR-01) fica entre a Administradora / o Credor e o "+".
 - ⚠ A DESCRICAO DOS LANCAMENTOS GERADOS PELO CONTRATO E' DO BANCO E SEGUE O CADASTRO (FIN-LANC-DESCRICAO-CONTRATO-01, Gabriel 17/10/2026;
   migration `supabase/migrations/20261027201000_fin_lanc_descricao_contrato_01.sql`, md5 do arquivo 701b743a5ccf304f0411c22a990463fa — APLICADA
   no proto em 17/10/2026, ledger 20261017174835, ⚠ timestamp do dia; ledger = arquivo).

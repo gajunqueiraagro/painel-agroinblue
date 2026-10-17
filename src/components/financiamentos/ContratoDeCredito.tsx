@@ -329,11 +329,13 @@ export const BlocoDocumentos = forwardRef<HTMLDivElement, { api: ApiDoContrato }
 });
 
 /* ═══ PEÇAS ══════════════════════════════════════════════════════════════════════════════════════════════════════════════ */
-function Titulo({ nome, dica, acao }: { nome: string; dica: string; acao?: React.ReactNode }) {
+/** O bloco da tela do contrato (fundo branco, borda fina) e o título dele: reusados pelo cadastro do contrato (acabamento 17/10). */
+export const BLOCO_DO_CONTRATO = 'flex min-w-0 flex-col rounded-lg border bg-card px-2 pb-1.5 pt-1';
+export function Titulo({ nome, dica, acao }: { nome: string; dica?: string; acao?: React.ReactNode }) {
   return (
     <div className="mb-1 flex h-[22px] min-w-0 items-center gap-2">
       <h3 className="shrink-0 text-[11px] font-semibold text-foreground">{nome}</h3>
-      <span className="min-w-0 flex-1 truncate text-[10px] text-muted-foreground" title={dica}>{dica}</span>
+      <span className="min-w-0 flex-1 truncate text-[10px] text-muted-foreground" title={dica}>{dica ?? ''}</span>
       {acao && <div className="shrink-0">{acao}</div>}
     </div>
   );
