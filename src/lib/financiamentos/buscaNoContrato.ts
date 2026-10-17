@@ -41,22 +41,94 @@ function lerOutro(v: unknown): OutroDono | null | undefined {
   return { tipo, numeroContrato: txt(v.numero_contrato), descricao: txt(v.descricao), parcela: numOuNulo(v.parcela), movivel: v.movivel === true };
 }
 
+/** uma linha de candidata (a do 4b, e a da leitura "ao contrário" do passo 6); peça torta = nulo */
+export function lerCandidata(l: unknown): Candidata | null {
+  if (!ehObj(l) || !txt(l.lancamento_id)) return null;
+  const valor = numOuNulo(l.valor); const outro = lerOutro(l.outro);
+  if (valor === null || outro === undefined || !Array.isArray(l.motivos)) return null;
+  return {
+    lancamentoId: String(l.lancamento_id), data: txt(l.data), valor, descricao: txt(l.descricao), conta: txt(l.conta), favorecido: txt(l.favorecido),
+    extrato: l.extrato === true, dias: numOuNulo(l.dias) ?? 0, pontos: numOuNulo(l.pontos) ?? 0,
+    motivos: l.motivos.filter((m): m is string => typeof m === 'string'), status: txt(l.status_transacao),
+    papelSugerido: papel(l.papel_sugerido), previsto: numOuNulo(l.previsto), diferenca: numOuNulo(l.diferenca), outro,
+  };
+}
+
 /** o envelope de `fn_financiamento_candidatas`; qualquer peça torta = nulo (a tela diz que não leu) */
 export function lerBuscaNoContrato(r: unknown): BuscaNoContrato | null {
   if (!ehObj(r) || (r.alvo !== 'liberacao' && r.alvo !== 'parcela') || !Array.isArray(r.linhas)) return null;
   const linhas: Candidata[] = [];
   for (const l of r.linhas) {
-    if (!ehObj(l) || !txt(l.lancamento_id)) return null;
-    const valor = numOuNulo(l.valor); const outro = lerOutro(l.outro);
-    if (valor === null || outro === undefined || !Array.isArray(l.motivos)) return null;
-    linhas.push({
-      lancamentoId: String(l.lancamento_id), data: txt(l.data), valor, descricao: txt(l.descricao), conta: txt(l.conta), favorecido: txt(l.favorecido),
-      extrato: l.extrato === true, dias: numOuNulo(l.dias) ?? 0, pontos: numOuNulo(l.pontos) ?? 0,
-      motivos: l.motivos.filter((m): m is string => typeof m === 'string'), status: txt(l.status_transacao),
-      papelSugerido: papel(l.papel_sugerido), previsto: numOuNulo(l.previsto), diferenca: numOuNulo(l.diferenca), outro,
-    });
+    const c = lerCandidata(l);
+    if (!c) return null;
+    linhas.push(c);
   }
   return { alvo: r.alvo, de: txt(r.de), ate: txt(r.ate), saldoALiberar: numOuNulo(r.saldo_a_liberar), linhas };
+}
+
+/* ═══ passo 6 — a leitura "ao contrário": do lançamento para o contrato (`fn_lancamento_financiamento`) ═══ */
+export interface ContratoDaCandidata { financiamentoId: string; numeroContrato: string | null; descricaoContrato: string | null; credor: string | null }
+export interface ParcelaCandidata extends Candidata, ContratoDaCandidata { parcelaId: string; parcela: number | null; vencimento: string | null }
+export interface LiberacaoCandidata extends Candidata, ContratoDaCandidata { saldoALiberar: number | null }
+export type OndeEsta =
+  | { tipo: 'parcela'; financiamentoId: string; contrato: string; parcela: number | null; papel: string; vinculoId: string | null }
+  | { tipo: 'liberacao'; financiamentoId: string; contrato: string; liberacaoId: string }
+  | { tipo: 'encargo'; financiamentoId: string; contrato: string; encargoId: string; papel: string }
+  | { tipo: 'captacao'; financiamentoId: string; contrato: string };
+export interface LancamentoNoFinanciamento {
+  tipoOperacao: string | null; data: string | null; valor: number; descricao: string | null;
+  atual: OndeEsta | null; parcelas: ParcelaCandidata[]; liberacoes: LiberacaoCandidata[];
+}
+
+const contratoDe = (o: Obj): ContratoDaCandidata | null => {
+  const id = txt(o.financiamento_id);
+  return id ? { financiamentoId: id, numeroContrato: txt(o.numero_contrato), descricaoContrato: txt(o.descricao_contrato), credor: txt(o.credor) } : null;
+};
+const nomeDoContrato = (o: Obj) => txt(o.numero_contrato) || txt(o.descricao) || 'contrato';
+
+function lerOndeEsta(v: unknown): OndeEsta | null | undefined {
+  if (v === null || v === undefined) return null;
+  if (!ehObj(v)) return undefined;
+  const fin = txt(v.financiamento_id); if (!fin) return undefined;
+  const contrato = nomeDoContrato(v);
+  if (v.tipo === 'parcela') return { tipo: 'parcela', financiamentoId: fin, contrato, parcela: numOuNulo(v.parcela), papel: txt(v.papel) ?? 'principal', vinculoId: txt(v.vinculo_id) };
+  if (v.tipo === 'liberacao' && txt(v.liberacao_id)) return { tipo: 'liberacao', financiamentoId: fin, contrato, liberacaoId: String(v.liberacao_id) };
+  if (v.tipo === 'encargo' && txt(v.encargo_id)) return { tipo: 'encargo', financiamentoId: fin, contrato, encargoId: String(v.encargo_id), papel: txt(v.papel) ?? 'outro' };
+  if (v.tipo === 'captacao') return { tipo: 'captacao', financiamentoId: fin, contrato };
+  return undefined;
+}
+
+export function lerLancamentoNoFinanciamento(r: unknown): LancamentoNoFinanciamento | null {
+  if (!ehObj(r) || !ehObj(r.lancamento) || !Array.isArray(r.parcelas) || !Array.isArray(r.liberacoes)) return null;
+  const atual = lerOndeEsta(r.atual);
+  if (atual === undefined) return null;
+  const parcelas: ParcelaCandidata[] = [];
+  for (const p of r.parcelas) {
+    const c = lerCandidata(p); const k = ehObj(p) ? contratoDe(p) : null;
+    if (!c || !k || !ehObj(p) || !txt(p.parcela_id)) return null;
+    parcelas.push({ ...c, ...k, parcelaId: String(p.parcela_id), parcela: numOuNulo(p.parcela), vencimento: txt(p.vencimento) });
+  }
+  const liberacoes: LiberacaoCandidata[] = [];
+  for (const p of r.liberacoes) {
+    const c = lerCandidata(p); const k = ehObj(p) ? contratoDe(p) : null;
+    if (!c || !k || !ehObj(p)) return null;
+    liberacoes.push({ ...c, ...k, saldoALiberar: numOuNulo(p.saldo_a_liberar) });
+  }
+  const l = r.lancamento;
+  return { tipoOperacao: txt(l.tipo_operacao), data: txt(l.data), valor: numOuNulo(l.valor) ?? 0, descricao: txt(l.descricao), atual, parcelas, liberacoes };
+}
+
+/** onde o lançamento já está, numa frase curta (o rodapé do modal) */
+export function fraseDoOndeEsta(a: OndeEsta): string {
+  if (a.tipo === 'parcela') return `${a.contrato} · parcela ${a.parcela ?? '?'} (${a.papel})`;
+  if (a.tipo === 'liberacao') return `${a.contrato} · liberação`;
+  if (a.tipo === 'encargo') return `${a.contrato} · encargo (${a.papel})`;
+  return `${a.contrato} · captação`;
+}
+
+/** o gesto contrário de cada vínculo — nulo quando não se desfaz por aqui (parcela gerada pelo contrato; captação) */
+export function desfazivelPorAqui(a: OndeEsta): boolean {
+  return (a.tipo === 'parcela' && !!a.vinculoId) || a.tipo === 'liberacao' || a.tipo === 'encargo';
 }
 
 export interface ResultadoDoVinculo {

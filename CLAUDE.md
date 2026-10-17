@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 17/10/2026 (FIN-FINANC-28 PASSO 5, +5: `src/components/financiamentos/darBaixa.test.tsx` 5 (novo) — 5586 depois dele; antes o
+  Baseline em 17/10/2026 (FIN-FINANC-28 PASSO 6, +7: `src/components/financiamentos/financiamentoDoLancamento.test.tsx` 7 (novo) — 5593 depois
+  dele; antes o FIN-FINANC-28 PASSO 5, +5: `src/components/financiamentos/darBaixa.test.tsx` 5 (novo) — 5586 depois dele; antes o
   FIN-FINANC-28 PASSO 4b, +8: `src/components/financiamentos/buscarNoContrato.test.tsx` 7 (novo),
   `src/lib/acessos/guardaDeClienteNasMigrations.test.ts` 1 (6 -> 7) — 5581 depois dele; antes o FIN-FINANC-28 PASSO 4c, +2: `src/lib/financiamentos/graficoDeSaidas.test.ts` 9 (novo),
   `src/pages/financiamentosListaCompacta.test.tsx` 1 (13 -> 14); saiu `src/lib/financiamentos/cronogramaEmAberto.test.ts` 8, com o dono que
@@ -369,7 +370,7 @@ no mesmo arquivo.
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
   `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5327
-  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO; 5568 desde o FIN-FINANC-28 PASSO 4; 5571 desde o FIN-FINANC-28 RESUMO-A18; 5573 desde o FIN-FINANC-28 PASSO 4c; 5581 desde o FIN-FINANC-28 PASSO 4b; 5586 desde o FIN-FINANC-28 PASSO 5], 22 skipped, e
+  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO; 5568 desde o FIN-FINANC-28 PASSO 4; 5571 desde o FIN-FINANC-28 RESUMO-A18; 5573 desde o FIN-FINANC-28 PASSO 4c; 5581 desde o FIN-FINANC-28 PASSO 4b; 5586 desde o FIN-FINANC-28 PASSO 5; 5593 desde o FIN-FINANC-28 PASSO 6], 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -2261,6 +2262,26 @@ preview que o cabecalho nao sai da tela ao rolar.
     O "Excluir" saiu do credito (volta como "Dar baixa › Cancelado" no passo 5).
   ⚠ NAO PROVADO NO NAVEGADOR com login (bancada com a pagina real e o lote real do proto) · nenhuma liberacao/destinacao/documento real
     (as tabelas estao vazias; a vista "pr78demo" da bancada e' SIMULADA) · upload real ao bucket e a URL assinada.
+- ⚠ NO MODAL DO FINANCEIRO O LANCAMENTO SE LIGA AO FINANCIAMENTO PELO MESMO MOTOR DO 4b, AO CONTRARIO (FIN-FINANC-28 PASSO 6, Gabriel
+  17/10/2026; migration `supabase/migrations/20261027200600_fin_financ_28_p6_vincular_lancamento.sql`, md5 do arquivo
+  accac411771f65002273e361725e6420 — APLICADA no proto em 17/10/2026, ledger 20261017152250 `fin_financ_28_p6_vincular_lancamento`, ⚠
+  timestamp do dia; ledger = arquivo).
+  · LEITURA UNICA, SEM REGRA NOVA: `fn_lancamento_financiamento(lancamento)` (2a1d4410…; guarda pelo cliente do lancamento,
+    `_fn_exigir_tenant_das_linhas`) pergunta a `fn_financiamento_candidatas` — so' nas parcelas a ±45 dias e nos contratos cuja janela
+    alcanca o lancamento — se ESTE lancamento e' candidato; devolve tambem onde ele JA' esta' (`atual`: parcela com/sem vinculo,
+    liberacao, encargo, captacao). Medido no NJ (30 saidas reais): mediana 8,9 ms, pior 300,7 ms — leitura so' com o modal aberto.
+  · TELA: `FinanciamentoDoLancamento` no rodape do `LancamentoV2Dialog` (edicao, lancamento vivo, fora de titulo de OC): vinculado,
+    "↔ C-9 · parcela 2 (juros)" abre o contrato (`onAbrirContrato`) e "desfazer" quando se desfaz por aqui (vinculo de pagamento,
+    liberacao, encargo — a parcela gerada pelo contrato e a captacao, nao); nao vinculado, o botao "Financiamento (N)" abre
+    `VincularFinanciamentoDialog` (780 × 440 fixo): abas Parcela · Liberação · Encargo · Criar contrato (saida: parcela e encargo;
+    entrada: liberacao). Os gestos sao os de sempre: `fn_financiamento_parcela_vincular` (com a simulacao e o "mover"),
+    `fn_financiamento_liberacao_salvar` ("em conta" com a data e o valor do lancamento), `fn_contrato_encargo_candidatas` /
+    `fn_contrato_encargo_vincular`. Depois de cada um: o canal de lancamentos avisa e as chaves do contrato releem.
+    "Criar contrato" fica apagado com o motivo ate' o formulario novo (passo 7). Hook `useLancamentoNoFinanciamento`; leitor puro em
+    `buscaNoContrato.ts` (`lerLancamentoNoFinanciamento`, `lerCandidata`, `fraseDoOndeEsta`, `desfazivelPorAqui`).
+  Teste: `supabase/tests/fin_financ_28_p6_vincular_lancamento_test.sql` (V1–V3) OK no vivo; mutacao (sem a guarda) morta em V3; 1
+  mutacao de tela morta. As fotos do modal do Financeiro NAO mudaram (a peca so' aparece depois da leitura).
+  ⚠ NAO PROVADO: o rodape do modal medido com a peca acesa (a bancada nao tem a RPC) · nada com login.
 - ⚠ O CONTRATO DE CREDITO SE ENCERRA PELO "DAR BAIXA ▾" (QUITADO · ROLADO · PRORROGADO · CANCELADO), COM TRILHA E "DESFAZER BAIXA"
   (FIN-FINANC-28 PASSO 5, Gabriel 17/10/2026; migration `supabase/migrations/20261027200500_fin_financ_28_p5_baixa.sql`, md5 do arquivo
   460ad69236088a535a18b9ace83dc4f2 — APLICADA no proto em 17/10/2026, ledger 20261017150835 `fin_financ_28_p5_baixa`, ⚠ timestamp do dia;

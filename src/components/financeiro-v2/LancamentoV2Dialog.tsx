@@ -21,6 +21,7 @@ import { TIPOS_DOCUMENTO, formatNFNumber, extractNFDigits, docDaLinha, topoDoDoc
 import { useCliente } from '@/contexts/ClienteContext';
 import { usePodeAbrir, usePodeAlterarOperacao, TELA_DA_OPERACAO } from '@/v2/hooks/usePodeAbrir';
 import { GestoDeOperacao } from '@/components/financeiro-v2/GestoDeOperacao';
+import { FinanciamentoDoLancamento } from '@/components/financiamentos/FinanciamentoDoLancamento';
 import { useLancamentoDocumentos } from '@/hooks/useLancamentoDocumentos';
 import { AbaDocumentosLancamento } from '@/components/financeiro-v2/AbaDocumentosLancamento';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -3252,6 +3253,12 @@ export function LancamentoV2Dialog({
                 onClick={() => setVincularAberto(true)} testId="acao-vincular-oc">
                 <Link2 className="h-3 w-3" /> Vincular à operação
               </GestoDeOperacao>
+            )}
+            {/* FIN-FINANC-28 passo 6 — o lançamento e o financiamento: onde ele está (abre o contrato; o contrário quando se desfaz
+                por aqui) ou "Financiamento" (vincular como parcela, liberação ou encargo). Título de OC fica fora (é da operação). */}
+            {isEdit && lancamento && clienteAtual?.id && !lancamento.cancelado && parteOCLida && !parteOCViva && (
+              <FinanciamentoDoLancamento lancamentoId={lancamento.id} clienteId={clienteAtual.id}
+                onAbrirContrato={onAbrirContrato ? (finId) => { onClose(); onAbrirContrato(finId); } : undefined} />
             )}
             {/* FIN-V2-HOMOLOG-FIX-01 (item 2): "Criar OC a partir deste lançamento" tambem aqui, ao lado do Vincular — a MESMA
                 regra da lista (`podeCriarOCDoLegado`) e o MESMO dialogo. */}
