@@ -35,7 +35,7 @@ export const REGUA_LISTA_FINANCIAMENTOS: Record<'data' | 'numero' | 'banco' | 's
    financiamentos (esta e a de "Compras parceladas") as importam daqui. */
 export const TABELA_LANC = 'table-financeiro';
 export const TH_LANC = 'px-1 py-[3px] align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground';
-export const TD_DATA_LANC = 'celula-data font-mono tabular-nums whitespace-nowrap';
+export const TD_DATA_LANC = 'celula-data tabular-nums whitespace-nowrap';
 export const TD_VALOR_LANC = 'celula-valor font-semibold tabular-nums whitespace-nowrap text-right';
 export const LINHA_LANC = 'h-[25px]';
 /** grupo e total: 27px, 9,5px/600 (`celula-grupo`, index.css) */

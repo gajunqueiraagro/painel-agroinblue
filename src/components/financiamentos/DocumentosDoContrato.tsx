@@ -106,7 +106,10 @@ export function DocumentosDoContrato({ financiamentoId, clienteId, hoje, credorI
   const apiDaCompra: LancamentoDocumentosApi = useMemo(() => ({
     ...api,
     documentos: api.documentos.filter((d) => d.especie !== 'boleto'),
-    confronto: null,
+    /* FIN-FINANC-28-P3-FIX3 — a faixa "Documentado / Valor do lançamento" lê o confronto DA COMPRA que o banco já devolve
+       (`fin_documento_confronto` da 1ª parcela, chaves `grupo_*`: a NF contra a soma das parcelas ATIVAS). Sem NF ligada às
+       parcelas não há grupo, e o confronto de UMA parcela segue fora (seria a nota contra uma parcela só). */
+    confronto: api.confronto?.grupo ? api.confronto : null,
     registrar: async (p) => {
       const criado = await api.registrar(p);
       if (criado && criado.origem === 'lancamento' && ids.length > 1) {

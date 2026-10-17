@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 
 export interface DestinacaoItem {
   id: string;
@@ -216,32 +217,19 @@ function DestinacaoCard({ item, idx, clienteId, contas, planos, onUpdate, onRemo
       {item.tipo === 'conta_propria' && (
         <div>
           <Label className="text-[10px]">Conta bancária</Label>
-          <Select value={item.conta_bancaria_id} onValueChange={v => onUpdate(idx, { conta_bancaria_id: v })}>
-            <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="Selecione" /></SelectTrigger>
-            <SelectContent>
-              {contas.map(c => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.nome_exibicao || c.nome_conta}{c.banco ? ` (${c.banco})` : ''}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {/* FIN-FINANC-28-P3-FIX3 — entidade: o seletor DA CASA com busca */}
+          <SearchableSelect value={item.conta_bancaria_id} onValueChange={v => onUpdate(idx, { conta_bancaria_id: v })} semTodos
+            allValue="" allLabel="Selecione" placeholder="Buscar conta..."
+            options={contas.map(c => ({ value: c.id, label: `${c.nome_exibicao || c.nome_conta}${c.banco ? ` (${c.banco})` : ''}` }))} />
         </div>
       )}
 
       {/* Plano de contas – sempre visível */}
       <div>
         <Label className="text-[10px]">Plano de contas</Label>
-        <Select value={item.plano_conta_id} onValueChange={v => onUpdate(idx, { plano_conta_id: v })}>
-          <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="Selecione" /></SelectTrigger>
-          <SelectContent>
-            {planos.map(p => (
-              <SelectItem key={p.id} value={p.id}>
-                {p.subcentro || p.centro_custo} ({p.macro_custo})
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <SearchableSelect value={item.plano_conta_id} onValueChange={v => onUpdate(idx, { plano_conta_id: v })} semTodos
+          allValue="" allLabel="Selecione" placeholder="Buscar conta do plano..."
+          options={planos.map(p => ({ value: p.id, label: `${p.subcentro || p.centro_custo} (${p.macro_custo})` }))} />
       </div>
 
       <div className="flex items-center gap-2">

@@ -28,6 +28,11 @@ export interface OpcaoSearchable {
   sub?: string;
   /** Marca a segunda linha como ausência a resolver (âmbar), não como dado. */
   subAlerta?: boolean;
+  /**
+   * Texto que ENTRA NA BUSCA e não aparece — FIN-FINANC-28-P3-FIX3 (ex.: os dígitos do CNPJ, para achar "11222333" num `sub`
+   * escrito "11.222.333/0001-44"). ⚠ ADITIVA: sem ela a busca é a de sempre.
+   */
+  busca?: string;
 }
 
 const PREFIXO = 'ss-busca:';
@@ -161,7 +166,7 @@ export function SearchableSelect({
     if (!search.trim()) return options;
     const q = search.toLowerCase();
     return options.filter(o =>
-      o.label.toLowerCase().includes(q) || (o.sub ?? '').toLowerCase().includes(q));
+      o.label.toLowerCase().includes(q) || (o.sub ?? '').toLowerCase().includes(q) || (o.busca ?? '').toLowerCase().includes(q));
   }, [options, search]);
 
   // Cap de render: sem virtualização, listas grandes (milhares de contrapartes)

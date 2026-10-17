@@ -6,6 +6,7 @@
 import { useMemo, useEffect } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Fazenda } from '@/contexts/FazendaContext';
@@ -37,11 +38,13 @@ export interface FazendaSelectProps {
   obrigatorio?: boolean;
   /** `id` do bloco, para quem grava levar o foco ao campo quando ele falta. */
   id?: string;
+  /** FIN-FINANC-28-P3-FIX3 — o seletor DA CASA com busca (`SearchableSelect`). Opt-in: sem a prop, o `Select` de sempre. */
+  comBusca?: boolean;
 }
 
 export function FazendaSelect({
   value, onChange, fazendas, forcaAdministrativo,
-  label, className, triggerClassName, size = 'default', tabIndex, disabled, hideAviso, obrigatorio, id,
+  label, className, triggerClassName, size = 'default', tabIndex, disabled, hideAviso, obrigatorio, id, comBusca = false,
 }: FazendaSelectProps) {
   const fazOperacionais = fazendas.filter(f => f.id !== '__global__');
 
@@ -60,12 +63,20 @@ export function FazendaSelect({
   return (
     <div className={className} id={id}>
       {label && <Label className="text-[10px]">{label}</Label>}
-      <Select value={value} onValueChange={onChange} disabled={forcaAdministrativo || disabled}>
-        <SelectTrigger tabIndex={tabIndex} className={cn('h-8', size === 'compact' && 'h-5 px-1.5 text-[11px] [&_svg]:h-3 [&_svg]:w-3', triggerClassName, falta && 'border-destructive')}><SelectValue placeholder="Selecione" /></SelectTrigger>
-        <SelectContent>
-          {fazOperacionais.map(f => <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>)}
-        </SelectContent>
-      </Select>
+      {comBusca ? (
+        <div className="min-w-0" title={fazOperacionais.find(f => f.id === value)?.nome}>
+          <SearchableSelect value={value} onValueChange={onChange} semTodos allValue="" allLabel="Selecione"
+            options={fazOperacionais.map(f => ({ value: f.id, label: f.nome }))} placeholder="Buscar fazenda..."
+            disabled={forcaAdministrativo || disabled} dense className={cn(triggerClassName, falta && 'border-destructive')} />
+        </div>
+      ) : (
+        <Select value={value} onValueChange={onChange} disabled={forcaAdministrativo || disabled}>
+          <SelectTrigger tabIndex={tabIndex} className={cn('h-8', size === 'compact' && 'h-5 px-1.5 text-[11px] [&_svg]:h-3 [&_svg]:w-3', triggerClassName, falta && 'border-destructive')}><SelectValue placeholder="Selecione" /></SelectTrigger>
+          <SelectContent>
+            {fazOperacionais.map(f => <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      )}
       {falta && <p className="mt-0.5 text-[10px] text-destructive">{MSG_FAZENDA_OBRIGATORIA}</p>}
       {!hideAviso && forcaAdministrativo && fazendaAdm && (
         <p className="text-[10px] text-amber-600 flex items-center gap-1 mt-1">

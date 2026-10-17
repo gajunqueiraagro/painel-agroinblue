@@ -14,6 +14,7 @@ import { CampoMoeda, brl, parseMoeda } from '@/components/ui/campo-moeda';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { NovoFornecedorDialog } from '@/components/financeiro-v2/NovoFornecedorDialog';
 import { leitorDeFornecedores, useFornecedoresDoCliente } from '@/hooks/useFornecedoresDoCliente';
 import { criarFornecedorDaCasa } from '@/lib/fornecedores/cadastroDaCasaBanco';
@@ -84,9 +85,9 @@ const CAMPO_CELULA = 'h-6';                // A16 — dentro da grade densa, tod
 const CAMPO_TRAVADO = 'bg-muted border-border/60 text-muted-foreground';
 const ROTULO = 'text-[10px] font-normal text-muted-foreground';
 const APOIO = 'mt-0.5 text-[10px] text-muted-foreground';
-const NUM = 'font-mono tabular-nums';
-/* 9px so' para numero monetario em mono — mesma excecao da lista e do detalhe. */
-const MOEDA = 'text-right font-mono tabular-nums whitespace-nowrap text-[9px]';
+const NUM = 'tabular-nums';
+/* 9px so' para numero monetario (Inter tabular, sem mono: FIN-FINANC-28-P3-FIX3) — mesma excecao da lista e do detalhe. */
+const MOEDA = 'text-right tabular-nums whitespace-nowrap text-[9px]';
 const MIN_PARCELAS = 1;
 const MAX_PARCELAS = 360;
 
@@ -192,15 +193,28 @@ function BlocoHead({ titulo }: { titulo: string }) {
  * vai para a prévia do banco no Salvar, que pergunta até onde ela alcança. `VAZIO` é a palavra da casa para "nenhum".
  */
 const VALOR_VAZIO_DAS_PARCELAS = '__vazio__';
-function CampoDasParcelas({ testid, comum, escolhido, vazio, opcoes, aoMudar }: {
+function CampoDasParcelas({ testid, comum, escolhido, vazio, opcoes, aoMudar, comBusca = false }: {
   testid: string; comum: ComumDasParcelas[keyof ComumDasParcelas]; escolhido: string | null | undefined; vazio: string;
   opcoes: ReadonlyArray<{ valor: string; label: string }>; aoMudar: (v: string | null) => void;
+  /** FIN-FINANC-28-P3-FIX3 — entidade (a safra): o seletor DA CASA com busca. As listas fixas (forma, cultura, fase) não. */
+  comBusca?: boolean;
 }) {
   const atual = escolhido !== undefined ? (escolhido || VALOR_VAZIO_DAS_PARCELAS)
     : comum.tipo === 'igual' ? (comum.valor || VALOR_VAZIO_DAS_PARCELAS) : undefined;
   const dica = comum.tipo === 'varia' ? VARIA_ENTRE_AS_PARCELAS : '—';
   /* o valor que as parcelas têm e que não está na lista (legado) continua visível como opção */
   const lista = atual && atual !== VALOR_VAZIO_DAS_PARCELAS && !opcoes.some(o => o.valor === atual) ? [...opcoes, { valor: atual, label: atual }] : opcoes;
+  if (comBusca) {
+    /* sem valor comum ("varia", "—") o gatilho diz a dica; o "vazio" da casa é uma opção como as outras */
+    const opcoesBusca = [{ value: VALOR_VAZIO_DAS_PARCELAS, label: vazio }, ...lista.map(o => ({ value: o.valor, label: o.label }))];
+    return (
+      <div className="min-w-0" data-testid={testid} data-escolhido={escolhido !== undefined ? 'sim' : 'nao'}
+        title={opcoesBusca.find(o => o.value === atual)?.label ?? dica}>
+        <SearchableSelect value={atual ?? ''} onValueChange={v => aoMudar(v === VALOR_VAZIO_DAS_PARCELAS ? null : v)} options={opcoesBusca}
+          semTodos allValue="" allLabel={dica} placeholder="Buscar..." disabled={comum.tipo === 'sem_parcelas'} dense className={CAMPO} />
+      </div>
+    );
+  }
   return (
     <Select value={atual} onValueChange={v => aoMudar(v === VALOR_VAZIO_DAS_PARCELAS ? null : v)} disabled={comum.tipo === 'sem_parcelas'}>
       <SelectTrigger className={CAMPO} data-testid={testid} data-escolhido={escolhido !== undefined ? 'sim' : 'nao'}><SelectValue placeholder={dica} /></SelectTrigger>
@@ -690,8 +704,10 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
 
   /* A conta avulsa entra na lista do seletor com sufixo, para o operador entender por
      que ela nao esta' entre as demais — e continuar podendo trocar. */
+  /* ⚠ FIN-FINANC-28-P3-FIX3 — A AVULSA SO' ENTRA SE NAO ESTA' NA LISTA, POR ID. A consulta dela fica no cache depois que
+     `contas` carrega; sem esta guarda o mesmo id ia duas vezes (dois itens marcados e o rotulo do gatilho repetido). */
   const contasComAtual = useMemo(() => {
-    if (!contaAvulsa) return contas;
+    if (!contaAvulsa || contas.some(c => c.id === contaAvulsa.id)) return contas;
     const sufixo = contaAvulsa.ativa === false ? ' (inativa)' : '';
     return [
       ...contas,
@@ -901,6 +917,24 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
     ...abaDeDocumentos,
   ];
 
+  /* FIN-FINANC-28-P3-FIX3 — o campo do Credor, UM SÓ: no parcelamento ele mora na 1ª linha; no crédito, na 2ª */
+  const campoCredor = (
+        <div>
+          <Label className={ROTULO}>Credor</Label>
+          {clienteId && (
+            /* FORN-SELETOR-PADRAO-01 fatia 2c — o seletor DONO, pelo leitor único; o "+" abre o cadastro da casa */
+            <FavorecidoSelect
+              value={form.credor_id || ''}
+              onChange={(id) => set('credor_id', id)}
+              clienteId={clienteId}
+              onCriarNovo={() => setNovoCredorAberto(true)}
+              triggerClassName={CAMPO}
+              placeholder="Selecionar credor..."
+            />
+          )}
+        </div>
+  );
+
   return (
     <>
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1007,19 +1041,26 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                       Ela hospeda o campo "Situacao do contrato", que agora some tambem ao editar
                       um parcelamento; manter `[2fr_1fr_1fr_1fr]` deixaria um quarto de linha
                       vazio a' direita, que e' o mesmo defeito que este PR veio tirar da Forma. */}
-                  <div className={`grid gap-2 ${ehEdicao && !ehParcelamento ? 'grid-cols-[2fr_1fr_1fr_1fr]' : 'grid-cols-[2fr_1fr_1fr]'}`}>
+                  {/* FIN-FINANC-28-P3-FIX3 — compra parcelada não tem nº de contrato: Credor e Escopo, sem coluna vazia */}
+                  <div className={`grid gap-2 ${ehParcelamento ? 'grid-cols-[minmax(0,2fr)_minmax(0,1fr)]' : ehEdicao ? 'grid-cols-[2fr_1fr_1fr_1fr]' : 'grid-cols-[2fr_1fr_1fr]'}`}>
+                    {ehParcelamento ? (<>
+                    {campoCredor}
+                    </>) : (<>
                     <div>
                       <Label className={ROTULO}>Descrição *</Label>
                       <Input className={CAMPO} value={form.descricao}
                         onChange={e => set('descricao', e.target.value)}
                         placeholder="Ex: Custeio safra 2025" />
                     </div>
-                    <div>
-                      <Label className={ROTULO}>Nº do contrato</Label>
-                      <Input className={CAMPO} value={form.numero_contrato}
-                        onChange={e => set('numero_contrato', e.target.value)}
-                        placeholder="opcional" />
-                    </div>
+                    </>)}
+                    {!ehParcelamento && (
+                      <div>
+                        <Label className={ROTULO}>Nº do contrato</Label>
+                        <Input className={CAMPO} value={form.numero_contrato}
+                          onChange={e => set('numero_contrato', e.target.value)}
+                          placeholder="opcional" />
+                      </div>
+                    )}
                     <div>
                       {/* "Escopo", nao "Tipo": desde que a natureza existe, "tipo"
                           ficou ambiguo. Coluna e valores continuam os mesmos. */}
@@ -1056,7 +1097,11 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
 
                   {/* ⚠ TRES COLUNAS SO' NO PARCELAMENTO — a Fazenda entra ao lado do Credor e da
                       Conta porque as tres respondem "de quem, de onde, para qual fazenda". */}
-                  <div className={`grid gap-2 ${ehParcelamento ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                  {/* FIN-FINANC-28-P3-FIX3 — no parcelamento o Credor sobe para a 1ª linha, com 2/3 da largura (o nome inteiro: "Casa
+                      do Criador Campo Grande LTDA" pede 285px a 12px; numa terça parte sobravam 110), e a Descrição desce para esta,
+                      ao lado de Fazenda e Conta — o mesmo número de linhas de antes. `minmax(0,…)`: sem ele a coluna cresce com o
+                      conteúdo do vizinho. */}
+                  <div className={`grid gap-2 ${ehParcelamento ? 'grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]' : 'grid-cols-2'}`}>
                     {/* ⚠ A FAZENDA SO' EXISTE NO PARCELAMENTO — PAR-01c. Financiamento e
                         emprestimo continuam nascendo na fazenda Administrativo, fixada pelo
                         gravador e sem campo aqui: a regra nao foi revogada, foi DELIMITADA. O
@@ -1076,24 +1121,22 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                           forcaAdministrativo={ehAdministrativo}
                           triggerClassName={CAMPO}
                           hideAviso
+                          comBusca
                         />
                         <p className={APOIO}>Onde a despesa cai</p>
                       </div>
                     )}
-                    <div>
-                      <Label className={ROTULO}>Credor</Label>
-                      {clienteId && (
-                        /* FORN-SELETOR-PADRAO-01 fatia 2c — o seletor DONO, pelo leitor único; o "+" abre o cadastro da casa */
-                        <FavorecidoSelect
-                          value={form.credor_id || ''}
-                          onChange={(id) => set('credor_id', id)}
-                          clienteId={clienteId}
-                          onCriarNovo={() => setNovoCredorAberto(true)}
-                          triggerClassName={CAMPO}
-                          placeholder="Selecionar credor..."
-                        />
-                      )}
+                    {/* FIN-FINANC-28-P3-FIX3 — no parcelamento a Descrição desce para esta linha (a primeira) e o Credor sobe */}
+                    {ehParcelamento ? (<>
+                    <div className="order-first">
+                      <Label className={ROTULO}>Descrição *</Label>
+                      <Input className={CAMPO} value={form.descricao}
+                        onChange={e => set('descricao', e.target.value)}
+                        placeholder="Ex: Custeio safra 2025" />
                     </div>
+                    </>) : (<>
+                    {campoCredor}
+                    </>)}
                     <div>
                       <Label className={ROTULO}>Conta bancária *</Label>
                       <ContaBancariaSelect
@@ -1103,6 +1146,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                         placeholder="Selecione"
                         showBankDetails="banco"
                         className={CAMPO}
+                        comBusca
                       />
                       <p className={APOIO}>De onde saem as parcelas</p>
                     </div>
@@ -1334,6 +1378,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                     {edicaoDeParcelamento ? (
                       /* PARC-LIVRES-01 2B — as parcelas GRAVADAS na mesma grade: a paga apagada, a não paga editável. */
                       <GradeDeParcelas
+                        alturaDoTotal={25}
                         modo="livres"
                         parcelas={gradeEdicao}
                         onParcelas={(lista) => { setErroDaGrade(null); setGradeEdicao(lista); }}
@@ -1348,6 +1393,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                       />
                     ) : ehParcelamento && !ehEdicao ? (
                       <GradeDeParcelas
+                        alturaDoTotal={25}
                         modo={modoParcelas}
                         onModo={trocarModoDasParcelas}
                         parcelas={livresAbertas ? parcelasLivres : previaComoParcelas}
@@ -1613,7 +1659,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                             <div className="col-span-4">
                               <Label className="text-[10px]">Safra</Label>
                               <CampoDasParcelas testid="safra-das-parcelas" comum={comumDasParcelas.safra_id} escolhido={escolhaDasParcelas.safra_id}
-                                vazio="Sem safra" aoMudar={v => escolher('safra_id', v)}
+                                vazio="Sem safra" aoMudar={v => escolher('safra_id', v)} comBusca
                                 opcoes={[...safras.filter(sf => sf.ativa).map(sf => ({ valor: sf.id, label: sf.nome })),
                                   ...Object.entries(lancamentosDoContrato?.nomes ?? {}).filter(([id]) => !safras.some(sf => sf.ativa && sf.id === id)).map(([id, nome]) => ({ valor: id, label: nome }))]} />
                             </div>
@@ -1669,14 +1715,12 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                       <div className="grid grid-cols-2 gap-2">
                         <div>
                           <Label className={ROTULO}>Conta de captação</Label>
-                          <Select value={form.plano_conta_captacao_id} onValueChange={v => set('plano_conta_captacao_id', v)}>
-                            <SelectTrigger className={CAMPO}><SelectValue placeholder="Selecione" /></SelectTrigger>
-                            <SelectContent>
-                              {planosEntrada.map(p => (
-                                <SelectItem key={p.id} value={p.id}>{p.subcentro || p.centro_custo}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          {/* FIN-FINANC-28-P3-FIX3 — conta do plano é entidade: o seletor DA CASA com busca */}
+                          <div className="min-w-0" title={nomeCaptacao ?? undefined}>
+                            <SearchableSelect value={form.plano_conta_captacao_id} onValueChange={v => set('plano_conta_captacao_id', v)}
+                              options={planosEntrada.map(p => ({ value: p.id, label: p.subcentro || p.centro_custo || '—' }))}
+                              semTodos allValue="" allLabel="Selecione" placeholder="Buscar conta do plano..." dense className={CAMPO} />
+                          </div>
                           <p className={APOIO}>Macro › Grupo › Centro</p>
                         </div>
                         <div>

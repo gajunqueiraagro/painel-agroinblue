@@ -20,6 +20,7 @@
  * = conta_origem em transferências).
  * NÃO filtra por fazenda/ativa — assume que o caller já fez isso.
  */
+import { SearchableSelect, type OpcaoSearchable } from '@/components/ui/searchable-select';
 import {
   Select,
   SelectContent,
@@ -88,6 +89,12 @@ interface Props {
    * ou `[{value:'__all__',label:'Todas'}]`). Caller decide a sentinela.
    */
   prependItems?: Array<{ value: string; label: string }>;
+  /**
+   * FIN-FINANC-28-P3-FIX3 — o seletor DA CASA com busca (`SearchableSelect`, a mesma paleta e densidade do seletor de
+   * fornecedor): digita parte do nome ou do banco e a lista filtra; o grupo vai à direita da opção. Mesma ordem, mesmos rótulos.
+   * ⚠ OPT-IN: sem a prop o componente é o de sempre (as outras montagens não mudam).
+   */
+  comBusca?: boolean;
 }
 
 /**
@@ -184,6 +191,7 @@ export function ContaBancariaSelect({
   size = 'default',
   contentClassName,
   prependItems,
+  comBusca = false,
 }: Props) {
   // Excluir IDs (transferência: origem ≠ destino).
   const excl = new Set(excluirIds ?? []);
@@ -207,6 +215,20 @@ export function ContaBancariaSelect({
   // tradução no callback (`onValueChange={(v) => setX(v === '__none__' ? '' : v)}`).
   const firstPrependValue = prependItems?.[0]?.value;
   const selectValue = value && value !== '' ? value : firstPrependValue;
+
+  if (comBusca) {
+    const opcoes: OpcaoSearchable[] = [
+      ...(prependItems ?? []).map((it) => ({ value: it.value, label: it.label })),
+      ...grupos.flatMap((g) => g.items.map(({ conta, label }) => ({ value: conta.id, label, hint: g.label }))),
+    ];
+    const atual = opcoes.find((o) => o.value === (value ?? ''));
+    return (
+      <div className="min-w-0" title={atual?.label}>
+        <SearchableSelect value={value ?? ''} onValueChange={onValueChange} options={opcoes} semTodos
+          allValue="" allLabel={placeholder} placeholder="Buscar conta..." disabled={disabled} dense className={className} />
+      </div>
+    );
+  }
 
   return (
     <Select

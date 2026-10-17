@@ -727,7 +727,8 @@ describe('4 — a tela do contrato mostra o que o banco derivou do lançamento',
     expect(cartao('Progresso')).toContain('1 de 2 pagas');
     expect(screen.getByTestId('total-das-parcelas').textContent).toContain('16.238,00');
     expect(screen.getByTestId('total-pagas').textContent).toBe('1 de 2');
-    expect(screen.getByTestId('total-pago').textContent).toBe('pago 8.119,00');
+    // FIN-FINANC-28-P3-FIX3 — na compra parcelada a célula sob a Conta fica vazia (o pago mora no cartão)
+    expect(screen.getByTestId('total-pago').textContent).toBe('');
   });
 
   it('a parcela CANCELADA não entra: a lista e o total são os do banco, não os de `financiamento_parcelas`', async () => {
@@ -839,12 +840,24 @@ describe('4 — a tela do contrato mostra o que o banco derivou do lançamento',
     expect(cab).toEqual(['Nº', 'Comp.', 'Venc.', 'Pgto.', 'Prazo', 'Conta', 'Valor (R$)', 'Situação', 'Nota fiscal', 'Boleto', '']);
     /* rodapé: tudo lido */
     expect(Array.from(screen.getByTestId('rodape-das-parcelas').querySelectorAll('td')).map((td) => td.textContent))
-      .toEqual(['Total · 2 parcelas', 'pago 8.119,00', '16.238,00', '1 de 2', '1 nota · confere', '1', '']);
+      .toEqual(['Total · 2 parcelas', '', '16.238,00', '1 de 2', '1 nota · confere', '1', '']);
     /* cartões com a contagem do banco; "Juros previstos" não existe no parcelamento */
     expect(cartao('Pago')).toBe('Pago · 1 parcelaR$ 8.119,00');
     expect(cartao('A vencer')).toBe('A vencer · 0 parcelasR$ 0,00');
     expect(cartao('Vencido')).toBe('Vencido · 1 parcelaR$ 8.119,00');
     expect(screen.queryByTestId('cartao-Juros previstos')).toBeNull();
+    /* FIN-FINANC-28-P3-FIX3 — o cabeçalho da COMPRA: a ordem do Gabriel, sem contrato / liberação / valor contratado /
+       vencimento final, rótulos em minúsculas (10px, nunca `uppercase`) e valores a 11px */
+    const grade = screen.getByTestId('grade-da-compra');
+    expect(Array.from(grade.querySelectorAll('dt')).map((dt) => dt.textContent).slice(0, 10)).toEqual([
+      'Descrição', 'Credor', 'Data da compra', 'Competência', '1ª parcela', 'Parcelas', 'Conta', 'Classificação', 'Safra', 'Situação']);
+    expect(grade.textContent).not.toMatch(/Nº contrato|Data de liberação|Valor contratado|Vencimento final|Banco\/conta/);
+    expect(Array.from(grade.querySelectorAll('dt')).every((dt) => dt.className.includes('text-[10px]') && !dt.className.includes('uppercase'))).toBe(true);
+    expect(Array.from(grade.querySelectorAll('dd')).every((dd) => dd.className.includes('text-[11px]'))).toBe(true);
+    expect(screen.getByTestId('dado-Competência').textContent).toMatch(/^\d{2}\/\d{4}$/);
+    expect(screen.getByText('Valor da compra')).toBeTruthy();
+    expect(screen.queryByText('Valor do contrato')).toBeNull();
+    expect(screen.getAllByTestId('prazo').every((c) => c.className.includes('text-[9px]'))).toBe(true);
   });
 
   it('PARC-CONTRATO-01: a nota que NÃO confere escreve a diferença do banco; sem detalhe (banco antigo) a tela diz "—", nunca inventa', async () => {
@@ -876,13 +889,11 @@ describe('4 — a tela do contrato mostra o que o banco derivou do lançamento',
     const botoes = screen.getByTestId('botoes-do-contrato');
     expect(botoes.className).toContain('shrink-0');
     expect(Array.from(botoes.querySelectorAll('button')).map((b) => b.textContent?.trim())).toEqual(['Editar', 'Documentos', 'Excluir']);
-    /* o bloco de dados não tem mais o título "Dados do contrato"; fonte mono SÓ nas datas da tabela (`celula-data`, a régua de
-       Lançamentos — FIN-FINANC-28-P3-FIX) */
+    /* o bloco de dados não tem mais o título "Dados do contrato"; NENHUMA fonte mono na tela (FIN-FINANC-28-P3-FIX3: datas e
+       números em Inter com dígitos de largura fixa) — a busca prova que sabe achar: as datas da tabela têm `celula-data` */
     expect(screen.queryByText('Dados do contrato')).toBeNull();
-    const mono = Array.from(document.querySelectorAll('.font-mono'));
-    expect(mono.length).toBeGreaterThan(0);
-    // e as datas da grade chave–valor do cabeçalho (FIN-FINANC-28-P3-FIX2), também em mono 8px
-    expect(mono.every((e) => e.classList.contains('celula-data') || !!e.closest('[data-testid="dados-do-contrato"]'))).toBe(true);
+    expect(document.querySelectorAll('td.celula-data').length).toBeGreaterThan(0);
+    expect(document.querySelectorAll('.font-mono').length).toBe(0);
     fireEvent.click(screen.getByRole('button', { name: /Documentos/ }));
     await screen.findByText('Editar obrigação');
     expect((await screen.findByRole('tab', { name: /Documentos/ })).getAttribute('aria-selected')).toBe('true');

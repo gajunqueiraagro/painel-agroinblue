@@ -101,16 +101,20 @@ describe('FIN-LISTA-COMPACTA-01 / FIN-FINANC-28-P3-FIX2 — aba Compras parcelad
     expect(screen.queryByText('Custeio BB')).toBeNull();
   });
 
-  it('cards: Total das compras · Já pago · A pagar · Vencidas (sem Principal e sem Juros); A pagar com cara de link', async () => {
+  it('cards: Total das compras · Já pago · A pagar · Vencidas (sem Principal e sem Juros); A pagar = parcelas em aberto, sem marca (FIX3)', async () => {
     montar();
     await screen.findAllByTestId('cel-data');
     const cards = screen.getByTestId('cards-compras');
     expect(Array.from(cards.children).map((c) => c.firstElementChild?.textContent)).toEqual(['Total das compras', 'Já pago', 'A pagar', 'Vencidas']);
     expect(cards.textContent).not.toMatch(/Juros|Principal/);
-    // sem leitura do lote no teste: pago 0 e em aberto 0, então A pagar (6.000,00) difere das parcelas em aberto e o card AVISA
-    expect(screen.getByTestId('card-A pagar').getAttribute('title')).toContain('diferença');
-    expect(screen.getByTestId('a-pagar-diverge')).toBeTruthy();
-    expect(screen.getByTestId('card-A pagar').querySelector('button')?.className).toContain('underline');
+    // sem leitura do lote no teste: em aberto 0 e Total − Já pago 6.000,00. O card mostra AS PARCELAS EM ABERTO (FIX3) e a
+    // diferença vai SÓ no `title`: nem ponto âmbar nem sublinhado
+    const aPagar = screen.getByTestId('card-A pagar');
+    expect(aPagar.querySelector('button')?.textContent?.replace(/\s/g, ' ')).toBe('R$ 0,00');
+    expect(aPagar.getAttribute('title')).toContain('diferença');
+    expect(aPagar.getAttribute('title')?.replace(/\s/g, ' ')).toContain('Total − Já pago = R$ 6.000,00');
+    expect(screen.queryByTestId('a-pagar-diverge')).toBeNull();
+    expect(aPagar.querySelector('button')?.className).not.toContain('underline');
   });
 
   it('a aba Financiamentos (a que abre) traz o financiamento, e o filtro de busca vale nela', async () => {
@@ -122,5 +126,55 @@ describe('FIN-LISTA-COMPACTA-01 / FIN-FINANC-28-P3-FIX2 — aba Compras parcelad
     expect(screen.getByTestId('filtros-financiamentos')).toBeTruthy();
     fireEvent.change(screen.getByPlaceholderText('Buscar descrição...'), { target: { value: 'nada disso' } });
     expect(screen.queryByText('Custeio BB')).toBeNull();
+  });
+});
+
+describe('FIN-FINANC-28-P3-FIX3 — voltar do contrato reabre a aba de onde saiu', () => {
+  beforeEach(() => { cleanup(); sessionStorage.clear(); });
+
+  it('abrir uma compra em "Compras parceladas", voltar (remontar) e a lista continua em Compras parceladas, com os filtros', async () => {
+    const onDetalhe = vi.fn();
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<QueryClientProvider client={qc}><FinanciamentosListaPage onDetalhe={onDetalhe} /></QueryClientProvider>);
+    fireEvent.click(screen.getByText('Compras parceladas'));
+    const linhas = await screen.findAllByRole('link');
+    fireEvent.click(linhas[0]);
+    expect(onDetalhe).toHaveBeenCalledWith('f2');
+    const salvo = JSON.parse(sessionStorage.getItem('financiamentos_lista_filtros_cli-1') ?? '{}');
+    expect(salvo.aba).toBe('parcelas');
+    expect(salvo.status).toBe('ativo');
+    cleanup();
+    // a volta: a página remonta (o detalhe a desmontou) e lê o que foi guardado
+    render(<QueryClientProvider client={new QueryClient()}><FinanciamentosListaPage onDetalhe={onDetalhe} /></QueryClientProvider>);
+    expect(await screen.findByTestId('cards-compras')).toBeTruthy();
+    expect((await screen.findAllByTestId('cel-data')).length).toBe(3);
+  });
+
+  it('sem nada guardado a página abre em "Financiamentos" (o detector sabe achar a aba)', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<QueryClientProvider client={qc}><FinanciamentosListaPage /></QueryClientProvider>);
+    await screen.findByText('Custeio BB');
+    expect(screen.queryByTestId('cards-compras')).toBeNull();
+  });
+});
+
+describe('FIN-FINANC-28-P3-FIX3 — o filtro Credor é o seletor da casa com busca', () => {
+  beforeEach(() => { cleanup(); sessionStorage.clear(); });
+
+  it('digitar parte do nome filtra a lista de credores (só os dos contratos) e escolher filtra os contratos', async () => {
+    montar();
+    await screen.findAllByTestId('cel-data');
+    const filtro = screen.getByTestId('filtro-credor');
+    expect(filtro.querySelector('select')).toBeNull();
+    fireEvent.click(within(filtro).getByRole('button'));
+    const busca = await screen.findByPlaceholderText('Buscar credor ou CNPJ...');
+    fireEvent.change(busca, { target: { value: 'conc' } });
+    const painel = busca.parentElement!.parentElement!;
+    const opcoes = Array.from(painel.querySelectorAll('button'));
+    expect(opcoes.map((o) => o.textContent)).toEqual(['Todos credores', 'Concessionaria']);
+    fireEvent.click(opcoes[1]);
+    expect(screen.getAllByTestId('cel-data').map((c) => c.textContent)).toEqual(['01/02/24']);
+    expect(filtro.getAttribute('title')).toBe('Concessionaria');
+    expect(filtro.className).toContain('w-40');
   });
 });

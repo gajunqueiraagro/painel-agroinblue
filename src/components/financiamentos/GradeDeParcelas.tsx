@@ -103,13 +103,15 @@ export interface GradeDeParcelasProps {
   travado?: boolean;
   /** Colunas a mais, à direita de "De onde veio" (nota fiscal, boleto): cabeçalho e célula por número de parcela. */
   extras?: { titulo: string; largura: number; celula: (numero: number) => ReactNode; rodape?: ReactNode }[];
+  /** Altura da linha do total, em px (padrão 20). O Editar obrigação usa 25 (FIN-FINANC-28-P3-FIX3). */
+  alturaDoTotal?: number;
 }
 
 const PADRAO = { frase: 'a compra', rotulo: 'Valor da compra', passaAValer: 'A compra vale' };
 
 export function GradeDeParcelas({
   modo, onModo, parcelas, onParcelas, compraCent, oQue = PADRAO, onCompraVale, base = null, rotuloVoltar = 'Voltar às duplicatas da nota',
-  recado = null, altura = 236, travado = false, extras = [],
+  recado = null, altura = 236, travado = false, extras = [], alturaDoTotal = 20,
 }: GradeDeParcelasProps) {
   const [perguntaVoltarAoMensal, setPerguntaVoltarAoMensal] = useState(false);
   const livres = modo === 'livres';
@@ -225,7 +227,7 @@ export function GradeDeParcelas({
       {/* rodapé de totais — congelado, em tabela */}
       <table className="w-full shrink-0 border-collapse border-t-2 border-[#9aa7b6] bg-[#E8E6DF] text-[10px]" style={{ tableLayout: 'fixed' }} data-testid="rodape-de-parcelas">
         <tbody>
-          <tr className="h-[20px]">
+          <tr style={{ height: alturaDoTotal }}>
             <td className="px-1.5 font-bold whitespace-nowrap" data-testid="rodape-n">{r.n} {r.n === 1 ? 'parcela' : 'parcelas'}</td>
             <td className="px-1.5 text-right whitespace-nowrap"><span className="text-muted-foreground">Soma das parcelas&nbsp;</span><span className="font-bold tabular-nums" data-testid="rodape-soma">{brCentavos(r.somaCent)}</span></td>
             <td className="px-1.5 text-right whitespace-nowrap"><span className="text-muted-foreground">{oQue.rotulo}&nbsp;</span><span className="font-bold tabular-nums" data-testid="rodape-compra">{brCentavos(r.compraCent)}</span></td>

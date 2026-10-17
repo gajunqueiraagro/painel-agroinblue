@@ -562,6 +562,25 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
             soltas, cada uma com a sua largura, e os rótulos de uma linha não caíam sob os da outra). 4 pares por linha a partir de
             1.280px, 2 abaixo. Primeiro os oito do pedido; depois os que a tela já mostrava (nada some). Vazio = "—". */}
         <div className="rounded-md border px-2 py-1" data-testid="dados-do-contrato">
+          {ehParcelamento ? (
+            /* FIN-FINANC-28-P3-FIX3 — COMPRA PARCELADA não fala de contrato, liberação, valor contratado nem vencimento final.
+               Ordem do Gabriel; credor pelo NOME INTEIRO; competência = mês/ano da compra (texto da data, sem conta); situação =
+               o status gravado no contrato (`financiamentos.status`), sem cálculo. Régua do formulário (10px / 11px). */
+            <GradeChaveValor regua="formulario" testId="grade-da-compra" itens={[
+              { rotulo: 'Descrição', valor: fin.descricao },
+              { rotulo: 'Credor', valor: nomeCredor ?? null },
+              { rotulo: 'Data da compra', valor: fmtDate(fin.data_contrato), tipo: 'data' },
+              { rotulo: 'Competência', valor: fin.data_contrato ? `${fin.data_contrato.slice(5, 7)}/${fin.data_contrato.slice(0, 4)}` : null, tipo: 'data' },
+              { rotulo: '1ª parcela', valor: fmtDate(fin.data_primeira_parcela), tipo: 'data' },
+              { rotulo: 'Parcelas', valor: fin.total_parcelas != null ? String(fin.total_parcelas) : null },
+              { rotulo: 'Conta', valor: nomeConta },
+              { rotulo: 'Classificação', valor: nomeParcela },
+              { rotulo: 'Safra', valor: safraDasParcelas ?? '…' },
+              { rotulo: 'Situação', valor: fin.status ? <SeloDoContrato status={fin.status} /> : null, title: fin.status ?? undefined },
+              ...(Number(fin.valor_entrada) > 0 ? [{ rotulo: 'Entrada', valor: fmt(Number(fin.valor_entrada)), tipo: 'dinheiro' as const }] : []),
+              ...(fin.observacao ? [{ rotulo: 'Observação', valor: fin.observacao }] : []),
+            ]} />
+          ) : (
           <GradeChaveValor itens={[
             { rotulo: 'Descrição', valor: fin.descricao },
             { rotulo: 'Credor', valor: nomeCredor ? nomeCurtoDoCredor(nomeCredor) : null, title: nomeCredor ?? undefined },
@@ -582,11 +601,12 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
             ...(Number(fin.valor_entrada) > 0 ? [{ rotulo: 'Entrada', valor: fmt(Number(fin.valor_entrada)), tipo: 'dinheiro' as const }] : []),
             ...(fin.observacao ? [{ rotulo: 'Observação', valor: fin.observacao }] : []),
           ]} />
+          )}
         </div>
 
         {/* ═══ c — CARTÕES de 40px, lidos de `fn_financiamento_situacao` (valores E contagens). "Juros previstos" só no crédito. */}
         <div className={`grid gap-2 ${ehParcelamento ? 'grid-cols-5' : 'grid-cols-6'}`}>
-          <Cartao rotulo="Valor do contrato" valor={fmt(Number(fin.valor_total))} borda="border-l-muted-foreground/40" />
+          <Cartao rotulo={ehParcelamento ? 'Valor da compra' : 'Valor do contrato'} valor={fmt(Number(fin.valor_total))} borda="border-l-muted-foreground/40" />
           <Cartao rotulo="Pago" contagem={cartoes ? cartoes.pagas : undefined} valor={dinheiro(cartoes?.pago)} borda="border-l-emerald-500" tom="text-[#15803d]" />
           <Cartao rotulo="A vencer" contagem={contagens?.aVencerQtde} valor={dinheiro(cartoes?.aVencer)} borda="border-l-primary" />
           {/* Vencido só fica vermelho QUANDO HÁ VENCIDO: tarja de alerta acesa em contrato em dia ensina a ignorar a cor */}
@@ -649,7 +669,7 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
                       <TableCell className={TD_DATA_LANC} data-testid="competencia">{fmtDate(d?.competencia ?? null)}</TableCell>
                       <TableCell className={`${TD_DATA_LANC} ${p.situacao === 'vencida' ? '!font-semibold text-[#b91c1c]' : ''}`}>{fmtDate(p.dataVencimento)}</TableCell>
                       <TableCell className={TD_DATA_LANC} data-testid="pago-em">{fmtDate(p.pagoEm)}</TableCell>
-                      <TableCell className={`whitespace-nowrap ${d?.prazo ? COR_DO_PRAZO[TOM_DO_PRAZO[d.prazo.tipo]] : 'text-muted-foreground'}`} data-testid="prazo">
+                      <TableCell className={`whitespace-nowrap text-[9px] ${d?.prazo ? COR_DO_PRAZO[TOM_DO_PRAZO[d.prazo.tipo]] : 'text-muted-foreground'}`} data-testid="prazo">
                         {textoDoPrazo(d?.prazo ?? null)}
                       </TableCell>
                       <TableCell className="truncate" title={d?.contaNome ?? undefined} data-testid="conta-da-parcela">{d?.contaNome ?? '—'}</TableCell>
@@ -721,8 +741,9 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
                   <TableCell colSpan={5} className={`${TOTAL} whitespace-nowrap`}>
                     Total{cartoes ? ` · ${cartoes.parcelas} ${cartoes.parcelas === 1 ? 'parcela' : 'parcelas'}` : ''}
                   </TableCell>
+                  {/* FIN-FINANC-28-P3-FIX3 — na compra parcelada a célula sob a Conta fica vazia (o "pago X" já está no cartão Pago) */}
                   <TableCell className={`${TOTAL} whitespace-nowrap text-right`} data-testid="total-pago">
-                    <span className="font-normal text-muted-foreground">pago</span> <span className="tabular-nums text-[#15803d]">{cartoes ? num2(cartoes.pago) : '…'}</span>
+                    {!ehParcelamento && <><span className="font-normal text-muted-foreground">pago</span> <span className="tabular-nums text-[#15803d]">{cartoes ? num2(cartoes.pago) : '…'}</span></>}
                   </TableCell>
                   {!ehParcelamento && <TableCell className={`${MOEDA} ${TOTAL}`}>{cartoes ? num2(cartoes.somaPrincipal) : '…'}</TableCell>}
                   {!ehParcelamento && <TableCell className={`${MOEDA} ${TOTAL}`}>{cartoes ? num2(cartoes.jurosPrevistos) : '…'}</TableCell>}

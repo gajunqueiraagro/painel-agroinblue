@@ -14,6 +14,8 @@ import { ObrigacaoDialog } from '@/components/financiamentos/ObrigacaoDialog';
 import { lerSituacaoEmLoteDoBanco } from '@/hooks/useSituacaoDoContrato';
 import { inscreverEmLancamentos } from '@/hooks/useFinanceiroV2';
 import { resumoDoContratoNaLista, totaisDasCompras } from '@/lib/financiamentos/situacaoEmLote';
+import { SearchableSelect, type OpcaoSearchable } from '@/components/ui/searchable-select';
+import { formatarDocumento } from '@/lib/fornecedores/fornecedorTexto';
 import { hojeLocal } from '@/lib/datas/hojeLocal';
 import { Segmentado } from '@/components/ui/segmentado';
 import {
@@ -26,7 +28,7 @@ import { contratoDaLista, ehCompraParcelada, ENCERRADOS, type ContratoDaLista } 
    os mesmos de `ObrigacoesTabela`. O `whitespace-nowrap` do NUM tem motivo
    registrado lá — sem ele "−R$ 2.155,00" quebra em duas linhas e a altura da
    linha deixa de ser previsível. */
-const NUM = 'text-right font-mono tabular-nums whitespace-nowrap';
+const NUM = 'text-right tabular-nums whitespace-nowrap';
 /* ⚠ 9px — EXCECAO DELIBERADA AO PISO DE 10px, e SO' para numero monetario em fonte MONO
    (decisao do Gabriel, PR-PARC-05d item 6b). Medido: "R$ 16.380.000,00" sao 16 caracteres;
    em mono 10px (~0,6em = 6px por caractere) da' 96px + `px-2` da celula = 112px, contra os
@@ -55,6 +57,8 @@ interface FinanciamentoRow {
   status: string;
   created_at: string;
   credor_nome?: string;
+  /** FIN-FINANC-28-P3-FIX3 — o CPF/CNPJ do credor (pela junção do contrato), para a busca do filtro */
+  credor_documento?: string | null;
   parcelas_pagas: number;
   prox_vencimento?: string;
   total_pendente: number;
@@ -107,9 +111,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
   const [novaObrigacaoAberta, setNovaObrigacaoAberta] = useState(false);
   /* FIN-FINANC-28-P3 — duas abas: "Financiamentos" (financiamento e empréstimo, a lista nova) e "Compras parceladas" (a lista
      de sempre, só com os parcelamentos). Os encerrados da aba nova nascem recolhidos. */
-  const [aba, setAba] = useState<'financiamentos' | 'parcelas'>('financiamentos');
   const [encerradosAbertos, setEncerradosAbertos] = useState(false);
-  const [filtroSituacaoFin, setFiltroSituacaoFin] = useState('todos');
 
   /* PR-PARC-04b item 3 — ABRIR O CONTRATO. Um caminho so', chamado pela linha inteira e
      pelo olho: eram o mesmo gesto escrito duas vezes, e duas copias de "grava os filtros
@@ -123,6 +125,8 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
         credor: filtroCredor, dataContratoDe: filtroDataContratoDe,
         dataContratoAte: filtroDataContratoAte,
         vencDe: filtroVencDe, vencAte: filtroVencAte,
+        /* FIN-FINANC-28-P3-FIX3 — a aba e a situação da aba Financiamentos voltam com o operador */
+        aba, situacaoFin: filtroSituacaoFin,
       }));
     } catch {}
     onDetalhe?.(id);
@@ -135,6 +139,9 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
     catch { return null; }
   })();
 
+  /* FIN-FINANC-28-P3-FIX3 — ao voltar do contrato reabre a aba de onde saiu (era sempre "Financiamentos") */
+  const [aba, setAba] = useState<'financiamentos' | 'parcelas'>(_sf?.aba === 'parcelas' ? 'parcelas' : 'financiamentos');
+  const [filtroSituacaoFin, setFiltroSituacaoFin] = useState<string>(typeof _sf?.situacaoFin === 'string' ? _sf.situacaoFin : 'todos');
   const [filtroStatus, setFiltroStatus] = useState(_sf?.status ?? 'ativo');
   const [filtroTipo, setFiltroTipo] = useState(_sf?.tipo ?? 'todos');
   const [filtroNatureza, setFiltroNatureza] = useState(_sf?.natureza ?? 'todas');
@@ -200,7 +207,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
       // 1) financiamentos + credor
       const { data: fins, error: e1 } = await supabase
         .from('financiamentos')
-        .select('*, financeiro_fornecedores!financiamentos_credor_id_fkey(nome)')
+        .select('*, financeiro_fornecedores!financiamentos_credor_id_fkey(nome, cpf_cnpj)')
         .eq('cliente_id', clienteId!)
         .order('created_at', { ascending: false });
       if (e1) throw e1;
@@ -251,6 +258,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
           status: f.status,
           created_at: f.created_at,
           credor_nome: f.financeiro_fornecedores?.nome ?? '—',
+          credor_documento: f.financeiro_fornecedores?.cpf_cnpj ?? null,
           parcelas_pagas: r.parcelasPagas,
           prox_vencimento: r.proxVencimento ?? undefined,
           total_pendente: r.totalPendente,
@@ -277,17 +285,18 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
     },
   });
 
-  /* ── Credores únicos para o select ── */
+  /* ── Credores dos contratos para o filtro (FIN-FINANC-28-P3-FIX3): o seletor DA CASA com busca, pelo nome ou pelo CPF/CNPJ
+     (a 2ª linha da opção entra na busca). Só os credores que aparecem nos contratos do cliente. ── */
   const credores = useMemo(() => {
-    const seen = new Set<string>();
-    const result: string[] = [];
+    const seen = new Map<string, OpcaoSearchable>();
     for (const f of financiamentos) {
       if (f.credor_nome && f.credor_nome !== '—' && !seen.has(f.credor_nome)) {
-        seen.add(f.credor_nome);
-        result.push(f.credor_nome);
+        const doc = f.credor_documento ? formatarDocumento(f.credor_documento) : '';
+        seen.set(f.credor_nome, { value: f.credor_nome, label: f.credor_nome,
+          ...(doc ? { sub: doc, busca: (f.credor_documento ?? '').replace(/\D/g, '') } : {}) });
       }
     }
-    return result.sort();
+    return Array.from(seen.values()).sort((x, y) => x.label.localeCompare(y.label, 'pt-BR'));
   }, [financiamentos]);
 
   /* ── Filtros (client-side, sobre dados já carregados) ── */
@@ -486,13 +495,12 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
               <SelectItem value="emprestimo">Empréstimo</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={filtroCredor} onValueChange={setFiltroCredor}>
-            <SelectTrigger className="h-6 w-40 text-[11px]"><SelectValue placeholder="Credor" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todos credores</SelectItem>
-              {credores.map(cr => <SelectItem key={cr} value={cr}>{cr}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          {/* FIN-FINANC-28-P3-FIX3 — LARGURA FIXA (160px): escolher um nome longo não muda o filtro de tamanho; o nome inteiro
+              fica no `title` */}
+          <div className="w-40 shrink-0" title={filtroCredor !== 'todos' ? filtroCredor : 'Todos credores'} data-testid="filtro-credor">
+            <SearchableSelect value={filtroCredor} onValueChange={setFiltroCredor} options={credores}
+              allLabel="Todos credores" allValue="todos" placeholder="Buscar credor ou CNPJ..." className="w-40" />
+          </div>
           {/* ⚠ O "Limpar" FICA, e fica na primeira linha: ele existe desde antes deste
               PR e some sozinho quando não há filtro extra. Tirá-lo obrigaria a limpar
               sete campos à mão. */}
@@ -634,17 +642,17 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
             o trabalho que o tamanho fazia — "A pagar" é a única com fundo, porque é a
             resposta do subtítulo. */}
         {aba === 'parcelas' && (
-        /* FIN-FINANC-28-P3-FIX2 — Total das compras · Já pago · A pagar · Vencidas (sem Principal e sem Juros: a compra
-           parcelada não tem juros). "A pagar" = Total − Já pago; quando difere da soma das parcelas em aberto o card AVISA
-           (ponto âmbar + a conta no `title`), nunca ajusta. "Vencidas" só fica vermelho com valor. */
+        /* FIN-FINANC-28-P3-FIX2/FIX3 — Total das compras · Já pago · A pagar · Vencidas (sem Principal e sem Juros: a compra
+           parcelada não tem juros). "A pagar" = A SOMA DAS PARCELAS EM ABERTO (a vencer + vencido, do lote; decisão do Gabriel,
+           FIX3); a diferença contra Total − Já pago vai SÓ no `title`, sem marca. "Vencidas" só fica vermelho com valor. */
         <div className="grid grid-cols-4 gap-2" data-testid="cards-compras">
           {[
             { rotulo: 'Total das compras', valor: totais.total, borda: 'border-l-muted-foreground/40', tom: '', titulo: 'soma do valor das compras' },
             { rotulo: 'Já pago', valor: totais.pago, borda: 'border-l-emerald-500', tom: 'text-[#15803d]', titulo: 'parcelas com lançamento pago' },
-            { rotulo: 'A pagar', valor: totais.aPagar, borda: 'border-l-primary', tom: '', link: true,
+            { rotulo: 'A pagar', valor: totais.emAberto, borda: 'border-l-primary', tom: '', link: true,
               titulo: totais.diferenca !== 0
-                ? `Total − Já pago = ${fmt(totais.aPagar)} · parcelas em aberto = ${fmt(totais.emAberto)} · diferença ${fmt(totais.diferenca)}`
-                : 'Total − Já pago (= a soma das parcelas em aberto)' },
+                ? `soma das parcelas em aberto · Total − Já pago = ${fmt(totais.aPagar)} · diferença ${fmt(totais.diferenca)}`
+                : 'soma das parcelas em aberto (= Total − Já pago)' },
             { rotulo: 'Vencidas', valor: totais.vencidas, borda: totais.vencidas > 0 ? 'border-l-destructive' : 'border-l-muted-foreground/40',
               tom: totais.vencidas > 0 ? 'text-[#b91c1c]' : '', titulo: 'parcelas em aberto com vencimento antes de hoje' },
           ].map(c => (
@@ -653,12 +661,11 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
               className={`h-[40px] rounded-md border border-l-[3px] px-3 py-1 ${c.borda}`}>
               <div className="flex items-center gap-1 text-[10px] leading-none text-muted-foreground">
                 <span className="truncate">{c.rotulo}</span>
-                {c.link && totais.diferenca !== 0 && <span className="size-1.5 shrink-0 rounded-full bg-amber-500" data-testid="a-pagar-diverge" aria-hidden />}
               </div>
               {c.link ? (
                 /* TODO "FIN-28 cronograma": o clique abre o gráfico do cronograma no próximo passo; hoje não faz nada */
                 <button type="button" onClick={() => { /* TODO FIN-28 cronograma */ }}
-                  className={`mt-0.5 block text-[14px] font-semibold tabular-nums leading-tight underline decoration-dotted underline-offset-2 ${c.tom}`}>
+                  className={`mt-0.5 block text-[14px] font-semibold tabular-nums leading-tight ${c.tom}`}>
                   {fmt(c.valor)}
                 </button>
               ) : (

@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 17/10/2026 (FIN-FINANC-28-P3-FIX2, +3: `src/lib/financiamentos/situacaoEmLote.test.ts` 1, `src/components/financiamentos/
+  Baseline em 17/10/2026 (FIN-FINANC-28-P3-FIX3, +3: `src/pages/financiamentosListaCompacta.test.tsx` 3 (7 -> 10: a volta do contrato
+  reabre a aba, o padrao sem nada guardado, e o filtro Credor com busca) — 5536 depois dele; antes o FIN-FINANC-28-P3-FIX2, +3: `src/lib/financiamentos/situacaoEmLote.test.ts` 1, `src/components/financiamentos/
   listaDeFinanciamentos.test.tsx` 1 (15 -> 16), `src/pages/financiamentosListaCompacta.test.tsx` 1 (6 -> 7, reescrito ao contrato novo) —
   5533 depois dele; antes o FIN-FINANC-28-P3-FIX, +7: `src/lib/fornecedores/nomeCurtoDoCredor.test.ts` 2 (novo),
   `src/lib/financiamentos/listaDeFinanciamentos.test.ts` 1 (12 -> 13), `src/components/financiamentos/listaDeFinanciamentos.test.tsx`
@@ -359,7 +360,7 @@ no mesmo arquivo.
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
   `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5327
-  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2], 22 skipped, e
+  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3], 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -2207,6 +2208,51 @@ preview que o cabecalho nao sai da tela ao rolar.
     documento por `financiamento_id` — a pendencia "sem documento" fica para o passo 4.
   ⚠ NAO PROVADO NO NAVEGADOR: nada com login (bancada com a pagina real e o banco simulado) · hoje os 41 ativos estao com "?" e
     `sem_liberacao` (a tabela de liberacoes esta' vazia).
+- ⚠ COMPRA PARCELADA NAO FALA DE CONTRATO; NUMERO E DATA SEM MONO; SELETOR DE ENTIDADE TEM BUSCA (FIN-FINANC-28-P3-FIX3, Gabriel
+  17/10/2026, so' tela). SUBSTITUI, no bloco do P3 logo abaixo, "data mono 8px", o "A pagar = Total − Ja' pago com ponto ambar" e o
+  cabecalho de 8 campos para o PARCELAMENTO.
+  · SEM FONTE MONO na lista (as duas abas), no detalhe e no `ObrigacaoDialog` (o Resumo inclusive): `TD_DATA_LANC` e as constantes
+    `NUM`/`MOEDA` sao Inter `tabular-nums`. Preso por teste (0 `.font-mono` no detalhe). Fica a mono so' no campo "Chave de acesso"
+    do formulario de documento (`AbaDocumentosLancamento`, compartilhado com o modal do Financeiro; nao tocado).
+  · CARD "A PAGAR" de Compras parceladas = A SOMA DAS PARCELAS EM ABERTO (`totaisDasCompras().emAberto`, a vencer + vencido do lote);
+    a diferenca contra Total − Ja' pago vai SO' no `title`; sem ponto ambar e sem sublinhado; o clique segue sem efeito (TODO
+    "FIN-28 cronograma"). NJ ativos: 476.342,61.
+  · VOLTAR DO CONTRATO reabre a aba de onde saiu: `aba` e a situacao da aba Financiamentos entram no `sessionStorage` dos filtros.
+  · DETALHE DO PARCELAMENTO (`GradeChaveValor regua="formulario"`, rotulo 10px cinza em minusculas, valor 11px/500, linha de 20px):
+    Descricao · Credor (NOME INTEIRO — a 2ª coluna de valor e' `minmax(max-content,1fr)`) · Data da compra · Competencia (mm/aaaa do
+    texto da data) · 1ª parcela · Parcelas · Conta · Classificacao · Safra · Situacao (o `financiamentos.status` gravado). Sem Nº
+    contrato, Data de liberacao, Valor contratado, Vencimento final, Banco/conta. Card "Valor da compra". Na tabela: Prazo a 9px com as
+    cores de sempre e a celula sob a Conta no Total VAZIA (o pago esta' no cartao). FINANCIAMENTO NAO MUDOU (regua de sempre, 8 campos).
+  · `ObrigacaoDialog` NO PARCELAMENTO: sem "Nº do contrato"; 1ª linha Credor (2/3, o nome inteiro cabe: 334px uteis contra 285 pedidos)
+    + Escopo; 2ª linha Descricao · Fazenda · Conta em terços (`minmax(0,1fr)`) — o MESMO numero de linhas (a 579 a aba nao rola, como
+    antes; a 523 rola 30px, eram 16). O campo do credor e' UMA constante (`campoCredor`), posta na 1ª linha (parcelamento) ou na 2ª.
+    Total da grade de parcelas a 25px (`GradeDeParcelas alturaDoTotal`, padrao 20 nos outros hospedeiros).
+  · CONTA BANCARIA DUPLICADA NO DIALOGO: a conta "avulsa" (fora da lista) so' entra em `contasComAtual` se o id NAO esta' na lista.
+  · ABA DOCUMENTOS DO CONTRATO: a faixa "Documentado / Valor do lancamento" le' o confronto DA COMPRA que o banco ja' devolve
+    (`fin_documento_confronto` da 1ª parcela, chaves `grupo_*`); sem NF ligada as parcelas, segue "—" (nunca a nota contra uma parcela).
+    Medido no NJ (compra d75d28d9, NF 000.030.252): nota 2.664,80 x 4 parcelas ativas 2.681,45, diferenca −16,65.
+  · SELETOR DE ENTIDADE TEM BUSCA (LEI DO COMPONENTE PADRAO): o filtro Credor da lista e' o `SearchableSelect` da casa (so' os credores
+    dos contratos, "Todos credores", busca pelo nome e pelos digitos do CPF/CNPJ — `OpcaoSearchable.busca`, campo novo opcional que entra
+    na busca e nao aparece; largura fixa 160px, nome inteiro no `title`); no dialogo, Fazenda e Conta bancaria (`comBusca`, prop OPT-IN
+    nova de `FazendaSelect` e `ContaBancariaSelect`: sem ela o componente e' o de sempre), Safra das parcelas, Conta de captacao e, no
+    `DestinacoesForm`, conta e plano. ⚠ O PAINEL DO SELETOR DA CASA E' O `MENU_PALETA` ESCURO (UI-DROPDOWN-PADRAO-01), nao `bg-popover`
+    claro como dizia o briefing — divergencia reportada, componente nao repintado.
+  ⚠ O `check:ui-nativo` NAO PEGA seletor de entidade SEM BUSCA: ele so' acusa `<select>` e `type="date"` NATIVOS; o `Select` do Radix
+    sem busca passa. Proposta (nao aplicada): o gate tambem varre `<Select`… `</Select>` cujo `.map(` percorre lista de entidade
+    (fornecedor/credor, conta, plano, fazenda, safra) e `<ContaBancariaSelect` / `<FazendaSelect` sem `comBusca`, com baseline.
+  ⚠ FRENTE SELETOR-ENTIDADE-BUSCA-01 (aberta, varredura de 17/10, so' contagem): sem busca — conta 37 (35 `ContaBancariaSelect` sem
+    `comBusca` + `PainelPeriodoTab` + 1 `<select>` nativo em `ModoRapidoGrid`), plano 4 (`ProjetosInvestimento`, 2 nativos em
+    `ModoRapidoGrid` e `FinV2SubcentroAliasesTab`), fazenda 9 (`FazendaSelect` sem `comBusca`), fornecedor/credor 0. Lista arquivo:linha
+    no relatorio do FIX3.
+  ⚠ FASE 0 (so' relato): (a) `fn_financiamento_sincronizar_status` le' `financiamento_parcelas.status`, que o parcelamento nao mantem —
+    os 11 parcelamentos quitados pelo Financeiro seguem 'ativo'; proposta (nao executada): a funcao deriva "paga" pela regra do dono e
+    ignora 'cancelado', gatilho na troca de status do lancamento (DDL fora do horario) e backfill so' com OK; (b) `nomeCurtoDoCredor`
+    corta sufixo societario ("Casa L.", 16 de 20 credores de compra do NJ) — proposta: tirar LTDA/S.A./ME/EIRELI antes de encurtar;
+    (c) "Parcela 3 - None": o "None" e' o nulo do Python impresso pelas planilhas (71 lancamentos no NJ: excel 62 em 05/10, importacao
+    incremental 3, mesa_excel 2) e o contrato 580db8cd foi criado pela tela em 07/10 com essa descricao.
+  ⚠ NAO PROVADO NO NAVEGADOR (bancada com a pagina real e dados reais do NJ lidos do proto): nada com login · a faixa do confronto
+    preenchida na tela (a bancada nao tem a RPC; o banco provou) · a conta duplicada sumindo com dado real · o Prazo ja' renderizava a
+    9px (a regua da tabela forca 9px em toda celula: a classe so' declara).
 - ⚠ O SALDO DEVEDOR DO FINANCIAMENTO TEM UMA FONTE SO': `fn_financiamento_saldo` — NENHUM LEITOR NOVO CALCULA SALDO POR CONTA
   PROPRIA (FIN-FINANC-28-P2, item 28 passo 2, Gabriel 17/10/2026; migration `supabase/migrations/20261027200000_fin_financ_28_p2_saldo.sql`,
   md5 do arquivo 8a7612075b44e4ee175df166abb6cb63 — APLICADA no proto em 17/10/2026 06:01 (Brasilia) com o GO do Gabriel: ledger
