@@ -191,7 +191,7 @@ describe('FIN-FINANC-28 P3-GRAFICO — card "Parcelas a pagar"', () => {
     expect(Array.from(cards.children).every((x) => x.className.includes('h-[40px]'))).toBe(true);
     const botao = screen.getByTestId('abrir-cronograma-anual');
     expect(botao.textContent?.replace(/\s/g, ' ')).toBe('R$ 11.087.377,51');
-    expect(botao.closest('[class*=h-\\[40px\\]]')?.querySelector('span')?.getAttribute('title')).toBe('Principal das parcelas em aberto; juros previstos no gráfico');
+    expect(botao.closest('[class*=h-\\[40px\\]]')?.querySelector('span')?.getAttribute('title')).toBe('Principal das parcelas a vencer; vencidos e juros previstos no gráfico');
     fireEvent.click(botao);
     expect(abrir).toHaveBeenCalledTimes(1);
     expect(screen.getAllByRole('button').filter((b) => b.getAttribute('data-testid') === 'abrir-cronograma-anual')).toHaveLength(1);

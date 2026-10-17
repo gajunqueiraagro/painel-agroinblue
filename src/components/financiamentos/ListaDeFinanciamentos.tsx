@@ -151,8 +151,8 @@ export function ListaDeFinanciamentos({ contratos, encerradosAbertos, aoAlternar
   /** FIN-FINANC-28 P3-GRAFICO — o clique no card "Parcelas a pagar" abre o cronograma anual do que falta pagar. */
   aoAbrirCronograma?: () => void;
   /**
-   * FIN-FINANC-28 P3-GRAFICO — o PRINCIPAL das parcelas em aberto do recorte, em reais, do dono `cronogramaEmAberto` (o mesmo do
-   * modal anual). Sem ele, o card "Parcelas a pagar" não aparece e a fileira é a de antes.
+   * FIN-FINANC-28 P3-GRAFICO / passo 4c — o PRINCIPAL A PAGAR (parcelas a vencer) do recorte, em reais, do dono `graficoDeSaidas`
+   * (o mesmo do modal anual; os vencidos e os juros ficam no gráfico). Sem ele, o card "Parcelas a pagar" não aparece e a fileira é a de antes.
    */
   parcelasAPagar?: number | null;
 }) {
@@ -174,7 +174,7 @@ export function ListaDeFinanciamentos({ contratos, encerradosAbertos, aoAlternar
     cardDaSoma('Contratado', 'Contratado (vigentes)', lista.total.contratado),
     cardDaSoma('Liberado', 'Liberado (vigentes)', lista.total.liberado),
     cardDaSoma('Saldo devedor', 'Saldo devedor (principal: liberado − amortizado)', lista.total.saldo),
-    ...(parcelasAPagar !== undefined ? [{ rotulo: 'Parcelas a pagar', titulo: 'Principal das parcelas em aberto; juros previstos no gráfico',
+    ...(parcelasAPagar !== undefined ? [{ rotulo: 'Parcelas a pagar', titulo: 'Principal das parcelas a vencer; vencidos e juros previstos no gráfico',
       valor: parcelasAPagar === null ? '…' : fmtReal(parcelasAPagar), extra: null, tom: '' }] : []),
     { rotulo: 'Com pendência', titulo: 'Contratos com pendência', valor: String(lista.comPendencia), extra: null,
       tom: lista.comPendencia > 0 ? AMBAR : '' },

@@ -14,7 +14,7 @@ import { ObrigacaoDialog } from '@/components/financiamentos/ObrigacaoDialog';
 import { lerSituacaoEmLoteDoBanco } from '@/hooks/useSituacaoDoContrato';
 import { inscreverEmLancamentos } from '@/hooks/useFinanceiroV2';
 import { resumoDoContratoNaLista, totaisDasCompras } from '@/lib/financiamentos/situacaoEmLote';
-import { cronogramaAnual, cronogramaMensal } from '@/lib/financiamentos/cronogramaEmAberto';
+import { graficoAnual, parcelasDoGrafico, temParcelaNoIntervalo, totaisNoIntervalo, type IntervaloDeVencimento } from '@/lib/financiamentos/graficoDeSaidas';
 import type { SituacaoDoContrato } from '@/lib/financiamentos/situacaoDoContrato';
 import { CronogramaEmAbertoDialog } from '@/components/financiamentos/CronogramaEmAbertoDialog';
 import { SearchableSelect, type OpcaoSearchable } from '@/components/ui/searchable-select';
@@ -309,6 +309,14 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
   /* ── Filtros (client-side, sobre dados já carregados) ── */
   /* FIN-FINANC-28-P3 — UM PREDICADO PARA AS DUAS ABAS. A situação vem de fora (cada aba tem a sua) e a natureza fica fora
      daqui: em "Compras parceladas" ela é fixa (o select fica apagado), em "Financiamentos" é aplicada por quem chama. */
+  /* o intervalo de vencimento da aba (ISO); vazio = sem filtro. Uma fonte para a lista, os cards e o gráfico. */
+  const intervalo = useMemo((): IntervaloDeVencimento | null => {
+    const de = brToISO(filtroVencDe) || null; const ate = brToISO(filtroVencAte) || null;
+    return de || ate ? { de, ate } : null;
+  }, [filtroVencDe, filtroVencAte]);
+  const textoDoIntervalo = intervalo
+    ? `parcelas com vencimento ${intervalo.de && intervalo.ate ? `entre ${filtroVencDe} e ${filtroVencAte}` : intervalo.de ? `a partir de ${filtroVencDe}` : `até ${filtroVencAte}`}`
+    : null;
   const passaNosFiltros = useMemo(() => {
     const descQ = filtroDescricao.trim().toLowerCase();
     const contQ = filtroContrato.trim().toLowerCase();
@@ -332,16 +340,16 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
       if (filtroCredor !== 'todos' && f.credor_nome !== filtroCredor) return false;
       const isoContratoDe = brToISO(filtroDataContratoDe);
       const isoContratoAte = brToISO(filtroDataContratoAte);
-      const isoVencDe      = brToISO(filtroVencDe);
-      const isoVencAte     = brToISO(filtroVencAte);
       if (isoContratoDe && (f.data_contrato ?? '') < isoContratoDe) return false;
       if (isoContratoAte && (f.data_contrato ?? '') > isoContratoAte) return false;
-      if (isoVencDe && (f.prox_vencimento ?? '') < isoVencDe) return false;
-      if (isoVencAte && (f.prox_vencimento ?? '') > isoVencAte) return false;
+      /* FIN-FINANC-28 passo 4c — VENCIMENTO: o contrato entra se tem QUALQUER parcela (paga ou não) com vencimento no
+         intervalo; "de" sozinho = dali em diante; "até" sozinho = até a data. Antes olhava só a PRÓXIMA parcela (no NJ, "de
+         01/11/2026" deixava só uma compra e escondia R$ 143 mil de parcelas de novembro). */
+      if (!temParcelaNoIntervalo(f.situacaoDoLote, intervalo)) return false;
       return true;
     };
   }, [filtroTipo, filtroDescricao, filtroContrato, filtroCredor,
-      filtroDataContratoDe, filtroDataContratoAte, filtroVencDe, filtroVencAte]);
+      filtroDataContratoDe, filtroDataContratoAte, intervalo]);
 
   /* a lista da aba "Compras parceladas": só os parcelamentos */
   const filtered = useMemo(
@@ -387,18 +395,21 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
      (`total_pendente - juros_pendente`), não por uma terceira varredura: assim
      não há como os quatro divergirem entre si. */
   /* FIN-FINANC-28-P3-FIX2 — os cards da compra parcelada, em centavos, no dono puro (`totaisDasCompras`), das MESMAS linhas */
-  const totais = useMemo(() => totaisDasCompras(filtered), [filtered]);
+  /* FIN-FINANC-28 passo 4c — com o filtro de vencimento os cards somam SÓ as parcelas do intervalo (a mesma fonte do gráfico) */
+  const totais = useMemo(() => (intervalo
+    ? totaisNoIntervalo(parcelasDoGrafico(filtered.map(f => f.situacaoDoLote), hoje, intervalo))
+    : totaisDasCompras(filtered)), [filtered, intervalo, hoje]);
 
   /* FIN-FINANC-28 P3-GRAFICO — o cronograma do que falta pagar, sobre AS MESMAS LINHAS dos cards: em Compras parceladas, as que o
      filtro deixou (`filtered`); em Financiamentos, as vigentes da aba (o conjunto dos cards dela). Só o lote: nenhuma consulta. */
   const [cronogramaAberto, setCronogramaAberto] = useState<'mensal' | 'anual' | null>(null);
-  const cronogramaCompras = useMemo(() => cronogramaMensal(filtered.map(f => f.situacaoDoLote), hoje), [filtered, hoje]);
   const vigentesFinanciamento = useMemo(
     () => financiamentos.filter(f => !ehCompraParcelada(f.natureza) && !ENCERRADOS.includes(f.status)
       && (filtroNatureza === 'todas' || f.natureza === filtroNatureza) && passaNosFiltros(f, filtroSituacaoFin)),
     [financiamentos, filtroNatureza, passaNosFiltros, filtroSituacaoFin]);
-  const cronogramaFinanciamentos = useMemo(() => cronogramaAnual(vigentesFinanciamento.map(f => f.situacaoDoLote), hoje),
-    [vigentesFinanciamento, hoje]);
+  /* o card "Parcelas a pagar" = o principal a pagar do gráfico anual (o MESMO dono, o mesmo recorte de vencimento) */
+  const graficoFinanciamentos = useMemo(() => graficoAnual(parcelasDoGrafico(vigentesFinanciamento.map(f => f.situacaoDoLote), hoje, intervalo)),
+    [vigentesFinanciamento, hoje, intervalo]);
 
   /* FIN-FINANC-28-P3 — a aba "Financiamentos": financiamento e empréstimo, sem os filtros da lista antiga (a lista nova agrupa,
      soma e recolhe os encerrados sozinha). */
@@ -678,14 +689,14 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
            FIX3); a diferença contra Total − Já pago vai SÓ no `title`, sem marca. "Vencidas" só fica vermelho com valor. */
         <div className="grid grid-cols-4 gap-2" data-testid="cards-compras">
           {[
-            { rotulo: 'Total das compras', valor: totais.total, borda: 'border-l-muted-foreground/40', tom: '', titulo: 'soma do valor das compras' },
-            { rotulo: 'Já pago', valor: totais.pago, borda: 'border-l-emerald-500', tom: 'text-[#15803d]', titulo: 'parcelas com lançamento pago' },
+            { rotulo: 'Total das compras', valor: totais.total, borda: 'border-l-muted-foreground/40', tom: '', titulo: textoDoIntervalo ? `soma das ${textoDoIntervalo}` : 'soma do valor das compras' },
+            { rotulo: 'Já pago', valor: totais.pago, borda: 'border-l-emerald-500', tom: 'text-[#15803d]', titulo: textoDoIntervalo ? `pago das ${textoDoIntervalo}` : 'parcelas com lançamento pago' },
             { rotulo: 'A pagar', valor: totais.emAberto, borda: 'border-l-primary', tom: '', link: true,
-              titulo: totais.diferenca !== 0
+              titulo: textoDoIntervalo ? `em aberto das ${textoDoIntervalo}` : totais.diferenca !== 0
                 ? `soma das parcelas em aberto · Total − Já pago = ${fmt(totais.aPagar)} · diferença ${fmt(totais.diferenca)}`
                 : 'soma das parcelas em aberto (= Total − Já pago)' },
             { rotulo: 'Vencidas', valor: totais.vencidas, borda: totais.vencidas > 0 ? 'border-l-destructive' : 'border-l-muted-foreground/40',
-              tom: totais.vencidas > 0 ? 'text-[#b91c1c]' : '', titulo: 'parcelas em aberto com vencimento antes de hoje' },
+              tom: totais.vencidas > 0 ? 'text-[#b91c1c]' : '', titulo: textoDoIntervalo ? `vencidas das ${textoDoIntervalo}` : 'parcelas em aberto com vencimento antes de hoje' },
           ].map(c => (
             <div key={c.rotulo} title={c.titulo} data-testid={`card-${c.rotulo}`}
               /* FIN-LISTA-COMPACTA-01 — 40px com `py-1`: 8 + 13 (rotulo) + 18 (valor) = 39, o numero nao encosta. */
@@ -725,7 +736,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
             : <ListaDeFinanciamentos contratos={contratosFinanciamento} encerradosAbertos={encerradosAbertos}
                 aoAlternarEncerrados={() => setEncerradosAbertos(v => !v)} aoAbrir={abrirContrato} filtros={filtros}
                 mostrarBanco={mostrarBanco} aoAbrirCronograma={() => setCronogramaAberto('anual')}
-                parcelasAPagar={isLoading ? null : cronogramaFinanciamentos.principalCent / 100} />
+                parcelasAPagar={isLoading ? null : graficoFinanciamentos.principalCent / 100} />
         ) : (
         <div className="flex h-full min-h-0 flex-col rounded-lg border border-border bg-card px-3 pt-2 pb-0 shadow-[0_1px_3px_0_rgb(0_0_0/0.04)]">
         {filtros}
@@ -873,12 +884,14 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
           limpa. De quebra, as 6 queries do hook (fazenda, fornecedores, contas e os tres
           planos) so' saem quando o modal abre, e nao a cada render desta lista. */}
       {/* FIN-FINANC-28 P3-GRAFICO — "O que falta pagar": fechar não mexe na lista (estado, filtros e rolagem ficam) */}
-      <CronogramaEmAbertoDialog aberto={cronogramaAberto !== null} aoFechar={() => setCronogramaAberto(null)}
+      {/* a chave pelo modo: cada abertura nasce em "Ano civil" (a escolha de safra do mensal não vaza para o anual) */}
+      <CronogramaEmAbertoDialog key={cronogramaAberto ?? 'fechado'} aberto={cronogramaAberto !== null} aoFechar={() => setCronogramaAberto(null)}
         modo={cronogramaAberto ?? 'mensal'} hoje={hoje}
-        cronograma={cronogramaAberto === 'anual' ? cronogramaFinanciamentos : cronogramaCompras}
-        recorte={cronogramaAberto === 'anual'
-          ? `${vigentesFinanciamento.length} ${vigentesFinanciamento.length === 1 ? 'contrato vigente' : 'contratos vigentes'} · os filtros da aba`
-          : `${filtered.length} ${filtered.length === 1 ? 'compra' : 'compras'} · os filtros da aba`} />
+        situacoes={cronogramaAberto === 'anual' ? vigentesFinanciamento.map(f => f.situacaoDoLote) : filtered.map(f => f.situacaoDoLote)}
+        intervalo={intervalo}
+        recorte={`${cronogramaAberto === 'anual'
+          ? `${vigentesFinanciamento.length} ${vigentesFinanciamento.length === 1 ? 'contrato vigente' : 'contratos vigentes'}`
+          : `${filtered.length} ${filtered.length === 1 ? 'compra' : 'compras'}`} · os filtros da aba${textoDoIntervalo ? ` · ${textoDoIntervalo}` : ''}`} />
       {novaObrigacaoAberta && (
       <ObrigacaoDialog
         open

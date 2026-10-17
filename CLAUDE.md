@@ -162,7 +162,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 17/10/2026 (FIN-FINANC-28 RESUMO-A18, +3: `src/components/financiamentos/resumoDaObrigacao.test.ts` 3 (novo) — 5571
+  Baseline em 17/10/2026 (FIN-FINANC-28 PASSO 4c, +2: `src/lib/financiamentos/graficoDeSaidas.test.ts` 9 (novo),
+  `src/pages/financiamentosListaCompacta.test.tsx` 1 (13 -> 14); saiu `src/lib/financiamentos/cronogramaEmAberto.test.ts` 8, com o dono que
+  testava; `cronogramaEmAberto.test.tsx` reescrito ao contrato novo (6 -> 6) — 5573 depois dele; antes o FIN-FINANC-28 RESUMO-A18, +3: `src/components/financiamentos/resumoDaObrigacao.test.ts` 3 (novo) — 5571
   depois dele; antes o FIN-FINANC-28 PASSO 4, +15: `src/components/financiamentos/contratoDeCredito.test.tsx` 14 (novo),
   `src/lib/acessos/guardaDeClienteNasMigrations.test.ts` 1 (5 -> 6) — 5568 depois dele; antes o FIN-FINANC-28 P3-GRAFICO, +16: `src/lib/financiamentos/cronogramaEmAberto.test.ts` 8 (novo),
   `src/components/financiamentos/cronogramaEmAberto.test.tsx` 6 (novo), `src/components/financiamentos/listaDeFinanciamentos.test.tsx` 2
@@ -365,7 +367,7 @@ no mesmo arquivo.
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
   `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5327
-  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO; 5568 desde o FIN-FINANC-28 PASSO 4; 5571 desde o FIN-FINANC-28 RESUMO-A18], 22 skipped, e
+  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO; 5568 desde o FIN-FINANC-28 PASSO 4; 5571 desde o FIN-FINANC-28 RESUMO-A18; 5573 desde o FIN-FINANC-28 PASSO 4c], 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -2257,6 +2259,27 @@ preview que o cabecalho nao sai da tela ao rolar.
     O "Excluir" saiu do credito (volta como "Dar baixa › Cancelado" no passo 5).
   ⚠ NAO PROVADO NO NAVEGADOR com login (bancada com a pagina real e o lote real do proto) · nenhuma liberacao/destinacao/documento real
     (as tabelas estao vazias; a vista "pr78demo" da bancada e' SIMULADA) · upload real ao bucket e a URL assinada.
+- ⚠ GRAFICOS DE SAIDA: LARANJA / VIOLETA / VERMELHO / CINZA; AZUL SO' PARA ENTRADA; EIXOS COM ESCALA; PERIODOS COMPLETOS; LINHA DE HOJE NO
+  MENSAL (regra da casa, Gabriel 17/10/2026, FIN-FINANC-28 passo 4c; mock `docs/mocks/mock-grafico-a-pagar-v2.html`, md5
+  cb2c0e014f3e8dad6958fa95d39cb435). Cores num lugar so', `COR_SAIDA` (`src/lib/graficos/coresDeSaida.ts`): a pagar / principal #d97706,
+  juros / encargos #8b5cf6, vencido e nao pago #b91c1c, ja' pago #cbd5e1 — grafico de saida le^ dali, nunca hex solto (preso por teste).
+  Eixo vertical com 4 ou 5 marcas redondas (`escalaDoEixo`: o menor passo 1/2/2,5/5 × 10ⁿ em ate' 4 intervalos) e grade clara; eixo
+  horizontal com a letra do mes e o ano marcado no comeco de cada ano (linha tracejada); SEMPRE anos civis inteiros (jan–dez) ou safras
+  inteiras (jul–jun, seletor no modal) do 1o ao ultimo periodo com parcela; o numero curto EM CIMA de cada coluna = a soma dos segmentos
+  dela (7,5px, cor do texto, com halo; zerada nao leva numero; ≥ 1 mi "1,6 mi", ≥ 10 mil "143k", ≥ 1 mil "8,2k"); o rotulo "hoje dd/mm"
+  ABAIXO do eixo e a linha atras das colunas. SVG em pixels reais (a regra do `preserveAspectRatio`).
+  · "O QUE FALTA PAGAR" v2 (substitui o P3-GRAFICO logo abaixo, que segue como historico): dono puro `graficoDeSaidas.ts` (centavos,
+    o MESMO lote dos cards). Cada parcela cai no periodo do SEU vencimento, empilhada: ja' pago (o `valorPago` do lote) · vencido (o que
+    falta, antes de hoje) · a pagar (· juros no anual). A coluna "venc." a' parte SAIU: o vencido fica no mes/ano em que venceu. O
+    anual ganhou "Vencidos" em vermelho; "Juros previstos" passou a ser so' o dos a vencer (NJ: 9.818.666,63 + vencidos 698.081,90 =
+    os 10.516.748,53 de antes). O card "Parcelas a pagar" = o principal a pagar do mesmo dono (NJ igual: 11.087.377,51, os vencidos
+    eram todos juros). Modal 760 × 440 fixo, grafico 728 × 270. `cronogramaEmAberto.ts` SAIU (sem chamador).
+  · FILTRO DE VENCIMENTO (o defeito de 17/10 10:47): o contrato entra se tem QUALQUER parcela (paga ou nao) com vencimento em [de, ate']
+    (`temParcelaNoIntervalo`); "de" sozinho = dali em diante; "ate'" sozinho = ate' a data. Com o filtro, os cards de Compras parceladas,
+    o card "Parcelas a pagar" e o grafico somam SO' as parcelas do intervalo (`totaisNoIntervalo`, a mesma fonte), e o `title` de cada
+    card diz o periodo. Contrato de/ate' segue pela data do contrato. NJ, "de 01/11/2026": 42 -> 36 compras, R$ 291.628,17 (antes: 1).
+  ⚠ NAO PROVADO NO NAVEGADOR com login (bancada com o lote real do NJ) · o tooltip do navegador (o `<title>`) so' por teste · "ja' pago"
+    de parcela antiga paga sem `valorPago` usa o total da parcela.
 - ⚠ "O QUE FALTA PAGAR": O CRONOGRAMA SAI DO MESMO LOTE DOS CARDS, E A SOMA DAS COLUNAS E' O CARD (FIN-FINANC-28 P3-GRAFICO, Gabriel
   17/10/2026, so' tela; mock `docs/mocks/mock-financiamentos-v1_2.html` secao 6, md5 e2f9594082c7fb628899b5ee569f4dc7). Clicar no card
   "A pagar" de Compras parceladas abre o modal MES A MES; clicar no card NOVO "Parcelas a pagar" da aba Financiamentos abre o ANO A ANO (empilhado:
