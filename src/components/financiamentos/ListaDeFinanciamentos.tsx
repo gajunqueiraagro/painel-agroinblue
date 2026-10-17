@@ -51,6 +51,7 @@ const CLASSE_STATUS: Record<string, string> = {
   ativo: STATUS_PALETA.programado.pilula,
   quitado: STATUS_PALETA.realizado.pilula,
   rolado: 'text-[#475569] border-transparent',
+  prorrogado: STATUS_PALETA.agendado.pilula,
   cancelado: 'text-[#b91c1c] border-transparent',
 };
 export function SeloDoContrato({ status }: { status: string }) {

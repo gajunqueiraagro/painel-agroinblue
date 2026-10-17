@@ -31,6 +31,7 @@ const api = (o: Partial<Api> = {}): Api => ({
   urlDoDocumento: vi.fn(async () => null), lerCaptacoesLivres: vi.fn(async () => []), lerContratosAnteriores: vi.fn(async () => []),
   vinculos: [], buscar: vi.fn(async () => "x"), vincularPagamento: vi.fn(async () => "x"), desvincularPagamento: vi.fn(async () => "x"),
   lerEncargosPerto: vi.fn(async () => []), vincularEncargo: vi.fn(async () => null),
+    baixaViva: null, darBaixa: vi.fn(async () => 'x'), desfazerBaixa: vi.fn(async () => null), lerSucessores: vi.fn(async () => []),
   ...o,
 });
 const SALDO = (o: Partial<SaldoDoContrato> = {}): SaldoDoContrato => ({
@@ -60,7 +61,6 @@ describe('(1) o cartão Saldo devedor é o do banco', () => {
     cabecalho(SALDO());
     expect(screen.getByTestId('credor-do-contrato').textContent).toBe('BANCO REGIONAL DE DESENVOLVIMENTO DO EXTREMO SUL');
     expect(screen.getByTestId('documento-do-credor').textContent).toBe('92.816.560/0001-37');
-    expect((screen.getByTestId('dar-baixa') as HTMLButtonElement).disabled).toBe(true);
   });
 });
 

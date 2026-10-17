@@ -46,16 +46,17 @@ const TD = 'h-[25px] px-2 text-[10px] whitespace-nowrap overflow-hidden text-ell
 const TD_R = `${TD} text-right tabular-nums`;
 const TOTAL = 'h-[25px] px-2 text-[10px] font-bold bg-[#E8E6DF] whitespace-nowrap';
 
-export const MOTIVO_DAR_BAIXA = 'Disponível no próximo passo';
 export const TEXTO_SALDO_SEM_LIBERACAO = 'Sem liberação gravada: o saldo devedor não se deduz do contratado.';
 
 /* ═══ CABEÇALHO ══════════════════════════════════════════════════════════════════════════════════════════════════════════ */
 export function CabecalhoDoCredito({
-  numero, credor, documento, credorTitle, descricao, subtitulo, saldo, jurosAVencer, proxVencimento, valorDaProx, onVoltar, onEditar, onDocumentos,
+  numero, credor, documento, credorTitle, descricao, subtitulo, saldo, jurosAVencer, proxVencimento, valorDaProx, onVoltar, onEditar, onDocumentos, acaoDeBaixa,
 }: {
   numero: string | null; credor: string | null; documento: string | null; credorTitle: string; descricao: string; subtitulo: string;
   saldo: SaldoDoContrato | null | undefined; jurosAVencer: number | null; proxVencimento: string | null; valorDaProx: number | null;
   onVoltar?: () => void; onEditar: () => void; onDocumentos: () => void;
+  /** passo 5: o "Dar baixa ▾" / "Desfazer baixa" (`BotaoDarBaixa`), montado por quem tem o hook */
+  acaoDeBaixa?: React.ReactNode;
 }) {
   const s = saldo ?? null;
   const semLiberacao = s !== null && s.liberado === null;
@@ -74,9 +75,7 @@ export function CabecalhoDoCredito({
         <span className="min-w-0 flex-1 truncate text-[12px]" title={descricao}>{descricao}</span>
         <div className="flex shrink-0 items-center gap-1" data-testid="botoes-do-credito">
           <Button variant="outline" size="sm" className="h-6 gap-1 px-2 text-[10.5px]" onClick={onEditar}><Pencil className="size-3" /> Editar contrato</Button>
-          <Button variant="outline" size="sm" className="h-6 gap-1 px-2 text-[10.5px]" disabled title={MOTIVO_DAR_BAIXA} data-testid="dar-baixa">
-            Dar baixa <ChevronDown className="size-3" />
-          </Button>
+          {acaoDeBaixa}
           <Button variant="outline" size="sm" className="h-6 gap-1 px-2 text-[10.5px]" onClick={onDocumentos} data-testid="ir-para-documentos">
             <Paperclip className="size-3" /> Documentos
           </Button>

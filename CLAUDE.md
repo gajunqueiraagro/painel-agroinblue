@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 17/10/2026 (FIN-FINANC-28 PASSO 4b, +8: `src/components/financiamentos/buscarNoContrato.test.tsx` 7 (novo),
+  Baseline em 17/10/2026 (FIN-FINANC-28 PASSO 5, +5: `src/components/financiamentos/darBaixa.test.tsx` 5 (novo) — 5586 depois dele; antes o
+  FIN-FINANC-28 PASSO 4b, +8: `src/components/financiamentos/buscarNoContrato.test.tsx` 7 (novo),
   `src/lib/acessos/guardaDeClienteNasMigrations.test.ts` 1 (6 -> 7) — 5581 depois dele; antes o FIN-FINANC-28 PASSO 4c, +2: `src/lib/financiamentos/graficoDeSaidas.test.ts` 9 (novo),
   `src/pages/financiamentosListaCompacta.test.tsx` 1 (13 -> 14); saiu `src/lib/financiamentos/cronogramaEmAberto.test.ts` 8, com o dono que
   testava; `cronogramaEmAberto.test.tsx` reescrito ao contrato novo (6 -> 6) — 5573 depois dele; antes o FIN-FINANC-28 RESUMO-A18, +3: `src/components/financiamentos/resumoDaObrigacao.test.ts` 3 (novo) — 5571
@@ -368,7 +369,7 @@ no mesmo arquivo.
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
   `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5327
-  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO; 5568 desde o FIN-FINANC-28 PASSO 4; 5571 desde o FIN-FINANC-28 RESUMO-A18; 5573 desde o FIN-FINANC-28 PASSO 4c; 5581 desde o FIN-FINANC-28 PASSO 4b], 22 skipped, e
+  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO; 5568 desde o FIN-FINANC-28 PASSO 4; 5571 desde o FIN-FINANC-28 RESUMO-A18; 5573 desde o FIN-FINANC-28 PASSO 4c; 5581 desde o FIN-FINANC-28 PASSO 4b; 5586 desde o FIN-FINANC-28 PASSO 5], 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -2260,6 +2261,41 @@ preview que o cabecalho nao sai da tela ao rolar.
     O "Excluir" saiu do credito (volta como "Dar baixa › Cancelado" no passo 5).
   ⚠ NAO PROVADO NO NAVEGADOR com login (bancada com a pagina real e o lote real do proto) · nenhuma liberacao/destinacao/documento real
     (as tabelas estao vazias; a vista "pr78demo" da bancada e' SIMULADA) · upload real ao bucket e a URL assinada.
+- ⚠ O CONTRATO DE CREDITO SE ENCERRA PELO "DAR BAIXA ▾" (QUITADO · ROLADO · PRORROGADO · CANCELADO), COM TRILHA E "DESFAZER BAIXA"
+  (FIN-FINANC-28 PASSO 5, Gabriel 17/10/2026; migration `supabase/migrations/20261027200500_fin_financ_28_p5_baixa.sql`, md5 do arquivo
+  460ad69236088a535a18b9ace83dc4f2 — APLICADA no proto em 17/10/2026, ledger 20261017150835 `fin_financ_28_p5_baixa`, ⚠ timestamp do dia;
+  ledger = arquivo byte a byte). So' financiamento e emprestimo; compra parcelada segue com o Excluir (recusa ja' escrita no dialogo).
+  · STATUS: `chk_financiamentos_status` ganhou 'prorrogado' (vigente: a lista o trata como os ativos; o saldo o calcula). O gatilho de
+    quitacao (`_fn_financiamento_status_pelas_parcelas`, 215e0630… -> d980fbdd…, patch guardado por md5, 2 ancoras) quita o prorrogado
+    como o ativo e, com parcela em aberto, o mantem prorrogado. `_fn_financiamento_saldo` (aa12b362… -> 13ce9583…) ganhou a pendencia
+    'aditivo_a_anexar' (prorrogado sem aditivo vivo; "sem aditivo" na lista).
+  · `fn_financiamento_baixa(contrato, tipo, dados, simular)` (a06188f2…; guarda pelo contrato a' vista; simulacao = a gravacao desfeita,
+    'FBSIM'): QUITADO exige principal (liberado, ou o contratado) = liquidado (amortizado) ou `confirmar_diferenca`; ROLADO exige o
+    contrato NOVO (financiamento/emprestimo vigente do cliente), grava nele a liberacao 'liquidacao' pelo saldo (sem caixa, pelo
+    `fn_financiamento_liberacao_salvar`), poe o antigo 'rolado' com `contrato_sucessor_id`, e o juros opcional vira encargo do antigo;
+    PRORROGADO exige o aditivo vivo ou `aditivo_a_anexar`, anda N meses as parcelas em aberto (sem pagamento vinculado) guardando
+    `vencimento_original`, e o MOTOR recria os programados no vencimento novo (a competencia junto, a regra da amortizacao);
+    CANCELADO recusa com parcela paga ou liberacao viva, dizendo quais. Motivo obrigatorio; baixa_em / por / motivo gravados.
+  · AS PARCELAS EM ABERTO SAEM (`_fn_baixa_encerrar_em_aberto`): o gatilho de quitacao refaz o status pelas parcelas, e um 'quitado'
+    com parcela em aberto voltaria a 'ativo'. O programado sai pelo dono do cancelamento; parcela com um lancamento ja' pago fica
+    paga pelo que pagou (so' o em aberto sai); parcela com pagamento vinculado ou lancamento casado recusa. "Esta' paga?" =
+    `_fn_parcela_esta_paga`, ESPELHO DECLARADO da regra do gatilho (quem mexer numa confere a outra).
+  · TRILHA `financiamento_baixas` (uma viva por contrato; antes = o contrato e as parcelas tocadas; detalhe = liberacao, encargo e
+    lancamentos cancelados). `fn_financiamento_baixa_desfazer(baixa, motivo, simular)` (e0c2d3d8…): so' a viva e so' com o contrato no
+    status da baixa; devolve o contrato, as parcelas (vencimentos inclusive), tira a liberacao do novo e o encargo, e o MOTOR recria os
+    programados.
+  · TELA: `BotaoDarBaixa` / `DarBaixaDialog` (`src/components/financiamentos/DarBaixa.tsx`; dono puro `baixaDoContrato.ts`): o menu
+    com as quatro saidas no contrato vigente, "Desfazer baixa" com a baixa viva; dialogo 600 × 430 fixo, area dos campos de 112px em
+    toda saida, previa/recusa num lugar de 44px, rodape "principal X = liquidado Y · diferenca Z" (os numeros do banco). No Editar
+    contrato a "Situação do contrato" do credito virou SO' LEITURA (`MOTIVO_SITUACAO_PELA_BAIXA`) e o status gravado volta intacto —
+    antes o dialogo regravava rolado/prorrogado como 'ativo'. As 6 fotos de edicao do credito REGRAVADAS de proposito.
+    "Criar contrato novo" na rolagem: ainda nao (o formulario novo e' o passo 7); escolhe-se um contrato ja' cadastrado.
+  Teste: `supabase/tests/fin_financ_28_p5_baixa_test.sql` (Q1–Q3, R1–R2, P1–P3, C1, G1) OK no vivo; 2 mutacoes de banco mortas (sem o
+  patch da quitacao -> P3; sem cancelar a parcela em aberto -> Q2) e 1 de tela. `fin_financ_28_p2_saldo_test.sql` passou ao contrato
+  do passo 4 (o S1 espera exatamente ['sem_documento']; nao tinha sido rodado depois dele).
+  Medido na bancada a 1.126 e 1.440: linha do titulo 26px sem estouro (botoes 301px), dialogo 600 × 430 sem rolagem nem corte.
+  ⚠ NAO PROVADO: nada com login · as RPCs pelo PostgREST · nenhuma baixa real · mes fechado no cancelamento dos programados (vale a
+    recusa do dono) · o juros da rolagem (encargo) sem caso no teste.
 - ⚠ NO CONTRATO DE CREDITO SE BUSCA A ENTRADA E O PAGAMENTO COMO NA OC: O BANCO SUGERE E DECIDE, E O PAGAMENTO DO OPERADOR NAO E' REESCRITO
   (FIN-FINANC-28 PASSO 4b, Gabriel 17/10/2026; migrations `supabase/migrations/20261027200300_fin_financ_28_p4b_buscar.sql`, md5 do arquivo
   6bf4a2c60f5c4a89fd40a884245d1819, ledger 20261017144610 `fin_financ_28_p4b_buscar`, e `20261027200400_fin_financ_28_p4b_guarda.sql`, md5

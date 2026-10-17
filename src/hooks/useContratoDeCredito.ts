@@ -21,10 +21,11 @@ import {
   type BuscaNoContrato, type EncargoSugerido, type PapelDoPagamento, type ResultadoDoVinculo,
 } from '@/lib/financiamentos/buscaNoContrato';
 import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
+import { lerBaixaViva, lerResultadoDaBaixa, type BaixaViva, type ResultadoDaBaixa, type TipoDeBaixa } from '@/lib/financiamentos/baixaDoContrato';
 
 export const BUCKET_DO_CONTRATO = 'fin-documentos';
 const CHAVES_DA_TELA = ['contrato-liberacoes', 'contrato-destinacoes', 'contrato-documentos', 'contrato-captacoes-livres', 'contrato-encargos',
-  'contrato-vinculos-pagamento', 'financiamento-parcelas'];
+  'contrato-vinculos-pagamento', 'financiamento-parcelas', 'contrato-baixa-viva', 'financiamento-detalhe'];
 const CHAVES_QUE_LEEM_O_SALDO = ['financiamento-situacao', 'financiamentos-lista', 'financiamento-primeira-liberacao', 'painel-financiamentos'];
 
 type Linha = Record<string, unknown>;
@@ -165,6 +166,19 @@ export function useContratoDeCredito(financiamentoId: string | null | undefined,
     },
   });
 
+  /* passo 5: a baixa viva (a que o "Desfazer baixa" desfaz) */
+  const baixaViva = useQuery({
+    queryKey: ['contrato-baixa-viva', financiamentoId],
+    enabled: ligado,
+    queryFn: async (): Promise<BaixaViva | null> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- tabela nova, fora do types.ts
+      const { data, error } = await (supabase as any).from('financiamento_baixas').select('id, tipo, data, motivo')
+        .eq('financiamento_id', financiamentoId!).is('desfeita_em', null).maybeSingle();
+      if (error) throw error;
+      return lerBaixaViva(data);
+    },
+  });
+
   const reler = useCallback(() => {
     for (const k of [...CHAVES_DA_TELA, ...CHAVES_QUE_LEEM_O_SALDO]) void qc.invalidateQueries({ queryKey: [k] });
   }, [qc]);
@@ -279,6 +293,35 @@ export function useContratoDeCredito(financiamentoId: string | null | undefined,
     return null;
   }, [financiamentoId, aposGravarNoFinanceiro]);
 
+  /* ═══ passo 5 — dar baixa e o gesto contrário (o banco decide; simular = a gravação desfeita) ═══ */
+  const darBaixa = useCallback(async (tipo: TipoDeBaixa, dados: Record<string, unknown>, simular: boolean): Promise<ResultadoDaBaixa | string> => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+    const { data, error } = await (supabase as any).rpc('fn_financiamento_baixa', { p_financiamento_id: financiamentoId, p_tipo: tipo, p_dados: dados, p_simular: simular });
+    if (error) return fraseDoErro(error);
+    const r = lerResultadoDaBaixa(data);
+    if (!r) return 'Resposta do banco fora do formato.';
+    if (!simular) aposGravarNoFinanceiro();
+    return r;
+  }, [financiamentoId, aposGravarNoFinanceiro]);
+
+  const desfazerBaixa = useCallback(async (baixaId: string, motivo: string): Promise<string | null> => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+    const { data, error } = await (supabase as any).rpc('fn_financiamento_baixa_desfazer', { p_baixa_id: baixaId, p_motivo: motivo, p_simular: false });
+    if (error) return fraseDoErro(error);
+    const r = lerResultadoDaBaixa(data);
+    if (r?.recusa) return r.recusa;
+    aposGravarNoFinanceiro();
+    return null;
+  }, [aposGravarNoFinanceiro]);
+
+  /** os contratos que podem ser o NOVO numa rolagem: financiamento / empréstimo vigente do cliente, menos este */
+  const lerSucessores = useCallback(async (): Promise<ContratoAnterior[]> => {
+    const { data } = await supabase.from('financiamentos').select('id, numero_contrato, descricao, natureza, status')
+      .eq('cliente_id', clienteId!).neq('natureza', 'parcelamento').neq('id', financiamentoId!).in('status', ['ativo', 'prorrogado'])
+      .order('data_contrato', { ascending: false });
+    return (data ?? []).map((f) => ({ id: f.id, numero: f.numero_contrato, descricao: f.descricao }));
+  }, [clienteId, financiamentoId]);
+
   const lerContratosAnteriores = useCallback(async (): Promise<ContratoAnterior[]> => {
     const { data } = await supabase.from('financiamentos').select('id, numero_contrato, descricao, natureza')
       .eq('cliente_id', clienteId!).neq('natureza', 'parcelamento').neq('id', financiamentoId!).order('data_contrato', { ascending: false });
@@ -290,6 +333,7 @@ export function useContratoDeCredito(financiamentoId: string | null | undefined,
     erroDeLeitura: liberacoes.error || destinacoes.error || documentos.error ? 'Não foi possível ler liberações, destinações ou documentos.' : null,
     salvarLiberacao, removerLiberacao, salvarDestinacao, removerDestinacao, enviarDocumento, removerDocumento, urlDoDocumento,
     lerCaptacoesLivres, lerContratosAnteriores,
+    baixaViva: baixaViva.data ?? null, darBaixa, desfazerBaixa, lerSucessores,
     vinculos: vinculos.data ?? [], buscar, vincularPagamento, desvincularPagamento, lerEncargosPerto, vincularEncargo,
   };
 }

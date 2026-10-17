@@ -45,7 +45,7 @@ begin
   if (v->>'contratado')::numeric is distinct from 1000000 or (v->>'liberado')::numeric is distinct from 1000000
      or (v->>'amortizado')::numeric is distinct from 200000 or (v->>'saldo')::numeric is distinct from 800000
      or (v->>'juros_pagos')::numeric is distinct from 20000 or (v->>'juros_previstos')::numeric is distinct from 80000
-     or v->>'regra' is distinct from 'calculado' or jsonb_array_length(v->'pendencias') is distinct from 0 then
+     or v->>'regra' is distinct from 'calculado' or v->'pendencias' is distinct from '["sem_documento"]'::jsonb then  -- passo 4: sem cedula viva = 'sem_documento'
     raise exception 'S1 no fim: %', v; end if;
   v := public.fn_financiamento_saldo(fin, date '2026-01-31');
   if (v->>'amortizado')::numeric is distinct from 100000 or (v->>'saldo')::numeric is distinct from 900000 then

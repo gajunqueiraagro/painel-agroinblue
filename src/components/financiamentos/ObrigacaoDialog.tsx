@@ -107,6 +107,7 @@ const ehNatureza = (v: string): v is NaturezaContrato =>
 /* Situacao do CONTRATO (nao confundir com a situacao da parcela). Os identificadores
    gravados continuam ativo/quitado/cancelado. */
 type StatusContrato = 'ativo' | 'quitado' | 'cancelado';
+export const MOTIVO_SITUACAO_PELA_BAIXA = 'A situação do contrato muda pelo "Dar baixa" na tela do contrato.';
 
 /** A linha de `financiamento_parcelas` como a grade da aba a consome. */
 interface ParcelaGravada {
@@ -257,7 +258,7 @@ interface Props {
    * codigo que mexe em dinheiro para ganhar nada. O dialogo e' o FORMULARIO; quem grava
    * continua sendo quem ja' gravava — o mesmo padrao de prop-bag do CompraModalShell.
    */
-  onSalvarEdicao?: (form: FinanciamentoForm, extras: { status: StatusContrato; parcelasAtualizadas?: number }) => Promise<boolean>;
+  onSalvarEdicao?: (form: FinanciamentoForm, extras: { status: string; parcelasAtualizadas?: number }) => Promise<boolean>;
   /** PARC-CONTRATO-01: a aba em que o diálogo abre ("Documentos" e "Editar parcelas" da tela do contrato). Sem ela, Contrato. */
   abaInicial?: AbaDaObrigacao;
 }
@@ -300,7 +301,8 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
   /* ⚠ FORA DO `FinanciamentoForm` DE PROPOSITO: `status` nao e' campo de CRIACAO (todo
      contrato nasce 'ativo', o gravador fixa). Ele so' existe na edicao, e por isso viaja
      em `extras` em vez de inchar o form que as duas telas compartilham. */
-  const [statusContrato, setStatusContrato] = useState<StatusContrato>('ativo');
+  /* FIN-FINANC-28 passo 5: o status GRAVADO volta intacto (rolado / prorrogado inclusive) — a situação muda pelo "Dar baixa" */
+  const [statusContrato, setStatusContrato] = useState<string>('ativo');
   /* A grade da aba Parcelas abre o MESMO modal do detalhe — um editor de parcela so'
      para o sistema, e ele ja' reconcilia o financeiro ao salvar. */
   const [parcelaEdit, setParcelaEdit] = useState<ParcelaGravada | null>(null);
@@ -457,7 +459,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
       forma_pagamento: '',
     });
     const statusBruto = contrato.status ?? '';
-    setStatusContrato(ehStatusContrato(statusBruto) ? statusBruto : 'ativo');
+    setStatusContrato(statusBruto || 'ativo');
     setCarregado(true);
   }, [ehEdicao, contrato, carregado, buscandoContrato, setForm]);
 
@@ -1085,14 +1087,10 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                     {ehEdicao && !ehParcelamento && (
                       <div>
                         <Label className={ROTULO}>Situação do contrato</Label>
-                        <Select value={statusContrato} onValueChange={v => { if (ehStatusContrato(v)) setStatusContrato(v); }}>
-                          <SelectTrigger className={CAMPO}><SelectValue /></SelectTrigger>
-                          <SelectContent position="popper" className={SELECT_POPPER}>
-                            <SelectItem value="ativo">Ativo</SelectItem>
-                            <SelectItem value="quitado">Quitado</SelectItem>
-                            <SelectItem value="cancelado">Cancelado</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        {/* FIN-FINANC-28 passo 5: só leitura — quitar, rolar, prorrogar e cancelar são o "Dar baixa ▾" do contrato
+                            (com trilha e o gesto contrário); trocar aqui regravaria um rolado / prorrogado como "ativo". */}
+                        <div className={`${CAMPO} flex items-center rounded-md border bg-muted/40 px-2 capitalize text-muted-foreground`}
+                          title={MOTIVO_SITUACAO_PELA_BAIXA} data-testid="situacao-do-contrato">{statusContrato}</div>
                       </div>
                     )}
                   </div>

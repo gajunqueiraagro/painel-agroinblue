@@ -36,6 +36,7 @@ function api(o: Partial<Api> = {}): Api {
     vincularPagamento: vi.fn(async (_p: string, _l: string, _pa: string, _m: boolean, simular: boolean) =>
       ({ simulado: simular, recusa: null, avisos: [], cancelados: 2, movido: false, paga: true })),
     desvincularPagamento: vi.fn(async () => 'x'), lerEncargosPerto: vi.fn(async () => []), vincularEncargo: vi.fn(async () => null),
+    baixaViva: null, darBaixa: vi.fn(async () => 'x'), desfazerBaixa: vi.fn(async () => null), lerSucessores: vi.fn(async () => []),
     ...o,
   };
 }

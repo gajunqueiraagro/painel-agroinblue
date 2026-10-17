@@ -38,6 +38,8 @@ import { GradeChaveValor } from '@/components/shared/GradeChaveValor';
 import { formatarDocumento, nomeEDocumento } from '@/lib/fornecedores/fornecedorTexto';
 import { AvisosDoCronograma, BlocoDestinacoes, BlocoDocumentos, BlocoLiberacoes, CabecalhoDoCredito, RemoverDialog } from '@/components/financiamentos/ContratoDeCredito';
 import { BuscarPagamentoDialog } from '@/components/financiamentos/BuscarNoContrato';
+import { BotaoDarBaixa, DarBaixaDialog } from '@/components/financiamentos/DarBaixa';
+import { ROTULO_DA_BAIXA, type TipoDeBaixa } from '@/lib/financiamentos/baixaDoContrato';
 import { ROTULO_DO_PAPEL } from '@/lib/financiamentos/buscaNoContrato';
 import type { VinculoDePagamento } from '@/hooks/useContratoDeCredito';
 import { useContratoDeCredito } from '@/hooks/useContratoDeCredito';
@@ -160,6 +162,9 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
   /* PASSO 4b — buscar o pagamento de uma parcela / desfazer o vínculo (os dois diálogos são donos da gravação) */
   const [buscarPagamentoDe, setBuscarPagamentoDe] = useState<string | null>(null);
   const [desvinculando, setDesvinculando] = useState<VinculoDePagamento | null>(null);
+  /* PASSO 5 — a baixa escolhida no menu e o "Desfazer baixa" */
+  const [baixaEscolhida, setBaixaEscolhida] = useState<TipoDeBaixa | null>(null);
+  const [desfazendoBaixa, setDesfazendoBaixa] = useState(false);
   const refDocumentos = useRef<HTMLDivElement>(null);
 
   /* FIN-FINANC-28-P3-FIX2 — a "Data de liberação" do cabeçalho: a 1ª liberação VIVA do contrato (sem liberação: "—") */
@@ -648,7 +653,8 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
             credorTitle={nomeEDocumento(nomeCredor, documentoCredor) || 'sem credor'} descricao={fin.descricao ?? ''} subtitulo={subtitulo}
             saldo={situacao?.saldo} jurosAVencer={situacao ? resumoDoCredito.jurosPendente : null}
             proxVencimento={resumoDoCredito.proxVencimento} valorDaProx={resumoDoCredito.valorDaProxParcela}
-            onVoltar={onVoltar} onEditar={() => abrirEdicao('contrato')} onDocumentos={irParaDocumentos} />
+            onVoltar={onVoltar} onEditar={() => abrirEdicao('contrato')} onDocumentos={irParaDocumentos}
+            acaoDeBaixa={<BotaoDarBaixa status={fin.status ?? null} api={credito} onEscolher={setBaixaEscolhida} onDesfazer={() => setDesfazendoBaixa(true)} />} />
         )}
       </div>
 
@@ -935,6 +941,12 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
         const alvo = linhas.find(x => x.id === buscarPagamentoDe);
         return alvo ? <BuscarPagamentoDialog api={credito} parcela={alvo} aoFechar={() => setBuscarPagamentoDe(null)} /> : null;
       })()}
+      {baixaEscolhida && <DarBaixaDialog api={credito} tipo={baixaEscolhida} aoFechar={() => setBaixaEscolhida(null)} />}
+      {desfazendoBaixa && credito.baixaViva && (
+        <RemoverDialog titulo="Desfazer baixa" comMotivo
+          frase={`Desfaz a baixa "${ROTULO_DA_BAIXA[credito.baixaViva.tipo]}": o contrato volta como estava, as parcelas que saíram voltam e os lançamentos programados são recriados.`}
+          aoConfirmar={(motivo) => credito.desfazerBaixa(credito.baixaViva!.id, motivo)} aoFechar={() => setDesfazendoBaixa(false)} />
+      )}
       {desvinculando && (
         <RemoverDialog titulo="Desvincular pagamento da parcela" comMotivo
           frase={`O pagamento sai da parcela (${ROTULO_DO_PAPEL[desvinculando.papel]}): ela volta como estava e o lançamento programado é recriado. O lançamento do Financeiro não é apagado nem alterado.`}

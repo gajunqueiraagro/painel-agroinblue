@@ -939,8 +939,8 @@ describe('4 — a tela do contrato mostra o que o banco derivou do lançamento',
     expect(screen.getByTestId('cartao-saldo').textContent).toBe('Saldo devedor?');
     expect(screen.getByTestId('cartao-saldo').getAttribute('title')).toBe('Sem liberação gravada: o saldo devedor não se deduz do contratado.');
     expect(screen.getByTestId('cartao-Contratado').textContent).toBe('ContratadoR$ 16.238,00');
-    expect((screen.getByTestId('dar-baixa') as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByTestId('dar-baixa').getAttribute('title')).toBe('Disponível no próximo passo');
+    /* passo 5: o "Dar baixa ▾" acende no contrato vigente (o menu das quatro saídas) */
+    expect((screen.getByTestId('dar-baixa') as HTMLButtonElement).disabled).toBe(false);
     expect((screen.getByTestId('ir-para-documentos') as HTMLButtonElement).disabled).toBe(false);
     expect(screen.getByTestId('bloco-documentos')).toBeTruthy();
     expect(screen.getByTestId('bloco-liberacoes')).toBeTruthy();
