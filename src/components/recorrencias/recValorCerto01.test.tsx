@@ -183,7 +183,8 @@ describe('a tela de Recorrências (V2Recorrencias, lida da FONTE): a tela não s
     expect(f).not.toMatch(/TD_NUM[^;]{0,40}truncate/);
   });
   it('layout sem movimento: `table-fixed` com a MESMA régua de colunas na tabela e no rodapé, e a linha de filtros com altura declarada', () => {
-    expect(f.match(/<Colunas \/>/g)).toHaveLength(2);
+    /* RECORRENCIAS-COLUNAS-01: a mesma régua, agora com a largura do Favorecido medida */
+    expect(f.match(/<Colunas favorecido=\{larguraFavorecido\} \/>/g)).toHaveLength(2);
     expect(f).toContain('<Table density="dense" className="table-fixed" data-testid="rec-tabela"');
     expect(f).toContain('<table className="w-full table-fixed border-collapse">');
     expect(f).toContain('<div className="flex h-[22px] items-center gap-1.5" data-testid="rec-filtros">');

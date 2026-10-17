@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -95,26 +95,31 @@ function Valor({ centavos, entrada = false, estimado = false, className }: { cen
   );
 }
 
-/* REC-FALTA-GERAR-A-VISTA-01: a Situação tem DOIS lugares reservados — a situação do mês e o selo "falta gerar · N meses" (vazio
-   quando não há o que gerar). Larguras MEDIDAS no pior texto ("não gerado" e "falta gerar · 12 meses") — ver o CLAUDE.md. */
-const LARGURA_SITUACAO = 62;
-const LARGURA_SELO = 110;
+/* RECORRENCIAS-COLUNAS-01 (Gabriel 17/10/2026): a Situação é UM lugar — o selo "falta gerar · N meses" quando a regra tem o que
+   gerar (a situação do mês vai no `title` dele), senão a situação do mês. MEDIDO: o selo pior, "falta gerar · 12 meses" a 9,5px,
+   pede 98,2px + 8 de padding. */
+const LARGURA_SITUACAO = 106;
 
-/** As colunas, em px (`table-layout: fixed`): so' a Descricao e' elastica. MEDIDAS — ver o CLAUDE.md (REC-VALOR-CERTO-01). */
+/** As colunas, em px (`table-layout: fixed`). RECORRENCIAS-COLUNAS-01: as fixas pelo maior texto real do NJ + folga; Descrição e
+ *  Favorecido dividem o resto ~45/55 (o Favorecido tem os textos maiores) — o Favorecido em px calculado da largura real
+ *  (`FATIA_FAVORECIDO`), a Descrição com o que sobra. Texto corta com o inteiro no `title`; número nunca. */
 const COLUNAS: ReadonlyArray<{ campo: Coluna; rotulo: string; largura: number | null; direita?: boolean }> = [
   { campo: 'descricao', rotulo: 'Descrição', largura: null },
-  { campo: 'favorecido', rotulo: 'Favorecido', largura: 118 },
-  { campo: 'conta', rotulo: 'Conta', largura: 100 },
-  { campo: 'tipo', rotulo: 'Tipo', largura: 70 },
+  { campo: 'favorecido', rotulo: 'Favorecido', largura: null },
+  { campo: 'conta', rotulo: 'Conta', largura: 120 },
+  { campo: 'tipo', rotulo: 'Tipo', largura: 84 },
   { campo: 'dia', rotulo: 'Dia', largura: 36, direita: true },
-  { campo: 'forma', rotulo: 'Forma', largura: 56 },
-  { campo: 'previsto', rotulo: 'Previsto', largura: 84, direita: true },
-  { campo: 'valor', rotulo: 'Valor', largura: 100, direita: true },
-  { campo: 'situacao', rotulo: 'Situação', largura: LARGURA_SITUACAO + LARGURA_SELO },
+  { campo: 'forma', rotulo: 'Forma', largura: 52 },
+  { campo: 'previsto', rotulo: 'Previsto', largura: 104, direita: true },
+  { campo: 'valor', rotulo: 'Valor', largura: 112, direita: true },
+  { campo: 'situacao', rotulo: 'Situação', largura: LARGURA_SITUACAO },
 ];
+const FATIA_FAVORECIDO = 0.55;
+/* a soma das fixas (Conta · Tipo · Dia · Forma · Previsto · Valor · Situação) + as ações, ESCRITA — a tela não soma; o teste confere. */
 /* REC-FALTA-GERAR-A-VISTA-01: o lugar do botão "Gerar" (reservado em toda linha) + o "⋯". */
 const LARGURA_GERAR = 40;
 const LARGURA_ACOES = LARGURA_GERAR + 22;
+export const LARGURA_DAS_FIXAS = 676;
 
 export default function V2Recorrencias() {
   const { recorrencias, loading, recarregar, clienteId } = useRecorrencias();
@@ -138,6 +143,19 @@ export default function V2Recorrencias() {
   const [periodo, setPeriodo] = useState<Periodo>(() => mesCorrente());
   const mes = anoMes(periodo.de);
   const rotuloMes = `${MESES_CURTOS[periodo.de.mes - 1].toLowerCase()}/${String(periodo.de.ano).slice(2)}`;
+  /* RECORRENCIAS-COLUNAS-01: o Favorecido fica com ~55% do que sobra das fixas, pela largura REAL da tabela (medida); a Descrição,
+     com o resto. Sem medida ainda, as duas dividem igual (as duas sem largura). */
+  const refTabela = useRef<HTMLDivElement>(null);
+  const [larguraFavorecido, setLarguraFavorecido] = useState<number | null>(null);
+  useEffect(() => {
+    const el = refTabela.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const fixas = LARGURA_DAS_FIXAS;
+    const medir = () => { const resto = el.clientWidth - fixas; setLarguraFavorecido(resto > 0 ? Math.round(resto * FATIA_FAVORECIDO) : null); };
+    medir();
+    const ro = new ResizeObserver(medir); ro.observe(el);
+    return () => ro.disconnect();
+  });
   const { ocorrencias, canceladas, mesesFechados, incompleto, recarregar: recarregarMes } = useOcorrenciasDoMes(clienteId, mes);
   const [modo, setModo] = useState<Modo>('mes');
   const [filtroTipo, setFiltroTipo] = useState<FiltroDoTipo>('todas');
@@ -281,15 +299,13 @@ export default function V2Recorrencias() {
   return (
     /* ⚠ `h-full`, E NAO `flex-1` — a licao do 04c/04b: esta tela mede contra o pai, e o `/v2` so' da' altura porque
        `recorrencias` entrou em `SECOES_APP_SHELL`. */
-    <div className="w-full min-w-0 h-full min-h-0 flex flex-col bg-background max-w-5xl mx-auto">
+    <div className="w-full min-w-0 h-full min-h-0 flex flex-col bg-background">
       <div className="shrink-0 px-4 pt-2 pb-1.5 space-y-1.5">
         {/* CABEÇALHO — título, o que a tela é, e a ação à direita. */}
         <div className="flex items-start gap-2">
           <div className="min-w-0">
-            <h1 className="text-[20px] font-bold leading-none tracking-tight text-foreground">
-              Recorrências
-            </h1>
-            <p className="mt-0.5 text-[11px] text-muted-foreground">
+            {/* RECORRENCIAS-COLUNAS-01: o título grande saiu — a tela se nomeia pela barra do topo. */}
+            <p className="text-[10px] text-muted-foreground">
               A regra que gera lançamentos previstos — nunca um lançamento
             </p>
           </div>
@@ -397,10 +413,10 @@ export default function V2Recorrencias() {
            fica FORA da rolagem, com a mesma régua de colunas (`colgroup` repetido). */
         <div className="min-h-0 flex-1 px-4 pb-1">
           <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card shadow-[0_1px_3px_0_rgb(0_0_0/0.04)]">
-            <div className="min-h-0 flex-1">
+            <div className="min-h-0 flex-1" ref={refTabela}>
               <Table density="dense" className="table-fixed" data-testid="rec-tabela"
                 wrapperClassName="h-full overflow-x-hidden overflow-y-scroll">
-                <Colunas />
+                <Colunas favorecido={larguraFavorecido} />
                 <TableHeader className="sticky top-0 z-10 bg-primary text-primary-foreground [&_tr]:border-b-0 [&_tr]:hover:bg-primary">
                   <TableRow className="h-[19px]">
                     {COLUNAS.map(c => (
@@ -447,21 +463,13 @@ export default function V2Recorrencias() {
                           {l ? <Valor centavos={l.valor} entrada={entrada} estimado={l.situacao === 'estimado'} /> : <span className="text-muted-foreground">—</span>}
                         </TableCell>
                         {/* DOIS LUGARES RESERVADOS: a situação do mês e o selo do que falta gerar (vazio sem nada a gerar). */}
-                        <TableCell className={cn(TD, 'whitespace-nowrap')}>
-                          <span className="flex items-center">
-                            <span className="shrink-0 overflow-hidden" style={{ width: LARGURA_SITUACAO - 4 }}>
-                              {l?.naoGerado ? <span data-testid="rec-nao-gerado" className={AMBAR} title={TITULO_NAO_GERADO[l.naoGerado]}>{ROTULO_NAO_GERADO}</span>
-                                : l ? <span className={COR_DA_SITUACAO[l.situacao]}>{ROTULO_SITUACAO_DO_MES[l.situacao]}</span>
-                                : <span className="text-muted-foreground" title="sem conta vencendo neste mês">—</span>}
-                            </span>
-                            <span className="shrink-0 overflow-hidden text-[9.5px]" style={{ width: LARGURA_SELO - 4 }} data-testid="rec-lugar-do-selo"
-                              aria-hidden={selo ? undefined : true}>
-                              {selo && (
-                                <span data-testid="rec-falta-gerar" title={selo.titulo}
-                                  className={selo.tom === 'ambar' ? AMBAR : 'text-muted-foreground'}>{selo.texto}</span>
-                              )}
-                            </span>
-                          </span>
+                        <TableCell className={cn(TD, 'whitespace-nowrap overflow-hidden')} data-testid="rec-lugar-do-selo">
+                          {selo ? (
+                            <span data-testid="rec-falta-gerar" className={cn('text-[9.5px]', selo.tom === 'ambar' ? AMBAR : 'text-muted-foreground')}
+                              title={`${selo.titulo} · ${rotuloMes}: ${l?.naoGerado ? ROTULO_NAO_GERADO : l ? ROTULO_SITUACAO_DO_MES[l.situacao] : 'sem conta vencendo'}`}>{selo.texto}</span>
+                          ) : l?.naoGerado ? <span data-testid="rec-nao-gerado" className={AMBAR} title={TITULO_NAO_GERADO[l.naoGerado]}>{ROTULO_NAO_GERADO}</span>
+                            : l ? <span className={COR_DA_SITUACAO[l.situacao]}>{ROTULO_SITUACAO_DO_MES[l.situacao]}</span>
+                            : <span className="text-muted-foreground" title="sem conta vencendo neste mês">—</span>}
                         </TableCell>
                         {/* `stopPropagation` no invólucro: abrir o menu não é abrir a linha. */}
                         <TableCell className={cn(TD, 'px-0 text-right select-none')}
@@ -525,7 +533,7 @@ export default function V2Recorrencias() {
                 rolagem; `overflow-y-scroll` nos dois para a coluna de valor alinhar com a das linhas. */}
             <div className="shrink-0 overflow-x-hidden overflow-y-scroll border-t bg-primary text-primary-foreground" data-testid="rec-rodape">
               <table className="w-full table-fixed border-collapse">
-                <Colunas />
+                <Colunas favorecido={larguraFavorecido} />
                 <tbody>
                   <tr className="h-[22px]">
                     <td className="truncate px-1 text-[10px] font-semibold" colSpan={6}
@@ -588,10 +596,10 @@ export default function V2Recorrencias() {
 }
 
 /** A régua de colunas, UMA para a tabela e para o rodapé. */
-function Colunas() {
+function Colunas({ favorecido }: { favorecido: number | null }) {
   return (
     <colgroup>
-      {COLUNAS.map(c => <col key={c.campo} style={c.largura === null ? undefined : { width: c.largura }} />)}
+      {COLUNAS.map(c => <col key={c.campo} style={c.campo === 'favorecido' && favorecido ? { width: favorecido } : c.largura === null ? undefined : { width: c.largura }} />)}
       <col style={{ width: LARGURA_ACOES }} />
     </colgroup>
   );

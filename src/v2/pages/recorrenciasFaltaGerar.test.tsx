@@ -37,10 +37,12 @@ describe('a linha: o selo e o botão Gerar têm lugar reservado', () => {
   it('o selo vem do dono, num lugar de largura reservada que existe em toda linha', () => {
     expect(TELA).toContain('const falta = faltaGerarDaRegra(aGerar, r.id);');
     expect(TELA).toContain('const selo = seloFaltaGerar(falta);');
-    expect(TELA).toContain('style={{ width: LARGURA_SELO - 4 }} data-testid="rec-lugar-do-selo"');
+    /* RECORRENCIAS-COLUNAS-01 (Gabriel 17/10): a Situação é UM lugar de 106px — o selo quando há o que gerar, senão a situação */
+    expect(TELA).toContain("data-testid=\"rec-lugar-do-selo\"");
     const lugar = TELA.slice(TELA.indexOf('data-testid="rec-lugar-do-selo"'), TELA.indexOf('data-testid="rec-lugar-do-gerar"'));
-    expect(lugar).toContain('{selo && (');
-    expect(TELA).toContain("{ campo: 'situacao', rotulo: 'Situação', largura: LARGURA_SITUACAO + LARGURA_SELO },");
+    expect(lugar).toContain('{selo ? (');
+    expect(TELA).toContain("{ campo: 'situacao', rotulo: 'Situação', largura: LARGURA_SITUACAO },");
+    expect(TELA).toContain('const LARGURA_SITUACAO = 106;');
   });
   it('o botão Gerar fica ANTES do "⋯", num lugar reservado (vazio e `aria-hidden` sem nada a gerar), e abre o mesmo diálogo', () => {
     const acoes = TELA.slice(TELA.indexOf('GERAR NA LINHA'), TELA.indexOf('<DropdownMenuContent'));
@@ -86,5 +88,16 @@ describe('a tela não calcula vaga: quem diz o que falta é o banco', () => {
     const bloco = DONO.slice(DONO.indexOf('O QUE FALTA GERAR — REC-FALTA-GERAR-A-VISTA-01'), DONO.indexOf('/** Por que a competência do mês não tem lançamento.'));
     expect(bloco.length).toBeGreaterThan(500);
     expect(semComentarios(bloco)).not.toMatch(/dataInicio|dataFim|ultimoLancamentoGerado|vencimentoPrevisto|competenciaQueVenceNoMes/);
+  });
+});
+
+describe('RECORRENCIAS-COLUNAS-01 — a régua', () => {
+  it('a soma escrita das fixas é a soma das colunas fixas + ações; Favorecido ~55% do resto; sem a trava de largura', async () => {
+    const larg = [...TELA.matchAll(/largura: (\d+)(?:, direita: true)? \}/g)].map((m) => Number(m[1]));
+    const n = (nome: string) => Number(TELA.match(new RegExp(`const ${nome} = (\\d+);`))?.[1]);
+    expect(larg.reduce((a, b) => a + b, 0) + n('LARGURA_SITUACAO') + n('LARGURA_GERAR') + 22).toBe(n('LARGURA_DAS_FIXAS'));
+    expect(TELA).toContain('const FATIA_FAVORECIDO = 0.55;');
+    expect(TELA).not.toContain('max-w-5xl');
+    expect(TELA).not.toMatch(/<h1/);
   });
 });

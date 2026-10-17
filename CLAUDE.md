@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 17/10/2026 (FORN-MESCLAR-01, +5: `src/components/financeiro-v2/mesclarFornecedores.test.tsx` 5 (novo); `documentoFiscalNosEscritores`
+  Baseline em 17/10/2026 (RECORRENCIAS-COLUNAS-01, +1: `src/v2/pages/recorrenciasFaltaGerar.test.tsx` 1 (9 -> 10); ele e `recValorCerto01`
+  trocados ao contrato novo da Situacao e da regua — 5615 depois dele; antes o FORN-MESCLAR-01, +5: `src/components/financeiro-v2/mesclarFornecedores.test.tsx` 5 (novo); `documentoFiscalNosEscritores`
   trocado ao contrato novo (a frase do Mesclar antigo) — 5614 depois dele; antes o FIN-FINANC-28 PASSO 8, +2: `src/lib/app/semFonteMono.test.ts` 2 (novo); trocados ao contrato novo, sem afrouxar,
   `centralListaLayout`, `casadoComExtrato`, `duplicarAbreModal`, `fazendaFinanceiro`, `novoDeXml`, `cprRecorte` e `cadastroDeContrato` — 5609 depois
   dele; antes o FIN-FINANC-28 PASSO 7, +14: `src/lib/financiamentos/cadastroDoContrato.test.ts` 7 (novo),
@@ -374,7 +375,7 @@ no mesmo arquivo.
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
   `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5327
-  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO; 5568 desde o FIN-FINANC-28 PASSO 4; 5571 desde o FIN-FINANC-28 RESUMO-A18; 5573 desde o FIN-FINANC-28 PASSO 4c; 5581 desde o FIN-FINANC-28 PASSO 4b; 5586 desde o FIN-FINANC-28 PASSO 5; 5593 desde o FIN-FINANC-28 PASSO 6; 5607 desde o FIN-FINANC-28 PASSO 7; 5609 desde o FIN-FINANC-28 PASSO 8; 5614 desde o FORN-MESCLAR-01], 22 skipped, e
+  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO; 5568 desde o FIN-FINANC-28 PASSO 4; 5571 desde o FIN-FINANC-28 RESUMO-A18; 5573 desde o FIN-FINANC-28 PASSO 4c; 5581 desde o FIN-FINANC-28 PASSO 4b; 5586 desde o FIN-FINANC-28 PASSO 5; 5593 desde o FIN-FINANC-28 PASSO 6; 5607 desde o FIN-FINANC-28 PASSO 7; 5609 desde o FIN-FINANC-28 PASSO 8; 5614 desde o FORN-MESCLAR-01; 5615 desde o RECORRENCIAS-COLUNAS-01], 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -2270,6 +2271,21 @@ preview que o cabecalho nao sai da tela ao rolar.
     O "Excluir" saiu do credito (volta como "Dar baixa › Cancelado" no passo 5).
   ⚠ NAO PROVADO NO NAVEGADOR com login (bancada com a pagina real e o lote real do proto) · nenhuma liberacao/destinacao/documento real
     (as tabelas estao vazias; a vista "pr78demo" da bancada e' SIMULADA) · upload real ao bucket e a URL assinada.
+- ⚠ A LISTA DO MES DAS RECORRENCIAS USA A LARGURA TODA, COM A REGUA MEDIDA (RECORRENCIAS-COLUNAS-01, decisao do Gabriel/Chat 17/10/2026,
+  so' tela, `src/v2/pages/V2Recorrencias.tsx`). SUBSTITUI as larguras do REC-VALOR-CERTO-01 / REC-FALTA-GERAR-A-VISTA-01.
+  · Sem a trava `max-w-5xl` (a largura toda da area de conteudo, como Lancamentos Financeiros); o titulo grande saiu (a barra do topo
+    nomeia a tela) e o subtitulo ficou a 10px cinza.
+  · REGUA (px, `table-fixed`): Conta 120 (maior real do NJ 108) · Tipo 84 · Dia 36 · Forma 52 · Previsto 104 · Valor do mes 112 ·
+    Situacao 106 · acoes 62 (o "Gerar" reservado 40 + o "⋯" 22); a soma escrita `LARGURA_DAS_FIXAS` = 676, conferida por teste. Descricao
+    e Favorecido dividem o resto: o Favorecido com 55% (`FATIA_FAVORECIDO`), calculado da largura REAL da tabela (ResizeObserver), a
+    Descricao com o que sobra; cortam com o inteiro no `title`.
+  · A SITUACAO E' UM LUGAR SO' DE 106px (decisao "selo na Situacao, coluna ~98px"; o selo pior, "falta gerar · 12 meses" a 9,5px, pede
+    98,2 + 8 de padding): com o que gerar, o selo — e a situacao do mes vai no `title` dele; sem, a situacao do mes. ⚠ Antes eram DOIS
+    lugares lado a lado (62 + 110).
+  MEDIDO (bancada com as 104 regras e as 99 contas de out/26 do NJ, 17/10): a 1.126 Descricao 108 / Favorecido 132 (44 e 59 cortam,
+  inteiros no `title`), a 1.440 249 / 305 (0 e 2 cortam); 0 numeros cortados; linhas de 19px; sem rolagem horizontal; sem titulo.
+  ⚠ A 1.126 NAO CHEGA AOS ~180px CADA da decisao: com as fixas decididas sobram 240px para os dois (a conta da decisao nao fecha).
+  ⚠ NAO PROVADO NO NAVEGADOR com login (bancada) · o selo "falta gerar" com dado (o NJ nao tinha regra a gerar em 17/10).
 - ⚠ MESCLAR FORNECEDORES E' UMA RPC, NUMA TRANSACAO, QUE MOVE TODA REFERENCIA POR ID E SE DESFAZ (FORN-MESCLAR-01, Gabriel 17/10/2026;
   migration `supabase/migrations/20261027200800_forn_mesclar_01.sql`, md5 do arquivo 9dce85b4f966e2f3e4b895736e771e35 — APLICADA no proto em
   17/10/2026, ledger 20261017162610 `forn_mesclar_01`, ⚠ timestamp do dia; ledger = arquivo). SUBSTITUI a mesclagem antiga
