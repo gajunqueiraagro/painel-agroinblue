@@ -62,8 +62,10 @@ function Linha({ rotulo, children }: { rotulo: string; children: React.ReactNode
   );
 }
 
-export function DarBaixaDialog({ api, tipo, aoFechar, onCriarContratoNovo }: {
+export function DarBaixaDialog({ api, tipo, aoFechar, onCriarContratoNovo, versaoDosContratos = 0 }: {
   api: ApiDoContrato; tipo: TipoDeBaixa; aoFechar: () => void; onCriarContratoNovo?: () => void;
+  /** sobe quando o cadastro novo cria um contrato: a lista do "contrato novo" relê */
+  versaoDosContratos?: number;
 }) {
   const [data, setData] = useState<string>(hojeLocal());
   const [motivo, setMotivo] = useState('');
@@ -78,7 +80,7 @@ export function DarBaixaDialog({ api, tipo, aoFechar, onCriarContratoNovo }: {
   const [erro, setErro] = useState<string | null>(null);
   const temAditivo = (api.documentos ?? []).some((d) => d.especie === 'aditivo');
 
-  useEffect(() => { if (tipo === 'rolado') void api.lerSucessores().then(setSucessores); }, [tipo, api.lerSucessores]);
+  useEffect(() => { if (tipo === 'rolado') void api.lerSucessores().then(setSucessores); }, [tipo, api.lerSucessores, versaoDosContratos]);
 
   const dados = (): Record<string, unknown> => ({
     data, motivo: motivo.trim(),

@@ -11,6 +11,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, useMemo, useEffect } from 'react';
 import { format } from 'date-fns';
 import { ObrigacaoDialog } from '@/components/financiamentos/ObrigacaoDialog';
+import { CadastroDeContratoDialog } from '@/components/financiamentos/CadastroDeContratoDialog';
 import { lerSituacaoEmLoteDoBanco } from '@/hooks/useSituacaoDoContrato';
 import { inscreverEmLancamentos } from '@/hooks/useFinanceiroV2';
 import { resumoDoContratoNaLista, totaisDasCompras } from '@/lib/financiamentos/situacaoEmLote';
@@ -145,7 +146,10 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
   })();
 
   /* FIN-FINANC-28-P3-FIX3 — ao voltar do contrato reabre a aba de onde saiu (era sempre "Financiamentos") */
-  const [aba, setAba] = useState<'financiamentos' | 'parcelas'>(_sf?.aba === 'parcelas' ? 'parcelas' : 'financiamentos');
+  const [aba, setAba] = useState<'financiamentos' | 'parcelas' | 'consorcios'>(_sf?.aba === 'parcelas' ? 'parcelas' : _sf?.aba === 'consorcios' ? 'consorcios' : 'financiamentos');
+  /* FIN-FINANC-28 passo 7: a aba "Consórcios" é a mesma lista do crédito, recortada pela natureza */
+  const abaCredito = aba !== 'parcelas';
+  const daAba = (natureza: string) => (aba === 'consorcios' ? natureza === 'consorcio' : natureza !== 'consorcio');
   const [filtroSituacaoFin, setFiltroSituacaoFin] = useState<string>(typeof _sf?.situacaoFin === 'string' ? _sf.situacaoFin : 'todos');
   const [filtroStatus, setFiltroStatus] = useState(_sf?.status ?? 'ativo');
   const [filtroTipo, setFiltroTipo] = useState(_sf?.tipo ?? 'todos');
@@ -402,11 +406,13 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
 
   /* FIN-FINANC-28 P3-GRAFICO — o cronograma do que falta pagar, sobre AS MESMAS LINHAS dos cards: em Compras parceladas, as que o
      filtro deixou (`filtered`); em Financiamentos, as vigentes da aba (o conjunto dos cards dela). Só o lote: nenhuma consulta. */
+  const [cadastroNovoAberto, setCadastroNovoAberto] = useState(false);
   const [cronogramaAberto, setCronogramaAberto] = useState<'mensal' | 'anual' | null>(null);
   const vigentesFinanciamento = useMemo(
-    () => financiamentos.filter(f => !ehCompraParcelada(f.natureza) && !ENCERRADOS.includes(f.status)
+    () => financiamentos.filter(f => !ehCompraParcelada(f.natureza) && daAba(f.natureza) && !ENCERRADOS.includes(f.status)
       && (filtroNatureza === 'todas' || f.natureza === filtroNatureza) && passaNosFiltros(f, filtroSituacaoFin)),
-    [financiamentos, filtroNatureza, passaNosFiltros, filtroSituacaoFin]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `daAba` resume a aba
+    [financiamentos, filtroNatureza, passaNosFiltros, filtroSituacaoFin, aba]);
   /* o card "Parcelas a pagar" = o principal a pagar do gráfico anual (o MESMO dono, o mesmo recorte de vencimento) */
   const graficoFinanciamentos = useMemo(() => graficoAnual(parcelasDoGrafico(vigentesFinanciamento.map(f => f.situacaoDoLote), hoje, intervalo)),
     [vigentesFinanciamento, hoje, intervalo]);
@@ -415,11 +421,12 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
      soma e recolhe os encerrados sozinha). */
   const contratosFinanciamento = useMemo(
     () => financiamentos
-      .filter(f => !ehCompraParcelada(f.natureza)
+      .filter(f => !ehCompraParcelada(f.natureza) && daAba(f.natureza)
         && (filtroNatureza === 'todas' || f.natureza === filtroNatureza)
         && passaNosFiltros(f, filtroSituacaoFin))
       .map(f => f.paraLista),
-    [financiamentos, filtroNatureza, passaNosFiltros, filtroSituacaoFin]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `daAba` resume a aba
+    [financiamentos, filtroNatureza, passaNosFiltros, filtroSituacaoFin, aba]);
 
   /* FIN-FINANC-28-P3-FIX2 — a coluna Banco só aparece quando há linha de crédito (grupo que não é banco): decidido sobre TODOS
      os financiamentos, nunca sobre o recorte do filtro (filtrar não muda coluna). */
@@ -450,7 +457,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
 
   /* FIN-FINANC-28-P3-FIX4 — TROCAR DE ABA ZERA TODOS OS FILTROS (Gabriel, 17/10). A volta do detalhe NÃO passa por aqui: ela
      remonta a tela e lê o que `abrirContrato` guardou. */
-  const trocarAba = (nova: 'financiamentos' | 'parcelas') => {
+  const trocarAba = (nova: 'financiamentos' | 'parcelas' | 'consorcios') => {
     if (nova === aba) return;
     zerarFiltros();
     setAba(nova);
@@ -493,7 +500,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
           />
           {/* FIN-FINANC-28-P3 — na aba "Financiamentos" a situação tem estado próprio (nasce "Todas": os encerrados ficam na linha
               recolhida) e oferece rolado e "Encerrados"; em "Compras parceladas" é o select de sempre. */}
-          {aba === 'financiamentos' ? (
+          {abaCredito ? (
             <Select value={filtroSituacaoFin} onValueChange={setFiltroSituacaoFin}>
               <SelectTrigger className="h-6 w-24 text-[11px]"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -646,21 +653,22 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
               opcoes={[
                 { valor: 'financiamentos', rotulo: 'Financiamentos' },
                 { valor: 'parcelas', rotulo: 'Compras parceladas' },
+                { valor: 'consorcios', rotulo: 'Consórcios' },
               ]}
             />
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {/* LUGAR RESERVADO: na aba "Compras parceladas" o botão fica invisível, e o "Nova obrigação" não anda. */}
             <Button variant="outline" size="sm"
-              className={`h-7 w-[132px] px-2 text-xs ${aba === 'financiamentos' ? '' : 'invisible'}`}
-              aria-hidden={aba !== 'financiamentos'} tabIndex={aba === 'financiamentos' ? 0 : -1}
+              className={`h-7 w-[132px] px-2 text-xs ${abaCredito ? '' : 'invisible'}`}
+              aria-hidden={!abaCredito} tabIndex={abaCredito ? 0 : -1}
               data-testid="mostrar-encerrados" aria-pressed={encerradosAbertos}
               onClick={() => setEncerradosAbertos(v => !v)}>
               {encerradosAbertos ? 'Ocultar encerrados' : 'Mostrar encerrados'}
             </Button>
             {/* CTA da casa: o mesmo `bg-cta` do resto do sistema, em 28px. */}
             <Button size="sm" className="h-7 gap-1 bg-cta px-2.5 text-xs font-semibold text-cta-foreground hover:bg-cta-hover"
-              onClick={() => setNovaObrigacaoAberta(true)}>
+              onClick={() => setCadastroNovoAberto(true)} data-testid="nova-obrigacao">
               <Plus className="size-3.5" /> Nova obrigação
             </Button>
           </div>
@@ -730,7 +738,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
           este recuo E' a distancia final da lista ate' a borda da tela — a regra da Mesa
           pede 5px, e 12 devolviam parte da faixa que o item 1 acabou de recuperar. */}
       <div className="min-h-0 flex-1 px-4 pb-1">
-        {aba === 'financiamentos' ? (
+        {abaCredito ? (
           isLoading
             ? <p className="text-sm text-muted-foreground p-4">Carregando…</p>
             : <ListaDeFinanciamentos contratos={contratosFinanciamento} encerradosAbertos={encerradosAbertos}
@@ -892,6 +900,14 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
         recorte={`${cronogramaAberto === 'anual'
           ? `${vigentesFinanciamento.length} ${vigentesFinanciamento.length === 1 ? 'contrato vigente' : 'contratos vigentes'}`
           : `${filtered.length} ${filtered.length === 1 ? 'compra' : 'compras'}`} · os filtros da aba${textoDoIntervalo ? ` · ${textoDoIntervalo}` : ''}`} />
+      {/* FIN-FINANC-28 passo 7 — o cadastro novo (financiamento, empréstimo, consórcio); a compra parcelada abre o formulário aprovado */}
+      {cadastroNovoAberto && (
+        <CadastroDeContratoDialog aberto aoFechar={() => setCadastroNovoAberto(false)}
+          onAbrirCompraParcelada={() => setNovaObrigacaoAberta(true)}
+          onSalvo={() => {
+            for (const k of ['financiamentos-lista', 'painel-financiamentos', 'painel-parcelas']) qc.invalidateQueries({ queryKey: [k, clienteId] });
+          }} />
+      )}
       {novaObrigacaoAberta && (
       <ObrigacaoDialog
         open

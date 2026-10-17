@@ -39,6 +39,7 @@ import { formatarDocumento, nomeEDocumento } from '@/lib/fornecedores/fornecedor
 import { AvisosDoCronograma, BlocoDestinacoes, BlocoDocumentos, BlocoLiberacoes, CabecalhoDoCredito, RemoverDialog } from '@/components/financiamentos/ContratoDeCredito';
 import { BuscarPagamentoDialog } from '@/components/financiamentos/BuscarNoContrato';
 import { BotaoDarBaixa, DarBaixaDialog } from '@/components/financiamentos/DarBaixa';
+import { CadastroDeContratoDialog } from '@/components/financiamentos/CadastroDeContratoDialog';
 import { ROTULO_DA_BAIXA, type TipoDeBaixa } from '@/lib/financiamentos/baixaDoContrato';
 import { ROTULO_DO_PAPEL } from '@/lib/financiamentos/buscaNoContrato';
 import type { VinculoDePagamento } from '@/hooks/useContratoDeCredito';
@@ -165,6 +166,9 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
   /* PASSO 5 — a baixa escolhida no menu e o "Desfazer baixa" */
   const [baixaEscolhida, setBaixaEscolhida] = useState<TipoDeBaixa | null>(null);
   const [desfazendoBaixa, setDesfazendoBaixa] = useState(false);
+  /* passo 7: a rolagem cria o contrato novo pelo cadastro novo, já com o credor deste */
+  const [criandoSucessor, setCriandoSucessor] = useState(false);
+  const [versaoDosContratos, setVersaoDosContratos] = useState(0);
   const refDocumentos = useRef<HTMLDivElement>(null);
 
   /* FIN-FINANC-28-P3-FIX2 — a "Data de liberação" do cabeçalho: a 1ª liberação VIVA do contrato (sem liberação: "—") */
@@ -941,7 +945,14 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
         const alvo = linhas.find(x => x.id === buscarPagamentoDe);
         return alvo ? <BuscarPagamentoDialog api={credito} parcela={alvo} aoFechar={() => setBuscarPagamentoDe(null)} /> : null;
       })()}
-      {baixaEscolhida && <DarBaixaDialog api={credito} tipo={baixaEscolhida} aoFechar={() => setBaixaEscolhida(null)} />}
+      {baixaEscolhida && <DarBaixaDialog api={credito} tipo={baixaEscolhida} aoFechar={() => setBaixaEscolhida(null)}
+        onCriarContratoNovo={() => setCriandoSucessor(true)} versaoDosContratos={versaoDosContratos} />}
+      {criandoSucessor && fin && (
+        <CadastroDeContratoDialog aberto aoFechar={() => setCriandoSucessor(false)}
+          prefill={{ natureza: fin.natureza === 'emprestimo' ? 'emprestimo' : 'financiamento', credorId: fin.credor_id ?? null,
+            valor: situacao?.saldo?.saldo ?? undefined, descricao: `${fin.descricao ?? ''} (renovação)` }}
+          onSalvo={() => setVersaoDosContratos((v) => v + 1)} />
+      )}
       {desfazendoBaixa && credito.baixaViva && (
         <RemoverDialog titulo="Desfazer baixa" comMotivo
           frase={`Desfaz a baixa "${ROTULO_DA_BAIXA[credito.baixaViva.tipo]}": o contrato volta como estava, as parcelas que saíram voltam e os lançamentos programados são recriados.`}

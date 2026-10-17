@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 17/10/2026 (FIN-FINANC-28 PASSO 6, +7: `src/components/financiamentos/financiamentoDoLancamento.test.tsx` 7 (novo) — 5593 depois
+  Baseline em 17/10/2026 (FIN-FINANC-28 PASSO 7, +14: `src/lib/financiamentos/cadastroDoContrato.test.ts` 7 (novo),
+  `src/components/financiamentos/cadastroDeContrato.test.tsx` 7 (novo) — 5607 depois dele; antes o FIN-FINANC-28 PASSO 6, +7: `src/components/financiamentos/financiamentoDoLancamento.test.tsx` 7 (novo) — 5593 depois
   dele; antes o FIN-FINANC-28 PASSO 5, +5: `src/components/financiamentos/darBaixa.test.tsx` 5 (novo) — 5586 depois dele; antes o
   FIN-FINANC-28 PASSO 4b, +8: `src/components/financiamentos/buscarNoContrato.test.tsx` 7 (novo),
   `src/lib/acessos/guardaDeClienteNasMigrations.test.ts` 1 (6 -> 7) — 5581 depois dele; antes o FIN-FINANC-28 PASSO 4c, +2: `src/lib/financiamentos/graficoDeSaidas.test.ts` 9 (novo),
@@ -370,7 +371,7 @@ no mesmo arquivo.
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
   `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5327
-  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO; 5568 desde o FIN-FINANC-28 PASSO 4; 5571 desde o FIN-FINANC-28 RESUMO-A18; 5573 desde o FIN-FINANC-28 PASSO 4c; 5581 desde o FIN-FINANC-28 PASSO 4b; 5586 desde o FIN-FINANC-28 PASSO 5; 5593 desde o FIN-FINANC-28 PASSO 6], 22 skipped, e
+  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO; 5568 desde o FIN-FINANC-28 PASSO 4; 5571 desde o FIN-FINANC-28 RESUMO-A18; 5573 desde o FIN-FINANC-28 PASSO 4c; 5581 desde o FIN-FINANC-28 PASSO 4b; 5586 desde o FIN-FINANC-28 PASSO 5; 5593 desde o FIN-FINANC-28 PASSO 6; 5607 desde o FIN-FINANC-28 PASSO 7], 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -2262,6 +2263,24 @@ preview que o cabecalho nao sai da tela ao rolar.
     O "Excluir" saiu do credito (volta como "Dar baixa › Cancelado" no passo 5).
   ⚠ NAO PROVADO NO NAVEGADOR com login (bancada com a pagina real e o lote real do proto) · nenhuma liberacao/destinacao/documento real
     (as tabelas estao vazias; a vista "pr78demo" da bancada e' SIMULADA) · upload real ao bucket e a URL assinada.
+- ⚠ CONTRATO DE CREDITO NOVO NASCE PELO FORMULARIO NOVO, E A CONTA DO CRONOGRAMA E' DO BANCO (FIN-FINANC-28 PASSO 7, Gabriel 17/10/2026;
+  mock `docs/mocks/mock-cadastro-contrato-v2.html`; migration `supabase/migrations/20261027200700_fin_financ_28_p7_cadastro.sql`, md5 do arquivo
+  8726df0772a6484383cdf888376fd9d0 — APLICADA no proto em 17/10/2026, ledger 20261017154024 `fin_financ_28_p7_cadastro`, ⚠ timestamp do dia;
+  ledger = arquivo). A EDICAO segue no `ObrigacaoDialog` e na tela do contrato.
+  · BANCO: natureza 'consorcio'; colunas `plano_principal_id`, `plano_juros_id`, `periodicidade`, `tipo_taxa`, `garantias` em `financiamentos`;
+    tabela `financiamento_consorcio` (grupo, cota, prazo, taxas, contemplacao); conta global "Consórcio a contemplar" (16040, fora do DRE).
+    `fn_financiamento_cronograma(p)` (0b7e8227…; so' leitura) e' o GERADOR (SAC · Price · Parcela unica · Personalizado · consorcio);
+    `fn_financiamento_criar(p_dados, p_simular)` (9bdbb92e…; interna `_fn_financiamento_criar_exec` 961c3d1d…) grava contrato + parcelas +
+    lancamentos pelo motor numa transacao, recusando com a frase na ordem de `oQueFalta`. Motor 0ffca819… -> cf810a2c… (plano do contrato e
+    descricao do consorcio); saldo 13ce9583… -> 1065bc82… (consorcio sem saldo devedor). Teste `supabase/tests/fin_financ_28_p7_cadastro_test.sql`.
+  · TELA: `CadastroDeContratoDialog` (natureza na criacao: Financiamento [com bem vinculado | emprestimo] · Compra parcelada (abre o formulario
+    aprovado) · Consorcio; abas Contrato · Liberacoes · Condicoes e cronograma · Destinacao · Documentos — as de depois do salvar usam os blocos
+    do passo 4; resumo fixo de 240px a' direita com "O que falta"); dono puro `src/lib/financiamentos/cadastroDoContrato.ts` (sem soma). PORTAS:
+    "Nova obrigação" da lista (aba "Consórcios" nova), "Criar contrato" do modal do Financeiro (passo 6) e "Criar contrato novo" da rolagem (passo 5).
+  · TAMANHO: 1150 x 600 fixo, encolhendo SO' com a janela menor (`min(…, 100vw/100vh − 16px)`): MEDIDO na bancada a 1.126 x 579 = 1110 x 563 e
+    a 1.440 x 800 = 1150 x 600, nas abas Contrato e cronograma, financiamento e consorcio — 0 rolagem, 0 controles fora, conteudo da aba = altura
+    da aba (412/412 e 449/449; com gap de 8px a aba Contrato pedia 441 de 412 a 1.126 — por isso gap-y de 4px), resumo 240 sem rolar.
+  ⚠ NAO PROVADO: nada com login · criar de verdade pela tela (so' pelo teste SQL) · a bancada com o banco simulado (cronograma de 8 linhas fixo).
 - ⚠ NO MODAL DO FINANCEIRO O LANCAMENTO SE LIGA AO FINANCIAMENTO PELO MESMO MOTOR DO 4b, AO CONTRARIO (FIN-FINANC-28 PASSO 6, Gabriel
   17/10/2026; migration `supabase/migrations/20261027200600_fin_financ_28_p6_vincular_lancamento.sql`, md5 do arquivo
   accac411771f65002273e361725e6420 — APLICADA no proto em 17/10/2026, ledger 20261017152250 `fin_financ_28_p6_vincular_lancamento`, ⚠
@@ -2277,7 +2296,7 @@ preview que o cabecalho nao sai da tela ao rolar.
     entrada: liberacao). Os gestos sao os de sempre: `fn_financiamento_parcela_vincular` (com a simulacao e o "mover"),
     `fn_financiamento_liberacao_salvar` ("em conta" com a data e o valor do lancamento), `fn_contrato_encargo_candidatas` /
     `fn_contrato_encargo_vincular`. Depois de cada um: o canal de lancamentos avisa e as chaves do contrato releem.
-    "Criar contrato" fica apagado com o motivo ate' o formulario novo (passo 7). Hook `useLancamentoNoFinanciamento`; leitor puro em
+    [passo 7: "Criar contrato" abre o formulario novo com a data, o valor e a descricao do lancamento.] Hook `useLancamentoNoFinanciamento`; leitor puro em
     `buscaNoContrato.ts` (`lerLancamentoNoFinanciamento`, `lerCandidata`, `fraseDoOndeEsta`, `desfazivelPorAqui`).
   Teste: `supabase/tests/fin_financ_28_p6_vincular_lancamento_test.sql` (V1–V3) OK no vivo; mutacao (sem a guarda) morta em V3; 1
   mutacao de tela morta. As fotos do modal do Financeiro NAO mudaram (a peca so' aparece depois da leitura).
@@ -2310,7 +2329,7 @@ preview que o cabecalho nao sai da tela ao rolar.
     toda saida, previa/recusa num lugar de 44px, rodape "principal X = liquidado Y · diferenca Z" (os numeros do banco). No Editar
     contrato a "Situação do contrato" do credito virou SO' LEITURA (`MOTIVO_SITUACAO_PELA_BAIXA`) e o status gravado volta intacto —
     antes o dialogo regravava rolado/prorrogado como 'ativo'. As 6 fotos de edicao do credito REGRAVADAS de proposito.
-    "Criar contrato novo" na rolagem: ainda nao (o formulario novo e' o passo 7); escolhe-se um contrato ja' cadastrado.
+    [passo 7: "Criar contrato novo" na rolagem abre o formulario novo com o credor e o saldo; salvo, a lista do "contrato novo" rele.]
   Teste: `supabase/tests/fin_financ_28_p5_baixa_test.sql` (Q1–Q3, R1–R2, P1–P3, C1, G1) OK no vivo; 2 mutacoes de banco mortas (sem o
   patch da quitacao -> P3; sem cancelar a parcela em aberto -> Q2) e 1 de tela. `fin_financ_28_p2_saldo_test.sql` passou ao contrato
   do passo 4 (o S1 espera exatamente ['sem_documento']; nao tinha sido rodado depois dele).

@@ -13,6 +13,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Segmentado } from '@/components/ui/segmentado';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { RemoverDialog } from '@/components/financiamentos/ContratoDeCredito';
+import { CadastroDeContratoDialog } from '@/components/financiamentos/CadastroDeContratoDialog';
 import { useLancamentoNoFinanciamento, type EncargoDoLancamento } from '@/hooks/useLancamentoNoFinanciamento';
 import {
   PAPEIS, ROTULO_DO_PAPEL, desfazivelPorAqui, fraseDoOndeEsta, fraseDoOutro,
@@ -37,6 +38,8 @@ export function FinanciamentoDoLancamento({ lancamentoId, clienteId, onAbrirCont
   const api = useLancamentoNoFinanciamento(lancamentoId, clienteId);
   const [aberto, setAberto] = useState(false);
   const [desfazendo, setDesfazendo] = useState(false);
+  /* passo 7: "Criar contrato" abre o cadastro novo já com a data e o valor deste lançamento */
+  const [criando, setCriando] = useState<LancamentoNoFinanciamento | null>(null);
   const d = typeof api.dado === 'object' ? api.dado : null;
   if (!d) return null;
   if (d.atual) {
@@ -66,7 +69,11 @@ export function FinanciamentoDoLancamento({ lancamentoId, clienteId, onAbrirCont
         title={n ? `${n} candidata(s) pelo motor do contrato` : 'Ligar este lançamento a uma parcela, liberação ou encargo de financiamento'}>
         <Link2 className="h-3 w-3" /> Financiamento{n ? ` (${n})` : ''}
       </Button>
-      {aberto && <VincularFinanciamentoDialog dado={d} api={api} aoFechar={() => setAberto(false)} onCriarContrato={onCriarContrato} />}
+      {aberto && <VincularFinanciamentoDialog dado={d} api={api} aoFechar={() => setAberto(false)} onCriarContrato={onCriarContrato ?? setCriando} />}
+      {criando && (
+        <CadastroDeContratoDialog aberto aoFechar={() => setCriando(null)}
+          prefill={{ natureza: 'financiamento', valor: criando.valor, data: criando.data, descricao: criando.descricao ?? '' }} />
+      )}
     </>
   );
 }

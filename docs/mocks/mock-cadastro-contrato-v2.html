@@ -1,0 +1,455 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cadastro de Contrato Mock</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--navy:#1d3a5d;--ink:#1f2937;--mut:#64748b;--line:#dde3ea;--soft:#f6f8fa}
+body{margin:0;background:#e9edf2;font-family:Inter,ui-sans-serif,system-ui,sans-serif;color:var(--ink);font-size:10px;font-variant-numeric:tabular-nums}
+*{box-sizing:border-box}
+.cap{font:600 11px Inter,sans-serif;color:#0f766e;margin:16px 16px 6px}
+.cap small{font-weight:400;color:#475569;font-size:10px;margin-left:6px}
+.wrap{padding:0 16px}
+.modal{width:1150px;height:600px;background:#fff;border-radius:8px;box-shadow:0 10px 32px rgba(15,23,42,.22);display:flex;flex-direction:column;overflow:hidden}
+.mh{height:36px;background:var(--navy);color:#fff;display:flex;align-items:center;padding:0 14px;gap:10px;flex:none}
+.mh b{font-size:11px}.mh span{opacity:.75}
+.mh .x{margin-left:auto;opacity:.8}
+.nat{display:flex;gap:4px;padding:8px 14px 0;flex:none}
+.nat div{border:1px solid #cfd6e0;border-radius:5px;padding:4px 12px;font-weight:500;color:#334155}
+.nat div.on{background:var(--navy);border-color:var(--navy);color:#fff}
+.nat i{font-style:normal;color:var(--mut);margin-left:10px;align-self:center}
+.body{flex:1;display:flex;min-height:0}
+.main{flex:1;display:flex;flex-direction:column;min-width:0;padding:8px 14px 0}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);flex:none}
+.tabs div{padding:5px 12px;color:var(--mut);font-weight:500;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs div.on{color:var(--navy);border-color:var(--navy);font-weight:600}
+.tabs div em{font-style:normal;background:#eef2f6;border-radius:8px;padding:0 5px;margin-left:4px;font-size:8.5px}
+.tabs div em.w{background:#fdf3e7;color:#a8642a}
+.pane{flex:1;padding:10px 0;min-height:0}
+.g{display:grid;gap:8px 12px}
+.g4{grid-template-columns:repeat(4,1fr)}.g3{grid-template-columns:repeat(3,1fr)}.g2{grid-template-columns:1fr 1fr}
+.f label{display:block;font-size:8.5px;font-weight:600;color:var(--mut);text-transform:uppercase;letter-spacing:.02em;margin-bottom:2px}
+.f label b{color:#b91c1c}
+.in{border:1px solid #cfd6e0;border-radius:4px;height:24px;display:flex;align-items:center;padding:0 7px;background:#fff;white-space:nowrap;overflow:hidden;gap:6px}
+.in.r{justify-content:flex-end}
+.in.sel::after{content:'▾';margin-left:auto;color:#94a3b8}
+.in.r.sel::after{margin-left:6px}
+.in .ph{color:#94a3b8}
+.in.calc{color:var(--mut);background:var(--soft)}
+.in.foc{border-color:#2563a8;box-shadow:0 0 0 2px #dbe7f6}
+.s2{grid-column:span 2}.s3{grid-column:span 3}.s4{grid-column:span 4}
+.seg{display:flex;border:1px solid #cfd6e0;border-radius:4px;height:24px;overflow:hidden}
+.seg div{flex:1;display:flex;align-items:center;justify-content:center;border-right:1px solid #cfd6e0;color:#334155}
+.seg div:last-child{border-right:0}.seg div.on{background:var(--navy);color:#fff;font-weight:600}
+.hint{font-size:9px;color:var(--mut);margin-top:3px;line-height:1.4}
+.sec{font-size:9px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.03em;margin:10px 0 6px;display:flex;align-items:center;gap:8px}
+.sec::after{content:'';flex:1;height:1px;background:var(--line)}
+table{border-collapse:collapse;width:100%;table-layout:fixed}
+th{background:var(--navy);color:#fff;font-size:8.5px;font-weight:600;height:22px;padding:0 6px;text-align:left;white-space:nowrap;text-transform:uppercase}
+td{height:25px;padding:0 6px;border-bottom:1px solid #eef0f3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.r{text-align:right}
+tr.tot td{background:#eef2f6;font-weight:700}
+tr.add td{color:#2563a8;font-weight:500}
+.st{display:inline-block;border-radius:9px;padding:0 7px;line-height:15px;font-size:8.5px;font-weight:600}
+.st.ok{background:#e9f5f3;color:#0f766e}.st.prev{background:#f1f5f9;color:#64748b}.st.liq{background:#e0ecff;color:#1d4f86}.st.w{background:#fdf3e7;color:#a8642a}
+.side{width:270px;flex:none;background:var(--soft);border-left:1px solid var(--line);padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.side h4{margin:0 0 2px;font-size:9px;text-transform:uppercase;color:var(--navy);letter-spacing:.03em}
+.kv{display:flex;justify-content:space-between;align-items:baseline;line-height:17px}
+.kv i{font-style:normal;color:var(--mut)}.kv b{font-weight:600}
+.kv.big b{font-size:13px}
+.hr{height:1px;background:var(--line);margin:3px 0}
+.chk{display:flex;gap:6px;align-items:baseline;line-height:16px}
+.chk .y{color:#0f766e;font-weight:700}.chk .n{color:#b45309;font-weight:700}
+.mf{height:46px;border-top:1px solid var(--line);display:flex;align-items:center;gap:8px;padding:0 14px;flex:none}
+.btn{border:1px solid #cfd6e0;border-radius:5px;padding:5px 12px;background:#fff;font-weight:500}
+.btn.p{background:var(--navy);color:#fff;border-color:var(--navy)}
+.mf .msg{color:var(--mut)}
+.drop{border:1.5px dashed #9fb3c8;border-radius:6px;height:74px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:#475569;background:#fafcff}
+.drop b{color:var(--navy)}
+.pop{position:absolute;left:0;top:44px;width:100%;background:#fff;border:1px solid #cfd6e0;border-radius:6px;box-shadow:0 8px 22px rgba(15,23,42,.18);z-index:5;padding:3px 0}
+.pop div{padding:0 9px;height:24px;display:flex;align-items:center;gap:8px}
+.pop div.on{background:#eef5ff}
+.pop div small{color:var(--mut);margin-left:auto}
+.pop div.new{color:#2563a8;border-top:1px solid #eef0f3;font-weight:500}
+.pop mark{background:#fff3c4;color:inherit;padding:0}
+.rel{position:relative}
+.note{width:1150px;margin:8px 0 0;background:#fff;border:1px solid var(--line);border-radius:7px;padding:8px 12px;line-height:1.6;font-size:10px}
+.note b{color:var(--navy)}
+.note ul{margin:2px 0;padding-left:16px}
+.mini{font-size:9px;color:var(--mut)}
+.rowflex{display:flex;gap:12px}
+.cron td{height:22px}
+table.parc td{height:24px}
+.pz{font-size:8.5px;color:#64748b}.pz.ok{color:#15803d}.pz.neg{color:#b91c1c}
+.st.venc{background:#fdecec;color:#b91c1c}.st.av{background:#fdf3e7;color:#a8642a}
+.c{text-align:center}.ok{color:#15803d}.neg{color:#b91c1c}
+.bar{height:4px;background:#e5e7eb;border-radius:2px;overflow:hidden;margin:1px 0 4px}.bar span{display:block;height:100%;background:#15803d}
+
+.box2{background:#fafbfc;border:1px solid var(--line);border-radius:6px;padding:6px 9px}
+.u{color:#94a3b8}
+</style></head><body>
+<div class="cap" style="font-size:13px;color:#1d3a5d">Cadastro de contrato · mock v1 <small>Novo / Editar · Financiamento, Compra parcelada e Consórcio · 17/10/2026</small></div>
+<div class="wrap"><div class="note"><b>Regras que valem para todo o formulário</b>
+<ul>
+<li><b>Fonte:</b> só Inter, sem nenhuma fonte de máquina de escrever (nem em data, número ou nº de contrato). Rótulo 8,5 px maiúsculo cinza, campo 10 px, valor alinhado à direita com algarismos de mesma largura.</li>
+<li><b>Modal de tamanho fixo, sem rolagem:</b> 1150 × 600. O que não cabe vai para uma aba, e o resumo fica sempre visível à direita.</li>
+<li><b>Busca digitável em todo cadastro</b> (credor, fornecedor, administradora, plano de contas, centro de custo, conta, fazenda, linha de crédito): o mesmo componente da tela de Lançamentos, com o último item "+ Cadastrar" sem sair do modal. Vira regra no CLAUDE.md.</li>
+<li><b>Cada dinheiro tem o seu lançamento:</b> liberação gera entrada (captação); parcela gera saída de principal e de juros separadas; consórcio gera parcela cheia, separando fundo comum de taxa.</li>
+<li><b>O resumo da direita é a mesma fonte do detalhe e da lista</b> (fn_financiamento_saldo / cronograma), sem conta paralela na tela.</li>
+<li>Valores ilustrativos. Códigos do plano: 4040 captação, 16020 amortização e 6040 juros vêm do Plano de Contas Padrão; os sem código são indicativos e o subcentro "Consórcio a contemplar" ainda não existe no plano.</li>
+</ul></div></div>
+<div class="cap">1) Financiamento · aba Contrato<small>tudo numa tela, sem rolar · resumo fixo à direita · conta de captação no próprio contrato</small></div><div class="wrap"><div class="modal">
+ <div class="mh"><b>Novo contrato</b><span>· Santa Rita</span><span class="x">✕</span></div>
+ <div class="nat"><div class="on">Financiamento</div><div class="">Compra parcelada</div><div class="">Consórcio</div><i>natureza escolhida na criação · no editar ela fica travada</i></div>
+ <div class="body">
+  <div class="main"><div class="tabs"><div class="on">Contrato</div><div class="">Liberações<em class="">2</em></div><div class="">Condições e cronograma<em class="">8</em></div><div class="">Destinação<em class="">2</em></div><div class="">Documentos<em class="w">falta</em></div></div><div class="pane">
+<div class="g g4">
+ <div class="f s2"><label>Descrição <b>*</b></label><div class="in ">Investimento Pecuário · Reforma de Pastagem 2026</div></div>
+ <div class="f rel"><label>Credor (banco) <b>*</b></label><div class="in sel">Banco do Brasil S.A.</div></div>
+ <div class="f "><label>Nº do contrato (cédula) <b>*</b></label><div class="in ">40/04003-9</div></div>
+ <div class="f "><label>Linha de crédito</label><div class="in sel">Pronamp Investimento</div><div class="hint">guarda-chuva: agrupa contratos da mesma linha</div></div>
+ <div class="f "><label>Modalidade <b>*</b></label><div class="in sel">Investimento</div></div>
+ <div class="f "><label>Data do contrato <b>*</b></label><div class="in ">15/08/2026</div></div>
+ <div class="f "><label>Valor contratado <b>*</b></label><div class="in r">R$ 1.800.000,00</div></div>
+ <div class="f "><label>Fazenda <b>*</b></label><div class="in sel">Santa Rita</div></div>
+ <div class="f s2"><label>Conta de captação <b>*</b></label><div class="in sel">BB 1234-5 · c/c 40.000-1</div><div class="hint">conta onde o dinheiro entra; cada liberação "em conta" vira entrada no caixa dessa conta</div></div>
+ <div class="f "><label>Garantias</label><div class="in sel">Alienação fiduciária · Hipoteca 2º grau mat. 12.345</div></div>
+</div>
+<div class="sec">Classificação no financeiro</div>
+<div class="g g4">
+ <div class="f rel s2"><label>Plano de contas · parcela de principal <b>*</b></label><div class="in sel">16020 · Amortização Financiamento Pecuária</div></div>
+ <div class="f rel s2"><label>Plano de contas · juros e encargos <b>*</b></label><div class="in sel">6040 · Despesas Financeiras Pecuária</div></div>
+ <div class="f rel s2"><label>Centro de custo</label><div class="in sel">Pecuária · Recria</div></div>
+ <div class="f s2"><label>Finalidade (texto livre)</label><div class="in ">Reforma de 420 ha de pastagem e cercas</div></div>
+</div>
+</div></div>
+  <div class="side">
+<h4>Resumo do contrato</h4>
+<div class="kv big"><i>Valor contratado</i><b>R$ 1.800.000,00</b></div>
+<div class="kv"><i>Liberado</i><b>R$ 1.200.000,00</b></div>
+<div class="kv"><i>A liberar</i><b>R$ 600.000,00</b></div>
+<div class="hr"></div>
+<div class="kv"><i>Sistema</i><b>SAC · anual</b></div>
+<div class="kv"><i>Taxa</i><b>10,5% a.a. pré</b></div>
+<div class="kv"><i>Carência</i><b>até 15/08/2027</b></div>
+<div class="kv"><i>Parcelas</i><b>7 de principal + 1 só juros</b></div>
+<div class="kv"><i>Vencimento final</i><b>15/08/2034</b></div>
+<div class="hr"></div>
+<div class="kv"><i>Juros previstos</i><b>R$ 945.000,00</b></div>
+<div class="kv"><i>Total a pagar</i><b>R$ 2.745.000,00</b></div>
+<div class="hr"></div>
+<h4>O que falta</h4>
+<div class="chk"><span class="y">✓</span>Credor, nº e datas</div>
+<div class="chk"><span class="y">✓</span>Liberações batem com o contratado (2ª prevista)</div>
+<div class="chk"><span class="y">✓</span>Destinação = liberado</div>
+<div class="chk"><span class="n">!</span>Cédula não anexada</div>
+</div>
+ </div>
+ <div class="mf"><span class="msg">campos com * são obrigatórios</span><span style="flex:1"></span><span class="btn">Cancelar</span><span class="btn p">Salvar contrato</span></div>
+</div></div><div class="cap">2) Todo campo de cadastro é digitável com busca<small>credor, fornecedor, plano de contas, centro de custo, conta, fazenda: digita e filtra (nome, código ou CNPJ) · último item cadastra na hora</small></div><div class="wrap"><div class="modal">
+ <div class="mh"><b>Novo contrato</b><span>· Santa Rita</span><span class="x">✕</span></div>
+ <div class="nat"><div class="on">Financiamento</div><div class="">Compra parcelada</div><div class="">Consórcio</div><i>natureza escolhida na criação · no editar ela fica travada</i></div>
+ <div class="body">
+  <div class="main"><div class="tabs"><div class="on">Contrato</div><div class="">Liberações<em class="">2</em></div><div class="">Condições e cronograma<em class="">8</em></div><div class="">Destinação<em class="">2</em></div><div class="">Documentos<em class="w">falta</em></div></div><div class="pane">
+<div class="g g4">
+ <div class="f s2"><label>Descrição <b>*</b></label><div class="in ">Investimento Pecuário · Reforma de Pastagem 2026</div></div>
+ <div class="f rel"><label>Credor (banco) <b>*</b></label><div class="in foc">bras<span class="ph">|</span></div>
+ <div class="pop">
+  <div class="on"><mark>Bras</mark>il · Banco do Brasil S.A.<small>00.000.000/0001-91</small></div>
+  <div>Banco Bradesco S.A. (<mark>Bras</mark>)<small>60.746.948/0001-12</small></div>
+  <div>Sicredi Centro-Sul MS/<mark>Bras</mark>ília<small>03.042.597/0001-55</small></div>
+  <div class="new">+ Cadastrar credor "bras"</div>
+ </div></div>
+ <div class="f "><label>Nº do contrato (cédula) <b>*</b></label><div class="in ">40/04003-9</div></div>
+ <div class="f "><label>Linha de crédito</label><div class="in sel">Pronamp Investimento</div><div class="hint">guarda-chuva: agrupa contratos da mesma linha</div></div>
+ <div class="f "><label>Modalidade <b>*</b></label><div class="in sel">Investimento</div></div>
+ <div class="f "><label>Data do contrato <b>*</b></label><div class="in ">15/08/2026</div></div>
+ <div class="f "><label>Valor contratado <b>*</b></label><div class="in r">R$ 1.800.000,00</div></div>
+ <div class="f "><label>Fazenda <b>*</b></label><div class="in sel">Santa Rita</div></div>
+ <div class="f s2"><label>Conta de captação <b>*</b></label><div class="in sel">BB 1234-5 · c/c 40.000-1</div><div class="hint">conta onde o dinheiro entra; cada liberação "em conta" vira entrada no caixa dessa conta</div></div>
+ <div class="f "><label>Garantias</label><div class="in sel">Alienação fiduciária · Hipoteca 2º grau mat. 12.345</div></div>
+</div>
+<div class="sec">Classificação no financeiro</div>
+<div class="g g4">
+ <div class="f rel s2"><label>Plano de contas · parcela de principal <b>*</b></label><div class="in sel">16020 · Amortização Financiamento Pecuária</div></div>
+ <div class="f rel s2"><label>Plano de contas · juros e encargos <b>*</b></label><div class="in sel">6040 · Despesas Financeiras Pecuária</div></div>
+ <div class="f rel s2"><label>Centro de custo</label><div class="in sel">Pecuária · Recria</div></div>
+ <div class="f s2"><label>Finalidade (texto livre)</label><div class="in ">Reforma de 420 ha de pastagem e cercas</div></div>
+</div>
+</div></div>
+  <div class="side">
+<h4>Resumo do contrato</h4>
+<div class="kv big"><i>Valor contratado</i><b>R$ 1.800.000,00</b></div>
+<div class="kv"><i>Liberado</i><b>R$ 1.200.000,00</b></div>
+<div class="kv"><i>A liberar</i><b>R$ 600.000,00</b></div>
+<div class="hr"></div>
+<div class="kv"><i>Sistema</i><b>SAC · anual</b></div>
+<div class="kv"><i>Taxa</i><b>10,5% a.a. pré</b></div>
+<div class="kv"><i>Carência</i><b>até 15/08/2027</b></div>
+<div class="kv"><i>Parcelas</i><b>7 de principal + 1 só juros</b></div>
+<div class="kv"><i>Vencimento final</i><b>15/08/2034</b></div>
+<div class="hr"></div>
+<div class="kv"><i>Juros previstos</i><b>R$ 945.000,00</b></div>
+<div class="kv"><i>Total a pagar</i><b>R$ 2.745.000,00</b></div>
+<div class="hr"></div>
+<h4>O que falta</h4>
+<div class="chk"><span class="y">✓</span>Credor, nº e datas</div>
+<div class="chk"><span class="y">✓</span>Liberações batem com o contratado (2ª prevista)</div>
+<div class="chk"><span class="y">✓</span>Destinação = liberado</div>
+<div class="chk"><span class="n">!</span>Cédula não anexada</div>
+</div>
+ </div>
+ <div class="mf"><span class="msg">campos com * são obrigatórios</span><span style="flex:1"></span><span class="btn">Cancelar</span><span class="btn p">Salvar contrato</span></div>
+</div></div><div class="cap">3) Liberações · várias por contrato, cada uma com sua entrada no caixa<small>crédito em conta = entrada na conta de captação · pago ao fornecedor = entrada e saída casadas · liquidação do anterior = renovação, sem caixa</small></div><div class="wrap"><div class="modal">
+ <div class="mh"><b>Editar contrato</b><span>· 40/04003-9 · Banco do Brasil</span><span class="x">✕</span></div>
+ <div class="nat"><div class="on">Financiamento</div><div class="">Compra parcelada</div><div class="">Consórcio</div><i>natureza escolhida na criação · no editar ela fica travada</i></div>
+ <div class="body">
+  <div class="main"><div class="tabs"><div class="">Contrato</div><div class="on">Liberações<em class="">2</em></div><div class="">Condições e cronograma<em class="">8</em></div><div class="">Destinação<em class="">2</em></div><div class="">Documentos<em class="w">falta</em></div></div><div class="pane">
+<table><colgroup><col style="width:78px"><col><col style="width:150px"><col style="width:180px"><col style="width:110px"><col style="width:96px"></colgroup>
+<thead><tr><th>Data</th><th>Descrição</th><th>Forma</th><th>Conta / fornecedor</th><th class="r">Valor</th><th>Caixa</th></tr></thead><tbody>
+<tr><td>20/08/2026</td><td>1ª liberação</td><td>Crédito em conta</td><td>BB c/c 40.000-1</td><td class="r">1.200.000,00</td><td><span class="st ok">conciliada</span></td></tr>
+<tr><td>15/02/2027</td><td>2ª liberação (prevista)</td><td>Pago ao fornecedor</td><td>Agro Sementes Ltda</td><td class="r">600.000,00</td><td><span class="st prev">prevista</span></td></tr>
+<tr class="add"><td colspan="6">+ Adicionar liberação</td></tr>
+<tr class="tot"><td colspan="4">Total liberado e previsto · contratado R$ 1.800.000,00 · diferença 0,00</td><td class="r">1.800.000,00</td><td></td></tr>
+</tbody></table>
+<div class="sec">Formas de liberação</div>
+<div class="g g3">
+ <div class="box2"><b>Crédito em conta</b><div class="hint">gera ENTRADA na conta de captação (4040 · Entrada de Financiamento Pecuária), na data da liberação. Vincula ao extrato quando o crédito aparecer.</div></div>
+ <div class="box2"><b>Pago ao fornecedor</b><div class="hint">o banco paga direto: o sistema gera a entrada e a saída no mesmo dia (sem passar no saldo), e a saída já leva o fornecedor e a classificação da compra.</div></div>
+ <div class="box2"><b>Liquidação do anterior</b><div class="hint">renovação: o dinheiro quita o contrato antigo. Sem caixa; o antigo vai para "rolado" e aponta para este.</div></div>
+</div>
+<div class="sec">Ao incluir uma liberação</div>
+<div class="g g4">
+ <div class="f"><label>Data <b>*</b></label><div class="in">15/02/2027</div></div>
+ <div class="f"><label>Forma <b>*</b></label><div class="seg"><div>Conta</div><div class="on">Fornecedor</div><div>Liquidação</div></div></div>
+ <div class="f rel"><label>Fornecedor <b>*</b></label><div class="in sel">Agro Sementes Ltda</div></div>
+ <div class="f"><label>Valor <b>*</b></label><div class="in r">600.000,00</div></div>
+</div>
+</div></div>
+  <div class="side">
+<h4>Resumo do contrato</h4>
+<div class="kv big"><i>Valor contratado</i><b>R$ 1.800.000,00</b></div>
+<div class="kv"><i>Liberado</i><b>R$ 1.200.000,00</b></div>
+<div class="kv"><i>A liberar</i><b>R$ 600.000,00</b></div>
+<div class="hr"></div>
+<div class="kv"><i>Sistema</i><b>SAC · anual</b></div>
+<div class="kv"><i>Taxa</i><b>10,5% a.a. pré</b></div>
+<div class="kv"><i>Carência</i><b>até 15/08/2027</b></div>
+<div class="kv"><i>Parcelas</i><b>7 de principal + 1 só juros</b></div>
+<div class="kv"><i>Vencimento final</i><b>15/08/2034</b></div>
+<div class="hr"></div>
+<div class="kv"><i>Juros previstos</i><b>R$ 945.000,00</b></div>
+<div class="kv"><i>Total a pagar</i><b>R$ 2.745.000,00</b></div>
+<div class="hr"></div>
+<h4>O que falta</h4>
+<div class="chk"><span class="y">✓</span>Credor, nº e datas</div>
+<div class="chk"><span class="y">✓</span>Liberações batem com o contratado (2ª prevista)</div>
+<div class="chk"><span class="y">✓</span>Destinação = liberado</div>
+<div class="chk"><span class="n">!</span>Cédula não anexada</div>
+</div>
+ </div>
+ <div class="mf"><span class="msg">a 2ª liberação fica prevista até o dinheiro sair</span><span style="flex:1"></span><span class="btn">Cancelar</span><span class="btn p">Salvar contrato</span></div>
+</div></div><div class="cap">4) Condições e cronograma · SAC / Price / parcela única / personalizado<small>o cronograma aparece na hora, embaixo dos campos · juros calculados sobre o saldo, não fixos por parcela</small></div><div class="wrap"><div class="modal">
+ <div class="mh"><b>Editar contrato</b><span>· 40/04003-9 · Banco do Brasil</span><span class="x">✕</span></div>
+ <div class="nat"><div class="on">Financiamento</div><div class="">Compra parcelada</div><div class="">Consórcio</div><i>natureza escolhida na criação · no editar ela fica travada</i></div>
+ <div class="body">
+  <div class="main"><div class="tabs"><div class="">Contrato</div><div class="">Liberações<em class="">2</em></div><div class="on">Condições e cronograma<em class="">8</em></div><div class="">Destinação<em class="">2</em></div><div class="">Documentos<em class="w">falta</em></div></div><div class="pane">
+<div class="g g4">
+ <div class="f s2"><label>Sistema de amortização <b>*</b></label><div class="seg"><div class="on">SAC</div><div>Price</div><div>Parcela única</div><div>Personalizado</div></div><div class="hint">SAC: principal igual, juros caem · Price: parcela igual · Personalizado: digita cada parcela (cédula com cronograma próprio)</div></div>
+ <div class="f"><label>Taxa de juros <b>*</b></label><div class="in r">10,50 % a.a.</div></div>
+ <div class="f"><label>Tipo de taxa</label><div class="seg"><div class="on">Pré</div><div>Pós (CDI/TLP)</div></div></div>
+ <div class="f"><label>Periodicidade <b>*</b></label><div class="in sel">Anual</div></div>
+ <div class="f"><label>Carência de principal até</label><div class="in">15/08/2027</div><div class="hint">na carência paga só juros</div></div>
+ <div class="f"><label>1º vencimento <b>*</b></label><div class="in">15/08/2027</div></div>
+ <div class="f"><label>Nº parcelas de principal <b>*</b></label><div class="in r">7</div></div>
+</div>
+<div class="sec">Cronograma gerado <span class="mini" style="font-weight:400;text-transform:none">· recalcula ao mudar qualquer campo acima · juros sobre o saldo liberado · editável no modo Personalizado</span></div>
+<table class="parc"><colgroup><col style="width:34px"><col style="width:66px"><col style="width:60px"><col style="width:110px"><col><col><col><col><col style="width:72px"></colgroup>
+<thead><tr><th>Nº</th><th>Venc.</th><th>Pgto.</th><th>Prazo</th><th class="r">Principal</th><th class="r">Juros</th><th class="r">Total</th><th class="r">Saldo devedor</th><th>Situação</th></tr></thead>
+<tbody><tr><td>1</td><td>15/08/27</td><td>—</td><td><span class="pz">vence em 10 meses</span></td><td class="r">—</td><td class="r">189.000,00</td><td class="r"><b>189.000,00</b></td><td class="r">1.800.000,00</td><td><span class="st av">A vencer</span></td></tr><tr><td>2</td><td>15/08/28</td><td>—</td><td><span class="pz">vence em 22 meses</span></td><td class="r">257.142,86</td><td class="r">189.000,00</td><td class="r"><b>446.142,86</b></td><td class="r">1.542.857,14</td><td><span class="st av">A vencer</span></td></tr><tr><td>3</td><td>15/08/29</td><td>—</td><td><span class="pz">vence em 34 meses</span></td><td class="r">257.142,86</td><td class="r">162.000,00</td><td class="r"><b>419.142,86</b></td><td class="r">1.285.714,28</td><td><span class="st av">A vencer</span></td></tr><tr><td>4</td><td>15/08/30</td><td>—</td><td><span class="pz">vence em 46 meses</span></td><td class="r">257.142,86</td><td class="r">135.000,00</td><td class="r"><b>392.142,86</b></td><td class="r">1.028.571,42</td><td><span class="st av">A vencer</span></td></tr><tr><td>5</td><td>15/08/31</td><td>—</td><td><span class="pz">vence em 58 meses</span></td><td class="r">257.142,86</td><td class="r">108.000,00</td><td class="r"><b>365.142,86</b></td><td class="r">771.428,56</td><td><span class="st av">A vencer</span></td></tr><tr><td colspan="9" class="mini">… mais 3 parcelas até 15/08/2034 · ver todas</td></tr></tbody></table>
+</div></div>
+  <div class="side">
+<h4>Resumo do contrato</h4>
+<div class="kv big"><i>Valor contratado</i><b>R$ 1.800.000,00</b></div>
+<div class="kv"><i>Liberado</i><b>R$ 1.200.000,00</b></div>
+<div class="kv"><i>A liberar</i><b>R$ 600.000,00</b></div>
+<div class="hr"></div>
+<div class="kv"><i>Sistema</i><b>SAC · anual</b></div>
+<div class="kv"><i>Taxa</i><b>10,5% a.a. pré</b></div>
+<div class="kv"><i>Carência</i><b>até 15/08/2027</b></div>
+<div class="kv"><i>Parcelas</i><b>7 de principal + 1 só juros</b></div>
+<div class="kv"><i>Vencimento final</i><b>15/08/2034</b></div>
+<div class="hr"></div>
+<div class="kv"><i>Juros previstos</i><b>R$ 945.000,00</b></div>
+<div class="kv"><i>Total a pagar</i><b>R$ 2.745.000,00</b></div>
+<div class="hr"></div>
+<h4>O que falta</h4>
+<div class="chk"><span class="y">✓</span>Credor, nº e datas</div>
+<div class="chk"><span class="y">✓</span>Liberações batem com o contratado (2ª prevista)</div>
+<div class="chk"><span class="y">✓</span>Destinação = liberado</div>
+<div class="chk"><span class="n">!</span>Cédula não anexada</div>
+</div>
+ </div>
+ <div class="mf"><span class="msg">mudar condições de contrato com parcela paga pede confirmação</span><span style="flex:1"></span><span class="btn">Cancelar</span><span class="btn p">Salvar contrato</span></div>
+</div></div><div class="cap">5) Destinação (opcional) · para onde foi o dinheiro<small>orçado × realizado por destino; realizado vem dos lançamentos vinculados</small></div><div class="wrap"><div class="modal">
+ <div class="mh"><b>Editar contrato</b><span>· 40/04003-9 · Banco do Brasil</span><span class="x">✕</span></div>
+ <div class="nat"><div class="on">Financiamento</div><div class="">Compra parcelada</div><div class="">Consórcio</div><i>natureza escolhida na criação · no editar ela fica travada</i></div>
+ <div class="body">
+  <div class="main"><div class="tabs"><div class="">Contrato</div><div class="">Liberações<em class="">2</em></div><div class="">Condições e cronograma<em class="">8</em></div><div class="on">Destinação<em class="">2</em></div><div class="">Documentos<em class="w">falta</em></div></div><div class="pane">
+<table><colgroup><col><col style="width:200px"><col style="width:200px"><col style="width:120px"><col style="width:110px"></colgroup>
+<thead><tr><th>Destino</th><th>Fornecedor</th><th>Plano de contas</th><th class="r">Orçado</th><th class="r">Realizado</th></tr></thead><tbody>
+<tr><td>Calcário e adubação · 420 ha</td><td>Agro Sementes Ltda</td><td>Corretivos e fertilizantes</td><td class="r">1.200.000,00</td><td class="r">1.200.000,00</td></tr>
+<tr><td>Cercas e bebedouros</td><td>Madeireira Pantanal</td><td>Benfeitorias</td><td class="r">600.000,00</td><td class="r u">0,00</td></tr>
+<tr class="add"><td colspan="5">+ Adicionar destino</td></tr>
+<tr class="tot"><td colspan="3">Total · liberado R$ 1.800.000,00 · diferença 0,00</td><td class="r">1.800.000,00</td><td class="r">1.200.000,00</td></tr>
+</tbody></table>
+<div class="hint" style="margin-top:6px">Opcional no custeio simples; obrigatório quando a linha exige comprovação (investimento, FCO, Pronamp). Realizado = lançamentos vinculados a este contrato.</div>
+</div></div>
+  <div class="side">
+<h4>Resumo do contrato</h4>
+<div class="kv big"><i>Valor contratado</i><b>R$ 1.800.000,00</b></div>
+<div class="kv"><i>Liberado</i><b>R$ 1.200.000,00</b></div>
+<div class="kv"><i>A liberar</i><b>R$ 600.000,00</b></div>
+<div class="hr"></div>
+<div class="kv"><i>Sistema</i><b>SAC · anual</b></div>
+<div class="kv"><i>Taxa</i><b>10,5% a.a. pré</b></div>
+<div class="kv"><i>Carência</i><b>até 15/08/2027</b></div>
+<div class="kv"><i>Parcelas</i><b>7 de principal + 1 só juros</b></div>
+<div class="kv"><i>Vencimento final</i><b>15/08/2034</b></div>
+<div class="hr"></div>
+<div class="kv"><i>Juros previstos</i><b>R$ 945.000,00</b></div>
+<div class="kv"><i>Total a pagar</i><b>R$ 2.745.000,00</b></div>
+<div class="hr"></div>
+<h4>O que falta</h4>
+<div class="chk"><span class="y">✓</span>Credor, nº e datas</div>
+<div class="chk"><span class="y">✓</span>Liberações batem com o contratado (2ª prevista)</div>
+<div class="chk"><span class="y">✓</span>Destinação = liberado</div>
+<div class="chk"><span class="n">!</span>Cédula não anexada</div>
+</div>
+ </div>
+ <div class="mf"><span class="msg"></span><span style="flex:1"></span><span class="btn">Cancelar</span><span class="btn p">Salvar contrato</span></div>
+</div></div><div class="cap">6) Documentos · clicar ou arrastar · cédula obrigatória<small>mesmo bloco serve financiamento, compra parcelada e consórcio</small></div><div class="wrap"><div class="modal">
+ <div class="mh"><b>Editar contrato</b><span>· 40/04003-9 · Banco do Brasil</span><span class="x">✕</span></div>
+ <div class="nat"><div class="on">Financiamento</div><div class="">Compra parcelada</div><div class="">Consórcio</div><i>natureza escolhida na criação · no editar ela fica travada</i></div>
+ <div class="body">
+  <div class="main"><div class="tabs"><div class="">Contrato</div><div class="">Liberações<em class="">2</em></div><div class="">Condições e cronograma<em class="">8</em></div><div class="">Destinação<em class="">2</em></div><div class="on">Documentos<em class="w">falta</em></div></div><div class="pane">
+<div class="drop"><b>Arraste os arquivos aqui ou clique para escolher</b><span class="mini">PDF, imagem · vários de uma vez · escolhe a espécie depois</span></div>
+<table style="margin-top:10px"><colgroup><col style="width:160px"><col><col style="width:82px"><col style="width:120px"><col style="width:60px"></colgroup>
+<thead><tr><th>Espécie</th><th>Arquivo</th><th>Data</th><th>Enviado por</th><th></th></tr></thead><tbody>
+<tr><td><b>Cédula / contrato</b></td><td class="u" style="color:#b45309">falta · obrigatório</td><td></td><td></td><td></td></tr>
+<tr><td>Comprovante de liberação</td><td>extrato_BB_20-08-26.pdf</td><td>20/08/2026</td><td>Gabriel</td><td class="r">abrir</td></tr>
+<tr><td>Aditivo</td><td class="mini">—</td><td></td><td></td><td></td></tr>
+<tr><td>Demonstrativo de saldo</td><td class="mini">—</td><td></td><td></td><td></td></tr>
+<tr><td>Comprovante de pagamento</td><td class="mini">—</td><td></td><td></td><td></td></tr>
+</tbody></table>
+<div class="hint" style="margin-top:6px">Espécies: Cédula/contrato · Aditivo · Demonstrativo de saldo · Comprovante de liberação · Comprovante de pagamento · Outros. Contrato sem cédula aparece como pendência "sem doc" na lista. Salvar sem cédula é permitido (avisa).</div>
+</div></div>
+  <div class="side">
+<h4>Resumo do contrato</h4>
+<div class="kv big"><i>Valor contratado</i><b>R$ 1.800.000,00</b></div>
+<div class="kv"><i>Liberado</i><b>R$ 1.200.000,00</b></div>
+<div class="kv"><i>A liberar</i><b>R$ 600.000,00</b></div>
+<div class="hr"></div>
+<div class="kv"><i>Sistema</i><b>SAC · anual</b></div>
+<div class="kv"><i>Taxa</i><b>10,5% a.a. pré</b></div>
+<div class="kv"><i>Carência</i><b>até 15/08/2027</b></div>
+<div class="kv"><i>Parcelas</i><b>7 de principal + 1 só juros</b></div>
+<div class="kv"><i>Vencimento final</i><b>15/08/2034</b></div>
+<div class="hr"></div>
+<div class="kv"><i>Juros previstos</i><b>R$ 945.000,00</b></div>
+<div class="kv"><i>Total a pagar</i><b>R$ 2.745.000,00</b></div>
+<div class="hr"></div>
+<h4>O que falta</h4>
+<div class="chk"><span class="y">✓</span>Credor, nº e datas</div>
+<div class="chk"><span class="y">✓</span>Liberações batem com o contratado (2ª prevista)</div>
+<div class="chk"><span class="y">✓</span>Destinação = liberado</div>
+<div class="chk"><span class="n">!</span>Cédula não anexada</div>
+</div>
+ </div>
+ <div class="mf"><span class="msg">salvar sem a cédula é permitido; o contrato fica com pendência "sem doc"</span><span style="flex:1"></span><span class="btn">Cancelar</span><span class="btn p">Salvar contrato</span></div>
+</div></div><div class="cap">7) Consórcio · natureza própria, não é financiamento<small>parcela vai para o financeiro com valor cheio · fundo comum é investimento (crédito acumulado), taxa adm. e seguro são despesa · contemplação separada</small></div><div class="wrap"><div class="modal">
+ <div class="mh"><b>Novo consórcio</b><span>· Agnaldo</span><span class="x">✕</span></div>
+ <div class="nat"><div class="">Financiamento</div><div class="">Compra parcelada</div><div class="on">Consórcio</div><i>natureza escolhida na criação · no editar ela fica travada</i></div>
+ <div class="body">
+  <div class="main"><div class="tabs"><div class="on">Consórcio</div><div class="">Parcelas<em class="">80</em></div><div class="">Documentos<em class="w">falta</em></div></div><div class="pane">
+<div class="g g4">
+ <div class="f s2"><label>Descrição <b>*</b></label><div class="in ">Consórcio John Deere · trator 6155J</div></div>
+ <div class="f rel"><label>Administradora <b>*</b></label><div class="in sel">Consórcio John Deere</div></div>
+ <div class="f "><label>Grupo / cota <b>*</b></label><div class="in ">002122 / 0457</div></div>
+ <div class="f "><label>Valor da carta de crédito <b>*</b></label><div class="in r">R$ 820.000,00</div></div>
+ <div class="f "><label>Prazo (meses) <b>*</b></label><div class="in r">80</div></div>
+ <div class="f "><label>Taxa de administração <b>*</b></label><div class="in r">14,00 % total</div></div>
+ <div class="f "><label>Fundo de reserva</label><div class="in r">2,00 % total</div></div>
+ <div class="f "><label>Seguro</label><div class="in r">0,038 % a.m.</div></div>
+ <div class="f "><label>1ª parcela <b>*</b></label><div class="in ">10/07/2026</div></div>
+ <div class="f "><label>Reajuste da carta</label><div class="in sel">Preço do bem (anual)</div></div>
+ <div class="f rel"><label>Conta de pagamento <b>*</b></label><div class="in sel">Bradesco c/c 5678-0</div></div>
+ <div class="f rel s2"><label>Plano de contas · parcelas <b>*</b></label><div class="in sel">Consórcio a contemplar <span class="ph">· subcentro novo no plano padrão</span></div><div class="hint">a parcela NÃO é despesa: vira crédito acumulado na carta; só a taxa de adm. e o seguro vão para despesa</div></div>
+ <div class="f rel s2"><label>Plano de contas · taxa adm. e seguro <b>*</b></label><div class="in sel">6040 · Despesas Financeiras Pecuária</div></div>
+</div>
+<div class="sec">Contemplação</div>
+<div class="g g4">
+ <div class="f"><label>Situação</label><div class="seg"><div class="on">Não contemplado</div><div>Contemplado</div></div></div>
+ <div class="f "><label>Data da contemplação</label><div class="in "><span class="ph">dd/mm/aaaa</span></div></div>
+ <div class="f "><label>Forma</label><div class="in sel">Sorteio / lance</div></div>
+ <div class="f "><label>Lance pago</label><div class="in r"><span class="ph">R$ 0,00</span></div></div>
+</div>
+<div class="hint">Ao contemplar: a carta é usada na compra do bem (pagamento ao fornecedor, sem passar no caixa), o bem entra no Patrimônio e as parcelas que faltam continuam como dívida.</div>
+</div></div>
+  <div class="side">
+<h4>Resumo do consórcio</h4>
+<div class="kv big"><i>Carta de crédito</i><b>R$ 820.000,00</b></div>
+<div class="kv"><i>Parcela (fundo comum)</i><b>R$ 10.250,00</b></div>
+<div class="kv"><i>Taxa adm. + fundo reserva</i><b>R$ 1.640,00</b></div>
+<div class="kv"><i>Seguro</i><b>R$ 311,60</b></div>
+<div class="kv"><i>Parcela total</i><b>R$ 12.201,60</b></div>
+<div class="hr"></div>
+<div class="kv"><i>Pagas</i><b>3 de 80</b></div>
+<div class="kv"><i>Acumulado na carta</i><b>R$ 30.750,00</b></div>
+<div class="kv"><i>Custo total previsto</i><b>R$ 976.128,00</b></div>
+<div class="kv"><i>Última parcela</i><b>10/02/2033</b></div>
+<div class="hr"></div>
+<h4>O que falta</h4>
+<div class="chk"><span class="y">✓</span>80 parcelas no financeiro, valor cheio</div>
+<div class="chk"><span class="n">!</span>Contrato de adesão não anexado</div>
+<div class="chk"><span class="n">!</span>Jul–set/26 previstas: confirmar se foram pagas</div>
+</div>
+ </div>
+ <div class="mf"><span class="msg">nº do grupo real (Agnaldo); valores da carta e taxas ilustrativos</span><span style="flex:1"></span><span class="btn">Cancelar</span><span class="btn p">Salvar consórcio</span></div>
+</div></div><div class="cap">8) Compra parcelada · mesma régua da tela que já está boa no sistema<small>tabela de parcelas igual à de hoje (Nº, Comp., Venc., Pgto., Prazo, Conta, Valor, Situação, NF, Boleto) · prazo em fonte menor · total sem o "pago" solto (já está no resumo)</small></div><div class="wrap"><div class="modal">
+ <div class="mh"><b>Editar compra parcelada</b><span>· Lascas Eucalipto Tratado · NJ</span><span class="x">✕</span></div>
+ <div class="nat"><div class="">Financiamento</div><div class="on">Compra parcelada</div><div class="">Consórcio</div><i>natureza escolhida na criação · no editar ela fica travada</i></div>
+ <div class="body">
+  <div class="main"><div class="tabs"><div class="on">Compra</div><div class="">Documentos<em class="">1</em></div></div><div class="pane">
+<div class="g g4">
+ <div class="f s2"><label>Descrição <b>*</b></label><div class="in ">Lascas Eucalipto Tratado</div></div>
+ <div class="f rel s2"><label>Credor (fornecedor) <b>*</b></label><div class="in sel">J.L. Fernandes Madeiras Tratadas Ltda (4 Irmãos)</div></div>
+ <div class="f "><label>Contrato em <b>*</b></label><div class="in ">02/06/26</div></div>
+ <div class="f "><label>Valor do contrato <b>*</b></label><div class="in r">R$ 35.700,00</div></div>
+ <div class="f "><label>Parcelas <b>*</b></label><div class="in r">6</div></div>
+ <div class="f "><label>1ª parcela · intervalo <b>*</b></label><div class="in ">05/07/26 · mensal</div></div>
+ <div class="f rel s2"><label>Classificação (plano de contas) <b>*</b></label><div class="in sel">Investimento em Cercas Pecuária</div></div>
+ <div class="f rel"><label>Conta <b>*</b></label><div class="in sel">Banco do Brasil</div></div>
+ <div class="f "><label>Nota fiscal</label><div class="in ">NF 000.005.510</div></div>
+</div>
+<div class="sec">Parcelas <span class="mini" style="font-weight:400;text-transform:none">· clique na linha para abrir o lançamento no Financeiro · ✎ edita a parcela</span></div>
+<table class="parc"><colgroup><col style="width:34px"><col style="width:60px"><col style="width:60px"><col style="width:60px"><col style="width:96px"><col><col style="width:74px"><col style="width:68px"><col style="width:96px"><col style="width:44px"><col style="width:24px"></colgroup>
+<thead><tr><th>Nº</th><th>Comp.</th><th>Venc.</th><th>Pgto.</th><th>Prazo</th><th>Conta</th><th class="r">Valor (R$)</th><th>Situação</th><th>Nota fiscal</th><th class="c">Boleto</th><th></th></tr></thead>
+<tbody><tr><td>1/6</td><td>02/06/26</td><td>05/07/26</td><td>02/07/26</td><td><span class="pz ok">3 dias antes</span></td><td>Banco do Brasil</td><td class="r"><b>5.950,00</b></td><td><span class="st ok">Paga</span></td><td>NF 000.005.510</td><td class="c u">—</td><td class="c">✎</td></tr><tr><td>2/6</td><td>02/06/26</td><td>05/08/26</td><td>03/08/26</td><td><span class="pz ok">2 dias antes</span></td><td>Banco do Brasil</td><td class="r"><b>5.950,00</b></td><td><span class="st ok">Paga</span></td><td>NF 000.005.510</td><td class="c u">—</td><td class="c">✎</td></tr><tr><td>3/6</td><td>02/06/26</td><td>05/09/26</td><td>02/09/26</td><td><span class="pz ok">3 dias antes</span></td><td>Banco do Brasil</td><td class="r"><b>5.950,00</b></td><td><span class="st ok">Paga</span></td><td>NF 000.005.510</td><td class="c u">—</td><td class="c">✎</td></tr><tr><td>4/6</td><td>02/06/26</td><td><span class="neg">05/10/26</span></td><td>—</td><td><span class="pz neg">vencida há 12 dias</span></td><td>Banco do Brasil</td><td class="r"><b>5.950,00</b></td><td><span class="st venc">Vencida</span></td><td>NF 000.005.510</td><td class="c u">—</td><td class="c">✎</td></tr><tr><td>5/6</td><td>02/06/26</td><td>05/11/26</td><td>—</td><td><span class="pz">vence em 19 dias</span></td><td>Banco do Brasil</td><td class="r"><b>5.950,00</b></td><td><span class="st av">A vencer</span></td><td>NF 000.005.510</td><td class="c u">—</td><td class="c">✎</td></tr><tr><td>6/6</td><td>02/06/26</td><td>05/12/26</td><td>—</td><td><span class="pz">vence em 49 dias</span></td><td>Banco do Brasil</td><td class="r"><b>5.950,00</b></td><td><span class="st av">A vencer</span></td><td>NF 000.005.510</td><td class="c u">—</td><td class="c">✎</td></tr>
+<tr class="tot"><td colspan="6">Total · 6 parcelas</td><td class="r">35.700,00</td><td>3 de 6</td><td class="ok">1 nota · confere</td><td class="c">0</td><td></td></tr>
+</tbody></table>
+</div></div>
+  <div class="side">
+<h4>Resumo da compra</h4>
+<div class="kv big"><i>Valor do contrato</i><b>R$ 35.700,00</b></div>
+<div class="kv"><i>Pago · 3 parcelas</i><b class="ok">R$ 17.850,00</b></div>
+<div class="kv"><i>A vencer · 2 parcelas</i><b>R$ 11.900,00</b></div>
+<div class="kv"><i>Vencido · 1 parcela</i><b class="neg">R$ 5.950,00</b></div>
+<div class="hr"></div>
+<div class="kv"><i>Progresso</i><b>3 de 6 pagas</b></div>
+<div class="bar"><span style="width:50%"></span></div>
+<div class="kv"><i>Última parcela</i><b>05/12/26</b></div>
+<div class="hr"></div>
+<div class="mini">Sem juros, sem amortização, sem liberação: é compra a prazo. Se tiver juros embutidos, é Financiamento.</div>
+</div>
+ </div>
+ <div class="mf"><span class="msg">dados reais do NJ</span><span style="flex:1"></span><span class="btn">Cancelar</span><span class="btn p">Salvar compra</span></div>
+</div></div><div style="height:24px"></div></body></html>
