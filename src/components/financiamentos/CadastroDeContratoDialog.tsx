@@ -25,7 +25,8 @@ import { FazendaSelect } from '@/components/shared/FazendaSelect';
 import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import { PlanoSubcentroSelect } from '@/components/shared/PlanoSubcentroSelect';
 import { NovoFornecedorDialog } from '@/components/financeiro-v2/NovoFornecedorDialog';
-import { BLOCO_DO_CONTRATO, BlocoDestinacoes, BlocoDocumentos, BlocoLiberacoes, Titulo } from '@/components/financiamentos/ContratoDeCredito';
+import { BlocoDestinacoes, BlocoDocumentos, BlocoLiberacoes } from '@/components/financiamentos/ContratoDeCredito';
+import { BLOCO_FORMULARIO as BLOCO_DO_CONTRATO, TituloDoBloco as Titulo, REGUA_CAMPO, REGUA_ROTULO } from '@/components/ui/bloco-formulario';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFinanciamentoCadastro } from '@/hooks/useFinanciamentoCadastro';
@@ -42,8 +43,8 @@ export interface PrefillDoCadastro { natureza?: NaturezaDoCadastro; credorId?: s
 
 type Aba = 'contrato' | 'liberacoes' | 'condicoes' | 'destinacao' | 'documentos' | 'consorcio' | 'parcelas';
 /* A RÉGUA DO CADASTRO (acabamento 17/10): rótulo 10px cinza em sentence case; campo e seletor de 28px com texto de 11px. */
-const ROTULO = 'mb-0.5 truncate text-[10px] leading-[13px] text-muted-foreground';
-const CAMPO = 'h-7 text-[11px]';
+const ROTULO = REGUA_ROTULO;
+const CAMPO = REGUA_CAMPO;
 /* O corpo do modal é cinza (bg-muted da casa) e os campos moram em blocos brancos — o bloco da tela do contrato, reusado. */
 function Bloco({ nome, children, grade, testId, className = '' }: { nome: string; children: React.ReactNode; grade: string; testId: string; className?: string }) {
   return (

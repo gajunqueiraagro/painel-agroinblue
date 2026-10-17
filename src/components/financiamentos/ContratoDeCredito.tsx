@@ -11,6 +11,7 @@
  *   destinação, remover documento (cancela; o arquivo fica no bucket). A recusa do banco fica ESCRITA no diálogo, nunca em toast.
  * ⚠ DIÁLOGOS DE TAMANHO FIXO: o campo que depende da forma (lançamento / fornecedor / contrato anterior) ocupa SEMPRE a mesma linha.
  */
+import { TituloDoBloco } from '@/components/ui/bloco-formulario';
 import { forwardRef, useEffect, useState } from 'react';
 import { ArrowLeft, ChevronDown, Paperclip, Pencil, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -329,17 +330,8 @@ export const BlocoDocumentos = forwardRef<HTMLDivElement, { api: ApiDoContrato }
 });
 
 /* ═══ PEÇAS ══════════════════════════════════════════════════════════════════════════════════════════════════════════════ */
-/** O bloco da tela do contrato (fundo branco, borda fina) e o título dele: reusados pelo cadastro do contrato (acabamento 17/10). */
-export const BLOCO_DO_CONTRATO = 'flex min-w-0 flex-col rounded-lg border bg-card px-2 pb-1.5 pt-1';
-export function Titulo({ nome, dica, acao }: { nome: string; dica?: string; acao?: React.ReactNode }) {
-  return (
-    <div className="mb-1 flex h-[22px] min-w-0 items-center gap-2">
-      <h3 className="shrink-0 text-[11px] font-semibold text-foreground">{nome}</h3>
-      <span className="min-w-0 flex-1 truncate text-[10px] text-muted-foreground" title={dica}>{dica ?? ''}</span>
-      {acao && <div className="shrink-0">{acao}</div>}
-    </div>
-  );
-}
+/* O bloco e o título moram na primitiva da casa (UI-MODAL-BLOCOS-01 passo 0): `src/components/ui/bloco-formulario.tsx`. */
+const Titulo = TituloDoBloco;
 
 function Rotulo({ texto, children }: { texto: string; children: React.ReactNode }) {
   return (

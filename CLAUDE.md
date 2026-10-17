@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 17/10/2026 (FIN-FINANC-28 CADASTRO-ACABAMENTO, +5: `src/components/financiamentos/cadastroAcabamento.test.tsx` 5 (novo) — 5628
+  Baseline em 17/10/2026 (UI-MODAL-BLOCOS-01 passo 0, +2: `src/components/ui/blocoFormulario.test.tsx` 2 (novo) — 5630 depois dele; antes o
+  FIN-FINANC-28 CADASTRO-ACABAMENTO, +5: `src/components/financiamentos/cadastroAcabamento.test.tsx` 5 (novo) — 5628
   depois dele; antes o FIN-LANC-DESCRICAO-CONTRATO-01, +3: `src/components/financeiro-v2/colunasDaListaV2.test.tsx` 3 (12 -> 15) — 5623
   depois dele; antes o FIN-FINANC-28 FIX 4b, +5: `src/components/financiamentos/buscarNoContrato.test.tsx` 5 (7 -> 12; o caso do "mover" passou a achar a
   caixa dentro de `confirmar-mover`, porque o dialogo ganhou a caixa "todas as saídas") — 5620 depois dele; antes o RECORRENCIAS-COLUNAS-01, +1: `src/v2/pages/recorrenciasFaltaGerar.test.tsx` 1 (9 -> 10); ele e `recValorCerto01`
@@ -378,7 +379,7 @@ no mesmo arquivo.
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
   `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5327
-  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO; 5568 desde o FIN-FINANC-28 PASSO 4; 5571 desde o FIN-FINANC-28 RESUMO-A18; 5573 desde o FIN-FINANC-28 PASSO 4c; 5581 desde o FIN-FINANC-28 PASSO 4b; 5586 desde o FIN-FINANC-28 PASSO 5; 5593 desde o FIN-FINANC-28 PASSO 6; 5607 desde o FIN-FINANC-28 PASSO 7; 5609 desde o FIN-FINANC-28 PASSO 8; 5614 desde o FORN-MESCLAR-01; 5615 desde o RECORRENCIAS-COLUNAS-01; 5620 desde o FIN-FINANC-28 FIX 4b; 5623 desde o FIN-LANC-DESCRICAO-CONTRATO-01; 5628 desde o FIN-FINANC-28 CADASTRO-ACABAMENTO], 22 skipped, e
+  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO; 5568 desde o FIN-FINANC-28 PASSO 4; 5571 desde o FIN-FINANC-28 RESUMO-A18; 5573 desde o FIN-FINANC-28 PASSO 4c; 5581 desde o FIN-FINANC-28 PASSO 4b; 5586 desde o FIN-FINANC-28 PASSO 5; 5593 desde o FIN-FINANC-28 PASSO 6; 5607 desde o FIN-FINANC-28 PASSO 7; 5609 desde o FIN-FINANC-28 PASSO 8; 5614 desde o FORN-MESCLAR-01; 5615 desde o RECORRENCIAS-COLUNAS-01; 5620 desde o FIN-FINANC-28 FIX 4b; 5623 desde o FIN-LANC-DESCRICAO-CONTRATO-01; 5628 desde o FIN-FINANC-28 CADASTRO-ACABAMENTO; 5630 desde o UI-MODAL-BLOCOS-01 passo 0], 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -2453,6 +2454,19 @@ preview que o cabecalho nao sai da tela ao rolar.
   -> B4; desvincular sempre chamando o motor -> B9) e 1 de tela (o botao sem a trava da recusa / do mover).
   ⚠ NAO PROVADO: nada com login · as RPCs pelo PostgREST · candidatas e vinculo com dado real (nenhum vinculado) · os dialogos com
     resposta real (a bancada nao tem a RPC: medida so' a casca) · o fluxo de quitacao do P3-FIX4 disparado pela tela.
+- ⚠ TODO MODAL DE FORMULARIO VAI PARA O PADRAO EM BLOCOS, PELA PRIMITIVA DA CASA (UI-MODAL-BLOCOS-01, Gabriel 17/10/2026 16:28). A primitiva:
+  `src/components/ui/bloco-formulario.tsx` — `CorpoFormulario` (fundo `bg-muted`), `BlocoFormulario` / `TituloDoBloco` (bloco branco de
+  borda fina, titulo 11px/600 sentence case, dica, acao), `Rotulo` (10px cinza, uma linha, `title`), `REGUA_CAMPO` (`h-7 text-[11px]`),
+  `REGUA_ROTULO`. O bloco da tela do contrato saiu de `ContratoDeCredito.tsx` para ela (o contrato e o cadastro a importam). PROIBIDO
+  segunda copia do bloco.
+  · O `check:ui-nativo` ganhou a REGUA DOS MODAIS, com baseline que SO' CAI (`BASELINE_MODAL_JSON`): em arquivo com `DialogContent`,
+    (a) classe `uppercase` / `tracking-wide|wider|widest|[` (b) `<CampoMoeda` sem `className` (c) `<CampoMoeda` com rotulo de "%" logo
+    antes. Medido em 17/10: 425 ocorrencias em 62 arquivos (todas do tipo (a)); auto-teste antes de varrer. Ao reduzir, regere com
+    `node scripts/check-ui-nativo.mjs --baseline-modal`.
+  ⚠ LIMITE DO DETECTOR: so' ve^ o arquivo que tem o `DialogContent`; campo em componente-filho (a aba de um shell) nao conta.
+  · Ondas: 1 Financeiro (LancamentoV2Dialog + AbaDocumentosLancamento, ObrigacaoDialog caminho compra parcelada, RecorrenciaDialog,
+    FornecedorFormDialog, ModalBaixaParcela, FinanceiroEditDialog / LancamentoDetalhe, ConciliarExtratoDialog, ExcelImportDialog) · 2 OC e
+    pecuaria · 3 agricola e o resto. Cada modal = 1 commit, so' visual (ordem, validacoes, handlers e gravacoes intocados).
 - ⚠ O CADASTRO DE CONTRATO TEM CORPO CINZA E CAMPOS EM BLOCOS BRANCOS; PERCENTUAL NUNCA E' CAMPO DE MOEDA (FIN-FINANC-28 CADASTRO-ACABAMENTO,
   Gabriel 17/10/2026 14:57, so' tela, `CadastroDeContratoDialog.tsx`). Corpo `bg-muted`; os campos moram no BLOCO DA TELA DO CONTRATO,
   reusado (`BLOCO_DO_CONTRATO` + `Titulo`, exportados de `ContratoDeCredito.tsx`: borda fina, fundo branco, titulo 11px/600 sentence case).
