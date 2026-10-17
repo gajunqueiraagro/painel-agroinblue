@@ -22,8 +22,36 @@ export interface Candidata {
   papelSugerido: PapelDoPagamento | null; previsto: number | null; diferenca: number | null; outro: OutroDono | null;
 }
 
+/** FIX 4b — o que a busca procurou (o banco devolve; a tela escreve no vazio e marca os controles). */
+export interface OQueFoiBuscado { faixa: 'pct10' | 'qualquer'; de: string | null; ate: string | null; texto: string | null; todas: boolean; semPrevisto: boolean }
+
 export interface BuscaNoContrato {
   alvo: 'liberacao' | 'parcela'; de: string | null; ate: string | null; saldoALiberar: number | null; linhas: Candidata[];
+  buscado: OQueFoiBuscado | null;
+}
+
+/** FIX 4b — as opções que a tela manda (`p_opcoes`). Ausente = o padrão do banco. */
+export interface OpcoesDaBusca { faixa?: 'pct10' | 'qualquer'; de?: string; ate?: string; busca?: string; todas?: boolean }
+export const opcoesParaOBanco = (o: OpcoesDaBusca): Record<string, unknown> => ({
+  ...(o.faixa ? { faixa: o.faixa === 'pct10' ? '10pct' : 'qualquer' } : {}),
+  ...(o.de ? { de: o.de } : {}), ...(o.ate ? { ate: o.ate } : {}),
+  ...(o.busca && o.busca.trim() ? { busca: o.busca.trim() } : {}), ...(o.todas ? { todas: true } : {}),
+});
+
+/** FIX 4b — a janela de datas: em torno da data-base (vencimento da parcela, ou data do contrato), o ano dela, ou um intervalo. */
+export type Janela = 'padrao' | 'd90' | 'd180' | 'ano' | 'intervalo';
+const somarDias = (iso: string, d: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + d * 86_400_000).toISOString().slice(0, 10);
+export function datasDaJanela(base: string | null, janela: Janela, intervalo: { de: string | null; ate: string | null }): { de?: string; ate?: string } {
+  if (janela === 'padrao' || !base) return janela === 'intervalo' ? { de: intervalo.de ?? undefined, ate: intervalo.ate ?? undefined } : {};
+  if (janela === 'd90') return { de: somarDias(base, -90), ate: somarDias(base, 90) };
+  if (janela === 'd180') return { de: somarDias(base, -180), ate: somarDias(base, 180) };
+  if (janela === 'ano') return { de: `${base.slice(0, 4)}-01-01`, ate: `${base.slice(0, 4)}-12-31` };
+  return { de: intervalo.de ?? undefined, ate: intervalo.ate ?? undefined };
+}
+
+function lerBuscado(v: unknown): OQueFoiBuscado | null {
+  if (!ehObj(v)) return null;
+  return { faixa: v.faixa === '10pct' ? 'pct10' : 'qualquer', de: txt(v.de), ate: txt(v.ate), texto: txt(v.texto), todas: v.todas === true, semPrevisto: v.sem_previsto === true };
 }
 
 type Obj = Record<string, unknown>;
@@ -63,7 +91,7 @@ export function lerBuscaNoContrato(r: unknown): BuscaNoContrato | null {
     if (!c) return null;
     linhas.push(c);
   }
-  return { alvo: r.alvo, de: txt(r.de), ate: txt(r.ate), saldoALiberar: numOuNulo(r.saldo_a_liberar), linhas };
+  return { alvo: r.alvo, de: txt(r.de), ate: txt(r.ate), saldoALiberar: numOuNulo(r.saldo_a_liberar), linhas, buscado: lerBuscado(r.busca) };
 }
 
 /* ═══ passo 6 — a leitura "ao contrário": do lançamento para o contrato (`fn_lancamento_financiamento`) ═══ */
@@ -133,6 +161,8 @@ export function desfazivelPorAqui(a: OndeEsta): boolean {
 
 export interface ResultadoDoVinculo {
   simulado: boolean; recusa: string | null; avisos: string[]; cancelados: number; movido: boolean; paga: boolean;
+  /** FIX 4b — a parcela estava zerada, e o valor dela veio do pagamento (com o SIM do operador) */
+  parcelaZerada: boolean; valorAtualizado: boolean;
 }
 
 const FRASE_DO_AVISO: Record<string, string> = {
@@ -154,6 +184,17 @@ export function fraseDoAviso(a: unknown): string | null {
   return FRASE_DO_AVISO[a.aviso] ?? a.aviso;
 }
 
+/** FIX 4b — o vazio nunca é beco sem saída: diz o que foi procurado. */
+export function fraseDoVazio(b: OQueFoiBuscado | null, oQue: 'pagamento' | 'entrada'): string {
+  if (!b) return `Nenhum${oQue === 'entrada' ? 'a entrada' : ' pagamento'} candidato.`;
+  const partes = [b.texto ? `“${b.texto}” em todas as ${oQue === 'entrada' ? 'entradas' : 'saídas'} do cliente`
+    : `${b.de ? br(b.de) : '—'} a ${b.ate ? br(b.ate) : '—'}`,
+    b.texto ? null : b.todas ? `todas as ${oQue === 'entrada' ? 'entradas' : 'saídas'}` : 'credor, nº do contrato ou conta de financiamento',
+    b.texto ? null : b.faixa === 'pct10' ? 'valor ±10% do previsto' : 'qualquer valor'].filter(Boolean);
+  return `Nenhum${oQue === 'entrada' ? 'a entrada' : ' pagamento'} encontrado · procurado: ${partes.join(' · ')}.`;
+}
+const br = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(2, 4)}`;
+
 /** o retorno do vincular / desvincular (simulado ou gravado); nulo = peça torta */
 export function lerResultadoDoVinculo(r: unknown): ResultadoDoVinculo | null {
   if (!ehObj(r)) return null;
@@ -162,6 +203,7 @@ export function lerResultadoDoVinculo(r: unknown): ResultadoDoVinculo | null {
   return {
     simulado: r.simulado === true, recusa, avisos,
     cancelados: Array.isArray(r.cancelados) ? r.cancelados.length : 0, movido: ehObj(r.movido), paga: r.paga === true,
+    parcelaZerada: r.parcela_zerada === true, valorAtualizado: r.valor_atualizado === true,
   };
 }
 

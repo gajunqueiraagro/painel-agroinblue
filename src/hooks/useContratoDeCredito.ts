@@ -17,7 +17,8 @@ import {
 } from '@/lib/financiamentos/contratoDeCredito';
 import { extensaoDoArquivo } from '@/lib/oc/caminhoDocumento';
 import {
-  encargosPertoDasLiberacoes, janelaDosEncargos, lerBuscaNoContrato, lerResultadoDoVinculo,
+  encargosPertoDasLiberacoes, janelaDosEncargos, lerBuscaNoContrato, lerResultadoDoVinculo, opcoesParaOBanco,
+  type OpcoesDaBusca,
   type BuscaNoContrato, type EncargoSugerido, type PapelDoPagamento, type ResultadoDoVinculo,
 } from '@/lib/financiamentos/buscaNoContrato';
 import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
@@ -238,9 +239,10 @@ export function useContratoDeCredito(financiamentoId: string | null | undefined,
   }, [financiamentoId]);
 
   /* ═══ passo 4b — buscar entradas e pagamentos (o banco sugere e decide; a tela só lê e confirma) ═══ */
-  const buscar = useCallback(async (alvo: 'liberacao' | 'parcela', parcelaId: string | null): Promise<BuscaNoContrato | string> => {
+  const buscar = useCallback(async (alvo: 'liberacao' | 'parcela', parcelaId: string | null, opcoes?: OpcoesDaBusca): Promise<BuscaNoContrato | string> => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
-    const { data, error } = await (supabase as any).rpc('fn_financiamento_candidatas', { p_financiamento_id: financiamentoId, p_alvo: alvo, p_parcela_id: parcelaId });
+    const { data, error } = await (supabase as any).rpc('fn_financiamento_candidatas', { p_financiamento_id: financiamentoId, p_alvo: alvo, p_parcela_id: parcelaId,
+      ...(opcoes ? { p_opcoes: opcoesParaOBanco(opcoes) } : {}) });
     if (error) return fraseDoErro(error);
     return lerBuscaNoContrato(data) ?? 'Não foi possível ler as candidatas.';
   }, [financiamentoId]);
@@ -250,10 +252,12 @@ export function useContratoDeCredito(financiamentoId: string | null | undefined,
     if (clienteId) notificarLancamentosMudaram(clienteId);
   }, [reler, clienteId]);
 
-  const vincularPagamento = useCallback(async (parcelaId: string, lancamentoId: string, papelDoPagamento: PapelDoPagamento, mover: boolean, simular: boolean): Promise<ResultadoDoVinculo | string> => {
+  const vincularPagamento = useCallback(async (parcelaId: string, lancamentoId: string, papelDoPagamento: PapelDoPagamento, mover: boolean, simular: boolean,
+    atualizarValor?: boolean | null): Promise<ResultadoDoVinculo | string> => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
     const { data, error } = await (supabase as any).rpc('fn_financiamento_parcela_vincular', {
       p_parcela_id: parcelaId, p_lancamento_id: lancamentoId, p_papel: papelDoPagamento, p_mover: mover, p_simular: simular,
+      ...(atualizarValor === true || atualizarValor === false ? { p_atualizar_valor: atualizarValor } : {}),
     });
     if (error) return fraseDoErro(error);
     const r = lerResultadoDoVinculo(data);

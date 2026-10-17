@@ -7,16 +7,21 @@
  *   corta, inteiro no `title`), e um LUGAR RESERVADO para a prévia / recusa — nada muda de altura ao escolher.
  * ⚠ GESTO CONTRÁRIO: liberação se remove no bloco Liberações; o pagamento se desvincula na linha do cronograma; o encargo, pelo
  *   bloco de encargos do contrato.
+ * ⚠ FIX 4b — A BUSCA NUNCA É BECO SEM SAÍDA: faixa de valor, janela e texto livre são OPÇÕES que o banco aplica (`p_opcoes`); a
+ *   tela não filtra nada. Vazio diz o que foi procurado e oferece ampliar. Parcela zerada pergunta se o pagamento vira o valor
+ *   dela (o banco grava, com o SIM; desvincular devolve o zero).
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Segmentado } from '@/components/ui/segmentado';
 import { Checkbox } from '@/components/ui/checkbox';
 import type { useContratoDeCredito } from '@/hooks/useContratoDeCredito';
 import {
-  PAPEIS, ROTULO_DO_PAPEL, fraseDoOutro,
-  type BuscaNoContrato, type Candidata, type EncargoSugerido, type PapelDoPagamento, type ResultadoDoVinculo,
+  PAPEIS, ROTULO_DO_PAPEL, datasDaJanela, fraseDoOutro, fraseDoVazio,
+  type BuscaNoContrato, type Candidata, type EncargoSugerido, type Janela, type OpcoesDaBusca, type PapelDoPagamento, type ResultadoDoVinculo,
 } from '@/lib/financiamentos/buscaNoContrato';
 import type { ParcelaDoContrato } from '@/lib/financiamentos/situacaoDoContrato';
 
@@ -87,19 +92,114 @@ function Lugar({ texto, tom, testId }: { texto: string | null; tom: 'erro' | 'av
   return <div className={`h-[30px] shrink-0 overflow-hidden px-3 pt-1 text-[10px] leading-[13px] ${cor}`} title={texto ?? undefined} data-testid={testId}>{texto ?? ''}</div>;
 }
 
+/* ═══ FIX 4b — o que se procura: faixa, janela, texto livre, todas ═══════════════════════════════════════════════════════════ */
+interface EstadoDaBusca { faixa: 'pct10' | 'qualquer' | null; janela: Janela; de: string; ate: string; texto: string; todas: boolean }
+const BUSCA_PADRAO: EstadoDaBusca = { faixa: null, janela: 'padrao', de: '', ate: '', texto: '', todas: false };
+
+/** O estado da busca e as opções que vão ao banco (nada = o padrão do banco). O texto espera 400 ms. */
+function useOpcoesDaBusca(base: string | null) {
+  const [estado, setEstado] = useState<EstadoDaBusca>(BUSCA_PADRAO);
+  const [textoFirme, setTextoFirme] = useState('');
+  useEffect(() => { const t = setTimeout(() => setTextoFirme(estado.texto), 400); return () => clearTimeout(t); }, [estado.texto]);
+  const opcoes = useMemo<OpcoesDaBusca | undefined>(() => {
+    const datas = datasDaJanela(base, estado.janela, { de: estado.de || null, ate: estado.ate || null });
+    const o: OpcoesDaBusca = { ...(estado.faixa ? { faixa: estado.faixa } : {}), ...datas,
+      ...(textoFirme.trim() ? { busca: textoFirme.trim() } : {}), ...(estado.todas ? { todas: true } : {}) };
+    return Object.keys(o).length ? o : undefined;
+  }, [base, estado.faixa, estado.janela, estado.de, estado.ate, estado.todas, textoFirme]);
+  return { estado, setEstado, opcoes };
+}
+
+const ROTULO_JANELA = (alvo: 'parcela' | 'liberacao'): Record<Janela, string> => ({
+  padrao: alvo === 'parcela' ? '±45 dias' : 'padrão', d90: '±90', d180: '±180',
+  ano: alvo === 'parcela' ? 'ano do vencimento' : 'ano do contrato', intervalo: 'de/até',
+});
+
+/** linha fixa de 26px: valor · janela · intervalo (lugar reservado de 212px, vazio fora do "de/até") */
+function ControlesDaBusca({ alvo, estado, setEstado, faixaDoBanco, semPrevisto }: {
+  alvo: 'parcela' | 'liberacao'; estado: EstadoDaBusca; setEstado: (f: (e: EstadoDaBusca) => EstadoDaBusca) => void;
+  faixaDoBanco: 'pct10' | 'qualquer'; semPrevisto: boolean;
+}) {
+  const rot = ROTULO_JANELA(alvo);
+  const comTexto = estado.texto.trim() !== '';
+  return (
+    <div className="flex h-[26px] shrink-0 items-center gap-2 px-3 text-[10px]" data-testid="controles-da-busca">
+      <span className="text-muted-foreground">valor</span>
+      <Segmentado altura={22} valor={estado.faixa ?? faixaDoBanco} onEscolher={(v) => setEstado((e) => ({ ...e, faixa: v }))}
+        opcoes={[
+          { valor: 'pct10', rotulo: alvo === 'parcela' ? '±10% do previsto' : '±10% do a liberar', desabilitada: semPrevisto,
+            title: semPrevisto ? (alvo === 'parcela' ? 'parcela sem valor' : 'contrato sem valor') : undefined },
+          { valor: 'qualquer', rotulo: 'qualquer' },
+        ]} />
+      <span className="ml-2 text-muted-foreground">janela</span>
+      <Segmentado altura={22} valor={estado.janela} onEscolher={(v) => setEstado((e) => ({ ...e, janela: v }))}
+        opcoes={(['padrao', 'd90', 'd180', 'ano', 'intervalo'] as Janela[]).map((j) => ({ valor: j, rotulo: rot[j],
+          desabilitada: comTexto, title: comTexto ? 'a busca livre olha todas as datas' : undefined }))} />
+      <div className="flex w-[212px] shrink-0 items-center gap-1" data-testid="lugar-do-intervalo">
+        {estado.janela === 'intervalo' && !comTexto && (
+          <>
+            <DatePicker size="compact" className="h-[22px] w-[100px]" value={estado.de} onChange={(v) => setEstado((e) => ({ ...e, de: v }))} placeholder="de" />
+            <DatePicker size="compact" className="h-[22px] w-[100px]" value={estado.ate} onChange={(v) => setEstado((e) => ({ ...e, ate: v }))} placeholder="até" />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** o campo livre e "todas", no topo — busca em TODAS as saídas/entradas do cliente (descrição, favorecido, valor, nº) */
+function CampoDeBusca({ oQue, estado, setEstado }: { oQue: 'saídas' | 'entradas'; estado: EstadoDaBusca; setEstado: (f: (e: EstadoDaBusca) => EstadoDaBusca) => void }) {
+  return (
+    <div className="ml-auto flex shrink-0 items-center gap-2">
+      <Input className="h-[20px] w-[260px] px-1.5 text-[10px]" placeholder={`buscar em todas as ${oQue}: descrição, favorecido, valor, nº`}
+        value={estado.texto} onChange={(e) => { const v = e.target.value; setEstado((s) => ({ ...s, texto: v })); }} data-testid="busca-livre" />
+      <label className="flex items-center gap-1" title={`sem exigir credor, plano ou nº do contrato`}>
+        <Checkbox className="size-3" checked={estado.todas} onCheckedChange={(v) => setEstado((s) => ({ ...s, todas: v === true }))}
+          data-testid="todas-as" /> todas as {oQue}
+      </label>
+    </div>
+  );
+}
+
+/** a linha do vazio: o que foi procurado + os dois gestos de ampliar */
+function LinhaDoVazio({ b, oQue, setEstado, testId }: { b: BuscaNoContrato; oQue: 'pagamento' | 'entrada'; setEstado: (f: (e: EstadoDaBusca) => EstadoDaBusca) => void; testId: string }) {
+  const frase = fraseDoVazio(b.buscado, oQue);
+  return (
+    <tr><td colSpan={8} className={`${TD} text-muted-foreground`} data-testid={testId}>
+      <div className="flex items-center gap-2">
+        <span className="min-w-0 truncate" title={frase}>{frase}</span>
+        <Button size="sm" variant="outline" className="h-[18px] shrink-0 px-1.5 text-[9.5px]" data-testid="ampliar-180"
+          onClick={() => setEstado((e) => ({ ...e, janela: 'd180', texto: '' }))}>Ampliar para ±180 dias</Button>
+        <Button size="sm" variant="outline" className="h-[18px] shrink-0 px-1.5 text-[9.5px]" data-testid="buscar-em-todas"
+          onClick={() => setEstado((e) => ({ ...e, todas: true, faixa: 'qualquer' }))}>Buscar em todas as {oQue === 'entrada' ? 'entradas' : 'saídas'}</Button>
+      </div>
+    </td></tr>
+  );
+}
+
 /* ═══ BUSCAR ENTRADAS (liberações) + encargos perto delas ═════════════════════════════════════════════════════════════════ */
 export function BuscarEntradasDialog({ api, aoFechar }: { api: ApiDoContrato; aoFechar: () => void }) {
   const [busca, setBusca] = useState<BuscaNoContrato | string | null>(null);
   const [encargos, setEncargos] = useState<EncargoSugerido[] | string | null>(null);
   const [recado, setRecado] = useState<{ texto: string; tom: 'erro' | 'ok' } | null>(null);
   const [gravando, setGravando] = useState<string | null>(null);
+  /* a data-base da janela é a do contrato: o banco a usa no padrão (−30 a +365), e a tela a lê da primeira resposta */
+  const [baseDoContrato, setBaseDoContrato] = useState<string | null>(null);
+  const { estado, setEstado, opcoes } = useOpcoesDaBusca(baseDoContrato);
   const datas = (api.liberacoes ?? []).map((l) => l.data);
   const chaveDasDatas = datas.join('|');
-  const ler = useCallback(() => {
-    void api.buscar('liberacao', null).then(setBusca);
+  const lerBusca = useCallback(() => {
+    void (opcoes ? api.buscar('liberacao', null, opcoes) : api.buscar('liberacao', null)).then((r) => {
+      setBusca(r);
+      if (!opcoes && typeof r === 'object' && r.de) setBaseDoContrato(new Date(Date.parse(`${r.de}T00:00:00Z`) + 30 * 86_400_000).toISOString().slice(0, 10));
+    });
+  }, [api.buscar, opcoes]);
+  const lerEncargos = useCallback(() => {
     void api.lerEncargosPerto(chaveDasDatas ? chaveDasDatas.split('|') : []).then(setEncargos);
-  }, [api.buscar, api.lerEncargosPerto, chaveDasDatas]);
-  useEffect(() => { ler(); }, [ler]);
+  }, [api.lerEncargosPerto, chaveDasDatas]);
+  const ler = useCallback(() => { lerBusca(); lerEncargos(); }, [lerBusca, lerEncargos]);
+  useEffect(() => { lerBusca(); }, [lerBusca]);
+  useEffect(() => { lerEncargos(); }, [lerEncargos]);
 
   const vincular = async (c: Candidata) => {
     if (!c.data) return;
@@ -122,22 +222,27 @@ export function BuscarEntradasDialog({ api, aoFechar }: { api: ApiDoContrato; ao
   return (
     <Casca titulo="Buscar entradas de captação" aoFechar={aoFechar} testId="buscar-entradas">
       <div className="flex h-[24px] shrink-0 items-center gap-3 px-3 text-[10px] text-muted-foreground" data-testid="buscar-entradas-topo">
-        <span>entradas do cliente sem contrato · plano de entrada de financiamento, credor ou nº do contrato na descrição</span>
-        {b && <span className="ml-auto shrink-0 tabular-nums">falta liberar <b className="text-foreground">R$ {num2(b.saldoALiberar ?? 0)}</b> · {br(b.de)} a {br(b.ate)}</span>}
+        <span className="min-w-0 truncate" title="entradas do cliente sem contrato · plano de entrada de financiamento, credor ou nº do contrato na descrição">entradas sem contrato · plano, credor ou nº do contrato</span>
+        {b && <span className="shrink-0 tabular-nums">falta liberar <b className="text-foreground">R$ {num2(b.saldoALiberar ?? 0)}</b>{b.buscado?.texto ? '' : ` · ${br(b.de)} a ${br(b.ate)}`}</span>}
+        <CampoDeBusca oQue="entradas" estado={estado} setEstado={setEstado} />
       </div>
+      <ControlesDaBusca alvo="liberacao" estado={estado} setEstado={setEstado} faixaDoBanco={b?.buscado?.faixa ?? 'qualquer'}
+        semPrevisto={b?.buscado?.semPrevisto ?? false} />
       <div className="min-h-0 flex-1 overflow-y-auto px-3" data-testid="lista-entradas">
         <table className="w-full table-fixed border-collapse">
           <Cols /><Cabecalho ultima="" />
           <tbody>
             {busca === null && <tr><td colSpan={8} className={`${TD} text-muted-foreground`}>Buscando…</td></tr>}
             {typeof busca === 'string' && <tr><td colSpan={8} className={`${TD} text-destructive`}>{busca}</td></tr>}
-            {b && b.linhas.length === 0 && <tr><td colSpan={8} className={`${TD} text-muted-foreground`} data-testid="entradas-vazio">Nenhuma entrada candidata na janela do contrato.</td></tr>}
+            {b && b.linhas.length === 0 && <LinhaDoVazio b={b} oQue="entrada" setEstado={setEstado} testId="entradas-vazio" />}
             {b?.linhas.map((c) => (
-              <tr key={c.lancamentoId} className="border-b" data-testid="candidata-entrada">
+              <tr key={c.lancamentoId} className="border-b" data-testid="candidata-entrada" title={c.outro ? fraseDoOutro(c.outro) : undefined}>
                 <CelulasDaCandidata c={c} />
                 <td className={TD}>
-                  <Button size="sm" variant="outline" className="h-[18px] px-1.5 text-[9.5px]" disabled={gravando !== null || !c.data}
-                    onClick={() => void vincular(c)} data-testid="vincular-como-liberacao">Vincular como liberação</Button>
+                  {c.outro
+                    ? <span className="text-muted-foreground" title={fraseDoOutro(c.outro)}>{c.outro.tipo === 'encargo' ? 'é encargo' : 'em outro contrato'}</span>
+                    : <Button size="sm" variant="outline" className="h-[18px] px-1.5 text-[9.5px]" disabled={gravando !== null || !c.data}
+                        onClick={() => void vincular(c)} data-testid="vincular-como-liberacao">Vincular como liberação</Button>}
                 </td>
               </tr>
             ))}
@@ -184,8 +289,16 @@ export function BuscarPagamentoDialog({ api, parcela, aoFechar }: { api: ApiDoCo
   const [previa, setPrevia] = useState<ResultadoDoVinculo | string | null>(null);
   const [gravando, setGravando] = useState(false);
   const [feito, setFeito] = useState<string | null>(null);
+  /* parcela zerada: o operador responde se o pagamento vira o valor dela (nulo = ainda não respondeu) */
+  const [atualizar, setAtualizar] = useState<boolean | null>(null);
+  const [versao, setVersao] = useState(0);
+  const { estado, setEstado, opcoes } = useOpcoesDaBusca(parcela.dataVencimento);
 
-  useEffect(() => { void api.buscar('parcela', parcela.id).then(setBusca); }, [api.buscar, parcela.id]);
+  useEffect(() => {
+    void (opcoes ? api.buscar('parcela', parcela.id, opcoes) : api.buscar('parcela', parcela.id)).then(setBusca);
+  }, [api.buscar, parcela.id, opcoes, versao]);
+  /* a lista mudou de recorte: a escolha anterior pode não estar mais nela */
+  useEffect(() => { setEscolhida(null); setAtualizar(null); }, [opcoes]);
 
   /* a prévia é a própria gravação desfeita: refaz só quando muda o que muda a resposta */
   const lancId = escolhida?.lancamentoId ?? null;
@@ -193,24 +306,31 @@ export function BuscarPagamentoDialog({ api, parcela, aoFechar }: { api: ApiDoCo
     if (!lancId) { setPrevia(null); return; }
     let vivo = true;
     setPrevia(null);
-    void api.vincularPagamento(parcela.id, lancId, papel, mover, true).then((r) => { if (vivo) setPrevia(r); });
+    const simular = atualizar === null
+      ? api.vincularPagamento(parcela.id, lancId, papel, mover, true)
+      : api.vincularPagamento(parcela.id, lancId, papel, mover, true, atualizar);
+    void simular.then((r) => { if (vivo) setPrevia(r); });
     return () => { vivo = false; };
-  }, [api.vincularPagamento, parcela.id, lancId, papel, mover]);
+  }, [api.vincularPagamento, parcela.id, lancId, papel, mover, atualizar]);
 
   const escolher = (c: Candidata) => {
     if (c.outro && !c.outro.movivel) return;
-    setEscolhida(c); setMover(false); setFeito(null);
+    setEscolhida(c); setMover(false); setFeito(null); setAtualizar(null);
     if (c.papelSugerido) setPapel(c.papelSugerido);
   };
+  const zerada = previa !== null && typeof previa === 'object' && previa.parcelaZerada;
   const gravar = async () => {
     if (!escolhida) return;
     setGravando(true);
-    const r = await api.vincularPagamento(parcela.id, escolhida.lancamentoId, papel, mover, false);
+    const r = atualizar === null
+      ? await api.vincularPagamento(parcela.id, escolhida.lancamentoId, papel, mover, false)
+      : await api.vincularPagamento(parcela.id, escolhida.lancamentoId, papel, mover, false, atualizar);
     setGravando(false);
     if (typeof r === 'string') { setPrevia(r); return; }
-    setFeito(`Pagamento de ${br(escolhida.data)} vinculado à parcela ${parcela.numero ?? '?'} como ${ROTULO_DO_PAPEL[papel]}${r.paga ? ' · parcela paga' : ''}. Desvincule na linha do cronograma para desfazer.`);
-    setEscolhida(null);
-    void api.buscar('parcela', parcela.id).then(setBusca);
+    setFeito(`Pagamento de ${br(escolhida.data)} vinculado à parcela ${parcela.numero ?? '?'} como ${ROTULO_DO_PAPEL[papel]}`
+      + `${r.valorAtualizado ? ` · a parcela passou a valer R$ ${num2(escolhida.valor)}` : ''}${r.paga ? ' · parcela paga' : ''}. Desvincule na linha do cronograma para desfazer.`);
+    setEscolhida(null); setAtualizar(null);
+    setVersao((v) => v + 1);
   };
 
   const b = typeof busca === 'object' ? busca : null;
@@ -221,6 +341,8 @@ export function BuscarPagamentoDialog({ api, parcela, aoFechar }: { api: ApiDoCo
     : escolhida && previa && typeof previa === 'object'
       ? [`Vincular ${br(escolhida.data)} · R$ ${num2(escolhida.valor)} como ${ROTULO_DO_PAPEL[papel]}`,
          previa.cancelados ? `${previa.cancelados} lançamento(s) programado(s) da parcela saem (cancelados)` : null,
+         previa.parcelaZerada ? (atualizar === true ? `a parcela passa a valer R$ ${num2(escolhida.valor)} (${papel === 'juros' ? 'juros' : 'principal'})`
+           : atualizar === false ? 'a parcela fica sem valor' : 'parcela sem valor: responda ao lado') : null,
          previa.paga ? 'a parcela fica paga' : 'a parcela segue em aberto', ...previa.avisos].filter(Boolean).join(' · ')
       : escolhida ? 'Simulando…' : 'Escolha um lançamento na lista.');
   const tom: 'erro' | 'aviso' | 'ok' | 'neutro' = feito ? 'ok' : recusa ? 'erro' : previa && typeof previa === 'object' && previa.avisos.length ? 'aviso' : 'neutro';
@@ -229,15 +351,18 @@ export function BuscarPagamentoDialog({ api, parcela, aoFechar }: { api: ApiDoCo
     <Casca titulo={`Buscar pagamento · parcela ${parcela.numero ?? '?'} · vence ${br(parcela.dataVencimento)}`} aoFechar={aoFechar} testId="buscar-pagamento">
       <div className="flex h-[24px] shrink-0 items-center gap-3 px-3 text-[10px] text-muted-foreground" data-testid="buscar-pagamento-topo">
         <span className="tabular-nums">principal <b className="text-foreground">{num2(parcela.valorPrincipal)}</b> · juros <b className="text-foreground">{num2(parcela.valorJuros)}</b> · total <b className="text-foreground">{num2(parcela.valorTotal)}</b></span>
-        <span className="min-w-0 truncate">saídas de amortização / juros / despesas financeiras, credor ou nº do contrato · valor até 10% do previsto · ±45 dias</span>
+        {b?.buscado && !b.buscado.texto && <span className="shrink-0 tabular-nums">{br(b.buscado.de)} a {br(b.buscado.ate)}</span>}
+        <CampoDeBusca oQue="saídas" estado={estado} setEstado={setEstado} />
       </div>
+      <ControlesDaBusca alvo="parcela" estado={estado} setEstado={setEstado} faixaDoBanco={b?.buscado?.faixa ?? 'pct10'}
+        semPrevisto={b?.buscado?.semPrevisto ?? parcela.valorTotal <= 0} />
       <div className="min-h-0 flex-1 overflow-y-auto px-3" data-testid="lista-pagamentos">
         <table className="w-full table-fixed border-collapse">
           <Cols /><Cabecalho ultima="Paga" />
           <tbody>
             {busca === null && <tr><td colSpan={8} className={`${TD} text-muted-foreground`}>Buscando…</td></tr>}
             {typeof busca === 'string' && <tr><td colSpan={8} className={`${TD} text-destructive`}>{busca}</td></tr>}
-            {b && b.linhas.length === 0 && <tr><td colSpan={8} className={`${TD} text-muted-foreground`} data-testid="pagamentos-vazio">Nenhum pagamento candidato a ±45 dias do vencimento.</td></tr>}
+            {b && b.linhas.length === 0 && <LinhaDoVazio b={b} oQue="pagamento" setEstado={setEstado} testId="pagamentos-vazio" />}
             {b?.linhas.map((c) => {
               const bloqueada = !!c.outro && !c.outro.movivel;
               const sel = escolhida?.lancamentoId === c.lancamentoId;
@@ -260,7 +385,7 @@ export function BuscarPagamentoDialog({ api, parcela, aoFechar }: { api: ApiDoCo
       <div className="flex h-[28px] shrink-0 items-center gap-2 border-t px-3 text-[10px]" data-testid="escolha-do-pagamento">
         <span className="text-muted-foreground">como</span>
         <Segmentado altura={22} valor={papel} onEscolher={setPapel}
-          opcoes={PAPEIS.map((p) => ({ valor: p, rotulo: ROTULO_DO_PAPEL[p], desabilitada: p === 'juros' && parcela.valorJuros <= 0 }))} />
+          opcoes={PAPEIS.map((p) => ({ valor: p, rotulo: ROTULO_DO_PAPEL[p] }))} />
         <span className="min-w-0 flex-1 truncate text-amber-700" title={escolhida?.outro ? fraseDoOutro(escolhida.outro) : undefined} data-testid="mover-aviso">
           {escolhida?.outro?.movivel ? `Este lançamento ${fraseDoOutro(escolhida.outro)}.` : ''}
         </span>
@@ -269,13 +394,24 @@ export function BuscarPagamentoDialog({ api, parcela, aoFechar }: { api: ApiDoCo
             <Checkbox className="size-3" checked={mover} onCheckedChange={(v) => setMover(v === true)} /> mover para esta parcela
           </label>
         )}
+        {/* lugar reservado de 300px: a pergunta da parcela zerada (vazio fora dela) */}
+        <div className="flex w-[300px] shrink-0 items-center justify-end gap-1.5" data-testid="lugar-da-pergunta">
+          {zerada && (
+            <>
+              <span className="truncate text-amber-700" title="A parcela está sem valor. O valor dela passa a ser o deste pagamento (principal, ou juros se o papel for juros).">Atualizar o valor da parcela com o pagamento?</span>
+              <Segmentado altura={20} valor={atualizar === null ? '' : atualizar ? 'sim' : 'nao'}
+                onEscolher={(v) => setAtualizar(v === 'sim')}
+                opcoes={[{ valor: 'sim', rotulo: 'Sim' }, { valor: 'nao', rotulo: 'Não' }]} />
+            </>
+          )}
+        </div>
       </div>
       <Lugar texto={textoDaPrevia} tom={tom} testId="previa-do-pagamento" />
       <div className="flex h-[36px] shrink-0 items-center justify-end gap-2 border-t px-3">
         <Button variant="outline" size="sm" className="h-[24px] text-[10px]" onClick={aoFechar}>Fechar</Button>
         <Button size="sm" className="h-[24px] text-[10px]" data-testid="vincular-a-parcela"
-          disabled={!escolhida || gravando || !previa || !!recusa || precisaMover}
-          title={precisaMover ? 'Marque "mover para esta parcela" para confirmar' : undefined}
+          disabled={!escolhida || gravando || !previa || !!recusa || precisaMover || (zerada && atualizar === null)}
+          title={precisaMover ? 'Marque "mover para esta parcela" para confirmar' : zerada && atualizar === null ? 'Responda se o valor da parcela muda' : undefined}
           onClick={() => void gravar()}>{gravando ? 'Gravando…' : 'Vincular a esta parcela'}</Button>
       </div>
     </Casca>

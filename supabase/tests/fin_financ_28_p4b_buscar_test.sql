@@ -136,8 +136,8 @@ BEGIN
   BEGIN perform fn_financiamento_parcela_vincular(v_p2, v_y, 'total', false, true); EXCEPTION WHEN sqlstate '42501' THEN v_ok := true; END;
   IF NOT v_ok THEN RAISE EXCEPTION 'B8 outro usuario vinculou'; END IF;
   perform set_config('request.jwt.claims', '{"sub":"7bd0b6ad-2527-4be1-af58-f2cc0c0edd8e","role":"authenticated"}', true);
-  IF has_function_privilege('anon', 'public.fn_financiamento_parcela_vincular(uuid,uuid,text,boolean,boolean)', 'EXECUTE')
-     OR has_function_privilege('anon', 'public.fn_financiamento_candidatas(uuid,text,uuid)', 'EXECUTE')
+  IF has_function_privilege('anon', 'public.fn_financiamento_parcela_vincular(uuid,uuid,text,boolean,boolean,boolean)', 'EXECUTE')
+     OR has_function_privilege('anon', 'public.fn_financiamento_candidatas(uuid,text,uuid,jsonb)', 'EXECUTE')
      OR has_function_privilege('anon', 'public.fn_financiamento_parcela_desvincular(uuid,text,boolean)', 'EXECUTE')
      OR has_function_privilege('authenticated', 'public._fn_financiamento_parcela_desvincular_exec(uuid,text)', 'EXECUTE') THEN
     RAISE EXCEPTION 'B8 ACL';

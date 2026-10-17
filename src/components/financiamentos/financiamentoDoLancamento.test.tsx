@@ -24,7 +24,7 @@ const ENV = (o: Record<string, unknown> = {}) => ({
 function api(o: Record<string, unknown> = {}) {
   return {
     dado: null,
-    vincularParcela: vi.fn(async (_p: string, _pa: string, _m: boolean, s: boolean) => ({ simulado: s, recusa: null, avisos: [], cancelados: 2, movido: false, paga: true })),
+    vincularParcela: vi.fn(async (_p: string, _pa: string, _m: boolean, s: boolean) => ({ simulado: s, recusa: null, avisos: [], cancelados: 2, movido: false, paga: true, parcelaZerada: false, valorAtualizado: false })),
     vincularLiberacao: vi.fn(async () => null), lerEncargo: vi.fn(async () => ({ elegivel: true, frase: null, papelSugerido: 'iof', candidatas: [] })),
     vincularEncargo: vi.fn(async () => null), desfazer: vi.fn(async () => null), ...o,
   };

@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 17/10/2026 (RECORRENCIAS-COLUNAS-01, +1: `src/v2/pages/recorrenciasFaltaGerar.test.tsx` 1 (9 -> 10); ele e `recValorCerto01`
+  Baseline em 17/10/2026 (FIN-FINANC-28 FIX 4b, +5: `src/components/financiamentos/buscarNoContrato.test.tsx` 5 (7 -> 12; o caso do "mover" passou a achar a
+  caixa dentro de `confirmar-mover`, porque o dialogo ganhou a caixa "todas as saídas") — 5620 depois dele; antes o RECORRENCIAS-COLUNAS-01, +1: `src/v2/pages/recorrenciasFaltaGerar.test.tsx` 1 (9 -> 10); ele e `recValorCerto01`
   trocados ao contrato novo da Situacao e da regua — 5615 depois dele; antes o FORN-MESCLAR-01, +5: `src/components/financeiro-v2/mesclarFornecedores.test.tsx` 5 (novo); `documentoFiscalNosEscritores`
   trocado ao contrato novo (a frase do Mesclar antigo) — 5614 depois dele; antes o FIN-FINANC-28 PASSO 8, +2: `src/lib/app/semFonteMono.test.ts` 2 (novo); trocados ao contrato novo, sem afrouxar,
   `centralListaLayout`, `casadoComExtrato`, `duplicarAbreModal`, `fazendaFinanceiro`, `novoDeXml`, `cprRecorte` e `cadastroDeContrato` — 5609 depois
@@ -375,7 +376,7 @@ no mesmo arquivo.
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
   `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5327
-  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO; 5568 desde o FIN-FINANC-28 PASSO 4; 5571 desde o FIN-FINANC-28 RESUMO-A18; 5573 desde o FIN-FINANC-28 PASSO 4c; 5581 desde o FIN-FINANC-28 PASSO 4b; 5586 desde o FIN-FINANC-28 PASSO 5; 5593 desde o FIN-FINANC-28 PASSO 6; 5607 desde o FIN-FINANC-28 PASSO 7; 5609 desde o FIN-FINANC-28 PASSO 8; 5614 desde o FORN-MESCLAR-01; 5615 desde o RECORRENCIAS-COLUNAS-01], 22 skipped, e
+  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO; 5568 desde o FIN-FINANC-28 PASSO 4; 5571 desde o FIN-FINANC-28 RESUMO-A18; 5573 desde o FIN-FINANC-28 PASSO 4c; 5581 desde o FIN-FINANC-28 PASSO 4b; 5586 desde o FIN-FINANC-28 PASSO 5; 5593 desde o FIN-FINANC-28 PASSO 6; 5607 desde o FIN-FINANC-28 PASSO 7; 5609 desde o FIN-FINANC-28 PASSO 8; 5614 desde o FORN-MESCLAR-01; 5615 desde o RECORRENCIAS-COLUNAS-01; 5620 desde o FIN-FINANC-28 FIX 4b], 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -2450,6 +2451,29 @@ preview que o cabecalho nao sai da tela ao rolar.
   -> B4; desvincular sempre chamando o motor -> B9) e 1 de tela (o botao sem a trava da recusa / do mover).
   ⚠ NAO PROVADO: nada com login · as RPCs pelo PostgREST · candidatas e vinculo com dado real (nenhum vinculado) · os dialogos com
     resposta real (a bancada nao tem a RPC: medida so' a casca) · o fluxo de quitacao do P3-FIX4 disparado pela tela.
+- ⚠ A BUSCA NO CONTRATO NUNCA E' BECO SEM SAIDA, E PARCELA ZERADA PERGUNTA ANTES DE GANHAR VALOR (FIN-FINANC-28 FIX 4b, Gabriel 17/10/2026;
+  migration `supabase/migrations/20261027200900_fin_financ_28_fix4b_busca.sql`, md5 do arquivo 11d9fe247cb87a7ecebd83e27bce2860 — APLICADA
+  no proto em 17/10/2026, ledger 20261017165852, ⚠ timestamp do dia; ledger = arquivo).
+  · BANCO: `fn_financiamento_candidatas(contrato, alvo, parcela, p_opcoes jsonb DEFAULT '{}')` (9d961604…) — opcoes `faixa` ('10pct' |
+    'qualquer'; padrao '10pct' com previsto, 'qualquer' na parcela/contrato zerado), `de`/`ate` (a janela), `busca` (texto livre em
+    TODAS as saidas/entradas do cliente, sem janela: descricao, favorecido, valor "1.142.396" ou "1142396,74", nº), `todas` (sem
+    exigir credor/plano/nº); o credor casa tambem pelo CPF/CNPJ e pelos apelidos; parcela zerada nao filtra valor e ordena por dias
+    ("parcela sem valor — sugestão só por credor/data"); o envelope devolve `busca {faixa, de, ate, texto, todas, sem_previsto}`.
+    `fn_financiamento_parcela_vincular(…, p_atualizar_valor boolean DEFAULT NULL)` (36fb02cc…): juros com juros previsto 0 nao recusa;
+    na parcela ZERADA so' com `true` o pagamento vira principal (ou juros, no papel juros; "parcela inteira" = principal); sem a
+    resposta ela fica zerada; desvincular devolve a foto (zero). Retorno ganha `parcela_zerada` e `valor_atualizado`.
+  · TELA (`BuscarNoContrato.tsx`; os dois dialogos): topo com o campo livre e "todas as saídas/entradas"; linha fixa de 26px "valor"
+    (±10% | qualquer, apagado sem previsto) + "janela" (±45 · ±90 · ±180 · ano do vencimento · de/até — no contrato "padrão" e "ano do
+    contrato") + lugar reservado de 212px dos dois DatePicker. A TELA SO' MONTA AS OPCOES (`opcoesParaOBanco`, `datasDaJanela`); sem
+    nada mexido, a chamada e' a de antes. Vazio: `fraseDoVazio` (o que o banco diz que procurou) + "Ampliar para ±180 dias" e "Buscar
+    em todas as …". Parcela zerada: lugar reservado de 300px na linha da escolha com "Atualizar o valor da parcela com o pagamento?
+    Sim | Não"; "Vincular" apagado ate' responder; a resposta vai na simulacao e na gravacao. Linha de outro contrato mostra o vinculo
+    atual e o mover (Buscar entradas: "em outro contrato", sem botao).
+  ⚠ MEDIDO na bancada com os envelopes REAIS da Santa Rita (parcela 6 zerada, d72190db), 1.126 x 579 e 1.440 x 800: dialogo 1000 x 520,
+    linha dos controles 998/998 e topo 998/998 sem estourar, 0 numeros cortados, 0 controles fora; 78 candidatas no padrao (so' por
+    credor/data: cartao, seguro, tarifa do Bradesco aparecem — o recorte e' o da regra), 1 na busca "1.142.396".
+  ⚠ NAO PROVADO: nada com login · gravar de verdade com o SIM (so' no teste SQL Z7) · o DatePicker do intervalo aberto · Buscar entradas
+    na bancada.
 - ⚠ GRAFICOS DE SAIDA: LARANJA / VIOLETA / VERMELHO / CINZA; AZUL SO' PARA ENTRADA; EIXOS COM ESCALA; PERIODOS COMPLETOS; LINHA DE HOJE NO
   MENSAL (regra da casa, Gabriel 17/10/2026, FIN-FINANC-28 passo 4c; mock `docs/mocks/mock-grafico-a-pagar-v2.html`, md5
   cb2c0e014f3e8dad6958fa95d39cb435). Cores num lugar so', `COR_SAIDA` (`src/lib/graficos/coresDeSaida.ts`): a pagar / principal #d97706,

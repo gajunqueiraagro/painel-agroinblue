@@ -4,11 +4,13 @@
  * confirmação na linha; lançamento que não se move fica apagado.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { BuscarEntradasDialog, BuscarPagamentoDialog } from './BuscarNoContrato';
-import { encargosPertoDasLiberacoes, fraseDoAviso, janelaDosEncargos, lerBuscaNoContrato, lerResultadoDoVinculo } from '@/lib/financiamentos/buscaNoContrato';
+import {
+  datasDaJanela, encargosPertoDasLiberacoes, fraseDoAviso, fraseDoVazio, janelaDosEncargos, lerBuscaNoContrato, lerResultadoDoVinculo, opcoesParaOBanco,
+} from '@/lib/financiamentos/buscaNoContrato';
 import type { useContratoDeCredito } from '@/hooks/useContratoDeCredito';
 import type { ParcelaDoContrato } from '@/lib/financiamentos/situacaoDoContrato';
 
@@ -34,7 +36,7 @@ function api(o: Partial<Api> = {}): Api {
     urlDoDocumento: vi.fn(async () => null), lerCaptacoesLivres: vi.fn(async () => []), lerContratosAnteriores: vi.fn(async () => []),
     vinculos: [], buscar: vi.fn(async () => busca ?? 'x'),
     vincularPagamento: vi.fn(async (_p: string, _l: string, _pa: string, _m: boolean, simular: boolean) =>
-      ({ simulado: simular, recusa: null, avisos: [], cancelados: 2, movido: false, paga: true })),
+      ({ simulado: simular, recusa: null, avisos: [], cancelados: 2, movido: false, paga: true, parcelaZerada: false, valorAtualizado: false })),
     desvincularPagamento: vi.fn(async () => 'x'), lerEncargosPerto: vi.fn(async () => []), vincularEncargo: vi.fn(async () => null),
     baixaViva: null, darBaixa: vi.fn(async () => 'x'), desfazerBaixa: vi.fn(async () => null), lerSucessores: vi.fn(async () => []),
     ...o,
@@ -86,7 +88,7 @@ describe('Buscar pagamento', () => {
       LINHA({ lancamento_id: 'fixo', outro: { tipo: 'parcela_do_contrato', numero_contrato: 'C-8', descricao: 'Y', parcela: 3, movivel: false } }),
     ]));
     const a = api({ buscar: vi.fn(async () => busca ?? 'x'), vincularPagamento: vi.fn(async (_p: string, _l: string, _pa: string, mover: boolean, s: boolean) =>
-      (mover ? { simulado: s, recusa: null, avisos: [], cancelados: 2, movido: true, paga: true } : { simulado: s, recusa: 'Confirme para mover.', avisos: [], cancelados: 0, movido: false, paga: false })) });
+      (mover ? { simulado: s, recusa: null, avisos: [], cancelados: 2, movido: true, paga: true, parcelaZerada: false, valorAtualizado: false } : { simulado: s, recusa: 'Confirme para mover.', avisos: [], cancelados: 0, movido: false, paga: false, parcelaZerada: false, valorAtualizado: false })) });
     render(<BuscarPagamentoDialog api={a} parcela={PARCELA} aoFechar={vi.fn()} />);
     const linhas = await screen.findAllByTestId('candidata-pagamento');
     fireEvent.click(linhas[1]);
@@ -95,7 +97,7 @@ describe('Buscar pagamento', () => {
     expect(screen.getByTestId('mover-aviso').textContent).toBe('Este lançamento já paga a parcela 2 do contrato C-9.');
     await waitFor(() => expect(screen.getByTestId('previa-do-pagamento').textContent).toBe('Confirme para mover.'));
     expect(screen.getByTestId('vincular-a-parcela')).toBeDisabled();
-    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(within(screen.getByTestId('confirmar-mover')).getByRole('checkbox'));
     await waitFor(() => expect(screen.getByTestId('vincular-a-parcela')).not.toBeDisabled());
     expect(a.vincularPagamento).toHaveBeenLastCalledWith('p-1', 'mov', 'total', true, true);
   });
@@ -110,6 +112,79 @@ describe('Buscar entradas', () => {
     fireEvent.click(await screen.findByTestId('vincular-como-liberacao'));
     await waitFor(() => expect(screen.getByTestId('recado-entradas').textContent).toBe('Este lançamento já está ligado a outra liberação.'));
     expect(salvar).toHaveBeenCalledWith(expect.objectContaining({ id: null, forma: 'conta', lancamentoId: 'ent', valor: 1000, data: '2031-01-15' }));
+  });
+});
+
+describe('FIX 4b — a busca nunca é beco sem saída', () => {
+  const ZERADA: ParcelaDoContrato = { ...PARCELA, id: 'p-6', numero: 6, valorPrincipal: 0, valorJuros: 0, valorTotal: 0 };
+  const BUSCADO = (o: Record<string, unknown> = {}) => ({ faixa: 'qualquer', de: '2031-04-26', ate: '2031-07-25', texto: null, todas: false, sem_previsto: true, ...o });
+
+  it('o leitor e as opções: o que foi procurado volta do banco; a janela é do vencimento; o vazio diz o que procurou', () => {
+    const b = lerBuscaNoContrato({ ...ENVELOPE([]), busca: BUSCADO() });
+    expect(b?.buscado).toEqual({ faixa: 'qualquer', de: '2031-04-26', ate: '2031-07-25', texto: null, todas: false, semPrevisto: true });
+    expect(opcoesParaOBanco({ faixa: 'pct10', busca: ' 1.142.396 ', todas: true })).toEqual({ faixa: '10pct', busca: '1.142.396', todas: true });
+    expect(opcoesParaOBanco({})).toEqual({});
+    expect(datasDaJanela('2031-06-10', 'd180', { de: null, ate: null })).toEqual({ de: '2030-12-12', ate: '2031-12-07' });
+    expect(datasDaJanela('2031-06-10', 'ano', { de: null, ate: null })).toEqual({ de: '2031-01-01', ate: '2031-12-31' });
+    expect(datasDaJanela('2031-06-10', 'padrao', { de: null, ate: null })).toEqual({});
+    expect(fraseDoVazio(b?.buscado ?? null, 'pagamento')).toBe('Nenhum pagamento encontrado · procurado: 26/04/31 a 25/07/31 · credor, nº do contrato ou conta de financiamento · qualquer valor.');
+    expect(lerResultadoDoVinculo({ simulado: true, recusa: null, cancelados: [], avisos: [], parcela_zerada: true, valor_atualizado: true }))
+      .toMatchObject({ parcelaZerada: true, valorAtualizado: true });
+  });
+
+  it('parcela zerada: o pagamento do credor a 30 dias aparece com "parcela sem valor", "±10%" fica apagado e "juros" fica aceso', async () => {
+    const busca = lerBuscaNoContrato({ ...ENVELOPE([LINHA({ data: '2031-07-10', dias: 30, papel_sugerido: 'principal', previsto: 0, diferenca: null,
+      motivos: ['favorecido = credor', 'parcela sem valor — sugestão só por credor/data'] })]), busca: BUSCADO() });
+    const a = api({ buscar: vi.fn(async () => busca ?? 'x') });
+    render(<BuscarPagamentoDialog api={a} parcela={ZERADA} aoFechar={vi.fn()} />);
+    const linha = await screen.findByTestId('candidata-pagamento');
+    expect(linha.textContent).toContain('parcela sem valor — sugestão só por credor/data');
+    const controles = screen.getByTestId('controles-da-busca');
+    expect(within(controles).getByText('±10% do previsto').closest('button')).toBeDisabled();
+    expect(within(controles).getByText('qualquer').closest('button')?.className).toMatch(/bg-primary/);
+    expect(within(screen.getByTestId('escolha-do-pagamento')).getByText('juros').closest('button')).not.toBeDisabled();
+  });
+
+  it('a busca livre vai ao banco como opção e mostra o vínculo atual de outro contrato, com a opção de mover', async () => {
+    const achada = lerBuscaNoContrato({ ...ENVELOPE([LINHA({ lancamento_id: 'outro-l', valor: 1142396.74, motivos: ['achado pela busca'],
+      outro: { tipo: 'parcela_vinculada', numero_contrato: 'C-77', descricao: null, parcela: 3, movivel: true } })]), busca: BUSCADO({ texto: '1.142.396' }) });
+    const buscar = vi.fn(async (_al: string, _p: string | null, op?: unknown) => (op ? achada : lerBuscaNoContrato({ ...ENVELOPE([]), busca: BUSCADO() })) ?? 'x');
+    const a = api({ buscar });
+    render(<BuscarPagamentoDialog api={a} parcela={ZERADA} aoFechar={vi.fn()} />);
+    fireEvent.change(await screen.findByTestId('busca-livre'), { target: { value: '1.142.396' } });
+    await waitFor(() => expect(buscar).toHaveBeenLastCalledWith('parcela', 'p-6', expect.objectContaining({ busca: '1.142.396' })), { timeout: 1500 });
+    const linha = await screen.findByTestId('candidata-pagamento');
+    expect(linha.getAttribute('title')).toContain('já paga a parcela 3 do contrato C-77');
+    fireEvent.click(linha);
+    expect(await screen.findByTestId('confirmar-mover')).toBeTruthy();
+  });
+
+  it('o vazio diz o que procurou e "Ampliar para ±180 dias" pede a janela ao banco', async () => {
+    const buscar = vi.fn(async () => lerBuscaNoContrato({ ...ENVELOPE([]), busca: BUSCADO() }) ?? 'x');
+    render(<BuscarPagamentoDialog api={api({ buscar })} parcela={ZERADA} aoFechar={vi.fn()} />);
+    const vazio = await screen.findByTestId('pagamentos-vazio');
+    expect(vazio.textContent).toContain('procurado: 26/04/31 a 25/07/31');
+    fireEvent.click(screen.getByTestId('ampliar-180'));
+    await waitFor(() => expect(buscar).toHaveBeenLastCalledWith('parcela', 'p-6', { de: '2030-12-12', ate: '2031-12-07' }));
+    fireEvent.click(screen.getByTestId('buscar-em-todas'));
+    await waitFor(() => expect(buscar).toHaveBeenLastCalledWith('parcela', 'p-6', expect.objectContaining({ todas: true, faixa: 'qualquer' })));
+  });
+
+  it('vincular na parcela zerada pergunta antes; "Sim" vai ao banco como p_atualizar_valor', async () => {
+    const vinc = vi.fn(async (_p: string, _l: string, _pa: string, _m: boolean, s: boolean, at?: boolean | null) =>
+      ({ simulado: s, recusa: null, avisos: [], cancelados: 0, movido: false, paga: true, parcelaZerada: true, valorAtualizado: at === true && !s }));
+    const a = api({ vincularPagamento: vinc });
+    render(<BuscarPagamentoDialog api={a} parcela={ZERADA} aoFechar={vi.fn()} />);
+    fireEvent.click(await screen.findByTestId('candidata-pagamento'));
+    const lugar = await screen.findByTestId('lugar-da-pergunta');
+    await waitFor(() => expect(lugar.textContent).toContain('Atualizar o valor da parcela com o pagamento?'));
+    expect(screen.getByTestId('vincular-a-parcela')).toBeDisabled();
+    fireEvent.click(within(lugar).getByText('Sim'));
+    await waitFor(() => expect(vinc).toHaveBeenLastCalledWith('p-6', 'l-1', 'total', false, true, true));
+    await waitFor(() => expect(screen.getByTestId('previa-do-pagamento').textContent).toContain('a parcela passa a valer R$ 550,00'));
+    fireEvent.click(screen.getByTestId('vincular-a-parcela'));
+    await waitFor(() => expect(vinc).toHaveBeenLastCalledWith('p-6', 'l-1', 'total', false, false, true));
+    await waitFor(() => expect(screen.getByTestId('previa-do-pagamento').textContent).toContain('a parcela passou a valer R$ 550,00'));
   });
 });
 
