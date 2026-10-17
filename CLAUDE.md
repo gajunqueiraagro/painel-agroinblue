@@ -2214,6 +2214,14 @@ preview que o cabecalho nao sai da tela ao rolar.
     documento por `financiamento_id` — a pendencia "sem documento" fica para o passo 4.
   ⚠ NAO PROVADO NO NAVEGADOR: nada com login (bancada com a pagina real e o banco simulado) · hoje os 41 ativos estao com "?" e
     `sem_liberacao` (a tabela de liberacoes esta' vazia).
+- ⚠ CABECALHO DE DETALHE EM COLUNAS DECLARADAS, POR ASSUNTO; O CNPJ/CPF NUNCA SE SEPARA DO CREDOR (FIN-FINANC-28, Gabriel 17/10/2026
+  11:05, so' tela). `GradeChaveValor` ganhou `colunas` (lista de colunas, cada uma uma PILHA propria alinhada pelo topo, a mesma largura
+  de rotulo dentro dela, lado a lado em QUALQUER largura — nada reflui por ordem); sem a prop, a grade de sempre (`itens`). Compra
+  parcelada: coluna 1 Descricao · Data da compra · Competencia · 1ª parcela · Safra · Conta (· Observacao); coluna 2 Credor (nome
+  inteiro) · CNPJ/CPF · Valor da compra · Parcelas · Classificacao · Situacao (selo da casa) (· Entrada). Nasce do CNPJ/CPF que caia
+  embaixo da Descricao e parecia o CNPJ da compra. O credito (passo 4) ja' tem Credor + CNPJ/CPF juntos na linha do titulo.
+  MEDIDO (bancada, NJ "Seguro de Vida" e "Lascas", 1.126 e 1.440): duas colunas, CNPJ/CPF 0px abaixo do Credor na mesma coluna, selo
+  centrado com o rotulo, 0 cortes.
 - ⚠ O RESUMO LATERAL DO ObrigacaoDialog E' A ESCALA A18 DE MODAL (FIN-FINANC-28 RESUMO-A18, Gabriel 17/10/2026, so' tela): aside de
   240px SEM ROLAGEM, da altura da area do formulario; "Resumo" 11px/600 (sem caixa alta); secao 9px maiuscula cinza-navy com linha
   fina, sem faixa de fundo; linha de 16px, rotulo 10px cinza, valor 10px/500 a' direita (texto longo corta com o inteiro no `title`);

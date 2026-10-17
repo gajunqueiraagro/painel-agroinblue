@@ -591,20 +591,27 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
               Ordem do Gabriel; credor pelo NOME INTEIRO; competência = mês/ano da compra (texto da data, sem conta); situação =
               o status gravado no contrato (`financiamentos.status`), sem cálculo. Régua do formulário (10px / 11px).
               ⚠ PASSO 4: esta grade é SÓ da compra parcelada — o crédito tem o cabeçalho próprio (`CabecalhoDoCredito`). */}
-          <GradeChaveValor regua="formulario" testId="grade-da-compra" itens={[
-            { rotulo: 'Descrição', valor: fin.descricao },
-            { rotulo: 'Credor', valor: nomeCredor ?? null, title: nomeEDocumento(nomeCredor, documentoCredor) || undefined },
-            { rotulo: 'CNPJ/CPF', valor: documentoCredor },
-            { rotulo: 'Data da compra', valor: fmtDate(fin.data_contrato), tipo: 'data' },
-            { rotulo: 'Competência', valor: fin.data_contrato ? `${fin.data_contrato.slice(5, 7)}/${fin.data_contrato.slice(0, 4)}` : null, tipo: 'data' },
-            { rotulo: '1ª parcela', valor: fmtDate(fin.data_primeira_parcela), tipo: 'data' },
-            { rotulo: 'Parcelas', valor: fin.total_parcelas != null ? String(fin.total_parcelas) : null },
-            { rotulo: 'Conta', valor: nomeConta },
-            { rotulo: 'Classificação', valor: nomeParcela },
-            { rotulo: 'Safra', valor: safraDasParcelas ?? '…' },
-            { rotulo: 'Situação', valor: fin.status ? <SeloDoContrato status={fin.status} /> : null, title: fin.status ?? undefined },
-            ...(Number(fin.valor_entrada) > 0 ? [{ rotulo: 'Entrada', valor: fmt(Number(fin.valor_entrada)), tipo: 'dinheiro' as const }] : []),
-            ...(fin.observacao ? [{ rotulo: 'Observação', valor: fin.observacao }] : []),
+          <GradeChaveValor regua="formulario" testId="grade-da-compra" colunas={[
+            /* coluna 1 — a compra: o que foi, quando, de onde sai o dinheiro (ordem do Gabriel, 17/10 11:05) */
+            [
+              { rotulo: 'Descrição', valor: fin.descricao },
+              { rotulo: 'Data da compra', valor: fmtDate(fin.data_contrato), tipo: 'data' },
+              { rotulo: 'Competência', valor: fin.data_contrato ? `${fin.data_contrato.slice(5, 7)}/${fin.data_contrato.slice(0, 4)}` : null, tipo: 'data' },
+              { rotulo: '1ª parcela', valor: fmtDate(fin.data_primeira_parcela), tipo: 'data' },
+              { rotulo: 'Safra', valor: safraDasParcelas ?? '…' },
+              { rotulo: 'Conta', valor: nomeConta },
+              ...(fin.observacao ? [{ rotulo: 'Observação', valor: fin.observacao }] : []),
+            ],
+            /* coluna 2 — com quem e quanto: o CNPJ/CPF NUNCA se separa do Credor */
+            [
+              { rotulo: 'Credor', valor: nomeCredor ?? null, title: nomeEDocumento(nomeCredor, documentoCredor) || undefined },
+              { rotulo: 'CNPJ/CPF', valor: documentoCredor },
+              { rotulo: 'Valor da compra', valor: fin.valor_total != null ? fmt(Number(fin.valor_total)) : null, tipo: 'dinheiro' },
+              { rotulo: 'Parcelas', valor: fin.total_parcelas != null ? String(fin.total_parcelas) : null },
+              { rotulo: 'Classificação', valor: nomeParcela },
+              { rotulo: 'Situação', valor: fin.status ? <SeloDoContrato status={fin.status} /> : null, title: fin.status ?? undefined },
+              ...(Number(fin.valor_entrada) > 0 ? [{ rotulo: 'Entrada', valor: fmt(Number(fin.valor_entrada)), tipo: 'dinheiro' as const }] : []),
+            ],
           ]} />
         </div>
 

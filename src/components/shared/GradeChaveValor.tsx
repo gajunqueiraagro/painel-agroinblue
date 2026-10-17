@@ -42,27 +42,48 @@ const GRADE_FORM = 'grid grid-cols-[auto_minmax(0,1fr)_auto_minmax(max-content,1
 
 const vazio = (v: ReactNode) => v === null || v === undefined || v === '';
 
-export function GradeChaveValor({ itens, testId, regua = 'lancamentos' }: {
-  itens: readonly ItemChaveValor[]; testId?: string;
+/**
+ * COLUNAS DECLARADAS — FIN-FINANC-28 (Gabriel 17/10/2026): `colunas` em vez de `itens` = cada coluna é uma PILHA própria de pares,
+ * alinhada pelo topo, com a MESMA largura de rótulo dentro dela; as colunas ficam lado a lado em QUALQUER largura (nada reflui por
+ * ordem). Nasce do CNPJ/CPF que caía embaixo da Descrição, longe do Credor, e parecia o CNPJ da compra.
+ */
+export function GradeChaveValor({ itens, colunas, testId, regua = 'lancamentos' }: {
+  itens?: readonly ItemChaveValor[];
+  /** cada lista é uma coluna (pilha), na ordem declarada */
+  colunas?: readonly (readonly ItemChaveValor[])[];
+  testId?: string;
   /** 'lancamentos' (padrão) = a régua da lista; 'formulario' = rótulo 10px em minúsculas e valor 11px */
   regua?: 'lancamentos' | 'formulario';
 }) {
   const rotuloCls = regua === 'formulario' ? ROTULO_FORM : ROTULO;
   const valorCls = regua === 'formulario' ? VALOR_FORM : VALOR;
   const altura = regua === 'formulario' ? 'h-[20px]' : 'h-[18px]';
+  const pares = (lista: readonly ItemChaveValor[]) => lista.map((it) => {
+    const tipo = it.tipo ?? 'texto';
+    const titulo = it.title ?? (typeof it.valor === 'string' ? it.valor : undefined);
+    return [
+      <dt key={`r-${it.rotulo}`} className={rotuloCls}>{it.rotulo}</dt>,
+      <dd key={`v-${it.rotulo}`} className={`flex ${altura} min-w-0 items-center ${valorCls[tipo]}`} title={titulo} data-testid={`dado-${it.rotulo}`}>
+        {vazio(it.valor) ? <span className="text-muted-foreground">—</span> : <span className="min-w-0 truncate">{it.valor}</span>}
+      </dd>,
+    ];
+  });
+  if (colunas) {
+    return (
+      <div data-testid={testId} className="grid gap-x-6" style={{ gridTemplateColumns: `repeat(${colunas.length}, minmax(0, 1fr))` }}>
+        {colunas.map((col, i) => (
+          <dl key={i} data-testid={testId ? `${testId}-coluna-${i + 1}` : undefined}
+            className="grid content-start grid-cols-[auto_minmax(0,1fr)] gap-x-2.5">
+            {pares(col)}
+          </dl>
+        ))}
+      </div>
+    );
+  }
   return (
     <dl data-testid={testId}
       className={regua === 'formulario' ? GRADE_FORM : GRADE}>
-      {itens.map((it) => {
-        const tipo = it.tipo ?? 'texto';
-        const titulo = it.title ?? (typeof it.valor === 'string' ? it.valor : undefined);
-        return [
-          <dt key={`r-${it.rotulo}`} className={rotuloCls}>{it.rotulo}</dt>,
-          <dd key={`v-${it.rotulo}`} className={`flex ${altura} min-w-0 items-center ${valorCls[tipo]}`} title={titulo} data-testid={`dado-${it.rotulo}`}>
-            {vazio(it.valor) ? <span className="text-muted-foreground">—</span> : <span className="min-w-0 truncate">{it.valor}</span>}
-          </dd>,
-        ];
-      })}
+      {pares(itens ?? [])}
     </dl>
   );
 }

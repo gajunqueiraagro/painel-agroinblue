@@ -852,15 +852,22 @@ describe('4 — a tela do contrato mostra o que o banco derivou do lançamento',
     /* FIN-FINANC-28-P3-FIX3 — o cabeçalho da COMPRA: a ordem do Gabriel, sem contrato / liberação / valor contratado /
        vencimento final, rótulos em minúsculas (10px, nunca `uppercase`) e valores a 11px */
     const grade = screen.getByTestId('grade-da-compra');
-    expect(Array.from(grade.querySelectorAll('dt')).map((dt) => dt.textContent).slice(0, 11)).toEqual([
-      'Descrição', 'Credor', 'CNPJ/CPF', 'Data da compra', 'Competência', '1ª parcela', 'Parcelas', 'Conta', 'Classificação', 'Safra', 'Situação']);
+    /* FIN-FINANC-28 (Gabriel 17/10 11:05): DUAS COLUNAS DECLARADAS, cada uma pilha própria — o CNPJ/CPF logo abaixo do Credor */
+    const coluna = (n: number) => Array.from(screen.getByTestId(`grade-da-compra-coluna-${n}`).querySelectorAll('dt')).map((dt) => dt.textContent);
+    expect(coluna(1)).toEqual(['Descrição', 'Data da compra', 'Competência', '1ª parcela', 'Safra', 'Conta']);
+    expect(coluna(2)).toEqual(['Credor', 'CNPJ/CPF', 'Valor da compra', 'Parcelas', 'Classificação', 'Situação']);
+    const col2 = screen.getByTestId('grade-da-compra-coluna-2');
+    expect(screen.getByTestId('dado-Credor').nextElementSibling?.textContent).toBe('CNPJ/CPF');
+    expect(col2.contains(screen.getByTestId('dado-CNPJ/CPF'))).toBe(true);
+    expect(grade.getAttribute('style')).toContain('repeat(2, minmax(0, 1fr))');
     /* FIX4 — o credor pelo nome do cadastro inteiro; sem documento no cadastro, "—" (nunca vazio, nunca inventado) */
     expect(screen.getByTestId('dado-CNPJ/CPF').textContent).toBe('—');
     expect(grade.textContent).not.toMatch(/Nº contrato|Data de liberação|Valor contratado|Vencimento final|Banco\/conta/);
     expect(Array.from(grade.querySelectorAll('dt')).every((dt) => dt.className.includes('text-[10px]') && !dt.className.includes('uppercase'))).toBe(true);
     expect(Array.from(grade.querySelectorAll('dd')).every((dd) => dd.className.includes('text-[11px]'))).toBe(true);
     expect(screen.getByTestId('dado-Competência').textContent).toMatch(/^\d{2}\/\d{4}$/);
-    expect(screen.getByText('Valor da compra')).toBeTruthy();
+    /* o cartão e, desde 17/10, o par da coluna 2 do cabeçalho (ordem do Gabriel) */
+    expect(screen.getAllByText('Valor da compra').length).toBe(2);
     expect(screen.queryByText('Valor do contrato')).toBeNull();
     expect(screen.getAllByTestId('prazo').every((c) => c.className.includes('text-[9px]'))).toBe(true);
   });
