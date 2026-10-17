@@ -1,0 +1,212 @@
+/**
+ * FIN-FINANC-28 · PASSO 4 — as leituras e os gestos da tela do contrato de crédito: liberações, destinações e documentos do
+ * contrato. A tela NÃO grava em tabela: todo gesto é uma RPC do banco (migration 20261027200200), e cada um tem o contrário
+ * (remover liberação · remover destinação · remover documento). Depois de cada gesto relê as três listas, a situação (cartões e
+ * saldo) e a lista de contratos — sem F5.
+ *
+ * ⚠ LEITURAS SEPARADAS, SEM EMBED: `financiamento_liberacoes` tem DUAS chaves para `financiamentos` (o contrato e o liquidado), e o
+ *   embed sem dica ficaria ambíguo. As quatro leituras extras (lançamentos, contas, fornecedores, contratos) são por id.
+ * ⚠ `financiamento_documentos` nasceu depois do `types.ts`: lido com `(supabase as any).from` (dívida declarada, como as `lr_*`).
+ */
+import { useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import {
+  ESPECIES_DO_CONTRATO, FORMAS_DA_LIBERACAO,
+  type DestinacaoDoContrato, type DocumentoDoContrato, type EncargoDoContrato, type EspecieDoContrato, type FormaDaLiberacao, type LiberacaoDoContrato,
+} from '@/lib/financiamentos/contratoDeCredito';
+import { extensaoDoArquivo } from '@/lib/oc/caminhoDocumento';
+
+export const BUCKET_DO_CONTRATO = 'fin-documentos';
+const CHAVES_DA_TELA = ['contrato-liberacoes', 'contrato-destinacoes', 'contrato-documentos', 'contrato-captacoes-livres'];
+const CHAVES_QUE_LEEM_O_SALDO = ['financiamento-situacao', 'financiamentos-lista', 'financiamento-primeira-liberacao', 'painel-financiamentos'];
+
+type Linha = Record<string, unknown>;
+const txt = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null);
+const num = (v: unknown): number => (typeof v === 'number' ? v : typeof v === 'string' ? Number(v) : 0);
+const forma = (v: unknown): FormaDaLiberacao => FORMAS_DA_LIBERACAO.find((f) => f === v) ?? 'conta';
+const especie = (v: unknown): EspecieDoContrato => ESPECIES_DO_CONTRATO.find((e) => e === v) ?? 'outro';
+/** a mensagem do banco (P0001 já vem em português) — nunca o objeto cru */
+const fraseDoErro = (e: unknown): string => {
+  const m = typeof e === 'object' && e !== null && 'message' in e ? String((e as { message: unknown }).message) : String(e);
+  return m.replace(/^(ERROR:\s*)?(P0001|42501):\s*/i, '').trim() || 'Não foi possível gravar.';
+};
+
+export interface CaptacaoLivre { id: string; data: string | null; valor: number; descricao: string | null; conta: string | null; status: string | null }
+export interface ContratoAnterior { id: string; numero: string | null; descricao: string | null }
+
+export interface PedidoDeLiberacao {
+  id: string | null; data: string; valor: number; forma: FormaDaLiberacao;
+  lancamentoId: string | null; fornecedorId: string | null; contratoLiquidadoId: string | null; destinacaoId: string | null; observacao: string | null;
+}
+
+export function useContratoDeCredito(financiamentoId: string | null | undefined, clienteId: string | null | undefined) {
+  const qc = useQueryClient();
+  const ligado = !!financiamentoId && !!clienteId;
+
+  const liberacoes = useQuery({
+    queryKey: ['contrato-liberacoes', financiamentoId],
+    enabled: ligado,
+    queryFn: async (): Promise<LiberacaoDoContrato[]> => {
+      const { data, error } = await supabase.from('financiamento_liberacoes')
+        .select('id, data, valor, forma, lancamento_id, fornecedor_id, contrato_liquidado_id, destinacao_id, observacao')
+        .eq('financiamento_id', financiamentoId!).is('cancelado_em', null).order('data', { ascending: true });
+      if (error) throw error;
+      const rows: Linha[] = data ?? [];
+      const ids = (k: string) => [...new Set(rows.map((r) => txt(r[k])).filter((v): v is string => !!v))];
+      const lancIds = ids('lancamento_id'); const fornIds = ids('fornecedor_id'); const finIds = ids('contrato_liquidado_id');
+      const lancs = new Map<string, { descricao: string | null; data: string | null; contaId: string | null }>();
+      if (lancIds.length) {
+        const r = await supabase.from('financeiro_lancamentos_v2').select('id, descricao, data_pagamento, data_vencimento, conta_destino_id, conta_bancaria_id').in('id', lancIds);
+        for (const l of r.data ?? []) lancs.set(l.id, { descricao: l.descricao, data: l.data_pagamento ?? l.data_vencimento, contaId: l.conta_destino_id ?? l.conta_bancaria_id });
+      }
+      const contaIds = [...new Set([...lancs.values()].map((l) => l.contaId).filter((v): v is string => !!v))];
+      const contas = new Map<string, string>();
+      if (contaIds.length) {
+        const r = await supabase.from('financeiro_contas_bancarias').select('id, nome_conta, nome_exibicao').in('id', contaIds);
+        for (const c of r.data ?? []) contas.set(c.id, c.nome_exibicao || c.nome_conta);
+      }
+      const forns = new Map<string, string>();
+      if (fornIds.length) {
+        const r = await supabase.from('financeiro_fornecedores').select('id, nome').in('id', fornIds);
+        for (const f of r.data ?? []) forns.set(f.id, f.nome);
+      }
+      const fins = new Map<string, string | null>();
+      if (finIds.length) {
+        const r = await supabase.from('financiamentos').select('id, numero_contrato').in('id', finIds);
+        for (const f of r.data ?? []) fins.set(f.id, f.numero_contrato);
+      }
+      return rows.map((r) => {
+        const lid = txt(r.lancamento_id); const l = lid ? lancs.get(lid) : undefined;
+        const fid = txt(r.fornecedor_id); const cid = txt(r.contrato_liquidado_id);
+        return {
+          id: String(r.id), data: String(r.data), valor: num(r.valor), forma: forma(r.forma),
+          lancamentoId: lid, lancamento: l ? { descricao: l.descricao, data: l.data, conta: l.contaId ? contas.get(l.contaId) ?? null : null } : null,
+          fornecedorId: fid, fornecedorNome: fid ? forns.get(fid) ?? null : null,
+          contratoLiquidadoId: cid, contratoLiquidadoNumero: cid ? fins.get(cid) ?? null : null,
+          destinacaoId: txt(r.destinacao_id), observacao: txt(r.observacao),
+        };
+      });
+    },
+  });
+
+  const destinacoes = useQuery({
+    queryKey: ['contrato-destinacoes', financiamentoId],
+    enabled: ligado,
+    queryFn: async (): Promise<DestinacaoDoContrato[]> => {
+      const { data, error } = await supabase.from('financiamento_destinacoes').select('id, descricao, valor, valor_orcado, created_at')
+        .eq('financiamento_id', financiamentoId!).order('created_at', { ascending: true });
+      if (error) throw error;
+      return (data ?? []).map((d) => ({ id: d.id, descricao: d.descricao, orcado: num(d.valor_orcado ?? d.valor) }));
+    },
+  });
+
+  /* os encargos VIVOS do contrato (o vínculo da FIN-CONTRATO-VINCULAR-ENCARGO-01), com o valor do lançamento — a linha das destinações */
+  const encargos = useQuery({
+    queryKey: ['contrato-encargos', financiamentoId],
+    enabled: ligado,
+    queryFn: async (): Promise<EncargoDoContrato[]> => {
+      const { data, error } = await supabase.from('financiamento_encargos').select('papel, lancamento_id').eq('financiamento_id', financiamentoId!).is('desfeito_em', null);
+      if (error) throw error;
+      const ids = (data ?? []).map((e) => e.lancamento_id);
+      if (ids.length === 0) return [];
+      const r = await supabase.from('financeiro_lancamentos_v2').select('id, valor, cancelado').in('id', ids);
+      const valor = new Map((r.data ?? []).filter((l) => !l.cancelado).map((l) => [l.id, num(l.valor)]));
+      return (data ?? []).filter((e) => valor.has(e.lancamento_id)).map((e) => ({ papel: e.papel, valor: valor.get(e.lancamento_id) ?? 0 }));
+    },
+  });
+
+  const documentos = useQuery({
+    queryKey: ['contrato-documentos', financiamentoId],
+    enabled: ligado,
+    queryFn: async (): Promise<DocumentoDoContrato[]> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- tabela nova, fora do types.ts
+      const { data, error } = await (supabase as any).from('financiamento_documentos')
+        .select('id, especie, nome, storage_path, criado_em, enviado_por').eq('financiamento_id', financiamentoId!)
+        .is('cancelado_em', null).order('criado_em', { ascending: true });
+      if (error) throw error;
+      const rows: Linha[] = data ?? [];
+      const quem = [...new Set(rows.map((r) => txt(r.enviado_por)).filter((v): v is string => !!v))];
+      const nomes = new Map<string, string>();
+      if (quem.length) {
+        const r = await supabase.from('profiles').select('user_id, nome').in('user_id', quem);
+        for (const p of r.data ?? []) if (p.nome) nomes.set(p.user_id, p.nome);
+      }
+      return rows.map((r) => ({
+        id: String(r.id), especie: especie(r.especie), nome: String(r.nome), storagePath: txt(r.storage_path), criadoEm: String(r.criado_em),
+        enviadoPor: txt(r.enviado_por) ? nomes.get(String(r.enviado_por)) ?? null : null,
+      }));
+    },
+  });
+
+  const reler = useCallback(() => {
+    for (const k of [...CHAVES_DA_TELA, ...CHAVES_QUE_LEEM_O_SALDO]) void qc.invalidateQueries({ queryKey: [k] });
+  }, [qc]);
+
+  /** cada gesto devolve a frase do banco quando recusa (escrita ao lado do botão), ou nulo */
+  const rpc = useCallback(async (fn: string, args: Record<string, unknown>): Promise<string | null> => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+    const { error } = await (supabase as any).rpc(fn, args);
+    if (error) return fraseDoErro(error);
+    reler();
+    return null;
+  }, [reler]);
+
+  const salvarLiberacao = useCallback((p: PedidoDeLiberacao) => rpc('fn_financiamento_liberacao_salvar', {
+    p_financiamento_id: financiamentoId, p_id: p.id, p_data: p.data, p_valor: p.valor, p_forma: p.forma,
+    p_lancamento_id: p.forma === 'conta' ? p.lancamentoId : null, p_fornecedor_id: p.forma === 'fornecedor' ? p.fornecedorId : null,
+    p_contrato_liquidado_id: p.forma === 'liquidacao' ? p.contratoLiquidadoId : null, p_destinacao_id: p.destinacaoId, p_observacao: p.observacao,
+  }), [rpc, financiamentoId]);
+  const removerLiberacao = useCallback((id: string, motivo: string) => rpc('fn_financiamento_liberacao_remover', { p_id: id, p_motivo: motivo }), [rpc]);
+  const salvarDestinacao = useCallback((id: string | null, descricao: string, orcado: number) => rpc('fn_financiamento_destinacao_salvar', {
+    p_financiamento_id: financiamentoId, p_id: id, p_descricao: descricao, p_valor_orcado: orcado,
+  }), [rpc, financiamentoId]);
+  const removerDestinacao = useCallback((id: string) => rpc('fn_financiamento_destinacao_remover', { p_id: id }), [rpc]);
+  const removerDocumento = useCallback((id: string, motivo: string) => rpc('fn_financiamento_documento_remover', { p_id: id, p_motivo: motivo }), [rpc]);
+
+  /** REGISTRAR PRIMEIRO, SUBIR DEPOIS (a lei do molde): o caminho vem do banco. Falhou a subida, o registro é cancelado. */
+  const enviarDocumento = useCallback(async (arquivo: File, esp: EspecieDoContrato): Promise<string | null> => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+    const { data, error } = await (supabase as any).rpc('fn_financiamento_documento_registrar', {
+      p_financiamento_id: financiamentoId, p_especie: esp, p_nome: arquivo.name, p_extensao: extensaoDoArquivo(arquivo) ?? 'bin', p_tipo: arquivo.type || null, p_tamanho: arquivo.size,
+    });
+    if (error) return fraseDoErro(error);
+    const caminho = typeof data?.storage_path === 'string' ? data.storage_path : null;
+    const docId = typeof data?.id === 'string' ? data.id : null;
+    if (!caminho || !docId) return 'O banco não devolveu o caminho do arquivo.';
+    const up = await supabase.storage.from(BUCKET_DO_CONTRATO).upload(caminho, arquivo, { upsert: false, contentType: arquivo.type || undefined });
+    if (up.error) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+      await (supabase as any).rpc('fn_financiamento_documento_remover', { p_id: docId, p_motivo: 'o arquivo não subiu' });
+      reler();
+      return `O arquivo "${arquivo.name}" não subiu: ${up.error.message}. Nada ficou registrado.`;
+    }
+    reler();
+    return null;
+  }, [financiamentoId, reler]);
+
+  const urlDoDocumento = useCallback(async (caminho: string): Promise<string | null> => {
+    const { data, error } = await supabase.storage.from(BUCKET_DO_CONTRATO).createSignedUrl(caminho, 60);
+    return error ? null : data?.signedUrl ?? null;
+  }, []);
+
+  const lerCaptacoesLivres = useCallback(async (): Promise<CaptacaoLivre[]> => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+    const { data, error } = await (supabase as any).rpc('fn_financiamento_captacoes_livres', { p_financiamento_id: financiamentoId });
+    if (error || !Array.isArray(data)) return [];
+    return data.map((r: Linha) => ({ id: String(r.id), data: txt(r.data), valor: num(r.valor), descricao: txt(r.descricao), conta: txt(r.conta), status: txt(r.status) }));
+  }, [financiamentoId]);
+
+  const lerContratosAnteriores = useCallback(async (): Promise<ContratoAnterior[]> => {
+    const { data } = await supabase.from('financiamentos').select('id, numero_contrato, descricao, natureza')
+      .eq('cliente_id', clienteId!).neq('natureza', 'parcelamento').neq('id', financiamentoId!).order('data_contrato', { ascending: false });
+    return (data ?? []).map((f) => ({ id: f.id, numero: f.numero_contrato, descricao: f.descricao }));
+  }, [clienteId, financiamentoId]);
+
+  return {
+    liberacoes: liberacoes.data ?? null, destinacoes: destinacoes.data ?? null, documentos: documentos.data ?? null, encargos: encargos.data ?? [],
+    erroDeLeitura: liberacoes.error || destinacoes.error || documentos.error ? 'Não foi possível ler liberações, destinações ou documentos.' : null,
+    salvarLiberacao, removerLiberacao, salvarDestinacao, removerDestinacao, enviarDocumento, removerDocumento, urlDoDocumento,
+    lerCaptacoesLivres, lerContratosAnteriores,
+  };
+}

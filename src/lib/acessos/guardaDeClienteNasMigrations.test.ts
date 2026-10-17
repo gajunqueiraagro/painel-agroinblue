@@ -24,7 +24,9 @@ export function semGuarda(sql: string): string[] {
     const temCliente = /cliente/i.test(params);
     const soId = !temCliente && /\buuid\b/i.test(params) && !/^(public\.)?_/.test(nome);
     if (!temCliente && !soId) return [];
+    /* FIN-FINANC-28 PASSO 4: `_fn_contrato_do_usuario(contrato)` e' a guarda pelo cliente do CONTRATO (tenant_ok + 42501, preso abaixo) */
     const guardada = /tenant_ok\s*\(/i.test(p) || /_fn_exigir_tenant(_das_linhas)?\s*\(/i.test(p)
+      || /_fn_contrato_do_usuario\s*\(/i.test(p)
       || (/is_admin_agroinblue\s*\(/i.test(p) && /42501/.test(p));
     return guardada ? [] : [nome];
   });
@@ -50,6 +52,18 @@ describe('guarda de cliente nas migrations novas', () => {
     const semUuid = `CREATE FUNCTION public.fn_s(p_n int) RETURNS int LANGUAGE sql SECURITY DEFINER AS $$ select 1 $$;`;
     expect(semGuarda(soIdSem)).toEqual(['public.fn_v']);
     expect(semGuarda([soIdSem, soIdComLinha, interna, semUuid].join('\n'))).toEqual(['public.fn_v']);
+  });
+
+  it('a guarda pelo contrato e\' aceita, e ela mesma tem tenant_ok + 42501 (FIN-FINANC-28 passo 4)', () => {
+    const peloContrato = `CREATE FUNCTION public.fn_r(p_financiamento_id uuid) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER AS $$
+      declare f record; begin f := public._fn_contrato_do_usuario(p_financiamento_id); return '{}'; end $$;`;
+    const soIdSem = `CREATE FUNCTION public.fn_q(p_financiamento_id uuid) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER AS $$ begin return '{}'; end $$;`;
+    expect(semGuarda([peloContrato, soIdSem].join('\n'))).toEqual(['public.fn_q']);
+    const sql = readFileSync(join(DIR, '20261027200200_fin_financ_28_p4_contrato.sql'), 'utf8');
+    const dono = sql.slice(sql.indexOf('create or replace function public._fn_contrato_do_usuario'), sql.indexOf('end $$;', sql.indexOf('create or replace function public._fn_contrato_do_usuario')));
+    expect(dono).toMatch(/not coalesce\(public\.tenant_ok\(f\.cliente_id\), false\)/);
+    expect(dono).toMatch(/errcode = '42501'/);
+    expect(sql).toMatch(/revoke all on function public\._fn_contrato_do_usuario\(uuid\) from public, anon, authenticated;/);
   });
 
   it('nenhuma migration nova tem funcao SECURITY DEFINER com parametro de cliente sem guarda', () => {

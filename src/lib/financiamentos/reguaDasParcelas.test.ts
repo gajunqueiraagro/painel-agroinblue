@@ -20,7 +20,7 @@ const porChave = (ehParcelamento: boolean) => new Map(colunasDasParcelas(ehParce
 describe('a régua — o cabeçalho alinha como a coluna', () => {
   it('número à direita, ícone ao centro, o resto à esquerda — nas duas naturezas', () => {
     const credito = colunasDasParcelas(false);
-    expect(credito.filter(c => c.alinha === 'direita').map(c => c.chave)).toEqual(['principal', 'juros', 'total']);
+    expect(credito.filter(c => c.alinha === 'direita').map(c => c.chave)).toEqual(['principal', 'juros', 'total', 'saldoApos']);
     expect(credito.filter(c => c.alinha === 'centro')).toEqual([]);
     const parcelamento = colunasDasParcelas(true);
     expect(parcelamento.filter(c => c.alinha === 'direita').map(c => c.chave)).toEqual(['total']);
@@ -29,15 +29,17 @@ describe('a régua — o cabeçalho alinha como a coluna', () => {
       expect(alinhamentoDoCabecalho(c)).toBe(CLASSE_DO_ALINHAMENTO[c.alinha]);
     }
     expect(alinhamentoDoCabecalho(porChave(false).get('total')!)).toBe('text-right');
-    expect(alinhamentoDoCabecalho(porChave(false).get('conta')!)).toBe('text-left');
+    expect(alinhamentoDoCabecalho(porChave(false).get('lancamento')!)).toBe('text-left');
+    expect(alinhamentoDoCabecalho(porChave(true).get('conta')!)).toBe('text-left');
     expect(alinhamentoDoCabecalho(porChave(true).get('boleto')!)).toBe('text-center');
   });
 
-  it('a tabela não estica: UMA coluna sem largura (a Conta); todas as outras em px', () => {
+  it('a tabela não estica: UMA coluna sem largura (a Conta na compra parcelada, o Lançamento no crédito); todas as outras em px', () => {
     for (const ehParcelamento of [false, true]) {
       const cols = colunasDasParcelas(ehParcelamento);
-      expect(cols.filter(c => c.largura === null).map(c => c.chave)).toEqual(['conta']);
-      for (const c of cols) if (c.chave !== 'conta') expect(c.largura).toBeGreaterThan(0);
+      const resto = ehParcelamento ? 'conta' : 'lancamento';
+      expect(cols.filter(c => c.largura === null).map(c => c.chave)).toEqual([resto]);
+      for (const c of cols) if (c.chave !== resto) expect(c.largura).toBeGreaterThan(0);
       expect(new Set(cols.map(c => c.chave)).size).toBe(cols.length);
     }
   });
@@ -46,13 +48,15 @@ describe('a régua — o cabeçalho alinha como a coluna', () => {
     expect(LARGURA_DA_DATA).toBe(64);
     for (const ehParcelamento of [false, true]) {
       const m = porChave(ehParcelamento);
-      for (const data of ['competencia', 'vencimento', 'pagamento'] as ChaveDaColuna[]) expect(m.get(data)!.largura).toBe(64);
+      const datas: ChaveDaColuna[] = ehParcelamento ? ['competencia', 'vencimento', 'pagamento'] : ['vencimento', 'pagamento'];
+      for (const data of datas) expect(m.get(data)!.largura).toBe(64);
       expect(m.get('numero')!.largura).toBe(48);
       expect(m.get('prazo')!.largura).toBe(116);
     }
     // a soma das colunas de largura fixa: o que sobra a 901px (a tabela a 1.127 de janela) é a Conta
     const fixas = (p: boolean) => colunasDasParcelas(p).reduce((a, c) => a + (c.largura ?? 0), 0);
-    expect(901 - fixas(false)).toBe(145);
+    // FIN-FINANC-28 PASSO 4: no crédito saíram Comp. e Conta, entraram Saldo após (96) e o Lançamento (o resto)
+    expect(901 - fixas(false)).toBe(153);
     expect(901 - fixas(true)).toBe(181);
   });
 });

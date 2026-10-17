@@ -16,7 +16,7 @@
 
 export type ChaveDaColuna =
   | 'numero' | 'competencia' | 'vencimento' | 'pagamento' | 'prazo' | 'conta'
-  | 'principal' | 'juros' | 'total' | 'situacao' | 'nota' | 'boleto' | 'linkDosJuros' | 'lapis';
+  | 'principal' | 'juros' | 'total' | 'saldoApos' | 'situacao' | 'nota' | 'boleto' | 'lancamento' | 'lapis';
 
 export interface ColunaDasParcelas {
   chave: ChaveDaColuna;
@@ -34,34 +34,41 @@ export const LARGURA_DA_DATA = 64;
 const col = (chave: ChaveDaColuna, rotulo: string, largura: number | null, alinha: AlinhamentoDaColuna = 'esquerda'): ColunaDasParcelas =>
   ({ chave, rotulo, largura, alinha });
 
-/** As colunas, na ordem da tela. Parcelamento: Valor, Nota fiscal e Boleto; crédito: Principal, Juros, Total e o link dos juros. */
+/**
+ * As colunas, na ordem da tela. Parcelamento: Valor, Nota fiscal e Boleto (a régua aprovada, intocada).
+ * Crédito — FIN-FINANC-28 PASSO 4 (o cronograma do mock v1.2, seção 2): Parc. · Venc. · Pgto. · Prazo · Principal · Juros · Total ·
+ * Saldo após · Situação · Lançamento (↔ principal / ↔ juros). Saíram Comp. e Conta (a conta vai no `title` do ↔); a coluna que fica
+ * com o resto é o Lançamento. "Saldo após" a 96: "99.999.999,99" a 9px/600 pede ~63px + 16.
+ */
 export function colunasDasParcelas(ehParcelamento: boolean): ColunaDasParcelas[] {
-  const inicio = [
+  if (!ehParcelamento) {
+    return [
+      col('numero', 'Parc.', 48),
+      col('vencimento', 'Venc.', LARGURA_DA_DATA),
+      col('pagamento', 'Pgto.', LARGURA_DA_DATA),
+      col('prazo', 'Prazo', 116),
+      col('principal', 'Principal', 84, 'direita'),
+      col('juros', 'Juros', 76, 'direita'),
+      col('total', 'Total (R$)', 88, 'direita'),
+      col('saldoApos', 'Saldo após', 96, 'direita'),
+      col('situacao', 'Situação', 88),
+      col('lancamento', 'Lançamento', null),
+      col('lapis', '', 24),
+    ];
+  }
+  return [
     col('numero', 'Nº', 48),
     col('competencia', 'Comp.', LARGURA_DA_DATA),
     col('vencimento', 'Venc.', LARGURA_DA_DATA),
     col('pagamento', 'Pgto.', LARGURA_DA_DATA),
     col('prazo', 'Prazo', 116),
     col('conta', 'Conta', null),
+    col('total', 'Valor (R$)', 88, 'direita'),
+    col('situacao', 'Situação', 88),
+    col('nota', 'Nota fiscal', 118),
+    col('boleto', 'Boleto', 46, 'centro'),
+    col('lapis', '', 24),
   ];
-  return ehParcelamento
-    ? [
-      ...inicio,
-      col('total', 'Valor (R$)', 88, 'direita'),
-      col('situacao', 'Situação', 88),
-      col('nota', 'Nota fiscal', 118),
-      col('boleto', 'Boleto', 46, 'centro'),
-      col('lapis', '', 24),
-    ]
-    : [
-      ...inicio,
-      col('principal', 'Principal', 84, 'direita'),
-      col('juros', 'Juros', 76, 'direita'),
-      col('total', 'Total (R$)', 88, 'direita'),
-      col('situacao', 'Situação', 88),
-      col('linkDosJuros', '', 40),
-      col('lapis', '', 24),
-    ];
 }
 
 /** A classe de alinhamento da coluna — a MESMA para o cabeçalho e para a célula (`text-right` no número, `text-center` no ícone). */

@@ -190,9 +190,10 @@ let qc: QueryClient;
 const novoQc = (staleTime: number) => new QueryClient({ defaultOptions: { queries: { retry: false, staleTime } } });
 const montarDetalhe = () => render(<QueryClientProvider client={qc}><FinanciamentoDetalhe id="ctr-1" /></QueryClientProvider>);
 const abrirEdicao = async () => {
-  /* o botão dos Dados do contrato é o primeiro; as linhas da grade de parcelas têm o seu */
-  await screen.findByTestId('dados-do-contrato');
-  fireEvent.click(screen.getAllByRole('button', { name: /^Editar$/ })[0]);
+  /* o botão dos Dados do contrato é o primeiro; as linhas da grade de parcelas têm o seu.
+     FIN-FINANC-28 PASSO 4: no crédito o cabeçalho é o próprio, e o botão diz "Editar contrato". */
+  await screen.findByTestId(banco.contrato?.natureza === 'parcelamento' ? 'dados-do-contrato' : 'cabecalho-do-credito');
+  fireEvent.click(screen.getAllByRole('button', { name: /^Editar( contrato)?$/ })[0]);
   await screen.findByText('Editar obrigação');
 };
 const campoDescricao = () => screen.getByPlaceholderText('Ex: Custeio safra 2025') as HTMLInputElement;
@@ -712,7 +713,7 @@ describe('2B — a grade sobre as parcelas gravadas do parcelamento', () => {
 describe('4 — a tela do contrato mostra o que o banco derivou do lançamento', () => {
   const cartao = (rotulo: string) => screen.getByTestId(`cartao-${rotulo}`).textContent;
   const linhasDoContrato = () => screen.getAllByTestId('linha-do-contrato');
-  const abrirDetalhe = async () => { montarDetalhe(); await screen.findByTestId('dados-do-contrato'); await waitFor(() => expect(linhasDoContrato().length).toBeGreaterThan(0)); };
+  const abrirDetalhe = async () => { montarDetalhe(); await screen.findByTestId(banco.contrato?.natureza === 'parcelamento' ? 'dados-do-contrato' : 'cabecalho-do-credito'); await waitFor(() => expect(linhasDoContrato().length).toBeGreaterThan(0)); };
 
   it('parcela paga pelo Financeiro: "Paga", "Pago em" e os cartões são os do banco (a coluna da parcela diz "pendente")', async () => {
     banco.situacao = SITUACAO([{ situacao: 'paga', pago_em: '2026-10-09', valor_pago: 8119, lancamento_status: 'conciliado', diverge: true }, { situacao: 'vencida' }],
@@ -752,8 +753,10 @@ describe('4 — a tela do contrato mostra o que o banco derivou do lançamento',
     fireEvent.click(linhasDoContrato()[1]);
     expect(screen.getByTestId('modal-do-financeiro').textContent).toBe('lanc-2');
     expect(screen.queryByRole('button', { name: 'Ver' })).toBeNull();
-    expect(screen.getByTestId('dica-da-linha').textContent).toBe('clique na linha para abrir o lançamento no Financeiro');
+    /* FIN-FINANC-28 PASSO 4: no crédito a tabela é o Cronograma, e a coluna Lançamento oferece ↔ principal e ↔ juros */
+    expect(screen.getByTestId('dica-da-linha').textContent).toBe('principal · juros · cada parcela casa com o lançamento do Financeiro (↔)');
     expect(screen.getAllByTestId('ver-juros').length).toBe(1);
+    expect(screen.getAllByTestId('ver-principal').length).toBe(2);
     fireEvent.click(screen.getByTestId('ver-juros'));
     expect(screen.getByTestId('modal-do-financeiro').textContent).toBe('lanc-juros-2');
   });
@@ -907,17 +910,36 @@ describe('4 — a tela do contrato mostra o que o banco derivou do lançamento',
     await waitFor(() => expect(screen.getByRole('tab', { name: /Parcelas/ }).getAttribute('aria-selected')).toBe('true'));
   });
 
-  it('PARC-CONTRATO-01: financiamento com juros — Principal, Juros e Total no lugar de Nota e Boleto; "Documentos" apagado com o motivo; "Juros previstos" aparece', async () => {
+  it('FIN-FINANC-28 PASSO 4: o contrato de crédito — cronograma na régua nova, cabeçalho próprio, seis cartões, "Documentos" leva ao bloco', async () => {
     banco.contrato = FINANCIAMENTO('financiamento');
-    banco.situacao = { ...SITUACAO([{ valor_juros: 100, valor_total: 8219, lancamento_juros_id: 'lj-1', ...DET({ documentos: [] }) }], { juros_previstos: 100, ...CART({ notas_qtde: 0, notas_valor: null, notas_diferenca: null, boletos: 0 }) }), natureza: 'financiamento' };
+    banco.situacao = { ...SITUACAO([{ valor_principal: 0, valor_juros: 100, valor_total: 100, lancamento_juros_id: 'lj-1', ...DET({ documentos: [] }) }, { valor_juros: 100, valor_total: 8219, ...DET({ documentos: [] }) }],
+      { juros_previstos: 200, soma_principal: 8119, ...CART({ notas_qtde: 0, notas_valor: null, notas_diferenca: null, boletos: 0 }) }), natureza: 'financiamento',
+      saldo: { aplica_saldo: true, regra: 'calculado', contratado: 16238, liberado: null, liberacoes: 0, amortizado: 0, saldo: null, juros_pagos: 0, juros_previstos: 200, pendencias: ['sem_liberacao'] } };
     await abrirDetalhe();
     const cab = Array.from(screen.getByTestId('rodape-das-parcelas').closest('table')!.querySelectorAll('thead th')).map((th) => th.textContent);
-    expect(cab).toEqual(['Nº', 'Comp.', 'Venc.', 'Pgto.', 'Prazo', 'Conta', 'Principal', 'Juros', 'Total (R$)', 'Situação', '', '']);
-    expect(Array.from(linhasDoContrato()[0].querySelectorAll('td')).map((td) => td.textContent).slice(6, 9)).toEqual(['8.119,00', '100,00', '8.219,00']);
+    expect(cab).toEqual(['Parc.', 'Venc.', 'Pgto.', 'Prazo', 'Principal', 'Juros', 'Total (R$)', 'Saldo após', 'Situação', 'Lançamento', '']);
+    const celulas = (i: number) => Array.from(linhasDoContrato()[i].querySelectorAll('td')).map((td) => td.textContent);
+    /* principal zero = "carência"; saldo após = contratado − principal acumulado (o dono puro) */
+    expect(celulas(0).slice(4, 8)).toEqual(['carência', '100,00', '100,00', '16.238,00']);
+    expect(celulas(1).slice(4, 8)).toEqual(['8.119,00', '100,00', '8.219,00', '8.119,00']);
+    expect(screen.getByTestId('total-das-parcelas').textContent).toBe('16.238,00');
     expect(screen.queryByTestId('total-notas')).toBeNull();
-    const documentos = screen.getByRole('button', { name: /Documentos/ }) as HTMLButtonElement;
-    expect([documentos.disabled, documentos.title]).toEqual([true, 'Documentos no contrato: só em parcelamento. No financiamento com juros a nota e o boleto ficam no lançamento.']);
-    expect(cartao('Juros previstos')).toContain('100,00');
+    /* o aviso do principal que não soma o contratado (só informa) */
+    expect(screen.getByTestId('avisos-do-cronograma').textContent).toContain('8.119,00 abaixo do contratado');
+    /* cabeçalho: nº · credor · descrição; seis cartões; saldo devedor "?" sem liberação (do banco, nunca deduzido) */
+    expect(screen.getByTestId('numero-do-contrato').textContent).toBe('C-9');
+    expect(screen.getAllByTestId('cartoes-do-credito')[0].children.length).toBe(6);
+    expect(screen.getByTestId('cartao-saldo').textContent).toBe('Saldo devedor?');
+    expect(screen.getByTestId('cartao-saldo').getAttribute('title')).toBe('Sem liberação gravada: o saldo devedor não se deduz do contratado.');
+    expect(screen.getByTestId('cartao-Contratado').textContent).toBe('ContratadoR$ 16.238,00');
+    expect((screen.getByTestId('dar-baixa') as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByTestId('dar-baixa').getAttribute('title')).toBe('Disponível no próximo passo');
+    expect((screen.getByTestId('ir-para-documentos') as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.getByTestId('bloco-documentos')).toBeTruthy();
+    expect(screen.getByTestId('bloco-liberacoes')).toBeTruthy();
+    expect(screen.getByTestId('bloco-destinacoes')).toBeTruthy();
+    /* sem Excluir no crédito (vira "Dar baixa", passo 5) */
+    expect(screen.queryByRole('button', { name: /Excluir/ })).toBeNull();
   });
 
   it('a tela não soma nem decide quem está pago, e não abre mais o editor antigo de parcela (a fonte prende)', () => {

@@ -43,6 +43,8 @@ export const TEXTO_PENDENCIA: Record<string, string> = {
   liberado_maior_que_contratado: 'liberado maior que o contratado',
   amortizado_maior_que_liberado: 'amortizado maior que o liberado',
   sem_numero_contrato: 'falta nº do contrato',
+  /* FIN-FINANC-28 PASSO 4 — o banco (`_fn_financiamento_saldo`) diz quando falta a cédula viva do contrato */
+  sem_documento: 'falta a cédula do contrato',
 };
 export const TEXTO_PENDENCIA_CURTO: Record<string, string> = {
   sem_liberacao: 'sem lib.',
@@ -50,6 +52,7 @@ export const TEXTO_PENDENCIA_CURTO: Record<string, string> = {
   liberado_maior_que_contratado: 'lib. > contr.',
   amortizado_maior_que_liberado: 'amort. > lib.',
   sem_numero_contrato: 'sem nº',
+  sem_documento: 'sem doc',
 };
 /** O que a coluna estreita mostra: a primeira pendência, curta, e "+N" quando há mais (todas, por extenso, vão no `title`). */
 export const pendenciaCurta = (codigos: readonly string[]): string =>

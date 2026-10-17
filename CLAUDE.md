@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 17/10/2026 (FIN-FINANC-28 P3-GRAFICO, +16: `src/lib/financiamentos/cronogramaEmAberto.test.ts` 8 (novo),
+  Baseline em 17/10/2026 (FIN-FINANC-28 PASSO 4, +15: `src/components/financiamentos/contratoDeCredito.test.tsx` 14 (novo),
+  `src/lib/acessos/guardaDeClienteNasMigrations.test.ts` 1 (5 -> 6) — 5568 depois dele; antes o FIN-FINANC-28 P3-GRAFICO, +16: `src/lib/financiamentos/cronogramaEmAberto.test.ts` 8 (novo),
   `src/components/financiamentos/cronogramaEmAberto.test.tsx` 6 (novo), `src/components/financiamentos/listaDeFinanciamentos.test.tsx` 2
   (16 -> 18) — 5553 depois dele; antes o FIN-FINANC-28-P3-FIX4, +1: `src/pages/financiamentosListaCompacta.test.tsx` 3 (10 -> 13: os filtros (a)(b)(c));
   saiu `src/lib/fornecedores/nomeCurtoDoCredor.test.ts` 2, com o encurtador que testava — 5537 depois dele; antes o FIN-FINANC-28-P3-FIX3, +3: `src/pages/financiamentosListaCompacta.test.tsx` 3 (7 -> 10: a volta do contrato
@@ -363,7 +364,7 @@ no mesmo arquivo.
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
   `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5327
-  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO], 22 skipped, e
+  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO; 5568 desde o FIN-FINANC-28 PASSO 4], 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -2212,6 +2213,34 @@ preview que o cabecalho nao sai da tela ao rolar.
     documento por `financiamento_id` — a pendencia "sem documento" fica para o passo 4.
   ⚠ NAO PROVADO NO NAVEGADOR: nada com login (bancada com a pagina real e o banco simulado) · hoje os 41 ativos estao com "?" e
     `sem_liberacao` (a tabela de liberacoes esta' vazia).
+- ⚠ A TELA DO CONTRATO DE CREDITO TEM LIBERACOES, DESTINACOES, CRONOGRAMA E DOCUMENTOS, E TODO GESTO E' UMA RPC COM O CONTRARIO
+  (FIN-FINANC-28 PASSO 4, Gabriel 17/10/2026; mock `docs/mocks/mock-financiamentos-v1_2.html` secao 2; migration
+  `supabase/migrations/20261027200200_fin_financ_28_p4_contrato.sql`, md5 do arquivo 0cbe209ddbd9716fb854ba6c1901eed4 — APLICADA no proto
+  em 17/10/2026, ledger 20261017134549 `fin_financ_28_p4_contrato`, ⚠ timestamp do dia; ledger = arquivo byte a byte). COMPRA PARCELADA
+  NAO MUDOU (fotos e medidas iguais). So' financiamento e emprestimo.
+  · BANCO: tabela `financiamento_documentos` (especie cedula | aditivo | demonstrativo_saldo | comprovante_liberacao | comprovante_pagamento
+    | outro; cancela com motivo, nunca apaga; RLS so' leitura por `tenant_ok`; arquivo no bucket `fin-documentos`, pasta
+    `<cliente>/financiamentos/<contrato>/<doc>.<ext>`). Sete publicas SECURITY DEFINER, guarda pelo cliente do CONTRATO na interna
+    `_fn_contrato_do_usuario` (tenant_ok + 42501; fechada a authenticated — o detector `guardaDeClienteNasMigrations` a reconhece):
+    `fn_financiamento_liberacao_salvar` (f67bcbaa…; "em conta" APONTA para a entrada que ja' existe — nunca cria lancamento; sem ela,
+    "a casar"; fornecedor e liquidacao sem caixa; o mesmo lancamento em duas liberacoes vivas recusa) · `_liberacao_remover` (b7452040…;
+    cancela com motivo — o vinculo acaba junto) · `_destinacao_salvar` (5c108c98…) · `_destinacao_remover` (2f4b8b39…; recusa com liberacao
+    viva nela) · `_documento_registrar` (4b03683c…; devolve o caminho; a tela sobe depois e, se a subida falhar, cancela o registro) ·
+    `_documento_remover` (ef4d7ce1…) · `fn_financiamento_captacoes_livres` (094ded33…; leitura: entradas sem contrato e sem liberacao viva).
+    `_fn_financiamento_saldo` 799d2053… -> aa12b362… (patch guardado por md5): pendencia `sem_documento` (sem cedula viva) — a lista
+    mostra "sem doc" (curta) / "falta a cédula do contrato" (title); fica DEPOIS das outras na coluna estreita ("sem lib. +1").
+    Teste `supabase/tests/fin_financ_28_p4_contrato_test.sql` (L1–L4, D1, C1, G1) OK no vivo; 3 mutacoes mortas.
+  · TELA: `ContratoDeCredito.tsx` (so' desenha; sem soma, preso por teste) + `useContratoDeCredito.ts` (leituras separadas, sem embed;
+    gestos pelas RPCs; rele cartoes, saldo e lista sem F5) + o dono puro `contratoDeCredito.ts` (total das liberacoes, orcado × liberado,
+    encargos, "saldo apos" = contratado − principal acumulado, os dois avisos do cronograma, o subtitulo). Cabecalho: "← Financiamentos" ·
+    Nº · credor inteiro + CNPJ/CPF · descricao; subtitulo; [Editar contrato] [Dar baixa ▾ apagado ate' o passo 5] [Documentos rola ate' o
+    bloco]. Seis cartoes do banco (saldo devedor "?" sem liberacao). Liberacoes e Destinacoes UMA EMBAIXO DA OUTRA (lado a lado, a 1.126, a
+    coluna "Conta ou fornecedor" ficava com ~20px — desvio do mock, declarado). Cronograma na regua nova do credito (`reguaDasParcelas`:
+    Parc. · Venc. · Pgto. · Prazo · Principal ("carência" quando 0) · Juros · Total · Saldo apos · Situacao · Lancamento (↔ principal / ↔
+    juros) · lapis; sairam Comp. e Conta). O credito tem UM scrollport (a tela); a compra parcelada segue com a tabela rolando.
+    O "Excluir" saiu do credito (volta como "Dar baixa › Cancelado" no passo 5).
+  ⚠ NAO PROVADO NO NAVEGADOR com login (bancada com a pagina real e o lote real do proto) · nenhuma liberacao/destinacao/documento real
+    (as tabelas estao vazias; a vista "pr78demo" da bancada e' SIMULADA) · upload real ao bucket e a URL assinada.
 - ⚠ "O QUE FALTA PAGAR": O CRONOGRAMA SAI DO MESMO LOTE DOS CARDS, E A SOMA DAS COLUNAS E' O CARD (FIN-FINANC-28 P3-GRAFICO, Gabriel
   17/10/2026, so' tela; mock `docs/mocks/mock-financiamentos-v1_2.html` secao 6, md5 e2f9594082c7fb628899b5ee569f4dc7). Clicar no card
   "A pagar" de Compras parceladas abre o modal MES A MES; clicar no card NOVO "Parcelas a pagar" da aba Financiamentos abre o ANO A ANO (empilhado:
