@@ -29,6 +29,8 @@ const api = (o: Partial<Api> = {}): Api => ({
   salvarLiberacao: vi.fn(async () => null), removerLiberacao: vi.fn(async () => null), salvarDestinacao: vi.fn(async () => null),
   removerDestinacao: vi.fn(async () => null), enviarDocumento: vi.fn(async () => null), removerDocumento: vi.fn(async () => null),
   urlDoDocumento: vi.fn(async () => null), lerCaptacoesLivres: vi.fn(async () => []), lerContratosAnteriores: vi.fn(async () => []),
+  vinculos: [], buscar: vi.fn(async () => "x"), vincularPagamento: vi.fn(async () => "x"), desvincularPagamento: vi.fn(async () => "x"),
+  lerEncargosPerto: vi.fn(async () => []), vincularEncargo: vi.fn(async () => null),
   ...o,
 });
 const SALDO = (o: Partial<SaldoDoContrato> = {}): SaldoDoContrato => ({

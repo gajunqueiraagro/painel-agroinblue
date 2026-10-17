@@ -31,6 +31,7 @@ import {
   type EspecieDoContrato, type FormaDaLiberacao, type LiberacaoDoContrato,
 } from '@/lib/financiamentos/contratoDeCredito';
 import type { SaldoDoContrato } from '@/lib/financiamentos/situacaoDoContrato';
+import { BuscarEntradasDialog } from '@/components/financiamentos/BuscarNoContrato';
 
 type ApiDoContrato = ReturnType<typeof useContratoDeCredito>;
 
@@ -116,10 +117,15 @@ export function BlocoLiberacoes({ api, contaDoContrato, onAbrirLancamento, clien
   const libs = api.liberacoes;
   const [editando, setEditando] = useState<LiberacaoDoContrato | 'nova' | null>(null);
   const [removendo, setRemovendo] = useState<LiberacaoDoContrato | null>(null);
+  const [buscando, setBuscando] = useState(false);
   return (
     <div className="flex min-w-0 flex-col rounded-lg border bg-card px-2 pb-1.5 pt-1" data-testid="bloco-liberacoes">
       <Titulo nome="Liberações" dica="em conta casa com o extrato · direto ao fornecedor = dívida + investimento sem caixa"
-        acao={<Button variant="outline" size="sm" className="h-[20px] gap-1 px-2 text-[10px]" onClick={() => setEditando('nova')} data-testid="nova-liberacao"><Plus className="size-3" /> liberação</Button>} />
+        acao={<div className="flex gap-1">
+          <Button variant="outline" size="sm" className="h-[20px] px-2 text-[10px]" onClick={() => setBuscando(true)} data-testid="buscar-entradas-botao"
+            title="Entradas do cliente que podem ser a captação deste contrato (e os encargos do credor perto delas)">Buscar entradas</Button>
+          <Button variant="outline" size="sm" className="h-[20px] gap-1 px-2 text-[10px]" onClick={() => setEditando('nova')} data-testid="nova-liberacao"><Plus className="size-3" /> liberação</Button>
+        </div>} />
       <table className="w-full table-fixed border-collapse">
         <colgroup><col style={{ width: 64 }} /><col style={{ width: 92 }} /><col style={{ width: 118 }} /><col /><col style={{ width: 120 }} /><col style={{ width: 44 }} /></colgroup>
         <thead><tr><th className={TH}>Data</th><th className={TH_R}>Valor</th><th className={TH}>Forma</th><th className={TH}>Conta ou fornecedor</th><th className={TH}>Extrato / lançamento</th><th className={TH} /></tr></thead>
@@ -159,6 +165,7 @@ export function BlocoLiberacoes({ api, contaDoContrato, onAbrirLancamento, clien
       {editando && (
         <LiberacaoDialog api={api} clienteId={clienteId} atual={editando === 'nova' ? null : editando} aoFechar={() => setEditando(null)} />
       )}
+      {buscando && <BuscarEntradasDialog api={api} aoFechar={() => setBuscando(false)} />}
       {removendo && (
         <RemoverDialog titulo="Remover liberação" comMotivo
           frase={`${br(removendo.data)} · ${reais(removendo.valor)} · ${ROTULO_DA_FORMA[removendo.forma]}. A liberação é cancelada${removendo.lancamentoId ? ' e o lançamento deixa de estar ligado ao contrato' : ''}; o saldo devedor é relido.`}
@@ -453,7 +460,7 @@ function DestinacaoDialog({ api, atual, aoFechar }: { api: ApiDoContrato; atual:
 }
 
 /** O gesto contrário, com o que acontece escrito; motivo obrigatório quando o banco o guarda. A recusa fica no diálogo. */
-function RemoverDialog({ titulo, frase, comMotivo, aoConfirmar, aoFechar }: {
+export function RemoverDialog({ titulo, frase, comMotivo, aoConfirmar, aoFechar }: {
   titulo: string; frase: string; comMotivo?: boolean; aoConfirmar: (motivo: string) => Promise<string | null>; aoFechar: () => void;
 }) {
   const [motivo, setMotivo] = useState('');

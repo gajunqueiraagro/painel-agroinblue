@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 17/10/2026 (FIN-FINANC-28 PASSO 4c, +2: `src/lib/financiamentos/graficoDeSaidas.test.ts` 9 (novo),
+  Baseline em 17/10/2026 (FIN-FINANC-28 PASSO 4b, +8: `src/components/financiamentos/buscarNoContrato.test.tsx` 7 (novo),
+  `src/lib/acessos/guardaDeClienteNasMigrations.test.ts` 1 (6 -> 7) — 5581 depois dele; antes o FIN-FINANC-28 PASSO 4c, +2: `src/lib/financiamentos/graficoDeSaidas.test.ts` 9 (novo),
   `src/pages/financiamentosListaCompacta.test.tsx` 1 (13 -> 14); saiu `src/lib/financiamentos/cronogramaEmAberto.test.ts` 8, com o dono que
   testava; `cronogramaEmAberto.test.tsx` reescrito ao contrato novo (6 -> 6) — 5573 depois dele; antes o FIN-FINANC-28 RESUMO-A18, +3: `src/components/financiamentos/resumoDaObrigacao.test.ts` 3 (novo) — 5571
   depois dele; antes o FIN-FINANC-28 PASSO 4, +15: `src/components/financiamentos/contratoDeCredito.test.tsx` 14 (novo),
@@ -367,7 +368,7 @@ no mesmo arquivo.
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
   `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5327
-  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO; 5568 desde o FIN-FINANC-28 PASSO 4; 5571 desde o FIN-FINANC-28 RESUMO-A18; 5573 desde o FIN-FINANC-28 PASSO 4c], 22 skipped, e
+  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO; 5568 desde o FIN-FINANC-28 PASSO 4; 5571 desde o FIN-FINANC-28 RESUMO-A18; 5573 desde o FIN-FINANC-28 PASSO 4c; 5581 desde o FIN-FINANC-28 PASSO 4b], 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -2259,6 +2260,43 @@ preview que o cabecalho nao sai da tela ao rolar.
     O "Excluir" saiu do credito (volta como "Dar baixa › Cancelado" no passo 5).
   ⚠ NAO PROVADO NO NAVEGADOR com login (bancada com a pagina real e o lote real do proto) · nenhuma liberacao/destinacao/documento real
     (as tabelas estao vazias; a vista "pr78demo" da bancada e' SIMULADA) · upload real ao bucket e a URL assinada.
+- ⚠ NO CONTRATO DE CREDITO SE BUSCA A ENTRADA E O PAGAMENTO COMO NA OC: O BANCO SUGERE E DECIDE, E O PAGAMENTO DO OPERADOR NAO E' REESCRITO
+  (FIN-FINANC-28 PASSO 4b, Gabriel 17/10/2026; migrations `supabase/migrations/20261027200300_fin_financ_28_p4b_buscar.sql`, md5 do arquivo
+  6bf4a2c60f5c4a89fd40a884245d1819, ledger 20261017144610 `fin_financ_28_p4b_buscar`, e `20261027200400_fin_financ_28_p4b_guarda.sql`, md5
+  4e09e3c17cb87f8d314927d6c62e3321, ledger 20261017145831 `fin_financ_28_p4b_guarda` — APLICADAS no proto em 17/10/2026, ⚠ timestamp do dia;
+  ledger = arquivo byte a byte). So' financiamento e emprestimo.
+  · LEITURA UNICA: `fn_financiamento_candidatas(contrato, alvo 'liberacao'|'parcela', parcela)` (f191ceac…): candidatas com pontos,
+    motivos (em portugues), papel sugerido e "onde ja' esta'" (`outro`: parcela_vinculada / encargo — moviveis —, parcela_do_contrato /
+    outro_contrato — nao). LIBERACAO: entradas sem contrato, sem liberacao viva, fora de OC, de 30 dias antes a 365 depois do contrato,
+    com plano 4030/4040/4050 OU credor OU nº do contrato (4+ digitos) OU nome do credor na descricao (`_fn_credor_na_descricao`: palavras
+    de 4+ letras fora das genericas — so' marca); a tela grava pelo `fn_financiamento_liberacao_salvar` de sempre. PARCELA: saidas a ±45
+    dias do vencimento, com valor a ate' 10% do principal, dos juros ou do total, com plano 16010/16020/16030/7010/12010/20310/6040/21090
+    OU credor OU nº OU nome; os lancamentos das parcelas DESTE contrato nao sao candidatos.
+  · VINCULAR PAGAMENTO: `fn_financiamento_parcela_vincular(parcela, lancamento, papel principal|juros|total, mover, simular)` (fbd43b3f…;
+    simulacao = a gravacao desfeita, SQLSTATE 'FPSIM'; recusa na simulacao em `recusa.frase`). A parcela aponta para o pagamento
+    (no total, `lancamento_juros_id` fica nulo), o programado que estava no lugar e' CANCELADO pelo dono, o pagamento ganha SO'
+    `financiamento_id` (valor, datas, status, conta, plano e favorecido identicos, preso por md5 no teste), a parcela acompanha o
+    valor (`_fn_parcela_acompanha_lancamento`, que NAO reparte o papel total — patch fda1bfda… -> b44939ab…) e fica paga quando todos
+    os lancamentos vivos dela estao realizados. Lugar com lancamento pago ou casado recusa. Mover (outra parcela/contrato ou encargo)
+    so' com `mover` e a confirmacao na tela; parcela de outro contrato SEM vinculo nao se move ("ajuste por aquele contrato").
+  · TRILHA `financiamento_parcela_vinculos` (antes da parcela e do lancamento; RLS so' leitura por `tenant_ok`; unico vivo por
+    lancamento e por parcela+papel). O MOTOR `fn_reconciliar_parcela_financiamento` (368310fa… -> 0ffca819…, patch guardado por md5)
+    PULA a parcela com vinculo vivo ('pagamento_vinculado_pelo_operador').
+  · DESVINCULAR (o gesto contrario): `fn_financiamento_parcela_desvincular(vinculo, motivo, simular)` (83f90dc7…): motivo obrigatorio;
+    a parcela volta a' foto, o `financiamento_id` posto sai e o MOTOR recria o programado; a parcela que era "paga sem lancamento"
+    volta assim, SEM chamar o motor (ele criaria um realizado).
+  · ENCARGOS perto da liberacao: `fn_contrato_encargos_vinculaveis` + o recorte puro `encargosPertoDasLiberacoes` (IOF, tarifa/TAC e
+    seguro a ate' 15 dias de uma liberacao), gravados por `fn_contrato_encargo_vincular`. Nada novo no banco.
+  · TELA: "Buscar entradas" no bloco Liberacoes (`BuscarEntradasDialog`) e "Buscar" / "desvincular" na coluna Lancamento do cronograma
+    (`BuscarPagamentoDialog`), dialogos 1000 × 520 fixos, prévia/recusa num lugar de 30px. Dono puro `src/lib/financiamentos/buscaNoContrato.ts`.
+    Medido na bancada a 1.126 e 1.440: celula do pior caso 132 de 136px; linhas de 25px; dialogos sem rolagem. A 523 de altura o dialogo
+    (520) nao cabe — o limite e' a janela de 579.
+  · O DETECTOR `guardaDeClienteNasMigrations` JULGA A ULTIMA DEFINICAO de cada funcao (`ultimasSemGuarda`): migration aplicada nao se
+    reescreve; a guarda que faltou entra numa seguinte (a 200400 pos `_fn_contrato_do_usuario` a' vista nas duas publicas).
+  Teste: `supabase/tests/fin_financ_28_p4b_buscar_test.sql` (B1–B9) OK no vivo; 2 mutacoes de banco mortas (nao cancelar o programado
+  -> B4; desvincular sempre chamando o motor -> B9) e 1 de tela (o botao sem a trava da recusa / do mover).
+  ⚠ NAO PROVADO: nada com login · as RPCs pelo PostgREST · candidatas e vinculo com dado real (nenhum vinculado) · os dialogos com
+    resposta real (a bancada nao tem a RPC: medida so' a casca) · o fluxo de quitacao do P3-FIX4 disparado pela tela.
 - ⚠ GRAFICOS DE SAIDA: LARANJA / VIOLETA / VERMELHO / CINZA; AZUL SO' PARA ENTRADA; EIXOS COM ESCALA; PERIODOS COMPLETOS; LINHA DE HOJE NO
   MENSAL (regra da casa, Gabriel 17/10/2026, FIN-FINANC-28 passo 4c; mock `docs/mocks/mock-grafico-a-pagar-v2.html`, md5
   cb2c0e014f3e8dad6958fa95d39cb435). Cores num lugar so', `COR_SAIDA` (`src/lib/graficos/coresDeSaida.ts`): a pagar / principal #d97706,

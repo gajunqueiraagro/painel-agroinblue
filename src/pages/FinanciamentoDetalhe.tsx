@@ -36,7 +36,10 @@ import { alinhamentoDoCabecalho, colunasDasParcelas, type ColunaDasParcelas } fr
 import { TABELA_LANC, TD_DATA_LANC, TD_VALOR_LANC, LINHA_LANC, TH_LANC, SeloDoContrato } from '@/components/financiamentos/ListaDeFinanciamentos';
 import { GradeChaveValor } from '@/components/shared/GradeChaveValor';
 import { formatarDocumento, nomeEDocumento } from '@/lib/fornecedores/fornecedorTexto';
-import { AvisosDoCronograma, BlocoDestinacoes, BlocoDocumentos, BlocoLiberacoes, CabecalhoDoCredito } from '@/components/financiamentos/ContratoDeCredito';
+import { AvisosDoCronograma, BlocoDestinacoes, BlocoDocumentos, BlocoLiberacoes, CabecalhoDoCredito, RemoverDialog } from '@/components/financiamentos/ContratoDeCredito';
+import { BuscarPagamentoDialog } from '@/components/financiamentos/BuscarNoContrato';
+import { ROTULO_DO_PAPEL } from '@/lib/financiamentos/buscaNoContrato';
+import type { VinculoDePagamento } from '@/hooks/useContratoDeCredito';
 import { useContratoDeCredito } from '@/hooks/useContratoDeCredito';
 import { avisosDoCronograma, saldoAposDasParcelas, subtituloDoContrato } from '@/lib/financiamentos/contratoDeCredito';
 import { resumoDoContratoNaLista } from '@/lib/financiamentos/situacaoEmLote';
@@ -154,6 +157,9 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
   /* FIN-FINANC-28 PASSO 4 — liberações, destinações e documentos do contrato de crédito (o hook roda sempre: regra dos hooks;
      na compra parcelada a tela não o desenha) */
   const credito = useContratoDeCredito(id, clienteId);
+  /* PASSO 4b — buscar o pagamento de uma parcela / desfazer o vínculo (os dois diálogos são donos da gravação) */
+  const [buscarPagamentoDe, setBuscarPagamentoDe] = useState<string | null>(null);
+  const [desvinculando, setDesvinculando] = useState<VinculoDePagamento | null>(null);
   const refDocumentos = useRef<HTMLDivElement>(null);
 
   /* FIN-FINANC-28-P3-FIX2 — a "Data de liberação" do cabeçalho: a 1ª liberação VIVA do contrato (sem liberação: "—") */
@@ -756,6 +762,29 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
                             </button>
                           )}
                           {!p.lancamentoId && !p.lancamentoJurosId && <span className="text-muted-foreground">—</span>}
+                          {/* PASSO 4b: pagamento vinculado pelo operador -> "desvincular"; em aberto ou "paga sem lançamento" -> "Buscar" */}
+                          {(() => {
+                            const vs = credito.vinculos.filter(v => v.parcelaId === p.id);
+                            if (vs.length > 0) {
+                              return (
+                                <>
+                                  <span className="px-1 text-muted-foreground">·</span>
+                                  <button type="button" className="text-[10px] font-medium text-destructive hover:underline" data-testid="desvincular-pagamento"
+                                    title={`Pagamento vinculado (${vs.map(v => ROTULO_DO_PAPEL[v.papel]).join(', ')}) · desvincular volta a parcela como estava`}
+                                    onClick={(e) => { e.stopPropagation(); setDesvinculando(vs[0]); }}>desvincular</button>
+                                </>
+                              );
+                            }
+                            const podeBuscar = p.situacao !== 'paga' || (!p.lancamentoId && !p.lancamentoJurosId);
+                            return podeBuscar ? (
+                              <>
+                                <span className="px-1 text-muted-foreground">·</span>
+                                <button type="button" className="text-[10px] font-medium text-primary hover:underline" data-testid="buscar-pagamento-botao"
+                                  title="Procurar no Financeiro o lançamento que pagou esta parcela"
+                                  onClick={(e) => { e.stopPropagation(); setBuscarPagamentoDe(p.id); }}>Buscar</button>
+                              </>
+                            ) : null;
+                          })()}
                         </TableCell>
                       )}
                       <TableCell className="px-0 text-right select-none">
@@ -902,6 +931,16 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
 
       {/* ── O lançamento da parcela, no modal do Financeiro: é nele que se paga e se edita; ao salvar, esta tela relê sozinha ── */}
       <LancamentoDaParcelaDialog lancamentoId={lancamentoAberto} clienteId={clienteId} aoFechar={() => setLancamentoAberto(null)} />
+      {buscarPagamentoDe && (() => {
+        const alvo = linhas.find(x => x.id === buscarPagamentoDe);
+        return alvo ? <BuscarPagamentoDialog api={credito} parcela={alvo} aoFechar={() => setBuscarPagamentoDe(null)} /> : null;
+      })()}
+      {desvinculando && (
+        <RemoverDialog titulo="Desvincular pagamento da parcela" comMotivo
+          frase={`O pagamento sai da parcela (${ROTULO_DO_PAPEL[desvinculando.papel]}): ela volta como estava e o lançamento programado é recriado. O lançamento do Financeiro não é apagado nem alterado.`}
+          aoConfirmar={async (motivo) => { const r = await credito.desvincularPagamento(desvinculando.id, motivo, false); return typeof r === 'string' ? r : r.recusa; }}
+          aoFechar={() => setDesvinculando(null)} />
+      )}
     </div>
   );
 }

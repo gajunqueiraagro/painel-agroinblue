@@ -13,8 +13,8 @@ import { join } from 'node:path';
 const DIR = 'supabase/migrations';
 const DESDE = '20261027198600';
 
-/** As funcoes SECURITY DEFINER com parametro de cliente sem guarda, num texto de migration. */
-export function semGuarda(sql: string): string[] {
+/** Cada funcao SECURITY DEFINER exposta (parametro de cliente, ou so' o id) de um texto de migration, e se tem guarda. */
+export function definicoesExpostas(sql: string): { nome: string; guardada: boolean }[] {
   const partes = sql.split(/(?=CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s)/i).filter(p => /^CREATE\s/i.test(p));
   return partes.flatMap(p => {
     const cab = p.match(/^CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+([\w.]+)\s*\(([^)]*)\)/i);
@@ -28,8 +28,24 @@ export function semGuarda(sql: string): string[] {
     const guardada = /tenant_ok\s*\(/i.test(p) || /_fn_exigir_tenant(_das_linhas)?\s*\(/i.test(p)
       || /_fn_contrato_do_usuario\s*\(/i.test(p)
       || (/is_admin_agroinblue\s*\(/i.test(p) && /42501/.test(p));
-    return guardada ? [] : [nome];
+    return [{ nome, guardada }];
   });
+}
+
+/** As funcoes SECURITY DEFINER com parametro de cliente sem guarda, num texto de migration. */
+export function semGuarda(sql: string): string[] {
+  return definicoesExpostas(sql).filter((d) => !d.guardada).map((d) => d.nome);
+}
+
+/**
+ * FIN-FINANC-28 passo 4b: migration aplicada e' REGISTRO HISTORICO (o ledger guarda o arquivo byte a byte) e nao se reescreve —
+ * a guarda que faltou entra numa migration seguinte que REDEFINE a funcao. Vale a ULTIMA definicao de cada funcao, na ordem dos
+ * arquivos. Devolve "arquivo: nome" das que terminam sem guarda.
+ */
+export function ultimasSemGuarda(arquivos: readonly { arquivo: string; sql: string }[]): string[] {
+  const ultima = new Map<string, { arquivo: string; guardada: boolean }>();
+  for (const a of arquivos) for (const d of definicoesExpostas(a.sql)) ultima.set(d.nome.toLowerCase(), { arquivo: a.arquivo, guardada: d.guardada });
+  return [...ultima.entries()].filter(([, v]) => !v.guardada).map(([nome, v]) => `${v.arquivo}: ${nome}`);
 }
 
 describe('guarda de cliente nas migrations novas', () => {
@@ -69,8 +85,19 @@ describe('guarda de cliente nas migrations novas', () => {
   it('nenhuma migration nova tem funcao SECURITY DEFINER com parametro de cliente sem guarda', () => {
     const novas = readdirSync(DIR).filter(f => f.endsWith('.sql') && f >= DESDE).sort();
     expect(novas).toContain('20261027198600_seg_dre_tenant_01.sql');
-    const achados = novas.flatMap(f => semGuarda(readFileSync(join(DIR, f), 'utf8')).map(n => `${f}: ${n}`));
+    const achados = ultimasSemGuarda(novas.map(f => ({ arquivo: f, sql: readFileSync(join(DIR, f), 'utf8') })));
     expect(achados).toEqual([]);
+  });
+
+  it('vale a ULTIMA definicao: a guarda posta numa migration seguinte fecha a anterior; a ultima sem guarda reprova', () => {
+    const sem = `CREATE OR REPLACE FUNCTION public.fn_p(p_id uuid) RETURNS void LANGUAGE sql SECURITY DEFINER AS $$ select 1 $$;`;
+    const com = `CREATE OR REPLACE FUNCTION public.fn_p(p_id uuid) RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
+      begin perform public._fn_contrato_do_usuario(p_id); end $$;`;
+    expect(ultimasSemGuarda([{ arquivo: 'a.sql', sql: sem }, { arquivo: 'b.sql', sql: com }])).toEqual([]);
+    expect(ultimasSemGuarda([{ arquivo: 'a.sql', sql: com }, { arquivo: 'b.sql', sql: sem }])).toEqual(['b.sql: public.fn_p']);
+    const sql = readFileSync(join(DIR, '20261027200400_fin_financ_28_p4b_guarda.sql'), 'utf8');
+    expect(semGuarda(sql)).toEqual([]);
+    expect(definicoesExpostas(sql).map((d) => d.nome)).toEqual(['public.fn_financiamento_parcela_vincular', 'public.fn_financiamento_parcela_desvincular']);
   });
 
   it('a migration do DRE poe a guarda nas 7 funcoes da familia (tenant_ok) e fecha a interna', () => {

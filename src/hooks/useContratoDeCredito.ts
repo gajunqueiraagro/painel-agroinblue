@@ -16,9 +16,15 @@ import {
   type DestinacaoDoContrato, type DocumentoDoContrato, type EncargoDoContrato, type EspecieDoContrato, type FormaDaLiberacao, type LiberacaoDoContrato,
 } from '@/lib/financiamentos/contratoDeCredito';
 import { extensaoDoArquivo } from '@/lib/oc/caminhoDocumento';
+import {
+  encargosPertoDasLiberacoes, janelaDosEncargos, lerBuscaNoContrato, lerResultadoDoVinculo,
+  type BuscaNoContrato, type EncargoSugerido, type PapelDoPagamento, type ResultadoDoVinculo,
+} from '@/lib/financiamentos/buscaNoContrato';
+import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
 
 export const BUCKET_DO_CONTRATO = 'fin-documentos';
-const CHAVES_DA_TELA = ['contrato-liberacoes', 'contrato-destinacoes', 'contrato-documentos', 'contrato-captacoes-livres'];
+const CHAVES_DA_TELA = ['contrato-liberacoes', 'contrato-destinacoes', 'contrato-documentos', 'contrato-captacoes-livres', 'contrato-encargos',
+  'contrato-vinculos-pagamento', 'financiamento-parcelas'];
 const CHAVES_QUE_LEEM_O_SALDO = ['financiamento-situacao', 'financiamentos-lista', 'financiamento-primeira-liberacao', 'painel-financiamentos'];
 
 type Linha = Record<string, unknown>;
@@ -34,6 +40,9 @@ const fraseDoErro = (e: unknown): string => {
 
 export interface CaptacaoLivre { id: string; data: string | null; valor: number; descricao: string | null; conta: string | null; status: string | null }
 export interface ContratoAnterior { id: string; numero: string | null; descricao: string | null }
+
+/** o pagamento que o operador vinculou à parcela (passo 4b) — a trilha viva, por parcela */
+export interface VinculoDePagamento { id: string; parcelaId: string; lancamentoId: string; papel: PapelDoPagamento }
 
 export interface PedidoDeLiberacao {
   id: string | null; data: string; valor: number; forma: FormaDaLiberacao;
@@ -139,6 +148,23 @@ export function useContratoDeCredito(financiamentoId: string | null | undefined,
     },
   });
 
+  /* passo 4b: os pagamentos vinculados pelo operador (a trilha viva) — a linha do cronograma oferece "desvincular" por eles */
+  const vinculos = useQuery({
+    queryKey: ['contrato-vinculos-pagamento', financiamentoId],
+    enabled: ligado,
+    queryFn: async (): Promise<VinculoDePagamento[]> => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- tabela nova, fora do types.ts
+      const { data, error } = await (supabase as any).from('financiamento_parcela_vinculos')
+        .select('id, parcela_id, lancamento_id, papel').eq('financiamento_id', financiamentoId!).is('desfeito_em', null);
+      if (error) throw error;
+      const rows: Linha[] = data ?? [];
+      return rows.flatMap((r) => {
+        const p = r.papel === 'principal' || r.papel === 'juros' || r.papel === 'total' ? r.papel : null;
+        return p ? [{ id: String(r.id), parcelaId: String(r.parcela_id), lancamentoId: String(r.lancamento_id), papel: p }] : [];
+      });
+    },
+  });
+
   const reler = useCallback(() => {
     for (const k of [...CHAVES_DA_TELA, ...CHAVES_QUE_LEEM_O_SALDO]) void qc.invalidateQueries({ queryKey: [k] });
   }, [qc]);
@@ -197,6 +223,62 @@ export function useContratoDeCredito(financiamentoId: string | null | undefined,
     return data.map((r: Linha) => ({ id: String(r.id), data: txt(r.data), valor: num(r.valor), descricao: txt(r.descricao), conta: txt(r.conta), status: txt(r.status) }));
   }, [financiamentoId]);
 
+  /* ═══ passo 4b — buscar entradas e pagamentos (o banco sugere e decide; a tela só lê e confirma) ═══ */
+  const buscar = useCallback(async (alvo: 'liberacao' | 'parcela', parcelaId: string | null): Promise<BuscaNoContrato | string> => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+    const { data, error } = await (supabase as any).rpc('fn_financiamento_candidatas', { p_financiamento_id: financiamentoId, p_alvo: alvo, p_parcela_id: parcelaId });
+    if (error) return fraseDoErro(error);
+    return lerBuscaNoContrato(data) ?? 'Não foi possível ler as candidatas.';
+  }, [financiamentoId]);
+
+  const aposGravarNoFinanceiro = useCallback(() => {
+    reler();
+    if (clienteId) notificarLancamentosMudaram(clienteId);
+  }, [reler, clienteId]);
+
+  const vincularPagamento = useCallback(async (parcelaId: string, lancamentoId: string, papelDoPagamento: PapelDoPagamento, mover: boolean, simular: boolean): Promise<ResultadoDoVinculo | string> => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+    const { data, error } = await (supabase as any).rpc('fn_financiamento_parcela_vincular', {
+      p_parcela_id: parcelaId, p_lancamento_id: lancamentoId, p_papel: papelDoPagamento, p_mover: mover, p_simular: simular,
+    });
+    if (error) return fraseDoErro(error);
+    const r = lerResultadoDoVinculo(data);
+    if (!r) return 'Resposta do banco fora do formato.';
+    if (!simular) aposGravarNoFinanceiro();
+    return r;
+  }, [aposGravarNoFinanceiro]);
+
+  const desvincularPagamento = useCallback(async (vinculoId: string, motivo: string, simular: boolean): Promise<ResultadoDoVinculo | string> => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+    const { data, error } = await (supabase as any).rpc('fn_financiamento_parcela_desvincular', { p_vinculo_id: vinculoId, p_motivo: motivo, p_simular: simular });
+    if (error) return fraseDoErro(error);
+    const r = lerResultadoDoVinculo(data);
+    if (!r) return 'Resposta do banco fora do formato.';
+    if (!simular) aposGravarNoFinanceiro();
+    return r;
+  }, [aposGravarNoFinanceiro]);
+
+  /** os encargos soltos do credor (IOF, tarifa, seguro) perto das liberações — pelo dono de "vinculável a encargo" */
+  const lerEncargosPerto = useCallback(async (datas: readonly string[]): Promise<EncargoSugerido[] | string> => {
+    const j = janelaDosEncargos(datas);
+    if (!j) return [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+    const { data, error } = await (supabase as any).rpc('fn_contrato_encargos_vinculaveis', { p_financiamento_id: financiamentoId, p_de: j.de, p_ate: j.ate });
+    if (error) return fraseDoErro(error);
+    const linhas = typeof data === 'object' && data !== null && 'linhas' in data ? data.linhas : null;
+    return encargosPertoDasLiberacoes(linhas, datas);
+  }, [financiamentoId]);
+
+  const vincularEncargo = useCallback(async (e: EncargoSugerido): Promise<string | null> => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+    const { error } = await (supabase as any).rpc('fn_contrato_encargo_vincular', {
+      p_financiamento_id: financiamentoId, p_itens: [{ lancamento_id: e.lancamentoId, papel: e.papel }], p_simular: false,
+    });
+    if (error) return fraseDoErro(error);
+    aposGravarNoFinanceiro();
+    return null;
+  }, [financiamentoId, aposGravarNoFinanceiro]);
+
   const lerContratosAnteriores = useCallback(async (): Promise<ContratoAnterior[]> => {
     const { data } = await supabase.from('financiamentos').select('id, numero_contrato, descricao, natureza')
       .eq('cliente_id', clienteId!).neq('natureza', 'parcelamento').neq('id', financiamentoId!).order('data_contrato', { ascending: false });
@@ -208,5 +290,6 @@ export function useContratoDeCredito(financiamentoId: string | null | undefined,
     erroDeLeitura: liberacoes.error || destinacoes.error || documentos.error ? 'Não foi possível ler liberações, destinações ou documentos.' : null,
     salvarLiberacao, removerLiberacao, salvarDestinacao, removerDestinacao, enviarDocumento, removerDocumento, urlDoDocumento,
     lerCaptacoesLivres, lerContratosAnteriores,
+    vinculos: vinculos.data ?? [], buscar, vincularPagamento, desvincularPagamento, lerEncargosPerto, vincularEncargo,
   };
 }
