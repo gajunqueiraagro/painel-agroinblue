@@ -29,7 +29,7 @@ const SEM_FAZENDA = '__sem_fazenda__';
  * entrada não.
  */
 const MESCLAR_LIGADO = false;
-export const MOTIVO_MESCLAR_TRAVADO = 'Indisponível: hoje a mesclagem move só os lançamentos financeiros. Será refeita (FORN-MESCLAR-01).';
+export const MOTIVO_MESCLAR_TRAVADO = 'Mesclar agora mora em Cadastros › Fornecedores › "Mesclar fornecedores": move todas as referências e pode ser desfeita.';
 
 interface Fornecedor {
   id: string;

@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Plus, Pencil, Search, Link2, AlertTriangle } from 'lucide-react';
 import { FornecedorFormDialog } from '@/components/financeiro-v2/FornecedorFormDialog';
+import { MesclarFornecedoresDialog } from '@/components/financeiro-v2/MesclarFornecedoresDialog';
 import { toast } from 'sonner';
 import { notificarFornecedoresMudaram } from '@/hooks/useFornecedoresDoCliente';
 import { Segmentado } from '@/components/ui/segmentado';
@@ -62,6 +63,7 @@ const PAGE_SIZE = 100;
 
 export function FinV2FornecedoresTab() {
   const { clienteAtual } = useCliente();
+  const [mesclarAberto, setMesclarAberto] = useState(false);
   const { fazendas } = useFazenda();
   const [items, setItems] = useState<Fornecedor[]>([]);
   const [loading, setLoading] = useState(false);
@@ -249,8 +251,17 @@ export function FinV2FornecedoresTab() {
             {loading ? '…' : `${totalCount.toLocaleString('pt-BR')} ${totalCount === 1 ? 'fornecedor' : 'fornecedores'}`}
           </span>
         </h2>
-        <Button size="sm" onClick={openNew}><Plus className="h-4 w-4 mr-1" /> Novo</Button>
+        <div className="flex items-center gap-2">
+          {/* FORN-MESCLAR-01 — a ferramenta de mesclar (move TODAS as referências, numa transação, e pode ser desfeita) */}
+          <Button size="sm" variant="outline" onClick={() => setMesclarAberto(true)} disabled={!clienteAtual?.id} data-testid="abrir-mesclar-fornecedores">
+            Mesclar fornecedores
+          </Button>
+          <Button size="sm" onClick={openNew}><Plus className="h-4 w-4 mr-1" /> Novo</Button>
+        </div>
       </div>
+      {mesclarAberto && clienteAtual?.id && (
+        <MesclarFornecedoresDialog aberto clienteId={clienteAtual.id} aoFechar={() => { setMesclarAberto(false); void load(); }} />
+      )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="h-8">

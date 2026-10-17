@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 17/10/2026 (FIN-FINANC-28 PASSO 8, +2: `src/lib/app/semFonteMono.test.ts` 2 (novo); trocados ao contrato novo, sem afrouxar,
+  Baseline em 17/10/2026 (FORN-MESCLAR-01, +5: `src/components/financeiro-v2/mesclarFornecedores.test.tsx` 5 (novo); `documentoFiscalNosEscritores`
+  trocado ao contrato novo (a frase do Mesclar antigo) — 5614 depois dele; antes o FIN-FINANC-28 PASSO 8, +2: `src/lib/app/semFonteMono.test.ts` 2 (novo); trocados ao contrato novo, sem afrouxar,
   `centralListaLayout`, `casadoComExtrato`, `duplicarAbreModal`, `fazendaFinanceiro`, `novoDeXml`, `cprRecorte` e `cadastroDeContrato` — 5609 depois
   dele; antes o FIN-FINANC-28 PASSO 7, +14: `src/lib/financiamentos/cadastroDoContrato.test.ts` 7 (novo),
   `src/components/financiamentos/cadastroDeContrato.test.tsx` 7 (novo) — 5607 depois dele; antes o FIN-FINANC-28 PASSO 6, +7: `src/components/financiamentos/financiamentoDoLancamento.test.tsx` 7 (novo) — 5593 depois
@@ -373,7 +374,7 @@ no mesmo arquivo.
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
   `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5327
-  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO; 5568 desde o FIN-FINANC-28 PASSO 4; 5571 desde o FIN-FINANC-28 RESUMO-A18; 5573 desde o FIN-FINANC-28 PASSO 4c; 5581 desde o FIN-FINANC-28 PASSO 4b; 5586 desde o FIN-FINANC-28 PASSO 5; 5593 desde o FIN-FINANC-28 PASSO 6; 5607 desde o FIN-FINANC-28 PASSO 7; 5609 desde o FIN-FINANC-28 PASSO 8], 22 skipped, e
+  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO; 5568 desde o FIN-FINANC-28 PASSO 4; 5571 desde o FIN-FINANC-28 RESUMO-A18; 5573 desde o FIN-FINANC-28 PASSO 4c; 5581 desde o FIN-FINANC-28 PASSO 4b; 5586 desde o FIN-FINANC-28 PASSO 5; 5593 desde o FIN-FINANC-28 PASSO 6; 5607 desde o FIN-FINANC-28 PASSO 7; 5609 desde o FIN-FINANC-28 PASSO 8; 5614 desde o FORN-MESCLAR-01], 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -2269,6 +2270,40 @@ preview que o cabecalho nao sai da tela ao rolar.
     O "Excluir" saiu do credito (volta como "Dar baixa › Cancelado" no passo 5).
   ⚠ NAO PROVADO NO NAVEGADOR com login (bancada com a pagina real e o lote real do proto) · nenhuma liberacao/destinacao/documento real
     (as tabelas estao vazias; a vista "pr78demo" da bancada e' SIMULADA) · upload real ao bucket e a URL assinada.
+- ⚠ MESCLAR FORNECEDORES E' UMA RPC, NUMA TRANSACAO, QUE MOVE TODA REFERENCIA POR ID E SE DESFAZ (FORN-MESCLAR-01, Gabriel 17/10/2026;
+  migration `supabase/migrations/20261027200800_forn_mesclar_01.sql`, md5 do arquivo 9dce85b4f966e2f3e4b895736e771e35 — APLICADA no proto em
+  17/10/2026, ledger 20261017162610 `forn_mesclar_01`, ⚠ timestamp do dia; ledger = arquivo). SUBSTITUI a mesclagem antiga
+  (`FornecedorFormDialog.handleMerge`, que so' movia os lancamentos do Financeiro, em tres idas soltas, sem trilha nem volta; segue
+  travada, com o motivo apontando para a ferramenta nova).
+  · `fn_fornecedor_mesclar(p_manter, p_absorver[], p_simular DEFAULT true)` (d7ff87f6…; SECURITY DEFINER; as linhas tem de existir e
+    ser do MESMO cliente com acesso — `_fn_exigir_tenant_das_linhas`, 42501, sem usuario tambem): move as 22 colunas de id de
+    `_fn_fornecedor_mesclar_alvos` (683a35b8…: as 16 FKs para `financeiro_fornecedores` + 7 colunas sem FK — Financeiro, Recorrencias,
+    Financiamentos, Operacao comercial, Rebanho, Agricultura, Importacao, Cadastro), junta nome, CPF/CNPJ e apelidos dos absorvidos nos
+    `aliases` (jsonb) do que fica, inativa os absorvidos com `fundido_em_id`/`fundido_em`/`fundido_por`/`fundido_motivo` = "mesclado em
+    <nome>" e grava `fornecedor_mesclagem_log` (movidos por tabela/coluna/de/ids, o antes, o resumo por modulo). SIMULACAO = GRAVACAO
+    (SQLSTATE 'FMSIM'). RECUSAS (uma regra, `_fn_fornecedor_mesclar_recusa`, bdee1b72…): lista vazia, o que fica na lista, repetido,
+    o que fica inativo ou ja' mesclado, absorvido ja' mesclado, CPF/CNPJ diferentes (pela chave de digitos e letras). O UPDATE dos
+    lancamentos roda sob `app.propagando_plano` (nao vira "editado manualmente"); o hash de importacao (inclui o favorecido) e'
+    recalculado pelo gatilho e volta no desfazer.
+  · `fn_fornecedor_mesclagem_desfazer(p_mesclagem_id, p_motivo, p_simular)` (6820778b…): motivo obrigatorio; so' a nao desfeita e sem
+    mesclagem MAIS NOVA dos mesmos fornecedores; devolve ao absorvido de origem SO' a linha que ainda aponta para o mantido (a que mudou
+    depois fica, e e' contada em `ficaram`), os apelidos e o estado dos absorvidos.
+  · `fn_fornecedor_repetidos(p_cliente)` (8c9c0a2a…; `tenant_ok` + 42501): SO' SUGERE grupos por CPF/CNPJ igual ou pelo nome sem S.A.,
+    LTDA, ME, EPP, EIRELI, CIA, "(001)" e pontuacao, ativos e inativos nao mesclados.
+  · FICAM COMO ESTAO (instantaneo/texto): `conciliacao_bancaria_itens.snapshot_favorecido_id`, `emitente_nome/documento`, os textos de
+    fornecedor de `lancamentos`, `financeiro_classificacao_staging`, `mesa_lancamento_staging` (sem `id`) e as tabelas de backup.
+  · TELA: Cadastros › Fornecedores › "Mesclar fornecedores" (`MesclarFornecedoresDialog`, 900 × 520 fixo, encolhendo so' com a janela):
+    sugestoes a' esquerda (clicar preenche, nao grava), "Fica" pelo seletor da casa, "Absorver" com busca (ativos do leitor + os
+    cadastros das sugestoes, inativos inclusive), a lista com CPF/CNPJ e situacao, a PREVIA do banco por modulo com o total e os
+    apelidos, recusa ESCRITA no rodape, "Mesclar" pede confirmacao; "Mesclagens recentes" desfaz com motivo. Dono puro
+    `src/lib/fornecedores/mesclarFornecedores.ts` (sem conta).
+  · PROVAS: `supabase/tests/forn_mesclar_01_test.sql` (M1–M9, sintetico no Teste) OK no ensaio e no vivo; mutacao (desfazer sem a
+    condicao "ainda aponta para o mantido") morta no M4; `seg_tenant_varredura_01c` OK. NENHUMA MESCLAGEM EM DADO REAL (log vazio).
+    Previa REAL simulada (desfeita) do par do NJ "Banco do Brasil" (fica o S.A. (001) ativo; absorve os tres inativos): Financeiro 5 ·
+    Financiamentos 16 · total 21, sem recusa — fotos na bancada a 1.126 e 1.440 (900 × 520, linhas de 18px, nada rola).
+  ⚠ NAO PROVADO: nada com login (bancada) · uma mesclagem de verdade · o custo com milhares de linhas (o par do NJ move 21; o mantido
+    tem 1.162 lancamentos, que nao se movem) · as colunas de agricultura/OC/rebanho com dado (so' no desenho; o teste sintetico move
+    lancamentos).
 - ⚠ SELETOR DE ENTIDADE TEM BUSCA E A CASA NAO TEM MONO (FIN-FINANC-28 PASSO 8, Gabriel 17/10/2026, so' tela). Conta, plano/subcentro,
   fazenda e fornecedor/credor se escolhem pelo seletor da casa COM BUSCA; o `check:ui-nativo` reprova o que nao for (baseline 0).
   · `ContaBancariaSelect` e `FazendaSelect` passaram a `comBusca = true` POR PADRAO (os 43 usos ganharam busca sem prop nova). O ramo

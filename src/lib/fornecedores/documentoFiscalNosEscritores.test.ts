@@ -65,6 +65,6 @@ describe('a mesclagem fica travada (FORN-MESCLAR-01)', () => {
     expect(fonte).toContain('const MESCLAR_LIGADO = false;');
     expect(fonte).toContain('const handleMerge = useCallback(');
     expect(fonte).toContain('disabled={!MESCLAR_LIGADO}');
-    expect(fonte).toContain('Indisponível: hoje a mesclagem move só os lançamentos financeiros. Será refeita (FORN-MESCLAR-01).');
+    expect(fonte).toContain('Mesclar agora mora em Cadastros › Fornecedores › \"Mesclar fornecedores\": move todas as referências e pode ser desfeita.');
   });
 });
