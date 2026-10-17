@@ -151,7 +151,7 @@ function Campo({ rotulo, valor, onChange, numerico, casas = 2, obrigatorio, dica
       </Label>
       {numerico ? (
         <CampoNumero valor={valor} onChange={onChange} casas={casas} title={dica}
-          className={cn('mt-0.5 h-8 text-right font-mono text-[12px]', FOCO)} />
+          className={cn('mt-0.5 h-8 text-right tabular-nums text-[12px]', FOCO)} />
       ) : (
         <Input value={valor} onChange={e => onChange(e.target.value)} title={dica}
           className={cn('mt-0.5 h-8 text-[12px]', FOCO)} />
@@ -205,7 +205,7 @@ function Derivado({ rotulo, valor, sufixo, dica }: {
       <Label className="text-[10px]">{rotulo}</Label>
       <div title={dica}
         className={cn('mt-0.5 flex h-8 items-center justify-end gap-1 rounded-md border border-dashed',
-          'bg-muted/30 px-2 font-mono text-[12px] tabular-nums',
+          'bg-muted/30 px-2 text-[12px] tabular-nums',
           valor == null && 'text-muted-foreground')}>
         {valor != null ? formatNum(valor, 2) : '—'}
         {sufixo && <span className="text-[9px] text-muted-foreground">{sufixo}</span>}
@@ -749,7 +749,7 @@ export function CargaMandiocaModal({
                       <CampoMoeda valor={icmsTravado ? 0 : num(form.icms)}
                         disabled={icmsTravado}
                         onChange={n => campo('icms', n == null ? '' : String(n))}
-                        className={cn('mt-0.5 h-8 text-right font-mono text-[12px]', FOCO,
+                        className={cn('mt-0.5 h-8 text-right tabular-nums text-[12px]', FOCO,
                           icmsTravado && 'bg-muted text-muted-foreground')} />
                     </div>
                     <div>
@@ -760,14 +760,14 @@ export function CargaMandiocaModal({
                       <CampoMoeda valor={funruralTravado ? 0 : num(form.funrural)}
                         disabled={funruralTravado}
                         onChange={n => campo('funrural', n == null ? '' : String(n))}
-                        className={cn('mt-0.5 h-8 text-right font-mono text-[12px]', FOCO,
+                        className={cn('mt-0.5 h-8 text-right tabular-nums text-[12px]', FOCO,
                           funruralTravado && 'bg-muted text-muted-foreground')} />
                     </div>
                     <div>
                       <Label className="text-[10px]">INSS (R$)</Label>
                       <CampoMoeda valor={num(form.inss)}
                         onChange={n => campo('inss', n == null ? '' : String(n))}
-                        className={cn('mt-0.5 h-8 text-right font-mono text-[12px]', FOCO)} />
+                        className={cn('mt-0.5 h-8 text-right tabular-nums text-[12px]', FOCO)} />
                     </div>
                     <div>
                       {/* ⚠ "DO FRETE" NO RÓTULO, e não é zelo: sem isso ele lê como o ICMS de cima e
@@ -780,7 +780,7 @@ export function CargaMandiocaModal({
                       <CampoMoeda valor={transporteTravado ? 0 : num(form.icmsTransporte)}
                         disabled={transporteTravado}
                         onChange={n => campo('icmsTransporte', n == null ? '' : String(n))}
-                        className={cn('mt-0.5 h-8 text-right font-mono text-[12px]', FOCO,
+                        className={cn('mt-0.5 h-8 text-right tabular-nums text-[12px]', FOCO,
                           transporteTravado && 'bg-muted text-muted-foreground')} />
                     </div>
                   </div>
@@ -847,7 +847,7 @@ export function CargaMandiocaModal({
                             <Label className="text-[10px]">R$/t</Label>
                             <CampoMoeda valor={s.preco_t}
                               onChange={n => mudarServico(tipo, { preco_t: n })}
-                              className={cn('mt-0.5 h-8 text-right font-mono text-[12px]', FOCO,
+                              className={cn('mt-0.5 h-8 text-right tabular-nums text-[12px]', FOCO,
                                 proposto && 'border-amber-500 bg-amber-50 text-amber-900')} />
                           </div>
                           {/* ⚠ LARGURA FIXA (116px) E ALINHADO À DIREITA — A19. A coluna não pode
@@ -862,7 +862,7 @@ export function CargaMandiocaModal({
                           <div>
                             <Label className="text-[10px] text-muted-foreground">Total</Label>
                             <div className={cn('mt-0.5 flex h-8 items-center justify-end rounded-md',
-                              'px-2 font-mono text-[12px] tabular-nums',
+                              'px-2 text-[12px] tabular-nums',
                               total == null && 'text-muted-foreground')}
                               title={total != null
                                 ? `${formatNum(s.preco_t ?? 0, 2)} R$/t × ${formatNum(t ?? 0, 2)} t`

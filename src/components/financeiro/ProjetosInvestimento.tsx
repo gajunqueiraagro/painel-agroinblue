@@ -17,6 +17,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { Plus, Pencil, Trash2, ArrowLeft, SplitSquareVertical } from 'lucide-react';
 
+import { SearchableSelect } from '@/components/ui/searchable-select';
 const MESES_KEYS = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'] as const;
 const MESES_LABELS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
@@ -352,25 +353,15 @@ export function ProjetosInvestimento({ ano, onBack, onDataChanged }: Props) {
             </div>
             <div>
               <label className="text-xs font-medium">Fazenda *</label>
-              <Select value={form.fazenda_id || ''} onValueChange={v => setForm(prev => ({ ...prev, fazenda_id: v }))}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                <SelectContent>
-                  {fazendas.map(f => (
-                    <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect value={form.fazenda_id || ''} onValueChange={v => setForm(prev => ({ ...prev, fazenda_id: v }))}
+                options={fazendas.map(f => ({ value: f.id, label: f.nome }))} semTodos allValue="" allLabel="Selecione" placeholder="Buscar fazenda..."
+                dense triggerClassName="h-8 text-xs" />
             </div>
             <div>
               <label className="text-xs font-medium">Subcentro *</label>
-              <Select value={form.subcentro || ''} onValueChange={handleSubcentroChange}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                <SelectContent side="bottom" className="max-h-[200px] overflow-y-auto">
-                  {subcentroOptions.map(o => (
-                    <SelectItem key={o.subcentro} value={o.subcentro}>{o.subcentro}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect value={form.subcentro || ''} onValueChange={handleSubcentroChange}
+                options={subcentroOptions.map(o => ({ value: o.subcentro, label: o.subcentro }))} semTodos allValue="" allLabel="Selecione"
+                placeholder="Buscar subcentro..." dense triggerClassName="h-8 text-xs" />
             </div>
             <div>
               <label className="text-xs font-medium">Responsável</label>

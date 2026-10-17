@@ -5450,10 +5450,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               ) : campos.origem.auto ? (
                 <Input value={campos.origem.value} readOnly className="mt-0.5 h-7 text-[11px] bg-muted cursor-not-allowed" />
               ) : (campos.origem as any).useSelect && outrasFazendas.length > 0 ? (
-                <Select value={fazendaOrigem} onValueChange={setFazendaOrigem}>
-                  <SelectTrigger className="mt-0.5 h-7 text-[11px]"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>{outrasFazendas.map(f => <SelectItem key={f.id} value={f.nome}>{f.nome}</SelectItem>)}</SelectContent>
-                </Select>
+                <SearchableSelect value={fazendaOrigem} onValueChange={setFazendaOrigem} options={outrasFazendas.map(f => ({ value: f.nome, label: f.nome }))}
+                  semTodos allValue="" allLabel="Selecione" placeholder="Buscar fazenda..." dense className="mt-0.5" triggerClassName="h-7 text-[11px]" />
               ) : (
                 <Input value={fazendaOrigem} onChange={e => setFazendaOrigem(e.target.value)} placeholder="Ex: Faz. Boa Vista" className="mt-0.5 h-7 text-[11px]" />
               )}

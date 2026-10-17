@@ -237,7 +237,7 @@ export function RematchOnDemandPanel({
                                   <td className="py-0.5 text-right tabular-nums">
                                     {formatMoeda(c.valor)}
                                   </td>
-                                  <td className="py-0.5 text-center font-mono">{c.score}</td>
+                                  <td className="py-0.5 text-center tabular-nums">{c.score}</td>
                                   <td
                                     className="py-0.5 truncate max-w-[160px]"
                                     title={c.descricao ?? ''}

@@ -14,6 +14,7 @@ import { Separator } from '@/components/ui/separator';
 import { Search, Filter, ChevronDown, ChevronUp, Clock, User, FileText, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
 
+import { SearchableSelect } from '@/components/ui/searchable-select';
 interface AuditEntry {
   id: string;
   cliente_id: string;
@@ -231,17 +232,8 @@ export function AuditoriaTab() {
             </div>
 
             <div className="grid grid-cols-2 gap-2">
-              <Select value={filtroFazenda} onValueChange={setFiltroFazenda}>
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue placeholder="Fazenda" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas</SelectItem>
-                  {fazendas.map(f => (
-                    <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect value={filtroFazenda} onValueChange={setFiltroFazenda} options={fazendas.map(f => ({ value: f.id, label: f.nome }))}
+                allValue="all" allLabel="Todas" placeholder="Buscar fazenda..." dense triggerClassName="h-8 text-xs" />
 
               <Select value={filtroUsuario} onValueChange={setFiltroUsuario}>
                 <SelectTrigger className="h-8 text-xs">

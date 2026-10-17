@@ -476,7 +476,7 @@ export function ExcelImportDialog({
                 <Label className="text-xs">Preview (3 primeiras linhas — valor final)</Label>
                 <div className="border rounded p-2 text-[11px] space-y-1 bg-muted/30">
                   {previewInfo.primeiras3.map((p, i) => (
-                    <div key={i} className="flex justify-between font-mono">
+                    <div key={i} className="flex justify-between tabular-nums">
                       <span>{p.data ?? '-'}</span>
                       <span className={p.valor != null && p.valor < 0 ? 'text-red-700' : 'text-emerald-700'}>
                         {p.valor != null

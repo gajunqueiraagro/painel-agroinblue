@@ -13,6 +13,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { normalizeFornecedorNome } from '@/lib/financeiro/normalizeFornecedorNome';
 import { notificarFornecedoresMudaram } from '@/hooks/useFornecedoresDoCliente';
 import { mascararAoDigitar, situacaoDoGravado, validarDocumento } from '@/lib/fornecedores/documentoFiscal';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import {
   acharRepetidos, fraseDosRepetidos, lerCadastroParaConferir, temRepetido, FRASE_FALHA_AO_CONFERIR_REPETIDO,
   type FornecedorParaConferir,
@@ -450,16 +451,10 @@ export function FornecedorFormDialog({
           </div>
           <div>
             <Label className="text-xs">Fazenda</Label>
-            <Select value={fazendaId} onValueChange={setFazendaId}>
-              <SelectTrigger className="h-9"><SelectValue placeholder="— Sem fazenda —" /></SelectTrigger>
-              <SelectContent>
-                {/* PR-FORNECEDOR-FAZENDA-01: fazenda opcional — opção explícita "sem fazenda". */}
-                <SelectItem value={SEM_FAZENDA}>— Sem fazenda —</SelectItem>
-                {fazendas.map(f => (
-                  <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {/* PR-FORNECEDOR-FAZENDA-01: fazenda opcional — opção explícita "sem fazenda", que e' tambem o que o X devolve. */}
+            <SearchableSelect value={fazendaId || SEM_FAZENDA} onValueChange={setFazendaId}
+              options={[{ value: SEM_FAZENDA, label: '— Sem fazenda —' }, ...fazendas.map(f => ({ value: f.id, label: f.nome }))]}
+              semTodos allValue={SEM_FAZENDA} allLabel="— Sem fazenda —" placeholder="Buscar fazenda..." dense triggerClassName="h-9" />
           </div>
           <div className="flex items-center gap-2">
             <Switch checked={ativo} onCheckedChange={setAtivo} />

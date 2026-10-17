@@ -2090,13 +2090,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                   <div className="grid grid-cols-2 gap-1 items-end">
                     <div>
                       <label className={lblCls}>Fazenda</label>
-                      <Select value={fazendaId} onValueChange={setFazendaId}>
-                        <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2]`}><SelectValue placeholder="Selecione" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__all__">Todas</SelectItem>
-                          {fazOperacionais.map(f => <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
+                      <SearchableSelect value={fazendaId} onValueChange={setFazendaId} options={fazOperacionais.map(f => ({ value: f.id, label: f.nome }))}
+                        allValue="__all__" allLabel="Todas" placeholder="Buscar fazenda..." triggerClassName={`${selCls} bg-white border-[#C9D4E2]`} />
                     </div>
                     <div>
                       <label className={lblCls}>Atividade</label>
@@ -2297,13 +2292,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 </div>
                   <div className="col-span-2 min-w-0">
                   <label className={lblCls}>Fazenda</label>
-                  <Select value={fazendaId} onValueChange={setFazendaId}>
-                    <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F]`}><SelectValue placeholder="Selecione" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__all__">Todas</SelectItem>
-                      {fazOperacionais.map(f => <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect value={fazendaId} onValueChange={setFazendaId} options={fazOperacionais.map(f => ({ value: f.id, label: f.nome }))}
+                    allValue="__all__" allLabel="Todas" placeholder="Buscar fazenda..."
+                    triggerClassName={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F]`} />
                 </div>
                   <div className="col-span-2 min-w-0">
                   <label className={lblCls}>Atividade</label>
@@ -2869,13 +2860,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                             o status, que são o que se lê primeiro. Vencido = tem vencimento no
                             passado E não tem pagamento; um lançamento pago ontem com
                             vencimento anteontem não está atrasado, está resolvido. */}
-                        <td className="celula-data font-mono px-0.5 py-1 align-middle leading-tight sticky left-[28px] z-10 bg-background text-center text-muted-foreground">{fmtDate(l.data_competencia)}</td>
+                        <td className="celula-data tabular-nums px-0.5 py-1 align-middle leading-tight sticky left-[28px] z-10 bg-background text-center text-muted-foreground">{fmtDate(l.data_competencia)}</td>
                         {/* PR-FIN-GRADE-DATAS-03 — VENC. e PGTO. em colunas separadas, cada uma a sua coluna real
                             (nunca fundidas, nunca a data financeira derivada). fmtDate(null) já rende o sentinela '-'.
                             VENC. permanece visível mesmo quando há PGTO. */}
-                        <td className={`celula-data font-mono px-0.5 py-1 align-middle leading-tight sticky left-[68px] z-10 bg-background text-center ${vencido ? 'font-semibold text-destructive' : 'text-muted-foreground'}`}
+                        <td className={`celula-data tabular-nums px-0.5 py-1 align-middle leading-tight sticky left-[68px] z-10 bg-background text-center ${vencido ? 'font-semibold text-destructive' : 'text-muted-foreground'}`}
                           title={vencido ? 'Vencido e não pago' : undefined}>{fmtDate(l.data_vencimento)}</td>
-                        <td className="celula-data font-mono px-0.5 py-1 align-middle leading-tight sticky left-[108px] z-10 bg-background text-center text-muted-foreground">{fmtDate(l.data_pagamento)}</td>
+                        <td className="celula-data tabular-nums px-0.5 py-1 align-middle leading-tight sticky left-[108px] z-10 bg-background text-center text-muted-foreground">{fmtDate(l.data_pagamento)}</td>
                         {/* FIN-V2-COLUNAS-OC-01 — A MARCA DA OC TEM COLUNA PRÓPRIA, antes do Produto (Gabriel, 05/10: "o ícone vem depois do
                             texto e some quando o texto é longo"). O bloco abaixo é o que estava no fim da célula do Produto, MOVIDO
                             VERBATIM: com acesso, o botão que abre a operação (e para a propagação — a linha não abre); sem acesso, só a
@@ -2988,7 +2979,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                           )}
                         </td>
                         {/* Doc. à direita: é número, e número se lê alinhado pela unidade. */}
-                        <td className="celula-doc font-mono text-muted-foreground text-right px-1 py-1 align-middle text-[10px] leading-tight truncate" data-testid="celula-doc"
+                        <td className="celula-doc tabular-nums text-muted-foreground text-right px-1 py-1 align-middle text-[10px] leading-tight truncate" data-testid="celula-doc"
                             title={doc.titulo || undefined}>{doc.rotulo || '-'}</td>
                         {/* `truncate` também aqui: a tabela é `tableLayout: fixed`, então a
                             faixa não cede — sem truncar, "Realizado" transbordaria a célula em

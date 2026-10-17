@@ -402,14 +402,14 @@ export default function ImportZootHistoricoTab() {
                       <TableBody>
                         {linhasFiltradas.map((l) => (
                           <TableRow key={l.linha} className={l.valida ? '' : 'bg-destructive/10'}>
-                            <TableCell className="text-xs font-mono">{l.linha}</TableCell>
+                            <TableCell className="text-xs tabular-nums">{l.linha}</TableCell>
                             <TableCell>
                               {l.valida
                                 ? <Badge variant="outline" className="text-primary border-primary/40 text-[10px] px-1.5">OK</Badge>
                                 : <Badge variant="destructive" className="text-[10px] px-1.5">Erro</Badge>
                               }
                             </TableCell>
-                            <TableCell className="text-xs font-mono">{l.tipo}</TableCell>
+                            <TableCell className="text-xs tabular-nums">{l.tipo}</TableCell>
                             <TableCell className="text-xs">{l.data}</TableCell>
                             <TableCell className="text-xs">{l.fazenda}</TableCell>
                             <TableCell className="text-xs">{l.categoria}</TableCell>

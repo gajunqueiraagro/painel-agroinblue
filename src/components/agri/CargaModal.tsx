@@ -66,7 +66,7 @@ function Campo({ rotulo, valor, onChange, numerico, casas = 2, obrigatorio, dica
       </Label>
       {numerico ? (
         <CampoNumero valor={valor} onChange={onChange} casas={casas} title={dica}
-          className={cn('mt-0.5 h-8 text-right font-mono text-[12px]', FOCO)} />
+          className={cn('mt-0.5 h-8 text-right tabular-nums text-[12px]', FOCO)} />
       ) : (
         <Input value={valor} onChange={e => onChange(e.target.value)} title={dica} type={tipo}
           className={cn('mt-0.5 h-8 text-[12px]', FOCO)} />
@@ -118,7 +118,7 @@ function CampoPeso({ rotulo, valorKg, onChangeKg, cultura, dica }: {
       {/* ⚠ A CHAVE É A UNIDADE: trocar de kg para sc refaz o texto a partir do quilo guardado,
           e sem `key` o `CampoNumero` manteria na tela o número da unidade anterior. */}
       <CampoNumero key={unidade} valor={visivel} onChange={digitou} casas={2} title={dica}
-        className={cn('mt-0.5 h-8 text-right font-mono text-[12px]', FOCO)} />
+        className={cn('mt-0.5 h-8 text-right tabular-nums text-[12px]', FOCO)} />
       {/* A outra unidade fica escrita embaixo: conferir o romaneio não deve exigir trocar o toggle. */}
       <div className="mt-0.5 text-right text-[9px] text-muted-foreground">
         {emSaca
@@ -141,7 +141,7 @@ function Derivado({ rotulo, valor, cor }: { rotulo: string; valor: number | null
     <div>
       <Label className="text-[10px]">{rotulo}</Label>
       <div className={cn('mt-0.5 flex h-8 items-center justify-end rounded-md border border-dashed',
-        'bg-muted/30 px-2 font-mono text-[12px] tabular-nums',
+        'bg-muted/30 px-2 text-[12px] tabular-nums',
         valor == null ? 'text-muted-foreground' : cor)}>
         {valor != null ? formatNum(valor, 2) : '—'}
       </div>
@@ -465,7 +465,7 @@ export function CargaModal({
                   <Label className="text-[10px]">Valor da secagem</Label>
                   <CampoMoeda valor={num(form.valorSecagem)}
                     onChange={n => onChange('valorSecagem', n == null ? '' : String(n))}
-                    className={cn('mt-0.5 h-8 text-right font-mono text-[12px]', FOCO)} />
+                    className={cn('mt-0.5 h-8 text-right tabular-nums text-[12px]', FOCO)} />
                 </div>
                 <div />
               </div>

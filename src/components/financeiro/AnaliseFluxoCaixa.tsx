@@ -157,11 +157,11 @@ export function FluxoCaixa({
                     (+) Entradas
                   </TableCell>
                   {dados.map(d => (
-                    <TableCell key={d.mes} className="text-[10px] px-2 py-1 text-right font-mono text-green-700 dark:text-green-400 whitespace-nowrap tabular-nums">
+                    <TableCell key={d.mes} className="text-[10px] px-2 py-1 text-right text-green-700 dark:text-green-400 whitespace-nowrap tabular-nums">
                       {d.entradas > 0 ? fmtK(d.entradas) : '—'}
                     </TableCell>
                   ))}
-                  <TableCell className="text-[10px] px-2 py-1 text-right font-mono font-bold text-green-700 dark:text-green-400 whitespace-nowrap tabular-nums">
+                  <TableCell className="text-[10px] px-2 py-1 text-right font-bold text-green-700 dark:text-green-400 whitespace-nowrap tabular-nums">
                     {fmtK(totEntradas)}
                   </TableCell>
                 </TableRow>
@@ -180,11 +180,11 @@ export function FluxoCaixa({
                     (-) Total Saídas
                   </TableCell>
                   {dados.map(d => (
-                    <TableCell key={d.mes} className="text-[10px] px-2 py-1 text-right font-mono font-bold text-red-600 dark:text-red-400 whitespace-nowrap tabular-nums">
+                    <TableCell key={d.mes} className="text-[10px] px-2 py-1 text-right font-bold text-red-600 dark:text-red-400 whitespace-nowrap tabular-nums">
                       {d.totalSaidas > 0 ? fmtK(d.totalSaidas) : '—'}
                     </TableCell>
                   ))}
-                  <TableCell className="text-[10px] px-2 py-1 text-right font-mono font-bold text-red-600 dark:text-red-400 whitespace-nowrap tabular-nums">
+                  <TableCell className="text-[10px] px-2 py-1 text-right font-bold text-red-600 dark:text-red-400 whitespace-nowrap tabular-nums">
                     {fmtK(totSaidas)}
                   </TableCell>
                 </TableRow>
@@ -195,11 +195,11 @@ export function FluxoCaixa({
                     (=) Saldo mês
                   </TableCell>
                   {dados.map(d => (
-                    <TableCell key={d.mes} className={`text-[10px] px-2 py-1 text-right font-mono font-bold whitespace-nowrap tabular-nums ${d.saldoMes >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                    <TableCell key={d.mes} className={`text-[10px] px-2 py-1 text-right font-bold whitespace-nowrap tabular-nums ${d.saldoMes >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                       {fmtK(d.saldoMes)}
                     </TableCell>
                   ))}
-                  <TableCell className={`text-[10px] px-2 py-1 text-right font-mono font-bold whitespace-nowrap tabular-nums ${saldoFinal >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                  <TableCell className={`text-[10px] px-2 py-1 text-right font-bold whitespace-nowrap tabular-nums ${saldoFinal >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                     {fmtK(saldoFinal)}
                   </TableCell>
                 </TableRow>
@@ -210,11 +210,11 @@ export function FluxoCaixa({
                     Saldo acumulado
                   </TableCell>
                   {dados.map(d => (
-                    <TableCell key={d.mes} className={`text-[10px] px-2 py-1 text-right font-mono whitespace-nowrap tabular-nums ${d.saldoAcum >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                    <TableCell key={d.mes} className={`text-[10px] px-2 py-1 text-right whitespace-nowrap tabular-nums ${d.saldoAcum >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                       {fmtK(d.saldoAcum)}
                     </TableCell>
                   ))}
-                  <TableCell className="text-[10px] px-2 py-1 text-right font-mono" />
+                  <TableCell className="text-[10px] px-2 py-1 text-right tabular-nums" />
                 </TableRow>
               </TableBody>
             </Table>
@@ -247,11 +247,11 @@ function SaidaRow({ label, dados, field }: { label: string; dados: FluxoMes[]; f
         {label}
       </TableCell>
       {dados.map(d => (
-        <TableCell key={d.mes} className="text-[10px] px-2 py-1 text-right font-mono text-muted-foreground whitespace-nowrap tabular-nums">
+        <TableCell key={d.mes} className="text-[10px] px-2 py-1 text-right text-muted-foreground whitespace-nowrap tabular-nums">
           {(d[field] as number) > 0 ? fmtK(d[field] as number) : '—'}
         </TableCell>
       ))}
-      <TableCell className="text-[10px] px-2 py-1 text-right font-mono text-muted-foreground whitespace-nowrap tabular-nums">
+      <TableCell className="text-[10px] px-2 py-1 text-right text-muted-foreground whitespace-nowrap tabular-nums">
         {fmtK(total)}
       </TableCell>
     </TableRow>

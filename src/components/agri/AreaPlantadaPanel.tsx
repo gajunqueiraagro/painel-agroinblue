@@ -290,7 +290,7 @@ export function AreaPlantadaPanel({ clienteId, pastoId, pastoNome, areaProdutiva
               <Input value={l.areaHa} onChange={e => editar(idx, 'areaHa', e.target.value)}
                 inputMode="decimal" placeholder={idx === 0 && areaProdutivaHa ? formatNum(areaProdutivaHa, 1) : '0,0'}
                 disabled={somenteLeitura}
-                className="mt-0.5 h-8 text-right font-mono text-[12px]" />
+                className="mt-0.5 h-8 text-right tabular-nums text-[12px]" />
             </div>
             {/* ⚠ EM ABERTURA OS CAMPOS SOMEM, NÃO FICAM CINZAS — AGRI-AREA-ABERTURA-01. Campo
                 desabilitado ainda pergunta; o P5 não tem plantio porque a área não foi

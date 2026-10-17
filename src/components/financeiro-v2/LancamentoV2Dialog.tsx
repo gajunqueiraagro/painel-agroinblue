@@ -2478,13 +2478,13 @@ export function LancamentoV2Dialog({
                       {referenciaOperacionalInfo.data_referencia && (
                         <span>
                           <span className="text-muted-foreground">Data Excel: </span>
-                          <span className="font-mono">{referenciaOperacionalInfo.data_referencia}</span>
+                          <span className="tabular-nums">{referenciaOperacionalInfo.data_referencia}</span>
                         </span>
                       )}
                       {referenciaOperacionalInfo.valor != null && (
                         <span>
                           <span className="text-muted-foreground">Valor Excel: </span>
-                          <span className={`font-mono font-semibold ${referenciaOperacionalInfo.valor < 0 ? 'text-red-700' : 'text-emerald-700'}`}>
+                          <span className={`tabular-nums font-semibold ${referenciaOperacionalInfo.valor < 0 ? 'text-red-700' : 'text-emerald-700'}`}>
                             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(referenciaOperacionalInfo.valor)}
                           </span>
                         </span>
@@ -2702,7 +2702,7 @@ export function LancamentoV2Dialog({
                   rotulo={xmlRot('Valor (R$) *', 'valor')}
                   valor={valorDisplay}
                   onValor={setValorDisplay}
-                  className={cn("h-8 text-right font-mono", fieldBg, xmlCls('valor'))}
+                  className={cn("h-8 text-right tabular-nums", fieldBg, xmlCls('valor'))}
                   disabled={lockedFields?.includes('valor') || isOCTitulo || parcelaPaga || travaCasado.valor}
                   contaAbertaRef={contaAbertaRef}
                 />
@@ -3054,7 +3054,7 @@ export function LancamentoV2Dialog({
                   </span>
                 )}
                 {docVemDeDocumento && (
-                  <span className="ml-auto font-mono text-[10px] font-normal text-muted-foreground" data-testid="doc-da-compra"
+                  <span className="ml-auto tabular-nums text-[10px] font-normal text-muted-foreground" data-testid="doc-da-compra"
                     title={`${docDoLancamento.resumo} · ${docDoLancamento.origem === 'nota' ? 'nota da compra, ligada a este lançamento' : 'documento ligado a este lançamento'}`}>
                     {docDoLancamento.origem === 'nota' ? 'nota da compra' : 'documento ligado'}: <span className="text-foreground">{docDoLancamento.rotulo}</span>
                   </span>
@@ -3080,7 +3080,7 @@ export function LancamentoV2Dialog({
                     value={notaFiscalDisplay}
                     onChange={handleNotaFiscalChange}
                     inputMode={tipoDocumento === 'Nota Fiscal' ? 'numeric' : 'text'}
-                    className={cn("h-8 font-mono text-[11px]", fieldBg, xmlCls('documento'))}
+                    className={cn("h-8 tabular-nums text-[11px]", fieldBg, xmlCls('documento'))}
                     placeholder={tipoDocumento === 'Nota Fiscal' ? '000.000.000' : 'Número'}
                   />
                 </div>

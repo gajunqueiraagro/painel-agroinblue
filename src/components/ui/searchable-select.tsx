@@ -104,6 +104,11 @@ interface SearchableSelectProps {
    * ⚠ ATIVO É `value !== allValue`, a mesma sentinela que o gatilho usa para exibir "Todos".
    */
   persistKey?: string;
+  /** PASSO 8 do FIN-FINANC-28 — classes do GATILHO (o botão), por cima das do modo: é o que deixa o seletor de entidade com
+   *  busca vestir a altura que cada tela mediu para o `Select` de antes (h-5, h-6, h-7…). Ausente = nada muda. */
+  triggerClassName?: string;
+  /** Ordem de tabulação do gatilho (o modal do lançamento numera os campos). Ausente = 0, como sempre. */
+  tabIndex?: number;
 }
 
 export function SearchableSelect({
@@ -120,6 +125,8 @@ export function SearchableSelect({
   dense = false,
   contentClassName,
   persistKey,
+  triggerClassName,
+  tabIndex,
 }: SearchableSelectProps) {
   const [open, setOpen] = useState(false);
   /* "Ativo" = o campo está filtrando alguma coisa. É a mesma pergunta que decide se o
@@ -275,7 +282,7 @@ export function SearchableSelect({
     <div ref={containerRef} className={cn('relative min-w-0', className)}>
       <button
         type="button"
-        tabIndex={disabled ? -1 : 0}
+        tabIndex={disabled ? -1 : (tabIndex ?? 0)}
         onClick={handleTriggerClick}
         onKeyDown={(e) => {
           if (!open && (e.key === 'Enter' || e.key === ' ')) {
@@ -306,6 +313,7 @@ export function SearchableSelect({
           dense ? 'h-8 px-2 text-[12px] font-normal' : 'h-6 px-2.5 text-[10px]',
           'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1',
           disabled && 'opacity-50 cursor-not-allowed',
+          triggerClassName,
         )}
       >
         <span className="truncate text-left flex-1">

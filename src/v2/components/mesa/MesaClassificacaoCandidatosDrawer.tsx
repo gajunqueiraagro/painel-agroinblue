@@ -92,11 +92,11 @@ export function MesaClassificacaoCandidatosDrawer({
             </div>
             <div className="flex justify-between gap-2">
               <span className="text-muted-foreground">Data:</span>
-              <span className="font-mono">{fmtData(contextoExcel.data)}</span>
+              <span className="tabular-nums">{fmtData(contextoExcel.data)}</span>
             </div>
             <div className="flex justify-between gap-2">
               <span className="text-muted-foreground">Valor:</span>
-              <span className="font-mono tabular-nums font-semibold">
+              <span className="tabular-nums font-semibold">
                 {contextoExcel.valor != null ? formatMoeda(contextoExcel.valor) : '-'}
               </span>
             </div>
@@ -197,15 +197,15 @@ export function MesaClassificacaoCandidatosDrawer({
                       )}
                     </div>
                     <span
-                      className="text-[9px] text-muted-foreground font-mono shrink-0"
+                      className="text-[9px] text-muted-foreground tabular-nums shrink-0"
                       title={c.lanc_id}
                     >
                       {truncUuid(c.lanc_id)}
                     </span>
                   </div>
                   <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px]">
-                    <span className="font-mono">{fmtData(c.data_pagamento)}</span>
-                    <span className="font-mono tabular-nums font-semibold">
+                    <span className="tabular-nums">{fmtData(c.data_pagamento)}</span>
+                    <span className="tabular-nums font-semibold">
                       {c.valor != null ? formatMoeda(c.valor) : '-'}
                     </span>
                     <span>{c.tipo_operacao ?? '-'}</span>

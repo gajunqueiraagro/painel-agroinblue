@@ -96,7 +96,7 @@ function SummaryRow({ label, value, variant, indent, bold }: {
   return (
     <div className={`flex justify-between items-baseline ${indent ? 'pl-3' : ''}`}>
       <span className={`text-[11px] ${bold ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>{label}</span>
-      <span className={`text-[11px] font-mono tabular-nums ${bold ? 'font-bold' : 'font-semibold'} ${colorClass}`}>{value}</span>
+      <span className={`text-[11px] tabular-nums ${bold ? 'font-bold' : 'font-semibold'} ${colorClass}`}>{value}</span>
     </div>
   );
 }
@@ -355,7 +355,7 @@ export function ContaBoitelTab({ onBack }: Props) {
                             )}
                           </div>
                           <div className="text-right">
-                            <p className="text-[13px] font-bold text-primary font-mono tabular-nums">{fmt(b.receita_produtor)}</p>
+                            <p className="text-[13px] font-bold text-primary tabular-nums">{fmt(b.receita_produtor)}</p>
                             <p className="text-[10px] text-muted-foreground">Resultado</p>
                           </div>
                         </div>
@@ -406,7 +406,7 @@ export function ContaBoitelTab({ onBack }: Props) {
                   </div>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <span className={`text-lg font-bold font-mono tabular-nums cursor-help ${
+                      <span className={`text-lg font-bold tabular-nums cursor-help ${
                         conciliacao.gapOk ? 'text-primary' : 'text-destructive'
                       }`}>
                         {fmt(conciliacao.gap)}
@@ -464,7 +464,7 @@ export function ContaBoitelTab({ onBack }: Props) {
                     <div className="border-t border-dashed border-border my-1" />
                     <div className="flex justify-between items-baseline">
                       <span className="text-[11px] font-bold text-foreground">Diferença de conciliação</span>
-                      <span className={`text-sm font-bold font-mono tabular-nums ${conciliacao.gapOk ? 'text-primary' : 'text-destructive'}`}>
+                      <span className={`text-sm font-bold tabular-nums ${conciliacao.gapOk ? 'text-primary' : 'text-destructive'}`}>
                         {fmt(conciliacao.gap)}
                       </span>
                     </div>
@@ -531,7 +531,7 @@ export function ContaBoitelTab({ onBack }: Props) {
                                       {fmtDate(l.data_pagamento)} · {ORIGEM_LABELS[l.origem_tipo || ''] || l.origem_tipo || '-'}
                                     </p>
                                   </div>
-                                  <span className={`text-[11px] font-bold font-mono tabular-nums whitespace-nowrap ml-2 ${
+                                  <span className={`text-[11px] font-bold tabular-nums whitespace-nowrap ml-2 ${
                                     isEntrada ? 'text-primary' : 'text-destructive'
                                   }`}>
                                     {isEntrada ? '+' : '−'} {fmt(l.valor)}
@@ -552,11 +552,11 @@ export function ContaBoitelTab({ onBack }: Props) {
                       <div className="border-t-2 border-border px-3 py-2 space-y-0.5 bg-muted/30">
                         <div className="flex justify-between text-[10px]">
                           <span className="text-muted-foreground">Total Entradas</span>
-                          <span className="font-bold font-mono tabular-nums text-primary">+ {fmt(conciliacao?.totalEntradas || 0)}</span>
+                          <span className="font-bold tabular-nums text-primary">+ {fmt(conciliacao?.totalEntradas || 0)}</span>
                         </div>
                         <div className="flex justify-between text-[10px]">
                           <span className="text-muted-foreground">Total Saídas</span>
-                          <span className="font-bold font-mono tabular-nums text-destructive">− {fmt(conciliacao?.totalSaidas || 0)}</span>
+                          <span className="font-bold tabular-nums text-destructive">− {fmt(conciliacao?.totalSaidas || 0)}</span>
                         </div>
                       </div>
                     </>
@@ -602,7 +602,7 @@ export function ContaBoitelTab({ onBack }: Props) {
               </div>
               <div>
                 <Label className="text-[11px]">Valor (R$)</Label>
-                <Input type="number" step="0.01" className="h-8 text-[11px] text-right font-mono" value={novoValor} onChange={e => setNovoValor(e.target.value)} placeholder="0,00" />
+                <Input type="number" step="0.01" className="h-8 text-[11px] text-right tabular-nums" value={novoValor} onChange={e => setNovoValor(e.target.value)} placeholder="0,00" />
               </div>
               <div>
                 <Label className="text-[11px]">Descrição (opcional)</Label>
@@ -635,7 +635,7 @@ export function ContaBoitelTab({ onBack }: Props) {
                   <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
                     <div>
                       <p className="text-muted-foreground text-[9px] uppercase tracking-wide">Valor</p>
-                      <p className={`font-bold font-mono tabular-nums ${detailLanc.sinal > 0 ? 'text-primary' : 'text-destructive'}`}>
+                      <p className={`font-bold tabular-nums ${detailLanc.sinal > 0 ? 'text-primary' : 'text-destructive'}`}>
                         {detailLanc.sinal > 0 ? '+' : '−'} {fmt(detailLanc.valor)}
                       </p>
                     </div>

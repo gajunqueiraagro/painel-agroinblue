@@ -316,7 +316,7 @@ export function LotesExcelTab({ contaBancariaId, anoMes }: Props) {
                         key={l.id}
                         className={isDescartada ? 'opacity-40' : ''}
                       >
-                        <TableCell className="text-[11px] font-mono">{fmtData(l.data_referencia)}</TableCell>
+                        <TableCell className="text-[11px] tabular-nums">{fmtData(l.data_referencia)}</TableCell>
                         <TableCell className="text-[11px] max-w-[200px] truncate" title={l.fornecedor_texto ?? ''}>
                           {l.fornecedor_texto || '-'}
                         </TableCell>

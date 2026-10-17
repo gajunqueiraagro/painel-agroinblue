@@ -286,10 +286,10 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesF
                       <AlertTriangle className="h-4 w-4" /> Aba obrigatória ausente:
                     </p>
                     {preview.erroEstrutura.abasFaltando.map(aba => (
-                      <div key={aba} className="text-xs bg-destructive/5 rounded px-2 py-1 font-mono">{aba}</div>
+                      <div key={aba} className="text-xs bg-destructive/5 rounded px-2 py-1 tabular-nums">{aba}</div>
                     ))}
                     <p className="text-xs text-muted-foreground mt-1">
-                      O arquivo deve conter uma aba chamada <span className="font-mono font-bold">EXPORT_APP_UNICO</span>
+                      O arquivo deve conter uma aba chamada <span className="tabular-nums font-bold">EXPORT_APP_UNICO</span>
                     </p>
                   </div>
                 )}
@@ -372,7 +372,7 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesF
                 {preview.resumoFazendas.map(f => (
                   <div key={f.codigo} className="flex items-center justify-between text-xs bg-muted/50 rounded px-2 py-1">
                     <div className="flex items-center gap-1.5">
-                      <span className="font-mono font-bold">{f.codigo}</span>
+                      <span className="tabular-nums font-bold">{f.codigo}</span>
                       <span className="text-muted-foreground">→ {f.nome}</span>
                     </div>
                     <span className="font-bold">{f.qtd} linhas</span>
@@ -437,7 +437,7 @@ export function ImportacaoFinanceira({ importacoes, centrosCusto, fazendas, mesF
                   <tbody>
                     {preview.lancamentos.slice(0, 10).map((l, i) => (
                       <tr key={i} className={`border-b ${!l.fazendaId ? 'bg-destructive/5' : ''}`}>
-                        <td className="p-1 font-mono font-bold">{l.fazenda || '-'}</td>
+                        <td className="p-1 tabular-nums font-bold">{l.fazenda || '-'}</td>
                         <td className="p-1">{l.anoMes}</td>
                         <td className="p-1 truncate max-w-[100px]">{l.produto || '-'}</td>
                         <td className="p-1 text-right font-bold">{formatMoeda(l.valor)}</td>

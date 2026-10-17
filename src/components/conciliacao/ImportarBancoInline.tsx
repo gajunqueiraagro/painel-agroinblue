@@ -217,7 +217,7 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
           <span className={recusaDoArquivo ? 'flex shrink-0 items-center gap-1' : 'flex min-w-0 flex-1 flex-wrap items-center gap-1'}>
             {FORMATOS.map((f) => (
               <span key={f.ext} title={f.dica}
-                className="cursor-help rounded border border-border bg-muted/60 px-1.5 py-[1px] font-mono text-[10px] leading-tight text-muted-foreground">
+                className="cursor-help rounded border border-border bg-muted/60 px-1.5 py-[1px] tabular-nums text-[10px] leading-tight text-muted-foreground">
                 {f.ext}
               </span>
             ))}
@@ -261,7 +261,7 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
             <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
               Planilha de lançamentos
             </span>
-            <span className="truncate font-mono text-[10px]">{arquivo.name}</span>
+            <span className="truncate tabular-nums text-[10px]">{arquivo.name}</span>
             <div className="flex-1" />
             <Button type="button" variant="outline" size="sm" className="h-6 gap-1 px-2 text-[10px]"
               onClick={cancelar}>
@@ -287,7 +287,7 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
             <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">
               Relatório de custeio
             </span>
-            <span className="truncate font-mono text-[10px]">{arquivo.name}</span>
+            <span className="truncate tabular-nums text-[10px]">{arquivo.name}</span>
             <div className="flex-1" />
             <Button type="button" variant="outline" size="sm" className="h-6 gap-1 px-2 text-[10px]"
               onClick={cancelar}>
@@ -413,7 +413,7 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
           <div className="flex flex-wrap items-center gap-2 border-b border-border bg-muted/40 px-3 py-1.5">
             {seletor}
             <span className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">Prévia</span>
-            <span className="truncate font-mono text-[10px] text-foreground">{arquivo?.name}</span>
+            <span className="truncate tabular-nums text-[10px] text-foreground">{arquivo?.name}</span>
             <div className="flex-1" />
             <Badge className="h-5 gap-1 px-1.5 text-[9px]">
               <CheckCircle2 className="h-2.5 w-2.5" />
@@ -541,9 +541,9 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
                     const s = linha.s;
                     return (
                       <tr key={`saldo-${s.data}-${s.documento ?? i}-${i}`} className="border-b border-border/60 opacity-45" data-testid="linha-saldo">
-                        <td className="whitespace-nowrap px-2 py-0.5 font-mono">{brData(s.data)}</td>
+                        <td className="whitespace-nowrap px-2 py-0.5 tabular-nums">{brData(s.data)}</td>
                         <td className="max-w-[280px] truncate px-2 py-0.5" title={s.descricao}>{s.descricao}</td>
-                        <td className="px-2 py-0.5 font-mono text-muted-foreground">{s.documento ?? '—'}</td>
+                        <td className="px-2 py-0.5 tabular-nums text-muted-foreground">{s.documento ?? '—'}</td>
                         <td className="whitespace-nowrap px-2 py-0.5 text-right font-medium tabular-nums text-muted-foreground">{formatMoeda(s.valor)}</td>
                         <td className="px-2 py-0.5 text-center">
                           <span className="rounded bg-muted px-1 py-0 text-[9px] font-semibold uppercase text-muted-foreground"
@@ -570,9 +570,9 @@ export function ImportarBancoInline({ contas, contaId, onContaChange, onImportad
                       /* ⚠ A BORDA DE BAIXO SAI QUANDO HÁ LINHA DO PAR: ela pertence ao CONJUNTO
                          (movimento + par), e riscar entre os dois separaria o que é uma coisa só. */
                       suspeita ? '' : 'border-b border-border/60')}>
-                      <td className="whitespace-nowrap px-2 py-0.5 font-mono">{brData(m.data)}</td>
+                      <td className="whitespace-nowrap px-2 py-0.5 tabular-nums">{brData(m.data)}</td>
                       <td className="max-w-[280px] truncate px-2 py-0.5" title={m.descricao}>{m.descricao || '—'}</td>
-                      <td className="px-2 py-0.5 font-mono text-muted-foreground">{m.documento ?? '—'}</td>
+                      <td className="px-2 py-0.5 tabular-nums text-muted-foreground">{m.documento ?? '—'}</td>
                       <td className={cn('whitespace-nowrap px-2 py-0.5 text-right font-medium tabular-nums',
                         m.valor < 0 ? 'text-destructive' : 'text-success')}>
                         {formatMoeda(m.valor)}

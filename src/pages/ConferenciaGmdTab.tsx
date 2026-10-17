@@ -424,10 +424,10 @@ export function ConferenciaGmdTab({ onBack, filtroGlobal, cenario: cenarioInicia
       {totals && (
         <div className="border rounded-lg p-2 bg-muted/20 space-y-1.5 text-[10px] text-muted-foreground max-w-[650px]">
           <h3 className="font-semibold text-foreground text-xs">Fórmula do GMD (Total Fazenda) — {cenarioLabel}</h3>
-          <div className="space-y-0.5 font-mono">
+          <div className="space-y-0.5 tabular-nums">
             <p>Ganho = Peso Tot.Fin ({fmt(totals.pesoTotalFin, 0)}) − Peso Tot.Ini ({fmt(totals.pesoTotalIni, 0)}) − Ent.Ext.kg ({fmt(totals.pesoEntradasExt, 0)}) + Saí.Ext.kg ({fmt(totals.pesoSaidasExt, 0)}) = <span className="font-bold text-foreground">{fmt(totals.ganho, 0)} kg</span></p>
           </div>
-          <div className="pt-0.5 border-t space-y-0.5 font-mono">
+          <div className="pt-0.5 border-t space-y-0.5 tabular-nums">
             <p>Cab. médias = ({fmt(totals.saldoInicial)} + {fmt(totals.saldoFinal)}) / 2 = {formatNum(totals.cabMedia, 1)} · Dias = {totals.dias}</p>
             <p className="font-bold text-primary">
               GMD = {fmt(totals.ganho, 0)} / ({formatNum(totals.cabMedia, 1)} × {totals.dias}) = {totals.gmd !== null ? formatNum(totals.gmd, 3) : '–'} kg/cab/dia

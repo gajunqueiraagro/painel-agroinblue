@@ -44,7 +44,7 @@ const PRINT_CSS = `
   .avoid-break { page-break-inside: avoid; }
   .chart-wrapper { display: none !important; } /* evita imprimir gráficos */
 }
-@media screen { .report { font-family: 'IBM Plex Sans', system-ui, sans-serif; } .report .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; } }
+@media screen { .report { font-family: 'IBM Plex Sans', system-ui, sans-serif; } .report .mono { font-variant-numeric: tabular-nums; } }
 `;
 
 function fmt(v: number | null | undefined, dec = 0): string {

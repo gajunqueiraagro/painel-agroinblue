@@ -224,7 +224,7 @@ export function IndicadoresMensais({
                 <TableRow>
                   <TableCell className="text-[10px] px-2 py-1 font-bold sticky left-0 bg-background">Desembolso mês</TableCell>
                   {dados.map(d => (
-                    <TableCell key={d.mes} className="text-[10px] px-2 py-1 text-right font-mono whitespace-nowrap tabular-nums">
+                    <TableCell key={d.mes} className="text-[10px] px-2 py-1 text-right whitespace-nowrap tabular-nums">
                       {d.desembolsoMes > 0 ? formatNum(d.desembolsoMes / 1000, 0) + 'k' : '—'}
                     </TableCell>
                   ))}
@@ -232,7 +232,7 @@ export function IndicadoresMensais({
                 <TableRow>
                   <TableCell className="text-[10px] px-2 py-1 font-bold sticky left-0 bg-background">Desembolso acum.</TableCell>
                   {dados.map(d => (
-                    <TableCell key={d.mes} className="text-[10px] px-2 py-1 text-right font-mono whitespace-nowrap tabular-nums">
+                    <TableCell key={d.mes} className="text-[10px] px-2 py-1 text-right whitespace-nowrap tabular-nums">
                       {d.desembolsoAcum > 0 ? formatNum(d.desembolsoAcum / 1000, 0) + 'k' : '—'}
                     </TableCell>
                   ))}
@@ -240,7 +240,7 @@ export function IndicadoresMensais({
                 <TableRow>
                   <TableCell className="text-[10px] px-2 py-1 font-bold sticky left-0 bg-background">Custo/cab mês</TableCell>
                   {dados.map(d => (
-                    <TableCell key={d.mes} className="text-[10px] px-2 py-1 text-right font-mono whitespace-nowrap tabular-nums">
+                    <TableCell key={d.mes} className="text-[10px] px-2 py-1 text-right whitespace-nowrap tabular-nums">
                       {d.custoCabMes !== null ? formatMoeda(d.custoCabMes) : '—'}
                     </TableCell>
                   ))}
@@ -248,7 +248,7 @@ export function IndicadoresMensais({
                 <TableRow>
                   <TableCell className="text-[10px] px-2 py-1 font-bold sticky left-0 bg-background">Custo/cab acum.</TableCell>
                   {dados.map(d => (
-                    <TableCell key={d.mes} className="text-[10px] px-2 py-1 text-right font-mono whitespace-nowrap tabular-nums">
+                    <TableCell key={d.mes} className="text-[10px] px-2 py-1 text-right whitespace-nowrap tabular-nums">
                       {d.custoCabAcum !== null ? formatMoeda(d.custoCabAcum) : '—'}
                     </TableCell>
                   ))}
@@ -256,7 +256,7 @@ export function IndicadoresMensais({
                 <TableRow>
                   <TableCell className="text-[10px] px-2 py-1 font-bold sticky left-0 bg-background">Média mensal</TableCell>
                   {dados.map(d => (
-                    <TableCell key={d.mes} className="text-[10px] px-2 py-1 text-right font-mono whitespace-nowrap tabular-nums">
+                    <TableCell key={d.mes} className="text-[10px] px-2 py-1 text-right whitespace-nowrap tabular-nums">
                       {d.mediaMensal > 0 ? formatNum(d.mediaMensal / 1000, 0) + 'k' : '—'}
                     </TableCell>
                   ))}

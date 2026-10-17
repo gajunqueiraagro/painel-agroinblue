@@ -119,7 +119,7 @@ function HistoricoChart({
               content={
                 <ChartTooltipContent
                   formatter={(value, name) => (
-                    <span className="font-mono text-xs">
+                    <span className="tabular-nums text-xs">
                       {formatNum(Number(value), decimals)} {unidade}
                     </span>
                   )}

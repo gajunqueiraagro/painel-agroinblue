@@ -61,7 +61,7 @@ const PRINT_CSS = `
 }
 @media screen {
   .report { font-family: 'IBM Plex Sans', system-ui, sans-serif; }
-  .report .mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
+  .report .mono { font-variant-numeric: tabular-nums; }
 }
 `;
 

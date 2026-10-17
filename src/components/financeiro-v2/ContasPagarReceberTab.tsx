@@ -66,6 +66,7 @@ import { toast } from 'sonner';
 import { docDaLinha } from '@/lib/financeiro/documentoHelper';
 import { consumirRetornoCpr, guardarRetornoCpr } from '@/lib/financeiro/cprRetorno';
 
+import { SearchableSelect } from '@/components/ui/searchable-select';
 // ─────────────────────────────────────────────────────────────────────────────
 // Vocabulário da tela
 // ─────────────────────────────────────────────────────────────────────────────
@@ -960,19 +961,13 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
   );
   /* o seletor de conta: cada opção diz o total A PAGAR e a contagem daquela conta no recorte atual */
   const ctlConta = (
-    <Select value={contaSel ?? '__todas__'} onValueChange={(v) => setContaSel(v === '__todas__' ? null : v)}>
-      <SelectTrigger data-testid="cpr-conta" className="h-[22px] w-[114px] shrink-0 px-2 text-[10px]" title={contaSel == null ? 'Todas as contas' : nomeConta(contaSel)}>
-        <SelectValue>{contaSel == null ? 'Todas as contas' : nomeConta(contaSel)}</SelectValue>
-      </SelectTrigger>
-      <SelectContent align="end">
-        <SelectItem value="__todas__">Todas as contas · {formatMoeda(recorteDeTodas.total.pagar.valor)} · {recorteDeTodas.total.pagar.contas}</SelectItem>
-        {resumoContas.map((c) => (
-          <SelectItem key={c.conta} value={c.conta} data-testid={`cpr-conta-opcao-${c.conta}`}>
-            {nomeConta(c.conta)} · {formatMoeda(c.pagar.valor)} · {c.pagar.contas}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <div data-testid="cpr-conta" className="w-[114px] shrink-0" title={contaSel == null ? 'Todas as contas' : nomeConta(contaSel)}>
+      {/* PASSO 8 do FIN-FINANC-28 — o seletor da casa COM BUSCA: o nome no gatilho, o a pagar e a contagem do dono ao lado de cada opção. */}
+      <SearchableSelect value={contaSel ?? '__todas__'} onValueChange={(v) => setContaSel(v === '__todas__' ? null : v)} semTodos
+        allValue="__todas__" allLabel="Todas as contas" placeholder="Buscar conta..." triggerClassName="h-[22px] px-2 text-[10px]"
+        options={[{ value: '__todas__', label: 'Todas as contas', hint: `${formatMoeda(recorteDeTodas.total.pagar.valor)} · ${recorteDeTodas.total.pagar.contas}` },
+          ...resumoContas.map((c) => ({ value: c.conta, label: nomeConta(c.conta), hint: `${formatMoeda(c.pagar.valor)} · ${c.pagar.contas}` }))]} />
+    </div>
   );
   const ctlSegmento = (
     <Segmentado

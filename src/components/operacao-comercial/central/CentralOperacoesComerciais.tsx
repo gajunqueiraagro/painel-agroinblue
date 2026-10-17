@@ -24,6 +24,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
 import { DatePicker } from '@/components/ui/date-picker';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { MoreVertical, Search, Eye, Filter, Ban, ArrowUp, ArrowDown, Lock, Trash2, FileText, Paperclip } from 'lucide-react';
 import { ItemDeMenuOC } from '@/components/venda/AbaContaCorrenteOC';
 import { normalizarErroRpc } from '@/hooks/useOcCompromissos';
@@ -854,15 +855,12 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
           <DatePicker value={dtIni} onChange={setDtIni} placeholder="Data inicial" size="compact" className="w-[124px]" />
           <DatePicker value={dtFim} onChange={setDtFim} placeholder="Data final" size="compact" className="w-[124px]" />
           {/* OC-LISTA-LAYOUT-01 — a fazenda, em memoria. Com a lateral numa fazenda ela manda: o select mostra a dela, apagado. */}
-          <Select value={fazendaSel ?? fFazenda} onValueChange={setFFazenda} disabled={!!fazendaSel}>
-            <SelectTrigger className={`${CTL} w-[150px]`} data-testid="filtro-fazenda"
-              title={fazendaSel ? 'a fazenda vem do seletor lateral' : undefined}><SelectValue placeholder="Fazenda" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__all__">Todas as fazendas</SelectItem>
-              {fazendaSel && !fazendas[fazendaSel] && <SelectItem value={fazendaSel}>{fazendaAtual?.nome ?? '—'}</SelectItem>}
-              {fazendaOptions.map(f => <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <div className="w-[150px] shrink-0" data-testid="filtro-fazenda" title={fazendaSel ? 'a fazenda vem do seletor lateral' : undefined}>
+            <SearchableSelect value={fazendaSel ?? fFazenda} onValueChange={setFFazenda} disabled={!!fazendaSel} allValue="__all__" allLabel="Todas as fazendas"
+              options={[...(fazendaSel && !fazendas[fazendaSel] ? [{ value: fazendaSel, label: fazendaAtual?.nome ?? '—' }] : []),
+                ...fazendaOptions.map(f => ({ value: f.id, label: f.nome }))]}
+              placeholder="Buscar fazenda..." triggerClassName={CTL} />
+          </div>
           <Select value={fTipo} onValueChange={setFTipo}>
             <SelectTrigger className={`${CTL} w-[120px]`}><SelectValue placeholder="Tipo" /></SelectTrigger>
             <SelectContent>
@@ -1049,7 +1047,7 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
                   onClick={abrePorTipo(r.tipo_operacao) ? () => abrirOperacaoPorTipo(r) : undefined}>
                   {/* Identificador e data são CONTEXTO, não conteúdo: quem varre a lista
                       procura contraparte e valor. Recuam para 8px muted. */}
-                  <TableCell className={`${TD} font-mono whitespace-nowrap text-[8px] text-muted-foreground`} title={r.id}>{r.id.slice(0, 8)}</TableCell>
+                  <TableCell className={`${TD} tabular-nums whitespace-nowrap text-[8px] text-muted-foreground`} title={r.id}>{r.id.slice(0, 8)}</TableCell>
                   <TableCell className={`${TD} whitespace-nowrap text-[8px] text-muted-foreground`}>{fmtData(r.data_operacao)}</TableCell>
                   <TableCell className={`${TD} whitespace-nowrap overflow-hidden`}>{TIPO_LABEL[r.tipo_operacao] ?? r.tipo_operacao}</TableCell>
                   {/* ⚠ A UNICA COLUNA QUE PODE NAO CABER, e por isso a unica com `truncate` e
@@ -1243,7 +1241,7 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
             {excluirEtapa === 1 && (
               <div className="text-[12px] space-y-1.5 leading-snug">
                 <p>
-                  A operação <span className="font-mono">#{excluirAlvo.id.slice(0, 8)}</span> de{' '}
+                  A operação <span className="tabular-nums">#{excluirAlvo.id.slice(0, 8)}</span> de{' '}
                   {fmtData(excluirAlvo.data_operacao)}, {nomeContraparte(excluirAlvo)}
                   {excluirAlvo.qtd_negociada != null ? `, ${excluirAlvo.qtd_negociada} cab` : ''}
                   {(excluirAlvo.valor_acordado ?? excluirAlvo.valor_total) ? ` de ${brl(excluirAlvo.valor_acordado ?? excluirAlvo.valor_total ?? 0)}` : ''}
@@ -1293,7 +1291,7 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
           <div className="space-y-2 text-[12px]">
             <div className="text-[11px] text-muted-foreground">
               A operação será cancelada (contrato oc_cancelar), sujeita às regras do backend.
-              {acao && <> Operação <span className="font-mono">#{acao.op.id.slice(0, 8)}</span>.</>}
+              {acao && <> Operação <span className="tabular-nums">#{acao.op.id.slice(0, 8)}</span>.</>}
             </div>
             <div>
               <div className="text-[11px] font-medium">Motivo *</div>

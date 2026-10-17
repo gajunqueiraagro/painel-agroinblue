@@ -86,7 +86,7 @@ export function ImportacoesDialog({
                     imp.desfeitaEm ? 'text-muted-foreground' : ''}`}>
                   <FileText className="mt-[3px] h-3 w-3 shrink-0 text-muted-foreground" />
                   <div className="min-w-0 flex-1">
-                  <div className="truncate font-mono" title={imp.nomeArquivo}>{imp.nomeArquivo}</div>
+                  <div className="truncate tabular-nums" title={imp.nomeArquivo}>{imp.nomeArquivo}</div>
                   <div className="text-[10px] text-muted-foreground">
                     {imp.data.split('-').reverse().join('/')}
                     {' · '}

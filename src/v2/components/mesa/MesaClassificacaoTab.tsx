@@ -810,7 +810,7 @@ export function MesaClassificacaoTab() {
           {/* Header sempre visível (resumo curto + toggle) */}
           <div className="flex items-center justify-between py-3 px-4 bg-muted/40 rounded-lg mb-3">
             <div className="text-sm text-muted-foreground">
-              Sessão <span className="font-mono">{sessaoId.slice(0, 8).toUpperCase()}</span> · {staging.length} linhas
+              Sessão <span className="tabular-nums">{sessaoId.slice(0, 8).toUpperCase()}</span> · {staging.length} linhas
               {headerStats.total > 0 && (
                 <> · Apply: <span className="font-medium text-foreground">{headerStats.total} exatas</span></>
               )}
@@ -1176,7 +1176,7 @@ export function MesaClassificacaoTab() {
               return (
                 <div key={c.texto} className="border rounded-md p-2.5 space-y-1.5">
                   <div className="flex items-baseline gap-2 flex-wrap">
-                    <span className="text-xs font-mono font-semibold">{c.texto}</span>
+                    <span className="text-xs tabular-nums font-semibold">{c.texto}</span>
                     <span className="text-[10px] text-muted-foreground">({c.qtd} linha(s))</span>
                     <span className="text-[10px] text-muted-foreground ml-auto">
                       ex: {ex.data ?? '—'} · {ex.valor != null ? formatMoeda(ex.valor) : '—'} · {ex.tipo_operacao ?? '—'}
@@ -1477,7 +1477,7 @@ function RowPreview({ row, onOpenCandidatos, onCreateLancamento, auxLoaded }: Ro
         >
           {STATUS_LABEL[status]}
         </Badge>
-        <span className="text-[11px] font-mono text-muted-foreground">
+        <span className="text-[11px] tabular-nums text-muted-foreground">
           L{row.excel_linha_origem ?? '-'}
         </span>
         <span className="font-bold tabular-nums text-sm">

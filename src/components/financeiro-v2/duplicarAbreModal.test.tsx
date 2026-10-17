@@ -107,7 +107,9 @@ describe('Duplicar abre o dialog em modo NOVO, preenchido', () => {
     expect(screen.getAllByDisplayValue('10/09/2026')).toHaveLength(1);
     expect(screen.getByDisplayValue('506,84')).toBeInTheDocument();
     for (const texto of ['Previsto', 'Telefonica Brasil S.A.', 'Faz. Pureza', 'Banco do Brasil', 'Telefonia e Internet']) {
-      expect(screen.getAllByRole('combobox').some((c) => c.textContent === texto)).toBe(true);
+      /* PASSO 8 do FIN-FINANC-28: conta e fazenda sao o seletor da casa COM BUSCA (gatilho = botao), os outros seguem combobox */
+      const deBusca = Array.from(document.querySelectorAll('button')).filter((b) => Array.from(b.children).some((c) => c.tagName === 'SPAN' && c.classList.contains('truncate') && c.classList.contains('text-left')));
+      expect([...screen.getAllByRole('combobox'), ...deBusca].some((c) => c.textContent === texto), texto).toBe(true);
     }
     expect(screen.queryByDisplayValue(/Cópia/)).toBeNull();
   });

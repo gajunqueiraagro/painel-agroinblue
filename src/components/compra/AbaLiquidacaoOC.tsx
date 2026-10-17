@@ -325,7 +325,7 @@ function DetalheObrigacaoDialog({ api, obr, somenteLeitura, onIrParaDocumentos, 
             {obr.tituloId && (
               <div className="col-span-2 flex items-baseline justify-between gap-2">
                 <span className="text-muted-foreground shrink-0">Título financeiro</span>
-                <span className="font-mono text-[10px] text-muted-foreground">{obr.tituloId.slice(0, 8)}</span>
+                <span className="tabular-nums text-[10px] text-muted-foreground">{obr.tituloId.slice(0, 8)}</span>
               </div>
             )}
           </div>

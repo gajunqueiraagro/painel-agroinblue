@@ -148,7 +148,7 @@ export function BarterInsumoModal({
             <div>
               <Label className="text-[10px]">Quantidade</Label>
               <Input value={quantidade} onChange={e => setQuantidade(e.target.value)}
-                inputMode="decimal" className={cn('mt-0.5 h-8 text-right font-mono text-[12px]', FOCO)} />
+                inputMode="decimal" className={cn('mt-0.5 h-8 text-right tabular-nums text-[12px]', FOCO)} />
             </div>
             <div>
               <Label className="text-[10px]">Unidade</Label>
@@ -175,7 +175,7 @@ export function BarterInsumoModal({
             <div>
               <Label className="text-[10px]">Valor <span className="text-destructive">*</span></Label>
               <CampoMoeda valor={valor} onChange={setValor}
-                className={cn('mt-0.5 h-8 text-right font-mono text-[12px]', FOCO)} />
+                className={cn('mt-0.5 h-8 text-right tabular-nums text-[12px]', FOCO)} />
             </div>
           </div>
 

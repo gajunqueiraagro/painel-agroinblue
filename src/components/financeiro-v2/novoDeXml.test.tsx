@@ -113,7 +113,9 @@ function montarModal(props: Partial<React.ComponentProps<typeof LancamentoV2Dial
 const botaoSalvar = () => document.querySelector('button[tabindex="17"]') as HTMLButtonElement;
 /** A nota NAO traz a conta de pagamento: o operador a escolhe. Nos casos de Salvar, a escolha entra como ele a faria. */
 const comConta = (d: DoXml) => ({ ...prefillDaNota(d), conta_bancaria_id: 'bb' });
-const combo = (texto: string) => screen.getAllByRole('combobox').some((c) => (c.textContent ?? '').includes(texto));
+/* PASSO 8 do FIN-FINANC-28: conta e fazenda sao o seletor da casa COM BUSCA (gatilho = botao); os outros seguem combobox. */
+const gatilhoDeBusca = () => Array.from(document.querySelectorAll('button')).filter((b) => Array.from(b.children).some((c) => c.tagName === 'SPAN' && c.classList.contains('truncate') && c.classList.contains('text-left')));
+const combo = (texto: string) => [...screen.getAllByRole('combobox'), ...gatilhoDeBusca()].some((c) => (c.textContent ?? '').includes(texto));
 
 /* ═══ TELA A ═══════════════════════════════════════════════════════════════════════ */
 function arquivo(nome: string, conteudo: string): File {

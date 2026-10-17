@@ -192,7 +192,7 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
                     const quem = l.nota ? `NF ${numeroDaNota(l.nota.numero)}` : l.arquivoNome;
                     return (
                       <tr key={l.id} className="border-t bg-destructive/5" data-testid="xml-linha" data-situacao="recusada">
-                        <td className={`${TD} font-mono`} title={quem}>{quem}</td>
+                        <td className={`${TD} tabular-nums`} title={quem}>{quem}</td>
                         <td colSpan={7} className={`${TD} text-destructive`} title={l.recusa ?? ''} data-testid="xml-recusa">{l.recusa}</td>
                         <td className={`${TD_ACAO} ${DIVISOR}`}>
                           <Button type="button" size="sm" variant="outline" className="h-4 px-1.5 text-[9.5px]" disabled title={l.recusa ?? ''}>Abrir lançamento</Button>
@@ -207,12 +207,12 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
                   const onde = d.ocorrencias[0];
                   return (
                     <tr key={l.id} className="border-t" data-testid="xml-linha" data-situacao={sit}>
-                      <td className={`${TD} font-mono`}>{numeroDaNota(n.numero)}</td>
+                      <td className={`${TD} tabular-nums`}>{numeroDaNota(n.numero)}</td>
                       <td className={`${TD} text-center tabular-nums`}>{dataCurta(n.emissao)}</td>
                       <td className={TD} title={n.emitente.nome}>{n.emitente.nome}</td>
-                      <td className={`${TD} font-mono`}>{documentoFormatado(n.emitente.documento)}</td>
+                      <td className={`${TD} tabular-nums`}>{documentoFormatado(n.emitente.documento)}</td>
                       <td className={`${TD} ${DIVISOR} ${l.fazenda ? '' : 'text-muted-foreground'}`} title={l.fazenda?.nome ?? 'Fazenda não identificada pela inscrição estadual.'}>{l.fazenda?.nome ?? '—'}</td>
-                      <td className={`${TD} text-right font-mono tabular-nums`}>{reais(n.totais.notaCent)}</td>
+                      <td className={`${TD} text-right tabular-nums`}>{reais(n.totais.notaCent)}</td>
                       <td className={TD} title={resumoDasDuplicatas(d.proposta)}>{resumoDasDuplicatas(d.proposta)}</td>
                       <td className={`${TD} ${DIVISOR} ${s.cor}`} data-testid="xml-situacao"
                         title={sit === 'ja_registrada' && onde ? `Nota já registrada · ${onde.descricao ?? ''} · ${dataCurta(onde.data)}` : s.texto}>
@@ -237,7 +237,7 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
             <span className="text-muted-foreground">
               {lidas.length} {lidas.length === 1 ? 'nota lida' : 'notas lidas'} · {recusadas} {recusadas === 1 ? 'recusada' : 'recusadas'}
             </span>
-            <span className="font-mono font-semibold tabular-nums">{reais(somaCent)}</span>
+            <span className="font-semibold tabular-nums">{reais(somaCent)}</span>
           </div>
           <p className="text-[10px] text-muted-foreground">Dados lidos do arquivo; a autenticidade da assinatura não é verificada.</p>
         </div>

@@ -87,7 +87,8 @@ const campoStatus = () => document.querySelector('button[tabindex="4"]') as HTML
 const botaoSalvar = () => document.querySelector('button[tabindex="17"]') as HTMLButtonElement;
 const campoConta = (rotulo: string) => {
   const label = Array.from(document.querySelectorAll('label')).find(l => l.textContent === rotulo);
-  return label?.parentElement?.querySelector('button[role="combobox"]') as HTMLButtonElement | null;
+  /* PASSO 8 do FIN-FINANC-28: a conta e' o seletor da casa COM BUSCA — o gatilho e' o primeiro botao do campo. */
+  return label?.parentElement?.querySelector('button') as HTMLButtonElement | null;
 };
 const frase = () => screen.queryByTestId('casado-com-extrato');
 const assentar = () => act(async () => { await new Promise((r) => setTimeout(r, 60)); });

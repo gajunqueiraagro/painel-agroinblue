@@ -34,6 +34,7 @@ import { formatMoeda } from '@/lib/calculos/formatters';
 import { paginarTudo } from '@/lib/financeiro/paginarTudo';
 import { isTransferencia } from '@/lib/analise/analiseAgregacoes';
 import { ATIVIDADES, type Atividade } from '@/lib/financeiro/ultimaAtividade';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import {
   RECORTE_PADRAO, janelaDoRecorte, impedimentoDoRecorte, descreverPeriodo, descreverEixo,
   type RecortePainel, type ModoPeriodo, type EixoData, type FiltroStatus,
@@ -278,16 +279,9 @@ export function PainelPeriodoTab() {
       <div className="flex flex-wrap items-end gap-2 rounded border bg-muted/30 px-2 py-2">
         <div className="w-[170px]">
           <Label className="text-[10px]">Conta</Label>
-          <Select value={recorte.contaId ?? TODAS}
-            onValueChange={(v) => mexer({ contaId: v === TODAS ? null : v })}>
-            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value={TODAS}>Todas as contas</SelectItem>
-              {contas.map((c) => (
-                <SelectItem key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <SearchableSelect value={recorte.contaId ?? TODAS} onValueChange={(v) => mexer({ contaId: v === TODAS ? null : v })}
+            options={contas.map((c) => ({ value: c.id, label: c.nome_exibicao || c.nome_conta }))} allValue={TODAS} allLabel="Todas as contas"
+            placeholder="Buscar conta..." dense triggerClassName="h-8 text-xs" />
         </div>
 
         <div className="w-[110px]">

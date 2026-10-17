@@ -643,7 +643,7 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
             <div className="col-span-2">
               <Label className="text-[10px]">Chave de acesso</Label>
               <Input value={chave} onChange={e => setChave(e.target.value)} data-testid="doc-chave"
-                className="h-8 text-[12px] mt-0.5 font-mono" placeholder="44 dígitos" />
+                className="h-8 text-[12px] mt-0.5 tabular-nums" placeholder="44 dígitos" />
             </div>
           )}
           <div className="col-span-2">

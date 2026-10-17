@@ -2155,7 +2155,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
                           valor do titulo segue no `title`, para quem conferir os dois. */}
                       <td className="px-[5px]">
                         {p.tituloId
-                          ? <span className="font-mono text-[9.5px] text-muted-foreground"
+                          ? <span className="tabular-nums text-[9.5px] text-muted-foreground"
                               title={`${p.tituloId} · ${p.tituloValor != null ? brl(p.tituloValor) : '—'}`}>{p.tituloId.slice(0, 8)}</span>
                           : <span className="text-[10px] text-muted-foreground">—</span>}
                       </td>

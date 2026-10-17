@@ -25,6 +25,7 @@ import { CATEGORIAS, kgToArrobas, type Lancamento, type Categoria } from '@/type
 import { STATUS_OPTIONS_ZOOTECNICO_COM_META } from '@/lib/statusOperacional';
 import { EditLancamentoSheet } from './EditLancamentoSheet';
 
+import { SearchableSelect } from '@/components/ui/searchable-select';
 interface FazendaOption { id: string; nome: string; }
 
 interface Props {
@@ -207,18 +208,13 @@ export function EditTransferenciaSheet({
             <div>
               <Label className="text-[10px] font-bold text-foreground">Destino</Label>
               {outrasFazendas.length > 0 ? (
-                <Select
+                <SearchableSelect
                   value={form.fazendaDestino || ''}
                   onValueChange={v => setForm(f => ({ ...f, fazendaDestino: v }))}
                   disabled={p1Oficial}
-                >
-                  <SelectTrigger className="mt-0.5 h-7 text-[11px]"><SelectValue placeholder="Selecione…" /></SelectTrigger>
-                  <SelectContent>
-                    {outrasFazendas.map(f => (
-                      <SelectItem key={f.id} value={f.nome}>{f.nome}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  options={outrasFazendas.map(f => ({ value: f.nome, label: f.nome }))} semTodos allValue="" allLabel="Selecione…"
+                  placeholder="Buscar fazenda..." dense className="mt-0.5" triggerClassName="h-7 text-[11px]"
+                />
               ) : (
                 <Input
                   value={form.fazendaDestino || ''}

@@ -14,6 +14,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 
+import { SearchableSelect } from '@/components/ui/searchable-select';
 type AbaTipo = 'entradas' | 'saidas' | 'nascimentos' | 'mortes_consumo' | 'chuvas';
 
 const ABAS: { id: AbaTipo; label: string }[] = [
@@ -418,16 +419,8 @@ export default function CadernoImportTab() {
           </div>
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground">Fazenda:</span>
-            <Select value={fazendaId} onValueChange={setFazendaId}>
-              <SelectTrigger className="w-[220px] h-8 text-xs">
-                <SelectValue placeholder="Selecione" />
-              </SelectTrigger>
-              <SelectContent>
-                {fazendasList.map((f) => (
-                  <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect value={fazendaId} onValueChange={setFazendaId} options={fazendasList.map((f) => ({ value: f.id, label: f.nome }))}
+              semTodos allValue="" allLabel="Selecione" placeholder="Buscar fazenda..." dense className="w-[220px]" triggerClassName="h-8 text-xs" />
           </div>
         </div>
 
@@ -606,16 +599,9 @@ export default function CadernoImportTab() {
                                   const selectedNome = matchPorNome?.nome || (opcoesFazendas.some((f) => f.nome === valorLimpo) ? valorLimpo : '');
                                   return (
                                     <TableCell key={c} className={cn('min-w-[180px]', uncertain && 'bg-amber-100 dark:bg-amber-950/40')}>
-                                      <Select value={selectedNome} onValueChange={(val) => updateCell(idx, c, val)}>
-                                        <SelectTrigger className="h-7 text-xs">
-                                          <SelectValue placeholder="Selecione fazenda destino" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          {opcoesFazendas.map((f) => (
-                                            <SelectItem key={f.id} value={f.nome}>{f.nome}</SelectItem>
-                                          ))}
-                                        </SelectContent>
-                                      </Select>
+                                      <SearchableSelect value={selectedNome} onValueChange={(val) => updateCell(idx, c, val)}
+                                        options={opcoesFazendas.map((f) => ({ value: f.nome, label: f.nome }))} semTodos allValue=""
+                                        allLabel="Selecione fazenda destino" placeholder="Buscar fazenda..." dense triggerClassName="h-7 text-xs" />
                                     </TableCell>
                                   );
                                 }

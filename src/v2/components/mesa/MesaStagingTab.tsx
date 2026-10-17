@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/select';
 import type { StagingRow } from '@/v2/lib/staging/types';
 
+import { SearchableSelect } from '@/components/ui/searchable-select';
 const LABEL_MOTIVO: Record<string, string> = {
   ofx_duplicado: 'OFX duplicado',
   ambiguo: 'Ambíguo',
@@ -356,22 +357,10 @@ export function MesaStagingTab({ sessaoId }: Props) {
       {(contasResolvidas.opcoes.length > 1 || contasResolvidas.temSemConta) && (
         <div className="flex items-center gap-2 text-xs px-3">
           <span className="text-muted-foreground">Conta resolvida:</span>
-          <Select value={filtroContaResolvida} onValueChange={setFiltroContaResolvida}>
-            <SelectTrigger className="h-7 w-56 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todas">Todas</SelectItem>
-              {contasResolvidas.opcoes.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.nome}
-                </SelectItem>
-              ))}
-              {contasResolvidas.temSemConta && (
-                <SelectItem value="__sem__">Sem conta resolvida</SelectItem>
-              )}
-            </SelectContent>
-          </Select>
+          <SearchableSelect value={filtroContaResolvida} onValueChange={setFiltroContaResolvida} allValue="todas" allLabel="Todas"
+            options={[...contasResolvidas.opcoes.map((c) => ({ value: c.id, label: c.nome })),
+              ...(contasResolvidas.temSemConta ? [{ value: '__sem__', label: 'Sem conta resolvida' }] : [])]}
+            placeholder="Buscar conta..." dense className="w-56" triggerClassName="h-7 text-xs" />
         </div>
       )}
 

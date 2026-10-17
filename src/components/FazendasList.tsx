@@ -134,7 +134,7 @@ export function FazendasList() {
                 <div className="min-w-0">
                   <p className="text-sm font-bold truncate">{f.nome}</p>
                   <div className="flex items-center gap-2">
-                    <Badge variant="secondary" className="text-xs font-mono">
+                    <Badge variant="secondary" className="text-xs tabular-nums">
                       {f.codigo_importacao || '—'}
                     </Badge>
                     {isActive && (

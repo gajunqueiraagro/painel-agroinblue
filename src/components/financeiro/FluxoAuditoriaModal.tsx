@@ -335,7 +335,7 @@ export function FluxoAuditoriaModal({ open, onClose, payload, lancamentos, valor
                             )}
                           </div>
                         </td>
-                        <td className={`text-[9px] px-1.5 py-1 text-right font-mono font-bold whitespace-nowrap align-middle ${valColor}`}>
+                        <td className={`text-[9px] px-1.5 py-1 text-right tabular-nums font-bold whitespace-nowrap align-middle ${valColor}`}>
                           {formatMoeda(Math.abs(l.valor))}
                         </td>
                         <td className="text-[9px] px-1.5 py-1 truncate align-middle">{l.status_transacao || '-'}</td>
@@ -369,11 +369,11 @@ export function FluxoAuditoriaModal({ open, onClose, payload, lancamentos, valor
               : `${filtered.length} lançamentos`}
           </span>
           <div className="flex items-center gap-3">
-            <span className={`font-bold font-mono text-xs ${valColor}`}>
+            <span className={`font-bold tabular-nums text-xs ${valColor}`}>
               Total: {formatMoeda(filtroInc ? totalFiltered : totalAllLanc)}
             </span>
             {hasDiff && !filtroInc && (
-              <span className="font-bold font-mono text-xs text-destructive">
+              <span className="font-bold tabular-nums text-xs text-destructive">
                 Δ {formatMoeda(diff)}
               </span>
             )}

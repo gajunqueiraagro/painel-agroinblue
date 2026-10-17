@@ -365,7 +365,7 @@ export function FinV2SafrasTab() {
               )}
               {!loading && !loadError && safrasFiltradas.map(s => (
                 <TableRow key={s.id} className={`h-auto ${!s.ativa ? 'opacity-50' : ''}`}>
-                  <TableCell className={`${cellClass} font-mono text-[11px]`}>{s.codigo || '—'}</TableCell>
+                  <TableCell className={`${cellClass} tabular-nums text-[11px]`}>{s.codigo || '—'}</TableCell>
                   <TableCell className={cellClass}><span className="font-semibold">{s.nome}</span></TableCell>
                   <TableCell className={cellClass}>
                     <Badge variant="outline" className="text-[9px] px-1.5 py-0 leading-tight">{escopoLabel(s.escopo_negocio)}</Badge>
@@ -376,7 +376,7 @@ export function FinV2SafrasTab() {
                     </Badge>
                   </TableCell>
                   <TableCell className={`${cellClass} text-muted-foreground`}>{emUso.has(s.id) ? 'Sim' : 'Não'}</TableCell>
-                  <TableCell className={`${cellClass} font-mono text-[11px]`}>{s.ordem_exibicao}</TableCell>
+                  <TableCell className={`${cellClass} tabular-nums text-[11px]`}>{s.ordem_exibicao}</TableCell>
                   <TableCell className="py-1 px-1">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -537,7 +537,7 @@ export function FinV2SafrasTab() {
                   title={ciclo === 'anual'
                     ? 'Gerado pela temporada e pelo escopo — é a chave da safra e não se digita.'
                     : 'Sugerido pelas datas — pode ser editado; é a chave da safra.'}
-                  className={`mt-0.5 h-8 font-mono text-[12px] ${ciclo === 'anual' ? 'cursor-default bg-muted' : ''}`} />
+                  className={`mt-0.5 h-8 tabular-nums text-[12px] ${ciclo === 'anual' ? 'cursor-default bg-muted' : ''}`} />
               </div>
               <div>
                 <Label className="text-[10px]">Nome <span className="text-destructive">*</span></Label>
@@ -572,7 +572,7 @@ export function FinV2SafrasTab() {
                 <div>
                   <Label className="text-[10px]">Ordem</Label>
                   <Input value={ordemRaw} onChange={e => setOrdemRaw(e.target.value)} inputMode="numeric"
-                    placeholder="0" className="mt-0.5 h-8 font-mono text-[12px]" />
+                    placeholder="0" className="mt-0.5 h-8 tabular-nums text-[12px]" />
                   <p className="mt-1 text-[10px] leading-tight text-muted-foreground">0 = padrão · 1, 2, 3… = manual</p>
                 </div>
                 <div>

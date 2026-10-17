@@ -386,7 +386,7 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
         <div className="px-4 pt-3 pb-1">
           <div className="flex items-center justify-between text-xs">
             <span className="text-muted-foreground">{drillDownLancamentos.length} lançamentos</span>
-            <span className={`font-bold font-mono ${drillDown.tipo === 'entrada' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+            <span className={`font-bold tabular-nums ${drillDown.tipo === 'entrada' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
               Total: {formatMoeda(drillDownTotal)}
             </span>
           </div>
@@ -430,7 +430,7 @@ export function FinanceiroCaixaTab({ lancamentosPecuarios = [], saldosIniciais =
                       </TableCell>
                       <TableCell className="text-[10px] px-2 py-1.5 max-w-[120px] truncate">{l.fornecedor || '-'}</TableCell>
                       <TableCell className="text-[10px] px-2 py-1.5 max-w-[120px] truncate">{l.centro_custo || '-'}</TableCell>
-                      <TableCell className={`text-[10px] px-2 py-1.5 text-right font-mono font-bold ${drillDown.tipo === 'entrada' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                      <TableCell className={`text-[10px] px-2 py-1.5 text-right tabular-nums font-bold ${drillDown.tipo === 'entrada' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                         {formatMoeda(Math.abs(l.valor))}
                       </TableCell>
                       <TableCell className="text-[10px] px-2 py-1.5">{l.status_transacao || '-'}</TableCell>

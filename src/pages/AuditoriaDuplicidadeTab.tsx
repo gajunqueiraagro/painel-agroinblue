@@ -493,7 +493,7 @@ export function AuditoriaDuplicidadeTab({ onBack }: Props) {
                         <TableCell className="max-w-[200px] truncate">{log.descricao || '—'}</TableCell>
                         <TableCell className="max-w-[140px] truncate">{log.fornecedor || '—'}</TableCell>
                         <TableCell>{log.numero_documento || '—'}</TableCell>
-                        <TableCell className="text-right font-mono whitespace-nowrap">{formatMoeda(log.valor)}</TableCell>
+                        <TableCell className="text-right tabular-nums whitespace-nowrap">{formatMoeda(log.valor)}</TableCell>
                         <TableCell className="whitespace-nowrap">{log.tipo_operacao || '—'}</TableCell>
                         <TableCell className="max-w-[120px] truncate text-[9px]">{log.nome_arquivo || '—'}</TableCell>
                         <TableCell>{statusBadge(log.status_revisao)}</TableCell>
@@ -605,7 +605,7 @@ export function AuditoriaDuplicidadeTab({ onBack }: Props) {
                         <div className="flex items-center justify-between gap-2 flex-wrap">
                           <div className="flex items-center gap-2">
                             <Copy className="h-3.5 w-3.5 text-amber-600 shrink-0" />
-                            <span className="text-[10px] font-mono text-muted-foreground">Hash: {group.hash?.slice(0, 12)}...</span>
+                            <span className="text-[10px] tabular-nums text-muted-foreground">Hash: {group.hash?.slice(0, 12)}...</span>
                             <Badge variant="outline" className="text-[9px]">{group.records.length} registros</Badge>
                             {!isPendente && (
                               <Badge variant="outline" className="text-[9px] bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-400">
@@ -664,7 +664,7 @@ export function AuditoriaDuplicidadeTab({ onBack }: Props) {
                                     <TableCell className="max-w-[180px] truncate">{r.descricao || '—'}</TableCell>
                                     <TableCell className="max-w-[130px] truncate">{r.fornecedor_nome || '—'}</TableCell>
                                     <TableCell>{r.numero_documento || '—'}</TableCell>
-                                    <TableCell className="text-right font-mono whitespace-nowrap">{formatMoeda(r.valor)}</TableCell>
+                                    <TableCell className="text-right tabular-nums whitespace-nowrap">{formatMoeda(r.valor)}</TableCell>
                                     <TableCell className="whitespace-nowrap">{r.tipo_operacao || '—'}</TableCell>
                                     <TableCell className="text-[9px]">{r.lote_importacao_id ? 'Importado' : 'Manual'}</TableCell>
                                     <TableCell className="text-[9px] whitespace-nowrap">{r.created_at ? format(new Date(r.created_at), 'dd/MM/yy HH:mm') : '—'}</TableCell>
@@ -905,7 +905,7 @@ function CompField({ label, value, mono }: { label: string; value: string | null
   return (
     <div className="flex justify-between gap-2">
       <span className="text-[10px] text-muted-foreground shrink-0">{label}</span>
-      <span className={`text-[10px] text-right truncate max-w-[180px] ${mono ? 'font-mono' : ''}`}>{value || '—'}</span>
+      <span className={`text-[10px] text-right truncate max-w-[180px] ${mono ? 'tabular-nums' : ''}`}>{value || '—'}</span>
     </div>
   );
 }

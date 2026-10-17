@@ -224,7 +224,7 @@ export function ClientesTab() {
                   <Input
                     value={editing.slug}
                     onChange={e => setEditing({ ...editing, slug: e.target.value })}
-                    className="h-9 text-sm font-mono"
+                    className="h-9 text-sm tabular-nums"
                   />
                 </div>
                 <div className="flex items-center gap-2">
@@ -289,7 +289,7 @@ export function ClientesTab() {
                 <div className="min-w-0">
                   <p className="text-sm font-bold truncate">{c.nome}</p>
                   <div className="flex items-center gap-2">
-                    <Badge variant="secondary" className="text-xs font-mono">{c.slug}</Badge>
+                    <Badge variant="secondary" className="text-xs tabular-nums">{c.slug}</Badge>
                     <Badge variant={c.ativo ? 'default' : 'destructive'} className="text-xs">
                       {c.ativo ? 'Ativo' : 'Inativo'}
                     </Badge>
@@ -334,7 +334,7 @@ export function ClientesTab() {
                 value={slug}
                 onChange={e => setSlug(e.target.value)}
                 placeholder="fazenda-sao-joao"
-                className="h-9 text-sm font-mono"
+                className="h-9 text-sm tabular-nums"
               />
               <p className="text-xs text-muted-foreground">
                 Gerado automaticamente a partir do nome

@@ -18,6 +18,8 @@ import {
   deriveStatusFinanceiro as deriveStatus,
 } from '@/lib/financeiro/statusFinanceiro';
 import { FazendaSelect } from '@/components/shared/FazendaSelect';
+import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import type { Fazenda } from '@/contexts/FazendaContext';
 
 interface RowData {
@@ -138,6 +140,17 @@ export function ModoRapidoGrid({ fazendaId, fazendas, contas, classificacoes, on
   }, []);
 
   // Keyboard navigation
+  /* PASSO 8 do FIN-FINANC-28 — conta e subcentro sao seletores COM BUSCA: a celula marcada (`data-row`/`data-col`) e' o
+     invólucro, e o foco vai ao gatilho dele. Campo comum recebe o foco como sempre. */
+  const focarCelula = (el: HTMLElement | null | undefined) => {
+    if (!el) return;
+    if (el.matches('input, select, button')) { el.focus(); return; }
+    el.querySelector<HTMLElement>('button')?.focus();
+  };
+  /* So' as SETAS do gatilho navegam: Enter abre a busca, e o que se digita dentro dela (que borbulha pelo portal) nao anda de linha. */
+  const navegarDoSeletor = (e: React.KeyboardEvent<HTMLDivElement>, rowIdx: number, colIdx: number) => {
+    if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && e.target === e.currentTarget.querySelector('button')) handleKeyDown(e, rowIdx, colIdx);
+  };
   const handleKeyDown = useCallback((e: React.KeyboardEvent, rowIdx: number, colIdx: number) => {
     const isInput = (e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'SELECT';
 
@@ -148,23 +161,20 @@ export function ModoRapidoGrid({ fazendaId, fazendas, contas, classificacoes, on
         addRow();
       }
       setTimeout(() => {
-        const nextRow = gridRef.current?.querySelector(`[data-row="${rowIdx + 1}"][data-col="${colIdx}"]`) as HTMLElement;
-        nextRow?.focus();
+        focarCelula(gridRef.current?.querySelector<HTMLElement>(`[data-row="${rowIdx + 1}"][data-col="${colIdx}"]`));
       }, 50);
     }
 
     if (e.key === 'ArrowDown' && !e.shiftKey) {
       if (isInput && (e.target as HTMLInputElement).type !== 'text') return;
       e.preventDefault();
-      const next = gridRef.current?.querySelector(`[data-row="${rowIdx + 1}"][data-col="${colIdx}"]`) as HTMLElement;
-      next?.focus();
+      focarCelula(gridRef.current?.querySelector<HTMLElement>(`[data-row="${rowIdx + 1}"][data-col="${colIdx}"]`));
     }
 
     if (e.key === 'ArrowUp' && !e.shiftKey) {
       if (isInput && (e.target as HTMLInputElement).type !== 'text') return;
       e.preventDefault();
-      const prev = gridRef.current?.querySelector(`[data-row="${rowIdx - 1}"][data-col="${colIdx}"]`) as HTMLElement;
-      prev?.focus();
+      focarCelula(gridRef.current?.querySelector<HTMLElement>(`[data-row="${rowIdx - 1}"][data-col="${colIdx}"]`));
     }
   }, [rows.length, addRow]);
 
@@ -292,7 +302,7 @@ export function ModoRapidoGrid({ fazendaId, fazendas, contas, classificacoes, on
 
               return (
                 <tr key={row.id} className={`border-b last:border-b-0 ${hasError ? 'bg-destructive/5' : 'hover:bg-muted/30'}`}>
-                  <td className="px-1 py-0.5 text-muted-foreground font-mono text-center">
+                  <td className="px-1 py-0.5 text-muted-foreground tabular-nums text-center">
                     {rowIdx + 1}
                     {hasError && (
                       <span title={rowErrors?.join(', ')}><AlertCircle className="h-3 w-3 text-destructive inline ml-0.5" /></span>
@@ -353,17 +363,10 @@ export function ModoRapidoGrid({ fazendaId, fazendas, contas, classificacoes, on
                   </td>
                   {/* Conta */}
                   <td className="px-0.5 py-0.5">
-                    <select
-                      data-row={rowIdx}
-                      data-col={3}
-                      value={row.conta_bancaria_id}
-                      onChange={e => updateRow(row.id, 'conta_bancaria_id', e.target.value)}
-                      onKeyDown={e => handleKeyDown(e, rowIdx, 3)}
-                      className="w-full h-7 px-0.5 text-[11px] bg-transparent border border-transparent focus:border-primary/40 rounded outline-none"
-                    >
-                      <option value="">—</option>
-                      {contasFazenda.map(c => <option key={c.id} value={c.id}>{c.nome_exibicao || c.nome_conta}</option>)}
-                    </select>
+                    <div data-row={rowIdx} data-col={3} onKeyDown={e => navegarDoSeletor(e, rowIdx, 3)}>
+                      <ContaBancariaSelect value={row.conta_bancaria_id} onValueChange={v => updateRow(row.id, 'conta_bancaria_id', v)}
+                        contas={contasFazenda} placeholder="—" className="h-7 px-0.5 text-[11px] bg-transparent border-transparent" />
+                    </div>
                   </td>
                   {/* Descrição */}
                   <td className="px-0.5 py-0.5">
@@ -390,22 +393,16 @@ export function ModoRapidoGrid({ fazendaId, fazendas, contas, classificacoes, on
                       min="0"
                       step="0.01"
                       placeholder="0,00"
-                      className="w-full h-7 px-1 text-[11px] text-right font-mono bg-transparent border border-transparent focus:border-primary/40 rounded outline-none placeholder:text-muted-foreground/40"
+                      className="w-full h-7 px-1 text-[11px] text-right tabular-nums bg-transparent border border-transparent focus:border-primary/40 rounded outline-none placeholder:text-muted-foreground/40"
                     />
                   </td>
                   {/* Subcentro */}
                   <td className="px-0.5 py-0.5">
-                    <select
-                      data-row={rowIdx}
-                      data-col={6}
-                      value={row.subcentro}
-                      onChange={e => updateRow(row.id, 'subcentro', e.target.value)}
-                      onKeyDown={e => handleKeyDown(e, rowIdx, 6)}
-                      className="w-full h-7 px-0.5 text-[11px] bg-transparent border border-transparent focus:border-primary/40 rounded outline-none"
-                    >
-                      <option value="">Selecione...</option>
-                      {subcentroOptions.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
+                    <div data-row={rowIdx} data-col={6} onKeyDown={e => navegarDoSeletor(e, rowIdx, 6)}>
+                      <SearchableSelect value={row.subcentro} onValueChange={v => updateRow(row.id, 'subcentro', v)}
+                        options={subcentroOptions.map(s => ({ value: s, label: s }))} semTodos allValue="" allLabel="Selecione..."
+                        placeholder="Buscar subcentro..." triggerClassName="h-7 px-0.5 text-[11px] bg-transparent border-transparent" />
+                    </div>
                   </td>
                   {/* Status */}
                   <td className="px-0.5 py-0.5">

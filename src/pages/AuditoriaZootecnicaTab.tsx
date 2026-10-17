@@ -241,7 +241,7 @@ export function AuditoriaZootecnicaTab() {
                         <span className="text-xs">{inc.tipo}</span>
                       </div>
                     </TableCell>
-                    <TableCell className="font-mono text-xs font-bold">{inc.valor}</TableCell>
+                    <TableCell className="tabular-nums text-xs font-bold">{inc.valor}</TableCell>
                     <TableCell>
                       <span className={`text-[9px] px-1.5 py-0.5 rounded ${
                         inc.fonte === 'fechamento' ? 'bg-green-100 text-green-800' :

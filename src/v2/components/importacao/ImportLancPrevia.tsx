@@ -112,7 +112,7 @@ export function ImportLancPrevia({
         <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x">
           <div className="px-3 py-2 flex items-baseline justify-between">
             <span className="text-[11px] font-semibold text-emerald-700">Entram</span>
-            <span className="text-[11px] tabular-nums font-mono">
+            <span className="text-[11px] tabular-nums">
               <strong>{totais.entram.qtd}</strong> linha{totais.entram.qtd !== 1 ? 's' : ''}
               {' · '}{formatMoeda(totais.entram.valor)}
               {/* ⚠ A QUEBRA ENTRE ATUALIZAR E CRIAR SÓ APARECE QUANDO HÁ AS
@@ -132,7 +132,7 @@ export function ImportLancPrevia({
           </div>
           <div className="px-3 py-2 flex items-baseline justify-between">
             <span className="text-[11px] font-semibold text-red-700">Ficam de fora</span>
-            <span className="text-[11px] tabular-nums font-mono">
+            <span className="text-[11px] tabular-nums">
               <strong>{totais.ficamDeFora.qtd}</strong> linha{totais.ficamDeFora.qtd !== 1 ? 's' : ''}
               {' · '}{formatMoeda(totais.ficamDeFora.valor)}
             </span>
@@ -149,7 +149,7 @@ export function ImportLancPrevia({
                 <span className="min-w-0 flex-1 truncate text-red-700" title={fraseDoMotivoNaPrevia(m.motivo, m.qtd)}>
                   {fraseDoMotivoNaPrevia(m.motivo, m.qtd)}
                 </span>
-                <span className="shrink-0 whitespace-nowrap tabular-nums font-mono text-muted-foreground">
+                <span className="shrink-0 whitespace-nowrap tabular-nums text-muted-foreground">
                   {m.qtd} · {formatMoeda(m.valor)}
                 </span>
               </div>
@@ -166,12 +166,12 @@ export function ImportLancPrevia({
             <div className="mt-0.5 max-h-24 space-y-0.5 overflow-y-auto">
               {foraPorDuplicidade.map((l) => (
                 <div key={l.indice} className="flex items-baseline gap-1.5 text-[10px] leading-tight">
-                  <span className="shrink-0 font-mono text-muted-foreground">linha {l.row.linha}</span>
+                  <span className="shrink-0 tabular-nums text-muted-foreground">linha {l.row.linha}</span>
                   <span className="min-w-0 flex-1 truncate" title={l.row.descricao ?? ''}>
                     idêntico a um lançamento existente: {l.row.descricao || '—'} de{' '}
                     {l.row.data_competencia ?? '—'}
                   </span>
-                  <span className="shrink-0 tabular-nums font-mono text-muted-foreground">
+                  <span className="shrink-0 tabular-nums text-muted-foreground">
                     {formatMoeda(Math.abs(Number(l.row.valor) || 0))}
                   </span>
                   {aoReincluir && (
@@ -197,9 +197,9 @@ export function ImportLancPrevia({
                 <span key={c.nome} className="text-[10px] leading-tight">
                   <span className={c.nome === 'sem conta' ? 'text-muted-foreground' : ''}>{c.nome}</span>
                   <span className="text-muted-foreground"> · </span>
-                  <span className="tabular-nums font-mono">{c.qtd}</span>
+                  <span className="tabular-nums">{c.qtd}</span>
                   <span className="text-muted-foreground"> · </span>
-                  <span className="tabular-nums font-mono">{formatMoeda(c.valor)}</span>
+                  <span className="tabular-nums">{formatMoeda(c.valor)}</span>
                 </span>
               ))}
             </div>
@@ -315,8 +315,8 @@ export function ImportLancPrevia({
                 className={`border-b ${l.entra ? '' : 'bg-red-50/70 text-red-800'}`}
                 data-testid="linha-previa"
               >
-                <td className="px-1 py-0.5 text-[10px] font-mono text-muted-foreground">{l.row.linha}</td>
-                <td className="px-1 py-0.5 text-[10px] font-mono">
+                <td className="px-1 py-0.5 text-[10px] tabular-nums text-muted-foreground">{l.row.linha}</td>
+                <td className="px-1 py-0.5 text-[10px] tabular-nums">
                   {l.row.data_competencia ?? '—'}
                 </td>
                 <td className="px-1 py-0.5 text-[10px] truncate" title={l.fazendaNome ?? ''}>
@@ -334,7 +334,7 @@ export function ImportLancPrevia({
                 <td className="px-1 py-0.5 text-[10px] truncate" title={l.subcentro ?? ''}>
                   {l.subcentro ?? '—'}
                 </td>
-                <td className="px-1 py-0.5 text-[10px] text-right tabular-nums font-mono">
+                <td className="px-1 py-0.5 text-[10px] text-right tabular-nums">
                   {formatMoeda(Math.abs(Number(l.row.valor) || 0))}
                 </td>
                 <td className="px-1 py-0.5 text-[10px]">

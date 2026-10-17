@@ -37,30 +37,34 @@ beforeEach(() => {
 });
 
 const ler = (p: string) => readFileSync(resolve(__dirname, p), 'utf8');
+/* PASSO 8 do FIN-FINANC-28 — o `FazendaSelect` e' o seletor da casa COM BUSCA: o gatilho e' o botao dele e as opcoes, os
+   nomes da lista aberta (o texto inteiro no `title` de cada uma). */
+const gatilho = (raiz: ParentNode = document) => raiz.querySelector('button') as HTMLButtonElement;
+const opcoes = () => Array.from(document.querySelectorAll('span.truncate[title]')).map((s) => s.textContent);
 
 describe('FazendaSelect — a prop `obrigatorio`', () => {
   it('vazio e obrigatorio (Global): borda vermelha e a frase embaixo', () => {
     render(<FazendaSelect value="" onChange={vi.fn()} fazendas={FAZENDAS} forcaAdministrativo={false} obrigatorio />);
     expect(screen.getByText(MSG_FAZENDA_OBRIGATORIA)).toBeTruthy();
-    expect(screen.getByRole('combobox').className).toContain('border-destructive');
+    expect(gatilho().className).toContain('border-destructive');
   });
 
   it('preenchido (filtro numa fazenda): sem frase, e troca', () => {
     const onChange = vi.fn();
     render(<FazendaSelect value="f-pureza" onChange={onChange} fazendas={FAZENDAS} forcaAdministrativo={false} obrigatorio />);
     expect(screen.queryByText(MSG_FAZENDA_OBRIGATORIA)).toBeNull();
-    expect(screen.getByRole('combobox').textContent).toContain('Faz. Pureza');
-    fireEvent.keyDown(screen.getByRole('combobox'), { key: 'Enter' });
+    expect(gatilho().textContent).toContain('Faz. Pureza');
+    fireEvent.keyDown(gatilho(), { key: 'Enter' });
     // todas as fazendas, sem a sentinela
-    expect(screen.getAllByRole('option').map(o => o.textContent)).toEqual(['Faz. Pureza', 'Faz. Sta. Luzia', 'Administrativo']);
-    fireEvent.click(screen.getByRole('option', { name: 'Faz. Sta. Luzia' }));
+    expect(opcoes()).toEqual(['Faz. Pureza', 'Faz. Sta. Luzia', 'Administrativo']);
+    fireEvent.click(screen.getByTitle('Faz. Sta. Luzia'));
     expect(onChange).toHaveBeenCalledWith('f-luzia');
   });
 
   it('sem a prop, nada muda: vazio continua sem frase nem borda', () => {
     render(<FazendaSelect value="" onChange={vi.fn()} fazendas={FAZENDAS} forcaAdministrativo={false} />);
     expect(screen.queryByText(MSG_FAZENDA_OBRIGATORIA)).toBeNull();
-    expect(screen.getByRole('combobox').className).not.toContain('border-destructive');
+    expect(gatilho().className).not.toContain('border-destructive');
   });
 
   it('Administrativo forcado continua: preenche a fazenda Administrativo e NAO acusa falta', () => {
@@ -92,7 +96,7 @@ describe('Modo rapido — o seletor do lote', () => {
   it('filtro numa fazenda: o lote nasce com ela', () => {
     montar('f-pureza');
     expect(screen.queryByText(MSG_FAZENDA_OBRIGATORIA)).toBeNull();
-    expect(document.getElementById('campo-fazenda-lote')?.querySelector('[role="combobox"]')?.textContent).toContain('Faz. Pureza');
+    expect(gatilho(document.getElementById('campo-fazenda-lote') as HTMLElement).textContent).toContain('Faz. Pureza');
   });
 
   it('a guarda: sem fazenda do lote, nenhuma linha grava — mesmo com a linha preenchida', () => {

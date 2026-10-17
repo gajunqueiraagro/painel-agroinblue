@@ -475,7 +475,7 @@ export function DREAtividade({
               >
                 <div className={`text-[11px] ${row.isBold ? "font-bold" : ""} leading-tight`}>{row.label}</div>
                 <div
-                  className={`text-[11px] text-right font-mono whitespace-nowrap tabular-nums min-w-[100px] ${row.isBold ? "font-bold" : ""} ${colorClass(row.valor)}`}
+                  className={`text-[11px] text-right whitespace-nowrap tabular-nums min-w-[100px] ${row.isBold ? "font-bold" : ""} ${colorClass(row.valor)}`}
                 >
                   {row.valor !== 0 ? formatMoeda(row.valor) : "—"}
                 </div>

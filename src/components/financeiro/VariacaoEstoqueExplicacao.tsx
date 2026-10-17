@@ -143,24 +143,24 @@ export function VariacaoEstoqueExplicacao({
               </div>
               <div className="grid grid-cols-2 gap-x-4 gap-y-1">
                 <span className="text-muted-foreground">Cabeças início ({anoFiltro})</span>
-                <span className="font-mono text-right font-bold">{formatNum(dados.cabInicio, 0)}</span>
+                <span className="tabular-nums text-right font-bold">{formatNum(dados.cabInicio, 0)}</span>
 
                 <span className="text-muted-foreground">Cabeças fim ({MESES_CURTOS[mesLimite - 1]}/{anoFiltro})</span>
-                <span className="font-mono text-right font-bold">{formatNum(dados.cabFim, 0)}</span>
+                <span className="tabular-nums text-right font-bold">{formatNum(dados.cabFim, 0)}</span>
 
                 <span className="text-muted-foreground">Δ Cabeças</span>
-                <span className={`font-mono text-right font-bold ${colorVal(dados.deltaCab)}`}>
+                <span className={`tabular-nums text-right font-bold ${colorVal(dados.deltaCab)}`}>
                   {dados.deltaCab >= 0 ? '+' : ''}{formatNum(dados.deltaCab, 0)}
                 </span>
 
                 <span className="text-muted-foreground">Arrobas início</span>
-                <span className="font-mono text-right">{formatNum(dados.arrobasInicio, 0)} @</span>
+                <span className="tabular-nums text-right">{formatNum(dados.arrobasInicio, 0)} @</span>
 
                 <span className="text-muted-foreground">Arrobas fim</span>
-                <span className="font-mono text-right">{formatNum(dados.arrobasFim, 0)} @</span>
+                <span className="tabular-nums text-right">{formatNum(dados.arrobasFim, 0)} @</span>
 
                 <span className="text-muted-foreground">Δ Arrobas</span>
-                <span className={`font-mono text-right font-bold ${colorVal(dados.deltaArrobas)}`}>
+                <span className={`tabular-nums text-right font-bold ${colorVal(dados.deltaArrobas)}`}>
                   {dados.deltaArrobas >= 0 ? '+' : ''}{formatNum(dados.deltaArrobas, 0)} @
                 </span>
               </div>
@@ -174,23 +174,23 @@ export function VariacaoEstoqueExplicacao({
               {dados.hasPrecos ? (
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1">
                   <span className="text-muted-foreground">Valor estoque inicial</span>
-                  <span className="font-mono text-right font-bold">{formatMoeda(dados.valorInicial)}</span>
+                  <span className="tabular-nums text-right font-bold">{formatMoeda(dados.valorInicial)}</span>
 
                   <span className="text-muted-foreground">Valor estoque final</span>
-                  <span className="font-mono text-right font-bold">{formatMoeda(dados.valorFinal)}</span>
+                  <span className="tabular-nums text-right font-bold">{formatMoeda(dados.valorFinal)}</span>
 
                   <span className="text-muted-foreground font-semibold">Variação bruta (final − inicial)</span>
-                  <span className={`font-mono text-right font-bold ${colorVal(dados.variacaoBruta)}`}>
+                  <span className={`tabular-nums text-right font-bold ${colorVal(dados.variacaoBruta)}`}>
                     {formatMoeda(dados.variacaoBruta)}
                   </span>
 
                   <span className="text-muted-foreground">(-) Reposição de bovinos</span>
-                  <span className="font-mono text-right text-red-600 dark:text-red-400">
+                  <span className="tabular-nums text-right text-red-600 dark:text-red-400">
                     {dados.reposicao > 0 ? `-${formatMoeda(dados.reposicao)}` : formatMoeda(0)}
                   </span>
 
                   <span className="font-bold">Variação líquida do estoque</span>
-                  <span className={`font-mono text-right font-bold text-sm ${colorVal(dados.variacaoLiquida)}`}>
+                  <span className={`tabular-nums text-right font-bold text-sm ${colorVal(dados.variacaoLiquida)}`}>
                     {formatMoeda(dados.variacaoLiquida)}
                   </span>
                 </div>

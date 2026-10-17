@@ -39,6 +39,7 @@ import { formatMoeda, formatKg, formatArroba, formatPercent } from '@/lib/calcul
 import { calcValorTotal, calcArrobas, calcIndicadoresLancamento } from '@/lib/calculos/economicos';
 import { toast } from 'sonner';
 
+import { SearchableSelect } from '@/components/ui/searchable-select';
 interface Props {
   lancamento: Lancamento;
   open: boolean;
@@ -1255,14 +1256,9 @@ export function LancamentoDetalhe({ lancamento, open, onClose, onEditar, onRemov
                 {isEntradaAuto ? (
                   <Input value={nomeFazenda} readOnly className="mt-1 bg-muted cursor-not-allowed" />
                 ) : isTransSaida && outrasFazendas.length > 0 ? (
-                  <Select value={form.fazendaDestino || ''} onValueChange={v => setForm(f => ({ ...f, fazendaDestino: v }))} disabled={effectiveP1Oficial}>
-                    <SelectTrigger className="mt-1"><SelectValue placeholder="Selecione a fazenda" /></SelectTrigger>
-                    <SelectContent>
-                      {outrasFazendas.map(f => (
-                        <SelectItem key={f.id} value={f.nome}>{f.nome}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect value={form.fazendaDestino || ''} onValueChange={v => setForm(f => ({ ...f, fazendaDestino: v }))} disabled={effectiveP1Oficial}
+                    options={outrasFazendas.map(f => ({ value: f.nome, label: f.nome }))} semTodos allValue="" allLabel="Selecione a fazenda"
+                    placeholder="Buscar fazenda..." dense className="mt-1" />
                 ) : (
                   <Input
                     value={form.fazendaDestino || ''}

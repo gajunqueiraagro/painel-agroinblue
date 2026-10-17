@@ -17,6 +17,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Plus, Pencil, ChevronDown, MoreHorizontal, Power, PowerOff, Trash2, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { SearchableSelect } from '@/components/ui/searchable-select';
 interface BancoRef {
   codigo_banco: string;
   nome_banco: string;
@@ -471,11 +472,11 @@ export function FinV2ContasTab() {
                             <span className="ml-1.5 text-[9px] font-semibold text-amber-700 border border-amber-300 bg-amber-50 rounded px-1 py-0 align-middle" title="Saldo inicial não definido para esta conta">⚠ Saldo inicial</span>
                           )}
                           {c.codigo_conta && (
-                            <span className="ml-1.5 text-[10px] text-muted-foreground font-mono">({c.codigo_conta})</span>
+                            <span className="ml-1.5 text-[10px] text-muted-foreground tabular-nums">({c.codigo_conta})</span>
                           )}
                         </TableCell>
                         <TableCell className={cellClass}>{c.banco || '-'}</TableCell>
-                        <TableCell className={`${cellClass} font-mono text-[11px]`}>{formatContaBancaria(c)}</TableCell>
+                        <TableCell className={`${cellClass} tabular-nums text-[11px]`}>{formatContaBancaria(c)}</TableCell>
                         <TableCell className={cellClass}>{fazendaNome(c.fazenda_id)}</TableCell>
                         <TableCell className={cellClass}>
                           <Badge variant={c.ativa ? 'default' : 'secondary'} className="text-[9px] px-1.5 py-0 leading-tight">
@@ -552,7 +553,7 @@ export function FinV2ContasTab() {
                     {bancos.map(b => (
                       <SelectItem key={b.codigo_banco} value={b.nome_curto}>
                         <span className="flex items-center gap-1.5">
-                          <span className="text-[10px] text-muted-foreground font-mono w-7">{b.codigo_banco}</span>
+                          <span className="text-[10px] text-muted-foreground tabular-nums w-7">{b.codigo_banco}</span>
                           <span>{b.nome_banco}</span>
                         </span>
                       </SelectItem>
@@ -571,14 +572,8 @@ export function FinV2ContasTab() {
             </div>
             <div>
               <Label>Fazenda *</Label>
-              <Select value={fazendaId} onValueChange={setFazendaId}>
-                <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
-                <SelectContent>
-                  {fazendas.map(f => (
-                    <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchableSelect value={fazendaId} onValueChange={setFazendaId} options={fazendas.map(f => ({ value: f.id, label: f.nome }))}
+                semTodos allValue="" allLabel="Selecione" placeholder="Buscar fazenda..." dense />
             </div>
             <div className="flex items-center gap-2">
               <Switch checked={ativa} onCheckedChange={setAtiva} />
@@ -599,7 +594,7 @@ export function FinV2ContasTab() {
                     value={codigoConta}
                     onChange={e => setCodigoConta(e.target.value)}
                     placeholder={editing ? 'Ex: cc-001 (uso técnico/importação)' : 'Auto (gerado pelo sistema)'}
-                    className="font-mono text-sm"
+                    className="tabular-nums text-sm"
                   />
                 </div>
                 <div className="grid grid-cols-3 gap-2">
@@ -646,7 +641,7 @@ export function FinV2ContasTab() {
                   value={saldoInicialOficial}
                   onChange={e => setSaldoInicialOficial(e.target.value)}
                   placeholder="0,00"
-                  className="w-full border rounded px-2 py-1 text-[11px] mt-0.5 text-right font-mono"
+                  className="w-full border rounded px-2 py-1 text-[11px] mt-0.5 text-right tabular-nums"
                   required
                 />
                 <p className="text-[9px] text-muted-foreground mt-0.5">Saldo real no início do período</p>

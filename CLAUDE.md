@@ -162,7 +162,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 17/10/2026 (FIN-FINANC-28 PASSO 7, +14: `src/lib/financiamentos/cadastroDoContrato.test.ts` 7 (novo),
+  Baseline em 17/10/2026 (FIN-FINANC-28 PASSO 8, +2: `src/lib/app/semFonteMono.test.ts` 2 (novo); trocados ao contrato novo, sem afrouxar,
+  `centralListaLayout`, `casadoComExtrato`, `duplicarAbreModal`, `fazendaFinanceiro`, `novoDeXml`, `cprRecorte` e `cadastroDeContrato` — 5609 depois
+  dele; antes o FIN-FINANC-28 PASSO 7, +14: `src/lib/financiamentos/cadastroDoContrato.test.ts` 7 (novo),
   `src/components/financiamentos/cadastroDeContrato.test.tsx` 7 (novo) — 5607 depois dele; antes o FIN-FINANC-28 PASSO 6, +7: `src/components/financiamentos/financiamentoDoLancamento.test.tsx` 7 (novo) — 5593 depois
   dele; antes o FIN-FINANC-28 PASSO 5, +5: `src/components/financiamentos/darBaixa.test.tsx` 5 (novo) — 5586 depois dele; antes o
   FIN-FINANC-28 PASSO 4b, +8: `src/components/financiamentos/buscarNoContrato.test.tsx` 7 (novo),
@@ -371,7 +373,7 @@ no mesmo arquivo.
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
   `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5327
-  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO; 5568 desde o FIN-FINANC-28 PASSO 4; 5571 desde o FIN-FINANC-28 RESUMO-A18; 5573 desde o FIN-FINANC-28 PASSO 4c; 5581 desde o FIN-FINANC-28 PASSO 4b; 5586 desde o FIN-FINANC-28 PASSO 5; 5593 desde o FIN-FINANC-28 PASSO 6; 5607 desde o FIN-FINANC-28 PASSO 7], 22 skipped, e
+  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO; 5568 desde o FIN-FINANC-28 PASSO 4; 5571 desde o FIN-FINANC-28 RESUMO-A18; 5573 desde o FIN-FINANC-28 PASSO 4c; 5581 desde o FIN-FINANC-28 PASSO 4b; 5586 desde o FIN-FINANC-28 PASSO 5; 5593 desde o FIN-FINANC-28 PASSO 6; 5607 desde o FIN-FINANC-28 PASSO 7; 5609 desde o FIN-FINANC-28 PASSO 8], 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -1304,7 +1306,11 @@ preview que o cabecalho nao sai da tela ao rolar.
   `@/components/ui`.
   ⚠ "NAO CABE EM 10px" NAO E' EXCECAO: ajusta-se o componente, nunca se
   volta ao nativo.
-  ⚠ O GATE TEM BASELINE, como o TSC: 9 arquivos herdados (0 `type=date`, 17 `<select>`). `type=date` esta'
+  ⚠ SELETOR DE ENTIDADE SEM BUSCA REPROVA, BASELINE ZERO (FIN-FINANC-28 passo 8, Gabriel 17/10/2026): o mesmo gate acusa
+  `comBusca={false}` em `ContaBancariaSelect`/`FazendaSelect` e `<Select>`/`<select>` cujas opcoes saem de `.map(` sobre conta,
+  plano/subcentro, fazenda, fornecedor/credor ou classificacao (os dois componentes da casa ficam fora; safra e enumeracao nao sao
+  entidade). Auto-teste do detector antes de varrer (sai 2 se nao achar o caso conhecido). Mutacao (`comBusca={false}`) reprova.
+  ⚠ O GATE TEM BASELINE, como o TSC: 8 arquivos herdados (0 `type=date`, 14 `<select>`; eram 9 e 17 ate' o passo 8). `type=date` esta'
   em ZERO — qualquer um novo REPROVA o PR, em qualquer arquivo. Ele acusa ocorrencia NOVA: arquivo fora da
   lista, ou arquivo da lista com MAIS do que a baseline. Reduzir e' sempre aceito; atualize a baseline no
   mesmo PR com `node scripts/check-ui-nativo.mjs --baseline`. Historia: docs/historico/gates-baselines.md.
@@ -2263,6 +2269,26 @@ preview que o cabecalho nao sai da tela ao rolar.
     O "Excluir" saiu do credito (volta como "Dar baixa › Cancelado" no passo 5).
   ⚠ NAO PROVADO NO NAVEGADOR com login (bancada com a pagina real e o lote real do proto) · nenhuma liberacao/destinacao/documento real
     (as tabelas estao vazias; a vista "pr78demo" da bancada e' SIMULADA) · upload real ao bucket e a URL assinada.
+- ⚠ SELETOR DE ENTIDADE TEM BUSCA E A CASA NAO TEM MONO (FIN-FINANC-28 PASSO 8, Gabriel 17/10/2026, so' tela). Conta, plano/subcentro,
+  fazenda e fornecedor/credor se escolhem pelo seletor da casa COM BUSCA; o `check:ui-nativo` reprova o que nao for (baseline 0).
+  · `ContaBancariaSelect` e `FazendaSelect` passaram a `comBusca = true` POR PADRAO (os 43 usos ganharam busca sem prop nova). O ramo
+    com busca VESTE A ALTURA DE CADA TELA: `size="compact"`, `className` (conta) e `triggerClassName`/`tabIndex` (fazenda) vao ao
+    GATILHO por duas props novas e opcionais do `SearchableSelect` (`triggerClassName`, `tabIndex`; ausentes, nada muda). A conta com
+    `prependItems` usa a sentinela do chamador como o vazio (o X devolve '__none__'/'__all__', nunca '').
+  · VIRARAM `SearchableSelect` (21 seletores crus): fazenda em Mesa de pareamento (2), Contrato, Fornecedor (opcao "sem fazenda"),
+    Projetos, Auditoria, Contas bancarias, Caderno (2), filtros do Financeiro (2) e da Central de OCs (`filtro-fazenda` virou o
+    invólucro; `CTL` no gatilho), destino das transferencias (LancamentoDetalhe, EditTransferenciaSheet, LancamentosTab); conta na
+    CPR (`cpr-conta`, 114px, o a pagar e a contagem no `hint` da opcao; o nome no gatilho), no Painel do periodo, na Mesa de staging e
+    no Modo Rapido (com a navegacao por setas: a celula e' o invólucro e o foco vai ao gatilho; so' as setas do gatilho navegam);
+    subcentro no Modo Rapido, em Projetos e nos apelidos de subcentro (dois `<select>` nativos a menos no Modo Rapido, um nos apelidos).
+  · MONO: `font-mono` saiu dos 59 arquivos de `src` (vira `tabular-nums`, ou some onde a linha ja' o tinha) e o `.report .mono` do
+    relatorio de desfrutes passou a `tabular-nums`. Trava: `src/lib/app/semFonteMono.test.ts` (com auto-teste).
+  · FOTOS REGRAVADAS, de proposito, depois do HTML antes x depois comparado (worktree no commit anterior): as 4 de
+    `valorComConta.fotos.json` (Fazenda e Conta do modal viraram o seletor com busca, tabIndex 7 preservado; o Valor perdeu a mono) e 5
+    de `obrigacaoDialog.fotos.json` (so' o ` h-8` do invólucro passou ao gatilho, 4 bytes cada); as outras 10 identicas.
+  ⚠ NAO PROVADO NO NAVEGADOR com login: as telas convertidas (filtro de fazenda do Financeiro e da Central, a barra da CPR a 1.126 —
+    que estava SEM FOLGA, 886 de 886 —, o Modo Rapido com as setas), a lista aberta com muitas contas/fazendas. Medido so' o
+    formulario do passo 7 na bancada (1.126 e 1.440: cabe, sem rolagem).
 - ⚠ CONTRATO DE CREDITO NOVO NASCE PELO FORMULARIO NOVO, E A CONTA DO CRONOGRAMA E' DO BANCO (FIN-FINANC-28 PASSO 7, Gabriel 17/10/2026;
   mock `docs/mocks/mock-cadastro-contrato-v2.html`; migration `supabase/migrations/20261027200700_fin_financ_28_p7_cadastro.sql`, md5 do arquivo
   8726df0772a6484383cdf888376fd9d0 — APLICADA no proto em 17/10/2026, ledger 20261017154024 `fin_financ_28_p7_cadastro`, ⚠ timestamp do dia;
@@ -2465,8 +2491,8 @@ preview que o cabecalho nao sai da tela ao rolar.
   17/10/2026, so' tela). SUBSTITUI, no bloco do P3 logo abaixo, "data mono 8px", o "A pagar = Total − Ja' pago com ponto ambar" e o
   cabecalho de 8 campos para o PARCELAMENTO.
   · SEM FONTE MONO na lista (as duas abas), no detalhe e no `ObrigacaoDialog` (o Resumo inclusive): `TD_DATA_LANC` e as constantes
-    `NUM`/`MOEDA` sao Inter `tabular-nums`. Preso por teste (0 `.font-mono` no detalhe). Fica a mono so' no campo "Chave de acesso"
-    do formulario de documento (`AbaDocumentosLancamento`, compartilhado com o modal do Financeiro; nao tocado).
+    `NUM`/`MOEDA` sao Inter `tabular-nums`. Preso por teste (0 `.font-mono` no detalhe). [A mono SAIU DO SISTEMA INTEIRO no passo 8, a chave
+    de acesso inclusive — ver a regra "SELETOR DE ENTIDADE TEM BUSCA E A CASA NAO TEM MONO".]
   · CARD "A PAGAR" de Compras parceladas = A SOMA DAS PARCELAS EM ABERTO (`totaisDasCompras().emAberto`, a vencer + vencido do lote);
     a diferenca contra Total − Ja' pago vai SO' no `title`; sem ponto ambar e sem sublinhado; o clique segue sem efeito (TODO
     "FIN-28 cronograma"). NJ ativos: 476.342,61.
@@ -2490,10 +2516,10 @@ preview que o cabecalho nao sai da tela ao rolar.
     nova de `FazendaSelect` e `ContaBancariaSelect`: sem ela o componente e' o de sempre), Safra das parcelas, Conta de captacao e, no
     `DestinacoesForm`, conta e plano. ⚠ O PAINEL DO SELETOR DA CASA E' O `MENU_PALETA` ESCURO (UI-DROPDOWN-PADRAO-01), nao `bg-popover`
     claro como dizia o briefing — divergencia reportada, componente nao repintado.
-  ⚠ O `check:ui-nativo` NAO PEGA seletor de entidade SEM BUSCA: ele so' acusa `<select>` e `type="date"` NATIVOS; o `Select` do Radix
+  ⚠ [FECHADA no passo 8: o gate passou a pegar, baseline 0.] O `check:ui-nativo` NAO PEGA seletor de entidade SEM BUSCA: ele so' acusa `<select>` e `type="date"` NATIVOS; o `Select` do Radix
     sem busca passa. Proposta (nao aplicada): o gate tambem varre `<Select`… `</Select>` cujo `.map(` percorre lista de entidade
     (fornecedor/credor, conta, plano, fazenda, safra) e `<ContaBancariaSelect` / `<FazendaSelect` sem `comBusca`, com baseline.
-  ⚠ FRENTE SELETOR-ENTIDADE-BUSCA-01 (aberta, varredura de 17/10, so' contagem): sem busca — conta 37 (35 `ContaBancariaSelect` sem
+  ⚠ [FECHADA no passo 8 do FIN-FINANC-28.] FRENTE SELETOR-ENTIDADE-BUSCA-01 (varredura de 17/10, so' contagem): sem busca — conta 37 (35 `ContaBancariaSelect` sem
     `comBusca` + `PainelPeriodoTab` + 1 `<select>` nativo em `ModoRapidoGrid`), plano 4 (`ProjetosInvestimento`, 2 nativos em
     `ModoRapidoGrid` e `FinV2SubcentroAliasesTab`), fazenda 9 (`FazendaSelect` sem `comBusca`), fornecedor/credor 0. Lista arquivo:linha
     no relatorio do FIX3.

@@ -364,12 +364,12 @@ export function BarterVendaModal({
                           total da linha, não a entrada. */}
                       <CampoNumero valor={linhas[i].sacas} onChange={v => mudar(i, 'sacas', v)}
                         casas={4} title={linhas[i].sacas}
-                        className={cn('h-6 px-1 text-right font-mono text-[10px]', FOCO)} />
+                        className={cn('h-6 px-1 text-right tabular-nums text-[10px]', FOCO)} />
                     </td>
                     <td className="px-1 py-0.5">
                       <CampoNumero valor={linhas[i].precoSaca} onChange={v => mudar(i, 'precoSaca', v)}
                         casas={4} title={linhas[i].precoSaca}
-                        className={cn('h-6 px-1 text-right font-mono text-[10px]', FOCO)} />
+                        className={cn('h-6 px-1 text-right tabular-nums text-[10px]', FOCO)} />
                     </td>
                     <td className="px-1.5 py-0.5 text-right tabular-nums">{formatMoeda(e.valor)}</td>
                     {/* ⚠ NEGATIVO EM VERMELHO: vender mais do que tem deixa o restante negativo, e
@@ -441,7 +441,7 @@ export function BarterVendaModal({
                       const pct = parseMoeda(v);
                       if (pct != null) setDeducao(deducaoPorAliquota(totais.bruto, pct));
                     }}
-                    className={cn('h-8 pr-5 text-right font-mono text-[12px]', FOCO)} />
+                    className={cn('h-8 pr-5 text-right tabular-nums text-[12px]', FOCO)} />
                   <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">%</span>
                 </div>
                 <CampoMoeda valor={deducao}
@@ -451,7 +451,7 @@ export function BarterVendaModal({
                        valor que é outro percentual do bruto. */
                     setAliquota(formatNum(aliquotaDoValor(totais.bruto, v ?? 0), 2));
                   }}
-                  className={cn('h-8 flex-1 text-right font-mono text-[12px]', FOCO)} />
+                  className={cn('h-8 flex-1 text-right tabular-nums text-[12px]', FOCO)} />
               </div>
               <button type="button"
                 className="mt-0.5 text-[9px] text-muted-foreground underline underline-offset-2 hover:text-foreground"

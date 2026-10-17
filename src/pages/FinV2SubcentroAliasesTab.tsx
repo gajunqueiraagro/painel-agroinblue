@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import {
   Dialog,
   DialogContent,
@@ -251,7 +252,7 @@ export function FinV2SubcentroAliasesTab() {
                     <Badge variant="outline">Cliente</Badge>
                   )}
                 </td>
-                <td className="px-3 py-2 font-mono text-xs">{a.alias_text}</td>
+                <td className="px-3 py-2 tabular-nums text-xs">{a.alias_text}</td>
                 <td className="px-3 py-2">
                   {a.plano_subcentro ?? (
                     <span className="italic text-muted-foreground">∅</span>
@@ -299,7 +300,7 @@ export function FinV2SubcentroAliasesTab() {
                 placeholder="ex: Pec/ADM/Despesas Financeiras"
                 value={form.alias_text}
                 onChange={(e) => setForm({ ...form, alias_text: e.target.value })}
-                className="font-mono mt-1"
+                className="tabular-nums mt-1"
               />
               <p className="text-xs text-muted-foreground mt-1">
                 Match será case-insensitive e ignora espaços extras.
@@ -307,18 +308,9 @@ export function FinV2SubcentroAliasesTab() {
             </div>
             <div>
               <label className="text-sm font-medium">Subcentro oficial do plano</label>
-              <select
-                className="mt-1 w-full rounded-md border px-3 py-2 text-sm"
-                value={form.plano_conta_id}
-                onChange={(e) => setForm({ ...form, plano_conta_id: e.target.value })}
-              >
-                <option value="">Selecione...</option>
-                {(planoQuery.data ?? []).map((pc) => (
-                  <option key={pc.id} value={pc.id}>
-                    {pc.subcentro} ({pc.macro_custo ?? '—'})
-                  </option>
-                ))}
-              </select>
+              <SearchableSelect value={form.plano_conta_id} onValueChange={(v) => setForm({ ...form, plano_conta_id: v })}
+                options={(planoQuery.data ?? []).map((pc) => ({ value: pc.id, label: `${pc.subcentro} (${pc.macro_custo ?? '—'})` }))}
+                semTodos allValue="" allLabel="Selecione..." placeholder="Buscar subcentro..." dense className="mt-1" />
             </div>
             <div>
               <label className="text-sm font-medium">Escopo</label>

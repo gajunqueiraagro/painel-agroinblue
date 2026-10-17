@@ -38,13 +38,14 @@ export interface FazendaSelectProps {
   obrigatorio?: boolean;
   /** `id` do bloco, para quem grava levar o foco ao campo quando ele falta. */
   id?: string;
-  /** FIN-FINANC-28-P3-FIX3 — o seletor DA CASA com busca (`SearchableSelect`). Opt-in: sem a prop, o `Select` de sempre. */
+  /** FIN-FINANC-28-P3-FIX3 — o seletor DA CASA com busca (`SearchableSelect`). PADRAO desde o passo 8 (seletor de entidade TEM
+   *  busca); `comBusca={false}` e' recusado pelo `check:ui-nativo`. `size`, `triggerClassName` e `tabIndex` vestem o gatilho. */
   comBusca?: boolean;
 }
 
 export function FazendaSelect({
   value, onChange, fazendas, forcaAdministrativo,
-  label, className, triggerClassName, size = 'default', tabIndex, disabled, hideAviso, obrigatorio, id, comBusca = false,
+  label, className, triggerClassName, size = 'default', tabIndex, disabled, hideAviso, obrigatorio, id, comBusca = true,
 }: FazendaSelectProps) {
   const fazOperacionais = fazendas.filter(f => f.id !== '__global__');
 
@@ -65,9 +66,10 @@ export function FazendaSelect({
       {label && <Label className="text-[10px]">{label}</Label>}
       {comBusca ? (
         <div className="min-w-0" title={fazOperacionais.find(f => f.id === value)?.nome}>
-          <SearchableSelect value={value} onValueChange={onChange} semTodos allValue="" allLabel="Selecione"
+          <SearchableSelect value={value ?? ''} onValueChange={onChange} semTodos allValue="" allLabel="Selecione"
             options={fazOperacionais.map(f => ({ value: f.id, label: f.nome }))} placeholder="Buscar fazenda..."
-            disabled={forcaAdministrativo || disabled} dense className={cn(triggerClassName, falta && 'border-destructive')} />
+            disabled={forcaAdministrativo || disabled} dense tabIndex={tabIndex}
+            triggerClassName={cn(size === 'compact' && 'h-5 px-1.5 text-[11px]', triggerClassName, falta && 'border-destructive')} />
         </div>
       ) : (
         <Select value={value} onValueChange={onChange} disabled={forcaAdministrativo || disabled}>

@@ -296,7 +296,7 @@ export function V2ImportLancamentosExcel({
         {parse && parse.linhaCabecalho === null && parse.linhasTestadas > 0 && (
           <div className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-[10px] text-amber-900">
             <strong>Nenhuma linha de cabeçalho foi reconhecida</strong> nas {parse.linhasTestadas} primeiras
-            linhas da aba <span className="font-mono">{parse.nomeSheet}</span>. Confira se os títulos das
+            linhas da aba <span className="tabular-nums">{parse.nomeSheet}</span>. Confira se os títulos das
             colunas estão no topo da planilha — ou use o botão <b>Baixar modelo</b>.
           </div>
         )}
@@ -305,25 +305,25 @@ export function V2ImportLancamentosExcel({
           <div className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-[10px] text-amber-900">
             <strong>Nenhuma coluna de plano de contas foi encontrada</strong> na linha {parse.linhaCabecalho},
             reconhecida como cabeçalho. Sem ela nenhuma linha pode ser importada. Renomeie a coluna para
-            {' '}<span className="font-mono">Conta (plano do cliente)</span> — ou use o botão <b>Baixar modelo</b>.
-            Atenção: uma coluna chamada apenas <span className="font-mono">Conta</span> com valores como
-            {' '}<span className="font-mono">cc-001 | bradesco</span> é conta <b>bancária</b>, não plano de contas.
+            {' '}<span className="tabular-nums">Conta (plano do cliente)</span> — ou use o botão <b>Baixar modelo</b>.
+            Atenção: uma coluna chamada apenas <span className="tabular-nums">Conta</span> com valores como
+            {' '}<span className="tabular-nums">cc-001 | bradesco</span> é conta <b>bancária</b>, não plano de contas.
           </div>
         )}
 
         {parse && (
           <div className="text-[10px] text-muted-foreground flex gap-3 flex-wrap">
-            <span>Aba: <span className="font-mono">{parse.nomeSheet ?? '—'}</span></span>
+            <span>Aba: <span className="tabular-nums">{parse.nomeSheet ?? '—'}</span></span>
             <span>
               Cabeçalho: {parse.linhaCabecalho !== null
-                ? <>linha <span className="font-mono">{parse.linhaCabecalho}</span></>
+                ? <>linha <span className="tabular-nums">{parse.linhaCabecalho}</span></>
                 : <span className="text-amber-700 font-semibold">não reconhecido</span>}
             </span>
             <span>{parse.linhasValidas} linha(s) lida(s)</span>
             <span>
               Plano de contas:{' '}
               {parse.colunaPlanoDetectada
-                ? <span className="font-mono">{parse.colunaPlanoDetectada}</span>
+                ? <span className="tabular-nums">{parse.colunaPlanoDetectada}</span>
                 : <span className="text-amber-700 font-semibold">coluna não encontrada</span>}
             </span>
             {parse.linhasComErro > 0 && (

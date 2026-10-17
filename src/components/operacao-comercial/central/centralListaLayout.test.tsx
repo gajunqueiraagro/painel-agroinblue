@@ -45,6 +45,16 @@ vi.mock('@/components/ui/select', () => ({
   SelectContent: ({ children }: { children: ReactNode }) => <>{children}</>,
   SelectItem: ({ value, children }: { value: string; children: ReactNode }) => <option value={value}>{children}</option>,
 }));
+/* PASSO 8 do FIN-FINANC-28 — o filtro de fazenda e' o seletor da casa COM BUSCA; aqui ele vira o mesmo `<select>` nativo dos outros. */
+vi.mock('@/components/ui/searchable-select', () => ({
+  SearchableSelect: ({ value, onValueChange, options, allValue, allLabel, semTodos, disabled }:
+    { value: string; onValueChange: (v: string) => void; options: { value: string; label: string }[]; allValue: string; allLabel: string; semTodos?: boolean; disabled?: boolean }) => (
+    <select value={value} disabled={disabled} onChange={e => onValueChange(e.target.value)}>
+      {!semTodos && <option value={allValue}>{allLabel}</option>}
+      {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+    </select>
+  ),
+}));
 
 import { CentralOperacoesComerciais } from '@/components/operacao-comercial/central/CentralOperacoesComerciais';
 
@@ -118,7 +128,8 @@ describe('OC-LISTA-LAYOUT-01 — a barra a 24px', () => {
     expect(b.length).toBeGreaterThan(1000);
     expect(b).not.toMatch(ALTURA_GRANDE);
     expect(FONTE).toContain("const CTL = 'h-6 py-0 text-[11px]';");
-    expect(b.match(/<SelectTrigger className=\{`\$\{CTL\}/g)).toHaveLength(5);
+    expect(b.match(/<SelectTrigger className=\{`\$\{CTL\}/g)).toHaveLength(4);
+    expect(b.match(/<SearchableSelect [\s\S]*?triggerClassName=\{CTL\} \/>/g)).toHaveLength(1);
     expect(b.match(/size="compact"/g)).toHaveLength(2);
   });
   it('os rotulos seguem as colunas: Toda entrega, Todo pagamento, Todas as fazendas', async () => {

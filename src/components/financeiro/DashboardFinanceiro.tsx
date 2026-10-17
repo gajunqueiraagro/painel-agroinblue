@@ -420,7 +420,7 @@ export function DashboardFinanceiro({
                       <span className="inline-block w-2 h-2 rounded-full mr-1.5 flex-shrink-0" style={{ background: bulletColor }} />
                       <span className="text-muted-foreground truncate">{cat}</span>
                     </span>
-                    <span className="font-mono font-semibold italic whitespace-nowrap" style={{ color: 'hsl(142, 40%, 40%)' }}>{formatMoeda(val)}</span>
+                    <span className="tabular-nums font-semibold italic whitespace-nowrap" style={{ color: 'hsl(142, 40%, 40%)' }}>{formatMoeda(val)}</span>
                   </div>
                 );
               })}
@@ -451,7 +451,7 @@ export function DashboardFinanceiro({
                       <span className="inline-block w-2 h-2 rounded-full mr-1.5 flex-shrink-0" style={{ background: bulletColor }} />
                       <span className="text-muted-foreground truncate">{cat}</span>
                     </span>
-                    <span className="font-mono font-semibold italic whitespace-nowrap text-destructive">{formatMoeda(val)}</span>
+                    <span className="tabular-nums font-semibold italic whitespace-nowrap text-destructive">{formatMoeda(val)}</span>
                   </div>
                 );
               })}
@@ -459,7 +459,7 @@ export function DashboardFinanceiro({
                 <div className="border-t pt-0.5 mt-0.5">
                   <div className="flex justify-between text-[9px] leading-tight">
                     <span style={{ color: 'hsl(40, 70%, 45%)' }}>Rateio ADM</span>
-                    <span className="font-mono font-bold italic" style={{ color: 'hsl(40, 70%, 45%)' }}>{formatMoeda(resolvedModo === 'mes' ? ind.rateioMes : ind.rateioAcumVal)}</span>
+                    <span className="tabular-nums font-bold italic" style={{ color: 'hsl(40, 70%, 45%)' }}>{formatMoeda(resolvedModo === 'mes' ? ind.rateioMes : ind.rateioAcumVal)}</span>
                   </div>
                 </div>
               )}
@@ -481,7 +481,7 @@ export function DashboardFinanceiro({
             <div className="mt-1 space-y-0 text-[9px] leading-tight">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Saldo Inicial</span>
-                <span className="font-mono font-semibold italic text-muted-foreground">{
+                <span className="tabular-nums font-semibold italic text-muted-foreground">{
                   (() => {
                     const v = resolvedModo === 'mes' && mesAte
                       ? (mesesFluxo.find(m => m.mes === mesAte)?.saldoInicial ?? NaN)
@@ -492,15 +492,15 @@ export function DashboardFinanceiro({
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Entradas</span>
-                <span className="font-mono font-semibold italic" style={{ color: 'hsl(142, 40%, 40%)' }}>{formatMoeda(totalEntradasDisplay)}</span>
+                <span className="tabular-nums font-semibold italic" style={{ color: 'hsl(142, 40%, 40%)' }}>{formatMoeda(totalEntradasDisplay)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Saídas</span>
-                <span className="font-mono font-semibold italic text-destructive">{formatMoeda(totalSaidasDisplay)}</span>
+                <span className="tabular-nums font-semibold italic text-destructive">{formatMoeda(totalSaidasDisplay)}</span>
               </div>
               <div className="flex justify-between border-t border-border/40 pt-0.5 mt-0.5">
                 <span className="font-semibold">Saldo Final</span>
-                <span className={`font-mono font-black italic ${
+                <span className={`tabular-nums font-black italic ${
                   isNaN(saldoLiquido) ? 'text-muted-foreground' :
                   saldoLiquido >= 0 ? 'text-primary' : 'text-destructive'
                 }`}>{isNaN(saldoLiquido) ? '—' : formatMoeda(saldoLiquido)}</span>
@@ -660,7 +660,7 @@ export function DashboardFinanceiro({
                           <span className="font-medium">{item.nome}</span>
                         </span>
                         <div className="flex items-center gap-1 shrink-0">
-                          <span className="font-mono font-bold italic text-destructive">{formatMoeda(item.valor)}</span>
+                          <span className="tabular-nums font-bold italic text-destructive">{formatMoeda(item.valor)}</span>
                           <span className="text-muted-foreground text-[7px] w-6 text-right">{formatNum(pct, 0)}%</span>
                         </div>
                       </div>
@@ -717,7 +717,7 @@ function CentroCustoRanking({ ccMes, ccAcum, totalSaidasMes, totalSaidasAcum, mo
                       <span className="font-medium">{item.nome}</span>
                     </span>
                     <div className="flex items-center gap-1 shrink-0">
-                      <span className={`font-mono font-bold italic ${isRateio ? '' : 'text-destructive'}`}>{formatMoeda(item.valor)}</span>
+                      <span className={`tabular-nums font-bold italic ${isRateio ? '' : 'text-destructive'}`}>{formatMoeda(item.valor)}</span>
                       <span className="text-muted-foreground text-[7px] w-6 text-right">{formatNum(pct, 0)}%</span>
                     </div>
                   </div>

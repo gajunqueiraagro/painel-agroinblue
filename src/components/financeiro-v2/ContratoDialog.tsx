@@ -22,6 +22,7 @@ const LINHA_DO_DOCUMENTO = true;
 import type { Fazenda } from '@/contexts/FazendaContext';
 import { hojeLocal } from '@/lib/datas/hojeLocal';
 
+import { SearchableSelect } from '@/components/ui/searchable-select';
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -378,7 +379,7 @@ export function ContratoDialog({
                   className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50"
                 />
                 {/* DEBUG */}
-                <p className="text-[9px] text-orange-600 dark:text-orange-400 mt-1 font-mono break-all">{debugContas}</p>
+                <p className="text-[9px] text-orange-600 dark:text-orange-400 mt-1 tabular-nums break-all">{debugContas}</p>
               </div>
             </div>
           </section>
@@ -391,12 +392,9 @@ export function ContratoDialog({
             <div className="space-y-2">
               <div>
                 <Label className="text-xs">Fazenda *</Label>
-                <Select value={fazendaId} onValueChange={setFazendaId}>
-                  <SelectTrigger className="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" tabIndex={11}><SelectValue placeholder="Selecione" /></SelectTrigger>
-                  <SelectContent>
-                    {fazOperacionais.map(f => <SelectItem key={f.id} value={f.id}>{f.nome}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <SearchableSelect value={fazendaId} onValueChange={setFazendaId} options={fazOperacionais.map(f => ({ value: f.id, label: f.nome }))}
+                  semTodos allValue="" allLabel="Selecione" placeholder="Buscar fazenda..." dense tabIndex={11}
+                  triggerClassName="h-9 bg-[#f5f6f8] dark:bg-muted border-border/50" />
               </div>
               <div>
                 <Label className="text-xs">Subcentro</Label>
@@ -437,7 +435,7 @@ export function ContratoDialog({
                   </PopoverContent>
                 </Popover>
                 {/* DEBUG */}
-                <p className="text-[9px] text-orange-600 dark:text-orange-400 mt-1 font-mono break-all">{debugSubcentro}</p>
+                <p className="text-[9px] text-orange-600 dark:text-orange-400 mt-1 tabular-nums break-all">{debugSubcentro}</p>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>

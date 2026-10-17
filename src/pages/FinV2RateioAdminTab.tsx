@@ -146,7 +146,7 @@ export function FinV2RateioAdminTab() {
                     onChange={e => editar(a.valor, e.target.value)}
                     inputMode="decimal"
                     placeholder="0"
-                    className="h-8 text-right font-mono text-[12px]"
+                    className="h-8 text-right tabular-nums text-[12px]"
                   />
                   <span className="text-[11px] text-muted-foreground">%</span>
                 </div>

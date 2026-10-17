@@ -870,7 +870,7 @@ function ConferenceRowGroup({ row, showOriginal, excelHeaders, onToggleSelect }:
     : row._classificacao === 'DUPLICADO_EXATO' ? 'bg-red-50/40 dark:bg-red-950/15'
     : row._classificacao === 'SUSPEITA' ? 'bg-amber-50/40 dark:bg-amber-950/15' : '';
 
-  const origCellCls = 'px-1.5 py-0.5 text-muted-foreground font-mono bg-blue-50/20 dark:bg-blue-950/5 whitespace-nowrap max-w-[120px] overflow-hidden text-ellipsis';
+  const origCellCls = 'px-1.5 py-0.5 text-muted-foreground tabular-nums bg-blue-50/20 dark:bg-blue-950/5 whitespace-nowrap max-w-[120px] overflow-hidden text-ellipsis';
   const hasExisting = row._registroExistente && (row._classificacao === 'DUPLICADO_EXATO' || row._classificacao === 'SUSPEITA');
 
   return (
@@ -950,16 +950,16 @@ function ExistingRecordRow({ existing, imported, motivos, showOriginal, excelHea
       <td className="px-1 py-0.5" />
       <td className="px-1 py-0.5 text-[8px] text-muted-foreground italic" colSpan={2}>↳ existente</td>
       {showOriginal && <td colSpan={excelHeaderCount + 1} />}
-      <td className="px-1.5 py-0.5 text-muted-foreground font-mono">{existing.ano_mes || '—'}</td>
-      <td className={`px-1.5 py-0.5 font-mono ${cmpClass(fieldMatch('Data Pagamento')?.match)}`}>{existing.data_pagamento || '—'}</td>
-      <td className={`px-1.5 py-0.5 font-mono ${cmpClass(fieldMatch('Fornecedor')?.match)}`} title={existing.fornecedor_nome || ''}>{existing.fornecedor_nome || '—'}</td>
-      <td className={`px-1.5 py-0.5 font-mono ${cmpClass(fieldMatch('Descrição')?.match)}`} title={existing.descricao || ''}>{(existing.descricao || '—').substring(0, 30)}</td>
-      <td className={`px-1.5 py-0.5 text-right tabular-nums font-mono ${cmpClass(fieldMatch('Valor')?.match)}`}>
+      <td className="px-1.5 py-0.5 text-muted-foreground tabular-nums">{existing.ano_mes || '—'}</td>
+      <td className={`px-1.5 py-0.5 tabular-nums ${cmpClass(fieldMatch('Data Pagamento')?.match)}`}>{existing.data_pagamento || '—'}</td>
+      <td className={`px-1.5 py-0.5 tabular-nums ${cmpClass(fieldMatch('Fornecedor')?.match)}`} title={existing.fornecedor_nome || ''}>{existing.fornecedor_nome || '—'}</td>
+      <td className={`px-1.5 py-0.5 tabular-nums ${cmpClass(fieldMatch('Descrição')?.match)}`} title={existing.descricao || ''}>{(existing.descricao || '—').substring(0, 30)}</td>
+      <td className={`px-1.5 py-0.5 text-right tabular-nums ${cmpClass(fieldMatch('Valor')?.match)}`}>
         {existing.valor != null ? `R$ ${existing.valor.toFixed(2)}` : '—'}
       </td>
-      <td className={`px-1.5 py-0.5 font-mono`}>{existing.subcentro || '—'}</td>
-      <td className={`px-1.5 py-0.5 font-mono ${cmpClass(fieldMatch('Documento')?.match)}`}>{existing.numero_documento || '—'}</td>
-      <td className="px-1.5 py-0.5 text-muted-foreground font-mono text-[8px]">{existing.conta_nome || (existing.conta_bancaria_id ? '✓' : '—')}</td>
+      <td className={`px-1.5 py-0.5 tabular-nums`}>{existing.subcentro || '—'}</td>
+      <td className={`px-1.5 py-0.5 tabular-nums ${cmpClass(fieldMatch('Documento')?.match)}`}>{existing.numero_documento || '—'}</td>
+      <td className="px-1.5 py-0.5 text-muted-foreground tabular-nums text-[8px]">{existing.conta_nome || (existing.conta_bancaria_id ? '✓' : '—')}</td>
       <td className="px-1.5 py-0.5">
         <div className="flex flex-wrap gap-0.5">
           {motivos.filter(m => m.match).map((m, i) => (

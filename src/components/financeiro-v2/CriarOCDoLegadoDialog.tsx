@@ -346,7 +346,7 @@ export function CriarOCDoLegadoDialog({ clienteId, lancamentoId, fornecedores, o
                       <td className={NUM}>{s.quantidade}</td>
                       <td className={NUM}>{s.peso_medio_kg == null ? '—' : s.peso_medio_kg.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}</td>
                       <td className={NUM}>{s.valor == null ? '—' : num2(s.valor)}</td>
-                      <td className={`${TD} font-mono text-[9.5px]`}>{s.id.slice(0, 8)} · {s.origem_registro ?? 'manual'}</td>
+                      <td className={`${TD} tabular-nums text-[9.5px]`}>{s.id.slice(0, 8)} · {s.origem_registro ?? 'manual'}</td>
                     </tr>
                   ))}
                 </tbody>

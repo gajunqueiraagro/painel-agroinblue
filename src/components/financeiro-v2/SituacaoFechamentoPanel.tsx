@@ -7,7 +7,7 @@ function Linha({ it, cls }: { it: ItemPendencia; cls: string }) {
       <span className="text-[11px] font-medium">{it.label}</span>
       <span className="text-[11px] tabular-nums font-bold">
         {it.qtd}
-        {it.impacto !== null && <span className="ml-2 font-mono">{formatMoeda(it.impacto)}</span>}
+        {it.impacto !== null && <span className="ml-2 tabular-nums">{formatMoeda(it.impacto)}</span>}
       </span>
     </div>
   );

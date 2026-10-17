@@ -308,7 +308,7 @@ export function MesaRowCompact({
             <span className="opacity-60">Excel:</span> {fmtTexto(row.excel_subcentro)}
           </span>
           {row.excel_linha_origem != null && (
-            <span className="opacity-40 ml-auto font-mono">
+            <span className="opacity-40 ml-auto tabular-nums">
               L{row.excel_linha_origem}
             </span>
           )}
@@ -385,7 +385,7 @@ function FieldLine({ label, value, mono }: { label: string; value: string; mono?
   return (
     <div className="text-[11px] flex items-baseline gap-1.5">
       <span className="opacity-60 shrink-0">{label}:</span>
-      <span className={`min-w-0 truncate ${mono ? 'font-mono text-[10px]' : ''}`} title={value}>
+      <span className={`min-w-0 truncate ${mono ? 'tabular-nums text-[10px]' : ''}`} title={value}>
         {value}
       </span>
     </div>
@@ -396,7 +396,7 @@ function DetailRow({ label, value, mono }: { label: string; value: string; mono?
   return (
     <>
       <div className="text-muted-foreground">{label}</div>
-      <div className={`truncate ${mono ? 'font-mono' : ''}`} title={value}>
+      <div className={`truncate ${mono ? 'tabular-nums' : ''}`} title={value}>
         {value}
       </div>
     </>

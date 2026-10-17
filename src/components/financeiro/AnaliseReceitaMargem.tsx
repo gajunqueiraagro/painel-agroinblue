@@ -209,55 +209,55 @@ export function ReceitaCustoMargem({
                 <TableRow>
                   <TableCell className="text-[10px] px-2 py-1 font-bold sticky left-0 bg-background text-green-700 dark:text-green-400">Receita líq.</TableCell>
                   {dados.map(d => (
-                    <TableCell key={d.mes} className="text-[10px] px-2 py-1 text-right font-mono">
+                    <TableCell key={d.mes} className="text-[10px] px-2 py-1 text-right tabular-nums">
                       {d.receita > 0 ? formatNum(d.receita / 1000, 0) + 'k' : '—'}
                     </TableCell>
                   ))}
-                  <TableCell className="text-[10px] px-2 py-1 text-right font-mono font-bold">
+                  <TableCell className="text-[10px] px-2 py-1 text-right tabular-nums font-bold">
                     {totais ? formatNum(totais.receitaAcum / 1000, 0) + 'k' : '—'}
                   </TableCell>
                 </TableRow>
                 <TableRow>
                   <TableCell className="text-[10px] px-2 py-1 font-bold sticky left-0 bg-background text-red-600 dark:text-red-400">Custo prod.</TableCell>
                   {dados.map(d => (
-                    <TableCell key={d.mes} className="text-[10px] px-2 py-1 text-right font-mono">
+                    <TableCell key={d.mes} className="text-[10px] px-2 py-1 text-right tabular-nums">
                       {d.custo > 0 ? formatNum(d.custo / 1000, 0) + 'k' : '—'}
                     </TableCell>
                   ))}
-                  <TableCell className="text-[10px] px-2 py-1 text-right font-mono font-bold">
+                  <TableCell className="text-[10px] px-2 py-1 text-right tabular-nums font-bold">
                     {totais ? formatNum(totais.custoAcum / 1000, 0) + 'k' : '—'}
                   </TableCell>
                 </TableRow>
                 <TableRow className="border-t-2">
                   <TableCell className="text-[10px] px-2 py-1 font-bold sticky left-0 bg-background">Margem total</TableCell>
                   {dados.map(d => (
-                    <TableCell key={d.mes} className={`text-[10px] px-2 py-1 text-right font-mono font-bold ${d.margemTotal >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                    <TableCell key={d.mes} className={`text-[10px] px-2 py-1 text-right tabular-nums font-bold ${d.margemTotal >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                       {d.receita > 0 || d.custo > 0 ? formatNum(d.margemTotal / 1000, 0) + 'k' : '—'}
                     </TableCell>
                   ))}
-                  <TableCell className={`text-[10px] px-2 py-1 text-right font-mono font-bold ${totais && totais.margemTotalAcum >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                  <TableCell className={`text-[10px] px-2 py-1 text-right tabular-nums font-bold ${totais && totais.margemTotalAcum >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                     {totais ? formatNum(totais.margemTotalAcum / 1000, 0) + 'k' : '—'}
                   </TableCell>
                 </TableRow>
                 <TableRow>
                   <TableCell className="text-[10px] px-2 py-1 font-bold sticky left-0 bg-background">@ vendidas</TableCell>
                   {dados.map(d => (
-                    <TableCell key={d.mes} className="text-[10px] px-2 py-1 text-right font-mono">
+                    <TableCell key={d.mes} className="text-[10px] px-2 py-1 text-right tabular-nums">
                       {d.arrobasVendidas > 0 ? formatNum(d.arrobasVendidas, 0) : '—'}
                     </TableCell>
                   ))}
-                  <TableCell className="text-[10px] px-2 py-1 text-right font-mono font-bold">
+                  <TableCell className="text-[10px] px-2 py-1 text-right tabular-nums font-bold">
                     {totais && totais.arrobasVendidasAcum > 0 ? formatNum(totais.arrobasVendidasAcum, 0) : '—'}
                   </TableCell>
                 </TableRow>
                 <TableRow>
                   <TableCell className="text-[10px] px-2 py-1 font-bold sticky left-0 bg-background">Receita/@</TableCell>
                   {dados.map(d => (
-                    <TableCell key={d.mes} className="text-[10px] px-2 py-1 text-right font-mono">
+                    <TableCell key={d.mes} className="text-[10px] px-2 py-1 text-right tabular-nums">
                       {d.receitaPorArroba !== null ? formatMoeda(d.receitaPorArroba) : '—'}
                     </TableCell>
                   ))}
-                  <TableCell className="text-[10px] px-2 py-1 text-right font-mono font-bold">
+                  <TableCell className="text-[10px] px-2 py-1 text-right tabular-nums font-bold">
                     {totais && totais.arrobasVendidasAcum > 0
                       ? formatMoeda(totais.receitaAcum / totais.arrobasVendidasAcum)
                       : '—'}

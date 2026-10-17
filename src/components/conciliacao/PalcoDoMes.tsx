@@ -209,7 +209,7 @@ export function PalcoDoMes({ clienteId, contaId, contaNome, ano, mes, aoFechar, 
                       <tr key={m.id}
                         className="cursor-pointer border-b border-border/60 hover:bg-muted/40"
                         onClick={() => setConciliando(m)}>
-                        <td className="h-[21px] whitespace-nowrap px-2 py-0 align-middle font-mono">
+                        <td className="h-[21px] whitespace-nowrap px-2 py-0 align-middle tabular-nums">
                           {brData(m.data_movimento)}
                         </td>
                         {/* o que CEDE é o contexto: trunca com o inteiro no title */}

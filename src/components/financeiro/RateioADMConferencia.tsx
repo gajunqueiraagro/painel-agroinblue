@@ -222,7 +222,7 @@ export function RateioADMConferenciaView({ conferencia, fazendasSemRebanho, tota
                         <TableRow key={i}>
                           <TableCell className="text-[10px] px-2 py-1">{l.dataRef || '-'}</TableCell>
                           <TableCell className="text-[10px] px-2 py-1 max-w-[120px] truncate">{l.produto || '-'}</TableCell>
-                          <TableCell className="text-[10px] px-2 py-1 text-right font-mono">{formatMoeda(l.valor)}</TableCell>
+                          <TableCell className="text-[10px] px-2 py-1 text-right tabular-nums">{formatMoeda(l.valor)}</TableCell>
                           <TableCell className="text-[10px] px-2 py-1">{l.statusTransacao || '-'}</TableCell>
                           <TableCell className="text-[10px] px-2 py-1">{l.fazenda}</TableCell>
                           <TableCell className="text-[10px] px-2 py-1">{l.tipoOperacao || '-'}</TableCell>
@@ -262,7 +262,7 @@ export function RateioADMConferenciaView({ conferencia, fazendasSemRebanho, tota
                           style={{ width: `${Math.min(f.percentual, 100)}%` }}
                         />
                       </div>
-                      <span className="text-xs font-mono font-bold w-12 text-right">
+                      <span className="text-xs tabular-nums font-bold w-12 text-right">
                         {formatNum(f.percentual, 1)}%
                       </span>
                     </div>

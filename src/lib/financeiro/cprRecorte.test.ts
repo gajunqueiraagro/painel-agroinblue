@@ -213,7 +213,8 @@ describe('CPR-CONTA-01 — filtro e resumo por conta, no mesmo dono', () => {
     expect(contasDaFaixaCpr(r).every(x => x.pagar.valor > 0)).toBe(true);
     expect(tela2).toContain('{contasNaFaixa.slice(0, MAX_CONTAS_NA_FAIXA).map((c) => (');
     expect(tela2).toContain('+{contasNaFaixa.length - MAX_CONTAS_NA_FAIXA}');
-    expect(tela2).toMatch(/\{resumoContas\.map\(\(c\) => \(\n\s+<SelectItem key=\{c\.conta\}/);
+    /* PASSO 8 do FIN-FINANC-28: o seletor e' o da casa COM BUSCA — as opcoes sao o resumo do dono, uma por conta */
+    expect(tela2).toContain('...resumoContas.map((c) => ({ value: c.conta, label: nomeConta(c.conta), hint: `${formatMoeda(c.pagar.valor)} · ${c.pagar.contas}` }))');
   });
   it('o resumo segue a caixa "Incluir vencidos": desligada, só o período', () => {
     const r = resumoPorContaCpr(linhas, { ...op, incluirVencidos: false });
@@ -995,6 +996,6 @@ describe('CPR-CAIXA-INICIAL-SEMPRE-01 — a tela parte SEMPRE do Caixa inicial (
   });
   it('o seletor não tem opção montada à mão na tela: a conta escolhida vem do dono', () => {
     expect(tela).not.toContain('!resumoContas.some((c) => c.conta === contaSel)');
-    expect(Array.from(tela.matchAll(/<SelectItem /g)).length).toBeGreaterThan(0);
+    expect(Array.from(tela.matchAll(/\.\.\.resumoContas\.map\(\(c\) => \(\{ value: c\.conta/g)).length).toBe(1);
   });
 });

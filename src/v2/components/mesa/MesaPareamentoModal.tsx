@@ -76,6 +76,7 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import type { MesaSessaoRow, MesaParRow } from '@/v2/lib/mesaSessao/types';
 
+import { SearchableSelect } from '@/components/ui/searchable-select';
 interface OfxItem {
   id: string;
   data_movimento: string;
@@ -1240,18 +1241,13 @@ export function MesaPareamentoModal({
                           <MatrizLinha campo="Fazenda"
                             excel={linhaAtiva.fazendaTexto}
                             fin={
-                              <Select value={payloadAtivo.fazendaNome ?? undefined}
+                              <SearchableSelect value={payloadAtivo.fazendaNome ?? ''}
                                       onValueChange={(nome) => {
                                         const f = (catalogo?.fazendas ?? []).find((x) => x.nome === nome);
-                                        editarCorrecaoAtiva({ fazendaId: f?.id ?? null, fazendaNome: nome });
-                                      }}>
-                                <SelectTrigger className="h-7 text-[11px]"><SelectValue placeholder="—" /></SelectTrigger>
-                                <SelectContent>
-                                  {(catalogo?.fazendas ?? []).map((f) => (
-                                    <SelectItem key={f.id} value={f.nome} >{f.nome}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                                        editarCorrecaoAtiva({ fazendaId: f?.id ?? null, fazendaNome: nome || null });
+                                      }}
+                                      options={(catalogo?.fazendas ?? []).map((f) => ({ value: f.nome, label: f.nome }))}
+                                      semTodos allValue="" allLabel="—" placeholder="Buscar fazenda..." dense triggerClassName="h-7 text-[11px]" />
                             } />
                           <MatrizLinha campo="Subcentro"
                             excel={linhaAtiva.subcentro}
@@ -2789,23 +2785,16 @@ function FormularioCorrecao({
       {/* Fazenda */}
       <div className="space-y-0.5">
         <label className="text-[10px] text-muted-foreground">Fazenda</label>
-        <Select
+        <SearchableSelect
           value={rascunho.fazendaId ?? ''}
           onValueChange={(v) => {
             const f = catalogo.fazendas.find((x) => x.id === v);
             set('fazendaId', v || null);
             set('fazendaNome', f?.nome ?? null);
           }}
-        >
-          <SelectTrigger className="h-7 text-[11px]"><SelectValue placeholder="—" /></SelectTrigger>
-          <SelectContent>
-            {catalogo.fazendas.map((f) => (
-              <SelectItem key={f.id} value={f.id} >
-                {f.nome}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          options={catalogo.fazendas.map((f) => ({ value: f.id, label: f.nome }))}
+          semTodos allValue="" allLabel="—" placeholder="Buscar fazenda..." dense triggerClassName="h-7 text-[11px]"
+        />
       </div>
 
       {/* Fornecedor híbrido (Command shadcn com 3 grupos) */}

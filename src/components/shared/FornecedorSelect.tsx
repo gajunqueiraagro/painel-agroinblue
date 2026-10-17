@@ -313,7 +313,7 @@ export function FornecedorSelect({
                 'text-[10px] truncate',
                 obrigar ? 'text-destructive/80' : 'text-amber-700 dark:text-amber-400',
               )}>
-                Texto histórico: <span className="font-mono">"{textoLegadoLimpo}"</span>
+                Texto histórico: <span className="tabular-nums">"{textoLegadoLimpo}"</span>
               </p>
               {obrigar && (
                 <p className="text-[10px] text-destructive mt-0.5 italic">

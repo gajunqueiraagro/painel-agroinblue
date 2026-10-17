@@ -495,7 +495,7 @@ export function ConciliarExtratoDialog({ open, onClose, movimento, onConciliado,
                         onCheckedChange={() => toggleMarcado(l)}
                       />
                     </TableCell>
-                    <TableCell className="text-[11px] font-mono">{fmtData(dataAncoraLancamento(l))}</TableCell>
+                    <TableCell className="text-[11px] tabular-nums">{fmtData(dataAncoraLancamento(l))}</TableCell>
                     <TableCell className="text-[11px] max-w-[260px] truncate" title={l.descricao || ''}>
                       <div className="flex items-center gap-1.5">
                         {l.status_transacao && l.status_transacao !== 'realizado' && (
@@ -519,7 +519,7 @@ export function ConciliarExtratoDialog({ open, onClose, movimento, onConciliado,
                         <span className="truncate">{l.descricao || '-'}</span>
                       </div>
                     </TableCell>
-                    <TableCell className="text-[11px] font-mono text-muted-foreground">{l.numero_documento || '-'}</TableCell>
+                    <TableCell className="text-[11px] tabular-nums text-muted-foreground">{l.numero_documento || '-'}</TableCell>
                     <TableCell className={`text-[11px] text-right font-semibold tabular-nums ${valorSigned < 0 ? 'text-red-700' : 'text-emerald-700'}`}>
                       {formatMoeda(valorSigned)}
                     </TableCell>
@@ -579,7 +579,7 @@ export function ConciliarExtratoDialog({ open, onClose, movimento, onConciliado,
                 >
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono text-muted-foreground">{fmtData(ref.data_referencia)}</span>
+                      <span className="tabular-nums text-muted-foreground">{fmtData(ref.data_referencia)}</span>
                       <Badge variant="secondary" className="h-4 px-1.5 text-[9px] uppercase font-normal">
                         {ref.origem}
                       </Badge>

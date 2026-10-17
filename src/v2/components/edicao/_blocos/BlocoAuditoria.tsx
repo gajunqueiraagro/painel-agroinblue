@@ -42,7 +42,7 @@ export function BlocoAuditoria({ lancamentoId, createdAt, updatedAt }: Props) {
             </div>
           </div>
           <div className="text-[10px] text-muted-foreground italic pt-2 border-t">
-            ID do lançamento: <span className="font-mono tabular-nums">{lancamentoId}</span>
+            ID do lançamento: <span className="tabular-nums">{lancamentoId}</span>
           </div>
         </div>
       </div>
