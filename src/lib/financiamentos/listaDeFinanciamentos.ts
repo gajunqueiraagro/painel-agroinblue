@@ -22,6 +22,9 @@ export interface ContratoDaLista {
   sucessorNumero: string | null;
   saldo: SaldoDoContrato | null;
   proxVencimento: string | null;
+  /** a data da linha: a da 1ª liberação gravada (viva) quando há; senão a do contrato */
+  data: string | null;
+  dataOrigem: 'liberacao' | 'contrato' | null;
 }
 
 /** Vigente = o que ainda deve. Encerrado = quitado, rolado ou cancelado (recolhidos numa linha). */
@@ -31,6 +34,7 @@ export const ehEncerrado = (c: ContratoDaLista): boolean => ENCERRADOS.includes(
 /** Número de contrato "de verdade": não vazio e com algum dígito (a mesma regra da pendência `sem_numero_contrato`). */
 export const temNumero = (n: string | null): boolean => !!n && n.trim() !== '' && /\d/.test(n);
 
+/* POR EXTENSO no `title` da célula; a coluna mostra a CURTA (FIN-FINANC-28-P3-FIX2: coluna estreita e fixa). */
 export const TEXTO_PENDENCIA: Record<string, string> = {
   sem_liberacao: 'liberação não gravada',
   amortizacao_sem_lancamento: 'amortização sem lançamento',
@@ -38,12 +42,25 @@ export const TEXTO_PENDENCIA: Record<string, string> = {
   amortizado_maior_que_liberado: 'amortizado maior que o liberado',
   sem_numero_contrato: 'falta nº do contrato',
 };
+export const TEXTO_PENDENCIA_CURTO: Record<string, string> = {
+  sem_liberacao: 'sem lib.',
+  amortizacao_sem_lancamento: 'amort. s/ lanç.',
+  liberado_maior_que_contratado: 'lib. > contr.',
+  amortizado_maior_que_liberado: 'amort. > lib.',
+  sem_numero_contrato: 'sem nº',
+};
+/** O que a coluna estreita mostra: a primeira pendência, curta, e "+N" quando há mais (todas, por extenso, vão no `title`). */
+export const pendenciaCurta = (codigos: readonly string[]): string =>
+  codigos.length === 0 ? '' : `${TEXTO_PENDENCIA_CURTO[codigos[0]] ?? codigos[0]}${codigos.length > 1 ? ` +${codigos.length - 1}` : ''}`;
 /** As pendências em português, separadas por " · "; código desconhecido aparece como veio (nunca some). */
 export const textoDasPendencias = (codigos: readonly string[]): string =>
   codigos.map((c) => TEXTO_PENDENCIA[c] ?? c).join(' · ');
 
-/** Uma soma que sabe quantos contratos ficaram de fora por falta do número ("+ ?"). */
-export interface Soma { valor: number; aConfirmar: number }
+/** Uma soma que sabe quantos contratos ficaram de fora por falta do número ("+ ?") e quantos entraram (`conhecidos`).
+ *  Nenhum conhecido = a soma NÃO EXISTE: a tela mostra "?", nunca "0,00" (zero inventado). */
+export interface Soma { valor: number; aConfirmar: number; conhecidos: number }
+/** a soma tem algum valor conhecido? (senão a tela diz "?") */
+export const somaConhecida = (s: Soma): boolean => s.conhecidos > 0 || s.aConfirmar === 0;
 
 export interface SubtotaisDaLista { contratado: Soma; liberado: Soma; amortizado: Soma; saldo: Soma }
 
@@ -67,13 +84,14 @@ const cent = (v: number) => Math.round(v * 100);
 function somar(contratos: readonly ContratoDaLista[], campo: 'contratado' | 'liberado' | 'amortizado' | 'saldo'): Soma {
   let c = 0;
   let fora = 0;
+  let dentro = 0;
   for (const k of contratos) {
     if (k.saldo?.foraDasSomas) continue;
     const v = k.saldo ? k.saldo[campo] : null;
     if (v === null || v === undefined) fora += 1;
-    else c += cent(v);
+    else { c += cent(v); dentro += 1; }
   }
-  return { valor: c / 100, aConfirmar: fora };
+  return { valor: c / 100, aConfirmar: fora, conhecidos: dentro };
 }
 
 function subtotais(contratos: readonly ContratoDaLista[]): SubtotaisDaLista {
@@ -86,10 +104,11 @@ function subtotais(contratos: readonly ContratoDaLista[]): SubtotaisDaLista {
 export const SEM_BANCO = 'Sem banco';
 
 /** Ordem dentro do grupo: a coluna e a direção pedidas; empate pelo número do contrato e pelo id (estável). */
-export type ColunaDaLista = 'numero' | 'banco' | 'descricao' | 'status' | 'contratado' | 'liberado' | 'amortizado' | 'saldo' | 'proxVencimento';
+export type ColunaDaLista = 'data' | 'numero' | 'banco' | 'descricao' | 'status' | 'contratado' | 'liberado' | 'amortizado' | 'saldo' | 'proxVencimento';
 
 function valorDaColuna(c: ContratoDaLista, col: ColunaDaLista): string | number | null {
   switch (col) {
+    case 'data': return c.data;
     case 'numero': return c.numeroContrato;
     case 'banco': return c.banco;
     case 'descricao': return c.descricao;
@@ -118,8 +137,9 @@ export function ordenarContratos(contratos: readonly ContratoDaLista[], col: Col
  * Agrupa os VIGENTES por linha de crédito, quando o contrato tem uma; os demais, por banco. Grupos de linha primeiro, depois os
  * de banco, cada bloco em ordem de contratado (maior primeiro). Os encerrados ficam à parte, na mesma ordem pedida.
  */
-export function montarListaDeFinanciamentos(contratos: readonly ContratoDaLista[], col: ColunaDaLista = 'contratado',
-                                            dir: 'asc' | 'desc' = 'desc'): ListaDeFinanciamentos {
+/** Ordem padrão (FIN-FINANC-28-P3-FIX): Data crescente dentro de cada grupo — a ordem da casa, data primeiro. */
+export function montarListaDeFinanciamentos(contratos: readonly ContratoDaLista[], col: ColunaDaLista = 'data',
+                                            dir: 'asc' | 'desc' = 'asc'): ListaDeFinanciamentos {
   const vigentes = contratos.filter((c) => !ehEncerrado(c));
   const porChave = new Map<string, { tipo: 'linha' | 'banco'; rotulo: string; contratos: ContratoDaLista[] }>();
   for (const c of vigentes) {
@@ -154,7 +174,10 @@ export function contratoDaLista(entrada: {
   id: string; numeroContrato: string | null; banco: string | null; descricao: string | null; status: string;
   linhaCreditoId: string | null; linhaCreditoNome: string | null; sucessorNumero: string | null;
   saldo: SaldoDoContrato | null | undefined; proxVencimento: string | null | undefined;
+  dataContrato: string | null | undefined; primeiraLiberacao: string | null | undefined;
 }): ContratoDaLista {
+  const lib = entrada.primeiraLiberacao ?? null;
+  const contrato = entrada.dataContrato ?? null;
   return {
     id: entrada.id,
     numeroContrato: entrada.numeroContrato,
@@ -166,5 +189,7 @@ export function contratoDaLista(entrada: {
     sucessorNumero: entrada.sucessorNumero,
     saldo: entrada.saldo ?? null,
     proxVencimento: entrada.proxVencimento ?? null,
+    data: lib ?? contrato,
+    dataOrigem: lib ? 'liberacao' : contrato ? 'contrato' : null,
   };
 }

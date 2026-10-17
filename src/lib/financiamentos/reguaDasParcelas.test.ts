@@ -6,6 +6,7 @@
  * de ícone e de texto usam o alinhamento que a régua declara. A tela não se monta em teste: a ligação é lida da FONTE, com
  * auto-teste do detector.
  */
+import { TD_VALOR_LANC } from '@/components/financiamentos/ListaDeFinanciamentos';
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -82,7 +83,8 @@ describe('a tela usa a régua (fonte)', () => {
   });
 
   it('table-fixed, colgroup e cabeçalho saem da MESMA lista; nada de largura ou alinhamento à mão', () => {
-    expect(FONTE).toMatch(/<Table density="dense" className="table-fixed"/);
+    // FIN-FINANC-28-P3-FIX: a tabela leva a régua de Lançamentos (`table-financeiro`) e segue `table-fixed`
+    expect(FONTE).toMatch(/<Table density="dense" className=\{`\$\{TABELA_LANC\} table-fixed /);
     expect(FONTE).toContain('const colunas = colunasDasParcelas(ehParcelamento);');
     const cg = bloco(FONTE, 'colgroup');
     expect(cg).toContain('colunas.map(');
@@ -98,8 +100,9 @@ describe('a tela usa a régua (fonte)', () => {
   });
 
   it('as células do corpo alinham como a régua diz: MOEDA (direita) nos números, text-center no Boleto', () => {
-    const MOEDA = FONTE.match(/const MOEDA = '([^']+)'/)?.[1] ?? '';
-    expect(MOEDA.split(' ')).toContain('text-right');
+    // MOEDA é o valor de Lançamentos (`TD_VALOR_LANC`, FIN-FINANC-28-P3-FIX), que alinha à direita
+    expect(FONTE).toContain('const MOEDA = TD_VALOR_LANC;');
+    expect(TD_VALOR_LANC.split(' ')).toContain('text-right');
     const corpo = bloco(FONTE, 'TableBody');
     const cels = aberturas(corpo);
     // crédito: principal, juros, total; parcelamento: só o total (as duas primeiras são condicionais ao crédito)

@@ -5,7 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
-import { lerSituacaoEmLote, parcelasDoLote, resumoDoContratoNaLista, totaisDaLista } from './situacaoEmLote';
+import { lerSituacaoEmLote, parcelasDoLote, resumoDoContratoNaLista, totaisDasCompras, totaisDaLista } from './situacaoEmLote';
 
 const parcela = (n: number, situacao: string, extra: Record<string, unknown> = {}) => ({
   id: `p${n}`, numero: n, data_vencimento: `2026-${String(4 + n).padStart(2, '0')}-23`, valor_principal: 12833.33, valor_juros: 0, valor_total: 12833.33,
@@ -38,7 +38,8 @@ describe('lerSituacaoEmLote', () => {
 describe('resumoDoContratoNaLista — o "em aberto" é o do contrato', () => {
   const lote = lerSituacaoEmLote({ reboque: REBOQUE, juros: COM_JUROS })!;
   it('Reboque Agrícola: 5 pagas, 25.666,66 em aberto (não os 110.000,00 da coluna antiga), próxima em 23/10', () => {
-    expect(resumoDoContratoNaLista(lote.get('reboque'))).toEqual({ parcelasPagas: 5, totalPendente: 25666.66, jurosPendente: 0, proxVencimento: '2026-10-23', valorDaProxParcela: 12833.33 });
+    expect(resumoDoContratoNaLista(lote.get('reboque'))).toEqual({ parcelasPagas: 5, totalPendente: 25666.66, jurosPendente: 0, proxVencimento: '2026-10-23', valorDaProxParcela: 12833.33,
+      pago: lote.get('reboque')!.cartoes.pago, vencido: lote.get('reboque')!.cartoes.vencido });
   });
   it('em aberto = a vencer + vencido do dono, em centavos (a parcial entra só pelo que falta); juros das não pagas', () => {
     const r = resumoDoContratoNaLista(lote.get('juros'));
@@ -47,7 +48,7 @@ describe('resumoDoContratoNaLista — o "em aberto" é o do contrato', () => {
     expect(r.proxVencimento).toBe('2026-05-23');
   });
   it('contrato sem leitura: zeros e nulos (a linha existe, sem inventar parcela)', () => {
-    expect(resumoDoContratoNaLista(undefined)).toEqual({ parcelasPagas: 0, totalPendente: 0, jurosPendente: 0, proxVencimento: null, valorDaProxParcela: null });
+    expect(resumoDoContratoNaLista(undefined)).toEqual({ parcelasPagas: 0, totalPendente: 0, jurosPendente: 0, proxVencimento: null, valorDaProxParcela: null, pago: 0, vencido: 0 });
   });
 });
 
@@ -79,7 +80,19 @@ describe('quem lê (da fonte): lista e painéis não leem mais a coluna antiga',
   it('os três leem o lote do dono; a lista não soma na tela', () => {
     for (const fonte of [lista, painel, endiv]) expect(fonte).toContain('lerSituacaoEmLoteDoBanco(');
     expect(lista).toContain('const r = resumoDoContratoNaLista(lote.get(f.id));');
-    expect(lista).toContain('aPagar: totaisDaLista(filtered).aPagar,');
+    // FIN-FINANC-28-P3-FIX2: os cards da compra parcelada saem do dono puro `totaisDasCompras`, das mesmas linhas
+    expect(lista).toContain('totaisDasCompras(filtered)');
     expect(lista).not.toContain('f.total_pendente, 0)');
   });
 });
+
+describe('FIN-FINANC-28-P3-FIX2 — totaisDasCompras', () => {
+  it('Total, Já pago, A pagar = Total − Já pago, Vencidas; e a diferença para as parcelas em aberto, sem ajustar', () => {
+    const t = totaisDasCompras([
+      { valor_total: 66000, pago: 44005, total_pendente: 22000, vencido: 0 },        // pago por valor diferente: diverge −5,00
+      { valor_total: 1000.1, pago: 0.2, total_pendente: 999.9, vencido: 500 },
+    ]);
+    expect(t).toEqual({ total: 67000.1, pago: 44005.2, aPagar: 22994.9, vencidas: 500, emAberto: 22999.9, diferenca: -5 });
+  });
+});
+

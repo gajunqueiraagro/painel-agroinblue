@@ -799,13 +799,14 @@ describe('4 — a tela do contrato mostra o que o banco derivou do lançamento',
     expect(cabecalho.className).toContain('top-0');
     /* a rolagem mora no wrapper da tabela: só as parcelas rolam */
     expect(rodape.closest('table')!.parentElement!.className).toContain('overflow-y-auto');
+    /* FIN-FINANC-28-P3-FIX: a linha é a de Lançamentos (25px), e a tabela leva a régua de lá */
     for (const linha of [...linhasDoContrato(), rodape.querySelector('tr')!]) {
-      expect(linha.className).toContain('h-[19px]');
-      expect(linha.className).toContain('[&>td]:leading-[18px]');
+      expect(linha.className).toContain('h-[25px]');
     }
+    expect(rodape.closest('table')!.className).toContain('table-financeiro');
     /* nada dentro da linha passa de 16px, e nenhum valor fica abaixo de 10px */
     expect(screen.getAllByRole('button', { name: 'Abrir o lançamento da parcela' })[0].className).toContain('h-4');
-    expect(document.body.innerHTML).not.toContain('text-[9px] font-semibold');
+    /* (FIN-FINANC-28-P3-FIX2: o piso de 10px saiu — a régua é a de Lançamentos, valor a 9px/600) */
     /* o Total continua vindo da leitura do contrato */
     expect(screen.getByTestId('total-das-parcelas').textContent).toBe('16.238,00');
   });
@@ -875,9 +876,13 @@ describe('4 — a tela do contrato mostra o que o banco derivou do lançamento',
     const botoes = screen.getByTestId('botoes-do-contrato');
     expect(botoes.className).toContain('shrink-0');
     expect(Array.from(botoes.querySelectorAll('button')).map((b) => b.textContent?.trim())).toEqual(['Editar', 'Documentos', 'Excluir']);
-    /* o bloco de dados não tem mais o título "Dados do contrato", e nada de fonte mono na tela */
+    /* o bloco de dados não tem mais o título "Dados do contrato"; fonte mono SÓ nas datas da tabela (`celula-data`, a régua de
+       Lançamentos — FIN-FINANC-28-P3-FIX) */
     expect(screen.queryByText('Dados do contrato')).toBeNull();
-    expect(document.body.innerHTML).not.toContain('font-mono');
+    const mono = Array.from(document.querySelectorAll('.font-mono'));
+    expect(mono.length).toBeGreaterThan(0);
+    // e as datas da grade chave–valor do cabeçalho (FIN-FINANC-28-P3-FIX2), também em mono 8px
+    expect(mono.every((e) => e.classList.contains('celula-data') || !!e.closest('[data-testid="dados-do-contrato"]'))).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: /Documentos/ }));
     await screen.findByText('Editar obrigação');
     expect((await screen.findByRole('tab', { name: /Documentos/ })).getAttribute('aria-selected')).toBe('true');

@@ -15,7 +15,7 @@ const saldo = (p: Partial<SaldoDoContrato> = {}): SaldoDoContrato => ({
 });
 const c = (id: string, p: Partial<ContratoDaLista> = {}): ContratoDaLista => ({
   id, numeroContrato: `C-${id}1`, banco: 'Banco A', descricao: `Contrato ${id}`, status: 'ativo', linhaCreditoId: null,
-  linhaCreditoNome: null, sucessorNumero: null, saldo: saldo(), proxVencimento: '2026-11-10', ...p,
+  linhaCreditoNome: null, sucessorNumero: null, saldo: saldo(), proxVencimento: '2026-11-10', data: '2025-01-10', dataOrigem: 'contrato', ...p,
 });
 
 function montar(contratos: ContratoDaLista[], encerradosAbertos = false) {
@@ -33,7 +33,8 @@ describe('ListaDeFinanciamentos', () => {
     const b = linhas.find((l) => l.textContent?.includes('Contrato b'))!;
     expect(within(b).getByTestId('cel-saldo').textContent).toBe('?');
     expect(within(b).getByTestId('cel-liberado').textContent).toBe('?');
-    expect(within(b).getByTestId('cel-pendencia').textContent).toBe('liberação não gravada');
+    expect(within(b).getByTestId('cel-pendencia').textContent).toBe('sem lib.');
+    expect(within(b).getByTestId('cel-pendencia').getAttribute('title')).toBe('liberação não gravada');
     const total = screen.getByTestId('lista-fin-total');
     expect(total.textContent).toContain('800,00');
     expect(total.textContent).toContain('+ ?');
@@ -79,9 +80,9 @@ describe('ListaDeFinanciamentos', () => {
     const tabela = screen.getByTestId('lista-fin-tabela');
     expect(tabela.className).toContain('table-fixed');
     const cols = Array.from(tabela.querySelectorAll('col'));
-    expect(cols).toHaveLength(10);
+    expect(cols).toHaveLength(11);
     expect(cols.filter((x) => !x.getAttribute('style')).length).toBe(1);
-    expect(cols[2].getAttribute('style')).toBeNull();
+    expect(cols[3].getAttribute('style')).toBeNull();
   });
 });
 
@@ -111,9 +112,68 @@ describe('régua de Lançamentos na tabela nova', () => {
     expect(saldo.className).toContain('celula-valor');
     expect(saldo.className).not.toContain('font-mono');
     const tds = linha.querySelectorAll('td');
-    expect(tds[8].className).toContain('celula-data');
-    expect(tds[3].className).toContain('celula-status');
-    expect(tds[3].querySelector('span')?.className).toContain('rounded-[7px]');
+    expect(tds[0].className).toContain('celula-data');
+    expect(tds[9].className).toContain('celula-data');
+    expect(tds[4].className).toContain('celula-status');
+    expect(tds[4].querySelector('span')?.className).toContain('rounded-[7px]');
     expect(screen.getAllByTestId('lista-fin-grupo')[0].className).toContain('h-[27px]');
+  });
+});
+
+describe('FIN-FINANC-28-P3-FIX', () => {
+  const semLib = (id: string, p: Partial<ContratoDaLista> = {}) =>
+    c(id, { saldo: saldo({ liberado: null, saldo: null, pendencias: ['sem_liberacao'] }), ...p });
+  const card = (rotulo: string) => {
+    const cards = Array.from(screen.getByTestId('lista-fin-cards').children);
+    return cards.find((x) => x.textContent?.startsWith(rotulo))!;
+  };
+
+  it('todos sem liberação: o subtotal, o total e os cards dizem "?" (nunca "0,00 + ?"), com "N a confirmar"', () => {
+    montar([semLib('a'), semLib('b')]);
+    const grupo = screen.getByTestId('lista-fin-grupo');
+    const tds = grupo.querySelectorAll('td');
+    expect(tds[2].textContent).toBe('?');      // liberado
+    expect(tds[4].textContent).toBe('?');      // saldo
+    expect(grupo.textContent).not.toContain('0,00 + ?');
+    const total = screen.getByTestId('lista-fin-total').querySelectorAll('td');
+    expect(total[2].textContent).toBe('?');
+    expect(total[4].textContent).toBe('?');
+    expect(card('Liberado').textContent).toContain('2 a confirmar');
+    expect(card('Liberado').textContent).not.toContain('R$');
+    expect(card('Saldo devedor').textContent).toContain('?');
+    expect(card('Saldo devedor').textContent).not.toContain('R$ 0,00');
+  });
+
+  it('com um conhecido: "R$ x" e "+ N a confirmar"; o subtotal "x + ?"', () => {
+    montar([c('a'), semLib('b')]);
+    expect(card('Saldo devedor').textContent).toContain('R$ 800,00');
+    expect(card('Saldo devedor').textContent).toContain('+ 1 a confirmar');
+    expect(screen.getByTestId('lista-fin-grupo').textContent).toContain('800,00 + ?');
+    expect(card('Saldo devedor').querySelector('span')?.getAttribute('title')).toContain('principal');
+  });
+
+  it('banco pelo nome curto, nome inteiro no title; Data é a primeira coluna', () => {
+    montar([c('a', { banco: 'Banco do Brasil S.A. (001)' })]);
+    const b = screen.getByTestId('cel-banco');
+    expect(b.textContent).toBe('BB');
+    expect(b.getAttribute('title')).toBe('Banco do Brasil S.A. (001)');
+    expect(screen.getAllByRole('columnheader')[0].textContent).toBe('Data');
+    expect(screen.getByTestId('cel-data').textContent).toBe('10/01/25');
+    expect(screen.getByTestId('cel-data').className).toContain('celula-data');
+  });
+
+  it('duas pendências: a 1ª curta + "+1" na coluna estreita; as duas por extenso no title', () => {
+    montar([c('a', { numeroContrato: 'Sem dados', saldo: saldo({ liberado: null, saldo: null, pendencias: ['sem_liberacao', 'sem_numero_contrato'] }) })]);
+    expect(screen.getByTestId('cel-pendencia').textContent).toBe('sem lib. +1');
+    expect(screen.getByTestId('cel-pendencia').getAttribute('title')).toBe('liberação não gravada · falta nº do contrato');
+  });
+
+  it('FIX2 — agrupada só por banco (mostrarBanco=false): a coluna Banco some e o banco vai no title da Descrição', () => {
+    render(<ListaDeFinanciamentos contratos={[c('a', { banco: 'Banco do Brasil' })]} encerradosAbertos={false}
+      aoAlternarEncerrados={vi.fn()} aoAbrir={vi.fn()} mostrarBanco={false} />);
+    expect(screen.queryByTestId('cel-banco')).toBeNull();
+    expect(screen.getAllByRole('columnheader').map((th) => th.textContent)).not.toContain('Banco');
+    expect(screen.getByTestId('lista-fin-tabela').querySelectorAll('col')).toHaveLength(10);
+    expect(screen.getByTestId('cel-descricao').getAttribute('title')).toBe('Contrato a · Banco do Brasil');
   });
 });

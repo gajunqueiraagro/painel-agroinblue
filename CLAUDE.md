@@ -162,7 +162,11 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 17/10/2026 (FIN-FINANC-28-P3, +25: `src/lib/financiamentos/listaDeFinanciamentos.test.ts` 12 (novo),
+  Baseline em 17/10/2026 (FIN-FINANC-28-P3-FIX2, +3: `src/lib/financiamentos/situacaoEmLote.test.ts` 1, `src/components/financiamentos/
+  listaDeFinanciamentos.test.tsx` 1 (15 -> 16), `src/pages/financiamentosListaCompacta.test.tsx` 1 (6 -> 7, reescrito ao contrato novo) —
+  5533 depois dele; antes o FIN-FINANC-28-P3-FIX, +7: `src/lib/fornecedores/nomeCurtoDoCredor.test.ts` 2 (novo),
+  `src/lib/financiamentos/listaDeFinanciamentos.test.ts` 1 (12 -> 13), `src/components/financiamentos/listaDeFinanciamentos.test.tsx`
+  4 (11 -> 15) — 5530 depois dele; antes o FIN-FINANC-28-P3, +25: `src/lib/financiamentos/listaDeFinanciamentos.test.ts` 12 (novo),
   `src/components/financiamentos/listaDeFinanciamentos.test.tsx` 11 (novo), `src/pages/financiamentosListaCompacta.test.tsx` 2
   (4 -> 6) — 5523 depois dele; antes o
   FIN-PARCELAS-TAXA-ZERO-01, +6: `src/hooks/useFinanciamentoCadastro.cronograma.test.tsx` 6 (novo) — 5498 depois dele; antes o
@@ -355,7 +359,7 @@ no mesmo arquivo.
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
   `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5327
-  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3], 22 skipped, e
+  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2], 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -2164,9 +2168,37 @@ preview que o cabecalho nao sai da tela ao rolar.
     (o selo `SeloDoContrato` = `STATUS_PILULA_BASE` a 8px); linha de 25px. Grupo e total: 27px a 9,5px/600, pela classe nova
     `celula-grupo` (index.css). As strings moram em `ListaDeFinanciamentos.tsx` (`TH_LANC`, `TD_DATA_LANC`, `TD_VALOR_LANC`,
     `LINHA_LANC`) e sao copias das de `FinanceiroV2Tab.tsx` — quem mexer la' confere aqui.
+  · FIX DA HOMOLOGACAO (FIN-FINANC-28-P3-FIX, 17/10): (1) o Banco mostra o NOME CURTO do credor por um helper unico,
+    `nomeCurtoDoCredor` (`src/lib/fornecedores/nomeCurtoDoCredor.ts`; o cadastro nao tem campo de nome curto): banco conhecido pelo
+    nome ("BB", "Itaú BBA", "DLL"…), nome que cabe em 12 caracteres inteiro, senao primeira palavra + inicial da ultima; nunca
+    corta, o nome inteiro no `title`; o agrupamento segue pelo nome do cadastro. (2) coluna DATA, a primeira: a da 1ª liberacao
+    VIVA (leitura direta de `financiamento_liberacoes`, menor `data` com `cancelado_em` nulo), senao a do contrato; a origem no
+    `title`; a lista abre por Data crescente dentro de cada grupo. (3) o th numerico alinha com o td (0px medido; a seta a'
+    esquerda do titulo). (4) ZERO INVENTADO NAO EXISTE: `Soma.conhecidos`; sem nenhum conhecido o subtotal, o total e o card dizem
+    "?" ("N a confirmar"), nunca "0,00 + ?" / "R$ 0,00" (`somaConhecida`). (5) rotulos curtos: cards "Contratado", "Liberado",
+    "Saldo devedor" (o detalhe no `title`), "Com pendência"; pendencias "sem liberação", "sem nº", "amort. sem lançamento",
+    "liberado > contratado", "amortizado > liberado". (6) a TABELA DE PARCELAS do contrato (`FinanciamentoDetalhe.tsx`) usa a
+    mesma regua de Lancamentos (as constantes de `ListaDeFinanciamentos.tsx`), o th com o padding da celula: th = td (0px) em
+    Principal, Juros e Total; larguras da `reguaDasParcelas.ts` intocadas. A data agora e' mono 8px (`celula-data`) — o teste que
+    proibia mono na tela passou a exigir que mono so' exista em `celula-data`.
+  · FIX2 (17/10, mesmo commit do FIX): (A) a coluna Banco SOME quando a lista e' agrupada so' por banco (prop `mostrarBanco`, decidida
+    pela tela sobre TODOS os financiamentos: nenhum com linha de credito — hoje, todos os clientes), o banco vai no `title` da
+    Descricao; a Pendencia e' estreita (64) e mostra a 1ª curta + "+N" (`pendenciaCurta`; por extenso no `title`, `TEXTO_PENDENCIA`);
+    o rolado mostra "→ <sucessor>" ali, cortando com o inteiro no `title`. Descricao a 1.126: 174 agrupada por banco (116 com
+    linha de credito). (B) "Compras parceladas": Data · Descricao · Credor · Valor da compra · A pagar · Parcela · Proxima ·
+    Situacao · Pagas (sem Tipo; o Nº contrato saiu desta aba e foi para o `title` da Descricao); fixas 568, Descricao e Credor
+    dividem a sobra (162 cada a 1.126). Cards Total das compras · Ja' pago · A pagar · Vencidas, do dono puro `totaisDasCompras`
+    (`situacaoEmLote.ts`, das mesmas linhas, cartoes `pago`/`vencido` do lote): A pagar = Total − Ja' pago e, quando difere da soma
+    das parcelas em aberto, ponto ambar + a conta no `title` — NUNCA ajusta. MEDIDO no NJ (17/10, ativos): 476.320,36 x 476.342,61,
+    −22,25 em 5 contratos (parcelas pagas por valor diferente do da parcela e o "Seguro Rural" 0,05; PARC-CADEIA-PAGA-VALOR-DIFERENTE-01);
+    nos CANCELADOS "Total − Ja' pago" e' o valor cheio com 0 em aberto. "A pagar" tem cara de link, clique sem efeito (TODO
+    "FIN-28 cronograma"). (C) o cabecalho do contrato e' a GRADE CHAVE–VALOR `GradeChaveValor` (`src/components/shared/`, a
+    primeira do sistema: so' havia `<dl>` soltos): 4 pares por linha a partir de 1.280px, 2 abaixo, rotulos alinhados; Descricao,
+    Credor (nome curto, inteiro no `title`), Nº contrato, Banco/conta, Data de liberacao (1ª liberacao viva, leitura direta),
+    Valor contratado, Situacao, Vencimento final, e depois os que ja' existiam (nada some).
   · REGUAS (px), MEDIDAS no Chromium (17/10) a 1.126 e 1.440 com o pior nº real ("C_102.022.070.010200", 20 caracteres) e valores de
-    50.000.000,00 / 99.999.999,99 (+ ?): aba nova Nº 116 · Banco 56 · Descricao o resto (118 a 1.126) · Situacao 64 · Contratado 80 ·
-    Liberado 96 · Amortizado 80 · Saldo 96 · Prox. venc. 72 · Pendencia 110; "Compras parceladas" Tipo 52 · Descricao o resto (88) ·
+    50.000.000,00 / 99.999.999,99 (+ ?): aba nova Data 46 · Nº 116 · Banco 58 · Descricao o resto (74 a 1.126) · Situacao 64 ·
+    Contratado 80 · Liberado 96 · Amortizado 80 · Saldo 96 · Prox. venc. 74 · Pendencia 106; "Compras parceladas" Tipo 52 · Descricao o resto (88) ·
     Nº 124 · Credor 84 · Contratado 80 · Principal 98 · Saldo 98 · Parcela 98 · Proxima 60 · Status 88 · olho 22 (minWidth 870). 0
     cortes de numero, data, situacao e nº; sem rolagem horizontal; filtros e cards na mesma posicao nas duas abas e com filtro.
   ⚠ DOCUMENTO DO CONTRATO (a "cedula") NAO TEM FONTE: o botao "Documentos" do contrato (`FinanciamentoDetalhe.tsx` ~:528) so' abre em

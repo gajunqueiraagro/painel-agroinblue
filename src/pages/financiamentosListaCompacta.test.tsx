@@ -25,7 +25,7 @@ const FINS = [
 ];
 
 vi.mock('@/integrations/supabase/client', () => {
-  const q: any = { select: () => q, eq: () => q, order: async () => ({ data: FINS, error: null }) };
+  const q: any = { select: () => q, eq: () => q, is: () => q, order: async () => ({ data: FINS, error: null }) };
   return { supabase: { from: () => q, rpc: async () => ({ data: {}, error: null }) } };
 });
 vi.mock('@/contexts/ClienteContext', () => ({ useCliente: () => ({ clienteAtual: { id: 'cli-1' } }) }));
@@ -45,72 +45,72 @@ function montar() {
   return r;
 }
 
-const ordemDosNumeros = () => screen.getAllByTestId('cel-numero-contrato').map((c) => c.textContent);
+const ordemDasDatas = () => screen.getAllByTestId('cel-data').map((c) => c.textContent);
 
-describe('FIN-LISTA-COMPACTA-01', () => {
+describe('FIN-LISTA-COMPACTA-01 / FIN-FINANC-28-P3-FIX2 — aba Compras parceladas', () => {
   beforeEach(() => { cleanup(); sessionStorage.clear(); });
 
-  it('coluna Nº contrato logo depois da Descricao, com o numero como esta gravado', async () => {
+  /* FIX2 (Gabriel, 17/10): Data · Descrição · Credor · Valor da compra · A pagar · Parcela · Próxima · Situação · Pagas — sem a
+     pílula de Tipo e sem o Nº contrato (que vai no `title` da Descrição). O teste prende o CONTEÚDO, não as classes. */
+  it('colunas na ordem da casa (data primeiro), sem Tipo e sem Nº contrato', async () => {
     montar();
-    await screen.findAllByTestId('cel-numero-contrato');
+    await screen.findAllByTestId('cel-data');
     const cab = screen.getAllByRole('columnheader').map((th) => th.textContent?.trim());
-    expect(cab.slice(0, 4)).toEqual(['Tipo', 'Descrição', 'Nº contrato', 'Credor']);
-    expect(cab).toContain('Contratado');
-    expect(cab).not.toContain('Contratado em');
-    expect(ordemDosNumeros()).toEqual(['', 'Atualizar', 'PR-78.192']);
-    const cel = screen.getAllByTestId('cel-numero-contrato')[2];
-    expect(cel.className).toContain('whitespace-nowrap');
-    expect(cel.className).toContain('text-[9px]');
-    expect(cel.className).toContain('text-zinc-600');
+    expect(cab).toEqual(['Data', 'Descrição', 'Credor', 'Valor da compra', 'A pagar', 'Parcela', 'Próxima', 'Situação', 'Pagas']);
+    expect(screen.queryByTestId('cel-numero-contrato')).toBeNull();
   });
 
-  it('o numero saiu da Descricao e o sufixo PEC / AGR ficou', async () => {
+  it('o nº do contrato mora no title da Descrição; o sufixo PEC / AGR ficou', async () => {
     montar();
     const descs = await screen.findAllByTestId('cel-descricao');
     const solo = descs.find((d) => d.textContent?.includes('Recuperação de Solo'))!;
     expect(solo.textContent).not.toContain('PR-78.192');
     expect(within(solo).getByText('· AGR')).toBeTruthy();
-    expect(solo.getAttribute('title')).toBe('Recuperação de Solo · AGR');
-    expect(descs.find((d) => d.textContent?.includes('Armazem'))!.textContent).toContain('· PEC');
+    expect(solo.getAttribute('title')).toBe('Recuperação de Solo · AGR · nº PR-78.192');
+    expect(descs.find((d) => d.textContent?.includes('Armazem'))!.getAttribute('title')).toBe('Armazem · PEC');
   });
 
-  it('status com a fracao, sem corte; ordenar por Nº contrato funciona nos dois sentidos', async () => {
+  it('situação e pagas em colunas próprias; ordenar por Data nos dois sentidos', async () => {
     montar();
-    const st = await screen.findAllByTestId('cel-status');
-    expect(st[0].className).toContain('whitespace-nowrap');
-    expect(st[0].className).not.toContain('truncate');
-    expect(st.map((s) => s.textContent)).toContain('ativo0/7');
-    fireEvent.click(screen.getByText('Nº contrato'));
-    expect(ordemDosNumeros()).toEqual(['', 'Atualizar', 'PR-78.192']);
-    fireEvent.click(screen.getByText('Nº contrato'));
-    expect(ordemDosNumeros()).toEqual(['PR-78.192', 'Atualizar', '']);
+    await screen.findAllByTestId('cel-status');
+    expect(screen.getAllByTestId('cel-pagas').map((c) => c.textContent)).toContain('0/7');
+    expect(ordemDasDatas()).toEqual(['05/01/24', '01/02/24', '10/03/24']);
+    fireEvent.click(screen.getByText('Data'));
+    expect(ordemDasDatas()).toEqual(['10/03/24', '01/02/24', '05/01/24']);
   });
 
-  it('fonte: sem a trava max-w-5xl, colgroup em px e so a Descricao sem largura', () => {
+  it('fonte: colgroup em px, Descrição e Credor sem largura (dividem a sobra), fixas = 568', () => {
     const src = readFileSync(resolve(process.cwd(), 'src/pages/FinanciamentosListaPage.tsx'), 'utf8');
     expect(src).not.toMatch(/className="[^"]*max-w-5xl/);
     const cg = src.slice(src.indexOf('<colgroup>'), src.indexOf('</colgroup>'));
     const cols = cg.match(/<col\b[^>]*\/>/g) ?? [];
-    expect(cols).toHaveLength(11);
-    expect(cols.filter((c) => !/width:/.test(c))).toHaveLength(1);
-    expect(cols.map((c) => Number(c.match(/width: (\d+)/)?.[1] ?? 0)).reduce((a, b) => a + b, 0)).toBe(804);
+    expect(cols).toHaveLength(9);
+    expect(cols.filter((c) => !/width:/.test(c))).toHaveLength(2);
+    expect(cols.map((c) => Number(c.match(/width: (\d+)/)?.[1] ?? 0)).reduce((a, b) => a + b, 0)).toBe(568);
   });
 
-  /* FIN-FINANC-28-P3 — "Compras parceladas" mostra o MESMO CONTEUDO da lista de antes (colunas, ordem, valores); o estilo mudou
-     (regua de fonte de Lancamentos) e por isso o teste prende o texto, nao as classes. */
-  it('Compras parceladas: colunas, ordem e valores da lista de antes, so com parcelamentos', async () => {
+  it('linhas: valores da lista, só parcelamentos', async () => {
     montar();
-    await screen.findAllByTestId('cel-numero-contrato');
-    const cab = screen.getAllByRole('columnheader').map((th) => th.textContent?.trim());
-    expect(cab).toEqual(['Tipo', 'Descrição', 'Nº contrato', 'Credor', 'Contratado', 'Principal', 'Saldo devedor', 'Parcela',
-      'Próxima', 'Status', '']);
+    await screen.findAllByTestId('cel-data');
     const linhas = screen.getAllByRole('link').map((tr) => Array.from(tr.querySelectorAll('td')).map((td) => td.textContent?.replace(/\u00a0/g, ' ').trim()));
     expect(linhas).toEqual([
-      ['PARC', 'Armazem· PEC', '', 'BRDE', '05/01/24', 'R$ 2.000,00', 'R$ 0,00', '—', '—', 'ativo0/1', ''],
-      ['PARC', 'Trator· AGR', 'Atualizar', 'Concessionaria', '01/02/24', 'R$ 3.000,00', 'R$ 0,00', '—', '—', 'ativo0/3', ''],
-      ['PARC', 'Recuperação de Solo· AGR', 'PR-78.192', 'BRDE', '10/03/24', 'R$ 1.000,00', 'R$ 0,00', '—', '—', 'ativo0/7', ''],
+      ['05/01/24', 'Armazem· PEC', 'BRDE', 'R$ 2.000,00', 'R$ 0,00', '—', '—', 'ativo', '0/1'],
+      ['01/02/24', 'Trator· AGR', 'Concessionaria', 'R$ 3.000,00', 'R$ 0,00', '—', '—', 'ativo', '0/3'],
+      ['10/03/24', 'Recuperação de Solo· AGR', 'BRDE', 'R$ 1.000,00', 'R$ 0,00', '—', '—', 'ativo', '0/7'],
     ]);
     expect(screen.queryByText('Custeio BB')).toBeNull();
+  });
+
+  it('cards: Total das compras · Já pago · A pagar · Vencidas (sem Principal e sem Juros); A pagar com cara de link', async () => {
+    montar();
+    await screen.findAllByTestId('cel-data');
+    const cards = screen.getByTestId('cards-compras');
+    expect(Array.from(cards.children).map((c) => c.firstElementChild?.textContent)).toEqual(['Total das compras', 'Já pago', 'A pagar', 'Vencidas']);
+    expect(cards.textContent).not.toMatch(/Juros|Principal/);
+    // sem leitura do lote no teste: pago 0 e em aberto 0, então A pagar (6.000,00) difere das parcelas em aberto e o card AVISA
+    expect(screen.getByTestId('card-A pagar').getAttribute('title')).toContain('diferença');
+    expect(screen.getByTestId('a-pagar-diverge')).toBeTruthy();
+    expect(screen.getByTestId('card-A pagar').querySelector('button')?.className).toContain('underline');
   });
 
   it('a aba Financiamentos (a que abre) traz o financiamento, e o filtro de busca vale nela', async () => {

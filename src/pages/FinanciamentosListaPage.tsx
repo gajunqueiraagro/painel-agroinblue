@@ -1,4 +1,4 @@
-import { ArrowLeft, Plus, Eye, ChevronsUpDown, ChevronUp, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Plus, ChevronsUpDown, ChevronUp, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '@/components/ui/table';
@@ -13,7 +13,7 @@ import { format } from 'date-fns';
 import { ObrigacaoDialog } from '@/components/financiamentos/ObrigacaoDialog';
 import { lerSituacaoEmLoteDoBanco } from '@/hooks/useSituacaoDoContrato';
 import { inscreverEmLancamentos } from '@/hooks/useFinanceiroV2';
-import { resumoDoContratoNaLista, totaisDaLista } from '@/lib/financiamentos/situacaoEmLote';
+import { resumoDoContratoNaLista, totaisDasCompras } from '@/lib/financiamentos/situacaoEmLote';
 import { hojeLocal } from '@/lib/datas/hojeLocal';
 import { Segmentado } from '@/components/ui/segmentado';
 import {
@@ -60,6 +60,9 @@ interface FinanciamentoRow {
   total_pendente: number;
   /** PR-PARC-03 — a metade "juros" de `total_pendente`, para o total do topo. */
   juros_pendente: number;
+  /** FIN-FINANC-28-P3-FIX2 — o já pago e o vencido em aberto, dos cartões do dono (os cards de "Compras parceladas") */
+  pago: number;
+  vencido: number;
   /** FIN-FINANC-28-P3 — a mesma linha na forma da aba "Financiamentos" (o saldo vem do lote, chave `saldo`). */
   paraLista: ContratoDaLista;
 }
@@ -214,6 +217,18 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
       if (e3) throw e3;
       const nomeDaLinha = new Map<string, string>();
       for (const l of linhas ?? []) nomeDaLinha.set(l.id, l.programa || l.descricao || 'Linha de crédito');
+      // 4) FIN-FINANC-28-P3-FIX — a data da 1ª liberação VIVA de cada contrato (a coluna Data; sem liberação, a do contrato)
+      const { data: libs, error: e4 } = await supabase
+        .from('financiamento_liberacoes')
+        .select('financiamento_id, data')
+        .eq('cliente_id', clienteId!)
+        .is('cancelado_em', null);
+      if (e4) throw e4;
+      const primeiraLib = new Map<string, string>();
+      for (const l of libs ?? []) {
+        const atual = primeiraLib.get(l.financiamento_id);
+        if (!atual || l.data < atual) primeiraLib.set(l.financiamento_id, l.data);
+      }
       const numeroPorId = new Map<string, string | null>();
       for (const f of fins ?? []) numeroPorId.set(f.id, f.numero_contrato ?? null);
 
@@ -241,6 +256,8 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
           total_pendente: r.totalPendente,
           juros_pendente: r.jurosPendente,
             valor_parcela: r.valorDaProxParcela,
+          pago: r.pago,
+          vencido: r.vencido,
           paraLista: contratoDaLista({
             id: f.id,
             numeroContrato: f.numero_contrato ?? null,
@@ -252,6 +269,8 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
             sucessorNumero: f.contrato_sucessor_id ? (numeroPorId.get(f.contrato_sucessor_id) ?? null) : null,
             saldo: lote.get(f.id)?.saldo,
             proxVencimento: r.proxVencimento,
+            dataContrato: f.data_contrato ?? null,
+            primeiraLiberacao: primeiraLib.get(f.id) ?? null,
           }),
         };
       });
@@ -351,13 +370,8 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
      principal em aberto é derivado por SUBTRAÇÃO da mesma base
      (`total_pendente - juros_pendente`), não por uma terceira varredura: assim
      não há como os quatro divergirem entre si. */
-  const totais = useMemo(() => ({
-    financiado: filtered.reduce((s, f) => s + f.valor_total, 0),
-    /* em centavos, no dono puro (`totaisDaLista`) — a tela não soma o que vem do contrato */
-    principalAberto: totaisDaLista(filtered).principalAberto,
-    juros: totaisDaLista(filtered).jurosAVencer,
-    aPagar: totaisDaLista(filtered).aPagar,
-  }), [filtered]);
+  /* FIN-FINANC-28-P3-FIX2 — os cards da compra parcelada, em centavos, no dono puro (`totaisDasCompras`), das MESMAS linhas */
+  const totais = useMemo(() => totaisDasCompras(filtered), [filtered]);
 
   /* FIN-FINANC-28-P3 — a aba "Financiamentos": financiamento e empréstimo, sem os filtros da lista antiga (a lista nova agrupa,
      soma e recolhe os encerrados sozinha). */
@@ -368,6 +382,12 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
         && passaNosFiltros(f, filtroSituacaoFin))
       .map(f => f.paraLista),
     [financiamentos, filtroNatureza, passaNosFiltros, filtroSituacaoFin]);
+
+  /* FIN-FINANC-28-P3-FIX2 — a coluna Banco só aparece quando há linha de crédito (grupo que não é banco): decidido sobre TODOS
+     os financiamentos, nunca sobre o recorte do filtro (filtrar não muda coluna). */
+  const mostrarBanco = useMemo(
+    () => financiamentos.some(f => !ehCompraParcelada(f.natureza) && !!f.paraLista.linhaCreditoId),
+    [financiamentos]);
 
   const hasExtraFilters = !!(filtroDescricao || filtroContrato || filtroCredor !== 'todos' ||
     filtroDataContratoDe || filtroDataContratoAte || filtroVencDe || filtroVencAte);
@@ -614,22 +634,36 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
             o trabalho que o tamanho fazia — "A pagar" é a única com fundo, porque é a
             resposta do subtítulo. */}
         {aba === 'parcelas' && (
-        <div className="grid grid-cols-4 gap-2">
-          {([
-            { rotulo: 'Total financiado',    valor: totais.financiado,     borda: 'border-l-muted-foreground/40', fundo: '' },
-            { rotulo: 'Principal em aberto', valor: totais.principalAberto, borda: 'border-l-primary',             fundo: '' },
-            { rotulo: 'Juros a pagar',       valor: totais.juros,           borda: 'border-l-amber-500',           fundo: '' },
-            { rotulo: 'A pagar',             valor: totais.aPagar,          borda: 'border-l-primary',             fundo: 'bg-primary/5' },
-          ] as const).map(c => (
-            <div key={c.rotulo}
-              /* ⚠ 42px, E NAO 38: o conteudo sempre foi 43px — rotulo 10px/leading-none (13
-                 com o `mt-0.5`), valor 14px/leading-tight (18) e `py-1.5` (12). Em 38px o
-                 valor era CORTADO por baixo, e como a caixa nao tem `overflow-hidden` o
-                 corte aparecia como numero encostado na borda. */
+        /* FIN-FINANC-28-P3-FIX2 — Total das compras · Já pago · A pagar · Vencidas (sem Principal e sem Juros: a compra
+           parcelada não tem juros). "A pagar" = Total − Já pago; quando difere da soma das parcelas em aberto o card AVISA
+           (ponto âmbar + a conta no `title`), nunca ajusta. "Vencidas" só fica vermelho com valor. */
+        <div className="grid grid-cols-4 gap-2" data-testid="cards-compras">
+          {[
+            { rotulo: 'Total das compras', valor: totais.total, borda: 'border-l-muted-foreground/40', tom: '', titulo: 'soma do valor das compras' },
+            { rotulo: 'Já pago', valor: totais.pago, borda: 'border-l-emerald-500', tom: 'text-[#15803d]', titulo: 'parcelas com lançamento pago' },
+            { rotulo: 'A pagar', valor: totais.aPagar, borda: 'border-l-primary', tom: '', link: true,
+              titulo: totais.diferenca !== 0
+                ? `Total − Já pago = ${fmt(totais.aPagar)} · parcelas em aberto = ${fmt(totais.emAberto)} · diferença ${fmt(totais.diferenca)}`
+                : 'Total − Já pago (= a soma das parcelas em aberto)' },
+            { rotulo: 'Vencidas', valor: totais.vencidas, borda: totais.vencidas > 0 ? 'border-l-destructive' : 'border-l-muted-foreground/40',
+              tom: totais.vencidas > 0 ? 'text-[#b91c1c]' : '', titulo: 'parcelas em aberto com vencimento antes de hoje' },
+          ].map(c => (
+            <div key={c.rotulo} title={c.titulo} data-testid={`card-${c.rotulo}`}
               /* FIN-LISTA-COMPACTA-01 — 40px com `py-1`: 8 + 13 (rotulo) + 18 (valor) = 39, o numero nao encosta. */
-              className={`h-[40px] rounded-md border border-l-[3px] px-3 py-1 ${c.borda} ${c.fundo}`}>
-              <div className="text-[10px] leading-none text-muted-foreground truncate">{c.rotulo}</div>
-              <div className="mt-0.5 text-[14px] font-semibold tabular-nums leading-tight truncate">{fmt(c.valor)}</div>
+              className={`h-[40px] rounded-md border border-l-[3px] px-3 py-1 ${c.borda}`}>
+              <div className="flex items-center gap-1 text-[10px] leading-none text-muted-foreground">
+                <span className="truncate">{c.rotulo}</span>
+                {c.link && totais.diferenca !== 0 && <span className="size-1.5 shrink-0 rounded-full bg-amber-500" data-testid="a-pagar-diverge" aria-hidden />}
+              </div>
+              {c.link ? (
+                /* TODO "FIN-28 cronograma": o clique abre o gráfico do cronograma no próximo passo; hoje não faz nada */
+                <button type="button" onClick={() => { /* TODO FIN-28 cronograma */ }}
+                  className={`mt-0.5 block text-[14px] font-semibold tabular-nums leading-tight underline decoration-dotted underline-offset-2 ${c.tom}`}>
+                  {fmt(c.valor)}
+                </button>
+              ) : (
+                <div className={`mt-0.5 text-[14px] font-semibold tabular-nums leading-tight truncate ${c.tom}`}>{fmt(c.valor)}</div>
+              )}
             </div>
           ))}
         </div>
@@ -651,7 +685,8 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
           isLoading
             ? <p className="text-sm text-muted-foreground p-4">Carregando…</p>
             : <ListaDeFinanciamentos contratos={contratosFinanciamento} encerradosAbertos={encerradosAbertos}
-                aoAlternarEncerrados={() => setEncerradosAbertos(v => !v)} aoAbrir={abrirContrato} filtros={filtros} />
+                aoAlternarEncerrados={() => setEncerradosAbertos(v => !v)} aoAbrir={abrirContrato} filtros={filtros}
+                mostrarBanco={mostrarBanco} />
         ) : (
         <div className="flex h-full min-h-0 flex-col rounded-lg border border-border bg-card px-3 pt-2 pb-0 shadow-[0_1px_3px_0_rgb(0_0_0/0.04)]">
         {filtros}
@@ -697,88 +732,51 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
               /* o primitivo põe `font-medium` (500) em toda célula; em Lançamentos o texto é 400 e só o valor é 600 */
               className={`${TABELA_LANC} table-fixed [&_td:not(.celula-valor)]:font-normal`}
               /* FIN-LISTA-COMPACTA-01 — piso de largura, abaixo do qual a TABELA rola dentro do card (a pagina nunca).
-                 FIN-FINANC-28-P3: as fixas (804) + 66 para a Descricao = 870, abaixo dos 892 uteis a 1.126 — sem rolagem ali. */
-              style={{ minWidth: 870 }}
+                 FIN-FINANC-28-P3-FIX2: as fixas (568) + 66 para Descricao e Credor cada = 700, bem abaixo dos 892 uteis a 1.126. */
+              style={{ minWidth: 700 }}
               wrapperClassName="h-full overflow-x-auto overflow-y-auto"
             >
-              {/* ⚠ O COLGROUP EM PORCENTAGEM SAIU (FIN-LISTA-COMPACTA-01): com a pagina sem trava de largura, porcentagem
-                  daria ao numero do contrato e aos valores mais ou menos espaco conforme a janela. `table-fixed` segue
-                  com a Descricao absorvendo o resto; as colunas em px somam 786. */}
-              {/* FIN-LISTA-COMPACTA-01 — LARGURAS EM px nas colunas de tamanho conhecido e SO' a Descricao estica (a
-                  `col` sem largura fica com o resto e corta com reticencia; o texto inteiro vai no `title`). Medidas no
-                  Chromium com a Inter sobre os 56 contratos ativos do NJ (pior texto + padding de 16):
-                  Tipo 52 ("PARC" pede 51) · No contrato 116 ("Energia Solar Faz." deixa 2px) · Credor 92 (corta com
-                  `title`, como antes) · Contratado 66 · Principal 98 · Saldo devedor 104 ("R$ 16.380.000,00" pede 103) ·
-                  Parcela 98 · Proxima 66 (data pede 64) · Status + fracao 72 · olho 22 = 786. */}
-              {/* FIN-FINANC-28-P3 — REMEDIDA com a régua de Lançamentos (cabeçalho 8px maiúsculo, célula 9px, selo do status) no
-                  Chromium a 1.126 (892px úteis no card): Nº 124 (o maior nº real, "C_102.022.070.010200", pede 121,2) · Credor 84
-                  (corta, como antes) · Contratado 80 (o cabeçalho com a seta pede 77,7) · Principal, Saldo e Parcela 98
-                  ("R$ 99.999.999,99" pede 95,7) · Próxima 60 (cabeçalho 58,5) · Status 88 (o selo "ativo" + "119/120" pede 87) =
-                  804; a Descrição fica com o resto (88 a 1.126). */}
+              {/* FIN-FINANC-28-P3-FIX2 (Gabriel, 17/10) — a ordem da casa, data primeiro: Data · Descrição · Credor · Valor da compra ·
+                  A pagar · Parcela · Próxima · Situação · Pagas. Saíram a pílula de Tipo (a aba só tem parcelamentos) e o Nº contrato
+                  (só nesta aba; a de Financiamentos mantém). Descrição e Credor ficam SEM largura e dividem o que sobra (cortam com o
+                  inteiro no `title`); as fixas, medidas no Chromium com a régua de Lançamentos, somam 568. */}
               <colgroup>
-                <col style={{ width: 52 }} />
+                <col style={{ width: 62 }} data-testid="col-data" />
                 <col />
-                <col style={{ width: 124 }} data-testid="col-numero-contrato" />
-                <col style={{ width: 84 }} />
-                <col style={{ width: 80 }} />
+                <col />
+                <col style={{ width: 110 }} />
                 <col style={{ width: 98 }} />
                 <col style={{ width: 98 }} />
-                <col style={{ width: 98 }} />
+                <col style={{ width: 68 }} />
+                <col style={{ width: 72 }} />
                 <col style={{ width: 60 }} />
-                <col style={{ width: 88 }} />
-                <col style={{ width: 22 }} />
               </colgroup>
-              {/* ⚠ A BORDA MORA NO `thead`, NÃO NA LINHA — item 3. Na linha, ela
-                  é filha do que rola e some por um instante a cada quadro do
-                  scroll; no `thead` sticky ela viaja junto e o cabeçalho fica
-                  sempre fechado por baixo. Daí o `[&_tr]:border-b-0`, que desliga
-                  a borda que o primitivo põe na linha do cabeçalho.
-                  ⚠ `bg-card` OPACO, não `bg-muted/95 backdrop-blur`: dentro do
-                  card o fundo tem de ser o MESMO do card, ou aparece um degrau de
-                  cor; e translúcido deixa a linha passar por baixo do número que
-                  se está conferindo. */}
-              {/* ⚠ CABECALHO AZUL (PR-PARC-05d item 3). O `border-b` SAIU: com fundo cheio,
-                  a regua vira segunda linha rente ao azul. Override LOCAL — o primitivo
-                  dense continua entregando o cabecalho claro para as outras 39 tabelas;
-                  se o azul vingar, vira A25 no dense, por decisao do Gabriel. */}
               <TableHeader className="sticky top-0 z-10 bg-primary text-primary-foreground [&_tr]:border-b-0 [&_tr]:hover:bg-primary">
                 <TableRow>
-                  {/* ⚠ 3e — ORDENA POR `natureza`, e a chave antiga era LETRA MORTA:
-                      `sortCol` era 'tipo', campo que nunca existiu na linha (a
-                      coluna é `tipo_financiamento`), então `a['tipo']` e
-                      `b['tipo']` eram ambos `undefined` e clicar no cabeçalho não
-                      reordenava nada. Agora a chave é a do dado exibido. */}
-                  <CabecalhoOrdenavel rotulo="Tipo" ativo={sortCol === 'natureza'}
-                    direcao={sortDir} aoOrdenar={() => handleSort('natureza')} />
+                  <CabecalhoOrdenavel rotulo="Data" ativo={sortCol === 'data_contrato'}
+                    direcao={sortDir} aoOrdenar={() => handleSort('data_contrato')} />
                   <CabecalhoOrdenavel rotulo="Descrição" ativo={sortCol === 'descricao'}
                     direcao={sortDir} aoOrdenar={() => handleSort('descricao')} />
-                  <CabecalhoOrdenavel rotulo="Nº contrato" ativo={sortCol === 'numero_contrato'}
-                    direcao={sortDir} aoOrdenar={() => handleSort('numero_contrato')} />
                   <CabecalhoOrdenavel rotulo="Credor" ativo={sortCol === 'credor_nome'}
                     direcao={sortDir} aoOrdenar={() => handleSort('credor_nome')} />
-                  {/* PR-PARC-05d item 4 — a data que responde "de quando e' esse contrato".
-                      A coluna JA' vinha na query e no tipo; so' nunca foi exibida. */}
-                  <CabecalhoOrdenavel rotulo="Contratado" ativo={sortCol === 'data_contrato'}
-                    direcao={sortDir} aoOrdenar={() => handleSort('data_contrato')} />
-                  <CabecalhoOrdenavel rotulo="Principal" ativo={sortCol === 'valor_total'}
+                  <CabecalhoOrdenavel rotulo="Valor da compra" ativo={sortCol === 'valor_total'}
                     direcao={sortDir} aoOrdenar={() => handleSort('valor_total')} direita />
-                  <CabecalhoOrdenavel rotulo="Saldo devedor" ativo={sortCol === 'total_pendente'}
+                  <CabecalhoOrdenavel rotulo="A pagar" ativo={sortCol === 'total_pendente'}
                     direcao={sortDir} aoOrdenar={() => handleSort('total_pendente')} direita />
                   <CabecalhoOrdenavel rotulo="Parcela" ativo={sortCol === 'valor_parcela'}
                     direcao={sortDir} aoOrdenar={() => handleSort('valor_parcela')} direita />
                   <CabecalhoOrdenavel rotulo="Próxima" ativo={sortCol === 'prox_vencimento'}
                     direcao={sortDir} aoOrdenar={() => handleSort('prox_vencimento')} />
-                  <CabecalhoOrdenavel rotulo="Status" ativo={sortCol === 'status'}
+                  <CabecalhoOrdenavel rotulo="Situação" ativo={sortCol === 'status'}
                     direcao={sortDir} aoOrdenar={() => handleSort('status')} />
-                  <TableHead />
+                  <CabecalhoOrdenavel rotulo="Pagas" ativo={sortCol === 'parcelas'}
+                    direcao={sortDir} aoOrdenar={() => handleSort('parcelas')} direita />
                 </TableRow>
               </TableHeader>
             <TableBody>
                 {dadosOrdenados.map(f => {
                   const encerrado = f.status !== 'ativo';
-                  /* ⚠ A LINHA INTEIRA ABRE O CONTRATO. O olho continua porque e' a
-                     affordance VISIVEL — quem nao sabe que a linha e' clicavel precisa
-                     de um alvo que se anuncie; quem ja sabe nao mira mais em 20px. */
+                  /* a LINHA INTEIRA abre o contrato (o olho saiu com a coluna própria: a linha clicável é a regra da casa) */
                   return (
                   <TableRow
                     key={f.id}
@@ -788,43 +786,17 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
                     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); abrirContrato(f.id); } }}
                     className={`${LINHA_LANC} cursor-pointer hover:bg-muted/40 ${encerrado ? 'opacity-50' : ''}`}
                   >
-                    {/* ⚠ PÍLULA DE NATUREZA — PR-PARC-02 item 3b. A forma é a da
-                        referência (`border`, 9px bold, `rounded`); o eixo deixou
-                        de ser pecuária x agricultura e passou a ser o que o
-                        contrato É. As cores FIN/PARC são as medidas no Finanças;
-                        EMP não existe lá e o âmbar é proposta deste PR. */}
-                    <TableCell>
-                      <span className={`inline-flex items-center rounded border px-1 py-0 text-[9px] font-bold leading-tight ${PILULA_NATUREZA[f.natureza]?.classe ?? PILULA_NATUREZA.financiamento.classe}`}>
-                        {PILULA_NATUREZA[f.natureza]?.sigla ?? PILULA_NATUREZA.financiamento.sigla}
-                      </span>
-                    </TableCell>
-                    {/* A descrição é o caminho para o detalhe, como na referência.
-                        ⚠ 3c — O ESCOPO NÃO SOME COM A PÍLULA: ele vem aqui, como
-                        sufixo de 10px. O `title` carrega a linha inteira porque
-                        a coluna trunca mesmo depois do alargamento (22% ≈ 225px)
-                        e o sufixo é o primeiro pedaço a ser cortado — sem isso, o
-                        escopo ficaria ilegível nas descrições mais longas. */}
-                    {/* FIN-LISTA-COMPACTA-01 — o numero do contrato SAIU daqui para a coluna propria; o escopo fica. */}
-                    <TableCell className="truncate" data-testid="cel-descricao"
-                      title={`${f.descricao} · ${escopoSigla(f.tipo_financiamento)}`}>
-                      <span className="font-medium leading-tight">{f.descricao}</span>
-                      <span className="ml-1 text-[10px] text-muted-foreground">· {escopoSigla(f.tipo_financiamento)}</span>
-                    </TableCell>
-                    {/* FIN-LISTA-COMPACTA-01 — No contrato sempre visivel, uma linha, como esta' gravado (vazio fica vazio). */}
-                    <TableCell className="whitespace-nowrap text-[9px] text-zinc-600" data-testid="cel-numero-contrato"
-                      title={f.numero_contrato ?? undefined}>
-                      {f.numero_contrato}
-                    </TableCell>
-                    <TableCell className="truncate" title={f.credor_nome}>{f.credor_nome}</TableCell>
-                    <TableCell className={TD_DATA_LANC}>
+                    <TableCell className={TD_DATA_LANC} data-testid="cel-data">
                       {f.data_contrato ? format(new Date(f.data_contrato + 'T12:00:00'), 'dd/MM/yy') : '—'}
                     </TableCell>
+                    <TableCell className="truncate" data-testid="cel-descricao"
+                      title={[f.descricao, escopoSigla(f.tipo_financiamento), f.numero_contrato ? `nº ${f.numero_contrato}` : null].filter(Boolean).join(' · ')}>
+                      <span className="font-medium leading-tight">{f.descricao}</span>
+                      <span className="ml-1 text-muted-foreground">· {escopoSigla(f.tipo_financiamento)}</span>
+                    </TableCell>
+                    <TableCell className="truncate" title={f.credor_nome}>{f.credor_nome}</TableCell>
                     <TableCell className={MOEDA}>{fmt(f.valor_total)}</TableCell>
-                    {/* ⚠ O NÚMERO QUE JUSTIFICA A TELA — e ele já existia: o
-                        `total_pendente` era calculado no fetch e nunca exibido.
-                        Foi por não estar na lista que os financiamentos do NJ
-                        custaram uma semana de arqueologia. */}
-                    <TableCell className={`${MOEDA} font-semibold`}>{fmt(f.total_pendente)}</TableCell>
+                    <TableCell className={MOEDA}>{fmt(f.total_pendente)}</TableCell>
                     <TableCell className={MOEDA}>
                       {f.valor_parcela != null ? fmt(f.valor_parcela) : '—'}
                     </TableCell>
@@ -833,34 +805,13 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
                         ? format(new Date(f.prox_vencimento + 'T12:00:00'), 'dd/MM/yy')
                         : '—'}
                     </TableCell>
-                    {/* FIN-LISTA-COMPACTA-01 — sem `truncate`: a fracao de pagas fica inteira ao lado do status. */}
                     <TableCell className="celula-status whitespace-nowrap" data-testid="cel-status">
                       <SeloDoContrato status={f.status} />
-                      <span className="ml-1 text-[10px] text-muted-foreground">
-                        {f.parcelas_pagas}/{f.total_parcelas}
-                      </span>
                     </TableCell>
-                    {/* ⚠ `select-none` SO' AQUI. Arrastar sobre a descricao continua
-                        selecionando texto — e' dado que se copia; o que nao pode e' o
-                        clique na coluna de acoes virar selecao. */}
-                    <TableCell className="px-0 text-right select-none">
-                    {/* ⚠ ERA ESTE O CULPADO DOS 26,5px. `h-6` sao 24px dentro de uma
-                        linha de 21px: a celula tem `py-0`, entao quem manda na altura e'
-                        o filho mais alto, e o botao esticava TODAS as linhas da tabela.
-                        `size="icon"` traz `h-8 w-8` — o `p-0` impede que o padding do
-                        variante volte a empurrar. */}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-5 w-5 p-0"
-                      title="Abrir"
-                      aria-label="Abrir"
-                      onClick={e => { e.stopPropagation(); abrirContrato(f.id); }}
-                    >
-                      <Eye className="size-3.5" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
+                    <TableCell className="whitespace-nowrap text-right tabular-nums" data-testid="cel-pagas">
+                      {f.parcelas_pagas}/{f.total_parcelas}
+                    </TableCell>
+                  </TableRow>
                   );
                 })}
             </TableBody>
@@ -926,7 +877,7 @@ function CabecalhoOrdenavel({ rotulo, ativo, direcao, aoOrdenar, direita }: {
          e lê-se pior. O override é DESTA TELA — mudar o dense trocaria o cabeçalho
          de todas as tabelas densas do sistema, e isso é decisão sua, não deste PR.
          O 9px/600 do primitivo continua valendo. */
-      className={`cursor-pointer select-none ${TH_LANC} ${direita ? 'text-right' : ''}`}
+      className={`cursor-pointer select-none whitespace-nowrap ${TH_LANC} px-2 ${direita ? 'text-right' : ''}`}
       onClick={aoOrdenar}
       aria-sort={ativo ? (direcao === 'asc' ? 'ascending' : 'descending') : 'none'}
     >

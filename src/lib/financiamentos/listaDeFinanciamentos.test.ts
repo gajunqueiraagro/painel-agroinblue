@@ -3,7 +3,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-  contratoDaLista, ehCompraParcelada, montarListaDeFinanciamentos, ordenarContratos, temNumero, textoDasPendencias,
+  contratoDaLista, ehCompraParcelada, montarListaDeFinanciamentos, ordenarContratos, pendenciaCurta, somaConhecida, temNumero, textoDasPendencias,
   type ContratoDaLista,
 } from './listaDeFinanciamentos';
 import { lerSituacaoDoContrato, type SaldoDoContrato } from './situacaoDoContrato';
@@ -14,7 +14,7 @@ const saldo = (p: Partial<SaldoDoContrato> = {}): SaldoDoContrato => ({
 });
 const c = (id: string, p: Partial<ContratoDaLista> = {}): ContratoDaLista => ({
   id, numeroContrato: `C-${id}1`, banco: 'Banco A', descricao: `Contrato ${id}`, status: 'ativo', linhaCreditoId: null,
-  linhaCreditoNome: null, sucessorNumero: null, saldo: saldo(), proxVencimento: '2026-11-10', ...p,
+  linhaCreditoNome: null, sucessorNumero: null, saldo: saldo(), proxVencimento: '2026-11-10', data: '2025-01-10', dataOrigem: 'contrato', ...p,
 });
 
 describe('montarListaDeFinanciamentos', () => {
@@ -23,16 +23,19 @@ describe('montarListaDeFinanciamentos', () => {
       c('a', { saldo: saldo({ contratado: 1000, liberado: 1000, saldo: 800 }) }),
       c('b', { saldo: saldo({ contratado: 500, liberado: null, saldo: null, pendencias: ['sem_liberacao'] }) }),
     ]);
-    expect(lista.total.saldo).toEqual({ valor: 800, aConfirmar: 1 });
-    expect(lista.total.liberado).toEqual({ valor: 1000, aConfirmar: 1 });
-    expect(lista.total.contratado).toEqual({ valor: 1500, aConfirmar: 0 });
-    expect(lista.grupos[0].saldo).toEqual({ valor: 800, aConfirmar: 1 });
+    expect(lista.total.saldo).toEqual({ valor: 800, aConfirmar: 1, conhecidos: 1 });
+    expect(lista.total.liberado).toEqual({ valor: 1000, aConfirmar: 1, conhecidos: 1 });
+    expect(lista.total.contratado).toEqual({ valor: 1500, aConfirmar: 0, conhecidos: 2 });
+    expect(lista.grupos[0].saldo).toEqual({ valor: 800, aConfirmar: 1, conhecidos: 1 });
   });
 
   it('sem a chave `saldo` no lote o contrato inteiro é "?" (nunca zero)', () => {
     const lista = montarListaDeFinanciamentos([c('a', { saldo: null })]);
-    expect(lista.total.contratado).toEqual({ valor: 0, aConfirmar: 1 });
-    expect(lista.total.saldo).toEqual({ valor: 0, aConfirmar: 1 });
+    expect(lista.total.contratado).toEqual({ valor: 0, aConfirmar: 1, conhecidos: 0 });
+    expect(lista.total.saldo).toEqual({ valor: 0, aConfirmar: 1, conhecidos: 0 });
+    // nenhum conhecido: a soma não existe (a tela diz "?", nunca 0,00)
+    expect(somaConhecida(lista.total.saldo)).toBe(false);
+    expect(somaConhecida({ valor: 0, aConfirmar: 0, conhecidos: 0 })).toBe(true);
   });
 
   it('agrupa por linha de crédito quando há; o resto por banco; linhas antes de bancos', () => {
@@ -88,6 +91,10 @@ describe('pendências, nº do contrato, ordem', () => {
     expect(textoDasPendencias(['sem_liberacao', 'amortizacao_sem_lancamento', 'liberado_maior_que_contratado',
       'amortizado_maior_que_liberado', 'sem_numero_contrato'])).toBe(
       'liberação não gravada · amortização sem lançamento · liberado maior que o contratado · amortizado maior que o liberado · falta nº do contrato');
+    // a coluna estreita: a 1ª curta + "+N" (FIN-FINANC-28-P3-FIX2)
+    expect(pendenciaCurta(['sem_liberacao', 'sem_numero_contrato'])).toBe('sem lib. +1');
+    expect(pendenciaCurta(['sem_numero_contrato'])).toBe('sem nº');
+    expect(pendenciaCurta([])).toBe('');
     expect(textoDasPendencias(['codigo_novo'])).toBe('codigo_novo');
     expect(textoDasPendencias([])).toBe('');
   });
@@ -120,9 +127,13 @@ describe('abas e leitura', () => {
     const s = saldo();
     expect(contratoDaLista({
       id: 'f', numeroContrato: null, banco: 'B', descricao: null, status: 'ativo', linhaCreditoId: null, linhaCreditoNome: null,
-      sucessorNumero: null, saldo: s, proxVencimento: undefined,
+      sucessorNumero: null, saldo: s, proxVencimento: undefined, dataContrato: '2025-03-01', primeiraLiberacao: null,
     })).toEqual({ id: 'f', numeroContrato: null, banco: 'B', descricao: '', status: 'ativo', linhaCreditoId: null,
-      linhaCreditoNome: null, sucessorNumero: null, saldo: s, proxVencimento: null });
+      linhaCreditoNome: null, sucessorNumero: null, saldo: s, proxVencimento: null, data: '2025-03-01', dataOrigem: 'contrato' });
+    // com liberação gravada, a data é a da 1ª liberação
+    expect(contratoDaLista({ id: 'g', numeroContrato: null, banco: null, descricao: 'x', status: 'ativo', linhaCreditoId: null,
+      linhaCreditoNome: null, sucessorNumero: null, saldo: s, proxVencimento: null, dataContrato: '2025-03-01',
+      primeiraLiberacao: '2025-04-15' })).toMatchObject({ data: '2025-04-15', dataOrigem: 'liberacao' });
   });
 
   it('o leitor da situação traz a chave `saldo` (NULO quando falta liberação) e recusa a peça torta', () => {
@@ -138,5 +149,14 @@ describe('abas e leitura', () => {
     expect(comSaldo?.saldo?.pendencias).toEqual(['sem_liberacao']);
     expect(lerSituacaoDoContrato(base)?.saldo).toBeNull();
     expect(lerSituacaoDoContrato({ ...base, saldo: { aplica_saldo: 'sim', pendencias: [] } })).toBeNull();
+  });
+});
+
+describe('FIN-FINANC-28-P3-FIX', () => {
+  it('ordem padrão: Data crescente dentro de cada grupo (sem data no fim)', () => {
+    const lista = montarListaDeFinanciamentos([
+      c('a', { data: '2025-06-01' }), c('b', { data: '2024-02-10' }), c('c', { data: null }), c('d', { data: '2025-01-15' }),
+    ]);
+    expect(lista.grupos[0].contratos.map((x) => x.id)).toEqual(['b', 'd', 'a', 'c']);
   });
 });

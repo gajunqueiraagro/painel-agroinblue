@@ -33,6 +33,9 @@ import {
 } from '@/components/financiamentos/ObrigacaoDialog';
 import { FinanciamentoForm } from '@/hooks/useFinanciamentoCadastro';
 import { alinhamentoDoCabecalho, colunasDasParcelas, type ColunaDasParcelas } from '@/lib/financiamentos/reguaDasParcelas';
+import { TABELA_LANC, TD_DATA_LANC, TD_VALOR_LANC, LINHA_LANC, TH_LANC, SeloDoContrato } from '@/components/financiamentos/ListaDeFinanciamentos';
+import { GradeChaveValor } from '@/components/shared/GradeChaveValor';
+import { nomeCurtoDoCredor } from '@/lib/fornecedores/nomeCurtoDoCredor';
 
 const fmt = (v: number) =>
   v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -45,19 +48,21 @@ const fmtDate = (d: string | null) =>
 const num2 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const COR_DO_PRAZO: Record<'verde' | 'vermelho' | 'cinza', string> = { verde: 'text-[#15803d]', vermelho: 'text-[#b91c1c]', cinza: 'text-muted-foreground' };
-const LINHA_DE_DADOS = 'flex h-[18px] min-w-0 items-baseline gap-x-5';
 const MOTIVO_DOCUMENTOS_SO_NO_PARCELAMENTO = 'Documentos no contrato: só em parcelamento. No financiamento com juros a nota e o boleto ficam no lançamento.';
 
 /* Número em tabela: a FONTE DO PROJETO com dígitos de largura fixa (PARC-CONTRATO-01: a mono destoava do resto do sistema). */
 const NUM = 'tabular-nums whitespace-nowrap';
-const MOEDA = 'text-right tabular-nums whitespace-nowrap text-[10px]';
+/* FIN-FINANC-28-P3-FIX — a tabela de Parcelas usa a RÉGUA DE LANÇAMENTOS (as classes de `ListaDeFinanciamentos.tsx`, que são as de
+   `FinanceiroV2Tab.tsx`): valor `celula-valor` 9px/600, data `celula-data` mono 8px, selo `celula-status`, linha de 25px,
+   cabeçalho 8px/600. */
+const MOEDA = TD_VALOR_LANC;
 /* PARC-FECHA-02 item 5 — o Total é o RODAPÉ PADRÃO DA CASA (o `TF` de `ParcelasDaCompra`): fundo #E8E6DF, negrito, 2px em cima.
    ⚠ O filete de 2px é SOMBRA INTERNA da célula, não borda: o `tfoot` é `sticky` e borda de célula em tabela colapsada fica
    para trás quando a lista rola. A sombra anda com a célula e não ocupa espaço (a linha segue com 19px). */
 const TOTAL = 'bg-[#E8E6DF] text-[10px] font-bold shadow-[inset_0_2px_0_#9aa7b6]';
 /* linha da parcela: 19px (o padrão de tabela, A31). Nada dentro dela passa de 16px — o filho mais alto manda na altura. */
 /* ⚠ a entrelinha vai ESCRITA: a celula herdava 20px e, sozinha, levava a linha a 20,5–21px (medido). 18 + 1 de borda = 19. */
-const LINHA = 'h-[19px] [&>td]:leading-[18px]';
+const LINHA = LINHA_LANC;
 
 /* ================================================================ */
 
@@ -142,6 +147,18 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
   /* PARC-CONTRATO-01: com `detalhe` o MESMO dono devolve também competência, conta, PRAZO, documentos e as contagens — a tela
      não calcula nenhum deles. */
   const { data: situacao } = useSituacaoDoContrato(id, clienteId, hj, { detalhe: true });
+
+  /* FIN-FINANC-28-P3-FIX2 — a "Data de liberação" do cabeçalho: a 1ª liberação VIVA do contrato (sem liberação: "—") */
+  const { data: primeiraLiberacao } = useQuery({
+    queryKey: ['financiamento-primeira-liberacao', id],
+    enabled: !!id && !!clienteId,
+    queryFn: async () => {
+      const { data, error } = await supabase.from('financiamento_liberacoes').select('data')
+        .eq('financiamento_id', id!).is('cancelado_em', null).order('data', { ascending: true }).limit(1);
+      if (error) throw error;
+      return data?.[0]?.data ?? null;
+    },
+  });
   const cartoes = situacao?.cartoes ?? null;
   const contagens = cartoes?.detalhe ?? null;
   const linhas = situacao?.parcelas ?? [];
@@ -541,35 +558,30 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
           </div>
         </div>
 
-        {/* ═══ b — DADOS, em DUAS linhas (rótulo cinza + valor em negrito, 10,5px). A terceira só existe com Nº contrato, Entrada
-            ou Observação preenchidos (e, no crédito, leva os dois destinos contábeis).
-            ⚠ CADA LINHA É INDEPENDENTE (flex), NÃO UMA GRADE DE COLUNAS: medido no NJ, com colunas alinhadas o credor longo de uma
-              linha e a classificação longa da outra pediam 912px dos 810 e os dois cortavam; soltas, cada linha usa a largura
-              que ELA precisa. Número e data nunca encolhem; o texto só corta (com o inteiro no `title`) se a linha não couber. */}
+        {/* ═══ b — DADOS: GRADE CHAVE–VALOR (FIN-FINANC-28-P3-FIX2). Rótulos e valores na MESMA grade (antes eram linhas flex
+            soltas, cada uma com a sua largura, e os rótulos de uma linha não caíam sob os da outra). 4 pares por linha a partir de
+            1.280px, 2 abaixo. Primeiro os oito do pedido; depois os que a tela já mostrava (nada some). Vazio = "—". */}
         <div className="rounded-md border px-2 py-1" data-testid="dados-do-contrato">
-          <div className={LINHA_DE_DADOS}>
-            <Dado rotulo="Descrição" valor={fin.descricao} />
-            <Dado rotulo="Credor" valor={nomeCredor} />
-            <Dado rotulo="Contrato em" valor={fmtDate(fin.data_contrato)} numero />
-            <Dado rotulo="Parcelas" valor={String(fin.total_parcelas)} numero />
-          </div>
-          <div className={LINHA_DE_DADOS}>
-            {/* no parcelamento há UM destino contábil (a despesa em N vezes); no crédito são DOIS, e vão na terceira linha */}
-            {ehParcelamento && <Dado rotulo="Classificação" valor={nomeParcela} />}
-            <Dado rotulo="Conta" valor={nomeConta} />
-            <Dado rotulo="1ª parcela" valor={fmtDate(fin.data_primeira_parcela)} numero />
-            <Dado rotulo="Safra" valor={safraDasParcelas ?? '…'} />
-            {!ehParcelamento && Number(fin.taxa_juros_mensal) > 0 && <Dado rotulo="Taxa" valor={`${Number(fin.taxa_juros_mensal).toFixed(2)}% a.m.`} numero />}
-          </div>
-          {(!ehParcelamento || fin.numero_contrato || fin.observacao || Number(fin.valor_entrada) > 0) && (
-            <div className={LINHA_DE_DADOS} data-testid="dados-terceira-linha">
-              {!ehParcelamento && <Dado rotulo="Amortização" valor={SUBCENTRO_AMORTIZACAO[escopo]} />}
-              {!ehParcelamento && <Dado rotulo="Juros" valor={SUBCENTRO_JUROS[escopo]} />}
-              {fin.numero_contrato && <Dado rotulo="Nº contrato" valor={fin.numero_contrato} numero />}
-              {Number(fin.valor_entrada) > 0 && <Dado rotulo="Entrada" valor={fmt(Number(fin.valor_entrada))} numero />}
-              {fin.observacao && <Dado rotulo="Observação" valor={fin.observacao} />}
-            </div>
-          )}
+          <GradeChaveValor itens={[
+            { rotulo: 'Descrição', valor: fin.descricao },
+            { rotulo: 'Credor', valor: nomeCredor ? nomeCurtoDoCredor(nomeCredor) : null, title: nomeCredor ?? undefined },
+            { rotulo: 'Nº contrato', valor: fin.numero_contrato },
+            { rotulo: 'Banco/conta', valor: nomeConta },
+            { rotulo: 'Data de liberação', valor: primeiraLiberacao ? fmtDate(primeiraLiberacao) : null, tipo: 'data' },
+            { rotulo: 'Valor contratado', valor: fin.valor_total != null ? fmt(Number(fin.valor_total)) : null, tipo: 'dinheiro' },
+            { rotulo: 'Situação', valor: fin.status ? <SeloDoContrato status={fin.status} /> : null, title: fin.status ?? undefined },
+            { rotulo: 'Vencimento final', valor: fin.vencimento_final ? fmtDate(fin.vencimento_final) : null, tipo: 'data' },
+            { rotulo: 'Contrato em', valor: fmtDate(fin.data_contrato), tipo: 'data' },
+            { rotulo: 'Parcelas', valor: fin.total_parcelas != null ? String(fin.total_parcelas) : null },
+            { rotulo: '1ª parcela', valor: fmtDate(fin.data_primeira_parcela), tipo: 'data' },
+            { rotulo: 'Safra', valor: safraDasParcelas ?? '…' },
+            ...(ehParcelamento
+              ? [{ rotulo: 'Classificação', valor: nomeParcela }]
+              : [{ rotulo: 'Amortização', valor: SUBCENTRO_AMORTIZACAO[escopo] }, { rotulo: 'Juros', valor: SUBCENTRO_JUROS[escopo] }]),
+            ...(!ehParcelamento && Number(fin.taxa_juros_mensal) > 0 ? [{ rotulo: 'Taxa', valor: `${Number(fin.taxa_juros_mensal).toFixed(2)}% a.m.` }] : []),
+            ...(Number(fin.valor_entrada) > 0 ? [{ rotulo: 'Entrada', valor: fmt(Number(fin.valor_entrada)), tipo: 'dinheiro' as const }] : []),
+            ...(fin.observacao ? [{ rotulo: 'Observação', valor: fin.observacao }] : []),
+          ]} />
         </div>
 
         {/* ═══ c — CARTÕES de 40px, lidos de `fn_financiamento_situacao` (valores E contagens). "Juros previstos" só no crédito. */}
@@ -611,7 +623,7 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
             </Button>
           </div>
           <div className="min-h-0 flex-1">
-            <Table density="dense" className="table-fixed" wrapperClassName="h-full overflow-x-hidden overflow-y-auto">
+            <Table density="dense" className={`${TABELA_LANC} table-fixed [&_td:not(.celula-valor)]:font-normal`} wrapperClassName="h-full overflow-x-hidden overflow-y-auto">
               {/* ⚠ A RÉGUA TEM UM DONO (`reguaDasParcelas.ts`): o `colgroup` e o cabeçalho saem da MESMA lista — largura medida no
                   pior texto e o th alinhado como o conteúdo da coluna. Só a Conta (sem largura) fica com o resto e corta. */}
               <colgroup>
@@ -634,9 +646,9 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
                     <TableRow key={p.id} className={`${LINHA} ${p.lancamentoId ? 'cursor-pointer' : ''}`} data-testid="linha-do-contrato" data-situacao={p.situacao}
                       onClick={abrir} title={p.lancamentoId ? undefined : MOTIVO_PARCELA_SEM_LANCAMENTO}>
                       <TableCell className={NUM}>{p.numero ?? '—'}{cartoes ? `/${cartoes.parcelas}` : ''}</TableCell>
-                      <TableCell className={NUM} data-testid="competencia">{fmtDate(d?.competencia ?? null)}</TableCell>
-                      <TableCell className={`${NUM} ${p.situacao === 'vencida' ? 'font-semibold text-[#b91c1c]' : ''}`}>{fmtDate(p.dataVencimento)}</TableCell>
-                      <TableCell className={NUM} data-testid="pago-em">{fmtDate(p.pagoEm)}</TableCell>
+                      <TableCell className={TD_DATA_LANC} data-testid="competencia">{fmtDate(d?.competencia ?? null)}</TableCell>
+                      <TableCell className={`${TD_DATA_LANC} ${p.situacao === 'vencida' ? '!font-semibold text-[#b91c1c]' : ''}`}>{fmtDate(p.dataVencimento)}</TableCell>
+                      <TableCell className={TD_DATA_LANC} data-testid="pago-em">{fmtDate(p.pagoEm)}</TableCell>
                       <TableCell className={`whitespace-nowrap ${d?.prazo ? COR_DO_PRAZO[TOM_DO_PRAZO[d.prazo.tipo]] : 'text-muted-foreground'}`} data-testid="prazo">
                         {textoDoPrazo(d?.prazo ?? null)}
                       </TableCell>
@@ -644,7 +656,7 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
                       {!ehParcelamento && <TableCell className={MOEDA}>{num2(p.valorPrincipal)}</TableCell>}
                       {!ehParcelamento && <TableCell className={MOEDA}>{num2(p.valorJuros)}</TableCell>}
                       <TableCell className={`${MOEDA} font-semibold`}>{num2(p.valorTotal)}</TableCell>
-                      <TableCell>
+                      <TableCell className="celula-status">
                         <span className={`inline-flex items-center whitespace-nowrap rounded px-1 py-0 text-[9px] font-normal leading-tight ${orfa ? CLASSE_SEM_LANCAMENTO : CLASSE_SITUACAO[p.situacao]}`}
                               title={orfa ? porQueSemLancamento(p) : origemDaSituacao(p)} data-testid="situacao-da-parcela" data-sem-lancamento={orfa ? 'sim' : undefined}>
                           {orfa ? ROTULO_SEM_LANCAMENTO : ROTULO_SITUACAO[p.situacao]}
@@ -810,17 +822,6 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
   );
 }
 
-/* ── Dados do contrato: rótulo cinza + valor em negrito, 10,5px, numa linha de 18px. O valor corta com o inteiro no `title`
-   (texto); número e data não cortam (`numero`). ─────────────────────────────────────────────────────────────────────── */
-function Dado({ rotulo, valor, numero }: { rotulo: string; valor?: string | null; numero?: boolean }) {
-  return (
-    <div className={`flex h-[18px] items-baseline gap-1.5 text-[10.5px] leading-[18px] ${numero ? 'shrink-0' : 'min-w-0'}`} data-testid={`dado-${rotulo}`}>
-      <span className="shrink-0 text-muted-foreground">{rotulo}</span>
-      <span className={`font-semibold text-foreground ${numero ? 'whitespace-nowrap tabular-nums' : 'min-w-0 truncate'}`} title={valor ?? undefined}>{valor || '—'}</span>
-    </div>
-  );
-}
-
 /* ── Cartão de 40px: rótulo (com a contagem de parcelas, do banco) e o valor, que nunca corta. ───────────────────────── */
 function Cartao({ rotulo, contagem, valor, borda, tom }: { rotulo: string; contagem?: number; valor: string; borda: string; tom?: string }) {
   return (
@@ -839,7 +840,9 @@ function Cartao({ rotulo, contagem, valor, borda, tom }: { rotulo: string; conta
    de todas as tabelas densas do sistema. */
 function ThDet({ coluna }: { coluna: ColunaDasParcelas }) {
   return (
-    <TableHead className={`text-primary-foreground normal-case tracking-normal ${alinhamentoDoCabecalho(coluna)}`} data-coluna={coluna.chave}>
+    /* a régua de Lançamentos (8px/600 maiúsculo) com o MESMO padding lateral da célula (px-2 do primitivo): o título do número fica
+       à direita, em cima do número */
+    <TableHead className={`${TH_LANC} px-2 tracking-[0.02em] ${alinhamentoDoCabecalho(coluna)}`} data-coluna={coluna.chave}>
       {coluna.rotulo}
     </TableHead>
   );
