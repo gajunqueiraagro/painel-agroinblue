@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 17/10/2026 (FIN-FINANC-28-P3-FIX3, +3: `src/pages/financiamentosListaCompacta.test.tsx` 3 (7 -> 10: a volta do contrato
+  Baseline em 17/10/2026 (FIN-FINANC-28-P3-FIX4, +1: `src/pages/financiamentosListaCompacta.test.tsx` 3 (10 -> 13: os filtros (a)(b)(c));
+  saiu `src/lib/fornecedores/nomeCurtoDoCredor.test.ts` 2, com o encurtador que testava — 5537 depois dele; antes o FIN-FINANC-28-P3-FIX3, +3: `src/pages/financiamentosListaCompacta.test.tsx` 3 (7 -> 10: a volta do contrato
   reabre a aba, o padrao sem nada guardado, e o filtro Credor com busca) — 5536 depois dele; antes o FIN-FINANC-28-P3-FIX2, +3: `src/lib/financiamentos/situacaoEmLote.test.ts` 1, `src/components/financiamentos/
   listaDeFinanciamentos.test.tsx` 1 (15 -> 16), `src/pages/financiamentosListaCompacta.test.tsx` 1 (6 -> 7, reescrito ao contrato novo) —
   5533 depois dele; antes o FIN-FINANC-28-P3-FIX, +7: `src/lib/fornecedores/nomeCurtoDoCredor.test.ts` 2 (novo),
@@ -360,7 +361,7 @@ no mesmo arquivo.
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
   `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5327
-  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3], 22 skipped, e
+  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4], 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -2170,7 +2171,8 @@ preview que o cabecalho nao sai da tela ao rolar.
     `celula-grupo` (index.css). As strings moram em `ListaDeFinanciamentos.tsx` (`TH_LANC`, `TD_DATA_LANC`, `TD_VALOR_LANC`,
     `LINHA_LANC`) e sao copias das de `FinanceiroV2Tab.tsx` — quem mexer la' confere aqui.
   · FIX DA HOMOLOGACAO (FIN-FINANC-28-P3-FIX, 17/10): (1) o Banco mostra o NOME CURTO do credor por um helper unico,
-    `nomeCurtoDoCredor` (`src/lib/fornecedores/nomeCurtoDoCredor.ts`; o cadastro nao tem campo de nome curto): banco conhecido pelo
+    [REVOGADO no P3-FIX4: o encurtador saiu; ver a regra "NOME DO CREDOR E' O DO CADASTRO, INTEIRO"] `nomeCurtoDoCredor`
+    (`src/lib/fornecedores/nomeCurtoDoCredor.ts`; o cadastro nao tem campo de nome curto): banco conhecido pelo
     nome ("BB", "Itaú BBA", "DLL"…), nome que cabe em 12 caracteres inteiro, senao primeira palavra + inicial da ultima; nunca
     corta, o nome inteiro no `title`; o agrupamento segue pelo nome do cadastro. (2) coluna DATA, a primeira: a da 1ª liberacao
     VIVA (leitura direta de `financiamento_liberacoes`, menor `data` com `cancelado_em` nulo), senao a do contrato; a origem no
@@ -2208,6 +2210,47 @@ preview que o cabecalho nao sai da tela ao rolar.
     documento por `financiamento_id` — a pendencia "sem documento" fica para o passo 4.
   ⚠ NAO PROVADO NO NAVEGADOR: nada com login (bancada com a pagina real e o banco simulado) · hoje os 41 ativos estao com "?" e
     `sem_liberacao` (a tabela de liberacoes esta' vazia).
+- ⚠ NOME DO CREDOR E' O DO CADASTRO, INTEIRO, COM O CPF/CNPJ — PROIBIDO ENCURTAR (FIN-FINANC-28-P3-FIX4, decisao do Gabriel 17/10/2026
+  09:04, definitiva). Toda tela mostra o nome EXATAMENTE como esta' no cadastro (LTDA, S.A., tudo): nada de tirar sufixo, abreviar ou
+  "nome curto". Onde a coluna nao comporta, corta com reticencias e o `title` diz "Nome completo · CNPJ/CPF formatado" — um ajudante
+  so', `nomeEDocumento(nome, doc)` (`src/lib/fornecedores/fornecedorTexto.ts`, em cima de `formatarDocumento`). `nomeCurtoDoCredor` e
+  o teste dele SAIRAM. Onde vale: coluna Banco da aba Financiamentos (`cel-banco`, `truncate`; o documento vem pela juncao do contrato,
+  `ContratoDaLista.bancoDocumento`), coluna Credor de Compras parceladas (`cel-credor`), o `title` da Descricao quando a coluna Banco
+  some, e o cabecalho do detalhe (financiamento e parcelamento): Credor inteiro + o par "CNPJ/CPF" ao lado (sem documento no cadastro,
+  "—"). O filtro Credor ja' mostrava o nome inteiro e busca por nome ou digitos do documento.
+  ⚠ A coluna Banco (58px, `REGUA_LISTA_FINANCIAMENTOS`) corta quase todo nome inteiro; hoje ela esta' escondida em todos os clientes
+    (nenhum contrato tem linha de credito). Alargar e' decisao quando a primeira linha de credito existir.
+- ⚠ O CONTRATO QUITA SOZINHO PELO QUE O LANCAMENTO DIZ, E REABRE NO GESTO CONTRARIO (FIN-FINANC-28-P3-FIX4, Gabriel 17/10/2026; migration
+  `supabase/migrations/20261027200100_fin_financ_28_p3fix4_quitacao.sql`, md5 do arquivo 2469afcac6f516113e7f4ef6a005291e — APLICADA no
+  proto em 17/10/2026 ~09:10 (Brasilia), ledger 20261017121001 `fin_financ_28_p3fix4_quitacao`, ⚠ timestamp do dia; ledger = arquivo
+  byte a byte, conferido na propria transacao). Vale para TODA natureza; SO' ativo <-> quitado (cancelado, rolado e o resto nunca).
+  · A REGRA E' A DA TELA ("3 de 6 pagas"), ESPELHO DECLARADO do `base`/`der`/`sit` de `fn_financiamento_situacao`: parcela viva (status
+    <> 'cancelado'); com lancamento vivo (principal e/ou juros) paga quando TODOS os vivos estao realizado/conciliado; sem lancamento
+    vivo, vale a coluna 'pago'. Todas pagas = 'quitado'; alguma nao paga = 'ativo'. Quem mexer numa confere a outra.
+  · DONOS: `_fn_financiamento_status_pelas_parcelas(uuid)` (interna, fechada: postgres e service_role; md5 215e0630…) conta e grava;
+    `fn_financiamento_sincronizar_status(uuid)` (publica, authenticated; md5 6d0af8c7…, era c5071eba… sem guarda) so' confere o cliente
+    (`tenant_ok`, 42501) e chama a interna. GATILHOS: `trg_parcelas_sincroniza_status_contrato` (financiamento_parcelas; funcao md5
+    cd63ca86…) passou a disparar tambem na troca de `lancamento_id` / `lancamento_juros_id`; `trg_zz_lancamento_quita_contrato` (NOVO,
+    financeiro_lancamentos_v2, AFTER UPDATE OF status_transacao, cancelado, so' quando um dos dois muda; funcao md5 e5158c2a…) acha a
+    parcela pelos indices de `lancamento_id` / `lancamento_juros_id` e recalcula o contrato. Todas SECURITY DEFINER com search_path =
+    pg_catalog, public; nenhuma executavel por `anon`.
+    ⚠ DESVIO DECLARADO DO BRIEFING: a interna NAO recebeu GRANT a `authenticated` (abriria o recalculo de qualquer contrato sem guarda).
+  · BACKFILL (com guarda: exatamente 11 ativo -> quitado e 0 quitado -> ativo, senao aborta): NJ 3 parcelamentos (Adensado, Manutencao
+    Cercas, Medicamentos Bovinos d75d28d9), a1b2c3d4 2 parcelamentos, a2d41cda 6 financiamentos (estes com a coluna da parcela ja'
+    'pago': o gatilho antigo nunca rodou para eles). O "esperado no NJ: 11" do briefing era o total de todos os clientes. Antes em
+    `fin_financ_28_p3fix4_quitacao_backfill` (RLS ligada, sem acesso para anon/authenticated); gesto contrario no cabecalho da migration.
+    Depois: ativo 102 -> 91, quitado 112 -> 123, cancelado 8.
+  Teste: `supabase/tests/fin_financ_28_p3fix4_quitacao_test.sql` (Q1–Q5, sintetico no Teste; termina em RAISE OK) OK no vivo; mutacao
+  (sem o gatilho novo) morta em Q1. `seg_tenant_varredura_01c_test.sql` OK.
+  ⚠ NAO PROVADO: pagar pela TELA e ver o contrato mudar sem F5 · a conciliacao (o gatilho de promocao leva o lancamento a realizado e
+    este gatilho segue; sem caso proprio no teste) · o custo do gatilho novo por UPDATE (o WHEN so' chama a funcao quando status ou
+    cancelado mudam; nao medido A/B).
+- ⚠ OS FILTROS DA LISTA DE FINANCIAMENTOS: TROCAR DE ABA ZERA TODOS; "LIMPAR FILTROS" TEM LUGAR FIXO (FIN-FINANC-28-P3-FIX4, Gabriel
+  17/10/2026 09:09, so' tela). `trocarAba` zera busca, Nº contrato, situacao (de volta a "Ativo" / "Todas"), escopo, natureza, credor e
+  as quatro datas, e apaga o que estava guardado; a VOLTA DO DETALHE NAO passa por ela (remonta e le^ o que `abrirContrato` guardou:
+  os filtros voltam). O botao "Limpar filtros" mora depois do "ate'" do Vencimento, 92px, SEMPRE presente (apagado sem filtro), e zera
+  a aba atual (`zerarFiltros`; "tem filtro?" = `temFiltro`, pela aba). O "Limpar" condicional da primeira linha SAIU.
+  Testes: `src/pages/financiamentosListaCompacta.test.tsx` (a) (b) (c); mutacao (trocar de aba sem zerar) morta em (a).
 - ⚠ COMPRA PARCELADA NAO FALA DE CONTRATO; NUMERO E DATA SEM MONO; SELETOR DE ENTIDADE TEM BUSCA (FIN-FINANC-28-P3-FIX3, Gabriel
   17/10/2026, so' tela). SUBSTITUI, no bloco do P3 logo abaixo, "data mono 8px", o "A pagar = Total − Ja' pago com ponto ambar" e o
   cabecalho de 8 campos para o PARCELAMENTO.
@@ -2246,7 +2289,7 @@ preview que o cabecalho nao sai da tela ao rolar.
     no relatorio do FIX3.
   ⚠ FASE 0 (so' relato): (a) `fn_financiamento_sincronizar_status` le' `financiamento_parcelas.status`, que o parcelamento nao mantem —
     os 11 parcelamentos quitados pelo Financeiro seguem 'ativo'; proposta (nao executada): a funcao deriva "paga" pela regra do dono e
-    ignora 'cancelado', gatilho na troca de status do lancamento (DDL fora do horario) e backfill so' com OK; (b) `nomeCurtoDoCredor`
+    ignora 'cancelado', gatilho na troca de status do lancamento e backfill so' com OK [APLICADO no P3-FIX4]; (b) [ENCERRADO no P3-FIX4: o encurtador saiu] `nomeCurtoDoCredor`
     corta sufixo societario ("Casa L.", 16 de 20 credores de compra do NJ) — proposta: tirar LTDA/S.A./ME/EIRELI antes de encurtar;
     (c) "Parcela 3 - None": o "None" e' o nulo do Python impresso pelas planilhas (71 lancamentos no NJ: excel 62 em 05/10, importacao
     incremental 3, mesa_excel 2) e o contrato 580db8cd foi criado pela tela em 07/10 com essa descricao.
@@ -2276,7 +2319,7 @@ preview que o cabecalho nao sai da tela ao rolar.
   liberado tirado do contrato, sem tenant, juros no saldo).
 - ⚠ FINANCIAMENTOS TEM A ESTRUTURA DO DESENHO APROVADO, SO' ACRESCENTADA (FIN-FINANC-28-P1, item 28 passo 1, Gabriel 16–17/10/2026;
   migration `supabase/migrations/20261027199900_fin_financ_28_p1_estrutura.sql`, md5 do arquivo 8931dcfb244ad6ee202383280ce00ddb —
-  APLICADA no proto em 17/10/2026 05:41 (Brasilia), dentro da janela antes das 07h, com o GO do Gabriel: ledger 20261017084155
+  APLICADA no proto em 17/10/2026 05:41 (Brasilia), com o GO do Gabriel: ledger 20261017084155
   `fin_financ_28_p1_estrutura`, ⚠ timestamp do dia; ledger = arquivo byte a byte; na primeira tentativa, sem trava).
   · NOVAS: `financiamento_linhas_credito` (cliente, credor, programa, limite, vigencia) e `financiamento_liberacoes` (N por
     contrato: data, valor > 0, forma conta | fornecedor | liquidacao — liquidacao exige `contrato_liquidado_id` <> o proprio —,
@@ -2346,7 +2389,7 @@ preview que o cabecalho nao sai da tela ao rolar.
     573.267,88 (todos realizados); e os 4 de parcelamento do NJ (PARC-CADEIA-PAGA-VALOR-DIFERENTE-01). O gatilho so' age na PROXIMA
     edicao do lancamento: os antigos ficam como estao ate' alguem os editar ou o Gabriel decidir.
   ⚠ EXCECAO DE HORARIO: `CREATE TRIGGER` em `financeiro_lancamentos_v2` (tabela quente) ensaiado e aplicado as ~09h30 de 16/10/2026,
-    com a autorizacao do Gabriel ("hoje so' o Gabriel esta' usando o proto"); a regra 07h/20h CONTINUA valendo.
+    com a autorizacao do Gabriel ("hoje so' o Gabriel esta' usando o proto").
   Testes: `supabase/tests/fin_contrato_juros_sync_01_test.sql` (S1–S6: juros, principal, lancamento sem parcela, parcelamento fora,
   cancelado e outro cliente fora, a correcao ficou; sem sobra) OK no ensaio e no vivo; 3 mutacoes mortas (sem a exclusao do
   parcelamento -> S4; sem a guarda de cliente -> S5; sem o gatilho -> S1). `src/components/financiamentos/lancamentoDaParcelaSync.test.tsx` 1
@@ -2437,7 +2480,7 @@ preview que o cabecalho nao sai da tela ao rolar.
 - ⚠ O CARD DO PASTO TEM DOIS ESCRITORES, NO BANCO, CADA UM NUMA TRANSACAO; A REABERTURA DE UM PASTO TEM TRILHA (FECH-PASTO-SALVAR-TRANSACAO-01,
   Gabriel 16/10/2026; migrations `20261027199400_fech_pasto_salvar_transacao_01.sql` (funcoes, md5 do arquivo 3786f6eebb0e4f4b23acce31bc9bb31f —
   APLICADA no proto em 16/10/2026: ledger 20261016135459 `fech_pasto_salvar_transacao_01`, ⚠ timestamp do dia; ledger = arquivo byte a byte)
-  e `20261027199500_fech_pasto_itens_trava_p2_01.sql` (gatilho; ⚠ DDL em tabela de uso: aplicar so' antes das 07h ou depois das 20h)).
+  e `20261027199500_fech_pasto_itens_trava_p2_01.sql` (gatilho)).
   · `fn_fechamento_pasto_salvar(card, campos, itens)` (md5 ba7a7feb…): campos do mes (lote, atividade, qualidade, observacao; chave
     ausente mantem, vazio = nulo) + troca dos itens preservando `peso_atualizado`. `fn_fechamento_pasto_reabrir(card, motivo)` (md5
     36fdfcbc…): so' card FECHADO volta a rascunho e a linha vai a `fechamento_reaberturas_log` (pilar 'p1_mapa_pastos', motivo + " · pasto
@@ -2697,7 +2740,7 @@ docs/historico/frentes-ate-2026-09-29.md.)
   (DRE-MODAL-VALOR-01a, OC-CC-CLASSIFICACAO-01).
 - ⚠ ENSAIO E MEDICAO NO PROTO: O BANCO E' O DOS CLIENTES (regra do Gabriel, 09/10/2026, DIVIDENDO-ESCRITOR-UNICO-01 passo 1). Antes de
   qualquer transacao de ensaio que pegue trava em tabela compartilhada: `SET LOCAL lock_timeout = '2s'` e `SET LOCAL
-  statement_timeout = '10s'`. Estourou: a transacao e' revertida e o ensaio e' refeito em RECORTE MENOR ou fora do horario — nunca
+  statement_timeout = '10s'`. Estourou: a transacao e' revertida e o ensaio e' refeito em RECORTE MENOR — nunca
   repetido igual. Medicao de custo e' feita em AMOSTRA, so' com linhas sinteticas criadas na propria transacao, nunca com a tabela
   inteira travada. A APLICACAO REAL de migration leva o mesmo `lock_timeout` de 2 s (escrito no arquivo): nao conseguiu a trava,
   aborta e reporta, sem esperar na fila.
@@ -2728,12 +2771,15 @@ docs/historico/frentes-ate-2026-09-29.md.)
   existe sem trocar o nascimento deixa o padrao velho voltando a cada registro novo.
   ⚠ NASCE DO INCIDENTE e8fec78b (12/10/2026): a OC-TITULO-PARA-CC-01b migrou 30 OCs para conta corrente em 12/10 e, no mesmo dia,
     duas vendas novas do NJ nasceram 'titulo' pela tela (41904517 e e8fec78b), porque o unico INSERT nao citava o modelo.
-- ⚠ ENSAIO COM `CREATE TRIGGER` / DDL EM TABELA DE USO CORRENTE SO' EM TABELA CLONE OU FORA DO HORARIO DE USO (regra do Gabriel,
-  12/10/2026, OC-CC-EXPLICAR-CONGELA-01): em `financeiro_lancamentos_v2` e nas demais tabelas que a tela grava o tempo todo, o
-  ensaio que cria gatilho, indice ou coluna roda numa TABELA CLONE sintetica criada na propria transacao, ou antes das 07h /
-  depois das 20h (horario de Brasilia) — NUNCA em horario em que o Gabriel esta' operando. `CREATE TRIGGER` pede uma trava que
-  barra TODA escrita na tabela ate' a transacao terminar, e quem chega depois entra na fila atras dela; o papel da tela desiste
-  em 5–8 s (`lock_timeout` / `statement_timeout` do `authenticator`) e a gravacao falha sem gravar nada.
+- ⚠ ENSAIO COM `CREATE TRIGGER` / DDL EM TABELA DE USO CORRENTE E' CURTO E LEVA `lock_timeout` DE 2 s (OC-CC-EXPLICAR-CONGELA-01,
+  12/10/2026): em `financeiro_lancamentos_v2` e nas demais tabelas que a tela grava o tempo todo, o ensaio que cria gatilho, indice ou
+  coluna roda numa TABELA CLONE sintetica criada na propria transacao, ou direto com `lock_timeout` curto e transacao curta.
+  `CREATE TRIGGER` pede uma trava que barra TODA escrita na tabela ate' a transacao terminar, e quem chega depois entra na fila
+  atras dela; o papel da tela desiste em 5–8 s (`lock_timeout` / `statement_timeout` do `authenticator`) e a gravacao falha sem
+  gravar nada.
+  ⚠ NAO EXISTE RESTRICAO DE HORARIO (decisao do Gabriel, 17/10/2026 09:04: ele nunca autorizou "so' antes das 07h ou depois das 20h").
+    Migration aprovada e' aplicada na hora, com os gates de sempre. As mencoes a essa janela em migrations ja' aplicadas
+    (20261027199300, 199500, 199900, 20260901120000) ficam no arquivo: sao registro historico e o ledger guarda o arquivo byte a byte.
   ⚠ INCIDENTE DE 12/10/2026 (erro meu, FIN-CONCILIADO-NAO-REBAIXA-01): seis ensaios com `CREATE TRIGGER` em
     `financeiro_lancamentos_v2` entre 10:55 e 11:09 UTC (um deles segurou a tabela ~10 s), com o Gabriel operando a OC fcdbe0bb
     nos mesmos minutos — o "Explicar diferença" dele congelou duas vezes e nao gravou. A relacao NAO foi provada (o log do
@@ -5216,8 +5262,7 @@ docs/historico/frentes-ate-2026-09-29.md.)
     ⚠ `zoo_operacao_lotes.valor_informado` E' numeric DE ESCALA 2 (medido 14/10): o banco guarda "14,125" como 14,13 — a tela manda
     as tres casas, a coluna arredonda. `qtd_negociada` e' integer: o lote do banco chega como "1200", sem ponto, e sem tocar no campo
     nunca passa pelo dono (0 lotes >= 1.000 hoje; o maior, 490).
-    valor_informado é numeric(.,2); 3ª casa digitada é arredondada pelo banco — frente OC-LOTE-VALOR-3-CASAS-01 (DDL só fora do
-    horário), não aberta.
+    valor_informado é numeric(.,2); 3ª casa digitada é arredondada pelo banco — frente OC-LOTE-VALOR-3-CASAS-01 não aberta.
   · `LoteDialog` (compra, venda e abate): resolve AO SAIR DO CAMPO E NO ENTER (o padrao da `GradeDeParcelas`), SO' o texto que o
     operador mudou desde que entrou no campo (o que veio do banco fica como veio); recusada, o campo volta ao que tinha ao entrar e
     "<Campo>: <frase>" fica no LUGAR RESERVADO de 14px sob a linha do Peso (`lote-recusa-conta`, sempre presente). O Valor (`ValorInput`,
@@ -5562,7 +5607,7 @@ docs/historico/frentes-ate-2026-09-29.md.)
       foi migrada para conta corrente em 12/10 e nao tem mais compromisso principal vivo (medido: 0). O teste precisa de um molde
       novo; NAO RODA ate' la'. Nao e' regressao deste PR (a queda no C1 e' prevista por leitura, nao executada).
     ⚠ DIVIDA OC-VINCULAR-PARCELA-SEGUINTE-HORARIO-01: `oc_vincular_parcela_seguinte_01_test.sql` cria gatilho em
-      `zoo_operacao_partes`; roda SO' fora do horario de uso (antes das 07h / depois das 20h de Brasilia). Nao rodado neste PR.
+      `zoo_operacao_partes`; ensaio curto, com `lock_timeout` de 2 s. Nao rodado neste PR.
   ⚠ O MAPA DE FRASES DO FRONT TINHA FICADO ATRAS DE UM RAISE, E FOI ACERTADO NO FECHAMENTO: `_oc_vincular_recebimento` passou a dizer
     "…so em venda, compra ou abate no modelo conta corrente" e o `FRASES_DO_BANCO` (`src/lib/oc/vincularLancamento.ts`) casava so'
     a forma antiga — a tela mostraria o texto do banco. Agora a expressao casa as DUAS formas, por extenso
@@ -5946,7 +5991,7 @@ docs/historico/frentes-ate-2026-09-29.md.)
     antes ficaram para tras de mudancas de contrato de outros PRs (peso obrigatorio no lote, lote obrigatorio na movimentacao,
     a assinatura de `oc_registrar_movimentacao`, o CHECK da conta por direcao, o caminho A do `oc_salvar_lotes`). E OS DEZ CRIAM
     A OC NO CLIENTE DO PRIMEIRO ADMIN que acharem em `cliente_membros` — cliente REAL, mesmo revertido: quando forem tocados,
-    migram para o cliente Teste. Ate' la', nenhum deles roda em horario de uso fora de transacao revertida.
+    migram para o cliente Teste. Ate' la', nenhum deles roda fora de transacao revertida.
   ⚠ FILA: [o gancho da saida, a versao REAL nas seis funcoes, o rotulo "Aguardando saída", o "Atualizar entregas" apagado em
     rascunho e o "Explicar diferença" so' com entrega FECHARAM no OC-CC-PADRAO-NOVAS-01b — a regra logo abaixo; FICA da lista
     de antes: a Central (OC-LISTA-FINANC-CC-01, PR proprio) e o fluxo Concluir -> Financeiro conferido no navegador] ·

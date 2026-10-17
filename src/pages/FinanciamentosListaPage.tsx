@@ -15,7 +15,7 @@ import { lerSituacaoEmLoteDoBanco } from '@/hooks/useSituacaoDoContrato';
 import { inscreverEmLancamentos } from '@/hooks/useFinanceiroV2';
 import { resumoDoContratoNaLista, totaisDasCompras } from '@/lib/financiamentos/situacaoEmLote';
 import { SearchableSelect, type OpcaoSearchable } from '@/components/ui/searchable-select';
-import { formatarDocumento } from '@/lib/fornecedores/fornecedorTexto';
+import { formatarDocumento, nomeEDocumento } from '@/lib/fornecedores/fornecedorTexto';
 import { hojeLocal } from '@/lib/datas/hojeLocal';
 import { Segmentado } from '@/components/ui/segmentado';
 import {
@@ -270,6 +270,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
             id: f.id,
             numeroContrato: f.numero_contrato ?? null,
             banco: f.financeiro_fornecedores?.nome ?? null,
+            bancoDocumento: f.financeiro_fornecedores?.cpf_cnpj ?? null,
             descricao: f.descricao,
             status: f.status,
             linhaCreditoId: f.linha_credito_id ?? null,
@@ -398,18 +399,33 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
     () => financiamentos.some(f => !ehCompraParcelada(f.natureza) && !!f.paraLista.linhaCreditoId),
     [financiamentos]);
 
-  const hasExtraFilters = !!(filtroDescricao || filtroContrato || filtroCredor !== 'todos' ||
-    filtroDataContratoDe || filtroDataContratoAte || filtroVencDe || filtroVencAte);
+  /* FIN-FINANC-28-P3-FIX4 — "tem filtro?" e "zerar" valem para a ABA ATUAL e moram aqui, uma vez. Os padrões são os do nascimento
+     da tela (situação "Ativo" em Compras parceladas, "Todas" em Financiamentos). */
+  const temFiltro = !!(filtroDescricao || filtroContrato || filtroCredor !== 'todos' || filtroTipo !== 'todos'
+    || (aba === 'parcelas' ? filtroStatus !== 'ativo' : (filtroNatureza !== 'todas' || filtroSituacaoFin !== 'todos'))
+    || filtroDataContratoDe || filtroDataContratoAte || filtroVencDe || filtroVencAte);
 
-  const clearExtraFilters = () => {
+  const zerarFiltros = () => {
     setFiltroDescricao('');
     setFiltroContrato('');
     setFiltroCredor('todos');
+    setFiltroStatus('ativo');
+    setFiltroTipo('todos');
+    setFiltroNatureza('todas');
+    setFiltroSituacaoFin('todos');
     setFiltroDataContratoDe('');
     setFiltroDataContratoAte('');
     setFiltroVencDe('');
     setFiltroVencAte('');
     try { sessionStorage.removeItem(STORAGE_KEY); } catch {}
+  };
+
+  /* FIN-FINANC-28-P3-FIX4 — TROCAR DE ABA ZERA TODOS OS FILTROS (Gabriel, 17/10). A volta do detalhe NÃO passa por aqui: ela
+     remonta a tela e lê o que `abrirContrato` guardou. */
+  const trocarAba = (nova: 'financiamentos' | 'parcelas') => {
+    if (nova === aba) return;
+    zerarFiltros();
+    setAba(nova);
   };
 
   if (!clienteId) {
@@ -501,14 +517,6 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
             <SearchableSelect value={filtroCredor} onValueChange={setFiltroCredor} options={credores}
               allLabel="Todos credores" allValue="todos" placeholder="Buscar credor ou CNPJ..." className="w-40" />
           </div>
-          {/* ⚠ O "Limpar" FICA, e fica na primeira linha: ele existe desde antes deste
-              PR e some sozinho quando não há filtro extra. Tirá-lo obrigaria a limpar
-              sete campos à mão. */}
-          {hasExtraFilters && (
-            <Button variant="ghost" size="sm" className="h-6 px-2 text-[11px]" onClick={clearExtraFilters}>
-              Limpar
-            </Button>
-          )}
         </div>
 
         {/* ⚠ AS DATAS PASSARAM AO CALENDARIO DO SISTEMA (A20). A mascara de texto nao
@@ -548,6 +556,12 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
             placeholder="até"
             className="w-[110px]"
           />
+          {/* FIN-FINANC-28-P3-FIX4 — LUGAR FIXO: o botão existe sempre (apagado sem filtro) e não empurra nada ao acender. Zera
+              todos os filtros da aba atual. Saiu o "Limpar" condicional da primeira linha. */}
+          <Button variant="outline" size="sm" className="ml-1.5 h-6 w-[92px] shrink-0 px-2 text-[11px]" onClick={zerarFiltros}
+            disabled={!temFiltro} title={temFiltro ? 'Zera todos os filtros desta aba' : 'Nenhum filtro ligado'} data-testid="limpar-filtros">
+            Limpar filtros
+          </Button>
         </div>
       </div>
   );
@@ -600,7 +614,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
               className="shrink-0"
               altura={22}
               valor={aba}
-              onEscolher={setAba}
+              onEscolher={trocarAba}
               opcoes={[
                 { valor: 'financiamentos', rotulo: 'Financiamentos' },
                 { valor: 'parcelas', rotulo: 'Compras parceladas' },
@@ -801,7 +815,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
                       <span className="font-medium leading-tight">{f.descricao}</span>
                       <span className="ml-1 text-muted-foreground">· {escopoSigla(f.tipo_financiamento)}</span>
                     </TableCell>
-                    <TableCell className="truncate" title={f.credor_nome}>{f.credor_nome}</TableCell>
+                    <TableCell className="truncate" title={nomeEDocumento(f.credor_nome, f.credor_documento) || undefined} data-testid="cel-credor">{f.credor_nome}</TableCell>
                     <TableCell className={MOEDA}>{fmt(f.valor_total)}</TableCell>
                     <TableCell className={MOEDA}>{fmt(f.total_pendente)}</TableCell>
                     <TableCell className={MOEDA}>

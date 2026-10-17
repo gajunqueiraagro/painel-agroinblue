@@ -21,6 +21,17 @@ export function formatarDocumento(doc: string | null | undefined): string {
   return mascaraDoDocumento(soDigitos(cru)) ?? cru;
 }
 
+/**
+ * FIN-FINANC-28-P3-FIX4 — o `title` de um credor/fornecedor: o NOME DO CADASTRO INTEIRO e o CPF/CNPJ formatado ("Nome · 00.000.000/0000-00").
+ * Sem documento, só o nome; sem nome, vazio. ⚠ PROIBIDO ENCURTAR NOME DE CREDOR (decisão do Gabriel, 17/10): a tela mostra o nome
+ * exatamente como está no cadastro e, onde não cabe, corta com reticências com isto no `title`.
+ */
+export function nomeEDocumento(nome: string | null | undefined, doc: string | null | undefined): string {
+  const n = (nome ?? '').trim();
+  const d = formatarDocumento(doc);
+  return [n, d].filter(Boolean).join(' · ');
+}
+
 /** Nome para comparar: sem acento, sem caixa, espaços duplos viram um, sem espaço nas pontas. */
 export function normalizarNome(s: string | null | undefined): string {
   return (s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();

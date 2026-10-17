@@ -9,7 +9,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { ChevronsUpDown, ChevronUp, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { STATUS_PALETA, STATUS_PILULA_BASE } from '@/lib/financeiro/statusFinanceiro';
-import { nomeCurtoDoCredor } from '@/lib/fornecedores/nomeCurtoDoCredor';
+import { nomeEDocumento } from '@/lib/fornecedores/fornecedorTexto';
 import {
   montarListaDeFinanciamentos, pendenciaCurta, somaConhecida, textoDasPendencias, temNumero,
   type ColunaDaLista, type ContratoDaLista, type GrupoDaLista, type Soma,
@@ -119,10 +119,11 @@ function LinhaDoContrato({ c, encerrado, aoAbrir, mostrarBanco }: {
       <td className="whitespace-nowrap px-1 font-medium text-[#1d3a5d]" data-testid="cel-numero" title={c.numeroContrato ?? undefined}>
         {temNumero(c.numeroContrato) ? c.numeroContrato : <span className={AMBAR}>sem nº</span>}
       </td>
-      {/* o NOME CURTO (helper único `nomeCurtoDoCredor`): a coluna não corta; o nome do cadastro vai no `title`. Com a lista
-          agrupada só por banco a coluna SOME (a linha do grupo já diz o banco) e o banco vai no `title` da Descrição. */}
-      {mostrarBanco && <td className="whitespace-nowrap px-1" title={c.banco ?? undefined} data-testid="cel-banco">{nomeCurtoDoCredor(c.banco)}</td>}
-      <td className="truncate px-1" title={mostrarBanco ? c.descricao : [c.descricao, c.banco].filter(Boolean).join(' · ')} data-testid="cel-descricao">{c.descricao}</td>
+      {/* FIN-FINANC-28-P3-FIX4 — o NOME DO CADASTRO INTEIRO (o nome curto acabou): onde não cabe, corta com reticências e o
+          `title` diz "Nome · CPF/CNPJ". Com a lista agrupada só por banco a coluna SOME (a linha do grupo já diz o banco) e o
+          banco vai no `title` da Descrição. */}
+      {mostrarBanco && <td className="truncate px-1" title={nomeEDocumento(c.banco, c.bancoDocumento) || undefined} data-testid="cel-banco">{c.banco ?? '—'}</td>}
+      <td className="truncate px-1" title={mostrarBanco ? c.descricao : [c.descricao, nomeEDocumento(c.banco, c.bancoDocumento)].filter(Boolean).join(' · ')} data-testid="cel-descricao">{c.descricao}</td>
       <td className="celula-status whitespace-nowrap px-0.5"><SeloDoContrato status={c.status} /></td>
       <td className={`${NUM}`}><Valor v={s?.contratado} /></td>
       <td className={`${NUM}`} data-testid="cel-liberado"><Valor v={s ? s.liberado : null} /></td>

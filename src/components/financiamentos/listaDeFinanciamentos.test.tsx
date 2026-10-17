@@ -152,14 +152,16 @@ describe('FIN-FINANC-28-P3-FIX', () => {
     expect(card('Saldo devedor').querySelector('span')?.getAttribute('title')).toContain('principal');
   });
 
-  it('banco pelo nome curto, nome inteiro no title; Data é a primeira coluna', () => {
-    montar([c('a', { banco: 'Banco do Brasil S.A. (001)' })]);
-    const b = screen.getByTestId('cel-banco');
-    expect(b.textContent).toBe('BB');
-    expect(b.getAttribute('title')).toBe('Banco do Brasil S.A. (001)');
+  it('FIX4 — banco pelo NOME DO CADASTRO INTEIRO (o nome curto acabou), cortando com reticências; title "Nome · CNPJ"; Data é a primeira coluna', () => {
+    montar([c('a', { banco: 'Banco do Brasil S.A. (001)', bancoDocumento: '00000000000191' }), c('b', { banco: 'Sicoob Ltda' })]);
+    const [b, b2] = screen.getAllByTestId('cel-banco');
+    expect(b.textContent).toBe('Banco do Brasil S.A. (001)');
+    expect(b.className).toContain('truncate');
+    expect(b.getAttribute('title')).toBe('Banco do Brasil S.A. (001) · 00.000.000/0001-91');
+    expect(b2.getAttribute('title')).toBe('Sicoob Ltda');
     expect(screen.getAllByRole('columnheader')[0].textContent).toBe('Data');
-    expect(screen.getByTestId('cel-data').textContent).toBe('10/01/25');
-    expect(screen.getByTestId('cel-data').className).toContain('celula-data');
+    expect(screen.getAllByTestId('cel-data')[0].textContent).toBe('10/01/25');
+    expect(screen.getAllByTestId('cel-data')[0].className).toContain('celula-data');
   });
 
   it('duas pendências: a 1ª curta + "+1" na coluna estreita; as duas por extenso no title', () => {

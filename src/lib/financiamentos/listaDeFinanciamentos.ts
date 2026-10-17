@@ -14,6 +14,8 @@ export interface ContratoDaLista {
   id: string;
   numeroContrato: string | null;
   banco: string | null;
+  /** FIN-FINANC-28-P3-FIX4 — o CPF/CNPJ do credor (o `title` da coluna diz "Nome · documento") */
+  bancoDocumento?: string | null;
   descricao: string;
   status: string;
   linhaCreditoId: string | null;
@@ -171,7 +173,7 @@ export const ehCompraParcelada = (natureza: string | null | undefined): boolean 
  * passado pronto.
  */
 export function contratoDaLista(entrada: {
-  id: string; numeroContrato: string | null; banco: string | null; descricao: string | null; status: string;
+  id: string; numeroContrato: string | null; banco: string | null; bancoDocumento?: string | null; descricao: string | null; status: string;
   linhaCreditoId: string | null; linhaCreditoNome: string | null; sucessorNumero: string | null;
   saldo: SaldoDoContrato | null | undefined; proxVencimento: string | null | undefined;
   dataContrato: string | null | undefined; primeiraLiberacao: string | null | undefined;
@@ -182,6 +184,7 @@ export function contratoDaLista(entrada: {
     id: entrada.id,
     numeroContrato: entrada.numeroContrato,
     banco: entrada.banco,
+    ...(entrada.bancoDocumento ? { bancoDocumento: entrada.bancoDocumento } : {}),
     descricao: entrada.descricao ?? '',
     status: entrada.status,
     linhaCreditoId: entrada.linhaCreditoId,

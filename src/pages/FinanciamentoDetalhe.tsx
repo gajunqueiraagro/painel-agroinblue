@@ -35,7 +35,7 @@ import { FinanciamentoForm } from '@/hooks/useFinanciamentoCadastro';
 import { alinhamentoDoCabecalho, colunasDasParcelas, type ColunaDasParcelas } from '@/lib/financiamentos/reguaDasParcelas';
 import { TABELA_LANC, TD_DATA_LANC, TD_VALOR_LANC, LINHA_LANC, TH_LANC, SeloDoContrato } from '@/components/financiamentos/ListaDeFinanciamentos';
 import { GradeChaveValor } from '@/components/shared/GradeChaveValor';
-import { nomeCurtoDoCredor } from '@/lib/fornecedores/nomeCurtoDoCredor';
+import { formatarDocumento, nomeEDocumento } from '@/lib/fornecedores/fornecedorTexto';
 
 const fmt = (v: number) =>
   v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -115,7 +115,7 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
         /* PR-PARC-05 — o subcentro da classificacao da parcela entra no MESMO select:
            no parcelamento ele e' o unico destino contabil do contrato e precisa aparecer
            nos Dados. Uma relacao a mais, nenhuma query a mais. */
-        .select('*, financeiro_fornecedores!financiamentos_credor_id_fkey(nome), financeiro_contas_bancarias!financiamentos_conta_bancaria_id_fkey(nome_conta, nome_exibicao), financeiro_plano_contas!financiamentos_plano_conta_parcela_id_fkey(subcentro)')
+        .select('*, financeiro_fornecedores!financiamentos_credor_id_fkey(nome, cpf_cnpj), financeiro_contas_bancarias!financiamentos_conta_bancaria_id_fkey(nome_conta, nome_exibicao), financeiro_plano_contas!financiamentos_plano_conta_parcela_id_fkey(subcentro)')
         .eq('id', id!)
         .single();
       if (error) throw error;
@@ -470,6 +470,8 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
   const colunas = colunasDasParcelas(ehParcelamento);
   const escopo = fin.tipo_financiamento === 'agricultura' ? 'agricultura' : 'pecuaria';
   const nomeCredor = fin.financeiro_fornecedores?.nome ?? null;
+  /* FIN-FINANC-28-P3-FIX4 — o documento do credor, formatado; sem documento no cadastro, "—" na grade */
+  const documentoCredor = formatarDocumento(fin.financeiro_fornecedores?.cpf_cnpj ?? null) || null;
   const nomeConta = fin.financeiro_contas_bancarias?.nome_exibicao || fin.financeiro_contas_bancarias?.nome_conta || null;
   const nomeParcela = fin.financeiro_plano_contas?.subcentro ?? null;
 
@@ -568,7 +570,8 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
                o status gravado no contrato (`financiamentos.status`), sem cálculo. Régua do formulário (10px / 11px). */
             <GradeChaveValor regua="formulario" testId="grade-da-compra" itens={[
               { rotulo: 'Descrição', valor: fin.descricao },
-              { rotulo: 'Credor', valor: nomeCredor ?? null },
+              { rotulo: 'Credor', valor: nomeCredor ?? null, title: nomeEDocumento(nomeCredor, documentoCredor) || undefined },
+              { rotulo: 'CNPJ/CPF', valor: documentoCredor },
               { rotulo: 'Data da compra', valor: fmtDate(fin.data_contrato), tipo: 'data' },
               { rotulo: 'Competência', valor: fin.data_contrato ? `${fin.data_contrato.slice(5, 7)}/${fin.data_contrato.slice(0, 4)}` : null, tipo: 'data' },
               { rotulo: '1ª parcela', valor: fmtDate(fin.data_primeira_parcela), tipo: 'data' },
@@ -583,7 +586,8 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
           ) : (
           <GradeChaveValor itens={[
             { rotulo: 'Descrição', valor: fin.descricao },
-            { rotulo: 'Credor', valor: nomeCredor ? nomeCurtoDoCredor(nomeCredor) : null, title: nomeCredor ?? undefined },
+            { rotulo: 'Credor', valor: nomeCredor ?? null, title: nomeEDocumento(nomeCredor, documentoCredor) || undefined },
+            { rotulo: 'CNPJ/CPF', valor: documentoCredor },
             { rotulo: 'Nº contrato', valor: fin.numero_contrato },
             { rotulo: 'Banco/conta', valor: nomeConta },
             { rotulo: 'Data de liberação', valor: primeiraLiberacao ? fmtDate(primeiraLiberacao) : null, tipo: 'data' },

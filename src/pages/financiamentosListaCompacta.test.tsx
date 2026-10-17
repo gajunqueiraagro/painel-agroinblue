@@ -178,3 +178,62 @@ describe('FIN-FINANC-28-P3-FIX3 — o filtro Credor é o seletor da casa com bus
     expect(filtro.className).toContain('w-40');
   });
 });
+
+describe('FIN-FINANC-28-P3-FIX4 — filtros: trocar de aba zera, "Limpar filtros" fixo, a volta do detalhe mantém', () => {
+  beforeEach(() => { cleanup(); sessionStorage.clear(); });
+
+  const escolherCredor = async (nome: string) => {
+    const filtro = screen.getByTestId('filtro-credor');
+    fireEvent.click(within(filtro).getByRole('button'));
+    const busca = await screen.findByPlaceholderText('Buscar credor ou CNPJ...');
+    fireEvent.change(busca, { target: { value: nome.slice(0, 4) } });
+    const painel = busca.parentElement!.parentElement!;
+    fireEvent.click(Array.from(painel.querySelectorAll('button')).find((b) => b.textContent === nome)!);
+  };
+
+  it('(a) trocar de aba zera o credor e a busca (e o Limpar volta a ficar apagado)', async () => {
+    montar();
+    await screen.findAllByTestId('cel-data');
+    fireEvent.change(screen.getByPlaceholderText('Buscar descrição...'), { target: { value: 'Trator' } });
+    await escolherCredor('Concessionaria');
+    expect(screen.getByTestId('filtro-credor').getAttribute('title')).toBe('Concessionaria');
+    expect((screen.getByTestId('limpar-filtros') as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(screen.getByText('Financiamentos'));
+    expect(screen.getByTestId('filtro-credor').getAttribute('title')).toBe('Todos credores');
+    expect((screen.getByPlaceholderText('Buscar descrição...') as HTMLInputElement).value).toBe('');
+    expect((screen.getByTestId('limpar-filtros') as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByText('Compras parceladas'));
+    expect((await screen.findAllByTestId('cel-data')).length).toBe(3);
+  });
+
+  it('(b) "Limpar filtros" existe sempre (apagado sem filtro), mesma largura, e zera tudo da aba', async () => {
+    montar();
+    await screen.findAllByTestId('cel-data');
+    const botao = screen.getByTestId('limpar-filtros') as HTMLButtonElement;
+    expect(botao.disabled).toBe(true);
+    expect(botao.className).toContain('w-[92px]');
+    await escolherCredor('BRDE');
+    fireEvent.change(screen.getByPlaceholderText('Nº contrato...'), { target: { value: 'PR' } });
+    expect(screen.getAllByTestId('cel-data').length).toBe(1);
+    expect(screen.getByTestId('limpar-filtros')).toBe(botao);
+    expect(botao.disabled).toBe(false);
+    fireEvent.click(botao);
+    expect(screen.getAllByTestId('cel-data').length).toBe(3);
+    expect(screen.getByTestId('filtro-credor').getAttribute('title')).toBe('Todos credores');
+    expect(botao.disabled).toBe(true);
+  });
+
+  it('(c) a volta do detalhe mantém os filtros (só a troca de aba zera)', async () => {
+    const onDetalhe = vi.fn();
+    render(<QueryClientProvider client={new QueryClient()}><FinanciamentosListaPage onDetalhe={onDetalhe} /></QueryClientProvider>);
+    fireEvent.click(screen.getByText('Compras parceladas'));
+    await screen.findAllByTestId('cel-data');
+    await escolherCredor('BRDE');
+    fireEvent.click(screen.getAllByRole('link')[0]);
+    cleanup();
+    render(<QueryClientProvider client={new QueryClient()}><FinanciamentosListaPage onDetalhe={onDetalhe} /></QueryClientProvider>);
+    await screen.findByTestId('cards-compras');
+    expect(screen.getByTestId('filtro-credor').getAttribute('title')).toBe('BRDE');
+    expect((await screen.findAllByTestId('cel-data')).length).toBe(2);
+  });
+});
