@@ -53,6 +53,14 @@ export interface BarraCompacta {
    * veio. A cor é do consumidor porque a natureza é dele — o componente não sabe o que desenha.
    */
   corTexto?: string;
+  /**
+   * A BARRA EMPILHADA — opt-in, FIN-FINANC-28 P3-GRAFICO. Os pedaços de baixo para cima, cada um com a sua cor (classe).
+   * ⚠ A ALTURA DA BARRA CONTINUA SENDO `valor` NA ESCALA DO GRÁFICO; cada pedaço ocupa a fração `pedaço / valor` dela — os
+   * pedaços de todas as barras ficam na MESMA escala. Quem passa garante que a soma dos pedaços é o `valor`.
+   */
+  segmentos?: { valor: number; cor: string }[];
+  /** A cor da nota debaixo do rótulo (classe). Sem ela, o âmbar de sempre. Ex.: o ano embaixo do primeiro mês. */
+  corNota?: string;
 }
 
 /**
@@ -114,7 +122,7 @@ function ColunaEixoZero({ barra, faixa, max, minimo, pctAcima, fonteValor, largu
 
 export function BarrasCompactas({
   barras, titulo, legenda, larguraMax = 340, altura = 96, preencherLargura = false,
-  larguraBarra = 22, fonteValor = 8, distribuir = false, onClickBarra, eixoZero = false,
+  larguraBarra = 22, fonteValor = 8, distribuir = false, onClickBarra, eixoZero = false, tituloNaColuna = false,
 }: {
   barras: readonly BarraCompacta[];
   titulo: string;
@@ -182,6 +190,11 @@ export function BarrasCompactas({
    * escala; o sinal decide o sentido, nunca o tamanho.
    */
   eixoZero?: boolean;
+  /**
+   * O `title` da barra vale para a COLUNA INTEIRA — opt-in, FIN-FINANC-28 P3-GRAFICO: a barra de um mês pequeno tem 2 ou 3px
+   * e passar o mouse nela é mira de precisão. Sem a prop, só a barra tem o `title`, como sempre foi.
+   */
+  tituloNaColuna?: boolean;
 }) {
   /**
    * ⚠ A ESCALA IGNORA OS NULOS e nunca é zero: com todas as barras sem dado, ou com um único
@@ -224,6 +237,7 @@ export function BarrasCompactas({
             <div key={`${b.rotulo}-${i}`}
               className={cn('flex h-full flex-col', colClasse, onClickBarra && 'cursor-pointer')}
               onClick={onClickBarra ? () => onClickBarra(i) : undefined}
+              title={tituloNaColuna ? b.title : undefined}
               style={colEstilo}>
               {/* ⚠ O NÚMERO ACOMPANHA A ALTURA DA BARRA — ele fica ANCORADO NO TOPO DELA, não
                   numa linha fixa no alto do card. Antes, o valor da roça (barra de 7%) aparecia
@@ -260,8 +274,12 @@ export function BarrasCompactas({
                   <div title={b.title}
                     className={cn('relative rounded-sm', distribuir ? 'mx-auto' : 'w-full',
                     b.meta ? 'border border-dashed border-amber-500 bg-transparent'
-                      : (b.cor ?? 'bg-primary'))}
+                      : b.segmentos ? 'flex flex-col-reverse overflow-visible' : (b.cor ?? 'bg-primary'))}
                     style={{ height: `${pct}%`, width: distribuir ? larguraBarra : undefined }}>
+                    {b.segmentos && b.valor ? b.segmentos.map((sg, k) => (
+                      <div key={k} className={cn('w-full', sg.cor, k === 0 && 'rounded-b-sm', k === b.segmentos!.length - 1 && 'rounded-t-sm')}
+                        style={{ height: `${(sg.valor / b.valor!) * 100}%` }} data-segmento={k} />
+                    )) : null}
                     <span className={cn(`absolute bottom-full left-1/2 -translate-x-1/2 whitespace-nowrap
                       pb-[2px] leading-none tabular-nums`, b.corTexto ?? 'text-muted-foreground')}
                       style={{ fontSize: fonteValor }}>{b.texto}</span>
@@ -282,7 +300,7 @@ export function BarrasCompactas({
             </div>
             {/* ⚠ A NOTA OCUPA ALTURA SEMPRE, com ou sem texto: uma safra marcada e outra não
                 desalinhariam os rótulos entre si. */}
-            <div className="min-h-[9px] truncate text-[7px] leading-tight text-amber-600" title={b.nota}>
+            <div className={cn('min-h-[9px] truncate text-[7px] leading-tight', b.corNota ?? 'text-amber-600')} title={b.nota}>
               {b.nota ?? ''}
             </div>
           </div>

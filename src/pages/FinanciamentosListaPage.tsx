@@ -14,6 +14,9 @@ import { ObrigacaoDialog } from '@/components/financiamentos/ObrigacaoDialog';
 import { lerSituacaoEmLoteDoBanco } from '@/hooks/useSituacaoDoContrato';
 import { inscreverEmLancamentos } from '@/hooks/useFinanceiroV2';
 import { resumoDoContratoNaLista, totaisDasCompras } from '@/lib/financiamentos/situacaoEmLote';
+import { cronogramaAnual, cronogramaMensal } from '@/lib/financiamentos/cronogramaEmAberto';
+import type { SituacaoDoContrato } from '@/lib/financiamentos/situacaoDoContrato';
+import { CronogramaEmAbertoDialog } from '@/components/financiamentos/CronogramaEmAbertoDialog';
 import { SearchableSelect, type OpcaoSearchable } from '@/components/ui/searchable-select';
 import { formatarDocumento, nomeEDocumento } from '@/lib/fornecedores/fornecedorTexto';
 import { hojeLocal } from '@/lib/datas/hojeLocal';
@@ -59,6 +62,8 @@ interface FinanciamentoRow {
   credor_nome?: string;
   /** FIN-FINANC-28-P3-FIX3 — o CPF/CNPJ do credor (pela junção do contrato), para a busca do filtro */
   credor_documento?: string | null;
+  /** FIN-FINANC-28 P3-GRAFICO — a situação do contrato como o lote a devolveu (o cronograma do que falta pagar lê daqui) */
+  situacaoDoLote?: SituacaoDoContrato;
   parcelas_pagas: number;
   prox_vencimento?: string;
   total_pendente: number;
@@ -259,6 +264,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
           created_at: f.created_at,
           credor_nome: f.financeiro_fornecedores?.nome ?? '—',
           credor_documento: f.financeiro_fornecedores?.cpf_cnpj ?? null,
+          situacaoDoLote: lote.get(f.id),
           parcelas_pagas: r.parcelasPagas,
           prox_vencimento: r.proxVencimento ?? undefined,
           total_pendente: r.totalPendente,
@@ -382,6 +388,17 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
      não há como os quatro divergirem entre si. */
   /* FIN-FINANC-28-P3-FIX2 — os cards da compra parcelada, em centavos, no dono puro (`totaisDasCompras`), das MESMAS linhas */
   const totais = useMemo(() => totaisDasCompras(filtered), [filtered]);
+
+  /* FIN-FINANC-28 P3-GRAFICO — o cronograma do que falta pagar, sobre AS MESMAS LINHAS dos cards: em Compras parceladas, as que o
+     filtro deixou (`filtered`); em Financiamentos, as vigentes da aba (o conjunto dos cards dela). Só o lote: nenhuma consulta. */
+  const [cronogramaAberto, setCronogramaAberto] = useState<'mensal' | 'anual' | null>(null);
+  const cronogramaCompras = useMemo(() => cronogramaMensal(filtered.map(f => f.situacaoDoLote), hoje), [filtered, hoje]);
+  const vigentesFinanciamento = useMemo(
+    () => financiamentos.filter(f => !ehCompraParcelada(f.natureza) && !ENCERRADOS.includes(f.status)
+      && (filtroNatureza === 'todas' || f.natureza === filtroNatureza) && passaNosFiltros(f, filtroSituacaoFin)),
+    [financiamentos, filtroNatureza, passaNosFiltros, filtroSituacaoFin]);
+  const cronogramaFinanciamentos = useMemo(() => cronogramaAnual(vigentesFinanciamento.map(f => f.situacaoDoLote), hoje),
+    [vigentesFinanciamento, hoje]);
 
   /* FIN-FINANC-28-P3 — a aba "Financiamentos": financiamento e empréstimo, sem os filtros da lista antiga (a lista nova agrupa,
      soma e recolhe os encerrados sozinha). */
@@ -677,8 +694,8 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
                 <span className="truncate">{c.rotulo}</span>
               </div>
               {c.link ? (
-                /* TODO "FIN-28 cronograma": o clique abre o gráfico do cronograma no próximo passo; hoje não faz nada */
-                <button type="button" onClick={() => { /* TODO FIN-28 cronograma */ }}
+                /* FIN-FINANC-28 P3-GRAFICO — o clique abre "O que falta pagar", mês a mês, sobre as mesmas linhas */
+                <button type="button" onClick={() => setCronogramaAberto('mensal')} data-testid="abrir-cronograma"
                   className={`mt-0.5 block text-[14px] font-semibold tabular-nums leading-tight ${c.tom}`}>
                   {fmt(c.valor)}
                 </button>
@@ -707,7 +724,8 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
             ? <p className="text-sm text-muted-foreground p-4">Carregando…</p>
             : <ListaDeFinanciamentos contratos={contratosFinanciamento} encerradosAbertos={encerradosAbertos}
                 aoAlternarEncerrados={() => setEncerradosAbertos(v => !v)} aoAbrir={abrirContrato} filtros={filtros}
-                mostrarBanco={mostrarBanco} />
+                mostrarBanco={mostrarBanco} aoAbrirCronograma={() => setCronogramaAberto('anual')}
+                parcelasAPagar={isLoading ? null : cronogramaFinanciamentos.principalCent / 100} />
         ) : (
         <div className="flex h-full min-h-0 flex-col rounded-lg border border-border bg-card px-3 pt-2 pb-0 shadow-[0_1px_3px_0_rgb(0_0_0/0.04)]">
         {filtros}
@@ -854,6 +872,13 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
           dados do ultimo — a pagina que ele substitui remontava a cada entrada e nascia
           limpa. De quebra, as 6 queries do hook (fazenda, fornecedores, contas e os tres
           planos) so' saem quando o modal abre, e nao a cada render desta lista. */}
+      {/* FIN-FINANC-28 P3-GRAFICO — "O que falta pagar": fechar não mexe na lista (estado, filtros e rolagem ficam) */}
+      <CronogramaEmAbertoDialog aberto={cronogramaAberto !== null} aoFechar={() => setCronogramaAberto(null)}
+        modo={cronogramaAberto ?? 'mensal'} hoje={hoje}
+        cronograma={cronogramaAberto === 'anual' ? cronogramaFinanciamentos : cronogramaCompras}
+        recorte={cronogramaAberto === 'anual'
+          ? `${vigentesFinanciamento.length} ${vigentesFinanciamento.length === 1 ? 'contrato vigente' : 'contratos vigentes'} · os filtros da aba`
+          : `${filtered.length} ${filtered.length === 1 ? 'compra' : 'compras'} · os filtros da aba`} />
       {novaObrigacaoAberta && (
       <ObrigacaoDialog
         open

@@ -179,3 +179,27 @@ describe('FIN-FINANC-28-P3-FIX', () => {
     expect(screen.getByTestId('cel-descricao').getAttribute('title')).toBe('Contrato a · Banco do Brasil');
   });
 });
+
+describe('FIN-FINANC-28 P3-GRAFICO — card "Parcelas a pagar"', () => {
+  it('entra na fileira (5 cards de mesma régua), mostra o principal em aberto e é ELE que abre o cronograma; o Saldo devedor não', () => {
+    const abrir = vi.fn();
+    render(<ListaDeFinanciamentos contratos={[c('a')]} encerradosAbertos={false} aoAlternarEncerrados={vi.fn()} aoAbrir={vi.fn()}
+      aoAbrirCronograma={abrir} parcelasAPagar={11087377.51} />);
+    const cards = screen.getByTestId('lista-fin-cards');
+    expect(cards.className).toContain('grid-cols-5');
+    expect(Array.from(cards.children).map((x) => x.querySelector('span')?.textContent)).toEqual(['Contratado', 'Liberado', 'Saldo devedor', 'Parcelas a pagar', 'Com pendência']);
+    expect(Array.from(cards.children).every((x) => x.className.includes('h-[40px]'))).toBe(true);
+    const botao = screen.getByTestId('abrir-cronograma-anual');
+    expect(botao.textContent?.replace(/\s/g, ' ')).toBe('R$ 11.087.377,51');
+    expect(botao.closest('[class*=h-\\[40px\\]]')?.querySelector('span')?.getAttribute('title')).toBe('Principal das parcelas em aberto; juros previstos no gráfico');
+    fireEvent.click(botao);
+    expect(abrir).toHaveBeenCalledTimes(1);
+    expect(screen.getAllByRole('button').filter((b) => b.getAttribute('data-testid') === 'abrir-cronograma-anual')).toHaveLength(1);
+  });
+
+  it('sem `parcelasAPagar` a fileira é a de antes (4 cards) e nada abre o cronograma', () => {
+    render(<ListaDeFinanciamentos contratos={[c('a')]} encerradosAbertos={false} aoAlternarEncerrados={vi.fn()} aoAbrir={vi.fn()} />);
+    expect(screen.getByTestId('lista-fin-cards').className).toContain('grid-cols-4');
+    expect(screen.queryByTestId('abrir-cronograma-anual')).toBeNull();
+  });
+});

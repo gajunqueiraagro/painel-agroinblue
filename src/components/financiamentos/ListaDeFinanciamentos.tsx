@@ -137,7 +137,7 @@ function LinhaDoContrato({ c, encerrado, aoAbrir, mostrarBanco }: {
   );
 }
 
-export function ListaDeFinanciamentos({ contratos, encerradosAbertos, aoAlternarEncerrados, aoAbrir, filtros, mostrarBanco = true }: {
+export function ListaDeFinanciamentos({ contratos, encerradosAbertos, aoAlternarEncerrados, aoAbrir, filtros, mostrarBanco = true, aoAbrirCronograma, parcelasAPagar }: {
   contratos: readonly ContratoDaLista[];
   /** FIN-FINANC-28-P3-FIX2 — false quando a lista é agrupada SÓ por banco (nenhum contrato com linha de crédito): a coluna Banco
    *  seria a repetição da linha do grupo. Quem decide é a tela, sobre TODOS os contratos (não o recorte do filtro), para filtrar
@@ -148,6 +148,13 @@ export function ListaDeFinanciamentos({ contratos, encerradosAbertos, aoAlternar
   encerradosAbertos: boolean;
   aoAlternarEncerrados: () => void;
   aoAbrir: (id: string) => void;
+  /** FIN-FINANC-28 P3-GRAFICO — o clique no card "Parcelas a pagar" abre o cronograma anual do que falta pagar. */
+  aoAbrirCronograma?: () => void;
+  /**
+   * FIN-FINANC-28 P3-GRAFICO — o PRINCIPAL das parcelas em aberto do recorte, em reais, do dono `cronogramaEmAberto` (o mesmo do
+   * modal anual). Sem ele, o card "Parcelas a pagar" não aparece e a fileira é a de antes.
+   */
+  parcelasAPagar?: number | null;
 }) {
   const [ordem, setOrdem] = useState<{ col: ColunaDaLista; dir: 'asc' | 'desc' }>({ col: 'data', dir: 'asc' });
   const aoOrdenar = (col: ColunaDaLista) => setOrdem((o) => (o.col === col ? { col, dir: o.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' }));
@@ -167,13 +174,15 @@ export function ListaDeFinanciamentos({ contratos, encerradosAbertos, aoAlternar
     cardDaSoma('Contratado', 'Contratado (vigentes)', lista.total.contratado),
     cardDaSoma('Liberado', 'Liberado (vigentes)', lista.total.liberado),
     cardDaSoma('Saldo devedor', 'Saldo devedor (principal: liberado − amortizado)', lista.total.saldo),
+    ...(parcelasAPagar !== undefined ? [{ rotulo: 'Parcelas a pagar', titulo: 'Principal das parcelas em aberto; juros previstos no gráfico',
+      valor: parcelasAPagar === null ? '…' : fmtReal(parcelasAPagar), extra: null, tom: '' }] : []),
     { rotulo: 'Com pendência', titulo: 'Contratos com pendência', valor: String(lista.comPendencia), extra: null,
       tom: lista.comPendencia > 0 ? AMBAR : '' },
   ];
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="mb-2 grid shrink-0 grid-cols-4 gap-2" data-testid="lista-fin-cards">
+      <div className={`mb-2 grid shrink-0 gap-2 ${cards.length === 5 ? 'grid-cols-5' : 'grid-cols-4'}`} data-testid="lista-fin-cards">
         {cards.map((c) => (
           <div key={c.rotulo} className="h-[40px] rounded-md border border-l-[3px] border-l-primary px-3 py-1">
             {/* o "+ ?" mora na linha do RÓTULO, num lugar sempre presente à direita: o valor nunca divide a linha com ele e o
@@ -182,7 +191,12 @@ export function ListaDeFinanciamentos({ contratos, encerradosAbertos, aoAlternar
               <span className="min-w-0 flex-1 truncate text-muted-foreground" title={c.titulo}>{c.rotulo}</span>
               <span className={`shrink-0 whitespace-nowrap text-[9.5px] ${AMBAR}`} title={c.tituloExtra}>{c.extra ?? ''}</span>
             </div>
-            <div className={`mt-0.5 whitespace-nowrap text-[13px] font-semibold leading-tight tabular-nums ${c.tom}`}>{c.valor}</div>
+            {c.rotulo === 'Parcelas a pagar' && aoAbrirCronograma ? (
+              <button type="button" onClick={aoAbrirCronograma} data-testid="abrir-cronograma-anual"
+                className={`mt-0.5 block whitespace-nowrap text-[13px] font-semibold leading-tight tabular-nums ${c.tom}`}>{c.valor}</button>
+            ) : (
+              <div className={`mt-0.5 whitespace-nowrap text-[13px] font-semibold leading-tight tabular-nums ${c.tom}`}>{c.valor}</div>
+            )}
           </div>
         ))}
       </div>

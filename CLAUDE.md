@@ -162,7 +162,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 17/10/2026 (FIN-FINANC-28-P3-FIX4, +1: `src/pages/financiamentosListaCompacta.test.tsx` 3 (10 -> 13: os filtros (a)(b)(c));
+  Baseline em 17/10/2026 (FIN-FINANC-28 P3-GRAFICO, +16: `src/lib/financiamentos/cronogramaEmAberto.test.ts` 8 (novo),
+  `src/components/financiamentos/cronogramaEmAberto.test.tsx` 6 (novo), `src/components/financiamentos/listaDeFinanciamentos.test.tsx` 2
+  (16 -> 18) — 5553 depois dele; antes o FIN-FINANC-28-P3-FIX4, +1: `src/pages/financiamentosListaCompacta.test.tsx` 3 (10 -> 13: os filtros (a)(b)(c));
   saiu `src/lib/fornecedores/nomeCurtoDoCredor.test.ts` 2, com o encurtador que testava — 5537 depois dele; antes o FIN-FINANC-28-P3-FIX3, +3: `src/pages/financiamentosListaCompacta.test.tsx` 3 (7 -> 10: a volta do contrato
   reabre a aba, o padrao sem nada guardado, e o filtro Credor com busca) — 5536 depois dele; antes o FIN-FINANC-28-P3-FIX2, +3: `src/lib/financiamentos/situacaoEmLote.test.ts` 1, `src/components/financiamentos/
   listaDeFinanciamentos.test.tsx` 1 (15 -> 16), `src/pages/financiamentosListaCompacta.test.tsx` 1 (6 -> 7, reescrito ao contrato novo) —
@@ -361,7 +363,7 @@ no mesmo arquivo.
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
   `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5327
-  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4], 22 skipped, e
+  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO], 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -2210,6 +2212,32 @@ preview que o cabecalho nao sai da tela ao rolar.
     documento por `financiamento_id` — a pendencia "sem documento" fica para o passo 4.
   ⚠ NAO PROVADO NO NAVEGADOR: nada com login (bancada com a pagina real e o banco simulado) · hoje os 41 ativos estao com "?" e
     `sem_liberacao` (a tabela de liberacoes esta' vazia).
+- ⚠ "O QUE FALTA PAGAR": O CRONOGRAMA SAI DO MESMO LOTE DOS CARDS, E A SOMA DAS COLUNAS E' O CARD (FIN-FINANC-28 P3-GRAFICO, Gabriel
+  17/10/2026, so' tela; mock `docs/mocks/mock-financiamentos-v1_2.html` secao 6, md5 e2f9594082c7fb628899b5ee569f4dc7). Clicar no card
+  "A pagar" de Compras parceladas abre o modal MES A MES; clicar no card NOVO "Parcelas a pagar" da aba Financiamentos abre o ANO A ANO (empilhado:
+  principal #2563a8 embaixo, juros previstos #d08a2c em cima; vencidas #b91c1c na 1a coluna). Fechar nao mexe na lista.
+  · DONO PURO, EM CENTAVOS: `src/lib/financiamentos/cronogramaEmAberto.ts` (`parcelasEmAberto`, `cronogramaMensal`, `cronogramaAnual`,
+    `aindaAPagarEmJaneiro`). PARCELA EM ABERTO = a regra do card (P3-FIX3): parcela que o lote nao julgou 'paga', pelo que falta
+    (`valorTotal − valorPago`); VENCIDA = vencimento antes de HOJE (a regua do cartao `vencido`). E' o que `a_vencer + vencido` do dono
+    somam: por isso a soma das colunas e' o card ao centavo. Na parcela PARCIAL o que falta e' repartido na proporcao principal/juros
+    (os juros sao o resto); 0 casos com juros hoje. Nenhuma consulta nova: a linha da lista guarda `situacaoDoLote`.
+  · O RECORTE E' O DOS CARDS: Compras parceladas = as linhas que o filtro deixou (`filtered`); Financiamentos = as VIGENTES da aba (o
+    conjunto dos cards dela), com os filtros.
+  · O CARD "SALDO DEVEDOR" (liberado − amortizado) NAO ABRE NADA e segue "?" enquanto nao houver liberacao gravada (e' a verdade). Quem
+    abre o anual e' o card "Parcelas a pagar" (`parcelasAPagar` de `ListaDeFinanciamentos`, opcional; sem ele a fileira e' a de 4 cards):
+    o PRINCIPAL das parcelas em aberto do recorte = `cronogramaFinanciamentos.principalCent` (o mesmo dono do modal; preso por teste: =
+    a soma do principal das colunas, ao centavo). `title` "Principal das parcelas em aberto; juros previstos no grafico". Fileira de 5
+    cards de mesma regua: a 1.126, 177 x 40 cada, nenhum valor cortado (nenhum card saiu); a 1.440, 240 x 40. NJ: R$ 11.087.377,51.
+  · O GRAFICO E' O `BarrasCompactas` DA CASA, com tres opcoes OPT-IN novas (sem elas, nada muda para quem ja' usa): `segmentos` (barra
+    empilhada; cada pedaco = valor / valor da barra, na mesma escala), `corNota` (o ano debaixo do 1o mes de cada ano, em cinza) e
+    `tituloNaColuna` (o `title` vale na coluna inteira: barra de 2px nao se mira). Barra de 26px; com muitas colunas encolhe (piso 10).
+    Modal 680 x 400 fixo, sem rolagem, sem mono.
+  NJ (17/10, bancada com o lote real): A pagar R$ 476.342,61 = soma das 12 colunas; vencidas R$ 115.778,06; ainda em jan/27 R$ 61.774,41;
+  ultima parcela ago/27. Financiamentos (11 vigentes): principal R$ 11.087.377,51; juros previstos R$ 10.516.748,53 (R$ 698.081,90 deles
+  ja' vencidos, todos juros); ultimo vencimento 2040.
+  ⚠ DIVERGENCIA DO MOCK, O BANCO VENCE: o mock dizia vencidas R$ 12.952 e out/26 R$ 171.762; o lote de hoje diz vencidas R$ 115.778,06 e
+    out/26 R$ 68.936,38 (o que venceu em out antes de 17/10 e nao foi pago esta' nas vencidas).
+  ⚠ NAO PROVADO NO NAVEGADOR com login (bancada) · o tooltip do navegador (o `title`) so' por teste.
 - ⚠ NOME DO CREDOR E' O DO CADASTRO, INTEIRO, COM O CPF/CNPJ — PROIBIDO ENCURTAR (FIN-FINANC-28-P3-FIX4, decisao do Gabriel 17/10/2026
   09:04, definitiva). Toda tela mostra o nome EXATAMENTE como esta' no cadastro (LTDA, S.A., tudo): nada de tirar sufixo, abreviar ou
   "nome curto". Onde a coluna nao comporta, corta com reticencias e o `title` diz "Nome completo · CNPJ/CPF formatado" — um ajudante
