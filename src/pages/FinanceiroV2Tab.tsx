@@ -26,6 +26,7 @@ import { useLancamentosComOC, rotuloOrigemOC } from '@/hooks/useLancamentosComOC
 import { iconeOrigemLancamento } from '@/v2/lib/origemLancamento';
 import { useDocumentosDoCliente } from '@/hooks/useDocumentosDoCliente';
 import { useParcelasDosLancamentos } from '@/hooks/useParcelasDosLancamentos';
+import { useContratosDoCliente } from '@/hooks/useContratosDoCliente';
 import { nomeEParcela } from '@/lib/financiamentos/nomeDaParcela';
 import { docDaLinha } from '@/lib/financeiro/documentoHelper';
 import { fraseDoLote } from '@/lib/financiamentos/cancelarParcela';
@@ -274,6 +275,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
      fonte da aba Documentos. É o que acende o clipe e dá o "NF 000.000.NNN" à parcela que não tem número próprio. */
   const { data: documentosPorLancamento } = useDocumentosDoCliente(clienteAtual?.id ?? null);
   const { data: parcelasDosLancamentos } = useParcelasDosLancamentos(clienteAtual?.id);
+  const { data: contratosDoCliente } = useContratosDoCliente(clienteAtual?.id);
 
   /**
    * PR-FORN-01 — as opções e a contagem saem do RECORTE CARREGADO, não do catálogo.
@@ -2887,6 +2889,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                               recorrenciaId: l.recorrencia_id,
                               parcelaDeParcelamento: parcela ? `${parcela.numero}/${parcela.total}` : null,
                               oc: oc ? rotuloOrigemOC(oc) : null,
+                              contrato: contratoId ? contratosDoCliente?.get(contratoId) ?? null : null,
                             });
                             if (vinculos.length === 0) return null;
                             const abrirContrato = podeAbrirFinanciamento ? onAbrirFinanciamento : undefined;

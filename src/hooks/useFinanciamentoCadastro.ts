@@ -565,7 +565,9 @@ export function useFinanciamentoCadastro() {
             origem_lancamento: 'financiamento',
             origem_tipo: 'financiamento_captacao',
             plano_conta_id: planoCaptacaoId,
-            descricao: `Captação: ${form.descricao.trim()}`,
+            /* FIN-LANC-DESCRICAO-CONTRATO-01: a tela não monta o texto. Ao ligar o lançamento ao contrato (`lancamento_captacao_id`,
+               logo abaixo), o gatilho do banco o reescreve como "Captação · nº · descrição". */
+            descricao: form.descricao.trim(),
             status_transacao: 'realizado',
             sem_movimentacao_caixa: false,
             cancelado: false,

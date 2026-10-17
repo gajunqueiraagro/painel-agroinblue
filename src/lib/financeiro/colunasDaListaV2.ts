@@ -64,13 +64,24 @@ export function vinculosDaLinha(e: {
   recorrenciaId?: string | null;
   parcelaDeParcelamento?: string | null;   // "i/N" do contrato, quando é parcela viva de parcelamento
   oc?: string | null;                      // rótulo da OC, quando há parte viva
+  contrato?: string | null;                // "<nº> · <descrição>" do contrato (FIN-LANC-DESCRICAO-CONTRATO-01)
 }): Vinculo[] {
   const out: Vinculo[] = [];
-  if (e.financiamentoId && !e.parcelaDeParcelamento) out.push({ tipo: 'F', titulo: NOME_VINCULO.F });
+  if (e.financiamentoId && !e.parcelaDeParcelamento) out.push({ tipo: 'F', titulo: e.contrato || NOME_VINCULO.F });
   if (e.recorrenciaId) out.push({ tipo: 'R', titulo: NOME_VINCULO.R });
   if (e.parcelaDeParcelamento) out.push({ tipo: 'P', titulo: `${NOME_VINCULO.P} · parcela ${e.parcelaDeParcelamento}` });
   if (e.oc) out.push({ tipo: 'O', titulo: e.oc });
   return out;
+}
+
+/**
+ * FIN-LANC-DESCRICAO-CONTRATO-01 — o nome do contrato no selo "F": "<nº> · <descrição>", o nº só com dígito. ESPELHO DECLARADO de
+ * `_fn_financiamento_descricao_lancamento` (o banco): quem mudar a regra do nº muda as duas.
+ */
+export function tituloDoContrato(numero: string | null | undefined, descricao: string | null | undefined): string {
+  const n = numero && /\d/.test(numero) ? numero.trim() : '';
+  const d = (descricao ?? '').trim();
+  return [n, d].filter(Boolean).join(' · ') || NOME_VINCULO.F;
 }
 
 export interface SafraNaLista { linha1: string; linha2: string | null; titulo: string }

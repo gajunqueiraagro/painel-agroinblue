@@ -339,7 +339,8 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
             origem_lancamento: 'financiamento',
             origem_tipo: 'financiamento_captacao',
             plano_conta_id: novoPlanoCap,
-            descricao: `Captação: ${(form.descricao ?? '').trim()}`,
+            /* FIN-LANC-DESCRICAO-CONTRATO-01: o gatilho do banco reescreve ao ligar ("Captação · nº · descrição"). */
+            descricao: (form.descricao ?? '').trim(),
             status_transacao: 'realizado',
             sem_movimentacao_caixa: false,
             cancelado: false,

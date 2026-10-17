@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
   CHAVE_PREF, MODOS_SEM_CAIXA, NIVEIS_CLASSIFICACAO, caminhoDaClassificacao, gravarPreferencia, lerPreferencia,
-  linhasDaGradePorModo, safraNaLista, secaoSemCaixaVisivel, textoDaClassificacao, vinculosDaLinha,
+  linhasDaGradePorModo, safraNaLista, secaoSemCaixaVisivel, textoDaClassificacao, tituloDoContrato, vinculosDaLinha,
 } from '@/lib/financeiro/colunasDaListaV2';
 import { totaisDaListaV2 } from '@/lib/financeiro/totaisDaListaV2';
 import { CelulaSafra, CelulaVinculos } from './ColunasDaListaV2';
@@ -134,5 +134,30 @@ describe('o Ampliado com e sem as contas, e as preferências', () => {
     instalarStorage(true);
     expect(lerPreferencia(CHAVE_PREF.semCaixa, null, MODOS_SEM_CAIXA, 'ocultar')).toBe('ocultar');
     expect(() => gravarPreferencia(CHAVE_PREF.semCaixa, null, 'so_dre')).not.toThrow();
+  });
+});
+
+describe('FIN-LANC-DESCRICAO-CONTRATO-01 — o selo "F" diz o contrato', () => {
+  it('nº só com dígito; sem nº e sem descrição, "Financiamento"', () => {
+    expect(tituloDoContrato('512-23772900-3', 'RO - Custeio Pecuário 2025')).toBe('512-23772900-3 · RO - Custeio Pecuário 2025');
+    expect(tituloDoContrato('Atualizar', ' Recuperação de Solo ')).toBe('Recuperação de Solo');
+    expect(tituloDoContrato(null, null)).toBe('Financiamento');
+  });
+  it('o title do selo F é o do contrato; o selo continua abrindo o contrato', () => {
+    const v = vinculosDaLinha({ financiamentoId: 'f1', contrato: 'PR-78.192 · Recuperação de Solo' });
+    expect(v).toEqual([{ tipo: 'F', titulo: 'PR-78.192 · Recuperação de Solo' }]);
+    const abrir = vi.fn();
+    render(<CelulaVinculos vinculos={v} abrir={{ F: abrir }} />);
+    const selo = screen.getByTestId('vinculo-F');
+    expect(selo.getAttribute('title')).toBe('PR-78.192 · Recuperação de Solo — clique para abrir');
+    fireEvent.click(selo);
+    expect(abrir).toHaveBeenCalledTimes(1);
+  });
+  it('a tela passa o nome do contrato ao selo e não monta texto de captação', () => {
+    const tela = readFileSync(resolve(__dirname, '../../pages/FinanceiroV2Tab.tsx'), 'utf8');
+    expect(tela).toMatch(/contrato: contratoId \? contratosDoCliente\?\.get\(contratoId\)/);
+    for (const f of ['../../hooks/useFinanciamentoCadastro.ts', '../../pages/FinanciamentoDetalhe.tsx']) {
+      expect(readFileSync(resolve(__dirname, f), 'utf8')).not.toMatch(/`Captação: /);
+    }
   });
 });
