@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 17/10/2026 (FIN-FINANC-28 PASSO 4, +15: `src/components/financiamentos/contratoDeCredito.test.tsx` 14 (novo),
+  Baseline em 17/10/2026 (FIN-FINANC-28 RESUMO-A18, +3: `src/components/financiamentos/resumoDaObrigacao.test.ts` 3 (novo) — 5571
+  depois dele; antes o FIN-FINANC-28 PASSO 4, +15: `src/components/financiamentos/contratoDeCredito.test.tsx` 14 (novo),
   `src/lib/acessos/guardaDeClienteNasMigrations.test.ts` 1 (5 -> 6) — 5568 depois dele; antes o FIN-FINANC-28 P3-GRAFICO, +16: `src/lib/financiamentos/cronogramaEmAberto.test.ts` 8 (novo),
   `src/components/financiamentos/cronogramaEmAberto.test.tsx` 6 (novo), `src/components/financiamentos/listaDeFinanciamentos.test.tsx` 2
   (16 -> 18) — 5553 depois dele; antes o FIN-FINANC-28-P3-FIX4, +1: `src/pages/financiamentosListaCompacta.test.tsx` 3 (10 -> 13: os filtros (a)(b)(c));
@@ -364,7 +365,7 @@ no mesmo arquivo.
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
   `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5327
-  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO; 5568 desde o FIN-FINANC-28 PASSO 4], 22 skipped, e
+  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO; 5568 desde o FIN-FINANC-28 PASSO 4; 5571 desde o FIN-FINANC-28 RESUMO-A18], 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -2213,6 +2214,13 @@ preview que o cabecalho nao sai da tela ao rolar.
     documento por `financiamento_id` — a pendencia "sem documento" fica para o passo 4.
   ⚠ NAO PROVADO NO NAVEGADOR: nada com login (bancada com a pagina real e o banco simulado) · hoje os 41 ativos estao com "?" e
     `sem_liberacao` (a tabela de liberacoes esta' vazia).
+- ⚠ O RESUMO LATERAL DO ObrigacaoDialog E' A ESCALA A18 DE MODAL (FIN-FINANC-28 RESUMO-A18, Gabriel 17/10/2026, so' tela): aside de
+  240px SEM ROLAGEM, da altura da area do formulario; "Resumo" 11px/600 (sem caixa alta); secao 9px maiuscula cinza-navy com linha
+  fina, sem faixa de fundo; linha de 16px, rotulo 10px cinza, valor 10px/500 a' direita (texto longo corta com o inteiro no `title`);
+  Valor total 11px/700; selo da natureza 8,5px; NENHUM texto acima de 11px; o "Falta:" para em 2 linhas (inteiro no `title`). A mesma
+  regua nas tres naturezas; o formulario novo (passo 7) a herda. Preso por `resumoDaObrigacao.test.ts` (fonte, com auto-teste).
+  MEDIDO na bancada a 1.126 x 579 e 1.440 x 800 (compra parcelada e PR-78.192, abas Contrato e Parcelas): 240px, sem rolagem,
+  maior fonte 11px, linhas de 16px. As 15 fotos do dialogo (`obrigacaoDialog.fotos.json`) REGRAVADAS de proposito (o aside esta' em todas).
 - ⚠ A TELA DO CONTRATO DE CREDITO TEM LIBERACOES, DESTINACOES, CRONOGRAMA E DOCUMENTOS, E TODO GESTO E' UMA RPC COM O CONTRARIO
   (FIN-FINANC-28 PASSO 4, Gabriel 17/10/2026; mock `docs/mocks/mock-financiamentos-v1_2.html` secao 2; migration
   `supabase/migrations/20261027200200_fin_financ_28_p4_contrato.sql`, md5 do arquivo 0cbe209ddbd9716fb854ba6c1901eed4 — APLICADA no proto

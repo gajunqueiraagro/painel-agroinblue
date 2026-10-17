@@ -178,8 +178,9 @@ function BlocoHead({ titulo }: { titulo: string }) {
        separam uma secao da outra; `py`/`mt`/`mb` de 2px cada somavam ~18px nos tres blocos, e
        essa altura estava empurrando o resumo para a rolagem. O fundo e as bordas fazem a
        separacao que o espaco fazia. */
-    <div className="bg-muted/40 border-y border-border/60 px-3 mt-0 mb-0">
-      <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">{titulo}</span>
+    /* FIN-FINANC-28 — ESCALA A18 DE MODAL (Gabriel 17/10): seção a 9px maiúscula cinza-navy com linha fina, SEM faixa de fundo */
+    <div className="mx-3 mt-1.5 border-b border-border/60 pb-[1px]">
+      <span className="text-[9px] font-semibold uppercase tracking-[0.04em] leading-[12px] text-[#475569]">{titulo}</span>
     </div>
   );
 }
@@ -228,9 +229,10 @@ function CampoDasParcelas({ testid, comum, escolhido, vazio, opcoes, aoMudar, co
 
 function Linha({ rotulo, valor, valorClassName }: { rotulo: string; valor: string | null; valorClassName?: string }) {
   return (
-    <div className="flex h-6 items-center justify-between gap-1.5 leading-tight">
+    /* A18: linha de 16px, rótulo 10px cinza, valor 10px/500 à direita; texto longo corta com o inteiro no `title` */
+    <div className="flex h-4 items-center justify-between gap-1.5 leading-[16px]">
       <span className="text-muted-foreground shrink-0">{rotulo}</span>
-      <span className={`font-medium text-right truncate ${valorClassName ?? ''}`} title={valor ?? undefined}>
+      <span className={`min-w-0 font-medium text-right truncate tabular-nums ${valorClassName ?? ''}`} title={valor ?? undefined}>
         {valor || '—'}
       </span>
     </div>
@@ -1001,7 +1003,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                 deixa o conteudo ser cortado pelo `overflow-hidden`.
                 ⚠ SO A PARTIR DE `lg`: abaixo disso as colunas viram linhas empilhadas
                 e altura fixa por coluna cortaria o resumo — ali o corpo rola inteiro. */}
-            <div className={`grid grid-cols-1 lg:grid-cols-[1fr_280px] lg:grid-rows-[minmax(0,1fr)] gap-3 p-4 ${ALTURA_CORPO} overflow-y-auto lg:overflow-hidden bg-muted/30`}>
+            <div className={`grid grid-cols-1 lg:grid-cols-[1fr_240px] lg:grid-rows-[minmax(0,1fr)] gap-3 p-4 ${ALTURA_CORPO} overflow-y-auto lg:overflow-hidden bg-muted/30`}>
               <div className="space-y-2 min-w-0 lg:min-h-0 lg:overflow-y-auto">
 
                 {/* ══ ABA CONTRATO ══════════════════════════════════════════════ */}
@@ -1771,22 +1773,22 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                 </TabsContent>
               </div>
 
-              {/* ── RESUMO LATERAL (280px) ─────────────────────────────────────
+              {/* ── RESUMO LATERAL (240px, A18, sem rolagem) ────────────────────
                   ⚠ FORA do scrollport da coluna de conteudo, por construcao: e' o
                   numero que se confere enquanto se preenche, e nao pode subir junto
                   com o formulario. Ausencia e' "—", nunca zero (A19/sentinelas). */}
-              <aside className="lg:min-h-0 lg:overflow-y-auto">
-                <div className="bg-card rounded-md border shadow-sm overflow-hidden text-[10px]">
-                  <div className="h-8 border-b border-border bg-accent/40 flex items-center px-3 text-[11px] font-bold uppercase tracking-wide text-primary">
-                    Resumo da obrigação
+              <aside className="lg:min-h-0 lg:overflow-hidden" data-testid="resumo-da-obrigacao">
+                <div className="lg:h-full bg-card rounded-md border shadow-sm overflow-hidden text-[10px]">
+                  <div className="h-[24px] border-b border-border flex items-center px-3 text-[11px] font-semibold text-primary">
+                    Resumo
                   </div>
                   <div className="pb-1">
                     <BlocoHead titulo="Contrato" />
                     <div className="px-3">
-                      <div className="flex h-6 items-center justify-between gap-1.5 leading-tight">
+                      <div className="flex h-4 items-center justify-between gap-1.5 leading-[16px]">
                         <span className="text-muted-foreground shrink-0">Natureza</span>
                         <span className="flex items-center gap-1 min-w-0">
-                          <span className="rounded border border-primary/40 bg-primary/10 px-1 text-[9px] font-bold text-primary">
+                          <span className="rounded border border-primary/40 bg-primary/10 px-1 text-[8.5px] font-bold leading-[12px] text-primary">
                             {PILULA_NATUREZA[form.natureza]}
                           </span>
                           <span className="font-medium truncate">{NOME_NATUREZA[form.natureza]}</span>
@@ -1804,9 +1806,9 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
 
                     <BlocoHead titulo="Cronograma" />
                     <div className="px-3">
-                      <div className="flex items-baseline justify-between gap-1.5 leading-tight">
+                      <div className="flex h-4 items-center justify-between gap-1.5 leading-[16px]">
                         <span className="text-muted-foreground shrink-0">Valor total</span>
-                        <span className={`text-[14px] font-semibold ${NUM}`}>
+                        <span className={`text-[11px] font-bold ${NUM}`} data-testid="resumo-valor-total">
                           {form.valor_total > 0 ? brl(form.valor_total) : '—'}
                         </span>
                       </div>
@@ -1838,7 +1840,9 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                     </div>
 
                     {pendencias.length > 0 && (
-                      <div className="mx-3 mt-2 border-l-2 border-amber-500 bg-amber-50 dark:bg-amber-950/30 px-2 py-1">
+                      /* sem rolagem no resumo: a lista do que falta para em 2 linhas, inteira no `title` */
+                      <div className="mx-3 mt-1.5 line-clamp-2 border-l-2 border-amber-500 bg-amber-50 dark:bg-amber-950/30 px-2 py-0.5 leading-[14px]"
+                        title={pendencias.map(p => p.texto.replace(/\.$/, '')).join(' · ')}>
                         <span className="font-semibold text-amber-700 dark:text-amber-500">Falta: </span>
                         <span className="text-amber-800 dark:text-amber-400">
                           {pendencias.map(p => p.texto.replace(/\.$/, '')).join(' · ')}
