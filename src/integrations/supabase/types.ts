@@ -3760,6 +3760,233 @@ export type Database = {
         }
         Relationships: []
       }
+      classificacao_bloco_itens: {
+        Row: {
+          bloco_id: string
+          id: string
+          lancamento_id: string | null
+          staging_id: string | null
+        }
+        Insert: {
+          bloco_id: string
+          id?: string
+          lancamento_id?: string | null
+          staging_id?: string | null
+        }
+        Update: {
+          bloco_id?: string
+          id?: string
+          lancamento_id?: string | null
+          staging_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "classificacao_bloco_itens_bloco_id_fkey"
+            columns: ["bloco_id"]
+            isOneToOne: false
+            referencedRelation: "classificacao_blocos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      classificacao_blocos: {
+        Row: {
+          cliente_id: string
+          conta_id: string
+          criado_em: string
+          criado_por: string | null
+          desfeito_em: string | null
+          desfeito_motivo: string | null
+          desfeito_por: string | null
+          estado_anterior: Json
+          id: string
+          resumo: Json | null
+          sessao_id: string
+        }
+        Insert: {
+          cliente_id: string
+          conta_id: string
+          criado_em?: string
+          criado_por?: string | null
+          desfeito_em?: string | null
+          desfeito_motivo?: string | null
+          desfeito_por?: string | null
+          estado_anterior: Json
+          id?: string
+          resumo?: Json | null
+          sessao_id: string
+        }
+        Update: {
+          cliente_id?: string
+          conta_id?: string
+          criado_em?: string
+          criado_por?: string | null
+          desfeito_em?: string | null
+          desfeito_motivo?: string | null
+          desfeito_por?: string | null
+          estado_anterior?: Json
+          id?: string
+          resumo?: Json | null
+          sessao_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "classificacao_blocos_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "classificacao_blocos_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_contas_bancarias"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      classificacao_sessoes: {
+        Row: {
+          arquivo: string | null
+          cliente_id: string
+          concluida_em: string | null
+          criado_em: string
+          criado_por: string | null
+          id: string
+          linhas_esperadas: number | null
+          status: string
+        }
+        Insert: {
+          arquivo?: string | null
+          cliente_id: string
+          concluida_em?: string | null
+          criado_em?: string
+          criado_por?: string | null
+          id: string
+          linhas_esperadas?: number | null
+          status?: string
+        }
+        Update: {
+          arquivo?: string | null
+          cliente_id?: string
+          concluida_em?: string | null
+          criado_em?: string
+          criado_por?: string | null
+          id?: string
+          linhas_esperadas?: number | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "classificacao_sessoes_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      classificacao_split_itens: {
+        Row: {
+          filho_id: string
+          id: string
+          match_lancamento_id_antes: string | null
+          match_status_antes: string | null
+          par_inferido: boolean
+          split_id: string
+          staging_id: string
+          vinculo_filho_id: string | null
+        }
+        Insert: {
+          filho_id: string
+          id?: string
+          match_lancamento_id_antes?: string | null
+          match_status_antes?: string | null
+          par_inferido?: boolean
+          split_id: string
+          staging_id: string
+          vinculo_filho_id?: string | null
+        }
+        Update: {
+          filho_id?: string
+          id?: string
+          match_lancamento_id_antes?: string | null
+          match_status_antes?: string | null
+          par_inferido?: boolean
+          split_id?: string
+          staging_id?: string
+          vinculo_filho_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "classificacao_split_itens_split_id_fkey"
+            columns: ["split_id"]
+            isOneToOne: false
+            referencedRelation: "classificacao_splits"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      classificacao_splits: {
+        Row: {
+          cliente_id: string
+          consolidado_id: string
+          criado_em: string
+          criado_por: string | null
+          desfeito_em: string | null
+          desfeito_motivo: string | null
+          desfeito_por: string | null
+          extrato_id: string
+          grupo_id: string | null
+          id: string
+          origem: string
+          sessao_id: string
+          vinculo_original: Json
+          vinculo_recriado_id: string | null
+        }
+        Insert: {
+          cliente_id: string
+          consolidado_id: string
+          criado_em?: string
+          criado_por?: string | null
+          desfeito_em?: string | null
+          desfeito_motivo?: string | null
+          desfeito_por?: string | null
+          extrato_id: string
+          grupo_id?: string | null
+          id?: string
+          origem: string
+          sessao_id: string
+          vinculo_original: Json
+          vinculo_recriado_id?: string | null
+        }
+        Update: {
+          cliente_id?: string
+          consolidado_id?: string
+          criado_em?: string
+          criado_por?: string | null
+          desfeito_em?: string | null
+          desfeito_motivo?: string | null
+          desfeito_por?: string | null
+          extrato_id?: string
+          grupo_id?: string | null
+          id?: string
+          origem?: string
+          sessao_id?: string
+          vinculo_original?: Json
+          vinculo_recriado_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "classificacao_splits_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cliente_membros: {
         Row: {
           ativo: boolean
@@ -3864,6 +4091,69 @@ export type Database = {
           id?: string
           status?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      conc_dividendos_plano_01_backfill: {
+        Row: {
+          aplicado_em: string
+          cliente_id: string
+          editado_manual_antes: boolean | null
+          grupo_custo_antes: string | null
+          lancamento_id: string
+          plano_conta_id: string
+          updated_at_antes: string | null
+        }
+        Insert: {
+          aplicado_em?: string
+          cliente_id: string
+          editado_manual_antes?: boolean | null
+          grupo_custo_antes?: string | null
+          lancamento_id: string
+          plano_conta_id: string
+          updated_at_antes?: string | null
+        }
+        Update: {
+          aplicado_em?: string
+          cliente_id?: string
+          editado_manual_antes?: boolean | null
+          grupo_custo_antes?: string | null
+          lancamento_id?: string
+          plano_conta_id?: string
+          updated_at_antes?: string | null
+        }
+        Relationships: []
+      }
+      conc_import_agnaldo_01a_backfill: {
+        Row: {
+          antes: Json
+          campos: string[]
+          criado_em: string
+          depois: Json | null
+          gesto_contrario: string
+          id: number
+          registro_id: string
+          tabela: string
+        }
+        Insert: {
+          antes: Json
+          campos: string[]
+          criado_em?: string
+          depois?: Json | null
+          gesto_contrario: string
+          id?: number
+          registro_id: string
+          tabela: string
+        }
+        Update: {
+          antes?: Json
+          campos?: string[]
+          criado_em?: string
+          depois?: Json | null
+          gesto_contrario?: string
+          id?: number
+          registro_id?: string
+          tabela?: string
         }
         Relationships: []
       }
@@ -4037,6 +4327,125 @@ export type Database = {
             columns: ["lancamento_id"]
             isOneToOne: false
             referencedRelation: "vw_financeiro_lancamentos_v2_doc"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      conciliacao_blocos: {
+        Row: {
+          cliente_id: string
+          conta_bancaria_id: string
+          criado_em: string
+          criado_por: string | null
+          desfeito_em: string | null
+          desfeito_motivo: string | null
+          desfeito_por: string | null
+          estado_anterior: Json
+          id: string
+          regra: string
+          resumo: Json | null
+        }
+        Insert: {
+          cliente_id: string
+          conta_bancaria_id: string
+          criado_em?: string
+          criado_por?: string | null
+          desfeito_em?: string | null
+          desfeito_motivo?: string | null
+          desfeito_por?: string | null
+          estado_anterior?: Json
+          id?: string
+          regra: string
+          resumo?: Json | null
+        }
+        Update: {
+          cliente_id?: string
+          conta_bancaria_id?: string
+          criado_em?: string
+          criado_por?: string | null
+          desfeito_em?: string | null
+          desfeito_motivo?: string | null
+          desfeito_por?: string | null
+          estado_anterior?: Json
+          id?: string
+          regra?: string
+          resumo?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conciliacao_blocos_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conciliacao_blocos_conta_bancaria_id_fkey"
+            columns: ["conta_bancaria_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_contas_bancarias"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      consultor_pendencias: {
+        Row: {
+          atualizada_em: string
+          atualizada_por: string | null
+          cliente_id: string
+          cobrar_de: string
+          criada_em: string
+          criada_por: string | null
+          id: string
+          o_que: string
+          origem_ref: string | null
+          origem_tipo: string | null
+          prazo: string | null
+          resolvida_em: string | null
+          status: string
+          ultima_cobranca_canal: string | null
+          ultima_cobranca_em: string | null
+        }
+        Insert: {
+          atualizada_em?: string
+          atualizada_por?: string | null
+          cliente_id: string
+          cobrar_de: string
+          criada_em?: string
+          criada_por?: string | null
+          id?: string
+          o_que: string
+          origem_ref?: string | null
+          origem_tipo?: string | null
+          prazo?: string | null
+          resolvida_em?: string | null
+          status?: string
+          ultima_cobranca_canal?: string | null
+          ultima_cobranca_em?: string | null
+        }
+        Update: {
+          atualizada_em?: string
+          atualizada_por?: string | null
+          cliente_id?: string
+          cobrar_de?: string
+          criada_em?: string
+          criada_por?: string | null
+          id?: string
+          o_que?: string
+          origem_ref?: string | null
+          origem_tipo?: string | null
+          prazo?: string | null
+          resolvida_em?: string | null
+          status?: string
+          ultima_cobranca_canal?: string | null
+          ultima_cobranca_em?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consultor_pendencias_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
             referencedColumns: ["id"]
           },
         ]
@@ -5426,6 +5835,36 @@ export type Database = {
         }
         Relationships: []
       }
+      fin_amort_competencia_venc_01_backfill: {
+        Row: {
+          ano_mes_antes: string | null
+          cliente_id: string
+          competencia_antes: string | null
+          data_vencimento: string
+          gravado_em: string
+          lancamento_id: string
+          md5_campos_antes: string
+        }
+        Insert: {
+          ano_mes_antes?: string | null
+          cliente_id: string
+          competencia_antes?: string | null
+          data_vencimento: string
+          gravado_em?: string
+          lancamento_id: string
+          md5_campos_antes: string
+        }
+        Update: {
+          ano_mes_antes?: string | null
+          cliente_id?: string
+          competencia_antes?: string | null
+          data_vencimento?: string
+          gravado_em?: string
+          lancamento_id?: string
+          md5_campos_antes?: string
+        }
+        Relationships: []
+      }
       fin_juros_comp_bkp_20260826: {
         Row: {
           ano_mes: string | null
@@ -5456,6 +5895,36 @@ export type Database = {
           descricao?: string | null
           id?: string | null
           valor?: number | null
+        }
+        Relationships: []
+      }
+      fin_safra_modal_01_backfill: {
+        Row: {
+          criado_em: string
+          evidencia: string
+          gesto_contrario: string
+          id: number
+          lancamento_id: string
+          safra_anterior: string
+          safra_nova: string
+        }
+        Insert: {
+          criado_em?: string
+          evidencia: string
+          gesto_contrario: string
+          id?: number
+          lancamento_id: string
+          safra_anterior: string
+          safra_nova: string
+        }
+        Update: {
+          criado_em?: string
+          evidencia?: string
+          gesto_contrario?: string
+          id?: number
+          lancamento_id?: string
+          safra_anterior?: string
+          safra_nova?: string
         }
         Relationships: []
       }
@@ -5620,11 +6089,15 @@ export type Database = {
           excel_data_vencimento: string | null
           excel_documento: string | null
           excel_fazenda_codigo: string | null
+          excel_forma_pagamento: string | null
           excel_fornecedor: string | null
           excel_linha_origem: number | null
           excel_observacao: string | null
           excel_produto: string | null
+          excel_safra: string | null
+          excel_status: string | null
           excel_subcentro: string | null
+          excel_tipo_documento: string | null
           excel_tipo_operacao: string | null
           excel_valor: number | null
           match_lancamento_id: string | null
@@ -5662,11 +6135,15 @@ export type Database = {
           excel_data_vencimento?: string | null
           excel_documento?: string | null
           excel_fazenda_codigo?: string | null
+          excel_forma_pagamento?: string | null
           excel_fornecedor?: string | null
           excel_linha_origem?: number | null
           excel_observacao?: string | null
           excel_produto?: string | null
+          excel_safra?: string | null
+          excel_status?: string | null
           excel_subcentro?: string | null
+          excel_tipo_documento?: string | null
           excel_tipo_operacao?: string | null
           excel_valor?: number | null
           match_lancamento_id?: string | null
@@ -5704,11 +6181,15 @@ export type Database = {
           excel_data_vencimento?: string | null
           excel_documento?: string | null
           excel_fazenda_codigo?: string | null
+          excel_forma_pagamento?: string | null
           excel_fornecedor?: string | null
           excel_linha_origem?: number | null
           excel_observacao?: string | null
           excel_produto?: string | null
+          excel_safra?: string | null
+          excel_status?: string | null
           excel_subcentro?: string | null
+          excel_tipo_documento?: string | null
           excel_tipo_operacao?: string | null
           excel_valor?: number | null
           match_lancamento_id?: string | null
@@ -6042,6 +6523,55 @@ export type Database = {
         }
         Relationships: []
       }
+      financeiro_documento_vinculos: {
+        Row: {
+          cliente_id: string
+          criado_em: string
+          criado_por: string | null
+          documento_id: string
+          documento_lancamento_id: string
+          lancamento_id: string
+        }
+        Insert: {
+          cliente_id: string
+          criado_em?: string
+          criado_por?: string | null
+          documento_id: string
+          documento_lancamento_id: string
+          lancamento_id: string
+        }
+        Update: {
+          cliente_id?: string
+          criado_em?: string
+          criado_por?: string | null
+          documento_id?: string
+          documento_lancamento_id?: string
+          lancamento_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fin_doc_vinc_documento_fk"
+            columns: ["documento_id", "documento_lancamento_id", "cliente_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_lancamento_documentos"
+            referencedColumns: ["id", "lancamento_id", "cliente_id"]
+          },
+          {
+            foreignKeyName: "fin_doc_vinc_lancamento_fk"
+            columns: ["lancamento_id", "cliente_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_lancamentos_v2"
+            referencedColumns: ["id", "cliente_id"]
+          },
+          {
+            foreignKeyName: "fin_doc_vinc_lancamento_fk"
+            columns: ["lancamento_id", "cliente_id"]
+            isOneToOne: false
+            referencedRelation: "vw_financeiro_lancamentos_v2_doc"
+            referencedColumns: ["id", "cliente_id"]
+          },
+        ]
+      }
       financeiro_duplicidade_log: {
         Row: {
           cliente_id: string
@@ -6181,6 +6711,7 @@ export type Database = {
         Row: {
           agencia: string | null
           aliases: Json | null
+          aliases_norm: string[]
           ativo: boolean | null
           banco: string | null
           cliente_id: string | null
@@ -6199,6 +6730,7 @@ export type Database = {
           id: string
           nome: string
           nome_favorecido: string | null
+          nome_norm: string | null
           nome_normalizado: string | null
           observacao: string | null
           observacao_pagamento: string | null
@@ -6213,6 +6745,7 @@ export type Database = {
         Insert: {
           agencia?: string | null
           aliases?: Json | null
+          aliases_norm?: string[]
           ativo?: boolean | null
           banco?: string | null
           cliente_id?: string | null
@@ -6231,6 +6764,7 @@ export type Database = {
           id?: string
           nome: string
           nome_favorecido?: string | null
+          nome_norm?: string | null
           nome_normalizado?: string | null
           observacao?: string | null
           observacao_pagamento?: string | null
@@ -6245,6 +6779,7 @@ export type Database = {
         Update: {
           agencia?: string | null
           aliases?: Json | null
+          aliases_norm?: string[]
           ativo?: boolean | null
           banco?: string | null
           cliente_id?: string | null
@@ -6263,6 +6798,7 @@ export type Database = {
           id?: string
           nome?: string
           nome_favorecido?: string | null
+          nome_norm?: string | null
           nome_normalizado?: string | null
           observacao?: string | null
           observacao_pagamento?: string | null
@@ -6669,6 +7205,7 @@ export type Database = {
           conciliado_em: string | null
           conta_bancaria_id: string | null
           conta_destino_id: string | null
+          conta_efetiva_id: string | null
           contrato_id: string | null
           created_at: string | null
           created_by: string | null
@@ -6724,6 +7261,8 @@ export type Database = {
           updated_at: string | null
           updated_by: string | null
           valor: number
+          valor_do_mes_em: string | null
+          valor_do_mes_origem: string | null
         }
         Insert: {
           ano_mes?: string | null
@@ -6740,6 +7279,7 @@ export type Database = {
           conciliado_em?: string | null
           conta_bancaria_id?: string | null
           conta_destino_id?: string | null
+          conta_efetiva_id?: string | null
           contrato_id?: string | null
           created_at?: string | null
           created_by?: string | null
@@ -6795,6 +7335,8 @@ export type Database = {
           updated_at?: string | null
           updated_by?: string | null
           valor?: number
+          valor_do_mes_em?: string | null
+          valor_do_mes_origem?: string | null
         }
         Update: {
           ano_mes?: string | null
@@ -6811,6 +7353,7 @@ export type Database = {
           conciliado_em?: string | null
           conta_bancaria_id?: string | null
           conta_destino_id?: string | null
+          conta_efetiva_id?: string | null
           contrato_id?: string | null
           created_at?: string | null
           created_by?: string | null
@@ -6866,6 +7409,8 @@ export type Database = {
           updated_at?: string | null
           updated_by?: string | null
           valor?: number
+          valor_do_mes_em?: string | null
+          valor_do_mes_origem?: string | null
         }
         Relationships: [
           {
@@ -7113,6 +7658,7 @@ export type Database = {
           dia_vencimento: number
           favorecido_id: string | null
           fazenda_id: string
+          folha: boolean
           forma_pagamento: string | null
           id: string
           observacao: string | null
@@ -7139,6 +7685,7 @@ export type Database = {
           dia_vencimento: number
           favorecido_id?: string | null
           fazenda_id: string
+          folha?: boolean
           forma_pagamento?: string | null
           id?: string
           observacao?: string | null
@@ -7165,6 +7712,7 @@ export type Database = {
           dia_vencimento?: number
           favorecido_id?: string | null
           fazenda_id?: string
+          folha?: boolean
           forma_pagamento?: string | null
           id?: string
           observacao?: string | null
@@ -7614,26 +8162,303 @@ export type Database = {
           created_at: string
           descricao: string
           financiamento_id: string
+          fornecedor_id: string | null
           id: string
+          tipo: string | null
           valor: number
+          valor_orcado: number | null
         }
         Insert: {
           cliente_id: string
           created_at?: string
           descricao: string
           financiamento_id: string
+          fornecedor_id?: string | null
           id?: string
+          tipo?: string | null
           valor?: number
+          valor_orcado?: number | null
         }
         Update: {
           cliente_id?: string
           created_at?: string
           descricao?: string
           financiamento_id?: string
+          fornecedor_id?: string | null
           id?: string
+          tipo?: string | null
+          valor?: number
+          valor_orcado?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financiamento_destinacoes_cliente_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financiamento_destinacoes_financiamento_fkey"
+            columns: ["financiamento_id"]
+            isOneToOne: false
+            referencedRelation: "financiamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financiamento_destinacoes_fornecedor_id_fkey"
+            columns: ["fornecedor_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_fornecedores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      financiamento_encargos: {
+        Row: {
+          cliente_id: string
+          desfeito_em: string | null
+          desfeito_motivo: string | null
+          desfeito_por: string | null
+          financiamento_id: string
+          id: string
+          lancamento_id: string
+          papel: string
+          vinculado_em: string
+          vinculado_por: string | null
+        }
+        Insert: {
+          cliente_id: string
+          desfeito_em?: string | null
+          desfeito_motivo?: string | null
+          desfeito_por?: string | null
+          financiamento_id: string
+          id?: string
+          lancamento_id: string
+          papel: string
+          vinculado_em?: string
+          vinculado_por?: string | null
+        }
+        Update: {
+          cliente_id?: string
+          desfeito_em?: string | null
+          desfeito_motivo?: string | null
+          desfeito_por?: string | null
+          financiamento_id?: string
+          id?: string
+          lancamento_id?: string
+          papel?: string
+          vinculado_em?: string
+          vinculado_por?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financiamento_encargos_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financiamento_encargos_financiamento_id_fkey"
+            columns: ["financiamento_id"]
+            isOneToOne: false
+            referencedRelation: "financiamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financiamento_encargos_lancamento_id_fkey"
+            columns: ["lancamento_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_lancamentos_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financiamento_encargos_lancamento_id_fkey"
+            columns: ["lancamento_id"]
+            isOneToOne: false
+            referencedRelation: "vw_classificacao_staging_preview"
+            referencedColumns: ["lanc_id"]
+          },
+          {
+            foreignKeyName: "financiamento_encargos_lancamento_id_fkey"
+            columns: ["lancamento_id"]
+            isOneToOne: false
+            referencedRelation: "vw_financeiro_lancamentos_v2_doc"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      financiamento_liberacoes: {
+        Row: {
+          cancelado_em: string | null
+          cancelado_motivo: string | null
+          cancelado_por: string | null
+          cliente_id: string
+          contrato_liquidado_id: string | null
+          created_at: string
+          created_by: string | null
+          data: string
+          destinacao_id: string | null
+          financiamento_id: string
+          forma: string
+          fornecedor_id: string | null
+          id: string
+          lancamento_id: string | null
+          observacao: string | null
+          valor: number
+        }
+        Insert: {
+          cancelado_em?: string | null
+          cancelado_motivo?: string | null
+          cancelado_por?: string | null
+          cliente_id: string
+          contrato_liquidado_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          data: string
+          destinacao_id?: string | null
+          financiamento_id: string
+          forma: string
+          fornecedor_id?: string | null
+          id?: string
+          lancamento_id?: string | null
+          observacao?: string | null
+          valor: number
+        }
+        Update: {
+          cancelado_em?: string | null
+          cancelado_motivo?: string | null
+          cancelado_por?: string | null
+          cliente_id?: string
+          contrato_liquidado_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          data?: string
+          destinacao_id?: string | null
+          financiamento_id?: string
+          forma?: string
+          fornecedor_id?: string | null
+          id?: string
+          lancamento_id?: string | null
+          observacao?: string | null
           valor?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "financiamento_liberacoes_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financiamento_liberacoes_contrato_liquidado_id_fkey"
+            columns: ["contrato_liquidado_id"]
+            isOneToOne: false
+            referencedRelation: "financiamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financiamento_liberacoes_destinacao_id_fkey"
+            columns: ["destinacao_id"]
+            isOneToOne: false
+            referencedRelation: "financiamento_destinacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financiamento_liberacoes_financiamento_id_fkey"
+            columns: ["financiamento_id"]
+            isOneToOne: false
+            referencedRelation: "financiamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financiamento_liberacoes_fornecedor_id_fkey"
+            columns: ["fornecedor_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_fornecedores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financiamento_liberacoes_lancamento_id_fkey"
+            columns: ["lancamento_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_lancamentos_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financiamento_liberacoes_lancamento_id_fkey"
+            columns: ["lancamento_id"]
+            isOneToOne: false
+            referencedRelation: "vw_classificacao_staging_preview"
+            referencedColumns: ["lanc_id"]
+          },
+          {
+            foreignKeyName: "financiamento_liberacoes_lancamento_id_fkey"
+            columns: ["lancamento_id"]
+            isOneToOne: false
+            referencedRelation: "vw_financeiro_lancamentos_v2_doc"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      financiamento_linhas_credito: {
+        Row: {
+          cliente_id: string
+          created_at: string
+          created_by: string | null
+          credor_id: string | null
+          descricao: string | null
+          id: string
+          limite: number | null
+          programa: string | null
+          updated_at: string
+          vigencia_fim: string | null
+          vigencia_inicio: string | null
+        }
+        Insert: {
+          cliente_id: string
+          created_at?: string
+          created_by?: string | null
+          credor_id?: string | null
+          descricao?: string | null
+          id?: string
+          limite?: number | null
+          programa?: string | null
+          updated_at?: string
+          vigencia_fim?: string | null
+          vigencia_inicio?: string | null
+        }
+        Update: {
+          cliente_id?: string
+          created_at?: string
+          created_by?: string | null
+          credor_id?: string | null
+          descricao?: string | null
+          id?: string
+          limite?: number | null
+          programa?: string | null
+          updated_at?: string
+          vigencia_fim?: string | null
+          vigencia_inicio?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financiamento_linhas_credito_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financiamento_linhas_credito_credor_id_fkey"
+            columns: ["credor_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_fornecedores"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       financiamento_parcelas: {
         Row: {
@@ -7648,10 +8473,13 @@ export type Database = {
           numero_parcela: number | null
           observacao: string | null
           status: string | null
+          tipo: string | null
           updated_at: string | null
+          valor_encargos: number | null
           valor_juros: number | null
           valor_principal: number | null
           valor_total: number | null
+          vencimento_original: string | null
         }
         Insert: {
           cliente_id?: string | null
@@ -7665,10 +8493,13 @@ export type Database = {
           numero_parcela?: number | null
           observacao?: string | null
           status?: string | null
+          tipo?: string | null
           updated_at?: string | null
+          valor_encargos?: number | null
           valor_juros?: number | null
           valor_principal?: number | null
           valor_total?: number | null
+          vencimento_original?: string | null
         }
         Update: {
           cliente_id?: string | null
@@ -7682,10 +8513,13 @@ export type Database = {
           numero_parcela?: number | null
           observacao?: string | null
           status?: string | null
+          tipo?: string | null
           updated_at?: string | null
+          valor_encargos?: number | null
           valor_juros?: number | null
           valor_principal?: number | null
           valor_total?: number | null
+          vencimento_original?: string | null
         }
         Relationships: [
           {
@@ -7693,6 +8527,27 @@ export type Database = {
             columns: ["financiamento_id"]
             isOneToOne: false
             referencedRelation: "financiamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financiamento_parcelas_lancamento_id_fkey"
+            columns: ["lancamento_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_lancamentos_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financiamento_parcelas_lancamento_id_fkey"
+            columns: ["lancamento_id"]
+            isOneToOne: false
+            referencedRelation: "vw_classificacao_staging_preview"
+            referencedColumns: ["lanc_id"]
+          },
+          {
+            foreignKeyName: "financiamento_parcelas_lancamento_id_fkey"
+            columns: ["lancamento_id"]
+            isOneToOne: false
+            referencedRelation: "vw_financeiro_lancamentos_v2_doc"
             referencedColumns: ["id"]
           },
           {
@@ -7720,8 +8575,13 @@ export type Database = {
       }
       financiamentos: {
         Row: {
+          baixa_em: string | null
+          baixa_motivo: string | null
+          baixa_por: string | null
+          carencia_ate: string | null
           cliente_id: string
           conta_bancaria_id: string | null
+          contrato_sucessor_id: string | null
           created_at: string | null
           created_by: string | null
           credor_id: string | null
@@ -7730,14 +8590,17 @@ export type Database = {
           data_primeira_parcela: string | null
           descricao: string | null
           fazenda_id: string | null
+          finalidade: string | null
           gerar_lancamento_captacao: boolean | null
           id: string
           lancamento_captacao_id: string | null
+          linha_credito_id: string | null
           natureza: string
           numero_contrato: string | null
           observacao: string | null
           plano_conta_captacao_id: string | null
           plano_conta_parcela_id: string | null
+          sistema_amortizacao: string | null
           status: string | null
           taxa_juros: number | null
           taxa_juros_mensal: number | null
@@ -7746,10 +8609,16 @@ export type Database = {
           updated_at: string | null
           valor_entrada: number | null
           valor_total: number | null
+          vencimento_final: string | null
         }
         Insert: {
+          baixa_em?: string | null
+          baixa_motivo?: string | null
+          baixa_por?: string | null
+          carencia_ate?: string | null
           cliente_id: string
           conta_bancaria_id?: string | null
+          contrato_sucessor_id?: string | null
           created_at?: string | null
           created_by?: string | null
           credor_id?: string | null
@@ -7758,14 +8627,17 @@ export type Database = {
           data_primeira_parcela?: string | null
           descricao?: string | null
           fazenda_id?: string | null
+          finalidade?: string | null
           gerar_lancamento_captacao?: boolean | null
           id?: string
           lancamento_captacao_id?: string | null
+          linha_credito_id?: string | null
           natureza?: string
           numero_contrato?: string | null
           observacao?: string | null
           plano_conta_captacao_id?: string | null
           plano_conta_parcela_id?: string | null
+          sistema_amortizacao?: string | null
           status?: string | null
           taxa_juros?: number | null
           taxa_juros_mensal?: number | null
@@ -7774,10 +8646,16 @@ export type Database = {
           updated_at?: string | null
           valor_entrada?: number | null
           valor_total?: number | null
+          vencimento_final?: string | null
         }
         Update: {
+          baixa_em?: string | null
+          baixa_motivo?: string | null
+          baixa_por?: string | null
+          carencia_ate?: string | null
           cliente_id?: string
           conta_bancaria_id?: string | null
+          contrato_sucessor_id?: string | null
           created_at?: string | null
           created_by?: string | null
           credor_id?: string | null
@@ -7786,14 +8664,17 @@ export type Database = {
           data_primeira_parcela?: string | null
           descricao?: string | null
           fazenda_id?: string | null
+          finalidade?: string | null
           gerar_lancamento_captacao?: boolean | null
           id?: string
           lancamento_captacao_id?: string | null
+          linha_credito_id?: string | null
           natureza?: string
           numero_contrato?: string | null
           observacao?: string | null
           plano_conta_captacao_id?: string | null
           plano_conta_parcela_id?: string | null
+          sistema_amortizacao?: string | null
           status?: string | null
           taxa_juros?: number | null
           taxa_juros_mensal?: number | null
@@ -7802,6 +8683,7 @@ export type Database = {
           updated_at?: string | null
           valor_entrada?: number | null
           valor_total?: number | null
+          vencimento_final?: string | null
         }
         Relationships: [
           {
@@ -7816,6 +8698,13 @@ export type Database = {
             columns: ["conta_bancaria_id"]
             isOneToOne: false
             referencedRelation: "financeiro_contas_bancarias"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financiamentos_contrato_sucessor_id_fkey"
+            columns: ["contrato_sucessor_id"]
+            isOneToOne: false
+            referencedRelation: "financiamentos"
             referencedColumns: ["id"]
           },
           {
@@ -7851,6 +8740,13 @@ export type Database = {
             columns: ["lancamento_captacao_id"]
             isOneToOne: false
             referencedRelation: "vw_financeiro_lancamentos_v2_doc"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financiamentos_linha_credito_id_fkey"
+            columns: ["linha_credito_id"]
+            isOneToOne: false
+            referencedRelation: "financiamento_linhas_credito"
             referencedColumns: ["id"]
           },
           {
@@ -8144,6 +9040,297 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      lr_sync_aplicacao_itens: {
+        Row: {
+          acao: string
+          antes: Json | null
+          aplicacao_id: string
+          chave: string | null
+          depois: Json | null
+          id: string
+          lancamento_id: string | null
+          motivo: string | null
+          seq: number
+          status: string
+          vinculo_antes: Json | null
+          vinculo_tocado: boolean
+        }
+        Insert: {
+          acao: string
+          antes?: Json | null
+          aplicacao_id: string
+          chave?: string | null
+          depois?: Json | null
+          id?: string
+          lancamento_id?: string | null
+          motivo?: string | null
+          seq: number
+          status: string
+          vinculo_antes?: Json | null
+          vinculo_tocado?: boolean
+        }
+        Update: {
+          acao?: string
+          antes?: Json | null
+          aplicacao_id?: string
+          chave?: string | null
+          depois?: Json | null
+          id?: string
+          lancamento_id?: string | null
+          motivo?: string | null
+          seq?: number
+          status?: string
+          vinculo_antes?: Json | null
+          vinculo_tocado?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lr_sync_aplicacao_itens_aplicacao_id_fkey"
+            columns: ["aplicacao_id"]
+            isOneToOne: false
+            referencedRelation: "lr_sync_aplicacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lr_sync_aplicacoes: {
+        Row: {
+          aplicada_em: string
+          aplicada_por: string | null
+          cliente_id: string
+          desfeita_em: string | null
+          desfeita_por: string | null
+          id: string
+          resumo: Json | null
+          resumo_desfazer: Json | null
+          sessao_id: string
+        }
+        Insert: {
+          aplicada_em?: string
+          aplicada_por?: string | null
+          cliente_id: string
+          desfeita_em?: string | null
+          desfeita_por?: string | null
+          id?: string
+          resumo?: Json | null
+          resumo_desfazer?: Json | null
+          sessao_id: string
+        }
+        Update: {
+          aplicada_em?: string
+          aplicada_por?: string | null
+          cliente_id?: string
+          desfeita_em?: string | null
+          desfeita_por?: string | null
+          id?: string
+          resumo?: Json | null
+          resumo_desfazer?: Json | null
+          sessao_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lr_sync_aplicacoes_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lr_sync_aplicacoes_sessao_id_fkey"
+            columns: ["sessao_id"]
+            isOneToOne: false
+            referencedRelation: "lr_sync_sessoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lr_sync_sessoes: {
+        Row: {
+          arquivos: Json
+          cliente_id: string
+          criado_em: string
+          criado_por: string | null
+          id: string
+          linhas: Json | null
+          resumo: Json | null
+          status: string
+        }
+        Insert: {
+          arquivos?: Json
+          cliente_id: string
+          criado_em?: string
+          criado_por?: string | null
+          id: string
+          linhas?: Json | null
+          resumo?: Json | null
+          status?: string
+        }
+        Update: {
+          arquivos?: Json
+          cliente_id?: string
+          criado_em?: string
+          criado_por?: string | null
+          id?: string
+          linhas?: Json | null
+          resumo?: Json | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lr_sync_sessoes_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lr_vinculos: {
+        Row: {
+          atualizado_em: string
+          chave: string
+          cliente_id: string
+          criado_em: string
+          criado_por: string | null
+          foto: Json | null
+          id: string
+          ignorar: boolean
+          lancamento_id: string | null
+          pago_no_lr_em: string | null
+        }
+        Insert: {
+          atualizado_em?: string
+          chave: string
+          cliente_id: string
+          criado_em?: string
+          criado_por?: string | null
+          foto?: Json | null
+          id?: string
+          ignorar?: boolean
+          lancamento_id?: string | null
+          pago_no_lr_em?: string | null
+        }
+        Update: {
+          atualizado_em?: string
+          chave?: string
+          cliente_id?: string
+          criado_em?: string
+          criado_por?: string | null
+          foto?: Json | null
+          id?: string
+          ignorar?: boolean
+          lancamento_id?: string | null
+          pago_no_lr_em?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lr_vinculos_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mandioca_frete_silvio_01_backfill: {
+        Row: {
+          criado_em: string
+          favorecido_anterior: string
+          gesto_contrario: string
+          lancamento_id: string
+          observacao_anterior: string | null
+        }
+        Insert: {
+          criado_em?: string
+          favorecido_anterior: string
+          gesto_contrario: string
+          lancamento_id: string
+          observacao_anterior?: string | null
+        }
+        Update: {
+          criado_em?: string
+          favorecido_anterior?: string
+          gesto_contrario?: string
+          lancamento_id?: string
+          observacao_anterior?: string | null
+        }
+        Relationships: []
+      }
+      mandioca_icms_repasse_01_backfill: {
+        Row: {
+          alvo_id: string
+          alvo_tabela: string
+          campo: string
+          criado_em: string
+          gesto_contrario: string
+          id: number
+          nf: string | null
+          passo: string
+          valor_anterior: string | null
+          valor_novo: string | null
+        }
+        Insert: {
+          alvo_id: string
+          alvo_tabela: string
+          campo: string
+          criado_em?: string
+          gesto_contrario: string
+          id?: number
+          nf?: string | null
+          passo: string
+          valor_anterior?: string | null
+          valor_novo?: string | null
+        }
+        Update: {
+          alvo_id?: string
+          alvo_tabela?: string
+          campo?: string
+          criado_em?: string
+          gesto_contrario?: string
+          id?: number
+          nf?: string | null
+          passo?: string
+          valor_anterior?: string | null
+          valor_novo?: string | null
+        }
+        Relationships: []
+      }
+      mandioca_retencao_nf_01_backfill: {
+        Row: {
+          criado_em: string
+          gesto_contrario: string
+          id: number
+          lancamento_id: string
+          nf: string
+          nfe: string
+          rotulo: string
+          valor: number
+          valor_anterior: string | null
+        }
+        Insert: {
+          criado_em?: string
+          gesto_contrario: string
+          id?: number
+          lancamento_id: string
+          nf: string
+          nfe: string
+          rotulo: string
+          valor: number
+          valor_anterior?: string | null
+        }
+        Update: {
+          criado_em?: string
+          gesto_contrario?: string
+          id?: number
+          lancamento_id?: string
+          nf?: string
+          nfe?: string
+          rotulo?: string
+          valor?: number
+          valor_anterior?: string | null
+        }
+        Relationships: []
       }
       mesa_lancamento_staging: {
         Row: {
@@ -9175,6 +10362,75 @@ export type Database = {
           },
           {
             foreignKeyName: "pastos_fazenda_id_fkey"
+            columns: ["fazenda_id"]
+            isOneToOne: false
+            referencedRelation: "fazendas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pecuaria_fechamento_documentos: {
+        Row: {
+          ano_mes: string
+          cancelado: boolean
+          cancelado_em: string | null
+          cancelado_motivo: string | null
+          cancelado_por: string | null
+          cliente_id: string
+          especie: string
+          fazenda_id: string
+          id: string
+          nome: string
+          tamanho_bytes: number | null
+          uploaded_em: string
+          uploaded_por: string | null
+          url: string | null
+          versao: number
+        }
+        Insert: {
+          ano_mes: string
+          cancelado?: boolean
+          cancelado_em?: string | null
+          cancelado_motivo?: string | null
+          cancelado_por?: string | null
+          cliente_id: string
+          especie?: string
+          fazenda_id: string
+          id?: string
+          nome: string
+          tamanho_bytes?: number | null
+          uploaded_em?: string
+          uploaded_por?: string | null
+          url?: string | null
+          versao?: number
+        }
+        Update: {
+          ano_mes?: string
+          cancelado?: boolean
+          cancelado_em?: string | null
+          cancelado_motivo?: string | null
+          cancelado_por?: string | null
+          cliente_id?: string
+          especie?: string
+          fazenda_id?: string
+          id?: string
+          nome?: string
+          tamanho_bytes?: number | null
+          uploaded_em?: string
+          uploaded_por?: string | null
+          url?: string | null
+          versao?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pecuaria_fechamento_documentos_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pecuaria_fechamento_documentos_fazenda_id_fkey"
             columns: ["fazenda_id"]
             isOneToOne: false
             referencedRelation: "fazendas"
@@ -10410,6 +11666,7 @@ export type Database = {
           despesas_abate: number | null
           despesas_abate_no_boitel: boolean
           dias: number | null
+          frigorifico_id: string | null
           gmd: number | null
           id: string
           lote_codigo: string | null
@@ -10428,6 +11685,7 @@ export type Database = {
           preco_venda_arroba: number | null
           qtd_abatida: number | null
           quebra_viagem_pct: number | null
+          quem_abate: string
           rendimento_entrada_pct: number | null
           rendimento_saida_pct: number | null
           updated_at: string
@@ -10459,6 +11717,7 @@ export type Database = {
           despesas_abate?: number | null
           despesas_abate_no_boitel?: boolean
           dias?: number | null
+          frigorifico_id?: string | null
           gmd?: number | null
           id?: string
           lote_codigo?: string | null
@@ -10477,6 +11736,7 @@ export type Database = {
           preco_venda_arroba?: number | null
           qtd_abatida?: number | null
           quebra_viagem_pct?: number | null
+          quem_abate?: string
           rendimento_entrada_pct?: number | null
           rendimento_saida_pct?: number | null
           updated_at?: string
@@ -10508,6 +11768,7 @@ export type Database = {
           despesas_abate?: number | null
           despesas_abate_no_boitel?: boolean
           dias?: number | null
+          frigorifico_id?: string | null
           gmd?: number | null
           id?: string
           lote_codigo?: string | null
@@ -10526,6 +11787,7 @@ export type Database = {
           preco_venda_arroba?: number | null
           qtd_abatida?: number | null
           quebra_viagem_pct?: number | null
+          quem_abate?: string
           rendimento_entrada_pct?: number | null
           rendimento_saida_pct?: number | null
           updated_at?: string
@@ -10537,6 +11799,13 @@ export type Database = {
           valor_total_diarias?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "zoo_operacao_boitel_frigorifico_id_fkey"
+            columns: ["frigorifico_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_fornecedores"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "zoo_operacao_boitel_operacao_id_fkey"
             columns: ["operacao_id"]
@@ -10790,12 +12059,15 @@ export type Database = {
       }
       zoo_operacao_documentos: {
         Row: {
+          cab: number | null
           cancelado: boolean
           cancelado_em: string | null
           cancelado_motivo: string | null
           cancelado_por: string | null
           chave_acesso: string | null
           cliente_id: string
+          dados: Json | null
+          data_abate: string | null
           data_emissao: string | null
           documento_origem_id: string | null
           emitente_documento: string | null
@@ -10807,6 +12079,7 @@ export type Database = {
           numero: string | null
           observacao: string | null
           operacao_id: string
+          peso_kg: number | null
           serie: string | null
           tamanho_bytes: number | null
           tipo: string | null
@@ -10815,15 +12088,19 @@ export type Database = {
           uploaded_em: string
           uploaded_por: string | null
           url: string | null
+          vencimento: string | null
           versao: number
         }
         Insert: {
+          cab?: number | null
           cancelado?: boolean
           cancelado_em?: string | null
           cancelado_motivo?: string | null
           cancelado_por?: string | null
           chave_acesso?: string | null
           cliente_id: string
+          dados?: Json | null
+          data_abate?: string | null
           data_emissao?: string | null
           documento_origem_id?: string | null
           emitente_documento?: string | null
@@ -10835,6 +12112,7 @@ export type Database = {
           numero?: string | null
           observacao?: string | null
           operacao_id: string
+          peso_kg?: number | null
           serie?: string | null
           tamanho_bytes?: number | null
           tipo?: string | null
@@ -10843,15 +12121,19 @@ export type Database = {
           uploaded_em?: string
           uploaded_por?: string | null
           url?: string | null
+          vencimento?: string | null
           versao?: number
         }
         Update: {
+          cab?: number | null
           cancelado?: boolean
           cancelado_em?: string | null
           cancelado_motivo?: string | null
           cancelado_por?: string | null
           chave_acesso?: string | null
           cliente_id?: string
+          dados?: Json | null
+          data_abate?: string | null
           data_emissao?: string | null
           documento_origem_id?: string | null
           emitente_documento?: string | null
@@ -10863,6 +12145,7 @@ export type Database = {
           numero?: string | null
           observacao?: string | null
           operacao_id?: string
+          peso_kg?: number | null
           serie?: string | null
           tamanho_bytes?: number | null
           tipo?: string | null
@@ -10871,6 +12154,7 @@ export type Database = {
           uploaded_em?: string
           uploaded_por?: string | null
           url?: string | null
+          vencimento?: string | null
           versao?: number
         }
         Relationships: [
@@ -11208,6 +12492,7 @@ export type Database = {
           movimentacao_id: string
           operacao_id: string
           operacao_lote_id: string
+          origem: string
         }
         Insert: {
           cliente_id: string
@@ -11217,6 +12502,7 @@ export type Database = {
           movimentacao_id: string
           operacao_id: string
           operacao_lote_id: string
+          origem?: string
         }
         Update: {
           cliente_id?: string
@@ -11226,6 +12512,7 @@ export type Database = {
           movimentacao_id?: string
           operacao_id?: string
           operacao_lote_id?: string
+          origem?: string
         }
         Relationships: [
           {
@@ -11337,6 +12624,7 @@ export type Database = {
           descricao: string | null
           documento_componente_id: string | null
           documento_id: string | null
+          entrega_movimentacao_id: string | null
           favorecido_id: string | null
           financeiro_lancamento_id: string | null
           grupo_custo: string | null
@@ -11370,6 +12658,7 @@ export type Database = {
           descricao?: string | null
           documento_componente_id?: string | null
           documento_id?: string | null
+          entrega_movimentacao_id?: string | null
           favorecido_id?: string | null
           financeiro_lancamento_id?: string | null
           grupo_custo?: string | null
@@ -11403,6 +12692,7 @@ export type Database = {
           descricao?: string | null
           documento_componente_id?: string | null
           documento_id?: string | null
+          entrega_movimentacao_id?: string | null
           favorecido_id?: string | null
           financeiro_lancamento_id?: string | null
           grupo_custo?: string | null
@@ -11443,6 +12733,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "zoo_operacao_documentos"
             referencedColumns: ["id", "operacao_id", "cliente_id"]
+          },
+          {
+            foreignKeyName: "zoo_operacao_partes_entrega_movimentacao_id_fkey"
+            columns: ["entrega_movimentacao_id"]
+            isOneToOne: false
+            referencedRelation: "lancamentos"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "zoo_operacao_partes_lote_fk"
@@ -11582,6 +12879,7 @@ export type Database = {
           id: string
           is_teste: boolean
           modalidade_comercial: string | null
+          modelo_financeiro: string
           numero_documento: string | null
           observacoes: string | null
           peso_carcaca_fonte: string | null
@@ -11637,6 +12935,7 @@ export type Database = {
           id?: string
           is_teste?: boolean
           modalidade_comercial?: string | null
+          modelo_financeiro?: string
           numero_documento?: string | null
           observacoes?: string | null
           peso_carcaca_fonte?: string | null
@@ -11692,6 +12991,7 @@ export type Database = {
           id?: string
           is_teste?: boolean
           modalidade_comercial?: string | null
+          modelo_financeiro?: string
           numero_documento?: string | null
           observacoes?: string | null
           peso_carcaca_fonte?: string | null
@@ -11736,6 +13036,24 @@ export type Database = {
             referencedColumns: ["id", "cliente_id"]
           },
         ]
+      }
+      zoot_cache_sujo: {
+        Row: {
+          ano: number
+          fazenda_id: string
+          marcado_em: string
+        }
+        Insert: {
+          ano: number
+          fazenda_id: string
+          marcado_em?: string
+        }
+        Update: {
+          ano?: number
+          fazenda_id?: string
+          marcado_em?: string
+        }
+        Relationships: []
       }
       zoot_importacoes: {
         Row: {
@@ -12014,6 +13332,30 @@ export type Database = {
           },
         ]
       }
+      vw_classificacao_sessoes: {
+        Row: {
+          arquivo: string | null
+          cliente_id: string | null
+          concluida_em: string | null
+          criado_em: string | null
+          criado_por: string | null
+          linhas_esperadas: number | null
+          linhas_recebidas: number | null
+          sessao_id: string | null
+          status: string | null
+          status_gravado: string | null
+          ultima_linha_em: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "classificacao_sessoes_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vw_classificacao_staging_preview: {
         Row: {
           aplicado: boolean | null
@@ -12033,54 +13375,78 @@ export type Database = {
           excel_data_vencimento: string | null
           excel_documento: string | null
           excel_fazenda_codigo: string | null
+          excel_forma_pagamento: string | null
           excel_fornecedor: string | null
           excel_linha_origem: number | null
           excel_observacao: string | null
           excel_produto: string | null
+          excel_safra: string | null
+          excel_status: string | null
           excel_subcentro: string | null
+          excel_tipo_documento: string | null
           excel_tipo_operacao: string | null
           excel_valor: number | null
+          lanc_cancelado: boolean | null
           lanc_centro_atual: string | null
           lanc_conta_bancaria_id: string | null
           lanc_conta_bancaria_nome: string | null
           lanc_conta_destino_id: string | null
           lanc_conta_destino_nome: string | null
+          lanc_cultura: string | null
           lanc_data_competencia: string | null
           lanc_data_pagamento: string | null
           lanc_data_vencimento: string | null
           lanc_descricao: string | null
+          lanc_fase: string | null
           lanc_favorecido_id_atual: string | null
           lanc_favorecido_nome_atual: string | null
           lanc_fazenda_id: string | null
           lanc_fazenda_nome: string | null
+          lanc_forma_pagamento: string | null
           lanc_grupo_atual: string | null
           lanc_id: string | null
           lanc_macro_atual: string | null
           lanc_numero_documento: string | null
           lanc_observacao: string | null
+          lanc_origem_lancamento: string | null
           lanc_plano_conta_id_atual: string | null
           lanc_safra_codigo: string | null
           lanc_safra_id: string | null
           lanc_sinal: string | null
           lanc_status: string | null
           lanc_subcentro_atual: string | null
+          lanc_tipo_documento: string | null
           lanc_tipo_operacao: string | null
           lanc_valor: number | null
+          linha_livre: boolean | null
           lote_aplicavel: boolean | null
           match_lancamento_ids: string[] | null
           match_status: string | null
           motor_version: number | null
+          planilha_cultura: string | null
+          planilha_favorecido_id: string | null
+          planilha_favorecido_nome: string | null
+          planilha_fazenda_id: string | null
+          planilha_fazenda_nome: string | null
+          planilha_forma_pagamento: string | null
+          planilha_safra_id: string | null
+          planilha_subcentro: string | null
+          planilha_tipo_documento: string | null
           proposto_alias_id: string | null
           proposto_categoria: string | null
           proposto_conta_bancaria_id: string | null
           proposto_conta_destino_id: string | null
+          proposto_cultura: string | null
           proposto_data_competencia: string | null
           proposto_data_pagamento: string | null
           proposto_data_vencimento: string | null
+          proposto_editado_em: string | null
+          proposto_fase: string | null
           proposto_favorecido_id: string | null
           proposto_favorecido_nome: string | null
           proposto_fazenda_id: string | null
           proposto_fazenda_nome: string | null
+          proposto_forma_pagamento: string | null
           proposto_macro: string | null
           proposto_numero_documento: string | null
           proposto_observacao: string | null
@@ -12093,11 +13459,17 @@ export type Database = {
           proposto_subcentro: string | null
           proposto_subcentro_existe_no_plano: boolean | null
           proposto_tier: string | null
+          proposto_tipo_documento: string | null
           proposto_tipo_operacao: string | null
           revisado_em: string | null
           revisado_por: string | null
+          safra_da_competencia_id: string | null
+          safra_fora_do_periodo: boolean | null
           sessao_id: string | null
+          split_desfeito: boolean | null
+          split_id: string | null
           staging_id: string | null
+          tem_estado_anterior: boolean | null
           updated_at: string | null
           will_change_anything: boolean | null
           will_create_subcentro_orfao: boolean | null
@@ -12289,6 +13661,7 @@ export type Database = {
           origem_lancamento: string | null
           origem_tipo: string | null
           safra_id: string | null
+          sem_movimentacao_caixa: boolean | null
           sinal: string | null
           status_transacao: string | null
           subcentro: string | null
@@ -12336,6 +13709,7 @@ export type Database = {
           origem_lancamento?: string | null
           origem_tipo?: string | null
           safra_id?: string | null
+          sem_movimentacao_caixa?: boolean | null
           sinal?: string | null
           status_transacao?: string | null
           subcentro?: string | null
@@ -12383,6 +13757,7 @@ export type Database = {
           origem_lancamento?: string | null
           origem_tipo?: string | null
           safra_id?: string | null
+          sem_movimentacao_caixa?: boolean | null
           sinal?: string | null
           status_transacao?: string | null
           subcentro?: string | null
@@ -12450,6 +13825,7 @@ export type Database = {
           emitente_nome: string | null
           especie: string | null
           lancamento_id: string | null
+          ligado_a_qtd: number | null
           nome: string | null
           numero: string | null
           observacao: string | null
@@ -12538,9 +13914,12 @@ export type Database = {
       }
       vw_oc_documentos: {
         Row: {
+          cab: number | null
           cancelado: boolean | null
           chave_acesso: string | null
           cliente_id: string | null
+          dados: Json | null
+          data_abate: string | null
           data_emissao: string | null
           documento_id: string | null
           documento_origem_id: string | null
@@ -12548,19 +13927,23 @@ export type Database = {
           emitente_id: string | null
           emitente_nome: string | null
           especie: string | null
+          liquido_proprio: number | null
           numero: string | null
           observacao: string | null
           operacao_id: string | null
+          peso_kg: number | null
           qtd_componentes: number | null
           qtd_lotes: number | null
           serie: string | null
           situacao: string | null
+          soma_no_valor: boolean | null
           total_acrescimos: number | null
           total_descontos_comerciais: number | null
           total_despesas_desembolso: number | null
           total_retencoes_sem_caixa: number | null
           url: string | null
           valor_liquido: number | null
+          vencimento: string | null
         }
         Relationships: [
           {
@@ -12756,6 +14139,9 @@ export type Database = {
           base: number | null
           base_origem: string | null
           cliente_id: string | null
+          despesas_liquidado: number | null
+          despesas_obrigacao: number | null
+          despesas_pendentes: number | null
           estado_liquidacao: string | null
           operacao_id: string | null
           saldo_operacao: number | null
@@ -12921,6 +14307,486 @@ export type Database = {
       }
     }
     Functions: {
+      _agri_carga_inserir_papel: {
+        Args: {
+          p_cliente: string
+          p_colheita: string
+          p_compoe_dre: boolean
+          p_conta: string
+          p_data: string
+          p_descricao: string
+          p_entrada: boolean
+          p_favorecido: string
+          p_fazenda: string
+          p_nf: string
+          p_papel: string
+          p_plano: string
+          p_safra: string
+          p_uid: string
+          p_valor: number
+        }
+        Returns: string
+      }
+      _agri_carga_papel_na_nf: {
+        Args: {
+          p_cliente: string
+          p_excluir_colheita: string
+          p_nf: string
+          p_papel: string
+          p_safra: string
+        }
+        Returns: boolean
+      }
+      _fin_lancamento_casado_com_extrato: {
+        Args: { p_lancamento_id: string }
+        Returns: boolean
+      }
+      _fn_avisos_sem_classificacao: {
+        Args: {
+          p_entradas: number
+          p_qtde: number
+          p_saidas: number
+          p_sem_fornecedor: number
+        }
+        Returns: Json
+      }
+      _fn_can_close_valor_rebanho: {
+        Args: { _ano_mes: string; _fazenda_id: string }
+        Returns: Json
+      }
+      _fn_classificacao_alinhar_ao_lancamento: {
+        Args: { p_lancamento_id: string; p_prop: Json }
+        Returns: Json
+      }
+      _fn_classificacao_cultura_da_planilha: {
+        Args: { p_safra_id: string; p_texto: string }
+        Returns: string
+      }
+      _fn_classificacao_forma_pagamento: {
+        Args: { p_texto: string }
+        Returns: string
+      }
+      _fn_classificacao_linha_livre: {
+        Args: {
+          s: Database["public"]["Tables"]["financeiro_classificacao_staging"]["Row"]
+        }
+        Returns: boolean
+      }
+      _fn_classificacao_par_herdado_valido: {
+        Args: {
+          p_conta_linha: string
+          p_data_pagamento: string
+          p_lancamento_id: string
+          p_mes_ate?: string
+          p_mes_de?: string
+        }
+        Returns: boolean
+      }
+      _fn_classificacao_precedencia_cru:
+        | { Args: { p_sessao_id: string }; Returns: number }
+        | {
+            Args: { p_sessao_id: string; p_staging_ids: string[] }
+            Returns: number
+          }
+      _fn_classificacao_resolver_fazenda: {
+        Args: { p_cliente_id: string; p_texto: string }
+        Returns: string
+      }
+      _fn_classificacao_resolver_fazenda_det: {
+        Args: { p_cliente_id: string; p_texto: string }
+        Returns: {
+          id: string
+          origem: string
+        }[]
+      }
+      _fn_classificacao_resolver_fornecedor: {
+        Args: { p_cliente_id: string; p_texto: string }
+        Returns: string
+      }
+      _fn_classificacao_resolver_fornecedor_det: {
+        Args: { p_cliente_id: string; p_texto: string }
+        Returns: {
+          id: string
+          origem: string
+        }[]
+      }
+      _fn_classificacao_resolver_safra: {
+        Args: { p_cliente_id: string; p_texto: string }
+        Returns: string
+      }
+      _fn_classificacao_resolver_safra_det: {
+        Args: { p_cliente_id: string; p_texto: string }
+        Returns: {
+          id: string
+          origem: string
+        }[]
+      }
+      _fn_classificacao_tipo_documento: {
+        Args: { p_texto: string }
+        Returns: string
+      }
+      _fn_conciliacao_dias_conta: {
+        Args: {
+          p_ate: string
+          p_cliente: string
+          p_conta: string
+          p_de: string
+          p_detalhe?: boolean
+          p_posicao?: string
+          p_saldo_inicial?: number
+        }
+        Returns: Json
+      }
+      _fn_conciliacao_resumo: {
+        Args: {
+          p_ano_mes: string
+          p_cliente_id: string
+          p_conta_ids: string[]
+          p_detalhe: boolean
+          p_sem_conta: boolean
+        }
+        Returns: {
+          avisos: Json
+          banco: Json
+          consolida_em_conta_id: string
+          conta_id: string
+          conta_nome: string
+          dias: Json
+          dias_com_diferenca: Json
+          diferenca: number
+          diferenca_entradas: number
+          diferenca_saidas: number
+          entradas: number
+          entradas_terceiros: number
+          entradas_transferencias: number
+          extratos_sem_par: Json
+          internas: Json
+          lancamentos_sem_par: Json
+          legado: Json
+          linhas_sistema: Json
+          motivos: Json
+          nivel: string
+          par_conta_id: string
+          par_status: string
+          posicao: Json
+          proprio: Json
+          retido_em_depositos: Json
+          saidas: number
+          saidas_terceiros: number
+          saidas_transferencias: number
+          saldo_extrato: number
+          saldo_extrato_data: string
+          saldo_inicial: number
+          saldo_inicial_origem: string
+          saldo_sistema: number
+          sem_conta: Json
+          status: string
+          tem_extrato: boolean
+          tipo_conta: string
+        }[]
+      }
+      _fn_conciliacao_sem_classificacao_mes: {
+        Args: { p_ate: string; p_cliente_id: string; p_de: string }
+        Returns: Json
+      }
+      _fn_conta_do_lancamento: {
+        Args: {
+          p_conta_bancaria_id: string
+          p_conta_destino_id: string
+          p_tipo_operacao: string
+        }
+        Returns: string
+      }
+      _fn_culturas_lancamento: { Args: never; Returns: string[] }
+      _fn_dividendo_conta_atual: {
+        Args: { p_cliente: string; p_sub: string }
+        Returns: string
+      }
+      _fn_dividendo_executar: {
+        Args: { p_a: Json; p_op: string }
+        Returns: Json
+      }
+      _fn_dividendo_foto: { Args: { p_id: string }; Returns: Json }
+      _fn_dividendo_garantir_conta: {
+        Args: { p_cliente: string; p_sub: string }
+        Returns: string
+      }
+      _fn_dividendo_recusar: {
+        Args: { p_antes?: Json; p_frase: string; p_motivo: string }
+        Returns: undefined
+      }
+      _fn_dividendo_rodar: {
+        Args: { p_a: Json; p_cliente: string; p_op: string; p_simular: boolean }
+        Returns: Json
+      }
+      _fn_dividendo_subcentro: { Args: { p_nome: string }; Returns: string }
+      _fn_encargo_papel_sugerido: {
+        Args: { p_descricao: string }
+        Returns: string
+      }
+      _fn_exigir_tenant: { Args: { p_cliente: string }; Returns: undefined }
+      _fn_exigir_tenant_das_linhas: {
+        Args: { p_clientes: string[] }
+        Returns: undefined
+      }
+      _fn_fechamento_p2_travado: {
+        Args: { p_ano_mes: string; p_fazenda_id: string }
+        Returns: boolean
+      }
+      _fn_financiamento_vivo: { Args: { p_status: string }; Returns: boolean }
+      _fn_fornecedor_aliases_norm: {
+        Args: { p_aliases: Json }
+        Returns: string[]
+      }
+      _fn_fornecedor_norm_divergentes: { Args: never; Returns: number }
+      _fn_fornecedor_norm_reconstruir: { Args: never; Returns: number }
+      _fn_lancamento_aplicado_vivo: {
+        Args: { p_lancamento_id: string }
+        Returns: number
+      }
+      _fn_lancamento_elegivel_a_encargo: {
+        Args: { p_lancamento_id: string }
+        Returns: {
+          frase: string
+          motivo: string
+          ok: boolean
+        }[]
+      }
+      _fn_lancamento_programado_gravar: {
+        Args: { p_campos: Json; p_id: string; p_op: string }
+        Returns: string
+      }
+      _fn_lancamento_sem_fornecedor: {
+        Args: {
+          p_cancelado: boolean
+          p_favorecido_id: string
+          p_plano_conta_id: string
+          p_tipo_operacao: string
+        }
+        Returns: boolean
+      }
+      _fn_lancamento_sem_plano: {
+        Args: {
+          p_cancelado: boolean
+          p_plano_conta_id: string
+          p_tipo_operacao: string
+        }
+        Returns: boolean
+      }
+      _fn_lr_alvo_motivo: {
+        Args: {
+          p_chave: string
+          p_cliente: string
+          p_id: string
+          p_tipo: string
+        }
+        Returns: string
+      }
+      _fn_lr_centavos: { Args: { p: Json }; Returns: number }
+      _fn_lr_conta: {
+        Args: { p_cliente: string; p_texto: string }
+        Returns: {
+          cartao: boolean
+          id: string
+          origem: string
+        }[]
+      }
+      _fn_lr_data: { Args: { p: Json }; Returns: string }
+      _fn_lr_foto_lancamento: { Args: { p_id: string }; Returns: Json }
+      _fn_lr_mes_fechado: {
+        Args: { p_ano_mes: string; p_cliente: string; p_fazenda: string }
+        Returns: boolean
+      }
+      _fn_lr_nomes_parecidos: {
+        Args: { a: string; b: string }
+        Returns: boolean
+      }
+      _fn_lr_sync_aplicar_exec: {
+        Args: { p_cliente: string; p_decisoes: Json; p_sessao: string }
+        Returns: Json
+      }
+      _fn_lr_sync_desfazer_exec: {
+        Args: { p_aplicacao: string; p_cliente: string }
+        Returns: Json
+      }
+      _fn_lr_trava_edicao: { Args: { p_id: string }; Returns: string }
+      _fn_lr_vinculo_gravar: {
+        Args: {
+          p_chave: string
+          p_cliente: string
+          p_foto: Json
+          p_ignorar: boolean
+          p_lanc: string
+          p_pago: string
+        }
+        Returns: undefined
+      }
+      _fn_lr_vinculo_voltar: {
+        Args: { p_antes: Json; p_chave: string; p_cliente: string }
+        Returns: undefined
+      }
+      _fn_meia_ponta_compativel: {
+        Args: { p_extrato: string }
+        Returns: string
+      }
+      _fn_normalizar_texto: { Args: { p_texto: string }; Returns: string }
+      _fn_numero_na_descricao: {
+        Args: { p_digitos_da_descricao: string; p_numero: string }
+        Returns: boolean
+      }
+      _fn_parcela_acompanha_lancamento: {
+        Args: { p_lancamento: string }
+        Returns: number
+      }
+      _fn_parcela_de_parcelamento_paga: {
+        Args: { p_lancamento_id: string; p_status: string }
+        Returns: boolean
+      }
+      _fn_parcela_descricao: {
+        Args: { p_descricao: string; p_numero: number; p_total: number }
+        Returns: string
+      }
+      _fn_parcela_renumerar: {
+        Args: {
+          p_nome: string
+          p_numero: number
+          p_numero_antes: number
+          p_total: number
+          p_total_antes: number
+        }
+        Returns: string
+      }
+      _fn_parcelamento_frase_do_erro: {
+        Args: { p_erro: string }
+        Returns: string
+      }
+      _fn_parcelamento_lancamento_novo: {
+        Args: {
+          p_financiamento_id: string
+          p_molde_id: string
+          p_numero: number
+          p_total: number
+          p_valor: number
+          p_vencimento: string
+        }
+        Returns: string
+      }
+      _fn_recorrencia_vagas: {
+        Args: {
+          p_ate?: string
+          p_com_fechados?: boolean
+          p_marca?: string
+          p_ocupadas: string[]
+          p_r: Database["public"]["Tables"]["financeiro_recorrencias"]["Row"]
+        }
+        Returns: {
+          competencia: string
+          motivo: string
+          vencimento: string
+        }[]
+      }
+      _fn_recorrencia_vencimento: {
+        Args: {
+          p_comp: string
+          p_r: Database["public"]["Tables"]["financeiro_recorrencias"]["Row"]
+        }
+        Returns: string
+      }
+      _fn_refresh_zoot_cache:
+        | { Args: { p_ano: number; p_fazenda_id: string }; Returns: undefined }
+        | {
+            Args: { p_ano: number; p_cenario: string; p_fazenda_id: string }
+            Returns: undefined
+          }
+        | {
+            Args: { p_ano: number; p_fazenda_id: string; p_mes: number }
+            Returns: undefined
+          }
+      _fn_safra_da_competencia: {
+        Args: { p_cliente_id: string; p_data: string; p_escopo: string }
+        Returns: string
+      }
+      _fn_split_vivo_do_lancamento: {
+        Args: { p_lancamento_id: string }
+        Returns: {
+          extrato_id: string
+          split_id: string
+          staging_id: string
+        }[]
+      }
+      _fn_status_pilares_fechamento: {
+        Args: { _ano_mes: string; _fazenda_id: string }
+        Returns: Json
+      }
+      _fn_transferencia_existente: {
+        Args: {
+          p_cliente: string
+          p_conta_entrada: string
+          p_conta_saida: string
+          p_dia_entrada: string
+          p_dia_saida: string
+          p_valor: number
+        }
+        Returns: string
+      }
+      _fn_zoot_categoria_mensal: {
+        Args: { p_ano: number; p_cenario?: string; p_fazenda_id: string }
+        Returns: {
+          ano: number
+          ano_mes: string
+          cab_abate: number
+          cab_compra: number
+          cab_consumo: number
+          cab_morte: number
+          cab_nascimento: number
+          cab_transf_entrada: number
+          cab_transf_saida: number
+          cab_venda: number
+          cab_venda_pe: number
+          categoria_codigo: string
+          categoria_id: string
+          categoria_nome: string
+          cenario: string
+          cliente_id: string
+          dias_mes: number
+          entradas_externas: number
+          evol_cat_entrada: number
+          evol_cat_saida: number
+          fazenda_id: string
+          fonte_oficial_mes: string
+          gmd: number
+          mes: number
+          ordem_exibicao: number
+          peso_abate: number
+          peso_carcaca_abate: number
+          peso_compra: number
+          peso_consumo: number
+          peso_entradas_externas: number
+          peso_evol_cat_entrada: number
+          peso_evol_cat_saida: number
+          peso_medio_final: number
+          peso_medio_inicial: number
+          peso_morte: number
+          peso_nascimento: number
+          peso_saidas_externas: number
+          peso_total_final: number
+          peso_total_inicial: number
+          peso_transf_entrada: number
+          peso_transf_saida: number
+          peso_venda: number
+          peso_venda_pe: number
+          producao_biologica: number
+          saidas_externas: number
+          saldo_final: number
+          saldo_inicial: number
+          saldo_p1: number
+          saldo_sistema: number
+        }[]
+      }
+      _oc_acertos_boitel_produtor: {
+        Args: { p_operacao_id: string }
+        Returns: number
+      }
       _oc_aplicar_partes: {
         Args: { p_cliente_id: string; p_operacao_id: string; p_parcelas: Json }
         Returns: undefined
@@ -12939,9 +14805,64 @@ export type Database = {
           base_origem: string
         }[]
       }
+      _oc_cancelar_conta_corrente: {
+        Args: { p_motivo: string; p_operacao_id: string; p_simular: boolean }
+        Returns: Json
+      }
+      _oc_cc_conta_entrega: {
+        Args: { p_categoria: string; p_tipo: string }
+        Returns: string
+      }
+      _oc_cc_conta_principal: {
+        Args: { p_operacao_id: string }
+        Returns: string
+      }
+      _oc_cc_deducao_sincronizar: {
+        Args: {
+          p_actor: string
+          p_componente: string
+          p_data: string
+          p_descricao_entrega: string
+          p_fazenda_id: string
+          p_lote_id: string
+          p_movimentacao_id: string
+          p_operacao_id: string
+          p_valor: number
+        }
+        Returns: Json
+      }
+      _oc_cc_direcao: { Args: { p_tipo: string }; Returns: string }
+      _oc_cc_fora_do_dre: {
+        Args: { p_lancamento_id: string }
+        Returns: boolean
+      }
+      _oc_cc_gancho_entregas: { Args: { p_operacao_id: string }; Returns: Json }
+      _oc_cc_recebimento_previsto: {
+        Args: { p_operacao_id: string }
+        Returns: boolean
+      }
+      _oc_cc_valor_entrega_do_lote: {
+        Args: { p_lote_id: string }
+        Returns: Json
+      }
+      _oc_cc_verbo: { Args: { p_tipo: string }; Returns: string }
+      _oc_competencia_pela_saida: {
+        Args: { p_operacao_id: string }
+        Returns: {
+          data_competencia: string
+          safra_id: string
+        }[]
+      }
       _oc_conciliar_peso: {
         Args: { p_medio: number; p_qtd: number; p_total: number }
         Returns: Json
+      }
+      _oc_conta_corrente_base: {
+        Args: { p_operacao_id: string }
+        Returns: {
+          base: number
+          liquidado: number
+        }[]
       }
       _oc_documento_aplicar: {
         Args: {
@@ -12954,6 +14875,11 @@ export type Database = {
         }
         Returns: undefined
       }
+      _oc_documento_soma_no_valor: {
+        Args: { p_especie: string; p_tipo_operacao: string }
+        Returns: boolean
+      }
+      _oc_entregas_snapshot: { Args: { p_operacao_id: string }; Returns: Json }
       _oc_estado_liquidacao: {
         Args: { p_base: number; p_liquidado: number }
         Returns: string
@@ -12978,11 +14904,108 @@ export type Database = {
         }
         Returns: boolean
       }
+      _oc_fechar_casca_titulo: {
+        Args: { p_estorno_id: string; p_motivo: string; p_operacao_id: string }
+        Returns: Json
+      }
+      _oc_legado_motivo_recebimento: {
+        Args: { p_lado?: string; p_lancamento_id: string }
+        Returns: string
+      }
+      _oc_modelo_ao_nascer: {
+        Args: { p_boitel: boolean; p_tipo: string }
+        Returns: string
+      }
+      _oc_motivo_nao_adotavel: {
+        Args: {
+          p_lancamento_id: string
+          p_lote_id: string
+          p_operacao_id: string
+        }
+        Returns: string
+      }
+      _oc_ratear_por_kg: {
+        Args: { p_itens: Json; p_total: number }
+        Returns: Json
+      }
+      _oc_renumerar_parcelas_do_grupo: {
+        Args: { p_parte_id: string }
+        Returns: number
+      }
+      _oc_restaurar_competencia: {
+        Args: { p_evento_id: string; p_lancamento_id: string }
+        Returns: Json
+      }
+      _oc_rotulo_categoria: { Args: { p_categoria: string }; Returns: string }
+      _oc_saidas_ativas_do_lote: {
+        Args: { p_lote_id: string }
+        Returns: string
+      }
+      _oc_sigla_categoria: { Args: { p_categoria: string }; Returns: string }
+      _oc_subcentro_abate: { Args: { p_categoria: string }; Returns: string }
+      _oc_subcentro_compra: { Args: { p_categoria: string }; Returns: string }
+      _oc_subcentro_venda: {
+        Args: { p_categoria: string; p_tem_boitel: boolean }
+        Returns: string
+      }
       _oc_sync_abate_lancamento: {
         Args: { p_operacao_id: string }
         Returns: number
       }
+      _oc_titulo_em_aberto: {
+        Args: { p_lancamento_id: string }
+        Returns: boolean
+      }
+      _oc_ultima_entrega: { Args: { p_operacao_id: string }; Returns: string }
       _oc_valor_do_lote: { Args: { p_lote_id: string }; Returns: Json }
+      _oc_vincular_recebimento: {
+        Args: {
+          p_lancamento_id: string
+          p_motivo: string
+          p_operacao_id: string
+          p_simular: boolean
+          p_versao_esperada: number
+        }
+        Returns: Json
+      }
+      _oc_vinculo_compromisso_liquidado: {
+        Args: { p_compromisso_id: string }
+        Returns: boolean
+      }
+      _oc_vinculo_diferenca_parcelas: {
+        Args: { p_compromisso_id: string }
+        Returns: number
+      }
+      _oc_vinculo_direcao_compromisso: {
+        Args: { p_plano_conta_id: string; p_subcentro: string }
+        Returns: string
+      }
+      _oc_vinculo_dist_janela: {
+        Args: { p_data: string; p_fim: string; p_ini: string }
+        Returns: number
+      }
+      _oc_vinculo_mapa: {
+        Args: never
+        Returns: {
+          componentes: string[]
+          natureza: string
+          subcentro: string
+          tipo_operacao: string
+          tipos_oc: string[]
+        }[]
+      }
+      _oc_vinculo_pista: {
+        Args: { p_descricao: string; p_eh_boitel: boolean; p_qtd: number }
+        Returns: number
+      }
+      _oc_vinculo_sugerir_componente: {
+        Args: { p_descricao: string; p_subcentro: string }
+        Returns: Json
+      }
+      _zoot_cache_marcar: {
+        Args: { p_ano: number; p_fazenda_id: string }
+        Returns: undefined
+      }
       agri_barter_abrir_contrato: {
         Args: {
           p_cultura?: string
@@ -13005,14 +15028,28 @@ export type Database = {
         Args: { p_colheita_id: string; p_motivo: string }
         Returns: Json
       }
+      agri_carga_mandioca_completar: {
+        Args: {
+          p_colheita_id: string
+          p_conta_id?: string
+          p_nfe?: string
+          p_papel: string
+          p_rotulo?: string
+          p_valor?: number
+        }
+        Returns: Json
+      }
       agri_carga_mandioca_corrigir: {
         Args: {
           p_colheita_id: string
+          p_conta_id?: string
           p_data: string
           p_desconto_kg: number
           p_funrural: number
           p_icms: number
+          p_icms_transporte?: number
           p_industria_id: string
+          p_inss?: number
           p_nf: string
           p_observacao?: string
           p_peso_bruto_kg: number
@@ -13027,11 +15064,14 @@ export type Database = {
       agri_carga_mandioca_registrar: {
         Args: {
           p_cliente: string
+          p_conta_id?: string
           p_data: string
           p_desconto_kg: number
           p_funrural: number
           p_icms: number
+          p_icms_transporte?: number
           p_industria_id: string
+          p_inss?: number
           p_nf: string
           p_observacao?: string
           p_peso_bruto_kg: number
@@ -13040,6 +15080,15 @@ export type Database = {
           p_safra_area_id: string
           p_servicos: Json
           p_ticket: string
+        }
+        Returns: Json
+      }
+      agri_compromisso_alterar_programacao: {
+        Args: {
+          p_cliente_id: string
+          p_conta_id?: string
+          p_lancamento_id: string
+          p_vencimento?: string
         }
         Returns: Json
       }
@@ -13308,6 +15357,14 @@ export type Database = {
         Args: { p_cliente_id: string; p_lancamento_id: string; p_payload: Json }
         Returns: Json
       }
+      fin_documento_vincular: {
+        Args: {
+          p_cliente: string
+          p_documento: string
+          p_lancamentos: string[]
+        }
+        Returns: Json
+      }
       fn_ajustes_sugeridos_mes: {
         Args: { p_ano_mes: string; p_fazenda_id: string }
         Returns: {
@@ -13370,8 +15427,37 @@ export type Database = {
           mes: number
         }[]
       }
+      fn_caixa_sistema_pontas: {
+        Args: {
+          p_ate: string
+          p_cliente: string
+          p_conta: string
+          p_de: string
+          p_detalhe?: boolean
+        }
+        Returns: {
+          aplicado_no_periodo: number
+          data: string
+          extrato_id: string
+          extrato_valor: number
+          falta: number
+          interna: boolean
+          lancamento_id: string
+          no_lv2: boolean
+          origem: string
+          parcial: boolean
+          sinal_lancamento: number
+          tipo_linha: string
+          valor: number
+          vinculo_fora: boolean
+        }[]
+      }
       fn_cancelar_lancamento_auditoria: {
         Args: { p_lancamento_id: string; p_motivo?: string }
+        Returns: Json
+      }
+      fn_cancelar_movimento_extrato: {
+        Args: { p_extrato_id: string; p_motivo: string }
         Returns: Json
       }
       fn_candidatos_conciliacao: {
@@ -13486,6 +15572,14 @@ export type Database = {
           valor: number
         }[]
       }
+      fn_classificacao_casar_manual: {
+        Args: {
+          p_lancamento_id: string
+          p_simular?: boolean
+          p_staging_id: string
+        }
+        Returns: Json
+      }
       fn_classificacao_casar_sessao: {
         Args: { p_ano_mes: string; p_sessao_id: string }
         Returns: Json
@@ -13500,8 +15594,25 @@ export type Database = {
           staging_ids: string[]
         }[]
       }
+      fn_classificacao_conferir_bloco: {
+        Args: {
+          p_lancamento_ids: string[]
+          p_sessao_id: string
+          p_simular?: boolean
+          p_staging_ids: string[]
+        }
+        Returns: Json
+      }
+      fn_classificacao_depara_resolver: {
+        Args: { p_cliente_id: string; p_textos: Json }
+        Returns: Json
+      }
       fn_classificacao_desfazer_ambiguo: {
         Args: { p_staging_id: string }
+        Returns: Json
+      }
+      fn_classificacao_desfazer_bloco: {
+        Args: { p_bloco_id: string; p_motivo: string }
         Returns: Json
       }
       fn_classificacao_desfazer_grupo: {
@@ -13510,6 +15621,10 @@ export type Database = {
       }
       fn_classificacao_desfazer_proximos: {
         Args: { p_staging_id: string }
+        Returns: Json
+      }
+      fn_classificacao_desfazer_split: {
+        Args: { p_motivo: string; p_simular?: boolean; p_staging_id: string }
         Returns: Json
       }
       fn_classificacao_editar_proposto: {
@@ -13569,6 +15684,19 @@ export type Database = {
         Args: { p_staging_id: string }
         Returns: Json
       }
+      fn_classificacao_sessao_abrir: {
+        Args: {
+          p_arquivo?: string
+          p_cliente_id: string
+          p_linhas_esperadas: number
+          p_sessao_id: string
+        }
+        Returns: Json
+      }
+      fn_classificacao_sessao_concluir: {
+        Args: { p_sessao_id: string }
+        Returns: Json
+      }
       fn_classificacao_sistema_nao_explicado: {
         Args: { p_ano_mes?: string; p_conta_id?: string; p_sessao_id: string }
         Returns: {
@@ -13583,6 +15711,10 @@ export type Database = {
           tipo_operacao: string
           valor: number
         }[]
+      }
+      fn_classificacao_soltar_par: {
+        Args: { p_simular?: boolean; p_staging_id: string }
+        Returns: Json
       }
       fn_classificacao_split_substituir: {
         Args: {
@@ -13647,8 +15779,80 @@ export type Database = {
           visivel_no_mes: boolean
         }[]
       }
+      fn_conciliacao_resumo_mes: {
+        Args: {
+          p_ano_mes: string
+          p_cliente_id: string
+          p_conta_ids?: string[]
+        }
+        Returns: {
+          avisos: Json
+          banco: Json
+          consolida_em_conta_id: string
+          conta_id: string
+          conta_nome: string
+          dias: Json
+          dias_com_diferenca: Json
+          diferenca: number
+          diferenca_entradas: number
+          diferenca_saidas: number
+          entradas: number
+          entradas_terceiros: number
+          entradas_transferencias: number
+          extratos_sem_par: Json
+          internas: Json
+          lancamentos_sem_par: Json
+          legado: Json
+          linhas_sistema: Json
+          motivos: Json
+          nivel: string
+          par_conta_id: string
+          par_status: string
+          posicao: Json
+          proprio: Json
+          retido_em_depositos: Json
+          saidas: number
+          saidas_terceiros: number
+          saidas_transferencias: number
+          saldo_extrato: number
+          saldo_extrato_data: string
+          saldo_inicial: number
+          saldo_inicial_origem: string
+          saldo_sistema: number
+          sem_conta: Json
+          status: string
+          tem_extrato: boolean
+          tipo_conta: string
+        }[]
+      }
+      fn_conciliacao_sem_classificacao_lista: {
+        Args: { p_ano_mes: string; p_cliente_id: string; p_conta_id?: string }
+        Returns: Json
+      }
       fn_conciliacao_soberana: {
         Args: { p_cliente: string; p_conta: string; p_mes: string }
+        Returns: Json
+      }
+      fn_conciliacao_status_ano: {
+        Args: { p_ano: number; p_cliente_id: string }
+        Returns: {
+          ano_mes: string
+          avisos: Json
+          conta_id: string
+          conta_nome: string
+          motivos: Json
+          nivel: string
+          status: string
+          tipo_conta: string
+        }[]
+      }
+      fn_conciliar_bloco: {
+        Args: {
+          p_extratos: string[]
+          p_lancamentos: string[]
+          p_regra: string
+          p_simular?: boolean
+        }
         Returns: Json
       }
       fn_contrato_criar_e_gerar: {
@@ -13696,6 +15900,22 @@ export type Database = {
         }
         Returns: Json
       }
+      fn_contrato_encargo_candidatas: {
+        Args: { p_lancamento_id: string }
+        Returns: Json
+      }
+      fn_contrato_encargo_desvincular: {
+        Args: { p_encargo_id: string; p_motivo: string; p_simular?: boolean }
+        Returns: Json
+      }
+      fn_contrato_encargo_vincular: {
+        Args: { p_financiamento_id: string; p_itens: Json; p_simular?: boolean }
+        Returns: Json
+      }
+      fn_contrato_encargos_vinculaveis: {
+        Args: { p_ate?: string; p_de?: string; p_financiamento_id: string }
+        Returns: Json
+      }
       fn_criar_lancamento_de_extrato: {
         Args: {
           p_dados_pagamento?: Json
@@ -13708,10 +15928,16 @@ export type Database = {
           p_forma_pagamento?: string
           p_numero_documento?: string
           p_observacao?: string
+          p_outra_conta?: string
           p_safra_id?: string
           p_subcentro?: string
           p_tipo_documento?: string
+          p_tipo_operacao?: string
         }
+        Returns: Json
+      }
+      fn_desfazer_bloco: {
+        Args: { p_bloco: string; p_motivo: string }
         Returns: Json
       }
       fn_desfazer_grupo_conciliacao: {
@@ -13725,6 +15951,45 @@ export type Database = {
       fn_diag_fechamento_sessao: {
         Args: { p_sessao_id: string }
         Returns: Json
+      }
+      fn_dividendo_criar: {
+        Args: { p_cliente_id: string; p_nome: string; p_simular?: boolean }
+        Returns: Json
+      }
+      fn_dividendo_inativar: {
+        Args: { p_id: string; p_simular?: boolean }
+        Returns: Json
+      }
+      fn_dividendo_reativar: {
+        Args: { p_id: string; p_simular?: boolean }
+        Returns: Json
+      }
+      fn_dividendo_renomear: {
+        Args: { p_id: string; p_nome: string; p_simular?: boolean }
+        Returns: Json
+      }
+      fn_dividendo_reordenar: {
+        Args: { p_cliente_id: string; p_ids: string[]; p_simular?: boolean }
+        Returns: Json
+      }
+      fn_documento_chave_ja_registrada: {
+        Args: {
+          p_chave: string
+          p_cliente: string
+          p_ignorar_documento?: string
+        }
+        Returns: {
+          data: string
+          descricao: string
+          documento_id: string
+          lancamento_id: string
+          numero: string
+          operacao_id: string
+          operacao_tipo: string
+          origem: string
+          serie: string
+          valor: number
+        }[]
       }
       fn_dre_agricola_por_safra: {
         Args: { p_cliente_id: string; p_safra_id: string }
@@ -13748,13 +16013,19 @@ export type Database = {
         Returns: Json
       }
       fn_dre_pecuaria: {
-        Args: { p_ate: string; p_cliente: string; p_de: string }
+        Args: {
+          p_ate: string
+          p_cenario?: string
+          p_cliente: string
+          p_de: string
+        }
         Returns: Json
       }
       fn_dre_pecuaria_lancamentos: {
         Args: {
           p_ate: string
           p_bloco: string
+          p_cenario?: string
           p_centro: string
           p_cliente: string
           p_de: string
@@ -13769,6 +16040,21 @@ export type Database = {
           p_de: string
           p_fazenda: string
         }
+        Returns: Json
+      }
+      fn_dre_sem_classificacao: {
+        Args: {
+          p_ate?: string
+          p_cenario?: string
+          p_cliente_id: string
+          p_de?: string
+          p_fazenda_id?: string
+          p_safra_id?: string
+        }
+        Returns: Json
+      }
+      fn_encargos_dos_lancamentos: {
+        Args: { p_cliente: string }
         Returns: Json
       }
       fn_endividamento_mensal: {
@@ -13845,6 +16131,7 @@ export type Database = {
           p_ano_mes: string
           p_cliente_id: string
           p_conta_bancaria_id: string
+          p_extratos?: string[]
           p_limite?: number
           p_simular?: boolean
         }
@@ -13855,6 +16142,20 @@ export type Database = {
           p_importacao_id: string
           p_motivo?: string
           p_simular?: boolean
+        }
+        Returns: Json
+      }
+      fn_extrato_importar_arquivo: {
+        Args: {
+          p_cliente_id: string
+          p_conta_bancaria_id: string
+          p_movimentos: Json
+          p_nome_arquivo: string
+          p_saldo_declarado: number
+          p_saldo_declarado_data: string
+          p_tipo_arquivo: string
+          p_total_com_erro: number
+          p_total_linhas: number
         }
         Returns: Json
       }
@@ -13870,6 +16171,18 @@ export type Database = {
         Args: { p_ano_mes: string; p_cliente_id: string }
         Returns: Json
       }
+      fn_fechamento_pasto_reabrir: {
+        Args: { p_fechamento_id: string; p_motivo: string }
+        Returns: Json
+      }
+      fn_fechamento_pasto_salvar: {
+        Args: { p_campos: Json; p_fechamento_id: string; p_itens: Json }
+        Returns: Json
+      }
+      fn_financeiro_anos_realizado: {
+        Args: { p_cliente: string; p_fazenda_ids: string[] }
+        Returns: number[]
+      }
       fn_financiamento_pagar_pelo_extrato: {
         Args: {
           p_lancamento_cru_id: string
@@ -13881,6 +16194,18 @@ export type Database = {
       fn_financiamento_sincronizar_status: {
         Args: { p_financiamento_id: string }
         Returns: undefined
+      }
+      fn_financiamento_situacao: {
+        Args: {
+          p_detalhe?: boolean
+          p_financiamento_id: string
+          p_hoje?: string
+        }
+        Returns: Json
+      }
+      fn_financiamentos_situacao_lote: {
+        Args: { p_cliente_id: string; p_hoje?: string }
+        Returns: Json
       }
       fn_fornecedores_com_uso: {
         Args: { p_cliente_id: string }
@@ -13906,6 +16231,20 @@ export type Database = {
       fn_invalidar_origem_extrato: {
         Args: { p_decisoes?: Json; p_extrato_id: string; p_motivo: string }
         Returns: Json
+      }
+      fn_lancamento_casado_com_extrato: {
+        Args: { p_lancamento_id: string }
+        Returns: boolean
+      }
+      fn_lancamentos_parciais: {
+        Args: { p_cliente: string }
+        Returns: {
+          aplicado: number
+          lancamento_id: string
+          partes: Json
+          saldo: number
+          valor: number
+        }[]
       }
       fn_lista_v2_totais: {
         Args: {
@@ -13934,8 +16273,10 @@ export type Database = {
         }
         Returns: {
           entradas: number
+          entradas_sem_caixa: number
           excluidos_sem_vencimento: number
           saidas: number
+          saidas_sem_caixa: number
           total: number
         }[]
       }
@@ -13959,17 +16300,35 @@ export type Database = {
         Args: { p_ano_mes: string; p_fazenda_id: string }
         Returns: undefined
       }
-      fn_marcar_extrato_transferencia: {
+      fn_lr_sync_aplicar: {
         Args: {
-          p_conta_contraparte: string
-          p_extrato_id: string
-          p_motivo?: string
+          p_cliente: string
+          p_decisoes: Json
+          p_sessao: string
+          p_simular?: boolean
         }
+        Returns: Json
+      }
+      fn_lr_sync_comparar: {
+        Args: { p_cliente: string; p_linhas: Json; p_sessao: string }
+        Returns: Json
+      }
+      fn_lr_sync_desfazer: {
+        Args: { p_aplicacao?: string; p_cliente: string; p_simular?: boolean }
         Returns: Json
       }
       fn_materializar_conjunto_mes: {
         Args: { p_ano_mes: string; p_fazenda_id: string }
         Returns: Json
+      }
+      fn_meta_calculada_pecuaria: {
+        Args: { p_ano: number; p_cliente: string }
+        Returns: {
+          fazenda_id: string
+          mes: number
+          ordem: number
+          valor: number
+        }[]
       }
       fn_natureza_patrimonial_fazenda: {
         Args: { p_fazenda_id: string }
@@ -14069,6 +16428,59 @@ export type Database = {
         Args: { p_cliente: string; p_cultura: string; p_safra_id: string }
         Returns: Json
       }
+      fn_parcelamento_cadastrar: { Args: { p_payload: Json }; Returns: string }
+      fn_parcelamento_cancelar_parcela: {
+        Args: {
+          p_escopo: string
+          p_lancamento_id: string
+          p_motivo: string
+          p_parcela_id?: string
+          p_simular?: boolean
+        }
+        Returns: Json
+      }
+      fn_parcelamento_editar_parcelas: {
+        Args: {
+          p_financiamento_id: string
+          p_parcelas: Json
+          p_valor_total: number
+        }
+        Returns: Json
+      }
+      fn_parcelamento_excluir: {
+        Args: {
+          p_financiamento_id: string
+          p_motivo: string
+          p_simular?: boolean
+        }
+        Returns: Json
+      }
+      fn_parcelamento_propagar: {
+        Args: {
+          p_campos: Json
+          p_escopo: string
+          p_financiamento_id: string
+          p_simular?: boolean
+        }
+        Returns: Json
+      }
+      fn_parcelamento_recriar_lancamento: {
+        Args: { p_parcela_id: string; p_simular?: boolean }
+        Returns: Json
+      }
+      fn_parcelas_dos_lancamentos: {
+        Args: { p_cliente_id: string }
+        Returns: Json
+      }
+      fn_pasto_vigente_no_mes: {
+        Args: {
+          p_ano_mes: string
+          p_ativo: boolean
+          p_data_fim: string
+          p_data_inicio: string
+        }
+        Returns: boolean
+      }
       fn_pastos_aplicaveis_mes: {
         Args: { p_ano_mes: string; p_fazenda_id: string }
         Returns: {
@@ -14099,7 +16511,44 @@ export type Database = {
           uso_operacional_origem: string
         }[]
       }
+      fn_plano_conta_do_texto: {
+        Args: { p_cliente: string; p_subcentro: string; p_tipo: string }
+        Returns: string
+      }
       fn_promover_staging: { Args: { p_sessao_id: string }; Returns: Json }
+      fn_rateio_admin_mes: {
+        Args: {
+          p_ate: string
+          p_cenario?: string
+          p_cliente: string
+          p_de: string
+          p_safra?: string
+        }
+        Returns: {
+          ano_mes: string
+          data_competencia: string
+          data_pagamento: string
+          descricao: string
+          existe_agricultura: boolean
+          existe_pecuaria: boolean
+          existe_silvicultura: boolean
+          favorecido_id: string
+          fazenda_id: string
+          grupo: string
+          lancamento_id: string
+          motivo: string
+          origem: string
+          peso_agricultura: number
+          peso_agricultura_mes: number
+          peso_nao_alocado: number
+          peso_pecuaria: number
+          peso_silvicultura: number
+          status_transacao: string
+          subcentro: string
+          tem_chave: boolean
+          valor: number
+        }[]
+      }
       fn_reabrir_p1_operacional: {
         Args: { p_ano_mes: string; p_fazenda_id: string; p_motivo: string }
         Returns: Json
@@ -14153,8 +16602,23 @@ export type Database = {
         }
         Returns: Json
       }
+      fn_recorrencias_a_gerar: {
+        Args: { p_cliente_id: string; p_hoje?: string }
+        Returns: {
+          a_gerar: number
+          fechados: number
+          passados: number
+          primeira: string
+          recorrencia_id: string
+          ultima: string
+        }[]
+      }
       fn_regenerar_area_do_mes: {
         Args: { p_ano_mes: string; p_fazenda_id: string }
+        Returns: Json
+      }
+      fn_reverter_cancelamento_extrato: {
+        Args: { p_extrato_id: string }
         Returns: Json
       }
       fn_reverter_desconsideracao_extrato: {
@@ -14176,6 +16640,10 @@ export type Database = {
           peso_medio_kg: number
           quantidade: number
         }[]
+      }
+      fn_split_do_lancamento: {
+        Args: { p_lancamento_id: string }
+        Returns: Json
       }
       fn_sugestoes_extrato: {
         Args: {
@@ -14214,11 +16682,27 @@ export type Database = {
         }
         Returns: Json
       }
+      fn_transferencia_de_extratos: {
+        Args: { p_entrada: string; p_saida: string; p_simular?: boolean }
+        Returns: Json
+      }
+      fn_transferencia_segunda_ponta: {
+        Args: { p_extrato: string; p_lancamento: string; p_simular?: boolean }
+        Returns: Json
+      }
       fn_transferencia_unir: {
         Args: { p_entrada_id: string; p_saida_id: string; p_simular?: boolean }
         Returns: Json
       }
       fn_transferencias_espelhadas: {
+        Args: { p_ano_mes: string; p_cliente_id: string }
+        Returns: Json
+      }
+      fn_transferencias_meia_ponta: {
+        Args: { p_ano_mes: string; p_cliente_id: string }
+        Returns: Json
+      }
+      fn_transferencias_sugeridas: {
         Args: { p_ano_mes: string; p_cliente_id: string }
         Returns: Json
       }
@@ -14256,6 +16740,7 @@ export type Database = {
       }
       fn_vincular_extrato_lancamento: {
         Args: {
+          p_dupla_ponta?: boolean
           p_extrato_id: string
           p_lancamento_id: string
           p_valor_aplicado?: number
@@ -14279,6 +16764,16 @@ export type Database = {
         Args: { p_id: string; p_tipo: string }
         Returns: Json
       }
+      fn_zoot_cache_buracos: {
+        Args: { p_cliente: string }
+        Returns: {
+          ano: number
+          fazenda: string
+          fazenda_id: string
+          meses: string
+          tipo: string
+        }[]
+      }
       fn_zoot_cache_ensure: {
         Args: { p_ano: number; p_cliente_id: string }
         Returns: undefined
@@ -14291,6 +16786,7 @@ export type Database = {
         Args: { p_ano: number; p_cliente_id: string }
         Returns: undefined
       }
+      fn_zoot_cache_reconstruir_sujos: { Args: never; Returns: number }
       fn_zoot_categoria_mensal: {
         Args: { p_ano: number; p_cenario?: string; p_fazenda_id: string }
         Returns: {
@@ -14403,6 +16899,16 @@ export type Database = {
         }
         Returns: Json
       }
+      oc_adotar_movimentacao: {
+        Args: {
+          p_cliente_id: string
+          p_lancamento_id: string
+          p_lote_id: string
+          p_operacao_id: string
+          p_versao_esperada: number
+        }
+        Returns: Json
+      }
       oc_adotar_titulo_financeiro: {
         Args: {
           p_componente?: string
@@ -14483,12 +16989,22 @@ export type Database = {
         }
         Returns: Json
       }
+      oc_cancelar_rol: { Args: { p_operacao_id: string }; Returns: Json }
+      oc_candidatas_vinculo: {
+        Args: { p_janela_dias?: number; p_lancamento_id: string }
+        Returns: Json
+      }
       oc_confirmar: {
         Args: {
           p_cliente_id: string
           p_operacao_id: string
           p_versao_esperada: number
         }
+        Returns: Json
+      }
+      oc_conta_corrente: { Args: { p_operacao_id: string }; Returns: Json }
+      oc_conta_corrente_lote: {
+        Args: { p_cliente_id: string; p_operacao_ids: string[] }
         Returns: Json
       }
       oc_criar_compromisso: {
@@ -14499,12 +17015,68 @@ export type Database = {
         }
         Returns: Json
       }
+      oc_criar_do_legado: {
+        Args: {
+          p_cliente_id: string
+          p_criterio_valor: string
+          p_dados: Json
+          p_recebimentos: string[]
+          p_saidas: Json
+          p_simular?: boolean
+          p_valor_outro: number
+        }
+        Returns: Json
+      }
+      oc_criar_do_legado_sugestoes: {
+        Args: { p_recebimentos: string[] }
+        Returns: Json
+      }
       oc_criar_rascunho: {
         Args: { p_cliente_id: string; p_payload: Json }
         Returns: Json
       }
       oc_derivar_status: {
         Args: { p_cliente_id: string; p_operacao_id: string }
+        Returns: Json
+      }
+      oc_desfazer_compromisso: {
+        Args: {
+          p_compromisso_id: string
+          p_motivo: string
+          p_operacao_id: string
+          p_simular?: boolean
+          p_versao: number
+        }
+        Returns: Json
+      }
+      oc_desfazer_explicacao: {
+        Args: {
+          p_motivo: string
+          p_operacao_id: string
+          p_parte_id: string
+          p_simular?: boolean
+          p_versao_esperada: number
+        }
+        Returns: Json
+      }
+      oc_desvincular_lancamento: {
+        Args: {
+          p_lancamento_id: string
+          p_motivo: string
+          p_operacao_id: string
+          p_plano_conta_id?: string
+          p_simular?: boolean
+          p_versao_esperada: number
+        }
+        Returns: Json
+      }
+      oc_desvincular_movimentacao: {
+        Args: {
+          p_cliente_id: string
+          p_motivo?: string
+          p_movimentacao_id: string
+          p_versao_esperada: number
+        }
         Returns: Json
       }
       oc_documento_cancelar: {
@@ -14604,12 +17176,44 @@ export type Database = {
         }
         Returns: Json
       }
+      oc_explicar_saldo: {
+        Args: {
+          p_lote_id: string
+          p_motivo: string
+          p_operacao_id: string
+          p_plano_conta_id: string
+          p_simular?: boolean
+          p_tipo: string
+          p_valor: number
+          p_vencimento?: string
+          p_versao_esperada: number
+        }
+        Returns: Json
+      }
       oc_gerar_obrigacoes: {
         Args: {
           p_cliente_id: string
           p_operacao_id: string
           p_payload: Json
           p_versao_esperada: number
+        }
+        Returns: Json
+      }
+      oc_lancar_pelo_modal: {
+        Args: {
+          p_componente: string
+          p_dados_pagamento: string
+          p_descricao: string
+          p_documento: string
+          p_favorecido_id: string
+          p_forma: string
+          p_natureza: string
+          p_observacao: string
+          p_operacao_id: string
+          p_parcelas: Json
+          p_plano_conta_id: string
+          p_simular?: boolean
+          p_versao: number
         }
         Returns: Json
       }
@@ -14626,11 +17230,26 @@ export type Database = {
         }
         Returns: Json
       }
+      oc_migrar_para_conta_corrente: {
+        Args: { p_operacao_id: string; p_simular?: boolean }
+        Returns: Json
+      }
       oc_programar_compromisso: {
         Args: {
           p_compromisso_id: string
           p_operacao_id: string
           p_payload: Json
+          p_versao_esperada: number
+        }
+        Returns: Json
+      }
+      oc_programar_recebimento: {
+        Args: {
+          p_conta_bancaria_id?: string
+          p_operacao_id: string
+          p_simular?: boolean
+          p_valor: number
+          p_vencimento: string
           p_versao_esperada: number
         }
         Returns: Json
@@ -14680,6 +17299,31 @@ export type Database = {
         }
         Returns: Json
       }
+      oc_recebimentos_vinculaveis: {
+        Args: { p_operacao_id: string }
+        Returns: {
+          conciliado: boolean
+          conta_bancaria_id: string
+          data: string
+          descricao: string
+          favorecido_id: string
+          lancamento_id: string
+          mesmo_favorecido: boolean
+          status_transacao: string
+          subcentro: string
+          valor: number
+        }[]
+      }
+      oc_reclassificar_item: {
+        Args: {
+          p_componente?: string
+          p_compromisso_id: string
+          p_motivo?: string
+          p_plano_conta_id: string
+          p_simular?: boolean
+        }
+        Returns: Json
+      }
       oc_registrar_liquidacao: {
         Args: { p_cliente_id: string; p_operacao_id: string; p_payload: Json }
         Returns: Json
@@ -14719,6 +17363,19 @@ export type Database = {
           p_versao_esperada: number
         }
         Returns: Json
+      }
+      oc_saidas_adotaveis: {
+        Args: { p_lote_id: string; p_operacao_id: string }
+        Returns: {
+          categoria: string
+          created_at: string
+          data: string
+          lancamento_id: string
+          origem_registro: string
+          peso_medio_kg: number
+          quantidade: number
+          valor_total: number
+        }[]
       }
       oc_salvar_abate: {
         Args: {
@@ -14766,9 +17423,31 @@ export type Database = {
         }
         Returns: Json
       }
+      oc_sincronizar_entregas: {
+        Args: {
+          p_operacao_id: string
+          p_simular?: boolean
+          p_versao_esperada: number
+        }
+        Returns: Json
+      }
       oc_sincronizar_liquidacao_de_financeiro: {
         Args: { p_financeiro_lancamento_id: string }
         Returns: undefined
+      }
+      oc_vincular_lancamento: {
+        Args: {
+          p_componente: string
+          p_compromisso_id?: string
+          p_criar_novo?: boolean
+          p_lancamento_id: string
+          p_motivo: string
+          p_operacao_id: string
+          p_parcela_id?: string
+          p_simular?: boolean
+          p_versao_esperada: number
+        }
+        Returns: Json
       }
       provisionar_cliente: {
         Args: { p_nome: string; p_slug: string }

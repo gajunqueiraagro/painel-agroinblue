@@ -2142,6 +2142,32 @@ preview que o cabecalho nao sai da tela ao rolar.
     gravava a competencia do principal = a data do contrato: as 80 parcelas do c518161d cairiam todas em 2026-06.
   Testes: `src/hooks/useFinanciamentoCadastro.cronograma.test.tsx` 6 (a conta pura e o hook com banco de mentira); 5 mutacoes mortas.
   ⚠ NAO PROVADO NO NAVEGADOR: nada (cadastrar o consorcio de teste e ver a lista e o Financeiro).
+- ⚠ FINANCIAMENTOS TEM A ESTRUTURA DO DESENHO APROVADO, SO' ACRESCENTADA (FIN-FINANC-28-P1, item 28 passo 1, Gabriel 16–17/10/2026;
+  migration `supabase/migrations/20261027199900_fin_financ_28_p1_estrutura.sql`, md5 do arquivo 8931dcfb244ad6ee202383280ce00ddb —
+  APLICADA no proto em 17/10/2026 05:41 (Brasilia), dentro da janela antes das 07h, com o GO do Gabriel: ledger 20261017084155
+  `fin_financ_28_p1_estrutura`, ⚠ timestamp do dia; ledger = arquivo byte a byte; na primeira tentativa, sem trava).
+  · NOVAS: `financiamento_linhas_credito` (cliente, credor, programa, limite, vigencia) e `financiamento_liberacoes` (N por
+    contrato: data, valor > 0, forma conta | fornecedor | liquidacao — liquidacao exige `contrato_liquidado_id` <> o proprio —,
+    lancamento, destinacao, fornecedor, cancelamento com motivo; NAO se apaga, cancela). RLS por `tenant_ok(cliente_id)`;
+    `authenticated` le^ e grava (linha de credito tambem apaga); PUBLIC e anon sem nada. PK so' em `id`: nenhuma vira tabela de
+    juncao do PostgREST (deixaria ambiguos os embeds `financeiro_fornecedores(...)` sem dica feitos a partir de lancamentos).
+  · `financiamentos` ganhou, todas nulas: linha_credito_id, sistema_amortizacao (sac/price/bullet/livre), carencia_ate,
+    vencimento_final, finalidade (custeio/investimento/comercializacao/outro), contrato_sucessor_id (o rolado; <> o proprio),
+    baixa_em / baixa_por / baixa_motivo; e o CHECK do status ativo / quitado / rolado / cancelado.
+  · `financiamento_destinacoes` ganhou PK, FK do contrato (RESTRICT) e do cliente, valor_orcado, fornecedor_id e tipo.
+  · `financiamento_parcelas` ganhou valor_encargos, vencimento_original, tipo (amortizacao/juros_carencia/mista), o CHECK do status
+    (pendente/pago/cancelado, os em uso) e a FK de lancamento_id (ON DELETE SET NULL, como a do juros).
+  · MEDIDO antes de aplicar (16 e 17/10): 0 linha fora dos CHECKs, 0 lancamento_id orfao, 0 destinacao — tudo nasceu VALIDADO.
+    Depois: 222 contratos e 922 parcelas identicos por md5 (sem as colunas novas, todas nulas); teste
+    `supabase/tests/fin_financ_28_p1_estrutura_test.sql` (E1–E4) OK. TRAVAS MEDIDAS NO ENSAIO (16/10 20h26, 287 ms):
+    AccessExclusive em financiamentos, financiamento_parcelas e financiamento_destinacoes; ShareRowExclusive em
+    financeiro_lancamentos_v2, financeiro_fornecedores e clientes (a validacao das FKs).
+  · TIPOS REGENERADOS (`src/integrations/supabase/types.ts`, `supabase gen types typescript --linked`, o formato de antes com
+    graphql_public): entraram tambem as tabelas e colunas criadas desde 27/09; TSC continuou 140 (os mesmos erros; so' o texto dos
+    tipos impressos mudou).
+  ⚠ PENDENCIA: o cadastro de destinacoes do front (`useFinanciamentoCadastro`) segue QUEBRADO — grava conta_bancaria_id,
+    plano_conta_id, gerar_lancamento, observacao, lancamento_id e updated_at, colunas que nao existem. Fica para o passo da tela
+    do contrato.
 - ⚠ A AMORTIZACAO DE FINANCIAMENTO E' EVENTO DE CAIXA: COMPETENCIA E ANO_MES = O VENCIMENTO DA PARCELA (FIN-AMORT-COMPETENCIA-VENC-01,
   Gabriel 16/10/2026; migration `supabase/migrations/20261027199600_fin_amort_competencia_venc_01.sql`, md5 do arquivo
   2a9d14a4a4a5d65373157a2525f1d496 — APLICADA no proto em 16/10/2026 21:31 UTC com o GO do Gabriel: ledger 20261016213120
