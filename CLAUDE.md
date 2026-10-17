@@ -2142,6 +2142,27 @@ preview que o cabecalho nao sai da tela ao rolar.
     gravava a competencia do principal = a data do contrato: as 80 parcelas do c518161d cairiam todas em 2026-06.
   Testes: `src/hooks/useFinanciamentoCadastro.cronograma.test.tsx` 6 (a conta pura e o hook com banco de mentira); 5 mutacoes mortas.
   ⚠ NAO PROVADO NO NAVEGADOR: nada (cadastrar o consorcio de teste e ver a lista e o Financeiro).
+- ⚠ O SALDO DEVEDOR DO FINANCIAMENTO TEM UMA FONTE SO': `fn_financiamento_saldo` — NENHUM LEITOR NOVO CALCULA SALDO POR CONTA
+  PROPRIA (FIN-FINANC-28-P2, item 28 passo 2, Gabriel 17/10/2026; migration `supabase/migrations/20261027200000_fin_financ_28_p2_saldo.sql`,
+  md5 do arquivo 8a7612075b44e4ee175df166abb6cb63 — APLICADA no proto em 17/10/2026 06:01 (Brasilia) com o GO do Gabriel: ledger
+  20261017090144 `fin_financ_28_p2_saldo`, ⚠ timestamp do dia; ledger = arquivo).
+  · SALDO DEVEDOR = LIBERADO − AMORTIZADO ATE' A DATA, SEM JUROS FUTUROS (juros projetados so' no cronograma, como juros previstos).
+    Liberado = soma das liberacoes nao canceladas ate' a data, NULO sem liberacao gravada (a tela mostra "?", nunca deduz do contrato
+    nem da captacao); amortizado = principal pago ate' a data pela regra de "paga" da situacao (o lancamento vivo decide; sem
+    lancamento vivo, a parcela). Rolado e cancelado: saldo 0 e fora das somas; quitado: saldo 0; ativo: calculado. Compra
+    parcelada: `aplica_saldo` false, so' contratado e pago. Pendencias: sem_liberacao (so' ativo), amortizacao_sem_lancamento
+    (parcela 'pago' de principal zero sem lancamento vivo — 29 parcelas em 17/10: SR 8, NJ 17, a6793f65 3, a2d41cda 1),
+    liberado_maior_que_contratado, amortizado_maior_que_liberado, sem_numero_contrato.
+  · DONOS: `fn_financiamento_saldo(contrato, data default current_date)` (publica, `tenant_ok` + 42501, authenticated e
+    service_role) e `_fn_financiamento_saldo` (interna, so' service_role; a situacao chama esta). `fn_financiamento_situacao`
+    ganhou NO FIM a chave `saldo` (com e sem `p_detalhe`), md5(prosrc) 4eb6abf0… -> b9f3b1afb49c8e97654a596a81b586d9;
+    `fn_financiamentos_situacao_lote` nao mudou (d85ccfa3…) e herda a chave. Provado na propria transacao da aplicacao: as chaves
+    de antes identicas em 222 de 222 contratos, sem e com detalhe, e nos 7 lotes. CUSTO MEDIDO (ACEITO pelo Gabriel): o lote do
+    NJ de ~87 ms para ~170 ms (5 chamadas: 83–130 -> 163–210 ms).
+  · Em 17/10 a tabela de liberacoes esta' vazia: os 41 contratos ativos ficam com saldo NULO e `sem_liberacao` ate' a migracao
+    dos contratos (passo 8/9). Nenhuma tela le^ a chave ainda (passos 3 e 7).
+  Teste: `supabase/tests/fin_financ_28_p2_saldo_test.sql` (S1–S5) OK no vivo; 4 mutacoes mortas no ensaio (amortizado sem a data,
+  liberado tirado do contrato, sem tenant, juros no saldo).
 - ⚠ FINANCIAMENTOS TEM A ESTRUTURA DO DESENHO APROVADO, SO' ACRESCENTADA (FIN-FINANC-28-P1, item 28 passo 1, Gabriel 16–17/10/2026;
   migration `supabase/migrations/20261027199900_fin_financ_28_p1_estrutura.sql`, md5 do arquivo 8931dcfb244ad6ee202383280ce00ddb —
   APLICADA no proto em 17/10/2026 05:41 (Brasilia), dentro da janela antes das 07h, com o GO do Gabriel: ledger 20261017084155
