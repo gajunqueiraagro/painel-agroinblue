@@ -162,7 +162,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 18/10/2026 (UI-MODAL-BLOCOS-01 titulo na borda, +1: `src/components/ui/blocoFormulario.test.tsx` 1 (2 -> 3) — 5631
+  Baseline em 18/10/2026 (FIN-FINANC-28 TELA DO CONTRATO v3, +10: `src/components/financiamentos/telaDoContratoV3.test.tsx` 10 (novo);
+  `contratoDeCredito.test.tsx` (2) trocado ao contrato novo (2 -> 2) e `obrigacaoEdicao.test.tsx` passou a ancorar em `topo-do-contrato` — 5641
+  depois dele; antes o UI-MODAL-BLOCOS-01 titulo na borda, +1: `src/components/ui/blocoFormulario.test.tsx` 1 (2 -> 3) — 5631
   depois dele; antes o UI-MODAL-BLOCOS-01 passo 0, +2: `src/components/ui/blocoFormulario.test.tsx` 2 (novo) — 5630 depois dele; antes o
   FIN-FINANC-28 CADASTRO-ACABAMENTO, +5: `src/components/financiamentos/cadastroAcabamento.test.tsx` 5 (novo) — 5628
   depois dele; antes o FIN-LANC-DESCRICAO-CONTRATO-01, +3: `src/components/financeiro-v2/colunasDaListaV2.test.tsx` 3 (12 -> 15) — 5623
@@ -380,7 +382,7 @@ no mesmo arquivo.
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
   `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5327
-  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO; 5568 desde o FIN-FINANC-28 PASSO 4; 5571 desde o FIN-FINANC-28 RESUMO-A18; 5573 desde o FIN-FINANC-28 PASSO 4c; 5581 desde o FIN-FINANC-28 PASSO 4b; 5586 desde o FIN-FINANC-28 PASSO 5; 5593 desde o FIN-FINANC-28 PASSO 6; 5607 desde o FIN-FINANC-28 PASSO 7; 5609 desde o FIN-FINANC-28 PASSO 8; 5614 desde o FORN-MESCLAR-01; 5615 desde o RECORRENCIAS-COLUNAS-01; 5620 desde o FIN-FINANC-28 FIX 4b; 5623 desde o FIN-LANC-DESCRICAO-CONTRATO-01; 5628 desde o FIN-FINANC-28 CADASTRO-ACABAMENTO; 5630 desde o UI-MODAL-BLOCOS-01 passo 0; 5631 desde o UI-MODAL-BLOCOS-01 titulo na borda], 22 skipped, e
+  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO; 5568 desde o FIN-FINANC-28 PASSO 4; 5571 desde o FIN-FINANC-28 RESUMO-A18; 5573 desde o FIN-FINANC-28 PASSO 4c; 5581 desde o FIN-FINANC-28 PASSO 4b; 5586 desde o FIN-FINANC-28 PASSO 5; 5593 desde o FIN-FINANC-28 PASSO 6; 5607 desde o FIN-FINANC-28 PASSO 7; 5609 desde o FIN-FINANC-28 PASSO 8; 5614 desde o FORN-MESCLAR-01; 5615 desde o RECORRENCIAS-COLUNAS-01; 5620 desde o FIN-FINANC-28 FIX 4b; 5623 desde o FIN-LANC-DESCRICAO-CONTRATO-01; 5628 desde o FIN-FINANC-28 CADASTRO-ACABAMENTO; 5630 desde o UI-MODAL-BLOCOS-01 passo 0; 5631 desde o UI-MODAL-BLOCOS-01 titulo na borda; 5641 desde o FIN-FINANC-28 TELA v3], 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -2248,6 +2250,33 @@ preview que o cabecalho nao sai da tela ao rolar.
   regua nas tres naturezas; o formulario novo (passo 7) a herda. Preso por `resumoDaObrigacao.test.ts` (fonte, com auto-teste).
   MEDIDO na bancada a 1.126 x 579 e 1.440 x 800 (compra parcelada e PR-78.192, abas Contrato e Parcelas): 240px, sem rolagem,
   maior fonte 11px, linhas de 16px. As 15 fotos do dialogo (`obrigacaoDialog.fotos.json`) REGRAVADAS de proposito (o aside esta' em todas).
+- ⚠ TELA DO CONTRATO v3: TUDO O QUE ELA MOSTRA ALEM DO CRONOGRAMA VEM DE UMA LEITURA, `fn_contrato_tela`, E A PAGINA NAO ROLA
+  (FIN-FINANC-28 TELA v3, Gabriel 18/10/2026; financiamento, emprestimo e consorcio — COMPRA PARCELADA NAO MUDOU). SUBSTITUI, no bloco do
+  PASSO 4 logo abaixo, o cabecalho com seis cartoes, "Liberacoes e Destinacoes uma embaixo da outra" e "o credito tem UM scrollport (a tela)".
+  · BANCO (so' leitura): `fn_contrato_tela(contrato, hoje)` (migration `20261027201100_fin_financ_28_tela_v3.sql`, md5 do arquivo
+    65e083c7dd31a7e5f338c056ebf6740c, ledger 20261018100037; patches `20261027201200_…_encerrado.sql` md5 f4237f627f2df1fa5f68e1167f88df1e
+    e `20261027201300_…_rotulos.sql` md5 06a95945e90deee7a625b45bdc1c7fe5, ledger com o timestamp do dia; ledger = arquivo; prosrc final
+    0c31b8f2…). Guarda `_fn_contrato_do_usuario`; chama `fn_financiamento_situacao(…, true)` e nao repete a regra. Devolve condicoes
+    (taxa gravada + unidade, TAXA A.A. = (1+i)^12−1 calculada AQUI — desvio declarado: nao na situacao), contrato (datas, credor,
+    1ª/ultima liberacao com "a confirmar"), liberacoes (entrou = lancamento vivo vinculado LIMITADO a' liberacao; a identificar = valor −
+    entrou; excedente = o que passa; fora da forma 'conta', entrou nulo), pagamentos (parcelas pagas/parciais e ENCARGOS PAGOS EM LINHAS
+    PROPRIAS, "Encargo · IOF"), historico (so' eventos datados: liberacoes, pagamentos, encargos, baixas, documentos) e `a_resolver`
+    (chave · tom vencido|dado · valor · acao). CONTRATO ENCERRADO (quitado, rolado, cancelado) NAO TEM "A RESOLVER" (decisao do brief:
+    "237.729.00/03 quitado: A resolver some"). Rotulos em portugues no banco (papel, forma, tipo da baixa, especie).
+    Testes: `fin_financ_28_tela_v3_test.sql` (V1–V6), `…_encerrado_test.sql` (E1–E3), `…_rotulos_test.sql` (R1–R2), OK no vivo; 3 mutacoes mortas.
+  · TELA: leitor sem cast `src/lib/financiamentos/telaDoContrato.ts` (peca torta = nulo inteiro; textos "não cadastrado", "até dd/mm/aaaa"
+    — nunca "sem carência"); `TelaDoContratoV3.tsx` (`TopoDoContrato`: linha do titulo "nº · descricao" 13px/600 + situacao + vencidas +
+    Editar · LUGAR RESERVADO de 58px do Juntar (FIN-CONTRATO-JUNTAR-01) · Dar baixa dourado; bloco Contrato em 2 colunas de leitura
+    (rotulo de 100px + valor, 11px); Resumo de 250px (Contratado · Liberado · Principal pago · Saldo devedor · Vencido so' > 0, de
+    `fn_financiamento_saldo`); "A resolver" com a acao por linha — Buscar pagamento leva ao cronograma e abre a busca da parcela);
+    abas `Segmentado` Cronograma · Liberacoes · Pagamentos · Documentos · Historico. A RAIZ E' `h-full overflow-hidden`: so' o corpo da
+    tabela da aba rola, cabecalho e Total presos no scrollport dela. Empilha so' abaixo de 600px. O CRONOGRAMA E' O DE ANTES (colunas,
+    "carência", Total, avisos fora da rolagem). Destinacoes e "orçado" sairam da tela (a destinacao e' a coluna Destino das liberacoes).
+  MEDIDO na bancada (pagina real, `fn_contrato_tela` e situacao REAIS lidas do proto, sem barra do shell): PR-78.179 — pagina nao rola a
+  1126x579 e 1440x800, A resolver com 4 itens, 11 parcelas visiveis a 800 (Total visivel e o cabecalho parado ao rolar); a 579 so' 2
+  parcelas cabem (o topo leva 396px). 237.729.00/03 — "Quitado", sem A resolver, pagamentos "Parcela 1/1" + "Encargo · IOF".
+  ⚠ NAO PROVADO: nada com login · a barra do shell real (a bancada nao a tem: no app sobra menos altura) · o "Buscar pagamento" abrindo a
+    busca na tela real · Documentos e o painel de Liberacoes com dado gravado pelo formulario.
 - ⚠ A TELA DO CONTRATO DE CREDITO TEM LIBERACOES, DESTINACOES, CRONOGRAMA E DOCUMENTOS, E TODO GESTO E' UMA RPC COM O CONTRARIO
   (FIN-FINANC-28 PASSO 4, Gabriel 17/10/2026; mock `docs/mocks/mock-financiamentos-v1_2.html` secao 2; migration
   `supabase/migrations/20261027200200_fin_financ_28_p4_contrato.sql`, md5 do arquivo 0cbe209ddbd9716fb854ba6c1901eed4 — APLICADA no proto

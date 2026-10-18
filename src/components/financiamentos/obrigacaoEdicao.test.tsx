@@ -88,6 +88,8 @@ vi.mock('@/integrations/supabase/client', () => {
       from: (t: string) => construtor(t),
       rpc: (fn: string, args: Record<string, unknown>) => {
         if (fn === 'fn_financiamento_situacao') return Promise.resolve({ data: banco.situacao, error: null });
+        /* TELA DO CONTRATO v3: a leitura da tela; sem resposta a tela mostra "…" (nao e' gesto de escrita) */
+        if (fn === 'fn_contrato_tela') return Promise.resolve({ data: null, error: null });
         if (fn === 'fn_parcelamento_propagar' && args.p_simular === true) {
           banco.previas.push(args);
           return Promise.resolve({ data: banco.propagar, error: null });
@@ -192,7 +194,7 @@ const montarDetalhe = () => render(<QueryClientProvider client={qc}><Financiamen
 const abrirEdicao = async () => {
   /* o botão dos Dados do contrato é o primeiro; as linhas da grade de parcelas têm o seu.
      FIN-FINANC-28 PASSO 4: no crédito o cabeçalho é o próprio, e o botão diz "Editar contrato". */
-  await screen.findByTestId(banco.contrato?.natureza === 'parcelamento' ? 'dados-do-contrato' : 'cabecalho-do-credito');
+  await screen.findByTestId(banco.contrato?.natureza === 'parcelamento' ? 'dados-do-contrato' : 'topo-do-contrato');
   fireEvent.click(screen.getAllByRole('button', { name: /^Editar( contrato)?$/ })[0]);
   await screen.findByText('Editar obrigação');
 };
@@ -713,7 +715,7 @@ describe('2B — a grade sobre as parcelas gravadas do parcelamento', () => {
 describe('4 — a tela do contrato mostra o que o banco derivou do lançamento', () => {
   const cartao = (rotulo: string) => screen.getByTestId(`cartao-${rotulo}`).textContent;
   const linhasDoContrato = () => screen.getAllByTestId('linha-do-contrato');
-  const abrirDetalhe = async () => { montarDetalhe(); await screen.findByTestId(banco.contrato?.natureza === 'parcelamento' ? 'dados-do-contrato' : 'cabecalho-do-credito'); await waitFor(() => expect(linhasDoContrato().length).toBeGreaterThan(0)); };
+  const abrirDetalhe = async () => { montarDetalhe(); await screen.findByTestId(banco.contrato?.natureza === 'parcelamento' ? 'dados-do-contrato' : 'topo-do-contrato'); await waitFor(() => expect(linhasDoContrato().length).toBeGreaterThan(0)); };
 
   it('parcela paga pelo Financeiro: "Paga", "Pago em" e os cartões são os do banco (a coluna da parcela diz "pendente")', async () => {
     banco.situacao = SITUACAO([{ situacao: 'paga', pago_em: '2026-10-09', valor_pago: 8119, lancamento_status: 'conciliado', diverge: true }, { situacao: 'vencida' }],
@@ -933,18 +935,15 @@ describe('4 — a tela do contrato mostra o que o banco derivou do lançamento',
     expect(screen.queryByTestId('total-notas')).toBeNull();
     /* o aviso do principal que não soma o contratado (só informa) */
     expect(screen.getByTestId('avisos-do-cronograma').textContent).toContain('8.119,00 abaixo do contratado');
-    /* cabeçalho: nº · credor · descrição; seis cartões; saldo devedor "?" sem liberação (do banco, nunca deduzido) */
-    expect(screen.getByTestId('numero-do-contrato').textContent).toBe('C-9');
-    expect(screen.getAllByTestId('cartoes-do-credito')[0].children.length).toBe(6);
-    expect(screen.getByTestId('cartao-saldo').textContent).toBe('Saldo devedor?');
-    expect(screen.getByTestId('cartao-saldo').getAttribute('title')).toBe('Sem liberação gravada: o saldo devedor não se deduz do contratado.');
-    expect(screen.getByTestId('cartao-Contratado').textContent).toBe('ContratadoR$ 16.238,00');
+    /* TELA DO CONTRATO v3 (18/10): a linha do título leva "nº · descrição", a situação e os botões; o Resumo é um bloco de 250px
+       (os seis cartões saíram); Liberações, Pagamentos, Documentos e Histórico são abas — o cronograma acima é o de antes */
+    expect(screen.getByTestId('titulo-do-contrato').textContent).toContain('C-9');
+    expect(screen.queryByTestId('cartoes-do-credito')).toBeNull();
+    expect(screen.getByTestId('bloco-resumo')).toBeTruthy();
     /* passo 5: o "Dar baixa ▾" acende no contrato vigente (o menu das quatro saídas) */
     expect((screen.getByTestId('dar-baixa') as HTMLButtonElement).disabled).toBe(false);
-    expect((screen.getByTestId('ir-para-documentos') as HTMLButtonElement).disabled).toBe(false);
-    expect(screen.getByTestId('bloco-documentos')).toBeTruthy();
-    expect(screen.getByTestId('bloco-liberacoes')).toBeTruthy();
-    expect(screen.getByTestId('bloco-destinacoes')).toBeTruthy();
+    expect(screen.getByTestId('lugar-do-juntar')).toBeTruthy();
+    expect(screen.getByTestId('abas-do-credito').textContent).toMatch(/Cronograma.*Liberações.*Pagamentos.*Documentos.*Histórico/);
     /* sem Excluir no crédito (vira "Dar baixa", passo 5) */
     expect(screen.queryByRole('button', { name: /Excluir/ })).toBeNull();
   });

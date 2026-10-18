@@ -10,9 +10,10 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { BlocoDestinacoes, BlocoDocumentos, BlocoLiberacoes, CabecalhoDoCredito } from './ContratoDeCredito';
 import {
-  avisosDoCronograma, encargosDoContrato, resumoDasDestinacoes, saldoAposDasParcelas, totalDasLiberacoes, type LiberacaoDoContrato,
+  avisosDoCronograma, encargosDoContrato, resumoDasDestinacoes, saldoAposDasParcelas, type LiberacaoDoContrato,
 } from '@/lib/financiamentos/contratoDeCredito';
 import { pendenciaCurta, textoDasPendencias } from '@/lib/financiamentos/listaDeFinanciamentos';
+import { lerTelaDoContrato } from '@/lib/financiamentos/telaDoContrato';
 import type { ParcelaDoContrato, SaldoDoContrato } from '@/lib/financiamentos/situacaoDoContrato';
 
 type Api = Parameters<typeof BlocoLiberacoes>[0]['api'];
@@ -22,6 +23,7 @@ const LIB = (o: Partial<LiberacaoDoContrato> = {}): LiberacaoDoContrato => ({
   contratoLiquidadoId: null, contratoLiquidadoNumero: null, destinacaoId: null, observacao: null, ...o,
 });
 const api = (o: Partial<Api> = {}): Api => ({
+  tela: null, erroDaTela: null, relerTela: vi.fn(),
   liberacoes: [LIB(), LIB({ id: 'lib-2', data: '2025-12-22', valor: 636930.01, lancamentoId: 'lanc-9', lancamento: { descricao: 'BRDE', data: '2025-12-22', conta: 'Sicredi' } })],
   destinacoes: [{ id: 'd-1', descricao: 'Recuperação de solo', orcado: 955395 }],
   documentos: [{ id: 'doc-1', especie: 'aditivo', nome: 'aditivo.pdf', storagePath: 'c/financiamentos/f/doc-1.pdf', criadoEm: '2026-10-17T10:00:00Z', enviadoPor: 'Gabriel' }],
@@ -64,19 +66,34 @@ describe('(1) o cartão Saldo devedor é o do banco', () => {
   });
 });
 
-describe('(2) o total das liberações', () => {
-  it('a soma das vivas, ao centavo (dono puro) — e o rodapé do bloco é ela', () => {
-    expect(totalDasLiberacoes([LIB({ valor: 0.1 }), LIB({ valor: 0.2 })])).toBe(0.3);
-    render(<BlocoLiberacoes api={api()} contaDoContrato="Conta do contrato" onAbrirLancamento={() => undefined} clienteId="cli" />);
+describe('(2) o total das liberações — TELA v3: os números vêm de fn_contrato_tela', () => {
+  /* a leitura da tela: entrou = o lançamento vinculado limitado à liberação; a identificar = valor − entrou; os totais prontos */
+  const TELA = lerTelaDoContrato({
+    condicoes: { taxa: null, unidade: null, taxa_aa: null, sistema: null, carencia_ate: null, tipo_taxa: null, periodicidade: null },
+    contrato: { data_contrato: null, vencimento_final: null, atividade: null, credor: null, credor_documento: null, primeira_liberacao: null, ultima_liberacao: null, vencidas: 0 },
+    liberacoes: [
+      { id: 'lib-1', data: '2025-11-21', forma: 'conta', valor: 318465, destinacao_id: null, destino: null, lancamento_id: null, entrou: 0, a_identificar: 318465, excedente: 0 },
+      { id: 'lib-2', data: '2025-12-22', forma: 'conta', valor: 636930.01, destinacao_id: 'd-1', destino: 'Recuperação de solo', lancamento_id: 'lanc-9', entrou: 636930.01, a_identificar: 0, excedente: 120 },
+    ],
+    liberacoes_total: { qtde: 2, liberado: 955395.01, entrou: 636930.01, a_identificar: 318465, excedente: 120 },
+    pagamentos: [], pagamentos_total: { qtde: 0, principal: 0, juros: 0, encargos: 0, total: 0 }, historico: [], a_resolver: [],
+  });
+  it('total, entrou e a identificar são os do banco; o excedente aparece "+X a mais"; o destino é coluna', () => {
+    expect(TELA).not.toBeNull();
+    render(<BlocoLiberacoes api={api({ tela: TELA })} contaDoContrato="Conta do contrato" onAbrirLancamento={() => undefined} clienteId="cli" />);
     expect(screen.getByTestId('total-liberacoes').textContent).toBe('955.395,01');
+    expect(screen.getByTestId('total-a-identificar').textContent).toBe('318.465,00');
+    expect(screen.getAllByTestId('a-identificar').map((c) => c.textContent)).toEqual(['318.465,00', '+120,00 a mais']);
+    expect(screen.getAllByTestId('entrou-na-conta').map((c) => c.textContent)).toEqual(['0,00', '636.930,01']);
+    expect(screen.getAllByTestId('destino-da-liberacao').map((c) => c.textContent)).toEqual(['—', 'Recuperação de solo']);
     /* em conta sem lançamento = "a casar"; com lançamento = ↔ que abre no Financeiro */
     expect(screen.getAllByTestId('linha-liberacao')[0].textContent).toContain('a casar');
     expect(screen.getByTestId('liberacao-vinculada').textContent).toBe('↔ 22/12/25');
   });
-  it('sem liberação, o bloco não some: diz o vazio', () => {
+  it('sem a leitura da tela, "…" — nunca zero inventado; sem liberação, o bloco diz o vazio', () => {
     render(<BlocoLiberacoes api={api({ liberacoes: [] })} contaDoContrato={null} onAbrirLancamento={() => undefined} clienteId="cli" />);
     expect(screen.getByTestId('liberacoes-vazio')).toBeTruthy();
-    expect(screen.getByTestId('total-liberacoes').textContent).toBe('0,00');
+    expect(screen.getByTestId('total-liberacoes').textContent).toBe('…');
   });
 });
 

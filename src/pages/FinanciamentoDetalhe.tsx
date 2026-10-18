@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { importarDoApp } from '@/lib/app/falhaDeVersao';
 import { LancamentoDaParcelaDialog } from '@/components/financiamentos/LancamentoDaParcelaDialog';
 import { useSituacaoDoContrato } from '@/hooks/useSituacaoDoContrato';
@@ -36,7 +36,10 @@ import { alinhamentoDoCabecalho, colunasDasParcelas, type ColunaDasParcelas } fr
 import { TABELA_LANC, TD_DATA_LANC, TD_VALOR_LANC, LINHA_LANC, TH_LANC, SeloDoContrato } from '@/components/financiamentos/ListaDeFinanciamentos';
 import { GradeChaveValor } from '@/components/shared/GradeChaveValor';
 import { formatarDocumento, nomeEDocumento } from '@/lib/fornecedores/fornecedorTexto';
-import { AvisosDoCronograma, BlocoDestinacoes, BlocoDocumentos, BlocoLiberacoes, CabecalhoDoCredito, RemoverDialog } from '@/components/financiamentos/ContratoDeCredito';
+import { AvisosDoCronograma, BlocoDocumentos, BlocoLiberacoes, RemoverDialog } from '@/components/financiamentos/ContratoDeCredito';
+import { TabelaDePagamentos, TabelaDoHistorico, TopoDoContrato } from '@/components/financiamentos/TelaDoContratoV3';
+import { Segmentado } from '@/components/ui/segmentado';
+import type { AcaoDoPendente, PendenteDoContrato } from '@/lib/financiamentos/telaDoContrato';
 import { BuscarPagamentoDialog } from '@/components/financiamentos/BuscarNoContrato';
 import { BotaoDarBaixa, DarBaixaDialog } from '@/components/financiamentos/DarBaixa';
 import { CadastroDeContratoDialog } from '@/components/financiamentos/CadastroDeContratoDialog';
@@ -56,6 +59,8 @@ const fmtDate = (d: string | null) =>
 
 /* valor de tabela: sem "R$" (o cabeçalho da coluna diz a moeda) */
 const num2 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+/** TELA DO CONTRATO v3 — as abas do crédito */
+type AbaDoCredito = 'cronograma' | 'liberacoes' | 'pagamentos' | 'documentos' | 'historico';
 
 const COR_DO_PRAZO: Record<'verde' | 'vermelho' | 'cinza', string> = { verde: 'text-[#15803d]', vermelho: 'text-[#b91c1c]', cinza: 'text-muted-foreground' };
 const MOTIVO_DOCUMENTOS_SO_NO_PARCELAMENTO = 'Documentos no contrato: só em parcelamento. No financiamento com juros a nota e o boleto ficam no lançamento.';
@@ -160,8 +165,13 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
   /* FIN-FINANC-28 PASSO 4 — liberações, destinações e documentos do contrato de crédito (o hook roda sempre: regra dos hooks;
      na compra parcelada a tela não o desenha) */
   const credito = useContratoDeCredito(id, clienteId);
+  /* a leitura da tela acompanha a situação: pagar ou vincular por outro caminho relê a situação, e com ela o "A resolver" */
+  const relerTela = credito.relerTela;
+  useEffect(() => { if (situacao) relerTela(); }, [situacao]); // eslint-disable-line react-hooks/exhaustive-deps
   /* PASSO 4b — buscar o pagamento de uma parcela / desfazer o vínculo (os dois diálogos são donos da gravação) */
   const [buscarPagamentoDe, setBuscarPagamentoDe] = useState<string | null>(null);
+  /* TELA DO CONTRATO v3 — a aba do crédito (o cronograma abre primeiro) */
+  const [abaDoCredito, setAbaDoCredito] = useState<AbaDoCredito>('cronograma');
   const [desvinculando, setDesvinculando] = useState<VinculoDePagamento | null>(null);
   /* PASSO 5 — a baixa escolhida no menu e o "Desfazer baixa" */
   const [baixaEscolhida, setBaixaEscolhida] = useState<TipoDeBaixa | null>(null);
@@ -511,7 +521,14 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
     carenciaAte: fin.carencia_ate ?? null, sistema: fin.sistema_amortizacao ?? null,
     ate: fin.vencimento_final ?? linhas[linhas.length - 1]?.dataVencimento ?? null,
   });
-  const irParaDocumentos = () => refDocumentos.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  /* TELA DO CONTRATO v3 — o botão de cada pendência do "A resolver" leva ao gesto que a resolve */
+  const resolverPendente = (acao: AcaoDoPendente, p: PendenteDoContrato) => {
+    if (acao === 'buscar_pagamento') { setAbaDoCredito('cronograma'); if (p.parcelaId) setBuscarPagamentoDe(p.parcelaId); }
+    else if (acao === 'ver_liberacoes') setAbaDoCredito('liberacoes');
+    else if (acao === 'ver_cronograma') setAbaDoCredito('cronograma');
+    else if (acao === 'anexar') setAbaDoCredito('documentos');
+    else abrirEdicao('contrato');
+  };
 
   return (
     /* ⚠ COLUNA FLEX, NAO AREA QUE ROLA (mudou no PR-PARC-05). Ate' o 04c a raiz inteira
@@ -525,7 +542,7 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
        conjunto passava do rodape em vez de parar nele. Com `overflow-hidden` o container
        vira o limite de verdade e o card termina onde a tela termina — a rolagem util
        continua existindo uma camada abaixo, no wrapper da tabela. */
-    <div className={`w-full min-w-0 h-full min-h-0 flex flex-col ${ehParcelamento ? 'overflow-hidden' : 'overflow-y-auto'} bg-background max-w-5xl mx-auto`} data-testid="tela-do-contrato">
+    <div className="w-full min-w-0 h-full min-h-0 flex flex-col overflow-hidden bg-background max-w-5xl mx-auto" data-testid="tela-do-contrato">
 
       {/* ═══ 1 — BARRA AZUL, a mesma da lista ═══════════════════════════════════
           ⚠ O "← Voltar" SOLTO SAIU e virou o elo do meio do caminho. Ele dizia para
@@ -653,32 +670,56 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
           {!ehParcelamento && <Cartao rotulo="Juros previstos" valor={dinheiro(cartoes?.jurosPrevistos)} borda="border-l-amber-500" />}
         </div>
         </>) : (
-          /* FIN-FINANC-28 PASSO 4 — CRÉDITO: título · subtítulo · seis cartões (mock v1.2, seção 2) */
-          <CabecalhoDoCredito numero={fin.numero_contrato ?? null} credor={nomeCredor} documento={documentoCredor}
-            credorTitle={nomeEDocumento(nomeCredor, documentoCredor) || 'sem credor'} descricao={fin.descricao ?? ''} subtitulo={subtitulo}
-            saldo={situacao?.saldo} jurosAVencer={situacao ? resumoDoCredito.jurosPendente : null}
-            proxVencimento={resumoDoCredito.proxVencimento} valorDaProx={resumoDoCredito.valorDaProxParcela}
-            onVoltar={onVoltar} onEditar={() => abrirEdicao('contrato')} onDocumentos={irParaDocumentos}
-            acaoDeBaixa={<BotaoDarBaixa status={fin.status ?? null} api={credito} onEscolher={setBaixaEscolhida} onDesfazer={() => setDesfazendoBaixa(true)} />} />
+          /* TELA DO CONTRATO v3 (Gabriel 18/10/2026) — título com selos e ações · Contrato em duas colunas + Resumo · A resolver */
+          <TopoDoContrato numero={fin.numero_contrato ?? null} descricao={fin.descricao ?? ''} status={fin.status ?? null}
+            saldo={situacao?.saldo} vencido={cartoes ? cartoes.vencido : null} tela={credito.tela}
+            onVoltar={onVoltar} onEditar={() => abrirEdicao('contrato')} onResolver={resolverPendente}
+            acaoDeBaixa={<BotaoDarBaixa destaque status={fin.status ?? null} api={credito} onEscolher={setBaixaEscolhida} onDesfazer={() => setDesfazendoBaixa(true)} />} />
         )}
       </div>
 
-      {/* ═══ PASSO 4 — LIBERAÇÕES e DESTINAÇÕES (crédito). Uma embaixo da outra: lado a lado, a 1.126, a coluna "Conta ou
-          fornecedor" ficaria com ~20px. */}
-      {!ehParcelamento && clienteId && (
-        <div className="shrink-0 space-y-2 px-3 pb-1.5">
+      {/* ═══ TELA DO CONTRATO v3 — ABAS do crédito (o Segmentado da casa). O painel da aba ocupa o resto da altura. */}
+      {!ehParcelamento && (
+        <div className="shrink-0 px-3 pb-1.5" data-testid="abas-do-credito">
+          <Segmentado<AbaDoCredito> altura={22} valor={abaDoCredito} onEscolher={setAbaDoCredito} opcoes={[
+            { valor: 'cronograma', rotulo: `Cronograma${cartoes ? ` (${cartoes.parcelas})` : ''}` },
+            { valor: 'liberacoes', rotulo: `Liberações${credito.tela ? ` (${credito.tela.liberacoesTotal.qtde})` : ''}` },
+            { valor: 'pagamentos', rotulo: `Pagamentos${credito.tela ? ` (${credito.tela.pagamentosTotal.qtde})` : ''}` },
+            { valor: 'documentos', rotulo: `Documentos${credito.documentos ? ` (${credito.documentos.length})` : ''}` },
+            { valor: 'historico', rotulo: 'Histórico' },
+          ]} />
+        </div>
+      )}
+      {!ehParcelamento && abaDoCredito === 'liberacoes' && clienteId && (
+        <div className="min-h-0 flex-1 px-3 pb-2" data-testid="painel-liberacoes">
           <BlocoLiberacoes api={credito} contaDoContrato={nomeConta} onAbrirLancamento={setLancamentoAberto} clienteId={clienteId} />
-          <BlocoDestinacoes api={credito} />
+        </div>
+      )}
+      {!ehParcelamento && abaDoCredito === 'pagamentos' && (
+        <div className="min-h-0 flex-1 px-3 pb-2" data-testid="painel-pagamentos">
+          <TabelaDePagamentos tela={credito.tela} onAbrirLancamento={setLancamentoAberto} />
+        </div>
+      )}
+      {!ehParcelamento && abaDoCredito === 'documentos' && (
+        <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-2" data-testid="painel-documentos">
+          <BlocoDocumentos ref={refDocumentos} api={credito} />
+        </div>
+      )}
+      {!ehParcelamento && abaDoCredito === 'historico' && (
+        <div className="min-h-0 flex-1 px-3 pb-2" data-testid="painel-historico">
+          <TabelaDoHistorico tela={credito.tela} />
         </div>
       )}
 
       {/* ═══ d — PARCELAS, até o rodapé ═══════════════════════════════════════
           ⚠ A ROLAGEM MORA NO WRAPPER DA TABELA (A21), e é nele que o `sticky` do thead e do tfoot ancora. `min-h-0` nos dois
           níveis: sem ele o filho flex recusa-se a encolher abaixo do conteúdo e a rolagem escapa para a tela inteira. */}
-      <div className={ehParcelamento ? 'min-h-0 flex-1 px-3 pb-1' : 'shrink-0 px-3 pb-1.5'}>
-        <div className={`flex flex-col rounded-lg border border-border bg-card px-3 pt-1.5 ${ehParcelamento ? 'h-full min-h-0 pb-0' : 'pb-1.5'}`}>
+      {(ehParcelamento || abaDoCredito === 'cronograma') && (
+      <div className="min-h-0 flex-1 px-3 pb-1" data-testid="painel-cronograma">
+        <div className={`flex h-full min-h-0 flex-col rounded-lg border border-border bg-card px-3 pt-1.5 ${ehParcelamento ? 'pb-0' : 'pb-1.5'}`}>
           <div className="mb-1 flex h-[22px] shrink-0 items-center gap-2">
-            <h2 className="text-[12px] font-semibold text-foreground">{ehParcelamento ? 'Parcelas' : 'Cronograma'}</h2>
+            {/* v3: no crédito o título "Cronograma" virou a aba */}
+            {ehParcelamento && <h2 className="text-[12px] font-semibold text-foreground">Parcelas</h2>}
             <span className={`min-w-0 truncate text-[10px] ${recadoDaLinha ? 'font-medium text-destructive' : 'text-muted-foreground'}`}
               data-testid="dica-da-linha" title={recadoDaLinha ?? undefined}>
               {recadoDaLinha ?? (ehParcelamento ? 'clique na linha para abrir o lançamento no Financeiro' : 'principal · juros · cada parcela casa com o lançamento do Financeiro (↔)')}
@@ -688,7 +729,7 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
             </Button>
           </div>
           <div className="min-h-0 flex-1">
-            <Table density="dense" className={`${TABELA_LANC} table-fixed [&_td:not(.celula-valor)]:font-normal`} wrapperClassName={ehParcelamento ? 'h-full overflow-x-hidden overflow-y-auto' : 'overflow-visible'}>
+            <Table density="dense" className={`${TABELA_LANC} table-fixed [&_td:not(.celula-valor)]:font-normal`} wrapperClassName="h-full overflow-x-hidden overflow-y-auto">
               {/* ⚠ A RÉGUA TEM UM DONO (`reguaDasParcelas.ts`): o `colgroup` e o cabeçalho saem da MESMA lista — largura medida no
                   pior texto e o th alinhado como o conteúdo da coluna. Só a Conta (sem largura) fica com o resto e corta. */}
               <colgroup>
@@ -861,15 +902,9 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
               </TableFooter>
             </Table>
           </div>
-          {!ehParcelamento && <AvisosDoCronograma avisos={avisos} />}
+          {!ehParcelamento && <div className="shrink-0"><AvisosDoCronograma avisos={avisos} /></div>}
         </div>
       </div>
-
-      {/* ═══ PASSO 4 — DOCUMENTOS DO CONTRATO (crédito): o botão "Documentos" do cabeçalho rola até aqui */}
-      {!ehParcelamento && (
-        <div className="shrink-0 px-3 pb-2">
-          <BlocoDocumentos ref={refDocumentos} api={credito} />
-        </div>
       )}
 
       {/* ═══ 6 — EDITAR OBRIGACAO: a MESMA casca do "Nova obrigacao" ═══════════

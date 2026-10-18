@@ -28,7 +28,7 @@ import { tamanhoPorExtenso } from '@/lib/arquivo/aceitarArquivo';
 import type { CaptacaoLivre, ContratoAnterior, PedidoDeLiberacao, useContratoDeCredito } from '@/hooks/useContratoDeCredito';
 import {
   ESPECIES_DO_CONTRATO, FORMAS_DA_LIBERACAO, ROTULO_DA_ESPECIE, ROTULO_DA_FORMA,
-  contaOuFornecedor, encargosDoContrato, estadoDoExtrato, faltaCedula, resumoDasDestinacoes, totalDasLiberacoes,
+  contaOuFornecedor, encargosDoContrato, estadoDoExtrato, faltaCedula, resumoDasDestinacoes,
   type EspecieDoContrato, type FormaDaLiberacao, type LiberacaoDoContrato,
 } from '@/lib/financiamentos/contratoDeCredito';
 import type { SaldoDoContrato } from '@/lib/financiamentos/situacaoDoContrato';
@@ -118,31 +118,48 @@ export function BlocoLiberacoes({ api, contaDoContrato, onAbrirLancamento, clien
   const [editando, setEditando] = useState<LiberacaoDoContrato | 'nova' | null>(null);
   const [removendo, setRemovendo] = useState<LiberacaoDoContrato | null>(null);
   const [buscando, setBuscando] = useState(false);
+  const leitura = new Map((api.tela?.liberacoes ?? []).map((t) => [t.id, t]));
+  const tot = api.tela?.liberacoesTotal ?? null;
   return (
-    <div className={BLOCO_FORMULARIO} data-testid="bloco-liberacoes">
+    <div className={`${BLOCO_FORMULARIO} h-full min-h-0`} data-testid="bloco-liberacoes">
       <Titulo nome="Liberações" dica="em conta casa com o extrato · direto ao fornecedor = dívida + investimento sem caixa"
         acao={<div className="flex gap-1">
           <Button variant="outline" size="sm" className="h-[20px] px-2 text-[10px]" onClick={() => setBuscando(true)} data-testid="buscar-entradas-botao"
             title="Entradas do cliente que podem ser a captação deste contrato (e os encargos do credor perto delas)">Buscar entradas</Button>
           <Button variant="outline" size="sm" className="h-[20px] gap-1 px-2 text-[10px]" onClick={() => setEditando('nova')} data-testid="nova-liberacao"><Plus className="size-3" /> liberação</Button>
         </div>} />
+      {/* TELA DO CONTRATO v3 — Data · Destino · Liberado · Entrou na conta · A identificar · Lançamento. "Entrou" e "a identificar"
+          (e o excedente, em laranja) vêm de `fn_contrato_tela`; a tela não soma. Cabeçalho e total presos: só o corpo rola. */}
+      <div className="min-h-0 flex-1 overflow-y-auto" data-testid="area-que-rola-liberacoes">
       <table className="w-full table-fixed border-collapse">
-        <colgroup><col style={{ width: 64 }} /><col style={{ width: 92 }} /><col style={{ width: 118 }} /><col /><col style={{ width: 120 }} /><col style={{ width: 44 }} /></colgroup>
-        <thead><tr><th className={TH}>Data</th><th className={TH_R}>Valor</th><th className={TH}>Forma</th><th className={TH}>Conta ou fornecedor</th><th className={TH}>Extrato / lançamento</th><th className={TH} /></tr></thead>
+        <colgroup><col style={{ width: 64 }} /><col /><col style={{ width: 96 }} /><col style={{ width: 104 }} /><col style={{ width: 112 }} /><col style={{ width: 92 }} /><col style={{ width: 44 }} /></colgroup>
+        <thead data-testid="cabecalho-liberacoes"><tr>
+          <th className={`${TH} sticky top-0 z-10`}>Data</th><th className={`${TH} sticky top-0 z-10`}>Destino</th><th className={`${TH_R} sticky top-0 z-10`}>Liberado</th>
+          <th className={`${TH_R} sticky top-0 z-10`}>Entrou na conta</th><th className={`${TH_R} sticky top-0 z-10`}>A identificar</th>
+          <th className={`${TH} sticky top-0 z-10`}>Lançamento</th><th className={`${TH} sticky top-0 z-10`} />
+        </tr></thead>
         <tbody>
-          {libs === null && <tr><td colSpan={6} className={`${TD} text-muted-foreground`}>…</td></tr>}
+          {libs === null && <tr><td colSpan={7} className={`${TD} text-muted-foreground`}>…</td></tr>}
           {libs !== null && libs.length === 0 && (
-            <tr><td colSpan={6} className={`${TD} text-muted-foreground`} data-testid="liberacoes-vazio">Nenhuma liberação gravada.</td></tr>
+            <tr><td colSpan={7} className={`${TD} text-muted-foreground`} data-testid="liberacoes-vazio">Nenhuma liberação gravada.</td></tr>
           )}
           {(libs ?? []).map((l) => {
             const cf = contaOuFornecedor(l, contaDoContrato);
             const ex = estadoDoExtrato(l);
+            const t = leitura.get(l.id) ?? null;
+            const origem = `${ROTULO_DA_FORMA[l.forma]} · ${cf.texto}`;
             return (
               <tr key={l.id} className="border-b" data-testid="linha-liberacao">
                 <td className={`${TD} tabular-nums`}>{br(l.data)}</td>
+                <td className={TD} title={`${t?.destino ?? 'sem destinação'} · ${origem}`} data-testid="destino-da-liberacao">
+                  {t?.destino ? t.destino : <span className="text-amber-700">—</span>}
+                </td>
                 <td className={TD_R}>{num2(l.valor)}</td>
-                <td className={TD} title={ROTULO_DA_FORMA[l.forma]}>{ROTULO_DA_FORMA[l.forma]}</td>
-                <td className={TD} title={cf.title}>{cf.texto}</td>
+                <td className={TD_R} data-testid="entrou-na-conta">{t === null ? '…' : t.entrou === null ? <span className="text-muted-foreground" title="não passa pela conta do cliente">—</span> : num2(t.entrou)}</td>
+                <td className={TD_R} data-testid="a-identificar">
+                  {t === null ? '…' : t.excedente > 0 ? <span className="text-amber-700" title="o lançamento vinculado passa do valor da liberação">+{num2(t.excedente)} a mais</span>
+                    : t.aIdentificar > 0 ? <span className="text-amber-700">{num2(t.aIdentificar)}</span> : <span className="text-muted-foreground">0,00</span>}
+                </td>
                 <td className={TD}>
                   {ex === 'vinculado' && l.lancamentoId ? (
                     <button type="button" className="text-primary hover:underline" onClick={() => onAbrirLancamento(l.lancamentoId!)}
@@ -158,10 +175,19 @@ export function BlocoLiberacoes({ api, contaDoContrato, onAbrirLancamento, clien
             );
           })}
         </tbody>
-        <tfoot>
-          <tr><td className={TOTAL}>Total</td><td className={`${TOTAL} text-right tabular-nums`} data-testid="total-liberacoes">{libs ? num2(totalDasLiberacoes(libs)) : '…'}</td><td colSpan={4} className={`${TOTAL} font-normal text-muted-foreground`}>{libs ? `${libs.length} ${libs.length === 1 ? 'liberação' : 'liberações'}` : ''}</td></tr>
+        <tfoot data-testid="total-das-liberacoes">
+          <tr>
+            <td className={`${TOTAL} sticky bottom-0 z-10`} colSpan={2}>Total{tot ? ` · ${tot.qtde} ${tot.qtde === 1 ? 'liberação' : 'liberações'}` : ''}</td>
+            <td className={`${TOTAL} sticky bottom-0 z-10 text-right tabular-nums`} data-testid="total-liberacoes">{tot ? num2(tot.liberado) : '…'}</td>
+            <td className={`${TOTAL} sticky bottom-0 z-10 text-right tabular-nums`}>{tot ? num2(tot.entrou) : '…'}</td>
+            <td className={`${TOTAL} sticky bottom-0 z-10 text-right tabular-nums ${tot && (tot.aIdentificar > 0 || tot.excedente > 0) ? 'text-amber-700' : ''}`} data-testid="total-a-identificar">
+              {tot ? (tot.aIdentificar > 0 ? num2(tot.aIdentificar) : tot.excedente > 0 ? `+${num2(tot.excedente)} a mais` : '0,00') : '…'}
+            </td>
+            <td className={`${TOTAL} sticky bottom-0 z-10`} colSpan={2} />
+          </tr>
         </tfoot>
       </table>
+      </div>
       {editando && (
         <LiberacaoDialog api={api} clienteId={clienteId} atual={editando === 'nova' ? null : editando} aoFechar={() => setEditando(null)} />
       )}

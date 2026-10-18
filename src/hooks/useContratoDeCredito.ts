@@ -22,12 +22,14 @@ import {
   type BuscaNoContrato, type EncargoSugerido, type PapelDoPagamento, type ResultadoDoVinculo,
 } from '@/lib/financiamentos/buscaNoContrato';
 import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
+import { lerTelaDoContrato, type TelaDoContrato } from '@/lib/financiamentos/telaDoContrato';
+import { hojeLocal } from '@/lib/datas/hojeLocal';
 import { lerBaixaViva, lerResultadoDaBaixa, type BaixaViva, type ResultadoDaBaixa, type TipoDeBaixa } from '@/lib/financiamentos/baixaDoContrato';
 
 export const BUCKET_DO_CONTRATO = 'fin-documentos';
 const CHAVES_DA_TELA = ['contrato-liberacoes', 'contrato-destinacoes', 'contrato-documentos', 'contrato-captacoes-livres', 'contrato-encargos',
   'contrato-vinculos-pagamento', 'financiamento-parcelas', 'contrato-baixa-viva', 'financiamento-detalhe'];
-const CHAVES_QUE_LEEM_O_SALDO = ['financiamento-situacao', 'financiamentos-lista', 'financiamento-primeira-liberacao', 'painel-financiamentos'];
+const CHAVES_QUE_LEEM_O_SALDO = ['contrato-tela', 'financiamento-situacao', 'financiamentos-lista', 'financiamento-primeira-liberacao', 'painel-financiamentos'];
 
 type Linha = Record<string, unknown>;
 const txt = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null);
@@ -98,6 +100,18 @@ export function useContratoDeCredito(financiamentoId: string | null | undefined,
           destinacaoId: txt(r.destinacao_id), observacao: txt(r.observacao),
         };
       });
+    },
+  });
+
+  /* TELA DO CONTRATO v3 — a leitura única da tela (`fn_contrato_tela`): condições com a taxa a.a., liberações com "entrou" e "a
+     identificar", pagamentos, histórico e o "A resolver" — tudo pronto do banco. Relida junto com o saldo (`CHAVES_QUE_LEEM_O_SALDO`). */
+  const tela = useQuery({
+    queryKey: ['contrato-tela', financiamentoId],
+    enabled: ligado,
+    queryFn: async (): Promise<TelaDoContrato | null> => {
+      const { data, error } = await (supabase as any).rpc('fn_contrato_tela', { p_financiamento_id: financiamentoId, p_hoje: hojeLocal() });
+      if (error) throw error;
+      return lerTelaDoContrato(data);
     },
   });
 
@@ -333,6 +347,7 @@ export function useContratoDeCredito(financiamentoId: string | null | undefined,
   }, [clienteId, financiamentoId]);
 
   return {
+    tela: tela.data ?? null, erroDaTela: tela.error ? 'Não foi possível ler o contrato.' : null, relerTela: () => void tela.refetch(),
     liberacoes: liberacoes.data ?? null, destinacoes: destinacoes.data ?? null, documentos: documentos.data ?? null, encargos: encargos.data ?? [],
     erroDeLeitura: liberacoes.error || destinacoes.error || documentos.error ? 'Não foi possível ler liberações, destinações ou documentos.' : null,
     salvarLiberacao, removerLiberacao, salvarDestinacao, removerDestinacao, enviarDocumento, removerDocumento, urlDoDocumento,

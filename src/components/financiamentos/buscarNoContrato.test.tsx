@@ -30,6 +30,7 @@ const PARCELA: ParcelaDoContrato = {
 function api(o: Partial<Api> = {}): Api {
   const busca = lerBuscaNoContrato(ENVELOPE([LINHA()]));
   return {
+    tela: null, erroDaTela: null, relerTela: vi.fn(),
     liberacoes: [], destinacoes: [], documentos: [], encargos: [], erroDeLeitura: null,
     salvarLiberacao: vi.fn(async () => null), removerLiberacao: vi.fn(async () => null), salvarDestinacao: vi.fn(async () => null),
     removerDestinacao: vi.fn(async () => null), enviarDocumento: vi.fn(async () => null), removerDocumento: vi.fn(async () => null),

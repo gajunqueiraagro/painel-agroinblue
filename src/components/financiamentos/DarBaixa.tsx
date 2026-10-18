@@ -27,8 +27,10 @@ const br = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)
 export const MOTIVO_BAIXA_SO_VIGENTE = 'A baixa só se dá em contrato ativo ou prorrogado.';
 
 /** O botão do cabeçalho: com o contrato vigente, o menu das quatro saídas; com uma baixa viva, "Desfazer baixa". */
-export function BotaoDarBaixa({ status, api, onEscolher, onDesfazer }: {
+export function BotaoDarBaixa({ status, api, onEscolher, onDesfazer, destaque = false }: {
   status: string | null; api: ApiDoContrato; onEscolher: (t: TipoDeBaixa) => void; onDesfazer: () => void;
+  /** TELA DO CONTRATO v3: o "Dar baixa" em dourado (a ação principal da linha do título) */
+  destaque?: boolean;
 }) {
   if (!podeDarBaixa(status) && api.baixaViva) {
     return (
@@ -39,7 +41,7 @@ export function BotaoDarBaixa({ status, api, onEscolher, onDesfazer }: {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="h-6 gap-1 px-2 text-[10.5px]" disabled={!podeDarBaixa(status)}
+        <Button variant={destaque ? 'default' : 'outline'} size="sm" className={`h-6 gap-1 px-2 text-[10.5px] ${destaque ? 'bg-cta font-semibold text-cta-foreground hover:bg-cta-hover' : ''}`} disabled={!podeDarBaixa(status)}
           title={podeDarBaixa(status) ? undefined : MOTIVO_BAIXA_SO_VIGENTE} data-testid="dar-baixa">
           Dar baixa <ChevronDown className="size-3" />
         </Button>
