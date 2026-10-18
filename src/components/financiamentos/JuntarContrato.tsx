@@ -26,7 +26,7 @@ const TD = 'h-[20px] px-2 text-[10.5px] tabular-nums';
 export function BotaoJuntar({ status, onAbrir }: { status: string | null; onAbrir: () => void }) {
   const ok = podeJuntar(status);
   return (
-    <Button variant="outline" size="sm" className="h-6 w-[58px] px-0 text-[10.5px]" disabled={!ok} onClick={onAbrir}
+    <Button variant="outline" size="sm" className="h-[26px] w-[64px] px-0 text-[11px]" disabled={!ok} onClick={onAbrir}
       title={ok ? DICA_DO_JUNTAR : MOTIVO_JUNTAR_SO_VIGENTE} data-testid="botao-juntar">Juntar</Button>
   );
 }

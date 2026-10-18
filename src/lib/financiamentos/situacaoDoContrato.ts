@@ -224,6 +224,13 @@ export function textoDoPrazo(p: PrazoDaParcela | null): string {
     case 'a_vencer': return p.dias === 0 ? 'vence hoje' : `vence em ${dias(p.dias)}`;
   }
 }
+/** TELA DO CONTRATO v4: o prazo curto do cronograma do crédito — "há N dias" (vencida) / "em N dias" (a vencer); paga como sempre */
+export function textoDoPrazoCurto(p: PrazoDaParcela | null): string {
+  if (!p) return '—';
+  if (p.tipo === 'vencida') return `há ${dias(p.dias)}`;
+  if (p.tipo === 'a_vencer') return p.dias === 0 ? 'hoje' : `em ${dias(p.dias)}`;
+  return textoDoPrazo(p);
+}
 /** verde = pagou em dia; vermelho = atraso; cinza = ainda por vencer. */
 export const TOM_DO_PRAZO: Record<TipoDoPrazo, 'verde' | 'vermelho' | 'cinza'> = {
   antes: 'verde', no_dia: 'verde', atraso: 'vermelho', vencida: 'vermelho', a_vencer: 'cinza',

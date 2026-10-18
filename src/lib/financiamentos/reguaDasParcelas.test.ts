@@ -44,20 +44,21 @@ describe('a régua — o cabeçalho alinha como a coluna', () => {
     }
   });
 
-  it('as larguras medidas: data 64 (46,3 + 16), Nº 48 ("20/20"), Prazo 116 ("vence em 2912 dias")', () => {
+  it('as larguras medidas: compra parcelada data 64, Nº 48, Prazo 116; crédito na régua v4 (cabe a 750px de conteúdo)', () => {
     expect(LARGURA_DA_DATA).toBe(64);
-    for (const ehParcelamento of [false, true]) {
-      const m = porChave(ehParcelamento);
-      const datas: ChaveDaColuna[] = ehParcelamento ? ['competencia', 'vencimento', 'pagamento'] : ['vencimento', 'pagamento'];
-      for (const data of datas) expect(m.get(data)!.largura).toBe(64);
-      expect(m.get('numero')!.largura).toBe(48);
-      expect(m.get('prazo')!.largura).toBe(116);
-    }
-    // a soma das colunas de largura fixa: o que sobra a 901px (a tabela a 1.127 de janela) é a Conta
+    const m = porChave(true);
+    for (const data of ['competencia', 'vencimento', 'pagamento'] as ChaveDaColuna[]) expect(m.get(data)!.largura).toBe(64);
+    expect(m.get('numero')!.largura).toBe(48);
+    expect(m.get('prazo')!.largura).toBe(116);
     const fixas = (p: boolean) => colunasDasParcelas(p).reduce((a, c) => a + (c.largura ?? 0), 0);
-    // FIN-FINANC-28 PASSO 4: no crédito saíram Comp. e Conta, entraram Saldo após (96) e o Lançamento (o resto)
-    expect(901 - fixas(false)).toBe(153);
     expect(901 - fixas(true)).toBe(181);
+    /* TELA DO CONTRATO v4 (18/10, medido na bancada com Inter): dd/mm/aa a 10px pede 49+5; "em 5097 dias" a 10px 66+5; o Total do
+       rodapé "16.380.000,00" em negrito 10,5px 77+5. Fixas 570 — a 750px de conteúdo sobram 162 ao Lançamento (lápis dentro, folga 5,8) */
+    const c = porChave(false);
+    expect([c.get('numero')!.largura, c.get('vencimento')!.largura, c.get('pagamento')!.largura, c.get('prazo')!.largura]).toEqual([37, 52, 52, 70]);
+    expect(fixas(false)).toBe(570);
+    expect(c.has('lapis')).toBe(false);
+    expect(c.get('lancamento')!.largura).toBeNull();
   });
 });
 

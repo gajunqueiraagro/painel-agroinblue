@@ -1,5 +1,5 @@
 /**
- * FIN-FINANC-28 · TELA DO CONTRATO v3 (Gabriel 18/10/2026) — o que a tela promete:
+ * FIN-FINANC-28 · TELA DO CONTRATO v3 → v4 (Gabriel 18/10/2026; v4 às 16:11) — o que a tela promete:
  * (1) cabeçalho e total das tabelas das abas ficam FORA da rolagem (presos no scrollport da tabela);
  * (2) a página não rola: a raiz da tela é `h-full overflow-hidden` e o cronograma rola por dentro;
  * (3) o cronograma é EXATAMENTE o de antes (colunas da régua do crédito);
@@ -36,7 +36,8 @@ const tela = (o?: Record<string, unknown>, c?: Record<string, unknown>, k?: Reco
   const t = lerTelaDoContrato(RAW(o, c, k)); if (!t) throw new Error('leitura torta'); return t;
 };
 const topo = (t: TelaDoContrato | null, pendencias = { qtde: 2, vencido: true }, onAbrirPendencias = vi.fn()) => render(
-  <TopoDoContrato numero="SINT-78.179" descricao="Armazém" status="ativo" vencido={8119} tela={t} onEditar={() => undefined}
+  <TopoDoContrato numero="SINT-78.179" descricao="Armazém" status="ativo" tela={t} onEditar={() => undefined}
+    parcelas={{ total: 15, pagas: 0 }} quinta={{ rotulo: 'Vencido', valor: 'R$ 8.119,00', vermelho: true }}
     pendencias={pendencias} onAbrirPendencias={onAbrirPendencias}
     saldo={{ aplicaSaldo: true, regra: 'calculado', contratado: 6412049, liberado: 6412049, liberacoes: 3, amortizado: 0, saldo: 6412049, jurosPagos: 0,
       jurosPrevistos: 0, foraDasSomas: false, pendencias: [] }} />);
@@ -62,7 +63,7 @@ describe('(1) cabeçalho e total fora da rolagem', () => {
 describe('(2) a página não rola; (3) o cronograma é o de antes', () => {
   const fonte = readFileSync(resolve(__dirname, '../../pages/FinanciamentoDetalhe.tsx'), 'utf8');
   it('a raiz da tela é h-full overflow-hidden e o painel do cronograma rola por dentro', () => {
-    const raiz = /<div className="([^"]*)" data-testid="tela-do-contrato">/.exec(fonte);
+    const raiz = /<div className=\{`([^`]*)`\} data-testid="tela-do-contrato">/.exec(fonte);
     expect(raiz).not.toBeNull();
     expect(raiz![1]).toMatch(/\bh-full\b/);
     expect(raiz![1]).toMatch(/\boverflow-hidden\b/);
@@ -71,7 +72,8 @@ describe('(2) a página não rola; (3) o cronograma é o de antes', () => {
     expect(painel).toBe(true);
   });
   it('as colunas do cronograma do crédito são as da régua de sempre', () => {
-    expect(colunasDasParcelas(false).map((c) => c.rotulo)).toEqual(['Parc.', 'Venc.', 'Pgto.', 'Prazo', 'Principal', 'Juros', 'Total (R$)', 'Saldo após', 'Situação', 'Lançamento', '']);
+    /* v4: "Total (R$)" virou "Total" e a coluna própria do lápis saiu (o lápis mora na célula Lançamento) */
+    expect(colunasDasParcelas(false).map((c) => c.rotulo)).toEqual(['Parc.', 'Venc.', 'Pgto.', 'Prazo', 'Principal', 'Juros', 'Total', 'Saldo após', 'Situação', 'Lançamento']);
   });
 });
 
@@ -84,8 +86,11 @@ describe('(4) "não cadastrado" e as condições do banco', () => {
     expect(screen.getByTestId('campo-documento').textContent).toContain('não cadastrado');
     expect(screen.getByTestId('campo-taxa').textContent).toContain('0,6821 % a.m.');
     expect(screen.getByTestId('campo-taxa-aa').textContent).toContain('8,4986 % a.a.');
-    /* a última liberação sem lançamento leva o selo "a confirmar"; o credor inteiro com o title */
-    expect(within(screen.getByTestId('campo-ultima-liberacao')).getByTestId('selo-a-confirmar')).toBeTruthy();
+    /* v4: a última liberação sem lançamento: a DATA em laranja com o title (sem selo); o credor inteiro com o title */
+    const aConfirmar = within(screen.getByTestId('campo-ultima-liberacao')).getByTestId('data-a-confirmar');
+    expect(aConfirmar.getAttribute('title')).toBe('a confirmar: liberação sem lançamento vinculado');
+    expect(aConfirmar.className).toContain('text-[#b45309]');
+    expect(screen.queryByTestId('selo-a-confirmar')).toBeNull();
     expect(screen.getByTestId('credor-do-contrato').getAttribute('title')).toBe('SINT BANCO REGIONAL DE DESENVOLVIMENTO');
   });
   it('carência gravada = "até dd/mm/aaaa"; sistema SAC', () => {
@@ -93,23 +98,26 @@ describe('(4) "não cadastrado" e as condições do banco', () => {
     expect(screen.getByTestId('campo-carencia').textContent).toBe('Carênciaaté 31/01/2027');
     expect(screen.getByTestId('campo-sistema').textContent).toBe('SistemaSAC');
   });
-  it('linha do título: "nº · descrição", o selo das vencidas e o lugar reservado do Juntar', () => {
+  it('linha do título: só a seta, "nº · descrição" 14px, sem o selo das vencidas, o lugar reservado do Juntar', () => {
     topo(tela());
     expect(screen.getByTestId('titulo-do-contrato').textContent).toBe('SINT-78.179 · Armazém');
-    expect(screen.getByTestId('selo-das-vencidas').textContent).toBe('1 parcela vencida');
+    expect(screen.getByTestId('titulo-do-contrato').className).toContain('text-[14px]');
+    expect(screen.getByTestId('voltar-do-contrato').textContent).toBe('');
+    expect(screen.getByTestId('voltar-do-contrato').getAttribute('aria-label')).toBe('Voltar para Financiamentos');
+    expect(screen.queryByTestId('selo-das-vencidas')).toBeNull();
     expect(screen.getByTestId('lugar-do-juntar').getAttribute('aria-hidden')).toBe('true');
   });
 });
 
 describe('(5) "A resolver" é ABA (B3): nenhum bloco de pendências no corpo; o selo do título abre a aba', () => {
-  it('o topo não tem bloco de pendências; o selo "N pendências" (vermelho com vencido) chama a abertura da aba', () => {
+  it('o topo não tem bloco de pendências; o selo laranja "N pendências" chama a abertura da aba', () => {
     const abrir = vi.fn();
     topo(tela(), { qtde: 3, vencido: true }, abrir);
     expect(screen.queryByTestId('bloco-a-resolver')).toBeNull();
     expect(screen.queryByTestId('pendente-vencidas')).toBeNull();
     const selo = screen.getByTestId('selo-das-pendencias');
     expect(selo.textContent).toBe('3 pendências');
-    expect(selo.className).toContain('text-[#b91c1c]');
+    expect(selo.className).toContain('text-[#b45309]');
     fireEvent.click(selo);
     expect(abrir).toHaveBeenCalledTimes(1);
   });
@@ -136,15 +144,52 @@ describe('(5) "A resolver" é ABA (B3): nenhum bloco de pendências no corpo; o 
   });
 });
 
-describe('(5b) bloco Contrato em três colunas', () => {
-  it('três colunas de rótulo fixo + valor, na largura do conteúdo: 4 · 4 · 3 linhas', () => {
+describe('(5b) v4 — a FICHA: Resumo em 5 células + fatos em 3 colunas', () => {
+  it('um card só; o Resumo tem 5 células iguais (Vencido vermelho); os fatos, 3 colunas de 4 linhas', () => {
     topo(tela());
-    const grade = screen.getByTestId('colunas-do-contrato');
-    expect(grade.className).toContain('grid-cols-[repeat(3,max-content)]');
-    expect(grade.className).toContain('gap-x-8');
-    expect(screen.getAllByTestId('coluna-do-contrato').map((c) => c.children.length)).toEqual([4, 4, 3]);
+    const ficha = screen.getByTestId('ficha-do-contrato');
+    const resumo = within(ficha).getByTestId('bloco-resumo');
+    expect(resumo.className).toContain('grid-cols-5');
+    expect(resumo.children.length).toBe(5);
+    expect([...resumo.children].map((c) => c.firstElementChild?.textContent)).toEqual(['Contratado', 'Liberado', 'Principal pago', 'Saldo devedor', 'Vencido']);
+    expect(resumo.children[4].lastElementChild?.className).toContain('text-[#b42318]');
+    const grade = within(ficha).getByTestId('colunas-do-contrato');
+    expect(grade.className).toContain('grid-cols-[max-content_minmax(0,max-content)_max-content]');
+    expect(grade.className).toContain('gap-x-6');
+    const colunas = screen.getAllByTestId('coluna-do-contrato');
+    expect(colunas).toHaveLength(3);
+    /* cada coluna: rótulo da largura do maior DAQUELA coluna (max-content) e o valor colado a 10px */
+    for (const c of colunas) expect(c.className).toContain('grid-cols-[max-content_minmax(0,max-content)] content-start gap-x-[10px]');
+    expect(colunas.map((c) => c.children.length)).toEqual([4, 4, 4]);
+    expect(screen.getByTestId('campo-parcelas').textContent).toBe('Parcelas15 · 0 pagas');
     expect(screen.getByTestId('campo-atividade').textContent).toContain('Agricultura');
-    expect(screen.getByTestId('bloco-resumo').className).toContain('min-[600px]:w-[280px]');
+  });
+  it('sem vencido a 5ª célula é a que a tela mandar (próximo pagamento / quitado em)', () => {
+    render(<TopoDoContrato numero="X" descricao="Y" status="quitado" tela={tela()} onEditar={() => undefined} parcelas={{ total: 1, pagas: 1 }}
+      quinta={{ rotulo: 'Quitado em', valor: '21/07/2025' }} pendencias={{ qtde: 0, vencido: false }} onAbrirPendencias={() => undefined} saldo={null} />);
+    const resumo = screen.getByTestId('bloco-resumo');
+    expect(resumo.children[4].textContent).toBe('Quitado em21/07/2025');
+  });
+});
+
+describe('(5c) v4 — a página (fonte): uma faixa de caminho só, abas sem quebra, lápis na célula Lançamento, Total preso', () => {
+  const fonte = readFileSync(resolve(__dirname, '../../pages/FinanciamentoDetalhe.tsx'), 'utf8');
+  it('a faixa navy "Financeiro / … / <contrato>" saiu da página (o caminho é a barra do app)', () => {
+    expect(fonte).not.toMatch(/<header className="shrink-0 bg-primary/);
+    expect(fonte).not.toContain("'Parcelamentos e Financiamentos'");
+  });
+  it('abas numa linha (sem quebra) com a contagem ao lado e "Editar parcelas" na mesma linha', () => {
+    expect(fonte).toContain('<div className="shrink-0 whitespace-nowrap" data-testid="segmentado-das-abas">');
+    expect(fonte).toContain('<RotuloDaAba nome="Cronograma" n={cartoes?.parcelas} />');
+    const barra = fonte.slice(fonte.indexOf('data-testid="abas-do-credito"'), fonte.indexOf('data-testid="painel-liberacoes"'));
+    expect(barra).toContain('data-testid="editar-parcelas"');
+  });
+  it('o lápis mora DENTRO da célula Lançamento; Total preso no rodapé; vazio = uma linha', () => {
+    const cel = fonte.slice(fonte.indexOf('data-testid="lancamento-da-parcela" title={d?.contaNome'), fonte.indexOf('{linhas.length > 0 && ('));
+    expect(cel).toContain('data-testid="lapis-da-parcela"');
+    expect(fonte).toContain("const TF_V4 = 'sticky bottom-0 z-10");
+    expect(fonte).toContain("const TH_V4 = 'sticky top-0 z-10");
+    expect(fonte).toContain('Sem parcelas. Use ✎ Editar parcelas ou Editar para gerar o cronograma.');
   });
 });
 

@@ -164,7 +164,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 18/10/2026 (FIN-CONTRATO-JUNTAR-01, +7: `src/components/financiamentos/juntarContrato.test.tsx` 7 (novo); os fakes do hook em
+  Baseline em 18/10/2026 (FIN-FINANC-28 TELA DO CONTRATO v4, +4: `src/components/financiamentos/telaDoContratoV3.test.tsx` 13 -> 17 (sai o das
+  tres colunas do B3; entram a ficha, a 5a celula, a faixa unica, as abas e o lapis na celula — por fonte); `reguaDasParcelas` e
+  `obrigacaoEdicao` trocados ao contrato novo (colunas do credito) — 5657 depois dele; antes o FIN-CONTRATO-JUNTAR-01, +7: `src/components/financiamentos/juntarContrato.test.tsx` 7 (novo); os fakes do hook em
   `darBaixa`, `contratoDeCredito` e `buscarNoContrato` ganharam as tres funcoes novas (so' tipo) — 5653 depois dele; antes o
   FIN-FINANC-28 EDITAR = CADASTRO NOVO v2, +2: `src/components/financiamentos/edicaoDoContrato.test.tsx` 8 (novo);
   `obrigacaoEdicao.test.tsx` −6 (51 -> 45: sairam as fotos de edicao e criacao de financiamento/emprestimo e tres casos do credito,
@@ -390,7 +392,7 @@ no mesmo arquivo.
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
   `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5327
-  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO; 5568 desde o FIN-FINANC-28 PASSO 4; 5571 desde o FIN-FINANC-28 RESUMO-A18; 5573 desde o FIN-FINANC-28 PASSO 4c; 5581 desde o FIN-FINANC-28 PASSO 4b; 5586 desde o FIN-FINANC-28 PASSO 5; 5593 desde o FIN-FINANC-28 PASSO 6; 5607 desde o FIN-FINANC-28 PASSO 7; 5609 desde o FIN-FINANC-28 PASSO 8; 5614 desde o FORN-MESCLAR-01; 5615 desde o RECORRENCIAS-COLUNAS-01; 5620 desde o FIN-FINANC-28 FIX 4b; 5623 desde o FIN-LANC-DESCRICAO-CONTRATO-01; 5628 desde o FIN-FINANC-28 CADASTRO-ACABAMENTO; 5630 desde o UI-MODAL-BLOCOS-01 passo 0; 5631 desde o UI-MODAL-BLOCOS-01 titulo na borda; 5641 desde o FIN-FINANC-28 TELA v3; 5644 desde o B3; 5646 desde o EDITAR v2; 5653 desde o FIN-CONTRATO-JUNTAR-01], 22 skipped, e
+  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO; 5568 desde o FIN-FINANC-28 PASSO 4; 5571 desde o FIN-FINANC-28 RESUMO-A18; 5573 desde o FIN-FINANC-28 PASSO 4c; 5581 desde o FIN-FINANC-28 PASSO 4b; 5586 desde o FIN-FINANC-28 PASSO 5; 5593 desde o FIN-FINANC-28 PASSO 6; 5607 desde o FIN-FINANC-28 PASSO 7; 5609 desde o FIN-FINANC-28 PASSO 8; 5614 desde o FORN-MESCLAR-01; 5615 desde o RECORRENCIAS-COLUNAS-01; 5620 desde o FIN-FINANC-28 FIX 4b; 5623 desde o FIN-LANC-DESCRICAO-CONTRATO-01; 5628 desde o FIN-FINANC-28 CADASTRO-ACABAMENTO; 5630 desde o UI-MODAL-BLOCOS-01 passo 0; 5631 desde o UI-MODAL-BLOCOS-01 titulo na borda; 5641 desde o FIN-FINANC-28 TELA v3; 5644 desde o B3; 5646 desde o EDITAR v2; 5653 desde o FIN-CONTRATO-JUNTAR-01; 5657 desde a TELA DO CONTRATO v4], 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -2258,6 +2260,35 @@ preview que o cabecalho nao sai da tela ao rolar.
   regua nas tres naturezas; o formulario novo (passo 7) a herda. Preso por `resumoDaObrigacao.test.ts` (fonte, com auto-teste).
   MEDIDO na bancada a 1.126 x 579 e 1.440 x 800 (compra parcelada e PR-78.192, abas Contrato e Parcelas): 240px, sem rolagem,
   maior fonte 11px, linhas de 16px. As 15 fotos do dialogo (`obrigacaoDialog.fotos.json`) REGRAVADAS de proposito (o aside esta' em todas).
+- ⚠ TELA DO CONTRATO v4 (Gabriel 18/10/2026 16:11, "Tela do Contrato v4", caso NJ PR-78.179; SUBSTITUI o VISUAL da v3/B3 — dados e
+  funcoes do banco iguais; so' apresentacao; credito: financiamento, emprestimo, consorcio). De cima para baixo, a pagina nao rola:
+  · UMA FAIXA DE CAMINHO SO' (a do app): a faixa navy "Financeiro / Parcelamentos e Financiamentos / …" SAIU de `FinanciamentoDetalhe`
+    (tambem na compra parcelada, que tem a propria seta). Voltar = a seta "←" (title/aria "Voltar para Financiamentos").
+  · LINHA DO TITULO: "<nº> · <descricao>" 14px/600 (corta com title) · selo da situacao · selo LARANJA "N pendencias" (abre a aba) ·
+    Editar · Juntar (lugar reservado 64px) · Dar baixa dourado; botoes de 26px a 11px. O selo "N parcelas vencidas" saiu.
+  · A FICHA (`ficha-do-contrato`, um card): faixa Resumo de 5 celulas iguais (Contratado · Liberado · Principal pago · Saldo devedor ·
+    5a = Vencido em vermelho quando ha'; senao "Prox. pgto. dd/mm/aaaa" + valor da 1a parcela nao paga; no quitado "Quitado em" a
+    data do ultimo pagamento — `QuintaCelula`, montada na pagina, sem soma) + fatos em 3 colunas (`grid-cols-[max-content_minmax(0,
+    max-content)_max-content] justify-between gap-x-6`; em cada coluna o rotulo tem a largura do maior DAQUELA coluna e o valor cola a
+    10px; 11px, linha de 18px; coluna 3 ganhou "Parcelas N · M pagas"). Liberacao sem lancamento: a DATA em laranja com o title (o
+    selo "a confirmar" saiu). Paleta `COR_V4` (`TelaDoContratoV3.tsx`): rotulo #556070, valor #111827, bordas #d3dae3/#e3e8ee, pagina
+    #e9edf2, laranja #b45309/#fdf0dc, vermelho #b42318/#fde8e6. No credito a tela ocupa a largura toda (sem `max-w-5xl`).
+  · ABAS numa linha (`whitespace-nowrap`), contagem ao lado em tom mais fraco (`RotuloDaAba`); "A resolver" com selo vermelho; "✎ Editar
+    parcelas" na mesma linha.
+  · CRONOGRAMA DO CREDITO: `<table>` propria (TH_V4/TD_V4/TF_V4 em `FinanciamentoDetalhe.tsx`): celula 10,5px, linha 24px, padding
+    2,5px, cabecalho navy 10px/600 preso; datas dd/mm/aa a 10px; Prazo "ha' N dias" vermelho / "em N dias" cinza (`textoDoPrazoCurto`);
+    "carencia" cinza; Situacao Vencida vermelho solido / A vencer contornado / Paga verde (`SELO_V4`); linha vencida em fundo vermelho
+    claro; Lancamento "↔ principal · ↔ juros · Buscar" + o LAPIS NO FIM DA MESMA CELULA (a coluna do lapis saiu); Total preso em
+    #e4e9ef negrito. Regua (`colunasDasParcelas(false)`): 37·52·52·70·75·75·82·75·52 = 570 + Lancamento (o resto); "Total (R$)" ->
+    "Total". O card tem a altura do conteudo ate' o fim da tela (`max-h-full`): sem parcelas, UMA linha "Sem parcelas. Use ✎ …".
+    A compra parcelada segue com a tabela de antes.
+  MEDIDO (bancada com a pagina real, dados reais lidos do proto em 18/10, barra do app de 96px, conteudo de 750/814/1100/1300 x 483 e
+  704, e 750 x 530): PR-78.179, 0040/05190-0, "Venda Milho Agnaldo (42)" (sem parcelas) e 237.729.00/03 (quitado, sem aba A resolver,
+  "Quitado em 21/07/2025") — 0 rolagem da pagina, 0 rolagem horizontal da tabela, 0 textos cortados (o titulo nao chegou a cortar),
+  lapis dentro da celula em todas; PR-78.179 com 9 linhas visiveis a 750 x 483 e 11 a 750 x 530. ⚠ FOLGA DE 5,8px no Lancamento a
+  750: texto mais longo ali ou valor de oito digitos no Total do rodape pede remedir. Prints em ~/Downloads/tela-contrato-v4/.
+  ⚠ NAO PROVADO: nada com login no app real (bancada) · a barra do app real (a bancada usa 96px) · as abas Liberacoes, Pagamentos e
+    Historico seguem no estilo da v3 (so' o cronograma ganhou a regua v4).
 - ⚠ DOIS CADASTROS DO MESMO CONTRATO SE JUNTAM NUM SO', POR UMA RPC COM SIMULACAO E DESFAZER; O ABSORVIDO NUNCA E' APAGADO
   (FIN-CONTRATO-JUNTAR-01, Gabriel 18/10/2026; migration `supabase/migrations/20261027201600_fin_contrato_juntar_01.sql`, md5 do arquivo
   335c4fc55ef5d9cff717b1e10976b7bc — APLICADA no proto em 18/10/2026, ledger 20261027201600 `fin_contrato_juntar_01`; ledger = arquivo).

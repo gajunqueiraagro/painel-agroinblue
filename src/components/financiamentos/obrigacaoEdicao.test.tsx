@@ -909,7 +909,10 @@ describe('4 — a tela do contrato mostra o que o banco derivou do lançamento',
       saldo: { aplica_saldo: true, regra: 'calculado', contratado: 16238, liberado: null, liberacoes: 0, amortizado: 0, saldo: null, juros_pagos: 0, juros_previstos: 200, pendencias: ['sem_liberacao'] } };
     await abrirDetalhe();
     const cab = Array.from(screen.getByTestId('rodape-das-parcelas').closest('table')!.querySelectorAll('thead th')).map((th) => th.textContent);
-    expect(cab).toEqual(['Parc.', 'Venc.', 'Pgto.', 'Prazo', 'Principal', 'Juros', 'Total (R$)', 'Saldo após', 'Situação', 'Lançamento', '']);
+    /* v4 (18/10): "Total (R$)" virou "Total"; a coluna do lápis saiu — o lápis mora no fim da célula Lançamento; Total preso */
+    expect(cab).toEqual(['Parc.', 'Venc.', 'Pgto.', 'Prazo', 'Principal', 'Juros', 'Total', 'Saldo após', 'Situação', 'Lançamento']);
+    for (const l of linhasDoContrato()) expect(l.querySelector('[data-testid="lancamento-da-parcela"] [data-testid="lapis-da-parcela"]')).not.toBeNull();
+    for (const td of screen.getByTestId('rodape-das-parcelas').querySelectorAll('td')) expect(td.className).toMatch(/sticky bottom-0/);
     const celulas = (i: number) => Array.from(linhasDoContrato()[i].querySelectorAll('td')).map((td) => td.textContent);
     /* principal zero = "carência"; saldo após = contratado − principal acumulado (o dono puro) */
     expect(celulas(0).slice(4, 8)).toEqual(['carência', '100,00', '100,00', '16.238,00']);

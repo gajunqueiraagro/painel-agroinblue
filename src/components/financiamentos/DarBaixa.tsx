@@ -41,7 +41,7 @@ export function BotaoDarBaixa({ status, api, onEscolher, onDesfazer, destaque = 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant={destaque ? 'default' : 'outline'} size="sm" className={`h-6 gap-1 px-2 text-[10.5px] ${destaque ? 'bg-cta font-semibold text-cta-foreground hover:bg-cta-hover' : ''}`} disabled={!podeDarBaixa(status)}
+        <Button variant={destaque ? 'default' : 'outline'} size="sm" className={`gap-1 ${destaque ? 'h-[26px] px-2.5 text-[11px] bg-cta font-semibold text-cta-foreground hover:bg-cta-hover' : 'h-6 px-2 text-[10.5px]'}`} disabled={!podeDarBaixa(status)}
           title={podeDarBaixa(status) ? undefined : MOTIVO_BAIXA_SO_VIGENTE} data-testid="dar-baixa">
           Dar baixa <ChevronDown className="size-3" />
         </Button>

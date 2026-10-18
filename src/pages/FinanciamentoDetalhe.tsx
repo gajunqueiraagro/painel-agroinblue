@@ -4,7 +4,7 @@ import { LancamentoDaParcelaDialog } from '@/components/financiamentos/Lancament
 import { useSituacaoDoContrato } from '@/hooks/useSituacaoDoContrato';
 import {
   CLASSE_SEM_LANCAMENTO, CLASSE_SITUACAO, MOTIVO_PARCELA_SEM_LANCAMENTO, ROTULO_SEM_LANCAMENTO, ROTULO_SITUACAO, TOM_DO_PRAZO,
-  origemDaSituacao, porQueSemLancamento, semLancamento, textoDasNotas, textoDoPrazo,
+  origemDaSituacao, porQueSemLancamento, semLancamento, textoDasNotas, textoDoPrazo, textoDoPrazoCurto,
 } from '@/lib/financiamentos/situacaoDoContrato';
 import { CancelarParcelaDialog } from '@/components/financiamentos/CancelarParcelaDialog';
 import { ExcluirCompraDialog, RecriarLancamentoDialog } from '@/components/financiamentos/GestosDoContratoDialogs';
@@ -36,7 +36,7 @@ import { TABELA_LANC, TD_DATA_LANC, TD_VALOR_LANC, LINHA_LANC, TH_LANC, SeloDoCo
 import { GradeChaveValor } from '@/components/shared/GradeChaveValor';
 import { formatarDocumento, nomeEDocumento } from '@/lib/fornecedores/fornecedorTexto';
 import { BlocoDocumentos, BlocoLiberacoes, RemoverDialog } from '@/components/financiamentos/ContratoDeCredito';
-import { ListaDePendencias, TabelaDePagamentos, TabelaDoHistorico, TopoDoContrato } from '@/components/financiamentos/TelaDoContratoV3';
+import { COR_V4, ListaDePendencias, TabelaDePagamentos, TabelaDoHistorico, TopoDoContrato, type QuintaCelula } from '@/components/financiamentos/TelaDoContratoV3';
 import { Segmentado } from '@/components/ui/segmentado';
 import type { AcaoDoPendente, PendenteDoContrato } from '@/lib/financiamentos/telaDoContrato';
 import { BuscarPagamentoDialog } from '@/components/financiamentos/BuscarNoContrato';
@@ -62,6 +62,9 @@ const fmtDate = (d: string | null) =>
 
 /* valor de tabela: sem "R$" (o cabeçalho da coluna diz a moeda) */
 const num2 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+/** v4: data de tabela dd/mm/aa (o padrão de tabela da casa), do texto ISO, sem fuso */
+const dataCurta = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(2, 4)}` : '—');
+const dataLonga = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '—');
 /** TELA DO CONTRATO v3 — as abas do crédito */
 type AbaDoCredito = 'cronograma' | 'liberacoes' | 'pagamentos' | 'documentos' | 'historico' | 'a_resolver';
 
@@ -81,6 +84,14 @@ const TOTAL = 'bg-[#E8E6DF] text-[10px] font-bold shadow-[inset_0_2px_0_#9aa7b6]
 /* linha da parcela: 19px (o padrão de tabela, A31). Nada dentro dela passa de 16px — o filho mais alto manda na altura. */
 /* ⚠ a entrelinha vai ESCRITA: a celula herdava 20px e, sozinha, levava a linha a 20,5–21px (medido). 18 + 1 de borda = 19. */
 const LINHA = LINHA_LANC;
+/* TELA DO CONTRATO v4 — a régua do cronograma do CRÉDITO: célula 10,5px, linha de 24px, 3px de padding lateral; cabeçalho navy 10px/600;
+   Total preso em cinza forte. Situação: Vencida vermelho sólido, A vencer contornado, Paga verde. */
+const TH_V4 = 'sticky top-0 z-10 h-[24px] whitespace-nowrap bg-[#1d3a5d] px-[2.5px] text-[10px] font-semibold text-white';
+const TD_V4 = 'h-[24px] overflow-hidden whitespace-nowrap px-[2.5px] text-[10.5px] text-[#111827]';
+const TF_V4 = 'sticky bottom-0 z-10 h-[24px] whitespace-nowrap bg-[#e4e9ef] px-[2.5px] text-[10.5px] font-bold text-[#111827] shadow-[inset_0_1px_0_#c5ced9]';
+const SELO_V4: Record<'paga' | 'vencida' | 'pendente' | 'parcial', string> = {
+  vencida: 'bg-[#b42318] text-white', pendente: 'border border-[#8a96a8] text-[#334155]', paga: 'bg-[#dcf2e3] text-[#166534]', parcial: 'bg-[#fdf0dc] text-[#b45309]',
+};
 
 /* ================================================================ */
 
@@ -434,6 +445,16 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
   }));
   const avisosDaLista = [...(principalDifere ? [principalDifere] : []), ...avisos];
   const pendencias = { qtde: pendentesDoBanco.length + avisosDaLista.length, vencido: pendentesDoBanco.some((p) => p.tom === 'vencido') };
+  /* TELA DO CONTRATO v4 — a 5ª célula do Resumo: Vencido (vermelho) quando há; no quitado, a data do último pagamento; senão o
+     próximo pagamento (a 1ª parcela não paga, pela ordem do vencimento). Nada é somado: os valores são os do banco. */
+  const proxima = linhas.find((p) => p.situacao !== 'paga') ?? null;
+  const ultimoPagamento = linhas.map((p) => p.pagoEm).filter((d): d is string => !!d).sort().at(-1) ?? null;
+  const quinta: QuintaCelula | null = !cartoes ? null
+    : cartoes.vencido > 0 ? { rotulo: 'Vencido', valor: fmt(cartoes.vencido), vermelho: true,
+      title: contagens ? `${contagens.vencidoQtde} ${contagens.vencidoQtde === 1 ? 'parcela vencida' : 'parcelas vencidas'}` : undefined }
+    : fin.status === 'quitado' ? { rotulo: 'Quitado em', valor: dataLonga(ultimoPagamento), title: 'a data do último pagamento' }
+    : proxima ? { rotulo: `Próx. pgto. ${dataLonga(proxima.dataVencimento)}`, valor: fmt(proxima.valorTotal), title: `Próximo pagamento ${dataLonga(proxima.dataVencimento)}` }
+    : { rotulo: 'Próx. pgto.', valor: '—', title: 'Próximo pagamento' };
   const subtitulo = subtituloDoContrato({
     linha: fin.financiamento_linhas_credito?.programa ?? fin.financiamento_linhas_credito?.descricao ?? null,
     taxaAnual: Number(fin.taxa_juros) || null, taxaMensal: Number(fin.taxa_juros_mensal) || null,
@@ -463,37 +484,11 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
        conjunto passava do rodape em vez de parar nele. Com `overflow-hidden` o container
        vira o limite de verdade e o card termina onde a tela termina — a rolagem util
        continua existindo uma camada abaixo, no wrapper da tabela. */
-    <div className="w-full min-w-0 h-full min-h-0 flex flex-col overflow-hidden bg-background max-w-5xl mx-auto" data-testid="tela-do-contrato">
+    <div className={`w-full min-w-0 h-full min-h-0 flex flex-col overflow-hidden ${ehParcelamento ? 'bg-background max-w-5xl mx-auto' : COR_V4.pagina}`} data-testid="tela-do-contrato">
 
-      {/* ═══ 1 — BARRA AZUL, a mesma da lista ═══════════════════════════════════
-          ⚠ O "← Voltar" SOLTO SAIU e virou o elo do meio do caminho. Ele dizia para
-          onde ia, mas nao dizia ONDE SE ESTAVA; o breadcrumb diz as duas coisas na
-          mesma linha e devolve os 36px que o botao ocupava. */}
-      <header className="shrink-0 bg-primary shadow-md">
-        <div className="flex items-center gap-2 px-3 py-1">
-          {/* ⚠ A MIGALHA DO MEIO E' BOTAO DE VERDADE. `onVoltar` sempre esteve ligado —
-              conferi os dois pais, os dois o passam — mas um link BRANCO no meio de texto
-              BRANCO, sem icone e sem sublinhado em repouso, nao se anuncia: o operador
-              nao achou por onde voltar. `cursor-pointer` e `hover:underline` explicitos
-              (o `cursor` ja' vinha do preflight; fica escrito para nao depender dele) e,
-              acima de tudo, a seta do item abaixo. */}
-          <p className="min-w-0 truncate text-[11px] font-semibold tracking-wide text-primary-foreground">
-            {/* ⚠ "Financeiro" E' TEXTO, NAO LINK — nao ha' destino proprio para ele, e
-                duas migalhas indo ao mesmo lugar mentem sobre a hierarquia. Igual a' lista. */}
-            Financeiro
-            <span className="mx-1 text-primary-foreground/40">/</span>
-            <button type="button" onClick={onVoltar}
-              className="cursor-pointer font-normal text-primary-foreground/90 hover:underline">
-              {from === 'lancamentos' ? 'Lançamentos' : 'Parcelamentos e Financiamentos'}
-            </button>
-            <span className="mx-1 text-primary-foreground/40">/</span>
-            {/* O ultimo nivel e' onde se esta': nao e' link. */}
-            <span className="font-normal text-primary-foreground/90">{fin.descricao}</span>
-          </p>
-        </div>
-      </header>
-
-      <div className="shrink-0 px-3 pt-1.5 pb-1.5 space-y-1.5">
+      {/* ═══ TELA DO CONTRATO v4 (18/10): a faixa navy "Financeiro / … / <contrato>" SAIU — o caminho é a barra do app (uma faixa
+          só). Voltar é a seta da linha do título. */}
+      <div className={`shrink-0 space-y-1.5 pb-1.5 pt-1.5 ${ehParcelamento ? 'px-3' : 'px-2'}`}>
         {ehParcelamento ? (<>
         {/* ═══ a — LINHA DO TÍTULO (PARC-CONTRATO-01, mock aprovado): UMA linha de 26px. O nome é CONTIDO (15px), encurta com
             reticência e `title`, e nunca empurra os botões — eles têm lugar reservado à direita (`shrink-0`). */}
@@ -593,7 +588,7 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
         </>) : (
           /* TELA DO CONTRATO v3 (Gabriel 18/10/2026) — título com selos e ações · Contrato em duas colunas + Resumo · A resolver */
           <TopoDoContrato numero={fin.numero_contrato ?? null} descricao={fin.descricao ?? ''} status={fin.status ?? null}
-            saldo={situacao?.saldo} vencido={cartoes ? cartoes.vencido : null} tela={credito.tela}
+            saldo={situacao?.saldo} tela={credito.tela} parcelas={cartoes ? { total: cartoes.parcelas, pagas: cartoes.pagas } : null} quinta={quinta}
             onVoltar={onVoltar} onEditar={() => abrirEdicao('contrato')} pendencias={pendencias} onAbrirPendencias={() => setAbaDoCredito('a_resolver')}
             acaoDeJuntar={<BotaoJuntar status={fin.status ?? null} onAbrir={() => setJuntando(true)} />}
             acaoDeBaixa={<BotaoDarBaixa destaque status={fin.status ?? null} api={credito} onEscolher={setBaixaEscolhida} onDesfazer={() => setDesfazendoBaixa(true)} />} />
@@ -602,48 +597,50 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
 
       {/* ═══ TELA DO CONTRATO v3 — ABAS do crédito (o Segmentado da casa). O painel da aba ocupa o resto da altura. */}
       {!ehParcelamento && (
-        <div className="flex shrink-0 items-center gap-2 px-3 pb-1.5" data-testid="abas-do-credito">
+        <div className="flex shrink-0 items-center gap-2 px-2 pb-1.5" data-testid="abas-do-credito">
+          {/* v4: uma linha, sem quebrar; a contagem fica ao lado do rótulo, em tom mais fraco */}
+          <div className="shrink-0 whitespace-nowrap" data-testid="segmentado-das-abas">
           <Segmentado<AbaDoCredito> altura={22} valor={abaAberta} onEscolher={setAbaDoCredito} opcoes={[
-            { valor: 'cronograma', rotulo: `Cronograma${cartoes ? ` (${cartoes.parcelas})` : ''}` },
-            { valor: 'liberacoes', rotulo: `Liberações${credito.tela ? ` (${credito.tela.liberacoesTotal.qtde})` : ''}` },
-            { valor: 'pagamentos', rotulo: `Pagamentos${credito.tela ? ` (${credito.tela.pagamentosTotal.qtde})` : ''}` },
-            { valor: 'documentos', rotulo: `Documentos${credito.documentos ? ` (${credito.documentos.length})` : ''}` },
+            { valor: 'cronograma', rotulo: <RotuloDaAba nome="Cronograma" n={cartoes?.parcelas} /> },
+            { valor: 'liberacoes', rotulo: <RotuloDaAba nome="Liberações" n={credito.tela?.liberacoesTotal.qtde} /> },
+            { valor: 'pagamentos', rotulo: <RotuloDaAba nome="Pagamentos" n={credito.tela?.pagamentosTotal.qtde} /> },
+            { valor: 'documentos', rotulo: <RotuloDaAba nome="Documentos" n={credito.documentos?.length} /> },
             { valor: 'historico', rotulo: 'Histórico' },
-            /* B3: "A resolver" é a última aba, com o N num selo (vermelho com vencido); sem pendência, some */
+            /* "A resolver" é a última aba, com o N num selo vermelho; sem pendência, some */
             ...(pendencias.qtde > 0 ? [{ valor: 'a_resolver' as const, rotulo: (
-              <span className="inline-flex items-center gap-1" data-testid="aba-a-resolver">A resolver
-                <span className={`rounded-full px-1.5 text-[9.5px] font-semibold leading-[14px] ${pendencias.vencido ? 'bg-[#b91c1c] text-white' : 'bg-amber-500 text-white'}`}
-                  data-testid="contagem-a-resolver">{pendencias.qtde}</span></span>) }] : []),
+              <span className="inline-flex items-center gap-1 whitespace-nowrap" data-testid="aba-a-resolver">A resolver
+                <span className="rounded-full bg-[#b42318] px-1.5 text-[9.5px] font-semibold leading-[14px] text-white" data-testid="contagem-a-resolver">{pendencias.qtde}</span></span>) }] : []),
           ]} />
+          </div>
           {/* recado da linha (erro de abrir/buscar) e "Editar parcelas" moram na barra das abas: nenhuma linha a mais sobre a tabela */}
           <span className="min-w-0 flex-1 truncate text-[10px] font-medium text-destructive" title={recadoDaLinha ?? undefined} data-testid="recado-da-linha">{recadoDaLinha ?? ''}</span>
-          <Button variant="outline" size="sm" className="h-[20px] shrink-0 gap-1 px-2 text-[10px]" onClick={() => abrirEdicao('parcelas')} data-testid="editar-parcelas">
+          <Button variant="outline" size="sm" className="h-[22px] shrink-0 gap-1 px-2 text-[11px]" onClick={() => abrirEdicao('parcelas')} data-testid="editar-parcelas">
             <Pencil className="size-3" /> Editar parcelas
           </Button>
         </div>
       )}
       {!ehParcelamento && abaAberta === 'liberacoes' && clienteId && (
-        <div className="min-h-0 flex-1 px-3 pb-2" data-testid="painel-liberacoes">
+        <div className="min-h-0 flex-1 px-2 pb-2" data-testid="painel-liberacoes">
           <BlocoLiberacoes api={credito} contaDoContrato={nomeConta} onAbrirLancamento={setLancamentoAberto} clienteId={clienteId} />
         </div>
       )}
       {!ehParcelamento && abaAberta === 'pagamentos' && (
-        <div className="min-h-0 flex-1 px-3 pb-2" data-testid="painel-pagamentos">
+        <div className="min-h-0 flex-1 px-2 pb-2" data-testid="painel-pagamentos">
           <TabelaDePagamentos tela={credito.tela} onAbrirLancamento={setLancamentoAberto} />
         </div>
       )}
       {!ehParcelamento && abaAberta === 'documentos' && (
-        <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-2" data-testid="painel-documentos">
+        <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2" data-testid="painel-documentos">
           <BlocoDocumentos ref={refDocumentos} api={credito} />
         </div>
       )}
       {!ehParcelamento && abaAberta === 'a_resolver' && (
-        <div className="min-h-0 flex-1 px-3 pb-2" data-testid="painel-a-resolver">
+        <div className="min-h-0 flex-1 px-2 pb-2" data-testid="painel-a-resolver">
           <ListaDePendencias pendencias={pendentesDoBanco} avisos={avisosDaLista} onResolver={resolverPendente} />
         </div>
       )}
       {!ehParcelamento && abaAberta === 'historico' && (
-        <div className="min-h-0 flex-1 px-3 pb-2" data-testid="painel-historico">
+        <div className="min-h-0 flex-1 px-2 pb-2" data-testid="painel-historico">
           <TabelaDoHistorico tela={credito.tela} onDesfazerJuncao={(id, evento) => setDesfazendoJuncao({ id, evento })} />
         </div>
       )}
@@ -651,7 +648,107 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
       {/* ═══ d — PARCELAS, até o rodapé ═══════════════════════════════════════
           ⚠ A ROLAGEM MORA NO WRAPPER DA TABELA (A21), e é nele que o `sticky` do thead e do tfoot ancora. `min-h-0` nos dois
           níveis: sem ele o filho flex recusa-se a encolher abaixo do conteúdo e a rolagem escapa para a tela inteira. */}
-      {(ehParcelamento || abaAberta === 'cronograma') && (
+      {/* ═══ TELA DO CONTRATO v4 — o CRONOGRAMA do crédito. O card tem a altura do conteúdo até o fim da tela (`max-h-full`): sem
+          parcelas fica uma linha, nunca uma área branca enorme. Cabeçalho e Total presos no scrollport da tabela. */}
+      {!ehParcelamento && abaAberta === 'cronograma' && (
+      <div className="min-h-0 flex-1 px-2 pb-2" data-testid="painel-cronograma">
+        <div className={`flex max-h-full min-h-0 flex-col overflow-hidden rounded-lg border bg-white ${COR_V4.borda}`}>
+          <div className="min-h-0 overflow-y-auto overflow-x-hidden" data-testid="area-que-rola-cronograma">
+            <table className="w-full table-fixed border-collapse" data-testid="tabela-cronograma">
+              <colgroup>
+                {colunas.map(c => <col key={c.chave} style={c.largura === null ? undefined : { width: c.largura }} />)}
+              </colgroup>
+              <thead data-testid="cabecalho-cronograma"><tr>
+                {colunas.map(c => (
+                  <th key={c.chave} data-coluna={c.chave}
+                    title={c.chave === 'lancamento' ? 'principal · juros · cada parcela casa com o lançamento do Financeiro (↔)' : undefined}
+                    className={`${TH_V4} ${alinhamentoDoCabecalho(c)}`}>{c.rotulo}</th>
+                ))}
+              </tr></thead>
+              <tbody>
+                {linhas.length === 0 && (
+                  <tr><td colSpan={colunas.length} className={`${TD_V4} ${COR_V4.rotulo}`} data-testid="cronograma-vazio">
+                    Sem parcelas. Use ✎ Editar parcelas ou Editar para gerar o cronograma.
+                  </td></tr>
+                )}
+                {linhas.map(p => {
+                  const d = p.detalhe;
+                  const vencida = p.situacao === 'vencida';
+                  const vs = credito.vinculos.filter(v => v.parcelaId === p.id);
+                  const podeBuscar = vs.length === 0 && (p.situacao !== 'paga' || (!p.lancamentoId && !p.lancamentoJurosId));
+                  return (
+                    <tr key={p.id} className={`border-b ${COR_V4.bordaFina} ${vencida ? COR_V4.fundoVermelho : 'hover:bg-[#f4f6f9]'} ${p.lancamentoId ? 'cursor-pointer' : ''}`}
+                      data-testid="linha-do-contrato" data-situacao={p.situacao}
+                      onClick={() => { if (p.lancamentoId) setLancamentoAberto(p.lancamentoId); }} title={p.lancamentoId ? undefined : MOTIVO_PARCELA_SEM_LANCAMENTO}>
+                      <td className={`${TD_V4} tabular-nums`}>{p.numero ?? '—'}{cartoes ? `/${cartoes.parcelas}` : ''}</td>
+                      <td className={`${TD_V4} text-[10px] tabular-nums ${vencida ? `font-semibold ${COR_V4.vermelho}` : ''}`}>{dataCurta(p.dataVencimento)}</td>
+                      <td className={`${TD_V4} text-[10px] tabular-nums`} data-testid="pago-em">{dataCurta(p.pagoEm)}</td>
+                      <td className={`${TD_V4} text-[10px] ${d?.prazo && TOM_DO_PRAZO[d.prazo.tipo] === 'vermelho' ? COR_V4.vermelho : d?.prazo && TOM_DO_PRAZO[d.prazo.tipo] === 'verde' ? 'text-[#15803d]' : COR_V4.rotulo}`} data-testid="prazo">
+                        {textoDoPrazoCurto(d?.prazo ?? null)}
+                      </td>
+                      <td className={`${TD_V4} text-right tabular-nums`}>{p.valorPrincipal === 0 ? <span className={COR_V4.rotulo}>carência</span> : num2(p.valorPrincipal)}</td>
+                      <td className={`${TD_V4} text-right tabular-nums`}>{num2(p.valorJuros)}</td>
+                      <td className={`${TD_V4} text-right font-semibold tabular-nums`}>{num2(p.valorTotal)}</td>
+                      <td className={`${TD_V4} text-right tabular-nums`} data-testid="saldo-apos">{saldoApos?.get(p.id) == null ? '—' : num2(saldoApos.get(p.id) ?? 0)}</td>
+                      <td className={TD_V4}>
+                        <span className={`inline-flex items-center whitespace-nowrap rounded px-[2px] text-[9.5px] font-semibold leading-[15px] ${SELO_V4[p.situacao]}`}
+                          title={origemDaSituacao(p)} data-testid="situacao-da-parcela">{ROTULO_SITUACAO[p.situacao]}</span>
+                        {ajustadas.has(p.id) && <> <SeloAjustada /></>}
+                      </td>
+                      <td className={TD_V4} data-testid="lancamento-da-parcela" title={d?.contaNome ? `conta: ${d.contaNome}` : undefined}>
+                        <div className="flex min-w-0 items-center whitespace-nowrap text-[10px]">
+                          {p.lancamentoId && (
+                            <button type="button" className="font-medium text-primary hover:underline" title="Abrir o lançamento do principal no Financeiro"
+                              onClick={(e) => { e.stopPropagation(); setLancamentoAberto(p.lancamentoId); }} data-testid="ver-principal">↔ principal</button>
+                          )}
+                          {p.lancamentoId && p.lancamentoJurosId && <span className={`px-[2px] ${COR_V4.rotulo}`}>·</span>}
+                          {p.lancamentoJurosId && (
+                            <button type="button" className="font-medium text-primary hover:underline" title="Abrir o lançamento dos juros desta parcela no Financeiro"
+                              onClick={(e) => { e.stopPropagation(); setLancamentoAberto(p.lancamentoJurosId); }} data-testid="ver-juros">↔ juros</button>
+                          )}
+                          {!p.lancamentoId && !p.lancamentoJurosId && <span className={COR_V4.rotulo}>—</span>}
+                          {vs.length > 0 && (<>
+                            <span className={`px-[2px] ${COR_V4.rotulo}`}>·</span>
+                            <button type="button" className={`font-medium hover:underline ${COR_V4.vermelho}`} data-testid="desvincular-pagamento"
+                              title={`Pagamento vinculado (${vs.map(v => ROTULO_DO_PAPEL[v.papel]).join(', ')}) · desvincular volta a parcela como estava`}
+                              onClick={(e) => { e.stopPropagation(); setDesvinculando(vs[0]); }}>desvincular</button>
+                          </>)}
+                          {podeBuscar && (<>
+                            <span className={`px-[2px] ${COR_V4.rotulo}`}>·</span>
+                            <button type="button" className="font-medium text-primary hover:underline" data-testid="buscar-pagamento-botao"
+                              title="Procurar no Financeiro o lançamento que pagou esta parcela"
+                              onClick={(e) => { e.stopPropagation(); setBuscarPagamentoDe(p.id); }}>Buscar</button>
+                          </>)}
+                          {/* o lápis mora no FIM da mesma célula (a coluna própria saiu) */}
+                          <button type="button" className={`ml-auto flex size-[14px] shrink-0 items-center justify-center rounded hover:bg-[#e3e8ee] ${COR_V4.rotulo}`}
+                            onClick={(e) => { e.stopPropagation(); setFocoParcela(p.id); abrirEdicao('parcelas'); }}
+                            title="Editar as parcelas (esta em destaque)" aria-label="Editar a parcela" data-testid="lapis-da-parcela">
+                            <Pencil className="size-3" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              {linhas.length > 0 && (
+                <tfoot data-testid="rodape-das-parcelas"><tr>
+                  <td colSpan={4} className={TF_V4}>Total{cartoes ? ` · ${cartoes.parcelas} ${cartoes.parcelas === 1 ? 'parcela' : 'parcelas'}` : ''}</td>
+                  <td className={`${TF_V4} text-right tabular-nums`}>{cartoes ? num2(cartoes.somaPrincipal) : '…'}</td>
+                  <td className={`${TF_V4} text-right tabular-nums`}>{cartoes ? num2(cartoes.jurosPrevistos) : '…'}</td>
+                  <td className={`${TF_V4} text-right tabular-nums`} data-testid="total-das-parcelas">{cartoes ? num2(cartoes.somaTotal) : '…'}</td>
+                  <td className={TF_V4} />
+                  <td className={`${TF_V4} tabular-nums`} data-testid="total-pagas">{cartoes ? `${cartoes.pagas} de ${cartoes.parcelas}` : '…'}</td>
+                  <td className={TF_V4} data-testid="total-pago">pago <span className="tabular-nums text-[#15803d]">{cartoes ? num2(cartoes.pago) : '…'}</span></td>
+                </tr></tfoot>
+              )}
+            </table>
+          </div>
+        </div>
+      </div>
+      )}
+
+      {ehParcelamento && (
       <div className="min-h-0 flex-1 px-3 pb-1" data-testid="painel-cronograma">
         <div className={`flex h-full min-h-0 flex-col rounded-lg border border-border bg-card px-3 pt-1.5 ${ehParcelamento ? 'pb-0' : 'pb-1.5'}`}>
           {/* B3: no crédito esta linha saiu — o subtítulo virou o title do cabeçalho Lançamento e "Editar parcelas" foi para a barra das abas */}
@@ -981,4 +1078,9 @@ function ThDet({ coluna }: { coluna: ColunaDasParcelas }) {
       {coluna.rotulo}
     </TableHead>
   );
+}
+
+/** TELA DO CONTRATO v4 — o rótulo da aba com a contagem ao lado, em tom mais fraco, na mesma linha */
+function RotuloDaAba({ nome, n }: { nome: string; n: number | undefined }) {
+  return <span className="inline-flex items-center gap-1 whitespace-nowrap">{nome}{n !== undefined && <span className="tabular-nums opacity-60">{n}</span>}</span>;
 }

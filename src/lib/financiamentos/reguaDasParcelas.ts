@@ -42,18 +42,19 @@ const col = (chave: ChaveDaColuna, rotulo: string, largura: number | null, alinh
  */
 export function colunasDasParcelas(ehParcelamento: boolean): ColunaDasParcelas[] {
   if (!ehParcelamento) {
+    /* TELA DO CONTRATO v4 (18/10): célula de 10,5px com 3px de padding lateral; a régua cabe a 750px de conteúdo sem rolar na
+       horizontal (o Lançamento fica com o resto e leva o lápis no fim — a coluna própria do lápis saiu). "Total (R$)" virou "Total". */
     return [
-      col('numero', 'Parc.', 48),
-      col('vencimento', 'Venc.', LARGURA_DA_DATA),
-      col('pagamento', 'Pgto.', LARGURA_DA_DATA),
-      col('prazo', 'Prazo', 116),
-      col('principal', 'Principal', 84, 'direita'),
-      col('juros', 'Juros', 76, 'direita'),
-      col('total', 'Total (R$)', 88, 'direita'),
-      col('saldoApos', 'Saldo após', 96, 'direita'),
-      col('situacao', 'Situação', 88),
+      col('numero', 'Parc.', 37),
+      col('vencimento', 'Venc.', 52),
+      col('pagamento', 'Pgto.', 52),
+      col('prazo', 'Prazo', 70),
+      col('principal', 'Principal', 75, 'direita'),
+      col('juros', 'Juros', 75, 'direita'),
+      col('total', 'Total', 82, 'direita'),
+      col('saldoApos', 'Saldo após', 75, 'direita'),
+      col('situacao', 'Situação', 52),
       col('lancamento', 'Lançamento', null),
-      col('lapis', '', 24),
     ];
   }
   return [
