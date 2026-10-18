@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { BlocoFormulario, REGUA_CAMPO } from '@/components/ui/bloco-formulario';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -76,10 +77,14 @@ const ALTURA_CORPO = 'h-[69vh]';
  * ⚠ CONTINUA SENDO `max-h`, NAO `h`: com tres parcelas a caixa encolhe para tres linhas em vez
  * de reservar 260px de vazio. Altura fixa aqui seria moldura em volta de nada.
  */
-const ALTURA_PREVIA = 'max-h-[260px]';
+/* UI-MODAL-BLOCOS-01 — a prévia do crédito ocupa o que sobra da coluna (69vh − 32 − 227 do bloco e do rótulo): ~141px a 1.126×579,
+   onde antes a coluna rolava 105px; com teto nos 260 de sempre. */
+const ALTURA_PREVIA = 'max-h-[min(260px,calc(69vh-259px))]';
 /** PARC-LIVRES-01 — a grade de parcelas da criação do parcelamento: altura FIXA (barra 26 + lista + totais 20 + aviso 18). */
-const ALTURA_GRADE = 276;
-const CAMPO = 'h-8';                       // A16 — todo campo do formulario na mesma altura
+/* UI-MODAL-BLOCOS-01 — a grade ocupa o que sobra da coluna (69vh − 32 do padding − 107 do bloco "Valores e prazo", da folga da
+   legenda e do vão): 261px a 1.126×579 (era 276 fixo, e com o bloco a coluna passaria a rolar 15px) e 413px a 1.440×800. */
+const ALTURA_GRADE = 'calc(69vh - 139px)';
+const CAMPO = REGUA_CAMPO;                 // UI-MODAL-BLOCOS-01 — a régua dos modais (28px, 11px); era h-8 (A16)
 const CAMPO_CELULA = 'h-6';                // A16 — dentro da grade densa, todos na dela
 /* Idioma canonico de campo travado (AbaLiquidacaoOC / CompraModalShell). */
 const CAMPO_TRAVADO = 'bg-muted border-border/60 text-muted-foreground';
@@ -1005,27 +1010,26 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                 deixa o conteudo ser cortado pelo `overflow-hidden`.
                 ⚠ SO A PARTIR DE `lg`: abaixo disso as colunas viram linhas empilhadas
                 e altura fixa por coluna cortaria o resumo — ali o corpo rola inteiro. */}
-            <div className={`grid grid-cols-1 lg:grid-cols-[1fr_240px] lg:grid-rows-[minmax(0,1fr)] gap-3 p-4 ${ALTURA_CORPO} overflow-y-auto lg:overflow-hidden bg-muted/30`}>
-              <div className="space-y-2 min-w-0 lg:min-h-0 lg:overflow-y-auto">
+            <div className={`grid grid-cols-1 lg:grid-cols-[1fr_240px] lg:grid-rows-[minmax(0,1fr)] gap-3 p-4 ${ALTURA_CORPO} overflow-y-auto lg:overflow-hidden bg-muted`} data-testid="corpo-da-obrigacao">
+              <div className="space-y-2 min-w-0 pt-2 lg:min-h-0 lg:overflow-y-auto">
 
                 {/* ══ ABA CONTRATO ══════════════════════════════════════════════ */}
-                <TabsContent value="contrato" className="mt-0 space-y-2.5">
+                <TabsContent value="contrato" className="mt-0 space-y-2">
                   {/* ⚠ PRIMEIRO CAMPO DA TELA. A natureza governa o resto (esconde
                       juros e captacao, troca a lista da classificacao); um campo que
                       muda os outros nao pode vir depois deles. */}
-                  <div>
-                    <Label className={ROTULO}>Natureza *</Label>
-                    <div className="mt-0.5 grid grid-cols-3 gap-2">
+                  <BlocoFormulario titulo="Natureza" testId="bloco-natureza">
+                    <div className="grid grid-cols-3 gap-2">
                       {ORDEM_NATUREZA.map(n => (
                         <button
                           key={n}
                           type="button"
                           onClick={() => set('natureza', n)}
-                          className={`rounded-md border px-2.5 py-2 text-left transition-colors ${
+                          className={`rounded-md border px-2.5 py-1.5 text-left transition-colors ${
                             form.natureza === n ? 'border-primary bg-primary/10' : 'border-border hover:bg-muted/50'
                           }`}
                         >
-                          <div className="text-[12px] font-semibold leading-tight">{NOME_NATUREZA[n]}</div>
+                          <div className="text-[11px] font-semibold leading-tight">{NOME_NATUREZA[n]}</div>
                           <div className="mt-0.5 text-[10px] leading-snug text-muted-foreground">{APOIO_NATUREZA[n]}</div>
                         </button>
                       ))}
@@ -1039,13 +1043,14 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                         Trocar a natureza não refaz parcelas pagas
                       </p>
                     )}
-                  </div>
+                  </BlocoFormulario>
 
                   {/* ⚠ A QUARTA COLUNA SO' EXISTE SE A SITUACAO EXISTIR — OBRIGACAO-UI-02.
                       Ela hospeda o campo "Situacao do contrato", que agora some tambem ao editar
                       um parcelamento; manter `[2fr_1fr_1fr_1fr]` deixaria um quarto de linha
                       vazio a' direita, que e' o mesmo defeito que este PR veio tirar da Forma. */}
                   {/* FIN-FINANC-28-P3-FIX3 — compra parcelada não tem nº de contrato: Credor e Escopo, sem coluna vazia */}
+                  <BlocoFormulario titulo="Identificação" testId="bloco-identificacao" className="gap-1">
                   <div className={`grid gap-2 ${ehParcelamento ? 'grid-cols-[minmax(0,2fr)_minmax(0,1fr)]' : ehEdicao ? 'grid-cols-[2fr_1fr_1fr_1fr]' : 'grid-cols-[2fr_1fr_1fr]'}`}>
                     {ehParcelamento ? (<>
                     {campoCredor}
@@ -1151,6 +1156,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                       <p className={APOIO}>De onde saem as parcelas</p>
                     </div>
                   </div>
+                  </BlocoFormulario>
 
                   {/* ⚠ A FORMA DE PAGAMENTO E' DO LANCAMENTO, NAO DO CONTRATO — PAR-01c, e e'
                       por isso que ela so' aparece no parcelamento e nao ao lado da Conta lá em
@@ -1170,6 +1176,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                       ⚠ SEM A FORMA (financiamento/emprestimo) A GRADE VIRA DE DUAS, nao de tres
                       com um vao: esconder a celula mantendo o `[1fr_1fr_2fr]` deixaria o buraco
                       que este item veio tirar. */}
+                  <BlocoFormulario titulo="Pagamento e registro" testId="bloco-pagamento" className="gap-1">
                   <div className={`grid gap-2 ${ehParcelamento ? 'grid-cols-[1fr_1fr_2fr]' : 'grid-cols-[1fr_2fr]'}`}>
                     {ehParcelamento && (
                       ehEdicao ? (
@@ -1201,7 +1208,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                     )}
                     <div>
                       <Label className={ROTULO}>Data do contrato *</Label>
-                      <DatePicker value={form.data_contrato} onChange={v => set('data_contrato', v)} />
+                      <DatePicker value={form.data_contrato} onChange={v => set('data_contrato', v)} className={CAMPO} />
                     </div>
                     <div>
                       <Label className={ROTULO}>Observação</Label>
@@ -1216,10 +1223,11 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                       Forma de pagamento: {MOTIVO_VALE_POR_PARCELA}
                     </p>
                   )}
+                  </BlocoFormulario>
                 </TabsContent>
 
                 {/* ══ ABA PARCELAS ══════════════════════════════════════════════ */}
-                <TabsContent value="parcelas" className="mt-0 space-y-2.5">
+                <TabsContent value="parcelas" className="mt-0 space-y-2">
                   {/* ⚠ CAMPO NAO ESTICA PARA PREENCHER LINHA (PR-PARC-05b item 2). Um
                       campo de valor com 300px de largura nao aceita mais digito nenhum —
                       so' anuncia importancia que nao tem, e afasta o rotulo do numero. A
@@ -1242,7 +1250,8 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                       ⚠ SO' NA CRIACAO DE PARCELAMENTO: em edicao a grade ja' e' de quatro com
                       teto de 200px por campo, e o financiamento tem seis campos, que em uma
                       linha ficariam ilegiveis. */}
-                  <div className={ehParcelamento ? 'grid grid-cols-4 gap-2' : 'space-y-2.5'}>
+                  <BlocoFormulario titulo="Valores e prazo" testId="bloco-valores">
+                  <div className={ehParcelamento ? 'grid grid-cols-4 gap-2' : 'space-y-2'}>
                   <div className={ehParcelamento ? 'contents' : `grid gap-2 ${ehEdicao ? 'grid-cols-4 [&>div]:max-w-[200px]' : 'grid-cols-3'}`}>
                     <div>
                       <Label className={ROTULO}>Valor total *</Label>
@@ -1307,7 +1316,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                     <div>
                       <Label className={ROTULO}>1ª parcela *</Label>
                       <DatePicker value={form.data_primeira_parcela} onChange={v => set('data_primeira_parcela', v)}
-                        disabled={livresAbertas || (ehEdicao && ehParcelamento)} />
+                        disabled={livresAbertas || (ehEdicao && ehParcelamento)} className={CAMPO} />
                       {/* ⚠ EDITAVEL, E COM CONSEQUENCIA ESCRITA. Mudar a 1a parcela DESLOCA
                           os vencimentos das pendentes pelo mesmo numero de dias — quem
                           renegocia a data de entrada espera que o resto ande junto. As PAGAS
@@ -1360,6 +1369,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                     )}
                   </div>
                   </div>{/* fecha o wrapper de uma-linha-so — OBRIGACAO-UI-02 */}
+                  </BlocoFormulario>
 
                   <div>
                     {/* ⚠ A FRASE-GUIA SOBE PARA A LINHA DO ROTULO — OBRIGACAO-UI-03. As duas
@@ -1594,9 +1604,9 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                 )}
 
                 {/* ══ ABA CLASSIFICACAO ═════════════════════════════════════════ */}
-                <TabsContent value="classificacao" className="mt-0 space-y-2.5">
+                <TabsContent value="classificacao" className="mt-0 space-y-2">
                   {ehParcelamento ? (
-                    <>
+                    <BlocoFormulario titulo="Classificação" testId="bloco-classificacao" className="gap-1">
                       {/* ⚠ AQUI MORAVA UM `<Select>` SO' — PAR-01c. A classificação do
                           parcelamento era uma conta do plano e mais nada: sem Atividade, sem
                           Safra, sem Cultura, sem Fase. Cada parcela vira um lançamento no v2, e
@@ -1630,7 +1640,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                           é a lista peneirada de saídas operacionais, e o cluster precisa do
                           plano INTEIRO para cruzar escopo e atividade. Quem filtra agora é o
                           `PlanoSubcentroSelect`, por `tipoOperacao`. */}
-                      <ClassificacaoLancamento
+                      <ClassificacaoLancamento regua="compacta"
                           value={classificacao}
                           /* ⚠ O SETTER DO `useState` VAI DIRETO — o cluster manda updater
                              funcional e quem o resolve é o estado vivo do pai (PAR-01a-ii-fix1).
@@ -1657,7 +1667,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                         <div data-testid="das-parcelas">
                           <div className="grid grid-cols-12 gap-2 items-start">
                             <div className="col-span-4">
-                              <Label className="text-[10px]">Safra</Label>
+                              <Label className={ROTULO}>Safra</Label>
                               <CampoDasParcelas testid="safra-das-parcelas" comum={comumDasParcelas.safra_id} escolhido={escolhaDasParcelas.safra_id}
                                 vazio="Sem safra" aoMudar={v => escolher('safra_id', v)} comBusca
                                 opcoes={[...safras.filter(sf => sf.ativa).map(sf => ({ valor: sf.id, label: sf.nome })),
@@ -1665,14 +1675,14 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                             </div>
                             {classificacao.atividade === 'agricultura' && (
                               <div className="col-span-4">
-                                <Label className="text-[10px]">Cultura</Label>
+                                <Label className={ROTULO}>Cultura</Label>
                                 <CampoDasParcelas testid="cultura-das-parcelas" comum={comumDasParcelas.cultura} escolhido={escolhaDasParcelas.cultura}
                                   vazio="Todas (rateia)" opcoes={CULTURAS_LANCAMENTO.map(c => ({ valor: c.valor, label: c.label }))} aoMudar={v => escolher('cultura', v)} />
                               </div>
                             )}
                             {classificacao.atividade === 'pecuaria' && (
                               <div className="col-span-4">
-                                <Label className="text-[10px]">Fase</Label>
+                                <Label className={ROTULO}>Fase</Label>
                                 <CampoDasParcelas testid="fase-das-parcelas" comum={comumDasParcelas.fase} escolhido={escolhaDasParcelas.fase}
                                   vazio="Todas (rateia)" opcoes={FASES.map(c => ({ valor: c.valor, label: c.label }))} aoMudar={v => escolher('fase', v)} />
                               </div>
@@ -1688,9 +1698,10 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                       <p className="text-[10px] text-muted-foreground">
                         Parcelamento não tem captação: o dinheiro não entra, a despesa é que sai em N vezes.
                       </p>
-                    </>
+                    </BlocoFormulario>
                   ) : (
                     <>
+                    <BlocoFormulario titulo="Classificação" testId="bloco-classificacao" className="gap-1">
                       {/* ⚠ TRAVADOS PORQUE QUEM DECIDE E' O ESCOPO. Sao os mesmos
                           subcentros que o motor fixa no banco por `tipo_financiamento`;
                           oferecer um Select aqui prometeria uma escolha que a
@@ -1747,24 +1758,23 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                         </div>
                       </div>
 
+                    </BlocoFormulario>
+
                       {/* ⚠ DESTINACOES SO' NA CRIACAO. Em edicao elas nao sao carregadas do
                           banco e o gravador de edicao nao as grava: o bloco apareceria VAZIO
                           (sugerindo que o contrato nao tem nenhuma, quando pode ter) e o que
                           fosse digitado ali sumiria no Salvar. Campo que perde o que recebe e'
                           pior que campo ausente. Editar destinacao segue sendo frente propria. */}
                       {!ehEdicao && (
-                      <div className="rounded-md border bg-card p-2.5">
-                        <p className="text-[10px] font-bold uppercase tracking-wide text-primary/90">Destinação do contrato</p>
-                        <p className="mb-1.5 text-[10px] text-muted-foreground">
-                          Como o valor contratado será distribuído (opcional — pode ser preenchido depois)
-                        </p>
+                      <BlocoFormulario titulo="Destinação do contrato" testId="bloco-destinacao"
+                        dica="como o valor contratado será distribuído (opcional — pode ser preenchido depois)">
                         <DestinacoesForm
                           clienteId={clienteId}
                           valorContrato={form.valor_total}
                           destinacoes={destinacoes}
                           onChange={setDestinacoes}
                         />
-                      </div>
+                      </BlocoFormulario>
                       )}
                     </>
                   )}
