@@ -75,7 +75,7 @@ import {
   MOTIVO_CONTA_PAGA, MOTIVO_SALVAR_PENDENTE, type RegraDaRecorrencia, type OrigemDoValorDoMes, type PedidoDoValorDoMes,
 } from '@/lib/financeiro/valorDoMes';
 import { pendenteDaNota, type DoXml } from '@/lib/financeiro/nfePrefill';
-import { gravarDocumentoNoCadastro, type OcorrenciaDaNota } from '@/lib/financeiro/nfeConsultas';
+import { completarCadastroPeloXml, gravarDocumentoNoCadastro, type OcorrenciaDaNota } from '@/lib/financeiro/nfeConsultas';
 import { documentoFormatado, reais } from '@/lib/financeiro/nfe/formatos';
 import { fraseParcelasComoNaNota, type CampoDoXml } from '@/lib/financeiro/nfe/proporLancamento';
 import { AvisosDoXml, CAMPO_AMBAR, FaixaDoFornecedor, OrigemDoXml, PilulaDoXml } from './LancamentoDoXml';
@@ -2263,7 +2263,14 @@ export function LancamentoV2Dialog({
     setXmlCriandoFornecedor(true);
     try {
       const novo = await onCriarFornecedor(xml.emitenteNome, fazendaId, documentoFormatado(xml.emitenteDocumento));
-      if (novo) { setFavorecidoId(novo.id); setXmlFaixaFechada(true); }
+      if (novo) {
+        setFavorecidoId(novo.id); setXmlFaixaFechada(true);
+        /* FORN-CADASTRO-02 — o fornecedor novo nasce com a fantasia, a IE e o endereço do emitente (só campo vazio) */
+        if (xml.emitente && clienteAtual?.id) {
+          const erro = await completarCadastroPeloXml(clienteAtual.id, novo.id, xml.emitente);
+          if (erro) toast.error(`Fornecedor criado, mas os dados do emitente não foram gravados: ${erro}`);
+        }
+      }
     } finally {
       setXmlCriandoFornecedor(false);
     }
@@ -2277,6 +2284,11 @@ export function LancamentoV2Dialog({
     if (xmlGravarDocumento && xml.resolucao.cadastroSemDocumento && xmlFornecedorProposto && favorecidoId === xmlFornecedorProposto && clienteAtual?.id) {
       const erro = await gravarDocumentoNoCadastro(clienteAtual.id, xmlFornecedorProposto, xml.emitenteDocumento);
       if (erro) toast.error(`Lançamento gravado, mas o documento não foi gravado no cadastro do fornecedor: ${erro}`);
+    }
+    /* FORN-CADASTRO-02 — fornecedor existente: o XML só PREENCHE o que está vazio (fantasia, IE, endereço); nunca sobrescreve */
+    if (xml.emitente && xmlFornecedorProposto && favorecidoId === xmlFornecedorProposto && clienteAtual?.id) {
+      const erro = await completarCadastroPeloXml(clienteAtual.id, xmlFornecedorProposto, xml.emitente);
+      if (erro) toast.error(`Lançamento gravado, mas os dados do emitente não foram gravados no cadastro: ${erro}`);
     }
     onLancamentoCriado?.();
   };

@@ -35,6 +35,10 @@ const montar = (onReabrir?: () => void) => renderHook(() => useCompraLotes({
 
 beforeEach(() => { toastErro.mockReset(); banco.mensagem = FRASE; vi.mocked(supabase.rpc).mockClear(); });
 
+/* FORN-CADASTRO-02: com os tipos regenerados, `vi.mocked(supabase.rpc).mock.calls` passou do limite de instanciação (TS2589) — as
+   chamadas se leem pelo `mock` do próprio vi.fn */
+const chamadasRpc = (): unknown[][] => Reflect.get(Reflect.get(supabase.rpc, 'mock'), 'calls');
+
 describe('useCompraLotes.salvar — a recusa', () => {
   it('com aoRecusar: a frase do banco chega ao callback, verbatim, e NAO ha toast', async () => {
     const { result } = montar();
@@ -106,7 +110,7 @@ describe('useCompraLotes.salvar — conta e quantidade', () => {
     const { result } = await comLote({ quantidade: '54', pesoMedioKg: '460,016' });
     await act(async () => { await result.current.salvar({ aoRecusar: vi.fn() }); });
     expect(supabase.rpc).toHaveBeenCalledTimes(1);
-    const lotes = vi.mocked(supabase.rpc).mock.calls[0][1] as { p_lotes: { qtd_negociada: number; peso_medio_negociado_kg: number }[] };
+    const lotes = chamadasRpc()[0][1] as { p_lotes: { qtd_negociada: number; peso_medio_negociado_kg: number }[] };
     expect(lotes.p_lotes[0]).toMatchObject({ qtd_negociada: 54, peso_medio_negociado_kg: 460.02 });
   });
   it('ajuste (B): lote de 1200 cab, sem tocar, salva (nao e' + "'" + ' recusado); "1.200" vai como 1200', async () => {
@@ -115,7 +119,7 @@ describe('useCompraLotes.salvar — conta e quantidade', () => {
       const { result } = await comLote({ quantidade });
       const aoRecusar = vi.fn();
       await act(async () => { await result.current.salvar({ aoRecusar }); });
-      const p = vi.mocked(supabase.rpc).mock.calls[0][1] as { p_lotes: { qtd_negociada: number }[] };
+      const p = chamadasRpc()[0][1] as { p_lotes: { qtd_negociada: number }[] };
       expect(p.p_lotes[0].qtd_negociada).toBe(1200);
       expect(aoRecusar).toHaveBeenCalledWith(FRASE);   // a frase que veio do banco de mentira, nao uma recusa da tela
     }
@@ -123,7 +127,7 @@ describe('useCompraLotes.salvar — conta e quantidade', () => {
   it('ajuste (A): valor simples "14,125" vai ao banco com as tres casas', async () => {
     const { result } = await comLote({ valorInformado: '14,125' });
     await act(async () => { await result.current.salvar({ aoRecusar: vi.fn() }); });
-    const p = vi.mocked(supabase.rpc).mock.calls[0][1] as { p_lotes: { valor_informado: number }[] };
+    const p = chamadasRpc()[0][1] as { p_lotes: { valor_informado: number }[] };
     expect(p.p_lotes[0].valor_informado).toBe(14.125);
   });
 });

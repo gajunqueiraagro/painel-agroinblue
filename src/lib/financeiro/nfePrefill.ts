@@ -6,6 +6,7 @@ import { novoPendente, type DocumentoPendente } from '@/lib/financeiro/documento
 import type { PropostaDeLancamento } from '@/lib/financeiro/nfe/proporLancamento';
 import type { ResolucaoEmitente } from '@/lib/financeiro/nfe/resolverEmitente';
 import type { OcorrenciaDaNota } from '@/lib/financeiro/nfeConsultas';
+import type { EmitenteNFe } from '@/lib/financeiro/nfe/tipos';
 
 /** O tipo com que o XML sobe ao bucket — decidido pelo CONTEUDO (o `lerNFe` aceitou), nao pelo que o navegador diz do arquivo. */
 export const MIME_XML = 'application/xml';
@@ -16,6 +17,8 @@ export interface DoXml {
   emitenteNome: string;
   /** So' digitos. */
   emitenteDocumento: string;
+  /** FORN-CADASTRO-02 — o emitente inteiro (fantasia, IE, endereço): completa o cadastro do fornecedor, só campo vazio */
+  emitente?: EmitenteNFe;
   resolucao: ResolucaoEmitente;
   ocorrencias: OcorrenciaDaNota[];
   arquivo: File;

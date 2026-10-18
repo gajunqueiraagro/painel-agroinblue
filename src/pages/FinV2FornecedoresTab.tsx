@@ -64,6 +64,8 @@ const PAGE_SIZE = 100;
 export function FinV2FornecedoresTab() {
   const { clienteAtual } = useCliente();
   const [mesclarAberto, setMesclarAberto] = useState(false);
+  /* o par que o "Mesclar" do cadastro pediu (FORN-CADASTRO-02): a ferramenta abre já com ele */
+  const [mesclarPar, setMesclarPar] = useState<{ manter: string; absorver: string[] } | null>(null);
   const { fazendas } = useFazenda();
   const [items, setItems] = useState<Fornecedor[]>([]);
   const [loading, setLoading] = useState(false);
@@ -99,8 +101,11 @@ export function FinV2FornecedoresTab() {
       if (q) {
         const safe = q.replace(/[%,()]/g, ' ').trim();
         if (safe) {
+          /* FORN-CADASTRO-02 — razão social, fantasia e documento; o documento com ou sem máscara (os dígitos em ordem) */
+          const digitos = safe.replace(/\D/g, '');
+          const porDigitos = digitos.length >= 3 && digitos.length === safe.replace(/[\s./-]/g, '').length ? `,cpf_cnpj.ilike.%${digitos.split('').join('%')}%` : '';
           query = query.or(
-            `nome_normalizado.ilike.%${safe}%,nome.ilike.%${safe}%,cpf_cnpj.ilike.%${safe}%`
+            `nome_normalizado.ilike.%${safe}%,nome.ilike.%${safe}%,nome_fantasia.ilike.%${safe}%,cpf_cnpj.ilike.%${safe}%${porDigitos}`
           );
         }
       }
@@ -261,6 +266,9 @@ export function FinV2FornecedoresTab() {
       </div>
       {mesclarAberto && clienteAtual?.id && (
         <MesclarFornecedoresDialog aberto clienteId={clienteAtual.id} aoFechar={() => { setMesclarAberto(false); void load(); }} />
+      )}
+      {mesclarPar && clienteAtual?.id && (
+        <MesclarFornecedoresDialog aberto clienteId={clienteAtual.id} inicial={mesclarPar} aoFechar={() => { setMesclarPar(null); void load(); }} />
       )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -462,6 +470,7 @@ export function FinV2FornecedoresTab() {
         clienteId={clienteAtual?.id || ''}
         onSaved={load}
         onSelectExisting={(f) => { toast.info(`Fornecedor "${f.nome}" selecionado.`); }}
+        onMesclar={(manter, absorver) => setMesclarPar({ manter, absorver: [absorver] })}
       />
     </div>
   );

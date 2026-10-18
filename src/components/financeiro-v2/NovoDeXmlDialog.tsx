@@ -112,7 +112,7 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
           ...base, nota, avisos, recusa: null,
           fazenda: fazendasComIE.find((f) => f.id === proposta.proposta.fazendaId) ?? null,
           doXml: {
-            proposta: proposta.proposta, emitenteNome: nota.emitente.nome, emitenteDocumento: nota.emitente.documento, resolucao,
+            proposta: proposta.proposta, emitenteNome: nota.emitente.nome, emitenteDocumento: nota.emitente.documento, emitente: nota.emitente, resolucao,
             ocorrencias, arquivo: arquivoXmlDaNota(bytes, arquivo.name),
           },
         });

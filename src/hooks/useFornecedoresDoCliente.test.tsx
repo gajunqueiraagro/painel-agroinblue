@@ -139,10 +139,10 @@ describe('useFornecedoresDoCliente', () => {
   it('fonte: quem grava no cadastro avisa o leitor — e a busca prova que acha um escritor mudo', () => {
     /* arquivo -> quantos pontos de sucesso gravam nome, documento, ativo ou apagam (medido no passo 1a) */
     const ESCRITORES: Record<string, number> = {
-      'src/components/financeiro-v2/FornecedorFormDialog.tsx': 5,
+      'src/components/financeiro-v2/FornecedorFormDialog.tsx': 3,   /* FORN-CADASTRO-02: salvar, reativar e excluir (inativar é a Situação + Salvar) */
       'src/components/compra/AbaDocumentosOC.tsx': 2,
       'src/components/compra/AbaCompromissosOC.tsx': 1,
-      'src/lib/financeiro/nfeConsultas.ts': 1,
+      'src/lib/financeiro/nfeConsultas.ts': 2,   /* o CNPJ do XML e (FORN-CADASTRO-02) a fantasia / IE / endereço do emitente */
       'src/pages/FinV2FornecedoresTab.tsx': 1,
       'src/hooks/useFinanceiroV2.ts': 1,
       'src/lib/fornecedores/cadastroDaCasaBanco.ts': 2,   /* a reativação (fatia 2c, 1a) e o criar da casa (1b, o credor do contrato) */

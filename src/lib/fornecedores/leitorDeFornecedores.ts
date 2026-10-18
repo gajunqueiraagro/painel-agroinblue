@@ -17,6 +17,8 @@
 export interface FornecedorLido {
   id: string;
   nome: string;
+  /** FORN-CADASTRO-02 — o nome fantasia (a razão social é `nome`) */
+  nome_fantasia?: string | null;
   cpf_cnpj: string | null;
   fazenda_id: string | null;
   ativo: boolean;

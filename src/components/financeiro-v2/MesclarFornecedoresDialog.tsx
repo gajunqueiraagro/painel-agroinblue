@@ -24,7 +24,11 @@ const TH = 'h-[18px] px-1.5 text-left text-[9.5px] font-semibold uppercase track
 const TD = 'h-[18px] px-1.5 text-[10px] whitespace-nowrap overflow-hidden text-ellipsis';
 const doc = (d: string | null) => (d ? formatarDocumento(d) : '—');
 
-export function MesclarFornecedoresDialog({ aberto, aoFechar, clienteId }: { aberto: boolean; aoFechar: () => void; clienteId: string }) {
+/** FORN-CADASTRO-02 — `inicial`: o cadastro abre esta ferramenta já com o par (o que fica e o duplicado) escolhido; nada é gravado
+ *  sem a prévia e a confirmação de sempre. */
+export function MesclarFornecedoresDialog({ aberto, aoFechar, clienteId, inicial }: {
+  aberto: boolean; aoFechar: () => void; clienteId: string; inicial?: { manter: string; absorver: string[] };
+}) {
   const [aba, setAba] = useState<'mesclar' | 'recentes'>('mesclar');
   const [manter, setManter] = useState('');
   const [absorver, setAbsorver] = useState<string[]>([]);
@@ -49,6 +53,7 @@ export function MesclarFornecedoresDialog({ aberto, aoFechar, clienteId }: { abe
     setRecentes(lerMesclagens(l) ?? []);
   }, [clienteId]);
   useEffect(() => { if (aberto) void recarregar(); }, [aberto, recarregar]);
+  useEffect(() => { if (aberto && inicial) { setManter(inicial.manter); setAbsorver(inicial.absorver); } }, [aberto, inicial]);
 
   /* quem pode ser absorvido: os ativos do leitor e os cadastros das sugestões (inativos inclusive), fora o que fica */
   const candidatos = useMemo(() => {

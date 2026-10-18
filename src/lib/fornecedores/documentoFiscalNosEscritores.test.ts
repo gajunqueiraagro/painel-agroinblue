@@ -29,12 +29,12 @@ describe('os quatro escritores passam pelo validador único', () => {
   it('FornecedorFormDialog (criar e editar): grava o documento do validador', () => {
     const fonte = ler('src/components/financeiro-v2/FornecedorFormDialog.tsx');
     expect(fonte).toMatch(IMPORT_DO_VALIDADOR);
-    expect(fonte).toContain('validarDocumento(cpfCnpj)');
-    const gravados = valoresGravados(fonte.slice(fonte.indexOf('const payload')));
-    expect(gravados[0]).toBe('documentoParaGravar');
-    expect(gravados.some((v) => CRU.test(v))).toBe(false);
+    /* FORN-CADASTRO-02: o formulário guarda os campos num objeto; o payload é o do dono puro, com o documento do validador */
+    expect(fonte).toContain('validarDocumento(d.cpf_cnpj)');
+    expect(fonte).toContain('payloadDoFornecedor(d, documentoParaGravar)');
+    expect(ler('src/lib/fornecedores/cadastroDoFornecedor.ts')).toContain('  p.cpf_cnpj = documento;');
     /* inválido trava o Salvar */
-    expect(fonte).toContain('disabled={saving || !nome.trim() || documentoBloqueia}');
+    expect(fonte).toContain('disabled={saving || documentoBloqueia || !linhaLida}');
   });
   it('NovoFornecedorDialog: confere e entrega ao hospedeiro o documento formatado', () => {
     const fonte = ler('src/components/financeiro-v2/NovoFornecedorDialog.tsx');
@@ -59,12 +59,15 @@ describe('os quatro escritores passam pelo validador único', () => {
   });
 });
 
-describe('a mesclagem fica travada (FORN-MESCLAR-01)', () => {
-  it('o código fica, a entrada não', () => {
+describe('a mesclagem é a do FORN-MESCLAR-01 (FORN-CADASTRO-02)', () => {
+  it('o cadastro não move lançamento por conta própria: o "Mesclar" do duplicado abre a ferramenta, já com o par', () => {
     const fonte = ler('src/components/financeiro-v2/FornecedorFormDialog.tsx');
-    expect(fonte).toContain('const MESCLAR_LIGADO = false;');
-    expect(fonte).toContain('const handleMerge = useCallback(');
-    expect(fonte).toContain('disabled={!MESCLAR_LIGADO}');
-    expect(fonte).toContain('Mesclar agora mora em Cadastros › Fornecedores › \"Mesclar fornecedores\": move todas as referências e pode ser desfeita.');
+    expect(fonte).not.toContain('handleMerge');
+    expect(fonte).not.toMatch(/update\(\{ favorecido_id/);
+    expect(fonte).toContain('onMesclar(editing.id, dup.id)');
+    /* a ferramenta mora no hospedeiro (o cadastro não a importa: fecharia um ciclo de import), aberta já com o par */
+    const host = ler('src/pages/FinV2FornecedoresTab.tsx');
+    expect(host).toContain('onMesclar={(manter, absorver) => setMesclarPar({ manter, absorver: [absorver] })}');
+    expect(host).toContain('<MesclarFornecedoresDialog aberto clienteId={clienteAtual.id} inicial={mesclarPar}');
   });
 });

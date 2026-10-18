@@ -5865,6 +5865,33 @@ export type Database = {
         }
         Relationships: []
       }
+      fin_financ_28_p3fix4_quitacao_backfill: {
+        Row: {
+          cliente_id: string
+          em: string
+          financiamento_id: string
+          natureza: string | null
+          status_anterior: string
+          status_novo: string
+        }
+        Insert: {
+          cliente_id: string
+          em?: string
+          financiamento_id: string
+          natureza?: string | null
+          status_anterior: string
+          status_novo: string
+        }
+        Update: {
+          cliente_id?: string
+          em?: string
+          financiamento_id?: string
+          natureza?: string | null
+          status_anterior?: string
+          status_novo?: string
+        }
+        Relationships: []
+      }
       fin_juros_comp_bkp_20260826: {
         Row: {
           ano_mes: string | null
@@ -5895,6 +5922,36 @@ export type Database = {
           descricao?: string | null
           id?: string | null
           valor?: number | null
+        }
+        Relationships: []
+      }
+      fin_lanc_descricao_contrato_backfill: {
+        Row: {
+          cliente_id: string
+          descricao_antiga: string | null
+          descricao_nova: string
+          em: string
+          financiamento_id: string
+          lancamento_id: string
+          tipo: string
+        }
+        Insert: {
+          cliente_id: string
+          descricao_antiga?: string | null
+          descricao_nova: string
+          em?: string
+          financiamento_id: string
+          lancamento_id: string
+          tipo: string
+        }
+        Update: {
+          cliente_id?: string
+          descricao_antiga?: string | null
+          descricao_nova?: string
+          em?: string
+          financiamento_id?: string
+          lancamento_id?: string
+          tipo?: string
         }
         Relationships: []
       }
@@ -6713,9 +6770,14 @@ export type Database = {
           aliases: Json | null
           aliases_norm: string[]
           ativo: boolean | null
+          bairro: string | null
           banco: string | null
+          celular: string | null
+          cep: string | null
           cliente_id: string | null
+          complemento: string | null
           conta: string | null
+          contato_nome: string | null
           cpf_cnpj: string | null
           cpf_cnpj_pagamento: string | null
           created_at: string | null
@@ -6728,18 +6790,27 @@ export type Database = {
           fundido_motivo: string | null
           fundido_por: string | null
           id: string
+          inscricao_estadual: string | null
+          inscricao_municipal: string | null
+          logradouro: string | null
+          municipio: string | null
           nome: string
+          nome_fantasia: string | null
           nome_favorecido: string | null
           nome_norm: string | null
           nome_normalizado: string | null
+          numero: string | null
           observacao: string | null
           observacao_pagamento: string | null
           pix_chave: string | null
           pix_tipo_chave: string | null
+          plano_padrao_id: string | null
           telefone: string | null
           tipo: string | null
           tipo_conta: string | null
+          tipo_pessoa: string | null
           tipo_recebimento: string | null
+          uf: string | null
           updated_at: string | null
         }
         Insert: {
@@ -6747,9 +6818,14 @@ export type Database = {
           aliases?: Json | null
           aliases_norm?: string[]
           ativo?: boolean | null
+          bairro?: string | null
           banco?: string | null
+          celular?: string | null
+          cep?: string | null
           cliente_id?: string | null
+          complemento?: string | null
           conta?: string | null
+          contato_nome?: string | null
           cpf_cnpj?: string | null
           cpf_cnpj_pagamento?: string | null
           created_at?: string | null
@@ -6762,18 +6838,27 @@ export type Database = {
           fundido_motivo?: string | null
           fundido_por?: string | null
           id?: string
+          inscricao_estadual?: string | null
+          inscricao_municipal?: string | null
+          logradouro?: string | null
+          municipio?: string | null
           nome: string
+          nome_fantasia?: string | null
           nome_favorecido?: string | null
           nome_norm?: string | null
           nome_normalizado?: string | null
+          numero?: string | null
           observacao?: string | null
           observacao_pagamento?: string | null
           pix_chave?: string | null
           pix_tipo_chave?: string | null
+          plano_padrao_id?: string | null
           telefone?: string | null
           tipo?: string | null
           tipo_conta?: string | null
+          tipo_pessoa?: string | null
           tipo_recebimento?: string | null
+          uf?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -6781,9 +6866,14 @@ export type Database = {
           aliases?: Json | null
           aliases_norm?: string[]
           ativo?: boolean | null
+          bairro?: string | null
           banco?: string | null
+          celular?: string | null
+          cep?: string | null
           cliente_id?: string | null
+          complemento?: string | null
           conta?: string | null
+          contato_nome?: string | null
           cpf_cnpj?: string | null
           cpf_cnpj_pagamento?: string | null
           created_at?: string | null
@@ -6796,18 +6886,27 @@ export type Database = {
           fundido_motivo?: string | null
           fundido_por?: string | null
           id?: string
+          inscricao_estadual?: string | null
+          inscricao_municipal?: string | null
+          logradouro?: string | null
+          municipio?: string | null
           nome?: string
+          nome_fantasia?: string | null
           nome_favorecido?: string | null
           nome_norm?: string | null
           nome_normalizado?: string | null
+          numero?: string | null
           observacao?: string | null
           observacao_pagamento?: string | null
           pix_chave?: string | null
           pix_tipo_chave?: string | null
+          plano_padrao_id?: string | null
           telefone?: string | null
           tipo?: string | null
           tipo_conta?: string | null
+          tipo_pessoa?: string | null
           tipo_recebimento?: string | null
+          uf?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -6823,6 +6922,13 @@ export type Database = {
             columns: ["fundido_em_id"]
             isOneToOne: false
             referencedRelation: "financeiro_fornecedores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financeiro_fornecedores_plano_padrao_fkey"
+            columns: ["plano_padrao_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_plano_contas"
             referencedColumns: ["id"]
           },
         ]
@@ -8156,6 +8262,132 @@ export type Database = {
           },
         ]
       }
+      financiamento_baixas: {
+        Row: {
+          antes: Json
+          cliente_id: string
+          data: string
+          desfeita_em: string | null
+          desfeita_motivo: string | null
+          desfeita_por: string | null
+          detalhe: Json
+          feita_em: string
+          feita_por: string | null
+          financiamento_id: string
+          id: string
+          motivo: string
+          tipo: string
+        }
+        Insert: {
+          antes: Json
+          cliente_id: string
+          data: string
+          desfeita_em?: string | null
+          desfeita_motivo?: string | null
+          desfeita_por?: string | null
+          detalhe?: Json
+          feita_em?: string
+          feita_por?: string | null
+          financiamento_id: string
+          id?: string
+          motivo: string
+          tipo: string
+        }
+        Update: {
+          antes?: Json
+          cliente_id?: string
+          data?: string
+          desfeita_em?: string | null
+          desfeita_motivo?: string | null
+          desfeita_por?: string | null
+          detalhe?: Json
+          feita_em?: string
+          feita_por?: string | null
+          financiamento_id?: string
+          id?: string
+          motivo?: string
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financiamento_baixas_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financiamento_baixas_financiamento_id_fkey"
+            columns: ["financiamento_id"]
+            isOneToOne: false
+            referencedRelation: "financiamentos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      financiamento_consorcio: {
+        Row: {
+          cliente_id: string
+          contemplado: boolean
+          cota: string | null
+          created_at: string
+          data_contemplacao: string | null
+          financiamento_id: string
+          forma_contemplacao: string | null
+          fundo_reserva_pct: number
+          grupo: string | null
+          lance_valor: number | null
+          reajuste: string | null
+          seguro_pct_mes: number
+          taxa_adm_pct: number
+        }
+        Insert: {
+          cliente_id: string
+          contemplado?: boolean
+          cota?: string | null
+          created_at?: string
+          data_contemplacao?: string | null
+          financiamento_id: string
+          forma_contemplacao?: string | null
+          fundo_reserva_pct?: number
+          grupo?: string | null
+          lance_valor?: number | null
+          reajuste?: string | null
+          seguro_pct_mes?: number
+          taxa_adm_pct?: number
+        }
+        Update: {
+          cliente_id?: string
+          contemplado?: boolean
+          cota?: string | null
+          created_at?: string
+          data_contemplacao?: string | null
+          financiamento_id?: string
+          forma_contemplacao?: string | null
+          fundo_reserva_pct?: number
+          grupo?: string | null
+          lance_valor?: number | null
+          reajuste?: string | null
+          seguro_pct_mes?: number
+          taxa_adm_pct?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financiamento_consorcio_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financiamento_consorcio_financiamento_id_fkey"
+            columns: ["financiamento_id"]
+            isOneToOne: true
+            referencedRelation: "financiamentos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       financiamento_destinacoes: {
         Row: {
           cliente_id: string
@@ -8210,6 +8442,69 @@ export type Database = {
             columns: ["fornecedor_id"]
             isOneToOne: false
             referencedRelation: "financeiro_fornecedores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      financiamento_documentos: {
+        Row: {
+          cancelado_em: string | null
+          cancelado_motivo: string | null
+          cancelado_por: string | null
+          cliente_id: string
+          criado_em: string
+          enviado_por: string | null
+          especie: string
+          financiamento_id: string
+          id: string
+          nome: string
+          storage_path: string | null
+          tamanho_bytes: number | null
+          tipo: string | null
+        }
+        Insert: {
+          cancelado_em?: string | null
+          cancelado_motivo?: string | null
+          cancelado_por?: string | null
+          cliente_id: string
+          criado_em?: string
+          enviado_por?: string | null
+          especie: string
+          financiamento_id: string
+          id?: string
+          nome: string
+          storage_path?: string | null
+          tamanho_bytes?: number | null
+          tipo?: string | null
+        }
+        Update: {
+          cancelado_em?: string | null
+          cancelado_motivo?: string | null
+          cancelado_por?: string | null
+          cliente_id?: string
+          criado_em?: string
+          enviado_por?: string | null
+          especie?: string
+          financiamento_id?: string
+          id?: string
+          nome?: string
+          storage_path?: string | null
+          tamanho_bytes?: number | null
+          tipo?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financiamento_documentos_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financiamento_documentos_financiamento_id_fkey"
+            columns: ["financiamento_id"]
+            isOneToOne: false
+            referencedRelation: "financiamentos"
             referencedColumns: ["id"]
           },
         ]
@@ -8285,6 +8580,67 @@ export type Database = {
             columns: ["lancamento_id"]
             isOneToOne: false
             referencedRelation: "vw_financeiro_lancamentos_v2_doc"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      financiamento_juncoes: {
+        Row: {
+          absorvido_id: string
+          antes: Json
+          cliente_id: string
+          depois: Json
+          desfeita_em: string | null
+          desfeita_por: string | null
+          feita_em: string
+          feita_por: string | null
+          id: string
+          mantido_id: string
+        }
+        Insert: {
+          absorvido_id: string
+          antes: Json
+          cliente_id: string
+          depois: Json
+          desfeita_em?: string | null
+          desfeita_por?: string | null
+          feita_em?: string
+          feita_por?: string | null
+          id?: string
+          mantido_id: string
+        }
+        Update: {
+          absorvido_id?: string
+          antes?: Json
+          cliente_id?: string
+          depois?: Json
+          desfeita_em?: string | null
+          desfeita_por?: string | null
+          feita_em?: string
+          feita_por?: string | null
+          id?: string
+          mantido_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financiamento_juncoes_absorvido_id_fkey"
+            columns: ["absorvido_id"]
+            isOneToOne: false
+            referencedRelation: "financiamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financiamento_juncoes_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financiamento_juncoes_mantido_id_fkey"
+            columns: ["mantido_id"]
+            isOneToOne: false
+            referencedRelation: "financiamentos"
             referencedColumns: ["id"]
           },
         ]
@@ -8460,8 +8816,97 @@ export type Database = {
           },
         ]
       }
+      financiamento_parcela_vinculos: {
+        Row: {
+          antes: Json
+          cliente_id: string
+          desfeito_em: string | null
+          desfeito_motivo: string | null
+          desfeito_por: string | null
+          financiamento_id: string
+          id: string
+          lancamento_id: string
+          papel: string
+          parcela_id: string
+          vinculado_em: string
+          vinculado_por: string | null
+        }
+        Insert: {
+          antes: Json
+          cliente_id: string
+          desfeito_em?: string | null
+          desfeito_motivo?: string | null
+          desfeito_por?: string | null
+          financiamento_id: string
+          id?: string
+          lancamento_id: string
+          papel: string
+          parcela_id: string
+          vinculado_em?: string
+          vinculado_por?: string | null
+        }
+        Update: {
+          antes?: Json
+          cliente_id?: string
+          desfeito_em?: string | null
+          desfeito_motivo?: string | null
+          desfeito_por?: string | null
+          financiamento_id?: string
+          id?: string
+          lancamento_id?: string
+          papel?: string
+          parcela_id?: string
+          vinculado_em?: string
+          vinculado_por?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financiamento_parcela_vinculos_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financiamento_parcela_vinculos_financiamento_id_fkey"
+            columns: ["financiamento_id"]
+            isOneToOne: false
+            referencedRelation: "financiamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financiamento_parcela_vinculos_lancamento_id_fkey"
+            columns: ["lancamento_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_lancamentos_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financiamento_parcela_vinculos_lancamento_id_fkey"
+            columns: ["lancamento_id"]
+            isOneToOne: false
+            referencedRelation: "vw_classificacao_staging_preview"
+            referencedColumns: ["lanc_id"]
+          },
+          {
+            foreignKeyName: "financiamento_parcela_vinculos_lancamento_id_fkey"
+            columns: ["lancamento_id"]
+            isOneToOne: false
+            referencedRelation: "vw_financeiro_lancamentos_v2_doc"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financiamento_parcela_vinculos_parcela_id_fkey"
+            columns: ["parcela_id"]
+            isOneToOne: false
+            referencedRelation: "financiamento_parcelas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       financiamento_parcelas: {
         Row: {
+          ajustada: boolean
           cliente_id: string | null
           created_at: string | null
           data_pagamento: string | null
@@ -8482,6 +8927,7 @@ export type Database = {
           vencimento_original: string | null
         }
         Insert: {
+          ajustada?: boolean
           cliente_id?: string | null
           created_at?: string | null
           data_pagamento?: string | null
@@ -8502,6 +8948,7 @@ export type Database = {
           vencimento_original?: string | null
         }
         Update: {
+          ajustada?: boolean
           cliente_id?: string | null
           created_at?: string | null
           data_pagamento?: string | null
@@ -8573,6 +9020,66 @@ export type Database = {
           },
         ]
       }
+      financiamento_parcelas_operacoes: {
+        Row: {
+          antes: Json
+          cliente_id: string
+          depois: Json
+          desfeita_em: string | null
+          desfeita_por: string | null
+          desfeito_motivo: string | null
+          feita_em: string
+          feita_por: string | null
+          financiamento_id: string
+          id: string
+          modo: string | null
+          tipo: string
+        }
+        Insert: {
+          antes: Json
+          cliente_id: string
+          depois: Json
+          desfeita_em?: string | null
+          desfeita_por?: string | null
+          desfeito_motivo?: string | null
+          feita_em?: string
+          feita_por?: string | null
+          financiamento_id: string
+          id?: string
+          modo?: string | null
+          tipo: string
+        }
+        Update: {
+          antes?: Json
+          cliente_id?: string
+          depois?: Json
+          desfeita_em?: string | null
+          desfeita_por?: string | null
+          desfeito_motivo?: string | null
+          feita_em?: string
+          feita_por?: string | null
+          financiamento_id?: string
+          id?: string
+          modo?: string | null
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financiamento_parcelas_operacoes_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financiamento_parcelas_operacoes_financiamento_id_fkey"
+            columns: ["financiamento_id"]
+            isOneToOne: false
+            referencedRelation: "financiamentos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       financiamentos: {
         Row: {
           baixa_em: string | null
@@ -8591,6 +9098,7 @@ export type Database = {
           descricao: string | null
           fazenda_id: string | null
           finalidade: string | null
+          garantias: string | null
           gerar_lancamento_captacao: boolean | null
           id: string
           lancamento_captacao_id: string | null
@@ -8598,13 +9106,17 @@ export type Database = {
           natureza: string
           numero_contrato: string | null
           observacao: string | null
+          periodicidade: string | null
           plano_conta_captacao_id: string | null
           plano_conta_parcela_id: string | null
+          plano_juros_id: string | null
+          plano_principal_id: string | null
           sistema_amortizacao: string | null
           status: string | null
           taxa_juros: number | null
           taxa_juros_mensal: number | null
           tipo_financiamento: string | null
+          tipo_taxa: string | null
           total_parcelas: number | null
           updated_at: string | null
           valor_entrada: number | null
@@ -8628,6 +9140,7 @@ export type Database = {
           descricao?: string | null
           fazenda_id?: string | null
           finalidade?: string | null
+          garantias?: string | null
           gerar_lancamento_captacao?: boolean | null
           id?: string
           lancamento_captacao_id?: string | null
@@ -8635,13 +9148,17 @@ export type Database = {
           natureza?: string
           numero_contrato?: string | null
           observacao?: string | null
+          periodicidade?: string | null
           plano_conta_captacao_id?: string | null
           plano_conta_parcela_id?: string | null
+          plano_juros_id?: string | null
+          plano_principal_id?: string | null
           sistema_amortizacao?: string | null
           status?: string | null
           taxa_juros?: number | null
           taxa_juros_mensal?: number | null
           tipo_financiamento?: string | null
+          tipo_taxa?: string | null
           total_parcelas?: number | null
           updated_at?: string | null
           valor_entrada?: number | null
@@ -8665,6 +9182,7 @@ export type Database = {
           descricao?: string | null
           fazenda_id?: string | null
           finalidade?: string | null
+          garantias?: string | null
           gerar_lancamento_captacao?: boolean | null
           id?: string
           lancamento_captacao_id?: string | null
@@ -8672,13 +9190,17 @@ export type Database = {
           natureza?: string
           numero_contrato?: string | null
           observacao?: string | null
+          periodicidade?: string | null
           plano_conta_captacao_id?: string | null
           plano_conta_parcela_id?: string | null
+          plano_juros_id?: string | null
+          plano_principal_id?: string | null
           sistema_amortizacao?: string | null
           status?: string | null
           taxa_juros?: number | null
           taxa_juros_mensal?: number | null
           tipo_financiamento?: string | null
+          tipo_taxa?: string | null
           total_parcelas?: number | null
           updated_at?: string | null
           valor_entrada?: number | null
@@ -8761,6 +9283,83 @@ export type Database = {
             columns: ["plano_conta_parcela_id"]
             isOneToOne: false
             referencedRelation: "financeiro_plano_contas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financiamentos_plano_juros_id_fkey"
+            columns: ["plano_juros_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_plano_contas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "financiamentos_plano_principal_id_fkey"
+            columns: ["plano_principal_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_plano_contas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      fornecedor_mesclagem_log: {
+        Row: {
+          absorvidos: string[]
+          antes: Json
+          cliente_id: string
+          criado_em: string
+          criado_por: string | null
+          desfeito_em: string | null
+          desfeito_motivo: string | null
+          desfeito_por: string | null
+          desfeito_resumo: Json | null
+          id: string
+          mantido_id: string
+          movidos: Json
+          resumo: Json
+        }
+        Insert: {
+          absorvidos: string[]
+          antes: Json
+          cliente_id: string
+          criado_em?: string
+          criado_por?: string | null
+          desfeito_em?: string | null
+          desfeito_motivo?: string | null
+          desfeito_por?: string | null
+          desfeito_resumo?: Json | null
+          id?: string
+          mantido_id: string
+          movidos?: Json
+          resumo: Json
+        }
+        Update: {
+          absorvidos?: string[]
+          antes?: Json
+          cliente_id?: string
+          criado_em?: string
+          criado_por?: string | null
+          desfeito_em?: string | null
+          desfeito_motivo?: string | null
+          desfeito_por?: string | null
+          desfeito_resumo?: Json | null
+          id?: string
+          mantido_id?: string
+          movidos?: Json
+          resumo?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fornecedor_mesclagem_log_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fornecedor_mesclagem_log_mantido_id_fkey"
+            columns: ["mantido_id"]
+            isOneToOne: false
+            referencedRelation: "financeiro_fornecedores"
             referencedColumns: ["id"]
           },
         ]
@@ -14350,6 +14949,10 @@ export type Database = {
         }
         Returns: Json
       }
+      _fn_baixa_encerrar_em_aberto: {
+        Args: { p_fin: string; p_motivo: string }
+        Returns: Json
+      }
       _fn_can_close_valor_rebanho: {
         Args: { _ano_mes: string; _fazenda_id: string }
         Returns: Json
@@ -14497,6 +15100,112 @@ export type Database = {
         }
         Returns: string
       }
+      _fn_contrato_credito_vigente: {
+        Args: { p_fin: string }
+        Returns: {
+          baixa_em: string | null
+          baixa_motivo: string | null
+          baixa_por: string | null
+          carencia_ate: string | null
+          cliente_id: string
+          conta_bancaria_id: string | null
+          contrato_sucessor_id: string | null
+          created_at: string | null
+          created_by: string | null
+          credor_id: string | null
+          data_contrato: string | null
+          data_inicio: string | null
+          data_primeira_parcela: string | null
+          descricao: string | null
+          fazenda_id: string | null
+          finalidade: string | null
+          garantias: string | null
+          gerar_lancamento_captacao: boolean | null
+          id: string
+          lancamento_captacao_id: string | null
+          linha_credito_id: string | null
+          natureza: string
+          numero_contrato: string | null
+          observacao: string | null
+          periodicidade: string | null
+          plano_conta_captacao_id: string | null
+          plano_conta_parcela_id: string | null
+          plano_juros_id: string | null
+          plano_principal_id: string | null
+          sistema_amortizacao: string | null
+          status: string | null
+          taxa_juros: number | null
+          taxa_juros_mensal: number | null
+          tipo_financiamento: string | null
+          tipo_taxa: string | null
+          total_parcelas: number | null
+          updated_at: string | null
+          valor_entrada: number | null
+          valor_total: number | null
+          vencimento_final: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "financiamentos"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      _fn_contrato_do_usuario: {
+        Args: { p_financiamento_id: string }
+        Returns: {
+          baixa_em: string | null
+          baixa_motivo: string | null
+          baixa_por: string | null
+          carencia_ate: string | null
+          cliente_id: string
+          conta_bancaria_id: string | null
+          contrato_sucessor_id: string | null
+          created_at: string | null
+          created_by: string | null
+          credor_id: string | null
+          data_contrato: string | null
+          data_inicio: string | null
+          data_primeira_parcela: string | null
+          descricao: string | null
+          fazenda_id: string | null
+          finalidade: string | null
+          garantias: string | null
+          gerar_lancamento_captacao: boolean | null
+          id: string
+          lancamento_captacao_id: string | null
+          linha_credito_id: string | null
+          natureza: string
+          numero_contrato: string | null
+          observacao: string | null
+          periodicidade: string | null
+          plano_conta_captacao_id: string | null
+          plano_conta_parcela_id: string | null
+          plano_juros_id: string | null
+          plano_principal_id: string | null
+          sistema_amortizacao: string | null
+          status: string | null
+          taxa_juros: number | null
+          taxa_juros_mensal: number | null
+          tipo_financiamento: string | null
+          tipo_taxa: string | null
+          total_parcelas: number | null
+          updated_at: string | null
+          valor_entrada: number | null
+          valor_total: number | null
+          vencimento_final: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "financiamentos"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      _fn_credor_na_descricao: {
+        Args: { p_credor: string; p_descricao: string }
+        Returns: boolean
+      }
       _fn_culturas_lancamento: { Args: never; Returns: string[] }
       _fn_dividendo_conta_atual: {
         Args: { p_cliente: string; p_sub: string }
@@ -14533,13 +15242,111 @@ export type Database = {
         Args: { p_ano_mes: string; p_fazenda_id: string }
         Returns: boolean
       }
+      _fn_financiamento_baixa_desfazer_exec: {
+        Args: { p_baixa_id: string; p_motivo: string }
+        Returns: Json
+      }
+      _fn_financiamento_baixa_exec: {
+        Args: { p_dados: Json; p_financiamento_id: string; p_tipo: string }
+        Returns: Json
+      }
+      _fn_financiamento_criar_exec: { Args: { p: Json }; Returns: Json }
+      _fn_financiamento_descricao_lancamento: {
+        Args: {
+          p_descricao: string
+          p_grupo_cota?: string
+          p_i: number
+          p_n: number
+          p_natureza: string
+          p_numero: string
+          p_tipo: string
+        }
+        Returns: string
+      }
+      _fn_financiamento_juntar_desfazer_exec: {
+        Args: { p_juncao: string }
+        Returns: Json
+      }
+      _fn_financiamento_juntar_exec: {
+        Args: { p_absorver: string; p_manter: string }
+        Returns: Json
+      }
+      _fn_financiamento_parcela_desvincular_exec: {
+        Args: { p_motivo: string; p_vinculo_id: string }
+        Returns: Json
+      }
+      _fn_financiamento_parcela_vincular_exec: {
+        Args: {
+          p_atualizar_valor?: boolean
+          p_lancamento_id: string
+          p_mover: boolean
+          p_papel: string
+          p_parcela_id: string
+        }
+        Returns: Json
+      }
+      _fn_financiamento_parcelas_desfazer_exec: {
+        Args: { p_motivo: string; p_operacao_id: string }
+        Returns: Json
+      }
+      _fn_financiamento_parcelas_editar_exec: {
+        Args: { p_id: string; p_mudancas: Json }
+        Returns: Json
+      }
+      _fn_financiamento_parcelas_regerar_exec: {
+        Args: { p_id: string; p_modo: string }
+        Returns: Json
+      }
+      _fn_financiamento_redescrever: {
+        Args: { p_financiamento_id: string }
+        Returns: number
+      }
+      _fn_financiamento_saldo: {
+        Args: { p_data: string; p_financiamento_id: string }
+        Returns: Json
+      }
+      _fn_financiamento_salvar_cabecalho_exec: {
+        Args: { p_dados: Json; p_id: string }
+        Returns: Json
+      }
+      _fn_financiamento_status_pelas_parcelas: {
+        Args: { p_financiamento_id: string }
+        Returns: string
+      }
       _fn_financiamento_vivo: { Args: { p_status: string }; Returns: boolean }
       _fn_fornecedor_aliases_norm: {
         Args: { p_aliases: Json }
         Returns: string[]
       }
+      _fn_fornecedor_chave_documento: { Args: { p: string }; Returns: string }
+      _fn_fornecedor_mesclagem_desfazer_exec: {
+        Args: { p_mesclagem_id: string; p_motivo: string }
+        Returns: Json
+      }
+      _fn_fornecedor_mesclar_alvos: {
+        Args: never
+        Returns: {
+          coluna: string
+          modulo: string
+          tabela: string
+        }[]
+      }
+      _fn_fornecedor_mesclar_exec: {
+        Args: { p_absorver: string[]; p_manter: string }
+        Returns: Json
+      }
+      _fn_fornecedor_mesclar_recusa: {
+        Args: { p_absorver: string[]; p_manter: string }
+        Returns: Json
+      }
       _fn_fornecedor_norm_divergentes: { Args: never; Returns: number }
       _fn_fornecedor_norm_reconstruir: { Args: never; Returns: number }
+      _fn_juncao_foto: { Args: { p_fin: string }; Returns: Json }
+      _fn_juncao_resumo: { Args: { p_fin: string }; Returns: Json }
+      _fn_juncao_soltar_lancamentos: {
+        Args: { p_motivo: string; p_parcela: string }
+        Returns: number
+      }
       _fn_lancamento_aplicado_vivo: {
         Args: { p_lancamento_id: string }
         Returns: number
@@ -14638,6 +15445,14 @@ export type Database = {
         Args: { p_lancamento: string }
         Returns: number
       }
+      _fn_parcela_credito_retirar: {
+        Args: { p_motivo: string; p_parcela_id: string }
+        Returns: undefined
+      }
+      _fn_parcela_credito_trava: {
+        Args: { p_parcela_id: string }
+        Returns: string
+      }
       _fn_parcela_de_parcelamento_paga: {
         Args: { p_lancamento_id: string; p_status: string }
         Returns: boolean
@@ -14645,6 +15460,10 @@ export type Database = {
       _fn_parcela_descricao: {
         Args: { p_descricao: string; p_numero: number; p_total: number }
         Returns: string
+      }
+      _fn_parcela_esta_paga: {
+        Args: { p_parcela_id: string }
+        Returns: boolean
       }
       _fn_parcela_renumerar: {
         Args: {
@@ -14669,6 +15488,16 @@ export type Database = {
           p_valor: number
           p_vencimento: string
         }
+        Returns: string
+      }
+      _fn_parcelas_credito_fechar: { Args: { p_fin: string }; Returns: Json }
+      _fn_parcelas_diferenca_do_saldo: {
+        Args: { p_fin: string }
+        Returns: number
+      }
+      _fn_parcelas_foto: { Args: { p_fin: string }; Returns: Json }
+      _fn_parcelas_operacao_registrar: {
+        Args: { p_antes: Json; p_fin: string; p_modo: string; p_tipo: string }
         Returns: string
       }
       _fn_recorrencia_vagas: {
@@ -15916,6 +16745,10 @@ export type Database = {
         Args: { p_ate?: string; p_de?: string; p_financiamento_id: string }
         Returns: Json
       }
+      fn_contrato_tela: {
+        Args: { p_financiamento_id: string; p_hoje?: string }
+        Returns: Json
+      }
       fn_criar_lancamento_de_extrato: {
         Args: {
           p_dados_pagamento?: Json
@@ -16183,12 +17016,134 @@ export type Database = {
         Args: { p_cliente: string; p_fazenda_ids: string[] }
         Returns: number[]
       }
+      fn_financiamento_baixa: {
+        Args: {
+          p_dados: Json
+          p_financiamento_id: string
+          p_simular?: boolean
+          p_tipo: string
+        }
+        Returns: Json
+      }
+      fn_financiamento_baixa_desfazer: {
+        Args: { p_baixa_id: string; p_motivo: string; p_simular?: boolean }
+        Returns: Json
+      }
+      fn_financiamento_candidatas: {
+        Args: {
+          p_alvo: string
+          p_financiamento_id: string
+          p_opcoes?: Json
+          p_parcela_id?: string
+        }
+        Returns: Json
+      }
+      fn_financiamento_captacoes_livres: {
+        Args: { p_financiamento_id: string }
+        Returns: Json
+      }
+      fn_financiamento_criar: {
+        Args: { p_dados: Json; p_simular?: boolean }
+        Returns: Json
+      }
+      fn_financiamento_cronograma: { Args: { p: Json }; Returns: Json }
+      fn_financiamento_destinacao_remover: {
+        Args: { p_id: string }
+        Returns: Json
+      }
+      fn_financiamento_destinacao_salvar: {
+        Args: {
+          p_descricao: string
+          p_financiamento_id: string
+          p_fornecedor_id?: string
+          p_id: string
+          p_valor_orcado: number
+        }
+        Returns: Json
+      }
+      fn_financiamento_documento_registrar: {
+        Args: {
+          p_especie: string
+          p_extensao: string
+          p_financiamento_id: string
+          p_nome: string
+          p_tamanho?: number
+          p_tipo?: string
+        }
+        Returns: Json
+      }
+      fn_financiamento_documento_remover: {
+        Args: { p_id: string; p_motivo: string }
+        Returns: Json
+      }
+      fn_financiamento_juntar: {
+        Args: { p_absorver: string; p_manter: string; p_simular?: boolean }
+        Returns: Json
+      }
+      fn_financiamento_juntar_desfazer: {
+        Args: { p_juncao_id: string; p_simular?: boolean }
+        Returns: Json
+      }
+      fn_financiamento_liberacao_remover: {
+        Args: { p_id: string; p_motivo: string }
+        Returns: Json
+      }
+      fn_financiamento_liberacao_salvar: {
+        Args: {
+          p_contrato_liquidado_id?: string
+          p_data: string
+          p_destinacao_id?: string
+          p_financiamento_id: string
+          p_forma: string
+          p_fornecedor_id?: string
+          p_id: string
+          p_lancamento_id?: string
+          p_observacao?: string
+          p_valor: number
+        }
+        Returns: Json
+      }
       fn_financiamento_pagar_pelo_extrato: {
         Args: {
           p_lancamento_cru_id: string
           p_parcela_id: string
           p_simular?: boolean
         }
+        Returns: Json
+      }
+      fn_financiamento_parcela_desvincular: {
+        Args: { p_motivo: string; p_simular?: boolean; p_vinculo_id: string }
+        Returns: Json
+      }
+      fn_financiamento_parcela_vincular: {
+        Args: {
+          p_atualizar_valor?: boolean
+          p_lancamento_id: string
+          p_mover?: boolean
+          p_papel: string
+          p_parcela_id: string
+          p_simular?: boolean
+        }
+        Returns: Json
+      }
+      fn_financiamento_parcelas_desfazer: {
+        Args: { p_motivo: string; p_operacao_id: string; p_simular?: boolean }
+        Returns: Json
+      }
+      fn_financiamento_parcelas_editar: {
+        Args: { p_id: string; p_mudancas: Json; p_simular?: boolean }
+        Returns: Json
+      }
+      fn_financiamento_parcelas_regerar: {
+        Args: { p_id: string; p_modo: string; p_simular?: boolean }
+        Returns: Json
+      }
+      fn_financiamento_saldo: {
+        Args: { p_data?: string; p_financiamento_id: string }
+        Returns: Json
+      }
+      fn_financiamento_salvar_cabecalho: {
+        Args: { p_dados: Json; p_id: string; p_simular?: boolean }
         Returns: Json
       }
       fn_financiamento_sincronizar_status: {
@@ -16207,6 +17162,16 @@ export type Database = {
         Args: { p_cliente_id: string; p_hoje?: string }
         Returns: Json
       }
+      fn_fornecedor_mesclagem_desfazer: {
+        Args: { p_mesclagem_id: string; p_motivo: string; p_simular?: boolean }
+        Returns: Json
+      }
+      fn_fornecedor_mesclar: {
+        Args: { p_absorver: string[]; p_manter: string; p_simular?: boolean }
+        Returns: Json
+      }
+      fn_fornecedor_repetidos: { Args: { p_cliente: string }; Returns: Json }
+      fn_fornecedor_uso: { Args: { p_fornecedor: string }; Returns: Json }
       fn_fornecedores_com_uso: {
         Args: { p_cliente_id: string }
         Returns: {
@@ -16235,6 +17200,10 @@ export type Database = {
       fn_lancamento_casado_com_extrato: {
         Args: { p_lancamento_id: string }
         Returns: boolean
+      }
+      fn_lancamento_financiamento: {
+        Args: { p_lancamento_id: string }
+        Returns: Json
       }
       fn_lancamentos_parciais: {
         Args: { p_cliente: string }

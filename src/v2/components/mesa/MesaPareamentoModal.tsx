@@ -2410,7 +2410,7 @@ function FornecedorInline({ clienteId, valor, excelOriginal, marcadoNovo, vincul
         .select('id, nome')
         .eq('cliente_id', clienteId)
         .eq('ativo', true)
-        .or(`nome_normalizado.ilike.%${safe}%,nome.ilike.%${safe}%`)
+        .or(`nome_normalizado.ilike.%${safe}%,nome.ilike.%${safe}%,nome_fantasia.ilike.%${safe}%`)
         .order('nome', { ascending: true })
         .limit(50);
       if (error) throw new Error(error.message);

@@ -9,6 +9,8 @@ import { soDigitos } from '@/lib/financeiro/nfe/formatos';
 import type { UltimaClassificacao } from '@/lib/financeiro/nfe/proporLancamento';
 import { notificarFornecedoresMudaram } from '@/hooks/useFornecedoresDoCliente';
 import { validarDocumento } from '@/lib/fornecedores/documentoFiscal';
+import { completarPeloEmitente } from '@/lib/fornecedores/cadastroDoFornecedor';
+import type { EmitenteNFe } from '@/lib/financeiro/nfe/tipos';
 
 /** Onde uma nota ja' esta' registrada — uma linha de `fn_documento_chave_ja_registrada`. */
 export interface OcorrenciaDaNota {
@@ -100,5 +102,24 @@ export async function gravarDocumentoNoCadastro(clienteId: string, fornecedorId:
     .eq('id', fornecedorId).eq('cliente_id', clienteId).or('cpf_cnpj.is.null,cpf_cnpj.eq.');
   if (error) return error.message;
   notificarFornecedoresMudaram(clienteId);   /* FORN-SELETOR-PADRAO-01: o documento do cadastro mudou */
+  return null;
+}
+
+/**
+ * FORN-CADASTRO-02 — o XML completa o cadastro do fornecedor com o que a NF-e traz do emitente (fantasia, IE, endereço, telefone):
+ * SÓ CAMPO VAZIO, nunca sobrescreve (a regra é `completarPeloEmitente`, pura). Lê a linha, monta o patch e grava num UPDATE com o
+ * cliente no filtro. Nada a completar = nada gravado. Devolve a mensagem de erro, ou `null`.
+ */
+export async function completarCadastroPeloXml(clienteId: string, fornecedorId: string, emitente: EmitenteNFe): Promise<string | null> {
+  const { data, error } = await supabase.from('financeiro_fornecedores')
+    .select('nome_fantasia, inscricao_estadual, tipo_pessoa, logradouro, numero, complemento, bairro, municipio, uf, cep, telefone')
+    .eq('id', fornecedorId).eq('cliente_id', clienteId).maybeSingle();
+  if (error) return error.message;
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
+  const patch = completarPeloEmitente(Object.fromEntries(Object.entries(data)), emitente);
+  if (Object.keys(patch).length === 0) return null;
+  const { error: e2 } = await supabase.from('financeiro_fornecedores').update(patch).eq('id', fornecedorId).eq('cliente_id', clienteId);
+  if (e2) return e2.message;
+  notificarFornecedoresMudaram(clienteId);
   return null;
 }

@@ -111,6 +111,7 @@ export function lerNFe(bytes: ArrayBuffer): ResultadoNFe {
   if (notaCent == null) return incompleta('valor total');
 
   const dest = filho(inf, 'dest');
+  const enderEmit = filho(emit, 'enderEmit');
   const fat = no(inf, 'cobr', 'fat');
   const duplicatas: DuplicataNFe[] = filhos(filho(inf, 'cobr'), 'dup').map((d) => ({
     numero: texto(d, 'nDup') ?? '',
@@ -130,7 +131,11 @@ export function lerNFe(bytes: ArrayBuffer): ResultadoNFe {
     tipoNota: texto(ide, 'tpNF') === '0' ? 'entrada' : 'saida',
     finalidade,
     naturezaOperacao: texto(ide, 'natOp') ?? '',
-    emitente: { documento: docEmitente, nome: nomeEmitente, fantasia: texto(emit, 'xFant'), ie: soDigitos(texto(emit, 'IE')) },
+    emitente: { documento: docEmitente, nome: nomeEmitente, fantasia: texto(emit, 'xFant'), ie: soDigitos(texto(emit, 'IE')),
+      endereco: enderEmit ? {
+        logradouro: texto(enderEmit, 'xLgr'), numero: texto(enderEmit, 'nro'), complemento: texto(enderEmit, 'xCpl'), bairro: texto(enderEmit, 'xBairro'),
+        municipio: texto(enderEmit, 'xMun'), uf: texto(enderEmit, 'UF'), cep: soDigitos(texto(enderEmit, 'CEP')), telefone: soDigitos(texto(enderEmit, 'fone')),
+      } : null },
     destinatario: {
       documento: soDigitos(texto(dest, 'CNPJ')) ?? soDigitos(texto(dest, 'CPF')),
       nome: texto(dest, 'xNome'),

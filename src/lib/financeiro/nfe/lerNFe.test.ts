@@ -27,7 +27,8 @@ describe('F1 — nfeProc completo, autorizado (2026, com os grupos da reforma tr
       modelo: '55', numero: '12345', serie: '1',
       emissao: '2026-09-30', saidaEntrada: '2026-10-01',
       tipoNota: 'saida', finalidade: 'normal', naturezaOperacao: 'VENDA DE MERCADORIA',
-      emitente: { documento: EMITENTE_CNPJ, nome: 'AGROPECUARIA EXEMPLO LTDA', fantasia: 'CASA DO CAMPO', ie: '283456789' },
+      /* FORN-CADASTRO-02: o `enderEmit` passou a ser lido (completa o cadastro do fornecedor) */
+      emitente: { documento: EMITENTE_CNPJ, nome: 'AGROPECUARIA EXEMPLO LTDA', fantasia: 'CASA DO CAMPO', ie: '283456789', endereco: { logradouro: 'RUA FICTICIA', numero: '100', complemento: null, bairro: 'CENTRO', municipio: 'CAMPO GRANDE', uf: 'MS', cep: '79000000', telefone: null } },
       destinatario: { documento: DESTINATARIO_CPF, nome: 'PRODUTOR RURAL DE TESTE', ie: '289876543' },
       totais: { produtosCent: 1623800, freteCent: 0, descontoCent: 0, notaCent: 1623800 },
       fatura: { origCent: 1623800, descCent: 0, liqCent: 1623800 },
@@ -102,7 +103,7 @@ describe('avisos — a nota e lida, e a tela mostra', () => {
   });
   it('F15 — emitente com CPF (produtor rural): documento de 11 digitos, sem fantasia', () => {
     const { nota } = lida(lerNFe(utf8(montarNFe({ emitenteCpf: true, nomeEmitente: 'JOAO PRODUTOR DE TESTE' }))));
-    expect(nota.emitente).toEqual({ documento: EMITENTE_CPF, nome: 'JOAO PRODUTOR DE TESTE', fantasia: null, ie: '283456789' });
+    expect(nota.emitente).toEqual({ documento: EMITENTE_CPF, nome: 'JOAO PRODUTOR DE TESTE', fantasia: null, ie: '283456789', endereco: { logradouro: 'RUA FICTICIA', numero: '100', complemento: null, bairro: 'CENTRO', municipio: 'CAMPO GRANDE', uf: 'MS', cep: '79000000', telefone: null } });
     expect(nota.emitente.documento).toHaveLength(11);
     expect(nota.chave).toMatch(/^\d{44}$/);
   });

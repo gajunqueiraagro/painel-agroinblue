@@ -44,15 +44,21 @@ export function digitosDaBusca(busca: string): string | null {
 }
 
 /** O mínimo que estas funções leem de um fornecedor. */
-export interface FornecedorDoSeletor { id: string; nome: string; cpf_cnpj?: string | null; ativo?: boolean | null }
+/** FORN-CADASTRO-02: `nome` é a RAZÃO SOCIAL; `nome_fantasia` (opcional) entra na opção e na busca. */
+export interface FornecedorDoSeletor { id: string; nome: string; cpf_cnpj?: string | null; ativo?: boolean | null; nome_fantasia?: string | null }
 
 /** Cadastro de projeção ("[META]" no nome): fora da lista por padrão; só entra em modal de meta. A regra mora aqui. */
+/** FORN-CADASTRO-02 — a fantasia de qualquer linha de fornecedor (o campo é opcional nos tipos dos hospedeiros) */
+export const fantasiaDe = (f: object): string | null => { const v: unknown = Reflect.get(f, 'nome_fantasia'); return typeof v === 'string' && v.trim() ? v : null; };
+
 export const ehCadastroDeMeta = (nome: string): boolean => nome.includes('[META]');
 
 /** O que se calcula UMA vez por fornecedor ao montar a lista (a busca corre sobre isto a cada tecla). */
 export interface OpcaoDeFornecedor<F extends FornecedorDoSeletor> {
   f: F;
   nomeNorm: string;
+  /** FORN-CADASTRO-02 — a fantasia normalizada ('' sem fantasia): a busca também acha por ela */
+  fantasiaNorm: string;
   digitos: string;
   /** Documento formatado ("" = sem documento: a área do documento da opção fica vazia). */
   documento: string;
@@ -71,15 +77,17 @@ export function montarOpcoes<F extends FornecedorDoSeletor>(ativos: readonly F[]
   });
   return base.map((f, i) => {
     const vezes = contagem.get(norm[i]) ?? 1;
-    return { f, nomeNorm: norm[i], digitos: soDigitos(f.cpf_cnpj), documento: formatarDocumento(f.cpf_cnpj), iguais: vezes > 1 ? vezes : 0 };
+    return { f, nomeNorm: norm[i], fantasiaNorm: normalizarNome(fantasiaDe(f)), digitos: soDigitos(f.cpf_cnpj), documento: formatarDocumento(f.cpf_cnpj), iguais: vezes > 1 ? vezes : 0 };
   });
 }
 
-/** A opção casa com a busca? Pelo nome (sem acento, sem caixa); e, quando a busca é só número, também pelo documento. */
+/** A opção casa com a busca? Pela razão social e pela fantasia (sem acento, sem caixa); e, quando a busca é só número (com ou sem
+ *  máscara), também pelo documento. */
 export function casaComABusca<F extends FornecedorDoSeletor>(o: OpcaoDeFornecedor<F>, busca: string): boolean {
   const q = normalizarNome(busca);
   if (!q) return true;
   if (o.nomeNorm.includes(q)) return true;
+  if (o.fantasiaNorm && o.fantasiaNorm.includes(q)) return true;
   const d = digitosDaBusca(busca);
   return d !== null && o.digitos.includes(d);
 }

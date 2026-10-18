@@ -16,6 +16,12 @@ export interface EmitenteNFe {
   fantasia: string | null;
   /** So' digitos; `null` quando ausente ou "ISENTO". */
   ie: string | null;
+  /** FORN-CADASTRO-02 — `enderEmit`, como escrito (CEP e fone so' digitos); `null` sem o grupo. */
+  endereco?: EnderecoNFe | null;
+}
+export interface EnderecoNFe {
+  logradouro: string | null; numero: string | null; complemento: string | null; bairro: string | null; municipio: string | null;
+  uf: string | null; cep: string | null; telefone: string | null;
 }
 
 export interface DestinatarioNFe {

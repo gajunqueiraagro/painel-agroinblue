@@ -13,7 +13,7 @@ import {
   criarLeitorDeFornecedores, type FonteDeFornecedores, type FornecedorLido, type LeitorDeFornecedores,
 } from '@/lib/fornecedores/leitorDeFornecedores';
 
-const COLUNAS = 'id, nome, cpf_cnpj, fazenda_id, ativo, tipo_recebimento, pix_tipo_chave, pix_chave, banco, agencia, conta, tipo_conta, cpf_cnpj_pagamento, nome_favorecido, observacao_pagamento';
+const COLUNAS = 'id, nome, nome_fantasia, cpf_cnpj, fazenda_id, ativo, tipo_recebimento, pix_tipo_chave, pix_chave, banco, agencia, conta, tipo_conta, cpf_cnpj_pagamento, nome_favorecido, observacao_pagamento';
 
 type LinhaDoBanco = Omit<FornecedorLido, 'ativo'> & { ativo: boolean | null };
 

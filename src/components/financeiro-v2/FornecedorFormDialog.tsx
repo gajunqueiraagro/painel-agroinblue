@@ -1,61 +1,58 @@
+/**
+ * FORN-CADASTRO-02 (Gabriel 18/10/2026, mock "Cadastro de Fornecedor") — o cadastro de fornecedor completo (criar e editar).
+ *
+ *  · modal de TAMANHO FIXO (900 × 400, limitado pela janela; o mock pedia 390 — medido): cabeçalho navy "Editar fornecedor · <RAZÃO SOCIAL>" / "Novo fornecedor";
+ *    abas no Segmentado da casa (ponto laranja na aba com pendência): Dados gerais · Endereço e contato · Pagamento · Padrões · Uso;
+ *    resumo lateral fixo de 272px ("Resumo do fornecedor" + "O que falta"), que some abaixo de 760px; rodapé fixo com
+ *    "Cadastrado em … · N lançamentos · N compras parceladas" e Cancelar · Salvar fornecedor.
+ *  · `nome` é a RAZÃO SOCIAL. Reusadas: forma preferida = `tipo_recebimento`, titular = `nome_favorecido`, documento do titular =
+ *    `cpf_cnpj_pagamento`. As regras moram em `src/lib/fornecedores/cadastroDoFornecedor.ts` (puro).
+ *  · DOCUMENTO DUPLICADO NO MESMO CLIENTE NÃO BLOQUEIA (há legado): o aviso "Este CNPJ também está cadastrado como X" fica escrito na
+ *    aba Dados gerais, com "Mesclar" (a ferramenta do FORN-MESCLAR-01, aberta já com o par). Nome repetido na edição segue avisando
+ *    no Salvar ("Salvar mesmo assim"); na criação, o nome de um ativo recusa e o de um inativo oferece reativar, como antes.
+ *  · Consultar CNPJ / CEP: SEM ROTA EXTERNA PERMITIDA (FASE 0, 18/10: nenhuma edge function de consulta) — os botões NÃO aparecem.
+ *  · Edição: a linha INTEIRA é relida do banco ao abrir (o lápis do seletor entrega só as colunas do leitor); o Salvar espera essa
+ *    leitura para nunca gravar vazio por cima de um campo que a tela não leu.
+ */
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { BlocoFormulario, CORPO_FORMULARIO, REGUA_CAMPO } from '@/components/ui/bloco-formulario';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { BlocoFormulario, CORPO_FORMULARIO, Rotulo } from '@/components/ui/bloco-formulario';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Switch } from '@/components/ui/switch';
+import { Segmentado } from '@/components/ui/segmentado';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { AlertTriangle, Eye, Merge, CheckCircle, Trash2, Ban } from 'lucide-react';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { normalizeFornecedorNome } from '@/lib/financeiro/normalizeFornecedorNome';
 import { notificarFornecedoresMudaram } from '@/hooks/useFornecedoresDoCliente';
 import { mascararAoDigitar, situacaoDoGravado, validarDocumento } from '@/lib/fornecedores/documentoFiscal';
-import { SearchableSelect } from '@/components/ui/searchable-select';
 import {
   acharRepetidos, fraseDosRepetidos, lerCadastroParaConferir, temRepetido, FRASE_FALHA_AO_CONFERIR_REPETIDO,
   type FornecedorParaConferir,
 } from '@/lib/fornecedores/repetidosDoCadastro';
+import {
+  BANCOS, FORMAS_PREFERIDAS, VAZIO, abasComPendencia, dadosDaLinha, oQueFalta, payloadDoFornecedor, rotuloDaForma,
+  type AbaDoFornecedor, type DadosDoFornecedor,
+} from '@/lib/fornecedores/cadastroDoFornecedor';
+import { loadContasDoPlanoDoCliente } from '@/lib/financeiro/planoContasBuilder';
+import { formatarDocumento } from '@/lib/fornecedores/fornecedorTexto';
 
-/** UI-MODAL-BLOCOS-01 — o rótulo da régua dos modais (10px cinza), num lugar só neste diálogo. */
-const ROTULO = 'text-[10px] font-normal text-muted-foreground';
-// PR-FORNECEDOR-FAZENDA-01: fazenda é opcional. Sentinela do "— Sem fazenda —"
-// (Radix Select não aceita SelectItem com value vazio) → mapeado para null no save.
-const SEM_FAZENDA = '__sem_fazenda__';
-
-/**
- * FORN-EDITAR-01 — a mesclagem move SÓ `financeiro_lancamentos_v2.favorecido_id` e inativa o duplicado; as outras tabelas com
- * FK para o fornecedor ficam apontando para o inativado. TRAVADA até a frente própria (FORN-MESCLAR-01): o código fica, a
- * entrada não.
- */
-const MESCLAR_LIGADO = false;
 export const MOTIVO_MESCLAR_TRAVADO = 'Mesclar agora mora em Cadastros › Fornecedores › "Mesclar fornecedores": move todas as referências e pode ser desfeita.';
+const SEM = '__nenhum__';
+/* a régua deste modal: campos de 26px (o mock pede 26–28; com 28 a aba Endereço e contato passava 14px da altura fixa — medido) */
+const CAMPO = 'h-[26px] text-[11px]';
 
 interface Fornecedor {
   id: string;
   nome: string;
   cpf_cnpj: string | null;
-  fazenda_id: string | null;   // PR-FORNECEDOR-FAZENDA-01: fazenda opcional
+  fazenda_id: string | null;
   ativo: boolean;
-  tipo_recebimento?: string | null;
-  pix_tipo_chave?: string | null;
-  pix_chave?: string | null;
-  banco?: string | null;
-  agencia?: string | null;
-  conta?: string | null;
-  tipo_conta?: string | null;
-  cpf_cnpj_pagamento?: string | null;
-  nome_favorecido?: string | null;
-  observacao_pagamento?: string | null;
 }
-
-interface Fazenda {
-  id: string;
-  nome: string;
-}
+interface Fazenda { id: string; nome: string }
+export interface UsoDoFornecedor { cadastradoEm: string | null; lancamentos: number; comprasParceladas: number; documentos: number; ultimoLancamento: string | null }
 
 interface Props {
   open: boolean;
@@ -66,562 +63,394 @@ interface Props {
   clienteId: string;
   onSaved: () => void;
   onSelectExisting?: (fornecedor: Fornecedor) => void;
+  /** o "Mesclar" do duplicado: quem hospeda abre a ferramenta do FORN-MESCLAR-01 já com o par (sem a prop, o botão não aparece).
+   *  O cadastro não importa a ferramenta: ela usa o seletor de fornecedor, que abre este cadastro (fecharia um ciclo de import). */
+  onMesclar?: (manter: string, absorver: string) => void;
   /** só para teste: quem lê o cadastro para a conferência de repetido (padrão: o banco) */
   lerCadastro?: (clienteId: string, nome: string) => Promise<FornecedorParaConferir[]>;
+  /** só para teste: a linha inteira na edição e o uso (padrão: o banco) */
+  lerLinha?: (id: string) => Promise<Record<string, unknown> | null>;
+  lerUso?: (id: string) => Promise<UsoDoFornecedor | null>;
 }
 
-function normalize(s: string) {
-  return s
-    .toUpperCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^A-Z0-9 ]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+async function lerLinhaDoBanco(id: string): Promise<Record<string, unknown> | null> {
+  const { data } = await supabase.from('financeiro_fornecedores').select('*').eq('id', id).maybeSingle();
+  return data && typeof data === 'object' && !Array.isArray(data) ? Object.fromEntries(Object.entries(data)) : null;
 }
+async function lerUsoDoBanco(id: string): Promise<UsoDoFornecedor | null> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+  const { data, error } = await (supabase as any).rpc('fn_fornecedor_uso', { p_fornecedor: id });
+  if (error || !data || typeof data !== 'object') return null;
+  const o: Record<string, unknown> = Object.fromEntries(Object.entries(data));
+  const n = (v: unknown) => (typeof v === 'number' ? v : Number(v) || 0);
+  const t = (v: unknown) => (typeof v === 'string' && v ? v : null);
+  return { cadastradoEm: t(o.cadastrado_em), lancamentos: n(o.lancamentos), comprasParceladas: n(o.compras_parceladas), documentos: n(o.documentos), ultimoLancamento: t(o.ultimo_lancamento) };
+}
+const dataBr = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '—');
+const ABAS: { valor: AbaDoFornecedor; rotulo: string }[] = [
+  { valor: 'dados', rotulo: 'Dados gerais' }, { valor: 'endereco', rotulo: 'Endereço e contato' }, { valor: 'pagamento', rotulo: 'Pagamento' },
+  { valor: 'padroes', rotulo: 'Padrões' }, { valor: 'uso', rotulo: 'Uso' },
+];
+const UFS = ['AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MG', 'MS', 'MT', 'PA', 'PB', 'PE', 'PI', 'PR', 'RJ', 'RN', 'RO', 'RR', 'RS', 'SC', 'SE', 'SP', 'TO'];
 
-function wordSimilarity(input: string, candidate: string): number {
-  const ni = normalize(input);
-  const nc = normalize(candidate);
-  if (!ni || !nc) return 0;
-  if (ni === nc) return 1;
-  if (nc.includes(ni) || ni.includes(nc)) return 0.8;
-
-  const wordsA = ni.split(' ').filter(w => w.length > 1);
-  const wordsB = nc.split(' ').filter(w => w.length > 1);
-  if (wordsA.length === 0) return 0;
-
-  let matches = 0;
-  for (const wa of wordsA) {
-    for (const wb of wordsB) {
-      if (wb.includes(wa) || wa.includes(wb)) {
-        matches++;
-        break;
-      }
-    }
-  }
-  return matches / Math.max(wordsA.length, 1);
+/** um campo de texto com o rótulo da régua (10px, sentence case) */
+function Campo({ rotulo, obrig, valor, onChange, placeholder, testId, className, invalido, maxLength }: {
+  rotulo: string; obrig?: boolean; valor: string; onChange: (v: string) => void; placeholder?: string; testId?: string; className?: string; invalido?: boolean; maxLength?: number;
+}) {
+  return (
+    <div className={`min-w-0 ${className ?? ''}`}>
+      <Rotulo texto={rotulo} obrig={obrig} />
+      <Input value={valor} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} data-testid={testId} maxLength={maxLength} title={valor || undefined}
+        aria-invalid={invalido || undefined} className={`${CAMPO} ${invalido ? 'border-destructive' : ''}`} />
+    </div>
+  );
 }
 
 export function FornecedorFormDialog({
-  open, onClose, editing, allFornecedores, fazendas, clienteId, onSaved, onSelectExisting,
-  lerCadastro = lerCadastroParaConferir,
+  open, onClose, editing, allFornecedores, fazendas, clienteId, onSaved, onSelectExisting, onMesclar,
+  lerCadastro = lerCadastroParaConferir, lerLinha = lerLinhaDoBanco, lerUso = lerUsoDoBanco,
 }: Props) {
-  const [nome, setNome] = useState('');
-  const [cpfCnpj, setCpfCnpj] = useState('');
-  const [fazendaId, setFazendaId] = useState('');
-  const [ativo, setAtivo] = useState(true);
+  const [d, setD] = useState<DadosDoFornecedor>(VAZIO);
+  const [aba, setAba] = useState<AbaDoFornecedor>('dados');
+  const [linhaLida, setLinhaLida] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [reviewId, setReviewId] = useState<string | null>(null);
+  const [docTocado, setDocTocado] = useState(false);
+  const [recado, setRecado] = useState<{ texto: string; tom: 'aviso' | 'erro' } | null>(null);
   const [reativarTarget, setReativarTarget] = useState<Fornecedor | null>(null);
   const [reativando, setReativando] = useState(false);
-  const [lancamentoCount, setLancamentoCount] = useState<number | null>(null);
-  const [deleting, setDeleting] = useState(false);
-  /* FORN-EDITAR-01 — o documento só é julgado pelo validador depois de mexido; o gravado fora do padrão abre como está */
-  const [docTocado, setDocTocado] = useState(false);
-  /* o aviso de repetido (ou a falha da conferência), escrito no lugar reservado acima dos botões */
-  const [recado, setRecado] = useState<{ texto: string; tom: 'aviso' | 'erro' } | null>(null);
-
-  // Payment fields
-  const [tipoRecebimento, setTipoRecebimento] = useState('');
-  const [pixTipoChave, setPixTipoChave] = useState('');
-  const [pixChave, setPixChave] = useState('');
-  const [banco, setBanco] = useState('');
-  const [agencia, setAgencia] = useState('');
-  const [conta, setConta] = useState('');
-  const [tipoConta, setTipoConta] = useState('');
-  const [cpfCnpjPagamento, setCpfCnpjPagamento] = useState('');
-  const [nomeFavorecido, setNomeFavorecido] = useState('');
-  const [observacaoPagamento, setObservacaoPagamento] = useState('');
+  const [uso, setUso] = useState<UsoDoFornecedor | null>(null);
+  const [cadastro, setCadastro] = useState<FornecedorParaConferir[] | null>(null);
+  const [planos, setPlanos] = useState<{ value: string; label: string }[]>([]);
+  const [excluindo, setExcluindo] = useState(false);
+  const set = <K extends keyof DadosDoFornecedor>(k: K, v: DadosDoFornecedor[K]) => { setD((x) => ({ ...x, [k]: v })); setRecado(null); };
 
   useEffect(() => {
-    if (open) {
-      if (editing) {
-        setNome(editing.nome);
-        setCpfCnpj(editing.cpf_cnpj || '');
-        setFazendaId(editing.fazenda_id ?? '');
-        setAtivo(editing.ativo);
-        setTipoRecebimento(editing.tipo_recebimento || '');
-        setPixTipoChave(editing.pix_tipo_chave || '');
-        setPixChave(editing.pix_chave || '');
-        setBanco(editing.banco || '');
-        setAgencia(editing.agencia || '');
-        setConta(editing.conta || '');
-        setTipoConta(editing.tipo_conta || '');
-        setCpfCnpjPagamento(editing.cpf_cnpj_pagamento || '');
-        setNomeFavorecido(editing.nome_favorecido || '');
-        setObservacaoPagamento(editing.observacao_pagamento || '');
-        supabase.from('financeiro_lancamentos_v2')
-          .select('id', { count: 'exact', head: true })
-          .eq('favorecido_id', editing.id)
-          .then(({ count }) => setLancamentoCount(count ?? 0));
-      } else {
-        setNome('');
-        setCpfCnpj('');
-        setFazendaId('');   // PR-FORNECEDOR-FAZENDA-01: sem default inventado — nasce vazio
-        setAtivo(true);
-        setLancamentoCount(null);
-        setTipoRecebimento('');
-        setPixTipoChave('');
-        setPixChave('');
-        setBanco('');
-        setAgencia('');
-        setConta('');
-        setTipoConta('');
-        setCpfCnpjPagamento('');
-        setNomeFavorecido('');
-        setObservacaoPagamento('');
-      }
-      setReviewId(null);
-      setDeleting(false);
-      setDocTocado(false);
-      setRecado(null);
-    }
-  }, [open, editing, fazendas]);
+    if (!open) return;
+    let vivo = true;
+    setAba('dados'); setRecado(null); setDocTocado(false); setUso(null); setCadastro(null);
+    if (editing) {
+      setD(dadosDaLinha(Object.fromEntries(Object.entries(editing)))); setLinhaLida(false);
+      void lerLinha(editing.id).then((l) => { if (!vivo) return; if (l) setD(dadosDaLinha(l)); setLinhaLida(true); });
+      void lerUso(editing.id).then((u) => { if (vivo) setUso(u); });
+    } else { setD(VAZIO); setLinhaLida(true); }
+    void lerCadastro(clienteId, editing?.nome ?? '').then((c) => { if (vivo) setCadastro(c); }).catch(() => { if (vivo) setCadastro([]); });
+    void loadContasDoPlanoDoCliente(clienteId).then((cs) => {
+      if (vivo) setPlanos(cs.filter((c) => c.subcentro).map((c) => ({ value: c.id, label: `${c.subcentro} · ${c.centro_custo}` })));
+    }).catch(() => undefined);
+    return () => { vivo = false; };
+  }, [open, editing, clienteId, lerLinha, lerUso, lerCadastro]);
 
-  /* FORN-EDITAR-01 — o documento pelo validador único */
-  const validado = validarDocumento(cpfCnpj);
-  const gravado = editing ? situacaoDoGravado(editing.cpf_cnpj) : null;
-  /* o gravado fora do padrão que ninguém mexeu: aparece como está, com o aviso; não trava o Salvar (vai como está, ou
-     formatado se for válido) */
+  /* FORN-EDITAR-01 — o documento pelo validador único; o gravado fora do padrão abre como está */
+  const validado = validarDocumento(d.cpf_cnpj);
+  const gravado = editing ? situacaoDoGravado(typeof editing.cpf_cnpj === 'string' ? editing.cpf_cnpj : null) : null;
   const legadoIntocado = !docTocado && gravado?.situacao === 'fora_do_padrao';
   const documentoBloqueia = !validado.valido && !legadoIntocado;
-  const documentoParaGravar: string | null = validado.valido ? (validado.formatado || null) : (cpfCnpj.trim() || null);
+  const documentoParaGravar: string | null = validado.valido ? (validado.formatado || null) : (d.cpf_cnpj.trim() || null);
   const recadoDoDocumento: { texto: string; tom: 'erro' | 'aviso' } | null = documentoBloqueia
     ? { texto: validado.motivo ?? '', tom: 'erro' }
-    : legadoIntocado
-      ? { texto: `Fora do padrão · ${gravado?.motivo ?? ''}${validado.valido && validado.formatado ? ` Ao salvar, grava ${validado.formatado}.` : ''}`, tom: 'aviso' }
-      : null;
-
-  const suggestions = useMemo(() => {
-    if (nome.trim().length < 3) return [];
-    return allFornecedores
-      .filter(f => !editing || f.id !== editing.id)
-      .map(f => ({ ...f, score: wordSimilarity(nome, f.nome) }))
-      .filter(f => f.score >= 0.35)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 5);
-  }, [nome, allFornecedores, editing]);
+    : legadoIntocado ? { texto: `Fora do padrão · ${gravado?.motivo ?? ''}${validado.valido && validado.formatado ? ` Ao salvar, grava ${validado.formatado}.` : ''}`, tom: 'aviso' }
+    : null;
+  /* documento duplicado no mesmo cliente: AVISO, não bloqueia */
+  const duplicados = useMemo(() => (cadastro && documentoParaGravar
+    ? acharRepetidos({ proprioId: editing?.id ?? null, nome: d.nome, cpfCnpj: documentoParaGravar, conferirNome: false }, cadastro).porDocumento : []),
+  [cadastro, documentoParaGravar, editing?.id, d.nome]);
+  const dup = duplicados[0] ?? null;
+  const faltas = oQueFalta(d, { documentoInvalido: documentoBloqueia, duplicadoCom: dup ? dup.nome : null });
+  const pendentes = abasComPendencia(faltas);
 
   const save = useCallback(async (forcar = false) => {
-    if (saving) return;
-    if (documentoBloqueia) return;
-    if (!clienteId || !nome.trim()) {
-      toast.error('Preencha o nome');
-      return;
-    }
-
-    // Pré-check de duplicata por nome_normalizado (mesma lógica do trigger no banco).
-    // ⚠ NÃO HÁ índice único de nome no banco (conferido em pg_indexes em 10/10/2026: o
-    // idx_financeiro_fornecedores_cliente_nome_norm_unique da migration 20260410022327 não existe no proto) —
-    // esta checagem é a única barreira (dívida FORN-NOME-UNICO-BANCO-01). Oferece reativação quando há
-    // fornecedor inativo com o mesmo nome.
+    if (saving || documentoBloqueia || !linhaLida) return;
+    if (!clienteId || !d.nome.trim()) { setRecado({ texto: 'Informe a razão social.', tom: 'erro' }); setAba('dados'); return; }
     if (!editing) {
-      const normalizado = normalizeFornecedorNome(nome);
-      const colidindo = allFornecedores.find(
-        (f) => normalizeFornecedorNome(f.nome) === normalizado,
-      );
+      /* sem índice único de nome no banco (FORN-NOME-UNICO-BANCO-01): esta é a barreira; inativo oferece reativar */
+      const normalizado = normalizeFornecedorNome(d.nome);
+      const colidindo = allFornecedores.find((f) => normalizeFornecedorNome(f.nome) === normalizado);
       if (colidindo) {
-        if (colidindo.ativo) {
-          toast.error(`Já existe fornecedor ativo "${colidindo.nome}". Selecione-o em vez de criar um novo.`);
-          return;
-        }
-        // Inativo → oferecer reativação via AlertDialog. Não cria duplicata.
-        setReativarTarget(colidindo);
-        return;
+        if (colidindo.ativo) { setRecado({ texto: `Já existe fornecedor ativo "${colidindo.nome}". Selecione-o em vez de criar um novo.`, tom: 'erro' }); return; }
+        setReativarTarget(colidindo); return;
       }
     }
-
     setSaving(true);
-
-    /* FORN-EDITAR-01 — conferência de repetido no MESMO cliente (ativos e inativos, fora o próprio): o documento sempre; o nome
-       na edição (na criação a checagem de nome é a de cima). Avisa no formulário; quem decide é o operador. */
-    if (!forcar) {
+    /* nome repetido na edição: avisa no Salvar (o documento duplicado já está escrito na aba, e não bloqueia) */
+    if (!forcar && editing) {
       let doCliente: FornecedorParaConferir[];
-      try {
-        doCliente = await lerCadastro(clienteId, nome);
-      } catch {
-        setRecado({ texto: FRASE_FALHA_AO_CONFERIR_REPETIDO, tom: 'erro' });
-        setSaving(false);
-        return;
-      }
-      const repetidos = acharRepetidos({ proprioId: editing?.id ?? null, nome, cpfCnpj: documentoParaGravar, conferirNome: !!editing }, doCliente);
-      if (temRepetido(repetidos)) {
-        setRecado({ texto: fraseDosRepetidos(repetidos), tom: 'aviso' });
-        setSaving(false);
-        return;
-      }
+      try { doCliente = await lerCadastro(clienteId, d.nome); } catch { setRecado({ texto: FRASE_FALHA_AO_CONFERIR_REPETIDO, tom: 'erro' }); setSaving(false); return; }
+      const repetidos = acharRepetidos({ proprioId: editing.id, nome: d.nome, cpfCnpj: null, conferirNome: true }, doCliente);
+      if (temRepetido(repetidos)) { setRecado({ texto: fraseDosRepetidos(repetidos), tom: 'aviso' }); setSaving(false); return; }
     }
-
-    const payload: any = {
-      cliente_id: clienteId,
-      // PR-FORNECEDOR-FAZENDA-01: '' (nasce vazio) e o sentinela → null; nunca ''.
-      fazenda_id: fazendaId && fazendaId !== SEM_FAZENDA ? fazendaId : null,
-      nome: nome.trim(),
-      cpf_cnpj: documentoParaGravar,   /* FORN-EDITAR-01: o formato do validador único */
-      ativo,
-      tipo_recebimento: tipoRecebimento || null,
-      pix_tipo_chave: pixTipoChave || null,
-      pix_chave: pixChave.trim() || null,
-      banco: banco.trim() || null,
-      agencia: agencia.trim() || null,
-      conta: conta.trim() || null,
-      tipo_conta: tipoConta || null,
-      cpf_cnpj_pagamento: cpfCnpjPagamento.trim() || null,
-      nome_favorecido: nomeFavorecido.trim() || null,
-      observacao_pagamento: observacaoPagamento.trim() || null,
-    };
-
-    if (editing) {
-      const { error } = await supabase.from('financeiro_fornecedores').update(payload).eq('id', editing.id);
-      if (error) { toast.error('Erro ao atualizar: ' + error.message); setSaving(false); return; }
-      toast.success('Fornecedor atualizado');
-    } else {
-      const { error } = await supabase.from('financeiro_fornecedores').insert(payload);
-      if (error) { toast.error('Erro ao criar: ' + error.message); setSaving(false); return; }
-      toast.success('Fornecedor criado');
-    }
+    const payload = { cliente_id: clienteId, ...payloadDoFornecedor(d, documentoParaGravar) };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- o payload é montado pelo dono puro (`payloadDoFornecedor`)
+    const tabela = supabase.from('financeiro_fornecedores') as any;
+    const { error } = editing ? await tabela.update(payload).eq('id', editing.id) : await tabela.insert(payload);
     setSaving(false);
-    notificarFornecedoresMudaram(clienteId);   /* FORN-SELETOR-PADRAO-01: o leitor único relê */
-    onClose();
-    onSaved();
-  }, [saving, clienteId, nome, fazendaId, ativo, editing, onClose, onSaved, allFornecedores, tipoRecebimento, pixTipoChave, pixChave, banco, agencia, conta, tipoConta, cpfCnpjPagamento, nomeFavorecido, observacaoPagamento, documentoBloqueia, documentoParaGravar, lerCadastro]);
+    if (error) { setRecado({ texto: `Não foi possível gravar: ${error.message}`, tom: 'erro' }); return; }
+    toast.success(editing ? 'Fornecedor atualizado' : 'Fornecedor criado');
+    notificarFornecedoresMudaram(clienteId);
+    onClose(); onSaved();
+  }, [saving, documentoBloqueia, linhaLida, clienteId, d, editing, allFornecedores, lerCadastro, documentoParaGravar, onClose, onSaved]);
 
   const reativarExistente = useCallback(async () => {
     if (!reativarTarget) return;
     setReativando(true);
-    const { error } = await supabase
-      .from('financeiro_fornecedores')
-      .update({ ativo: true })
-      .eq('id', reativarTarget.id);
+    const { error } = await supabase.from('financeiro_fornecedores').update({ ativo: true }).eq('id', reativarTarget.id);
     setReativando(false);
-    if (error) {
-      toast.error('Erro ao reativar: ' + error.message);
-      return;
-    }
+    if (error) { setRecado({ texto: `Não foi possível reativar: ${error.message}`, tom: 'erro' }); return; }
     toast.success(`Fornecedor "${reativarTarget.nome}" reativado`);
     setReativarTarget(null);
     notificarFornecedoresMudaram(clienteId);
-    onClose();
-    onSaved();
+    onClose(); onSaved();
   }, [reativarTarget, onClose, onSaved, clienteId]);
 
-  const handleMerge = useCallback(async (target: Fornecedor) => {
+  const excluir = async () => {
     if (!editing) return;
-    // Move all lancamentos from current editing to target
-    const { error: moveErr } = await supabase
-      .from('financeiro_lancamentos_v2')
-      .update({ favorecido_id: target.id })
-      .eq('favorecido_id', editing.id);
-    if (moveErr) { toast.error('Erro ao mesclar lançamentos'); return; }
-
-    // Add current name as alias on the target
-    const { data: targetData } = await supabase
-      .from('financeiro_fornecedores')
-      .select('aliases')
-      .eq('id', target.id)
-      .single();
-    const currentAliases: string[] = (targetData as any)?.aliases || [];
-    if (!currentAliases.includes(editing.nome)) {
-      await supabase
-        .from('financeiro_fornecedores')
-        .update({ aliases: [...currentAliases, editing.nome] } as any)
-        .eq('id', target.id);
-    }
-
-    // Deactivate the duplicate
-    await supabase.from('financeiro_fornecedores').update({ ativo: false }).eq('id', editing.id);
-
-    toast.success(`Mesclado com "${target.nome}". Lançamentos migrados.`);
+    setExcluindo(true);
+    const { error } = await supabase.from('financeiro_fornecedores').delete().eq('id', editing.id);
+    setExcluindo(false);
+    if (error) { setRecado({ texto: 'Não foi possível excluir.', tom: 'erro' }); return; }
+    toast.success('Fornecedor excluído');
     notificarFornecedoresMudaram(clienteId);
-    onClose();
-    onSaved();
-  }, [editing, onClose, onSaved, clienteId]);
+    onClose(); onSaved();
+  };
 
-  const handleUseExisting = useCallback((target: Fornecedor) => {
-    onSelectExisting?.(target);
-    onClose();
-  }, [onSelectExisting, onClose]);
-
-  const reviewFornecedor = reviewId ? allFornecedores.find(f => f.id === reviewId) : null;
-  const fazendaNome = (id: string) => fazendas.find(f => f.id === id)?.nome || '-';
+  const titulo = editing ? `Editar fornecedor · ${d.nome || editing.nome}` : 'Novo fornecedor';
+  const fazendaNome = fazendas.find((f) => f.id === d.fazenda_id)?.nome ?? null;
+  const planoNome = planos.find((p) => p.value === d.plano_padrao_id)?.label ?? null;
+  const bancosOpcoes = useMemo(() => {
+    const lista = BANCOS.map((b) => ({ value: b, label: b }));
+    return d.banco && !BANCOS.includes(d.banco) ? [{ value: d.banco, label: d.banco }, ...lista] : lista;
+  }, [d.banco]);
+  const formas = FORMAS_PREFERIDAS.some((f) => f.valor === d.tipo_recebimento) || !d.tipo_recebimento
+    ? FORMAS_PREFERIDAS : [...FORMAS_PREFERIDAS, { valor: d.tipo_recebimento, rotulo: d.tipo_recebimento }];
+  const cidade = [d.municipio, d.uf].filter(Boolean).join(' / ');
+  const pagamento = d.tipo_recebimento === 'PIX' ? `Pix${d.pix_chave ? ` · ${d.pix_chave}` : ''}`
+    : d.tipo_recebimento ? [rotuloDaForma(d.tipo_recebimento), d.banco, d.agencia && `ag ${d.agencia}`, d.conta && `cc ${d.conta}`].filter(Boolean).join(' · ') : '';
+  const RESUMO: [string, string][] = [
+    ['Razão social', d.nome], ['Fantasia', d.nome_fantasia], [d.tipo_pessoa === 'PF' ? 'CPF' : 'CNPJ', d.cpf_cnpj], ['IE', d.inscricao_estadual],
+    ['Cidade', cidade], ['Telefone', d.telefone || d.celular], ['Pagamento', pagamento], ['Subcentro', planoNome ?? ''],
+  ];
+  const rodapeUso = editing
+    ? (uso ? `Cadastrado em ${dataBr(uso.cadastradoEm)} · ${uso.lancamentos} ${uso.lancamentos === 1 ? 'lançamento' : 'lançamentos'} · ${uso.comprasParceladas} ${uso.comprasParceladas === 1 ? 'compra parcelada' : 'compras parceladas'}` : '…')
+    : 'Novo cadastro';
 
   return (
-    <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
-      {/* UI-MODAL-BLOCOS-01 — altura fixa pela tela; corpo cinza com dois blocos; só o corpo rola, e só em janela baixa. */}
-      <DialogContent className="flex h-[min(680px,calc(100dvh-48px))] w-[95vw] max-w-2xl flex-col gap-0 overflow-hidden p-0">
-        <DialogHeader className="shrink-0 border-b px-4 py-2.5">
-          <DialogTitle className="text-[13px]">{editing ? 'Editar Fornecedor' : 'Novo Fornecedor'}</DialogTitle>
-        </DialogHeader>
-
-        <div className={`min-h-0 flex-1 overflow-y-auto ${CORPO_FORMULARIO}`} data-testid="corpo-do-fornecedor">
-          <BlocoFormulario titulo="Identificação" testId="bloco-identificacao" className="gap-1">
-          <div>
-            <Label className={ROTULO}>Nome *</Label>
-            <Input
-              value={nome}
-              onChange={e => { setNome(e.target.value); setRecado(null); }}
-              placeholder="Nome do fornecedor"
-              className={REGUA_CAMPO}
-              autoFocus
-            />
-          </div>
-
-          {/* Suggestions panel */}
-          {suggestions.length > 0 && (
-            <div className="border border-amber-300/50 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-700/40 rounded-md p-2 space-y-1.5">
-              <div className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400">
-                <AlertTriangle className="h-3.5 w-3.5" />
-                <span className="text-[11px] font-semibold">Já existem cadastros semelhantes. Revise antes de criar um novo.</span>
-              </div>
-              <p className="text-[10px] text-muted-foreground">Sugestões de cadastro semelhante:</p>
-              {editing && !MESCLAR_LIGADO && (
-                <p data-testid="mesclar-travado" className="text-[10px] text-amber-700 truncate" title={MOTIVO_MESCLAR_TRAVADO}>Mesclar · {MOTIVO_MESCLAR_TRAVADO}</p>
-              )}
-              <div className="space-y-1">
-                {suggestions.map(s => (
-                  <div key={s.id} className="flex items-center gap-1.5 bg-background/80 rounded px-2 py-1 border border-border/50">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[11px] font-medium truncate" title={s.nome}>{s.nome}</p>
-                      <p className="text-[9px] text-muted-foreground">{fazendaNome(s.fazenda_id)}</p>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="flex h-[min(400px,calc(100dvh-16px))] w-[min(900px,calc(100vw-16px))] max-w-none flex-col gap-0 overflow-hidden p-0"
+        data-testid="cadastro-do-fornecedor">
+        <div className="flex h-[34px] shrink-0 items-center bg-primary px-3 text-primary-foreground">
+          <DialogTitle className="min-w-0 truncate text-[12px] font-semibold" title={titulo}>{titulo}</DialogTitle>
+          <DialogDescription className="sr-only">Cadastro de fornecedor: dados gerais, endereço e contato, pagamento, padrões e uso.</DialogDescription>
+        </div>
+        <div className="flex min-h-0 flex-1">
+          <div className="flex min-w-0 flex-1 flex-col">
+            <div className="flex h-[32px] shrink-0 items-center px-2" data-testid="abas-do-fornecedor">
+              <Segmentado<AbaDoFornecedor> altura={22} valor={aba} onEscolher={setAba} opcoes={ABAS.map((a) => ({
+                valor: a.valor, rotulo: (
+                  <span className="inline-flex items-center gap-1 whitespace-nowrap" data-testid={`aba-${a.valor}`}>{a.rotulo}
+                    {pendentes.has(a.valor) && <span className="size-1.5 rounded-full bg-[#b45309]" data-testid={`pendencia-${a.valor}`} title="há o que preencher nesta aba" />}
+                  </span>),
+              }))} />
+            </div>
+            <div className={`min-h-0 flex-1 overflow-hidden ${CORPO_FORMULARIO}`} data-testid="corpo-do-fornecedor">
+              {aba === 'dados' && (
+                <BlocoFormulario titulo="Identificação" testId="bloco-identificacao" className="gap-1">
+                  <div className="grid grid-cols-[96px_200px_minmax(0,1fr)] items-start gap-2">
+                    <div>
+                      <Rotulo texto="Tipo" />
+                      <Segmentado<'PJ' | 'PF'> altura={26} valor={d.tipo_pessoa || (validado.tipo === 'cpf' ? 'PF' : 'PJ')} onEscolher={(v) => set('tipo_pessoa', v)}
+                        opcoes={[{ valor: 'PJ', rotulo: 'PJ' }, { valor: 'PF', rotulo: 'PF' }]} />
                     </div>
-                    <Badge variant={s.ativo ? 'default' : 'secondary'} className="text-[8px] px-1 py-0 shrink-0">
-                      {s.ativo ? 'Ativo' : 'Inativo'}
-                    </Badge>
-                    <div className="flex gap-0.5 shrink-0">
-                      {!editing && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-5 text-[9px] px-1.5 gap-0.5"
-                          onClick={() => handleUseExisting(s)}
-                          title="Usar este cadastro existente"
-                        >
-                          <CheckCircle className="h-2.5 w-2.5" />Usar
-                        </Button>
+                    <div className="min-w-0">
+                      <Rotulo texto={d.tipo_pessoa === 'PF' ? 'CPF' : 'CNPJ/CPF'} obrig />
+                      <Input value={d.cpf_cnpj} onChange={(e) => { set('cpf_cnpj', mascararAoDigitar(e.target.value)); setDocTocado(true); }}
+                        className={`${CAMPO} tabular-nums ${documentoBloqueia ? 'border-destructive' : ''}`} placeholder="000.000.000-00 ou 00.000.000/0000-00"
+                        aria-invalid={documentoBloqueia || undefined} />
+                      <div data-testid="cpf-cnpj-recado" title={recadoDoDocumento?.texto || undefined}
+                        className={`h-[14px] truncate text-[10px] leading-[14px] ${recadoDoDocumento?.tom === 'erro' ? 'text-destructive' : 'text-[#b45309]'}`}>
+                        {recadoDoDocumento?.texto ?? ''}
+                      </div>
+                    </div>
+                    {/* lugar do aviso de duplicado: existe sempre (18px); com duplicado, a frase e o gesto */}
+                    <div className="flex h-[41px] min-w-0 items-end pb-[15px]" data-testid="lugar-do-duplicado">
+                      {dup && (
+                        <div className="flex min-w-0 items-center gap-1.5 text-[10.5px] text-[#b45309]" data-testid="duplicado-do-documento">
+                          <span className="min-w-0 truncate" title={`Este ${validado.tipo === 'cpf' ? 'CPF' : 'CNPJ'} também está cadastrado como ${dup.nome}${dup.ativo ? '' : ' (inativo)'}`}>
+                            Este {validado.tipo === 'cpf' ? 'CPF' : 'CNPJ'} também está cadastrado como {dup.nome}{dup.ativo ? '' : ' (inativo)'}
+                          </span>
+                          {editing && onMesclar && <Button variant="outline" size="sm" className="h-[22px] shrink-0 px-2 text-[10.5px]" onClick={() => { onMesclar(editing.id, dup.id); onClose(); }} data-testid="mesclar-duplicado">Mesclar</Button>}
+                          {!editing && onSelectExisting && (
+                            <Button variant="outline" size="sm" className="h-[22px] shrink-0 px-2 text-[10.5px]" data-testid="usar-duplicado"
+                              onClick={() => { const f = allFornecedores.find((x) => x.id === dup.id); onSelectExisting(f ?? { id: dup.id, nome: dup.nome, cpf_cnpj: dup.cpf_cnpj, fazenda_id: null, ativo: dup.ativo }); onClose(); }}>Usar este</Button>
+                          )}
+                        </div>
                       )}
-                      {editing && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-5 text-[9px] px-1.5 gap-0.5"
-                          data-testid="botao-mesclar"
-                          disabled={!MESCLAR_LIGADO}
-                          onClick={MESCLAR_LIGADO ? () => handleMerge(s) : undefined}
-                          title={MESCLAR_LIGADO ? 'Mesclar: mover lançamentos para este' : MOTIVO_MESCLAR_TRAVADO}
-                        >
-                          <Merge className="h-2.5 w-2.5" />Mesclar
-                        </Button>
-                      )}
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-5 text-[9px] px-1.5 gap-0.5"
-                        onClick={() => setReviewId(reviewId === s.id ? null : s.id)}
-                        title="Ver detalhes"
-                      >
-                        <Eye className="h-2.5 w-2.5" />
-                      </Button>
                     </div>
                   </div>
-                ))}
-              </div>
-
-              {/* Review detail */}
-              {reviewFornecedor && (
-                <div className="mt-1 bg-muted/50 rounded p-2 text-[10px] space-y-0.5 border border-border/30">
-                  <p><strong>Nome:</strong> {reviewFornecedor.nome}</p>
-                  <p><strong>CPF/CNPJ:</strong> {reviewFornecedor.cpf_cnpj || '-'}</p>
-                  <p><strong>Fazenda:</strong> {fazendaNome(reviewFornecedor.fazenda_id)}</p>
-                  <p><strong>Status:</strong> {reviewFornecedor.ativo ? 'Ativo' : 'Inativo'}</p>
-                </div>
+                  <div className="grid grid-cols-[minmax(0,1fr)_150px] gap-2">
+                    <Campo rotulo="Razão social" obrig valor={d.nome} onChange={(v) => set('nome', v)} placeholder="Razão social" testId="campo-razao-social" />
+                    <div>
+                      <Rotulo texto="Situação" />
+                      <Segmentado<'ativo' | 'inativo'> altura={26} valor={d.ativo ? 'ativo' : 'inativo'} onEscolher={(v) => set('ativo', v === 'ativo')}
+                        opcoes={[{ valor: 'ativo', rotulo: 'Ativo' }, { valor: 'inativo', rotulo: 'Inativo' }]} />
+                    </div>
+                  </div>
+                  <Campo rotulo="Nome fantasia" valor={d.nome_fantasia} onChange={(v) => set('nome_fantasia', v)} placeholder="Como aparece na nota" testId="campo-fantasia" />
+                  <div className="grid grid-cols-2 gap-2">
+                    <Campo rotulo="Inscrição estadual" valor={d.inscricao_estadual} onChange={(v) => set('inscricao_estadual', v)} />
+                    <Campo rotulo="Inscrição municipal" valor={d.inscricao_municipal} onChange={(v) => set('inscricao_municipal', v)} />
+                  </div>
+                </BlocoFormulario>
+              )}
+              {aba === 'endereco' && (<>
+                <BlocoFormulario titulo="Endereço" testId="bloco-endereco" className="gap-1">
+                  <div className="grid grid-cols-[96px_minmax(0,1fr)_80px] gap-2">
+                    <Campo rotulo="CEP" valor={d.cep} onChange={(v) => set('cep', v)} placeholder="00000-000" maxLength={9} />
+                    <Campo rotulo="Logradouro" valor={d.logradouro} onChange={(v) => set('logradouro', v)} />
+                    <Campo rotulo="Número" valor={d.numero} onChange={(v) => set('numero', v)} />
+                  </div>
+                  <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_64px] gap-2">
+                    <Campo rotulo="Complemento" valor={d.complemento} onChange={(v) => set('complemento', v)} />
+                    <Campo rotulo="Bairro" valor={d.bairro} onChange={(v) => set('bairro', v)} />
+                    <Campo rotulo="Município" valor={d.municipio} onChange={(v) => set('municipio', v)} />
+                    <div className="min-w-0">
+                      <Rotulo texto="UF" />
+                      <Select value={d.uf || SEM} onValueChange={(v) => set('uf', v === SEM ? '' : v)}>
+                        <SelectTrigger className={CAMPO}><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={SEM}>—</SelectItem>
+                          {UFS.map((u) => <SelectItem key={u} value={u}>{u}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </BlocoFormulario>
+                <BlocoFormulario titulo="Contato" testId="bloco-contato" className="gap-1">
+                  <div className="grid grid-cols-2 gap-2">
+                    <Campo rotulo="E-mail" valor={d.email} onChange={(v) => set('email', v)} />
+                    <Campo rotulo="Telefone" valor={d.telefone} onChange={(v) => set('telefone', v)} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Campo rotulo="Pessoa de contato" valor={d.contato_nome} onChange={(v) => set('contato_nome', v)} testId="campo-contato" />
+                    <Campo rotulo="Celular / WhatsApp" valor={d.celular} onChange={(v) => set('celular', v)} />
+                  </div>
+                </BlocoFormulario>
+              </>)}
+              {aba === 'pagamento' && (
+                <BlocoFormulario titulo="Pagamento" testId="bloco-pagamento" className="gap-1">
+                  <div className="grid grid-cols-[minmax(0,1fr)_120px_minmax(0,1.6fr)] gap-2">
+                    <div className="min-w-0">
+                      <Rotulo texto="Forma preferida" />
+                      <Segmentado<string> altura={26} valor={d.tipo_recebimento || SEM} onEscolher={(v) => set('tipo_recebimento', v === d.tipo_recebimento ? '' : v)}
+                        opcoes={formas.map((f) => ({ valor: f.valor, rotulo: f.rotulo }))} />
+                    </div>
+                    <div className="min-w-0">
+                      <Rotulo texto="Tipo de chave" />
+                      <Select value={d.pix_tipo_chave || SEM} onValueChange={(v) => set('pix_tipo_chave', v === SEM ? '' : v)}>
+                        <SelectTrigger className={CAMPO}><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={SEM}>—</SelectItem>
+                          {['CPF', 'CNPJ', 'Telefone', 'E-mail', 'Aleatória'].map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Campo rotulo="Chave Pix" valor={d.pix_chave} onChange={(v) => set('pix_chave', v)} />
+                  </div>
+                  <div className="grid grid-cols-[minmax(0,1.6fr)_80px_110px_minmax(0,1fr)] gap-2">
+                    <div className="min-w-0">
+                      <Rotulo texto="Banco" />
+                      <SearchableSelect value={d.banco} onValueChange={(v) => set('banco', v)} options={bancosOpcoes} semTodos placeholder="Buscar banco…" dense triggerClassName={CAMPO} />
+                    </div>
+                    <Campo rotulo="Agência" valor={d.agencia} onChange={(v) => set('agencia', v)} />
+                    <Campo rotulo="Conta" valor={d.conta} onChange={(v) => set('conta', v)} />
+                    <div className="min-w-0">
+                      <Rotulo texto="Tipo de conta" />
+                      <Select value={d.tipo_conta || SEM} onValueChange={(v) => set('tipo_conta', v === SEM ? '' : v)}>
+                        <SelectTrigger className={CAMPO}><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={SEM}>—</SelectItem>
+                          {['Corrente', 'Poupança', 'Pagamento', 'Outro'].map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-[minmax(0,1fr)_170px_minmax(0,1fr)] gap-2">
+                    <Campo rotulo="Titular da conta" valor={d.nome_favorecido} onChange={(v) => set('nome_favorecido', v)} />
+                    <Campo rotulo="CNPJ/CPF do titular" valor={d.cpf_cnpj_pagamento} onChange={(v) => set('cpf_cnpj_pagamento', mascararAoDigitar(v))} />
+                    <Campo rotulo="Observação para pagamento" valor={d.observacao_pagamento} onChange={(v) => set('observacao_pagamento', v)} />
+                  </div>
+                </BlocoFormulario>
+              )}
+              {aba === 'padroes' && (
+                <BlocoFormulario titulo="Padrões" dica="o que o lançamento novo deste fornecedor sugere" testId="bloco-padroes" className="gap-1">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="min-w-0">
+                      <Rotulo texto="Fazenda" />
+                      <SearchableSelect value={d.fazenda_id || SEM} onValueChange={(v) => set('fazenda_id', v === SEM ? '' : v)}
+                        options={[{ value: SEM, label: '— Sem fazenda —' }, ...fazendas.map((f) => ({ value: f.id, label: f.nome }))]}
+                        semTodos allValue={SEM} allLabel="— Sem fazenda —" placeholder="Buscar fazenda…" dense triggerClassName={CAMPO} />
+                    </div>
+                    <div className="min-w-0">
+                      <Rotulo texto="Subcentro padrão" />
+                      <SearchableSelect value={d.plano_padrao_id || SEM} onValueChange={(v) => set('plano_padrao_id', v === SEM ? '' : v)}
+                        options={[{ value: SEM, label: '— nenhum —' }, ...planos]} semTodos allValue={SEM} allLabel="— nenhum —" placeholder="Buscar subcentro…" dense triggerClassName={CAMPO} />
+                    </div>
+                  </div>
+                  <Campo rotulo="Observação" valor={d.observacao} onChange={(v) => set('observacao', v)} />
+                </BlocoFormulario>
+              )}
+              {aba === 'uso' && (
+                <BlocoFormulario titulo="Uso" dica="contagens do banco · só leitura" testId="bloco-uso" className="gap-1">
+                  {!editing ? <p className="text-[11px] text-[#556070]">O fornecedor ainda não foi gravado.</p> : (
+                    <div className="grid w-max grid-cols-[max-content_max-content] gap-x-[10px] text-[11px] leading-[20px]" data-testid="uso-do-fornecedor">
+                      <span className="text-[#556070]">Lançamentos</span><span className="font-medium tabular-nums">{uso ? uso.lancamentos : '…'}</span>
+                      <span className="text-[#556070]">Último lançamento</span><span className="font-medium tabular-nums">{uso ? dataBr(uso.ultimoLancamento) : '…'}</span>
+                      <span className="text-[#556070]">Compras parceladas</span><span className="font-medium tabular-nums">{uso ? uso.comprasParceladas : '…'}</span>
+                      <span className="text-[#556070]">Documentos</span><span className="font-medium tabular-nums">{uso ? uso.documentos : '…'}</span>
+                      <span className="text-[#556070]">Cadastrado em</span><span className="font-medium tabular-nums">{uso ? dataBr(uso.cadastradoEm) : '…'}</span>
+                    </div>
+                  )}
+                  {editing && uso && uso.lancamentos === 0 && uso.comprasParceladas === 0 && uso.documentos === 0 && (
+                    <div className="pt-1">
+                      <Button variant="outline" size="sm" className="h-[24px] px-2 text-[10.5px] text-destructive" disabled={excluindo} onClick={() => void excluir()} data-testid="excluir-fornecedor"
+                        title="Sem lançamento, compra ou documento: pode ser excluído (não se desfaz). Com uso, inative pela Situação em Dados gerais.">Excluir fornecedor</Button>
+                    </div>
+                  )}
+                </BlocoFormulario>
               )}
             </div>
-          )}
-
-          <div className="grid grid-cols-[200px_minmax(0,1fr)_64px] items-start gap-2">
-          <div>
-            <Label className={ROTULO}>CPF/CNPJ</Label>
-            <Input
-              value={cpfCnpj}
-              onChange={e => { setCpfCnpj(mascararAoDigitar(e.target.value)); setDocTocado(true); setRecado(null); }}
-              className={`${REGUA_CAMPO} ${documentoBloqueia ? 'border-destructive' : ''}`}
-              placeholder="000.000.000-00 ou 00.000.000/0000-00"
-              aria-invalid={documentoBloqueia || undefined}
-            />
-            {/* FORN-EDITAR-01 — lugar RESERVADO de 14px, sempre presente: a recusa (vermelho) ou o "fora do padrão" (âmbar) */}
-            <div data-testid="cpf-cnpj-recado" title={recadoDoDocumento?.texto || undefined}
-              className={`h-[14px] truncate text-[10px] leading-[14px] ${recadoDoDocumento?.tom === 'erro' ? 'text-destructive' : 'text-amber-700'}`}>
-              {recadoDoDocumento?.texto ?? ''}
+          </div>
+          {/* RESUMO LATERAL (272px): rótulo da largura do maior e o valor colado; some abaixo de 760px */}
+          <aside className="hidden w-[272px] shrink-0 flex-col border-l border-[#d3dae3] bg-[#f4f6f9] px-3 py-2 min-[760px]:flex" data-testid="resumo-do-fornecedor">
+            <h3 className="mb-1.5 text-[11px] font-semibold text-[#111827]">Resumo do fornecedor</h3>
+            <div className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-[10px] text-[10.5px] leading-[17px]" data-testid="pares-do-resumo">
+              {RESUMO.map(([r, v]) => (
+                <div key={r} className="contents">
+                  <span className="whitespace-nowrap text-[#556070]">{r}</span>
+                  <span className={`min-w-0 truncate font-medium ${v ? 'text-[#111827]' : 'text-[#94a3b8]'}`} title={v || undefined}>{v ? (r === 'CNPJ' || r === 'CPF' ? formatarDocumento(v) || v : v) : '—'}</span>
+                </div>
+              ))}
             </div>
-          </div>
-          <div>
-            <Label className={ROTULO}>Fazenda</Label>
-            {/* PR-FORNECEDOR-FAZENDA-01: fazenda opcional — opção explícita "sem fazenda", que e' tambem o que o X devolve. */}
-            <SearchableSelect value={fazendaId || SEM_FAZENDA} onValueChange={setFazendaId}
-              options={[{ value: SEM_FAZENDA, label: '— Sem fazenda —' }, ...fazendas.map(f => ({ value: f.id, label: f.nome }))]}
-              semTodos allValue={SEM_FAZENDA} allLabel="— Sem fazenda —" placeholder="Buscar fazenda..." dense triggerClassName={REGUA_CAMPO} />
-          </div>
-          <div>
-            <Label className={ROTULO}>Ativo</Label>
-            <div className="flex h-7 items-center"><Switch checked={ativo} onCheckedChange={setAtivo} aria-label="Ativo" /></div>
-          </div>
-          </div>
-          </BlocoFormulario>
-
-          {/* ── DADOS DE PAGAMENTO ── UI-MODAL-BLOCOS-01: um bloco, três linhas na ordem de sempre (recebimento e Pix · banco ·
-              favorecido). */}
-          <BlocoFormulario titulo="Dados de pagamento" testId="bloco-pagamento" className="gap-1">
-              <div className="grid grid-cols-[150px_120px_minmax(0,1fr)] gap-2">
-                <div className="min-w-0">
-                  <Label className={ROTULO}>Tipo de recebimento</Label>
-                                    <Select value={tipoRecebimento || '__none_tipo__'} onValueChange={v => setTipoRecebimento(v === '__none_tipo__' ? '' : v)}>
-                                      <SelectTrigger className={REGUA_CAMPO}><SelectValue placeholder="Selecione" /></SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="__none_tipo__">Nenhum</SelectItem>
-                                        <SelectItem value="PIX">PIX</SelectItem>
-                                        <SelectItem value="Transferência Bancária">Transferência Bancária</SelectItem>
-                                        <SelectItem value="Boleto">Boleto</SelectItem>
-                                        <SelectItem value="Cartão">Cartão</SelectItem>
-                                        <SelectItem value="Débito Automático">Débito Automático</SelectItem>
-                                        <SelectItem value="Débito">Débito</SelectItem>
-                                        <SelectItem value="Outro">Outro</SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                </div>
-                <div className="min-w-0">
-                  <Label className={ROTULO}>Tipo de chave PIX</Label>
-                                    <Select value={pixTipoChave || '__none_pix__'} onValueChange={v => setPixTipoChave(v === '__none_pix__' ? '' : v)}>
-                                      <SelectTrigger className={REGUA_CAMPO}><SelectValue placeholder="Selecione" /></SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="__none_pix__">Nenhum</SelectItem>
-                                        <SelectItem value="CPF">CPF</SelectItem>
-                                        <SelectItem value="CNPJ">CNPJ</SelectItem>
-                                        <SelectItem value="Telefone">Telefone</SelectItem>
-                                        <SelectItem value="E-mail">E-mail</SelectItem>
-                                        <SelectItem value="Aleatória">Aleatória</SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                </div>
-                <div className="min-w-0">
-                  <Label className={ROTULO}>Chave PIX</Label>
-                                  <Input value={pixChave} onChange={e => setPixChave(e.target.value)} className={REGUA_CAMPO} placeholder="CPF, CNPJ, telefone, email ou chave aleatória" />
-                </div>
-              </div>
-              <div className="grid grid-cols-4 gap-2">
-                <div className="min-w-0">
-                  <Label className={ROTULO}>Banco</Label>
-                                    <Input value={banco} onChange={e => setBanco(e.target.value)} className={REGUA_CAMPO} placeholder="Ex: Sicredi" />
-                </div>
-                <div className="min-w-0">
-                  <Label className={ROTULO}>Agência</Label>
-                                    <Input value={agencia} onChange={e => setAgencia(e.target.value)} className={REGUA_CAMPO} placeholder="0000" />
-                </div>
-                <div className="min-w-0">
-                  <Label className={ROTULO}>Conta</Label>
-                                    <Input value={conta} onChange={e => setConta(e.target.value)} className={REGUA_CAMPO} placeholder="00000-0" />
-                </div>
-                <div className="min-w-0">
-                  <Label className={ROTULO}>Tipo de conta</Label>
-                                    <Select value={tipoConta || '__none_tc__'} onValueChange={v => setTipoConta(v === '__none_tc__' ? '' : v)}>
-                                      <SelectTrigger className={REGUA_CAMPO}><SelectValue placeholder="Selecione" /></SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="__none_tc__">Nenhum</SelectItem>
-                                        <SelectItem value="Corrente">Corrente</SelectItem>
-                                        <SelectItem value="Poupança">Poupança</SelectItem>
-                                        <SelectItem value="Pagamento">Pagamento</SelectItem>
-                                        <SelectItem value="Outro">Outro</SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                </div>
-              </div>
-              <div className="grid grid-cols-[150px_minmax(0,1fr)_minmax(0,1fr)] gap-2">
-                <div className="min-w-0">
-                  <Label className={ROTULO}>CPF/CNPJ favorecido</Label>
-                                    <Input value={cpfCnpjPagamento} onChange={e => setCpfCnpjPagamento(e.target.value)} className={REGUA_CAMPO} placeholder="000.000.000-00" />
-                </div>
-                <div className="min-w-0">
-                  <Label className={ROTULO}>Nome do favorecido</Label>
-                                  <Input value={nomeFavorecido} onChange={e => setNomeFavorecido(e.target.value)} className={REGUA_CAMPO} placeholder="Nome para pagamento" />
-                </div>
-                <div className="min-w-0">
-                  <Label className={ROTULO}>Observação para pagamento</Label>
-                                  <Input value={observacaoPagamento} onChange={e => setObservacaoPagamento(e.target.value)} className={REGUA_CAMPO} placeholder="Informações adicionais" />
-                </div>
-              </div>
-          </BlocoFormulario>
+            <div className="mt-2 border-t border-[#e3e8ee] pt-1.5" data-testid="o-que-falta">
+              <div className="text-[10.5px] font-semibold text-[#b45309]">{faltas.length ? 'O que falta' : 'Nada pendente'}</div>
+              {faltas.slice(0, 5).map((f) => (
+                <button key={f.texto} type="button" className="block w-full truncate text-left text-[10.5px] leading-[16px] text-[#b45309] hover:underline" title={f.texto}
+                  onClick={() => setAba(f.aba)} data-testid="falta">· {f.texto}</button>
+              ))}
+            </div>
+          </aside>
         </div>
-
-        {/* FORN-EDITAR-01 — lugar RESERVADO (duas linhas) para o aviso de repetido e a falha da conferência: nunca toast */}
-        <div data-testid="fornecedor-recado" title={recado?.texto || undefined}
-          className={`h-[30px] shrink-0 overflow-hidden px-4 pt-1 text-[11px] leading-[15px] ${recado?.tom === 'erro' ? 'text-destructive' : 'text-amber-700'}`}>
-          {recado?.texto ?? ''}
-        </div>
-        <DialogFooter className="shrink-0 flex-wrap gap-1 border-t px-4 py-2">
-          {editing && lancamentoCount !== null && (
-            lancamentoCount > 0 ? (
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="outline" size="sm" className="text-amber-600 border-amber-300 hover:bg-amber-50 mr-auto gap-1">
-                    <Ban className="h-3.5 w-3.5" />Inativar
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Inativar fornecedor</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Este fornecedor possui <strong>{lancamentoCount}</strong> lançamento(s) vinculado(s). Ele não será apagado da base, apenas inativado. Os lançamentos serão preservados.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                    <AlertDialogAction onClick={async () => {
-                      await supabase.from('financeiro_fornecedores').update({ ativo: false }).eq('id', editing.id);
-                      toast.success('Fornecedor inativado');
-                      notificarFornecedoresMudaram(clienteId);
-                      onClose();
-                      onSaved();
-                    }}>Confirmar Inativação</AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            ) : (
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="outline" size="sm" className="text-destructive border-destructive/30 hover:bg-destructive/10 mr-auto gap-1">
-                    <Trash2 className="h-3.5 w-3.5" />Excluir
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Excluir fornecedor</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Este fornecedor não possui vínculos e pode ser excluído permanentemente. Essa ação não pode ser desfeita.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                    <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={async () => {
-                      setDeleting(true);
-                      const { error } = await supabase.from('financeiro_fornecedores').delete().eq('id', editing.id);
-                      setDeleting(false);
-                      if (error) { toast.error('Erro ao excluir'); return; }
-                      toast.success('Fornecedor excluído');
-                      notificarFornecedoresMudaram(clienteId);
-                      onClose();
-                      onSaved();
-                    }}>Excluir Permanentemente</AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            )
-          )}
-          <Button variant="outline" size="sm" onClick={onClose}>Cancelar</Button>
-          <Button size="sm" onClick={() => save(recado?.tom === 'aviso')} disabled={saving || !nome.trim() || documentoBloqueia}
-            title={documentoBloqueia ? (validado.motivo ?? undefined) : undefined}>
-            {saving ? 'Salvando...' : recado?.tom === 'aviso' ? 'Salvar mesmo assim' : editing ? 'Salvar' : 'Criar'}
+        <div className="flex h-[44px] shrink-0 items-center gap-2 border-t border-[#d3dae3] px-3">
+          <span className="shrink-0 whitespace-nowrap text-[10.5px] text-[#556070] tabular-nums" data-testid="rodape-uso">{rodapeUso}</span>
+          {/* lugar RESERVADO (duas linhas) para o aviso de repetido e as recusas: nunca toast */}
+          <div data-testid="fornecedor-recado" title={recado?.texto || undefined}
+            className={`h-[30px] min-w-0 flex-1 overflow-hidden text-[10.5px] leading-[15px] ${recado?.tom === 'erro' ? 'text-destructive' : 'text-[#b45309]'}`}>
+            {recado?.texto ?? ''}
+          </div>
+          <Button variant="outline" size="sm" className="h-[26px] text-[11px]" onClick={onClose}>Cancelar</Button>
+          <Button size="sm" className="h-[26px] text-[11px]" onClick={() => void save(recado?.tom === 'aviso')} disabled={saving || documentoBloqueia || !linhaLida}
+            title={documentoBloqueia ? (validado.motivo ?? undefined) : !linhaLida ? 'Lendo o cadastro…' : undefined} data-testid="salvar-fornecedor">
+            {saving ? 'Salvando…' : recado?.tom === 'aviso' ? 'Salvar mesmo assim' : 'Salvar fornecedor'}
           </Button>
-        </DialogFooter>
+        </div>
       </DialogContent>
       <AlertDialog open={!!reativarTarget} onOpenChange={(v) => { if (!v) setReativarTarget(null); }}>
         <AlertDialogContent>
@@ -634,9 +463,7 @@ export function FornecedorFormDialog({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={reativando}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={reativarExistente} disabled={reativando}>
-              {reativando ? 'Reativando...' : 'Reativar'}
-            </AlertDialogAction>
+            <AlertDialogAction onClick={reativarExistente} disabled={reativando}>{reativando ? 'Reativando...' : 'Reativar'}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

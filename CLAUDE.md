@@ -164,7 +164,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 18/10/2026 (FIN-FINANC-28 TELA DO CONTRATO v4, +4: `src/components/financiamentos/telaDoContratoV3.test.tsx` 13 -> 17 (sai o das
+  Baseline em 18/10/2026 (FORN-CADASTRO-02, +8: `src/components/financeiro-v2/fornecedorCadastro02.test.tsx` 8 (novo); `fornecedorEditar`,
+  `useFornecedoresDoCliente`, `lerNFe`, `documentoFiscalNosEscritores` e `useCompraLotes.recusa` trocados ao contrato novo — 5665 depois dele;
+  antes o FIN-FINANC-28 TELA DO CONTRATO v4, +4: `src/components/financiamentos/telaDoContratoV3.test.tsx` 13 -> 17 (sai o das
   tres colunas do B3; entram a ficha, a 5a celula, a faixa unica, as abas e o lapis na celula — por fonte); `reguaDasParcelas` e
   `obrigacaoEdicao` trocados ao contrato novo (colunas do credito) — 5657 depois dele; antes o FIN-CONTRATO-JUNTAR-01, +7: `src/components/financiamentos/juntarContrato.test.tsx` 7 (novo); os fakes do hook em
   `darBaixa`, `contratoDeCredito` e `buscarNoContrato` ganharam as tres funcoes novas (so' tipo) — 5653 depois dele; antes o
@@ -392,7 +394,7 @@ no mesmo arquivo.
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
   `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5327
-  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO; 5568 desde o FIN-FINANC-28 PASSO 4; 5571 desde o FIN-FINANC-28 RESUMO-A18; 5573 desde o FIN-FINANC-28 PASSO 4c; 5581 desde o FIN-FINANC-28 PASSO 4b; 5586 desde o FIN-FINANC-28 PASSO 5; 5593 desde o FIN-FINANC-28 PASSO 6; 5607 desde o FIN-FINANC-28 PASSO 7; 5609 desde o FIN-FINANC-28 PASSO 8; 5614 desde o FORN-MESCLAR-01; 5615 desde o RECORRENCIAS-COLUNAS-01; 5620 desde o FIN-FINANC-28 FIX 4b; 5623 desde o FIN-LANC-DESCRICAO-CONTRATO-01; 5628 desde o FIN-FINANC-28 CADASTRO-ACABAMENTO; 5630 desde o UI-MODAL-BLOCOS-01 passo 0; 5631 desde o UI-MODAL-BLOCOS-01 titulo na borda; 5641 desde o FIN-FINANC-28 TELA v3; 5644 desde o B3; 5646 desde o EDITAR v2; 5653 desde o FIN-CONTRATO-JUNTAR-01; 5657 desde a TELA DO CONTRATO v4], 22 skipped, e
+  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO; 5568 desde o FIN-FINANC-28 PASSO 4; 5571 desde o FIN-FINANC-28 RESUMO-A18; 5573 desde o FIN-FINANC-28 PASSO 4c; 5581 desde o FIN-FINANC-28 PASSO 4b; 5586 desde o FIN-FINANC-28 PASSO 5; 5593 desde o FIN-FINANC-28 PASSO 6; 5607 desde o FIN-FINANC-28 PASSO 7; 5609 desde o FIN-FINANC-28 PASSO 8; 5614 desde o FORN-MESCLAR-01; 5615 desde o RECORRENCIAS-COLUNAS-01; 5620 desde o FIN-FINANC-28 FIX 4b; 5623 desde o FIN-LANC-DESCRICAO-CONTRATO-01; 5628 desde o FIN-FINANC-28 CADASTRO-ACABAMENTO; 5630 desde o UI-MODAL-BLOCOS-01 passo 0; 5631 desde o UI-MODAL-BLOCOS-01 titulo na borda; 5641 desde o FIN-FINANC-28 TELA v3; 5644 desde o B3; 5646 desde o EDITAR v2; 5653 desde o FIN-CONTRATO-JUNTAR-01; 5657 desde a TELA DO CONTRATO v4; 5665 desde o FORN-CADASTRO-02], 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -1614,6 +1616,48 @@ preview que o cabecalho nao sai da tela ao rolar.
     precisa desligar) e a pagina ja' aberta antes da publicacao (so' muda ao recarregar).
   [A divida MENU-CLIQUE-FECHANDO-01, medida neste passo, FECHOU no commit seguinte — ver a regra "LISTA OU MENU FECHANDO NAO
     ACEITA CLIQUE", acima.]
+- ⚠ O CADASTRO DE FORNECEDOR E' COMPLETO: 5 ABAS, TAMANHO FIXO, "O QUE FALTA", DOCUMENTO DUPLICADO AVISA E MESCLA (FORN-CADASTRO-02,
+  Gabriel 18/10/2026 16:44, mock "Cadastro de Fornecedor"; migration `supabase/migrations/20261027201700_forn_cadastro_02.sql`, md5 do arquivo
+  00c50a1c8a219dc02e1eace10cef5161 — APLICADA no proto em 18/10/2026, ledger 20261027201700; ledger = arquivo). SUBSTITUI, no bloco do
+  FORN-EDITAR-01 logo abaixo, o painel de sugestoes, o Mesclar travado e "aviso de CPF/CNPJ repetido no Salvar".
+  · BANCO (aditiva): `nome` continua sendo o nome oficial = RAZAO SOCIAL. Colunas novas, nulas: nome_fantasia, tipo_pessoa (CHECK PJ|PF),
+    inscricao_estadual, inscricao_municipal, cep, logradouro, numero, complemento, bairro, municipio, uf (CHECK ^[A-Z]{2}$), celular,
+    contato_nome, plano_padrao_id (FK do plano, ON DELETE SET NULL). REUSADAS, nada duplicado: email, telefone, observacao (vazias),
+    forma preferida = `tipo_recebimento` (valores gravados 'PIX' · 'Transferência Bancária' · 'Boleto'), titular = `nome_favorecido`,
+    documento do titular = `cpf_cnpj_pagamento`. `fn_fornecedor_uso(fornecedor)` (SECURITY DEFINER, `_fn_exigir_tenant_das_linhas`,
+    authenticated/service_role): cadastrado_em, lancamentos vivos, ultimo lancamento, compras parceladas (credor, parcelamento, nao
+    cancelada), documentos vivos (lancamento + OC). RLS: as 4 policies `tenant_ok` de sempre. Teste `supabase/tests/forn_cadastro_02_test.sql`
+    (C1–C4) OK no vivo; 2 mutacoes mortas. `types.ts` REGENERADO (so' acrescimos; o TS2589 que nasceu em `useCompraLotes.recusa.test.ts`
+    saiu com o ajudante `chamadasRpc`; TSC segue 139, mesmo conjunto).
+  · DONO PURO: `src/lib/fornecedores/cadastroDoFornecedor.ts` — campos (`DadosDoFornecedor`, `dadosDaLinha`), o que o banco recebe
+    (`payloadDoFornecedor`: vazio = nulo, UF maiuscula, o documento vem PRONTO do validador unico), as formas, `oQueFalta` (razao social,
+    CNPJ/CPF ou invalido, "CNPJ duplicado (X)", pessoa de contato, banco/agencia/conta na TED, chave na Pix) e `abasComPendencia`, e
+    `completarPeloEmitente` (o XML da NF-e completa SO' CAMPO VAZIO: fantasia, IE, tipo pela quantidade de digitos, endereco, telefone,
+    CEP 00000-000 — nunca sobrescreve).
+  · MODAL (`FornecedorFormDialog`): `h-[min(400px,…)] w-[min(900px,…)]` fixo; cabecalho navy "Editar fornecedor · <razao social>" /
+    "Novo fornecedor"; abas no `Segmentado` (Dados gerais · Endereço e contato · Pagamento · Padrões · Uso) com o ponto laranja da
+    pendencia; corpo `overflow-hidden` (nenhuma aba rola); resumo lateral de 272px com "O que falta" (cada item leva a' aba), oculto
+    abaixo de 760px; rodape "Cadastrado em … · N lançamentos · N compras parceladas" + Cancelar · Salvar fornecedor; campos de 26px a
+    11px; nada em maiusculas. Na edicao a LINHA INTEIRA e' relida do banco e o Salvar espera essa leitura. Excluir mora na aba Uso (so'
+    sem uso). Consultar CNPJ/CEP: SEM ROTA EXTERNA (nenhuma edge function de consulta) — sem botoes.
+    ⚠ DESVIOS DO MOCK, MEDIDOS: altura 400 (390 do mock) e campos de 26px (28 do mock) — com 28px a aba Endereço e contato passava 14px
+      da altura fixa · sem a dica do CEP (sem rota) · o painel de sugestoes antigo SAIU.
+  · DOCUMENTO DUPLICADO NO MESMO CLIENTE NAO BLOQUEIA (ha' legado): o aviso fica escrito na aba Dados gerais ("Este CNPJ também está
+    cadastrado como X"), com "Mesclar" (edicao) / "Usar este" (criacao). O "Mesclar" PEDE AO HOSPEDEIRO (`onMesclar(manter, absorver)`):
+    Cadastros › Fornecedores abre o `MesclarFornecedoresDialog` ja' com o par (`inicial`). ⚠ O CADASTRO NAO IMPORTA A FERRAMENTA, nem por
+    `import()` dinamico: ela usa o `FavorecidoSelect`, que abre o cadastro — o madge conta o dinamico e o ciclo voltaria (24). Sem
+    `onMesclar` (o lapis do seletor) o botao nao aparece. Nome repetido na edicao segue "Salvar mesmo assim".
+  · BUSCA POR RAZAO SOCIAL, FANTASIA E DOCUMENTO: `casaComABusca` (`fornecedorTexto.ts`) casa tambem a fantasia; o `FavorecidoSelect`
+    mostra "nome · fantasia" numa linha (o documento segue a' direita, nao embaixo: item de menu de 20px); `FinV2FornecedoresTab`
+    (fantasia e digitos do documento) e `MesaPareamentoModal` (fantasia) no `.or` da consulta.
+  · XML: `lerNFe` le^ `enderEmit`; `completarCadastroPeloXml` (`nfeConsultas.ts`) grava so' os vazios — no fornecedor criado pelo XML e
+    quando o favorecido do lancamento e' o proposto.
+  MEDIDO (bancada, 1000×600, 1126×579, 1440×800; Vera CNPJ com razao social x fantasia, um PF, um com valores longos e o novo): as 5
+  abas sem rolagem, dialogo 900 × 400, resumo 272, campos de 26px; so' a razao social longa rola dentro do proprio campo (inteira no
+  `title`). Prints em ~/Downloads/cadastro-fornecedor/.
+  ⚠ DOCUMENTOS DUPLICADOS POR CLIENTE (FASE 0, 18/10, so' contagem; lista fora do repo): 4 grupos — Agnaldo 3, Vera 1. Nada mesclado.
+  ⚠ NAO PROVADO: nada com login no navegador (bancada) · Salvar real pela tela (so' por teste) · a completacao pelo XML so' por teste ·
+    o Mesclar abrindo a ferramenta na tela real.
 - ⚠ CPF/CNPJ DO CADASTRO TEM UM VALIDADOR SO', O FORNECEDOR SE EDITA PELO LAPIS DO SELETOR, E A MESCLAGEM ESTA' TRAVADA (FORN-EDITAR-01,
   Gabriel 15/10/2026, so' tela, sem banco).
   · VALIDADOR UNICO (`src/lib/fornecedores/documentoFiscal.ts`, puro): `validarDocumento(texto) -> {valido, tipo cpf|cnpj|null,

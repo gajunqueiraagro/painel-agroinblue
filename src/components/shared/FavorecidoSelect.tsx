@@ -39,7 +39,7 @@ import {
 import { leitorDeFornecedores, useFornecedoresDoCliente } from '@/hooks/useFornecedoresDoCliente';
 import type { FornecedorLido } from '@/lib/fornecedores/leitorDeFornecedores';
 import {
-  LIMITE_DE_OPCOES, formatarDocumento, fraseDoLimite, linhaDoDocumento as textoDaLinhaDoDocumento, montarOpcoes,
+  LIMITE_DE_OPCOES, fantasiaDe, formatarDocumento, fraseDoLimite, linhaDoDocumento as textoDaLinhaDoDocumento, montarOpcoes,
   recortarOpcoes, seloDeIguais,
 } from '@/lib/fornecedores/fornecedorTexto';
 
@@ -335,7 +335,10 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
                 >
                   <Check className={cn("mr-2 h-3.5 w-3.5 shrink-0", value === o.f.id ? "opacity-100" : "opacity-0")} />
                   {/* nome à esquerda: é o ÚNICO que corta (inteiro no `title`) */}
-                  <span className="min-w-0 flex-1 truncate text-left" title={favorecidoLabel(o.f, showCpfCnpj)}>{o.f.nome}</span>
+                  {/* FORN-CADASTRO-02: "RAZÃO SOCIAL · Fantasia" (a fantasia em tom apagado), numa linha — o item de menu é o da casa */}
+                  <span className="min-w-0 flex-1 truncate text-left" title={[favorecidoLabel(o.f, showCpfCnpj), fantasiaDe(o.f)].filter(Boolean).join(' · ')}>
+                    {o.f.nome}{fantasiaDe(o.f) ? <span data-testid="favorecido-fantasia" className={MENU_SECUNDARIO}> · {fantasiaDe(o.f)}</span> : null}
+                  </span>
                   {o.iguais > 0 && (
                     <span data-testid="favorecido-iguais" className="ml-1.5 shrink-0 rounded-sm bg-amber-400/90 px-1 text-zinc-900"
                       title={`${o.iguais} cadastros ativos com este nome — confira o CNPJ/CPF`}>{seloDeIguais(o.iguais)}</span>
