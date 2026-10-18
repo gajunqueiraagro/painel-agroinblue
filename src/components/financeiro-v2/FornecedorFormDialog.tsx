@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { BlocoFormulario, CORPO_FORMULARIO, REGUA_CAMPO } from '@/components/ui/bloco-formulario';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -19,6 +20,8 @@ import {
   type FornecedorParaConferir,
 } from '@/lib/fornecedores/repetidosDoCadastro';
 
+/** UI-MODAL-BLOCOS-01 — o rótulo da régua dos modais (10px cinza), num lugar só neste diálogo. */
+const ROTULO = 'text-[10px] font-normal text-muted-foreground';
 // PR-FORNECEDOR-FAZENDA-01: fazenda é opcional. Sentinela do "— Sem fazenda —"
 // (Radix Select não aceita SelectItem com value vazio) → mapeado para null no save.
 const SEM_FAZENDA = '__sem_fazenda__';
@@ -345,19 +348,21 @@ export function FornecedorFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-2xl w-[95vw] max-h-[90vh] flex flex-col overflow-hidden">
-        <DialogHeader>
-          <DialogTitle className="text-base">{editing ? 'Editar Fornecedor' : 'Novo Fornecedor'}</DialogTitle>
+      {/* UI-MODAL-BLOCOS-01 — altura fixa pela tela; corpo cinza com dois blocos; só o corpo rola, e só em janela baixa. */}
+      <DialogContent className="flex h-[min(620px,calc(100dvh-48px))] w-[95vw] max-w-2xl flex-col gap-0 overflow-hidden p-0">
+        <DialogHeader className="shrink-0 border-b px-4 py-2.5">
+          <DialogTitle className="text-[13px]">{editing ? 'Editar Fornecedor' : 'Novo Fornecedor'}</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-3 overflow-y-auto flex-1 pr-1">
+        <div className={`min-h-0 flex-1 overflow-y-auto ${CORPO_FORMULARIO}`} data-testid="corpo-do-fornecedor">
+          <BlocoFormulario titulo="Identificação" testId="bloco-identificacao" className="gap-1">
           <div>
-            <Label className="text-xs">Nome *</Label>
+            <Label className={ROTULO}>Nome *</Label>
             <Input
               value={nome}
               onChange={e => { setNome(e.target.value); setRecado(null); }}
               placeholder="Nome do fornecedor"
-              className="h-9"
+              className={REGUA_CAMPO}
               autoFocus
             />
           </div>
@@ -434,12 +439,13 @@ export function FornecedorFormDialog({
             </div>
           )}
 
+          <div className="grid grid-cols-[200px_minmax(0,1fr)_64px] items-start gap-2">
           <div>
-            <Label className="text-xs">CPF/CNPJ</Label>
+            <Label className={ROTULO}>CPF/CNPJ</Label>
             <Input
               value={cpfCnpj}
               onChange={e => { setCpfCnpj(mascararAoDigitar(e.target.value)); setDocTocado(true); setRecado(null); }}
-              className={`h-9 ${documentoBloqueia ? 'border-destructive' : ''}`}
+              className={`${REGUA_CAMPO} ${documentoBloqueia ? 'border-destructive' : ''}`}
               placeholder="000.000.000-00 ou 00.000.000/0000-00"
               aria-invalid={documentoBloqueia || undefined}
             />
@@ -450,108 +456,108 @@ export function FornecedorFormDialog({
             </div>
           </div>
           <div>
-            <Label className="text-xs">Fazenda</Label>
+            <Label className={ROTULO}>Fazenda</Label>
             {/* PR-FORNECEDOR-FAZENDA-01: fazenda opcional — opção explícita "sem fazenda", que e' tambem o que o X devolve. */}
             <SearchableSelect value={fazendaId || SEM_FAZENDA} onValueChange={setFazendaId}
               options={[{ value: SEM_FAZENDA, label: '— Sem fazenda —' }, ...fazendas.map(f => ({ value: f.id, label: f.nome }))]}
-              semTodos allValue={SEM_FAZENDA} allLabel="— Sem fazenda —" placeholder="Buscar fazenda..." dense triggerClassName="h-9" />
+              semTodos allValue={SEM_FAZENDA} allLabel="— Sem fazenda —" placeholder="Buscar fazenda..." dense triggerClassName={REGUA_CAMPO} />
           </div>
-          <div className="flex items-center gap-2">
-            <Switch checked={ativo} onCheckedChange={setAtivo} />
-            <Label className="text-xs">Ativo</Label>
+          <div>
+            <Label className={ROTULO}>Ativo</Label>
+            <div className="flex h-7 items-center"><Switch checked={ativo} onCheckedChange={setAtivo} aria-label="Ativo" /></div>
           </div>
+          </div>
+          </BlocoFormulario>
 
-          {/* ── DADOS DE PAGAMENTO ── */}
-          <div className="border-t border-border/30 pt-3 mt-1">
-            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Dados de Pagamento</p>
-            <div className="space-y-2">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <div>
-                  <Label className="text-[11px]">Tipo de Recebimento</Label>
-                  <Select value={tipoRecebimento || '__none_tipo__'} onValueChange={v => setTipoRecebimento(v === '__none_tipo__' ? '' : v)}>
-                    <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none_tipo__">Nenhum</SelectItem>
-                      <SelectItem value="PIX">PIX</SelectItem>
-                      <SelectItem value="Transferência Bancária">Transferência Bancária</SelectItem>
-                      <SelectItem value="Boleto">Boleto</SelectItem>
-                      <SelectItem value="Cartão">Cartão</SelectItem>
-                      <SelectItem value="Débito Automático">Débito Automático</SelectItem>
-                      <SelectItem value="Débito">Débito</SelectItem>
-                      <SelectItem value="Outro">Outro</SelectItem>
-                    </SelectContent>
-                  </Select>
+          {/* ── DADOS DE PAGAMENTO ── UI-MODAL-BLOCOS-01: um bloco, três linhas na ordem de sempre (recebimento e Pix · banco ·
+              favorecido). */}
+          <BlocoFormulario titulo="Dados de pagamento" testId="bloco-pagamento" className="gap-1">
+              <div className="grid grid-cols-[150px_120px_minmax(0,1fr)] gap-2">
+                <div className="min-w-0">
+                  <Label className={ROTULO}>Tipo de recebimento</Label>
+                                    <Select value={tipoRecebimento || '__none_tipo__'} onValueChange={v => setTipoRecebimento(v === '__none_tipo__' ? '' : v)}>
+                                      <SelectTrigger className={REGUA_CAMPO}><SelectValue placeholder="Selecione" /></SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="__none_tipo__">Nenhum</SelectItem>
+                                        <SelectItem value="PIX">PIX</SelectItem>
+                                        <SelectItem value="Transferência Bancária">Transferência Bancária</SelectItem>
+                                        <SelectItem value="Boleto">Boleto</SelectItem>
+                                        <SelectItem value="Cartão">Cartão</SelectItem>
+                                        <SelectItem value="Débito Automático">Débito Automático</SelectItem>
+                                        <SelectItem value="Débito">Débito</SelectItem>
+                                        <SelectItem value="Outro">Outro</SelectItem>
+                                      </SelectContent>
+                                    </Select>
                 </div>
-                <div>
-                  <Label className="text-[11px]">Tipo de Chave PIX</Label>
-                  <Select value={pixTipoChave || '__none_pix__'} onValueChange={v => setPixTipoChave(v === '__none_pix__' ? '' : v)}>
-                    <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none_pix__">Nenhum</SelectItem>
-                      <SelectItem value="CPF">CPF</SelectItem>
-                      <SelectItem value="CNPJ">CNPJ</SelectItem>
-                      <SelectItem value="Telefone">Telefone</SelectItem>
-                      <SelectItem value="E-mail">E-mail</SelectItem>
-                      <SelectItem value="Aleatória">Aleatória</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div className="min-w-0">
+                  <Label className={ROTULO}>Tipo de chave PIX</Label>
+                                    <Select value={pixTipoChave || '__none_pix__'} onValueChange={v => setPixTipoChave(v === '__none_pix__' ? '' : v)}>
+                                      <SelectTrigger className={REGUA_CAMPO}><SelectValue placeholder="Selecione" /></SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="__none_pix__">Nenhum</SelectItem>
+                                        <SelectItem value="CPF">CPF</SelectItem>
+                                        <SelectItem value="CNPJ">CNPJ</SelectItem>
+                                        <SelectItem value="Telefone">Telefone</SelectItem>
+                                        <SelectItem value="E-mail">E-mail</SelectItem>
+                                        <SelectItem value="Aleatória">Aleatória</SelectItem>
+                                      </SelectContent>
+                                    </Select>
                 </div>
-              </div>
-              <div>
-                <Label className="text-[11px]">Chave PIX</Label>
-                <Input value={pixChave} onChange={e => setPixChave(e.target.value)} className="h-8 text-xs" placeholder="CPF, CNPJ, telefone, email ou chave aleatória" />
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                <div>
-                  <Label className="text-[11px]">Banco</Label>
-                  <Input value={banco} onChange={e => setBanco(e.target.value)} className="h-8 text-xs" placeholder="Ex: Sicredi" />
-                </div>
-                <div>
-                  <Label className="text-[11px]">Agência</Label>
-                  <Input value={agencia} onChange={e => setAgencia(e.target.value)} className="h-8 text-xs" placeholder="0000" />
-                </div>
-                <div>
-                  <Label className="text-[11px]">Conta</Label>
-                  <Input value={conta} onChange={e => setConta(e.target.value)} className="h-8 text-xs" placeholder="00000-0" />
+                <div className="min-w-0">
+                  <Label className={ROTULO}>Chave PIX</Label>
+                                  <Input value={pixChave} onChange={e => setPixChave(e.target.value)} className={REGUA_CAMPO} placeholder="CPF, CNPJ, telefone, email ou chave aleatória" />
                 </div>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <div>
-                  <Label className="text-[11px]">Tipo de Conta</Label>
-                  <Select value={tipoConta || '__none_tc__'} onValueChange={v => setTipoConta(v === '__none_tc__' ? '' : v)}>
-                    <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecione" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none_tc__">Nenhum</SelectItem>
-                      <SelectItem value="Corrente">Corrente</SelectItem>
-                      <SelectItem value="Poupança">Poupança</SelectItem>
-                      <SelectItem value="Pagamento">Pagamento</SelectItem>
-                      <SelectItem value="Outro">Outro</SelectItem>
-                    </SelectContent>
-                  </Select>
+              <div className="grid grid-cols-4 gap-2">
+                <div className="min-w-0">
+                  <Label className={ROTULO}>Banco</Label>
+                                    <Input value={banco} onChange={e => setBanco(e.target.value)} className={REGUA_CAMPO} placeholder="Ex: Sicredi" />
                 </div>
-                <div>
-                  <Label className="text-[11px]">CPF/CNPJ Favorecido</Label>
-                  <Input value={cpfCnpjPagamento} onChange={e => setCpfCnpjPagamento(e.target.value)} className="h-8 text-xs" placeholder="000.000.000-00" />
+                <div className="min-w-0">
+                  <Label className={ROTULO}>Agência</Label>
+                                    <Input value={agencia} onChange={e => setAgencia(e.target.value)} className={REGUA_CAMPO} placeholder="0000" />
+                </div>
+                <div className="min-w-0">
+                  <Label className={ROTULO}>Conta</Label>
+                                    <Input value={conta} onChange={e => setConta(e.target.value)} className={REGUA_CAMPO} placeholder="00000-0" />
+                </div>
+                <div className="min-w-0">
+                  <Label className={ROTULO}>Tipo de conta</Label>
+                                    <Select value={tipoConta || '__none_tc__'} onValueChange={v => setTipoConta(v === '__none_tc__' ? '' : v)}>
+                                      <SelectTrigger className={REGUA_CAMPO}><SelectValue placeholder="Selecione" /></SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="__none_tc__">Nenhum</SelectItem>
+                                        <SelectItem value="Corrente">Corrente</SelectItem>
+                                        <SelectItem value="Poupança">Poupança</SelectItem>
+                                        <SelectItem value="Pagamento">Pagamento</SelectItem>
+                                        <SelectItem value="Outro">Outro</SelectItem>
+                                      </SelectContent>
+                                    </Select>
                 </div>
               </div>
-              <div>
-                <Label className="text-[11px]">Nome do Favorecido</Label>
-                <Input value={nomeFavorecido} onChange={e => setNomeFavorecido(e.target.value)} className="h-8 text-xs" placeholder="Nome para pagamento" />
+              <div className="grid grid-cols-[150px_minmax(0,1fr)_minmax(0,1fr)] gap-2">
+                <div className="min-w-0">
+                  <Label className={ROTULO}>CPF/CNPJ favorecido</Label>
+                                    <Input value={cpfCnpjPagamento} onChange={e => setCpfCnpjPagamento(e.target.value)} className={REGUA_CAMPO} placeholder="000.000.000-00" />
+                </div>
+                <div className="min-w-0">
+                  <Label className={ROTULO}>Nome do favorecido</Label>
+                                  <Input value={nomeFavorecido} onChange={e => setNomeFavorecido(e.target.value)} className={REGUA_CAMPO} placeholder="Nome para pagamento" />
+                </div>
+                <div className="min-w-0">
+                  <Label className={ROTULO}>Observação para pagamento</Label>
+                                  <Input value={observacaoPagamento} onChange={e => setObservacaoPagamento(e.target.value)} className={REGUA_CAMPO} placeholder="Informações adicionais" />
+                </div>
               </div>
-              <div>
-                <Label className="text-[11px]">Observação para Pagamento</Label>
-                <Input value={observacaoPagamento} onChange={e => setObservacaoPagamento(e.target.value)} className="h-8 text-xs" placeholder="Informações adicionais" />
-              </div>
-            </div>
-          </div>
+          </BlocoFormulario>
         </div>
 
         {/* FORN-EDITAR-01 — lugar RESERVADO (duas linhas) para o aviso de repetido e a falha da conferência: nunca toast */}
         <div data-testid="fornecedor-recado" title={recado?.texto || undefined}
-          className={`h-[30px] overflow-hidden text-[11px] leading-[15px] ${recado?.tom === 'erro' ? 'text-destructive' : 'text-amber-700'}`}>
+          className={`h-[30px] shrink-0 overflow-hidden px-4 pt-1 text-[11px] leading-[15px] ${recado?.tom === 'erro' ? 'text-destructive' : 'text-amber-700'}`}>
           {recado?.texto ?? ''}
         </div>
-        <DialogFooter className="gap-1 flex-wrap">
+        <DialogFooter className="shrink-0 flex-wrap gap-1 border-t px-4 py-2">
           {editing && lancamentoCount !== null && (
             lancamentoCount > 0 ? (
               <AlertDialog>
