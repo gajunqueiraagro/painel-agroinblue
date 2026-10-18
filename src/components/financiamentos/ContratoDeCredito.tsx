@@ -11,7 +11,7 @@
  *   destinação, remover documento (cancela; o arquivo fica no bucket). A recusa do banco fica ESCRITA no diálogo, nunca em toast.
  * ⚠ DIÁLOGOS DE TAMANHO FIXO: o campo que depende da forma (lançamento / fornecedor / contrato anterior) ocupa SEMPRE a mesma linha.
  */
-import { TituloDoBloco } from '@/components/ui/bloco-formulario';
+import { BLOCO_FORMULARIO, BLOCO_FORMULARIO_COM_ACAO, TituloDoBloco } from '@/components/ui/bloco-formulario';
 import { forwardRef, useEffect, useState } from 'react';
 import { ArrowLeft, ChevronDown, Paperclip, Pencil, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -119,7 +119,7 @@ export function BlocoLiberacoes({ api, contaDoContrato, onAbrirLancamento, clien
   const [removendo, setRemovendo] = useState<LiberacaoDoContrato | null>(null);
   const [buscando, setBuscando] = useState(false);
   return (
-    <div className="flex min-w-0 flex-col rounded-lg border bg-card px-2 pb-1.5 pt-1" data-testid="bloco-liberacoes">
+    <div className={BLOCO_FORMULARIO_COM_ACAO} data-testid="bloco-liberacoes">
       <Titulo nome="Liberações" dica="em conta casa com o extrato · direto ao fornecedor = dívida + investimento sem caixa"
         acao={<div className="flex gap-1">
           <Button variant="outline" size="sm" className="h-[20px] px-2 text-[10px]" onClick={() => setBuscando(true)} data-testid="buscar-entradas-botao"
@@ -184,7 +184,7 @@ export function BlocoDestinacoes({ api }: { api: ApiDoContrato }) {
   const enc = encargosDoContrato(api.encargos);
   const pct = (v: number | null) => (v === null ? '—' : `${v.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} %`);
   return (
-    <div className="flex min-w-0 flex-col rounded-lg border bg-card px-2 pb-1.5 pt-1" data-testid="bloco-destinacoes">
+    <div className={BLOCO_FORMULARIO_COM_ACAO} data-testid="bloco-destinacoes">
       <Titulo nome="Destinações" dica="para onde vai o dinheiro · orçado × liberado"
         acao={<Button variant="outline" size="sm" className="h-[20px] gap-1 px-2 text-[10px]" onClick={() => setEditando('nova')} data-testid="nova-destinacao"><Plus className="size-3" /> destinação</Button>} />
       <table className="w-full table-fixed border-collapse">
@@ -271,7 +271,7 @@ export const BlocoDocumentos = forwardRef<HTMLDivElement, { api: ApiDoContrato }
     if (url) window.open(url, '_blank', 'noopener'); else setRecado('Não foi possível abrir o arquivo.');
   };
   return (
-    <div ref={ref} className="flex min-w-0 scroll-mt-2 flex-col rounded-lg border bg-card px-2 pb-1.5 pt-1" data-testid="bloco-documentos">
+    <div ref={ref} className={`${BLOCO_FORMULARIO} scroll-mt-3`} data-testid="bloco-documentos">
       <Titulo nome="Documentos do contrato" dica="a cédula, os aditivos, os demonstrativos e os comprovantes" />
       <AreaDeArquivo regra={REGRA_ARQUIVO_DO_DOCUMENTO} modo="lote" onArquivos={receber} className="h-[36px]" testId="area-documentos"
         convite="Clique ou arraste os documentos do contrato" desabilitado={enviando} motivoDesabilitado="Enviando…" />

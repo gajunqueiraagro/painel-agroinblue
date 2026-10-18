@@ -26,7 +26,7 @@ import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import { PlanoSubcentroSelect } from '@/components/shared/PlanoSubcentroSelect';
 import { NovoFornecedorDialog } from '@/components/financeiro-v2/NovoFornecedorDialog';
 import { BlocoDestinacoes, BlocoDocumentos, BlocoLiberacoes } from '@/components/financiamentos/ContratoDeCredito';
-import { BLOCO_FORMULARIO as BLOCO_DO_CONTRATO, TituloDoBloco as Titulo, REGUA_CAMPO, REGUA_ROTULO } from '@/components/ui/bloco-formulario';
+import { BLOCO_FORMULARIO as BLOCO_DO_CONTRATO, GRADE_FORMULARIO, TituloDoBloco as Titulo, REGUA_CAMPO, REGUA_ROTULO } from '@/components/ui/bloco-formulario';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFinanciamentoCadastro } from '@/hooks/useFinanciamentoCadastro';
@@ -50,7 +50,7 @@ function Bloco({ nome, children, grade, testId, className = '' }: { nome: string
   return (
     <section className={`${BLOCO_DO_CONTRATO} ${className}`} data-testid={testId}>
       <Titulo nome={nome} />
-      <div className={`grid items-start gap-x-3 gap-y-1.5 ${grade}`}>{children}</div>
+      <div className={`${GRADE_FORMULARIO} ${grade}`}>{children}</div>
     </section>
   );
 }
@@ -223,7 +223,7 @@ export function CadastroDeContratoDialog({ aberto, aoFechar, onAbrirCompraParcel
               </div>
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden" data-testid={`aba-${aba}`}>
                 {(aba === 'contrato' || aba === 'consorcio') && (
-                  <fieldset disabled={travado} className="flex min-h-0 flex-col gap-1.5">
+                  <fieldset disabled={travado} className="flex min-h-0 flex-col gap-2 pt-2">
                     <Bloco nome="Identificação" testId="bloco-identificacao"
                       grade={cons ? 'grid-cols-[minmax(0,2fr)_minmax(0,2fr)_minmax(0,1fr)_auto]' : 'grid-cols-[minmax(0,1.6fr)_minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]'}>
                       <Campo rotulo="Descrição" obrig>
@@ -267,7 +267,7 @@ export function CadastroDeContratoDialog({ aberto, aoFechar, onAbrirCompraParcel
                       </Bloco>
                     )}
                     {cons && (
-                      <div className="grid grid-cols-2 gap-1.5">
+                      <div className="grid grid-cols-2 gap-2">
                         <Bloco nome="Custos" testId="bloco-custos" grade="grid-cols-3">
                           <Campo rotulo="Taxa adm. (% total)" obrig><CampoPercentual className={CAMPO} valor={form.taxaAdmPct} onChange={(v) => set('taxaAdmPct', v ?? 0)} /></Campo>
                           <Campo rotulo="Fundo reserva (% total)"><CampoPercentual className={CAMPO} valor={form.fundoReservaPct} onChange={(v) => set('fundoReservaPct', v ?? 0)} /></Campo>
@@ -308,7 +308,7 @@ export function CadastroDeContratoDialog({ aberto, aoFechar, onAbrirCompraParcel
                   </fieldset>
                 )}
                 {aba === 'condicoes' && (
-                  <fieldset disabled={travado} className="flex min-h-0 flex-1 flex-col gap-1.5">
+                  <fieldset disabled={travado} className="flex min-h-0 flex-1 flex-col gap-2 pt-2">
                     <Bloco nome="Condições" testId="bloco-condicoes" grade="grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)] shrink-0">
                       <Campo rotulo="Sistema de amortização" obrig>
                         <Segmentado altura={26} valor={form.sistema} onEscolher={(v: SistemaDoCadastro) => set('sistema', v)}
@@ -349,9 +349,9 @@ export function CadastroDeContratoDialog({ aberto, aoFechar, onAbrirCompraParcel
                   </fieldset>
                 )}
                 {aba === 'parcelas' && tabela}
-                {aba === 'liberacoes' && salvoId && <div className="min-h-0 flex-1 overflow-y-auto"><BlocoLiberacoes api={credito} contaDoContrato={null} onAbrirLancamento={() => undefined} clienteId={clienteId} /></div>}
-                {aba === 'destinacao' && salvoId && <div className="min-h-0 flex-1 overflow-y-auto"><BlocoDestinacoes api={credito} /></div>}
-                {aba === 'documentos' && salvoId && <div className="min-h-0 flex-1 overflow-y-auto"><BlocoDocumentos api={credito} /></div>}
+                {aba === 'liberacoes' && salvoId && <div className="min-h-0 flex-1 overflow-y-auto pt-2"><BlocoLiberacoes api={credito} contaDoContrato={null} onAbrirLancamento={() => undefined} clienteId={clienteId} /></div>}
+                {aba === 'destinacao' && salvoId && <div className="min-h-0 flex-1 overflow-y-auto pt-2"><BlocoDestinacoes api={credito} /></div>}
+                {aba === 'documentos' && salvoId && <div className="min-h-0 flex-1 overflow-y-auto pt-2"><BlocoDocumentos api={credito} /></div>}
               </div>
             </div>
             {/* o resumo fixo à direita (240px, a régua A18): os números do cronograma do BANCO */}
