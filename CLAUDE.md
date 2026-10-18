@@ -164,7 +164,9 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 18/10/2026 (FIN-FINANC-28 EDITAR = CADASTRO NOVO v2, +2: `src/components/financiamentos/edicaoDoContrato.test.tsx` 8 (novo);
+  Baseline em 18/10/2026 (FIN-CONTRATO-JUNTAR-01, +7: `src/components/financiamentos/juntarContrato.test.tsx` 7 (novo); os fakes do hook em
+  `darBaixa`, `contratoDeCredito` e `buscarNoContrato` ganharam as tres funcoes novas (so' tipo) — 5653 depois dele; antes o
+  FIN-FINANC-28 EDITAR = CADASTRO NOVO v2, +2: `src/components/financiamentos/edicaoDoContrato.test.tsx` 8 (novo);
   `obrigacaoEdicao.test.tsx` −6 (51 -> 45: sairam as fotos de edicao e criacao de financiamento/emprestimo e tres casos do credito,
   com o caminho do credito do ObrigacaoDialog; entrou 1, o Editar do credito abre o cadastro novo) — 5646 depois dele; antes o
   FIN-FINANC-28 TELA v3 B3, +3: `src/components/financiamentos/telaDoContratoV3.test.tsx` 3 (10 -> 13; o
@@ -388,7 +390,7 @@ no mesmo arquivo.
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
   `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5327
-  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO; 5568 desde o FIN-FINANC-28 PASSO 4; 5571 desde o FIN-FINANC-28 RESUMO-A18; 5573 desde o FIN-FINANC-28 PASSO 4c; 5581 desde o FIN-FINANC-28 PASSO 4b; 5586 desde o FIN-FINANC-28 PASSO 5; 5593 desde o FIN-FINANC-28 PASSO 6; 5607 desde o FIN-FINANC-28 PASSO 7; 5609 desde o FIN-FINANC-28 PASSO 8; 5614 desde o FORN-MESCLAR-01; 5615 desde o RECORRENCIAS-COLUNAS-01; 5620 desde o FIN-FINANC-28 FIX 4b; 5623 desde o FIN-LANC-DESCRICAO-CONTRATO-01; 5628 desde o FIN-FINANC-28 CADASTRO-ACABAMENTO; 5630 desde o UI-MODAL-BLOCOS-01 passo 0; 5631 desde o UI-MODAL-BLOCOS-01 titulo na borda; 5641 desde o FIN-FINANC-28 TELA v3; 5644 desde o B3; 5646 desde o EDITAR v2], 22 skipped, e
+  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO; 5568 desde o FIN-FINANC-28 PASSO 4; 5571 desde o FIN-FINANC-28 RESUMO-A18; 5573 desde o FIN-FINANC-28 PASSO 4c; 5581 desde o FIN-FINANC-28 PASSO 4b; 5586 desde o FIN-FINANC-28 PASSO 5; 5593 desde o FIN-FINANC-28 PASSO 6; 5607 desde o FIN-FINANC-28 PASSO 7; 5609 desde o FIN-FINANC-28 PASSO 8; 5614 desde o FORN-MESCLAR-01; 5615 desde o RECORRENCIAS-COLUNAS-01; 5620 desde o FIN-FINANC-28 FIX 4b; 5623 desde o FIN-LANC-DESCRICAO-CONTRATO-01; 5628 desde o FIN-FINANC-28 CADASTRO-ACABAMENTO; 5630 desde o UI-MODAL-BLOCOS-01 passo 0; 5631 desde o UI-MODAL-BLOCOS-01 titulo na borda; 5641 desde o FIN-FINANC-28 TELA v3; 5644 desde o B3; 5646 desde o EDITAR v2; 5653 desde o FIN-CONTRATO-JUNTAR-01], 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -2256,6 +2258,32 @@ preview que o cabecalho nao sai da tela ao rolar.
   regua nas tres naturezas; o formulario novo (passo 7) a herda. Preso por `resumoDaObrigacao.test.ts` (fonte, com auto-teste).
   MEDIDO na bancada a 1.126 x 579 e 1.440 x 800 (compra parcelada e PR-78.192, abas Contrato e Parcelas): 240px, sem rolagem,
   maior fonte 11px, linhas de 16px. As 15 fotos do dialogo (`obrigacaoDialog.fotos.json`) REGRAVADAS de proposito (o aside esta' em todas).
+- ⚠ DOIS CADASTROS DO MESMO CONTRATO SE JUNTAM NUM SO', POR UMA RPC COM SIMULACAO E DESFAZER; O ABSORVIDO NUNCA E' APAGADO
+  (FIN-CONTRATO-JUNTAR-01, Gabriel 18/10/2026; migration `supabase/migrations/20261027201600_fin_contrato_juntar_01.sql`, md5 do arquivo
+  335c4fc55ef5d9cff717b1e10976b7bc — APLICADA no proto em 18/10/2026, ledger 20261027201600 `fin_contrato_juntar_01`; ledger = arquivo).
+  · BANCO: `financiamento_juncoes` (mantido, absorvido, antes, depois, feita/desfeita em/por; RLS so' leitura por `tenant_ok`).
+    `fn_financiamento_juntar(p_manter, p_absorver, p_simular DEFAULT true)` — guarda `_fn_contrato_do_usuario` nos dois; SIMULACAO =
+    GRAVACAO ('FJSIM'; recusa em `recusa.frase`, na gravacao P0001 + "Nada foi gravado."). RECUSA: clientes, credores ou natureza
+    diferentes, compra parcelada, contrato baixado, o mesmo, e parcela paga / com pagamento vinculado / casada (a lista
+    "<nº> (mantido|absorvido): <trava>"). FAZ: contratado = soma; as liberacoes do absorvido passam (a captacao vira liberacao 'conta'
+    pelo valor REAL do lancamento — a divergencia liberado x contratado fica a' vista); cronograma somado POR VENCIMENTO (o que nao
+    casa passa inteiro), `ajustada` mantida; os lancamentos gerados das parcelas saem pelo dono e o MOTOR regera; encargos,
+    documentos e destinacoes passam (destinacao de mesmo nome soma o orcado); o absorvido vira 'cancelado' com `baixa_motivo`
+    "juntado ao <nº> (<id>)" e `contrato_sucessor_id` = o mantido. Nunca DELETE. `fn_financiamento_juntar_desfazer(p_juncao_id,
+    p_simular)` volta tudo pela foto de antes (so' a viva). `fn_contrato_tela` (patch por md5, 0c31b8f2… -> 121e4f09…) poe no
+    historico "Juntado com <nº>" / "Juntado ao <nº>" (+ " · desfeito em dd/mm/aaaa") com `juncao_id` e `desfazivel`.
+    Teste `supabase/tests/fin_contrato_juntar_01_test.sql` (J1–J5) OK no vivo; as duas mutacoes que sobreviveram a' primeira versao
+    do teste (desfazer sem devolver a parcela; sem a trava de parcela paga) morrem depois do conserto dele. 3 mutacoes de tela mortas.
+  · TELA: "Juntar" no lugar reservado de 58px da linha do titulo (`BotaoJuntar`, apagado fora de ativo/prorrogado) -> 
+    `JuntarContratoDialog` (`src/components/financiamentos/JuntarContrato.tsx`, 760 x 400 fixo, blocos da casa): seletor com busca so'
+    dos vigentes do MESMO cliente, credor e natureza; a simulacao lado a lado (Este · Absorvido · Depois, do banco; liberado ≠
+    contratado em ambar, so' comparado); recusa escrita no lugar de 30px; gravar pede confirmacao no rodape. Historico: "Desfazer"
+    so' no evento de juncao viva (`DesfazerJuncaoDialog`, simula antes). Lista: o absorvido nos encerrados com o selo "juntado" e
+    "→ <nº>". Leitor puro `src/lib/financiamentos/juntarContratos.ts`.
+  · PILOTO APLICADO (18/10): NJ PR-78.192 "Recuperação de Solo" — 2c2cdeb7 mantido, f992f503 absorvido (juncao ff77a38a…): contratado
+    955.395,00, liberacoes 318.465,00 (21/11/25) + 636.939,00 (22/12/25) = 955.404,00 (divergencia de 9,00 a' vista), 10 parcelas
+    somadas, a de 01/10/26 com juros 86.081,90 (vencida), 36 lancamentos gerados cancelados e 18 regerados.
+  ⚠ NAO PROVADO: nada com login no navegador (o diálogo so' por teste) · o desfazer do piloto (nao foi desfeito).
 - ⚠ O CREDITO SE EDITA PELO CADASTRO NOVO, E AS PARCELAS EM ABERTO MUDAM POR TRES RPCs COM TRILHA E DESFAZER (FIN-FINANC-28 EDITAR = CADASTRO
   NOVO v2, Gabriel 18/10/2026; migrations `20261027201400_fin_financ_28_editar_cadastro.sql` md5 daa90c496265d38ea846258d33aee06e e
   `20261027201500_fin_financ_28_cabecalho_linha.sql` md5 8772c5861b722f5913b81999cadfffba, ledger com o timestamp do dia; ledger = arquivo).
@@ -2592,7 +2620,7 @@ preview que o cabecalho nao sai da tela ao rolar.
     `useContratosDoCliente`) e o clique abre o contrato, como antes.
   ⚠ PENDENCIAS: o consorcio do Agnaldo (c518161d) segue natureza 'financiamento' ("Amortização 42/80 · 002122 · …"); trocar para
     'consorcio' e' PR proprio (o gatilho reescreve quando trocar) · 39 contratos com nº sem digito (lista entregue ao Gabriel) · dois
-    contratos do NJ com o MESMO nº e descricao (PR-78.192 "Recuperação de Solo": 2c2cdeb7 e f992f503) · nº "13" no 537661af
+    contratos do NJ com o MESMO nº e descricao (PR-78.192 "Recuperação de Solo": 2c2cdeb7 e f992f503) [JUNTADOS no FIN-CONTRATO-JUNTAR-01, 18/10] · nº "13" no 537661af
     (tem digito, entra) · NAO PROVADO na tela com login (Lançamentos / Fluxo).
 - ⚠ A BUSCA NO CONTRATO NUNCA E' BECO SEM SAIDA, E PARCELA ZERADA PERGUNTA ANTES DE GANHAR VALOR (FIN-FINANC-28 FIX 4b, Gabriel 17/10/2026;
   migration `supabase/migrations/20261027200900_fin_financ_28_fix4b_busca.sql`, md5 do arquivo 11d9fe247cb87a7ecebd83e27bce2860 — APLICADA

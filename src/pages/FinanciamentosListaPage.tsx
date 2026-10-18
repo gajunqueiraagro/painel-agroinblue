@@ -286,6 +286,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
             linhaCreditoId: f.linha_credito_id ?? null,
             linhaCreditoNome: f.linha_credito_id ? (nomeDaLinha.get(f.linha_credito_id) ?? null) : null,
             sucessorNumero: f.contrato_sucessor_id ? (numeroPorId.get(f.contrato_sucessor_id) ?? null) : null,
+            juntado: f.status === 'cancelado' && !!f.contrato_sucessor_id,
             saldo: lote.get(f.id)?.saldo,
             proxVencimento: r.proxVencimento,
             dataContrato: f.data_contrato ?? null,

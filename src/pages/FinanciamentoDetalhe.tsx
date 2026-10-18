@@ -41,6 +41,7 @@ import { Segmentado } from '@/components/ui/segmentado';
 import type { AcaoDoPendente, PendenteDoContrato } from '@/lib/financiamentos/telaDoContrato';
 import { BuscarPagamentoDialog } from '@/components/financiamentos/BuscarNoContrato';
 import { BotaoDarBaixa, DarBaixaDialog } from '@/components/financiamentos/DarBaixa';
+import { BotaoJuntar, DesfazerJuncaoDialog, JuntarContratoDialog } from '@/components/financiamentos/JuntarContrato';
 import { CadastroDeContratoDialog } from '@/components/financiamentos/CadastroDeContratoDialog';
 import { EditarParcelasDialog, SeloAjustada, type ParcelaParaEditar } from '@/components/financiamentos/EdicaoDoContrato';
 import { useEdicaoDoContrato } from '@/hooks/useEdicaoDoContrato';
@@ -181,6 +182,9 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
   /* PASSO 5 — a baixa escolhida no menu e o "Desfazer baixa" */
   const [baixaEscolhida, setBaixaEscolhida] = useState<TipoDeBaixa | null>(null);
   const [desfazendoBaixa, setDesfazendoBaixa] = useState(false);
+  /* FIN-CONTRATO-JUNTAR-01 */
+  const [juntando, setJuntando] = useState(false);
+  const [desfazendoJuncao, setDesfazendoJuncao] = useState<{ id: string; evento: string } | null>(null);
   /* passo 7: a rolagem cria o contrato novo pelo cadastro novo, já com o credor deste */
   const [criandoSucessor, setCriandoSucessor] = useState(false);
   const [versaoDosContratos, setVersaoDosContratos] = useState(0);
@@ -591,6 +595,7 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
           <TopoDoContrato numero={fin.numero_contrato ?? null} descricao={fin.descricao ?? ''} status={fin.status ?? null}
             saldo={situacao?.saldo} vencido={cartoes ? cartoes.vencido : null} tela={credito.tela}
             onVoltar={onVoltar} onEditar={() => abrirEdicao('contrato')} pendencias={pendencias} onAbrirPendencias={() => setAbaDoCredito('a_resolver')}
+            acaoDeJuntar={<BotaoJuntar status={fin.status ?? null} onAbrir={() => setJuntando(true)} />}
             acaoDeBaixa={<BotaoDarBaixa destaque status={fin.status ?? null} api={credito} onEscolher={setBaixaEscolhida} onDesfazer={() => setDesfazendoBaixa(true)} />} />
         )}
       </div>
@@ -639,7 +644,7 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
       )}
       {!ehParcelamento && abaAberta === 'historico' && (
         <div className="min-h-0 flex-1 px-3 pb-2" data-testid="painel-historico">
-          <TabelaDoHistorico tela={credito.tela} />
+          <TabelaDoHistorico tela={credito.tela} onDesfazerJuncao={(id, evento) => setDesfazendoJuncao({ id, evento })} />
         </div>
       )}
 
@@ -926,6 +931,8 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
         const alvo = linhas.find(x => x.id === buscarPagamentoDe);
         return alvo ? <BuscarPagamentoDialog api={credito} parcela={alvo} aoFechar={() => setBuscarPagamentoDe(null)} /> : null;
       })()}
+      {juntando && <JuntarContratoDialog api={credito} numero={fin.numero_contrato ?? null} aoFechar={() => setJuntando(false)} />}
+      {desfazendoJuncao && <DesfazerJuncaoDialog api={credito} juncaoId={desfazendoJuncao.id} evento={desfazendoJuncao.evento} aoFechar={() => setDesfazendoJuncao(null)} />}
       {baixaEscolhida && <DarBaixaDialog api={credito} tipo={baixaEscolhida} aoFechar={() => setBaixaEscolhida(null)}
         onCriarContratoNovo={() => setCriandoSucessor(true)} versaoDosContratos={versaoDosContratos} />}
       {criandoSucessor && fin && (

@@ -22,6 +22,8 @@ export interface ContratoDaLista {
   linhaCreditoNome: string | null;
   /** o número do contrato que nasceu deste (o rolado aponta o sucessor) */
   sucessorNumero: string | null;
+  /** FIN-CONTRATO-JUNTAR-01: cancelado com sucessor = o cadastro juntado a outro (o selo diz "juntado") */
+  juntado?: boolean;
   saldo: SaldoDoContrato | null;
   proxVencimento: string | null;
   /** a data da linha: a da 1ª liberação gravada (viva) quando há; senão a do contrato */
@@ -179,7 +181,7 @@ export const ehCompraParcelada = (natureza: string | null | undefined): boolean 
  */
 export function contratoDaLista(entrada: {
   id: string; numeroContrato: string | null; banco: string | null; bancoDocumento?: string | null; descricao: string | null; status: string;
-  linhaCreditoId: string | null; linhaCreditoNome: string | null; sucessorNumero: string | null;
+  linhaCreditoId: string | null; linhaCreditoNome: string | null; sucessorNumero: string | null; juntado?: boolean;
   saldo: SaldoDoContrato | null | undefined; proxVencimento: string | null | undefined;
   dataContrato: string | null | undefined; primeiraLiberacao: string | null | undefined;
 }): ContratoDaLista {
@@ -195,6 +197,7 @@ export function contratoDaLista(entrada: {
     linhaCreditoId: entrada.linhaCreditoId,
     linhaCreditoNome: entrada.linhaCreditoNome,
     sucessorNumero: entrada.sucessorNumero,
+    ...(entrada.juntado ? { juntado: true } : {}),
     saldo: entrada.saldo ?? null,
     proxVencimento: entrada.proxVencimento ?? null,
     data: lib ?? contrato,

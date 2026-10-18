@@ -34,6 +34,7 @@ const api = (o: Partial<Api> = {}): Api => ({
   vinculos: [], buscar: vi.fn(async () => "x"), vincularPagamento: vi.fn(async () => "x"), desvincularPagamento: vi.fn(async () => "x"),
   lerEncargosPerto: vi.fn(async () => []), vincularEncargo: vi.fn(async () => null),
     baixaViva: null, darBaixa: vi.fn(async () => 'x'), desfazerBaixa: vi.fn(async () => null), lerSucessores: vi.fn(async () => []),
+    lerJuntaveis: vi.fn(async () => []), juntar: vi.fn(async () => 'x'), desfazerJuncao: vi.fn(async () => 'x'),
   ...o,
 });
 const SALDO = (o: Partial<SaldoDoContrato> = {}): SaldoDoContrato => ({

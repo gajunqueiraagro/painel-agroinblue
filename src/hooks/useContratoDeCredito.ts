@@ -25,6 +25,9 @@ import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
 import { lerTelaDoContrato, type TelaDoContrato } from '@/lib/financiamentos/telaDoContrato';
 import { hojeLocal } from '@/lib/datas/hojeLocal';
 import { lerBaixaViva, lerResultadoDaBaixa, type BaixaViva, type ResultadoDaBaixa, type TipoDeBaixa } from '@/lib/financiamentos/baixaDoContrato';
+import {
+  lerResultadoDaJuncao, lerResultadoDoDesfazerJuncao, type ResultadoDaJuncao, type ResultadoDoDesfazerJuncao,
+} from '@/lib/financiamentos/juntarContratos';
 
 export const BUCKET_DO_CONTRATO = 'fin-documentos';
 const CHAVES_DA_TELA = ['contrato-liberacoes', 'contrato-destinacoes', 'contrato-documentos', 'contrato-captacoes-livres', 'contrato-encargos',
@@ -342,6 +345,37 @@ export function useContratoDeCredito(financiamentoId: string | null | undefined,
     return (data ?? []).map((f) => ({ id: f.id, numero: f.numero_contrato, descricao: f.descricao }));
   }, [clienteId, financiamentoId]);
 
+  /* ═══ FIN-CONTRATO-JUNTAR-01 — juntar o outro cadastro do mesmo contrato (o banco decide; simular = a gravação desfeita) ═══ */
+  /** os que podem ser absorvidos: vigentes do MESMO cliente, credor e natureza, menos este (o banco recusa o resto) */
+  const lerJuntaveis = useCallback(async (): Promise<(ContratoAnterior & { valor: number })[]> => {
+    const { data: este } = await supabase.from('financiamentos').select('credor_id, natureza').eq('id', financiamentoId!).maybeSingle();
+    if (!este?.credor_id) return [];
+    const { data } = await supabase.from('financiamentos').select('id, numero_contrato, descricao, valor_total')
+      .eq('cliente_id', clienteId!).eq('credor_id', este.credor_id).eq('natureza', este.natureza ?? 'financiamento').neq('id', financiamentoId!)
+      .in('status', ['ativo', 'prorrogado']).order('data_contrato', { ascending: true });
+    return (data ?? []).map((f) => ({ id: f.id, numero: f.numero_contrato, descricao: f.descricao, valor: Number(f.valor_total) }));
+  }, [clienteId, financiamentoId]);
+
+  const juntar = useCallback(async (absorverId: string, simular: boolean): Promise<ResultadoDaJuncao | string> => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+    const { data, error } = await (supabase as any).rpc('fn_financiamento_juntar', { p_manter: financiamentoId, p_absorver: absorverId, p_simular: simular });
+    if (error) return fraseDoErro(error);
+    const r = lerResultadoDaJuncao(data);
+    if (!r) return 'Resposta do banco fora do formato.';
+    if (!simular && !r.recusa) aposGravarNoFinanceiro();
+    return r;
+  }, [financiamentoId, aposGravarNoFinanceiro]);
+
+  const desfazerJuncao = useCallback(async (juncaoId: string, simular: boolean): Promise<ResultadoDoDesfazerJuncao | string> => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+    const { data, error } = await (supabase as any).rpc('fn_financiamento_juntar_desfazer', { p_juncao_id: juncaoId, p_simular: simular });
+    if (error) return fraseDoErro(error);
+    const r = lerResultadoDoDesfazerJuncao(data);
+    if (!r) return 'Resposta do banco fora do formato.';
+    if (!simular && !r.recusa) aposGravarNoFinanceiro();
+    return r;
+  }, [aposGravarNoFinanceiro]);
+
   const lerContratosAnteriores = useCallback(async (): Promise<ContratoAnterior[]> => {
     const { data } = await supabase.from('financiamentos').select('id, numero_contrato, descricao, natureza')
       .eq('cliente_id', clienteId!).neq('natureza', 'parcelamento').neq('id', financiamentoId!).order('data_contrato', { ascending: false });
@@ -355,6 +389,7 @@ export function useContratoDeCredito(financiamentoId: string | null | undefined,
     salvarLiberacao, removerLiberacao, salvarDestinacao, removerDestinacao, enviarDocumento, removerDocumento, urlDoDocumento,
     lerCaptacoesLivres, lerContratosAnteriores,
     baixaViva: baixaViva.data ?? null, darBaixa, desfazerBaixa, lerSucessores,
+    lerJuntaveis, juntar, desfazerJuncao,
     vinculos: vinculos.data ?? [], buscar, vincularPagamento, desvincularPagamento, lerEncargosPerto, vincularEncargo,
   };
 }

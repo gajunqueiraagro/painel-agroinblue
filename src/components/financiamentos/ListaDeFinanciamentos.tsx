@@ -54,7 +54,9 @@ const CLASSE_STATUS: Record<string, string> = {
   prorrogado: STATUS_PALETA.agendado.pilula,
   cancelado: 'text-[#b91c1c] border-transparent',
 };
-export function SeloDoContrato({ status }: { status: string }) {
+/** FIN-CONTRATO-JUNTAR-01: o cadastro juntado a outro (cancelado com sucessor) diz "juntado", no tom neutro do rolado */
+export function SeloDoContrato({ status, juntado = false }: { status: string; juntado?: boolean }) {
+  if (juntado) return <span className={cn(STATUS_PILULA_BASE, CLASSE_STATUS.rolado)} data-testid="selo-juntado">juntado</span>;
   return <span className={cn(STATUS_PILULA_BASE, CLASSE_STATUS[status] ?? CLASSE_STATUS.rolado)}>{status}</span>;
 }
 
@@ -102,10 +104,10 @@ function LinhaDoContrato({ c, encerrado, aoAbrir, mostrarBanco }: {
 }) {
   const s = c.saldo;
   const codigos = s?.pendencias ?? [];
-  const sucessor = c.status === 'rolado' && c.sucessorNumero ? `→ ${c.sucessorNumero}` : '';
+  const sucessor = (c.status === 'rolado' || c.juntado) && c.sucessorNumero ? `→ ${c.sucessorNumero}` : '';
   /* a célula: o sucessor do rolado (quando há) ou a 1ª pendência curta + "+N"; o `title` diz tudo por extenso */
   const textoPend = sucessor || pendenciaCurta(codigos);
-  const tituloPend = [sucessor ? `rolado para o contrato ${c.sucessorNumero}` : '', textoDasPendencias(codigos)].filter(Boolean).join(' · ');
+  const tituloPend = [sucessor ? `${c.juntado ? 'juntado ao' : 'rolado para o'} contrato ${c.sucessorNumero}` : '', textoDasPendencias(codigos)].filter(Boolean).join(' · ');
   return (
     <tr
       role="link" tabIndex={0} data-testid="lista-fin-contrato"
@@ -125,7 +127,7 @@ function LinhaDoContrato({ c, encerrado, aoAbrir, mostrarBanco }: {
           banco vai no `title` da Descrição. */}
       {mostrarBanco && <td className="truncate px-1" title={nomeEDocumento(c.banco, c.bancoDocumento) || undefined} data-testid="cel-banco">{c.banco ?? '—'}</td>}
       <td className="truncate px-1" title={mostrarBanco ? c.descricao : [c.descricao, nomeEDocumento(c.banco, c.bancoDocumento)].filter(Boolean).join(' · ')} data-testid="cel-descricao">{c.descricao}</td>
-      <td className="celula-status whitespace-nowrap px-0.5"><SeloDoContrato status={c.status} /></td>
+      <td className="celula-status whitespace-nowrap px-0.5"><SeloDoContrato status={c.status} juntado={c.juntado} /></td>
       <td className={`${NUM}`}><Valor v={s?.contratado} /></td>
       <td className={`${NUM}`} data-testid="cel-liberado"><Valor v={s ? s.liberado : null} /></td>
       <td className={`${NUM}`}><Valor v={s?.amortizado} /></td>

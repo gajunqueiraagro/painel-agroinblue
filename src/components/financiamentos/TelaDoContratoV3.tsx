@@ -60,9 +60,11 @@ const SITUACAO_TOM: Record<string, string> = {
   rolado: 'bg-muted text-muted-foreground', cancelado: 'bg-muted text-muted-foreground',
 };
 
-export function TopoDoContrato({ numero, descricao, status, saldo, vencido, tela, onVoltar, onEditar, acaoDeBaixa, pendencias, onAbrirPendencias }: {
+export function TopoDoContrato({ numero, descricao, status, saldo, vencido, tela, onVoltar, onEditar, acaoDeBaixa, acaoDeJuntar, pendencias, onAbrirPendencias }: {
   numero: string | null; descricao: string; status: string | null; saldo: SaldoDoContrato | null | undefined; vencido: number | null;
   tela: TelaDoContrato | null; onVoltar?: () => void; onEditar: () => void; acaoDeBaixa?: ReactNode;
+  /** FIN-CONTRATO-JUNTAR-01: o botão "Juntar", no lugar reservado de 58px */
+  acaoDeJuntar?: ReactNode;
   /** B3: quantas pendências a aba "A resolver" tem (as do banco + o aviso do principal) e se alguma é de vencido */
   pendencias: { qtde: number; vencido: boolean }; onAbrirPendencias: () => void;
 }) {
@@ -92,8 +94,8 @@ export function TopoDoContrato({ numero, descricao, status, saldo, vencido, tela
         {vencidas && <span className="shrink-0 rounded-full bg-destructive/10 px-2 text-[10px] font-medium leading-[16px] text-[#b91c1c]" data-testid="selo-das-vencidas">{vencidas}</span>}
         <div className="ml-auto flex shrink-0 items-center gap-1" data-testid="botoes-do-credito">
           <Button variant="outline" size="sm" className="h-6 gap-1 px-2 text-[10.5px]" onClick={onEditar}><Pencil className="size-3" /> Editar</Button>
-          {/* FIN-CONTRATO-JUNTAR-01 — o lugar do "Juntar" é reservado (nada se move quando ele acender) */}
-          <span className="inline-block h-6 w-[58px]" aria-hidden="true" data-testid="lugar-do-juntar" />
+          {/* FIN-CONTRATO-JUNTAR-01 — o lugar do "Juntar" é reservado (58px; nada se move quando ele acende) */}
+          <span className="inline-flex h-6 w-[58px] shrink-0" aria-hidden={acaoDeJuntar ? undefined : true} data-testid="lugar-do-juntar">{acaoDeJuntar}</span>
           {acaoDeBaixa}
         </div>
       </div>
@@ -214,21 +216,28 @@ export function TabelaDePagamentos({ tela, onAbrirLancamento }: { tela: TelaDoCo
   );
 }
 
-export function TabelaDoHistorico({ tela }: { tela: TelaDoContrato | null }) {
+/** FIN-CONTRATO-JUNTAR-01: o evento de junção viva tem "Desfazer" (o gesto contrário); o resto do Histórico é só leitura */
+export function TabelaDoHistorico({ tela, onDesfazerJuncao }: { tela: TelaDoContrato | null; onDesfazerJuncao?: (juncaoId: string, evento: string) => void }) {
   const linhas = tela?.historico ?? null;
   return (
     <div className="h-full min-h-0 overflow-y-auto rounded-md border" data-testid="area-que-rola-historico">
       <table className="w-full table-fixed border-collapse" data-testid="tabela-historico">
-        <colgroup><col style={{ width: 80 }} /><col /><col style={{ width: 120 }} /></colgroup>
-        <thead><tr><th className={TH}>Data</th><th className={TH}>Evento</th><th className={TH_R}>Valor</th></tr></thead>
+        <colgroup><col style={{ width: 80 }} /><col /><col style={{ width: 120 }} /><col style={{ width: 64 }} /></colgroup>
+        <thead><tr><th className={TH}>Data</th><th className={TH}>Evento</th><th className={TH_R}>Valor</th><th className={TH} aria-label="ação" /></tr></thead>
         <tbody>
-          {linhas === null && <tr><td colSpan={3} className={`${TD} text-muted-foreground`}>…</td></tr>}
-          {linhas !== null && linhas.length === 0 && <tr><td colSpan={3} className={`${TD} text-muted-foreground`}>Nenhum evento.</td></tr>}
+          {linhas === null && <tr><td colSpan={4} className={`${TD} text-muted-foreground`}>…</td></tr>}
+          {linhas !== null && linhas.length === 0 && <tr><td colSpan={4} className={`${TD} text-muted-foreground`}>Nenhum evento.</td></tr>}
           {(linhas ?? []).map((e, i) => (
             <tr key={`${e.evento}-${i}`} className="border-b" data-testid="linha-historico">
               <td className={TD_D}>{dataBr(e.data) ?? '—'}</td>
               <td className={TD} title={e.evento}>{e.evento}</td>
               <td className={TD_R}>{e.valor === null ? '' : num2(e.valor)}</td>
+              <td className={TD}>
+                {e.juncaoId && e.desfazivel && onDesfazerJuncao && (
+                  <button type="button" className="text-[10px] text-primary hover:underline" onClick={() => { if (e.juncaoId) onDesfazerJuncao(e.juncaoId, e.evento); }}
+                    title="desfazer a junção: os dois cadastros voltam ao que eram" data-testid="desfazer-juncao">Desfazer</button>
+                )}
+              </td>
             </tr>
           ))}
         </tbody>

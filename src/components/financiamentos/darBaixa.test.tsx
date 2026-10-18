@@ -21,6 +21,7 @@ function api(o: Partial<Api> = {}): Api {
     urlDoDocumento: vi.fn(async () => null), lerCaptacoesLivres: vi.fn(async () => []), lerContratosAnteriores: vi.fn(async () => []),
     baixaViva: null, darBaixa: vi.fn(async (_t: string, _d: Record<string, unknown>, simular: boolean) => lerResultadoDaBaixa({ ...OK, simulado: simular }) ?? 'x'),
     desfazerBaixa: vi.fn(async () => null), lerSucessores: vi.fn(async () => [{ id: 'novo', numero: 'C-2', descricao: 'Novo' }]),
+    lerJuntaveis: vi.fn(async () => []), juntar: vi.fn(async () => 'x'), desfazerJuncao: vi.fn(async () => 'x'),
     vinculos: [], buscar: vi.fn(async () => 'x'), vincularPagamento: vi.fn(async () => 'x'), desvincularPagamento: vi.fn(async () => 'x'),
     lerEncargosPerto: vi.fn(async () => []), vincularEncargo: vi.fn(async () => null),
     ...o,

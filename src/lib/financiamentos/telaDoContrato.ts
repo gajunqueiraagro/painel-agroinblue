@@ -16,7 +16,7 @@ export interface PagamentoNaTela {
   data: string | null; tipo: 'parcela' | 'encargo'; item: string; principal: number; juros: number; encargos: number; total: number;
   conta: string | null; lancamentoId: string | null;
 }
-export interface EventoNaTela { data: string | null; evento: string; valor: number | null }
+export interface EventoNaTela { data: string | null; evento: string; valor: number | null; juncaoId: string | null; desfazivel: boolean }
 export interface MarcoDaLiberacao { data: string; aConfirmar: boolean }
 export interface TelaDoContrato {
   condicoes: { taxa: number | null; unidade: string | null; taxaAa: number | null; sistema: string | null; carenciaAte: string | null; tipoTaxa: string | null; periodicidade: string | null };
@@ -61,7 +61,8 @@ export function lerTelaDoContrato(raw: unknown): TelaDoContrato | null {
         data: t(o.data), tipo, item: tObrig(o.item), principal: n(o.principal), juros: n(o.juros), encargos: n(o.encargos), total: n(o.total),
         conta: t(o.conta), lancamentoId: t(o.lancamento_id) }; }),
       pagamentosTotal: { qtde: n(pt.qtde), principal: n(pt.principal), juros: n(pt.juros), encargos: n(pt.encargos), total: n(pt.total) },
-      historico: lista(r.historico).map((x) => { const o = obj(x); return { data: t(o.data), evento: tObrig(o.evento), valor: nOuNulo(o.valor) }; }),
+      historico: lista(r.historico).map((x) => { const o = obj(x); return { data: t(o.data), evento: tObrig(o.evento), valor: nOuNulo(o.valor),
+        juncaoId: t(o.juncao_id), desfazivel: o.desfazivel === true }; }),
       aResolver: lista(r.a_resolver).map((x) => { const o = obj(x);
         const acao = ACOES.find((a) => a === o.acao); if (!acao) throw new Torta();
         const tom: TomDoPendente = o.tom === 'vencido' ? 'vencido' : o.tom === 'dado' ? 'dado' : (() => { throw new Torta(); })();

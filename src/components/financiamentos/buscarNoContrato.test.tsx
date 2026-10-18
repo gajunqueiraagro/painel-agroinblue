@@ -40,6 +40,7 @@ function api(o: Partial<Api> = {}): Api {
       ({ simulado: simular, recusa: null, avisos: [], cancelados: 2, movido: false, paga: true, parcelaZerada: false, valorAtualizado: false })),
     desvincularPagamento: vi.fn(async () => 'x'), lerEncargosPerto: vi.fn(async () => []), vincularEncargo: vi.fn(async () => null),
     baixaViva: null, darBaixa: vi.fn(async () => 'x'), desfazerBaixa: vi.fn(async () => null), lerSucessores: vi.fn(async () => []),
+    lerJuntaveis: vi.fn(async () => []), juntar: vi.fn(async () => 'x'), desfazerJuncao: vi.fn(async () => 'x'),
     ...o,
   };
 }
