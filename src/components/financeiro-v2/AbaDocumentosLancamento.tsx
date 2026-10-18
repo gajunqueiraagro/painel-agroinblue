@@ -30,6 +30,7 @@ import { useFornecedoresDoCliente } from '@/hooks/useFornecedoresDoCliente';
 import type { FornecedorLido } from '@/lib/fornecedores/leitorDeFornecedores';
 import { CampoMoeda } from '@/components/ui/campo-moeda';
 import { DatePicker } from '@/components/ui/date-picker';
+import { BlocoFormulario, CORPO_FORMULARIO } from '@/components/ui/bloco-formulario';
 import { Paperclip, Pencil, Ban, Plus, X } from 'lucide-react';
 import { AreaDeArquivo } from '@/components/ui/area-de-arquivo';
 import { ajudaDaRegra } from '@/lib/arquivo/aceitarArquivo';
@@ -522,7 +523,7 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
     <Dialog open onOpenChange={(o) => { if (!o) onFechar(); }}>
       {/* PR 2b — cabeçalho e rodapé fixos, só o corpo rola: com o aviso da nota compartilhada e o motivo do
           cancelamento, o formulário passava da altura da tela e o cabeçalho sumia (visto na prova na tela). */}
-      <DialogContent className="max-w-lg p-0 gap-0 overflow-hidden flex max-h-[calc(100vh-32px)] flex-col">
+      <DialogContent className="max-w-lg p-0 gap-0 overflow-hidden flex h-[min(640px,calc(100dvh-48px))] flex-col">
         <div className="bg-primary px-4 py-2.5 text-primary-foreground flex shrink-0 items-center justify-between">
           <DialogTitle className="text-[14px] font-semibold">
             {documento ? 'Editar documento' : 'Novo documento'}
@@ -534,23 +535,25 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
           Escolha o tipo e informe os dados do documento deste lançamento.
         </DialogDescription>
 
-        <div className="min-h-0 flex-1 overflow-auto">
+        {/* UI-MODAL-BLOCOS-01 — corpo cinza; os campos num bloco "Documento" com o título na borda; régua 28px/11px. */}
+        <div className={`min-h-0 flex-1 overflow-auto ${CORPO_FORMULARIO}`} data-testid="corpo-do-documento">
         {compartilhada && (
-          <p className="mx-4 mt-3 rounded border border-sky-200 bg-sky-50 px-2 py-1 text-[10px] text-sky-900" data-testid="aviso-nota-compartilhada">
+          <p className="rounded border border-sky-200 bg-sky-50 px-2 py-1 text-[10px] text-sky-900" data-testid="aviso-nota-compartilhada">
             Esta nota está em {documento?.ligadoAQtd} parcelas; a alteração vale para todas.
           </p>
         )}
 
         {(sugNumero || sugData || sugValor || sugEmitente) && (
-          <p className="mx-4 mt-3 rounded border border-amber-300 bg-amber-50 px-2 py-1 text-[10px] text-amber-900" data-testid="sugestao-do-lancamento">
+          <p className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-[10px] text-amber-900" data-testid="sugestao-do-lancamento">
             Preenchido com o que {sug?.origem ?? 'o lançamento'} diz ({[sugNumero && 'número', sugData && campos.dataNaSugestao, sugValor && 'valor', sugEmitente && 'emitente'].filter(Boolean).join(', ')}) — confira. Mudar aqui não muda {sug?.origem ?? 'o lançamento'}.
           </p>
         )}
-        <div className="grid grid-cols-2 gap-2 px-4 py-3">
+        <BlocoFormulario titulo="Documento" testId="bloco-documento">
+        <div className="grid grid-cols-2 gap-x-2 gap-y-1">
           {/* ── O TIPO VEM PRIMEIRO, e é ele que decide os campos abaixo (`CAMPOS_POR_ESPECIE`) ── */}
           <div className="col-span-2">
-            <Label className="text-[10px]">Tipo de documento <span className="text-destructive">*</span></Label>
-            <Segmentado valor={especie} onEscolher={trocarEspecie} altura={26} className="mt-0.5 flex w-full [&>button]:flex-1"
+            <Label className="text-[10px] text-muted-foreground">Tipo de documento <span className="text-destructive">*</span></Label>
+            <Segmentado valor={especie} onEscolher={trocarEspecie} altura={22} className="mt-0.5 flex w-full [&>button]:flex-1"
               opcoes={especiesDoForm.map(e => ({ valor: e.value, rotulo: e.label, desabilitada: especieSoLeitura }))} />
             {/* ⚠ O VOCABULÁRIO DA OC É MENOR, e o operador precisa saber ANTES de salvar.
                 Lá só existem `nf_principal`, `nf_complementar`, `recibo` e `outro`: boleto e
@@ -570,19 +573,19 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
           {/* ── linha 1: os dois campos principais — na NF, Número e Série; nos demais, data e valor ── */}
           {campos.serie && (<>
             <div>
-              <Label className="text-[10px]">{campos.numero}</Label>
+              <Label className="text-[10px] text-muted-foreground">{campos.numero}</Label>
               <Input value={numero} onChange={e => setNumero(e.target.value)} data-testid="doc-numero"
-                className={`h-8 text-[12px] mt-0.5${sugNumero ? AMBAR : ''}`} placeholder="Opcional" />
+                className={`h-7 text-[11px] mt-0.5${sugNumero ? AMBAR : ''}`} placeholder="Opcional" />
             </div>
             <div>
-              <Label className="text-[10px]">Série</Label>
+              <Label className="text-[10px] text-muted-foreground">Série</Label>
               <Input value={serie} onChange={e => setSerie(e.target.value)} data-testid="doc-serie"
-                className="h-8 text-[12px] mt-0.5" placeholder="Opcional" />
+                className="h-7 text-[11px] mt-0.5" placeholder="Opcional" />
             </div>
           </>)}
           <div>
-            <Label className="text-[10px]">{campos.data}</Label>
-            <DatePicker value={dataEmissao} onChange={setDataEmissao} className={`h-8 text-[12px] mt-0.5${sugData ? AMBAR : ''}`} />
+            <Label className="text-[10px] text-muted-foreground">{campos.data}</Label>
+            <DatePicker value={dataEmissao} onChange={setDataEmissao} className={`h-7 text-[11px] mt-0.5${sugData ? AMBAR : ''}`} />
           </div>
           {/* ⚠ NA OC, O VALOR DO DOCUMENTO NÃO É UM CAMPO — DOC-UMA-FONTE-01. Lá ele é a
               soma dos COMPONENTES (acréscimo, desconto comercial, retenção), que mexem na
@@ -593,29 +596,29 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
           {destinoOC ? (
             <div data-testid="doc-valor-da-oc">
               <Label className="text-[10px] text-muted-foreground">{campos.valor}</Label>
-              <p className="mt-0.5 h-8 text-[10px] leading-tight text-muted-foreground">
+              <p className="mt-0.5 h-7 text-[10px] leading-tight text-muted-foreground">
                 Vem dos componentes, na aba Documentos da operação.
               </p>
             </div>
           ) : (
             <div>
-              <Label className="text-[10px]">{campos.valor}</Label>
-              <CampoMoeda valor={valor} onChange={setValor} className={`h-8 text-[12px] mt-0.5 text-right${sugValor ? AMBAR : ''}`} />
+              <Label className="text-[10px] text-muted-foreground">{campos.valor}</Label>
+              <CampoMoeda valor={valor} onChange={setValor} className={`h-7 text-[11px] mt-0.5 text-right${sugValor ? AMBAR : ''}`} />
             </div>
           )}
           {/* fora da NF o número não é a identidade do papel: vem depois, em largura inteira */}
           {!campos.serie && (
             <div className="col-span-2">
-              <Label className="text-[10px]">{campos.numero}</Label>
+              <Label className="text-[10px] text-muted-foreground">{campos.numero}</Label>
               <Input value={numero} onChange={e => setNumero(e.target.value)} data-testid="doc-numero"
-                className={`h-8 text-[12px] mt-0.5${sugNumero ? AMBAR : ''}`} placeholder="Opcional" />
+                className={`h-7 text-[11px] mt-0.5${sugNumero ? AMBAR : ''}`} placeholder="Opcional" />
             </div>
           )}
           {/* ── EMITENTE — o DONO do seletor de fornecedor (FORN-SELETOR-PADRAO-01 fatia 2a): busca por nome e por CNPJ/CPF, só
               ativos, documento à vista. "Outro (informar nome e CNPJ/CPF)" é a ação fixa do pé da lista. ── */}
           {campos.emitente && (
             <div className="col-span-2" data-testid="doc-emitente">
-              <Label className="text-[10px]">{campos.emitente}</Label>
+              <Label className="text-[10px] text-muted-foreground">{campos.emitente}</Label>
               <div className="mt-0.5">
                 <FavorecidoSelect<FornecedorLido>
                   value={emitenteEhOutro ? '' : emitenteId} onChange={setEmitenteId}
@@ -623,38 +626,38 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
                   search={buscaEmitente} onSearchChange={setBuscaEmitente}
                   placeholder={emitenteEhOutro ? 'Outro (informar nome e CNPJ/CPF)' : 'Selecione'}
                   acaoFinal={{ label: 'Outro (informar nome e CNPJ/CPF)', onSelect: () => setEmitenteId(OUTRO) }}
-                  triggerClassName={sugEmitente ? 'border-amber-300 bg-amber-50' : undefined} />
+                  triggerClassName={sugEmitente ? 'h-7 text-[11px] border-amber-300 bg-amber-50' : 'h-7 text-[11px]'} />
               </div>
             </div>
           )}
           {campos.emitente && emitenteEhOutro && (<>
             <div>
-              <Label className="text-[10px]">Nome do emitente</Label>
+              <Label className="text-[10px] text-muted-foreground">Nome do emitente</Label>
               <Input value={emitenteNome} onChange={e => setEmitenteNome(e.target.value)} data-testid="doc-emitente-nome"
-                className="h-8 text-[12px] mt-0.5" />
+                className="h-7 text-[11px] mt-0.5" />
             </div>
             <div>
-              <Label className="text-[10px]">CNPJ / CPF do emitente</Label>
+              <Label className="text-[10px] text-muted-foreground">CNPJ / CPF do emitente</Label>
               <Input value={emitenteDoc} onChange={e => setEmitenteDoc(e.target.value)} data-testid="doc-emitente-documento"
-                className="h-8 text-[12px] mt-0.5" />
+                className="h-7 text-[11px] mt-0.5" />
             </div>
           </>)}
           {campos.chave && (
             <div className="col-span-2">
-              <Label className="text-[10px]">Chave de acesso</Label>
+              <Label className="text-[10px] text-muted-foreground">Chave de acesso</Label>
               <Input value={chave} onChange={e => setChave(e.target.value)} data-testid="doc-chave"
-                className="h-8 text-[12px] mt-0.5 tabular-nums" placeholder="44 dígitos" />
+                className="h-7 text-[11px] mt-0.5 tabular-nums" placeholder="44 dígitos" />
             </div>
           )}
           <div className="col-span-2">
-            <Label className="text-[10px]">Observação</Label>
+            <Label className="text-[10px] text-muted-foreground">Observação</Label>
             <Input value={observacao} onChange={e => setObservacao(e.target.value)}
-              className="h-8 text-[12px] mt-0.5" placeholder="Opcional" />
+              className="h-7 text-[11px] mt-0.5" placeholder="Opcional" />
           </div>
           {/* ── ARQUIVO: a área verde, "melhor para identificar" (Gabriel). O `<input type="file">` é o de sempre (mesmos
               `accept` e regras) — só deixou de ser a cara do campo. Soltar um arquivo aqui entra pelo MESMO input. ── */}
           <div className="col-span-2">
-            <Label className="text-[10px]">Arquivo</Label>
+            <Label className="text-[10px] text-muted-foreground">Arquivo</Label>
             {/* UI-ARRASTAR-ARQUIVO-01a — a área é a do sistema (`AreaDeArquivo`): clicar ou arrastar, realce verde, e o tipo
                 errado é recusado AO ESCOLHER, na própria área (a conferência ao gravar continua, pelo mesmo dono). Altura fixa
                 de 40px: o nome longo corta com o inteiro no `title`. */}
@@ -670,11 +673,12 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
             </p>
           </div>
         </div>
+        </BlocoFormulario>
 
         {compartilhada && cancelandoNota && (
-          <div className="mx-4 mb-2 space-y-1 rounded border border-red-200 bg-red-50 px-2 py-1.5" data-testid="cancelar-nota">
-            <Label className="text-[10px]">Motivo do cancelamento da nota <span className="text-destructive">*</span></Label>
-            <Input value={motivoNota} onChange={e => setMotivoNota(e.target.value)} className="h-8 text-[12px]"
+          <div className="space-y-1 rounded border border-red-200 bg-red-50 px-2 py-1.5" data-testid="cancelar-nota">
+            <Label className="text-[10px] text-muted-foreground">Motivo do cancelamento da nota <span className="text-destructive">*</span></Label>
+            <Input value={motivoNota} onChange={e => setMotivoNota(e.target.value)} className="h-7 text-[11px]"
               placeholder={`A nota sai das ${documento?.ligadoAQtd} parcelas`} />
             <div className="flex justify-end gap-2">
               <Button type="button" variant="ghost" className="h-7 text-[11px]" onClick={() => { setCancelandoNota(false); setMotivoNota(''); setErroForm(null); }}>Voltar</Button>
@@ -688,7 +692,7 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
 
         </div>
 
-        <div className="flex shrink-0 items-center justify-end gap-2 border-t bg-card px-4 py-2.5">
+        <div className="flex shrink-0 items-center justify-end gap-2 border-t bg-card px-4 py-2">
           {erroForm && (
             <span className="mr-auto text-[10px] leading-tight text-destructive" data-testid="erro-form-documento">{erroForm}</span>
           )}
