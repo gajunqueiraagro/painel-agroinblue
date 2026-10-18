@@ -238,7 +238,7 @@ describe('tela B — o Novo lançamento preenchido pela nota', () => {
     expect(screen.getByTestId('origem-xml-valor').textContent).toBe('do XML');
     expect(screen.getByText('Fornecedor * · pelo CNPJ')).toBeTruthy();
     expect(screen.getByText('Fazenda * · IE 289876543')).toBeTruthy();
-    expect(screen.getByText('Produto / Descrição * · do XML')).toBeTruthy();
+    expect(screen.getByText('Produto / descrição * · do XML')).toBeTruthy();
     expect(screen.getByTestId('origem-xml-subcentro').textContent).toBe('Classificação sugerida: Nutrição Engorda · último · 14/08/26 deste fornecedor');
     /* fornecedor achado pelo documento, unico e ativo: nenhuma faixa de fornecedor, nenhum aviso */
     expect(screen.queryByTestId('xml-faixa-fornecedor')).toBeNull();

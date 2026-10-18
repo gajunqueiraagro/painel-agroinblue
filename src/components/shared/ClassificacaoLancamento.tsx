@@ -74,7 +74,7 @@ export const atividadeValida = (v: string | null | undefined): Atividade | null 
 export function ClassificacaoLancamento({
   value, onChange, classificacoes, safras, dataCompetencia,
   culturasDaSafra = [], subcentroDesabilitado = false, tipoOperacao, travado = false, motivoTravado, erroSubcentro = null,
-  ocultarCulturaFase = false, ocultarLinhaDaSafra = false,
+  ocultarCulturaFase = false, ocultarLinhaDaSafra = false, regua,
 }: {
   value: ClassificacaoValor;
   /**
@@ -108,6 +108,8 @@ export function ClassificacaoLancamento({
    */
   tipoOperacao: string;
   travado?: boolean;
+  /** UI-MODAL-BLOCOS-01 — 'compacta': os campos na régua dos modais em blocos (28px, 11px). Sem a prop, o de sempre (32px). */
+  regua?: 'compacta';
   /** OC-CC-MODAL-FINANCEIRO-01 — por que esta' travado, quando NAO e' a transferencia (ex.: a conta do principal e' a da OC). Sem a prop, a frase de sempre. */
   motivoTravado?: string;
   /** A recusa do save sobre o subcentro (direcao x conta do plano) — mora embaixo do campo. */
@@ -149,6 +151,8 @@ export function ClassificacaoLancamento({
   /* O nome que o JSX movido usa — ver a nota da interface. */
   const subcentroTravado = travado;
   const fieldBg = CAMPO_BG;
+  const alturaCampo = regua === 'compacta' ? 'h-7 text-[11px]' : 'h-8 text-xs';
+  const rotuloCls = regua === 'compacta' ? 'text-[10px] text-muted-foreground' : 'text-[10px]';
   const [subcentroSearch, setSubcentroSearch] = useState('');
 
   const [subcentroLimpoPelaAtividade, setSubcentroLimpoPelaAtividade] = useState(false);
@@ -280,7 +284,7 @@ export function ClassificacaoLancamento({
                      grade 2×2 de 50px, e a altura do campo é DECLARADA pela grade — não
                      depende do rótulo, que é o que a A16 pede. */}
               <div className="col-span-4">
-                <Label className="text-[10px]">Atividade</Label>
+                <Label className={rotuloCls}>Atividade</Label>
                 {/* ⚠ 2×2 EM 50px, E ESTA É A ÚNICA LINHA DO MODAL MAIS ALTA QUE 32 — decisão
                     do Gabriel na homologação de 10/09. A versão anterior espremia as quatro
                     pílulas em 32px com entrelinha de 11: cabia, mas ninguém lia. Aqui a
@@ -362,7 +366,7 @@ export function ClassificacaoLancamento({
                   search={subcentroSearch}
                   onSearchChange={setSubcentroSearch}
                   label="Subcentro *"
-                  triggerClassName={fieldBg}
+                  triggerClassName={regua === 'compacta' ? cn(fieldBg, 'h-7 text-[11px]') : fieldBg}
                   tabIndex={11}
                   disabled={subcentroDesabilitado}
                 />
@@ -411,7 +415,7 @@ export function ClassificacaoLancamento({
             {!ocultarLinhaDaSafra && (
             <div className="grid grid-cols-12 gap-2 items-start">
               <div className="col-span-4">
-                <Label className="text-[10px]">Safra</Label>
+                <Label className={rotuloCls}>Safra</Label>
                 <Select
                   value={safraId || '__none_safra__'}
                   disabled={ehAdministrativo}
@@ -422,7 +426,7 @@ export function ClassificacaoLancamento({
                       mas nomes futuros podem não caber, e aí o title é quem responde. */}
                   <SelectTrigger
                     title={safraId ? safraNome(safraId) : undefined}
-                    className={cn('h-8 text-xs [&>span]:truncate', fieldBg,
+                    className={cn(alturaCampo, '[&>span]:truncate', fieldBg,
                       safraSugeridaId && safraId === safraSugeridaId && 'border-dashed border-primary',
                       /* ⚠ RISCADO SÓ QUANDO HÁ O QUE RISCAR. O traço diz "este valor não vai
                          sobreviver ao save"; num campo vazio ele não diria nada. */
@@ -489,10 +493,10 @@ export function ClassificacaoLancamento({
                    custo direto da primeira cultura da lista. */}
               {!ocultarCulturaFase && atividade === 'agricultura' && (
                 <div className="col-span-4">
-                  <Label className="text-[10px]">Cultura</Label>
+                  <Label className={rotuloCls}>Cultura</Label>
                   <Select value={cultura || SEM_CULTURA}
                     onValueChange={v => setClassificacao((c) => ({ ...c, cultura: v === SEM_CULTURA ? '' : v }))}>
-                    <SelectTrigger className={cn('h-8 text-xs [&>span]:truncate', fieldBg)}>
+                    <SelectTrigger className={cn(alturaCampo, '[&>span]:truncate', fieldBg)}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -514,10 +518,10 @@ export function ClassificacaoLancamento({
 
               {!ocultarCulturaFase && atividade === 'pecuaria' && (
                 <div className="col-span-4">
-                  <Label className="text-[10px]">Fase</Label>
+                  <Label className={rotuloCls}>Fase</Label>
                   <Select value={fase || SEM_CULTURA}
                     onValueChange={v => setClassificacao((c) => ({ ...c, fase: v === SEM_CULTURA ? '' : v }))}>
-                    <SelectTrigger className={cn('h-8 text-xs [&>span]:truncate', fieldBg)}>
+                    <SelectTrigger className={cn(alturaCampo, '[&>span]:truncate', fieldBg)}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>

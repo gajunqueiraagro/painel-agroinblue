@@ -32,7 +32,7 @@ describe('bloco "Documentos" no topo em todo uso (lido da fonte: o diálogo não
     expect(bloco).toBeGreaterThan(-1);
     expect(salvo).toBeGreaterThan(bloco);
     /* Tipo Documento aparece UMA vez na aba: o bloco de baixo saiu */
-    expect(aba.split('Tipo Documento</Label>').length - 1).toBe(1);
+    expect(aba.split('Tipo documento</Label>').length - 1).toBe(1);
     /* e nada o condiciona: a condição do fix1 caiu */
     expect(fonte).not.toContain('blocoDocumentosNoTopo');
     const inicioDaSecao = aba.lastIndexOf('<section', bloco);
@@ -42,8 +42,8 @@ describe('bloco "Documentos" no topo em todo uso (lido da fonte: o diálogo não
   });
 
   it('o bloco é fixo no topo da área que rola, opaco e acima das tabelas; a Observação fica embaixo', () => {
-    expect(aba).toContain('cn(sectionClass, "sticky -top-2 z-20")');
-    expect(aba.indexOf('Observação</Label>')).toBeGreaterThan(aba.indexOf('<AbaDocumentosLancamento'));
+    expect(aba).toContain('cn(sectionClass, "sticky top-[7px] z-20 shadow-[0_-7px_0_0_hsl(var(--muted))]")');
+    expect(aba.indexOf('<TituloDoBloco nome="Observação" />')).toBeGreaterThan(aba.indexOf('<AbaDocumentosLancamento'));
   });
 });
 

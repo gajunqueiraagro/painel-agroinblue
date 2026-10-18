@@ -139,7 +139,7 @@ async function abrirNoPagamento(lanc: LancamentoV2, extra: Props = {}) {
 const linhasDoBloco = () => screen.getAllByTestId('pgto-linha')
   .map(l => [l.children[0].textContent, (l.children[1].textContent ?? '').replace(/\s/g, ' ')]);
 const formaNoSelect = () => {
-  const rotulo = screen.getAllByText('Forma de Pagamento').find(el => el.tagName === 'LABEL');
+  const rotulo = screen.getAllByText('Forma de pagamento').find(el => el.tagName === 'LABEL');
   return within(rotulo!.parentElement as HTMLElement).getByRole('combobox');
 };
 async function trocarForma(para: string) {

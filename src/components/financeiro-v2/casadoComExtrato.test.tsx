@@ -160,7 +160,7 @@ describe('o modal — lançamento CASADO', () => {
     expect(campoStatus().disabled).toBe(true);
     expect(campoPagamento().disabled).toBe(true);
     expect(campoValor().disabled).toBe(true);
-    expect(campoConta('Conta Origem *')?.disabled).toBe(true);
+    expect(campoConta('Conta origem *')?.disabled).toBe(true);
     expect(banco.perguntas).toEqual(['lanc-1']);
   });
   it('salvar sem tocar no que é do banco GRAVA, sem segunda pergunta', async () => {
@@ -181,14 +181,14 @@ describe('o modal — lançamento CASADO', () => {
     await waitFor(() => expect(frase()).not.toBeNull());
     expect(campoStatus().disabled).toBe(false);
     expect(campoValor().disabled).toBe(true);
-    expect(campoConta('Conta Origem *')?.disabled).toBe(true);
+    expect(campoConta('Conta origem *')?.disabled).toBe(true);
   });
   it('entrada casada: a conta em leitura é a de destino', async () => {
     banco.casado = true;
     montar(entrada());
     await aberto('500,00');
     await waitFor(() => expect(frase()).not.toBeNull());
-    expect(campoConta('Conta Destino *')?.disabled).toBe(true);
+    expect(campoConta('Conta destino *')?.disabled).toBe(true);
     expect(campoValor().disabled).toBe(true);
   });
 });
@@ -201,7 +201,7 @@ describe('o modal — lançamento NÃO casado', () => {
     expect(campoStatus().disabled).toBe(false);
     expect(campoPagamento().disabled).toBe(false);
     expect(campoValor().disabled).toBe(false);
-    expect(campoConta('Conta Origem *')?.disabled).toBe(false);
+    expect(campoConta('Conta origem *')?.disabled).toBe(false);
     expect(banco.perguntas).toEqual(['lanc-1']);
   });
   it('mudar o valor e salvar: o banco é perguntado de novo, segue não casado, e GRAVA', async () => {

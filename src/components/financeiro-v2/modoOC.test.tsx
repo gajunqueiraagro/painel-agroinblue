@@ -246,8 +246,8 @@ describe('o modal em modo OC — principal (venda)', () => {
     expect(o.onVoltar).toHaveBeenCalledTimes(1);
     expect(screen.getByText('Programar recebimento')).toBeTruthy();
     const r = rotulos();
-    expect(r).not.toContain('Data Competência *');
-    expect(r).not.toContain('Data Pagamento *');
+    expect(r).not.toContain('Data competência *');
+    expect(r).not.toContain('Data pagamento *');
     expect(r.some(t => /safra/i.test(t))).toBe(false);
     expect(r).toContain('Vencimento *');
     expect(screen.queryByTestId('campo-item-oc')).toBeNull();          // o item é só da despesa
@@ -381,9 +381,9 @@ describe('o modal NORMAL não muda', () => {
     expect(screen.queryByTestId('rotulo-vencimento-oc')).toBeNull();
     expect(screen.getByText('Novo Lançamento')).toBeTruthy();
     const r = rotulos();
-    expect(r).toContain('Data Competência *');
-    expect(r).toContain('Data Pagamento *');
-    expect(r).toContain('Data Vencimento');
+    expect(r).toContain('Data competência *');
+    expect(r).toContain('Data pagamento *');
+    expect(r).toContain('Data vencimento');
     expect(porTab(1)).toHaveProperty('disabled', false);
     expect(porTab(4)).toHaveProperty('disabled', false);
     expect(campoFazenda()).toHaveProperty('disabled', false);
