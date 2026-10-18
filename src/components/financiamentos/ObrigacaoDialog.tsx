@@ -33,7 +33,6 @@ import { CULTURAS_LANCAMENTO, FASES } from '@/lib/agri/rateioLancamento';
 import {
   MOTIVO_PARCELA_DE_PARCELAMENTO, MOTIVO_PRIMEIRA_PARCELA_DO_PARCELAMENTO, MOTIVO_VALE_POR_PARCELA, VARIA_ENTRE_AS_PARCELAS, textoDasParcelas, valorComumDasParcelas,
 } from '@/lib/financiamentos/valorDasParcelas';
-import ModalBaixaParcela from '@/components/financiamentos/ModalBaixaParcela';
 import { TableFooter } from '@/components/ui/table';
 import { Pencil } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -157,7 +156,9 @@ export const PILULA_NATUREZA: Record<NaturezaContrato, string> = {
   emprestimo: 'EMP',
 };
 
-const ORDEM_NATUREZA: NaturezaContrato[] = ['parcelamento', 'financiamento', 'emprestimo'];
+/* EDITAR = CADASTRO NOVO v2 (18/10/2026): financiamento, empréstimo e consórcio nascem e se editam pelo CADASTRO NOVO
+   (`CadastroDeContratoDialog`); este diálogo ficou só para a COMPRA PARCELADA. */
+const ORDEM_NATUREZA: NaturezaContrato[] = ['parcelamento'];
 
 /* ⚠ LITERAIS MEDIDOS NO BANCO PROTO, nao supostos — `financeiro_plano_contas`, 08/09/2026.
    Sao os MESMOS subcentros que `fn_reconciliar_parcela_financiamento` fixa por
@@ -310,11 +311,14 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
   const [statusContrato, setStatusContrato] = useState<string>('ativo');
   /* A grade da aba Parcelas abre o MESMO modal do detalhe — um editor de parcela so'
      para o sistema, e ele ja' reconcilia o financeiro ao salvar. */
-  const [parcelaEdit, setParcelaEdit] = useState<ParcelaGravada | null>(null);
   const [salvandoEdicao, setSalvandoEdicao] = useState(false);
 
   const ehEdicao = modo === 'editar';
   const ehParcelamento = form.natureza === 'parcelamento';
+  /* EDITAR v2: na criação este diálogo só abre como compra parcelada (o crédito nasce no cadastro novo) */
+  useEffect(() => {
+    if (modo === 'criar') setForm((f) => (f.natureza === 'parcelamento' ? f : { ...f, natureza: 'parcelamento' }));
+  }, [modo, setForm]);
 
   /* ── MODO EDITAR — o contrato existente e o cronograma que ele ja' tem ──────── */
   const { data: contrato, isFetching: buscandoContrato } = useQuery({
@@ -1485,11 +1489,10 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                                 <TableCell className={NUM}>{dataBR(pg.data_pagamento) ?? '—'}</TableCell>
                                 <TableCell className="px-0 text-right select-none">
                                   <Button variant="ghost" size="icon" className="h-5 w-5 p-0"
-                                    onClick={() => setParcelaEdit(pg)}
-                                    /* PARC-LIVRES-01 2A — o editor de parcela chama o motor do financiamento; em parcelamento ele
-                                       cancelava o lançamento e criava outro. Apagado com o motivo, nunca escondido. */
-                                    disabled={ehParcelamento}
-                                    title={ehParcelamento ? MOTIVO_PARCELA_DE_PARCELAMENTO : 'Editar parcela'} aria-label="Editar parcela">
+                                    /* PARC-LIVRES-01 2A + EDITAR v2 (18/10): este diálogo não grava parcela — no parcelamento é a grade; no
+                                       crédito, o "Editar parcelas" da tela do contrato (`fn_financiamento_parcelas_editar`). */
+                                    disabled
+                                    title={ehParcelamento ? MOTIVO_PARCELA_DE_PARCELAMENTO : 'As parcelas do crédito se editam pela tela do contrato (Editar parcelas).'} aria-label="Editar parcela">
                                     <Pencil className="size-3.5" />
                                   </Button>
                                 </TableCell>
@@ -1898,51 +1901,6 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
       </DialogContent>
     </Dialog>
 
-    {/* ⚠ O EDITOR DE PARCELA E' O MESMO DO DETALHE, montado aqui como IRMAO do dialogo.
-        Ao fechar, invalida a grade desta aba E as consultas do detalhe atras: a parcela
-        que acabou de mudar aparece nos dois lugares sem F5. */}
-    {ehEdicao && parcelaEdit && contrato && (
-      <ModalBaixaParcela
-        /* ⚠ PROP-BAG EXPLICITO, e nao um cast do row. A linha do banco tem colunas
-           anulaveis (`descricao`, `total_parcelas`, `cliente_id`...) e o modal pede os
-           campos fechados; `as` calaria a diferenca em vez de resolve-la. Montado a mao,
-           cada coalescencia fica visivel — e a regra zero-cast continua de pe'. */
-        parcela={{
-          id: parcelaEdit.id,
-          numero_parcela: Number(parcelaEdit.numero_parcela) || 0,
-          valor_principal: Number(parcelaEdit.valor_principal) || 0,
-          valor_juros: Number(parcelaEdit.valor_juros) || 0,
-          data_vencimento: parcelaEdit.data_vencimento ?? '',
-          data_pagamento: parcelaEdit.data_pagamento,
-          status: parcelaEdit.status ?? 'pendente',
-          observacao: parcelaEdit.observacao,
-          lancamento_id: parcelaEdit.lancamento_id,
-          lancamento_juros_id: parcelaEdit.lancamento_juros_id,
-        }}
-        financiamento={{
-          id: contrato.id,
-          cliente_id: contrato.cliente_id ?? '',
-          fazenda_id: contrato.fazenda_id ?? null,
-          descricao: contrato.descricao ?? '',
-          total_parcelas: Number(contrato.total_parcelas) || parcelasGravadas.length,
-          tipo_financiamento: contrato.tipo_financiamento ?? undefined,
-          status: contrato.status ?? undefined,
-          plano_conta_parcela_id: contrato.plano_conta_parcela_id ?? null,
-          conta_bancaria_id: contrato.conta_bancaria_id ?? null,
-          numero_contrato: contrato.numero_contrato,
-          credor_id: contrato.credor_id,
-          data_contrato: contrato.data_contrato,
-          natureza: contrato.natureza,
-        }}
-        modo="editar"
-        onClose={() => {
-          setParcelaEdit(null);
-          qc.invalidateQueries({ queryKey: ['obrigacao-edicao-parcelas', financiamentoId] });
-          qc.invalidateQueries({ queryKey: ['financiamento-parcelas', financiamentoId] });
-          qc.invalidateQueries({ queryKey: ['financiamento-detalhe', financiamentoId] });
-        }}
-      />
-    )}
     {/* PARC-CONTRATO-01 item 2 — até onde a edição alcança as parcelas. "Voltar" fecha sem gravar nada. */}
     {propagar && (
       <PropagarContratoDialog descricao={form.descricao || contrato?.descricao || ''} previa={propagar.previa}

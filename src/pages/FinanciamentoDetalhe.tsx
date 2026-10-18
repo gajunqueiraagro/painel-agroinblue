@@ -23,7 +23,6 @@ import { Button } from '@/components/ui/button';
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell, TableFooter } from '@/components/ui/table';
 import { useCliente } from '@/contexts/ClienteContext';
 import { supabase } from '@/integrations/supabase/client';
-import { montarPayloadConta } from '@/lib/financeiro/contaPayload';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -43,6 +42,9 @@ import type { AcaoDoPendente, PendenteDoContrato } from '@/lib/financiamentos/te
 import { BuscarPagamentoDialog } from '@/components/financiamentos/BuscarNoContrato';
 import { BotaoDarBaixa, DarBaixaDialog } from '@/components/financiamentos/DarBaixa';
 import { CadastroDeContratoDialog } from '@/components/financiamentos/CadastroDeContratoDialog';
+import { EditarParcelasDialog, SeloAjustada, type ParcelaParaEditar } from '@/components/financiamentos/EdicaoDoContrato';
+import { useEdicaoDoContrato } from '@/hooks/useEdicaoDoContrato';
+import { travaNaTela } from '@/lib/financiamentos/edicaoDoContrato';
 import { ROTULO_DA_BAIXA, type TipoDeBaixa } from '@/lib/financiamentos/baixaDoContrato';
 import { ROTULO_DO_PAPEL } from '@/lib/financiamentos/buscaNoContrato';
 import type { VinculoDePagamento } from '@/hooks/useContratoDeCredito';
@@ -165,6 +167,9 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
   /* FIN-FINANC-28 PASSO 4 — liberações, destinações e documentos do contrato de crédito (o hook roda sempre: regra dos hooks;
      na compra parcelada a tela não o desenha) */
   const credito = useContratoDeCredito(id, clienteId);
+  /* EDITAR = CADASTRO NOVO v2: o cabeçalho, as parcelas à mão, o regerar e o desfazer do crédito */
+  const edicao = useEdicaoDoContrato(id, clienteId);
+  const [focoParcela, setFocoParcela] = useState<string | null>(null);
   /* a leitura da tela acompanha a situação: pagar ou vincular por outro caminho relê a situação, e com ela o "A resolver" */
   const relerTela = credito.relerTela;
   useEffect(() => { if (situacao) relerTela(); }, [situacao]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -266,112 +271,9 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
       return false;
     }
 
-    /* ── DESLOCAMENTO DO CRONOGRAMA (PR-PARC-05c item 3) ──────────────────────
-       ⚠ AQUI, E NAO NO DIALOGO: este e' o unico ponto do fluxo com acesso as parcelas
-       e ao estado ANTERIOR do contrato (`fin.data_primeira_parcela`) — o dialogo so'
-       conhece o form, e o form ja' e' o valor novo.
-       ⚠ SO' AS PENDENTES. A data de uma parcela paga ja' virou lancamento no caixa;
-       reescreve-la nao adia nada, so' desmente um fato registrado. O filtro e'
-       `status <> 'pago'` no proprio UPDATE, para nao depender do que o front carregou.
-       ⚠ DIAS, NAO MESES: o intervalo e' a diferenca em dias entre a data antiga e a
-       nova, aplicado igual a todas — assim uma frequencia semestral continua semestral,
-       e o dia do mes acompanha o que o operador escolheu. */
-    const dataAntiga: string | null = fin?.data_primeira_parcela ?? null;
-    const dataNova = form.data_primeira_parcela || null;
-    /* PARC-LIVRES-01 2A — NO PARCELAMENTO NAO SE DESLOCA: este laço move só `financiamento_parcelas`, e o lançamento de cada
-       parcela ficava com a data de antes (parcela e lançamento divergiam). A data de cada parcela se edita na grade de parcelas,
-       que grava parcela e lançamento juntos. Financiamento e empréstimo: como sempre. */
-    if (form.natureza !== 'parcelamento' && dataAntiga && dataNova && dataAntiga !== dataNova) {
-      const MS_DIA = 86400000;
-      const deltaDias = Math.round(
-        (new Date(dataNova + 'T12:00:00').getTime() - new Date(dataAntiga + 'T12:00:00').getTime()) / MS_DIA,
-      );
-      if (deltaDias !== 0) {
-        const { data: pendentes } = await supabase
-          .from('financiamento_parcelas')
-          .select('id, data_vencimento')
-          .eq('financiamento_id', id!)
-          .neq('status', 'pago');
-        for (const par of pendentes ?? []) {
-          if (!par.data_vencimento) continue;
-          const nova = new Date(par.data_vencimento + 'T12:00:00');
-          nova.setDate(nova.getDate() + deltaDias);
-          await supabase
-            .from('financiamento_parcelas')
-            .update({ data_vencimento: format(nova, 'yyyy-MM-dd'), updated_at: new Date().toISOString() })
-            .eq('id', par.id);
-        }
-        if ((pendentes?.length ?? 0) > 0) {
-          toast.info(`${pendentes!.length} parcela(s) pendente(s) deslocada(s) em ${deltaDias} dia(s).`);
-        }
-      }
-    }
-
-    // ── Sync lançamento de captação ──────────────────────────────────
-    const novoGerar = !!form.gerar_lancamento_captacao;
-    const novoPlanoCap = form.plano_conta_captacao_id;
-    const lancId: string | null = (fin as any)?.lancamento_captacao_id ?? null;
-    const anoMes = format(new Date(form.data_contrato + 'T12:00:00'), 'yyyy-MM');
-
-    if (novoGerar && novoPlanoCap) {
-      if (lancId) {
-        await supabase.from('financeiro_lancamentos_v2').update({
-          valor: form.valor_total,
-          data_competencia: form.data_contrato,
-          data_pagamento: form.data_contrato,
-          // Convenção soberana (PR-K): 1-Entradas → conta_destino_id; conta_bancaria_id null.
-          ...montarPayloadConta('1-Entradas', form.conta_bancaria_id || null),
-          favorecido_id: form.credor_id || null,
-          plano_conta_id: novoPlanoCap,
-          ano_mes: anoMes,
-          cancelado: false,
-          cancelado_em: null,
-          cancelado_por: null,
-          sem_movimentacao_caixa: false,
-          updated_at: new Date().toISOString(),
-        }).eq('id', lancId);
-      } else {
-        const { data: novoLanc } = await supabase
-          .from('financeiro_lancamentos_v2')
-          .insert({
-            cliente_id: (fin as any)?.cliente_id,
-            fazenda_id: (fin as any)?.fazenda_id,
-            financiamento_id: id!,
-            // Convenção soberana (PR-K): 1-Entradas → conta_destino_id; conta_bancaria_id null.
-            ...montarPayloadConta('1-Entradas', form.conta_bancaria_id || null),
-            favorecido_id: form.credor_id || null,
-            tipo_operacao: '1-Entradas',
-            sinal: 1,
-            valor: form.valor_total,
-            data_competencia: form.data_contrato,
-            data_pagamento: form.data_contrato,
-            ano_mes: anoMes,
-            origem_lancamento: 'financiamento',
-            origem_tipo: 'financiamento_captacao',
-            plano_conta_id: novoPlanoCap,
-            /* FIN-LANC-DESCRICAO-CONTRATO-01: o gatilho do banco reescreve ao ligar ("Captação · nº · descrição"). */
-            descricao: (form.descricao ?? '').trim(),
-            status_transacao: 'realizado',
-            sem_movimentacao_caixa: false,
-            cancelado: false,
-          })
-          .select('id')
-          .single();
-        if (novoLanc?.id) {
-          await supabase.from('financiamentos')
-            .update({ lancamento_captacao_id: novoLanc.id })
-            .eq('id', id!);
-        }
-      }
-    } else if (!novoGerar && lancId) {
-      await supabase.from('financeiro_lancamentos_v2').update({
-        cancelado: true,
-        cancelado_em: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }).eq('id', lancId);
-    }
-    // ─────────────────────────────────────────────────────────────────
-
+    /* EDITAR = CADASTRO NOVO v2 (18/10/2026): este gravador ficou SÓ para a compra parcelada (o crédito grava o cabeçalho por
+       `fn_financiamento_salvar_cabecalho`, que sincroniza a captação no banco). Saíram daqui o DESLOCAMENTO de dias das parcelas
+       (só valia fora do parcelamento) e a SINCRONIA DA CAPTAÇÃO (nenhum parcelamento tem captação: medido 0 de 64 em 18/10). */
     /* ⚠ O QUE O SALVAR NÃO ALCANÇA, DITO — PARC-OBRIGACAO-EDICAO-01a. Descrição e conta são copiadas para o lançamento de cada
        parcela quando ela nasce; este gravador atualiza só o CONTRATO. Enquanto a propagação não existe, quem mudou um dos dois
        num contrato com parcelas lê que elas ficaram como estavam — em vez de descobrir depois. */
@@ -521,6 +423,11 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
   /* B3 (medido 18/10): a 1.126×579 o aviso da 1ª parcela ocupava 42px sob o cronograma e tirava duas parcelas da vista — ele
      também vira item da aba "A resolver" (só informa). Sob o cronograma não fica aviso nenhum. */
   const pendentesDoBanco = credito.tela?.aResolver ?? [];
+  const ajustadas = new Set(parcelas.filter((r) => 'ajustada' in r && r.ajustada === true).map((r) => r.id));
+  const parcelasParaEditar: ParcelaParaEditar[] = linhas.map((p) => ({
+    id: p.id, numero: p.numero, vencimento: p.dataVencimento, principal: p.valorPrincipal, juros: p.valorJuros, ajustada: ajustadas.has(p.id),
+    trava: travaNaTela(p.situacao, credito.vinculos.some((v) => v.parcelaId === p.id)),
+  }));
   const avisosDaLista = [...(principalDifere ? [principalDifere] : []), ...avisos];
   const pendencias = { qtde: pendentesDoBanco.length + avisosDaLista.length, vencido: pendentesDoBanco.some((p) => p.tom === 'vencido') };
   const subtitulo = subtituloDoContrato({
@@ -796,6 +703,8 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
                               title={orfa ? porQueSemLancamento(p) : origemDaSituacao(p)} data-testid="situacao-da-parcela" data-sem-lancamento={orfa ? 'sim' : undefined}>
                           {orfa ? ROTULO_SEM_LANCAMENTO : ROTULO_SITUACAO[p.situacao]}
                         </span>
+                        {/* EDITAR v2: a parcela ajustada à mão leva o selo (a coluna `ajustada` do banco), na mesma célula */}
+                        {!ehParcelamento && ajustadas.has(p.id) && <> <SeloAjustada /></>}
                       </TableCell>
                       {ehParcelamento && orfa && (
                         /* sem lançamento não há nota nem boleto a mostrar: as duas colunas dão lugar aos dois gestos da linha */
@@ -869,10 +778,10 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
                       <TableCell className="px-0 text-right select-none">
                         {/* ⚠ 16px DENTRO DE LINHA DE 19px: `py-0` na célula faz o filho mais alto mandar na altura de TODAS as linhas. */}
                         <Button variant="ghost" size="icon" className="h-4 w-4 p-0 align-middle"
-                          onClick={(e) => { e.stopPropagation(); abrir(); }}
-                          disabled={!p.lancamentoId}
-                          title={p.lancamentoId ? 'Abrir o lançamento desta parcela no Financeiro' : MOTIVO_PARCELA_SEM_LANCAMENTO}
-                          aria-label="Abrir o lançamento da parcela">
+                          onClick={(e) => { e.stopPropagation(); if (ehParcelamento) abrir(); else { setFocoParcela(p.id); abrirEdicao('parcelas'); } }}
+                          disabled={ehParcelamento && !p.lancamentoId}
+                          title={!ehParcelamento ? 'Editar as parcelas (esta em destaque)' : p.lancamentoId ? 'Abrir o lançamento desta parcela no Financeiro' : MOTIVO_PARCELA_SEM_LANCAMENTO}
+                          aria-label={ehParcelamento ? 'Abrir o lançamento da parcela' : 'Editar a parcela'}>
                           <Pencil className="size-3" />
                         </Button>
                       </TableCell>
@@ -939,7 +848,17 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
           ⚠ `onSalvarEdicao` recebe o `saveEdit` DESTA tela: o dialogo e' o formulario,
           e quem grava continua sendo quem ja' gravava (com a sincronia do lancamento de
           captacao intacta). */}
-      {editOpen && (
+      {/* EDITAR = CADASTRO NOVO v2 (18/10): no crédito o Editar abre o cadastro novo em modo editar e o "Editar parcelas" (e o lápis)
+          a edição das parcelas — o ObrigacaoDialog ficou só para a compra parcelada. */}
+      {editOpen && !ehParcelamento && abaDoEditar !== 'parcelas' && id && (
+        <CadastroDeContratoDialog aberto financiamentoId={id} aoFechar={() => setEditOpen(false)}
+          onSalvo={() => { for (const k of ['financiamento-detalhe', 'financiamentos-lista', 'financiamento-situacao', 'contrato-tela']) qc.invalidateQueries({ queryKey: [k] }); }} />
+      )}
+      {editOpen && !ehParcelamento && abaDoEditar === 'parcelas' && (
+        <EditarParcelasDialog aberto aoFechar={() => { setEditOpen(false); setFocoParcela(null); }} api={edicao} ultimaOperacao={edicao.ultimaOperacao}
+          parcelas={parcelasParaEditar} focoId={focoParcela} />
+      )}
+      {editOpen && ehParcelamento && (
         <ObrigacaoDialog
           open
           modo="editar"

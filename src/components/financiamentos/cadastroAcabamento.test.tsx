@@ -8,6 +8,8 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+/* EDITAR v2: o modo editar usa o hook da edição; na criação ele não é chamado de verdade */
+vi.mock('@/hooks/useEdicaoDoContrato', () => ({ useEdicaoDoContrato: () => ({ salvarCabecalho: vi.fn(), editarParcelas: vi.fn(), regerar: vi.fn(), desfazer: vi.fn(), ultimaOperacao: null }) }));
 vi.mock('@/contexts/ClienteContext', () => ({ useCliente: () => ({ clienteAtual: { id: 'c1', nome: 'Cliente Teste' } }) }));
 vi.mock('@/contexts/FazendaContext', () => ({ useFazenda: () => ({ fazendas: [] }) }));
 vi.mock('@/hooks/useFinanciamentoCadastro', () => ({ useFinanciamentoCadastro: () => ({ contas: [], classificacoes: [] }) }));

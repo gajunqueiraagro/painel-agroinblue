@@ -30,6 +30,8 @@ export const BUCKET_DO_CONTRATO = 'fin-documentos';
 const CHAVES_DA_TELA = ['contrato-liberacoes', 'contrato-destinacoes', 'contrato-documentos', 'contrato-captacoes-livres', 'contrato-encargos',
   'contrato-vinculos-pagamento', 'financiamento-parcelas', 'contrato-baixa-viva', 'financiamento-detalhe'];
 const CHAVES_QUE_LEEM_O_SALDO = ['contrato-tela', 'financiamento-situacao', 'financiamentos-lista', 'financiamento-primeira-liberacao', 'painel-financiamentos'];
+/** EDITAR = CADASTRO NOVO v2: quem grava no contrato por fora deste hook (a edição) relê as mesmas chaves */
+export const CHAVES_DO_CONTRATO: readonly string[] = [...CHAVES_DA_TELA, ...CHAVES_QUE_LEEM_O_SALDO, 'contrato-operacoes-parcelas'];
 
 type Linha = Record<string, unknown>;
 const txt = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null);

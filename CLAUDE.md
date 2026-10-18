@@ -43,7 +43,9 @@ no mesmo arquivo.
   sai com codigo 0 e passa sempre. Era um gate vazio. O comando oficial
   varre os 671 arquivos .ts/.tsx em src/ e sai com codigo 2 enquanto
   houver erro.
-- TSC baseline: 140 erros (141 -> 140 no PR-CONC-IMPORT-BANCO-01B, por PECA QUE DEIXOU DE EXISTIR: saiu o TS2352 do
+- TSC baseline: 139 erros (140 -> 139 no FIN-FINANC-28 EDITAR = CADASTRO NOVO v2, por PECA QUE DEIXOU DE EXISTIR: saiu o TS2322
+  `number` -> `string` do `sinal: 1` no insert da captacao do `saveEdit` de FinanciamentoDetalhe.tsx — a captacao passou ao banco;
+  antes, 141 -> 140 no PR-CONC-IMPORT-BANCO-01B, por PECA QUE DEIXOU DE EXISTIR: saiu o TS2352 do
   `(inserted ?? []) as { id; hash_movimento }[]` em useImportacaoExtrato.ts — o upsert direto em `extrato_bancario_v2` virou
   a RPC `fn_extrato_importar_arquivo`; antes, 142 -> 141 no PR-FIN-DUPLICAR-ABRE-MODAL-01, por APAGAR CODIGO MORTO: saiu o TS2322
   `number` -> `string` do `sinal` no `duplicarLancamento` de useFinanceiroV2.ts), medidos em ARVORE LIMPA — worktree em detached HEAD sobre o commit,
@@ -162,7 +164,10 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 18/10/2026 (FIN-FINANC-28 TELA v3 B3, +3: `src/components/financiamentos/telaDoContratoV3.test.tsx` 3 (10 -> 13; o
+  Baseline em 18/10/2026 (FIN-FINANC-28 EDITAR = CADASTRO NOVO v2, +2: `src/components/financiamentos/edicaoDoContrato.test.tsx` 8 (novo);
+  `obrigacaoEdicao.test.tsx` −6 (51 -> 45: sairam as fotos de edicao e criacao de financiamento/emprestimo e tres casos do credito,
+  com o caminho do credito do ObrigacaoDialog; entrou 1, o Editar do credito abre o cadastro novo) — 5646 depois dele; antes o
+  FIN-FINANC-28 TELA v3 B3, +3: `src/components/financiamentos/telaDoContratoV3.test.tsx` 3 (10 -> 13; o
   "A resolver" virou aba) — 5644 depois dele; antes o FIN-FINANC-28 TELA DO CONTRATO v3, +10: `src/components/financiamentos/telaDoContratoV3.test.tsx` 10 (novo);
   `contratoDeCredito.test.tsx` (2) trocado ao contrato novo (2 -> 2) e `obrigacaoEdicao.test.tsx` passou a ancorar em `topo-do-contrato` — 5641
   depois dele; antes o UI-MODAL-BLOCOS-01 titulo na borda, +1: `src/components/ui/blocoFormulario.test.tsx` 1 (2 -> 3) — 5631
@@ -383,7 +388,7 @@ no mesmo arquivo.
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
   `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5327
-  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO; 5568 desde o FIN-FINANC-28 PASSO 4; 5571 desde o FIN-FINANC-28 RESUMO-A18; 5573 desde o FIN-FINANC-28 PASSO 4c; 5581 desde o FIN-FINANC-28 PASSO 4b; 5586 desde o FIN-FINANC-28 PASSO 5; 5593 desde o FIN-FINANC-28 PASSO 6; 5607 desde o FIN-FINANC-28 PASSO 7; 5609 desde o FIN-FINANC-28 PASSO 8; 5614 desde o FORN-MESCLAR-01; 5615 desde o RECORRENCIAS-COLUNAS-01; 5620 desde o FIN-FINANC-28 FIX 4b; 5623 desde o FIN-LANC-DESCRICAO-CONTRATO-01; 5628 desde o FIN-FINANC-28 CADASTRO-ACABAMENTO; 5630 desde o UI-MODAL-BLOCOS-01 passo 0; 5631 desde o UI-MODAL-BLOCOS-01 titulo na borda; 5641 desde o FIN-FINANC-28 TELA v3; 5644 desde o B3], 22 skipped, e
+  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO; 5568 desde o FIN-FINANC-28 PASSO 4; 5571 desde o FIN-FINANC-28 RESUMO-A18; 5573 desde o FIN-FINANC-28 PASSO 4c; 5581 desde o FIN-FINANC-28 PASSO 4b; 5586 desde o FIN-FINANC-28 PASSO 5; 5593 desde o FIN-FINANC-28 PASSO 6; 5607 desde o FIN-FINANC-28 PASSO 7; 5609 desde o FIN-FINANC-28 PASSO 8; 5614 desde o FORN-MESCLAR-01; 5615 desde o RECORRENCIAS-COLUNAS-01; 5620 desde o FIN-FINANC-28 FIX 4b; 5623 desde o FIN-LANC-DESCRICAO-CONTRATO-01; 5628 desde o FIN-FINANC-28 CADASTRO-ACABAMENTO; 5630 desde o UI-MODAL-BLOCOS-01 passo 0; 5631 desde o UI-MODAL-BLOCOS-01 titulo na borda; 5641 desde o FIN-FINANC-28 TELA v3; 5644 desde o B3; 5646 desde o EDITAR v2], 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -2251,6 +2256,42 @@ preview que o cabecalho nao sai da tela ao rolar.
   regua nas tres naturezas; o formulario novo (passo 7) a herda. Preso por `resumoDaObrigacao.test.ts` (fonte, com auto-teste).
   MEDIDO na bancada a 1.126 x 579 e 1.440 x 800 (compra parcelada e PR-78.192, abas Contrato e Parcelas): 240px, sem rolagem,
   maior fonte 11px, linhas de 16px. As 15 fotos do dialogo (`obrigacaoDialog.fotos.json`) REGRAVADAS de proposito (o aside esta' em todas).
+- ⚠ O CREDITO SE EDITA PELO CADASTRO NOVO, E AS PARCELAS EM ABERTO MUDAM POR TRES RPCs COM TRILHA E DESFAZER (FIN-FINANC-28 EDITAR = CADASTRO
+  NOVO v2, Gabriel 18/10/2026; migrations `20261027201400_fin_financ_28_editar_cadastro.sql` md5 daa90c496265d38ea846258d33aee06e e
+  `20261027201500_fin_financ_28_cabecalho_linha.sql` md5 8772c5861b722f5913b81999cadfffba, ledger com o timestamp do dia; ledger = arquivo).
+  Financiamento, emprestimo e consorcio; COMPRA PARCELADA FICA NO ObrigacaoDialog (que passou a nascer e a se editar SO' como parcelamento).
+  · BANCO: `financiamento_parcelas.ajustada` (a mexida a' mao). `fn_financiamento_salvar_cabecalho(id, dados, simular)` grava SO' as chaves
+    que vieram (lista fechada; natureza e status nao), deriva a taxa mensal da a.a., SINCRONIZA A CAPTACAO (cria / atualiza / cancela pelo
+    dono; casada com o extrato recusa com a frase) e devolve `cronograma_mudou` + `campos_do_cronograma` (sistema, taxa, prazo, carencia,
+    valor, periodicidade, 1º vencimento) — NAO desloca parcela. `fn_financiamento_parcelas_editar(id, {alterar, acrescentar, retirar},
+    simular)`: so' parcela em aberto; TRAVADA (`_fn_parcela_credito_trava`: paga · pagamento registrado · vinculo vivo · casada com o
+    extrato) recusa com o motivo; marca `ajustada`. `fn_financiamento_parcelas_regerar(id, 'manter_ajustes'|'recalcular_todas', simular)`:
+    `fn_financiamento_cronograma` com principal = saldo da fonte unica (`_fn_financiamento_saldo`, HOJE) − principal em aberto das que
+    ficam (travadas e, em 'manter_ajustes', as ajustadas); n = total_parcelas − as que ficam; 1º vencimento = o do contrato sem nenhuma
+    que fique, senao o mais cedo das substituidas; recusa sem sistema, sem liberacao (saldo nulo), consorcio. As linhas ocupam as
+    parcelas substituidas em ordem; sobra sai, falta nasce. Depois de editar/regerar/desfazer: numero pela ordem do vencimento,
+    total_parcelas e vencimento_final no contrato, e o MOTOR roda em toda viva nao travada (ele cria/atualiza/cancela os lancamentos;
+    a retirada cancela os em aberto pelo dono). TRILHA `financiamento_parcelas_operacoes` (foto antes/depois de TODAS as parcelas;
+    `feita_em` = clock_timestamp); `fn_financiamento_parcelas_desfazer(operacao, motivo, simular)` so' a ULTIMA viva, motivo obrigatorio,
+    recusa parcela que travou depois. Simulacao = gravacao ('FCSIM'); recusa na simulacao em `recusa.frase`, na gravacao P0001 + "Nada foi
+    gravado.". Guarda `_fn_contrato_do_usuario`; contrato vigente (ativo/prorrogado). Testes `fin_financ_28_editar_cadastro_a_test.sql`
+    (A1–A4) e `_b_test.sql` (B1–B5), OK no vivo; 5 mutacoes mortas.
+  · TELA: `CadastroDeContratoDialog` com `financiamentoId` = modo editar (titulo "Editar contrato · <nº> · <credor inteiro>", natureza
+    travada, vazio = "· não cadastrado" no rotulo, consorcio com carta/prazo/custos em leitura; Salvar = so' o que mudou,
+    `dadosDoCabecalho`); "Regerar parcelas em aberto" (`RegerarParcelas`: "Manter ajustes" padrao, previa antes × depois do banco,
+    grava so' na confirmacao) acende quando o banco diz que o cronograma mudou. Na tela do contrato, "Editar parcelas" e o LAPIS do
+    cronograma abrem `EditarParcelasDialog` (900 × 560 fixo; à mão · regerar · desfazer a ultima; travada em leitura com o motivo; selo
+    "ajustada"; diferenca do principal em aberto contra o saldo em laranja, nunca forcada); o clique na linha segue abrindo o lancamento.
+    Selo "ajustada" na celula Situação do cronograma (colunas iguais). Dono puro `src/lib/financiamentos/edicaoDoContrato.ts`; hook
+    `useEdicaoDoContrato`. O `saveEdit` da tela ficou so' para a compra parcelada: sairam o deslocamento de dias e a sincronia da
+    captacao (0 de 64 parcelamentos com captacao em 18/10). Lista de financiamentos: SEM botao de editar (decisao do Gabriel).
+  · O QUE SOBROU (morto, nao apagado): no ObrigacaoDialog os ramos `!ehParcelamento` (juros, captacao, a tabela das parcelas do credito
+    com o lapis apagado, os campos de taxa) e `ORDEM_NATUREZA` so' com parcelamento; `ModalBaixaParcela.tsx` sem quem o monte;
+    `DialogVerLancamentosOficiais` sem chamador (ja' era); `parcelaMirror.ts` (codigo morto, ja' registrado). Apagar e' PR proprio.
+  ⚠ NAO PROVADO: nada com login · gravar pela tela (cabecalho, parcelas, regerar, desfazer — so' pelos testes SQL e de componente) ·
+    nenhum contrato real regerado (PR-78.179 tem o saldo errado ate' o NJ-BRDE-ESTRUTURA-01; simulacao SAC/Price no relatorio) ·
+    o "abrir-regerar" sem salvar antes usa o cabecalho GRAVADO · a parcela "vencida" aparece como "em aberto" no dialogo (o rotulo e'
+    so' da trava).
 - ⚠ TELA DO CONTRATO v3: TUDO O QUE ELA MOSTRA ALEM DO CRONOGRAMA VEM DE UMA LEITURA, `fn_contrato_tela`, E A PAGINA NAO ROLA
   (FIN-FINANC-28 TELA v3, Gabriel 18/10/2026; financiamento, emprestimo e consorcio — COMPRA PARCELADA NAO MUDOU). SUBSTITUI, no bloco do
   PASSO 4 logo abaixo, o cabecalho com seis cartoes, "Liberacoes e Destinacoes uma embaixo da outra" e "o credito tem UM scrollport (a tela)".

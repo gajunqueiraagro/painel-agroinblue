@@ -1,62 +1,14 @@
 {
- "criacao-emprestimo-classificacao": {
-  "md5": "ac21384edc934efe56b62e570fd837e9",
-  "bytes": 18551
- },
- "criacao-emprestimo-contrato": {
-  "md5": "0effffe110e058ec2272b5c81fd824b4",
-  "bytes": 23808
- },
- "criacao-emprestimo-parcelas": {
-  "md5": "c0c8d85c0d866569dd2c0bc139041d61",
-  "bytes": 19730
- },
- "criacao-financiamento-classificacao": {
-  "md5": "af70f87bed99c31a18f355a32daeb807",
-  "bytes": 18553
- },
- "criacao-financiamento-contrato": {
-  "md5": "ca49316e75ea08794e24c1d844cbb210",
-  "bytes": 23810
- },
- "criacao-financiamento-parcelas": {
-  "md5": "f95df860fd3bc7fb4d5b2b3b66e9adf8",
-  "bytes": 19732
- },
  "criacao-parcelamento-classificacao": {
   "md5": "7a4c8e7013ed9bcc2d9c47b8eefdee01",
   "bytes": 17861
  },
  "criacao-parcelamento-contrato": {
-  "md5": "fb029c0ca5fc684545ed5ba941f59dbb",
-  "bytes": 25916
+  "md5": "a3aed00f9567f9d89a3fbcefb239ddd4",
+  "bytes": 25314
  },
  "criacao-parcelamento-parcelas": {
   "md5": "928180259243050c694a56d492b12683",
   "bytes": 21282
- },
- "edicao-emprestimo-classificacao": {
-  "md5": "49b581f916ae7e139d258b73303882d0",
-  "bytes": 41449
- },
- "edicao-emprestimo-contrato": {
-  "md5": "7691ca0b90768802e8a8bd92e74c47ce",
-  "bytes": 48816
- },
- "edicao-emprestimo-parcelas": {
-  "md5": "d20add2ccdf643e429d979704daa718f",
-  "bytes": 50065
- },
- "edicao-financiamento-classificacao": {
-  "md5": "c8e143fe6cf41b829d333cbc3db6dc91",
-  "bytes": 41406
- },
- "edicao-financiamento-contrato": {
-  "md5": "712c219192225a7972037e589a5dd8d7",
-  "bytes": 48764
- },
- "edicao-financiamento-parcelas": {
-  "md5": "f8d657b9846593844c457c4dccc1e456",
-  "bytes": 50022
  }
 }

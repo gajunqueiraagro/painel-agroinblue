@@ -247,19 +247,17 @@ const escolherNatureza = async (rotulo: string) => {
 };
 
 describe('foto do diálogo — o que NÃO pode mudar', () => {
-  for (const natureza of ['financiamento', 'emprestimo'] as const) {
-    it(`edição de ${natureza}: as três abas idênticas ao commit publicado`, async () => {
-      banco.contrato = FINANCIAMENTO(natureza); banco.lancs = [];
-      montarDetalhe();
-      await abrirEdicao();
-      await waitFor(() => expect(campoDescricao().value).toBe(natureza === 'financiamento' ? 'Trator' : 'Capital de giro'));
-      await waitFor(() => expect(screen.queryByText(/Pendência:/)).toBeNull());
-      await conferirFoto(`edicao-${natureza}-contrato`);
-      await irParaAba('Parcelas'); await conferirFoto(`edicao-${natureza}-parcelas`);
-      await irParaAba('Classificação'); await conferirFoto(`edicao-${natureza}-classificacao`);
-    });
-  }
-  for (const [natureza, rotulo] of [['parcelamento', 'Parcelamento'], ['financiamento', 'Financiamento'], ['emprestimo', 'Empréstimo']] as const) {
+  /* EDITAR v2 (18/10): edição e criação de financiamento e empréstimo saíram deste diálogo (vão pelo cadastro novo) — as fotos delas
+     saíram com o caminho. Fica a da compra parcelada. */
+  it('crédito: o Editar da tela do contrato abre o CADASTRO NOVO em modo editar, não este diálogo', async () => {
+    banco.contrato = FINANCIAMENTO('financiamento'); banco.lancs = [];
+    montarDetalhe();
+    await screen.findByTestId('topo-do-contrato');
+    fireEvent.click(screen.getAllByRole('button', { name: /^Editar$/ })[0]);
+    expect(await screen.findByTestId('cadastro-de-contrato')).toBeTruthy();
+    expect(screen.queryByText('Editar obrigação')).toBeNull();
+  });
+  for (const [natureza, rotulo] of [['parcelamento', 'Parcelamento']] as const) {
     it(`criação de ${natureza}: as três abas idênticas ao commit publicado`, async () => {
       montarCriacao();
       await screen.findByText('Nova obrigação');
@@ -571,14 +569,6 @@ describe('PARC-CONTRATO-01 item 2 — propagar a edição do contrato às parcel
     expect(banco.toasts.filter((t) => t.startsWith('ERRO'))).toEqual([]);
   });
 
-  it('financiamento com juros: fora — nenhuma prévia é pedida e o Salvar é o de sempre', async () => {
-    banco.contrato = FINANCIAMENTO('financiamento');
-    montarDetalhe();
-    await abrirEdicao(); await pronto();
-    await salvar();
-    expect(banco.previas).toEqual([]);
-    expect(screen.queryByTestId('propagar-contrato')).toBeNull();
-  });
 });
 
 describe('2A — parcelamento não passa pelo editor de parcela nem pelo deslocamento do contrato', () => {
@@ -599,17 +589,12 @@ describe('2A — parcelamento não passa pelo editor de parcela nem pelo desloca
     expect(banco.updates.filter((u) => u.tabela === 'financiamento_parcelas')).toEqual([]);
     expect('data_primeira_parcela' in updatesDoContrato()[0].payload).toBe(false);
     const fonte = readFileSync(resolve(__dirname, '../../pages/FinanciamentoDetalhe.tsx'), 'utf8');
-    expect(fonte).toContain("if (form.natureza !== 'parcelamento' && dataAntiga && dataNova && dataAntiga !== dataNova) {");
+    /* EDITAR v2 (18/10): o deslocamento de dias saiu do gravador da tela (o crédito muda o 1º vencimento pelo "Regerar") */
+    expect(fonte).not.toContain('deltaDias');
+    expect(fonte).not.toContain("from('financiamento_parcelas')\n          .select('id, data_vencimento')");
 expect(fonte).toContain("...(form.natureza === 'parcelamento' ? (form.fazenda_id ? { fazenda_id: form.fazenda_id } : {}) : { data_primeira_parcela: form.data_primeira_parcela || null }),");
   });
 
-  it('financiamento: o gravador do contrato continua levando `data_primeira_parcela`', async () => {
-    banco.contrato = FINANCIAMENTO('financiamento');
-    montarDetalhe();
-    await abrirEdicao(); await pronto();
-    await salvar();
-    expect('data_primeira_parcela' in updatesDoContrato()[0].payload).toBe(true);
-  });
 });
 
 /* ── PARC-LIVRES-01 passo 2B — editar as parcelas gravadas, na mesma grade, por UMA RPC ───────────────────────────────────── */
@@ -701,14 +686,6 @@ describe('2B — a grade sobre as parcelas gravadas do parcelamento', () => {
     expect(updatesDoContrato()).toEqual([]);
   });
 
-  it('financiamento com juros: a aba Parcelas segue com a tabela de sempre (sem a grade)', async () => {
-    banco.contrato = FINANCIAMENTO('financiamento');
-    montarDetalhe();
-    await abrirEdicao(); await pronto();
-    await irParaAba('Parcelas');
-    expect(screen.queryByTestId('grade-de-parcelas')).toBeNull();
-    expect(screen.getAllByRole('button', { name: 'Editar parcela' }).length).toBe(2);
-  });
 });
 
 /* ── PARC-LIVRES-01 passo 4 — o contrato LÊ a situação do banco (o dono é o lançamento) ──────────────────────────────────── */
@@ -750,7 +727,11 @@ describe('4 — a tela do contrato mostra o que o banco derivou do lançamento',
     banco.contrato = FINANCIAMENTO('financiamento');
     banco.situacao = SITUACAO([{}, { lancamento_juros_id: 'lanc-juros-2', valor_juros: 100, valor_total: 8219 }]);
     await abrirDetalhe();
-    fireEvent.click(screen.getAllByRole('button', { name: 'Abrir o lançamento da parcela' })[0]);
+    /* EDITAR v2: no crédito o lápis abre "Editar parcelas" (a parcela em destaque); o CLIQUE NA LINHA segue abrindo o lançamento */
+    fireEvent.click(screen.getAllByRole('button', { name: 'Editar a parcela' })[0]);
+    expect(await screen.findByTestId('editar-parcelas-dialog')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Fechar' }));
+    fireEvent.click(linhasDoContrato()[0]);
     expect(screen.getByTestId('modal-do-financeiro').textContent).toBe('lanc-1');
     fireEvent.click(linhasDoContrato()[1]);
     expect(screen.getByTestId('modal-do-financeiro').textContent).toBe('lanc-2');
