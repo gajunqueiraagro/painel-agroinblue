@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import { DatePicker } from '@/components/ui/date-picker';
 import { CampoMoeda } from '@/components/ui/campo-moeda';
+import { BlocoFormulario, CORPO_FORMULARIO, REGUA_CAMPO } from '@/components/ui/bloco-formulario';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -60,7 +61,7 @@ const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', curren
 
 /* Idioma canonico de campo travado (AbaLiquidacaoOC / CompraModalShell). */
 const CAMPO_TRAVADO = 'bg-muted border-border/60 text-muted-foreground';
-const CAMPO = 'h-8';                                   // A16 — tudo na mesma altura
+const CAMPO = REGUA_CAMPO;                             // UI-MODAL-BLOCOS-01 — a régua dos modais (28px, 11px); era h-8
 const ROTULO = 'text-[10px] font-normal text-muted-foreground';
 /* ⚠ O DROPDOWN TEM A LARGURA DO CAMPO. Sem `position="popper"` o Radix mede a caixa
    pelo item mais longo e ela estoura para fora do modal de 448px; com ele, a variavel
@@ -528,65 +529,69 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
             `p-0 gap-0 overflow-hidden` e X nativo escondido — sem `gap-0` o DialogContent
             injeta `gap-4` entre cabecalho, corpo e rodape. */}
         <DialogContent className="max-w-md p-0 gap-0 overflow-hidden [&>button.absolute]:hidden">
-          <div className="bg-primary text-primary-foreground px-6 py-2.5">
-            <DialogTitle className="text-lg font-bold leading-tight">
+          <div className="bg-primary text-primary-foreground px-4 py-2">
+            <DialogTitle className="text-[13px] font-semibold leading-tight">
               Parcela {parcela.numero_parcela}/{financiamento.total_parcelas}
             </DialogTitle>
             {/* O contrato no subtitulo: aberto por dentro da tela do contrato, o modal
                 perdia a referencia de QUAL contrato se estava mexendo. */}
-            <p className="mt-1 text-xs text-white/80 truncate" title={financiamento.descricao}>
+            <p className="mt-0.5 text-[11px] text-white/80 truncate" title={financiamento.descricao}>
               {financiamento.descricao}
             </p>
           </div>
 
           {/* REGISTRAR */}
           {modo === 'registrar' && (
-            <div className="space-y-3">
+            <div className={CORPO_FORMULARIO} data-testid="corpo-da-baixa">
+              <BlocoFormulario titulo="Pagamento" testId="bloco-pagamento" className="gap-1">
               <div>
-                <Label className="text-xs">Data do pagamento</Label>
+                <Label className={ROTULO}>Data do pagamento</Label>
                 {/* 136a item 2 — o último calendário nativo desta tela. O modo editar já
                     abria o calendário azul; aqui o operador ainda via o do navegador, com
                     "Limpar/Hoje" que não são nossos e o fuso que devolve o dia anterior. */}
-                <DatePicker value={dataPagamento} onChange={setDataPagamento} />
+                <DatePicker value={dataPagamento} onChange={setDataPagamento} className={CAMPO} />
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <Label className="text-xs">Principal</Label>
-                  <Input type="number" step="0.01" value={principal} onChange={e => setPrincipal(Number(e.target.value))} />
+                  <Label className={ROTULO}>Principal</Label>
+                  <Input type="number" step="0.01" value={principal} onChange={e => setPrincipal(Number(e.target.value))} className={CAMPO} />
                 </div>
                 <div>
-                  <Label className="text-xs">Juros</Label>
-                  <Input type="number" step="0.01" value={juros} onChange={e => setJuros(Number(e.target.value))} />
+                  <Label className={ROTULO}>Juros</Label>
+                  <Input type="number" step="0.01" value={juros} onChange={e => setJuros(Number(e.target.value))} className={CAMPO} />
                 </div>
                 <div>
-                  <Label className="text-xs">Total</Label>
-                  <Input type="text" value={fmt(valorTotal)} readOnly className="bg-muted font-semibold" />
+                  <Label className={ROTULO}>Total</Label>
+                  <Input type="text" value={fmt(valorTotal)} readOnly className={`${CAMPO} bg-muted font-semibold`} />
                 </div>
               </div>
               <div>
-                <Label className="text-xs">Conta bancária</Label>
+                <Label className={ROTULO}>Conta bancária</Label>
                 {/* PR-H2 — ContaBancariaSelect compartilhado. */}
                 <ContaBancariaSelect
                   value={contaBancariaId}
                   onValueChange={setContaBancariaId}
                   contas={contas}
                   placeholder="Selecione"
+                  className={CAMPO}
                 />
               </div>
               <div>
-                <Label className="text-xs">Observação</Label>
-                <Textarea value={observacao} onChange={e => setObservacao(e.target.value)} rows={2} placeholder="Opcional" />
+                <Label className={ROTULO}>Observação</Label>
+                <Textarea value={observacao} onChange={e => setObservacao(e.target.value)} rows={2} placeholder="Opcional" className="min-h-[48px] text-[11px]" />
               </div>
+              </BlocoFormulario>
             </div>
           )}
 
           {/* EDITAR */}
           {isEditar && (
-            <div className="p-4 space-y-2.5">
+            <div className={CORPO_FORMULARIO} data-testid="corpo-da-baixa">
+              <BlocoFormulario titulo="Parcela" testId="bloco-parcela" className="gap-1">
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <Label className={ROTULO}>Vencimento *</Label>
-                  <DatePicker value={dataVencimento} onChange={setDataVencimento} />
+                  <DatePicker value={dataVencimento} onChange={setDataVencimento} className={CAMPO} />
                   {erros.data_vencimento && <p className="text-[10px] text-destructive mt-0.5">{erros.data_vencimento}</p>}
                 </div>
                 <div>
@@ -627,14 +632,17 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
                 </div>
               </div>
 
+              </BlocoFormulario>
+
               {/* ⚠ OS DOIS CAMPOS DO PAGAMENTO EXISTEM SEMPRE, DESABILITADOS ATE' A PARCELA
                   SER PAGA. Antes eles APARECIAM ao trocar a situacao: o modal mudava de
                   altura debaixo do cursor e o rodape saia do lugar. Desabilitado tambem e'
                   honesto — fora de "Paga" a conta nao e' lida pelo gravador. */}
+              <BlocoFormulario titulo="Pagamento" testId="bloco-pagamento" className="gap-1">
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <Label className={ROTULO}>Pago em {status === 'pago' && '*'}</Label>
-                  <DatePicker value={dataPagamento} onChange={setDataPagamento} disabled={status !== 'pago'} />
+                  <DatePicker value={dataPagamento} onChange={setDataPagamento} disabled={status !== 'pago'} className={CAMPO} />
                   {erros.data_pagamento && <p className="text-[10px] text-destructive mt-0.5">{erros.data_pagamento}</p>}
                 </div>
                 <div>
@@ -655,6 +663,7 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
                 <Label className={ROTULO}>Observação</Label>
                 <Input className={CAMPO} value={observacao} onChange={e => setObservacao(e.target.value)} placeholder="opcional" />
               </div>
+              </BlocoFormulario>
             </div>
           )}
 
