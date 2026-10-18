@@ -22,6 +22,7 @@ import {
   type Recorrencia, type MesDoFato, type ResultadoPropagacao, type PayloadDaRegra,
 } from '@/hooks/useRecorrencias';
 import { Segmentado } from '@/components/ui/segmentado';
+import { BlocoFormulario, CORPO_FORMULARIO, REGUA_CAMPO } from '@/components/ui/bloco-formulario';
 import { Checkbox } from '@/components/ui/checkbox';
 import { EXPLICACAO_A_CONFIRMAR, ROTULO_TIPO } from '@/lib/financeiro/recorrenciasDoMes';
 import { PropagarRecorrenciaDialog } from './PropagarRecorrenciaDialog';
@@ -300,33 +301,35 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
   return (
     <>
     <Dialog open onOpenChange={o => !o && aoFechar()}>
-      <DialogContent className="w-[94vw] max-w-2xl gap-0 overflow-hidden p-0">
-        <DialogHeader className="border-b bg-primary/10 px-4 py-2.5 pr-12 text-left">
-          <DialogTitle className="flex items-center gap-1.5 text-[14px] font-medium leading-none text-primary">
-            <Repeat className="h-4 w-4" />
+      {/* UI-MODAL-BLOCOS-01 — altura fixa pela tela (igual em todo estado): só o corpo rola, e só quando a janela é baixa. */}
+      <DialogContent className="flex h-[min(730px,calc(100dvh-48px))] w-[94vw] max-w-2xl flex-col gap-0 overflow-hidden p-0">
+        <DialogHeader className="shrink-0 border-b bg-primary/10 px-4 py-2 pr-12 text-left">
+          <DialogTitle className="flex items-center gap-1.5 text-[13px] font-medium leading-none text-primary">
+            <Repeat className="h-3.5 w-3.5" />
             {ed ? 'Editar recorrência' : 'Nova recorrência'}
           </DialogTitle>
-          <DialogDescription className="mt-1 text-[11px] leading-snug">
+          <DialogDescription className="mt-0.5 truncate text-[10px] leading-snug">
             A recorrência é uma regra: ela não é um lançamento, gera lançamentos previstos.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="max-h-[70vh] space-y-2.5 overflow-y-auto px-4 py-3">
+        <div className={`min-h-0 flex-1 overflow-y-auto ${CORPO_FORMULARIO}`} data-testid="corpo-da-recorrencia">
+          <BlocoFormulario titulo="Identificação" testId="bloco-identificacao" className="gap-1">
           {/* LINHA 1 — Descrição | Tipo | Valor base | O valor é.
               ⚠ LARGURAS EM px, MEDIDAS NA TELA (REC-VALOR-CERTO-01, janela de 1.126): Descrição 268 · Tipo 92 · Valor base 112
               ("99.999.999,99" pede 87 dos 90 úteis — 3px de folga) · "O valor é" 142 (os dois segmentos pedem 117). Nenhum
               número corta. O modal tem 514px em "Certo", em "A confirmar" e com a folha marcada. */}
           <div className="grid grid-cols-[minmax(0,1fr)_92px_112px_142px] gap-2">
             <div className="min-w-0">
-              <Label className="text-[10px]">Descrição *</Label>
+              <Label className="text-[10px] text-muted-foreground">Descrição *</Label>
               <Input value={descricao} onChange={e => setDescricao(e.target.value)}
-                className="h-8 text-xs" placeholder="Telefone, internet, mão de obra…" />
+                className={REGUA_CAMPO} placeholder="Telefone, internet, mão de obra…" />
             </div>
 
             <div>
-              <Label className="text-[10px]">Tipo *</Label>
+              <Label className="text-[10px] text-muted-foreground">Tipo *</Label>
               <Select value={ehSaida ? 'saida' : 'entrada'} onValueChange={v => setEhSaida(v === 'saida')}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectTrigger className={REGUA_CAMPO}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="saida">Saída</SelectItem>
                   <SelectItem value="entrada">Entrada</SelectItem>
@@ -335,16 +338,16 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
             </div>
 
             <div>
-              <Label className="text-[10px]">Valor base *</Label>
+              <Label className="text-[10px] text-muted-foreground">Valor base *</Label>
               <Input value={valorTexto} onChange={e => setValorTexto(e.target.value)}
-                className="h-8 text-xs tabular-nums" placeholder="350,00"
+                className={`${REGUA_CAMPO} tabular-nums`} placeholder="350,00"
                 title="Sempre positivo — o sinal vem do Tipo ao lado." />
             </div>
 
             <div>
-              <Label className="text-[10px]">O valor é *</Label>
-              <div className="flex h-8 items-center" data-testid="rec-tipo-do-valor">
-                <Segmentado altura={26} valor={valorAConfirmar ? 'a_confirmar' : 'certo'}
+              <Label className="text-[10px] text-muted-foreground">O valor é *</Label>
+              <div className="flex h-7 items-center" data-testid="rec-tipo-do-valor">
+                <Segmentado altura={22} valor={valorAConfirmar ? 'a_confirmar' : 'certo'}
                   onEscolher={v => setValorAConfirmar(v === 'a_confirmar')}
                   opcoes={[
                     { valor: 'certo', rotulo: ROTULO_TIPO.certo, title: 'Valor certo: a conta de cada mês nasce com este valor' },
@@ -377,9 +380,9 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
               era 171 e cortava "Porto Seguro Com…". Nome maior trunca com `title`. */}
           <div className="grid grid-cols-[207px_minmax(0,1fr)_150px] gap-2">
             <div className="min-w-0">
-              <Label className="text-[10px]">Conta *</Label>
+              <Label className="text-[10px] text-muted-foreground">Conta *</Label>
               <ContaBancariaSelect value={contaId} onValueChange={setContaId}
-                contas={contasBancarias} showBankDetails="agencia" placeholder="Selecionar conta" />
+                contas={contasBancarias} showBankDetails="agencia" placeholder="Selecionar conta" className={REGUA_CAMPO} />
             </div>
 
             <div className="min-w-0">
@@ -390,20 +393,24 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
                 /* 2a-fix1 — o "+" abre o MESMO cadastro do modal do lançamento (`NovoFornecedorDialog`); o novo volta escolhido, sem F5 */
                 onCriarNovo={() => setNovoFornecedorAberto(true)}
                 label="Favorecido"
+                triggerClassName={REGUA_CAMPO} novoButtonClassName="h-7 w-7"
               />
             </div>
 
             <div className="min-w-0">
               <FazendaSelect value={fazendaId} onChange={setFazendaId} fazendas={fazendas}
-                forcaAdministrativo={false} label="Fazenda *" hideAviso />
+                forcaAdministrativo={false} label="Fazenda *" hideAviso triggerClassName={REGUA_CAMPO} />
             </div>
           </div>
+
+          </BlocoFormulario>
 
           {/* LINHA 3 — A CLASSIFICAÇÃO DO LANÇAMENTO (atividade · subcentro · safra), o mesmo componente.
               ⚠ MONTADO FORA DE GRADE: ele devolve as duas grades dele (ver o aviso no próprio componente).
               ⚠ A SAFRA SE SUGERE PELO PRIMEIRO VENCIMENTO (Início + Dia venc. + de que mês é a conta); sem ele, pelo
               Início. A escolha à mão cala a sugestão; empate sem sigla não escolhe. */}
-          <ClassificacaoLancamento
+          <BlocoFormulario titulo="Classificação" testId="bloco-classificacao" className="gap-1">
+          <ClassificacaoLancamento regua="compacta"
             value={classificacao}
             onChange={setClassificacao}
             classificacoes={classificacoes}
@@ -412,38 +419,40 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
             tipoOperacao={ehSaida ? '2-Saídas' : '1-Entradas'}
             ocultarCulturaFase
           />
+          </BlocoFormulario>
 
           {/* LINHA 4 — Periodicidade | Dia venc. | Início | Fim.
               ⚠ A SAFRA SAIU DAQUI (PR-FIN-RECORRENCIA-MODAL-01): mora na grade da classificação, com a sugestão.
               ⚠ LARGURAS MEDIDAS NA TELA: "30/09/2026" pede ~71px a 12px, + o ícone e o padding = 118 cada (eram 154);
               o dia é um número de dois dígitos numa grade, 64 (era 100). */}
+          <BlocoFormulario titulo="Vigência" testId="bloco-vigencia" className="gap-1">
           <div className="grid grid-cols-[90px_64px_118px_118px] gap-2">
             <div>
-              <Label className="text-[10px]">Periodicidade</Label>
+              <Label className="text-[10px] text-muted-foreground">Periodicidade</Label>
               {/* Só mensal existe — e o campo aparece porque o dia em que uma
                   segunda periodicidade chegar, ela chega neste lugar. */}
               <Select value="mensal" disabled>
-                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectTrigger className={REGUA_CAMPO}><SelectValue /></SelectTrigger>
                 <SelectContent><SelectItem value="mensal">Mensal</SelectItem></SelectContent>
               </Select>
             </div>
 
             <div>
-              <Label className="text-[10px]">Dia venc. *</Label>
-              <DiaVencimentoGrade value={Number(diaVencimento) || 1} onChange={(d) => setDiaVencimento(String(d))} />
+              <Label className="text-[10px] text-muted-foreground">Dia venc. *</Label>
+              <DiaVencimentoGrade value={Number(diaVencimento) || 1} onChange={(d) => setDiaVencimento(String(d))} className="h-7 text-[11px]" />
             </div>
 
             <div>
-              <Label className="text-[10px]">Início *</Label>
+              <Label className="text-[10px] text-muted-foreground">Início *</Label>
               <div title="A COMPETÊNCIA do primeiro lançamento — o mês do fato.">
-                <DatePicker value={dataInicio} onChange={setDataInicio} className="text-[10px]" />
+                <DatePicker value={dataInicio} onChange={setDataInicio} className="h-7 text-[10px]" />
               </div>
             </div>
 
             <div>
-              <Label className="text-[10px]">Fim *</Label>
+              <Label className="text-[10px] text-muted-foreground">Fim *</Label>
               <div title="Limita a COMPETÊNCIA, não o vencimento: com deslocamento, o último pagamento cai depois desta data — e está certo.">
-                <DatePicker value={dataFim} onChange={setDataFim} className="text-[10px]" />
+                <DatePicker value={dataFim} onChange={setDataFim} className="h-7 text-[10px]" />
               </div>
             </div>
 
@@ -455,8 +464,8 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
               NÚMERO: a mecânica — âncora, deslocamento, primeiro vencimento —
               não aparece, porque o operador sabe de quem é a conta e não precisa
               saber o resto. */}
-          <div className="rounded-md border bg-muted/30 p-2">
-            <Label className="text-[10px]">O que se paga aqui é de qual mês?</Label>
+          <div>
+            <Label className="text-[10px] text-muted-foreground">O que se paga aqui é de qual mês?</Label>
             <div className="mt-1 grid gap-1 sm:grid-cols-2">
               {OPCOES_MES_DO_FATO.map(o => {
                 const sel = mesDoFato === o.valor;
@@ -488,14 +497,17 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
             )}
           </div>
 
+          </BlocoFormulario>
+
           {/* LINHA FINAL — os dois campos nossos que o original não tem. Ficam
               no fim de propósito: são opcionais e não participam da âncora, e
               pô-los antes empurraria a pergunta do mês para baixo da dobra. */}
+          <BlocoFormulario titulo="Pagamento" testId="bloco-pagamento">
           <div className="grid grid-cols-12 gap-2">
             <div className="col-span-4">
-              <Label className="text-[10px]">Forma de pagamento</Label>
+              <Label className="text-[10px] text-muted-foreground">Forma de pagamento</Label>
               <Select value={formaPgto || '__none__'} onValueChange={v => setFormaPgto(v === '__none__' ? '' : v)}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="—" /></SelectTrigger>
+                <SelectTrigger className={REGUA_CAMPO}><SelectValue placeholder="—" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">—</SelectItem>
                   {FORMAS.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
@@ -503,14 +515,15 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
               </Select>
             </div>
             <div className="col-span-8">
-              <Label className="text-[10px]">Observação</Label>
+              <Label className="text-[10px] text-muted-foreground">Observação</Label>
               <Textarea value={observacao} onChange={e => setObservacao(e.target.value)}
-                rows={2} className="resize-none text-xs" />
+                rows={2} className="min-h-[48px] resize-none text-[11px]" />
             </div>
           </div>
+          </BlocoFormulario>
         </div>
 
-        <DialogFooter className="items-center gap-2 border-t bg-accent px-4 py-2.5 sm:justify-between">
+        <DialogFooter className="shrink-0 items-center gap-2 border-t bg-accent px-4 py-1.5 sm:justify-between">
           <span className="text-[10px] leading-snug text-muted-foreground">{impedimento ?? ''}</span>
           <span className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={aoFechar}>Cancelar</Button>
