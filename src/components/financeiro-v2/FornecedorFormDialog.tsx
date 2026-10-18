@@ -349,7 +349,7 @@ export function FornecedorFormDialog({
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
       {/* UI-MODAL-BLOCOS-01 — altura fixa pela tela; corpo cinza com dois blocos; só o corpo rola, e só em janela baixa. */}
-      <DialogContent className="flex h-[min(620px,calc(100dvh-48px))] w-[95vw] max-w-2xl flex-col gap-0 overflow-hidden p-0">
+      <DialogContent className="flex h-[min(680px,calc(100dvh-48px))] w-[95vw] max-w-2xl flex-col gap-0 overflow-hidden p-0">
         <DialogHeader className="shrink-0 border-b px-4 py-2.5">
           <DialogTitle className="text-[13px]">{editing ? 'Editar Fornecedor' : 'Novo Fornecedor'}</DialogTitle>
         </DialogHeader>

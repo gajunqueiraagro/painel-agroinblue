@@ -23,18 +23,16 @@ describe('a primitiva do formulário em blocos', () => {
     expect(r.className).toMatch(/truncate text-\[10px\]/);
     expect(REGUA_CAMPO).toBe('h-7 text-[11px]');
   });
-  it('o título fica sobre a borda (legenda com o cinza do corpo), sem faixa de título; ação na borda à direita', () => {
+  it('CORREÇÃO 18/10 — o título fica DENTRO do bloco: linha de 18px com linha fina embaixo, ação na mesma linha; nada absoluto', () => {
     render(<BlocoFormulario titulo="Liberações" acao={<button>+ liberação</button>} testId="b"><Rotulo texto="Data" /></BlocoFormulario>);
     const b = screen.getByTestId('b');
-    expect(b.className).toMatch(/\brelative\b/);
-    expect(b.className).toMatch(/\bpt-3\.5\b/);
-    const legenda = b.querySelector('[data-legenda]')!;
-    expect(legenda.className).toMatch(/absolute/);
-    expect(legenda.className).toMatch(/-top-\[7px\]/);
-    expect(legenda.querySelector('h3')!.parentElement!.className).toMatch(/\bbg-muted\b/);
-    expect(screen.getByText('+ liberação').parentElement!.className).toMatch(/\bbg-muted\b/);
-    render(<BlocoFormulario titulo="Sem ação" testId="c"><Rotulo texto="X" /></BlocoFormulario>);
-    expect(screen.getByTestId('c').className).toMatch(/\bpt-2\.5\b/);
+    expect(b.className).toMatch(/\bpx-3 pb-2 pt-1\.5\b/);
+    const linha = b.querySelector('[data-titulo-do-bloco]')!;
+    expect(linha.parentElement).toBe(b);
+    expect(linha.className).toMatch(/min-h-\[18px\]/);
+    expect(linha.className).toMatch(/border-b/);
+    expect(linha.contains(screen.getByText('+ liberação'))).toBe(true);
+    expect(b.querySelectorAll('[class*="absolute"], [class*="bg-muted"]')).toHaveLength(0);
   });
   it('o contrato e o cadastro importam o bloco daqui (sem segunda cópia)', () => {
     const contrato = readFileSync(resolve(__dirname, '../financiamentos/ContratoDeCredito.tsx'), 'utf8');

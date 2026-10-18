@@ -2465,13 +2465,13 @@ preview que o cabecalho nao sai da tela ao rolar.
     antes. Medido em 17/10: 425 ocorrencias em 62 arquivos (todas do tipo (a)); auto-teste antes de varrer. Ao reduzir, regere com
     `node scripts/check-ui-nativo.mjs --baseline-modal`.
   ⚠ LIMITE DO DETECTOR: so' ve^ o arquivo que tem o `DialogContent`; campo em componente-filho (a aba de um shell) nao conta.
-  · TITULO NA BORDA, PADRAO UNICO (Gabriel 18/10/2026; sem segunda variante): o titulo (11px/600) fica SOBRE a borda superior do
-    bloco, como legenda de fieldset — fundo `bg-muted` (o cinza do corpo; o mesmo tom do `bg-background` das telas), px-1, a 8px da
-    esquerda; a dica segue o titulo e a acao fica na borda a' direita. A faixa de titulo saiu. Bloco: `BLOCO_FORMULARIO` (pt 10px) ou
-    `BLOCO_FORMULARIO_COM_ACAO` (pt 14px: o botao de 20px centrado na borda); grade `GRADE_FORMULARIO` (gap-y 4px); corpo
-    `CORPO_FORMULARIO` (p 8px, gap 8px). ⚠ O BLOCO E' `relative` E A LEGENDA SOBE 7px: o primeiro bloco de uma area que rola (ou com
-      `overflow-hidden`) precisa de 8px de padding no topo, senao a legenda e' cortada. Cada bloco ficou 20px mais baixo (medido no
-      cadastro: 81 -> 61; na tela do contrato, Liberações 110 -> 94). Fotos antes/depois em ~/Downloads/ui-modal-blocos/contrato/.
+  · TITULO DENTRO DO BLOCO, PADRAO UNICO (CORRECAO do Gabriel 18/10/2026: o "titulo na borda" de 53c9434f foi reprovado — "nenhuma
+    tela foi feita assim"): linha de 18px dentro do bloco, 11px/600 sentence case, linha fina embaixo, acao na mesma linha a' direita;
+    bloco `BLOCO_FORMULARIO` com padding 6px topo / 12px lados / 8px base; corpo `CORPO_FORMULARIO` (p 8px, gap 8px); grade
+    `GRADE_FORMULARIO` (gap-y 4px). Sem fundo atras do titulo, sem posicionamento absoluto, uma versao so (o `_COM_ACAO` saiu).
+    Blocos de LEITURA: rotulo e valor na mesma fonte de 11px (rotulo cinza regular, valor 500), rotulo de largura fixa e o valor logo
+    ao lado — nunca rotulo a' esquerda e valor a' direita com vazio no meio; nome de credor/fornecedor inteiro, cortando no fim com
+    `title`. A onda 1 inteira foi reconvertida; a recorrencia passou a duas colunas (Identificacao+Classificacao | Vigencia+Pagamento).
     ⚠ ALTURA DO MODAL (mesma decisao): fixa, calculada pela tela, igual em todas as abas; meta sem rolagem a 1.126x579 e 1.440x800;
       so' abaixo de 650px de janela o corpo pode rolar por dentro (cabecalho, abas e rodape fixos) — acima disso rolagem e' erro.
       Cada uso desse fallback vai no relatorio com os px que faltaram.

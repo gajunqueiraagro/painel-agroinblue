@@ -42,7 +42,7 @@ describe('bloco "Documentos" no topo em todo uso (lido da fonte: o diálogo não
   });
 
   it('o bloco é fixo no topo da área que rola, opaco e acima das tabelas; a Observação fica embaixo', () => {
-    expect(aba).toContain('cn(sectionClass, "sticky top-[7px] z-20 shadow-[0_-7px_0_0_hsl(var(--muted))]")');
+    expect(aba).toContain('cn(sectionClass, "sticky -top-2 z-20")');
     expect(aba.indexOf('<TituloDoBloco nome="Observação" />')).toBeGreaterThan(aba.indexOf('<AbaDocumentosLancamento'));
   });
 });

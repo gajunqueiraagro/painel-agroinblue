@@ -22,7 +22,7 @@ import {
   type Recorrencia, type MesDoFato, type ResultadoPropagacao, type PayloadDaRegra,
 } from '@/hooks/useRecorrencias';
 import { Segmentado } from '@/components/ui/segmentado';
-import { BlocoFormulario, CORPO_FORMULARIO, REGUA_CAMPO } from '@/components/ui/bloco-formulario';
+import { BlocoFormulario, REGUA_CAMPO } from '@/components/ui/bloco-formulario';
 import { Checkbox } from '@/components/ui/checkbox';
 import { EXPLICACAO_A_CONFIRMAR, ROTULO_TIPO } from '@/lib/financeiro/recorrenciasDoMes';
 import { PropagarRecorrenciaDialog } from './PropagarRecorrenciaDialog';
@@ -302,7 +302,7 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
     <>
     <Dialog open onOpenChange={o => !o && aoFechar()}>
       {/* UI-MODAL-BLOCOS-01 — altura fixa pela tela (igual em todo estado): só o corpo rola, e só quando a janela é baixa. */}
-      <DialogContent className="flex h-[min(730px,calc(100dvh-48px))] w-[94vw] max-w-2xl flex-col gap-0 overflow-hidden p-0">
+      <DialogContent className="flex h-[min(560px,calc(100dvh-48px))] w-[min(1000px,calc(100vw-32px))] max-w-none flex-col gap-0 overflow-hidden p-0">
         <DialogHeader className="shrink-0 border-b bg-primary/10 px-4 py-2 pr-12 text-left">
           <DialogTitle className="flex items-center gap-1.5 text-[13px] font-medium leading-none text-primary">
             <Repeat className="h-3.5 w-3.5" />
@@ -313,7 +313,10 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
           </DialogDescription>
         </DialogHeader>
 
-        <div className={`min-h-0 flex-1 overflow-y-auto ${CORPO_FORMULARIO}`} data-testid="corpo-da-recorrencia">
+        {/* UI-MODAL-BLOCOS-01 (correção 18/10) — duas colunas na ordem de sempre: Identificação e Classificação à esquerda,
+            Vigência e Pagamento à direita (com o título dentro, uma coluna só passava de 800px de altura). */}
+        <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_440px] items-start gap-2 overflow-y-auto bg-muted p-2" data-testid="corpo-da-recorrencia">
+          <div className="flex min-w-0 flex-col gap-2">
           <BlocoFormulario titulo="Identificação" testId="bloco-identificacao" className="gap-1">
           {/* LINHA 1 — Descrição | Tipo | Valor base | O valor é.
               ⚠ LARGURAS EM px, MEDIDAS NA TELA (REC-VALOR-CERTO-01, janela de 1.126): Descrição 268 · Tipo 92 · Valor base 112
@@ -378,7 +381,7 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
               ⚠ LARGURAS MEDIDAS NA TELA (PR-FIN-RECORRENCIA-MODAL-01, janela de 1.130): Conta 207 ("Banco do Brasil
               (8974-3)" pede ~147 + a seta) e Fazenda 150 (as fazendas têm nome curto); o Favorecido fica com o resto —
               era 171 e cortava "Porto Seguro Com…". Nome maior trunca com `title`. */}
-          <div className="grid grid-cols-[207px_minmax(0,1fr)_150px] gap-2">
+          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,0.8fr)] gap-2">
             <div className="min-w-0">
               <Label className="text-[10px] text-muted-foreground">Conta *</Label>
               <ContaBancariaSelect value={contaId} onValueChange={setContaId}
@@ -425,6 +428,8 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
               ⚠ A SAFRA SAIU DAQUI (PR-FIN-RECORRENCIA-MODAL-01): mora na grade da classificação, com a sugestão.
               ⚠ LARGURAS MEDIDAS NA TELA: "30/09/2026" pede ~71px a 12px, + o ícone e o padding = 118 cada (eram 154);
               o dia é um número de dois dígitos numa grade, 64 (era 100). */}
+          </div>
+          <div className="flex min-w-0 flex-col gap-2">
           <BlocoFormulario titulo="Vigência" testId="bloco-vigencia" className="gap-1">
           <div className="grid grid-cols-[90px_64px_118px_118px] gap-2">
             <div>
@@ -521,6 +526,7 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
             </div>
           </div>
           </BlocoFormulario>
+          </div>
         </div>
 
         <DialogFooter className="shrink-0 items-center gap-2 border-t bg-accent px-4 py-1.5 sm:justify-between">

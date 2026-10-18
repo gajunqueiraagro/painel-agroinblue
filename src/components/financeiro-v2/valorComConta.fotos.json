@@ -1,18 +1,18 @@
 {
  "novo": {
-  "md5": "4c2219042da45e61b052c0a29d783c56",
-  "bytes": 36212
+  "md5": "1a99c8280362d8e03c80a51fa9e26172",
+  "bytes": 36140
  },
  "novo-com-valor": {
-  "md5": "9f7df1556bbca4f124562f401b04b3f5",
-  "bytes": 36208
+  "md5": "d87e2a58111bf3d327eb4a655f4d7716",
+  "bytes": 36136
  },
  "edicao": {
-  "md5": "47afb06db02db1cdd171e54cc948ee73",
-  "bytes": 38723
+  "md5": "3fe8c89c058a162556ad00ab2f3feb37",
+  "bytes": 38651
  },
  "prefill-xml": {
-  "md5": "883d605e010f57229616a1f2b7a88470",
-  "bytes": 40205
+  "md5": "054ae986f47c3b30aa36dc6cb6b63e91",
+  "bytes": 40133
  }
 }

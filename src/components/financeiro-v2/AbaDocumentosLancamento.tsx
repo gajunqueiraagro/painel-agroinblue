@@ -523,7 +523,7 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
     <Dialog open onOpenChange={(o) => { if (!o) onFechar(); }}>
       {/* PR 2b — cabeçalho e rodapé fixos, só o corpo rola: com o aviso da nota compartilhada e o motivo do
           cancelamento, o formulário passava da altura da tela e o cabeçalho sumia (visto na prova na tela). */}
-      <DialogContent className="max-w-lg p-0 gap-0 overflow-hidden flex h-[min(640px,calc(100dvh-48px))] flex-col">
+      <DialogContent className="max-w-lg p-0 gap-0 overflow-hidden flex h-[min(660px,calc(100dvh-48px))] flex-col">
         <div className="bg-primary px-4 py-2.5 text-primary-foreground flex shrink-0 items-center justify-between">
           <DialogTitle className="text-[14px] font-semibold">
             {documento ? 'Editar documento' : 'Novo documento'}

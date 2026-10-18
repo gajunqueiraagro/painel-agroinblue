@@ -666,7 +666,7 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
       {/* ═══ PASSO 4 — LIBERAÇÕES e DESTINAÇÕES (crédito). Uma embaixo da outra: lado a lado, a 1.126, a coluna "Conta ou
           fornecedor" ficaria com ~20px. */}
       {!ehParcelamento && clienteId && (
-        <div className="shrink-0 space-y-2 px-3 pb-1.5 pt-2">
+        <div className="shrink-0 space-y-2 px-3 pb-1.5">
           <BlocoLiberacoes api={credito} contaDoContrato={nomeConta} onAbrirLancamento={setLancamentoAberto} clienteId={clienteId} />
           <BlocoDestinacoes api={credito} />
         </div>
@@ -867,7 +867,7 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
 
       {/* ═══ PASSO 4 — DOCUMENTOS DO CONTRATO (crédito): o botão "Documentos" do cabeçalho rola até aqui */}
       {!ehParcelamento && (
-        <div className="shrink-0 px-3 pb-2 pt-2">
+        <div className="shrink-0 px-3 pb-2">
           <BlocoDocumentos ref={refDocumentos} api={credito} />
         </div>
       )}

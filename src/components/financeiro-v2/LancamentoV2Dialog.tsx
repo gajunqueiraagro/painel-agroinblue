@@ -3052,9 +3052,7 @@ export function LancamentoV2Dialog({
                 `py-2` do corpo, senão as linhas passavam visíveis nessa faixa acima do bloco. O sticky não
                 cobre o cabeçalho das abas nem o rodapé). Mesmos campos; só a régua (rótulo 10, campo 11, h-8
                 como os outros campos do modal) e a posição. */}
-            {/* UI-MODAL-BLOCOS-01 — o título vai na borda (legenda). Preso a 7px do topo da área que rola, para a legenda caber; a
-                sombra de 7px na cor do corpo cobre a faixa acima do bloco (o papel que o `-top-2` fazia). */}
-            <section className={cn(sectionClass, "sticky top-[7px] z-20 shadow-[0_-7px_0_0_hsl(var(--muted))]")} data-testid="bloco-documentos-topo">
+            <section className={cn(sectionClass, "sticky -top-2 z-20")} data-testid="bloco-documentos-topo">
               <TituloDoBloco nome="Documentos" dica="do lançamento"
                 acao={docVemDeDocumento ? (
                   <span className="block max-w-[420px] truncate tabular-nums text-[10px] font-normal text-muted-foreground" data-testid="doc-da-compra"

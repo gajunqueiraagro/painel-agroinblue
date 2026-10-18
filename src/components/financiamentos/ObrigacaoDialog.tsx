@@ -79,11 +79,11 @@ const ALTURA_CORPO = 'h-[69vh]';
  */
 /* UI-MODAL-BLOCOS-01 — a prévia do crédito ocupa o que sobra da coluna (69vh − 32 − 227 do bloco e do rótulo): ~141px a 1.126×579,
    onde antes a coluna rolava 105px; com teto nos 260 de sempre. */
-const ALTURA_PREVIA = 'max-h-[min(260px,calc(69vh-259px))]';
+const ALTURA_PREVIA = 'max-h-[min(260px,calc(69vh-273px))]';
 /** PARC-LIVRES-01 — a grade de parcelas da criação do parcelamento: altura FIXA (barra 26 + lista + totais 20 + aviso 18). */
 /* UI-MODAL-BLOCOS-01 — a grade ocupa o que sobra da coluna (69vh − 32 do padding − 107 do bloco "Valores e prazo", da folga da
-   legenda e do vão): 261px a 1.126×579 (era 276 fixo, e com o bloco a coluna passaria a rolar 15px) e 413px a 1.440×800. */
-const ALTURA_GRADE = 'calc(69vh - 139px)';
+   título e do vão; 151 com o título dentro, correção de 18/10): 249px a 1.126×579 (era 276 fixo, e com o bloco a coluna passaria a rolar 15px) e 413px a 1.440×800. */
+const ALTURA_GRADE = 'calc(69vh - 151px)';
 const CAMPO = REGUA_CAMPO;                 // UI-MODAL-BLOCOS-01 — a régua dos modais (28px, 11px); era h-8 (A16)
 const CAMPO_CELULA = 'h-6';                // A16 — dentro da grade densa, todos na dela
 /* Idioma canonico de campo travado (AbaLiquidacaoOC / CompraModalShell). */
@@ -1011,7 +1011,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                 ⚠ SO A PARTIR DE `lg`: abaixo disso as colunas viram linhas empilhadas
                 e altura fixa por coluna cortaria o resumo — ali o corpo rola inteiro. */}
             <div className={`grid grid-cols-1 lg:grid-cols-[1fr_240px] lg:grid-rows-[minmax(0,1fr)] gap-3 p-4 ${ALTURA_CORPO} overflow-y-auto lg:overflow-hidden bg-muted`} data-testid="corpo-da-obrigacao">
-              <div className="space-y-2 min-w-0 pt-2 lg:min-h-0 lg:overflow-y-auto">
+              <div className="space-y-2 min-w-0 lg:min-h-0 lg:overflow-y-auto">
 
                 {/* ══ ABA CONTRATO ══════════════════════════════════════════════ */}
                 <TabsContent value="contrato" className="mt-0 space-y-2">
