@@ -756,7 +756,9 @@ describe('4 — a tela do contrato mostra o que o banco derivou do lançamento',
     expect(screen.getByTestId('modal-do-financeiro').textContent).toBe('lanc-2');
     expect(screen.queryByRole('button', { name: 'Ver' })).toBeNull();
     /* FIN-FINANC-28 PASSO 4: no crédito a tabela é o Cronograma, e a coluna Lançamento oferece ↔ principal e ↔ juros */
-    expect(screen.getByTestId('dica-da-linha').textContent).toBe('principal · juros · cada parcela casa com o lançamento do Financeiro (↔)');
+    /* B3: no crédito a dica saiu da tabela e virou o title do cabeçalho Lançamento */
+    expect(screen.queryByTestId('dica-da-linha')).toBeNull();
+    expect(document.querySelector('th[data-coluna="lancamento"]')!.getAttribute('title')).toBe('principal · juros · cada parcela casa com o lançamento do Financeiro (↔)');
     expect(screen.getAllByTestId('ver-juros').length).toBe(1);
     expect(screen.getAllByTestId('ver-principal').length).toBe(2);
     fireEvent.click(screen.getByTestId('ver-juros'));
@@ -934,7 +936,10 @@ describe('4 — a tela do contrato mostra o que o banco derivou do lançamento',
     expect(screen.getByTestId('total-das-parcelas').textContent).toBe('16.238,00');
     expect(screen.queryByTestId('total-notas')).toBeNull();
     /* o aviso do principal que não soma o contratado (só informa) */
-    expect(screen.getByTestId('avisos-do-cronograma').textContent).toContain('8.119,00 abaixo do contratado');
+    /* B3: o aviso do principal saiu de baixo do cronograma — é item da aba "A resolver" */
+    expect(screen.queryByTestId('avisos-do-cronograma')).toBeNull();
+    fireEvent.click(screen.getByTestId('selo-das-pendencias'));
+    expect(screen.getByTestId('painel-a-resolver').textContent).toContain('8.119,00 abaixo do contratado');
     /* TELA DO CONTRATO v3 (18/10): a linha do título leva "nº · descrição", a situação e os botões; o Resumo é um bloco de 250px
        (os seis cartões saíram); Liberações, Pagamentos, Documentos e Histórico são abas — o cronograma acima é o de antes */
     expect(screen.getByTestId('titulo-do-contrato').textContent).toContain('C-9');

@@ -4,9 +4,9 @@
  *
  *  · linha do título: "← Financiamentos" · "<nº> · <descrição>" 13px/600 · selo da situação · selo vermelho das vencidas · ações
  *    (Editar · lugar RESERVADO do "Juntar" — FIN-CONTRATO-JUNTAR-01 o acende · Dar baixa em dourado);
- *  · bloco "Contrato" em duas colunas (rótulo de largura fixa + valor colado, 11px; uma informação por campo; o que falta é
+ *  · bloco "Contrato" em TRÊS colunas (B3) (rótulo de largura fixa + valor colado, 11px; uma informação por campo; o que falta é
  *    "não cadastrado" em laranja) + bloco "Resumo" de 250px (números da fonte única: `fn_financiamento_saldo` e os cartões da situação);
- *  · bloco "A resolver": uma linha por pendência, com a bolinha, o texto, o valor e o botão que resolve; sem pendência, some.
+ *  · "A resolver" é ABA (B3, 18/10): o topo só leva o selo "N pendências", que a abre (ListaDePendencias).
  * ⚠ SÓ DESENHA: nada é somado aqui — totais, "a identificar", taxa a.a. e as pendências vêm de `fn_contrato_tela`.
  */
 import type { ReactNode } from 'react';
@@ -22,12 +22,23 @@ import {
 const num2 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const reais = (v: number) => `R$ ${num2(v)}`;
 const LARANJA = 'text-amber-700';
+function LinhaPendente({ p, onResolver }: { p: PendenteDoContrato; onResolver: (acao: AcaoDoPendente, p: PendenteDoContrato) => void }) {
+  return (
+    <div className="flex h-[22px] min-w-0 items-center gap-2" data-testid={`pendente-${p.chave}`}>
+      <span className={`size-2 shrink-0 rounded-full ${p.tom === 'vencido' ? 'bg-[#b91c1c]' : 'bg-amber-500'}`} />
+      <span className={`min-w-0 flex-1 truncate text-[11px] ${p.tom === 'vencido' ? 'text-[#b91c1c]' : ''}`} title={p.texto}>{p.texto}</span>
+      <span className="w-[110px] shrink-0 text-right text-[11px] font-medium tabular-nums">{p.valor === null ? '' : num2(p.valor)}</span>
+      <Button variant="outline" size="sm" className="h-5 w-[118px] shrink-0 px-2 text-[10px]" onClick={() => onResolver(p.acao, p)}
+        data-testid={`resolver-${p.chave}`}>{ROTULO_DA_ACAO[p.acao]}</Button>
+    </div>
+  );
+}
 
 /* ═══ linha de leitura: rótulo de largura fixa (100px, 11px cinza) + o valor colado (11px/500). Nunca rótulo à esquerda e valor
    encostado à direita com o vazio no meio. */
 export function LinhaDeLeitura({ rotulo, children, testId }: { rotulo: string; children: ReactNode; testId?: string }) {
   return (
-    <div className="grid h-[18px] min-w-0 grid-cols-[100px_minmax(0,1fr)] items-center gap-2" data-testid={testId}>
+    <div className="grid h-[18px] min-w-0 grid-cols-[110px_minmax(0,max-content)] items-center gap-2" data-testid={testId}>
       <span className="truncate text-[11px] text-muted-foreground" title={rotulo}>{rotulo}</span>
       <span className="flex min-w-0 items-center gap-1.5 text-[11px] font-medium">{children}</span>
     </div>
@@ -49,17 +60,17 @@ const SITUACAO_TOM: Record<string, string> = {
   rolado: 'bg-muted text-muted-foreground', cancelado: 'bg-muted text-muted-foreground',
 };
 
-export function TopoDoContrato({ numero, descricao, status, saldo, vencido, tela, onVoltar, onEditar, acaoDeBaixa, onResolver }: {
+export function TopoDoContrato({ numero, descricao, status, saldo, vencido, tela, onVoltar, onEditar, acaoDeBaixa, pendencias, onAbrirPendencias }: {
   numero: string | null; descricao: string; status: string | null; saldo: SaldoDoContrato | null | undefined; vencido: number | null;
   tela: TelaDoContrato | null; onVoltar?: () => void; onEditar: () => void; acaoDeBaixa?: ReactNode;
-  onResolver: (acao: AcaoDoPendente, p: PendenteDoContrato) => void;
+  /** B3: quantas pendências a aba "A resolver" tem (as do banco + o aviso do principal) e se alguma é de vencido */
+  pendencias: { qtde: number; vencido: boolean }; onAbrirPendencias: () => void;
 }) {
   const s = saldo ?? null;
   const semLiberacao = s !== null && s.liberado === null;
   const c = tela?.contrato ?? null; const k = tela?.condicoes ?? null;
   const vencidas = textoDasVencidas(c?.vencidas ?? 0);
   const titulo = `${numero || 'sem nº'} · ${descricao}`;
-  const pend = tela?.aResolver ?? [];
   return (
     <div className="space-y-2" data-testid="topo-do-contrato">
       {/* 1 — LINHA DO TÍTULO */}
@@ -72,6 +83,12 @@ export function TopoDoContrato({ numero, descricao, status, saldo, vencido, tela
           <span className={`shrink-0 rounded-full px-2 text-[10px] font-medium leading-[16px] ${SITUACAO_TOM[status] ?? 'bg-muted text-muted-foreground'}`}
             data-testid="selo-da-situacao">{ROTULO_DA_SITUACAO[status] ?? status}</span>
         )}
+        {pendencias.qtde > 0 && (
+          <button type="button" onClick={onAbrirPendencias} title="abrir a aba A resolver" data-testid="selo-das-pendencias"
+            className={`shrink-0 rounded-full px-2 text-[10px] font-medium leading-[16px] hover:underline ${pendencias.vencido ? 'bg-destructive/10 text-[#b91c1c]' : 'bg-amber-100 text-amber-800'}`}>
+            {pendencias.qtde === 1 ? '1 pendência' : `${pendencias.qtde} pendências`}
+          </button>
+        )}
         {vencidas && <span className="shrink-0 rounded-full bg-destructive/10 px-2 text-[10px] font-medium leading-[16px] text-[#b91c1c]" data-testid="selo-das-vencidas">{vencidas}</span>}
         <div className="ml-auto flex shrink-0 items-center gap-1" data-testid="botoes-do-credito">
           <Button variant="outline" size="sm" className="h-6 gap-1 px-2 text-[10.5px]" onClick={onEditar}><Pencil className="size-3" /> Editar</Button>
@@ -81,31 +98,33 @@ export function TopoDoContrato({ numero, descricao, status, saldo, vencido, tela
         </div>
       </div>
 
-      {/* 2 — CONTRATO + RESUMO (abaixo de 600px empilha; acima, nunca) */}
-      <div className="flex flex-col gap-2 min-[600px]:flex-row" data-testid="linha-de-blocos">
-        <section className={`${BLOCO_FORMULARIO} min-[600px]:flex-1`} data-testid="bloco-contrato">
+      {/* 2 — CONTRATO (três colunas, largura do conteúdo) + RESUMO (280px) encostado, à esquerda. Abaixo de 600px empilha. */}
+      <div className="flex flex-col items-start gap-2 min-[600px]:flex-row" data-testid="linha-de-blocos">
+        <section className={`${BLOCO_FORMULARIO} min-w-0 max-w-full min-[600px]:max-w-[calc(100%-288px)]`} data-testid="bloco-contrato">
           <TituloDoBloco nome="Contrato" />
-          <div className="grid grid-cols-1 gap-x-7 gap-y-0.5 min-[600px]:grid-cols-2">
-            <div className="min-w-0 space-y-0.5">
+          <div className="grid grid-cols-1 gap-x-8 gap-y-0.5 min-[600px]:grid-cols-[repeat(3,max-content)]" data-testid="colunas-do-contrato">
+            <div className="min-w-0 space-y-0.5" data-testid="coluna-do-contrato">
               <LinhaDeLeitura rotulo="Data do contrato" testId="campo-data-do-contrato"><span className="tabular-nums">{dataBr(c?.dataContrato ?? null) ?? '—'}</span></LinhaDeLeitura>
               <LinhaDeLeitura rotulo="1ª liberação" testId="campo-primeira-liberacao"><Marco m={c?.primeiraLiberacao ?? null} /></LinhaDeLeitura>
               <LinhaDeLeitura rotulo="Última liberação" testId="campo-ultima-liberacao"><Marco m={c?.ultimaLiberacao ?? null} /></LinhaDeLeitura>
               <LinhaDeLeitura rotulo="Vencimento final"><span className="tabular-nums">{dataBr(c?.vencimentoFinal ?? null) ?? '—'}</span></LinhaDeLeitura>
-              <LinhaDeLeitura rotulo="Atividade">{ouNaoCadastrado(textoDaAtividade(c?.atividade ?? null))}</LinhaDeLeitura>
             </div>
-            <div className="min-w-0 space-y-0.5">
+            <div className="min-w-0 max-w-[340px] space-y-0.5" data-testid="coluna-do-contrato">
               <LinhaDeLeitura rotulo="Credor" testId="campo-credor">
                 {c?.credor ? <span className="min-w-0 truncate whitespace-nowrap" title={c.credor} data-testid="credor-do-contrato">{c.credor}</span> : <NaoCadastrado />}
               </LinhaDeLeitura>
               <LinhaDeLeitura rotulo="CNPJ/CPF" testId="campo-documento">{c?.credorDocumento ? <span className="tabular-nums">{c.credorDocumento}</span> : <NaoCadastrado />}</LinhaDeLeitura>
+              <LinhaDeLeitura rotulo="Atividade" testId="campo-atividade">{ouNaoCadastrado(textoDaAtividade(c?.atividade ?? null))}</LinhaDeLeitura>
+              <LinhaDeLeitura rotulo="Sistema" testId="campo-sistema">{k ? ouNaoCadastrado(textoDoSistema(k.sistema)) : '…'}</LinhaDeLeitura>
+            </div>
+            <div className="min-w-0 space-y-0.5" data-testid="coluna-do-contrato">
               <LinhaDeLeitura rotulo="Taxa" testId="campo-taxa">{k ? ouNaoCadastrado(textoDaTaxa(k)) : '…'}</LinhaDeLeitura>
               <LinhaDeLeitura rotulo="Taxa a.a." testId="campo-taxa-aa">{k ? ouNaoCadastrado(textoDaTaxaAa(k)) : '…'}</LinhaDeLeitura>
-              <LinhaDeLeitura rotulo="Sistema" testId="campo-sistema">{k ? ouNaoCadastrado(textoDoSistema(k.sistema)) : '…'}</LinhaDeLeitura>
               <LinhaDeLeitura rotulo="Carência" testId="campo-carencia">{k ? ouNaoCadastrado(textoDaCarencia(k.carenciaAte)) : '…'}</LinhaDeLeitura>
             </div>
           </div>
         </section>
-        <section className={`${BLOCO_FORMULARIO} min-[600px]:w-[250px] min-[600px]:shrink-0`} data-testid="bloco-resumo">
+        <section className={`${BLOCO_FORMULARIO} w-full min-[600px]:w-[280px] min-[600px]:shrink-0`} data-testid="bloco-resumo">
           <TituloDoBloco nome="Resumo" />
           <LinhaDoResumo rotulo="Contratado" valor={s?.contratado ?? null} />
           <LinhaDoResumo rotulo="Liberado" valor={s?.liberado ?? null} interrogacao={semLiberacao} title={semLiberacao ? 'Nenhuma liberação gravada.' : undefined} />
@@ -115,29 +134,31 @@ export function TopoDoContrato({ numero, descricao, status, saldo, vencido, tela
           {(vencido ?? 0) > 0 && <LinhaDoResumo rotulo="Vencido" valor={vencido} vermelho />}
         </section>
       </div>
+    </div>
+  );
+}
 
-      {/* 3 — A RESOLVER (some sem pendência) */}
-      {pend.length > 0 && (
-        <section className={BLOCO_FORMULARIO} data-testid="bloco-a-resolver">
-          <TituloDoBloco nome="A resolver" />
-          {pend.map((p) => (
-            <div key={p.chave} className="flex h-[22px] min-w-0 items-center gap-2" data-testid={`pendente-${p.chave}`}>
-              <span className={`size-2 shrink-0 rounded-full ${p.tom === 'vencido' ? 'bg-[#b91c1c]' : 'bg-amber-500'}`} />
-              <span className={`min-w-0 flex-1 truncate text-[11px] ${p.tom === 'vencido' ? 'text-[#b91c1c]' : ''}`} title={p.texto}>{p.texto}</span>
-              <span className="w-[110px] shrink-0 text-right text-[11px] font-medium tabular-nums">{p.valor === null ? '' : num2(p.valor)}</span>
-              <Button variant="outline" size="sm" className="h-5 w-[118px] shrink-0 px-2 text-[10px]" onClick={() => onResolver(p.acao, p)}
-                data-testid={`resolver-${p.chave}`}>{ROTULO_DA_ACAO[p.acao]}</Button>
-            </div>
-          ))}
-        </section>
-      )}
+/* ═══ ABA "A RESOLVER" (B3, Gabriel 18/10): a lista das pendências, uma por linha (bolinha, texto, valor, botão que resolve).
+   As do banco (`fn_contrato_tela`) e, por último, os avisos do cronograma (o principal que não fecha com o contratado e a 1ª parcela; só informam). */
+export function ListaDePendencias({ pendencias, avisos, onResolver }: {
+  pendencias: readonly PendenteDoContrato[]; avisos: readonly string[]; onResolver: (acao: AcaoDoPendente, p: PendenteDoContrato) => void;
+}) {
+  return (
+    <div className="h-full min-h-0 overflow-y-auto rounded-md border bg-card px-3 py-1.5" data-testid="lista-de-pendencias">
+      {pendencias.map((p) => <LinhaPendente key={p.chave} p={p} onResolver={onResolver} />)}
+      {avisos.map((a) => (
+        <div key={a} className="flex min-h-[22px] min-w-0 items-center gap-2 py-0.5" data-testid="pendente-aviso">
+          <span className="size-2 shrink-0 rounded-full bg-amber-500" />
+          <span className="min-w-0 flex-1 text-[11px]">{a}</span>
+        </div>
+      ))}
     </div>
   );
 }
 
 function LinhaDoResumo({ rotulo, valor, interrogacao, vermelho, title }: { rotulo: string; valor: number | null; interrogacao?: boolean; vermelho?: boolean; title?: string }) {
   return (
-    <div className={`flex h-[20px] items-center justify-between gap-2 ${vermelho ? 'text-[#b91c1c]' : ''}`} title={title} data-testid={`resumo-${rotulo}`}>
+    <div className={`flex h-[16px] items-center justify-between gap-2 ${vermelho ? 'text-[#b91c1c]' : ''}`} title={title} data-testid={`resumo-${rotulo}`}>
       <span className={`text-[11px] ${vermelho ? '' : 'text-muted-foreground'}`}>{rotulo}</span>
       <span className={`whitespace-nowrap text-[13px] font-bold tabular-nums ${interrogacao ? LARANJA : ''}`}>{interrogacao ? '?' : valor === null ? '—' : reais(valor)}</span>
     </div>

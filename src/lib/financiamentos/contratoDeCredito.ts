@@ -106,14 +106,19 @@ const dias = (a: string, b: string) => Math.round((Date.UTC(+b.slice(0, 4), +b.s
  *  (b) a 1ª parcela com juros cobra o PERÍODO INTEIRO (os mesmos juros da 2ª, sem amortização entre elas) e a 1ª liberação caiu no
  *      meio desse período (mais de 15 dias depois do início dele) — se o banco cobra por dia desde a liberação, a 1ª é menor.
  */
+/** TELA v3 B3: o aviso do principal que não fecha com o contratado — vira item da aba "A resolver" (os outros avisos ficam sob o cronograma). */
+export function avisoDoPrincipal(entrada: { contratado: number | null; somaPrincipal: number | null }): string | null {
+  if (entrada.contratado === null || entrada.somaPrincipal === null) return null;
+  const dif = cent(entrada.somaPrincipal) - cent(entrada.contratado);
+  if (dif === 0) return null;
+  return `O principal das parcelas soma ${reais(cent(entrada.somaPrincipal))} — ${reais(Math.abs(dif))} ${dif > 0 ? 'acima' : 'abaixo'} do contratado (${reais(cent(entrada.contratado))}).`;
+}
 export function avisosDoCronograma(entrada: {
   contratado: number | null; somaPrincipal: number | null; parcelas: readonly ParcelaDoContrato[]; primeiraLiberacao: string | null;
 }): string[] {
   const out: string[] = [];
-  if (entrada.contratado !== null && entrada.somaPrincipal !== null) {
-    const dif = cent(entrada.somaPrincipal) - cent(entrada.contratado);
-    if (dif !== 0) out.push(`O principal das parcelas soma ${reais(cent(entrada.somaPrincipal))} — ${reais(Math.abs(dif))} ${dif > 0 ? 'acima' : 'abaixo'} do contratado (${reais(cent(entrada.contratado))}).`);
-  }
+  const principal = avisoDoPrincipal(entrada);
+  if (principal !== null) out.push(principal);
   const ps = entrada.parcelas.filter((p) => p.dataVencimento);
   const lib = entrada.primeiraLiberacao;
   if (lib && ps.length >= 2 && ps[0].valorJuros > 0 && cent(ps[0].valorPrincipal) === 0) {

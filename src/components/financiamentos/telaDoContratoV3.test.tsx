@@ -11,7 +11,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { TabelaDePagamentos, TabelaDoHistorico, TopoDoContrato } from './TelaDoContratoV3';
+import { ListaDePendencias, TabelaDePagamentos, TabelaDoHistorico, TopoDoContrato } from './TelaDoContratoV3';
 import { lerTelaDoContrato, type TelaDoContrato } from '@/lib/financiamentos/telaDoContrato';
 import { colunasDasParcelas } from '@/lib/financiamentos/reguaDasParcelas';
 
@@ -35,8 +35,9 @@ const RAW = (o: Record<string, unknown> = {}, c: Record<string, unknown> = {}, k
 const tela = (o?: Record<string, unknown>, c?: Record<string, unknown>, k?: Record<string, unknown>): TelaDoContrato => {
   const t = lerTelaDoContrato(RAW(o, c, k)); if (!t) throw new Error('leitura torta'); return t;
 };
-const topo = (t: TelaDoContrato | null, onResolver = vi.fn()) => render(
-  <TopoDoContrato numero="SINT-78.179" descricao="Armazém" status="ativo" vencido={8119} tela={t} onEditar={() => undefined} onResolver={onResolver}
+const topo = (t: TelaDoContrato | null, pendencias = { qtde: 2, vencido: true }, onAbrirPendencias = vi.fn()) => render(
+  <TopoDoContrato numero="SINT-78.179" descricao="Armazém" status="ativo" vencido={8119} tela={t} onEditar={() => undefined}
+    pendencias={pendencias} onAbrirPendencias={onAbrirPendencias}
     saldo={{ aplicaSaldo: true, regra: 'calculado', contratado: 6412049, liberado: 6412049, liberacoes: 3, amortizado: 0, saldo: 6412049, jurosPagos: 0,
       jurosPrevistos: 0, foraDasSomas: false, pendencias: [] }} />);
 
@@ -100,19 +101,50 @@ describe('(4) "não cadastrado" e as condições do banco', () => {
   });
 });
 
-describe('(5) "A resolver"', () => {
-  it('some sem pendência', () => {
-    topo(tela({ a_resolver: [] }));
+describe('(5) "A resolver" é ABA (B3): nenhum bloco de pendências no corpo; o selo do título abre a aba', () => {
+  it('o topo não tem bloco de pendências; o selo "N pendências" (vermelho com vencido) chama a abertura da aba', () => {
+    const abrir = vi.fn();
+    topo(tela(), { qtde: 3, vencido: true }, abrir);
     expect(screen.queryByTestId('bloco-a-resolver')).toBeNull();
+    expect(screen.queryByTestId('pendente-vencidas')).toBeNull();
+    const selo = screen.getByTestId('selo-das-pendencias');
+    expect(selo.textContent).toBe('3 pendências');
+    expect(selo.className).toContain('text-[#b91c1c]');
+    fireEvent.click(selo);
+    expect(abrir).toHaveBeenCalledTimes(1);
   });
-  it('com pendência: o texto, o valor e o botão da ação, que leva a ação e a pendência', () => {
+  it('sem pendência, sem selo', () => {
+    topo(tela({ a_resolver: [] }), { qtde: 0, vencido: false });
+    expect(screen.queryByTestId('selo-das-pendencias')).toBeNull();
+  });
+  it('a lista da aba: as do banco com o botão da ação, e os avisos do cronograma como itens', () => {
     const onResolver = vi.fn();
-    topo(tela(), onResolver);
+    render(<ListaDePendencias pendencias={tela().aResolver} avisos={['O principal das parcelas soma R$ 1,00 — R$ 2,00 abaixo do contratado (R$ 3,00).']} onResolver={onResolver} />);
     expect(screen.getByTestId('pendente-vencidas').textContent).toContain('8.119,00');
     expect(screen.getByTestId('resolver-vencidas').textContent).toBe('Buscar pagamento');
     expect(screen.getByTestId('resolver-sem_cedula').textContent).toBe('Anexar');
+    expect(screen.getByTestId('pendente-aviso').textContent).toContain('abaixo do contratado');
     fireEvent.click(screen.getByTestId('resolver-vencidas'));
     expect(onResolver).toHaveBeenCalledWith('buscar_pagamento', expect.objectContaining({ parcelaId: 'p-3' }));
+  });
+  it('a página: a aba "A resolver (N)" só entra com pendência, e sob o cronograma não há aviso (fonte)', () => {
+    const fonte = readFileSync(resolve(__dirname, '../../pages/FinanciamentoDetalhe.tsx'), 'utf8');
+    expect(fonte).toContain("...(pendencias.qtde > 0 ? [{ valor: 'a_resolver' as const");
+    expect(fonte).toContain("onAbrirPendencias={() => setAbaDoCredito('a_resolver')}");
+    expect(fonte).not.toContain('<AvisosDoCronograma');
+    expect(fonte).not.toContain("'principal · juros · cada parcela casa com o lançamento do Financeiro (↔)')}");
+  });
+});
+
+describe('(5b) bloco Contrato em três colunas', () => {
+  it('três colunas de rótulo fixo + valor, na largura do conteúdo: 4 · 4 · 3 linhas', () => {
+    topo(tela());
+    const grade = screen.getByTestId('colunas-do-contrato');
+    expect(grade.className).toContain('grid-cols-[repeat(3,max-content)]');
+    expect(grade.className).toContain('gap-x-8');
+    expect(screen.getAllByTestId('coluna-do-contrato').map((c) => c.children.length)).toEqual([4, 4, 3]);
+    expect(screen.getByTestId('campo-atividade').textContent).toContain('Agricultura');
+    expect(screen.getByTestId('bloco-resumo').className).toContain('min-[600px]:w-[280px]');
   });
 });
 

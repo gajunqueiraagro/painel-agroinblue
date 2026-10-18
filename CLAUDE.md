@@ -162,7 +162,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 18/10/2026 (FIN-FINANC-28 TELA DO CONTRATO v3, +10: `src/components/financiamentos/telaDoContratoV3.test.tsx` 10 (novo);
+  Baseline em 18/10/2026 (FIN-FINANC-28 TELA v3 B3, +3: `src/components/financiamentos/telaDoContratoV3.test.tsx` 3 (10 -> 13; o
+  "A resolver" virou aba) — 5644 depois dele; antes o FIN-FINANC-28 TELA DO CONTRATO v3, +10: `src/components/financiamentos/telaDoContratoV3.test.tsx` 10 (novo);
   `contratoDeCredito.test.tsx` (2) trocado ao contrato novo (2 -> 2) e `obrigacaoEdicao.test.tsx` passou a ancorar em `topo-do-contrato` — 5641
   depois dele; antes o UI-MODAL-BLOCOS-01 titulo na borda, +1: `src/components/ui/blocoFormulario.test.tsx` 1 (2 -> 3) — 5631
   depois dele; antes o UI-MODAL-BLOCOS-01 passo 0, +2: `src/components/ui/blocoFormulario.test.tsx` 2 (novo) — 5630 depois dele; antes o
@@ -382,7 +383,7 @@ no mesmo arquivo.
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
   `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5327
-  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO; 5568 desde o FIN-FINANC-28 PASSO 4; 5571 desde o FIN-FINANC-28 RESUMO-A18; 5573 desde o FIN-FINANC-28 PASSO 4c; 5581 desde o FIN-FINANC-28 PASSO 4b; 5586 desde o FIN-FINANC-28 PASSO 5; 5593 desde o FIN-FINANC-28 PASSO 6; 5607 desde o FIN-FINANC-28 PASSO 7; 5609 desde o FIN-FINANC-28 PASSO 8; 5614 desde o FORN-MESCLAR-01; 5615 desde o RECORRENCIAS-COLUNAS-01; 5620 desde o FIN-FINANC-28 FIX 4b; 5623 desde o FIN-LANC-DESCRICAO-CONTRATO-01; 5628 desde o FIN-FINANC-28 CADASTRO-ACABAMENTO; 5630 desde o UI-MODAL-BLOCOS-01 passo 0; 5631 desde o UI-MODAL-BLOCOS-01 titulo na borda; 5641 desde o FIN-FINANC-28 TELA v3], 22 skipped, e
+  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO; 5568 desde o FIN-FINANC-28 PASSO 4; 5571 desde o FIN-FINANC-28 RESUMO-A18; 5573 desde o FIN-FINANC-28 PASSO 4c; 5581 desde o FIN-FINANC-28 PASSO 4b; 5586 desde o FIN-FINANC-28 PASSO 5; 5593 desde o FIN-FINANC-28 PASSO 6; 5607 desde o FIN-FINANC-28 PASSO 7; 5609 desde o FIN-FINANC-28 PASSO 8; 5614 desde o FORN-MESCLAR-01; 5615 desde o RECORRENCIAS-COLUNAS-01; 5620 desde o FIN-FINANC-28 FIX 4b; 5623 desde o FIN-LANC-DESCRICAO-CONTRATO-01; 5628 desde o FIN-FINANC-28 CADASTRO-ACABAMENTO; 5630 desde o UI-MODAL-BLOCOS-01 passo 0; 5631 desde o UI-MODAL-BLOCOS-01 titulo na borda; 5641 desde o FIN-FINANC-28 TELA v3; 5644 desde o B3], 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -2272,7 +2273,17 @@ preview que o cabecalho nao sai da tela ao rolar.
     abas `Segmentado` Cronograma · Liberacoes · Pagamentos · Documentos · Historico. A RAIZ E' `h-full overflow-hidden`: so' o corpo da
     tabela da aba rola, cabecalho e Total presos no scrollport dela. Empilha so' abaixo de 600px. O CRONOGRAMA E' O DE ANTES (colunas,
     "carência", Total, avisos fora da rolagem). Destinacoes e "orçado" sairam da tela (a destinacao e' a coluna Destino das liberacoes).
-  MEDIDO na bancada (pagina real, `fn_contrato_tela` e situacao REAIS lidas do proto, sem barra do shell): PR-78.179 — pagina nao rola a
+  · B3 (Gabriel 18/10 07:31, "a tabela, que e' o mais importante, ficou escondida") — SUBSTITUI o bloco "A resolver" do topo e o
+    Contrato em duas colunas: "A RESOLVER" E' A ULTIMA ABA, "A resolver (N)" com o N num selo (vermelho com vencido, laranja sem), e
+    some sem pendencia (aberta, volta ao Cronograma); na linha do titulo o selo clicavel "N pendencias" a abre (`ListaDePendencias`).
+    Os AVISOS DO CRONOGRAMA (o principal que nao fecha com o contratado, `avisoDoPrincipal`, e a 1ª parcela) sao itens dela — sob o
+    cronograma nao fica aviso. ⚠ DESVIO DECLARADO: o B3 so' mandava o do principal; o da 1ª parcela (42px medidos) tirava duas parcelas
+    da vista a 579. Contrato em TRES colunas `max-content` (gap 32px, rotulo 110px + valor colado): datas (4) · credor, CNPJ, atividade,
+    sistema (4) · taxa, taxa a.a., carencia (3); Resumo de 280px encostado, linhas de 16px. No credito a linha "principal · juros…"
+    saiu (virou o `title` do cabecalho Lançamento) e "Editar parcelas" mora a' direita da barra das abas, com o recado da linha.
+    MEDIDO (bancada com barra de 96px no topo): PR-78.179 1126x579 8 parcelas visiveis, 1440x800 15/15; 0040/05190-0 3/3; 237.729.00/03
+    sem aba; pagina nunca rola, cabecalho e Total presos. Prints em ~/Downloads/tela-contrato-v3/b3/.
+  MEDIDO ANTES DO B3 (sem barra do shell): PR-78.179 — pagina nao rola a
   1126x579 e 1440x800, A resolver com 4 itens, 11 parcelas visiveis a 800 (Total visivel e o cabecalho parado ao rolar); a 579 so' 2
   parcelas cabem (o topo leva 396px). 237.729.00/03 — "Quitado", sem A resolver, pagamentos "Parcela 1/1" + "Encargo · IOF".
   ⚠ NAO PROVADO: nada com login · a barra do shell real (a bancada nao a tem: no app sobra menos altura) · o "Buscar pagamento" abrindo a
