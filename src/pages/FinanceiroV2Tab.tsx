@@ -74,6 +74,7 @@ import { FinanceiroV2ExportMenu } from '@/components/financeiro-v2/FinanceiroV2E
 import { CorrecaoTransferenciasBanner } from '@/components/financeiro-v2/CorrecaoTransferenciasBanner';
 import { format, parseISO } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
+import { rotulosDosFornecedores, sufixoDoRotulo } from '@/lib/fornecedores/fornecedorTexto';
 import { normalizarAtividade, casaTipoOperacao } from '@/lib/financeiro/filtrosListaV2';
 import { temFiltroLimitante, FRASE_SEM_FILTRO, SEM_SAFRA, SEM_CULTURA } from '@/lib/financeiro/filtroLimitante';
 import { CULTURAS_LANCAMENTO } from '@/lib/agri/rateioLancamento';
@@ -305,21 +306,28 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
    * órfão não existe no banco (medido: 0 em 09/09/2026), então o único caso é a corrida
    * de carga — e ela se resolve sozinha quando `fornecedores` chega.
    */
-  const opcoesFornecedor = useMemo(() => {
-    const nomePorId = new Map(hook.fornecedores.map((f) => [f.id, f.nome]));
+  /* FORN-NOME-EXIBIDO-01 — os fornecedores do RECORTE e o rótulo de cada um (`rotulosDosFornecedores`, o dono): o filtro e a grade
+     leem o MESMO rótulo, então "…0007-69" / "sem CNPJ" e "inativo" aparecem iguais nos dois. */
+  const usosNoRecorte = useMemo(() => {
     const noRecorte = new Map<string, number>();
     hook.lancamentos.forEach((l) => {
       if (l.favorecido_id) noRecorte.set(l.favorecido_id, (noRecorte.get(l.favorecido_id) ?? 0) + 1);
     });
-
+    return noRecorte;
+  }, [hook.lancamentos]);
+  const rotulosDoRecorte = useMemo(
+    () => rotulosDosFornecedores(hook.fornecedores.filter((f) => usosNoRecorte.has(f.id))),
+    [hook.fornecedores, usosNoRecorte],
+  );
+  const opcoesFornecedor = useMemo(() => {
     const opcoes: { value: string; label: string; hint: string }[] = [];
-    noRecorte.forEach((usos, id) => {
-      const nome = nomePorId.get(id);
-      if (!nome) return;
-      opcoes.push({ value: id, label: nome, hint: String(usos) });
+    usosNoRecorte.forEach((usos, id) => {
+      const r = rotulosDoRecorte.get(id);
+      if (!r) return;
+      opcoes.push({ value: id, label: r.nome, hint: [sufixoDoRotulo(r), String(usos)].filter(Boolean).join(' · ') });
     });
     return opcoes.sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
-  }, [hook.lancamentos, hook.fornecedores]);
+  }, [usosNoRecorte, rotulosDoRecorte]);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const currentYear = new Date().getFullYear();
@@ -2785,6 +2793,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 ) : (
                   linhasDaGrade.map(l => {
                     const fornNome = fornecedoresMap.get(l.favorecido_id || '');
+                    const rotuloForn = rotulosDoRecorte.get(l.favorecido_id || '');
                     // PR-OC-FIN-EDIT-FIX-01 — apresentação: título de OC não exibe o fornecedor no Produto.
                     //   Só display (histórico intacto). Remove o sufixo " — <contraparte>" do formato de
                     //   compromisso legado; NÃO mexe no formato por-parcela ("… — Parc. x/y") nem nos novos.
@@ -2918,8 +2927,16 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                             </Tooltip>
                           )}
                         </td>
-                        <td className="truncate px-1 py-1 align-middle text-[12px] leading-tight text-muted-foreground" title={fornNome || ''}>
-                          {fornNome || (!l.favorecido_id ? '-' : <span className="text-warning">n/c</span>)}
+                        <td className="truncate px-1 py-1 align-middle text-[12px] leading-tight text-muted-foreground"
+                          title={rotuloForn?.title ?? fornNome ?? ''} data-testid="celula-fornecedor">
+                          {fornNome ? (
+                            /* FORN-NOME-EXIBIDO-01 — o nome corta; o final e o "inativo" ficam inteiros à direita */
+                            <span className="flex min-w-0 items-baseline gap-1">
+                              <span className="truncate">{fornNome}</span>
+                              {rotuloForn?.final && <span className="shrink-0 whitespace-nowrap text-[10px]" data-testid="final-fornecedor">· {rotuloForn.final}</span>}
+                              {rotuloForn?.inativo && <span className="shrink-0 whitespace-nowrap text-[10px] text-amber-700" data-testid="inativo-fornecedor">· inativo</span>}
+                            </span>
+                          ) : (!l.favorecido_id ? '-' : <span className="text-warning">n/c</span>)}
                         </td>
                         {/* FIN-V2-COLUNAS-02 — a Classificação no nível escolhido; o caminho inteiro no `title`. */}
                         <td className="celula-classe truncate px-1 py-1 align-middle text-[11px] leading-tight text-muted-foreground" data-testid="celula-classificacao"

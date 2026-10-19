@@ -26,6 +26,17 @@ type FiltroStatus = 'ativos' | 'inativos' | 'todos';
  * errado), pelo validador único (`situacaoDoGravado`). Combina com o status e com a busca. Como "fora do padrão" não se filtra
  * no banco (o gravado tem formatos misturados), com o filtro ligado a lista do recorte é lida INTEIRA e paginada aqui.
  */
+/** FORN-NOME-EXIBIDO-01 — quantos fornecedores DISTINTOS aparecem nas linhas (uma linha por lançamento). */
+export function contarFornecedoresDistintos(linhas: readonly { favorecido_id: string | null }[]): number {
+  return new Set(linhas.map((l) => l.favorecido_id).filter((id): id is string => !!id)).size;
+}
+
+/** FORN-NOME-EXIBIDO-01 — a frase do aviso; nula sem nada a dizer (zero, ou leitura que não chegou). */
+export function avisoDeInativos(n: number | null): string | null {
+  if (n === null || n <= 0) return null;
+  return `${n} ${n === 1 ? 'fornecedor inativo ainda tem' : 'fornecedores inativos ainda têm'} lançamentos e aparece${n === 1 ? '' : 'm'} em Lançamentos Financeiros. Una ao cadastro certo pelo Mesclar.`;
+}
+
 export function precisaDeDocumento(cpfCnpj: string | null | undefined): boolean {
   return situacaoDoGravado(cpfCnpj).situacao !== 'ok';
 }
@@ -80,6 +91,10 @@ export function FinV2FornecedoresTab() {
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
 
+  /* FORN-NOME-EXIBIDO-01 — inativos (não mesclados) que ainda têm lançamento vivo: somem daqui com "Ativos", mas aparecem no filtro
+     e na grade de Lançamentos. Nulo = ainda lendo ou a leitura falhou (o aviso não diz zero sem saber). */
+  const [inativosComLancamento, setInativosComLancamento] = useState<number | null>(null);
+
   // Pending items
   const [pendingItems, setPendingItems] = useState<PendingItem[]>([]);
   const [loadingPending, setLoadingPending] = useState(false);
@@ -133,6 +148,32 @@ export function FinV2FornecedoresTab() {
     setTotalCount(count ?? 0);
     setLoading(false);
   }, [clienteAtual?.id, statusFilter, searchDebounced, page, semDocumento]);
+
+  const loadInativosComLancamento = useCallback(async () => {
+    if (!clienteAtual?.id) return;
+    const clienteId = clienteAtual.id;
+    setInativosComLancamento(null);
+    try {
+      const linhas = await lerTodasAsPaginas<{ favorecido_id: string | null }>(async (de, ate, contar) => {
+        const { data, error, count } = await supabase
+          .from('financeiro_lancamentos_v2')
+          .select('favorecido_id, financeiro_fornecedores!fk_flv2_favorecido_tenant!inner(ativo, fundido_em_id)', { count: contar ? 'exact' : undefined })
+          .eq('cliente_id', clienteId)
+          .not('cancelado', 'is', true)
+          .eq('financeiro_fornecedores.ativo', false)
+          .is('financeiro_fornecedores.fundido_em_id', null)
+          .order('id')
+          .range(de, ate);
+        if (error) throw new Error(error.message);
+        return { data: (data ?? []).map((r) => ({ favorecido_id: r.favorecido_id })), count: typeof count === 'number' ? count : null };
+      });
+      setInativosComLancamento(contarFornecedoresDistintos(linhas));
+    } catch {
+      setInativosComLancamento(null);
+    }
+  }, [clienteAtual?.id]);
+
+  useEffect(() => { void loadInativosComLancamento(); }, [loadInativosComLancamento]);
 
   const loadPending = useCallback(async () => {
     if (!clienteAtual?.id) return;
@@ -308,6 +349,17 @@ export function FinV2FornecedoresTab() {
                 semDocumento ? 'border-primary bg-primary text-primary-foreground' : 'bg-transparent text-muted-foreground hover:bg-muted')}>
               Sem CPF/CNPJ
             </button>
+          </div>
+          {/* FORN-NOME-EXIBIDO-01 — lugar reservado de 16px, sempre presente (vazio sem inativo com lançamento) */}
+          <div className="h-4 flex items-center gap-2 text-[10px] leading-4 text-amber-700" data-testid="aviso-inativos-com-lancamento">
+            {avisoDeInativos(inativosComLancamento) && (
+              <>
+                <span className="truncate" title={avisoDeInativos(inativosComLancamento) ?? ''}>{avisoDeInativos(inativosComLancamento)}</span>
+                {statusFilter !== 'inativos' && (
+                  <button type="button" className="shrink-0 underline" onClick={() => { setStatusFilter('inativos'); setPage(1); }}>ver inativos</button>
+                )}
+              </>
+            )}
           </div>
           <Card>
             <CardContent className="p-0">

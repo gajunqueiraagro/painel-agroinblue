@@ -129,3 +129,74 @@ export function linhaDoDocumento(escolhido: FornecedorDoSeletor | null | undefin
 }
 /** O selo do nome repetido ("3 iguais"); "" quando o nome é único. */
 export const seloDeIguais = (n: number): string => (n > 1 ? `${n} iguais` : '');
+
+/* ── FORN-NOME-EXIBIDO-01 (Gabriel 19/10/2026) — UMA regra de nome exibido para o filtro e a grade de Lançamentos ──────────────
+ * O nome é SEMPRE a razão social do cadastro (`nome`). Quando dois ou mais cadastros da MESMA lista dão o mesmo nome comparado,
+ * cada um ganha um final fixo, que não corta: o fim do CNPJ/CPF ("…0007-69") ou "sem CNPJ". Cadastro inativo leva a marca
+ * "inativo". Nasce da Vera: "Lineagro … AS" (inativo) e "Lineagro … S.A." apareciam no filtro com o mesmo começo de nome. */
+
+/** Prefixos que o sistema antigo pôs no nome (medido em 19/10: só o "Pec.3M-", 192 cadastros, um cliente). */
+export const PREFIXOS_DO_SISTEMA_ANTIGO: readonly RegExp[] = [/^pec\.3m-\s*/];
+
+/** Sufixos societários que não distinguem um cadastro do outro ("S.A." x "AS" x "SA", "Ltda", "ME"…). */
+const SUFIXO_SOCIETARIO = /\b(s a|sa|as|ltda|me|epp|eireli|cia)\b/g;
+
+/** O nome para dizer "parece o mesmo": sem acento e caixa, sem o prefixo do sistema antigo, sem pontuação e sem sufixo societário. */
+export function chaveDoNomeComparado(nome: string | null | undefined): string {
+  let n = normalizarNome(nome);
+  for (const p of PREFIXOS_DO_SISTEMA_ANTIGO) n = n.replace(p, '');
+  return n.replace(/[^a-z0-9 ]/g, ' ').replace(SUFIXO_SOCIETARIO, ' ').replace(/\s+/g, ' ').trim();
+}
+
+export const FINAL_SEM_DOCUMENTO = 'sem CNPJ';
+
+/** O fim do documento que distingue o cadastro: CNPJ "…0007-69", CPF "…789-09", outro tamanho os 4 últimos dígitos; vazio = "sem CNPJ". */
+export function finalDoDocumento(doc: string | null | undefined): string {
+  const d = soDigitos(doc);
+  if (!d) return FINAL_SEM_DOCUMENTO;
+  if (d.length === 14) return `…${d.slice(8, 12)}-${d.slice(12)}`;
+  if (d.length === 11) return `…${d.slice(6, 9)}-${d.slice(9)}`;
+  return `…${d.slice(-4)}`;
+}
+
+export interface RotuloDoFornecedor {
+  /** A razão social, como está no cadastro. */
+  nome: string;
+  /** O final que distingue os parecidos; nulo quando o nome comparado é único na lista. */
+  final: string | null;
+  inativo: boolean;
+  /** O `title`: nome inteiro · documento formatado · inativo. */
+  title: string;
+}
+
+/** Os rótulos de uma LISTA de cadastros (a que a tela mostra junta): o final só aparece entre os parecidos DESSA lista. */
+export function rotulosDosFornecedores(fornecedores: readonly FornecedorDoSeletor[]): Map<string, RotuloDoFornecedor> {
+  const porChave = new Map<string, Set<string>>();
+  for (const f of fornecedores) {
+    const k = chaveDoNomeComparado(f.nome);
+    if (!k) continue;
+    const s = porChave.get(k) ?? new Set<string>();
+    s.add(f.id);
+    porChave.set(k, s);
+  }
+  const rotulos = new Map<string, RotuloDoFornecedor>();
+  for (const f of fornecedores) {
+    const k = chaveDoNomeComparado(f.nome);
+    const parecidos = k ? (porChave.get(k)?.size ?? 0) : 0;
+    const inativo = f.ativo === false;
+    const titulo = nomeEDocumento(f.nome, f.cpf_cnpj);
+    rotulos.set(f.id, {
+      nome: f.nome,
+      final: parecidos > 1 ? finalDoDocumento(f.cpf_cnpj) : null,
+      inativo,
+      title: inativo ? `${titulo} · inativo` : titulo,
+    });
+  }
+  return rotulos;
+}
+
+/** O texto que fica à direita do nome, sem cortar: o final (se há parecidos) e a marca "inativo". Vazio quando não há nada. */
+export function sufixoDoRotulo(r: RotuloDoFornecedor | undefined): string {
+  if (!r) return '';
+  return [r.final, r.inativo ? 'inativo' : null].filter(Boolean).join(' · ');
+}

@@ -164,7 +164,7 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 19/10/2026 (faixa do XML, +1: `src/components/financeiro-v2/novoDeXml.test.tsx` 1 (28 -> 29); `lancamentoCompacto` trocado ao
+  Baseline em 19/10/2026 (FORN-NOME-EXIBIDO-01, +11: `src/lib/fornecedores/nomeExibido.test.ts` 11 (novo) — 5682 depois dele; antes a faixa do XML, +1: `src/components/financeiro-v2/novoDeXml.test.tsx` 1 (28 -> 29); `lancamentoCompacto` trocado ao
   contrato novo (o corpo com `min-w-0`) — 5671 depois dele; antes o FORN-MESCLAR-02a, +1: `src/components/financeiro-v2/mesclarFornecedores.test.tsx` 1 (5 -> 6) — 5670 depois dele;
   antes o UI-MODAL-BLOCOS-01 · LANCAMENTO COMPACTO, +4: `src/components/financeiro-v2/lancamentoCompacto.test.tsx` 4 (novo);
   `blocoFormulario`, `resumoPagamentoModal` e `finPgtoFantasma01` trocados ao contrato novo — 5669 depois dele; antes o FORN-CADASTRO-02, +8: `src/components/financeiro-v2/fornecedorCadastro02.test.tsx` 8 (novo); `fornecedorEditar`,
@@ -397,7 +397,7 @@ no mesmo arquivo.
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
   `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5327
-  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO; 5568 desde o FIN-FINANC-28 PASSO 4; 5571 desde o FIN-FINANC-28 RESUMO-A18; 5573 desde o FIN-FINANC-28 PASSO 4c; 5581 desde o FIN-FINANC-28 PASSO 4b; 5586 desde o FIN-FINANC-28 PASSO 5; 5593 desde o FIN-FINANC-28 PASSO 6; 5607 desde o FIN-FINANC-28 PASSO 7; 5609 desde o FIN-FINANC-28 PASSO 8; 5614 desde o FORN-MESCLAR-01; 5615 desde o RECORRENCIAS-COLUNAS-01; 5620 desde o FIN-FINANC-28 FIX 4b; 5623 desde o FIN-LANC-DESCRICAO-CONTRATO-01; 5628 desde o FIN-FINANC-28 CADASTRO-ACABAMENTO; 5630 desde o UI-MODAL-BLOCOS-01 passo 0; 5631 desde o UI-MODAL-BLOCOS-01 titulo na borda; 5641 desde o FIN-FINANC-28 TELA v3; 5644 desde o B3; 5646 desde o EDITAR v2; 5653 desde o FIN-CONTRATO-JUNTAR-01; 5657 desde a TELA DO CONTRATO v4; 5665 desde o FORN-CADASTRO-02; 5669 desde o LANCAMENTO COMPACTO; 5670 desde o FORN-MESCLAR-02a; 5671 desde a faixa do XML], 22 skipped, e
+  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO; 5568 desde o FIN-FINANC-28 PASSO 4; 5571 desde o FIN-FINANC-28 RESUMO-A18; 5573 desde o FIN-FINANC-28 PASSO 4c; 5581 desde o FIN-FINANC-28 PASSO 4b; 5586 desde o FIN-FINANC-28 PASSO 5; 5593 desde o FIN-FINANC-28 PASSO 6; 5607 desde o FIN-FINANC-28 PASSO 7; 5609 desde o FIN-FINANC-28 PASSO 8; 5614 desde o FORN-MESCLAR-01; 5615 desde o RECORRENCIAS-COLUNAS-01; 5620 desde o FIN-FINANC-28 FIX 4b; 5623 desde o FIN-LANC-DESCRICAO-CONTRATO-01; 5628 desde o FIN-FINANC-28 CADASTRO-ACABAMENTO; 5630 desde o UI-MODAL-BLOCOS-01 passo 0; 5631 desde o UI-MODAL-BLOCOS-01 titulo na borda; 5641 desde o FIN-FINANC-28 TELA v3; 5644 desde o B3; 5646 desde o EDITAR v2; 5653 desde o FIN-CONTRATO-JUNTAR-01; 5657 desde a TELA DO CONTRATO v4; 5665 desde o FORN-CADASTRO-02; 5669 desde o LANCAMENTO COMPACTO; 5670 desde o FORN-MESCLAR-02a; 5671 desde a faixa do XML; 5682 desde o FORN-NOME-EXIBIDO-01], 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -2495,6 +2495,23 @@ preview que o cabecalho nao sai da tela ao rolar.
   `1fr`; a faixa sem `min-w-0 overflow-hidden`). FOTOS REGRAVADAS de proposito: as 4 de `valorComConta.fotos.json` (+34 bytes = as classes
   `minmax(0,` e `min-w-0`; +82 na do XML, com as faixas).
   ⚠ NAO PROVADO: com login no app real (bancada) · a variante "o cadastro tem outro documento" na tela (mesmo desenho, so' por leitura).
+- ⚠ O NOME DO FORNECEDOR NA TELA E' A RAZAO SOCIAL; ENTRE OS PARECIDOS, O FIM DO DOCUMENTO; O INATIVO E' MARCADO (FORN-NOME-EXIBIDO-01,
+  Gabriel 19/10/2026, so' tela). Filtro e grade de Lancamentos Financeiros e Cadastros › Fornecedores mostram o MESMO campo
+  (`financeiro_fornecedores.nome`); o lancamento so' guarda o id. O que difere e' QUEM aparece: Cadastros abre em "Ativos", e o filtro
+  e a grade mostram tambem o inativo que ainda tem lancamento no periodo.
+  · DONO: `src/lib/fornecedores/fornecedorTexto.ts` — `chaveDoNomeComparado` (sem acento, caixa, pontuacao, sufixo societario
+    S.A./SA/AS/LTDA/ME/EPP/EIRELI/CIA e o prefixo do sistema antigo `PREFIXOS_DO_SISTEMA_ANTIGO`, hoje so' "Pec.3M-"), `finalDoDocumento`
+    ("…0007-69" CNPJ, "…789-09" CPF, os 4 ultimos noutro tamanho, "sem CNPJ"), `rotulosDosFornecedores(lista)` e `sufixoDoRotulo`.
+    O final so' aparece entre os parecidos DA MESMA LISTA (o recorte da tela); "inativo" sempre que `ativo = false`.
+  · LANCAMENTOS (`FinanceiroV2Tab.tsx`): `rotulosDoRecorte` e' um so', lido pelo filtro (o final e o "inativo" no `hint`, a' direita,
+    que nao corta) e pela grade (o nome corta; o final e o "inativo", em ambar, ficam `shrink-0`; o `title` = nome · documento ·
+    inativo). O gatilho do filtro escolhido segue mostrando so' o nome.
+  · CADASTROS (`FinV2FornecedoresTab.tsx`): lugar reservado de 16px com "N fornecedores inativos ainda tem lancamentos e aparecem em
+    Lancamentos Financeiros. Una ao cadastro certo pelo Mesclar." e "ver inativos"; contagem de fornecedores DISTINTOS (inativo, nao
+    mesclado, com lancamento vivo) por uma leitura paginada com a juncao `fk_flv2_favorecido_tenant`; lendo ou falhou = vazio, nunca "0".
+  Teste: `src/lib/fornecedores/nomeExibido.test.ts` (11); 2 mutacoes mortas (final sem parecido; sem o prefixo antigo).
+  ⚠ MEDIDO (19/10): inativos nao mesclados com lancamento vivo — Vera 19, NJ 15, Agnaldo 3, Santa Rita 1; "Pec.3M-" so' na Vera (192).
+  ⚠ NAO PROVADO NO NAVEGADOR: a celula de 124px com o final, o filtro com os parecidos, e a leitura do aviso pelo PostgREST.
 - ⚠ O GATILHO DA CLASSIFICACAO NAO REVALIDA O QUE NINGUEM MEXEU — CONTA INATIVA INCLUSIVE —, E REATIVAR REVALIDA (FORN-MESCLAR-02a, Gabriel
   19/10/2026; migration `supabase/migrations/20261027201800_forn_mesclar_02a.sql`, md5 do arquivo 4c6eb843b60a126bdcdb0f19d44a783d — APLICADA no
   proto em 19/10/2026, ledger 20261027201800 `forn_mesclar_02a`; ledger = arquivo). Nasce da mesclagem do grupo Pontero (Vera) recusada com
