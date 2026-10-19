@@ -2516,11 +2516,16 @@ preview que o cabecalho nao sai da tela ao rolar.
   MESCLAR "Pec.3M-X" COM O CADASTRO SEM O PREFIXO ("X"): sao cadastros diferentes DE PROPOSITO, e a mesclagem apaga a informacao do
   rateio (Gabriel, 19/10/2026). Nao e' resto de sistema antigo. Vale para toda regra de "nome parecido" (`chaveDoNomeComparado` mantem
   o prefixo), para as sugestoes de mesclagem (`fn_fornecedor_repetidos` nao junta os dois lados — migration
-  20261027202100_forn_repetidos_sem_rateio_01, A APLICAR) e para qualquer lote de mesclagem. Dois "Pec.3M-" entre si podem ser
+  20261027202100_forn_repetidos_sem_rateio_01, md5 do arquivo 29dc092619bd90a0e0ef34e5b64dbc09 — APLICADA no proto em 19/10/2026, ledger
+  20261027202100 = arquivo; corpo 8c9c0a2a… -> d66b4eab…; teste `supabase/tests/forn_repetidos_sem_rateio_01_test.sql` (R1–R3) OK no vivo e
+  cai contra o corpo antigo) e para qualquer lote de mesclagem. Dois "Pec.3M-" entre si podem ser
   mesclados (o mesmo lado). Medido em 19/10: 192 cadastros "Pec.3M-", todos na Vera.
   ⚠ NASCE DE ERRO MEU (19/10/2026): tratei o prefixo como resto de sistema e gravei 9 mesclagens "Pec.3M-X" -> "X" na Vera
-    (Pec.3M-Higino inclusive, 209 referencias), com o OK de um relatorio que dizia "prefixo do sistema antigo". O desfazer esta' proposto
-    e aguarda o OK do Gabriel.
+    (Pec.3M-Higino inclusive, 209 referencias), com o OK de um relatorio que dizia "prefixo do sistema antigo". DESFEITAS em 19/10/2026
+    ~08:46 com o OK do Gabriel, pelo desfazer da tela (`fn_fornecedor_mesclagem_desfazer`), junto com a de 18/10 "Comercial Jere" <-
+    "Pec.3M-Comercial Jere"; as 3 da lista A que estavam por cima foram desfeitas e refeitas. Conferido: 308 de 308 referencias de
+    volta aos "Pec.3M-", 0 apelido "Pec.3M-" em cadastro sem prefixo, as 15 mesclagens "Pec.3M-" <-> "Pec.3M-" de 18/10 intactas. Lista
+    em ~/agroinblue-local/fornecedores-2026-10-19/c_gravadas.csv (fora do repo).
 - ⚠ O GATILHO DA CLASSIFICACAO NAO REVALIDA O QUE NINGUEM MEXEU — CONTA INATIVA INCLUSIVE —, E REATIVAR REVALIDA (FORN-MESCLAR-02a, Gabriel
   19/10/2026; migration `supabase/migrations/20261027201800_forn_mesclar_02a.sql`, md5 do arquivo 4c6eb843b60a126bdcdb0f19d44a783d — APLICADA no
   proto em 19/10/2026, ledger 20261027201800 `forn_mesclar_02a`; ledger = arquivo). Nasce da mesclagem do grupo Pontero (Vera) recusada com
