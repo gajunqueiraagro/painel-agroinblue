@@ -105,7 +105,33 @@ export interface Confronto {
    * ATIVAS do grupo. Ausente = o confronto de sempre.
    */
   grupo?: { valorDocumento: number; somaLancamentos: number; qtd: number };
+  /**
+   * FIN-DOC-SOMA-01 (Gabriel 19/10/2026) — o banco separa o que SOMA do que CONFERE. Nulo = nenhum documento fiscal com valor.
+   * Nota fiscal e Recibo (na OC, o que soma no valor dela) somam, contra a BASE que o banco escolheu: 'lancamento', 'contrato'
+   * (a nota inteira numa parcela, contra as parcelas do contrato) ou 'grupo' (a nota ligada às parcelas). A nota repetida conta uma vez.
+   */
+  fiscal: ConfrontoFiscal | null;
+  /** Boleto e Comprovante: não somam; cada um conferido contra o valor do lançamento. */
+  pagamentos: ConfrontoPagamento[];
+  /** "Outro" (e, na OC, o que não soma): não soma e não confere — só contado. */
+  informativos: number;
+  /** A nota registrada mais de uma vez (mesmo número + CNPJ, ou a mesma chave): a faixa avisa; nunca se cancela sozinha. */
+  repetidas: NotaRepetida[];
 }
+
+export interface ConfrontoFiscal {
+  total: number;
+  qtd: number;
+  /** quantos dos `qtd` são recibos (o rótulo da faixa: nota, recibo ou os dois) */
+  recibos: number;
+  base: 'lancamento' | 'contrato' | 'grupo';
+  baseValor: number;
+  baseQtd: number;
+  diferenca: number;
+  situacao: 'fecha' | 'falta' | 'passa';
+}
+export interface ConfrontoPagamento { documentoId: string; especie: string; numero: string | null; valor: number; diferenca: number; confere: boolean }
+export interface NotaRepetida { numero: string; vezes: number }
 
 export interface LancDocPayload {
   /**
@@ -307,6 +333,32 @@ function daLinha(r: DocRow): LancDocumento {
   };
 }
 
+const ehObjeto = (x: Json | undefined): x is { [k: string]: Json | undefined } => !!x && typeof x === 'object' && !Array.isArray(x);
+const BASES = ['lancamento', 'contrato', 'grupo'] as const;
+const SITUACOES = ['fecha', 'falta', 'passa'] as const;
+function daFiscal(f: Json | undefined): ConfrontoFiscal | null {
+  if (!ehObjeto(f)) return null;
+  const base = BASES.find((b) => b === f.base);
+  const situacao = SITUACOES.find((x) => x === f.situacao);
+  if (!base || !situacao) return null;
+  return {
+    total: Number(f.total ?? 0), qtd: Number(f.qtd ?? 0), recibos: Number(f.recibos ?? 0), base,
+    baseValor: Number(f.base_valor ?? 0), baseQtd: Number(f.base_qtd ?? 0), diferenca: Number(f.diferenca ?? 0), situacao,
+  };
+}
+function daPagamento(p: Json): ConfrontoPagamento[] {
+  if (!ehObjeto(p) || typeof p.documento_id !== 'string') return [];
+  return [{
+    documentoId: p.documento_id, especie: typeof p.especie === 'string' ? p.especie : '',
+    numero: typeof p.numero === 'string' && p.numero ? p.numero : null,
+    valor: Number(p.valor ?? 0), diferenca: Number(p.diferenca ?? 0), confere: p.confere === true,
+  }];
+}
+function daRepetida(r: Json): NotaRepetida[] {
+  if (!ehObjeto(r) || typeof r.numero !== 'string') return [];
+  return [{ numero: r.numero, vezes: Number(r.vezes ?? 0) }];
+}
+
 /** O envelope do banco → o que a tela lê. Ausente vira `null`, nunca zero. */
 export function daConfronto(c: Json | null | undefined): Confronto | null {
   /* ⚠ NARROWING, NÃO CAST: `jsonb` chega como `Json`, que pode ser número, texto ou lista.
@@ -320,6 +372,10 @@ export function daConfronto(c: Json | null | undefined): Confronto | null {
     docsComValor: Number(c.docs_com_valor ?? 0),
     diferenca: Number(c.diferenca ?? 0),
     confere: c.confere === true,
+    fiscal: daFiscal(c.fiscal),
+    pagamentos: Array.isArray(c.pagamentos) ? c.pagamentos.flatMap(daPagamento) : [],
+    informativos: Number(c.informativos ?? 0),
+    repetidas: Array.isArray(c.repetidas) ? c.repetidas.flatMap(daRepetida) : [],
   };
   /* PR 2b: as chaves `grupo_*` só existem com documento compartilhado — e aí vêm as três juntas. */
   if (c.grupo_soma_lancamentos == null) return base;
@@ -330,46 +386,6 @@ export function daConfronto(c: Json | null | undefined): Confronto | null {
       somaLancamentos: Number(c.grupo_soma_lancamentos ?? 0),
       qtd: Number(c.grupo_qtd ?? 0),
     },
-  };
-}
-
-/**
- * O confronto contando as DUAS origens — DOC-UMA-FONTE-01.
- *
- * ⚠ ESTA SOMA CONTRARIA O QUE ESTE ARQUIVO DIZIA, e é deliberado. `fin_documento_confronto`
- * lê `financeiro_lancamento_documentos` e só ela: a NF que mora na OC ficava fora, e o
- * lançamento aparecia como "nada documentado" tendo a nota anexada um clique adiante. A
- * pergunta mudou — "quanto deste lançamento está documentado, venha o papel de onde vier" —
- * e a resposta antiga não a respondia.
- * ⚠ A ARITMÉTICA É A DA RPC, copiada da definição dela, não redigitada de cabeça:
- * `confere` exige ao menos um documento COM valor e diferença de até R$ 0,01; a diferença é
- * documentado − lançamento, arredondada a 2 casas. Se as duas contas divergirem um dia, é
- * porque alguém mudou uma sem a outra.
- * ⚠ A CORREÇÃO DE RAIZ É NO BANCO: `fin_documento_confronto` passar a ler
- * `vw_lancamento_documentos`. Aí esta função morre e o topo volta a só formatar o que leu.
- * Enquanto ela existe, `valor_lancamento` continua vindo do banco — o front não inventa
- * nem o valor do lançamento nem a tolerância.
- */
-export function confrontoDasDuasOrigens(
-  doBanco: Confronto | null, docs: readonly LancDocumento[],
-): Confronto | null {
-  if (!doBanco) return null;
-  /* ⚠ COM A NF DA COMPRA, O BANCO JÁ RESPONDE — FIN-NFE-PARCELAS-01 PR 2b. Somar as linhas da view aqui
-     poria a nota inteira (24.052,00) contra UMA parcela (3.006,50); o banco confere contra a soma das
-     parcelas ativas. Documento de OC num lançamento de parcelamento não acontece hoje; se acontecer,
-     o que vale é o banco. */
-  if (doBanco.grupo) return doBanco;
-  const ativos = docs.filter(d => !d.cancelado);
-  const comValor = ativos.filter(d => d.valorDocumento != null);
-  const total = comValor.reduce((acc, d) => acc + (d.valorDocumento ?? 0), 0);
-  const diferenca = Math.round((total - doBanco.valorLancamento) * 100) / 100;
-  return {
-    valorLancamento: doBanco.valorLancamento,
-    valorDocumentado: total,
-    docsAtivos: ativos.length,
-    docsComValor: comValor.length,
-    diferenca,
-    confere: comValor.length > 0 && Math.abs(diferenca) <= 0.01,
   };
 }
 
@@ -407,7 +423,8 @@ export function useLancamentoDocumentos(
       if (conf.error) throw conf.error;
       const docs = (lista.data ?? []).map(daLinha);
       setDocumentos(docs);
-      setConfronto(confrontoDasDuasOrigens(daConfronto(conf.data), docs));
+      /* FIN-DOC-SOMA-01 — o banco é o dono do confronto, sobre as DUAS origens (lê a mesma view): a tela não soma mais nada. */
+      setConfronto(daConfronto(conf.data));
 
       /* ⚠ A PERGUNTA É FEITA MESMO SEM DOCUMENTO NENHUM. Deduzir a operação das linhas da
          view só funcionaria depois do primeiro documento — e é justamente o primeiro que

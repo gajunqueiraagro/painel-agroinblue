@@ -24,6 +24,8 @@ describe('daConfronto — o envelope do banco vira o topo da aba', () => {
     expect(c).toEqual({
       valorLancamento: 701428.17, valorDocumentado: 701428.17,
       docsAtivos: 1, docsComValor: 1, diferenca: 0, confere: true,
+      /* FIN-DOC-SOMA-01 — sem as chaves novas no envelope: nada inventado */
+      fiscal: null, pagamentos: [], informativos: 0, repetidas: [],
     });
   });
 

@@ -35,6 +35,7 @@ import { Paperclip, Pencil, Ban, Plus, X } from 'lucide-react';
 import { AreaDeArquivo } from '@/components/ui/area-de-arquivo';
 import { ajudaDaRegra } from '@/lib/arquivo/aceitarArquivo';
 import { formatMoeda } from '@/lib/calculos/formatters';
+import { faixaDoConfronto } from '@/lib/financeiro/faixaDoConfronto';
 import { formatNFNumber } from '@/lib/financeiro/documentoHelper';
 import {
   ESPECIES_LANC_DOC, rotuloEspecieDoc, type EspecieLancDoc, type LancDocumento, type LancDocPayload,
@@ -88,7 +89,7 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, clienteId, onAnex
   const [cancelando, setCancelando] = useState<LancDocumento | null>(null);
   const [motivo, setMotivo] = useState('');
 
-  const c = api.confronto;
+  const faixa = faixaDoConfronto(api.confronto);
   const ativos = api.documentos.filter(d => !d.cancelado);
   /* ⚠ CANCELADO NÃO FICA NA LISTA — FIN-DOCUMENTOS-LAYOUT-01 (pedido do Gabriel, 29/09 e 04/10: "quando eu cancelo um, ele não
      some, fica poluindo a tela"). Ele é história: sai da vista e fica atrás do "mostrar" do rodapé, o mesmo padrão das contas
@@ -145,29 +146,24 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, clienteId, onAnex
           o confronto ocupava mais altura que a lista que ele resume. Rótulo 10px e valor 12px lado a lado; em largura
           estreita os grupos QUEBRAM de linha (`flex-wrap`), não cortam. */}
       <div className="flex flex-wrap items-baseline gap-x-[18px] gap-y-1 rounded-md border bg-muted/20 px-3.5 py-[5px] leading-[14px]" data-testid="topo-confronto">
-        {/* ⚠ COM A NF DA COMPRA, A CONFERÊNCIA É PELA COMPRA — FIN-NFE-PARCELAS-01 PR 2b: a nota contra a
-            soma das parcelas ATIVAS (o banco já responde, chaves `grupo_*`). Sem ela, como sempre. */}
-        <span className="inline-flex items-baseline gap-[5px] whitespace-nowrap">
-          <span className="text-[10px] text-muted-foreground">{c?.grupo ? 'Nota da compra' : 'Documentado'}</span>
-          <span className="text-[12px] font-semibold tabular-nums" data-testid="topo-documentado">
-            {c ? formatMoeda(c.grupo ? c.grupo.valorDocumento : c.valorDocumentado) : '—'}
+        {/* ⚠ O BANCO É O DONO — FIN-DOC-SOMA-01 (Gabriel 19/10/2026). A nota (o que soma) contra a base que o banco escolheu (o
+            lançamento, as parcelas do contrato ou as parcelas ligadas), cada boleto/comprovante à parte (não soma) e a nota
+            repetida. A frase sai de `faixaDoConfronto`; nenhuma conta aqui. */}
+        {faixa === null && (
+          <span className="inline-flex items-baseline gap-[5px] whitespace-nowrap">
+            <span className="text-[10px] text-muted-foreground">Documentado</span>
+            <span className="text-[12px] font-semibold tabular-nums" data-testid="topo-documentado">—</span>
           </span>
-        </span>
-        <span className="inline-flex items-baseline gap-[5px] whitespace-nowrap">
-          <span className="text-[10px] text-muted-foreground">
-            {c?.grupo ? `Parcelas ativas (${c.grupo.qtd})` : 'Valor do lançamento'}
-          </span>
-          <span className="text-[12px] font-semibold tabular-nums" data-testid="topo-valor">
-            {c ? formatMoeda(c.grupo ? c.grupo.somaLancamentos : c.valorLancamento) : '—'}
-          </span>
-        </span>
-        {c && c.docsComValor > 0 && (
-          c.confere
-            ? <span className="whitespace-nowrap text-[11px] font-medium text-emerald-600">confere</span>
-            : <span className="whitespace-nowrap text-[11px] font-medium text-amber-700">
-                {formatMoeda(Math.abs(c.diferenca))} {c.diferenca > 0 ? 'a mais' : 'a menos'}
-              </span>
         )}
+        {faixa !== null && faixa.length === 0 && (
+          <span className="text-[10px] text-muted-foreground" data-testid="topo-sem-valor">Nenhum documento com valor a conferir</span>
+        )}
+        {faixa?.map((p) => (
+          <span key={p.chave} className="inline-flex items-baseline gap-[5px] whitespace-nowrap" data-testid={`faixa-${p.chave}`}>
+            <span className="text-[11px] font-medium tabular-nums">{p.texto}</span>
+            <span className={`text-[11px] font-medium ${p.tom === 'ok' ? 'text-emerald-600' : 'text-amber-700'}`}>{p.veredito}</span>
+          </span>
+        ))}
       </div>
 
       <div className="flex items-center justify-between">

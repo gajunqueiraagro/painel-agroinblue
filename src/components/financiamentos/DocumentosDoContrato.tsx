@@ -108,8 +108,9 @@ export function DocumentosDoContrato({ financiamentoId, clienteId, hoje, credorI
     documentos: api.documentos.filter((d) => d.especie !== 'boleto'),
     /* FIN-FINANC-28-P3-FIX3 — a faixa "Documentado / Valor do lançamento" lê o confronto DA COMPRA que o banco já devolve
        (`fin_documento_confronto` da 1ª parcela, chaves `grupo_*`: a NF contra a soma das parcelas ATIVAS). Sem NF ligada às
-       parcelas não há grupo, e o confronto de UMA parcela segue fora (seria a nota contra uma parcela só). */
-    confronto: api.confronto?.grupo ? api.confronto : null,
+       parcelas não há grupo, e o confronto de UMA parcela segue fora (seria a nota contra uma parcela só). FIN-DOC-SOMA-01: a nota
+       inteira só na 1ª parcela, sem ligação, o banco já confere contra as parcelas do contrato (base 'contrato') — entra também. */
+    confronto: api.confronto?.grupo || api.confronto?.fiscal?.base === 'contrato' ? api.confronto : null,
     registrar: async (p) => {
       const criado = await api.registrar(p);
       if (criado && criado.origem === 'lancamento' && ids.length > 1) {

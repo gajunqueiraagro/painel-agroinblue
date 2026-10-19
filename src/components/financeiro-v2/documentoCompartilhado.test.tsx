@@ -15,7 +15,7 @@ vi.mock('@/integrations/supabase/client', () => ({ supabase: { rpc: vi.fn(), fro
 import { AbaDocumentosLancamento } from '@/components/financeiro-v2/AbaDocumentosLancamento';
 import { DocumentosPendentes } from '@/components/financeiro-v2/DocumentosPendentes';
 import {
-  daConfronto, confrontoDasDuasOrigens, type LancDocumento, type LancamentoDocumentosApi, type Confronto,
+  daConfronto, type LancDocumento, type LancamentoDocumentosApi, type Confronto,
 } from '@/hooks/useLancamentoDocumentos';
 /* FORN-SELETOR-PADRAO-01 fatia 2a — o emitente lê do leitor único (de mentira no teste) */
 vi.mock('@/hooks/useFornecedoresDoCliente', async () => (await import('@/test/leitorDeFornecedoresFake')).moduloDoLeitorFake());
@@ -83,32 +83,30 @@ describe('conferência pela compra (chaves grupo_* do banco)', () => {
   const COM_GRUPO = {
     valor_lancamento: 3006.5, valor_documentado: 24052, docs_ativos: 2, docs_com_valor: 1, diferenca: 3006.5, confere: false,
     grupo_valor_documento: 24052, grupo_soma_lancamentos: 21045.5, grupo_qtd: 7,
+    fiscal: { total: 24052, qtd: 1, recibos: 0, base: 'grupo', base_valor: 21045.5, base_qtd: 7, diferenca: 3006.5, situacao: 'passa' },
+    pagamentos: [], informativos: 0, repetidas: [],
   };
 
-  it('com grupo_*, o topo mostra a nota da compra contra as parcelas ativas, e a diferença do banco', () => {
+  it('com grupo_*, o topo mostra a nota da compra contra as parcelas ativas, e a diferença do banco (FIN-DOC-SOMA-01: a frase da faixa)', () => {
     const c = daConfronto(COM_GRUPO);
     expect(c?.grupo).toEqual({ valorDocumento: 24052, somaLancamentos: 21045.5, qtd: 7 });
     monta(api(c));
-    expect(screen.getByText('Nota da compra')).toBeTruthy();
-    expect(screen.getByText('Parcelas ativas (7)')).toBeTruthy();
-    expect(screen.getByTestId('topo-documentado').textContent).toContain('24.052,00');
-    expect(screen.getByTestId('topo-valor').textContent).toContain('21.045,50');
-    expect(screen.getByText(/3\.006,50 a mais/)).toBeTruthy();
+    expect(screen.getByTestId('faixa-fiscal').textContent?.replace(/\u00a0/g, ' ')).toBe('Nota fiscal R$ 24.052,00 · 7 parcelas ativas somam R$ 21.045,50passa R$ 3.006,50');
   });
 
-  it('com grupo_*, o front NÃO recalcula pelas linhas da view (somaria 24.052 contra UMA parcela)', () => {
-    const c = daConfronto(COM_GRUPO);
-    expect(confrontoDasDuasOrigens(c, [NF, BOLETO])).toBe(c);
+  it('FIN-DOC-SOMA-01 — o front NÃO soma nada: o hook não tem mais a soma das duas origens (lido da fonte)', () => {
+    const fonte = readFileSync(resolve(__dirname, '../../hooks/useLancamentoDocumentos.ts'), 'utf8');
+    expect(fonte).not.toContain('confrontoDasDuasOrigens');
+    expect(fonte).not.toMatch(/reduce\(\(acc, d\) => acc \+ \(d\.valorDocumento/);
+    expect(fonte).toContain('setConfronto(daConfronto(conf.data));');
   });
 
-  it('sem grupo_*, exatamente como hoje: sem a chave grupo, e o front soma as linhas', () => {
-    const c = daConfronto({ valor_lancamento: 3006.5, valor_documentado: 3006.5, docs_ativos: 1, docs_com_valor: 1, diferenca: 0, confere: true });
+  it('sem grupo_*, sem a chave grupo; a nota contra o lançamento', () => {
+    const c = daConfronto({ valor_lancamento: 3006.5, valor_documentado: 3006.5, docs_ativos: 1, docs_com_valor: 1, diferenca: 0, confere: true,
+      fiscal: { total: 3006.5, qtd: 1, recibos: 0, base: 'lancamento', base_valor: 3006.5, base_qtd: 1, diferenca: 0, situacao: 'fecha' } });
     expect(c).not.toHaveProperty('grupo');
-    const r = confrontoDasDuasOrigens(c, [doc({ valorDocumento: 3006.5 })]);
-    expect(r).toMatchObject({ valorDocumentado: 3006.5, diferenca: 0, confere: true });
     monta(api(c));
-    expect(screen.getByText('Documentado')).toBeTruthy();
-    expect(screen.getByText('Valor do lançamento')).toBeTruthy();
+    expect(screen.getByTestId('faixa-fiscal').textContent?.replace(/\u00a0/g, ' ')).toBe('Nota fiscal R$ 3.006,50✓ confere com o lançamento');
   });
 });
 
