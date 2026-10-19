@@ -71,6 +71,22 @@ interface Props {
   /** só para teste: a linha inteira na edição e o uso (padrão: o banco) */
   lerLinha?: (id: string) => Promise<Record<string, unknown> | null>;
   lerUso?: (id: string) => Promise<UsoDoFornecedor | null>;
+  /** só para teste: a pergunta "pode inativar?" (padrão: `fn_fornecedor_pode_inativar`) */
+  lerTrava?: (id: string) => Promise<TravaDeInativar | null>;
+}
+
+/** FORN-INATIVAR-TRAVA-01 — o que o banco diz antes de inativar: com lançamento vivo ou recorrência ativa, não pode, e a frase diz
+ *  por quê e manda ao Mesclar. A mesma frase é a da trava do banco (`_fn_fornecedor_frase_inativar`): a tela só a escreve. */
+export interface TravaDeInativar { pode: boolean; frase: string | null }
+export const FRASE_FALHA_AO_CONFERIR_INATIVAR = 'Não foi possível conferir se o fornecedor pode ser inativado. Nada foi gravado.';
+async function lerTravaDoBanco(id: string): Promise<TravaDeInativar | null> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+  const { data, error } = await (supabase as any).rpc('fn_fornecedor_pode_inativar', { p_fornecedor: id });
+  if (error || !data || typeof data !== 'object' || Array.isArray(data)) return null;
+  const pode: unknown = Reflect.get(data, 'pode');
+  const frase: unknown = Reflect.get(data, 'frase');
+  if (typeof pode !== 'boolean') return null;
+  return { pode, frase: typeof frase === 'string' && frase ? frase : null };
 }
 
 async function lerLinhaDoBanco(id: string): Promise<Record<string, unknown> | null> {
@@ -108,7 +124,7 @@ function Campo({ rotulo, obrig, valor, onChange, placeholder, testId, className,
 
 export function FornecedorFormDialog({
   open, onClose, editing, allFornecedores, fazendas, clienteId, onSaved, onSelectExisting, onMesclar,
-  lerCadastro = lerCadastroParaConferir, lerLinha = lerLinhaDoBanco, lerUso = lerUsoDoBanco,
+  lerCadastro = lerCadastroParaConferir, lerLinha = lerLinhaDoBanco, lerUso = lerUsoDoBanco, lerTrava = lerTravaDoBanco,
 }: Props) {
   const [d, setD] = useState<DadosDoFornecedor>(VAZIO);
   const [aba, setAba] = useState<AbaDoFornecedor>('dados');
@@ -178,6 +194,12 @@ export function FornecedorFormDialog({
       const repetidos = acharRepetidos({ proprioId: editing.id, nome: d.nome, cpfCnpj: null, conferirNome: true }, doCliente);
       if (temRepetido(repetidos)) { setRecado({ texto: fraseDosRepetidos(repetidos), tom: 'aviso' }); setSaving(false); return; }
     }
+    /* FORN-INATIVAR-TRAVA-01 — ativo -> inativo pergunta ao banco ANTES de gravar; a recusa fica escrita ao lado do botão */
+    if (editing && editing.ativo !== false && !d.ativo) {
+      const trava = await lerTrava(editing.id);
+      if (!trava) { setRecado({ texto: FRASE_FALHA_AO_CONFERIR_INATIVAR, tom: 'erro' }); setSaving(false); return; }
+      if (!trava.pode) { setRecado({ texto: trava.frase ?? FRASE_FALHA_AO_CONFERIR_INATIVAR, tom: 'erro' }); setAba('dados'); setSaving(false); return; }
+    }
     const payload = { cliente_id: clienteId, ...payloadDoFornecedor(d, documentoParaGravar) };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- o payload é montado pelo dono puro (`payloadDoFornecedor`)
     const tabela = supabase.from('financeiro_fornecedores') as any;
@@ -187,7 +209,7 @@ export function FornecedorFormDialog({
     toast.success(editing ? 'Fornecedor atualizado' : 'Fornecedor criado');
     notificarFornecedoresMudaram(clienteId);
     onClose(); onSaved();
-  }, [saving, documentoBloqueia, linhaLida, clienteId, d, editing, allFornecedores, lerCadastro, documentoParaGravar, onClose, onSaved]);
+  }, [saving, documentoBloqueia, linhaLida, clienteId, d, editing, allFornecedores, lerCadastro, lerTrava, documentoParaGravar, onClose, onSaved]);
 
   const reativarExistente = useCallback(async () => {
     if (!reativarTarget) return;
