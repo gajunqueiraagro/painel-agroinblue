@@ -14,7 +14,8 @@ import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
 import { supabase } from '@/integrations/supabase/client';
 import { useFornecedoresDoCliente, notificarFornecedoresMudaram } from '@/hooks/useFornecedoresDoCliente';
 import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
-import { formatarDocumento } from '@/lib/fornecedores/fornecedorTexto';
+import { formatarDocumento, mesmoLadoDoRateio } from '@/lib/fornecedores/fornecedorTexto';
+import { lerTodasAsPaginas } from '@/v2/lib/importLanc/lerTodasAsPaginas';
 import {
   MOTIVO_DESFAZER_SEM_MOTIVO, MOTIVO_SEM_PREVIA, MODULOS_DA_MESCLAGEM, fraseDoGrupo, fraseDoResultado, lerGruposRepetidos, lerMesclagens,
   lerPreviaDaMesclagem, type FornecedorDaMesclagem, type GrupoRepetido, type MesclagemFeita, type PreviaDaMesclagem,
@@ -41,6 +42,9 @@ export function MesclarFornecedoresDialog({ aberto, aoFechar, clienteId, inicial
   const [recentes, setRecentes] = useState<MesclagemFeita[]>([]);
   const [desfazendo, setDesfazendo] = useState<string | null>(null);
   const [motivo, setMotivo] = useState('');
+  /* FORN-ABSORVER-INATIVOS-01 — os INATIVOS não mesclados do cliente: o leitor só traz ativos, e o inativo que ainda tem lançamento
+     (os 38 de 19/10, o "Lineagro … AS" da Vera entre eles) precisa ser absorvível pela tela */
+  const [inativos, setInativos] = useState<FornecedorDaMesclagem[]>([]);
   const lidos = useFornecedoresDoCliente(clienteId);
 
   const recarregar = useCallback(async () => {
@@ -51,17 +55,29 @@ export function MesclarFornecedoresDialog({ aberto, aoFechar, clienteId, inicial
     ]);
     setGrupos(lerGruposRepetidos(g) ?? []);
     setRecentes(lerMesclagens(l) ?? []);
+    try {
+      const linhas = await lerTodasAsPaginas<FornecedorDaMesclagem>(async (de, ate, contar) => {
+        const { data, error, count } = await supabase.from('financeiro_fornecedores')
+          .select('id, nome, cpf_cnpj, ativo', { count: contar ? 'exact' : undefined })
+          .eq('cliente_id', clienteId).eq('ativo', false).is('fundido_em_id', null)
+          .order('nome').order('id').range(de, ate);
+        if (error) throw new Error(error.message);
+        return { data: (data ?? []).map((f) => ({ id: f.id, nome: f.nome, cpfCnpj: f.cpf_cnpj, ativo: false })), count: typeof count === 'number' ? count : null };
+      });
+      setInativos(linhas);
+    } catch { setInativos([]); }
   }, [clienteId]);
   useEffect(() => { if (aberto) void recarregar(); }, [aberto, recarregar]);
   useEffect(() => { if (aberto && inicial) { setManter(inicial.manter); setAbsorver(inicial.absorver); } }, [aberto, inicial]);
 
-  /* quem pode ser absorvido: os ativos do leitor e os cadastros das sugestões (inativos inclusive), fora o que fica */
+  /* quem pode ser absorvido: os ativos do leitor, os INATIVOS não mesclados e os cadastros das sugestões, fora o que fica */
   const candidatos = useMemo(() => {
     const m = new Map<string, FornecedorDaMesclagem>();
     for (const f of lidos.fornecedores) m.set(f.id, { id: f.id, nome: f.nome, cpfCnpj: f.cpf_cnpj, ativo: f.ativo });
+    for (const f of inativos) if (!m.has(f.id)) m.set(f.id, f);
     for (const g of grupos) for (const f of g.fornecedores) if (!m.has(f.id)) m.set(f.id, f);
     return m;
-  }, [lidos.fornecedores, grupos]);
+  }, [lidos.fornecedores, inativos, grupos]);
 
   const chaveDaPrevia = manter && absorver.length ? `${manter}|${[...absorver].sort().join(',')}` : '';
   useEffect(() => {
@@ -114,7 +130,10 @@ export function MesclarFornecedoresDialog({ aberto, aoFechar, clienteId, inicial
   };
 
   const nomeDe = (id: string) => candidatos.get(id)?.nome ?? id.slice(0, 8);
-  const opcoesAbsorver = [...candidatos.values()].filter((f) => f.id !== manter && !absorver.includes(f.id))
+  const mantidoNome = (id: string): string | null => (id ? candidatos.get(id)?.nome ?? lidos.fornecedores.find((f) => f.id === id)?.nome ?? null : null);
+  /* "Pec.3M-" = pagamento por rateio (NF no nome do Higino): o que fica e o absorvido são sempre do MESMO lado (`mesmoLadoDoRateio`) */
+  const opcoesAbsorver = [...candidatos.values()].filter((f) => f.id !== manter && !absorver.includes(f.id)
+      && (!mantidoNome(manter) || mesmoLadoDoRateio(mantidoNome(manter) ?? '', f.nome)))
     .map((f) => ({ value: f.id, label: f.nome, hint: `${f.ativo ? '' : 'inativo · '}${doc(f.cpfCnpj)}` }));
   const mantido = candidatos.get(manter) ?? null;
   const motivoDoBotao = !chaveDaPrevia ? MOTIVO_SEM_PREVIA : lendoPrevia ? 'Calculando a prévia…' : previa?.recusa ? previa.recusa.frase : null;

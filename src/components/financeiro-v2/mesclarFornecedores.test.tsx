@@ -17,7 +17,7 @@ vi.mock('@/integrations/supabase/client', () => {
     mantido: { id: 'm', nome: 'Banco Fica S.A. (001)', cpf_cnpj: null, ativo: true },
     absorvidos: [{ id: 'a1', nome: 'Banco Fica', cpf_cnpj: null, ativo: false }, { id: 'a2', nome: 'BANCO FICA', cpf_cnpj: null, ativo: false }],
     por_modulo: { Financiamentos: 16, Financeiro: 5 }, apelidos: ['Banco Fica'] });
-  const lista = (dados: unknown) => { const p: Record<string, unknown> = {}; for (const k of ['select', 'eq', 'order', 'limit']) p[k] = () => p; p.then = (ok: (v: unknown) => unknown) => Promise.resolve({ data: dados, error: null }).then(ok); return p; };
+  const lista = (dados: unknown) => { const p: Record<string, unknown> = {}; for (const k of ['select', 'eq', 'order', 'limit', 'is', 'range']) p[k] = () => p; p.then = (ok: (v: unknown) => unknown) => Promise.resolve({ data: dados, error: null, count: Array.isArray(dados) ? dados.length : null }).then(ok); return p; };
   return { supabase: {
     rpc: (fn: string, args: Record<string, unknown>) => {
       banco.chamadas.push([fn, args]);
@@ -31,7 +31,9 @@ vi.mock('@/integrations/supabase/client', () => {
       if (fn === 'fn_fornecedor_mesclagem_desfazer') return Promise.resolve({ data: { voltaram: 21, ficaram: 0 }, error: null });
       return Promise.resolve({ data: null, error: null });
     },
-    from: () => lista([{ id: 'log-9', mantido_id: 'm', absorvidos: ['a1'], criado_em: '2026-10-17T12:00:00Z', resumo: { total: 3 },
+    from: (tabela: string) => tabela === 'financeiro_fornecedores' ? lista([
+      { id: 'i1', nome: 'Lineagro Produtos Agropecuarios AS', cpf_cnpj: null, ativo: false },
+      { id: 'i2', nome: 'Pec.3M-Banco Fica', cpf_cnpj: null, ativo: false }]) : lista([{ id: 'log-9', mantido_id: 'm', absorvidos: ['a1'], criado_em: '2026-10-17T12:00:00Z', resumo: { total: 3 },
       antes: { absorvidos: [{ nome: 'Banco Fica' }] }, desfeito_em: null, desfeito_motivo: null }]),
   } };
 });
@@ -101,5 +103,26 @@ describe('o diálogo', () => {
     expect(f).toMatch(/h-\[min\(520px,calc\(100vh-16px\)\)\] w-\[min\(900px,calc\(100vw-16px\)\)\]/);
     expect(f).not.toMatch(/\.reduce\(|\+=/);
     for (const rpc of ['fn_fornecedor_mesclar', 'fn_fornecedor_mesclagem_desfazer', 'fn_fornecedor_repetidos']) expect(f).toContain(`'${rpc}'`);
+  });
+});
+
+describe('FORN-ABSORVER-INATIVOS-01 — o Absorver lista os inativos não mesclados, e nunca do outro lado do rateio', () => {
+  it('o inativo não mesclado aparece; o "Pec.3M-" não é oferecido quando o que fica não tem o prefixo', async () => {
+    render(<MesclarFornecedoresDialog aberto aoFechar={vi.fn()} clienteId="cli" inicial={{ manter: 'm', absorver: [] }} />);
+    await screen.findByTestId('sugestao-de-repetido');
+    fireEvent.click(screen.getByText('+ acrescentar cadastro…'));
+    await waitFor(() => expect(screen.getByText('Lineagro Produtos Agropecuarios AS')).toBeTruthy());
+    expect(screen.queryByText('Pec.3M-Banco Fica')).toBeNull();
+  });
+  it('a regra do lado do rateio tem um dono', async () => {
+    const { mesmoLadoDoRateio, ehRateio } = await import('@/lib/fornecedores/fornecedorTexto');
+    expect(ehRateio('Pec.3M-Higino Hernandes Neto')).toBe(true);
+    expect(ehRateio('Higino Hernandes Neto')).toBe(false);
+    expect(mesmoLadoDoRateio('Pec.3M-X', 'X')).toBe(false);
+    expect(mesmoLadoDoRateio('Pec.3M-X', 'Pec.3M-(X)')).toBe(true);
+    expect(mesmoLadoDoRateio('X Ltda', 'X')).toBe(true);
+    const fonte = readFileSync(resolve(__dirname, 'MesclarFornecedoresDialog.tsx'), 'utf8');
+    expect(fonte).toContain(".eq('ativo', false).is('fundido_em_id', null)");
+    expect(fonte).toContain('mesmoLadoDoRateio(mantidoNome(manter)');
   });
 });

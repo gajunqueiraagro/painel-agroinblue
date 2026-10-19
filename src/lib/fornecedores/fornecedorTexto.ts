@@ -200,3 +200,8 @@ export function sufixoDoRotulo(r: RotuloDoFornecedor | undefined): string {
   if (!r) return '';
   return [r.final, r.inativo ? 'inativo' : null].filter(Boolean).join(' · ');
 }
+
+/** "Pec.3M-" no começo do nome = fornecedor pago POR RATEIO, com a NF no nome do Higino (Gabriel 19/10/2026). */
+export const ehRateio = (nome: string | null | undefined): boolean => /^\s*pec\.3m-/i.test(nome ?? '');
+/** Dois cadastros só se mesclam do MESMO lado: os dois com "Pec.3M-" ou os dois sem. "Pec.3M-X" e "X" são diferentes de propósito. */
+export const mesmoLadoDoRateio = (a: string | null | undefined, b: string | null | undefined): boolean => ehRateio(a) === ehRateio(b);
