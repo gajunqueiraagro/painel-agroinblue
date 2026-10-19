@@ -98,11 +98,12 @@ export function lerBuscaNoContrato(r: unknown): BuscaNoContrato | null {
 export interface ContratoDaCandidata { financiamentoId: string; numeroContrato: string | null; descricaoContrato: string | null; credor: string | null }
 export interface ParcelaCandidata extends Candidata, ContratoDaCandidata { parcelaId: string; parcela: number | null; vencimento: string | null }
 export interface LiberacaoCandidata extends Candidata, ContratoDaCandidata { saldoALiberar: number | null }
+/* `contrato` = nº, senão a descrição (a frase longa, no `title` e nos diálogos); `numeroContrato` = só o nº (a origem curta) */
 export type OndeEsta =
-  | { tipo: 'parcela'; financiamentoId: string; contrato: string; parcela: number | null; papel: string; vinculoId: string | null }
-  | { tipo: 'liberacao'; financiamentoId: string; contrato: string; liberacaoId: string }
-  | { tipo: 'encargo'; financiamentoId: string; contrato: string; encargoId: string; papel: string }
-  | { tipo: 'captacao'; financiamentoId: string; contrato: string };
+  | { tipo: 'parcela'; financiamentoId: string; contrato: string; numeroContrato?: string | null; parcela: number | null; papel: string; vinculoId: string | null }
+  | { tipo: 'liberacao'; financiamentoId: string; contrato: string; numeroContrato?: string | null; liberacaoId: string }
+  | { tipo: 'encargo'; financiamentoId: string; contrato: string; numeroContrato?: string | null; encargoId: string; papel: string }
+  | { tipo: 'captacao'; financiamentoId: string; contrato: string; numeroContrato?: string | null };
 export interface LancamentoNoFinanciamento {
   tipoOperacao: string | null; data: string | null; valor: number; descricao: string | null;
   atual: OndeEsta | null; parcelas: ParcelaCandidata[]; liberacoes: LiberacaoCandidata[];
@@ -119,10 +120,11 @@ function lerOndeEsta(v: unknown): OndeEsta | null | undefined {
   if (!ehObj(v)) return undefined;
   const fin = txt(v.financiamento_id); if (!fin) return undefined;
   const contrato = nomeDoContrato(v);
-  if (v.tipo === 'parcela') return { tipo: 'parcela', financiamentoId: fin, contrato, parcela: numOuNulo(v.parcela), papel: txt(v.papel) ?? 'principal', vinculoId: txt(v.vinculo_id) };
-  if (v.tipo === 'liberacao' && txt(v.liberacao_id)) return { tipo: 'liberacao', financiamentoId: fin, contrato, liberacaoId: String(v.liberacao_id) };
-  if (v.tipo === 'encargo' && txt(v.encargo_id)) return { tipo: 'encargo', financiamentoId: fin, contrato, encargoId: String(v.encargo_id), papel: txt(v.papel) ?? 'outro' };
-  if (v.tipo === 'captacao') return { tipo: 'captacao', financiamentoId: fin, contrato };
+  const numeroContrato = txt(v.numero_contrato);
+  if (v.tipo === 'parcela') return { tipo: 'parcela', financiamentoId: fin, contrato, numeroContrato, parcela: numOuNulo(v.parcela), papel: txt(v.papel) ?? 'principal', vinculoId: txt(v.vinculo_id) };
+  if (v.tipo === 'liberacao' && txt(v.liberacao_id)) return { tipo: 'liberacao', financiamentoId: fin, contrato, numeroContrato, liberacaoId: String(v.liberacao_id) };
+  if (v.tipo === 'encargo' && txt(v.encargo_id)) return { tipo: 'encargo', financiamentoId: fin, contrato, numeroContrato, encargoId: String(v.encargo_id), papel: txt(v.papel) ?? 'outro' };
+  if (v.tipo === 'captacao') return { tipo: 'captacao', financiamentoId: fin, contrato, numeroContrato };
   return undefined;
 }
 
@@ -152,6 +154,27 @@ export function fraseDoOndeEsta(a: OndeEsta): string {
   if (a.tipo === 'liberacao') return `${a.contrato} · liberação`;
   if (a.tipo === 'encargo') return `${a.contrato} · encargo (${a.papel})`;
   return `${a.contrato} · captação`;
+}
+
+/** A parcela de COMPRA PARCELADA vista pelo modal (a posição e o total das parcelas vivas, do dono da situação). */
+export interface ParcelaDaCompraNoModal { numero: number; total: number }
+
+/**
+ * UI-TEXTO-LONGO-01 — a ORIGEM CURTA do lançamento no rodapé do modal: "Parcela 3/5 · Compra 1234", "Parcela 2 · Contrato
+ * PR-78.179", "Liberação · Contrato X". NUNCA a descrição do contrato (a de uma compra parcelada pode ter 300 caracteres e
+ * cortava com "…"): sem número, o tipo ("Compra parcelada", "Contrato"). A frase longa fica no `title`.
+ */
+export function origemCurtaDoLancamento(a: OndeEsta, compra?: ParcelaDaCompraNoModal | null): string {
+  const n = a.numeroContrato ?? null;
+  if (a.tipo === 'parcela') {
+    const juros = a.papel === 'juros' ? ' (juros)' : '';
+    if (compra) return `Parcela ${compra.numero}/${compra.total}${juros} · ${n ? `Compra ${n}` : 'Compra parcelada'}`;
+    return `Parcela ${a.parcela ?? '?'}${juros} · ${n ? `Contrato ${n}` : 'Contrato'}`;
+  }
+  const doContrato = n ? `Contrato ${n}` : 'Contrato';
+  if (a.tipo === 'liberacao') return `Liberação · ${doContrato}`;
+  if (a.tipo === 'encargo') return `Encargo · ${doContrato}`;
+  return `Captação · ${doContrato}`;
 }
 
 /** o gesto contrário de cada vínculo — nulo quando não se desfaz por aqui (parcela gerada pelo contrato; captação) */

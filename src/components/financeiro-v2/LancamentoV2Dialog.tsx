@@ -1562,6 +1562,11 @@ export function LancamentoV2Dialog({
     ? edicaoDaParcela(contratoDaParcela.situacao, lancamento.id, valorNum, dataVencimento || null)
     : null;
   const parcelaPaga = edicaoParcela?.paga === true;
+  /* UI-TEXTO-LONGO-01 — a posição desta parcela entre as vivas da compra (do dono da situação): o rodapé diz "Parcela 3/5 · Compra …" */
+  const parcelasDaCompra = contratoDaParcela?.situacao.parcelas ?? null;
+  const posicaoNaCompra = parcelasDaCompra && lancamento?.id ? parcelasDaCompra.findIndex(p => p.lancamentoId === lancamento.id) : -1;
+  const parcelaDaCompra = parcelasDaCompra && posicaoNaCompra >= 0
+    ? { numero: parcelasDaCompra[posicaoNaCompra].numero ?? posicaoNaCompra + 1, total: parcelasDaCompra.length } : null;
   const digitadoNoTopo = !!(notaFiscal || tipoDocumento);
   const haNotaNaCompra = pendentes.some(p => p.parcela == null && p.payload.especie === 'nf');
   const levarOTopoParaACompra = () => {
@@ -3287,7 +3292,7 @@ export function LancamentoV2Dialog({
             {/* FIN-FINANC-28 passo 6 — o lançamento e o financiamento: onde ele está (abre o contrato; o contrário quando se desfaz
                 por aqui) ou "Financiamento" (vincular como parcela, liberação ou encargo). Título de OC fica fora (é da operação). */}
             {isEdit && lancamento && clienteAtual?.id && !lancamento.cancelado && parteOCLida && !parteOCViva && (
-              <FinanciamentoDoLancamento lancamentoId={lancamento.id} clienteId={clienteAtual.id}
+              <FinanciamentoDoLancamento lancamentoId={lancamento.id} clienteId={clienteAtual.id} parcelaDaCompra={parcelaDaCompra}
                 onAbrirContrato={onAbrirContrato ? (finId) => { onClose(); onAbrirContrato(finId); } : undefined} />
             )}
             {/* FIN-V2-HOMOLOG-FIX-01 (item 2): "Criar OC a partir deste lançamento" tambem aqui, ao lado do Vincular — a MESMA
@@ -3382,7 +3387,8 @@ export function LancamentoV2Dialog({
                 <SecaoResumo titulo="Identificação" />
                 <div className="contents">
                   <LinhaResumo rotulo="Tipo" valor={resumoTipoLabel} cor={resumoTipoCor} />
-                  <LinhaResumo rotulo="Produto" valor={descricao} quebra />
+                  {/* UI-TEXTO-LONGO-01 — a descrição NÃO se repete no resumo (ela já está no campo Produto / descrição): uma
+                      descrição de 300 caracteres crescia 15 linhas e empurrava a Classificação para fora. Só dados curtos. */}
                   <LinhaResumo rotulo="Data competência" valor={resumoFmtData(dataCompetencia)} />
                   <LinhaResumo rotulo="Favorecido" valor={resumoFavorecido} quebra />
                   <LinhaResumo rotulo="Fazenda" valor={resumoFazenda} quebra />

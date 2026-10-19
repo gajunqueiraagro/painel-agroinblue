@@ -1805,10 +1805,8 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                           <span className="font-medium truncate">{NOME_NATUREZA[form.natureza]}</span>
                         </span>
                       </div>
-                      {/* ⚠ A DESCRICAO E' O NOME DO CONTRATO e faltava no resumo: com tres
-                          abas e o formulario rolando, dava para estar preenchendo os juros
-                          de um contrato sem ter a menor pista de QUAL. */}
-                      <Linha rotulo="Descrição" valor={form.descricao || null} />
+                      {/* UI-TEXTO-LONGO-01 — a descrição NÃO se repete no resumo (ela está no campo da aba Contrato; longa, cortava
+                          com "…"): o resumo diz o contrato pelos dados curtos — natureza, escopo, credor, conta e data. */}
                       <Linha rotulo="Escopo" valor={form.tipo_financiamento === 'pecuaria' ? 'Pecuária' : 'Agricultura'} />
                       <Linha rotulo="Credor" valor={credor?.nome ?? null} />
                       <Linha rotulo="Conta" valor={nomeConta} />

@@ -85,7 +85,7 @@ describe('o rodapé do modal', () => {
     hook.atual = api({ dado: lerLancamentoNoFinanciamento(ENV({ atual: { tipo: 'liberacao', financiamento_id: 'f9', numero_contrato: 'C-9', liberacao_id: 'l1' } })) });
     const abrir = vi.fn();
     render(<FinanciamentoDoLancamento lancamentoId="x" clienteId="c" onAbrirContrato={abrir} />);
-    expect(screen.getByTestId('abrir-contrato-do-lancamento').textContent).toBe('↔ C-9 · liberação');
+    expect(screen.getByTestId('abrir-contrato-do-lancamento').textContent).toBe('↔ Liberação · Contrato C-9');
     fireEvent.click(screen.getByTestId('abrir-contrato-do-lancamento'));
     expect(abrir).toHaveBeenCalledWith('f9');
     expect(screen.getByTestId('desfazer-financiamento')).toBeTruthy();

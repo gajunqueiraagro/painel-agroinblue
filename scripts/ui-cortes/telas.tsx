@@ -29,6 +29,11 @@ const q = new URLSearchParams(location.search);
 const tela = q.get('tela') ?? 'mesclar';
 const m = q.get('m') ?? 'novo';
 const v = q.get('v') ?? '';
+/* UI-TEXTO-LONGO-01 — `&desc=curto|longo`: a MESMA tela com uma descrição curta ou com 300 caracteres (o caso do sêmen bovino). O gate
+   compara as alturas das duas (modal, resumo lateral, lista de parcelas). Texto sintético. */
+const desc = q.get('desc');
+const DESC_CURTA = 'Sal mineral';
+const DESC_LONGA = ('Sêmen Bovino - SAV EXEMPLO 1234/ 5678 · touro de teste com nome comprido · ').repeat(5).slice(0, 300);
 const g = globalThis as any;
 const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 const raiz = createRoot(document.getElementById('root')!);
@@ -97,7 +102,11 @@ if (tela === 'mesclar') {
   };
   montar(<FinanciamentoDetalhe id={d.fin.id} />);
 } else if (tela === 'lancamento') {
-  g.__bancoBancada = { from: () => [], rpc: () => null };
+  /* com `desc`, a edição é parcela de uma compra parcelada SEM número de contrato: o rodapé fala dela (a descrição do contrato é a longa) */
+  g.__bancoBancada = { from: () => [], rpc: (fn: string) => (desc && fn === 'fn_lancamento_financiamento') ? {
+    lancamento: { tipo_operacao: '2-Saídas', data: '2026-10-10', valor: 1345.5, descricao: DESC_LONGA },
+    atual: { tipo: 'parcela', financiamento_id: 'fin-sint', numero_contrato: null, descricao: DESC_LONGA, parcela: 3, papel: 'principal', vinculo_id: null },
+    parcelas: [], liberacoes: [] } : null };
 
 const FAZENDAS = [{ id: 'f-pur', nome: 'Faz. Exemplo' }, { id: 'f-exp', nome: 'Faz. Exemplo Dois' }] as any;
 const CONTAS = [{ id: 'bb', nome_conta: 'Banco Alfa', banco: 'BB', fazenda_id: 'f-pur', tipo_conta: null, codigo_conta: null, nome_exibicao: 'Banco Alfa', agencia: null, numero_conta: null, conta_digito: null },
@@ -161,6 +170,11 @@ if (v === 'oc' || v === 'ocdesp') {
       favorecido_id: 'agro', subcentro: 'Venda de Bezerros', macro_custo: 'Receita Operacional', grupo_custo: 'Receita', centro_custo: 'Vendas', plano_conta_id: 'pl-ent', escopo_negocio: 'pecuaria', cultura: '', fase: '', conta_bancaria_id: 'bb' }
     : { fazenda_id: 'f-pur', tipo_operacao: '2-Saídas', status_transacao: 'programado', data_competencia: '2026-10-05', valor: 300, descricao: 'Frete da venda',
       subcentro: 'Nutrição Engorda', macro_custo: 'Custeio Produtivo', grupo_custo: 'Nutrição', centro_custo: 'Suplementação', plano_conta_id: 'pl-nut', escopo_negocio: 'pecuaria', cultura: '', fase: '', conta_bancaria_id: 'bb' };
+}
+if (desc) {
+  const d = desc === 'longo' ? DESC_LONGA : DESC_CURTA;
+  if (props.lancamento) props.lancamento = { ...props.lancamento, descricao: d };
+  else props.prefill = { ...(props.prefill ?? {}), descricao: d };
 }
 if (v === 'ref') props.referenciaOperacionalInfo = { fornecedor_texto: 'AGROPECUARIA EXEMPLO LTDA', fazenda_texto: 'EXEMPLO', plano_texto: 'Nutrição Engorda',
   centro_texto: 'Suplementação', produto_texto: 'Sal mineral', valor: -1345.5, data_referencia: '10/09/2026' };

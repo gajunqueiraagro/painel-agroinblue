@@ -16,7 +16,7 @@ import { RemoverDialog } from '@/components/financiamentos/ContratoDeCredito';
 import { CadastroDeContratoDialog } from '@/components/financiamentos/CadastroDeContratoDialog';
 import { useLancamentoNoFinanciamento, type EncargoDoLancamento } from '@/hooks/useLancamentoNoFinanciamento';
 import {
-  PAPEIS, ROTULO_DO_PAPEL, desfazivelPorAqui, fraseDoOndeEsta, fraseDoOutro,
+  PAPEIS, ROTULO_DO_PAPEL, desfazivelPorAqui, fraseDoOndeEsta, fraseDoOutro, origemCurtaDoLancamento, type ParcelaDaCompraNoModal,
   type LancamentoNoFinanciamento, type LiberacaoCandidata, type PapelDoPagamento, type ParcelaCandidata, type ResultadoDoVinculo,
 } from '@/lib/financiamentos/buscaNoContrato';
 
@@ -31,8 +31,10 @@ const TH = 'sticky top-0 z-10 h-[22px] bg-primary px-2 text-left text-[9.5px] fo
 const TD = 'h-[22px] px-2 text-[10px] whitespace-nowrap overflow-hidden text-ellipsis';
 
 /** o pedaço do rodapé do modal: onde o lançamento está, ou o botão de vincular */
-export function FinanciamentoDoLancamento({ lancamentoId, clienteId, onAbrirContrato, onCriarContrato }: {
+export function FinanciamentoDoLancamento({ lancamentoId, clienteId, onAbrirContrato, onCriarContrato, parcelaDaCompra }: {
   lancamentoId: string; clienteId: string; onAbrirContrato?: (financiamentoId: string) => void;
+  /** UI-TEXTO-LONGO-01 — a parcela de compra parcelada (posição e total, do dono da situação): a origem diz "Parcela 3/5 · Compra …" */
+  parcelaDaCompra?: ParcelaDaCompraNoModal | null;
   onCriarContrato?: (l: LancamentoNoFinanciamento) => void;
 }) {
   const api = useLancamentoNoFinanciamento(lancamentoId, clienteId);
@@ -46,9 +48,10 @@ export function FinanciamentoDoLancamento({ lancamentoId, clienteId, onAbrirCont
     const a = d.atual;
     return (
       <span className="flex min-w-0 items-center gap-1 text-[10px]" data-testid="financiamento-do-lancamento">
-        <button type="button" className="min-w-0 truncate font-medium text-primary hover:underline disabled:no-underline disabled:text-muted-foreground"
+        {/* UI-TEXTO-LONGO-01 — a ORIGEM CURTA, nunca a descrição do contrato e nunca "…"; a frase longa vai no `title` */}
+        <button type="button" className="shrink-0 whitespace-nowrap font-medium text-primary hover:underline disabled:no-underline disabled:text-muted-foreground"
           disabled={!onAbrirContrato} onClick={() => onAbrirContrato?.(a.financiamentoId)} title={`Financiamento: ${fraseDoOndeEsta(a)} · abrir o contrato`}
-          data-testid="abrir-contrato-do-lancamento">↔ {fraseDoOndeEsta(a)}</button>
+          data-testid="abrir-contrato-do-lancamento">↔ {origemCurtaDoLancamento(a, parcelaDaCompra)}</button>
         {desfazivelPorAqui(a) && (
           <button type="button" className="shrink-0 text-destructive hover:underline" onClick={() => setDesfazendo(true)} data-testid="desfazer-financiamento">desfazer</button>
         )}
