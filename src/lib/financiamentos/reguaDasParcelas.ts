@@ -46,8 +46,9 @@ export function colunasDasParcelas(ehParcelamento: boolean): ColunaDasParcelas[]
        horizontal (o Lançamento fica com o resto e leva o lápis no fim — a coluna própria do lápis saiu). "Total (R$)" virou "Total". */
     return [
       col('numero', 'Parc.', 37),
-      col('vencimento', 'Venc.', 52),
-      col('pagamento', 'Pgto.', 52),
+      /* UI-SEM-CORTE-01 — data dd/mm/aaaa: "01/10/2026" a 10px pede 64px com o padding (medido na bancada, a vencida em negrito inclusive) */
+      col('vencimento', 'Venc.', 68),
+      col('pagamento', 'Pgto.', 68),
       col('prazo', 'Prazo', 70),
       col('principal', 'Principal', 75, 'direita'),
       col('juros', 'Juros', 75, 'direita'),

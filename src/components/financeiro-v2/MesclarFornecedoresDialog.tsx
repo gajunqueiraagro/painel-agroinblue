@@ -27,8 +27,13 @@ import {
   type CadastroComparado, type FornecedorDaMesclagem, type GrupoRepetido, type MesclagemFeita, type PreviaDaMesclagem, type UsoDoCadastro,
 } from '@/lib/fornecedores/mesclarFornecedores';
 
-const TH = 'h-[22px] px-1.5 text-left text-[10.5px] font-semibold text-primary-foreground bg-primary whitespace-nowrap overflow-hidden text-ellipsis';
-const TD = 'h-[22px] px-1.5 text-[10.5px] whitespace-nowrap overflow-hidden text-ellipsis';
+/* UI-SEM-CORTE-01 — nenhum texto com reticências: o que não cabe quebra a linha (a linha cresce), nunca "…". */
+const TH = 'h-[22px] px-1.5 py-[3px] text-left align-middle text-[10.5px] leading-[16px] font-semibold text-primary-foreground bg-primary break-words';
+const TD = 'h-[22px] px-1.5 py-[3px] align-middle text-[10.5px] leading-[16px] break-words';
+/* data, hora e número: nunca quebram nem cortam — a coluna tem a largura do pior caso medido */
+const TD_NUM = 'h-[22px] px-1.5 py-[3px] align-middle text-[10.5px] leading-[16px] whitespace-nowrap tabular-nums';
+const DATA = (iso: string) => new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+const HORA = (iso: string) => new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 const doc = (d: string | null) => (d ? formatarDocumento(d) : '—');
 
 /** FORN-MESCLAR-02c — o campo de busca de cadastros (grande no vazio, compacto na barra). A lista abre por cima (não muda altura de
@@ -55,10 +60,10 @@ function BuscaDeCadastro({ candidatos, colunas, aoEscolher, grande }: {
           data-testid="resultado-da-busca-cadastro">
           {itens.map((f) => (
             <button key={f.id} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => escolher(f.id)} data-testid="cadastro-achado"
-              className={`flex w-full items-center gap-1.5 text-left ${MENU_ITEM} ${MENU_REALCE_HOVER}`}
+              className={`flex w-full items-start gap-1.5 text-left ${MENU_ITEM} ${MENU_REALCE_HOVER}`}
               title={[f.nome, f.nomeFantasia, f.cpfCnpj ? formatarDocumento(f.cpfCnpj) : 'sem CNPJ/CPF', f.ativo ? 'ativo' : 'inativo'].filter(Boolean).join(' · ')}>
-              <span className="min-w-0 flex-1 truncate">{f.nome}</span>
-              {f.nomeFantasia && <span className={`min-w-0 max-w-[30%] truncate ${MENU_SECUNDARIO}`}>{f.nomeFantasia}</span>}
+              <span className="min-w-0 flex-1 break-words">{f.nome}</span>
+              {f.nomeFantasia && <span className={`min-w-0 max-w-[30%] break-words ${MENU_SECUNDARIO}`}>{f.nomeFantasia}</span>}
               <span className={`shrink-0 tabular-nums ${MENU_SECUNDARIO}`}>{f.cpfCnpj ? formatarDocumento(f.cpfCnpj) : 'sem CNPJ'}</span>
               <span className={`shrink-0 ${f.ativo ? MENU_SECUNDARIO : 'text-amber-300'}`}>{f.ativo ? 'ativo' : 'inativo'}</span>
               {ehRateio(f.nome) && <span className="shrink-0 rounded bg-zinc-500 px-1 text-[9px]">Pec.3M</span>}
@@ -267,16 +272,16 @@ export function MesclarFornecedoresDialog({ aberto, aoFechar, clienteId, inicial
           <DialogDescription className="sr-only">Comparar cadastros repetidos e juntar num só</DialogDescription>
         </div>
 
-        <div className="grid min-h-0 flex-1 grid-cols-[170px_minmax(0,1fr)] max-[759px]:grid-cols-1">
+        <div className="grid min-h-0 flex-1 grid-cols-[220px_minmax(0,1fr)] max-[759px]:grid-cols-1">
           <aside className="flex min-h-0 flex-col border-r bg-muted/20 max-[759px]:hidden" data-testid="coluna-sugestoes">
             <div className="h-[22px] shrink-0 px-2 pt-1 text-[10.5px] font-semibold text-muted-foreground">Sugestões</div>
             <div className="min-h-0 flex-1 overflow-y-auto px-1" data-testid="sugestoes-de-repetidos">
               {grupos.length === 0 && <div className="px-1 text-[10.5px] text-muted-foreground">Nenhum cadastro repetido.</div>}
               {grupos.map((g) => (
                 <button key={g.chave} type="button" onClick={() => abrirGrupo(g)} data-testid="sugestao-de-repetido"
-                  className="block h-[34px] w-full rounded px-1 text-left hover:bg-muted" title={g.fornecedores.map((f) => f.nome).join(' · ')}>
-                  <span className="block truncate text-[10.5px] font-semibold leading-[16px]">{g.fornecedores[0].nome}</span>
-                  <span className="block truncate text-[10px] leading-[14px] text-muted-foreground">{fraseDoGrupo(g)}</span>
+                  className="block min-h-[34px] w-full rounded px-1 py-[2px] text-left hover:bg-muted" title={g.fornecedores.map((f) => f.nome).join(' · ')}>
+                  <span className="block break-words text-[10.5px] font-semibold leading-[14px]">{g.fornecedores[0].nome}</span>
+                  <span className="block text-[10px] leading-[14px] text-muted-foreground">{fraseDoGrupo(g)}</span>
                 </button>
               ))}
             </div>
@@ -290,9 +295,7 @@ export function MesclarFornecedoresDialog({ aberto, aoFechar, clienteId, inicial
             <div className="flex min-h-0 min-w-0 flex-col gap-1 px-3 pt-1.5">
               <div className="flex h-[24px] shrink-0 items-center gap-2">
                 <Segmentado altura={22} valor={aba} onEscolher={setAba} opcoes={[{ valor: 'comparar', rotulo: 'Comparar cadastros' }, { valor: 'uso', rotulo: 'Uso' }]} />
-                <span className="min-w-0 flex-1 truncate text-[10px] text-muted-foreground" title="linhas em amarelo: os cadastros discordam; marque o valor que fica">
-                  linhas em amarelo: os cadastros discordam; marque o valor que fica
-                </span>
+                <span className="min-w-0 flex-1 break-words text-[10px] leading-[12px] text-muted-foreground">amarelo: os cadastros discordam — marque o valor que fica</span>
                 <div className="w-[260px] shrink-0" data-testid="lugar-da-busca">
                   {colunas.length > 0 && <BuscaDeCadastro candidatos={listaDeCandidatos} colunas={colunas} aoEscolher={acrescentar} grande={false} />}
                 </div>
@@ -315,7 +318,7 @@ export function MesclarFornecedoresDialog({ aberto, aoFechar, clienteId, inicial
                             <span className="flex items-center gap-1">
                               <input type="radio" name="fica" className="h-3 w-3 shrink-0" checked={id === ficaEfetivo} onChange={() => { setFica(id); setEscolhas({}); }}
                                 aria-label={`fica: ${nomeDe(id)}`} data-testid={`fica-${id}`} />
-                              <span className="min-w-0 truncate">{nomeDe(id)}</span>
+                              <span className="min-w-0 break-words">{nomeDe(id)}</span>
                               {suf && <span className="shrink-0 text-[10px] font-normal opacity-80">{suf}</span>}
                               {id === ficaEfetivo && <span className="shrink-0 text-[10px] font-normal">· fica</span>}
                               <button type="button" className="ml-auto shrink-0 text-[10.5px] leading-none opacity-80 hover:opacity-100" title="tirar esta coluna"
@@ -337,7 +340,7 @@ export function MesclarFornecedoresDialog({ aberto, aoFechar, clienteId, inicial
                                     onChange={() => setEscolhas((e) => ({ ...e, [l.campo as string]: c.id }))} data-testid={`valor-${l.chave}-${c.id}`}
                                     aria-label={`${l.rotulo}: ${c.texto}`} />
                                 )}
-                                <span className={`min-w-0 truncate ${c.texto === null ? 'text-muted-foreground' : ''} ${!c.escolhivel && l.campo && c.texto !== null ? 'text-muted-foreground' : ''}`}>{c.texto ?? '—'}</span>
+                                <span className={`min-w-0 break-words ${c.texto === null ? 'text-muted-foreground' : ''} ${!c.escolhivel && l.campo && c.texto !== null ? 'text-muted-foreground' : ''}`}>{c.texto ?? '—'}</span>
                               </span>
                             </td>
                           ))}
@@ -354,24 +357,28 @@ export function MesclarFornecedoresDialog({ aberto, aoFechar, clienteId, inicial
                   </table>
                 )}
               </div>
-              <div className="h-[22px] shrink-0 truncate text-[10.5px] leading-[22px]" data-testid="resultado-ao-vivo" title={linhas.length ? resultadoAoVivo(linhas) : undefined}>
+              <div className="min-h-[22px] shrink-0 break-words py-[3px] text-[10.5px] leading-[16px]" data-testid="resultado-ao-vivo">
                 {linhas.length ? resultadoAoVivo(linhas) : ''}
               </div>
             </div>
           ) : (
-            <div className="min-h-0 flex-1 overflow-y-auto px-3 pt-2" data-testid="mesclagens-recentes">
+            /* UI-SEM-CORTE-01 — o container que rola começa NO cabeçalho (sem padding acima dele): nada aparece por cima do cabeçalho preso */
+            <div className="flex min-h-0 flex-1 flex-col px-3 pt-2">
+            <div className="min-h-0 flex-1 overflow-y-auto" data-testid="mesclagens-recentes">
               <table className="w-full table-fixed border-collapse">
-                <colgroup><col style={{ width: 74 }} /><col /><col /><col style={{ width: 78 }} /><col style={{ width: 130 }} /><col style={{ width: 70 }} /></colgroup>
-                <thead className="sticky top-0"><tr><th className={TH}>Data</th><th className={TH}>Fica</th><th className={TH}>Absorvidos</th>
+                {/* larguras pelo conteúdo medido na bancada a 10,5px: "19/10/2026" 61 · "14:26" 30 · "Referências" 63 · "mesclada" 47 (+ 12 de padding) */}
+                <colgroup><col style={{ width: 78 }} /><col style={{ width: 46 }} /><col /><col /><col style={{ width: 78 }} /><col style={{ width: 70 }} /><col style={{ width: 66 }} /></colgroup>
+                <thead className="sticky top-0 z-10"><tr><th className={TH}>Data</th><th className={TH}>Hora</th><th className={TH}>Fica</th><th className={TH}>Absorvidos</th>
                   <th className={`${TH} text-right`}>Referências</th><th className={TH}>Situação</th><th className={TH} /></tr></thead>
                 <tbody>
                   {recentes.map((l) => (
                     <tr key={l.id} className="border-b">
-                      <td className={`${TD} tabular-nums`}>{new Date(l.criadoEm).toLocaleDateString('pt-BR')}</td>
-                      <td className={TD} title={nomeDe(l.mantidoId)}>{nomeDe(l.mantidoId)}</td>
-                      <td className={TD} title={l.absorvidosNomes.join(' · ')}>{l.absorvidosNomes.join(' · ') || `${l.absorvidos.length} cadastros`}</td>
-                      <td className={`${TD} text-right tabular-nums`}>{l.total}</td>
-                      <td className={TD} title={l.desfeitoMotivo ?? undefined}>{l.desfeitoEm ? `desfeita · ${l.desfeitoMotivo ?? ''}` : 'mesclada'}</td>
+                      <td className={TD_NUM}>{DATA(l.criadoEm)}</td>
+                      <td className={TD_NUM}>{HORA(l.criadoEm)}</td>
+                      <td className={TD}>{nomeDe(l.mantidoId)}</td>
+                      <td className={TD}>{l.absorvidosNomes.join(' · ') || `${l.absorvidos.length} cadastros`}</td>
+                      <td className={`${TD_NUM} text-right`}>{l.total}</td>
+                      <td className={TD} title={l.desfeitoEm ? `desfeita em ${DATA(l.desfeitoEm)} ${HORA(l.desfeitoEm)}${l.desfeitoMotivo ? ` · motivo: ${l.desfeitoMotivo}` : ''}` : undefined}>{l.desfeitoEm ? 'desfeita' : 'mesclada'}</td>
                       <td className="h-[22px] p-0 text-center text-[10.5px] leading-none">{!l.desfeitoEm && (
                         <button type="button" className="text-[10.5px] text-primary underline" data-testid="desfazer-mesclagem" onClick={() => { setDesfazendo(l.id); setMotivo(''); setRecado(null); }}>Desfazer</button>
                       )}</td>
@@ -381,12 +388,13 @@ export function MesclarFornecedoresDialog({ aberto, aoFechar, clienteId, inicial
               </table>
               {recentes.length === 0 && <div className="pt-2 text-[10.5px] text-muted-foreground">Nenhuma mesclagem.</div>}
             </div>
+            </div>
           )}
         </div>
 
-        <div className="flex h-[38px] shrink-0 items-center gap-2 border-t px-3">
-          {/* FORN-MESCLAR-02a — a recusa do banco aparece INTEIRA: até duas linhas dentro do rodapé de altura fixa; o texto inteiro no `title` */}
-          <span className={`min-w-0 flex-1 line-clamp-2 break-words text-[10.5px] leading-[14px] ${rodapeEmErro ? 'text-destructive' : recado ? 'text-[#15803d]' : 'text-muted-foreground'}`}
+        <div className="flex min-h-[38px] shrink-0 items-center gap-2 border-t px-3 py-1">
+          {/* FORN-MESCLAR-02a / UI-SEM-CORTE-01 — a recusa do banco aparece INTEIRA, quebrando a linha (o rodapé cresce), nunca com "…" */}
+          <span className={`min-w-0 flex-1 break-words text-[10.5px] leading-[14px] ${rodapeEmErro ? 'text-destructive' : recado ? 'text-[#15803d]' : 'text-muted-foreground'}`}
             title={textoDoRodape || undefined} data-testid="recado-da-mesclagem">
             {textoDoRodape}
           </span>

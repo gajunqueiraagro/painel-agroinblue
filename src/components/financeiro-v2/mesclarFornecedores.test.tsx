@@ -168,8 +168,9 @@ describe('o diálogo', () => {
     await waitFor(() => expect(screen.getByTestId('recado-da-mesclagem').textContent).toBe(frase), { timeout: 2000 });
     const r = screen.getByTestId('recado-da-mesclagem');
     expect(r.getAttribute('title')).toBe(frase);
-    expect(r.className).toMatch(/\bline-clamp-2\b/);
-    expect(r.className).not.toMatch(/\btruncate\b/);
+    /* UI-SEM-CORTE-01 — a frase inteira quebra a linha: nem "…" (truncate) nem corte por linhas (line-clamp) */
+    expect(r.className).toMatch(/\bbreak-words\b/);
+    expect(r.className).not.toMatch(/\bline-clamp|\btruncate\b/);
     expect(screen.getByTestId('mesclar')).toBeDisabled();
   });
   it('"Pec.3M-" acrescentado à mão: bloqueia com o motivo escrito, sem pedir a prévia', async () => {

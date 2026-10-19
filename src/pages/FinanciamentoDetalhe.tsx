@@ -56,14 +56,12 @@ import { resumoDoContratoNaLista } from '@/lib/financiamentos/situacaoEmLote';
 const fmt = (v: number) =>
   v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-/* dd/mm/aa — o padrão de data de tabela da casa (A31) */
+/* UI-SEM-CORTE-01 — data sempre dd/mm/aaaa completa (substitui o dd/mm/aa de tabela do A31) */
 const fmtDate = (d: string | null) =>
-  d ? format(new Date(d + 'T12:00:00'), 'dd/MM/yy') : '—';
+  d ? format(new Date(d + 'T12:00:00'), 'dd/MM/yyyy') : '—';
 
 /* valor de tabela: sem "R$" (o cabeçalho da coluna diz a moeda) */
 const num2 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-/** v4: data de tabela dd/mm/aa (o padrão de tabela da casa), do texto ISO, sem fuso */
-const dataCurta = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(2, 4)}` : '—');
 const dataLonga = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '—');
 /** TELA DO CONTRATO v3 — as abas do crédito */
 type AbaDoCredito = 'cronograma' | 'liberacoes' | 'pagamentos' | 'documentos' | 'historico' | 'a_resolver';
@@ -681,8 +679,8 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
                       data-testid="linha-do-contrato" data-situacao={p.situacao}
                       onClick={() => { if (p.lancamentoId) setLancamentoAberto(p.lancamentoId); }} title={p.lancamentoId ? undefined : MOTIVO_PARCELA_SEM_LANCAMENTO}>
                       <td className={`${TD_V4} tabular-nums`}>{p.numero ?? '—'}{cartoes ? `/${cartoes.parcelas}` : ''}</td>
-                      <td className={`${TD_V4} text-[10px] tabular-nums ${vencida ? `font-semibold ${COR_V4.vermelho}` : ''}`}>{dataCurta(p.dataVencimento)}</td>
-                      <td className={`${TD_V4} text-[10px] tabular-nums`} data-testid="pago-em">{dataCurta(p.pagoEm)}</td>
+                      <td className={`${TD_V4} text-[10px] tabular-nums ${vencida ? `font-semibold ${COR_V4.vermelho}` : ''}`}>{dataLonga(p.dataVencimento)}</td>
+                      <td className={`${TD_V4} text-[10px] tabular-nums`} data-testid="pago-em">{dataLonga(p.pagoEm)}</td>
                       <td className={`${TD_V4} text-[10px] ${d?.prazo && TOM_DO_PRAZO[d.prazo.tipo] === 'vermelho' ? COR_V4.vermelho : d?.prazo && TOM_DO_PRAZO[d.prazo.tipo] === 'verde' ? 'text-[#15803d]' : COR_V4.rotulo}`} data-testid="prazo">
                         {textoDoPrazoCurto(d?.prazo ?? null)}
                       </td>
@@ -695,8 +693,9 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
                           title={origemDaSituacao(p)} data-testid="situacao-da-parcela">{ROTULO_SITUACAO[p.situacao]}</span>
                         {ajustadas.has(p.id) && <> <SeloAjustada /></>}
                       </td>
-                      <td className={TD_V4} data-testid="lancamento-da-parcela" title={d?.contaNome ? `conta: ${d.contaNome}` : undefined}>
-                        <div className="flex min-w-0 items-center whitespace-nowrap text-[10px]">
+                      {/* UI-SEM-CORTE-01 — sem corte calado: onde a coluna não comporta os gestos (750px de conteúdo), eles quebram a linha */}
+                      <td className={`${TD_V4} !overflow-visible !whitespace-normal py-[3px]`} data-testid="lancamento-da-parcela" title={d?.contaNome ? `conta: ${d.contaNome}` : undefined}>
+                        <div className="flex min-w-0 flex-wrap items-center text-[10px] [&>*]:whitespace-nowrap">
                           {p.lancamentoId && (
                             <button type="button" className="font-medium text-primary hover:underline" title="Abrir o lançamento do principal no Financeiro"
                               onClick={(e) => { e.stopPropagation(); setLancamentoAberto(p.lancamentoId); }} data-testid="ver-principal">↔ principal</button>

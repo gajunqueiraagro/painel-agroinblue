@@ -700,7 +700,7 @@ describe('4 — a tela do contrato mostra o que o banco derivou do lançamento',
     await abrirDetalhe();
     expect(linhasDoContrato().map((l) => l.getAttribute('data-situacao'))).toEqual(['paga', 'vencida']);
     expect(screen.getAllByTestId('situacao-da-parcela').map((s) => s.textContent)).toEqual(['Paga', 'Vencida']);
-    expect(screen.getAllByTestId('pago-em').map((s) => s.textContent)).toEqual(['09/10/26', '—']);
+    expect(screen.getAllByTestId('pago-em').map((s) => s.textContent)).toEqual(['09/10/2026', '—']);
     expect(cartao('Pago')).toContain('8.119,00');
     expect(cartao('A vencer')).toContain('0,00');
     expect(cartao('Vencido')).toContain('8.119,00');
@@ -814,8 +814,8 @@ describe('4 — a tela do contrato mostra o que o banco derivou do lançamento',
     ], { pago: 8119, a_vencer: 0, vencido: 8119, pagas: 1, ...CART() });
     await abrirDetalhe();
     const celulas = (i: number) => Array.from(linhasDoContrato()[i].querySelectorAll('td')).map((td) => td.textContent);
-    expect(celulas(0).slice(0, 9)).toEqual(['1/2', '02/06/26', '10/10/26', '07/10/26', '3 dias antes', 'Banco do Brasil', '8.119,00', 'Paga', 'NF 000.005.510']);
-    expect(celulas(1).slice(0, 9)).toEqual(['2/2', '02/06/26', '05/10/26', '—', 'vencida há 2 dias', 'Banco do Brasil', '8.119,00', 'Vencida', 'NF 000.005.510']);
+    expect(celulas(0).slice(0, 9)).toEqual(['1/2', '02/06/2026', '10/10/2026', '07/10/2026', '3 dias antes', 'Banco do Brasil', '8.119,00', 'Paga', 'NF 000.005.510']);
+    expect(celulas(1).slice(0, 9)).toEqual(['2/2', '02/06/2026', '05/10/2026', '—', 'vencida há 2 dias', 'Banco do Brasil', '8.119,00', 'Vencida', 'NF 000.005.510']);
     const prazos = screen.getAllByTestId('prazo');
     expect(prazos[0].className).toContain('text-[#15803d]');
     expect(prazos[1].className).toContain('text-[#b91c1c]');

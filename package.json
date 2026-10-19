@@ -12,6 +12,7 @@
     "check:tdz": "node scripts/check-tdz-render.mjs",
     "check:ui-nativo": "node scripts/check-ui-nativo.mjs",
     "check:hooks": "node scripts/check-hooks.mjs",
+    "check:ui-cortes": "node scripts/check-ui-cortes.mjs",
     "preview:proto": "node scripts/run-vite-safe.mjs preview proto",
     "test": "vitest run",
     "test:watch": "vitest",

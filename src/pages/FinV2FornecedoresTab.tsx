@@ -362,7 +362,7 @@ export function FinV2FornecedoresTab() {
           <div className="h-4 flex items-center gap-2 text-[10px] leading-4 text-amber-700" data-testid="aviso-inativos-com-lancamento">
             {avisoDeInativos(inativosComLancamento) && (
               <>
-                <span className="truncate" title={avisoDeInativos(inativosComLancamento) ?? ''}>{avisoDeInativos(inativosComLancamento)}</span>
+                <span className="min-w-0">{avisoDeInativos(inativosComLancamento)}</span>
                 {statusFilter !== 'inativos' && (
                   <button type="button" className="shrink-0 underline" onClick={() => { setStatusFilter('inativos'); setPage(1); }}>ver inativos</button>
                 )}
@@ -371,15 +371,16 @@ export function FinV2FornecedoresTab() {
           </div>
           <Card>
             <CardContent className="p-0">
-              {/* FORN-EDITAR-01 — uma linha por registro: só o nome corta (inteiro no `title`); documento e status não quebram */}
-              <Table className="table-fixed">
+              {/* UI-SEM-CORTE-01 — nada corta: o nome longo quebra a linha; o corpo rola DENTRO do cartão e o cabeçalho (opaco) fica preso
+                  no topo do container que rola, sem vão acima dele */}
+              <Table className="table-fixed" wrapperClassName="max-h-[calc(100dvh-320px)] min-h-[120px] overflow-y-auto" data-testid="lista-de-fornecedores">
                 <colgroup>
                   <col />
                   <col style={{ width: 230 }} />
                   <col style={{ width: 72 }} />
                   <col style={{ width: 36 }} />
                 </colgroup>
-                <TableHeader>
+                <TableHeader className="bg-muted">
                   <TableRow className="h-7">
                     <TableHead className="text-[10px]">Nome</TableHead>
                     <TableHead className="text-[10px]">CPF/CNPJ</TableHead>
@@ -394,10 +395,10 @@ export function FinV2FornecedoresTab() {
                     const doc = situacaoDoGravado(f.cpf_cnpj);
                     return (
                     <TableRow key={f.id} className="h-7 text-[11px]">
-                      <TableCell className="py-0.5 font-medium truncate whitespace-nowrap" title={f.nome}>{f.nome}</TableCell>
+                      <TableCell className="py-0.5 font-medium break-words">{f.nome}</TableCell>
                       <TableCell className="py-0.5 whitespace-nowrap text-muted-foreground" title={doc.motivo ?? undefined}>
                         <span className="flex min-w-0 items-center gap-1.5">
-                          <span className="min-w-0 truncate tabular-nums">{f.cpf_cnpj || '-'}</span>
+                          <span className="min-w-0 tabular-nums">{f.cpf_cnpj || '-'}</span>
                           {doc.situacao === 'vazio' && (
                             <span data-testid="doc-vazio" className="shrink-0 text-[9.5px] text-amber-700">vazio</span>
                           )}
@@ -467,8 +468,8 @@ export function FinV2FornecedoresTab() {
           {!loadingPending && pendingItems.length > 0 && (
             <Card>
               <CardContent className="p-0">
-                <Table>
-                  <TableHeader>
+                <Table wrapperClassName="max-h-[calc(100dvh-300px)] min-h-[120px] overflow-y-auto">
+                  <TableHeader className="bg-muted">
                     <TableRow className="h-7">
                       <TableHead className="text-[10px]">Descrição Original</TableHead>
                       <TableHead className="text-[10px] w-12">Qtd</TableHead>
@@ -479,14 +480,15 @@ export function FinV2FornecedoresTab() {
                   <TableBody>
                     {pendingItems.slice(0, 100).map((p, i) => (
                       <TableRow key={i} className="text-[10px] h-8">
-                        <TableCell className="py-0.5 font-medium max-w-[200px] truncate" title={p.descricao}>
+                        <TableCell className="py-0.5 font-medium break-words">
                           {p.descricao}
                         </TableCell>
                         <TableCell className="py-0.5 text-muted-foreground">{p.count}</TableCell>
                         <TableCell className="py-0.5">
                           {p.suggestions.length > 0 ? (
                             <Select onValueChange={(fornId) => linkToFornecedor(p, fornId)}>
-                              <SelectTrigger className="h-6 text-[10px]">
+                              {/* UI-SEM-CORTE-01 — o nome sugerido inteiro: o gatilho cresce e quebra a linha, nunca "…" */}
+                              <SelectTrigger className="h-auto min-h-6 py-0.5 text-[10px] [&>span]:line-clamp-none [&>span]:break-words">
                                 <SelectValue placeholder={p.suggestions[0]?.nome || 'Selecione'} />
                               </SelectTrigger>
                               <SelectContent>

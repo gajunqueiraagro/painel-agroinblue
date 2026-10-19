@@ -258,8 +258,9 @@ export function FornecedorFormDialog({
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent className="flex h-[min(400px,calc(100dvh-16px))] w-[min(900px,calc(100vw-16px))] max-w-none flex-col gap-0 overflow-hidden p-0"
         data-testid="cadastro-do-fornecedor">
-        <div className="flex h-[34px] shrink-0 items-center bg-primary px-3 text-primary-foreground">
-          <DialogTitle className="min-w-0 truncate text-[12px] font-semibold" title={titulo}>{titulo}</DialogTitle>
+        <div className="flex min-h-[34px] shrink-0 items-center bg-primary py-1 pl-3 pr-9 text-primary-foreground">
+          {/* UI-SEM-CORTE-01 — a razão social inteira: quebra a linha, nunca "…" */}
+          <DialogTitle className="min-w-0 break-words text-[12px] font-semibold leading-[15px]">{titulo}</DialogTitle>
           <DialogDescription className="sr-only">Cadastro de fornecedor: dados gerais, endereço e contato, pagamento, padrões e uso.</DialogDescription>
         </div>
         <div className="flex min-h-0 flex-1">
@@ -287,7 +288,7 @@ export function FornecedorFormDialog({
                         className={`${CAMPO} tabular-nums ${documentoBloqueia ? 'border-destructive' : ''}`} placeholder="000.000.000-00 ou 00.000.000/0000-00"
                         aria-invalid={documentoBloqueia || undefined} />
                       <div data-testid="cpf-cnpj-recado" title={recadoDoDocumento?.texto || undefined}
-                        className={`h-[14px] truncate text-[10px] leading-[14px] ${recadoDoDocumento?.tom === 'erro' ? 'text-destructive' : 'text-[#b45309]'}`}>
+                        className={`min-h-[14px] break-words text-[10px] leading-[14px] ${recadoDoDocumento?.tom === 'erro' ? 'text-destructive' : 'text-[#b45309]'}`}>
                         {recadoDoDocumento?.texto ?? ''}
                       </div>
                     </div>
@@ -295,7 +296,7 @@ export function FornecedorFormDialog({
                     <div className="flex h-[41px] min-w-0 items-end pb-[15px]" data-testid="lugar-do-duplicado">
                       {dup && (
                         <div className="flex min-w-0 items-center gap-1.5 text-[10.5px] text-[#b45309]" data-testid="duplicado-do-documento">
-                          <span className="min-w-0 truncate" title={`Este ${validado.tipo === 'cpf' ? 'CPF' : 'CNPJ'} também está cadastrado como ${dup.nome}${dup.ativo ? '' : ' (inativo)'}`}>
+                          <span className="min-w-0 break-words" title={`Este ${validado.tipo === 'cpf' ? 'CPF' : 'CNPJ'} também está cadastrado como ${dup.nome}${dup.ativo ? '' : ' (inativo)'}`}>
                             Este {validado.tipo === 'cpf' ? 'CPF' : 'CNPJ'} também está cadastrado como {dup.nome}{dup.ativo ? '' : ' (inativo)'}
                           </span>
                           {editing && onMesclar && <Button variant="outline" size="sm" className="h-[22px] shrink-0 px-2 text-[10.5px]" onClick={() => { onMesclar(editing.id, dup.id); onClose(); }} data-testid="mesclar-duplicado">Mesclar</Button>}
@@ -447,14 +448,14 @@ export function FornecedorFormDialog({
               {RESUMO.map(([r, v]) => (
                 <div key={r} className="contents">
                   <span className="whitespace-nowrap text-[#556070]">{r}</span>
-                  <span className={`min-w-0 truncate font-medium ${v ? 'text-[#111827]' : 'text-[#94a3b8]'}`} title={v || undefined}>{v ? (r === 'CNPJ' || r === 'CPF' ? formatarDocumento(v) || v : v) : '—'}</span>
+                  <span className={`min-w-0 break-words font-medium ${v ? 'text-[#111827]' : 'text-[#94a3b8]'}`} title={v || undefined}>{v ? (r === 'CNPJ' || r === 'CPF' ? formatarDocumento(v) || v : v) : '—'}</span>
                 </div>
               ))}
             </div>
             <div className="mt-2 border-t border-[#e3e8ee] pt-1.5" data-testid="o-que-falta">
               <div className="text-[10.5px] font-semibold text-[#b45309]">{faltas.length ? 'O que falta' : 'Nada pendente'}</div>
               {faltas.slice(0, 5).map((f) => (
-                <button key={f.texto} type="button" className="block w-full truncate text-left text-[10.5px] leading-[16px] text-[#b45309] hover:underline" title={f.texto}
+                <button key={f.texto} type="button" className="block w-full break-words text-left text-[10.5px] leading-[16px] text-[#b45309] hover:underline" title={f.texto}
                   onClick={() => setAba(f.aba)} data-testid="falta">· {f.texto}</button>
               ))}
             </div>

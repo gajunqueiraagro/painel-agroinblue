@@ -134,6 +134,24 @@ no mesmo arquivo.
   multilinha) e a indentacao acertou os 20. Falso negativo e' o lado certo para
   errar — o gate existe para o que quebra, nao para o que e' feio.
 
+- CORTE DE TEXTO, DATA E CABECALHO PRESO — comando OFICIAL:
+      npm run check:ui-cortes
+  (UI-SEM-CORTE-01, Gabriel 19/10/2026) Sobe a bancada `scripts/ui-cortes/` (as telas REAIS com banco, cliente e leitor de
+  fornecedores simulados, dados SINTETICOS) e varre no Chromium, a 1000x600, 1126x579 e 1440x800: Mesclar fornecedores (vazio,
+  comparar, uso, mesclagens recentes), Cadastros › Fornecedores (lista e pendentes), o cadastro do fornecedor (as 5 abas), a tela do
+  contrato v4 e o Novo/Editar lancamento (Geral, Pagamento, Documentos). Reprova: texto com reticencias (`text-overflow: ellipsis` ou
+  `line-clamp` que nao cabe); CORTE CALADO (texto numa linha so' cortado por `overflow: hidden`, em celula de tabela ou texto proprio) e
+  VAZAMENTO (celula `nowrap` cujo conteudo invade a vizinha); DATA, HORA OU NUMERO QUEBRADO em duas linhas (so' os nos de texto contam);
+  cabecalho preso com vao acima dele, com fundo transparente, ou num container que nao rola dentro de um que rola; e data fora de
+  dd/mm/aaaa em coluna de data (Data, Venc., Vencimento, Pgto., Pagamento, Emissão). Elementos de 2px ou menos (`sr-only`) ficam fora.
+  BASELINE: ZERO — a lista de EXCECOES do script esta' VAZIA (decisao do Gabriel). Achado novo reprova. Antes de varrer, o detector
+  se prova num fixture com cada defeito e sai com codigo 2 se nao os achar. `--fotos DIR` grava um print por tela e tamanho;
+  `--so <prefixo>` e `--tamanhos LxA,...` sao diagnostico. Tela nova de Fornecedores, Financiamentos ou Lancamento entra na lista
+  `CENARIOS` do script, com dado sintetico em `scripts/ui-cortes/dados/` (NUNCA dado real de cliente).
+  ⚠ MEDIDO NO ESTADO PUBLICADO ANTES DESTE PR (HEAD 524431fd, num worktree): 114 achados — 97 reticencias, 2 cabecalhos (o vao de 8px
+    em Mesclagens recentes e o cabecalho da lista de fornecedores que nao ficava preso), 15 datas dd/mm/aa no cronograma do contrato.
+  ⚠ LIMITE: so' as telas da lista. O resto do sistema segue com `truncate` ate' entrar no gate.
+
 - HOOK CONDICIONAL — comando OFICIAL:
       npm run check:hooks
   Baseline: 2 (src/components/compra/AbaAuditoriaOC.tsx, linhas 41 e 52), ambas
@@ -1195,6 +1213,26 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   ausente; dado conciliado nunca deve aparentar ausencia.
 
 ## UI — CABECALHO FIXO E TAMANHOS (regra permanente, ao lado do A21)
+- ⚠ NENHUM TEXTO COM RETICENCIAS, DATA SEMPRE dd/mm/aaaa, CABECALHO PRESO SEM VAO (UI-SEM-CORTE-01, Gabriel 19/10/2026 — SUBSTITUI, para
+  todo o sistema daqui em diante, o "texto que nao cabe corta na celula com o inteiro no `title`" da regra UMA LINHA POR REGISTRO, o
+  "datas dd/mm/aa" do PADRAO DE TABELA (A31) e o "nada cortado sem `title`" do FORN-MESCLAR-02b; o gate e' o `check:ui-cortes`):
+  · NENHUM "…" EM TELA NENHUMA, nem corte calado por `overflow: hidden`. A coluna e' dimensionada pelo conteudo REAL medido; se nao
+    cabe, muda o layout de outro jeito: coluna mais larga, outra mais estreita, rotulo mais curto, ou o TEXTO QUEBRA A LINHA (a linha
+    cresce) — nunca reticencias. `title` nao substitui mostrar o texto.
+  · DATA SEMPRE dd/mm/aaaa COMPLETA; HORA em coluna propria (hh:mm) quando ha' mais de um registro no mesmo dia. Uma informacao por celula.
+  · CABECALHO PRESO = `position: sticky; top: 0` DENTRO do container que rola, sem padding/margem acima dele nesse container, com fundo
+    OPACO. Nenhuma linha aparece acima (nem por baixo) do cabecalho ao rolar. Com o primitivo `Table`, quem rola e' o `wrapperClassName`
+    (altura + `overflow-y-auto`); o `TableHeader` padrao e' `bg-muted/50` (transparente) — passe `className="bg-muted"`.
+  · ONDE JA' VALE (19/10, provado pelo gate nos tres tamanhos): Mesclar fornecedores — sugestoes com o nome inteiro (a coluna passou de
+    170 a 220px e o nome quebra), tabela de comparacao e Uso quebrando a linha, rodape e "Resultado" inteiros; MESCLAGENS RECENTES =
+    Data (dd/mm/aaaa, 78 — "19/10/2026" mede 61 a 10,5px; data, hora e numero `nowrap`) · Hora (46) · Fica · Absorvidos (quebram) · Referências (78) · Situação (70, o motivo do desfeito no `title`)
+    · acao (66), o container que rola comeca no cabecalho. Cadastro do fornecedor — titulo, resumo lateral e "O que falta" inteiros.
+    Cadastros › Fornecedores — o nome quebra a linha; a lista rola DENTRO do cartao (`max-h-[calc(100dvh-320px)]`) com o cabecalho
+    preso e opaco; Pendentes idem, e o gatilho da sugestao cresce em vez de cortar. Contrato v4 — Venc. e Pgto. em dd/mm/aaaa (52 ->
+    68px, medido: "01/10/2026" pede 64 com o padding), a coluna Lancamento quebra a linha onde nao cabe (a 750px de conteudo: 130px
+    para 154 pedidos), e a compra parcelada e o cabecalho do contrato tambem em dd/mm/aaaa.
+  ⚠ NAO PROVADO: nada com login no app real (bancada) · a altura `100dvh-320px` da lista de fornecedores foi tirada da bancada (barra de
+    96px); no app real a barra pode ter outra altura · telas fora do gate seguem com `truncate` e dd/mm/aa ate' entrarem nele.
 Toda lista com rolagem nasce com cabecalho e totais FIXOS e so' o corpo
 rolando; toda tela nova usa os tamanhos do A18 — identidade 12px/500,
 contexto 10px/400 muted, numero de topo 20px/500 — sem excecao.
@@ -1240,7 +1278,7 @@ preview que o cabecalho nao sai da tela ao rolar.
   obrigatorio vem marcado (`*`) antes. Cada bloco se cobra dos PROPRIOS campos; o bloco nunca aberto se
   cobra no botao que grava, com bloco e campo escritos ao lado. Detalhe: A29 do docs/PADROES-UI.md.
 - ⚠ PADRAO DE TABELA (regra permanente, Gabriel, 28/09/2026, no OC-VENDA-ENTREGAS-01c): 10px nas linhas, 9,5px no
-  cabecalho, linha de 18px, datas dd/mm/aa; cabecalho navy em todos os niveis; cabecalho, totais e cards CONGELADOS (so' as
+  cabecalho, linha de 18px, datas dd/mm/aa [REVOGADO no UI-SEM-CORTE-01: dd/mm/aaaa]; cabecalho navy em todos os niveis; cabecalho, totais e cards CONGELADOS (so' as
   linhas rolam); uma informacao por coluna e uma linha por registro; divisor vertical entre grupos de colunas; tipos de linha
   diferentes com fundos diferentes; cor pelo sinal; O CABECALHO ALINHA COMO A COLUNA (texto a' esquerda, numero a' direita, icone ao
   centro — a regra logo abaixo SUBSTITUI o "cabecalho centralizado" de antes nas tabelas com coluna de texto e de numero); texto que nao cabe corta na celula com o inteiro no `title`, numero,
@@ -1343,7 +1381,7 @@ preview que o cabecalho nao sai da tela ao rolar.
   `viewBox` de 100 numa caixa de 220px renderiza a 17,6px). Referencia de como se faz: `PecCascataView`.
   Quem precisar de unidade normalizada faz como `V2AreasMeta`: nenhum texto dentro do SVG (valores em HTML
   por cima) e `vectorEffect="non-scaling-stroke"` em todo traco. Nenhum gate ve' isso — jsdom nao faz layout.
-- ⚠ UMA LINHA POR REGISTRO, SEMPRE (UI-LINHA-UNICA-01, Gabriel 04/10/2026 — SUBSTITUI a regra "texto cortado com reticencia e'
+- ⚠ [O CORTE COM `title` FOI REVOGADO no UI-SEM-CORTE-01: texto que nao cabe quebra a linha, nunca "…".] UMA LINHA POR REGISTRO, SEMPRE (UI-LINHA-UNICA-01, Gabriel 04/10/2026 — SUBSTITUI a regra "texto cortado com reticencia e'
   proibido" de 27/09). Em TABELA, nenhuma celula quebra linha nem aumenta a altura da linha. Texto que nao cabe e' cortado na
   propria celula (nowrap + ellipsis) e o texto INTEIRO vai no `title`. Numero, valor e data NUNCA sao cortados: a coluna deles tem
   a largura do pior caso. Pedido literal: "eu odeio quando vai empilhando e alongando… pode esconder se for texto muito grande,
@@ -2596,7 +2634,7 @@ preview que o cabecalho nao sai da tela ao rolar.
     documento > mais lancamentos > ativo. "Pec.3M-" acrescentado a' mao bloqueia na tela com a frase do banco, sem pedir previa. Dono puro:
     `mesclarFornecedores.ts` (`LINHAS_DA_COMPARACAO`, `ficaPadrao`, `linhasDaComparacao`, `valoresParaGravar`, `resultadoAoVivo`,
     `bloqueioDoRateio`, `fraseDoQuePassa`). MEDIDO na bancada (1000x600, 1126x579, 1440x800, 740x600; 2 e 3 cadastros, as duas abas): sem
-    rolagem (tabela 284/284), linhas de 22px, nada cortado sem `title`. Prints em ~/Downloads/mesclar-02b/.
+    rolagem (tabela 284/284), linhas de 22px, nada cortado sem `title` [REVOGADO no UI-SEM-CORTE-01: nada cortado, com ou sem `title`]. Prints em ~/Downloads/mesclar-02b/.
   Testes: `supabase/tests/forn_mesclar_02b_test.sql` (R1–R7) OK no vivo; 5 mutacoes de banco mortas (a do fecho transitivo pediu o 4o
   cadastro na corrente); `forn_mesclar_01_test.sql` trocado ao contrato novo (M8 acha o grupo pelos ids; M9 nas assinaturas novas).
   vitest 13, 5 mutacoes mortas. ⚠ NAO PROVADO no navegador com login nem gravando de verdade (o Gabriel mescla pela tela).
