@@ -28,7 +28,7 @@ import { useLarguraDaJanela } from '@/hooks/useLarguraDaJanela';
 import {
   FORM_VAZIO, ROTULO_INDICE, ROTULO_SITUACAO, TEXTO_PLANO_FIXO, TITULO_PLANO_FIXO, TITULO_SITUACAO, brl, dadosDoForm, formDaTela, linhaCurta,
   linhasDoResumo, mostraResumo, regrasDoForm, textoDoVencimento,
-  fundoComumDoContrato, type BaseDoSeguro, type FormDoConsorcio, type Indice, type ParcelaDoConsorcio, type Faixa, type SaldoDoConsorcio,
+  fundoComumDoContrato, faltaParaGerar, dicaDoFundoComum, type ItemQueFalta, type BaseDoSeguro, type FormDoConsorcio, type Indice, type ParcelaDoConsorcio, type Faixa, type SaldoDoConsorcio,
 } from '@/lib/financiamentos/consorcio';
 
 type Aba = 'consorcio' | 'custos' | 'parcelas' | 'documentos';
@@ -48,9 +48,9 @@ function Bloco({ nome, grade, testId, children, acao }: { nome: string; grade: s
     </section>
   );
 }
-function Campo({ rotulo, obrig, children, className = '' }: { rotulo: string; obrig?: boolean; children: ReactNode; className?: string }) {
+function Campo({ rotulo, obrig, children, className = '', campo }: { rotulo: string; obrig?: boolean; children: ReactNode; className?: string; campo?: string }) {
   return (
-    <div className={`min-w-0 ${className}`}>
+    <div className={`min-w-0 ${className}`} data-campo={campo}>
       <div className={REGUA_ROTULO} title={rotulo}>{rotulo}{obrig ? ' *' : ''}</div>
       {children}
     </div>
@@ -88,7 +88,19 @@ export function ConsorcioDialog({ aberto, aoFechar, financiamentoId, onSalvo, on
   const previa = useCronogramaDoConsorcio(regras);
   const subDe = (id: string | null) => classificacoes.find((c) => c.id === id)?.subcentro ?? '';
 
+  /* FIN-CONSORCIO-03 — o rodapé lista SÓ o que falta ao gerador; cada item leva à aba e ao campo */
+  const falta = useMemo(() => faltaParaGerar(form), [form]);
+  const [tentouSalvar, setTentouSalvar] = useState(false);
+  const irAoCampo = (item: ItemQueFalta) => {
+    setAba(item.aba);
+    window.setTimeout(() => {
+      const alvo = document.querySelector<HTMLElement>(`[data-campo="${item.campo}"] input, [data-campo="${item.campo}"] button`);
+      alvo?.focus();
+    }, 0);
+  };
   const salvar = async () => {
+    setTentouSalvar(true);
+    if (falta.length > 0) { setRecado(null); return; }
     setGravando(true); setRecado(null);
     const r = await gestos.salvar(finId, dadosDoForm(form, clienteId), false);
     setGravando(false);
@@ -151,8 +163,8 @@ export function ConsorcioDialog({ aberto, aoFechar, financiamentoId, onSalvo, on
                 </Campo>
               </Bloco>
               <Bloco nome="Carta e reajuste" testId="bloco-carta" grade="grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,0.8fr)]">
-                <Campo rotulo="Carta de crédito" obrig><CampoMoeda className={CAMPO} valor={form.carta} onChange={(v) => set('carta', v)} /></Campo>
-                <Campo rotulo="1ª parcela" obrig><DatePicker size="compact" className={CAMPO} value={form.primeiraParcela ?? ''} onChange={(v) => set('primeiraParcela', v || null)} /></Campo>
+                <Campo rotulo="Carta de crédito" obrig campo="carta"><CampoMoeda className={CAMPO} valor={form.carta} onChange={(v) => set('carta', v)} /></Campo>
+                <Campo rotulo="1ª parcela" obrig campo="primeiraParcela"><DatePicker size="compact" className={CAMPO} value={form.primeiraParcela ?? ''} onChange={(v) => set('primeiraParcela', v || null)} /></Campo>
                 <Campo rotulo="Adesão"><DatePicker size="compact" className={CAMPO} value={form.dataAdesao ?? ''} onChange={(v) => set('dataAdesao', v || null)} /></Campo>
                 <Campo rotulo="Índice de reajuste">
                   <Select value={form.indice} onValueChange={(v) => set('indice', INDICES.find((i) => i === v) ?? 'nenhum')}>
@@ -182,14 +194,32 @@ export function ConsorcioDialog({ aberto, aoFechar, financiamentoId, onSalvo, on
             </>)}
 
             {aba === 'custos' && (<>
-              <Bloco nome="Prazos" testId="bloco-prazos" grade="grid-cols-[minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,2.4fr)]">
-                <Campo rotulo="Prazo do grupo" obrig><Input className={CAMPO} inputMode="numeric" value={form.prazoGrupo ?? ''} onChange={(e) => set('prazoGrupo', e.target.value ? Number(e.target.value.replace(/\D/g, '')) : null)} /></Campo>
+              {/* FIN-CONSORCIO-03 — uma linha só: prazo, transcorridas e o fundo comum por parcela; "a pagar agora" e o restante da carta
+                  (números do gerador) moram na linha do título do bloco — nada empurra o modal */}
+              <Bloco nome="Prazos" testId="bloco-prazos" grade="grid-cols-[minmax(0,0.75fr)_minmax(0,0.75fr)_minmax(0,1.45fr)_minmax(0,1.45fr)_minmax(0,0.8fr)]"
+                acao={<span className="uma-linha-que-rola max-w-[420px] text-[10px] text-muted-foreground" data-testid="dica-fundo-comum">
+                  {[`a pagar agora ${previa?.aPagarAgora ?? '—'}`, dicaDoFundoComum(form, previa)].filter(Boolean).join(' · ')}</span>}>
+                <Campo rotulo="Prazo do grupo" obrig campo="prazoGrupo"><Input className={CAMPO} inputMode="numeric" value={form.prazoGrupo ?? ''} onChange={(e) => set('prazoGrupo', e.target.value ? Number(e.target.value.replace(/\D/g, '')) : null)} /></Campo>
                 <Campo rotulo="Já transcorridas"><Input className={CAMPO} inputMode="numeric" value={form.jaTranscorridas ?? ''} onChange={(e) => set('jaTranscorridas', e.target.value ? Number(e.target.value.replace(/\D/g, '')) : 0)} /></Campo>
-                <Campo rotulo="A pagar agora"><span className={LEITURA} data-testid="a-pagar-agora">{previa?.aPagarAgora ?? '—'}</span></Campo>
                 <Campo rotulo="Transcorridas">
                   <Segmentado altura={28} valor={form.transcorridas} onEscolher={(v) => set('transcorridas', v)}
-                    opcoes={[{ valor: 'diluidas', rotulo: 'Diluídas' }, { valor: 'adiadas', rotulo: 'Adiadas até a contemplação' }, { valor: 'adesao', rotulo: 'Pagas na adesão' }]} />
+                    opcoes={[{ valor: 'diluidas', rotulo: 'Diluídas', title: 'Diluídas nas parcelas a pagar' }, { valor: 'adiadas', rotulo: 'Adiadas', title: 'Adiadas até a contemplação' },
+                      { valor: 'adesao', rotulo: 'Na adesão', title: 'Pagas na adesão' }]} />
                 </Campo>
+                {/* o fundo comum por parcela: automático (a carta dividida) ou o que o termo diz (% por parcela ou R$); o restante da carta
+                    vai às adiadas (ou à adesão) pelo gerador */}
+                <Campo rotulo="Fundo comum por parcela">
+                  <Segmentado altura={28} valor={form.fundoComum.modo === 'pct_total' ? 'pct_parcela' : form.fundoComum.modo}
+                    onEscolher={(v) => set('fundoComum', v === 'auto' ? { modo: 'auto', valor: null } : { modo: v, valor: v === form.fundoComum.modo ? form.fundoComum.valor : null })}
+                    opcoes={[{ valor: 'auto', rotulo: 'Automático' }, { valor: 'pct_parcela', rotulo: '% parc.' }, { valor: 'valor', rotulo: 'R$' }]} />
+                </Campo>
+                {form.fundoComum.modo === 'auto'
+                  ? <Campo rotulo="Fundo comum"><span className={LEITURA} data-testid="fundo-comum-auto">{brl(previa?.faixas.find((x) => !x.adiada)?.fundoComum ?? null)}</span></Campo>
+                  : form.fundoComum.modo === 'valor'
+                    ? <Campo rotulo="Fundo comum R$"><CampoMoeda className={CAMPO} valor={form.fundoComum.valor} onChange={(v) => set('fundoComum', { modo: 'valor', valor: v })} /></Campo>
+                    : <Campo rotulo={form.fundoComum.modo === 'pct_total' ? 'Fundo comum % total' : 'Fundo comum (%)'}>
+                        <CampoPercentual className={CAMPO} valor={form.fundoComum.valor} onChange={(v) => set('fundoComum', { ...form.fundoComum, valor: v })} casas={4} />
+                      </Campo>}
               </Bloco>
               <Bloco nome="Taxa de administração" testId="bloco-taxa" grade="grid-cols-[minmax(0,0.7fr)_minmax(0,1.6fr)_minmax(0,0.7fr)_minmax(0,0.6fr)_minmax(0,0.8fr)_minmax(0,0.6fr)]">
                 <Campo rotulo="Total (%)"><CampoPercentual className={CAMPO} valor={form.taxaTotalPct} onChange={(v) => set('taxaTotalPct', v)} casas={4} /></Campo>
@@ -266,9 +296,15 @@ export function ConsorcioDialog({ aberto, aoFechar, financiamentoId, onSalvo, on
           )}
         </div>
         <div className="flex h-[36px] shrink-0 items-center gap-2 border-t px-3">
-          <span className={`uma-linha-que-rola min-w-0 flex-1 text-[10px] ${recado?.erro ? 'text-destructive' : 'text-muted-foreground'}`} title={recado?.texto} data-testid="recado-do-consorcio">
-            {recado?.texto ?? (editando ? 'o cadastro grava direto · as parcelas mudam pelo lápis, pelo reajuste ou pelo "Regerar em aberto"' : 'campos com * são obrigatórios')}
-          </span>
+          {/* FIN-CONSORCIO-03 — faixa de 11px que quebra a linha (rola por dentro só se passar de duas), vermelha na recusa */}
+          <div className={`max-h-[32px] min-w-0 flex-1 overflow-y-auto break-words text-[11px] leading-[14px] ${recado?.erro || (tentouSalvar && falta.length > 0) ? 'text-destructive' : 'text-muted-foreground'}`}
+            data-testid="recado-do-consorcio">
+            {recado?.texto ?? (falta.length > 0
+              ? <span data-testid="falta-do-consorcio">Falta:{falta.map((item, i) => (
+                  <span key={item.campo}>{i > 0 ? ' ·' : ''} <button type="button" className="underline-offset-2 hover:underline" onClick={() => irAoCampo(item)}
+                    data-testid={`falta-${item.campo}`}>{item.rotulo}</button></span>))}</span>
+              : (editando ? 'o cadastro grava direto · as parcelas mudam pelo lápis, pelo reajuste ou pelo "Regerar em aberto"' : 'campos com * são obrigatórios'))}
+          </div>
           <Button variant="outline" size="sm" className="h-[24px] text-[10px]" onClick={aoFechar}>Fechar</Button>
           <Button size="sm" className="h-[24px] text-[10px]" disabled={gravando} onClick={() => void salvar()} data-testid="salvar-consorcio">
             {gravando ? 'Salvando…' : editando ? 'Salvar alterações' : 'Salvar consórcio'}

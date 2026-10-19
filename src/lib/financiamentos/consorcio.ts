@@ -171,6 +171,31 @@ export function formDaTela(t: TelaDoConsorcio): FormDoConsorcio {
   };
 }
 
+/* ── FIN-CONSORCIO-03 — o que falta para o gerador, e a dica do fundo comum ─────────────────────────────────────────── */
+export type CampoQueFalta = 'carta' | 'primeiraParcela' | 'prazoGrupo';
+export interface ItemQueFalta { campo: CampoQueFalta; rotulo: string; aba: 'consorcio' | 'custos' }
+/** Só o que falta (a regra de entrada de `fn_consorcio_cronograma`: carta > 0, 1ª parcela, prazo de 1 a 600) — nunca a lista inteira. */
+export function faltaParaGerar(f: FormDoConsorcio): ItemQueFalta[] {
+  const falta: ItemQueFalta[] = [];
+  if (!(typeof f.carta === 'number' && f.carta > 0)) falta.push({ campo: 'carta', rotulo: 'carta de crédito', aba: 'consorcio' });
+  if (!f.primeiraParcela) falta.push({ campo: 'primeiraParcela', rotulo: '1ª parcela', aba: 'consorcio' });
+  if (!(typeof f.prazoGrupo === 'number' && f.prazoGrupo >= 1 && f.prazoGrupo <= 600)) falta.push({ campo: 'prazoGrupo', rotulo: 'prazo do grupo (1 a 600 meses)', aba: 'custos' });
+  return falta;
+}
+
+/** A dica cinza ao lado do fundo comum: os números são do gerador (a tela não divide a carta). */
+export function dicaDoFundoComum(f: FormDoConsorcio, c: Cronograma | null): string {
+  const pagas = c?.faixas.find((x) => !x.adiada) ?? null;
+  if (f.fundoComum.modo === 'auto') {
+    const base = f.transcorridas === 'diluidas' ? 'carta ÷ parcelas a pagar' : 'carta ÷ prazo';
+    return pagas ? `automático: ${base} = R$ ${brl(pagas.fundoComum)}` : `automático: ${base}`;
+  }
+  const adiada = c?.faixas.find((x) => x.adiada) ?? null;
+  if (adiada) return `restante nas ${adiada.parcelas} adiadas · R$ ${brl(adiada.fundoComum)} cada`;
+  if (f.transcorridas === 'adesao') return 'restante da carta pago na adesão';
+  return '';
+}
+
 /* ── textos ────────────────────────────────────────────────────────────────────────────────────────────────────────── */
 export const ROTULO_SITUACAO: Record<SituacaoDaParcela, string> = { paga: 'Paga', a_ligar: 'A ligar', a_vencer: 'A vencer', adiada: 'Adiada' };
 export const TITULO_SITUACAO: Record<SituacaoDaParcela, string> = {

@@ -76,6 +76,13 @@ const CENARIOS = [
   ...[['novo-consorcio', ''], ['novo-custos', 'Custos e prazos']].map(([n, aba]) => ({
     nome: `consorcio-${n}`, url: 'tela=consorcio&novo=1', tamanhos: TAMANHOS_DO_CONSORCIO, semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="lista-parcelas-consorcio"]' },
     antes: aba ? async (p) => { await p.getByRole('button', { name: aba }).first().click(); await p.waitForTimeout(500); } : undefined })),
+  /* FIN-CONSORCIO-03 — o fundo comum do termo (% por parcela) na aba Custos e prazos, e o "Falta:" do rodapé depois do Salvar no novo
+     (o modal tem a mesma caixa: `alturasComo` contra a aba de sempre) */
+  { nome: 'consorcio-custos-fc-pct', url: 'tela=consorcio&fc=pct', tamanhos: TAMANHOS_DO_CONSORCIO, semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="lista-parcelas-consorcio"]' },
+    alturasComo: 'tela=consorcio',
+    antes: async (p) => { await p.getByRole('button', { name: 'Custos e prazos' }).first().click(); await p.waitForTimeout(500); } },
+  { nome: 'consorcio-novo-falta', url: 'tela=consorcio&novo=1', tamanhos: TAMANHOS_DO_CONSORCIO, semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="lista-parcelas-consorcio"]' },
+    antes: clicar('[data-testid="salvar-consorcio"]') },
 ];
 /* UI-TEXTO-LONGO-01 — o que tem de ter a mesma altura com texto curto e longo (o que não existe na tela é pulado nos dois lados) */
 const ALTURAS_DO_MODAL = ['[role="dialog"]', '[role="dialog"] aside', '[data-testid="grade-de-parcelas"]'];

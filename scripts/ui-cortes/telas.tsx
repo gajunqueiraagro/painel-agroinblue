@@ -123,7 +123,11 @@ if (tela === 'mesclar') {
   /* FIN-CONSORCIO-02 — o cadastro do consórcio: a tela e o gerador vêm do banco simulado (dado SINTÉTICO, `dados/consorcio.json`, lido do
      banco num bloco revertido); `&novo=1` abre o cadastro novo (sem tela do banco: só o gerador) */
   const d: any = consorcio;
-  g.__bancoBancada = { from: () => [], rpc: (fn: string) => fn === 'fn_consorcio_tela' ? d.tela : fn === 'fn_consorcio_cronograma' ? d.cronograma : null };
+  /* FIN-CONSORCIO-03 — `&fc=pct`: o fundo comum do termo (1,1625% por parcela) e o gerador com o restante nas adiadas */
+  const pct = q.get('fc') === 'pct';
+  const telaC = pct ? { ...d.tela, contrato: { ...d.tela.contrato, regras: { ...d.tela.contrato.regras, fundo_comum: { modo: 'pct_parcela', valor: 1.1625 } } } } : d.tela;
+  const cron = pct ? d.cronograma_fundo_pct : d.cronograma;
+  g.__bancoBancada = { from: () => [], rpc: (fn: string) => fn === 'fn_consorcio_tela' ? telaC : fn === 'fn_consorcio_cronograma' ? cron : null };
   montar(<ConsorcioDialog aberto aoFechar={() => {}} financiamentoId={q.get('novo') ? null : d.tela.contrato.id} />);
 } else if (tela === 'cadastro-contrato') {
   /* FIN-CONTRATO-SALVAR-01 — o cadastro de contrato de crédito: `&m=novo` (vazio) ou `&m=editar` (um contrato antigo SINTÉTICO, como os da

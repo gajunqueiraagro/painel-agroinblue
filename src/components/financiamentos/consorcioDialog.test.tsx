@@ -147,7 +147,9 @@ describe('a fonte', () => {
   });
   it('modal de tamanho fixo limitado pela janela; só a lista de parcelas rola', () => {
     expect(fonte).toMatch(/h-\[min\(560px,calc\(100dvh-32px\)\)\] w-\[min\(1120px,calc\(100vw-32px\)\)\]/);
-    expect((fonte.match(/overflow-y-auto/g) ?? []).length).toBe(1);
+    /* FIN-CONSORCIO-03: além da lista, só o recado do rodapé rola por dentro (e só se passar de duas linhas de 11px) */
+    expect((fonte.match(/overflow-y-auto/g) ?? []).length).toBe(2);
+    expect(fonte).toMatch(/max-h-\[32px\] min-w-0 flex-1 overflow-y-auto break-words text-\[11px\]/);
     expect(fonte).toMatch(/min-h-0 flex-1 overflow-y-auto rounded border bg-card" data-testid="lista-parcelas-consorcio"/);
   });
   it('as portas: o detalhe e o cadastro novo abrem o modal do consórcio', () => {
