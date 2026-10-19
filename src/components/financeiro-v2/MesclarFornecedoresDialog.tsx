@@ -1,8 +1,11 @@
 /**
- * FORN-MESCLAR-01 — "Mesclar fornecedores": escolher o que fica e os que são absorvidos, ver ANTES o que muda (a simulação do
- * banco, por módulo, com o CPF/CNPJ de cada um) e gravar numa transação; "Mesclagens recentes" desfaz. Tamanho fixo, um
- * scrollport por lista, recusas escritas no lugar reservado (nunca toast). A regra é do banco (`fn_fornecedor_mesclar`); a tela
- * só lê e escreve o que ele devolve. Sugestões de repetidos (`fn_fornecedor_repetidos`) só SUGEREM: nada é escolhido sozinho.
+ * FORN-MESCLAR-01 / 02b — "Mesclar fornecedores" com comparação lado a lado (mock aprovado pelo Gabriel 19/10/2026 08:27).
+ * À esquerda as sugestões (`fn_fornecedor_repetidos`: grupos ligados por documento OU nome; só sugerem) e as mesclagens recentes; à
+ * direita uma coluna por cadastro (2 ou mais): quem fica (rádio no cabeçalho), os campos lado a lado, a linha amarela onde discordam
+ * com o rádio do valor que fica, e o resultado ao vivo; a aba Uso mostra onde cada um é usado (`fn_fornecedor_uso`). Gravar é UMA
+ * chamada (`fn_fornecedor_mesclar` com `p_valores`), simulada antes; o rodapé diz o que passa com os números do banco.
+ * Tamanho fixo (~1120 x 420, limitado pela janela); só a tabela rola por dentro; recusas escritas no rodapé (nunca toast).
+ * A regra é do banco; as linhas, o padrão do "fica" e as frases são de `mesclarFornecedores.ts` (puro). Nenhuma conta aqui.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
@@ -10,30 +13,45 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Segmentado } from '@/components/ui/segmentado';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
 import { supabase } from '@/integrations/supabase/client';
 import { useFornecedoresDoCliente, notificarFornecedoresMudaram } from '@/hooks/useFornecedoresDoCliente';
 import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
-import { formatarDocumento, mesmoLadoDoRateio } from '@/lib/fornecedores/fornecedorTexto';
+import { ehRateio, formatarDocumento, rotulosDosFornecedores, sufixoDoRotulo } from '@/lib/fornecedores/fornecedorTexto';
 import { lerTodasAsPaginas } from '@/v2/lib/importLanc/lerTodasAsPaginas';
 import {
-  MOTIVO_DESFAZER_SEM_MOTIVO, MOTIVO_SEM_PREVIA, MODULOS_DA_MESCLAGEM, fraseDoGrupo, fraseDoResultado, lerGruposRepetidos, lerMesclagens,
-  lerPreviaDaMesclagem, type FornecedorDaMesclagem, type GrupoRepetido, type MesclagemFeita, type PreviaDaMesclagem,
+  MOTIVO_DESFAZER_SEM_MOTIVO, bloqueioDoRateio, ficaPadrao, fraseDoGrupo, fraseDoQuePassa, fraseDoResultado, lerGruposRepetidos,
+  lerMesclagens, lerPreviaDaMesclagem, lerUso, linhasDaComparacao, resultadoAoVivo, valoresParaGravar,
+  type CadastroComparado, type FornecedorDaMesclagem, type GrupoRepetido, type MesclagemFeita, type PreviaDaMesclagem, type UsoDoCadastro,
 } from '@/lib/fornecedores/mesclarFornecedores';
 
-const TH = 'h-[18px] px-1.5 text-left text-[9.5px] font-semibold uppercase tracking-wide text-primary-foreground bg-primary';
-const TD = 'h-[18px] px-1.5 text-[10px] whitespace-nowrap overflow-hidden text-ellipsis';
+const TH = 'h-[22px] px-1.5 text-left text-[10.5px] font-semibold text-primary-foreground bg-primary whitespace-nowrap overflow-hidden text-ellipsis';
+const TD = 'h-[22px] px-1.5 text-[10.5px] whitespace-nowrap overflow-hidden text-ellipsis';
 const doc = (d: string | null) => (d ? formatarDocumento(d) : '—');
+
+const LINHAS_DO_USO: ReadonlyArray<{ rotulo: string; valor: (u: UsoDoCadastro) => string }> = [
+  { rotulo: 'Lançamentos', valor: (u) => String(u.lancamentos) },
+  { rotulo: 'Compras parceladas', valor: (u) => String(u.comprasParceladas) },
+  { rotulo: 'Recorrências', valor: (u) => String(u.recorrencias) },
+  { rotulo: 'Documentos', valor: (u) => String(u.documentos) },
+  { rotulo: 'Financiamentos', valor: (u) => String(u.financiamentos) },
+  { rotulo: 'OC', valor: (u) => String(u.operacoes) },
+  { rotulo: 'Último uso', valor: (u) => (u.ultimoUso ? new Date(`${u.ultimoUso.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR') : '—') },
+];
 
 /** FORN-CADASTRO-02 — `inicial`: o cadastro abre esta ferramenta já com o par (o que fica e o duplicado) escolhido; nada é gravado
  *  sem a prévia e a confirmação de sempre. */
 export function MesclarFornecedoresDialog({ aberto, aoFechar, clienteId, inicial }: {
   aberto: boolean; aoFechar: () => void; clienteId: string; inicial?: { manter: string; absorver: string[] };
 }) {
-  const [aba, setAba] = useState<'mesclar' | 'recentes'>('mesclar');
-  const [manter, setManter] = useState('');
-  const [absorver, setAbsorver] = useState<string[]>([]);
+  const [vista, setVista] = useState<'comparar' | 'recentes'>('comparar');
+  const [aba, setAba] = useState<'comparar' | 'uso'>('comparar');
+  /* as colunas da comparação (a ordem da tela) e quem fica; `fica` vazio = o padrão (`ficaPadrao`) assim que os dados chegam */
+  const [colunas, setColunas] = useState<string[]>([]);
+  const [fica, setFica] = useState('');
+  const [escolhas, setEscolhas] = useState<Record<string, string>>({});
   const [grupos, setGrupos] = useState<GrupoRepetido[]>([]);
+  const [cadastros, setCadastros] = useState<Map<string, CadastroComparado>>(new Map());
+  const [uso, setUso] = useState<Map<string, UsoDoCadastro>>(new Map());
   const [previa, setPrevia] = useState<PreviaDaMesclagem | null>(null);
   const [lendoPrevia, setLendoPrevia] = useState(false);
   const [confirmando, setConfirmando] = useState(false);
@@ -42,8 +60,7 @@ export function MesclarFornecedoresDialog({ aberto, aoFechar, clienteId, inicial
   const [recentes, setRecentes] = useState<MesclagemFeita[]>([]);
   const [desfazendo, setDesfazendo] = useState<string | null>(null);
   const [motivo, setMotivo] = useState('');
-  /* FORN-ABSORVER-INATIVOS-01 — os INATIVOS não mesclados do cliente: o leitor só traz ativos, e o inativo que ainda tem lançamento
-     (os 38 de 19/10, o "Lineagro … AS" da Vera entre eles) precisa ser absorvível pela tela */
+  /* FORN-ABSORVER-INATIVOS-01 — os INATIVOS não mesclados do cliente: o leitor só traz ativos */
   const [inativos, setInativos] = useState<FornecedorDaMesclagem[]>([]);
   const lidos = useFornecedoresDoCliente(clienteId);
 
@@ -68,30 +85,69 @@ export function MesclarFornecedoresDialog({ aberto, aoFechar, clienteId, inicial
     } catch { setInativos([]); }
   }, [clienteId]);
   useEffect(() => { if (aberto) void recarregar(); }, [aberto, recarregar]);
+
   /* o par pedido pelo cadastro entra UMA vez por abertura: depois de mesclar ele não volta sozinho (FORN-MESCLAR-DEPOIS-01) */
   const inicialAplicado = useRef(false);
   useEffect(() => {
     if (!aberto) { inicialAplicado.current = false; return; }
-    if (inicial && !inicialAplicado.current) { inicialAplicado.current = true; setManter(inicial.manter); setAbsorver(inicial.absorver); }
+    if (inicial && !inicialAplicado.current) {
+      inicialAplicado.current = true;
+      setColunas([inicial.manter, ...inicial.absorver.filter((x) => x !== inicial.manter)]); setFica(inicial.manter); setEscolhas({});
+    }
   }, [aberto, inicial]);
 
-  /* quem pode ser absorvido: os ativos do leitor, os INATIVOS não mesclados e os cadastros das sugestões, fora o que fica */
-  const candidatos = useMemo(() => {
-    const m = new Map<string, FornecedorDaMesclagem>();
-    for (const f of lidos.fornecedores) m.set(f.id, { id: f.id, nome: f.nome, cpfCnpj: f.cpf_cnpj, ativo: f.ativo });
-    for (const f of inativos) if (!m.has(f.id)) m.set(f.id, f);
-    for (const g of grupos) for (const f of g.fornecedores) if (!m.has(f.id)) m.set(f.id, f);
-    return m;
-  }, [lidos.fornecedores, inativos, grupos]);
+  /* a linha inteira de cada coluna, o subcentro padrão dela e o uso — lidos uma vez por cadastro */
+  const chaveDasColunas = colunas.join(',');
+  useEffect(() => {
+    const faltam = colunas.filter((id) => !cadastros.has(id));
+    if (faltam.length === 0) return;
+    let vivo = true;
+    void (async () => {
+      const { data } = await (supabase as any).from('financeiro_fornecedores').select('*').in('id', faltam);
+      const linhas: Array<Record<string, unknown>> = Array.isArray(data) ? data : [];
+      const planos = [...new Set(linhas.map((l) => l.plano_padrao_id).filter((x): x is string => typeof x === 'string'))];
+      const { data: pl } = planos.length
+        ? await (supabase as any).from('financeiro_plano_contas').select('id, subcentro, ativo, cliente_id').in('id', planos)
+        : { data: [] };
+      const porPlano = new Map<string, { subcentro: string; ok: boolean }>();
+      for (const p of Array.isArray(pl) ? pl : []) porPlano.set(p.id, { subcentro: p.subcentro ?? '—', ok: p.ativo === true && (p.cliente_id === null || p.cliente_id === clienteId) });
+      const usos = await Promise.all(faltam.map(async (id) => [id, lerUso((await (supabase as any).rpc('fn_fornecedor_uso', { p_fornecedor: id })).data)] as const));
+      if (!vivo) return;
+      setCadastros((m) => {
+        const n = new Map(m);
+        for (const l of linhas) {
+          const linha: Record<string, string | null> = {};
+          for (const [k, x] of Object.entries(l)) linha[k] = x === null || x === undefined ? null : typeof x === 'string' ? x : String(x);
+          const plano = typeof l.plano_padrao_id === 'string' ? porPlano.get(l.plano_padrao_id) : undefined;
+          n.set(String(l.id), { id: String(l.id), nome: String(l.nome ?? ''), ativo: l.ativo !== false, linha,
+            planoNome: plano ? plano.subcentro : typeof l.plano_padrao_id === 'string' ? '(subcentro removido)' : null,
+            planoNoPlano: typeof l.plano_padrao_id === 'string' ? plano?.ok ?? false : null });
+        }
+        return n;
+      });
+      setUso((m) => { const n = new Map(m); for (const [id, u] of usos) if (u) n.set(id, u); return n; });
+    })();
+    return () => { vivo = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- relê só quando as colunas mudam
+  }, [chaveDasColunas, clienteId]);
 
-  const chaveDaPrevia = manter && absorver.length ? `${manter}|${[...absorver].sort().join(',')}` : '';
+  const comparados = useMemo(() => colunas.map((id) => cadastros.get(id)).filter((c): c is CadastroComparado => !!c), [colunas, cadastros]);
+  const prontos = comparados.length === colunas.length && colunas.length > 0;
+  /* quem fica: o escolhido; sem escolha, o padrão (com documento > mais uso > ativo) quando tudo chegou */
+  const ficaEfetivo = fica && colunas.includes(fica) ? fica : prontos ? ficaPadrao(comparados, uso) ?? '' : '';
+  const linhas = useMemo(() => (ficaEfetivo ? linhasDaComparacao(comparados, ficaEfetivo, escolhas) : []), [comparados, ficaEfetivo, escolhas]);
+  const valores = useMemo(() => valoresParaGravar(linhas), [linhas]);
+  const absorvidos = colunas.filter((id) => id !== ficaEfetivo);
+  const bloqueio = ficaEfetivo ? bloqueioDoRateio(comparados, ficaEfetivo, ehRateio) : null;
+
+  const chaveDaPrevia = ficaEfetivo && absorvidos.length && !bloqueio ? `${ficaEfetivo}|${absorvidos.join(',')}|${JSON.stringify(valores)}` : '';
   useEffect(() => {
     setConfirmando(false);
     if (!chaveDaPrevia) { setPrevia(null); return; }
     let vivo = true; setLendoPrevia(true);
     const t = setTimeout(() => {
-      const [m, abs] = chaveDaPrevia.split('|');
-      void (supabase as any).rpc('fn_fornecedor_mesclar', { p_manter: m, p_absorver: abs.split(','), p_simular: true })
+      const [m, abs, val] = chaveDaPrevia.split('|');
+      void (supabase as any).rpc('fn_fornecedor_mesclar', { p_manter: m, p_absorver: abs.split(','), p_simular: true, p_valores: JSON.parse(val) })
         .then(({ data, error }: { data: unknown; error: { message?: string } | null }) => {
           if (!vivo) return;
           setLendoPrevia(false);
@@ -102,20 +158,20 @@ export function MesclarFornecedoresDialog({ aberto, aoFechar, clienteId, inicial
     return () => { vivo = false; clearTimeout(t); };
   }, [chaveDaPrevia]);
 
-  const escolherGrupo = (g: GrupoRepetido) => {
-    const fica = g.fornecedores.find((f) => f.ativo) ?? g.fornecedores[0];
-    setManter(fica.id); setAbsorver(g.fornecedores.filter((f) => f.id !== fica.id).map((f) => f.id)); setRecado(null);
+  const abrirGrupo = (g: GrupoRepetido) => {
+    setColunas(g.fornecedores.map((f) => f.id)); setFica(''); setEscolhas({}); setRecado(null); setVista('comparar');
   };
+  const tirarColuna = (id: string) => { setColunas((c) => c.filter((x) => x !== id)); if (fica === id) setFica(''); setEscolhas({}); };
 
   const gravar = async () => {
     if (!previa || previa.recusa || !chaveDaPrevia) return;
     setGravando(true); setRecado(null);
-    const { data, error } = await (supabase as any).rpc('fn_fornecedor_mesclar', { p_manter: manter, p_absorver: absorver, p_simular: false });
+    const { data, error } = await (supabase as any).rpc('fn_fornecedor_mesclar', { p_manter: ficaEfetivo, p_absorver: absorvidos, p_simular: false, p_valores: valores });
     setGravando(false); setConfirmando(false);
     if (error) { setRecado({ tom: 'erro', texto: error.message ?? 'Não foi possível mesclar.' }); return; }
     const feito = lerPreviaDaMesclagem(data);
-    /* FORN-MESCLAR-DEPOIS-01 — volta ao estado inicial (Fica e Absorver vazios, Mesclar apagado); a frase de sucesso fica no rodapé */
-    setManter(''); setAbsorver([]); setPrevia(null); setConfirmando(false);
+    /* FORN-MESCLAR-DEPOIS-01 — volta ao estado inicial (nenhuma coluna, Mesclar apagado); a frase de sucesso fica no rodapé */
+    setColunas([]); setFica(''); setEscolhas({}); setPrevia(null); setCadastros(new Map()); setUso(new Map());
     setRecado({ tom: 'ok', texto: feito ? fraseDoResultado(feito) : 'Mesclado.' });
     notificarFornecedoresMudaram(clienteId); notificarLancamentosMudaram(clienteId);
     void recarregar();
@@ -130,138 +186,175 @@ export function MesclarFornecedoresDialog({ aberto, aoFechar, clienteId, inicial
     const voltaram = typeof data === 'object' && data !== null && 'voltaram' in data ? Number(data.voltaram) : 0;
     const ficaram = typeof data === 'object' && data !== null && 'ficaram' in data ? Number(data.ficaram) : 0;
     setRecado({ tom: 'ok', texto: `Mesclagem desfeita: ${voltaram} referências voltaram${ficaram ? ` · ${ficaram} mudaram depois e ficaram` : ''}.` });
-    setDesfazendo(null); setMotivo('');
+    setDesfazendo(null); setMotivo(''); setCadastros(new Map()); setUso(new Map());
     notificarFornecedoresMudaram(clienteId); notificarLancamentosMudaram(clienteId);
     void recarregar();
   };
 
-  const nomeDe = (id: string) => candidatos.get(id)?.nome ?? id.slice(0, 8);
-  const mantidoNome = (id: string): string | null => (id ? candidatos.get(id)?.nome ?? lidos.fornecedores.find((f) => f.id === id)?.nome ?? null : null);
-  /* "Pec.3M-" = pagamento por rateio (NF no nome do Higino): o que fica e o absorvido são sempre do MESMO lado (`mesmoLadoDoRateio`) */
-  const opcoesAbsorver = [...candidatos.values()].filter((f) => f.id !== manter && !absorver.includes(f.id)
-      && (!mantidoNome(manter) || mesmoLadoDoRateio(mantidoNome(manter) ?? '', f.nome)))
+  /* quem pode entrar como coluna: os ativos do leitor, os inativos não mesclados e os das sugestões. O "Pec.3M-" do outro lado
+     entra (a pessoa pode acrescentar à mão) e a tela bloqueia com o motivo escrito; o banco também recusa. */
+  const candidatos = useMemo(() => {
+    const m = new Map<string, FornecedorDaMesclagem>();
+    for (const f of lidos.fornecedores) m.set(f.id, { id: f.id, nome: f.nome, cpfCnpj: f.cpf_cnpj, ativo: f.ativo });
+    for (const f of inativos) if (!m.has(f.id)) m.set(f.id, f);
+    for (const g of grupos) for (const f of g.fornecedores) if (!m.has(f.id)) m.set(f.id, f);
+    return m;
+  }, [lidos.fornecedores, inativos, grupos]);
+  const opcoesAcrescentar = [...candidatos.values()].filter((f) => !colunas.includes(f.id))
     .map((f) => ({ value: f.id, label: f.nome, hint: `${f.ativo ? '' : 'inativo · '}${doc(f.cpfCnpj)}` }));
-  const mantido = candidatos.get(manter) ?? null;
-  const motivoDoBotao = !chaveDaPrevia ? MOTIVO_SEM_PREVIA : lendoPrevia ? 'Calculando a prévia…' : previa?.recusa ? previa.recusa.frase : null;
+  /* o nome exibido (FORN-NOME-EXIBIDO-01): o final do documento entre os parecidos DESTA comparação, e a marca de inativo */
+  const rotulos = useMemo(() => rotulosDosFornecedores(comparados.map((c) => ({ id: c.id, nome: c.nome, cpf_cnpj: c.linha.cpf_cnpj, ativo: c.ativo }))), [comparados]);
+  const nomeDe = (id: string) => candidatos.get(id)?.nome ?? cadastros.get(id)?.nome ?? id.slice(0, 8);
+
+  const motivoDoBotao = colunas.length < 2 ? 'Escolha uma sugestão ou acrescente ao menos dois cadastros.'
+    : !prontos ? 'Lendo os cadastros…' : bloqueio ? bloqueio : lendoPrevia ? 'Calculando a prévia…' : previa?.recusa ? previa.recusa.frase : null;
+  const textoDoRodape = recado?.texto
+    ?? (vista === 'comparar' ? motivoDoBotao ?? (previa ? (confirmando ? 'Confere? Isto move as referências e inativa os outros cadastros (pode ser desfeito). ' : '') + fraseDoQuePassa(previa, absorvidos.length) : '') : '');
+  const rodapeEmErro = recado?.tom === 'erro' || (!recado && (!!bloqueio || !!previa?.recusa));
 
   return (
     <Dialog open={aberto} onOpenChange={(v) => { if (!v) aoFechar(); }}>
-      <DialogContent className="flex h-[min(520px,calc(100vh-16px))] w-[min(900px,calc(100vw-16px))] max-w-none flex-col gap-0 overflow-hidden p-0"
+      <DialogContent className="flex h-[min(420px,calc(100vh-16px))] w-[min(1120px,calc(100vw-16px))] max-w-none flex-col gap-0 overflow-hidden p-0"
         data-testid="mesclar-fornecedores">
         <div className="flex h-[34px] shrink-0 items-center gap-3 bg-primary px-3 text-primary-foreground">
           <DialogTitle className="text-[11px] font-semibold">Mesclar fornecedores</DialogTitle>
-          <DialogDescription className="sr-only">Mover as referências de cadastros repetidos para um só</DialogDescription>
-        </div>
-        <div className="flex h-[32px] shrink-0 items-center border-b px-3">
-          <Segmentado altura={22} valor={aba} onEscolher={setAba} opcoes={[{ valor: 'mesclar', rotulo: 'Mesclar' }, { valor: 'recentes', rotulo: `Mesclagens recentes · ${recentes.length}` }]} />
+          <DialogDescription className="sr-only">Comparar cadastros repetidos e juntar num só</DialogDescription>
         </div>
 
-        {aba === 'mesclar' ? (
-          <div className="grid min-h-0 flex-1 grid-cols-[240px_minmax(0,1fr)]">
-            <aside className="flex min-h-0 flex-col border-r bg-muted/20">
-              <div className="h-[22px] shrink-0 px-2 pt-1 text-[9.5px] font-semibold uppercase tracking-wide text-muted-foreground">Sugestões · só sugerem</div>
-              <div className="min-h-0 flex-1 overflow-y-auto px-1" data-testid="sugestoes-de-repetidos">
-                {grupos.length === 0 && <div className="px-1 text-[10px] text-muted-foreground">Nenhum cadastro repetido.</div>}
-                {grupos.map((g) => (
-                  <button key={`${g.motivo}|${g.chave}`} type="button" onClick={() => escolherGrupo(g)} data-testid="sugestao-de-repetido"
-                    className="block h-[30px] w-full rounded px-1 text-left hover:bg-muted" title={g.fornecedores.map((f) => f.nome).join(' · ')}>
-                    <span className="block truncate text-[10px] font-medium">{g.fornecedores[0].nome}</span>
-                    <span className="block truncate text-[9.5px] text-muted-foreground">{fraseDoGrupo(g)}</span>
-                  </button>
-                ))}
-              </div>
-            </aside>
-            <div className="flex min-h-0 min-w-0 flex-col gap-2 px-3 pt-2">
-              <div className="grid shrink-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3">
-                <div className="min-w-0">
-                  <div className="text-[9.5px] font-semibold uppercase tracking-wide text-muted-foreground">Fica *</div>
-                  <FavorecidoSelect value={manter} onChange={(id) => { setManter(id); setAbsorver((a) => a.filter((x) => x !== id)); }} clienteId={clienteId} />
+        <div className="grid min-h-0 flex-1 grid-cols-[170px_minmax(0,1fr)] max-[759px]:grid-cols-1">
+          <aside className="flex min-h-0 flex-col border-r bg-muted/20 max-[759px]:hidden" data-testid="coluna-sugestoes">
+            <div className="h-[22px] shrink-0 px-2 pt-1 text-[10.5px] font-semibold text-muted-foreground">Sugestões</div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-1" data-testid="sugestoes-de-repetidos">
+              {grupos.length === 0 && <div className="px-1 text-[10.5px] text-muted-foreground">Nenhum cadastro repetido.</div>}
+              {grupos.map((g) => (
+                <button key={g.chave} type="button" onClick={() => abrirGrupo(g)} data-testid="sugestao-de-repetido"
+                  className="block h-[34px] w-full rounded px-1 text-left hover:bg-muted" title={g.fornecedores.map((f) => f.nome).join(' · ')}>
+                  <span className="block truncate text-[10.5px] font-semibold leading-[16px]">{g.fornecedores[0].nome}</span>
+                  <span className="block truncate text-[10px] leading-[14px] text-muted-foreground">{fraseDoGrupo(g)}</span>
+                </button>
+              ))}
+            </div>
+            <button type="button" className={`h-[26px] shrink-0 border-t px-2 text-left text-[10.5px] ${vista === 'recentes' ? 'font-semibold text-primary' : 'text-primary underline'}`}
+              onClick={() => { setVista((x) => (x === 'recentes' ? 'comparar' : 'recentes')); setRecado(null); }} data-testid="abrir-recentes">
+              Mesclagens recentes ({recentes.length})
+            </button>
+          </aside>
+
+          {vista === 'comparar' ? (
+            <div className="flex min-h-0 min-w-0 flex-col gap-1 px-3 pt-1.5">
+              <div className="flex h-[24px] shrink-0 items-center gap-2">
+                <Segmentado altura={22} valor={aba} onEscolher={setAba} opcoes={[{ valor: 'comparar', rotulo: 'Comparar cadastros' }, { valor: 'uso', rotulo: 'Uso' }]} />
+                <span className="min-w-0 flex-1 truncate text-[10px] text-muted-foreground" title="linhas em amarelo: os cadastros discordam; marque o valor que fica">
+                  linhas em amarelo: os cadastros discordam; marque o valor que fica
+                </span>
+                <div className="w-[230px] shrink-0">
+                  <SearchableSelect value="" onValueChange={(id) => { if (id) { setColunas((c) => [...c, id]); setEscolhas({}); } }} options={opcoesAcrescentar}
+                    semTodos allValue="" allLabel="+ acrescentar cadastro" placeholder="Buscar fornecedor..." dense triggerClassName="h-[22px] text-[10.5px]" />
                 </div>
-                <div className="min-w-0">
-                  <div className="text-[9.5px] font-semibold uppercase tracking-wide text-muted-foreground">Absorver *</div>
-                  <SearchableSelect value="" onValueChange={(id) => { if (id) setAbsorver((a) => [...a, id]); }} options={opcoesAbsorver}
-                    semTodos allValue="" allLabel="+ acrescentar cadastro…" placeholder="Buscar fornecedor..." dense />
-                </div>
               </div>
-              <div className="h-[96px] shrink-0 overflow-y-auto rounded border" data-testid="lista-absorvidos">
-                <table className="w-full table-fixed border-collapse">
-                  <colgroup><col /><col style={{ width: 150 }} /><col style={{ width: 70 }} /><col style={{ width: 22 }} /></colgroup>
-                  <thead className="sticky top-0"><tr><th className={TH}>Cadastro</th><th className={TH}>CPF/CNPJ</th><th className={TH}>Situação</th><th className={TH} /></tr></thead>
-                  <tbody>
-                    {mantido && (
-                      <tr className="bg-primary/10"><td className={`${TD} font-semibold`} title={mantido.nome}>{mantido.nome} · fica</td>
-                        <td className={`${TD} tabular-nums`}>{doc(mantido.cpfCnpj)}</td><td className={TD}>{mantido.ativo ? 'ativo' : 'inativo'}</td><td /></tr>
-                    )}
-                    {absorver.map((id) => { const f = candidatos.get(id); return (
-                      <tr key={id} className="border-b"><td className={TD} title={f?.nome}>{nomeDe(id)}</td>
-                        <td className={`${TD} tabular-nums`}>{doc(f?.cpfCnpj ?? null)}</td><td className={TD}>{f?.ativo === false ? 'inativo' : 'ativo'}</td>
-                        <td className="h-[18px] p-0 text-center text-[10px] leading-none"><button type="button" className="h-4 text-[10px] leading-none text-muted-foreground hover:text-destructive" title="tirar da lista"
-                          onClick={() => setAbsorver((a) => a.filter((x) => x !== id))}>✕</button></td></tr>
-                    ); })}
-                  </tbody>
-                </table>
+
+              <div className="min-h-0 flex-1 overflow-auto rounded border" data-testid="tabela-comparacao">
+                {colunas.length === 0 ? (
+                  <div className="p-2 text-[10.5px] text-muted-foreground">Escolha uma sugestão à esquerda ou acrescente os cadastros a comparar.</div>
+                ) : (
+                  <table className="w-full table-fixed border-collapse">
+                    <colgroup><col style={{ width: 118 }} />{colunas.map((id) => <col key={id} />)}</colgroup>
+                    <thead className="sticky top-0 z-10">
+                      <tr>
+                        <th className={TH}>{aba === 'uso' ? 'Uso' : 'Campo'}</th>
+                        {colunas.map((id) => { const r = rotulos.get(id); const suf = sufixoDoRotulo(r); return (
+                          <th key={id} className={`${TH} ${id === ficaEfetivo ? 'bg-[#1e4a7a]' : ''}`} title={r?.title ?? nomeDe(id)} data-testid={`coluna-${id}`}>
+                            <span className="flex items-center gap-1">
+                              <input type="radio" name="fica" className="h-3 w-3 shrink-0" checked={id === ficaEfetivo} onChange={() => { setFica(id); setEscolhas({}); }}
+                                aria-label={`fica: ${nomeDe(id)}`} data-testid={`fica-${id}`} />
+                              <span className="min-w-0 truncate">{nomeDe(id)}</span>
+                              {suf && <span className="shrink-0 text-[10px] font-normal opacity-80">{suf}</span>}
+                              {id === ficaEfetivo && <span className="shrink-0 text-[10px] font-normal">· fica</span>}
+                              <button type="button" className="ml-auto shrink-0 text-[10.5px] leading-none opacity-80 hover:opacity-100" title="tirar esta coluna"
+                                onClick={() => tirarColuna(id)} data-testid={`tirar-${id}`}>✕</button>
+                            </span>
+                          </th>
+                        ); })}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {aba === 'comparar' ? linhas.map((l) => (
+                        <tr key={l.chave} className={`border-b ${l.divergente ? 'bg-[#fef9c3]' : ''}`} data-testid={`linha-${l.chave}`} data-divergente={l.divergente ? 'sim' : 'nao'}>
+                          <td className={`${TD} text-muted-foreground`}>{l.rotulo}</td>
+                          {l.celulas.map((c) => (
+                            <td key={c.id} className={`${TD} ${c.id === ficaEfetivo && !l.divergente ? 'bg-[#e0ecf8]' : ''}`} title={c.title ?? undefined}>
+                              <span className="flex min-w-0 items-center gap-1">
+                                {l.divergente && l.campo && c.texto !== null && (
+                                  <input type="radio" name={`valor-${l.chave}`} className="h-3 w-3 shrink-0" disabled={!c.escolhivel} checked={l.escolhido === c.id}
+                                    onChange={() => setEscolhas((e) => ({ ...e, [l.campo as string]: c.id }))} data-testid={`valor-${l.chave}-${c.id}`}
+                                    aria-label={`${l.rotulo}: ${c.texto}`} />
+                                )}
+                                <span className={`min-w-0 truncate ${c.texto === null ? 'text-muted-foreground' : ''} ${!c.escolhivel && l.campo && c.texto !== null ? 'text-muted-foreground' : ''}`}>{c.texto ?? '—'}</span>
+                              </span>
+                            </td>
+                          ))}
+                        </tr>
+                      )) : LINHAS_DO_USO.map((u) => (
+                        <tr key={u.rotulo} className="border-b">
+                          <td className={`${TD} text-muted-foreground`}>{u.rotulo}</td>
+                          {colunas.map((id) => { const x = uso.get(id); return (
+                            <td key={id} className={`${TD} tabular-nums ${id === ficaEfetivo ? 'bg-[#e0ecf8] font-semibold' : ''}`}>{x ? u.valor(x) : '…'}</td>
+                          ); })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
               </div>
-              <div className="min-h-0 flex-1 overflow-y-auto rounded border" data-testid="previa-da-mesclagem">
-                <table className="w-full table-fixed border-collapse">
-                  <colgroup><col /><col style={{ width: 120 }} /></colgroup>
-                  <thead className="sticky top-0"><tr><th className={TH}>O que passa para o que fica</th><th className={`${TH} text-right`}>Referências</th></tr></thead>
-                  <tbody>
-                    {MODULOS_DA_MESCLAGEM.map((m) => { const q = previa?.porModulo.find((x) => x.modulo === m)?.quantidade ?? 0; return (
-                      <tr key={m} className="border-b"><td className={TD}>{m}</td>
-                        <td className={`${TD} text-right tabular-nums ${q ? 'font-semibold' : 'text-muted-foreground'}`} data-testid={`previa-${m}`}>{previa && !previa.recusa ? q : '—'}</td></tr>
-                    ); })}
-                    <tr className="bg-muted/60"><td className={`${TD} font-semibold`}>Total</td>
-                      <td className={`${TD} text-right font-semibold tabular-nums`} data-testid="previa-total">{previa && !previa.recusa ? previa.total : '—'}</td></tr>
-                    <tr><td colSpan={2} className={`${TD} text-muted-foreground`} title={previa?.apelidos.join(' · ')}>
-                      apelidos do que fica: {previa && !previa.recusa ? (previa.apelidos.join(' · ') || '—') : '—'}</td></tr>
-                  </tbody>
-                </table>
+              <div className="h-[22px] shrink-0 truncate text-[10.5px] leading-[22px]" data-testid="resultado-ao-vivo" title={linhas.length ? resultadoAoVivo(linhas) : undefined}>
+                {linhas.length ? resultadoAoVivo(linhas) : ''}
               </div>
             </div>
-          </div>
-        ) : (
-          <div className="min-h-0 flex-1 overflow-y-auto px-3 pt-2" data-testid="mesclagens-recentes">
-            <table className="w-full table-fixed border-collapse">
-              <colgroup><col style={{ width: 74 }} /><col /><col /><col style={{ width: 78 }} /><col style={{ width: 120 }} /><col style={{ width: 70 }} /></colgroup>
-              <thead className="sticky top-0"><tr><th className={TH}>Data</th><th className={TH}>Fica</th><th className={TH}>Absorvidos</th>
-                <th className={`${TH} text-right`}>Referências</th><th className={TH}>Situação</th><th className={TH} /></tr></thead>
-              <tbody>
-                {recentes.map((l) => (
-                  <tr key={l.id} className="border-b">
-                    <td className={`${TD} tabular-nums`}>{new Date(l.criadoEm).toLocaleDateString('pt-BR')}</td>
-                    <td className={TD} title={nomeDe(l.mantidoId)}>{nomeDe(l.mantidoId)}</td>
-                    <td className={TD} title={l.absorvidosNomes.join(' · ')}>{l.absorvidosNomes.join(' · ') || `${l.absorvidos.length} cadastros`}</td>
-                    <td className={`${TD} text-right tabular-nums`}>{l.total}</td>
-                    <td className={TD} title={l.desfeitoMotivo ?? undefined}>{l.desfeitoEm ? `desfeita · ${l.desfeitoMotivo ?? ''}` : 'mesclada'}</td>
-                    <td className="h-[18px] p-0 text-center text-[10px] leading-none">{!l.desfeitoEm && (
-                      <button type="button" className="text-[10px] text-primary underline" data-testid="desfazer-mesclagem" onClick={() => { setDesfazendo(l.id); setMotivo(''); setRecado(null); }}>Desfazer</button>
-                    )}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {recentes.length === 0 && <div className="pt-2 text-[10px] text-muted-foreground">Nenhuma mesclagem.</div>}
-          </div>
-        )}
+          ) : (
+            <div className="min-h-0 flex-1 overflow-y-auto px-3 pt-2" data-testid="mesclagens-recentes">
+              <table className="w-full table-fixed border-collapse">
+                <colgroup><col style={{ width: 74 }} /><col /><col /><col style={{ width: 78 }} /><col style={{ width: 130 }} /><col style={{ width: 70 }} /></colgroup>
+                <thead className="sticky top-0"><tr><th className={TH}>Data</th><th className={TH}>Fica</th><th className={TH}>Absorvidos</th>
+                  <th className={`${TH} text-right`}>Referências</th><th className={TH}>Situação</th><th className={TH} /></tr></thead>
+                <tbody>
+                  {recentes.map((l) => (
+                    <tr key={l.id} className="border-b">
+                      <td className={`${TD} tabular-nums`}>{new Date(l.criadoEm).toLocaleDateString('pt-BR')}</td>
+                      <td className={TD} title={nomeDe(l.mantidoId)}>{nomeDe(l.mantidoId)}</td>
+                      <td className={TD} title={l.absorvidosNomes.join(' · ')}>{l.absorvidosNomes.join(' · ') || `${l.absorvidos.length} cadastros`}</td>
+                      <td className={`${TD} text-right tabular-nums`}>{l.total}</td>
+                      <td className={TD} title={l.desfeitoMotivo ?? undefined}>{l.desfeitoEm ? `desfeita · ${l.desfeitoMotivo ?? ''}` : 'mesclada'}</td>
+                      <td className="h-[22px] p-0 text-center text-[10.5px] leading-none">{!l.desfeitoEm && (
+                        <button type="button" className="text-[10.5px] text-primary underline" data-testid="desfazer-mesclagem" onClick={() => { setDesfazendo(l.id); setMotivo(''); setRecado(null); }}>Desfazer</button>
+                      )}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {recentes.length === 0 && <div className="pt-2 text-[10.5px] text-muted-foreground">Nenhuma mesclagem.</div>}
+            </div>
+          )}
+        </div>
 
-        <div className="flex h-[36px] shrink-0 items-center gap-2 border-t px-3">
-          {/* FORN-MESCLAR-02a — a recusa do banco aparece INTEIRA: até duas linhas de 14px dentro do rodapé de 36px (layout fixo); era
-              `truncate` e a frase ("Subcentro … nao existe no plano de contas…") cortava. O texto inteiro segue no `title`. */}
-          <span className={`min-w-0 flex-1 line-clamp-2 break-words text-[10px] leading-[14px] ${recado?.tom === 'erro' || (!recado && previa?.recusa) ? 'text-destructive' : recado ? 'text-[#15803d]' : 'text-muted-foreground'}`}
-            title={recado?.texto ?? motivoDoBotao ?? undefined} data-testid="recado-da-mesclagem">
-            {recado?.texto ?? (aba === 'mesclar' ? motivoDoBotao ?? (confirmando ? 'Confere? Isto move as referências e inativa os absorvidos (pode ser desfeito).' : '') : '')}
+        <div className="flex h-[38px] shrink-0 items-center gap-2 border-t px-3">
+          {/* FORN-MESCLAR-02a — a recusa do banco aparece INTEIRA: até duas linhas dentro do rodapé de altura fixa; o texto inteiro no `title` */}
+          <span className={`min-w-0 flex-1 line-clamp-2 break-words text-[10.5px] leading-[14px] ${rodapeEmErro ? 'text-destructive' : recado ? 'text-[#15803d]' : 'text-muted-foreground'}`}
+            title={textoDoRodape || undefined} data-testid="recado-da-mesclagem">
+            {textoDoRodape}
           </span>
-          {aba === 'recentes' && desfazendo && (
+          {vista === 'recentes' && desfazendo && (
             <>
-              <Input className="h-[24px] w-[220px] text-[10px]" placeholder="motivo para desfazer *" value={motivo} onChange={(e) => setMotivo(e.target.value)} data-testid="motivo-desfazer" />
-              <Button size="sm" className="h-[24px] text-[10px]" disabled={gravando} onClick={() => void desfazer(desfazendo)} data-testid="confirmar-desfazer">Desfazer mesclagem</Button>
+              <Input className="h-[24px] w-[220px] text-[10.5px]" placeholder="motivo para desfazer *" value={motivo} onChange={(e) => setMotivo(e.target.value)} data-testid="motivo-desfazer" />
+              <Button size="sm" className="h-[24px] text-[10.5px]" disabled={gravando} onClick={() => void desfazer(desfazendo)} data-testid="confirmar-desfazer">Desfazer mesclagem</Button>
             </>
           )}
-          <Button size="sm" variant="outline" className="h-[24px] text-[10px]" onClick={aoFechar}>Fechar</Button>
-          {aba === 'mesclar' && (
+          <Button size="sm" variant="outline" className="h-[24px] text-[10.5px]" onClick={aoFechar}>Fechar</Button>
+          {vista === 'comparar' && (
             confirmando
-              ? <Button size="sm" className="h-[24px] text-[10px]" disabled={gravando} onClick={() => void gravar()} data-testid="confirmar-mesclagem">Confirmar mesclagem</Button>
-              : <Button size="sm" className="h-[24px] text-[10px]" disabled={!!motivoDoBotao || gravando} onClick={() => setConfirmando(true)} data-testid="mesclar">Mesclar</Button>
+              ? <Button size="sm" className="h-[24px] bg-cta text-[10.5px] font-semibold text-cta-foreground hover:bg-cta-hover" disabled={gravando} onClick={() => void gravar()} data-testid="confirmar-mesclagem">Confirmar mesclagem</Button>
+              : <Button size="sm" className="h-[24px] bg-cta text-[10.5px] font-semibold text-cta-foreground hover:bg-cta-hover" disabled={!!motivoDoBotao || gravando || !previa} onClick={() => setConfirmando(true)} data-testid="mesclar">
+                  Mesclar {colunas.length} cadastros
+                </Button>
           )}
         </div>
       </DialogContent>

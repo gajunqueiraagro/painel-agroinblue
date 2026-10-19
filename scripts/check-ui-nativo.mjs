@@ -41,7 +41,7 @@ import { join } from 'node:path';
  * ⚠ E O CABEÇALHO ACIMA MENTIA desde a primeira medição: dizia "47 `type=\"date\"` em 39
  * arquivos" enquanto o mapa registrava 44 em 30. O número de `<select>` era o único certo.
  */
-/** UI-MODAL-BLOCOS-01 — régua dos modais: 415 ocorrências em 60 arquivos (425 em 62 no passo 0, 17/10/2026; só cai). */
+/** UI-MODAL-BLOCOS-01 — régua dos modais: 407 ocorrências em 59 arquivos (415 em 60 até o FORN-MESCLAR-02b, 19/10/2026; 425 em 62 no passo 0, 17/10/2026; só cai). */
 const BASELINE_MODAL_JSON = {
   "src/components/BoitelPlanningDialog.tsx": [9, 0, 0],
   "src/components/ConfirmacaoRegistroDialog.tsx": [8, 0, 0],
@@ -74,7 +74,6 @@ const BASELINE_MODAL_JSON = {
   "src/components/financeiro-v2/DecisaoDerivadosDialog.tsx": [2, 0, 0],
   "src/components/financeiro-v2/DesvincularOperacaoDialog.tsx": [2, 0, 0],
   "src/components/financeiro-v2/LancamentoLeituraDialog.tsx": [4, 0, 0],
-  "src/components/financeiro-v2/MesclarFornecedoresDialog.tsx": [8, 0, 0],
   "src/components/financeiro-v2/ReclassificarItemDialog.tsx": [2, 0, 0],
   "src/components/financeiro-v2/VincularOperacaoDialog.tsx": [2, 0, 0],
   "src/components/financeiro/FluxoAuditoriaModal.tsx": [2, 0, 0],

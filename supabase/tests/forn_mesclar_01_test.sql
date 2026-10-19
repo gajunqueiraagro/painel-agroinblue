@@ -25,7 +25,9 @@ begin
 
   -- M8 sugestoes (antes de mesclar): o grupo por nome traz os tres "Banco Mescla"
   r := public.fn_fornecedor_repetidos(k);
-  if not exists (select 1 from jsonb_array_elements(r) g where g->>'motivo' = 'nome' and g->>'chave' = 'sint banco mescla'
+  /* FORN-MESCLAR-02b: a chave do grupo passou a ser o componente (nao o nome); o grupo e' achado pelos tres cadastros */
+  if not exists (select 1 from jsonb_array_elements(r) g where g->>'motivo' = 'nome'
+                  and g->'fornecedores' @> jsonb_build_array(jsonb_build_object('id', m), jsonb_build_object('id', a1), jsonb_build_object('id', a2))
                   and jsonb_array_length(g->'fornecedores') = 3) then raise exception 'M8 nome: %', r; end if;
 
   -- M1 simular
@@ -86,12 +88,12 @@ begin
   exception when sqlstate '42501' then null; end;
 
   -- M9 ACL
-  if has_function_privilege('anon', 'public.fn_fornecedor_mesclar(uuid, uuid[], boolean)', 'execute')
+  if has_function_privilege('anon', 'public.fn_fornecedor_mesclar(uuid, uuid[], boolean, jsonb)', 'execute')
      or has_function_privilege('anon', 'public.fn_fornecedor_mesclagem_desfazer(uuid, text, boolean)', 'execute')
      or has_function_privilege('anon', 'public.fn_fornecedor_repetidos(uuid)', 'execute')
-     or has_function_privilege('authenticated', 'public._fn_fornecedor_mesclar_exec(uuid, uuid[])', 'execute')
+     or has_function_privilege('authenticated', 'public._fn_fornecedor_mesclar_exec(uuid, uuid[], jsonb)', 'execute')
      or has_function_privilege('authenticated', 'public._fn_fornecedor_mesclagem_desfazer_exec(uuid, text)', 'execute')
-     or not has_function_privilege('authenticated', 'public.fn_fornecedor_mesclar(uuid, uuid[], boolean)', 'execute')
+     or not has_function_privilege('authenticated', 'public.fn_fornecedor_mesclar(uuid, uuid[], boolean, jsonb)', 'execute')
      or has_table_privilege('authenticated', 'public.fornecedor_mesclagem_log', 'insert')
     then raise exception 'M9 ACL'; end if;
 

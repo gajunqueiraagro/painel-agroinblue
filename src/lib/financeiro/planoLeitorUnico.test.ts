@@ -31,6 +31,8 @@ const EXCECOES: Record<string, { consultas: number; motivo: 'id' | 'lista' | 'li
   'src/components/consumo/gerarFinanceiroConsumo.ts': { consultas: 1, motivo: 'id' },
   'src/components/financiamentos/DialogVerLancamentosOficiais.tsx': { consultas: 1, motivo: 'id' },
   'src/components/financeiro-v2/ExtratoGerencialTab.tsx': { consultas: 1, motivo: 'id' },
+  /* FORN-MESCLAR-02b — o subcentro padrão de cada cadastro comparado, pelo id gravado (e se está no plano do cliente) */
+  'src/components/financeiro-v2/MesclarFornecedoresDialog.tsx': { consultas: 1, motivo: 'id' },
   'src/v2/lib/excelPreview/catalogoCliente.ts': { consultas: 1, motivo: 'lista' },
   'src/components/financiamentos/DestinacoesForm.tsx': { consultas: 1, motivo: 'lista' },
   'src/hooks/usePlanoContasOC.ts': { consultas: 1, motivo: 'lista' },
