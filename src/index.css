@@ -131,10 +131,13 @@
    do campo, como em todo input — sem "…", sem quebra, sem mudar a altura. `.uma-linha-que-rola` e' o texto; `.filtros-uma-linha`
    (o cartao dos filtros do Financeiro V2) leva a mesma regra ao texto de TODO gatilho de seletor dentro dele: `SelectTrigger` e
    `FavorecidoSelect` (role combobox) e `SearchableSelect` (o span `truncate flex-1`). O `!important` vence o `truncate`, o
-   `line-clamp-1` e o `break-all` dos componentes. */
+   `line-clamp-1` e o `break-all` dos componentes. FIN-CONTRATO-SALVAR-01: `.campos-uma-linha` (o corpo do cadastro de contrato) e' a
+   mesma regra para os seletores de um formulario. */
 .uma-linha-que-rola,
 .filtros-uma-linha button[role="combobox"] > span:first-child,
-.filtros-uma-linha button > span.truncate.flex-1:first-child {
+.filtros-uma-linha button > span.truncate.flex-1:first-child,
+.campos-uma-linha button[role="combobox"] > span:first-child,
+.campos-uma-linha button > span.truncate.flex-1:first-child {
   display: block !important;
   white-space: nowrap !important;
   overflow-x: auto !important;
@@ -147,7 +150,9 @@
 }
 .uma-linha-que-rola::-webkit-scrollbar,
 .filtros-uma-linha button[role="combobox"] > span:first-child::-webkit-scrollbar,
-.filtros-uma-linha button > span.truncate.flex-1:first-child::-webkit-scrollbar { display: none; }
+.filtros-uma-linha button > span.truncate.flex-1:first-child::-webkit-scrollbar,
+.campos-uma-linha button[role="combobox"] > span:first-child::-webkit-scrollbar,
+.campos-uma-linha button > span.truncate.flex-1:first-child::-webkit-scrollbar { display: none; }
 
 /* Alta densidade – tabela de lançamentos financeiros */
 .table-financeiro th {

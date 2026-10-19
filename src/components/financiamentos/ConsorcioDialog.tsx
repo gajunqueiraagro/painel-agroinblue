@@ -24,6 +24,7 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { useFinanciamentoCadastro } from '@/hooks/useFinanciamentoCadastro';
 import { useContratoDeCredito } from '@/hooks/useContratoDeCredito';
 import { useCronogramaDoConsorcio, useGestosDoConsorcio, useTelaDoConsorcio } from '@/hooks/useConsorcio';
+import { useLarguraDaJanela } from '@/hooks/useLarguraDaJanela';
 import {
   FORM_VAZIO, ROTULO_INDICE, ROTULO_SITUACAO, TEXTO_PLANO_FIXO, TITULO_PLANO_FIXO, TITULO_SITUACAO, brl, dadosDoForm, formDaTela, linhaCurta,
   linhasDoResumo, mostraResumo, regrasDoForm, textoDoVencimento,
@@ -54,17 +55,6 @@ function Campo({ rotulo, obrig, children, className = '' }: { rotulo: string; ob
       {children}
     </div>
   );
-}
-
-/** a largura da janela (o resumo lateral some abaixo de 900px) */
-function useLarguraDaJanela(): number {
-  const [l, setL] = useState(() => (typeof window === 'undefined' ? 1440 : window.innerWidth));
-  useEffect(() => {
-    const f = () => setL(window.innerWidth);
-    window.addEventListener('resize', f);
-    return () => window.removeEventListener('resize', f);
-  }, []);
-  return l;
 }
 
 export function ConsorcioDialog({ aberto, aoFechar, financiamentoId, onSalvo, onOutraNatureza }: {

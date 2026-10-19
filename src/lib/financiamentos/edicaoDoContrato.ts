@@ -26,16 +26,47 @@ export function taxaAaDoContrato(taxaAa: number | null, taxaMensal: number | nul
   return 0;
 }
 
-export interface ContratoParaEditar { form: FormDoCadastro; naoCadastrado: CampoNaoCadastrado[]; numero: string | null; credorNome: string | null }
+/** De onde veio a periodicidade mostrada: a gravada, a inferida das parcelas, ou — sem como inferir (0 ou 1 parcela) — a que o banco
+ *  usa quando a coluna é nula (`coalesce(periodicidade, 'mensal')` no gerador e no salvar do cabeçalho). Nunca um padrão silencioso. */
+export type OrigemDaPeriodicidade = 'gravada' | 'parcelas' | 'banco';
+export const TEXTO_DA_ORIGEM: Record<OrigemDaPeriodicidade, string> = {
+  gravada: '', parcelas: 'inferida das parcelas', banco: 'não cadastrada · o banco usa mensal',
+};
+const MESES_DA_PERIODICIDADE: Record<number, Periodicidade> = { 1: 'mensal', 3: 'trimestral', 6: 'semestral', 12: 'anual' };
+
+/** FIN-CONTRATO-SALVAR-01 — a periodicidade pelas parcelas gravadas: o intervalo em meses mais frequente entre vencimentos seguidos
+ *  (1, 3, 6 ou 12). Menos de duas datas, ou intervalo que não é nenhum desses: a do banco (mensal), dita como tal. */
+export function inferirPeriodicidade(vencimentos: readonly (string | null)[]): { periodicidade: Periodicidade; origem: OrigemDaPeriodicidade } {
+  const ds = vencimentos.filter((v): v is string => !!v).sort();
+  const conta = new Map<number, number>();
+  for (let i = 1; i < ds.length; i++) {
+    const m = (Number(ds[i].slice(0, 4)) - Number(ds[i - 1].slice(0, 4))) * 12 + Number(ds[i].slice(5, 7)) - Number(ds[i - 1].slice(5, 7));
+    if (MESES_DA_PERIODICIDADE[m]) conta.set(m, (conta.get(m) ?? 0) + 1);
+  }
+  const melhor = [...conta.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0];
+  return melhor ? { periodicidade: MESES_DA_PERIODICIDADE[melhor[0]], origem: 'parcelas' } : { periodicidade: 'mensal', origem: 'banco' };
+}
+
+/** os planos padrão pela atividade (os mesmos do motor); os juros também — o contrato antigo veio sem o plano dos juros */
+export const PLANO_PRINCIPAL_POR_ATIVIDADE: Record<string, string> = {
+  pecuaria: 'Amortização Financiamento Pecuária', agricultura: 'Amortização Financiamento Agricultura', silvicultura: 'Amortização Financiamento Silvicultura',
+};
+export const PLANO_JUROS_POR_ATIVIDADE: Record<string, string> = {
+  pecuaria: 'Juros de Financiamento Pecuária', agricultura: 'Juros de Financiamento Agricultura', silvicultura: 'Juros de Financiamento Silvicultura',
+};
+
+export interface ContratoParaEditar { form: FormDoCadastro; naoCadastrado: CampoNaoCadastrado[]; numero: string | null; credorNome: string | null;
+  origemDaPeriodicidade: OrigemDaPeriodicidade }
 
 /** a linha de `financiamentos` (com o nome do credor e a linha do consórcio, se houver) -> o formulário do cadastro */
-export function formDoContrato(row: unknown, consorcio: unknown): ContratoParaEditar | null {
+export function formDoContrato(row: unknown, consorcio: unknown, vencimentos: readonly (string | null)[] = []): ContratoParaEditar | null {
   if (!ehObj(row)) return null;
   const nat = NATUREZAS.find((x) => x === row.natureza);
   if (!nat) return null;
   const base = formVazio(nat);
   const sis = SISTEMAS.find((x) => x === row.sistema_amortizacao) ?? null;
   const per = PERIODOS.find((x) => x === row.periodicidade) ?? null;
+  const inferida = per ? null : inferirPeriodicidade(vencimentos);
   const tipo = row.tipo_taxa === 'pre' || row.tipo_taxa === 'pos' ? row.tipo_taxa : null;
   const naoCadastrado: CampoNaoCadastrado[] = [];
   if (!sis && nat !== 'consorcio') naoCadastrado.push('sistema');
@@ -54,12 +85,12 @@ export function formDoContrato(row: unknown, consorcio: unknown): ContratoParaEd
     garantias: txt(row.garantias) ?? '', planoPrincipalId: txt(row.plano_principal_id) ?? txt(row.plano_conta_parcela_id), planoJurosId: txt(row.plano_juros_id),
     observacao: txt(row.observacao) ?? '',
     sistema: sis ?? base.sistema, taxaAa: taxaAaDoContrato(num(row.taxa_juros), num(row.taxa_juros_mensal)), tipoTaxa: tipo ?? base.tipoTaxa,
-    periodicidade: per ?? base.periodicidade, carenciaAte: txt(row.carencia_ate), primeiroVencimento: txt(row.data_primeira_parcela),
+    periodicidade: per ?? inferida?.periodicidade ?? base.periodicidade, carenciaAte: txt(row.carencia_ate), primeiroVencimento: txt(row.data_primeira_parcela),
     n: num(row.total_parcelas) ?? base.n, prazo: num(row.total_parcelas) ?? 0,
     grupo: txt(c?.grupo) ?? '', cota: txt(c?.cota) ?? '', taxaAdmPct: num(c?.taxa_adm_pct) ?? 0, fundoReservaPct: num(c?.fundo_reserva_pct) ?? 0,
     seguroPctMes: num(c?.seguro_pct_mes) ?? 0,
   };
-  return { form, naoCadastrado, numero: txt(row.numero_contrato), credorNome: txt(forn?.nome) };
+  return { form, naoCadastrado, numero: txt(row.numero_contrato), credorNome: txt(forn?.nome), origemDaPeriodicidade: inferida?.origem ?? 'gravada' };
 }
 
 /** o título do modo editar: "Editar contrato · <nº> · <credor inteiro>" */

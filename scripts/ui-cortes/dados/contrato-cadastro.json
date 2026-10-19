@@ -1,0 +1,131 @@
+{
+ "contrato": {
+  "id": "fin-sint",
+  "natureza": "financiamento",
+  "status": "ativo",
+  "descricao": "Custeio Pecuária Exemplo",
+  "numero_contrato": "000.000.00/01",
+  "credor_id": "cr-sint",
+  "conta_bancaria_id": "bb",
+  "fazenda_id": "f-pur",
+  "valor_total": 120000,
+  "data_contrato": "2025-08-10",
+  "data_primeira_parcela": "2026-07-26",
+  "total_parcelas": 3,
+  "taxa_juros": 0,
+  "taxa_juros_mensal": 1.1715,
+  "tipo_financiamento": "pecuaria",
+  "periodicidade": null,
+  "sistema_amortizacao": null,
+  "tipo_taxa": null,
+  "carencia_ate": null,
+  "plano_principal_id": null,
+  "plano_conta_parcela_id": "pl-amort-pec",
+  "plano_juros_id": null,
+  "linha_credito_id": null,
+  "finalidade": null,
+  "garantias": null,
+  "observacao": null,
+  "financeiro_fornecedores": {
+   "nome": "Banco Exemplo de Crédito Rural S.A."
+  }
+ },
+ "vencimentos": [
+  "2026-07-26",
+  "2026-08-26",
+  "2026-09-26"
+ ],
+ "cronograma": {
+  "juros_total": 2808.06,
+  "linhas": [
+   {
+    "juros": 1404.03,
+    "numero": 1,
+    "principal": 40000,
+    "saldo_apos": 80000,
+    "total": 41404.03,
+    "vencimento": "2026-07-26"
+   },
+   {
+    "juros": 936.02,
+    "numero": 2,
+    "principal": 40000,
+    "saldo_apos": 40000,
+    "total": 40936.02,
+    "vencimento": "2026-08-26"
+   },
+   {
+    "juros": 468.01,
+    "numero": 3,
+    "principal": 40000,
+    "saldo_apos": 0,
+    "total": 40468.01,
+    "vencimento": "2026-09-26"
+   }
+  ],
+  "parcelas": 3,
+  "parcelas_so_juros": 0,
+  "principal_total": 120000,
+  "recusa": null,
+  "total": 122808.06,
+  "vencimento_final": "2026-09-26"
+ },
+ "planos": [
+  {
+   "id": "pl-amort-pec",
+   "subcentro": "Amortização Financiamento Pecuária",
+   "centro_custo": "Amortização",
+   "grupo_custo": "Financiamentos",
+   "macro_custo": "Financiamentos",
+   "tipo_operacao": "2-Saídas",
+   "escopo_negocio": "pecuaria",
+   "ativo": true,
+   "ordem_exibicao": 16000,
+   "cliente_id": null,
+   "compoe_dre": true,
+   "gera_lcdpr": false
+  },
+  {
+   "id": "pl-amort-agr",
+   "subcentro": "Amortização Financiamento Agricultura",
+   "centro_custo": "Amortização",
+   "grupo_custo": "Financiamentos",
+   "macro_custo": "Financiamentos",
+   "tipo_operacao": "2-Saídas",
+   "escopo_negocio": "agricultura",
+   "ativo": true,
+   "ordem_exibicao": 16000,
+   "cliente_id": null,
+   "compoe_dre": true,
+   "gera_lcdpr": false
+  },
+  {
+   "id": "pl-juros-pec",
+   "subcentro": "Juros de Financiamento Pecuária",
+   "centro_custo": "Juros",
+   "grupo_custo": "Financiamentos",
+   "macro_custo": "Financiamentos",
+   "tipo_operacao": "2-Saídas",
+   "escopo_negocio": "pecuaria",
+   "ativo": true,
+   "ordem_exibicao": 16000,
+   "cliente_id": null,
+   "compoe_dre": true,
+   "gera_lcdpr": false
+  },
+  {
+   "id": "pl-juros-agr",
+   "subcentro": "Juros de Financiamento Agricultura",
+   "centro_custo": "Juros",
+   "grupo_custo": "Financiamentos",
+   "macro_custo": "Financiamentos",
+   "tipo_operacao": "2-Saídas",
+   "escopo_negocio": "agricultura",
+   "ativo": true,
+   "ordem_exibicao": 16000,
+   "cliente_id": null,
+   "compoe_dre": true,
+   "gera_lcdpr": false
+  }
+ ]
+}

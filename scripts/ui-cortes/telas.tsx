@@ -21,6 +21,8 @@ import { montarNFe, utf8 } from '@/lib/financeiro/nfe/__fixtures__/notas';
 import { TRAVAS_DO_MODO_OC } from '@/lib/oc/lancarPeloModal';
 import contrato from './dados/contrato.json';
 import consorcio from './dados/consorcio.json';
+import contratoCadastro from './dados/contrato-cadastro.json';
+import { CadastroDeContratoDialog } from '@/components/financiamentos/CadastroDeContratoDialog';
 import { ConsorcioDialog } from '@/components/financiamentos/ConsorcioDialog';
 import { LANCAMENTOS } from './dados/financeiro';
 import { buscarFornecedores } from '@/lib/fornecedores/buscaDeFornecedor';
@@ -109,6 +111,16 @@ if (tela === 'mesclar') {
   const d: any = consorcio;
   g.__bancoBancada = { from: () => [], rpc: (fn: string) => fn === 'fn_consorcio_tela' ? d.tela : fn === 'fn_consorcio_cronograma' ? d.cronograma : null };
   montar(<ConsorcioDialog aberto aoFechar={() => {}} financiamentoId={q.get('novo') ? null : d.tela.contrato.id} />);
+} else if (tela === 'cadastro-contrato') {
+  /* FIN-CONTRATO-SALVAR-01 — o cadastro de contrato de crédito: `&m=novo` (vazio) ou `&m=editar` (um contrato antigo SINTÉTICO, como os da
+     Santa Rita: sem periodicidade, sem sistema, sem plano dos juros) */
+  const d: any = contratoCadastro;
+  g.__bancoBancada = {
+    from: (t: string) => t === 'financiamentos' ? [d.contrato] : t === 'financiamento_parcelas' ? d.vencimentos.map((v: string, i: number) => ({ data_vencimento: v, status: 'pendente', numero_parcela: i + 1 }))
+      : t === 'financeiro_plano_contas' ? d.planos : [],
+    rpc: (fn: string) => fn === 'fn_financiamento_cronograma' ? d.cronograma : null,
+  };
+  montar(<CadastroDeContratoDialog aberto aoFechar={() => {}} financiamentoId={m === 'editar' ? d.contrato.id : null} prefill={m === 'editar' ? undefined : { natureza: 'financiamento' }} />);
 } else if (tela === 'lancamento') {
   /* com `desc`, a edição é parcela de uma compra parcelada SEM número de contrato: o rodapé fala dela (a descrição do contrato é a longa) */
   g.__bancoBancada = { from: () => [], rpc: (fn: string) => (desc && fn === 'fn_lancamento_financiamento') ? {
