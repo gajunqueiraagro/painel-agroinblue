@@ -28,6 +28,7 @@ const TAMANHOS = arg('--tamanhos') ? arg('--tamanhos').split(',').map((t) => t.s
 const FOTOS = arg('--fotos');
 const SO = arg('--so');
 
+const TAMANHOS_DO_CONSORCIO = [[750, 520], [750, 600], [814, 530], [1000, 600], [1126, 579], [1300, 704], [1440, 800]];
 const clicar = (sel) => async (p) => { await p.locator(sel).first().click(); await p.waitForTimeout(500); };
 const clicarTexto = (txt) => async (p) => { await p.getByText(txt, { exact: true }).first().click(); await p.waitForTimeout(500); };
 const CENARIOS = [
@@ -55,6 +56,14 @@ const CENARIOS = [
   ...['Geral', 'Pagamento', 'Documentos'].flatMap((aba) => ['novo', 'editar'].map((m) => ({ nome: `lancamento-${m}-${aba}-longo`, url: `tela=lancamento&m=${m}&desc=longo`,
     alturasComo: `tela=lancamento&m=${m}&desc=curto`, antes: clicarTexto(aba) }))),
   { nome: 'lancamento-xml-Pagamento-longo', url: 'tela=lancamento&m=novo&v=xml&desc=longo', alturasComo: 'tela=lancamento&m=novo&v=xml&desc=curto', antes: clicarTexto('Pagamento') },
+  /* FIN-CONSORCIO-02 — o cadastro do consórcio, aba a aba, nos sete tamanhos do mock: nada rola dentro do modal além da lista de
+     parcelas (`semRolagem`: a lista é a única exceção) e nada passa da caixa dele */
+  ...[['consorcio', ''], ['custos', 'Custos e prazos'], ['parcelas', /^Parcelas/], ['documentos', /^Documentos/]].map(([n, aba]) => ({
+    nome: `consorcio-${n}`, url: 'tela=consorcio', tamanhos: TAMANHOS_DO_CONSORCIO, semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="lista-parcelas-consorcio"]' },
+    antes: aba ? async (p) => { await p.getByRole('button', { name: aba }).first().click(); await p.waitForTimeout(500); } : undefined })),
+  ...[['novo-consorcio', ''], ['novo-custos', 'Custos e prazos']].map(([n, aba]) => ({
+    nome: `consorcio-${n}`, url: 'tela=consorcio&novo=1', tamanhos: TAMANHOS_DO_CONSORCIO, semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="lista-parcelas-consorcio"]' },
+    antes: aba ? async (p) => { await p.getByRole('button', { name: aba }).first().click(); await p.waitForTimeout(500); } : undefined })),
 ];
 /* UI-TEXTO-LONGO-01 — o que tem de ter a mesma altura com texto curto e longo (o que não existe na tela é pulado nos dois lados) */
 const ALTURAS_DO_MODAL = ['[role="dialog"]', '[role="dialog"] aside', '[data-testid="grade-de-parcelas"]'];
@@ -71,6 +80,29 @@ const achadoDaAltura = (sel, antes, depois) => (antes === null || depois === nul
   ? { regra: 'altura', texto: `${sel} nao achado para medir a altura` }
   : Math.abs(depois - antes) > 0.5 ? { regra: 'altura', texto: `${sel} mudou de altura: ${antes}px -> ${depois}px` } : null;
 
+/* FIN-CONSORCIO-02 — roda NA PAGINA: dentro de `dentro`, nenhum elemento com conteúdo maior que a caixa na vertical (rolando ou
+   cortado), fora `exceto` e o que mora nele; e o próprio `dentro` cabe na janela */
+function medirRolagem({ dentro, exceto }) {
+  const achados = [];
+  const raiz = document.querySelector(dentro); if (!raiz) return [{ regra: 'rolagem', texto: `${dentro} nao achado` }];
+  const livre = exceto ? document.querySelector(exceto) : null;
+  const rr = raiz.getBoundingClientRect();
+  if (rr.bottom > innerHeight + 0.5 || rr.right > innerWidth + 0.5) achados.push({ regra: 'rolagem', texto: `${dentro} passa da janela (${Math.round(rr.width)}x${Math.round(rr.height)})` });
+  for (const e of [raiz, ...raiz.querySelectorAll('*')]) {
+    if (livre && (e === livre || livre.contains(e))) continue;
+    const cs = getComputedStyle(e);
+    if (cs.overflowY === 'visible' || cs.display === 'none') continue;
+    if (e.scrollHeight > e.clientHeight + 1 && e.clientHeight > 2)
+      achados.push({ regra: 'rolagem', texto: `${(e.getAttribute('data-testid') || e.tagName.toLowerCase())} pede ${e.scrollHeight}px, tem ${e.clientHeight} (${cs.overflowY})` });
+  }
+  /* e na horizontal: caixa que esconde o que passa dela (o segmentado espremido numa célula) — a que ROLA de propósito (`auto`) fica */
+  for (const e of raiz.querySelectorAll('*')) {
+    const cs = getComputedStyle(e);
+    if ((cs.overflowX === 'hidden' || cs.overflowX === 'clip') && e.scrollWidth > e.clientWidth + 1 && e.clientWidth > 2)
+      achados.push({ regra: 'corte', texto: `${(e.getAttribute('data-testid') || (e.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 40))} pede ${e.scrollWidth}px, tem ${e.clientWidth}` });
+  }
+  return achados;
+}
 /* roda NA PAGINA: devolve os achados [{regra, texto}] */
 function medir(regiao) {
   const achados = [];
@@ -108,6 +140,8 @@ function medir(regiao) {
       if (!ehData(th.textContent ?? '')) return;
       for (const tr of tb.querySelectorAll('tbody tr')) {
         const td = tr.children[i]; if (!td || td.colSpan > 1) continue;
+        /* FIN-CONSORCIO-02 — a celula que DECLARA nao ter data (`data-sem-data`: a parcela adiada vence "contemplação") nao e' data incompleta */
+        if (td.hasAttribute('data-sem-data')) continue;
         const t = (td.textContent ?? '').trim();
         if (t && t !== '—' && t !== '-' && !/^\d{2}\/\d{2}\/\d{4}$/.test(t)) achados.push({ regra: 'data', texto: `${th.textContent.trim()}: ${t}` });
       }
@@ -162,18 +196,22 @@ try {
     <tbody>${Array.from({ length: 30 }, () => '<tr><td>10/09/26</td></tr>').join('')}</tbody></table></div>
     <div style="height:120px;overflow:auto"><div style="overflow-x:auto"><table><thead style="position:sticky;top:0;background:#fff"><tr><th>Nome</th></tr></thead>
     <tbody>${Array.from({ length: 30 }, () => '<tr><td>x</td></tr>').join('')}</tbody></table></div></div>`);
+  /* e a rolagem (FIN-CONSORCIO-02): um modal com conteudo mais alto que a caixa tem de ser acusado */
+  await p0.evaluate(() => { const d = document.createElement('div'); d.setAttribute('role', 'dialog'); d.style.cssText = 'height:40px;overflow:hidden';
+    d.innerHTML = '<div style="height:120px">alto</div>'; document.body.appendChild(d); });
+  const daRolagem0 = await p0.evaluate(medirRolagem, { dentro: '[role="dialog"]', exceto: null });
   /* e a altura: um bloco que cresce com o texto novo tem de ser acusado; o que nao muda, nao */
   await p0.evaluate(() => { const d = document.createElement('div'); d.id = 'cresce'; d.style.width = '60px'; d.textContent = 'curto'; document.body.appendChild(d); });
   const h0 = await alturaDe(p0, '#cresce');
   const semMudar = achadoDaAltura('#cresce', h0, await alturaDe(p0, '#cresce'));
   await p0.evaluate(() => { document.getElementById('cresce').textContent = 'um nome longo que quebra em varias linhas'; });
   const comMudanca = achadoDaAltura('#cresce', h0, await alturaDe(p0, '#cresce'));
-  const prova = [...(await p0.evaluate(medir)), ...(await p0.evaluate(medirCabecalho)), ...(comMudanca && !semMudar ? [comMudanca] : [])].map((a) => a.regra);
+  const prova = [...daRolagem0, ...(await p0.evaluate(medir)), ...(await p0.evaluate(medirCabecalho)), ...(comMudanca && !semMudar ? [comMudanca] : [])].map((a) => a.regra);
   await p0.close();
-  if (!['reticencias', 'corte', 'quebra', 'data', 'cabecalho', 'altura'].every((r) => prova.includes(r)) || prova.filter((r) => r === 'cabecalho').length < 3) { console.error(`check-ui-cortes: AUTO-TESTE FALHOU (achou ${prova.join(',') || 'nada'})`); process.exit(2); }
+  if (!['reticencias', 'corte', 'quebra', 'data', 'cabecalho', 'altura', 'rolagem'].every((r) => prova.includes(r)) || prova.filter((r) => r === 'cabecalho').length < 3) { console.error(`check-ui-cortes: AUTO-TESTE FALHOU (achou ${prova.join(',') || 'nada'})`); process.exit(2); }
 
   const todos = [];
-  for (const cen of CENARIOS.filter((c) => !SO || c.nome.startsWith(SO))) for (const [w, h] of TAMANHOS) {
+  for (const cen of CENARIOS.filter((c) => !SO || c.nome.startsWith(SO))) for (const [w, h] of (cen.tamanhos && !arg('--tamanhos') ? cen.tamanhos : TAMANHOS)) {
     const p = await navegador.newPage({ viewport: { width: w, height: h } });
     const erros = []; p.on('pageerror', (e) => erros.push(String(e).slice(0, 160)));
     await p.goto(`${base}/index.html?${cen.url}`); await p.evaluate(() => document.fonts.ready); await p.waitForTimeout(1300);
@@ -198,7 +236,8 @@ try {
     if (FOTOS) { fs.mkdirSync(FOTOS, { recursive: true }); await p.screenshot({ path: path.join(FOTOS, `${cen.nome}_${w}x${h}.png`) }); }
     /* FORN-BUSCA-UNICA-01 — `regiao` (opcional): o cenário varre só o que o seletor pega (a tela inteira sem ele) */
     if (cen.regiao && !(await p.$(cen.regiao))) erros.push(`regiao ${cen.regiao} nao achada`);
-    const achados = [...(await p.evaluate(medir, cen.regiao ?? null)), ...(await p.evaluate(medirCabecalho, cen.regiao ?? null)), ...(daAltura ? [daAltura] : []), ...dasAlturas, ...erros.map((e) => ({ regra: 'erro', texto: e }))];
+    const daRolagem = cen.semRolagem ? await p.evaluate(medirRolagem, cen.semRolagem) : [];
+    const achados = [...daRolagem, ...(await p.evaluate(medir, cen.regiao ?? null)), ...(await p.evaluate(medirCabecalho, cen.regiao ?? null)), ...(daAltura ? [daAltura] : []), ...dasAlturas, ...erros.map((e) => ({ regra: 'erro', texto: e }))];
     for (const a of achados) if (!EXCECOES.some((x) => x.tela === cen.nome && x.regra === a.regra && x.texto === a.texto)) todos.push({ tela: cen.nome, tamanho: `${w}x${h}`, ...a });
     await p.close();
   }
@@ -207,6 +246,6 @@ try {
     codigo = 1;
     console.error(`check-ui-cortes: ${unicos.length} achado(s) (baseline: ${EXCECOES.length} excecoes):`);
     for (const a of unicos) console.error(`  ${a.tela} [${todos.filter((x) => x.tela === a.tela && x.regra === a.regra && x.texto === a.texto).map((x) => x.tamanho).join(' ')}] ${a.regra}: ${a.texto}`);
-  } else console.log(`check-ui-cortes: ${CENARIOS.filter((c) => !SO || c.nome.startsWith(SO)).length} telas x ${TAMANHOS.length} tamanhos sem reticencias, sem vao no cabecalho preso e com data dd/mm/aaaa (baseline: ${EXCECOES.length} excecoes).`);
+  } else console.log(`check-ui-cortes: ${CENARIOS.filter((c) => !SO || c.nome.startsWith(SO)).length} telas, ${CENARIOS.filter((c) => !SO || c.nome.startsWith(SO)).reduce((n, c) => n + (c.tamanhos && !arg('--tamanhos') ? c.tamanhos : TAMANHOS).length, 0)} medicoes, sem reticencias, sem vao no cabecalho preso e com data dd/mm/aaaa (baseline: ${EXCECOES.length} excecoes).`);
 } finally { await navegador.close(); await servidor.close(); }
 process.exit(codigo);

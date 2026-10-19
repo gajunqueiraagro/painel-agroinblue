@@ -16,6 +16,8 @@ vi.mock('@/hooks/useFinanciamentoCadastro', () => ({ useFinanciamentoCadastro: (
 vi.mock('@/hooks/useContratoDeCredito', () => ({ useContratoDeCredito: () => ({ documentos: [] }) }));
 vi.mock('@/hooks/useFornecedoresDoCliente', async () => (await import('@/test/leitorDeFornecedoresFake')).moduloDoLeitorFake());
 vi.mock('@/components/financeiro-v2/NovoFornecedorDialog', () => ({ NovoFornecedorDialog: () => null }));
+/* FIN-CONSORCIO-02 — o consórcio tem modal próprio (provado em `consorcioDialog.test.tsx`); aqui só a porta */
+vi.mock('./ConsorcioDialog', () => ({ ConsorcioDialog: () => <div data-testid="consorcio-dialog" /> }));
 vi.mock('@/integrations/supabase/client', () => {
   const q = { select: () => q, eq: () => Promise.resolve({ data: [], error: null }) };
   return { supabase: { from: () => q, rpc: () => Promise.resolve({ data: null, error: null }) } };
@@ -34,21 +36,10 @@ const foto = () => [...document.querySelectorAll('section[data-testid^="bloco-"]
 ]);
 
 describe('acabamento do cadastro', () => {
-  it('consórcio: corpo cinza, blocos brancos na ordem pedida, percentual com "%" e o plano das parcelas como selo', () => {
+  it('consórcio: o cadastro de contrato entrega ao modal próprio do consórcio (FIN-CONSORCIO-02)', () => {
     abrir('consorcio');
-    expect(screen.getByTestId('corpo-do-cadastro').className).toMatch(/\bbg-muted\b/);
-    expect(foto()).toEqual([
-      ['bloco-identificacao', ['Descrição *', 'Administradora *', 'Grupo / cota *', 'Atividade *']],
-      ['bloco-carta', ['Valor da carta de crédito *', 'Prazo (meses) *', '1ª parcela *', 'Reajuste da carta']],
-      ['bloco-custos', ['Taxa adm. (% total) *', 'Fundo reserva (% total)', 'Seguro (% a.m.)']],
-      ['bloco-contemplacao', []],
-      ['bloco-pagamento', ['Fazenda *', 'Conta de pagamento *', 'Plano das parcelas *', 'Plano da taxa adm. e seguro *']],
-    ]);
-    const custos = screen.getByTestId('bloco-custos');
-    expect(within(custos).getAllByTestId('campo-percentual')).toHaveLength(3);
-    expect(custos.textContent).not.toMatch(/R\$/);
-    expect(screen.getByTestId('plano-do-consorcio').tagName).toBe('SPAN');
-    expect(screen.getByTestId('plano-do-consorcio').textContent).toBe('Consórcio a contemplar · fora do DRE');
+    expect(screen.getByTestId('consorcio-dialog')).toBeTruthy();
+    expect(screen.queryByTestId('corpo-do-cadastro')).toBeNull();
   });
 
   it('financiamento: identificação, valores e datas, pagamento e classificação, garantias; a taxa de juros é percentual', () => {
@@ -65,7 +56,7 @@ describe('acabamento do cadastro', () => {
   });
 
   it('nenhum rótulo em maiúsculas ou espaçado; "O que falta" em sentence case', () => {
-    abrir('consorcio');
+    abrir('financiamento');
     for (const parte of [screen.getByTestId('corpo-do-cadastro'), screen.getByTestId('resumo-do-cadastro')]) {
       expect(parte.querySelectorAll('[class*="uppercase"], [class*="tracking-"]')).toHaveLength(0);
     }
@@ -78,7 +69,7 @@ describe('acabamento do cadastro', () => {
     expect(faltaNoResumo(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k'])).toEqual({ visiveis: ['a', 'b', 'c'], resto: ['d', 'e', 'f', 'g', 'h', 'i', 'j', 'k'] });
     expect(recusaAlemDaLista('Informe a carta de crédito, o prazo (1 a 600 meses) e a 1ª parcela.', ['prazo'])).toBeNull();
     expect(recusaAlemDaLista('A soma do principal das parcelas (10) não fecha com o valor contratado (20).', ['prazo'])).toMatch(/A soma/);
-    abrir('consorcio');
+    abrir('financiamento');
     expect(screen.getByTestId('o-que-falta').textContent).not.toMatch(/… e mais/);
   });
 

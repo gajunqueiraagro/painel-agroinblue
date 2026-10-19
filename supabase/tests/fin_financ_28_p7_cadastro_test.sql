@@ -6,7 +6,8 @@
 -- G5 consorcio do mock: carta 820.000,00 / 80 = 10.250,00 de fundo comum + 1.640,00 de taxa adm e fundo + 311,60 de seguro.
 -- K1 criar (simulado) nao grava; K2 gravado: contrato, parcelas do gerador e os lancamentos do motor com o PLANO ESCOLHIDO
 --    (principal 16020, juros 6040). K3 consorcio: natureza propria, a linha do consorcio, o plano "Consorcio a contemplar" no
---    principal, a descricao "Parcela 1/3 Consorcio …", e o saldo fora do "liberado − amortizado".
+--    principal, a descricao "Consórcio 002122/0457 · Parc 1/3" (a do FIN-LANC-DESCRICAO-CONTRATO-01), e o saldo fora do "liberado − amortizado".
+--    Desde o FIN-CONSORCIO-02 o consorcio deste cadastro passa pelo escritor do consorcio (as chaves antigas traduzidas).
 -- K4 recusas (o que falta; cadastro de outro cliente) e a guarda (outro usuario 42501; anon nao executa).
 set local statement_timeout = '60s';
 set local lock_timeout = '2s';
@@ -76,7 +77,7 @@ BEGIN
   IF (select natureza from financiamentos where id = v_fin) <> 'consorcio' OR (select numero_contrato from financiamentos where id = v_fin) <> '002122 / 0457'
      OR (select taxa_adm_pct from financiamento_consorcio where financiamento_id = v_fin) <> 15 THEN RAISE EXCEPTION 'K3 consorcio'; END IF;
   IF (select l.plano_conta_id from financiamento_parcelas q join financeiro_lancamentos_v2 l on l.id = q.lancamento_id where q.financiamento_id = v_fin and q.numero_parcela = 1) <> v_plano_cons
-     OR (select l.descricao from financiamento_parcelas q join financeiro_lancamentos_v2 l on l.id = q.lancamento_id where q.financiamento_id = v_fin and q.numero_parcela = 1) not like 'Parcela 1/3 Consórcio SINT P7 CONS%'
+     OR (select l.descricao from financiamento_parcelas q join financeiro_lancamentos_v2 l on l.id = q.lancamento_id where q.financiamento_id = v_fin and q.numero_parcela = 1) <> 'Consórcio 002122/0457 · Parc 1/3'
      OR (select l.valor from financiamento_parcelas q join financeiro_lancamentos_v2 l on l.id = q.lancamento_juros_id where q.financiamento_id = v_fin and q.numero_parcela = 1) <> 150 THEN
     RAISE EXCEPTION 'K3 lancamentos do consorcio';
   END IF;

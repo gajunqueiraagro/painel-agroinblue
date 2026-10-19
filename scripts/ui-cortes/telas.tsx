@@ -20,6 +20,8 @@ import { arquivoXmlDaNota, prefillDaNota } from '@/lib/financeiro/nfePrefill';
 import { montarNFe, utf8 } from '@/lib/financeiro/nfe/__fixtures__/notas';
 import { TRAVAS_DO_MODO_OC } from '@/lib/oc/lancarPeloModal';
 import contrato from './dados/contrato.json';
+import consorcio from './dados/consorcio.json';
+import { ConsorcioDialog } from '@/components/financiamentos/ConsorcioDialog';
 import { LANCAMENTOS } from './dados/financeiro';
 import { buscarFornecedores } from '@/lib/fornecedores/buscaDeFornecedor';
 import { FinanceiroV2Tab } from '@/pages/FinanceiroV2Tab';
@@ -101,6 +103,12 @@ if (tela === 'mesclar') {
     rpc: (fn: string) => fn === 'fn_financiamento_situacao' ? d.situacao : fn === 'fn_contrato_tela' ? d.tela ?? null : fn === 'fn_financiamento_captacoes_livres' ? [] : null,
   };
   montar(<FinanciamentoDetalhe id={d.fin.id} />);
+} else if (tela === 'consorcio') {
+  /* FIN-CONSORCIO-02 — o cadastro do consórcio: a tela e o gerador vêm do banco simulado (dado SINTÉTICO, `dados/consorcio.json`, lido do
+     banco num bloco revertido); `&novo=1` abre o cadastro novo (sem tela do banco: só o gerador) */
+  const d: any = consorcio;
+  g.__bancoBancada = { from: () => [], rpc: (fn: string) => fn === 'fn_consorcio_tela' ? d.tela : fn === 'fn_consorcio_cronograma' ? d.cronograma : null };
+  montar(<ConsorcioDialog aberto aoFechar={() => {}} financiamentoId={q.get('novo') ? null : d.tela.contrato.id} />);
 } else if (tela === 'lancamento') {
   /* com `desc`, a edição é parcela de uma compra parcelada SEM número de contrato: o rodapé fala dela (a descrição do contrato é a longa) */
   g.__bancoBancada = { from: () => [], rpc: (fn: string) => (desc && fn === 'fn_lancamento_financiamento') ? {

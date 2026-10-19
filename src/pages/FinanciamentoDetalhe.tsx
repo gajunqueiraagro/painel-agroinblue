@@ -43,6 +43,7 @@ import { BuscarPagamentoDialog } from '@/components/financiamentos/BuscarNoContr
 import { BotaoDarBaixa, DarBaixaDialog } from '@/components/financiamentos/DarBaixa';
 import { BotaoJuntar, DesfazerJuncaoDialog, JuntarContratoDialog } from '@/components/financiamentos/JuntarContrato';
 import { CadastroDeContratoDialog } from '@/components/financiamentos/CadastroDeContratoDialog';
+import { ConsorcioDialog } from '@/components/financiamentos/ConsorcioDialog';
 import { EditarParcelasDialog, SeloAjustada, type ParcelaParaEditar } from '@/components/financiamentos/EdicaoDoContrato';
 import { useEdicaoDoContrato } from '@/hooks/useEdicaoDoContrato';
 import { travaNaTela } from '@/lib/financiamentos/edicaoDoContrato';
@@ -401,6 +402,10 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
   }
   if (!fin) {
     return <div className="w-full h-full min-h-0 bg-background flex items-center justify-center"><p className="text-sm text-muted-foreground">Financiamento não encontrado.</p></div>;
+  }
+  /* FIN-CONSORCIO-02 — o consórcio tem cadastro próprio: o detalhe abre o modal dele; fechar volta à lista. */
+  if (fin.natureza === 'consorcio' && id) {
+    return <ConsorcioDialog aberto financiamentoId={id} aoFechar={() => onVoltar?.()} />;
   }
 
   /* ⚠ `w-full` NAO E' REDUNDANTE — ERA O QUE FALTAVA (PR-PARC-04c). Este bloco tinha

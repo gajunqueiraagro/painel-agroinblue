@@ -35,6 +35,7 @@ import { criarFornecedorDaCasa } from '@/lib/fornecedores/cadastroDaCasaBanco';
 import { supabase } from '@/integrations/supabase/client';
 import { useEdicaoDoContrato } from '@/hooks/useEdicaoDoContrato';
 import { RegerarParcelas } from '@/components/financiamentos/EdicaoDoContrato';
+import { ConsorcioDialog } from '@/components/financiamentos/ConsorcioDialog';
 import { dadosDoCabecalho, formDoContrato, tituloDaEdicao, type CampoNaoCadastrado } from '@/lib/financiamentos/edicaoDoContrato';
 import {
   ROTULO_DA_MODALIDADE, ROTULO_DA_PERIODICIDADE, ROTULO_DO_SISTEMA, faltaNoResumo, formVazio, lerCronograma, oQueFalta, pedidoDeCriacao, pedidoDoCronograma,
@@ -238,6 +239,14 @@ export function CadastroDeContratoDialog({ aberto, aoFechar, onAbrirCompraParcel
     </div>
   );
 
+  /* o seletor de natureza continua oferecendo as três (o estreitamento do `if` abaixo tiraria a do consórcio) */
+  const valorDaEscolha = escolha;
+  /* FIN-CONSORCIO-02 — consórcio novo (ou editado por aqui) é o cadastro próprio dele. */
+  if (escolha === 'consorcio') {
+    return <ConsorcioDialog aberto={aberto} aoFechar={aoFechar} financiamentoId={financiamentoId ?? null} onSalvo={onSalvo}
+      onOutraNatureza={editando ? undefined : () => escolher('financiamento')} />;
+  }
+
   return (
     <Dialog open={aberto} onOpenChange={(v) => { if (!v) aoFechar(); }}>
       <DialogContent className="flex h-[min(600px,calc(100vh-16px))] w-[min(1150px,calc(100vw-16px))] max-w-none flex-col gap-0 overflow-hidden p-0" data-testid="cadastro-de-contrato">
@@ -248,7 +257,7 @@ export function CadastroDeContratoDialog({ aberto, aoFechar, onAbrirCompraParcel
           <DialogDescription className="sr-only">Cadastro de contrato</DialogDescription>
         </div>
         <div className="flex h-[34px] shrink-0 items-center gap-3 border-b px-3">
-          <Segmentado altura={22} valor={escolha} onEscolher={escolher} opcoes={[
+          <Segmentado altura={22} valor={valorDaEscolha} onEscolher={escolher} opcoes={[
             { valor: 'financiamento', rotulo: 'Financiamento', desabilitada: travado || editando },
             { valor: 'parcelado', rotulo: 'Compra parcelada', desabilitada: travado || editando },
             { valor: 'consorcio', rotulo: 'Consórcio', desabilitada: travado || editando },
