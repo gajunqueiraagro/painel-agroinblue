@@ -41,6 +41,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { Segmentado, type OpcaoSegmentada } from '@/components/ui/segmentado';
+import { REGUA_ROTULO } from '@/components/ui/bloco-formulario';
 import { PlanoSubcentroSelect } from '@/components/shared/PlanoSubcentroSelect';
 import { ATIVIDADES, lembrarAtividade, type Atividade } from '@/lib/financeiro/ultimaAtividade';
 import { safraSugerida } from '@/lib/agri/safraSugerida';
@@ -70,6 +72,9 @@ export const CAMPO_BG = "bg-background border-[hsl(210_20%_80%)] focus-visible:b
 /** Converte texto livre em atividade conhecida — `null` quando não reconhece. */
 export const atividadeValida = (v: string | null | undefined): Atividade | null =>
   ATIVIDADES.some((a) => a.valor === v) ? (v as Atividade) : null;
+
+/** As quatro atividades no segmentado de uma linha (régua 'linha'); o vazio ('') é "nenhuma escolhida". */
+const OPCOES_ATIVIDADE: ReadonlyArray<OpcaoSegmentada<Atividade | ''>> = ATIVIDADES.map((a) => ({ valor: a.valor, rotulo: a.rotulo }));
 
 export function ClassificacaoLancamento({
   value, onChange, classificacoes, safras, dataCompetencia,
@@ -108,8 +113,11 @@ export function ClassificacaoLancamento({
    */
   tipoOperacao: string;
   travado?: boolean;
-  /** UI-MODAL-BLOCOS-01 — 'compacta': os campos na régua dos modais em blocos (28px, 11px). Sem a prop, o de sempre (32px). */
-  regua?: 'compacta';
+  /** UI-MODAL-BLOCOS-01 — 'compacta': os campos na régua dos modais em blocos (28px, 11px). Sem a prop, o de sempre (32px).
+   *  'linha' (LANCAMENTO COMPACTO, Gabriel 18/10/2026): a régua compacta e a Atividade num `Segmentado` de UMA linha (28px, 11px)
+   *  ao lado do Subcentro, com "Macro · Grupo · Centro" logo abaixo — a grade 2×2 de 50px saiu. Só o `LancamentoV2Dialog` a pede:
+   *  a recorrência e a obrigação (colunas mais estreitas) seguem na 'compacta'. */
+  regua?: 'compacta' | 'linha';
   /** OC-CC-MODAL-FINANCEIRO-01 — por que esta' travado, quando NAO e' a transferencia (ex.: a conta do principal e' a da OC). Sem a prop, a frase de sempre. */
   motivoTravado?: string;
   /** A recusa do save sobre o subcentro (direcao x conta do plano) — mora embaixo do campo. */
@@ -151,8 +159,9 @@ export function ClassificacaoLancamento({
   /* O nome que o JSX movido usa — ver a nota da interface. */
   const subcentroTravado = travado;
   const fieldBg = CAMPO_BG;
-  const alturaCampo = regua === 'compacta' ? 'h-7 text-[11px]' : 'h-8 text-xs';
-  const rotuloCls = regua === 'compacta' ? 'text-[10px] text-muted-foreground' : 'text-[10px]';
+  const compacta = regua === 'compacta' || regua === 'linha';
+  const alturaCampo = compacta ? 'h-7 text-[11px]' : 'h-8 text-xs';
+  const rotuloCls = regua === 'linha' ? REGUA_ROTULO : compacta ? 'text-[10px] text-muted-foreground' : 'text-[10px]';
   const [subcentroSearch, setSubcentroSearch] = useState('');
 
   const [subcentroLimpoPelaAtividade, setSubcentroLimpoPelaAtividade] = useState(false);
@@ -274,7 +283,7 @@ export function ClassificacaoLancamento({
                 Resumo automático (Macro · Grupo · Centro) SOMENTE LEITURA abaixo do Subcentro,
                 a partir dos derivados já existentes. Mesmos estados/ids/handlers/validação da
                 antiga aba Classificação (movida verbatim). */}
-            <div className="grid grid-cols-12 gap-2 items-start">
+            <div className={regua === 'linha' ? 'grid grid-cols-[max-content_minmax(0,1fr)] gap-x-2 items-start' : 'grid grid-cols-12 gap-2 items-start'}>
               {/* ── Atividade — PR-FIN-ATIVIDADE-01 (D13). Vem ANTES do Subcentro porque é o
                      que encolhe a lista dele: o plano passou de 137 para 206 subcentros em
                      10/09 e continua crescendo; digitar "combust" devolvia pecuária,
@@ -283,6 +292,15 @@ export function ClassificacaoLancamento({
                      coluna estreita as quatro pílulas saíam ilegíveis ou cortadas. Viraram
                      grade 2×2 de 50px, e a altura do campo é DECLARADA pela grade — não
                      depende do rótulo, que é o que a A16 pede. */}
+              {regua === 'linha' ? (
+              <div data-testid="atividade-em-linha">
+                <Label className={rotuloCls}>Atividade</Label>
+                {/* ⚠ UMA LINHA, 28px, 11px — LANCAMENTO COMPACTO. O segmentado da casa (navy = escolhida); a opção travada fica
+                    apagada (o `subcentroTravado` de sempre). Clicar na escolhida desmarca, como a pílula fazia. */}
+                <Segmentado altura={28} fonte={11} valor={atividade ?? ''}
+                  onEscolher={(v) => { if (v) aplicarAtividade(v); }} opcoes={OPCOES_ATIVIDADE.map((o) => ({ ...o, desabilitada: subcentroTravado }))} />
+              </div>
+              ) : (
               <div className="col-span-4">
                 <Label className={rotuloCls}>Atividade</Label>
                 {/* ⚠ 2×2 EM 50px, E ESTA É A ÚNICA LINHA DO MODAL MAIS ALTA QUE 32 — decisão
@@ -316,8 +334,9 @@ export function ClassificacaoLancamento({
                   })}
                 </div>
               </div>
+              )}
               {/* Subcentro — PR-U2c-1D: <PlanoSubcentroSelect /> (fonte única) */}
-              <div className="col-span-8">
+              <div className={regua === 'linha' ? 'min-w-0' : 'col-span-8'}>
                 <PlanoSubcentroSelect
                   value={subcentro}
                   onChange={(v) => setClassificacao((c) => ({ ...c, subcentro: v }))}
@@ -366,7 +385,7 @@ export function ClassificacaoLancamento({
                   search={subcentroSearch}
                   onSearchChange={setSubcentroSearch}
                   label="Subcentro *"
-                  triggerClassName={regua === 'compacta' ? cn(fieldBg, 'h-7 text-[11px]') : fieldBg}
+                  triggerClassName={compacta ? cn(fieldBg, 'h-7 text-[11px]') : fieldBg}
                   tabIndex={11}
                   disabled={subcentroDesabilitado}
                 />
@@ -396,7 +415,7 @@ export function ClassificacaoLancamento({
                 )}
                 {/* Resumo automático dos derivados (Macro › Grupo › Centro). Somente leitura;
                     sem estado novo, sem recálculo, sem edição. "—" quando não houver derivação. */}
-                <div className="mt-1 text-[10px] leading-snug text-muted-foreground">
+                <div className={cn(regua === 'linha' ? 'mt-0.5' : 'mt-1', 'text-[10px] leading-snug text-muted-foreground')}>
                   {(macroCusto || grupoCusto || centroCusto) ? (
                     <>
                       Macro: <span className="font-medium text-foreground/70">{macroCusto || '—'}</span>

@@ -164,7 +164,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 18/10/2026 (FORN-CADASTRO-02, +8: `src/components/financeiro-v2/fornecedorCadastro02.test.tsx` 8 (novo); `fornecedorEditar`,
+  Baseline em 19/10/2026 (UI-MODAL-BLOCOS-01 · LANCAMENTO COMPACTO, +4: `src/components/financeiro-v2/lancamentoCompacto.test.tsx` 4 (novo);
+  `blocoFormulario`, `resumoPagamentoModal` e `finPgtoFantasma01` trocados ao contrato novo — 5669 depois dele; antes o FORN-CADASTRO-02, +8: `src/components/financeiro-v2/fornecedorCadastro02.test.tsx` 8 (novo); `fornecedorEditar`,
   `useFornecedoresDoCliente`, `lerNFe`, `documentoFiscalNosEscritores` e `useCompraLotes.recusa` trocados ao contrato novo — 5665 depois dele;
   antes o FIN-FINANC-28 TELA DO CONTRATO v4, +4: `src/components/financiamentos/telaDoContratoV3.test.tsx` 13 -> 17 (sai o das
   tres colunas do B3; entram a ficha, a 5a celula, a faixa unica, as abas e o lapis na celula — por fonte); `reguaDasParcelas` e
@@ -394,7 +395,7 @@ no mesmo arquivo.
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
   `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5327
-  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO; 5568 desde o FIN-FINANC-28 PASSO 4; 5571 desde o FIN-FINANC-28 RESUMO-A18; 5573 desde o FIN-FINANC-28 PASSO 4c; 5581 desde o FIN-FINANC-28 PASSO 4b; 5586 desde o FIN-FINANC-28 PASSO 5; 5593 desde o FIN-FINANC-28 PASSO 6; 5607 desde o FIN-FINANC-28 PASSO 7; 5609 desde o FIN-FINANC-28 PASSO 8; 5614 desde o FORN-MESCLAR-01; 5615 desde o RECORRENCIAS-COLUNAS-01; 5620 desde o FIN-FINANC-28 FIX 4b; 5623 desde o FIN-LANC-DESCRICAO-CONTRATO-01; 5628 desde o FIN-FINANC-28 CADASTRO-ACABAMENTO; 5630 desde o UI-MODAL-BLOCOS-01 passo 0; 5631 desde o UI-MODAL-BLOCOS-01 titulo na borda; 5641 desde o FIN-FINANC-28 TELA v3; 5644 desde o B3; 5646 desde o EDITAR v2; 5653 desde o FIN-CONTRATO-JUNTAR-01; 5657 desde a TELA DO CONTRATO v4; 5665 desde o FORN-CADASTRO-02], 22 skipped, e
+  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO; 5568 desde o FIN-FINANC-28 PASSO 4; 5571 desde o FIN-FINANC-28 RESUMO-A18; 5573 desde o FIN-FINANC-28 PASSO 4c; 5581 desde o FIN-FINANC-28 PASSO 4b; 5586 desde o FIN-FINANC-28 PASSO 5; 5593 desde o FIN-FINANC-28 PASSO 6; 5607 desde o FIN-FINANC-28 PASSO 7; 5609 desde o FIN-FINANC-28 PASSO 8; 5614 desde o FORN-MESCLAR-01; 5615 desde o RECORRENCIAS-COLUNAS-01; 5620 desde o FIN-FINANC-28 FIX 4b; 5623 desde o FIN-LANC-DESCRICAO-CONTRATO-01; 5628 desde o FIN-FINANC-28 CADASTRO-ACABAMENTO; 5630 desde o UI-MODAL-BLOCOS-01 passo 0; 5631 desde o UI-MODAL-BLOCOS-01 titulo na borda; 5641 desde o FIN-FINANC-28 TELA v3; 5644 desde o B3; 5646 desde o EDITAR v2; 5653 desde o FIN-CONTRATO-JUNTAR-01; 5657 desde a TELA DO CONTRATO v4; 5665 desde o FORN-CADASTRO-02; 5669 desde o LANCAMENTO COMPACTO], 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -2650,15 +2651,44 @@ preview que o cabecalho nao sai da tela ao rolar.
     `node scripts/check-ui-nativo.mjs --baseline-modal`.
   ⚠ LIMITE DO DETECTOR: so' ve^ o arquivo que tem o `DialogContent`; campo em componente-filho (a aba de um shell) nao conta.
   · TITULO DENTRO DO BLOCO, PADRAO UNICO (CORRECAO do Gabriel 18/10/2026: o "titulo na borda" de 53c9434f foi reprovado — "nenhuma
-    tela foi feita assim"): linha de 18px dentro do bloco, 11px/600 sentence case, linha fina embaixo, acao na mesma linha a' direita;
-    bloco `BLOCO_FORMULARIO` com padding 6px topo / 12px lados / 8px base; corpo `CORPO_FORMULARIO` (p 8px, gap 8px); grade
-    `GRADE_FORMULARIO` (gap-y 4px). Sem fundo atras do titulo, sem posicionamento absoluto, uma versao so (o `_COM_ACAO` saiu).
+    tela foi feita assim"): linha de 16px dentro do bloco, 11px/600 sentence case, linha fina COLADA embaixo e 4px ate' os rotulos, acao
+    na mesma linha a' direita; bloco `BLOCO_FORMULARIO` com padding 6px topo / 10px lados / 6px base; corpo `CORPO_FORMULARIO` (p 8px, gap
+    6px); grade `GRADE_FORMULARIO` (gap-y 4px); rotulo `REGUA_ROTULO` EM BLOCO de 13px + 2px (o `<label>` inline herdava a caixa de linha
+    de 24px do `body`: 8px de vao em cima de cada rotulo, medido no DOM) [numeros do LANCAMENTO COMPACTO, 18/10 15:45; eram titulo de
+    18px + 6px de vao, padding 6/12/8 e gap 8]. Sem fundo atras do titulo, sem posicionamento absoluto, uma versao so (o `_COM_ACAO` saiu).
     Blocos de LEITURA: rotulo e valor na mesma fonte de 11px (rotulo cinza regular, valor 500), rotulo de largura fixa e o valor logo
     ao lado — nunca rotulo a' esquerda e valor a' direita com vazio no meio; nome de credor/fornecedor inteiro, cortando no fim com
     `title`. A onda 1 inteira foi reconvertida; a recorrencia passou a duas colunas (Identificacao+Classificacao | Vigencia+Pagamento).
     ⚠ ALTURA DO MODAL (mesma decisao): fixa, calculada pela tela, igual em todas as abas; meta sem rolagem a 1.126x579 e 1.440x800;
       so' abaixo de 650px de janela o corpo pode rolar por dentro (cabecalho, abas e rodape fixos) — acima disso rolagem e' erro.
       Cada uso desse fallback vai no relatorio com os px que faltaram.
+  · LANCAMENTO COMPACTO (Gabriel 18/10/2026 15:45, print do "Editar Lançamento" do Agnaldo: "tem que rolar para acessar a Safra"; so'
+    tela). `LancamentoV2Dialog`: (1) o Geral tem TRES blocos — "Valores e datas" (`bloco-valores-datas`, duas linhas de grade: Tipo ·
+    Competência · Vencimento · Pagamento · Status / Valor · Fazenda · Conta), Identificação, Classificação; campos, tabIndex, handlers e
+    validacoes os de antes; (2) o corpo declara a regua de texto `text-[11px] leading-[13px]` (os rotulos dos seletores da casa —
+    fornecedor, produto, fazenda, subcentro, valor — sao `<label>` inline e so' assim perdem os 8px) e os rotulos do proprio modal usam
+    `REGUA_ROTULO`; data a 11px (era 10); 6px entre os blocos; (3) a ATIVIDADE e' o `Segmentado` de UMA linha (28px, 11px; `altura` 28
+    entrou no componente) ao lado do Subcentro, "Macro · Grupo · Centro" logo abaixo — `ClassificacaoLancamento regua="linha"`, opt-in
+    (recorrencia e obrigacao seguem na 'compacta', com a grade 2×2); (4) RESUMO LATERAL em `AsideResumo formato="pares"` (opt-in, por
+    contexto; Abate, Venda, Compra e envelope NAO mudam): faixa de 18px "Resumo do lançamento" 11px/600, secoes em sentence case 11px/600
+    com linha fina, linhas de 16px a 11px, rotulo cinza na largura do maior e o valor colado (grade de duas colunas no corpo), zero caixa
+    alta; "Data competência" e "Nº de parcelas" em sentence case; (5) o titulo da aba Auditoria a 11px (era 12).
+    MEDIDO na bancada (pagina real do modal, banco simulado, barra do app de 96px e lateral de 176px atras), rolagem do Geral antes ->
+    depois, a 1.000x600 / 1.126x579 / 1.440x800: novo 64/85/0 -> 0/0/0 · editar (Milho Grão 102.000, lavoura) 65/86/0 -> 0/0/0 · editar
+    com aviso de rateio 65/86/0 -> 0/0/0 · modo OC principal 51/72/0 -> 0/0/0 · modo OC despesa 39/60/0 -> 0/0/0 · rateio no novo 81/102/0
+    -> 0/0/0 · XML 170/191/0 -> 39/60/0 · referencia operacional 217/238/17 -> 68/89/0. A SAFRA FICA A' VISTA sem rolar em todos os
+    basicos a 579 e em tudo a 800. Pagamento, Documentos e Auditoria: 0 em todos (o Pagamento do XML parcelado rolava 4px a 579). Todo
+    campo e seletor com 28px a 11px; resumo com faixa de 18px e 0 caixa alta (eram 26px e 6). Blocos do Geral novo: 96 + 110 + 113 + 174 ->
+    141 + 93 + 142. FALLBACK abaixo de 650px (o corpo rola por dentro, cabecalho/abas/rodape fixos): XML 39px a 600 e 60px a 579;
+    referencia operacional 68px a 600 e 89px a 579. HERDEIROS DA PRIMITIVA remedidos nos tres tamanhos: cadastro de contrato
+    (financiamento, emprestimo, consorcio e a aba Condições), fornecedor (5 abas, Vera / cheio / novo), recorrencia (nova e editar) e
+    baixa de parcela (registrar e editar, montada direto: o modal segue sem chamador) — nenhum rola, 0 campos fora, 0 rotulos cortados.
+    Prints em ~/Downloads/ui-modal-blocos/lancamento-compacto/ (antes, depois, herdeiros-depois). Teste
+    `src/components/financeiro-v2/lancamentoCompacto.test.tsx` (4; 3 mutacoes mortas). FOTOS REGRAVADAS de proposito: as 4 de
+    `valorComConta.fotos.json` e as 3 da criacao de parcelamento de `obrigacaoDialog.fotos.json` (−5 bytes por bloco = so' as classes da
+    primitiva). ⚠ NAO PROVADO: nada com login no app real (bancada) · a aba Auditoria no modo editar (o leitor dela trava na bancada) · a
+    cor dos rotulos dos seletores da casa (foreground) x os do modal (cinza) segue diferente, como era · o "—" de 12px do confronto da
+    aba Documentos ficou (regra do FIN-DOCUMENTOS-LAYOUT-01: valor 12px).
   · Ondas: 1 Financeiro (LancamentoV2Dialog + AbaDocumentosLancamento, ObrigacaoDialog caminho compra parcelada, RecorrenciaDialog,
     FornecedorFormDialog, ModalBaixaParcela, FinanceiroEditDialog / LancamentoDetalhe, ConciliarExtratoDialog, ExcelImportDialog) · 2 OC e
     pecuaria · 3 agricola e o resto. Cada modal = 1 commit, so' visual (ordem, validacoes, handlers e gravacoes intocados).

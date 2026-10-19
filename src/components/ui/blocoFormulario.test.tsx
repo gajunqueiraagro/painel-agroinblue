@@ -12,6 +12,7 @@ describe('a primitiva do formulário em blocos', () => {
   it('bloco branco de borda fina, título 11px/600 sem caixa alta; corpo cinza; rótulo 10px de uma linha', () => {
     render(<CorpoFormulario testId="corpo"><BlocoFormulario titulo="Identificação" dica="quem e o quê" testId="b"><Rotulo texto="Descrição" obrig /></BlocoFormulario></CorpoFormulario>);
     expect(screen.getByTestId('corpo').className).toMatch(/\bbg-muted\b/);
+    expect(screen.getByTestId('corpo').className).toMatch(/\bgap-1\.5\b/);
     const b = screen.getByTestId('b');
     expect(b.className).toMatch(/rounded-lg border bg-card/);
     const h = b.querySelector('h3')!;
@@ -20,16 +21,21 @@ describe('a primitiva do formulário em blocos', () => {
     expect(b.querySelectorAll('[class*="uppercase"], [class*="tracking-"]')).toHaveLength(0);
     const r = screen.getByTitle('Descrição');
     expect(r.textContent).toBe('Descrição *');
-    expect(r.className).toMatch(/truncate text-\[10px\]/);
+    expect(r.className).toMatch(/\bblock\b/);
+    expect(r.className).toMatch(/truncate/);
+    expect(r.className).toMatch(/text-\[10px\]/);
+    expect(r.className).toMatch(/leading-\[13px\]/);
     expect(REGUA_CAMPO).toBe('h-7 text-[11px]');
   });
-  it('CORREÇÃO 18/10 — o título fica DENTRO do bloco: linha de 18px com linha fina embaixo, ação na mesma linha; nada absoluto', () => {
+  it('LANCAMENTO COMPACTO 18/10 — o título fica DENTRO do bloco: linha de 16px com a linha fina colada embaixo e 4px até os rótulos; padding 6/10/6; ação na mesma linha; nada absoluto', () => {
     render(<BlocoFormulario titulo="Liberações" acao={<button>+ liberação</button>} testId="b"><Rotulo texto="Data" /></BlocoFormulario>);
     const b = screen.getByTestId('b');
-    expect(b.className).toMatch(/\bpx-3 pb-2 pt-1\.5\b/);
+    expect(b.className).toMatch(/\bpx-2\.5 pb-1\.5 pt-1\.5\b/);
     const linha = b.querySelector('[data-titulo-do-bloco]')!;
     expect(linha.parentElement).toBe(b);
-    expect(linha.className).toMatch(/min-h-\[18px\]/);
+    expect(linha.className).toMatch(/min-h-\[16px\]/);
+    expect(linha.className).toMatch(/\bmb-1\b/);
+    expect(linha.className).not.toMatch(/\bpb-/);
     expect(linha.className).toMatch(/border-b/);
     expect(linha.contains(screen.getByText('+ liberação'))).toBe(true);
     expect(b.querySelectorAll('[class*="absolute"], [class*="bg-muted"]')).toHaveLength(0);

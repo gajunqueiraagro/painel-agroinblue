@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { BLOCO_FORMULARIO, BlocoFormulario, TituloDoBloco } from '@/components/ui/bloco-formulario';
+import { BLOCO_FORMULARIO, BlocoFormulario, REGUA_ROTULO, TituloDoBloco } from '@/components/ui/bloco-formulario';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 // PR-FIN-STATUS-UX-03A-1 — domínio financeiro (dono único). normalizeStatusTransacao
@@ -2207,7 +2207,7 @@ export function LancamentoV2Dialog({
   //   Pagamento) para o ano caber (dd/MM/yyyy). text-[10px] vence o text-[12px] padrão do DatePicker
   //   via twMerge (11px ainda encostava o ano no ícone); largura/grid/padding/altura/ícone inalterados;
   //   componente compartilhado intocado.
-  const dateFieldCls = cn(fieldBg, "h-7 text-[10px]");
+  const dateFieldCls = cn(fieldBg, "h-7 text-[11px]");
 
   /* ── FIN-NFE-XML-01d — O QUE VEIO DO XML FICA EM AMBAR ATE' O OPERADOR MEXER ──────────────────────────────────────────
      ⚠ DERIVADO, NAO GUARDADO: um campo esta' em ambar enquanto o valor dele E' o que a nota propos. Editar tira o ambar
@@ -2403,7 +2403,10 @@ export function LancamentoV2Dialog({
               caixa) → body volta a ser filho direto, layout 100% idêntico. */}
           <div className="flex-1 flex min-h-0 overflow-hidden">
           {/* Scrollable body */}
-          <div className="flex-1 overflow-y-auto px-4 py-2 space-y-1.5 bg-muted" data-testid="corpo-do-lancamento">
+          {/* UI-MODAL-BLOCOS-01 · LANCAMENTO COMPACTO — o corpo declara a régua de texto (11px / 13px de linha): os rótulos dos seletores
+              da casa (fornecedor, produto, fazenda, subcentro, valor) são `<label>` INLINE e herdavam a caixa de linha de 24px do
+              `body` — 8px de vão em cima de cada rótulo, medidos no DOM. 6px entre os blocos. */}
+          <div className="flex-1 overflow-y-auto px-4 py-2 space-y-1.5 bg-muted text-[11px] leading-[13px]" data-testid="corpo-do-lancamento">
 
             {/* OC-CC-MODAL-FINANCEIRO-01 — a faixa de origem (o molde do "Do XML"): de qual operacao este lancamento e', com o
                 caminho de volta. Uma linha de 24px, em todas as abas; so' o texto corta (inteiro no `title`). */}
@@ -2417,7 +2420,7 @@ export function LancamentoV2Dialog({
             )}
 
             {/* ═══ ABA GERAL ═══ */}
-            <TabsContent value="geral" className="mt-0 space-y-2 focus-visible:outline-none">
+            <TabsContent value="geral" className="mt-0 space-y-1.5 focus-visible:outline-none">
             {/* FIN-NFE-XML-01d — o que a nota pede que o operador decida: o fornecedor (uma faixa) e os avisos. */}
             {xml && (
               <div className="space-y-1" data-testid="xml-faixas">
@@ -2570,14 +2573,17 @@ export function LancamentoV2Dialog({
                 apenas reposicionamento visual. O espaçamento vertical entre as linhas vem
                 do `space-y-2` do próprio TabsContent. */}
 
-            <BlocoFormulario titulo="Datas e status" testId="bloco-datas" className="gap-1">
+            {/* UI-MODAL-BLOCOS-01 · LANCAMENTO COMPACTO (Gabriel 18/10/2026 15:45) — "Datas e status" e "Valor e contas" viraram UM
+                bloco, "Valores e datas", com duas linhas de grade: (Tipo · Competência · Vencimento · Pagamento · Status) e (Valor ·
+                Fazenda · Conta). So' a moldura mudou: os campos, a ordem de tabulação (tabIndex), handlers e validações são os de antes. */}
+            <BlocoFormulario titulo="Valores e datas" testId="bloco-valores-datas" className="gap-1">
             {/* ── LINHA 1 — Tipo | Competência | Vencimento | Pagamento | Status (grid 3/2/2/2/3 = 12) ──
                 PR-FIN-MODAL-VENCIMENTO-02B: Vencimento agora é um DatePicker FUNCIONAL (mesmo componente
                 compartilhado de Competência/Pagamento), read-only para título OC. Grava em data_vencimento,
                 nunca em data_pagamento; o contrato de Data Pagamento do lançamento manual permanece inalterado. */}
             <div className="grid grid-cols-12 gap-2">
               <div className="col-span-3">
-                <Label className="text-[10px] text-muted-foreground">{xmlRot('Tipo operação *', 'tipo')}</Label>
+                <Label className={REGUA_ROTULO}>{xmlRot('Tipo operação *', 'tipo')}</Label>
                 <Select value={tipoOperacao} onValueChange={aplicarTipoOperacao} disabled={lockedFields?.includes('tipo_operacao') || isOCTitulo}>
                   <SelectTrigger ref={firstFieldRef} tabIndex={1} className={cn("h-7 text-[11px]", fieldBg, xmlCls('tipo'))}><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -2588,7 +2594,7 @@ export function LancamentoV2Dialog({
               </div>
               {!modoOC && (
               <div className="col-span-2">
-                <Label className="text-[10px] text-muted-foreground">{/* em ambar o rotulo encurta: "Data Competência *" + a origem nao cabem na coluna (medido a 1.135) e quebravam a linha */}
+                <Label className={REGUA_ROTULO}>{/* em ambar o rotulo encurta: "Data Competência *" + a origem nao cabem na coluna (medido a 1.135) e quebravam a linha */}
                   {xmlAmbar('competencia') ? xmlRot('Competência *', 'competencia') : 'Data competência *'}</Label>
                 <DatePicker value={dataCompetencia} onChange={setDataCompetencia} disabled={isOCTitulo} tabIndex={2} className={cn(dateFieldCls, xmlCls('competencia'))} />
               </div>
@@ -2598,7 +2604,7 @@ export function LancamentoV2Dialog({
                   (governado pela Operação Comercial). Grava SEMPRE em data_vencimento, nunca em
                   data_pagamento. Contrato de Data Pagamento do manual permanece inalterado. */}
               <div className={modoOC ? 'col-span-3' : 'col-span-2'}>
-                <Label className={cn("text-[10px] text-muted-foreground", modoOC && tentouOC && faltaVencimentoOC && 'text-destructive')} data-testid={modoOC ? 'rotulo-vencimento-oc' : undefined}>
+                <Label className={cn(REGUA_ROTULO, modoOC && tentouOC && faltaVencimentoOC && 'text-destructive')} data-testid={modoOC ? 'rotulo-vencimento-oc' : undefined}>
                   {modoOC ? (tentouOC && faltaVencimentoOC ? `Vencimento * · ${MOTIVO_VENCIMENTO_OBRIGATORIO}` : 'Vencimento *')
                     : xmlAmbar('vencimento') ? xmlRot('Vencimento', 'vencimento') : 'Data vencimento'}</Label>
                 {/* parcela paga: em leitura; o motivo está escrito no rodapé (`parcela-do-contrato`) — sem invólucro aqui, o HTML do lançamento comum não muda */}
@@ -2607,13 +2613,13 @@ export function LancamentoV2Dialog({
               {!modoOC && (
               <div className="col-span-2"
                 title={!pagamentoPermitido && !pagamentoTravado ? 'Só realizado tem data de pagamento' : undefined}>
-                <Label className="text-[10px] text-muted-foreground">Data pagamento *</Label>
+                <Label className={REGUA_ROTULO}>Data pagamento *</Label>
                 <DatePicker value={pagamentoMostrado} onChange={handleDataPagamentoChange}
                   disabled={pagamentoTravado || !pagamentoPermitido || travaCasado.pagamento} tabIndex={3} className={dateFieldCls} />
               </div>
               )}
               <div className="col-span-3" title={modoOC ? MOTIVO_STATUS_TRAVADO_OC : undefined}>
-                <Label className="text-[10px] text-muted-foreground">Status *</Label>
+                <Label className={REGUA_ROTULO}>Status *</Label>
                 <Select value={statusTransacao} onValueChange={handleStatusChange} disabled={travaCasado.status || travado('status_transacao') || undefined}>
                   <SelectTrigger tabIndex={4} className={cn("h-7 text-[11px]", fieldBg)}><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -2625,7 +2631,7 @@ export function LancamentoV2Dialog({
                   que competencia e pagamento liberam. Obrigatorio; a pendencia fica escrita no rotulo, em vermelho. */}
               {modoOC?.natureza === 'obrigacao' && (
                 <div className="col-span-3" data-testid="campo-item-oc">
-                  <Label className={cn("text-[10px] text-muted-foreground", tentouOC && faltaItemOC && 'text-destructive')} data-testid="rotulo-item-oc">
+                  <Label className={cn(REGUA_ROTULO, tentouOC && faltaItemOC && 'text-destructive')} data-testid="rotulo-item-oc">
                     {tentouOC && faltaItemOC ? `Item * · ${MOTIVO_ITEM_OBRIGATORIO}` : 'Item da operação *'}</Label>
                   <SearchableSelect value={itemOC} onValueChange={v => { setItemOC(v); if (erroAntesDeSalvar === MOTIVO_ITEM_OBRIGATORIO) setErroAntesDeSalvar(null); }}
                     options={modoOC.itens.map(i => ({ value: i.codigo, label: i.nome }))} allValue="" allLabel="Selecione o item" placeholder="Selecione o item" semTodos
@@ -2640,6 +2646,100 @@ export function LancamentoV2Dialog({
                 {avisoPagamentoLegado(pagamentoLegadoARemover)}
               </p>
             )}
+            {/* ── LINHA 3 — Valor, Fazenda e Conta(s) ──
+                Valor COMPACTO (col-span-2); na Transferência os 4 campos ficam na MESMA
+                linha (Valor 2 · Fazenda 4 · Origem 3 · Destino 3), sem quebra. Saída/Entrada
+                usam a conta aplicável em col-span-6 (contrato de contas inalterado). */}
+            <div className="grid grid-cols-12 gap-2">
+              {/* Valor — mesmo state/tabIndex/disabled; a máscara mora em `CampoValorComConta`. */}
+              <div className="col-span-2">
+                {/* ⚠ A CONTA DIRETO NO CAMPO — FIN-VALOR-CALC-01a. Sem operador é o campo de sempre (mesma máscara, mesmo HTML);
+                    com operador ("16.238,00/2") o resultado aparece na linha do rótulo e Enter/blur o aplica. O modal segue com
+                    UM valor: `valorDisplay` só muda por tecla da máscara ou por conta APLICADA — nunca pelo texto parcial. */}
+                <CampoValorComConta
+                  rotulo={xmlRot('Valor (R$) *', 'valor')}
+                  valor={valorDisplay}
+                  onValor={setValorDisplay}
+                  className={cn("h-7 text-right tabular-nums text-[11px]", fieldBg, xmlCls('valor'))}
+                  disabled={lockedFields?.includes('valor') || isOCTitulo || parcelaPaga || travaCasado.valor}
+                  contaAbertaRef={contaAbertaRef}
+                />
+              </div>
+              {/* Fazenda — PR-U2c-1B: <FazendaSelect /> (fonte única) */}
+              <FazendaSelect
+                value={fazendaId}
+                onChange={setFazendaId}
+                fazendas={fazendas}
+                forcaAdministrativo={fazendaTravadaAdm}
+                label={xmlRotTexto('Fazenda *', 'fazenda')}
+                /* FIN-FAZENDA-PADRAO-01 — com o filtro Global o campo nasce VAZIO (nunca a primeira da lista), e o
+                   vazio aparece aqui, em vermelho, antes de qualquer clique. */
+                disabled={travado('fazenda_id') || undefined}
+                obrigatorio
+                id="campo-fazenda-financeiro"
+                className="col-span-4"
+                triggerClassName={cn(fieldBg, 'h-7 text-[11px]', xmlCls('fazenda'))}
+                tabIndex={7}
+              />
+              {/* Conta Bancária — PR-H2: ContaBancariaSelect compartilhado (agrupado por
+                  tipo_conta + dark/glass). Sentinela '__none__' preservada na semântica interna. */}
+              {isTransferencia ? (
+                <>
+                  <div className="col-span-3">
+                    <Label className={REGUA_ROTULO}>Conta origem *</Label>
+                    <ContaBancariaSelect
+                      value={contaOrigemId}
+                      onValueChange={setContaOrigemId}
+                      contas={contas}
+                      placeholder="Selecione"
+                      disabled={lockedFields?.includes('conta_bancaria_id') || travaCasado.contaOrigem}
+                      prependItems={[{ value: '__none__', label: 'Nenhuma' }]}
+                      excluirIds={contaDestinoId && contaDestinoId !== '__none__' ? [contaDestinoId] : undefined}
+                      className={cn("h-7 text-[11px]", fieldBg)}
+                    />
+                  </div>
+                  <div className="col-span-3">
+                    <Label className={REGUA_ROTULO}>Conta destino *</Label>
+                    <ContaBancariaSelect
+                      value={contaDestinoId}
+                      onValueChange={setContaDestinoId}
+                      contas={contas}
+                      placeholder="Selecione"
+                      disabled={lockedFields?.includes('conta_destino_id') || travaCasado.contaDestino}
+                      prependItems={[{ value: '__none__', label: 'Nenhuma' }]}
+                      excluirIds={contaOrigemId && contaOrigemId !== '__none__' ? [contaOrigemId] : undefined}
+                      className={cn("h-7 text-[11px]", fieldBg)}
+                    />
+                  </div>
+                </>
+              ) : isEntrada ? (
+                <div className="col-span-6">
+                  <Label className={REGUA_ROTULO}>Conta destino *</Label>
+                  <ContaBancariaSelect
+                    value={contaDestinoId}
+                    onValueChange={setContaDestinoId}
+                    contas={contas}
+                    placeholder="Selecione"
+                    disabled={lockedFields?.includes('conta_destino_id') || travaCasado.contaDestino}
+                    prependItems={[{ value: '__none__', label: 'Nenhuma' }]}
+                    className={cn("h-7 text-[11px]", fieldBg)}
+                  />
+                </div>
+              ) : (
+                <div className="col-span-6">
+                  <Label className={REGUA_ROTULO}>Conta origem *</Label>
+                  <ContaBancariaSelect
+                    value={contaOrigemId}
+                    onValueChange={setContaOrigemId}
+                    contas={contas}
+                    placeholder="Selecione"
+                    disabled={lockedFields?.includes('conta_bancaria_id') || travaCasado.contaOrigem}
+                    prependItems={[{ value: '__none__', label: 'Nenhuma' }]}
+                    className={cn("h-7 text-[11px]", fieldBg)}
+                  />
+                </div>
+              )}
+            </div>
 
             </BlocoFormulario>
             <BlocoFormulario titulo="Identificação" testId="bloco-identificacao" className="gap-1">
@@ -2706,103 +2806,6 @@ export function LancamentoV2Dialog({
             </div>
 
             </BlocoFormulario>
-            <BlocoFormulario titulo="Valor e contas" testId="bloco-valor" className="gap-1">
-            {/* ── LINHA 3 — Valor, Fazenda e Conta(s) ──
-                Valor COMPACTO (col-span-2); na Transferência os 4 campos ficam na MESMA
-                linha (Valor 2 · Fazenda 4 · Origem 3 · Destino 3), sem quebra. Saída/Entrada
-                usam a conta aplicável em col-span-6 (contrato de contas inalterado). */}
-            <div className="grid grid-cols-12 gap-2">
-              {/* Valor — mesmo state/tabIndex/disabled; a máscara mora em `CampoValorComConta`. */}
-              <div className="col-span-2">
-                {/* ⚠ A CONTA DIRETO NO CAMPO — FIN-VALOR-CALC-01a. Sem operador é o campo de sempre (mesma máscara, mesmo HTML);
-                    com operador ("16.238,00/2") o resultado aparece na linha do rótulo e Enter/blur o aplica. O modal segue com
-                    UM valor: `valorDisplay` só muda por tecla da máscara ou por conta APLICADA — nunca pelo texto parcial. */}
-                <CampoValorComConta
-                  rotulo={xmlRot('Valor (R$) *', 'valor')}
-                  valor={valorDisplay}
-                  onValor={setValorDisplay}
-                  className={cn("h-7 text-right tabular-nums text-[11px]", fieldBg, xmlCls('valor'))}
-                  disabled={lockedFields?.includes('valor') || isOCTitulo || parcelaPaga || travaCasado.valor}
-                  contaAbertaRef={contaAbertaRef}
-                />
-              </div>
-              {/* Fazenda — PR-U2c-1B: <FazendaSelect /> (fonte única) */}
-              <FazendaSelect
-                value={fazendaId}
-                onChange={setFazendaId}
-                fazendas={fazendas}
-                forcaAdministrativo={fazendaTravadaAdm}
-                label={xmlRotTexto('Fazenda *', 'fazenda')}
-                /* FIN-FAZENDA-PADRAO-01 — com o filtro Global o campo nasce VAZIO (nunca a primeira da lista), e o
-                   vazio aparece aqui, em vermelho, antes de qualquer clique. */
-                disabled={travado('fazenda_id') || undefined}
-                obrigatorio
-                id="campo-fazenda-financeiro"
-                className="col-span-4"
-                triggerClassName={cn(fieldBg, 'h-7 text-[11px]', xmlCls('fazenda'))}
-                tabIndex={7}
-              />
-              {/* Conta Bancária — PR-H2: ContaBancariaSelect compartilhado (agrupado por
-                  tipo_conta + dark/glass). Sentinela '__none__' preservada na semântica interna. */}
-              {isTransferencia ? (
-                <>
-                  <div className="col-span-3">
-                    <Label className="text-[10px] text-muted-foreground">Conta origem *</Label>
-                    <ContaBancariaSelect
-                      value={contaOrigemId}
-                      onValueChange={setContaOrigemId}
-                      contas={contas}
-                      placeholder="Selecione"
-                      disabled={lockedFields?.includes('conta_bancaria_id') || travaCasado.contaOrigem}
-                      prependItems={[{ value: '__none__', label: 'Nenhuma' }]}
-                      excluirIds={contaDestinoId && contaDestinoId !== '__none__' ? [contaDestinoId] : undefined}
-                      className={cn("h-7 text-[11px]", fieldBg)}
-                    />
-                  </div>
-                  <div className="col-span-3">
-                    <Label className="text-[10px] text-muted-foreground">Conta destino *</Label>
-                    <ContaBancariaSelect
-                      value={contaDestinoId}
-                      onValueChange={setContaDestinoId}
-                      contas={contas}
-                      placeholder="Selecione"
-                      disabled={lockedFields?.includes('conta_destino_id') || travaCasado.contaDestino}
-                      prependItems={[{ value: '__none__', label: 'Nenhuma' }]}
-                      excluirIds={contaOrigemId && contaOrigemId !== '__none__' ? [contaOrigemId] : undefined}
-                      className={cn("h-7 text-[11px]", fieldBg)}
-                    />
-                  </div>
-                </>
-              ) : isEntrada ? (
-                <div className="col-span-6">
-                  <Label className="text-[10px] text-muted-foreground">Conta destino *</Label>
-                  <ContaBancariaSelect
-                    value={contaDestinoId}
-                    onValueChange={setContaDestinoId}
-                    contas={contas}
-                    placeholder="Selecione"
-                    disabled={lockedFields?.includes('conta_destino_id') || travaCasado.contaDestino}
-                    prependItems={[{ value: '__none__', label: 'Nenhuma' }]}
-                    className={cn("h-7 text-[11px]", fieldBg)}
-                  />
-                </div>
-              ) : (
-                <div className="col-span-6">
-                  <Label className="text-[10px] text-muted-foreground">Conta origem *</Label>
-                  <ContaBancariaSelect
-                    value={contaOrigemId}
-                    onValueChange={setContaOrigemId}
-                    contas={contas}
-                    placeholder="Selecione"
-                    disabled={lockedFields?.includes('conta_bancaria_id') || travaCasado.contaOrigem}
-                    prependItems={[{ value: '__none__', label: 'Nenhuma' }]}
-                    className={cn("h-7 text-[11px]", fieldBg)}
-                  />
-                </div>
-              )}
-            </div>
-
-            </BlocoFormulario>
             <BlocoFormulario titulo="Classificação" testId="bloco-classificacao" className="gap-1">
             {/* ⚠ O CLUSTER DE CLASSIFICAÇÃO SAIU DAQUI — PAR-01a-ii. Atividade, Subcentro, Safra,
                 Cultura e Fase, mais as regras que os cruzam, viraram `ClassificacaoLancamento`
@@ -2820,7 +2823,7 @@ export function LancamentoV2Dialog({
                 ⚠ `culturasDaSafra` VAI POR PROP: o hook não tem cache e esta tela também a usa,
                 no aviso de rateio logo abaixo — chamar dos dois lados seria duas consultas. */}
             <ClassificacaoLancamento
-              regua="compacta"
+              regua="linha"
               key={`cls-${lancamento?.id ?? 'novo'}-${aberturaSeq}`}
               value={classificacao}
               /* ⚠ O SETTER DO `useState` VAI DIRETO, e é ele que resolve o updater funcional
@@ -2929,7 +2932,7 @@ export function LancamentoV2Dialog({
             {/* ═══ fim ABA GERAL ═══ */}
 
             {/* ═══ ABA PAGAMENTO ═══ */}
-            <TabsContent value="pagamento" className="mt-0 space-y-2 focus-visible:outline-none">
+            <TabsContent value="pagamento" className="mt-0 space-y-1.5 focus-visible:outline-none">
             <section className={sectionClass}>
               <TituloDoBloco nome="Pagamento" />
 
@@ -2937,7 +2940,7 @@ export function LancamentoV2Dialog({
                   (PR-FIN-MODAL-02B). Campos e handlers idênticos; só mudou a aba. */}
               <div className="grid grid-cols-[150px_minmax(0,1fr)] gap-x-2 gap-y-1.5">
                 <div>
-                  <Label className="text-[10px] text-muted-foreground">{xmlRot('Forma de pagamento', 'forma')}</Label>
+                  <Label className={REGUA_ROTULO}>{xmlRot('Forma de pagamento', 'forma')}</Label>
                   <Select value={formaPgto || FORMA_PAGAMENTO_V2_NENHUMA} onValueChange={handleFormaPgtoChange}>
                     <SelectTrigger tabIndex={13} className={cn("h-7 text-[11px]", fieldBg, xmlCls('forma'))}><SelectValue placeholder="Selecione" /></SelectTrigger>
                     {/* ⚠ A LISTA SAIU DAQUI — PAR-01c. Os oito itens eram escritos à mão neste
@@ -2954,7 +2957,7 @@ export function LancamentoV2Dialog({
                   </Select>
                 </div>
                 <div className="min-w-0">
-                  <Label className="text-[10px] text-muted-foreground">Dados para pagamento</Label>
+                  <Label className={REGUA_ROTULO}>Dados para pagamento</Label>
                   <DadosParaPagamento
                     modo={modoPgtoEfetivo}
                     bloco={blocoPgto}
@@ -2994,7 +2997,7 @@ export function LancamentoV2Dialog({
                     )}
                     {(
                       <div>
-                        <Label className="text-[10px] text-muted-foreground">{xmlRot('Modalidade', 'parcelamento')}</Label>
+                        <Label className={REGUA_ROTULO}>{xmlRot('Modalidade', 'parcelamento')}</Label>
                         <Select value={formaPagamentoParc} onValueChange={(v: 'avista' | 'parcelada') => setFormaPagamentoParc(v)}>
                           <SelectTrigger className={cn("h-7 text-[11px]", fieldBg, xmlCls('parcelamento'))}><SelectValue /></SelectTrigger>
                           <SelectContent>
@@ -3006,7 +3009,7 @@ export function LancamentoV2Dialog({
                     )}
                     {formaPagamentoParc === 'parcelada' && (
                       <div>
-                        <Label className="text-[10px] text-muted-foreground">Nº de parcelas *</Label>
+                        <Label className={REGUA_ROTULO}>Nº de parcelas *</Label>
                         <Input
                           type="number"
                           min={2}
@@ -3052,7 +3055,7 @@ export function LancamentoV2Dialog({
             {/* ═══ fim ABA PAGAMENTO ═══ */}
 
             {/* ═══ ABA DOCUMENTOS ═══ */}
-            <TabsContent value="documentos" className="mt-0 space-y-2 focus-visible:outline-none">
+            <TabsContent value="documentos" className="mt-0 space-y-1.5 focus-visible:outline-none">
             {/* ⚠ OS ANEXOS VÊM ANTES DOS CAMPOS ANTIGOS, e os dois convivem por decisão
                 (97b item 4). `Tipo Documento` e `Nº Documento` são COLUNAS DO LANÇAMENTO,
                 lidas por Enriquecer, importações e legados; derivá-las do documento
@@ -3086,7 +3089,7 @@ export function LancamentoV2Dialog({
               )}
               <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">
                 <div>
-                  <Label className="text-[10px] text-muted-foreground">Tipo documento</Label>
+                  <Label className={REGUA_ROTULO}>Tipo documento</Label>
                   <Select disabled={topoTravado || !!modoOC} value={tipoDocumento || '__none_td__'} onValueChange={v => { setTipoDocumento(v === '__none_td__' ? '' : v as TipoDocumento); if (v !== 'Nota Fiscal') { /* keep raw */ } }}>
                     <SelectTrigger tabIndex={12} className={cn("h-7 text-[11px]", fieldBg)}><SelectValue placeholder="Selecione" /></SelectTrigger>
                     <SelectContent>
@@ -3096,7 +3099,7 @@ export function LancamentoV2Dialog({
                   </Select>
                 </div>
                 <div>
-                  <Label className="text-[10px] text-muted-foreground">{xmlRot('Nº documento', 'documento')}</Label>
+                  <Label className={REGUA_ROTULO}>{xmlRot('Nº documento', 'documento')}</Label>
                   <Input
                     tabIndex={13}
                     disabled={topoTravado}
@@ -3368,28 +3371,29 @@ export function LancamentoV2Dialog({
               Nenhuma lógica/estado/validação — só apresentação. */}
           {!excelContext && (
             /* MODAIS-PADRAO-01e — as pecas do Abate (`ui/linha-resumo`): 240px, so' a linha do corpo (o
-               rodape voltou a' largura inteira), faixa de titulo e secoes de 10px (eram 11px e 9px), pares
-               pelo `LinhaResumo`. Mesmo texto, mesmos valores. */
+               rodape voltou a' largura inteira), pares pelo `LinhaResumo`. Mesmo texto, mesmos valores.
+               UI-MODAL-BLOCOS-01 · LANCAMENTO COMPACTO — `formato="pares"`: titulos em sentence case 11px/600, faixa de 18px,
+               linhas de 16px, rotulo na largura do maior e o valor colado (sem caixa alta). */
             <div className="col-start-2 row-start-2 min-h-0">
-              <AsideResumo faixa={<FaixaTituloResumo titulo="Resumo do lançamento" />}>
+              <AsideResumo formato="pares" faixa={<FaixaTituloResumo titulo="Resumo do lançamento" />}>
                 <SecaoResumo titulo="Identificação" />
-                <div>
+                <div className="contents">
                   <LinhaResumo rotulo="Tipo" valor={resumoTipoLabel} cor={resumoTipoCor} />
                   <LinhaResumo rotulo="Produto" valor={descricao} quebra />
-                  <LinhaResumo rotulo="Data Competência" valor={resumoFmtData(dataCompetencia)} />
+                  <LinhaResumo rotulo="Data competência" valor={resumoFmtData(dataCompetencia)} />
                   <LinhaResumo rotulo="Favorecido" valor={resumoFavorecido} quebra />
                   <LinhaResumo rotulo="Fazenda" valor={resumoFazenda} quebra />
                 </div>
 
                 <SecaoResumo titulo="Financeiro" />
-                <div>
+                <div className="contents">
                   <LinhaResumo rotulo="Valor" valor={valorNum > 0 ? formatMoeda(valorNum) : null} />
                   {!isEntrada && <LinhaResumo rotulo="Conta origem" valor={resumoContaOrigem} quebra />}
                   {(isEntrada || isTransferencia) && <LinhaResumo rotulo="Conta destino" valor={resumoContaDestino} quebra />}
                 </div>
 
                 <SecaoResumo titulo="Classificação" />
-                <div>
+                <div className="contents">
                   <LinhaResumo rotulo="Safra" valor={resumoSafra} quebra />
                   <LinhaResumo rotulo="Centro" valor={centroCusto} quebra />
                   <LinhaResumo rotulo="Subcentro" valor={subcentro} quebra />
@@ -3399,17 +3403,17 @@ export function LancamentoV2Dialog({
                     paleta, e o vencimento aparece: previsto/programado/agendado não têm data de pagamento, e o resumo não dizia
                     quando o lançamento sai do banco. */}
                 <SecaoResumo titulo="Pagamento" />
-                <div data-testid="resumo-pagamento">
+                <div className="contents" data-testid="resumo-pagamento">
                   <LinhaResumo rotulo="Status" valor={resumoStatusLabel} cor={resumoStatusCor} />
                   <LinhaResumo rotulo="Vencimento" valor={resumoFmtData(dataVencimento)} />
                   <LinhaResumo rotulo="Pagamento" valor={resumoFmtData(pagamentoMostrado)} />
                   <LinhaResumo rotulo="Forma" valor={formaPgto} quebra />
                   <LinhaResumo rotulo="Modalidade" valor={!isEdit ? (formaPagamentoParc === 'parcelada' ? 'Parcelada' : 'À vista') : null} />
-                  <LinhaResumo rotulo="Nº de Parcelas" valor={!isEdit && formaPagamentoParc === 'parcelada' ? `${numParcelas}` : null} />
+                  <LinhaResumo rotulo="Nº de parcelas" valor={!isEdit && formaPagamentoParc === 'parcelada' ? `${numParcelas}` : null} />
                 </div>
 
                 <SecaoResumo titulo="Documento" />
-                <div>
+                <div className="contents">
                   <LinhaResumo rotulo="Tipo" valor={tipoDocumento || (docDoLancamento.origem === 'nota' ? 'Nota Fiscal · da compra' : docDoLancamento.origem === 'documento' ? 'Documento ligado' : null)} quebra />
                   <LinhaResumo rotulo="Número" valor={notaFiscalDisplay || (docVemDeDocumento ? docDoLancamento.rotulo : null)} quebra />
                 </div>

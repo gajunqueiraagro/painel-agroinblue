@@ -20,7 +20,18 @@
  *
  * Módulo folha: importa só React. `ui/` nunca importa de `abate/`, `compra/` ou `venda/`.
  */
-import type { ReactNode } from 'react';
+import { createContext, useContext, type ReactNode } from 'react';
+
+/**
+ * O FORMATO DO RESUMO — UI-MODAL-BLOCOS-01 · LANCAMENTO COMPACTO (Gabriel 18/10/2026 15:45: títulos em MAIÚSCULAS no resumo são
+ * proibidos). 'faixas' é o de sempre (Abate, Venda, Compra, envelope: NADA muda neles). 'pares' é o padrão da casa dos blocos de
+ * leitura: títulos em sentence case 11px/600 (faixa do topo de 18px), linhas de 16px a 11px, rótulo cinza na largura do MAIOR
+ * rótulo do resumo e o valor colado nele (uma grade de duas colunas no corpo, as seções ocupando as duas). Quem o pede é o
+ * `AsideResumo` (`formato="pares"`); as outras peças leem pelo contexto — o hospedeiro não repete a prop linha a linha.
+ * ⚠ NO 'pares' O PADDING MORA NO CORPO (a grade), não na linha: a linha vira duas células da grade (`contents`).
+ */
+type FormatoDoResumo = 'faixas' | 'pares';
+const FormatoResumo = createContext<FormatoDoResumo>('faixas');
 
 export function LinhaResumo({ rotulo, valor, cor, forte, selo, empilhado, seloAbaixo, quebra }: {
   rotulo: string; valor: string | null;
@@ -70,6 +81,21 @@ export function LinhaResumo({ rotulo, valor, cor, forte, selo, empilhado, seloAb
   quebra?: boolean;
 }) {
   const quebrar = !!quebra && !empilhado && !seloAbaixo;
+  const formato = useContext(FormatoResumo);
+  if (formato === 'pares') {
+    return (
+      <div className="contents" data-linha-resumo="">
+        <span className="truncate leading-4 text-muted-foreground" title={rotulo}>{rotulo}</span>
+        <span className={`flex min-w-0 items-baseline gap-1.5 leading-4`}>
+          {selo}
+          <span className={`min-w-0 tabular-nums ${quebrar ? 'break-words' : 'truncate'} ${forte ? 'font-bold' : 'font-medium'} ${valor ? (cor ?? '') : ''}`}
+            title={!quebrar && valor ? valor : undefined}>
+            {valor || '—'}
+          </span>
+        </span>
+      </div>
+    );
+  }
   return (
     /* ⚠ O PADDING MORA NA LINHA, nao no container — A17. Cada item e' uma linha so', com
        o valor a direita e sem quebra; `py-px` da' ~16px por linha, e e' o que faz as
@@ -100,7 +126,19 @@ export function LinhaResumo({ rotulo, valor, cor, forte, selo, empilhado, seloAb
  * `px-3`, aside `self-start` — e o resumo de cada modal tinha uma altura diferente.
  * As classes sao as do Abate; nada foi reescrito na mudanca.
  */
-export function AsideResumo({ faixa, children }: { faixa: ReactNode; children: ReactNode }) {
+export function AsideResumo({ faixa, children, formato = 'faixas' }: { faixa: ReactNode; children: ReactNode; formato?: FormatoDoResumo }) {
+  if (formato === 'pares') {
+    return (
+      <FormatoResumo.Provider value="pares">
+        <aside className="flex h-full flex-col bg-card rounded-md border shadow-sm overflow-hidden text-[11px]">
+          {faixa}
+          <div className="flex-1 min-h-0 overflow-y-auto grid grid-cols-[max-content_minmax(0,1fr)] content-start gap-x-2 px-2.5 pb-1">
+            {children}
+          </div>
+        </aside>
+      </FormatoResumo.Provider>
+    );
+  }
   return (
     /* ⚠ O CARD OCUPA A COLUNA INTEIRA, e quem rola e' a LISTA dentro dele.
         Antes o `aside` era `sticky self-start`: ele tinha a altura do CONTEUDO e a
@@ -121,6 +159,15 @@ export function AsideResumo({ faixa, children }: { faixa: ReactNode; children: R
 /* `titulo` — MODAIS-PADRAO-01d: o envelope dos lancamentos simples diz "Resumo do lancamento" /
    "Resumo da meta", e a faixa e' a mesma. Sem ele, o texto de sempre. */
 export function FaixaTituloResumo({ children, titulo = 'Resumo da operação' }: { children?: ReactNode; titulo?: string }) {
+  const formato = useContext(FormatoResumo);
+  if (formato === 'pares') {
+    return (
+      <div className="shrink-0 h-[18px] border-b border-border bg-accent/40 flex items-center gap-2 px-2.5 text-[11px] font-semibold leading-4 text-primary">
+        {titulo}
+        {children}
+      </div>
+    );
+  }
   return (
     /* ⚠ O STATUS MORA NO CABECALHO DO RESUMO, nao numa linha da lista: e' a
         primeira pergunta ("em que pe esta esta operacao?") e ela nao deve disputar
@@ -133,6 +180,14 @@ export function FaixaTituloResumo({ children, titulo = 'Resumo da operação' }:
 }
 
 export function SecaoResumo({ titulo, extra }: { titulo: string; extra?: ReactNode }) {
+  const formato = useContext(FormatoResumo);
+  if (formato === 'pares') {
+    return (
+      <div className="col-span-2 mt-1.5 first:mt-1 mb-0.5 flex h-4 items-center gap-1.5 border-b border-border/60 text-[11px] font-semibold leading-4 text-foreground" data-secao-resumo="">
+        {titulo}{extra}
+      </div>
+    );
+  }
   const rotulo = <span className="text-[10px] font-bold uppercase tracking-wide text-primary/90 leading-none">{titulo}</span>;
   return (
     <div className="bg-primary/10 border-y border-primary/15 px-2.5 py-1 mt-0.5 first:mt-0 mb-0.5">

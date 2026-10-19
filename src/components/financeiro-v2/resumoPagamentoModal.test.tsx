@@ -117,10 +117,10 @@ describe('o status no bloco Pagamento, com a cor da paleta', () => {
 });
 
 describe('a ordem do bloco e o vencimento', () => {
-  it('Status · Vencimento · Pagamento · Forma · Modalidade · Nº de Parcelas; previsto mostra o vencimento e "—" no pagamento', async () => {
+  it('Status · Vencimento · Pagamento · Forma · Modalidade · Nº de parcelas; previsto mostra o vencimento e "—" no pagamento', async () => {
     await abrir(FOLHA);
     expect(linhasPagamento()).toEqual([
-      ['Status', 'Previsto'], ['Vencimento', '05/11/2026'], ['Pagamento', '—'], ['Forma', 'PIX'], ['Modalidade', '—'], ['Nº de Parcelas', '—'],
+      ['Status', 'Previsto'], ['Vencimento', '05/11/2026'], ['Pagamento', '—'], ['Forma', 'PIX'], ['Modalidade', '—'], ['Nº de parcelas', '—'],
     ]);
   });
   it('sem vencimento: "—"; realizado mostra as duas datas', async () => {

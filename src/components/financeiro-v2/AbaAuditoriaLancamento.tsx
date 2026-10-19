@@ -155,7 +155,7 @@ export function AbaAuditoriaLancamento({ lancamentoId, criadoPor, criadoEm, desc
     <div className="flex min-h-0 flex-col gap-2">
       {/* A21 — o cabeçalho da aba não rola; só a lista abaixo dele. */}
       <div className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b bg-background pb-1">
-        <span className="text-[12px] font-semibold text-foreground">Histórico do lançamento</span>
+        <span className="text-[11px] font-semibold text-foreground">Histórico do lançamento</span>
         {eventos && <span className="text-[10px] text-muted-foreground shrink-0">{resumo}</span>}
       </div>
       {eventos === null ? (
