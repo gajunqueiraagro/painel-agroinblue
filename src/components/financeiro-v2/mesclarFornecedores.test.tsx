@@ -71,6 +71,21 @@ describe('o diálogo', () => {
     await waitFor(() => expect(screen.getByTestId('recado-da-mesclagem').textContent).toContain('CPF/CNPJ diferentes'), { timeout: 2000 });
     expect(screen.getByTestId('mesclar')).toBeDisabled();
   });
+  it('FORN-MESCLAR-02a — a recusa do banco aparece INTEIRA no rodapé: duas linhas sem corte, o texto inteiro também no title', async () => {
+    banco.recusar = true;
+    render(<MesclarFornecedoresDialog aberto aoFechar={vi.fn()} clienteId="cli" />);
+    fireEvent.click(await screen.findByTestId('sugestao-de-repetido'));
+    const frase = 'CPF/CNPJ diferentes: X e Y. Fornecedores com documentos diferentes não se mesclam.';
+    await waitFor(() => expect(screen.getByTestId('recado-da-mesclagem').textContent).toBe(frase), { timeout: 2000 });
+    const r = screen.getByTestId('recado-da-mesclagem');
+    expect(r.getAttribute('title')).toBe(frase);
+    expect(r.className).not.toMatch(/\btruncate\b/);
+    expect(r.className).toMatch(/\bline-clamp-2\b/);
+    expect(r.className).toMatch(/\bbreak-words\b/);
+    expect(r.className).toMatch(/leading-\[14px\]/);
+    /* duas linhas de 14px cabem no rodapé de altura fixa (36px) */
+    expect((r.parentElement as HTMLElement).className).toMatch(/\bh-\[36px\]/);
+  });
   it('desfazer pede motivo e grava com ele', async () => {
     render(<MesclarFornecedoresDialog aberto aoFechar={vi.fn()} clienteId="cli" />);
     fireEvent.click(screen.getByText(/Mesclagens recentes/));

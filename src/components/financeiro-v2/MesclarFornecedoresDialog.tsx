@@ -220,7 +220,9 @@ export function MesclarFornecedoresDialog({ aberto, aoFechar, clienteId, inicial
         )}
 
         <div className="flex h-[36px] shrink-0 items-center gap-2 border-t px-3">
-          <span className={`min-w-0 flex-1 truncate text-[10px] ${recado?.tom === 'erro' || (!recado && previa?.recusa) ? 'text-destructive' : recado ? 'text-[#15803d]' : 'text-muted-foreground'}`}
+          {/* FORN-MESCLAR-02a — a recusa do banco aparece INTEIRA: até duas linhas de 14px dentro do rodapé de 36px (layout fixo); era
+              `truncate` e a frase ("Subcentro … nao existe no plano de contas…") cortava. O texto inteiro segue no `title`. */}
+          <span className={`min-w-0 flex-1 line-clamp-2 break-words text-[10px] leading-[14px] ${recado?.tom === 'erro' || (!recado && previa?.recusa) ? 'text-destructive' : recado ? 'text-[#15803d]' : 'text-muted-foreground'}`}
             title={recado?.texto ?? motivoDoBotao ?? undefined} data-testid="recado-da-mesclagem">
             {recado?.texto ?? (aba === 'mesclar' ? motivoDoBotao ?? (confirmando ? 'Confere? Isto move as referências e inativa os absorvidos (pode ser desfeito).' : '') : '')}
           </span>
