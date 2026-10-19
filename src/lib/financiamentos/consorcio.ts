@@ -68,7 +68,9 @@ const txt = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? 
 const bool = (v: unknown): boolean => v === true;
 const lista = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 
-export interface Faixa { faixa: number; de: number; ate: number; parcelas: number; adiada: boolean; fundoComum: number; taxaAdm: number; reserva: number; seguro: number; total: number }
+export interface Faixa { faixa: number; de: number; ate: number; parcelas: number; adiada: boolean; fundoComum: number; taxaAdm: number; reserva: number; seguro: number; total: number;
+  /** FIN-CONSORCIO-03b: os centavos do fundo comum que o gerador pôs nesta faixa (a última do grupo que recebe o resto); nulo sem ajuste */
+  ajusteArredondamento: number | null }
 export interface Totais { fundoComum: number; taxaAdm: number; reserva: number; seguro: number; total: number }
 export interface Cronograma { faixas: Faixa[]; totais: Totais | null; avisos: string[]; recusa: string | null; parcelas: number; aPagarAgora: number | null; adiadas: number | null; vencimentoFinal: string | null }
 
@@ -77,7 +79,7 @@ function lerFaixa(v: unknown): Faixa | null {
   const faixa = num(o.faixa), de = num(o.de), ate = num(o.ate);
   if (faixa === null || de === null || ate === null) return null;
   return { faixa, de, ate, parcelas: num(o.parcelas) ?? 0, adiada: bool(o.adiada), fundoComum: num(o.fundo_comum) ?? 0, taxaAdm: num(o.taxa_adm) ?? 0,
-    reserva: num(o.fundo_reserva) ?? 0, seguro: num(o.seguro) ?? 0, total: num(o.total) ?? 0 };
+    reserva: num(o.fundo_reserva) ?? 0, seguro: num(o.seguro) ?? 0, total: num(o.total) ?? 0, ajusteArredondamento: num(o.ajuste_arredondamento) };
 }
 export function lerCronograma(v: unknown): Cronograma | null {
   const o = obj(v); if (!o) return null;
@@ -92,6 +94,8 @@ export function lerCronograma(v: unknown): Cronograma | null {
 export interface ParcelaDoConsorcio {
   id: string; numero: number; vencimento: string | null; fundoComum: number; taxaAdm: number; reserva: number; seguro: number; total: number;
   faixa: number | null; adiada: boolean; ajustada: boolean; situacao: SituacaoDaParcela; trava: string | null;
+  /** FIN-CONSORCIO-03b: o ajuste de arredondamento do gerador, quando o fundo comum gravado é o dele */
+  ajusteArredondamento: number | null;
   lancamentoId: string | null; pago: number | null; devolvido: number | null; liquido: number | null;
 }
 export interface SaldoDoConsorcio {
@@ -123,7 +127,8 @@ export function lerTelaDoConsorcio(v: unknown): TelaDoConsorcio | null {
     const q = obj(p); if (!q || !txt(q.id) || num(q.numero) === null || !ehSituacao(q.situacao)) return null;
     parcelas.push({ id: String(q.id), numero: num(q.numero) ?? 0, vencimento: txt(q.vencimento), fundoComum: num(q.fundo_comum) ?? 0,
       taxaAdm: num(q.taxa_adm) ?? 0, reserva: num(q.fundo_reserva) ?? 0, seguro: num(q.seguro) ?? 0, total: num(q.total) ?? 0, faixa: num(q.faixa),
-      adiada: bool(q.adiada), ajustada: bool(q.ajustada), situacao: q.situacao, trava: txt(q.trava), lancamentoId: txt(q.lancamento_id),
+      adiada: bool(q.adiada), ajustada: bool(q.ajustada), situacao: q.situacao, trava: txt(q.trava), ajusteArredondamento: num(q.ajuste_arredondamento),
+      lancamentoId: txt(q.lancamento_id),
       pago: num(q.pago), devolvido: num(q.devolvido), liquido: num(q.liquido) });
   }
   const faixas: Faixa[] = [];
@@ -171,6 +176,11 @@ export function formDaTela(t: TelaDoConsorcio): FormDoConsorcio {
   };
 }
 
+/** FIN-CONSORCIO-03b — a marca do ajuste de arredondamento (o `title` da célula e da faixa); o número é do gerador */
+export const ROTULO_AJUSTE = 'ajuste';
+export const tituloDoAjuste = (v: number) =>
+  `ajuste de arredondamento: ${v < 0 ? '−' : '+'}R$ ${brl(Math.abs(v))} — os centavos da divisão da carta ficam na última parcela do grupo`;
+
 /* ── FIN-CONSORCIO-03 — o que falta para o gerador, e a dica do fundo comum ─────────────────────────────────────────── */
 export type CampoQueFalta = 'carta' | 'primeiraParcela' | 'prazoGrupo';
 export interface ItemQueFalta { campo: CampoQueFalta; rotulo: string; aba: 'consorcio' | 'custos' }
@@ -191,7 +201,10 @@ export function dicaDoFundoComum(f: FormDoConsorcio, c: Cronograma | null): stri
     return pagas ? `automático: ${base} = R$ ${brl(pagas.fundoComum)}` : `automático: ${base}`;
   }
   const adiada = c?.faixas.find((x) => x.adiada) ?? null;
-  if (adiada) return `restante nas ${adiada.parcelas} adiadas · R$ ${brl(adiada.fundoComum)} cada`;
+  /* FIN-CONSORCIO-03b: a última adiada pode ser faixa própria (os centavos do arredondamento): a contagem é a do gerador (`adiadas`) */
+  const ajustada = c?.faixas.find((x) => x.adiada && x.ajusteArredondamento != null) ?? null;
+  if (adiada) return `restante nas ${c?.adiadas ?? adiada.parcelas} adiadas · R$ ${brl(adiada.fundoComum)} cada`
+    + (ajustada && ajustada !== adiada ? ` (a última R$ ${brl(ajustada.fundoComum)})` : '');
   if (f.transcorridas === 'adesao') return 'restante da carta pago na adesão';
   return '';
 }
@@ -222,11 +235,14 @@ export function linhaCurta(t: Pick<TelaDoConsorcio['contrato'], 'credorNome' | '
 }
 
 /** As linhas do resumo lateral (só leitura do banco). */
+/** "47–79" ou, na faixa de uma parcela só (a última adiada com os centavos), "80" */
+export const intervaloDaFaixa = (f: { de: number; ate: number }) => (f.de === f.ate ? String(f.de) : `${f.de}–${f.ate}`);
+
 export function linhasDoResumo(t: TelaDoConsorcio): { rotulo: string; valor: string }[] {
   const s = t.saldo;
   return [
     { rotulo: 'Carta', valor: brl(s.carta) },
-    ...(t.faixas.length ? t.faixas.map((f) => ({ rotulo: `Faixa ${f.de}–${f.ate}${f.adiada ? ' adiada' : ''}`, valor: brl(f.total) })) : [{ rotulo: 'Faixas', valor: '—' }]),
+    ...(t.faixas.length ? t.faixas.map((f) => ({ rotulo: `Faixa ${intervaloDaFaixa(f)}${f.adiada ? ' adiada' : ''}`, valor: brl(f.total) })) : [{ rotulo: 'Faixas', valor: '—' }]),
     { rotulo: 'Última a pagar', valor: s.ultimaAPagar ? textoDoVencimento(s.ultimaAPagar) : '—' },
     { rotulo: 'Custo', valor: brl(s.custo) },
     { rotulo: 'Andamento', valor: `${s.pagas} de ${s.parcelas} pagas` },

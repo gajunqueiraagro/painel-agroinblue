@@ -38,8 +38,10 @@ beforeEach(() => { estado.tela = fixture.tela; largura(1440); });
 describe('o leitor', () => {
   it('lê a tela e o gerador do banco; peça torta invalida a leitura inteira', () => {
     expect(tela.parcelas).toHaveLength(80);
-    expect(tela.faixas.map((f) => [f.de, f.ate, f.adiada])).toEqual([[1, 12, false], [13, 46, false], [47, 80, true]]);
-    expect(lerCronograma(fixture.cronograma)?.faixas).toHaveLength(3);
+    expect(tela.faixas.map((f) => [f.de, f.ate, f.adiada])).toEqual([[1, 12, false], [13, 46, false], [47, 79, true], [80, 80, true]]);
+    /* FIN-CONSORCIO-03b: a última adiada leva os centavos do fundo comum e vira faixa própria */
+    expect(lerCronograma(fixture.cronograma)?.faixas).toHaveLength(4);
+    expect(lerCronograma(fixture.cronograma)?.faixas[3].ajusteArredondamento).toBe(-0.02);
     expect(lerTelaDoConsorcio({ ...fixture.tela, parcelas: [{ id: 'x', numero: 1, situacao: 'quitada' }] })).toBeNull();
   });
   it('as regras vão e voltam (formulário ↔ regras do contrato)', () => {
@@ -56,9 +58,10 @@ describe('o leitor', () => {
   });
   it('o resumo lateral é lido do banco: uma linha por faixa e o adiado com as parcelas no rótulo', () => {
     const l = linhasDoResumo(tela);
-    expect(l.filter((x) => x.rotulo.startsWith('Faixa'))).toHaveLength(3);
+    expect(l.filter((x) => x.rotulo.startsWith('Faixa'))).toHaveLength(4);
+    expect(l.find((x) => x.rotulo === 'Faixa 80 adiada')?.valor).toBe('2.482,53');
     expect(l.find((x) => x.rotulo.startsWith('Adiado'))?.rotulo).toBe('Adiado · 34 parc.');
-    expect(fundoComumDoContrato(tela.saldo)).toBeCloseTo(197608, 2);
+    expect(fundoComumDoContrato(tela.saldo)).toBeCloseTo(197607.98, 2);
   });
   it('o resumo só aparece com janela de 900px ou mais', () => {
     expect(mostraResumo(899)).toBe(false);
@@ -73,7 +76,12 @@ describe('a aba Parcelas', () => {
     montar();
     const titulos = screen.getAllByTestId('titulo-da-faixa').map((e) => e.textContent);
     expect(titulos).toEqual([expect.stringMatching(/^Faixa 1 · parcelas 1–12/), expect.stringMatching(/^Faixa 2 · parcelas 13–46/),
-      expect.stringMatching(/^Faixa 3 · parcelas 47–80 · adiadas até a contemplação/)]);
+      expect.stringMatching(/^Faixa 3 · parcelas 47–79 · adiadas até a contemplação/),
+      expect.stringMatching(/^Faixa 4 · parcela 80 · adiadas até a contemplação · .* · ajuste de arredondamento$/)]);
+    /* a parcela com os centavos tem a marca à vista e o porquê no title */
+    const ajuste = screen.getByTestId('parcela-com-ajuste');
+    expect(ajuste.textContent).toBe('ajuste2.470,08');
+    expect(ajuste.getAttribute('title')).toBe('ajuste de arredondamento: −R$ 0,02 — os centavos da divisão da carta ficam na última parcela do grupo');
   });
   it('a parcela adiada sem data diz "contemplação" e a situação "Adiada"', () => {
     montar();
@@ -92,7 +100,7 @@ describe('a aba Parcelas', () => {
   it('o Total é o do banco (o saldo), não a soma das linhas', () => {
     montar();
     const total = screen.getByRole('table').querySelector('tfoot tr')!;
-    expect(total.textContent).toContain('224.293,04');
+    expect(total.textContent).toContain('224.293,02');
     expect(total.textContent).toContain('25.689,04');
   });
 });
@@ -100,7 +108,8 @@ describe('a aba Parcelas', () => {
 describe('as faixas geradas e os avisos', () => {
   it('as faixas do gerador e os avisos numa linha só', () => {
     render(<FaixasGeradas faixas={tela.faixas} avisos={['fundo comum: a', 'reserva: b']} recusa={null} />);
-    expect(screen.getAllByTestId('faixa-gerada')).toHaveLength(3);
+    expect(screen.getAllByTestId('faixa-gerada')).toHaveLength(4);
+    expect(screen.getByTestId('faixa-com-ajuste').textContent).toBe('ajuste2.470,08');
     expect(screen.getByTestId('avisos-do-gerador').textContent).toBe('! fundo comum: a · reserva: b');
   });
   it('sem faixa, a recusa do gerador fica escrita', () => {

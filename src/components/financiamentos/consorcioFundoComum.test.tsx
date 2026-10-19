@@ -42,11 +42,14 @@ describe('o fundo comum vai ao gerador como o termo diz', () => {
     expect(r.fundo_reserva).toEqual({ modo: 'pct_parcela', valor: 0.0063, total_pct: 0.5 });
     expect((dadosDoForm(formDoTermo(), 'cli').regras as Record<string, unknown>).fundo_comum).toEqual({ modo: 'pct_parcela', valor: 1.1625 });
   });
-  it('a resposta do banco para o caso 002122: faixas 2.803,66 / 2.890,84 / 2.716,49 e total 224.293,14', () => {
-    expect(PCT.faixas.map((f) => [f.de, f.ate, f.fundoComum, f.taxaAdm, f.reserva, f.total, f.adiada])).toEqual([
-      [1, 12, 2297.19, 494.02, 12.45, 2803.66, false], [13, 46, 2297.19, 581.2, 12.45, 2890.84, false], [47, 80, 2704.04, 0, 12.45, 2716.49, true]]);
-    expect(PCT.totais?.total).toBe(224293.14);
-    expect(PCT.totais?.fundoComum).toBe(197608.1);
+  it('a resposta do banco para o caso 002122 (FIN-CONSORCIO-03b): 2.803,66 / 2.890,84 / 2.716,49 e a 80 com os centavos; total 224.293,02', () => {
+    expect(PCT.faixas.map((f) => [f.de, f.ate, f.fundoComum, f.taxaAdm, f.reserva, f.total, f.adiada, f.ajusteArredondamento])).toEqual([
+      [1, 12, 2297.19, 494.02, 12.45, 2803.66, false, null], [13, 46, 2297.19, 581.2, 12.45, 2890.84, false, null],
+      [47, 79, 2704.04, 0, 12.45, 2716.49, true, null], [80, 80, 2703.92, 0, 12.45, 2716.37, true, -0.12]]);
+    expect(PCT.totais?.total).toBe(224293.02);
+    expect(PCT.totais?.fundoComum).toBe(197607.98);
+    /* fecha com a carta: o gerador não avisa mais o fundo comum (a reserva continua avisando, é outra regra) */
+    expect(PCT.avisos.some((a) => a.startsWith('fundo comum:'))).toBe(false);
   });
   it('automático continua sendo a carta dividida (regras {modo:auto}); R$ fixo e % total vão como vieram', () => {
     expect(regrasDoForm({ ...formDoTermo(), fundoComum: { modo: 'auto', valor: null } }).fundo_comum).toEqual({ modo: 'auto' });
@@ -60,7 +63,7 @@ describe('o fundo comum vai ao gerador como o termo diz', () => {
   });
   it('a dica lê os números do gerador', () => {
     expect(dicaDoFundoComum({ ...formDoTermo(), fundoComum: { modo: 'auto', valor: null } }, AUTO)).toBe('automático: carta ÷ prazo = R$ 2.470,10');
-    expect(dicaDoFundoComum(formDoTermo(), PCT)).toBe('restante nas 34 adiadas · R$ 2.704,04 cada');
+    expect(dicaDoFundoComum(formDoTermo(), PCT)).toBe('restante nas 34 adiadas · R$ 2.704,04 cada (a última R$ 2.703,92)');
   });
 });
 
@@ -98,7 +101,7 @@ describe('a tela', () => {
     const prazos = within(screen.getByTestId('bloco-prazos'));
     fireEvent.click(prazos.getByRole('button', { name: '% parc.' }));
     expect(screen.getAllByDisplayValue('0,0063').length).toBe(1);
-    expect(screen.getByTestId('dica-fundo-comum').textContent).toBe('a pagar agora 46 · restante nas 34 adiadas · R$ 2.704,04 cada');
+    expect(screen.getByTestId('dica-fundo-comum').textContent).toBe('a pagar agora 46 · restante nas 34 adiadas · R$ 2.704,04 cada (a última R$ 2.703,92)');
     fireEvent.click(prazos.getByRole('button', { name: 'Automático' }));
     expect(screen.getByTestId('fundo-comum-auto')).toBeTruthy();
   });

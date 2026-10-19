@@ -1,6 +1,7 @@
 -- FIN-CONSORCIO-02 — o consorcio universal. Roda depois da 20261027203300; termina em RAISE (nada fica). Admin simulado; sintetico no
 -- cliente Teste (o T10 so' SIMULA no cliente real: nada e' gravado).
--- T1 o gerador reproduz o caso do documento (3 faixas, totais, avisos do fundo comum e da reserva).
+-- T1 o gerador reproduz o caso do documento (4 faixas desde o FIN-CONSORCIO-03b: a ultima adiada leva os centavos do fundo comum; totais;
+--    o aviso da reserva; o do fundo comum saiu porque agora fecha com a carta).
 -- T2 outra administradora: taxa igual, transcorridas diluidas, INCC sem teto, seguro sobre o credito — 1 faixa, sem aviso.
 -- T3 gravado pelo escritor: 80 parcelas, as 34 adiadas sem vencimento e sem lancamento; o principal em "Consorcio a contemplar".
 -- T4 editar uma parcela (ajustada) e regerar mantendo / recalculando.  T5 reajuste limitado ao teto, e o desfazer devolve tudo.
@@ -23,14 +24,15 @@ DECLARE
 BEGIN
   -- T1
   r := fn_consorcio_cronograma(c_regras);
-  IF r->>'recusa' is not null OR (r->>'parcelas')::int <> 80 OR jsonb_array_length(r->'faixas') <> 3
+  IF r->>'recusa' is not null OR (r->>'parcelas')::int <> 80 OR jsonb_array_length(r->'faixas') <> 4
      OR (r->'faixas'->0->>'total')::numeric <> 2803.66 OR (r->'faixas'->0->>'ate')::int <> 12
      OR (r->'faixas'->1->>'total')::numeric <> 2890.84 OR (r->'faixas'->1->>'taxa_adm')::numeric <> 581.20 OR (r->'faixas'->1->>'ate')::int <> 46
      OR (r->'faixas'->2->>'total')::numeric <> 2716.49 OR (r->'faixas'->2->>'fundo_comum')::numeric <> 2704.04 OR not (r->'faixas'->2->>'adiada')::boolean
-     OR (r->'totais'->>'fundo_comum')::numeric <> 197608.10 OR (r->'totais'->>'taxa_adm')::numeric <> 25689.04
-     OR (r->'totais'->>'fundo_reserva')::numeric <> 996.00 OR (r->'totais'->>'total')::numeric <> 224293.14
+     OR (r->'faixas'->2->>'ate')::int <> 79 OR (r->'faixas'->3->>'fundo_comum')::numeric <> 2703.92 OR (r->'faixas'->3->>'ajuste_arredondamento')::numeric <> -0.12
+     OR (r->'totais'->>'fundo_comum')::numeric <> 197607.98 OR (r->'totais'->>'taxa_adm')::numeric <> 25689.04
+     OR (r->'totais'->>'fundo_reserva')::numeric <> 996.00 OR (r->'totais'->>'total')::numeric <> 224293.02
      OR r->'linhas'->46->>'vencimento' is not null OR r->'linhas'->45->>'vencimento' <> '2035-04-16' THEN RAISE EXCEPTION 'T1: %', r - 'linhas'; END IF;
-  IF NOT (r->'avisos') @> '["fundo comum: 197.608,10 nas parcelas x 197.607,98 da carta (+0,12, arredondamento)"]'::jsonb
+  IF EXISTS (select 1 from jsonb_array_elements_text(r->'avisos') a where a like 'fundo comum:%')
      OR NOT (r->'avisos') @> '["reserva: 996,00 pelo % por parcela x 988,04 pelo % total"]'::jsonb THEN RAISE EXCEPTION 'T1 avisos: %', r->'avisos'; END IF;
 
   -- T2
@@ -58,7 +60,8 @@ BEGIN
     RAISE EXCEPTION 'T3 gravado';
   END IF;
   r := fn_consorcio_tela(v_fin, '2031-01-01');
-  IF jsonb_array_length(r->'faixas') <> 3 OR (r->'saldo'->>'fundo_comum_adiado')::numeric <> 91937.36 OR (r->'saldo'->>'carta')::numeric <> 197607.98
+  IF jsonb_array_length(r->'faixas') <> 4 OR (r->'saldo'->>'fundo_comum_adiado')::numeric <> 91937.24
+     OR (r->'parcelas'->79->>'ajuste_arredondamento')::numeric <> -0.12 OR (r->'faixas'->3->>'ajuste_arredondamento')::numeric <> -0.12 OR (r->'saldo'->>'carta')::numeric <> 197607.98
      OR (r->'parcelas'->79->>'situacao') <> 'adiada' OR (r->'parcelas'->0->>'situacao') <> 'a_vencer' THEN RAISE EXCEPTION 'T3 tela: %', r->'saldo'; END IF;
 
   -- T4
@@ -84,7 +87,8 @@ BEGIN
   perform fn_financiamento_parcelas_desfazer((r->>'operacao_id')::uuid, 'teste do desfazer', false);
   IF (select valor_total from financiamentos where id = v_fin) <> 197607.98 OR (select (regras->>'carta')::numeric from financiamento_consorcio where financiamento_id = v_fin) <> 197607.98
      OR (select valor_fundo_comum from financiamento_parcelas where financiamento_id = v_fin and data_vencimento = '2032-01-16') <> 2297.19
-     OR (select max(faixa) from financiamento_parcelas where financiamento_id = v_fin and status <> 'cancelado') <> 3 THEN RAISE EXCEPTION 'T5 desfazer'; END IF;
+     -- FIN-CONSORCIO-03b: a ultima adiada (com os centavos do fundo comum) e' faixa propria: 4 faixas antes do reajuste e depois do desfazer
+     OR (select max(faixa) from financiamento_parcelas where financiamento_id = v_fin and status <> 'cancelado') <> 4 THEN RAISE EXCEPTION 'T5 desfazer'; END IF;
 
   -- T6
   r := fn_consorcio_contemplar(v_fin, '{"data":"2032-03-10","forma":"lance","lance_tipo":"embutido","lance_valor":20000,"carta_recebida":177607.98}'::jsonb, false);
@@ -137,7 +141,7 @@ BEGIN
     'credor_id', 'd2b9be0d-21d6-4819-920e-12adb490ae41', 'grupo', '002122', 'cota', '1', 'tipo_bem', 'Máquina agrícola', 'atividade', 'pecuaria',
     'fazenda_id', '68f41ea0-3708-4423-b4b4-e42a3733c87a', 'conta_bancaria_id', '186a093b-0204-4164-95e3-0dd247457ffa', 'data_adesao', '2026-06-19',
     'regras', c_regras || '{"primeira_parcela":"2026-07-16"}'::jsonb), true);
-  IF r->>'recusa' is not null OR not (r->>'simulado')::boolean OR (r->'cronograma'->'totais'->>'total')::numeric <> 224293.14
+  IF r->>'recusa' is not null OR not (r->>'simulado')::boolean OR (r->'cronograma'->'totais'->>'total')::numeric <> 224293.02
      OR (select count(*) from financiamentos where cliente_id = 'a2d41cda-eb1e-4527-a6cf-a1b9663339e2') <> v_n THEN RAISE EXCEPTION 'T10: %', r; END IF;
 
   RAISE EXCEPTION 'FIN_CONSORCIO_02 OK';

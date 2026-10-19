@@ -28,7 +28,7 @@ import { useLarguraDaJanela } from '@/hooks/useLarguraDaJanela';
 import {
   FORM_VAZIO, ROTULO_INDICE, ROTULO_SITUACAO, TEXTO_PLANO_FIXO, TITULO_PLANO_FIXO, TITULO_SITUACAO, brl, dadosDoForm, formDaTela, linhaCurta,
   linhasDoResumo, mostraResumo, regrasDoForm, textoDoVencimento,
-  fundoComumDoContrato, faltaParaGerar, dicaDoFundoComum, type ItemQueFalta, type BaseDoSeguro, type FormDoConsorcio, type Indice, type ParcelaDoConsorcio, type Faixa, type SaldoDoConsorcio,
+  fundoComumDoContrato, faltaParaGerar, dicaDoFundoComum, tituloDoAjuste, ROTULO_AJUSTE, intervaloDaFaixa, type ItemQueFalta, type BaseDoSeguro, type FormDoConsorcio, type Indice, type ParcelaDoConsorcio, type Faixa, type SaldoDoConsorcio,
 } from '@/lib/financiamentos/consorcio';
 
 type Aba = 'consorcio' | 'custos' | 'parcelas' | 'documentos';
@@ -280,7 +280,7 @@ export function ConsorcioDialog({ aberto, aoFechar, financiamentoId, onSalvo, on
               <div className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-2 text-[11px] leading-4">
                 {(t ? linhasDoResumo(t) : [
                   { rotulo: 'Carta', valor: brl(form.carta) },
-                  ...(previa?.faixas.length ? previa.faixas.map((f) => ({ rotulo: `Faixa ${f.de}–${f.ate}${f.adiada ? ' adiada' : ''}`, valor: brl(f.total) })) : [{ rotulo: 'Faixas', valor: '—' }]),
+                  ...(previa?.faixas.length ? previa.faixas.map((f) => ({ rotulo: `Faixa ${intervaloDaFaixa(f)}${f.adiada ? ' adiada' : ''}`, valor: brl(f.total) })) : [{ rotulo: 'Faixas', valor: '—' }]),
                   { rotulo: 'Última a pagar', valor: previa?.vencimentoFinal ? textoDoVencimento(previa.vencimentoFinal) : '—' },
                   { rotulo: 'Taxa adm.', valor: previa?.totais ? brl(previa.totais.taxaAdm) : '—' },
                   { rotulo: 'Reserva', valor: previa?.totais ? brl(previa.totais.reserva) : '—' },
@@ -323,7 +323,12 @@ export function ConsorcioDialog({ aberto, aoFechar, financiamentoId, onSalvo, on
 export function FaixasGeradas({ faixas, avisos, recusa }: { faixas: Faixa[]; avisos: string[]; recusa: string | null }) {
   return (
     <section className={`${BLOCO_FORMULARIO} min-h-0 flex-1`} data-testid="faixas-geradas">
-      <TituloDoBloco nome="Faixas geradas" />
+      {/* FIN-CONSORCIO-03b — os avisos do gerador moram na linha do título (a última adiada virou faixa própria: a linha de baixo não
+          cabia nas janelas de 520–530px); rolam no lugar deles, inteiros no `title` */}
+      <TituloDoBloco nome="Faixas geradas" acao={
+        <span className="uma-linha-que-rola block max-w-[520px] text-[10px] leading-[15px] text-amber-700" data-testid="avisos-do-gerador" title={avisos.join('\n')}>
+          {avisos.length ? `! ${avisos.join(' · ')}` : ''}
+        </span>} />
       <table className="w-full table-fixed text-[10.5px]">
         <colgroup><col className="w-[104px]" /><col /><col /><col /><col /><col /><col className="w-[48px]" /></colgroup>
         <thead><tr className="h-[17px] bg-primary text-[9.5px] text-primary-foreground">
@@ -334,8 +339,11 @@ export function FaixasGeradas({ faixas, avisos, recusa }: { faixas: Faixa[]; avi
         <tbody>
           {faixas.map((f) => (
             <tr key={f.faixa} className="h-[17px] border-b" data-testid="faixa-gerada">
-              <td className="whitespace-nowrap px-1.5 tabular-nums">{f.de}–{f.ate}{f.adiada ? ' adiadas' : ''}</td>
-              <td className="px-1.5 text-right tabular-nums">{brl(f.fundoComum)}</td><td className="px-1.5 text-right tabular-nums">{brl(f.taxaAdm)}</td>
+              <td className="whitespace-nowrap px-1.5 tabular-nums">{intervaloDaFaixa(f)}{f.adiada ? (f.de === f.ate ? ' adiada' : ' adiadas') : ''}</td>
+              <td className="whitespace-nowrap px-1.5 text-right tabular-nums" title={f.ajusteArredondamento != null ? tituloDoAjuste(f.ajusteArredondamento) : undefined}
+                data-testid={f.ajusteArredondamento != null ? 'faixa-com-ajuste' : undefined}>
+                {f.ajusteArredondamento != null && <span className="mr-1 text-[9.5px] text-amber-700">{ROTULO_AJUSTE}</span>}{brl(f.fundoComum)}</td>
+              <td className="px-1.5 text-right tabular-nums">{brl(f.taxaAdm)}</td>
               <td className="px-1.5 text-right tabular-nums">{brl(f.reserva)}</td><td className="px-1.5 text-right tabular-nums">{brl(f.seguro)}</td>
               <td className="px-1.5 text-right font-semibold tabular-nums">{brl(f.total)}</td><td className="px-1.5 text-center tabular-nums">{f.parcelas}</td>
             </tr>
@@ -343,9 +351,6 @@ export function FaixasGeradas({ faixas, avisos, recusa }: { faixas: Faixa[]; avi
           {faixas.length === 0 && <tr><td colSpan={7} className="h-[17px] px-1.5 text-muted-foreground">{recusa ?? 'Preencha carta, 1ª parcela e prazo para ver as faixas.'}</td></tr>}
         </tbody>
       </table>
-      <div className="uma-linha-que-rola mt-0.5 h-[14px] shrink-0 text-[10px] leading-[14px] text-amber-700" data-testid="avisos-do-gerador" title={avisos.join('\n')}>
-        {avisos.length ? `! ${avisos.join(' · ')}` : ''}
-      </div>
     </section>
   );
 }
@@ -385,14 +390,18 @@ export function ParcelasDoConsorcio({ parcelas, faixas, saldo, ultimaOperacao, o
                 faixa ? (
                   <tr key={`f${faixa.faixa}`} className="bg-muted" data-testid="titulo-da-faixa">
                     <td colSpan={9} className="h-[18px] whitespace-nowrap px-1.5 py-0 text-[10px] font-semibold leading-[16px] text-primary">
-                      Faixa {faixa.faixa} · parcelas {faixa.de}–{faixa.ate}{faixa.adiada ? ' · adiadas até a contemplação' : ''} · {brl(faixa.total)}
+                      Faixa {faixa.faixa} · {faixa.de === faixa.ate ? 'parcela' : 'parcelas'} {intervaloDaFaixa(faixa)}{faixa.adiada ? ' · adiadas até a contemplação' : ''} · {brl(faixa.total)}
+                      {faixa.ajusteArredondamento != null && <span className="font-normal text-amber-700" title={tituloDoAjuste(faixa.ajusteArredondamento)}> · ajuste de arredondamento</span>}
                     </td>
                   </tr>
                 ) : null,
                 <tr key={p.id} className="border-b" data-testid="parcela-do-consorcio">
                   <td className={TD}>{p.numero}</td>
                   <td className={`${TD} ${p.vencimento ? '' : 'italic text-amber-700'}`} data-testid="vencimento-da-parcela" data-sem-data={p.vencimento ? undefined : ''}>{textoDoVencimento(p.vencimento)}</td>
-                  <td className={`${TD} text-right`}>{brl(p.fundoComum)}</td><td className={`${TD} text-right`}>{brl(p.taxaAdm)}</td>
+                  <td className={`${TD} whitespace-nowrap text-right`} title={p.ajusteArredondamento != null ? tituloDoAjuste(p.ajusteArredondamento) : undefined}
+                    data-testid={p.ajusteArredondamento != null ? 'parcela-com-ajuste' : undefined}>
+                    {p.ajusteArredondamento != null && <span className="mr-1 text-[9.5px] text-amber-700">{ROTULO_AJUSTE}</span>}{brl(p.fundoComum)}</td>
+                  <td className={`${TD} text-right`}>{brl(p.taxaAdm)}</td>
                   <td className={`${TD} text-right`}>{brl(p.reserva)}</td>
                   <td className={`${TD} text-right font-semibold`} title={p.devolvido ? `pago ${brl(p.pago)} · devolvido ${brl(p.devolvido)} · líquido ${brl(p.liquido)}` : undefined}>{brl(p.total)}</td>
                   <td className={`${TD} ${COR_SITUACAO[p.situacao]}`} title={TITULO_SITUACAO[p.situacao]}>{ROTULO_SITUACAO[p.situacao]}{p.ajustada ? ' ·' : ''}</td>
