@@ -2322,7 +2322,10 @@ export function LancamentoV2Dialog({
           //   de volta a' largura inteira, embaixo das duas colunas. No 02H o resumo descia ao lado do rodape
           //   para ganhar altura; com a altura pela janela ele ja' tem os 479px do Abate, e as cinco cascas
           //   passam a ter a mesma forma.
-          !excelContext && "grid grid-cols-[1fr_240px] grid-rows-[auto_minmax(0,1fr)_auto]",
+          // ⚠ `minmax(0,1fr)`, NUNCA `1fr` — FORN-MESCLAR-02a / faixa do XML (Gabriel 19/10/2026): `1fr` tem o MINIMO automatico, e o
+          //   minimo de uma linha `whitespace-nowrap` (o aviso "Fornecedor achado pelo nome · <razao social> …") e' o texto INTEIRO: a
+          //   coluna crescia ate' ele, o resumo saia pela direita e o rodape cortava. Com minimo zero, quem encolhe e' o texto.
+          !excelContext && "grid grid-cols-[minmax(0,1fr)_240px] grid-rows-[auto_minmax(0,1fr)_auto]",
         )}
           /* FIN-VALOR-CALC-01a — com conta aberta no campo Valor, Esc cancela a CONTA (o campo trata) e o modal fica. */
           onEscapeKeyDown={(e) => { if (contaAbertaRef.current) e.preventDefault(); }}
@@ -2369,7 +2372,7 @@ export function LancamentoV2Dialog({
           {/* PR-FIN-MODAL-02H — no grid (fluxo normal) o Tabs+form fica na col 1 / linha 2;
               no fluxo Excel mantém flex-1 (flex-col). O título do resumo saiu daqui e passou
               a ser a faixa de topo do próprio painel (col 2), alinhada a esta TabsList. */}
-          <Tabs value={abaAtiva} onValueChange={v => setAbaAtiva(v as AbaFinanceira)} className={cn("flex flex-col min-h-0", excelContext ? "flex-1" : "col-start-1 row-start-2")}>
+          <Tabs value={abaAtiva} onValueChange={v => setAbaAtiva(v as AbaFinanceira)} className={cn("flex min-w-0 flex-col min-h-0", excelContext ? "flex-1" : "col-start-1 row-start-2")}>
             {/* MODAIS-PADRAO-01e — a barra do Abate: botao 20px/10px, barra ~29px, aba ativa em navy claro
                 (bg-primary/10), como as outras cascas. Era h-8 com botao de 24px/12px e a ativa sublinhada. */}
             <TabsList className="w-full justify-start gap-1 rounded-none border-b border-border bg-card px-2 py-1 h-auto shrink-0">
@@ -2401,12 +2404,12 @@ export function LancamentoV2Dialog({
           {/* PR-Mesa-ExcelContext: com contexto Excel, corpo vira 2 colunas
               (form + painel). Sem contexto, wrapper usa `contents` (não gera
               caixa) → body volta a ser filho direto, layout 100% idêntico. */}
-          <div className="flex-1 flex min-h-0 overflow-hidden">
+          <div className="flex-1 flex min-w-0 min-h-0 overflow-hidden">
           {/* Scrollable body */}
           {/* UI-MODAL-BLOCOS-01 · LANCAMENTO COMPACTO — o corpo declara a régua de texto (11px / 13px de linha): os rótulos dos seletores
               da casa (fornecedor, produto, fazenda, subcentro, valor) são `<label>` INLINE e herdavam a caixa de linha de 24px do
               `body` — 8px de vão em cima de cada rótulo, medidos no DOM. 6px entre os blocos. */}
-          <div className="flex-1 overflow-y-auto px-4 py-2 space-y-1.5 bg-muted text-[11px] leading-[13px]" data-testid="corpo-do-lancamento">
+          <div className="min-w-0 flex-1 overflow-y-auto px-4 py-2 space-y-1.5 bg-muted text-[11px] leading-[13px]" data-testid="corpo-do-lancamento">
 
             {/* OC-CC-MODAL-FINANCEIRO-01 — a faixa de origem (o molde do "Do XML"): de qual operacao este lancamento e', com o
                 caminho de volta. Uma linha de 24px, em todas as abas; so' o texto corta (inteiro no `title`). */}
@@ -2436,7 +2439,7 @@ export function LancamentoV2Dialog({
                 <AvisosDoXml xml={xml} registradaDispensada={xmlRegistradaDispensada}
                   onDispensarRegistrada={() => setXmlRegistradaDispensada(true)} onAbrirOcorrencia={abrirOcorrenciaDaNota} />
                 {xmlAmbar('subcentro') && (
-                  <div className="flex h-6 items-center rounded border border-amber-300 bg-amber-50 px-2 text-[10px] text-amber-900" data-testid="origem-xml-subcentro"
+                  <div className="flex h-6 min-w-0 items-center overflow-hidden rounded border border-amber-300 bg-amber-50 px-2 text-[10px] text-amber-900" data-testid="origem-xml-subcentro"
                     title={`Classificação sugerida: ${xml.proposta.classificacao?.subcentro ?? ''} · ${xml.proposta.origens.subcentro ?? ''}`}>
                     <span className="min-w-0 truncate">Classificação sugerida: {xml.proposta.classificacao?.subcentro} · {xml.proposta.origens.subcentro} deste fornecedor</span>
                   </div>

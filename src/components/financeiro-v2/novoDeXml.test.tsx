@@ -465,6 +465,37 @@ describe('tela B — a faixa do fornecedor', () => {
     fireEvent.click(screen.getByTestId('xml-trocar-fornecedor'));
     expect(screen.queryByTestId('xml-faixa-fornecedor')).toBeNull();
   });
+  it('razao social MUITO longa: a faixa nao alarga o modal — o nome encolhe (inteiro no title), a caixa e "trocar" ficam, resumo e rodape seguem na grade', async () => {
+    /* ⚠ O jsdom NAO MEDE: o que prende e' o CONTRATO de largura (medido na bancada a 1.000, 1.126 e 1.440: faixa de 750px e 24px, resumo
+       e "Criar N Parcelas" dentro da janela). Antes a grade era `1fr` e a coluna crescia ate' o texto inteiro do aviso (1.274px). */
+    const LONGO = 'COOPERATIVA AGROINDUSTRIAL DOS PRODUTORES RURAIS DO MATO GROSSO DO SUL E REGIAO CENTRO OESTE LTDA FILIAL CAMPO GRANDE';
+    const longo = forn('agro', LONGO, null);
+    montarModal({ prefill: comConta(doXmlDe({ nomeEmitente: LONGO, duplicatas: [['001', '2026-10-30', '8119.00'], ['002', '2026-11-29', '8119.00']] }, [longo], { idPeloNome: 'agro' })) }, [longo]);
+    await screen.findByDisplayValue('16.238,00');
+    const faixa = screen.getByTestId('xml-faixa-fornecedor');
+    /* a frase inteira continua sendo o texto e o title da faixa */
+    expect(faixa.getAttribute('title')).toBe(`Fornecedor achado pelo nome · "${LONGO}" · cadastro sem CNPJ · o XML traz 11.222.333/0001-81`);
+    for (const c of ['h-6', 'min-w-0', 'overflow-hidden']) expect(faixa.className.split(' ')).toContain(c);
+    const nome = screen.getByTestId('xml-nome-do-fornecedor');
+    expect(nome.getAttribute('title')).toBe(LONGO);
+    expect(nome.className).toMatch(/\btruncate\b/);
+    expect(nome.className).toMatch(/shrink-\[10\]/);
+    /* os gestos nao encolhem: sempre a' vista, a' direita */
+    expect(screen.getByTestId('xml-gravar-documento').closest('label')!.className).toMatch(/\bshrink-0\b/);
+    expect(screen.getByTestId('xml-trocar-fornecedor').className).toMatch(/\bshrink-0\b/);
+    /* a raiz: a coluna principal da grade tem minimo ZERO, e a coluna do corpo tambem */
+    const dialogo = screen.getByRole('dialog');
+    expect(dialogo.className).toContain('grid-cols-[minmax(0,1fr)_240px]');
+    expect(dialogo.className).not.toMatch(/grid-cols-\[1fr_240px\]/);
+    expect(screen.getByRole('tablist').parentElement!.className).toMatch(/\bmin-w-0\b/);
+    expect(screen.getByTestId('corpo-do-lancamento').className).toMatch(/\bmin-w-0\b/);
+    /* o resumo e o rodape continuam na grade (coluna 2 e a linha do rodape) */
+    expect(dialogo.querySelector('aside')).not.toBeNull();
+    expect(botaoSalvar().textContent).toBe('Criar 2 Parcelas');
+    /* a "Classificação sugerida" tem o mesmo cuidado */
+    const cls = screen.getByTestId('origem-xml-subcentro');
+    for (const c of ['h-6', 'min-w-0', 'overflow-hidden']) expect(cls.className.split(' ')).toContain(c);
+  });
 
   it('o CNPJ so e gravado no cadastro DEPOIS de o lancamento nascer; se o Salvar falha, nao grava', async () => {
     const d = doXmlDe({ duplicatas: null }, [AGRO_SEM_DOC], { idPeloNome: 'agro' });

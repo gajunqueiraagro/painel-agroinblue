@@ -14,7 +14,9 @@ import type { OcorrenciaDaNota } from '@/lib/financeiro/nfeConsultas';
 
 /** As classes do campo em ambar — para somar ao fundo do campo. */
 export const CAMPO_AMBAR = 'border-amber-300 bg-amber-50 dark:bg-amber-950/30';
-const FAIXA = 'flex h-6 items-center gap-2 rounded border border-amber-300 bg-amber-50 px-2 text-[10px] text-amber-900';
+/* ⚠ `min-w-0 overflow-hidden` NA FAIXA: a linha nunca pede ao hospedeiro mais largura que a que ele tem — o que nao cabe corta DENTRO
+   dela (FORN-MESCLAR-02a / faixa do XML, 19/10/2026). Os gestos (caixa, "trocar fornecedor") sao `shrink-0`: sempre a' vista. */
+const FAIXA = 'flex h-6 min-w-0 items-center gap-2 overflow-hidden rounded border border-amber-300 bg-amber-50 px-2 text-[10px] text-amber-900';
 const LINK = 'shrink-0 font-medium underline underline-offset-2 hover:text-amber-950';
 
 /** A origem escrita pequena ao lado do rotulo do campo. */
@@ -92,9 +94,15 @@ export function FaixaDoFornecedor({ xml, fechada, gravarDocumento, onGravarDocum
   }
   if (r.achadoPor === 'nome' && r.cadastroSemDocumento) {
     const frase = `Fornecedor achado pelo nome · "${nome}" · cadastro sem ${rotuloDoc} · o XML traz ${doc}`;
+    /* O NOME encolhe primeiro (reticencias; inteiro no `title` dele, a frase toda no `title` da faixa), ate' 72px; so' depois o fim da frase
+       cede. A caixa e "trocar fornecedor" nao encolhem nunca. */
     return (
       <Faixa testid="xml-faixa-fornecedor" titulo={frase}>
-        <span className="min-w-0 truncate">{frase}</span>
+        <span className="flex min-w-0 items-center">
+          <span className="shrink-0 whitespace-pre">{'Fornecedor achado pelo nome · '}</span>
+          <span className="min-w-[72px] shrink-[10] truncate font-medium" title={nome} data-testid="xml-nome-do-fornecedor">"{nome}"</span>
+          <span className="min-w-0 truncate whitespace-pre">{` · cadastro sem ${rotuloDoc} · o XML traz ${doc}`}</span>
+        </span>
         <label className="ml-auto flex shrink-0 cursor-pointer items-center gap-1">
           <input type="checkbox" className="h-3 w-3 accent-amber-700" checked={gravarDocumento} onChange={(e) => onGravarDocumento(e.target.checked)} data-testid="xml-gravar-documento" />
           Gravar o {rotuloDoc} neste cadastro ao salvar
@@ -105,7 +113,16 @@ export function FaixaDoFornecedor({ xml, fechada, gravarDocumento, onGravarDocum
   }
   if (r.achadoPor === 'nome') {
     const frase = `Fornecedor achado pelo nome · "${nome}" · o cadastro tem outro documento · o XML traz ${doc}`;
-    return <Faixa testid="xml-faixa-fornecedor" titulo={frase}><span className="min-w-0 truncate">{frase}</span><span className="ml-auto">{trocar}</span></Faixa>;
+    return (
+      <Faixa testid="xml-faixa-fornecedor" titulo={frase}>
+        <span className="flex min-w-0 items-center">
+          <span className="shrink-0 whitespace-pre">{'Fornecedor achado pelo nome · '}</span>
+          <span className="min-w-[72px] shrink-[10] truncate font-medium" title={nome} data-testid="xml-nome-do-fornecedor">"{nome}"</span>
+          <span className="min-w-0 truncate whitespace-pre">{` · o cadastro tem outro documento · o XML traz ${doc}`}</span>
+        </span>
+        <span className="ml-auto shrink-0">{trocar}</span>
+      </Faixa>
+    );
   }
   return null;
 }

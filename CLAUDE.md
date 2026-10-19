@@ -164,7 +164,8 @@ no mesmo arquivo.
 
 - SUITE DE TESTES — comando OFICIAL:
       npx vitest run
-  Baseline em 19/10/2026 (FORN-MESCLAR-02a, +1: `src/components/financeiro-v2/mesclarFornecedores.test.tsx` 1 (5 -> 6) — 5670 depois dele;
+  Baseline em 19/10/2026 (faixa do XML, +1: `src/components/financeiro-v2/novoDeXml.test.tsx` 1 (28 -> 29); `lancamentoCompacto` trocado ao
+  contrato novo (o corpo com `min-w-0`) — 5671 depois dele; antes o FORN-MESCLAR-02a, +1: `src/components/financeiro-v2/mesclarFornecedores.test.tsx` 1 (5 -> 6) — 5670 depois dele;
   antes o UI-MODAL-BLOCOS-01 · LANCAMENTO COMPACTO, +4: `src/components/financeiro-v2/lancamentoCompacto.test.tsx` 4 (novo);
   `blocoFormulario`, `resumoPagamentoModal` e `finPgtoFantasma01` trocados ao contrato novo — 5669 depois dele; antes o FORN-CADASTRO-02, +8: `src/components/financeiro-v2/fornecedorCadastro02.test.tsx` 8 (novo); `fornecedorEditar`,
   `useFornecedoresDoCliente`, `lerNFe`, `documentoFiscalNosEscritores` e `useCompraLotes.recusa` trocados ao contrato novo — 5665 depois dele;
@@ -396,7 +397,7 @@ no mesmo arquivo.
   PR-CONC-IMPORT-BANCO-01B, +25: `src/lib/financeiro/extratoHashOcorrencia.test.ts` 5,
   `src/lib/financeiro/importacaoExtratoResultado.test.ts` 7, `src/components/conciliacao/desfazerArquivoResumo.test.tsx` 5,
   `src/components/conciliacao/importarGravacaoAtomica.test.tsx` 6, `src/components/conciliacao/importarCaixaPorLinha.test.tsx` 2): 5327
-  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO; 5568 desde o FIN-FINANC-28 PASSO 4; 5571 desde o FIN-FINANC-28 RESUMO-A18; 5573 desde o FIN-FINANC-28 PASSO 4c; 5581 desde o FIN-FINANC-28 PASSO 4b; 5586 desde o FIN-FINANC-28 PASSO 5; 5593 desde o FIN-FINANC-28 PASSO 6; 5607 desde o FIN-FINANC-28 PASSO 7; 5609 desde o FIN-FINANC-28 PASSO 8; 5614 desde o FORN-MESCLAR-01; 5615 desde o RECORRENCIAS-COLUNAS-01; 5620 desde o FIN-FINANC-28 FIX 4b; 5623 desde o FIN-LANC-DESCRICAO-CONTRATO-01; 5628 desde o FIN-FINANC-28 CADASTRO-ACABAMENTO; 5630 desde o UI-MODAL-BLOCOS-01 passo 0; 5631 desde o UI-MODAL-BLOCOS-01 titulo na borda; 5641 desde o FIN-FINANC-28 TELA v3; 5644 desde o B3; 5646 desde o EDITAR v2; 5653 desde o FIN-CONTRATO-JUNTAR-01; 5657 desde a TELA DO CONTRATO v4; 5665 desde o FORN-CADASTRO-02; 5669 desde o LANCAMENTO COMPACTO; 5670 desde o FORN-MESCLAR-02a], 22 skipped, e
+  passando [5329 desde o RESUMO-ATIVIDADE-01a; 5368 desde o FORN-EDITAR-01; 5389 desde o ZOOT-MES-FECHADO-MODAL-01; 5393 desde o FIN-LR-SYNC-01 a2; 5394 desde o CONC-CARDS-ORDEM-01; 5406 desde o FIN-V2-COLUNAS-02; 5416 desde o FIN-LR-SYNC-01 passo b; 5431 desde o FIN-LR-SYNC-01 passo c; 5437 desde o FECH-MES-SELECIONADO-01; 5448 desde o RESUMO-CLIENTES-01 passo a; 5458 desde o RESUMO-CLIENTES-01 passo b; 5459 desde o FIN-CONTRATO-JUROS-SYNC-01; 5479 desde o RESUMO-ATIVIDADE-01b; 5490 desde o FECH-MAPA-PASTO-MODAL-01 passo A; 5492 desde o FECH-PASTO-SALVAR-TRANSACAO-01; 5498 desde o FIN-PARCELAS-TAXA-ZERO-01; 5523 desde o FIN-FINANC-28-P3; 5530 desde o FIN-FINANC-28-P3-FIX; 5533 desde o FIN-FINANC-28-P3-FIX2; 5536 desde o FIN-FINANC-28-P3-FIX3; 5537 desde o FIN-FINANC-28-P3-FIX4; 5553 desde o FIN-FINANC-28 P3-GRAFICO; 5568 desde o FIN-FINANC-28 PASSO 4; 5571 desde o FIN-FINANC-28 RESUMO-A18; 5573 desde o FIN-FINANC-28 PASSO 4c; 5581 desde o FIN-FINANC-28 PASSO 4b; 5586 desde o FIN-FINANC-28 PASSO 5; 5593 desde o FIN-FINANC-28 PASSO 6; 5607 desde o FIN-FINANC-28 PASSO 7; 5609 desde o FIN-FINANC-28 PASSO 8; 5614 desde o FORN-MESCLAR-01; 5615 desde o RECORRENCIAS-COLUNAS-01; 5620 desde o FIN-FINANC-28 FIX 4b; 5623 desde o FIN-LANC-DESCRICAO-CONTRATO-01; 5628 desde o FIN-FINANC-28 CADASTRO-ACABAMENTO; 5630 desde o UI-MODAL-BLOCOS-01 passo 0; 5631 desde o UI-MODAL-BLOCOS-01 titulo na borda; 5641 desde o FIN-FINANC-28 TELA v3; 5644 desde o B3; 5646 desde o EDITAR v2; 5653 desde o FIN-CONTRATO-JUNTAR-01; 5657 desde a TELA DO CONTRATO v4; 5665 desde o FORN-CADASTRO-02; 5669 desde o LANCAMENTO COMPACTO; 5670 desde o FORN-MESCLAR-02a; 5671 desde a faixa do XML], 22 skipped, e
   3 FALHAS PRE-EXISTENTES que NAO sao regressao de PR nenhum:
     2x src/lib/zootecnico/validacaoZootecnica  ·  1x transferencia
   Elas falham no HEAD limpo, em arvore limpa. Antes de chamar qualquer falha de
@@ -2477,6 +2478,23 @@ preview que o cabecalho nao sai da tela ao rolar.
   inteiros no `title`), a 1.440 249 / 305 (0 e 2 cortam); 0 numeros cortados; linhas de 19px; sem rolagem horizontal; sem titulo.
   ⚠ A 1.126 NAO CHEGA AOS ~180px CADA da decisao: com as fixas decididas sobram 240px para os dois (a conta da decisao nao fecha).
   ⚠ NAO PROVADO NO NAVEGADOR com login (bancada) · o selo "falta gerar" com dado (o NJ nao tinha regra a gerar em 17/10).
+- ⚠ NENHUMA FAIXA ALARGA O MODAL DO LANCAMENTO: A COLUNA PRINCIPAL TEM MINIMO ZERO (faixa do XML, Gabriel 19/10/2026, so' tela). Nasce do
+  aviso "Fornecedor achado pelo nome · <razao social> · cadastro sem CNPJ · [x] Gravar o CNPJ … · trocar fornecedor" com nome longo: a grade
+  `grid-cols-[1fr_240px]` tinha o minimo AUTOMATICO, o minimo de uma linha `whitespace-nowrap` e' o texto inteiro, e a coluna crescia ate' ele
+  (medido a 1.126x579: faixa de 1.274px, o resumo em 1.358–1.598, fora da janela, e "Criar 5 Parcelas" cortado).
+  · RAIZ: `grid-cols-[minmax(0,1fr)_240px]` + `min-w-0` no `Tabs`, no invólucro e no corpo (`corpo-do-lancamento`). Qualquer aviso longo
+    passa a cortar DENTRO dele. As faixas do XML (`FAIXA`, `LancamentoDoXml.tsx`) e a "Classificação sugerida" levam `min-w-0
+    overflow-hidden`, 24px, uma linha.
+  · NA FAIXA DO FORNECEDOR ACHADO PELO NOME so' o NOME encolhe primeiro (reticencias, inteiro no `title` dele; a frase inteira no `title` da
+    faixa; `shrink-[10]` e minimo de 72px), depois o fim da frase; a caixa "Gravar o CNPJ…" e "trocar fornecedor" sao `shrink-0`. O texto
+    da faixa nao mudou. ⚠ FATOR DE ENCOLHIMENTO ABAIXO DE 1 NAO SERVE: com a soma dos fatores < 1 o flex so' distribui uma FRACAO do
+    aperto, e o texto transbordou por baixo da caixa (medido) — o nome tem fator alto, o resto 1.
+  MEDIDO na bancada (razao social de 113 caracteres, 5 duplicatas) a 1.000x600, 1.126x579 e 1.440x800: rolagem horizontal 0, resumo dentro
+  (834–1.074 a 1.126), faixa de 750px e 24px, caixa e "trocar" visiveis, "Criar 5 Parcelas" visivel. Prints em
+  ~/Downloads/ui-modal-blocos/lancamento-faixa-xml/ (antes, depois). Teste em `novoDeXml.test.tsx` (2 mutacoes mortas: a grade de volta a
+  `1fr`; a faixa sem `min-w-0 overflow-hidden`). FOTOS REGRAVADAS de proposito: as 4 de `valorComConta.fotos.json` (+34 bytes = as classes
+  `minmax(0,` e `min-w-0`; +82 na do XML, com as faixas).
+  ⚠ NAO PROVADO: com login no app real (bancada) · a variante "o cadastro tem outro documento" na tela (mesmo desenho, so' por leitura).
 - ⚠ O GATILHO DA CLASSIFICACAO NAO REVALIDA O QUE NINGUEM MEXEU — CONTA INATIVA INCLUSIVE —, E REATIVAR REVALIDA (FORN-MESCLAR-02a, Gabriel
   19/10/2026; migration `supabase/migrations/20261027201800_forn_mesclar_02a.sql`, md5 do arquivo 4c6eb843b60a126bdcdb0f19d44a783d — APLICADA no
   proto em 19/10/2026, ledger 20261027201800 `forn_mesclar_02a`; ledger = arquivo). Nasce da mesclagem do grupo Pontero (Vera) recusada com
@@ -2490,6 +2508,19 @@ preview que o cabecalho nao sai da tela ao rolar.
     e que NAO sai de cancelado nao mexe, com ou sem chave; trocar para texto fora do plano segue recusado; REATIVAR revalida.
     ⚠ EFEITO ACEITO (decisao do Gabriel): cancelado SEM chave e com texto fora do plano (fora Dividendos) passa a ser recusado ao reativar
     (antes passava calado): Vera 4.734, Raul 147, NJ 4, RRCC 1, Santa Rita 1 em 19/10. Quem reativar escolhe a conta antes.
+  · MENSAGEM DA REATIVACAO (migration `supabase/migrations/20261027201900_forn_mesclar_02a_mensagem.sql`, md5 do arquivo
+    2c1062f6017ad37821320e8c44e12043 — APLICADA no proto em 19/10/2026, ledger 20261027201900; ledger = arquivo; corpo 7c36c513… -> a09fcd93…,
+    patch por md5): SO' quando sai de cancelado — conta inativa: 'Para reativar este lançamento, escolha uma conta ativa do plano: "X" está
+    inativa.'; texto fora do plano: 'Para reativar este lançamento, escolha uma conta do plano: o subcentro "X" não existe no plano de
+    contas.'; fora da reativacao, a frase de sempre. O teste (C4, C5) confere as tres frases.
+  · QUEM REATIVA LANCAMENTO (varredura de 19/10, so' leitura): so' tres funcoes do banco, todas sobre UM registro —
+    `fn_classificacao_desfazer_split` (o consolidado), `oc_desvincular_lancamento` (o titulo substituido) e
+    `_fn_financiamento_salvar_cabecalho_exec` (a captacao, que grava a chave junto). NENHUMA alcanca os 4.887 nem os 58 (0 com split vivo,
+    0 com parte de OC, 0 captacoes). Nenhuma tela reativa (as escritas `cancelado: false` do front sao INSERT), nenhuma edge function toca
+    em `cancelado`; desfazer mesclagem, desfazer arquivo, cancelar importacao e invalidar origem so' CANCELAM.
+  · O NOME DA MIGRATION SEGUE A CONVENCAO DO REPO (prefixo fixo `20261027` desde 15/09/2026, os seis digitos finais como contador): NAO
+    renomear para a data real — ela ficaria antes de `20261027158000_dre_classif_copia_01.sql`, que grava o corpo que o patch confere, e
+    uma montagem do zero abortaria na guarda de md5.
   · TELA: a recusa do banco no rodape do `MesclarFornecedoresDialog` aparece inteira (ate' duas linhas de 14px no rodape fixo de 36px; era
     `truncate`), o texto inteiro tambem no `title`.
   · Teste `supabase/tests/forn_mesclar_02a_test.sql` (C0 Pontero em simulacao, C1 mesclagem sintetica com lancamento em conta inativa, C2 editar
