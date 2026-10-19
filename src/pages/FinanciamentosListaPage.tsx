@@ -18,8 +18,8 @@ import { resumoDoContratoNaLista, totaisDasCompras } from '@/lib/financiamentos/
 import { graficoAnual, parcelasDoGrafico, temParcelaNoIntervalo, totaisNoIntervalo, type IntervaloDeVencimento } from '@/lib/financiamentos/graficoDeSaidas';
 import type { SituacaoDoContrato } from '@/lib/financiamentos/situacaoDoContrato';
 import { CronogramaEmAbertoDialog } from '@/components/financiamentos/CronogramaEmAbertoDialog';
-import { SearchableSelect, type OpcaoSearchable } from '@/components/ui/searchable-select';
-import { formatarDocumento, nomeEDocumento } from '@/lib/fornecedores/fornecedorTexto';
+import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
+import { nomeEDocumento } from '@/lib/fornecedores/fornecedorTexto';
 import { hojeLocal } from '@/lib/datas/hojeLocal';
 import { Segmentado } from '@/components/ui/segmentado';
 import {
@@ -63,6 +63,10 @@ interface FinanciamentoRow {
   credor_nome?: string;
   /** FIN-FINANC-28-P3-FIX3 — o CPF/CNPJ do credor (pela junção do contrato), para a busca do filtro */
   credor_documento?: string | null;
+  /** FORN-BUSCA-UNICA-01 — o que a busca única também lê do credor */
+  credor_fantasia?: string | null;
+  credor_aliases?: string[] | null;
+  credor_ativo?: boolean | null;
   /** FIN-FINANC-28 P3-GRAFICO — a situação do contrato como o lote a devolveu (o cronograma do que falta pagar lê daqui) */
   situacaoDoLote?: SituacaoDoContrato;
   parcelas_pagas: number;
@@ -216,7 +220,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
       // 1) financiamentos + credor
       const { data: fins, error: e1 } = await supabase
         .from('financiamentos')
-        .select('*, financeiro_fornecedores!financiamentos_credor_id_fkey(nome, cpf_cnpj)')
+        .select('*, financeiro_fornecedores!financiamentos_credor_id_fkey(nome, cpf_cnpj, nome_fantasia, aliases_norm, ativo)')
         .eq('cliente_id', clienteId!)
         .order('created_at', { ascending: false });
       if (e1) throw e1;
@@ -268,6 +272,9 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
           created_at: f.created_at,
           credor_nome: f.financeiro_fornecedores?.nome ?? '—',
           credor_documento: f.financeiro_fornecedores?.cpf_cnpj ?? null,
+          credor_fantasia: f.financeiro_fornecedores?.nome_fantasia ?? null,
+          credor_aliases: f.financeiro_fornecedores?.aliases_norm ?? null,
+          credor_ativo: f.financeiro_fornecedores?.ativo ?? null,
           situacaoDoLote: lote.get(f.id),
           parcelas_pagas: r.parcelasPagas,
           prox_vencimento: r.proxVencimento ?? undefined,
@@ -299,17 +306,25 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
 
   /* ── Credores dos contratos para o filtro (FIN-FINANC-28-P3-FIX3): o seletor DA CASA com busca, pelo nome ou pelo CPF/CNPJ
      (a 2ª linha da opção entra na busca). Só os credores que aparecem nos contratos do cliente. ── */
+  /* FORN-BUSCA-UNICA-01 — o filtro Credor é o seletor padrão (`FavorecidoSelect`, a busca única: razão social, fantasia, CNPJ/CPF,
+     apelidos), sobre os credores dos contratos (inativos inclusive). O valor é o id do credor. */
   const credores = useMemo(() => {
-    const seen = new Map<string, OpcaoSearchable>();
+    const seen = new Map<string, { id: string; nome: string; nome_fantasia: string | null; cpf_cnpj: string | null; aliases_norm: string[] | null; ativo: boolean }>();
     for (const f of financiamentos) {
-      if (f.credor_nome && f.credor_nome !== '—' && !seen.has(f.credor_nome)) {
-        const doc = f.credor_documento ? formatarDocumento(f.credor_documento) : '';
-        seen.set(f.credor_nome, { value: f.credor_nome, label: f.credor_nome,
-          ...(doc ? { sub: doc, busca: (f.credor_documento ?? '').replace(/\D/g, '') } : {}) });
+      if (f.credor_id && f.credor_nome && f.credor_nome !== '—' && !seen.has(f.credor_id)) {
+        seen.set(f.credor_id, { id: f.credor_id, nome: f.credor_nome, nome_fantasia: f.credor_fantasia ?? null, cpf_cnpj: f.credor_documento ?? null,
+          aliases_norm: f.credor_aliases ?? null, ativo: f.credor_ativo !== false });
       }
     }
-    return Array.from(seen.values()).sort((x, y) => x.label.localeCompare(y.label, 'pt-BR'));
+    return Array.from(seen.values());
   }, [financiamentos]);
+  /* o filtro guardado antes deste PR era o NOME do credor: vira o id quando o nome é de um credor só */
+  useEffect(() => {
+    if (filtroCredor === 'todos' || credores.length === 0 || credores.some((c) => c.id === filtroCredor)) return;
+    const pelos = credores.filter((c) => c.nome === filtroCredor);
+    setFiltroCredor(pelos.length === 1 ? pelos[0].id : 'todos');
+  }, [credores, filtroCredor]);
+  const nomeDoCredorFiltrado = credores.find((c) => c.id === filtroCredor)?.nome ?? null;
 
   /* ── Filtros (client-side, sobre dados já carregados) ── */
   /* FIN-FINANC-28-P3 — UM PREDICADO PARA AS DUAS ABAS. A situação vem de fora (cada aba tem a sua) e a natureza fica fora
@@ -342,7 +357,7 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
                      `${PILULA_NATUREZA[f.natureza]?.sigla ?? ''} ${PILULA_NATUREZA[f.natureza]?.rotulo ?? ''}`]
                      .join(' ').toLowerCase().includes(descQ)) return false;
       if (contQ && !(f.numero_contrato ?? '').toLowerCase().includes(contQ)) return false;
-      if (filtroCredor !== 'todos' && f.credor_nome !== filtroCredor) return false;
+      if (filtroCredor !== 'todos' && f.credor_id !== filtroCredor) return false;
       const isoContratoDe = brToISO(filtroDataContratoDe);
       const isoContratoAte = brToISO(filtroDataContratoAte);
       if (isoContratoDe && (f.data_contrato ?? '') < isoContratoDe) return false;
@@ -549,9 +564,11 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
           </Select>
           {/* FIN-FINANC-28-P3-FIX3 — LARGURA FIXA (160px): escolher um nome longo não muda o filtro de tamanho; o nome inteiro
               fica no `title` */}
-          <div className="w-40 shrink-0" title={filtroCredor !== 'todos' ? filtroCredor : 'Todos credores'} data-testid="filtro-credor">
-            <SearchableSelect value={filtroCredor} onValueChange={setFiltroCredor} options={credores}
-              allLabel="Todos credores" allValue="todos" placeholder="Buscar credor ou CNPJ..." className="w-40" />
+          {/* FORN-BUSCA-UNICA-01 — 160px de largura; o nome escolhido aparece INTEIRO (quebra a linha), nunca com "…" */}
+          <div className="w-40 shrink-0" title={nomeDoCredorFiltrado ?? 'Todos credores'} data-testid="filtro-credor">
+            <FavorecidoSelect value={filtroCredor === 'todos' ? '' : filtroCredor} onChange={(id) => setFiltroCredor(id || 'todos')}
+              fornecedores={credores} situacao="todos" nomeInteiro limpavel rotuloDoVazio="Todos credores" placeholder="Todos credores"
+              linhaDoDocumento={false} size="compact" />
           </div>
         </div>
 

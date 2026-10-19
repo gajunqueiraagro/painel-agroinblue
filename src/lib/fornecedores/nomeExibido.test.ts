@@ -85,7 +85,8 @@ describe('a ligação nas telas (fonte)', () => {
   const tela = readFileSync(resolve(__dirname, '../../pages/FinanceiroV2Tab.tsx'), 'utf8');
   it('filtro e grade leem o MESMO rótulo do dono', () => {
     expect(tela).toMatch(/const rotulosDoRecorte = useMemo\(\s*\(\) => rotulosDosFornecedores\(/);
-    expect(tela).toMatch(/hint: \[sufixoDoRotulo\(r\), String\(usos\)\]/);
+    /* FORN-BUSCA-UNICA-01 — o filtro é o seletor padrão: o documento inteiro, a situação e o uso no item (não mais o final) */
+    expect(tela).toMatch(/<FavorecidoSelect[\s\S]{0,200}fornecedores=\{fornecedoresDoFiltro\}[\s\S]{0,40}situacao="todos"/);
     expect(tela).toContain("const rotuloForn = rotulosDoRecorte.get(l.favorecido_id || '');");
     expect(tela).toContain('data-testid="final-fornecedor"');
     expect(tela).toContain('data-testid="inativo-fornecedor"');

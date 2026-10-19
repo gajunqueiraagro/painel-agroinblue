@@ -125,11 +125,11 @@ export function MesclarFornecedoresDialog({ aberto, aoFechar, clienteId, inicial
     try {
       const linhas = await lerTodasAsPaginas<FornecedorDaMesclagem>(async (de, ate, contar) => {
         const { data, error, count } = await supabase.from('financeiro_fornecedores')
-          .select('id, nome, nome_fantasia, cpf_cnpj, ativo', { count: contar ? 'exact' : undefined })
+          .select('id, nome, nome_fantasia, cpf_cnpj, ativo, aliases_norm', { count: contar ? 'exact' : undefined })
           .eq('cliente_id', clienteId).eq('ativo', false).is('fundido_em_id', null)
           .order('nome').order('id').range(de, ate);
         if (error) throw new Error(error.message);
-        return { data: (data ?? []).map((f) => ({ id: f.id, nome: f.nome, nomeFantasia: f.nome_fantasia, cpfCnpj: f.cpf_cnpj, ativo: false })), count: typeof count === 'number' ? count : null };
+        return { data: (data ?? []).map((f) => ({ id: f.id, nome: f.nome, nomeFantasia: f.nome_fantasia, cpfCnpj: f.cpf_cnpj, ativo: false, aliasesNorm: f.aliases_norm })), count: typeof count === 'number' ? count : null };
       });
       setInativos(linhas);
     } catch { setInativos([]); }
@@ -245,7 +245,7 @@ export function MesclarFornecedoresDialog({ aberto, aoFechar, clienteId, inicial
      entra (a pessoa pode acrescentar à mão) e a tela bloqueia com o motivo escrito; o banco também recusa. */
   const candidatos = useMemo(() => {
     const m = new Map<string, FornecedorDaMesclagem>();
-    for (const f of lidos.fornecedores) m.set(f.id, { id: f.id, nome: f.nome, nomeFantasia: f.nome_fantasia ?? null, cpfCnpj: f.cpf_cnpj, ativo: f.ativo });
+    for (const f of lidos.fornecedores) m.set(f.id, { id: f.id, nome: f.nome, nomeFantasia: f.nome_fantasia ?? null, cpfCnpj: f.cpf_cnpj, ativo: f.ativo, aliasesNorm: f.aliases_norm ?? null });
     for (const f of inativos) if (!m.has(f.id)) m.set(f.id, f);
     for (const g of grupos) for (const f of g.fornecedores) if (!m.has(f.id)) m.set(f.id, f);
     return m;

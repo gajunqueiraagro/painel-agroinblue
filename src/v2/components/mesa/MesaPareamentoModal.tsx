@@ -1,3 +1,4 @@
+import { buscarFornecedoresNoBanco } from '@/lib/fornecedores/buscaDeFornecedorBanco';
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -2403,18 +2404,10 @@ function FornecedorInline({ clienteId, valor, excelOriginal, marcadoNovo, vincul
     enabled: !!clienteId && buscaDebounced.trim().length >= 2,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
-      const safe = buscaDebounced.trim().replace(/[%,()]/g, ' ').trim();
-      if (!safe) return [];
-      const { data, error } = await supabase
-        .from('financeiro_fornecedores')
-        .select('id, nome')
-        .eq('cliente_id', clienteId)
-        .eq('ativo', true)
-        .or(`nome_normalizado.ilike.%${safe}%,nome.ilike.%${safe}%,nome_fantasia.ilike.%${safe}%`)
-        .order('nome', { ascending: true })
-        .limit(50);
-      if (error) throw new Error(error.message);
-      return data ?? [];
+      /* FORN-BUSCA-UNICA-01 — a busca única no servidor (razão social, fantasia, CNPJ/CPF, apelidos; só ativos; 50) */
+      if (!buscaDebounced.trim()) return [];
+      const { itens } = await buscarFornecedoresNoBanco<{ id: string; nome: string }>(clienteId, buscaDebounced, 'ativos', 50);
+      return itens;
     },
   });
   const mostrarExcel = !!excelOriginal && !filtrados.some((f) => f.nome.toLowerCase() === excelOriginal.toLowerCase());

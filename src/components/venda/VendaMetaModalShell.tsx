@@ -247,27 +247,14 @@ export function VendaMetaModalShell({
                 projecao, e nao importa se ela compra ou vende. */}
             <Label className="text-[10px] text-muted-foreground">Comprador</Label>
             <div className="mt-[3px]">
-              {isEdicao && clienteIdParaContraparte ? (
-                /* fatia 2e: o seletor dono, pelo encaixe único. `incluirMeta`: o "[META] Planejamento" continua oferecido.
-                   O rótulo "Fornecedor" que o seletor antigo desenhava por baixo de "Comprador" saiu com ele. */
-                <CampoDeFornecedor
-                  clienteId={clienteIdParaContraparte}
+              {/* FORN-BUSCA-UNICA-01 — criação e edição: o seletor padrão (a busca única); sem cliente ele fica vazio */}
+              <CampoDeFornecedor
+                  clienteId={clienteIdParaContraparte ?? ''}
                   value={compradorId || null}
                   onChange={(id) => setCompradorId(id ?? '')}
                   incluirMeta
                   placeholder="Selecione o comprador"
                 />
-              ) : (
-                <SearchableSelect
-                  value={compradorId || '__all__'}
-                  onValueChange={(v) => setCompradorId(v === '__all__' ? '' : v)}
-                  options={contrapartes.map(f => ({ value: f.id, label: f.nome }))}
-                  placeholder="Selecione o comprador"
-                  allLabel="Nenhum selecionado"
-                  allValue="__all__"
-                  className="[&_button]:h-8 [&_button]:text-[12px] [&_button]:px-2.5"
-                />
-              )}
             </div>
           </div>
           <div className="min-w-0 lg:col-span-2 space-y-1.5">

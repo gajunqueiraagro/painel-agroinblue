@@ -34,7 +34,14 @@ vi.mock('@/integrations/supabase/client', () => {
     };
     return c;
   };
-  return { supabase: { from: (t: string) => cadeia(t), rpc: async () => ({ data: null, error: null }) } };
+  /* FORN-BUSCA-UNICA-01 — a lista vem da RPC da busca única (`fn_fornecedor_buscar`), pela situação pedida */
+  const rpc = async (fn: string, args: { p_situacao: string }) => {
+    if (fn !== 'fn_fornecedor_buscar') return { data: null, error: null };
+    const ativoDeVerdade = (l: { ativo: boolean; fundido_em_id: string | null }) => l.ativo && !l.fundido_em_id;
+    const itens = banco.linhas.filter((l) => args.p_situacao === 'todos' || (args.p_situacao === 'ativos') === ativoDeVerdade(l));
+    return { data: { total: itens.length, itens }, error: null };
+  };
+  return { supabase: { from: (t: string) => cadeia(t), rpc } };
 });
 vi.mock('@/contexts/ClienteContext', () => ({ useCliente: () => ({ clienteAtual: { id: 'teste', nome: 'Teste' } }) }));
 vi.mock('@/contexts/FazendaContext', () => ({ useFazenda: () => ({ fazendas: [] }) }));

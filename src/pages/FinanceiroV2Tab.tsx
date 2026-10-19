@@ -41,6 +41,7 @@ import { formatDocumento } from '@/lib/financeiro/documentoHelper';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { SearchableSelect, limparBuscasLembradas } from '@/components/ui/searchable-select';
+import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
 import { apenasAtivos, guardarFiltros, lerFiltros, esquecerFiltros } from '@/lib/financeiro/filtrosPersistidos';
 import { CHAVE_RETORNO_OC, extrasDoRetornoOC, type ExtrasRetornoOC } from '@/lib/financeiro/retornoOC';
 import { Button } from '@/components/ui/button';
@@ -104,7 +105,6 @@ import { hojeLocal } from '@/lib/datas/hojeLocal';
  * sobreviveria ao Limpar em silêncio.
  */
 const PREFIXO_BUSCA = 'fin-v2-';
-const CHAVE_BUSCA_FORNECEDOR = `${PREFIXO_BUSCA}fornecedor`;
 const CHAVE_BUSCA_MACRO      = `${PREFIXO_BUSCA}macro`;
 const CHAVE_BUSCA_GRUPO      = `${PREFIXO_BUSCA}grupo`;
 const CHAVE_BUSCA_CENTRO     = `${PREFIXO_BUSCA}centro`;
@@ -319,15 +319,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     () => rotulosDosFornecedores(hook.fornecedores.filter((f) => usosNoRecorte.has(f.id))),
     [hook.fornecedores, usosNoRecorte],
   );
-  const opcoesFornecedor = useMemo(() => {
-    const opcoes: { value: string; label: string; hint: string }[] = [];
-    usosNoRecorte.forEach((usos, id) => {
-      const r = rotulosDoRecorte.get(id);
-      if (!r) return;
-      opcoes.push({ value: id, label: r.nome, hint: [sufixoDoRotulo(r), String(usos)].filter(Boolean).join(' · ') });
-    });
-    return opcoes.sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
-  }, [usosNoRecorte, rotulosDoRecorte]);
+  /* FORN-BUSCA-UNICA-01 — o filtro é o seletor padrão (`FavorecidoSelect`, a busca única): os fornecedores do recorte, inativos
+     inclusive (têm lançamento), cada um com o uso = os lançamentos dele no recorte. */
+  const fornecedoresDoFiltro = useMemo(
+    () => hook.fornecedores.filter((f) => usosNoRecorte.has(f.id)).map((f) => ({ ...f, uso: usosNoRecorte.get(f.id) ?? 0 })),
+    [hook.fornecedores, usosNoRecorte],
+  );
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const currentYear = new Date().getFullYear();
@@ -1863,7 +1860,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
           justamente nas pontas, onde moram a primeira e a última coluna, e um card
           arredondado sobre uma tabela de cantos vivos parecia dois desenhos. Se um dia
           voltar o raio, volta nos dois — meio arredondado é a única saída errada. */}
-      <Card className="rounded-none bg-white shrink-0" style={{ border: '1px solid #D6DEE8', boxShadow: '0 2px 6px rgba(0,0,0,0.04)' }}>
+      <Card data-testid="filtros-da-lista" className="rounded-none bg-white shrink-0" style={{ border: '1px solid #D6DEE8', boxShadow: '0 2px 6px rgba(0,0,0,0.04)' }}>
         {/* Padding interno pequeno: o afastamento da borda da tela é do container raiz. */}
         <CardContent className="p-2 space-y-1">
           {isMobile ? (
@@ -2031,12 +2028,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 </div>
                 <div>
                   <label className={lblCls}>Fornecedor</label>
-                  <SearchableSelect
-                    value={fornecedorFiltro}
-                    onValueChange={setFornecedorFiltro}
-                    options={opcoesFornecedor}
-                    placeholder="Todos"
-                    persistKey={CHAVE_BUSCA_FORNECEDOR}
+                  <FavorecidoSelect
+                    value={fornecedorFiltro === '__all__' ? '' : fornecedorFiltro}
+                    onChange={(id) => setFornecedorFiltro(id || '__all__')}
+                    fornecedores={fornecedoresDoFiltro}
+                    situacao="todos" nomeInteiro mostrarUso limpavel rotuloDoVazio="Todos" placeholder="Todos"
+                    linhaDoDocumento={false} size="compact" triggerClassName="bg-white border-[#C9D4E2] !text-[9px]"
                   />
                 </div>
                 <div>
@@ -2451,13 +2448,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                   </div>
                   <div className="col-span-2 min-w-0">
                     <label className={lblCls}>Fornecedor</label>
-                    <SearchableSelect
-                      value={fornecedorFiltro}
-                      onValueChange={setFornecedorFiltro}
-                      options={opcoesFornecedor}
-                      placeholder="Buscar fornecedor..."
-                      persistKey={CHAVE_BUSCA_FORNECEDOR}
-                    />
+                    <FavorecidoSelect
+                    value={fornecedorFiltro === '__all__' ? '' : fornecedorFiltro}
+                    onChange={(id) => setFornecedorFiltro(id || '__all__')}
+                    fornecedores={fornecedoresDoFiltro}
+                    situacao="todos" nomeInteiro mostrarUso limpavel rotuloDoVazio="Todos" placeholder="Todos"
+                    linhaDoDocumento={false} size="compact" triggerClassName="bg-white border-[#C9D4E2] !text-[9px]"
+                  />
                   </div>
                   
               </div>

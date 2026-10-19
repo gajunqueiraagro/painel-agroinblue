@@ -32,20 +32,16 @@ export function nomeEDocumento(nome: string | null | undefined, doc: string | nu
   return [n, d].filter(Boolean).join(' · ');
 }
 
-/** Nome para comparar: sem acento, sem caixa, espaços duplos viram um, sem espaço nas pontas. */
-export function normalizarNome(s: string | null | undefined): string {
-  return (s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
-}
-
-/** A busca digitada é NÚMERO (só dígitos, com ou sem ponto, barra, traço e espaço)? Devolve os dígitos, ou nulo. */
-export function digitosDaBusca(busca: string): string | null {
-  const semPontuacao = busca.replace(/[.\-/\s]/g, '');
-  return semPontuacao !== '' && /^\d+$/.test(semPontuacao) ? semPontuacao : null;
-}
+/* FORN-BUSCA-UNICA-01 — a normalização e os dígitos da busca MORAM em `buscaDeFornecedor.ts` (o dono da regra de busca, espelhado
+   pela RPC); aqui só se reexportam, para os chamadores de sempre. */
+export { normalizarNome, digitosDaBusca } from './buscaDeFornecedor';
+import { normalizarNome, prepararParaBusca, buscarPreparados, casaComOTermo, type Preparado, type SituacaoDaBusca } from './buscaDeFornecedor';
 
 /** O mínimo que estas funções leem de um fornecedor. */
 /** FORN-CADASTRO-02: `nome` é a RAZÃO SOCIAL; `nome_fantasia` (opcional) entra na opção e na busca. */
-export interface FornecedorDoSeletor { id: string; nome: string; cpf_cnpj?: string | null; ativo?: boolean | null; nome_fantasia?: string | null }
+export interface FornecedorDoSeletor { id: string; nome: string; cpf_cnpj?: string | null; ativo?: boolean | null; nome_fantasia?: string | null;
+  /** FORN-BUSCA-UNICA-01 — a busca única também lê: a marca da mesclagem, os apelidos e o uso */
+  fundido_em_id?: string | null; aliases_norm?: readonly string[] | null; uso?: number | null }
 
 /** Cadastro de projeção ("[META]" no nome): fora da lista por padrão; só entra em modal de meta. A regra mora aqui. */
 /** FORN-CADASTRO-02 — a fantasia de qualquer linha de fornecedor (o campo é opcional nos tipos dos hospedeiros) */
@@ -54,12 +50,8 @@ export const fantasiaDe = (f: object): string | null => { const v: unknown = Ref
 export const ehCadastroDeMeta = (nome: string): boolean => nome.includes('[META]');
 
 /** O que se calcula UMA vez por fornecedor ao montar a lista (a busca corre sobre isto a cada tecla). */
-export interface OpcaoDeFornecedor<F extends FornecedorDoSeletor> {
-  f: F;
-  nomeNorm: string;
-  /** FORN-CADASTRO-02 — a fantasia normalizada ('' sem fantasia): a busca também acha por ela */
-  fantasiaNorm: string;
-  digitos: string;
+/* FORN-BUSCA-UNICA-01 — nomeNorm, fantasiaNorm, digitos, apelidos, ativo e uso vêm de `prepararParaBusca` (a regra única). */
+export interface OpcaoDeFornecedor<F extends FornecedorDoSeletor> extends Preparado<F> {
   /** Documento formatado ("" = sem documento: a área do documento da opção fica vazia). */
   documento: string;
   /** Quantos ATIVOS têm este mesmo nome normalizado; 0 quando o nome é único (sem selo). */
@@ -69,27 +61,19 @@ export interface OpcaoDeFornecedor<F extends FornecedorDoSeletor> {
 /** Monta as opções: tira os de meta (salvo `incluirMeta`), normaliza e conta os nomes repetidos ENTRE OS LISTADOS. */
 export function montarOpcoes<F extends FornecedorDoSeletor>(ativos: readonly F[], incluirMeta = false): OpcaoDeFornecedor<F>[] {
   const base = incluirMeta ? ativos : ativos.filter((f) => !ehCadastroDeMeta(f.nome));
+  const preparados = prepararParaBusca(base);
   const contagem = new Map<string, number>();
-  const norm = base.map((f) => {
-    const n = normalizarNome(f.nome);
-    contagem.set(n, (contagem.get(n) ?? 0) + 1);
-    return n;
-  });
-  return base.map((f, i) => {
-    const vezes = contagem.get(norm[i]) ?? 1;
-    return { f, nomeNorm: norm[i], fantasiaNorm: normalizarNome(fantasiaDe(f)), digitos: soDigitos(f.cpf_cnpj), documento: formatarDocumento(f.cpf_cnpj), iguais: vezes > 1 ? vezes : 0 };
+  preparados.forEach((p) => contagem.set(p.nomeNorm, (contagem.get(p.nomeNorm) ?? 0) + 1));
+  return preparados.map((p) => {
+    const vezes = contagem.get(p.nomeNorm) ?? 1;
+    return { ...p, documento: formatarDocumento(p.f.cpf_cnpj), iguais: vezes > 1 ? vezes : 0 };
   });
 }
 
-/** A opção casa com a busca? Pela razão social e pela fantasia (sem acento, sem caixa); e, quando a busca é só número (com ou sem
- *  máscara), também pelo documento. */
+/** A opção casa com a busca? A regra única (`casaComOTermo`, `buscaDeFornecedor.ts`): razão social, fantasia, apelidos e — busca só de
+ *  número — o documento. */
 export function casaComABusca<F extends FornecedorDoSeletor>(o: OpcaoDeFornecedor<F>, busca: string): boolean {
-  const q = normalizarNome(busca);
-  if (!q) return true;
-  if (o.nomeNorm.includes(q)) return true;
-  if (o.fantasiaNorm && o.fantasiaNorm.includes(q)) return true;
-  const d = digitosDaBusca(busca);
-  return d !== null && o.digitos.includes(d);
+  return casaComOTermo(o, busca);
 }
 
 export const LIMITE_DE_OPCOES = 100;
@@ -104,8 +88,10 @@ export interface RecorteDeOpcoes<F extends FornecedorDoSeletor> {
 /** Filtra sobre todas, põe o escolhido no topo e corta no limite — o corte nunca muda o RESULTADO da busca, só o que se desenha. */
 export function recortarOpcoes<F extends FornecedorDoSeletor>(
   opcoes: readonly OpcaoDeFornecedor<F>[], busca: string, escolhidoId: string | null | undefined, limite: number = LIMITE_DE_OPCOES,
+  situacao: SituacaoDaBusca = 'ativos',
 ): RecorteDeOpcoes<F> {
-  const casam = busca.trim() ? opcoes.filter((o) => casaComABusca(o, busca)) : opcoes;
+  /* FORN-BUSCA-UNICA-01 — o que casa e a ORDEM são da regra única (`buscarPreparados`) */
+  const casam = buscarPreparados<F, OpcaoDeFornecedor<F>>(opcoes, busca, situacao);
   const escolhido = escolhidoId ? casam.find((o) => o.f.id === escolhidoId) : undefined;
   if (!escolhido) return { total: casam.length, visiveis: casam.slice(0, limite) };
   const visiveis: OpcaoDeFornecedor<F>[] = [escolhido];

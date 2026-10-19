@@ -20,6 +20,9 @@ import { arquivoXmlDaNota, prefillDaNota } from '@/lib/financeiro/nfePrefill';
 import { montarNFe, utf8 } from '@/lib/financeiro/nfe/__fixtures__/notas';
 import { TRAVAS_DO_MODO_OC } from '@/lib/oc/lancarPeloModal';
 import contrato from './dados/contrato.json';
+import { LANCAMENTOS } from './dados/financeiro';
+import { buscarFornecedores } from '@/lib/fornecedores/buscaDeFornecedor';
+import { FinanceiroV2Tab } from '@/pages/FinanceiroV2Tab';
 import { GRUPOS, LEITOR, LINHAS, LISTA, RECENTES, USO } from './dados/fornecedores';
 
 const q = new URLSearchParams(location.search);
@@ -51,8 +54,16 @@ const bancoDeFornecedores = {
       { id: 'p3', descricao: 'Manutenção de cerca' }];
     return [];
   },
-  rpc: (fn: string, a: any) => fn === 'fn_fornecedor_repetidos' ? GRUPOS : fn === 'fn_fornecedor_uso' ? USO[a.p_fornecedor] ?? { lancamentos: 0 } : null,
+  rpc: (fn: string, a: any) => fn === 'fn_fornecedor_repetidos' ? GRUPOS : fn === 'fn_fornecedor_uso' ? USO[a.p_fornecedor] ?? { lancamentos: 0 }
+    : fn === 'fn_fornecedor_buscar' ? buscarNaBancada(a) : null,
 };
+/* FORN-BUSCA-UNICA-01 — a RPC da busca única, respondida pela PROPRIA funcao da tela (o espelho e' provado pelo teste SQL) */
+function buscarNaBancada(a: any) {
+  const achados = buscarFornecedores(LISTA as any[], a.p_busca ?? '', a.p_situacao ?? 'ativos');
+  const de = a.p_offset ?? 0;
+  const itens = (a.p_limite == null ? achados.slice(de) : achados.slice(de, de + a.p_limite)).map((f: any) => ({ ...f, uso: 0 }));
+  return { total: achados.length, itens };
+}
 
 if (tela === 'mesclar') {
   g.__bancoBancada = bancoDeFornecedores;
@@ -60,6 +71,15 @@ if (tela === 'mesclar') {
 } else if (tela === 'fornecedores') {
   g.__bancoBancada = bancoDeFornecedores;
   montar(<div className="p-3"><FinV2FornecedoresTab /></div>);
+} else if (tela === 'financeiro') {
+  /* FORN-BUSCA-UNICA-01 — a lista do Financeiro V2 (filtros + tabela), com o filtro de fornecedor da busca única */
+  g.__bancoBancada = {
+    from: (t: string, e: any) => t === 'financeiro_lancamentos_v2' ? (e.in.id ? [] : LANCAMENTOS)
+      : t === 'financeiro_fornecedores' ? LISTA
+      : t === 'financeiro_contas_bancarias' ? [{ id: 'bb', nome_conta: 'Banco Alfa', banco: 'BB', fazenda_id: 'f1', ativo: true, ordem_exibicao: 1 }] : [],
+    rpc: (fn: string) => fn === 'get_anos_financeiro_v2' ? [{ ano: '2026' }] : fn === 'fn_parcelas_dos_lancamentos' ? {} : null,
+  };
+  montar(<div className="p-3 h-full"><FinanceiroV2Tab filtroAnoInicial="2026" /></div>);
 } else if (tela === 'fornecedor-cadastro') {
   g.__bancoBancada = { from: () => [], rpc: () => null };
   const linha = { ...LINHAS.b, inscricao_municipal: '1234567', cep: '79002-000', complemento: 'Sala 1001 Bloco B', bairro: 'Jardim dos Estados', telefone: '(67) 3333-4444',

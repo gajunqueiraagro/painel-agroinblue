@@ -13,7 +13,8 @@ import {
   criarLeitorDeFornecedores, type FonteDeFornecedores, type FornecedorLido, type LeitorDeFornecedores,
 } from '@/lib/fornecedores/leitorDeFornecedores';
 
-const COLUNAS = 'id, nome, nome_fantasia, cpf_cnpj, fazenda_id, ativo, tipo_recebimento, pix_tipo_chave, pix_chave, banco, agencia, conta, tipo_conta, cpf_cnpj_pagamento, nome_favorecido, observacao_pagamento';
+const COLUNAS = 'id, nome, nome_fantasia, cpf_cnpj, fazenda_id, ativo, tipo_recebimento, pix_tipo_chave, pix_chave, banco, agencia, conta, tipo_conta, cpf_cnpj_pagamento, nome_favorecido, observacao_pagamento, aliases_norm, fundido_em_id';
+/* FORN-BUSCA-UNICA-01 — `aliases_norm` (nomes e documentos dos absorvidos, textos aprendidos) e a marca da mesclagem entram na busca única */
 
 type LinhaDoBanco = Omit<FornecedorLido, 'ativo'> & { ativo: boolean | null };
 

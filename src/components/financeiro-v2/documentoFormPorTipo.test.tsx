@@ -175,7 +175,8 @@ describe('emitente com busca — o DONO do seletor de fornecedor (FORN-SELETOR-P
     monta();
     expect(campo().textContent).toBe('Selecione');
     abrir();
-    expect(nomesNaLista()).toEqual(FORNECEDORES.map(f => f.nome));
+    /* FORN-BUSCA-UNICA-01 — a ordem é a da regra única (ativo → começa com o termo → uso → nome normalizado) */
+    expect(nomesNaLista()).toEqual(['Agnaldo da Cruz Cunegundes', 'Cleodir Supermercados Eireli-EPP', 'Comercial Pantanal de Rio Verde Ltda']);
     const outro = screen.getByTestId('favorecido-acao-final');
     expect(outro.textContent).toBe('Outro (informar nome e CNPJ/CPF)');
     expect(screen.getByTestId('favorecido-lista').contains(outro)).toBe(false);   /* fora da rolagem */

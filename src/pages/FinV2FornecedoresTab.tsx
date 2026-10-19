@@ -1,3 +1,4 @@
+import { buscarFornecedoresNoBanco } from '@/lib/fornecedores/buscaDeFornecedorBanco';
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -26,17 +27,8 @@ type FiltroStatus = 'ativos' | 'inativos' | 'todos';
  * errado), pelo validador único (`situacaoDoGravado`). Combina com o status e com a busca. Como "fora do padrão" não se filtra
  * no banco (o gravado tem formatos misturados), com o filtro ligado a lista do recorte é lida INTEIRA e paginada aqui.
  */
-/**
- * FORN-CADASTRO-02 — o filtro da busca (o `.or` do PostgREST): razão social, fantasia e documento; o documento com ou sem máscara
- * (os dígitos em ordem). Nulo = sem busca. UM dono: a lista e o aviso dos inativos filtram pelo MESMO texto (FORN-AVISO-BUSCA-01).
- */
-export function filtroDaBusca(busca: string): string | null {
-  const safe = busca.trim().replace(/[%,()]/g, ' ').trim();
-  if (!safe) return null;
-  const digitos = safe.replace(/\D/g, '');
-  const porDigitos = digitos.length >= 3 && digitos.length === safe.replace(/[\s./-]/g, '').length ? `,cpf_cnpj.ilike.%${digitos.split('').join('%')}%` : '';
-  return `nome_normalizado.ilike.%${safe}%,nome.ilike.%${safe}%,nome_fantasia.ilike.%${safe}%,cpf_cnpj.ilike.%${safe}%${porDigitos}`;
-}
+/* FORN-BUSCA-UNICA-01 — a lista e o aviso buscam pela RPC da busca única (`buscarFornecedoresNoBanco`, o espelho no banco). */
+export type { SituacaoDaLista } from '@/lib/fornecedores/buscaDeFornecedorBanco';
 
 /** FORN-NOME-EXIBIDO-01 — quantos fornecedores DISTINTOS aparecem nas linhas (uma linha por lançamento). */
 export function contarFornecedoresDistintos(linhas: readonly { favorecido_id: string | null }[]): number {
@@ -140,40 +132,25 @@ export function FinV2FornecedoresTab() {
     if (!clienteAtual?.id) return;
     setLoading(true);
     const clienteId = clienteAtual.id;
-    const consulta = (contar: boolean) => {
-      let query = supabase
-        .from('financeiro_fornecedores')
-        .select('*', { count: contar ? 'exact' : undefined })
-        .eq('cliente_id', clienteId);
-
-      if (statusFilter === 'ativos') query = query.eq('ativo', true);
-      else if (statusFilter === 'inativos') query = query.eq('ativo', false);
-
-      const filtro = filtroDaBusca(searchDebounced);
-      if (filtro) query = query.or(filtro);
-      return query.order('nome').order('id');
-    };
-
     const from = (page - 1) * PAGE_SIZE;
-    const to = page * PAGE_SIZE - 1;
-    if (semDocumento) {
-      /* FORN-EDITAR-01 — o recorte inteiro, filtrado pelo validador único, paginado aqui */
-      const todos = await lerTodasAsPaginas<Fornecedor>(async (de, ate, contar) => {
-        const { data, error, count } = await consulta(contar).range(de, ate);
-        if (error) throw new Error(error.message);
-        return { data: (data as Fornecedor[]) ?? [], count: typeof count === 'number' ? count : null };
-      }).catch(() => [] as Fornecedor[]);
-      const filtrados = todos.filter(f => precisaDeDocumento(f.cpf_cnpj));
-      setItems(filtrados.slice(from, to + 1));
-      setTotalCount(filtrados.length);
+    try {
+      if (semDocumento) {
+        /* FORN-EDITAR-01 — o recorte inteiro, filtrado pelo validador único, paginado aqui */
+        const { itens } = await buscarFornecedoresNoBanco<Fornecedor>(clienteId, searchDebounced, statusFilter, null);
+        const filtrados = itens.filter(f => precisaDeDocumento(f.cpf_cnpj));
+        setItems(filtrados.slice(from, from + PAGE_SIZE));
+        setTotalCount(filtrados.length);
+        return;
+      }
+      const { itens, total } = await buscarFornecedoresNoBanco<Fornecedor>(clienteId, searchDebounced, statusFilter, PAGE_SIZE, from);
+      setItems(itens);
+      setTotalCount(total);
+    } catch {
+      setItems([]);
+      setTotalCount(0);
+    } finally {
       setLoading(false);
-      return;
     }
-    const { data, count } = await consulta(true).range(from, to);
-
-    setItems((data as Fornecedor[]) || []);
-    setTotalCount(count ?? 0);
-    setLoading(false);
   }, [clienteAtual?.id, statusFilter, searchDebounced, page, semDocumento]);
 
   const loadInativosComLancamento = useCallback(async () => {
@@ -194,13 +171,12 @@ export function FinV2FornecedoresTab() {
         if (error) throw new Error(error.message);
         return { data: (data ?? []).map((r) => ({ favorecido_id: r.favorecido_id })), count: typeof count === 'number' ? count : null };
       });
-      /* FORN-AVISO-BUSCA-01 — com busca, conta só os inativos que batem com ela (o mesmo filtro da lista); sem busca, o total do cliente */
-      const filtro = filtroDaBusca(searchDebounced);
+      /* FORN-AVISO-BUSCA-01 — com busca, conta só os inativos que batem com ela (a MESMA busca da lista, a RPC); sem busca, o total */
       const ids = [...new Set(linhas.map((l) => l.favorecido_id).filter((id): id is string => !!id))];
-      if (!filtro || ids.length === 0) { setInativosComLancamento(contarFornecedoresDistintos(linhas)); return; }
-      const { data, error } = await supabase.from('financeiro_fornecedores').select('id').eq('cliente_id', clienteId).in('id', ids).or(filtro);
-      if (error) throw new Error(error.message);
-      setInativosComLancamento((data ?? []).length);
+      if (!searchDebounced.trim() || ids.length === 0) { setInativosComLancamento(contarFornecedoresDistintos(linhas)); return; }
+      const { itens } = await buscarFornecedoresNoBanco<{ id: string }>(clienteId, searchDebounced, 'inativos', null);
+      const casam = new Set(itens.map((f) => f.id));
+      setInativosComLancamento(ids.filter((id) => casam.has(id)).length);
     } catch {
       setInativosComLancamento(null);
     }

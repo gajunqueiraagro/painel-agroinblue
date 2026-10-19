@@ -266,27 +266,14 @@ export function CompraMetaModalShell({
                 impediria projetar uma compra de fornecedor ja conhecido. */}
             <Label className="text-[10px] text-muted-foreground">Fornecedor <span className="text-destructive">*</span></Label>
             <div className="mt-[3px]">
-              {isEdicao && clienteIdParaFornecedor ? (
-                /* fatia 2e: o seletor dono, pelo encaixe único. `incluirMeta`: o "[META] Planejamento" continua oferecido.
-                   O segundo rótulo "Fornecedor" que o seletor antigo desenhava por baixo deste saiu com ele. */
-                <CampoDeFornecedor
-                  clienteId={clienteIdParaFornecedor}
+              {/* FORN-BUSCA-UNICA-01 — criação e edição: o seletor padrão (a busca única); sem cliente ele fica vazio */}
+              <CampoDeFornecedor
+                  clienteId={clienteIdParaFornecedor ?? ''}
                   value={compraFornecedorId || null}
                   onChange={(id) => setCompraFornecedorId(id ?? '')}
                   incluirMeta
                   placeholder="Selecione o fornecedor"
                 />
-              ) : (
-                <SearchableSelect
-                  value={compraFornecedorId || '__all__'}
-                  onValueChange={(v) => setCompraFornecedorId(v === '__all__' ? '' : v)}
-                  options={fornecedores.map(f => ({ value: f.id, label: f.nome }))}
-                  placeholder="Selecione o fornecedor"
-                  allLabel="Nenhum selecionado"
-                  allValue="__all__"
-                  className="[&_button]:h-8 [&_button]:text-[12px] [&_button]:px-2.5"
-                />
-              )}
             </div>
           </div>
           <div className="min-w-0">

@@ -1,0 +1,48 @@
+{
+  "_leia": "FORN-BUSCA-UNICA-01 — a LISTA UNICA de casos da busca de fornecedor. Roda contra a funcao da tela (buscaDeFornecedor.test.ts) e contra a RPC fn_fornecedor_buscar (supabase/tests/forn_busca_unica_01_test.sql, GERADO deste arquivo por `node scripts/gerar-teste-busca-fornecedor.mjs`). Dados SINTETICOS. `esperado` e' a ordem exata; `uso` = quantos lancamentos vivos o fornecedor tem (o teste SQL os cria).",
+  "normalizacao": [
+    { "entrada": "  Comércio   JERÊ ", "saida": "comercio jere" },
+    { "entrada": "Ação Ñandu Ü Ç", "saida": "acao nandu u c" },
+    { "entrada": "Agrozetablue", "saida": "agrozetablue" },
+    { "entrada": "", "saida": "" },
+    { "entrada": "   ", "saida": "" }
+  ],
+  "digitosDaBusca": [
+    { "entrada": "54.442.418/0001-88", "saida": "54442418000188" },
+    { "entrada": "54442418", "saida": "54442418" },
+    { "entrada": "544 424", "saida": "544424" },
+    { "entrada": "12-3", "saida": "123" },
+    { "entrada": "agro 1", "saida": null },
+    { "entrada": "", "saida": null }
+  ],
+  "digitosDoDocumento": [
+    { "entrada": "11.222.333/0001-81", "saida": "11222333000181" },
+    { "entrada": "12.ABC.345/01DE-35", "saida": "123450135" },
+    { "entrada": null, "saida": "" }
+  ],
+  "fornecedores": [
+    { "chave": "gf", "nome": "Sintq G F Rezendezeta Junqueira", "nome_fantasia": "Agrozetablue", "cpf_cnpj": "54.442.418/0001-88", "ativo": true, "uso": 2 },
+    { "chave": "agz", "nome": "Sintq Agrozetablue Comercio", "ativo": true, "uso": 5 },
+    { "chave": "jere", "nome": "Sintq Comercial Jerê", "ativo": true, "uso": 0 },
+    { "chave": "jere2", "nome": "Sintq Comercial Jere Alimentos", "ativo": true, "uso": 3 },
+    { "chave": "dono", "nome": "Sintq Dono Zetamesc", "aliases": ["Sintq Antigo Nomezeta", "11.444.777/0001-61"], "ativo": true, "uso": 1 },
+    { "chave": "abs", "nome": "Sintq Antigo Nomezeta", "cpf_cnpj": "11.444.777/0001-61", "ativo": false, "fundido_em": "dono", "uso": 0 },
+    { "chave": "ina", "nome": "Sintq Inativo Zetamesc", "ativo": false, "uso": 0 }
+  ],
+  "buscas": [
+    { "caso": "fantasia acha a razao social (o caso AGROinBLUE); quem comeca com o termo vem antes do mais usado", "busca": "agrozetablue", "situacao": "ativos", "esperado": ["gf", "agz"] },
+    { "caso": "caixa e espacos nao importam", "busca": "  AGROZETABLUE ", "situacao": "ativos", "esperado": ["gf", "agz"] },
+    { "caso": "CNPJ so digitos (parte)", "busca": "54442418", "situacao": "ativos", "esperado": ["gf"] },
+    { "caso": "CNPJ com pontuacao", "busca": "54.442.418/0001-88", "situacao": "ativos", "esperado": ["gf"] },
+    { "caso": "sem acento acha com acento; o mais usado primeiro", "busca": "jere", "situacao": "ativos", "esperado": ["jere2", "jere"] },
+    { "caso": "com acento acha sem acento", "busca": "Jerê", "situacao": "ativos", "esperado": ["jere2", "jere"] },
+    { "caso": "nome do absorvido acha quem ficou (apelido)", "busca": "antigo nomezeta", "situacao": "ativos", "esperado": ["dono"] },
+    { "caso": "documento do absorvido acha quem ficou (apelido documento)", "busca": "11444777", "situacao": "ativos", "esperado": ["dono"] },
+    { "caso": "pedindo todos, o absorvido aparece depois do ativo", "busca": "antigo nomezeta", "situacao": "todos", "esperado": ["dono", "abs"] },
+    { "caso": "inativo so quando o filtro pede", "busca": "zetamesc", "situacao": "ativos", "esperado": ["dono"] },
+    { "caso": "so os inativos", "busca": "zetamesc", "situacao": "inativos", "esperado": ["ina"] },
+    { "caso": "todos: ativo primeiro", "busca": "zetamesc", "situacao": "todos", "esperado": ["dono", "ina"] },
+    { "caso": "busca de letras nao casa por documento", "busca": "sintq g f", "situacao": "ativos", "esperado": ["gf"] },
+    { "caso": "nada", "busca": "zzzqqqzeta", "situacao": "todos", "esperado": [] }
+  ]
+}

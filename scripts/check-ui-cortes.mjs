@@ -38,16 +38,24 @@ const CENARIOS = [
   { nome: 'fornecedores-pendentes', url: 'tela=fornecedores', antes: clicarTexto('Pendentes') },
   { nome: 'fornecedores-inativos', url: 'tela=fornecedores', antes: clicarTexto('Inativos') },
   { nome: 'fornecedores-todos', url: 'tela=fornecedores', antes: clicarTexto('Todos') },
+  /* FORN-BUSCA-UNICA-01 — SO' OS FILTROS do Financeiro V2 (decisao do Gabriel, 19/10): a TABELA tem 60 achados (reticencias em Produto,
+     Fornecedor e Centro; datas dd/mm/aa; cabecalho) e e' a frente FIN-V2-SEM-CORTE-01. Tirar a `regiao` mede a tela inteira. */
+  { nome: 'financeiro-filtros', url: 'tela=financeiro', regiao: '[data-testid="filtros-da-lista"]' },
+  /* FORN-BUSCA-UNICA-01 — o filtro de fornecedor com um nome longo escolhido: o chip mostra o nome inteiro */
+  { nome: 'financeiro-filtro-fornecedor', url: 'tela=financeiro', regiao: '[data-testid="filtros-da-lista"]', antes: async (p) => {
+    await p.locator('label:text-is("Fornecedor") + div [role="combobox"]').first().click(); await p.waitForTimeout(300);
+    await p.locator('[data-testid="favorecido-opcao"]').filter({ hasText: 'Cooperativa' }).first().click(); await p.waitForTimeout(500); } },
   ...['Dados gerais', 'Endereço e contato', 'Pagamento', 'Padrões', 'Uso'].map((aba) => ({ nome: `fornecedor-cadastro-${aba}`, url: 'tela=fornecedor-cadastro', antes: clicarTexto(aba) })),
   { nome: 'contrato-v4', url: 'tela=contrato' },
   ...['Geral', 'Pagamento', 'Documentos'].flatMap((aba) => ['novo', 'editar'].map((m) => ({ nome: `lancamento-${m}-${aba}`, url: `tela=lancamento&m=${m}`, antes: clicarTexto(aba) }))),
 ];
 
 /* roda NA PAGINA: devolve os achados [{regra, texto}] */
-function medir() {
+function medir(regiao) {
   const achados = [];
+  const raiz = (regiao && document.querySelector(regiao)) || document.body;
   const texto = (e) => (e.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 80);
-  for (const e of document.querySelectorAll('body *')) {
+  for (const e of raiz.querySelectorAll('*')) {
     const cs = getComputedStyle(e);
     if (cs.display === 'none' || cs.visibility === 'hidden' || !e.textContent.trim()) continue;
     const r = e.getBoundingClientRect(); if (r.width <= 2 || r.height <= 2) continue;   /* sr-only (so' para leitor de tela) fica de fora */
@@ -73,7 +81,7 @@ function medir() {
     if (topos.size > 1) achados.push({ regra: 'quebra', texto: `"${t}" em ${topos.size} linhas` });
   }
   const ehData = (t) => /^(data|venc\.?|vencimento|pgto\.?|pagamento|emissão|data de emissão)$/i.test(t.replace(/[▲▼↑↓*]/g, '').trim());
-  for (const tb of document.querySelectorAll('table')) {
+  for (const tb of raiz.querySelectorAll('table')) {
     const ths = [...tb.querySelectorAll('thead tr:last-child th')];
     ths.forEach((th, i) => {
       if (!ehData(th.textContent ?? '')) return;
@@ -87,11 +95,12 @@ function medir() {
   return achados;
 }
 /* roda NA PAGINA: rola cada container ate' o meio e confere o cabecalho preso */
-function medirCabecalho() {
+function medirCabecalho(regiao) {
   const achados = [];
+  const raiz = (regiao && document.querySelector(regiao)) || document.body;
   /* o scrollport de um elemento: o ancestral mais próximo com overflow */
   const scrollport = (x) => { for (let a = x.parentElement; a; a = a.parentElement) { const o = getComputedStyle(a); if (o.overflowY !== 'visible' || o.overflowX !== 'visible') return a; } return null; };
-  for (const c of document.querySelectorAll('body *')) {
+  for (const c of raiz.querySelectorAll('*')) {
     const cs = getComputedStyle(c);
     if (!/(auto|scroll)/.test(cs.overflowY) || c.scrollHeight <= c.clientHeight + 4) continue;
     const presos = [...c.querySelectorAll('*')].filter((x) => getComputedStyle(x).position === 'sticky' && getComputedStyle(x).top !== 'auto' && parseFloat(getComputedStyle(x).top) < 1
@@ -143,7 +152,9 @@ try {
     await p.goto(`${base}/index.html?${cen.url}`); await p.evaluate(() => document.fonts.ready); await p.waitForTimeout(1300);
     try { if (cen.antes) await cen.antes(p); } catch (e) { erros.push(`gesto: ${String(e).slice(0, 100)}`); }
     if (FOTOS) { fs.mkdirSync(FOTOS, { recursive: true }); await p.screenshot({ path: path.join(FOTOS, `${cen.nome}_${w}x${h}.png`) }); }
-    const achados = [...(await p.evaluate(medir)), ...(await p.evaluate(medirCabecalho)), ...erros.map((e) => ({ regra: 'erro', texto: e }))];
+    /* FORN-BUSCA-UNICA-01 — `regiao` (opcional): o cenário varre só o que o seletor pega (a tela inteira sem ele) */
+    if (cen.regiao && !(await p.$(cen.regiao))) erros.push(`regiao ${cen.regiao} nao achada`);
+    const achados = [...(await p.evaluate(medir, cen.regiao ?? null)), ...(await p.evaluate(medirCabecalho, cen.regiao ?? null)), ...erros.map((e) => ({ regra: 'erro', texto: e }))];
     for (const a of achados) if (!EXCECOES.some((x) => x.tela === cen.nome && x.regra === a.regra && x.texto === a.texto)) todos.push({ tela: cen.nome, tamanho: `${w}x${h}`, ...a });
     await p.close();
   }

@@ -1,3 +1,4 @@
+import { buscarFornecedores, type FornecedorBuscavel } from '@/lib/fornecedores/buscaDeFornecedor';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ResumoOperacoesModal, type FiltrosResumo } from '@/components/operacao-comercial/central/ResumoOperacoesModal';
@@ -442,6 +443,8 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
   const [rows, setRows] = useState<OpRow[]>([]);
   const [fazendas, setFazendas] = useState<Record<string, FazendaRef>>({});
   const [contrapartes, setContrapartes] = useState<Record<string, string>>({});
+  /* FORN-BUSCA-UNICA-01 — o filtro "Contraparte…" é a busca única (razão social, fantasia, CNPJ/CPF, apelidos) */
+  const [contrapartesBusca, setContrapartesBusca] = useState<FornecedorBuscavel[]>([]);
   const [finMap, setFinMap] = useState<Record<string, FinRow>>({});
   /* A view do modelo titulo, crua; quem le' e' o `liqMap` efetivo (abaixo), que troca a linha em conta corrente pelo dono. */
   const [liqView, setLiqView] = useState<Record<string, LiqRow>>({});
@@ -551,7 +554,7 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
       // FASE 2 — auxiliares em lote, filtradas pelo CONJUNTO FECHADO de IDs da lista carregada.
       const [faz, forn, fin, liq, rec, lotesKg, lote] = await Promise.all([
         fazendaIds.length ? sb.from('fazendas').select('id, nome, codigo').in('id', fazendaIds) : Promise.resolve({ data: [] }),
-        contraparteIds.length ? sb.from('financeiro_fornecedores').select('id, nome').in('id', contraparteIds) : Promise.resolve({ data: [] }),
+        contraparteIds.length ? sb.from('financeiro_fornecedores').select('id, nome, nome_fantasia, cpf_cnpj, ativo, aliases_norm, fundido_em_id').in('id', contraparteIds) : Promise.resolve({ data: [] }),
         sb.from('vw_oc_operacao_compromissos_resumo')
           .select('operacao_id, modo, n_compromissos, obrigacao_total, total_programado, total_materializado, total_liquidado, tem_compromissos, tem_partes_legadas, entrada_obrigacao, saida_obrigacao, entrada_liquidado, saida_liquidado, entrada_materializado, saida_materializado, entrada_programado, saida_programado')
           .eq('cliente_id', clienteId).in('operacao_id', operacaoIds),
@@ -566,8 +569,10 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
         .forEach(f => { fmap[f.id] = { nome: f.nome, codigo: f.codigo }; });
       setFazendas(fmap);
       const cmap: Record<string, string> = {};
-      ((forn?.data as { id: string; nome: string }[] | null) ?? []).forEach(c => { cmap[c.id] = c.nome; });
+      const lidasContrapartes: FornecedorBuscavel[] = (forn?.data as FornecedorBuscavel[] | null) ?? [];
+      lidasContrapartes.forEach(c => { cmap[c.id] = c.nome; });
       setContrapartes(cmap);
+      setContrapartesBusca(lidasContrapartes);
       const finmap: Record<string, FinRow> = {};
       ((fin?.data as FinRow[] | null) ?? []).forEach(x => { finmap[x.operacao_id] = x; });
       setFinMap(finmap);
@@ -642,6 +647,9 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
     [rows, recMap],
   );
 
+  const contrapartesQueCasam = useMemo(
+    () => new Set(buscarFornecedores(contrapartesBusca, busca, 'todos').map((f) => f.id)),
+    [contrapartesBusca, busca]);
   const filtradas = useMemo(() => {
     const q = busca.trim().toLowerCase();
     return rows.filter(r => {
@@ -662,12 +670,11 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
       if (dtIni && r.data_operacao < dtIni) return false;
       if (dtFim && r.data_operacao > dtFim) return false;
       if (q) {
-        const nome = (r.contraparte_id ? contrapartes[r.contraparte_id] : '') ?? '';
-        if (!nome.toLowerCase().includes(q)) return false;
+        if (!r.contraparte_id || !contrapartesQueCasam.has(r.contraparte_id)) return false;
       }
       return true;
     });
-  }, [rows, busca, fTipo, fComercial, fazendaSel, fFazenda, fLiquidacao, fRecebimento, dtIni, dtFim, mostrarRascunhos, contrapartes, liqMap, recMap]);
+  }, [rows, busca, fTipo, fComercial, fazendaSel, fFazenda, fLiquidacao, fRecebimento, dtIni, dtFim, mostrarRascunhos, contrapartesQueCasam, liqMap, recMap]);
   /* As opcoes do filtro de fazenda: as fazendas das OCs lidas (o mapa que a tela ja' carrega), por nome. */
   const fazendaOptions = useMemo(
     () => Object.entries(fazendas).map(([id, f]) => ({ id, nome: f.nome })).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')),

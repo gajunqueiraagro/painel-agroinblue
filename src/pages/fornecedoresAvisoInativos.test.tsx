@@ -11,7 +11,7 @@ import { resolve } from 'node:path';
 const banco = vi.hoisted(() => ({
   inativosComLanc: [{ favorecido_id: 'i1' }, { favorecido_id: 'i1' }, { favorecido_id: 'i2' }, { favorecido_id: 'i3' }],
   nomes: { i1: 'Aguimar F E Cia Ltda', i2: 'Aguimar F. E. Cia Ltda', i3: 'MMM Comércio de Gas' } as Record<string, string>,
-  ultimoOr: null as string | null,
+  ultimaBusca: null as { p_busca: string; p_situacao: string } | null,
 }));
 vi.mock('@/integrations/supabase/client', () => {
   const cadeia = (tabela: string) => {
@@ -20,7 +20,7 @@ vi.mock('@/integrations/supabase/client', () => {
     for (const m of ['eq', 'not', 'is', 'order', 'neq', 'limit', 'maybeSingle', 'single']) c[m] = () => c;
     c.select = (cols: string) => { if (tabela === 'financeiro_lancamentos_v2' && cols.includes('!inner')) estado.joinInativos = true; return c; };
     c.in = (_col: string, ids: string[]) => { estado.ids = ids; return c; };
-    c.or = (f: string) => { estado.or = f; banco.ultimoOr = f; return c; };
+    c.or = (f: string) => { estado.or = f; return c; };
     c.range = () => c;
     c.then = (ok: (r: unknown) => unknown) => {
       if (estado.joinInativos) return Promise.resolve({ data: banco.inativosComLanc, error: null, count: banco.inativosComLanc.length }).then(ok);
@@ -33,7 +33,15 @@ vi.mock('@/integrations/supabase/client', () => {
     };
     return c;
   };
-  return { supabase: { from: (t: string) => cadeia(t), rpc: async () => ({ data: null, error: null }) } };
+  /* FORN-BUSCA-UNICA-01 — a lista e o aviso buscam pela RPC `fn_fornecedor_buscar` */
+  const rpc = async (fn: string, args: { p_busca: string; p_situacao: string }) => {
+    if (fn !== 'fn_fornecedor_buscar') return { data: null, error: null };
+    banco.ultimaBusca = { p_busca: args.p_busca, p_situacao: args.p_situacao };
+    const termo = (args.p_busca ?? '').trim().toLowerCase();
+    const itens = Object.entries(banco.nomes).filter(([, nome]) => nome.toLowerCase().includes(termo)).map(([id, nome]) => ({ id, nome, ativo: false }));
+    return { data: { total: itens.length, itens }, error: null };
+  };
+  return { supabase: { from: (t: string) => cadeia(t), rpc } };
 });
 vi.mock('@/contexts/ClienteContext', () => ({ useCliente: () => ({ clienteAtual: { id: 'vera', nome: 'Vera' } }) }));
 vi.mock('@/contexts/FazendaContext', () => ({ useFazenda: () => ({ fazendas: [] }) }));
@@ -41,11 +49,11 @@ vi.mock('@/hooks/useFornecedoresDoCliente', async () => (await import('@/test/le
 vi.mock('@/hooks/useFinanceiroV2', () => ({ notificarLancamentosMudaram: vi.fn() }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
-import { FinV2FornecedoresTab, filtroDaBusca } from './FinV2FornecedoresTab';
+import { FinV2FornecedoresTab } from './FinV2FornecedoresTab';
 
 beforeEach(() => {
   banco.inativosComLanc = [{ favorecido_id: 'i1' }, { favorecido_id: 'i1' }, { favorecido_id: 'i2' }, { favorecido_id: 'i3' }];
-  banco.ultimoOr = null;
+  banco.ultimaBusca = null;
 });
 const aviso = () => screen.getByTestId('aviso-inativos-com-lancamento').textContent ?? '';
 async function buscar(texto: string) {
@@ -66,17 +74,15 @@ describe('o aviso dos inativos com lançamento', () => {
     await buscar('ana ve');
     await waitFor(() => expect(aviso()).toBe(''));
     expect(screen.getByTestId('aviso-inativos-com-lancamento')).toBeTruthy();
-    expect(banco.ultimoOr).toBe(filtroDaBusca('ana ve'));
+    expect(banco.ultimaBusca).toEqual({ p_busca: 'ana ve', p_situacao: 'inativos' });
   });
   it('relê ao fechar a ferramenta de mesclar (lido da fonte: as duas portas)', () => {
     const fonte = readFileSync(resolve(__dirname, 'FinV2FornecedoresTab.tsx'), 'utf8');
     expect(fonte.match(/void load\(\); void loadInativosComLancamento\(\); \}\} \/>/g)).toHaveLength(2);
   });
-  it('a lista e o aviso usam o MESMO filtro da busca', () => {
-    expect(filtroDaBusca('  ')).toBeNull();
-    expect(filtroDaBusca('linea')).toContain('nome.ilike.%linea%');
-    expect(filtroDaBusca('21.018.928')).toContain('cpf_cnpj.ilike.%2%1%0%1%8%9%2%8%');
+  it('a lista e o aviso usam a MESMA busca (a RPC da busca única) com o texto da busca', () => {
     const fonte = readFileSync(resolve(__dirname, 'FinV2FornecedoresTab.tsx'), 'utf8');
-    expect(fonte.match(/filtroDaBusca\(searchDebounced\)/g)).toHaveLength(2);
+    expect(fonte.match(/buscarFornecedoresNoBanco<[^>]+>\(clienteId, searchDebounced,/g)).toHaveLength(3);
+    expect(fonte).not.toMatch(/\.or\(filtro\)/);
   });
 });

@@ -280,6 +280,10 @@ export interface FornecedorV2 {
   cpf_cnpj_pagamento: string | null;
   nome_favorecido: string | null;
   observacao_pagamento: string | null;
+  /** FORN-BUSCA-UNICA-01 — o que a busca única também lê */
+  nome_fantasia?: string | null;
+  aliases_norm?: string[] | null;
+  fundido_em_id?: string | null;
 }
 
 export interface ClassificacaoItem {
@@ -426,7 +430,8 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     while (true) {
       const { data } = await supabase
         .from('financeiro_fornecedores')
-        .select('id, nome, cpf_cnpj, fazenda_id, ativo, tipo_recebimento, pix_tipo_chave, pix_chave, banco, agencia, conta, tipo_conta, cpf_cnpj_pagamento, nome_favorecido, observacao_pagamento')
+        /* FORN-BUSCA-UNICA-01 — fantasia, apelidos e a marca da mesclagem: o filtro de fornecedor busca por eles (a regra única) */
+        .select('id, nome, nome_fantasia, cpf_cnpj, fazenda_id, ativo, tipo_recebimento, pix_tipo_chave, pix_chave, banco, agencia, conta, tipo_conta, cpf_cnpj_pagamento, nome_favorecido, observacao_pagamento, aliases_norm, fundido_em_id')
         .eq('cliente_id', clienteId)
         .order('nome')
         .range(from, from + batchSize - 1);

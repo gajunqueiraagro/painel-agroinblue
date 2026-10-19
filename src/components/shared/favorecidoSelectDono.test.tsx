@@ -74,7 +74,8 @@ describe.each(['leitor', 'lista'] as const)('a opção, a busca e o selo — mod
     render(<Campo modo={modo} />);
     abrir();
     expect(BASE.some((x) => !x.ativo) && BASE.some((x) => x.nome.includes('[META]'))).toBe(true);
-    expect(nomes()).toEqual(['Fulano Insumos', 'FULANO  INSUMOS', 'Fulâno Insumos', 'Beltrano Comércio de Insumos Agropecuários e Representações Ltda', 'Sicrano Sem Documento', 'Documento Torto']);
+    /* FORN-BUSCA-UNICA-01 — a ordem é a da regra única (`buscarFornecedores`): ativo → começa com o termo → uso → nome normalizado → id */
+    expect(nomes()).toEqual(['Beltrano Comércio de Insumos Agropecuários e Representações Ltda', 'Documento Torto', 'Fulano Insumos', 'FULANO  INSUMOS', 'Fulâno Insumos', 'Sicrano Sem Documento']);
   });
   it('com `incluirMeta` o cadastro de meta entra', () => {
     render(<Campo modo={modo} incluirMeta />);
@@ -85,7 +86,7 @@ describe.each(['leitor', 'lista'] as const)('a opção, a busca e o selo — mod
     render(<Campo modo={modo} />);
     abrir();
     const selos = opcoes().map((o) => within(o).queryByTestId('favorecido-iguais')?.textContent ?? '');
-    expect(selos).toEqual(['3 iguais', '3 iguais', '3 iguais', '', '', '']);
+    expect(selos).toEqual(['', '', '3 iguais', '3 iguais', '3 iguais', '']);
   });
   it('busca por nome sem acento e por dígitos do documento (com e sem pontuação)', () => {
     render(<Campo modo={modo} />);
@@ -104,7 +105,7 @@ describe.each(['leitor', 'lista'] as const)('a opção, a busca e o selo — mod
     const onSelected = vi.fn();
     render(<Campo modo={modo} onSelected={onSelected} linha />);
     abrir();
-    fireEvent.click(opcoes()[1]);
+    fireEvent.click(opcoes()[3]);
     expect(onSelected).toHaveBeenCalledWith(expect.objectContaining({ id: 'rep2' }));
     expect(screen.getByRole('combobox').textContent).toBe('FULANO  INSUMOS');
     expect(screen.getByRole('combobox').getAttribute('title')).toBe('FULANO  INSUMOS · 123.456.789-09');
@@ -119,7 +120,7 @@ describe('a linha fixa do documento sob o campo', () => {
     expect(linha().textContent).toBe('');
     const classe = linha().className;
     expect(classe).toContain('h-[14px]');
-    abrir(); fireEvent.click(opcoes()[0]);
+    abrir(); fireEvent.click(opcoes()[2]);
     expect(linha().textContent).toBe('11.222.333/0001-81');
     abrir(); fireEvent.click(opcoes().find((o) => o.textContent?.includes('Sicrano')) as HTMLElement);
     expect(linha().textContent).toBe('sem CNPJ/CPF');

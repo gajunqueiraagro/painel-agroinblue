@@ -32,6 +32,9 @@ export interface FornecedorLido {
   cpf_cnpj_pagamento: string | null;
   nome_favorecido: string | null;
   observacao_pagamento: string | null;
+  /** FORN-BUSCA-UNICA-01 — os apelidos normalizados (a busca única os lê) e a marca da mesclagem */
+  aliases_norm?: string[] | null;
+  fundido_em_id?: string | null;
 }
 
 export interface PaginaDeFornecedores { linhas: FornecedorLido[]; total: number | null }

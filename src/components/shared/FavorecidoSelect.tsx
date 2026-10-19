@@ -42,6 +42,7 @@ import {
   LIMITE_DE_OPCOES, fantasiaDe, formatarDocumento, fraseDoLimite, linhaDoDocumento as textoDaLinhaDoDocumento, montarOpcoes,
   recortarOpcoes, seloDeIguais,
 } from '@/lib/fornecedores/fornecedorTexto';
+import { situacaoDoItem, type SituacaoDaBusca } from '@/lib/fornecedores/buscaDeFornecedor';
 
 /** O minimo que o seletor le' de um fornecedor. OC-HOMOLOG-FIX-02: o `NovoCompromissoDialog` da OC so' conhece
  *  `{ id, nome }`, e o seletor passa a servi-lo sem cast; quem tem o `FornecedorV2` inteiro segue recebendo-o no
@@ -111,6 +112,13 @@ export interface FavorecidoSelectProps<F extends FavorecidoOpcao = FornecedorV2>
   /** Fatia 2b (OC) — o texto do item que esvazia o campo `limpavel` (padrão "— nenhum —"). No emitente do documento da OC o
    *  vazio SIGNIFICA "a própria contraparte", e o item diz isso. */
   rotuloDoVazio?: string;
+  /** FORN-BUSCA-UNICA-01 — quem entra na lista: 'ativos' (padrão), 'inativos' ou 'todos' (o filtro que pede inativos e mesclados;
+   *  vale com a lista do hospedeiro — o leitor só tem ativos). O item inativo / mesclado diz a situação. */
+  situacao?: SituacaoDaBusca;
+  /** FORN-BUSCA-UNICA-01 — o escolhido aparece INTEIRO no campo (o nome quebra a linha e o campo cresce), nunca com "…" — o filtro. */
+  nomeInteiro?: boolean;
+  /** FORN-BUSCA-UNICA-01 — o uso de cada um (o `uso` da linha) aparece à direita do item: "12 lanç." */
+  mostrarUso?: boolean;
 }
 
 export const FRASE_FALHA_AO_ABRIR_CADASTRO = 'Não foi possível abrir o cadastro do fornecedor.';
@@ -152,7 +160,7 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
   search: buscaDoHospedeiro, onSearchChange: aoBuscarNoHospedeiro, onCriarNovo, novoButtonClassName,
   label, triggerClassName, size = 'default', tabIndex, disabled, showCpfCnpj = false,
   limpavel = false, placeholder = 'Selecione fornecedor...', linhaDoDocumento, incluirMeta = false, acaoFinal,
-  novoDesabilitado = false, novoRotulo, rotuloDoVazio = '— nenhum —',
+  novoDesabilitado = false, novoRotulo, rotuloDoVazio = '— nenhum —', situacao = 'ativos', nomeInteiro = false, mostrarUso = false,
 }: FavorecidoSelectProps<F>) {
   const [open, setOpen] = useState(false);
   const [buscaPropria, setBuscaPropria] = useState('');
@@ -173,12 +181,13 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
   useEffect(() => { setErroDoLapis(null); }, [value]);
 
   const ativos: Array<F | FornecedorLido> = useMemo(
-    () => (doLeitor ? lidos.fornecedores : (fornecedores ?? []).filter(f => f.ativo !== false)),
-    [doLeitor, lidos.fornecedores, fornecedores]);
+    () => (doLeitor ? lidos.fornecedores : situacao === 'ativos' ? (fornecedores ?? []).filter(f => f.ativo !== false) : (fornecedores ?? [])),
+    [doLeitor, lidos.fornecedores, fornecedores, situacao]);
 
   /* normalização, documento e "N iguais": UMA vez por lista (a busca corre sobre isto a cada tecla) */
   const opcoes = useMemo(() => montarOpcoes(ativos, incluirMeta), [ativos, incluirMeta]);
-  const recorte = useMemo(() => recortarOpcoes(opcoes, search, value || null, LIMITE_DE_OPCOES), [opcoes, search, value]);
+  const recorte = useMemo(() => recortarOpcoes(opcoes, search, value || null, LIMITE_DE_OPCOES, situacao), [opcoes, search, value, situacao]);
+  const nomePorId = useMemo(() => new Map(ativos.map((f) => [f.id, f.nome])), [ativos]);
   const visiveis = recorte.visiveis;
   const rodape = fraseDoLimite(visiveis.length, recorte.total);
 
@@ -190,7 +199,7 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
     if (doLeitor) return lidos.gravado;
     return (fornecedores ?? []).find(f => f.id === value) ?? null;
   }, [value, ativos, doLeitor, lidos.gravado, fornecedores]);
-  const inativo = !!escolhido && escolhido.ativo === false;
+  const inativo = !!escolhido && escolhido.ativo === false && situacao === 'ativos';
 
   /**
    * Abre POSICIONADO no fornecedor atual — 133h adendo item 14.
@@ -269,9 +278,9 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
       <div className="flex items-center gap-1">
         <Popover open={open} onOpenChange={v => { setOpen(v); if (!v) onSearchChange(''); }}>
           <PopoverTrigger asChild>
-            <Button tabIndex={tabIndex} variant="outline" role="combobox" aria-expanded={open} disabled={disabled} title={tituloDoGatilho} className={cn("flex-1 min-w-0 h-8 justify-between font-normal text-[12px]", size === 'compact' && 'h-5 px-1.5 text-[11px] [&_svg]:h-3 [&_svg]:w-3', triggerClassName)}>
+            <Button tabIndex={tabIndex} variant="outline" role="combobox" aria-expanded={open} disabled={disabled} title={tituloDoGatilho} className={cn("flex-1 min-w-0 h-8 justify-between font-normal text-[12px]", size === 'compact' && 'h-5 px-1.5 text-[11px] [&_svg]:h-3 [&_svg]:w-3', nomeInteiro && '!h-auto min-h-6 py-0.5 whitespace-normal', triggerClassName)}>
               {/* UI-DROPDOWN-PADRAO-01: o texto que não cabe começa na borda esquerda (o botão centraliza por padrão) */}
-              <span className="min-w-0 flex-1 truncate text-left">{textoDoGatilho}</span>
+              <span data-testid="favorecido-gatilho-texto" className={cn("min-w-0 flex-1 text-left", nomeInteiro ? "whitespace-normal break-words leading-tight" : "truncate")}>{textoDoGatilho}</span>
               {inativo && (
                 /* o gravado que não está mais entre os ativos: o campo não esvazia, e diz por quê */
                 <span data-testid="favorecido-inativo" className="ml-1 shrink-0 rounded border border-amber-400 bg-amber-50 px-1 text-[9.5px] leading-[14px] text-amber-800">inativo</span>
@@ -339,12 +348,17 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
                   <span className="min-w-0 flex-1 truncate text-left" title={[favorecidoLabel(o.f, showCpfCnpj), fantasiaDe(o.f)].filter(Boolean).join(' · ')}>
                     {o.f.nome}{fantasiaDe(o.f) ? <span data-testid="favorecido-fantasia" className={MENU_SECUNDARIO}> · {fantasiaDe(o.f)}</span> : null}
                   </span>
+                  {/* FORN-BUSCA-UNICA-01 — inativo / "mesclado em <dono>": só aparece quando o filtro pede (situação ≠ 'ativos') */}
+                  {situacaoDoItem(o.f, (id) => nomePorId.get(id)) && (
+                    <span data-testid="favorecido-situacao" className="ml-1.5 shrink-0 rounded-sm bg-zinc-200/90 px-1 text-zinc-900">{situacaoDoItem(o.f, (id) => nomePorId.get(id))}</span>
+                  )}
                   {o.iguais > 0 && (
                     <span data-testid="favorecido-iguais" className="ml-1.5 shrink-0 rounded-sm bg-amber-400/90 px-1 text-zinc-900"
                       title={`${o.iguais} cadastros ativos com este nome — confira o CNPJ/CPF`}>{seloDeIguais(o.iguais)}</span>
                   )}
                   {/* documento à direita, em tom apagado: NUNCA corta. Sem documento a área fica vazia (D5). */}
                   <span data-testid="favorecido-doc-da-opcao" className={cn("ml-2 shrink-0 whitespace-nowrap tabular-nums", MENU_SECUNDARIO)}>{o.documento}</span>
+                  {mostrarUso && <span data-testid="favorecido-uso" className={cn("ml-2 shrink-0 whitespace-nowrap tabular-nums", MENU_SECUNDARIO)}>{o.uso} lanç.</span>}
                 </button>
               ))}
             </div>

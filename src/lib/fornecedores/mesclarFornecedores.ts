@@ -10,11 +10,15 @@ const txt = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? 
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
 /** A ordem em que a prévia mostra os módulos (a mesma do banco, `_fn_fornecedor_mesclar_alvos`). */
+import { buscarFornecedores } from './buscaDeFornecedor';
+
 export const MODULOS_DA_MESCLAGEM: ReadonlyArray<string> = [
   'Financeiro', 'Recorrências', 'Financiamentos', 'Operação comercial', 'Rebanho', 'Agricultura', 'Importação', 'Cadastro',
 ];
 
-export interface FornecedorDaMesclagem { id: string; nome: string; cpfCnpj: string | null; ativo: boolean; nomeFantasia?: string | null }
+export interface FornecedorDaMesclagem { id: string; nome: string; cpfCnpj: string | null; ativo: boolean; nomeFantasia?: string | null;
+  /** FORN-BUSCA-UNICA-01 — os apelidos (a busca única os lê) */
+  aliasesNorm?: readonly string[] | null }
 export interface Recusa { motivo: string; frase: string }
 export interface PreviaDaMesclagem {
   simulado: boolean;
@@ -268,24 +272,16 @@ export const PLACEHOLDER_BUSCA_CADASTRO = 'Buscar cadastro para comparar (nome, 
 export const TEXTO_DO_VAZIO_DA_MESCLAGEM = 'Escolha uma sugestão à esquerda ou busque os cadastros que quer juntar.';
 export const LIMITE_DA_BUSCA_DE_CADASTRO = 8;
 
-/** Sem acento, sem caixa, espaços colapsados — "jere" acha "Jerê". */
-const semAcento = (s: string | null | undefined) => (s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
-
-/** Os candidatos que casam com a busca (razão social, fantasia ou dígitos do documento), fora os que já são coluna.
- *  Ordem: o nome que COMEÇA pela busca, depois ativo antes de inativo, depois o nome. Busca vazia = nada. */
+/** Os candidatos que casam com a busca, fora os que já são coluna — pela REGRA ÚNICA (`buscarFornecedores`, FORN-BUSCA-UNICA-01:
+ *  razão social, fantasia, CNPJ/CPF, apelidos; ordem ativo → começa com o termo → nome). Busca vazia = nada. */
 export function buscarCadastros(candidatos: readonly FornecedorDaMesclagem[], busca: string, jaNaComparacao: readonly string[],
   limite = LIMITE_DA_BUSCA_DE_CADASTRO): { itens: FornecedorDaMesclagem[]; total: number } {
-  const q = semAcento(busca);
-  if (!q) return { itens: [], total: 0 };
-  const dig = busca.replace(/[.\-/\s]/g, '');
-  const soDigitos = /^\d+$/.test(dig) ? dig : null;
+  if (!busca.trim()) return { itens: [], total: 0 };
   const fora = new Set(jaNaComparacao);
-  const achados = candidatos.filter((f) => {
-    if (fora.has(f.id)) return false;
-    if (semAcento(f.nome).includes(q) || semAcento(f.nomeFantasia).includes(q)) return true;
-    return soDigitos !== null && (f.cpfCnpj ?? '').replace(/\D/g, '').includes(soDigitos);
-  });
-  const peso = (f: FornecedorDaMesclagem) => (semAcento(f.nome).startsWith(q) ? 0 : 1) * 2 + (f.ativo ? 0 : 1);
-  achados.sort((a, b) => peso(a) - peso(b) || a.nome.localeCompare(b.nome, 'pt-BR'));
+  const porId = new Map(candidatos.map((f) => [f.id, f]));
+  const achados = buscarFornecedores(
+    candidatos.filter((f) => !fora.has(f.id)).map((f) => ({ id: f.id, nome: f.nome, nome_fantasia: f.nomeFantasia ?? null, cpf_cnpj: f.cpfCnpj,
+      ativo: f.ativo, aliases_norm: f.aliasesNorm ?? null })),
+    busca, 'todos').map((f) => porId.get(f.id)).filter((f): f is FornecedorDaMesclagem => !!f);
   return { itens: achados.slice(0, limite), total: achados.length };
 }

@@ -75,6 +75,7 @@ import { VendaResumoPanel } from '@/components/venda/VendaResumoPanel';
 import { AbateExportDialog } from '@/components/AbateExportMenu';
 import { AbateFinanceiroPanel, AbateFinanceiroPanelRef } from '@/components/AbateFinanceiroPanel';
 import { SearchableSelect } from '@/components/ui/searchable-select';
+import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
 import { MSG_FAZENDA_OBRIGATORIA, bloqueioDaFazenda, destinoAposTrocarOrigem, destinosDaTransferencia, fazendaSemeada } from '@/lib/zoo/fazendaDoFormulario';
 import { NovoFornecedorDialog } from '@/components/financeiro-v2/NovoFornecedorDialog';
 import { supabase } from '@/integrations/supabase/client';
@@ -5463,14 +5464,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               <Label className="font-bold text-[11px]">Frigorífico (Fornecedor) *</Label>
               <div className="flex items-center gap-1 mt-0.5">
                 <div className="min-w-0 flex-1" id="abate-fornecedor-select">
-                  <SearchableSelect
-                    value={abateFornecedorId || '__all__'}
-                    onValueChange={(v) => setAbateFornecedorId(v === '__all__' ? '' : v)}
-                    options={abateFornecedores.map(f => ({ value: f.id, label: f.nome }))}
+                  <FavorecidoSelect /* FORN-BUSCA-UNICA-01 — o seletor padrão (a busca única) */
+                    value={abateFornecedorId}
+                    onChange={(id) => setAbateFornecedorId(id)}
+                    clienteId={clienteAtual?.id ?? null} limpavel rotuloDoVazio="Nenhum selecionado" linhaDoDocumento={false}
                     placeholder="Selecione ou cadastre o frigorífico"
-                    allLabel="Nenhum selecionado"
-                    allValue="__all__"
-                    className="[&_button]:h-7 [&_button]:text-[11px] [&_button]:px-2"
+                    triggerClassName="h-7 text-[11px] px-2"
                   />
                 </div>
                 <Button type="button" variant="outline" size="icon" className="relative z-10 h-7 w-7 shrink-0" aria-label="Novo frigorífico" onClick={() => setNovoFornecedorAbateOpen(true)}>
@@ -5515,14 +5514,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               <Label className="font-bold text-[11px]">Fornecedor *</Label>
               <div className="flex items-center gap-1 mt-0.5">
                 <div className="min-w-0 flex-1" id="compra-fornecedor-select">
-                  <SearchableSelect
-                    value={compraFornecedorId || '__all__'}
-                    onValueChange={(v) => setCompraFornecedorId(v === '__all__' ? '' : v)}
-                    options={abateFornecedores.map(f => ({ value: f.id, label: f.nome }))}
+                  <FavorecidoSelect /* FORN-BUSCA-UNICA-01 — o seletor padrão (a busca única) */
+                    value={compraFornecedorId}
+                    onChange={(id) => setCompraFornecedorId(id)}
+                    clienteId={clienteAtual?.id ?? null} limpavel rotuloDoVazio="Nenhum selecionado" linhaDoDocumento={false}
                     placeholder="Selecione ou cadastre o fornecedor"
-                    allLabel="Nenhum selecionado"
-                    allValue="__all__"
-                    className="[&_button]:h-7 [&_button]:text-[11px] [&_button]:px-2"
+                    triggerClassName="h-7 text-[11px] px-2"
                   />
                 </div>
                 <Button type="button" variant="outline" size="icon" className="h-7 w-7 shrink-0" onClick={() => setNovoFornecedorCompraOpen(true)}>
@@ -5567,19 +5564,16 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
               <Label className="font-bold text-[11px]">Destino (Comprador)</Label>
               <div className="flex items-center gap-1 mt-0.5">
                 <div className="min-w-0 flex-1">
-                  <SearchableSelect
-                    value={vendaDestinoFornecedorId || '__all__'}
-                    onValueChange={(v) => {
-                      const id = v === '__all__' ? '' : v;
+                  <FavorecidoSelect /* FORN-BUSCA-UNICA-01 — o seletor padrão (a busca única) */
+                    value={vendaDestinoFornecedorId}
+                    onChange={(id) => {
                       setVendaDestinoFornecedorId(id);
                       const nome = abateFornecedores.find(f => f.id === id)?.nome || '';
                       setFazendaDestino(nome);
                     }}
-                    options={abateFornecedores.map(f => ({ value: f.id, label: f.nome }))}
+                    clienteId={clienteAtual?.id ?? null} limpavel rotuloDoVazio="Nenhum selecionado" linhaDoDocumento={false}
                     placeholder="Selecione o comprador"
-                    allLabel="Nenhum selecionado"
-                    allValue="__all__"
-                    className="[&_button]:h-7 [&_button]:text-[11px] [&_button]:px-2"
+                    triggerClassName="h-7 text-[11px] px-2"
                   />
                 </div>
                 <Button type="button" variant="outline" size="icon" className="h-7 w-7 shrink-0" onClick={() => setNovoFornecedorVendaOpen(true)}>
@@ -6006,6 +6000,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     fazendaOrigem, setFazendaOrigem,
     compraFornecedorId, setCompraFornecedorId,
     fornecedores: abateFornecedores,
+    /* FORN-BUSCA-UNICA-01 — a criação também usa o seletor padrão (a busca única), como a edição */
+    clienteIdParaFornecedor: clienteAtual?.id ?? undefined,
     notaFiscal, setNotaFiscal,
     precoKgBase: precoKg, setPrecoKgBase: setPrecoKg,
     bonus, setBonus,
@@ -6035,6 +6031,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     observacao, setObservacao,
     compradorId: vendaDestinoFornecedorId, setCompradorId: setVendaDestinoFornecedorId,
     contrapartes: abateFornecedores,
+    clienteIdParaContraparte: clienteAtual?.id ?? undefined,
     notaFiscal, setNotaFiscal,
     vendaTipoPreco, setVendaTipoPreco,
     vendaPrecoInput, setVendaPrecoInput,
