@@ -115,7 +115,8 @@ export interface FavorecidoSelectProps<F extends FavorecidoOpcao = FornecedorV2>
   /** FORN-BUSCA-UNICA-01 — quem entra na lista: 'ativos' (padrão), 'inativos' ou 'todos' (o filtro que pede inativos e mesclados;
    *  vale com a lista do hospedeiro — o leitor só tem ativos). O item inativo / mesclado diz a situação. */
   situacao?: SituacaoDaBusca;
-  /** FORN-BUSCA-UNICA-01 — o escolhido aparece INTEIRO no campo (o nome quebra a linha e o campo cresce), nunca com "…" — o filtro. */
+  /** FORN-BUSCA-UNICA-01 — o escolhido aparece inteiro no campo, nunca com "…" — o filtro. FIN-FILTRO-DOC-01: numa linha so', rolando
+   *  dentro do campo como em todo input (`uma-linha-que-rola`, index.css); o campo nunca cresce. */
   nomeInteiro?: boolean;
   /** FORN-BUSCA-UNICA-01 — o uso de cada um (o `uso` da linha) aparece à direita do item: "12 lanç." */
   mostrarUso?: boolean;
@@ -278,9 +279,9 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
       <div className="flex items-center gap-1">
         <Popover open={open} onOpenChange={v => { setOpen(v); if (!v) onSearchChange(''); }}>
           <PopoverTrigger asChild>
-            <Button tabIndex={tabIndex} variant="outline" role="combobox" aria-expanded={open} disabled={disabled} title={tituloDoGatilho} className={cn("flex-1 min-w-0 h-8 justify-between font-normal text-[12px]", size === 'compact' && 'h-5 px-1.5 text-[11px] [&_svg]:h-3 [&_svg]:w-3', nomeInteiro && '!h-auto min-h-6 py-0.5 whitespace-normal', triggerClassName)}>
+            <Button tabIndex={tabIndex} variant="outline" role="combobox" aria-expanded={open} disabled={disabled} title={tituloDoGatilho} className={cn("flex-1 min-w-0 h-8 justify-between font-normal text-[12px]", size === 'compact' && 'h-5 px-1.5 text-[11px] [&_svg]:h-3 [&_svg]:w-3', triggerClassName)}>
               {/* UI-DROPDOWN-PADRAO-01: o texto que não cabe começa na borda esquerda (o botão centraliza por padrão) */}
-              <span data-testid="favorecido-gatilho-texto" className={cn("min-w-0 flex-1 text-left", nomeInteiro ? "whitespace-normal break-words leading-tight" : "truncate")}>{textoDoGatilho}</span>
+              <span data-testid="favorecido-gatilho-texto" className={cn("min-w-0 flex-1 text-left", nomeInteiro ? "uma-linha-que-rola" : "truncate")}>{textoDoGatilho}</span>
               {inativo && (
                 /* o gravado que não está mais entre os ativos: o campo não esvazia, e diz por quê */
                 <span data-testid="favorecido-inativo" className="ml-1 shrink-0 rounded border border-amber-400 bg-amber-50 px-1 text-[9.5px] leading-[14px] text-amber-800">inativo</span>

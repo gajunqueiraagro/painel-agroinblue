@@ -53,13 +53,22 @@ describe('a busca única nas telas (fonte)', () => {
 
 describe('o chip do filtro (FavorecidoSelect com nomeInteiro)', () => {
   const LONGO = 'Sintq Fornecedor de Nome Muito Comprido Comércio de Insumos Agropecuários e Representações Ltda';
-  it('mostra o nome inteiro, sem "…" (quebra a linha)', () => {
+  it('mostra o nome inteiro, sem "…", numa linha que rola dentro do campo (FIN-FILTRO-DOC-01: nada empurra a tela)', () => {
     render(<FavorecidoSelect value="a" onChange={() => {}} fornecedores={[{ id: 'a', nome: LONGO, cpf_cnpj: null, ativo: true }]}
       situacao="todos" nomeInteiro limpavel rotuloDoVazio="Todos" linhaDoDocumento={false} />);
     const texto = screen.getByTestId('favorecido-gatilho-texto');
     expect(texto.textContent).toBe(LONGO);
-    expect(texto.className).not.toMatch(/truncate|line-clamp|text-ellipsis/);
-    expect(texto.className).toContain('whitespace-normal');
+    expect(texto.className).not.toMatch(/truncate|line-clamp|text-ellipsis|whitespace-normal|break-words/);
+    expect(texto.className).toContain('uma-linha-que-rola');
+    /* o gatilho nao cresce: nada de altura automatica */
+    expect(screen.getByRole('combobox').className).not.toMatch(/h-auto|whitespace-normal/);
+  });
+  it('a regra da linha que rola mora no index.css e vale para todo gatilho do cartao de filtros do V2', () => {
+    const css = ler('index.css');
+    for (const sel of ['.uma-linha-que-rola', '.filtros-uma-linha button[role="combobox"] > span:first-child', '.filtros-uma-linha button > span.truncate.flex-1:first-child'])
+      expect(css).toContain(sel);
+    expect(css).toMatch(/white-space: nowrap !important;[\s\S]{0,80}overflow-x: auto !important;/);
+    expect(ler('pages/FinanceiroV2Tab.tsx')).toMatch(/data-testid="filtros-da-lista" className="filtros-uma-linha /);
   });
   it('sem nomeInteiro, o campo de formulário segue como era (corta, inteiro no title)', () => {
     render(<FavorecidoSelect value="a" onChange={() => {}} fornecedores={[{ id: 'a', nome: LONGO, cpf_cnpj: null, ativo: true }]} linhaDoDocumento={false} />);

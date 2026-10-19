@@ -194,7 +194,9 @@ export function parseDocumentoImport(raw: string | null): { tipo: TipoDocumento;
    o parcelamento não grava `numero_documento` em cada parcela, e a parcela aparecia sem nota. */
 
 /** O que a função precisa de cada documento (linha de `vw_lancamento_documentos`, que já traz os ligados). */
-export interface DocumentoDaLinha { especie: string | null; numero: string | null; cancelado?: boolean | null }
+export interface DocumentoDaLinha { especie: string | null; numero: string | null; cancelado?: boolean | null;
+  /** FIN-FILTRO-DOC-01 — a chave de acesso (44 dígitos): o filtro Documento também acha por ela */
+  chave_acesso?: string | null }
 
 const ESPECIES_NF: readonly string[] = ['nf', 'nf_principal', 'nf_complementar'];
 const ehNF = (d: DocumentoDaLinha) => ESPECIES_NF.includes(d.especie ?? '');
@@ -285,6 +287,52 @@ export function docDaLinha(
     return { rotulo: r, titulo: comTipo(prefixo, r), origem: 'documento', clipe, resumo };
   }
   return { rotulo: '', titulo: '', origem: null, clipe, resumo };
+}
+
+/* ── FIN-FILTRO-DOC-01 — o FILTRO "Documento" da lista: a MESMA fonte da coluna DOC. (o campo próprio do lançamento + os documentos
+   VIVOS ligados a ele — os da OC e os das parcelas da mesma nota vêm pela `vw_lancamento_documentos`) ───────────────────────────── */
+
+export const PLACEHOLDER_FILTRO_DOCUMENTO = 'Número da NF, recibo ou chave';
+
+/** As palavras que dizem o TIPO na busca ("NF 910", "recibo"), no prefixo que a coluna escreve. */
+const TIPO_DA_PALAVRA: Readonly<Record<string, string>> = {
+  nf: 'NF', nfe: 'NF', 'nf-e': 'NF', nota: 'NF', fiscal: 'NF', rec: 'Rec.', recibo: 'Rec.', bol: 'Bol.', boleto: 'Bol.', fatura: 'Bol.',
+  comp: 'Comp.', comprovante: 'Comp.',
+};
+const PREFIXO_DA_ESPECIE_NO_FILTRO: Readonly<Record<string, string>> = { ...PREFIXO_POR_ESPECIE, nf_produtor: 'NF' };
+const soDigitosDoc = (s: string | null | undefined) => (s ?? '').replace(/\D/g, '');
+const semZerosAEsquerda = (s: string) => s.replace(/^0+/, '');
+
+/**
+ * O lançamento casa com o que foi digitado no filtro Documento? Compara por DÍGITOS, sem pontuação e sem zeros à esquerda dos dois
+ * lados ("0.910", ".910", "910" e "000.000.910" acham o mesmo), dentro do número; pela CHAVE DE ACESSO (os dígitos digitados, 4+,
+ * dentro dos 44); e pelo TIPO ("NF 910", "recibo"). Documento cancelado não entra. Vazio casa com todos.
+ */
+export function documentoCasaComFiltro(
+  termo: string,
+  lancamento: { tipo_documento?: string | null; numero_documento?: string | null },
+  docs: readonly DocumentoDaLinha[] | null | undefined,
+): boolean {
+  const t = termo.trim();
+  if (!t) return true;
+  const digitos = soDigitosDoc(t);
+  const numero = semZerosAEsquerda(digitos);
+  const palavras = t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[0-9.,:/\\-]/g, ' ').split(/\s+/).filter(Boolean);
+  const tipos = palavras.map((w) => TIPO_DA_PALAVRA[w]);
+  if (tipos.some((x) => !x)) return false;   /* palavra que não é tipo de documento não acha nada */
+  const candidatos: Array<{ prefixo: string; numero: string | null; chave: string | null }> = [];
+  if ((lancamento.numero_documento ?? '').trim()) {
+    candidatos.push({ prefixo: PREFIXO_POR_TIPO[lancamento.tipo_documento ?? ''] ?? SEM_PREFIXO, numero: lancamento.numero_documento ?? null, chave: null });
+  }
+  for (const d of vivos(docs)) {
+    candidatos.push({ prefixo: PREFIXO_DA_ESPECIE_NO_FILTRO[d.especie ?? ''] ?? SEM_PREFIXO, numero: d.numero, chave: d.chave_acesso ?? null });
+  }
+  return candidatos.some((c) => {
+    if (tipos.length && !tipos.every((x) => x === c.prefixo)) return false;
+    if (!digitos) return true;
+    if (numero && semZerosAEsquerda(soDigitosDoc(c.numero)).includes(numero)) return true;
+    return digitos.length >= 4 && soDigitosDoc(c.chave).includes(digitos);
+  });
 }
 
 /* ── PARC-FECHA-02 item 1 — no PARCELADO o documento da compra tem UM dono ─────────────────────────────────────────────── */

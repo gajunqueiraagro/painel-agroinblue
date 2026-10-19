@@ -30,7 +30,7 @@ export function useDocumentosDoCliente(clienteId: string | null | undefined) {
       for (let de = 0; ; de += PAGINA) {
         const { data, error } = await supabase
           .from('vw_lancamento_documentos')
-          .select('lancamento_id, especie, numero, cancelado')
+          .select('lancamento_id, especie, numero, cancelado, chave_acesso')
           .eq('cliente_id', clienteId ?? '')
           .order('lancamento_id', { ascending: true })
           .order('documento_id', { ascending: true })
@@ -39,7 +39,7 @@ export function useDocumentosDoCliente(clienteId: string | null | undefined) {
         for (const d of data ?? []) {
           if (!d.lancamento_id) continue;
           const lista = mapa.get(d.lancamento_id) ?? [];
-          lista.push({ especie: d.especie, numero: d.numero, cancelado: d.cancelado });
+          lista.push({ especie: d.especie, numero: d.numero, cancelado: d.cancelado, chave_acesso: d.chave_acesso });
           mapa.set(d.lancamento_id, lista);
         }
         if ((data ?? []).length < PAGINA) break;

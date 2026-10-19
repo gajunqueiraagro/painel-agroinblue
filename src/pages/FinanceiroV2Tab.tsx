@@ -28,7 +28,7 @@ import { useDocumentosDoCliente } from '@/hooks/useDocumentosDoCliente';
 import { useParcelasDosLancamentos } from '@/hooks/useParcelasDosLancamentos';
 import { useContratosDoCliente } from '@/hooks/useContratosDoCliente';
 import { nomeEParcela } from '@/lib/financiamentos/nomeDaParcela';
-import { docDaLinha } from '@/lib/financeiro/documentoHelper';
+import { docDaLinha, documentoCasaComFiltro, PLACEHOLDER_FILTRO_DOCUMENTO } from '@/lib/financeiro/documentoHelper';
 import { fraseDoLote } from '@/lib/financiamentos/cancelarParcela';
 import { fraseDoLoteDeSplit } from '@/lib/conciliacao/cancelarFilhoDeSplit';
 import { MinimodalOrigemLancamento } from '@/components/financeiro-v2/MinimodalOrigemLancamento';
@@ -37,7 +37,6 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { usePodeAbrir, TELA_DA_OPERACAO } from '@/v2/hooks/usePodeAbrir';
 import { contaSimpleValid } from '@/components/financeiro-v2/lancamentoDialogTabs';
 import { validarLancamento, tipoDaContaNoPlano } from '@/lib/financeiro/validacaoLancamento';
-import { formatDocumento } from '@/lib/financeiro/documentoHelper';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { SearchableSelect, limparBuscasLembradas } from '@/components/ui/searchable-select';
@@ -201,10 +200,6 @@ function formatNF(l: LancamentoV2): string {
 /** O que a coluna Doc. escreve (PARC-LIVRES-01 passo 3): o texto padronizado do dono — "NF 000.000.518", "Rec. X", "Doc. X"… */
 const lancamentoParaDoc = (l: LancamentoV2) => ({ tipo_documento: (l as any).tipo_documento ?? null, numero_documento: l.numero_documento });
 
-// Tooltip mantém info completa (tipo + número formatado)
-function formatDocCompleto(l: LancamentoV2): string {
-  return formatDocumento((l as any).tipo_documento, l.numero_documento);
-}
 
 export interface FinV2DrillFilters {
   ano?: string;
@@ -1125,12 +1120,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
       items = items.filter(l => l.descricao?.toLowerCase().includes(q));
     }
     if (documentoFiltro.trim()) {
-      // Busca no número do documento (coluna DOC) e no documento formatado (tipo + número,
-      // mesmo valor do tooltip via formatDocCompleto). Case-insensitive, substring.
-      const q = documentoFiltro.toLowerCase();
-      items = items.filter(l =>
-        (l.numero_documento || '').toLowerCase().includes(q) ||
-        formatDocCompleto(l).toLowerCase().includes(q));
+      /* FIN-FILTRO-DOC-01 — a MESMA fonte da coluna DOC.: o campo do lançamento + os documentos vivos ligados (OC, parcelas da mesma
+         nota), por dígitos sem zeros à esquerda, chave de acesso e tipo (`documentoCasaComFiltro`, o dono) */
+      items = items.filter(l => documentoCasaComFiltro(documentoFiltro, l, documentosPorLancamento?.get(l.id)));
     }
     if (fornecedorFiltro !== '__all__') {
       items = items.filter(l => l.favorecido_id === fornecedorFiltro);
@@ -1193,7 +1185,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     }
 
     return items;
-  }, [hook.lancamentos, contaOrigem, contaDestino, produtoFiltro, documentoFiltro, fornecedorFiltro, tipoOperacao, atividadeFiltro, safraFiltro, culturaFiltro, grupoFiltro, centroToGrupo, statusSelecionados, conciliados]);
+  }, [hook.lancamentos, contaOrigem, contaDestino, produtoFiltro, documentoFiltro, documentosPorLancamento, fornecedorFiltro, tipoOperacao, atividadeFiltro, safraFiltro, culturaFiltro, grupoFiltro, centroToGrupo, statusSelecionados, conciliados]);
 
   const compareDefaultOrder = useCallback((a: LancamentoV2, b: LancamentoV2) => {
     // PR-FIN-GRADE-DATAS-03 — a ordenação padrão acompanha a dimensão selecionada (Data por). Chave
@@ -1860,7 +1852,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
           justamente nas pontas, onde moram a primeira e a última coluna, e um card
           arredondado sobre uma tabela de cantos vivos parecia dois desenhos. Se um dia
           voltar o raio, volta nos dois — meio arredondado é a única saída errada. */}
-      <Card data-testid="filtros-da-lista" className="rounded-none bg-white shrink-0" style={{ border: '1px solid #D6DEE8', boxShadow: '0 2px 6px rgba(0,0,0,0.04)' }}>
+      <Card data-testid="filtros-da-lista" className="filtros-uma-linha rounded-none bg-white shrink-0" style={{ border: '1px solid #D6DEE8', boxShadow: '0 2px 6px rgba(0,0,0,0.04)' }}>
         {/* Padding interno pequeno: o afastamento da borda da tela é do container raiz. */}
         <CardContent className="p-2 space-y-1">
           {isMobile ? (
@@ -2041,7 +2033,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                   <Input
                     value={documentoFiltro}
                     onChange={e => setDocumentoFiltro(e.target.value)}
-                    placeholder="NF, recibo..."
+                    placeholder={PLACEHOLDER_FILTRO_DOCUMENTO}
                     className="h-6 !text-[9px] placeholder:!text-[9px] leading-tight px-1.5 bg-white border-[#C9D4E2]"
                     autoCorrect="off" autoCapitalize="none" spellCheck={false}
                   />
@@ -2388,7 +2380,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     <Input
                       value={documentoFiltro}
                       onChange={e => setDocumentoFiltro(e.target.value)}
-                      placeholder="NF, recibo, rateio..."
+                      placeholder={PLACEHOLDER_FILTRO_DOCUMENTO}
                       className="h-6 !text-[8px] placeholder:!text-[8px] leading-tight px-1.5 bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus-visible:ring-[#1E3A5F]"
                       autoCorrect="off" autoCapitalize="none" spellCheck={false}
                     />

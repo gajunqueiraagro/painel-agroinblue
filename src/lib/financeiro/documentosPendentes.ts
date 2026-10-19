@@ -18,6 +18,7 @@
  * `oc-documentos` não existe aqui.
  */
 import { supabase } from '@/integrations/supabase/client';
+import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
 import {
   paraJson, caminhoDocumentoLancamento, BUCKET_LANCAMENTO_DOCUMENTOS, REGRA_ARQUIVO_DO_DOCUMENTO,
   type LancDocPayload,
@@ -137,7 +138,14 @@ export async function gravarDocumentosPendentes(
 ): Promise<DocumentoPendente[]> {
   const saida: DocumentoPendente[] = [];
   for (const p of pendentes) saida.push(await gravarUm(clienteId, lancamentoId, p));
+  avisarSeGravou(clienteId, pendentes, saida);
   return saida;
+}
+
+/** FIN-FILTRO-DOC-01 — gravou algum? A lista (coluna DOC., clipe, filtro) relê pelo canal único de lançamentos — UMA vez, depois
+ *  de todos (o criar do lançamento avisa ANTES de os pendentes existirem). */
+function avisarSeGravou(clienteId: string, antes: readonly DocumentoPendente[], depois: readonly DocumentoPendente[]) {
+  if (depois.some((p, i) => p.gravado && !antes[i]?.gravado)) notificarLancamentosMudaram(clienteId);
 }
 
 export const todosGravados = (lista: readonly DocumentoPendente[]) => lista.every(p => p.gravado);
@@ -162,6 +170,7 @@ export async function gravarDocumentosDoParcelamento(
     if (!alvo) { saida.push({ ...p, erro: `Parcela ${p.parcela ?? 1} não encontrada no parcelamento.` }); continue; }
     saida.push(await gravarUm(clienteId, alvo.lancamentoId, p, p.parcela == null ? todas : undefined));
   }
+  avisarSeGravou(clienteId, pendentes, saida);
   return saida;
 }
 

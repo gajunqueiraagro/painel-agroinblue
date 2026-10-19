@@ -15,6 +15,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
 import type { Json, Database } from '@/integrations/supabase/types';
 import { extensaoDoArquivo } from '@/lib/oc/caminhoDocumento';
 import { aceitarArquivo, fraseDeFormatoNaoAceito, type RegraDeAceite, type TipoDeArquivo } from '@/lib/arquivo/aceitarArquivo';
@@ -482,6 +483,8 @@ export function useLancamentoDocumentos(
       if (error) throw error;
       const env = aplicarEnvelope(data);
       await recarregar();
+      /* FIN-FILTRO-DOC-01 — documento gravado: a lista (coluna DOC., clipe, filtro) relê pelo canal único de lançamentos */
+      if (clienteId) notificarLancamentosMudaram(clienteId);
       const id = env?.documento_id;
       /* O endereço vai junto: foi AQUI que se decidiu entre OC e lançamento. */
       return id ? { id: String(id), origem: operacaoId ? 'operacao' : 'lancamento', operacaoId: operacaoId ?? null } : null;
@@ -518,6 +521,8 @@ export function useLancamentoDocumentos(
       if (error) throw error;
       aplicarEnvelope(data);
       await recarregar();
+      /* FIN-FILTRO-DOC-01 — documento gravado: a lista (coluna DOC., clipe, filtro) relê pelo canal único de lançamentos */
+      if (clienteId) notificarLancamentosMudaram(clienteId);
       return true;
     } finally {
       if (montado.current) setSaving(false);
@@ -541,6 +546,8 @@ export function useLancamentoDocumentos(
       if (error) throw error;
       aplicarEnvelope(data);
       await recarregar();
+      /* FIN-FILTRO-DOC-01 — documento gravado: a lista (coluna DOC., clipe, filtro) relê pelo canal único de lançamentos */
+      if (clienteId) notificarLancamentosMudaram(clienteId);
       return true;
     } finally {
       if (montado.current) setSaving(false);
@@ -604,6 +611,8 @@ export function useLancamentoDocumentos(
       if (error) throw error;
       aplicarEnvelope(data);
       await recarregar();
+      /* FIN-FILTRO-DOC-01 — documento gravado: a lista (coluna DOC., clipe, filtro) relê pelo canal único de lançamentos */
+      if (clienteId) notificarLancamentosMudaram(clienteId);
       return true;
     } finally {
       if (montado.current) setSaving(false);
