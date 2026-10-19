@@ -11,11 +11,29 @@ export const fonteDoCadastroNoBanco: FonteDoCadastro = {
   lerPorNome: async (clienteId, nomeNormalizado) => {
     const { data, error } = await supabase
       .from('financeiro_fornecedores')
-      .select('id, nome, cpf_cnpj, fazenda_id, ativo, created_at')
+      .select('id, nome, cpf_cnpj, fazenda_id, ativo, created_at, fundido_em_id')
       .eq('cliente_id', clienteId)
       .eq('nome_normalizado', nomeNormalizado);
     if (error) throw new Error(error.message);
-    return (data ?? []).map((r) => ({ id: r.id, nome: r.nome, cpf_cnpj: r.cpf_cnpj, fazenda_id: r.fazenda_id, ativo: r.ativo !== false, created_at: r.created_at }));
+    /* FORN-MESCLAR-02d — o homônimo MESCLADO não é oferecido para reativar (o banco recusa): ele leva junto o cadastro em que foi
+       mesclado (o fim da cadeia), e a regra o seleciona como "já existe". Foi por aqui que um absorvido voltou a ativo. */
+    type Linha = NonNullable<typeof data>[number];
+    const conhecidos = new Map<string, Linha>();
+    for (const r of data ?? []) conhecidos.set(r.id, r);
+    for (let volta = 0; volta < 5; volta++) {
+      const faltam = [...new Set([...conhecidos.values()].map((r) => r.fundido_em_id).filter((x): x is string => !!x && !conhecidos.has(x)))];
+      if (!faltam.length) break;
+      const { data: donos, error: e2 } = await supabase.from('financeiro_fornecedores')
+        .select('id, nome, cpf_cnpj, fazenda_id, ativo, created_at, fundido_em_id').eq('cliente_id', clienteId).in('id', faltam);
+      if (e2) throw new Error(e2.message);
+      for (const d of donos ?? []) conhecidos.set(d.id, d);
+    }
+    const fim = (r: Linha): Linha | null => { let x: Linha | undefined = r; for (let k = 0; k < 6 && x?.fundido_em_id; k++) x = conhecidos.get(x.fundido_em_id); return x && !x.fundido_em_id ? x : null; };
+    const paraCadastro = (r: Linha) => ({ id: r.id, nome: r.nome, cpf_cnpj: r.cpf_cnpj, fazenda_id: r.fazenda_id, ativo: r.ativo !== false, created_at: r.created_at });
+    return (data ?? []).map((r) => {
+      const dono = r.fundido_em_id ? fim(r) : null;
+      return { ...paraCadastro(r), mescladoEm: r.fundido_em_id ? (dono ? paraCadastro(dono) : null) : null };
+    });
   },
   lerAtivos: async (clienteId) => {
     const lista = await leitorDeFornecedores.ler(clienteId);

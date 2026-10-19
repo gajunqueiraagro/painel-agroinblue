@@ -185,3 +185,15 @@ describe('fonte — a regra mora num lugar só, e todo "+" passa por ela', () =>
     expect(banco).toContain('leitorDeFornecedores.ler(clienteId)');
   });
 });
+
+describe('FORN-MESCLAR-02d — o homônimo mesclado', () => {
+  const dono = { id: 'dono', nome: 'Casa Que Ficou', cpf_cnpj: null, fazenda_id: null, ativo: true };
+  it('não é oferecido para reativar: vale o cadastro em que ele foi mesclado', () => {
+    const absorvido = { id: 'abs', nome: 'Casa Antiga', cpf_cnpj: null, fazenda_id: null, ativo: false, mescladoEm: dono };
+    expect(decidirCadastro({ nome: 'casa antiga' }, [absorvido])).toEqual({ tipo: 'ja_existe', fornecedor: dono });
+  });
+  it('absorvido marcado ativo por engano também não vale: vale o que ficou', () => {
+    const absorvido = { id: 'abs', nome: 'Casa Antiga', cpf_cnpj: null, fazenda_id: null, ativo: true, mescladoEm: dono };
+    expect(decidirCadastro({ nome: 'Casa Antiga' }, [absorvido])).toEqual({ tipo: 'ja_existe', fornecedor: dono });
+  });
+});

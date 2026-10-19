@@ -36,6 +36,8 @@ const CENARIOS = [
   { nome: 'mesclar-recentes', url: 'tela=mesclar', antes: clicar('[data-testid="abrir-recentes"]') },
   { nome: 'fornecedores-lista', url: 'tela=fornecedores' },
   { nome: 'fornecedores-pendentes', url: 'tela=fornecedores', antes: clicarTexto('Pendentes') },
+  { nome: 'fornecedores-inativos', url: 'tela=fornecedores', antes: clicarTexto('Inativos') },
+  { nome: 'fornecedores-todos', url: 'tela=fornecedores', antes: clicarTexto('Todos') },
   ...['Dados gerais', 'Endereço e contato', 'Pagamento', 'Padrões', 'Uso'].map((aba) => ({ nome: `fornecedor-cadastro-${aba}`, url: 'tela=fornecedor-cadastro', antes: clicarTexto(aba) })),
   { nome: 'contrato-v4', url: 'tela=contrato' },
   ...['Geral', 'Pagamento', 'Documentos'].flatMap((aba) => ['novo', 'editar'].map((m) => ({ nome: `lancamento-${m}-${aba}`, url: `tela=lancamento&m=${m}`, antes: clicarTexto(aba) }))),

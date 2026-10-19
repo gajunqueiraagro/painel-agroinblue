@@ -59,6 +59,19 @@ interface Fornecedor {
   cpf_cnpj: string | null;
   fazenda_id: string;
   ativo: boolean;
+  /* FORN-MESCLAR-02d — o cadastro em que este foi mesclado (mesclagem viva) e quando */
+  fundido_em_id?: string | null;
+  fundido_em?: string | null;
+}
+
+/** FORN-MESCLAR-02d — a situação da linha: "Ativo", "Inativo" ou, no absorvido por mesclagem viva, "Mesclado em <nome>" (a data no
+ *  `title`). O absorvido é sempre inativo (regra do banco), então nunca aparece em "Ativos". */
+export function situacaoDaLinha(f: { ativo: boolean; fundido_em_id?: string | null; fundido_em?: string | null }, nomeDoDono: string | null):
+  { rotulo: string; title: string | undefined; mesclado: boolean } {
+  if (!f.fundido_em_id) return { rotulo: f.ativo ? 'Ativo' : 'Inativo', title: undefined, mesclado: false };
+  const dono = nomeDoDono ?? 'outro cadastro';
+  const quando = f.fundido_em ? new Date(f.fundido_em).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : null;
+  return { rotulo: `Mesclado em ${dono}`, title: `mesclado em ${dono}${quando ? ` em ${quando}` : ''} — desfaça a mesclagem para reativar`, mesclado: true };
 }
 
 interface PendingItem {
@@ -102,6 +115,18 @@ export function FinV2FornecedoresTab() {
   const [activeTab, setActiveTab] = useState('cadastro');
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  /* FORN-MESCLAR-02d — o nome de quem ficou, para "Mesclado em <nome>" (lido só para os absorvidos da página) */
+  const [donos, setDonos] = useState<Map<string, string>>(new Map());
+  useEffect(() => {
+    const faltam = [...new Set(items.map((f) => f.fundido_em_id).filter((x): x is string => !!x && !donos.has(x)))];
+    if (!faltam.length || !clienteAtual?.id) return;
+    let vivo = true;
+    void supabase.from('financeiro_fornecedores').select('id, nome').eq('cliente_id', clienteAtual.id).in('id', faltam).then(({ data }) => {
+      if (!vivo || !data) return;
+      setDonos((m) => { const n = new Map(m); for (const d of data) n.set(d.id, d.nome); return n; });
+    });
+    return () => { vivo = false; };
+  }, [items, donos, clienteAtual?.id]);
 
   /* FORN-NOME-EXIBIDO-01 — inativos (não mesclados) que ainda têm lançamento vivo: somem daqui com "Ativos", mas aparecem no filtro
      e na grade de Lançamentos. Nulo = ainda lendo ou a leitura falhou (o aviso não diz zero sem saber). */
@@ -377,7 +402,8 @@ export function FinV2FornecedoresTab() {
                 <colgroup>
                   <col />
                   <col style={{ width: 230 }} />
-                  <col style={{ width: 72 }} />
+                  {/* FORN-MESCLAR-02d — 150: "Mesclado em <nome>" quebra a linha dentro dela, nunca corta */}
+                  <col style={{ width: 150 }} />
                   <col style={{ width: 36 }} />
                 </colgroup>
                 <TableHeader className="bg-muted">
@@ -407,10 +433,13 @@ export function FinV2FornecedoresTab() {
                           )}
                         </span>
                       </TableCell>
-                      <TableCell className="py-0.5 whitespace-nowrap">
-                        <Badge variant={f.ativo ? 'default' : 'secondary'} className="text-[9px] px-1 py-0">
-                          {f.ativo ? 'Ativo' : 'Inativo'}
-                        </Badge>
+                      <TableCell className="py-0.5">
+                        {(() => { const sit = situacaoDaLinha(f, f.fundido_em_id ? donos.get(f.fundido_em_id) ?? null : null); return (
+                          <Badge variant={f.ativo ? 'default' : 'secondary'} title={sit.title} data-testid={sit.mesclado ? 'situacao-mesclado' : undefined}
+                            className={`px-1 py-0 text-[9px] ${sit.mesclado ? 'whitespace-normal break-words text-left leading-[12px] bg-[#e0ecf8] text-[#1e3a5f]' : ''}`}>
+                            {sit.rotulo}
+                          </Badge>
+                        ); })()}
                       </TableCell>
                       <TableCell className="py-0.5">
                         <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => openEdit(f)}>

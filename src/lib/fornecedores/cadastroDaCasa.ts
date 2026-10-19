@@ -23,6 +23,8 @@ export interface FornecedorDoCadastro {
   ativo: boolean;
   /** só para o desempate entre homônimos: o mais antigo primeiro */
   created_at?: string | null;
+  /** FORN-MESCLAR-02d — absorvido por mesclagem viva: o cadastro que ficou (o fim da cadeia) */
+  mescladoEm?: FornecedorDoCadastro | null;
 }
 
 export type DecisaoDoCadastro =
@@ -53,9 +55,12 @@ export function decidirCadastro(
   const alvo = normalizeFornecedorNome(entrada.nome);
   if (alvo === '') return { tipo: 'criar' };
   const mesmoNome = doCliente.filter((f) => normalizeFornecedorNome(f.nome) === alvo).sort(maisAntigoPrimeiro);
-  const ativo = mesmoNome.find((f) => f.ativo);
+  const ativo = mesmoNome.find((f) => f.ativo && !f.mescladoEm);
   if (ativo) return { tipo: 'ja_existe', fornecedor: ativo };
-  const inativo = mesmoNome.find((f) => !f.ativo);
+  /* FORN-MESCLAR-02d — o homônimo MESCLADO não se reativa (o banco recusa): vale o cadastro em que ele foi mesclado */
+  const viaMesclagem = mesmoNome.map((f) => f.mescladoEm).find((d): d is FornecedorDoCadastro => !!d && d.ativo);
+  if (viaMesclagem) return { tipo: 'ja_existe', fornecedor: viaMesclagem };
+  const inativo = mesmoNome.find((f) => !f.ativo && !f.mescladoEm);
   if (inativo) return { tipo: 'inativo', fornecedor: inativo };
   /* FORN-EDITAR-01: a chave do validador único (dígitos E letras — o CNPJ alfanumérico não perde as letras) */
   const doc = chaveDoDocumento(entrada.cpfCnpj);

@@ -5,6 +5,9 @@ export const LINHAS: Record<string, Record<string, unknown>> = {
   c: { id: 'c', cliente_id: 'cli', nome: 'Casa do Agronegócio Exemplo', nome_fantasia: 'Casa do Agronegócio', cpf_cnpj: '54442418000188', ativo: true, email: 'vendas@casadoagro-exemplo.com.br',
     pix_tipo_chave: 'cnpj', pix_chave: '54442418000188', municipio: 'Sidrolândia', uf: 'MS', created_at: '2026-02-05T10:00:00Z' },
   m: { id: 'm', cliente_id: 'cli', nome: 'Luiz Fernando Exemplo da Silva', nome_fantasia: null, cpf_cnpj: null, ativo: true, telefone: '(67) 99999-0000', created_at: '2026-03-05T10:00:00Z' },
+  /* FORN-MESCLAR-02d — absorvido por mesclagem viva: inativo, com o dono de nome longo ("Mesclado em <nome>" nao pode cortar) */
+  abs: { id: 'abs', cliente_id: 'cli', nome: 'Luiz Fernando Exemplo Absorvido', nome_fantasia: null, cpf_cnpj: null, ativo: false, fundido_em_id: 'b',
+    fundido_em: '2026-10-19T15:26:00Z', created_at: '2026-03-06T10:00:00Z' },
 };
 const NOMES_BASE = ['Agropecuária Exemplo Comércio de Insumos e Defensivos Agrícolas Ltda', 'Pec.3M-Comercial Exemplo de Alimentos e Bebidas do Centro-Oeste',
   'Posto de Combustíveis Exemplo Rodovia BR-163 Quilômetro 445 Ltda', 'Cooperativa Agroindustrial dos Produtores Rurais Exemplo do Mato Grosso do Sul',
