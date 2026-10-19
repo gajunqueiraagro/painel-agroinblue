@@ -2531,7 +2531,11 @@ preview que o cabecalho nao sai da tela ao rolar.
   paginada por abertura, `ativo = false` e `fundido_em_id IS NULL`) + os das sugestoes. Antes so' entravam inativos que estivessem numa
   sugestao — o "Lineagro … AS" da Vera nao era absorvivel pela tela. O dono do lado do rateio e' `ehRateio` / `mesmoLadoDoRateio`
   (`fornecedorTexto.ts`): com o que fica escolhido, o Absorver so' oferece cadastros do MESMO lado ("Pec.3M-" com "Pec.3M-", sem com sem).
-  ⚠ O BANCO NAO RECUSA a mesclagem mista (`fn_fornecedor_mesclar` aceita): a trava e' da tela e das sugestoes. ⚠ NAO PROVADO NO NAVEGADOR.
+  ⚠ O BANCO TAMBEM RECUSA (FORN-MESCLAR-RATEIO-01, migration `supabase/migrations/20261027202300_forn_mesclar_rateio_01.sql`, md5 do arquivo
+    fa45c79e2255f93c79271a89b3ed0d02 — APLICADA no proto em 19/10/2026, ledger 20261027202300 = arquivo; `_fn_fornecedor_mesclar_recusa`
+    bdee1b72… -> 8e106764…, patch guardado por md5, ACL e SECURITY iguais): motivo 'rateio_misto', na simulacao e na gravacao, com a
+    frase '"X" e "Pec.3M-X" não se mesclam: "Pec.3M-" marca o pagamento por rateio …'. O desfazer nao passa pela regra. Teste
+    `supabase/tests/forn_mesclar_rateio_01_test.sql` (M1–M5) OK no vivo e cai em M1 contra o corpo antigo. ⚠ NAO PROVADO NO NAVEGADOR.
 - ⚠ "Pec.3M-" NO NOME DO FORNECEDOR = PAGAMENTO POR RATEIO, COM A NOTA FISCAL EM NOME DO HIGINO (a Vera paga a parte dela). NUNCA
   MESCLAR "Pec.3M-X" COM O CADASTRO SEM O PREFIXO ("X"): sao cadastros diferentes DE PROPOSITO, e a mesclagem apaga a informacao do
   rateio (Gabriel, 19/10/2026). Nao e' resto de sistema antigo. Vale para toda regra de "nome parecido" (`chaveDoNomeComparado` mantem
