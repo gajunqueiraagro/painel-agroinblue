@@ -259,7 +259,9 @@ describe('a área de arquivo', () => {
     expect(screen.queryByTestId('arquivo-escolhido')).toBeNull();
     expect(area.textContent).toBe('Clique ou arraste o arquivo · PDF, imagem ou XML · até 10 MB');
     /* a ajuda vem da REGRA: cita XML, que a aba aceita */
-    expect(screen.getByText(/PDF, JPG, PNG ou XML, até 10 MB\. Pode ficar para depois/)).toBeInTheDocument();
+    /* FIN-DOC-MODAL-01 — a ajuda curta, numa linha; a frase inteira no `title` */
+    expect(screen.getByTestId('ajuda-do-arquivo').textContent).toBe('PDF, JPG, PNG ou XML, até 10 MB · pode ficar para depois');
+    expect(screen.getByTestId('ajuda-do-arquivo').title).toMatch(/PDF, JPG, PNG ou XML, até 10 MB\. Pode ficar para depois/);
   });
   it('documento que já tem arquivo: "arquivo anexado · substituir"; sem arquivo, o convite', () => {
     monta({ documento: doc({}) });
@@ -348,5 +350,51 @@ describe('emitente: só fornecedores ATIVOS, mais o já gravado no documento em 
     salvar();
     await waitFor(() => expect(editar).toHaveBeenCalledTimes(1));
     expect(editar.mock.calls[0][2]).toMatchObject({ emitenteId: 'pec', emitenteNome: 'Pec.3M-Comercial Pantanal' });
+  });
+});
+
+describe('FIN-DOC-MODAL-01 — o modal sem rolagem: régua de 4 colunas, altura fixa, a mesma em todo tipo', () => {
+  /** a posição de cada campo na grade: qual filho da grade, e quantas colunas ocupa */
+  const colunas = (el: Element | null) => (el?.closest('[data-testid="grade-do-documento"] > *')?.className.match(/col-span-(\d)/)?.[1] ?? '1');
+  const filhoDaGrade = (testId: string) => screen.getByTestId(testId).closest('[data-testid="grade-do-documento"] > *');
+  it('NF: linha 1 Número | Série | Data | Valor; linha 2 Emitente | Chave (2+2); linha 3 Observação | Arquivo (2+2)', () => {
+    monta();
+    const grade = screen.getByTestId('grade-do-documento');
+    expect(grade.className).toContain('grid-cols-4');
+    const ordem = [...grade.children].map((c) => c.getAttribute('data-testid') ?? c.querySelector('[data-testid]')?.getAttribute('data-testid') ?? '·');
+    expect(ordem.indexOf('doc-numero')).toBeLessThan(ordem.indexOf('doc-serie'));
+    expect(colunas(screen.getByTestId('doc-numero'))).toBe('1');
+    expect(colunas(screen.getByTestId('doc-serie'))).toBe('1');
+    expect(colunas(screen.getByTestId('doc-emitente'))).toBe('2');
+    expect(colunas(screen.getByTestId('lugar-chave'))).toBe('2');
+    expect(colunas(screen.getByTestId('lugar-observacao'))).toBe('2');
+    expect(colunas(screen.getByTestId('lugar-arquivo'))).toBe('2');
+    /* Emitente e Chave lado a lado; Observação e Arquivo lado a lado */
+    expect(filhoDaGrade('doc-emitente')?.nextElementSibling).toBe(filhoDaGrade('lugar-chave'));
+    expect(filhoDaGrade('lugar-observacao')?.nextElementSibling).toBe(filhoDaGrade('lugar-arquivo'));
+  });
+  it('a altura do modal é fixa e a área de arquivo baixa; a ajuda numa linha', () => {
+    monta();
+    const dlg = screen.getByRole('dialog');
+    expect(dlg.className).toContain('h-[min(492px,calc(100dvh-32px))]');
+    expect(dlg.className).toContain('w-[min(860px,calc(100vw-32px))]');
+    expect(screen.getByTestId('area-arquivo').className).toContain('h-7');
+    expect(screen.getByTestId('ajuda-do-arquivo').className).toContain('truncate');
+  });
+  it('Comprovante (sem emitente e sem chave): a linha 2 guarda o lugar, Observação e Arquivo seguem lado a lado', () => {
+    monta();
+    fireEvent.click(screen.getByRole('button', { name: 'Comprovante' }));
+    expect(screen.queryByTestId('doc-emitente')).toBeNull();
+    expect(screen.queryByTestId('lugar-chave')).toBeNull();
+    const grade = screen.getByTestId('grade-do-documento');
+    expect(grade.querySelectorAll(':scope > [aria-hidden]').length).toBe(2);
+    expect(filhoDaGrade('lugar-observacao')?.nextElementSibling).toBe(filhoDaGrade('lugar-arquivo'));
+    expect(screen.getByRole('dialog').className).toContain('h-[min(492px,calc(100dvh-32px))]');
+  });
+  it('a faixa âmbar da sugestão é uma linha só (corta, com a frase no title)', () => {
+    monta({ sugestao: { numero: '000.086.993', dataEmissao: '2026-09-10', valor: 2440, emitenteId: null } });
+    const faixa = screen.getByTestId('sugestao-do-lancamento');
+    expect(faixa.className).toContain('truncate');
+    expect(faixa.title).toContain('confira');
   });
 });

@@ -523,7 +523,11 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
     <Dialog open onOpenChange={(o) => { if (!o) onFechar(); }}>
       {/* PR 2b — cabeçalho e rodapé fixos, só o corpo rola: com o aviso da nota compartilhada e o motivo do
           cancelamento, o formulário passava da altura da tela e o cabeçalho sumia (visto na prova na tela). */}
-      <DialogContent className="max-w-lg p-0 gap-0 overflow-hidden flex h-[min(660px,calc(100dvh-48px))] flex-col">
+      {/* FIN-DOC-MODAL-01 (Gabriel 19/10/2026) — SEM ROLAGEM: a régua de 4 colunas (Número | Série | Data | Valor · Emitente | Chave ·
+          Observação | Arquivo) no lugar da coluna única que pedia rolagem para chegar ao Arquivo. Largura da família dos modais do
+          lançamento; ALTURA FIXA de 492px (o pior caso medido: NF + aviso da sugestão + emitente "Outro" = 485), a mesma em todo tipo —
+          trocar o tipo não muda o tamanho do modal. Teto na janela: só abaixo de ~524px de altura o corpo rola por dentro. */}
+      <DialogContent className="max-w-none w-[min(860px,calc(100vw-32px))] p-0 gap-0 overflow-hidden flex h-[min(492px,calc(100dvh-32px))] flex-col">
         <div className="bg-primary px-4 py-2.5 text-primary-foreground flex shrink-0 items-center justify-between">
           <DialogTitle className="text-[14px] font-semibold">
             {documento ? 'Editar documento' : 'Novo documento'}
@@ -544,14 +548,15 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
         )}
 
         {(sugNumero || sugData || sugValor || sugEmitente) && (
-          <p className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-[10px] text-amber-900" data-testid="sugestao-do-lancamento">
+          <p className="truncate rounded border border-amber-300 bg-amber-50 px-2 py-1 text-[10px] leading-[14px] text-amber-900" data-testid="sugestao-do-lancamento"
+            title={`Preenchido com o que ${sug?.origem ?? 'o lançamento'} diz — confira. Mudar aqui não muda ${sug?.origem ?? 'o lançamento'}.`}>
             Preenchido com o que {sug?.origem ?? 'o lançamento'} diz ({[sugNumero && 'número', sugData && campos.dataNaSugestao, sugValor && 'valor', sugEmitente && 'emitente'].filter(Boolean).join(', ')}) — confira. Mudar aqui não muda {sug?.origem ?? 'o lançamento'}.
           </p>
         )}
         <BlocoFormulario titulo="Documento" testId="bloco-documento">
-        <div className="grid grid-cols-2 gap-x-2 gap-y-1">
+        <div className="grid grid-cols-4 gap-x-2 gap-y-1" data-testid="grade-do-documento">
           {/* ── O TIPO VEM PRIMEIRO, e é ele que decide os campos abaixo (`CAMPOS_POR_ESPECIE`) ── */}
-          <div className="col-span-2">
+          <div className="col-span-4">
             <Label className="text-[10px] text-muted-foreground">Tipo de documento <span className="text-destructive">*</span></Label>
             <Segmentado valor={especie} onEscolher={trocarEspecie} altura={22} className="mt-0.5 flex w-full [&>button]:flex-1"
               opcoes={especiesDoForm.map(e => ({ valor: e.value, rotulo: e.label, desabilitada: especieSoLeitura }))} />
@@ -606,7 +611,7 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
               <CampoMoeda valor={valor} onChange={setValor} className={`h-7 text-[11px] mt-0.5 text-right${sugValor ? AMBAR : ''}`} />
             </div>
           )}
-          {/* fora da NF o número não é a identidade do papel: vem depois, em largura inteira */}
+          {/* fora da NF o número não é a identidade do papel: vem depois de data e valor, ocupando o lugar de Número + Série */}
           {!campos.serie && (
             <div className="col-span-2">
               <Label className="text-[10px] text-muted-foreground">{campos.numero}</Label>
@@ -628,48 +633,55 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
                   acaoFinal={{ label: 'Outro (informar nome e CNPJ/CPF)', onSelect: () => setEmitenteId(OUTRO) }}
                   triggerClassName={sugEmitente ? 'h-7 text-[11px] border-amber-300 bg-amber-50' : 'h-7 text-[11px]'} />
               </div>
+              {/* "Outro": nome e CNPJ/CPF DENTRO da célula do emitente, um ao lado do outro — a Chave não muda de lugar */}
+              {emitenteEhOutro && (
+                <div className="mt-1 grid grid-cols-2 gap-x-2" data-testid="emitente-outro">
+                  <div>
+                    <Label className="text-[10px] text-muted-foreground">Nome do emitente</Label>
+                    <Input value={emitenteNome} onChange={e => setEmitenteNome(e.target.value)} data-testid="doc-emitente-nome"
+                      className="h-7 text-[11px] mt-0.5" />
+                  </div>
+                  <div>
+                    <Label className="text-[10px] text-muted-foreground">CNPJ / CPF do emitente</Label>
+                    <Input value={emitenteDoc} onChange={e => setEmitenteDoc(e.target.value)} data-testid="doc-emitente-documento"
+                      className="h-7 text-[11px] mt-0.5" />
+                  </div>
+                </div>
+              )}
             </div>
           )}
-          {campos.emitente && emitenteEhOutro && (<>
-            <div>
-              <Label className="text-[10px] text-muted-foreground">Nome do emitente</Label>
-              <Input value={emitenteNome} onChange={e => setEmitenteNome(e.target.value)} data-testid="doc-emitente-nome"
-                className="h-7 text-[11px] mt-0.5" />
-            </div>
-            <div>
-              <Label className="text-[10px] text-muted-foreground">CNPJ / CPF do emitente</Label>
-              <Input value={emitenteDoc} onChange={e => setEmitenteDoc(e.target.value)} data-testid="doc-emitente-documento"
-                className="h-7 text-[11px] mt-0.5" />
-            </div>
-          </>)}
           {campos.chave && (
-            <div className="col-span-2">
+            <div className="col-span-2" data-testid="lugar-chave">
               <Label className="text-[10px] text-muted-foreground">Chave de acesso</Label>
               <Input value={chave} onChange={e => setChave(e.target.value)} data-testid="doc-chave"
                 className="h-7 text-[11px] mt-0.5 tabular-nums" placeholder="44 dígitos" />
             </div>
           )}
-          <div className="col-span-2">
+          {/* sem emitente (Comprovante) ou sem chave (fora da NF), a linha 2 guarda o lugar: a linha 3 fica sempre na mesma altura */}
+          {!campos.emitente && <div className="col-span-2" aria-hidden />}
+          {!campos.chave && <div className="col-span-2" aria-hidden />}
+          <div className="col-span-2 self-start" data-testid="lugar-observacao">
             <Label className="text-[10px] text-muted-foreground">Observação</Label>
             <Input value={observacao} onChange={e => setObservacao(e.target.value)}
               className="h-7 text-[11px] mt-0.5" placeholder="Opcional" />
           </div>
           {/* ── ARQUIVO: a área verde, "melhor para identificar" (Gabriel). O `<input type="file">` é o de sempre (mesmos
               `accept` e regras) — só deixou de ser a cara do campo. Soltar um arquivo aqui entra pelo MESMO input. ── */}
-          <div className="col-span-2">
+          <div className="col-span-2" data-testid="lugar-arquivo">
             <Label className="text-[10px] text-muted-foreground">Arquivo</Label>
             {/* UI-ARRASTAR-ARQUIVO-01a — a área é a do sistema (`AreaDeArquivo`): clicar ou arrastar, realce verde, e o tipo
                 errado é recusado AO ESCOLHER, na própria área (a conferência ao gravar continua, pelo mesmo dono). Altura fixa
                 de 40px: o nome longo corta com o inteiro no `title`. */}
-            <AreaDeArquivo regra={REGRA_ARQUIVO_DO_DOCUMENTO} testId="area-arquivo" inputTestId="doc-arquivo" className="mt-0.5 h-10"
+            <AreaDeArquivo regra={REGRA_ARQUIVO_DO_DOCUMENTO} testId="area-arquivo" inputTestId="doc-arquivo" className="mt-0.5 h-7"
               onArquivos={([f]) => setArquivo(f ?? null)}
               conteudo={arquivo
                 ? <span data-testid="arquivo-escolhido">{arquivo.name}</span>
                 : documento?.url ? <>arquivo anexado · <span className="underline underline-offset-2">substituir</span></> : undefined}
               tituloDoConteudo={arquivo ? arquivo.name : documento?.url ? 'arquivo anexado · clique ou arraste outro para substituir' : undefined}
               onRemover={arquivo ? () => setArquivo(null) : undefined} />
-            <p className="mt-1 text-[10px] text-muted-foreground">
-              {ajudaDaRegra(REGRA_ARQUIVO_DO_DOCUMENTO)}. Pode ficar para depois — o documento aparece na lista dizendo “sem arquivo”.
+            <p className="mt-0.5 truncate text-[10px] leading-[13px] text-muted-foreground" data-testid="ajuda-do-arquivo"
+              title={`${ajudaDaRegra(REGRA_ARQUIVO_DO_DOCUMENTO)}. Pode ficar para depois — o documento aparece na lista dizendo “sem arquivo”.`}>
+              {ajudaDaRegra(REGRA_ARQUIVO_DO_DOCUMENTO)} · pode ficar para depois
             </p>
           </div>
         </div>

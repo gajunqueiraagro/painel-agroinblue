@@ -119,13 +119,14 @@ describe('aba Documentos do lançamento — o tipo errado é recusado ao escolhe
     expect(enviado.name).toBe('NFe-12345.xml');
     expect(enviado.type).toBe('application/xml');
   });
-  it('a área tem 40px fixos e o nome longo não empilha (corta, com o inteiro no `title`)', () => {
+  /* FIN-DOC-MODAL-01: a área do documento do lançamento passou a 28px (o modal sem rolagem) */
+  it('a área tem 28px fixos e o nome longo não empilha (corta, com o inteiro no `title`)', () => {
     const { api } = apiLanc();
     render(<FormDocumento api={api} documento={null} clienteId="cli" onFechar={() => {}} />);
     const area = screen.getByTestId('area-arquivo');
     const nome = 'NFe 000.031.776 Comercial Pantanal de Rio Verde Ltda - via do destinatario - copia (2).pdf';
     soltar(area, [new File(['%PDF'], nome, { type: 'application/pdf' })]);
-    expect(area.className).toContain('h-10');
+    expect(area.className).toContain('h-7');
     expect(area.className).toContain('whitespace-nowrap');
     expect(area.getAttribute('title')).toBe(nome);
     expect(screen.getByTestId('arquivo-escolhido').parentElement?.className).toContain('truncate');
