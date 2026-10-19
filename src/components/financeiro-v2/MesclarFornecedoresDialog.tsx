@@ -4,7 +4,7 @@
  * scrollport por lista, recusas escritas no lugar reservado (nunca toast). A regra é do banco (`fn_fornecedor_mesclar`); a tela
  * só lê e escreve o que ele devolve. Sugestões de repetidos (`fn_fornecedor_repetidos`) só SUGEREM: nada é escolhido sozinho.
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -68,7 +68,12 @@ export function MesclarFornecedoresDialog({ aberto, aoFechar, clienteId, inicial
     } catch { setInativos([]); }
   }, [clienteId]);
   useEffect(() => { if (aberto) void recarregar(); }, [aberto, recarregar]);
-  useEffect(() => { if (aberto && inicial) { setManter(inicial.manter); setAbsorver(inicial.absorver); } }, [aberto, inicial]);
+  /* o par pedido pelo cadastro entra UMA vez por abertura: depois de mesclar ele não volta sozinho (FORN-MESCLAR-DEPOIS-01) */
+  const inicialAplicado = useRef(false);
+  useEffect(() => {
+    if (!aberto) { inicialAplicado.current = false; return; }
+    if (inicial && !inicialAplicado.current) { inicialAplicado.current = true; setManter(inicial.manter); setAbsorver(inicial.absorver); }
+  }, [aberto, inicial]);
 
   /* quem pode ser absorvido: os ativos do leitor, os INATIVOS não mesclados e os cadastros das sugestões, fora o que fica */
   const candidatos = useMemo(() => {
@@ -109,8 +114,9 @@ export function MesclarFornecedoresDialog({ aberto, aoFechar, clienteId, inicial
     setGravando(false); setConfirmando(false);
     if (error) { setRecado({ tom: 'erro', texto: error.message ?? 'Não foi possível mesclar.' }); return; }
     const feito = lerPreviaDaMesclagem(data);
+    /* FORN-MESCLAR-DEPOIS-01 — volta ao estado inicial (Fica e Absorver vazios, Mesclar apagado); a frase de sucesso fica no rodapé */
+    setManter(''); setAbsorver([]); setPrevia(null); setConfirmando(false);
     setRecado({ tom: 'ok', texto: feito ? fraseDoResultado(feito) : 'Mesclado.' });
-    setAbsorver([]); setPrevia(null);
     notificarFornecedoresMudaram(clienteId); notificarLancamentosMudaram(clienteId);
     void recarregar();
   };

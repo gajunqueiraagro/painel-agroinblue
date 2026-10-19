@@ -11,7 +11,7 @@ import { lerGruposRepetidos, lerMesclagens, lerPreviaDaMesclagem } from '@/lib/f
 
 vi.mock('@/hooks/useFornecedoresDoCliente', async () => (await import('@/test/leitorDeFornecedoresFake')).moduloDoLeitorFake());
 vi.mock('@/hooks/useFinanceiroV2', () => ({ notificarLancamentosMudaram: vi.fn() }));
-const banco = vi.hoisted(() => ({ chamadas: [] as Array<[string, Record<string, unknown>]>, recusar: false }));
+const banco = vi.hoisted(() => ({ chamadas: [] as Array<[string, Record<string, unknown>]>, recusar: false, gravou: false }));
 vi.mock('@/integrations/supabase/client', () => {
   const previa = (simulado: boolean) => ({ simulado, recusa: null, mesclagem_id: simulado ? null : 'log-1', total: 21,
     mantido: { id: 'm', nome: 'Banco Fica S.A. (001)', cpf_cnpj: null, ativo: true },
@@ -26,6 +26,7 @@ vi.mock('@/integrations/supabase/client', () => {
         { id: 'a2', nome: 'BANCO FICA', cpf_cnpj: null, ativo: false }] }], error: null });
       if (fn === 'fn_fornecedor_mesclar') {
         if (banco.recusar) return Promise.resolve({ data: { simulado: true, recusa: { motivo: 'cnpj_diferente', frase: 'CPF/CNPJ diferentes: X e Y. Fornecedores com documentos diferentes não se mesclam.' } }, error: null });
+        if (args.p_simular === false) banco.gravou = true;
         return Promise.resolve({ data: previa(args.p_simular === true), error: null });
       }
       if (fn === 'fn_fornecedor_mesclagem_desfazer') return Promise.resolve({ data: { voltaram: 21, ficaram: 0 }, error: null });
@@ -33,14 +34,17 @@ vi.mock('@/integrations/supabase/client', () => {
     },
     from: (tabela: string) => tabela === 'financeiro_fornecedores' ? lista([
       { id: 'i1', nome: 'Lineagro Produtos Agropecuarios AS', cpf_cnpj: null, ativo: false },
-      { id: 'i2', nome: 'Pec.3M-Banco Fica', cpf_cnpj: null, ativo: false }]) : lista([{ id: 'log-9', mantido_id: 'm', absorvidos: ['a1'], criado_em: '2026-10-17T12:00:00Z', resumo: { total: 3 },
+      { id: 'i2', nome: 'Pec.3M-Banco Fica', cpf_cnpj: null, ativo: false }]) : lista([
+      ...(banco.gravou ? [{ id: 'log-1', mantido_id: 'm', absorvidos: ['a1', 'a2'], criado_em: '2026-10-19T12:00:00Z', resumo: { total: 21 },
+        antes: { absorvidos: [{ nome: 'Banco Fica' }, { nome: 'BANCO FICA' }] }, desfeito_em: null, desfeito_motivo: null }] : []),
+      { id: 'log-9', mantido_id: 'm', absorvidos: ['a1'], criado_em: '2026-10-17T12:00:00Z', resumo: { total: 3 },
       antes: { absorvidos: [{ nome: 'Banco Fica' }] }, desfeito_em: null, desfeito_motivo: null }]),
   } };
 });
 import { definirFornecedoresDoLeitor } from '@/test/leitorDeFornecedoresFake';
 import { MesclarFornecedoresDialog } from './MesclarFornecedoresDialog';
 
-beforeEach(() => { banco.chamadas.length = 0; banco.recusar = false; definirFornecedoresDoLeitor([{ id: 'm', nome: 'Banco Fica S.A. (001)', ativo: true }]); });
+beforeEach(() => { banco.chamadas.length = 0; banco.recusar = false; banco.gravou = false; definirFornecedoresDoLeitor([{ id: 'm', nome: 'Banco Fica S.A. (001)', ativo: true }]); });
 
 describe('o leitor', () => {
   it('peça torta = nulo; a recusa vem como recusa; módulos na ordem da casa', () => {
@@ -124,5 +128,25 @@ describe('FORN-ABSORVER-INATIVOS-01 — o Absorver lista os inativos não mescla
     const fonte = readFileSync(resolve(__dirname, 'MesclarFornecedoresDialog.tsx'), 'utf8');
     expect(fonte).toContain(".eq('ativo', false).is('fundido_em_id', null)");
     expect(fonte).toContain('mesmoLadoDoRateio(mantidoNome(manter)');
+  });
+});
+
+describe('FORN-MESCLAR-DEPOIS-01 — depois de mesclar, o diálogo volta ao estado inicial e a frase de sucesso fica', () => {
+  it('Fica e Absorver vazios, Mesclar apagado, a frase no rodapé e "Mesclagens recentes" relida', async () => {
+    render(<MesclarFornecedoresDialog aberto aoFechar={vi.fn()} clienteId="cli" inicial={{ manter: 'm', absorver: ['a1', 'a2'] }} />);
+    await screen.findByText('Mesclagens recentes · 1');
+    await waitFor(() => expect(screen.getByTestId('previa-total').textContent).toBe('21'), { timeout: 2000 });
+    fireEvent.click(screen.getByTestId('mesclar'));
+    fireEvent.click(screen.getByTestId('confirmar-mesclagem'));
+    await waitFor(() => expect(screen.getByTestId('recado-da-mesclagem').textContent).toContain('2 cadastros absorvidos · 21 referências movidas'));
+    await screen.findByText('Mesclagens recentes · 2');
+    const lista = screen.getByTestId('lista-absorvidos');
+    expect(lista.querySelectorAll('tbody tr')).toHaveLength(0);
+    expect(lista.textContent).not.toContain('· fica');
+    expect((screen.getByTestId('mesclar') as HTMLButtonElement).disabled).toBe(true);
+    /* o par inicial NÃO volta sozinho depois do sucesso (só numa nova abertura) */
+    await new Promise((ok) => setTimeout(ok, 400));
+    expect(screen.getByTestId('lista-absorvidos').querySelectorAll('tbody tr')).toHaveLength(0);
+    expect(screen.getByTestId('recado-da-mesclagem').textContent).toContain('2 cadastros absorvidos');
   });
 });

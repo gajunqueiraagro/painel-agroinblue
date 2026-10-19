@@ -26,6 +26,18 @@ type FiltroStatus = 'ativos' | 'inativos' | 'todos';
  * errado), pelo validador único (`situacaoDoGravado`). Combina com o status e com a busca. Como "fora do padrão" não se filtra
  * no banco (o gravado tem formatos misturados), com o filtro ligado a lista do recorte é lida INTEIRA e paginada aqui.
  */
+/**
+ * FORN-CADASTRO-02 — o filtro da busca (o `.or` do PostgREST): razão social, fantasia e documento; o documento com ou sem máscara
+ * (os dígitos em ordem). Nulo = sem busca. UM dono: a lista e o aviso dos inativos filtram pelo MESMO texto (FORN-AVISO-BUSCA-01).
+ */
+export function filtroDaBusca(busca: string): string | null {
+  const safe = busca.trim().replace(/[%,()]/g, ' ').trim();
+  if (!safe) return null;
+  const digitos = safe.replace(/\D/g, '');
+  const porDigitos = digitos.length >= 3 && digitos.length === safe.replace(/[\s./-]/g, '').length ? `,cpf_cnpj.ilike.%${digitos.split('').join('%')}%` : '';
+  return `nome_normalizado.ilike.%${safe}%,nome.ilike.%${safe}%,nome_fantasia.ilike.%${safe}%,cpf_cnpj.ilike.%${safe}%${porDigitos}`;
+}
+
 /** FORN-NOME-EXIBIDO-01 — quantos fornecedores DISTINTOS aparecem nas linhas (uma linha por lançamento). */
 export function contarFornecedoresDistintos(linhas: readonly { favorecido_id: string | null }[]): number {
   return new Set(linhas.map((l) => l.favorecido_id).filter((id): id is string => !!id)).size;
@@ -112,18 +124,8 @@ export function FinV2FornecedoresTab() {
       if (statusFilter === 'ativos') query = query.eq('ativo', true);
       else if (statusFilter === 'inativos') query = query.eq('ativo', false);
 
-      const q = searchDebounced.trim();
-      if (q) {
-        const safe = q.replace(/[%,()]/g, ' ').trim();
-        if (safe) {
-          /* FORN-CADASTRO-02 — razão social, fantasia e documento; o documento com ou sem máscara (os dígitos em ordem) */
-          const digitos = safe.replace(/\D/g, '');
-          const porDigitos = digitos.length >= 3 && digitos.length === safe.replace(/[\s./-]/g, '').length ? `,cpf_cnpj.ilike.%${digitos.split('').join('%')}%` : '';
-          query = query.or(
-            `nome_normalizado.ilike.%${safe}%,nome.ilike.%${safe}%,nome_fantasia.ilike.%${safe}%,cpf_cnpj.ilike.%${safe}%${porDigitos}`
-          );
-        }
-      }
+      const filtro = filtroDaBusca(searchDebounced);
+      if (filtro) query = query.or(filtro);
       return query.order('nome').order('id');
     };
 
@@ -167,11 +169,17 @@ export function FinV2FornecedoresTab() {
         if (error) throw new Error(error.message);
         return { data: (data ?? []).map((r) => ({ favorecido_id: r.favorecido_id })), count: typeof count === 'number' ? count : null };
       });
-      setInativosComLancamento(contarFornecedoresDistintos(linhas));
+      /* FORN-AVISO-BUSCA-01 — com busca, conta só os inativos que batem com ela (o mesmo filtro da lista); sem busca, o total do cliente */
+      const filtro = filtroDaBusca(searchDebounced);
+      const ids = [...new Set(linhas.map((l) => l.favorecido_id).filter((id): id is string => !!id))];
+      if (!filtro || ids.length === 0) { setInativosComLancamento(contarFornecedoresDistintos(linhas)); return; }
+      const { data, error } = await supabase.from('financeiro_fornecedores').select('id').eq('cliente_id', clienteId).in('id', ids).or(filtro);
+      if (error) throw new Error(error.message);
+      setInativosComLancamento((data ?? []).length);
     } catch {
       setInativosComLancamento(null);
     }
-  }, [clienteAtual?.id]);
+  }, [clienteAtual?.id, searchDebounced]);
 
   useEffect(() => { void loadInativosComLancamento(); }, [loadInativosComLancamento]);
 
@@ -306,10 +314,10 @@ export function FinV2FornecedoresTab() {
         </div>
       </div>
       {mesclarAberto && clienteAtual?.id && (
-        <MesclarFornecedoresDialog aberto clienteId={clienteAtual.id} aoFechar={() => { setMesclarAberto(false); void load(); }} />
+        <MesclarFornecedoresDialog aberto clienteId={clienteAtual.id} aoFechar={() => { setMesclarAberto(false); void load(); void loadInativosComLancamento(); }} />
       )}
       {mesclarPar && clienteAtual?.id && (
-        <MesclarFornecedoresDialog aberto clienteId={clienteAtual.id} inicial={mesclarPar} aoFechar={() => { setMesclarPar(null); void load(); }} />
+        <MesclarFornecedoresDialog aberto clienteId={clienteAtual.id} inicial={mesclarPar} aoFechar={() => { setMesclarPar(null); void load(); void loadInativosComLancamento(); }} />
       )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
