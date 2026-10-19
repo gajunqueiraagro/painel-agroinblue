@@ -46,7 +46,9 @@ describe('(1) cabeçalho e total fora da rolagem', () => {
   it('Pagamentos: o scrollport é a área da tabela; thead preso no topo e tfoot no fundo; encargo em linha própria', () => {
     render(<TabelaDePagamentos tela={tela()} onAbrirLancamento={() => undefined} />);
     const area = screen.getByTestId('area-que-rola-pagamentos');
-    expect(area.className).toMatch(/\boverflow-y-auto\b/);
+    /* FIN-CONTRATO-TELA-FONTE-01: a área rola nos dois eixos e a tabela tem largura mínima (janela estreita rola dentro do cartão) */
+    expect(area.className).toMatch(/\boverflow-auto\b/);
+    expect(screen.getByTestId('tabela-pagamentos').className).toMatch(/min-w-\[720px\]/);
     expect(area.className).toMatch(/\bh-full\b/);
     for (const th of within(screen.getByTestId('cabecalho-pagamentos')).getAllByRole('columnheader')) expect(th.className).toMatch(/sticky top-0/);
     for (const td of screen.getByTestId('total-pagamentos').querySelectorAll('td')) expect(td.className).toMatch(/sticky bottom-0/);
@@ -55,7 +57,7 @@ describe('(1) cabeçalho e total fora da rolagem', () => {
   });
   it('Histórico: só eventos com data, cabeçalho preso', () => {
     render(<TabelaDoHistorico tela={tela()} />);
-    expect(screen.getByTestId('area-que-rola-historico').className).toMatch(/\boverflow-y-auto\b/);
+    expect(screen.getByTestId('area-que-rola-historico').className).toMatch(/\boverflow-auto\b/);
     expect(screen.getAllByTestId('linha-historico').length).toBe(2);
   });
 });
@@ -91,17 +93,19 @@ describe('(4) "não cadastrado" e as condições do banco', () => {
     expect(aConfirmar.getAttribute('title')).toBe('a confirmar: liberação sem lançamento vinculado');
     expect(aConfirmar.className).toContain('text-[#b45309]');
     expect(screen.queryByTestId('selo-a-confirmar')).toBeNull();
-    expect(screen.getByTestId('credor-do-contrato').getAttribute('title')).toBe('SINT BANCO REGIONAL DE DESENVOLVIMENTO');
+    /* FIN-CONTRATO-TELA-FONTE-01: o credor inteiro NA TELA (rola dentro do lugar dele), nunca só no `title` */
+    expect(screen.getByTestId('credor-do-contrato').textContent).toBe('SINT BANCO REGIONAL DE DESENVOLVIMENTO');
+    expect(screen.getByTestId('credor-do-contrato').className).toContain('uma-linha-que-rola');
   });
   it('carência gravada = "até dd/mm/aaaa"; sistema SAC', () => {
     topo(tela(undefined, undefined, { sistema: 'sac', carencia_ate: '2027-01-31' }));
     expect(screen.getByTestId('campo-carencia').textContent).toBe('Carênciaaté 31/01/2027');
     expect(screen.getByTestId('campo-sistema').textContent).toBe('SistemaSAC');
   });
-  it('linha do título: só a seta, "nº · descrição" 14px, sem o selo das vencidas, o lugar reservado do Juntar', () => {
+  it('linha do título: só a seta, "nº · descrição" 13px (FIN-CONTRATO-TELA-FONTE-01), sem o selo das vencidas, o lugar reservado do Juntar', () => {
     topo(tela());
     expect(screen.getByTestId('titulo-do-contrato').textContent).toBe('SINT-78.179 · Armazém');
-    expect(screen.getByTestId('titulo-do-contrato').className).toContain('text-[14px]');
+    expect(screen.getByTestId('titulo-do-contrato').className).toContain('text-[13px]');
     expect(screen.getByTestId('voltar-do-contrato').textContent).toBe('');
     expect(screen.getByTestId('voltar-do-contrato').getAttribute('aria-label')).toBe('Voltar para Financiamentos');
     expect(screen.queryByTestId('selo-das-vencidas')).toBeNull();
@@ -187,8 +191,8 @@ describe('(5c) v4 — a página (fonte): uma faixa de caminho só, abas sem queb
   it('o lápis mora DENTRO da célula Lançamento; Total preso no rodapé; vazio = uma linha', () => {
     const cel = fonte.slice(fonte.indexOf('data-testid="lancamento-da-parcela" title={d?.contaNome'), fonte.indexOf('{linhas.length > 0 && ('));
     expect(cel).toContain('data-testid="lapis-da-parcela"');
-    expect(fonte).toContain("const TF_V4 = 'sticky bottom-0 z-10");
-    expect(fonte).toContain("const TH_V4 = 'sticky top-0 z-10");
+    expect(fonte).toContain('const TF_V4 = `sticky bottom-0 z-10');
+    expect(fonte).toContain('const TH_V4 = `sticky top-0 z-10');
     expect(fonte).toContain('Sem parcelas. Use ✎ Editar parcelas ou Editar para gerar o cronograma.');
   });
 });

@@ -38,14 +38,18 @@ type ApiDoContrato = ReturnType<typeof useContratoDeCredito>;
 
 const reais = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const num2 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const br = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(2, 4)}` : '—');
+/* FIN-CONTRATO-TELA-FONTE-01 — data SEMPRE dd/mm/aaaa (UI-SEM-CORTE-01) */
+const br = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '—');
 
 /* a régua de tabela da casa: cabeçalho navy 9,5px, linha de 25px a 10px, `table-fixed` com larguras explícitas */
-const TH = 'h-[22px] bg-primary px-2 text-left text-[9.5px] font-semibold text-primary-foreground whitespace-nowrap overflow-hidden text-ellipsis';
+/* FIN-CONTRATO-TELA-FONTE-01 — a escala da tela do contrato (cabeçalho 10px, célula 10,5px, total 10,5px bold), sem "…": texto longo rola
+   dentro da célula (`.uma-linha-que-rola`) */
+const TH = 'h-[22px] bg-primary px-2 text-left text-[10px] font-semibold text-primary-foreground whitespace-nowrap';
 const TH_R = `${TH} text-right`;
-const TD = 'h-[25px] px-2 text-[10px] whitespace-nowrap overflow-hidden text-ellipsis';
+const TD = 'h-[25px] px-2 text-[10.5px] whitespace-nowrap';
+const ROLA = 'uma-linha-que-rola';
 const TD_R = `${TD} text-right tabular-nums`;
-const TOTAL = 'h-[25px] px-2 text-[10px] font-bold bg-[#E8E6DF] whitespace-nowrap';
+const TOTAL = 'h-[25px] px-2 text-[10.5px] font-bold bg-[#E8E6DF] whitespace-nowrap';
 
 export const TEXTO_SALDO_SEM_LIBERACAO = 'Sem liberação gravada: o saldo devedor não se deduz do contratado.';
 
@@ -130,9 +134,9 @@ export function BlocoLiberacoes({ api, contaDoContrato, onAbrirLancamento, clien
         </div>} />
       {/* TELA DO CONTRATO v3 — Data · Destino · Liberado · Entrou na conta · A identificar · Lançamento. "Entrou" e "a identificar"
           (e o excedente, em laranja) vêm de `fn_contrato_tela`; a tela não soma. Cabeçalho e total presos: só o corpo rola. */}
-      <div className="min-h-0 flex-1 overflow-y-auto" data-testid="area-que-rola-liberacoes">
-      <table className="w-full table-fixed border-collapse">
-        <colgroup><col style={{ width: 64 }} /><col /><col style={{ width: 96 }} /><col style={{ width: 104 }} /><col style={{ width: 112 }} /><col style={{ width: 92 }} /><col style={{ width: 44 }} /></colgroup>
+      <div className="min-h-0 flex-1 overflow-auto" data-testid="area-que-rola-liberacoes">
+      <table className="w-full min-w-[680px] table-fixed border-collapse">
+        <colgroup><col style={{ width: 80 }} /><col /><col style={{ width: 96 }} /><col style={{ width: 104 }} /><col style={{ width: 112 }} /><col style={{ width: 110 }} /><col style={{ width: 44 }} /></colgroup>
         <thead data-testid="cabecalho-liberacoes"><tr>
           <th className={`${TH} sticky top-0 z-10`}>Data</th><th className={`${TH} sticky top-0 z-10`}>Destino</th><th className={`${TH_R} sticky top-0 z-10`}>Liberado</th>
           <th className={`${TH_R} sticky top-0 z-10`}>Entrou na conta</th><th className={`${TH_R} sticky top-0 z-10`}>A identificar</th>
@@ -152,7 +156,7 @@ export function BlocoLiberacoes({ api, contaDoContrato, onAbrirLancamento, clien
               <tr key={l.id} className="border-b" data-testid="linha-liberacao">
                 <td className={`${TD} tabular-nums`}>{br(l.data)}</td>
                 <td className={TD} title={`${t?.destino ?? 'sem destinação'} · ${origem}`} data-testid="destino-da-liberacao">
-                  {t?.destino ? t.destino : <span className="text-amber-700">—</span>}
+                  {t?.destino ? <span className={ROLA}>{t.destino}</span> : <span className="text-amber-700">—</span>}
                 </td>
                 <td className={TD_R}>{num2(l.valor)}</td>
                 <td className={TD_R} data-testid="entrou-na-conta">{t === null ? '…' : t.entrou === null ? <span className="text-muted-foreground" title="não passa pela conta do cliente">—</span> : num2(t.entrou)}</td>
@@ -311,7 +315,7 @@ export const BlocoDocumentos = forwardRef<HTMLDivElement, { api: ApiDoContrato }
                     options={ESPECIES_DO_CONTRATO.map((e) => ({ value: e, label: ROTULO_DA_ESPECIE[e] }))} semTodos placeholder="Espécie *" dense />
                 )}
               </div>
-              <span className="min-w-0 flex-1 truncate" title={p.arquivo.name}>{p.arquivo.name}</span>
+              <span className={`min-w-0 flex-1 ${ROLA}`}>{p.arquivo.name}</span>
               <span className="shrink-0 tabular-nums text-muted-foreground">{p.recusa ?? tamanhoPorExtenso(p.arquivo.size)}</span>
               <button type="button" className="shrink-0 text-muted-foreground hover:text-destructive" title="Tirar da lista" onClick={() => setPendentes((ps) => ps.filter((x) => x.chave !== p.chave))}><X className="size-3" /></button>
             </div>
@@ -325,7 +329,7 @@ export const BlocoDocumentos = forwardRef<HTMLDivElement, { api: ApiDoContrato }
         </div>
       )}
       <table className="mt-1 w-full table-fixed border-collapse">
-        <colgroup><col style={{ width: 160 }} /><col /><col style={{ width: 64 }} /><col style={{ width: 130 }} /><col style={{ width: 100 }} /></colgroup>
+        <colgroup><col style={{ width: 160 }} /><col /><col style={{ width: 80 }} /><col style={{ width: 130 }} /><col style={{ width: 100 }} /></colgroup>
         <thead><tr><th className={TH}>Espécie</th><th className={TH}>Arquivo</th><th className={TH}>Data</th><th className={TH}>Enviado por</th><th className={TH} /></tr></thead>
         <tbody>
           {docs !== null && faltaCedula(docs) && (
@@ -334,10 +338,10 @@ export const BlocoDocumentos = forwardRef<HTMLDivElement, { api: ApiDoContrato }
           {docs === null && <tr><td colSpan={5} className={`${TD} text-muted-foreground`}>…</td></tr>}
           {(docs ?? []).map((d) => (
             <tr key={d.id} className="border-b" data-testid="linha-documento">
-              <td className={TD} title={ROTULO_DA_ESPECIE[d.especie]}>{ROTULO_DA_ESPECIE[d.especie]}</td>
-              <td className={TD} title={d.nome}>{d.nome}</td>
+              <td className={TD}><span className={ROLA}>{ROTULO_DA_ESPECIE[d.especie]}</span></td>
+              <td className={TD}><span className={ROLA}>{d.nome}</span></td>
               <td className={`${TD} tabular-nums`}>{br(d.criadoEm.slice(0, 10))}</td>
-              <td className={TD} title={d.enviadoPor ?? undefined}>{d.enviadoPor ?? '—'}</td>
+              <td className={TD}><span className={ROLA}>{d.enviadoPor ?? '—'}</span></td>
               <td className={`${TD} text-right`}>
                 <button type="button" className="mr-2 text-primary hover:underline" onClick={() => void abrir(d.storagePath)}>abrir</button>
                 <button type="button" className="text-muted-foreground hover:text-destructive" onClick={() => setRemovendo({ id: d.id, nome: d.nome })} data-testid="remover-documento">remover</button>
@@ -346,7 +350,7 @@ export const BlocoDocumentos = forwardRef<HTMLDivElement, { api: ApiDoContrato }
           ))}
         </tbody>
       </table>
-      <div className="h-[14px] truncate text-[10px] leading-[14px] text-destructive" title={recado ?? undefined} data-testid="recado-documentos">{recado ?? ''}</div>
+      <div className="h-[28px] overflow-y-auto break-words text-[11px] leading-[14px] text-destructive" data-testid="recado-documentos">{recado ?? ''}</div>
       {removendo && (
         <RemoverDialog titulo="Remover documento" comMotivo frase={`"${removendo.nome}" deixa de valer no contrato. O registro é cancelado com o motivo; o arquivo fica guardado.`}
           aoConfirmar={(motivo) => api.removerDocumento(removendo.id, motivo)} aoFechar={() => setRemovendo(null)} />

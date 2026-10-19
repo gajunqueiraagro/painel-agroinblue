@@ -52,7 +52,7 @@ describe('(1) o cartão Saldo devedor é o do banco', () => {
     cabecalho(SALDO({ saldo: 123456.78, liberado: 200000 }));
     expect(screen.getByTestId('cartao-saldo').textContent).toBe('Saldo devedorR$ 123.456,78');
     expect(screen.getByTestId('cartao-liberado').textContent).toBe('Liberado (2)R$ 200.000,00');
-    expect(screen.getByTestId('cartao-proxima').textContent).toBe('Próx. parcela · 01/10/26R$ 86.081,90');
+    expect(screen.getByTestId('cartao-proxima').textContent).toBe('Próx. parcela · 01/10/2026R$ 86.081,90');
   });
   it('sem liberação gravada: "?" com o porquê no title, nunca o contratado', () => {
     cabecalho(SALDO({ liberado: null, saldo: null, liberacoes: 0 }));
@@ -89,7 +89,7 @@ describe('(2) o total das liberações — TELA v3: os números vêm de fn_contr
     expect(screen.getAllByTestId('destino-da-liberacao').map((c) => c.textContent)).toEqual(['—', 'Recuperação de solo']);
     /* em conta sem lançamento = "a casar"; com lançamento = ↔ que abre no Financeiro */
     expect(screen.getAllByTestId('linha-liberacao')[0].textContent).toContain('a casar');
-    expect(screen.getByTestId('liberacao-vinculada').textContent).toBe('↔ 22/12/25');
+    expect(screen.getByTestId('liberacao-vinculada').textContent).toBe('↔ 22/12/2025');
   });
   it('sem a leitura da tela, "…" — nunca zero inventado; sem liberação, o bloco diz o vazio', () => {
     render(<BlocoLiberacoes api={api({ liberacoes: [] })} contaDoContrato={null} onAbrirLancamento={() => undefined} clienteId="cli" />);

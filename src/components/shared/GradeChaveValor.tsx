@@ -21,7 +21,7 @@ export interface ItemChaveValor {
 
 const ROTULO = 'flex h-[18px] items-center whitespace-nowrap text-[8px] font-semibold uppercase tracking-[0.02em] text-muted-foreground';
 const VALOR: Record<NonNullable<ItemChaveValor['tipo']>, string> = {
-  texto: 'min-w-0 truncate text-[9px] font-medium text-foreground',
+  texto: 'min-w-0 text-[9px] font-medium text-foreground',
   data: 'whitespace-nowrap text-[8px] tabular-nums text-foreground',
   dinheiro: 'whitespace-nowrap text-[9px] font-semibold tabular-nums text-foreground',
 };
@@ -29,7 +29,7 @@ const VALOR: Record<NonNullable<ItemChaveValor['tipo']>, string> = {
    maiúsculo), valor 11px/500; data e dinheiro em Inter com dígitos de largura fixa (sem mono). Linha de 20px. */
 const ROTULO_FORM = 'flex h-[20px] items-center whitespace-nowrap text-[10px] font-normal text-muted-foreground';
 const VALOR_FORM: Record<NonNullable<ItemChaveValor['tipo']>, string> = {
-  texto: 'min-w-0 truncate text-[11px] font-medium text-foreground',
+  texto: 'min-w-0 text-[11px] font-medium text-foreground',
   data: 'whitespace-nowrap text-[11px] font-medium tabular-nums text-foreground',
   dinheiro: 'whitespace-nowrap text-[11px] font-semibold tabular-nums text-foreground',
 };
@@ -64,7 +64,8 @@ export function GradeChaveValor({ itens, colunas, testId, regua = 'lancamentos' 
     return [
       <dt key={`r-${it.rotulo}`} className={rotuloCls}>{it.rotulo}</dt>,
       <dd key={`v-${it.rotulo}`} className={`flex ${altura} min-w-0 items-center ${valorCls[tipo]}`} title={titulo} data-testid={`dado-${it.rotulo}`}>
-        {vazio(it.valor) ? <span className="text-muted-foreground">—</span> : <span className="min-w-0 truncate">{it.valor}</span>}
+        {/* FIN-CONTRATO-TELA-FONTE-01 — sem "…": o valor longo rola dentro do lugar dele (`.uma-linha-que-rola`, UI-SEM-CORTE-01) */}
+        {vazio(it.valor) ? <span className="text-muted-foreground">—</span> : <span className="uma-linha-que-rola min-w-0">{it.valor}</span>}
       </dd>,
     ];
   });

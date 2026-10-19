@@ -787,12 +787,15 @@ describe('4 — a tela do contrato mostra o que o banco derivou do lançamento',
     expect(cabecalho.className).toContain('sticky');
     expect(cabecalho.className).toContain('top-0');
     /* a rolagem mora no wrapper da tabela: só as parcelas rolam */
-    expect(rodape.closest('table')!.parentElement!.className).toContain('overflow-y-auto');
+    /* FIN-CONTRATO-TELA-FONTE-01: o wrapper rola nos dois eixos (largura mínima da tabela em janela estreita) */
+    expect(rodape.closest('table')!.parentElement!.className).toContain('overflow-auto');
     /* FIN-FINANC-28-P3-FIX: a linha é a de Lançamentos (25px), e a tabela leva a régua de lá */
     for (const linha of [...linhasDoContrato(), rodape.querySelector('tr')!]) {
       expect(linha.className).toContain('h-[25px]');
     }
-    expect(rodape.closest('table')!.className).toContain('table-financeiro');
+    /* FIN-CONTRATO-TELA-FONTE-01: a tabela saiu da régua de Lançamentos (8/9px) para a escala da tela do contrato (10,5px) */
+    expect(rodape.closest('table')!.className).not.toContain('table-financeiro');
+    expect(rodape.closest('table')!.className).toContain('[&_td]:text-[10.5px]');
     /* nada dentro da linha passa de 16px, e nenhum valor fica abaixo de 10px */
     expect(screen.getAllByRole('button', { name: 'Abrir o lançamento da parcela' })[0].className).toContain('h-4');
     /* (FIN-FINANC-28-P3-FIX2: o piso de 10px saiu — a régua é a de Lançamentos, valor a 9px/600) */
@@ -854,7 +857,8 @@ describe('4 — a tela do contrato mostra o que o banco derivou do lançamento',
     /* o cartão e, desde 17/10, o par da coluna 2 do cabeçalho (ordem do Gabriel) */
     expect(screen.getAllByText('Valor da compra').length).toBe(2);
     expect(screen.queryByText('Valor do contrato')).toBeNull();
-    expect(screen.getAllByTestId('prazo').every((c) => c.className.includes('text-[9px]'))).toBe(true);
+    /* FIN-CONTRATO-TELA-FONTE-01: célula da tabela do contrato a 10,5px (a escala da tela) */
+    expect(screen.getAllByTestId('prazo').every((c) => c.className.includes('text-[10.5px]'))).toBe(true);
   });
 
   it('PARC-CONTRATO-01: a nota que NÃO confere escreve a diferença do banco; sem detalhe (banco antigo) a tela diz "—", nunca inventa', async () => {
@@ -873,16 +877,18 @@ describe('4 — a tela do contrato mostra o que o banco derivou do lançamento',
     expect(cartao('A vencer')).toBe('A vencerR$ 16.238,00');
   });
 
-  it('PARC-CONTRATO-01: título CONTIDO numa linha (corta com title, botões com lugar reservado); Documentos e Editar parcelas abrem o diálogo na aba certa', async () => {
+  it('FIN-CONTRATO-TELA-FONTE-01: título 13px que QUEBRA em duas linhas reservadas (nunca "…", botões com lugar reservado); Documentos e Editar parcelas abrem o diálogo na aba certa', async () => {
     banco.contrato = { ...PARCELAMENTO(), descricao: 'Contrato de teste com um nome bem comprido de sessenta letras xx' };
     banco.situacao = SITUACAO([{ ...DET() }, { ...DET() }], CART());
     await abrirDetalhe();
     const titulo = screen.getByTestId('titulo-do-contrato');
-    expect(titulo.className).toContain('truncate');
+    expect(titulo.className).not.toContain('truncate');
+    expect(titulo.className).toContain('break-words');
+    expect(titulo.className).toContain('max-h-[32px]');
     expect(titulo.className).toContain('min-w-0');
-    expect(titulo.className).toContain('text-[15px]');
-    expect(titulo.getAttribute('title')).toBe('Contrato de teste com um nome bem comprido de sessenta letras xx');
-    expect(screen.getByTestId('linha-do-titulo').className).toContain('h-[26px]');
+    expect(titulo.className).toContain('text-[13px]');
+    expect(titulo.textContent?.trim()).toBe('Contrato de teste com um nome bem comprido de sessenta letras xx');
+    expect(screen.getByTestId('linha-do-titulo').className).toContain('h-[34px]');
     const botoes = screen.getByTestId('botoes-do-contrato');
     expect(botoes.className).toContain('shrink-0');
     expect(Array.from(botoes.querySelectorAll('button')).map((b) => b.textContent?.trim())).toEqual(['Editar', 'Documentos', 'Excluir']);

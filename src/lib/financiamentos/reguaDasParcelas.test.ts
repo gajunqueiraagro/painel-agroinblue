@@ -44,14 +44,15 @@ describe('a régua — o cabeçalho alinha como a coluna', () => {
     }
   });
 
-  it('as larguras medidas: compra parcelada data 64, Nº 48, Prazo 116; crédito na régua v4 com a data dd/mm/aaaa', () => {
-    expect(LARGURA_DA_DATA).toBe(64);
+  it('as larguras medidas: compra parcelada data 72, Nº 48, Prazo 116; crédito na régua v4 com a data dd/mm/aaaa', () => {
+    expect(LARGURA_DA_DATA).toBe(72);
     const m = porChave(true);
-    for (const data of ['competencia', 'vencimento', 'pagamento'] as ChaveDaColuna[]) expect(m.get(data)!.largura).toBe(64);
+    for (const data of ['competencia', 'vencimento', 'pagamento'] as ChaveDaColuna[]) expect(m.get(data)!.largura).toBe(72);
     expect(m.get('numero')!.largura).toBe(48);
     expect(m.get('prazo')!.largura).toBe(116);
     const fixas = (p: boolean) => colunasDasParcelas(p).reduce((a, c) => a + (c.largura ?? 0), 0);
-    expect(901 - fixas(true)).toBe(181);
+    /* FIN-CONTRATO-TELA-FONTE-01: as três datas a 72 (10,5px) — 24px a menos para a Conta a 901 */
+    expect(901 - fixas(true)).toBe(157);
     /* TELA DO CONTRATO v4 (18/10, medido na bancada com Inter): "em 5097 dias" a 10px 66+5; o Total do rodapé "16.380.000,00" em
        negrito 10,5px 77+5. UI-SEM-CORTE-01 (19/10): a data passou a dd/mm/aaaa, "01/10/2026" pede 64 com o padding -> 68. Fixas 602 — a
        750px de conteúdo sobram 130 ao Lançamento, que quebra a linha ali (nunca corta) */
@@ -89,8 +90,8 @@ describe('a tela usa a régua (fonte)', () => {
   });
 
   it('table-fixed, colgroup e cabeçalho saem da MESMA lista; nada de largura ou alinhamento à mão', () => {
-    // FIN-FINANC-28-P3-FIX: a tabela leva a régua de Lançamentos (`table-financeiro`) e segue `table-fixed`
-    expect(FONTE).toMatch(/<Table density="dense" className=\{`\$\{TABELA_LANC\} table-fixed /);
+    // FIN-CONTRATO-TELA-FONTE-01: a régua da tela do contrato (célula 10,5px) e largura mínima que rola dentro do cartão
+    expect(FONTE).toMatch(/<Table density="dense" className="min-w-\[904px\] table-fixed /);
     expect(FONTE).toContain('const colunas = colunasDasParcelas(ehParcelamento);');
     const cg = bloco(FONTE, 'colgroup');
     expect(cg).toContain('colunas.map(');

@@ -28,7 +28,8 @@ export function TituloDoBloco({ nome, dica, acao }: { nome: string; dica?: strin
   return (
     <div className="mb-1 flex min-h-[16px] min-w-0 items-center gap-2 border-b border-border/60" data-titulo-do-bloco="">
       <h3 className="shrink-0 text-[11px] font-semibold leading-[15px] text-foreground">{nome}</h3>
-      <span className="min-w-0 flex-1 truncate text-[10px] leading-[15px] text-muted-foreground" title={dica}>{dica ?? ''}</span>
+      {/* FIN-CONTRATO-TELA-FONTE-01 — a dica não corta com "…": rola dentro do lugar dela (`.uma-linha-que-rola`, UI-SEM-CORTE-01) */}
+      <span className="uma-linha-que-rola min-w-0 flex-1 text-[10px] leading-[15px] text-muted-foreground" title={dica}>{dica ?? ''}</span>
       {acao && <div className="flex shrink-0 items-center">{acao}</div>}
     </div>
   );

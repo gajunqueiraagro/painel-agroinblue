@@ -29,7 +29,8 @@ export interface ColunaDasParcelas {
 
 export type AlinhamentoDaColuna = 'esquerda' | 'direita' | 'centro';
 
-export const LARGURA_DA_DATA = 64;
+/* FIN-CONTRATO-TELA-FONTE-01 — a célula passou a 10,5px: "01/10/2026" pede 70px com o padding (medido na bancada) -> 72 */
+export const LARGURA_DA_DATA = 72;
 
 const col = (chave: ChaveDaColuna, rotulo: string, largura: number | null, alinha: AlinhamentoDaColuna = 'esquerda'): ColunaDasParcelas =>
   ({ chave, rotulo, largura, alinha });
