@@ -1,9 +1,10 @@
 -- FORN-MESCLAR-02a — o gatilho dos lancamentos nao revalida o que ninguem mexeu (chave numa conta INATIVA inclusive); reativar revalida.
---   C0 a mesclagem REAL do grupo Pontero (Vera), so' em simulacao: sem recusa
+--   C0 o grupo Pontero (Vera): mesclado de verdade em 19/10 (a mesclagem viva existe); desfeita, a simulacao passa sem recusa
 --   C1 mesclagem sintetica no Teste com lancamento cancelado ligado a conta inativa: sem recusa; chave e subcentro do lancamento intactos
 --   C2 editar outro campo (descricao) desse lancamento: passa, sem mexer em chave nem subcentro
 --   C3 trocar o subcentro para um inexistente: continua recusado (check_violation)
---   C4 reativar o lancamento ligado a conta inativa: recusado (check_violation)
+--   C4 reativar o lancamento ligado a conta inativa: recusado com a frase da conta inativa (20261027201900)
+--   C5 reativar lancamento sem chave com texto fora do plano: recusado com a frase de "escolha uma conta do plano"
 -- O lancamento sintetico nasce com os gatilhos desligados SO' no INSERT (session_replication_role), porque hoje o gatilho recusa a
 -- chave inativa no INSERT — e' o estado que os 58 legados tem. Termina em RAISE 'OK' (desfaz tudo).
 set local statement_timeout = '30s';
@@ -14,11 +15,18 @@ DECLARE
   k constant uuid := '43f32d07-dba8-4670-900c-bf645440c04a';
   fz constant uuid := 'c2498ace-8478-410c-a697-d3f2e2934d1f';
   cta constant uuid := '131b8501-caf7-4964-b1b1-3f552ad2b75d';
-  inativa uuid; sub_inativo text; fica uuid; sai uuid; l uuid; r jsonb; ok boolean; v record;
+  inativa uuid; sub_inativo text; fica uuid; sai uuid; l uuid; l2 uuid; r jsonb; ok boolean; v record; msg text;
 BEGIN
-  r := public.fn_fornecedor_mesclar('23c3a168-65b2-496f-9a8f-42a0a37a045c'::uuid, array['6d64046a-feb3-4029-b31f-693fd3929b96'::uuid], true);
-  if r->'recusa' is not null and r->>'recusa' <> 'null' then raise exception 'C0 Pontero recusado: %', r->'recusa'; end if;
-  if (r->>'total')::int < 1 then raise exception 'C0 Pontero sem movimento: %', r; end if;
+  /* C0 — o Pontero foi mesclado de verdade em 19/10 (log f7f67551). Enquanto a mesclagem estiver viva, confere que ela existe;
+     se for desfeita, a simulacao tem de passar de novo. */
+  if exists (select 1 from public.financeiro_fornecedores where id = '6d64046a-feb3-4029-b31f-693fd3929b96' and fundido_em_id = '23c3a168-65b2-496f-9a8f-42a0a37a045c') then
+    if not exists (select 1 from public.fornecedor_mesclagem_log where mantido_id = '23c3a168-65b2-496f-9a8f-42a0a37a045c' and desfeito_em is null)
+      then raise exception 'C0 Pontero fundido sem mesclagem viva'; end if;
+  else
+    r := public.fn_fornecedor_mesclar('23c3a168-65b2-496f-9a8f-42a0a37a045c'::uuid, array['6d64046a-feb3-4029-b31f-693fd3929b96'::uuid], true);
+    if r->'recusa' is not null and r->>'recusa' <> 'null' then raise exception 'C0 Pontero recusado: %', r->'recusa'; end if;
+    if (r->>'total')::int < 1 then raise exception 'C0 Pontero sem movimento: %', r; end if;
+  end if;
 
   select id, subcentro into inativa, sub_inativo from public.financeiro_plano_contas
    where ativo = false and cliente_id is null and tipo_operacao = '2-Saídas' order by subcentro limit 1;
@@ -48,10 +56,30 @@ BEGIN
   exception when check_violation then ok := true; end;
   if not ok then raise exception 'C3 aceitou subcentro inexistente'; end if;
 
-  ok := false;
+  msg := null;
   begin update public.financeiro_lancamentos_v2 set cancelado = false where id = l;
-  exception when check_violation then ok := true; end;
-  if not ok then raise exception 'C4 reativou com conta inativa'; end if;
+  exception when check_violation then msg := SQLERRM; end;
+  if msg is null then raise exception 'C4 reativou com conta inativa'; end if;
+  if msg is distinct from format('Para reativar este lançamento, escolha uma conta ativa do plano: "%s" está inativa.', sub_inativo)
+    then raise exception 'C4 frase: %', msg; end if;
+
+  set local session_replication_role = replica;
+  insert into public.financeiro_lancamentos_v2 (cliente_id, fazenda_id, tipo_operacao, valor, sinal, data_competencia, status_transacao,
+    favorecido_id, conta_bancaria_id, descricao, cenario, origem_lancamento, cancelado, plano_conta_id, subcentro)
+  values (k, fz, '2-Saídas', 10, -1, date '2026-09-01', 'previsto', sai, cta, 'SINT 02a texto', 'realizado', 'manual', true, null, 'SINT subcentro fora do plano')
+  returning id into l2;
+  set local session_replication_role = origin;
+  msg := null;
+  begin update public.financeiro_lancamentos_v2 set cancelado = false where id = l2;
+  exception when check_violation then msg := SQLERRM; end;
+  if msg is distinct from 'Para reativar este lançamento, escolha uma conta do plano: o subcentro "SINT subcentro fora do plano" não existe no plano de contas.'
+    then raise exception 'C5 frase: %', msg; end if;
+  /* fora da reativacao, a frase de sempre (C3 ja' recusou; aqui o texto) */
+  msg := null;
+  begin update public.financeiro_lancamentos_v2 set subcentro = 'SINT outro texto' where id = l2;
+  exception when check_violation then msg := SQLERRM; end;
+  if msg is distinct from 'Subcentro "SINT outro texto" nao existe no plano de contas. Selecione um subcentro canonico.'
+    then raise exception 'C5 frase de sempre: %', msg; end if;
 
   RAISE EXCEPTION 'OK';
 END $t$;
