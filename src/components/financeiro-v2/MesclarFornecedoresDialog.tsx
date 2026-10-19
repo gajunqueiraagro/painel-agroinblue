@@ -6,20 +6,23 @@
  * chamada (`fn_fornecedor_mesclar` com `p_valores`), simulada antes; o rodapé diz o que passa com os números do banco.
  * Tamanho fixo (~1120 x 420, limitado pela janela); só a tabela rola por dentro; recusas escritas no rodapé (nunca toast).
  * A regra é do banco; as linhas, o padrão do "fica" e as frases são de `mesclarFornecedores.ts` (puro). Nenhuma conta aqui.
+ * FORN-MESCLAR-02c — a busca é VISÍVEL: sem colunas, um campo grande no centro (com foco ao abrir); com colunas, um campo com lupa
+ * na barra (não um seletor). Os dois são o mesmo `BuscaDeCadastro`, sobre `buscarCadastros` (sem acento, sem caixa).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Segmentado } from '@/components/ui/segmentado';
-import { SearchableSelect } from '@/components/ui/searchable-select';
+import { Search } from 'lucide-react';
+import { MENU_ITEM, MENU_PALETA, MENU_REALCE_HOVER, MENU_SECUNDARIO, MENU_VAZIO } from '@/components/ui/menuPadrao';
 import { supabase } from '@/integrations/supabase/client';
 import { useFornecedoresDoCliente, notificarFornecedoresMudaram } from '@/hooks/useFornecedoresDoCliente';
 import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
 import { ehRateio, formatarDocumento, rotulosDosFornecedores, sufixoDoRotulo } from '@/lib/fornecedores/fornecedorTexto';
 import { lerTodasAsPaginas } from '@/v2/lib/importLanc/lerTodasAsPaginas';
 import {
-  MOTIVO_DESFAZER_SEM_MOTIVO, bloqueioDoRateio, ficaPadrao, fraseDoGrupo, fraseDoQuePassa, fraseDoResultado, lerGruposRepetidos,
+  MOTIVO_DESFAZER_SEM_MOTIVO, PLACEHOLDER_BUSCA_CADASTRO, TEXTO_DO_VAZIO_DA_MESCLAGEM, bloqueioDoRateio, buscarCadastros, ficaPadrao, fraseDoGrupo, fraseDoQuePassa, fraseDoResultado, lerGruposRepetidos,
   lerMesclagens, lerPreviaDaMesclagem, lerUso, linhasDaComparacao, resultadoAoVivo, valoresParaGravar,
   type CadastroComparado, type FornecedorDaMesclagem, type GrupoRepetido, type MesclagemFeita, type PreviaDaMesclagem, type UsoDoCadastro,
 } from '@/lib/fornecedores/mesclarFornecedores';
@@ -27,6 +30,48 @@ import {
 const TH = 'h-[22px] px-1.5 text-left text-[10.5px] font-semibold text-primary-foreground bg-primary whitespace-nowrap overflow-hidden text-ellipsis';
 const TD = 'h-[22px] px-1.5 text-[10.5px] whitespace-nowrap overflow-hidden text-ellipsis';
 const doc = (d: string | null) => (d ? formatarDocumento(d) : '—');
+
+/** FORN-MESCLAR-02c — o campo de busca de cadastros (grande no vazio, compacto na barra). A lista abre por cima (não muda altura de
+ *  nada), no padrão de menu da casa: razão social · fantasia · CNPJ · situação · Pec.3M. Clicar (ou Enter no primeiro) acrescenta a
+ *  coluna; Esc limpa o texto (e só fecha o diálogo com o campo vazio — ver `onEscapeKeyDown`). */
+function BuscaDeCadastro({ candidatos, colunas, aoEscolher, grande }: {
+  candidatos: readonly FornecedorDaMesclagem[]; colunas: readonly string[]; aoEscolher: (id: string) => void; grande: boolean;
+}) {
+  const [texto, setTexto] = useState('');
+  const { itens, total } = useMemo(() => buscarCadastros(candidatos, texto, colunas), [candidatos, texto, colunas]);
+  const escolher = (id: string) => { aoEscolher(id); setTexto(''); };
+  return (
+    <div className="relative w-full">
+      <Search className={`pointer-events-none absolute top-1/2 -translate-y-1/2 text-muted-foreground ${grande ? 'left-2.5 h-4 w-4' : 'left-1.5 h-3 w-3'}`} aria-hidden />
+      <Input autoFocus value={texto} onChange={(e) => setTexto(e.target.value)} placeholder={PLACEHOLDER_BUSCA_CADASTRO} aria-label={PLACEHOLDER_BUSCA_CADASTRO}
+        data-busca-cadastro="sim" data-testid={grande ? 'busca-cadastro-vazio' : 'busca-cadastro'}
+        className={grande ? 'h-[32px] pl-8 text-[12px]' : 'h-[22px] pl-6 text-[10.5px]'}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && itens[0]) { e.preventDefault(); escolher(itens[0].id); }
+          if (e.key === 'Escape' && texto) { e.preventDefault(); setTexto(''); }
+        }} />
+      {texto.trim() !== '' && (
+        <div className={`absolute top-full z-20 mt-0.5 overflow-hidden rounded border shadow-md ${MENU_PALETA} ${grande ? 'left-0 right-0' : 'right-0 w-[440px]'}`}
+          data-testid="resultado-da-busca-cadastro">
+          {itens.map((f) => (
+            <button key={f.id} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => escolher(f.id)} data-testid="cadastro-achado"
+              className={`flex w-full items-center gap-1.5 text-left ${MENU_ITEM} ${MENU_REALCE_HOVER}`}
+              title={[f.nome, f.nomeFantasia, f.cpfCnpj ? formatarDocumento(f.cpfCnpj) : 'sem CNPJ/CPF', f.ativo ? 'ativo' : 'inativo'].filter(Boolean).join(' · ')}>
+              <span className="min-w-0 flex-1 truncate">{f.nome}</span>
+              {f.nomeFantasia && <span className={`min-w-0 max-w-[30%] truncate ${MENU_SECUNDARIO}`}>{f.nomeFantasia}</span>}
+              <span className={`shrink-0 tabular-nums ${MENU_SECUNDARIO}`}>{f.cpfCnpj ? formatarDocumento(f.cpfCnpj) : 'sem CNPJ'}</span>
+              <span className={`shrink-0 ${f.ativo ? MENU_SECUNDARIO : 'text-amber-300'}`}>{f.ativo ? 'ativo' : 'inativo'}</span>
+              {ehRateio(f.nome) && <span className="shrink-0 rounded bg-zinc-500 px-1 text-[9px]">Pec.3M</span>}
+            </button>
+          ))}
+          <div className={`px-2 py-[3px] ${MENU_VAZIO}`}>
+            {total === 0 ? `Nenhum cadastro com “${texto.trim()}”.` : total > itens.length ? `Mostrando ${itens.length} de ${total} — digite mais para refinar.` : `${total} ${total === 1 ? 'cadastro' : 'cadastros'}`}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const LINHAS_DO_USO: ReadonlyArray<{ rotulo: string; valor: (u: UsoDoCadastro) => string }> = [
   { rotulo: 'Lançamentos', valor: (u) => String(u.lancamentos) },
@@ -75,11 +120,11 @@ export function MesclarFornecedoresDialog({ aberto, aoFechar, clienteId, inicial
     try {
       const linhas = await lerTodasAsPaginas<FornecedorDaMesclagem>(async (de, ate, contar) => {
         const { data, error, count } = await supabase.from('financeiro_fornecedores')
-          .select('id, nome, cpf_cnpj, ativo', { count: contar ? 'exact' : undefined })
+          .select('id, nome, nome_fantasia, cpf_cnpj, ativo', { count: contar ? 'exact' : undefined })
           .eq('cliente_id', clienteId).eq('ativo', false).is('fundido_em_id', null)
           .order('nome').order('id').range(de, ate);
         if (error) throw new Error(error.message);
-        return { data: (data ?? []).map((f) => ({ id: f.id, nome: f.nome, cpfCnpj: f.cpf_cnpj, ativo: false })), count: typeof count === 'number' ? count : null };
+        return { data: (data ?? []).map((f) => ({ id: f.id, nome: f.nome, nomeFantasia: f.nome_fantasia, cpfCnpj: f.cpf_cnpj, ativo: false })), count: typeof count === 'number' ? count : null };
       });
       setInativos(linhas);
     } catch { setInativos([]); }
@@ -195,18 +240,18 @@ export function MesclarFornecedoresDialog({ aberto, aoFechar, clienteId, inicial
      entra (a pessoa pode acrescentar à mão) e a tela bloqueia com o motivo escrito; o banco também recusa. */
   const candidatos = useMemo(() => {
     const m = new Map<string, FornecedorDaMesclagem>();
-    for (const f of lidos.fornecedores) m.set(f.id, { id: f.id, nome: f.nome, cpfCnpj: f.cpf_cnpj, ativo: f.ativo });
+    for (const f of lidos.fornecedores) m.set(f.id, { id: f.id, nome: f.nome, nomeFantasia: f.nome_fantasia ?? null, cpfCnpj: f.cpf_cnpj, ativo: f.ativo });
     for (const f of inativos) if (!m.has(f.id)) m.set(f.id, f);
     for (const g of grupos) for (const f of g.fornecedores) if (!m.has(f.id)) m.set(f.id, f);
     return m;
   }, [lidos.fornecedores, inativos, grupos]);
-  const opcoesAcrescentar = [...candidatos.values()].filter((f) => !colunas.includes(f.id))
-    .map((f) => ({ value: f.id, label: f.nome, hint: `${f.ativo ? '' : 'inativo · '}${doc(f.cpfCnpj)}` }));
+  const listaDeCandidatos = useMemo(() => [...candidatos.values()], [candidatos]);
+  const acrescentar = (id: string) => { setColunas((c) => (c.includes(id) ? c : [...c, id])); setEscolhas({}); setRecado(null); };
   /* o nome exibido (FORN-NOME-EXIBIDO-01): o final do documento entre os parecidos DESTA comparação, e a marca de inativo */
   const rotulos = useMemo(() => rotulosDosFornecedores(comparados.map((c) => ({ id: c.id, nome: c.nome, cpf_cnpj: c.linha.cpf_cnpj, ativo: c.ativo }))), [comparados]);
   const nomeDe = (id: string) => candidatos.get(id)?.nome ?? cadastros.get(id)?.nome ?? id.slice(0, 8);
 
-  const motivoDoBotao = colunas.length < 2 ? 'Escolha uma sugestão ou acrescente ao menos dois cadastros.'
+  const motivoDoBotao = colunas.length < 2 ? 'Escolha uma sugestão ou busque ao menos dois cadastros.'
     : !prontos ? 'Lendo os cadastros…' : bloqueio ? bloqueio : lendoPrevia ? 'Calculando a prévia…' : previa?.recusa ? previa.recusa.frase : null;
   const textoDoRodape = recado?.texto
     ?? (vista === 'comparar' ? motivoDoBotao ?? (previa ? (confirmando ? 'Confere? Isto move as referências e inativa os outros cadastros (pode ser desfeito). ' : '') + fraseDoQuePassa(previa, absorvidos.length) : '') : '');
@@ -215,7 +260,8 @@ export function MesclarFornecedoresDialog({ aberto, aoFechar, clienteId, inicial
   return (
     <Dialog open={aberto} onOpenChange={(v) => { if (!v) aoFechar(); }}>
       <DialogContent className="flex h-[min(420px,calc(100vh-16px))] w-[min(1120px,calc(100vw-16px))] max-w-none flex-col gap-0 overflow-hidden p-0"
-        data-testid="mesclar-fornecedores">
+        data-testid="mesclar-fornecedores"
+        onEscapeKeyDown={(e) => { const el = document.activeElement; if (el instanceof HTMLInputElement && el.dataset.buscaCadastro && el.value) e.preventDefault(); }}>
         <div className="flex h-[34px] shrink-0 items-center gap-3 bg-primary px-3 text-primary-foreground">
           <DialogTitle className="text-[11px] font-semibold">Mesclar fornecedores</DialogTitle>
           <DialogDescription className="sr-only">Comparar cadastros repetidos e juntar num só</DialogDescription>
@@ -247,15 +293,17 @@ export function MesclarFornecedoresDialog({ aberto, aoFechar, clienteId, inicial
                 <span className="min-w-0 flex-1 truncate text-[10px] text-muted-foreground" title="linhas em amarelo: os cadastros discordam; marque o valor que fica">
                   linhas em amarelo: os cadastros discordam; marque o valor que fica
                 </span>
-                <div className="w-[230px] shrink-0">
-                  <SearchableSelect value="" onValueChange={(id) => { if (id) { setColunas((c) => [...c, id]); setEscolhas({}); } }} options={opcoesAcrescentar}
-                    semTodos allValue="" allLabel="+ acrescentar cadastro" placeholder="Buscar fornecedor..." dense triggerClassName="h-[22px] text-[10.5px]" />
+                <div className="w-[260px] shrink-0" data-testid="lugar-da-busca">
+                  {colunas.length > 0 && <BuscaDeCadastro candidatos={listaDeCandidatos} colunas={colunas} aoEscolher={acrescentar} grande={false} />}
                 </div>
               </div>
 
-              <div className="min-h-0 flex-1 overflow-auto rounded border" data-testid="tabela-comparacao">
+              <div className={`min-h-0 flex-1 rounded border ${colunas.length === 0 ? 'overflow-visible' : 'overflow-auto'}`} data-testid="tabela-comparacao">
                 {colunas.length === 0 ? (
-                  <div className="p-2 text-[10.5px] text-muted-foreground">Escolha uma sugestão à esquerda ou acrescente os cadastros a comparar.</div>
+                  <div className="flex flex-col items-center gap-2 px-6 pt-10" data-testid="vazio-da-mesclagem">
+                    <div className="w-full max-w-[560px]"><BuscaDeCadastro candidatos={listaDeCandidatos} colunas={colunas} aoEscolher={acrescentar} grande /></div>
+                    <p className="text-[10.5px] text-muted-foreground">{TEXTO_DO_VAZIO_DA_MESCLAGEM}</p>
+                  </div>
                 ) : (
                   <table className="w-full table-fixed border-collapse">
                     <colgroup><col style={{ width: 118 }} />{colunas.map((id) => <col key={id} />)}</colgroup>

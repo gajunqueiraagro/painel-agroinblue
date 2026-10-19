@@ -9,7 +9,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
-  bloqueioDoRateio, ficaPadrao, lerGruposRepetidos, lerMesclagens, lerPreviaDaMesclagem, linhasDaComparacao, resultadoAoVivo, valoresParaGravar,
+  TEXTO_DO_VAZIO_DA_MESCLAGEM, PLACEHOLDER_BUSCA_CADASTRO, bloqueioDoRateio, buscarCadastros, fraseDoGrupo, ficaPadrao, lerGruposRepetidos, lerMesclagens, lerPreviaDaMesclagem, linhasDaComparacao, resultadoAoVivo, valoresParaGravar,
   type CadastroComparado, type UsoDoCadastro,
 } from '@/lib/fornecedores/mesclarFornecedores';
 import { ehRateio } from '@/lib/fornecedores/fornecedorTexto';
@@ -175,7 +175,7 @@ describe('o diálogo', () => {
   it('"Pec.3M-" acrescentado à mão: bloqueia com o motivo escrito, sem pedir a prévia', async () => {
     render(<MesclarFornecedoresDialog aberto aoFechar={vi.fn()} clienteId="cli" inicial={{ manter: 'c', absorver: [] }} />);
     await screen.findByTestId('fica-c');
-    fireEvent.click(screen.getByText('+ acrescentar cadastro'));
+    fireEvent.change(screen.getByTestId('busca-cadastro'), { target: { value: 'casa' } });
     fireEvent.click(await screen.findByText('Pec.3M-Casa Mesclar'));
     await waitFor(() => expect(screen.getByTestId('recado-da-mesclagem').textContent).toMatch(/não se mesclam: "Pec\.3M-"/));
     expect(screen.getByTestId('mesclar')).toBeDisabled();
@@ -185,7 +185,7 @@ describe('o diálogo', () => {
   it('o inativo não mesclado pode ser acrescentado', async () => {
     render(<MesclarFornecedoresDialog aberto aoFechar={vi.fn()} clienteId="cli" inicial={{ manter: 'c', absorver: [] }} />);
     await screen.findByTestId('fica-c');
-    fireEvent.click(screen.getByText('+ acrescentar cadastro'));
+    fireEvent.change(screen.getByTestId('busca-cadastro'), { target: { value: 'lineagro' } });
     await waitFor(() => expect(screen.getByText('Lineagro Produtos Agropecuarios AS')).toBeTruthy());
   });
   it('desfazer pede motivo e grava com ele', async () => {
@@ -215,5 +215,58 @@ describe('a regra do lado do rateio tem um dono', () => {
     expect(ehRateio('Higino Hernandes Neto')).toBe(false);
     expect(mesmoLadoDoRateio('Pec.3M-X', 'X')).toBe(false);
     expect(mesmoLadoDoRateio('Pec.3M-X', 'Pec.3M-(X)')).toBe(true);
+  });
+});
+
+describe('FORN-MESCLAR-02c — a busca visível', () => {
+  const CAND = [
+    { id: 'j1', nome: 'Pec.3M-Comercial Jerê', nomeFantasia: 'Mercado do Jerê', cpfCnpj: null, ativo: true },
+    { id: 'j2', nome: 'Pec.3M-Comercial Jere Alimentos', cpfCnpj: null, ativo: false },
+    { id: 'h', nome: 'Agro Exemplo HJ', cpfCnpj: '11.222.333/0001-81', ativo: true },
+  ];
+  it('sem acento e sem caixa, por fantasia e por dígitos; fora as que já são coluna', () => {
+    expect(buscarCadastros(CAND, 'JERE', []).itens.map((f) => f.id)).toEqual(['j1', 'j2']);
+    expect(buscarCadastros(CAND, 'mercado do jere', []).itens.map((f) => f.id)).toEqual(['j1']);
+    expect(buscarCadastros(CAND, '11.222', []).itens.map((f) => f.id)).toEqual(['h']);
+    expect(buscarCadastros(CAND, 'jere', ['j1']).itens.map((f) => f.id)).toEqual(['j2']);
+    expect(buscarCadastros(CAND, '   ', []).total).toBe(0);
+  });
+  it('o grupo "nome parecido" é lido e dito', () => {
+    const g = lerGruposRepetidos([{ motivo: 'parecido', chave: 'k', qtd: 2, fornecedores: [{ id: 'j1', nome: 'A', cpf_cnpj: null, ativo: true, nome_fantasia: 'F' }, { id: 'j2', nome: 'B', cpf_cnpj: null, ativo: true }] }]);
+    expect(g?.[0].motivo).toBe('parecido');
+    expect(g?.[0].fornecedores[0].nomeFantasia).toBe('F');
+    expect(fraseDoGrupo(g![0])).toBe('nome parecido · 2 cadastros');
+  });
+  it('vazio: o campo grande no centro com foco, o texto do vazio, e a barra sem busca', async () => {
+    render(<MesclarFornecedoresDialog aberto aoFechar={vi.fn()} clienteId="cli" />);
+    const campo = await screen.findByTestId('busca-cadastro-vazio');
+    expect(document.activeElement).toBe(campo);
+    expect(campo.getAttribute('placeholder')).toBe(PLACEHOLDER_BUSCA_CADASTRO);
+    expect(screen.getByTestId('vazio-da-mesclagem').textContent).toContain(TEXTO_DO_VAZIO_DA_MESCLAGEM);
+    expect(screen.queryByTestId('busca-cadastro')).toBeNull();
+  });
+  it('"jere" acha "Jerê" com fantasia, documento, situação e Pec.3M; clicar acrescenta a coluna e a barra vira campo com lupa', async () => {
+    definirFornecedoresDoLeitor([{ id: 'j1', nome: 'Pec.3M-Comercial Jerê', nome_fantasia: 'Mercado do Jerê', ativo: true }]);
+    render(<MesclarFornecedoresDialog aberto aoFechar={vi.fn()} clienteId="cli" />);
+    fireEvent.change(await screen.findByTestId('busca-cadastro-vazio'), { target: { value: 'jere' } });
+    const achado = await screen.findByTestId('cadastro-achado');
+    expect(achado.textContent).toContain('Pec.3M-Comercial Jerê');
+    expect(achado.textContent).toContain('Mercado do Jerê');
+    expect(achado.textContent).toContain('sem CNPJ');
+    expect(achado.textContent).toContain('ativo');
+    expect(achado.textContent).toContain('Pec.3M');
+    fireEvent.click(achado);
+    expect(await screen.findByTestId('coluna-j1')).toBeTruthy();
+    const barra = screen.getByTestId('busca-cadastro');
+    expect(barra.tagName).toBe('INPUT');
+    expect(barra.getAttribute('placeholder')).toBe(PLACEHOLDER_BUSCA_CADASTRO);
+    expect(screen.getByTestId('lugar-da-busca').querySelector('.lucide-search')).not.toBeNull();
+  });
+  it('Enter acrescenta o primeiro achado', async () => {
+    render(<MesclarFornecedoresDialog aberto aoFechar={vi.fn()} clienteId="cli" />);
+    const campo = await screen.findByTestId('busca-cadastro-vazio');
+    fireEvent.change(campo, { target: { value: 'casa mesclar' } });
+    fireEvent.keyDown(campo, { key: 'Enter' });
+    expect(await screen.findByTestId('coluna-c')).toBeTruthy();
   });
 });

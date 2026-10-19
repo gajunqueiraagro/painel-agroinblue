@@ -14,7 +14,7 @@ export const MODULOS_DA_MESCLAGEM: ReadonlyArray<string> = [
   'Financeiro', 'Recorrências', 'Financiamentos', 'Operação comercial', 'Rebanho', 'Agricultura', 'Importação', 'Cadastro',
 ];
 
-export interface FornecedorDaMesclagem { id: string; nome: string; cpfCnpj: string | null; ativo: boolean }
+export interface FornecedorDaMesclagem { id: string; nome: string; cpfCnpj: string | null; ativo: boolean; nomeFantasia?: string | null }
 export interface Recusa { motivo: string; frase: string }
 export interface PreviaDaMesclagem {
   simulado: boolean;
@@ -40,7 +40,7 @@ const lerFornecedor = (v: unknown): FornecedorDaMesclagem | null => {
   if (!ehObj(v)) return null;
   const id = txt(v.id); const nome = txt(v.nome);
   if (!id || !nome) return null;
-  return { id, nome, cpfCnpj: txt(v.cpf_cnpj), ativo: v.ativo !== false };
+  return { id, nome, cpfCnpj: txt(v.cpf_cnpj), ativo: v.ativo !== false, nomeFantasia: txt(v.nome_fantasia) };
 };
 
 export function lerPreviaDaMesclagem(r: unknown): PreviaDaMesclagem | null {
@@ -64,14 +64,15 @@ export function lerPreviaDaMesclagem(r: unknown): PreviaDaMesclagem | null {
 
 const ordemDoModulo = (m: string) => { const i = MODULOS_DA_MESCLAGEM.indexOf(m); return i < 0 ? MODULOS_DA_MESCLAGEM.length : i; };
 
-export interface GrupoRepetido { motivo: 'documento' | 'nome'; chave: string; fornecedores: FornecedorDaMesclagem[] }
+/** FORN-MESCLAR-02c: 'parecido' = ligados por nome PARECIDO (o banco decide; nunca documentos diferentes no mesmo grupo). */
+export interface GrupoRepetido { motivo: 'documento' | 'nome' | 'parecido'; chave: string; fornecedores: FornecedorDaMesclagem[] }
 
 export function lerGruposRepetidos(r: unknown): GrupoRepetido[] | null {
   if (!Array.isArray(r)) return null;
   const grupos: GrupoRepetido[] = [];
   for (const g of r) {
     if (!ehObj(g) || !Array.isArray(g.fornecedores)) return null;
-    const motivo = g.motivo === 'documento' || g.motivo === 'nome' ? g.motivo : null;
+    const motivo = g.motivo === 'documento' || g.motivo === 'nome' || g.motivo === 'parecido' ? g.motivo : null;
     const chave = txt(g.chave);
     if (!motivo || !chave) return null;
     const fornecedores: FornecedorDaMesclagem[] = [];
@@ -105,6 +106,7 @@ export function lerMesclagens(r: unknown): MesclagemFeita[] | null {
 /** "o motivo do grupo": por que o sistema acha que são o mesmo. */
 export const fraseDoGrupo = (g: GrupoRepetido): string => {
   if (g.motivo === 'nome') return `mesmo nome · ${g.fornecedores.length} cadastros`;
+  if (g.motivo === 'parecido') return `nome parecido · ${g.fornecedores.length} cadastros`;
   const d = (g.fornecedores.find((f) => f.cpfCnpj)?.cpfCnpj ?? '').replace(/\D/g, '');
   return `mesmo ${d.length === 11 ? 'CPF' : 'CNPJ'} · ${g.fornecedores.length} cadastros`;
 };
@@ -259,4 +261,31 @@ export function fraseDoQuePassa(p: PreviaDaMesclagem, absorvidos: number): strin
   const docs = t('financeiro_lancamento_documentos.emitente_id') + t('zoo_operacao_documentos.emitente_id');
   return `Passam para o que fica: ${t('financeiro_lancamentos_v2.favorecido_id')} lançamentos · ${t('financeiro_recorrencias.favorecido_id')} recorrências · ${docs} documentos. `
     + `${absorvidos === 1 ? 'O outro cadastro fica inativo' : `Os outros ${absorvidos} cadastros ficam inativos`} e ${absorvidos === 1 ? 'pode' : 'podem'} ser desfeito${absorvidos === 1 ? '' : 's'}.`;
+}
+
+/* ── FORN-MESCLAR-02c — a busca de cadastros para comparar (visível no vazio e na barra) ─────────────────────────────── */
+export const PLACEHOLDER_BUSCA_CADASTRO = 'Buscar cadastro para comparar (nome, fantasia ou CNPJ)';
+export const TEXTO_DO_VAZIO_DA_MESCLAGEM = 'Escolha uma sugestão à esquerda ou busque os cadastros que quer juntar.';
+export const LIMITE_DA_BUSCA_DE_CADASTRO = 8;
+
+/** Sem acento, sem caixa, espaços colapsados — "jere" acha "Jerê". */
+const semAcento = (s: string | null | undefined) => (s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+
+/** Os candidatos que casam com a busca (razão social, fantasia ou dígitos do documento), fora os que já são coluna.
+ *  Ordem: o nome que COMEÇA pela busca, depois ativo antes de inativo, depois o nome. Busca vazia = nada. */
+export function buscarCadastros(candidatos: readonly FornecedorDaMesclagem[], busca: string, jaNaComparacao: readonly string[],
+  limite = LIMITE_DA_BUSCA_DE_CADASTRO): { itens: FornecedorDaMesclagem[]; total: number } {
+  const q = semAcento(busca);
+  if (!q) return { itens: [], total: 0 };
+  const dig = busca.replace(/[.\-/\s]/g, '');
+  const soDigitos = /^\d+$/.test(dig) ? dig : null;
+  const fora = new Set(jaNaComparacao);
+  const achados = candidatos.filter((f) => {
+    if (fora.has(f.id)) return false;
+    if (semAcento(f.nome).includes(q) || semAcento(f.nomeFantasia).includes(q)) return true;
+    return soDigitos !== null && (f.cpfCnpj ?? '').replace(/\D/g, '').includes(soDigitos);
+  });
+  const peso = (f: FornecedorDaMesclagem) => (semAcento(f.nome).startsWith(q) ? 0 : 1) * 2 + (f.ativo ? 0 : 1);
+  achados.sort((a, b) => peso(a) - peso(b) || a.nome.localeCompare(b.nome, 'pt-BR'));
+  return { itens: achados.slice(0, limite), total: achados.length };
 }

@@ -75,7 +75,7 @@ begin
   r := public.fn_fornecedor_mesclar(a2, array[d], true);
   if r->'recusa'->>'motivo' is distinct from 'cnpj_diferente' then raise exception 'M5 simular: %', r; end if;
   begin perform public.fn_fornecedor_mesclar(a2, array[d], false); raise exception 'M5 passou';
-  exception when sqlstate 'P0001' then get stacked diagnostics v_msg = message_text; if v_msg not like 'CPF/CNPJ diferentes%' then raise; end if; end;
+  exception when sqlstate 'P0001' then get stacked diagnostics v_msg = message_text; if v_msg not like 'CNPJs diferentes — são empresas diferentes%' then raise; end if; end;
 
   -- M6 outro cliente e sem usuario
   select id into x from financeiro_fornecedores where cliente_id <> k limit 1;
