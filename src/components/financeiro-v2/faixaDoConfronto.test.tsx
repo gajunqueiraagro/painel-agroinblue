@@ -70,6 +70,17 @@ describe('a faixa do confronto, pelo banco', () => {
     expect(sp(screen.getByTestId('faixa-rep-233089').textContent)).toBe('nota 233089 registrada 2 vezes— cancele uma');
   });
 
+  it('FIN-DOC-SOMA-02a — a mesma nota na OC e no lançamento: diz isso, conta uma vez e NÃO manda cancelar; a duplicada manda', () => {
+    faixa(envelope({ repetidas: [{ numero: '8017', vezes: 2, tipo: 'oc_e_lancamento' }, { numero: '1234', vezes: 2, tipo: 'duplicada' }] }));
+    const b = screen.getByTestId('faixa-rep-8017');
+    expect(sp(b.textContent)).toBe('mesma nota 8017 na OC e no lançamento· conta uma vez');
+    expect(b.textContent).not.toMatch(/cancele/);
+    expect(b.lastElementChild?.className).toContain('text-muted-foreground');
+    expect(sp(screen.getByTestId('faixa-rep-1234').textContent)).toBe('nota 1234 registrada 2 vezes— cancele uma');
+    /* sem o tipo (banco anterior), a regra de antes: duplicada */
+    expect(daConfronto(envelope({ repetidas: [{ numero: '9', vezes: 2 }] }))?.repetidas[0].tipo).toBe('duplicada');
+  });
+
   it('recibo tem o nome dele; sem nada com valor a faixa diz isso; sem envelope, "—"', () => {
     expect(faixaDoConfronto(daConfronto(envelope({ fiscal: fiscal({ recibos: 1 }) })))?.[0].texto.replace(/\u00a0/g, ' ')).toBe('Recibo R$ 100,00');
     faixa(envelope({ fiscal: null, docs_com_valor: 0 }));

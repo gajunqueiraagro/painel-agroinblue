@@ -76,7 +76,7 @@ BEGIN
   insert into financeiro_documento_vinculos (documento_id, documento_lancamento_id, lancamento_id, cliente_id)
     select v_doc, n1, x, k from unnest(array[n2, n3]) x;
   r := fin_documento_confronto(n2, k);
-  if r->'repetidas' is distinct from '[{"numero": "1234", "vezes": 2}]'::jsonb then raise exception 'S5 repetidas: %', r; end if;
+  if r->'repetidas' is distinct from '[{"numero": "1234", "vezes": 2, "tipo": "duplicada"}]'::jsonb then raise exception 'S5 repetidas: %', r; end if;
   if (r->>'valor_documentado')::numeric <> 300 or r->'fiscal'->>'base' is distinct from 'grupo' or r->'fiscal'->>'situacao' is distinct from 'fecha'
      or (r->'fiscal'->>'qtd')::int <> 1 then raise exception 'S5 conta uma vez: %', r; end if;
   insert into financeiro_lancamento_documentos (cliente_id, lancamento_id, nome, especie, numero, valor_documento, emitente_id, emitente_documento)

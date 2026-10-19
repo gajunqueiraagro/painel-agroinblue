@@ -161,7 +161,7 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, clienteId, onAnex
         {faixa?.map((p) => (
           <span key={p.chave} className="inline-flex items-baseline gap-[5px] whitespace-nowrap" data-testid={`faixa-${p.chave}`}>
             <span className="text-[11px] font-medium tabular-nums">{p.texto}</span>
-            <span className={`text-[11px] font-medium ${p.tom === 'ok' ? 'text-emerald-600' : 'text-amber-700'}`}>{p.veredito}</span>
+            <span className={`text-[11px] font-medium ${p.tom === 'ok' ? 'text-emerald-600' : p.tom === 'info' ? 'text-muted-foreground' : 'text-amber-700'}`}>{p.veredito}</span>
           </span>
         ))}
       </div>

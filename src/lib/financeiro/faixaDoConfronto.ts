@@ -8,7 +8,7 @@
 import type { Confronto, ConfrontoFiscal, ConfrontoPagamento } from '@/hooks/useLancamentoDocumentos';
 import { formatMoeda } from '@/lib/calculos/formatters';
 
-export type TomDaFaixa = 'ok' | 'difere' | 'aviso';
+export type TomDaFaixa = 'ok' | 'difere' | 'aviso' | 'info';
 export interface PedacoDaFaixa {
   /** o que foi conferido, com os valores ("Nota fiscal R$ 9.000,00 · parcelas da compra somam R$ 9.000,00") */
   texto: string;
@@ -57,7 +57,12 @@ export function faixaDoConfronto(c: Confronto | null): PedacoDaFaixa[] | null {
   if (c.fiscal) pedacos.push(pedacoFiscal(c.fiscal, c.valorLancamento));
   for (const p of c.pagamentos) pedacos.push(pedacoPagamento(p));
   for (const r of c.repetidas) {
-    pedacos.push({ chave: `rep-${r.numero}`, texto: `nota ${r.numero} registrada ${r.vezes} vezes`, veredito: '— cancele uma', tom: 'aviso' });
+    /* FIN-DOC-SOMA-02a — a nota que está na OC e no lançamento é a MESMA nota por dois caminhos: conta uma vez e não se manda cancelar */
+    if (r.tipo === 'oc_e_lancamento') {
+      pedacos.push({ chave: `rep-${r.numero}`, texto: `mesma nota ${r.numero} na OC e no lançamento`, veredito: '· conta uma vez', tom: 'info' });
+    } else {
+      pedacos.push({ chave: `rep-${r.numero}`, texto: `nota ${r.numero} registrada ${r.vezes} vezes`, veredito: '— cancele uma', tom: 'aviso' });
+    }
   }
   return pedacos;
 }

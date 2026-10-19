@@ -131,7 +131,9 @@ export interface ConfrontoFiscal {
   situacao: 'fecha' | 'falta' | 'passa';
 }
 export interface ConfrontoPagamento { documentoId: string; especie: string; numero: string | null; valor: number; diferenca: number; confere: boolean }
-export interface NotaRepetida { numero: string; vezes: number }
+/** FIN-DOC-SOMA-02a — 'duplicada' = duas linhas do mesmo caminho (cancele uma); 'oc_e_lancamento' = a MESMA nota uma vez na OC e
+ *  uma no lançamento (não se manda cancelar: cancelar pelo lançamento a linha da OC cancela na OC). */
+export interface NotaRepetida { numero: string; vezes: number; tipo: 'duplicada' | 'oc_e_lancamento' }
 
 export interface LancDocPayload {
   /**
@@ -356,7 +358,7 @@ function daPagamento(p: Json): ConfrontoPagamento[] {
 }
 function daRepetida(r: Json): NotaRepetida[] {
   if (!ehObjeto(r) || typeof r.numero !== 'string') return [];
-  return [{ numero: r.numero, vezes: Number(r.vezes ?? 0) }];
+  return [{ numero: r.numero, vezes: Number(r.vezes ?? 0), tipo: r.tipo === 'oc_e_lancamento' ? 'oc_e_lancamento' : 'duplicada' }];
 }
 
 /** O envelope do banco → o que a tela lê. Ausente vira `null`, nunca zero. */
