@@ -135,16 +135,16 @@ export const seloDeIguais = (n: number): string => (n > 1 ? `${n} iguais` : '');
  * cada um ganha um final fixo, que não corta: o fim do CNPJ/CPF ("…0007-69") ou "sem CNPJ". Cadastro inativo leva a marca
  * "inativo". Nasce da Vera: "Lineagro … AS" (inativo) e "Lineagro … S.A." apareciam no filtro com o mesmo começo de nome. */
 
-/** Prefixos que o sistema antigo pôs no nome (medido em 19/10: só o "Pec.3M-", 192 cadastros, um cliente). */
-export const PREFIXOS_DO_SISTEMA_ANTIGO: readonly RegExp[] = [/^pec\.3m-\s*/];
-
 /** Sufixos societários que não distinguem um cadastro do outro ("S.A." x "AS" x "SA", "Ltda", "ME"…). */
 const SUFIXO_SOCIETARIO = /\b(s a|sa|as|ltda|me|epp|eireli|cia)\b/g;
 
-/** O nome para dizer "parece o mesmo": sem acento e caixa, sem o prefixo do sistema antigo, sem pontuação e sem sufixo societário. */
+/**
+ * O nome para dizer "parece o mesmo": sem acento e caixa, sem pontuação e sem sufixo societário.
+ * ⚠ O PREFIXO "Pec.3M-" FICA NA CHAVE (Gabriel 19/10/2026): ele marca o fornecedor pago POR RATEIO, com a nota fiscal no nome do
+ *   Higino e a Vera pagando a parte dela — "Pec.3M-X" e "X" são cadastros diferentes de propósito, nunca "parecidos".
+ */
 export function chaveDoNomeComparado(nome: string | null | undefined): string {
-  let n = normalizarNome(nome);
-  for (const p of PREFIXOS_DO_SISTEMA_ANTIGO) n = n.replace(p, '');
+  const n = normalizarNome(nome);
   return n.replace(/[^a-z0-9 ]/g, ' ').replace(SUFIXO_SOCIETARIO, ' ').replace(/\s+/g, ' ').trim();
 }
 

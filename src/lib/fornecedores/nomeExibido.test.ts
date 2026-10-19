@@ -1,6 +1,7 @@
 /**
  * FORN-NOME-EXIBIDO-01 (Gabriel 19/10/2026) — uma regra de nome exibido: a razão social sempre; entre os parecidos da mesma lista,
- * o fim do CNPJ/CPF ou "sem CNPJ"; o inativo marcado. Caso real (sintético): os três Lineagro da Vera no filtro de Lançamentos.
+ * o fim do CNPJ/CPF ou "sem CNPJ"; o inativo marcado. Caso real (sintético): os três Lineagro da Vera no filtro de Lançamentos
+ * — o "Pec.3M-" é outro cadastro de propósito (rateio) e não ganha final.
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -18,12 +19,17 @@ const LINEAGRO = [
 ];
 
 describe('o nome comparado', () => {
-  it('ignora acento, caixa, pontuação, sufixo societário e o prefixo do sistema antigo', () => {
+  it('ignora acento, caixa, pontuação e sufixo societário', () => {
     const k = chaveDoNomeComparado('Lineagro Produtos Agropecuarios AS');
     expect(k).toBe('lineagro produtos agropecuarios');
     expect(chaveDoNomeComparado('Lineagro Produtos Agropecuários S.A.')).toBe(k);
-    expect(chaveDoNomeComparado('Pec.3M-Lineagro Produtos Agropecuários')).toBe(k);
     expect(chaveDoNomeComparado('Cleodir Supermercados Eireli-EPP')).toBe('cleodir supermercados');
+  });
+  it('"Pec.3M-X" e "X" NÃO são parecidos: o prefixo marca o pagamento por rateio (NF no nome do Higino)', () => {
+    expect(chaveDoNomeComparado('Pec.3M-Lineagro Produtos Agropecuários')).not.toBe(chaveDoNomeComparado('Lineagro Produtos Agropecuários S.A.'));
+    expect(chaveDoNomeComparado('Pec.3M-Higino Hernandes Neto')).not.toBe(chaveDoNomeComparado('Higino Hernandes Neto'));
+    /* dois do MESMO lado continuam comparáveis */
+    expect(chaveDoNomeComparado('Pec.3M-Cleodir Supermercados Eireli-EPP')).toBe(chaveDoNomeComparado('Pec.3M-Cleodir Supermercados'));
   });
   it('não junta nomes diferentes nem come pedaço de palavra', () => {
     expect(chaveDoNomeComparado('Casas Bahia')).toBe('casas bahia');
@@ -46,7 +52,7 @@ describe('os rótulos de uma lista', () => {
     const r = rotulosDosFornecedores(LINEAGRO);
     expect(r.get('a')).toMatchObject({ nome: 'Lineagro Produtos Agropecuarios AS', final: 'sem CNPJ', inativo: true });
     expect(r.get('b')).toMatchObject({ final: '…0007-69', inativo: false });
-    expect(r.get('c')).toMatchObject({ final: 'sem CNPJ', inativo: false });
+    expect(r.get('c')).toMatchObject({ final: null, inativo: false });
     expect(r.get('d')).toMatchObject({ final: null, inativo: false });
     expect(sufixoDoRotulo(r.get('a'))).toBe('sem CNPJ · inativo');
     expect(sufixoDoRotulo(r.get('d'))).toBe('');
