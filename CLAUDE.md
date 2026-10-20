@@ -4275,7 +4275,8 @@ docs/historico/frentes-ate-2026-09-29.md.)
     · O status do extrato le' o MODULO da soma aplicada; o resumo ganha `soma_extratos_com_sinal`, `soma_lancamentos_com_sinal`,
       `diferenca_com_sinal` e `sinal_misto`. "Desfazer bloco" desfaz tudo, o reembolso inclusive.
     · TELA (`CasarBlocoModal`): Soma dos Pix / Soma dos lançamentos / Diferença COM SINAL sempre que ha' selecao — os numeros do banco;
-      com recusa (sem resposta), a soma da SELECAO em centavos, so' para mostrar (`somasComSinal`, `title` "soma da seleção"); a recusa
+      com recusa (sem resposta), a soma da SELECAO em centavos, so' para mostrar (`somasComSinal`, `title` "soma da seleção" — DESVIO
+      APROVADO pelo Gabriel em 20/10/2026: e' a unica soma da tela, nunca decide nada); a recusa
       a 11px, sem o prefixo do codigo (`fraseDaRecusa`); o historico do banco ROLA na celula (sem "…"); datas dd/mm/aaaa; o rodape diz
       onde desfazer (`ONDE_DESFAZER_BLOCO`: menu "Ações" (⋯) da linha do bloco › Desfazer bloco). Bancada `tela=casar-bloco` (`&v=recusa`)
       nos sete tamanhos do consorcio.
@@ -4285,7 +4286,29 @@ docs/historico/frentes-ate-2026-09-29.md.)
     `vinculo_posterior` (NFs de mandioca do NJ) e 3 pela guarda FIN-CONCILIADO-NAO-REBAIXA (lancamento com outro vinculo vivo: o desfazer
     nao devolve o status). `conc_blocos_01_test`, `mandioca_retencao_nf_01_test` e `conc_parcial_um_estado_01_test` caem IGUAL com o corpo
     antigo (deriva do dado / guarda de 12/10).
-    ⚠ NAO PROVADO: nada com login no app real (bancada) · nenhum bloco de sinal misto gravado em dado real (o 002122 espera o OK do Gabriel).
+    · CASO 002122 GRAVADO em 20/10/2026 com o OK do Gabriel (migration `supabase/migrations/20261027203900_conc_bloco_002122_parcela1.sql`, md5
+      do arquivo 3e1dcddbaaf732174002122ab16fe3be, ledger = arquivo): competencia da parcela 1 (e489aac6, fbdb6092) de 17/07 para 17/06; o bloco
+      (PIX 19/06 −2.893,37 -> 2.399,35 + 494,02; reembolso 23/06 +89,71 -> −89,71 no e489aac6), os dois realizados em 19/06; o e726069c
+      cancelado ("duplicado pela parcela 4 do consórcio 002122"); os quatro cancelados antigos intocados. Provado: consorcio 3 pagas, a pagar
+      215.882,04; Bradesco jun/26 conciliado (0,00); DRE pecuaria jun/26 juros 494,02 (era em julho) e investimento 1.697,26 (era 4.500,92).
+    ⚠ PENDENCIAS CONHECIDAS, PARA A AUDITORIA-01 (decisao do Gabriel, 20/10: nao mexer agora): os 6 blocos que nao se desfazem (3 do NJ
+      mandioca por vinculo posterior, 3 pela trava de lancamento casado) e os 3 testes antigos do banco que falham com a versao antiga e com
+      a nova (`conc_blocos_01_test`, `mandioca_retencao_nf_01_test`, `conc_parcial_um_estado_01_test`).
+    ⚠ NAO PROVADO: nada com login no app real (bancada).
+- ⚠ A COMPETENCIA DOS LANCAMENTOS DA PARCELA ACOMPANHA O VENCIMENTO AJUSTADO (CONC-BLOCO-SINAL-MISTO-01 item 2, Gabriel 20/10/2026; migration
+  `supabase/migrations/20261027203800_parcela_competencia_acompanha_vencimento.sql`, md5 do arquivo bce3ea27864c17a7f56c4129436a8c21 — APLICADA no
+  proto em 20/10/2026, ledger = arquivo). O dono e' o motor das parcelas de credito e consorcio, `fn_reconciliar_parcela_financiamento`
+  (c77919c7… -> 1df9f3c1…, patch guardado por md5): quando ele leva o vencimento novo da parcela ao lancamento (editar parcelas, o lapis,
+  regerar, prorrogar, o consorcio), leva a competencia JUNTO, no mesmo UPDATE; `ano_mes` pelo gatilho; trilha = a operacao do gesto
+  (`financiamento_parcelas_operacoes`) + o `audit_log` do lancamento. Lancamento cujo vencimento nao muda NAO e' tocado. Isto revoga, so' para
+  o vencimento que muda, o "o que ja' existe o motor nao toca" do FIN-AMORT-COMPETENCIA-VENC-01. Teste
+  `supabase/tests/parcela_competencia_acompanha_vencimento_test.sql` (V1–V2) OK no vivo; sem a migration cai em V1.
+  ⚠ COMPRA PARCELADA FICOU FORA (divergencia reportada, decisao do Gabriel pendente): o escritor e' `fn_parcelamento_editar_parcelas`, e a
+    competencia da parcela de compra e' a DATA DA COMPRA em 280 de 280 lancamentos (20/10) — seguir o vencimento mudaria essa regra.
+  ⚠ FASE 0 (20/10, so' contagem, nada corrigido; lista em ~/agroinblue-local/competencia-vencimento-2026-10-20/, fora do repo): 741 lancamentos
+    vivos de parcela viva com competencia ≠ vencimento — compra parcelada 280 (todos na data da compra: NJ 175, Vera 63, Agnaldo 42);
+    credito 461, 424 deles na data do contrato (as amortizacoes que o Gabriel decidiu manter em 16/10: NJ 150, Santa Rita 108, Agnaldo 91,
+    Vera 42, Raul 25, RRCC 8) e 37 com outra data (Santa Rita 22, Agnaldo 9, NJ 5, RRCC 1); consorcio 0 depois do 002122.
 - ⚠ NA CONFERENCIA, EXTRATO CUJOS VINCULOS SOMAM MENOS QUE O BANCO NAO E' LINHA CASADA: "!", "Parcial" E A FALTA ESCRITA
   (CONC-SPLIT-FILHO-CANCELADO-01 passo 1, Gabriel 11/10/2026, so' tela, `EspelhoConciliacaoTab.tsx`). Nasce da Santa Rita (BB,
   10/08/2026, extrato a4699176 de −13.760,35): era um desmembramento da Mesa em tres filhos; um (10.219,33) foi cancelado pelo
