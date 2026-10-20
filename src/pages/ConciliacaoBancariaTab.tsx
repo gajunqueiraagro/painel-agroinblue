@@ -41,6 +41,7 @@ import { COR_SINAL } from '@/lib/oc/contaCorrente';
 import { buildUnifiedSaldos, type ContaSaldoRef, type SaldoV2SourceRow, type SaldoLegacySourceRow } from '@/lib/financeiro/saldosBancarios';
 import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
 import { mesUnico } from '@/v2/lib/periodo';
+import { estadoDoSlotOfx, TITULO_OFX_COM_SALDO, TITULO_OFX_SEM_SALDO, type EstadoDoSlotOfx } from '@/lib/conciliacao/slotOfx';
 // PR-MOS-2 — LotesExcelTab (Referências Operacionais antigas) desacoplado da aba Enriquecer (legado).
 
 /* ── Types ── */
@@ -337,9 +338,11 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
      (`tem_extrato`), e a leitura deixou de existir. */
   const [contasComOfx, setContasComOfx] = useState<Map<string, Set<string>>>(new Map());
   const [contasComPdf, setContasComPdf] = useState<Map<string, Set<string>>>(new Map());
+  /* UI-SEM-CORTE-02 — as contas que importam OFX (qualquer mês): com extrato no mês e sem saldo declarado, o ícone fica vazado. */
+  const [contasQueImportamOfx, setContasQueImportamOfx] = useState<Set<string>>(new Set());
   const carregarIndicadoresSaldo = useCallback(async () => {
     if (!clienteId) return;
-    const [{ data: imps }, { data: docs }] = await Promise.all([
+    const [{ data: imps }, { data: docs }, { data: ofxs }] = await Promise.all([
       supabase.from('financeiro_importacoes_v2')
         .select('conta_bancaria_id, saldo_declarado_data')
         .eq('cliente_id', clienteId)
@@ -355,6 +358,13 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
         .eq('cancelado', false)
         .gte('ano_mes', `${ano}-01`)
         .lte('ano_mes', `${ano}-12`),
+      supabase.from('financeiro_importacoes_v2')
+        .select('conta_bancaria_id')
+        .eq('cliente_id', clienteId)
+        .ilike('tipo_arquivo', '%ofx%')
+        .is('cancelado_em', null)
+        .is('cancelada_em', null)
+        .neq('status', 'cancelada'),
     ]);
     const porMes = (linhas: { conta: string | null; mes: string | null }[]) => {
       const m = new Map<string, Set<string>>();
@@ -369,6 +379,7 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     };
     setContasComOfx(porMes((imps ?? []).map(i => ({ conta: i.conta_bancaria_id, mes: i.saldo_declarado_data }))));
     setContasComPdf(porMes((docs ?? []).map(d => ({ conta: d.conta_bancaria_id, mes: d.ano_mes }))));
+    setContasQueImportamOfx(new Set((ofxs ?? []).map(o => o.conta_bancaria_id).filter((c): c is string => !!c)));
 
   }, [clienteId, ano]);
 
@@ -1438,7 +1449,11 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
                         onEdit={()=>handleEditSaldo(anoMesSel,s.conta.id,saldosDaLinha(s.linha).saldo_extrato)}
                         canEdit={canEditSaldoFinal(anoMesSel)}
                         showSaldoAlert={anoMesSel === s.conta.mes_inicio && s.conta.saldo_inicial_oficial === null}
-                        temOfx={contasComOfx.get(anoMesSel)?.has(s.conta.id) ?? false}
+                        estadoOfx={estadoDoSlotOfx({
+                          comSaldoNoMes: contasComOfx.get(anoMesSel)?.has(s.conta.id) ?? false,
+                          importaOfx: contasQueImportamOfx.has(s.conta.id),
+                          temExtratoNoMes: s.linha.tem_extrato,
+                        })}
                         temPdf={contasComPdf.get(anoMesSel)?.has(s.conta.id) ?? false}
                         onClassificar={() => setSemClassificacaoDe({ contaId: s.conta.id })} />
                       ))}
@@ -1928,15 +1943,15 @@ interface SaldoContaRowProps {
   onEdit: () => void;
   canEdit: boolean;
   showSaldoAlert?: boolean;
-  /** O mês desta conta tem OFX importado com saldo declarado. */
-  temOfx?: boolean;
+  /** UI-SEM-CORTE-02 — 'cheio' (OFX com saldo do banco no mês) · 'vazado' (OFX com movimentos, sem saldo) · null. */
+  estadoOfx?: EstadoDoSlotOfx;
   /** O mês desta conta tem extrato (PDF/imagem) anexado. */
   temPdf?: boolean;
   /** Abre o modal "Sem classificação" desta conta (CONC-SEM-CLASSIFICACAO-01). */
   onClassificar: () => void;
 }
 
-function SaldoContaRow({data, isActive, isDimmed, onClick, onEdit, canEdit, showSaldoAlert, temOfx, temPdf, onClassificar}: SaldoContaRowProps) {
+function SaldoContaRow({data, isActive, isDimmed, onClick, onEdit, canEdit, showSaldoAlert, estadoOfx = null, temPdf, onClassificar}: SaldoContaRowProps) {
   /* ⚠ A LINHA É A DO DONO — PR-CONC-SALDO-UMA-REGUA-02 (D4): o status (o ponto) e os motivos (o `title`).
      ⚠ OS TRÊS NÚMEROS SÃO OS DA CONTA, o `proprio` do dono (PR-CONC-INTERNA-SEPARADA-01b, D2): a mãe e a interna têm cada uma
      a sua linha e o seu saldo; a marca "· conferida com X" diz que o mês delas só fecha junto. O status é o do par. */
@@ -2004,9 +2019,13 @@ function SaldoContaRow({data, isActive, isDimmed, onClick, onEdit, canEdit, show
           <span className="w-[29px] shrink-0 text-right text-[9.5px] text-muted-foreground" data-testid="slot-data">
             {ext !== null && linha.saldo_extrato_data ? `${linha.saldo_extrato_data.slice(8, 10)}/${linha.saldo_extrato_data.slice(5, 7)}` : ''}
           </span>
-          <span className="inline-flex h-[11px] w-[11px] shrink-0 text-primary" data-testid="slot-ofx"
-            title={temOfx ? 'Extrato OFX importado' : undefined} aria-label={temOfx ? 'Extrato OFX importado' : undefined}>
-            {temOfx && <FileText className="h-[11px] w-[11px]" aria-hidden />}
+          {/* UI-SEM-CORTE-02 — dois estados no MESMO lugar de 11px: cheio (o banco informou o saldo) e vazado/cinza (só movimentos). */}
+          <span className={`inline-flex h-[11px] w-[11px] shrink-0 ${estadoOfx === 'vazado' ? 'text-muted-foreground' : 'text-primary'}`} data-testid="slot-ofx"
+            data-estado={estadoOfx ?? 'vazio'}
+            title={estadoOfx === 'cheio' ? TITULO_OFX_COM_SALDO : estadoOfx === 'vazado' ? TITULO_OFX_SEM_SALDO : undefined}
+            aria-label={estadoOfx === 'cheio' ? TITULO_OFX_COM_SALDO : estadoOfx === 'vazado' ? TITULO_OFX_SEM_SALDO : undefined}>
+            {estadoOfx === 'cheio' && <FileText className="h-[11px] w-[11px]" fill="currentColor" fillOpacity={0.18} aria-hidden />}
+            {estadoOfx === 'vazado' && <FileText className="h-[11px] w-[11px]" strokeDasharray="2 1.5" aria-hidden />}
           </span>
           <span className="inline-flex h-[11px] w-[11px] shrink-0 text-purple-600" data-testid="slot-pdf"
             title={temPdf ? 'PDF do extrato anexado' : undefined} aria-label={temPdf ? 'PDF do extrato anexado' : undefined}>
