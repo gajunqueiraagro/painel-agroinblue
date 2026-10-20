@@ -383,7 +383,9 @@ export async function gerarFinanceiroBoitel(
     });
   }
 
-  const insertsComGrupo = inserts.map(ins => ({ ...ins, grupo_geracao_id: grupoId, sem_movimentacao_caixa: false }));
+  /* CRIAR-DO-EXTRATO-01 — todo lançamento nasce com vencimento: a data da parcela/pagamento (sem ela, a competência). */
+  const insertsComGrupo = inserts.map(ins => ({ ...ins, data_vencimento: ins.data_vencimento ?? ins.data_pagamento ?? ins.data_competencia,
+    grupo_geracao_id: grupoId, sem_movimentacao_caixa: false }));
 
   const { error } = await supabase.from('financeiro_lancamentos_v2').insert(insertsComGrupo);
   if (error) {
