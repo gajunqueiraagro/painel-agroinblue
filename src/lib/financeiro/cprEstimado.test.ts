@@ -47,10 +47,10 @@ describe('o dono reparte o total a pagar em confirmado + estimado, em centavos',
       expect(r.aReceberConfirmado.qtd + r.aReceberEstimado.qtd).toBe(r.total.receber.contas);
     }
   });
-  it('a caixa "Incluir vencidos" desligada tira a vencida das duas fatias (é o recorte do rodapé)', () => {
+  it('CPR-AJUSTES-20-10b: num período com hoje a caixa "Incluir vencidos" não tira a vencida das fatias (ela entra no saldo e no rodapé)', () => {
     const r = recorte(false, ESTIMADAS);
-    expect(r.aPagarEstimado).toEqual({ valor: 33340, qtd: 2 });
-    expect(r.aPagarConfirmado).toEqual({ valor: 125010, qtd: 2 });
+    expect(r.aPagarEstimado).toEqual(recorte(true, ESTIMADAS).aPagarEstimado);
+    expect(r.aPagarConfirmado).toEqual(recorte(true, ESTIMADAS).aPagarConfirmado);
   });
   it('conta que NÃO é de recorrência é confirmada; sem o conjunto, tudo é confirmado e o estimado é zero', () => {
     expect(contaEstimadaCpr({ id: 'avulsa' }, ESTIMADAS)).toBe(false);
