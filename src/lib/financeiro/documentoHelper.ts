@@ -292,7 +292,7 @@ export function docDaLinha(
 /* ── FIN-FILTRO-DOC-01 — o FILTRO "Documento" da lista: a MESMA fonte da coluna DOC. (o campo próprio do lançamento + os documentos
    VIVOS ligados a ele — os da OC e os das parcelas da mesma nota vêm pela `vw_lancamento_documentos`) ───────────────────────────── */
 
-export const PLACEHOLDER_FILTRO_DOCUMENTO = 'Número do documento (NF, recibo, boleto) ou chave';
+export const PLACEHOLDER_FILTRO_DOCUMENTO = 'Nº ou chave';
 
 /** As palavras que dizem o TIPO na busca ("NF 910", "recibo"), no prefixo que a coluna escreve. */
 const TIPO_DA_PALAVRA: Readonly<Record<string, string>> = {
