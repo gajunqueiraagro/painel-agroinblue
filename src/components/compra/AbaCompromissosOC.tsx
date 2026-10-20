@@ -5,6 +5,7 @@ import { useOperacaoEstornoFinanceiro } from '@/hooks/useOperacaoEstornoFinancei
 import type { OcCompromissosApi, CompromissoResumo, ParcelaMaterializacao, CriarCompromissoPayload, ProgramarParcelaInput } from '@/hooks/useOcCompromissos';
 import { useReprogramarCompromissoLote } from '@/hooks/useReprogramarCompromissoLote';
 import { DialogoAtualizarCompromisso } from '@/components/compra/DialogoAtualizarCompromisso';
+import { DialogoDesfazerCompromisso } from '@/components/compra/DialogoDesfazerCompromisso';
 import { DesvincularOperacaoDialog } from '@/components/financeiro-v2/DesvincularOperacaoDialog';
 import { ReclassificarItemDialog } from '@/components/financeiro-v2/ReclassificarItemDialog';
 import { titulosDesvinculaveis } from '@/lib/oc/desvincularLancamento';
@@ -23,7 +24,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { executarDesfazerCompromisso, rolDoEstado, ErroDesfazer, type TituloADesfazer } from '@/lib/oc/desfazerCompromisso';
+import { rolDoEstado, type TituloADesfazer } from '@/lib/oc/desfazerCompromisso';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { SearchableSelect } from '@/components/ui/searchable-select';
@@ -694,11 +695,11 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
     nivel: 'materializacao' | 'programacao' | 'compromisso' | 'desfazer';
     programacaoId?: string; parcelaId?: string; compromissoId?: string; descricao: string;
     rol?: string[];
+    /** OC-DESFAZER-PREVISTO-01b — o cabeçalho do diálogo: "Abate 036 N · novilhas · 36 cab". */
+    identidade?: string;
   }>(null);
   const [estEtapa, setEstEtapa] = useState<1 | 2>(1);
   const [estMotivo, setEstMotivo] = useState('');
-  /** O que a cadeia fez e o que falta, quando o banco a recusou no meio. */
-  const [estResultado, setEstResultado] = useState<{ erro: string; feito: string[]; falta: string[] } | null>(null);
   /* ⚠ ESTADO PROPRIO, NAO `estorno.saving`. As guardas de Esc/clique-fora e o
      botao Voltar leem esta flag; se ela ficar presa em true o dialogo modal
      recusa QUALQUER fechamento e a pagina inteira fica inerte sob o overlay —
@@ -768,7 +769,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
   const [reclAlvo, setReclAlvo] = useState<CompromissoResumo | null>(null);
 
   const abrirEstorno = (alvo: NonNullable<typeof estAlvo>) => {
-    setEstMotivo(''); setEstEtapa(1); setEstResultado(null); setEstAlvo(alvo);
+    setEstMotivo(''); setEstEtapa(1); setEstAlvo(alvo);
   };
   const confirmarEstorno = async () => {
     if (!estAlvo || versao == null) return;
@@ -780,21 +781,6 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
         await estorno.cancelarProgramacao(versao, estAlvo.programacaoId, estMotivo.trim());
       } else if (estAlvo.nivel === 'compromisso' && estAlvo.compromissoId) {
         await estorno.cancelarCompromisso(versao, estAlvo.compromissoId, estMotivo.trim());
-      } else if (estAlvo.nivel === 'desfazer' && estAlvo.compromissoId && resumoOperacao?.operacaoId) {
-        /* ⚠ UM GESTO, UMA CHAMADA, UMA TRANSACAO — OC-CC-MODAL-FINANCEIRO-01: quem encadeia estornar ->
-           cancelar programacao -> cancelar compromisso e' o banco (`oc_desfazer_compromisso`), com um motivo
-           e um `estorno_id`. Recusa do banco: NADA foi desfeito, e o dialogo diz o motivo e o que falta. */
-        try {
-          const { feito } = await executarDesfazerCompromisso({
-            operacaoId: resumoOperacao.operacaoId, versao, compromissoId: estAlvo.compromissoId,
-            motivo: estMotivo, falta: estAlvo.rol ?? [],
-          });
-          toast.success(`Compromisso desfeito: ${feito.join(', ')}.`);
-          await ocApi.recarregar();
-        } catch (e) {
-          if (e instanceof ErroDesfazer) { setEstResultado({ erro: e.message, feito: e.feito, falta: e.falta }); }
-          throw e;
-        }
       }
       setEstAlvo(null);
     } catch {
@@ -1027,6 +1013,12 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
      manual permitia), a cadeia ia ate' o fim e quatro linhas diferentes liam "principal". */
   const rotuloCompromisso = (c: CompromissoResumo): string =>
     previsaoDe(c)?.rotulo ?? c.descricao ?? identidadeCompromisso(c) ?? componenteAdicional(c) ?? (c.natureza ?? '—');
+  /* OC-DESFAZER-PREVISTO-01b — a identidade no cabeçalho dos diálogos de desfazer e atualizar: o rótulo do compromisso e, quando
+     ele é de um lote, a categoria e as cabeças ("Abate 036 N · novilhas · 36 cab"). */
+  const identidadeDoDialogo = (c: CompromissoResumo): string => {
+    const lote = c.loteId ? lotes.find(l => l.id === c.loteId) : null;
+    return [rotuloCompromisso(c), lote?.categoria ?? null, lote?.qtd != null ? `${lote.qtd} cab` : null].filter(Boolean).join(' · ');
+  };
 
   /**
    * O SUBCENTRO SUGERIDO — e ele depende do LADO da operação.
@@ -1509,7 +1501,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
             desabilitado={conciliadoNoCompromisso || !g.pode || estRodando}
             onEscolher={() => abrirEstorno({ nivel: 'desfazer', compromissoId: c.compromissoId ?? undefined,
               descricao: `o compromisso ${c.natureza ?? ''}/${c.componente ?? ''} de ${brl(c.valorCompromisso)}`,
-              rol: rolDoDesfazer(c) })} />
+              rol: rolDoDesfazer(c), identidade: identidadeDoDialogo(c) })} />
         </DropdownMenuContent>
       </DropdownMenu>
     );
@@ -1840,7 +1832,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
                           title={g.motivo || undefined}
                           onSelect={() => abrirEstorno({ nivel: 'desfazer', compromissoId: c.compromissoId ?? undefined,
                             descricao: `o compromisso ${c.natureza ?? ''}/${c.componente ?? ''} de ${brl(c.valorCompromisso)}`,
-                            rol: rolDoDesfazer(c) })}>
+                            rol: rolDoDesfazer(c), identidade: identidadeDoDialogo(c) })}>
                           Desfazer compromisso
                         </DropdownMenuItem>
                         {/* ⚠ `text-zinc-300`, NAO `text-muted-foreground` — OC-MOTIVO-UNICO-01, medido na tela:
@@ -2431,7 +2423,21 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
       {/* ⚠ `onOpenChange` so fecha quando NAO esta rodando: Esc e clique fora ficam
           inertes durante a execucao. Fechar no meio deixaria o usuario sem saber se
           o desfazimento chegou a acontecer. Mesmo padrao de 376aa17d. */}
-      {estAlvo && (
+      {/* OC-DESFAZER-PREVISTO-01b — o "Desfazer compromisso" tem o seu diálogo (460x344, simula ao abrir, bloqueio com quem trava,
+          agendado com confirmação, motivo guardado). Os outros níveis seguem neste. */}
+      {estAlvo?.nivel === 'desfazer' && estAlvo.compromissoId && resumoOperacao?.operacaoId && versao != null && (
+        <DialogoDesfazerCompromisso
+          operacaoId={resumoOperacao.operacaoId} compromissoId={estAlvo.compromissoId} versao={versao}
+          identidade={estAlvo.identidade ?? estAlvo.descricao} rol={estAlvo.rol ?? []} tipoOperacao={tipoOperacao}
+          onFechar={() => setEstAlvo(null)}
+          onAbrirLancamento={(id) => { setEstAlvo(null); editarTitulo(id); }}
+          onDesfeito={(feito) => {
+            setEstAlvo(null);
+            toast.success(`Compromisso desfeito: ${feito.join(', ')}.`);
+            void ocApi.recarregar();
+          }} />
+      )}
+      {estAlvo && estAlvo.nivel !== 'desfazer' && (
         <Dialog open onOpenChange={(o) => { if (!o && !estRodando) setEstAlvo(null); }}>
           <DialogContent className="sm:max-w-md"
             onInteractOutside={(e) => { if (estRodando) e.preventDefault(); }}
@@ -2440,7 +2446,6 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
               <DialogTitle className="text-[12px]">
                 {estAlvo.nivel === 'materializacao' ? 'Estornar lançamento'
                 : estAlvo.nivel === 'programacao' ? 'Cancelar programação'
-                : estAlvo.nivel === 'desfazer' ? 'Desfazer compromisso'
                 : 'Cancelar compromisso'}
               </DialogTitle>
               <DialogDescription className="text-[11px]">
@@ -2450,16 +2455,7 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
               </DialogDescription>
             </DialogHeader>
 
-            {estEtapa === 1 && estAlvo.nivel === 'desfazer' && (
-              <div className="text-[12px] space-y-1.5 leading-snug">
-                <p>Será desfeito {estAlvo.descricao}, nesta ordem:</p>
-                <ol className="list-decimal pl-5 space-y-0.5" data-rol="desfazer">
-                  {(estAlvo.rol ?? []).map(item => <li key={item}>{item}</li>)}
-                </ol>
-                <p className="text-muted-foreground">Um motivo só, registrado em cada passo.</p>
-              </div>
-            )}
-            {estEtapa === 1 && estAlvo.nivel !== 'desfazer' && (
+            {estEtapa === 1 && (
               <div className="text-[12px] space-y-1.5 leading-snug">
                 <p>Será desfeito: {estAlvo.descricao}.</p>
                 <p className="text-muted-foreground">A operação permanece aberta e o passo pode ser refeito.</p>
@@ -2475,15 +2471,6 @@ export function AbaCompromissosOC({ ocApi, bloqueado, clienteId, tipoOperacao, e
                 placeholder="Motivo (obrigatório)"
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm"
               />
-            )}
-            {/* ⚠ O BANCO RECUSOU (E3: titulo realizado, conciliado, liquidacao ativa) — a cadeia e' uma transacao:
-                nada foi desfeito. Diz o motivo e o que falta; resolvido, o mesmo "Confirmar" tenta de novo. */}
-            {estResultado && (
-              <div className="rounded-md border border-amber-400 bg-amber-50 dark:bg-amber-950/30 px-2 py-1.5 text-[11px] leading-snug text-amber-800 dark:text-amber-200" data-resultado="desfazer">
-                <p className="font-medium">{estResultado.erro}</p>
-                {estResultado.feito.length > 0 && <p>Já desfeito: {estResultado.feito.join(', ')}.</p>}
-                {estResultado.falta.length > 0 && <p>Falta: {estResultado.falta.join(', ')}.</p>}
-              </div>
             )}
 
             <DialogFooter className="gap-2">
