@@ -76,6 +76,8 @@ function doXml(): DoXml {
   return { proposta: p.proposta, emitenteNome: lido.nota.emitente.nome, emitenteDocumento: lido.nota.emitente.documento, resolucao, ocorrencias: [], arquivo: arquivoXmlDaNota(bytes, 'NFe-12345.XML') };
 }
 const prefillSalvavel = () => ({ ...prefillDaNota(doXml()), conta_bancaria_id: 'bb' });
+/* CRIAR-DO-EXTRATO-01 — o vencimento é obrigatório para SALVAR: as provas que gravam levam um. */
+const prefillComVencimento = () => ({ ...prefillSalvavel(), data_vencimento: '2026-10-30' });
 const LANCAMENTO = {
   id: 'lanc-1', cliente_id: 'cli', fazenda_id: 'f-pur', conta_bancaria_id: 'bb', data_competencia: '2026-09-10', data_pagamento: null,
   data_vencimento: '2026-10-10', valor: 1345.5, sinal: -1, tipo_operacao: '2-Saídas', status_transacao: 'programado',
@@ -308,7 +310,7 @@ describe('prova 4 — Esc cancela; conta inválida ao sair volta ao valor de ant
 
 describe('provas 5 e 6 — o que vai gravar', () => {
   it('durante a conta o modal segue com o valor ANTERIOR; depois de aplicar, o payload leva o resultado', async () => {
-    const m = montar({ prefill: prefillSalvavel(), documentosAntesDeSalvar: true });
+    const m = montar({ prefill: prefillComVencimento(), documentosAntesDeSalvar: true });
     await waitFor(() => expect(campo().value).toBe('16.238,00'));
     await waitFor(() => expect(botaoSalvar().hasAttribute('disabled')).toBe(false));
     digitar('16.238,00/2');
@@ -326,7 +328,7 @@ describe('provas 5 e 6 — o que vai gravar', () => {
     expect(JSON.stringify(m.onSave.mock.calls[0][0])).not.toContain('/2');
   });
   it('Salvar com conta INVÁLIDA aberta: o blur devolve o valor de antes, e é ele que a tela mostra e grava', async () => {
-    const m = montar({ prefill: prefillSalvavel(), documentosAntesDeSalvar: true });
+    const m = montar({ prefill: prefillComVencimento(), documentosAntesDeSalvar: true });
     await waitFor(() => expect(campo().value).toBe('16.238,00'));
     await waitFor(() => expect(botaoSalvar().hasAttribute('disabled')).toBe(false));
     digitar('16.238,00/0');
@@ -337,7 +339,7 @@ describe('provas 5 e 6 — o que vai gravar', () => {
     expect(m.onSave.mock.calls[0][0]).toMatchObject({ valor: 16238 });
   });
   it('sem conta, o payload é o de sempre', async () => {
-    const m = montar({ prefill: prefillSalvavel(), documentosAntesDeSalvar: true });
+    const m = montar({ prefill: prefillComVencimento(), documentosAntesDeSalvar: true });
     await waitFor(() => expect(campo().value).toBe('16.238,00'));
     await waitFor(() => expect(botaoSalvar().hasAttribute('disabled')).toBe(false));
     fireEvent.click(botaoSalvar());

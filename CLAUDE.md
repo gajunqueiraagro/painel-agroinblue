@@ -10220,6 +10220,51 @@ curta nas secoes de regras) e a pendencia (na FILA); o bloco inteiro vai para do
   estimado devolve {ok: false, motivo 'parcela_pos', frase "Parcela de contrato pós-fixado: case pelo modal da linha do extrato para gravar o
   juro real."} (a tela a escreve pelo `MOTIVO_CASAR_LABEL`); o dono (c15da84d… -> 57ca18e8…) liga `app.pos_pagar = 'on'` (local) so' em volta da
   chamada e a desliga logo depois. Teste `supabase/tests/fin_pos_fixado_01b_guarda_test.sql` (G1–G3) OK no vivo; sem a guarda cai em G1.
+- ⚠ TODO LANCAMENTO NASCE COM VENCIMENTO (CRIAR-DO-EXTRATO-01, Gabriel 20/10/2026). O caso: Vera, Itau Personalite, 05/09/2025, "REND
+  PAGO APLIC AUT MAIS" +1,09 — o "Criar lancamento pela diferenca" abria com um bloco de 5 linhas que fazia o modal rolar, e o vencimento
+  VAZIO. (a) A REFERENCIA de onde o lancamento nasceu e' UMA faixa de 22px (`FaixaDaReferencia`, dona do texto: "Do extrato: <historico>
+  · dd/mm/aaaa · R$ valor · <conta>" / "Da planilha:" / "Da referência:"), na LINHA DAS ABAS do modal, a' direita delas, com a Geral
+  aberta (nao soma altura ao corpo: a 750x520 o corpo ja' nao tinha 2px de folga); o texto longo ROLA na faixa, o ⓘ tem observacao,
+  data e valor originais e "Use como referência; fornecedor, fazenda e classificação são escolhidos por você.". Sem referencia, a barra
+  de abas e' a de sempre, no' por no'. (b) VENCIMENTO OBRIGATORIO em todo Novo/Editar (fora do modo OC, do parcelado e do campo
+  travado): vazio nao salva, rotulo e borda em vermelho e "Informe o vencimento." ao lado do Salvar. Criar do extrato abre com
+  vencimento = data do pagamento. (c) TODO GERADOR grava vencimento: o proprio quando ha'; senao o PAGAMENTO; sem pagamento, a
+  COMPETENCIA. Tela: consumo de rebanho, paineis de Abate/Compra/Venda e `gerarFinanceiroCompra` (a data da parcela), boitel,
+  captacao (= data do contrato) e destinacao do financiamento (= competencia: nao tem pagamento), importador incremental, e o writer
+  comum `buildInsertRow` / update (`form.data_vencimento || data_pagamento || data_competencia`). Banco (20261028100500, cada funcao
+  reescrita da PROPRIA definicao viva trocando so' o trecho, com a conta de 1 ocorrencia): `_fn_financiamento_salvar_cabecalho_exec`
+  (INSERT e o UPDATE que reativa a captacao), `fn_classificacao_split_substituir` (proposta > consolidado > pagamento > competencia),
+  `fn_promover_staging` (pagamento > competencia). O OFX antigo nao tem caminho vivo (ultimo em 25/08). Prova: `supabase/tests/
+  criar_do_extrato_01_test.sql` (T0 auto-teste: a varredura acha o gerador plantado sem vencimento; T1 nenhuma funcao do `public`
+  que insere em financeiro_lancamentos_v2 deixa de citar o vencimento).
+  · ABAIXO DE 900px O RESUMO LATERAL DO MODAL SAI (`max-[899px]:`): a 750/814 os cinco campos de data ficavam com 67–80px e cortavam o
+    rotulo com "…" — ja' antes deste bloco. O corpo tem 6px em cima (era 8).
+  · PARTE C, APLICADA no proto em 20/10. 20261028100600 — as tres funcoes que podiam gravar vencimento nulo num vivo:
+    `fn_reconciliar_parcela_financiamento` (o ajuste do vencimento: valor novo vazio mantem o da linha > data da parcela >
+    competencia; era `NULLIF(v_depois,'')`), `fn_extrato_desfazer_arquivo` (o desfazer do "OFX substituiu": vivo cuja foto tinha
+    vencimento nulo volta com foto > pagamento > competencia; cancelado restaura como estava) e `_fn_lancamento_programado_gravar`
+    (o escritor do LUCRO RURAL, chamado so' por `_fn_lr_sync_aplicar_exec` / `_fn_lr_sync_desfazer_exec`, que a tela Lucro Rural
+    alcanca por `fn_lr_sync_aplicar` / `fn_lr_sync_desfazer`: vencimento vazio e' RECUSADO com "Informe o vencimento."; o criar do
+    sync ja' pulava linha sem vencimento, o atualizar so' manda vazio se a linha da planilha perder a data). 20261028100610 — backfill
+    dos 16 vivos sem vencimento (NJ 7, Santa Rita 4, Agnaldo 3, Vera 1, RRCC 1; movimentacao_rebanho 5, mesa_split 4, conciliacao 2,
+    importacao_incremental 2, ofx 2, financiamento 1) com vencimento = pagamento e trilha propria (`financeiro_vencimento_backfill_
+    cde01`, motivo "vencimento = pagamento — CRIAR-DO-EXTRATO-01"); depois `ck_lancamento_v2_vencimento_vivo` = `cancelado OR
+    data_vencimento IS NOT NULL`, NOT VALID e VALIDATE (validada). Os 13.521 CANCELADOS sem vencimento ficam como estao (decisao do
+    Gabriel): um CHECK puro nao validaria e recusaria qualquer UPDATE neles. Ledger = arquivo nas tres (100500, 100600, 100610).
+    Provas no vivo: `criar_do_extrato_01c_test.sql` (trava validada; 0 vivos sem vencimento; INSERT e UPDATE sem vencimento
+    recusados, 23514) e `criar_do_extrato_01d_test.sql` (as tres funcoes; o Lucro Rural chamado de verdade). Mutacao: o NULLIF de
+    volta na reconciliacao derruba o D1.
+  · SUITE: 5936 passando (+15: `criarDoExtrato01.test.tsx`), 22 skipped, as 3 falhas de sempre. Testes ajustados ao contrato novo:
+    novoDeXml (a nota a' vista recusa ate' o vencimento), modoOC e valorComConta (as provas que salvam levam vencimento; a foto do
+    modal regravada: +98 bytes = as classes `max-[899px]:` x2, `pt-1.5 pb-2` e o rotulo "Data vencimento *" com testid),
+    lancamentoCompacto (a classe do corpo).
+- ⚠ NAO HA RESTRICAO DE HORARIO PARA MIGRATION, DDL OU BACKFILL (Gabriel, regra corrigida em 17/10 e reafirmada em 20/10/2026, no
+  CRIAR-DO-EXTRATO-01). Aprovado se aplica NA HORA, no proto. Toda mencao anterior a "so' antes das 07h / depois das 20h", "DDL em
+  tabela quente fora do horario" ou "bloco das 20h05" neste arquivo esta' REVOGADA (as linhas antigas nao foram editadas: este bloco
+  so' acrescenta no fim). Em DDL de tabela quente: `lock_timeout` curto e, se der timeout, repetir — sem esperar horario.
+  · E O GATE DE TELA COMPLETO (`npm run check:ui-cortes`, sem `--so`) RODA ANTES DE TODO PUSH, nao so' as telas tocadas (Gabriel,
+    20/10/2026: a regra de numero partido do UI-SEM-CORTE-02 subiu medida so' nas telas tocadas e o gate completo ficou vermelho na
+    CPR). EXCECAO CONHECIDA, do Code 1 (CPR-SEM-CORTE-01): `cpr-ampliado-totais` a 750x520 e 750x600, o total "estimado" partido.
 - ⚠ CONTAS A PAGAR E RECEBER LÊ COMO EXTRATO DE BANCO: A RECEBER ANTES DE A PAGAR, O SALDO NA ÚLTIMA LINHA DO DIA, E TODO VENCIDO EM ABERTO
   CONTA NO SALDO DE HOJE (CPR-AJUSTES-20-10, Gabriel 20/10/2026, so' tela, sem migration; mock "CPR Saldo do Dia"). SUBSTITUI, nos blocos
   CPR-SALDO-DIA-01 / -02 e CPR-CAIXA-INICIAL-SEMPRE-01, a D1/D2 (o vencido so' contava depois da ancora), o grupo "Vencidos anteriores a'

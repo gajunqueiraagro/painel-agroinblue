@@ -341,17 +341,25 @@ describe('tela B — o Novo lançamento preenchido pela nota', () => {
     expect('parcelas' in mensal).toBe(false);
   });
 
-  it('A VISTA (nota sem duplicatas): vencimento VAZIO, o aviso escrito, e o payload do Salvar = o que a tela mostra; o XML sobe como application/xml', async () => {
+  it('A VISTA (nota sem duplicatas): vencimento VAZIO, o aviso escrito, o Salvar RECUSA até o vencimento; o payload = o que a tela mostra; o XML sobe como application/xml', async () => {
     const d = doXmlDe({ duplicatas: null }, [AGRO]);
     const m = montarModal({ prefill: comConta(d) });
     await screen.findByDisplayValue('16.238,00');
     expect(screen.getByTestId('xml-aviso').textContent).toBe(FRASE_SEM_DUPLICATAS);
     expect(botaoSalvar().textContent).toBe('Criar Lançamento');
     banco.rpc.mockImplementation(async (nome: unknown) => (nome === 'fin_documento_registrar' ? { data: { documento_id: 'doc-1' }, error: null } : { data: null, error: null }));
+    /* CRIAR-DO-EXTRATO-01 — sem vencimento o Salvar não grava: o rótulo diz por quê; o operador informa e grava */
+    fireEvent.click(botaoSalvar());
+    await waitFor(() => expect(screen.getByTestId('erro-antes-de-salvar').textContent).toBe('Informe o vencimento.'));
+    expect(screen.getByTestId('rotulo-vencimento').className).toContain('text-destructive');
+    expect(m.onSave).not.toHaveBeenCalled();
+    const campoVenc = within(screen.getByTestId('rotulo-vencimento').parentElement!).getByPlaceholderText('dd/mm/aaaa');
+    fireEvent.change(campoVenc, { target: { value: '30/10/2026' } });
+    fireEvent.keyDown(campoVenc, { key: 'Enter' });
     fireEvent.click(botaoSalvar());
     await waitFor(() => expect(m.onSave).toHaveBeenCalledTimes(1));
     expect(m.onSave.mock.calls[0][0]).toMatchObject({
-      tipo_operacao: '2-Saídas', status_transacao: 'programado', valor: 16238, data_competencia: '2026-09-30', data_vencimento: null,
+      tipo_operacao: '2-Saídas', status_transacao: 'programado', valor: 16238, data_competencia: '2026-09-30', data_vencimento: '2026-10-30',
       data_pagamento: null, favorecido_id: 'agro', fazenda_id: 'f-pur', numero_documento: '12345', tipo_documento: 'Nota Fiscal',
       forma_pagamento: 'Boleto', plano_conta_id: 'pl-nut', descricao: 'NF 12.345 · SAL MINERAL 80 P SC 30KG, RACAO ENGORDA 18% SC 40KG · 6 itens',
     });
@@ -499,7 +507,8 @@ describe('tela B — a faixa do fornecedor', () => {
 
   it('o CNPJ so e gravado no cadastro DEPOIS de o lancamento nascer; se o Salvar falha, nao grava', async () => {
     const d = doXmlDe({ duplicatas: null }, [AGRO_SEM_DOC], { idPeloNome: 'agro' });
-    const m = montarModal({ prefill: comConta(d) }, [AGRO_SEM_DOC]);
+    /* CRIAR-DO-EXTRATO-01 — a nota à vista abre sem vencimento e o Salvar o exige: aqui o operador já o informou */
+    const m = montarModal({ prefill: { ...comConta(d), data_vencimento: '2026-10-30' } }, [AGRO_SEM_DOC]);
     await screen.findByDisplayValue('16.238,00');
     expect(consultas.gravarDocumentoNoCadastro).not.toHaveBeenCalled();
     m.onSave.mockImplementationOnce(async () => false);
@@ -515,7 +524,7 @@ describe('tela B — a faixa do fornecedor', () => {
   });
 
   it('caixa DESMARCADA: o lancamento nasce e o cadastro nao e tocado', async () => {
-    const m = montarModal({ prefill: comConta(doXmlDe({ duplicatas: null }, [AGRO_SEM_DOC], { idPeloNome: 'agro' })) }, [AGRO_SEM_DOC]);
+    const m = montarModal({ prefill: { ...comConta(doXmlDe({ duplicatas: null }, [AGRO_SEM_DOC], { idPeloNome: 'agro' })), data_vencimento: '2026-10-30' } }, [AGRO_SEM_DOC]);
     await screen.findByDisplayValue('16.238,00');
     fireEvent.click(screen.getByTestId('xml-gravar-documento'));
     fireEvent.click(botaoSalvar());

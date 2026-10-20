@@ -374,7 +374,8 @@ describe('o modal em modo OC — despesa', () => {
 
 describe('o modal NORMAL não muda', () => {
   it('sem `origemOC`: nenhuma faixa, nenhum item, competência e pagamento à vista, e nada travado', async () => {
-    const { onSave } = montar(null, { ...PREFILL_DESPESA });
+    /* CRIAR-DO-EXTRATO-01 — fora do modo OC o vencimento também é obrigatório para salvar */
+    const { onSave } = montar(null, { ...PREFILL_DESPESA, data_vencimento: '2026-10-05' });
     await aberto('300,00');
     expect(screen.queryByTestId('faixa-origem-oc')).toBeNull();
     expect(screen.queryByTestId('campo-item-oc')).toBeNull();
@@ -383,7 +384,7 @@ describe('o modal NORMAL não muda', () => {
     const r = rotulos();
     expect(r).toContain('Data competência *');
     expect(r).toContain('Data pagamento *');
-    expect(r).toContain('Data vencimento');
+    expect(r).toContain('Data vencimento *');
     expect(porTab(1)).toHaveProperty('disabled', false);
     expect(porTab(4)).toHaveProperty('disabled', false);
     expect(campoFazenda()).toHaveProperty('disabled', false);

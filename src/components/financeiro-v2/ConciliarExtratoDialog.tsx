@@ -657,6 +657,7 @@ export function ConciliarExtratoDialog({ open, onClose, movimento, onConciliado,
         } : undefined}
         lockedFields={['valor', 'data_pagamento', 'conta_bancaria_id', 'conta_destino_id', 'tipo_operacao']}
         referenciaOperacionalInfo={referenciaSelected ? {
+          origem: 'planilha',
           fornecedor_texto: referenciaSelected.fornecedor_texto,
           fazenda_texto: referenciaSelected.fazenda_texto,
           plano_texto: referenciaSelected.plano_texto,

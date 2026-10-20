@@ -154,6 +154,8 @@ export function CriarLancamentoDaLinha({ movimento, contaBancariaId, valorSugeri
     conta_destino_id: ehEntrada ? (contaBancariaId ?? undefined) : undefined,
     data_pagamento: dataMov,
     data_competencia: dataMov,
+    /* CRIAR-DO-EXTRATO-01 — realizado com data de pagamento: o vencimento nasce igual a ela (nunca vazio). */
+    data_vencimento: dataMov,
     valor: valorSugerido != null && valorSugerido > 0
       ? Math.round(valorSugerido * 100) / 100
       : Math.abs(movimento.valor),
@@ -238,6 +240,9 @@ export function CriarLancamentoDaLinha({ movimento, contaBancariaId, valorSugeri
       /* ⚠ O BOX DE ORIGEM, read-only — o padrão do título de OC. Ele diz de onde
          o lançamento nasceu, que é o que explica os campos travados ao lado. */
       referenciaOperacionalInfo={{
+        origem: 'extrato',
+        conta_nome: contasBancarias.find(c => c.id === contaBancariaId)?.nome_exibicao
+          || contasBancarias.find(c => c.id === contaBancariaId)?.nome_conta || null,
         produto_texto: movimento.descricao,
         valor: movimento.valor,
         data_referencia: movimento.data_movimento,

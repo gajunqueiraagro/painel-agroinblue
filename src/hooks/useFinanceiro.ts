@@ -1166,7 +1166,7 @@ export function useFinanceiro(options: UseFinanceiroOptions = {}) {
       // ── Expand transfers into paired records (debit + credit) ──
       const expandedRows: Array<{
         fazenda_id: string; cliente_id: string; lote_importacao_id: string;
-        origem_lancamento: string; data_competencia: string; data_pagamento: string | null;
+        origem_lancamento: string; data_competencia: string; data_pagamento: string | null; data_vencimento: string;
         ano_mes: string; conta_bancaria_id: string | null; conta_destino_id?: string | null; descricao: string | null;
         valor: number; sinal: number; status_transacao: string | null;
         tipo_operacao: string; macro_custo: string | null; centro_custo: string | null;
@@ -1186,6 +1186,8 @@ export function useFinanceiro(options: UseFinanceiroOptions = {}) {
           origem_lancamento: origemDado,
           data_competencia: l.dataPagamento || l.anoMes + '-01',
           data_pagamento: l.dataPagamento,
+          /* CRIAR-DO-EXTRATO-01 — a planilha não traz vencimento: ele é o pagamento ou, sem pagamento, a competência. */
+          data_vencimento: l.dataPagamento || l.anoMes + '-01',
           ano_mes: l.anoMes,
           descricao: l.produto,
           valor: l.valor,

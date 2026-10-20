@@ -237,6 +237,7 @@ export function ContaBoitelTab({ onBack }: Props) {
       valor,
       data_competencia: novoData,
       data_pagamento: novoData,
+      data_vencimento: novoData,   // CRIAR-DO-EXTRATO-01 — vencimento = pagamento
       descricao: desc,
       origem_tipo: origemTipo,
       sem_movimentacao_caixa: false,
