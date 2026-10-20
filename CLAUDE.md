@@ -10161,3 +10161,26 @@ curta nas secoes de regras) e a pendencia (na FILA); o bloco inteiro vai para do
     `_fn_financiamento_status_pelas_parcelas` / `_fn_parcela_esta_paga` (espelhos declarados de antes, nao tocados).
   ⚠ NAO PROVADO: nada na tela (nenhum arquivo do front mudou; as telas leem a situacao, identica) · a trava recebida pelo PostgREST (provada com
     `SET ROLE authenticated` no teste).
+- ⚠ PARCELA ADIADA (SEM VENCIMENTO) E' DIVIDA, MAS NAO E' VENCIDA, NEM "PROXIMA", NEM CURTO OU LONGO PRAZO (FIN-PARCELA-STATUS-01, correcao
+  do painel, Gabriel 20/10/2026; migration `supabase/migrations/20261027204630_fin_parcela_status_01_adiadas.sql`, md5 do arquivo
+  09e303e8920ec055477a5100e6d7b437 — APLICADA no proto em 20/10/2026, ledger = arquivo; `fn_financiamento_situacao` e7f274ba… -> 4a395ca4…,
+  patch guardado por md5). Nasce da TELA BRANCA do Painel Financiamentos (20/10, 15h01): as 34 adiadas do 002122 (Agnaldo, consorcio ate' a
+  contemplacao) tem `data_vencimento` NULA, e "Próximas parcelas" formatava `new Date('' + 'T12:00:00')` (RangeError). Provado com os dados
+  reais: so' o Agnaldo caia; sem as adiadas o painel abria. Nao era das migrations do STATUS-01.
+  · BANCO: os `cartoes` da situacao ganham, DEPOIS de `vencido`, `adiado` (o que falta pagar das nao pagas sem vencimento) e `adiado_qtde`.
+    `a_vencer` e `vencido` continuam sem elas. As outras chaves identicas em 237 de 237 contratos. Teste S11 em
+    `supabase/tests/fin_parcela_status_01_test.sql` (e o S10: as leituras como `authenticated`).
+  · LEITORES TOCADOS: `lerSituacaoDoContrato` (`adiado`, `adiadoQtde`; 0 sem a chave) · a lista de contratos (`resumoDoContratoNaLista`: o em
+    aberto = a vencer + vencido + adiado; 002122 de 123.521,50 a 215.882,04) · Painel Financiamentos (`useFinanciamentosPainel`: pizza com o
+    grupo "Adiadas, sem vencimento (N parcelas)" — `rotuloDasAdiadas`, um dono —, fora de pendentes ≤ 30 dias, de vencidas e das próximas
+    parcelas) · endividamento da Home (`useEndividamentoAtual`: o mesmo grupo; a adiada segue no total da divida).
+  · LIDOS E JA' CERTOS (sem mudanca): `graficoDeSaidas` (pula sem vencimento) · a Mesa (`candidatasParaExtrato`: data vazia = distancia
+    infinita, preso como guarda) · `fn_endividamento_mensal` (le' pagamento, nao vencimento) · CPR, fluxo e exportacoes (leem lancamentos; a
+    adiada nao tem lancamento) · planejamento e resumo de META (filtram por intervalo de vencimento: nulo fica fora).
+  · SO' LISTADOS (pedem desenho novo): a EVOLUCAO DA DIVIDA do Painel — a adiada cai no ano 0 e nao aparece em barra nenhuma (so' no "Ini.") ·
+    os cartoes do `FinanciamentoDetalhe` nao dizem "adiado" (o consorcio abre o `ConsorcioDialog`, nao chega la') · `fn_endividamento_mensal`
+    nao filtra parcela cancelada (anterior).
+  Testes: `src/lib/financiamentos/parcelaAdiada.test.tsx` 4 e `src/pages/financiamentosPainelAdiada.test.tsx` 1 (fixture SINTETICA); com o
+  codigo antigo caem 4 dos 5 (o da Mesa e' guarda). Prova com dados reais (Agnaldo e NJ, harness local fora do repo): Painel e Home do
+  Agnaldo com o grupo 92.360,54 / 34; NJ identico antes e depois.
+  ⚠ NAO PROVADO: nada com login no app real (o painel abrindo no navegador do Gabriel).
