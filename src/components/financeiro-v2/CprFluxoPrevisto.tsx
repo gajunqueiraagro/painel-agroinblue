@@ -279,7 +279,7 @@ function TooltipFluxo({ active, label, payload, emConta }: TooltipProps) {
 }
 
 export function CprFluxoPrevisto({
-  linhas, saldoInicial, caveat, granularidade, hoje, inicio, passado, conciliadoAte, vencidosForaDoSaldo = 0, barras = 'ambos', folha = false, encerradoEm = null,
+  linhas, saldoInicial, caveat, granularidade, hoje, inicio, passado, conciliadoAte, barras = 'ambos', folha = false, encerradoEm = null,
 }: {
   /**
    * CPR-PDF-ACABAMENTO-01 — PERÍODO INTEIRO NO PASSADO: a data "até". O gráfico desenha SÓ o realizado, do início do período até
@@ -314,8 +314,6 @@ export function CprFluxoPrevisto({
    * passa a contar. Antes dela, o saldo conferido com o banco é soberano.
    */
   conciliadoAte: string | null;
-  /** CPR-SALDO-DIA-01: quantos vencidos ficaram FORA do saldo (anteriores à conciliação da conta) — só para a legenda. */
-  vencidosForaDoSaldo?: number;
   /**
    * CPR-SALDO-DIA-01 (G): o SEGMENTO da tela decide SÓ as barras de movimento (e, por elas, o tooltip). `linhas` vem SEMPRE com
    * os dois lados: a linha de saldo, as áreas e as tags são as da CONTA, em qualquer segmento.
@@ -569,7 +567,6 @@ export function CprFluxoPrevisto({
         <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
           {caveat ? `${caveat} · ` : ''}{encerradoEm ? 'período encerrado: só o realizado' : '* de hoje em diante, assumindo que tudo cai no vencimento'}
           {anteriores > 0 && ` · ${anteriores} já vencido${anteriores > 1 ? 's' : ''}, ${anteriores > 1 ? 'descontados' : 'descontado'} do saldo de hoje`}
-          {vencidosForaDoSaldo > 0 && ` · ${vencidosForaDoSaldo} vencido${vencidosForaDoSaldo > 1 ? 's' : ''} anterior${vencidosForaDoSaldo > 1 ? 'es' : ''} à conciliação, fora do saldo`}
           {semVencimento > 0 && ` · ${semVencimento} sem vencimento, fora do gráfico`}
           {rebaixada && ' · período longo demais para o detalhe diário: agrupado por mês'}
         </p>

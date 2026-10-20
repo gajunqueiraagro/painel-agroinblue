@@ -38,7 +38,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import {
   ATALHOS_CPR, periodoDoAtalho, recortarCpr, ramoDaConsultaCpr, doSegmentoCpr, contaEmAberto,
   ehReceberCpr, contaDaConta, resumoPorContaCpr, contasDaFaixaCpr, SEM_CONTA, ehTransferenciaCpr, chaveDaLinhaCpr, type ContaCpr,
-  ancorasDoCaixaCpr, serieDoSaldoCpr, linhasDoSaldoCpr, resumoPorSemanaCpr, saldoPorContaCpr, contaEstimadaCpr, somarDiasIso,
+  ancorasDoCaixaCpr, serieDoSaldoCpr, ordenarDoDiaCpr, totaisDeHojeCpr, linhasDoSaldoCpr, resumoPorSemanaCpr, saldoPorContaCpr, contaEstimadaCpr, somarDiasIso,
   type AtalhoCpr, type PeriodoCpr, type FiltroContaCpr,
 } from '@/lib/financeiro/cprRecorte';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -152,6 +152,10 @@ interface Regua {
 }
 const REGUA_NORMAL: Regua = { comp: 0, venc: 46, pgto: 0, fornecedor: 100, subcentro: 82, safra: 0, faz: 0, status: 60, anexo: 12, pagar: 111, receber: 111, saldo: 118 };
 const REGUA_AMPLIADA: Regua = { comp: 30, venc: 46, pgto: 46, fornecedor: 96, subcentro: 84, safra: 56, faz: 26, status: 60, anexo: 12, pagar: 111, receber: 111, saldo: 118 };
+/** CPR-SEM-CORTE-01 — a largura mínima da lista (a régua medida de cada modo, com a Descrição no mínimo dela): abaixo disso a lista
+ *  rola na horizontal dentro do cartão. */
+const LARGURA_MINIMA_NORMAL = 884;
+const LARGURA_MINIMA_AMPLIADA = 1092;
 const larg = (px: number): CSSProperties => ({ width: px, flexShrink: 0 });
 /** As três células de valor de uma faixa (dia, vencidos, saldo hoje, rodapé): a MESMA grade das linhas. */
 const moedaComSinal = (v: number) => `${v < 0 ? '−' : ''}${formatMoeda(Math.abs(v))}`;
@@ -162,7 +166,6 @@ const FUNDO_DIA = 'bg-[color-mix(in_srgb,hsl(var(--primary))_12%,hsl(var(--card)
 const FUNDO_VENCIDOS = 'bg-[color-mix(in_srgb,#b91c1c_9%,hsl(var(--card)))]';
 const FUNDO_SALDO_NEGATIVO = 'bg-[color-mix(in_srgb,#b91c1c_16%,hsl(var(--card)))]';
 const MOTIVO_SALDO_DOIS_LADOS = 'saldo considera a pagar e a receber';
-const MOTIVO_ANTERIORES = 'vencimento em mês já conciliado: abra o lançamento e atualize a data para entrar no saldo';
 
 /**
  * AS TRÊS EXCEÇÕES AO PISO DE 10px DESTA TELA — autorizadas nominalmente, PR-CPR-2A.3.2.
@@ -253,7 +256,8 @@ function diasAte(iso: string, hoje: Date): number {
  */
 function faixaDaData(iso: string, hoje: Date): { dia: string; quando: string } {
   const d = parseISO(iso);
-  const cru = format(d, "EEEE · dd MMM", { locale: ptBR });
+  /* CPR-AJUSTES-20-10: a data COMPLETA (dd/mm/aaaa) — "Quarta-feira · 21/10/2026" */
+  const cru = format(d, "EEEE · dd/MM/yyyy", { locale: ptBR });
   const dia = cru.charAt(0).toUpperCase() + cru.slice(1);
   const n = diasAte(iso, hoje);
   const quando = n === 0 ? 'hoje'
@@ -272,7 +276,9 @@ interface Grupo {
   chave: string;
   /** CPR-SALDO-DIA-01: os dois subgrupos de vencidos, o intervalo "entre hoje e de", os dias do período, e "Sem vencimento". */
   /** CPR-CAIXA-INICIAL-SEMPRE-01: 'hoje' é a MARCA de hoje no meio da lista (o saldo em caixa), no lugar dela no tempo. */
-  tipo: 'vencidos_contam' | 'vencidos_anteriores' | 'entre' | 'dia' | 'sem_vencimento' | 'hoje';
+  /* CPR-AJUSTES-20-10: o "Saldo hoje" e os dois grupos de vencidos sairam — hoje e' um DIA (com os vencidos dentro); 'vencidos' so'
+     existe fora de um período que contém hoje. */
+  tipo: 'vencidos' | 'entre' | 'dia' | 'sem_vencimento';
   titulo: string;
   /** O sufixo de contagem ("em 3 dias"). Vazio fora dos dias. */
   quando: string;
@@ -282,10 +288,14 @@ interface Grupo {
   /** Totais das contas EM ABERTO do grupo, dos DOIS lados (o saldo é da conta, não do segmento). */
   pagar: number;
   receber: number;
-  /** O saldo depois do grupo; `undefined` = o grupo não tem saldo (anteriores, sem vencimento); `null` = não há saldo em caixa. */
+  /** O saldo depois do grupo; `undefined` = o grupo não tem saldo (vencidos fora do período, sem vencimento); `null` = não há saldo em caixa. */
   saldo: number | null | undefined;
   /** dia antes de hoje: os totais e o saldo são os REALIZADOS (do dono do caixa) */
   passado?: boolean;
+  /** o dia de hoje (os vencidos entram nele) */
+  hoje?: boolean;
+  /** o aviso dos vencidos anteriores à conciliação (a faixa de hoje o escreve em âmbar) */
+  avisoHoje?: string;
 }
 
 export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento }: {
@@ -749,6 +759,8 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
   const motivoSemCaixa = caixaDeUmaConta
     ? `${nomeConta(contaSel)} não entra no saldo em caixa (cartão ou conta sem saldo conferido)`
     : 'sem saldo em caixa conferido';
+  /* CPR-AJUSTES-20-10 — as chaves das linhas VENCIDAS (todas contam no saldo de hoje): o selo "vencido" na linha */
+  const chavesVencidas = useMemo(() => new Set(recorte.vencidos.contam.linhas.map(chaveDaLinhaCpr)), [recorte]);
   const grupos = useMemo((): Grupo[] => {
     const doSeg = (ls: readonly LinhaCpr[]) => ls.filter((l) => doSegmentoCpr(l, segmento));
     const mapa = new Map<string, LinhaCpr[]>();
@@ -761,60 +773,61 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
       const atual = mapa.get(chave);
       if (atual) atual.push(l); else mapa.set(chave, [l]);
     }
-    /* TODO DIA DA SÉRIE TEM LINHA DE FECHAMENTO, mesmo sem conta listada no segmento: é ela que faz a coluna Saldo fechar
-       (anterior − a pagar + a receber). Dia só com contas PAGAS repete o saldo anterior: paga aparece e não soma. */
+    /* TODO DIA DA SÉRIE TEM LINHA DE SALDO, mesmo sem conta listada no segmento: é ela que faz a coluna Saldo fechar
+       (anterior + a receber − a pagar). Dia só com contas PAGAS repete o saldo anterior: paga aparece e não soma. */
     /* CPR-PDF-ACABAMENTO-01 — os dias ANTES de hoje são os REALIZADOS do dono do caixa (o que saiu e o que entrou no dia, pela
-       data do pagamento, e o saldo no fim dele), a partir do Caixa inicial; de hoje em diante, os projetados de sempre. A dobra
-       é hoje: ao chegar nela o saldo corrente passa a ser o de partida (caixa − vencidos que contam). */
+       data do pagamento, e o saldo no fim dele), a partir do Caixa inicial; de hoje em diante, os projetados de sempre. */
     const passos = new Map([...serie.realizados, ...serie.dias].map((d) => [d.data, d]));
-    const partidaDoFuturo = (serie.entreHojeEDe ?? serie.partida).saldo;
     const futuro = periodo.de > hojeIso;
     const hojeNoPeriodo = !serie.encerrado && !futuro;
     const temRealizado = serie.inicial != null && !futuro;
     /* a coluna Saldo parte do CAIXA INICIAL; sem ele (o dono não responde na véspera), os dias antes de hoje ficam sem saldo —
        nunca com o saldo de hoje */
     let corrente: number | null = serie.inicial ? serie.inicial.saldo : null;
-    let dobrou = futuro;
-    const chaves = Array.from(new Set([...mapa.keys(), ...passos.keys()])).sort();
+    const vencidos = recorte.vencidos.contam;
+    const nVencidos = vencidos.pagar.contas + vencidos.receber.contas;
+    const ant = recorte.vencidos.anteriores;
+    const nAnt = ant.pagar.contas + ant.receber.contas;
+    /* CPR-AJUSTES-20-10 — o DIA: em cima, a faixa fina SÓ com a data e o quando; embaixo, a linha "Saldo em dd/mm/aaaa" com o total a
+       receber, o total a pagar e o saldo — como extrato de banco. Dentro do dia: entradas, depois saídas, do maior valor ao menor. */
+    const chaves = Array.from(new Set([...mapa.keys(), ...passos.keys(), ...(hojeNoPeriodo ? [hojeIso] : [])])).sort();
     const dias: Grupo[] = chaves.map((chave) => {
       const faixa = faixaDaData(chave, hoje);
-      if (!dobrou && chave >= hojeIso) { dobrou = true; corrente = partidaDoFuturo; }
       const p = passos.get(chave);
+      if (hojeNoPeriodo && chave === hojeIso) {
+        /* HOJE: o que já foi realizado hoje (está dentro do caixa), os VENCIDOS (todos contam no saldo de hoje: saem / entram hoje)
+           e o que vence hoje. A linha de saldo fecha no saldo depois disso; com "Incluir vencidos" desligado eles não são listados,
+           mas seguem no saldo (D3), e a faixa diz. */
+        const th = totaisDeHojeCpr(serie);
+        const listados = ordenarDoDiaCpr([...(incluirVencidos ? doSeg(vencidos.linhas) : []), ...(mapa.get(chave) ?? [])]);
+        const datasAnt = ant.ancoras.length === 1 ? format(parseISO(ant.ancoras[0]), 'dd/MM/yyyy') : null;
+        const aviso = nAnt === 0 ? '' : `${nAnt} ${nAnt === 1 ? 'vencido que não apareceu' : 'vencidos que não apareceram'} no extrato conciliado ${datasAnt ? `até ${datasAnt}` : 'de cada conta'} ${nAnt === 1 ? 'entra' : 'entram'} hoje · confirme se ainda vai acontecer`;
+        const foraDaLista = !incluirVencidos && nVencidos > 0 ? `o saldo inclui ${nVencidos} ${nVencidos === 1 ? 'vencido' : 'vencidos'} fora da lista` : '';
+        corrente = serie.hoje == null ? null : (p ? p.saldo : serie.partida.saldo);
+        return {
+          chave, tipo: 'dia', hoje: true, titulo: faixa.dia, quando: ['hoje', foraDaLista].filter(Boolean).join(' · '), linhas: listados,
+          receber: th.receber.valor, pagar: th.pagar.valor,
+          saldo: corrente, avisoHoje: aviso || undefined,
+        };
+      }
       if (p) corrente = p.saldo;
       return {
-        chave, tipo: 'dia', titulo: faixa.dia, quando: chave < hojeIso ? 'realizado' : faixa.quando, linhas: mapa.get(chave) ?? [],
+        chave, tipo: 'dia', titulo: faixa.dia, quando: chave < hojeIso ? 'realizado' : faixa.quando, linhas: ordenarDoDiaCpr(mapa.get(chave) ?? []),
         pagar: p?.pagar.valor ?? 0, receber: p?.receber.valor ?? 0, saldo: chave < hojeIso && !temRealizado ? null : corrente, passado: chave < hojeIso,
       };
     });
+    /* fora de um período que contém hoje os vencidos não têm dia: no encerrado saem HOJE, depois dele; no futuro já estão dentro do
+       Caixa inicial previsto. Um grupo à parte, sem linha de saldo. */
     const topo: Grupo[] = [];
-    if (incluirVencidos) {
-      const { contam, anteriores, diasDaMaisAntiga } = recorte.vencidos;
-      const nContam = contam.pagar.contas + contam.receber.contas;
-      if (nContam > 0) topo.push({
-        chave: 'vencidos-contam', tipo: 'vencidos_contam', quando: '',
-        titulo: `Vencidos · ${contas(nContam)} · contam no saldo`,
-        dica: `vencimento posterior à última conciliação da conta: saem (ou entram) hoje${diasDaMaisAntiga != null ? ` · mais antiga do cartão Vencidos há ${diasDaMaisAntiga} dias` : ''}`,
-        linhas: doSeg(contam.linhas), pagar: contam.pagar.valor, receber: contam.receber.valor,
-          /* fora de um período que contém hoje os vencidos não têm lugar na coluna Saldo: no encerrado saem HOJE, depois dele;
-           no futuro já estão dentro do Caixa inicial previsto */
-        saldo: hojeNoPeriodo ? serie.partida.saldo : undefined,
-      });
-      const nAnt = anteriores.pagar.contas + anteriores.receber.contas;
-      if (nAnt > 0) {
-        const ancoraDaEscolhida = contaSel != null && contaSel !== SEM_CONTA ? ancoras?.get(contaSel) : undefined;
-        const de = contaSel == null ? 'anteriores à conciliação de cada conta'
-          : ancoraDaEscolhida ? `anteriores à conciliação de ${format(parseISO(ancoraDaEscolhida), 'dd/MM')}`
-          : contaSel === SEM_CONTA ? 'sem conta definida' : 'de conta sem saldo conferido';
-        topo.push({
-          chave: 'vencidos-anteriores', tipo: 'vencidos_anteriores', quando: '', dica: MOTIVO_ANTERIORES,
-          titulo: `Vencidos ${de} · ${contas(nAnt)} · fora do saldo`,
-          linhas: doSeg(anteriores.linhas), pagar: anteriores.pagar.valor, receber: anteriores.receber.valor, saldo: undefined,
-        });
-      }
-    }
+    if (!hojeNoPeriodo && incluirVencidos && nVencidos > 0) topo.push({
+      chave: 'vencidos', tipo: 'vencidos', quando: '',
+      titulo: `Vencidos · ${contas(nVencidos)} · saem hoje`,
+      dica: futuro ? 'já estão dentro do Caixa inicial previsto' : 'saem (ou entram) hoje, depois do período',
+      linhas: ordenarDoDiaCpr(doSeg(vencidos.linhas)), pagar: vencidos.pagar.valor, receber: vencidos.receber.valor, saldo: undefined,
+    });
     if (serie.entreHojeEDe) topo.push({
       chave: 'entre', tipo: 'entre', quando: '', linhas: [],
-      titulo: `Entre hoje e ${format(parseISO(periodo.de), 'dd/MM')} · ${contas(recorte.antesDoPeriodo.pagar.contas + recorte.antesDoPeriodo.receber.contas)}`,
+      titulo: `Entre hoje e ${format(parseISO(periodo.de), 'dd/MM/yyyy')} · ${contas(recorte.antesDoPeriodo.pagar.contas + recorte.antesDoPeriodo.receber.contas)}`,
       dica: 'contas em aberto que vencem antes do período: já estão no Caixa inicial previsto, não são listadas',
       pagar: serie.entreHojeEDe.pagar.valor, receber: serie.entreHojeEDe.receber.valor, saldo: undefined,
     });
@@ -822,26 +835,12 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
     const fim: Grupo[] = sv.linhas.length === 0 ? [] : [{
       chave: 'sem-vencimento', tipo: 'sem_vencimento', quando: '', dica: 'sem data de vencimento: fora dos cartões e do saldo',
       titulo: `Sem vencimento · ${contas(sv.pagar.contas + sv.receber.contas)} · fora do saldo`,
-      linhas: doSeg(sv.linhas), pagar: sv.pagar.valor, receber: sv.receber.valor, saldo: undefined,
-    }];
-    /* CPR-CAIXA-INICIAL-SEMPRE-01 — A LISTA ANDA NO TEMPO, a partir do Caixa inicial (a linha fixa do topo):
-         período com hoje dentro: dias realizados → HOJE (o saldo em caixa) → vencidos (saem hoje) → hoje em diante;
-         período encerrado: os dias realizados → vencidos (saem hoje, depois dele);
-         período futuro: vencidos e "entre hoje e de" (já dentro do Caixa inicial previsto) → os dias. */
-    const marcaDeHoje: Grupo[] = !hojeNoPeriodo ? [] : [{
-      chave: 'hoje', tipo: 'hoje', quando: '', linhas: [],
-      titulo: `Hoje · ${format(parseISO(hojeIso), 'dd/MM')} · saldo em caixa${incluirVencidos ? '' : ' · após vencidos'}`,
-      dica: serie.hoje == null ? motivoSemCaixa
-        : incluirVencidos ? 'o saldo em caixa de hoje — o mesmo número do cartão Caixa; a pagar e a receber são o que já foi realizado hoje'
-        : `Caixa ${moedaComSinal(serie.hoje)} − vencidos a pagar que contam ${formatMoeda(serie.partida.pagar.valor)} + vencidos a receber que contam ${formatMoeda(serie.partida.receber.valor)}`,
-      pagar: incluirVencidos ? (serie.realizadoHoje?.pagar.valor ?? 0) : serie.partida.pagar.valor,
-      receber: incluirVencidos ? (serie.realizadoHoje?.receber.valor ?? 0) : serie.partida.receber.valor,
-      saldo: incluirVencidos ? serie.hoje : serie.partida.saldo,
+      linhas: ordenarDoDiaCpr(doSeg(sv.linhas)), pagar: sv.pagar.valor, receber: sv.receber.valor, saldo: undefined,
     }];
     if (serie.encerrado) return [...dias, ...topo, ...fim];
     if (futuro) return [...topo, ...dias, ...fim];
-    return [...dias.filter((d) => d.passado), ...marcaDeHoje, ...topo, ...dias.filter((d) => !d.passado), ...fim];
-  }, [doPeriodoNaLista, recorte, serie, segmento, incluirVencidos, contaSel, ancoras, periodo.de, hoje, hojeIso, motivoSemCaixa]);
+    return [...dias, ...fim];
+  }, [doPeriodoNaLista, recorte, serie, segmento, incluirVencidos, periodo.de, hoje, hojeIso]);
 
   // ── Abrir o lançamento ─────────────────────────────────────────────────────
   /**
@@ -1007,7 +1006,6 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
       saldoInicial={serie.encerrado ? serie.fim : serie.hoje}
       encerradoEm={serie.encerrado ? periodo.ate : null}
       barras={segmento}
-      vencidosForaDoSaldo={recorte.vencidos.anteriores.linhas.length}
       caveat={rotuloCaixa}
       granularidade="dia"
       inicio={periodo.de}
@@ -1033,6 +1031,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
     foraDoCaixa: (l) => chavesForaDoCaixa.has(chaveDaLinhaCpr(l)),
     parcela: (l) => parcelasDosLancamentos?.get(l.id) ?? null,
     paga: (l) => !contaEmAberto(l),
+    vencido: (l) => chavesVencidas.has(chaveDaLinhaCpr(l)),
   };
   const identidadeDoArquivo = {
     clienteNome: clienteAtual?.nome ?? 'cliente', contaNome: contaSel == null ? 'Todas as contas' : nomeConta(contaSel),
@@ -1113,7 +1112,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
   /* a frase do erro (ou do aviso) fica ESCRITA ao lado do botão — nunca em toast; uma linha, inteira no `title` */
   const ctlRecadoExport = recadoExport ? (
     <span data-testid="cpr-exportar-recado" title={recadoExport.texto}
-      className={cn('min-w-0 truncate text-[10px]', recadoExport.erro ? 'text-destructive' : 'text-amber-600 dark:text-amber-400')}>
+      className={cn('uma-linha-que-rola min-w-0 text-[10px]', recadoExport.erro ? 'text-destructive' : 'text-amber-600 dark:text-amber-400')}>
       {recadoExport.texto}
     </span>
   ) : null;
@@ -1173,7 +1172,8 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
     /* ⚠ `h-full`, E NÃO `flex-1` — a mesma lição de `V2Recorrencias`: a altura vem do pai, e
        o `/v2` só a dá porque esta seção entrou em `SECOES_APP_SHELL`. Sem isso o `sticky`
        dos grupos não gruda em nada. `max-w-5xl` para a tela não encostar na margem. */
-    <div className={cn('w-full min-w-0 h-full min-h-0 flex flex-col bg-background', !ampliado && 'max-w-5xl mx-auto')}>
+    /* CPR-SEM-CORTE-01: `filtros-uma-linha` — o texto de todo seletor da tela (conta, atalho) rola dentro do campo, nunca "…" */
+    <div className={cn('filtros-uma-linha w-full min-w-0 h-full min-h-0 flex flex-col bg-background', !ampliado && 'max-w-5xl mx-auto')}>
       {/* o gráfico montado FORA DA VISTA, só enquanto o PDF é gerado: tamanho fixo, para a folha sair igual em qualquer janela */}
       {graficoParaPdf && (
         <div ref={refGraficoPdf} aria-hidden data-testid="cpr-grafico-para-pdf"
@@ -1203,16 +1203,18 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
           <div data-testid="cpr-faixa-recolhida"
             className="grid h-[24px] grid-cols-[148px_142px_150px_136px_132px_minmax(0,1fr)_auto] items-center gap-2 rounded-md border bg-card px-2 text-[10px] whitespace-nowrap">
             <CelRecolhida rotulo="Vencidos" valor={formatMoeda(recorte.cartoes.vencidos.pagar.valor)} classe={recorte.cartoes.vencidos.pagar.valor > 0 ? COR_SINAL.neg : undefined} />
-            <CelRecolhida rotulo="A pagar" valor={formatMoeda(recorte.cartoes.periodo.pagar.valor)} classe={COR_SINAL.neg} />
             <CelRecolhida rotulo="A receber" valor={formatMoeda(recorte.cartoes.periodo.receber.valor)} classe={recorte.cartoes.periodo.receber.valor > 0 ? COR_SINAL.pos : undefined} />
+            <CelRecolhida rotulo="A pagar" valor={formatMoeda(recorte.cartoes.periodo.pagar.valor)} classe={COR_SINAL.neg} />
             <CelRecolhida rotulo="Mínimo" titulo={tituloMenorSaldo}
               valor={serie.menor ? moedaComSinal(serie.menor.valor) : '—'} classe={serie.menor ? (serie.menor.valor < 0 ? COR_SINAL.neg : COR_SINAL.pos) : undefined} />
             <CelRecolhida rotulo="Caixa" valor={serie.hoje != null ? moedaComSinal(serie.hoje) : '—'} titulo={serie.hoje == null ? motivoSemSaldo : undefined} />
-            <span className="min-w-0 truncate text-right text-muted-foreground">{isFetching ? 'carregando…' : ''}</span>
+            <span className="uma-linha-que-rola min-w-0 text-right text-muted-foreground">{isFetching ? 'carregando…' : ''}</span>
             {ctlExportar}
           </div>
           {/* (3) as pílulas de status, clicáveis — linha FIXA de 20px, sempre presente, com a frase do exportar à direita */}
-          <div data-testid="cpr-linha-status" className="flex h-[20px] flex-nowrap items-center gap-2 whitespace-nowrap">
+          {/* CPR-SEM-CORTE-01: em janela estreita os totais confirmado / estimado descem para a linha de baixo (o lugar de 316px
+              existe sempre: a quebra é a mesma com ou sem estimado), nunca ficam partidos */}
+          <div data-testid="cpr-linha-status" className="flex min-h-[20px] flex-wrap items-center gap-x-2 whitespace-nowrap">
             <span className="shrink-0 text-[9.5px] text-muted-foreground">Status</span>
             {ctlStatus}
             <div className="flex min-w-0 flex-1 basis-0 justify-end">{ctlRecadoExport}</div>
@@ -1234,7 +1236,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
             {/* a conta escolhida fica escrita no cabeçalho enquanto o filtro estiver ligado ("se escolher banco, tem que aparecer ali") */}
             {contaSel != null && (
               <span data-testid="cpr-conta-no-cabecalho" title={nomeConta(contaSel)}
-                className="max-w-[260px] truncate rounded-md bg-primary px-2 py-[2px] text-[11px] font-medium text-primary-foreground">
+                className="uma-linha-que-rola max-w-[260px] rounded-md bg-primary px-2 py-[2px] text-[11px] font-medium text-primary-foreground">
                 Conta: {nomeConta(contaSel)}
               </span>
             )}
@@ -1259,7 +1261,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
             testId="cpr-card-vencidos"
             rotulo="Vencidos"
             contagem={`· ${contas(recorte.cartoes.vencidos.pagar.contas)}`}
-            titulo={`Vencidos a pagar: ${formatMoeda(recorte.cartoes.vencidos.pagar.valor)} em ${contas(recorte.cartoes.vencidos.pagar.contas)} · vencidos a receber: ${formatMoeda(recorte.cartoes.vencidos.receber.valor)} em ${contas(recorte.cartoes.vencidos.receber.contas)} · ${recorte.vencidos.contam.pagar.contas + recorte.vencidos.contam.receber.contas} contam no saldo · ${recorte.vencidos.anteriores.pagar.contas + recorte.vencidos.anteriores.receber.contas} anteriores à conciliação (fora do saldo)`}
+            titulo={`Vencidos a pagar: ${formatMoeda(recorte.cartoes.vencidos.pagar.valor)} em ${contas(recorte.cartoes.vencidos.pagar.contas)} · vencidos a receber: ${formatMoeda(recorte.cartoes.vencidos.receber.valor)} em ${contas(recorte.cartoes.vencidos.receber.contas)} · todos contam no saldo de hoje · ${recorte.vencidos.anteriores.pagar.contas + recorte.vencidos.anteriores.receber.contas} não apareceram no extrato já conciliado (confirme se ainda vão acontecer)`}
             valor={formatMoeda(recorte.cartoes.vencidos.pagar.valor)}
             classeValor={recorte.cartoes.vencidos.pagar.valor > 0 ? 'text-destructive' : 'text-muted-foreground'}
             borda="border-l-destructive"
@@ -1268,6 +1270,15 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
             lado={recorte.cartoes.vencidos.receber.valor > 0
               ? [{ rotulo: 'a receber', valor: '', classe: 'text-success' }, { rotulo: '', valor: formatMoeda(recorte.cartoes.vencidos.receber.valor), classe: 'text-success' }]
               : undefined}
+          />
+          <CardResumo
+            testId="cpr-card-receber"
+            rotulo="A receber"
+            contagem={`· ${recorte.cartoes.periodo.receber.contas}`}
+            titulo={`A receber no período: ${contas(recorte.cartoes.periodo.receber.contas)}, sem os vencidos`}
+            valor={formatMoeda(recorte.cartoes.periodo.receber.valor)}
+            classeValor={recorte.cartoes.periodo.receber.valor > 0 ? 'text-success' : 'text-muted-foreground'}
+            borda="border-l-success"
           />
           <CardResumo
             testId="cpr-card-pagar"
@@ -1279,15 +1290,6 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
             valor={formatMoeda(recorte.cartoes.periodo.pagar.valor)}
             classeValor="text-destructive"
             borda="border-l-destructive"
-          />
-          <CardResumo
-            testId="cpr-card-receber"
-            rotulo="A receber"
-            contagem={`· ${recorte.cartoes.periodo.receber.contas}`}
-            titulo={`A receber no período: ${contas(recorte.cartoes.periodo.receber.contas)}, sem os vencidos`}
-            valor={formatMoeda(recorte.cartoes.periodo.receber.valor)}
-            classeValor={recorte.cartoes.periodo.receber.valor > 0 ? 'text-success' : 'text-muted-foreground'}
-            borda="border-l-success"
           />
           {/* MÍNIMO — o menor saldo da série (da partida ao fim), do dono. Rótulo curto que NÃO corta: "Mínimo ▼ · DD/MM" (a data
               é número). Sem saldo em caixa: "Mínimo" e "—". */}
@@ -1329,7 +1331,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
               onClick={() => alternarConta(c.conta)} title={`${nomeConta(c.conta)} · ${formatMoeda(c.pagar.valor)} · ${contas(c.pagar.contas)}`}
               className={cn('flex h-[16px] shrink-0 items-center gap-1 rounded px-1.5 transition-colors',
                 contaSel === c.conta ? 'bg-primary text-primary-foreground' : 'text-foreground hover:bg-muted')}>
-              <span className="max-w-[96px] truncate">{nomeConta(c.conta)}</span>
+              <span className="uma-linha-que-rola max-w-[96px]">{nomeConta(c.conta)}</span>
               <span className="tabular-nums" data-valor-da-faixa>{formatMoeda(c.pagar.valor)}</span>
             </button>
           ))}
@@ -1393,10 +1395,12 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
                ~15px de LARGURA DE COLUNA numa lista de 22px por linha, e o gutter estável
                impede que as linhas andem quando a rolagem aparece. Os dois utilitários já
                existem em `index.css`; aqui é só adesão. */
-            <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden rolagem-fina rolagem-sem-tampar !pb-0">
+            /* CPR-SEM-CORTE-01: em janela mais estreita que a régua a lista ROLA NOS DOIS EIXOS dentro do cartão (a largura mínima é a
+               da régua do modo), nunca corta coluna de valor */
+            <div className="min-h-0 flex-1 overflow-auto rolagem-fina rolagem-sem-tampar !pb-0">
              {/* ⚠ UM SCROLLPORT SÓ, e TUDO o que é fixo mora DENTRO dele (cabeçalho, "Saldo hoje", faixas e o rodapé `sticky bottom-0`):
                  fora, o fixo teria a largura cheia e as linhas perderiam o gutter da barra — as colunas de valor desalinhariam. */}
-             <div className="flex min-h-full flex-col">
+             <div data-tabela-que-rola className="flex min-h-full flex-col" style={{ minWidth: ampliado ? LARGURA_MINIMA_AMPLIADA : LARGURA_MINIMA_NORMAL }}>
 
               {/* CABEÇALHO DE COLUNA — navy, 22px, a régua do modo. */}
               <div data-testid="cpr-cabecalho" className={cn(
@@ -1414,8 +1418,8 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
                 {regua.faz > 0 && <span style={larg(regua.faz)}>Faz.</span>}
                 <span style={larg(regua.status)} className="text-center">Status</span>
                 <span style={larg(regua.anexo)} aria-hidden />
-                <span style={larg(regua.pagar)} className="text-right">A pagar</span>
                 <span style={larg(regua.receber)} className="text-right">A receber</span>
+                <span style={larg(regua.pagar)} className="text-right">A pagar</span>
                 <span style={larg(regua.saldo)} className="text-right" title={segmento === 'ambos' ? undefined : MOTIVO_SALDO_DOIS_LADOS}>Saldo</span>
               </div>
 
@@ -1437,19 +1441,24 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
               {grupos.map((g) => (
                 <div key={g.chave} data-testid={`cpr-grupo-${g.tipo}`} data-total={Math.round((g.receber - g.pagar) * 100) / 100}
                   data-saldo={g.saldo ?? ''}>
-                  {/* O FECHAMENTO DO GRUPO — fundo OPACO e `z` acima das linhas (A21); os três valores caem nas colunas da régua. */}
-                  <Faixa
-                    regua={regua}
-                    className={cn('sticky top-[42px] z-10',
-                      g.tipo === 'hoje' ? 'h-[22px] border-y-[1.5px] border-y-primary/50 bg-card font-bold text-foreground'
-                        : g.tipo === 'dia' || g.tipo === 'entre' ? cn('h-[22px] border-t-[1.5px] border-t-primary/50 font-bold text-primary', FUNDO_DIA)
-                        : g.tipo === 'vencidos_contam' ? cn('h-[22px] border-t-[1.5px] border-t-[#b91c1c]/40 font-bold', COR_SINAL.neg, FUNDO_VENCIDOS)
-                        : 'h-[20px] border-b bg-muted font-medium text-muted-foreground')}
-                    titulo={g.titulo} quando={g.quando} dica={g.dica}
-                    pagar={g.pagar} receber={g.receber} saldo={g.saldo}
-                    semSeta={g.tipo === 'vencidos_anteriores' || g.tipo === 'sem_vencimento'}
-                    fundoNegativo motivoSemSaldo={motivoSemSaldo}
-                  />
+                  {/* CPR-AJUSTES-20-10 — o DIA: em cima a faixa FINA só com a data e o quando (sem totais, sem saldo); os outros grupos
+                      (vencidos fora do período de hoje, "entre hoje e de", sem vencimento) seguem com os totais na faixa. Fundo OPACO e
+                      `z` acima das linhas (A21). */}
+                  {g.tipo === 'dia' ? (
+                    <FaixaDoDia titulo={g.titulo} quando={g.quando} hoje={!!g.hoje} aviso={g.avisoHoje} />
+                  ) : (
+                    <Faixa
+                      regua={regua}
+                      className={cn('sticky top-[42px] z-10',
+                        g.tipo === 'entre' ? cn('h-[22px] border-t-[1.5px] border-t-primary/50 font-bold text-primary', FUNDO_DIA)
+                          : g.tipo === 'vencidos' ? cn('h-[22px] border-t-[1.5px] border-t-[#b91c1c]/40 font-bold', COR_SINAL.neg, FUNDO_VENCIDOS)
+                          : 'h-[20px] border-b bg-muted font-medium text-muted-foreground')}
+                      titulo={g.titulo} quando={g.quando} dica={g.dica}
+                      pagar={g.pagar} receber={g.receber} saldo={g.saldo}
+                      semSeta={g.tipo === 'sem_vencimento'}
+                      fundoNegativo motivoSemSaldo={motivoSemSaldo}
+                    />
+                  )}
 
                   {g.linhas.map((l) => {
                     const valor = Math.abs(Number(l.valor ?? 0));
@@ -1478,6 +1487,12 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
                     const dicaDescricao = `${np.inteiro || '—'}\norigem: ${rotuloOrigem(l.origem_lancamento)} · doc: ${doc || '—'} · conta: ${nomeConta(contaDaConta(l))}`;
                     /* REC-VALOR-CERTO-02 — a conta ESTIMADA (pelo conjunto da regra única): selo depois da descrição e valor em âmbar. */
                     const estimada = !paga && contaEstimadaCpr(l, estimadas);
+                    /* CPR-AJUSTES-20-10 — o vencido (conta no saldo de hoje): o selo "vencido", no estilo do "estimado" */
+                    const vencida = chavesVencidas.has(chaveDaLinhaCpr(l));
+                    const seloVencido = vencida
+                      ? <span data-testid="cpr-selo-vencido" title={`vencido em ${l.data_vencimento ? format(parseISO(l.data_vencimento), 'dd/MM/yyyy') : '—'}: conta no saldo de hoje · confirme se ainda vai acontecer`}
+                          className="h-[14px] shrink-0 whitespace-nowrap rounded bg-red-100 px-1 text-[9px] leading-[14px] text-red-700">vencido</span>
+                      : null;
                     const celValor = (
                       <span data-valor-da-linha className={cn('whitespace-nowrap text-right tabular-nums', estimada ? COR_ESTIMADO : receber ? COR_SINAL.pos : COR_SINAL.neg, (paga || foraDoCaixa) && 'opacity-50')}
                         title={paga ? 'já paga — está no realizado do dia do pagamento, não na projeção' : foraDoCaixa ? 'ponta em conta que não entra no saldo em caixa — não soma; a outra ponta é o que mexe no saldo' : undefined}>
@@ -1513,46 +1528,33 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
                             {paga && l.data_pagamento ? format(parseISO(l.data_pagamento), 'dd/MM/yy') : ''}
                           </span>
                         )}
-                        {estimada ? (
-                          /* a descrição corta ANTES do selo; o selo nunca corta, e a linha segue com 18px */
-                          <span className="flex min-w-0 flex-1 items-center gap-1" data-celula-descricao>
-                            <span className="min-w-0 truncate text-foreground" title={dicaDescricao}>{np.nome || '—'}</span>
-                            {seloDaParcela}
+                        {/* A DESCRIÇÃO, numa linha: a marca "Transf.", o nome (CPR-SEM-CORTE-01: o que não cabe ROLA na própria linha, nunca
+                            "…"), o "i/N" do contrato e os selos "estimado" / "vencido" — marcas e selos nunca cortam; a linha segue com 18px. */}
+                        <span className="flex min-w-0 flex-1 items-center gap-1" data-celula-descricao>
+                          {seloTransf}
+                          <span className="uma-linha-que-rola min-w-0 text-foreground" title={dicaDescricao}>{(np.parcela ? np.nome : l.descricao) || '—'}</span>
+                          {seloDaParcela}
+                          {estimada && (
                             <span data-testid="cpr-selo-estimado" title={tituloDoSeloDaLinha(l.id)}
                               className="h-[14px] shrink-0 whitespace-nowrap rounded bg-amber-100 px-1 text-[9px] leading-[14px] text-amber-700">
                               estimado
                             </span>
-                          </span>
-                        ) : seloDaParcela ? (
-                          /* o nome corta ANTES do "i/N"; o "i/N" nunca corta */
-                          <span className="flex min-w-0 flex-1 items-center gap-1" data-celula-descricao>
-                            <span className="min-w-0 truncate text-foreground" title={dicaDescricao}>{np.nome || '—'}</span>
-                            {seloDaParcela}
-                          </span>
-                        ) : seloTransf ? (
-                          /* a marca "Transf." nunca corta; a descrição corta depois dela */
-                          <span className="flex min-w-0 flex-1 items-center gap-1" data-celula-descricao>
-                            {seloTransf}
-                            <span className="min-w-0 truncate text-foreground" title={dicaDescricao}>{l.descricao || '—'}</span>
-                          </span>
-                        ) : (
-                          <span className="min-w-0 flex-1 truncate text-foreground" title={dicaDescricao} data-celula-descricao>
-                            {l.descricao || '—'}
-                          </span>
-                        )}
-                        <span style={larg(regua.fornecedor)} className="truncate text-muted-foreground" title={fornecedor}>
+                          )}
+                          {seloVencido}
+                        </span>
+                        <span style={larg(regua.fornecedor)} className="uma-linha-que-rola text-muted-foreground" title={fornecedor}>
                           {fornecedor}
                         </span>
-                        <span style={larg(regua.subcentro)} className={cn(FONTE_FINA, 'truncate text-muted-foreground')} title={l.subcentro ?? undefined}>
+                        <span style={larg(regua.subcentro)} className={cn(FONTE_FINA, 'uma-linha-que-rola text-muted-foreground')} title={l.subcentro ?? undefined}>
                           {l.subcentro || '—'}
                         </span>
                         {regua.safra > 0 && (
-                          <span style={larg(regua.safra)} className={cn(FONTE_FINA, 'truncate text-muted-foreground')} title={codigoDaSafra(l.safra_id)}>
+                          <span style={larg(regua.safra)} className={cn(FONTE_FINA, 'uma-linha-que-rola text-muted-foreground')} title={codigoDaSafra(l.safra_id)}>
                             {codigoDaSafra(l.safra_id)}
                           </span>
                         )}
                         {regua.faz > 0 && (
-                          <span style={larg(regua.faz)} className={cn(FONTE_FINA, 'truncate text-muted-foreground')} title={codigoDaFazenda(l.fazenda_id)}>
+                          <span style={larg(regua.faz)} className={cn(FONTE_FINA, 'uma-linha-que-rola text-muted-foreground')} title={codigoDaFazenda(l.fazenda_id)}>
                             {codigoDaFazenda(l.fazenda_id)}
                           </span>
                         )}
@@ -1572,12 +1574,24 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
                           {anexo && <Paperclip className="h-2.5 w-2.5 text-muted-foreground" aria-hidden />}
                         </span>
                         {/* o valor da linha cai na coluna do SEU lado, na cor do sinal, sem seta; o Saldo da linha fica vazio */}
-                        <span style={larg(regua.pagar)} className="text-right">{receber ? null : celValor}</span>
                         <span style={larg(regua.receber)} className="text-right">{receber ? celValor : null}</span>
+                        <span style={larg(regua.pagar)} className="text-right">{receber ? null : celValor}</span>
                         <span style={larg(regua.saldo)} aria-hidden />
                       </button>
                     );
                   })}
+                  {/* CPR-AJUSTES-20-10 — a ÚLTIMA linha do dia: "Saldo em dd/mm/aaaa", o total a receber (▲), o total a pagar (▼) e o
+                      saldo. Fundo azul claro, texto navy em negrito, filete embaixo; a célula do saldo em vermelho quando negativo. */}
+                  {g.tipo === 'dia' && (
+                    <Faixa
+                      testId={g.hoje ? 'cpr-saldo-do-dia-hoje' : 'cpr-saldo-do-dia'} regua={regua}
+                      className={cn('h-[22px] border-b-[1.5px] border-b-primary/50 font-bold text-primary', FUNDO_DIA)}
+                      titulo={`Saldo em ${format(parseISO(g.chave), 'dd/MM/yyyy')}`}
+                      dica={g.hoje ? 'hoje: o realizado de hoje (já no caixa), os vencidos (contam no saldo de hoje) e o que vence hoje' : undefined}
+                      pagar={g.pagar} receber={g.receber} saldo={g.saldo}
+                      fundoNegativo motivoSemSaldo={motivoSemSaldo}
+                    />
+                  )}
                 </div>
               ))}
 
@@ -1664,7 +1678,7 @@ function CardResumo({ rotulo, contagem, classeContagem, titulo, valor, classeVal
       <div className="min-w-0 flex-1">
         <div className="flex text-[10px] leading-[12px] text-muted-foreground" title={titulo ?? rotulo}
           data-testid={testId ? `${testId}-rotulo` : undefined}>
-          <span className="truncate">{rotulo}</span>
+          <span className="uma-linha-que-rola min-w-0">{rotulo}</span>
           {contagem && <span className={cn('shrink-0 whitespace-pre tabular-nums', classeContagem)} data-testid={testId ? `${testId}-contagem` : undefined}>{' '}{contagem}</span>}
         </div>
         <div data-testid={testId ? `${testId}-valor` : undefined} data-valor-do-cartao
@@ -1715,6 +1729,25 @@ function CelValor({ largura, tipo, valor, navy, semSeta, fundoNegativo, motivoSe
   );
 }
 
+/**
+ * CPR-AJUSTES-20-10 — A FAIXA DE CIMA DO DIA: fina, SÓ a data completa e o quando ("Quarta-feira · 21/10/2026 · amanhã"), sem
+ * totais e sem saldo (eles moram na linha "Saldo em …", embaixo do dia). Em hoje, o aviso dos vencidos anteriores à conciliação
+ * vai em âmbar. O que não cabe rola na própria linha, nunca "…".
+ */
+function FaixaDoDia({ titulo, quando, hoje, aviso }: { titulo: string; quando: string; hoje: boolean; aviso?: string }): ReactNode {
+  return (
+    <div data-faixa data-testid={hoje ? 'cpr-faixa-hoje' : 'cpr-faixa-dia'}
+      className={cn('sticky top-[42px] z-10 flex h-[20px] shrink-0 items-center border-b border-l-[3px] border-l-transparent bg-muted px-3 text-[10px] font-semibold text-muted-foreground',
+        hoje && 'border-l-primary')}>
+      <span className="uma-linha-que-rola min-w-0 flex-1" title={[titulo, quando, aviso].filter(Boolean).join(' · ')}>
+        <span className="text-foreground">{titulo}</span>
+        {quando && <span> · {quando}</span>}
+        {aviso && <span className="text-amber-700 dark:text-amber-400" data-testid="cpr-aviso-hoje"> · {aviso}</span>}
+      </span>
+    </div>
+  );
+}
+
 /** UMA FAIXA DA LISTA (saldo hoje, vencidos, dia, rodapé): título à esquerda (texto: corta, inteiro no `title`) + as três colunas de valor da régua. */
 function Faixa({ regua, className, titulo, quando, dica, pagar, receber, saldo, navy, semSeta, fundoNegativo, motivoSemSaldo, testId }: {
   regua: Regua; className: string; titulo: string; quando?: string; dica?: string;
@@ -1723,12 +1756,12 @@ function Faixa({ regua, className, titulo, quando, dica, pagar, receber, saldo, 
 }): ReactNode {
   return (
     <div data-testid={testId} data-faixa className={cn('flex shrink-0 items-center gap-1 px-3 text-[11px] border-l-[3px] border-l-transparent', className)}>
-      <span className="min-w-0 flex-1 truncate tracking-wide" title={dica ? `${titulo}\n${dica}` : titulo}>
+      <span className="uma-linha-que-rola min-w-0 flex-1 tracking-wide" title={dica ? `${titulo}\n${dica}` : titulo}>
         {titulo}
         {quando && <span className={cn(FONTE_QUANDO, 'ml-1 font-normal opacity-80')}>· {quando}</span>}
       </span>
-      <CelValor largura={regua.pagar} tipo="pagar" valor={pagar} navy={navy} semSeta={semSeta} />
       <CelValor largura={regua.receber} tipo="receber" valor={receber} navy={navy} semSeta={semSeta} />
+      <CelValor largura={regua.pagar} tipo="pagar" valor={pagar} navy={navy} semSeta={semSeta} />
       <CelValor largura={regua.saldo} tipo="saldo" valor={saldo} navy={navy} fundoNegativo={fundoNegativo} motivoSemSaldo={motivoSemSaldo} />
     </div>
   );
@@ -1740,7 +1773,7 @@ function CelRecolhida({ rotulo, valor, texto, classe, titulo }: { rotulo: string
     <div className="flex min-w-0 items-baseline gap-1" title={titulo ?? `${rotulo}: ${valor ?? texto ?? ''}`}>
       <span className="shrink-0 text-muted-foreground">{rotulo}</span>
       {texto != null
-        ? <span className="min-w-0 truncate font-medium text-foreground">{texto}</span>
+        ? <span className="uma-linha-que-rola min-w-0 font-medium text-foreground">{texto}</span>
         : <span data-valor-recolhido className={cn('ml-auto shrink-0 font-medium tabular-nums', classe ?? 'text-foreground')}>{valor}</span>}
     </div>
   );

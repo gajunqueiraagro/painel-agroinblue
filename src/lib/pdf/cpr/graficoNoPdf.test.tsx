@@ -214,7 +214,7 @@ describe('a ponta de transferência chega escrita ao PDF e ao Excel', () => {
     receber: (l) => ehReceberCpr(l), paga: () => false, transferencia: (l) => ehTransferenciaCpr(l), foraDoCaixa: (l) => fora.has(chaveDaLinhaCpr(l)),
   };
   const noDia = [...recorte.periodoSoma.linhas, ...recorte.foraDoCaixa];
-  const grupos: GrupoDaTela<Linha>[] = [{ tipo: 'dia', titulo: 'Sexta', quando: '', linhas: noDia, pagar: serie.dias[0].pagar.valor, receber: serie.dias[0].receber.valor, saldo: serie.dias[0].saldo }];
+  const grupos: GrupoDaTela<Linha>[] = [{ tipo: 'dia', chave: '2026-10-09', titulo: 'Sexta', quando: '', linhas: noDia, pagar: serie.dias[0].pagar.valor, receber: serie.dias[0].receber.valor, saldo: serie.dias[0].saldo }];
   it('a descrição leva "Transf. · "; a saída cai em A pagar, a entrada em A receber; a ponta fora do caixa vem marcada', () => {
     const folhas = noDia.map((l) => contaDaFolha(l, de));
     expect(folhas.map((c) => [c.descricao, c.pagar !== '', c.receber !== '', c.foraDoCaixa])).toEqual([

@@ -10282,6 +10282,49 @@ curta nas secoes de regras) e a pendencia (na FILA); o bloco inteiro vai para do
     sobre o "5936" do bloco CRIAR-DO-EXTRATO-01, medido antes do merge); com este bloco 5953 (+5 `auditDeleteFront.test.ts`), 22
     skipped, as 3 falhas de sempre e 1 erro nao tratado (eram 87: o mock do supabase do `conciliacaoDono.test.tsx` sem `.ilike`
     desde o icone do OFX do UI-SEM-CORTE-02).
+- ⚠ CONTAS A PAGAR E RECEBER LÊ COMO EXTRATO DE BANCO: A RECEBER ANTES DE A PAGAR, O SALDO NA ÚLTIMA LINHA DO DIA, E TODO VENCIDO EM ABERTO
+  CONTA NO SALDO DE HOJE (CPR-AJUSTES-20-10, Gabriel 20/10/2026, so' tela, sem migration; mock "CPR Saldo do Dia"). SUBSTITUI, nos blocos
+  CPR-SALDO-DIA-01 / -02 e CPR-CAIXA-INICIAL-SEMPRE-01, a D1/D2 (o vencido so' contava depois da ancora), o grupo "Vencidos anteriores a'
+  conciliacao · fora do saldo", o grupo "Vencidos · contam no saldo", a marca "Hoje" e os totais na faixa de cima do dia.
+  · ORDEM DAS COLUNAS: "A receber" antes de "A pagar" no cabecalho, nas linhas, nas faixas, no rodape "Fim do periodo", nos cartoes (e na
+    faixa recolhida do Ampliado), no PDF (cartoes, tabela, "Saldo em", resumos por semana e por conta) e no Excel (as duas abas).
+  · O DIA: em cima, `FaixaDoDia` — 20px, so' "Quarta-feira · 21/10/2026 · amanhã" (dd/mm/aaaa, sem totais nem saldo; em hoje o aviso em
+    ambar); as linhas; e por ULTIMO a linha "Saldo em dd/mm/aaaa" (`cpr-saldo-do-dia` / `-hoje`, 22px, fundo azul claro, navy negrito,
+    filete embaixo, saldo vermelho quando negativo) com a receber ▲, a pagar ▼ e o saldo. Caixa inicial segue a primeira linha; Fim do
+    periodo segue o rodape navy preso. Dentro do dia: `ordenarDoDiaCpr` (dono) — entradas, depois saidas, cada grupo do maior valor ao
+    menor, empate pela chave da linha.
+  · VENCIDOS (DECIDIDO pelo Gabriel): todo previsto / programado / agendado vencido em aberto conta no saldo de HOJE, inclusive com
+    vencimento anterior a' conciliacao da conta, sem conta ou em conta sem ancora; entra NO DIA DE HOJE (com "Incluir vencidos") com o
+    selo "vencido" (`cpr-selo-vencido`, depois da descricao, como o "estimado"). `vencidoAnteriorAConciliacao` (dono) SO' MARCA os que tem
+    vencimento <= a ancora da conta da linha: a faixa de hoje avisa "N vencido(s) que nao apareceu(ram) no extrato conciliado ate'
+    dd/mm/aaaa entra(m) hoje · confirme se ainda vai acontecer" (`cpr-aviso-hoje`). Os totais do dia de hoje sao do dono
+    (`totaisDeHojeCpr`: realizado de hoje + vencidos + o que vence hoje) — a tela nao soma. Fora de um periodo que contem hoje (encerrado,
+    futuro) os vencidos ficam num grupo `vencidos` a' parte, sem linha de saldo. "Sem vencimento · fora do saldo" continua.
+    ⚠ POR QUE O BALDE EXISTIA (CPR-SALDO-DIA-01 D1/D2, 06/10): vencido em mes ja' conciliado "pode ser lancamento errado, legado". RISCO
+      ACEITO: lancamento legado que ja' aconteceu por outro registro passa a tirar do saldo de hoje ate' ser cancelado ou ter a data corrigida.
+    ⚠ PONTA DE TRANSFERENCIA VENCIDA EM CONTA FORA DO CAIXA (em "Todas"): nao conta e nao e' listada (a outra ponta, a da conta do caixa,
+      e' a que mexe no saldo) — mesma regra da ponta antes do periodo.
+    ⚠ "INCLUIR VENCIDOS" DESLIGADO: a semantica de antes (D3), confirmada — os vencidos saem da LISTA e do total do rodape e CONTINUAM no
+      saldo; a faixa de hoje diz "o saldo inclui N vencido(s) fora da lista". (O briefing dizia "fora da lista e do saldo": nao era assim.)
+    ⚠ O cartao "Vencidos que contam" do PDF e o cartao Vencidos da tela seguem SO' COM CONTAS (sem pontas de transferencia), a regra de
+      09/10: a Transf. Aplicacao CDB vencida aparece na lista e no saldo, nao no cartao.
+  · CPR-SEM-CORTE-01: nenhum `truncate` na tela nem no Fluxo — texto que nao cabe rola no proprio lugar (`.uma-linha-que-rola`; os
+    seletores pela `filtros-uma-linha` na raiz da tela). A lista rola nos DOIS eixos dentro do cartao abaixo da regua do modo
+    (`LARGURA_MINIMA_NORMAL` 884, `_AMPLIADA` 1092) e se declara `data-tabela-que-rola` — o `check:ui-cortes` passou a isentar essa
+    marca na regra `numero`, como isenta `<table>` (numero de tabela que rola inteira nao conta). A terceira linha do Ampliado
+    (`cpr-linha-status`) quebra em janela estreita (`flex-wrap`, `min-h-[20px]`): os totais confirmado / estimado descem, nunca partem.
+    Gate: `cpr-lista` e `cpr-ampliado` (a CPR inteira, bancada `tela=cpr` com um vencido e uma entrada sinteticos) nos sete tamanhos, 0
+    achados; os 28 achados antigos (~/agroinblue-local/cpr-sem-corte-01/achados.txt) zerados, e o `cpr-ampliado-totais` a 750.
+  · O Fluxo perdeu a frase "N vencido anterior a' conciliacao, fora do saldo" (prop `vencidosForaDoSaldo` saiu).
+  Testes: `src/components/financeiro-v2/cprAjustes2010.test.ts` 12 (novo; o caso da Vera em sintetico: caixa 293.896,08, CDB de 290.000
+  vencida em 09/10 com a conta conciliada ate' 09/10 -> hoje 3.896,08, depois −1.896,83 -> 1.999,25); `cprRecorte.test.ts`,
+  `exportCpr.test.tsx` e `graficoNoPdf.test.tsx` trocados ao contrato novo. 5 mutacoes mortas (cabecalho antigo, sem a linha "Saldo em",
+  ordem sem valor, regra antiga do vencido; e o import antigo).
+  ⚠ NAO PROVADO: nada com login no app real (bancada + PDF e Excel gerados do dono com dado sintetico) · o caso da Vera com o dado de
+    hoje: em 20/10 a Aplicacao CDB passou a vencer em 20/10 e o FGTS / E-Social em 20/11 (editados no proto entre 18h49 e 19h28 UTC) —
+    nao ha' mais o vencido de 09/10 nela · o Ampliado na janela real (a bancada mantem a lateral de 176px aberta).
+  · SUITE depois do CPR-AJUSTES-20-10: 5946 passando (+13: `cprAjustes2010.test.ts` 12 novo, `cprRecorte.test.ts` 80 -> 81), 22 skipped, as 3
+    falhas de sempre e os 88 erros de sempre (87 do `conciliacaoDono.test.tsx`, do Code 2). Gate de tela completo: 104 telas, 550 medicoes, 0 achados.
 - ⚠ O "DESFAZER COMPROMISSO" DA OC NAO TRAVA EM LANCAMENTO QUE JA' NAO E' DA OC (OC-DESFAZER-PREVISTO-01a, Gabriel 20/10/2026). O caso:
   OC de abate 1645ba75 / compromisso 6347b5a1 — um lancamento REALIZADO e CONCILIADO de julho (2448e772) foi vinculado a' OC em 12/10
   e DESVINCULADO em 14/10; a parte ficou cancelada e o lancamento vivo (como deve). `oc_cancelar_programacao` e `oc_cancelar_compromisso`

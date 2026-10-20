@@ -30,6 +30,8 @@ const semHifen = (palavra: string): string[] => [palavra];
 /** Uma célula de TEXTO que corta: a caixa tem a largura da coluna e o texto para 5pt ANTES da coluna vizinha. */
 /** O lugar do "i/N" da parcela, dentro da coluna Descrição: fixo, para o nome cortar ANTES dele. */
 const W_PARCELA = 26;
+/** CPR-AJUSTES-20-10 — o selo "vencido" depois da descrição: lugar fixo, como o "i/N" (o nome corta antes dele) */
+const W_VENCIDO = 30;
 
 function Corta({ texto, largura, cor, tamanho = F }: { texto: string; largura?: number; cor: string; tamanho?: number }) {
   return (
@@ -71,8 +73,8 @@ function CabecalhoDaTabela({ comConta, fixo }: { comConta: boolean; fixo?: boole
       <Text style={{ ...h, width: W.safra }}>Safra</Text>
       <Text style={{ ...h, width: W.faz }}>Faz.</Text>
       <Text style={{ ...h, width: W.status, textAlign: 'center' }}>Status</Text>
-      <Text style={{ ...h, width: W.pagar, textAlign: 'right', paddingRight: 3 }}>A pagar</Text>
       <Text style={{ ...h, width: W.receber, textAlign: 'right', paddingRight: 3 }}>A receber</Text>
+      <Text style={{ ...h, width: W.pagar, textAlign: 'right', paddingRight: 3 }}>A pagar</Text>
       <Text style={{ ...h, width: W.saldo, textAlign: 'right', paddingRight: 3 }}>Saldo</Text>
     </View>
   );
@@ -94,28 +96,54 @@ function LinhaDaConta({ c, comConta, zebra }: { c: ContaDaFolha; comConta: boole
           <View style={{ flex: 1, paddingRight: 2 }}><Text hyphenationCallback={semHifen} style={{ ...corta, fontSize: F, color: COR.cinza }}>{c.descricao}</Text></View>
           <Text style={{ width: W_PARCELA, fontSize: F, color: COR.cinza, textAlign: 'right' }}>{c.parcela}</Text>
         </View>
+      ) : c.vencido ? (
+        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', paddingRight: 5 }}>
+          <View style={{ flex: 1, paddingRight: 2 }}><Text hyphenationCallback={semHifen} style={{ ...corta, fontSize: F, color: COR.cinza }}>{c.descricao}</Text></View>
+          <Text style={{ width: W_VENCIDO, fontSize: 6.5, fontWeight: 700, color: COR.vermelho, textAlign: 'right' }}>vencido</Text>
+        </View>
       ) : <Corta texto={c.descricao} cor={COR.cinza} />}
       <Corta texto={c.fornecedor} largura={wForn(comConta)} cor={COR.cinzaMedio} />
       <Corta texto={c.subcentro} largura={wSub(comConta)} cor={COR.cinzaMedio} />
       <Text style={{ ...t, width: W.safra }}>{c.safra}</Text>
       <Text style={{ ...t, width: W.faz }}>{c.faz}</Text>
       <Text style={{ width: W.status, fontSize: F, fontWeight: 700, textAlign: 'center', color: hexDoStatus(c.statusChave) ?? COR.cinzaMedio }}>{c.status}</Text>
-      <Text style={{ width: W.pagar, fontSize: F, textAlign: 'right', paddingRight: 3, color: COR.vermelho, opacity: apagada }}>{c.pagar}</Text>
       <Text style={{ width: W.receber, fontSize: F, textAlign: 'right', paddingRight: 3, color: COR.verde, opacity: apagada }}>{c.receber}</Text>
+      <Text style={{ width: W.pagar, fontSize: F, textAlign: 'right', paddingRight: 3, color: COR.vermelho, opacity: apagada }}>{c.pagar}</Text>
       <View style={{ width: W.saldo }} />
     </View>
   );
 }
 
 function LinhaDaFaixa({ f }: { f: FaixaDaFolha }) {
-  const vencidos = f.tipo === 'vencidos_contam';
+  const vencidos = f.tipo === 'vencidos';
   const hoje = f.tipo === 'saldo_hoje';
+  /* CPR-AJUSTES-20-10 — a faixa de cima do DIA leva só a data e o quando (os totais e o saldo moram na linha "Saldo em" embaixo) */
+  if (f.tipo === 'dia') {
+    return (
+      <View style={{ paddingVertical: 1.6, paddingHorizontal: 4, backgroundColor: COR.zebra, borderTopWidth: 0.5, borderTopColor: COR.separador }}>
+        <Text hyphenationCallback={semHifen} style={{ ...corta, fontSize: 7, fontWeight: 700, color: COR.cinza }}>{f.titulo}</Text>
+        {f.aviso ? <Text hyphenationCallback={semHifen} style={{ fontSize: 6.5, color: COR.ambar, marginTop: 1 }}>{f.aviso}</Text> : null}
+      </View>
+    );
+  }
   const cor = vencidos ? COR.vermelho : COR.azul;
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 2.4, paddingHorizontal: 4, backgroundColor: hoje ? COR.branco : vencidos ? FUNDO_VENCIDOS : FUNDO_DIA, borderTopWidth: hoje ? 0 : 0.9, borderTopColor: cor, borderBottomWidth: hoje ? 0.5 : 0, borderBottomColor: COR.separador }}>
       <Text hyphenationCallback={semHifen} style={{ ...corta, flex: 1, fontSize: 7.5, fontWeight: 700, color: cor }}>{f.titulo}</Text>
-      <Valor c={f.pagar} largura={W.pagar} negrito />
       <Valor c={f.receber} largura={W.receber} negrito />
+      <Valor c={f.pagar} largura={W.pagar} negrito />
+      <Valor c={f.saldo} largura={W.saldo} negrito />
+    </View>
+  );
+}
+
+/** CPR-AJUSTES-20-10 — a ÚLTIMA linha do dia, como extrato de banco: "Saldo em dd/mm/aaaa", fundo azul claro, texto navy negrito */
+function LinhaDoFecho({ f }: { f: NonNullable<FaixaDaFolha['fecho']> }) {
+  return (
+    <View wrap={false} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 2.4, paddingHorizontal: 4, backgroundColor: FUNDO_DIA, borderBottomWidth: 0.9, borderBottomColor: COR.azul }}>
+      <Text hyphenationCallback={semHifen} style={{ ...corta, flex: 1, fontSize: 7.5, fontWeight: 700, color: COR.azul }}>{f.titulo}</Text>
+      <Valor c={f.receber} largura={W.receber} negrito />
+      <Valor c={f.pagar} largura={W.pagar} negrito />
       <Valor c={f.saldo} largura={W.saldo} negrito />
     </View>
   );
@@ -131,6 +159,7 @@ function Faixa({ f, comConta }: { f: FaixaDaFolha; comConta: boolean }) {
         {primeira ? <LinhaDaConta c={primeira} comConta={comConta} zebra={false} /> : null}
       </View>
       {resto.map((c, i) => <LinhaDaConta key={i} c={c} comConta={comConta} zebra={i % 2 === 0} />)}
+      {f.fecho ? <LinhaDoFecho f={f.fecho} /> : null}
     </View>
   );
 }
@@ -150,8 +179,8 @@ function BlocoSimples({ b, comConta, inteiro }: { b: BlocoSimplesDaFolha; comCon
       {b.contas.map((c, i) => <LinhaDaConta key={i} c={c} comConta={comConta} zebra={i % 2 === 1} />)}
       <View wrap={false} style={{ flexDirection: 'row', paddingVertical: 2.4, paddingHorizontal: 4, borderTopWidth: 0.9, borderTopColor: COR.cinzaMedio }}>
         <Text style={{ flex: 1, fontSize: 7.5, fontWeight: 700, color: COR.cinza }}>Total · fora do saldo</Text>
-        <Text style={{ width: W.pagar, fontSize: F, fontWeight: 700, textAlign: 'right', paddingRight: 3, color: COR.cinza }}>{b.pagar}</Text>
         <Text style={{ width: W.receber, fontSize: F, fontWeight: 700, textAlign: 'right', paddingRight: 3, color: COR.cinza }}>{b.receber}</Text>
+        <Text style={{ width: W.pagar, fontSize: F, fontWeight: 700, textAlign: 'right', paddingRight: 3, color: COR.cinza }}>{b.pagar}</Text>
         <View style={{ width: W.saldo }} />
       </View>
     </View>
@@ -212,8 +241,8 @@ function LinhaResumo({ rotulo, caixa, pagar, receber, saldo, forte, zebra }: { r
         <Text hyphenationCallback={semHifen} style={{ ...corta, fontSize: F, color: COR.cinza, fontWeight: forte ? 700 : 400 }}>{rotulo}</Text>
       </View>
       {caixa == null ? null : <Text style={{ width: COL_RESUMO.valor, fontSize: F, textAlign: 'right', paddingRight: 3, color: COR.cinza, fontWeight: forte ? 700 : 400 }}>{caixa}</Text>}
-      <Valor c={pagar} largura={COL_RESUMO.valor} negrito={forte} />
       <Valor c={receber} largura={COL_RESUMO.valor} negrito={forte} />
+      <Valor c={pagar} largura={COL_RESUMO.valor} negrito={forte} />
       <Valor c={saldo} largura={COL_RESUMO.valor} negrito={forte} />
     </View>
   );
@@ -223,11 +252,9 @@ export function DocumentoCpr({ modelo: m, logoData }: { modelo: ModeloCpr; logoD
   const pagina = { ...estilos.pagina, paddingTop: 74 };
   const cab = <PdfHeader titulo="Contas a Pagar e Receber" clienteNome={m.cabecalho.clienteNome} fazenda={m.cabecalho.fazenda} contaNome={m.cabecalho.contaNome} periodoLabel={m.cabecalho.periodo} linha2={m.cabecalho.linha2} logoData={logoData} />;
   /* bloco curto vai inteiro na página dos resumos; bloco longo ganha página própria com o cabeçalho da tabela fixo */
-  const anterioresLongo = !!m.anteriores && m.anteriores.contas.length > CABE_INTEIRO;
   const semVencimentoLongo = !!m.semVencimento && m.semVencimento.contas.length > CABE_INTEIRO;
-  const anterioresCurto = m.anteriores && !anterioresLongo ? m.anteriores : null;
   const semVencimentoCurto = m.semVencimento && !semVencimentoLongo ? m.semVencimento : null;
-  const temResumos = !!anterioresCurto || !!semVencimentoCurto || m.semanas.length > 0 || !!m.porConta;
+  const temResumos = !!semVencimentoCurto || m.semanas.length > 0 || !!m.porConta;
   return (
     <Document title="Contas a Pagar e Receber" author="AGROinBLUE">
       <Page size="A4" orientation="landscape" style={pagina} wrap>
@@ -258,19 +285,12 @@ export function DocumentoCpr({ modelo: m, logoData }: { modelo: ModeloCpr; logoD
         {m.faixas.map((f, i) => <Faixa key={i} f={f} comConta={m.comColunaConta} />)}
         <View wrap={false} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: COR.azul, paddingVertical: 3.5, paddingHorizontal: 4 }}>
           <Text style={{ flex: 1, fontSize: 8, fontWeight: 700, color: COR.branco }}>{m.fim.titulo}</Text>
-          <Valor c={m.fim.pagar} largura={W.pagar} negrito corFixa="#fca5a5" />
           <Valor c={m.fim.receber} largura={W.receber} negrito corFixa="#86efac" />
+          <Valor c={m.fim.pagar} largura={W.pagar} negrito corFixa="#fca5a5" />
           <Valor c={m.fim.saldo} largura={W.saldo} negrito corFixa={m.fim.saldo?.tom === 'neg' ? '#fca5a5' : m.fim.saldo?.tom === 'pos' ? '#86efac' : COR.branco} />
         </View>
       </Page>
 
-      {m.anteriores && anterioresLongo ? (
-        <Page size="A4" orientation="landscape" style={pagina} wrap>
-          {cab}
-          <PdfRodape />
-          <BlocoSimples b={m.anteriores} comConta={m.comColunaConta} inteiro={false} />
-        </Page>
-      ) : null}
       {m.semVencimento && semVencimentoLongo ? (
         <Page size="A4" orientation="landscape" style={pagina} wrap>
           {cab}
@@ -283,14 +303,13 @@ export function DocumentoCpr({ modelo: m, logoData }: { modelo: ModeloCpr; logoD
         <Page size="A4" orientation="landscape" style={pagina} wrap>
           {cab}
           <PdfRodape />
-          {anterioresCurto ? <BlocoSimples b={anterioresCurto} comConta={m.comColunaConta} inteiro /> : null}
           {semVencimentoCurto ? <BlocoSimples b={semVencimentoCurto} comConta={m.comColunaConta} inteiro /> : null}
 
           {/* os dois resumos vão INTEIROS (`wrap={false}`): nunca partem entre páginas, então o cabeçalho nunca falta */}
           {m.semanas.length > 0 ? (
             <View wrap={false} style={{ marginBottom: 10 }}>
               <Text style={estilos.secao}>Resumo por semana</Text>
-              <CabecalhoResumo primeira="Semana" colunas={['A pagar', 'A receber', 'Saldo no fim da semana']} />
+              <CabecalhoResumo primeira="Semana" colunas={['A receber', 'A pagar', 'Saldo no fim da semana']} />
               {m.semanas.map((w, i) => (
                 <LinhaResumo key={w.semana} rotulo={w.semana} zebra={i % 2 === 1} pagar={w.pagar} receber={w.receber} saldo={w.saldo} />
               ))}
@@ -300,7 +319,7 @@ export function DocumentoCpr({ modelo: m, logoData }: { modelo: ModeloCpr; logoD
           {m.porConta ? (
             <View wrap={false}>
               <Text style={estilos.secao}>Resumo por conta</Text>
-              <CabecalhoResumo primeira="Conta" colunas={['Caixa hoje', 'A pagar', 'A receber', 'Saldo no fim']} />
+              <CabecalhoResumo primeira="Conta" colunas={['Caixa hoje', 'A receber', 'A pagar', 'Saldo no fim']} />
               {m.porConta.linhas.map((c, i) => (
                 <LinhaResumo key={`${c.conta}-${i}`} rotulo={c.conta} zebra={i % 2 === 1} caixa={c.caixa} pagar={c.pagar} receber={c.receber} saldo={c.saldo} />
               ))}
