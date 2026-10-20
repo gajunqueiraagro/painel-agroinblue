@@ -128,6 +128,9 @@ export interface PainelData {
   historicoAlavancagem: HistoricoAlavancagemPoint[];
 }
 
+/** FIN-PARCELA-STATUS-01: o nome do grupo das parcelas ADIADAS (sem vencimento até a contemplação do consórcio), com a quantidade. */
+export const rotuloDasAdiadas = (n: number): string => `Adiadas, sem vencimento (${n} ${n === 1 ? 'parcela' : 'parcelas'})`;
+
 const MESES_LABELS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
 export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin, mesRef: number | 'todos' = 'todos'): PainelData {
@@ -248,6 +251,8 @@ export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin, mesRef
 
     // Pizza por faixa: Curto (anoFiltro..anoFiltro+1) vs Longo (anoFiltro+2+)
     let curtoPrazo = 0, longoPrazo = 0;
+    // FIN-PARCELA-STATUS-01: a parcela ADIADA (sem vencimento) não é curto nem longo prazo — grupo próprio, com a quantidade
+    let adiadoPrazo = 0, adiadoQtde = 0;
 
     // Credor
     const credorMap = new Map<string, number>();
@@ -295,7 +300,8 @@ export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin, mesRef
           bucket.total += valorTotal;
         }
 
-        if (venc < dataCorte) overdueCount++;
+        // Parcela ADIADA do consórcio (sem vencimento até a contemplação) não está vencida.
+        if (venc && venc < dataCorte) overdueCount++;
 
         if (venc > dataCorte && venc <= anoFim) {
           aAmortizar.principal += principal;
@@ -312,8 +318,8 @@ export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin, mesRef
       if (isPendente) {
         credorMap.set(fin.credor_nome, (credorMap.get(fin.credor_nome) || 0) + valorTotal);
 
-        const vencYear = Number(venc.substring(0, 4));
-        if (vencYear <= ano + 1) curtoPrazo += principal;
+        if (!venc) { adiadoPrazo += principal; adiadoQtde++; }
+        else if (Number(venc.substring(0, 4)) <= ano + 1) curtoPrazo += principal;
         else longoPrazo += principal;
       }
 
@@ -338,7 +344,7 @@ export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin, mesRef
         }
       }
 
-      if (isPendente && venc <= em30Dias) {
+      if (isPendente && venc && venc <= em30Dias) {
         pendentes.push({
           parcela_id: p.id,
           financiamento_id: p.financiamento_id,
@@ -356,7 +362,9 @@ export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin, mesRef
     }
 
     const proximasParcelas = parcelas
-      .filter(p => p.status === 'pendente')
+      // Parcela ADIADA do consórcio não tem vencimento (só ganha na contemplação): não é "próxima", e sem data o painel quebrava
+      // (format de data inválida — tela branca no Agnaldo desde o 002122 gravado com 34 adiadas, 20/10/2026).
+      .filter(p => p.status === 'pendente' && !!p.data_vencimento)
       .sort((a, b) => a.data_vencimento.localeCompare(b.data_vencimento))
       .slice(0, 12)
       .map((p): ProximaParcela => {
@@ -392,6 +400,7 @@ export function useFinanciamentosPainel(ano: number, tipoFiltro: TipoFin, mesRef
     const pizzaVencimentos: SliceVencimento[] = [
       { nome: `Curto Prazo (${ano}–${ano + 1})`, valor: curtoPrazo, color: '#EF4444' },
       { nome: `Longo Prazo (${ano + 2}+)`, valor: longoPrazo, color: '#EAB308' },
+      { nome: rotuloDasAdiadas(adiadoQtde), valor: adiadoPrazo, color: '#94A3B8' },
     ].filter(s => s.valor > 0);
 
     // ── Evolução da Dívida: 7 barras (Ini + 5 anos + Demais) — só Principal pendente ──
