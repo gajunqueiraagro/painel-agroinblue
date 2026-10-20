@@ -5,6 +5,7 @@
 --   D3 fornecedor com lancamento: a simulacao recusa (com_uso) e a gravacao levanta P0001 com a frase do "mescle"
 --   D4 o membro desfaz um vinculo vivo do extrato pelo gesto: desfeito_em/por/motivo gravados, linha viva, trilha com o motivo
 --   D5 sem motivo, a gravacao recusa (P0001) e a simulacao nao grava
+--   D6 o extrato NAO grava trilha no INSERT (a importacao tem registro proprio): gatilho so' em UPDATE/DELETE
 BEGIN;
 SET LOCAL lock_timeout = '2s';
 SET LOCAL statement_timeout = '30s';
@@ -69,6 +70,13 @@ begin
   if e is distinct from 'P0001' then raise exception 'D5 sem motivo: %', coalesce(e, 'aceitou'); end if;
   perform public.fn_conciliacao_item_desfazer(v_item, null, true);
   if (select desfeito_em from public.conciliacao_bancaria_itens where id = v_item) is not null then raise exception 'D5 simulacao gravou'; end if;
+
+  -- D6
+  if exists (select 1 from pg_trigger where tgname = 'trg_trilha_registro' and tgrelid = 'public.extrato_bancario_v2'::regclass
+             and tgtype & 4 > 0)
+     or not exists (select 1 from pg_trigger where tgname = 'trg_trilha_registro' and tgrelid = 'public.extrato_bancario_v2'::regclass
+             and tgtype & 16 > 0 and tgtype & 8 > 0) then
+    raise exception 'D6 gatilho do extrato'; end if;
 
   raise exception 'OK';
 end $teste$;
