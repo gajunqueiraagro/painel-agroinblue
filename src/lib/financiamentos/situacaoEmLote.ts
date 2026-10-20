@@ -58,7 +58,8 @@ export function resumoDoContratoNaLista(s: SituacaoDoContrato | undefined): Resu
   return {
     parcelasPagas: s.cartoes.pagas,
     /* o "em aberto" É o do contrato: a vencer + vencido, os dois cartões do dono (a parcial entra só pelo que falta) */
-    totalPendente: (cent(s.cartoes.aVencer) + cent(s.cartoes.vencido)) / 100,
+    /* FIN-PARCELA-STATUS-01: + as ADIADAS (sem vencimento), que não são nem a vencer nem vencidas e não podem sumir do em aberto */
+    totalPendente: (cent(s.cartoes.aVencer) + cent(s.cartoes.vencido) + cent(s.cartoes.adiado)) / 100,
     jurosPendente: jurosCent / 100,
     proxVencimento: prox?.dataVencimento ?? null,
     valorDaProxParcela: prox ? prox.valorTotal : null,
