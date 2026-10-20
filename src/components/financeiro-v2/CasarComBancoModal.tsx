@@ -20,6 +20,7 @@
  * previsto vira o real. Nada concilia sozinho; o operador ainda clica Conciliar.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { fechaAoCentavo, podeCriarPelaDiferenca } from '@/lib/conciliacao/tolerancia';
 import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { X } from 'lucide-react';
@@ -62,7 +63,7 @@ interface Levado extends LevadoInicial { valorTexto: string; }
  * MESMO sinal que ele = os lançamentos passam do banco ("a mais").
  */
 export function sentidoDaDiferenca(diferenca: number, noExtrato: number): 'a_mais' | 'a_menos' | 'confere' {
-  if (Math.abs(diferenca) <= 0.01) return 'confere';
+  if (fechaAoCentavo(diferenca)) return 'confere';
   return diferenca * Math.sign(noExtrato || 1) > 0 ? 'a_mais' : 'a_menos';
 }
 
@@ -174,7 +175,7 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
   const dataCurta = extrato.data ? `${extrato.data.slice(8, 10)}/${extrato.data.slice(5, 7)}` : '—';
   const semItens = levados.length === 0;
   const podeConciliar = !!sim?.ok && !gravando && !semItens;
-  const podeCriar = !!sim && !sim.ok && Math.abs(sim.diferenca) > 0.01;
+  const podeCriar = podeCriarPelaDiferenca(sim, semItens);
   const sentido = sim && !semItens ? sentidoDaDiferenca(sim.diferenca, sim.noExtrato) : null;
   const unico = levados.length === 1;
   const valorDoBanco = paraCampo(extrato.valor);
