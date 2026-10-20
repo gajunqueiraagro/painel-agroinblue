@@ -44,13 +44,20 @@ export interface ContaDaFolha {
   pagar: string; receber: string; paga: boolean;
   /** ponta de transferência em conta fora do caixa: aparece e não soma (quem diz é o dono do recorte) */
   foraDoCaixa: boolean;
+  /** CPR-AJUSTES-20-10: vencido (conta no saldo de hoje) — o selo "vencido" depois da descrição */
+  vencido: boolean;
 }
 /** Uma faixa (saldo hoje, vencidos, dia, intervalo) com as contas listadas nela. */
 export interface FaixaDaFolha {
-  tipo: 'saldo_hoje' | 'vencidos_contam' | 'entre' | 'dia';
+  tipo: 'saldo_hoje' | 'vencidos' | 'entre' | 'dia';
   titulo: string;
   pagar: CelulaValorCpr | null; receber: CelulaValorCpr | null; saldo: CelulaValorCpr | null;
   contas: ContaDaFolha[];
+  /** CPR-AJUSTES-20-10 — o DIA termina na linha "Saldo em dd/mm/aaaa" (a receber, a pagar, saldo), como na tela; a faixa de cima
+   *  do dia leva só a data e o quando */
+  fecho?: { titulo: string; pagar: CelulaValorCpr | null; receber: CelulaValorCpr | null; saldo: CelulaValorCpr | null };
+  /** o aviso dos vencidos anteriores à conciliação (só em hoje) */
+  aviso?: string;
 }
 export interface BlocoSimplesDaFolha { titulo: string; frase: string; contas: ContaDaFolha[]; pagar: string; receber: string }
 
@@ -68,7 +75,6 @@ export interface ModeloCpr {
   notaSemSaldo: string | null;
   /** segmento "A pagar" ou "A receber": a lista é de um lado só, o saldo é sempre da conta */
   notaSegmento: string | null;
-  anteriores: BlocoSimplesDaFolha | null;
   semVencimento: BlocoSimplesDaFolha | null;
   semanas: { semana: string; pagar: CelulaValorCpr | null; receber: CelulaValorCpr | null; saldo: CelulaValorCpr | null }[];
   porConta: { linhas: { conta: string; caixa: string; pagar: CelulaValorCpr | null; receber: CelulaValorCpr | null; saldo: CelulaValorCpr | null }[]; total: { caixa: string; pagar: CelulaValorCpr | null; receber: CelulaValorCpr | null; saldo: CelulaValorCpr | null }; nota: string } | null;
@@ -78,12 +84,15 @@ export interface ModeloCpr {
 
 /** O grupo que a tela desenha (a MESMA lista da tela, na mesma ordem). */
 export interface GrupoDaTela<L> {
-  /** 'hoje' = a marca de hoje no meio da lista da tela; na folha quem a escreve é a faixa "Saldo hoje" (o grupo é pulado) */
-  tipo: 'vencidos_contam' | 'vencidos_anteriores' | 'entre' | 'dia' | 'sem_vencimento' | 'hoje';
+  /** CPR-AJUSTES-20-10: hoje é um DIA (com os vencidos dentro); 'vencidos' só existe fora de um período que contém hoje */
+  tipo: 'vencidos' | 'entre' | 'dia' | 'sem_vencimento';
+  /** no dia, a data (AAAA-MM-DD): o título da linha "Saldo em dd/mm/aaaa" */
+  chave: string;
   titulo: string; quando: string; linhas: L[];
   pagar: number; receber: number; saldo: number | null | undefined;
-  /** dia ANTES de hoje (realizado): na folha vem logo depois do Caixa inicial, antes do "Saldo hoje" */
   passado?: boolean;
+  hoje?: boolean;
+  avisoHoje?: string;
 }
 export interface LinhaDaTela {
   data_competencia?: string | null; data_vencimento?: string | null; data_pagamento?: string | null;
@@ -118,6 +127,8 @@ export interface EntradaDoModelo<L extends LinhaDaTela> {
     transferencia?: (l: L) => boolean; foraDoCaixa?: (l: L) => boolean;
     /** o número e o total da parcela NO CONTRATO (lidos do banco); ausente = a descrição como está */
     parcela?: (l: L) => ParcelaDoContrato | null;
+    /** CPR-AJUSTES-20-10: a linha está vencida (conta no saldo de hoje) */
+    vencido?: (l: L) => boolean;
   };
 }
 
@@ -140,7 +151,7 @@ export function contaDaFolha<L extends LinhaDaTela>(l: L, de: EntradaDoModelo<L>
     comp: ma(l.data_competencia), venc: dmaCurto(l.data_vencimento), pgto: paga ? dmaCurto(l.data_pagamento) : '',
     descricao: `${marca}${(np.parcela ? np.nome : l.descricao) || '—'}`, parcela: np.parcela ?? '', fornecedor: de.fornecedor(l), conta: de.conta(l), subcentro: de.subcentro(l), centro: de.centro(l),
     macro: de.macro(l), safra: de.safra(l), faz: de.faz(l), status: st.rotulo, statusChave: st.chave, origem: de.origem(l), doc: de.doc(l),
-    pagar: receber ? '' : texto, receber: receber ? texto : '', paga, foraDoCaixa: !!de.foraDoCaixa?.(l),
+    pagar: receber ? '' : texto, receber: receber ? texto : '', paga, foraDoCaixa: !!de.foraDoCaixa?.(l), vencido: !!de.vencido?.(l),
   };
 }
 
@@ -176,54 +187,45 @@ export function montarModeloCpr<L extends LinhaDaTela>(e: EntradaDoModelo<L>): M
     { rotulo: 'Vencidos que contam', valor: formatMoeda(c.vencidosContamPagar.valor),
       detalhes: [`${contas(c.vencidosContamPagar.contas)} a pagar${c.vencidosContamReceber.valor > 0 ? ` · a receber ${formatMoeda(c.vencidosContamReceber.valor)}` : ''}`],
       tom: c.vencidosContamPagar.valor > 0 ? 'neg' : 'neutro' },
-    { rotulo: 'A pagar no período', valor: formatMoeda(c.pagarNoPeriodo.valor), detalhes: linhasPorStatus(c.porStatus.pagar, c.transferencias.pagar.valor), tom: 'neg' },
     { rotulo: 'A receber no período', valor: formatMoeda(c.receberNoPeriodo.valor), detalhes: linhasPorStatus(c.porStatus.receber, c.transferencias.receber.valor), tom: c.receberNoPeriodo.valor > 0 ? 'pos' : 'neutro' },
+    { rotulo: 'A pagar no período', valor: formatMoeda(c.pagarNoPeriodo.valor), detalhes: linhasPorStatus(c.porStatus.pagar, c.transferencias.pagar.valor), tom: 'neg' },
     { rotulo: 'Mínimo', valor: s.menor ? saldoComData(s.menor.valor) : '—', detalhes: s.menor ? [s.menor.data ? `em ${dm(s.menor.data)}` : 'hoje'] : [], tom: tomDe(s.menor?.valor ?? null) },
     { rotulo: 'Saldo no fim', valor: saldoComData(s.fim), detalhes: [`em ${dma(e.periodo.ate)}`], tom: tomDe(s.fim) },
     { rotulo: 'Caixa hoje', valor: saldoComData(s.hoje), detalhes: [dma(c.hoje), ...situacaoDaConciliacao(c.conciliadoAte, c.hoje)], tom: 'neutro' },
   ];
 
   const quem = e.todasAsContas ? 'todas as contas' : e.contaNome;
-  const faixaDeHoje: FaixaDaFolha = {
-    tipo: 'saldo_hoje',
-    titulo: `Saldo hoje · ${quem}${e.incluirVencidos ? '' : ' · após vencidos'}`,
-    /* com os vencidos ligados, a linha de hoje mostra o que JÁ foi realizado hoje (o saldo dela já o contém) */
-    pagar: e.incluirVencidos ? (s.realizadoHoje && s.realizadoHoje.pagar.contas > 0 ? celulaDeValor('pagar', s.realizadoHoje.pagar.valor) : null) : celulaDeValor('pagar', s.partida.pagar.valor),
-    receber: e.incluirVencidos ? (s.realizadoHoje && s.realizadoHoje.receber.contas > 0 ? celulaDeValor('receber', s.realizadoHoje.receber.valor) : null) : celulaDeValor('receber', s.partida.receber.valor),
-    saldo: celulaDeValor('saldo', e.incluirVencidos ? s.hoje : s.partida.saldo),
-    contas: [],
-  };
-  /* CPR-CAIXA-INICIAL-SEMPRE-01 — A FOLHA ANDA NO TEMPO E A PRIMEIRA LINHA É SEMPRE O CAIXA INICIAL (R1): Caixa inicial, os dias
-     realizados, o saldo de hoje (quando hoje está no período) e o que vem. Período futuro: o Caixa inicial é o previsto na
-     véspera. Sem o Caixa inicial (o dono não responde naquela data), a linha sai com "—". */
+  /* CPR-CAIXA-INICIAL-SEMPRE-01 — A FOLHA ANDA NO TEMPO E A PRIMEIRA LINHA É SEMPRE O CAIXA INICIAL (R1). CPR-AJUSTES-20-10 — depois,
+     os grupos da tela NA MESMA ORDEM: cada dia com a faixa de cima (só a data e o quando) e a linha "Saldo em dd/mm/aaaa" embaixo;
+     hoje é um dia (os vencidos dentro, com o aviso). Período futuro: o Caixa inicial é o previsto na véspera. */
   const futuro = e.periodo.de > c.hoje;
   const vespera = (() => { const d = new Date(`${e.periodo.de}T12:00:00Z`); d.setUTCDate(d.getUTCDate() - 1); return d.toISOString().slice(0, 10); })();
-  const faixaDe = (g: GrupoDaTela<L>): FaixaDaFolha | null => (g.tipo === 'vencidos_anteriores' || g.tipo === 'sem_vencimento' || g.tipo === 'hoje' ? null : {
-    tipo: g.tipo, titulo: g.quando ? `${g.titulo} · ${g.quando}` : g.titulo,
-    pagar: celulaDeValor('pagar', g.pagar), receber: celulaDeValor('receber', g.receber),
-    saldo: celulaDeValor('saldo', g.saldo, { destacarNegativo: true }), contas: g.linhas.map((l) => contaDaFolha(l, e.de)),
-  });
   const faixas: FaixaDaFolha[] = [];
   faixas.push({
     tipo: 'saldo_hoje', titulo: `Caixa inicial · ${dma(s.inicial?.data ?? vespera)}${s.inicial && futuro ? ' · previsto' : ''} · ${quem}`,
     pagar: null, receber: null, saldo: celulaDeValor('saldo', s.inicial ? s.inicial.saldo : null), contas: [],
   });
-  for (const g of e.grupos) { const f = g.passado ? faixaDe(g) : null; if (f) faixas.push(f); }
-  if (!s.encerrado && !futuro) faixas.push(faixaDeHoje);
-  let anteriores: BlocoSimplesDaFolha | null = null;
   let semVencimento: BlocoSimplesDaFolha | null = null;
   for (const g of e.grupos) {
-    if (g.tipo === 'vencidos_anteriores') {
-      anteriores = { titulo: `${g.titulo}`, frase: 'vencimento em mês já conciliado: confira se foi pago ou atualize a data', contas: g.linhas.map((l) => contaDaFolha(l, e.de)), pagar: formatMoeda(g.pagar), receber: formatMoeda(g.receber) };
-      continue;
-    }
     if (g.tipo === 'sem_vencimento') {
       semVencimento = { titulo: g.titulo, frase: 'sem data de vencimento: fora dos números e do saldo', contas: g.linhas.map((l) => contaDaFolha(l, e.de)), pagar: formatMoeda(g.pagar), receber: formatMoeda(g.receber) };
       continue;
     }
-    if (g.passado) continue;
-    const f = faixaDe(g);
-    if (f) faixas.push(f);
+    const contasDoGrupo = g.linhas.map((l) => contaDaFolha(l, e.de));
+    if (g.tipo === 'dia') {
+      faixas.push({
+        tipo: 'dia', titulo: g.quando ? `${g.titulo} · ${g.quando}` : g.titulo, aviso: g.avisoHoje,
+        pagar: null, receber: null, saldo: null, contas: contasDoGrupo,
+        fecho: { titulo: `Saldo em ${dma(g.chave)}`, pagar: celulaDeValor('pagar', g.pagar), receber: celulaDeValor('receber', g.receber),
+          saldo: celulaDeValor('saldo', g.saldo, { destacarNegativo: true }) },
+      });
+      continue;
+    }
+    faixas.push({
+      tipo: g.tipo, titulo: g.quando ? `${g.titulo} · ${g.quando}` : g.titulo,
+      pagar: celulaDeValor('pagar', g.pagar), receber: celulaDeValor('receber', g.receber),
+      saldo: celulaDeValor('saldo', g.saldo, { destacarNegativo: true }), contas: contasDoGrupo,
+    });
   }
 
   /* o primeiro valor que não é número: a folha sai, e o aviso o nomeia (o motor recusa NaN em coordenada, não em texto) */
@@ -252,7 +254,7 @@ export function montarModeloCpr<L extends LinhaDaTela>(e: EntradaDoModelo<L>): M
     },
     notaSemSaldo: s.hoje == null ? `Saldo "—": ${e.motivoSemSaldo}.` : null,
     notaSegmento: e.segmento === 'ambos' ? null : `Lista só as contas ${e.segmento === 'pagar' ? 'a pagar' : 'a receber'}; os totais de cada dia e o saldo consideram a pagar e a receber.`,
-    anteriores, semVencimento,
+    semVencimento,
     semanas: e.semanas.map((w) => ({ semana: `${dm(w.de)} a ${dm(w.ate)}`, pagar: celulaDeValor('pagar', w.pagar), receber: celulaDeValor('receber', w.receber), saldo: celulaDeValor('saldo', w.saldo, { destacarNegativo: true }) })),
     porConta: e.porConta ? {
       linhas: e.porConta.map((c) => ({
