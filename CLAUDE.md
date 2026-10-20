@@ -9896,3 +9896,30 @@ docs/historico/frentes-ate-2026-09-29.md.)
 Frentes fechadas, historias de baseline e medicoes antigas SAIRAM daqui em 29/09/2026, sem perda de conteudo:
 docs/historico/README.md diz onde esta' cada coisa. Frente nova fechada deixa AQUI so' a regra vigente (uma entrada
 curta nas secoes de regras) e a pendencia (na FILA); o bloco inteiro vai para docs/historico/.
+
+## ACRESCIMOS DO CODE EM MODO PARALELO (Code 2) — regras novas entram no fim
+- ⚠ O FILTRO "DOCUMENTO" ACHA NUMERO COM LETRAS (FIN-FILTRO-DOC-TEXTO-01, Gabriel 20/10/2026, so' tela). `documentoCasaComFiltro`
+  (`src/lib/financeiro/documentoHelper.ts`): palavras de TIPO no comeco do termo ("NF", "nota fiscal", "Rec.", "boleto"…) filtram pela
+  especie e saem do texto; o resto e' normalizado por `normalizarNumeroDoc` (minusculas, sem acento, so' [a-z0-9], cada sequencia de
+  digitos sem zeros a' esquerda — "R_D015" -> "rd15"; "000.000.910" -> "910"), a MESMA regra no numero do candidato (campo proprio do
+  lancamento e documentos VIVOS ligados), e casa por contencao. A regra por digitos e a chave de acesso (4+ digitos) seguem, SO' para
+  termo sem letra — com letra os digitos soltos nao valem ("R_D15" nao acha a NF 915; desvio aprovado pelo Gabriel em 20/10). Palavra
+  que nao e' tipo vira texto, nao zera a busca. Nasce da Vera (Conta Fazenda, recibos "R_D05": "R_D15" e "Rec. R_" davam 0).
+  · PLACEHOLDER `PLACEHOLDER_FILTRO_DOCUMENTO` = "Nº ou chave" (decisao do Gabriel; "Nº do documento ou chave" cortava a 814, 1000 e
+    1126). MEDIDO na bancada (texto 8px / 9px x largura util do campo): 750x483 52,4/155 · 750x530 52,4/155 · 814x530 46,6/45 ⚠ CORTA
+    1,6px · 1000x600 46,6/76 · 1126x579 46,6/97 · 1300x704 46,6/126 · 1440x800 46,6/149. A 814 a grade de filtros inteira ja' corta
+    (Fazenda, Tipo, Status, Conta…; anterior a este PR). O campo nao foi alargado. O `check:ui-cortes` NAO mede placeholder.
+  · FASE 0 (20/10), numeros vivos com letras — lancamento.numero_documento: Vera 348 de 1.002, Santa Rita 306 de 1.214, Agnaldo 139
+    de 696, NJ 52 de 2.983; financeiro_lancamento_documentos: Vera 51 de 152, RRCC 3 de 4, Agnaldo 2 de 63, Teste 1; documentos de OC:
+    Vera 49 de 91, Agnaldo 44 de 75, RRCC 11 de 17, Santa Rita 7 de 11, NJ 5 de 13, Raul 1 de 2.
+  · ⚠ O CAMINHO DO SERVIDOR (flag `VITE_LISTA_PAGINADA_V2`, desligada) segue com a regra antiga, por texto contido e sem normalizar:
+    `fn_lista_v2_totais(p_lista_documento)` (migration 20260810132831) e `casaDocumentoNoCliente` (`listaPaginadaV2.ts`). O espelho vai
+    no FIN-V2-DESEMPENHO-01, travado por arquivo de casos compartilhado.
+  · Teste: `src/lib/financeiro/filtroDocumento.test.ts` 9 -> 16 (+7); mutacao (palavra desconhecida volta a `return false`) derruba 4.
+    SUITE: 5866 passando (5859 + 7) depois deste PR, 22 skipped, as 3 falhas de sempre.
+  ⚠ NAO PROVADO: nada com login no app real (o R_D05 da Vera na tela) · o recibo ligado como documento, com dado real (so' por teste).
+- ⚠ .env DO CHECKOUT PRINCIPAL APONTA PARA PRODUÇÃO (duttifnbxqtyyybjmouv) — em cópia/worktree nova, NUNCA copiar o .env; usar o
+  .env.proto.local (proto binbcdfbisgscrifztia). Code em modo paralelo confere o projeto antes de qualquer gate que toque banco.
+  (Na pratica, 20/10: a suite numa worktree sem `.env` cai na coleta com "supabaseUrl is required" em 77 arquivos; roda-se com as
+  variaveis do `.env.proto.local` exportadas no shell — `set -a; . ./.env.proto.local; set +a; npx vitest run` —, e o
+  `build:proto` le' o `.env.proto.local` sozinho.)
