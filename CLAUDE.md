@@ -10347,3 +10347,27 @@ curta nas secoes de regras) e a pendencia (na FILA); o bloco inteiro vai para do
   passando, 3 falhas de sempre, 1 erro de sempre; gate de tela completo 113 telas, 613 medicoes, 0 achados. Os testes antigos trocados
   (a caixa nao muda nada num periodo com hoje; no encerrado ela ainda decide). 5 mutacoes mortas.
   ⚠ NAO PROVADO: com login no app real · a Vera aberta na tela depois da publicacao.
+- ⚠ O RODAPE "FIM DO PERIODO" DA CPR TEM UM DONO E SOMA SO' O QUE ESTA' DEPOIS DA LINHA DO CAIXA INICIAL (CPR-AJUSTES-20-10b, correcao do
+  rodape, Gabriel 20/10/2026, so' tela). CORRIGE, no bloco do CPR-AJUSTES-20-10b logo acima, "O rodape (Fim do periodo) soma sempre os
+  vencidos" e o "a pagar 206.581,23 (… + vencidos)": no periodo FUTURO os vencidos ja' estao dentro do Caixa inicial previsto, e soma'-los
+  de novo contava duas vezes (Vera, Global, nov/26: 1.450.135,93 + 232.473,50 − 206.581,23 = 1.476.028,20 contra o saldo no fim
+  1.476.189,03, a diferenca de 160,83 = os vencidos).
+  · INVARIANTE, em tela, PDF e Excel, centavo a centavo: Caixa inicial + A receber do rodape − A pagar do rodape = Saldo no fim.
+  · DONO: `rodapeDoPeriodoCpr(recorte, serie)` (`src/lib/financeiro/cprRecorte.ts`) -> {pagar, receber, contas, realizados, encerrado};
+    o titulo e' `contagemDoRodapeCpr` ("N contas", "N contas · M lançamentos realizados", encerrado "M lançamentos realizados").
+      futuro: so' o em aberto do periodo — vencidos e "Entre hoje e dd/mm" (antes do Caixa inicial) ficam fora; `recorte.total` e as
+        fatias confirmado / estimado seguem a mesma regra (`recorte.vencidosNoRodape` = `vencidosNaLista && de <= hoje`);
+      com hoje: os dias REALIZADOS de "de" ate' hoje (hoje inclusive, `serie.totalRealizado`) + os vencidos (no dia de hoje) + o em
+        aberto — ⚠ MUDANCA DECLARADA: antes o rodape do periodo com hoje somava so' o em aberto e o invariante nao fechava (o Caixa
+        inicial e' a vespera de "de"); a lista ja' mostrava os dias realizados depois do Caixa inicial;
+      encerrado: o realizado do periodo, como antes; sem o realizado (sem saldo conferido), o em aberto da lista, como antes.
+  · A tela, o PDF (`rodape.realizados`) e o Excel leem o MESMO objeto; o Excel ganhou a linha final "Fim do período · dd/mm/aaaa" em
+    "Saldo por dia" (a receber, a pagar, saldo no fim), e as linhas depois do Caixa inicial somam exatamente o rodape.
+  · Vera, Global, 01/11–30/11 (dado de 20/10): A pagar 206.420,40 (186.395,93 + 20.024,47 das pontas de transferencia) · A receber
+    232.473,50 · Caixa inicial 1.450.135,93 · Saldo no fim 1.476.189,03.
+  · A caixa "Incluir vencidos" nao foi tocada (proposta de retirada pendente com o Gabriel).
+  Testes: `cprAjustes2010.test.ts` 18 -> 22 (o invariante no futuro — o caso da Vera em sintetico —, com hoje, comecando hoje, e a
+  ligacao das tres saidas ao dono); `cprRecorte.test.ts` trocado ao contrato novo (o total do futuro sem os vencidos; o rodape do
+  encerrado pelo dono). Mutacoes mortas: somar os vencidos de volta no rodape (cai o invariante do futuro por exatamente 160,83) e o
+  rodape sem o realizado (caem os dois do periodo com hoje).
+  ⚠ NAO PROVADO: com login no app real · a Vera aberta na tela depois da publicacao.
