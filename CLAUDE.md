@@ -10090,3 +10090,52 @@ curta nas secoes de regras) e a pendencia (na FILA); o bloco inteiro vai para do
   · SUITE: 5913 passando depois do FIN-POS-FIXADO-01a (+15: `src/lib/financiamentos/jurosPosFixado.test.ts` novo; `cprEstimado.test.ts` com o
     mesmo numero de casos), 22 skipped, as 3 falhas de sempre e o erro nao tratado de sempre. ⚠ A BASELINE VIGENTE DA SUITE E' 5913 e
     VALE SOBRE a linha antiga de 5898 da secao GATES (que nao foi editada: este bloco so' acrescenta no fim, por regra do briefing).
+- ⚠ A COLUNA `financiamento_parcelas.status` SEGUE OS LANCAMENTOS DA PARCELA, POR UMA REGRA SO' (FIN-PARCELA-STATUS-01, Gabriel 20/10/2026;
+  migrations `supabase/migrations/20261027204600_fin_parcela_status_01.sql`, md5 do arquivo 32ce8228a46d0404142e48b6bc354adb, e
+  `20261027204610_fin_parcela_status_01_cancelar.sql`, md5 22c4d275ad851d0730c4de1cedc2c88c — APLICADAS no proto em 20/10/2026, ledger = arquivo).
+  Nasce da FASE 0 de 20/10: 1.229 parcelas, 1.019 vivas; 140 vivas com a coluna diferente do que os lancamentos dizem (138 "pendente" com tudo
+  pago); o motor do credito le' a coluna e devolveria os lancamentos pagos a previsto.
+  · A REGRA: `_fn_parcela_pelos_lancamentos(status do principal vivo, status do juros vivo)` (pura; nulo = sem lancamento vivo naquele papel) ->
+    'paga' (todos os vivos realizados ou conciliados) · 'parcial' (algum) · 'aberta' (nenhum) · NULO (nenhum vivo: vale a coluna).
+    `fn_financiamento_situacao` a chama (b9f3b1af… -> e7f274ba…; retorno identico em 237 de 237 contratos, com e sem detalhe, e nos 7 lotes).
+    `_fn_parcela_status_alvo(lancamento, juros)` (invoker, executavel por authenticated) diz o que a coluna deve ter: 'pago' (com a data de
+    pagamento, a maior dos pagos) ou 'pendente' — a coluna nao tem 'parcial'.
+  · QUEM GRAVA: o gatilho dos lancamentos (`trg_fn_lancamento_quita_contrato`, b7b24d41… -> 2c1101cd…; so' a funcao mudou, nenhum DDL em
+    `financeiro_lancamentos_v2`) chama `_fn_parcela_status_alinhar(parcela, lancamento_cancelado)` para cada parcela que aponta para o lancamento
+    cujo status ou cancelado mudou; cancelado o ULTIMO lancamento vivo de uma parcela que ele fazia paga, ela volta a 'pendente'. Do lado da
+    parcela, `trg_aa_parcela_status_pelos_lancamentos` (BEFORE INSERT OR UPDATE OF status, lancamento_id, lancamento_juros_id): parcela que nasce,
+    troca de lancamento ou volta de 'cancelado' recebe o status dos lancamentos.
+  · A TRAVA: o FRONT (papel authenticated/anon) gravando um status que os lancamentos contradizem -> P0001 "A situação da parcela N segue os
+    lançamentos dela, que estão pagos|em aberto: pague ou desfaça o pagamento pelo lançamento no Financeiro. Nada foi gravado." Dentro das funcoes
+    do banco (todos os escritores de status sao SECURITY DEFINER) a gravacao que contradiz e' CORRIGIDA para o que os lancamentos dizem: as fotos
+    dos desfazer passam e a coluna fica a dos lancamentos. NAO SE JULGA: parcela sem lancamento vivo (as 83 de hoje, a coluna e' a fonte) e a
+    passagem de ou para 'cancelado' (decisao dos donos: retirar, excluir, juntar, baixa). `ajustada` nao e' lida nem gravada.
+  · `fn_financiamento_pagar_pelo_extrato` (34d5a1e8… -> 466fa328…) nao grava mais status nem data na parcela: o motor cria os lancamentos, eles ficam
+    realizados na data do extrato e a coluna segue pelo gatilho.
+  · O MOTOR (`fn_reconciliar_parcela_financiamento`, 1df9f3c1… -> 004f499a…) segue lendo a coluna, mas lancamento JA' PAGO manda no proprio status e
+    na propria data: com a parcela 'pago' ele nao rebaixa 'conciliado' a 'realizado' nem troca a data de pagamento do lancamento pela da parcela.
+  · FRONT: nenhum arquivo mudou. O unico escritor de status no front e' `ModalBaixaParcela.tsx` (grava 'pago'), SEM QUEM O MONTE (so' testes o
+    importam); NAO EXISTE dono no banco para "dar baixa numa parcela" — criar um e' decisao do Gabriel. O cadastro antigo
+    (`useFinanciamentoCadastro` -> `linhasDasParcelas`) so' INSERE, com 'pendente'.
+  Testes: `supabase/tests/fin_parcela_status_01_test.sql` (S1–S9, sintetico copiado do 8.233.040; S9 paga pelo extrato de verdade) OK no vivo;
+  6 mutacoes mortas (sem o alinhamento no gatilho dos lancamentos -> S2; o front passando -> S5; situacao sem a regra -> S8; motor sem a guarda
+  -> S7; pagar sem mudar -> S9; sem o ramo do cancelar -> S4). TROCADOS AO CONTRATO NOVO (montavam de proposito a parcela 'pago' com o lancamento
+  em aberto, que deixou de existir): `fin_pos_fixado_01a_test` (J3 pos_paga), `parc_livres_01_4_test` (S2–S4) e `fin_consorcio_04_test` (F4: a 13
+  paga pelos lancamentos). Os 42 testes SQL de parcela rodados no vivo: so' caem os 6 que ja' caiam com os corpos antigos (`editar_cadastro_b`
+  B4, `parc_contrato_01_detalhe` D1, `encargo_01_b` E8, `pr_fin_datas_04a`, e as duas suites de psql).
+  · BACKFILL (`supabase/migrations/20261027204620_fin_parcela_status_01_backfill.sql`, md5 do arquivo b784b65aa25cbadbc37978c18e1cdee7 — APLICADO no
+    proto em 20/10/2026 com o OK do Gabriel, ledger = arquivo): as 138 vivas "pendente com tudo pago" passaram a 'pago' com a data dos lancamentos
+    (Vera 73, NJ 55, Agnaldo 8, Santa Rita 1, Teste 1), pelo escritor da regra; guarda do estado medido; 0 de 428 lancamentos tocados; nenhum
+    contrato mudou de status; `ajustada` intocada. TRILHA em `fin_parcela_status_01_backfill` (antes e depois por parcela, motivo "status
+    alinhado aos lançamentos — FIN-PARCELA-STATUS-01"; RLS sem acesso) — decisao do Gabriel: NAO em `financiamento_parcelas_operacoes` (sem
+    coluna de motivo, tipo fechado, e a ultima operacao viva e' a que o "Desfazer a ultima" desfaz). FICARAM: a parcial (28d2a91b, 'pendente',
+    que e' o que a regra grava), a retida da Santa Rita (f0b6c625: 'pago' com os dois lancamentos em aberto, nenhum extrato que case) e as 83
+    sem lancamento vivo. Depois: situacao x coluna nas 1.019 vivas diverge SO' na retida; o motor em 10 das 138 (6 de credito + 4 parcelamento)
+    nao muda status, valor, data nem id de lancamento nenhum.
+  ⚠ ACHADOS, sem corrigir: a parcela 1 do C_237/1702/2025/005 (Santa Rita) — o motor tenta levar o juros do lancamento (573.267,88) ao da parcela
+    (564.778,50) e a trava do lancamento casado o recusa (divergencia de valor ja' registrada em 16/10) · a data de pagamento editada SOZINHA num
+    lancamento pago nao realinha a da parcela (o gatilho dos lancamentos so' olha status e cancelado; incluir a coluna e' DDL em tabela quente) ·
+    a regra "o que conta como pago" (realizado ou conciliado) ainda aparece por extenso nas somas de valor da situacao e em
+    `_fn_financiamento_status_pelas_parcelas` / `_fn_parcela_esta_paga` (espelhos declarados de antes, nao tocados).
+  ⚠ NAO PROVADO: nada na tela (nenhum arquivo do front mudou; as telas leem a situacao, identica) · a trava recebida pelo PostgREST (provada com
+    `SET ROLE authenticated` no teste).
