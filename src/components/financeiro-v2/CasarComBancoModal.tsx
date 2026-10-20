@@ -29,6 +29,8 @@ import { Segmentado } from '@/components/ui/segmentado';
 import { CriarLancamentoDaLinha } from '@/components/conciliacao/CriarLancamentoDaLinha';
 import { MOTIVO_CASAR_LABEL } from '@/components/financeiro-v2/EspelhoConciliacaoTab';
 import { STATUS_PALETA, STATUS_FILTRO_LABEL } from '@/lib/financeiro/statusFinanceiro';
+import { FRASE_LEVE_O_PAR, fraseDoJuroReal, lerRespostaPosPagar, levadosSaoOPar, mapaDaParcelaPos, parcelaPosDosLevados,
+  type RespostaPosPagar } from '@/lib/financiamentos/parcelaPosPagar';
 
 const fmtBRL = (v: number | null | undefined) =>
   v == null ? '—' : Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -91,15 +93,35 @@ interface Props {
   nomeConta?: string;
   contaBancariaId: string | null;
   onConciliado: () => void;
+  /** FIN-POS-FIXADO-01b: com o cliente, o modal reconhece a parcela de contrato pós-fixado com juros estimado entre os levados e
+   *  casa pelo dono (`fn_financiamento_parcela_pos_pagar`), que grava o juro real. Sem ele, o caminho de sempre. */
+  clienteId?: string | null;
 }
 
-export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta, contaBancariaId, onConciliado }: Props) {
+export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta, contaBancariaId, onConciliado, clienteId }: Props) {
   const [levados, setLevados] = useState<Levado[]>([]);
   const [sim, setSim] = useState<Simulacao | null>(null);
   const [erroRodape, setErroRodape] = useState<string | null>(null);
   const [gravando, setGravando] = useState(false);
   const [criando, setCriando] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /* FIN-POS-FIXADO-01b — lancamento (principal ou juros) -> parcela pos com juros estimado, lido do banco ao abrir. */
+  const [mapaPos, setMapaPos] = useState<Map<string, string> | null>(null);
+  const [respPos, setRespPos] = useState<RespostaPosPagar | null>(null);
+
+  useEffect(() => {
+    if (!open || !clienteId) { setMapaPos(null); return; }
+    let cancelado = false;
+    void (async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+      const { data: est, error } = await (supabase as any).rpc('fn_juros_estimados_do_cliente', { p_cliente_id: clienteId });
+      if (cancelado || error || !Array.isArray(est) || est.length === 0) { if (!cancelado) setMapaPos(null); return; }
+      const ids = est.map((e: { parcela_id?: unknown }) => e.parcela_id).filter((x: unknown): x is string => typeof x === 'string');
+      const { data: parcelas } = await supabase.from('financiamento_parcelas').select('id, lancamento_id').in('id', ids);
+      if (!cancelado) setMapaPos(mapaDaParcelaPos(est, parcelas ?? []));
+    })();
+    return () => { cancelado = true; };
+  }, [open, clienteId]);
 
   useEffect(() => {
     if (!open) return;
@@ -115,6 +137,8 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
     () => levados.map((l) => ({ lancamento_id: l.lancamento_id, valor: Math.abs(valorDe(l.valorTexto)) })),
     [levados],
   );
+  const idsLevados = useMemo(() => levados.map((l) => l.lancamento_id), [levados]);
+  const parcelaPos = useMemo(() => parcelaPosDosLevados(idsLevados, mapaPos), [idsLevados, mapaPos]);
 
   const simular = useCallback(async () => {
     if (!extrato) return;
@@ -128,6 +152,22 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
       setSim({ ok: false, noExtrato: alvo, soma: 0, diferenca: -alvo, erro: null });
       return;
     }
+    /* ⚠ PARCELA POS-FIXADA (FIN-POS-FIXADO-01b): quem diz o juro real e' o dono, em simulacao; a tela nao soma. O principal e os juros
+       da parcela, e nada mais, ou a frase. */
+    if (parcelaPos) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+      const { data, error } = await (supabase as any).rpc('fn_financiamento_parcela_pos_pagar', {
+        p_extrato_id: extrato.extrato_id, p_parcela_id: parcelaPos, p_simular: true,
+      });
+      const r = error ? null : lerRespostaPosPagar(data);
+      if (!r) { setSim(null); setRespPos(null); setErroRodape(error?.message ?? 'Não foi possível simular.'); return; }
+      if (!r.ok) { setSim(null); setRespPos(null); setErroRodape(r.frase); return; }
+      if (!levadosSaoOPar(idsLevados, r)) { setSim(null); setRespPos(null); setErroRodape(FRASE_LEVE_O_PAR); return; }
+      setErroRodape(null); setRespPos(r);
+      setSim({ ok: true, noExtrato: Number(r.noExtrato ?? extrato.valor), soma: Number(r.noExtrato ?? extrato.valor), diferenca: 0, erro: null });
+      return;
+    }
+    setRespPos(null);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
     const { data, error } = await (supabase as any).rpc('fn_espelho_casar', {
       p_extrato_id: extrato.extrato_id, p_itens: itens, p_simular: true, p_motivo: 'casado_no_espelho',
@@ -146,7 +186,7 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
     }
     setSim(null);
     setErroRodape(MOTIVO_CASAR_LABEL[r.motivo ?? ''] ?? r.motivo ?? 'Não foi possível simular.');
-  }, [extrato, itens]);
+  }, [extrato, itens, parcelaPos, idsLevados]);
 
   /* Debounce de 300ms: digitar um valor não dispara uma chamada por tecla. */
   useEffect(() => {
@@ -159,6 +199,17 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
   const conciliar = async () => {
     if (!extrato) return;
     setGravando(true); setErroRodape(null);
+    if (parcelaPos) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+      const { error: erroPos } = await (supabase as any).rpc('fn_financiamento_parcela_pos_pagar', {
+        p_extrato_id: extrato.extrato_id, p_parcela_id: parcelaPos, p_simular: false,
+      });
+      setGravando(false);
+      if (erroPos) { setErroRodape(erroPos.message); return; }
+      onClose();
+      onConciliado();
+      return;
+    }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
     const { data, error } = await (supabase as any).rpc('fn_espelho_casar', {
       p_extrato_id: extrato.extrato_id, p_itens: itens, p_simular: false, p_motivo: 'casado_no_espelho',
@@ -237,7 +288,11 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
                   })()}
                 <div className="mt-[3px] flex min-w-0 items-center gap-2">
                   <input
-                    value={l.valorTexto}
+                    /* FIN-POS-FIXADO-01b: no caso pós o campo dos juros mostra o juro real que o banco vai gravar (lido do dono) */
+                    value={parcelaPos && respPos?.ok && respPos.juroReal != null && l.lancamento_id === respPos.jurosId
+                      ? paraCampo(respPos.juroReal) : l.valorTexto}
+                    readOnly={!!parcelaPos}
+                    title={parcelaPos ? 'Parcela de contrato pós-fixado: o juro real vem do extrato; o principal não muda.' : undefined}
                     onChange={(e) => setLevados((v) => v.map((x) => x.lancamento_id === l.lancamento_id ? { ...x, valorTexto: e.target.value } : x))}
                     inputMode="decimal"
                     className={cn('w-24 rounded border px-1 py-0.5 text-right text-[11px] font-medium tabular-nums', corVal(l.valor_assinado))}
@@ -256,7 +311,7 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
                   {/* ⚠ UM LEVADO: "Usar valor do banco" — o campo recebe o valor do extrato (em módulo, como o campo
                       trabalha) e a diferença vai a zero na próxima simulação. VÁRIOS: "absorver a diferença" põe a
                       diferença inteira NESTA linha; as outras não mudam. */}
-                  {unico && l.usarValorDoBanco && l.valorTexto === valorDoBanco ? null : unico ? (
+                  {parcelaPos || (unico && l.usarValorDoBanco && l.valorTexto === valorDoBanco) ? null : unico ? (
                     /* ⚠ "CORRIGIR O VALOR DO LANÇAMENTO" — CONC-BLOCOS-TELA-01 (decisão do Gabriel): era "Usar valor do
                        banco". É um gesto SEPARADO, com nome próprio, porque muda o valor do lançamento; o comportamento é o
                        mesmo de antes. Na variante bloco ele não existe. */
@@ -319,6 +374,9 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
               )}
               {sim?.ok && (
                 <div className="text-[10px] text-emerald-600" data-testid="frase-diferenca">Confere com o banco ✓</div>
+              )}
+              {parcelaPos && respPos && fraseDoJuroReal(respPos) && (
+                <div className="text-[10px] text-muted-foreground" data-testid="juro-real">{fraseDoJuroReal(respPos)}</div>
               )}
             </div>
 
