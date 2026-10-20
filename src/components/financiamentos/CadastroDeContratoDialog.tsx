@@ -39,7 +39,7 @@ import { useEdicaoDoContrato } from '@/hooks/useEdicaoDoContrato';
 import { RegerarParcelas, TabelaDoCronograma } from '@/components/financiamentos/EdicaoDoContrato';
 import { ConsorcioDialog } from '@/components/financiamentos/ConsorcioDialog';
 import {
-  contaDoCronograma, dadosDoCabecalho, faixaDoPrincipal, formDoContrato, motivoRegerarApagado, mudancasDasParcelas, semMudanca, tituloDaEdicao,
+  contaDoCronograma, dadosDoCabecalho, faixaDoPrincipal, formDoContrato, idDaPrevia, mudancasDaPreviaNoContrato, motivoRegerarApagado, mudancasDasParcelas, semMudanca, tituloDaEdicao,
   FRASE_SALVE_PARCELAS_ANTES_DE_REGERAR, PLANO_JUROS_POR_ATIVIDADE, PLANO_PRINCIPAL_POR_ATIVIDADE, TEXTO_DA_ORIGEM,
   type CampoNaoCadastrado, type OrigemDaPeriodicidade, type ParcelaParaEditar,
 } from '@/lib/financiamentos/edicaoDoContrato';
@@ -124,6 +124,8 @@ export function CadastroDeContratoDialog({ aberto, aoFechar, onAbrirCompraParcel
   const [regerando, setRegerando] = useState(false);
   /* as parcelas editadas na aba (editar): nulo = como o banco as tem (`edicao.parcelas`, a mesma fonte da tela do contrato) */
   const [linhasEditadas, setLinhasEditadas] = useState<ParcelaParaEditar[] | null>(null);
+  /* novo SAC / Price / Parcela única: as linhas da prévia do banco levadas à tabela pelo "Gerar N parcelas" (nulo = só a prévia, em leitura) */
+  const [linhasDoNovo, setLinhasDoNovo] = useState<ParcelaParaEditar[] | null>(null);
   const [salvoAgora, setSalvoAgora] = useState<string | null>(null);
   /* FIN-CONTRATO-SALVAR-01 — o que impede o Salvar fica ESCRITO: a leitura que falhou, e o "Falta:" com cada item levando à aba dele */
   const [erroLeitura, setErroLeitura] = useState<string | null>(null);
@@ -204,6 +206,7 @@ export function CadastroDeContratoDialog({ aberto, aoFechar, onAbrirCompraParcel
     }, 300);
     return () => { vivo = false; clearTimeout(tm); };
   }, [chave, escolha]);
+  useEffect(() => { setLinhasDoNovo(null); }, [chave]);
 
   const escolher = (v: 'financiamento' | 'parcelado' | 'consorcio') => {
     if (salvoId) return;
@@ -219,12 +222,15 @@ export function CadastroDeContratoDialog({ aberto, aoFechar, onAbrirCompraParcel
        que foi editado na linha; a paga e a vinculada ficam em leitura;
      · novo Personalizado: as parcelas digitadas (editáveis); novo SAC / Price / Parcela única: a prévia do banco (`fn_financiamento_cronograma`). */
   const parcelasDoBanco = edicao.parcelas ?? null;
+  const previaDoBanco: ParcelaParaEditar[] = (cronograma?.linhas ?? []).map((l) => ({ id: idDaPrevia(l.numero), numero: l.numero, vencimento: l.vencimento,
+    principal: l.principal, juros: l.juros, ajustada: false, trava: null, situacao: 'pendente' as const, pagoEm: null }));
   const linhasDaTab: ParcelaParaEditar[] = editando ? (linhasEditadas ?? parcelasDoBanco ?? [])
     : form.sistema === 'livre'
       ? form.parcelas.map((p, i) => ({ id: null, numero: i + 1, vencimento: p.vencimento, principal: p.principal, juros: p.juros, ajustada: false, trava: null, situacao: null, pagoEm: null }))
-      : (cronograma?.linhas ?? []).map((l) => ({ id: `previa-${l.numero}`, numero: l.numero, vencimento: l.vencimento, principal: l.principal, juros: l.juros,
-          ajustada: false, trava: null, situacao: 'pendente' as const, pagoEm: null }));
-  const tabEditavel = editando || form.sistema === 'livre';
+      : (linhasDoNovo ?? previaDoBanco);
+  const tabEditavel = editando || form.sistema === 'livre' || linhasDoNovo !== null;
+  /* o que o operador mexeu na prévia do novo: vai pelo `editarParcelas` logo depois da criação (fica "ajustada") */
+  const mudancasDoNovo = !editando && linhasDoNovo ? mudancasDasParcelas(previaDoBanco, linhasDoNovo) : { alterar: [], acrescentar: [], retirar: [] };
   const mudancasDaTab = editando && parcelasDoBanco ? mudancasDasParcelas(parcelasDoBanco, linhasDaTab) : { alterar: [], acrescentar: [], retirar: [] };
   const motivoDoRegerarNaTab = motivoDoRegerar ?? (semMudanca(mudancasDaTab) ? null : FRASE_SALVE_PARCELAS_ANTES_DE_REGERAR);
   const faixa = faixaDoPrincipal(contaDoCronograma(linhasDaTab, form.valorTotal || null));
@@ -239,21 +245,23 @@ export function CadastroDeContratoDialog({ aberto, aoFechar, onAbrirCompraParcel
   const editarLinhas = (f: (ls: ParcelaParaEditar[]) => ParcelaParaEditar[]) => { setLinhasEditadas((ls) => f(ls ?? parcelasDoBanco ?? [])); setRecusa(null); setSalvoAgora(null); };
   const mudarNaTab = (i: number, p: Partial<ParcelaParaEditar>) => {
     if (editando) { editarLinhas((ls) => ls.map((l, j) => (j === i ? { ...l, ...p, ajustada: true } : l))); return; }
+    if (linhasDoNovo) { setLinhasDoNovo(linhasDoNovo.map((l, j) => (j === i ? { ...l, ...p, ajustada: true } : l))); return; }
     set('parcelas', form.parcelas.map((x, j) => (j === i ? { vencimento: p.vencimento !== undefined ? p.vencimento : x.vencimento, principal: p.principal ?? x.principal, juros: p.juros ?? x.juros } : x)));
   };
   const retirarNaTab = (i: number) => {
     if (editando) { editarLinhas((ls) => ls.filter((_x, j) => j !== i)); return; }
+    if (linhasDoNovo) { setLinhasDoNovo(linhasDoNovo.filter((_x, j) => j !== i)); return; }
     set('parcelas', form.parcelas.filter((_x, j) => j !== i));
   };
   const acrescentarNaTab = () => {
     if (editando) { editarLinhas((ls) => [...ls, { id: null, numero: null, vencimento: null, principal: 0, juros: 0, ajustada: true, trava: null, situacao: null, pagoEm: null }]); return; }
+    if (linhasDoNovo) { setLinhasDoNovo([...linhasDoNovo, { id: null, numero: null, vencimento: null, principal: 0, juros: 0, ajustada: true, trava: null, situacao: null, pagoEm: null }]); return; }
     set('parcelas', [...form.parcelas, { vencimento: null, principal: 0, juros: 0 }]);
   };
-  /* "Gerar N parcelas" (novo): leva as linhas que o banco gerou para a tabela, editáveis na linha — o sistema passa a Personalizado */
-  const gerarNaTabela = () => {
-    if (!cronograma?.linhas.length) return;
-    setForm((f) => ({ ...f, sistema: 'livre', parcelas: cronograma.linhas.map((l) => ({ vencimento: l.vencimento, principal: l.principal, juros: l.juros })) }));
-  };
+  /* "Gerar N parcelas" (novo): leva as linhas que o banco gerou para a tabela, editáveis na linha. O SISTEMA FICA o escolhido (SAC /
+     Price / Parcela única): o contrato nasce pelo gerador e as linhas mexidas vão pelo `editarParcelas` depois de criar (decisão do
+     Gabriel, 20/10 — o FIN-POS-FIXADO-01 depende do sistema gravado). Mudar uma condição refaz a prévia e descarta as linhas levadas. */
+  const gerarNaTabela = () => { if (previaDoBanco.length) setLinhasDoNovo(previaDoBanco); };
   /* o motivo do Salvar apagado no editar: a leitura falhou ou ainda não chegou — nunca um Salvar que some calado */
   const motivoSemSalvar = editando ? (erroLeitura ?? (original ? null : 'Carregando o contrato…')) : null;
   /* FIN-CONTRATO-CRONOGRAMA-01 — UM Salvar: o cabeçalho (só o que mudou) e, quando há linhas editadas na aba, as parcelas
@@ -296,6 +304,15 @@ export function CadastroDeContratoDialog({ aberto, aoFechar, onAbrirCompraParcel
     if (error || !id) { setRecusa(error ? String(error.message ?? error).replace(/^(ERROR:\s*)?(P0001|42501):\s*/i, '') : 'Resposta do banco fora do formato.'); return; }
     setSalvoId(id);
     onSalvo?.(id);
+    /* as linhas mexidas na prévia, NA MESMA ação: pelas parcelas que o banco acabou de criar (pelo número) */
+    if (!semMudanca(mudancasDoNovo)) {
+      const { data: criadas } = await supabase.from('financiamento_parcelas').select('id, numero_parcela').eq('financiamento_id', id);
+      const idPorNumero = new Map((criadas ?? []).map((c) => [Number(c.numero_parcela), String(c.id)]));
+      const m = mudancasDaPreviaNoContrato(mudancasDoNovo, idPorNumero);
+      const r = m ? await edicao.editarParcelasDe(id, m, false) : null;
+      if (!r || r.recusa) { setRecusa(`Contrato criado; as parcelas editadas não foram gravadas: ${r?.recusa ?? 'parcela criada não encontrada'}. Ajuste pela tela do contrato (Editar parcelas).`); setAba('condicoes'); return; }
+      setLinhasDoNovo(null);
+    }
     setAba(abaDepois ?? (cons ? 'documentos' : 'liberacoes'));
   };
   /* "Falta: …" leva à aba de cada item (os de condições moram na aba Condições; o resto, na do contrato) */
@@ -510,8 +527,8 @@ export function CadastroDeContratoDialog({ aberto, aoFechar, onAbrirCompraParcel
                           {editando
                             ? <Button variant="outline" size="sm" className="h-6 shrink-0 text-[11px]" disabled={!!motivoDoRegerarNaTab || regerando} title={motivoDoRegerarNaTab ?? undefined}
                                 onClick={() => setRegerando(true)} data-testid="abrir-regerar">Regerar em aberto</Button>
-                            : <Button variant="outline" size="sm" className="h-6 shrink-0 text-[11px]" disabled={form.sistema === 'livre' || !(cronograma?.linhas.length)}
-                                title={form.sistema === 'livre' ? 'Personalizado: digite as parcelas na tabela' : 'leva as parcelas geradas pelo banco para a tabela, editáveis na linha (o sistema passa a Personalizado)'}
+                            : <Button variant="outline" size="sm" className="h-6 shrink-0 text-[11px]" disabled={form.sistema === 'livre' || !(cronograma?.linhas.length) || linhasDoNovo !== null}
+                                title={form.sistema === 'livre' ? 'Personalizado: digite as parcelas na tabela' : 'leva as parcelas geradas pelo banco para a tabela, editáveis na linha; o contrato nasce com o sistema escolhido e as linhas mexidas ficam "ajustada"'}
                                 onClick={gerarNaTabela} data-testid="gerar-parcelas">{cronograma?.linhas.length ? `Gerar ${cronograma.linhas.length} parcelas` : 'Gerar parcelas'}</Button>}
                         </div>
                       </div>

@@ -19,6 +19,7 @@ const edicao = {
   desfazer: vi.fn(async () => ({ simulado: false, recusa: null, corpo: {} })),
   ultimaOperacao: null,
   parcelas: null,
+  editarParcelasDe: vi.fn(async (_id: string, _m: unknown, simular: boolean) => ({ simulado: simular, recusa: null, corpo: {} })),
 };
 vi.mock('@/hooks/useEdicaoDoContrato', () => ({ useEdicaoDoContrato: () => edicao }));
 vi.mock('@/contexts/ClienteContext', () => ({ useCliente: () => ({ clienteAtual: { id: 'c1', nome: 'Cliente Teste' } }) }));

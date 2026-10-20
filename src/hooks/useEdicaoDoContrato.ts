@@ -71,6 +71,8 @@ export function useEdicaoDoContrato(financiamentoId: string | null | undefined, 
     parcelas,
     salvarCabecalho: (dados: Record<string, unknown>, simular = true) => chamar('fn_financiamento_salvar_cabecalho', { p_id: financiamentoId, p_dados: dados }, simular),
     editarParcelas: (m: MudancasDasParcelas, simular = true) => chamar('fn_financiamento_parcelas_editar', { p_id: financiamentoId, p_mudancas: m }, simular),
+    /** o mesmo editar, num contrato que acabou de nascer (o cadastro novo ainda não tem o id no hook) */
+    editarParcelasDe: (id: string, m: MudancasDasParcelas, simular = true) => chamar('fn_financiamento_parcelas_editar', { p_id: id, p_mudancas: m }, simular),
     regerar: (modo: ModoDeRegerar, simular = true) => chamar('fn_financiamento_parcelas_regerar', { p_id: financiamentoId, p_modo: modo }, simular),
     desfazer: (operacaoId: string, motivo: string, simular = true) => chamar('fn_financiamento_parcelas_desfazer', { p_operacao_id: operacaoId, p_motivo: motivo }, simular),
     ultimaOperacao: ultima.data ?? null,

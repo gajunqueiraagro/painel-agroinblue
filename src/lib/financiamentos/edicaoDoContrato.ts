@@ -341,3 +341,18 @@ export function diferencaDaLinha(l: LinhaAntesDepois): number | null {
   if (!l.antes || !l.depois) return null;
   return (cent(l.depois.principal) + cent(l.depois.juros) - cent(l.antes.principal) - cent(l.antes.juros)) / 100;
 }
+
+/**
+ * FIN-CONTRATO-CRONOGRAMA-01 (ajuste) — o contrato NOVO nasce pelo gerador do banco com o sistema escolhido (SAC / Price / Parcela única);
+ * as linhas que o operador editou na prévia vão, na MESMA ação do Salvar, logo depois da criação, pelo `editarParcelas` (ficam "ajustada").
+ * As linhas da prévia têm id `previa-<n>`; aqui elas viram as parcelas que o banco acabou de criar (pelo número). Nulo = alguma não achada.
+ */
+export const idDaPrevia = (numero: number) => `previa-${numero}`;
+export function mudancasDaPreviaNoContrato(m: MudancasDasParcelas, idPorNumero: ReadonlyMap<number, string>): MudancasDasParcelas | null {
+  const real = (id: string): string | null => { const n = /^previa-(\d+)$/.exec(id); return n ? idPorNumero.get(Number(n[1])) ?? null : id; };
+  const alterar: MudancasDasParcelas['alterar'] = [];
+  for (const a of m.alterar) { const id = real(a.id); if (!id) return null; alterar.push({ ...a, id }); }
+  const retirar: string[] = [];
+  for (const r of m.retirar) { const id = real(r); if (!id) return null; retirar.push(id); }
+  return { alterar, acrescentar: m.acrescentar, retirar };
+}
