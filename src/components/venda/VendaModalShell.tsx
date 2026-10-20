@@ -615,7 +615,7 @@ export function VendaModalShell({
 
       {/* ⚠ O RESUMO VAI DO CABECALHO AO RODAPE, como no Abate: as abas moram DENTRO da coluna da
           esquerda. Por cima das duas colunas, elas tiravam a altura da barra do resumo. */}
-      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[1fr_240px]">
+      <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[minmax(0,1fr)_240px]">
         <div className="flex min-h-0 min-w-0 flex-col">
         {/* BARRA DE ABAS — a do Abate (botao 20px/10px, barra ~29px; era `px-6 py-3` com h-8 12px). */}
         <div className="shrink-0 bg-card border-b px-2 py-1 flex items-center gap-1">
@@ -853,22 +853,23 @@ export function VendaModalShell({
               )}
             </div>
 
-            {/* FAIXA DE TOPO — rotulo 11px/400, valor 20px/500. */}
+            {/* FAIXA DE TOPO — UI-SEM-CORTE-02 (item 5): o nome QUEBRA (13px), a data no tamanho do rotulo e nunca corta (eram 20px com
+                `truncate`). */}
             <div className="grid grid-cols-2 gap-2 rounded-md border bg-muted/20 px-3.5 py-[11px]">
               <div className="min-w-0">
                 <div className="text-[11px] font-normal text-muted-foreground leading-none">Comprador</div>
-                <div className="mt-1 text-[20px] font-medium leading-none truncate">{compradorNome ?? '—'}</div>
+                <div className="mt-1 break-words text-[13px] font-medium leading-tight">{compradorNome ?? '—'}</div>
               </div>
               <div className="min-w-0">
                 <div className="text-[11px] font-normal text-muted-foreground leading-none">Data da venda</div>
-                <div className="mt-1 text-[20px] font-medium tabular-nums leading-none">
+                <div className="mt-1 whitespace-nowrap text-[11px] font-semibold tabular-nums leading-tight">
                   {data ? data.split('-').reverse().join('/') : <span className="text-muted-foreground">—</span>}
                 </div>
               </div>
             </div>
             <Separator />
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3">
               <div className="min-w-0">
                 <Label className="text-[10px] text-muted-foreground flex items-center gap-1">Comprador <span className="text-destructive">*</span></Label>
                 {/* FORN-SELETOR-PADRAO-01 fatia 2b — o DONO do seletor de fornecedor, pelo leitor único; o "+" e a linha fixa do
@@ -936,7 +937,7 @@ export function VendaModalShell({
                   <p className="mt-0.5 text-[10px] leading-tight text-muted-foreground" data-testid="motivo-tipo-boitel">{MOTIVO_ABATE_BOITEL}</p>
                 )}
               </div>
-              <div className="min-w-0 lg:col-span-2">
+              <div className="min-w-0 md:col-span-2">
                 <Label className="text-[10px] text-muted-foreground">Observações / Lote</Label>
                 <Input value={observacao} onChange={e => setObservacao(e.target.value)} placeholder="Opcional"
                   className="mt-[3px] h-8 px-2.5 text-[12px]" />
@@ -950,22 +951,22 @@ export function VendaModalShell({
 
         {/* RESUMO LATERAL — as pecas do Abate (`ui/linha-resumo`), MODAIS-PADRAO-01a: 240px e
             esticado ate' o fim do corpo; quem rola e' a lista dentro do card, nao a coluna. */}
-        <div className="lg:min-h-0">
+        <div className="md:min-h-0">
           <AsideResumo faixa={<FaixaTituloResumo />}>
               <SecaoResumo titulo="Identificação" />
               {painelBoitel ? (
                 /* PR-OC-BOITEL-PAINEL-01 (D6b): no boitel a Identificacao vai a 2 linhas, para a conta do acerto caber sem
                    rolar a 1135×525. A segunda e' "Data · Fazenda · Tipo", cortada na borda com o texto inteiro no `title`. */
                 <div>
-                  <LinhaResumo rotulo="Comprador" valor={compradorNome} />
+                  <LinhaResumo rotulo="Comprador" valor={compradorNome} quebra />
                   <div className="px-2.5 py-px leading-tight truncate font-medium" title={linhaIdentificacao}
                     data-testid="identificacao-boitel">{linhaIdentificacao}</div>
                 </div>
               ) : (
               <div>
-                <LinhaResumo rotulo="Comprador" valor={compradorNome} />
+                <LinhaResumo rotulo="Comprador" valor={compradorNome} quebra />
                 <LinhaResumo rotulo="Data" valor={data ? data.split('-').reverse().join('/') : null} />
-                <LinhaResumo rotulo="Fazenda" valor={fazendaNome} />
+                <LinhaResumo rotulo="Fazenda" valor={fazendaNome} quebra />
                 <LinhaResumo rotulo="Tipo" valor={vendaTipoVenda === 'gado_adulto' ? 'Gado adulto' : vendaTipoVenda === 'desmama' ? 'Desmama' : vendaTipoVenda === 'boitel' ? 'Boitel' : null} />
               </div>
               )}
