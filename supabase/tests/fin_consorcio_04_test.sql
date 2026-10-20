@@ -106,7 +106,11 @@ BEGIN
   IF NOT v_ok THEN RAISE EXCEPTION 'F4 regerar sem mudanca'; END IF;
   -- a 13 paga; a faixa 13 a 46 passa a 600,00 de taxa
   select id into v_p13 from financiamento_parcelas where financiamento_id = v_fin and numero_parcela = 13;
-  update financiamento_parcelas set status = 'pago' where id = v_p13;
+  -- FIN-PARCELA-STATUS-01: a parcela fica paga pelos lancamentos dela (a coluna os segue); 'pago' gravado na coluna com eles em aberto
+  -- e' corrigido pelo gatilho
+  update financeiro_lancamentos_v2 set status_transacao = 'realizado', data_pagamento = date '2032-07-16'
+   where id in (select lancamento_id from financiamento_parcelas where id = v_p13 union select lancamento_juros_id from financiamento_parcelas where id = v_p13);
+  IF (select status from financiamento_parcelas where id = v_p13) <> 'pago' THEN RAISE EXCEPTION 'F4 a 13 nao ficou paga pelos lancamentos'; END IF;
   r := fn_consorcio_salvar(v_fin, v_dados || jsonb_build_object('regras', c_base || jsonb_build_object('faixas',
          jsonb_build_array(c_fx->0, c_fx->1 || '{"taxa_adm":600}', c_fx->2, c_fx->3))), false);
   r := fn_financiamento_parcelas_regerar(v_fin, 'recalcular_todas', false);
