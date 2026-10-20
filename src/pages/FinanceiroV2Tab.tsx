@@ -2843,7 +2843,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                        um clique que não faz nada ensina a desconfiar do resto da tela. */
                     return (
                       <tr key={l.id}
-                        className={`border-b italic !h-auto hover:bg-muted/50 transition-colors${canEditRow ? ' cursor-pointer' : ''} ${selectedIds.has(l.id) ? 'bg-primary/5' : ''}`}
+                        className={`border-b !h-auto hover:bg-muted/50 transition-colors${canEditRow ? ' cursor-pointer' : ''} ${selectedIds.has(l.id) ? 'bg-primary/5' : ''}`}
                         onClick={canEditRow ? () => openEdit(l) : undefined}>
                         {/* ⚠ A FAIXA CINZA COMEÇA NA BORDA — FIN-LISTA-DENSIDADE-01, e isto
                             DESFAZ o `bg-card` que estas duas células ganharam no c9cefcf3.
@@ -2903,7 +2903,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                         <td className="truncate px-1 py-1 align-middle text-[12px] font-medium leading-tight" title={isParcelaFinanciamento ? `Parcela de financiamento (origem automática) — ${np.inteiro || ''}` : (np.inteiro || '')}>
                           {np.parcela ? (
                             <span className="flex min-w-0 items-baseline gap-1" data-testid="nome-com-parcela">
-                              <span className="min-w-0 truncate">{np.nome || '-'}</span>
+                              <span className="min-w-0 truncate pr-0.5">{np.nome || '-'}</span>
                               <span className="shrink-0 whitespace-nowrap tabular-nums" data-testid="parcela-i-n">{np.parcela}</span>
                             </span>
                           ) : <>{descExibida || '-'}</>}
@@ -2921,7 +2921,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                           {fornNome ? (
                             /* FORN-NOME-EXIBIDO-01 — o nome corta; o final e o "inativo" ficam inteiros à direita */
                             <span className="flex min-w-0 items-baseline gap-1">
-                              <span className="truncate">{fornNome}</span>
+                              <span className="truncate pr-0.5">{fornNome}</span>
                               {rotuloForn?.final && <span className="shrink-0 whitespace-nowrap text-[10px]" data-testid="final-fornecedor">· {rotuloForn.final}</span>}
                               {rotuloForn?.inativo && <span className="shrink-0 whitespace-nowrap text-[10px] text-amber-700" data-testid="inativo-fornecedor">· inativo</span>}
                             </span>
@@ -3011,7 +3011,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                           {(() => {
                             const rotulo = stPilula
                               ? <span className={cn(STATUS_PILULA_BASE, stPilula)} data-status={stKey}>{stLabel}</span>
-                              : <span className={cn('block truncate', stColor, stEstagio && 'font-semibold')} data-status={stKey}>{stLabel}</span>;
+                              : <span className={cn('block truncate pr-0.5', stColor, stEstagio && 'font-semibold')} data-status={stKey}>{stLabel}</span>;
                             if (!icone) return rotulo;
                             return (
                               <MinimodalOrigemLancamento
