@@ -776,7 +776,7 @@ export function AbateModalShell({
           44px delas e cortava no fim — e a barra de abas nao diz nada sobre o resumo. */}
       {/* ⚠ `min-w-0` NA COLUNA PRINCIPAL, como na venda e na compra: sem ele o `1fr` nao encolhe abaixo do conteudo, e a linha de
           botoes do conta corrente empurrava o resumo lateral e o X para fora do modal (FIX OC-CC-ABATE-01, 14/10/2026). */}
-      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[1fr_240px]">
+      <div className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[minmax(0,1fr)_240px]">
         <div className="flex min-h-0 min-w-0 flex-col">
         {/* BARRA DE ABAS — template do CompraModalShell (bg-card, border-b, px-6 py-3). */}
         <div className="shrink-0 bg-card border-b px-2 py-1 flex items-center gap-1">
@@ -965,31 +965,32 @@ export function AbateModalShell({
                 )}
               </div>
 
-              {/* FAIXA DE TOPO — rotulo 11px/400, valor 20px/500. */}
+              {/* FAIXA DE TOPO — UI-SEM-CORTE-02 (item 5): um dado por bloco, o rotulo colado em cima do valor; texto QUEBRA (13px), data
+                  nunca maior que o rotulo e nunca corta. Eram 15px com `truncate` ("Faz. Exemplo Sant…"). */}
               {/* ⚠ O COMPRADOR OCUPA O QUE SOBRA (A22): em tres colunas iguais, "Fortunceres
                   S.A. - Minerva" cortava enquanto Data sobrava espaco. Data e Fazenda tem
                   largura fixa porque o conteudo delas e' previsivel; o nome, nao. */}
               <div className="grid grid-cols-[1fr_100px_150px] gap-2 rounded-md border bg-muted/20 px-[9px] py-1.5">
                 <div className="min-w-0">
                   <div className="text-[10px] font-normal text-muted-foreground leading-none">Comprador</div>
-                  <div className="mt-0.5 truncate whitespace-nowrap text-[15px] font-medium leading-none">{frigorificoNome ?? '—'}</div>
+                  <div className="mt-0.5 break-words text-[13px] font-medium leading-tight">{frigorificoNome ?? '—'}</div>
                   {/* ⚠ SO' APARECE QUANDO EXISTE: uma linha "CNPJ —" fixa diria que o
                       documento falta no cadastro, quando o que falta e' a carga que o traz. */}
                   {frigorificoDoc && (
-                    <div className="mt-0.5 text-[10px] text-muted-foreground leading-none truncate">
+                    <div className="mt-0.5 whitespace-nowrap text-[10px] text-muted-foreground leading-none">
                       CNPJ {frigorificoDoc}
                     </div>
                   )}
                 </div>
                 <div className="min-w-0">
                   <div className="text-[10px] font-normal text-muted-foreground leading-none">Data do abate</div>
-                  <div className="mt-0.5 text-[15px] font-medium tabular-nums leading-none">
+                  <div className="mt-0.5 whitespace-nowrap text-[10px] font-semibold tabular-nums leading-tight">
                     {data ? data.split('-').reverse().join('/') : <span className="text-muted-foreground">—</span>}
                   </div>
                 </div>
                 <div className="min-w-0">
                   <div className="text-[10px] font-normal text-muted-foreground leading-none">Fazenda de origem</div>
-                  <div className="mt-0.5 text-[15px] font-medium leading-none truncate">{fazendaNome ?? '—'}</div>
+                  <div className="mt-0.5 break-words text-[13px] font-medium leading-tight">{fazendaNome ?? '—'}</div>
                 </div>
               </div>
               <Separator />
@@ -1061,7 +1062,7 @@ export function AbateModalShell({
             </>)}
           </div>
         </div>
-        <div className="lg:min-h-0">
+        <div className="md:min-h-0">
           {/* O conteiner, a faixa de titulo e a faixa de secao moram em `ui/linha-resumo`
               desde o MODAIS-PADRAO-01a — os comentarios do `h-full` e do status foram com eles. */}
           <AsideResumo faixa={
@@ -1077,10 +1078,10 @@ export function AbateModalShell({
                   Identificacao diferente das outras; os mesmos quatro dados viraram quatro linhas,
                   e o CNPJ so' aparece onde existe, como antes. */}
               <div className="">
-                <LinhaResumo rotulo="Frigorífico" valor={frigorificoNome ?? null} />
+                <LinhaResumo rotulo="Frigorífico" valor={frigorificoNome ?? null} quebra />
                 {frigorificoDoc && <LinhaResumo rotulo="CNPJ" valor={frigorificoDoc} />}
                 <LinhaResumo rotulo="Data" valor={data ? data.split('-').reverse().join('/') : null} />
-                <LinhaResumo rotulo="Fazenda" valor={fazendaNome || null} />
+                <LinhaResumo rotulo="Fazenda" valor={fazendaNome || null} quebra />
               </div>
 
               <SecaoResumo titulo="Negociação" />

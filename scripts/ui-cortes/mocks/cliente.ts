@@ -1,1 +1,1 @@
-export const useCliente = () => ({ clienteAtual: { id: 'cli', nome: 'Cliente Bancada' }, clientes: [], isAdmin: true, loading: false });
+export const useCliente = () => ({ clienteAtual: { id: 'cli', nome: 'Cliente Bancada' }, clientes: [{ id: 'cli', nome: 'Cliente Bancada' }, { id: 'cli2', nome: 'Cliente Exemplo Dois' }], isAdmin: true, perfil: 'admin_agroinblue', loading: false });

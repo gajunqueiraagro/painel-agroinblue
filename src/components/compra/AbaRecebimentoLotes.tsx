@@ -213,7 +213,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
 
   /* ⚠ RECEBIDO ZERO E' AUSENCIA, NAO NUMERO: "— / 10 cab" diz que ainda nao comecou; sem lote nenhum, tudo "—". */
   const quadro = tot.semLote ? `${v.Feito} — · Saldo — · Kg méd. — · Última ${v.mov} —`
-    : `${v.Feito} ${totalRecebido === 0 ? '—' : totalRecebido} / ${totalNegociado} cab · Saldo ${tot.saldo} · Kg méd. ${tot.kgMedio != null ? formatNum(tot.kgMedio, 2) : '—'} · Última ${v.mov} ${tot.ultimaData ? `${tot.ultimaData.slice(8, 10)}/${tot.ultimaData.slice(5, 7)}/${tot.ultimaData.slice(2, 4)}` : '—'}`;
+    : `${v.Feito} ${totalRecebido === 0 ? '—' : totalRecebido} / ${totalNegociado} cab · Saldo ${tot.saldo} · Kg méd. ${tot.kgMedio != null ? formatNum(tot.kgMedio, 2) : '—'} · Última ${v.mov} ${tot.ultimaData ? `${tot.ultimaData.slice(8, 10)}/${tot.ultimaData.slice(5, 7)}/${tot.ultimaData.slice(0, 4)}` : '—'}`;
   const avisoTexto = recusa
     ?? (somenteLeitura ? (motivoSomenteLeitura ?? 'Operação fechada com título financeiro. Para editar, estorne o lançamento na aba Financeiro e reabra a operação.')
       : encerrada ? `${v.encerradaTexto} · só leitura · para corrigir, reabra`
@@ -225,7 +225,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
           um botao some. No abate, os cartoes do shell sairam: esta faixa e' o unico lugar desses numeros. */}
       <div data-testid="faixa-entrega" className="flex items-center gap-2" style={{ height: ALTURA_FAIXA_ENTREGA }}>
         <div data-testid="quadro-entrega" title={quadro}
-          className="flex h-full min-w-0 flex-1 items-center truncate rounded-md border bg-muted/20 px-2 text-[10.5px] tabular-nums text-foreground">
+          className="uma-linha-que-rola h-full min-w-0 flex-1 rounded-md border bg-muted/20 px-2 text-[10.5px] leading-[24px] tabular-nums text-foreground">
           {quadro}
         </div>
         <div data-testid="gestos-entrega" className="flex w-[220px] shrink-0 items-center justify-end gap-1.5">
@@ -249,7 +249,7 @@ export function AbaRecebimentoLotes({ api, operacaoPronta, concluida, encerrada,
 
       {/* ── AVISO (20px, uma linha): o estado da aba, o motivo da leitura, ou a recusa do banco (sempre aqui, nunca em toast). */}
       <div data-testid={somenteLeitura && motivoSomenteLeitura && !recusa ? 'entrega-somente-leitura' : 'aviso-entrega'} title={avisoTexto}
-        className={cn('truncate text-[10px] leading-[20px]', recusa ? 'text-destructive' : 'text-muted-foreground')}
+        className={cn('uma-linha-que-rola text-[10px] leading-[20px]', recusa ? 'text-destructive' : 'text-muted-foreground')}
         role={recusa ? 'alert' : undefined} style={{ height: ALTURA_AVISO_ENTREGA }}>
         {avisoTexto}
       </div>

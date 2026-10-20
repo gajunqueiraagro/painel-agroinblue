@@ -133,9 +133,9 @@ export function ResumoLateralOC({
         <SecaoResumo titulo="Identificação" />
         <div>
           <LinhaResumo rotulo="Tipo" valor={TIPO_LABEL[tipoLabel ?? ''] ?? null} />
-          <LinhaResumo rotulo="Contraparte" valor={fornecedorNome || null} />
+          <LinhaResumo rotulo="Contraparte" valor={fornecedorNome || null} quebra />
           <LinhaResumo rotulo="Data" valor={dataLabel || null} />
-          <LinhaResumo rotulo="Fazenda" valor={fazendaNome || null} />
+          <LinhaResumo rotulo="Fazenda" valor={fazendaNome || null} quebra />
         </div>
 
         <SecaoResumo titulo="Negociação" />

@@ -205,13 +205,14 @@ describe('T10 — FIX: o modal do abate nao transborda (coluna principal encolhe
   const ler = (p: string) => readFileSync(resolve(process.cwd(), p), 'utf8');
   /* a classe da coluna logo abaixo do grid de duas colunas do shell */
   const colunaPrincipal = (src: string) => {
-    const i = src.indexOf('lg:grid-cols-[1fr_240px]');
+    /* UI-SEM-CORTE-02: a grade de duas colunas passou a valer a partir de `md` */
+    const i = src.indexOf('md:grid-cols-[minmax(0,1fr)_240px]');
     if (i < 0) return null;
     const m = src.slice(i).match(/<div className="([^"]*)">/);
     return m ? m[1] : null;
   };
   it('auto-teste do leitor', () => {
-    expect(colunaPrincipal('x lg:grid-cols-[1fr_240px]">\n  <div className="flex min-w-0">')).toBe('flex min-w-0');
+    expect(colunaPrincipal('x md:grid-cols-[minmax(0,1fr)_240px]">\n  <div className="flex min-w-0">')).toBe('flex min-w-0');
     expect(colunaPrincipal('sem grid')).toBeNull();
   });
   it('a coluna principal do shell do abate tem min-w-0, como a da venda e a da compra', () => {

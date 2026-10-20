@@ -83,6 +83,8 @@ export function ordenarPendencias(lista: readonly Pendencia[]): Pendencia[] {
 }
 
 export const dataCurta = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '—');
+/** UI-SEM-CORTE-02 — o prazo em dd/mm/aaaa, sempre completo (a regra da casa para data em coluna). */
+export const dataCompleta = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '—');
 export const textoDaCobranca = (p: Pendencia) =>
   p.ultimaCobrancaEm && p.ultimaCobrancaCanal ? `${dataCurta(p.ultimaCobrancaEm)} · ${ROTULO_CANAL[p.ultimaCobrancaCanal]}` : '—';
 export const textoDaOrigem = (p: Pendencia) =>

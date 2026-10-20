@@ -31,6 +31,15 @@ import { buscarFornecedores } from '@/lib/fornecedores/buscaDeFornecedor';
 import { FinanceiroV2Tab } from '@/pages/FinanceiroV2Tab';
 import { GRUPOS, LEITOR, LINHAS, LISTA, RECENTES, USO } from './dados/fornecedores';
 import { CasarBlocoModal } from '@/components/financeiro-v2/CasarComBancoModal';
+import { CasarComBancoModal } from '@/components/financeiro-v2/CasarComBancoModal';
+import { VendaModalShell } from '@/components/venda/VendaModalShell';
+import { AbateModalShell } from '@/components/abate/AbateModalShell';
+import { CompraModalShell } from '@/components/compra/CompraModalShell';
+import { AvisoPendenciasCliente } from '@/components/consultor/AvisoPendenciasCliente';
+import { NovaPendenciaDialog } from '@/components/consultor/NovaPendenciaDialog';
+import { ResumoClientesPainel } from '@/components/consultor/ResumoClientesPainel';
+import * as OC from './dados/oc';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { AcessosTab } from '@/pages/AcessosTab';
 import { ContasPagarReceberTab } from '@/components/financeiro-v2/ContasPagarReceberTab';
 
@@ -258,6 +267,33 @@ if (tela === 'mesclar') {
     rpc: (fn: string) => fn === 'fn_nomes_dos_autores' ? NOMES : null };
   montar(<AcessosTab />);
   if (v === 'editar') setTimeout(() => (document.querySelectorAll('[data-testid="editar-membro"]')[1] as HTMLElement | undefined)?.click(), 300);
+} else if (tela === 'oc') {
+  /* UI-SEM-CORTE-02 — os tres modais da OC, aba a aba (`&v=venda|abate|compra&aba=`), com dados SINTETICOS (`dados/oc.ts`); o mes
+     da operacao FECHADO no P1 (a faixa "Reabrir mês" no rodape). */
+  const aba = q.get('aba') ?? '';
+  const fechado = q.get('p1') !== 'aberto';
+  g.__bancoBancada = { from: () => [], rpc: (fn: string) => fn === 'get_status_pilares_fechamento'
+    ? { p1_mapa_pastos: { status: fechado ? 'oficial' : 'aberto' }, p2_valor_rebanho: { status: 'aberto' } } : null };
+  const p: any = v === 'abate' ? OC.propsAbate(aba) : v === 'compra' ? OC.propsCompra(aba) : OC.propsVenda(aba);
+  if (v === 'compra' && fechado) p.mesFechadoMsg = OC.MES_FECHADO;
+  /* o MESMO DialogContent do `LancamentosTab` (o shell manda na propria altura) */
+  montar(<Dialog open><DialogContent className="max-w-5xl max-h-none p-0 gap-0 overflow-hidden [&>button.absolute]:hidden">
+    {v === 'abate' ? <AbateModalShell {...p} /> : v === 'compra' ? <CompraModalShell {...p} /> : <VendaModalShell {...p} />}
+  </DialogContent></Dialog>);
+} else if (tela === 'pendencias') {
+  /* UI-SEM-CORTE-02 — o ⚑ do cliente aberto (modal de altura fixa), a Nova pendência e o Resumo dos clientes. */
+  const fonte: any = OC.fontePendencias();
+  const Abre = () => { React.useEffect(() => { (document.querySelector('[data-testid="aviso-pendencias-botao"]') as HTMLElement | null)?.click(); }, []); return null; };
+  if (v === 'nova') montar(<NovaPendenciaDialog open onOpenChange={() => {}} clientes={[{ id: 'cli', nome: 'Cliente Bancada' }]} clienteFixo="cli" criar={async () => null} />);
+  else if (v === 'resumo') montar(<ResumoClientesPainel fonte={fonte} />);
+  else montar(<div className="bg-primary p-2"><AvisoPendenciasCliente cliente={{ id: 'cli', nome: 'Cliente Bancada' }} onVerNoResumo={() => {}} fonte={fonte} /><Abre /></div>);
+} else if (tela === 'casar-1x1') {
+  /* UI-SEM-CORTE-02 — o Casar com o banco 1:1 (o rendimento de R$ 0,01 da Vera, sintetico): o banco simulado diz que nao fecha. */
+  g.__bancoBancada = { from: () => [], rpc: (fn: string) => fn === 'fn_espelho_casar' ? { ok: false, motivo: 'soma_nao_bate', no_extrato: 0.01, soma: 0, diferenca: -0.01 } : null };
+  montar(<CasarComBancoModal open onClose={() => {}} contaBancariaId="bb" nomeConta="Banco Exemplo Personalité"
+    extrato={{ extrato_id: 'x1', data: '2025-06-30', historico: 'REND PAGO APLIC AUT MAIS · RENDIMENTO SINTETICO DA APLICACAO AUTOMATICA', valor: 0.01 }}
+    iniciais={v === 'levado' ? [{ lancamento_id: 'y1', descricao: 'Rendimento de aplicação · junho', fornecedor: 'Banco Exemplo', valor_assinado: 0.01, data_vencimento: '2025-06-30', status_transacao: 'programado' }] : []}
+    onConciliado={() => {}} />);
 } else if (tela === 'lancamento') {
   /* com `desc`, a edição é parcela de uma compra parcelada SEM número de contrato: o rodapé fala dela (a descrição do contrato é a longa) */
   /* ACESSOS-PERFIL-01 — a aba Auditoria: eventos de dois membros e um sem autor (com e sem `via`), nomes pela fonte única. */

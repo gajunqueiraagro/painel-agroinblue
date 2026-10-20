@@ -424,7 +424,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
           importa e' a janela BAIXA, onde o modal quase nao cabe. */}
       {/* ⚠ 240px SO' NO MODO OC — MODAIS-PADRAO-01a: e' a largura do resumo do Abate. O legado
           (CompraResumoPanel, outros callers) fica nos 280px de sempre, fora do escopo. */}
-      <div className={`grid min-h-0 flex-1 grid-cols-1 ${api.modoOC ? 'lg:grid-cols-[1fr_240px]' : 'lg:grid-cols-[1fr_280px]'}`}>
+      <div className={`grid min-h-0 flex-1 grid-cols-1 ${api.modoOC ? 'md:grid-cols-[minmax(0,1fr)_240px]' : 'lg:grid-cols-[1fr_280px]'}`}>
         <div className="flex min-h-0 min-w-0 flex-col">
         {/* BARRA DE ABAS — a do Abate e da Venda (botao 20px/10px, barra ~29px), DENTRO da coluna
             da esquerda: o resumo vai do cabecalho ao rodape. Era `px-6 py-1.5` com botao de 12px e a
@@ -587,13 +587,13 @@ export function CompraModalShell(api: CompraModalShellProps) {
                   </SelectContent>
                 </Select>
               </div>
-              {/* Hierarquia do A18: rotulo 11px cinza, valor 20px peso 500 — o topo domina
+              {/* UI-SEM-CORTE-02 (item 5): o nome QUEBRA (13px) e a data fica no tamanho do rotulo, nunca maior nem cortada. Antes: Hierarquia do A18: rotulo 11px cinza, valor 20px peso 500 — o topo domina
                   o campo, senao o olho encontra primeiro o formulario e depois procura de
                   quem e' a compra. */}
               <div className="grid grid-cols-2 gap-2 rounded-md border bg-muted/20 px-3.5 py-[11px]">
                 <div className="min-w-0">
                   <div className="text-[11px] text-muted-foreground leading-none">Fornecedor</div>
-                  <div className="mt-1 text-[20px] font-medium leading-none truncate" title={fornecedorNome || undefined}>
+                  <div className="mt-1 break-words text-[13px] font-medium leading-tight" title={fornecedorNome || undefined}>
                     {fornecedorNome || <span className="text-muted-foreground">—</span>}
                   </div>
                   {/* So quando existe: fornecedor sem documento nao ganha linha vazia nem
@@ -604,7 +604,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
                 </div>
                 <div className="min-w-0">
                   <div className="text-[11px] text-muted-foreground leading-none">Data da compra</div>
-                  <div className="mt-1 text-[20px] font-medium tabular-nums leading-none">{dataLabel}</div>
+                  <div className="mt-1 whitespace-nowrap text-[11px] font-semibold tabular-nums leading-tight">{dataLabel}</div>
                 </div>
               </div>
             </div>
@@ -617,7 +617,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
                 ⚠ `gap-x-4 gap-y-3` (16px/12px) no lugar do `gap-2` uniforme: a coluna
                 precisa de mais ar que a linha, senao os dois campos lado a lado se leem
                 como um so. */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3">
               <div className="min-w-0">
                 <Label className="text-[10px] flex items-center gap-1">Fornecedor <span className="text-destructive">*</span></Label>
                 {/* FORN-SELETOR-PADRAO-01 fatia 2b — o DONO do seletor de fornecedor, pelo leitor único (ativos do cliente; o gravado
@@ -685,7 +685,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
                   disabled={permissoes.negociacaoReadOnly} />
               </div>
 
-              <div className="lg:col-span-2 min-w-0">
+              <div className="md:col-span-2 min-w-0">
                 <Label className="text-[10px]">Observações/Lote</Label>
                 <Input value={api.observacao} onChange={e => api.setObservacao(e.target.value)} placeholder="Opcional"
                   className={`mt-[3px] h-8 px-2.5 text-[12px] ${permissoes.dadosOperacaoReadOnly ? CAMPO_TRAVADO : ''}`}
@@ -759,7 +759,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
             ⚠ O WRAPPER existe para dar rolagem PROPRIA a esta coluna. Ela nao deve rolar
             — e' o ponto do PR —, mas se um dia o resumo passar da altura do corpo, rolar
             aqui e' melhor que ser CORTADO em silencio pelo `overflow-hidden` do grid. */}
-        <div className="lg:min-h-0 lg:overflow-y-auto">
+        <div className="md:min-h-0 md:overflow-y-auto">
         {api.modoOC ? (
           <ResumoLateralOC
             tipoLabel={api.liquidacaoApi?.tipoOperacao ?? null}

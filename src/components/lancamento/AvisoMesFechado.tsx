@@ -31,14 +31,14 @@ export function AvisoMesFechado({ p1, master, acaoP1, className }: Props) {
       {p1 && (
         <div data-testid="aviso-mes-fechado-p1" className={LINHA}>
           <Lock className="h-3 w-3 shrink-0" />
-          <span className="min-w-0 flex-1 truncate font-medium" title={p1}>{p1}</span>
+          <span className="uma-linha-que-rola min-w-0 flex-1 font-medium" title={p1}>{p1}</span>
           {acaoP1}
         </div>
       )}
       {master && (
         <div data-testid="aviso-mes-fechado-master" className={LINHA}>
           <Lock className="h-3 w-3 shrink-0" />
-          <span className="min-w-0 flex-1 truncate font-medium" title={master}>{master}</span>
+          <span className="uma-linha-que-rola min-w-0 flex-1 font-medium" title={master}>{master}</span>
         </div>
       )}
     </div>
