@@ -147,6 +147,8 @@
   word-break: normal !important;
   overflow-wrap: normal !important;
   scrollbar-width: none;
+  /* UI-SEM-CORTE-02 — 2px a' direita: a ultima letra (e o glifo inclinado) nunca encosta na borda que corta */
+  padding-right: 2px !important;
 }
 .uma-linha-que-rola::-webkit-scrollbar,
 .filtros-uma-linha button[role="combobox"] > span:first-child::-webkit-scrollbar,
