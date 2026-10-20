@@ -600,7 +600,8 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
       {!ehParcelamento && (
         <div className="flex shrink-0 items-center gap-2 px-2 pb-1.5" data-testid="abas-do-credito">
           {/* v4: uma linha, sem quebrar; a contagem fica ao lado do rótulo, em tom mais fraco */}
-          <div className="shrink-0 whitespace-nowrap" data-testid="segmentado-das-abas">
+          {/* UI-SEM-CORTE-02 — em janela estreita as abas ROLAM no proprio lugar (nunca empurram o "Editar parcelas" para fora da janela) */}
+          <div className="min-w-0 shrink overflow-x-auto whitespace-nowrap [scrollbar-width:none]" data-testid="segmentado-das-abas">
           <Segmentado<AbaDoCredito> altura={22} valor={abaAberta} onEscolher={setAbaDoCredito} opcoes={[
             { valor: 'cronograma', rotulo: <RotuloDaAba nome="Cronograma" n={cartoes?.parcelas} /> },
             { valor: 'liberacoes', rotulo: <RotuloDaAba nome="Liberações" n={credito.tela?.liberacoesTotal.qtde} /> },
