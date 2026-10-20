@@ -7,7 +7,7 @@
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import {
-  CANAIS, ROTULO_CANAL, ROTULO_STATUS, dataCurta, emAberto, fraseDoRodape, ordenarPendencias, rodapePendencias, textoDaCobranca,
+  CANAIS, ROTULO_CANAL, ROTULO_STATUS, dataCompleta, emAberto, fraseDoRodape, ordenarPendencias, rodapePendencias, textoDaCobranca,
   textoDaOrigem, vencida, type CanalCobranca, type Pendencia,
 } from '@/lib/consultor/pendencias';
 
@@ -17,15 +17,14 @@ export interface PendenciasTabelaProps {
   nomesDosClientes?: ReadonlyMap<string, string>;
   onCobrar: (id: string, canal: CanalCobranca) => Promise<string | null>;
   onResolver: (id: string) => Promise<string | null>;
-  /** Altura do corpo (o modal fixa 5 linhas; o painel, a área toda). */
-  alturaDoCorpo?: string;
 }
 
 const TH = 'px-1.5 text-left font-semibold';
-const TD = 'truncate px-1.5';
+/* UI-SEM-CORTE-02 — texto QUEBRA a linha (a linha cresce), nunca "…"; data e numero ficam numa linha so'. */
+const TD = 'break-words px-1.5 py-0.5 leading-tight';
 const COR_STATUS: Record<Pendencia['status'], string> = { aberta: 'text-[#b45309]', cobrada: 'text-[#1d4ed8]', resolvida: 'text-muted-foreground' };
 
-export function PendenciasTabela({ lista, nomesDosClientes, onCobrar, onResolver, alturaDoCorpo }: PendenciasTabelaProps) {
+export function PendenciasTabela({ lista, nomesDosClientes, onCobrar, onResolver }: PendenciasTabelaProps) {
   const [cobrando, setCobrando] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [recado, setRecado] = useState<string | null>(null);
@@ -43,14 +42,15 @@ export function PendenciasTabela({ lista, nomesDosClientes, onCobrar, onResolver
   const cols = (
     <colgroup>
       {comCliente && <col style={{ width: 130 }} />}
-      <col style={{ width: 48 }} /><col style={{ width: 104 }} /><col /><col style={{ width: 112 }} />
+      <col style={{ width: 70 }} /><col style={{ width: 104 }} /><col /><col style={{ width: 112 }} />
       <col style={{ width: 66 }} /><col style={{ width: 100 }} /><col style={{ width: 168 }} />
     </colgroup>
   );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid="pendencias-tabela">
-      <div className="min-h-0 flex-1 overflow-auto" style={alturaDoCorpo ? { height: alturaDoCorpo, flex: 'none' } : undefined}>
+      {/* UI-SEM-CORTE-02 — o corpo e' o flex-1 da altura de quem hospeda (modal ou painel): nunca uma altura propria que empurre os botoes */}
+      <div className="min-h-0 flex-1 overflow-auto" data-testid="pendencias-corpo">
         <table className="w-full table-fixed text-[10px]">
           {cols}
           <thead className="sticky top-0 z-10 bg-primary text-primary-foreground">
@@ -66,7 +66,7 @@ export function PendenciasTabela({ lista, nomesDosClientes, onCobrar, onResolver
               return (
                 <tr key={p.id} className={cn('h-[22px] border-b', !aberta && 'text-muted-foreground')} data-testid="pendencia-linha" data-status={p.status}>
                   {comCliente && <td className={TD} title={nomesDosClientes?.get(p.clienteId) ?? ''}>{nomesDosClientes?.get(p.clienteId) ?? '—'}</td>}
-                  <td className={cn('px-1.5 tabular-nums', vencida(p) && 'font-semibold text-destructive')} data-testid="pendencia-prazo">{dataCurta(p.prazo)}</td>
+                  <td className={cn('whitespace-nowrap px-1.5 tabular-nums', vencida(p) && 'font-semibold text-destructive')} data-testid="pendencia-prazo">{dataCompleta(p.prazo)}</td>
                   <td className={TD} title={p.cobrarDe}>{p.cobrarDe}</td>
                   <td className={TD} title={p.oQue}>{p.oQue}</td>
                   <td className={TD} title={textoDaOrigem(p)}>{textoDaOrigem(p)}</td>
