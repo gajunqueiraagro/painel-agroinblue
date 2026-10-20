@@ -27,6 +27,7 @@ import { hojeLocal } from '@/lib/datas/hojeLocal';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
+import { rotuloDasAdiadas } from '@/hooks/useFinanciamentosPainel';
 
 export interface PizzaSliceLeve {
   nome: string;
@@ -187,6 +188,9 @@ export function useEndividamentoAtual(anoBase?: number): EndividamentoAtual {
       let dividaPecAnoAnt = 0;
       let curtoPrazo = 0;
       let longoPrazo = 0;
+      // FIN-PARCELA-STATUS-01: a parcela ADIADA (sem vencimento) é dívida, mas não é curto nem longo prazo — grupo próprio
+      let adiadoPrazo = 0;
+      let adiadoQtde = 0;
       const totalAnoSerie = new Array(12).fill(0);
       const dividaPecAnoSerie = new Array(12).fill(0);
       const totalAnoAntSerie = new Array(12).fill(0);
@@ -218,11 +222,9 @@ export function useEndividamentoAtual(anoBase?: number): EndividamentoAtual {
 
           // Pizza só do snapshot atual.
           const venc = p.data_vencimento;
-          const vencYear = venc ? Number(venc.slice(0, 4)) : NaN;
-          if (!Number.isNaN(vencYear)) {
-            if (vencYear <= anoBaseEff + 1) curtoPrazo += vp;
-            else longoPrazo += vp;
-          }
+          if (!venc) { adiadoPrazo += vp; adiadoQtde++; }
+          else if (Number(venc.slice(0, 4)) <= anoBaseEff + 1) curtoPrazo += vp;
+          else longoPrazo += vp;
         }
 
         // Mês anterior
@@ -275,6 +277,7 @@ export function useEndividamentoAtual(anoBase?: number): EndividamentoAtual {
       const pizzaVencimentos: PizzaSliceLeve[] = [
         { nome: `Curto Prazo (${anoBaseEff}–${anoBaseEff + 1})`, valor: curtoPrazo, color: '#EF4444' },
         { nome: `Longo Prazo (${anoBaseEff + 2}+)`,              valor: longoPrazo, color: '#EAB308' },
+        { nome: rotuloDasAdiadas(adiadoQtde),                    valor: adiadoPrazo, color: '#94A3B8' },
       ].filter((s) => s.valor > 0);
 
       return {
