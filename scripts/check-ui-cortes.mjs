@@ -65,6 +65,11 @@ const CENARIOS = [
      de parcelas têm de ser as da MESMA tela com a descrição curta (`alturasComo`). O parcelado do XML traz a grade de parcelas. */
   ...['Geral', 'Pagamento', 'Documentos'].flatMap((aba) => ['novo', 'editar'].map((m) => ({ nome: `lancamento-${m}-${aba}-longo`, url: `tela=lancamento&m=${m}&desc=longo`,
     alturasComo: `tela=lancamento&m=${m}&desc=curto`, antes: clicarTexto(aba) }))),
+  /* FIN-POS-FIXADO-01a — a CPR com o selo "estimado" das duas origens, nos sete tamanhos. ⚠ SO' O QUE ESTE PR TOCA (`regiao`): o
+     selo da linha e os dois totais do Ampliado. A CPR inteira nunca esteve no gate e tem cortes antigos (descricao, subcentro,
+     cabecalho do dia em janela estreita) — frente CPR-SEM-CORTE-01. Tirar a `regiao` mede a tela inteira. */
+  { nome: 'cpr-selo-estimado', url: 'tela=cpr', tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[data-testid="cpr-selo-estimado"]' },
+  { nome: 'cpr-ampliado-totais', url: 'tela=cpr', tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[data-testid="cpr-confirmado-estimado"]', antes: clicar('[data-testid="cpr-ampliar"]') },
   /* ACESSOS-PERFIL-01 — Acessos (lista + Novo, com as mensagens dos campos, + Editar) nos sete tamanhos, e a aba Auditoria do lançamento */
   { nome: 'acessos-lista', url: 'tela=acessos', tamanhos: TAMANHOS_DO_CONSORCIO },
   { nome: 'acessos-novo-falta', url: 'tela=acessos', tamanhos: TAMANHOS_DO_CONSORCIO, antes: clicar('[data-testid="acesso-criar"]') },
