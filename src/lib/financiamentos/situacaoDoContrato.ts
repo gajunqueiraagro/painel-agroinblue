@@ -54,6 +54,9 @@ export interface ParcelaDoContrato {
 
 export interface CartoesDoContrato {
   valorContrato: number; pago: number; aVencer: number; vencido: number;
+  /** FIN-PARCELA-STATUS-01: o que falta das parcelas ADIADAS (sem vencimento: o consórcio até a contemplação) — nem a vencer nem vencido.
+   *  0 quando o banco não manda a chave (resposta anterior à 20261027204630). */
+  adiado: number; adiadoQtde: number;
   pagas: number; parcelas: number; jurosPrevistos: number; somaPrincipal: number; somaTotal: number; divergentes: number;
   /** só com `p_detalhe` */
   detalhe: DetalheDosCartoes | null;
@@ -169,7 +172,8 @@ export function lerSituacaoDoContrato(dado: unknown): SituacaoDoContrato | null 
   if (detalheDosCartoes === undefined) return null;
   const saldo = lerSaldo(raiz);
   if (saldo === undefined) return null;
-  return { parcelas, cartoes: { valorContrato, pago, aVencer, vencido, pagas, parcelas: parcelasN, jurosPrevistos, somaPrincipal, somaTotal, divergentes, detalhe: detalheDosCartoes }, saldo };
+  const adiado = num(c.adiado) ?? 0; const adiadoQtde = num(c.adiado_qtde) ?? 0;
+  return { parcelas, cartoes: { valorContrato, pago, aVencer, vencido, adiado, adiadoQtde, pagas, parcelas: parcelasN, jurosPrevistos, somaPrincipal, somaTotal, divergentes, detalhe: detalheDosCartoes }, saldo };
 }
 
 /* PARC-CONTRATO-01: a não paga por vencer é "A vencer" (a palavra do cartão), não "Pendente". */
