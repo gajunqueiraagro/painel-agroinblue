@@ -14,6 +14,34 @@ export type SituacaoDaParcela = 'paga' | 'a_ligar' | 'a_vencer' | 'adiada';
 
 export interface Componente { modo: ModoDoComponente | 'auto'; valor: number | null; totalPct?: number | null }
 
+/* FIN-CONSORCIO-04 — o consórcio se monta pelas FAIXAS em R$ (copiadas do termo / do boleto: são a verdade gravada) ou pelas REGRAS em %.
+   O gerador é o mesmo (`regras.modo`); a tela só junta o que foi digitado e lê o que o banco devolve. */
+export type ModoDeMontar = 'faixas' | 'regras';
+export type TipoDaFaixa = 'a_pagar' | 'adiada' | 'adesao';
+export const TIPOS_DA_FAIXA: readonly TipoDaFaixa[] = ['a_pagar', 'adiada', 'adesao'];
+export const ROTULO_TIPO_DA_FAIXA: Record<TipoDaFaixa, string> = { a_pagar: 'a pagar', adiada: 'adiada', adesao: 'na adesão' };
+/** Uma faixa como o termo a escreve: de · até e os quatro valores da parcela, em R$ */
+export interface FaixaDigitada { de: number | null; ate: number | null; fundoComum: number | null; taxaAdm: number | null; reserva: number | null; seguro: number | null; tipo: TipoDaFaixa }
+/** O consórcio novo abre com UMA faixa vazia, de 1 até o prazo (decisão do Gabriel, 20/10) */
+export const faixaVazia = (prazo: number | null): FaixaDigitada => ({ de: 1, ate: prazo, fundoComum: null, taxaAdm: null, reserva: null, seguro: null, tipo: 'a_pagar' });
+const semValor = (x: FaixaDigitada) => [x.fundoComum, x.taxaAdm, x.reserva, x.seguro].every((v) => v === null || v === 0);
+/** Alguma faixa tem valor digitado? (passar para Regras pergunta antes de apagar o que foi digitado) */
+export const temValorDigitado = (fx: FaixaDigitada[]) => fx.some((x) => !semValor(x));
+/** A faixa inicial acompanha o prazo enquanto ninguém digitou nela */
+export function faixasComPrazo(fx: FaixaDigitada[], prazo: number | null): FaixaDigitada[] {
+  if (fx.length === 0) return [faixaVazia(prazo)];
+  if (fx.length === 1 && fx[0].de === 1 && semValor(fx[0])) return [{ ...fx[0], ate: prazo }];
+  return fx;
+}
+/** Parcelas na faixa (a contagem da linha; dinheiro nenhum) */
+export const qtdeDaFaixa = (x: Pick<FaixaDigitada, 'de' | 'ate'>) => (x.de != null && x.ate != null && x.ate >= x.de ? x.ate - x.de + 1 : null);
+/** "+ faixa": a nova começa depois da última (sem valor, a pagar) */
+export function acrescentarFaixa(fx: FaixaDigitada[], prazo: number | null): FaixaDigitada[] {
+  const ult = fx[fx.length - 1];
+  const de = ult?.ate != null ? ult.ate + 1 : null;
+  return [...fx, { ...faixaVazia(prazo), de, ate: prazo != null && de != null && de <= prazo ? prazo : null, tipo: ult?.tipo ?? 'a_pagar' }];
+}
+
 /** O formulário do consórcio (o que o banco grava em `regras` + o cadastro). */
 export interface FormDoConsorcio {
   descricao: string; credorId: string | null; grupo: string; cota: string; tipoBem: string; atividade: 'pecuaria' | 'agricultura';
@@ -23,6 +51,8 @@ export interface FormDoConsorcio {
   taxaTotalPct: number | null; formaTaxa: FormaDaTaxa; taxaPctParcela: number | null; taxaPrimeiras: number | null; taxaAdesaoPct: number | null;
   fundoComum: Componente; reserva: Componente;
   seguroModo: 'pct_mes' | 'valor'; seguroValor: number | null; seguroBase: BaseDoSeguro; seguroInicio: InicioDoSeguro;
+  /** FIN-CONSORCIO-04 */
+  modo: ModoDeMontar; faixas: FaixaDigitada[]; primeiraParcelaTermo: number | null;
 }
 
 export const FORM_VAZIO: FormDoConsorcio = {
@@ -31,6 +61,7 @@ export const FORM_VAZIO: FormDoConsorcio = {
   transcorridas: 'diluidas', taxaTotalPct: null, formaTaxa: 'igual', taxaPctParcela: null, taxaPrimeiras: null, taxaAdesaoPct: null,
   fundoComum: { modo: 'auto', valor: null }, reserva: { modo: 'pct_total', valor: null },
   seguroModo: 'pct_mes', seguroValor: null, seguroBase: 'credito_e_taxas', seguroInicio: 'primeira',
+  modo: 'faixas', faixas: [faixaVazia(null)], primeiraParcelaTermo: null,
 };
 
 const numOuNulo = (v: number | null | undefined) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
@@ -48,6 +79,9 @@ export function regrasDoForm(f: FormDoConsorcio): Record<string, unknown> {
     fundo_reserva: comp(f.reserva, true),
     seguro: { modo: f.seguroModo, valor: numOuNulo(f.seguroValor), base: f.seguroBase, inicio: f.seguroInicio },
     reajuste: { indice: f.indice, teto_pct: numOuNulo(f.tetoPct), mes: numOuNulo(f.mesReajuste) },
+    modo: f.modo, primeira_parcela_termo: numOuNulo(f.primeiraParcelaTermo),
+    ...(f.modo === 'faixas' ? { faixas: f.faixas.map((x) => ({ de: numOuNulo(x.de), ate: numOuNulo(x.ate), fundo_comum: numOuNulo(x.fundoComum) ?? 0,
+      taxa_adm: numOuNulo(x.taxaAdm) ?? 0, fundo_reserva: numOuNulo(x.reserva) ?? 0, seguro: numOuNulo(x.seguro) ?? 0, tipo: x.tipo })) } : {}),
   };
 }
 
@@ -72,7 +106,16 @@ export interface Faixa { faixa: number; de: number; ate: number; parcelas: numbe
   /** FIN-CONSORCIO-03b: os centavos do fundo comum que o gerador pôs nesta faixa (a última do grupo que recebe o resto); nulo sem ajuste */
   ajusteArredondamento: number | null }
 export interface Totais { fundoComum: number; taxaAdm: number; reserva: number; seguro: number; total: number }
-export interface Cronograma { faixas: Faixa[]; totais: Totais | null; avisos: string[]; recusa: string | null; parcelas: number; aPagarAgora: number | null; adiadas: number | null; vencimentoFinal: string | null }
+/** FIN-CONSORCIO-04 — a conferência do banco (âmbar, nunca corrige, não impede salvar) */
+export type ChaveDaConferencia = 'fundo_comum' | 'taxa_adm' | 'primeira_parcela' | 'reserva';
+export interface ItemDaConferencia { chave: ChaveDaConferencia; ok: boolean; texto: string }
+export interface Cronograma { faixas: Faixa[]; totais: Totais | null; avisos: string[]; recusa: string | null; parcelas: number; aPagarAgora: number | null; adiadas: number | null; vencimentoFinal: string | null;
+  confere: ItemDaConferencia[];
+  /** a faixa (índice na lista digitada) que o banco recusou; nulo sem recusa de faixa */
+  faixaErro: number | null;
+  /** os números das linhas pagas na adesão (a faixa de adesão vira faixa "na adesão" ao passar de Regras para Faixas) */
+  numerosNaAdesao: number[] }
+const CHAVES_DA_CONFERENCIA: readonly ChaveDaConferencia[] = ['fundo_comum', 'taxa_adm', 'primeira_parcela', 'reserva'];
 
 function lerFaixa(v: unknown): Faixa | null {
   const o = obj(v); if (!o) return null;
@@ -86,7 +129,14 @@ export function lerCronograma(v: unknown): Cronograma | null {
   const faixas: Faixa[] = [];
   for (const f of lista(o.faixas)) { const x = lerFaixa(f); if (!x) return null; faixas.push(x); }
   const t = obj(o.totais);
-  return { faixas, avisos: lista(o.avisos).map((a) => txt(a)).filter((a): a is string => !!a), recusa: txt(o.recusa),
+  const confere: ItemDaConferencia[] = [];
+  for (const c of lista(o.confere)) {
+    const x = obj(c); const chave = x ? CHAVES_DA_CONFERENCIA.find((k) => k === x.chave) : undefined; const texto = x ? txt(x.texto) : null;
+    if (!x || !chave || !texto) return null;
+    confere.push({ chave, ok: bool(x.ok), texto });
+  }
+  const numerosNaAdesao = lista(o.linhas).map((l) => obj(l)).filter((l): l is Obj => !!l && bool(l.adesao)).map((l) => num(l.numero)).filter((n): n is number => n !== null);
+  return { confere, faixaErro: num(o.faixa_erro), numerosNaAdesao, faixas, avisos: lista(o.avisos).map((a) => txt(a)).filter((a): a is string => !!a), recusa: txt(o.recusa),
     totais: t ? { fundoComum: num(t.fundo_comum) ?? 0, taxaAdm: num(t.taxa_adm) ?? 0, reserva: num(t.fundo_reserva) ?? 0, seguro: num(t.seguro) ?? 0, total: num(t.total) ?? 0 } : null,
     parcelas: num(o.parcelas) ?? 0, aPagarAgora: num(o.a_pagar_agora), adiadas: num(o.adiadas), vencimentoFinal: txt(o.vencimento_final) };
 }
@@ -160,6 +210,11 @@ export function formDaTela(t: TelaDoConsorcio): FormDoConsorcio {
     return { modo: modo === 'pct_parcela' || modo === 'pct_total' || modo === 'valor' ? modo : 'auto', valor: num(x.valor), totalPct: num(x.total_pct) };
   };
   const taxa = o('taxa_adm'), seg = o('seguro'), rea = o('reajuste');
+  const faixas: FaixaDigitada[] = lista(r.faixas).map((x) => obj(x)).filter((x): x is Obj => !!x).map((x) => ({
+    de: num(x.de), ate: num(x.ate), fundoComum: num(x.fundo_comum), taxaAdm: num(x.taxa_adm), reserva: num(x.fundo_reserva), seguro: num(x.seguro),
+    tipo: TIPOS_DA_FAIXA.find((k) => k === x.tipo) ?? (bool(x.adiada) ? 'adiada' : 'a_pagar') }));
+  /* o contrato salvo antes do FIN-CONSORCIO-04 não tem `modo`: foi montado pelas regras */
+  const modo: ModoDeMontar = r.modo === 'faixas' ? 'faixas' : 'regras';
   const um = <T extends string>(v: unknown, ok: readonly T[], padrao: T): T => (typeof v === 'string' && ok.some((x) => x === v) ? ok.find((x) => x === v) ?? padrao : padrao);
   return {
     descricao: t.contrato.descricao, credorId: t.contrato.credorId, grupo: t.contrato.grupo ?? '', cota: t.contrato.cota ?? '', tipoBem: t.contrato.tipoBem ?? '',
@@ -173,8 +228,19 @@ export function formDaTela(t: TelaDoConsorcio): FormDoConsorcio {
     seguroModo: seg.modo === 'valor' ? 'valor' : 'pct_mes', seguroValor: num(seg.valor),
     seguroBase: um(seg.base, BASES, 'credito_e_taxas'),
     seguroInicio: seg.inicio === 'contemplacao' ? 'contemplacao' : 'primeira',
+    modo, faixas: modo === 'faixas' && faixas.length ? faixas : [faixaVazia(num(r.prazo_grupo))], primeiraParcelaTermo: num(r.primeira_parcela_termo),
   };
 }
+
+/** Regras → Faixas: as faixas geradas viram o ponto de partida (a do ajuste de centavos inclusive, como faixa própria) */
+export function faixasDasRegras(c: Cronograma | null): FaixaDigitada[] | null {
+  if (!c || c.recusa || c.faixas.length === 0) return null;
+  const naAdesao = new Set(c.numerosNaAdesao);
+  return c.faixas.map((x) => ({ de: x.de, ate: x.ate, fundoComum: x.fundoComum, taxaAdm: x.taxaAdm, reserva: x.reserva, seguro: x.seguro,
+    tipo: naAdesao.has(x.de) ? 'adesao' : x.adiada ? 'adiada' : 'a_pagar' }));
+}
+/** A faixa do gerador que contém a linha digitada (o total da parcela é do banco) */
+export const faixaGeradaDe = (c: Cronograma | null, de: number | null) => (c && de != null ? c.faixas.find((x) => x.de <= de && de <= x.ate) ?? null : null);
 
 /** FIN-CONSORCIO-03b — a marca do ajuste de arredondamento (o `title` da célula e da faixa); o número é do gerador */
 export const ROTULO_AJUSTE = 'ajuste';
@@ -238,12 +304,32 @@ export function linhaCurta(t: Pick<TelaDoConsorcio['contrato'], 'credorNome' | '
 /** "47–79" ou, na faixa de uma parcela só (a última adiada com os centavos), "80" */
 export const intervaloDaFaixa = (f: { de: number; ate: number }) => (f.de === f.ate ? String(f.de) : `${f.de}–${f.ate}`);
 
+/** FIN-CONSORCIO-04 — "Parcelas 1 a 12", "Adiadas 47 a 79", "Adiada 80" */
+export function rotuloDaFaixaNoResumo(f: Pick<Faixa, 'de' | 'ate' | 'adiada'>, naAdesao = false): string {
+  const um = f.de === f.ate;
+  const nome = naAdesao ? 'Na adesão' : f.adiada ? (um ? 'Adiada' : 'Adiadas') : (um ? 'Parcela' : 'Parcelas');
+  return um ? `${nome} ${f.de}` : `${nome} ${f.de} a ${f.ate}`;
+}
+type LinhaDoResumo = { rotulo: string; valor: string };
+/** As linhas do resumo (as faixas, a 1ª parcela, a última a pagar e os totais): números do banco, nenhuma conta */
+export function linhasDasFaixas(carta: number | null, faixas: Faixa[], naAdesao: number[], ultima: string | null, totais: { taxaAdm: number; reserva: number; total: number } | null): LinhaDoResumo[] {
+  const adesao = new Set(naAdesao);
+  const primeira = faixas.find((f) => !f.adiada && !adesao.has(f.de)) ?? null;
+  return [
+    { rotulo: 'Carta', valor: brl(carta) },
+    { rotulo: '1ª parcela', valor: brl(primeira?.total ?? null) },
+    ...(faixas.length ? faixas.map((f) => ({ rotulo: rotuloDaFaixaNoResumo(f, adesao.has(f.de)), valor: brl(f.total) })) : [{ rotulo: 'Faixas', valor: '—' }]),
+    { rotulo: 'Última a pagar', valor: ultima ? textoDoVencimento(ultima) : '—' },
+    { rotulo: 'Taxa adm.', valor: brl(totais?.taxaAdm ?? null) },
+    { rotulo: 'Reserva', valor: brl(totais?.reserva ?? null) },
+    { rotulo: 'Total', valor: brl(totais?.total ?? null) },
+  ];
+}
+
 export function linhasDoResumo(t: TelaDoConsorcio): { rotulo: string; valor: string }[] {
   const s = t.saldo;
   return [
-    { rotulo: 'Carta', valor: brl(s.carta) },
-    ...(t.faixas.length ? t.faixas.map((f) => ({ rotulo: `Faixa ${intervaloDaFaixa(f)}${f.adiada ? ' adiada' : ''}`, valor: brl(f.total) })) : [{ rotulo: 'Faixas', valor: '—' }]),
-    { rotulo: 'Última a pagar', valor: s.ultimaAPagar ? textoDoVencimento(s.ultimaAPagar) : '—' },
+    ...linhasDasFaixas(s.carta, t.faixas, t.cronograma?.numerosNaAdesao ?? [], s.ultimaAPagar, { taxaAdm: s.taxaAdm, reserva: s.reserva, total: s.total }),
     { rotulo: 'Custo', valor: brl(s.custo) },
     { rotulo: 'Andamento', valor: `${s.pagas} de ${s.parcelas} pagas` },
     { rotulo: 'Fundo comum pago', valor: brl(s.fundoComumPago) },

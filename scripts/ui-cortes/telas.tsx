@@ -142,9 +142,16 @@ if (tela === 'mesclar') {
   const d: any = consorcio;
   /* FIN-CONSORCIO-03 — `&fc=pct`: o fundo comum do termo (1,1625% por parcela) e o gerador com o restante nas adiadas */
   const pct = q.get('fc') === 'pct';
-  const telaC = pct ? { ...d.tela, contrato: { ...d.tela.contrato, regras: { ...d.tela.contrato.regras, fundo_comum: { modo: 'pct_parcela', valor: 1.1625 } } } } : d.tela;
-  const cron = pct ? d.cronograma_fundo_pct : d.cronograma;
-  g.__bancoBancada = { from: () => [], rpc: (fn: string) => fn === 'fn_consorcio_tela' ? telaC : fn === 'fn_consorcio_cronograma' ? cron : null };
+  /* FIN-CONSORCIO-04 — `&modo=faixas`: o consórcio gravado pelas faixas do termo (o 002122, as respostas do banco no modo faixas);
+     `&n=200`: 200 parcelas em 6 faixas; o gerador simulado responde pelo modo que a tela manda (faixas | regras) */
+  const fx = q.get('modo') === 'faixas', n200 = q.get('n') === '200';
+  const regrasDaTela = n200 ? d.regras_200 : fx ? d.regras_faixas : pct ? { ...d.tela.contrato.regras, fundo_comum: { modo: 'pct_parcela', valor: 1.1625 } } : d.tela.contrato.regras;
+  const telaC = { ...d.tela, contrato: { ...d.tela.contrato, carta: regrasDaTela.carta ?? d.tela.contrato.carta, regras: regrasDaTela } };
+  const cronRegras = pct ? d.cronograma_fundo_pct : d.cronograma;
+  const cronFaixas = n200 ? d.cronograma_200 : d.cronograma_faixas;
+  const modoPedido = (p: unknown) => (typeof p === 'object' && p !== null && 'modo' in p ? p.modo : null);
+  g.__bancoBancada = { from: () => [], rpc: (fn: string, a: Record<string, unknown>) => fn === 'fn_consorcio_tela' ? telaC
+    : fn === 'fn_consorcio_cronograma' ? (modoPedido(a.p) === 'faixas' ? cronFaixas : n200 ? d.cronograma_200 : cronRegras) : null };
   montar(<ConsorcioDialog aberto aoFechar={() => {}} financiamentoId={q.get('novo') ? null : d.tela.contrato.id} />);
 } else if (tela === 'cadastro-contrato') {
   /* FIN-CONTRATO-SALVAR-01 — o cadastro de contrato de crédito: `&m=novo` (vazio) ou `&m=editar` (um contrato antigo SINTÉTICO, como os da

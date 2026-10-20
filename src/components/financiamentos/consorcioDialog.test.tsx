@@ -28,7 +28,9 @@ vi.mock('@/hooks/useConsorcio', () => ({
   useGestosDoConsorcio: () => ({}),
 }));
 import { lerTelaDoConsorcio as lerTelaDoConsorcioReal, lerCronograma as lerCronogramaReal } from '@/lib/financiamentos/consorcio';
-import { ConsorcioDialog, FaixasGeradas, ParcelasDoConsorcio } from './ConsorcioDialog';
+import { ConsorcioDialog, ParcelasDoConsorcio } from './ConsorcioDialog';
+import { TabelaDeFaixas } from './CustosDoConsorcio';
+import { FORM_VAZIO, type FormDoConsorcio } from '@/lib/financiamentos/consorcio';
 
 const tela = lerTelaDoConsorcio(fixture.tela)!;
 const largura = (w: number) => { Object.defineProperty(window, 'innerWidth', { configurable: true, value: w }); act(() => { window.dispatchEvent(new Event('resize')); }); };
@@ -56,10 +58,13 @@ describe('o leitor', () => {
     expect(textoDoVencimento(null)).toBe('contemplação');
     expect(textoDoVencimento('2026-07-16')).toBe('16/07/2026');
   });
-  it('o resumo lateral é lido do banco: uma linha por faixa e o adiado com as parcelas no rótulo', () => {
+  it('o resumo lateral é lido do banco: carta, 1ª parcela, uma linha por faixa ("Parcelas 1 a 12", "Adiada 80") e o adiado com as parcelas no rótulo', () => {
     const l = linhasDoResumo(tela);
-    expect(l.filter((x) => x.rotulo.startsWith('Faixa'))).toHaveLength(4);
-    expect(l.find((x) => x.rotulo === 'Faixa 80 adiada')?.valor).toBe('2.482,53');
+    /* FIN-CONSORCIO-04: o rótulo da faixa diz as parcelas */
+    expect(l.slice(0, 2).map((x) => x.rotulo)).toEqual(['Carta', '1ª parcela']);
+    expect(l.filter((x) => /^(Parcelas?|Adiadas?) \d/.test(x.rotulo)).map((x) => x.rotulo)).toEqual(['Parcelas 1 a 12', 'Parcelas 13 a 46', 'Adiadas 47 a 79', 'Adiada 80']);
+    expect(l.find((x) => x.rotulo === 'Adiada 80')?.valor).toBe('2.482,53');
+    expect(l.find((x) => x.rotulo === '1ª parcela')?.valor).toBe(l.find((x) => x.rotulo === 'Parcelas 1 a 12')?.valor);
     expect(l.find((x) => x.rotulo.startsWith('Adiado'))?.rotulo).toBe('Adiado · 34 parc.');
     expect(fundoComumDoContrato(tela.saldo)).toBeCloseTo(197607.98, 2);
   });
@@ -105,15 +110,18 @@ describe('a aba Parcelas', () => {
   });
 });
 
-describe('as faixas geradas e os avisos', () => {
-  it('as faixas do gerador e os avisos numa linha só', () => {
-    render(<FaixasGeradas faixas={tela.faixas} avisos={['fundo comum: a', 'reserva: b']} recusa={null} />);
+describe('as faixas geradas (Regras %, só leitura)', () => {
+  /* FIN-CONSORCIO-04: as faixas que as regras geram moram na mesma tabela das faixas digitadas, só leitura */
+  const regras: FormDoConsorcio = { ...FORM_VAZIO, modo: 'regras' };
+  it('as faixas do gerador, a marca do ajuste e o Total do banco', () => {
+    render(<TabelaDeFaixas form={regras} previa={lerCronograma(fixture.cronograma)} aoMudar={() => {}} aoTirar={() => {}} faixaErro={null} />);
     expect(screen.getAllByTestId('faixa-gerada')).toHaveLength(4);
     expect(screen.getByTestId('faixa-com-ajuste').textContent).toBe('ajuste2.470,08');
-    expect(screen.getByTestId('avisos-do-gerador').textContent).toBe('! fundo comum: a · reserva: b');
+    expect(screen.queryAllByTestId('faixa-digitada')).toHaveLength(0);
+    expect(screen.getByRole('table').querySelector('tfoot tr')!.textContent).toContain('80');
   });
   it('sem faixa, a recusa do gerador fica escrita', () => {
-    render(<FaixasGeradas faixas={[]} avisos={[]} recusa="Informe a carta." />);
+    render(<TabelaDeFaixas form={regras} previa={{ ...lerCronograma(fixture.cronograma)!, faixas: [], recusa: 'Informe a carta.' }} aoMudar={() => {}} aoTirar={() => {}} faixaErro={null} />);
     expect(screen.getByText('Informe a carta.')).toBeInTheDocument();
   });
 });
@@ -123,7 +131,7 @@ describe('o modal', () => {
     render(<ConsorcioDialog aberto aoFechar={() => {}} financiamentoId="cons-sint" />);
     expect(screen.getByTestId('titulo-do-consorcio').textContent).toBe('Editar consórcio · Consórcio Trator Exemplo');
     expect(screen.getByTestId('linha-curta').textContent).toMatch(/grupo 009999 · cota 0123 · não contemplado$/);
-    for (const n of ['Consórcio', 'Custos e prazos', 'Parcelas (80)', 'Documentos (0)']) expect(screen.getByRole('button', { name: n })).not.toBeDisabled();
+    for (const n of ['Consórcio', 'Custos e parcelas', 'Parcelas (80)', 'Documentos (0)']) expect(screen.getByRole('button', { name: n })).not.toBeDisabled();
   });
   it('novo: Parcelas e Documentos apagados até salvar', () => {
     render(<ConsorcioDialog aberto aoFechar={() => {}} financiamentoId={null} />);

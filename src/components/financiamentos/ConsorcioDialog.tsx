@@ -1,4 +1,6 @@
 /**
+ * FIN-CONSORCIO-04 — a aba "Custos e parcelas" monta o consórcio pelas FAIXAS em R$ (copiadas do termo) ou pelas REGRAS em %, com a
+ * conferência do banco (`CustosDoConsorcio.tsx`).
  * FIN-CONSORCIO-02 — o cadastro do consórcio (mock "Cadastro de Consórcio", Gabriel 19/10/2026 16:55). Modal FIXO de ~1120 × 560 (limitado
  * pela janela): cabeçalho "Editar consórcio" + a linha curta (administradora · grupo · cota · situação); abas Consórcio · Custos e prazos ·
  * Parcelas (N) · Documentos (N); resumo lateral de 240px que some abaixo de 900px de janela. Nada rola além da lista de parcelas.
@@ -18,7 +20,10 @@ import { FazendaSelect } from '@/components/shared/FazendaSelect';
 import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import { PlanoSubcentroSelect } from '@/components/shared/PlanoSubcentroSelect';
 import { BlocoDocumentos } from '@/components/financiamentos/ContratoDeCredito';
-import { BLOCO_FORMULARIO, GRADE_FORMULARIO, REGUA_CAMPO, REGUA_ROTULO, TituloDoBloco } from '@/components/ui/bloco-formulario';
+import { BLOCO_FORMULARIO, GRADE_FORMULARIO, REGUA_CAMPO, TituloDoBloco } from '@/components/ui/bloco-formulario';
+import {
+  BlocoPrazos, Campo, ConfereDoConsorcio, ConfirmarRegras, TabelaDeFaixas, TEXTO_DIGITE_AS_FAIXAS, TEXTO_RODAPE_FAIXAS, TEXTO_RODAPE_REGRAS,
+} from '@/components/financiamentos/CustosDoConsorcio';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFinanciamentoCadastro } from '@/hooks/useFinanciamentoCadastro';
@@ -28,7 +33,8 @@ import { useLarguraDaJanela } from '@/hooks/useLarguraDaJanela';
 import {
   FORM_VAZIO, ROTULO_INDICE, ROTULO_SITUACAO, TEXTO_PLANO_FIXO, TITULO_PLANO_FIXO, TITULO_SITUACAO, brl, dadosDoForm, formDaTela, linhaCurta,
   linhasDoResumo, mostraResumo, regrasDoForm, textoDoVencimento,
-  fundoComumDoContrato, faltaParaGerar, dicaDoFundoComum, tituloDoAjuste, ROTULO_AJUSTE, intervaloDaFaixa, type ItemQueFalta, type BaseDoSeguro, type FormDoConsorcio, type Indice, type ParcelaDoConsorcio, type Faixa, type SaldoDoConsorcio,
+  fundoComumDoContrato, faltaParaGerar, tituloDoAjuste, ROTULO_AJUSTE, intervaloDaFaixa, linhasDasFaixas, faixasDasRegras, faixasComPrazo, temValorDigitado,
+  acrescentarFaixa, type ItemQueFalta, type FormDoConsorcio, type Indice, type ParcelaDoConsorcio, type Faixa, type SaldoDoConsorcio, type ModoDeMontar, type FaixaDigitada,
 } from '@/lib/financiamentos/consorcio';
 
 type Aba = 'consorcio' | 'custos' | 'parcelas' | 'documentos';
@@ -36,8 +42,6 @@ const CAMPO = REGUA_CAMPO;
 const LEITURA = 'uma-linha-que-rola flex h-7 items-center rounded-md bg-background/60 px-2 text-[11px] text-muted-foreground';
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 const INDICES: readonly Indice[] = ['nenhum', 'ipca', 'incc', 'igpm', 'preco_do_bem'];
-const BASES_DO_SEGURO: readonly BaseDoSeguro[] = ['credito_e_taxas', 'credito', 'saldo_devedor'];
-const ROTULO_BASE: Record<BaseDoSeguro, string> = { credito_e_taxas: 'crédito e taxas', credito: 'crédito', saldo_devedor: 'saldo devedor' };
 export const MOTIVO_SALVE_ANTES = 'as parcelas e os documentos nascem quando o consórcio é salvo';
 
 function Bloco({ nome, grade, testId, children, acao }: { nome: string; grade: string; testId: string; children: ReactNode; acao?: ReactNode }) {
@@ -46,14 +50,6 @@ function Bloco({ nome, grade, testId, children, acao }: { nome: string; grade: s
       <TituloDoBloco nome={nome} acao={acao} />
       <div className={`${GRADE_FORMULARIO} ${grade}`}>{children}</div>
     </section>
-  );
-}
-function Campo({ rotulo, obrig, children, className = '', campo }: { rotulo: string; obrig?: boolean; children: ReactNode; className?: string; campo?: string }) {
-  return (
-    <div className={`min-w-0 ${className}`} data-campo={campo}>
-      <div className={REGUA_ROTULO} title={rotulo}>{rotulo}{obrig ? ' *' : ''}</div>
-      {children}
-    </div>
   );
 }
 
@@ -88,6 +84,31 @@ export function ConsorcioDialog({ aberto, aoFechar, financiamentoId, onSalvo, on
   const previa = useCronogramaDoConsorcio(regras);
   const subDe = (id: string | null) => classificacoes.find((c) => c.id === id)?.subcentro ?? '';
 
+  /* FIN-CONSORCIO-04 — Faixas (R$) | Regras (%): Regras → Faixas leva as faixas geradas (a do ajuste inclusive); Faixas → Regras com
+     valor digitado pergunta antes de descartar */
+  const [confirmarRegras, setConfirmarRegras] = useState(false);
+  const aoTrocarModo = (m: ModoDeMontar) => {
+    if (m === form.modo) return;
+    if (m === 'faixas') { setForm((f) => ({ ...f, modo: 'faixas', faixas: faixasDasRegras(previa) ?? faixasComPrazo(f.faixas, f.prazoGrupo) })); return; }
+    if (temValorDigitado(form.faixas)) { setConfirmarRegras(true); return; }
+    set('modo', 'regras');
+  };
+  const aoMudarPrazo = (prazo: number | null) => setForm((f) => ({ ...f, prazoGrupo: prazo, faixas: faixasComPrazo(f.faixas, prazo) }));
+  const mudarFaixa = (i: number, x: FaixaDigitada) => setForm((f) => ({ ...f, faixas: f.faixas.map((y, j) => (j === i ? x : y)) }));
+  const tirarFaixa = (i: number) => setForm((f) => ({ ...f, faixas: f.faixas.filter((_, j) => j !== i) }));
+  /* a recusa do gerador nas faixas (buraco, sobreposição, …): impede salvar e leva à linha */
+  const recusaDasFaixas = form.modo === 'faixas' && previa?.recusa ? previa.recusa : null;
+  const faixaErro = recusaDasFaixas ? previa?.faixaErro ?? null : null;
+  /* o foco vai à linha depois que a aba desenhou (efeito: depois do commit, nunca antes) */
+  const [focarFaixa, setFocarFaixa] = useState<number | null>(null);
+  const irAFaixa = (i: number | null) => { setAba('custos'); setFocarFaixa(i ?? 0); };
+  useEffect(() => {
+    if (focarFaixa === null || aba !== 'custos') return;
+    const alvo = document.querySelector<HTMLElement>(`[data-faixa="${focarFaixa}"] input`);
+    alvo?.scrollIntoView?.({ block: 'nearest' }); alvo?.focus();
+    setFocarFaixa(null);
+  }, [focarFaixa, aba]);
+
   /* FIN-CONSORCIO-03 — o rodapé lista SÓ o que falta ao gerador; cada item leva à aba e ao campo */
   const falta = useMemo(() => faltaParaGerar(form), [form]);
   const [tentouSalvar, setTentouSalvar] = useState(false);
@@ -100,19 +121,19 @@ export function ConsorcioDialog({ aberto, aoFechar, financiamentoId, onSalvo, on
   };
   const salvar = async () => {
     setTentouSalvar(true);
-    if (falta.length > 0) { setRecado(null); return; }
+    if (falta.length > 0 || recusaDasFaixas) { setRecado(null); return; }
     setGravando(true); setRecado(null);
     const r = await gestos.salvar(finId, dadosDoForm(form, clienteId), false);
     setGravando(false);
     if (!r.ok) { setRecado({ texto: r.recusa ?? 'O banco recusou.', erro: true }); return; }
     const id = typeof r.dado?.financiamento_id === 'string' ? r.dado.financiamento_id : finId;
     if (!finId && id) { setFinId(id); onSalvo?.(id); setRecado({ texto: 'Consórcio salvo · as parcelas nasceram pelas regras', erro: false }); return; }
-    setRecado({ texto: r.dado?.cronograma_mudou === true ? 'Salvo · as regras mudaram: use "Regerar em aberto" nas Parcelas' : 'Salvo', erro: false });
+    setRecado({ texto: r.dado?.cronograma_mudou === true ? `Salvo · ${form.modo === 'faixas' ? 'as faixas' : 'as regras'} mudaram: use "Regerar em aberto" nas Parcelas (só as em aberto mudam)` : 'Salvo', erro: false });
   };
 
   const abas = [
     { valor: 'consorcio' as const, rotulo: 'Consórcio' },
-    { valor: 'custos' as const, rotulo: 'Custos e prazos' },
+    { valor: 'custos' as const, rotulo: 'Custos e parcelas' },
     { valor: 'parcelas' as const, rotulo: `Parcelas${t ? ` (${t.parcelas.length})` : ''}`, desabilitada: !editando, title: editando ? undefined : MOTIVO_SALVE_ANTES },
     { valor: 'documentos' as const, rotulo: `Documentos${t ? ` (${t.documentos})` : ''}`, desabilitada: !editando, title: editando ? undefined : MOTIVO_SALVE_ANTES },
   ];
@@ -162,9 +183,11 @@ export function ConsorcioDialog({ aberto, aoFechar, financiamentoId, onSalvo, on
                   </div>
                 </Campo>
               </Bloco>
-              <Bloco nome="Carta e reajuste" testId="bloco-carta" grade="grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,0.8fr)]">
+              <Bloco nome="Carta e reajuste" testId="bloco-carta" grade="grid-cols-4">
                 <Campo rotulo="Valor da carta de crédito" obrig campo="carta"><CampoMoeda className={CAMPO} valor={form.carta} onChange={(v) => set('carta', v)} /></Campo>
                 <Campo rotulo="1ª parcela" obrig campo="primeiraParcela"><DatePicker size="compact" className={CAMPO} value={form.primeiraParcela ?? ''} onChange={(v) => set('primeiraParcela', v || null)} /></Campo>
+                {/* FIN-CONSORCIO-04 — o valor da 1ª parcela como o termo o escreve (opcional): só para a conferência */}
+                <Campo rotulo="1ª parcela do termo" campo="primeiraParcelaTermo"><CampoMoeda className={CAMPO} valor={form.primeiraParcelaTermo} onChange={(v) => set('primeiraParcelaTermo', v)} /></Campo>
                 <Campo rotulo="Adesão"><DatePicker size="compact" className={CAMPO} value={form.dataAdesao ?? ''} onChange={(v) => set('dataAdesao', v || null)} /></Campo>
                 <Campo rotulo="Índice de reajuste">
                   <Select value={form.indice} onValueChange={(v) => set('indice', INDICES.find((i) => i === v) ?? 'nenhum')}>
@@ -193,79 +216,19 @@ export function ConsorcioDialog({ aberto, aoFechar, financiamentoId, onSalvo, on
               </Bloco>
             </>)}
 
-            {aba === 'custos' && (<>
-              {/* FIN-CONSORCIO-03 — uma linha só: prazo, transcorridas e o fundo comum por parcela; "a pagar agora" e o restante da carta
-                  (números do gerador) moram na linha do título do bloco — nada empurra o modal */}
-              <Bloco nome="Prazos" testId="bloco-prazos" grade="grid-cols-[minmax(0,0.75fr)_minmax(0,0.75fr)_minmax(0,1.45fr)_minmax(0,1.45fr)_minmax(0,0.8fr)]"
-                acao={<span className="uma-linha-que-rola max-w-[420px] text-[10px] text-muted-foreground" data-testid="dica-fundo-comum">
-                  {[`a pagar agora ${previa?.aPagarAgora ?? '—'}`, dicaDoFundoComum(form, previa)].filter(Boolean).join(' · ')}</span>}>
-                <Campo rotulo="Prazo do grupo" obrig campo="prazoGrupo"><Input className={CAMPO} inputMode="numeric" value={form.prazoGrupo ?? ''} onChange={(e) => set('prazoGrupo', e.target.value ? Number(e.target.value.replace(/\D/g, '')) : null)} /></Campo>
-                <Campo rotulo="Já transcorridas"><Input className={CAMPO} inputMode="numeric" value={form.jaTranscorridas ?? ''} onChange={(e) => set('jaTranscorridas', e.target.value ? Number(e.target.value.replace(/\D/g, '')) : 0)} /></Campo>
-                <Campo rotulo="Transcorridas">
-                  <Segmentado altura={28} valor={form.transcorridas} onEscolher={(v) => set('transcorridas', v)}
-                    opcoes={[{ valor: 'diluidas', rotulo: 'Diluídas', title: 'Diluídas nas parcelas a pagar' }, { valor: 'adiadas', rotulo: 'Adiadas', title: 'Adiadas até a contemplação' },
-                      { valor: 'adesao', rotulo: 'Na adesão', title: 'Pagas na adesão' }]} />
-                </Campo>
-                {/* o fundo comum por parcela: automático (a carta dividida) ou o que o termo diz (% por parcela ou R$); o restante da carta
-                    vai às adiadas (ou à adesão) pelo gerador */}
-                <Campo rotulo="Fundo comum por parcela">
-                  <Segmentado altura={28} valor={form.fundoComum.modo === 'pct_total' ? 'pct_parcela' : form.fundoComum.modo}
-                    onEscolher={(v) => set('fundoComum', v === 'auto' ? { modo: 'auto', valor: null } : { modo: v, valor: v === form.fundoComum.modo ? form.fundoComum.valor : null })}
-                    opcoes={[{ valor: 'auto', rotulo: 'Automático' }, { valor: 'pct_parcela', rotulo: '% parc.' }, { valor: 'valor', rotulo: 'R$' }]} />
-                </Campo>
-                {form.fundoComum.modo === 'auto'
-                  ? <Campo rotulo="Fundo comum"><span className={LEITURA} data-testid="fundo-comum-auto">{brl(previa?.faixas.find((x) => !x.adiada)?.fundoComum ?? null)}</span></Campo>
-                  : form.fundoComum.modo === 'valor'
-                    ? <Campo rotulo="Fundo comum"><CampoMoeda className={CAMPO} valor={form.fundoComum.valor} onChange={(v) => set('fundoComum', { modo: 'valor', valor: v })} /></Campo>
-                    : <Campo rotulo={form.fundoComum.modo === 'pct_total' ? 'Fundo comum % total' : 'Fundo comum (%)'}>
-                        <CampoPercentual className={CAMPO} valor={form.fundoComum.valor} onChange={(v) => set('fundoComum', { ...form.fundoComum, valor: v })} casas={4} />
-                      </Campo>}
-              </Bloco>
-              <Bloco nome="Taxa de administração" testId="bloco-taxa" grade="grid-cols-[minmax(0,0.7fr)_minmax(0,1.6fr)_minmax(0,0.7fr)_minmax(0,0.6fr)_minmax(0,0.8fr)_minmax(0,0.6fr)]">
-                <Campo rotulo="Total (%)"><CampoPercentual className={CAMPO} valor={form.taxaTotalPct} onChange={(v) => set('taxaTotalPct', v)} casas={4} /></Campo>
-                <Campo rotulo="Cobrança">
-                  <Segmentado altura={28} valor={form.formaTaxa} onEscolher={(v) => set('formaTaxa', v)}
-                    opcoes={[{ valor: 'igual', rotulo: 'Igual' }, { valor: 'antecipada', rotulo: 'Antecipada' }, { valor: 'manual', rotulo: 'Manual' }]} />
-                </Campo>
-                <Campo rotulo="Por parcela (%)"><CampoPercentual className={CAMPO} valor={form.taxaPctParcela} onChange={(v) => set('taxaPctParcela', v)} casas={4} disabled={form.formaTaxa === 'manual'} /></Campo>
-                <Campo rotulo="Nas primeiras"><Input className={CAMPO} inputMode="numeric" disabled={form.formaTaxa !== 'antecipada'} value={form.taxaPrimeiras ?? ''}
-                  onChange={(e) => set('taxaPrimeiras', e.target.value ? Number(e.target.value.replace(/\D/g, '')) : null)} /></Campo>
-                <Campo rotulo="Restante por parcela"><span className={LEITURA} data-testid="taxa-restante">{previa && previa.faixas.length > 1 && form.formaTaxa === 'antecipada' ? brl(previa.faixas[1].taxaAdm) : '—'}</span></Campo>
-                <Campo rotulo="Adesão (%)"><CampoPercentual className={CAMPO} valor={form.taxaAdesaoPct} onChange={(v) => set('taxaAdesaoPct', v)} casas={4} /></Campo>
-              </Bloco>
-              <Bloco nome="Outros custos" testId="bloco-outros" grade="grid-cols-[minmax(0,1.25fr)_minmax(0,0.7fr)_minmax(0,0.55fr)_minmax(0,1.2fr)_minmax(0,1.3fr)_minmax(0,0.9fr)]">
-                <Campo rotulo="Fundo de reserva">
-                  <Segmentado altura={28} valor={form.reserva.modo === 'auto' ? 'pct_total' : form.reserva.modo} onEscolher={(v) => set('reserva', { ...form.reserva, modo: v })}
-                    opcoes={[{ valor: 'pct_parcela', rotulo: '% parc.' }, { valor: 'pct_total', rotulo: '% total' }, { valor: 'valor', rotulo: 'R$' }]} />
-                </Campo>
-                {form.reserva.modo === 'valor'
-                  ? <Campo rotulo="Reserva"><CampoMoeda className={CAMPO} valor={form.reserva.valor} onChange={(v) => set('reserva', { ...form.reserva, valor: v })} /></Campo>
-                  : <Campo rotulo="Reserva (%)"><CampoPercentual className={CAMPO} valor={form.reserva.valor} onChange={(v) => set('reserva', { ...form.reserva, valor: v })} casas={4} /></Campo>}
-                <Campo rotulo="% total"><CampoPercentual className={CAMPO} valor={form.reserva.totalPct ?? null} onChange={(v) => set('reserva', { ...form.reserva, totalPct: v })} casas={4}
-                  disabled={form.reserva.modo === 'pct_total'} /></Campo>
-                {form.seguroModo === 'valor'
-                  ? <Campo rotulo="Seguro"><CampoMoeda className={CAMPO} valor={form.seguroValor} onChange={(v) => set('seguroValor', v)} /></Campo>
-                  : <Campo rotulo="Seguro %/mês"><CampoPercentual className={CAMPO} valor={form.seguroValor} onChange={(v) => set('seguroValor', v)} casas={4} /></Campo>}
-                <Campo rotulo="Seguro é">
-                  <Select value={form.seguroModo === 'valor' ? 'valor' : form.seguroBase}
-                    onValueChange={(v) => setForm((f) => (v === 'valor' ? { ...f, seguroModo: 'valor' }
-                      : { ...f, seguroModo: 'pct_mes', seguroBase: BASES_DO_SEGURO.find((b) => b === v) ?? 'credito_e_taxas' }))}>
-                    <SelectTrigger className={CAMPO}><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {BASES_DO_SEGURO.map((b) => <SelectItem key={b} value={b}>% {ROTULO_BASE[b]}</SelectItem>)}
-                      <SelectItem value="valor">Valor fixo R$</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </Campo>
-                <Campo rotulo="Seguro começa">
-                  <Select value={form.seguroInicio} onValueChange={(v) => set('seguroInicio', v === 'contemplacao' ? 'contemplacao' : 'primeira')}>
-                    <SelectTrigger className={CAMPO}><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value="primeira">1ª parcela</SelectItem><SelectItem value="contemplacao">Contemplação</SelectItem></SelectContent>
-                  </Select>
-                </Campo>
-              </Bloco>
-              <FaixasGeradas faixas={previa?.faixas ?? []} avisos={previa?.avisos ?? []} recusa={previa?.recusa ?? null} />
-            </>)}
+            {aba === 'custos' && (<div className="flex min-h-0 flex-1 flex-col gap-0.5">
+              <BlocoPrazos form={form} set={set} setForm={setForm} previa={previa} aoTrocarModo={aoTrocarModo} aoMudarPrazo={aoMudarPrazo} />
+              {/* nas faixas, a linha de cima da tabela: o convite e o "+ faixa" (os avisos do gerador moram na conferência) */}
+              {form.modo === 'faixas' && (
+                <div className="flex h-[22px] shrink-0 items-center gap-2">
+                  <span className="uma-linha-que-rola min-w-0 flex-1 text-[10.5px] text-muted-foreground" data-testid="digite-as-faixas">{TEXTO_DIGITE_AS_FAIXAS}</span>
+                  <Button variant="outline" size="sm" className="h-[22px] shrink-0 text-[10px]" onClick={() => setForm((f) => ({ ...f, faixas: acrescentarFaixa(f.faixas, f.prazoGrupo) }))}
+                    data-testid="mais-faixa">+ faixa</Button>
+                </div>
+              )}
+              <TabelaDeFaixas form={form} previa={previa} aoMudar={mudarFaixa} aoTirar={tirarFaixa} faixaErro={faixaErro} />
+              <ConfereDoConsorcio previa={previa} />
+            </div>)}
 
             {aba === 'parcelas' && t && (
               <ParcelasDoConsorcio parcelas={t.parcelas} faixas={t.faixas} saldo={t.saldo} ultimaOperacao={t.ultimaOperacao}
@@ -278,14 +241,9 @@ export function ConsorcioDialog({ aberto, aoFechar, financiamentoId, onSalvo, on
             <aside className="flex min-h-0 flex-col overflow-hidden border-l bg-card px-3 pt-2" data-testid="resumo-do-consorcio">
               <div className="mb-1 text-[11px] font-semibold">Resumo do consórcio</div>
               <div className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-2 text-[11px] leading-4">
-                {(t ? linhasDoResumo(t) : [
-                  { rotulo: 'Carta', valor: brl(form.carta) },
-                  ...(previa?.faixas.length ? previa.faixas.map((f) => ({ rotulo: `Faixa ${intervaloDaFaixa(f)}${f.adiada ? ' adiada' : ''}`, valor: brl(f.total) })) : [{ rotulo: 'Faixas', valor: '—' }]),
-                  { rotulo: 'Última a pagar', valor: previa?.vencimentoFinal ? textoDoVencimento(previa.vencimentoFinal) : '—' },
-                  { rotulo: 'Taxa adm.', valor: previa?.totais ? brl(previa.totais.taxaAdm) : '—' },
-                  { rotulo: 'Reserva', valor: previa?.totais ? brl(previa.totais.reserva) : '—' },
-                  { rotulo: 'Total', valor: previa?.totais ? brl(previa.totais.total) : '—' },
-                ]).map((l) => (
+                {(t ? linhasDoResumo(t) : previa && !previa.recusa
+                  ? linhasDasFaixas(form.carta, previa.faixas, previa.numerosNaAdesao, previa.vencimentoFinal, previa.totais)
+                  : linhasDasFaixas(form.carta, [], [], null, null)).map((l) => (
                   <div key={l.rotulo} className="contents">
                     <span className="whitespace-nowrap text-muted-foreground">{l.rotulo}</span>
                     <span className="whitespace-nowrap text-right font-medium tabular-nums">{l.valor}</span>
@@ -297,61 +255,30 @@ export function ConsorcioDialog({ aberto, aoFechar, financiamentoId, onSalvo, on
         </div>
         <div className="flex h-[36px] shrink-0 items-center gap-2 border-t px-3">
           {/* FIN-CONSORCIO-03 — faixa de 11px que quebra a linha (rola por dentro só se passar de duas), vermelha na recusa */}
-          <div className={`max-h-[32px] min-w-0 flex-1 overflow-y-auto break-words text-[11px] leading-[14px] ${recado?.erro || (tentouSalvar && falta.length > 0) ? 'text-destructive' : 'text-muted-foreground'}`}
+          <div className={`max-h-[32px] min-w-0 flex-1 overflow-y-auto break-words text-[11px] leading-[14px] ${recado?.erro || (tentouSalvar && (falta.length > 0 || !!recusaDasFaixas)) ? 'text-destructive' : 'text-muted-foreground'}`}
             data-testid="recado-do-consorcio">
             {recado?.texto ?? (falta.length > 0
               ? <span data-testid="falta-do-consorcio">Falta:{falta.map((item, i) => (
                   <span key={item.campo}>{i > 0 ? ' ·' : ''} <button type="button" className="underline-offset-2 hover:underline" onClick={() => irAoCampo(item)}
                     data-testid={`falta-${item.campo}`}>{item.rotulo}</button></span>))}</span>
-              : (editando ? 'o cadastro grava direto · as parcelas mudam pelo lápis, pelo reajuste ou pelo "Regerar em aberto"' : 'campos com * são obrigatórios'))}
+              : recusaDasFaixas
+                /* FIN-CONSORCIO-04 — a recusa do gerador nas faixas leva à linha dela */
+                ? <button type="button" className="text-left underline-offset-2 hover:underline" onClick={() => irAFaixa(faixaErro)} data-testid="recusa-das-faixas">{recusaDasFaixas}</button>
+                : aba === 'custos' ? (form.modo === 'faixas' ? TEXTO_RODAPE_FAIXAS : TEXTO_RODAPE_REGRAS)
+                  : (editando ? 'o cadastro grava direto · as parcelas mudam pelo lápis, pelo reajuste ou pelo "Regerar em aberto"' : 'campos com * são obrigatórios'))}
           </div>
           <Button variant="outline" size="sm" className="h-[24px] text-[10px]" onClick={aoFechar}>Fechar</Button>
           <Button size="sm" className="h-[24px] text-[10px]" disabled={gravando} onClick={() => void salvar()} data-testid="salvar-consorcio">
             {gravando ? 'Salvando…' : editando ? 'Salvar alterações' : 'Salvar consórcio'}
           </Button>
         </div>
+        <ConfirmarRegras aberto={confirmarRegras} aoVoltar={() => setConfirmarRegras(false)} aoConfirmar={() => { setConfirmarRegras(false); set('modo', 'regras'); }} />
         {finId && dialogo && (
           <GestoDoConsorcio dialogo={dialogo} finId={finId} gestos={gestos} indice={form.indice} ultimaOperacao={t?.ultimaOperacao ?? null}
             aoFechar={(texto) => { setDialogo(null); if (texto) setRecado({ texto, erro: false }); }} />
         )}
       </DialogContent>
     </Dialog>
-  );
-}
-
-/** as faixas que as regras geram (só leitura) e os avisos do gerador */
-export function FaixasGeradas({ faixas, avisos, recusa }: { faixas: Faixa[]; avisos: string[]; recusa: string | null }) {
-  return (
-    <section className={`${BLOCO_FORMULARIO} min-h-0 flex-1`} data-testid="faixas-geradas">
-      {/* FIN-CONSORCIO-03b — os avisos do gerador moram na linha do título (a última adiada virou faixa própria: a linha de baixo não
-          cabia nas janelas de 520–530px); rolam no lugar deles, inteiros no `title` */}
-      <TituloDoBloco nome="Faixas geradas" acao={
-        <span className="uma-linha-que-rola block max-w-[520px] text-[10px] leading-[15px] text-amber-700" data-testid="avisos-do-gerador" title={avisos.join('\n')}>
-          {avisos.length ? `! ${avisos.join(' · ')}` : ''}
-        </span>} />
-      <table className="w-full table-fixed text-[10.5px]">
-        <colgroup><col className="w-[104px]" /><col /><col /><col /><col /><col /><col className="w-[48px]" /></colgroup>
-        <thead><tr className="h-[17px] bg-primary text-[9.5px] text-primary-foreground">
-          <th className="px-1.5 text-left font-semibold">Parcelas</th><th className="px-1.5 text-right font-semibold">Fundo comum</th><th className="px-1.5 text-right font-semibold">Taxa adm.</th>
-          <th className="px-1.5 text-right font-semibold">Reserva</th><th className="px-1.5 text-right font-semibold">Seguro</th><th className="px-1.5 text-right font-semibold">Total</th>
-          <th className="px-1.5 text-center font-semibold">Qtde</th>
-        </tr></thead>
-        <tbody>
-          {faixas.map((f) => (
-            <tr key={f.faixa} className="h-[17px] border-b" data-testid="faixa-gerada">
-              <td className="whitespace-nowrap px-1.5 tabular-nums">{intervaloDaFaixa(f)}{f.adiada ? (f.de === f.ate ? ' adiada' : ' adiadas') : ''}</td>
-              <td className="whitespace-nowrap px-1.5 text-right tabular-nums" title={f.ajusteArredondamento != null ? tituloDoAjuste(f.ajusteArredondamento) : undefined}
-                data-testid={f.ajusteArredondamento != null ? 'faixa-com-ajuste' : undefined}>
-                {f.ajusteArredondamento != null && <span className="mr-1 text-[9.5px] text-amber-700">{ROTULO_AJUSTE}</span>}{brl(f.fundoComum)}</td>
-              <td className="px-1.5 text-right tabular-nums">{brl(f.taxaAdm)}</td>
-              <td className="px-1.5 text-right tabular-nums">{brl(f.reserva)}</td><td className="px-1.5 text-right tabular-nums">{brl(f.seguro)}</td>
-              <td className="px-1.5 text-right font-semibold tabular-nums">{brl(f.total)}</td><td className="px-1.5 text-center tabular-nums">{f.parcelas}</td>
-            </tr>
-          ))}
-          {faixas.length === 0 && <tr><td colSpan={7} className="h-[17px] px-1.5 text-muted-foreground">{recusa ?? 'Preencha carta, 1ª parcela e prazo para ver as faixas.'}</td></tr>}
-        </tbody>
-      </table>
-    </section>
   );
 }
 
@@ -539,7 +466,13 @@ export function textoDaPrevia(tipo: string, d: Record<string, unknown> | null): 
     const teto = d.limitado_pelo_teto === true ? ' (limitado pelo teto)' : '';
     return `Reajuste aplicado ${n('pct_aplicado') ?? '—'}%${teto} em ${n('parcelas') ?? 0} parcelas · carta ${brl(n('carta_antes'))} → ${brl(n('carta_depois'))}.`;
   }
-  if (tipo === 'regerar') return `Regera as parcelas em aberto · ${Array.isArray(d.depois) ? d.depois.length : '—'} parcelas depois.`;
+  if (tipo === 'regerar') {
+    /* FIN-CONSORCIO-04 — "trocadas" são só as que mudam (algum componente ou o vencimento); a idêntica não conta */
+    const base = typeof d.base === 'object' && d.base !== null && !Array.isArray(d.base) ? Object.fromEntries(Object.entries(d.base)) : {};
+    const b = (k: string) => (typeof base[k] === 'number' ? Number(base[k]) : 0);
+    const extra = [b('novas') ? `${b('novas')} nascem` : '', b('retiradas') ? `${b('retiradas')} saem` : ''].filter(Boolean).join(' · ');
+    return `Mudam ${b('trocadas')} parcelas em aberto · ${b('iguais')} ficam iguais · ${b('mantidas')} mantidas (pagas ou ajustadas)${extra ? ` · ${extra}` : ''}.`;
+  }
   if (tipo === 'contemplar') return 'Contemplação: as adiadas ganham vencimento a partir do mês seguinte; o seguro que começa na contemplação entra.';
   return `Altera ${n('alteradas') ?? 0} parcela · marcada como ajustada.`;
 }

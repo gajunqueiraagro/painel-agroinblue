@@ -4,7 +4,7 @@
 --    o aviso da reserva; o do fundo comum saiu porque agora fecha com a carta).
 -- T2 outra administradora: taxa igual, transcorridas diluidas, INCC sem teto, seguro sobre o credito — 1 faixa, sem aviso.
 -- T3 gravado pelo escritor: 80 parcelas, as 34 adiadas sem vencimento e sem lancamento; o principal em "Consorcio a contemplar".
--- T4 editar uma parcela (ajustada) e regerar mantendo / recalculando.  T5 reajuste limitado ao teto, e o desfazer devolve tudo.
+-- T4 editar uma parcela (ajustada) e regerar mantendo (nada muda: recusa, FIN-CONSORCIO-04) / recalculando.  T5 reajuste limitado ao teto, e o desfazer devolve tudo.
 -- T6 contemplacao data as adiadas (mes seguinte, mensal) e o desfazer as devolve sem vencimento e sem lancamento.
 -- T7 devolucao numa parcela (e o desvincular).  T8 a guarda (outro usuario 42501).  T9 recusas.  T10 a conversao do 002122, simulada.
 set local statement_timeout = '120s';
@@ -71,7 +71,11 @@ BEGIN
      OR (select abs(l.valor) from financiamento_parcelas q join financeiro_lancamentos_v2 l on l.id = q.lancamento_id where q.id = v_p5) <> 2012.45 THEN
     RAISE EXCEPTION 'T4 editar';
   END IF;
-  perform fn_financiamento_parcelas_regerar(v_fin, 'manter_ajustes', false);
+  -- FIN-CONSORCIO-04: mantendo o ajuste, as outras 79 voltariam identicas — nada muda, o Regerar recusa
+  v_ok := false;
+  BEGIN perform fn_financiamento_parcelas_regerar(v_fin, 'manter_ajustes', false);
+  EXCEPTION WHEN others THEN v_ok := sqlerrm like 'Nada muda%'; END;
+  IF NOT v_ok THEN RAISE EXCEPTION 'T4 manter ajustes sem mudanca'; END IF;
   IF (select valor_fundo_comum from financiamento_parcelas where id = v_p5) <> 2000 THEN RAISE EXCEPTION 'T4 manter ajustes'; END IF;
   perform fn_financiamento_parcelas_regerar(v_fin, 'recalcular_todas', false);
   IF (select valor_fundo_comum from financiamento_parcelas where id = v_p5) <> 2297.19 OR (select ajustada from financiamento_parcelas where id = v_p5)

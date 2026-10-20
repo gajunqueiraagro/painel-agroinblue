@@ -93,15 +93,17 @@ describe('o rodapé lista só o que falta', () => {
 });
 
 describe('a tela', () => {
-  it('Custos e prazos: o fundo comum do termo aparece em %, com 4 casas, e a dica do restante', () => {
+  it('Custos e parcelas (Regras): o fundo comum do termo aparece em %, com 4 casas, e a dica do restante', () => {
     estado.cron = fixture.cronograma_fundo_pct;
     render(<ConsorcioDialog aberto aoFechar={() => {}} financiamentoId="cons-sint" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Custos e prazos' }));
-    expect(screen.getByTestId('dica-fundo-comum').textContent).toBe('a pagar agora 46 · automático: carta ÷ prazo = R$ 2.297,19');
-    const prazos = within(screen.getByTestId('bloco-prazos'));
+    fireEvent.click(screen.getByRole('button', { name: 'Custos e parcelas' }));
+    /* FIN-CONSORCIO-04: a dica começa pelo valor da carta (aba Consórcio) */
+    expect(screen.getByTestId('dica-fundo-comum').textContent).toBe('valor da carta R$ 197.607,98 (aba Consórcio) · a pagar agora 46 · automático: carta ÷ prazo = R$ 2.297,19');
+    /* FIN-CONSORCIO-04: o bloco Prazos tem as regras todas (a reserva também tem "% parc."): o segmento do fundo comum pelo campo */
+    const prazos = within(screen.getByTestId('bloco-prazos').querySelector<HTMLElement>('[data-campo="fundoComumModo"]')!);
     fireEvent.click(prazos.getByRole('button', { name: '% parc.' }));
     expect(screen.getAllByDisplayValue('0,0063').length).toBe(1);
-    expect(screen.getByTestId('dica-fundo-comum').textContent).toBe('a pagar agora 46 · restante nas 34 adiadas · R$ 2.704,04 cada (a última R$ 2.703,92)');
+    expect(screen.getByTestId('dica-fundo-comum').textContent).toBe('valor da carta R$ 197.607,98 (aba Consórcio) · a pagar agora 46 · restante nas 34 adiadas · R$ 2.704,04 cada (a última R$ 2.703,92)');
     fireEvent.click(prazos.getByRole('button', { name: 'Automático' }));
     expect(screen.getByTestId('fundo-comum-auto')).toBeTruthy();
   });
