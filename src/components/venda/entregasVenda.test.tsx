@@ -119,7 +119,10 @@ describe('a tabela unica', () => {
       expect(td.className).toContain('h-[22px]');
     });
     expect(container.querySelector('table')!.className).toContain('table-fixed');
-    expect(within(saida).getByText('19/03/25')).toBeTruthy();
+    /* UI-SEM-CORTE-02 — data em dd/mm/aaaa, e TODA coluna com largura (a tabela tem a largura da regua; a sobra fica fora dela) */
+    expect(within(saida).getByText('19/03/2025')).toBeTruthy();
+    expect(COLUNAS_DA_ENTREGA.every(c => typeof c.largura === 'number' && c.largura > 0)).toBe(true);
+    expect((container.querySelector('table') as HTMLElement).style.width).toBe(`${COLUNAS_DA_ENTREGA.reduce((n, c) => n + (c.largura ?? 0), 0)}px`);
     expect(within(saida).getByText('565.521,66')).toBeTruthy();
   });
 
