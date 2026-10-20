@@ -183,7 +183,7 @@ describe('(5c) v4 — a página (fonte): uma faixa de caminho só, abas sem queb
     expect(fonte).not.toContain("'Parcelamentos e Financiamentos'");
   });
   it('abas numa linha (sem quebra) com a contagem ao lado e "Editar parcelas" na mesma linha', () => {
-    expect(fonte).toContain('<div className="shrink-0 whitespace-nowrap" data-testid="segmentado-das-abas">');
+    expect(fonte).toContain('<div className="min-w-0 shrink overflow-x-auto whitespace-nowrap [scrollbar-width:none]" data-testid="segmentado-das-abas">');
     expect(fonte).toContain('<RotuloDaAba nome="Cronograma" n={cartoes?.parcelas} />');
     const barra = fonte.slice(fonte.indexOf('data-testid="abas-do-credito"'), fonte.indexOf('data-testid="painel-liberacoes"'));
     expect(barra).toContain('data-testid="editar-parcelas"');
