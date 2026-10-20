@@ -7,7 +7,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { docDaLinha, documentoCasaComFiltro, PLACEHOLDER_FILTRO_DOCUMENTO, type DocumentoDaLinha } from './documentoHelper';
+import { docDaLinha, documentoCasaComFiltro, normalizarNumeroDoc, PLACEHOLDER_FILTRO_DOCUMENTO, type DocumentoDaLinha } from './documentoHelper';
 
 const SEM_CAMPO = { tipo_documento: null, numero_documento: null };
 const CHAVE = '50261034053649000192550010000139101123456789';
@@ -57,9 +57,50 @@ describe('o filtro Documento', () => {
   });
   it('a tela usa o dono e o placeholder novo (lido da fonte)', () => {
     const fonte = readFileSync(resolve(__dirname, '../../pages/FinanceiroV2Tab.tsx'), 'utf8');
-    expect(PLACEHOLDER_FILTRO_DOCUMENTO).toBe('Número da NF, recibo ou chave');
+    expect(PLACEHOLDER_FILTRO_DOCUMENTO).toBe('Número do documento (NF, recibo, boleto) ou chave');
     expect(fonte).toMatch(/documentoCasaComFiltro\(documentoFiltro, l, documentosPorLancamento\?\.get\(l\.id\)\)/);
     expect(fonte.match(/placeholder=\{PLACEHOLDER_FILTRO_DOCUMENTO\}/g) ?? []).toHaveLength(2);
     expect(fonte).not.toMatch(/formatDocCompleto/);
+  });
+});
+
+describe('FIN-FILTRO-DOC-TEXTO-01 — número com letras', () => {
+  const recibo = (numero: string): DocumentoDaLinha => ({ especie: 'recibo', numero });
+  const nfLetra: DocumentoDaLinha = { especie: 'nf', numero: 'R_D05' };
+  it('normaliza os dois lados: só [a-z0-9], sem acento, sem zeros à esquerda em cada sequência de dígitos', () => {
+    expect(normalizarNumeroDoc('R_D015')).toBe('rd15');
+    expect(normalizarNumeroDoc('000.000.910')).toBe('910');
+    expect(normalizarNumeroDoc('Série-Ã 007/A0')).toBe('seriea7a0');
+  });
+  it('"R_D15" acha "R_D15" e "R_D015"; "rd15" acha "R_D15"; "D015" acha "R_D15"', () => {
+    expect(casa('R_D15', [recibo('R_D15')])).toBe(true);
+    expect(casa('R_D15', [recibo('R_D015')])).toBe(true);
+    expect(casa('rd15', [recibo('R_D15')])).toBe(true);
+    expect(casa('D015', [recibo('R_D15')])).toBe(true);
+    expect(casa('R_D16', [recibo('R_D15')])).toBe(false);
+  });
+  it('com letra, os dígitos soltos não acham qualquer número ("R_D15" não acha a NF 915)', () => {
+    expect(casa('R_D15', [{ especie: 'nf', numero: '915' }])).toBe(false);
+  });
+  it('acha pelo campo próprio do lançamento ("Rec. R_D05", o caso da Conta Fazenda)', () => {
+    const lanc = { tipo_documento: 'Recibo', numero_documento: 'R_D05' };
+    expect(casa('R_D05', [], lanc)).toBe(true);
+    expect(casa('Rec. R_', [], lanc)).toBe(true);
+    expect(casa('Rec. R_D05', [], lanc)).toBe(true);
+  });
+  it('"Rec. R_D05" acha o recibo R_D05 e NÃO a NF R_D05 (o tipo filtra e sai do texto)', () => {
+    expect(casa('Rec. R_D05', [recibo('R_D05')])).toBe(true);
+    expect(casa('Rec. R_D05', [nfLetra])).toBe(false);
+    expect(casa('NF R_D05', [nfLetra])).toBe(true);
+  });
+  it('palavra que não é tipo vira texto, não zera a busca', () => {
+    expect(casa('xpto', [recibo('XPTO-1')])).toBe(true);
+    expect(casa('xpto 910', [NF])).toBe(false);
+  });
+  it('as regras de antes continuam: "NF 910", ".910", "000.000.910", a chave e o cancelado', () => {
+    for (const t of ['NF 910', '.910', '000.000.910']) expect(casa(t, [NF]), t).toBe(true);
+    expect(casa('3405 3649 0001', [NF])).toBe(true);
+    expect(casa('R_D05', [{ ...recibo('R_D05'), cancelado: true }])).toBe(false);
+    expect(casa('', [recibo('R_D05')])).toBe(true);
   });
 });
