@@ -31,7 +31,8 @@ import { PageHeader } from '@/components/ui/page-header';
 import { Segmentado } from '@/components/ui/segmentado';
 import { CprFluxoPrevisto } from '@/components/financeiro-v2/CprFluxoPrevisto';
 import { esperarGraficoNoDom, AVISO_PDF_SEM_GRAFICO, TAMANHO_DO_GRAFICO_NO_PDF } from '@/lib/pdf/cpr/graficoDoDom';
-import { lerEstimadasDoCliente } from '@/hooks/useRecorrencias';
+import { lerEstimadosDaCpr } from '@/lib/financeiro/estimadosDaCprBanco';
+import { origensPresentes, SEM_ESTIMADOS, tituloDoEstimado } from '@/lib/financeiro/estimadosDaCpr';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -633,17 +634,21 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
   const ancoras = useMemo(() => (caixaTodas ? ancorasDoCaixaCpr(caixaTodas.ancoraPorConta) : undefined), [caixaTodas]);
   /* REC-VALOR-CERTO-02 — os lançamentos AINDA ESTIMADOS do cliente (recorrência a confirmar sem o valor do mês): o conjunto vem da
      regra única, em até duas leituras por cliente (nunca por linha; a segunda só existe se houver recorrência a confirmar). O
-     dono reparte o total por ele; a tela só desenha o selo e os dois totais. */
+     dono reparte o total por ele; a tela só desenha o selo e os dois totais.
+     FIN-POS-FIXADO-01a: o MESMO conjunto ganha os juros futuros de contrato pós-fixado (`fn_juros_estimados_do_cliente`, uma
+     chamada por cliente), por UM dono (`lerEstimadosDaCpr`); a origem só muda o `title`. */
   const { data: estimadasDoCliente } = useQuery({
     queryKey: ['cpr-estimadas', clienteId],
     enabled: !!clienteId,
-    queryFn: async () => (clienteId ? lerEstimadasDoCliente(clienteId) : { ids: new Set<string>(), incompleto: false }),
+    queryFn: async () => (clienteId ? lerEstimadosDaCpr(clienteId) : SEM_ESTIMADOS),
   });
   const estimadas = estimadasDoCliente?.ids;
   /* A leitura das ocorrências estimadas tem teto (`TETO_OCORRENCIAS_ESTIMADAS`): batendo nele, a tela DIZ — no `title` do selo e dos
      dois totais — em vez de classificar calada. Só no `title`: o lugar dos totais (316px) fica cheio no pior número. */
   const avisoEstimadasIncompleto = estimadasDoCliente?.incompleto ? AVISO_ESTIMADAS_INCOMPLETO : '';
-  const tituloDoSelo = TITULO_SELO_ESTIMADO + (avisoEstimadasIncompleto ? `\n${avisoEstimadasIncompleto}` : '');
+  /* o `title` dos totais: as origens presentes no conjunto; o do selo da linha: as origens DELA (as duas, se tiver as duas) */
+  const tituloDoSelo = tituloDoEstimado(estimadasDoCliente ? origensPresentes(estimadasDoCliente) : undefined, avisoEstimadasIncompleto);
+  const tituloDoSeloDaLinha = (id: string) => tituloDoEstimado(estimadasDoCliente?.origens.get(id), avisoEstimadasIncompleto);
   const recorte = useMemo(
     () => recortarCpr(linhas, { periodo, hoje: hojeIso, incluirVencidos, conta: contaSel, ancoras, estimadas }),
     [linhas, periodo, hojeIso, incluirVencidos, contaSel, ancoras, estimadas]);
@@ -1513,7 +1518,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
                           <span className="flex min-w-0 flex-1 items-center gap-1" data-celula-descricao>
                             <span className="min-w-0 truncate text-foreground" title={dicaDescricao}>{np.nome || '—'}</span>
                             {seloDaParcela}
-                            <span data-testid="cpr-selo-estimado" title={tituloDoSelo}
+                            <span data-testid="cpr-selo-estimado" title={tituloDoSeloDaLinha(l.id)}
                               className="h-[14px] shrink-0 whitespace-nowrap rounded bg-amber-100 px-1 text-[9px] leading-[14px] text-amber-700">
                               estimado
                             </span>
@@ -1686,9 +1691,8 @@ function CardResumo({ rotulo, contagem, classeContagem, titulo, valor, classeVal
  * ▼ a pagar (vermelho) · ▲ a receber (verde) · saldo ▲ verde se ≥ 0, ▼ vermelho se < 0, com "−" tipográfico colado.
  * Zero é R$ 0,00 (sem seta, apagado). As cores vêm de `COR_SINAL`; no rodapé navy, de `TOM_NO_NAVY`.
  */
-/* REC-VALOR-CERTO-02 — o âmbar do "ainda é estimativa" e a frase do selo, num lugar só. */
+/* REC-VALOR-CERTO-02 — o âmbar do "ainda é estimativa"; as frases do selo, por origem, moram em `estimadosDaCpr.ts`. */
 const COR_ESTIMADO = 'text-amber-600';
-const TITULO_SELO_ESTIMADO = 'valor estimado pela recorrência · informe o valor do mês no lançamento';
 const AVISO_ESTIMADAS_INCOMPLETO = 'leitura incompleta: há mais ocorrências de recorrência a confirmar do que a tela lê de uma vez — pode haver conta estimada sem o selo';
 
 function CelValor({ largura, tipo, valor, navy, semSeta, fundoNegativo, motivoSemSaldo }: {
