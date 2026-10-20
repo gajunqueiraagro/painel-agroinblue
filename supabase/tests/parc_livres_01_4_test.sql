@@ -1,8 +1,8 @@
 -- PARC-LIVRES-01 (passo 4) — `fn_financiamento_situacao`: a situacao da parcela e' a do LANCAMENTO.
 -- Roda depois da 20261027194300, numa transacao que TERMINA EM RAISE (nada fica gravado). Sintetico no cliente Teste, admin simulado.
--- S1 nada pago: pendente / vencida pela data; cartoes fecham no total.  S2 lancamento realizado -> PAGA, com a parcela ainda
--- 'pendente' (diverge).  S3 parcela 'pago' com lancamento programado -> NAO paga (vale o lancamento).  S4 a cancelada nao entra;
--- parcela SEM lancamento vale a propria.  S5 com juros: so' o principal realizado = 'parcial'; os dois = paga.  S6 sem usuario: 42501.
+-- S1 nada pago: pendente / vencida pela data; cartoes fecham no total.  S2 lancamento realizado -> PAGA, e a coluna da parcela segue
+-- (FIN-PARCELA-STATUS-01: 'pago', sem divergencia).  S3 'pago' gravado na coluna com o lancamento programado e' corrigido pelo gatilho
+-- (NAO paga: vale o lancamento).  S4 a cancelada nao entra; parcela SEM lancamento vale a propria.  S5 com juros: so' o principal realizado = 'parcial'; os dois = paga.  S6 sem usuario: 42501.
 set local statement_timeout = '60s';
 set local lock_timeout = '3s';
 select set_config('request.jwt.claims', '{"sub":"7bd0b6ad-2527-4be1-af58-f2cc0c0edd8e","role":"authenticated"}', true);
@@ -26,28 +26,32 @@ BEGIN
   IF (select string_agg(e->>'situacao', ',' order by (e->>'numero')::int) from jsonb_array_elements(r->'parcelas') e) <> 'vencida,vencida,pendente' THEN RAISE EXCEPTION 'S1: situacoes %', r->'parcelas'; END IF;
   IF (c->>'pago', c->>'a_vencer', c->>'vencido', c->>'pagas', c->>'parcelas', c->>'valor_contrato') IS DISTINCT FROM ('0.00', '100.00', '200.00', '0', '3', '300.00') THEN RAISE EXCEPTION 'S1: cartoes %', c; END IF;
 
-  -- S2: pagou pelo Financeiro (o lancamento realizado); a parcela continua 'pendente' na coluna
+  -- S2: pagou pelo Financeiro (o lancamento realizado); FIN-PARCELA-STATUS-01: a coluna da parcela segue o lancamento ('pago')
   update financeiro_lancamentos_v2 set status_transacao = 'realizado', data_pagamento = date '2031-02-09' where id = p1.lancamento_id;
   r := fn_financiamento_situacao(v_fin, date '2031-03-15'); c := r->'cartoes';
   IF (r->'parcelas'->0->>'situacao', r->'parcelas'->0->>'pago_em', r->'parcelas'->0->>'valor_pago', r->'parcelas'->0->>'fonte', r->'parcelas'->0->>'diverge')
-     IS DISTINCT FROM ('paga', '2031-02-09', '100.00', 'lancamento', 'true') THEN RAISE EXCEPTION 'S2: parcela 1 %', r->'parcelas'->0; END IF;
-  IF (c->>'pago', c->>'a_vencer', c->>'vencido', c->>'pagas', c->>'divergentes') IS DISTINCT FROM ('100.00', '100.00', '100.00', '1', '1') THEN RAISE EXCEPTION 'S2: cartoes %', c; END IF;
+     IS DISTINCT FROM ('paga', '2031-02-09', '100.00', 'lancamento', 'false') THEN RAISE EXCEPTION 'S2: parcela 1 %', r->'parcelas'->0; END IF;
+  IF (c->>'pago', c->>'a_vencer', c->>'vencido', c->>'pagas', c->>'divergentes') IS DISTINCT FROM ('100.00', '100.00', '100.00', '1', '0') THEN RAISE EXCEPTION 'S2: cartoes %', c; END IF;
   IF (c->>'pago')::numeric + (c->>'a_vencer')::numeric + (c->>'vencido')::numeric <> 300 THEN RAISE EXCEPTION 'S2: pago + a vencer + vencido nao fecha'; END IF;
-  IF (select status from financiamento_parcelas where id = p1.id) <> 'pendente' THEN RAISE EXCEPTION 'S2: a leitura escreveu na parcela'; END IF;
+  IF (select status || '|' || data_pagamento from financiamento_parcelas where id = p1.id) IS DISTINCT FROM 'pago|2031-02-09' THEN
+    RAISE EXCEPTION 'S2: a coluna nao seguiu o lancamento'; END IF;
   -- conciliado conta igual
   update financeiro_lancamentos_v2 set status_transacao = 'conciliado' where id = p1.lancamento_id;
   IF fn_financiamento_situacao(v_fin, date '2031-03-15')->'parcelas'->0->>'situacao' <> 'paga' THEN RAISE EXCEPTION 'S2: conciliado nao contou'; END IF;
 
-  -- S3: a coluna diz 'pago' e o lancamento esta' programado -> vale o lancamento
+  -- S3: gravar 'pago' na coluna com o lancamento programado -> o gatilho corrige (vale o lancamento); a situacao diz vencida
   update financiamento_parcelas set status = 'pago', data_pagamento = date '2031-03-01' where id = p2.id;
+  IF (select status from financiamento_parcelas where id = p2.id) <> 'pendente' THEN RAISE EXCEPTION 'S3: o gatilho nao corrigiu a coluna'; END IF;
   r := fn_financiamento_situacao(v_fin, date '2031-03-15');
-  IF (r->'parcelas'->1->>'situacao', r->'parcelas'->1->>'diverge', r->'parcelas'->1->>'valor_pago') IS DISTINCT FROM ('vencida', 'true', '0.00') THEN RAISE EXCEPTION 'S3: parcela 2 %', r->'parcelas'->1; END IF;
+  IF (r->'parcelas'->1->>'situacao', r->'parcelas'->1->>'diverge', r->'parcelas'->1->>'valor_pago') IS DISTINCT FROM ('vencida', 'false', '0.00') THEN RAISE EXCEPTION 'S3: parcela 2 %', r->'parcelas'->1; END IF;
 
   -- S4: sem lancamento vivo vale a parcela; a cancelada nao entra
   -- PARC-CADEIA-01: o lancamento de parcela viva so' se cancela com a chave do escritor; aqui o teste MONTA a quebra de proposito
   perform set_config('app.parcelamento_escritor', 'on', true);
   update financeiro_lancamentos_v2 set cancelado = true where id = p2.lancamento_id;
   perform set_config('app.parcelamento_escritor', 'off', true);
+  -- sem lancamento vivo a coluna e' a fonte (o gatilho nao julga): ela e' gravada direto
+  update financiamento_parcelas set status = 'pago', data_pagamento = date '2031-03-01' where id = p2.id;
   r := fn_financiamento_situacao(v_fin, date '2031-03-15');
   IF (r->'parcelas'->1->>'situacao', r->'parcelas'->1->>'fonte', r->'parcelas'->1->>'pago_em', r->'parcelas'->1->>'diverge') IS DISTINCT FROM ('paga', 'parcela', '2031-03-01', 'false') THEN RAISE EXCEPTION 'S4: parcela sem lancamento %', r->'parcelas'->1; END IF;
   update financiamento_parcelas set status = 'cancelado' where id = p3.id;
