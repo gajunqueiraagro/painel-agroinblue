@@ -1,0 +1,11 @@
+[
+  { "nome": "pre", "tipoTaxa": "pre", "statusParcela": "pendente", "ajustada": false, "statusLancamento": "programado", "esperado": false },
+  { "nome": "nulo", "tipoTaxa": null, "statusParcela": "pendente", "ajustada": false, "statusLancamento": "programado", "esperado": false },
+  { "nome": "pos", "tipoTaxa": "pos", "statusParcela": "pendente", "ajustada": false, "statusLancamento": "programado", "esperado": true },
+  { "nome": "pos_ajustada", "tipoTaxa": "pos", "statusParcela": "pendente", "ajustada": true, "statusLancamento": "programado", "esperado": true },
+  { "nome": "pos_previsto", "tipoTaxa": "pos", "statusParcela": "pendente", "ajustada": false, "statusLancamento": "previsto", "esperado": true },
+  { "nome": "pos_paga", "tipoTaxa": "pos", "statusParcela": "pago", "ajustada": false, "statusLancamento": "programado", "esperado": false },
+  { "nome": "pos_cancelada", "tipoTaxa": "pos", "statusParcela": "cancelado", "ajustada": false, "statusLancamento": "programado", "esperado": false },
+  { "nome": "pos_realizado", "tipoTaxa": "pos", "statusParcela": "pendente", "ajustada": false, "statusLancamento": "realizado", "esperado": false },
+  { "nome": "pos_conciliado", "tipoTaxa": "pos", "statusParcela": "pendente", "ajustada": false, "statusLancamento": "conciliado", "esperado": false }
+]
