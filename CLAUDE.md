@@ -10339,3 +10339,29 @@ curta nas secoes de regras) e a pendencia (na FILA); o bloco inteiro vai para do
   · FICA PARA O 01b (depende do mock do Gabriel): frases do banco com acento e o lancamento que trava (data, valor, status) com
     "Abrir lancamento"; agendado com confirmacao explicita (hoje o Desfazer o cancela calado e o Atualizar o bloqueia); vencimento
     proposto do Atualizar editavel com aviso quando ja' passou (hoje e' o da parcela viva); motivo guardado entre tentativas.
+- ⚠ AS RECUSAS DA OC VEM PRONTAS DO BANCO; DESFAZER/ATUALIZAR COMPROMISSO NO MOCK DE 460x344 (OC-DESFAZER-PREVISTO-01b, Gabriel
+  20/10/2026, mock aprovado 19h16). 20261028100800: (1) as recusas de oc_cancelar_programacao, oc_cancelar_compromisso,
+  oc_estornar_materializacao, oc_alterar_parcela_programacao, oc_salvar_lotes, oc_desvincular_lancamento, oc_ajustar_valor_compromisso,
+  oc_estornar_recebimento e oc_revalorar_lote saem em portugues com acento, sem nome de funcao, R$ 0.000,00 e dd/mm/aaaa (troca
+  guardada pelo md5 de ORIGEM; a verificacao aborta se alguma frase antiga sobrar); ERRCODE preservados; quando um LANCAMENTO trava,
+  o id vai no DETAIL e o HINT leva o JSON da linha (data, valor, status, conciliado, n/N, sinal) — `_fn_oc_lanc_que_trava`, e os
+  formatadores `_fn_oc_brl` / `_fn_oc_data` (separadores fixos, nao dependem da localidade). (2) AGENDADO pede confirmacao:
+  `oc_desfazer_compromisso` e `oc_reprogramar_compromisso_do_lote` ganharam `p_confirmar_agendado` (sem ela recusa com frase e DETAIL;
+  na simulacao volta em `agendados`); o Atualizar deixou de bloquear agendado. (3) o Atualizar recebe `p_vencimento` (a parcela nova
+  nasce nele; a simulacao devolve `vencimento_proposto`, o da parcela viva) e o rol com R$ formatado. (4) o desfazer SIMULADO nao
+  exige motivo. Toda funcao recriada: REVOKE PUBLIC/anon + GRANT authenticated/service_role (conferido: nenhuma executavel por anon).
+  · TELA: `CascaDialogoOC` (460x344 fixo, cabecalho/rodape de 38px, corpo #EEF0F3, blocos brancos; linha do lancamento "data · Receb.
+    n/N · valor · selo"; faixa vermelha do bloqueio com "Abrir lancamento" pelo id do DETAIL e a ida e volta da casa; faixa ambar do
+    agendado com a confirmacao). `DialogoDesfazerCompromisso` SIMULA AO ABRIR e escolhe o miolo (pronto / agendado / bloqueio); o
+    "Falta: …" montado pela tela saiu. `DialogoAtualizarCompromisso` no mesmo molde: compromisso hoje x o lote vale hoje, vencimento no
+    DatePicker da casa (proposta = parcela viva; data passada = aviso ambar, nao bloqueio; trocar a data simula de novo pelo onChange).
+    MOTIVO GUARDADO (`src/lib/oc/motivoGuardado.ts`) por operacao + gesto + alvo enquanto a pagina vive; o gesto que grava o consome.
+    `frasesDoBancoOC.ts` so' traduz o que o banco ainda nao escreve (`oc_lancar_pelo_modal`); `REGEX_JA_DESFEITO` reconhece as frases
+    novas e as antigas.
+  · PROVAS: `oc_desfazer_previsto_01b_test.sql` no vivo (E1 realizado: frase + DETAIL + HINT; E2 agendado recusa sem e cancela com a
+    confirmacao; E3 Atualizar no vencimento escolhido, com trilha; E4 nada cru, nada para anon); 3 mutacoes mortas (sem DETAIL, ignorar
+    a confirmacao, ignorar o vencimento). `dialogosCompromissoOC.test.tsx` (motivo ao reabrir, bloqueio sem "Falta:", Abrir pelo id,
+    agendado so' com confirmacao, aviso de data passada); 4 mutacoes mortas. Gate de tela: `oc-dialogo-{bloqueio,agendado,pronto,
+    atualizar}` nos sete tamanhos, sem rolagem.
+  · FICA: o "Desfazer" da aba Financeiro da OC (`AbaFinanceiroOC`) e o "Estornar lancamento" da linha seguem sem a confirmacao do
+    agendado na tela (o primeiro recebe a recusa com frase do banco; o segundo estorna agendado como sempre).
