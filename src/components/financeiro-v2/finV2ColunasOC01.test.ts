@@ -86,7 +86,7 @@ describe('as fontes — exceção ao piso só nesta lista, por classe da tabela 
     expect(tela).toContain('<span className={cn(STATUS_PILULA_BASE, stPilula)} data-status={stKey}>{stLabel}</span>');
   });
   it('o status legado que não cabe corta numa linha, com o rótulo no `title`', () => {
-    expect(tela).toContain("<span className={cn('block truncate', stColor, stEstagio && 'font-semibold')} data-status={stKey}>{stLabel}</span>");
+    expect(tela).toContain("<span className={cn('block truncate pr-0.5', stColor, stEstagio && 'font-semibold')} data-status={stKey}>{stLabel}</span>");
     /* PARC-LIVRES-01 passo 3 — o `title` do Status passou a levar também a ORIGEM (que saiu da coluna): o rótulo do legado continua nele */
     expect(tela).toContain("title={[stTitle ?? (stPilula || stEstagio ? null : stLabel), icone ? `origem: ${icone.significado}` : null].filter(Boolean).join(' · ') || undefined}");
   });
@@ -143,7 +143,7 @@ describe('passo 3 — clipe, Doc. e origem (lidos da fonte da lista)', () => {
   it('passo 5 — parcela de parcelamento: o nome corta e o "i/N" do CONTRATO fica numa parte que não corta; a tela não monta o texto', () => {
     expect(tela).toContain('const np = nomeEParcela(descExibida, parcelasDosLancamentos?.get(l.id));');
     expect(tela).toContain('<span className="shrink-0 whitespace-nowrap tabular-nums" data-testid="parcela-i-n">{np.parcela}</span>');
-    expect(tela).toContain('<span className="min-w-0 truncate">');
+    expect(tela).toContain('<span className="min-w-0 truncate pr-0.5">');
     /* nenhuma descrição de parcela montada na tela: nem "Parcela ${", nem "/${" colado a um total */
     expect(tela).not.toMatch(/Parcela \$\{/);
     /* a busca sabe achar: o padrão proibido existe no painel legado de compra */
