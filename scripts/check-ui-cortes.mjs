@@ -146,6 +146,9 @@ const CENARIOS = [
   /* UI-SEM-CORTE-02 — o Casar com o banco 1:1 (Acessos: os cenarios do ACESSOS-PERFIL-01, acima) */
   { nome: 'casar-1x1-vazio', url: 'tela=casar-1x1', tamanhos: TAMANHOS_DO_CONSORCIO },
   { nome: 'casar-1x1-levado', url: 'tela=casar-1x1&v=levado', tamanhos: TAMANHOS_DO_CONSORCIO },
+  /* FIN-POS-FIXADO-01b — o 1:1 da parcela pós-fixada (a linha do juro real) e a frase do bloco */
+  { nome: 'casar-1x1-pos', url: 'tela=casar-1x1&v=pos', tamanhos: TAMANHOS_DO_CONSORCIO },
+  { nome: 'casar-bloco-pos', url: 'tela=casar-bloco&v=pos', tamanhos: TAMANHOS_DO_CONSORCIO },
   /* UI-SEM-CORTE-02 — a TABELA do Financeiro V2 segue fora (FIN-V2-SEM-CORTE-01, suspensa), mas entra pelo texto inclinado e pela
      sobreposicao: a ultima letra do fornecedor ("Maderat") sumia pela linha em italico */
   { nome: 'financeiro-tabela-italico', url: 'tela=financeiro', soRegras: ['italico', 'sobreposicao'] },
