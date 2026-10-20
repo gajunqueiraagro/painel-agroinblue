@@ -19,6 +19,10 @@ export function montarPayloadExcelCpr<L extends LinhaDaTela>(e: {
   arquivo: string; grupos: GrupoDaTela<L>[]; serie: SerieDoSaldoCpr; de: EntradaDoModelo<L>['de']; incluirVencidos: boolean; hoje: string;
   /** o primeiro dia do período (`periodo.de`): depois de hoje, o Caixa inicial é o previsto e não há linha de hoje */
   inicio: string;
+  /** CPR-AJUSTES-20-10b — o último dia do período e o rodapé do dono (`rodapeDoPeriodoCpr`): a linha "Fim do período" fecha a aba
+   *  com Caixa inicial + A receber − A pagar = Saldo no fim, os mesmos números da tela. Sem eles, a aba termina no último dia. */
+  fim?: string;
+  rodape?: { pagar: number; receber: number };
 }): XlsxDownloadPayload {
   const contas: Record<string, XlsxCellValue>[] = [];
   for (const g of e.grupos) {
@@ -50,6 +54,7 @@ export function montarPayloadExcelCpr<L extends LinhaDaTela>(e: {
         g.tipo === 'dia' ? `${dataCheia(g.chave)}${g.hoje ? ' · hoje' : g.passado ? ' · realizado' : ''}` : g.titulo,
         g.receber, g.pagar, g.saldo ?? null,
       ]),
+    ...(e.fim && e.rodape ? [[`Fim do período · ${dataCheia(e.fim)}`, e.rodape.receber, e.rodape.pagar, s.fim] as XlsxCellValue[]] : []),
   ];
   return {
     filename: `${e.arquivo}.xlsx`,
