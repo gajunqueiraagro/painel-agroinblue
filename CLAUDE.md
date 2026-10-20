@@ -10090,3 +10090,23 @@ curta nas secoes de regras) e a pendencia (na FILA); o bloco inteiro vai para do
   · SUITE: 5913 passando depois do FIN-POS-FIXADO-01a (+15: `src/lib/financiamentos/jurosPosFixado.test.ts` novo; `cprEstimado.test.ts` com o
     mesmo numero de casos), 22 skipped, as 3 falhas de sempre e o erro nao tratado de sempre. ⚠ A BASELINE VIGENTE DA SUITE E' 5913 e
     VALE SOBRE a linha antiga de 5898 da secao GATES (que nao foi editada: este bloco so' acrescenta no fim, por regra do briefing).
+- ⚠ O GATE DE TELA TAMBEM VE^ SOBREPOSICAO, TEXTO INCLINADO NA BORDA E NUMERO PARTIDO (UI-SEM-CORTE-02, Gabriel 20/10/2026). O
+  `check:ui-cortes` ganhou `medirSobreposicao` (com auto-teste no fixture): (a) `sobreposicao` — irmaos visiveis em fluxo (nem
+  absolute/fixed/sticky, nem `inline`) cujos retangulos se cruzam > 1,5px, e botao sobre texto que nao e' dele, com o texto VISIVEL ali
+  (cada linha do texto por si, recortada pelos ancestrais e por ele mesmo quando rola; o ponto do meio do cruzamento e' do botao);
+  (b) `italico` / `corte` — o texto (Range) passa da borda que o corta; texto inclinado soma 0,21 x o tamanho da letra; (c) `numero` —
+  numero, valor ou data PARTIDO (parte a' vista, parte escondida) por um ancestral que rola ou corta, fora de tabela (a tabela que rola
+  inteira segue valendo). Opcao `soRegras` por cenario: a TABELA do Financeiro V2 (suspensa, FIN-V2-SEM-CORTE-01) entra so' por
+  `italico` e `sobreposicao` (`financeiro-tabela-italico`). Mutacoes mortas: o `h-[280px]` + corpo de 132px de volta nas Pendencias
+  (2 sobreposicoes: os botoes sobre o rodape) e o `italic` de volta na linha do V2 (texto inclinado). Medido no fim: 94 telas, 475
+  medicoes, zero achados.
+  · BANCADA: `tela=oc&v=venda|abate|compra&aba=` (os tres modais da OC, todas as abas, dados SINTETICOS em `dados/oc.ts`, mes fechado
+    no P1, montados no MESMO `DialogContent` do `LancamentosTab`) nos tres tamanhos do gate (o modal da OC e' limitado a 1024);
+    `tela=pendencias` (o ⚑ aberto; `&v=nova`, `&v=resumo`) e `tela=casar-1x1` (`&v=levado`) nos sete tamanhos.
+  · OS MODAIS DA OC FICAM EM DUAS COLUNAS A PARTIR DE `md` (eram `lg`): abaixo de 1024 o resumo empilhava sob o conteudo, o corpo
+    rolava e os cabecalhos presos ganhavam vao. Cartoes de identificacao: o nome QUEBRA (13px), a data fica no tamanho do rotulo e
+    nunca corta (item 5: um dado por bloco, rotulo colado, numero/data nunca maior que o rotulo nem escondido; texto quebra, numero nao).
+  · ⚠ DIALOGOS FORA DO GATE: 184 arquivos tem `DialogContent`/`AlertDialogContent`/`SheetContent`; a bancada mede ~20 telas e dialogos.
+    O resto fica fora porque o hospedeiro nao esta' na bancada (le' tabela/RPC propria). Lista no relatorio do bloco.
+  ⚠ NAO PROVADO: nada com login no app real (bancada) · a 1000x600 a tela de Acessos cortava o e-mail com "…" no cenario que eu montei
+    (relatado ao Code 1; os cenarios dele, ACESSOS-PERFIL-01, sao os que valem).
