@@ -40,7 +40,8 @@ const B = vi.hoisted(() => ({
 vi.mock('@/integrations/supabase/client', () => {
   const tabela = (nome: string) => {
     const b: Record<string, unknown> = {};
-    for (const m of ['select', 'eq', 'gte', 'lte', 'lt', 'is', 'not', 'neq', 'order', 'in', 'limit', 'range']) b[m] = () => b;
+    /* `ilike`: a consulta das contas que importam OFX (o ícone do saldo, UI-SEM-CORTE-02) */
+    for (const m of ['select', 'eq', 'gte', 'lte', 'lt', 'is', 'not', 'neq', 'order', 'in', 'limit', 'range', 'ilike']) b[m] = () => b;
     b.single = () => Promise.resolve({ data: { fazenda_id: 'faz' }, error: null });
     b.insert = (linha: Record<string, unknown>) => { B.inserts.push({ tabela: nome, linha }); return Promise.resolve({ error: null }); };
     b.then = (ok: (x: { data: unknown[]; error: null }) => unknown) =>

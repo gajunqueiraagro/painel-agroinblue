@@ -8,7 +8,8 @@
 --     service_role, supabase_admin). A cascata de FK (apagar um cliente pelo admin; lancamento -> documentos/vinculos/itens) roda
 --     como o dono da tabela e passa — e fica na trilha. No extrato, o modo "log" do `fn_bloqueia_delete_extrato` e o
 --     `app.mesa_v2_triggers_enforce` da sessao deixam de valer para o usuario: o gatilho novo recusa antes.
--- (2) TRILHA por gatilho em INSERT/UPDATE/DELETE (`trg_trilha_registro`, `_fn_trilha_registro`): audit_log com a linha antes e
+-- (2) TRILHA por gatilho em INSERT/UPDATE/DELETE (no extrato so' UPDATE/DELETE: a importacao ja' tem registro proprio)
+--     (`trg_trilha_registro`, `_fn_trilha_registro`): audit_log com a linha antes e
 --     depois, autor = auth.uid() (o `trg_trilha_autor` do AUDIT-SEG-01 garante) e o motivo de `app.motivo` no resumo. Linha sem
 --     cliente (conta GLOBAL do plano) nao entra: audit_log.cliente_id e' obrigatorio e so' o admin/migration mexe nelas.
 -- (3) OS GESTOS QUE SUBSTITUEM O DELETE DA TELA (SECURITY DEFINER, tenant pela linha, simulacao = gravacao com p_simular true por
@@ -70,8 +71,12 @@ BEGIN
     EXECUTE format('CREATE TRIGGER trg_sem_delete_direto BEFORE DELETE ON public.%I '
                    'FOR EACH ROW EXECUTE FUNCTION public._fn_sem_delete_direto()', t);
     EXECUTE format('DROP TRIGGER IF EXISTS trg_trilha_registro ON public.%I', t);
-    EXECUTE format('CREATE TRIGGER trg_trilha_registro AFTER INSERT OR UPDATE OR DELETE ON public.%I '
-                   'FOR EACH ROW EXECUTE FUNCTION public._fn_trilha_registro()', t);
+    -- extrato_bancario_v2: a importacao ja' e' registrada em financeiro_importacoes_v2 (arquivo, autor, data) — sem trilha por
+    -- linha no INSERT; so' UPDATE (cancelamento inclusive) e DELETE. (Decisao do Gabriel, 20/10: o OFX 2025 da Vera, 12
+    -- arquivos, teria gerado 611 linhas de trilha so' na importacao.)
+    EXECUTE format('CREATE TRIGGER trg_trilha_registro AFTER %s ON public.%I '
+                   'FOR EACH ROW EXECUTE FUNCTION public._fn_trilha_registro()',
+                   CASE WHEN t = 'extrato_bancario_v2' THEN 'UPDATE OR DELETE' ELSE 'INSERT OR UPDATE OR DELETE' END, t);
   END LOOP;
 END $tabelas$;
 
@@ -153,3 +158,11 @@ BEGIN
     END IF;
   END LOOP;
 END $confere$;
+
+DO $confere_extrato$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_trilha_registro' AND tgrelid = 'public.extrato_bancario_v2'::regclass
+             AND tgtype & 4 > 0) THEN
+    RAISE EXCEPTION 'AUDIT-DELETE-01a: extrato_bancario_v2 nao pode gravar trilha no INSERT';
+  END IF;
+END $confere_extrato$;
