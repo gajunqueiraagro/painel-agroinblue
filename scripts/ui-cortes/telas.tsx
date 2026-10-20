@@ -256,6 +256,9 @@ if (tela === 'mesclar') {
     rpc: (fn: string) => fn === 'fn_juros_estimados_do_cliente' ? [{ lancamento_id: 'juros-2' }, { lancamento_id: 'ambas' }]
       : fn === 'fn_parcelas_dos_lancamentos' ? {} : null,
   };
+  /* CPR-AJUSTES-20-10b — `&v=futuro`: um período que começa depois de hoje (o bloco "Vencidos em aberto · entram no saldo" antes
+     do Caixa inicial, e nenhum dia de hoje), aberto pelo mesmo retorno de sessão que a tela já lê */
+  if (v === 'futuro') sessionStorage.setItem('cpr_retorno_do_contrato', JSON.stringify({ atalho: 'datas', datas: { de: dia(10), ate: dia(40) } }));
   montar(<div className="h-full"><ContasPagarReceberTab onIntensiveToggle={() => {}} /></div>);
 } else if (tela === 'acessos') {
   /* ACESSOS-PERFIL-01 — a lista (nome e e-mail pela fonte unica), o "Novo acesso" e o "Editar acesso" (`&v=editar`). SINTETICO. */
