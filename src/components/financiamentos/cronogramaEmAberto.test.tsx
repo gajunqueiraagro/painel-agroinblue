@@ -15,7 +15,7 @@ const par = (p: Partial<ParcelaDoContrato>): ParcelaDoContrato => ({
   id: 'x', numero: 1, dataVencimento: '2026-11-10', valorPrincipal: 100, valorJuros: 0, valorTotal: 100, situacao: 'pendente',
   pagoEm: null, valorPago: 0, lancamentoId: null, lancamentoJurosId: null, fonte: 'lancamento', diverge: false, detalhe: null, ...p,
 });
-const sit = (ps: ParcelaDoContrato[]): SituacaoDoContrato => ({ parcelas: ps, cartoes: { valorContrato: 0, pago: 0, aVencer: 0, vencido: 0, pagas: 0, parcelas: ps.length,
+const sit = (ps: ParcelaDoContrato[]): SituacaoDoContrato => ({ parcelas: ps, cartoes: { valorContrato: 0, pago: 0, aVencer: 0, vencido: 0, adiado: 0, adiadoQtde: 0, pagas: 0, parcelas: ps.length,
   jurosPrevistos: 0, somaPrincipal: 0, somaTotal: 0, divergentes: 0, detalhe: null } });
 const HOJE = '2026-10-17';
 const COMPRAS = [sit([
