@@ -25,17 +25,18 @@ import { cn } from '@/lib/utils';
      lote fica onde ja' existia (o abate). Menu e seletor abrem POR CIMA (dropdown e dialogo): nada empurra a tabela. */
 
 const fmtBr = (iso: string | null) => (iso ? iso.split('-').reverse().join('/') : '—');
-const fmtCurta = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(2, 4)}` : '—');
 const idCurto = (id: string) => id.slice(0, 8);
 const fmtDif = (n: number | null) => (n == null ? '' : n > 0 ? `+${n}` : n < 0 ? `−${-n}` : '0');
 
-/** A regua (px). Categoria e' a unica sem largura: absorve a sobra e corta com o inteiro no `title`. */
+/** A regua (px). UI-SEM-CORTE-02 — TODAS as colunas tem largura (a Categoria pelo conteudo: 104px cabem "Desmama Machos" e
+ *  "Bezerros Machos" a 10px) e a tabela tem a largura da regua (`LARGURA_DA_ENTREGA`): a sobra fica a' direita, nunca dentro
+ *  da Categoria. Data em dd/mm/aaaa (72px, medido na bancada: a 66 ainda cortava). */
 export const COLUNAS_DA_ENTREGA: { chave: string; rotulo: string; largura: number | null; alinha: 'esq' | 'dir' | 'centro' }[] = [
   { chave: 'lote', rotulo: 'Lote', largura: 34, alinha: 'centro' },
-  { chave: 'categoria', rotulo: 'Categoria', largura: null, alinha: 'esq' },
+  { chave: 'categoria', rotulo: 'Categoria', largura: 104, alinha: 'esq' },
   { chave: 'negCab', rotulo: 'Neg. cab', largura: 50, alinha: 'dir' },
   { chave: 'negKg', rotulo: 'Neg. kg', largura: 54, alinha: 'dir' },
-  { chave: 'data', rotulo: 'Data', largura: 54, alinha: 'centro' },
+  { chave: 'data', rotulo: 'Data', largura: 72, alinha: 'centro' },
   { chave: 'cab', rotulo: 'Cab', largura: 40, alinha: 'dir' },
   { chave: 'kgMed', rotulo: 'Kg méd.', largura: 54, alinha: 'dir' },
   { chave: 'dif', rotulo: 'Dif.', largura: 38, alinha: 'dir' },
@@ -43,6 +44,7 @@ export const COLUNAS_DA_ENTREGA: { chave: string; rotulo: string; largura: numbe
   { chave: 'situacao', rotulo: 'Situação', largura: 66, alinha: 'esq' },
   { chave: 'acoes', rotulo: 'Ações', largura: 72, alinha: 'centro' },
 ];
+export const LARGURA_DA_ENTREGA = COLUNAS_DA_ENTREGA.reduce((n, c) => n + (c.largura ?? 0), 0);
 export const ALTURA_LINHA_ENTREGA = 22;
 export const ALTURA_CABECALHO_ENTREGA = 20;
 export const LINHAS_VISIVEIS_ENTREGA = 12;
@@ -119,7 +121,7 @@ export function EntregasVendaTabela({
   return (
     <>
       <div data-testid="tabela-entrega-rolagem" className="overflow-y-auto rounded-md border" style={{ maxHeight: alturaMax }}>
-        <table className="w-full table-fixed border-collapse" data-testid="entregas-venda">
+        <table className="table-fixed border-collapse" style={{ width: LARGURA_DA_ENTREGA }} data-testid="entregas-venda">
           <colgroup>{COLUNAS_DA_ENTREGA.map(c => <col key={c.chave} style={c.largura ? { width: c.largura } : undefined} />)}</colgroup>
           <thead className="sticky top-0 z-10">
             <tr className="bg-primary text-primary-foreground">
@@ -145,7 +147,7 @@ export function EntregasVendaTabela({
                     <td className={TD} title={cat}>{cat}</td>
                     <td className={cn(TD, ALINHA.dir)}>{negCab}</td>
                     <td className={cn(TD, ALINHA.dir)}>{negKg}</td>
-                    <td className={cn(TD, ALINHA.centro)} title={fmtBr(m.data || null)}>{fmtCurta(m.data || null)}</td>
+                    <td className={cn(TD, ALINHA.centro)}>{fmtBr(m.data || null)}</td>
                     <td className={cn(TD, ALINHA.dir)}>{m.quantidade}</td>
                     <td className={cn(TD, ALINHA.dir)}>{m.pesoMedio != null ? formatNum(m.pesoMedio, 2) : '—'}</td>
                     <td className={cn(TD, ALINHA.dir, ln.dif != null && ln.dif !== 0 ? 'text-amber-700' : 'text-muted-foreground')}>{fmtDif(ln.dif)}</td>
