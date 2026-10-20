@@ -57,7 +57,7 @@ describe('o filtro Documento', () => {
   });
   it('a tela usa o dono e o placeholder novo (lido da fonte)', () => {
     const fonte = readFileSync(resolve(__dirname, '../../pages/FinanceiroV2Tab.tsx'), 'utf8');
-    expect(PLACEHOLDER_FILTRO_DOCUMENTO).toBe('Número do documento (NF, recibo, boleto) ou chave');
+    expect(PLACEHOLDER_FILTRO_DOCUMENTO).toBe('Nº ou chave');
     expect(fonte).toMatch(/documentoCasaComFiltro\(documentoFiltro, l, documentosPorLancamento\?\.get\(l\.id\)\)/);
     expect(fonte.match(/placeholder=\{PLACEHOLDER_FILTRO_DOCUMENTO\}/g) ?? []).toHaveLength(2);
     expect(fonte).not.toMatch(/formatDocCompleto/);
