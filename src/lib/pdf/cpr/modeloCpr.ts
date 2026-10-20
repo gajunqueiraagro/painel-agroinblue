@@ -8,7 +8,7 @@
  */
 import { nomeEParcela, type ParcelaDoContrato } from '@/lib/financiamentos/nomeDaParcela';
 import { formatMoeda } from '@/lib/calculos/formatters';
-import { diasEntre, type PeriodoCpr, type SerieDoSaldoCpr, type SemanaCpr, type SaldoDaContaCpr, type LadoCpr } from '@/lib/financeiro/cprRecorte';
+import { diasEntre, contagemDoRodapeCpr, type PeriodoCpr, type SerieDoSaldoCpr, type SemanaCpr, type SaldoDaContaCpr, type LadoCpr } from '@/lib/financeiro/cprRecorte';
 import { STATUS_FINANCEIRO_ORDEM, STATUS_FINANCEIRO_LABEL } from '@/lib/financeiro/statusFinanceiro';
 import type { GraficoDaFolha } from '@/lib/pdf/cpr/graficoDoDom';
 
@@ -114,7 +114,8 @@ export interface EntradaDoModelo<L extends LinhaDaTela> {
   };
   /** o rodapé da tela: totais a pagar e a receber da lista e a contagem */
   /** `realizado`: período ENCERRADO — os totais e a contagem são do que foi realizado no período, não de contas em aberto */
-  rodape: { pagar: number; receber: number; contas: number; realizado?: boolean };
+  /** o rodapé do dono (`rodapeDoPeriodoCpr`): só o que vem depois do Caixa inicial; `realizados` = os lançamentos realizados somados */
+  rodape: { pagar: number; receber: number; contas: number; realizados?: number; realizado?: boolean };
   semanas: SemanaCpr[];
   porConta: SaldoDaContaCpr[] | null;
   motivoSemSaldo: string;
@@ -254,7 +255,7 @@ export function montarModeloCpr<L extends LinhaDaTela>(e: EntradaDoModelo<L>): M
     comColunaConta: e.todasAsContas,
     faixas,
     fim: {
-      titulo: `Fim do período · ${dma(e.periodo.ate)} · ${e.rodape.realizado ? `${e.rodape.contas} ${e.rodape.contas === 1 ? 'lançamento realizado' : 'lançamentos realizados'}` : contas(e.rodape.contas)}`,
+      titulo: `Fim do período · ${dma(e.periodo.ate)} · ${contagemDoRodapeCpr({ contas: e.rodape.contas, realizados: e.rodape.realizados ?? (e.rodape.realizado ? e.rodape.contas : 0), encerrado: !!e.rodape.realizado })}`,
       pagar: celulaDeValor('pagar', e.rodape.pagar), receber: celulaDeValor('receber', e.rodape.receber), saldo: celulaDeValor('saldo', s.fim),
     },
     notaSemSaldo: s.hoje == null ? `Saldo "—": ${e.motivoSemSaldo}.` : null,
