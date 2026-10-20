@@ -1,7 +1,7 @@
 /**
  * RESUMO-CLIENTES-01 passo a — o ⚑ do cabeçalho, dentro do cliente (mock v3, parte 2). Só admin; lugar RESERVADO de largura fixa
  * (nunca desloca o nome do usuário). Âmbar com o número de pendências em aberto daquele cliente; cinza "⚑ 0" sem nenhuma. Clicar abre
- * o modal de altura fixa: a lista (rola a partir da 6ª linha), "+ nova deste cliente", "Ver no Resumo dos clientes", Fechar.
+ * o modal de altura fixa (UI-SEM-CORTE-02: 320px, a lista e' o flex-1 e rola por dentro; os botoes nunca cobrem o rodape da tabela), "+ nova deste cliente", "Ver no Resumo dos clientes", Fechar.
  */
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
@@ -36,12 +36,12 @@ export function AvisoPendenciasCliente({ cliente, onVerNoResumo, fonte }: {
       )}
       {cliente && (
         <Dialog open={aberto} onOpenChange={setAberto}>
-          <DialogContent className="flex h-[280px] max-w-[860px] flex-col gap-2" data-testid="pendencias-do-cliente">
+          <DialogContent className="flex h-[min(320px,calc(100dvh-32px))] max-w-[860px] flex-col gap-2" data-testid="pendencias-do-cliente">
             <DialogHeader>
               <DialogTitle className="text-[13px]">Pendências — {cliente.nome}</DialogTitle>
               <DialogDescription className="text-[10px]">{n} {n === 1 ? 'aberta' : 'abertas'} · {vencidas} {vencidas === 1 ? 'vencida' : 'vencidas'}. Só você vê isto.</DialogDescription>
             </DialogHeader>
-            <PendenciasTabela lista={p.lista} onCobrar={p.cobrar} onResolver={p.resolver} alturaDoCorpo="132px" />
+            <PendenciasTabela lista={p.lista} onCobrar={p.cobrar} onResolver={p.resolver} />
             <div className="flex h-7 shrink-0 items-center gap-2">
               <Button size="sm" variant="outline" className="h-7 text-[11px]" data-testid="nova-deste-cliente" onClick={() => setNova(true)}>+ nova deste cliente</Button>
               <Button size="sm" variant="outline" className="h-7 text-[11px]" data-testid="ver-no-resumo" onClick={() => { setAberto(false); onVerNoResumo(); }}>Ver no Resumo dos clientes</Button>
