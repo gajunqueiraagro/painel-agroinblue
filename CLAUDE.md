@@ -9961,3 +9961,25 @@ curta nas secoes de regras) e a pendencia (na FILA); o bloco inteiro vai para do
   (o Code 2 na faixa 20261028…), nenhum dado de negocio, nenhuma migration do Code 1. Ordem: ensaio em transacao revertida -> mostrar
   a resposta -> aplicar -> conferir ledger = arquivo (md5) e as provas. DDL que trava tabela quente so' antes das 07h ou depois das
   20h. Erro de lock/timeout (outro Code aplicando junto): esperar e tentar uma vez; persistindo, PARAR e relatar.
+- ⚠ A TOLERANCIA DA CONCILIACAO E' MEIO CENTAVO, NA TELA E NO BANCO; R$ 0,01 E' DIFERENCA (CONC-CRIAR-CENTAVO-01, Gabriel 20/10/2026).
+  Nasce da Vera (Itau Personalite, jun/2025): extratos "REND PAGO APLIC AUT MAIS" de +0,01 sem lancamento e o "Criar lancamento pela
+  diferenca" APAGADO (`Math.abs(sim.diferenca) > 0.01`). Dono no front: `src/lib/conciliacao/tolerancia.ts` — `TOLERANCIA_CONCILIACAO`
+  (0.005), `fechaAoCentavo`, `podeCriarPelaDiferenca` (sem levados: libera com extrato ≠ 0; com levados: simulacao nao fechou e
+  diferenca > meio centavo). PROIBIDO 0.01 solto decidindo conciliar ou criar (teste de fonte com auto-teste em
+  `tolerancia.test.ts`). Alinhados: `CasarComBancoModal` (`podeCriar`, `sentidoDaDiferenca`), `EspelhoConciliacaoTab`
+  (`faltaDoExtrato` — falta de 0,01 agora e' "Parcial" —, `podeConciliar`/motivo da barra, `temDif` das linhas) e a busca de
+  candidatos do Importar Banco (`useImportacaoExtrato`: auto-vinculo so' com valor igual ate' meio centavo).
+  · BANCO: migration `supabase/migrations/20261028100300_conc_criar_centavo_01.sql` (md5 do arquivo 73946b5432d7be2e3c9ff92afa477866 —
+    APLICADA no proto em 20/10/2026, ledger corrigido para a versao do arquivo; patch guardado por md5): `fn_espelho_casar`
+    cd21bf8d… -> c1bdf39a… e `fn_espelho_casar_n1` d86e57ce… -> a299c183… passam de `> 0.01` a `> 0.005` (as outras do casar ja' eram
+    0,005: `fn_conciliar_bloco`, `fn_classificacao_conferir_bloco`, `fn_vincular_grupo_conciliacao`). Ensaio: diferenca de 0,01
+    casava calada (`ok: true`) e passou a `soma_nao_bate`; 0,004 continua `ok`. ACL e SECURITY DEFINER iguais.
+  · FICAM COMO ESTAO (exibicao, nao decidem criar nem conciliar): `MesaPareamentoModal` (~:2124, "valor igual" < 0,01),
+    `V2MesaOperacional` (~:325, `naoExplicado < 0.01`), `CompraVinculoFinanceiroDisplay` (< 0,01). O "Quem le' a tolerancia" do
+    `useConciliacaoDoMes` (`TOL = 0.005`) ja' era meio centavo.
+  ⚠ NAO PROVADO: o caso da Vera na tela com login (bancada nao tem o modal 1:1; o `check:ui-cortes` mede so' o de bloco) · o
+    Importar Banco re-medido (auto-vinculo com 0,01 de diferenca passa a manual) · o 1:1 da barra do Espelho no navegador.
+- ⚠ LEDGER = ARQUIVO, VERSAO INCLUSIVE: o `apply_migration` do MCP grava a versao com o timestamp do dia; logo depois de aplicar, o
+  Code corrige `supabase_migrations.schema_migrations.version` para o numero do arquivo (UPDATE guardado por nome + md5 dos statements),
+  mostrando antes/depois. Corrigidas em 20/10: `audit_seg_01_trilha` 20261020131759 -> 20261028100000 e `conc_criar_centavo_01`
+  20261020134046 -> 20261028100300.
