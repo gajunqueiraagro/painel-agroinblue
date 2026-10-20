@@ -10343,6 +10343,7 @@ curta nas secoes de regras) e a pendencia (na FILA); o bloco inteiro vai para do
     31/10 = 1.450.135,93 · Fim do periodo: a pagar 206.581,23 (57 saidas 186.395,93 + 3 pontas de transferencia 20.024,47 + vencidos) ·
     a receber 232.473,50 (212.449,03 + as 3 pontas) · saldo no fim 1.476.189,03 (as transferencias sao entre duas contas do caixa).
   · Gate: cenario `cpr-futuro` (bancada `tela=cpr&v=futuro`, o periodo pelo retorno de sessao da tela) nos sete tamanhos.
-  Testes: `cprAjustes2010.test.ts` +6 (18 -> 24... ver a suite); `cprRecorte.test.ts` e `cprEstimado.test.ts` trocados ao contrato novo
+  Testes: `cprAjustes2010.test.ts` 12 -> 18 (+6); `cprRecorte.test.ts` 81 -> 82; `cprEstimado.test.ts` trocado ao contrato novo; SUITE 5973
+  passando, 3 falhas de sempre, 1 erro de sempre; gate de tela completo 113 telas, 613 medicoes, 0 achados. Os testes antigos trocados
   (a caixa nao muda nada num periodo com hoje; no encerrado ela ainda decide). 5 mutacoes mortas.
   ⚠ NAO PROVADO: com login no app real · a Vera aberta na tela depois da publicacao.
