@@ -1,5 +1,5 @@
 /**
- * "REABRIR MÊS…" DE DENTRO DA OPERAÇÃO COMERCIAL — ACESSOS-OC-02 (M9, decisão do Gabriel de 05/10/2026).
+ * "REABRIR MÊS" DE DENTRO (UI-SEM-CORTE-02: o rotulo nao leva "…") DE DENTRO DA OPERAÇÃO COMERCIAL — ACESSOS-OC-02 (M9, decisão do Gabriel de 05/10/2026).
  *
  * Reabrir o período é gesto do FECHAMENTO do rebanho. Os três modais da OC (compra, venda, abate) o oferecem ao lado do aviso de
  * mês fechado; quem não tem a tela do fechamento vê o gesto APAGADO com o motivo (gesto fica apagado com motivo, nunca some).
@@ -27,7 +27,7 @@ export function ReabrirMesNaOC({ forma, onAbrir }: {
           className="h-6 shrink-0 text-[10px]" disabled={!podeReabrir}
           title={podeReabrir ? undefined : MOTIVO_REABRIR_SEM_FECHAMENTO}
           onClick={podeReabrir ? onAbrir : undefined}>
-          Reabrir mês…
+          Reabrir mês
         </Button>
       </>
     );
@@ -37,7 +37,7 @@ export function ReabrirMesNaOC({ forma, onAbrir }: {
       <button type="button" data-testid="reabrir-mes"
         className={podeReabrir ? 'underline underline-offset-2' : 'cursor-not-allowed opacity-50'}
         disabled={!podeReabrir} title={podeReabrir ? undefined : MOTIVO_REABRIR_SEM_FECHAMENTO}
-        onClick={podeReabrir ? onAbrir : undefined}>Reabrir mês…</button>
+        onClick={podeReabrir ? onAbrir : undefined}>Reabrir mês</button>
       {!podeReabrir && <> <span data-testid="reabrir-mes-motivo">· {MOTIVO_REABRIR_SEM_FECHAMENTO}</span></>}
     </>
   );
