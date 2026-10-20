@@ -5,7 +5,7 @@
  * ⚠ O CASO DO NJ (30/09 11:21): no banco −506,51 "Vivo Celular - VIVO MOVEL - MS"; levado "Vivo Casa · Telefonica" 506,84.
  *   A RPC devolve diferença −0,33 (soma − extrato, assinados) e a frase dizia "somam MENOS" — o lançamento é MAIOR.
  * ⚠ O BANCO FALSO FAZ A CONTA DA `fn_espelho_casar` (corpo lido no `prosrc` em 30/09): soma = Σ direção × |valor|,
- *   diferença = round(soma − extrato, 2), `ok` quando |diferença| ≤ 0,01. Assim o resumo e a frase vêm do mesmo
+ *   diferença = round(soma − extrato, 2), `ok` quando |diferença| ≤ 0,005 (CONC-CRIAR-CENTAVO-01: a tolerância do banco). Assim o resumo e a frase vêm do mesmo
  *   caminho da tela real, não de números prontos.
  */
 import { describe, it, expect, vi } from 'vitest';
@@ -28,7 +28,7 @@ vi.mock('@/integrations/supabase/client', () => ({
         const soma = args.p_extratos.reduce((a, id) => a + Math.abs(VALORES.get(id) ?? 0), 0);
         const diferenca = Math.round((soma - noLanc) * 100) / 100;
         return Promise.resolve({
-          data: Math.abs(diferenca) <= 0.01
+          data: Math.abs(diferenca) <= 0.005
             ? { ok: true, no_lancamento: noLanc, soma_extratos: soma }
             : { ok: false, motivo: 'soma_nao_bate', no_lancamento: noLanc, soma_extratos: soma, diferenca },
           error: null,
@@ -43,7 +43,7 @@ vi.mock('@/integrations/supabase/client', () => ({
       const soma = args.p_itens.reduce((a, i) => a + (DIRECAO.get(i.lancamento_id) ?? -1) * Math.abs(i.valor), 0);
       const diferenca = Math.round((soma - alvo) * 100) / 100;
       return Promise.resolve({
-        data: Math.abs(diferenca) <= 0.01
+        data: Math.abs(diferenca) <= 0.005
           ? { ok: true, no_extrato: alvo, soma }
           : { ok: false, motivo: 'soma_nao_bate', no_extrato: alvo, soma, diferenca },
         error: null,
@@ -499,5 +499,25 @@ describe('CONC-BLOCO-SINAL-MISTO-01 — somas com sinal, recusa traduzida, sem r
     expect(dlg.textContent).not.toContain('…');
     expect(texto('onde-desfazer-bloco')).toBe('Para desfazer: menu "Ações" (⋯) da linha do bloco › Desfazer bloco.');
     expect(dlg.querySelector('.truncate')).toBeNull();
+  });
+});
+
+/* CONC-CRIAR-CENTAVO-01: R$ 0,01 é diferença de verdade — "Criar lançamento pela diferença" não pode ficar apagado. */
+describe('criar pela diferença com centavo', () => {
+  const criar = () => screen.getByRole('button', { name: 'Criar lançamento pela diferença' });
+  it('extrato de R$ 0,01 sem lançamento levado: criar liberado (o caso da Vera)', async () => {
+    render(<CasarComBancoModal open onClose={() => {}} extrato={{ ...EXTRATO, valor: 0.01, historico: 'REND PAGO APLIC AUT MAIS' }}
+      iniciais={[]} nomeConta="Itaú Personalite" contaBancariaId="itau" onConciliado={() => {}} />);
+    await waitFor(() => expect(criar()).not.toBeDisabled());
+  });
+  it('com um levado que deixa R$ 0,01 de diferença: criar liberado e Conciliar apagado', async () => {
+    montar([{ ...VIVO, valor_assinado: -506.52 }]);
+    await waitFor(() => expect(criar()).not.toBeDisabled());
+    expect(screen.getByRole('button', { name: 'Conciliar' })).toBeDisabled();
+  });
+  it('com um levado que fecha: criar apagado', async () => {
+    montar([{ ...VIVO, valor_assinado: -506.51 }]);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Conciliar' })).not.toBeDisabled());
+    expect(criar()).toBeDisabled();
   });
 });
