@@ -24,7 +24,7 @@ const entra = (venc: string, valor: number) => conta(venc, valor, { tipo_operaca
 
 describe('(1) A receber ANTES de A pagar', () => {
   it('no cabeçalho, nas linhas, nas faixas (dia, Caixa inicial, Fim do período) e nos cartões', () => {
-    const cab = tela.slice(tela.indexOf('data-testid="cpr-cabecalho"'), tela.indexOf('testId="cpr-caixa-inicial"'));
+    const cab = tela.slice(tela.indexOf('data-testid="cpr-cabecalho"'), tela.indexOf('{iCaixaInicial === -1 && linhaDoCaixaInicial}'));
     expect(cab.indexOf('>A receber<')).toBeGreaterThan(0);
     expect(cab.indexOf('>A receber<')).toBeLessThan(cab.indexOf('>A pagar<'));
     /* a linha da conta */
@@ -124,9 +124,9 @@ describe('(4) o vencido conta no saldo de HOJE, com o selo e o aviso', () => {
     /* o Fluxo não diz mais "anterior à conciliação, fora do saldo" */
     expect(fluxo).not.toContain('vencidosForaDoSaldo');
   });
-  it('"Incluir vencidos" desligado: sai da LISTA de hoje e o saldo de hoje continua o mesmo (a faixa diz)', () => {
-    expect(tela).toContain('...(incluirVencidos ? doSeg(vencidos.linhas) : [])');
-    expect(tela).toContain("`o saldo inclui ${nVencidos} ${nVencidos === 1 ? 'vencido' : 'vencidos'} fora da lista`");
+  it('CPR-AJUSTES-20-10b: o vencido que entra no saldo aparece SEMPRE no dia de hoje — a caixa não o esconde', () => {
+    expect(tela).toContain('const listados = ordenarDoDiaCpr([...doSeg(vencidos.linhas), ...(mapa.get(chave) ?? [])]);');
+    expect(tela).not.toContain('fora da lista');
   });
 });
 
@@ -134,5 +134,69 @@ describe('CPR-SEM-CORTE-01 — nada de "…" na CPR', () => {
   it('nenhum truncate, text-ellipsis ou line-clamp na tela nem no Fluxo', () => {
     expect(tela).not.toMatch(/\btruncate\b|text-ellipsis|line-clamp/);
     expect(fluxo).not.toMatch(/\btruncate\b|text-ellipsis|line-clamp/);
+  });
+});
+
+/* ─── CPR-AJUSTES-20-10b — período que não inclui hoje, e vencido que entra no saldo aparece sempre ─────────────────────── */
+describe('CPR-AJUSTES-20-10b — período futuro', () => {
+  const hoje = '2026-10-20';
+  const NOV = { de: '2026-11-01', ate: '2026-11-30' };
+  /* o caso da Vera (sintético): os 3 vencidos em aberto de R$ 160,83, nada entre 21/10 e 31/10, contas em novembro; e uma conta PAGA
+     hoje (com a pílula Realizado ligada a busca a traz) — ela não pode abrir um dia "hoje" num período de novembro */
+  const linhas = [
+    conta('2025-12-15', 38.63, { status_transacao: 'previsto' }), conta('2026-09-15', 112.82, { status_transacao: 'previsto' }),
+    conta('2026-10-15', 9.38, { status_transacao: 'previsto' }),
+    conta('2026-11-05', 21000, { status_transacao: 'agendado' }), entra('2026-11-12', 212449.03),
+    conta(hoje, 500, { status_transacao: 'realizado', data_pagamento: hoje }),
+  ];
+  const rec = (incluirVencidos = true) => recortarCpr(linhas, { periodo: NOV, hoje, incluirVencidos, ancoras: new Map([['IP', '2026-10-09']]) });
+  it('o Caixa inicial da véspera = caixa de hoje − os vencidos em aberto + o que vence de amanhã até a véspera', () => {
+    const s = serieDoSaldoCpr(rec(), 1450296.76);
+    expect(s.inicial).toEqual({ data: '2026-10-31', saldo: 1450135.93 });
+    expect(s.partida.pagar).toEqual({ valor: 160.83, contas: 3 });
+    expect(s.dias.map((d) => d.data)).toEqual(['2026-11-05', '2026-11-12']);
+    expect(s.fim).toBe(Math.round((1450135.93 - 21000 + 212449.03) * 100) / 100);
+  });
+  it('nada de hoje entra na lista: a paga de hoje fica fora das pagas do período', () => {
+    const r = rec();
+    expect(r.pagas.map((l) => l.data_vencimento)).toEqual([hoje]);
+    expect(r.pagasNoPeriodo).toEqual([]);
+    expect(tela).toContain('...recorte.pagasNoPeriodo,');
+    expect(tela).not.toMatch(/\.\.\.recorte\.pagas,/);
+  });
+  it('os vencidos aparecem SEMPRE (a caixa não os esconde) e o rodapé os soma', () => {
+    for (const incluir of [true, false]) {
+      const r = rec(incluir);
+      expect(r.vencidosNaLista).toBe(true);
+      expect(r.total.pagar).toEqual({ valor: 21160.83, contas: 4 });
+    }
+  });
+  it('a tela: o bloco "Vencidos em aberto · entram no saldo" vem ANTES da linha do Caixa inicial', () => {
+    expect(tela).toContain("titulo: futuro ? `Vencidos em aberto · ${contas(nVencidos)} · entram no saldo`");
+    expect(tela).toContain('antesDoCaixaInicial: futuro,');
+    /* "entre hoje e de" também já está dentro do Caixa inicial previsto: vem antes dele; e o bloco prende a 22px (em 42 cobria a linha) */
+    expect(tela).toContain("chave: 'entre', tipo: 'entre', quando: '', linhas: [], antesDoCaixaInicial: true,");
+    expect(tela).toContain("g.antesDoCaixaInicial ? 'top-[22px]' : 'top-[42px]'");
+    expect(tela).toContain('const iCaixaInicial = grupos.findIndex((g) => !g.antesDoCaixaInicial);');
+    expect(tela).toContain('{i === iCaixaInicial && linhaDoCaixaInicial}');
+    expect(tela).toContain('if (!hojeNoPeriodo && recorte.vencidosNaLista && nVencidos > 0) topo.push({');
+  });
+  it('o PDF e o Excel põem o bloco antes do Caixa inicial, como a tela', () => {
+    const modelo = semComentario(readFileSync(resolve(__dirname, '../../lib/pdf/cpr/modeloCpr.ts'), 'utf8'));
+    const excel = semComentario(readFileSync(resolve(__dirname, '../../lib/financeiro/cprExcel.ts'), 'utf8'));
+    expect(modelo).toContain('if (nAntes > 0) faixas.splice(nAntes, 0, ...faixas.splice(0, 1));');
+    expect(excel.indexOf('e.grupos.filter((g) => g.antesDoCaixaInicial)')).toBeLessThan(excel.indexOf('`Caixa inicial'));
+  });
+});
+
+describe('CPR-AJUSTES-20-10b — período que inclui hoje', () => {
+  it('o vencido entra no dia de hoje e no total, com a caixa ligada ou desligada; período encerrado: a caixa ainda decide', () => {
+    const hoje = '2026-10-20';
+    const ls = [conta('2026-10-15', 9.38), conta('2026-10-25', 100)];
+    const r = (periodo: { de: string; ate: string }, incluirVencidos: boolean) => recortarCpr(ls, { periodo, hoje, incluirVencidos });
+    expect(r({ de: '2026-10-01', ate: '2026-10-31' }, false).total.pagar).toEqual({ valor: 109.38, contas: 2 });
+    expect(r({ de: '2026-10-01', ate: '2026-10-31' }, false).vencidosNaLista).toBe(true);
+    expect(r({ de: '2026-09-01', ate: '2026-09-30' }, false).vencidosNaLista).toBe(false);
+    expect(r({ de: '2026-09-01', ate: '2026-09-30' }, true).vencidosNaLista).toBe(true);
   });
 });
