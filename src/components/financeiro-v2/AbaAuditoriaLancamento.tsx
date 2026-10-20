@@ -13,11 +13,18 @@
  * ⚠ A CRIAÇÃO NÃO É EVENTO. O trigger é AFTER UPDATE: nenhum lançamento tem linha de "criou".
  * A última linha da trilha é montada do próprio registro (`created_by`/`created_at`), e por
  * isso ela existe mesmo quando não houve nenhuma edição.
+ *
+ * ⚠ O NOME DO AUTOR TEM UMA FONTE (ACESSOS-PERFIL-01): `fn_nomes_dos_autores(cliente, ids)` — perfil, login ou "usuário
+ * removido". O "nome da sessão" saiu. AUTOR NULO NÃO É "sistema" POR CONTA DA TELA: "sistema · <via>" quando o evento diz
+ * por onde entrou (a coluna `via` do `audit_log`, AUDIT-SEG-01), senão "sem autor registrado". A coluna `via` pode ainda não
+ * existir no banco: a leitura tenta com ela e, sem ela, lê de novo sem.
  */
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
-import { TrilhaAuditoria, primeiroNome, type EventoTrilha } from '@/components/ui/trilha-auditoria';
+import { useCliente } from '@/contexts/ClienteContext';
+import { TrilhaAuditoria, type EventoTrilha } from '@/components/ui/trilha-auditoria';
+import { buscarNomesDosAutores } from '@/hooks/useNomesDosAutores';
+import { autorNaTrilha, mapaDosNomes, type NomeDoAutor } from '@/lib/acessos/nomesDosAutores';
 import {
   fraseDoEvento, camposMudados,
   type CatalogosAuditoria, type EventoAuditoriaBruto,
@@ -33,8 +40,12 @@ interface Props {
 
 interface LinhaAudit {
   id: string; acao: string; usuario_id: string | null; created_at: string;
-  dados_anteriores: unknown; dados_novos: unknown;
+  dados_anteriores: unknown; dados_novos: unknown; via?: string | null;
 }
+const COLUNAS_AUDIT = 'id, acao, usuario_id, created_at, dados_anteriores, dados_novos';
+/* "coluna nao existe" (Postgres 42703 / PostgREST PGRST204): a `via` ainda nao chegou ao banco. */
+const semColuna = (e: unknown) => e != null && typeof e === 'object'
+  && ['42703', 'PGRST204'].includes(String(Reflect.get(e, 'code') ?? ''));
 interface LinhaConcil {
   id: string; acao: string; actor_user_id: string | null; created_at: string;
   extrato_id: string | null; motivo: string | null;
@@ -42,7 +53,8 @@ interface LinhaConcil {
 }
 
 export function AbaAuditoriaLancamento({ lancamentoId, criadoPor, criadoEm, descricao, catalogos }: Props) {
-  const { user } = useAuth();
+  const { clienteAtual } = useCliente();
+  const clienteId = clienteAtual?.id ?? null;
   const [eventos, setEventos] = useState<EventoTrilha[] | null>(null);
 
   useEffect(() => {
@@ -50,23 +62,27 @@ export function AbaAuditoriaLancamento({ lancamentoId, criadoPor, criadoEm, desc
     let cancelado = false;
     setEventos(null);
     (async () => {
-      const [resAudit, resConcil] = await Promise.all([
-        supabase.from('audit_log')
-          .select('id, acao, usuario_id, created_at, dados_anteriores, dados_novos')
-          .eq('tabela_origem', 'financeiro_lancamentos_v2')
-          .eq('registro_id', lancamentoId)
-          .order('created_at', { ascending: false }),
+      const lerAudit = (colunas: string) => supabase.from('audit_log')
+        .select(colunas)
+        .eq('tabela_origem', 'financeiro_lancamentos_v2')
+        .eq('registro_id', lancamentoId)
+        .order('created_at', { ascending: false });
+      const [resAuditComVia, resConcil] = await Promise.all([
+        lerAudit(`${COLUNAS_AUDIT}, via`),
         supabase.from('conciliacao_audit_log')
           .select('id, acao, actor_user_id, created_at, extrato_id, motivo, payload_antes, payload_depois')
           .eq('lancamento_id', lancamentoId)
           .order('created_at', { ascending: false }),
       ]);
 
-      const brutos: (EventoAuditoriaBruto & { blocos: { rotulo: string; valor: unknown }[] })[] = [];
+      const resAudit = semColuna(resAuditComVia.error) ? await lerAudit(COLUNAS_AUDIT) : resAuditComVia;
 
-      for (const r of (resAudit.data ?? []) as LinhaAudit[]) {
+      const brutos: (EventoAuditoriaBruto & { via?: string | null; blocos: { rotulo: string; valor: unknown }[] })[] = [];
+
+      const linhasAudit: unknown[] = Array.isArray(resAudit.data) ? resAudit.data : [];
+      for (const r of linhasAudit.map(lerLinhaAudit).filter((x): x is LinhaAudit => x !== null)) {
         brutos.push({
-          id: r.id, acao: r.acao, criadoEm: r.created_at, autorId: r.usuario_id,
+          id: r.id, acao: r.acao, criadoEm: r.created_at, autorId: r.usuario_id, via: r.via ?? null,
           antes: r.dados_anteriores, depois: r.dados_novos,
           motivo: motivoDoCancelamento(r.dados_novos),
           blocos: [{ rotulo: 'antes', valor: r.dados_anteriores }, { rotulo: 'depois', valor: r.dados_novos }],
@@ -84,26 +100,14 @@ export function AbaAuditoriaLancamento({ lancamentoId, criadoPor, criadoEm, desc
       /* Uma trilha só, do mais recente para o mais antigo. */
       brutos.sort((a, b) => (a.criadoEm < b.criadoEm ? 1 : a.criadoEm > b.criadoEm ? -1 : 0));
 
-      /* ⚠ `profiles` ESTÁ VAZIA (0 linhas, medido em 09/09/2026), então a consulta abaixo
-         hoje volta sem nada e todo autor cairia em "—". O nome da sessão corrente é a única
-         fonte que o navegador tem, e é o mesmo caminho já usado pela aba Auditoria da OC.
-         No dia em que `profiles` for preenchida, ela passa a mandar sem tocar nesta tela. */
+      /* Os nomes: a fonte única, com a guarda do cliente (quem não aparece na trilha deste cliente não volta). */
       const ids = [...new Set([criadoPor, ...brutos.map((b) => b.autorId)].filter((x): x is string => !!x))];
-      const nomes = new Map<string, string>();
-      if (ids.length) {
-        const { data } = await supabase.from('profiles').select('user_id, nome').in('user_id', ids);
-        for (const p of (data ?? []) as { user_id: string; nome: string | null }[]) {
-          if (p.user_id && p.nome) nomes.set(p.user_id, primeiroNome(p.nome));
-        }
+      let lidos: NomeDoAutor[] = [];
+      if (ids.length && clienteId) {
+        try { lidos = await buscarNomesDosAutores(clienteId, ids); } catch { lidos = []; }
       }
-      const meta = user?.user_metadata as { nome?: unknown; full_name?: unknown } | undefined;
-      const meuNomeBruto = typeof meta?.nome === 'string' ? meta.nome
-        : typeof meta?.full_name === 'string' ? meta.full_name
-        : user?.email ? user.email.split('@')[0] : null;
-      if (user?.id && meuNomeBruto && !nomes.has(user.id)) nomes.set(user.id, primeiroNome(meuNomeBruto));
-
-      /* Autor nulo é o sistema — trigger, importação, rotina. Não é "não sei quem foi". */
-      const autorDe = (id: string | null) => (id === null ? 'sistema' : nomes.get(id) ?? null);
+      const nomes = mapaDosNomes(lidos);
+      const autorDe = (id: string | null, via?: string | null) => autorNaTrilha(id, nomes, via);
 
       const linhas: EventoTrilha[] = brutos.map((b) => {
         const { frase, detalhe } = fraseDoEvento(b, catalogos);
@@ -111,7 +115,7 @@ export function AbaAuditoriaLancamento({ lancamentoId, criadoPor, criadoEm, desc
         return {
           id: b.id,
           quando: b.criadoEm,
-          autor: autorDe(b.autorId),
+          autor: autorDe(b.autorId, b.via),
           autorId: b.autorId,
           frase,
           detalhe,
@@ -144,7 +148,7 @@ export function AbaAuditoriaLancamento({ lancamentoId, criadoPor, criadoEm, desc
       if (!cancelado) setEventos(linhas);
     })();
     return () => { cancelado = true; };
-  }, [lancamentoId, criadoPor, criadoEm, descricao, catalogos, user]);
+  }, [lancamentoId, criadoPor, criadoEm, descricao, catalogos, clienteId]);
 
   const lista = eventos ?? [];
   const pessoas = new Set(lista.map((e) => e.autorId).filter(Boolean)).size;
@@ -165,6 +169,16 @@ export function AbaAuditoriaLancamento({ lancamentoId, criadoPor, criadoEm, desc
       )}
     </div>
   );
+}
+
+/** A linha do `audit_log` lida sem cast (a leitura tem a `via` ou não, conforme o banco). */
+function lerLinhaAudit(r: unknown): LinhaAudit | null {
+  if (r == null || typeof r !== 'object') return null;
+  const txt = (k: string): string | null => { const v: unknown = Reflect.get(r, k); return typeof v === 'string' ? v : null; };
+  const id = txt('id'); const acao = txt('acao'); const criado = txt('created_at');
+  if (!id || !acao || !criado) return null;
+  return { id, acao, usuario_id: txt('usuario_id'), created_at: criado,
+    dados_anteriores: Reflect.get(r, 'dados_anteriores'), dados_novos: Reflect.get(r, 'dados_novos'), via: txt('via') };
 }
 
 /** O motivo do cancelamento mora no próprio registro novo, não numa coluna de evento. */

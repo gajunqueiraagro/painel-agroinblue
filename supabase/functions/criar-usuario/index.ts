@@ -225,12 +225,21 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Update profile cliente_id if not set
-    await adminClient
-      .from("profiles")
-      .update({ cliente_id })
-      .eq("user_id", userId)
-      .is("cliente_id", null);
+    /* ACESSOS-PERFIL-01: o perfil (nome e e-mail) nasce com o acesso, pelo dono no banco (`_fn_perfil_garantir`: cria, ou
+       preenche o que esta' vazio; nome ja' preenchido nao e' sobrescrito). O update antigo de `profiles.cliente_id` (coluna que
+       nao existe) falhava calado. Falha aqui NAO e' calada: a resposta diz a etapa "perfil". */
+    const { error: perfilError } = await adminClient.rpc("_fn_perfil_garantir", {
+      p_user_id: userId, p_nome: typeof nome === "string" && nome.trim() ? nome.trim() : null, p_email: email,
+    });
+    if (perfilError) {
+      return new Response(JSON.stringify({
+        error: "O acesso foi criado, mas o nome e o e-mail não foram gravados no perfil: " + perfilError.message,
+        etapa: "perfil", user_id: userId, login_existente: loginExistente,
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     return new Response(JSON.stringify({ success: true, user_id: userId, login_existente: loginExistente }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

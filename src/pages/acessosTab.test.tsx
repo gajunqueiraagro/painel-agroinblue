@@ -32,7 +32,12 @@ vi.mock('@/integrations/supabase/client', () => {
     q.then = (ok: (v: { data: unknown; error: null }) => unknown) => { estado.leituras.push(nome); return Promise.resolve(ok({ data: dados(), error: null })); };
     return q;
   };
-  return { supabase: { from: tabela, functions: { invoke: (...a: unknown[]) => estado.invoke(...a) } } };
+  /* ACESSOS-PERFIL-01: nome e e-mail vem da fonte unica `fn_nomes_dos_autores` (nao mais de `profiles` direto). */
+  const rpc = (fn: string) => {
+    estado.leituras.push(fn);
+    return Promise.resolve({ data: fn === 'fn_nomes_dos_autores' ? estado.perfis.map(p => ({ ...p, nome: p.nome ?? p.email ?? 'usuário removido', situacao: 'membro ativo' })) : null, error: null });
+  };
+  return { supabase: { from: tabela, rpc, functions: { invoke: (...a: unknown[]) => estado.invoke(...a) } } };
 });
 
 /* jsdom não tem ResizeObserver; o Checkbox do Radix o usa para medir (o teste não mede layout). */
@@ -86,7 +91,9 @@ describe('o cabeçalho e a lista', () => {
     expect(fin?.querySelectorAll('td')[1].getAttribute('title')).toContain('fazendas: Faz. Um');
     expect([...document.querySelectorAll('thead th')].map(th => th.textContent)).toEqual(['E-mail', 'Nome', 'Perfil', 'Situação', '']);
     expect(document.querySelector('table')?.className).toContain('table-fixed');
-    expect(screen.getByTestId('acessos-rolagem').className).toContain('overflow-y-auto');
+    /* ACESSOS-PERFIL-01: rola nos dois eixos (janela estreita: a tabela de largura minima rola DENTRO do cartao) */
+    expect(screen.getByTestId('acessos-rolagem').className).toContain('overflow-auto');
+    expect(document.querySelector('table')?.className).toContain('min-w-[540px]');
   });
   it('a linha do admin do AGROinBLUE não tem ações e diz por quê; a minha própria também não', async () => {
     await montar();
@@ -95,7 +102,9 @@ describe('o cabeçalho e a lista', () => {
     expect(de('u-adm')?.textContent).toContain(MOTIVO_LINHA_ADMIN);
     expect(within(de('u-adm') ?? document.body).queryAllByRole('button')).toHaveLength(0);
     expect(within(de('u-eu') ?? document.body).queryAllByRole('button')).toHaveLength(0);
-    expect(within(de('u-fin') ?? document.body).getAllByRole('button')).toHaveLength(2);
+    /* ACESSOS-PERFIL-01: editar · redefinir a senha · remover */
+    expect(within(de('u-fin') ?? document.body).getAllByRole('button').map(b => b.getAttribute('aria-label'))).toEqual([
+      'editar o acesso de Fulana Financeira', 'redefinir a senha de Fulana Financeira', 'remover o acesso de Fulana Financeira']);
   });
   it('sem cliente escolhido: título neutro, formulário parado com o motivo, e nada é lido', async () => {
     estado.cliente = null;
@@ -125,9 +134,11 @@ describe('os perfis do piloto', () => {
     expect(PERFIS_DA_TELA.some(p => p.valor === 'admin_agroinblue')).toBe(false);
     /* a tela desenha a lista do dono: o item sem vez vem `disabled`, com o motivo escrito no proprio item */
     const s = semComentario(FONTE);
-    expect(s).toContain('PERFIS_DA_TELA.map(p => (');
-    expect(s).toContain('disabled={p.motivo != null}');
-    expect(s).toContain('{p.motivo ? `${p.rotulo} · ${p.motivo}` : p.rotulo}');
+    /* ACESSOS-PERFIL-01: na edicao, o perfil que o membro ja' tem continua escolhivel */
+    expect(s).toContain('PERFIS_DA_TELA.map(p => {');
+    expect(s).toContain('const apagado = p.motivo != null && p.valor !== editando?.perfil;');
+    expect(s).toContain('disabled={apagado}');
+    expect(s).toContain('{apagado ? `${p.rotulo} · ${p.motivo}` : p.rotulo}');
   });
   it('o seletor nasce em Financeiro, e perfil apagado não passa na validação', async () => {
     expect(PERFIL_INICIAL).toBe('financeiro');

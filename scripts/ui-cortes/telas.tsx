@@ -31,6 +31,7 @@ import { buscarFornecedores } from '@/lib/fornecedores/buscaDeFornecedor';
 import { FinanceiroV2Tab } from '@/pages/FinanceiroV2Tab';
 import { GRUPOS, LEITOR, LINHAS, LISTA, RECENTES, USO } from './dados/fornecedores';
 import { CasarBlocoModal } from '@/components/financeiro-v2/CasarComBancoModal';
+import { AcessosTab } from '@/pages/AcessosTab';
 
 const q = new URLSearchParams(location.search);
 const tela = q.get('tela') ?? 'mesclar';
@@ -213,9 +214,34 @@ if (tela === 'mesclar') {
       : null,
   };
   montar(<CadastroDeContratoDialog aberto aoFechar={() => {}} financiamentoId={m === 'editar' ? contratoDoCenario.id : null} prefill={m === 'editar' ? undefined : { natureza: 'financiamento' }} />);
+} else if (tela === 'acessos') {
+  /* ACESSOS-PERFIL-01 — a lista (nome e e-mail pela fonte unica), o "Novo acesso" e o "Editar acesso" (`&v=editar`). SINTETICO. */
+  const MEMBROS = [
+    { id: 'm1', user_id: 'u-fin', perfil: 'financeiro', ativo: true }, { id: 'm2', user_id: 'u-adm', perfil: 'admin_agroinblue', ativo: true },
+    { id: 'm3', user_id: 'u1', perfil: 'gestor_cliente', ativo: true }, { id: 'm4', user_id: 'u-longo', perfil: 'gestor_cliente', ativo: true },
+    { id: 'm5', user_id: 'u-sem', perfil: 'campo', ativo: true }];
+  const NOMES = [
+    { user_id: 'u-fin', nome: 'Fulana Financeira Exemplo', email: 'financeiro@fazendaexemplo.com.br', situacao: 'membro ativo' },
+    { user_id: 'u-adm', nome: 'Administrador Exemplo', email: 'admin@exemplo.com', situacao: 'consultor' },
+    { user_id: 'u1', nome: 'Eu Mesmo da Bancada', email: 'bancada@exemplo.com', situacao: 'membro ativo' },
+    { user_id: 'u-longo', nome: 'Maria Aparecida dos Santos Pereira de Albuquerque Exemplo', email: 'maria.aparecida.santos.pereira.albuquerque@agropecuariaexemplo.com.br', situacao: 'membro ativo' },
+    { user_id: 'u-sem', nome: 'usuário removido (0e422659)', email: null, situacao: 'removido' }];
+  g.__bancoBancada = { from: (t: string) => t === 'cliente_membros' ? MEMBROS : t === 'fazenda_membros' ? [{ user_id: 'u-fin', fazenda_id: 'f1' }, { user_id: 'u-longo', fazenda_id: 'f1' }] : [],
+    rpc: (fn: string) => fn === 'fn_nomes_dos_autores' ? NOMES : null };
+  montar(<AcessosTab />);
+  if (v === 'editar') setTimeout(() => (document.querySelectorAll('[data-testid="editar-membro"]')[1] as HTMLElement | undefined)?.click(), 300);
 } else if (tela === 'lancamento') {
   /* com `desc`, a edição é parcela de uma compra parcelada SEM número de contrato: o rodapé fala dela (a descrição do contrato é a longa) */
-  g.__bancoBancada = { from: () => [], rpc: (fn: string) => (desc && fn === 'fn_lancamento_financiamento') ? {
+  /* ACESSOS-PERFIL-01 — a aba Auditoria: eventos de dois membros e um sem autor (com e sem `via`), nomes pela fonte única. */
+  const AUDIT = [
+    { id: 'a1', acao: 'editou', usuario_id: 'u-outro', created_at: '2026-10-12T14:05:00Z', dados_anteriores: { valor: 1000, descricao: 'Sal' }, dados_novos: { valor: 1345.5, descricao: DESC_LONGA }, via: null },
+    { id: 'a2', acao: 'editou', usuario_id: null, created_at: '2026-10-11T10:00:00Z', dados_anteriores: { status_transacao: 'previsto' }, dados_novos: { status_transacao: 'programado' }, via: 'sistema:fn_recorrencia_gerar' },
+    { id: 'a3', acao: 'editou', usuario_id: null, created_at: '2026-09-11T10:00:00Z', dados_anteriores: { valor: 900 }, dados_novos: { valor: 1000 }, via: null },
+    { id: 'a4', acao: 'editou', usuario_id: 'u1', created_at: '2026-09-10T15:00:00Z', dados_anteriores: { observacao: null }, dados_novos: { observacao: 'conferido' }, via: null }];
+  g.__bancoBancada = { from: (t: string) => t === 'audit_log' ? AUDIT : [], rpc: (fn: string) => fn === 'fn_nomes_dos_autores' ? [
+      { user_id: 'u-outro', nome: 'Beltrano Gestor da Silva', email: 'beltrano@exemplo.com', situacao: 'ex-membro' },
+      { user_id: 'u1', nome: 'Eu Mesmo da Bancada', email: 'bancada@exemplo.com', situacao: 'membro ativo' }]
+    : (desc && fn === 'fn_lancamento_financiamento') ? {
     lancamento: { tipo_operacao: '2-Saídas', data: '2026-10-10', valor: 1345.5, descricao: DESC_LONGA },
     atual: { tipo: 'parcela', financiamento_id: 'fin-sint', numero_contrato: null, descricao: DESC_LONGA, parcela: 3, papel: 'principal', vinculo_id: null },
     parcelas: [], liberacoes: [] } : null };

@@ -33,13 +33,10 @@ const REGRA = 'react-hooks/rules-of-hooks';
 /**
  * arquivo → nº de ocorrências herdadas. Só diminui.
  *
- * ⚠ AS DUAS SÃO PRÉ-EXISTENTES e não têm relação com o incidente de 21/09: já estavam aqui.
- * Elas ficam registradas, não perdoadas — quem mexer em `AbaAuditoriaOC` ganha a chance de
- * baixar este número.
+ * ⚠ ZERO desde o ACESSOS-PERFIL-01 (20/10/2026): as duas herdadas de `AbaAuditoriaOC` (os `useMemo` abaixo do
+ * `return` antecipado) subiram para antes dele quando a aba passou a ler os nomes pela fonte única.
  */
-const BASELINE = new Map([
-  ['src/components/compra/AbaAuditoriaOC.tsx', 2],
-]);
+const BASELINE = new Map([]);
 
 const FIXTURE = `
 import { useMemo } from 'react';

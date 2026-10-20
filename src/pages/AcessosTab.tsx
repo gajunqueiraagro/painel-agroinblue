@@ -1,9 +1,13 @@
 /**
  * ACESSOS — quem entra em cada cliente e com qual perfil. ACESSOS-TELA-01 (Gabriel, 06/10/2026).
  *
- * ⚠ A TELA NAO ESCREVE EM TABELA: criar, redefinir senha e remover sao das edge functions (`criar-usuario`,
- *   `redefinir-senha`, `remover-membro`), que no piloto so' atendem o admin do AGROinBLUE. Aqui so' se LE a lista
- *   (`cliente_membros` + `profiles` + `fazenda_membros`) e se escreve o que a funcao devolveu.
+ * ⚠ A TELA NAO ESCREVE EM TABELA: criar, editar, redefinir senha e remover sao das edge functions (`criar-usuario`,
+ *   `editar-membro`, `redefinir-senha`, `remover-membro`), que no piloto so' atendem o admin do AGROinBLUE. Aqui so' se LE a
+ *   lista (`cliente_membros` + `fazenda_membros`, e o NOME e o E-MAIL pela fonte unica `fn_nomes_dos_autores` —
+ *   ACESSOS-PERFIL-01) e se escreve o que a funcao devolveu.
+ * ⚠ EDITAR ACESSO (ACESSOS-PERFIL-01): o lapis da linha abre o MESMO painel do "Novo acesso", preenchido; a senha fica na chave.
+ *   Trocar o e-mail troca o LOGIN: o primeiro clique escreve "O login passa a ser X" e pede a confirmacao no mesmo botao.
+ * ⚠ NADA CORTA (UI-SEM-CORTE-01): a lista e' 11px, e texto que nao cabe quebra a linha.
  * ⚠ A SENHA so' vive no campo e no corpo da chamada: nao e' exibida de novo, nao vai a log, console, toast nem URL, e o
  *   campo e' limpo depois de cada tentativa bem-sucedida.
  * ⚠ ERRO E AVISO FICAM ESCRITOS ao lado do botao (UX-TOAST-01) — esta tela nao tem toast.
@@ -24,13 +28,14 @@ import {
   AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Eye, EyeOff, KeyRound, Trash2 } from 'lucide-react';
+import { Eye, EyeOff, KeyRound, Pencil, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
-  ehAdminAgroinblue, lerRespostaDaFuncao, pendenciasDoNovoAcesso,
-  FRASE_CRIADO, FRASE_LOGIN_EXISTENTE, FRASE_SEM_CLIENTE, FRASE_SO_ADMIN_NA_TELA, MOTIVO_LINHA_ADMIN, MOTIVO_LINHA_PROPRIA,
-  PERFIL_INICIAL, PERFIS_DA_TELA, ROTULO_PERFIL, SENHA_MINIMA,
+  ehAdminAgroinblue, fraseDoLoginNovo, lerRespostaDaFuncao, pendenciasDoEditarAcesso, pendenciasDoNovoAcesso,
+  FRASE_CRIADO, FRASE_EDITADO, FRASE_EDITADO_COM_LOGIN, FRASE_LOGIN_EXISTENTE, FRASE_SEM_CLIENTE, FRASE_SO_ADMIN_NA_TELA,
+  MOTIVO_LINHA_ADMIN, MOTIVO_LINHA_PROPRIA, PERFIL_INICIAL, PERFIS_DA_TELA, ROTULO_PERFIL, SENHA_MINIMA,
 } from '@/lib/acessos/acessosDaTela';
+import { buscarNomesDosAutores } from '@/hooks/useNomesDosAutores';
 
 interface Membro {
   id: string;
@@ -39,14 +44,19 @@ interface Membro {
   nome: string | null;
   email: string | null;
   fazendas: string[];
+  fazendaIds: string[];
+  /** Sem login (usuário removido do Auth): não se edita nem se troca a senha — só se remove o acesso. */
+  semLogin: boolean;
 }
 
-const TH = 'sticky top-0 z-10 h-[18px] whitespace-nowrap bg-primary px-1.5 py-0 text-center text-[9.5px] font-semibold leading-[18px] text-primary-foreground';
-const TD = 'h-[18px] overflow-hidden text-ellipsis whitespace-nowrap px-1.5 py-0 text-[10px] leading-[18px]';
+const TH = 'sticky top-0 z-10 h-[20px] whitespace-nowrap bg-primary px-1.5 py-0 text-center text-[10px] font-semibold leading-[20px] text-primary-foreground';
+/* 11px; texto que nao cabe QUEBRA a linha (nunca "…" nem corte calado). */
+const TD = 'min-h-[20px] break-words px-1.5 py-[3px] align-top text-[11px] leading-[14px]';
 const ROTULO = 'block text-[10px] font-medium text-foreground';
+const MOTIVO_SEM_LOGIN = 'sem login (usuário removido): só se remove o acesso';
 const CAMPO = 'h-[24px] px-2 text-[11px]';
 /* O slot da mensagem do campo: existe sempre, com ou sem mensagem. */
-const SLOT = 'block h-[12px] overflow-hidden text-ellipsis whitespace-nowrap text-[9.5px] leading-[12px] text-destructive';
+const SLOT = 'block min-h-[12px] text-[9.5px] leading-[12px] text-destructive';
 
 /** Campo de senha: `type="password"`, com "mostrar". Nunca nasce visivel. */
 function CampoSenha({ valor, onMudar, invalido, testid, autoFocus, desabilitado }: {
@@ -84,7 +94,10 @@ export function AcessosTab() {
   const [fazendasMarcadas, setFazendasMarcadas] = useState<string[]>([]);
   const [tentou, setTentou] = useState(false);
   const [criando, setCriando] = useState(false);
-  const [recado, setRecado] = useState<{ tom: 'ok' | 'erro'; texto: string } | null>(null);
+  const [recado, setRecado] = useState<{ tom: 'ok' | 'erro' | 'aviso'; texto: string } | null>(null);
+  /* EDITAR ACESSO: o membro aberto no painel (nulo = "Novo acesso") e a confirmacao armada da troca de login. */
+  const [editando, setEditando] = useState<Membro | null>(null);
+  const [confirmarLogin, setConfirmarLogin] = useState(false);
 
   const [alvoSenha, setAlvoSenha] = useState<Membro | null>(null);
   const [novaSenha, setNovaSenha] = useState('');
@@ -107,24 +120,27 @@ export function AcessosTab() {
       if (error) throw error;
       const ids = (linhas ?? []).map(m => m.user_id);
       if (ids.length === 0) { setMembros([]); return; }
-      const { data: perfis, error: erroPerfis } = await supabase.from('profiles').select('user_id, nome, email').in('user_id', ids);
-      if (erroPerfis) throw erroPerfis;
-      const dePerfil = new Map((perfis ?? []).map(p => [p.user_id, p]));
+      /* O nome e o e-mail tem UMA fonte, a do banco (perfil -> login -> "usuário removido"): nunca o "—" de perfil vazio. */
+      const nomes = await buscarNomesDosAutores(clienteId, null);
+      const dePerfil = new Map(nomes.map(n => [n.userId, n]));
       const idsDeFazenda = fazendaIds ? fazendaIds.split(',') : [];
       const nomeDaFazenda = new Map(fazendas.map(f => [f.id, f.nome]));
       const porUsuario = new Map<string, string[]>();
+      const idsPorUsuario = new Map<string, string[]>();
       if (idsDeFazenda.length > 0) {
         const { data: fm, error: erroFm } = await supabase.from('fazenda_membros')
           .select('user_id, fazenda_id').in('user_id', ids).in('fazenda_id', idsDeFazenda);
         if (erroFm) throw erroFm;
         for (const x of fm ?? []) {
           porUsuario.set(x.user_id, [...(porUsuario.get(x.user_id) ?? []), nomeDaFazenda.get(x.fazenda_id) ?? x.fazenda_id]);
+          idsPorUsuario.set(x.user_id, [...(idsPorUsuario.get(x.user_id) ?? []), x.fazenda_id]);
         }
       }
       const lista = (linhas ?? []).map((m): Membro => ({
         id: m.id, user_id: m.user_id, perfil: m.perfil,
         nome: dePerfil.get(m.user_id)?.nome ?? null, email: dePerfil.get(m.user_id)?.email ?? null,
-        fazendas: porUsuario.get(m.user_id) ?? [],
+        fazendas: porUsuario.get(m.user_id) ?? [], fazendaIds: idsPorUsuario.get(m.user_id) ?? [],
+        semLogin: dePerfil.get(m.user_id)?.situacao === 'removido',
       }));
       lista.sort((a, b) => (a.nome ?? a.email ?? '').localeCompare(b.nome ?? b.email ?? '', 'pt-BR'));
       setMembros(lista);
@@ -140,10 +156,47 @@ export function AcessosTab() {
   /* Trocar de cliente limpa o formulario e os recados: nada digitado para um cliente vaza para o outro. */
   useEffect(() => {
     setNome(''); setEmail(''); setSenha(''); setPerfil(PERFIL_INICIAL); setFazendasMarcadas([]);
-    setTentou(false); setRecado(null); setRecadoDaLista(null);
+    setTentou(false); setRecado(null); setRecadoDaLista(null); setEditando(null); setConfirmarLogin(false);
   }, [clienteId]);
 
-  const pendencias = pendenciasDoNovoAcesso({ nome, email, senha, perfil, fazendas: fazendasMarcadas });
+  const pendencias: Partial<Record<'nome' | 'email' | 'senha' | 'perfil' | 'fazendas', string>> = editando
+    ? pendenciasDoEditarAcesso({ nome, email, perfil, perfilAtual: editando.perfil, fazendas: fazendasMarcadas })
+    : pendenciasDoNovoAcesso({ nome, email, senha, perfil, fazendas: fazendasMarcadas });
+  const loginMuda = editando != null && email.trim().toLowerCase() !== (editando.email ?? '').trim().toLowerCase();
+
+  const abrirEditar = (m: Membro) => {
+    setEditando(m); setNome(m.nome ?? ''); setEmail(m.email ?? ''); setSenha(''); setPerfil(m.perfil);
+    setFazendasMarcadas(m.fazendaIds.filter(id => fazendas.some(f => f.id === id)));
+    setTentou(false); setRecado(null); setConfirmarLogin(false);
+  };
+  const voltarAoNovo = () => {
+    setEditando(null); setNome(''); setEmail(''); setSenha(''); setPerfil(PERFIL_INICIAL); setFazendasMarcadas([]);
+    setTentou(false); setRecado(null); setConfirmarLogin(false);
+  };
+
+  const salvarEdicao = async () => {
+    setTentou(true);
+    if (!editando || !clienteAtual || !isAdmin || Object.keys(pendencias).length > 0) { setRecado(null); return; }
+    /* O e-mail e' o login: trocar pede a confirmacao, escrita ao lado do botao, e so' o segundo clique grava. */
+    if (loginMuda && !confirmarLogin) { setConfirmarLogin(true); setRecado({ tom: 'aviso', texto: fraseDoLoginNovo(email) }); return; }
+    setRecado(null);
+    setCriando(true);
+    try {
+      const res = await supabase.functions.invoke('editar-membro', {
+        body: { membro_id: editando.id, nome: nome.trim(), email: email.trim(), perfil, fazenda_ids: fazendasMarcadas },
+      });
+      const r = await lerRespostaDaFuncao(res, 'Não foi possível salvar o acesso.');
+      if (r.ok === false) { setRecado({ tom: 'erro', texto: r.frase }); setConfirmarLogin(false); return; }
+      const frase = loginMuda ? FRASE_EDITADO_COM_LOGIN(email) : FRASE_EDITADO;
+      voltarAoNovo();
+      setRecado({ tom: 'ok', texto: frase });
+      await carregar();
+    } catch {
+      setRecado({ tom: 'erro', texto: 'Não foi possível salvar o acesso.' });
+    } finally {
+      setCriando(false);
+    }
+  };
   const motivoDoFormulario = !clienteAtual ? FRASE_SEM_CLIENTE : !isAdmin ? FRASE_SO_ADMIN_NA_TELA : null;
   const formularioParado = motivoDoFormulario != null || criando;
 
@@ -212,11 +265,10 @@ export function AcessosTab() {
   return (
     <div className="mx-auto flex h-full min-h-0 w-full min-w-0 max-w-5xl flex-col bg-background" data-testid="tela-acessos">
       <div className="shrink-0 px-4 pb-1.5 pt-2">
-        <h1 className="truncate text-[20px] font-bold leading-none tracking-tight text-foreground" data-testid="acessos-titulo"
-          title={clienteAtual ? `Acessos de ${clienteAtual.nome}` : 'Acessos'}>
+        <h1 className="break-words text-[20px] font-bold leading-tight tracking-tight text-foreground" data-testid="acessos-titulo">
           {clienteAtual ? `Acessos de ${clienteAtual.nome}` : 'Acessos'}
         </h1>
-        <p className="mt-1 truncate text-[10px] text-muted-foreground">
+        <p className="mt-1 break-words text-[10px] text-muted-foreground">
           {clienteAtual ? 'quem entra neste cliente e com qual perfil · o cliente é o do seletor do topo' : FRASE_SEM_CLIENTE}
         </p>
       </div>
@@ -224,10 +276,11 @@ export function AcessosTab() {
       <div className="flex min-h-0 flex-1 gap-3 px-4 pb-3">
         {/* A LISTA — cabecalho preso; so' o corpo rola. */}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden rounded-md border" data-testid="acessos-rolagem">
-            <table className="w-full table-fixed border-collapse">
+          {/* Janela estreita: a tabela tem largura minima e ROLA DENTRO do cartao (nunca espreme o e-mail nem corta colunas). */}
+          <div className="min-h-0 flex-1 overflow-auto rounded-md border" data-testid="acessos-rolagem">
+            <table className="w-full min-w-[540px] table-fixed border-collapse">
               <colgroup>
-                <col /><col style={{ width: 150 }} /><col style={{ width: 104 }} /><col style={{ width: 52 }} /><col style={{ width: 60 }} />
+                <col /><col style={{ width: 150 }} /><col style={{ width: 112 }} /><col style={{ width: 52 }} /><col style={{ width: 66 }} />
               </colgroup>
               <thead><tr>
                 <th className={cn(TH, 'text-left')}>E-mail</th><th className={cn(TH, 'text-left')}>Nome</th>
@@ -245,9 +298,10 @@ export function AcessosTab() {
                   const motivo = admin ? MOTIVO_LINHA_ADMIN : proprio ? MOTIVO_LINHA_PROPRIA : !isAdmin ? FRASE_SO_ADMIN_NA_TELA : null;
                   return (
                     <tr key={m.id} data-testid="linha-membro" data-user={m.user_id}
-                      className={cn('border-t border-slate-100', i % 2 === 1 && 'bg-muted/30')}>
-                      <td className={TD} title={m.email ?? 'sem e-mail no perfil'}>{m.email ?? '—'}</td>
-                      <td className={TD} title={`${m.nome ?? 'sem nome'}${m.fazendas.length > 0 ? ` · fazendas: ${m.fazendas.join(', ')}` : ' · sem fazenda liberada'}`}>
+                      className={cn('border-t border-slate-100', i % 2 === 1 && 'bg-muted/30', editando?.id === m.id && 'bg-primary/10')}>
+                      <td className={TD} data-testid="membro-email">{m.email ?? 'sem login'}</td>
+                      <td className={TD} data-testid="membro-nome"
+                        title={m.fazendas.length > 0 ? `fazendas: ${m.fazendas.join(', ')}` : 'sem fazenda liberada'}>
                         {m.nome ?? '—'}
                       </td>
                       {/* A linha do admin do AGROinBLUE nao tem perfil de cliente nem acoes: as tres ultimas colunas viram a frase
@@ -262,9 +316,12 @@ export function AcessosTab() {
                       {!admin && <td className={cn(TD, 'text-center')} data-testid="acoes-membro" title={motivo ?? undefined}>
                         {motivo == null && (
                           <span className="inline-flex items-center gap-1.5 align-middle">
-                            <button type="button" title={`redefinir a senha de ${quem(m)}`} aria-label={`redefinir a senha de ${quem(m)}`}
-                              onClick={() => { setAlvoSenha(m); setNovaSenha(''); setErroSenha(null); }}
-                              className="text-muted-foreground hover:text-foreground"><KeyRound className="h-3 w-3" /></button>
+                            <button type="button" title={m.semLogin ? MOTIVO_SEM_LOGIN : `editar o acesso de ${quem(m)}`} aria-label={`editar o acesso de ${quem(m)}`}
+                              data-testid="editar-membro" disabled={m.semLogin} onClick={() => abrirEditar(m)}
+                              className="text-muted-foreground hover:text-foreground disabled:opacity-30"><Pencil className="h-3 w-3" /></button>
+                            <button type="button" title={m.semLogin ? MOTIVO_SEM_LOGIN : `redefinir a senha de ${quem(m)}`} aria-label={`redefinir a senha de ${quem(m)}`}
+                              disabled={m.semLogin} onClick={() => { setAlvoSenha(m); setNovaSenha(''); setErroSenha(null); }}
+                              className="text-muted-foreground hover:text-foreground disabled:opacity-30"><KeyRound className="h-3 w-3" /></button>
                             <button type="button" title={`remover o acesso de ${quem(m)}`} aria-label={`remover o acesso de ${quem(m)}`}
                               onClick={() => { setAlvoRemover(m); setErroRemover(null); }}
                               className="text-destructive/80 hover:text-destructive"><Trash2 className="h-3 w-3" /></button>
@@ -278,41 +335,60 @@ export function AcessosTab() {
             </table>
           </div>
           {/* Slot fixo do recado da lista (senha redefinida, acesso removido, erro de leitura). */}
-          <div className={cn('h-[16px] shrink-0 overflow-hidden text-ellipsis whitespace-nowrap text-[10px] leading-[16px]',
-            erroDaLista ? 'text-destructive' : 'text-[#15803d]')} data-testid="acessos-recado-lista"
-            title={erroDaLista ?? recadoDaLista ?? undefined}>
+          <div className={cn('min-h-[16px] shrink-0 text-[10px] leading-[16px]',
+            erroDaLista ? 'text-destructive' : 'text-[#15803d]')} data-testid="acessos-recado-lista">
             {membros.length > 0 ? erroDaLista ?? recadoDaLista ?? '' : ''}
           </div>
         </div>
 
         {/* O FORMULARIO — largura fixa; cada campo tem o seu slot de mensagem. */}
-        <form className="flex w-[292px] shrink-0 flex-col rounded-md border bg-card px-3 py-2" noValidate data-testid="acessos-form"
-          onSubmit={e => { e.preventDefault(); void criar(); }}>
-          <div className="mb-1 text-[12px] font-semibold text-foreground">Novo acesso</div>
+        {/* Janela baixa (abaixo de ~650px): o painel rola por dentro; a lista ao lado nao se move. */}
+        <form className="flex min-h-0 w-[292px] shrink-0 flex-col overflow-y-auto rounded-md border bg-card px-3 py-2" noValidate data-testid="acessos-form"
+          onSubmit={e => { e.preventDefault(); void (editando ? salvarEdicao() : criar()); }}>
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <span className="text-[12px] font-semibold text-foreground" data-testid="acessos-form-titulo">{editando ? 'Editar acesso' : 'Novo acesso'}</span>
+            {editando && (
+              <button type="button" onClick={voltarAoNovo} disabled={criando} data-testid="editar-cancelar"
+                className="text-[9.5px] text-primary underline disabled:opacity-40">cancelar edição</button>
+            )}
+          </div>
           <label className={ROTULO}>Nome *
             <Input value={nome} onChange={e => setNome(e.target.value)} disabled={formularioParado} data-testid="acesso-nome"
               className={cn(CAMPO, erroDe('nome') && 'border-destructive')} />
           </label>
           <span className={SLOT} data-testid="erro-nome">{erroDe('nome')}</span>
           <label className={ROTULO}>E-mail (login) *
-            <Input type="email" value={email} onChange={e => setEmail(e.target.value)} disabled={formularioParado} autoComplete="off"
+            <Input type="email" value={email} onChange={e => { setEmail(e.target.value); setConfirmarLogin(false); }} disabled={formularioParado} autoComplete="off"
               data-testid="acesso-email" className={cn(CAMPO, erroDe('email') && 'border-destructive')} />
           </label>
           <span className={SLOT} data-testid="erro-email">{erroDe('email')}</span>
-          <label className={ROTULO}>Senha provisória *
-            <CampoSenha valor={senha} onMudar={setSenha} invalido={!!erroDe('senha')} testid="acesso-senha" desabilitado={formularioParado} />
-          </label>
+          {/* No EDITAR a senha nao se edita aqui (e' a chave da linha): o lugar fica, com a frase, na mesma altura. */}
+          {editando ? (
+            <div className={ROTULO}>Senha
+              <div className="flex h-[24px] items-center text-[10px] font-normal text-muted-foreground" data-testid="acesso-senha-na-chave">
+                muda pela chave da linha
+              </div>
+            </div>
+          ) : (
+            <label className={ROTULO}>Senha provisória *
+              <CampoSenha valor={senha} onMudar={setSenha} invalido={!!erroDe('senha')} testid="acesso-senha" desabilitado={formularioParado} />
+            </label>
+          )}
           <span className={SLOT} data-testid="erro-senha">{erroDe('senha')}</span>
           <div className={ROTULO}>Perfil *
             <Select value={perfil} onValueChange={setPerfil} disabled={formularioParado}>
               <SelectTrigger className={cn(CAMPO, 'w-full')} data-testid="acesso-perfil"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {PERFIS_DA_TELA.map(p => (
-                  <SelectItem key={p.valor} value={p.valor} disabled={p.motivo != null} title={p.motivo ?? undefined}
-                    data-testid={`perfil-${p.valor}`}>
-                    {p.motivo ? `${p.rotulo} · ${p.motivo}` : p.rotulo}
-                  </SelectItem>
-                ))}
+                {PERFIS_DA_TELA.map(p => {
+                  /* Na edicao o perfil que o membro ja' tem continua escolhivel, mesmo que a tela ainda nao o crie. */
+                  const apagado = p.motivo != null && p.valor !== editando?.perfil;
+                  return (
+                    <SelectItem key={p.valor} value={p.valor} disabled={apagado} title={apagado ? p.motivo ?? undefined : undefined}
+                      data-testid={`perfil-${p.valor}`}>
+                      {apagado ? `${p.rotulo} · ${p.motivo}` : p.rotulo}
+                    </SelectItem>
+                  );
+                })}
               </SelectContent>
             </Select>
           </div>
@@ -331,23 +407,26 @@ export function AcessosTab() {
             {fazendas.length === 0
               ? <span className="text-[10px] text-muted-foreground">Nenhuma fazenda neste cliente.</span>
               : fazendas.map(f => (
-                <label key={f.id} className="flex h-[16px] cursor-pointer items-center gap-1.5 text-[10px]">
-                  <Checkbox className="h-3 w-3" checked={fazendasMarcadas.includes(f.id)} disabled={formularioParado}
+                <label key={f.id} className="flex min-h-[16px] cursor-pointer items-center gap-1.5 text-[10px]">
+                  <Checkbox className="h-3 w-3 shrink-0" checked={fazendasMarcadas.includes(f.id)} disabled={formularioParado}
                     onCheckedChange={() => alternarFazenda(f.id)} />
-                  <span className="truncate" title={f.nome}>{f.nome}</span>
+                  <span className="min-w-0 break-words">{f.nome}</span>
                 </label>
               ))}
           </div>
           <span className={SLOT} data-testid="erro-fazendas">{erroDe('fazendas')}</span>
           {/* O botao e, AO LADO dele, o que aconteceu — erro do banco, sucesso ou o motivo de estar parado. */}
-          <div className="mt-0.5 flex h-[50px] shrink-0 items-start gap-2">
-            <Button type="submit" size="sm" disabled={formularioParado} className="h-[24px] shrink-0 px-2.5 text-[11px]" data-testid="acesso-criar">
-              {criando ? 'Criando…' : 'Criar acesso'}
+          <div className="mt-0.5 flex min-h-[50px] shrink-0 items-start gap-2">
+            <Button type="submit" size="sm" disabled={formularioParado} className="h-[24px] shrink-0 px-2.5 text-[11px]"
+              data-testid={editando ? 'acesso-salvar' : 'acesso-criar'}>
+              {editando
+                ? (criando ? 'Salvando…' : confirmarLogin && loginMuda ? 'Confirmar e salvar' : 'Salvar alterações')
+                : (criando ? 'Criando…' : 'Criar acesso')}
             </Button>
-            <span className={cn('min-w-0 flex-1 overflow-hidden text-[9.5px] leading-[12px]',
-              motivoDoFormulario || recado?.tom === 'erro' ? 'text-destructive' : 'text-[#15803d]',
+            <span className={cn('min-w-0 flex-1 break-words text-[9.5px] leading-[12px]',
+              motivoDoFormulario || recado?.tom === 'erro' ? 'text-destructive' : recado?.tom === 'aviso' ? 'text-[#b45309]' : 'text-[#15803d]',
               motivoDoFormulario && 'text-muted-foreground')}
-              data-testid="acesso-recado" role="status" aria-live="polite" title={motivoDoFormulario ?? recado?.texto ?? undefined}>
+              data-testid="acesso-recado" role="status" aria-live="polite">
               {motivoDoFormulario ?? recado?.texto ?? ''}
             </span>
           </div>
@@ -356,11 +435,11 @@ export function AcessosTab() {
 
       {/* REDEFINIR SENHA — dialogo de tamanho fixo; o erro fica escrito ao lado do botao. */}
       <Dialog open={alvoSenha != null} onOpenChange={o => { if (!o && !ocupado) { setAlvoSenha(null); setNovaSenha(''); setErroSenha(null); } }}>
-        <DialogContent className="h-[176px] w-[380px] max-w-[380px] gap-0 p-3" data-testid="dialogo-senha">
-          <DialogTitle className="truncate text-[13px] font-semibold" title={alvoSenha ? `Redefinir a senha de ${quem(alvoSenha)}` : undefined}>
+        <DialogContent className="min-h-[176px] w-[380px] max-w-[380px] gap-0 p-3" data-testid="dialogo-senha">
+          <DialogTitle className="break-words text-[13px] font-semibold">
             Redefinir a senha de {alvoSenha ? quem(alvoSenha) : ''}
           </DialogTitle>
-          <p className="mt-1 truncate text-[10px] text-muted-foreground" title={alvoSenha?.email ?? undefined}>
+          <p className="mt-1 break-words text-[10px] text-muted-foreground">
             {alvoSenha?.email ?? 'sem e-mail no perfil'}{clienteAtual ? ` · ${clienteAtual.nome}` : ''}
           </p>
           <label className={cn(ROTULO, 'mt-2')}>Senha nova *
@@ -373,8 +452,7 @@ export function AcessosTab() {
             </Button>
             <Button size="sm" variant="outline" className="h-[24px] shrink-0 px-2.5 text-[11px]" disabled={ocupado}
               onClick={() => { setAlvoSenha(null); setNovaSenha(''); setErroSenha(null); }}>Cancelar</Button>
-            <span className="min-w-0 flex-1 overflow-hidden text-[9.5px] leading-[12px] text-destructive" data-testid="senha-erro" role="alert"
-              title={erroSenha ?? undefined}>{erroSenha ?? ''}</span>
+            <span className="min-w-0 flex-1 break-words text-[9.5px] leading-[12px] text-destructive" data-testid="senha-erro" role="alert">{erroSenha ?? ''}</span>
           </div>
         </DialogContent>
       </Dialog>
@@ -389,7 +467,7 @@ export function AcessosTab() {
               <b>{clienteAtual?.nome ?? 'este cliente'}</b>. O login continua existindo; só o acesso a este cliente é removido.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="h-[24px] overflow-hidden text-[10px] leading-[12px] text-destructive" data-testid="remover-erro" role="alert">{erroRemover ?? ''}</div>
+          <div className="min-h-[24px] break-words text-[10px] leading-[12px] text-destructive" data-testid="remover-erro" role="alert">{erroRemover ?? ''}</div>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={ocupado} className="h-[26px] text-[11px]">Cancelar</AlertDialogCancel>
             <Button variant="destructive" size="sm" className="h-[26px] text-[11px]" disabled={ocupado} onClick={() => { void remover(); }} data-testid="remover-confirmar">

@@ -49,9 +49,27 @@ export function pendenciasDoNovoAcesso(f: { nome: string; email: string; senha: 
   return p;
 }
 
+/**
+ * EDITAR ACESSO (ACESSOS-PERFIL-01): os campos que faltam. O perfil vale se a tela o cria OU se e' o que o membro ja' tem
+ * (editar o nome de um "Campo" nao obriga a trocar o perfil dele). A senha nao se edita aqui: e' a chave da linha.
+ */
+export function pendenciasDoEditarAcesso(f: { nome: string; email: string; perfil: string; perfilAtual: string; fazendas: readonly string[] }) {
+  const p: Partial<Record<'nome' | 'email' | 'perfil' | 'fazendas', string>> = {};
+  if (!f.nome.trim()) p.nome = 'Informe o nome.';
+  if (!/^\S+@\S+\.\S+$/.test(f.email.trim())) p.email = 'Informe um e-mail válido.';
+  if (f.perfil !== f.perfilAtual && !PERFIS_DA_TELA.some(x => x.valor === f.perfil && x.motivo == null)) p.perfil = 'Escolha um perfil.';
+  if (f.fazendas.length === 0) p.fazendas = 'Marque ao menos uma fazenda.';
+  return p;
+}
+
+/** O e-mail e' o login: trocar pede a confirmacao com esta frase, ao lado do botao. */
+export const fraseDoLoginNovo = (email: string) => `O login passa a ser ${email.trim().toLowerCase()}. Confirme para salvar.`;
+export const FRASE_EDITADO = 'Acesso atualizado.';
+export const FRASE_EDITADO_COM_LOGIN = (email: string) => `Acesso atualizado. O login agora é ${email.trim().toLowerCase()}.`;
+
 const ROTULO_ETAPA: Record<string, string> = {
-  validacao: 'validação', permissao: 'permissão', alvo: 'permissão', login: 'criação do login',
-  vinculo_cliente: 'vínculo com o cliente', inesperado: 'erro inesperado',
+  validacao: 'validação', permissao: 'permissão', alvo: 'permissão', login: 'login',
+  vinculo_cliente: 'vínculo com o cliente', perfil: 'perfil (nome e e-mail)', inesperado: 'erro inesperado',
 };
 
 function campoDeTexto(v: unknown, chave: string): string | null {

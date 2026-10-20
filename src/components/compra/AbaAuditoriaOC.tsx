@@ -1,7 +1,9 @@
 import { useMemo } from 'react';
 import { Button } from '@/components/ui/button';
-import { useAuth } from '@/contexts/AuthContext';
-import { TrilhaAuditoria, primeiroNome, type EventoTrilha } from '@/components/ui/trilha-auditoria';
+import { useCliente } from '@/contexts/ClienteContext';
+import { TrilhaAuditoria, type EventoTrilha } from '@/components/ui/trilha-auditoria';
+import { useNomesDosAutores } from '@/hooks/useNomesDosAutores';
+import { autorNaTrilha } from '@/lib/acessos/nomesDosAutores';
 import type { EventosApi, EventoOC } from '@/hooks/useOperacaoEventos';
 import { frasearEvento, type Resolvedores } from '@/lib/oc/frasearEvento';
 import { ESPECIE_LABEL } from './DocumentoFormOC';
@@ -22,7 +24,18 @@ interface Props {
 }
 
 export function AbaAuditoriaOC({ api, operacaoPronta, fornecedores, lotes }: Props) {
-  const { user } = useAuth();
+  const { clienteAtual } = useCliente();
+  /* O NOME DE QUEM FEZ tem UMA fonte (ACESSOS-PERFIL-01): `fn_nomes_dos_autores`, com a guarda do cliente. O "nome da
+     sessão" (o `user_metadata` de quem está logado) saiu. Os hooks vêm ANTES do `return` (regra dos hooks). */
+  const { nomes } = useNomesDosAutores(clienteAtual?.id ?? null, api.eventos.map(e => e.usuarioId));
+  const resolvedores: Resolvedores = useMemo(() => ({
+    fornecedor: (id: string) => (fornecedores ?? []).find(f => f.id === id)?.nome ?? null,
+    lote: (id: string) => {
+      const l = (lotes ?? []).find(x => x.loteId === id);
+      return l ? `Lote ${l.ordem}${l.categoria ? ` · ${l.categoria}` : ''}` : null;
+    },
+    especie: (e: string) => ESPECIE_LABEL[e as EspecieDoc] ?? 'um documento',
+  }), [fornecedores, lotes]);
 
   if (!operacaoPronta) {
     return (
@@ -32,31 +45,7 @@ export function AbaAuditoriaOC({ api, operacaoPronta, fornecedores, lotes }: Pro
     );
   }
 
-  /* ⚠ NAO HA FONTE DE NOME PARA OUTRO USUARIO NO NAVEGADOR — medido, nao suposto:
-     `profiles` esta VAZIA (0 linhas) e o nome so existe em `auth.users.raw_user_meta_data`,
-     que o cliente le apenas para a PROPRIA sessao. Entao resolve-se quem esta logado e o
-     resto fica "—", a sentinela de dado ausente. Hoje isso cobre 100% dos 357 eventos do
-     proto, porque ha um unico autor; no dia em que houver o segundo, o nome dele depende
-     de `profiles` passar a ser preenchida. Registrado no relatorio, nao escondido. */
-  const meuNome = useMemo(() => {
-    const meta = user?.user_metadata as { nome?: unknown; full_name?: unknown } | undefined;
-    const bruto = typeof meta?.nome === 'string' ? meta.nome
-      : typeof meta?.full_name === 'string' ? meta.full_name
-      : user?.email ? user.email.split('@')[0] : null;
-    return bruto ? primeiroNome(bruto) : null;
-  }, [user]);
-
-  const nomeDe = (usuarioId: string | null) =>
-    (usuarioId && user?.id === usuarioId ? meuNome : null);
-
-  const resolvedores: Resolvedores = useMemo(() => ({
-    fornecedor: (id: string) => (fornecedores ?? []).find(f => f.id === id)?.nome ?? null,
-    lote: (id: string) => {
-      const l = (lotes ?? []).find(x => x.loteId === id);
-      return l ? `Lote ${l.ordem}${l.categoria ? ` · ${l.categoria}` : ''}` : null;
-    },
-    especie: (e: string) => ESPECIE_LABEL[e as EspecieDoc] ?? 'um documento',
-  }), [fornecedores, lotes]);
+  const nomeDe = (usuarioId: string | null) => autorNaTrilha(usuarioId, nomes);
 
   /* "46 registros · Gabriel" com um autor so; "· 3 pessoas" com mais de um. Dizer
      "1 pessoa" nao informa nada quando se pode dizer QUEM. */

@@ -114,7 +114,9 @@ export function TrilhaAuditoria({ eventos, vazio, escala = 'tela' }: Props) {
   /* ⚠ COLUNA DO AUTOR SÓ EXISTE QUANDO DISTINGUE. Com um autor só, ela repetiria o mesmo
      nome em todas as linhas. O cabeçalho da tela já diz quem é, uma vez. Dois ou mais
      autores e a coluna volta, porque aí ela separa uma linha da outra. */
-  const mostrarAutor = new Set(eventos.map((e) => e.autorId).filter(Boolean)).size > 1;
+  /* ACESSOS-PERFIL-01: o evento sem autor ("sem autor registrado", "sistema · …") conta como um autor proprio — sem isso a
+     coluna sumia com um membro + eventos sem autor, e a frase nunca aparecia. */
+  const mostrarAutor = new Set(eventos.map((e) => e.autorId ?? `sem:${e.autor ?? ''}`)).size > 1;
 
   return (
     <div className="rounded-md border overflow-hidden">
@@ -141,10 +143,10 @@ export function TrilhaAuditoria({ eventos, vazio, escala = 'tela' }: Props) {
                   className={`flex w-full items-baseline gap-2 text-left hover:bg-muted/30 ${cxLinha} ${aberto ? 'bg-muted/30' : ''}`}>
                   <span className={`${cxHora} shrink-0 text-[10px] tabular-nums text-muted-foreground`}>{hora(e.quando)}</span>
                   {mostrarAutor && (
-                    <span className="w-[62px] shrink-0 truncate text-[10px] text-muted-foreground"
-                      title={e.autor ?? 'Autor não identificado nesta sessão'}>{e.autor ?? '—'}</span>
+                    /* UI-SEM-CORTE-01: o autor quebra a linha, nunca corta. */
+                    <span className="w-[88px] shrink-0 break-words text-[10px] text-muted-foreground" data-testid="trilha-autor">{e.autor ?? '—'}</span>
                   )}
-                  <span className={`min-w-0 flex-1 truncate ${cxFrase} text-foreground`}>
+                  <span className={`min-w-0 flex-1 break-words ${cxFrase} text-foreground`}>
                     {e.frase}
                     {e.detalhe && <span className="ml-1.5 text-muted-foreground">{e.detalhe}</span>}
                   </span>
