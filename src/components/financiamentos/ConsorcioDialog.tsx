@@ -163,7 +163,7 @@ export function ConsorcioDialog({ aberto, aoFechar, financiamentoId, onSalvo, on
                 </Campo>
               </Bloco>
               <Bloco nome="Carta e reajuste" testId="bloco-carta" grade="grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,0.8fr)]">
-                <Campo rotulo="Carta de crédito" obrig campo="carta"><CampoMoeda className={CAMPO} valor={form.carta} onChange={(v) => set('carta', v)} /></Campo>
+                <Campo rotulo="Valor da carta de crédito" obrig campo="carta"><CampoMoeda className={CAMPO} valor={form.carta} onChange={(v) => set('carta', v)} /></Campo>
                 <Campo rotulo="1ª parcela" obrig campo="primeiraParcela"><DatePicker size="compact" className={CAMPO} value={form.primeiraParcela ?? ''} onChange={(v) => set('primeiraParcela', v || null)} /></Campo>
                 <Campo rotulo="Adesão"><DatePicker size="compact" className={CAMPO} value={form.dataAdesao ?? ''} onChange={(v) => set('dataAdesao', v || null)} /></Campo>
                 <Campo rotulo="Índice de reajuste">
@@ -216,7 +216,7 @@ export function ConsorcioDialog({ aberto, aoFechar, financiamentoId, onSalvo, on
                 {form.fundoComum.modo === 'auto'
                   ? <Campo rotulo="Fundo comum"><span className={LEITURA} data-testid="fundo-comum-auto">{brl(previa?.faixas.find((x) => !x.adiada)?.fundoComum ?? null)}</span></Campo>
                   : form.fundoComum.modo === 'valor'
-                    ? <Campo rotulo="Fundo comum R$"><CampoMoeda className={CAMPO} valor={form.fundoComum.valor} onChange={(v) => set('fundoComum', { modo: 'valor', valor: v })} /></Campo>
+                    ? <Campo rotulo="Fundo comum"><CampoMoeda className={CAMPO} valor={form.fundoComum.valor} onChange={(v) => set('fundoComum', { modo: 'valor', valor: v })} /></Campo>
                     : <Campo rotulo={form.fundoComum.modo === 'pct_total' ? 'Fundo comum % total' : 'Fundo comum (%)'}>
                         <CampoPercentual className={CAMPO} valor={form.fundoComum.valor} onChange={(v) => set('fundoComum', { ...form.fundoComum, valor: v })} casas={4} />
                       </Campo>}
@@ -233,18 +233,18 @@ export function ConsorcioDialog({ aberto, aoFechar, financiamentoId, onSalvo, on
                 <Campo rotulo="Restante por parcela"><span className={LEITURA} data-testid="taxa-restante">{previa && previa.faixas.length > 1 && form.formaTaxa === 'antecipada' ? brl(previa.faixas[1].taxaAdm) : '—'}</span></Campo>
                 <Campo rotulo="Adesão (%)"><CampoPercentual className={CAMPO} valor={form.taxaAdesaoPct} onChange={(v) => set('taxaAdesaoPct', v)} casas={4} /></Campo>
               </Bloco>
-              <Bloco nome="Outros custos" testId="bloco-outros" grade="grid-cols-[minmax(0,1.25fr)_minmax(0,0.8fr)_minmax(0,0.6fr)_minmax(0,0.8fr)_minmax(0,1.45fr)_minmax(0,1fr)]">
+              <Bloco nome="Outros custos" testId="bloco-outros" grade="grid-cols-[minmax(0,1.25fr)_minmax(0,0.7fr)_minmax(0,0.55fr)_minmax(0,1.2fr)_minmax(0,1.3fr)_minmax(0,0.9fr)]">
                 <Campo rotulo="Fundo de reserva">
                   <Segmentado altura={28} valor={form.reserva.modo === 'auto' ? 'pct_total' : form.reserva.modo} onEscolher={(v) => set('reserva', { ...form.reserva, modo: v })}
                     opcoes={[{ valor: 'pct_parcela', rotulo: '% parc.' }, { valor: 'pct_total', rotulo: '% total' }, { valor: 'valor', rotulo: 'R$' }]} />
                 </Campo>
                 {form.reserva.modo === 'valor'
-                  ? <Campo rotulo="Reserva R$"><CampoMoeda className={CAMPO} valor={form.reserva.valor} onChange={(v) => set('reserva', { ...form.reserva, valor: v })} /></Campo>
+                  ? <Campo rotulo="Reserva"><CampoMoeda className={CAMPO} valor={form.reserva.valor} onChange={(v) => set('reserva', { ...form.reserva, valor: v })} /></Campo>
                   : <Campo rotulo="Reserva (%)"><CampoPercentual className={CAMPO} valor={form.reserva.valor} onChange={(v) => set('reserva', { ...form.reserva, valor: v })} casas={4} /></Campo>}
                 <Campo rotulo="% total"><CampoPercentual className={CAMPO} valor={form.reserva.totalPct ?? null} onChange={(v) => set('reserva', { ...form.reserva, totalPct: v })} casas={4}
                   disabled={form.reserva.modo === 'pct_total'} /></Campo>
                 {form.seguroModo === 'valor'
-                  ? <Campo rotulo="Seguro R$"><CampoMoeda className={CAMPO} valor={form.seguroValor} onChange={(v) => set('seguroValor', v)} /></Campo>
+                  ? <Campo rotulo="Seguro"><CampoMoeda className={CAMPO} valor={form.seguroValor} onChange={(v) => set('seguroValor', v)} /></Campo>
                   : <Campo rotulo="Seguro %/mês"><CampoPercentual className={CAMPO} valor={form.seguroValor} onChange={(v) => set('seguroValor', v)} casas={4} /></Campo>}
                 <Campo rotulo="Seguro é">
                   <Select value={form.seguroModo === 'valor' ? 'valor' : form.seguroBase}

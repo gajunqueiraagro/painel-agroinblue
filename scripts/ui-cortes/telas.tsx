@@ -21,6 +21,8 @@ import { montarNFe, utf8 } from '@/lib/financeiro/nfe/__fixtures__/notas';
 import { TRAVAS_DO_MODO_OC } from '@/lib/oc/lancarPeloModal';
 import contrato from './dados/contrato.json';
 import consorcio from './dados/consorcio.json';
+import { CampoMoeda } from '@/components/ui/campo-moeda';
+import { REGUA_CAMPO } from '@/components/ui/bloco-formulario';
 import contratoCadastro from './dados/contrato-cadastro.json';
 import { CadastroDeContratoDialog } from '@/components/financiamentos/CadastroDeContratoDialog';
 import { ConsorcioDialog } from '@/components/financiamentos/ConsorcioDialog';
@@ -119,6 +121,21 @@ if (tela === 'mesclar') {
       : fn === 'fn_consorcio_tela' ? c.tela : fn === 'fn_consorcio_cronograma' ? c.cronograma : null,
   };
   montar(<FinanciamentoDetalhe id={d.fin.id} />);
+} else if (tela === 'campos-moeda') {
+  /* UI-CAMPO-MOEDA-01 — os campos de valor de LARGURA FIXA dos modais que a bancada não monta, com as MESMAS classes e o MESMO
+     invólucro de cada um (a regra `valor` do gate põe 999.999.999,99 em cada um e mede) */
+  const nada = () => undefined;
+  montar(
+    <div className="space-y-3 p-4 text-[11px]">
+      <div data-campo="boitel">Boitel (BoitelBlocosModais)<div className="mt-1 flex items-center gap-1">
+        <CampoMoeda valor={null} onChange={nada} className="h-8 w-[130px] px-2 text-[12px] tabular-nums text-right bg-card" /></div></div>
+      <div data-campo="lance">Lance (CadastroDeContratoDialog)<div className="w-[124px]"><CampoMoeda className={REGUA_CAMPO} valor={null} onChange={nada} /></div></div>
+      <div data-campo="livre">Parcelas livres (CadastroDeContratoDialog)<div className="grid grid-cols-[30px_130px_140px_140px_20px] items-center gap-2 text-[10px]">
+        <span>1</span><span>—</span><CampoMoeda className={REGUA_CAMPO} valor={null} onChange={nada} /><CampoMoeda className={REGUA_CAMPO} valor={null} onChange={nada} /><span /></div></div>
+      <div data-campo="edicao">Editar parcelas (EdicaoDoContrato)<table className="table-fixed border-collapse"><colgroup><col style={{ width: 70 }} /><col style={{ width: 130 }} /><col style={{ width: 140 }} /><col style={{ width: 140 }} /></colgroup>
+        <tbody><tr><td>1</td><td>—</td><td className="px-1"><CampoMoeda className={REGUA_CAMPO} valor={null} onChange={nada} /></td><td className="px-1"><CampoMoeda className={REGUA_CAMPO} valor={null} onChange={nada} /></td></tr></tbody></table></div>
+    </div>,
+  );
 } else if (tela === 'consorcio') {
   /* FIN-CONSORCIO-02 — o cadastro do consórcio: a tela e o gerador vêm do banco simulado (dado SINTÉTICO, `dados/consorcio.json`, lido do
      banco num bloco revertido); `&novo=1` abre o cadastro novo (sem tela do banco: só o gerador) */

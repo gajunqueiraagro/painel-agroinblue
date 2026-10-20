@@ -79,7 +79,7 @@ describe('o rodapé lista só o que falta', () => {
     fireEvent.click(screen.getByTestId('salvar-consorcio'));
     expect(salvar).not.toHaveBeenCalled();
     const rodape = screen.getByTestId('recado-do-consorcio');
-    expect(rodape.textContent).toBe('Falta: carta de crédito · 1ª parcela · prazo do grupo (1 a 600 meses)');
+    expect(rodape.textContent).toBe('Falta: valor da carta de crédito · 1ª parcela · prazo do grupo (1 a 600 meses)');
     expect(rodape.className).toContain('text-destructive');
     expect(rodape.className).toContain('break-words');
     act(() => { fireEvent.click(screen.getByTestId('falta-prazoGrupo')); });

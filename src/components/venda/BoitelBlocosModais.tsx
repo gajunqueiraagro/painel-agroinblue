@@ -343,7 +343,7 @@ export function CampoNum({ label, valor, onChange, casas = 2, sufixo, obrigatori
         <div className="mt-1 flex items-center gap-1">
           {moeda ? (
             <CampoMoeda valor={valor} onChange={(n) => onChange(n ?? 0)} disabled={desabilitado}
-              className={`h-8 w-[120px] px-2 text-[12px] tabular-nums text-right bg-card${erro ? ' border-destructive' : ''}`} />
+              className={`h-8 w-[130px] px-2 text-[12px] tabular-nums text-right bg-card${erro ? ' border-destructive' : ''}`} />
           ) : (
             <Input
               value={rascunho ?? fmt(valor)} disabled={desabilitado} inputMode="decimal"
@@ -473,7 +473,7 @@ function CampoNumBase({ valor, onChange, casas, sufixo, moeda, desabilitado, inv
     <div className="flex items-center gap-1">
       {moeda && casas === 2 ? (
         <CampoMoeda valor={valor} onChange={n => onChange(n ?? 0)} disabled={desabilitado}
-          className={`h-8 w-[120px] px-2 text-[12px] tabular-nums text-right bg-card${invalido ? ' border-destructive' : ''}`} />
+          className={`h-8 w-[130px] px-2 text-[12px] tabular-nums text-right bg-card${invalido ? ' border-destructive' : ''}`} />
       ) : (
         <Input value={rascunho ?? fmt(valor)} disabled={desabilitado} inputMode="decimal"
           onChange={e => { setRascunho(e.target.value); onChange(parse(e.target.value)); }}

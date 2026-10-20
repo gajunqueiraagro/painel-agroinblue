@@ -391,7 +391,7 @@ export function MorteModalShell({
                     payload manda `undefined`, que a lista branca de
                     `adicionarLancamento` omite. */}
                 <Label className="text-[10px] text-muted-foreground">Valor</Label>
-                <CampoMoeda valor={valorDigitado} onChange={setValorDigitado} placeholder="R$ 0,00"
+                <CampoMoeda valor={valorDigitado} onChange={setValorDigitado}
                   className="mt-[3px] h-8 px-2.5 text-[12px] text-right tabular-nums" />
                 {/* Le-se de relance o que a base fez com o numero digitado. Sem conta
                     possivel, nao aparece nada — o resumo lateral ja mostra o traco. */}

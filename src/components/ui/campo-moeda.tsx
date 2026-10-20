@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
 /* ⚠ `brl`, `round2` e `parseMoeda` SAIRAM DAQUI para `lib/calculos/numeroBR` — regra pura não
    mora em componente, e `lib/agri/colheita` precisava do parser sem arrastar React junto.
    A reexportação mantém os doze consumidores intactos: quem importava daqui continua
@@ -44,10 +45,16 @@ export function CampoMoeda({ valor, onChange, placeholder, className, disabled, 
   casas?: number;
   title?: string;
 }) {
-  /* ⚠ O "R$" SÓ APARECE COM DUAS CASAS. `brl` é fixo em 2 por definição de moeda; com 4 o campo
-     mostra o número puro em pt-BR, porque "R$ 97,8532" não é uma quantia que se escreve — é um
-     preço unitário. O símbolo volta no total, que é dinheiro de verdade. */
-  const escrever = (n: number) => (casas === 2 ? brl(n) : formatCasas(n, casas));
+  /* UI-CAMPO-MOEDA-01 (Gabriel 20/10/2026) — UM TIPO SÓ DE CAMPO DE VALOR NO SISTEMA: o "R$" mora FIXO dentro do campo, à esquerda
+     (o irmão do "%" do `CampoPercentual`), o número à direita, e o vazio mostra "0,00". O texto do campo é só o número — o símbolo não é
+     digitado nem apagado. Com 4 casas (preço unitário) o "R$" fica do mesmo jeito. Negativo: "R$ −1.234,56" (o menos tipográfico).
+     Sem prop para desligar o prefixo. Quem passa `placeholder` próprio continua podendo ("o saldo devedor").
+     ⚠ As classes de LAYOUT que o chamador manda (largura, margem, flex, col-span) vão para o invólucro; as do campo (altura, texto,
+     borda) ficam no input — sem isso o `flex-1` / `mt-0.5` dos hospedeiros pararia no input e o prefixo sairia do centro. */
+  const escrever = (n: number) => {
+    const t = formatCasas(Math.abs(n), casas);
+    return n < 0 ? `\u2212${t}` : t;
+  };
   const ler = (t: string): number | null => {
     if (!aceitaNegativo) return parseMoeda(t);
     const negativo = /^[-\u2212]/.test(t.trim());
@@ -57,21 +64,33 @@ export function CampoMoeda({ valor, onChange, placeholder, className, disabled, 
   const [texto, setTexto] = useState(valor != null ? escrever(valor) : '');
   const [editando, setEditando] = useState(false);
   useEffect(() => { if (!editando) setTexto(valor != null ? escrever(valor) : ''); }, [valor, editando, casas]);
+  const { fora, dentro } = separarClasses(className);
   return (
-    <Input
-      inputMode="decimal" value={texto} placeholder={placeholder} className={className} disabled={disabled}
-      title={title} autoFocus={autoFocus}
-      onFocus={() => setEditando(true)}
-      onChange={(e) => { setTexto(e.target.value); onChange(ler(e.target.value)); }}
-      onBlur={() => {
-        setEditando(false);
-        const n = ler(texto);
-        const r = n != null ? roundCasas(n, casas) : null;
-        onChange(r);
-        setTexto(r != null ? escrever(r) : '');
-      }}
-    />
+    <div className={cn('relative', fora)} data-testid="campo-moeda">
+      <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground" data-testid="prefixo-rs">R$</span>
+      <Input
+        inputMode="decimal" value={texto} placeholder={placeholder ?? formatCasas(0, casas)} className={cn(dentro, 'pl-6 text-right tabular-nums')}
+        disabled={disabled} title={title} autoFocus={autoFocus}
+        onFocus={() => setEditando(true)}
+        onChange={(e) => { setTexto(e.target.value); onChange(ler(e.target.value)); }}
+        onBlur={() => {
+          setEditando(false);
+          const n = ler(texto);
+          const r = n != null ? roundCasas(n, casas) : null;
+          onChange(r);
+          setTexto(r != null ? escrever(r) : '');
+        }}
+      />
+    </div>
   );
+}
+
+/* UI-CAMPO-MOEDA-01 — o que é do LUGAR do campo (vai para o invólucro) e o que é do campo (fica no input) */
+const CLASSE_DE_LUGAR = /^(?:-?m[trblxy]?-\S+|flex-1|flex-none|flex-auto|grow(?:-0)?|shrink(?:-0)?|basis-\S+|(?:col|row)-span-\S+|(?:col|row)-(?:start|end)-\S+|self-\S+|justify-self-\S+|order-\S+|(?:min-|max-)?w-\S+)$/;
+export function separarClasses(c: string | undefined): { fora: string; dentro: string } {
+  const fora: string[] = []; const dentro: string[] = [];
+  for (const k of (c ?? '').split(/\s+/).filter(Boolean)) (CLASSE_DE_LUGAR.test(k) ? fora : dentro).push(k);
+  return { fora: fora.join(' '), dentro: dentro.join(' ') };
 }
 
 /**

@@ -573,7 +573,7 @@ export function DocumentoFormOC({ api, somenteLeitura, fornecedores, clienteId, 
             <div>
               <label className="text-[10px] text-muted-foreground">Valor total da nota</label>
               <CampoMoeda valor={numeroDoCampo(valorSimples)} disabled={somenteLeitura}
-                onChange={n => setValorSimples(textoDoCampo(n))} placeholder="R$ 0,00"
+                onChange={n => setValorSimples(textoDoCampo(n))}
                 className={`h-7 text-[11px] text-right tabular-nums ${marcaSugerido('valorTotal')}`} />
             </div>
             <div className="lg:col-span-3 text-[10px] leading-tight pb-1.5">
@@ -616,7 +616,7 @@ export function DocumentoFormOC({ api, somenteLeitura, fornecedores, clienteId, 
             {/* MESMO campo do total: e' o MESMO dado. Sem isto, o valor apareceria
                 formatado com a decomposicao fechada e cru com ela aberta. */}
             <CampoMoeda valor={numeroDoCampo(c.valor)} onChange={n => setComp(i, { valor: textoDoCampo(n) })}
-              placeholder="R$ 0,00" className="h-6 text-[11px] text-right tabular-nums" />
+              className="h-6 text-[11px] text-right tabular-nums" />
             <Input value={c.descricao} onChange={e => setComp(i, { descricao: e.target.value })} placeholder="opcional" className="h-6 text-[11px]" />
             <button type="button" onClick={() => rmComp(i)} className="text-muted-foreground/60 hover:text-destructive" aria-label="Remover"><Trash2 className="h-3.5 w-3.5" /></button>
           </div>

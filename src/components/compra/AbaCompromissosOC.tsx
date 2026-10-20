@@ -2847,7 +2847,7 @@ function NovoCompromissoDialog({ onClose, onSubmit, saving, clienteId, tipoOpera
           <div className="grid grid-cols-2 gap-2">
             <div>
               <Label className="text-[11px]">Valor total *</Label>
-              <CampoMoeda valor={valor} onChange={setValor} placeholder="R$ 0,00" className="mt-0.5 h-6 text-[11px]" />
+              <CampoMoeda valor={valor} onChange={setValor} className="mt-0.5 h-6 text-[11px]" />
             </div>
             <div>
               <Label className="text-[11px]">Favorecido</Label>
@@ -3068,7 +3068,7 @@ function ProgramarDialog({ onClose, onSubmit, saving, clienteId, valorCompromiss
                 <div className="text-[11px] text-muted-foreground pb-2">{i + 1}</div>
                 <div>
                   <Label className="text-[10px]">Valor</Label>
-                  <CampoMoeda valor={l.valor} onChange={(n) => setLinha(l.idLocal, { valor: n })} placeholder="R$ 0,00" className="mt-0.5 h-6 text-[11px]" />
+                  <CampoMoeda valor={l.valor} onChange={(n) => setLinha(l.idLocal, { valor: n })} className="mt-0.5 h-6 text-[11px]" />
                 </div>
                 <div>
                   <Label className="text-[10px]">Vencimento</Label>

@@ -375,7 +375,7 @@ export function CadastroDeContratoDialog({ aberto, aoFechar, onAbrirCompraParcel
                             <Segmentado altura={26} valor={form.contemplado ? 's' : 'n'} onEscolher={(v) => set('contemplado', v === 's')} opcoes={[{ valor: 'n', rotulo: 'Não contemplado' }, { valor: 's', rotulo: 'Contemplado' }]} />
                             {form.contemplado && <div className="w-[110px]"><DatePicker size="compact" className={CAMPO} value={form.dataContemplacao ?? ''} onChange={(v) => set('dataContemplacao', v || null)} /></div>}
                             {form.contemplado && <Segmentado altura={26} valor={form.formaContemplacao ?? 'sorteio'} onEscolher={(v) => set('formaContemplacao', v)} opcoes={[{ valor: 'sorteio', rotulo: 'Sorteio' }, { valor: 'lance', rotulo: 'Lance' }]} />}
-                            {form.contemplado && form.formaContemplacao === 'lance' && <div className="w-[110px]"><CampoMoeda className={CAMPO} valor={form.lanceValor} onChange={(v) => set('lanceValor', v ?? 0)} /></div>}
+                            {form.contemplado && form.formaContemplacao === 'lance' && <div className="w-[124px]"><CampoMoeda className={CAMPO} valor={form.lanceValor} onChange={(v) => set('lanceValor', v ?? 0)} /></div>}
                           </div>
                         </Bloco>
                       </div>

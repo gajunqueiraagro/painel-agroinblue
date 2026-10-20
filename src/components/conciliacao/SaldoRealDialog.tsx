@@ -228,7 +228,7 @@ export function SaldoRealDialog({
         <div className="min-h-0 min-w-0 flex-1 space-y-2.5 overflow-y-auto px-4 py-3">
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <Label className="text-[10px]">Saldo real (R$)</Label>
+              <Label className="text-[10px]">Saldo real</Label>
               <CampoMoeda aceitaNegativo autoFocus valor={valor} onChange={setValor}
                 className="h-8 text-xs tabular-nums" placeholder="-1.845,32" />
             </div>

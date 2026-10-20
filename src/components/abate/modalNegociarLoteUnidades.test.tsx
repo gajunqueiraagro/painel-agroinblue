@@ -402,7 +402,7 @@ describe('ABATE-PROJETADO-01a — Funrural / SENAR em % sobre o BRUTO, gravado e
     montar(LT10({ funrural: { valor: 1599.61, fonte: 'reais' } }));
     irPara('Bônus, descontos e impostos');
     expect(screen.getByText(/= 1,63% do bruto/)).toBeTruthy();
-    expect(campoPorRotulo('Funrural + SENAR').value.replace(/\s/g, ' ')).toBe('R$ 1.599,61');
+    expect(campoPorRotulo('Funrural + SENAR').value.replace(/\s/g, ' ')).toBe('1.599,61'); // UI-CAMPO-MOEDA-01: o "R$" é o prefixo fixo do campo, não o texto
   });
 
   it('conta que não fecha é recusada com a frase do dono e o campo volta ao que tinha', () => {

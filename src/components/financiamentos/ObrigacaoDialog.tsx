@@ -1261,7 +1261,6 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                       <Label className={ROTULO}>Valor total *</Label>
                       <CampoMoeda valor={form.valor_total || null}
                         onChange={n => set('valor_total', n ?? 0)}
-                        placeholder="R$ 0,00"
                         className={`${CAMPO} text-right ${NUM}`} />
                     </div>
                     {/* ⚠ SEM ENTRADA NO PARCELAMENTO — PAR-01c, e o motivo é que a tela e o
@@ -1279,7 +1278,6 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                       <Label className={ROTULO}>Valor de entrada</Label>
                       <CampoMoeda valor={form.valor_entrada || null}
                         onChange={n => set('valor_entrada', n ?? 0)}
-                        placeholder="R$ 0,00"
                         className={`${CAMPO} text-right ${NUM}`} />
                       <p className={APOIO}>Pago à vista, fora das parcelas</p>
                     </div>

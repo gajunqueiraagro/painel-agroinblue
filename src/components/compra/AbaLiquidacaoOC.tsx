@@ -649,7 +649,7 @@ function RegistrarLiquidacaoDialog({ api, darkSelectClass, obr, onClose }: { api
                 do campo. Vazio e' AUSENCIA e nao zero — sem a distincao, digitar "0,00"
                 limparia o campo. */}
             <CampoMoeda valor={valor.trim() === '' ? null : parseNumericValue(valor)}
-              onChange={(n) => setValor(n == null ? '' : String(n))} placeholder="R$ 0,00"
+              onChange={(n) => setValor(n == null ? '' : String(n))}
               className={`h-8 text-[12px] text-right tabular-nums ${excedeSaldo ? 'border-destructive' : ''}`} />
             {excedeSaldo && <div className="text-[10px] text-destructive mt-0.5">Valor excede o saldo aberto.</div>}
           </div>

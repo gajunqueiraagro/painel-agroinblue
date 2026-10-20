@@ -187,7 +187,7 @@ export interface ItemQueFalta { campo: CampoQueFalta; rotulo: string; aba: 'cons
 /** Só o que falta (a regra de entrada de `fn_consorcio_cronograma`: carta > 0, 1ª parcela, prazo de 1 a 600) — nunca a lista inteira. */
 export function faltaParaGerar(f: FormDoConsorcio): ItemQueFalta[] {
   const falta: ItemQueFalta[] = [];
-  if (!(typeof f.carta === 'number' && f.carta > 0)) falta.push({ campo: 'carta', rotulo: 'carta de crédito', aba: 'consorcio' });
+  if (!(typeof f.carta === 'number' && f.carta > 0)) falta.push({ campo: 'carta', rotulo: 'valor da carta de crédito', aba: 'consorcio' });
   if (!f.primeiraParcela) falta.push({ campo: 'primeiraParcela', rotulo: '1ª parcela', aba: 'consorcio' });
   if (!(typeof f.prazoGrupo === 'number' && f.prazoGrupo >= 1 && f.prazoGrupo <= 600)) falta.push({ campo: 'prazoGrupo', rotulo: 'prazo do grupo (1 a 600 meses)', aba: 'custos' });
   return falta;

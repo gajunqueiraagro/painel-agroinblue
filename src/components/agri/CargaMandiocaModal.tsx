@@ -743,7 +743,7 @@ export function CargaMandiocaModal({
                   <div className="grid grid-cols-[1fr_1fr_1fr_1fr] items-end gap-2">
                     <div>
                       <Label className="flex items-center gap-1 text-[10px]">
-                        ICMS (R$)
+                        ICMS
                         {icmsTravado && <Lock className="h-2.5 w-2.5 text-muted-foreground" />}
                       </Label>
                       <CampoMoeda valor={icmsTravado ? 0 : num(form.icms)}
@@ -754,7 +754,7 @@ export function CargaMandiocaModal({
                     </div>
                     <div>
                       <Label className="flex items-center gap-1 text-[10px]">
-                        Funrural (R$)
+                        Funrural
                         {funruralTravado && <Lock className="h-2.5 w-2.5 text-muted-foreground" />}
                       </Label>
                       <CampoMoeda valor={funruralTravado ? 0 : num(form.funrural)}
@@ -764,7 +764,7 @@ export function CargaMandiocaModal({
                           funruralTravado && 'bg-muted text-muted-foreground')} />
                     </div>
                     <div>
-                      <Label className="text-[10px]">INSS (R$)</Label>
+                      <Label className="text-[10px]">INSS</Label>
                       <CampoMoeda valor={num(form.inss)}
                         onChange={n => campo('inss', n == null ? '' : String(n))}
                         className={cn('mt-0.5 h-8 text-right tabular-nums text-[12px]', FOCO)} />
@@ -774,7 +774,7 @@ export function CargaMandiocaModal({
                           o operador digita o mesmo número duas vezes. Este vai para Transporte
                           Agrícola (13090), junto do frete que ele tributa. */}
                       <Label className="flex items-center gap-1 text-[10px]">
-                        ICMS do frete (R$)
+                        ICMS do frete
                         {transporteTravado && <Lock className="h-2.5 w-2.5 text-muted-foreground" />}
                       </Label>
                       <CampoMoeda valor={transporteTravado ? 0 : num(form.icmsTransporte)}
@@ -844,7 +844,7 @@ export function CargaMandiocaModal({
                             </div>
                           ) : <div />}
                           <div>
-                            <Label className="text-[10px]">R$/t</Label>
+                            <Label className="text-[10px]">Preço por t</Label>
                             <CampoMoeda valor={s.preco_t}
                               onChange={n => mudarServico(tipo, { preco_t: n })}
                               className={cn('mt-0.5 h-8 text-right tabular-nums text-[12px]', FOCO,

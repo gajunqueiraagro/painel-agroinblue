@@ -614,14 +614,14 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
                 <div>
                   <Label className={ROTULO}>Principal *</Label>
                   <CampoMoeda valor={principal} onChange={n => setPrincipal(n ?? 0)}
-                    placeholder="R$ 0,00" className={`${CAMPO} text-right tabular-nums`} />
+                    className={`${CAMPO} text-right tabular-nums`} />
                   {erros.valor_principal && <p className="text-[10px] text-destructive mt-0.5">{erros.valor_principal}</p>}
                 </div>
                 {!ehParcelamento && (
                   <div>
                     <Label className={ROTULO}>Juros *</Label>
                     <CampoMoeda valor={juros} onChange={n => setJuros(n ?? 0)}
-                      placeholder="R$ 0,00" className={`${CAMPO} text-right tabular-nums`} />
+                      className={`${CAMPO} text-right tabular-nums`} />
                     {erros.valor_juros && <p className="text-[10px] text-destructive mt-0.5">{erros.valor_juros}</p>}
                   </div>
                 )}
