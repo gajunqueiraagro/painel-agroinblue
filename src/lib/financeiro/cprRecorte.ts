@@ -203,6 +203,8 @@ export interface RecorteCpr<T extends ContaCpr> {
   incluirVencidos: boolean;
   /** CPR-AJUSTES-20-10b — os vencidos estão na lista e no total? Sempre, menos no período encerrado com a caixa desligada. */
   vencidosNaLista: boolean;
+  /** os vencidos entram no total do rodapé? Não no período futuro (estão antes do Caixa inicial, já dentro dele). */
+  vencidosNoRodape: boolean;
   /** Vencidos em aberto, de qualquer idade — o cartão os mostra SEMPRE; a caixa decide se entram na lista e no total. */
   vencidos: SomaCpr & {
     maisAntiga: string | null; diasDaMaisAntiga: number | null; linhas: T[];
@@ -312,17 +314,21 @@ export function recortarCpr<T extends ContaCpr>(
      tira (ou põe) do saldo de hoje — e por isso está SEMPRE na lista e no total do rodapé, qualquer que seja a caixa "Incluir
      vencidos". Só no período ENCERRADO (o vencido sai hoje, DEPOIS dele, e não mexe no saldo do período) a caixa ainda decide. */
   const vencidosNaLista = incluirVencidos || periodo.ate >= hoje;
-  const vP = vencidosNaLista ? sv.cPagar : 0, vR = vencidosNaLista ? sv.cReceber : 0;
-  const nVP = vencidosNaLista ? sv.pagar.contas : 0, nVR = vencidosNaLista ? sv.receber.contas : 0;
-  /* REC-VALOR-CERTO-02 — as MESMAS linhas do total do rodapé (vencidos, se ligados, + período), repartidas pelo conjunto. */
+  /* CPR-AJUSTES-20-10b (correção do rodapé) — o total soma SÓ o que está DEPOIS da linha do Caixa inicial. No período FUTURO os
+     vencidos (e o "entre hoje e de") vêm ANTES dela e já estão dentro do Caixa inicial previsto: somá-los de novo no rodapé contava
+     duas vezes (Vera, nov/26: 160,83 a mais no a pagar). No período com hoje eles moram no dia de hoje, depois do Caixa inicial. */
+  const vencidosNoRodape = vencidosNaLista && periodo.de <= hoje;
+  const vP = vencidosNoRodape ? sv.cPagar : 0, vR = vencidosNoRodape ? sv.cReceber : 0;
+  const nVP = vencidosNoRodape ? sv.pagar.contas : 0, nVR = vencidosNoRodape ? sv.receber.contas : 0;
+  /* REC-VALOR-CERTO-02 — as MESMAS linhas do total do rodapé (vencidos, se contam nele, + período), repartidas pelo conjunto. */
   const fatias = { pc: { valor: 0, qtd: 0 }, pe: { valor: 0, qtd: 0 }, rc: { valor: 0, qtd: 0 }, re: { valor: 0, qtd: 0 } };
-  for (const l of [...(vencidosNaLista ? porBalde.vencido : []), ...porBalde.periodo]) {
+  for (const l of [...(vencidosNoRodape ? porBalde.vencido : []), ...porBalde.periodo]) {
     const est = contaEstimadaCpr(l, opcoes.estimadas);
     const f = ehPagarCpr(l) ? (est ? fatias.pe : fatias.pc) : ehReceberCpr(l) ? (est ? fatias.re : fatias.rc) : null;
     if (f) { f.valor += centavosDaConta(l); f.qtd += 1; }
   }
   return {
-    periodo, hoje, incluirVencidos, vencidosNaLista,
+    periodo, hoje, incluirVencidos, vencidosNaLista, vencidosNoRodape,
     vencidos: {
       pagar: sv.pagar, receber: sv.receber, maisAntiga, diasDaMaisAntiga: maisAntiga ? diasEntre(maisAntiga, hoje) : null, linhas: porBalde.vencido,
       contam: { pagar: sc.pagar, receber: sc.receber, linhas: contam },
@@ -542,6 +548,36 @@ export function serieDoSaldoCpr<T extends ContaCpr>(recorte: RecorteCpr<T>, sald
     partida, entreHojeEDe, dias, fim: tem ? reais(saldo) : null, menor,
     totalPagar: { valor: reais(tP), contas: nP }, totalReceber: { valor: reais(tR), contas: nR },
   };
+}
+
+/**
+ * CPR-AJUSTES-20-10b (correção do rodapé) — O RODAPÉ "Fim do período" TEM UM DONO e soma SÓ o que está DEPOIS da linha do Caixa
+ * inicial, para valer, centavo a centavo, em tela, PDF e Excel:  Caixa inicial + A receber − A pagar = Saldo no fim.
+ *   encerrado: o realizado do período (nada é projetado);
+ *   com hoje: os dias realizados (de "de" até hoje, hoje inclusive) + os vencidos (no dia de hoje) + o em aberto do período;
+ *   futuro: só o em aberto do período — vencidos e "entre hoje e de" vêm antes do Caixa inicial e já estão dentro dele.
+ * Sem o realizado (sem saldo conferido), o em aberto da lista, como antes.
+ */
+export interface RodapeCpr { pagar: LadoCpr; receber: LadoCpr; contas: number; realizados: number; encerrado: boolean }
+export function rodapeDoPeriodoCpr<T extends ContaCpr>(recorte: RecorteCpr<T>, serie: SerieDoSaldoCpr): RodapeCpr {
+  const tr = serie.totalRealizado;
+  if (serie.encerrado && serie.inicial) {
+    return { pagar: tr.pagar, receber: tr.receber, contas: 0, realizados: tr.pagar.contas + tr.receber.contas, encerrado: true };
+  }
+  const comRealizado = serie.inicial != null && recorte.periodo.de <= recorte.hoje;
+  const junta = (a: LadoCpr, r: LadoCpr): LadoCpr => (comRealizado
+    ? { valor: reais(Math.round(a.valor * 100) + Math.round(r.valor * 100)), contas: a.contas + r.contas } : a);
+  return {
+    pagar: junta(recorte.total.pagar, tr.pagar), receber: junta(recorte.total.receber, tr.receber),
+    contas: recorte.total.ambos.contas, realizados: comRealizado ? tr.pagar.contas + tr.receber.contas : 0, encerrado: false,
+  };
+}
+/** O que o título do rodapé conta: "N contas", "N contas · M lançamentos realizados" ou, encerrado, "M lançamentos realizados". */
+export function contagemDoRodapeCpr(r: Pick<RodapeCpr, 'contas' | 'realizados' | 'encerrado'>): string {
+  const real = `${r.realizados} ${r.realizados === 1 ? 'lançamento realizado' : 'lançamentos realizados'}`;
+  if (r.encerrado) return real;
+  const abertas = `${r.contas} ${r.contas === 1 ? 'conta' : 'contas'}`;
+  return r.realizados > 0 ? `${abertas} · ${real}` : abertas;
 }
 
 /**
