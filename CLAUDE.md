@@ -10184,3 +10184,39 @@ curta nas secoes de regras) e a pendencia (na FILA); o bloco inteiro vai para do
   codigo antigo caem 4 dos 5 (o da Mesa e' guarda). Prova com dados reais (Agnaldo e NJ, harness local fora do repo): Painel e Home do
   Agnaldo com o grupo 92.360,54 / 34; NJ identico antes e depois.
   ⚠ NAO PROVADO: nada com login no app real (o painel abrindo no navegador do Gabriel).
+- ⚠ O JURO REAL DA PARCELA POS-FIXADA ENTRA QUANDO O EXTRATO E' CASADO, POR UM DONO SO' (FIN-POS-FIXADO-01b, Gabriel 20/10/2026; migration
+  `supabase/migrations/20261027204640_fin_pos_fixado_01b.sql`, md5 do arquivo 234cb82070d79cdf2f22800c37ff1b78 — APLICADA no proto em 20/10/2026,
+  ledger = arquivo). Em contrato pos o banco debita principal + juro real; o juro programado e' a estimativa do 01a.
+  · DONO: `fn_financiamento_parcela_pos_pagar(p_extrato_id, p_parcela_id, p_simular DEFAULT true)` (md5 c15da84d…; SECURITY DEFINER, tenant pelas
+    duas linhas com `_fn_exigir_tenant_das_linhas`; so' `authenticated`/`service_role`). Parcela de contrato `tipo_taxa = 'pos'`, nao paga nem
+    cancelada, com o principal e os juros vivos e nao realizados, contra UMA linha de debito do extrato sem vinculo. Juro real = |extrato| −
+    principal − encargos (`valor_encargos`; com encargos ≠ 0 recusa — 0 casos em 20/10). O PRINCIPAL NUNCA MUDA. Negativo recusa com "o extrato
+    é menor que o principal da parcela; case como pagamento parcial" (zero: "o extrato é igual ao principal…"). Reaproveita `fn_espelho_casar`
+    (principal pelo valor dele, juros pelo juro real; vinculo e realizacao); o valor chega a' parcela pelo `_fn_parcela_acompanha_lancamento` e a
+    parcela fica PAGA PELO GATILHO do FIN-PARCELA-STATUS-01 — o dono NAO grava status nem quita; `ajustada` intocada. SIMULACAO = GRAVACAO
+    ('PPSIM'); recusa na simulacao em `recusa {motivo, frase}`, na gravacao P0001 + " Nada foi gravado.".
+  · TRILHA FORA de `financiamento_parcelas_operacoes` (nao entra no "Desfazer a ultima"): uma linha em `audit_log` — modulo 'financeiro', acao
+    'juro_real_pelo_extrato', tabela 'financiamento_parcelas', antes/depois (principal, juros, total, status, valor do lancamento de juros) e o
+    MOTIVO "juro real pelo extrato de dd/mm/aaaa" no `resumo` ("motivo: …") e em `dados_novos.motivo`. O audit_log NAO tem coluna de motivo e
+    nenhuma foi criada: a convencao da casa e' o resumo (AUDIT-DELETE-01a). Autor = quem esta' logado (`trg_trilha_autor`).
+  · BLOCO: `fn_conciliar_bloco` (patch guardado por md5, 8a108ebf… -> 719372f3…) recusa, ANTES das recusas de soma, bloco com lancamento de
+    parcela pos com juros estimado (`_fn_juros_estimado`) e soma diferente: CBLOC "parcela_pos: Parcela de contrato pós-fixado: case pelo modal
+    da linha do extrato para gravar o juro real." A tela so' mostra a frase (`fraseDaRecusa` tira o codigo); nenhum elemento novo. Soma igual
+    ao centavo passa como antes; contrato nao pos volta a' recusa de soma de sempre.
+  · MODAL (`CasarComBancoModal`, prop nova `clienteId`, entregue pela Conferencia): le^ `fn_juros_estimados_do_cliente` + as parcelas delas
+    (`mapaDaParcelaPos`, `src/lib/financiamentos/parcelaPosPagar.ts`, leitor sem cast); levado que e' principal ou juros de parcela pos ->
+    simula e concilia PELO DONO (nunca pela `fn_espelho_casar` direta), campos em leitura, o dos juros mostra o juro real do banco, sem
+    "Corrigir"/"absorver", e a linha `juro-real` ("Juro real pelo extrato: R$ X · estimado R$ Y · o principal não muda"). So' o principal e
+    os juros da parcela, e nada mais (`FRASE_LEVE_O_PAR`). Sem `clienteId`, o caminho de sempre.
+  Testes: `supabase/tests/fin_pos_fixado_01b_test.sql` (P1–P5, parcela 2 do 8.233.040 com extratos sinteticos, transacao desfeita) OK no vivo;
+  4 mutacoes de banco mortas (principal absorvendo a diferenca -> P1; status sem alinhar -> P1; sem a trilha -> P4; bloco sem a recusa -> P3).
+  `src/components/financeiro-v2/casarPosFixado.test.tsx` 7; 2 mutacoes de tela mortas (o Conciliar e o simular pela `fn_espelho_casar`).
+  Gate: `check:ui-cortes` com `casar-1x1-pos` e `casar-bloco-pos` (bancada sintetica) nos sete tamanhos.
+  ⚠ NAO PROVADO: nada com login no app real (bancada) · a `fn_espelho_casar` chamada direto (fora do modal) ainda reescreve o juro de parcela
+    pos sem trilha — so' a tela foi fechada · encargos com lancamento proprio (nao existe hoje).
+- ⚠ [FECHA o "a fn_espelho_casar chamada direto ainda reescreve o juro" do bloco acima] SO' O DONO GRAVA O JURO REAL DA PARCELA POS (FIN-POS-FIXADO-01b
+  guarda, Gabriel 20/10/2026; migration `supabase/migrations/20261027204650_fin_pos_fixado_01b_guarda.sql`, md5 do arquivo 904f881406535656a1628b245a0362ba —
+  APLICADA no proto em 20/10/2026, ledger = arquivo). `fn_espelho_casar` (c1bdf39a… -> 2ba25431…) com o lancamento de JUROS de parcela pos ainda
+  estimado devolve {ok: false, motivo 'parcela_pos', frase "Parcela de contrato pós-fixado: case pelo modal da linha do extrato para gravar o
+  juro real."} (a tela a escreve pelo `MOTIVO_CASAR_LABEL`); o dono (c15da84d… -> 57ca18e8…) liga `app.pos_pagar = 'on'` (local) so' em volta da
+  chamada e a desliga logo depois. Teste `supabase/tests/fin_pos_fixado_01b_guarda_test.sql` (G1–G3) OK no vivo; sem a guarda cai em G1.
