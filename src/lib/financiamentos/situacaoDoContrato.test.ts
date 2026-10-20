@@ -10,7 +10,7 @@ const CARTOES = { valor_contrato: 35700, pago: 17850, a_vencer: 11900, vencido: 
 describe('lerSituacaoDoContrato', () => {
   it('lê parcelas e cartões como vieram (os números do contrato que motivou o passo)', () => {
     const s = lerSituacaoDoContrato({ parcelas: [PARCELA], cartoes: CARTOES })!;
-    expect(s.cartoes).toEqual({ valorContrato: 35700, pago: 17850, aVencer: 11900, vencido: 5950, pagas: 3, parcelas: 6, jurosPrevistos: 0,
+    expect(s.cartoes).toEqual({ valorContrato: 35700, pago: 17850, aVencer: 11900, vencido: 5950, adiado: 0, adiadoQtde: 0, pagas: 3, parcelas: 6, jurosPrevistos: 0,
       somaPrincipal: 35700, somaTotal: 35700, divergentes: 3, detalhe: null });
     expect(s.parcelas[0]).toEqual({ id: 'p1', numero: 1, dataVencimento: '2026-07-05', valorPrincipal: 5950, valorJuros: 0, valorTotal: 5950,
       situacao: 'paga', pagoEm: '2026-07-02', valorPago: 5950, lancamentoId: 'l1', lancamentoJurosId: null, fonte: 'lancamento', diverge: true, detalhe: null });
