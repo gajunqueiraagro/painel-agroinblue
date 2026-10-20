@@ -122,6 +122,23 @@ const CENARIOS = [
     antes: async (p) => { await p.getByRole('button', { name: 'Custos e parcelas' }).first().click(); await p.waitForTimeout(500);
       if (url.includes('&r=1')) { await p.locator('[data-campo="montarPor"] button', { hasText: 'Regras (%)' }).first().click(); await p.waitForTimeout(300);
         const ok = p.locator('[data-testid="confirmar-passar-regras"]'); if (await ok.count()) { await ok.click(); await p.waitForTimeout(500); } } } })),
+  /* UI-SEM-CORTE-02 — os tres modais da OC, TODAS as abas (dados sinteticos; o mes FECHADO no P1, com o "Reabrir mês" no rodape), nos
+     tres tamanhos do gate: o modal da OC e' limitado a 1024 e nao tem desenho abaixo de 1000. A compra so' abre na Auditoria pelo
+     clique (o shell nao a aceita como aba inicial). */
+  ...[['venda', ['venda', 'negociacao', 'entrega', 'documentos', 'financeiro', 'auditoria']], ['abate', ['abate', 'negociacao', 'entrega', 'documentos', 'financeiro', 'auditoria']],
+    ['compra', ['compra', 'negociacao', 'recebimento', 'documentos', 'financeiro', 'auditoria']]].flatMap(([v, abas]) => abas.map((aba) => ({
+    nome: `oc-${v}-${aba}`, url: `tela=oc&v=${v}&aba=${aba === 'auditoria' && v === 'compra' ? '' : aba}`,
+    antes: aba === 'auditoria' && v === 'compra' ? clicarTexto('Auditoria') : undefined }))),
+  /* UI-SEM-CORTE-02 — o consultor: o ⚑ aberto (Pendências do cliente), a Nova pendência e o Resumo dos clientes */
+  { nome: 'pendencias-do-cliente', url: 'tela=pendencias', tamanhos: TAMANHOS_DO_CONSORCIO },
+  { nome: 'pendencias-nova', url: 'tela=pendencias&v=nova', tamanhos: TAMANHOS_DO_CONSORCIO },
+  { nome: 'pendencias-resumo', url: 'tela=pendencias&v=resumo', tamanhos: TAMANHOS_DO_CONSORCIO },
+  /* UI-SEM-CORTE-02 — o Casar com o banco 1:1 (Acessos: os cenarios do ACESSOS-PERFIL-01, acima) */
+  { nome: 'casar-1x1-vazio', url: 'tela=casar-1x1', tamanhos: TAMANHOS_DO_CONSORCIO },
+  { nome: 'casar-1x1-levado', url: 'tela=casar-1x1&v=levado', tamanhos: TAMANHOS_DO_CONSORCIO },
+  /* UI-SEM-CORTE-02 — a TABELA do Financeiro V2 segue fora (FIN-V2-SEM-CORTE-01, suspensa), mas entra pelo texto inclinado e pela
+     sobreposicao: a ultima letra do fornecedor ("Maderat") sumia pela linha em italico */
+  { nome: 'financeiro-tabela-italico', url: 'tela=financeiro', soRegras: ['italico', 'sobreposicao'] },
 ];
 /* UI-TEXTO-LONGO-01 — o que tem de ter a mesma altura com texto curto e longo (o que não existe na tela é pulado nos dois lados) */
 const ALTURAS_DO_MODAL = ['[role="dialog"]', '[role="dialog"] aside', '[data-testid="grade-de-parcelas"]'];
@@ -231,6 +248,89 @@ function medir(regiao) {
   }
   return achados;
 }
+/* UI-SEM-CORTE-02 (item 7) — roda NA PAGINA: o que a regra das reticencias nao ve.
+   (a) SOBREPOSICAO — dois irmaos visiveis em fluxo (nem absolute/fixed/sticky) cujos retangulos se cruzam (> 1,5px nos dois
+       eixos), e botao x conteudo: um botao visivel sobre um texto que nao e' dele nem o contem, com o texto VISIVEL ali (o
+       retangulo do texto recortado pelos ancestrais que cortam). E' o caso do modal de Pendencias com os botoes sobre o rodape.
+   (b) TEXTO ALEM DA CAIXA — o texto (medido por Range) passa da borda que o corta; texto INCLINADO (italic/oblique) conta a
+       inclinacao do glifo (0,21 x o tamanho da letra): a ultima letra inclinada encostada na borda some ("Maderat").
+   (c) NUMERO ESCONDIDO — numero, valor ou data recortado na horizontal por um ancestral que rola ou corta. */
+function medirSobreposicao(regiao) {
+  const achados = [];
+  const raiz = (regiao && document.querySelector(regiao)) || document.body;
+  const texto = (e) => (e.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 60);
+  const visivel = (e) => { const cs = getComputedStyle(e); if (cs.display === 'none' || cs.visibility === 'hidden' || Number(cs.opacity) === 0) return false;
+    const r = e.getBoundingClientRect(); return r.width > 2 && r.height > 2; };
+  /* o retangulo que se ve: recortado por todo ancestral que corta (overflow != visible) */
+  /* `comSiMesmo`: o texto (Range) e' recortado tambem pelo PROPRIO elemento quando e' ele que rola ou corta (`uma-linha-que-rola`,
+     o texto do seletor); a caixa do elemento, so' pelos ancestrais */
+  const recorte = (e, r0, comSiMesmo = false) => { let r = { l: r0.left, t: r0.top, rr: r0.right, b: r0.bottom };
+    for (let a = comSiMesmo ? e : e.parentElement; a && a !== document.documentElement; a = a.parentElement) {
+      const cs = getComputedStyle(a); if (cs.overflowX === 'visible' && cs.overflowY === 'visible') continue;
+      const ra = a.getBoundingClientRect(); const l = ra.left + a.clientLeft, t = ra.top + a.clientTop;
+      if (cs.overflowX !== 'visible') { r.l = Math.max(r.l, l); r.rr = Math.min(r.rr, l + a.clientWidth); }
+      if (cs.overflowY !== 'visible') { r.t = Math.max(r.t, t); r.b = Math.min(r.b, t + a.clientHeight); }
+    }
+    return r; };
+  const cruza = (a, b, tol) => Math.min(a.rr, b.rr) - Math.max(a.l, b.l) > tol && Math.min(a.b, b.b) - Math.max(a.t, b.t) > tol;
+  const emFluxo = (e) => { const p = getComputedStyle(e).position; return p === 'static' || p === 'relative'; };
+  const todos = [...raiz.querySelectorAll('*')];
+  /* (a) irmaos */
+  for (const pai of [raiz, ...todos]) {
+    /* `inline` fica de fora: o retangulo dele e' a uniao das linhas, e dois pedacos de uma frase que quebra "se cruzam" sem se tocar */
+    const filhos = [...pai.children].filter((c) => visivel(c) && emFluxo(c) && getComputedStyle(c).float === 'none' && getComputedStyle(c).display !== 'inline');
+    if (filhos.length < 2 || /^(TR|TBODY|THEAD|TFOOT|TABLE|COLGROUP|svg|g)$/i.test(pai.tagName)) continue;
+    for (let i = 0; i < filhos.length; i++) for (let j = i + 1; j < filhos.length; j++) {
+      const a = recorte(filhos[i], filhos[i].getBoundingClientRect()), b = recorte(filhos[j], filhos[j].getBoundingClientRect());
+      if (a.rr - a.l < 1 || b.rr - b.l < 1 || a.b - a.t < 1 || b.b - b.t < 1) continue;
+      if (cruza(a, b, 1.5)) achados.push({ regra: 'sobreposicao', texto: `"${texto(filhos[i]) || filhos[i].tagName}" x "${texto(filhos[j]) || filhos[j].tagName}"` });
+    }
+  }
+  /* (a) botao x conteudo */
+  const botoes = todos.filter((e) => (e.tagName === 'BUTTON' || e.getAttribute('role') === 'button') && visivel(e));
+  const comTexto = todos.filter((e) => visivel(e) && [...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()));
+  for (const bt of botoes) {
+    const rb = recorte(bt, bt.getBoundingClientRect());
+    for (const t of comTexto) {
+      if (t === bt || bt.contains(t) || t.contains(bt)) continue;
+      const rg = document.createRange(); rg.selectNodeContents(t);
+      /* cada LINHA do texto por si (o retangulo da uniao de um texto que quebra cobre o vao ao lado da ultima linha) */
+      const linhasT = [...rg.getClientRects()].map((q) => recorte(t, q, true)).filter((q) => q.rr - q.l >= 1 && q.b - q.t >= 1);
+      const rt = linhasT.find((q) => cruza(rb, q, 1.5));
+      if (!rt) continue;
+      /* so' conta quando os dois se veem ali: o ponto do meio do cruzamento e' de um deles ou de um ancestral comum */
+      const x = (Math.max(rb.l, rt.l) + Math.min(rb.rr, rt.rr)) / 2, y = (Math.max(rb.t, rt.t) + Math.min(rb.b, rt.b)) / 2;
+      const topo = document.elementFromPoint(x, y); if (!topo) continue;
+      if (bt.contains(topo) && !t.contains(topo)) achados.push({ regra: 'sobreposicao', texto: `botão "${texto(bt)}" sobre "${texto(t)}"` });
+    }
+  }
+  /* (b) texto alem da caixa (com a inclinacao) e (c) numero escondido */
+  const ehNumero = (s) => /^[-−▲▼]?\s*(R\$\s?)?[-−]?[\d.]+(,\d+)?%?$|^\d{2}\/\d{2}(\/\d{2,4})?$/.test(s);
+  for (const e of comTexto) {
+    const cs = getComputedStyle(e);
+    const rg = document.createRange(); rg.selectNodeContents(e); const rt = rg.getBoundingClientRect();
+    if (rt.width < 1) continue;
+    let corta = null;
+    for (let a = e; a && a !== document.documentElement; a = a.parentElement) {
+      const ca = getComputedStyle(a); if (ca.overflowX === 'visible') continue;
+      const ra = a.getBoundingClientRect(); corta = { el: a, l: ra.left + a.clientLeft, r: ra.left + a.clientLeft + a.clientWidth, rola: /(auto|scroll)/.test(ca.overflowX) }; break;
+    }
+    if (!corta) continue;
+    const inclinado = /italic|oblique/.test(cs.fontStyle);
+    const folga = inclinado ? 0.21 * parseFloat(cs.fontSize) : 0;
+    const t = texto(e);
+    /* com "…" o texto ja' e' achado da regra das reticencias; o INCLINADO conta sempre (o span que encolhe ao texto corta a ultima letra) */
+    if (!corta.rola && (inclinado || cs.textOverflow !== 'ellipsis') && rt.right + folga > corta.r + 0.5)
+      achados.push({ regra: inclinado ? 'italico' : 'corte', texto: `"${t}" passa ${(rt.right + folga - corta.r).toFixed(1)}px da caixa${inclinado ? ' (texto inclinado)' : ''}` });
+    /* so' o numero PARTIDO (parte a' vista, parte escondida); o que rola inteiro para fora da vista e o que mora numa tabela que rola
+       por inteiro (a coluna segue inteira, a tabela e' que rola) nao contam */
+    const aVista = Math.min(rt.right, corta.r) - Math.max(rt.left, corta.l);
+    if (ehNumero(t) && aVista > 0.5 && aVista < rt.width - 0.5 && !e.closest('table')) {
+      const ry = recorte(e, rt); if (ry.b - ry.t > 1) achados.push({ regra: 'numero', texto: `"${t}" escondido pela rolagem/corte (${Math.round(Math.min(rt.right, corta.r) - Math.max(rt.left, corta.l))} de ${Math.round(rt.width)}px)` });
+    }
+  }
+  return achados;
+}
 /* roda NA PAGINA: rola cada container ate' o meio e confere o cabecalho preso */
 function medirCabecalho(regiao) {
   const achados = [];
@@ -296,9 +396,17 @@ try {
     document.body.appendChild(d);
   });
   const daTabela0 = await p0.evaluate(medirTabelaMinima, { sel: '#tabela-curta', linhas: 3 });
-  const prova = [...daRolagem0, ...daTabela0, ...(await p0.evaluate(medir)), ...(await p0.evaluate(medirCabecalho)), ...(comMudanca && !semMudar ? [comMudanca] : [])].map((a) => a.regra);
+  const daPagina0 = [...(await p0.evaluate(medir)), ...(await p0.evaluate(medirCabecalho))];
+  /* UI-SEM-CORTE-02 — o detector novo se prova: irmaos que se cruzam, botao sobre o rodape, texto inclinado na borda, numero escondido */
+  await p0.setContent(`<div id="sobre" style="width:300px"><div style="height:30px">primeiro bloco</div><div style="height:30px;margin-top:-20px">segundo bloco</div></div>
+    <div style="position:relative;height:60px;width:300px"><div style="height:60px">rodape da tabela com texto</div><button style="position:absolute;top:2px;left:10px">Fechar</button></div>
+    <div style="display:inline-block;overflow:hidden;white-space:nowrap;font-style:italic;font-size:12px">Maderat</div>
+    <div style="width:40px;overflow-x:auto;white-space:nowrap"><span>1.234.567,89</span></div>`);
+  const daSobre0 = await p0.evaluate(medirSobreposicao, null);
+  const prova = [...daRolagem0, ...daTabela0, ...daPagina0, ...daSobre0, ...(comMudanca && !semMudar ? [comMudanca] : [])].map((a) => a.regra);
   await p0.close();
-  if (!['reticencias', 'corte', 'quebra', 'data', 'cabecalho', 'altura', 'rolagem', 'valor', 'tabela'].every((r) => prova.includes(r)) || prova.filter((r) => r === 'cabecalho').length < 3) { console.error(`check-ui-cortes: AUTO-TESTE FALHOU (achou ${prova.join(',') || 'nada'})`); process.exit(2); }
+  if (!['reticencias', 'corte', 'quebra', 'data', 'cabecalho', 'altura', 'rolagem', 'valor', 'tabela', 'sobreposicao', 'italico', 'numero'].every((r) => prova.includes(r))
+    || prova.filter((r) => r === 'cabecalho').length < 3 || daSobre0.filter((a) => a.regra === 'sobreposicao').length < 2) { console.error(`check-ui-cortes: AUTO-TESTE FALHOU (achou ${prova.join(',') || 'nada'})`); process.exit(2); }
 
   const todos = [];
   for (const cen of CENARIOS.filter((c) => !SO || c.nome.startsWith(SO))) for (const [w, h] of (cen.tamanhos && !arg('--tamanhos') ? cen.tamanhos : TAMANHOS)) {
@@ -328,7 +436,11 @@ try {
     if (cen.regiao && !(await p.$(cen.regiao))) erros.push(`regiao ${cen.regiao} nao achada`);
     const daRolagem = cen.semRolagem ? await p.evaluate(medirRolagem, cen.semRolagem) : [];
     if (cen.tabelaMinima) daRolagem.push(...(await p.evaluate(medirTabelaMinima, cen.tabelaMinima)));
-    const achados = [...daRolagem, ...(await p.evaluate(medir, cen.regiao ?? null)), ...(await p.evaluate(medirCabecalho, cen.regiao ?? null)), ...(daAltura ? [daAltura] : []), ...dasAlturas, ...erros.map((e) => ({ regra: 'erro', texto: e }))];
+    const achadosTodos = [...daRolagem, ...(await p.evaluate(medir, cen.regiao ?? null)), ...(await p.evaluate(medirCabecalho, cen.regiao ?? null)),
+      ...(await p.evaluate(medirSobreposicao, cen.regiao ?? null)), ...(daAltura ? [daAltura] : []), ...dasAlturas, ...erros.map((e) => ({ regra: 'erro', texto: e }))];
+    /* `soRegras` (UI-SEM-CORTE-02): o cenario conta so' estas regras — a tabela do Financeiro V2, suspensa (FIN-V2-SEM-CORTE-01), entra
+       so' pelo texto inclinado e pela sobreposicao. Erro de pagina conta sempre. */
+    const achados = cen.soRegras ? achadosTodos.filter((a) => a.regra === 'erro' || cen.soRegras.includes(a.regra)) : achadosTodos;
     for (const a of achados) if (!EXCECOES.some((x) => x.tela === cen.nome && x.regra === a.regra && x.texto === a.texto)) todos.push({ tela: cen.nome, tamanho: `${w}x${h}`, ...a });
     await p.close();
   }
