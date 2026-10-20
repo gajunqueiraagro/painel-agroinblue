@@ -95,7 +95,8 @@ describe('faltaDoExtrato — só o que FALTA é parcial', () => {
   it('diferença positiva acima de um centavo = a falta; zero, um centavo e soma MAIOR que o banco = nulo', () => {
     expect(faltaDoExtrato(10219.33)).toBe(10219.33);
     expect(faltaDoExtrato(0)).toBeNull();
-    expect(faltaDoExtrato(0.01)).toBeNull();
+    expect(faltaDoExtrato(0.01)).toBe(0.01);      // CONC-CRIAR-CENTAVO-01: um centavo é falta de verdade
+    expect(faltaDoExtrato(0.004)).toBeNull();     // abaixo de meio centavo é arredondamento
     expect(faltaDoExtrato(-360)).toBeNull();
   });
 });
