@@ -10265,3 +10265,20 @@ curta nas secoes de regras) e a pendencia (na FILA); o bloco inteiro vai para do
   · E O GATE DE TELA COMPLETO (`npm run check:ui-cortes`, sem `--so`) RODA ANTES DE TODO PUSH, nao so' as telas tocadas (Gabriel,
     20/10/2026: a regra de numero partido do UI-SEM-CORTE-02 subiu medida so' nas telas tocadas e o gate completo ficou vermelho na
     CPR). EXCECAO CONHECIDA, do Code 1 (CPR-SEM-CORTE-01): `cpr-ampliado-totais` a 750x520 e 750x600, o total "estimado" partido.
+- AUDITORIA APLICADA NO PROTO (AUDIT-SEG-01 partes 2 e 3, AUDIT-DELETE-01a; Gabriel 20/10/2026), na ordem 20261028100100 -> 100400 ->
+  100200, ledger = arquivo nas tres (100100 `2956e9fe`, 100400 `d84e675f` — o arquivo com o extrato SEM trilha no INSERT —, 100200
+  `79eb629d`, o indice criado CONCURRENTLY fora de transacao e registrado a' mao no ledger; `idx_audit_log_registro` valido). Efeito:
+  `trg_audit_financeiro_v2` em INSERT e UPDATE (a criacao entra na trilha, com `audit_log.via`); nas seis tabelas (conciliacao,
+  extrato, documentos, vinculos, fornecedores, plano) zero policy e zero privilegio de DELETE para a tela, `trg_sem_delete_direto` e
+  `trg_trilha_registro` (12 gatilhos; no extrato so' UPDATE/DELETE); os gestos `fn_conciliacao_item_desfazer` e
+  `fn_fornecedor_excluir`. Provas no vivo: A1–A6, B1–B2, D1–D6 OK. O B1 passou a inserir so' as colunas gravaveis (a coluna GERADA
+  `conta_efetiva_id` recusa `insert ... select *`). Os fronts (desfazer vinculo e excluir fornecedor pelo gesto do banco; teste sem
+  DELETE nas seis tabelas) sobem junto.
+  · PARCELAS ADIADAS E O VENCIMENTO (medido em 20/10): as 34 parcelas sem vencimento sao TODAS as adiadas (`adiada = true`) do
+    consorcio 002122, numeros 47–80, 'pendente', sem lancamento vinculado. O motor `fn_reconciliar_parcela_financiamento` sai com
+    `skip parcela_sem_vencimento` antes de qualquer escrita: o recurso "competencia" do CRIAR-DO-EXTRATO-01 nunca da' vencimento a
+    lancamento de parcela adiada.
+  · SUITE: A BASELINE VIGENTE E' 5948 em origin/proto depois do CRIAR-DO-EXTRATO-01 + FIN-PARCELA-STATUS-01/FIN-POS-FIXADO-01b (vale
+    sobre o "5936" do bloco CRIAR-DO-EXTRATO-01, medido antes do merge); com este bloco 5953 (+5 `auditDeleteFront.test.ts`), 22
+    skipped, as 3 falhas de sempre e 1 erro nao tratado (eram 87: o mock do supabase do `conciliacaoDono.test.tsx` sem `.ilike`
+    desde o icone do OFX do UI-SEM-CORTE-02).
