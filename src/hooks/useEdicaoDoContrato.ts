@@ -3,17 +3,29 @@
  * "Desfazer"). Toda gravação relê as chaves do contrato e avisa o canal de lançamentos (o motor mexeu neles).
  * ⚠ Simular é o padrão (p_simular = true no banco): a tela pede a prévia antes e só grava na confirmação.
  */
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
-import { CHAVES_DO_CONTRATO } from '@/hooks/useContratoDeCredito';
-import { lerResposta, type MudancasDasParcelas, type RespostaDoBanco } from '@/lib/financiamentos/edicaoDoContrato';
+import { CHAVES_DO_CONTRATO, lerVinculosDePagamento } from '@/hooks/useContratoDeCredito';
+import { CHAVE_SITUACAO_DO_CONTRATO, lerSituacaoDoBanco } from '@/hooks/useSituacaoDoContrato';
+import { hojeLocal } from '@/lib/datas/hojeLocal';
+import {
+  ajustadasDasGravadas, lerResposta, montarParcelasParaEditar, type MudancasDasParcelas, type ParcelaParaEditar, type RespostaDoBanco,
+} from '@/lib/financiamentos/edicaoDoContrato';
 
 export type ModoDeRegerar = 'manter_ajustes' | 'recalcular_todas';
 export interface UltimaOperacao { id: string; tipo: 'editar' | 'regerar'; feitaEm: string }
 
 const ERRO_FORA = 'Resposta do banco fora do formato.';
+
+/** as parcelas gravadas do contrato (`financiamento_parcelas`), na ordem do número — a MESMA leitura e a MESMA chave
+ *  (`financiamento-parcelas`) da tela do contrato: a marca `ajustada` vem daqui */
+export async function lerParcelasGravadas(financiamentoId: string) {
+  const { data, error } = await supabase.from('financiamento_parcelas').select('*').eq('financiamento_id', financiamentoId).order('numero_parcela');
+  if (error) throw error;
+  return data ?? [];
+}
 
 export function useEdicaoDoContrato(financiamentoId: string | null | undefined, clienteId: string | null | undefined) {
   const qc = useQueryClient();
@@ -42,7 +54,21 @@ export function useEdicaoDoContrato(financiamentoId: string | null | undefined, 
     },
   });
 
+  /* FIN-CONTRATO-CRONOGRAMA-01 — UMA FONTE para as parcelas editáveis: a situação do banco + a marca `ajustada` + os vínculos vivos,
+     pelas mesmas chaves da tela do contrato (o cache é o mesmo) e pelo mesmo montador (`montarParcelasParaEditar`). Nula = lendo. */
+  const hoje = hojeLocal();
+  /* a MESMA chave da tela do contrato (com detalhe); sem a inscrição no canal: quem grava aqui relê as chaves do contrato (`reler`) */
+  const situacao = useQuery({ queryKey: [CHAVE_SITUACAO_DO_CONTRATO, financiamentoId, hoje, 'detalhe'], enabled: !!financiamentoId && !!clienteId,
+    queryFn: () => lerSituacaoDoBanco(financiamentoId!, hoje, true) });
+  const gravadas = useQuery({ queryKey: ['financiamento-parcelas', financiamentoId], enabled: !!financiamentoId, queryFn: () => lerParcelasGravadas(financiamentoId!) });
+  const vinculos = useQuery({ queryKey: ['contrato-vinculos-pagamento', financiamentoId], enabled: !!financiamentoId && !!clienteId,
+    queryFn: () => lerVinculosDePagamento(financiamentoId!) });
+  const parcelas = useMemo((): ParcelaParaEditar[] | null => (situacao.data && gravadas.data
+    ? montarParcelasParaEditar(situacao.data.parcelas, ajustadasDasGravadas(gravadas.data), vinculos.data ?? []) : null),
+  [situacao.data, gravadas.data, vinculos.data]);
+
   return {
+    parcelas,
     salvarCabecalho: (dados: Record<string, unknown>, simular = true) => chamar('fn_financiamento_salvar_cabecalho', { p_id: financiamentoId, p_dados: dados }, simular),
     editarParcelas: (m: MudancasDasParcelas, simular = true) => chamar('fn_financiamento_parcelas_editar', { p_id: financiamentoId, p_mudancas: m }, simular),
     regerar: (modo: ModoDeRegerar, simular = true) => chamar('fn_financiamento_parcelas_regerar', { p_id: financiamentoId, p_modo: modo }, simular),

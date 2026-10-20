@@ -45,8 +45,8 @@ import { BotaoJuntar, DesfazerJuncaoDialog, JuntarContratoDialog } from '@/compo
 import { CadastroDeContratoDialog } from '@/components/financiamentos/CadastroDeContratoDialog';
 import { ConsorcioDialog } from '@/components/financiamentos/ConsorcioDialog';
 import { EditarParcelasDialog, SeloAjustada, type ParcelaParaEditar } from '@/components/financiamentos/EdicaoDoContrato';
-import { useEdicaoDoContrato } from '@/hooks/useEdicaoDoContrato';
-import { travaNaTela } from '@/lib/financiamentos/edicaoDoContrato';
+import { lerParcelasGravadas, useEdicaoDoContrato } from '@/hooks/useEdicaoDoContrato';
+import { ajustadasDasGravadas, montarParcelasParaEditar } from '@/lib/financiamentos/edicaoDoContrato';
 import { ROTULO_DA_BAIXA, type TipoDeBaixa } from '@/lib/financiamentos/baixaDoContrato';
 import { ROTULO_DO_PAPEL } from '@/lib/financiamentos/buscaNoContrato';
 import type { VinculoDePagamento } from '@/hooks/useContratoDeCredito';
@@ -161,13 +161,7 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
     queryKey: ['financiamento-parcelas', id],
     enabled: !!id,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('financiamento_parcelas')
-        .select('*')
-        .eq('financiamento_id', id!)
-        .order('numero_parcela');
-      if (error) throw error;
-      return data ?? [];
+      return lerParcelasGravadas(id!);
     },
   });
 
@@ -446,11 +440,9 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
   /* B3 (medido 18/10): a 1.126×579 o aviso da 1ª parcela ocupava 42px sob o cronograma e tirava duas parcelas da vista — ele
      também vira item da aba "A resolver" (só informa). Sob o cronograma não fica aviso nenhum. */
   const pendentesDoBanco = credito.tela?.aResolver ?? [];
-  const ajustadas = new Set(parcelas.filter((r) => 'ajustada' in r && r.ajustada === true).map((r) => r.id));
-  const parcelasParaEditar: ParcelaParaEditar[] = linhas.map((p) => ({
-    id: p.id, numero: p.numero, vencimento: p.dataVencimento, principal: p.valorPrincipal, juros: p.valorJuros, ajustada: ajustadas.has(p.id),
-    trava: travaNaTela(p.situacao, credito.vinculos.some((v) => v.parcelaId === p.id)),
-  }));
+  /* FIN-CONTRATO-CRONOGRAMA-01 — o MESMO montador da aba Condições do cadastro (`montarParcelasParaEditar`), das mesmas três leituras */
+  const ajustadas = ajustadasDasGravadas(parcelas);
+  const parcelasParaEditar: ParcelaParaEditar[] = montarParcelasParaEditar(linhas, ajustadas, credito.vinculos);
   const avisosDaLista = [...(principalDifere ? [principalDifere] : []), ...avisos];
   const pendencias = { qtde: pendentesDoBanco.length + avisosDaLista.length, vencido: pendentesDoBanco.some((p) => p.tom === 'vencido') };
   /* TELA DO CONTRATO v4 — a 5ª célula do Resumo: Vencido (vermelho) quando há; no quitado, a data do último pagamento; senão o
@@ -972,7 +964,7 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
       )}
       {editOpen && !ehParcelamento && abaDoEditar === 'parcelas' && (
         <EditarParcelasDialog aberto aoFechar={() => { setEditOpen(false); setFocoParcela(null); }} api={edicao} ultimaOperacao={edicao.ultimaOperacao}
-          parcelas={parcelasParaEditar} focoId={focoParcela} />
+          parcelas={parcelasParaEditar} focoId={focoParcela} contratado={contratadoDoCredito} />
       )}
       {editOpen && ehParcelamento && (
         <ObrigacaoDialog

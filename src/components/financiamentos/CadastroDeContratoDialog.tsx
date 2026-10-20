@@ -36,9 +36,13 @@ import { mostraResumo } from '@/lib/financiamentos/consorcio';
 import { criarFornecedorDaCasa } from '@/lib/fornecedores/cadastroDaCasaBanco';
 import { supabase } from '@/integrations/supabase/client';
 import { useEdicaoDoContrato } from '@/hooks/useEdicaoDoContrato';
-import { RegerarParcelas } from '@/components/financiamentos/EdicaoDoContrato';
+import { RegerarParcelas, TabelaDoCronograma } from '@/components/financiamentos/EdicaoDoContrato';
 import { ConsorcioDialog } from '@/components/financiamentos/ConsorcioDialog';
-import { dadosDoCabecalho, formDoContrato, motivoRegerarApagado, tituloDaEdicao, PLANO_JUROS_POR_ATIVIDADE, PLANO_PRINCIPAL_POR_ATIVIDADE, TEXTO_DA_ORIGEM, type CampoNaoCadastrado, type OrigemDaPeriodicidade } from '@/lib/financiamentos/edicaoDoContrato';
+import {
+  contaDoCronograma, dadosDoCabecalho, faixaDoPrincipal, formDoContrato, motivoRegerarApagado, mudancasDasParcelas, semMudanca, tituloDaEdicao,
+  FRASE_SALVE_PARCELAS_ANTES_DE_REGERAR, PLANO_JUROS_POR_ATIVIDADE, PLANO_PRINCIPAL_POR_ATIVIDADE, TEXTO_DA_ORIGEM,
+  type CampoNaoCadastrado, type OrigemDaPeriodicidade, type ParcelaParaEditar,
+} from '@/lib/financiamentos/edicaoDoContrato';
 import {
   ROTULO_DA_MODALIDADE, ROTULO_DA_PERIODICIDADE, ROTULO_DO_SISTEMA, faltaNoResumo, formVazio, lerCronograma, oQueFalta, pedidoDeCriacao, pedidoDoCronograma,
   recusaAlemDaLista, textoDasParcelas,
@@ -51,6 +55,8 @@ type Aba = 'contrato' | 'liberacoes' | 'condicoes' | 'destinacao' | 'documentos'
 /* A RÉGUA DO CADASTRO (acabamento 17/10): rótulo 10px cinza em sentence case; campo e seletor de 28px com texto de 11px. */
 const ROTULO = REGUA_ROTULO;
 const CAMPO = REGUA_CAMPO;
+/* FIN-CONTRATO-CRONOGRAMA-01 — a régua da aba Condições: campos de 24px a 11px */
+const CAMPO24 = 'h-6 text-[11px]';
 /* O corpo do modal é cinza (bg-muted da casa) e os campos moram em blocos brancos — o bloco da tela do contrato, reusado. */
 function Bloco({ nome, children, grade, testId, className = '' }: { nome: string; children: React.ReactNode; grade: string; testId: string; className?: string }) {
   return (
@@ -114,7 +120,10 @@ export function CadastroDeContratoDialog({ aberto, aoFechar, onAbrirCompraParcel
   const [ncNoBanco, setNcNoBanco] = useState<CampoNaoCadastrado[]>([]);
   const [destaque, setDestaque] = useState<CampoNaoCadastrado | null>(null);
   const [tituloEdicao, setTituloEdicao] = useState<string>('Editar contrato');
-  const [regerarAceso, setRegerarAceso] = useState(false);
+  /* FIN-CONTRATO-CRONOGRAMA-01 — o Regerar acontece NO LUGAR da tabela (a faixa e o antes × depois) */
+  const [regerando, setRegerando] = useState(false);
+  /* as parcelas editadas na aba (editar): nulo = como o banco as tem (`edicao.parcelas`, a mesma fonte da tela do contrato) */
+  const [linhasEditadas, setLinhasEditadas] = useState<ParcelaParaEditar[] | null>(null);
   const [salvoAgora, setSalvoAgora] = useState<string | null>(null);
   /* FIN-CONTRATO-SALVAR-01 — o que impede o Salvar fica ESCRITO: a leitura que falhou, e o "Falta:" com cada item levando à aba dele */
   const [erroLeitura, setErroLeitura] = useState<string | null>(null);
@@ -205,23 +214,77 @@ export function CadastroDeContratoDialog({ aberto, aoFechar, onAbrirCompraParcel
   const falta = oQueFalta(form);
   /* FIN-CONTRATO-NC-SALVAR-01 — UMA FONTE para o cronograma: com o cabeçalho da tela diferente do banco, o Regerar (que lê o banco) fica apagado */
   const motivoDoRegerar = editando && original ? motivoRegerarApagado(dadosDoCabecalho(original, form, naoCadastrado, escolhidos), naoCadastrado) : null;
+  /* FIN-CONTRATO-CRONOGRAMA-01 — as linhas da tabela da aba Condições:
+     · editar: as parcelas do banco (`edicao.parcelas` — a situação + a ajustada + os vínculos, o montador da tela do contrato), com o
+       que foi editado na linha; a paga e a vinculada ficam em leitura;
+     · novo Personalizado: as parcelas digitadas (editáveis); novo SAC / Price / Parcela única: a prévia do banco (`fn_financiamento_cronograma`). */
+  const parcelasDoBanco = edicao.parcelas ?? null;
+  const linhasDaTab: ParcelaParaEditar[] = editando ? (linhasEditadas ?? parcelasDoBanco ?? [])
+    : form.sistema === 'livre'
+      ? form.parcelas.map((p, i) => ({ id: null, numero: i + 1, vencimento: p.vencimento, principal: p.principal, juros: p.juros, ajustada: false, trava: null, situacao: null, pagoEm: null }))
+      : (cronograma?.linhas ?? []).map((l) => ({ id: `previa-${l.numero}`, numero: l.numero, vencimento: l.vencimento, principal: l.principal, juros: l.juros,
+          ajustada: false, trava: null, situacao: 'pendente' as const, pagoEm: null }));
+  const tabEditavel = editando || form.sistema === 'livre';
+  const mudancasDaTab = editando && parcelasDoBanco ? mudancasDasParcelas(parcelasDoBanco, linhasDaTab) : { alterar: [], acrescentar: [], retirar: [] };
+  const motivoDoRegerarNaTab = motivoDoRegerar ?? (semMudanca(mudancasDaTab) ? null : FRASE_SALVE_PARCELAS_ANTES_DE_REGERAR);
+  const faixa = faixaDoPrincipal(contaDoCronograma(linhasDaTab, form.valorTotal || null));
+  const pagasDaTab = linhasDaTab.filter((l) => !!l.trava).length;
+  const resumoDoBanco = editando && parcelasDoBanco ? contaDoCronograma(linhasDaTab, form.valorTotal || null) : null;
+  const vencimentoFinalDaTab = linhasDaTab.reduce<string | null>((m, l) => (l.vencimento && (!m || l.vencimento > m) ? l.vencimento : m), null);
+  const NOME_DO_NC: Record<CampoNaoCadastrado, string> = { sistema: 'Sistema', periodicidade: 'Periodicidade', tipoTaxa: 'Tipo de taxa', carenciaAte: 'Carência' };
+  const naoImpedem = editando ? naoCadastrado.filter((k) => k === 'tipoTaxa' || k === 'carenciaAte').map((k) => NOME_DO_NC[k]) : [];
+  const dicaDasCondicoes = editando
+    ? `lido do banco · ${pagasDaTab} ${pagasDaTab === 1 ? 'travada' : 'travadas'} (paga ou vinculada) · ${linhasDaTab.length - pagasDaTab} em aberto você edita na linha`
+    : 'contrato novo: o banco gera pelo sistema, prazo e 1º vencimento; depois ajuste na linha';
+  const editarLinhas = (f: (ls: ParcelaParaEditar[]) => ParcelaParaEditar[]) => { setLinhasEditadas((ls) => f(ls ?? parcelasDoBanco ?? [])); setRecusa(null); setSalvoAgora(null); };
+  const mudarNaTab = (i: number, p: Partial<ParcelaParaEditar>) => {
+    if (editando) { editarLinhas((ls) => ls.map((l, j) => (j === i ? { ...l, ...p, ajustada: true } : l))); return; }
+    set('parcelas', form.parcelas.map((x, j) => (j === i ? { vencimento: p.vencimento !== undefined ? p.vencimento : x.vencimento, principal: p.principal ?? x.principal, juros: p.juros ?? x.juros } : x)));
+  };
+  const retirarNaTab = (i: number) => {
+    if (editando) { editarLinhas((ls) => ls.filter((_x, j) => j !== i)); return; }
+    set('parcelas', form.parcelas.filter((_x, j) => j !== i));
+  };
+  const acrescentarNaTab = () => {
+    if (editando) { editarLinhas((ls) => [...ls, { id: null, numero: null, vencimento: null, principal: 0, juros: 0, ajustada: true, trava: null, situacao: null, pagoEm: null }]); return; }
+    set('parcelas', [...form.parcelas, { vencimento: null, principal: 0, juros: 0 }]);
+  };
+  /* "Gerar N parcelas" (novo): leva as linhas que o banco gerou para a tabela, editáveis na linha — o sistema passa a Personalizado */
+  const gerarNaTabela = () => {
+    if (!cronograma?.linhas.length) return;
+    setForm((f) => ({ ...f, sistema: 'livre', parcelas: cronograma.linhas.map((l) => ({ vencimento: l.vencimento, principal: l.principal, juros: l.juros })) }));
+  };
   /* o motivo do Salvar apagado no editar: a leitura falhou ou ainda não chegou — nunca um Salvar que some calado */
   const motivoSemSalvar = editando ? (erroLeitura ?? (original ? null : 'Carregando o contrato…')) : null;
-  const salvarCabecalho = async () => {
+  /* FIN-CONTRATO-CRONOGRAMA-01 — UM Salvar: o cabeçalho (só o que mudou) e, quando há linhas editadas na aba, as parcelas
+     (`editarParcelas(mudanças, false)`, o mesmo do "Editar parcelas"), nesta ordem; a recusa de qualquer um fica escrita no rodapé */
+  const salvarEdicao = async () => {
     if (!original) { setRecusa(erroLeitura ?? 'O contrato ainda não carregou.'); return; }
     const dados = dadosDoCabecalho(original, form, naoCadastrado, escolhidos);
-    if (Object.keys(dados).length === 0) { setRecusa('Nenhuma mudança no cabeçalho.'); return; }
+    const comParcelas = !semMudanca(mudancasDaTab);
+    if (Object.keys(dados).length === 0 && !comParcelas) { setRecusa('Nenhuma mudança no cabeçalho nem nas parcelas.'); return; }
+    if (Object.keys(dados).length > 0 && !(await salvarCabecalho(dados))) return;
+    if (!comParcelas) return;
+    setGravando(true);
+    const r = await edicao.editarParcelas(mudancasDaTab, false);
+    setGravando(false);
+    if (r.recusa) { setRecusa(r.recusa); return; }
+    setLinhasEditadas(null);
+    setSalvoAgora(Object.keys(dados).length > 0 ? 'Cabeçalho e parcelas salvos.' : 'Parcelas salvas · pagas e vinculadas não mudaram.');
+  };
+  const salvarCabecalho = async (dados: Record<string, unknown>): Promise<boolean> => {
     setGravando(true);
     const r = await edicao.salvarCabecalho(dados, false);
     setGravando(false);
-    if (r.recusa) { setRecusa(r.recusa); return; }
+    if (r.recusa) { setRecusa(r.recusa); return false; }
     setOriginal(form); setNcNoBanco(naoCadastrado);
     if (financiamentoId) onSalvo?.(financiamentoId);
-    if (r.corpo.cronograma_mudou === true) { setRegerarAceso(true); setAba('condicoes'); setSalvoAgora('Cabeçalho salvo · o cronograma mudou: regere as parcelas em aberto na aba Condições.'); }
+    if (r.corpo.cronograma_mudou === true) { setRegerando(true); setAba('condicoes'); setSalvoAgora('Cabeçalho salvo · o cronograma mudou: regere as parcelas em aberto na aba Condições.'); }
     else setSalvoAgora('Cabeçalho salvo.');
+    return true;
   };
   const salvar = async (abaDepois?: Aba) => {
-    if (editando) { await salvarCabecalho(); return; }
+    if (editando) { await salvarEdicao(); return; }
     if (salvoId) { aoFechar(); return; }
     if (falta.length) { setRecusa(null); setFaltaNoSalvar(falta); return; }
     if (cronograma?.recusa) { setRecusa(cronograma.recusa); return; }
@@ -290,7 +353,7 @@ export function CadastroDeContratoDialog({ aberto, aoFechar, onAbrirCompraParcel
 
   return (
     <Dialog open={aberto} onOpenChange={(v) => { if (!v) aoFechar(); }}>
-      <DialogContent className="flex h-[min(600px,calc(100vh-16px))] w-[min(1150px,calc(100vw-16px))] max-w-none flex-col gap-0 overflow-hidden p-0" data-testid="cadastro-de-contrato">
+      <DialogContent className="flex h-[min(720px,calc(100vh-16px))] w-[min(1150px,calc(100vw-16px))] max-w-none flex-col gap-0 overflow-hidden p-0" data-testid="cadastro-de-contrato">
         <div className="flex h-[34px] shrink-0 items-center bg-primary px-3 text-primary-foreground">
           <DialogTitle className="min-w-0 truncate text-[11px] font-semibold" title={editando ? tituloEdicao : undefined} data-testid="titulo-do-cadastro">
             {editando ? tituloEdicao : `${travado ? 'Contrato salvo' : cons ? 'Novo consórcio' : 'Novo contrato'} · ${clienteAtual?.nome ?? ''}`}
@@ -413,53 +476,64 @@ export function CadastroDeContratoDialog({ aberto, aoFechar, onAbrirCompraParcel
                   </fieldset>
                 )}
                 {aba === 'condicoes' && (
-                  <fieldset disabled={travado} className="flex min-h-0 flex-1 flex-col gap-2">
-                    <Bloco nome="Condições" testId="bloco-condicoes" grade="grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)] shrink-0">
-                      <Campo rotulo={rotuloNc('Sistema de amortização', 'sistema')} obrig destaque={destaque === 'sistema'}>
-                        <Segmentado<SistemaDoCadastro | ''> altura={26} valor={nc('sistema') ? '' : form.sistema} onEscolher={(v) => { if (v !== '') { cadastrar('sistema'); set('sistema', v); } }}
-                          opcoes={(['sac', 'price', 'bullet', 'livre'] satisfies SistemaDoCadastro[]).map((s) => ({ valor: s, rotulo: ROTULO_DO_SISTEMA[s] }))} />
-                      </Campo>
-                      <Campo rotulo="Taxa de juros (% a.a.)" obrig><CampoPercentual className={CAMPO} valor={form.taxaAa} onChange={(v) => set('taxaAa', v ?? 0)} /></Campo>
-                      <Campo rotulo={rotuloNc('Tipo de taxa', 'tipoTaxa')}><Segmentado<'pre' | 'pos' | ''> altura={26} valor={nc('tipoTaxa') ? '' : form.tipoTaxa}
-                        onEscolher={(v) => { if (v !== '') { cadastrar('tipoTaxa'); set('tipoTaxa', v); } }} opcoes={[{ valor: 'pre', rotulo: 'Pré' }, { valor: 'pos', rotulo: 'Pós (CDI/TLP)' }]} /></Campo>
-                      <Campo rotulo={nc('carenciaAte') ? 'Carência · não cadastrada' : 'Carência de principal até'}><DatePicker size="compact" className={CAMPO} value={form.carenciaAte ?? ''} onChange={(v) => { cadastrar('carenciaAte'); set('carenciaAte', v || null); }} /></Campo>
-                      <Campo rotulo={nc('periodicidade') && origemDaPeriodicidade !== 'gravada' ? (origemDaPeriodicidade === 'parcelas' ? 'Periodicidade · inferida das parcelas · confirme' : `Periodicidade · ${TEXTO_DA_ORIGEM[origemDaPeriodicidade]}`) : rotuloNc('Periodicidade', 'periodicidade')} obrig>
-                        <Segmentado<Periodicidade | ''> altura={26} sugestao={nc('periodicidade') && origemDaPeriodicidade !== 'gravada'} valor={nc('periodicidade') && origemDaPeriodicidade === 'gravada' ? '' : form.periodicidade} onEscolher={(v) => { if (v !== '') { cadastrar('periodicidade'); set('periodicidade', v); } }}
-                          opcoes={(['mensal', 'trimestral', 'semestral', 'anual'] satisfies Periodicidade[]).map((p) => ({ valor: p, rotulo: ROTULO_DA_PERIODICIDADE[p],
-                            title: nc('periodicidade') && origemDaPeriodicidade !== 'gravada' ? 'sugestão: clique para confirmar e salve o cabeçalho' : undefined }))} />
-                      </Campo>
-                      <div />
-                      {form.sistema !== 'bullet' && form.sistema !== 'livre'
-                        ? <Campo rotulo="Nº parcelas de principal (prazo)" obrig><Input className={CAMPO} inputMode="numeric" value={form.n || ''} onChange={(e) => set('n', Number(e.target.value.replace(/\D/g, '').slice(0, 3)) || 0)} data-testid="n-parcelas" /></Campo>
-                        : <div />}
-                    </Bloco>
-                    {form.sistema === 'livre' && (
-                      <div className="flex shrink-0 items-center gap-2 text-[10px]" data-testid="parcelas-digitadas">
-                        <span className="text-muted-foreground">{form.parcelas.length} parcela(s) digitada(s)</span>
-                        <Button variant="outline" size="sm" className="h-[20px] gap-1 px-2 text-[10px]" onClick={() => set('parcelas', [...form.parcelas, { vencimento: null, principal: 0, juros: 0 }])}><Plus className="size-3" /> parcela</Button>
+                  /* ⚠ `min-w-0`: o fieldset nasce com largura mínima pelo conteúdo — sem ele a tabela (min-width) empurra a aba para fora
+                     do modal em vez de rolar dentro do cartão (medido a 750px: a coluna Situação sumia, cortada) */
+                  <fieldset disabled={travado} className="flex min-h-0 min-w-0 flex-1 flex-col gap-1.5">
+                    {/* FIN-CONTRATO-CRONOGRAMA-01 — as condições em DUAS linhas de campos de 24px a 11px: Sistema · Taxa · Tipo · Carência /
+                        Periodicidade · Nº parcelas · 1º vencimento · o botão (Gerar no novo, Regerar em aberto no editar). Nº e 1º
+                        vencimento valem para todo sistema. */}
+                    <section className={`${BLOCO_DO_CONTRATO} shrink-0`} data-testid="bloco-condicoes">
+                      <Titulo nome="Condições" dica={dicaDasCondicoes} />
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-end gap-2.5" data-testid="condicoes-linha-1">
+                          <Campo rotulo={rotuloNc('Sistema de amortização', 'sistema')} obrig destaque={destaque === 'sistema'}>
+                            <Segmentado<SistemaDoCadastro | ''> altura={24} valor={nc('sistema') ? '' : form.sistema} onEscolher={(v) => { if (v !== '') { cadastrar('sistema'); set('sistema', v); } }}
+                              opcoes={(['sac', 'price', 'bullet', 'livre'] satisfies SistemaDoCadastro[]).map((s) => ({ valor: s, rotulo: ROTULO_DO_SISTEMA[s] }))} />
+                          </Campo>
+                          <Campo rotulo="Taxa (% a.a.)" obrig className="w-[92px] shrink-0"><CampoPercentual className={CAMPO24} valor={form.taxaAa} onChange={(v) => set('taxaAa', v ?? 0)} /></Campo>
+                          <Campo rotulo={rotuloNc('Tipo de taxa', 'tipoTaxa')}><Segmentado<'pre' | 'pos' | ''> altura={24} valor={nc('tipoTaxa') ? '' : form.tipoTaxa}
+                            onEscolher={(v) => { if (v !== '') { cadastrar('tipoTaxa'); set('tipoTaxa', v); } }} opcoes={[{ valor: 'pre', rotulo: 'Pré' }, { valor: 'pos', rotulo: 'Pós (CDI/TLP)' }]} /></Campo>
+                          <Campo rotulo={nc('carenciaAte') ? 'Carência · não cadastrada' : 'Carência até'} className="w-[132px] shrink-0">
+                            <DatePicker size="compact" className={CAMPO24} value={form.carenciaAte ?? ''} onChange={(v) => { cadastrar('carenciaAte'); set('carenciaAte', v || null); }} /></Campo>
+                        </div>
+                        <div className="flex items-end gap-2.5" data-testid="condicoes-linha-2">
+                          <Campo rotulo={nc('periodicidade') && origemDaPeriodicidade !== 'gravada' ? (origemDaPeriodicidade === 'parcelas' ? 'Periodicidade · inferida das parcelas · confirme' : `Periodicidade · ${TEXTO_DA_ORIGEM[origemDaPeriodicidade]}`) : rotuloNc('Periodicidade', 'periodicidade')} obrig>
+                            <Segmentado<Periodicidade | ''> altura={24} sugestao={nc('periodicidade') && origemDaPeriodicidade !== 'gravada'} valor={nc('periodicidade') && origemDaPeriodicidade === 'gravada' ? '' : form.periodicidade} onEscolher={(v) => { if (v !== '') { cadastrar('periodicidade'); set('periodicidade', v); } }}
+                              opcoes={(['mensal', 'trimestral', 'semestral', 'anual'] satisfies Periodicidade[]).map((p) => ({ valor: p, rotulo: ROTULO_DA_PERIODICIDADE[p],
+                                title: nc('periodicidade') && origemDaPeriodicidade !== 'gravada' ? 'sugestão: clique para confirmar e salve o cabeçalho' : undefined }))} />
+                          </Campo>
+                          <Campo rotulo="Nº parcelas" obrig className="w-[78px] shrink-0">
+                            <Input className={CAMPO24} inputMode="numeric" value={form.n || ''} onChange={(e) => set('n', Number(e.target.value.replace(/\D/g, '').slice(0, 3)) || 0)} data-testid="n-parcelas" />
+                          </Campo>
+                          <Campo rotulo="1º vencimento" obrig className="w-[132px] shrink-0">
+                            <DatePicker size="compact" className={CAMPO24} value={form.primeiroVencimento ?? ''} onChange={(v) => set('primeiroVencimento', v || null)} /></Campo>
+                          {editando
+                            ? <Button variant="outline" size="sm" className="h-6 shrink-0 text-[11px]" disabled={!!motivoDoRegerarNaTab || regerando} title={motivoDoRegerarNaTab ?? undefined}
+                                onClick={() => setRegerando(true)} data-testid="abrir-regerar">Regerar em aberto</Button>
+                            : <Button variant="outline" size="sm" className="h-6 shrink-0 text-[11px]" disabled={form.sistema === 'livre' || !(cronograma?.linhas.length)}
+                                title={form.sistema === 'livre' ? 'Personalizado: digite as parcelas na tabela' : 'leva as parcelas geradas pelo banco para a tabela, editáveis na linha (o sistema passa a Personalizado)'}
+                                onClick={gerarNaTabela} data-testid="gerar-parcelas">{cronograma?.linhas.length ? `Gerar ${cronograma.linhas.length} parcelas` : 'Gerar parcelas'}</Button>}
+                        </div>
                       </div>
-                    )}
-                    {form.sistema === 'livre' && form.parcelas.length > 0 && (
-                      <div className="max-h-[110px] shrink-0 space-y-1 overflow-y-auto">
-                        {form.parcelas.map((p, i) => (
-                          <div key={i} className="grid grid-cols-[30px_130px_140px_140px_20px] items-center gap-2 text-[10px]">
-                            <span className="tabular-nums">{i + 1}</span>
-                            <DatePicker size="compact" className={CAMPO} value={p.vencimento ?? ''} onChange={(v) => set('parcelas', form.parcelas.map((x, j) => (j === i ? { ...x, vencimento: v || null } : x)))} />
-                            <CampoMoeda className={CAMPO} valor={p.principal} onChange={(v) => set('parcelas', form.parcelas.map((x, j) => (j === i ? { ...x, principal: v ?? 0 } : x)))} />
-                            <CampoMoeda className={CAMPO} valor={p.juros} onChange={(v) => set('parcelas', form.parcelas.map((x, j) => (j === i ? { ...x, juros: v ?? 0 } : x)))} />
-                            <button type="button" className="text-muted-foreground hover:text-destructive" onClick={() => set('parcelas', form.parcelas.filter((_x, j) => j !== i))}><X className="size-3" /></button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {editando ? (regerarAceso && !motivoDoRegerar
-                      ? <RegerarParcelas api={edicao} onCampoFaltando={setDestaque} onFeito={() => { setRegerarAceso(false); setSalvoAgora('Parcelas em aberto regeradas · desfazer pela tela do contrato (Editar parcelas).'); }} />
-                      : <div className="flex h-[26px] shrink-0 items-center gap-2 text-[10.5px] text-muted-foreground" data-testid="regerar-apagado">
-                          <span className={`uma-linha-que-rola min-w-0 flex-1 ${motivoDoRegerar ? 'font-medium text-amber-800' : ''}`} data-testid="motivo-do-regerar">
-                            {motivoDoRegerar ?? 'Mudou sistema, taxa, prazo, carência, valor, periodicidade ou 1º vencimento? Salve: o banco acende "Regerar parcelas em aberto".'}</span>
-                          <Button variant="outline" size="sm" className="h-[22px] shrink-0 text-[10px]" disabled={!!motivoDoRegerar} title={motivoDoRegerar ?? undefined}
-                            onClick={() => setRegerarAceso(true)} data-testid="abrir-regerar">Regerar parcelas em aberto</Button>
-                        </div>) : tabela}
+                    </section>
+                    {regerando && editando && !motivoDoRegerarNaTab
+                      ? <RegerarParcelas api={edicao} onCampoFaltando={setDestaque} ajustadasEmAberto={linhasDaTab.filter((l) => l.ajustada && !l.trava).length}
+                          onVoltar={() => setRegerando(false)}
+                          onFeito={() => { setRegerando(false); setLinhasEditadas(null); setSalvoAgora('Parcelas em aberto regeradas · desfazer pela tela do contrato (Editar parcelas).'); }} />
+                      : (<>
+                        {/* a faixa de 24px: N parcelas · principal, a conferência com o contratado (nunca corrige), o motivo do Regerar apagado, "+ parcela" */}
+                        <div className="flex h-[24px] shrink-0 items-center gap-2 text-[11px]" data-testid="faixa-do-cronograma">
+                          <span className="shrink-0 tabular-nums" data-testid="principal-do-cronograma">{faixa.texto}</span>
+                          {faixa.conferencia && <span className={`shrink-0 tabular-nums ${faixa.confere ? 'text-[#15803d]' : 'font-medium text-amber-700'}`} data-testid="conferencia-do-principal">{faixa.conferencia}</span>}
+                          <span className="uma-linha-que-rola min-w-0 flex-1 font-medium text-amber-800" data-testid={motivoDoRegerarNaTab ? 'motivo-do-regerar' : undefined}
+                            title={motivoDoRegerarNaTab ?? undefined}>{motivoDoRegerarNaTab ?? ''}</span>
+                          <Button variant="outline" size="sm" className="h-[22px] shrink-0 gap-1 px-2 text-[11px]" disabled={!tabEditavel} data-testid="acrescentar-parcela"
+                            title={tabEditavel ? undefined : 'Escolha Personalizado ou clique Gerar para ajustar na linha'} onClick={acrescentarNaTab}><Plus className="size-3" /> parcela</Button>
+                        </div>
+                        <TabelaDoCronograma modo="editar" linhas={linhasDaTab} contratado={form.valorTotal || null} editavel={tabEditavel}
+                          onMudar={mudarNaTab} onRetirar={retirarNaTab} testId="tabela-da-aba-condicoes"
+                          vazio={editando ? (edicao.parcelas === null || edicao.parcelas === undefined ? 'lendo as parcelas do banco' : 'Sem parcelas.') : (cronograma?.recusa ?? 'Preencha as condições para ver o cronograma.')} />
+                      </>)}
                   </fieldset>
                 )}
                 {aba === 'parcelas' && tabela}
@@ -490,14 +564,25 @@ export function CadastroDeContratoDialog({ aberto, aoFechar, onAbrirCompraParcel
                 <LinhaResumo rotulo="Sistema" valor={`${nc('sistema') ? 'não cadastrado' : ROTULO_DO_SISTEMA[form.sistema]} · ${ROTULO_DA_PERIODICIDADE[form.periodicidade].toLowerCase()}${nc('periodicidade') && origemDaPeriodicidade === 'parcelas' ? ' (inferida)' : ''}`} />
                 <LinhaResumo rotulo="Taxa" valor={`${num2(form.taxaAa)}% a.a. ${form.tipoTaxa === 'pre' ? 'pré' : 'pós'}`} />
                 <LinhaResumo rotulo="Carência" valor={form.carenciaAte ? `até ${br(form.carenciaAte)}` : '—'} />
+                {/* FIN-CONTRATO-CRONOGRAMA-01 — no editar (com o cabeçalho igual ao do banco) o resumo é o cronograma GRAVADO — as linhas da aba */}
+                {resumoDoBanco ? (<>
+                  <LinhaResumo rotulo="Parcelas" valor={`${resumoDoBanco.parcelas}${resumoDoBanco.pagas ? ` · ${resumoDoBanco.pagas} ${resumoDoBanco.pagas === 1 ? 'paga' : 'pagas'}` : ''}`} />
+                  <LinhaResumo rotulo="1º vencimento" valor={br(linhasDaTab[0]?.vencimento ?? null)} />
+                  <LinhaResumo rotulo="Vencimento final" valor={br(vencimentoFinalDaTab)} />
+                  <LinhaResumo rotulo="Juros previstos" valor={`R$ ${num2(resumoDoBanco.juros)}`} />
+                  <LinhaResumo rotulo="Total a pagar" valor={`R$ ${num2(resumoDoBanco.total)}`} forte />
+                </>) : (<>
                 <LinhaResumo rotulo="Parcelas" valor={textoDasParcelas(cronograma)} />
                 <LinhaResumo rotulo="Vencimento final" valor={br(cronograma?.vencimentoFinal ?? null)} />
                 <LinhaResumo rotulo="Juros previstos" valor={cronograma ? `R$ ${num2(cronograma.jurosTotal)}` : '—'} />
                 <LinhaResumo rotulo="Total a pagar" valor={cronograma ? `R$ ${num2(cronograma.total)}` : '—'} forte />
+                </>)}
               </>)}
               <div className="mb-0.5 mt-2 border-t pt-1 text-[11px] font-semibold text-foreground">O que falta</div>
               <div className="min-h-0 flex-1 overflow-hidden text-[10px] leading-[15px]" data-testid="o-que-falta">
-                {falta.length === 0 && !travado && <div className="text-[#15803d]">✓ pronto para salvar</div>}
+                {falta.length === 0 && !travado && naoImpedem.length === 0 && <div className="text-[#15803d]">✓ pronto para salvar</div>}
+                {/* FIN-CONTRATO-CRONOGRAMA-01 — o que não impede salvar fica em âmbar, dito como tal */}
+                {naoImpedem.length > 0 && <div className="break-words text-amber-700" data-testid="falta-nao-impede">! {naoImpedem.join(' e ')}: não cadastrados (não impedem salvar)</div>}
                 {faltaNoResumo(falta).visiveis.map((f) => <div key={f} className="truncate text-amber-700" title={f}>! {f}</div>)}
                 {faltaNoResumo(falta).resto.length > 0 && <div className="text-muted-foreground" title={faltaNoResumo(falta).resto.join('\n')} data-testid="falta-mais">+{faltaNoResumo(falta).resto.length}</div>}
                 {recusaAlemDaLista(cronograma?.recusa, falta) && <div className="line-clamp-2 text-destructive" title={cronograma?.recusa ?? undefined}>! {cronograma?.recusa}</div>}

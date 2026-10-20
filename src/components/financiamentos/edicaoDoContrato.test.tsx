@@ -24,6 +24,7 @@ const edicao = {
   } })),
   desfazer: vi.fn(async () => ({ simulado: false, recusa: null, corpo: {} })),
   ultimaOperacao: null,
+  parcelas: null,
 };
 vi.mock('@/hooks/useEdicaoDoContrato', () => ({ useEdicaoDoContrato: () => edicao }));
 vi.mock('@/contexts/ClienteContext', () => ({ useCliente: () => ({ clienteAtual: { id: 'c1', nome: 'Cliente Teste' } }) }));
@@ -114,7 +115,9 @@ describe('(3) regerar parcelas em aberto', () => {
     render(<RegerarParcelas api={edicao} onFeito={feito} />);
     await waitFor(() => expect(edicao.regerar).toHaveBeenCalledWith('manter_ajustes', true));
     expect((await screen.findAllByTestId('linha-antes-depois')).map((l) => l.getAttribute('data-marca'))).toEqual(['mudou', 'igual', 'nova']);
-    expect(screen.getByTestId('base-do-regerar').textContent).toContain('regera R$ 2.600,00 em 2 parcela(s)');
+    expect(screen.getByTestId('base-do-regerar').textContent).toContain('Regerar 2 em aberto');
+    /* FIN-CONTRATO-CRONOGRAMA-01: o saldo da base vai no title da faixa */
+    expect(screen.getByTestId('base-do-regerar').getAttribute('title')).toContain('regera R$ 2.600,00 em 2 parcela(s)');
     fireEvent.click(screen.getByRole('button', { name: 'Recalcular todas' }));
     await waitFor(() => expect(edicao.regerar).toHaveBeenCalledWith('recalcular_todas', true));
     expect(edicao.regerar.mock.calls.every((c) => c[1] === true)).toBe(true);
@@ -132,7 +135,7 @@ describe('(4) editar as parcelas à mão', () => {
     render(<EditarParcelasDialog aberto aoFechar={fechar} api={edicao} ultimaOperacao={null}
       parcelas={[P({ trava: 'paga · não muda' }), P({ id: 'p2', numero: 2, vencimento: '2031-03-15' })]} />);
     const linhas = screen.getAllByTestId('linha-editar-parcela');
-    expect(within(linhas[0]).getByTestId('trava-da-parcela').textContent).toBe('paga · não muda');
+    expect(within(linhas[0]).getByTestId('trava-da-parcela').getAttribute('title')).toBe('paga · não muda');
     expect(within(linhas[0]).queryByTestId('retirar-parcela')).toBeNull();
     expect((screen.getByTestId('salvar-parcelas') as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(within(linhas[1]).getByTestId('retirar-parcela'));

@@ -174,12 +174,45 @@ if (tela === 'mesclar') {
   /* FIN-CONTRATO-SALVAR-01 — o cadastro de contrato de crédito: `&m=novo` (vazio) ou `&m=editar` (um contrato antigo SINTÉTICO, como os da
      Santa Rita: sem periodicidade, sem sistema, sem plano dos juros) */
   const d: any = contratoCadastro;
+  /* FIN-CONTRATO-CRONOGRAMA-01 — a aba Condições com o cronograma do banco, todos SINTÉTICOS: `&v=sr` (Personalizado, 5 anuais, 2 pagas;
+     o principal não fecha por R$ 0,02), `&v=rrcc` (SAC anual pós, a 1ª paga, as 5 ajustadas), `&v=regerar` (o rrcc com a prévia do
+     regerar), `&v=120` (120 mensais), `&v=desc` (descrição de 120 caracteres), `&v=sac60` (novo: o banco gera SAC 60 mensais) */
+  const somaMeses = (iso: string, k: number) => { const dt = new Date(`${iso}T12:00:00Z`); dt.setUTCMonth(dt.getUTCMonth() + k); return dt.toISOString().slice(0, 10); };
+  const linhasSint = (n: number, d1: string, passo: number, principal: number, jurosDe: (i: number) => number, pagas: number, ajustadas: boolean) =>
+    Array.from({ length: n }, (_x, i) => ({ id: `p-sint-${i + 1}`, numero: i + 1, venc: somaMeses(d1, i * passo), principal, juros: jurosDe(i), paga: i < pagas, ajustada: ajustadas }));
+  const cenario = v === 'sr' ? { contrato: { valor_total: 534107.87, sistema_amortizacao: 'livre', periodicidade: null, tipo_taxa: null, data_primeira_parcela: '2025-05-15', total_parcelas: 5 },
+      linhas: linhasSint(5, '2025-05-15', 12, 106821.57, (i) => [53983.43, 33767.64, 31726.01, 21150.67, 10575.34][i], 2, false) }
+    : v === 'rrcc' || v === 'regerar' || v === 'desc' ? { contrato: { valor_total: 600022.5, sistema_amortizacao: 'sac', periodicidade: 'anual', tipo_taxa: 'pos', data_primeira_parcela: '2026-08-15', total_parcelas: 5,
+        ...(v === 'desc' ? { descricao: ('Custeio pecuário de reforma de pastagem e aquisição de máquinas para a fazenda exemplo ').repeat(2).slice(0, 120) } : {}) },
+      linhas: linhasSint(5, '2026-08-15', 12, 120004.5, (i) => [116304.73, 35665.34, 26749, 17832.67, 8916.33][i], 1, true) }
+    : v === '120' ? { contrato: { valor_total: 999999999.99, sistema_amortizacao: 'price', periodicidade: 'mensal', tipo_taxa: 'pre', data_primeira_parcela: '2026-01-10', total_parcelas: 120 },
+      linhas: linhasSint(120, '2026-01-10', 1, 8333333.33, (i) => 99999999.99 - i * 100000, 10, false) }
+    : null;
+  const contratoDoCenario = cenario ? { ...d.contrato, ...cenario.contrato } : d.contrato;
+  const situacaoDoCenario = cenario ? {
+    parcelas: cenario.linhas.map((l) => ({ id: l.id, numero: l.numero, data_vencimento: l.venc, valor_principal: l.principal, valor_juros: l.juros, valor_total: l.principal + l.juros,
+      situacao: l.paga ? 'paga' : 'pendente', pago_em: l.paga ? l.venc : null, valor_pago: l.paga ? l.principal + l.juros : 0, lancamento_id: `l-${l.id}`, lancamento_juros_id: `j-${l.id}`,
+      fonte: 'lancamento', diverge: false })),
+    cartoes: { valor_contrato: contratoDoCenario.valor_total, pago: 0, a_vencer: 0, vencido: 0, pagas: cenario.linhas.filter((l) => l.paga).length, parcelas: cenario.linhas.length,
+      juros_previstos: 0, soma_principal: 0, soma_total: 0, divergentes: 0 },
+  } : null;
+  const fotoSint = (ls: NonNullable<typeof cenario>['linhas'], mais: number) => ls.map((l) => ({ id: l.id, numero_parcela: l.numero, data_vencimento: l.venc, valor_principal: l.principal,
+    valor_juros: l.paga ? l.juros : Math.round((l.juros + mais) * 100) / 100, valor_total: l.principal + l.juros, status: l.paga ? 'pago' : 'pendente', ajustada: l.ajustada && mais === 0 }));
+  const cronSac60 = { recusa: null, parcelas: 60, parcelas_so_juros: 0, principal_total: 300000, juros_total: 95312.5, total: 395312.5, vencimento_final: '2031-06-10',
+    linhas: Array.from({ length: 60 }, (_x, i) => ({ numero: i + 1, vencimento: somaMeses('2026-07-10', i), principal: 5000, juros: Math.round((300000 - i * 5000) * 0.0098 * 100) / 100,
+      total: 5000 + Math.round((300000 - i * 5000) * 0.0098 * 100) / 100, saldo_apos: 300000 - (i + 1) * 5000 })) };
   g.__bancoBancada = {
-    from: (t: string) => t === 'financiamentos' ? [d.contrato] : t === 'financiamento_parcelas' ? d.vencimentos.map((v: string, i: number) => ({ data_vencimento: v, status: 'pendente', numero_parcela: i + 1 }))
+    from: (t: string) => t === 'financiamentos' ? [contratoDoCenario]
+      : t === 'financiamento_parcelas' ? (cenario ? cenario.linhas.map((l) => ({ id: l.id, numero_parcela: l.numero, data_vencimento: l.venc, status: l.paga ? 'pago' : 'pendente', ajustada: l.ajustada }))
+        : d.vencimentos.map((v: string, i: number) => ({ data_vencimento: v, status: 'pendente', numero_parcela: i + 1 })))
       : t === 'financeiro_plano_contas' ? d.planos : [],
-    rpc: (fn: string) => fn === 'fn_financiamento_cronograma' ? d.cronograma : null,
+    rpc: (fn: string) => fn === 'fn_financiamento_cronograma' ? (v === 'sac60' ? cronSac60 : d.cronograma)
+      : fn === 'fn_financiamento_situacao' ? situacaoDoCenario
+      : fn === 'fn_financiamento_parcelas_regerar' && cenario ? { simulado: true, recusa: null, antes: fotoSint(cenario.linhas, 0), depois: fotoSint(cenario.linhas, 1234.56),
+          base: { saldo: 480018, guardado: 0, principal: 480018, parcelas: 4, sistema: 'sac', taxa_aa: 12.5, periodicidade: 'anual' }, diferenca_do_saldo: 0 }
+      : null,
   };
-  montar(<CadastroDeContratoDialog aberto aoFechar={() => {}} financiamentoId={m === 'editar' ? d.contrato.id : null} prefill={m === 'editar' ? undefined : { natureza: 'financiamento' }} />);
+  montar(<CadastroDeContratoDialog aberto aoFechar={() => {}} financiamentoId={m === 'editar' ? contratoDoCenario.id : null} prefill={m === 'editar' ? undefined : { natureza: 'financiamento' }} />);
 } else if (tela === 'lancamento') {
   /* com `desc`, a edição é parcela de uma compra parcelada SEM número de contrato: o rodapé fala dela (a descrição do contrato é a longa) */
   g.__bancoBancada = { from: () => [], rpc: (fn: string) => (desc && fn === 'fn_lancamento_financiamento') ? {

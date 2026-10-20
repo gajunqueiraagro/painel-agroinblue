@@ -13,8 +13,8 @@ const temSoma = (s: string) => /\.reduce\(|\+=/.test(s);
 
 describe('o formulário novo', () => {
   const fonte = semComentario(ler('CadastroDeContratoDialog.tsx'));
-  it("tem tamanho fixo de 1150 x 600 (encolhe só com a janela menor) e a coluna de resumo", () => {
-    expect(fonte).toMatch(/h-\[min\(600px,calc\(100vh-16px\)\)\] w-\[min\(1150px,calc\(100vw-16px\)\)\]/);
+  it("tem tamanho fixo de 1150 x 720 (FIN-CONTRATO-CRONOGRAMA-01; encolhe só com a janela menor) e a coluna de resumo", () => {
+    expect(fonte).toMatch(/h-\[min\(720px,calc\(100vh-16px\)\)\] w-\[min\(1150px,calc\(100vw-16px\)\)\]/);
     expect(fonte).toMatch(/data-testid="resumo-do-cadastro"/);
   });
   it('o cronograma é do gerador do banco e a criação é uma RPC', () => {

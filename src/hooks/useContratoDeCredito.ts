@@ -58,6 +58,20 @@ export interface PedidoDeLiberacao {
   lancamentoId: string | null; fornecedorId: string | null; contratoLiquidadoId: string | null; destinacaoId: string | null; observacao: string | null;
 }
 
+/** os pagamentos vinculados pelo operador (a trilha viva). FIN-CONTRATO-CRONOGRAMA-01: a MESMA leitura (e a mesma chave
+ *  `contrato-vinculos-pagamento`) serve a tela do contrato e a aba Condições do cadastro. */
+export async function lerVinculosDePagamento(financiamentoId: string): Promise<VinculoDePagamento[]> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- tabela nova, fora do types.ts
+  const { data, error } = await (supabase as any).from('financiamento_parcela_vinculos')
+    .select('id, parcela_id, lancamento_id, papel').eq('financiamento_id', financiamentoId).is('desfeito_em', null);
+  if (error) throw error;
+  const rows: Linha[] = data ?? [];
+  return rows.flatMap((r) => {
+    const p = r.papel === 'principal' || r.papel === 'juros' || r.papel === 'total' ? r.papel : null;
+    return p ? [{ id: String(r.id), parcelaId: String(r.parcela_id), lancamentoId: String(r.lancamento_id), papel: p }] : [];
+  });
+}
+
 export function useContratoDeCredito(financiamentoId: string | null | undefined, clienteId: string | null | undefined) {
   const qc = useQueryClient();
   const ligado = !!financiamentoId && !!clienteId;
@@ -173,17 +187,7 @@ export function useContratoDeCredito(financiamentoId: string | null | undefined,
   const vinculos = useQuery({
     queryKey: ['contrato-vinculos-pagamento', financiamentoId],
     enabled: ligado,
-    queryFn: async (): Promise<VinculoDePagamento[]> => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- tabela nova, fora do types.ts
-      const { data, error } = await (supabase as any).from('financiamento_parcela_vinculos')
-        .select('id, parcela_id, lancamento_id, papel').eq('financiamento_id', financiamentoId!).is('desfeito_em', null);
-      if (error) throw error;
-      const rows: Linha[] = data ?? [];
-      return rows.flatMap((r) => {
-        const p = r.papel === 'principal' || r.papel === 'juros' || r.papel === 'total' ? r.papel : null;
-        return p ? [{ id: String(r.id), parcelaId: String(r.parcela_id), lancamentoId: String(r.lancamento_id), papel: p }] : [];
-      });
-    },
+    queryFn: () => lerVinculosDePagamento(financiamentoId!),
   });
 
   /* passo 5: a baixa viva (a que o "Desfazer baixa" desfaz) */

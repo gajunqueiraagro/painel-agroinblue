@@ -76,6 +76,16 @@ const CENARIOS = [
     nome: `cadastro-contrato-${m}-${aba}`, url: `tela=cadastro-contrato&m=${m}`, tamanhos: TAMANHOS_DO_CONSORCIO,
     antes: async (p) => { await p.getByRole('button', { name: aba, exact: true }).first().click(); await p.waitForTimeout(500); } }))),
   { nome: 'cadastro-contrato-novo-falta', url: 'tela=cadastro-contrato&m=novo', tamanhos: TAMANHOS_DO_CONSORCIO, antes: clicar('[data-testid="salvar-cadastro"]') },
+  /* FIN-CONTRATO-CRONOGRAMA-01 — a aba Condições e cronograma: os dois casos do relato (SINTÉTICOS), o novo SAC 60 mensais, a prévia do
+     regerar no lugar da tabela, 120 parcelas e a descrição de 120 caracteres; `tabelaMinima`: cabeçalho, 3 linhas e o Total inteiros */
+  ...[['sr', 'editar&v=sr'], ['rrcc', 'editar&v=rrcc'], ['sac60', 'novo&v=sac60'], ['120', 'editar&v=120'], ['desc', 'editar&v=desc'], ['regerar', 'editar&v=regerar']].map(([n, q]) => ({
+    nome: `cadastro-contrato-cronograma-${n}`, url: `tela=cadastro-contrato&m=${q}`, tamanhos: [[750, 483], ...TAMANHOS_DO_CONSORCIO],
+    tabelaMinima: { sel: n === 'regerar' ? '[data-testid="antes-depois"]' : '[data-testid="tabela-da-aba-condicoes"]', linhas: 3 },
+    antes: async (p) => {
+      await p.getByRole('button', { name: 'Condições e cronograma', exact: true }).first().click(); await p.waitForTimeout(500);
+      if (n === 'regerar') { await p.locator('[data-testid="abrir-regerar"]').click(); await p.waitForTimeout(400);
+        await p.getByRole('button', { name: 'Recalcular todas' }).first().click(); await p.waitForTimeout(500); }
+    } })),
   ...[['novo-consorcio', ''], ['novo-custos', 'Custos e parcelas']].map(([n, aba]) => ({
     nome: `consorcio-${n}`, url: 'tela=consorcio&novo=1', tamanhos: TAMANHOS_DO_CONSORCIO, semRolagem: { dentro: '[role="dialog"]', exceto: EXCETO_CONSORCIO },
     antes: aba ? async (p) => { await p.getByRole('button', { name: aba }).first().click(); await p.waitForTimeout(500); } : undefined })),

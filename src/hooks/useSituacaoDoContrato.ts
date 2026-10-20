@@ -24,17 +24,20 @@ export function useSituacaoDoContrato(financiamentoId: string | null | undefined
   return useQuery({
     queryKey: detalhe ? [CHAVE_SITUACAO_DO_CONTRATO, financiamentoId, hoje, 'detalhe'] : [CHAVE_SITUACAO_DO_CONTRATO, financiamentoId, hoje],
     enabled: !!financiamentoId && !!clienteId,
-    queryFn: async (): Promise<SituacaoDoContrato> => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
-      const { data, error } = await (supabase as any).rpc('fn_financiamento_situacao', detalhe
-        ? { p_financiamento_id: financiamentoId, p_hoje: hoje, p_detalhe: true }
-        : { p_financiamento_id: financiamentoId, p_hoje: hoje });
-      if (error) throw error;
-      const lido = lerSituacaoDoContrato(data);
-      if (!lido) throw new Error('A situação do contrato veio em formato inesperado.');
-      return lido;
-    },
+    queryFn: () => lerSituacaoDoBanco(financiamentoId!, hoje, detalhe),
   });
+}
+
+/** a leitura (a mesma da chave `financiamento-situacao`) — FIN-CONTRATO-CRONOGRAMA-01: o cadastro a usa pela mesma chave, sem segunda regra */
+export async function lerSituacaoDoBanco(financiamentoId: string, hoje: string, detalhe: boolean): Promise<SituacaoDoContrato> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+  const { data, error } = await (supabase as any).rpc('fn_financiamento_situacao', detalhe
+    ? { p_financiamento_id: financiamentoId, p_hoje: hoje, p_detalhe: true }
+    : { p_financiamento_id: financiamentoId, p_hoje: hoje });
+  if (error) throw error;
+  const lido = lerSituacaoDoContrato(data);
+  if (!lido) throw new Error('A situação do contrato veio em formato inesperado.');
+  return lido;
 }
 
 /**

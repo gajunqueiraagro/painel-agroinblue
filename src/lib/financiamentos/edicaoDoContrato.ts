@@ -5,6 +5,7 @@
  * ⚠ NÃO FAZ CONTA DE DINHEIRO: cronograma, diferença do saldo e o "regerar" são do banco.
  */
 import { formVazio, type FormDoCadastro, type Modalidade, type NaturezaDoCadastro, type Periodicidade, type SistemaDoCadastro } from './cadastroDoContrato';
+import type { ParcelaDoContrato, SituacaoDaParcela } from './situacaoDoContrato';
 
 type Obj = Record<string, unknown>;
 const ehObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -138,6 +139,8 @@ export function dadosDoCabecalho(antes: FormDoCadastro, depois: FormDoCadastro, 
 /** os campos do cabeçalho que mudam o cronograma (o que o Regerar lê do banco) */
 export const CHAVES_DO_CRONOGRAMA = ['sistema_amortizacao', 'taxa_aa', 'tipo_taxa', 'periodicidade', 'total_parcelas', 'carencia_ate', 'data_primeira_parcela'] as const;
 export const FRASE_SALVE_ANTES_DE_REGERAR = 'Salve o cabeçalho antes de regerar — a prévia usa o que está gravado';
+/** FIN-CONTRATO-CRONOGRAMA-01 — com linhas editadas na aba e ainda não salvas, o Regerar (que lê o banco) fica apagado */
+export const FRASE_SALVE_PARCELAS_ANTES_DE_REGERAR = 'Salve as parcelas editadas antes de regerar — a prévia usa o que está gravado';
 /**
  * FIN-CONTRATO-NC-SALVAR-01 — UMA FONTE SÓ PARA O CRONOGRAMA: o Regerar lê o contrato GRAVADO. Enquanto a tela tiver condições diferentes
  * do banco (`dados` = o que o Salvar mandaria) ou sistema / periodicidade / tipo de taxa ainda não cadastrados, ele fica apagado com a
@@ -149,10 +152,16 @@ export function motivoRegerarApagado(dados: Record<string, unknown>, naoCadastra
   return null;
 }
 /** a recusa do regerar por campo não cadastrado vira instrução (o RAISE do banco não muda); o campo a destacar vai junto */
-export function fraseDaRecusaDoRegerar(recusa: string): { frase: string; campo: CampoNaoCadastrado | null } {
+export function fraseDaRecusaDoRegerar(recusa: string, contexto?: { modo: 'manter_ajustes' | 'recalcular_todas'; ajustadasEmAberto: number }): { frase: string; campo: CampoNaoCadastrado | null; semNada?: boolean } {
   if (/Sistema de amortiza[çc][ãa]o n[ãa]o cadastrado/i.test(recusa)) return { frase: 'Escolha o sistema de amortização e clique Salvar cabeçalho antes de regerar', campo: 'sistema' };
+  /* FIN-CONTRATO-CRONOGRAMA-01 — "Manter ajustes" sem parcela livre: toda parcela em aberto foi ajustada à mão (8.233.040: os valores
+     do extrato do banco). A recusa do banco não explica; a tela diz o porquê e o caminho. */
+  if (contexto?.modo === 'manter_ajustes' && contexto.ajustadasEmAberto > 0 && /Nenhuma parcela em aberto/i.test(recusa)) {
+    return { frase: FRASE_MANTER_SEM_NADA, campo: null, semNada: true };
+  }
   return { frase: recusa, campo: null };
 }
+export const FRASE_MANTER_SEM_NADA = "Todas as parcelas em aberto foram ajustadas à mão — nada a regerar. Use 'Recalcular todas' para substituí-las.";
 
 /* ── respostas ─────────────────────────────────────────────────────────────────────────────────────────────────────────── */
 export interface RespostaDoBanco { simulado: boolean; recusa: string | null; corpo: Obj }
@@ -251,4 +260,84 @@ export function lerBase(corpo: Obj): BaseDoRegerar | null {
   const saldo = num(b.saldo); const guardado = num(b.guardado); const principal = num(b.principal); const parcelas = num(b.parcelas); const taxaAa = num(b.taxa_aa);
   if (saldo === null || guardado === null || principal === null || parcelas === null || taxaAa === null) return null;
   return { saldo, guardado, principal, parcelas, sistema: txt(b.sistema) ?? '', taxaAa, periodicidade: PERIODOS.find((x) => x === b.periodicidade) ?? null };
+}
+
+/* ═══ FIN-CONTRATO-CRONOGRAMA-01 — a tabela do cronograma (aba Condições e "Editar parcelas") ═══════════════════════════════ */
+/** a parcela como a tabela editável a mostra: o que se grava (id, vencimento, principal, juros) + a ajustada, a trava e a situação */
+export interface ParcelaParaEditar extends ParcelaEditavel {
+  numero: number | null; ajustada: boolean; trava: string | null;
+  /** a situação do banco (`fn_financiamento_situacao`); nula na parcela nova (ainda não gravada) */
+  situacao?: SituacaoDaParcela | null;
+  /** a data do pagamento (do lançamento) */
+  pagoEm?: string | null;
+}
+/**
+ * UMA FONTE: a tela do contrato e a aba Condições montam as parcelas editáveis por ESTA função, das mesmas três leituras —
+ * as parcelas de `fn_financiamento_situacao`, a marca `ajustada` de `financiamento_parcelas` e os vínculos de pagamento vivos.
+ */
+export function montarParcelasParaEditar(linhas: readonly ParcelaDoContrato[], ajustadas: ReadonlySet<string>,
+  vinculos: readonly { parcelaId: string }[]): ParcelaParaEditar[] {
+  return linhas.map((p) => ({
+    id: p.id, numero: p.numero, vencimento: p.dataVencimento, principal: p.valorPrincipal, juros: p.valorJuros, ajustada: ajustadas.has(p.id),
+    trava: travaNaTela(p.situacao, vinculos.some((v) => v.parcelaId === p.id)), situacao: p.situacao, pagoEm: p.pagoEm,
+  }));
+}
+/** as ajustadas, das linhas de `financiamento_parcelas` (as vivas) */
+export function ajustadasDasGravadas(rows: readonly unknown[]): Set<string> {
+  const s = new Set<string>();
+  for (const r of rows) if (ehObj(r) && r.ajustada === true && r.status !== 'cancelado' && typeof r.id === 'string') s.add(r.id);
+  return s;
+}
+
+const cent = (v: number) => Math.round(v * 100);
+/**
+ * As somas que a TABELA mostra, das linhas que estão na tela (as editadas inclusive), em centavos inteiros: o rodapé de total, o
+ * "saldo após" de cada linha (contratado − principal acumulado, na ordem da tela) e a diferença do principal contra o contratado.
+ * ⚠ É conferência do que está escrito na tela — o cronograma, o saldo e o regerar são do banco; nada aqui é gravado nem corrigido.
+ */
+export interface ContaDoCronograma { principal: number; juros: number; total: number; saldoApos: (number | null)[]; diferenca: number | null; pagas: number; parcelas: number }
+export function contaDoCronograma(linhas: readonly { principal: number; juros: number; trava?: string | null; situacao?: SituacaoDaParcela | null }[],
+  contratado: number | null): ContaDoCronograma {
+  let pr = 0; let ju = 0; let pagas = 0;
+  const saldoApos: (number | null)[] = [];
+  let resta = contratado === null ? null : cent(contratado);
+  for (const l of linhas) {
+    pr += cent(l.principal); ju += cent(l.juros);
+    if (l.situacao === 'paga') pagas += 1;
+    if (resta !== null) { resta -= cent(l.principal); saldoApos.push(resta / 100); } else saldoApos.push(null);
+  }
+  return { principal: pr / 100, juros: ju / 100, total: (pr + ju) / 100, saldoApos, diferenca: contratado === null ? null : (cent(contratado) - pr) / 100, pagas, parcelas: linhas.length };
+}
+/** o total da linha (principal + juros), em centavos */
+export const totalDaLinha = (l: { principal: number; juros: number }) => (cent(l.principal) + cent(l.juros)) / 100;
+const reais2 = (v: number) => Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+/** a faixa acima da tabela: "N parcelas · principal R$ X" + "= valor contratado ✓" (verde) ou "falta/sobra R$ D" (âmbar). Nunca corrige. */
+export function faixaDoPrincipal(c: ContaDoCronograma): { texto: string; conferencia: string; confere: boolean | null } {
+  const texto = `${c.parcelas} ${c.parcelas === 1 ? 'parcela' : 'parcelas'} · principal R$ ${reais2(c.principal)}`;
+  if (c.diferenca === null) return { texto, conferencia: '', confere: null };
+  if (cent(c.diferenca) === 0) return { texto, conferencia: '= valor contratado ✓', confere: true };
+  return { texto, conferencia: c.diferenca > 0 ? `falta R$ ${reais2(c.diferenca)} para o contratado` : `sobra R$ ${reais2(c.diferenca)} sobre o contratado`, confere: false };
+}
+/** o rótulo curto da situação na linha (a trava inteira vai no `title`) */
+export function rotuloDaLinha(l: { situacao?: SituacaoDaParcela | null; trava: string | null; id: string | null }): string {
+  if (l.id === null) return 'nova';
+  if (l.situacao === 'paga') return 'paga';
+  if (l.situacao === 'parcial') return 'pag. registrado';
+  if (l.trava) return 'vinculada';
+  return l.situacao === 'vencida' ? 'vencida' : 'a vencer';
+}
+export interface ContaAntesDepois { antesPrincipal: number; antesJuros: number; depoisPrincipal: number; depoisJuros: number; diferenca: number }
+/** o rodapé do antes × depois: as somas das duas colunas e a diferença do total (depois − antes), em centavos */
+export function contaAntesDepois(linhas: readonly LinhaAntesDepois[]): ContaAntesDepois {
+  let ap = 0; let aj = 0; let dp = 0; let dj = 0;
+  for (const l of linhas) {
+    if (l.antes) { ap += cent(l.antes.principal); aj += cent(l.antes.juros); }
+    if (l.depois) { dp += cent(l.depois.principal); dj += cent(l.depois.juros); }
+  }
+  return { antesPrincipal: ap / 100, antesJuros: aj / 100, depoisPrincipal: dp / 100, depoisJuros: dj / 100, diferenca: (dp + dj - ap - aj) / 100 };
+}
+/** a diferença de uma linha do antes × depois (total depois − total antes); nula quando falta um lado */
+export function diferencaDaLinha(l: LinhaAntesDepois): number | null {
+  if (!l.antes || !l.depois) return null;
+  return (cent(l.depois.principal) + cent(l.depois.juros) - cent(l.antes.principal) - cent(l.antes.juros)) / 100;
 }

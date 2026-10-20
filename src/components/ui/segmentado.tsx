@@ -42,7 +42,8 @@ export function Segmentado<T extends string>({
   /** 26 é o padrão (abas e linhas de controle); 22 para as réguas de cabeçalho; 20 dentro de um
       card da faixa, onde ele ocupa o lugar do número (DRE-CASCATA-03b-fix4); 28 quando ele mora numa
       linha de campos de formulário (a régua dos modais em blocos, `REGUA_CAMPO`). */
-  altura?: 20 | 22 | 26 | 28;
+  /* FIN-CONTRATO-CRONOGRAMA-01 — 24 na linha de campos de 24px da aba Condições do cadastro de contrato */
+  altura?: 20 | 22 | 24 | 26 | 28;
   /** ⚠ 9px SÓ DENTRO DO CARD, e é a exceção declarada do DRE: fora dela o piso da casa é 9,5. */
   fonte?: number;
   className?: string;
