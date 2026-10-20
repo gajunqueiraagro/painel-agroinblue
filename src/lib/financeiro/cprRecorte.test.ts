@@ -96,13 +96,19 @@ describe('cartões e total — uma função, os mesmos dados', () => {
     expect(r.pagas.length).toBe(1);
     expect(r.semVencimento.pagar).toEqual({ valor: 77, contas: 1 });
   });
-  it('"Incluir vencidos" desligada: o cartão de vencidos continua dizendo o valor; o total fica só com o período', () => {
+  it('CPR-AJUSTES-20-10b: em período que NÃO está encerrado a caixa "Incluir vencidos" não tira vencido da lista nem do total', () => {
     const s = recortarCpr(linhas, { periodo: D30, hoje: HOJE, incluirVencidos: false });
+    expect(s.vencidosNaLista).toBe(true);
     expect(s.vencidos.pagar).toEqual(r.vencidos.pagar);
-    expect(s.total.pagar).toEqual({ valor: 300.60, contas: 3 });
-    expect(s.total.receber).toEqual({ valor: 5000, contas: 1 });
-    expect(s.total.ambos).toEqual({ valor: 4699.40, contas: 4 });
+    expect(s.total).toEqual(r.total);
     expect(s.periodoSoma).toEqual(r.periodoSoma);
+  });
+  it('CPR-AJUSTES-20-10b: só no período ENCERRADO a caixa ainda decide (o vencido sai hoje, depois dele)', () => {
+    const lig = recortarCpr(linhas, { periodo: { de: '2026-09-01', ate: '2026-09-30' }, hoje: HOJE, incluirVencidos: true });
+    const des = recortarCpr(linhas, { periodo: { de: '2026-09-01', ate: '2026-09-30' }, hoje: HOJE, incluirVencidos: false });
+    expect([lig.vencidosNaLista, des.vencidosNaLista]).toEqual([true, false]);
+    expect(des.vencidos.pagar).toEqual(lig.vencidos.pagar);              // o cartão segue dizendo o valor
+    expect(des.total.pagar.valor).toBe(Math.round((lig.total.pagar.valor - lig.vencidos.pagar.valor) * 100) / 100);
   });
   it('a soma dos grupos da lista = o total, ao centavo, nos três segmentos', () => {
     for (const seg of ['pagar', 'receber', 'ambos'] as const) {
@@ -216,13 +222,14 @@ describe('CPR-CONTA-01 — filtro e resumo por conta, no mesmo dono', () => {
     /* PASSO 8 do FIN-FINANC-28: o seletor e' o da casa COM BUSCA — as opcoes sao o resumo do dono, uma por conta */
     expect(tela2).toContain('...resumoContas.map((c) => ({ value: c.conta, label: nomeConta(c.conta), hint: `${formatMoeda(c.pagar.valor)} · ${c.pagar.contas}` }))');
   });
-  it('o resumo segue a caixa "Incluir vencidos": desligada, só o período', () => {
+  it('CPR-AJUSTES-20-10b: o resumo não muda com a caixa num período que inclui hoje; a soma das contas segue o total', () => {
     const r = resumoPorContaCpr(linhas, { ...op, incluirVencidos: false });
-    expect(r.map(x => [x.conta, x.pagar.valor])).toEqual([[SEM_CONTA, 12000], ['A', 300.30], ['B', 50]]);
-    expect(r.reduce((t, x) => t + c(x.pagar.valor), 0)).toBe(c(recortarCpr(linhas, { ...op, incluirVencidos: false }).total.pagar.valor));    /* conta que só tem VENCIDO: entra no resumo com a caixa ligada (com o valor dela), e sai com a caixa desligada */
+    expect(r).toEqual(resumoPorContaCpr(linhas, op));
+    expect(r.reduce((t, x) => t + c(x.pagar.valor), 0)).toBe(c(recortarCpr(linhas, { ...op, incluirVencidos: false }).total.pagar.valor));
+    /* conta que só tem VENCIDO: entra no resumo, com a caixa ligada ou desligada (o vencido entra no saldo) */
     const comD = [...linhas, sai('2026-09-01', 7, 'D')];
     expect(resumoPorContaCpr(comD, op).find(x => x.conta === 'D')?.pagar).toEqual({ valor: 7, contas: 1 });
-    expect(resumoPorContaCpr(comD, { ...op, incluirVencidos: false }).some(x => x.conta === 'D')).toBe(false);
+    expect(resumoPorContaCpr(comD, { ...op, incluirVencidos: false }).find(x => x.conta === 'D')?.pagar).toEqual({ valor: 7, contas: 1 });
   });
 });
 
@@ -351,14 +358,13 @@ describe('CPR-AJUSTES-20-10 — todo vencido em aberto conta no saldo de hoje (s
     expect(s.partida.saldo).toBe(3896.08);                           // 293.896,08 − 290.000,00
     expect(s.dias.find((d) => d.data === '2026-10-21')?.saldo).toBe(1999.25);   // − 1.896,83 (FGTS + E-Social)
   });
-  it('a caixa "Incluir vencidos" desligada: os vencidos saem da LISTA e do total, e continuam no saldo (a semântica de antes, D3)', () => {
+  it('CPR-AJUSTES-20-10b: o vencido que entra no saldo está SEMPRE no total do rodapé — a caixa desligada não o tira', () => {
     const linhas = [sai('2026-09-10', 200.20, 'A'), sai('2026-10-20', 1000, 'A')];
     const lig = recortarCpr(linhas, { periodo: D30, hoje: HOJE, incluirVencidos: true, ancoras: ANC });
     const des = recortarCpr(linhas, { periodo: D30, hoje: HOJE, incluirVencidos: false, ancoras: ANC });
     expect(serieDoSaldoCpr(des, 1000)).toEqual(serieDoSaldoCpr(lig, 1000));
     expect(serieDoSaldoCpr(des, 1000).partida.saldo).toBe(799.8);
-    expect(des.total.pagar.valor).toBe(1000);
-    expect(lig.total.pagar.valor).toBe(1200.2);
+    expect([des.total.pagar.valor, lig.total.pagar.valor]).toEqual([1200.2, 1200.2]);
   });
   it('as âncoras são LIDAS do cartão Caixa (a data que o cálculo dele usou), sem espelho', () => {
     const m = ancorasDoCaixaCpr([{ contaId: 'CC', data: '2026-09-17' }, { contaId: 'INV', data: '2026-08-31' }]);
@@ -405,10 +411,10 @@ describe('CPR-SALDO-DIA-01 — a série do saldo, em centavos', () => {
     expect(s.menor?.valor).toBe(Math.min(s.partida.saldo ?? 0, ...s.dias.map(d => d.saldo ?? 0)));
     expect(s.menor?.valor).not.toBe(s.fim);
   });
-  it('D3: a caixa "Incluir vencidos" NÃO muda o saldo — só a lista e o total', () => {
+  it('D3: a caixa "Incluir vencidos" NÃO muda o saldo; e (CPR-AJUSTES-20-10b) num período com hoje nem a lista nem o total', () => {
     const lig = serieDoSaldoCpr(rec(true), 1000), des = serieDoSaldoCpr(rec(false), 1000);
     expect(des).toEqual(lig);
-    expect(rec(true).total.pagar.valor).not.toBe(rec(false).total.pagar.valor);
+    expect(rec(true).total.pagar.valor).toBe(rec(false).total.pagar.valor);
   });
   it('o menor saldo pode ser o de partida (data nula = hoje)', () => {
     const s = serieDoSaldoCpr(recortarCpr([sai('2026-10-02', 500), entra('2026-10-10', 100)], { periodo: D30, hoje: HOJE, incluirVencidos: true, ancoras: ANC }), 100);
@@ -972,10 +978,13 @@ describe('CPR-CAIXA-INICIAL-SEMPRE-01 — quem entra no seletor de conta', () =>
     expect(nomes(resumoPorContaCpr([t], op(AGO)))).toEqual(['A', 'B']);
     expect(nomes(resumoPorContaCpr([conta('2026-08-10', 9, { status_transacao: 'realizado', data_pagamento: '2026-08-10' })], op(AGO)))).toEqual([SEM_CONTA]);
   });
-  it('vencidos: a conta só de vencido entra com a caixa ligada e sai com ela desligada', () => {
+  it('vencidos: a conta só de vencido entra sempre num período com hoje; no encerrado, só com a caixa ligada', () => {
     const linhas = [conta('2026-09-20', 30, { conta_bancaria_id: 'V' }), conta('2026-10-10', 70, { conta_bancaria_id: 'A' })];
     expect(nomes(resumoPorContaCpr(linhas, op(MES)))).toEqual(['A', 'V']);
-    expect(nomes(resumoPorContaCpr(linhas, op(MES, { incluirVencidos: false })))).toEqual(['A']);
+    expect(nomes(resumoPorContaCpr(linhas, op(MES, { incluirVencidos: false })))).toEqual(['A', 'V']);
+    const SET = { de: '2026-09-01', ate: '2026-09-30' };
+    expect(nomes(resumoPorContaCpr(linhas, op(SET)))).toContain('V');
+    expect(nomes(resumoPorContaCpr(linhas, op(SET, { incluirVencidos: false })))).not.toContain('V');
   });
   it('a conta JÁ ESCOLHIDA continua na lista mesmo sem linha nenhuma no período — uma vez só', () => {
     const linhas = [conta('2026-10-10', 70, { conta_bancaria_id: 'A' })];
