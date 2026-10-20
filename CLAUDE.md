@@ -10108,5 +10108,7 @@ curta nas secoes de regras) e a pendencia (na FILA); o bloco inteiro vai para do
     nunca corta (item 5: um dado por bloco, rotulo colado, numero/data nunca maior que o rotulo nem escondido; texto quebra, numero nao).
   · ⚠ DIALOGOS FORA DO GATE: 184 arquivos tem `DialogContent`/`AlertDialogContent`/`SheetContent`; a bancada mede ~20 telas e dialogos.
     O resto fica fora porque o hospedeiro nao esta' na bancada (le' tabela/RPC propria). Lista no relatorio do bloco.
-  ⚠ NAO PROVADO: nada com login no app real (bancada) · a 1000x600 a tela de Acessos cortava o e-mail com "…" no cenario que eu montei
-    (relatado ao Code 1; os cenarios dele, ACESSOS-PERFIL-01, sao os que valem).
+  ⚠ NAO PROVADO: nada com login no app real (bancada).
+  · ACESSOS (o que vale hoje, 20/10): o e-mail ja' QUEBRA a linha (ACESSOS-PERFIL-01, Code 1). A 1000x600 a TABELA passa da largura do
+    cartao e a coluna de acoes some a' direita (dentro de uma area que rola; o gate nao reprova porque e' rolagem, nao corte) — vai para
+    o Code 1.
