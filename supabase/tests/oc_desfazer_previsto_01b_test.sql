@@ -7,6 +7,7 @@
 --   E3 "Atualizar" (65cab185): a simulacao propoe o vencimento da parcela viva e escreve o rol com R$; agendado sem confirmacao
 --      recusa; com a confirmacao e o vencimento ESCOLHIDO (30/11/2026) a parcela nova nasce nele e o titulo cancelado leva a trilha.
 --   E4 nenhuma recusa das funcoes da OC ficou sem acento; nenhuma executavel por anon.
+--   E5 a guarda de cliente do desfazer (20261028100810): usuario sem acesso recusado (42501).
 BEGIN;
 SET LOCAL lock_timeout = '2s';
 SET LOCAL statement_timeout = '60s';
@@ -94,6 +95,13 @@ begin
    where s.nspname = 'public' and p.proname in ('oc_desfazer_compromisso','oc_reprogramar_compromisso_do_lote','oc_estornar_materializacao')
      and has_function_privilege('anon', p.oid, 'EXECUTE');
   if v_n <> 0 then raise exception 'E4 % funcao(oes) executavel(is) por anon', v_n; end if;
+
+  -- E5 a guarda de cliente do desfazer (20261028100810): usuario sem acesso e' recusado (42501)
+  perform set_config('request.jwt.claims', json_build_object('sub', gen_random_uuid(), 'role', 'authenticated')::text, true);
+  e := null;
+  begin perform public.oc_desfazer_compromisso('1645ba75-2cea-45ee-8316-e0695b7cffe7', 0, '6347b5a1-1e04-4f2d-ac31-874b29071b96', '', true);
+  exception when others then e := sqlstate; end;
+  if e is distinct from '42501' then raise exception 'E5 guarda: %', coalesce(e, 'aceitou'); end if;
 
   raise exception 'OK';
 end $teste$;
