@@ -292,7 +292,7 @@ export function docDaLinha(
 /* ── FIN-FILTRO-DOC-01 — o FILTRO "Documento" da lista: a MESMA fonte da coluna DOC. (o campo próprio do lançamento + os documentos
    VIVOS ligados a ele — os da OC e os das parcelas da mesma nota vêm pela `vw_lancamento_documentos`) ───────────────────────────── */
 
-export const PLACEHOLDER_FILTRO_DOCUMENTO = 'Número da NF, recibo ou chave';
+export const PLACEHOLDER_FILTRO_DOCUMENTO = 'Número do documento (NF, recibo, boleto) ou chave';
 
 /** As palavras que dizem o TIPO na busca ("NF 910", "recibo"), no prefixo que a coluna escreve. */
 const TIPO_DA_PALAVRA: Readonly<Record<string, string>> = {
@@ -302,11 +302,21 @@ const TIPO_DA_PALAVRA: Readonly<Record<string, string>> = {
 const PREFIXO_DA_ESPECIE_NO_FILTRO: Readonly<Record<string, string>> = { ...PREFIXO_POR_ESPECIE, nf_produtor: 'NF' };
 const soDigitosDoc = (s: string | null | undefined) => (s ?? '').replace(/\D/g, '');
 const semZerosAEsquerda = (s: string) => s.replace(/^0+/, '');
+const semAcentoMinusculo = (s: string | null | undefined) => (s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+/** FIN-FILTRO-DOC-TEXTO-01 — o número do documento para comparar: minúsculas, sem acento, só [a-z0-9], e em cada sequência de
+ *  dígitos sem os zeros à esquerda ("R_D015" -> "rd15"; "000.000.910" -> "910"). A MESMA regra nos dois lados. */
+export function normalizarNumeroDoc(s: string | null | undefined): string {
+  return semAcentoMinusculo(s).replace(/[^a-z0-9]/g, '').replace(/\d+/g, (d) => d.replace(/^0+(?=\d)/, ''));
+}
 
 /**
- * O lançamento casa com o que foi digitado no filtro Documento? Compara por DÍGITOS, sem pontuação e sem zeros à esquerda dos dois
- * lados ("0.910", ".910", "910" e "000.000.910" acham o mesmo), dentro do número; pela CHAVE DE ACESSO (os dígitos digitados, 4+,
- * dentro dos 44); e pelo TIPO ("NF 910", "recibo"). Documento cancelado não entra. Vazio casa com todos.
+ * O lançamento casa com o que foi digitado no filtro Documento? As palavras de TIPO no COMEÇO do termo ("NF", "nota fiscal",
+ * "Rec.", "boleto") filtram pelo prefixo da espécie e saem do texto; o resto é o texto comparado. Casa quando: (a) o texto
+ * normalizado (`normalizarNumeroDoc`) está DENTRO do número normalizado do candidato — "R_D15" acha "R_D015", "rd15" acha
+ * "R_D15"; (b) texto só de dígitos: a regra por dígitos de sempre ("0.910", ".910", "910" e "000.000.910" acham o mesmo); (c) a
+ * CHAVE DE ACESSO (os dígitos digitados, 4+, dentro dos 44). Candidatos: o número próprio do lançamento e os documentos VIVOS
+ * ligados (cancelado não entra). Palavra que não é tipo vira parte do texto, não zera a busca. Vazio casa com todos.
  */
 export function documentoCasaComFiltro(
   termo: string,
@@ -315,11 +325,15 @@ export function documentoCasaComFiltro(
 ): boolean {
   const t = termo.trim();
   if (!t) return true;
-  const digitos = soDigitosDoc(t);
+  const pedacos = semAcentoMinusculo(t).replace(/\bnf-e\b/g, 'nfe').split(/[^a-z0-9]+/).filter(Boolean);
+  const tipos: string[] = [];
+  let i = 0;
+  while (i < pedacos.length && TIPO_DA_PALAVRA[pedacos[i]]) tipos.push(TIPO_DA_PALAVRA[pedacos[i++]]);
+  const resto = pedacos.slice(i).join('');
+  const texto = normalizarNumeroDoc(resto);
+  /* (b) e (c) só valem para texto só de dígitos: com letra ("R_D15") os dígitos soltos achariam qualquer "15" */
+  const digitos = /^\d+$/.test(texto) ? soDigitosDoc(resto) : '';
   const numero = semZerosAEsquerda(digitos);
-  const palavras = t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[0-9.,:/\\-]/g, ' ').split(/\s+/).filter(Boolean);
-  const tipos = palavras.map((w) => TIPO_DA_PALAVRA[w]);
-  if (tipos.some((x) => !x)) return false;   /* palavra que não é tipo de documento não acha nada */
   const candidatos: Array<{ prefixo: string; numero: string | null; chave: string | null }> = [];
   if ((lancamento.numero_documento ?? '').trim()) {
     candidatos.push({ prefixo: PREFIXO_POR_TIPO[lancamento.tipo_documento ?? ''] ?? SEM_PREFIXO, numero: lancamento.numero_documento ?? null, chave: null });
@@ -329,7 +343,8 @@ export function documentoCasaComFiltro(
   }
   return candidatos.some((c) => {
     if (tipos.length && !tipos.every((x) => x === c.prefixo)) return false;
-    if (!digitos) return true;
+    if (!texto) return true;
+    if (normalizarNumeroDoc(c.numero).includes(texto)) return true;
     if (numero && semZerosAEsquerda(soDigitosDoc(c.numero)).includes(numero)) return true;
     return digitos.length >= 4 && soDigitosDoc(c.chave).includes(digitos);
   });
