@@ -39,6 +39,7 @@ import {
   ATALHOS_CPR, periodoDoAtalho, recortarCpr, ramoDaConsultaCpr, doSegmentoCpr, contaEmAberto,
   ehReceberCpr, contaDaConta, resumoPorContaCpr, contasDaFaixaCpr, SEM_CONTA, ehTransferenciaCpr, chaveDaLinhaCpr, type ContaCpr,
   ancorasDoCaixaCpr, serieDoSaldoCpr, ordenarDoDiaCpr, totaisDeHojeCpr, linhasDoSaldoCpr, resumoPorSemanaCpr, saldoPorContaCpr, contaEstimadaCpr, somarDiasIso,
+  rodapeDoPeriodoCpr, contagemDoRodapeCpr,
   type AtalhoCpr, type PeriodoCpr, type FiltroContaCpr,
 } from '@/lib/financeiro/cprRecorte';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -920,9 +921,13 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
     ? `período anterior aos realizados carregados (a janela começa em ${caixaTodas ? format(parseISO(`${caixaTodas.argumentos.mesMinimo}-01`), 'dd/MM/yyyy') : '—'}): sem saldo nessa data`
     : motivoSemCaixa;
   /* O RODAPÉ: no período ENCERRADO não há em aberto — ele mostra as quantidades e os totais do REALIZADO do período (do dono) */
-  const rodape = serie.encerrado && serie.inicial
-    ? { pagar: serie.totalRealizado.pagar.valor, receber: serie.totalRealizado.receber.valor, contas: serie.totalRealizado.pagar.contas + serie.totalRealizado.receber.contas, realizado: true }
-    : { pagar: recorte.total.pagar.valor, receber: recorte.total.receber.valor, contas: recorte.total.ambos.contas, realizado: false };
+  /* CPR-AJUSTES-20-10b — o rodapé é do dono: soma só o que está depois da linha do Caixa inicial (Caixa inicial + a receber −
+     a pagar = saldo no fim); tela, PDF e Excel leem o mesmo objeto. */
+  const fimDoPeriodo = rodapeDoPeriodoCpr(recorte, serie);
+  const rodape = {
+    pagar: fimDoPeriodo.pagar.valor, receber: fimDoPeriodo.receber.valor, contas: fimDoPeriodo.contas,
+    realizados: fimDoPeriodo.realizados, realizado: fimDoPeriodo.encerrado,
+  };
   const tituloMenorSaldo = serie.menor ? (serie.encerrado ? 'menor saldo realizado da conta no período' : 'menor saldo da conta no período (realizado até hoje, previsto daí em diante)') : motivoSemSaldo;
   const codigoDaSafra = (id: string | null): string => (id && fin.safras.find((x) => x.id === id)?.codigo) || '—';
   const codigoDaFazenda = (id: string | null): string => (id && fazendas.find((x) => x.id === id)?.codigo) || '—';
@@ -1095,6 +1100,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
     try {
       triggerXlsxDownload(montarPayloadExcelCpr<LinhaCpr>({
         arquivo: nomeDoArquivoCpr(identidadeDoArquivo), grupos, serie, de: resolvedores, incluirVencidos, hoje: hojeIso, inicio: periodo.de,
+        fim: periodo.ate, rodape,
       }));
     } catch (e) {
       setRecadoExport({ erro: true, texto: `Falha ao gerar Excel: ${e instanceof Error ? e.message : String(e)}` });
@@ -1623,9 +1629,9 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
               <Faixa
                 testId="cpr-total" regua={regua} navy
                 className="sticky bottom-0 z-20 h-[26px] bg-primary text-[11px] font-bold text-primary-foreground"
-                titulo={`Fim do período · ${format(parseISO(periodo.ate), 'dd/MM/yyyy')} · ${rodape.realizado ? realizados(rodape.contas) : contas(rodape.contas)}`}
+                titulo={`Fim do período · ${format(parseISO(periodo.ate), 'dd/MM/yyyy')} · ${contagemDoRodapeCpr(fimDoPeriodo)}`}
                 dica={rodape.realizado ? 'período encerrado: o que saiu e o que entrou no período (realizado) e o saldo no fim dele'
-                  : `a pagar e a receber da lista (${recorte.vencidosNaLista ? 'vencidos + período' : 'período, sem os vencidos'}); o saldo no fim considera sempre os vencidos que contam`}
+                  : 'o que vem depois do Caixa inicial: Caixa inicial + a receber − a pagar = saldo no fim'}
                 pagar={rodape.pagar} receber={rodape.receber} saldo={serie.fim}
                 motivoSemSaldo={motivoSemSaldo}
               />
@@ -1671,7 +1677,6 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
  */
 /** Uma natureza do caixa — o valor e o que explica a data dele. */
 const contas = (n: number) => `${n} ${n === 1 ? 'conta' : 'contas'}`;
-const realizados = (n: number) => `${n} ${n === 1 ? 'lançamento realizado' : 'lançamentos realizados'}`;
 
 /**
  * O CARTÃO DO RESUMO — CPR-PERIODO-VENCIDOS-01: 40px. À esquerda o rótulo (texto: corta com o inteiro no `title`) e, embaixo,
