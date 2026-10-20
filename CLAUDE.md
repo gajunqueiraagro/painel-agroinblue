@@ -10282,3 +10282,17 @@ curta nas secoes de regras) e a pendencia (na FILA); o bloco inteiro vai para do
     sobre o "5936" do bloco CRIAR-DO-EXTRATO-01, medido antes do merge); com este bloco 5953 (+5 `auditDeleteFront.test.ts`), 22
     skipped, as 3 falhas de sempre e 1 erro nao tratado (eram 87: o mock do supabase do `conciliacaoDono.test.tsx` sem `.ilike`
     desde o icone do OFX do UI-SEM-CORTE-02).
+- ⚠ O "DESFAZER COMPROMISSO" DA OC NAO TRAVA EM LANCAMENTO QUE JA' NAO E' DA OC (OC-DESFAZER-PREVISTO-01a, Gabriel 20/10/2026). O caso:
+  OC de abate 1645ba75 / compromisso 6347b5a1 — um lancamento REALIZADO e CONCILIADO de julho (2448e772) foi vinculado a' OC em 12/10
+  e DESVINCULADO em 14/10; a parte ficou cancelada e o lancamento vivo (como deve). `oc_cancelar_programacao` e `oc_cancelar_compromisso`
+  juntavam a parte sem olhar `cancelada` (o compromisso, em TODAS as programacoes) e recusavam com "Existe titulo ativo…": o
+  `oc_desfazer_compromisso` — que ja' estorna o titulo previsto/programado no mesmo gesto — nunca chegava ao fim. 20261028100700
+  (guarda por md5 de ORIGEM e de DESTINO, ACL conferida): as duas guardas contam so' PARTE VIVA e, no compromisso, so' PROGRAMACAO
+  ATIVA; lancamento de parte cancelada nunca trava e nunca e' tocado. E o "Atualizar compromisso" (`oc_reprogramar_compromisso_do_lote`)
+  passa a gravar `cancelado_em`, `cancelado_por`, `cancelado_motivo` e `updated_by` no lancamento que cancela (era so' `cancelado`).
+  Varredura de 20/10: so' este compromisso passa a ser desfazivel; 117 seguem travados por titulo pago (como devem). Prova no vivo:
+  `oc_desfazer_previsto_01a_test.sql` (T1 a OC do caso desfaz simulado e o 2448e772 segue intocado; T2 titulo realizado recusa;
+  T3 previsto cancela junto com data/autor/motivo; T4 trilha do Atualizar). Mutacao: o filtro antigo de volta derruba o T1.
+  · FICA PARA O 01b (depende do mock do Gabriel): frases do banco com acento e o lancamento que trava (data, valor, status) com
+    "Abrir lancamento"; agendado com confirmacao explicita (hoje o Desfazer o cancela calado e o Atualizar o bloqueia); vencimento
+    proposto do Atualizar editavel com aviso quando ja' passou (hoje e' o da parcela viva); motivo guardado entre tentativas.
