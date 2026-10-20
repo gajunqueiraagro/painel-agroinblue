@@ -561,6 +561,8 @@ export function useFinanciamentoCadastro() {
             valor: form.valor_total,
             data_competencia: form.data_contrato,
             data_pagamento: form.data_contrato,
+            /* CRIAR-DO-EXTRATO-01 — todo lançamento nasce com vencimento: a captação vence no dia do contrato (= pagamento). */
+            data_vencimento: form.data_contrato,
             ano_mes: anoMes,
             origem_lancamento: 'financiamento',
             origem_tipo: 'financiamento_captacao',
@@ -635,6 +637,8 @@ export function useFinanciamentoCadastro() {
                 sinal: sinal,
                 valor: dest.valor,
                 data_competencia: form.data_contrato,
+                /* CRIAR-DO-EXTRATO-01 — a destinação não tem data de pagamento: o vencimento é a competência (o dia do contrato). */
+                data_vencimento: form.data_contrato,
                 ano_mes: anoMes,
                 origem_lancamento: 'financiamento',
                 origem_tipo: 'financiamento_destinacao',
