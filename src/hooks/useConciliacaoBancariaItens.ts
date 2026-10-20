@@ -83,22 +83,16 @@ export function useConciliacaoBancariaItens() {
     return map;
   }
 
-  async function remover(id: string): Promise<void> {
-    // Buscar extrato_id antes de deletar para recomputar status depois.
-    const { data: row } = await supabase
-      .from('conciliacao_bancaria_itens' as any)
-      .select('extrato_id')
-      .eq('id', id)
-      .maybeSingle();
-    const extratoId = (row as unknown as { extrato_id: string } | null)?.extrato_id;
-
-    const { error } = await supabase
-      .from('conciliacao_bancaria_itens' as any)
-      .delete()
-      .eq('id', id);
+  /* AUDIT-DELETE-01a: o vínculo NÃO se apaga — desfaz pelo gesto do banco (desfeito_em/por/motivo + trilha), motivo obrigatório. */
+  async function remover(id: string, motivo: string): Promise<void> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+    const { data, error } = await (supabase as any).rpc('fn_conciliacao_item_desfazer', {
+      p_item_id: id, p_motivo: motivo, p_simular: false,
+    });
     if (error) throw error;
-
-    if (extratoId) await libRecomputarStatusExtrato(extratoId);
+    const r = (data ?? {}) as { ok?: boolean; extrato_id?: string; recusa?: { frase?: string } };
+    if (r.ok === false) throw new Error(r.recusa?.frase ?? 'Não foi possível desfazer o vínculo.');
+    if (r.extrato_id) await libRecomputarStatusExtrato(r.extrato_id);
   }
 
   // PR4 — lista vínculos por lancamento_id (espelho de listarPorExtrato).
