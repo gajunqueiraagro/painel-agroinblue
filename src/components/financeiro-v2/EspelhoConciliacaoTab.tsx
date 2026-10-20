@@ -775,6 +775,8 @@ export const MOTIVO_CASAR_LABEL: Readonly<Record<string, string>> = {
   lancamento_ja_conciliado: 'Um dos lançamentos já está conciliado.',
   valor_invalido: 'Valor inválido: precisa ser maior que zero.',
   soma_nao_bate: 'A soma dos lançamentos não bate com o valor do banco.',
+  /* FIN-POS-FIXADO-01b: o juro de parcela pós-fixada só se grava pelo dono (a `fn_espelho_casar` direta recusa). */
+  parcela_pos: 'Parcela de contrato pós-fixado: case pelo modal da linha do extrato para gravar o juro real.',
   /* Só do sentido N:1 (`fn_espelho_casar_n1`). */
   minimo_dois_extratos: 'Marque ao menos dois movimentos do banco.',
   contas_diferentes: 'Os movimentos são de contas diferentes.',
@@ -1749,6 +1751,7 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
         iniciais={casar?.iniciais ?? []}
         nomeConta={nomeConta}
         contaBancariaId={contaId}
+        clienteId={clienteId}
         onConciliado={() => { limpar(); onMudou(); }}
       />
 
