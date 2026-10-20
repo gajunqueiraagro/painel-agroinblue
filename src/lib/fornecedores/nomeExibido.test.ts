@@ -93,7 +93,7 @@ describe('a ligação nas telas (fonte)', () => {
   });
   it('o final e o "inativo" não cortam (shrink-0); só o nome corta', () => {
     const celula = tela.slice(tela.indexOf('data-testid="celula-fornecedor"'), tela.indexOf('data-testid="inativo-fornecedor"') + 40);
-    expect(celula).toContain('<span className="truncate">{fornNome}</span>');
+    expect(celula).toContain('<span className="truncate pr-0.5">{fornNome}</span>');
     expect(celula.match(/shrink-0 whitespace-nowrap/g)).toHaveLength(2);
   });
   it('Cadastros tem o lugar reservado do aviso, sempre presente', () => {
