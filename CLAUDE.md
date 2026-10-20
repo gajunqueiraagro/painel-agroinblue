@@ -10059,3 +10059,34 @@ curta nas secoes de regras) e a pendencia (na FILA); o bloco inteiro vai para do
     volta -> `auditDeleteFront.test.ts`.
   ⚠ NAO PROVADO: nada aplicado (so' ensaio) · o "Excluir fornecedor" na tela com login · o volume da trilha numa importacao grande de
     extrato (uma linha de audit_log por movimento).
+- ⚠ JUROS FUTUROS DE CONTRATO POS-FIXADO SAO ESTIMADOS, E A CPR OS MARCA COM O MESMO SELO DA RECORRENCIA (FIN-POS-FIXADO-01a, Gabriel
+  20/10/2026, opcao A; migration `supabase/migrations/20261027204500_fin_pos_fixado_01a.sql`, md5 do arquivo aed93080cfdc5fc989477dfe3f91f8fe —
+  APLICADA no proto em 20/10/2026, ledger = arquivo). A marca e' DERIVADA, nada se grava: pagar, casar ou realizar o juros a tira sozinho.
+  · A REGRA E' UMA, NO BANCO: `_fn_juros_estimado(tipo_taxa, status_parcela, status_lancamento)` (imutavel, fechada) = contrato `tipo_taxa =
+    'pos'` + parcela fora de 'pago' e 'cancelado' + lancamento de juros fora de 'realizado' e 'conciliado'. O principal nunca e' estimado.
+    ⚠ `financiamento_parcelas.ajustada` NAO ENTRA, e nao se le^ como "valor real informado": no banco ela significa "editada a' mao,
+      protegida no Regerar" (`fn_financiamento_parcelas_editar` a poe em toda linha que mexe). Medido em 20/10: as parcelas 2 a 5 do
+      8.233.040 (RRCC) estao ajustadas e os juros sao os do gerador. NAO MEXER em `ajustada` por causa desta regra.
+  · LEITURA: `fn_juros_estimados_do_cliente(cliente)` -> (lancamento_id, financiamento_id, parcela_id), uma por cliente, `tenant_ok` + 42501.
+    Espelho em TS: `jurosEstimadoPosFixado` (`src/lib/financiamentos/jurosPosFixado.ts`), preso pelos MESMOS casos
+    (`jurosPosFixado.casos.json`, repetidos no teste SQL; um vitest confere que os nomes e o esperado batem).
+  · CPR: o conjunto `estimadas` e' a UNIAO das duas origens, por UM dono — `lerEstimadosDaCpr` (`src/lib/financeiro/estimadosDaCprBanco.ts`:
+    as leituras da recorrencia + uma chamada da funcao) e `juntarEstimados` / `tituloDoEstimado` (`src/lib/financeiro/estimadosDaCpr.ts`).
+    O selo e os dois totais nao mudaram de forma, lugar nem tamanho; so' o `title` e' por origem (recorrencia: o texto de sempre; juros pos:
+    "juros estimados pela taxa do contrato pós-fixado · o valor real entra quando a parcela for paga"; as duas: os dois). O aviso de
+    leitura incompleta (o teto da leitura da recorrencia) vai no `title` das duas; a leitura dos juros nao tem teto.
+  · NO PROTO (20/10): so' o 8.233.040 — os 4 lancamentos de juros das parcelas 2 a 5, R$ 89.163,34; a parcela 1 (paga) nao; os 223
+    contratos com `tipo_taxa` nulo nao marcam nada (nao ha' contrato 'pre').
+  Testes: `supabase/tests/fin_pos_fixado_01a_test.sql` (J1–J4, contratos sinteticos em transacao desfeita) OK no vivo; 3 mutacoes mortas
+  (sem o filtro de tipo_taxa -> J1; sem o de status da parcela -> J3 pos_paga; sem o de lancamento realizado -> J3 pos_realizado).
+  `src/lib/financiamentos/jurosPosFixado.test.ts` 15 (as mesmas 3 mutacoes no espelho morrem); `cprEstimado.test.ts` trocado ao contrato
+  novo (o `title` por origem). Gate: `check:ui-cortes` com `cpr-selo-estimado` e `cpr-ampliado-totais` (bancada `tela=cpr`, sintetica) nos
+  sete tamanhos, com `regiao` — so' o selo e os totais.
+  ⚠ FRENTE CPR-SEM-CORTE-01: a CPR inteira nunca esteve no gate; medida inteira na bancada em 20/10, ~30 achados antigos (descricao,
+    subcentro e fornecedor com "…", cabecalho do dia e "Fim do período" cortados em janela estreita). Nada disso e' do selo.
+  ⚠ FICAM: DRE e cronograma do contrato (FIN-POS-FIXADO-01c, com mock) · o casar com valor diferente (FIN-POS-FIXADO-01b; a tabela medida
+    na FASE 0 esta' em ~/agroinblue-local/fin-pos-fixado-01/) · NAO PROVADO: nada com login no app real; o Ampliado na janela real (a
+    bancada mantem a lateral de 176px aberta e espreme a tabela de 1.092px — o selo invade a coluna Fornecedor ali).
+  · SUITE: 5913 passando depois do FIN-POS-FIXADO-01a (+15: `src/lib/financiamentos/jurosPosFixado.test.ts` novo; `cprEstimado.test.ts` com o
+    mesmo numero de casos), 22 skipped, as 3 falhas de sempre e o erro nao tratado de sempre. ⚠ A BASELINE VIGENTE DA SUITE E' 5913 e
+    VALE SOBRE a linha antiga de 5898 da secao GATES (que nao foi editada: este bloco so' acrescenta no fim, por regra do briefing).
