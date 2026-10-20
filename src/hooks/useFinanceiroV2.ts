@@ -743,7 +743,9 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       conta_bancaria_id: form.conta_bancaria_id || null,
       conta_destino_id: form.conta_destino_id || null,
       data_competencia: form.data_competencia,
-      data_vencimento: form.data_vencimento || null,   // PR-FIN-MODAL-VENCIMENTO-02B — grava o vencimento; nunca em data_pagamento
+      /* PR-FIN-MODAL-VENCIMENTO-02B — grava o vencimento; nunca em data_pagamento. CRIAR-DO-EXTRATO-01 — nunca vazio: quem chega
+         aqui sem vencimento (fora do modal, que o exige) vence no pagamento ou, sem pagamento, na competência. */
+      data_vencimento: form.data_vencimento || form.data_pagamento || form.data_competencia || null,
       data_pagamento: form.data_pagamento || null,
       valor: form.valor,
       sinal,
@@ -1139,7 +1141,9 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       conta_bancaria_id: form.conta_bancaria_id || null,
       conta_destino_id: form.conta_destino_id || null,
       data_competencia: form.data_competencia,
-      data_vencimento: form.data_vencimento || null,   // PR-FIN-MODAL-VENCIMENTO-02B — grava o vencimento; nunca em data_pagamento
+      /* PR-FIN-MODAL-VENCIMENTO-02B — grava o vencimento; nunca em data_pagamento. CRIAR-DO-EXTRATO-01 — nunca vazio: quem chega
+         aqui sem vencimento (fora do modal, que o exige) vence no pagamento ou, sem pagamento, na competência. */
+      data_vencimento: form.data_vencimento || form.data_pagamento || form.data_competencia || null,
       data_pagamento: form.data_pagamento || null,
       valor: form.valor,
       sinal,
