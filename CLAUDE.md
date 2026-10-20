@@ -10365,3 +10365,6 @@ curta nas secoes de regras) e a pendencia (na FILA); o bloco inteiro vai para do
     atualizar}` nos sete tamanhos, sem rolagem.
   · FICA: o "Desfazer" da aba Financeiro da OC (`AbaFinanceiroOC`) e o "Estornar lancamento" da linha seguem sem a confirmacao do
     agendado na tela (o primeiro recebe a recusa com frase do banco; o segundo estorna agendado como sempre).
+  · GUARDA DE CLIENTE no `oc_desfazer_compromisso` (20261028100810): a 100800 o recriou SECURITY DEFINER sem guarda propria (os donos
+    encadeados checavam; a simulacao lia a operacao antes) e o `guardaDeClienteNasMigrations.test.ts` acusou; a funcao foi
+    redefinida inteira com `_fn_exigir_tenant_das_linhas` pelo cliente da operacao (service_role passa, como nos donos). Prova E5.
