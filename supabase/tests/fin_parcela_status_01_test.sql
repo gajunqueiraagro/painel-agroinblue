@@ -9,6 +9,8 @@
 --   S7 motor: numa parcela paga o motor nao muda status, valor nem id dos lancamentos
 --   S8 a situacao do contrato le' a regra unica (fonte) e diz o mesmo que a coluna
 --   S9 pagar pelo extrato: os lancamentos ficam realizados na data do extrato e a coluna vira 'pago' pelo gatilho (a funcao nao grava status)
+--   S10 COMO authenticated (o papel da tela): a situacao com e sem detalhe, o lote, a regra e o alvo leem sem erro
+--   S11 parcela ADIADA (sem vencimento, o consorcio ate' a contemplacao): fora de a vencer e de vencido, no cartao `adiado` com a contagem
 -- Contratos sinteticos copiados do 8.233.040 (RRCC) e lancamentos copiados de um lancamento de juros dele (molde do 01a).
 BEGIN;
 SET LOCAL lock_timeout = '2s';
@@ -54,7 +56,7 @@ $f$;
 DO $t$
 DECLARE
   u_admin constant uuid := '7bd0b6ad-2527-4be1-af58-f2cc0c0edd8e';
-  f1 uuid; f9 uuid; lp uuid; lj uuid; lp2 uuid; lj2 uuid; p1 uuid; p2 uuid; p3 uuid; p9 uuid;
+  f1 uuid; f9 uuid; lp uuid; lj uuid; lp2 uuid; lj2 uuid; p1 uuid; p2 uuid; p3 uuid; p9 uuid; fa uuid;
   v text; v_ok boolean; v_n int; v_msg text; v_antes text; v_depois text; v_r jsonb; v_cru uuid; v_ext uuid;
 BEGIN
   PERFORM set_config('request.jwt.claims', json_build_object('sub', u_admin, 'role', 'authenticated')::text, true);
@@ -150,6 +152,29 @@ BEGIN
               WHERE q.id = p9 AND (l.status_transacao <> 'realizado' OR l.data_pagamento IS DISTINCT FROM date '2027-02-05')) THEN
     RAISE EXCEPTION 'S9 lancamentos da parcela nao realizados na data do extrato'; END IF;
   IF NOT (SELECT cancelado FROM public.financeiro_lancamentos_v2 WHERE id = v_cru) THEN RAISE EXCEPTION 'S9 cru nao cancelado'; END IF;
+
+  -- S10
+  SET LOCAL ROLE authenticated;
+  BEGIN
+    PERFORM public.fn_financiamento_situacao(f1, date '2027-01-31', false);
+    PERFORM public.fn_financiamento_situacao(f1, date '2027-01-31', true);
+    PERFORM public.fn_financiamentos_situacao_lote('537661af-a934-4c66-b138-f8dbc378a00f', date '2027-01-31');
+    PERFORM public._fn_parcela_pelos_lancamentos('realizado', NULL);
+    PERFORM * FROM public._fn_parcela_status_alvo(lp, lj);
+  EXCEPTION WHEN OTHERS THEN GET STACKED DIAGNOSTICS v_msg = MESSAGE_TEXT; RESET ROLE; RAISE EXCEPTION 'S10 leitura como authenticated: %', v_msg;
+  END;
+  RESET ROLE;
+
+  -- S11
+  fa := pg_temp.contrato('ADIADA');
+  PERFORM pg_temp.parcela(fa, 1, NULL, NULL, 'pendente');
+  INSERT INTO public.financiamento_parcelas (financiamento_id, cliente_id, numero_parcela, data_vencimento, valor_principal, valor_juros,
+                                             valor_total, status)
+  VALUES (fa, '537661af-a934-4c66-b138-f8dbc378a00f', 2, NULL, 100, 10, 110, 'pendente');
+  v_r := public.fn_financiamento_situacao(fa, date '2027-01-31', false)->'cartoes';
+  IF (v_r->>'adiado')::numeric IS DISTINCT FROM 110 OR (v_r->>'adiado_qtde')::int IS DISTINCT FROM 1
+     OR (v_r->>'vencido')::numeric IS DISTINCT FROM 110 OR (v_r->>'a_vencer')::numeric IS DISTINCT FROM 0 THEN
+    RAISE EXCEPTION 'S11 adiada nos cartoes: %', v_r; END IF;
 
   RAISE EXCEPTION 'OK';
 END $t$;
