@@ -10,6 +10,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
   executarDesfazerCompromisso, lerRetornoDoDesfazer, feitoDoRetorno, fraseDoErroDoDesfazer, rolDoEstado, ErroDesfazer,
+  lerLancamentoQueTrava, REGEX_JA_DESFEITO,
   type RpcDesfazer,
 } from '@/lib/oc/desfazerCompromisso';
 
@@ -39,7 +40,7 @@ describe('Desfazer compromisso — uma chamada', () => {
     const r = await executarDesfazerCompromisso({ operacaoId: OP, versao: 14, compromissoId: COMP, motivo: '  erro ', rpc });
     expect(rpc).toHaveBeenCalledTimes(1);
     expect(rpc).toHaveBeenCalledWith({
-      p_operacao_id: OP, p_versao: 14, p_compromisso_id: COMP, p_motivo: 'erro', p_simular: false,
+      p_operacao_id: OP, p_versao: 14, p_compromisso_id: COMP, p_motivo: 'erro', p_simular: false, p_confirmar_agendado: false,
     });
     expect(r.feito).toHaveLength(3);
     expect(r.feito[0]).toMatch(/^estornado o título de R\$\s848\.713,32 \(parcela 1\)$/);
@@ -61,12 +62,19 @@ describe('Desfazer compromisso — uma chamada', () => {
     expect(soAberto && feitoDoRetorno(soAberto)).toEqual(['cancelado o compromisso']);
   });
 
-  it('recusa E3 do banco: a frase do banco, NADA feito (a cadeia e uma transacao) e o rol que falta', async () => {
-    const rpc = rpcQue({ data: null, error: { code: 'P0001', message: 'Estorne a liquidacao ou conciliacao financeira antes de estornar esta materializacao.' } });
+  /* OC-DESFAZER-PREVISTO-01b — o banco devolve a frase PRONTA (passa como veio) e o lançamento que trava no DETAIL/HINT. */
+  const LANC = '2448e772-1111-4222-8333-944444444444';
+  const FRASE_E3 = 'O lançamento de R$ 213.150,75 de 13/07/2026 já foi pago ou conciliado. Desfaça o pagamento no lançamento antes.';
+  const HINT_E3 = JSON.stringify({ lancamento_id: LANC, data: '2026-07-13', valor: 213150.75, status: 'realizado', sinal: '1',
+    conciliado: true, sequencia: 1, total: 1 });
+  it('recusa E3 do banco: a frase do banco, NADA feito (a cadeia e uma transacao), o rol que falta e QUEM TRAVA (do DETAIL)', async () => {
+    const rpc = rpcQue({ data: null, error: { code: 'P0001', message: FRASE_E3, details: LANC, hint: HINT_E3 } });
     const falta = rolDoEstado(COMPLETO);
     const erro = await executarDesfazerCompromisso({ operacaoId: OP, versao: 14, compromissoId: COMP, motivo: 'erro', falta, rpc }).catch(e => e);
     expect(erro).toBeInstanceOf(ErroDesfazer);
-    expect(erro.message).toBe('Este lançamento já foi pago ou conciliado. Desfaça o pagamento ou a conciliação no Financeiro antes.');
+    expect(erro.message).toBe(FRASE_E3);
+    expect(erro.trava).toEqual({ lancamentoId: LANC, data: '2026-07-13', valor: 213150.75, status: 'realizado', conciliado: true,
+      sequencia: 1, total: 1, sinal: '1' });
     expect(erro.feito).toEqual([]);
     expect(erro.falta).toEqual(falta);
     expect(rpc).toHaveBeenCalledTimes(1);          // nao ha' segunda tentativa nem passo seguinte
@@ -77,7 +85,7 @@ describe('Desfazer compromisso — uma chamada', () => {
     expect(fraseDoErroDoDesfazer({ code: '42501', message: 'permission denied' })).toBe('Sem permissão para esta operação.');
     expect(fraseDoErroDoDesfazer({ code: 'P0002', message: 'x' })).toBe('Operação não encontrada.');
     expect(fraseDoErroDoDesfazer({ code: '57014', message: 'canceling statement due to statement timeout' })).toBe('Não foi possível desfazer agora. Tente de novo.');
-    expect(fraseDoErroDoDesfazer({ code: 'P0001', message: 'Compromisso ja cancelado' })).toBe('Este lançamento já foi cancelado.');
+    expect(fraseDoErroDoDesfazer({ code: 'P0001', message: 'Este compromisso já foi cancelado.' })).toBe('Este compromisso já foi cancelado.');
     expect(fraseDoErroDoDesfazer({ code: 'P0001', message: 'Desfazer exige motivo' })).toBe('Desfazer exige motivo');   // fora do mapa: como veio
   });
 
@@ -89,6 +97,28 @@ describe('Desfazer compromisso — uma chamada', () => {
     const rpc = rpcQue({ data: {}, error: null });
     await expect(executarDesfazerCompromisso({ operacaoId: OP, versao: 14, compromissoId: COMP, motivo: 'erro', rpc }))
       .rejects.toThrow(/fora do esperado/);
+  });
+
+  it('sem DETAIL de id nao ha lancamento que trava; HINT torto so tira os extras', () => {
+    expect(lerLancamentoQueTrava(null, HINT_E3)).toBeNull();
+    expect(lerLancamentoQueTrava('nao-e-id', HINT_E3)).toBeNull();
+    expect(lerLancamentoQueTrava(LANC, '{torto')).toMatchObject({ lancamentoId: LANC, data: null, valor: null, conciliado: false });
+  });
+
+  it('a simulacao vai sem motivo (o diálogo simula ao abrir); a confirmacao do agendado vai quando marcada', async () => {
+    const rpc = rpcQue({ data: retorno({ simulado: true, agendados: [{ lancamento_id: LANC, sequencia: 1, total: 2, valor: 10, data: '2026-11-10', sinal: '-1' }] }), error: null });
+    const r = await executarDesfazerCompromisso({ operacaoId: OP, versao: 14, compromissoId: COMP, motivo: '', simular: true, rpc });
+    expect(rpc.mock.calls[0][0]).toMatchObject({ p_motivo: '', p_simular: true, p_confirmar_agendado: false });
+    expect(r.retorno.agendados).toEqual([{ lancamentoId: LANC, sequencia: 1, total: 2, valor: 10, data: '2026-11-10', sinal: '-1' }]);
+    const rpc2 = rpcQue({ data: retorno(), error: null });
+    await executarDesfazerCompromisso({ operacaoId: OP, versao: 14, compromissoId: COMP, motivo: 'x', confirmarAgendado: true, rpc: rpc2 });
+    expect(rpc2.mock.calls[0][0].p_confirmar_agendado).toBe(true);
+  });
+
+  it('"ja desfeito" reconhece as frases novas do banco e as antigas', () => {
+    for (const f of ['Este lançamento já foi estornado.', 'Esta programação já foi cancelada.', 'Este compromisso já foi cancelado.',
+      'A materializacao ja esta estornada', 'Programacao ja cancelada', 'Compromisso ja cancelado']) expect(REGEX_JA_DESFEITO.test(f)).toBe(true);
+    expect(REGEX_JA_DESFEITO.test('A operação está cancelada. Recupere a operação antes.')).toBe(false);
   });
 
   it('motivo vazio nao vai ao banco', async () => {
