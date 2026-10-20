@@ -95,7 +95,7 @@ describe('o Geral: três blocos, "Valores e datas" com duas linhas de grade', ()
   });
   it('a régua: corpo a 11px/13px, rótulos do modal em bloco de 13px, data a 11px — o vão de 8px em cima de cada rótulo saiu', () => {
     const m = fonte('./LancamentoV2Dialog.tsx');
-    expect(m).toMatch(/className="min-w-0 flex-1 overflow-y-auto px-4 py-2 space-y-1\.5 bg-muted text-\[11px\] leading-\[13px\]" data-testid="corpo-do-lancamento"/);
+    expect(m).toMatch(/className="min-w-0 flex-1 overflow-y-auto px-4 pt-1\.5 pb-2 space-y-1\.5 bg-muted text-\[11px\] leading-\[13px\]" data-testid="corpo-do-lancamento"/);
     expect(m).not.toContain('<Label className="text-[10px] text-muted-foreground">');
     expect(m).toContain('const dateFieldCls = cn(fieldBg, "h-7 text-[11px]");');
     for (const v of ['geral', 'pagamento', 'documentos']) expect(m).toContain(`<TabsContent value="${v}" className="mt-0 space-y-1.5 focus-visible:outline-none">`);
