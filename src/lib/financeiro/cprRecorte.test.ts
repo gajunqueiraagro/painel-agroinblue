@@ -10,7 +10,7 @@ import {
   tituloDoGrupoVencidos, rotuloDoTotal, centavosDaConta, contaDaConta, daContaCpr, resumoPorContaCpr, contasDaFaixaCpr, SEM_CONTA, type ContaCpr,
   ancorasDoCaixaCpr, vencidoAnteriorAConciliacao, ordenarDoDiaCpr, serieDoSaldoCpr, linhasDoSaldoCpr,
   pontasCpr, chaveDaLinhaCpr, ehPagarCpr, ehReceberCpr, ehTransferenciaCpr, pontaForaDoCaixaCpr,
-  resumoPorSemanaCpr, saldoPorContaCpr,
+  resumoPorSemanaCpr, saldoPorContaCpr, rodapeDoPeriodoCpr,
 } from '@/lib/financeiro/cprRecorte';
 
 const HOJE = '2026-10-05';
@@ -246,7 +246,7 @@ describe('a tela só renderiza o dono (lido da fonte)', () => {
   it('os cartões e o total leem `recorte`; nenhuma soma de `linhas` na tela', () => {
     expect(tela).toContain('recortarCpr(linhas, { periodo, hoje: hojeIso, incluirVencidos, ancoras, estimadas })');
     /* CPR-TRANSFERENCIAS-NO-FLUXO-01: os cartões leem `recorte.cartoes` (só contas, sem as pontas de transferência) */
-    for (const campo of ['recorte.cartoes.vencidos.pagar.valor', 'recorte.cartoes.periodo.pagar.valor', 'recorte.cartoes.periodo.receber.valor', 'recorte.total.pagar.valor', 'recorte.total.receber.valor', 'serie.fim', 'serie.menor']) {
+    for (const campo of ['recorte.cartoes.vencidos.pagar.valor', 'recorte.cartoes.periodo.pagar.valor', 'recorte.cartoes.periodo.receber.valor', 'rodapeDoPeriodoCpr(recorte, serie)', 'serie.fim', 'serie.menor']) {
       expect(tela, campo).toContain(campo);
     }
     expect(tela).not.toMatch(/linhas\.filter\([^)]*\)\.reduce\(/);
@@ -428,7 +428,9 @@ describe('CPR-SALDO-DIA-01 — a série do saldo, em centavos', () => {
     expect(s.dias.map(d => d.data)).toEqual(['2026-10-20']);
     expect(s.fim).toBe(-4828.11);
     expect(r.periodoSoma.pagar.contas).toBe(0);
-    expect(r.total.pagar.valor).toBe(r.vencidos.pagar.valor);          // o intervalo não entra no total da lista
+    /* CPR-AJUSTES-20-10b: nem o intervalo nem os vencidos entram no total do rodapé — vêm antes do Caixa inicial previsto */
+    expect(r.vencidosNoRodape).toBe(false);
+    expect(r.total.pagar).toEqual({ valor: 0, contas: 0 });
   });
   it('sem saldo em caixa (cartão de crédito, conta sem âncora): os totais do dia existem, os saldos são nulos', () => {
     const s = serieDoSaldoCpr(rec(true), null);
@@ -1027,8 +1029,14 @@ describe('CPR-CAIXA-INICIAL-SEMPRE-01 — a tela parte SEMPRE do Caixa inicial (
     expect(tela).toContain('let corrente: number | null = serie.inicial ? serie.inicial.saldo : null;');
   });
   it('período encerrado: o rodapé mostra as quantidades e os totais do REALIZADO; o gráfico diz "realizado"', () => {
-    expect(tela).toContain('const rodape = serie.encerrado && serie.inicial\n');
-    expect(tela).toContain('? { pagar: serie.totalRealizado.pagar.valor, receber: serie.totalRealizado.receber.valor, contas: serie.totalRealizado.pagar.contas + serie.totalRealizado.receber.contas, realizado: true }');
+    /* CPR-AJUSTES-20-10b: o rodapé é do dono; no encerrado ele devolve o REALIZADO do período, com a contagem dos lançamentos */
+    expect(tela).toContain('const fimDoPeriodo = rodapeDoPeriodoCpr(recorte, serie);');
+    const SET = { de: '2026-09-01', ate: '2026-09-30' };
+    const r = recortarCpr([conta('2026-09-15', 999, { conta_bancaria_id: 'A' })], { periodo: SET, hoje: HOJE, incluirVencidos: true, ancoras: new Map([['A', '2026-09-30']]) });
+    const s = serieDoSaldoCpr(r, 1000, { inicial: { data: '2026-08-31', saldo: 700 }, dias: [
+      { data: '2026-09-10', entradas: 500, saidas: 0, nEntradas: 1, nSaidas: 0, saldo: 1200 },
+      { data: '2026-09-20', entradas: 0, saidas: 1500, nEntradas: 0, nSaidas: 1, saldo: -300 }] });
+    expect(rodapeDoPeriodoCpr(r, s)).toEqual({ pagar: { valor: 1500, contas: 1 }, receber: { valor: 500, contas: 1 }, contas: 0, realizados: 2, encerrado: true });
     expect(tela).toContain('pagar={rodape.pagar} receber={rodape.receber} saldo={serie.fim}');
     expect(src('../../components/financeiro-v2/CprFluxoPrevisto.tsx')).toContain("{encerradoEm ? 'Fluxo de caixa realizado' : 'Fluxo de caixa previsto'}");
   });
