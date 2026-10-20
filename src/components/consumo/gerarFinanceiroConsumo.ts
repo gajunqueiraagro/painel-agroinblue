@@ -97,6 +97,8 @@ export async function gerarFinanceiroConsumo(p: GerarFinanceiroConsumoParams): P
     movimentacao_rebanho_id: p.lancamentoId,
     data_competencia: p.data,
     data_pagamento: p.data,
+    /* CRIAR-DO-EXTRATO-01 — todo lançamento nasce com vencimento; o consumo é realizado no dia: vencimento = pagamento. */
+    data_vencimento: p.data,
     ano_mes: p.data.slice(0, 7),
     valor: p.valorTotal,
     descricao,
