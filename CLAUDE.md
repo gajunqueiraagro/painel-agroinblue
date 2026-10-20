@@ -10325,3 +10325,24 @@ curta nas secoes de regras) e a pendencia (na FILA); o bloco inteiro vai para do
     nao ha' mais o vencido de 09/10 nela · o Ampliado na janela real (a bancada mantem a lateral de 176px aberta).
   · SUITE depois do CPR-AJUSTES-20-10: 5946 passando (+13: `cprAjustes2010.test.ts` 12 novo, `cprRecorte.test.ts` 80 -> 81), 22 skipped, as 3
     falhas de sempre e os 88 erros de sempre (87 do `conciliacaoDono.test.tsx`, do Code 2). Gate de tela completo: 104 telas, 550 medicoes, 0 achados.
+- ⚠ CPR: PERIODO QUE NAO INCLUI HOJE NAO MOSTRA HOJE, E VENCIDO QUE ENTRA NO SALDO APARECE SEMPRE (CPR-AJUSTES-20-10b, Gabriel 20/10/2026, so'
+  tela). Nasce da Vera, Global, 01/11–30/11: a lista abria um dia "hoje" com os realizados de 20/10 e o Caixa inicial de 31/10 saia igual
+  ao caixa de hoje.
+  · FASE 0, MEDIDO (proto, so' leitura): na Vera nada em aberto entre 21/10 e 31/10 e nada vencendo hoje; 3 vencidos em aberto = R$ 160,83
+    (15/12/2025 38,63; 15/09/2026 112,82; 15/10/2026 9,38, os tres da conta fazenda). O Caixa inicial igual ao de hoje era da VERSAO PUBLICADA
+    (a D1/D2 deixava esses vencidos fora do saldo); o CPR-AJUSTES-20-10 ja' os desconta. O dia "hoje" era defeito vivo: a busca traz de hoje
+    ate' "de", e as PAGAS (pilula Realizado) que vencem hoje abriam um dia fora do periodo. Conserto: a lista usa `recorte.pagasNoPeriodo`
+    (dono: so' as pagas com vencimento dentro do periodo); `recorte.pagas` segue para o seletor e as regras de antes.
+  · VENCIDOS: `recorte.vencidosNaLista` (dono) = sempre, menos no periodo ENCERRADO com a caixa desligada. Periodo com hoje: no dia de hoje,
+    qualquer que seja a caixa. Periodo FUTURO: bloco "Vencidos em aberto · N contas · entram no saldo" ANTES da linha do Caixa inicial (que ja'
+    os desconta), com o total; "Entre hoje e dd/mm/aaaa" (o que vence ate' a vespera) tambem antes dele. Os dois prendem a 22px. O rodape
+    (Fim do periodo) soma sempre os vencidos. PDF e Excel na mesma ordem (`GrupoDaTela.antesDoCaixaInicial`).
+  · A CAIXA "INCLUIR VENCIDOS" SO' DECIDE NO PERIODO ENCERRADO (o vencido sai hoje, depois do periodo, e nao mexe no saldo dele); a frase vai
+    no `title` dela. PROPOSTA AO GABRIEL: retira'-la (no encerrado, mostrar sempre o grupo "saem hoje"). Nao removida.
+  · VERA, Global, 01/11–30/11, pelo dado de 20/10 (caixa de hoje 1.450.296,76, o da tela publicada): vencidos 160,83 (3) · Caixa inicial
+    31/10 = 1.450.135,93 · Fim do periodo: a pagar 206.581,23 (57 saidas 186.395,93 + 3 pontas de transferencia 20.024,47 + vencidos) ·
+    a receber 232.473,50 (212.449,03 + as 3 pontas) · saldo no fim 1.476.189,03 (as transferencias sao entre duas contas do caixa).
+  · Gate: cenario `cpr-futuro` (bancada `tela=cpr&v=futuro`, o periodo pelo retorno de sessao da tela) nos sete tamanhos.
+  Testes: `cprAjustes2010.test.ts` +6 (18 -> 24... ver a suite); `cprRecorte.test.ts` e `cprEstimado.test.ts` trocados ao contrato novo
+  (a caixa nao muda nada num periodo com hoje; no encerrado ela ainda decide). 5 mutacoes mortas.
+  ⚠ NAO PROVADO: com login no app real · a Vera aberta na tela depois da publicacao.
