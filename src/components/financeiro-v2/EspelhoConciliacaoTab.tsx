@@ -16,6 +16,7 @@
  * de `AuditoriaBancariaSoberana` byte a byte — o que mudou foi a casa e a Conferência.
  */
 import React, { useEffect, useMemo, useState } from 'react';
+import { fechaAoCentavo, TOLERANCIA_CONCILIACAO } from '@/lib/conciliacao/tolerancia';
 import { DndContext, DragOverlay, useDraggable, useDroppable, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -303,7 +304,7 @@ const SINAL_CASADO = { simbolo: '\u2713', cor: 'text-success', titulo: 'extrato 
    soma maior que o banco é o "aplicado acima do lançamento", que já tem aviso próprio. */
 export const SINAL_PARCIAL = { simbolo: '!', cor: 'text-destructive', titulo: 'extrato parcial: os lançamentos somam menos que o banco' };
 export function faltaDoExtrato(diferenca: number): number | null {
-  return diferenca > 0.01 ? Math.round(diferenca * 100) / 100 : null;
+  return diferenca > TOLERANCIA_CONCILIACAO ? Math.round(diferenca * 100) / 100 : null;
 }
 export const MOTIVO_EXTRATO_PARCIAL = 'extrato parcial — desfaça o desmembramento na Mesa (em breve aqui)';
 
@@ -1045,9 +1046,9 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
     : sel.extratos.size >= 2 && sel.lancamentos.size === 1 ? 'n_um'
     : null;
   /* O bloco não concilia pela barra: a matriz e a regra se conferem no modal, que é quem chama a RPC. */
-  const podeConciliar = !!sentido && sentido !== 'bloco' && Math.abs(difSel) <= 0.01;
+  const podeConciliar = !!sentido && sentido !== 'bloco' && fechaAoCentavo(difSel);
   const motivoBloqueio = sentido === 'bloco' ? 'bloco: confira em "Casar com o banco…"'
-    : sentido ? (Math.abs(difSel) > 0.01 ? 'os valores não batem' : '')
+    : sentido ? (!fechaAoCentavo(difSel) ? 'os valores não batem' : '')
     : sel.extratos.size === 0 ? 'marque ao menos um extrato'
     : sel.lancamentos.size === 0 ? 'marque ao menos um lançamento'
     : 'marque 1 extrato para N lançamentos, ou N extratos para 1 lançamento';
@@ -1301,7 +1302,7 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
                   const icone = iconeDoLancamento(p.tipoVencedor);
                   const agrupado = p.filhas.length > 1;
                   const unica = p.filhas.length === 1 ? p.filhas[0] : null;
-                  const temDif = Math.abs(p.diferenca) > 0.01;
+                  const temDif = !fechaAoCentavo(p.diferenca);
                   const falta = faltaDoExtrato(p.diferenca);
                   const sinal = falta != null ? SINAL_PARCIAL : SINAL_CASADO;
                   const somaAssinada = Math.sign(p.extrato.valor || 1) * p.soma;
@@ -1393,7 +1394,7 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
 
                 {/* ⚠ N:1 — a mãe do lado do SISTEMA. Ver `ParedoN1`. */}
                 {!soNaoConciliados && d.paredosN1.map((g) => {
-                  const temDif = Math.abs(g.diferenca) > 0.01;
+                  const temDif = !fechaAoCentavo(g.diferenca);
                   const somaAssinada = Math.sign(g.sis.valor_assinado || 1) * g.soma;
                   return (
                     <React.Fragment key={g.sis.lancamento_id}>

@@ -29,6 +29,7 @@
  * mensagem do PostgREST, stack, path, SQL ou UUID.
  */
 import { useRef, useState } from 'react';
+import { fechaAoCentavo } from '@/lib/conciliacao/tolerancia';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
@@ -476,7 +477,7 @@ function detectarAmbiguidade(
     if (Math.abs(c.score - top.score) <= 1) return true;
     // Caso especial: scores diferentes mas valor+data+fornecedor idênticos
     const valorIgual =
-      Math.abs(Math.abs(c.lanc.valor) - Math.abs(top.lanc.valor)) <= 0.01;
+      fechaAoCentavo(Math.abs(c.lanc.valor) - Math.abs(top.lanc.valor));
     const dataIgual = dataAncoraLancamento(c.lanc) === dataAncoraLancamento(top.lanc);
     const fornParecido = similarFornecedorEstrito(c.fornNome, top.fornNome);
     return valorIgual && dataIgual && fornParecido;
@@ -787,7 +788,7 @@ export function useImportacaoExtrato() {
         // ── 1) Score de TODOS os candidatos viáveis (auto-match exclui já-totalmente-conciliados) ──
         const candidatosScore: CandidatoComScore[] = [];
         for (const l of lancsLivres) {
-          if (Math.abs(Math.abs(Number(l.valor) || 0) - valorMov) > 0.01) continue;
+          if (!fechaAoCentavo(Math.abs(Number(l.valor) || 0) - valorMov)) continue;
           const ancL = dataAncoraLancamento(l);
           if (!ancL) continue;
           if (Math.abs(diasEntre(m.data, ancL)) > 7) continue;
