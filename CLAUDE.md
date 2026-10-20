@@ -9983,3 +9983,31 @@ curta nas secoes de regras) e a pendencia (na FILA); o bloco inteiro vai para do
   Code corrige `supabase_migrations.schema_migrations.version` para o numero do arquivo (UPDATE guardado por nome + md5 dos statements),
   mostrando antes/depois. Corrigidas em 20/10: `audit_seg_01_trilha` 20261020131759 -> 20261028100000 e `conc_criar_centavo_01`
   20261020134046 -> 20261028100300.
+- ⚠ NADA SE APAGA DE VERDADE NA CONCILIACAO, NO EXTRATO, NOS DOCUMENTOS, NOS FORNECEDORES E NO PLANO (AUDIT-DELETE-01a, Gabriel 20/10/2026).
+  Migration `supabase/migrations/20261028100400_audit_delete_01a.sql` — ⚠ ESCRITA E ENSAIADA EM 20/10, PENDENTE DE APLICAR DEPOIS DAS 20h
+  (CREATE TRIGGER em extrato_bancario_v2 e conciliacao_bancaria_itens). ORDEM DA NOITE: 20261028100100 -> 20261028100400 ->
+  20261028100200 (o indice CONCURRENTLY, fora de transacao, por ultimo); depois de cada `apply_migration`, a versao do ledger corrigida
+  para a do arquivo. O FRONT DESTE BLOCO (FornecedorFormDialog, useConciliacaoBancariaItens e `src/hooks/auditDeleteFront.test.ts`) SO'
+  SOBE DEPOIS DA APLICACAO: antes dela as RPCs novas nao existem e o "Excluir fornecedor" falharia.
+  · conciliacao_bancaria_itens, extrato_bancario_v2, financeiro_lancamento_documentos, financeiro_documento_vinculos,
+    financeiro_fornecedores, financeiro_plano_contas: sem policy e sem privilegio de DELETE para anon/authenticated, e o gatilho
+    `trg_sem_delete_direto` (`_fn_sem_delete_direto`, 42501) recusa quem nao e' o dono das funcoes (postgres, service_role,
+    supabase_admin). A CASCATA DE FK (apagar cliente pelo admin; lancamento -> documentos/vinculos/itens) roda como o dono e passa. No
+    extrato, o modo "log" e o `app.mesa_v2_triggers_enforce` da sessao deixam de valer para o usuario.
+  · TRILHA `trg_trilha_registro` (`_fn_trilha_registro`, INSERT/UPDATE/DELETE) nas seis: audit_log com antes/depois, autor = auth.uid()
+    e "motivo: <app.motivo>" no resumo. Conta GLOBAL do plano (sem cliente) fica fora (audit_log.cliente_id e' obrigatorio).
+  · GESTOS (SECURITY DEFINER, tenant pela linha, simulacao = gravacao com p_simular true por padrao, motivo obrigatorio na gravacao):
+    `fn_conciliacao_item_desfazer(item, motivo, simular)` marca desfeito_em/por/motivo (a trilha da conciliacao registra junto);
+    `fn_fornecedor_excluir(fornecedor, motivo, simular)` tira o fornecedor de uso (ativo = false, nunca apaga) e, com lancamento vivo
+    ou recorrencia ativa, recusa com a frase do "mescle no cadastro certo". Documento ja' tinha cancelar; plano e vinculos nao tem
+    DELETE na tela. O "Excluir fornecedor" (aba Uso, so' sem uso) nao tem confirmacao: grava o motivo fixo
+    `MOTIVO_EXCLUIR_FORNECEDOR` ("excluído no cadastro do fornecedor (sem uso)"); o excluido fica em Inativos.
+  · FASE 0 (20/10): DELETE da tela so' em `FornecedorFormDialog.tsx:229` e `useConciliacaoBancariaItens.ts:97` (o `remover`, SEM chamador);
+    nenhuma funcao do banco apaga nessas tabelas. DELETEs desde 30/03 (pg_stat): fornecedores 365, extrato 234, plano 35, itens 32,
+    vinculos 7, documentos 6 — quem fez nao da' para saber (nao havia trilha).
+  · PROVAS (ensaio revertido): `supabase/tests/audit_delete_01a_test.sql` D1–D5 OK (membro nao apaga nas seis, nem com DELETE concedido
+    so' na transacao; fornecedor sem uso sai de uso com trilha e motivo; com lancamento recusa; vinculo desfeito com motivo e trilha;
+    sem motivo recusa). Mutacoes mortas: trilha sem o motivo -> D2; excluir sem a checagem de uso -> D3; no front, o `.delete()` de
+    volta -> `auditDeleteFront.test.ts`.
+  ⚠ NAO PROVADO: nada aplicado (so' ensaio) · o "Excluir fornecedor" na tela com login · o volume da trilha numa importacao grande de
+    extrato (uma linha de audit_log por movimento).
