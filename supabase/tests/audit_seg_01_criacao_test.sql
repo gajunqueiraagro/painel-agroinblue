@@ -8,7 +8,7 @@ SET LOCAL role authenticated;
 DO $teste$
 declare
   c_nj constant uuid := 'f2d67cd4-24d0-456f-a079-a3281dcce7fd'; c_user constant uuid := '9200e0d0-095f-4ab8-a31a-3052a0faaf56';
-  v_molde jsonb; v_novo uuid := gen_random_uuid(); r record;
+  v_molde jsonb; v_novo uuid := gen_random_uuid(); r record; v_cols text;
 begin
   perform set_config('request.jwt.claims', json_build_object('sub', c_user, 'role', 'authenticated')::text, true);
   select to_jsonb(l) into v_molde from public.financeiro_lancamentos_v2 l
@@ -16,9 +16,12 @@ begin
      and coalesce(l.origem_lancamento, '') not in ('mesa_split', 'parcela_financiamento') and coalesce(l.tipo_operacao, '') not like '3-%'
    order by l.created_at desc limit 1;
   if v_molde is null then raise exception 'B1 sem molde'; end if;
-  insert into public.financeiro_lancamentos_v2
-  select (jsonb_populate_record(null::public.financeiro_lancamentos_v2,
-          v_molde || jsonb_build_object('id', v_novo, 'hash_importacao', null, 'created_by', null, 'updated_by', null))).*;
+  -- so' as colunas que se gravam (sem as GERADAS, como conta_efetiva_id)
+  select string_agg(quote_ident(attname), ', ' order by attnum) into v_cols from pg_attribute
+   where attrelid = 'public.financeiro_lancamentos_v2'::regclass and attnum > 0 and not attisdropped and attgenerated = '';
+  execute format('insert into public.financeiro_lancamentos_v2 (%s) select %s from jsonb_populate_record(null::public.financeiro_lancamentos_v2, $1)',
+                 v_cols, v_cols)
+    using v_molde || jsonb_build_object('id', v_novo, 'hash_importacao', null, 'created_by', null, 'updated_by', null);
   select usuario_id, acao, via into r from public.audit_log where tabela_origem = 'financeiro_lancamentos_v2' and registro_id = v_novo;
   if r.acao is distinct from 'criou' or r.usuario_id is distinct from c_user or r.via is not null then
     raise exception 'B1 criou: % % %', r.acao, r.usuario_id, r.via; end if;
