@@ -201,6 +201,8 @@ export interface RecorteCpr<T extends ContaCpr> {
   periodo: PeriodoCpr;
   hoje: string;
   incluirVencidos: boolean;
+  /** CPR-AJUSTES-20-10b — os vencidos estão na lista e no total? Sempre, menos no período encerrado com a caixa desligada. */
+  vencidosNaLista: boolean;
   /** Vencidos em aberto, de qualquer idade — o cartão os mostra SEMPRE; a caixa decide se entram na lista e no total. */
   vencidos: SomaCpr & {
     maisAntiga: string | null; diasDaMaisAntiga: number | null; linhas: T[];
@@ -217,6 +219,9 @@ export interface RecorteCpr<T extends ContaCpr> {
   semVencimento: SomaCpr & { linhas: T[] };
   /** Pagas que a consulta trouxe (pílula "Realizado" ligada): aparecem na lista do dia, nunca nos totais. */
   pagas: T[];
+  /** CPR-AJUSTES-20-10b — as pagas que a LISTA mostra: só as que vencem DENTRO do período (a busca traz também as de hoje até "de",
+   *  e uma paga de hoje num período futuro abria um dia "hoje" fora do período) */
+  pagasNoPeriodo: T[];
   /** Pontas de transferência do período em conta que NÃO entra no caixa (`pontaForaDoCaixaCpr`): na lista do dia, nunca nos totais. */
   foraDoCaixa: T[];
   /** OS CARTÕES DO TOPO — só CONTAS a pagar e a receber, SEM as pontas de transferência (os totais da lista e o saldo as incluem). */
@@ -303,17 +308,21 @@ export function recortarCpr<T extends ContaCpr>(
   }
   const emReais = (m: Map<string, number>) => Object.fromEntries(Array.from(m, ([k, v]) => [k, reais(v)]));
   const maisAntiga = porBalde.vencido.length > 0 ? (porBalde.vencido[0].data_vencimento ?? '').slice(0, 10) : null;
-  const vP = incluirVencidos ? sv.cPagar : 0, vR = incluirVencidos ? sv.cReceber : 0;
-  const nVP = incluirVencidos ? sv.pagar.contas : 0, nVR = incluirVencidos ? sv.receber.contas : 0;
+  /* CPR-AJUSTES-20-10b — VENCIDO QUE ENTRA NO SALDO APARECE SEMPRE: em todo período que não está encerrado o vencido em aberto
+     tira (ou põe) do saldo de hoje — e por isso está SEMPRE na lista e no total do rodapé, qualquer que seja a caixa "Incluir
+     vencidos". Só no período ENCERRADO (o vencido sai hoje, DEPOIS dele, e não mexe no saldo do período) a caixa ainda decide. */
+  const vencidosNaLista = incluirVencidos || periodo.ate >= hoje;
+  const vP = vencidosNaLista ? sv.cPagar : 0, vR = vencidosNaLista ? sv.cReceber : 0;
+  const nVP = vencidosNaLista ? sv.pagar.contas : 0, nVR = vencidosNaLista ? sv.receber.contas : 0;
   /* REC-VALOR-CERTO-02 — as MESMAS linhas do total do rodapé (vencidos, se ligados, + período), repartidas pelo conjunto. */
   const fatias = { pc: { valor: 0, qtd: 0 }, pe: { valor: 0, qtd: 0 }, rc: { valor: 0, qtd: 0 }, re: { valor: 0, qtd: 0 } };
-  for (const l of [...(incluirVencidos ? porBalde.vencido : []), ...porBalde.periodo]) {
+  for (const l of [...(vencidosNaLista ? porBalde.vencido : []), ...porBalde.periodo]) {
     const est = contaEstimadaCpr(l, opcoes.estimadas);
     const f = ehPagarCpr(l) ? (est ? fatias.pe : fatias.pc) : ehReceberCpr(l) ? (est ? fatias.re : fatias.rc) : null;
     if (f) { f.valor += centavosDaConta(l); f.qtd += 1; }
   }
   return {
-    periodo, hoje, incluirVencidos,
+    periodo, hoje, incluirVencidos, vencidosNaLista,
     vencidos: {
       pagar: sv.pagar, receber: sv.receber, maisAntiga, diasDaMaisAntiga: maisAntiga ? diasEntre(maisAntiga, hoje) : null, linhas: porBalde.vencido,
       contam: { pagar: sc.pagar, receber: sc.receber, linhas: contam },
@@ -323,6 +332,7 @@ export function recortarCpr<T extends ContaCpr>(
     periodoSoma: { pagar: sp.pagar, receber: sp.receber, saldo: reais(sp.cReceber - sp.cPagar), linhas: porBalde.periodo },
     semVencimento: { pagar: ss.pagar, receber: ss.receber, linhas: porBalde.sem_vencimento },
     pagas: porBalde.paga,
+    pagasNoPeriodo: porBalde.paga.filter((l) => { const v = (l.data_vencimento ?? '').slice(0, 10); return v >= periodo.de && v <= periodo.ate; }),
     foraDoCaixa,
     cartoes: {
       vencidos: { pagar: cv.pagar, receber: cv.receber }, periodo: { pagar: cp.pagar, receber: cp.receber },
@@ -400,13 +410,13 @@ export function resumoPorContaCpr<T extends ContaCpr>(
     const b = baldeDaConta(l, periodo, hoje);
     const venc = (l.data_vencimento ?? '').slice(0, 10);
     const pagaNoPeriodo = b === 'paga' && venc !== '' && venc >= periodo.de && venc <= periodo.ate;
-    if (b === 'periodo' || pagaNoPeriodo || (b === 'vencido' && incluirVencidos)) chaves.add(contaDaConta(l) ?? SEM_CONTA);
+    if (b === 'periodo' || pagaNoPeriodo || (b === 'vencido' && (incluirVencidos || periodo.ate >= hoje))) chaves.add(contaDaConta(l) ?? SEM_CONTA);
   }
   for (const c of opcoes.comRealizado ?? []) chaves.add(c);
   if (opcoes.contaEscolhida != null) chaves.add(opcoes.contaEscolhida);
   const lista = Array.from(chaves).map((conta) => {
     const r = recortarCpr(linhas, { periodo, hoje, incluirVencidos, conta });
-    return { conta, pagar: r.total.pagar, receber: r.total.receber, vencidoPagar: opcoes.incluirVencidos ? r.vencidos.pagar : { valor: 0, contas: 0 } };
+    return { conta, pagar: r.total.pagar, receber: r.total.receber, vencidoPagar: r.vencidosNaLista ? r.vencidos.pagar : { valor: 0, contas: 0 } };
   });
   return lista.sort((a, b) => (b.pagar.valor - a.pagar.valor) || (b.receber.valor - a.receber.valor) || (a.conta < b.conta ? -1 : 1));
 }
