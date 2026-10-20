@@ -9923,3 +9923,38 @@ curta nas secoes de regras) e a pendencia (na FILA); o bloco inteiro vai para do
   (Na pratica, 20/10: a suite numa worktree sem `.env` cai na coleta com "supabaseUrl is required" em 77 arquivos; roda-se com as
   variaveis do `.env.proto.local` exportadas no shell — `set -a; . ./.env.proto.local; set +a; npx vitest run` —, e o
   `build:proto` le' o `.env.proto.local` sozinho.)
+- ⚠ A TRILHA DE AUDITORIA E' IMUTAVEL E O AUTOR E' QUEM ESTA' LOGADO (AUDIT-SEG-01 parte 1, Gabriel 20/10/2026; migration
+  `supabase/migrations/20261028100000_audit_seg_01_trilha.sql`, md5 do arquivo e02712dbe3922b1b6c479c9e9fb2f127 — APLICADA no proto em
+  20/10/2026 ~10h20 (Brasilia), ⚠ registrada como 20261020131759; ledger = arquivo por md5). Base: o relatorio da AUDITORIA-01 FASE 0 (20/10).
+  · audit_log, audit_log_movimentacoes, fechamento_reaberturas_log, financeiro_saldos_audit e zoo_operacao_eventos: SEM UPDATE/DELETE/
+    TRUNCATE para anon e authenticated (policies `*_update_tenant`/`*_delete_tenant` sairam) e com o gatilho `trg_trilha_imutavel`
+    (`_fn_trilha_imutavel`, 42501), que recusa tambem quem passar por policy concedida. Passam so' postgres (o dono das funcoes
+    SECURITY DEFINER), service_role e supabase_admin — `oc_excluir_definitivamente` e `oc_limpar_operacao_teste` apagam eventos da OC e
+    seguem funcionando (DELETE de negocio e' do AUDIT-DELETE-01). conciliacao_audit_log segue append-only como era.
+  · O FRONT NUNCA ESCOLHE O AUTOR: `trg_trilha_autor` (`_fn_trilha_autor`, BEFORE INSERT, colunas por argumento) grava auth.uid() e
+    now() sempre que ha' usuario logado ou o papel e' anon/authenticated; sem usuario fora desses papeis (rotina, service_role, backfill)
+    o que veio fica. O INSERT direto da tela continua: audit_log_movimentacoes (useLancamentos.ts:807, Abate/Compra/VendaFinanceiroPanel,
+    useBoitelOperacoes.ts:226/276/394) e financeiro_saldos_audit (FinV2SaldosTab.tsx:438).
+  · `audit_trigger_financeiro_v2` (99a35541… -> c5a34e73…) e `audit_trigger_lancamentos` (f4632c48… -> f65021a2…): autor = auth.uid().
+    PROIBIDO voltar a COALESCE(NEW.updated_by|created_by, …): 16 das 56 funcoes que alteram lancamento nao gravam updated_by (o
+    cancelamento saia com o nome do editor anterior; 220 casos em 60 dias) e o front escrevia o que quisesse em updated_by. Sem
+    usuario, autor NULO.
+  · conciliacao_audit_log LEGIVEL por membro do cliente (GRANT SELECT + policy `tenant_ok(cliente_id)`): antes ninguem a lia, e a
+    parte "conciliacao" da aba Auditoria do lancamento vinha sempre vazia.
+  · PROVAS: `supabase/tests/audit_seg_01_trilha_test.sql` (A1–A6, nj@ no NJ) OK no ensaio revertido e no vivo; mutacoes mortas: sem o
+    gatilho de autor -> A2 (o membro forjava o admin); gatilho de trilha com COALESCE(updated_by) -> A3. Como membro, INSERT em
+    financeiro_saldos_audit e zoo_operacao_eventos com o id do admin grava o proprio autor; o dono apaga evento de OC. 0 funcoes do
+    sistema abertas a anon.
+  · ⚠ PENDENTE DE APLICAR, SO' ANTES DAS 07h OU DEPOIS DAS 20h (DDL em tabela quente): `20261028100100_audit_seg_01_via_e_criacao.sql`
+    (coluna audit_log.via — 'sistema:<app.via>' sem usuario, app.via com usuario — e trg_audit_financeiro_v2 AFTER INSERT OR UPDATE:
+    a criacao de lancamento entra na trilha; teste `audit_seg_01_criacao_test.sql` B1–B2 so' depois dela) e
+    `20261028100200_audit_seg_01_indice.sql` (CREATE INDEX CONCURRENTLY idx_audit_log_registro (tabela_origem, registro_id, created_at
+    DESC), FORA de transacao — nao pelo apply_migration). Ate' la' a criacao de lancamento financeiro NAO tem evento na trilha.
+  ⚠ A TELA ainda chama autor nulo de "sistema" e le^ nomes de `profiles` (legivel so' a propria linha): vai com o leitor de nomes.
+  ⚠ O CANAL DE ESCRITA DO MCP RECUSA SQL COM "^" ("Invalid or expired requestState", duas vezes seguidas; sem o caractere, passou).
+- ⚠ CANAL DE ESCRITA DO PROTO (`supabase-proto-write`) — AUTORIZACAO DO GABRIEL (20/10/2026), COM CONDICOES: antes da PRIMEIRA chamada de
+  escrita, confirmar que o project-ref e' binbcdfbisgscrifztia (a URL do servidor em ~/.claude.json e uma marca so' do proto no
+  ledger); qualquer outro — em especial duttifnbxqtyyybjmouv, PRODUCAO — PARAR sem escrever nada. So' as migrations do proprio bloco
+  (o Code 2 na faixa 20261028…), nenhum dado de negocio, nenhuma migration do Code 1. Ordem: ensaio em transacao revertida -> mostrar
+  a resposta -> aplicar -> conferir ledger = arquivo (md5) e as provas. DDL que trava tabela quente so' antes das 07h ou depois das
+  20h. Erro de lock/timeout (outro Code aplicando junto): esperar e tentar uma vez; persistindo, PARAR e relatar.
