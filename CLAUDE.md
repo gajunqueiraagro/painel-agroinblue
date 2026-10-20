@@ -2596,6 +2596,22 @@ preview que o cabecalho nao sai da tela ao rolar.
     proprio, FIN-POS-FIXADO-01 · a CORRECAO DO 8.233.040 pelo extrato do Sicoob esta' simulada e espera o OK do Gabriel · o contrato 13
     (caso A) espera o sistema e o 1º vencimento certos.
   ⚠ NAO PROVADO: nada com login no app real (bancada).
+- ⚠ A CAPTACAO SEGUE O CREDITADO EM CONTA, NUNCA O VALOR DO CONTRATO (Gabriel 20/10/2026; migration
+  `supabase/migrations/20261027204200_fin_captacao_creditado_8233040_encargos.sql`, md5 do arquivo b2c12afc1f1bc5b69aa4f85965b6afc5 — APLICADA no
+  proto em 20/10/2026, ledger = arquivo). `_fn_financiamento_salvar_cabecalho_exec` (f252549b… -> 76b57c80…): atualizar a captacao que existe
+  NAO reescreve o valor dela (data, conta, credor e plano seguem o cabecalho); criar uma captacao nova usa a soma das liberacoes vivas "em
+  conta", e so' na falta delas o valor do contrato. Trava: `supabase/tests/fin_captacao_creditado_test.sql` (K1–K2); com o corpo antigo cai em K1.
+  · O 8.233.040 (RRCC, 74567fe0) foi corrigido pelo extrato do Sicoob de 05/10/2026 com o OK do Gabriel (migrations 20261027204100 e 204200):
+    SAC anual pos, 5 parcelas de 120.004,50 (parcela 1 paga em 17/08/2026, juros 116.304,73 = 39.538,67 + 76.766,06 a identificar; 2–5 com
+    juros estimados — a marca vem no FIN-POS-FIXADO-01); captacao 592.000,00 (o creditado); liberacoes 592.000,00 em conta + 8.022,50 sem
+    caixa (credor Sicoob, "encargos da contratação (IOF/tarifa) — a identificar com o banco"); a despesa de 8.022,50 em Juros de
+    Financiamento Pecuaria, sem conta e sem caixa, em 26/09/2025, ligada ao contrato como encargo ('iof'). Saldo 480.018,00 (o banco diz
+    532.390,64 para quitacao: juros/correcao do pos, informacao).
+  · A coluna `financiamento_parcelas.status` da parcela 1 foi alinhada a 'pago' (17/08/2026): o MOTOR das parcelas deriva o status do
+    lancamento DA COLUNA da parcela ('pendente' -> previsto/programado) e devolveria os lancamentos realizados a previsto na proxima vez que
+    rodasse nela. ⚠ CONTAGEM (20/10, nada corrigido): parcelas vivas pagas pelos lancamentos com a coluna diferente de 'pago' — credito: NJ 1,
+    Santa Rita 1, Teste 1; CONSORCIO Agnaldo 3 (o 002122, parcelas 1–3 — mesmo risco do motor); compra parcelada: NJ 54, Vera 53, Agnaldo 5
+    (o motor nao roda em parcelamento). E o inverso (coluna 'pago' com lancamento em aberto): Santa Rita 1.
 - ⚠ O CREDITO SE EDITA PELO CADASTRO NOVO, E AS PARCELAS EM ABERTO MUDAM POR TRES RPCs COM TRILHA E DESFAZER (FIN-FINANC-28 EDITAR = CADASTRO
   NOVO v2, Gabriel 18/10/2026; migrations `20261027201400_fin_financ_28_editar_cadastro.sql` md5 daa90c496265d38ea846258d33aee06e e
   `20261027201500_fin_financ_28_cabecalho_linha.sql` md5 8772c5861b722f5913b81999cadfffba, ledger com o timestamp do dia; ledger = arquivo).
