@@ -93,6 +93,8 @@ export interface GrupoDaTela<L> {
   passado?: boolean;
   hoje?: boolean;
   avisoHoje?: string;
+  /** CPR-AJUSTES-20-10b — o bloco vem ANTES do Caixa inicial (os vencidos do período futuro, que o Caixa inicial já desconta) */
+  antesDoCaixaInicial?: boolean;
 }
 export interface LinhaDaTela {
   data_competencia?: string | null; data_vencimento?: string | null; data_pagamento?: string | null;
@@ -227,6 +229,9 @@ export function montarModeloCpr<L extends LinhaDaTela>(e: EntradaDoModelo<L>): M
       saldo: celulaDeValor('saldo', g.saldo, { destacarNegativo: true }), contas: contasDoGrupo,
     });
   }
+  /* CPR-AJUSTES-20-10b — o bloco dos vencidos do período FUTURO vem ANTES do Caixa inicial (que já os desconta), como na tela */
+  const nAntes = e.grupos.filter((g) => g.antesDoCaixaInicial).length;
+  if (nAntes > 0) faixas.splice(nAntes, 0, ...faixas.splice(0, 1));
 
   /* o primeiro valor que não é número: a folha sai, e o aviso o nomeia (o motor recusa NaN em coordenada, não em texto) */
   let valorInvalido: string | null = null;
