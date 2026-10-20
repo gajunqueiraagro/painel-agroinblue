@@ -24,7 +24,7 @@ const sit = (ps: ParcelaDoContrato[]): SituacaoDoContrato => {
     const f = Math.max(Math.round(p.valorTotal * 100) - Math.round(p.valorPago * 100), 0);
     if (p.dataVencimento && p.dataVencimento < HOJE) vencido += f; else aVencer += f;
   }
-  return { parcelas: ps, cartoes: { valorContrato: 0, pago: pago / 100, aVencer: aVencer / 100, vencido: vencido / 100, pagas: 0, parcelas: ps.length,
+  return { parcelas: ps, cartoes: { valorContrato: 0, pago: pago / 100, aVencer: aVencer / 100, vencido: vencido / 100, adiado: 0, adiadoQtde: 0, pagas: 0, parcelas: ps.length,
     jurosPrevistos: 0, somaPrincipal: 0, somaTotal: 0, divergentes: 0, detalhe: null } };
 };
 /* a "Antena" (a próxima parcela em nov) e uma compra com parcela de out (a próxima) E de nov — o caso do NJ */
