@@ -68,7 +68,12 @@ BEGIN
   END LOOP;
   FOR r IN SELECT c.*, EXISTS (SELECT 1 FROM public.fn_juros_estimados_do_cliente(c_rrcc) e WHERE e.lancamento_id = c.lanc) AS marcou
              FROM casos c LOOP
-    IF r.marcou IS DISTINCT FROM r.esperado THEN RAISE EXCEPTION 'J3 caso %: marcou=% esperado=%', r.nome, r.marcou, r.esperado; END IF;
+    IF r.nome = 'pos_paga' THEN
+      -- FIN-PARCELA-STATUS-01: parcela 'pago' com o juros em aberto deixou de existir — o gatilho leva a coluna ao que os lancamentos dizem
+      -- ('pendente'), e o juros em aberto de um pos-fixado e' estimado. A regra pura (abaixo) segue dizendo nao para (pos, pago, programado).
+      IF (SELECT q.status FROM public.financiamento_parcelas q WHERE q.lancamento_juros_id = r.lanc) <> 'pendente' OR NOT r.marcou THEN
+        RAISE EXCEPTION 'J3 caso pos_paga: a coluna nao seguiu o juros em aberto'; END IF;
+    ELSIF r.marcou IS DISTINCT FROM r.esperado THEN RAISE EXCEPTION 'J3 caso %: marcou=% esperado=%', r.nome, r.marcou, r.esperado; END IF;
     IF public._fn_juros_estimado(r.tipo_taxa, r.status_parcela, r.status_lanc) IS DISTINCT FROM r.esperado THEN
       RAISE EXCEPTION 'J3 regra pura, caso %', r.nome; END IF;
   END LOOP;
