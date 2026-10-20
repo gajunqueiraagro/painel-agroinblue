@@ -8,7 +8,7 @@ import { resolve } from 'node:path';
 import {
   periodoDoAtalho, baldeDaConta, recortarCpr, ramoDaConsultaCpr, somarDiasIso, diasEntre, liquidoEmAberto, doSegmentoCpr,
   tituloDoGrupoVencidos, rotuloDoTotal, centavosDaConta, contaDaConta, daContaCpr, resumoPorContaCpr, contasDaFaixaCpr, SEM_CONTA, type ContaCpr,
-  ancorasDoCaixaCpr, vencidoContaNoSaldo, serieDoSaldoCpr, linhasDoSaldoCpr,
+  ancorasDoCaixaCpr, vencidoAnteriorAConciliacao, ordenarDoDiaCpr, serieDoSaldoCpr, linhasDoSaldoCpr,
   pontasCpr, chaveDaLinhaCpr, ehPagarCpr, ehReceberCpr, ehTransferenciaCpr, pontaForaDoCaixaCpr,
   resumoPorSemanaCpr, saldoPorContaCpr,
 } from '@/lib/financeiro/cprRecorte';
@@ -249,10 +249,12 @@ describe('a tela só renderiza o dono (lido da fonte)', () => {
     expect(tela).not.toMatch(/rotulo: '(Vencidos|7 dias|90 dias|Tudo)'/);
     expect(tela).toContain(">Conta</span>");
     expect(tela).not.toContain(">Banco</span>");
-    expect(tela.indexOf('testId="cpr-total"')).toBeGreaterThan(tela.indexOf('overflow-y-auto overflow-x-hidden rolagem-fina'));
+    expect(tela.indexOf('testId="cpr-total"')).toBeGreaterThan(tela.indexOf('overflow-auto rolagem-fina'));
     /* o rodapé é navy, 26px e `sticky bottom-0` DENTRO do scrollport (as colunas de valor alinham com as linhas) */
     expect(tela).toMatch(/testId="cpr-total" regua=\{regua\} navy\s+className="sticky bottom-0 z-20 h-\[26px\] bg-primary text-\[11px\] font-bold text-primary-foreground"/);
-    expect(Array.from(tela.matchAll(/overflow-y-auto/g)).length).toBe(1);
+    /* CPR-SEM-CORTE-01: UM scrollport só — a lista rola nos dois eixos (overflow-auto), nenhum outro rola na vertical */
+    expect(Array.from(tela.matchAll(/overflow-y-auto/g)).length).toBe(0);
+    expect(Array.from(tela.matchAll(/overflow-auto rolagem-fina/g)).length).toBe(1);
   });
   it('CPR-CONTA-01: o filtro entra no dono e chega a tudo — cartões, lista, total, gráfico, caixa e cabeçalho', () => {
     expect(tela).toContain('recortarCpr(linhas, { periodo, hoje: hojeIso, incluirVencidos, conta: contaSel, ancoras, estimadas })');
@@ -290,8 +292,9 @@ describe('a tela só renderiza o dono (lido da fonte)', () => {
     const cartao = tela.slice(tela.indexOf('function CardResumo('), tela.indexOf('function CelValor('));
     expect(cartao.match(/data-valor-do-cartao/g)?.length).toBe(2);
     expect(cartao).toContain("<div key={i} title={l.title} className={cn('whitespace-nowrap', l.classe ?? 'text-muted-foreground')}>");
-    expect(cartao.match(/truncate/g)?.length).toBe(1);                       // só o TEXTO do rótulo corta
-    expect(cartao).toContain('<span className="truncate">{rotulo}</span>');
+    /* CPR-SEM-CORTE-01 (CPR-AJUSTES-20-10): nada de "…" — o rótulo que não cabe ROLA dentro do lugar dele */
+    expect(cartao).not.toMatch(/truncate/);
+    expect(cartao).toContain('<span className="uma-linha-que-rola min-w-0">{rotulo}</span>');
     expect(cartao).toMatch(/\{contagem && <span className=\{cn\('shrink-0 whitespace-pre tabular-nums', classeContagem\)\}/);   // a contagem é número: não corta
     /* o cartão Vencidos mostra os dois lados À VISTA (a receber em verde, só quando > 0); o do caixa, corrente e investido em duas linhas */
     expect(tela).toContain("lado={recorte.cartoes.vencidos.receber.valor > 0");
@@ -304,39 +307,58 @@ describe('a tela só renderiza o dono (lido da fonte)', () => {
 });
 
 /* ─── CPR-SALDO-DIA-01 — o vencido que conta no saldo, a série do saldo e o contrato da tela ─────────────────────────── */
-describe('CPR-SALDO-DIA-01 — qual vencido conta no saldo (D1/D2)', () => {
+describe('CPR-AJUSTES-20-10 — todo vencido em aberto conta no saldo de hoje (substitui a D1/D2 do CPR-SALDO-DIA-01)', () => {
   const ANC = new Map([['A', '2026-09-30'], ['B', '2026-08-31']]);
   const sai = (venc: string, valor: number, c: string | null) => conta(venc, valor, { conta_bancaria_id: c });
   const entra = (venc: string, valor: number, c: string | null) => conta(venc, valor, { tipo_operacao: '1-Entradas', conta_destino_id: c });
-  it('conta no saldo SÓ com vencimento POSTERIOR à âncora da conta DA LINHA', () => {
-    expect(vencidoContaNoSaldo(sai('2026-10-01', 1, 'A'), ANC)).toBe(true);
-    expect(vencidoContaNoSaldo(sai('2026-09-30', 1, 'A'), ANC)).toBe(false);   // no dia da âncora: já conferido com o banco
-    expect(vencidoContaNoSaldo(sai('2026-09-15', 1, 'A'), ANC)).toBe(false);
-    /* a MESMA data conta na conta B (âncora 31/08) e não na A (âncora 30/09): a âncora é por conta */
-    expect(vencidoContaNoSaldo(sai('2026-09-15', 1, 'B'), ANC)).toBe(true);
+  it('a marca "anterior à conciliação" = vencimento NO DIA ou ANTES da âncora da conta DA LINHA (só informa)', () => {
+    expect(vencidoAnteriorAConciliacao(sai('2026-10-01', 1, 'A'), ANC)).toBe(false);
+    expect(vencidoAnteriorAConciliacao(sai('2026-09-30', 1, 'A'), ANC)).toBe(true);   // no dia da âncora: o extrato já cobria
+    expect(vencidoAnteriorAConciliacao(sai('2026-09-15', 1, 'A'), ANC)).toBe(true);
+    /* a MESMA data é anterior na conta A (âncora 30/09) e não na B (âncora 31/08): a âncora é por conta */
+    expect(vencidoAnteriorAConciliacao(sai('2026-09-15', 1, 'B'), ANC)).toBe(false);
     /* a conta da entrada é a de DESTINO */
-    expect(vencidoContaNoSaldo(entra('2026-09-15', 1, 'B'), ANC)).toBe(true);
-    expect(vencidoContaNoSaldo(conta('2026-09-15', 1, { tipo_operacao: '1-Entradas', conta_bancaria_id: 'B', conta_destino_id: 'A' }), ANC)).toBe(false);
+    expect(vencidoAnteriorAConciliacao(entra('2026-09-15', 1, 'B'), ANC)).toBe(false);
+    expect(vencidoAnteriorAConciliacao(conta('2026-09-15', 1, { tipo_operacao: '1-Entradas', conta_bancaria_id: 'B', conta_destino_id: 'A' }), ANC)).toBe(true);
+    /* sem conta, conta sem âncora, sem mapa: não há extrato conciliado a dizer nada */
+    expect(vencidoAnteriorAConciliacao(sai('2026-09-15', 1, null), ANC)).toBe(false);
+    expect(vencidoAnteriorAConciliacao(sai('2026-09-15', 1, 'CARTAO'), ANC)).toBe(false);
+    expect(vencidoAnteriorAConciliacao(sai('2026-09-15', 1, 'A'), undefined)).toBe(false);
   });
-  it('sem conta, conta sem âncora e sem mapa de âncoras: FORA do saldo', () => {
-    expect(vencidoContaNoSaldo(sai('2026-10-01', 1, null), ANC)).toBe(false);
-    expect(vencidoContaNoSaldo(sai('2026-10-01', 1, 'CARTAO'), ANC)).toBe(false);
-    expect(vencidoContaNoSaldo(sai('2026-10-01', 1, 'A'), undefined)).toBe(false);
-  });
-  it('o recorte separa os dois subgrupos; a soma deles é o cartão Vencidos, ao centavo', () => {
+  it('TODOS os vencidos contam (o anterior à conciliação inclusive); "anteriores" é só o subconjunto marcado', () => {
     const linhas = [sai('2026-10-02', 100.10, 'A'), sai('2026-09-10', 200.20, 'A'), sai('2026-09-10', 300.30, 'B'), entra('2026-10-03', 50.05, 'A'),
       entra('2026-08-01', 70.07, 'B'), sai('2026-10-01', 9.99, null), sai('2026-10-20', 1000, 'A')];
     const r = recortarCpr(linhas, { periodo: D30, hoje: HOJE, incluirVencidos: true, ancoras: ANC });
-    expect(r.vencidos.contam.pagar).toEqual({ valor: 400.40, contas: 2 });
-    expect(r.vencidos.contam.receber).toEqual({ valor: 50.05, contas: 1 });
-    expect(r.vencidos.anteriores.pagar).toEqual({ valor: 210.19, contas: 2 });
+    expect(r.vencidos.contam.linhas).toEqual(r.vencidos.linhas);
+    expect(r.vencidos.contam.pagar).toEqual({ valor: 610.59, contas: 4 });
+    expect(r.vencidos.contam.receber).toEqual({ valor: 120.12, contas: 2 });
+    /* marcados: o de 10/09 na A (âncora 30/09) e o de 01/08 na B (âncora 31/08); o de 10/09 na B não (31/08 < 10/09) */
+    expect(r.vencidos.anteriores.pagar).toEqual({ valor: 200.20, contas: 1 });
     expect(r.vencidos.anteriores.receber).toEqual({ valor: 70.07, contas: 1 });
-    expect(Math.round((r.vencidos.contam.pagar.valor + r.vencidos.anteriores.pagar.valor) * 100)).toBe(Math.round(r.vencidos.pagar.valor * 100));
-    expect(r.vencidos.contam.linhas.length + r.vencidos.anteriores.linhas.length).toBe(r.vencidos.linhas.length);
-    /* a busca sabe achar: sem âncoras TODOS são anteriores */
+    expect(r.vencidos.anteriores.ancoras).toEqual(['2026-08-31', '2026-09-30']);
+    /* a busca sabe achar: sem âncoras nada é anterior, e todos seguem contando */
     const semAncora = recortarCpr(linhas, { periodo: D30, hoje: HOJE, incluirVencidos: true });
-    expect(semAncora.vencidos.contam.linhas).toHaveLength(0);
-    expect(semAncora.vencidos.anteriores.linhas).toHaveLength(6);
+    expect(semAncora.vencidos.anteriores.linhas).toHaveLength(0);
+    expect(semAncora.vencidos.contam.linhas).toHaveLength(6);
+  });
+  it('o caso da Vera: a Transf. Aplicação CDB de R$ 290.000,00 vencida em 09/10, conta conciliada até 09/10 — entra no saldo de hoje', () => {
+    const hoje = '2026-10-20';
+    const cdb = conta('2026-10-09', 290000, { tipo_operacao: '3-Transferências', conta_bancaria_id: 'IP', conta_destino_id: 'CDB', status_transacao: 'programado' });
+    const fgts = conta('2026-10-21', 1896.83, { conta_bancaria_id: 'IP', status_transacao: 'agendado' });
+    const r = recortarCpr([cdb, fgts], { periodo: { de: '2026-10-01', ate: '2026-11-30' }, hoje, incluirVencidos: true, conta: 'IP', ancoras: new Map([['IP', '2026-10-09']]) });
+    expect(vencidoAnteriorAConciliacao({ ...cdb, ponta: 'saida' }, new Map([['IP', '2026-10-09']]))).toBe(true);
+    const s = serieDoSaldoCpr(r, 293896.08);
+    expect(s.partida.saldo).toBe(3896.08);                           // 293.896,08 − 290.000,00
+    expect(s.dias.find((d) => d.data === '2026-10-21')?.saldo).toBe(1999.25);   // − 1.896,83 (FGTS + E-Social)
+  });
+  it('a caixa "Incluir vencidos" desligada: os vencidos saem da LISTA e do total, e continuam no saldo (a semântica de antes, D3)', () => {
+    const linhas = [sai('2026-09-10', 200.20, 'A'), sai('2026-10-20', 1000, 'A')];
+    const lig = recortarCpr(linhas, { periodo: D30, hoje: HOJE, incluirVencidos: true, ancoras: ANC });
+    const des = recortarCpr(linhas, { periodo: D30, hoje: HOJE, incluirVencidos: false, ancoras: ANC });
+    expect(serieDoSaldoCpr(des, 1000)).toEqual(serieDoSaldoCpr(lig, 1000));
+    expect(serieDoSaldoCpr(des, 1000).partida.saldo).toBe(799.8);
+    expect(des.total.pagar.valor).toBe(1000);
+    expect(lig.total.pagar.valor).toBe(1200.2);
   });
   it('as âncoras são LIDAS do cartão Caixa (a data que o cálculo dele usou), sem espelho', () => {
     const m = ancorasDoCaixaCpr([{ contaId: 'CC', data: '2026-09-17' }, { contaId: 'INV', data: '2026-08-31' }]);
@@ -357,8 +379,8 @@ describe('CPR-SALDO-DIA-01 — a série do saldo, em centavos', () => {
   const linhas = [
     sai('2026-10-02', 100.10),                       // vencido que conta
     entra('2026-10-03', 50.05),                      // vencido a receber que conta
-    sai('2026-09-10', 9999.99),                      // anterior à conciliação: FORA do saldo
-    sai('2026-10-01', 777.77, null),                 // sem conta: FORA do saldo
+    sai('2026-09-10', 9999.99),                      // anterior à conciliação: CONTA no saldo de hoje (CPR-AJUSTES-20-10)
+    sai('2026-10-01', 777.77, null),                 // sem conta: também conta (todo vencido em aberto sai hoje)
     sai(HOJE, 0.10), sai(HOJE, 0.20),                // hoje: 0,30 (centavos, sem float)
     sai('2026-10-10', 5000), entra('2026-10-10', 1000),
     entra('2026-10-20', 9000),
@@ -371,15 +393,15 @@ describe('CPR-SALDO-DIA-01 — a série do saldo, em centavos', () => {
   it('partida = caixa − vencidos a pagar que contam + a receber que contam; cada dia = anterior − a pagar + a receber', () => {
     const s = serieDoSaldoCpr(rec(true), 1000);
     expect(s.hoje).toBe(1000);
-    expect(s.partida).toEqual({ pagar: { valor: 100.10, contas: 1 }, receber: { valor: 50.05, contas: 1 }, saldo: 949.95 });
+    expect(s.partida).toEqual({ pagar: { valor: 10877.86, contas: 3 }, receber: { valor: 50.05, contas: 1 }, saldo: -9827.81 });
     expect(s.entreHojeEDe).toBeNull();
     expect(s.dias.map(d => [d.data, d.pagar.valor, d.receber.valor, d.saldo])).toEqual([
-      [HOJE, 0.30, 0, 949.65], ['2026-10-10', 5000, 1000, -3050.35], ['2026-10-20', 0, 9000, 5949.65],
+      [HOJE, 0.30, 0, -9828.11], ['2026-10-10', 5000, 1000, -13828.11], ['2026-10-20', 0, 9000, -4828.11],
     ]);
     /* o último dia É o saldo no fim; o menor É o mínimo da série, com o dia dele */
-    expect(s.fim).toBe(5949.65);
+    expect(s.fim).toBe(-4828.11);
     expect(s.fim).toBe(s.dias[s.dias.length - 1].saldo);
-    expect(s.menor).toEqual({ valor: -3050.35, data: '2026-10-10' });
+    expect(s.menor).toEqual({ valor: -13828.11, data: '2026-10-10' });
     expect(s.menor?.valor).toBe(Math.min(s.partida.saldo ?? 0, ...s.dias.map(d => d.saldo ?? 0)));
     expect(s.menor?.valor).not.toBe(s.fim);
   });
@@ -396,9 +418,9 @@ describe('CPR-SALDO-DIA-01 — a série do saldo, em centavos', () => {
   it('"de" no futuro: o que vence entre hoje e "de" passa pelo saldo antes do primeiro dia, sem ser listado', () => {
     const r = rec(true, { periodo: { de: '2026-10-15', ate: '2026-10-31' } });
     const s = serieDoSaldoCpr(r, 1000);
-    expect(s.entreHojeEDe).toEqual({ pagar: { valor: 5000.30, contas: 3 }, receber: { valor: 1000, contas: 1 }, saldo: -3050.35 });
+    expect(s.entreHojeEDe).toEqual({ pagar: { valor: 5000.30, contas: 3 }, receber: { valor: 1000, contas: 1 }, saldo: -13828.11 });
     expect(s.dias.map(d => d.data)).toEqual(['2026-10-20']);
-    expect(s.fim).toBe(5949.65);
+    expect(s.fim).toBe(-4828.11);
     expect(r.periodoSoma.pagar.contas).toBe(0);
     expect(r.total.pagar.valor).toBe(r.vencidos.pagar.valor);          // o intervalo não entra no total da lista
   });
@@ -425,7 +447,8 @@ describe('CPR-SALDO-DIA-01 — a série do saldo, em centavos', () => {
       const doGrafico = linhasDoSaldoCpr(r);
       const s = serieDoSaldoCpr(r, 1000);
       expect(Math.round(((s.hoje ?? 0) + liquidoEmAberto(doGrafico)) * 100)).toBe(Math.round((s.fim ?? 0) * 100));
-      expect(doGrafico.some(l => l.data_vencimento === '2026-09-10')).toBe(false);   // o anterior à conciliação não vai ao gráfico
+      /* CPR-AJUSTES-20-10: o anterior à conciliação CONTA no saldo de hoje — e vai ao gráfico pela mesma regra */
+      expect(doGrafico.some(l => l.data_vencimento === '2026-09-10')).toBe(true);
       expect(doGrafico.some(l => l.status_transacao === 'realizado')).toBe(false);
     }
   });
@@ -464,7 +487,8 @@ describe('CPR-SALDO-DIA-01 — a tela só renderiza (lido da fonte)', () => {
     expect(tela).not.toMatch(/COL\.(banco|origem|doc|valor)/);
     expect(tela).toContain('origem: ${rotuloOrigem(l.origem_lancamento)} · doc: ${doc || \'—\'}');
     expect(tela).toContain("title={segmento === 'ambos' ? undefined : MOTIVO_SALDO_DOIS_LADOS}");
-    expect(tela).toContain("const MOTIVO_ANTERIORES = 'vencimento em mês já conciliado: abra o lançamento e atualize a data para entrar no saldo';");
+    /* CPR-AJUSTES-20-10: o grupo "vencidos anteriores à conciliação · fora do saldo" deixou de existir, e o motivo dele junto */
+    expect(tela).not.toContain('MOTIVO_ANTERIORES');
   });
   it('Ampliar é o mecanismo do shell: uma prop, estado local, e sair da tela desliga', () => {
     /* PARC-CADEIA-01: a tela ganhou a ida ao contrato (outra prop); o Ampliar segue sendo a MESMA prop, numa linha */
@@ -600,7 +624,8 @@ describe('CPR-SALDO-DIA-02 — pílulas de status no Ampliado: o mesmo nó, o me
   });
   it('no Ampliado a 3ª linha é fixa, de 20px, sempre presente; o texto "status: …" saiu', () => {
     const ampliado = tela.slice(tela.indexOf('{ampliado && ('), tela.indexOf('{!ampliado && ('));
-    expect(ampliado).toContain('<div data-testid="cpr-linha-status" className="flex h-[20px] flex-nowrap items-center gap-2 whitespace-nowrap">');
+    /* CPR-SEM-CORTE-01: a linha quebra em janela estreita (os totais descem), nunca parte um número */
+    expect(ampliado).toContain('<div data-testid="cpr-linha-status" className="flex min-h-[20px] flex-wrap items-center gap-x-2 whitespace-nowrap">');
     expect(ampliado.indexOf('data-testid="cpr-linha-status"')).toBeGreaterThan(ampliado.indexOf('data-testid="cpr-faixa-recolhida"'));
     expect(ampliado).toContain('{ctlStatus}');
     expect(ampliado).not.toMatch(/\{[^}]*&&\s*<div data-testid="cpr-linha-status"/);   // nenhuma condição: a linha existe sempre
@@ -625,7 +650,7 @@ describe('CPR-SALDO-DIA-02 — pílula Realizado ligada não derruba a tela', ()
     const grupos = tela.slice(tela.indexOf('const grupos = useMemo((): Grupo[] => {'), tela.indexOf('// ── Abrir o lançamento'));
     expect(grupos).toMatch(/const chave = \(l\.data_vencimento \?\? ''\)\.slice\(0, 10\);[\s\S]{0,420}if \(!chave\) continue;\s+const atual = mapa\.get\(chave\);/);
     /* toda chave que chega a `faixaDaData` vem do mapa (já sem a vazia) ou dos dias da série (que têm data) */
-    expect(grupos).toContain('const chaves = Array.from(new Set([...mapa.keys(), ...passos.keys()])).sort();');
+    expect(grupos).toContain('const chaves = Array.from(new Set([...mapa.keys(), ...passos.keys(), ...(hojeNoPeriodo ? [hojeIso] : [])])).sort();');
   });
 });
 
@@ -719,18 +744,19 @@ describe('CPR-TRANSFERENCIAS-NO-FLUXO-01 — a transferência tem duas pontas, e
     expect([s.fim, s.dias.length, s.totalPagar.valor]).toEqual([1000, 0, 0]);
     expect(linhasDoSaldoCpr(r)).toEqual([]);
   });
-  it('VENCIDA em aberto: depois da âncora da conta DA PONTA conta no saldo; antes dela, fica à vista e fora', () => {
+  it('VENCIDA em aberto: conta no saldo de hoje (CPR-AJUSTES-20-10), anterior à âncora da conta DA PONTA inclusive — marcada', () => {
     const depois = rec([transf('2026-10-02', 500, 'A', 'B')], 'A');
     expect(depois.vencidos.contam.pagar).toEqual({ valor: 500, contas: 1 });
+    expect(depois.vencidos.anteriores.linhas).toEqual([]);
     expect(serieDoSaldoCpr(depois, 1000).partida.saldo).toBe(500);
     const antes = rec([transf('2026-09-15', 500, 'A', 'B')], 'A');
-    expect(antes.vencidos.contam.linhas).toEqual([]);
+    expect(antes.vencidos.contam.pagar).toEqual({ valor: 500, contas: 1 });
     expect(antes.vencidos.anteriores.pagar).toEqual({ valor: 500, contas: 1 });
-    expect(serieDoSaldoCpr(antes, 1000).fim).toBe(1000);
-    /* em Todas, cada ponta pela âncora da SUA conta: a de C (sem âncora) é anterior, a de A conta */
+    expect(serieDoSaldoCpr(antes, 1000).fim).toBe(500);
+    /* em Todas, a ponta numa conta FORA do caixa (C, sem âncora) não passa pelo saldo nem é listada: só a de A conta */
     const misto = rec([transf('2026-10-02', 500, 'A', 'C')]);
     expect(misto.vencidos.contam.linhas.map((l) => l.ponta)).toEqual(['saida']);
-    expect(misto.vencidos.anteriores.linhas.map((l) => l.ponta)).toEqual(['entrada']);
+    expect(misto.foraDoCaixa).toEqual([]);
     expect(serieDoSaldoCpr(misto, 1000).partida.saldo).toBe(500);
   });
   it('os CARTÕES do topo ficam SÓ com contas, sem as pontas; os totais do dia e do fim as incluem', () => {
@@ -981,9 +1007,12 @@ describe('CPR-CAIXA-INICIAL-SEMPRE-01 — a tela parte SEMPRE do Caixa inicial (
     expect(tela).toContain('dica={!serie.inicial ? motivoSemSaldo');
   });
   it('hoje fica marcado NO LUGAR DELE: dias realizados → hoje → vencidos → de hoje em diante', () => {
-    expect(tela).toContain("return [...dias.filter((d) => d.passado), ...marcaDeHoje, ...topo, ...dias.filter((d) => !d.passado), ...fim];");
+    /* CPR-AJUSTES-20-10: hoje é um DIA da lista (na ordem das datas, com os vencidos dentro); fora de um período que o contém,
+       os vencidos vão num grupo à parte — depois dos dias no encerrado, antes no futuro */
+    expect(tela).toContain('...(hojeNoPeriodo ? [hojeIso] : [])');
     expect(tela).toContain('if (serie.encerrado) return [...dias, ...topo, ...fim];');
     expect(tela).toContain('if (futuro) return [...topo, ...dias, ...fim];');
+    expect(tela).toContain('return [...dias, ...fim];');
     /* dia antes de hoje sem o Caixa inicial fica SEM saldo — nunca com o saldo de hoje */
     expect(tela).toContain('saldo: chave < hojeIso && !temRealizado ? null : corrente');
     expect(tela).toContain('let corrente: number | null = serie.inicial ? serie.inicial.saldo : null;');
