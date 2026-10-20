@@ -99,8 +99,12 @@ export function tituloDaEdicao(numero: string | null, credor: string | null): st
 }
 
 /** o que o Salvar manda a `fn_financiamento_salvar_cabecalho`: SÓ o que mudou (o banco diz se o cronograma mudou).
- *  Campo que estava "não cadastrado" e continua não escolhido não vai. */
-export function dadosDoCabecalho(antes: FormDoCadastro, depois: FormDoCadastro, naoCadastrado: readonly CampoNaoCadastrado[]): Record<string, unknown> {
+ *  Campo que estava "não cadastrado" e continua não escolhido não vai (nunca grava um padrão calado).
+ *  ⚠ FIN-CONTRATO-NC-SALVAR-01: campo que estava "não cadastrado" NA LEITURA e o operador ESCOLHEU (`escolhidos`) vai SEMPRE, mesmo
+ *  igual ao valor que a tela mostrava (o padrão do formulário ou a periodicidade inferida) — antes, escolher o mesmo valor nunca
+ *  chegava ao banco e o contrato seguia sem sistema / periodicidade. */
+export function dadosDoCabecalho(antes: FormDoCadastro, depois: FormDoCadastro, naoCadastrado: readonly CampoNaoCadastrado[],
+  escolhidos: readonly CampoNaoCadastrado[] = []): Record<string, unknown> {
   const d: Record<string, unknown> = {};
   const muda = <T,>(chave: string, a: T, b: T, valor: unknown = b) => { if (a !== b) d[chave] = valor; };
   muda('descricao', antes.descricao.trim(), depois.descricao.trim());
@@ -114,10 +118,14 @@ export function dadosDoCabecalho(antes: FormDoCadastro, depois: FormDoCadastro, 
   muda('data_primeira_parcela', antes.primeiroVencimento, depois.primeiroVencimento);
   muda('total_parcelas', antes.n, depois.n);
   muda('taxa_aa', antes.taxaAa, depois.taxaAa);
-  if (!naoCadastrado.includes('sistema')) muda('sistema_amortizacao', antes.sistema, depois.sistema);
-  if (!naoCadastrado.includes('periodicidade')) muda('periodicidade', antes.periodicidade, depois.periodicidade);
-  if (!naoCadastrado.includes('tipoTaxa')) muda('tipo_taxa', antes.tipoTaxa, depois.tipoTaxa);
-  muda('carencia_ate', antes.carenciaAte, depois.carenciaAte);
+  const campo = <T,>(k: CampoNaoCadastrado, chave: string, a: T, b: T) => {
+    if (escolhidos.includes(k)) d[chave] = b;
+    else if (!naoCadastrado.includes(k)) muda(chave, a, b);
+  };
+  campo('sistema', 'sistema_amortizacao', antes.sistema, depois.sistema);
+  campo('periodicidade', 'periodicidade', antes.periodicidade, depois.periodicidade);
+  campo('tipoTaxa', 'tipo_taxa', antes.tipoTaxa, depois.tipoTaxa);
+  if (escolhidos.includes('carenciaAte')) d.carencia_ate = depois.carenciaAte; else muda('carencia_ate', antes.carenciaAte, depois.carenciaAte);
   muda('plano_principal_id', antes.planoPrincipalId, depois.planoPrincipalId);
   muda('plano_juros_id', antes.planoJurosId, depois.planoJurosId);
   muda('garantias', antes.garantias.trim(), depois.garantias.trim());
@@ -125,6 +133,25 @@ export function dadosDoCabecalho(antes: FormDoCadastro, depois: FormDoCadastro, 
   if (depois.natureza !== 'consorcio') muda('finalidade', antes.modalidade, depois.modalidade);
   muda('linha_credito_id', antes.linhaCreditoId, depois.linhaCreditoId);
   return d;
+}
+
+/** os campos do cabeçalho que mudam o cronograma (o que o Regerar lê do banco) */
+export const CHAVES_DO_CRONOGRAMA = ['sistema_amortizacao', 'taxa_aa', 'tipo_taxa', 'periodicidade', 'total_parcelas', 'carencia_ate', 'data_primeira_parcela'] as const;
+export const FRASE_SALVE_ANTES_DE_REGERAR = 'Salve o cabeçalho antes de regerar — a prévia usa o que está gravado';
+/**
+ * FIN-CONTRATO-NC-SALVAR-01 — UMA FONTE SÓ PARA O CRONOGRAMA: o Regerar lê o contrato GRAVADO. Enquanto a tela tiver condições diferentes
+ * do banco (`dados` = o que o Salvar mandaria) ou sistema / periodicidade / tipo de taxa ainda não cadastrados, ele fica apagado com a
+ * frase. Nulo = pode regerar.
+ */
+export function motivoRegerarApagado(dados: Record<string, unknown>, naoCadastrado: readonly CampoNaoCadastrado[]): string | null {
+  if (CHAVES_DO_CRONOGRAMA.some((k) => k in dados)) return FRASE_SALVE_ANTES_DE_REGERAR;
+  if (naoCadastrado.some((k) => k === 'sistema' || k === 'periodicidade' || k === 'tipoTaxa')) return FRASE_SALVE_ANTES_DE_REGERAR;
+  return null;
+}
+/** a recusa do regerar por campo não cadastrado vira instrução (o RAISE do banco não muda); o campo a destacar vai junto */
+export function fraseDaRecusaDoRegerar(recusa: string): { frase: string; campo: CampoNaoCadastrado | null } {
+  if (/Sistema de amortiza[çc][ãa]o n[ãa]o cadastrado/i.test(recusa)) return { frase: 'Escolha o sistema de amortização e clique Salvar cabeçalho antes de regerar', campo: 'sistema' };
+  return { frase: recusa, campo: null };
 }
 
 /* ── respostas ─────────────────────────────────────────────────────────────────────────────────────────────────────────── */
@@ -208,12 +235,20 @@ export function antesDepois(antes: readonly FotoDaParcela[], depois: readonly Fo
   return linhas;
 }
 
-export interface BaseDoRegerar { saldo: number; guardado: number; principal: number; parcelas: number; sistema: string; taxaAa: number }
+export interface BaseDoRegerar { saldo: number; guardado: number; principal: number; parcelas: number; sistema: string; taxaAa: number;
+  /** a periodicidade que o BANCO usou (FIN-CONTRATO-NC-SALVAR-01); nula quando o banco ainda não a devolve */
+  periodicidade: Periodicidade | null }
 /** a base que o banco usou para regerar (saldo da fonte única − o principal das que ficam) */
+const ROTULO_SISTEMA_BASE: Record<string, string> = { sac: 'SAC', price: 'Price', bullet: 'Parcela única', livre: 'Personalizado' };
+/** a linha de base da prévia: o que o BANCO vai usar — "SAC · anual · 7,43% a.a." */
+export function textoDaBase(b: BaseDoRegerar): string {
+  const taxa = b.taxaAa.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return [ROTULO_SISTEMA_BASE[b.sistema] ?? (b.sistema || 'sem sistema'), b.periodicidade, `${taxa}% a.a.`].filter(Boolean).join(' · ');
+}
 export function lerBase(corpo: Obj): BaseDoRegerar | null {
   const b = corpo.base;
   if (!ehObj(b)) return null;
   const saldo = num(b.saldo); const guardado = num(b.guardado); const principal = num(b.principal); const parcelas = num(b.parcelas); const taxaAa = num(b.taxa_aa);
   if (saldo === null || guardado === null || principal === null || parcelas === null || taxaAa === null) return null;
-  return { saldo, guardado, principal, parcelas, sistema: txt(b.sistema) ?? '', taxaAa };
+  return { saldo, guardado, principal, parcelas, sistema: txt(b.sistema) ?? '', taxaAa, periodicidade: PERIODOS.find((x) => x === b.periodicidade) ?? null };
 }

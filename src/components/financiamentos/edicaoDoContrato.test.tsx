@@ -98,7 +98,11 @@ describe('(2) o cadastro em modo editar', () => {
     fireEvent.change(descricao, { target: { value: 'Armazém novo' } });
     fireEvent.click(screen.getByTestId('salvar-cadastro'));
     await waitFor(() => expect(edicao.salvarCabecalho).toHaveBeenCalledWith({ descricao: 'Armazém novo' }, false));
-    expect(await screen.findByTestId('regerar-parcelas')).toBeTruthy();
+    /* FIN-CONTRATO-NC-SALVAR-01 (contrato novo): o sistema segue não cadastrado no banco, então o Regerar (que lê o banco) fica APAGADO
+       com a frase, no lugar de abrir a prévia */
+    expect(await screen.findByTestId('motivo-do-regerar')).toHaveTextContent('Salve o cabeçalho antes de regerar — a prévia usa o que está gravado');
+    expect(screen.queryByTestId('regerar-parcelas')).toBeNull();
+    expect((screen.getByTestId('abrir-regerar') as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByText(/Sistema de amortização · não cadastrado/)).toBeTruthy();
   });
 });

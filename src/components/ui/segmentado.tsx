@@ -24,7 +24,7 @@ export interface OpcaoSegmentada<T extends string> {
 }
 
 export function Segmentado<T extends string>({
-  valor, onEscolher, opcoes, altura = 26, fonte, className,
+  valor, onEscolher, opcoes, altura = 26, fonte, className, sugestao,
 }: {
   valor: T;
   /* ⚠ `NoInfer` AQUI TAMBÉM, e pelo mesmo motivo: um `setState` chega como
@@ -46,6 +46,9 @@ export function Segmentado<T extends string>({
   /** ⚠ 9px SÓ DENTRO DO CARD, e é a exceção declarada do DRE: fora dela o piso da casa é 9,5. */
   fonte?: number;
   className?: string;
+  /** FIN-CONTRATO-NC-SALVAR-01 — o valor marcado é SUGESTÃO (inferido), ainda não escolhido: tom âmbar tracejado no lugar do navy. Clicar
+      nele (o mesmo valor) chama `onEscolher` e passa a ser escolha. Sem a prop, o componente é o de sempre. */
+  sugestao?: boolean;
 }) {
   return (
     /* ⚠ `overflow-hidden` + `rounded-md` NO PAI: é ele que recorta o preenchimento do botão
@@ -55,11 +58,13 @@ export function Segmentado<T extends string>({
       {opcoes.map(o => {
         const ativa = o.valor === valor;
         return (
-          <button key={o.valor} type="button" disabled={o.desabilitada} title={o.title}
+          <button key={o.valor} type="button" disabled={o.desabilitada} title={o.title} data-sugestao={ativa && sugestao ? 'sim' : undefined}
             onClick={() => { if (!o.desabilitada) onEscolher(o.valor); }}
             style={fonte ? { fontSize: fonte, paddingLeft: 5, paddingRight: 5 } : undefined}
             className={cn('whitespace-nowrap px-2 text-[10px] font-medium transition-colors',
-              ativa
+              ativa && sugestao
+                ? 'bg-amber-50 text-amber-800 outline outline-1 -outline-offset-2 outline-dashed outline-amber-500'
+                : ativa
                 ? 'bg-primary text-primary-foreground'
                 : 'bg-transparent text-muted-foreground hover:bg-muted',
               o.desabilitada && 'cursor-default opacity-50 hover:bg-transparent')}>

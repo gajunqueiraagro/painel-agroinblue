@@ -18,8 +18,8 @@ import { Segmentado } from '@/components/ui/segmentado';
 import { BLOCO_FORMULARIO, CORPO_FORMULARIO, REGUA_CAMPO, TituloDoBloco } from '@/components/ui/bloco-formulario';
 import type { ModoDeRegerar, UltimaOperacao, useEdicaoDoContrato } from '@/hooks/useEdicaoDoContrato';
 import {
-  antesDepois, diferencaDoSaldo, fraseDaDiferenca, lerBase, lerFoto, mudancasDasParcelas, semMudanca,
-  type FotoDaParcela, type ParcelaEditavel, type RespostaDoBanco,
+  antesDepois, diferencaDoSaldo, fraseDaDiferenca, fraseDaRecusaDoRegerar, lerBase, lerFoto, mudancasDasParcelas, semMudanca, textoDaBase,
+  type CampoNaoCadastrado, type FotoDaParcela, type ParcelaEditavel, type RespostaDoBanco,
 } from '@/lib/financiamentos/edicaoDoContrato';
 
 type Api = ReturnType<typeof useEdicaoDoContrato>;
@@ -70,7 +70,9 @@ export function TabelaAntesDepois({ antes, depois }: { antes: readonly FotoDaPar
 }
 
 /* ═══ REGERAR PARCELAS EM ABERTO ═══════════════════════════════════════════════════════════════════════════════════════ */
-export function RegerarParcelas({ api, onFeito, onVoltar }: { api: Api; onFeito: (r: RespostaDoBanco) => void; onVoltar?: () => void }) {
+export function RegerarParcelas({ api, onFeito, onVoltar, onCampoFaltando }: { api: Api; onFeito: (r: RespostaDoBanco) => void; onVoltar?: () => void;
+  /** FIN-CONTRATO-NC-SALVAR-01 — a recusa por campo não cadastrado diz qual campo destacar no cabeçalho */
+  onCampoFaltando?: (campo: CampoNaoCadastrado) => void }) {
   const [modo, setModo] = useState<ModoDeRegerar>('manter_ajustes');
   const [previa, setPrevia] = useState<RespostaDoBanco | null>(null);
   const [gravando, setGravando] = useState(false);
@@ -84,6 +86,8 @@ export function RegerarParcelas({ api, onFeito, onVoltar }: { api: Api; onFeito:
   const antes = previa ? lerFoto(previa.corpo.antes) : null;
   const depois = previa ? lerFoto(previa.corpo.depois) : null;
   const base = previa ? lerBase(previa.corpo) : null;
+  const recusa = previa?.recusa ? fraseDaRecusaDoRegerar(previa.recusa) : null;
+  useEffect(() => { if (recusa?.campo && onCampoFaltando) onCampoFaltando(recusa.campo); }, [recusa?.campo]); // eslint-disable-line react-hooks/exhaustive-deps -- avisa uma vez por recusa
   const dif = previa ? fraseDaDiferenca(diferencaDoSaldo(previa.corpo)) : null;
   const gravar = async () => {
     setGravando(true); setErro(null);
@@ -101,9 +105,10 @@ export function RegerarParcelas({ api, onFeito, onVoltar }: { api: Api; onFeito:
         ]} />} />
       <div className="mb-1 flex h-[18px] shrink-0 items-center gap-3 text-[10.5px]" data-testid="base-do-regerar">
         {previa === null ? <span className="text-muted-foreground">lendo a prévia do banco…</span>
-          : previa.recusa ? <span className="truncate text-[#b91c1c]" title={previa.recusa} data-testid="recusa-do-regerar">{previa.recusa}</span>
-          : base ? <span className="truncate text-muted-foreground" title="a base é o saldo devedor da fonte única menos o principal das parcelas que ficam">
-              saldo R$ {num2(base.saldo)} · fica R$ {num2(base.guardado)} · regera R$ {num2(base.principal)} em {base.parcelas} parcela(s) · {base.sistema.toUpperCase()} {num2(base.taxaAa)}% a.a.
+          : recusa ? <span className="uma-linha-que-rola min-w-0 text-[#b91c1c]" title={recusa.frase} data-testid="recusa-do-regerar">{recusa.frase}</span>
+          : base ? <span className="uma-linha-que-rola min-w-0 text-muted-foreground" data-testid="texto-da-base"
+              title="o que o BANCO vai usar: o contrato gravado · a base é o saldo devedor da fonte única menos o principal das parcelas que ficam">
+              saldo R$ {num2(base.saldo)} · fica R$ {num2(base.guardado)} · regera R$ {num2(base.principal)} em {base.parcelas} parcela(s) · {textoDaBase(base)}
             </span> : null}
         {dif && <span className={`ml-auto shrink-0 ${LARANJA}`} data-testid="diferenca-do-saldo">{dif}</span>}
       </div>

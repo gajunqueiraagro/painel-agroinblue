@@ -159,7 +159,8 @@ describe('4 · periodicidade nula', () => {
   it('a tela diz "inferida das parcelas" e o Salvar não manda a periodicidade', async () => {
     await abrirEditar();
     fireEvent.click(aba('Condições e cronograma'));
-    expect(screen.getByText('Periodicidade · inferida das parcelas *')).toBeTruthy();
+    /* FIN-CONTRATO-NC-SALVAR-01: a inferida pede confirmação (e fica em tom de sugestão) */
+    expect(screen.getByText('Periodicidade · inferida das parcelas · confirme *')).toBeTruthy();
     expect(screen.getByTestId('resumo-do-cadastro').textContent).toMatch(/não cadastrado · mensal \(inferida\)/);
     fireEvent.click(aba('Contrato'));
     fireEvent.change(screen.getByDisplayValue('Custeio Exemplo'), { target: { value: 'X' } });

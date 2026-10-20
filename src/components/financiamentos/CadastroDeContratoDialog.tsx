@@ -38,7 +38,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useEdicaoDoContrato } from '@/hooks/useEdicaoDoContrato';
 import { RegerarParcelas } from '@/components/financiamentos/EdicaoDoContrato';
 import { ConsorcioDialog } from '@/components/financiamentos/ConsorcioDialog';
-import { dadosDoCabecalho, formDoContrato, tituloDaEdicao, PLANO_JUROS_POR_ATIVIDADE, PLANO_PRINCIPAL_POR_ATIVIDADE, TEXTO_DA_ORIGEM, type CampoNaoCadastrado, type OrigemDaPeriodicidade } from '@/lib/financiamentos/edicaoDoContrato';
+import { dadosDoCabecalho, formDoContrato, motivoRegerarApagado, tituloDaEdicao, PLANO_JUROS_POR_ATIVIDADE, PLANO_PRINCIPAL_POR_ATIVIDADE, TEXTO_DA_ORIGEM, type CampoNaoCadastrado, type OrigemDaPeriodicidade } from '@/lib/financiamentos/edicaoDoContrato';
 import {
   ROTULO_DA_MODALIDADE, ROTULO_DA_PERIODICIDADE, ROTULO_DO_SISTEMA, faltaNoResumo, formVazio, lerCronograma, oQueFalta, pedidoDeCriacao, pedidoDoCronograma,
   recusaAlemDaLista, textoDasParcelas,
@@ -65,10 +65,11 @@ const br = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)
 export const MOTIVO_SALVE_ANTES = 'Salve o contrato primeiro: liberações, destinação e documentos gravam direto no contrato.';
 const SUBCENTRO_CONSORCIO = 'Consórcio a contemplar';
 
-function Campo({ rotulo, obrig, children, className = '' }: { rotulo: string; obrig?: boolean; children: React.ReactNode; className?: string }) {
+function Campo({ rotulo, obrig, children, className = '', destaque }: { rotulo: string; obrig?: boolean; children: React.ReactNode; className?: string;
+  /** FIN-CONTRATO-NC-SALVAR-01 — o campo que o Regerar pediu (rótulo em vermelho) */ destaque?: boolean }) {
   return (
-    <div className={`min-w-0 ${className}`}>
-      <div className={ROTULO} title={rotulo}>{rotulo}{obrig ? ' *' : ''}</div>
+    <div className={`min-w-0 ${className}`} data-destaque={destaque ? 'sim' : undefined}>
+      <div className={`${ROTULO} ${destaque ? '!text-[#b91c1c] font-semibold' : ''}`} title={rotulo}>{rotulo}{obrig ? ' *' : ''}</div>
       {children}
     </div>
   );
@@ -108,6 +109,10 @@ export function CadastroDeContratoDialog({ aberto, aoFechar, onAbrirCompraParcel
   const [salvoId, setSalvoId] = useState<string | null>(financiamentoId ?? null);
   const [original, setOriginal] = useState<FormDoCadastro | null>(null);
   const [naoCadastrado, setNaoCadastrado] = useState<CampoNaoCadastrado[]>([]);
+  /* FIN-CONTRATO-NC-SALVAR-01 — os "não cadastrados" como o BANCO os tem (na leitura e depois de cada Salvar): quem saiu desta lista
+     na tela foi ESCOLHIDO e vai no pedido mesmo igual ao que a tela mostrava */
+  const [ncNoBanco, setNcNoBanco] = useState<CampoNaoCadastrado[]>([]);
+  const [destaque, setDestaque] = useState<CampoNaoCadastrado | null>(null);
   const [tituloEdicao, setTituloEdicao] = useState<string>('Editar contrato');
   const [regerarAceso, setRegerarAceso] = useState(false);
   const [salvoAgora, setSalvoAgora] = useState<string | null>(null);
@@ -124,7 +129,8 @@ export function CadastroDeContratoDialog({ aberto, aoFechar, onAbrirCompraParcel
   const comResumo = mostraResumo(useLarguraDaJanela());
   const set = <K extends keyof FormDoCadastro>(k: K, v: FormDoCadastro[K]) => { setForm((f) => ({ ...f, [k]: v })); setRecusa(null); setFaltaNoSalvar(null); setSalvoAgora(null); };
   const nc = (k: CampoNaoCadastrado) => naoCadastrado.includes(k);
-  const cadastrar = (k: CampoNaoCadastrado) => setNaoCadastrado((xs) => xs.filter((x) => x !== k));
+  const cadastrar = (k: CampoNaoCadastrado) => { setNaoCadastrado((xs) => xs.filter((x) => x !== k)); setDestaque((d) => (d === k ? null : d)); };
+  const escolhidos = ncNoBanco.filter((k) => !naoCadastrado.includes(k));
   const rotuloNc = (rotulo: string, k: CampoNaoCadastrado) => (nc(k) ? `${rotulo} · não cadastrado` : rotulo);
 
   /* modo editar: carrega o contrato gravado UMA vez por abertura */
@@ -147,7 +153,7 @@ export function CadastroDeContratoDialog({ aberto, aoFechar, onAbrirCompraParcel
         const c = formDoContrato(data, cons, vencs);
         if (!c) { setErroLeitura(data ? 'Não consegui carregar o contrato: resposta fora do formato.' : 'Não consegui carregar o contrato: não encontrado.'); return; }
         setOrigemDaPeriodicidade(c.origemDaPeriodicidade);
-        setForm(c.form); setOriginal(c.form); setNaoCadastrado(c.naoCadastrado);
+        setForm(c.form); setOriginal(c.form); setNaoCadastrado(c.naoCadastrado); setNcNoBanco(c.naoCadastrado);
         setEscolha(c.form.natureza === 'consorcio' ? 'consorcio' : 'financiamento');
         setTituloEdicao(tituloDaEdicao(c.numero, c.credorNome));
         setAba(abaInicial ?? (c.form.natureza === 'consorcio' ? 'consorcio' : 'contrato'));
@@ -197,17 +203,19 @@ export function CadastroDeContratoDialog({ aberto, aoFechar, onAbrirCompraParcel
     if (v === 'financiamento') { setForm((f) => ({ ...f, natureza: f.natureza === 'consorcio' ? 'financiamento' : f.natureza, planoPrincipalId: null })); setAba('contrato'); }
   };
   const falta = oQueFalta(form);
+  /* FIN-CONTRATO-NC-SALVAR-01 — UMA FONTE para o cronograma: com o cabeçalho da tela diferente do banco, o Regerar (que lê o banco) fica apagado */
+  const motivoDoRegerar = editando && original ? motivoRegerarApagado(dadosDoCabecalho(original, form, naoCadastrado, escolhidos), naoCadastrado) : null;
   /* o motivo do Salvar apagado no editar: a leitura falhou ou ainda não chegou — nunca um Salvar que some calado */
   const motivoSemSalvar = editando ? (erroLeitura ?? (original ? null : 'Carregando o contrato…')) : null;
   const salvarCabecalho = async () => {
     if (!original) { setRecusa(erroLeitura ?? 'O contrato ainda não carregou.'); return; }
-    const dados = dadosDoCabecalho(original, form, naoCadastrado);
+    const dados = dadosDoCabecalho(original, form, naoCadastrado, escolhidos);
     if (Object.keys(dados).length === 0) { setRecusa('Nenhuma mudança no cabeçalho.'); return; }
     setGravando(true);
     const r = await edicao.salvarCabecalho(dados, false);
     setGravando(false);
     if (r.recusa) { setRecusa(r.recusa); return; }
-    setOriginal(form);
+    setOriginal(form); setNcNoBanco(naoCadastrado);
     if (financiamentoId) onSalvo?.(financiamentoId);
     if (r.corpo.cronograma_mudou === true) { setRegerarAceso(true); setAba('condicoes'); setSalvoAgora('Cabeçalho salvo · o cronograma mudou: regere as parcelas em aberto na aba Condições.'); }
     else setSalvoAgora('Cabeçalho salvo.');
@@ -407,7 +415,7 @@ export function CadastroDeContratoDialog({ aberto, aoFechar, onAbrirCompraParcel
                 {aba === 'condicoes' && (
                   <fieldset disabled={travado} className="flex min-h-0 flex-1 flex-col gap-2">
                     <Bloco nome="Condições" testId="bloco-condicoes" grade="grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)] shrink-0">
-                      <Campo rotulo={rotuloNc('Sistema de amortização', 'sistema')} obrig>
+                      <Campo rotulo={rotuloNc('Sistema de amortização', 'sistema')} obrig destaque={destaque === 'sistema'}>
                         <Segmentado<SistemaDoCadastro | ''> altura={26} valor={nc('sistema') ? '' : form.sistema} onEscolher={(v) => { if (v !== '') { cadastrar('sistema'); set('sistema', v); } }}
                           opcoes={(['sac', 'price', 'bullet', 'livre'] satisfies SistemaDoCadastro[]).map((s) => ({ valor: s, rotulo: ROTULO_DO_SISTEMA[s] }))} />
                       </Campo>
@@ -415,9 +423,10 @@ export function CadastroDeContratoDialog({ aberto, aoFechar, onAbrirCompraParcel
                       <Campo rotulo={rotuloNc('Tipo de taxa', 'tipoTaxa')}><Segmentado<'pre' | 'pos' | ''> altura={26} valor={nc('tipoTaxa') ? '' : form.tipoTaxa}
                         onEscolher={(v) => { if (v !== '') { cadastrar('tipoTaxa'); set('tipoTaxa', v); } }} opcoes={[{ valor: 'pre', rotulo: 'Pré' }, { valor: 'pos', rotulo: 'Pós (CDI/TLP)' }]} /></Campo>
                       <Campo rotulo={nc('carenciaAte') ? 'Carência · não cadastrada' : 'Carência de principal até'}><DatePicker size="compact" className={CAMPO} value={form.carenciaAte ?? ''} onChange={(v) => { cadastrar('carenciaAte'); set('carenciaAte', v || null); }} /></Campo>
-                      <Campo rotulo={nc('periodicidade') && origemDaPeriodicidade !== 'gravada' ? `Periodicidade · ${TEXTO_DA_ORIGEM[origemDaPeriodicidade]}` : rotuloNc('Periodicidade', 'periodicidade')} obrig>
-                        <Segmentado<Periodicidade | ''> altura={26} valor={nc('periodicidade') && origemDaPeriodicidade === 'gravada' ? '' : form.periodicidade} onEscolher={(v) => { if (v !== '') { cadastrar('periodicidade'); set('periodicidade', v); } }}
-                          opcoes={(['mensal', 'trimestral', 'semestral', 'anual'] satisfies Periodicidade[]).map((p) => ({ valor: p, rotulo: ROTULO_DA_PERIODICIDADE[p] }))} />
+                      <Campo rotulo={nc('periodicidade') && origemDaPeriodicidade !== 'gravada' ? (origemDaPeriodicidade === 'parcelas' ? 'Periodicidade · inferida das parcelas · confirme' : `Periodicidade · ${TEXTO_DA_ORIGEM[origemDaPeriodicidade]}`) : rotuloNc('Periodicidade', 'periodicidade')} obrig>
+                        <Segmentado<Periodicidade | ''> altura={26} sugestao={nc('periodicidade') && origemDaPeriodicidade !== 'gravada'} valor={nc('periodicidade') && origemDaPeriodicidade === 'gravada' ? '' : form.periodicidade} onEscolher={(v) => { if (v !== '') { cadastrar('periodicidade'); set('periodicidade', v); } }}
+                          opcoes={(['mensal', 'trimestral', 'semestral', 'anual'] satisfies Periodicidade[]).map((p) => ({ valor: p, rotulo: ROTULO_DA_PERIODICIDADE[p],
+                            title: nc('periodicidade') && origemDaPeriodicidade !== 'gravada' ? 'sugestão: clique para confirmar e salve o cabeçalho' : undefined }))} />
                       </Campo>
                       <div />
                       {form.sistema !== 'bullet' && form.sistema !== 'livre'
@@ -443,11 +452,13 @@ export function CadastroDeContratoDialog({ aberto, aoFechar, onAbrirCompraParcel
                         ))}
                       </div>
                     )}
-                    {editando ? (regerarAceso
-                      ? <RegerarParcelas api={edicao} onFeito={() => { setRegerarAceso(false); setSalvoAgora('Parcelas em aberto regeradas · desfazer pela tela do contrato (Editar parcelas).'); }} />
+                    {editando ? (regerarAceso && !motivoDoRegerar
+                      ? <RegerarParcelas api={edicao} onCampoFaltando={setDestaque} onFeito={() => { setRegerarAceso(false); setSalvoAgora('Parcelas em aberto regeradas · desfazer pela tela do contrato (Editar parcelas).'); }} />
                       : <div className="flex h-[26px] shrink-0 items-center gap-2 text-[10.5px] text-muted-foreground" data-testid="regerar-apagado">
-                          <span className="min-w-0 flex-1 truncate">Mudou sistema, taxa, prazo, carência, valor, periodicidade ou 1º vencimento? Salve: o banco acende "Regerar parcelas em aberto".</span>
-                          <Button variant="outline" size="sm" className="h-[22px] shrink-0 text-[10px]" onClick={() => setRegerarAceso(true)} data-testid="abrir-regerar">Regerar parcelas em aberto</Button>
+                          <span className={`uma-linha-que-rola min-w-0 flex-1 ${motivoDoRegerar ? 'font-medium text-amber-800' : ''}`} data-testid="motivo-do-regerar">
+                            {motivoDoRegerar ?? 'Mudou sistema, taxa, prazo, carência, valor, periodicidade ou 1º vencimento? Salve: o banco acende "Regerar parcelas em aberto".'}</span>
+                          <Button variant="outline" size="sm" className="h-[22px] shrink-0 text-[10px]" disabled={!!motivoDoRegerar} title={motivoDoRegerar ?? undefined}
+                            onClick={() => setRegerarAceso(true)} data-testid="abrir-regerar">Regerar parcelas em aberto</Button>
                         </div>) : tabela}
                   </fieldset>
                 )}
@@ -473,6 +484,8 @@ export function CadastroDeContratoDialog({ aberto, aoFechar, onAbrirCompraParcel
                 <LinhaResumo rotulo="Custo total previsto" valor={cronograma ? `R$ ${num2(cronograma.total)}` : '—'} />
                 <LinhaResumo rotulo="Última parcela" valor={br(cronograma?.vencimentoFinal ?? null)} />
               </>) : (<>
+                {editando && <div className={`mb-0.5 h-[14px] text-[10px] ${motivoDoRegerar ? 'text-amber-800' : 'text-muted-foreground'}`} data-testid="origem-do-resumo">
+                  {motivoDoRegerar ? 'prévia da tela · não gravado' : 'como está gravado'}</div>}
                 <LinhaResumo rotulo="Valor contratado" valor={`R$ ${num2(form.valorTotal)}`} />
                 <LinhaResumo rotulo="Sistema" valor={`${nc('sistema') ? 'não cadastrado' : ROTULO_DO_SISTEMA[form.sistema]} · ${ROTULO_DA_PERIODICIDADE[form.periodicidade].toLowerCase()}${nc('periodicidade') && origemDaPeriodicidade === 'parcelas' ? ' (inferida)' : ''}`} />
                 <LinhaResumo rotulo="Taxa" valor={`${num2(form.taxaAa)}% a.a. ${form.tipoTaxa === 'pre' ? 'pré' : 'pós'}`} />
@@ -505,7 +518,7 @@ export function CadastroDeContratoDialog({ aberto, aoFechar, onAbrirCompraParcel
           </div>
           <Button variant="outline" size="sm" className="h-[24px] text-[10px]" onClick={aoFechar}>{travado ? 'Fechar' : 'Cancelar'}</Button>
           {escolha !== 'parcelado' && (
-            <Button size="sm" className="h-[24px] text-[10px]" disabled={gravando || !!motivoSemSalvar} title={motivoSemSalvar ?? undefined} onClick={() => void salvar()} data-testid="salvar-cadastro">
+            <Button size="sm" className={`h-[24px] text-[10px] ${motivoDoRegerar ? 'ring-2 ring-amber-500 ring-offset-1' : ''}`} data-destaque={motivoDoRegerar ? 'sim' : undefined} disabled={gravando || !!motivoSemSalvar} title={motivoSemSalvar ?? undefined} onClick={() => void salvar()} data-testid="salvar-cadastro">
               {gravando ? 'Salvando…' : editando ? 'Salvar cabeçalho' : travado ? 'Concluir' : cons ? 'Salvar consórcio' : 'Salvar contrato'}
             </Button>
           )}
