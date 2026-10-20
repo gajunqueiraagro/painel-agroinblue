@@ -137,17 +137,21 @@ describe('uma regra só, e a tela só desenha (lido da FONTE)', () => {
   });
   it('o selo: 9px, 14px de altura, nunca corta, com a frase no title; a linha continua com 18px', () => {
     const f = fonte('src/components/financeiro-v2/ContasPagarReceberTab.tsx');
-    expect(f).toContain('<span data-testid="cpr-selo-estimado" title={tituloDoSelo} className="h-[14px] shrink-0 whitespace-nowrap rounded bg-amber-100 px-1 text-[9px] leading-[14px] text-amber-700"> estimado </span>');
-    expect(f).toContain("const TITULO_SELO_ESTIMADO = 'valor estimado pela recorrência · informe o valor do mês no lançamento';");
+    /* FIN-POS-FIXADO-01a: o MESMO selo (forma, lugar e tamanho); so' o `title` passa a ser o da origem da linha */
+    expect(f).toContain('<span data-testid="cpr-selo-estimado" title={tituloDoSeloDaLinha(l.id)} className="h-[14px] shrink-0 whitespace-nowrap rounded bg-amber-100 px-1 text-[9px] leading-[14px] text-amber-700"> estimado </span>');
+    expect(fonte('src/lib/financeiro/estimadosDaCpr.ts')).toContain("recorrencia: 'valor estimado pela recorrência · informe o valor do mês no lançamento',");
     expect(f).toContain("'flex h-[18px] w-full shrink-0 items-center gap-1 border-b px-3 text-left text-[10px]',");
   });
   it('o aviso de leitura INCOMPLETA (teto das ocorrências estimadas) é escrito no title do selo, dos dois totais e do cartão', () => {
     const f = fonte('src/components/financeiro-v2/ContasPagarReceberTab.tsx');
     expect(f).toContain("const avisoEstimadasIncompleto = estimadasDoCliente?.incompleto ? AVISO_ESTIMADAS_INCOMPLETO : '';");
-    expect(f).toContain("const tituloDoSelo = TITULO_SELO_ESTIMADO + (avisoEstimadasIncompleto ? `\\n${avisoEstimadasIncompleto}` : '');");
-    /* a busca sabe achar: o aviso é usado em quatro lugares (a frase do selo, confirmado, estimado pelo selo, cartão) */
-    expect(f.match(/avisoEstimadasIncompleto \?/g)).toHaveLength(3);
-    expect(f.match(/tituloDoSelo/g)).toHaveLength(3);
+    expect(f).toContain('const tituloDoSelo = tituloDoEstimado(estimadasDoCliente ? origensPresentes(estimadasDoCliente) : undefined, avisoEstimadasIncompleto);');
+    expect(f).toContain('const tituloDoSeloDaLinha = (id: string) => tituloDoEstimado(estimadasDoCliente?.origens.get(id), avisoEstimadasIncompleto);');
+    /* a busca sabe achar: o aviso vai no confirmado e no cartão pelo ternário, e no selo (linha e totais) pelo dono do título */
+    expect(f.match(/avisoEstimadasIncompleto \?/g)).toHaveLength(2);
+    expect(f.match(/, avisoEstimadasIncompleto\)/g)).toHaveLength(2);
+    expect(f.match(/tituloDoSelo\b/g)).toHaveLength(2);          // a definição e os totais
+    expect(f.match(/tituloDoSeloDaLinha\b/g)).toHaveLength(2);   // a definição e o selo da linha
     const hook = fonte('src/hooks/useRecorrencias.ts');
     expect(hook).toContain('return { ids: idsEstimados(linhas), incompleto: linhas.length >= TETO_OCORRENCIAS_ESTIMADAS };');
   });
