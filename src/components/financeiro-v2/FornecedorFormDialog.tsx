@@ -39,6 +39,9 @@ import {
 import { loadContasDoPlanoDoCliente } from '@/lib/financeiro/planoContasBuilder';
 import { formatarDocumento } from '@/lib/fornecedores/fornecedorTexto';
 
+/** AUDIT-DELETE-01a — o motivo gravado quando o cadastro sem uso é excluído (a tela não pergunta). */
+export const MOTIVO_EXCLUIR_FORNECEDOR = 'excluído no cadastro do fornecedor (sem uso)';
+
 export const MOTIVO_MESCLAR_TRAVADO = 'Mesclar agora mora em Cadastros › Fornecedores › "Mesclar fornecedores": move todas as referências e pode ser desfeita.';
 const SEM = '__nenhum__';
 /* a régua deste modal: campos de 26px (o mock pede 26–28; com 28 a aba Endereço e contato passava 14px da altura fixa — medido) */
@@ -223,13 +226,20 @@ export function FornecedorFormDialog({
     onClose(); onSaved();
   }, [reativarTarget, onClose, onSaved, clienteId]);
 
+  /* AUDIT-DELETE-01a: excluir NÃO apaga — o fornecedor sai de uso pelo gesto do banco (ativo = false, com motivo e trilha). Com
+     lançamento ou recorrência o banco recusa e a frase manda mesclar. A tela não tem confirmação: o motivo é o do gesto. */
   const excluir = async () => {
     if (!editing) return;
     setExcluindo(true);
-    const { error } = await supabase.from('financeiro_fornecedores').delete().eq('id', editing.id);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+    const { data, error } = await (supabase as any).rpc('fn_fornecedor_excluir', {
+      p_fornecedor_id: editing.id, p_motivo: MOTIVO_EXCLUIR_FORNECEDOR, p_simular: false,
+    });
     setExcluindo(false);
-    if (error) { setRecado({ texto: 'Não foi possível excluir.', tom: 'erro' }); return; }
-    toast.success('Fornecedor excluído');
+    if (error) { setRecado({ texto: `Não foi possível excluir: ${error.message}`, tom: 'erro' }); return; }
+    const r = (data ?? {}) as { ok?: boolean; recusa?: { frase?: string } };
+    if (r.ok === false) { setRecado({ texto: r.recusa?.frase ?? 'Não foi possível excluir.', tom: 'erro' }); return; }
+    toast.success('Fornecedor excluído (fica fora de uso)');
     notificarFornecedoresMudaram(clienteId);
     onClose(); onSaved();
   };
@@ -434,7 +444,7 @@ export function FornecedorFormDialog({
                   {editing && uso && uso.lancamentos === 0 && uso.comprasParceladas === 0 && uso.documentos === 0 && (
                     <div className="pt-1">
                       <Button variant="outline" size="sm" className="h-[24px] px-2 text-[10.5px] text-destructive" disabled={excluindo} onClick={() => void excluir()} data-testid="excluir-fornecedor"
-                        title="Sem lançamento, compra ou documento: pode ser excluído (não se desfaz). Com uso, inative pela Situação em Dados gerais.">Excluir fornecedor</Button>
+                        title="Sem lançamento, compra ou documento: sai de uso (não é apagado; fica em Inativos, com a trilha). Com uso, mescle no cadastro certo.">Excluir fornecedor</Button>
                     </div>
                   )}
                 </BlocoFormulario>
