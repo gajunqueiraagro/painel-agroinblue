@@ -400,6 +400,8 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
             valor: p.valor,
             data_competencia: data,
             data_pagamento: p.data,
+            /* CRIAR-DO-EXTRATO-01 — todo lançamento nasce com vencimento: aqui ele é a data da parcela/pagamento. */
+            data_vencimento: p.data,
             descricao: `${compraLabel} - Parcela ${i + 1}/${parcelas.length}`,
             historico: fazendaOrigem ? `Origem: ${fazendaOrigem}` : undefined,
             origem_tipo: 'compra_rebanho:parcela',
@@ -414,6 +416,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
           valor: calc.valorBase,
           data_competencia: data,
           data_pagamento: data,
+          data_vencimento: data,
           descricao: compraLabel,
           historico: fazendaOrigem ? `Origem: ${fazendaOrigem}` : undefined,
           origem_tipo: 'compra_rebanho:parcela',
@@ -434,6 +437,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
           valor: calc.freteVal,
           data_competencia: data,
           data_pagamento: data,
+          data_vencimento: data,
           descricao: `Prev. Frete - ${compraLabel}`,
           origem_tipo: 'compra_rebanho:frete',
         });
@@ -452,6 +456,7 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
           valor: calc.comissaoVal,
           data_competencia: data,
           data_pagamento: data,
+          data_vencimento: data,
           descricao: `Prev. Comissão - ${compraLabel}`,
           origem_tipo: 'compra_rebanho:comissao',
         });
