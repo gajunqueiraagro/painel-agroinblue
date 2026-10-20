@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { FaixaDaReferencia, type ReferenciaOperacionalInfo } from './FaixaDaReferencia';
 import { BLOCO_FORMULARIO, BlocoFormulario, REGUA_ROTULO, TituloDoBloco } from '@/components/ui/bloco-formulario';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -257,16 +258,7 @@ interface Props {
   // que originou esta criação. Puramente visual: NÃO resolve UUIDs por nome.
   // Operador continua escolhendo fornecedor/fazenda/plano oficial manualmente.
   // Sem essa prop, o componente se comporta idêntico ao atual.
-  referenciaOperacionalInfo?: {
-    fornecedor_texto?: string | null;
-    fazenda_texto?: string | null;
-    plano_texto?: string | null;
-    centro_texto?: string | null;
-    produto_texto?: string | null;
-    observacao?: string | null;
-    valor?: number | null;
-    data_referencia?: string | null;
-  };
+  referenciaOperacionalInfo?: ReferenciaOperacionalInfo;
   // PR-Mesa-ExcelContext — contexto read-only "Contexto Excel / Sugestão"
   // exibido em painel lateral quando o dialog é aberto a partir da Mesa
   // Classificação Excel. Ausente nos demais usos → layout idêntico ao atual.
@@ -1639,6 +1631,10 @@ export function LancamentoV2Dialog({
   );
   const faltaItemOC = !!modoOC && modoOC.natureza === 'obrigacao' && !itemOC;
   const faltaVencimentoOC = !!modoOC && linhasDoModoOC.some(l => !l.vencimento);
+  /* CRIAR-DO-EXTRATO-01 — o vencimento do lançamento comum (o modo OC e o parcelado têm a regra deles; o campo travado não se cobra). */
+  const [tentouVencimento, setTentouVencimento] = useState(false);
+  const faltaVencimento = !modoOC && formaPagamentoParc !== 'parcelada' && !isOCTitulo && !parcelaPaga && !dataVencimento;
+  const vencimentoEmErro = tentouVencimento && faltaVencimento;
   const favorecidoDoModoOC = favorecidoId && favorecidoId !== '__none_forn__' ? favorecidoId : null;
   const classificacoesDoModal = useMemo(
     () => (modoOC?.natureza === 'obrigacao' ? [...classificacoesDaDespesa(classificacoes, modoOC.tipoOperacao)] : classificacoes),
@@ -1741,6 +1737,15 @@ export function LancamentoV2Dialog({
 
   const handleSubmit = async (voltar?: { valor: number; vencimento: string }) => {
     if (!canSave) return;
+    /* CRIAR-DO-EXTRATO-01 — vencimento obrigatório em todo Novo/Editar (fora do modo OC, que tem a regra dele, do parcelado,
+       cujos vencimentos são os da lista, e do campo travado). O rótulo e a borda acendem em vermelho e a frase sai ao lado do
+       Salvar (no rótulo ela não cabe na coluna de 115px: o gate media "…"); nada é gravado. */
+    if (faltaVencimento && !voltar) {
+      setTentouVencimento(true);
+      setErroAntesDeSalvar(MOTIVO_VENCIMENTO_OBRIGATORIO);
+      setAbaAtiva('geral');
+      return;
+    }
     /* MODO OC — as duas pendencias proprias: acende em vermelho, diz ao lado do botao e NAO grava. */
     if (modoOC && (faltaItemOC || faltaVencimentoOC)) {
       setTentouOC(true);
@@ -2298,6 +2303,40 @@ export function LancamentoV2Dialog({
     onLancamentoCriado?.();
   };
 
+  /* CRIAR-DO-EXTRATO-01 — a referência de onde o lançamento nasceu (extrato, planilha, referência) mora na LINHA DAS ABAS, à direita
+     delas, quando a Geral está aberta: uma linha de 22px que não soma altura nenhuma ao corpo (a 750x520 o corpo já não tinha
+     2px de folga — uma faixa dentro dele fazia o modal rolar). Sem referência, a barra é a de sempre, nó por nó. */
+  const faixaNaBarra = !!referenciaOperacionalInfo;
+  const barraDeAbas = (
+    <TabsList className={cn("w-full justify-start gap-1 rounded-none border-b border-border bg-card px-2 py-1 h-auto shrink-0",
+      faixaNaBarra && "w-auto border-b-0")}>
+      {ABAS_TAB.map(({ value, label }) => (
+        // PR-FIN-MODAL-02J — restyle das abas (ERP moderno): inativa discreta
+        // (font-medium/muted, hover suave), ativa evidente sem borda grossa —
+        // fundo background, cantos sup. arredondados, borda fininha, sombra leve e
+        // UNDERLINE primário de 1px via `after:` (pseudo-elemento), evitando somar duas
+        // bordas inferiores (linha de 2px). `relative` sustenta o badge no canto.
+        <TabsTrigger
+          key={value}
+          value={value}
+          className={cn(
+            "relative h-5 px-[7px] py-0 text-[10px] font-medium text-muted-foreground rounded-md",
+            "hover:bg-muted/50",
+            "data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none",
+          )}
+        >
+          {label}
+          {abaComErro(value) && (
+            <span
+              className="absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-destructive"
+              aria-label="pendência"
+            />
+          )}
+        </TabsTrigger>
+      ))}
+    </TabsList>
+  );
+
   return (
     <>
       <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
@@ -2331,6 +2370,9 @@ export function LancamentoV2Dialog({
           //   minimo de uma linha `whitespace-nowrap` (o aviso "Fornecedor achado pelo nome · <razao social> …") e' o texto INTEIRO: a
           //   coluna crescia ate' ele, o resumo saia pela direita e o rodape cortava. Com minimo zero, quem encolhe e' o texto.
           !excelContext && "grid grid-cols-[minmax(0,1fr)_240px] grid-rows-[auto_minmax(0,1fr)_auto]",
+          // CRIAR-DO-EXTRATO-01 — abaixo de 900px o resumo (que repete o formulário) sai: com ele, a 750/814 os cinco campos de data
+          //   da primeira linha ficavam com 67–80px e cortavam o rótulo com "…". O formulário fica com a largura toda.
+          !excelContext && "max-[899px]:grid-cols-[minmax(0,1fr)]",
         )}
           /* FIN-VALOR-CALC-01a — com conta aberta no campo Valor, Esc cancela a CONTA (o campo trata) e o modal fica. */
           onEscapeKeyDown={(e) => { if (contaAbertaRef.current) e.preventDefault(); }}
@@ -2380,32 +2422,12 @@ export function LancamentoV2Dialog({
           <Tabs value={abaAtiva} onValueChange={v => setAbaAtiva(v as AbaFinanceira)} className={cn("flex min-w-0 flex-col min-h-0", excelContext ? "flex-1" : "col-start-1 row-start-2")}>
             {/* MODAIS-PADRAO-01e — a barra do Abate: botao 20px/10px, barra ~29px, aba ativa em navy claro
                 (bg-primary/10), como as outras cascas. Era h-8 com botao de 24px/12px e a ativa sublinhada. */}
-            <TabsList className="w-full justify-start gap-1 rounded-none border-b border-border bg-card px-2 py-1 h-auto shrink-0">
-              {ABAS_TAB.map(({ value, label }) => (
-                // PR-FIN-MODAL-02J — restyle das abas (ERP moderno): inativa discreta
-                // (font-medium/muted, hover suave), ativa evidente sem borda grossa —
-                // fundo background, cantos sup. arredondados, borda fininha, sombra leve e
-                // UNDERLINE primário de 1px via `after:` (pseudo-elemento), evitando somar duas
-                // bordas inferiores (linha de 2px). `relative` sustenta o badge no canto.
-                <TabsTrigger
-                  key={value}
-                  value={value}
-                  className={cn(
-                    "relative h-5 px-[7px] py-0 text-[10px] font-medium text-muted-foreground rounded-md",
-                    "hover:bg-muted/50",
-                    "data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none",
-                  )}
-                >
-                  {label}
-                  {abaComErro(value) && (
-                    <span
-                      className="absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-destructive"
-                      aria-label="pendência"
-                    />
-                  )}
-                </TabsTrigger>
-              ))}
-            </TabsList>
+            {faixaNaBarra ? (
+              <div className="flex min-w-0 shrink-0 items-center gap-2 border-b border-border bg-card pr-2" data-testid="barra-de-abas-com-faixa">
+                {barraDeAbas}
+                {abaAtiva === 'geral' && <FaixaDaReferencia referencia={referenciaOperacionalInfo!} className="flex-1" />}
+              </div>
+            ) : barraDeAbas}
           {/* PR-Mesa-ExcelContext: com contexto Excel, corpo vira 2 colunas
               (form + painel). Sem contexto, wrapper usa `contents` (não gera
               caixa) → body volta a ser filho direto, layout 100% idêntico. */}
@@ -2414,7 +2436,8 @@ export function LancamentoV2Dialog({
           {/* UI-MODAL-BLOCOS-01 · LANCAMENTO COMPACTO — o corpo declara a régua de texto (11px / 13px de linha): os rótulos dos seletores
               da casa (fornecedor, produto, fazenda, subcentro, valor) são `<label>` INLINE e herdavam a caixa de linha de 24px do
               `body` — 8px de vão em cima de cada rótulo, medidos no DOM. 6px entre os blocos. */}
-          <div className="min-w-0 flex-1 overflow-y-auto px-4 py-2 space-y-1.5 bg-muted text-[11px] leading-[13px]" data-testid="corpo-do-lancamento">
+          {/* CRIAR-DO-EXTRATO-01 — 6px em cima (era 8): a 750x520 a Geral pedia 391px e tinha 389 — rolava 2px. */}
+          <div className="min-w-0 flex-1 overflow-y-auto px-4 pt-1.5 pb-2 space-y-1.5 bg-muted text-[11px] leading-[13px]" data-testid="corpo-do-lancamento">
 
             {/* OC-CC-MODAL-FINANCEIRO-01 — a faixa de origem (o molde do "Do XML"): de qual operacao este lancamento e', com o
                 caminho de volta. Uma linha de 24px, em todas as abas; so' o texto corta (inteiro no `title`). */}
@@ -2449,76 +2472,6 @@ export function LancamentoV2Dialog({
                     <span className="min-w-0 truncate">Classificação sugerida: {xml.proposta.classificacao?.subcentro} · {xml.proposta.origens.subcentro} deste fornecedor</span>
                   </div>
                 )}
-              </div>
-            )}
-
-            {/* PR2.2 — Box informativo da referência operacional que originou
-                esta criação. Read-only, não bloqueia nada. Operador continua
-                escolhendo fornecedor/fazenda/plano oficial manualmente. */}
-            {referenciaOperacionalInfo && (
-              <div className="rounded-md border border-blue-200 bg-blue-50/60 dark:bg-blue-950/30 px-3 py-2 text-[11px] space-y-1.5">
-                <div className="font-semibold text-blue-900 dark:text-blue-200 text-[11px]">
-                  📋 Referência operacional usada
-                </div>
-                <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
-                  {referenciaOperacionalInfo.fornecedor_texto && (
-                    <div>
-                      <span className="text-muted-foreground">Fornecedor (Excel): </span>
-                      <span className="font-medium">{referenciaOperacionalInfo.fornecedor_texto}</span>
-                    </div>
-                  )}
-                  {referenciaOperacionalInfo.fazenda_texto && (
-                    <div>
-                      <span className="text-muted-foreground">Fazenda (Excel): </span>
-                      <span className="font-medium">{referenciaOperacionalInfo.fazenda_texto}</span>
-                    </div>
-                  )}
-                  {referenciaOperacionalInfo.plano_texto && (
-                    <div>
-                      <span className="text-muted-foreground">Plano (Excel): </span>
-                      <span className="font-medium">{referenciaOperacionalInfo.plano_texto}</span>
-                    </div>
-                  )}
-                  {referenciaOperacionalInfo.centro_texto && (
-                    <div>
-                      <span className="text-muted-foreground">Centro (Excel): </span>
-                      <span className="font-medium">{referenciaOperacionalInfo.centro_texto}</span>
-                    </div>
-                  )}
-                  {referenciaOperacionalInfo.produto_texto && (
-                    <div className="col-span-2">
-                      <span className="text-muted-foreground">Produto/Hist. (Excel): </span>
-                      <span className="font-medium">{referenciaOperacionalInfo.produto_texto}</span>
-                    </div>
-                  )}
-                  {referenciaOperacionalInfo.observacao && (
-                    <div className="col-span-2">
-                      <span className="text-muted-foreground">Obs (Excel): </span>
-                      <span className="font-medium">{referenciaOperacionalInfo.observacao}</span>
-                    </div>
-                  )}
-                  {(referenciaOperacionalInfo.valor != null || referenciaOperacionalInfo.data_referencia) && (
-                    <div className="col-span-2 flex gap-3 pt-1 mt-1 border-t border-blue-200">
-                      {referenciaOperacionalInfo.data_referencia && (
-                        <span>
-                          <span className="text-muted-foreground">Data Excel: </span>
-                          <span className="tabular-nums">{referenciaOperacionalInfo.data_referencia}</span>
-                        </span>
-                      )}
-                      {referenciaOperacionalInfo.valor != null && (
-                        <span>
-                          <span className="text-muted-foreground">Valor Excel: </span>
-                          <span className={`tabular-nums font-semibold ${referenciaOperacionalInfo.valor < 0 ? 'text-red-700' : 'text-emerald-700'}`}>
-                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(referenciaOperacionalInfo.valor)}
-                          </span>
-                        </span>
-                      )}
-                    </div>
-                  )}
-                </div>
-                <div className="text-[9px] text-blue-900/70 dark:text-blue-200/70 italic pt-1">
-                  Use as informações acima como referência. Os campos oficiais (fornecedor, fazenda, plano) devem ser escolhidos manualmente.
-                </div>
               </div>
             )}
 
@@ -2612,11 +2565,12 @@ export function LancamentoV2Dialog({
                   (governado pela Operação Comercial). Grava SEMPRE em data_vencimento, nunca em
                   data_pagamento. Contrato de Data Pagamento do manual permanece inalterado. */}
               <div className={modoOC ? 'col-span-3' : 'col-span-2'}>
-                <Label className={cn(REGUA_ROTULO, modoOC && tentouOC && faltaVencimentoOC && 'text-destructive')} data-testid={modoOC ? 'rotulo-vencimento-oc' : undefined}>
+                <Label className={cn(REGUA_ROTULO, ((modoOC && tentouOC && faltaVencimentoOC) || vencimentoEmErro) && 'text-destructive')}
+                  data-testid={modoOC ? 'rotulo-vencimento-oc' : 'rotulo-vencimento'}>
                   {modoOC ? (tentouOC && faltaVencimentoOC ? `Vencimento * · ${MOTIVO_VENCIMENTO_OBRIGATORIO}` : 'Vencimento *')
-                    : xmlAmbar('vencimento') ? xmlRot('Vencimento', 'vencimento') : 'Data vencimento'}</Label>
+                    : xmlAmbar('vencimento') ? xmlRot('Vencimento *', 'vencimento') : 'Data vencimento *'}</Label>
                 {/* parcela paga: em leitura; o motivo está escrito no rodapé (`parcela-do-contrato`) — sem invólucro aqui, o HTML do lançamento comum não muda */}
-                <DatePicker value={dataVencimento} onChange={setDataVencimento} disabled={isOCTitulo || parcelaPaga} className={cn(dateFieldCls, xmlCls('vencimento'), modoOC && tentouOC && faltaVencimentoOC && 'border-destructive')} />
+                <DatePicker value={dataVencimento} onChange={setDataVencimento} disabled={isOCTitulo || parcelaPaga} className={cn(dateFieldCls, xmlCls('vencimento'), ((modoOC && tentouOC && faltaVencimentoOC) || vencimentoEmErro) && 'border-destructive')} />
               </div>
               {!modoOC && (
               <div className="col-span-2"
@@ -3382,7 +3336,7 @@ export function LancamentoV2Dialog({
                rodape voltou a' largura inteira), pares pelo `LinhaResumo`. Mesmo texto, mesmos valores.
                UI-MODAL-BLOCOS-01 · LANCAMENTO COMPACTO — `formato="pares"`: titulos em sentence case 11px/600, faixa de 18px,
                linhas de 16px, rotulo na largura do maior e o valor colado (sem caixa alta). */
-            <div className="col-start-2 row-start-2 min-h-0">
+            <div className="col-start-2 row-start-2 min-h-0 max-[899px]:hidden">
               <AsideResumo formato="pares" faixa={<FaixaTituloResumo titulo="Resumo do lançamento" />}>
                 <SecaoResumo titulo="Identificação" />
                 <div className="contents">
