@@ -10,7 +10,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { executarDesfazerCompromisso, ErroDesfazer, type RpcDesfazer } from '@/lib/oc/desfazerCompromisso';
 
-const RECUSA = 'Estorne a liquidacao ou conciliacao financeira antes de estornar esta materializacao.';
+const RECUSA = 'O lançamento de R$ 5.056,00 de 13/04/2026 já foi pago ou conciliado. Desfaça o pagamento no lançamento antes.';
 const OP = '11111111-1111-4111-8111-111111111111';
 
 describe('Desfazer com o D2', () => {
@@ -34,7 +34,7 @@ describe('Desfazer com o D2', () => {
     const erro = await executarDesfazerCompromisso({ operacaoId: OP, versao: 16, compromissoId: '0119442b', motivo: 'x', falta: ['cancelar o compromisso'], rpc })
       .catch(e => e);
     expect(erro).toBeInstanceOf(ErroDesfazer);
-    expect(erro.message).toBe('Este lançamento já foi pago ou conciliado. Desfaça o pagamento ou a conciliação no Financeiro antes.');
+    expect(erro.message).toBe(RECUSA);   // OC-DESFAZER-PREVISTO-01b: a frase vem pronta do banco e passa como veio
     expect(erro.feito).toEqual([]);
     expect(rpc).toHaveBeenCalledTimes(1);
   });
