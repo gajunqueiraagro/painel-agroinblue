@@ -563,6 +563,8 @@ export interface RespostaBloco {
   matriz: Array<{ extrato_id: string; lancamento_id: string; valor_aplicado: number }>;
   resumo: {
     soma_extratos: number; soma_lancamentos: number; diferenca: number;
+    /* CONC-BLOCO-SINAL-MISTO-01 — as somas COM SINAL (saída −, entrada +), do banco; `sinal_misto` = o bloco tem saída e entrada */
+    soma_extratos_com_sinal?: number; soma_lancamentos_com_sinal?: number; diferenca_com_sinal?: number; sinal_misto?: boolean;
     quitados: Array<{ lancamento_id: string }>;
     parcial: { lancamento_id: string; descricao: string; aplicado: number; falta: number } | null;
   };
@@ -586,13 +588,34 @@ export function aplicadoPorLancamento(r: RespostaBloco): Map<string, number> {
   return m;
 }
 
-const dataCurta = (d: string | null | undefined) => (d ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(2, 4)}` : '—');
+/**
+ * CONC-BLOCO-SINAL-MISTO-01 — as três somas COM SINAL do rodapé do bloco. Com a simulação do banco, os números DELE; sem ela (o banco
+ * recusou, ou ainda não respondeu), a soma da SELEÇÃO — em centavos inteiros, só para mostrar: quem decide é o banco, e a recusa fica
+ * escrita ao lado. Diferença = Pix − lançamentos.
+ */
+export function somasComSinal(resp: RespostaBloco | null, extratos: readonly ExtratoDoBloco[], lancamentos: readonly LancamentoDoBloco[]) {
+  const r = resp?.resumo;
+  if (r && r.soma_extratos_com_sinal != null && r.soma_lancamentos_com_sinal != null && r.diferenca_com_sinal != null) {
+    return { pix: Number(r.soma_extratos_com_sinal), lancamentos: Number(r.soma_lancamentos_com_sinal), diferenca: Number(r.diferenca_com_sinal), doBanco: true };
+  }
+  const cent = (v: number) => Math.round(Number(v) * 100);
+  const pix = extratos.reduce((s, e) => s + cent(e.valor), 0);
+  const lan = lancamentos.reduce((s, l) => s + cent(l.valor_assinado), 0);
+  return { pix: pix / 100, lancamentos: lan / 100, diferenca: (pix - lan) / 100, doBanco: false };
+}
+
+/** O nome do lugar onde o bloco se desfaz depois de conciliado: o menu da linha do bloco na Conferência (`EspelhoConciliacaoTab`). */
+export const ONDE_DESFAZER_BLOCO = 'Para desfazer: menu "Ações" (⋯) da linha do bloco › Desfazer bloco.';
+
+/* dd/mm/aaaa (UI-SEM-CORTE-01; era dd/mm/aa) */
+const dataCurta = (d: string | null | undefined) => (d ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}` : '—');
 
 /**
  * CASAR COM O BANCO · BLOCO — N extratos × M lançamentos, numa gravação só (`fn_conciliar_bloco`).
  *
  * ⚠ A MATRIZ E O RESUMO VÊM SÓ DA RPC: ao abrir e a cada troca de regra, `p_simular = true`; o Conciliar bloco é a
- *   MESMA chamada com `p_simular = false`. Nenhuma soma, nenhuma alocação aqui — a tela que somasse teria a segunda régua.
+ *   MESMA chamada com `p_simular = false`. Nenhuma alocação aqui. A única soma da tela é a da SELEÇÃO quando o banco recusa
+ *   (`somasComSinal`), só para mostrar o que foi escolhido.
  * ⚠ NÃO EXISTE "Corrigir o valor do lançamento" NESTA VARIANTE: o valor do lançamento nunca muda num bloco. Valor
  *   errado se corrige no próprio lançamento, ou no 1:N.
  * ⚠ A RECUSA (SQLSTATE CBLOC) FICA NO MODAL, acima do rodapé, em vermelho — nunca em toast (UX-TOAST-01) — e o botão
@@ -667,6 +690,8 @@ export function CasarBlocoModal({
   const quitados = new Set((resp?.resumo.quitados ?? []).map((q) => q.lancamento_id));
   const parcial = resp?.resumo.parcial ?? null;
   const dif = resp ? Number(resp.resumo.diferenca) : null;
+  const somas = somasComSinal(resp, extratos, lancamentos);
+  const tituloSomas = somas.doBanco ? undefined : 'soma da seleção · o banco não simulou este bloco';
   const confere = dif != null && Math.abs(dif) <= 0.005 && !parcial;
   const motivoDesabilitado = gravando ? 'Conciliando…'
     : carregando ? 'Simulando o bloco…'
@@ -701,7 +726,7 @@ export function CasarBlocoModal({
 
           <div className="text-[9.5px] text-muted-foreground whitespace-nowrap">Pix levados ({extratos.length})</div>
           <table className="w-full table-fixed border-separate border-spacing-0 text-[10px]" data-testid="tabela-pix">
-            <colgroup><col style={{ width: 58 }} /><col /><col style={{ width: 90 }} /></colgroup>
+            <colgroup><col style={{ width: 66 }} /><col /><col style={{ width: 90 }} /></colgroup>
             <thead>
               <tr className="h-[18px] bg-primary text-primary-foreground text-[9.5px]">
                 <th className="px-1.5 text-left font-semibold">Data</th>
@@ -716,8 +741,8 @@ export function CasarBlocoModal({
                 return (
                   <tr key={id} className="h-[18px]" data-testid="pix-levado">
                     <td className="border-b px-1.5 tabular-nums whitespace-nowrap">{dataCurta(e.data)}</td>
-                    {/* SÓ O HISTÓRICO DO BANCO TRUNCA — com o texto inteiro no `title`. */}
-                    <td className="border-b px-1.5 truncate" title={e.historico ?? ''}>{e.historico ?? '—'}</td>
+                    {/* O HISTÓRICO DO BANCO ROLA DENTRO DA CÉLULA (UI-SEM-CORTE-01: sem "…"), inteiro também no `title`. */}
+                    <td className="border-b px-1.5"><div className="uma-linha-que-rola" data-testid="historico-bloco" title={e.historico ?? ''}>{e.historico ?? '—'}</div></td>
                     <td className={cn('border-b px-1.5 text-right tabular-nums whitespace-nowrap', corVal(e.valor))}>{fmtBRL(e.valor)}</td>
                   </tr>
                 );
@@ -732,7 +757,7 @@ export function CasarBlocoModal({
             <colgroup>
               {/* As larguras do mock (58 · resto · 172 · 66 · 66 · 78): a Descrição fica com 236px e a NF cabe numa linha de
                   18px (com 72/72/90 ela tinha 212 e quebrava em 37px — medido na tela). */}
-              <col style={{ width: 58 }} /><col /><col style={{ width: 172 }} />
+              <col style={{ width: 66 }} /><col /><col style={{ width: 172 }} />
               <col style={{ width: 66 }} /><col style={{ width: 66 }} /><col style={{ width: 78 }} />
             </colgroup>
             <thead>
@@ -773,13 +798,15 @@ export function CasarBlocoModal({
           </table>
 
           <div className="grid grid-cols-[1fr_110px] gap-y-px border-t pt-1.5">
+            {/* CONC-BLOCO-SINAL-MISTO-01 — COM SINAL sempre que há seleção: saída −, entrada + (o Pix de −2.893,37 e o reembolso de
+                +89,71 somam −2.803,66). */}
             <span className="text-muted-foreground">Soma dos Pix</span>
-            <span className="text-right tabular-nums">{resp ? fmtBRL(resp.resumo.soma_extratos) : '—'}</span>
+            <span className={cn('text-right tabular-nums', corVal(somas.pix))} title={tituloSomas} data-testid="soma-pix-bloco">{fmtBRL(somas.pix)}</span>
             <span className="text-muted-foreground">Soma dos lançamentos</span>
-            <span className="text-right tabular-nums">{resp ? fmtBRL(resp.resumo.soma_lancamentos) : '—'}</span>
+            <span className={cn('text-right tabular-nums', corVal(somas.lancamentos))} title={tituloSomas} data-testid="soma-lancamentos-bloco">{fmtBRL(somas.lancamentos)}</span>
             <span className="text-muted-foreground">Diferença</span>
-            <span className={cn('text-right font-semibold tabular-nums', dif == null ? '' : Math.abs(dif) <= 0.005 ? 'text-emerald-600' : 'text-rose-600')}
-              data-testid="diferenca-bloco">{dif == null ? '—' : fmtBRL(dif)}</span>
+            <span className={cn('text-right font-semibold tabular-nums', Math.abs(somas.diferenca) <= 0.005 ? 'text-emerald-600' : 'text-rose-600')}
+              title={tituloSomas} data-testid="diferenca-bloco">{fmtBRL(somas.diferenca)}</span>
           </div>
           {resp && (confere
             ? <div className="font-semibold text-emerald-600" data-testid="frase-bloco">
@@ -792,11 +819,11 @@ export function CasarBlocoModal({
               : null)}
 
           {/* ⚠ A RECUSA MORA AQUI, num slot acima do rodapé — nunca em toast (UX-TOAST-01). */}
-          <div className="min-h-[14px] text-[10px] text-destructive" data-testid="recusa-bloco">{recusa ?? ''}</div>
+          <div className="min-h-[15px] text-[11px] leading-[15px] text-destructive" data-testid="recusa-bloco">{recusa ?? ''}</div>
         </div>
 
         <div className="flex h-[34px] shrink-0 items-center justify-between gap-2 border-t px-3 whitespace-nowrap">
-          <span className="text-muted-foreground">Desfazer fica no "⋯" do bloco depois de conciliado.</span>
+          <span className="text-muted-foreground" data-testid="onde-desfazer-bloco">{ONDE_DESFAZER_BLOCO}</span>
           <span className="flex items-center gap-2">
             <button type="button" onClick={onClose} className="rounded border px-2.5 py-0.5 text-[11px] hover:bg-muted">Cancelar</button>
             <button type="button" disabled={!!motivoDesabilitado} onClick={() => { void conciliar(); }}

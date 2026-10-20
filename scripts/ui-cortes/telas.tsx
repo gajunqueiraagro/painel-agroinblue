@@ -30,6 +30,7 @@ import { LANCAMENTOS } from './dados/financeiro';
 import { buscarFornecedores } from '@/lib/fornecedores/buscaDeFornecedor';
 import { FinanceiroV2Tab } from '@/pages/FinanceiroV2Tab';
 import { GRUPOS, LEITOR, LINHAS, LISTA, RECENTES, USO } from './dados/fornecedores';
+import { CasarBlocoModal } from '@/components/financeiro-v2/CasarComBancoModal';
 
 const q = new URLSearchParams(location.search);
 const tela = q.get('tela') ?? 'mesclar';
@@ -121,6 +122,22 @@ if (tela === 'mesclar') {
       : fn === 'fn_consorcio_tela' ? c.tela : fn === 'fn_consorcio_cronograma' ? c.cronograma : null,
   };
   montar(<FinanciamentoDetalhe id={d.fin.id} />);
+} else if (tela === 'casar-bloco') {
+  /* CONC-BLOCO-SINAL-MISTO-01 — o bloco da Conferência com saída E entrada (PIX −2.893,37 + reembolso +89,71 contra −2.309,64 e −494,02;
+     SINTÉTICO). `&v=recusa`: o banco recusa (Mais antigo primeiro com sinal misto) e a tela mostra a frase e as somas da seleção. */
+  const HIST = 'PIX ENVIADO · DESTINO ADMINISTRADORA DE CONSORCIOS EXEMPLO SINTETICA LTDA · CONTA 0000-0 · AUTENTICACAO 0000000000000000000';
+  const EXT = [{ extrato_id: 'x1', data: '2031-06-19', historico: HIST, valor: -2893.37 }, { extrato_id: 'x2', data: '2031-06-23', historico: 'PIX RECEBIDO · REEMBOLSO SINTETICO', valor: 89.71 }];
+  const LAN = [{ lancamento_id: 'y1', data: '2031-06-17', descricao: 'Consórcio Exemplo · Parc 1/80 · fundo comum e reserva', fornecedor: 'Administradora Exemplo Sintética', valor_assinado: -2309.64 },
+    { lancamento_id: 'y2', data: '2031-06-17', descricao: 'Taxa adm. e seguro · Parc 1/80', fornecedor: 'Administradora Exemplo Sintética', valor_assinado: -494.02 }];
+  const OK = { ok: true, simulado: true, regra: 'exato', matriz: [
+    { extrato_id: 'x1', lancamento_id: 'y1', valor_aplicado: 2309.64 }, { extrato_id: 'x1', lancamento_id: 'y2', valor_aplicado: 583.73 },
+    { extrato_id: 'x2', lancamento_id: 'y1', valor_aplicado: -89.71 }],
+    resumo: { soma_extratos: 2803.66, soma_lancamentos: 2803.66, diferenca: 0, soma_extratos_com_sinal: -2803.66, soma_lancamentos_com_sinal: -2803.66,
+      diferenca_com_sinal: 0, sinal_misto: true, quitados: [{ lancamento_id: 'y1' }, { lancamento_id: 'y2' }], parcial: null } };
+  const recusa = v === 'recusa';
+  g.__bancoBancada = { from: () => [], rpc: (fn: string) => fn !== 'fn_conciliar_bloco' ? null
+    : recusa ? { __erro: 'direcao_mista: Mais antigo primeiro aceita só saídas ou só entradas; para saída + reembolso use Soma exata.' } : OK };
+  montar(<CasarBlocoModal open onClose={() => {}} extratos={EXT} lancamentos={LAN} nomeConta="Banco Exemplo" regraInicial={recusa ? 'mais_antigo_primeiro' : 'exato'} onConciliado={() => {}} />);
 } else if (tela === 'campos-moeda') {
   /* UI-CAMPO-MOEDA-01 — os campos de valor de LARGURA FIXA dos modais que a bancada não monta, com as MESMAS classes e o MESMO
      invólucro de cada um (a regra `valor` do gate põe 999.999.999,99 em cada um e mede) */

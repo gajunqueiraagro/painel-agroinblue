@@ -25,7 +25,11 @@ const cadeia = (tabela: string) => {
 };
 export const supabase: any = {
   from: (t: string) => cadeia(t),
-  rpc: (fn: string, a: Record<string, unknown>) => Promise.resolve({ data: banco().rpc?.(fn, a ?? {}) ?? null, error: null }),
+  /* a tela pode responder uma RECUSA do banco: `{ __erro: 'codigo: frase' }` vira `{ data: null, error: { message } }` */
+  rpc: (fn: string, a: Record<string, unknown>) => {
+    const r: any = banco().rpc?.(fn, a ?? {}) ?? null;
+    return Promise.resolve(r && typeof r === 'object' && '__erro' in r ? { data: null, error: { code: 'CBLOC', message: r.__erro } } : { data: r, error: null });
+  },
   auth: { getUser: async () => ({ data: { user: { id: 'u1' } } }), getSession: async () => ({ data: { session: null } }), onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }) },
   storage: { from: () => ({ createSignedUrl: async () => ({ data: null, error: null }) }) },
   channel: () => ({ on() { return this; }, subscribe() { return this; } }), removeChannel() {},

@@ -54,7 +54,7 @@ vi.mock('@/integrations/supabase/client', () => ({
 vi.mock('@/components/conciliacao/CriarLancamentoDaLinha', () => ({ CriarLancamentoDaLinha: () => null }));
 vi.mock('@/components/financeiro-v2/EspelhoConciliacaoTab', () => ({ MOTIVO_CASAR_LABEL: {} }));
 
-import { CasarComBancoModal, CasarN1Modal, CasarBlocoModal, sentidoDaDiferenca, valorAbsorvendo, fraseDaRecusa } from './CasarComBancoModal';
+import { CasarComBancoModal, CasarN1Modal, CasarBlocoModal, sentidoDaDiferenca, valorAbsorvendo, fraseDaRecusa, ONDE_DESFAZER_BLOCO } from './CasarComBancoModal';
 
 const EXTRATO = { extrato_id: 'e-vivo', data: '2026-09-01', historico: 'Vivo Celular - VIVO MOVEL - MS', valor: -506.51 };
 const VIVO: LevadoInicial = { lancamento_id: 'l-vivo', descricao: 'Vivo Casa', fornecedor: 'Telefonica Brasil S.A.', valor_assinado: -506.84 };
@@ -305,12 +305,14 @@ describe('CONC-BLOCOS-TELA-01 — Casar com o banco · bloco', () => {
     expect(dlg.scrollWidth).toBeLessThanOrEqual(dlg.clientWidth);
     expect(screen.getByTestId('conciliar-bloco')).toBeInTheDocument();
     await waitFor(() => expect(screen.getByTestId('frase-bloco').textContent).toBe('Confere com o banco ✓ · os 7 lançamentos ficam quitados'));
-    /* a descrição sai INTEIRA e não trunca; o histórico trunca com o texto no title */
+    /* a descrição sai INTEIRA e não trunca; o histórico ROLA dentro da célula (sem "…"), com o texto inteiro no title
+       (CONC-BLOCO-SINAL-MISTO-01, contrato novo: UI-SEM-CORTE-01) */
     const descricoes = screen.getAllByTestId('descricao-levada');
     expect(descricoes[0].textContent).toBe('Arranquio Mandioca 40,34 t · NF 9287581');
     for (const d of descricoes) expect(d.className).not.toContain('truncate');
     const hist = [...document.querySelectorAll('[title]')].find((el) => el.getAttribute('title') === HIST)!;
-    expect(hist.className).toContain('truncate');
+    expect(hist.className).toContain('uma-linha-que-rola');
+    expect(hist.className).not.toContain('truncate');
     expect(screen.getByTestId('diferenca-bloco').textContent).toBe('0,00');
     expect(screen.getByTestId('conciliar-bloco')).not.toBeDisabled();
   });
@@ -418,7 +420,7 @@ describe('CONC-CASAR-ALTURA-01 — teto de 90vh, miolo rola, rodapé fixo', () =
       nomeConta="Banco do Brasil" onConciliado={() => {}} />);
     contrato(/^Conciliar$/);
   });
-  it('bloco: o mesmo contrato, com o "Desfazer fica no ⋯" à esquerda do rodapé', () => {
+  it('bloco: o mesmo contrato, com o lugar do Desfazer (o nome do menu) à esquerda do rodapé', () => {
     BLOCO.resposta = { data: { ok: true, simulado: true, regra: 'exato', matriz: [], resumo: { soma_extratos: 1, soma_lancamentos: 1, diferenca: 0, quitados: [], parcial: null } }, error: null };
     render(<CasarBlocoModal open onClose={() => {}}
       extratos={[{ extrato_id: 'b1', data: '2026-09-02', historico: 'Pix', valor: -1 }]}
@@ -426,6 +428,76 @@ describe('CONC-CASAR-ALTURA-01 — teto de 90vh, miolo rola, rodapé fixo', () =
       onConciliado={() => {}} />);
     contrato('conciliar-bloco');
     const dlg = screen.getByRole('dialog');
-    expect([...dlg.children].filter((el) => el.tagName !== 'BUTTON').pop()!.textContent).toContain('Desfazer fica no');
+    expect([...dlg.children].filter((el) => el.tagName !== 'BUTTON').pop()!.textContent).toContain(ONDE_DESFAZER_BLOCO);
+  });
+});
+
+/**
+ * CONC-BLOCO-SINAL-MISTO-01 — o bloco com saída E entrada (o PIX de −2.893,37 + o reembolso de +89,71 contra os −2.309,64 e −494,02
+ * da parcela 1 de um consórcio). As somas aparecem COM SINAL sempre que há seleção; a recusa do banco sai traduzida, a 11px, sem o
+ * código; e nenhum texto do modal tem "…".
+ */
+describe('CONC-BLOCO-SINAL-MISTO-01 — somas com sinal, recusa traduzida, sem reticências', () => {
+  const EXT = [
+    { extrato_id: 'x1', data: '2031-06-19', historico: 'PIX ENVIADO · SINT', valor: -2893.37 },
+    { extrato_id: 'x2', data: '2031-06-23', historico: 'PIX RECEBIDO · SINT', valor: 89.71 },
+  ];
+  const LAN = [
+    { lancamento_id: 'y1', data: '2031-06-17', descricao: 'SINT Consórcio 1/80', fornecedor: 'Adm. Sintética', valor_assinado: -2309.64 },
+    { lancamento_id: 'y2', data: '2031-06-17', descricao: 'SINT Taxa adm. e seguro 1/80', fornecedor: 'Adm. Sintética', valor_assinado: -494.02 },
+  ];
+  const montar = (regra?: 'exato' | 'mais_antigo_primeiro') => render(<CasarBlocoModal open onClose={() => {}} extratos={EXT} lancamentos={LAN}
+    nomeConta="Banco Sint" regraInicial={regra} onConciliado={() => {}} />);
+  const texto = (id: string) => screen.getByTestId(id).textContent;
+
+  it('misto que fecha: as três somas do BANCO, com sinal, e o reembolso negativo no lançamento mais antigo', async () => {
+    BLOCO.resposta = { data: { ok: true, simulado: true, regra: 'exato', matriz: [
+      { extrato_id: 'x1', lancamento_id: 'y1', valor_aplicado: 2309.64 }, { extrato_id: 'x1', lancamento_id: 'y2', valor_aplicado: 583.73 },
+      { extrato_id: 'x2', lancamento_id: 'y1', valor_aplicado: -89.71 }],
+      resumo: { soma_extratos: 2803.66, soma_lancamentos: 2803.66, diferenca: 0, soma_extratos_com_sinal: -2803.66,
+        soma_lancamentos_com_sinal: -2803.66, diferenca_com_sinal: 0, sinal_misto: true,
+        quitados: [{ lancamento_id: 'y1' }, { lancamento_id: 'y2' }], parcial: null } }, error: null };
+    montar();
+    await waitFor(() => expect(screen.getByTestId('frase-bloco').textContent).toContain('Confere com o banco ✓'));
+    expect(texto('soma-pix-bloco')).toBe('-2.803,66');
+    expect(texto('soma-lancamentos-bloco')).toBe('-2.803,66');
+    expect(texto('diferenca-bloco')).toBe('0,00');
+    expect(screen.getByTestId('soma-pix-bloco').getAttribute('title')).toBeNull();
+    expect(screen.getByTestId('conciliar-bloco')).not.toBeDisabled();
+  });
+
+  it('recusa (Mais antigo primeiro com sinal misto): a frase sem "direcao_mista:", a 11px; as somas da seleção, com sinal, nunca "—"', async () => {
+    BLOCO.resposta = { data: null, error: { code: 'CBLOC',
+      message: 'direcao_mista: Mais antigo primeiro aceita só saídas ou só entradas; para saída + reembolso use Soma exata.' } };
+    TOAST.error.mockClear();
+    montar('mais_antigo_primeiro');
+    const recusa = await screen.findByTestId('recusa-bloco');
+    await waitFor(() => expect(recusa.textContent).toBe('Mais antigo primeiro aceita só saídas ou só entradas; para saída + reembolso use Soma exata.'));
+    expect(recusa.textContent).not.toContain('direcao_mista');
+    expect(recusa.className).toContain('text-[11px]');
+    expect(texto('soma-pix-bloco')).toBe('-2.803,66');
+    expect(texto('soma-lancamentos-bloco')).toBe('-2.803,66');
+    expect(texto('diferenca-bloco')).toBe('0,00');
+    expect(screen.getByTestId('soma-pix-bloco').getAttribute('title')).toContain('soma da seleção');
+    expect(screen.getByTestId('conciliar-bloco')).toBeDisabled();
+    expect(TOAST.error).not.toHaveBeenCalled();
+  });
+
+  it('líquido zero: a frase do banco sem "liquido_zero:"', async () => {
+    BLOCO.resposta = { data: null, error: { code: 'CBLOC',
+      message: 'liquido_zero: o bloco soma zero: entrada e saída se anulam — use o par de estorno.' } };
+    montar();
+    const recusa = await screen.findByTestId('recusa-bloco');
+    await waitFor(() => expect(recusa.textContent).toBe('o bloco soma zero: entrada e saída se anulam — use o par de estorno.'));
+  });
+
+  it('nenhum texto com "…" no modal (rodapé diz o nome do menu)', async () => {
+    BLOCO.resposta = { data: null, error: { code: 'CBLOC', message: 'direcao_mista: x' } };
+    montar('mais_antigo_primeiro');
+    await screen.findByTestId('recusa-bloco');
+    const dlg = screen.getByTestId('casar-bloco');
+    expect(dlg.textContent).not.toContain('…');
+    expect(texto('onde-desfazer-bloco')).toBe('Para desfazer: menu "Ações" (⋯) da linha do bloco › Desfazer bloco.');
+    expect(dlg.querySelector('.truncate')).toBeNull();
   });
 });

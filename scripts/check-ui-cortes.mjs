@@ -81,6 +81,9 @@ const CENARIOS = [
     antes: aba ? async (p) => { await p.getByRole('button', { name: aba }).first().click(); await p.waitForTimeout(500); } : undefined })),
   /* UI-CAMPO-MOEDA-01 — os campos de valor de largura fixa dos modais fora da bancada (a regra `valor` os mede com 999.999.999,99) */
   { nome: 'campos-moeda', url: 'tela=campos-moeda', tamanhos: TAMANHOS_DO_CONSORCIO },
+  /* CONC-BLOCO-SINAL-MISTO-01 — o bloco da Conferência com saída + reembolso: o que fecha e a recusa, nos sete tamanhos */
+  { nome: 'casar-bloco-misto', url: 'tela=casar-bloco', tamanhos: TAMANHOS_DO_CONSORCIO },
+  { nome: 'casar-bloco-recusa', url: 'tela=casar-bloco&v=recusa', tamanhos: TAMANHOS_DO_CONSORCIO },
   /* FIN-CONSORCIO-03 — o fundo comum do termo (% por parcela) na aba Custos e prazos, e o "Falta:" do rodapé depois do Salvar no novo
      (o modal tem a mesma caixa: `alturasComo` contra a aba de sempre) */
   { nome: 'consorcio-custos-fc-pct', url: 'tela=consorcio&fc=pct', tamanhos: TAMANHOS_DO_CONSORCIO, semRolagem: { dentro: '[role="dialog"]', exceto: EXCETO_CONSORCIO },
