@@ -362,6 +362,20 @@ if (v === 'xml') {
     arquivo: arquivoXmlDaNota(bytes, 'NFe-12345.XML') } as any);
   props.documentosAntesDeSalvar = true;
 }
+/* CRIAR-DO-EXTRATO-01 — o "Criar lançamento pela diferença" (extrato) e o Conciliar com referência do Excel (planilha): a faixa de UMA
+   linha no topo da Geral; `ref=longo` = histórico de 300 caracteres (a altura tem de ser a da faixa curta). `semvenc` = editar um
+   realizado SEM vencimento (o rótulo acende "Vencimento * · Informe o vencimento." ao salvar). Histórico e valores sintéticos. */
+if (v === 'extrato' || v === 'planilha') {
+  const hist = q.get('ref') === 'longo' ? ('REND PAGO APLIC AUT MAIS CONTA INVESTIMENTO EXEMPLO ' + 'HISTORICO LONGO DO BANCO '.repeat(12)).slice(0, 300) : 'REND PAGO APLIC AUT MAIS';
+  props.prefill = { fazenda_id: 'f-pur', conta_destino_id: 'bb', data_pagamento: '2025-09-05', data_competencia: '2025-09-05', data_vencimento: '2025-09-05',
+    valor: 1.09, tipo_operacao: '1-Entradas', status_transacao: 'realizado', descricao: 'REND PAGO APLIC AUT MAIS' };
+  props.referenciaOperacionalInfo = v === 'extrato'
+    ? { origem: 'extrato', conta_nome: 'Banco Alfa', produto_texto: hist, valor: 1.09, data_referencia: '2025-09-05', observacao: 'Movimento do extrato bancário' }
+    : { origem: 'planilha', fornecedor_texto: 'Fornecedor Exemplo da Planilha', fazenda_texto: 'Faz. Exemplo', plano_texto: 'Receitas Financeiras',
+        produto_texto: hist, observacao: 'Observação da planilha de referência', valor: 1.09, data_referencia: '2025-09-05' };
+  if (v === 'extrato') props.ocultarParcelamento = true;
+}
+if (v === 'semvenc' && m === 'editar') props.lancamento = { ...MILHO, data_vencimento: null };
 if (v === 'oc' || v === 'ocdesp') {
   const nat = v === 'oc' ? 'principal' : 'obrigacao';
   props.origemOC = { operacaoId: 'a1b2c3d4-0000-4000-8000-000000000000', versao: 8, natureza: nat, tipoOperacao: 'venda', rotulo: 'OC #a1b2c3d4 · Venda 140 Novilhas',
