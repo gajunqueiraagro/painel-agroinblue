@@ -388,11 +388,21 @@ if (tela === 'mesclar') {
      a faixa "Falta receber …, já programado.") e o "Buscar recebimento no Financeiro" com os dois grupos (`&v=buscar`, nome longo).
      Dados SINTETICOS na forma do `oc_conta_corrente`. */
   const cc = lerContaCorrente(OC.envelopeContaCorrente());
+  /* OC-CORRECOES-01 C3 — as tres datas, favorecido, conta bancaria; do comprador tambem os que a regra exclui (apagados, com o motivo) */
+  const comum = { subcentro: 'Venda de Desmama Fêmeas', semContaBancaria: false, conciliado: false };
   const itens = [
-    { lancamentoId: 'm1', data: '2026-09-20', valor: 50000, descricao: 'Pix do comprador Exemplo da Silva', subcentro: 'Venda de Desmama Fêmeas',
-      mesmoFavorecido: true, semContaBancaria: false, status: 'realizado', conciliado: false },
-    { lancamentoId: 'o1', data: '2026-09-10', valor: 5000, descricao: 'Pix recebido de terceiro com um nome muito comprido que nao cabe na coluna',
-      subcentro: 'Venda de Desmama Fêmeas', mesmoFavorecido: false, semContaBancaria: false, status: 'realizado', conciliado: false },
+    { ...comum, lancamentoId: 'm1', data: '2026-09-20', competencia: '2026-09-03', vencimento: '2026-09-20', pagamento: '2026-09-20', valor: 50000,
+      descricao: 'Pix do comprador Exemplo da Silva', favorecido: 'Exemplo da Silva Agropecuária Ltda', contaBancaria: 'Banco do Brasil',
+      mesmoFavorecido: true, status: 'realizado', motivoExcluido: null },
+    { ...comum, lancamentoId: 'x1', data: '2026-09-30', competencia: '2026-09-03', vencimento: '2026-09-30', pagamento: null, valor: 215000,
+      descricao: 'Venda 118 Vacas - 1/3', favorecido: 'Exemplo da Silva Agropecuária Ltda', contaBancaria: 'Banco do Brasil',
+      mesmoFavorecido: true, status: 'programado', motivoExcluido: 'já está nesta operação (1/1)' },
+    { ...comum, lancamentoId: 'x2', data: '2026-10-30', competencia: '2026-09-03', vencimento: '2026-10-30', pagamento: null, valor: 1375000.55,
+      descricao: 'Venda 118 Vacas - 2/3', favorecido: 'Exemplo da Silva Agropecuária Ltda', contaBancaria: 'Cooperativa de Crédito Sicredi Exemplo',
+      mesmoFavorecido: true, status: 'programado', motivoExcluido: 'ligado a outra operação comercial' },
+    { ...comum, lancamentoId: 'o1', data: '2026-09-10', competencia: '2026-09-10', vencimento: '2026-09-10', pagamento: '2026-09-10', valor: 5000,
+      descricao: 'Pix recebido de terceiro com um nome muito comprido que nao cabe na coluna', favorecido: 'Terceiro Exemplo',
+      contaBancaria: 'Banco do Brasil', mesmoFavorecido: false, status: 'realizado', motivoExcluido: null },
   ];
   const nada = async () => null;
   const api: any = { contaCorrente: cc, loading: false, erro: null, ocupado: false, recarregar: async () => {}, sincronizarEntregas: nada,
