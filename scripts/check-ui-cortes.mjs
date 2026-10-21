@@ -482,8 +482,9 @@ function medirCabecalho(regiao) {
    mudanca compartilhada sai com 3 ("rode o completo"); diff sem tela, com 0. */
 const RAPIDO = process.argv.includes('--rapido');
 const naRapida = RAPIDO ? filtroRapido('check-ui-cortes') : () => true;
-/* no modo rapido, o cenario sem tamanhos proprios mede nos 7 (os do contrato); o que declara os seus (o modal da OC: >= 1000) fica neles */
-const tamanhosDe = (c) => (c.tamanhos && !arg('--tamanhos') ? c.tamanhos : RAPIDO && !arg('--tamanhos') ? TAMANHOS_DO_CONSORCIO : TAMANHOS);
+/* o modo rapido mede cada cenario nos MESMOS tamanhos do completo (o veredito de um cenario nao depende do modo): forcar os 7 do contrato
+   reprovava o modal da OC a 750/814, largura em que ele nao tem desenho e que o completo nao mede (57 achados na prova de 21/10) */
+const tamanhosDe = (c) => (c.tamanhos && !arg('--tamanhos') ? c.tamanhos : TAMANHOS);
 const ESCOLHIDOS = CENARIOS.filter((c) => (!SO || c.nome.startsWith(SO)) && naRapida(c));
 const servidor = await createServer({ configFile: path.join(AQUI, 'ui-cortes/vite.config.mts'), server: { port: 0, host: '127.0.0.1' } });
 await servidor.listen();

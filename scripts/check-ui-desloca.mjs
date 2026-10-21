@@ -101,8 +101,8 @@ const comparar = (a, b, estado) => {
    mudanca compartilhada sai com 3 ("rode o completo"); diff sem tela, com 0. */
 const RAPIDO = process.argv.includes('--rapido');
 const naRapida = RAPIDO ? filtroRapido('check-ui-desloca') : () => true;
-/* no modo rapido, os 7 tamanhos do contrato (o `minLargura` do cenario continua valendo) */
-const TAMANHOS_DA_VEZ = RAPIDO && !arg('--tamanhos') ? [[750, 520], [750, 600], [814, 530], [1000, 600], [1126, 579], [1300, 704], [1440, 800]] : TAMANHOS;
+/* o modo rapido mede nos MESMOS tamanhos do completo (ver check-ui-cortes) */
+const TAMANHOS_DA_VEZ = TAMANHOS;
 const ESCOLHIDOS = CENARIOS.filter((c) => (!SO || c.nome.startsWith(SO)) && naRapida(c));
 const servidor = await createServer({ configFile: path.join(AQUI, 'ui-cortes/vite.config.mts'), server: { port: 0, host: '127.0.0.1' } });
 await servidor.listen();
