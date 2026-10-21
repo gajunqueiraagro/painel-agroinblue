@@ -82,7 +82,8 @@ describe('o modal do lançamento, lido da FONTE', () => {
   });
   it('parcela paga: valor e vencimento em leitura, com o motivo escrito no rodapé', () => {
     expect(modal).toContain("disabled={lockedFields?.includes('valor') || isOCTitulo || parcelaPaga || travaCasado.valor}");
-    expect(modal).toContain('disabled={isOCTitulo || parcelaPaga}');
+    /* OC-CORRECOES-01 C1: o titulo de OC em aberto ajusta o vencimento (a OC acompanha); a parcela paga segue travada */
+    expect(modal).toContain('disabled={(isOCTitulo && !ocAjustavel) || parcelaPaga}');
     expect(modal).toContain('{edicaoParcela.paga ? MOTIVO_PARCELA_PAGA : edicaoParcela.frase}');
   });
   it('lançamento comum não consulta contrato nenhum (o prefiltro) e não ganha nó novo no HTML', () => {
