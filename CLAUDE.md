@@ -10446,3 +10446,35 @@ curta nas secoes de regras) e a pendencia (na FILA); o bloco inteiro vai para do
   `ck_lancamento_v2_vencimento_vivo` (lancamento sintetico sem vencimento; CRIAR-DO-EXTRATO-01).
   ⚠ NAO PROVADO: nada com login no app real (o cadastro novo pela tela) · a importacao do XML e o importador legado gravando pelo gatilho.
   · SUITE depois do FORN-NOME-CAIXA-01: 5985 passando (+3 `nomeCaixa.test.ts`), 22 skipped, as 3 falhas de sempre.
+- ⚠ A LISTA DE CADASTROS › FORNECEDORES E' UMA LEITURA DO BANCO, PAGINADA NO SERVIDOR (FORN-LISTA-01, Gabriel, mock "Lista de
+  Fornecedores"; noite de 20/10/2026; migration `supabase/migrations/20261027204720_forn_lista_01.sql`, md5 do arquivo
+  8ec85ab14b518b73d6b400f39e860033 — APLICADA no proto em 20/10/2026, ledger = arquivo).
+  · `fn_fornecedor_lista(cliente, busca, situacao 'ativos'|'inativos'|'mesclados'|'todos', ids, ordem, desc, limite, offset)` (SECURITY
+    DEFINER, `tenant_ok` + 42501, authenticated / service_role) -> {total, contagens {ativos, inativos, mesclados, todos}, documentos
+    [[id, cpf_cnpj]] do recorte da situacao, itens [a linha + lancamentos, ultimo_uso, situacao, dono_nome]}. A BUSCA E' A BUSCA UNICA
+    (chama `fn_fornecedor_buscar(… 'todos', NULL)`; nao repete a regra). SITUACAO: ativo = ativo e nao mesclado; mesclado = tem
+    `fundido_em_id`; inativo = o resto (⚠ o 'inativos' da busca unica inclui os mesclados; o desta lista nao). LANCAMENTOS e ULTIMO USO:
+    ESPELHO DECLARADO de `fn_fornecedor_uso` (vivos; max pagamento, senao competencia). ORDEM: razao_social (padrao) · nome_fantasia ·
+    documento · cidade · lancamentos · ultimo_uso · situacao; vazio por ultimo; empate pela razao social normalizada e pelo id.
+    NJ: ~90–140 ms por chamada (morna).
+  · "SEM CPF/CNPJ" FICA COM O VALIDADOR UNICO DO FRONT (`situacaoDoGravado`): a tela conta sobre os `documentos` e, com o filtro ligado,
+    pede de novo com `p_ids` = os escolhidos — ordem e pagina no banco. Leitor sem cast e frases: `src/lib/fornecedores/listaDeFornecedores.ts`.
+  · TELA (`FinV2FornecedoresTab.tsx`): titulo 14px + "N cadastros ativos"; Mesclar + "+ Novo" dourado (`bg-cta`); abas "Cadastro (N)" /
+    "Sem cadastro"; busca larga "Buscar por razão social, nome fantasia ou CNPJ…"; Ativos · Inativos · Mesclados · Todos com a contagem;
+    "Sem CPF/CNPJ N"; tabela Razao social · Nome fantasia · CNPJ/CPF · Cidade/UF · Lanc. · Ultimo uso (dd/mm/aaaa) · Situacao · lapis,
+    11px, linha de 25px, cabecalho navy preso, cabecalho clicavel ordena (▲/▼; de novo inverte); "—" e "sem documento" em cinza (o
+    "vazio" laranja saiu); o documento fora do padrao em ambar, inteiro, com o motivo no `title`; texto longo rola no lugar; a tabela
+    ocupa a altura que sobra (`h-[calc(100dvh-120px)]` na pagina, medida na bancada de 96px); rodape fixo "Mostrando 1–100 de N · Por
+    pagina 50|100|200 (lembrado por usuario e navegador, chave `forn-lista-por-pagina:<usuario>`) · ← Anterior · Pagina X de Y · Proxima
+    →". Abaixo de 900px a Cidade/UF sai; a busca fica com a linha inteira e os filtros e o rodape quebram. O aviso dos inativos com
+    lancamento (16px) ficou; erro de leitura escrito nele.
+  · Gate: `fornecedores-lista`, `-mesclados`, `-sem-documento`, `-inativos`, `-todos` nos sete tamanhos do contrato (bancada
+    `listaNaBancada`, sintetica). A 1126 x 579 cabem 10 linhas. Prints em ~/Downloads/forn-lista/.
+  Testes: `supabase/tests/forn_lista_01_test.sql` (L1–L5) OK no vivo, 4 mutacoes de banco mortas; `src/pages/fornecedoresLista.test.tsx`
+  7, 4 mutacoes de tela mortas. Trocados ao contrato novo: `fornecedoresMesclado.test.tsx` e `fornecedoresAvisoInativos.test.tsx` (a lista
+  pela RPC nova; o rotulo com a contagem; o placeholder), `buscaUnicaNasTelas.test.tsx` (a lista pela RPC nova; o aviso segue na busca).
+  ⚠ ESCOLHAS DA NOITE: "Ultimo uso" em dd/mm/aaaa (o mock dizia mm/aaaa; a regra vigente e' a data cheia) · "Todos" tambem com a
+    contagem · o documento fora do padrao em ambar no lugar do selo (o selo escondia parte do numero) · o "Por pagina" lembrado por
+    navegador (sem tabela de preferencia por usuario).
+  ⚠ NAO PROVADO: nada com login no app real (bancada) · a altura da pagina no shell real (a bancada usa 96px de barra).
+  · SUITE depois do FORN-LISTA-01: 5994 passando (+7 `fornecedoresLista.test.tsx`; +2 em `buscaUnicaNasTelas.test.tsx`), 22 skipped, as 3 falhas de sempre. Gate de tela completo: 116 telas, 650 medicoes, 0 achados.
