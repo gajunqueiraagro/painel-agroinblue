@@ -65,7 +65,7 @@ describe('contrato visual dos controles', () => {
     const bloco = screen.getByTestId('bloco-acoes');
     expect(within(bloco).getByTestId('btn-voltar').getAttribute('title')).toBe('Voltar');
     expect(within(bloco).getByTestId('btn-limpar').getAttribute('title')).toBe('Limpar filtros');
-    expect(within(bloco).getByTestId('btn-novo-de-xml').textContent).toContain('Do XML');
+    expect(within(bloco).getByTestId('btn-novo-de-xml').textContent).toContain('Da nota');
     expect(within(bloco).getByTestId('btn-intensivo').textContent).toContain('Ampliar');
     expect(within(bloco).getByTestId('btn-novo').textContent).toContain('Novo');
   });

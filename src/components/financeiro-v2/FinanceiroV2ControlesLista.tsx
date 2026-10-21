@@ -109,8 +109,8 @@ export function FinanceiroV2ControlesLista({
           {onNovoDeXml ? (
             <Button size="sm" data-testid="btn-novo-de-xml" onClick={onNovoDeXml}
               className="h-6 w-full text-[10px] gap-0.5 px-1.5 bg-[#E7C873] text-foreground hover:bg-[#D9B95F]"
-              title="Novo a partir de XML" aria-label="Novo a partir de XML">
-              <Plus className="h-3 w-3" /> Do XML
+              title="Novo a partir da nota (XML ou PDF)" aria-label="Novo a partir da nota (XML ou PDF)">
+              <Plus className="h-3 w-3" /> Da nota
             </Button>
           ) : (
             <div data-testid="celula-novo-de-xml" aria-hidden="true" className="h-6" />

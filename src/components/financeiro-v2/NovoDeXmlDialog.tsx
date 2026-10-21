@@ -1,10 +1,14 @@
 /**
- * "NOVO A PARTIR DE XML" — a lista das notas lidas (FIN-NFE-XML-01d, tela A do mock).
+ * "NOVO A PARTIR DA NOTA" — a lista das notas lidas (FIN-NFE-XML-01d, tela A do mock; FIN-NOTA-PDF-01: XML OU PDF).
+ *
+ * FIN-NOTA-PDF-01 — o arquivo e' lido por `lerNota` (XML -> `lerNFe`, intocado; PDF -> o DANFE pela posicao), e a nota segue o
+ * MESMO caminho (`resolverEmitente`, `proporLancamento`). A linha do XML abre o "Novo lançamento" como sempre; a do PDF abre o
+ * `NotaFiscalDialog` (o PDF com o lido em amarelo, criar as N parcelas). Um PDF so', lido, abre direto.
  *
  * O operador solta um ou varios XML de NF-e; cada arquivo vira UMA linha. "Abrir lançamento" entrega a nota ao MESMO
  * `LancamentoV2Dialog` de sempre, ja' preenchido (`prefillDaNota`). NADA E' GRAVADO NESTA TELA.
  *
- * ⚠ QUEM LE O ARQUIVO E' `lerNFe`, E SO' ELE; quem decide o que o lancamento propoe e' `proporLancamento`; quem acha o
+ * ⚠ QUEM LE O ARQUIVO E' `lerNota` (no XML, `lerNFe`), E SO' ELE; quem decide o que o lancamento propoe e' `proporLancamento`; quem acha o
  *   fornecedor e' `resolverEmitente`. Aqui so' se orquestra e se desenha.
  * ⚠ O PADRAO DA TABELA E' O A31: cabecalho navy 9,5px, linha de 18px a 10px, uma linha por nota; numero, valor e data nunca
  *   cortam, texto longo corta com o inteiro no `title`.
@@ -14,7 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { AreaDeArquivo } from '@/components/ui/area-de-arquivo';
 import type { RegraDeAceite } from '@/lib/arquivo/aceitarArquivo';
-import { lerNFe } from '@/lib/financeiro/nfe/lerNFe';
+import { lerNota } from '@/lib/financeiro/nfe/lerNota';
 import type { AvisoNFe, NotaLida } from '@/lib/financeiro/nfe/tipos';
 import { proporLancamento, type FazendaComIE, type PropostaDeLancamento } from '@/lib/financeiro/nfe/proporLancamento';
 import { resolverEmitente, type FornecedorParaResolver, type ResolucaoEmitente } from '@/lib/financeiro/nfe/resolverEmitente';
@@ -23,6 +27,7 @@ import {
   fornecedorPeloNome, iePorFazenda, notaJaRegistrada, ultimaClassificacaoDoFornecedor, type OcorrenciaDaNota,
 } from '@/lib/financeiro/nfeConsultas';
 import { arquivoXmlDaNota, type DoXml } from '@/lib/financeiro/nfePrefill';
+import type { NotaLidaOk, NotaParaLancar } from './NotaFiscalDialog';
 
 export interface LinhaDeNota {
   id: string;
@@ -35,6 +40,8 @@ export interface LinhaDeNota {
   /** A frase da recusa (do leitor, ou "Nota de venda…"); `null` = nota aceita. */
   recusa: string | null;
   lancada: boolean;
+  /** FIN-NOTA-PDF-01 — a nota do PDF: o arquivo, os bytes e o lido (marcas, conferencia da chave) para o `NotaFiscalDialog`. */
+  paraLancar?: NotaParaLancar | null;
 }
 
 /** "2 × 8.119,00 · 05/11 e 05/12" | "sem duplicatas" | "3 · parcelas livres" | "1 × 16.238,00 · 30/10". */
@@ -69,9 +76,15 @@ const TD_ACAO = 'h-[18px] px-[7px] text-center whitespace-nowrap';
 let seq = 0;
 /* UI-ARRASTAR-ARQUIVO-01a — em LOTE: a área entrega TODOS os arquivos e quem julga cada um continua sendo o LEITOR (`lerNFe`),
    com a frase dele na linha — CT-e, evento, PDF, grande demais (o teto de 2 MB mora no leitor, não aqui). */
-const REGRA_DOS_XML: RegraDeAceite = { tipos: ['xml'], varios: true };
+const REGRA_DOS_XML: RegraDeAceite = { tipos: ['xml', 'pdf'], varios: true };
 
-export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedores, onAbrirLancamento, lancadas }: {
+/** FIN-NOTA-PDF-01 — o PDF da nota como documento: nome terminado em `.pdf` e tipo `application/pdf` explicitos (o conteudo decidiu). */
+export function arquivoPdfDaNota(bytes: ArrayBuffer, nomeOriginal: string): File {
+  const base = nomeOriginal.replace(/\.pdf$/i, '').trim() || 'nota';
+  return new File([bytes], `${base}.pdf`, { type: 'application/pdf' });
+}
+
+export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedores, onAbrirLancamento, onAbrirNota, lancadas }: {
   open: boolean;
   onClose: () => void;
   clienteId: string | null;
@@ -79,6 +92,8 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
   fornecedores: readonly FornecedorParaResolver[];
   /** Abre o "Novo lançamento" com a nota. Quem abre devolve a nota a esta lista pelo `id` da linha quando ela for lancada. */
   onAbrirLancamento: (doXml: DoXml, linhaId: string) => void;
+  /** FIN-NOTA-PDF-01 — abre a nota do PDF no `NotaFiscalDialog`. */
+  onAbrirNota?: (nota: NotaParaLancar, linhaId: string) => void;
   /** Os ids das linhas ja' lancadas nesta sessao do modal. */
   lancadas: ReadonlySet<string>;
 }) {
@@ -96,7 +111,7 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
         seq += 1;
         const base = { id: `nota-${Date.now()}-${seq}`, arquivoNome: arquivo.name, doXml: null, nota: null, avisos: [], fazenda: null, lancada: false };
         const bytes = await arquivo.arrayBuffer();
-        const lido = lerNFe(bytes);
+        const lido = await lerNota(bytes);
         if (lido.ok === false) { novas.push({ ...base, recusa: lido.frase }); continue; }
         const { nota, avisos } = lido;
         /* O fornecedor: pelo documento; so' vai ao banco pelo nome quando o documento nao achou ninguem. */
@@ -108,15 +123,22 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
         ]);
         const proposta = proporLancamento({ nota, avisosDoLeitor: avisos, fazendas: fazendasComIE, emitente: resolucao, favorecidoId: resolucao.propostoId, ultima });
         if (proposta.ok === false) { novas.push({ ...base, nota, avisos, recusa: proposta.frase }); continue; }
+        const ehPdf = lido.origem === 'pdf';
+        const doXml: DoXml = {
+          proposta: proposta.proposta, emitenteNome: nota.emitente.nome, emitenteDocumento: nota.emitente.documento, emitente: nota.emitente, resolucao,
+          ocorrencias, arquivo: ehPdf ? arquivoPdfDaNota(bytes, arquivo.name) : arquivoXmlDaNota(bytes, arquivo.name),
+        };
+        const lidoOk: NotaLidaOk = lido;
         novas.push({
           ...base, nota, avisos, recusa: null,
           fazenda: fazendasComIE.find((f) => f.id === proposta.proposta.fazendaId) ?? null,
-          doXml: {
-            proposta: proposta.proposta, emitenteNome: nota.emitente.nome, emitenteDocumento: nota.emitente.documento, emitente: nota.emitente, resolucao,
-            ocorrencias, arquivo: arquivoXmlDaNota(bytes, arquivo.name),
-          },
+          doXml,
+          paraLancar: ehPdf ? { arquivo: doXml.arquivo, bytes, lido: lidoOk, doXml } : null,
         });
       }
+      /* FIN-NOTA-PDF-01 — um PDF so', lido e aceito: abre direto a nota (o mock), sem passar pela lista. */
+      const unica = arquivos.length === 1 && novas.length === 1 ? novas[0] : null;
+      if (unica?.paraLancar && !unica.recusa && onAbrirNota) onAbrirNota(unica.paraLancar, unica.id);
       /* A mesma nota solta duas vezes entra uma so' (pela chave). */
       setLinhas((antes) => {
         const chaves = new Set(antes.map((l) => l.nota?.chave).filter(Boolean));
@@ -131,7 +153,7 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
     } finally {
       setLendo(false);
     }
-  }, [clienteId, fazendas, fornecedores]);
+  }, [clienteId, fazendas, fornecedores, onAbrirNota]);
 
   const fechar = () => { setLinhas([]); onClose(); };
   const lidas = linhas.filter((l) => !l.recusa);
@@ -147,13 +169,13 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
     <Dialog open={open} onOpenChange={(o) => { if (!o) fechar(); }}>
       <DialogContent className="max-w-[1080px] p-0 gap-0 overflow-hidden" data-testid="novo-de-xml">
         <div className="flex h-9 items-center bg-primary px-4 pr-10">
-          <DialogTitle className="text-[13px] font-semibold leading-none text-primary-foreground">Novo a partir de XML</DialogTitle>
-          <DialogDescription className="sr-only">Solte os XML das notas fiscais para abrir o lançamento já preenchido.</DialogDescription>
+          <DialogTitle className="text-[13px] font-semibold leading-none text-primary-foreground">Novo a partir da nota</DialogTitle>
+          <DialogDescription className="sr-only">Solte os XML ou PDF das notas fiscais para abrir o lançamento já preenchido.</DialogDescription>
         </div>
 
         <div className="space-y-2 px-4 py-3">
           <AreaDeArquivo modo="lote" regra={REGRA_DOS_XML} testId="xml-area-de-soltar" inputTestId="xml-input" className="h-12"
-            convite="Clique ou arraste os XML das notas" detalhe="NF-e (modelo 55) · um arquivo por nota · vários de uma vez"
+            convite="Clique ou arraste as notas (XML ou PDF)" detalhe="NF-e (modelo 55) · um arquivo por nota · vários de uma vez"
             rotuloDoBotao={lendo ? 'Lendo…' : 'Escolher arquivos'}
             desabilitado={!clienteId} motivoDesabilitado="Selecione um cliente para ler as notas."
             onArquivos={(arquivos) => { void lerArquivos(arquivos); }} />
@@ -222,7 +244,7 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
                       </td>
                       <td className={`${TD_ACAO} ${DIVISOR}`}>
                         <Button type="button" size="sm" variant={lancada ? 'outline' : 'default'} className="h-4 px-1.5 text-[9.5px]"
-                          data-testid="xml-abrir-lancamento" onClick={() => onAbrirLancamento(d, l.id)}>
+                          data-testid="xml-abrir-lancamento" onClick={() => { if (l.paraLancar && onAbrirNota) onAbrirNota(l.paraLancar, l.id); else onAbrirLancamento(d, l.id); }}>
                           {lancada ? 'abrir de novo' : 'Abrir lançamento'}
                         </Button>
                       </td>

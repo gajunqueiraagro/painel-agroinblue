@@ -69,6 +69,7 @@ import { podeCriarOCDoLegado } from '@/lib/oc/criarDoLegado';
 import { prefillDeDuplicar, type PrefillDuplicar } from '@/lib/financeiro/prefillDeDuplicar';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
 import { NovoDeXmlDialog } from '@/components/financeiro-v2/NovoDeXmlDialog';
+import { NotaFiscalDialog, type NotaParaLancar } from '@/components/financeiro-v2/NotaFiscalDialog';
 import { prefillDaNota, type DoXml } from '@/lib/financeiro/nfePrefill';
 import { ModoRapidoGrid } from '@/components/financeiro-v2/ModoRapidoGrid';
 import { FinanceiroV2ExportMenu } from '@/components/financeiro-v2/FinanceiroV2ExportMenu';
@@ -620,6 +621,14 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     setPrefillXml(prefillDaNota(doXml));
     setLinhaXmlAberta(linhaId);
     setDialogOpen(true);
+  };
+  /* FIN-NOTA-PDF-01 — a nota do PDF abre o "Novo lançamento · da nota fiscal" (o mock): o PDF com o lido em amarelo, criar as N
+     parcelas. A lista fica montada (escondida) por baixo, como no Novo lançamento do XML. */
+  const [notaAberta, setNotaAberta] = useState<{ nota: NotaParaLancar; linhaId: string } | null>(null);
+  const abrirOcorrenciaDaNota = (o: { origem: string; lancamentoId: string | null; operacaoId: string | null }) => {
+    const destino = o.origem === 'lancamento' && o.lancamentoId ? `/?flancId=${encodeURIComponent(o.lancamentoId)}`
+      : o.operacaoId ? `/?oc_id=${encodeURIComponent(o.operacaoId)}` : null;
+    if (destino) window.open(destino, '_blank', 'noopener');
   };
   // PR-OC-FIN-EDIT-FIX-02 — libera favorecido do título OC só nesta abertura (fluxo "Editar" da OC).
   const [favOCEdit, setFavOCEdit] = useState(false);
@@ -1725,8 +1734,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         />
       </div>
       <Button size="sm" onClick={() => setXmlAberto(true)} data-testid="btn-novo-de-xml"
-        className="h-6 w-full text-[10px] gap-0.5 px-1.5 bg-[#E7C873] text-foreground hover:bg-[#D9B95F]" title="Novo a partir de XML" aria-label="Novo a partir de XML">
-        <Plus className="h-3 w-3" /> Do XML
+        className="h-6 w-full text-[10px] gap-0.5 px-1.5 bg-[#E7C873] text-foreground hover:bg-[#D9B95F]" title="Novo a partir da nota (XML ou PDF)" aria-label="Novo a partir da nota (XML ou PDF)">
+        <Plus className="h-3 w-3" /> Da nota
       </Button>
       <Button
         size="sm"
@@ -1815,8 +1824,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
             largura de dois botoes curtos (medido a 1.135: um terceiro na primeira linha encostava no filtro de Fazenda); o nome
             inteiro vai no `title`. */}
         <Button size="sm" onClick={() => setXmlAberto(true)} data-testid="btn-novo-de-xml"
-          className="h-6 text-[10px] gap-0.5 px-1.5 bg-[#E7C873] text-foreground hover:bg-[#D9B95F]" title="Novo a partir de XML" aria-label="Novo a partir de XML">
-          <Plus className="h-3 w-3" /> Do XML
+          className="h-6 text-[10px] gap-0.5 px-1.5 bg-[#E7C873] text-foreground hover:bg-[#D9B95F]" title="Novo a partir da nota (XML ou PDF)" aria-label="Novo a partir da nota (XML ou PDF)">
+          <Plus className="h-3 w-3" /> Da nota
         </Button>
         <Button
           size="sm"
@@ -3186,14 +3195,33 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
 
       {/* FIN-NFE-XML-01d — a lista de notas. Fica montada (e escondida) enquanto o lancamento de uma delas esta' aberto. */}
       <NovoDeXmlDialog
-        open={xmlAberto && !dialogOpen}
+        open={xmlAberto && !dialogOpen && !notaAberta}
         onClose={() => { setXmlAberto(false); setLinhasXmlLancadas(new Set()); }}
         clienteId={clienteAtual?.id ?? null}
         fazendas={fazOperacionais}
         fornecedores={hook.fornecedores}
         onAbrirLancamento={abrirLancamentoDoXml}
+        onAbrirNota={(nota, linhaId) => setNotaAberta({ nota, linhaId })}
         lancadas={linhasXmlLancadas}
       />
+
+      {notaAberta && clienteAtual?.id && (
+        <NotaFiscalDialog
+          open
+          onClose={() => setNotaAberta(null)}
+          clienteId={clienteAtual.id}
+          clienteNome={clienteAtual.nome ?? null}
+          nota={notaAberta.nota}
+          fazendas={fazendas}
+          contas={hook.contasBancarias}
+          classificacoes={hook.classificacoes}
+          fornecedores={hook.fornecedores}
+          onCriarFornecedor={hook.criarFornecedor}
+          onAbrirNoLancamento={(d) => { const linha = notaAberta.linhaId; setNotaAberta(null); abrirLancamentoDoXml(d, linha); }}
+          onAbrirRegistrada={abrirOcorrenciaDaNota}
+          onCriado={() => { const linha = notaAberta.linhaId; setLinhasXmlLancadas((antes) => new Set([...antes, linha])); }}
+        />
+      )}
 
       {criarOCDe && clienteAtual?.id && (
         <CriarOCDoLegadoDialog
