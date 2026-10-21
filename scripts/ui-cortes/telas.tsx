@@ -44,6 +44,8 @@ import * as OC from './dados/oc';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { AcessosTab } from '@/pages/AcessosTab';
 import { ContasPagarReceberTab } from '@/components/financeiro-v2/ContasPagarReceberTab';
+import V2Recorrencias from '@/v2/pages/V2Recorrencias';
+import * as REC from './dados/recorrencias';
 
 const q = new URLSearchParams(location.search);
 const tela = q.get('tela') ?? 'mesclar';
@@ -286,6 +288,16 @@ if (tela === 'mesclar') {
   if (v === 'futuro') sessionStorage.setItem('cpr_retorno_do_contrato', JSON.stringify({ atalho: 'datas', datas: { de: dia(10), ate: dia(40) } }));
   if (v === 'encerrado') sessionStorage.setItem('cpr_retorno_do_contrato', JSON.stringify({ atalho: 'datas', datas: { de: dia(-40), ate: dia(-10) }, segmento: 'ambos' }));
   montar(<div className="h-full"><ContasPagarReceberTab onIntensiveToggle={() => {}} /></div>);
+} else if (tela === 'recorrencias') {
+  /* REC-COLUNAS-01 — Financeiro › Recorrências (a lista do mês), com o pior texto de cada coluna curta. SINTÉTICO (`dados/recorrencias.ts`). */
+  g.__bancoBancada = {
+    from: (t: string, e: any) => t === 'financeiro_recorrencias' ? REC.REGRAS
+      : t === 'financeiro_contas_bancarias' ? REC.CONTAS_REC
+      : t === 'financeiro_lancamentos_v2' && e.eq.cancelado === false && !e.in.recorrencia_id ? REC.OCORRENCIAS
+      : [],
+    rpc: (fn: string) => fn === 'fn_recorrencias_a_gerar' ? REC.A_GERAR : null,
+  };
+  montar(<div className="h-full"><V2Recorrencias /></div>);
 } else if (tela === 'acessos') {
   /* ACESSOS-PERFIL-01 — a lista (nome e e-mail pela fonte unica), o "Novo acesso" e o "Editar acesso" (`&v=editar`). SINTETICO. */
   const MEMBROS = [
