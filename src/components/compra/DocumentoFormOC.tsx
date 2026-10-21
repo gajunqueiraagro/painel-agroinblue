@@ -33,7 +33,9 @@ import type {
    em "outro" faria o balde do desconhecido virar maioria. */
 export const ESPECIE_LABEL: Record<EspecieDoc, string> = { nf_principal: 'NF principal', nf_complementar: 'NF complementar', recibo: 'Recibo', outro: 'Outro documento',
   npr: 'NPR', acerto: 'Acerto', romaneio: 'Romaneio',
-  nf_produtor: 'NF produtor', gta: 'GTA', guia: 'Guia', declaracao: 'Declaração' };
+  nf_produtor: 'NF produtor', gta: 'GTA', guia: 'Guia', declaracao: 'Declaração',
+  /* OC-DOC-VENDA-01 — os documentos da operacao da venda */
+  contrato: 'Contrato / pedido', nf_entrada: 'NF de entrada (comprador)', comprovante: 'Comprovante' };
 const ESPECIES: EspecieDoc[] = ['nf_principal', 'nf_complementar', 'recibo', 'outro'];
 const NATUREZA_LABEL: Record<NaturezaComp, string> = {
   acrescimo: 'Acréscimo', desconto_comercial: 'Desconto comercial', retencao_sem_caixa: 'Retenção (sem caixa)',
