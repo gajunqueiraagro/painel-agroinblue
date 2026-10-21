@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -151,7 +151,7 @@ export const MOTIVO_ACAO = {
   semLancamento: 'esta linha não tem lançamento',
   emBreve: 'disponível em breve',
   semCompromisso: 'programado antes do modal, sem compromisso na operação · ainda sem gesto de cancelar',
-  conciliado: 'conciliado · desfaça a conciliação primeiro',
+  conciliado: 'conciliado · desfaça a conciliação na Conferência primeiro',
   explicacaoSemLancamento: 'esta explicação não gera lançamento',
   /* OC-CC-ABATE-01 PR 2 — o banco recusa desfazer a deducao: ela segue o acerto do abate. */
   deducaoDoAcerto: 'a dedução acompanha o acerto do abate · corrija as retenções na aba Abate',
@@ -193,16 +193,24 @@ export function acoesDaLinha(l: LinhaContaCorrente, lado: LadoContaCorrente, som
         motivo: gravar(l.status === 'conciliado' ? MOTIVO_ACAO.conciliado : null) },
     ];
   }
-  /* ABATE-PROJETADO-01c — o PREVISTO (abate so' projetado) e' dinheiro em aberto como o programado: parcela-se e cancela-se igual. */
+  /* ABATE-PROJETADO-01c — o PREVISTO (abate so' projetado) e' dinheiro em aberto como o programado: parcela-se e cancela-se igual.
+     OC-RECEB-PARCIAL-01 — UMA REGRA SO', pelo estado da linha: CONCILIADO trava os tres gestos com o mesmo motivo (o dinheiro esta
+     ligado ao extrato: desfaca a conciliacao na Conferencia); RECEBIDO sem conciliacao diz que ja' e' dinheiro e o caminho de cada
+     gesto; EM ABERTO deixa cancelar (com compromisso) e o resto "em breve". Antes cada item lia o estado de um jeito e o mesmo
+     recebimento aparecia "ja' recebido" num item e "programado" no outro. */
   const programado = dinheiroEmAberto(l.status);
+  const conciliado = l.status === 'conciliado';
+  const motivoDe = (emAberto: string | null, recebido: string) =>
+    gravar(conciliado ? MOTIVO_ACAO.conciliado : programado ? emAberto : recebido);
   return [
     { chave: 'abrir', texto: 'Abrir lançamento', motivo: semLanc },
     { chave: 'parcelar', texto: `Parcelar este ${t.nomeDinheiro}`,
-      motivo: gravar(programado ? MOTIVO_ACAO.emBreve : `${t.jaDinheiro} · só se parcela o que está programado`) },
+      motivo: motivoDe(MOTIVO_ACAO.emBreve, `${t.jaDinheiro} · só se parcela o que está programado`) },
     { chave: 'desvincular', texto: 'Desvincular da operação',
-      motivo: gravar(l.status === 'conciliado' ? MOTIVO_ACAO.conciliado : MOTIVO_ACAO.emBreve) },
+      motivo: motivoDe(MOTIVO_ACAO.emBreve, MOTIVO_ACAO.emBreve) },
     { chave: 'cancelar_programado', texto: `Cancelar ${t.nomeDinheiro} programado`, perigo: true,
-      motivo: gravar(programado ? (temCompromisso ? null : MOTIVO_ACAO.semCompromisso) : `só para ${t.nomeDinheiro} programado`) },
+      motivo: motivoDe(temCompromisso ? null : MOTIVO_ACAO.semCompromisso,
+        `${t.jaDinheiro} · para desfazer, estorne o ${t.nomeDinheiro} no lançamento`) },
   ];
 }
 
@@ -652,20 +660,36 @@ function DialogoBuscarRecebimento({ api, lado, onFechar }: { api: OcContaCorrent
             <tbody>
               {itens === null && <tr><td colSpan={6} className={`${TD} text-center text-muted-foreground`}>Carregando…</td></tr>}
               {itens?.length === 0 && <tr><td colSpan={6} className={`${TD} text-center text-muted-foreground`}>{compra ? 'Nenhuma saída do cliente disponível para vincular.' : 'Nenhuma entrada do cliente disponível para vincular.'}</td></tr>}
-              {itens?.map(r => (
-                <tr key={r.lancamentoId} className={`cursor-pointer ${escolhido === r.lancamentoId ? 'bg-primary/10' : 'bg-white'}`}
-                  onClick={() => setEscolhido(r.lancamentoId)} data-lancamento={r.lancamentoId}>
-                  <td className={`${TD} text-center`}>
-                    <input type="radio" aria-label={`Escolher ${r.descricao ?? r.lancamentoId}`} checked={escolhido === r.lancamentoId}
-                      onChange={() => setEscolhido(r.lancamentoId)} />
-                  </td>
-                  <td className={`${TD} text-center`}>{dataCurta(r.data)}</td>
-                  <td className={`${TD} whitespace-normal break-words`}>{r.descricao ?? '—'}{!r.mesmoFavorecido ? ' · outro favorecido' : ''}</td>
-                  <td className={`${TD} whitespace-normal break-words`}>{rotuloDaConta(r.subcentro) ?? '—'}</td>
-                  <td className={`${TD} text-center ${r.semContaBancaria ? 'text-[#b45309]' : ''}`}>{r.conciliado ? 'conciliado' : (r.semContaBancaria ? 'sem conta' : (r.status ?? '—'))}</td>
-                  <td className={`${NUM} ${compra ? COR.neg : COR.pos}`}>{formatMoeda(r.valor)}</td>
-                </tr>
-              ))}
+              {/* OC-RECEB-PARCIAL-01 — DOIS GRUPOS: primeiro os do proprio comprador/fornecedor/frigorifico, depois os de outro
+                  favorecido (separados por um cabecalho, nao por um sufixo no fim da descricao). Descricao e conta em UMA linha com
+                  "…" e o texto inteiro no `title`; data e valor nunca cortam. */}
+              {itens && itens.length > 0 && ([true, false] as const).map(doMesmo => {
+                const grupo = itens.filter(r => r.mesmoFavorecido === doMesmo);
+                if (grupo.length === 0) return null;
+                return (
+                  <Fragment key={doMesmo ? 'mesmo' : 'outro'}>
+                    <tr data-testid={doMesmo ? 'grupo-mesmo-favorecido' : 'grupo-outro-favorecido'}>
+                      <td colSpan={6} className={`${TD} bg-muted/40 font-medium text-muted-foreground`}>
+                        {doMesmo ? `Do ${TEXTOS[lado].grupoSaldo.toLowerCase()} da operação` : 'Outro favorecido'}
+                      </td>
+                    </tr>
+                    {grupo.map(r => (
+                      <tr key={r.lancamentoId} className={`cursor-pointer ${escolhido === r.lancamentoId ? 'bg-primary/10' : 'bg-white'}`}
+                        onClick={() => setEscolhido(r.lancamentoId)} data-lancamento={r.lancamentoId}>
+                        <td className={`${TD} text-center`}>
+                          <input type="radio" aria-label={`Escolher ${r.descricao ?? r.lancamentoId}`} checked={escolhido === r.lancamentoId}
+                            onChange={() => setEscolhido(r.lancamentoId)} />
+                        </td>
+                        <td className={`${TD} whitespace-nowrap text-center`}>{dataCurta(r.data)}</td>
+                        <td className={`${TD} max-w-0 truncate`} title={r.descricao ?? undefined}>{r.descricao ?? '—'}</td>
+                        <td className={`${TD} max-w-0 truncate`} title={rotuloDaConta(r.subcentro) ?? undefined}>{rotuloDaConta(r.subcentro) ?? '—'}</td>
+                        <td className={`${TD} whitespace-nowrap text-center ${r.semContaBancaria ? 'text-[#b45309]' : ''}`}>{r.conciliado ? 'conciliado' : (r.semContaBancaria ? 'sem conta' : (r.status ?? '—'))}</td>
+                        <td className={`${NUM} whitespace-nowrap ${compra ? COR.neg : COR.pos}`}>{formatMoeda(r.valor)}</td>
+                      </tr>
+                    ))}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>
