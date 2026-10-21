@@ -34,8 +34,20 @@ vi.mock('@/integrations/supabase/client', () => {
     };
     return c;
   };
-  /* FORN-BUSCA-UNICA-01 — a lista vem da RPC da busca única (`fn_fornecedor_buscar`), pela situação pedida */
+
+  /* FORN-LISTA-01 — a lista de cadastros vem de `fn_fornecedor_lista` */
+  const lista = (args: { p_situacao: string; p_busca?: string }, linhas: { id: string; nome: string; ativo: boolean; fundido_em_id?: string | null; fundido_em?: string | null }[]) => {
+    const sit = (l: { ativo: boolean; fundido_em_id?: string | null }) => (l.fundido_em_id ? 'mesclado' : l.ativo ? 'ativo' : 'inativo');
+    const termo = (args.p_busca ?? '').trim().toLowerCase();
+    const casam = linhas.filter((l) => l.nome.toLowerCase().includes(termo));
+    const s = casam.filter((l) => args.p_situacao === 'todos' || sit(l) === args.p_situacao.slice(0, -1));
+    const dono = (id?: string | null) => linhas.find((l) => l.id === id)?.nome ?? null;
+    return { data: { total: s.length, contagens: { ativos: casam.filter((l) => sit(l) === 'ativo').length, inativos: casam.filter((l) => sit(l) === 'inativo').length,
+      mesclados: casam.filter((l) => sit(l) === 'mesclado').length, todos: casam.length }, documentos: s.map((l) => [l.id, null]),
+      itens: s.map((l) => ({ ...l, cpf_cnpj: null, lancamentos: 0, ultimo_uso: null, situacao: sit(l), dono_nome: dono(l.fundido_em_id) })) }, error: null };
+  };
   const rpc = async (fn: string, args: { p_situacao: string }) => {
+    if (fn === 'fn_fornecedor_lista') return lista(args, banco.linhas);
     if (fn !== 'fn_fornecedor_buscar') return { data: null, error: null };
     const ativoDeVerdade = (l: { ativo: boolean; fundido_em_id: string | null }) => l.ativo && !l.fundido_em_id;
     const itens = banco.linhas.filter((l) => args.p_situacao === 'todos' || (args.p_situacao === 'ativos') === ativoDeVerdade(l));
@@ -73,7 +85,7 @@ describe('Cadastros › Fornecedores com um absorvido', () => {
   });
   it('em "Todos" a situação diz "Mesclado em <nome>", inteira, com a data no title; o inativo comum segue "Inativo"', async () => {
     render(<FinV2FornecedoresTab />);
-    fireEvent.click(screen.getByRole('button', { name: 'Todos' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Todos / }));
     await waitFor(() => expect(screen.getByTestId('situacao-mesclado').textContent)
       .toBe('Mesclado em Sintq Dono Zeta Comércio de Insumos Agropecuários'));
     const selo = screen.getByTestId('situacao-mesclado');

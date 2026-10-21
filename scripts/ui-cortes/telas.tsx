@@ -29,7 +29,7 @@ import { ConsorcioDialog } from '@/components/financiamentos/ConsorcioDialog';
 import { LANCAMENTOS } from './dados/financeiro';
 import { buscarFornecedores } from '@/lib/fornecedores/buscaDeFornecedor';
 import { FinanceiroV2Tab } from '@/pages/FinanceiroV2Tab';
-import { GRUPOS, LEITOR, LINHAS, LISTA, RECENTES, USO } from './dados/fornecedores';
+import { GRUPOS, LEITOR, LINHAS, LISTA, RECENTES, SEM_CADASTRO, USO } from './dados/fornecedores';
 import { CasarBlocoModal } from '@/components/financeiro-v2/CasarComBancoModal';
 import { CasarComBancoModal } from '@/components/financeiro-v2/CasarComBancoModal';
 import { VendaModalShell } from '@/components/venda/VendaModalShell';
@@ -80,8 +80,25 @@ const bancoDeFornecedores = {
     return [];
   },
   rpc: (fn: string, a: any) => fn === 'fn_fornecedor_repetidos' ? GRUPOS : fn === 'fn_fornecedor_uso' ? USO[a.p_fornecedor] ?? { lancamentos: 0 }
-    : fn === 'fn_fornecedor_buscar' ? buscarNaBancada(a) : null,
+    : fn === 'fn_fornecedor_buscar' ? buscarNaBancada(a) : fn === 'fn_fornecedor_sem_cadastro' ? SEM_CADASTRO
+    : fn === 'fn_fornecedor_sem_cadastro_recentes' ? [] : fn === 'fn_fornecedor_lista' ? listaNaBancada(a) : null,
 };
+/* FORN-LISTA-01 — a RPC da lista, respondida pela bancada (a busca pela PROPRIA funcao da tela; ordem so' pelo nome; a regra do banco e'
+   provada pelo teste SQL). Pior caso de proposito: cidade longa, 99.999 lancamentos, data cheia. */
+function listaNaBancada(a: any) {
+  const casam: any[] = a.p_busca ? buscarFornecedores(LISTA as any[], a.p_busca, 'todos') : (LISTA as any[]);
+  const sit = (f: any) => (f.fundido_em_id ? 'mesclado' : f.ativo === false ? 'inativo' : 'ativo');
+  const contagens = { ativos: casam.filter((f) => sit(f) === 'ativo').length, inativos: casam.filter((f) => sit(f) === 'inativo').length,
+    mesclados: casam.filter((f) => sit(f) === 'mesclado').length, todos: casam.length };
+  const s = casam.filter((f) => a.p_situacao === 'todos' || sit(f) === String(a.p_situacao).slice(0, -1))
+    .sort((x, y) => String(x.nome).localeCompare(String(y.nome), 'pt-BR'));
+  const l = a.p_ids ? s.filter((f) => a.p_ids.includes(f.id)) : s;
+  const de = a.p_offset ?? 0;
+  const itens = l.slice(de, de + (a.p_limite ?? l.length)).map((f, i) => ({ ...f, municipio: f.municipio ?? (i % 2 ? 'Presidente Prudente' : null),
+    uf: f.uf ?? (i % 2 ? 'SP' : null), lancamentos: i === 0 ? 99999 : (i * 7) % 23, ultimo_uso: i % 3 === 2 ? null : '2026-10-20', situacao: sit(f),
+    dono_nome: f.fundido_em_id ? String(LINHAS[f.fundido_em_id]?.nome ?? '') : null }));
+  return { total: l.length, contagens, documentos: s.map((f) => [f.id, f.cpf_cnpj ?? null]), itens };
+}
 /* FORN-BUSCA-UNICA-01 — a RPC da busca única, respondida pela PROPRIA funcao da tela (o espelho e' provado pelo teste SQL) */
 function buscarNaBancada(a: any) {
   const achados = buscarFornecedores(LISTA as any[], a.p_busca ?? '', a.p_situacao ?? 'ativos');

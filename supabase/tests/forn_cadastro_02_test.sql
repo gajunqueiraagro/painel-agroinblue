@@ -22,7 +22,8 @@ BEGIN
     'PIX', 'Sicredi', '0001', '12345-6', 'SINT LUIZ FERNANDO DA SILVA LTDA', '54.442.418/0001-88', plano, 'obs')
   returning id into f;
   select into r to_jsonb(x) from financeiro_fornecedores x where x.id = f;
-  if r->>'nome_fantasia' is distinct from 'SINT CASA DO AGRONEGOCIO' or r->>'uf' is distinct from 'MS' or r->>'plano_padrao_id' is distinct from plano::text
+  /* FORN-NOME-CAIXA-01: o cadastro em caixa alta grava padronizado */
+  if r->>'nome_fantasia' is distinct from 'Sint Casa do Agronegocio' or r->>'uf' is distinct from 'MS' or r->>'plano_padrao_id' is distinct from plano::text
      or r->>'contato_nome' is distinct from 'Fulano' or r->>'tipo_recebimento' is distinct from 'PIX' then raise exception 'C1 gravacao: %', r; end if;
 
   ok := false; begin update financeiro_fornecedores set tipo_pessoa = 'XX' where id = f; exception when check_violation then ok := true; end;

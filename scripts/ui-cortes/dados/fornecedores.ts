@@ -41,3 +41,21 @@ export const RECENTES = [
   ...Array.from({ length: 16 }, (_, i) => ({ id: `rx${i}`, mantido_id: `x${i % 12}`, absorvidos: [`gp${i % 12}b`], criado_em: `2026-10-${String(17 - (i % 9)).padStart(2, '0')}T${String(8 + i).padStart(2, '0')}:15:00Z`,
     resumo: { total: 3 + i * 7 }, antes: { absorvidos: [{ nome: `Fornecedor Exemplo ${i + 1} Comércio e Representações` }] }, desfeito_em: null, desfeito_motivo: null })),
 ];
+
+/* FORN-SEM-CADASTRO-01 — a aba "Sem cadastro" (dados SINTETICOS): texto longo, valor de nove digitos, sugestao dos tres motivos, rateio */
+const lancSC = (i: number, desc: string, valor: number) => ({ id: `sc${i}`, descricao: desc, data: `2026-${String((i % 9) + 1).padStart(2, '0')}-0${(i % 8) + 1}`,
+  valor, fazenda_id: 'f1', status: i % 2 ? 'realizado' : 'programado' });
+const textoSC = (i: number, texto: string, qtd: number, valor: number, sugestao: unknown, rateio = false) => ({
+  chave: texto.toLowerCase(), texto, origem: i % 3 ? 'descricao' : 'planilha', rateio, qtd, valor, ultimo: '2026-10-05', sugestao,
+  lancamentos: Array.from({ length: qtd }, (_, k) => lancSC(i * 100 + k, `${texto} — lançamento ${k + 1} com uma descrição comprida para rolar na própria célula`, valor / qtd)),
+});
+export const SEM_CADASTRO = {
+  textos: [
+    textoSC(1, 'Contador Folha - Rodrigo', 15, 18000, { fornecedor_id: 'b', nome: 'Luiz Fernando Exemplo da Silva Ltda', documento: '54.442.418/0001-88', motivo: 'ja_ligado' }),
+    textoSC(2, 'Combustivel-3M', 52, 48920.15, null),
+    textoSC(3, 'Pagamento de frete de gado para a Fazenda Exemplo — viagem de retorno com escala em Campo Grande e pernoite', 4, 99999999.99, { fornecedor_id: 'c', nome: 'Comercial Exemplo', documento: null, motivo: 'parecido' }),
+    textoSC(4, 'Pec.3M-Contabilidade Holding', 21, 4188.4, null, true),
+    ...Array.from({ length: 30 }, (_, k) => textoSC(10 + k, `Texto Sintético ${k + 1}`, (k % 5) + 1, 1000 + k * 37.5, k % 3 ? null : { fornecedor_id: 'b', nome: 'Luiz Fernando Exemplo da Silva Ltda', documento: null, motivo: 'nome_igual' })),
+  ],
+  total: { textos: 34, lancamentos: 1184, valor: 100071528.55 }, com_sugestao: 12, sem_sugestao: 22,
+};

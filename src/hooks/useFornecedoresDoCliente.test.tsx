@@ -143,7 +143,7 @@ describe('useFornecedoresDoCliente', () => {
       'src/components/compra/AbaDocumentosOC.tsx': 2,
       'src/components/compra/AbaCompromissosOC.tsx': 1,
       'src/lib/financeiro/nfeConsultas.ts': 2,   /* o CNPJ do XML e (FORN-CADASTRO-02) a fantasia / IE / endereço do emitente */
-      'src/pages/FinV2FornecedoresTab.tsx': 1,
+      'src/components/financeiro-v2/FornecedoresSemCadastro.tsx': 2,   /* FORN-SEM-CADASTRO-01: ligar e desfazer (o apelido do cadastro) */
       'src/hooks/useFinanceiroV2.ts': 1,
       'src/lib/fornecedores/cadastroDaCasaBanco.ts': 2,   /* a reativação (fatia 2c, 1a) e o criar da casa (1b, o credor do contrato) */
       'src/pages/LancamentosTab.tsx': 4,
