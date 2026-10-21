@@ -140,6 +140,22 @@ class Danfe {
   }
 }
 
+/**
+ * FIN-NOTA-PDF-01b — o PEDACO QUE ATRAVESSA COLUNAS, partido pelo espaco: emissores (e o jsPDF da bancada) juntam valores vizinhos num
+ * item so' ("3.194,3300 3.194,33" = V.UNIT e V.TOTAL); o x de cada parte e' estimado pela posicao do caractere na largura do item. So'
+ * na TABELA DE ITENS (fora dela, os rotulos tem espaco de proposito).
+ */
+export function partirPelosEspacos<T extends ItemDoDanfe>(o: T): T[] {
+  const t = o.str;
+  if (!/\S\s+\S/.test(t) || o.w <= 0) return [o];
+  const partes: T[] = [];
+  for (const m of t.matchAll(/\S+/g)) {
+    const i = m.index ?? 0;
+    partes.push({ ...o, str: m[0], x: o.x + (o.w * i) / t.length, w: (o.w * m[0].length) / t.length });
+  }
+  return partes;
+}
+
 const RE_CHAVE = /^(\d{4}\s?){10}\d{4}$/;
 const RE_NUMERO = /^N[º°O.]?\.?\s*:?\s*(\d{1,3}(?:\.\d{3}){0,2}|\d{1,9})$/;
 const RE_SERIE = /^SERIE:?\s*(\d{1,3})$/;
@@ -277,7 +293,12 @@ export function notaDoDanfe(paginas: readonly ItemDoDanfe[][]): ResultadoDoDanfe
       const cTotal = col((n) => n.startsWith('V.TOTAL') || n.startsWith('VALOR TOTAL') || n.startsWith('VLR. TOTAL') || n.startsWith('V. TOTAL'));
       const rotFim = d.itens.filter((o) => o.pagina === pg && o.y < rotDescr.y && /^(DADOS ADICIONAIS|CALCULO DO ISSQN)/.test(normalizar(o.str))).sort((a, b) => b.y - a.y)[0];
       const naCol = (linha: ItemNaPagina[], c: { de: number; ate: number } | null) => (c ? linha.filter((o) => o.x >= c.de && o.x < c.ate) : []);
-      for (const linha of d.linhasEntre(pg, rotDescr.y - TOL_LINHA, rotFim?.y ?? 0)) {
+      /* a descricao fica inteira (tem espaco de proposito); o pedaco que comeca DEPOIS dela e passa da coluna onde comeca, se parte */
+      const inicioDasColunas = cab.map((c) => c.x - 4);
+      const atravessa = (o: ItemNaPagina) => inicioDasColunas.some((x) => x > o.x + 1 && x < o.x + o.w - 1);
+      const fimDaDescricao = cDesc?.ate ?? 0;
+      for (const linhaCrua of d.linhasEntre(pg, rotDescr.y - TOL_LINHA, rotFim?.y ?? 0)) {
+        const linha = linhaCrua.flatMap((o) => (o.x >= fimDaDescricao && atravessa(o) ? partirPelosEspacos(o) : [o]));
         const total = centavosBr(naCol(linha, cTotal).map((o) => o.str).join('').trim());
         const descr = naCol(linha, cDesc).map((o) => o.str.trim()).join(' ').trim();
         if (total != null && descr) {
