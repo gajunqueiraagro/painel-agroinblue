@@ -10563,3 +10563,29 @@ curta nas secoes de regras) e a pendencia (na FILA); o bloco inteiro vai para do
     e "A confirmar" sobre o valor vizinho) e o "Gerar" sai da tabela (a soma das fixas passa da largura e o wrapper corta na horizontal).
     O cenario do gate so' mede de 1000px para cima ate' ela fechar. (O cabecalho "Descrição" vazando 3px a 1000 fechou com o +34.)
   ⚠ NAO PROVADO: nada com login no app real (bancada).
+- ⚠ A BARRA LATERAL TEM 152px, NUM TOKEN SO' (UI-SIDEBAR-ESTREITA-01, Gabriel 09/10 e 21/10/2026, so' tela; SUBSTITUI o "176px (`w-44`)" do
+  UI-BOTOES-LUGAR-FIXO-01). A largura mora em `LARGURA_DA_LATERAL` (`src/v2/components/V2Sidebar.tsx`), aplicada por `style` no `aside`; a
+  bancada do `check:ui-cortes` le' a mesma constante. Nenhuma tela calibra largura pela barra (medido: os `calc(100vw - N)` do repo sao todos
+  de modal centrado na janela; os `useLarguraDaJanela() < 900` olham a janela). A gaveta do submenu e' `absolute` dentro da coluna
+  principal e acompanha sozinha.
+  · REGRA: largura = o maior item do MENU (icone + rotulo + seta) + padding enxuto. MEDIDO no Chromium com a Inter (12px/500): "Planejamento"
+    com o icone e a seta = 16 + 8 + 77,8 + 8 + 12 = 121,8px; + 8 + 8 do botao (`px-2`) + 6 + 6 da navegacao (`px-1.5`) = 149,8 -> 152 (folga
+    2,2px). "Configurações" (sem seta) pede 136,6. Logo: 10 + 44,3 + 8 + 75,1 ("Agroinblue", 14px/700) + 10 = 147,4. A fonte dos itens NAO
+    desceu. Os seletores ficam com `px-1.5` por dentro.
+  · SELETORES: nome de cliente ou de fazenda maior que o campo corta com "…" e o nome inteiro no `title` (cliente; a fazenda ja' tinha a dica
+    com o nome). Medido (proto, 21/10): clientes — so' "Agnaldo Cedenho" corta (105,1 de 98,8; e a entrada "☰ Resumo dos clientes"); "Vera
+    Ligia Milani" cabe (96,7 de 98,8). Fazendas — "Global" e as reais cabem, menos "Fazenda Teste Cana" (118,7 de 114,5). O nome do cliente
+    fica colado ao icone (`[&_button>span]:flex-1`).
+  · NADA SE DESLOCA: o seletor de fazenda tem LUGAR RESERVADO de 28px sempre que ha' o de cliente (cliente com uma fazenda so' — Teste,
+    Raul, RRCC — e o Resumo dos clientes nao tem seletor de fazenda: antes o menu inteiro subia 34px ao trocar para eles; medido). Trocar
+    cliente, fazenda (nome curto x longo) e abrir/fechar o submenu: 0px de diferenca em qualquer elemento da barra e no conteudo.
+  · GANHO: +24px de conteudo em TODA tela e tamanho (medido em Recorrências, Contas a Pagar e Receber e Fornecedores a 750x483, 814x530,
+    1000x600, 1126x579, 1300x704 e 1440x800; ex.: 1126 950 -> 974). Prints em ~/Downloads/sidebar/{antes,depois}/.
+  · GATE: `barra-lateral` (nomes que cabem, todas as regras) e `barra-lateral-nome-longo` (sem `reticencias`) nos sete tamanhos; bancada
+    `&lateral=1` (a V2Sidebar de verdade; `&cli=`, `&faz=` — `Global` —, `&submenu=`, `&umafaz=1`). Mutacao (largura 140) reprova logo,
+    cliente e "Planejamento".
+  ⚠ LIMITE CONHECIDO, NAO MEXIDO: a 750x483 (admin, 9 itens) a navegacao rola 19px por dentro (ja' rolava com 176). Com barra de rolagem
+    CLASSICA (Windows) ela ocupa ~15px e os rotulos mais longos cortariam com "…" (com 176 sobrava folga); em overlay (macOS) nada muda.
+    NAO PROVADO no Windows.
+  ⚠ NAO PROVADO: nada com login no app real (bancada) · o modo Ampliado (`intensivo`) esconde a barra inteira, como antes; nao ha' modo
+    recolhido so' com icones.
