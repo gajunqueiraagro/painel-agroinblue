@@ -69,6 +69,10 @@ interface Props {
   /** o "Mesclar" do duplicado: quem hospeda abre a ferramenta do FORN-MESCLAR-01 já com o par (sem a prop, o botão não aparece).
    *  O cadastro não importa a ferramenta: ela usa o seletor de fornecedor, que abre este cadastro (fecharia um ciclo de import). */
   onMesclar?: (manter: string, absorver: string) => void;
+  /** FORN-SEM-CADASTRO-01 — cadastro NOVO nasce com este nome (o texto do lançamento); nada é gravado antes do Salvar */
+  nomeInicial?: string;
+  /** FORN-SEM-CADASTRO-01 — o id do cadastro novo, depois de gravado (quem abriu liga os lançamentos só então) */
+  onCriado?: (id: string) => void;
   /** só para teste: quem lê o cadastro para a conferência de repetido (padrão: o banco) */
   lerCadastro?: (clienteId: string, nome: string) => Promise<FornecedorParaConferir[]>;
   /** só para teste: a linha inteira na edição e o uso (padrão: o banco) */
@@ -126,7 +130,7 @@ function Campo({ rotulo, obrig, valor, onChange, placeholder, testId, className,
 }
 
 export function FornecedorFormDialog({
-  open, onClose, editing, allFornecedores, fazendas, clienteId, onSaved, onSelectExisting, onMesclar,
+  open, onClose, editing, allFornecedores, fazendas, clienteId, onSaved, onSelectExisting, onMesclar, nomeInicial, onCriado,
   lerCadastro = lerCadastroParaConferir, lerLinha = lerLinhaDoBanco, lerUso = lerUsoDoBanco, lerTrava = lerTravaDoBanco,
 }: Props) {
   const [d, setD] = useState<DadosDoFornecedor>(VAZIO);
@@ -151,13 +155,13 @@ export function FornecedorFormDialog({
       setD(dadosDaLinha(Object.fromEntries(Object.entries(editing)))); setLinhaLida(false);
       void lerLinha(editing.id).then((l) => { if (!vivo) return; if (l) setD(dadosDaLinha(l)); setLinhaLida(true); });
       void lerUso(editing.id).then((u) => { if (vivo) setUso(u); });
-    } else { setD(VAZIO); setLinhaLida(true); }
+    } else { setD(nomeInicial ? { ...VAZIO, nome: nomeInicial } : VAZIO); setLinhaLida(true); }
     void lerCadastro(clienteId, editing?.nome ?? '').then((c) => { if (vivo) setCadastro(c); }).catch(() => { if (vivo) setCadastro([]); });
     void loadContasDoPlanoDoCliente(clienteId).then((cs) => {
       if (vivo) setPlanos(cs.filter((c) => c.subcentro).map((c) => ({ value: c.id, label: `${c.subcentro} · ${c.centro_custo}` })));
     }).catch(() => undefined);
     return () => { vivo = false; };
-  }, [open, editing, clienteId, lerLinha, lerUso, lerCadastro]);
+  }, [open, editing, clienteId, lerLinha, lerUso, lerCadastro, nomeInicial]);
 
   /* FORN-EDITAR-01 — o documento pelo validador único; o gravado fora do padrão abre como está */
   const validado = validarDocumento(d.cpf_cnpj);
@@ -206,13 +210,15 @@ export function FornecedorFormDialog({
     const payload = { cliente_id: clienteId, ...payloadDoFornecedor(d, documentoParaGravar) };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- o payload é montado pelo dono puro (`payloadDoFornecedor`)
     const tabela = supabase.from('financeiro_fornecedores') as any;
-    const { error } = editing ? await tabela.update(payload).eq('id', editing.id) : await tabela.insert(payload);
+    const { data: criado, error } = editing ? await tabela.update(payload).eq('id', editing.id)
+      : onCriado ? await tabela.insert(payload).select('id').single() : await tabela.insert(payload);
     setSaving(false);
     if (error) { setRecado({ texto: `Não foi possível gravar: ${error.message}`, tom: 'erro' }); return; }
+    if (!editing && onCriado && criado && typeof criado.id === 'string') onCriado(criado.id);
     toast.success(editing ? 'Fornecedor atualizado' : 'Fornecedor criado');
     notificarFornecedoresMudaram(clienteId);
     onClose(); onSaved();
-  }, [saving, documentoBloqueia, linhaLida, clienteId, d, editing, allFornecedores, lerCadastro, lerTrava, documentoParaGravar, onClose, onSaved]);
+  }, [saving, documentoBloqueia, linhaLida, clienteId, d, editing, allFornecedores, lerCadastro, lerTrava, documentoParaGravar, onClose, onSaved, onCriado]);
 
   const reativarExistente = useCallback(async () => {
     if (!reativarTarget) return;
