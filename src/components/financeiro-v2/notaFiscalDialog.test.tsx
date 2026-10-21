@@ -30,6 +30,8 @@ const consultas = vi.hoisted(() => ({
   fornecedorPeloNome: vi.fn(async (): Promise<string | null> => null),
   notaJaRegistrada: vi.fn(async (): Promise<unknown[]> => []),
   ultimaClassificacaoDoFornecedor: vi.fn(async (): Promise<unknown> => null),
+  fornecedorPeloDocumento: vi.fn(async (_c: string, _d: string): Promise<{ id: string; nome: string; ativo: boolean } | null> => null),
+  usoDoFornecedor: vi.fn(async (_f: string): Promise<{ lancamentos: number; ultimo: string | null } | null> => ({ lancamentos: 3, ultimo: '2026-09-01' })),
 }));
 vi.mock('@/lib/financeiro/nfeConsultas', () => consultas);
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() } }));
@@ -359,5 +361,41 @@ describe('N8 — FIN-NOTA-PDF-01b: "Atualizar e parcelar" (o à vista existente 
     fireEvent.click(screen.getByTestId('nota-so-anexar'));
     await waitFor(() => expect(g.documentosDoLancamento).toHaveBeenCalled());
     expect(g.parcelarExistente).not.toHaveBeenCalled();
+  });
+});
+
+describe('N9 — NOTA-FORNECEDOR-DUPLICA-01: o cadastro sem CNPJ e o CNPJ ja\' cadastrado', () => {
+  const SEM_DOC: FornecedorV2 = { ...FORN, id: 'semdoc', nome: 'Agro Sintetica Insumos Agropecuarios Ltda', cpf_cnpj: null };
+  it('achado pelo NOME entre os sem CNPJ: "sem CNPJ · 3 lanç. · último", "Completar com o CNPJ" (nao cadastra outro); depois, "cadastrado"', async () => {
+    abrir(montarNota({ fornecedores: [SEM_DOC] }), { fornecedores: [SEM_DOC] });
+    expect(screen.getByTestId('nota-chip-fornecedor').textContent).toBe('achado pelo nome · sem CNPJ');
+    expect(screen.queryByTestId('nota-cadastrar-fornecedor')).toBeNull();
+    expect((await screen.findByTestId('nota-sem-cnpj')).textContent).toContain('sem CNPJ · 3 lanç. · último 01/09/2026');
+    fireEvent.click(screen.getByTestId('nota-completar-fornecedor'));
+    await waitFor(() => expect(consultas.gravarDocumentoNoCadastro).toHaveBeenCalledWith('cli', 'semdoc', CNPJ));
+    await waitFor(() => expect(screen.getByTestId('nota-chip-fornecedor').textContent).toBe('cadastrado'));
+  });
+  it('"Cadastrar outro" e\' escolha do operador: so\' entao aparece "Cadastrar com estes dados"', async () => {
+    abrir(montarNota({ fornecedores: [SEM_DOC] }), { fornecedores: [SEM_DOC] });
+    fireEvent.click(screen.getByTestId('nota-cadastrar-outro'));
+    expect(await screen.findByTestId('nota-cadastrar-fornecedor')).toBeTruthy();
+  });
+  it('o CNPJ ja\' e\' de um cadastro (conferido no banco antes de criar): a frase e "Usar este"; nada criado', async () => {
+    consultas.fornecedorPeloDocumento.mockResolvedValueOnce({ id: 'ja', nome: 'Cadastro Sintetico Existente', ativo: true });
+    const props = abrir(montarNota());
+    fireEvent.click(screen.getByTestId('nota-cadastrar-fornecedor'));
+    expect((await screen.findByTestId('nota-conflito')).textContent).toContain('Cadastro Sintetico Existente');
+    expect(screen.getByTestId('nota-chip-fornecedor').textContent).toBe('CNPJ já cadastrado');
+    expect(props.onCriarFornecedor).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('nota-usar-este'));
+    await waitFor(() => expect(screen.getByTestId('nota-chip-fornecedor').textContent).toBe('cadastrado'));
+    expect(screen.queryByTestId('nota-cadastrar-fornecedor')).toBeNull();
+  });
+  it('a nota reaberta RELE^ com a lista de agora: o cadastro criado depois da leitura vira "cadastrado" (nao oferece criar de novo)', () => {
+    const lidaAntes = montarNota();                       // lida quando ainda nao havia cadastro
+    expect(lidaAntes.doXml.resolucao.achadoPor).toBeNull();
+    abrir(lidaAntes, { fornecedores: [FORN] });           // o cadastro com o CNPJ existe agora
+    expect(screen.getByTestId('nota-chip-fornecedor').textContent).toBe('cadastrado');
+    expect(screen.queryByTestId('nota-cadastrar-fornecedor')).toBeNull();
   });
 });
