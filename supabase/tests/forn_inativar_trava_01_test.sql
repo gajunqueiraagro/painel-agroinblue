@@ -23,11 +23,11 @@ BEGIN
   insert into public.financeiro_fornecedores (cliente_id, nome, ativo) values (k, 'SINT TRAVA fica', true) returning id into f4;
   insert into public.financeiro_fornecedores (cliente_id, nome, ativo) values (k, 'SINT TRAVA sem nada', true) returning id into f5;
   set local session_replication_role = replica;
-  insert into public.financeiro_lancamentos_v2 (cliente_id, fazenda_id, tipo_operacao, valor, sinal, data_competencia, status_transacao,
-    favorecido_id, conta_bancaria_id, descricao, cenario, origem_lancamento, cancelado)
-  values (k, fz, '2-Saídas', 10, -1, date '2026-09-01', 'previsto', f1, cta, 'SINT TRAVA', 'realizado', 'manual', false),
-         (k, fz, '2-Saídas', 10, -1, date '2026-09-01', 'previsto', f3, cta, 'SINT TRAVA', 'realizado', 'manual', false),
-         (k, fz, '2-Saídas', 10, -1, date '2026-09-01', 'previsto', f5, cta, 'SINT TRAVA cancelado', 'realizado', 'manual', true);
+  insert into public.financeiro_lancamentos_v2 (cliente_id, fazenda_id, tipo_operacao, valor, sinal, data_competencia, data_vencimento,
+    status_transacao, favorecido_id, conta_bancaria_id, descricao, cenario, origem_lancamento, cancelado)
+  values (k, fz, '2-Saídas', 10, -1, date '2026-09-01', date '2026-09-01', 'previsto', f1, cta, 'SINT TRAVA', 'realizado', 'manual', false),
+         (k, fz, '2-Saídas', 10, -1, date '2026-09-01', date '2026-09-01', 'previsto', f3, cta, 'SINT TRAVA', 'realizado', 'manual', false),
+         (k, fz, '2-Saídas', 10, -1, date '2026-09-01', null, 'previsto', f5, cta, 'SINT TRAVA cancelado', 'realizado', 'manual', true);
   insert into public.financeiro_recorrencias (cliente_id, fazenda_id, descricao, conta_bancaria_id, subcentro, valor_base, dia_vencimento,
     data_inicio, primeiro_vencimento, data_fim, ativo, favorecido_id)
   values (k, fz, 'SINT TRAVA rec', cta, 'SINT', 10, 10, date '2026-09-01', date '2026-09-10', date '2027-08-31', true, f2) returning id into rec;
