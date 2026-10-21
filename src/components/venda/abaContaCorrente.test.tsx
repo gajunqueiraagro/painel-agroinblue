@@ -555,13 +555,15 @@ describe('OC-CC-ACOES-LINHA-02 — clique e menu "⋯" em toda linha do extrato'
       ['Abrir lançamento', null],
       ['Parcelar este recebimento', 'já recebido · só se parcela o que está programado'],
       ['Desvincular da operação', 'disponível em breve'],
-      ['Cancelar recebimento programado', 'só para recebimento programado'],
+      ['Cancelar recebimento programado', 'já recebido · para desfazer, estorne o recebimento no lançamento'],
     ]);
+    /* OC-RECEB-PARCIAL-01 — UMA REGRA SO': conciliado trava os tres gestos com o MESMO motivo, que diz o proximo passo (antes o
+       mesmo recebimento aparecia "ja' recebido" num item, "conciliado" no outro e "so' para programado" no terceiro) */
     expect(par(linha({ status: 'conciliado' }))).toEqual([
       ['Abrir lançamento', null],
-      ['Parcelar este recebimento', 'já recebido · só se parcela o que está programado'],
-      ['Desvincular da operação', 'conciliado · desfaça a conciliação primeiro'],
-      ['Cancelar recebimento programado', 'só para recebimento programado'],
+      ['Parcelar este recebimento', 'conciliado · desfaça a conciliação na Conferência primeiro'],
+      ['Desvincular da operação', 'conciliado · desfaça a conciliação na Conferência primeiro'],
+      ['Cancelar recebimento programado', 'conciliado · desfaça a conciliação na Conferência primeiro'],
     ]);
     expect(par(linha({ status: 'programado', noSaldo: false }))).toEqual([
       ['Abrir lançamento', null],
@@ -579,7 +581,7 @@ describe('OC-CC-ACOES-LINHA-02 — clique e menu "⋯" em toda linha do extrato'
       ['Abrir lançamento', null],
       ['Parcelar este pagamento', 'já pago · só se parcela o que está programado'],
       ['Desvincular da operação', 'disponível em breve'],
-      ['Cancelar pagamento programado', 'só para pagamento programado'],
+      ['Cancelar pagamento programado', 'já pago · para desfazer, estorne o pagamento no lançamento'],
     ]);
   });
 
@@ -608,7 +610,7 @@ describe('OC-CC-ACOES-LINHA-02 — clique e menu "⋯" em toda linha do extrato'
       ['Desfazer explicação', null],
     ]);
     expect(par({ ...x, lancamentoId: 'L9' })[1]).toEqual(['Abrir lançamento', null]);
-    expect(par({ ...x, status: 'conciliado' })[2]).toEqual(['Desfazer explicação', 'conciliado · desfaça a conciliação primeiro']);
+    expect(par({ ...x, status: 'conciliado' })[2]).toEqual(['Desfazer explicação', 'conciliado · desfaça a conciliação na Conferência primeiro']);
     expect(acoesDaLinha(x, 'venda', false)[2].perigo).toBe(true);
   });
 
@@ -820,8 +822,8 @@ describe('OC-CC-MODAL-FINANCEIRO-01 — "Programar" abre o modal do Financeiro; 
     expect(item(true)?.motivo).toBeNull();
     expect(item(false)?.motivo).toMatch(/sem compromisso na operação/);
     expect(item(true, true)?.motivo).toBe(motivoSomenteLeitura('venda'));
-    /* o que ja' foi pago nao e' "programado": o motivo de sempre, com ou sem compromisso */
+    /* o que ja' foi recebido nao e' "programado": diz que ja' e' dinheiro e o caminho (OC-RECEB-PARCIAL-01), com ou sem compromisso */
     expect(acoesDaLinha({ ...l, status: 'realizado' }, 'venda', false, true).find(a => a.chave === 'cancelar_programado')?.motivo)
-      .toBe('só para recebimento programado');
+      .toBe('já recebido · para desfazer, estorne o recebimento no lançamento');
   });
 });
