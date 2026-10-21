@@ -10751,3 +10751,23 @@ curta nas secoes de regras) e a pendencia (na FILA); o bloco inteiro vai para do
     750/814 = divida REC-COLUNAS-01b); com `&barra=32` a mesma bancada serve a medida da regua e o `check:ui-desloca`.
   ⚠ NAO PROVADO: nada com login no app real — regua, linhas que cabem e prints sao da bancada (componentes reais, barra de 32px da
     `BarraSecao`).
+
+- ⚠ VALOR CERTO TAMBEM MUDA NUM MES — COM CONFIRMACAO (CONC-VALOR-CERTO-ACEITA-01, Gabriel 21/10/2026: "mesmo valor certo pode mudar
+  ocasionalmente"; CORRIGE o item (3) do CONC-LIGAR-FUTURO-01a). 20261028101200. Extrato MAIOR que lancamento de valor certo NAO recusa
+  mais: pergunta. `fn_conc_ligar_com_valor_real(extrato, lancamento, motivo, p_aceitar_valor_extrato default false)` (a 3-args saiu;
+  forma unica): sem a confirmacao devolve SEM GRAVAR `{ok:false, precisa_confirmar:true, frase:"Este mês veio R$ X (previsto R$ Y).
+  Ligar com o valor do extrato?", valor_extrato, valor_previsto}`; com ela, o lancamento DAQUELE MES passa ao valor do extrato
+  (`_fn_conc_valor_do_extrato`, nucleo fechado: trilha `financeiro_baixas_no_vinculo` tipo 'valor_real', motivo "valor do extrato",
+  antes/depois; `valor_do_mes_origem` 'manual') e liga — realizado na data do extrato. A RECORRENCIA NAO MUDA. "A confirmar"
+  (estimado) aceita direto; extrato MENOR divide. Titulo de OC e parcela de financiamento NAO sobem: "o valor deste lancamento e' da
+  operacao comercial: corrija la'" (o 1:1 e o Casar dizem o mesmo).
+  · `fn_espelho_casar`: o item maior que um valor certo faz a simulacao devolver `pergunta` {lancamento_id, frase, ...}; gravar sem
+    `aceitar_valor_extrato: true` no item devolve `{ok:false, motivo:'confirmar_valor_extrato', pergunta}` sem gravar. O 1:1 cru
+    (`fn_vincular_extrato_lancamento`) diz "Para ligar, confirme o valor do extrato deste mes".
+  · TELA: "Casar com o banco" mostra a pergunta (ambar, `pergunta-valor-extrato`) e troca o Conciliar por "Ligar com o valor do
+    extrato" (`aceitar-valor-extrato`), que grava na hora com o item marcado; mudou o levado ou o valor, a confirmacao cai. A barra da
+    Conferencia so' concilia o que fecha ao centavo (nunca cai aqui); se cair, o rotulo manda para o Casar. Bancada `tela=casar-1x1&v=certo`.
+  Testes: SQL `conc_valor_certo_aceita_01_test.sql` (A1–A6), F3 do `conc_ligar_futuro_01a`, P4b do `oc_receb_parcial_01`, B9 do
+  `conc_baixa_no_vinculo_01` (assinatura nova) — OK no proto. Mutacoes SQL (aceita sem confirmar, nucleo sem trilha, estimado
+  perguntando, Casar gravando sem confirmar, sem guarda) e de tela (sem a marca de aceito, ignorar o pedido ao gravar, pergunta
+  escondida) — todas derrubam teste. ⚠ O Vivo (valor certo) agora liga com a pergunta; virar "A confirmar" continua decisao do Gabriel.
