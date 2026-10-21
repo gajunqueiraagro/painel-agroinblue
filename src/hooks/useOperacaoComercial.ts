@@ -274,16 +274,18 @@ export function useOperacaoComercial() {
   // (supabase as any).from — mesmo idioma do .rpc: as tabelas zoo_operacao_* ainda
   // não estão no types.ts gerado.
   const carregarOperacao = async (operacaoId: string, clienteId: string): Promise<OcEstado | null> => {
-    const { data: operacao, error: eOp } = await (supabase as any)
-      .from('zoo_operacoes_comerciais').select('*')
-      .eq('id', operacaoId).eq('cliente_id', clienteId).maybeSingle();
-    if (eOp) throw new Error(eOp.message);
-    if (!operacao) return null;
-    const [pr, mv, ev] = await Promise.all([
+    /* OC-ABRIR-LENTO-01 — o cabecalho e as tres listas saem JUNTOS (eram duas idas em serie). A conferencia do cliente e' a
+       mesma: sem a OC deste cliente, nada do que veio e' usado; as listas, a RLS ja' isola por cliente. */
+    const [opR, pr, mv, ev] = await Promise.all([
+      (supabase as any).from('zoo_operacoes_comerciais').select('*')
+        .eq('id', operacaoId).eq('cliente_id', clienteId).maybeSingle(),
       (supabase as any).from('zoo_operacao_partes').select('*').eq('operacao_id', operacaoId).order('created_at'),
       (supabase as any).from('zoo_operacao_movimentacoes').select('*').eq('operacao_id', operacaoId).order('created_at'),
       (supabase as any).from('zoo_operacao_eventos').select('*').eq('operacao_id', operacaoId).order('created_at'),
     ]);
+    const { data: operacao, error: eOp } = opR;
+    if (eOp) throw new Error(eOp.message);
+    if (!operacao) return null;
     /* TITULO VIVO = parte ativa CUJO LANCAMENTO tambem esta vivo.
        `zoo_operacao_partes` guarda o vinculo (`financeiro_lancamento_id`) e o
        cancelamento DA PARTE, mas nao sabe se o LANCAMENTO foi cancelado. Quem

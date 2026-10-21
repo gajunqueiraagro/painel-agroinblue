@@ -1074,7 +1074,15 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       }
       setOcHidratando(true);
       try {
-        const estado = await ocRpc.carregarOperacao(ocIdParam, clienteAtual.id);
+        /* OC-ABRIR-LENTO-01 — as duas linhas do boitel saem JUNTO com a OC (eram tres idas em serie depois dela). So' sao
+           usadas depois das mesmas conferencias de cliente e de tipo; a RLS isola a tabela por cliente. */
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: tabela fora de types.ts
+        const lerBoitel = (cenario: 'projetado' | 'realizado') => (supabase as any)
+          .from('zoo_operacao_boitel').select('*')
+          .eq('operacao_id', ocIdParam).eq('cenario', cenario).maybeSingle();
+        const [estado, { data: linhaBoitel }, { data: linhaReal }] = await Promise.all([
+          ocRpc.carregarOperacao(ocIdParam, clienteAtual.id), lerBoitel('projetado'), lerBoitel('realizado'),
+        ]);
         if (cancelado) return;
         if (!estado) throw new Error('Operação não encontrada ou inacessível a este cliente.');
         const op = estado.operacao;
@@ -1105,10 +1113,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
            ⚠ LEITURA POR PostgREST, e nao por RPC: a tabela tem policy de SELECT e a
            leitura funciona. A ESCRITA continua exclusiva de `oc_salvar_boitel`.
            ⚠ 'projetado': o realizado nasce no abate e e' outra linha. */
-        const { data: linhaBoitel } = await (supabase as any)
-          .from('zoo_operacao_boitel').select('*')
-          .eq('operacao_id', op.id).eq('cenario', 'projetado').maybeSingle();
-        if (cancelado) return;
         const bd = boitelDeLinha(linhaBoitel);
         /* ⚠ VENDA COMUM REABRE SEM TIPO, e isso e' honestidade, nao esquecimento: a OC
            nao guarda `tipo_venda`, entao escolher um por ela seria inventar dado. O botao
@@ -1119,11 +1123,6 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
 
         /* ⚠ A SEGUNDA LINHA, quando existir — PR-OC-VENDA-REALIZADO-02. Mesma leitura por
            PostgREST do projetado; `maybeSingle` porque ela e' opcional por natureza. */
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: tabela fora de types.ts
-        const { data: linhaReal } = await (supabase as any)
-          .from('zoo_operacao_boitel').select('*')
-          .eq('operacao_id', op.id).eq('cenario', 'realizado').maybeSingle();
-        if (cancelado) return;
         const realGravado = boitelDeLinha(linhaReal);
         setOcBoitelReal(realGravado);
         setOcBoitelRealSalvo(realGravado);
