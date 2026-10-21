@@ -7,7 +7,7 @@
 -- T3 completou: titulo realizado pelo caminho de sempre, liquidacao no valor inteiro.   T4b desfazer tudo: estornada, OC como antes.
 -- T5 a PAGAR (compra) e abate: o mesmo.   T6 lancamento sem OC: o gatilho nao escreve nada.
 -- T7 liquidacao manual ativa: a recusa de sempre.   T8 tenant da leitura (outro cliente e sem usuario: 42501).
--- T9 a leitura = contagem direta em todos os clientes.   T10 1:1 com extrato MENOR: titulo de OC recusa; sem OC passa.
+-- T9 a leitura = contagem direta em todos os clientes.   T10 1:1 com extrato MENOR: passa na hora (a decisao e' no fim da transacao, OC-RECEB-PARCIAL-01).
 -- T11 1:1 EXATO em titulo de OC: passa.
 CREATE FUNCTION pg_temp.ext(p_v numeric, p_d date) RETURNS uuid LANGUAGE sql AS $f$
   INSERT INTO extrato_bancario_v2 (cliente_id, conta_bancaria_id, data_movimento, valor, tipo_movimento, hash_movimento, descricao, documento)
@@ -102,15 +102,18 @@ BEGIN
   IF v_t IS NULL OR v_t NOT LIKE '%ja possui liquidacao manual ativa; sincronizacao automatica bloqueada%' THEN RAISE EXCEPTION 'T7: %', v_t; END IF;
   IF pg_temp.liq(a) IS DISTINCT FROM '10.00|2031-03-01|recebimento|manual n=1' THEN RAISE EXCEPTION 'T7 gravou: %', pg_temp.liq(a); END IF;
   v_ok := v_ok || 'T7 ok; ';
-  -- §T10 e T11
+  -- §T10 e T11 — OC-RECEB-PARCIAL-01 (21/10/2026): o 1:1 MENOR em titulo de OC deixou de recusar na hora; a decisao foi para o fim
+  -- da transacao (divide pela parcela da programacao da OC, ou recusa se a OC nao tem programacao — `oc_receb_parcial_01_test.sql`
+  -- P2/P7). E a promocao imediata so' vale para o inteiro: o parcial sem OC tambem espera o fim (divide — `conc_baixa_no_vinculo_01`).
   a := pg_temp.tit(150, 'venda'); v_t := NULL;
   BEGIN PERFORM fn_vincular_extrato_lancamento(pg_temp.ext(100, '2031-03-04'), a, 100); EXCEPTION WHEN sqlstate 'P0001' THEN v_t := SQLERRM; END;
-  IF v_t IS DISTINCT FROM 'Este título é de operação comercial e o valor do extrato é menor que o do título. Faça o recebimento parcial pela Conferência (bloco). Nada foi gravado.'
-     OR (SELECT status_transacao FROM financeiro_lancamentos_v2 WHERE id = a) IS DISTINCT FROM 'programado'
-     OR public._fn_lancamento_aplicado_vivo(a) IS DISTINCT FROM 0::numeric THEN RAISE EXCEPTION 'T10 OC: %', v_t; END IF;
-  s := pg_temp.tit(150, NULL);   -- sem OC: como sempre (passa, e o titulo e' promovido)
+  IF v_t IS NOT NULL OR public._fn_lancamento_aplicado_vivo(a) IS DISTINCT FROM 100::numeric
+     OR (SELECT status_transacao FROM financeiro_lancamentos_v2 WHERE id = a) IS DISTINCT FROM 'programado' THEN RAISE EXCEPTION 'T10 OC: %', v_t; END IF;
+  s := pg_temp.tit(150, NULL);   -- sem OC: o vinculo passa; a baixa (e a divisao) e' no fim da transacao
   PERFORM fn_vincular_extrato_lancamento(pg_temp.ext(100, '2031-03-04'), s, 100);
-  IF (SELECT status_transacao FROM financeiro_lancamentos_v2 WHERE id = s) IS DISTINCT FROM 'realizado' THEN RAISE EXCEPTION 'T10 sem OC: nao passou'; END IF;
+  IF (SELECT status_transacao FROM financeiro_lancamentos_v2 WHERE id = s) IS DISTINCT FROM 'programado'
+     OR public._fn_lancamento_aplicado_vivo(s) IS DISTINCT FROM 100::numeric THEN RAISE EXCEPTION 'T10 sem OC'; END IF;
+  a := pg_temp.tit(150, 'venda');
   PERFORM fn_vincular_extrato_lancamento(pg_temp.ext(150, '2031-03-04'), a, 150);
   IF (SELECT status_transacao FROM financeiro_lancamentos_v2 WHERE id = a) IS DISTINCT FROM 'realizado'
      OR pg_temp.liq(a) IS DISTINCT FROM '150.00|2031-03-04|recebimento|financeiro n=1' THEN RAISE EXCEPTION 'T11: %', pg_temp.liq(a); END IF;
