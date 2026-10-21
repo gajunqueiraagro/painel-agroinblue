@@ -33,30 +33,39 @@ describe('a leitura: uma chamada por cliente, e erro não é "tudo em dia"', () 
   });
 });
 
-describe('a linha: o selo e o botão Gerar têm lugar reservado', () => {
-  it('o selo vem do dono, num lugar de largura reservada que existe em toda linha', () => {
-    expect(TELA).toContain('const falta = faltaGerarDaRegra(aGerar, r.id);');
-    expect(TELA).toContain('const selo = seloFaltaGerar(falta);');
-    /* RECORRENCIAS-COLUNAS-01 (Gabriel 17/10): a Situação é UM lugar (116px desde o REC-COLUNAS-01) — o selo quando há o que gerar, senão a situação */
-    expect(TELA).toContain("data-testid=\"rec-lugar-do-selo\"");
-    const lugar = TELA.slice(TELA.indexOf('data-testid="rec-lugar-do-selo"'), TELA.indexOf('data-testid="rec-lugar-do-gerar"'));
-    expect(lugar).toContain('{selo ? (');
+describe('a linha: o selo curto, a marca laranja e o Gerar no "⋯" (REC-COLUNAS-01c)', () => {
+  const inicio = TELA.indexOf('const falta = faltaGerarDaRegra(aGerar, r.id);');
+  const linha = TELA.slice(inicio, TELA.indexOf('</TableRow>', inicio));
+  it('o selo vem do dono, no lugar da Situação, que tem a largura das situações comuns (68)', () => {
+    expect(linha).toContain('const selo = seloFaltaGerar(falta);');
+    expect(linha).toContain('data-testid="rec-lugar-do-selo"');
+    expect(linha.slice(linha.indexOf('data-testid="rec-lugar-do-selo"'))).toContain('{selo ? (');
     expect(TELA).toContain("{ campo: 'situacao', rotulo: 'Situação', largura: LARGURA_SITUACAO },");
-    expect(TELA).toContain('const LARGURA_SITUACAO = 116;');
+    expect(TELA).toContain('const LARGURA_SITUACAO = 68;');
+    /* o texto do selo é o do dono, sem número montado na tela */
+    expect(linha).toContain('>{selo.texto}</span>');
   });
-  it('o botão Gerar fica ANTES do "⋯", num lugar reservado (vazio e `aria-hidden` sem nada a gerar), e abre o mesmo diálogo', () => {
-    const acoes = TELA.slice(TELA.indexOf('GERAR NA LINHA'), TELA.indexOf('<DropdownMenuContent'));
-    expect(acoes).toContain('style={{ width: LARGURA_GERAR }} data-testid="rec-lugar-do-gerar"');
-    expect(acoes).toContain('aria-hidden={falta && falta.aGerar > 0 && r.ativo ? undefined : true}');
-    expect(acoes).toContain('{falta && falta.aGerar > 0 && r.ativo && (');
-    expect(acoes).toContain('onClick={() => setGerando(r)}');
-    expect(acoes).toContain('title={tituloDoGerarNaLinha(falta)}');
-    expect(acoes.indexOf('rec-gerar-na-linha')).toBeLessThan(acoes.indexOf('<DropdownMenu>'));
-    expect(TELA).toContain('const LARGURA_ACOES = LARGURA_GERAR + 24;');
-    /* o clique no botão não abre a linha: o invólucro da célula segura o clique, como no "⋯" */
-    expect(TELA.slice(TELA.indexOf("cn(TD, 'px-0 text-right select-none')"), TELA.indexOf('GERAR NA LINHA'))).toContain('onClick={e => e.stopPropagation()}');
-    /* o item do "⋯" continua */
-    expect(TELA).toContain('<Play className="mr-2 h-3 w-3" /> Gerar lançamentos');
+  it('a marca laranja de 3px só na regra com mês a gerar, por sombra interna (não muda largura)', () => {
+    expect(TELA).toContain("const MARCA_FALTA_GERAR = '[&>td:first-child]:shadow-[inset_3px_0_0_#d97706]';");
+    expect(linha).toContain('const temMesAGerar = (falta?.aGerar ?? 0) > 0;');
+    expect(linha).toContain('temMesAGerar && MARCA_FALTA_GERAR)}>');
+    expect(linha).toContain("data-falta-gerar={temMesAGerar ? '' : undefined}");
+    /* a marca não depende de mais nada (nem de "ativo", nem de mês fechado) */
+    expect(linha.match(/MARCA_FALTA_GERAR/g)).toHaveLength(1);
+  });
+  it('o botão Gerar saiu da linha; é a PRIMEIRA opção do "⋯", habilitada só com mês a gerar (ou sem a leitura)', () => {
+    expect(TELA).not.toContain('rec-gerar-na-linha');
+    expect(TELA).not.toContain('LARGURA_GERAR');
+    const menu = linha.slice(linha.indexOf('<DropdownMenuContent'), linha.indexOf('</DropdownMenuContent>'));
+    expect(menu.indexOf('data-testid="rec-menu-gerar"')).toBeLessThan(menu.indexOf('Editar'));
+    expect(menu).toContain('disabled={!podeGerar}');
+    expect(menu).toContain('onClick={() => { if (podeGerar) setGerando(r); }}');
+    expect(linha).toContain('const podeGerar = r.ativo && (temMesAGerar || erroAGerar);');
+    expect(linha).toContain("const rotuloDoGerar = falta && temMesAGerar ? rotuloDoGerarNoMenu(falta) : erroAGerar ? 'Gerar lançamentos' : 'Gerar meses que faltam';");
+    /* apagado, o motivo fica escrito no item (nunca some) */
+    expect(menu).toContain('{!podeGerar && <span className="ml-1 opacity-80">· {motivoSemGerar}</span>}');
+    /* abrir o menu não abre a linha */
+    expect(TELA.slice(TELA.indexOf("cn(TD, 'px-0 text-right select-none')"), TELA.indexOf('<DropdownMenu>'))).toContain('onClick={e => e.stopPropagation()}');
   });
 });
 
@@ -95,7 +104,9 @@ describe('RECORRENCIAS-COLUNAS-01 — a régua', () => {
   it('a soma escrita das fixas é a soma das colunas fixas + ações; Favorecido ~55% do resto; sem a trava de largura', async () => {
     const larg = [...TELA.matchAll(/largura: (\d+)(?:, direita: true)? \}/g)].map((m) => Number(m[1]));
     const n = (nome: string) => Number(TELA.match(new RegExp(`const ${nome} = (\\d+);`))?.[1]);
-    expect(larg.reduce((a, b) => a + b, 0) + n('LARGURA_SITUACAO') + n('LARGURA_GERAR') + 24).toBe(n('LARGURA_DAS_FIXAS'));
+    expect(larg.reduce((a, b) => a + b, 0) + n('LARGURA_SITUACAO') + n('LARGURA_ACOES')).toBe(n('LARGURA_DAS_FIXAS'));
+    /* REC-COLUNAS-01c: a coluna das ações é o "⋯" (20px) + 4 */
+    expect(n('LARGURA_ACOES')).toBe(24);
     expect(TELA).toContain('const FATIA_FAVORECIDO = 0.55;');
     expect(TELA).not.toContain('max-w-5xl');
     expect(TELA).not.toMatch(/<h1/);
