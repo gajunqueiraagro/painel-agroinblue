@@ -145,7 +145,7 @@ describe('as duas telas de lote', () => {
   it('Do XML com cliente: uma linha de convite, e o botão "Escolher arquivos"', () => {
     render(<NovoDeXmlDialog open onClose={() => {}} clienteId="cli" fazendas={[]} fornecedores={[]} onAbrirLancamento={() => {}} lancadas={new Set()} />);
     const area = screen.getByTestId('xml-area-de-soltar');
-    expect(area.textContent).toBe('Clique ou arraste os XML das notas · NF-e (modelo 55) · um arquivo por nota · vários de uma vezEscolher arquivos');
+    expect(area.textContent).toBe('Clique ou arraste as notas (XML ou PDF) · NF-e (modelo 55) · um arquivo por nota · vários de uma vezEscolher arquivos');
     expect(area.className).toContain('h-12');
     expect((screen.getByTestId('xml-input') as HTMLInputElement).multiple).toBe(true);
   });
