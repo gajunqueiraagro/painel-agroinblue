@@ -50,6 +50,20 @@ export const fonteDoCadastroNoBanco: FonteDoCadastro = {
     if (!data || data.length === 0) throw new Error('nenhuma linha reativada');
     notificarFornecedoresMudaram(clienteId);
   },
+  /* FORN-FILIAL-01 — "preencher o CNPJ naquele cadastro": só no cadastro DESTE cliente que está SEM documento (o banco ainda trava o
+     CNPJ de outro ativo, no fim da transação) */
+  preencherDocumento: async (clienteId, id, documento) => {
+    const { data, error } = await supabase
+      .from('financeiro_fornecedores')
+      .update({ cpf_cnpj: documento })
+      .eq('cliente_id', clienteId)
+      .eq('id', id)
+      .or('cpf_cnpj.is.null,cpf_cnpj.eq.')
+      .select('id');
+    if (error) throw new Error(error.message);
+    if (!data || data.length === 0) throw new Error('o cadastro já tem documento');
+    notificarFornecedoresMudaram(clienteId);
+  },
 };
 
 /**
