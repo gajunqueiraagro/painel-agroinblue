@@ -12,8 +12,9 @@
  *   do P1. O filtro abaixo e a lista da RPC dizem a MESMA coisa, e a RPC recusa pelo nome o que vier a mais.
  */
 
-/** As chaves que `oc_editar_dados_operacao` aceita — espelho de `v_permitidas` (migration 20261027155000). */
-export const CAMPOS_CADASTRAIS_OC: ReadonlyArray<string> = ['contraparte_id', 'observacoes', 'numero_documento'];
+/** As chaves que `oc_editar_dados_operacao` aceita — espelho de `v_permitidas` (migrations 20261027155000 e 20261028110620: o
+ *  tipo de venda entrou como CLASSIFICACAO, so' desmama <-> gado adulto; boitel o banco recusa e a tela nem oferece). */
+export const CAMPOS_CADASTRAIS_OC: ReadonlyArray<string> = ['contraparte_id', 'observacoes', 'numero_documento', 'tipo_venda'];
 
 export type CaminhoSalvarOC = 'nenhum' | 'editar_dados' | 'salvar_rascunho';
 
