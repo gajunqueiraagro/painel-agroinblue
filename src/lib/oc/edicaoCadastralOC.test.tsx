@@ -76,23 +76,26 @@ describe('o caminho do Salvar e o que ele leva', () => {
     expect(caminhoDoSalvarOC('cancelada')).toBe('nenhum');
   });
 
-  it('so os cadastrais vao — data e fazenda ficam de fora mesmo sujas', () => {
-    expect(CAMPOS_CADASTRAIS_OC).toEqual(['contraparte_id', 'observacoes', 'numero_documento']);
-    expect(soCadastrais({ contraparte_id: 'ricardo', data_operacao: '2025-07-30', observacoes: 'x', fazenda_id: 'f' }))
-      .toEqual({ contraparte_id: 'ricardo', observacoes: 'x' });
+  it('so os cadastrais vao — data e fazenda ficam de fora mesmo sujas; o tipo de venda vai (OC-TIPO-VENDA-01)', () => {
+    expect(CAMPOS_CADASTRAIS_OC).toEqual(['contraparte_id', 'observacoes', 'numero_documento', 'tipo_venda']);
+    expect(soCadastrais({ contraparte_id: 'ricardo', data_operacao: '2025-07-30', observacoes: 'x', fazenda_id: 'f', tipo_venda: 'desmama' }))
+      .toEqual({ contraparte_id: 'ricardo', observacoes: 'x', tipo_venda: 'desmama' });
     /* e a busca sabe achar: sem nada cadastral, sai vazio */
     expect(soCadastrais({ data_operacao: '2025-07-30' })).toEqual({});
   });
 });
 
 describe('venda fechada', () => {
-  it('data, fazenda e tipo de venda travados com cadeado; comprador e observacao livres; o selo diz por que', () => {
+  it('OC-TIPO-VENDA-01: cancelada trava o tipo (o boitel fechado travado: `tipoVendaEditavelComOCFechada` e o banco, T2)', () => {
+    venda({ vendaTipoVenda: 'desmama', ocStatusComercial: 'cancelada' });
+    expect(screen.getByTestId('tipo-venda-oc').hasAttribute('disabled')).toBe(true);
+  });
+
+  it('data e fazenda travados com cadeado; comprador, observacao e TIPO DE VENDA livres (OC-TIPO-VENDA-01); o selo diz por que', () => {
     venda({ semAlteracoes: false });
     expect(screen.getByText('Operação fechada · reabra para editar')).toBeTruthy();
     expect(campoData().hasAttribute('disabled')).toBe(true);
-    const combos = screen.getAllByRole('combobox');
-    const tipo = combos.find(c => c.textContent?.includes('Selecione...'));
-    expect(tipo?.hasAttribute('disabled')).toBe(true);
+    expect(screen.getByTestId('tipo-venda-oc').hasAttribute('disabled')).toBe(false);
     expect(seletorFazenda()?.hasAttribute('disabled')).toBe(true);
     expect(screen.getAllByText('Ricardo Goulart').map(e => e.closest('button')).find(b => !!b)?.hasAttribute('disabled')).toBe(false);
     expect(screen.getAllByPlaceholderText('Opcional').every(i => !i.hasAttribute('disabled'))).toBe(true);
