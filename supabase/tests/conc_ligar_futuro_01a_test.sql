@@ -4,8 +4,8 @@
 --      `sistema_candidatos_adiantados` (adiantado), achada pela busca livre com o valor igual primeiro; ligada, vira realizado em 01/09
 --   F2 a busca: por fornecedor (a busca unica), por valor com e sem pontuacao, por documento; so' o mesmo sinal; so' a mesma conta
 --      ou sem conta; a ordem (valor igual > nome > vencimento mais perto)
---   F3 valor diferente: valor certo com extrato maior recusa com frase; a confirmar recebe a outra frase e aceita o valor do extrato;
---      o valor certo nao aceita o valor do extrato; extrato menor divide
+--   F3 valor diferente: o 1:1 cru recusa o maior com frase; a confirmar aceita o valor do extrato; o valor certo pergunta (sem
+--      gravar) — CONC-VALOR-CERTO-ACEITA-01; extrato menor divide
 --   F4 guarda de cliente (42501) e anon sem EXECUTE
 set local statement_timeout = '60s';
 set local lock_timeout = '3s';
@@ -100,7 +100,7 @@ BEGIN
   e := pg_temp.ext(-1500, date '2026-09-19');
   begin perform public.fn_vincular_extrato_lancamento(e, l6, 1500, false);
   exception when others then msg := sqlerrm; end;
-  if msg is distinct from 'O extrato de R$ 1.500,00 é maior que o lançamento (R$ 999,00 em aberto). Corrija o valor do lançamento antes de ligar. Nada foi gravado.'
+  if msg is distinct from 'O extrato de R$ 1.500,00 é maior que o lançamento (R$ 999,00 em aberto). Para ligar, confirme o valor do extrato deste mês. Nada foi gravado.'
     then raise exception 'F3 maior certo: %', msg; end if;
   insert into public.financeiro_recorrencias (cliente_id, fazenda_id, descricao, conta_bancaria_id, subcentro, valor_base, dia_vencimento,
     data_inicio, primeiro_vencimento, data_fim, ativo, tipo_valor)
@@ -122,8 +122,10 @@ BEGIN
   update public.financeiro_lancamentos_v2 set recorrencia_id = rec_certa where id = l;
   msg := null;
   e := pg_temp.ext(-320, date '2026-09-29');
-  begin perform public.fn_conc_ligar_com_valor_real(e, l, 'teste'); exception when others then msg := sqlerrm; end;
-  if msg is distinct from 'Só a recorrência a confirmar, ainda em aberto, aceita o valor do extrato. Nada foi gravado.' then raise exception 'F3 certo aceitou: %', msg; end if;
+  -- CONC-VALOR-CERTO-ACEITA-01: o valor certo com extrato maior nao recusa mais — pergunta (sem gravar) e so' grava com a confirmacao
+  r := public.fn_conc_ligar_com_valor_real(e, l, 'teste');
+  if (r->>'precisa_confirmar')::boolean is not true or (select round(abs(valor), 2) from public.financeiro_lancamentos_v2 where id = l) <> 300
+    then raise exception 'F3 certo sem confirmacao: %', r; end if;
   e := pg_temp.ext(-250, date '2026-09-29');
   perform public.fn_vincular_extrato_lancamento(e, l, 250, false);
   set constraints all immediate; set constraints all deferred;
@@ -137,7 +139,7 @@ BEGIN
   if not ok then raise exception 'F4 busca sem tenant'; end if;
   perform set_config('request.jwt.claims', '{"sub":"7bd0b6ad-2527-4be1-af58-f2cc0c0edd8e","role":"authenticated"}', true);
   if has_function_privilege('anon', 'public.fn_conc_buscar_para_ligar(uuid, text, integer)', 'EXECUTE')
-     or has_function_privilege('anon', 'public.fn_conc_ligar_com_valor_real(uuid, uuid, text)', 'EXECUTE')
+     or has_function_privilege('anon', 'public.fn_conc_ligar_com_valor_real(uuid, uuid, text, boolean)', 'EXECUTE')
      or not has_function_privilege('authenticated', 'public.fn_conc_buscar_para_ligar(uuid, text, integer)', 'EXECUTE') then raise exception 'F4 ACL'; end if;
 
   RAISE EXCEPTION 'OK';
