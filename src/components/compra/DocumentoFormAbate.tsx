@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowLeft, Check, ChevronsUpDown, FileText } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -19,11 +19,11 @@ import { aplicarLeitura, fraseDaLeitura } from '@/lib/oc/leitura/aplicarLeitura'
 import { candidatosPorNome, raizCnpj, soDigitosDoc, type CandidatoFornecedor } from '@/lib/oc/similaridadeFornecedor';
 import { brl, formatCasas, parseMoeda } from '@/lib/calculos/numeroBR';
 import { cn } from '@/lib/utils';
-import type { DocumentosApi, EspecieDoc, LoteOpcao } from '@/hooks/useOperacaoDocumentos';
+import type { DocumentosApi, EspecieDoc, LoteOpcao, NotaRepetida } from '@/hooks/useOperacaoDocumentos';
 import {
   camposDaEspecie, ROTULO_SEGMENTO, arrobasDoPeso, retencoesDaNF, retencoesDoAcerto, mediaDoRomaneio, pctDoBruto,
-  GRUPOS_DO_SELETOR_ABATE, TIPOS_DE_GUIA, TIPOS_DE_DECLARACAO,
-  type CampoDef, type ChaveCampo,
+  GRUPOS_DO_SELETOR_ABATE, gruposDoSeletor, TIPOS_DE_GUIA, TIPOS_DE_DECLARACAO,
+  type CampoDef, type ChaveCampo, type TipoOperacaoOC,
 } from '@/lib/oc/camposDaEspecie';
 import {
   nfsProdutorDoTexto, payloadDoFormAbate, pendenciasDoFormAbate, textoDasNfsProdutor, valorDasNfsProdutor,
@@ -38,7 +38,9 @@ import { ESPECIE_LABEL, ehNotaFiscal, numeroDigitando, numeroEmRepouso } from '.
      area de 250px mudam; o seletor, a area de arquivo, a faixa de conferencia e o rodape ficam onde estao. Nada rola.
    ⚠ A TELA SO' DESENHA: os campos de cada especie sao de `camposDaEspecie`; o payload, as pendencias e o que se preserva sao de
      `formDocumentoAbate`. Os calculados (@, retencoes, liquido, media) sao so' exibicao — o valor que soma e' do banco.
-   Compra e venda nao passam por aqui (seguem com `DocumentoFormOC`). */
+   OC-DOC-VENDA-01: a VENDA usa ESTE formulario (um dono so', pelo tipo gravado no form): a saida da fazenda igual ao abate e os
+   documentos da operacao no lugar do frigorifico. A compra (e o legado da venda: NF principal, complementar, recibo) segue com
+   `DocumentoFormOC`. */
 
 /** Alturas da regua (px). A area de campos e' a da NF, a especie com mais campos. */
 export const ALTURA_AREA_CAMPOS = 250;
@@ -64,7 +66,30 @@ const FRASE_DA_ESPECIE: Partial<Record<EspecieDoc, string>> = {
   declaracao: 'Declaração · informativo · não soma no valor',
 };
 const FRASE_OUTRO = 'Outro · informativo · não soma';
+/* OC-DOC-VENDA-01 — as frases da venda: a NF do produtor e' a nota da venda (soma); a operacao e' informativa; o "outro" da venda
+   SOMA (regra do banco desde antes: so' GTA, guia, declaracao e os da operacao ficam fora). */
+const FRASE_DA_ESPECIE_VENDA: Partial<Record<EspecieDoc, string>> = {
+  nf_produtor: 'NF produtor · é a nota da venda · soma no valor da operação',
+  gta: FRASE_DA_ESPECIE.gta, guia: FRASE_DA_ESPECIE.guia, declaracao: FRASE_DA_ESPECIE.declaracao,
+  contrato: 'Contrato / pedido de venda · informativo · não soma no valor',
+  nf_entrada: 'NF de entrada do comprador · informativo · não soma no valor',
+  comprovante: 'Comprovante · informativo · não soma no valor',
+  outro: 'Outro · soma no valor da venda',
+};
+/** O endereco que abre a OC na aba Documentos — a convencao de `abrirOperacao` (AbaDocumentosLancamento): o parametro do tipo,
+ *  `oc_id` e `oc_aba`. Abre noutra aba, para nao perder o formulario em curso. */
+export function enderecoDaOC(n: Pick<NotaRepetida, 'operacaoId' | 'tipoOperacao'>, busca = typeof window !== 'undefined' ? window.location.search : ''): string {
+  const p = new URLSearchParams(busca);
+  for (const k of ['oc_compra', 'oc_venda', 'oc_abate']) p.delete(k);
+  p.set(n.tipoOperacao === 'venda' ? 'oc_venda' : n.tipoOperacao === 'abate' ? 'oc_abate' : 'oc_compra', '1');
+  p.set('oc_id', n.operacaoId);
+  p.set('oc_aba', 'documentos');
+  return `${typeof window !== 'undefined' ? window.location.pathname : ''}?${p.toString()}`;
+}
 export const FRASE_ESPECIE_FIXA = 'espécie não muda depois de registrado';
+
+/* A frase da leitura pelo DANFE: na NF do frigorifico, que o layout nao foi reconhecido; na NF de entrada do comprador, nada. */
+const f2Rotulo = (e: EspecieDoc) => (e === 'nf_entrada' ? '' : ' (frigorífico não reconhecido)');
 
 /** Campo de numero sem "R$" (cab, kg): texto livre focado; no blur, o numero em pt-BR. */
 function CampoNumero({ valor, onChange, casas, className, invalido }: {
@@ -183,7 +208,18 @@ export function DocumentoFormAbate({ api, somenteLeitura, fornecedores, clienteI
 
   const editando = form.documentoId != null;
   const contraparte = (fornecedores ?? []).find(f => f.id === contraparteId) ?? null;
-  const linhas = camposDaEspecie('abate', form.especie) ?? [];
+  const tipo: TipoOperacaoOC = form.tipo;
+  const linhas = camposDaEspecie(tipo, form.especie) ?? [];
+  /* OC-DOC-VENDA-01 — a nota repetida (chave de 44 digitos viva noutro documento do cliente): a faixa avisa com o link e o
+     Registrar nao grava. O banco barra igual (23505); aqui e' para o operador saber ANTES, e onde ela esta'. */
+  const [repetida, setRepetida] = useState<NotaRepetida | null>(null);
+  const digitosDaChave = form.chaveAcesso.replace(/\D/g, '');
+  useEffect(() => {
+    let vivo = true;
+    if (digitosDaChave.length !== 44 || !api.notaRepetida) { setRepetida(null); return; }
+    void api.notaRepetida(digitosDaChave, form.documentoId).then(r => { if (vivo) setRepetida(r); });
+    return () => { vivo = false; };
+  }, [digitosDaChave, form.documentoId, api]);
   const pendencias = pendenciasDoFormAbate(form, contraparteId ?? null);
   const pendente = new Set<ChaveCampo>(tentou ? pendencias.map(p => p.chave) : []);
   const set = <K extends keyof FormAbate>(k: K, v: FormAbate[K]) => setForm(f => ({ ...f, [k]: v }));
@@ -237,7 +273,7 @@ export function DocumentoFormAbate({ api, somenteLeitura, fornecedores, clienteI
       const r = lerPdfDoAbate(pdf, { especie: form.especie, cnpjContraparte: contraparte?.cpfCnpj ?? null });
       if (r.tipo === 'lido') {
         /* 7f: o numero so' ganha a mascara de NF nas notas (frigorifico e produtor); GTA e declaracao ficam como o PDF escreve. */
-        const mascara = ehNotaFiscal(form.especie) || form.especie === 'nf_produtor' ? numeroEmRepouso : undefined;
+        const mascara = ehNotaFiscal(form.especie) || form.especie === 'nf_produtor' || form.especie === 'nf_entrada' ? numeroEmRepouso : undefined;
         const n = aplicarLeitura(form, r.campos, r.dados, mascara).preenchidos.length;
         /* passo 7e: o Romaneio sem lote ganha o lote cuja quantidade de cabecas e' a do romaneio, se for UM so'. */
         const sugerido = r.grupo === 'romaneio' && form.loteIds.length === 0 ? loteSugeridoPelaQuantidade(api.lotes, r.campos.cab) : null;
@@ -252,7 +288,7 @@ export function DocumentoFormAbate({ api, somenteLeitura, fornecedores, clienteI
         setAvisoAtencao(avisos.length > 0);
         return;
       }
-      if (r.motivo === 'desconhecido' && ehNotaFiscal(form.especie)) {
+      if (r.motivo === 'desconhecido' && (ehNotaFiscal(form.especie) || form.especie === 'nf_entrada')) {
         const d = extrairDanfe(pdf.linhas.join('\n'));
         if (!d.chaveAcesso && !d.numero && !d.valorTotal) { setAviso('Não reconheci o formato de DANFE: preencha os campos.'); setAvisoAtencao(true); return; }
         const exato = emitenteDaNota(d.emitenteCnpj, d.emitenteNome);
@@ -262,9 +298,12 @@ export function DocumentoFormAbate({ api, somenteLeitura, fornecedores, clienteI
           serie: f.serie.trim() || !d.serie ? f.serie : d.serie,
           dataEmissao: f.dataEmissao || !d.dataEmissao ? f.dataEmissao : d.dataEmissao,
           chaveAcesso: f.chaveAcesso.trim() || !d.chaveAcesso ? f.chaveAcesso : d.chaveAcesso,
-          bruto: f.bruto != null || !d.valorTotal ? f.bruto : d.valorTotal,
+          /* OC-DOC-VENDA-01: a NF de entrada do comprador guarda o total no Valor (informativo); a NF do frigorifico, no Bruto. */
+          ...(f.especie === 'nf_entrada'
+            ? { valorInformativo: f.valorInformativo != null || !d.valorTotal ? f.valorInformativo : d.valorTotal }
+            : { bruto: f.bruto != null || !d.valorTotal ? f.bruto : d.valorTotal }),
         }));
-        setAviso(`Nota lida pelo DANFE (frigorífico não reconhecido)${d.valorTotal ? ` · total ${brl(d.valorTotal)}` : ''}`
+        setAviso(`Nota lida pelo DANFE${f2Rotulo(form.especie)}${d.valorTotal ? ` · total ${brl(d.valorTotal)}` : ''}`
           + (d.emitenteCnpj && !exato ? ` · emitente ${d.emitenteNome ?? ''} ${d.emitenteCnpj} fora do cadastro` : '') + ' · confira antes de registrar');
         return;
       }
@@ -299,7 +338,7 @@ export function DocumentoFormAbate({ api, somenteLeitura, fornecedores, clienteI
   const registrar = async () => {
     if (somenteLeitura) return;
     setTentou(true);
-    if (pendencias.length > 0) return;
+    if (pendencias.length > 0 || repetida) return;
     const payload = payloadDoFormAbate(form);
     if (form.documentoId) {
       const ok = await api.editar(form.documentoId, form.versao, payload);
@@ -313,9 +352,11 @@ export function DocumentoFormAbate({ api, somenteLeitura, fornecedores, clienteI
     onSaved();
   };
 
-  /* 7f: o seletor em DOIS grupos (ABATE · SAÍDA), numa linha; a especie que nao esta' em grupo nenhum (legado) entra no segundo. */
-  const grupos = GRUPOS_DO_SELETOR_ABATE.map((g, i) => {
-    const especies = i === GRUPOS_DO_SELETOR_ABATE.length - 1 && !GRUPOS_DO_SELETOR_ABATE.some(x => x.especies.includes(form.especie))
+  /* 7f: o seletor em DOIS grupos (ABATE · SAÍDA), numa linha; a especie que nao esta' em grupo nenhum (legado) entra no segundo.
+     OC-DOC-VENDA-01: na venda, OPERAÇÃO · SAÍDA (`gruposDoSeletor`). */
+  const gruposDoTipo = gruposDoSeletor(tipo) ?? GRUPOS_DO_SELETOR_ABATE;
+  const grupos = gruposDoTipo.map((g, i) => {
+    const especies = i === gruposDoTipo.length - 1 && !gruposDoTipo.some(x => x.especies.includes(form.especie))
       ? [...g.especies, form.especie] : g.especies;
     return { rotulo: g.rotulo, opcoes: especies.map(e => ({ valor: e, rotulo: ROTULO_SEGMENTO[e] ?? ESPECIE_LABEL[e], desabilitada: editando && e !== form.especie })) };
   });
@@ -333,9 +374,9 @@ export function DocumentoFormAbate({ api, somenteLeitura, fornecedores, clienteI
     switch (k) {
       case 'numero':
         return <Input value={form.numero} disabled={somenteLeitura} aria-invalid={inv || undefined}
-          inputMode={ehNotaFiscal(form.especie) || form.especie === 'nf_produtor' ? 'numeric' : undefined}
-          onChange={e => set('numero', ehNotaFiscal(form.especie) || form.especie === 'nf_produtor' ? numeroDigitando(e.target.value) : e.target.value)}
-          onBlur={() => setForm(f => ((ehNotaFiscal(f.especie) || f.especie === 'nf_produtor') && f.numero ? { ...f, numero: numeroEmRepouso(f.numero) } : f))}
+          inputMode={ehNotaFiscal(form.especie) || form.especie === 'nf_produtor' || form.especie === 'nf_entrada' ? 'numeric' : undefined}
+          onChange={e => set('numero', ehNotaFiscal(form.especie) || form.especie === 'nf_produtor' || form.especie === 'nf_entrada' ? numeroDigitando(e.target.value) : e.target.value)}
+          onBlur={() => setForm(f => ((ehNotaFiscal(f.especie) || f.especie === 'nf_produtor' || f.especie === 'nf_entrada') && f.numero ? { ...f, numero: numeroEmRepouso(f.numero) } : f))}
           className={cn(CTL, borda)} />;
       case 'serie': case 'chaveAcesso': case 'observacao': case 'ordemCompra': case 'loteFrigorifico': case 'op': case 'nfRefNumero':
       case 'destinatario': case 'gtaCitada': case 'finalidade': case 'destino':
@@ -427,11 +468,13 @@ export function DocumentoFormAbate({ api, somenteLeitura, fornecedores, clienteI
   /* A faixa, por prioridade: o que falta (vermelho) > o emitente da nota (ambar) > o que a leitura disse > a conferencia ao vivo
      > a frase da especie. */
   const faltaTexto = tentou && pendencias.length > 0 ? `falta: ${pendencias.map(p => p.rotulo).join(', ')}` : null;
+  const repetidaTexto = repetida ? `Esta nota já está registrada: ${repetida.rotulo} · não grava de novo` : null;
   const candidato = candidatos[0] ?? null;
   const emitenteTexto = conflitoCnpj
     ?? (candidato ? `Emitente não achado pelo CNPJ · parecido: ${candidato.nome}${candidatos.length > 1 ? ` (+${candidatos.length - 1})` : ''}` : null);
-  const fraseFaixa = faltaTexto ?? emitenteTexto ?? aviso ?? aoVivo?.texto ?? FRASE_DA_ESPECIE[form.especie] ?? FRASE_OUTRO;
-  const tomFaixa = faltaTexto ? 'erro' : emitenteTexto ? 'emitente' : aviso ? (avisoAtencao ? 'atencao' : 'neutro')
+  const fraseDaEspecie = (tipo === 'venda' ? FRASE_DA_ESPECIE_VENDA : FRASE_DA_ESPECIE)[form.especie] ?? FRASE_OUTRO;
+  const fraseFaixa = repetidaTexto ?? faltaTexto ?? emitenteTexto ?? aviso ?? aoVivo?.texto ?? fraseDaEspecie;
+  const tomFaixa = repetidaTexto || faltaTexto ? 'erro' : emitenteTexto ? 'emitente' : aviso ? (avisoAtencao ? 'atencao' : 'neutro')
     : aoVivo?.tom === 'vermelho' ? 'diverge' : aoVivo?.tom === 'verde' ? 'confere' : 'neutro';
   const tituloFaixa = candidatos.length > 1 && !faltaTexto && !conflitoCnpj
     ? `${fraseFaixa} — parecidos: ${candidatos.map(c => c.nome).join(', ')}` : fraseFaixa;
@@ -503,6 +546,10 @@ export function DocumentoFormAbate({ api, somenteLeitura, fornecedores, clienteI
                   : 'bg-muted/30 text-muted-foreground')}
         style={{ height: ALTURA_FAIXA }}>
         <span className="min-w-0 flex-1 truncate">{fraseFaixa}</span>
+        {repetida && (
+          <a data-testid="abrir-nota-repetida" href={enderecoDaOC(repetida)} target="_blank" rel="noopener noreferrer"
+            className="shrink-0 underline underline-offset-2">abrir</a>
+        )}
         {tomFaixa === 'emitente' && candidato && !conflitoCnpj && (
           <span className="flex shrink-0 gap-1">
             <button type="button" data-testid="usar-candidato" onClick={() => void usarCandidato(candidato)}
@@ -518,7 +565,7 @@ export function DocumentoFormAbate({ api, somenteLeitura, fornecedores, clienteI
         <div className="flex gap-2">
           <Button type="button" variant="ghost" size="sm" className="h-[22px] px-2 text-[11px]" onClick={onCancel}>Cancelar</Button>
           <Button type="button" size="sm" className="h-[22px] gap-1 px-2 text-[11px]" disabled={api.saving || somenteLeitura}
-            onClick={() => void registrar()}>
+            onClick={() => void registrar()} data-testid="registrar-documento">
             <FileText className="h-3 w-3" /> {api.saving ? 'Salvando…' : editando ? 'Salvar alterações' : 'Registrar documento'}
           </Button>
         </div>
