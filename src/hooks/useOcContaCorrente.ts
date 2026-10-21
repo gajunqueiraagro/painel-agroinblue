@@ -21,6 +21,14 @@ export interface RecebimentoVinculavel {
   semContaBancaria: boolean;
   status: string | null;
   conciliado: boolean;
+  /* OC-CORRECOES-01 C3 (`oc_recebimentos_do_financeiro`): as tres datas, o favorecido e a conta bancaria pelo nome, e — do comprador —
+     o MOTIVO de a regra o excluir (nulo = vinculavel). Opcionais: quem monta fixture antigo continua valendo. */
+  competencia?: string | null;
+  vencimento?: string | null;
+  pagamento?: string | null;
+  favorecido?: string | null;
+  contaBancaria?: string | null;
+  motivoExcluido?: string | null;
 }
 
 /** Uma linha do dialogo "Explicar diferenca", como a RPC a recebe. */
@@ -163,21 +171,25 @@ export function useOcContaCorrente({ operacaoId, enabled, versao, onVersaoChange
 
   const listarVinculaveis = useCallback(async () => {
     if (!operacaoId) return { itens: [], erro: 'Operação não carregada.' };
-    const { data, error } = await (supabase as any).rpc('oc_recebimentos_vinculaveis', { p_operacao_id: operacaoId });
+    /* OC-CORRECOES-01 C3 — a lista nova: os vinculaveis de sempre + o do comprador que a regra exclui, com o motivo. */
+    const { data, error } = await (supabase as any).rpc('oc_recebimentos_do_financeiro', { p_operacao_id: operacaoId });
     if (error) return { itens: [], erro: normalizarErroRpc(error).message };
     const linhas: Array<Record<string, unknown>> = Array.isArray(data) ? data : [];
+    const txt = (v: unknown) => (typeof v === 'string' && v !== '' ? v : null);
     return {
       erro: null,
       itens: linhas.map((r) => ({
         lancamentoId: String(r.lancamento_id),
-        data: String(r.data ?? ''),
+        data: String(r.data_pagamento ?? r.data_vencimento ?? r.data_competencia ?? ''),
         valor: Number(r.valor) || 0,
-        descricao: typeof r.descricao === 'string' ? r.descricao : null,
-        subcentro: typeof r.subcentro === 'string' ? r.subcentro : null,
-        mesmoFavorecido: r.mesmo_favorecido === true,
+        descricao: txt(r.descricao),
+        subcentro: txt(r.subcentro),
+        mesmoFavorecido: r.do_comprador === true,
         semContaBancaria: r.conta_bancaria_id == null,
-        status: typeof r.status_transacao === 'string' ? r.status_transacao : null,
+        status: txt(r.status_transacao),
         conciliado: r.conciliado === true,
+        competencia: txt(r.data_competencia), vencimento: txt(r.data_vencimento), pagamento: txt(r.data_pagamento),
+        favorecido: txt(r.favorecido_nome), contaBancaria: txt(r.conta_bancaria_nome), motivoExcluido: txt(r.motivo_excluido),
       })),
     };
   }, [operacaoId]);
