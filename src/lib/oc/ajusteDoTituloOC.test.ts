@@ -5,7 +5,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { tituloOCAjustavel, motivoTituloOCTravado, camposDoAjusteOC } from './ajusteDoTituloOC';
+import { tituloOCAjustavel, motivoTituloOCTravado, camposDoAjusteOC, motivoDoCampoOC } from './ajusteDoTituloOC';
 
 describe('o titulo de OC em aberto se ajusta no modal', () => {
   it('em aberto e sem conciliacao: ajustavel; realizado e conciliado: travado, com o porque e onde', () => {
@@ -43,5 +43,24 @@ describe('o titulo de OC em aberto se ajusta no modal', () => {
     expect(src).toContain('disabled={(isOCTitulo && !ocAjustavel) || parcelaPaga}');
     expect(src).toContain("subcentroDesabilitado={(isOCTitulo && !ocAjustavel) ||");
     expect(src).not.toMatch(/DatePicker value=\{dataVencimento\}[^>]*disabled=\{isOCTitulo \|\| parcelaPaga\}/);
+  });
+});
+
+describe('P3 — o porque no proprio campo do titulo de OC', () => {
+  const travado = motivoTituloOCTravado('realizado', false);
+  it('valor, tipo e competencia sempre dizem que vem da OC e onde mudar; vencimento e classificacao so travados', () => {
+    expect(motivoDoCampoOC('valor', true, null, 'ajuste na OC'))
+      .toBe('O valor segue a operação comercial (ajuste na OC): muda pela OC ou parcelando na conta corrente da OC.');
+    expect(motivoDoCampoOC('tipo', true, null, 'ajuste na OC')).toBe('O tipo vem da operação comercial (ajuste na OC).');
+    expect(motivoDoCampoOC('competencia', true, null, 'ajuste na OC')).toBe('A competência vem da operação comercial (ajuste na OC).');
+    expect(motivoDoCampoOC('vencimento', true, null, 'ajuste na OC')).toBeNull();
+    expect(motivoDoCampoOC('classificacao', false, travado, 'ajuste na OC')).toBe(travado);
+  });
+  it('o modal poe o porque no title de cada campo (lido da fonte)', () => {
+    const modal = readFileSync('src/components/financeiro-v2/LancamentoV2Dialog.tsx', 'utf8');
+    for (const c of ['tipo', 'competencia', 'vencimento', 'valor']) expect(modal).toContain(`title={porqueOC('${c}')}`);
+    expect(modal).toContain("motivoSubcentroDesabilitado={porqueOC('classificacao')}");
+    expect(readFileSync('src/components/shared/ClassificacaoLancamento.tsx', 'utf8'))
+      .toContain('title={subcentroDesabilitado ? motivoSubcentroDesabilitado : undefined}');
   });
 });

@@ -42,8 +42,8 @@ BEGIN
   r := public.oc_editar_dados_operacao(op, c, jsonb_build_object('tipo_venda', 'gado_adulto'), v);
   if (select tipo_venda from public.zoo_operacoes_comerciais where id = op) is distinct from 'gado_adulto'
      or (select versao from public.zoo_operacoes_comerciais where id = op) <> v + 1
-     or not exists (select 1 from public.zoo_operacao_eventos e where e.operacao_id = op and e.created_at >= now() - interval '1 minute'
-                     and e.dados_novos::text like '%tipo_venda%')
+     or not exists (select 1 from public.zoo_operacao_eventos e where e.operacao_id = op and e.acao = 'editar_dados'
+                     and e.dados_anteriores->>'tipo_venda' = 'desmama' and e.dados_novos->>'tipo_venda' = 'gado_adulto')
     then raise exception 'T2 fechada nao trocou (ou sem trilha)'; end if;
   v := v + 1;
   msg := null; begin perform public.oc_editar_dados_operacao(op, c, jsonb_build_object('tipo_venda', 'boitel'), v); exception when others then msg := sqlerrm; end;

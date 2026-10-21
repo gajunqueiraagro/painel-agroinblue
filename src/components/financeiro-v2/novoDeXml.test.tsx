@@ -40,6 +40,8 @@ const consultas = vi.hoisted(() => ({
   notaJaRegistrada: vi.fn(async (_c: string, _k: string) => [] as unknown[]),
   ultimaClassificacaoDoFornecedor: vi.fn(async () => null as unknown),
   gravarDocumentoNoCadastro: vi.fn(async () => null as string | null),
+  /* NOTA-FORNECEDOR-DUPLICA-01 — o CNPJ conferido no banco antes de criar (nenhum cadastro com ele, por padrao) */
+  fornecedorPeloDocumento: vi.fn(async (): Promise<{ id: string; nome: string; ativo: boolean } | null> => null),
 }));
 vi.mock('@/lib/financeiro/nfeConsultas', () => consultas);
 vi.mock('@/hooks/useFornecedoresDoCliente', async () => (await import('@/test/leitorDeFornecedoresFake')).moduloDoLeitorFake());
@@ -49,7 +51,7 @@ vi.mock('@/components/financeiro-v2/AbaAuditoriaLancamento', () => ({ AbaAuditor
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() } }));
 
 import { LancamentoV2Dialog } from './LancamentoV2Dialog';
-import { NovoDeXmlDialog, resumoDasDuplicatas } from './NovoDeXmlDialog';
+import { NovoDeXmlDialog, comFornecedoresDeAgora, resumoDasDuplicatas } from './NovoDeXmlDialog';
 import { lerNFe } from '@/lib/financeiro/nfe/lerNFe';
 import { proporLancamento, FRASE_SEM_DUPLICATAS, type UltimaClassificacao } from '@/lib/financeiro/nfe/proporLancamento';
 import { resolverEmitente, type ResolucaoEmitente } from '@/lib/financeiro/nfe/resolverEmitente';
@@ -557,6 +559,16 @@ describe('tela B — a faixa do fornecedor', () => {
     fireEvent.click(screen.getByTestId('xml-criar-fornecedor'));
     await waitFor(() => expect(m.onCriarFornecedor).toHaveBeenCalledWith('AGROPECUARIA EXEMPLO LTDA', 'f-pur', '11.222.333/0001-81'));
   });
+  it('NOTA-FORNECEDOR-DUPLICA-01 — o CNPJ ja\' e\' de um cadastro (conferido no banco antes): a frase pronta, nada criado, e "usar este"', async () => {
+    consultas.fornecedorPeloDocumento.mockResolvedValueOnce({ id: 'agro-ja', nome: 'Agropecuaria Exemplo (cadastro antigo)', ativo: true });
+    const m = montarModal({ prefill: prefillDaNota(doXmlDe({}, [], { ultima: null })) }, []);
+    await screen.findByDisplayValue('16.238,00');
+    fireEvent.click(screen.getByTestId('xml-criar-fornecedor'));
+    expect((await screen.findByTestId('xml-conflito')).textContent).toBe('Este CNPJ já é de "Agropecuaria Exemplo (cadastro antigo)" (ativo). Nada foi criado.');
+    expect(m.onCriarFornecedor).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('xml-usar-este'));
+    await waitFor(() => expect(screen.queryByTestId('xml-faixa-fornecedor')).toBeNull());
+  });
 });
 
 describe('sem XML, o modal e o de sempre', () => {
@@ -566,5 +578,15 @@ describe('sem XML, o modal e o de sempre', () => {
     for (const t of ['pilula-do-xml', 'xml-faixas', 'xml-faixa-fornecedor', 'xml-aviso', 'origem-xml-tipo', 'origem-xml-valor', 'recado-de-parcelas']) expect(screen.queryByTestId(t)).toBeNull();
     expect(document.body.innerHTML).not.toContain('border-amber-300 bg-amber-50 dark:bg-amber-950/30');
     expect(screen.getByText('Fornecedor *')).toBeTruthy();
+  });
+});
+
+describe('NOTA-FORNECEDOR-DUPLICA-01 — a linha reaberta rele^ o fornecedor com a lista de agora', () => {
+  it('lida sem cadastro; o cadastro com o CNPJ nasceu depois: ao abrir, ele e\' o proposto (e a NF pendente leva o emitente)', () => {
+    const lida = doXmlDe({}, [], { ultima: null });
+    expect(lida.resolucao.achadoPor).toBeNull();
+    const agora = comFornecedoresDeAgora(lida, [AGRO]);
+    expect([agora.resolucao.achadoPor, agora.proposta.favorecidoId, agora.proposta.documento.emitenteId]).toEqual(['documento', 'agro', 'agro']);
+    expect(comFornecedoresDeAgora(agora, [AGRO])).toBe(agora);
   });
 });

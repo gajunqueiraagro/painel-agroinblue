@@ -216,6 +216,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   inativo sempre; nome gravado em caixa padronizada por funcao do banco; FILIAIS tem a mesma razao social (CNPJ e cidade distinguem) e
   o CNPJ de outro ATIVO nao grava (trava adiada no banco); "Sem cadastro" so' com o real (SEM-CADASTRO-02: fornecedor escrito = coluna
   de fornecedor da planilha ou descricao de EXTRATO `extrato`/`ofx`; nunca descricao de TXT/Excel/manual); "Ultimo uso"/"Lanc." so' realizado ate' hoje.
+- NOTA-FORNECEDOR-DUPLICA-01: o emitente sem CNPJ no cadastro se acha pela busca do cadastro entre os SEM documento (MEI: sem o CNPJ no
+  nome); a previa rele^ a lista de agora; o CNPJ e' conferido no banco ANTES de criar (conflito = "Usar este", nunca o erro generico).
 - Nota fiscal (FIN-NOTA-PDF-01): XML e PDF entram por UMA porta (`lerNota`) e saem na MESMA `NotaLida`; o DANFE se le^ pela posicao
   e a chave de 44 digitos confere o lido (divergiu = nada criado); criar/atualizar pela nota usa o gravador do parcelado e a cadeia de documentos.
   FIN-NOTA-PDF-01b: NADA ESCOLHIDO NA PREVIA SE PERDE — todo caminho que abre outro modal leva tudo (`prefillDoModal`); o pago nunca muda de valor.

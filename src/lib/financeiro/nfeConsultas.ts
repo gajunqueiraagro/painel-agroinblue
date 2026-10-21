@@ -169,3 +169,26 @@ export async function lancamentosAbertosComValor(clienteId: string, fornecedorId
     pago: l.status_transacao === 'realizado' || l.status_transacao === 'conciliado' || !!l.data_pagamento,
   })).filter((l) => !(l.pago && l.financiamentoId));
 }
+
+/** NOTA-FORNECEDOR-DUPLICA-01 — o cadastro do cliente que JA' tem este CNPJ/CPF (o mascarado ou so' digitos), lido no banco ANTES de criar. */
+export interface CadastroComODocumento { id: string; nome: string; ativo: boolean }
+export async function fornecedorPeloDocumento(clienteId: string, documento: string): Promise<CadastroComODocumento | null> {
+  const digitos = soDigitos(documento);
+  if (!digitos) return null;
+  const formatos = [...new Set([digitos, validarDocumento(digitos).formatado].filter((x): x is string => !!x))];
+  const { data, error } = await supabase.from('financeiro_fornecedores').select('id, nome, ativo, fundido_em_id')
+    .eq('cliente_id', clienteId).in('cpf_cnpj', formatos).order('ativo', { ascending: false }).limit(5);
+  if (error || !Array.isArray(data)) return null;
+  const vivo = data.find((f) => f.ativo !== false && !f.fundido_em_id) ?? data.find((f) => !f.fundido_em_id) ?? null;
+  return vivo ? { id: vivo.id, nome: vivo.nome, ativo: vivo.ativo !== false } : null;
+}
+
+/** NOTA-FORNECEDOR-DUPLICA-01 — o uso do cadastro achado pelo nome (a tela mostra: lancamentos e ultimo uso). Falha = nulo. */
+export async function usoDoFornecedor(fornecedorId: string): Promise<{ lancamentos: number; ultimo: string | null } | null> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+  const { data, error } = await (supabase as any).rpc('fn_fornecedor_uso', { p_fornecedor: fornecedorId });
+  if (error || !data || typeof data !== 'object') return null;
+  const n: unknown = Reflect.get(data, 'lancamentos');
+  const u: unknown = Reflect.get(data, 'ultimo_lancamento');
+  return { lancamentos: typeof n === 'number' ? n : Number(n) || 0, ultimo: typeof u === 'string' && u ? u : null };
+}

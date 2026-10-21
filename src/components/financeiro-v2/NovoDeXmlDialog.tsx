@@ -78,6 +78,17 @@ let seq = 0;
    com a frase dele na linha — CT-e, evento, PDF, grande demais (o teto de 2 MB mora no leitor, não aqui). */
 const REGRA_DOS_XML: RegraDeAceite = { tipos: ['xml', 'pdf'], varios: true };
 
+/**
+ * NOTA-FORNECEDOR-DUPLICA-01 — a nota reaberta da lista RELE^ o fornecedor com a lista de agora: o cadastro criado (ou completado)
+ * depois da leitura passa a ser o proposto, e a previa nao oferece criar de novo (o segundo clique dava conflito de CNPJ).
+ */
+export function comFornecedoresDeAgora(d: DoXml, fornecedores: readonly FornecedorParaResolver[]): DoXml {
+  const emitente = d.emitente ?? { documento: d.emitenteDocumento, nome: d.emitenteNome, fantasia: null, ie: null };
+  const r = resolverEmitente(emitente, fornecedores, null);
+  if (r.achadoPor !== 'documento' || r.propostoId === d.proposta.favorecidoId) return d;
+  return { ...d, resolucao: r, proposta: { ...d.proposta, favorecidoId: r.propostoId, documento: { ...d.proposta.documento, emitenteId: r.propostoId } } };
+}
+
 /** FIN-NOTA-PDF-01 — o PDF da nota como documento: nome terminado em `.pdf` e tipo `application/pdf` explicitos (o conteudo decidiu). */
 export function arquivoPdfDaNota(bytes: ArrayBuffer, nomeOriginal: string): File {
   const base = nomeOriginal.replace(/\.pdf$/i, '').trim() || 'nota';
@@ -244,7 +255,11 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
                       </td>
                       <td className={`${TD_ACAO} ${DIVISOR}`}>
                         <Button type="button" size="sm" variant={lancada ? 'outline' : 'default'} className="h-4 px-1.5 text-[9.5px]"
-                          data-testid="xml-abrir-lancamento" onClick={() => { if (l.paraLancar && onAbrirNota) onAbrirNota(l.paraLancar, l.id); else onAbrirLancamento(d, l.id); }}>
+                          data-testid="xml-abrir-lancamento" onClick={() => {
+                            const atual = comFornecedoresDeAgora(d, fornecedores);
+                            if (l.paraLancar && onAbrirNota) onAbrirNota({ ...l.paraLancar, doXml: comFornecedoresDeAgora(l.paraLancar.doXml, fornecedores) }, l.id);
+                            else onAbrirLancamento(atual, l.id);
+                          }}>
                           {lancada ? 'abrir de novo' : 'Abrir lançamento'}
                         </Button>
                       </td>
