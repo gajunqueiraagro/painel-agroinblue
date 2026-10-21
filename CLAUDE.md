@@ -10589,6 +10589,52 @@ curta nas secoes de regras) e a pendencia (na FILA); o bloco inteiro vai para do
     o `fn_desfazer_bloco` restaura o status de um titulo ainda casado por outro bloco e o guarda recusa.
   · CONC-LIGAR-FUTURO-01 (a queixa do Vivo): a lista de candidatos do Espelho (`fn_extratos_espelhados`) so' traz lancamento com
     `data_vencimento <= fim do mes do extrato`; o vinculo em si nao recusa vencimento futuro (recusa valor acima do lancamento).
+- ⚠ LIGAR O EXTRATO AO LANCAMENTO DE VENCIMENTO FUTURO (CONC-LIGAR-FUTURO-01a, Gabriel 21/10/2026 — so' BANCO; a tela vem com
+  mock). 20261028101000. (1) `fn_conc_buscar_para_ligar(extrato, texto, limite)` — busca LIVRE: lancamento em aberto (previsto,
+  programado, agendado), mesma conta OU sem conta, MESMO SINAL do extrato, SEM limite de data; casa por fornecedor (a busca unica
+  `fn_fornecedor_buscar`), descricao, valor (506,51 · 506.51 · R$ 1.234,56 · 1.234) e documento (texto ou so' os digitos); ordem
+  valor igual > nome casando > vencimento mais perto; devolve vencimento, competencia, status, origem (oc | recorrencia | parcela |
+  saldo | avulso), a_confirmar, valor, ja_aplicado, livre, diferenca. STABLE: quem chama em SQL cria o extrato num comando antes.
+  (2) `fn_extratos_espelhados` ('espelhados-06-adiantados'): os candidatos do MES SEGUINTE vem numa chave NOVA,
+  `sistema_candidatos_adiantados` (adiantado: true) — nao em `sistema_candidatos`, porque `mesaDoDia.ts` abre um dia por vencimento
+  de candidato e a tela de setembro ganharia dias de outubro antes do mock. (3) Valor diferente: so' a recorrencia A CONFIRMAR
+  (`tipo_valor = 'estimado'`) aceita o valor do extrato (`fn_conc_ligar_com_valor_real`, a mesma, agora restrita); valor certo com
+  extrato MAIOR: o 1:1 recusa com frase pronta (o `sobre_aplicacao` cru saiu); MENOR: divide (CONC-BAIXA-NO-VINCULO-01).
+  · O Vivo Casa (recorrencia afca114b) esta cadastrado como valor CERTO (473,66) e o banco cobrou 506,51 em 01/09 e 506,84 nas
+    seguintes: pela regra nova, ligar o proximo com diferenca recusa — a recorrencia talvez devesse ser "A confirmar" (decisao do
+    Gabriel). O conserto de 21/10 (bac38a7f) foi feito antes desta regra.
+- REGISTRADO, NAO FEITO (21/10/2026): (a) `fn_desfazer_bloco` cai no T3 -> T4b do `conc_parcial_um_estado_01_test.sql` desde
+  FIN-CONCILIADO-NAO-REBAIXA-01 (20261027196700): restaura o status de um titulo ainda ligado a OUTRO bloco e o guarda de "casado nao
+  rebaixa" recusa. (b) NJ, conta Sicredi PJ Pecuaria: saldo final de out/2026 digitado 0,00 (manual) sem nenhum extrato no mes —
+  -2.147,50 sem explicacao na conta do Caixa.
+
+- ⚠ A BARRA LATERAL TEM 152px, NUM TOKEN SO' (UI-SIDEBAR-ESTREITA-01, Gabriel 09/10 e 21/10/2026, so' tela; SUBSTITUI o "176px (`w-44`)" do
+  UI-BOTOES-LUGAR-FIXO-01). A largura mora em `LARGURA_DA_LATERAL` (`src/v2/components/V2Sidebar.tsx`), aplicada por `style` no `aside`; a
+  bancada do `check:ui-cortes` le' a mesma constante. Nenhuma tela calibra largura pela barra (medido: os `calc(100vw - N)` do repo sao todos
+  de modal centrado na janela; os `useLarguraDaJanela() < 900` olham a janela). A gaveta do submenu e' `absolute` dentro da coluna
+  principal e acompanha sozinha.
+  · REGRA: largura = o maior item do MENU (icone + rotulo + seta) + padding enxuto. MEDIDO no Chromium com a Inter (12px/500): "Planejamento"
+    com o icone e a seta = 16 + 8 + 77,8 + 8 + 12 = 121,8px; + 8 + 8 do botao (`px-2`) + 6 + 6 da navegacao (`px-1.5`) = 149,8 -> 152 (folga
+    2,2px). "Configurações" (sem seta) pede 136,6. Logo: 10 + 44,3 + 8 + 75,1 ("Agroinblue", 14px/700) + 10 = 147,4. A fonte dos itens NAO
+    desceu. Os seletores ficam com `px-1.5` por dentro.
+  · SELETORES: nome de cliente ou de fazenda maior que o campo corta com "…" e o nome inteiro no `title` (cliente; a fazenda ja' tinha a dica
+    com o nome). Medido (proto, 21/10): clientes — so' "Agnaldo Cedenho" corta (105,1 de 98,8; e a entrada "☰ Resumo dos clientes"); "Vera
+    Ligia Milani" cabe (96,7 de 98,8). Fazendas — "Global" e as reais cabem, menos "Fazenda Teste Cana" (118,7 de 114,5). O nome do cliente
+    fica colado ao icone (`[&_button>span]:flex-1`).
+  · NADA SE DESLOCA: o seletor de fazenda tem LUGAR RESERVADO de 28px sempre que ha' o de cliente (cliente com uma fazenda so' — Teste,
+    Raul, RRCC — e o Resumo dos clientes nao tem seletor de fazenda: antes o menu inteiro subia 34px ao trocar para eles; medido). Trocar
+    cliente, fazenda (nome curto x longo) e abrir/fechar o submenu: 0px de diferenca em qualquer elemento da barra e no conteudo.
+  · GANHO: +24px de conteudo em TODA tela e tamanho (medido em Recorrências, Contas a Pagar e Receber e Fornecedores a 750x483, 814x530,
+    1000x600, 1126x579, 1300x704 e 1440x800; ex.: 1126 950 -> 974). Prints em ~/Downloads/sidebar/{antes,depois}/.
+  · GATE: `barra-lateral` (nomes que cabem, todas as regras) e `barra-lateral-nome-longo` (sem `reticencias`) nos sete tamanhos; bancada
+    `&lateral=1` (a V2Sidebar de verdade; `&cli=`, `&faz=` — `Global` —, `&submenu=`, `&umafaz=1`). Mutacao (largura 140) reprova logo,
+    cliente e "Planejamento".
+  ⚠ LIMITE CONHECIDO, NAO MEXIDO: a 750x483 (admin, 9 itens) a navegacao rola 19px por dentro (ja' rolava com 176). Com barra de rolagem
+    CLASSICA (Windows) ela ocupa ~15px e os rotulos mais longos cortariam com "…" (com 176 sobrava folga); em overlay (macOS) nada muda.
+    NAO PROVADO no Windows.
+  ⚠ NAO PROVADO: nada com login no app real (bancada) · o modo Ampliado (`intensivo`) esconde a barra inteira, como antes; nao ha' modo
+    recolhido so' com icones.
+
 
 
 - ⚠ REGRA DE CORTE NOVA (Gabriel, 21/10/2026 07h25 — SUBSTITUI, para NOME/TEXTO EM TABELA, o "nenhum '…'" do UI-SEM-CORTE-01): nome ou

@@ -46,6 +46,10 @@ import { AcessosTab } from '@/pages/AcessosTab';
 import { ContasPagarReceberTab } from '@/components/financeiro-v2/ContasPagarReceberTab';
 import V2Recorrencias from '@/v2/pages/V2Recorrencias';
 import * as REC from './dados/recorrencias';
+import { V2Sidebar, LARGURA_DA_LATERAL } from '@/v2/components/V2Sidebar';
+import { ClienteSelector } from '@/components/ClienteSelector';
+import { FazendaSelector } from '@/components/FazendaSelector';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 const q = new URLSearchParams(location.search);
 const tela = q.get('tela') ?? 'mesclar';
@@ -59,11 +63,30 @@ const DESC_LONGA = ('Sêmen Bovino - SAV EXEMPLO 1234/ 5678 · touro de teste co
 const g = globalThis as any;
 const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 const raiz = createRoot(document.getElementById('root')!);
-/* a casca do V2 atras: barra lateral de 176px e barra do topo de 96px. FORN-01b — `&barra=32` = a barra REAL de hoje (a `BarraSecao`,
-   `h-8`, PR-BARRA-UNICA-01a), para as telas medidas contra o app: Fornecedores e Recorrencias */
+/* UI-SIDEBAR-ESTREITA-01 — `&lateral=1` poe a barra lateral DE VERDADE (V2Sidebar com os seletores) no lugar do bloco azul. O nome do
+   cliente e o da fazenda escolhidos vem de `&cli=` e `&faz=` (`Global` = o global); `&submenu=<grupo>` acende o grupo com a gaveta
+   aberta. Sem os parametros, nomes SINTETICOS do pior caso (cliente e fazenda maiores que os reais). */
+const LATERAL = q.get('lateral');
+const CLI = q.get('cli') ?? 'Cliente Exemplo Nome Longo Agropecuária';
+const FAZ = q.get('faz') ?? 'Fazenda Exemplo Nome Longo Retiro';
+if (LATERAL) {
+  const clientes = [{ id: 'cli', nome: CLI, perfil: 'admin_agroinblue' }, { id: 'cli2', nome: 'Cliente Exemplo Dois', perfil: 'admin_agroinblue' }];
+  g.__clienteBancada = { clienteAtual: clientes[0], clientes, isAdmin: true, perfil: 'admin_agroinblue', loading: false,
+    setClienteAtual: () => {}, resumoClientes: false, setResumoClientes: () => {} };
+  const fazendas = [{ id: 'f1', nome: FAZ === 'Global' ? 'Faz. Exemplo' : FAZ, cliente_id: 'cli' }, { id: 'f2', nome: 'Faz. Exemplo Dois', cliente_id: 'cli' }];
+  const atual = FAZ === 'Global' ? { id: '__global__', nome: 'Global', owner_id: '' } : fazendas[0];
+  g.__fazendaBancada = { fazendas, fazendaAtual: atual, isGlobal: atual.id === '__global__', fazendaId: atual.id, setFazendaAtual: () => {} };
+}
+const Lateral = () => LATERAL ? (
+  <TooltipProvider><V2Sidebar activeSection="financeiro-lanc" onNavigate={() => {}} drawerAtivo={q.get('submenu')} onDrawerToggle={() => {}}
+    clienteSelector={<ClienteSelector />} fazendaSelector={q.get('umafaz') ? undefined : <FazendaSelector />} /></TooltipProvider>
+) : <div style={{ width: LARGURA_DA_LATERAL, flexShrink: 0, background: '#1e3a5f' }} />;
+/* a casca do V2 atras: a barra lateral (a largura do dono, `LARGURA_DA_LATERAL`) e a barra do topo de 96px. FORN-01b — `&barra=32` = a
+   barra REAL de hoje (a `BarraSecao`, `h-8`, PR-BARRA-UNICA-01a), para as telas medidas contra o app: Fornecedores e Recorrencias;
+   `data-casca` marca o rolador da PAGINA (o `check:ui-desloca` nao o conta como lista) */
 const BARRA = Number(q.get('barra') ?? 96);
 const Casca = ({ children }: { children?: React.ReactNode }) => (
-  <div style={{ display: 'flex', height: '100vh' }}><div style={{ width: 176, flexShrink: 0, background: '#1e3a5f' }} />
+  <div style={{ display: 'flex', height: '100vh' }}><Lateral />
     <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}><div style={{ height: BARRA, flexShrink: 0, background: BARRA === 32 ? '#1e3a5f' : '#e9edf2' }} />
       <div data-casca="" style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>{children}</div></div></div>);
 const montar = (n: React.ReactNode) => raiz.render(<QueryClientProvider client={qc}><MemoryRouter><Casca>{n}</Casca></MemoryRouter></QueryClientProvider>);

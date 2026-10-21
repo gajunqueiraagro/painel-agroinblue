@@ -112,9 +112,9 @@ BEGIN
 
   -- B8 recorrencia estimada aceita o valor real
   insert into public.financeiro_recorrencias (cliente_id, fazenda_id, descricao, conta_bancaria_id, subcentro, valor_base, dia_vencimento,
-    data_inicio, primeiro_vencimento, data_fim, ativo)
+    data_inicio, primeiro_vencimento, data_fim, ativo, tipo_valor)   -- CONC-LIGAR-FUTURO-01a: so' a recorrencia A CONFIRMAR aceita o valor
   values ('43f32d07-dba8-4670-900c-bf645440c04a', 'c2498ace-8478-410c-a697-d3f2e2934d1f', 'SINT CBV01 rec', '131b8501-caf7-4964-b1b1-3f552ad2b75d',
-          'SINT', 473.66, 1, date '2026-09-01', date '2026-10-01', date '2027-08-31', true) returning id into rec;
+          'SINT', 473.66, 1, date '2026-09-01', date '2026-10-01', date '2027-08-31', true, 'estimado') returning id into rec;
   l6 := pg_temp.lanc(473.66, 'programado');
   update public.financeiro_lancamentos_v2 set recorrencia_id = rec, origem_lancamento = 'recorrencia', data_vencimento = date '2026-10-01' where id = l6;
   r := public.fn_conc_ligar_com_valor_real(pg_temp.ext(-506.51, date '2026-09-01'), l6, 'teste vivo');
