@@ -1,7 +1,8 @@
 /* OC-DOC-ESPECIE-ABATE-01 passo 2 — O DONO DOS CAMPOS DE CADA ESPECIE DE DOCUMENTO DA OC.
    A tela so' DESENHA o que esta lista devolve: nenhuma especie escreve campo por conta propria (preso por teste).
-   ⚠ SO' O ABATE TEM GRADE POR ESPECIE. Compra e venda seguem com as 4 especies e o formulario de hoje
-     (`camposDaEspecie` devolve nulo para elas).
+   ⚠ ABATE E VENDA TEM GRADE POR ESPECIE (OC-DOC-VENDA-01: a venda usa a MESMA aba do abate — "ja esta feito, e so copiar").
+     A compra segue com as 4 especies e o formulario de hoje (`camposDaEspecie` devolve nulo para ela). Na venda, as especies que
+     nao sao da grade (NF principal, complementar, recibo — o legado) tambem devolvem nulo: abrem no formulario de hoje.
    ⚠ ONDE CADA CAMPO GRAVA (um lugar so', como no passo 1):
      valores (bruto, Funrural, SENAR, Seguro, RAT, retencoes do acerto, valor da NPR / do "outro") -> COMPONENTES;
      cab, peso_kg, data_abate, vencimento -> colunas; ordem_compra, lote_frigorifico, preco_arroba, op, nf_referida (NPR) e
@@ -38,18 +39,34 @@ export interface CampoDef {
 
 /** As especies que a OC oferece, na ordem do seletor. */
 export function especiesDaOC(tipo: TipoOperacaoOC): EspecieDoc[] {
-  return tipo === 'abate'
-    ? GRUPOS_DO_SELETOR_ABATE.flatMap(g => g.especies)
-    : ['nf_principal', 'nf_complementar', 'recibo', 'outro'];
+  const grupos = gruposDoSeletor(tipo);
+  return grupos ? grupos.flatMap(g => g.especies) : ['nf_principal', 'nf_complementar', 'recibo', 'outro'];
 }
+
+/** A OC desta tipo usa a aba do abate (grade por especie, lista em blocos)? Abate e venda. */
+export const usaGradePorEspecie = (tipo: TipoOperacaoOC | null | undefined): boolean => tipo === 'abate' || tipo === 'venda';
 
 /** 7f — o seletor do abate em DOIS grupos, numa linha: os papeis do frigorifico e os da saida da fazenda ("Outro" fica na saida). */
 export const GRUPOS_DO_SELETOR_ABATE: { rotulo: string; especies: EspecieDoc[] }[] = [
   { rotulo: 'ABATE', especies: ['nf_principal', 'npr', 'acerto', 'romaneio'] },
   { rotulo: 'SAÍDA', especies: ['nf_produtor', 'gta', 'guia', 'declaracao', 'outro'] },
 ];
-/** As especies do bloco "SAÍDA DA FAZENDA" da lista (o resto vai em "ABATE · FRIGORÍFICO"). */
+/** OC-DOC-VENDA-01 — a venda: a SAIDA DA FAZENDA igual a' do abate e, no lugar do frigorifico, os documentos DA OPERACAO. */
+export const GRUPOS_DO_SELETOR_VENDA: { rotulo: string; especies: EspecieDoc[] }[] = [
+  { rotulo: 'OPERAÇÃO', especies: ['contrato', 'nf_entrada', 'comprovante'] },
+  GRUPOS_DO_SELETOR_ABATE[1],
+];
+/** Os grupos do seletor por tipo de OC; nulo = sem grade (compra). */
+export function gruposDoSeletor(tipo: TipoOperacaoOC | null | undefined): { rotulo: string; especies: EspecieDoc[] }[] | null {
+  return tipo === 'abate' ? GRUPOS_DO_SELETOR_ABATE : tipo === 'venda' ? GRUPOS_DO_SELETOR_VENDA : null;
+}
+/** As especies do bloco "SAÍDA DA FAZENDA" da lista (o resto vai no primeiro bloco: "ABATE · FRIGORÍFICO" ou "DA OPERAÇÃO"). */
 export const ESPECIES_DA_SAIDA: EspecieDoc[] = ['nf_produtor', 'gta', 'guia', 'declaracao', 'outro', 'recibo'];
+/** Os dois blocos da lista, por tipo de OC: o primeiro e' o do frigorifico (abate) ou o da operacao (venda). */
+export function blocosDaLista(tipo: TipoOperacaoOC | null | undefined): { chave: 'abate' | 'operacao' | 'saida'; rotulo: string }[] {
+  return [tipo === 'venda' ? { chave: 'operacao', rotulo: 'DA OPERAÇÃO' } : { chave: 'abate', rotulo: 'ABATE · FRIGORÍFICO' },
+    { chave: 'saida', rotulo: 'SAÍDA DA FAZENDA' }];
+}
 
 /** As opcoes do Tipo da guia e da declaracao (gravadas em `dados.tipo_guia` / `dados.tipo_declaracao`). */
 /* 7f-fix1: `curto` = a coluna Tipo da lista; `contagem` = [singular, plural] da linha de contagem do topo. Um lugar so'. */
@@ -78,6 +95,7 @@ export function tipoDoDocumento(especie: EspecieDoc, dados: Record<string, unkno
 export const ROTULO_SEGMENTO: Partial<Record<EspecieDoc, string>> = {
   nf_principal: 'NF', npr: 'NPR', acerto: 'Acerto', romaneio: 'Romaneio', outro: 'Outro',
   nf_produtor: 'NF produtor', gta: 'GTA', guia: 'Guia', declaracao: 'Declaração',
+  contrato: 'Contrato', nf_entrada: 'NF entrada', comprovante: 'Comprovante',
 };
 
 const c = (chave: ChaveCampo, rotulo: string, colunas: CampoDef['colunas'] = 1, extra: Partial<CampoDef> = {}): CampoDef =>
@@ -147,6 +165,32 @@ const DECLARACAO: CampoDef[][] = [
   [c('observacao', 'Observação', 3)],
 ];
 
+/* ── OC-DOC-VENDA-01 · A VENDA ─────────────────────────────────────────────────────────────────────────────────
+   A NF do produtor e' a NOTA DA VENDA: a mesma grade do abate (o leitor da NFP-e preenche os mesmos campos), com o valor
+   obrigatorio — na venda ele SOMA (decisao do Gabriel, 21/10; a natureza do componente sai do tipo em `formDocumentoAbate`). */
+const NF_PRODUTOR_VENDA: CampoDef[][] = [
+  NF_PRODUTOR[0], NF_PRODUTOR[1],
+  [c('cab', 'Cab', 1, { obrigatorio: true, numerico: true }), c('valorInformativo', 'Valor da nota R$', 1, { obrigatorio: true, numerico: true }),
+   c('gtaCitada', 'GTA citada'), c('observacao', 'Observação', 2)],
+];
+/* Da operacao: informativos (nao somam). */
+const CONTRATO: CampoDef[][] = [
+  [c('numero', 'Nº contrato / pedido', 1, { obrigatorio: true }), c('dataEmissao', 'Data', 1, { obrigatorio: true }),
+   c('valorInformativo', 'Valor R$', 1, { numerico: true }), c('lote', 'Lote')],
+  [c('observacao', 'Observação', 5)],
+];
+const NF_ENTRADA: CampoDef[][] = [
+  [c('numero', 'Número', 1, { obrigatorio: true }), c('serie', 'Série'), c('dataEmissao', 'Emissão', 1, { obrigatorio: true }),
+   c('valorInformativo', 'Valor da nota R$', 1, { numerico: true }), c('lote', 'Lote')],
+  [c('emitente', 'Emitente (comprador)', 3), c('chaveAcesso', 'Chave de acesso', 2)],
+  [c('observacao', 'Observação', 5)],
+];
+const COMPROVANTE: CampoDef[][] = [
+  [c('numero', 'Identificação'), c('dataEmissao', 'Data', 1, { obrigatorio: true }), c('valorInformativo', 'Valor R$', 1, { numerico: true }),
+   c('lote', 'Lote')],
+  [c('observacao', 'Observação', 5)],
+];
+
 /* "Outro" = os campos de hoje do formulario (numero, serie, emissao, valor, emitente, chave, observacao). No abate ele e'
    INFORMATIVO: a lista o mostra em cinza e o banco nao o soma. */
 const OUTRO: CampoDef[][] = [
@@ -156,10 +200,23 @@ const OUTRO: CampoDef[][] = [
 ];
 
 /**
- * As linhas da grade (5 colunas) de uma especie. NULO = esta OC usa o formulario de hoje (compra e venda).
+ * As linhas da grade (5 colunas) de uma especie. NULO = esta OC usa o formulario de hoje (compra; na venda, o legado).
  * No abate: NF complementar usa a grade da NF; recibo (legado) a do "outro".
  */
 export function camposDaEspecie(tipo: TipoOperacaoOC, especie: EspecieDoc): CampoDef[][] | null {
+  if (tipo === 'venda') {
+    switch (especie) {
+      case 'nf_produtor': return NF_PRODUTOR_VENDA;
+      case 'gta': return GTA;
+      case 'guia': return GUIA;
+      case 'declaracao': return DECLARACAO;
+      case 'outro': return OUTRO;
+      case 'contrato': return CONTRATO;
+      case 'nf_entrada': return NF_ENTRADA;
+      case 'comprovante': return COMPROVANTE;
+      default: return null;   // nf_principal, nf_complementar, recibo: o formulario de hoje
+    }
+  }
   if (tipo !== 'abate') return null;
   switch (especie) {
     case 'nf_principal': case 'nf_complementar': return NF;

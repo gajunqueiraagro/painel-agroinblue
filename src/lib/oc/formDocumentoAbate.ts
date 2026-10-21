@@ -7,7 +7,7 @@
      (bonificacao, desconto, "outros"…) volta no payload como veio. Assim editar uma NF com bonificacao nao a apaga.
    ⚠ `dados` SUBSTITUI O OBJETO no banco: o formulario parte do `dados` lido e so' troca as chaves da especie. */
 import type { ComponentePayload, DocumentoDetalhe, DocumentoPayload, EspecieDoc, NaturezaComp } from '@/hooks/useOperacaoDocumentos';
-import { camposDaEspecie, retencoesDoAcerto, type ChaveCampo } from '@/lib/oc/camposDaEspecie';
+import { camposDaEspecie, retencoesDoAcerto, type ChaveCampo, type TipoOperacaoOC } from '@/lib/oc/camposDaEspecie';
 
 /** Uma NF do produtor referida pela NF do frigorifico (`dados.nfs_produtor`). A JBS cita duas, sem valor. */
 export interface NfProdutor { numero: string; data: string | null; valor: number | null }
@@ -34,6 +34,8 @@ export const FRASE_LOTE_SUGERIDO = 'lote sugerido pela quantidade · confira';
 
 /** Os valores digitaveis. Numero = number | null (vazio e' ausencia, nao zero); texto = string. */
 export interface FormAbate {
+  /** OC-DOC-VENDA-01 — o tipo da OC (abate | venda): decide a grade, as pendencias e a natureza do valor da NF do produtor. */
+  tipo: TipoOperacaoOC;
   documentoId: string | null;
   versao: number;
   especie: EspecieDoc;
@@ -62,9 +64,9 @@ export interface FormAbate {
   dadosLidos: Record<string, unknown>;
 }
 
-export function formAbateVazio(especie: EspecieDoc = 'nf_principal'): FormAbate {
+export function formAbateVazio(especie: EspecieDoc = 'nf_principal', tipo: TipoOperacaoOC = 'abate'): FormAbate {
   return {
-    documentoId: null, versao: 0, especie, url: '', documentoOrigemId: null,
+    tipo, documentoId: null, versao: 0, especie, url: '', documentoOrigemId: null,
     numero: '', serie: '', chaveAcesso: '', dataEmissao: '', observacao: '',
     emitenteId: '', emitenteNome: '', emitenteDocumento: '',
     dataAbate: '', vencimento: '', ordemCompra: '', loteFrigorifico: '', op: '', nfRefNumero: '',
@@ -79,7 +81,12 @@ export function formAbateVazio(especie: EspecieDoc = 'nf_principal'): FormAbate 
 type Mapa = { campo: 'bruto' | 'funrural' | 'senar' | 'seguro' | 'rat' | 'retAcerto' | 'valor' | 'valorInformativo'; tipo: string; natureza: NaturezaComp }[];
 export const TIPO_RETENCAO_ACERTO = 'retencao_acerto';
 export const DESCRICAO_RETENCAO_ACERTO = 'Retenções do acerto';
-function mapaDaEspecie(e: EspecieDoc): Mapa {
+/** OC-DOC-VENDA-01 — a natureza do "Valor" da saida da fazenda e dos documentos da operacao da venda: so' a NF do produtor DA
+ *  VENDA soma (e' a nota da venda — decisao do Gabriel, 21/10); no abate ela, e na venda contrato, NF de entrada e comprovante, sao
+ *  informativos. Um lugar so' para gravar (`payloadDoFormAbate`) e para ler (`formAbateDoDetalhe`). */
+export const naturezaDoValorInformativo = (tipo: TipoOperacaoOC, e: EspecieDoc): NaturezaComp =>
+  (tipo === 'venda' && e === 'nf_produtor' ? 'acrescimo' : 'informativo');
+function mapaDaEspecie(e: EspecieDoc, tipo: TipoOperacaoOC): Mapa {
   switch (e) {
     case 'nf_principal': case 'nf_complementar': return [
       { campo: 'bruto', tipo: 'valor_bruto', natureza: 'acrescimo' },
@@ -94,7 +101,8 @@ function mapaDaEspecie(e: EspecieDoc): Mapa {
     ];
     case 'romaneio': case 'gta': case 'declaracao': return [];
     /* 7f: o valor da NFP-e e da guia NUNCA soma — e' componente de natureza 'informativo' (o mesmo das guias convertidas). */
-    case 'nf_produtor': case 'guia': return [{ campo: 'valorInformativo', tipo: 'valor_bruto', natureza: 'informativo' }];
+    case 'nf_produtor': case 'guia': case 'contrato': case 'nf_entrada': case 'comprovante':
+      return [{ campo: 'valorInformativo', tipo: 'valor_bruto', natureza: naturezaDoValorInformativo(tipo, e) }];
     default: return [{ campo: 'valor', tipo: 'valor_bruto', natureza: 'acrescimo' }];
   }
 }
@@ -124,11 +132,11 @@ export function nfsProdutorDoTexto(texto: string, atuais: NfProdutor[]): NfProdu
   return nums.map(n => atuais.find(a => a.numero === n) ?? { numero: n, data: null, valor: null });
 }
 
-export function formAbateDoDetalhe(d: DocumentoDetalhe): FormAbate {
-  const f = formAbateVazio(d.especie);
+export function formAbateDoDetalhe(d: DocumentoDetalhe, tipo: TipoOperacaoOC = 'abate'): FormAbate {
+  const f = formAbateVazio(d.especie, tipo);
   const dados = objeto(d.dados);
   const ref = objeto(dados.nf_referida);
-  const mapa = mapaDaEspecie(d.especie);
+  const mapa = mapaDaEspecie(d.especie, tipo);
   const usados = new Set<number>();
   let retAcerto: number | null = null;
   const valores: Partial<Record<Mapa[number]['campo'], number>> = {};
@@ -173,7 +181,7 @@ const vazio = (s: string) => s.trim() === '';
 
 /** Os campos obrigatorios que faltam, pelos rotulos da grade. */
 export function pendenciasDoFormAbate(f: FormAbate, contraparteId: string | null): { chave: ChaveCampo; rotulo: string }[] {
-  const linhas = camposDaEspecie('abate', f.especie) ?? [];
+  const linhas = camposDaEspecie(f.tipo, f.especie) ?? [];
   const falta: { chave: ChaveCampo; rotulo: string }[] = [];
   for (const campo of linhas.flat()) {
     if (!campo.obrigatorio) continue;
@@ -212,12 +220,12 @@ export function valorDoCampo(f: FormAbate, chave: ChaveCampo): string | number |
 export const cabDaGta = (f: Pick<FormAbate, 'femeas' | 'machos'>): number | null =>
   (f.femeas == null || f.machos == null ? null : Math.round(f.femeas + f.machos));
 
-const temCampo = (e: EspecieDoc, chave: ChaveCampo) => (camposDaEspecie('abate', e) ?? []).flat().some(c => c.chave === chave);
+const temCampo = (tipo: TipoOperacaoOC, e: EspecieDoc, chave: ChaveCampo) => (camposDaEspecie(tipo, e) ?? []).flat().some(c => c.chave === chave);
 const ouNada = (s: string) => (vazio(s) ? undefined : s.trim());
 
 export function payloadDoFormAbate(f: FormAbate): DocumentoPayload {
   const e = f.especie;
-  const tem = (k: ChaveCampo) => temCampo(e, k);
+  const tem = (k: ChaveCampo) => temCampo(f.tipo, e, k);
   const comps: Omit<ComponentePayload, 'ordem'>[] = [];
   /* R$ 0 DIGITADO E' DADO (passo 3, regra das sentinelas): vira componente de valor 0 — so' o campo vazio fica sem componente, e
      e' isso que a conferencia le como "sem valor". */
@@ -235,7 +243,8 @@ export function payloadDoFormAbate(f: FormAbate): DocumentoPayload {
     if (pos(ret)) comps.push({ tipo: TIPO_RETENCAO_ACERTO, natureza: 'retencao_sem_caixa', valor: ret!, descricao: DESCRICAO_RETENCAO_ACERTO });
   }
   if (tem('valor') && pos(f.valor)) comps.push({ tipo: 'valor_bruto', natureza: 'acrescimo', valor: f.valor! });
-  if (tem('valorInformativo') && pos(f.valorInformativo)) comps.push({ tipo: 'valor_bruto', natureza: 'informativo', valor: f.valorInformativo! });
+  if (tem('valorInformativo') && pos(f.valorInformativo))
+    comps.push({ tipo: 'valor_bruto', natureza: naturezaDoValorInformativo(f.tipo, e), valor: f.valorInformativo! });
   const componentes: ComponentePayload[] = [...comps, ...f.preservados.map(({ ordem: _o, ...c }) => c)]
     .map((c, i) => ({ ...c, ordem: i + 1 }));
 

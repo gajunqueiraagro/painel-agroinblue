@@ -668,7 +668,7 @@ export function VendaModalShell({
               ⚠ FORNECEDORES DA `liquidacaoApi`, como na compra: fonte unica, sem segunda
               lista nem segundo cadastro. */}
           {abaAtiva === 'documentos' && documentosApi ? (
-            <AbaDocumentosOC api={documentosApi} operacaoPronta={!!ocOperacaoId}
+            <AbaDocumentosOC api={documentosApi} operacaoPronta={!!ocOperacaoId} tipoOperacao="venda"
               somenteLeitura={ocStatusComercial === 'cancelada'}
               fornecedores={liquidacaoApi?.fornecedores}
               contraparteId={compradorId || null}
