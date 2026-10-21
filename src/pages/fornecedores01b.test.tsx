@@ -127,7 +127,11 @@ describe('FORN-01b — "Último uso" e "Lanç." só com o realizado até hoje (a
     expect(lista).toContain("AND l.favorecido_id IS NOT NULL AND l.cenario = 'realizado'");
     const base = m.slice(m.indexOf('CREATE OR REPLACE FUNCTION public._fn_sem_cadastro_base'), m.indexOf('CREATE OR REPLACE FUNCTION public.fn_fornecedor_lista'));
     expect(base).toContain("AND l.cenario = 'realizado' AND l.origem_tipo IS NULL");
-    expect(base).toContain("OR l.origem_lancamento IN ('importacao_incremental', 'extrato', 'ofx', 'excel', 'mesa_excel', 'mesa_split', 'migracao')");
+    expect(base).toContain("l.origem_tipo IS NULL");
+    /* SEM-CADASTRO-02 — a descricao so' vale do EXTRATO bancario; a planilha (coluna de fornecedor) sempre */
+    const m2 = ler('../../supabase/migrations/20261028110300_sem_cadastro_02.sql');
+    expect(m2).toContain("AND (t.origem = 'planilha' OR l.origem_lancamento IN ('extrato', 'ofx'))");
+    expect(m2).not.toMatch(/IN \([^)]*importacao_incremental/);
   });
 });
 
