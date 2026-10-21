@@ -351,11 +351,25 @@ export function barraDaDiferenca(cc: ContaCorrente, lado: LadoContaCorrente = 'v
   const c = Math.round(falta * 100);
   if (c === 0) return null;
   const v = Math.abs(c) / 100;
-  const fmt = v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const brl = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmt = brl(v);
+  /* OC-RECEB-PARCIAL-01 — a falta que JA ESTA PROGRAMADA (o "Receb. 2/2" que sobrou de um recebimento parcial, ou um programado
+     comum) e' dita: "recebeu a menos" sozinho fazia parecer que o dinheiro sumiu, com a parcela em aberto logo abaixo. */
+  const prog = Math.round(Math.abs(cc.programado ?? 0) * 100) / 100;
   if (lado === 'compra') {
+    if (c > 0 && prog > 0) {
+      return prog * 100 >= c
+        ? { frase: `Falta pagar R$ ${fmt}, já programado.`, valor: falta }
+        : { frase: `Pagou R$ ${fmt} a menos do que o gado que entrou; R$ ${brl(prog)} já está programado.`, valor: falta };
+    }
     return c > 0
       ? { frase: `Pagou R$ ${fmt} a menos do que o gado que entrou.`, valor: falta }
       : { frase: `Pagou R$ ${fmt} a mais do que o gado que entrou.`, valor: falta };
+  }
+  if (c > 0 && prog > 0) {
+    return prog * 100 >= c
+      ? { frase: `Falta receber R$ ${fmt}, já programado.`, valor: falta }
+      : { frase: `Recebeu R$ ${fmt} a menos do que entregou; R$ ${brl(prog)} já está programado.`, valor: falta };
   }
   return c > 0
     ? { frase: `Recebeu R$ ${fmt} a menos do que entregou.`, valor: falta }
