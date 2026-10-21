@@ -10418,3 +10418,31 @@ curta nas secoes de regras) e a pendencia (na FILA); o bloco inteiro vai para do
     ligada pelo cadastro criado mostra o texto como nome.
   ⚠ NAO PROVADO: nada com login no app real (bancada) · ligar e desfazer pela tela de verdade (so' teste SQL e de componente).
   · SUITE depois do FORN-SEM-CADASTRO-01: 5982 passando (+5 `fornecedoresSemCadastro.test.tsx`; `useFornecedoresDoCliente.test.tsx` trocado ao contrato novo: o escritor do apelido e' a aba nova, 2 avisos), 22 skipped, as 3 falhas de sempre. Gate de tela completo: 114 telas, 624 medicoes, 0 achados.
+- ⚠ O NOME DO FORNECEDOR E' GRAVADO EM MAIUSCULA/MINUSCULA PADRONIZADO, POR UMA FUNCAO NO BANCO, E OS CADASTROS ANTIGOS ESPERAM O OK
+  (FORN-NOME-CAIXA-01, Gabriel 19/10/2026; noite de 20/10; migrations `supabase/migrations/20261027204710_forn_nome_caixa_01.sql`, md5 do
+  arquivo 772660715b388f5379efa618c5456e7e, `20261027204711_forn_nome_caixa_01_mesclagem.sql`, md5 09cb12bc1d6b24afad3f687384aa2aa0, e `20261027204712_forn_nome_caixa_01_guarda.sql`,
+  md5 b0d33f19a229ae96a864f83fb3cdcae2 (a guarda de cliente nas duas da aplicacao) —
+  APLICADAS no proto em 20/10/2026, ledger = arquivo).
+  · A REGRA E' UMA: `_fn_nome_caixa(texto)` (imutavel, fechada), chamada pelo gatilho `trg_aa_fornecedor_nome_caixa` (BEFORE INSERT OR
+    UPDATE OF nome, nome_fantasia, contato_nome; funcao `_fn_fornecedor_nome_caixa_trg`, SECURITY DEFINER) — tela, XML, importacao, "Sem
+    cadastro" e mesclagem passam por ela. So' converte texto TODO em maiusculas ou TODO em minusculas; cada palavra Initcap; de, da, do,
+    das, dos, e, em, a, o, para em minusculo no meio; siglas em maiusculo (ME, EPP, S.A., S/A, SA, as 27 UFs, ate' 4 letras sem vogal,
+    a lista extra `_fn_nome_caixa_siglas()` — BRDE, BB, CPF, CNPJ, IE —, iniciais com ponto); LTDA/EIRELI/CIA por Initcap; "Pec.3M-"
+    intocado; ⚠ escolha da noite: algarismo romano e palavra com algarismo ficam como vieram. A lista de casos e' uma:
+    `src/lib/fornecedores/nomeCaixa.casos.json` (o teste SQL a roda; um vitest confere que os dois batem). PROIBIDO converter nome de
+    fornecedor no front.
+  · INSERT sempre; UPDATE SO' NO CAMPO QUE MUDOU (escolha conservadora: editar outro campo nao reescreve o nome antigo). O texto
+    original da razao social e da fantasia vira apelido (`aliases`; o contato nao); `nome_norm` e `aliases_norm` acompanham.
+  · Quem ja' calculou os valores liga `app.nome_caixa_escritor` (local) e o gatilho nao age: a aplicacao, o desfazer dela e o desfazer
+    da MESCLAGEM (`_fn_fornecedor_mesclagem_desfazer_exec`, patch guardado por md5 f5d2bfe1… -> 87b27393…: o nome volta EXATO).
+  · OS CADASTROS QUE JA' EXISTEM NAO MUDARAM. Preparado e NAO executado: `fn_fornecedor_nome_caixa_aplicar(cliente, simular DEFAULT true)`
+    e `fn_fornecedor_nome_caixa_desfazer(operacao, motivo, simular)` (trilha `fornecedor_nome_caixa_operacoes` + `audit_log` com o
+    motivo; so' postgres / service_role; guarda `tenant_ok` — sem usuario 42501: em SQL, por antes o JWT do admin). Simulacao de 20/10: 673 de 7.089 cadastros mudariam (Agnaldo 327, NJ 267, Santa Rita 54,
+    Vera 15, RRCC 10), 198 linhas com duvida — lista em ~/agroinblue-local/forn-nome-caixa/ (fora do repo). Aplicar cliente a cliente
+    so' com o OK do Gabriel.
+  Testes: `supabase/tests/forn_nome_caixa_01_test.sql` (N1–N7) OK no vivo; 5 mutacoes de banco mortas; `forn_mesclar_02b` R6 mata o
+  patch da mesclagem; `src/lib/fornecedores/nomeCaixa.test.ts` 3. Trocados ao contrato novo: `forn_mesclar_02b` (sinteticos nascem com o
+  gatilho desligado) e `forn_cadastro_02` C1. ⚠ `forn_cadastro_02` e `forn_inativar_trava_01` caem igual antes e depois, pela trava
+  `ck_lancamento_v2_vencimento_vivo` (lancamento sintetico sem vencimento; CRIAR-DO-EXTRATO-01).
+  ⚠ NAO PROVADO: nada com login no app real (o cadastro novo pela tela) · a importacao do XML e o importador legado gravando pelo gatilho.
+  · SUITE depois do FORN-NOME-CAIXA-01: 5985 passando (+3 `nomeCaixa.test.ts`), 22 skipped, as 3 falhas de sempre.
