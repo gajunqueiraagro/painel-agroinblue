@@ -117,31 +117,33 @@ export function resumoFaltaGerar(mapa: MapaAGerar): { regras: number; meses: num
 }
 
 const meses = (n: number): string => (n === 1 ? '1 mês' : `${n} meses`);
+/** 'AAAA-MM' -> 'MM/AAAA' (o texto do `title`). */
+const mesAno = (m: string): string => `${m.slice(5, 7)}/${m.slice(0, 4)}`;
 const intervalo = (f: FaltaGerar): string =>
-  (f.primeira && f.ultima ? (f.primeira === f.ultima ? `em ${f.primeira}` : `de ${f.primeira} a ${f.ultima}`) : '');
+  (f.primeira && f.ultima ? (f.primeira === f.ultima ? `em ${mesAno(f.primeira)}` : `de ${mesAno(f.primeira)} a ${mesAno(f.ultima)}`) : '');
 
 /**
- * O selo da linha. Com mês a gerar: "falta gerar · N meses", em âmbar. Só com mês fechado: "N em mês fechado", cinza (o Gerar
- * não cria em mês fechado). O `title` diz quantos são passados e de quando a quando.
+ * O selo da linha. REC-COLUNAS-01c (Gabriel 21/10/2026): o texto é CURTO — "falta gerar" em âmbar, ou "mês fechado" em cinza
+ * quando só sobra mês fechado —, e o NÚMERO DE MESES vai no `title` ("Faltam gerar 44 meses — de 09/2026 a 04/2030 · 2
+ * passados") e no item do "⋯". A coluna Situação tem a largura das situações comuns, não a do selo raro de dois dígitos.
  */
 export function seloFaltaGerar(f: FaltaGerar | null): { texto: string; tom: 'ambar' | 'cinza'; titulo: string } | null {
   if (!f) return null;
   if (f.aGerar > 0) {
-    const partes = [meses(f.aGerar)];
-    if (f.passados > 0) partes.push(f.passados === 1 ? '1 passado' : `${f.passados} passados`);
-    partes.push(intervalo(f));
-    if (f.fechados > 0) partes.push(`${f.fechados} em mês fechado`);
-    partes.push('gerar pela linha');
-    return { texto: `falta gerar · ${meses(f.aGerar)}`, tom: 'ambar', titulo: partes.filter(Boolean).join(' · ') };
+    const cabeca = `${f.aGerar === 1 ? 'Falta gerar 1 mês' : `Faltam gerar ${f.aGerar} meses`}${intervalo(f) ? ` — ${intervalo(f)}` : ''}`;
+    const extras: string[] = [];
+    if (f.passados > 0) extras.push(f.passados === 1 ? '1 passado' : `${f.passados} passados`);
+    if (f.fechados > 0) extras.push(`${f.fechados} em mês fechado`);
+    return { texto: 'falta gerar', tom: 'ambar', titulo: [cabeca, ...extras].join(' · ') };
   }
   if (f.fechados > 0) {
-    return { texto: `${f.fechados} em mês fechado`, tom: 'cinza', titulo: 'o Gerar não cria lançamento em mês fechado; reabra o mês para gerar' };
+    return { texto: 'mês fechado', tom: 'cinza', titulo: `${meses(f.fechados)} em mês fechado: o Gerar não cria lançamento em mês fechado; reabra o mês para gerar` };
   }
   return null;
 }
 
-/** O `title` do botão Gerar da linha. */
-export const tituloDoGerarNaLinha = (f: FaltaGerar): string => (f.aGerar === 1 ? 'Gerar o mês que falta' : `Gerar os ${f.aGerar} meses que faltam`);
+/** O rótulo do item do "⋯" que gera — REC-COLUNAS-01c: o botão "Gerar" saiu da linha e virou a primeira opção do menu. */
+export const rotuloDoGerarNoMenu = (f: FaltaGerar): string => (f.aGerar === 1 ? 'Gerar 1 mês que falta' : `Gerar ${f.aGerar} meses que faltam`);
 /** O valor do cartão: contagem de meses, sem R$. */
 export const mesesAGerar = meses;
 export const AVISO_A_GERAR_NAO_LIDO = 'não foi possível ler o que falta gerar';
