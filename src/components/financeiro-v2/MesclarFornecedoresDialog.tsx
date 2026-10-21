@@ -17,6 +17,7 @@ import { Segmentado } from '@/components/ui/segmentado';
 import { Search } from 'lucide-react';
 import { MENU_ITEM, MENU_PALETA, MENU_REALCE_HOVER, MENU_SECUNDARIO, MENU_VAZIO } from '@/components/ui/menuPadrao';
 import { supabase } from '@/integrations/supabase/client';
+import { trocarMescladosPeloDono, fraseDaTroca } from '@/lib/fornecedores/donoDoMesclado';
 import { useFornecedoresDoCliente, notificarFornecedoresMudaram } from '@/hooks/useFornecedoresDoCliente';
 import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
 import { ehRateio, formatarDocumento, rotulosDosFornecedores, sufixoDoRotulo } from '@/lib/fornecedores/fornecedorTexto';
@@ -91,7 +92,7 @@ const LINHAS_DO_USO: ReadonlyArray<{ rotulo: string; valor: (u: UsoDoCadastro) =
 /** FORN-CADASTRO-02 — `inicial`: o cadastro abre esta ferramenta já com o par (o que fica e o duplicado) escolhido; nada é gravado
  *  sem a prévia e a confirmação de sempre. */
 export function MesclarFornecedoresDialog({ aberto, aoFechar, clienteId, inicial }: {
-  aberto: boolean; aoFechar: () => void; clienteId: string; inicial?: { manter: string; absorver: string[] };
+  aberto: boolean; aoFechar: () => void; clienteId: string; inicial?: { manter?: string; absorver: string[] };
 }) {
   const [vista, setVista] = useState<'comparar' | 'recentes'>('comparar');
   const [aba, setAba] = useState<'comparar' | 'uso'>('comparar');
@@ -136,15 +137,34 @@ export function MesclarFornecedoresDialog({ aberto, aoFechar, clienteId, inicial
   }, [clienteId]);
   useEffect(() => { if (aberto) void recarregar(); }, [aberto, recarregar]);
 
+  /* FORN-01b — o cadastro JÁ MESCLADO escolhido (pela busca, pela sugestão ou pelo par pedido) vira o DONO atual dele, com o aviso
+     "X foi unido em Y; usando Y" — o banco recusa absorver um mesclado, então a tela nunca o põe como coluna */
+  const colocarColunas = async (ids: string[], ficaPedido: string) => {
+    try {
+      const { ids: finais, trocas } = await trocarMescladosPeloDono(clienteId, ids);
+      if (!trocas.length) return;
+      setColunas(finais);
+      const ficaTrocado = trocas.find((t) => t.de === ficaPedido)?.para;
+      if (ficaPedido) setFica(ficaTrocado ?? ficaPedido);
+      setEscolhas({});
+      setRecado({ tom: 'ok', texto: trocas.map(fraseDaTroca).join(' ') });
+    } catch { /* sem a leitura, fica como veio: o banco recusa o mesclado na prévia, com o motivo */ }
+  };
+
   /* o par pedido pelo cadastro entra UMA vez por abertura: depois de mesclar ele não volta sozinho (FORN-MESCLAR-DEPOIS-01) */
   const inicialAplicado = useRef(false);
   useEffect(() => {
     if (!aberto) { inicialAplicado.current = false; return; }
     if (inicial && !inicialAplicado.current) {
       inicialAplicado.current = true;
-      setColunas([inicial.manter, ...inicial.absorver.filter((x) => x !== inicial.manter)]); setFica(inicial.manter); setEscolhas({});
+      /* FORN-01b — sem `manter` (a faixa do inativo da lista): entra só o inativo, e a pessoa escolhe com quem ele se une */
+      const ids = [...(inicial.manter ? [inicial.manter] : []), ...inicial.absorver.filter((x) => x !== inicial.manter)];
+      setColunas(ids); setFica(inicial.manter ?? ''); setEscolhas({});
+      void colocarColunas(ids, inicial.manter ?? '');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- o par entra uma vez por abertura
   }, [aberto, inicial]);
+
 
   /* a linha inteira de cada coluna, o subcentro padrão dela e o uso — lidos uma vez por cadastro */
   const chaveDasColunas = colunas.join(',');
@@ -209,7 +229,9 @@ export function MesclarFornecedoresDialog({ aberto, aoFechar, clienteId, inicial
   }, [chaveDaPrevia]);
 
   const abrirGrupo = (g: GrupoRepetido) => {
-    setColunas(g.fornecedores.map((f) => f.id)); setFica(''); setEscolhas({}); setRecado(null); setVista('comparar');
+    const ids = g.fornecedores.map((f) => f.id);
+    setColunas(ids); setFica(''); setEscolhas({}); setRecado(null); setVista('comparar');
+    void colocarColunas(ids, '');
   };
   const tirarColuna = (id: string) => { setColunas((c) => c.filter((x) => x !== id)); if (fica === id) setFica(''); setEscolhas({}); };
 
@@ -251,7 +273,10 @@ export function MesclarFornecedoresDialog({ aberto, aoFechar, clienteId, inicial
     return m;
   }, [lidos.fornecedores, inativos, grupos]);
   const listaDeCandidatos = useMemo(() => [...candidatos.values()], [candidatos]);
-  const acrescentar = (id: string) => { setColunas((c) => (c.includes(id) ? c : [...c, id])); setEscolhas({}); setRecado(null); };
+  const acrescentar = (id: string) => {
+    setColunas((c) => (c.includes(id) ? c : [...c, id])); setEscolhas({}); setRecado(null);
+    void colocarColunas([...colunas.filter((x) => x !== id), id], fica);
+  };
   /* o nome exibido (FORN-NOME-EXIBIDO-01): o final do documento entre os parecidos DESTA comparação, e a marca de inativo */
   const rotulos = useMemo(() => rotulosDosFornecedores(comparados.map((c) => ({ id: c.id, nome: c.nome, cpf_cnpj: c.linha.cpf_cnpj, ativo: c.ativo }))), [comparados]);
   const nomeDe = (id: string) => candidatos.get(id)?.nome ?? cadastros.get(id)?.nome ?? id.slice(0, 8);
