@@ -7,12 +7,12 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Plus, Pencil, Search, Link2, AlertTriangle } from 'lucide-react';
+import { Plus, Pencil, Search } from 'lucide-react';
 import { FornecedorFormDialog } from '@/components/financeiro-v2/FornecedorFormDialog';
 import { MesclarFornecedoresDialog } from '@/components/financeiro-v2/MesclarFornecedoresDialog';
+import { FornecedoresSemCadastro } from '@/components/financeiro-v2/FornecedoresSemCadastro';
 import { toast } from 'sonner';
 import { notificarFornecedoresMudaram } from '@/hooks/useFornecedoresDoCliente';
 import { Segmentado } from '@/components/ui/segmentado';
@@ -66,27 +66,6 @@ export function situacaoDaLinha(f: { ativo: boolean; fundido_em_id?: string | nu
   return { rotulo: `Mesclado em ${dono}`, title: `mesclado em ${dono}${quando ? ` em ${quando}` : ''} — desfaça a mesclagem para reativar`, mesclado: true };
 }
 
-interface PendingItem {
-  descricao: string;
-  count: number;
-  ids: string[];
-  suggestions: Fornecedor[];
-}
-
-function normalize(s: string) {
-  return s.toUpperCase().replace(/[^A-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
-}
-
-function similarity(a: string, b: string): number {
-  const na = normalize(a);
-  const nb = normalize(b);
-  if (na === nb) return 1;
-  if (na.includes(nb) || nb.includes(na)) return 0.7;
-  const words = na.split(' ');
-  const matches = words.filter(w => nb.includes(w)).length;
-  return matches / Math.max(words.length, 1);
-}
-
 const PAGE_SIZE = 100;
 
 export function FinV2FornecedoresTab() {
@@ -97,7 +76,6 @@ export function FinV2FornecedoresTab() {
   const { fazendas } = useFazenda();
   const [items, setItems] = useState<Fornecedor[]>([]);
   const [loading, setLoading] = useState(false);
-  const [creatingPendingId, setCreatingPendingId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Fornecedor | null>(null);
   const [searchText, setSearchText] = useState('');
@@ -124,9 +102,8 @@ export function FinV2FornecedoresTab() {
      e na grade de Lançamentos. Nulo = ainda lendo ou a leitura falhou (o aviso não diz zero sem saber). */
   const [inativosComLancamento, setInativosComLancamento] = useState<number | null>(null);
 
-  // Pending items
-  const [pendingItems, setPendingItems] = useState<PendingItem[]>([]);
-  const [loadingPending, setLoadingPending] = useState(false);
+  /* FORN-SEM-CADASTRO-01 — o contador laranja da aba vem da própria aba (nulo = lendo) */
+  const [semCadastroN, setSemCadastroN] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     if (!clienteAtual?.id) return;
@@ -184,49 +161,6 @@ export function FinV2FornecedoresTab() {
 
   useEffect(() => { void loadInativosComLancamento(); }, [loadInativosComLancamento]);
 
-  const loadPending = useCallback(async () => {
-    if (!clienteAtual?.id) return;
-    setLoadingPending(true);
-    // Get lancamentos without favorecido_id that have a descricao
-    const { data } = await supabase
-      .from('financeiro_lancamentos_v2')
-      .select('id, descricao')
-      .eq('cliente_id', clienteAtual.id)
-      .is('favorecido_id', null)
-      .not('descricao', 'is', null)
-      .order('descricao');
-
-    if (!data || data.length === 0) {
-      setPendingItems([]);
-      setLoadingPending(false);
-      return;
-    }
-
-    // Group by descricao
-    const groups: Record<string, { count: number; ids: string[] }> = {};
-    for (const row of data) {
-      const desc = (row.descricao || '').trim();
-      if (!desc) continue;
-      if (!groups[desc]) groups[desc] = { count: 0, ids: [] };
-      groups[desc].count++;
-      if (groups[desc].ids.length < 50) groups[desc].ids.push(row.id);
-    }
-
-    // Build pending items with suggestions
-    const pending: PendingItem[] = Object.entries(groups)
-      .sort((a, b) => b[1].count - a[1].count)
-      .map(([desc, g]) => {
-        const suggestions = items
-          .filter(f => f.ativo && similarity(desc, f.nome) > 0.3)
-          .sort((a, b) => similarity(desc, b.nome) - similarity(desc, a.nome))
-          .slice(0, 3);
-        return { descricao: desc, count: g.count, ids: g.ids, suggestions };
-      });
-
-    setPendingItems(pending);
-    setLoadingPending(false);
-  }, [clienteAtual?.id, items]);
-
   // Debounce: searchText → searchDebounced (300ms)
   useEffect(() => {
     const t = setTimeout(() => setSearchDebounced(searchText), 300);
@@ -237,7 +171,6 @@ export function FinV2FornecedoresTab() {
   useEffect(() => { setPage(1); }, [searchDebounced, statusFilter, semDocumento]);
 
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { if (activeTab === 'pendentes') loadPending(); }, [activeTab, loadPending]);
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const rangeStart = totalCount === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
@@ -253,48 +186,6 @@ export function FinV2FornecedoresTab() {
     setDialogOpen(true);
   };
 
-  // Link pending lancamentos to an existing fornecedor
-  const linkToFornecedor = async (pending: PendingItem, fornecedorId: string) => {
-    const { error } = await supabase
-      .from('financeiro_lancamentos_v2')
-      .update({ favorecido_id: fornecedorId })
-      .in('id', pending.ids);
-    if (error) {
-      toast.error('Erro ao vincular');
-      return;
-    }
-    toast.success(`${pending.count} lançamentos vinculados`);
-    loadPending();
-  };
-
-  // Create new fornecedor from pending and link
-  const createAndLink = async (pending: PendingItem) => {
-    if (creatingPendingId) return;
-    if (!clienteAtual?.id) return;
-    const faz = fazendas.find(f => f.id !== '__global__');
-    if (!faz) return;
-
-    setCreatingPendingId(pending.descricao);
-    try {
-      const { data, error } = await supabase
-        .from('financeiro_fornecedores')
-        .insert({ cliente_id: clienteAtual.id, fazenda_id: faz.id, nome: pending.descricao })
-        .select('id')
-        .single();
-      if (error || !data) {
-        toast.error('Erro ao criar fornecedor');
-        return;
-      }
-      notificarFornecedoresMudaram(clienteAtual.id);
-      await linkToFornecedor(pending, data.id);
-      load();
-    } finally {
-      setCreatingPendingId(null);
-    }
-  };
-
-  const fazendaNome = (id: string) => fazendas.find(f => f.id === id)?.nome || '-';
-  const pendingCount = pendingItems.length;
 
   return (
     <div className="w-full p-4 pb-20 space-y-3 animate-fade-in">
@@ -324,9 +215,10 @@ export function FinV2FornecedoresTab() {
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="h-8">
           <TabsTrigger value="cadastro" className="text-xs h-7">Cadastro ({totalCount})</TabsTrigger>
-          <TabsTrigger value="pendentes" className="text-xs h-7 gap-1">
-            <AlertTriangle className="h-3 w-3" />
-            Pendentes {pendingCount > 0 && <Badge variant="destructive" className="text-[9px] px-1 py-0 ml-0.5">{pendingCount}</Badge>}
+          <TabsTrigger value="sem-cadastro" className="text-xs h-7 gap-1" data-testid="aba-sem-cadastro">
+            Sem cadastro {semCadastroN != null && semCadastroN > 0 && (
+              <span className="ml-0.5 rounded-lg bg-[#fdf0dc] px-1.5 text-[10px] font-semibold text-[#b45309]" data-testid="contador-sem-cadastro">{semCadastroN}</span>
+            )}
           </TabsTrigger>
         </TabsList>
 
@@ -460,72 +352,12 @@ export function FinV2FornecedoresTab() {
           </div>
         </TabsContent>
 
-        <TabsContent value="pendentes" className="space-y-2 mt-2">
-          <p className="text-[10px] text-muted-foreground">
-            Lançamentos sem fornecedor vinculado. Vincule a um existente ou crie novo.
-          </p>
-          {loadingPending && <div className="text-center text-muted-foreground py-6 text-xs animate-pulse">Carregando...</div>}
-          {!loadingPending && pendingItems.length === 0 && (
-            <div className="text-center text-muted-foreground py-8 text-xs">
-              ✅ Todos os lançamentos estão vinculados!
-            </div>
+        {/* FORN-SEM-CADASTRO-01 — montada sempre (o contador da aba precisa da leitura); some da vista fora dela */}
+        <div className={activeTab === 'sem-cadastro' ? 'mt-2' : 'hidden'}>
+          {clienteAtual?.id && (
+            <FornecedoresSemCadastro clienteId={clienteAtual.id} fazendas={fazendas.filter((f) => f.id !== '__global__')} aoContar={setSemCadastroN} visivel={activeTab === 'sem-cadastro'} />
           )}
-          {!loadingPending && pendingItems.length > 0 && (
-            <Card>
-              <CardContent className="p-0">
-                <Table wrapperClassName="max-h-[calc(100dvh-300px)] min-h-[120px] overflow-y-auto">
-                  <TableHeader className="bg-muted">
-                    <TableRow className="h-7">
-                      <TableHead className="text-[10px]">Descrição Original</TableHead>
-                      <TableHead className="text-[10px] w-12">Qtd</TableHead>
-                      <TableHead className="text-[10px]">Sugestão</TableHead>
-                      <TableHead className="text-[10px] w-28">Ação</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {pendingItems.slice(0, 100).map((p, i) => (
-                      <TableRow key={i} className="text-[10px] h-8">
-                        <TableCell className="py-0.5 font-medium break-words">
-                          {p.descricao}
-                        </TableCell>
-                        <TableCell className="py-0.5 text-muted-foreground">{p.count}</TableCell>
-                        <TableCell className="py-0.5">
-                          {p.suggestions.length > 0 ? (
-                            <Select onValueChange={(fornId) => linkToFornecedor(p, fornId)}>
-                              {/* UI-SEM-CORTE-01 — o nome sugerido inteiro: o gatilho cresce e quebra a linha, nunca "…" */}
-                              <SelectTrigger className="h-auto min-h-6 py-0.5 text-[10px] [&>span]:line-clamp-none [&>span]:break-words">
-                                <SelectValue placeholder={p.suggestions[0]?.nome || 'Selecione'} />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {p.suggestions.map(s => (
-                                  <SelectItem key={s.id} value={s.id} className="py-0.5">{s.nome}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          ) : (
-                            <span className="text-muted-foreground italic">Sem sugestão</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="py-0.5">
-                          <div className="flex gap-0.5">
-                            {p.suggestions.length > 0 && (
-                              <Button size="sm" variant="outline" className="h-5 text-[9px] px-1.5" onClick={() => linkToFornecedor(p, p.suggestions[0].id)}>
-                                <Link2 className="h-2.5 w-2.5 mr-0.5" />Vincular
-                              </Button>
-                            )}
-                            <Button size="sm" variant="default" className="h-5 text-[9px] px-1.5" onClick={() => createAndLink(p)} disabled={creatingPendingId === p.descricao}>
-                              <Plus className="h-2.5 w-2.5 mr-0.5" />{creatingPendingId === p.descricao ? '...' : 'Criar'}
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
+        </div>
       </Tabs>
 
       <FornecedorFormDialog
