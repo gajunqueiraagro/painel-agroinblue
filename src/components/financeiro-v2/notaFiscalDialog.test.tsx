@@ -8,10 +8,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { ClassificacaoItem, FornecedorV2 } from '@/hooks/useFinanceiroV2';
+import type { ClassificacaoItem, ContaBancariaV2, FornecedorV2, LancamentoV2Form, Safra } from '@/hooks/useFinanceiroV2';
 import type { Fazenda } from '@/contexts/FazendaContext';
 
-vi.mock('@/integrations/supabase/client', () => ({ supabase: { from: () => ({}), rpc: vi.fn(), storage: { from: () => ({}) } } }));
+vi.mock('@/integrations/supabase/client', () => {
+  /* a cadeia que responde vazio (as culturas da safra leem `agri_safra_area`) */
+  const cadeia = (): Record<string, unknown> => {
+    const b: Record<string, unknown> = {};
+    for (const m of ['select', 'eq', 'in', 'is', 'not', 'order', 'limit', 'or']) b[m] = () => b;
+    b.then = (ok: (x: { data: unknown[]; error: null }) => unknown) => Promise.resolve({ data: [], error: null }).then(ok);
+    return b;
+  };
+  return { supabase: { from: () => cadeia(), rpc: vi.fn(), storage: { from: () => ({}) } } };
+});
 const consultas = vi.hoisted(() => ({
   camposQueOEmitenteCompleta: vi.fn(async (_c: string, _f: string, _e: unknown): Promise<string[]> => []),
   completarCadastroPeloXml: vi.fn(async (_c: string, _f: string, _e: { ie: string | null; endereco?: { municipio: string | null; uf: string | null } | null }): Promise<string | null> => null),
@@ -36,17 +45,23 @@ import type { DocumentoPendente, ParcelaGravada } from '@/lib/financeiro/documen
 import { notaDoDanfe, type ItemDoDanfe } from '@/lib/financeiro/nfe/danfe';
 import { proporLancamento } from '@/lib/financeiro/nfe/proporLancamento';
 import { resolverEmitente } from '@/lib/financeiro/nfe/resolverEmitente';
-import { PAGINAS_DANFE_SINTETICO } from '@/lib/financeiro/nfe/__fixtures__/danfeSintetico';
+import { PAGINAS_DANFE_SINTETICO, danfeSinteticoSemDuplicata } from '@/lib/financeiro/nfe/__fixtures__/danfeSintetico';
 import type { OcorrenciaDaNota } from '@/lib/financeiro/nfeConsultas';
 
 beforeEach(() => {
   Element.prototype.scrollIntoView = () => {};
+  Element.prototype.hasPointerCapture = () => false;
   vi.clearAllMocks();
   consultas.camposQueOEmitenteCompleta.mockResolvedValue([]);
   consultas.lancamentosAbertosComValor.mockResolvedValue([]);
 });
 
-const FAZENDAS: Fazenda[] = [{ id: 'faz-1', nome: 'Faz. Sintetica', owner_id: 'u1', cliente_id: 'cli', codigo: null }];
+const FAZENDAS: Fazenda[] = [{ id: 'faz-1', nome: 'Faz. Sintetica', owner_id: 'u1', cliente_id: 'cli', codigo: null },
+  { id: 'faz-2', nome: 'Faz. Sintetica Dois', owner_id: 'u1', cliente_id: 'cli', codigo: null }];
+const CONTAS: ContaBancariaV2[] = [{ id: 'sic', nome_conta: 'Sicredi Lavoura', banco: 'Sicredi', fazenda_id: 'faz-1', tipo_conta: null, codigo_conta: null,
+  nome_exibicao: 'Sicredi Lavoura', agencia: null, numero_conta: null, conta_digito: null, aliases: null }];
+const SAFRAS: Safra[] = [{ id: 's-soja', nome: 'Safra 26/27 Soja', ativa: true, codigo: '26/27-SOJ', escopo_negocio: 'agricultura' },
+  { id: 's-pec', nome: '26/27 Pecuária', ativa: true, codigo: '26/27-Pec', escopo_negocio: 'pecuaria' }];
 const PLANO: ClassificacaoItem[] = [
   { id: 'pl-nut', subcentro: 'Nutrição Engorda', centro_custo: 'Suplementação', grupo_custo: 'Nutrição', macro_custo: 'Custeio Produtivo', tipo_operacao: '2-Saídas', escopo_negocio: 'pecuaria' },
   { id: 'pl-ins', subcentro: 'Insumos Lavoura', centro_custo: 'Insumos', grupo_custo: 'Custeio Lavoura', macro_custo: 'Custeio Produtivo', tipo_operacao: '2-Saídas', escopo_negocio: 'agricultura' },
@@ -58,9 +73,11 @@ const RECEITA = vi.fn(async (_cnpj: string): Promise<RespostaDoCnpj> => ({ ok: t
   complemento: '', bairro: 'Centro', cep: '79000-000', matrizFilial: 'FILIAL',
 } }));
 
-function montarNota(opcoes: { paginas?: ItemDoDanfe[][]; fornecedores?: FornecedorV2[]; ocorrencias?: OcorrenciaDaNota[] } = {}): NotaParaLancar {
+function montarNota(opcoes: { paginas?: ItemDoDanfe[][]; fornecedores?: FornecedorV2[]; ocorrencias?: OcorrenciaDaNota[]; umaParcela?: boolean } = {}): NotaParaLancar {
   const r = notaDoDanfe(opcoes.paginas ?? PAGINAS_DANFE_SINTETICO);
   if (r.ok === false) throw new Error(r.frase);
+  /* nota de UMA parcela: a duplicata unica com o valor da nota */
+  if (opcoes.umaParcela) { r.nota.duplicatas = [{ numero: '001', vencimento: '2026-10-20', valorCent: r.nota.totais.notaCent }]; r.nota.somaDuplicatasCent = r.nota.totais.notaCent; }
   const resolucao = resolverEmitente(r.nota.emitente, opcoes.fornecedores ?? [], null);
   const p = proporLancamento({ nota: r.nota, avisosDoLeitor: r.avisos, fazendas: [{ id: 'faz-1', nome: 'Faz. Sintetica', ie: '280000002' }], emitente: resolucao, favorecidoId: resolucao.propostoId, ultima: null });
   if (p.ok === false) throw new Error(p.frase);
@@ -82,6 +99,8 @@ function gravadoresFalsos() {
     documentosDoParcelamento: vi.fn(async (_c: string, _p: readonly ParcelaGravada[], pend: readonly DocumentoPendente[]) => pend.map((x) => ({ ...x, gravado: true }))),
     documentosDoLancamento: vi.fn(async (_c: string, _l: string, pend: readonly DocumentoPendente[]) => pend.map((x) => ({ ...x, gravado: true }))),
     numeroNoLancamento: vi.fn(async (_c: string, _ids: readonly string[], _n: string): Promise<string | null> => null),
+    parcelarExistente: vi.fn(async (_l: string, _p: PayloadParcelamento): Promise<string | null> => 'fin-velho'),
+    lancamento: vi.fn(async (_f: LancamentoV2Form): Promise<string | null> => 'lanc-unico'),
   };
   const comoGravadores: Gravadores = g;
   return { g, comoGravadores };
@@ -91,15 +110,15 @@ const FORN: FornecedorV2 = {
   banco: null, agencia: null, conta: null, tipo_conta: null, cpf_cnpj_pagamento: null, nome_favorecido: null, observacao_pagamento: null,
 };
 
-function abrir(nota: NotaParaLancar, extra: { fornecedores?: FornecedorV2[]; g?: Gravadores } = {}) {
+function abrir(nota: NotaParaLancar, extra: { fornecedores?: FornecedorV2[]; g?: Gravadores; onCriarLancamento?: (f: LancamentoV2Form) => Promise<string | null> } = {}) {
   const onCriarFornecedor = vi.fn(async (nome: string, _faz: string | null, _doc?: string): Promise<FornecedorV2 | null> => ({ ...FORN, id: 'forn-novo', nome }));
   const props = {
     onClose: vi.fn(), onCriado: vi.fn(), onAbrirNoLancamento: vi.fn(), onAbrirRegistrada: vi.fn(), onCriarFornecedor,
   };
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <NotaFiscalDialog open clienteId="cli" clienteNome="NJ" nota={nota} fazendas={FAZENDAS} contas={[]} classificacoes={PLANO}
-        fornecedores={extra.fornecedores ?? []} gravadores={extra.g} consultarReceita={RECEITA} {...props} />
+      <NotaFiscalDialog open clienteId="cli" clienteNome="NJ" nota={nota} fazendas={FAZENDAS} contas={CONTAS} classificacoes={PLANO} safras={SAFRAS}
+        fornecedores={extra.fornecedores ?? []} gravadores={extra.g} consultarReceita={RECEITA} onCriarLancamento={extra.onCriarLancamento} {...props} />
     </QueryClientProvider>,
   );
   return props;
@@ -167,12 +186,31 @@ describe('N2 — a prova: cadastrar, escolher o subcentro, criar 4 parcelas com 
     expect(pendentes[0].payload).toMatchObject({ especie: 'nf', numero: '000.000.937', serie: '10', chaveAcesso: '50260911222333000424550100000009371217538298', dataEmissao: '2026-09-15', valorDocumento: 1966.56 });
     expect(props.onClose).toHaveBeenCalled();
   });
-  it('subcentro de lavoura: não cria aqui (safra e cultura são do Novo lançamento)', async () => {
-    abrir(montarNota({ fornecedores: [FORN] }));
+  it('FIN-NOTA-PDF-01b — subcentro de lavoura: Safra (sugerida pela data) e Cultura (sem resposta até escolher); safra e cultura gravadas', async () => {
+    const { g, comoGravadores } = gravadoresFalsos();
+    abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
+    expect(screen.getByTestId('nota-safra').textContent).toContain('só lavoura');
     await escolherSubcentro('Insumos Lavoura');
-    await waitFor(() => expect(screen.getByTestId('nota-no-lancamento').textContent).toContain('safra'));
-    expect(screen.getByTestId('nota-abrir-no-lancamento')).toBeTruthy();
-    expect(screen.queryByTestId('nota-criar')).toBeNull();
+    await waitFor(() => expect(screen.getByTestId('nota-safra').textContent).toContain('Safra 26/27 Soja'));
+    expect(screen.getByTestId('nota-falta').textContent).toBe('⚠ Falta: cultura');
+    expect(screen.getByTestId('nota-criar')).toBeDisabled();
+    fireEvent.keyDown(screen.getByTestId('nota-cultura-gatilho'), { key: 'Enter' });
+    fireEvent.click(await screen.findByRole('option', { name: 'Soja' }));
+    await waitFor(() => expect(screen.getByTestId('nota-criar')).toBeEnabled());
+    fireEvent.click(screen.getByTestId('nota-criar'));
+    await waitFor(() => expect(g.gravar).toHaveBeenCalled());
+    expect(g.gravar.mock.calls[0][0]).toMatchObject({ plano_conta_id: 'pl-ins', safra_id: 's-soja', cultura: 'soja', total_parcelas: 4 });
+  });
+  it('"Todas (rateia)" é uma resposta: a cultura vai nula (rateia), sem o "Falta:"', async () => {
+    const { g, comoGravadores } = gravadoresFalsos();
+    abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
+    await escolherSubcentro('Insumos Lavoura');
+    fireEvent.keyDown(await screen.findByTestId('nota-cultura-gatilho'), { key: 'Enter' });
+    fireEvent.click(await screen.findByRole('option', { name: 'Todas (rateia)' }));
+    await waitFor(() => expect(screen.getByTestId('nota-criar')).toBeEnabled());
+    fireEvent.click(screen.getByTestId('nota-criar'));
+    await waitFor(() => expect(g.gravar).toHaveBeenCalled());
+    expect(g.gravar.mock.calls[0][0]).toMatchObject({ safra_id: 's-soja', cultura: null });
   });
 });
 
@@ -232,5 +270,94 @@ describe('N5 — o "+ Da nota": um PDF só, lido, abre a nota direto', () => {
     expect(paraLancar.arquivo.type).toBe('application/pdf');
     expect(paraLancar.doXml.proposta.parcelamento).toEqual({ tipo: 'parcelado', parcelas: 4, primeiroVencimento: '2026-10-20' });
     expect(paraLancar.doXml.proposta.fazendaId).toBe('faz-1');
+  });
+});
+
+describe('N6 — FIN-NOTA-PDF-01b: nota de UMA parcela e nota SEM duplicata criam UM lançamento no próprio modal', () => {
+  it('uma parcela: "Criar lançamento" com o vencimento da duplicata; a nota anexada ao lançamento', async () => {
+    const { g, comoGravadores } = gravadoresFalsos();
+    abrir(montarNota({ fornecedores: [FORN], umaParcela: true }), { g: comoGravadores });
+    expect(screen.getByTestId('nota-criar').textContent).toBe('Criar lançamento');
+    expect(screen.getByTestId('nota-vencimento').textContent).toContain('da duplicata');
+    await escolherSubcentro('Nutrição Engorda');
+    await waitFor(() => expect(screen.getByTestId('nota-criar')).toBeEnabled());
+    fireEvent.click(screen.getByTestId('nota-criar'));
+    await waitFor(() => expect(g.lancamento).toHaveBeenCalled());
+    expect(g.lancamento.mock.calls[0][0]).toMatchObject({ valor: 1966.56, data_vencimento: '2026-10-20', status_transacao: 'programado', plano_conta_id: 'pl-nut',
+      favorecido_id: 'f1', fazenda_id: 'faz-1', numero_documento: '937', tipo_documento: 'Nota Fiscal' });
+    expect(g.gravar).not.toHaveBeenCalled();
+    expect(g.documentosDoLancamento.mock.calls[0][1]).toBe('lanc-unico');
+    expect(g.documentosDoLancamento.mock.calls[0][2][0].arquivo?.type).toBe('application/pdf');
+  });
+  it('sem duplicata (o molde do caso de 21/10): vencimento = emissão, em âmbar, editável', async () => {
+    const { g, comoGravadores } = gravadoresFalsos();
+    abrir(montarNota({ paginas: danfeSinteticoSemDuplicata(), fornecedores: [FORN] }), { g: comoGravadores });
+    expect(screen.getByTestId('nota-vencimento').textContent).toContain('nota sem duplicata: confira o vencimento');
+    expect((within(screen.getByTestId('nota-vencimento')).getByRole('textbox') as HTMLInputElement).value).toBe('29/09/2026');
+    await escolherSubcentro('Nutrição Engorda');
+    fireEvent.click(await screen.findByTestId('nota-criar'));
+    await waitFor(() => expect(g.lancamento).toHaveBeenCalled());
+    expect(g.lancamento.mock.calls[0][0]).toMatchObject({ valor: 9583, data_vencimento: '2026-09-29', numero_documento: '3241' });
+  });
+});
+
+describe('N7 — o caso de 21/10 16h49: NADA ESCOLHIDO NO MODAL SE PERDE no caminho para o Novo lançamento', () => {
+  it('conta e fazenda escolhidas (e subcentro, fornecedor, vencimento, documento, itens, o PDF) chegam ao Novo lançamento', async () => {
+    const props = abrir(montarNota({ paginas: danfeSinteticoSemDuplicata(), fornecedores: [FORN] }));
+    fireEvent.click(within(screen.getByTestId('nota-bloco-lancamento')).getByRole('button', { name: /Nenhuma/ }));
+    fireEvent.click(await screen.findByText('Sicredi Lavoura'));
+    fireEvent.click(within(screen.getByTestId('nota-bloco-lancamento')).getByRole('button', { name: /Faz\. Sintetica/ }));
+    fireEvent.click(await screen.findByText('Faz. Sintetica Dois'));
+    await escolherSubcentro('Nutrição Engorda');
+    fireEvent.click(screen.getByTestId('nota-abrir-no-lancamento'));
+    expect(props.onAbrirNoLancamento).toHaveBeenCalledTimes(1);
+    const prefill = props.onAbrirNoLancamento.mock.calls[0][0];
+    expect(prefill).toMatchObject({
+      conta_bancaria_id: 'sic', fazenda_id: 'faz-2', status_transacao: 'programado', plano_conta_id: 'pl-nut', subcentro: 'Nutrição Engorda',
+      favorecido_id: 'f1', data_vencimento: '2026-09-29', valor: 9583, numero_documento: '3241', tipo_documento: 'Nota Fiscal', data_competencia: '2026-09-29',
+    });
+    expect(prefill.descricao).toContain('NF 3.241');
+    expect(prefill.descricao).toContain('POSTE DE CONCRETO SINTETICO 9M');
+    expect(prefill.doXml.arquivo.type).toBe('application/pdf');
+    expect(prefill.doXml.proposta.favorecidoId).toBe('f1');
+  });
+});
+
+describe('N8 — FIN-NOTA-PDF-01b: "Atualizar e parcelar" (o à vista existente vira 1/4 + 3 novas)', () => {
+  it('aberto de R$ 1.966,56: a RPC recebe o existente e a lista 4 × 491,64; a nota em todas as parcelas', async () => {
+    consultas.lancamentosAbertosComValor.mockResolvedValue([
+      { id: 'l-avista', vencimento: '2026-09-20', competencia: '2026-09-15', descricao: 'Compra do extrato', valorCent: 196656, financiamentoId: null, numeroDocumento: null, pago: false },
+    ]);
+    const { g, comoGravadores } = gravadoresFalsos();
+    const props = abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
+    const botao = await screen.findByTestId('nota-atualizar-este');
+    expect(botao.textContent).toBe('Atualizar e parcelar');
+    await escolherSubcentro('Nutrição Engorda');
+    fireEvent.click(screen.getByTestId('nota-atualizar-este'));
+    expect((await screen.findByTestId('nota-confirmar-texto')).textContent).toContain('vira a parcela 1/4');
+    fireEvent.click(screen.getByTestId('nota-confirmar-atualizar'));
+    await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
+    const [alvo, payload] = g.parcelarExistente.mock.calls[0];
+    expect(alvo).toBe('l-avista');
+    expect(payload.parcelas).toEqual([1, 2, 3, 4].map((numero, i) => ({ numero, data_vencimento: ['2026-10-20', '2026-11-20', '2026-12-20', '2027-01-20'][i], valor: 491.64 })));
+    expect(payload).toMatchObject({ valor_total: 1966.56, plano_conta_id: 'pl-nut', favorecido_id: 'f1' });
+    expect(g.gravar).not.toHaveBeenCalled();
+    expect(g.parcelas).toHaveBeenCalledWith('fin-velho');
+    expect(g.documentosDoParcelamento.mock.calls[0][2][0].arquivo?.type).toBe('application/pdf');
+  });
+  it('PAGO com valor diferente da parcela 1: a diferença em R$ e a decisão (o valor pago cobre a nota: só anexar)', async () => {
+    consultas.lancamentosAbertosComValor.mockResolvedValue([
+      { id: 'l-pago', vencimento: '2026-09-20', competencia: '2026-09-15', descricao: 'Pago no extrato', valorCent: 196656, financiamentoId: null, numeroDocumento: null, pago: true },
+    ]);
+    const { g, comoGravadores } = gravadoresFalsos();
+    abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
+    await escolherSubcentro('Nutrição Engorda');
+    fireEvent.click(await screen.findByTestId('nota-atualizar-este'));
+    const texto = ((await screen.findByTestId('nota-confirmar-texto')).textContent ?? '').replace(/\u00a0/g, ' ');
+    expect(texto).toContain('Já está pago com R$ 1.966,56; a parcela 1 da nota é R$ 491,64 (diferença R$ 1.474,92). O valor pago não muda.');
+    expect(screen.queryByTestId('nota-confirmar-atualizar')).toBeNull();
+    fireEvent.click(screen.getByTestId('nota-so-anexar'));
+    await waitFor(() => expect(g.documentosDoLancamento).toHaveBeenCalled());
+    expect(g.parcelarExistente).not.toHaveBeenCalled();
   });
 });
