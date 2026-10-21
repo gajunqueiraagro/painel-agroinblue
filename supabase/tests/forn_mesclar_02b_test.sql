@@ -18,12 +18,15 @@ DECLARE
 BEGIN
   select id into v_fora from financeiro_plano_contas where not ativo limit 1;
   if v_fora is null then raise exception 'sem plano inativo para o teste'; end if;
+  /* FORN-NOME-CAIXA-01 — os cadastros sinteticos nascem como escritos (o teste e' da mesclagem, nao da caixa do nome) */
+  perform set_config('app.nome_caixa_escritor', 'on', true);
   insert into financeiro_fornecedores (cliente_id, nome, ativo, email, plano_padrao_id) values (k, 'SINT Luiz Mesclar da Silva', true, 'a@sint.br', v_fora) returning id into a;
   insert into financeiro_fornecedores (cliente_id, nome, ativo, cpf_cnpj, inscricao_estadual, email) values (k, 'SINT LUIZ MESCLAR DA SILVA LTDA', true, '54.442.418/0001-88', '284964700', 'b@sint.br') returning id into b;
   insert into financeiro_fornecedores (cliente_id, nome, ativo, cpf_cnpj, nome_fantasia, pix_tipo_chave, pix_chave) values (k, 'SINT Casa Mesclar', true, '54442418000188', 'Casa do Mesclar', 'cnpj', '54442418000188') returning id into c;
   /* D liga-se a C so' pelo nome: a corrente A–B–C–D so' fecha com o alcance transitivo */
   insert into financeiro_fornecedores (cliente_id, nome, ativo) values (k, 'SINT Casa Mesclar Ltda', true) returning id into d;
   insert into financeiro_fornecedores (cliente_id, nome, ativo, cpf_cnpj) values (k, 'Pec.3M-SINT Luiz Mesclar da Silva', true, null) returning id into p;
+  perform set_config('app.nome_caixa_escritor', 'off', true);
 
   select id into v_faz from fazendas where cliente_id = k order by nome limit 1;
   select id into v_plano from financeiro_plano_contas where ativo and cliente_id is null and tipo_operacao = '2-Saídas' and escopo_negocio = 'pecuaria' order by ordem_exibicao limit 1;
