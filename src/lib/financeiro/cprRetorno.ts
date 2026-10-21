@@ -14,7 +14,6 @@ export interface RetornoCpr {
   visao: 'lista' | 'fluxo';
   atalho: AtalhoCpr;
   datas: PeriodoCpr | null;
-  incluirVencidos: boolean;
   contaSel: FiltroContaCpr;
   segmento: SegmentoCpr;
   statusLigados: string[];
@@ -38,8 +37,8 @@ export function lerRetornoCpr(texto: string | null | undefined): Partial<Retorno
     const de = j.datas.de; const ate = j.datas.ate;
     if (ehData(de) && ehData(ate)) r.datas = { de, ate };
   }
-  const incluir = j.incluirVencidos; const conta = j.contaSel; const amp = j.ampliado; const status = j.statusLigados;
-  if (typeof incluir === 'boolean') r.incluirVencidos = incluir;
+  /* CPR-AJUSTES-20-10c — o instantâneo antigo ainda pode trazer o campo da caixa dos vencidos (ela saiu): ele é ignorado */
+  const conta = j.contaSel; const amp = j.ampliado; const status = j.statusLigados;
   if (typeof conta === 'string') r.contaSel = conta; else if (conta === null) r.contaSel = null;
   if (j.segmento === 'pagar' || j.segmento === 'receber' || j.segmento === 'ambos') r.segmento = j.segmento;
   if (Array.isArray(status)) r.statusLigados = status.filter((x): x is string => typeof x === 'string');
