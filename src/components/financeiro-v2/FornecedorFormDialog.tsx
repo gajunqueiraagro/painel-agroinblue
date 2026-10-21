@@ -14,7 +14,7 @@
  *  · Edição: a linha INTEIRA é relida do banco ao abrir (o lápis do seletor entrega só as colunas do leitor); o Salvar espera essa
  *    leitura para nunca gravar vazio por cima de um campo que a tela não leu.
  */
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { BlocoFormulario, CORPO_FORMULARIO, Rotulo } from '@/components/ui/bloco-formulario';
 import { Input } from '@/components/ui/input';
@@ -25,7 +25,11 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { normalizeFornecedorNome } from '@/lib/financeiro/normalizeFornecedorNome';
+import {
+  conferirCadastro, preencherDocumentoDoCadastro, fraseDaFilial, fraseDoDocumento, fraseDoHomonimoSemDocumento, type FornecedorDoCadastro,
+} from '@/lib/fornecedores/cadastroDaCasa';
+import { fonteDoCadastroNoBanco } from '@/lib/fornecedores/cadastroDaCasaBanco';
+import { consultarCnpj, preencherVazios, fraseDoPreenchido } from '@/lib/fornecedores/consultaCnpj';
 import { notificarFornecedoresMudaram } from '@/hooks/useFornecedoresDoCliente';
 import { mascararAoDigitar, situacaoDoGravado, validarDocumento } from '@/lib/fornecedores/documentoFiscal';
 import {
@@ -139,7 +143,9 @@ export function FornecedorFormDialog({
   const [saving, setSaving] = useState(false);
   const [docTocado, setDocTocado] = useState(false);
   const [recado, setRecado] = useState<{ texto: string; tom: 'aviso' | 'erro' } | null>(null);
-  const [reativarTarget, setReativarTarget] = useState<Fornecedor | null>(null);
+  const [reativarTarget, setReativarTarget] = useState<{ id: string; nome: string } | null>(null);
+  /* FORN-FILIAL-01 — o homônimo SEM documento achado no Salvar: "Preencher naquele" grava o CNPJ nele */
+  const [homonimo, setHomonimo] = useState<FornecedorDoCadastro | null>(null);
   const [reativando, setReativando] = useState(false);
   const [uso, setUso] = useState<UsoDoFornecedor | null>(null);
   const [cadastro, setCadastro] = useState<FornecedorParaConferir[] | null>(null);
@@ -173,6 +179,28 @@ export function FornecedorFormDialog({
     ? { texto: validado.motivo ?? '', tom: 'erro' }
     : legadoIntocado ? { texto: `Fora do padrão · ${gravado?.motivo ?? ''}${validado.valido && validado.formatado ? ` Ao salvar, grava ${validado.formatado}.` : ''}`, tom: 'aviso' }
     : null;
+  /* FORN-FILIAL-01 — o CNPJ DIGITADO (válido, 14) é consultado na base pública (BrasilAPI): razão social, fantasia e endereço entram SÓ
+     onde está vazio. Falha (rede, não achado, limite) não trava nada: a frase fica na linha do documento e o cadastro segue à mão. */
+  const [consulta, setConsulta] = useState<{ cnpj: string; texto: string } | null>(null);
+  const dAtual = useRef(d);
+  dAtual.current = d;
+  const cnpjParaConsultar = docTocado && validado.valido && validado.tipo === 'cnpj' ? validado.digitos : '';
+  useEffect(() => {
+    if (!cnpjParaConsultar) { setConsulta(null); return; }
+    let vivo = true;
+    setConsulta({ cnpj: cnpjParaConsultar, texto: 'Consultando o CNPJ…' });
+    const t = setTimeout(() => {
+      void consultarCnpj(cnpjParaConsultar).then((r) => {
+        if (!vivo) return;
+        if (r.ok === false) { setConsulta({ cnpj: cnpjParaConsultar, texto: r.frase }); return; }
+        /* a frase sai do formulário de AGORA; o preenchimento confere de novo no estado da hora (só vazio) */
+        const frase = fraseDoPreenchido(preencherVazios(dAtual.current, r.dados).campos, r.dados.matrizFilial);
+        setD((x) => ({ ...x, ...preencherVazios(x, r.dados).patch }));
+        setConsulta({ cnpj: cnpjParaConsultar, texto: frase ?? 'Consulta do CNPJ: nada a preencher (os campos já estão preenchidos).' });
+      });
+    }, 500);
+    return () => { vivo = false; clearTimeout(t); };
+  }, [cnpjParaConsultar]);
   /* documento duplicado no mesmo cliente: AVISO, não bloqueia. FORN-01b (Gabriel, 21/10): no cadastro ATIVO (ou novo), um INATIVO com o
      mesmo documento não avisa nem cobra — vale o ativo; só outro ATIVO conta */
   const editandoAtivo = !editing || editing.ativo !== false;
@@ -187,13 +215,21 @@ export function FornecedorFormDialog({
   const save = useCallback(async (forcar = false) => {
     if (saving || documentoBloqueia || !linhaLida) return;
     if (!clienteId || !d.nome.trim()) { setRecado({ texto: 'Informe a razão social.', tom: 'erro' }); setAba('dados'); return; }
-    if (!editing) {
-      /* sem índice único de nome no banco (FORN-NOME-UNICO-BANCO-01): esta é a barreira; inativo oferece reativar */
-      const normalizado = normalizeFornecedorNome(d.nome);
-      const colidindo = allFornecedores.find((f) => normalizeFornecedorNome(f.nome) === normalizado);
-      if (colidindo) {
-        if (colidindo.ativo) { setRecado({ texto: `Já existe fornecedor ativo "${colidindo.nome}". Selecione-o em vez de criar um novo.`, tom: 'erro' }); return; }
-        setReativarTarget(colidindo); return;
+    if (!editing && !forcar) {
+      /* FORN-FILIAL-01 — UMA regra só com o "+" dos seletores (`decidirCadastro`, lida do banco — não da página de 100 da lista):
+         mesmo nome sem documento → é ele; inativo → reativar; CNPJ de outro ativo → não cria; mesmo nome com CNPJ diferente → outra
+         filial (aviso, e "Salvar mesmo assim" cria); homônimo sem documento → preencher o CNPJ nele, ou "Salvar mesmo assim" cria outro */
+      const r = await conferirCadastro(fonteDoCadastroNoBanco, clienteId, { nome: d.nome.trim(), cpfCnpj: documentoParaGravar });
+      setHomonimo(null);
+      if (r.tipo === 'erro') { setRecado({ texto: r.frase, tom: 'erro' }); return; }
+      if (r.tipo === 'ja_existe') { setRecado({ texto: `Já existe fornecedor ativo "${r.fornecedor.nome}". Selecione-o em vez de criar um novo.`, tom: 'erro' }); return; }
+      if (r.tipo === 'inativo') { setReativarTarget({ id: r.fornecedor.id, nome: r.fornecedor.nome }); return; }
+      if (r.tipo === 'documento_de_outro') { setRecado({ texto: `${fraseDoDocumento(r.fornecedor)} Nada foi gravado.`, tom: 'erro' }); return; }
+      if (r.tipo === 'filial') { setRecado({ texto: fraseDaFilial(r.fornecedor), tom: 'aviso' }); return; }
+      if (r.tipo === 'homonimo_sem_documento') {
+        setHomonimo(r.fornecedor);
+        setRecado({ texto: fraseDoHomonimoSemDocumento(r.fornecedor, documentoParaGravar ?? ''), tom: 'aviso' });
+        return;
       }
     }
     setSaving(true);
@@ -222,6 +258,18 @@ export function FornecedorFormDialog({
     notificarFornecedoresMudaram(clienteId);
     onClose(); onSaved();
   }, [saving, documentoBloqueia, linhaLida, clienteId, d, editing, allFornecedores, lerCadastro, lerTrava, documentoParaGravar, onClose, onSaved, onCriado]);
+
+  /* FORN-FILIAL-01 — "Preencher naquele": o CNPJ digitado vai para o homônimo sem documento (só se ele continuar sem), e ele é o usado */
+  const preencherNoHomonimo = useCallback(async () => {
+    if (!homonimo || !clienteId || !documentoParaGravar || saving) return;
+    setSaving(true);
+    const r = await preencherDocumentoDoCadastro(fonteDoCadastroNoBanco, clienteId, homonimo, documentoParaGravar);
+    setSaving(false);
+    if (r.ok === false) { setRecado({ texto: r.frase, tom: 'erro' }); return; }
+    toast.success(`CNPJ gravado em "${homonimo.nome}"`);
+    setHomonimo(null);
+    onClose(); onSaved();
+  }, [homonimo, clienteId, documentoParaGravar, saving, onClose, onSaved]);
 
   const reativarExistente = useCallback(async () => {
     if (!reativarTarget) return;
@@ -306,9 +354,9 @@ export function FornecedorFormDialog({
                       <Input value={d.cpf_cnpj} onChange={(e) => { set('cpf_cnpj', mascararAoDigitar(e.target.value)); setDocTocado(true); }}
                         className={`${CAMPO} tabular-nums ${documentoBloqueia ? 'border-destructive' : ''}`} placeholder="000.000.000-00 ou 00.000.000/0000-00"
                         aria-invalid={documentoBloqueia || undefined} />
-                      <div data-testid="cpf-cnpj-recado" title={recadoDoDocumento?.texto || undefined}
-                        className={`min-h-[14px] break-words text-[10px] leading-[14px] ${recadoDoDocumento?.tom === 'erro' ? 'text-destructive' : 'text-[#b45309]'}`}>
-                        {recadoDoDocumento?.texto ?? ''}
+                      <div data-testid="cpf-cnpj-recado" title={recadoDoDocumento?.texto || consulta?.texto || undefined}
+                        className={`min-h-[14px] break-words text-[10px] leading-[14px] ${recadoDoDocumento?.tom === 'erro' ? 'text-destructive' : recadoDoDocumento ? 'text-[#b45309]' : 'text-muted-foreground'}`}>
+                        {recadoDoDocumento?.texto ?? (consulta && consulta.cnpj === cnpjParaConsultar ? <span data-testid="consulta-cnpj">{consulta.texto}</span> : '')}
                       </div>
                     </div>
                     {/* lugar do aviso de duplicado: existe sempre (18px); com duplicado, a frase e o gesto */}
@@ -488,6 +536,10 @@ export function FornecedorFormDialog({
             {recado?.texto ?? ''}
           </div>
           <Button variant="outline" size="sm" className="h-[26px] text-[11px]" onClick={onClose}>Cancelar</Button>
+          {homonimo && recado?.tom === 'aviso' && (
+            <Button variant="outline" size="sm" className="h-[26px] text-[11px]" onClick={() => void preencherNoHomonimo()} disabled={saving}
+              data-testid="preencher-no-homonimo">Preencher naquele</Button>
+          )}
           <Button size="sm" className="h-[26px] text-[11px]" onClick={() => void save(recado?.tom === 'aviso')} disabled={saving || documentoBloqueia || !linhaLida}
             title={documentoBloqueia ? (validado.motivo ?? undefined) : !linhaLida ? 'Lendo o cadastro…' : undefined} data-testid="salvar-fornecedor">
             {saving ? 'Salvando…' : recado?.tom === 'aviso' ? 'Salvar mesmo assim' : 'Salvar fornecedor'}
