@@ -77,7 +77,7 @@ import {
   MOTIVO_CONTA_PAGA, MOTIVO_SALVAR_PENDENTE, type RegraDaRecorrencia, type OrigemDoValorDoMes, type PedidoDoValorDoMes,
 } from '@/lib/financeiro/valorDoMes';
 import { pendenteDaNota, type DoXml } from '@/lib/financeiro/nfePrefill';
-import { completarCadastroPeloXml, gravarDocumentoNoCadastro, type OcorrenciaDaNota } from '@/lib/financeiro/nfeConsultas';
+import { completarCadastroPeloXml, fornecedorPeloDocumento, gravarDocumentoNoCadastro, type CadastroComODocumento, type OcorrenciaDaNota } from '@/lib/financeiro/nfeConsultas';
 import { documentoFormatado, reais } from '@/lib/financeiro/nfe/formatos';
 import { fraseParcelasComoNaNota, type CampoDoXml } from '@/lib/financeiro/nfe/proporLancamento';
 import { AvisosDoXml, CAMPO_AMBAR, FaixaDoFornecedor, OrigemDoXml, PilulaDoXml } from './LancamentoDoXml';
@@ -587,6 +587,8 @@ export function LancamentoV2Dialog({
   const [xmlGravarDocumento, setXmlGravarDocumento] = useState(false);
   const [xmlFornecedorProposto, setXmlFornecedorProposto] = useState<string | null>(null);
   const [xmlCriandoFornecedor, setXmlCriandoFornecedor] = useState(false);
+  /* NOTA-FORNECEDOR-DUPLICA-01 — o CNPJ da nota ja' e' de um cadastro (conferido no banco ANTES de criar): a faixa diz de quem e oferece usar */
+  const [xmlConflito, setXmlConflito] = useState<CadastroComODocumento | null>(null);
   /* O alvo da nova tentativa: o lançamento à vista, ou as parcelas do parcelamento (PR 2b). `null` = não
      há como tentar de novo daqui (a frase diz o caminho). */
   const [posSalvar, setPosSalvar] = useState<{
@@ -2302,6 +2304,10 @@ export function LancamentoV2Dialog({
     if (!xml) return;
     setXmlCriandoFornecedor(true);
     try {
+      if (clienteAtual?.id) {
+        const ja = await fornecedorPeloDocumento(clienteAtual.id, xml.emitenteDocumento);
+        if (ja) { setXmlConflito(ja); return; }
+      }
       const novo = await onCriarFornecedor(xml.emitenteNome, fazendaId, documentoFormatado(xml.emitenteDocumento));
       if (novo) {
         setFavorecidoId(novo.id); setXmlFaixaFechada(true);
@@ -2493,7 +2499,9 @@ export function LancamentoV2Dialog({
                     document.getElementById('campo-fornecedor-financeiro')?.querySelector('button')?.focus();
                   }}
                   onEscolher={(id) => { setFavorecidoId(id); setXmlFornecedorProposto(id); setXmlFaixaFechada(true); }}
-                  onCriar={() => { void criarFornecedorDoXml(); }} criando={xmlCriandoFornecedor} />
+                  onCriar={() => { void criarFornecedorDoXml(); }} criando={xmlCriandoFornecedor}
+                  conflito={xmlConflito}
+                  onUsarConflito={(id) => { setFavorecidoId(id); setXmlFornecedorProposto(id); setXmlConflito(null); setXmlFaixaFechada(true); }} />
                 <AvisosDoXml xml={xml} registradaDispensada={xmlRegistradaDispensada}
                   onDispensarRegistrada={() => setXmlRegistradaDispensada(true)} onAbrirOcorrencia={abrirOcorrenciaDaNota} />
                 {xmlAmbar('subcentro') && (
