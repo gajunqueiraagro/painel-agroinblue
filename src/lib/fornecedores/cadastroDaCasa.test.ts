@@ -8,7 +8,7 @@ import { join, relative, resolve } from 'node:path';
 import {
   conferirCadastro, decidirCadastro, reativarDoCadastro, fraseDoDocumento, fraseDoInativo,
   FRASE_FALHA_AO_CONFERIR, FRASE_FALHA_AO_REATIVAR, FRASE_JA_EXISTE,
-  type FonteDoCadastro, type FornecedorDoCadastro,
+  fraseDaFilial, fraseDoHomonimoSemDocumento, type FonteDoCadastro, type FornecedorDoCadastro,
 } from './cadastroDaCasa';
 import { normalizeFornecedorNome } from '@/lib/financeiro/normalizeFornecedorNome';
 
@@ -58,12 +58,33 @@ describe('decidirCadastro — a regra, na ordem', () => {
     expect(decidirCadastro({ nome: 'Nome Novo' }, [dono])).toEqual({ tipo: 'criar' });
   });
 
-  it('a ordem: o NOME vem antes do documento (ativo de mesmo nome; depois o inativo de mesmo nome; só então o documento)', () => {
+  it('FORN-FILIAL-01 — a ordem: o DOCUMENTO de outro ativo vem antes do nome (o banco também trava); o mesmo documento e o mesmo nome é ele', () => {
     const dono = f('d', 'Dono', { cpf_cnpj: '123.456.789-09' });
     const mesmoNome = f('m', 'Gama');
-    expect(decidirCadastro({ nome: 'gama', cpfCnpj: '12345678909' }, [dono, mesmoNome])).toEqual({ tipo: 'ja_existe', fornecedor: mesmoNome });
+    expect(decidirCadastro({ nome: 'gama', cpfCnpj: '12345678909' }, [dono, mesmoNome])).toEqual({ tipo: 'documento_de_outro', fornecedor: dono });
+    expect(decidirCadastro({ nome: 'dono', cpfCnpj: '12345678909' }, [dono, mesmoNome])).toEqual({ tipo: 'ja_existe', fornecedor: dono });
     const inativo = f('i', 'Gama', { ativo: false });
-    expect(decidirCadastro({ nome: 'gama', cpfCnpj: '12345678909' }, [dono, inativo])).toEqual({ tipo: 'inativo', fornecedor: inativo });
+    expect(decidirCadastro({ nome: 'gama' }, [dono, inativo])).toEqual({ tipo: 'inativo', fornecedor: inativo });
+  });
+
+  it('FORN-FILIAL-01 — filiais: mesmo nome + CNPJ válido diferente cria (com o aviso); homônimo sem documento pergunta; sem documento seleciona', () => {
+    const tl = f('tl', 'Zeta Filial Exemplo Ltda', { cpf_cnpj: '11.222.333/0004-24' });
+    expect(decidirCadastro({ nome: 'zeta filial exemplo ltda', cpfCnpj: '11.222.333/0038-73' }, [tl])).toEqual({ tipo: 'filial', fornecedor: tl });
+    expect(fraseDaFilial(tl)).toBe('Já existe Zeta Filial Exemplo Ltda com CNPJ 11.222.333/0004-24; este fica como outro cadastro.');
+    const semDoc = f('sd', 'Zeta Filial Exemplo Ltda');
+    expect(decidirCadastro({ nome: 'Zeta Filial Exemplo Ltda', cpfCnpj: '11.222.333/0038-73' }, [tl, semDoc])).toEqual({ tipo: 'homonimo_sem_documento', fornecedor: semDoc });
+    expect(fraseDoHomonimoSemDocumento(semDoc, '11222333003873'))
+      .toBe('Já existe Zeta Filial Exemplo Ltda sem CNPJ. Preencher o CNPJ 11.222.333/0038-73 naquele cadastro, ou criar outro?');
+    /* fora do padrão conta como "sem documento" (é o que pede o CNPJ certo) */
+    const torto = f('t', 'Zeta Filial Exemplo Ltda', { cpf_cnpj: '123' });
+    expect(decidirCadastro({ nome: 'Zeta Filial Exemplo Ltda', cpfCnpj: '11.222.333/0038-73' }, [torto])).toEqual({ tipo: 'homonimo_sem_documento', fornecedor: torto });
+    /* o novo sem documento: seleciona o existente (como antes) */
+    expect(decidirCadastro({ nome: 'Zeta Filial Exemplo Ltda' }, [tl, semDoc])).toEqual({ tipo: 'ja_existe', fornecedor: semDoc });   // o mais antigo (empate: o id)
+    /* o inativo com outro CNPJ não bloqueia: é outra filial */
+    const ina = f('in', 'Zeta Filial Exemplo Ltda', { cpf_cnpj: '11.222.333/0004-24', ativo: false });
+    expect(decidirCadastro({ nome: 'Zeta Filial Exemplo Ltda', cpfCnpj: '11.222.333/0038-73' }, [ina])).toEqual({ tipo: 'filial', fornecedor: ina });
+    /* o CNPJ de um INATIVO não bloqueia (FORN-01b) */
+    expect(decidirCadastro({ nome: 'Outro Nome', cpfCnpj: '11.222.333/0004-24' }, [ina])).toEqual({ tipo: 'criar' });
   });
 
   it('(2c) nada disso: cria; nome que normaliza para vazio também (quem recusa nome vazio é o formulário)', () => {
@@ -81,7 +102,7 @@ describe('decidirCadastro — a regra, na ordem', () => {
 
 describe('conferirCadastro / reativarDoCadastro — leem pela fonte, nunca gravam para decidir', () => {
   const fonteCom = (porNome: FornecedorDoCadastro[], ativos: FornecedorDoCadastro[]): FonteDoCadastro & { reativar: ReturnType<typeof vi.fn> } => ({
-    lerPorNome: vi.fn(async () => porNome), lerAtivos: vi.fn(async () => ativos), reativar: vi.fn(async () => {}),
+    lerPorNome: vi.fn(async () => porNome), lerAtivos: vi.fn(async () => ativos), reativar: vi.fn(async () => {}), preencherDocumento: vi.fn(async () => {}),
   });
 
   it('pergunta pelo nome JÁ normalizado e pelo cliente; junta os de mesmo nome (com inativos) aos ativos', async () => {
@@ -100,9 +121,9 @@ describe('conferirCadastro / reativarDoCadastro — leem pela fonte, nunca grava
   });
 
   it('falha de leitura vira frase — e NUNCA vira "pode criar"', async () => {
-    const fonte: FonteDoCadastro = { lerPorNome: async () => { throw new Error('rede'); }, lerAtivos: async () => [], reativar: async () => {} };
+    const fonte: FonteDoCadastro = { lerPorNome: async () => { throw new Error('rede'); }, lerAtivos: async () => [], reativar: async () => {}, preencherDocumento: async () => {} };
     expect(await conferirCadastro(fonte, 'cli', { nome: 'x' })).toEqual({ tipo: 'erro', frase: FRASE_FALHA_AO_CONFERIR });
-    const fonte2: FonteDoCadastro = { lerPorNome: async () => [], lerAtivos: async () => { throw new Error('rede'); }, reativar: async () => {} };
+    const fonte2: FonteDoCadastro = { lerPorNome: async () => [], lerAtivos: async () => { throw new Error('rede'); }, reativar: async () => {}, preencherDocumento: async () => {} };
     expect(await conferirCadastro(fonte2, 'cli', { nome: 'x' })).toEqual({ tipo: 'erro', frase: FRASE_FALHA_AO_CONFERIR });
   });
 
