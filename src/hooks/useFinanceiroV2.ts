@@ -284,6 +284,9 @@ export interface FornecedorV2 {
   nome_fantasia?: string | null;
   aliases_norm?: string[] | null;
   fundido_em_id?: string | null;
+  /** FORN-FILIAL-01 — a cidade da filial (o seletor mostra "Razão social · Cidade/UF · CNPJ") */
+  municipio?: string | null;
+  uf?: string | null;
 }
 
 export interface ClassificacaoItem {
@@ -431,7 +434,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       const { data } = await supabase
         .from('financeiro_fornecedores')
         /* FORN-BUSCA-UNICA-01 — fantasia, apelidos e a marca da mesclagem: o filtro de fornecedor busca por eles (a regra única) */
-        .select('id, nome, nome_fantasia, cpf_cnpj, fazenda_id, ativo, tipo_recebimento, pix_tipo_chave, pix_chave, banco, agencia, conta, tipo_conta, cpf_cnpj_pagamento, nome_favorecido, observacao_pagamento, aliases_norm, fundido_em_id')
+        .select('id, nome, nome_fantasia, cpf_cnpj, fazenda_id, ativo, tipo_recebimento, pix_tipo_chave, pix_chave, banco, agencia, conta, tipo_conta, cpf_cnpj_pagamento, nome_favorecido, observacao_pagamento, aliases_norm, fundido_em_id, municipio, uf')
         .eq('cliente_id', clienteId)
         .order('nome')
         .range(from, from + batchSize - 1);

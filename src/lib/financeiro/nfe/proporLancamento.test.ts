@@ -24,8 +24,8 @@ const FAZ_DEST: FazendaComIE = { id: 'faz-dest', nome: 'Faz. Modelo', ie: '28.98
 const FAZ_OUTRA: FazendaComIE = { id: 'faz-outra', nome: 'Faz. Outra', ie: '11.111.111-1' };
 const FAZ_EMIT: FazendaComIE = { id: 'faz-emit', nome: 'Faz. Vendedora', ie: '28.345.678-9' };
 const FAZ_SEM_IE: FazendaComIE = { id: 'faz-sem', nome: 'Faz. Sem IE', ie: null };
-const ACHADO: ResolucaoEmitente = { achadoPor: 'documento', candidatos: [{ id: 'forn-1', nome: 'Agro Exemplo' }], propostoId: 'forn-1', inativo: false, cadastroSemDocumento: false };
-const NINGUEM: ResolucaoEmitente = { achadoPor: null, candidatos: [], propostoId: null, inativo: false, cadastroSemDocumento: false };
+const ACHADO: ResolucaoEmitente = { achadoPor: 'documento', candidatos: [{ id: 'forn-1', nome: 'Agro Exemplo' }], propostoId: 'forn-1', inativo: false, cadastroSemDocumento: false, filialDiferente: false };
+const NINGUEM: ResolucaoEmitente = { achadoPor: null, candidatos: [], propostoId: null, inativo: false, cadastroSemDocumento: false, filialDiferente: false };
 const ULTIMA: UltimaClassificacao = { plano_conta_id: 'plano-1', subcentro: 'Nutrição Engorda', macro_custo: 'Custeio Produtivo', grupo_custo: 'Nutrição', centro_custo: 'Suplementação', escopo_negocio: 'pecuaria', data: '2026-08-14' };
 
 function propor(o: OpcoesNota = {}, extra: Partial<Parameters<typeof proporLancamento>[0]> = {}): PropostaDeLancamento {
@@ -186,7 +186,7 @@ describe('resolverEmitente — documento primeiro, nome depois', () => {
   const f = (id: string, extra: Partial<FornecedorParaResolver> = {}): FornecedorParaResolver => ({ id, nome: `Fornecedor ${id}`, cpf_cnpj: null, ativo: true, ...extra });
   it('pelo DOCUMENTO, comparando so digitos (cadastro com mascara)', () => {
     expect(resolverEmitente(E, [f('a'), f('b', { cpf_cnpj: '11.222.333/0001-81' })], null))
-      .toEqual({ achadoPor: 'documento', candidatos: [f('b', { cpf_cnpj: '11.222.333/0001-81' })], propostoId: 'b', inativo: false, cadastroSemDocumento: false });
+      .toEqual({ achadoPor: 'documento', candidatos: [f('b', { cpf_cnpj: '11.222.333/0001-81' })], propostoId: 'b', inativo: false, cadastroSemDocumento: false, filialDiferente: false });
   });
   it('pelo documento VENCE o nome', () => {
     const r = resolverEmitente(E, [f('a'), f('b', { cpf_cnpj: '11222333000181' })], 'a');
@@ -205,14 +205,14 @@ describe('resolverEmitente — documento primeiro, nome depois', () => {
     expect([r.achadoPor, r.propostoId, r.inativo]).toEqual(['documento', 'a', true]);
   });
   it('pelo NOME, um candidato, cadastro SEM documento: oferece gravar o do XML', () => {
-    expect(resolverEmitente(E, [f('a'), f('b')], 'a')).toEqual({ achadoPor: 'nome', candidatos: [f('a')], propostoId: 'a', inativo: false, cadastroSemDocumento: true });
+    expect(resolverEmitente(E, [f('a'), f('b')], 'a')).toEqual({ achadoPor: 'nome', candidatos: [f('a')], propostoId: 'a', inativo: false, cadastroSemDocumento: true, filialDiferente: false });
   });
   it('pelo nome, cadastro COM outro documento: propoe, e nao oferece gravar', () => {
     const r = resolverEmitente(E, [f('a', { cpf_cnpj: '99.999.999/0001-99' })], 'a');
     expect([r.achadoPor, r.propostoId, r.cadastroSemDocumento]).toEqual(['nome', 'a', false]);
   });
   it('NENHUM: nada proposto (a tela oferece criar); id do banco que nao esta na lista tambem e nenhum', () => {
-    const nada = { achadoPor: null, candidatos: [], propostoId: null, inativo: false, cadastroSemDocumento: false };
+    const nada = { achadoPor: null, candidatos: [], propostoId: null, inativo: false, cadastroSemDocumento: false, filialDiferente: false };
     expect(resolverEmitente(E, [f('a')], null)).toEqual(nada);
     expect(resolverEmitente(E, [f('a')], 'fantasma')).toEqual(nada);
     expect(resolverEmitente({ documento: '', nome: 'X' }, [f('a', { cpf_cnpj: '' })], null)).toEqual(nada);

@@ -145,7 +145,7 @@ describe('useFornecedoresDoCliente', () => {
       'src/lib/financeiro/nfeConsultas.ts': 2,   /* o CNPJ do XML e (FORN-CADASTRO-02) a fantasia / IE / endereço do emitente */
       'src/components/financeiro-v2/FornecedoresSemCadastro.tsx': 2,   /* FORN-SEM-CADASTRO-01: ligar e desfazer (o apelido do cadastro) */
       'src/hooks/useFinanceiroV2.ts': 1,
-      'src/lib/fornecedores/cadastroDaCasaBanco.ts': 2,   /* a reativação (fatia 2c, 1a) e o criar da casa (1b, o credor do contrato) */
+      'src/lib/fornecedores/cadastroDaCasaBanco.ts': 3,   /* a reativação (fatia 2c, 1a), o criar da casa (1b, o credor do contrato) e (FORN-FILIAL-01) o CNPJ preenchido no homônimo sem documento */
       'src/pages/LancamentosTab.tsx': 4,
     };
     const avisos = (fonte: string) => (fonte.match(/^\s*notificarFornecedoresMudaram\(/gm) ?? []).length;

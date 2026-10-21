@@ -15,7 +15,7 @@ import {
   definirFornecedoresDoLeitor, definirSituacaoDoLeitor, pedidosAoLeitor, tentativasDoLeitor,
 } from '@/test/leitorDeFornecedoresFake';
 
-interface Forn { id: string; nome: string; cpf_cnpj: string | null; ativo: boolean }
+interface Forn { id: string; nome: string; cpf_cnpj: string | null; ativo: boolean; municipio?: string | null; uf?: string | null }
 const f = (id: string, nome: string, cpf_cnpj: string | null = null, ativo = true): Forn => ({ id, nome, cpf_cnpj, ativo });
 
 const BASE: Forn[] = [
@@ -27,6 +27,12 @@ const BASE: Forn[] = [
   f('torto', 'Documento Torto', '1234567'),
   f('meta', '[META] Planejamento'),
   f('ina', 'Antigo Inativo', '55444333000122', false),
+];
+/* FORN-FILIAL-01 — duas filiais: a mesma razão social; a cidade e o CNPJ as distinguem */
+const FILIAIS: Forn[] = [
+  { ...f('fil_tl', 'Zeta Filial Agropecuária Ltda', '11222333000424'), municipio: 'Três Lagoas', uf: 'MS' },
+  { ...f('fil_pp', 'Zeta Filial Agropecuária Ltda', '11222333003873'), municipio: 'Presidente Prudente', uf: 'SP' },
+  f('outro', 'Beltrano Comércio de Insumos Agropecuários e Representações Ltda', '99888777000166'),
 ];
 
 function Campo(props: { modo: 'leitor' | 'lista'; lista?: Forn[]; inicial?: string; linha?: boolean; incluirMeta?: boolean; onSelected?: (x: { id: string }) => void }) {
@@ -57,12 +63,30 @@ describe.each(['leitor', 'lista'] as const)('a opção, a busca e o selo — mod
     expect(longo).toBeTruthy();
     const nome = longo?.querySelector('span');
     expect(nome?.className).toContain('truncate');
-    expect(nome?.getAttribute('title')).toBe('Beltrano Comércio de Insumos Agropecuários e Representações Ltda');
+    /* FORN-FILIAL-01 — o `title` leva a linha inteira: razão social · cidade · CNPJ (aqui sem cidade) */
+    expect(nome?.getAttribute('title')).toBe('Beltrano Comércio de Insumos Agropecuários e Representações Ltda · 99.888.777/0001-66');
     const doc = within(longo as HTMLElement).getByTestId('favorecido-doc-da-opcao');
     expect(doc.textContent).toBe('99.888.777/0001-66');
     expect(doc.className).toContain('shrink-0');
     expect(doc.className).toContain('whitespace-nowrap');
     expect(doc.className).not.toContain('truncate');
+  });
+  it('FORN-FILIAL-01 — "Razão social · Município/UF · CNPJ completo": a cidade e o CNPJ inteiro nunca cortam; a busca acha pela cidade', () => {
+    if (modo === 'leitor') definirFornecedoresDoLeitor(FILIAIS);
+    render(<Campo modo={modo} lista={FILIAIS} />);
+    abrir();
+    digitar('zeta filial tres');
+    expect(opcoes()).toHaveLength(1);
+    const tl = opcoes()[0];
+    const cidade = within(tl).getByTestId('favorecido-cidade-da-opcao');
+    expect(cidade.textContent).toBe('Três Lagoas/MS');
+    expect(cidade.className).toContain('shrink-0');
+    expect(cidade.className).toContain('whitespace-nowrap');
+    expect(cidade.className).not.toContain('truncate');
+    expect(within(tl).getByTestId('favorecido-doc-da-opcao').textContent).toBe('11.222.333/0004-24');
+    expect(tl.querySelector('span')?.getAttribute('title')).toBe('Zeta Filial Agropecuária Ltda · Três Lagoas/MS · 11.222.333/0004-24');
+    digitar('zeta filial');
+    expect(opcoes().map((o) => within(o).getByTestId('favorecido-cidade-da-opcao').textContent).sort()).toEqual(['Presidente Prudente/SP', 'Três Lagoas/MS']);
   });
   it('sem documento a área fica VAZIA; tamanho inválido aparece como está', () => {
     render(<Campo modo={modo} />);

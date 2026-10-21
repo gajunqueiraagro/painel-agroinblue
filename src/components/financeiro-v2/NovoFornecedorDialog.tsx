@@ -4,7 +4,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import {
-  conferirCadastro, reativarDoCadastro, fraseDoDocumento, fraseDoInativo, FRASE_JA_EXISTE,
+  conferirCadastro, reativarDoCadastro, preencherDocumentoDoCadastro, fraseDoDocumento, fraseDoInativo, fraseDaFilial, fraseDoHomonimoSemDocumento,
+  FRASE_JA_EXISTE,
   type FonteDoCadastro, type FornecedorDoCadastro,
 } from '@/lib/fornecedores/cadastroDaCasa';
 import { fonteDoCadastroNoBanco } from '@/lib/fornecedores/cadastroDaCasaBanco';
@@ -39,7 +40,11 @@ type Estado =
   | { tipo: 'form' }
   | { tipo: 'selecionado' }
   | { tipo: 'inativo'; fornecedor: FornecedorDoCadastro }
-  | { tipo: 'documento'; fornecedor: FornecedorDoCadastro };
+  | { tipo: 'documento'; fornecedor: FornecedorDoCadastro }
+  /* FORN-FILIAL-01 — outra filial (mesmo nome, CNPJ diferente): o aviso diz qual já existe, e "Criar este cadastro" grava */
+  | { tipo: 'filial'; fornecedor: FornecedorDoCadastro }
+  /* FORN-FILIAL-01 — o homônimo não tem documento: preencher o CNPJ nele, ou criar outro */
+  | { tipo: 'homonimo'; fornecedor: FornecedorDoCadastro };
 
 export function NovoFornecedorDialog({ open, onClose, clienteId, onSave, onSelecionar, defaultNome, fonte = fonteDoCadastroNoBanco }: Props) {
   const [nome, setNome] = useState('');
@@ -88,7 +93,24 @@ export function NovoFornecedorDialog({ open, onClose, clienteId, onSave, onSelec
       setSaving(false);
       return;
     }
-    /* o criar do hospedeiro que FALHA com exceção: o motivo fica aqui, ao lado do botão, e o digitado fica */
+    if (r.tipo === 'filial') {
+      setEstado({ tipo: 'filial', fornecedor: r.fornecedor });
+      setRecado({ texto: fraseDaFilial(r.fornecedor), tom: 'aviso' });
+      setSaving(false);
+      return;
+    }
+    if (r.tipo === 'homonimo_sem_documento') {
+      setEstado({ tipo: 'homonimo', fornecedor: r.fornecedor });
+      setRecado({ texto: fraseDoHomonimoSemDocumento(r.fornecedor, documento.formatado ?? cpfCnpj), tom: 'aviso' });
+      setSaving(false);
+      return;
+    }
+    await criar();
+  };
+
+  /* o criar do hospedeiro que FALHA com exceção: o motivo fica aqui, ao lado do botão, e o digitado fica */
+  const criar = async () => {
+    setSaving(true);
     try {
       await onSave(nome.trim(), documento.formatado || undefined);
     } catch (e) {
@@ -99,6 +121,19 @@ export function NovoFornecedorDialog({ open, onClose, clienteId, onSave, onSelec
     setSaving(false);
     setNome('');
     setCpfCnpj('');
+    setEstado({ tipo: 'form' });
+  };
+
+  /* FORN-FILIAL-01 — "Preencher naquele cadastro": grava o CNPJ no homônimo sem documento e o seleciona */
+  const preencherNaquele = async (f: FornecedorDoCadastro) => {
+    if (!clienteId || saving || !documento.formatado) return;
+    setSaving(true);
+    const r = await preencherDocumentoDoCadastro(fonte, clienteId, f, documento.formatado);
+    if (r.ok === false) { setRecado({ texto: r.frase, tom: 'erro' }); setSaving(false); return; }
+    await onSelecionar(r.fornecedor);
+    setSaving(false);
+    limpar();
+    onClose();
   };
 
   const reativar = async (f: FornecedorDoCadastro) => {
@@ -163,6 +198,18 @@ export function NovoFornecedorDialog({ open, onClose, clienteId, onSave, onSelec
                 {saving ? 'Reativando...' : 'Reativar e selecionar'}
               </Button>
               <Button variant="outline" onClick={voltarAoFormulario} disabled={saving} className="shrink-0">Não reativar</Button>
+            </>)}
+            {estado.tipo === 'filial' && (<>
+              <Button onClick={() => void criar()} disabled={saving} className="min-w-0 flex-1" data-testid="novo-fornecedor-criar-filial">
+                {saving ? 'Salvando...' : 'Criar este cadastro'}
+              </Button>
+              <Button variant="outline" onClick={voltarAoFormulario} disabled={saving} className="shrink-0">Voltar</Button>
+            </>)}
+            {estado.tipo === 'homonimo' && (<>
+              <Button onClick={() => void preencherNaquele(estado.fornecedor)} disabled={saving} className="min-w-0 flex-1" data-testid="novo-fornecedor-preencher">
+                {saving ? 'Gravando...' : 'Preencher naquele'}
+              </Button>
+              <Button variant="outline" onClick={() => void criar()} disabled={saving} className="shrink-0" data-testid="novo-fornecedor-criar-outro">Criar outro</Button>
             </>)}
             {estado.tipo === 'documento' && (<>
               <Button onClick={() => selecionarODono(estado.fornecedor)} disabled={saving} className="min-w-0 flex-1" title={`Selecionar ${estado.fornecedor.nome}`}>
