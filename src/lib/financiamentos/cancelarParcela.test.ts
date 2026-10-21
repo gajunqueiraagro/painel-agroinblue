@@ -140,7 +140,7 @@ describe('as quatro portas passam pelo mesmo dono', () => {
   });
   it('"Abrir o contrato" só para quem acessa a tela, e a volta retorna à origem', () => {
     expect(lista).toContain('onAbrirContrato={podeAbrirFinanciamento ? onAbrirFinanciamento : undefined}');
-    expect(cpr).toContain('guardarRetornoCpr({ visao, atalho, datas, incluirVencidos, contaSel, segmento, statusLigados, ampliado });');
+    expect(cpr).toContain('guardarRetornoCpr({ visao, atalho, datas, contaSel, segmento, statusLigados, ampliado });');
     expect(shell).toContain("onAbrirFinanciamento={podeAbrirTela('financiamentos') ? (id) => {\n          setOrigemDoFinanciamento('contas-a-pagar-receber');");
     expect(shell).toContain('setSection(origemDoFinanciamento);');
     expect(shell).not.toContain("setFinanciamentoIdAlvo(null);\n          setSection('financeiro-lanc');");
