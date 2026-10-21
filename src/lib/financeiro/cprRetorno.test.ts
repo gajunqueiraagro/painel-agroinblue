@@ -3,7 +3,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { CHAVE_RETORNO_CPR, consumirRetornoCpr, guardarRetornoCpr, lerRetornoCpr, type RetornoCpr } from './cprRetorno';
 
 const ESTADO: RetornoCpr = {
-  visao: 'fluxo', atalho: 'datas', datas: { de: '2026-10-01', ate: '2026-11-30' }, incluirVencidos: false,
+  visao: 'fluxo', atalho: 'datas', datas: { de: '2026-10-01', ate: '2026-11-30' },
   contaSel: 'conta-1', segmento: 'ambos', statusLigados: ['previsto', 'programado'], ampliado: true,
 };
 
@@ -20,9 +20,16 @@ describe('retorno da CPR', () => {
     expect(sessionStorage.getItem(CHAVE_RETORNO_CPR)).toBeNull();
     expect(consumirRetornoCpr()).toBeNull();
   });
+  it('CPR-AJUSTES-20-10c: o instantâneo ANTIGO, com a caixa dos vencidos gravada, não quebra — o campo é ignorado, o resto vale', () => {
+    sessionStorage.setItem(CHAVE_RETORNO_CPR, JSON.stringify({ ...ESTADO, incluirVencidos: false }));
+    const r = consumirRetornoCpr();
+    expect(r).toEqual(ESTADO);
+    expect(r && 'incluirVencidos' in r).toBe(false);
+    expect(lerRetornoCpr(JSON.stringify({ incluirVencidos: true }))).toBeNull();
+  });
   it('campo torto fica de fora; o resto vale', () => {
     const r = lerRetornoCpr(JSON.stringify({ ...ESTADO, visao: 'grade', atalho: '90', datas: { de: '01/10/2026', ate: '2026-11-30' }, segmento: 7, statusLigados: ['previsto', 3] }));
-    expect(r).toEqual({ incluirVencidos: false, contaSel: 'conta-1', statusLigados: ['previsto'], ampliado: true });
+    expect(r).toEqual({ contaSel: 'conta-1', statusLigados: ['previsto'], ampliado: true });
   });
   it('conta "todas" (nula) e datas nulas voltam como nulas, não como ausentes', () => {
     const r = lerRetornoCpr(JSON.stringify({ ...ESTADO, contaSel: null, datas: null }));
