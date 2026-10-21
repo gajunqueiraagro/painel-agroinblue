@@ -10548,3 +10548,76 @@ curta nas secoes de regras) e a pendencia (na FILA); o bloco inteiro vai para do
   antigo). Mutacoes: somar o grupo no rodape derruba 2; esconder o grupo no dono derruba 3; tirar o grupo da tela derruba 1. Bancada:
   `cpr-encerrado` e `cpr-encerrado-saem-hoje` (`tela=cpr&v=encerrado`) nos sete tamanhos; prints em ~/Downloads/cpr-20-10c/.
   ⚠ NAO PROVADO: nada com login no app real (bancada e testes).
+
+- ⚠ REGRA DE CORTE NOVA (Gabriel, 21/10/2026 07h25 — SUBSTITUI, para NOME/TEXTO EM TABELA, o "nenhum '…'" do UI-SEM-CORTE-01): nome ou
+  texto longo em tabela (razao social, fantasia, favorecido, descricao, produto, cidade) = UMA linha, termina em "…" quando nao cabe, o
+  texto inteiro no `title`; NAO quebra a linha. Numero, valor, data, CPF/CNPJ, nota e contador NUNCA cortam (coluna dimensionada pelo
+  conteudo). PROIBIDO o corte SECO (sem "…": o `uma-linha-que-rola` dentro de celula cortava "ALVORADA PRODUTOS A"). Fora de tabela, "…"
+  segue proibido. O `check:ui-cortes` mudou junto: aceita "…" em celula com o texto inteiro no `title`; reprova o corte seco em celula
+  (overflow auto/scroll/hidden sem ellipsis), o "…" sem `title` e qualquer corte em numero/data/documento (regra `numero`); o gatilho de
+  seletor dentro da celula e' campo e fica de fora. O detector se prova no fixture (o aceito passa; o seco e o documento sao achados).
+  Prova: a lista de Fornecedores de 20/10 REPROVA (322 achados so' em `fornecedores-lista`, todos corte seco); a nova APROVA.
+  A regra alcancou, alem de Fornecedores: o contrato (a conta da parcela no parcelamento, `FinanciamentoDetalhe`; item, conta e evento
+  da `TelaDoContratoV3`; destino e documentos do `ContratoDeCredito` — constante `CELULA`/`E.celula` = `block truncate`, sempre com
+  `title`, cobrado pelo `contratoFonte.test`) e o historico do banco no Casar em bloco (`CasarComBancoModal`). Varredura estatica: nenhuma
+  outra celula com rolagem escondida. ⚠ O gate COMPLETO com a regra nova nao rodou no FORN-01b (o Code 2 rodava o dele): rodaram as
+  fatias fornecedores, recorrencias, contrato, cadastro-contrato e casar.
+- ⚠ UI-SEM-DESLOCAR-01 — GATE NOVO `npm run check:ui-desloca` (Gabriel, 21/10/2026; a LEI DE ESTABILIDADE VISUAL de 13/09 e o espaco
+  reservado de 09/10 viraram gate): `scripts/check-ui-desloca.mjs`, na bancada do `check:ui-cortes`, troca os ESTADOS da tela (tamanho de
+  pagina, pagina, filtros/segmentos, abas, busca com e sem resultado, a faixa de aviso aparecendo; `auto` troca cada opcao de cada
+  `Segmentado` e cada `role=tab`) e REPROVA se x, y ou largura de qualquer controle, aba, titulo ou cabecalho de tabela mudar (> 0,5px)
+  em relacao ao estado inicial. O conteudo (tbody, o que mora numa area que rola dentro da tela, `[data-desloca-livre]`) fica de fora; o
+  `th` e o que esta' preso contam. Hoje: Fornecedores (18 estados), Fornecedores › Sem cadastro, Recorrencias, CPR e Mesclar, nos seis
+  tamanhos (750x483, 814x530, 1000x600, 1126x579, 1300x704, 1440x800). Entra nos gates de sempre, ao lado do `check:ui-cortes`.
+  Prova: a lista de 20/10 REPROVA (102 achados: 50↔100 empurra o "Por pagina" 7px; "Pagina 1 de 48" empurra a navegacao); a nova APROVA.
+  COMO NAO DESLOCAR: todo texto que muda com a selecao vai em `TextoReservado` (`src/components/ui/regua-tabela.tsx`): a largura do maior
+  valor possivel num `::before` invisivel (`attr(data-reserva)`, fora do `textContent`), algarismos tabulares.
+- FORN-01b — CADASTROS › FORNECEDORES NA REGUA DE RECORRENCIAS, "SEM CADASTRO" SO' COM O REAL, MESCLAR/INATIVOS SEM TRAVA (Gabriel,
+  21/10/2026, homologacao 06h20/06h49/06h58/07h01/07h25).
+  · A REGUA DE TABELA E' UMA SO': `src/components/ui/regua-tabela.tsx` (`TH_REGUA`, `TD_REGUA`, `TD_REGUA_TEXTO`, `TD_REGUA_NUM`,
+    `SECUNDARIA_REGUA`, `QUADRO_REGUA`, `RODAPE_REGUA`, `TextoReservado`). Medida em Financeiro › Recorrencias (bancada, componentes
+    reais, barra real de 32px): cabecalho navy 22px renderizados a 9,5px/500, linha 19px a 10px, padding lateral 4px e vertical 0, coluna
+    secundaria 9,5px, barra do rodape navy 23px (22 + a borda) a 10px, 5px de vao no pe. Recorrencias passou a importar dela (mesmos
+    valores); Fornecedores usa a mesma. A frente UI-TABELA-PADRAO-01 espalha ESTE modulo — nao nasce variante por tela.
+  · LISTA: `fornecedores` entrou em `SECOES_APP_SHELL` (a tela mede contra o pai; saiu o `calc(100dvh-120px)` que deixava ~100px vazios).
+    A 1126x579 cabem 18 linhas inteiras (antes 9). Colunas `table-layout: fixed`: CNPJ/CPF 108, Cidade/UF 112, Lanc. 44, Ultimo uso 64,
+    Situacao 60 (selo curto "Ativo/Inativo/Mesclado"; o dono e a data no `title`), acao 24; Razao social e Nome fantasia dividem o resto
+    58/42 em px (ResizeObserver; com a aba escondida nao mede). PAGINACAO DENTRO DO QUADRO, na barra navy: "Mostrando 1–100 de 2.356" ·
+    "Por pagina 50|100|200" · "← Anterior · Pagina 1 de 24 · Proxima →". Reservas pelo maior total ja' lido do cliente (`reservasDaLista`:
+    "9.999" para 2.356; paginas pelo Por pagina 50); a busca nao encolhe a reserva. Contadores dos filtros, da aba Cadastro, do titulo e
+    o da aba "Sem cadastro" (lugar sempre presente) idem.
+  · "ULTIMO USO" e "LANC." (migration 20261028110000 — no ledger do proto entrou como 20261021110700): so' o cenario REALIZADO vivo;
+    Ultimo uso = a ultima data (pagamento, senao vencimento, senao competencia) ATE' HOJE (America/Sao_Paulo). Deixou de ser espelho de
+    `fn_fornecedor_uso` (aquela conta todas as referencias, as que a mesclagem move). Antes: 185 cadastros com Ultimo uso no futuro; 0.
+  · ABA "SEM CADASTRO" (`_fn_sem_cadastro_base`, mesma migration): so' cenario realizado; lancamento gerado pelo sistema (`origem_tipo`
+    preenchido: consumo_rebanho, abate:*, oc:*) fica fora; a DESCRICAO so' vale como fornecedor escrito no que veio de extrato/importacao
+    (`origem_lancamento` importacao_incremental, extrato, ofx, excel, mesa_excel, mesa_split, migracao) — o `manual` (descricao digitada) e
+    a `conciliacao` (ajuste do sistema) sairam; o texto da planilha vale em qualquer origem. A aba estica ate' o pe (o "Ver ligacoes
+    recentes" nao sobe ao filtrar) e o texto da celula termina em "…" com `title`.
+  · CONSERTOS DE DADO (21/10, proto, pelo canal de escrita com o admin nas claims, ensaio antes):
+    · 792c02d0 (deducao de abate de cenario META que virou "previsto" no backfill de 30/07) CANCELADO pelo
+      `fn_cancelar_lancamento_auditoria`, motivo "Meta não gera financeiro (Gabriel 21/10)", trilha "cancelou".
+    · fa242c27 (deducao de abate realizada sem fornecedor) -> o comprador daquele abate (o `fornecedor_id` da movimentacao, 8bc01e51), por
+      UPDATE com `app.motivo` e a trilha "editou" do `audit_trigger_financeiro_v2` (o ligar da aba gravaria o texto da deducao como apelido
+      do comprador — evitado).
+  · GERADORES: o abate (`AbateFinanceiroPanel.tsx`) ja' gravava `cenario` meta quando a operacao e' Meta (desde 21/04; a 792c02d0 e'
+    anterior) — teste novo trava isso. A DEDUCAO do abate passou a nascer com o fornecedor PADRAO = o comprador (o mesmo `fornecedorId`
+    da parcela), editavel. A deducao da OC (`_oc_cc_deducao_sincronizar`) ja' nascia com o comprador (42/42). ⚠ NAO HA CORRETOR NA OC:
+    a comissao leva o favorecido da propria parte (`zoo_operacao_partes.favorecido_id`), escolhido na obrigacao.
+  · MESCLAR: escolher um cadastro JA' MESCLADO (busca, sugestao ou o par pedido) troca pelo DONO atual (fim da cadeia de `fundido_em_id`,
+    ate' 6 saltos — `src/lib/fornecedores/donoDoMesclado.ts`) com o aviso "X foi unido em Y; usando Y". `inicial` aceita so' o absorvido
+    (`manter` opcional). A FAIXA DOS INATIVOS nomeia: "<nome> (inativo) · N lancamentos · R$ X" (o de maior valor; "e mais N") com
+    "Unir pelo Mesclar", que abre a ferramenta ja' com ele; lugar reservado de 16px, some sozinha quando resolvido. O caso do NJ (o
+    tabeliao, 6 lanc.) JA' tinha sido unido pela tela em 21/10 09:58 UTC; hoje o unico inativo nao mesclado com lancamento vivo no proto e'
+    de outro cliente (4 lanc.).
+  · CADASTRO: no cadastro ATIVO (ou novo), um INATIVO com o mesmo CPF/CNPJ nao avisa nem cobra — vale o ativo; so' outro ATIVO conta (no
+    banco nunca houve trava de documento).
+  Testes: SQL `forn_01b_test.sql` (T1–T7, OK no proto), `forn_lista_01` e `forn_sem_cadastro_01` OK (o fixture deste agora vem de
+  extrato); vitest `fornecedores01b.test.tsx` (12) + os ajustados (`fornecedoresAvisoInativos`, `fornecedoresMesclado`, `nomeExibido`,
+  `fornecedorEditar`). Mutacoes: rodape fora do quadro, Ultimo uso sem o filtro de hoje, deducao sem o comprador, inativo cobrando o
+  ativo, faixa so' contando, mesclado sem trocar pelo dono, corte seco na aba — cada uma derruba teste; sem a reserva, o
+  `check:ui-desloca` acha 58. Bancada: `&barra=32` (a barra real), `&n=2356`, `&aviso=1`, `tela=recorrencias`. Prints em ~/Downloads/forn-01b/.
+  ⚠ Recorrencias entra no `check:ui-cortes` so' como regua (medida e print, `soRegras: []`): ela tem 9 achados proprios na regra de hoje
+    (cartoes do topo com "…" fora de tabela; cabecalho a 750/814) — divida dela, UI-TABELA-PADRAO-01.
+  ⚠ NAO PROVADO: nada com login no app real — regua, linhas que cabem e prints sao da bancada (componentes reais, barra de 32px da
+    `BarraSecao`).
