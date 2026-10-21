@@ -54,6 +54,7 @@ import { useOcCompromissos } from '@/hooks/useOcCompromissos';
 import { useOcContaCorrente } from '@/hooks/useOcContaCorrente';
 import { CancelarContaCorrenteDialog } from '@/components/venda/CancelarContaCorrenteDialog';
 import { classeDoDinheiroNaTela, classeDoSaldoNaTela, COR_SINAL, corDoSaldoNaTela, MOTIVO_ATUALIZAR_EM_RASCUNHO, ROTULO_AGUARDANDO_SAIDA, saldoNaTela } from '@/lib/oc/contaCorrente';
+import { tipoVendaEditavelComOCFechada } from '@/lib/oc/tipoVendaOC';
 import { linhasPainelBoitel, linhaIdentificacaoBoitel, entregaEmUmaLinha, classeDaCorPainel } from '@/components/venda/painelBoitel';
 import type { ReactNode } from 'react';
 import type { LinhaPrevisao, RotulosCompromissos } from '@/components/compra/AbaCompromissosOC';
@@ -269,11 +270,13 @@ export function VendaModalShell({
 
   const fazendaFalta = !vendaFazendaId;
   /* OC-EDITAR-CADASTRAL-01 — com a OC FECHADA so' os cadastrais se editam (comprador, observacoes, NF, documentos);
-     data, fazenda, tipo de venda, lotes e boitel ficam travados, e cancelada trava tudo. O Salvar da aba Venda
-     grava pelo `oc_editar_dados_operacao` e so' precisa do comprador: o tipo de venda nao e' gravado na OC, e a
-     venda comum reabre sem ele — exigi-lo aqui prenderia o comprador atras de um campo travado. */
+     data, fazenda, lotes e boitel ficam travados, e cancelada trava tudo. O Salvar da aba Venda grava pelo
+     `oc_editar_dados_operacao` e so' precisa do comprador (a OC antiga pode reabrir sem tipo).
+     OC-TIPO-VENDA-01 — o TIPO DE VENDA e' classificacao: com a OC fechada ele troca entre desmama e gado adulto (vai pelo
+     mesmo `oc_editar_dados_operacao`, com trilha); boitel nao se escolhe nem se tira sem reabrir. */
   const fechada = ocStatusComercial === 'fechada';
   const operacionalTravado = fechada || ocStatusComercial === 'cancelada';
+  const tipoVendaTravado = ocStatusComercial === 'cancelada' || (fechada && !tipoVendaEditavelComOCFechada(vendaTipoVenda));
   const identificacaoPronta = fechada
     ? !!compradorId
     : !!compradorId && !!vendaFazendaId && !!data && !!vendaTipoVenda;
@@ -920,15 +923,16 @@ export function VendaModalShell({
               <div className="min-w-0">
                 <Label className="text-[10px] text-muted-foreground flex items-center gap-1">
                   Tipo de venda <span className="text-destructive">*</span>
-                  {operacionalTravado && <Lock className="w-3 h-3 text-amber-700" />}
+                  {tipoVendaTravado && <Lock className="w-3 h-3 text-amber-700" />}
                 </Label>
-                <Select value={vendaTipoVenda} onValueChange={setVendaTipoVenda} disabled={operacionalTravado || !!motivoBoitelAcesso}>
-                  <SelectTrigger className={`mt-[3px] h-8 px-2.5 text-[12px] ${operacionalTravado ? CAMPO_TRAVADO : ''}`}><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                <Select value={vendaTipoVenda} onValueChange={setVendaTipoVenda} disabled={tipoVendaTravado || !!motivoBoitelAcesso}>
+                  <SelectTrigger className={`mt-[3px] h-8 px-2.5 text-[12px] ${tipoVendaTravado ? CAMPO_TRAVADO : ''}`} data-testid="tipo-venda-oc"><SelectValue placeholder="Selecione..." /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="gado_adulto">Gado adulto</SelectItem>
                     <SelectItem value="desmama">Desmama</SelectItem>
-                    <SelectItem value="boitel" disabled={!acessoOC.negociar_abate_boitel}
-                      title={acessoOC.negociar_abate_boitel ? undefined : MOTIVO_ABATE_BOITEL}>Boitel</SelectItem>
+                    <SelectItem value="boitel" disabled={!acessoOC.negociar_abate_boitel || fechada}
+                      title={fechada ? 'Boitel tem planejamento próprio: para trocar de ou para boitel, reabra a operação.'
+                        : acessoOC.negociar_abate_boitel ? undefined : MOTIVO_ABATE_BOITEL}>Boitel</SelectItem>
                   </SelectContent>
                 </Select>
                 {/* ACESSOS-OC-03a — a venda vira boitel por ESTE campo: quem nao negocia boitel nao o escolhe (e nao tira a
