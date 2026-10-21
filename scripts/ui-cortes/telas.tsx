@@ -45,6 +45,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { AcessosTab } from '@/pages/AcessosTab';
 import { ContasPagarReceberTab } from '@/components/financeiro-v2/ContasPagarReceberTab';
 import V2Recorrencias from '@/v2/pages/V2Recorrencias';
+import * as REC from './dados/recorrencias';
 
 const q = new URLSearchParams(location.search);
 const tela = q.get('tela') ?? 'mesclar';
@@ -125,23 +126,6 @@ if (tela === 'mesclar') {
   g.__bancoBancada = bancoDeFornecedores;
   /* FORN-01b — com `&barra=32` a tela entra como no app: sem o `p-3` da bancada, na secao de altura do V2 (`SECOES_APP_SHELL`) */
   montar(BARRA === 32 ? <div className="flex h-full min-h-0 w-full min-w-0 flex-col"><FinV2FornecedoresTab /></div> : <div className="p-3"><FinV2FornecedoresTab /></div>);
-} else if (tela === 'recorrencias') {
-  /* FORN-01b — Financeiro › Recorrências, a RÉGUA de tabela aprovada pelo Gabriel: 40 regras SINTÉTICAS vencendo no mês corrente, para
-     medir a régua (fonte, altura de linha e de cabeçalho, padding, barra do Total) e pôr ao lado da lista de Fornecedores */
-  const ym = new Date().toISOString().slice(0, 7);
-  const REGRAS = Array.from({ length: 40 }, (_, i) => ({ id: `r${i}`, cliente_id: 'cli', descricao: i % 3 ? `Arrendamento Exemplo ${i + 1}` : `Energia elétrica da sede e dos currais da Fazenda Exemplo ${i + 1}`,
-    favorecido_id: `f${i}`, financeiro_fornecedores: { nome: i % 2 ? 'Cooperativa Agroindustrial dos Produtores Rurais Exemplo do Mato Grosso do Sul' : 'Imobiliária Exemplo' },
-    conta_bancaria_id: 'bb', subcentro: 'Energia', forma_pagamento: i % 2 ? 'Boleto' : 'PIX', valor_base: -(1000 + i * 37.5), dia_vencimento: (i % 28) + 1,
-    data_inicio: '2026-01-01', primeiro_vencimento: '2026-01-10', data_fim: '2027-06-30', ativo: true, ultimo_lancamento_gerado: '2027-06-01', fazenda_id: 'f1', tipo_valor: i % 5 ? 'certo' : 'estimado' }));
-  g.__bancoBancada = {
-    from: (t: string, e: any) => t === 'financeiro_recorrencias' ? REGRAS
-      : t === 'financeiro_contas_bancarias' ? [{ id: 'bb', nome_conta: 'Banco Alfa Conta Movimento', banco: 'BB', fazenda_id: 'f1', ativo: true, ordem_exibicao: 1 }]
-      : t === 'financeiro_lancamentos_v2' && e.eq.cancelado === false && !e.in.recorrencia_id ? REGRAS.map((r, i) => ({ recorrencia_id: r.id, valor: Math.abs(r.valor_base),
-        data_vencimento: `${ym}-${String(r.dia_vencimento).padStart(2, '0')}`, status_transacao: i % 4 ? 'programado' : 'realizado', valor_do_mes_em: null }))
-      : [],
-    rpc: () => [],
-  };
-  montar(<div className="flex h-full min-h-0 w-full min-w-0 flex-col"><V2Recorrencias /></div>);
 } else if (tela === 'financeiro') {
   /* FORN-BUSCA-UNICA-01 — a lista do Financeiro V2 (filtros + tabela), com o filtro de fornecedor da busca única */
   g.__bancoBancada = {
@@ -315,6 +299,16 @@ if (tela === 'mesclar') {
   if (v === 'futuro') sessionStorage.setItem('cpr_retorno_do_contrato', JSON.stringify({ atalho: 'datas', datas: { de: dia(10), ate: dia(40) } }));
   if (v === 'encerrado') sessionStorage.setItem('cpr_retorno_do_contrato', JSON.stringify({ atalho: 'datas', datas: { de: dia(-40), ate: dia(-10) }, segmento: 'ambos' }));
   montar(<div className="h-full"><ContasPagarReceberTab onIntensiveToggle={() => {}} /></div>);
+} else if (tela === 'recorrencias') {
+  /* REC-COLUNAS-01 — Financeiro › Recorrências (a lista do mês), com o pior texto de cada coluna curta. SINTÉTICO (`dados/recorrencias.ts`). */
+  g.__bancoBancada = {
+    from: (t: string, e: any) => t === 'financeiro_recorrencias' ? REC.REGRAS
+      : t === 'financeiro_contas_bancarias' ? REC.CONTAS_REC
+      : t === 'financeiro_lancamentos_v2' && e.eq.cancelado === false && !e.in.recorrencia_id ? REC.OCORRENCIAS
+      : [],
+    rpc: (fn: string) => fn === 'fn_recorrencias_a_gerar' ? REC.A_GERAR : null,
+  };
+  montar(<div className="h-full"><V2Recorrencias /></div>);
 } else if (tela === 'acessos') {
   /* ACESSOS-PERFIL-01 — a lista (nome e e-mail pela fonte unica), o "Novo acesso" e o "Editar acesso" (`&v=editar`). SINTETICO. */
   const MEMBROS = [

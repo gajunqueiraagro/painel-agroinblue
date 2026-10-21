@@ -59,10 +59,6 @@ const CENARIOS = [
   { nome: 'fornecedores-por-pagina-200', url: 'tela=fornecedores&barra=32&n=2356', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicarRotulo(/^200$/) },
   { nome: 'fornecedores-ultima-pagina', url: 'tela=fornecedores&barra=32&n=2356', tamanhos: TAMANHOS_DO_CONTRATO,
     antes: async (p) => { for (let i = 0; i < 3; i++) await clicarRotulo(/^Próxima/)(p); } },
-  /* FORN-01b — Financeiro › Recorrências, a RÉGUA de tabela aprovada (a mesma barra real do topo): entra na bancada para ser MEDIDA e
-     fotografada ao lado de Fornecedores, e conta so' erro de pagina. Ela tem 9 achados proprios na regra de hoje (os cartões do topo
-     com "…" fora de tabela; "Situação", "Descrição" e "Favorecido" do cabeçalho a 750/814) — divida dela, frente UI-TABELA-PADRAO-01. */
-  { nome: 'recorrencias', url: 'tela=recorrencias&barra=32', tamanhos: TAMANHOS_DO_CONTRATO, soRegras: [] },
   /* FORN-BUSCA-UNICA-01 — SO' OS FILTROS do Financeiro V2 (decisao do Gabriel, 19/10): a TABELA tem 60 achados (reticencias em Produto,
      Fornecedor e Centro; datas dd/mm/aa; cabecalho) e e' a frente FIN-V2-SEM-CORTE-01. Tirar a `regiao` mede a tela inteira. */
   { nome: 'financeiro-filtros', url: 'tela=financeiro', regiao: '[data-testid="filtros-da-lista"]' },
@@ -89,6 +85,13 @@ const CENARIOS = [
      cabecalho do dia em janela estreita) — frente CPR-SEM-CORTE-01. Tirar a `regiao` mede a tela inteira. */
   /* CPR-SEM-CORTE-01 (CPR-AJUSTES-20-10) — a CPR INTEIRA, lista e Ampliado, nos sete tamanhos: nada de "…" */
   { nome: 'cpr-lista', url: 'tela=cpr', tamanhos: TAMANHOS_DO_CONSORCIO },
+  /* REC-COLUNAS-01 — Financeiro › Recorrências, a lista do mês com o pior texto de cada coluna curta, nos sete tamanhos. Descrição,
+     Favorecido e a Conta acima da régua cortam com "…" e o inteiro no `title` (regra do Gabriel de 21/10, 07h25): a regra
+     `reticencias` fica fora; corte calado, vazamento, número partido, quebra, sobreposição e cabeçalho valem.
+     ⚠ SÓ DE 1000px PARA CIMA: em 750 e 814 os cartões se sobrepõem e o "Gerar" sai da tabela (anterior ao REC-COLUNAS-01) — divida
+     REC-COLUNAS-01b no CLAUDE.md; quando fechar, este cenário passa a TAMANHOS_DO_CONSORCIO. */
+  { nome: 'recorrencias', url: 'tela=recorrencias', tamanhos: [[1000, 600], [1126, 579], [1300, 704], [1440, 800]],
+    soRegras: ['corte', 'quebra', 'numero', 'sobreposicao', 'italico', 'cabecalho', 'data', 'valor', 'altura', 'rolagem', 'tabela'] },
   { nome: 'cpr-futuro', url: 'tela=cpr&v=futuro', tamanhos: TAMANHOS_DO_CONSORCIO },
   /* CPR-AJUSTES-20-10c — período encerrado: o grupo "Saem hoje · fora do saldo do período" DEPOIS do Fim do período (rolado até ele) */
   { nome: 'cpr-encerrado', url: 'tela=cpr&v=encerrado', tamanhos: TAMANHOS_DO_CONSORCIO },

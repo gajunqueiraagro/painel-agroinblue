@@ -98,30 +98,37 @@ function Valor({ centavos, entrada = false, estimado = false, className }: { cen
 }
 
 /* RECORRENCIAS-COLUNAS-01 (Gabriel 17/10/2026): a Situação é UM lugar — o selo "falta gerar · N meses" quando a regra tem o que
-   gerar (a situação do mês vai no `title` dele), senão a situação do mês. MEDIDO: o selo pior, "falta gerar · 12 meses" a 9,5px,
-   pede 98,2px + 8 de padding. */
-const LARGURA_SITUACAO = 106;
+   gerar (a situação do mês vai no `title` dele), senão a situação do mês.
+   REC-COLUNAS-01 (21/10/2026): o pior selo de dois dígitos, "falta gerar · 44 meses" a 9,5px, mede 99,4px RENDERIZADO (cortava
+   0,6px nos 106 de antes) — + 8 de folga + 8 de padding = 116. */
+const LARGURA_SITUACAO = 116;
 
-/** As colunas, em px (`table-layout: fixed`). RECORRENCIAS-COLUNAS-01: as fixas pelo maior texto real do NJ + folga; Descrição e
+/** As colunas, em px (`table-layout: fixed`). REC-COLUNAS-01 (Gabriel 21/10/2026): cada coluna curta = o MAIOR texto possível
+ *  dela, cabeçalho incluído (com a seta de 12px), MEDIDO renderizado + 8 de folga + 8 de padding — Conta 107,8 ("Cartão Sicredi
+ *  Lavoura", o maior nome de conta USADO hoje em recorrência, todos os clientes; nome maior corta com o inteiro no `title`) ·
+ *  Tipo 56,4 ("A confirmar") · Dia 26,7 (o cabeçalho) · Forma 40,6 (o cabeçalho; "Dinheiro" 39,9, a maior forma do cadastro) ·
+ *  Previsto 57,3 ("999.999,99", o maior valor base real tem seis dígitos) · Valor 71,3 (o cabeçalho "Valor do mês"; o "▼ 999.999,99" mede 67,7 — o mês está no seletor do topo) ·
+ *  Situação 99,4. RECORRENCIAS-COLUNAS-01: Descrição e
  *  Favorecido dividem o resto ~45/55 (o Favorecido tem os textos maiores) — o Favorecido em px calculado da largura real
  *  (`FATIA_FAVORECIDO`), a Descrição com o que sobra. Texto corta com o inteiro no `title`; número nunca. */
 const COLUNAS: ReadonlyArray<{ campo: Coluna; rotulo: string; largura: number | null; direita?: boolean }> = [
   { campo: 'descricao', rotulo: 'Descrição', largura: null },
   { campo: 'favorecido', rotulo: 'Favorecido', largura: null },
-  { campo: 'conta', rotulo: 'Conta', largura: 120 },
-  { campo: 'tipo', rotulo: 'Tipo', largura: 84 },
-  { campo: 'dia', rotulo: 'Dia', largura: 36, direita: true },
-  { campo: 'forma', rotulo: 'Forma', largura: 52 },
-  { campo: 'previsto', rotulo: 'Previsto', largura: 104, direita: true },
-  { campo: 'valor', rotulo: 'Valor', largura: 112, direita: true },
+  { campo: 'conta', rotulo: 'Conta', largura: 127 },
+  { campo: 'tipo', rotulo: 'Tipo', largura: 73 },
+  { campo: 'dia', rotulo: 'Dia', largura: 43, direita: true },
+  { campo: 'forma', rotulo: 'Forma', largura: 57 },
+  { campo: 'previsto', rotulo: 'Previsto', largura: 74, direita: true },
+  { campo: 'valor', rotulo: 'Valor do mês', largura: 88, direita: true },
   { campo: 'situacao', rotulo: 'Situação', largura: LARGURA_SITUACAO },
 ];
 const FATIA_FAVORECIDO = 0.55;
 /* a soma das fixas (Conta · Tipo · Dia · Forma · Previsto · Valor · Situação) + as ações, ESCRITA — a tela não soma; o teste confere. */
-/* REC-FALTA-GERAR-A-VISTA-01: o lugar do botão "Gerar" (reservado em toda linha) + o "⋯". */
+/* REC-FALTA-GERAR-A-VISTA-01: o lugar do botão "Gerar" (reservado em toda linha) + o "⋯". REC-COLUNAS-01: o conteúdo é o botão
+   Gerar (35,4) + o "⋯" (20) = 55,4 + 8 de folga -> 64 (a célula não tem padding). */
 const LARGURA_GERAR = 40;
-const LARGURA_ACOES = LARGURA_GERAR + 22;
-export const LARGURA_DAS_FIXAS = 676;
+const LARGURA_ACOES = LARGURA_GERAR + 24;
+export const LARGURA_DAS_FIXAS = 642;
 
 export default function V2Recorrencias() {
   const { recorrencias, loading, recarregar, clienteId } = useRecorrencias();
@@ -423,7 +430,7 @@ export default function V2Recorrencias() {
                   <TableRow className="h-[19px]">
                     {COLUNAS.map(c => (
                       <Cab key={c.campo} campo={c.campo} direita={c.direita}
-                        rotulo={c.campo === 'valor' ? `Valor em ${rotuloMes}` : c.rotulo} />
+                        rotulo={c.rotulo} />
                     ))}
                     <TableHead className={TH} />
                   </TableRow>
@@ -447,9 +454,8 @@ export default function V2Recorrencias() {
                         onClick={() => setEditando(r)}
                         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); setEditando(r); } }}
                         className={cn('h-[19px] cursor-pointer hover:bg-muted/40', r.situacao === 'cancelada' && 'opacity-55')}>
-                        <TableCell className={TD_TEXTO} title={tituloDescricao}>
-                          <span className="font-semibold">{r.descricao}</span>
-                        </TableCell>
+                        {/* REC-COLUNAS-01: o negrito na própria célula — num <span> dentro dela o texto passava da caixa sem o "…" visível ser dele */}
+                        <TableCell className={cn(TD_TEXTO, 'font-semibold')} title={tituloDescricao}>{r.descricao}</TableCell>
                         <TableCell className={TD_TEXTO} title={favorecido}>{favorecido}</TableCell>
                         <TableCell className={TD_TEXTO} title={conta}>{conta}</TableCell>
                         <TableCell className={cn(TD, 'whitespace-nowrap')}>
@@ -458,7 +464,8 @@ export default function V2Recorrencias() {
                           </span>
                         </TableCell>
                         <TableCell className={TD_NUM}>{r.diaVencimento}</TableCell>
-                        <TableCell className={TD_TEXTO} title={forma}>{forma}</TableCell>
+                        {/* REC-COLUNAS-01: a forma vem de uma lista fechada e a coluna tem a largura da maior — não corta. */}
+                        <TableCell className={cn(TD, 'whitespace-nowrap')}>{forma}</TableCell>
                         <TableCell className={cn(TD_NUM, 'text-muted-foreground')}>{dinheiro(Math.round(Math.abs(r.valorBase) * 100))}</TableCell>
                         {/* ⚠ "—" FORA DO MÊS: a regra não tem conta vencendo nele (só aparece em "Todas as regras"). */}
                         <TableCell className={TD_NUM}>
