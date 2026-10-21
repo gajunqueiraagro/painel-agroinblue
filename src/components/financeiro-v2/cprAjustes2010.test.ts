@@ -34,7 +34,7 @@ describe('(1) A receber ANTES de A pagar', () => {
     expect(cab.indexOf('>A receber<')).toBeGreaterThan(0);
     expect(cab.indexOf('>A receber<')).toBeLessThan(cab.indexOf('>A pagar<'));
     /* a linha da conta */
-    expect(tela).toContain('<span style={larg(regua.receber)} className="text-right">{receber ? celValor : null}</span>\n                        <span style={larg(regua.pagar)} className="text-right">{receber ? null : celValor}</span>');
+    expect(tela).toMatch(/<span style=\{larg\(regua\.receber\)\} className="text-right">\{receber \? celValor : null\}<\/span>\n\s+<span style=\{larg\(regua\.pagar\)\} className="text-right">\{receber \? null : celValor\}<\/span>/);
     /* a faixa (o mesmo componente desenha o Caixa inicial, o "Saldo em", os vencidos e o Fim do período) */
     const faixa = tela.slice(tela.indexOf('function Faixa('), tela.indexOf('function CelValor(') > tela.indexOf('function Faixa(') ? tela.indexOf('function CelValor(') : undefined);
     expect(faixa.indexOf("tipo=\"receber\"")).toBeGreaterThan(0);
@@ -79,7 +79,7 @@ describe('(2) o saldo do dia na ÚLTIMA linha do dia', () => {
   it('o "Saldo em" de cada dia é o saldo CORRIDO da série: anterior + a receber − a pagar', () => {
     const hoje = '2026-10-20';
     const r = recortarCpr([conta('2026-10-21', 1896.83), entra('2026-11-05', 21000), conta('2026-11-05', 8119)],
-      { periodo: { de: '2026-10-01', ate: '2026-11-30' }, hoje, incluirVencidos: true, ancoras: new Map([['IP', '2026-10-09']]) });
+      { periodo: { de: '2026-10-01', ate: '2026-11-30' }, hoje, ancoras: new Map([['IP', '2026-10-09']]) });
     const s = serieDoSaldoCpr(r, 10000);
     expect(s.dias.map((d) => [d.data, d.saldo])).toEqual([['2026-10-21', 8103.17], ['2026-11-05', 20984.17]]);
     expect(s.dias[1].saldo).toBe(Math.round((8103.17 + 21000 - 8119) * 100) / 100);
@@ -108,7 +108,7 @@ describe('(4) o vencido conta no saldo de HOJE, com o selo e o aviso', () => {
     const hoje = '2026-10-20';
     const cdb = conta('2026-10-09', 290000, { tipo_operacao: '3-Transferências', conta_bancaria_id: 'IP', conta_destino_id: 'CDB' });
     const fgts = conta('2026-10-21', 1896.83, { status_transacao: 'agendado' });
-    const r = recortarCpr([cdb, fgts], { periodo: { de: '2026-10-01', ate: '2026-11-30' }, hoje, incluirVencidos: true, conta: 'IP', ancoras: new Map([['IP', '2026-10-09']]) });
+    const r = recortarCpr([cdb, fgts], { periodo: { de: '2026-10-01', ate: '2026-11-30' }, hoje, conta: 'IP', ancoras: new Map([['IP', '2026-10-09']]) });
     expect(r.vencidos.anteriores.linhas.map((l) => l.id)).toEqual([cdb.id]);
     const s = serieDoSaldoCpr(r, 293896.08);
     const th = totaisDeHojeCpr(s);
@@ -155,7 +155,7 @@ describe('CPR-AJUSTES-20-10b — período futuro', () => {
     conta('2026-11-05', 21000, { status_transacao: 'agendado' }), entra('2026-11-12', 212449.03),
     conta(hoje, 500, { status_transacao: 'realizado', data_pagamento: hoje }),
   ];
-  const rec = (incluirVencidos = true) => recortarCpr(linhas, { periodo: NOV, hoje, incluirVencidos, ancoras: new Map([['IP', '2026-10-09']]) });
+  const rec = () => recortarCpr(linhas, { periodo: NOV, hoje, ancoras: new Map([['IP', '2026-10-09']]) });
   it('o Caixa inicial da véspera = caixa de hoje − os vencidos em aberto + o que vence de amanhã até a véspera', () => {
     const s = serieDoSaldoCpr(rec(), 1450296.76);
     expect(s.inicial).toEqual({ data: '2026-10-31', saldo: 1450135.93 });
@@ -170,42 +170,41 @@ describe('CPR-AJUSTES-20-10b — período futuro', () => {
     expect(tela).toContain('...recorte.pagasNoPeriodo,');
     expect(tela).not.toMatch(/\.\.\.recorte\.pagas,/);
   });
-  it('os vencidos aparecem SEMPRE (a caixa não os esconde) e NÃO entram no rodapé: já estão dentro do Caixa inicial', () => {
-    for (const incluir of [true, false]) {
-      const r = rec(incluir);
-      expect(r.vencidosNaLista).toBe(true);
-      expect(r.vencidosNoRodape).toBe(false);
-      expect(r.vencidos.pagar).toEqual({ valor: 160.83, contas: 3 });
-      expect(r.total.pagar).toEqual({ valor: 21000, contas: 1 });
-    }
+  it('os vencidos aparecem SEMPRE e NÃO entram no rodapé: já estão dentro do Caixa inicial', () => {
+    const r = rec();
+    expect(r.vencidosNaLista).toBe(true);
+    expect(r.vencidosNoRodape).toBe(false);
+    expect(r.vencidos.pagar).toEqual({ valor: 160.83, contas: 3 });
+    expect(r.total.pagar).toEqual({ valor: 21000, contas: 1 });
+    expect(r.saemHoje.linhas).toEqual([]);
   });
   it('a tela: o bloco "Vencidos em aberto · entram no saldo" vem ANTES da linha do Caixa inicial', () => {
-    expect(tela).toContain("titulo: futuro ? `Vencidos em aberto · ${contas(nVencidos)} · entram no saldo`");
-    expect(tela).toContain('antesDoCaixaInicial: futuro,');
+    expect(tela).toContain("titulo: `Vencidos em aberto · ${contas(nVencidos)} · entram no saldo`,");
+    expect(tela).toContain("chave: 'vencidos', tipo: 'vencidos', quando: '', antesDoCaixaInicial: true,");
     /* "entre hoje e de" também já está dentro do Caixa inicial previsto: vem antes dele; e o bloco prende a 22px (em 42 cobria a linha) */
     expect(tela).toContain("chave: 'entre', tipo: 'entre', quando: '', linhas: [], antesDoCaixaInicial: true,");
     expect(tela).toContain("g.antesDoCaixaInicial ? 'top-[22px]' : 'top-[42px]'");
-    expect(tela).toContain('const iCaixaInicial = grupos.findIndex((g) => !g.antesDoCaixaInicial);');
+    expect(tela).toContain('const iCaixaInicial = gruposAntesDoFim.findIndex((g) => !g.antesDoCaixaInicial);');
     expect(tela).toContain('{i === iCaixaInicial && linhaDoCaixaInicial}');
-    expect(tela).toContain('if (!hojeNoPeriodo && recorte.vencidosNaLista && nVencidos > 0) topo.push({');
+    expect(tela).toContain('if (futuro && nVencidos > 0) topo.push({');
   });
   it('o PDF e o Excel põem o bloco antes do Caixa inicial, como a tela', () => {
     const modelo = semComentario(readFileSync(resolve(__dirname, '../../lib/pdf/cpr/modeloCpr.ts'), 'utf8'));
     const excel = semComentario(readFileSync(resolve(__dirname, '../../lib/financeiro/cprExcel.ts'), 'utf8'));
     expect(modelo).toContain('if (nAntes > 0) faixas.splice(nAntes, 0, ...faixas.splice(0, 1));');
-    expect(excel.indexOf('e.grupos.filter((g) => g.antesDoCaixaInicial)')).toBeLessThan(excel.indexOf('`Caixa inicial'));
+    expect(excel.indexOf('e.grupos.filter((g) => g.antesDoCaixaInicial && !g.depoisDoFim)')).toBeLessThan(excel.indexOf('`Caixa inicial'));
   });
 });
 
 describe('CPR-AJUSTES-20-10b — período que inclui hoje', () => {
-  it('o vencido entra no dia de hoje e no total, com a caixa ligada ou desligada; período encerrado: a caixa ainda decide', () => {
+  it('o vencido entra no dia de hoje e no total; no período encerrado ele não entra no total', () => {
     const hoje = '2026-10-20';
     const ls = [conta('2026-10-15', 9.38), conta('2026-10-25', 100)];
-    const r = (periodo: { de: string; ate: string }, incluirVencidos: boolean) => recortarCpr(ls, { periodo, hoje, incluirVencidos });
-    expect(r({ de: '2026-10-01', ate: '2026-10-31' }, false).total.pagar).toEqual({ valor: 109.38, contas: 2 });
-    expect(r({ de: '2026-10-01', ate: '2026-10-31' }, false).vencidosNaLista).toBe(true);
-    expect(r({ de: '2026-09-01', ate: '2026-09-30' }, false).vencidosNaLista).toBe(false);
-    expect(r({ de: '2026-09-01', ate: '2026-09-30' }, true).vencidosNaLista).toBe(true);
+    const r = (periodo: { de: string; ate: string }) => recortarCpr(ls, { periodo, hoje });
+    expect(r({ de: '2026-10-01', ate: '2026-10-31' }).total.pagar).toEqual({ valor: 109.38, contas: 2 });
+    expect(r({ de: '2026-10-01', ate: '2026-10-31' }).vencidosNaLista).toBe(true);
+    expect(r({ de: '2026-09-01', ate: '2026-09-30' }).vencidosNaLista).toBe(false);
+    expect(r({ de: '2026-09-01', ate: '2026-09-30' }).total.pagar).toEqual({ valor: 0, contas: 0 });
   });
 });
 
@@ -247,6 +246,10 @@ function gruposComoATela(r: RecorteCpr<L>, s: SerieDoSaldoCpr): GrupoDaTela<L>[]
     gs.push({ tipo: 'dia', chave: d.data, titulo: d.data, quando: '', linhas: r.periodoSoma.linhas.filter((l) => l.data_vencimento === d.data),
       pagar: d.pagar.valor, receber: d.receber.valor, saldo: d.saldo });
   }
+  /* CPR-AJUSTES-20-10c — período encerrado: o grupo "Saem hoje", DEPOIS do Fim do período */
+  const sh = r.saemHoje;
+  if (sh.linhas.length > 0) gs.push({ tipo: 'saem_hoje', chave: 'saem-hoje', titulo: 'Saem hoje · fora do saldo do período', quando: '', depoisDoFim: true,
+    frase: 'Ainda não aconteceram; entram no saldo de hoje.', linhas: sh.linhas, pagar: sh.pagar.valor, receber: sh.receber.valor, saldo: undefined });
   return gs;
 }
 function asTres(r: RecorteCpr<L>, s: SerieDoSaldoCpr) {
@@ -255,13 +258,13 @@ function asTres(r: RecorteCpr<L>, s: SerieDoSaldoCpr) {
   const grupos = gruposComoATela(r, s);
   const z = { valor: 0, contas: 0 };
   const m = montarModeloCpr<L>({
-    clienteNome: 'Vera', contaNome: 'Todas', todasAsContas: true, periodo: r.periodo, segmento: 'ambos', incluirVencidos: r.incluirVencidos,
+    clienteNome: 'Vera', contaNome: 'Todas', todasAsContas: true, periodo: r.periodo, segmento: 'ambos',
     emitidoEm: '20/10/2026 10:00', serie: s, grupos,
     cartoes: { vencidosContamPagar: z, vencidosContamReceber: z, pagarNoPeriodo: z, receberNoPeriodo: z, porStatus: { pagar: {}, receber: {} },
       transferencias: { pagar: z, receber: z }, hoje: r.hoje, conciliadoAte: null },
     rodape, semanas: [], porConta: null, motivoSemSaldo: '', de: deFolha,
   });
-  const x = montarPayloadExcelCpr<L>({ arquivo: 'cpr', grupos, serie: s, de: deFolha, incluirVencidos: r.incluirVencidos, hoje: r.hoje,
+  const x = montarPayloadExcelCpr<L>({ arquivo: 'cpr', grupos, serie: s, de: deFolha, hoje: r.hoje,
     inicio: r.periodo.de, fim: r.periodo.ate, rodape });
   return { f, m, rows: x.sheets[1].rows as (string | number | null)[][] };
 }
@@ -278,11 +281,12 @@ function confereOInvariante(r: RecorteCpr<L>, s: SerieDoSaldoCpr) {
   expect(m.fim.saldo?.texto).toBe(formatMoeda(s.fim));
   /* EXCEL: a linha "Fim do período" fecha a aba; e as linhas DEPOIS do Caixa inicial somam exatamente o rodapé */
   const iCaixa = rows.findIndex((x) => String(x[0]).startsWith('Caixa inicial'));
-  const fimRow = rows[rows.length - 1];
+  const iFim = rows.findIndex((x) => String(x[0]).startsWith('Fim do período'));
+  const fimRow = rows[iFim];
   expect(String(fimRow[0])).toBe(`Fim do período · ${r.periodo.ate.slice(8, 10)}/${r.periodo.ate.slice(5, 7)}/${r.periodo.ate.slice(0, 4)}`);
   const [, rec, pag, saldo] = fimRow as [string, number, number, number];
   expect(cent(Number(rows[iCaixa][3])) + cent(rec) - cent(pag)).toBe(cent(saldo));
-  const depois = rows.slice(iCaixa + 1, rows.length - 1);
+  const depois = rows.slice(iCaixa + 1, iFim);
   expect(depois.reduce((t, x) => t + cent(Number(x[1] ?? 0)), 0)).toBe(cent(rec));
   expect(depois.reduce((t, x) => t + cent(Number(x[2] ?? 0)), 0)).toBe(cent(pag));
   return f;
@@ -300,8 +304,8 @@ describe('CPR-AJUSTES-20-10b — o rodapé soma só o que está DEPOIS do Caixa 
       conta('2026-11-20', 20024.47, { tipo_operacao: '3-Transferências', conta_bancaria_id: 'IP', conta_destino_id: 'FZ' }),
       entra('2026-11-12', 212449.03),
     ].map(comDesc);
-    for (const incluir of [true, false]) {
-      const r = recortarCpr(ls, { periodo: { de: '2026-11-01', ate: '2026-11-30' }, hoje, incluirVencidos: incluir,
+    {
+      const r = recortarCpr(ls, { periodo: { de: '2026-11-01', ate: '2026-11-30' }, hoje,
         ancoras: new Map([['IP', '2026-10-09'], ['FZ', '2026-10-09']]) });
       const s = serieDoSaldoCpr(r, 1450296.76);
       expect(s.inicial).toEqual({ data: '2026-10-31', saldo: 1450135.93 });
@@ -322,8 +326,8 @@ describe('CPR-AJUSTES-20-10b — o rodapé soma só o que está DEPOIS do Caixa 
         { data: '2026-10-20', entradas: 0, saidas: 100, nEntradas: 0, nSaidas: 1, saldo: 1200 },
       ],
     };
-    for (const incluir of [true, false]) {
-      const r = recortarCpr(ls, { periodo: { de: '2026-10-01', ate: '2026-10-31' }, hoje, incluirVencidos: incluir, ancoras: new Map([['IP', '2026-10-09']]) });
+    {
+      const r = recortarCpr(ls, { periodo: { de: '2026-10-01', ate: '2026-10-31' }, hoje, ancoras: new Map([['IP', '2026-10-09']]) });
       const s = serieDoSaldoCpr(r, 1200, real);
       expect(r.vencidosNoRodape).toBe(true);
       const f = confereOInvariante(r, s);
@@ -336,7 +340,7 @@ describe('CPR-AJUSTES-20-10b — o rodapé soma só o que está DEPOIS do Caixa 
   it('período que COMEÇA HOJE: o realizado de hoje entra no rodapé (o Caixa inicial é o fim de ontem)', () => {
     const ls: L[] = [conta('2026-10-25', 100)].map(comDesc);
     const real: RealizadoCpr = { inicial: { data: '2026-10-19', saldo: 1000 }, dias: [{ data: hoje, entradas: 0, saidas: 40, nEntradas: 0, nSaidas: 1, saldo: 960 }] };
-    const r = recortarCpr(ls, { periodo: { de: hoje, ate: '2026-11-18' }, hoje, incluirVencidos: true });
+    const r = recortarCpr(ls, { periodo: { de: hoje, ate: '2026-11-18' }, hoje });
     const s = serieDoSaldoCpr(r, 960, real);
     const f = confereOInvariante(r, s);
     expect(f.pagar).toEqual({ valor: 140, contas: 2 });
@@ -347,5 +351,88 @@ describe('CPR-AJUSTES-20-10b — o rodapé soma só o que está DEPOIS do Caixa 
     expect(tela).toContain('${contagemDoRodapeCpr(fimDoPeriodo)}');
     expect(tela).toContain('fim: periodo.ate, rodape,');
     expect(tela).not.toContain('recorte.total.pagar.valor, receber: recorte.total.receber.valor');
+  });
+});
+
+/* ───────────── CPR-AJUSTES-20-10c — a caixa dos vencidos saiu; o período ENCERRADO mostra os do período DEPOIS do Fim ───────────── */
+describe('CPR-AJUSTES-20-10c — período encerrado: "Saem hoje · fora do saldo do período", depois do Fim do período', () => {
+  const hoje = '2026-10-20';
+  const SET = { de: '2026-09-01', ate: '2026-09-30' };
+  /* o caso da Vera em sintético (set/26): um vencido de antes do período (dez/25), um a pagar e um a receber DO período, um de
+     depois dele (out/26); o realizado de setembro vem do dono do caixa */
+  const antigo = conta('2025-12-15', 38.63, { status_transacao: 'previsto' });
+  const doPeriodoPagar = conta('2026-09-15', 112.82, { status_transacao: 'previsto' });
+  const doPeriodoReceber = entra('2026-09-20', 500);
+  const deOutubro = conta('2026-10-15', 9.38, { status_transacao: 'previsto' });
+  const ls: L[] = [antigo, doPeriodoPagar, doPeriodoReceber, deOutubro].map(comDesc);
+  const real: RealizadoCpr = { inicial: { data: '2026-08-31', saldo: 1000 },
+    dias: [{ data: '2026-09-10', entradas: 300, saidas: 100, nEntradas: 1, nSaidas: 1, saldo: 1200 }] };
+  const r = recortarCpr(ls, { periodo: SET, hoje, ancoras: new Map([['IP', '2026-10-09']]) });
+  const s = serieDoSaldoCpr(r, 5000, real);
+
+  it('o dono: só os vencidos em aberto com vencimento DENTRO do período, com o subtotal dos dois lados', () => {
+    expect(r.saemHoje.linhas.map((l) => l.data_vencimento)).toEqual(['2026-09-15', '2026-09-20']);
+    expect(r.saemHoje.pagar).toEqual({ valor: 112.82, contas: 1 });
+    expect(r.saemHoje.receber).toEqual({ valor: 500, contas: 1 });
+    /* o de antes do período não é dele; o cartão segue com todos */
+    expect(r.saemHoje.linhas.some((l) => l.data_vencimento === '2025-12-15')).toBe(false);
+    expect(r.vencidos.linhas.length).toBe(4);
+  });
+  it('INVARIANTE (tela = PDF = Excel): Caixa inicial + A receber − A pagar = Saldo no fim; o grupo não entra no rodapé', () => {
+    const f = confereOInvariante(r, s);
+    expect(f.encerrado).toBe(true);
+    expect([f.pagar.valor, f.receber.valor, s.fim]).toEqual([100, 300, 1200]);
+    /* o rodapé é o MESMO com ou sem o grupo */
+    const semOGrupo = { ...r, saemHoje: { pagar: { valor: 0, contas: 0 }, receber: { valor: 0, contas: 0 }, linhas: [] } };
+    expect(rodapeDoPeriodoCpr(semOGrupo, s)).toEqual(f);
+    /* sem saldo conferido, o encerrado também não soma o grupo */
+    const semCaixa = rodapeDoPeriodoCpr(r, serieDoSaldoCpr(r, null));
+    expect([semCaixa.pagar.valor, semCaixa.receber.valor]).toEqual([0, 0]);
+  });
+  it('o PDF: o bloco "Saem hoje" com a frase, as linhas e o subtotal, depois do Fim do período', () => {
+    const { m } = asTres(r, s);
+    expect(m.saemHoje?.titulo).toBe('Saem hoje · fora do saldo do período');
+    expect(m.saemHoje?.frase).toBe('Ainda não aconteceram; entram no saldo de hoje.');
+    expect(m.saemHoje?.contas.map((c) => c.venc)).toEqual(['15/09/26', '20/09/26']);
+    expect([m.saemHoje?.receber, m.saemHoje?.pagar]).toEqual([formatMoeda(500), formatMoeda(112.82)]);
+    expect(m.faixas.flatMap((x) => x.contas).length).toBe(0);
+    expect(doc.indexOf('{m.saemHoje ? <BlocoSimples')).toBeGreaterThan(doc.indexOf('{m.fim.titulo}'));
+  });
+  it('o Excel: linhas PRÓPRIAS depois da linha "Fim do período", fora da soma dela', () => {
+    const { rows } = asTres(r, s);
+    const iFim = rows.findIndex((x) => String(x[0]).startsWith('Fim do período'));
+    expect(rows.slice(iFim + 1)).toEqual([
+      ['Saem hoje · fora do saldo do período', 500, 112.82, null],
+      ['Ainda não aconteceram; entram no saldo de hoje.', null, null, null],
+      ['vencido em 15/09/2026 · Conta ' + doPeriodoPagar.id, null, 112.82, null],
+      ['vencido em 20/09/2026 · Conta ' + doPeriodoReceber.id, 500, null, null],
+    ]);
+  });
+  it('período COM HOJE e FUTURO: o grupo não existe (o vencido entra no saldo)', () => {
+    expect(recortarCpr(ls, { periodo: { de: '2026-10-01', ate: '2026-10-31' }, hoje }).saemHoje.linhas).toEqual([]);
+    expect(recortarCpr(ls, { periodo: { de: '2026-11-01', ate: '2026-11-30' }, hoje }).saemHoje.linhas).toEqual([]);
+  });
+  it('a tela: o grupo vem DEPOIS da linha "Fim do período", com o título, a frase e o selo vencido; sem caixa nenhuma', () => {
+    expect(tela).toContain('if (serie.encerrado) return [...dias, ...fim, ...depois];');
+    expect(tela).toContain("titulo: 'Saem hoje · fora do saldo do período', frase: 'Ainda não aconteceram; entram no saldo de hoje.',");
+    expect(tela).toContain('const sh = recorte.saemHoje;');
+    expect(tela.indexOf('{gruposDepoisDoFim.map((g) => desenharGrupo(g))}')).toBeGreaterThan(tela.indexOf('testId="cpr-total"'));
+    expect(tela).toContain('data-testid="cpr-frase-do-grupo"');
+    expect(tela).not.toContain('Checkbox');
+  });
+  it('nenhum "Incluir vencidos" no código (a caixa, o estado e o campo saíram)', () => {
+    const { readdirSync, statSync } = require('node:fs') as typeof import('node:fs');
+    const raiz = resolve(__dirname, '../..');
+    const achados: string[] = [];
+    const andar = (dir: string) => {
+      for (const nome of readdirSync(dir)) {
+        const p = resolve(dir, nome);
+        if (statSync(p).isDirectory()) { andar(p); continue; }
+        if (!/\.(ts|tsx)$/.test(nome) || /\.test\.tsx?$/.test(nome)) continue;
+        if (/Incluir vencidos|incluirVencidos|cpr-incluir-vencidos/.test(readFileSync(p, 'utf8'))) achados.push(p);
+      }
+    };
+    andar(raiz);
+    expect(achados).toEqual([]);
   });
 });
