@@ -20,6 +20,16 @@ export function motivoTituloOCTravado(status: string | null | undefined, casadoC
   return null;
 }
 
+/** OC-CORRECOES-01 C (P3) — o PORQUE NO PROPRIO CAMPO: cada campo travado do titulo de OC diz por que e onde mudar (o `title`
+ *  do campo). Vencimento e classificacao so' travam quando o titulo nao se ajusta (realizado ou conciliado); nulo = livre. */
+export type CampoDoTituloOC = 'tipo' | 'competencia' | 'valor' | 'vencimento' | 'classificacao';
+export function motivoDoCampoOC(campo: CampoDoTituloOC, ajustavel: boolean, motivoTravado: string | null, onde: string): string | null {
+  if (campo === 'valor') return `O valor segue a operação comercial (${onde}): muda pela OC ou parcelando na conta corrente da OC.`;
+  if (campo === 'tipo') return `O tipo vem da operação comercial (${onde}).`;
+  if (campo === 'competencia') return `A competência vem da operação comercial (${onde}).`;
+  return ajustavel ? null : motivoTravado;
+}
+
 export interface LinhaAntes {
   tipo_operacao?: string | null;
   data_vencimento?: string | null;

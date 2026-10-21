@@ -89,6 +89,7 @@ import { useIntegerInput, useDecimalInput, parseDecimalInput } from '@/hooks/use
 import { toast } from 'sonner';
 import { decidirHidratacao, vaiHidratar } from '@/lib/oc/hidratacaoOC';
 import { caminhoDoSalvarOC, soCadastrais } from '@/lib/oc/edicaoCadastralOC';
+import { tipoVendaDaCarga, type TipoVendaOC } from '@/lib/oc/tipoVendaOC';
 import { gravarRealizadoBoitel as gravarRealizadoNoBanco, decisaoDoRealizado, type ResultadoRealizado } from '@/lib/oc/gravarRealizadoBoitel';
 import { useMasterLock } from '@/hooks/useMasterLock';
 import { MasterLockBanner } from '@/components/MasterLockBanner';
@@ -492,7 +493,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      nao reflete na closure (a armadilha que mordeu na fatia 2).
      ⚠ Sem isto o salvamento automatico gravaria a cada navegacao, subindo `versao` e
      enchendo a auditoria de eventos que nao mudaram nada. */
-  const ocSnapshotRef = useRef({ contraparte_id: '', data_operacao: '', observacoes: '', numero_documento: '' });
+  const ocSnapshotRef = useRef({ contraparte_id: '', data_operacao: '', observacoes: '', numero_documento: '', tipo_venda: '' });
   // PR-OC-EDIT-01A — existe título financeiro materializado nesta operação? (parte ativa com
   //   financeiro_lancamento_id). Bloqueia a edição da base econômica (ADR Soberania Financeira).
   const [ocTemTitulo, setOcTemTitulo] = useState<boolean>(false);
@@ -975,7 +976,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         setNotaFiscal(op.numero_documento ?? '');   // PR-OC-EDIT-01A — hidrata sempre (evita valor legado no salvar).
         ocSnapshotRef.current = {
           contraparte_id: op.contraparte_id ?? '', data_operacao: op.data_operacao ?? '',
-          observacoes: op.observacoes ?? '', numero_documento: op.numero_documento ?? '',
+          observacoes: op.observacoes ?? '', numero_documento: op.numero_documento ?? '', tipo_venda: '',
         };
         setOcOperacaoId(op.id);
         setOcVersao(op.versao);
@@ -1074,7 +1075,15 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       }
       setOcHidratando(true);
       try {
-        const estado = await ocRpc.carregarOperacao(ocIdParam, clienteAtual.id);
+        /* OC-ABRIR-LENTO-01 — as duas linhas do boitel saem JUNTO com a OC (eram tres idas em serie depois dela). So' sao
+           usadas depois das mesmas conferencias de cliente e de tipo; a RLS isola a tabela por cliente. */
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: tabela fora de types.ts
+        const lerBoitel = (cenario: 'projetado' | 'realizado') => (supabase as any)
+          .from('zoo_operacao_boitel').select('*')
+          .eq('operacao_id', ocIdParam).eq('cenario', cenario).maybeSingle();
+        const [estado, { data: linhaBoitel }, { data: linhaReal }] = await Promise.all([
+          ocRpc.carregarOperacao(ocIdParam, clienteAtual.id), lerBoitel('projetado'), lerBoitel('realizado'),
+        ]);
         if (cancelado) return;
         if (!estado) throw new Error('Operação não encontrada ou inacessível a este cliente.');
         const op = estado.operacao;
@@ -1090,7 +1099,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
            o que ficou sujo quando a OC fechada grava por `oc_editar_dados_operacao`. */
         ocSnapshotRef.current = {
           contraparte_id: op.contraparte_id ?? '', data_operacao: op.data_operacao ?? '',
-          observacoes: op.observacoes ?? '', numero_documento: op.numero_documento ?? '',
+          observacoes: op.observacoes ?? '', numero_documento: op.numero_documento ?? '', tipo_venda: '',
         };
         setOcOperacaoId(op.id);
         setOcVersao(op.versao);
@@ -1105,25 +1114,16 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
            ⚠ LEITURA POR PostgREST, e nao por RPC: a tabela tem policy de SELECT e a
            leitura funciona. A ESCRITA continua exclusiva de `oc_salvar_boitel`.
            ⚠ 'projetado': o realizado nasce no abate e e' outra linha. */
-        const { data: linhaBoitel } = await (supabase as any)
-          .from('zoo_operacao_boitel').select('*')
-          .eq('operacao_id', op.id).eq('cenario', 'projetado').maybeSingle();
-        if (cancelado) return;
         const bd = boitelDeLinha(linhaBoitel);
-        /* ⚠ VENDA COMUM REABRE SEM TIPO, e isso e' honestidade, nao esquecimento: a OC
-           nao guarda `tipo_venda`, entao escolher um por ela seria inventar dado. O botao
-           dira' "Informe comprador, data, fazenda e tipo de venda" ate' o operador marcar.
-           Ver PR-OC-VENDA-TIPO-NA-OC-01, registrado. */
-        if (bd) { setVendaTipoVenda('boitel'); setOcBoitel(bd); }
-        else { setVendaTipoVenda(''); setOcBoitel(null); }
+        /* OC-TIPO-VENDA-01 — a venda comum reabre COM o tipo: a OC passou a guardar `tipo_venda` (o boitel continua vindo do
+           planejamento). A OC antiga que nunca o gravou volta vazia — escolher um por ela seria inventar dado. */
+        const tipoCarregado = tipoVendaDaCarga((op as { tipo_venda?: string | null }).tipo_venda, !!bd);
+        setVendaTipoVenda(tipoCarregado);
+        ocSnapshotRef.current = { ...ocSnapshotRef.current, tipo_venda: tipoCarregado };
+        setOcBoitel(bd ?? null);
 
         /* ⚠ A SEGUNDA LINHA, quando existir — PR-OC-VENDA-REALIZADO-02. Mesma leitura por
            PostgREST do projetado; `maybeSingle` porque ela e' opcional por natureza. */
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: tabela fora de types.ts
-        const { data: linhaReal } = await (supabase as any)
-          .from('zoo_operacao_boitel').select('*')
-          .eq('operacao_id', op.id).eq('cenario', 'realizado').maybeSingle();
-        if (cancelado) return;
         const realGravado = boitelDeLinha(linhaReal);
         setOcBoitelReal(realGravado);
         setOcBoitelRealSalvo(realGravado);
@@ -1199,7 +1199,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         /* OC-EDITAR-CADASTRAL-01 — mesmo snapshot da compra e da venda. */
         ocSnapshotRef.current = {
           contraparte_id: op.contraparte_id ?? '', data_operacao: op.data_operacao ?? '',
-          observacoes: op.observacoes ?? '', numero_documento: op.numero_documento ?? '',
+          observacoes: op.observacoes ?? '', numero_documento: op.numero_documento ?? '', tipo_venda: '',
         };
         setOcOperacaoId(op.id);
         setOcVersao(op.versao);
@@ -2850,6 +2850,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     if ((data || '')               !== snap.data_operacao)    sujo.data_operacao    = data || null;
     if ((observacao || '')         !== snap.observacoes)      sujo.observacoes      = observacao || null;
     if ((notaFiscal || '')         !== snap.numero_documento) sujo.numero_documento = notaFiscal || null;
+    if (modoOCVenda && (vendaTipoVenda || '') !== snap.tipo_venda) sujo.tipo_venda = vendaTipoVenda || null;
     return sujo;
   };
   const ocDadosSujos = Object.keys(camposSujosOC()).length > 0;
@@ -2857,7 +2858,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const marcarSnapshotOCComoSalvo = () => {
     ocSnapshotRef.current = {
       contraparte_id: contraparteDoModoOC || '', data_operacao: data || '',
-      observacoes: observacao || '', numero_documento: notaFiscal || '',
+      observacoes: observacao || '', numero_documento: notaFiscal || '', tipo_venda: modoOCVenda ? vendaTipoVenda || '' : '',
     };
   };
 
@@ -3306,6 +3307,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     try {
       const env = await ocRpc.salvarRascunho(ocOperacaoId, clienteId, ocVersao, {
         tipo_operacao: 'venda',
+        tipo_venda: (vendaTipoVenda || '') as TipoVendaOC | '',   // OC-TIPO-VENDA-01: a OC guarda o tipo (vazio = sem tipo)
         data_operacao: data,
         cenario: isCenarioMeta ? 'meta' : 'realizado',
         fazenda_id: vendaFazendaId,
@@ -3599,9 +3601,12 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     setObservacao(op.observacoes ?? '');
     setStatusOp(op.cenario === 'meta' ? 'meta' : 'realizado');
     setNotaFiscal(op.numero_documento ?? '');
+    /* OC-TIPO-VENDA-01: a venda recarrega o tipo da OC (o boitel, pelo que a tela ja' sabe do planejamento) */
+    const tipoRecarregado = modoOCVenda ? tipoVendaDaCarga((op as { tipo_venda?: string | null }).tipo_venda, vendaTipoVenda === 'boitel') : '';
+    if (modoOCVenda) setVendaTipoVenda(tipoRecarregado);
     ocSnapshotRef.current = {
       contraparte_id: op.contraparte_id ?? '', data_operacao: op.data_operacao ?? '',
-      observacoes: op.observacoes ?? '', numero_documento: op.numero_documento ?? '',
+      observacoes: op.observacoes ?? '', numero_documento: op.numero_documento ?? '', tipo_venda: tipoRecarregado,
     };
     setOcVersao(op.versao);
     setOcStatusComercial(op.status_comercial);

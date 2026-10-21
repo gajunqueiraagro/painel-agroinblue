@@ -412,7 +412,8 @@ describe('venda em BOITEL e ABATE — a Negociacao inteira em leitura para o fin
     venda({ acessoOC: FINANCEIRO, ocOperacaoId: null, vendaTipoVenda: '' });
     expect(screen.getByTestId('motivo-tipo-boitel').textContent).toBe(MOTIVO_ABATE_BOITEL);
     const fonte = readFileSync('src/components/venda/VendaModalShell.tsx', 'utf8');
-    expect(fonte).toContain('<SelectItem value="boitel" disabled={!acessoOC.negociar_abate_boitel}');
+    /* OC-TIPO-VENDA-01: a OC fechada tambem apaga o Boitel (trocar de/para boitel pede reabrir) */
+    expect(fonte).toContain('<SelectItem value="boitel" disabled={!acessoOC.negociar_abate_boitel || fechada}');
   });
   it('"Lançar realizado do abate" (boitel): apagado com o motivo; sem o motivo, o botao de sempre', () => {
     const iniciar = vi.fn(async () => true);

@@ -3,7 +3,7 @@ import { FaixaDaReferencia, type ReferenciaOperacionalInfo } from './FaixaDaRefe
 import { BLOCO_FORMULARIO, BlocoFormulario, REGUA_ROTULO, TituloDoBloco } from '@/components/ui/bloco-formulario';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { tituloOCAjustavel, motivoTituloOCTravado, camposDoAjusteOC } from '@/lib/oc/ajusteDoTituloOC';
+import { tituloOCAjustavel, motivoTituloOCTravado, camposDoAjusteOC, motivoDoCampoOC, type CampoDoTituloOC } from '@/lib/oc/ajusteDoTituloOC';
 // PR-FIN-STATUS-UX-03A-1 — domínio financeiro (dono único). normalizeStatusTransacao
 //   (v2Transferencia, compartilhado) mapeava 'previsto'→'meta'; o modal passa a usar o
 //   normalizador próprio do domínio (normalizeStatusModal), sem tocar o compartilhado.
@@ -671,6 +671,8 @@ export function LancamentoV2Dialog({
   /* OC-TITULO-AJUSTAR-01 — em aberto e sem conciliacao, o titulo de OC tem vencimento, conta e classificacao editaveis aqui. */
   const ocAjustavel = tituloOCAjustavel(lancamento?.status_transacao, casadoComExtrato);
   const motivoOCTravado = motivoTituloOCTravado(lancamento?.status_transacao, casadoComExtrato);
+  /* P3: o porque no proprio campo (title), so' no titulo de OC */
+  const porqueOC = (campo: CampoDoTituloOC) => (isOCTitulo ? motivoDoCampoOC(campo, ocAjustavel, motivoOCTravado, ondeAjustarTituloOC(podeAbrirOC)) ?? undefined : undefined);
   const [consultandoParcela, setConsultandoParcela] = useState(false);
   const abrirCancelamento = async () => {
     if (consultandoParcela) return;
@@ -2586,7 +2588,7 @@ export function LancamentoV2Dialog({
                 compartilhado de Competência/Pagamento), read-only para título OC. Grava em data_vencimento,
                 nunca em data_pagamento; o contrato de Data Pagamento do lançamento manual permanece inalterado. */}
             <div className="grid grid-cols-12 gap-2">
-              <div className="col-span-3">
+              <div className="col-span-3" title={porqueOC('tipo')}>
                 <Label className={REGUA_ROTULO}>{xmlRot('Tipo operação *', 'tipo')}</Label>
                 <Select value={tipoOperacao} onValueChange={aplicarTipoOperacao} disabled={lockedFields?.includes('tipo_operacao') || isOCTitulo}>
                   <SelectTrigger ref={firstFieldRef} tabIndex={1} className={cn("h-7 text-[11px]", fieldBg, xmlCls('tipo'))}><SelectValue /></SelectTrigger>
@@ -2597,7 +2599,7 @@ export function LancamentoV2Dialog({
                 </Select>
               </div>
               {!modoOC && (
-              <div className="col-span-2">
+              <div className="col-span-2" title={porqueOC('competencia')}>
                 <Label className={REGUA_ROTULO}>{/* em ambar o rotulo encurta: "Data Competência *" + a origem nao cabem na coluna (medido a 1.135) e quebravam a linha */}
                   {xmlAmbar('competencia') ? xmlRot('Competência *', 'competencia') : 'Data competência *'}</Label>
                 <DatePicker value={dataCompetencia} onChange={setDataCompetencia} disabled={isOCTitulo} tabIndex={2} className={cn(dateFieldCls, xmlCls('competencia'))} />
@@ -2607,7 +2609,7 @@ export function LancamentoV2Dialog({
                   Competência/Pagamento). Editável em lançamento manual; read-only para título OC
                   (governado pela Operação Comercial). Grava SEMPRE em data_vencimento, nunca em
                   data_pagamento. Contrato de Data Pagamento do manual permanece inalterado. */}
-              <div className={modoOC ? 'col-span-3' : 'col-span-2'}>
+              <div className={modoOC ? 'col-span-3' : 'col-span-2'} title={porqueOC('vencimento')}>
                 <Label className={cn(REGUA_ROTULO, ((modoOC && tentouOC && faltaVencimentoOC) || vencimentoEmErro) && 'text-destructive')}
                   data-testid={modoOC ? 'rotulo-vencimento-oc' : 'rotulo-vencimento'}>
                   {modoOC ? (tentouOC && faltaVencimentoOC ? `Vencimento * · ${MOTIVO_VENCIMENTO_OBRIGATORIO}` : 'Vencimento *')
@@ -2657,7 +2659,7 @@ export function LancamentoV2Dialog({
                 usam a conta aplicável em col-span-6 (contrato de contas inalterado). */}
             <div className="grid grid-cols-12 gap-2">
               {/* Valor — mesmo state/tabIndex/disabled; a máscara mora em `CampoValorComConta`. */}
-              <div className="col-span-2">
+              <div className="col-span-2" title={porqueOC('valor')}>
                 {/* ⚠ A CONTA DIRETO NO CAMPO — FIN-VALOR-CALC-01a. Sem operador é o campo de sempre (mesma máscara, mesmo HTML);
                     com operador ("16.238,00/2") o resultado aparece na linha do rótulo e Enter/blur o aplica. O modal segue com
                     UM valor: `valorDisplay` só muda por tecla da máscara ou por conta APLICADA — nunca pelo texto parcial. */}
@@ -2843,6 +2845,7 @@ export function LancamentoV2Dialog({
               tipoOperacao={tipoOperacao}
               travado={subcentroTravado || travado('classificacao')}
               motivoTravado={travado('classificacao') ? MOTIVO_CLASSIFICACAO_DA_OC : undefined}
+              motivoSubcentroDesabilitado={porqueOC('classificacao')}
               subcentroDesabilitado={(isOCTitulo && !ocAjustavel) || subcentroTravado || travado('classificacao')}
               ocultarCulturaFase={!!modoOC || undefined}
               ocultarLinhaDaSafra={!!modoOC || undefined}
