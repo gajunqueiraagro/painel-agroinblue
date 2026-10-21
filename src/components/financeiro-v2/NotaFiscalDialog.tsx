@@ -7,6 +7,12 @@
  *   escolhe o que a nota nao diz (subcentro, conta) e se grava pelo gravador de sempre (`criarDaNota.ts`).
  * ⚠ NUNCA ADIVINHA: subcentro e' escolha do operador ou a sugestao de sempre (o ultimo lancamento classificado do fornecedor).
  * ⚠ BARRA, NAO AVISA: chave que nao confere com o lido (campo vermelho) e nota ja' registrada no cliente (com o link) nao criam nada.
+ * FIN-NOTA-PDF-01b — o que ficou fora do 01, NO MESMO MODAL: subcentro de lavoura pede Safra e Cultura (a sugestao de sempre do
+ *   fornecedor, ou a safra pela data como no Novo lancamento; Cultura sem resposta ate' o operador escolher — "Todas (rateia)" e' uma
+ *   resposta); nota de uma parcela (ou sem duplicata) cria UM lancamento ("Criar lancamento", vencimento editavel; sem duplicata =
+ *   emissao, em ambar); lancamento a' vista existente + nota parcelada = "Atualizar e parcelar" (o existente vira 1/N, o pago nunca muda
+ *   de valor: a diferenca aparece em R$ e o operador decide). NADA ESCOLHIDO AQUI SE PERDE: "Abrir no Novo lancamento" leva tudo
+ *   (`prefillDoModal`).
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
@@ -20,7 +26,16 @@ import { BLOCO_FORMULARIO, REGUA_ROTULO, TituloDoBloco } from '@/components/ui/b
 import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import { FazendaSelect } from '@/components/shared/FazendaSelect';
 import { PreviaDaNota } from './PreviaDaNota';
-import { atualizarComANota, criarParcelasDaNota, GRAVADORES, type Gravadores } from './criarDaNota';
+import {
+  atualizarComANota, atualizarEParcelar, criarLancamentoDaNota, criarParcelasDaNota, decisaoDoExistente, formDaNota, GRAVADORES, parcelasDaNota,
+  prefillDoModal, type EscolhasDaNota, type Gravadores,
+} from './criarDaNota';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DatePicker } from '@/components/ui/date-picker';
+import { CULTURAS_LANCAMENTO, SEM_CULTURA } from '@/lib/agri/rateioLancamento';
+import { safraSugerida } from '@/lib/agri/safraSugerida';
+import { useCulturasDaSafra } from '@/hooks/useAreaPlantada';
+import type { ParcelaDoPayload } from '@/lib/financiamentos/montarPayloadParcelamento';
 import { gravarParcelamento } from './LancamentoV2Dialog';
 import { ondeEsta } from './LancamentoDoXml';
 import type { DoXml } from '@/lib/financeiro/nfePrefill';
@@ -34,7 +49,7 @@ import {
 } from '@/lib/financeiro/nfeConsultas';
 import { caixaDeTitulo, consultarCnpj, type DadosDoCnpj } from '@/lib/fornecedores/consultaCnpj';
 import type { CampoDoEmitente } from '@/lib/fornecedores/cadastroDoFornecedor';
-import type { ClassificacaoItem, ContaBancariaV2, FornecedorV2 } from '@/hooks/useFinanceiroV2';
+import type { ClassificacaoItem, ContaBancariaV2, FornecedorV2, LancamentoV2Form, Safra } from '@/hooks/useFinanceiroV2';
 import type { Fazenda } from '@/contexts/FazendaContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
@@ -102,8 +117,8 @@ const GRADE_KV = 'grid gap-x-3 gap-y-0.5 [grid-template-columns:repeat(auto-fill
 export interface NotaParaLancar { arquivo: File; bytes: ArrayBuffer; lido: NotaLidaOk; doXml: DoXml }
 
 export function NotaFiscalDialog({
-  open, onClose, clienteId, clienteNome, nota, fazendas, contas, classificacoes, fornecedores, onCriarFornecedor, onAbrirNoLancamento,
-  onAbrirRegistrada, onCriado, gravadores, consultarReceita = consultarCnpj,
+  open, onClose, clienteId, clienteNome, nota, fazendas, contas, classificacoes, safras = [], fornecedores, onCriarFornecedor, onCriarLancamento,
+  onAbrirNoLancamento, onAbrirRegistrada, onCriado, gravadores, consultarReceita = consultarCnpj,
 }: {
   open: boolean;
   onClose: () => void;
@@ -113,10 +128,13 @@ export function NotaFiscalDialog({
   fazendas: Fazenda[];
   contas: ContaBancariaV2[];
   classificacoes: ClassificacaoItem[];
+  safras?: Safra[];
   fornecedores: readonly FornecedorV2[];
   onCriarFornecedor: (nome: string, fazendaId: string | null, cpfCnpj?: string) => Promise<FornecedorV2 | null>;
-  /** O que este modal nao cria (nota de uma parcela so', subcentro de lavoura): o Novo lancamento de sempre, com a nota. */
-  onAbrirNoLancamento: (d: DoXml) => void;
+  /** FIN-NOTA-PDF-01b — o gravador do lancamento UNICO: o da tela (`handleSave`), que devolve o id criado. */
+  onCriarLancamento?: (form: LancamentoV2Form) => Promise<string | null>;
+  /** O Novo lancamento de sempre, com TUDO o que foi lido e escolhido aqui (`prefillDoModal`). */
+  onAbrirNoLancamento: (prefill: ReturnType<typeof prefillDoModal>) => void;
   onAbrirRegistrada: (o: OcorrenciaDaNota) => void;
   onCriado: () => void;
   /** So' para teste: os gravadores (padrao: os do banco). */
@@ -138,8 +156,14 @@ export function NotaFiscalDialog({
   const [receitaFrase, setReceitaFrase] = useState<string | null>(null);
   const [completar, setCompletar] = useState<CampoDoEmitente[]>([]);
   const [abertos, setAbertos] = useState<LancamentoAbertoDaNota[]>([]);
-  const [confirmarAtualizar, setConfirmarAtualizar] = useState<LancamentoAbertoDaNota | null>(null);
+  const [confirmarAtualizar, setConfirmarAtualizar] = useState<{ alvo: LancamentoAbertoDaNota; parcelar: boolean } | null>(null);
   const [ocupado, setOcupado] = useState<null | 'cadastrar' | 'completar' | 'criar' | 'atualizar'>(null);
+  /* FIN-NOTA-PDF-01b — lavoura: a safra e a cultura ('' = "Todas (rateia)"; `null` = ainda sem resposta) */
+  const [safraId, setSafraId] = useState('');
+  const [cultura, setCultura] = useState<string | null>(null);
+  const [safraEditada, setSafraEditada] = useState(false);
+  /* nota de UMA parcela: o vencimento da duplicata; sem duplicata, a emissao (em ambar, para conferir) */
+  const [vencimento, setVencimento] = useState(p.duplicatas[0]?.vencimento ?? n.emissao);
   const [erro, setErro] = useState<string | null>(null);
 
   /* a Receita: o nome inteiro (o DANFE corta) e o endereco escrito direito; nunca trava */
@@ -176,6 +200,20 @@ export function NotaFiscalDialog({
   const lavoura = plano?.escopo_negocio === 'agricultura';
   const nParcelas = p.duplicatas.length;
   const cabeAqui = nParcelas >= 2;
+  const semDuplicata = nParcelas === 0;
+  const culturasDaSafra = useCulturasDaSafra(lavoura && safraId ? safraId : null);
+  const safrasDaLavoura = useMemo(() => safras.filter((sf) => (sf.escopo_negocio ?? '') === 'agricultura' || sf.id === safraId), [safras, safraId]);
+
+  /* a SUGESTAO DE SEMPRE: o ultimo lancamento do fornecedor com este subcentro (safra e cultura dele); sem ele, a safra pela data,
+     como no Novo lancamento (sem desempate: o operador decide). Cultura nunca se adivinha fora da sugestao do fornecedor. */
+  useEffect(() => {
+    if (!lavoura) { setSafraId(''); setCultura(null); setSafraEditada(false); return; }
+    if (safraEditada) return;
+    const ult = p.classificacao;
+    if (ult && ult.plano_conta_id === planoId && ult.safra_id) { setSafraId(ult.safra_id); setCultura(ult.cultura ?? ''); return; }
+    setSafraId(safraSugerida(p.competencia, 'agricultura', safras, { desempatar: false }) ?? '');
+    setCultura(null);
+  }, [lavoura, planoId, safraEditada, p.classificacao, p.competencia, safras]);
   const registrada = doXml.ocorrencias[0] ?? null;
   const divergencias = lido.divergencias;
   const somaItens = n.itens.reduce((s, i) => s + i.valorCent, 0);
@@ -185,9 +223,23 @@ export function NotaFiscalDialog({
   else if (res.inativo && favorecidoId === p.favorecidoId) faltas.push('fornecedor ativo');
   if (!fazendaId) faltas.push('fazenda');
   if (!planoId) faltas.push('subcentro');
+  if (lavoura && !safraId) faltas.push('safra');
+  if (lavoura && cultura === null) faltas.push('cultura');
+  if (!cabeAqui && !vencimento) faltas.push('vencimento');
   const bloqueio = divergencias.length ? `A chave não confere com o lido (${divergencias.map((x) => NOME_DO_CONFERIDO[x]).join(', ')}). Nada será criado.`
     : registrada ? `Nota já registrada neste cliente · ${ondeEsta(registrada)}` : null;
-  const podeCriar = !bloqueio && faltas.length === 0 && cabeAqui && !lavoura && !ocupado;
+  const podeCriar = !bloqueio && faltas.length === 0 && !ocupado;
+  const contaEscolhida = contaId && contaId !== '__none__' ? contaId : null;
+  const escolhas = (): EscolhasDaNota | null => (favorecidoId && plano?.id ? {
+    fazendaId, favorecidoId, contaBancariaId: contaEscolhida, planoContaId: plano.id, escopoNegocio: plano.escopo_negocio || null,
+    safraId: lavoura ? safraId || null : null, cultura: lavoura ? cultura || null : null,
+  } : null);
+  /* NADA ESCOLHIDO AQUI SE PERDE: o Novo lancamento recebe a nota E as escolhas */
+  const abrirNoLancamento = () => onAbrirNoLancamento(prefillDoModal(doXml, {
+    fazendaId, contaBancariaId: contaEscolhida, favorecidoId, favorecidoNome: fornecedores.find((f) => f.id === favorecidoId)?.nome ?? null,
+    plano: plano?.id ? { id: plano.id, subcentro: plano.subcentro, macro_custo: plano.macro_custo, grupo_custo: plano.grupo_custo, centro_custo: plano.centro_custo, escopo_negocio: plano.escopo_negocio } : null,
+    safraId: lavoura ? safraId || null : null, cultura: lavoura ? cultura : null, vencimento: cabeAqui ? null : vencimento || null,
+  }));
 
   const cadastrar = async () => {
     setOcupado('cadastrar'); setErro(null);
@@ -215,24 +267,32 @@ export function NotaFiscalDialog({
   };
   const g: Gravadores = gravadores ?? { ...GRAVADORES, gravar: (payload, cli) => gravarParcelamento(payload, cli, () => qc.invalidateQueries()) };
   const criar = async () => {
-    if (!podeCriar || !favorecidoId || !plano?.id) return;
+    const e = escolhas();
+    if (!podeCriar || !e || !plano) return;
     setOcupado('criar'); setErro(null);
     try {
-      const r = await criarParcelasDaNota(clienteId, doXml, {
-        fazendaId, favorecidoId, contaBancariaId: contaId && contaId !== '__none__' ? contaId : null, planoContaId: plano.id, escopoNegocio: plano.escopo_negocio || null,
-      }, g);
+      const r = cabeAqui
+        ? await criarParcelasDaNota(clienteId, doXml, e, g)
+        : await criarLancamentoDaNota(clienteId, doXml, formDaNota(doXml, e, vencimento, plano), e.favorecidoId, { ...g, lancamento: g.lancamento ?? onCriarLancamento });
       if (r.ok === false) { setErro(r.erro); return; }
-      if (r.erroDoDocumento) toast.error(r.erroDoDocumento); else toast.success(`${r.parcelas} parcelas criadas · ${p.rotuloNota} anexada`);
+      if (r.erroDoDocumento) toast.error(r.erroDoDocumento);
+      else toast.success(`${cabeAqui ? `${r.parcelas} parcelas criadas` : 'Lançamento criado'} · ${p.rotuloNota} anexada`);
       onCriado(); onClose();
     } finally { setOcupado(null); }
   };
-  const atualizar = async (alvo: LancamentoAbertoDaNota) => {
+  /** "Atualizar este" (anexar) ou "Atualizar e parcelar" (o a' vista vira 1/N; `parcelas` = a lista que vai ao banco). */
+  const atualizar = async (alvo: LancamentoAbertoDaNota, parcelas: ParcelaDoPayload[] | null) => {
     if (!favorecidoId) return;
     setOcupado('atualizar'); setErro(null);
     try {
-      const r = await atualizarComANota(clienteId, { id: alvo.id, financiamentoId: alvo.financiamentoId }, doXml, favorecidoId, g);
+      const e = escolhas();
+      const r = parcelas && e
+        ? await atualizarEParcelar(clienteId, alvo.id, doXml, e, parcelas, g)
+        : await atualizarComANota(clienteId, { id: alvo.id, financiamentoId: alvo.financiamentoId }, doXml, favorecidoId, g);
       if (r.ok === false) { setErro(r.erro); return; }
-      toast.success(`Lançamento atualizado · ${p.rotuloNota} anexada`);
+      const falhaDoDocumento = 'erroDoDocumento' in r && typeof r.erroDoDocumento === 'string' ? r.erroDoDocumento : null;
+      if (falhaDoDocumento) toast.error(falhaDoDocumento);
+      else toast.success(parcelas ? `Lançamento parcelado em ${parcelas.length} · ${p.rotuloNota} anexada` : `Lançamento atualizado · ${p.rotuloNota} anexada`);
       onCriado(); onClose();
     } finally { setOcupado(null); setConfirmarAtualizar(null); }
   };
@@ -251,6 +311,9 @@ export function NotaFiscalDialog({
   const cidade = end?.municipio ? `${receita ? end.municipio : caixaDeTitulo(end.municipio)}/${end.uf ?? ''}` : '—';
   const opcoesPlano = saidas.map((c) => ({ value: c.id ?? '', label: c.subcentro, sub: [c.centro_custo, c.grupo_custo].filter(Boolean).join(' · ') }));
   const aberto = abertos[0] ?? null;
+  /* a' vista existente + nota parcelada: o gesto e' "Atualizar e parcelar" */
+  const parcelarAberto = !!aberto && !aberto.financiamentoId && cabeAqui;
+  const decisao = confirmarAtualizar?.parcelar ? decisaoDoExistente(confirmarAtualizar.alvo, doXml) : null;
   const origemPlano = p.classificacao && planoId === p.classificacao.plano_conta_id ? `último · ${dataCurta(p.classificacao.data)}` : null;
 
   return (
@@ -383,14 +446,10 @@ export function NotaFiscalDialog({
             {/* ── LANCAMENTO ───────────────────────────────────────────────────────────────────────── */}
             <section className={BLOCO} data-testid="nota-bloco-lancamento">
               <TituloDoBloco nome="Lançamento" dica="o que a nota não diz, você escolhe" />
-              <div className="campos-uma-linha grid grid-cols-4 gap-x-3">
+              <div className="campos-uma-linha grid grid-cols-4 gap-x-3 gap-y-1">
                 <div className="min-w-0">
                   <span className={cn(REGUA_ROTULO, 'uma-linha-que-rola')}>Fazenda{p.fazendaId && fazendaId === p.fazendaId ? ' · pela nota' : ''}</span>
                   <FazendaSelect value={fazendaId} onChange={setFazendaId} fazendas={fazendas} forcaAdministrativo={false} obrigatorio hideAviso triggerClassName="h-[22px] text-[10.5px]" />
-                </div>
-                <div className="min-w-0">
-                  <span className={REGUA_ROTULO}>Status das parcelas</span>
-                  <div className="flex h-[22px] items-center rounded-md border bg-background px-2 text-[10.5px]" title="O parcelamento nasce programado, como no Novo lançamento.">Programado</div>
                 </div>
                 <div className="min-w-0">
                   <span className={REGUA_ROTULO}>Conta origem</span>
@@ -400,9 +459,46 @@ export function NotaFiscalDialog({
                 <div className="min-w-0" data-testid="nota-subcentro">
                   <span className={cn(REGUA_ROTULO, 'uma-linha-que-rola', !planoId && 'text-destructive')} title={origemPlano ? `Sugestão: o ${origemPlano}` : undefined}>Subcentro *{origemPlano ? ` · ${origemPlano}` : ''}</span>
                   <div title={plano?.subcentro}>
-                    <SearchableSelect value={planoId} onValueChange={setPlanoId} semTodos allValue="" allLabel="Selecione o subcentro…" dense options={opcoesPlano}
+                    <SearchableSelect value={planoId} onValueChange={(v) => { setPlanoId(v); setSafraEditada(false); }} semTodos allValue="" allLabel="Selecione o subcentro…" dense options={opcoesPlano}
                       placeholder="Buscar subcentro…" triggerClassName={cn('h-[22px] text-[10.5px]', !planoId && 'border-destructive')} />
                   </div>
+                </div>
+                <div className="min-w-0">
+                  <span className={REGUA_ROTULO}>Status</span>
+                  <div className="flex h-[22px] items-center rounded-md border bg-background px-2 text-[10.5px]" title="Nasce programado, como no Novo lançamento.">Programado</div>
+                </div>
+                {/* FIN-NOTA-PDF-01b — a segunda linha EXISTE SEMPRE (nada se desloca): Safra e Cultura so' valem na lavoura */}
+                <div className="min-w-0" data-testid="nota-safra">
+                  <span className={cn(REGUA_ROTULO, 'uma-linha-que-rola', lavoura && !safraId && 'text-destructive')}>{lavoura ? 'Safra *' : 'Safra · só lavoura'}</span>
+                  <div title={safras.find((sf) => sf.id === safraId)?.nome}>
+                    <SearchableSelect value={safraId} onValueChange={(v) => { setSafraId(v); setSafraEditada(true); setCultura(null); }} semTodos allValue=""
+                      allLabel={lavoura ? 'Selecione a safra…' : 'não se aplica'} dense disabled={!lavoura}
+                      options={safrasDaLavoura.map((sf) => ({ value: sf.id, label: sf.nome }))} placeholder="Buscar safra…"
+                      triggerClassName={cn('h-[22px] text-[10.5px]', lavoura && !safraId && 'border-destructive')} />
+                  </div>
+                </div>
+                <div className="min-w-0" data-testid="nota-cultura">
+                  <span className={cn(REGUA_ROTULO, 'uma-linha-que-rola', lavoura && cultura === null && 'text-destructive')}>{lavoura ? 'Cultura *' : 'Cultura · só lavoura'}</span>
+                  <Select value={cultura === null ? '' : cultura || SEM_CULTURA} disabled={!lavoura}
+                    onValueChange={(v) => { setCultura(v === SEM_CULTURA ? '' : v); setSafraEditada(true); }}>
+                    <SelectTrigger className={cn('h-[22px] text-[10.5px]', lavoura && cultura === null && 'border-destructive')} data-testid="nota-cultura-gatilho">
+                      <SelectValue placeholder={lavoura ? 'Selecione…' : 'não se aplica'} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={SEM_CULTURA}>Todas (rateia)</SelectItem>
+                      {[...CULTURAS_LANCAMENTO.filter((c) => culturasDaSafra.includes(c.valor)), ...CULTURAS_LANCAMENTO.filter((c) => !culturasDaSafra.includes(c.valor))]
+                        .map((c) => <SelectItem key={c.valor} value={c.valor}>{c.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="col-span-2 min-w-0" data-testid="nota-vencimento">
+                  <span className={cn(REGUA_ROTULO, 'uma-linha-que-rola', !cabeAqui && semDuplicata && 'text-amber-800')}>
+                    {cabeAqui ? 'Vencimento · pelas parcelas da nota' : semDuplicata ? 'Vencimento · nota sem duplicata: confira o vencimento' : 'Vencimento · da duplicata'}
+                  </span>
+                  {cabeAqui
+                    ? <div className="flex h-[22px] items-center rounded-md border bg-muted/40 px-2 text-[10.5px] tabular-nums">{dataInteira(p.duplicatas[0]?.vencimento)} a {dataInteira(p.duplicatas[nParcelas - 1]?.vencimento)}</div>
+                    : <DatePicker value={vencimento} onChange={setVencimento} data-testid="nota-vencimento-campo"
+                        className={cn('h-[22px] text-[10.5px]', semDuplicata && 'border-amber-400 bg-amber-50', !vencimento && 'border-destructive')} />}
                 </div>
               </div>
             </section>
@@ -420,11 +516,7 @@ export function NotaFiscalDialog({
           ) : erro ? (
             <span className="min-w-0 uma-linha-que-rola text-destructive" title={erro} data-testid="nota-erro">⚠ {erro}</span>
           ) : faltas.length ? (
-            <span className="shrink-0 text-destructive" data-testid="nota-falta">⚠ Falta: {faltas.join(', ')}</span>
-          ) : lavoura || !cabeAqui ? (
-            <span className="min-w-0 uma-linha-que-rola text-amber-800" data-testid="nota-no-lancamento">
-              {lavoura ? 'Subcentro de lavoura pede safra e cultura: abra no Novo lançamento.' : 'Nota de uma parcela só: abra no Novo lançamento.'}
-            </span>
+            <span className="min-w-0 uma-linha-que-rola text-destructive" data-testid="nota-falta">⚠ Falta: {faltas.join(', ')}</span>
           ) : null}
           {!bloqueio && !erro && aberto ? (
             /* o pedido do Gabriel: ATUALIZAR o que ja' existe, em vez de criar outro (so' com confirmacao) */
@@ -434,43 +526,59 @@ export function NotaFiscalDialog({
                 Já existe lançamento aberto deste fornecedor: {dataInteira(aberto.vencimento ?? aberto.competencia)} · {aberto.descricao ?? 'sem descrição'} · R$ {reais(aberto.valorCent)}
                 {abertos.length > 1 ? ` · e mais ${abertos.length - 1}` : ''}
               </span>
-              <button type="button" className="shrink-0 font-medium underline underline-offset-2" disabled={!!ocupado} onClick={() => setConfirmarAtualizar(aberto)} data-testid="nota-atualizar-este">
-                Atualizar este
+              <button type="button" className="shrink-0 font-medium underline underline-offset-2" disabled={!!ocupado}
+                onClick={() => setConfirmarAtualizar({ alvo: aberto, parcelar: parcelarAberto })} data-testid="nota-atualizar-este">
+                {parcelarAberto ? 'Atualizar e parcelar' : 'Atualizar este'}
               </button>
             </span>
-          ) : !bloqueio && !erro && cabeAqui ? (
-            <span className="min-w-0 uma-linha-que-rola text-muted-foreground" title={`O PDF fica anexado às ${nParcelas} parcelas como a NF ${numeroFalado(n.numero)}.`}>
-              O {lido.origem === 'pdf' ? 'PDF' : 'XML'} fica anexado às {nParcelas} parcelas como a NF {numeroFalado(n.numero)}.
+          ) : !bloqueio && !erro ? (
+            <span className="min-w-0 uma-linha-que-rola text-muted-foreground">
+              O {lido.origem === 'pdf' ? 'PDF' : 'XML'} fica anexado {cabeAqui ? `às ${nParcelas} parcelas` : 'ao lançamento'} como a NF {numeroFalado(n.numero)}.
             </span>
           ) : null}
           <span className="ml-auto" />
           <Button type="button" size="sm" variant="outline" className="h-[24px] shrink-0 px-2.5 text-[10.5px]" disabled={!!ocupado} onClick={onClose}>Cancelar</Button>
-          {(lavoura || !cabeAqui) && !bloqueio ? (
-            <Button type="button" size="sm" className="h-[24px] w-[150px] shrink-0 px-2.5 text-[10.5px]" disabled={!!ocupado} onClick={() => onAbrirNoLancamento(doXml)} data-testid="nota-abrir-no-lancamento">
-              Abrir no Novo lançamento
-            </Button>
-          ) : (
-            <Button type="button" size="sm" className="h-[24px] w-[150px] shrink-0 px-2.5 text-[10.5px]" disabled={!podeCriar} onClick={() => { void criar(); }} data-testid="nota-criar">
-              {ocupado === 'criar' ? 'Criando…' : `Criar ${nParcelas} parcelas`}
-            </Button>
-          )}
+          <Button type="button" size="sm" variant="outline" className="h-[24px] shrink-0 px-2.5 text-[10.5px]" disabled={!!ocupado || !!bloqueio} onClick={abrirNoLancamento}
+            title="Abre o Novo lançamento com tudo o que foi lido e escolhido aqui (nada se perde)." data-testid="nota-abrir-no-lancamento">
+            No Novo lançamento
+          </Button>
+          <Button type="button" size="sm" className="h-[24px] w-[150px] shrink-0 px-2.5 text-[10.5px]" disabled={!podeCriar} onClick={() => { void criar(); }} data-testid="nota-criar">
+            {ocupado === 'criar' ? 'Criando…' : cabeAqui ? `Criar ${nParcelas} parcelas` : 'Criar lançamento'}
+          </Button>
         </div>
       </DialogContent>
 
       <AlertDialog open={!!confirmarAtualizar} onOpenChange={(o) => { if (!o && ocupado !== 'atualizar') setConfirmarAtualizar(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Atualizar este lançamento com a nota?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {confirmarAtualizar ? `${dataInteira(confirmarAtualizar.vencimento ?? confirmarAtualizar.competencia)} · ${confirmarAtualizar.descricao ?? 'sem descrição'} · R$ ${reais(confirmarAtualizar.valorCent)}. ` : ''}
-              A {p.rotuloNota} é anexada{confirmarAtualizar?.financiamentoId ? ' a todas as parcelas dele' : ''} e o número do documento é preenchido onde estiver vazio. Nenhum lançamento novo é criado.
+            <AlertDialogTitle>{confirmarAtualizar?.parcelar ? 'Atualizar e parcelar este lançamento?' : 'Atualizar este lançamento com a nota?'}</AlertDialogTitle>
+            <AlertDialogDescription data-testid="nota-confirmar-texto">
+              {confirmarAtualizar ? `${dataInteira(confirmarAtualizar.alvo.vencimento ?? confirmarAtualizar.alvo.competencia)} · ${confirmarAtualizar.alvo.descricao ?? 'sem descrição'} · R$\u00a0${reais(confirmarAtualizar.alvo.valorCent)}. ` : ''}
+              {!confirmarAtualizar?.parcelar
+                ? `A ${p.rotuloNota} é anexada${confirmarAtualizar?.alvo.financiamentoId ? ' a todas as parcelas dele' : ''} e o número do documento é preenchido onde estiver vazio. Nenhum lançamento novo é criado.`
+                : decisao?.tipo === 'diferenca'
+                  ? `Já está pago com R$\u00a0${reais(decisao.pagoCent)}; a parcela 1 da nota é R$\u00a0${reais(decisao.parcela1Cent)} (diferença R$\u00a0${reais(Math.abs(decisao.diferencaCent))}). O valor pago não muda.${decisao.repartindo ? ` Repartir: a parcela 1 fica com R$\u00a0${reais(decisao.pagoCent)} e o resto da nota vai para as parcelas 2 a ${nParcelas}.` : ' O valor pago cobre a nota inteira: só dá para anexar a nota.'}`
+                  : `Ele vira a parcela 1/${nParcelas} (R$\u00a0${reais(p.duplicatas[0]?.valorCent ?? 0)}, venc. ${dataInteira(p.duplicatas[0]?.vencimento)}) — o mesmo lançamento, com a conciliação e a trilha — e nascem as parcelas 2 a ${nParcelas}. A ${p.rotuloNota} fica anexada a todas.`}
+              {confirmarAtualizar?.parcelar && faltas.length ? ` Antes, falta: ${faltas.join(', ')}.` : ''}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={ocupado === 'atualizar'}>Voltar</AlertDialogCancel>
-            <AlertDialogAction disabled={ocupado === 'atualizar'} onClick={(e) => { e.preventDefault(); if (confirmarAtualizar) void atualizar(confirmarAtualizar); }} data-testid="nota-confirmar-atualizar">
-              {ocupado === 'atualizar' ? 'Atualizando…' : 'Atualizar este'}
-            </AlertDialogAction>
+            {confirmarAtualizar?.parcelar && decisao?.tipo === 'diferenca' && (
+              <Button type="button" variant="outline" disabled={ocupado === 'atualizar'} data-testid="nota-so-anexar"
+                onClick={() => { if (confirmarAtualizar) void atualizar(confirmarAtualizar.alvo, null); }}>Só anexar a nota</Button>
+            )}
+            {(!confirmarAtualizar?.parcelar || decisao?.tipo === 'cabe' || (decisao?.tipo === 'diferenca' && decisao.repartindo)) && (
+              <AlertDialogAction disabled={ocupado === 'atualizar' || (!!confirmarAtualizar?.parcelar && faltas.length > 0)} data-testid="nota-confirmar-atualizar"
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (!confirmarAtualizar) return;
+                  const lista = !confirmarAtualizar.parcelar ? null : decisao?.tipo === 'diferenca' ? decisao.repartindo : parcelasDaNota(doXml);
+                  void atualizar(confirmarAtualizar.alvo, lista);
+                }}>
+                {ocupado === 'atualizar' ? 'Atualizando…' : !confirmarAtualizar?.parcelar ? 'Atualizar este' : decisao?.tipo === 'diferenca' ? 'Repartir o resto nas demais' : 'Atualizar e parcelar'}
+              </AlertDialogAction>
+            )}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
