@@ -33,7 +33,7 @@ import { useFiltroUrl } from '@/v2/hooks/useFiltroUrl';
 import { FILTRO_DESPESAS_PENDENTES, passaFiltroPagamento, temDespesaPendente, pctPagoPeloLado } from '@/lib/oc/estadoPeloLado';
 import {
   lerLoteContaCorrente, ladoDaOC, pagtoDaLinhaCC, financeiroDaLinhaCC, fraseDosDocumentos,
-  totalDespesasEmAbertoCC, tituloDasDespesasEmAberto, numeroDoFinanceiro,
+  totalDespesasEmAbertoCC, tituloDasDespesasEmAberto, numeroDoFinanceiro, FRASE_RESUMO_CC_INDISPONIVEL,
   type ResumoListaOC, type TomFinanceiroCC,
 } from '@/lib/oc/listaContaCorrente';
 import { classeDoSaldoNaTela } from '@/lib/oc/contaCorrente';
@@ -531,7 +531,12 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
   // ZERO N+1, BOUNDED pelo conjunto carregado: FASE 1 = lista de operações; FASE 2 = auxiliares em lote,
   //   filtradas pelos IDs da lista (nunca por cliente inteiro; nunca .in([]); nunca consulta no render/map).
   //   Requests FIXOS: 1 (lista) + até 5 (auxiliares) — independentes do nº de linhas.
+  /* OC-ABRIR-LENTO-01 — a leitura que termina DEPOIS de a lista sair da tela (ou de outra leitura comecar) nao escreve nada
+     nem avisa: o toast do resumo chegou a aparecer em Cadastros › Fornecedores, uma tela que nao mostra resumo nenhum. */
+  const leituraRef = useRef(0);
   const carregar = useCallback(async () => {
+    const minha = ++leituraRef.current;
+    const valendo = () => leituraRef.current === minha;
     if (!clienteId) { setRows([]); setFazendas({}); setContrapartes({}); setFinMap({}); setLiqView({}); setRecMap({}); setCcMap({}); setKgMap({}); return; }
     setLoading(true);
     try {
@@ -540,6 +545,7 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
         .select('id, versao, data_operacao, tipo_operacao, contraparte_id, fazenda_id, status_comercial, rascunho, entrega_encerrada, qtd_negociada, peso_total_negociado_kg, valor_acordado, valor_total, modelo_financeiro')
         .eq('cliente_id', clienteId).order('data_operacao', { ascending: false }).limit(1000);
       if (ops?.error) throw new Error(ops.error.message);
+      if (!valendo()) return;
       const operacoes = (ops.data as OpRow[] | null) ?? [];
       setRows(operacoes);
 
@@ -563,6 +569,7 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
         sb.from('zoo_operacao_lotes').select('operacao_id, qtd_negociada, peso_medio_negociado_kg, criterio_valor, valor_informado').in('operacao_id', operacaoIds),
         sb.rpc('oc_conta_corrente_lote', { p_cliente_id: clienteId, p_operacao_ids: operacaoIds }),
       ]);
+      if (!valendo()) return;
 
       const fmap: Record<string, FazendaRef> = {};
       ((faz?.data as { id: string; nome: string; codigo: string | null }[] | null) ?? [])
@@ -597,17 +604,21 @@ export function CentralOperacoesComerciais({ initialOcId, onAbrirOperacao }: Cen
         })))) ?? 0;
       });
       setKgMap(kgmap);
-      /* Falha do lote nao derruba a lista: as linhas caem no modelo titulo, como antes (o aviso vai ao toast da tela). */
-      if (lote?.error) toast.error(`Resumo do conta corrente indisponível: ${lote.error.message}`);
+      /* Falha do lote nao derruba a lista: as linhas caem no modelo titulo, como antes. O erro do banco nunca vai cru a' tela
+         (OC-ABRIR-LENTO-01: "canceling statement due to statement timeout"): a frase pronta, e o texto do banco no console. */
+      if (lote?.error) {
+        console.error('oc_conta_corrente_lote', lote.error);
+        toast.error(FRASE_RESUMO_CC_INDISPONIVEL);
+      }
       setCcMap(lote?.error ? {} : lerLoteContaCorrente(lote?.data));
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Falha ao carregar operações.');
+      if (valendo()) toast.error(e instanceof Error ? e.message : 'Falha ao carregar operações.');
     } finally {
-      setLoading(false);
+      if (valendo()) setLoading(false);
     }
   }, [clienteId]);
 
-  useEffect(() => { carregar(); }, [carregar]);
+  useEffect(() => { carregar(); return () => { leituraRef.current += 1; }; }, [carregar]);
 
   /* OC-LISTA-FINANC-CC-01 — o PAGTO EFETIVO: a linha em conta corrente le' o dono (`pagtoDaLinhaCC`, no vocabulario da view),
      a do modelo titulo segue na view. Celula, filtro "Pagamento", opcoes e ordenacao leem ESTE mapa — uma fonte so' por linha. */

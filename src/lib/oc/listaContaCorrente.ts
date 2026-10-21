@@ -179,3 +179,6 @@ export function linhaDoResumoCC(r: ResumoListaOC, lado: LadoContaCorrente): {
     estado: pagtoDaLinhaCC(r.cc, lado, null).estado_liquidacao,
   };
 }
+
+/** OC-ABRIR-LENTO-01 — a frase da falha do resumo do conta corrente da Central (o erro do banco nunca vai cru a' tela). */
+export const FRASE_RESUMO_CC_INDISPONIVEL = 'Não foi possível carregar o resumo do conta corrente agora. Tente de novo.';
