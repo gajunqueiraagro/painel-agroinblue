@@ -801,7 +801,7 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
                       <TableCell className={`${TD_PARC} ${d?.prazo ? COR_DO_PRAZO[TOM_DO_PRAZO[d.prazo.tipo]] : 'text-muted-foreground'}`} data-testid="prazo">
                         {textoDoPrazo(d?.prazo ?? null)}
                       </TableCell>
-                      {ehParcelamento && <TableCell className={TD_PARC} data-testid="conta-da-parcela"><span className={E.rola}>{d?.contaNome ?? '—'}</span></TableCell>}
+                      {ehParcelamento && <TableCell className={TD_PARC} data-testid="conta-da-parcela"><span className={E.celula} title={d?.contaNome ?? undefined}>{d?.contaNome ?? '—'}</span></TableCell>}
                       {/* principal zero = parcela de carência (só juros) */}
                       {!ehParcelamento && <TableCell className={MOEDA}>{p.valorPrincipal === 0 ? <span className="font-normal text-muted-foreground">carência</span> : num2(p.valorPrincipal)}</TableCell>}
                       {!ehParcelamento && <TableCell className={MOEDA}>{num2(p.valorJuros)}</TableCell>}
