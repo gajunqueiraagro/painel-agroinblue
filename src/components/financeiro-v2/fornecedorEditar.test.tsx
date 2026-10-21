@@ -81,14 +81,28 @@ describe('o campo CPF/CNPJ do cadastro completo', () => {
 });
 
 describe('repetido: aviso escrito, o operador decide', () => {
-  it('FORN-CADASTRO-02 — CPF/CNPJ de outro fornecedor (inativo também): AVISO escrito na aba com "Mesclar"; o Salvar NÃO bloqueia', async () => {
-    const { lerCadastro, onSaved, onMesclar } = montar({
+  it('FORN-01b — no cadastro ATIVO, um INATIVO com o mesmo CPF/CNPJ não avisa nem cobra (vale o ativo): grava direto', async () => {
+    const { onSaved } = montar({
       cadastro: [{ id: 'f1', nome: 'Agro Alfa', cpf_cnpj: '11.222.333/0001-81', ativo: true },
         { id: 'f2', nome: 'Beta Antiga', cpf_cnpj: '11222333000181', ativo: false }],
     });
     await pronto();
     fireEvent.change(campoDoc(), { target: { value: '11222333000181' } });
-    await waitFor(() => expect(screen.getByTestId('duplicado-do-documento').textContent).toContain('Este CNPJ também está cadastrado como Beta Antiga (inativo)'));
+    await new Promise((ok) => setTimeout(ok, 50));
+    expect(screen.queryByTestId('duplicado-do-documento')).toBeNull();
+    expect(screen.queryByTestId('o-que-falta')?.textContent ?? '').not.toContain('CNPJ duplicado');
+    fireEvent.click(botaoSalvar());
+    await waitFor(() => expect(onSaved).toHaveBeenCalled());
+  });
+  it('FORN-CADASTRO-02 — CPF/CNPJ de outro fornecedor ATIVO: AVISO escrito na aba com "Mesclar"; o Salvar NÃO bloqueia', async () => {
+    const { lerCadastro, onSaved, onMesclar } = montar({
+      cadastro: [{ id: 'f1', nome: 'Agro Alfa', cpf_cnpj: '11.222.333/0001-81', ativo: true },
+        { id: 'f2', nome: 'Beta Antiga', cpf_cnpj: '11222333000181', ativo: true }],
+    });
+    await pronto();
+    fireEvent.change(campoDoc(), { target: { value: '11222333000181' } });
+    await waitFor(() => expect(screen.getByTestId('duplicado-do-documento').textContent).toContain('Este CNPJ também está cadastrado como Beta Antiga'));
+    expect(screen.getByTestId('duplicado-do-documento').textContent).not.toContain('(inativo)');
     expect(screen.getByTestId('mesclar-duplicado')).toBeTruthy();
     expect(screen.getByTestId('o-que-falta').textContent).toContain('CNPJ duplicado (Beta Antiga)');
     expect(screen.getByTestId('pendencia-dados')).toBeTruthy();
