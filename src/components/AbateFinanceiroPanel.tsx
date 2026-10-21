@@ -429,6 +429,9 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
           historico: frigorifico ? `Frigorífico: ${frigorifico}` : null,
           origem_tipo: 'abate:deducao',
           sem_movimentacao_caixa: isFunrural,
+          /* FORN-01b (Gabriel, 21/10) — a dedução (Funrural, taxas) nasce com o fornecedor PADRÃO = o comprador do abate, o frigorífico que
+             desconta (o mesmo da parcela); editável depois. Antes nascia sem fornecedor e caía em "Sem cadastro". */
+          ...(fornecedorId ? { favorecido_id: fornecedorId } : {}),
         });
       }
 
