@@ -44,6 +44,7 @@ import * as OC from './dados/oc';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { AcessosTab } from '@/pages/AcessosTab';
 import { ContasPagarReceberTab } from '@/components/financeiro-v2/ContasPagarReceberTab';
+import V2Recorrencias from '@/v2/pages/V2Recorrencias';
 
 const q = new URLSearchParams(location.search);
 const tela = q.get('tela') ?? 'mesclar';
@@ -57,11 +58,13 @@ const DESC_LONGA = ('Sêmen Bovino - SAV EXEMPLO 1234/ 5678 · touro de teste co
 const g = globalThis as any;
 const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 const raiz = createRoot(document.getElementById('root')!);
-/* a casca do V2 atras: barra lateral de 176px e barra do topo de 96px */
+/* a casca do V2 atras: barra lateral de 176px e barra do topo de 96px. FORN-01b — `&barra=32` = a barra REAL de hoje (a `BarraSecao`,
+   `h-8`, PR-BARRA-UNICA-01a), para as telas medidas contra o app: Fornecedores e Recorrencias */
+const BARRA = Number(q.get('barra') ?? 96);
 const Casca = ({ children }: { children?: React.ReactNode }) => (
   <div style={{ display: 'flex', height: '100vh' }}><div style={{ width: 176, flexShrink: 0, background: '#1e3a5f' }} />
-    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}><div style={{ height: 96, flexShrink: 0, background: '#e9edf2' }} />
-      <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>{children}</div></div></div>);
+    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}><div style={{ height: BARRA, flexShrink: 0, background: BARRA === 32 ? '#1e3a5f' : '#e9edf2' }} />
+      <div data-casca="" style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>{children}</div></div></div>);
 const montar = (n: React.ReactNode) => raiz.render(<QueryClientProvider client={qc}><MemoryRouter><Casca>{n}</Casca></MemoryRouter></QueryClientProvider>);
 
 g.__fornecedoresBancada = LEITOR;
@@ -74,6 +77,9 @@ const bancoDeFornecedores = {
       return LISTA;
     }
     if (t === 'fornecedor_mesclagem_log') return RECENTES;
+    /* FORN-01b — `&aviso=1`: um inativo (nao mesclado) que ainda tem lancamentos — a faixa nomeia ele (nome SINTETICO) */
+    if (t === 'financeiro_lancamentos_v2' && q.get('aviso') && e.eq['financeiro_fornecedores.ativo'] === false)
+      return Array.from({ length: 6 }, (_, i) => ({ id: `li${i}`, favorecido_id: 'x3', valor: 6479.33, financeiro_fornecedores: { id: 'x3', nome: String(LISTA.find((x: any) => x.id === 'x3')?.nome), ativo: false, fundido_em_id: null } }));
     if (t === 'financeiro_lancamentos_v2' && 'favorecido_id' in e.is) return [
       { id: 'p1', descricao: 'Pagamento de frete de gado para a Fazenda Exemplo — viagem de retorno' }, { id: 'p2', descricao: 'Pagamento de frete de gado para a Fazenda Exemplo — viagem de retorno' },
       { id: 'p3', descricao: 'Manutenção de cerca' }];
@@ -85,8 +91,13 @@ const bancoDeFornecedores = {
 };
 /* FORN-LISTA-01 — a RPC da lista, respondida pela bancada (a busca pela PROPRIA funcao da tela; ordem so' pelo nome; a regra do banco e'
    provada pelo teste SQL). Pior caso de proposito: cidade longa, 99.999 lancamentos, data cheia. */
+/* FORN-01b — `&n=2356`: a lista do tamanho da real (2.356 ativos), para a paginação "1–50 de 2.356 · Página 1 de 48" */
+const N_LISTA = Number(q.get('n') ?? 0);
+const LISTA_GRANDE: any[] = N_LISTA > LISTA.length ? [...LISTA, ...Array.from({ length: N_LISTA - LISTA.length }, (_, i) => ({ id: `n${i}`, cliente_id: 'cli',
+  nome: `Fornecedor Sintético ${String(i + 1).padStart(4, '0')} Comércio de Produtos Agropecuários`, nome_fantasia: i % 2 ? `Fantasia Sintética ${i + 1}` : null,
+  cpf_cnpj: i % 3 ? null : '12.345.678/0001-90', ativo: true, created_at: '2026-01-01T10:00:00Z' }))] : (LISTA as any[]);
 function listaNaBancada(a: any) {
-  const casam: any[] = a.p_busca ? buscarFornecedores(LISTA as any[], a.p_busca, 'todos') : (LISTA as any[]);
+  const casam: any[] = a.p_busca ? buscarFornecedores(LISTA_GRANDE, a.p_busca, 'todos') : LISTA_GRANDE;
   const sit = (f: any) => (f.fundido_em_id ? 'mesclado' : f.ativo === false ? 'inativo' : 'ativo');
   const contagens = { ativos: casam.filter((f) => sit(f) === 'ativo').length, inativos: casam.filter((f) => sit(f) === 'inativo').length,
     mesclados: casam.filter((f) => sit(f) === 'mesclado').length, todos: casam.length };
@@ -112,7 +123,25 @@ if (tela === 'mesclar') {
   montar(<MesclarFornecedoresDialog aberto aoFechar={() => {}} clienteId="cli" inicial={q.get('vazio') ? undefined : { manter: 'b', absorver: ['c', 'm'] }} />);
 } else if (tela === 'fornecedores') {
   g.__bancoBancada = bancoDeFornecedores;
-  montar(<div className="p-3"><FinV2FornecedoresTab /></div>);
+  /* FORN-01b — com `&barra=32` a tela entra como no app: sem o `p-3` da bancada, na secao de altura do V2 (`SECOES_APP_SHELL`) */
+  montar(BARRA === 32 ? <div className="flex h-full min-h-0 w-full min-w-0 flex-col"><FinV2FornecedoresTab /></div> : <div className="p-3"><FinV2FornecedoresTab /></div>);
+} else if (tela === 'recorrencias') {
+  /* FORN-01b — Financeiro › Recorrências, a RÉGUA de tabela aprovada pelo Gabriel: 40 regras SINTÉTICAS vencendo no mês corrente, para
+     medir a régua (fonte, altura de linha e de cabeçalho, padding, barra do Total) e pôr ao lado da lista de Fornecedores */
+  const ym = new Date().toISOString().slice(0, 7);
+  const REGRAS = Array.from({ length: 40 }, (_, i) => ({ id: `r${i}`, cliente_id: 'cli', descricao: i % 3 ? `Arrendamento Exemplo ${i + 1}` : `Energia elétrica da sede e dos currais da Fazenda Exemplo ${i + 1}`,
+    favorecido_id: `f${i}`, financeiro_fornecedores: { nome: i % 2 ? 'Cooperativa Agroindustrial dos Produtores Rurais Exemplo do Mato Grosso do Sul' : 'Imobiliária Exemplo' },
+    conta_bancaria_id: 'bb', subcentro: 'Energia', forma_pagamento: i % 2 ? 'Boleto' : 'PIX', valor_base: -(1000 + i * 37.5), dia_vencimento: (i % 28) + 1,
+    data_inicio: '2026-01-01', primeiro_vencimento: '2026-01-10', data_fim: '2027-06-30', ativo: true, ultimo_lancamento_gerado: '2027-06-01', fazenda_id: 'f1', tipo_valor: i % 5 ? 'certo' : 'estimado' }));
+  g.__bancoBancada = {
+    from: (t: string, e: any) => t === 'financeiro_recorrencias' ? REGRAS
+      : t === 'financeiro_contas_bancarias' ? [{ id: 'bb', nome_conta: 'Banco Alfa Conta Movimento', banco: 'BB', fazenda_id: 'f1', ativo: true, ordem_exibicao: 1 }]
+      : t === 'financeiro_lancamentos_v2' && e.eq.cancelado === false && !e.in.recorrencia_id ? REGRAS.map((r, i) => ({ recorrencia_id: r.id, valor: Math.abs(r.valor_base),
+        data_vencimento: `${ym}-${String(r.dia_vencimento).padStart(2, '0')}`, status_transacao: i % 4 ? 'programado' : 'realizado', valor_do_mes_em: null }))
+      : [],
+    rpc: () => [],
+  };
+  montar(<div className="flex h-full min-h-0 w-full min-w-0 flex-col"><V2Recorrencias /></div>);
 } else if (tela === 'financeiro') {
   /* FORN-BUSCA-UNICA-01 — a lista do Financeiro V2 (filtros + tabela), com o filtro de fornecedor da busca única */
   g.__bancoBancada = {
