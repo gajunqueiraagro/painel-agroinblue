@@ -18,10 +18,13 @@ const VALORES = vi.hoisted(() => new Map<string, number>());
 /* CONC-BLOCOS-TELA-01: o que a `fn_conciliar_bloco` falsa devolve, e com que argumentos foi chamada. */
 const BLOCO = vi.hoisted(() => ({ resposta: { data: null, error: null } as { data: unknown; error: unknown }, chamadas: [] as unknown[] }));
 const TOAST = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
+/* CONC-VALOR-CERTO-ACEITA-01: os lancamentos de valor certo que a `fn_espelho_casar` falsa pergunta (sem `aceitar_valor_extrato`),
+   se a pergunta vem ja' na simulacao, e as chamadas recebidas. */
+const CERTO = vi.hoisted(() => ({ ids: new Set<string>(), naSimulacao: true, chamadas: [] as { p_itens: { lancamento_id: string; aceitar_valor_extrato?: boolean }[]; p_simular?: boolean }[] }));
 vi.mock('sonner', () => ({ toast: TOAST }));
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
-    rpc: (fn: string, args: { p_itens: { lancamento_id: string; valor: number }[]; p_lancamento_id: string; p_extratos: string[]; p_simular?: boolean; p_regra?: string }) => {
+    rpc: (fn: string, args: { p_itens: { lancamento_id: string; valor: number; aceitar_valor_extrato?: boolean }[]; p_lancamento_id: string; p_extratos: string[]; p_simular?: boolean; p_regra?: string }) => {
       if (fn === 'fn_espelho_casar_n1') {
         /* O corpo da RPC (lido no `prosrc` em 30/09): tudo em módulo, diferença = Σ|extratos| − |lançamento|. */
         const noLanc = Math.abs(VALORES.get(args.p_lancamento_id) ?? 0);
@@ -42,6 +45,13 @@ vi.mock('@/integrations/supabase/client', () => ({
       const alvo = -506.51;
       const soma = args.p_itens.reduce((a, i) => a + (DIRECAO.get(i.lancamento_id) ?? -1) * Math.abs(i.valor), 0);
       const diferenca = Math.round((soma - alvo) * 100) / 100;
+      CERTO.chamadas.push(args);
+      const certo = args.p_itens.find((i) => CERTO.ids.has(i.lancamento_id) && !i.aceitar_valor_extrato);
+      if (certo && Math.abs(diferenca) <= 0.005 && (!args.p_simular || CERTO.naSimulacao)) {
+        const pergunta = { lancamento_id: certo.lancamento_id, frase: 'Este mês veio R$ 506,51 (previsto R$ 480,00). Ligar com o valor do extrato?' };
+        return Promise.resolve({ data: args.p_simular ? { ok: true, no_extrato: alvo, soma, pergunta }
+          : { ok: false, motivo: 'confirmar_valor_extrato', pergunta }, error: null });
+      }
       return Promise.resolve({
         data: Math.abs(diferenca) <= 0.005
           ? { ok: true, no_extrato: alvo, soma }
@@ -524,5 +534,43 @@ describe('criar pela diferença com centavo', () => {
     montar([{ ...VIVO, valor_assinado: -506.51 }]);
     await waitFor(() => expect(screen.getByRole('button', { name: 'Conciliar' })).not.toBeDisabled());
     expect(criar()).toBeDisabled();
+  });
+});
+
+/* CONC-VALOR-CERTO-ACEITA-01 (Gabriel: "mesmo valor certo pode mudar ocasionalmente") — o extrato maior que um lancamento de valor
+   certo nao recusa: a tela mostra a pergunta do banco e so' grava com o "sim", marcando o item com `aceitar_valor_extrato`. */
+describe('CONC-VALOR-CERTO-ACEITA-01 — valor certo com extrato maior pergunta antes de gravar', () => {
+  const ALUGUEL: LevadoInicial = { lancamento_id: 'l-aluguel', descricao: 'Aluguel', fornecedor: 'Imobiliária Sint', valor_assinado: -506.51 };
+  const FRASE = 'Este mês veio R$ 506,51 (previsto R$ 480,00). Ligar com o valor do extrato?';
+  const abrir = (naSimulacao: boolean) => {
+    CERTO.ids = new Set([ALUGUEL.lancamento_id]); CERTO.naSimulacao = naSimulacao; CERTO.chamadas = [];
+    DIRECAO.set(ALUGUEL.lancamento_id, -1);
+    const feito = vi.fn();
+    render(<CasarComBancoModal open onClose={() => {}} extrato={EXTRATO} iniciais={[ALUGUEL]}
+      nomeConta="Banco do Brasil" contaBancariaId="bb" onConciliado={feito} />);
+    return feito;
+  };
+  const gravacoes = () => CERTO.chamadas.filter((c) => c.p_simular === false);
+
+  it('a pergunta da simulação aparece; sem o "sim" não há Conciliar e nada é gravado; o "sim" grava UMA vez, com o item confirmado', async () => {
+    const feito = abrir(true);
+    expect((await screen.findByTestId('pergunta-valor-extrato')).textContent).toBe(FRASE);
+    expect(screen.queryByRole('button', { name: 'Conciliar' })).toBeNull();
+    expect(gravacoes()).toHaveLength(0);
+    fireEvent.click(screen.getByTestId('aceitar-valor-extrato'));
+    await waitFor(() => expect(feito).toHaveBeenCalledTimes(1));
+    expect(gravacoes()).toHaveLength(1);
+    expect(gravacoes()[0].p_itens).toEqual([{ lancamento_id: 'l-aluguel', valor: 506.51, aceitar_valor_extrato: true }]);
+  });
+
+  it('a pergunta que só vem ao gravar: Conciliar não grava, mostra a pergunta; o "sim" grava', async () => {
+    const feito = abrir(false);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Conciliar' })).not.toBeDisabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Conciliar' }));
+    expect((await screen.findByTestId('pergunta-valor-extrato')).textContent).toBe(FRASE);
+    expect(feito).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('aceitar-valor-extrato'));
+    await waitFor(() => expect(feito).toHaveBeenCalledTimes(1));
+    expect(gravacoes().map((c) => c.p_itens[0].aceitar_valor_extrato ?? false)).toEqual([false, true]);
   });
 });

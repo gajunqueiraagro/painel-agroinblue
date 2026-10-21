@@ -452,6 +452,15 @@ if (tela === 'mesclar') {
       iniciais={[{ lancamento_id: 'yp', descricao: 'Amortização 2/5 · 0.000.000 · Custeio Pecuário Sintético', fornecedor: 'Banco Exemplo', valor_assinado: -88888888.88, data_vencimento: '2027-08-15', status_transacao: 'programado' },
         { lancamento_id: 'yj', descricao: 'Juros 2/5 · 0.000.000 · Custeio Pecuário Sintético', fornecedor: 'Banco Exemplo', valor_assinado: -9999999.99, data_vencimento: '2027-08-15', status_transacao: 'programado' }]}
       onConciliado={() => {}} />);
+  } else if (v === 'certo') {
+    /* CONC-VALOR-CERTO-ACEITA-01 — valor certo com extrato maior: a pergunta do banco no rodapé e o "Ligar com o valor do extrato" (valores no teto). */
+    g.__bancoBancada = { from: () => [], rpc: (fn: string) => fn === 'fn_espelho_casar' ? { ok: true, simulado: true, no_extrato: -99999999.99, soma: -99999999.99,
+      pergunta: { lancamento_id: 'yc', valor_extrato: 99999999.99, valor_previsto: 88888888.88,
+        frase: 'Este mês veio R$ 99.999.999,99 (previsto R$ 88.888.888,88). Ligar com o valor do extrato?' } } : null };
+    montar(<CasarComBancoModal open onClose={() => {}} contaBancariaId="bb" nomeConta="Banco Exemplo Personalité"
+      extrato={{ extrato_id: 'x1', data: '2027-08-15', historico: 'PAGAMENTO BOLETO · ALUGUEL SINTETICO DA SEDE · IMOBILIARIA EXEMPLO LTDA', valor: -99999999.99 }}
+      iniciais={[{ lancamento_id: 'yc', descricao: 'Aluguel da sede · agosto', fornecedor: 'Imobiliária Exemplo', valor_assinado: -99999999.99, data_vencimento: '2027-08-15', status_transacao: 'programado' }]}
+      onConciliado={() => {}} />);
   } else {
   g.__bancoBancada = { from: () => [], rpc: (fn: string) => fn === 'fn_espelho_casar' ? { ok: false, motivo: 'soma_nao_bate', no_extrato: 0.01, soma: 0, diferenca: -0.01 } : null };
   montar(<CasarComBancoModal open onClose={() => {}} contaBancariaId="bb" nomeConta="Banco Exemplo Personalité"

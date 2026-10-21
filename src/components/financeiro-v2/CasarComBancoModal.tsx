@@ -133,9 +133,19 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
   }, [open, iniciais, extrato]);
 
   const valorDe = (t: string) => Number(t.replace(/\./g, '').replace(',', '.')) || 0;
-  const itens = useMemo(
+  /* CONC-VALOR-CERTO-ACEITA-01 — o lancamento de valor certo que sobe para o valor do extrato so' grava com a confirmacao: o banco
+     devolve a PERGUNTA (na simulacao e ao gravar sem ela) e a tela a mostra antes; o "sim" marca o item com `aceitar_valor_extrato`.
+     Mudou o que foi levado ou o valor, a confirmacao cai (vale para aquele valor, naquele lancamento). */
+  const [pergunta, setPergunta] = useState<{ lancamento_id: string; frase: string } | null>(null);
+  const [aceitos, setAceitos] = useState<string[]>([]);
+  const itensBase = useMemo(
     () => levados.map((l) => ({ lancamento_id: l.lancamento_id, valor: Math.abs(valorDe(l.valorTexto)) })),
     [levados],
+  );
+  useEffect(() => { setAceitos([]); setPergunta(null); }, [itensBase]);
+  const itens = useMemo(
+    () => itensBase.map((i) => (aceitos.includes(i.lancamento_id) ? { ...i, aceitar_valor_extrato: true } : i)),
+    [itensBase, aceitos],
   );
   const idsLevados = useMemo(() => levados.map((l) => l.lancamento_id), [levados]);
   const parcelaPos = useMemo(() => parcelaPosDosLevados(idsLevados, mapaPos), [idsLevados, mapaPos]);
@@ -173,9 +183,11 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
       p_extrato_id: extrato.extrato_id, p_itens: itens, p_simular: true, p_motivo: 'casado_no_espelho',
     });
     if (error) { setSim(null); setErroRodape(error.message); return; }
-    const r = (data ?? {}) as { ok?: boolean; motivo?: string; no_extrato?: number; soma?: number; diferenca?: number };
+    const r = (data ?? {}) as { ok?: boolean; motivo?: string; no_extrato?: number; soma?: number; diferenca?: number;
+      pergunta?: { lancamento_id: string; frase: string } };
     if (r.ok) {
       setErroRodape(null);
+      setPergunta(r.pergunta ?? null);
       setSim({ ok: true, noExtrato: Number(r.no_extrato ?? 0), soma: Number(r.soma ?? 0), diferenca: 0, erro: null });
       return;
     }
@@ -196,7 +208,7 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
     return () => { if (timer.current) clearTimeout(timer.current); };
   }, [open, simular]);
 
-  const conciliar = async () => {
+  const conciliar = async (lista: typeof itens = itens) => {
     if (!extrato) return;
     setGravando(true); setErroRodape(null);
     if (parcelaPos) {
@@ -212,11 +224,13 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
     const { data, error } = await (supabase as any).rpc('fn_espelho_casar', {
-      p_extrato_id: extrato.extrato_id, p_itens: itens, p_simular: false, p_motivo: 'casado_no_espelho',
+      p_extrato_id: extrato.extrato_id, p_itens: lista, p_simular: false, p_motivo: 'casado_no_espelho',
     });
     setGravando(false);
     if (error) { setErroRodape(error.message); return; }
-    const r = (data ?? {}) as { ok?: boolean; motivo?: string };
+    const r = (data ?? {}) as { ok?: boolean; motivo?: string; pergunta?: { lancamento_id: string; frase: string } };
+    /* o banco ainda pede confirmacao (outro item maior): mostra a pergunta, nada foi gravado */
+    if (r.ok === false && r.motivo === 'confirmar_valor_extrato' && r.pergunta) { setPergunta(r.pergunta); return; }
     if (r.ok === false) { setErroRodape(MOTIVO_CASAR_LABEL[r.motivo ?? ''] ?? r.motivo ?? 'Não foi possível conciliar.'); return; }
     onClose();
     onConciliado();
@@ -381,6 +395,9 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
             </div>
 
             {erroRodape && <div className="text-[10px] text-destructive">{erroRodape}</div>}
+            {!erroRodape && pergunta && !aceitos.includes(pergunta.lancamento_id) && (
+              <div className="text-[10px] text-amber-700" data-testid="pergunta-valor-extrato">{pergunta.frase}</div>
+            )}
             {!erroRodape && semItens && (
               /* Sem levados o caminho é criar, não corrigir: o texto convida em vez de acusar. */
               <div className="text-[10px] text-muted-foreground">
@@ -396,11 +413,25 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
                 podeCriar ? 'hover:bg-muted' : 'opacity-40 cursor-not-allowed')}>
               Criar lançamento pela diferença
             </button>
-            <button type="button" disabled={!podeConciliar} onClick={conciliar}
-              className={cn('rounded px-2.5 py-0.5 text-[11px] font-medium',
-                podeConciliar ? 'bg-[#E7C873] text-foreground hover:bg-[#D9B95F]' : 'bg-muted text-muted-foreground cursor-not-allowed')}>
-              {gravando ? 'Conciliando…' : 'Conciliar'}
-            </button>
+            {pergunta && !aceitos.includes(pergunta.lancamento_id) ? (
+              <button type="button" disabled={!podeConciliar} data-testid="aceitar-valor-extrato"
+                onClick={() => {
+                  /* o "sim" grava na hora, com o item confirmado (o estado novo so' chega no proximo render) */
+                  const novos = [...aceitos, pergunta.lancamento_id];
+                  setAceitos(novos);
+                  void conciliar(itensBase.map((i) => (novos.includes(i.lancamento_id) ? { ...i, aceitar_valor_extrato: true } : i)));
+                }}
+                className={cn('rounded px-2.5 py-0.5 text-[11px] font-medium',
+                  podeConciliar ? 'bg-[#E7C873] text-foreground hover:bg-[#D9B95F]' : 'bg-muted text-muted-foreground cursor-not-allowed')}>
+                Ligar com o valor do extrato
+              </button>
+            ) : (
+              <button type="button" disabled={!podeConciliar} onClick={() => { void conciliar(); }}
+                className={cn('rounded px-2.5 py-0.5 text-[11px] font-medium',
+                  podeConciliar ? 'bg-[#E7C873] text-foreground hover:bg-[#D9B95F]' : 'bg-muted text-muted-foreground cursor-not-allowed')}>
+                {gravando ? 'Conciliando…' : 'Conciliar'}
+              </button>
+            )}
           </div>
         </DialogContent>
       </Dialog>
