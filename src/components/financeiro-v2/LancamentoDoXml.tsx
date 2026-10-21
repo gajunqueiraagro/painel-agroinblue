@@ -47,7 +47,7 @@ export function ondeEsta(o: OcorrenciaDaNota): string {
  * A FAIXA DO FORNECEDOR — uma so', conforme o caso. `null` quando o fornecedor foi achado pelo documento, unico e ativo
  * (nada a decidir), ou quando o operador ja' resolveu (`fechada`).
  */
-export function FaixaDoFornecedor({ xml, fechada, gravarDocumento, onGravarDocumento, onTrocar, onEscolher, onCriar, criando }: {
+export function FaixaDoFornecedor({ xml, fechada, gravarDocumento, onGravarDocumento, onTrocar, onEscolher, onCriar, criando, conflito = null, onUsarConflito }: {
   xml: DoXml;
   fechada: boolean;
   gravarDocumento: boolean;
@@ -56,8 +56,22 @@ export function FaixaDoFornecedor({ xml, fechada, gravarDocumento, onGravarDocum
   onEscolher: (fornecedorId: string) => void;
   onCriar: () => void;
   criando: boolean;
+  /** NOTA-FORNECEDOR-DUPLICA-01 — o CNPJ ja' e' de um cadastro (conferido no banco antes de criar): a frase pronta e "usar este". */
+  conflito?: { id: string; nome: string; ativo: boolean } | null;
+  onUsarConflito?: (id: string) => void;
 }) {
   if (fechada) return null;
+  if (conflito) {
+    const frase = `Este ${soDigitos(xml.emitenteDocumento).length === 11 ? 'CPF' : 'CNPJ'} já é de "${conflito.nome}" (${conflito.ativo ? 'ativo' : 'inativo'}). Nada foi criado.`;
+    return (
+      <Faixa testid="xml-faixa-fornecedor" titulo={frase}>
+        <span className="min-w-0 truncate" data-testid="xml-conflito">{frase}</span>
+        {conflito.ativo && onUsarConflito && (
+          <button type="button" className={`${LINK} ml-auto`} onClick={() => onUsarConflito(conflito.id)} data-testid="xml-usar-este">usar este</button>
+        )}
+      </Faixa>
+    );
+  }
   const r = xml.resolucao;
   const doc = documentoFormatado(xml.emitenteDocumento);
   const rotuloDoc = soDigitos(xml.emitenteDocumento).length === 11 ? 'CPF' : 'CNPJ';
