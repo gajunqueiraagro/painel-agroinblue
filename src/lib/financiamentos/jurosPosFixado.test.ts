@@ -53,7 +53,7 @@ describe('o recorte da CPR com uma linha de recorrência e uma de juros pós', (
     id, data_vencimento: '2026-10-15', data_pagamento: null, status_transacao: 'programado', tipo_operacao: '2-Saídas', valor, conta_bancaria_id: 'bb' });
   const linhas = [conta('rec', 300), conta('juros', 35665.34), conta('principal', 120004.5)];
   const e = juntarEstimados(new Set(['rec']), new Set(['juros']), false);
-  const r = recortarCpr(linhas, { periodo: { de: '2026-10-01', ate: '2026-10-31' }, hoje: '2026-10-05', incluirVencidos: true, estimadas: e.ids });
+  const r = recortarCpr(linhas, { periodo: { de: '2026-10-01', ate: '2026-10-31' }, hoje: '2026-10-05', estimadas: e.ids });
   it('as duas entram no estimado; o principal fica no confirmado; confirmado + estimado = total', () => {
     expect(r.aPagarEstimado).toEqual({ valor: 3596534, qtd: 2 });
     expect(r.aPagarConfirmado).toEqual({ valor: 12000450, qtd: 1 });
