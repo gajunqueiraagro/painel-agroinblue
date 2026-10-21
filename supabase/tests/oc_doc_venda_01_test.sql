@@ -2,7 +2,7 @@
 -- uma venda e de um abate reais so' na estrutura), admin simulado; termina em RAISE 'OK' (desfaz tudo).
 --   V1 especies por tipo: a venda aceita NF do produtor, GTA, contrato, NF de entrada e comprovante; o abate recusa contrato; a
 --      compra recusa NF do produtor
---   V2 o que soma: na venda a NF do produtor soma e contrato/NF de entrada/comprovante nao; no abate a NF do produtor nao soma
+--   V2 o que soma: na venda a NF do produtor soma e contrato/NF de entrada/comprovante/outro nao; no abate a NF do produtor nao soma
 --   V3 nota repetida (cliente inteiro): a mesma chave noutra OC e' barrada no registrar (23505, DETAIL com a OC e o rotulo, sem
 --      uuid no texto); o editar barra a chave que MUDA para a de outra nota e deixa editar mantendo a propria; cancelada libera
 --   V4 guarda (42501) e ACL da pergunta da tela
@@ -48,6 +48,8 @@ BEGIN
   if not public._oc_documento_soma_no_valor('venda', 'nf_produtor') or public._oc_documento_soma_no_valor('venda', 'contrato')
      or public._oc_documento_soma_no_valor('venda', 'nf_entrada') or public._oc_documento_soma_no_valor('venda', 'comprovante')
      or public._oc_documento_soma_no_valor('abate', 'nf_produtor') or not public._oc_documento_soma_no_valor('venda', 'recibo')
+     -- 21/10: o "outro" da venda e' informativo, igual ao abate; o da compra segue somando
+     or public._oc_documento_soma_no_valor('venda', 'outro') or not public._oc_documento_soma_no_valor('compra', 'outro')
     then raise exception 'V2 regra de soma'; end if;
 
   -- V3 nota repetida

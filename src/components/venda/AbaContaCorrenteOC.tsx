@@ -370,8 +370,11 @@ export function AbaContaCorrenteOC({ api, somenteLeitura, lado = 'venda', despes
 
           {/* A FAIXA DE SUB-ABAS — o `Segmentado` da casa (a selecao se marca em navy, regra permanente; o sublinhado do mock v5 nao
               entra, como a pilula do mock da Conciliacao nao entrou). Os botoes da direita trocam com a sub-aba. */}
+          {/* OC-CC-BOTAO-BUSCAR-DESLOCA-01 (Gabriel 21/10/2026) — TRES LUGARES: as abas (nao encolhem), o motivo no MEIO (lugar sempre
+              presente, `flex-1 min-w-0`; corta com "…" e o texto inteiro no `title`) e os botoes a' direita (nunca encolhem nem cortam).
+              Antes o motivo morava DENTRO do grupo dos botoes: a 1.126 ele empurrava "+ Buscar recebimento" para fora da barra. */}
           <div className="flex h-[26px] flex-none items-center gap-1.5" data-testid="faixa-subabas">
-            {temDespesas ? (
+            <span className="flex-none" data-testid="faixa-subabas-abas">{temDespesas ? (
               <Segmentado<SubAbaContaCorrente> valor={sub} onEscolher={escolherSub} opcoes={[
                 { valor: 'conta', rotulo: t.titulo },
                 { valor: 'despesas', rotulo: (
@@ -385,15 +388,16 @@ export function AbaContaCorrenteOC({ api, somenteLeitura, lado = 'venda', despes
                 ) },
               ]} />
             ) : (
-              <span className="text-[10.5px] font-semibold">{t.titulo}</span>
-            )}
+              <span className="whitespace-nowrap text-[10.5px] font-semibold">{t.titulo}</span>
+            )}</span>
+            {/* OC-CC-MODAL-FINANCEIRO-01 — principal ja' coberto (acordado − recebido − programado <= 0): o botao fica apagado com o
+                motivo ESCRITO ao lado, em vez de abrir o modal para o banco recusar. O lugar existe sempre (vazio sem motivo). */}
+            <span className="min-w-0 flex-1 truncate text-right text-[10px] text-muted-foreground" data-testid="motivo-programar"
+              title={(sub === 'conta' || !temDespesas) && principalJaCoberto(cc) ? MOTIVO_PRINCIPAL_COBERTO : undefined}>
+              {(sub === 'conta' || !temDespesas) && principalJaCoberto(cc) ? MOTIVO_PRINCIPAL_COBERTO : ''}
+            </span>
             {sub === 'conta' || !temDespesas ? (
-              <span className="ml-auto flex gap-[5px]" data-testid="botoes-conta">
-                {/* OC-CC-MODAL-FINANCEIRO-01 — principal ja' coberto (acordado − recebido − programado <= 0): o botao fica apagado com o
-                    motivo ESCRITO ao lado, em vez de abrir o modal para o banco recusar. */}
-                {principalJaCoberto(cc) && (
-                  <span className="self-center whitespace-nowrap text-[10px] text-muted-foreground" data-testid="motivo-programar">{MOTIVO_PRINCIPAL_COBERTO}</span>
-                )}
+              <span className="flex flex-none gap-[5px] whitespace-nowrap" data-testid="botoes-conta">
                 <Button type="button" variant="outline" size="sm" className={BOTAO} disabled={somenteLeitura || api.ocupado || !onProgramar || principalJaCoberto(cc)}
                   title={principalJaCoberto(cc) ? MOTIVO_PRINCIPAL_COBERTO : undefined}
                   data-testid="botao-programar" onClick={() => { setErroAcao(null); onProgramar?.(); }}>
@@ -405,7 +409,7 @@ export function AbaContaCorrenteOC({ api, somenteLeitura, lado = 'venda', despes
                 </Button>
               </span>
             ) : (
-              <span ref={setHostDespesas} className="ml-auto flex gap-[5px]" data-testid="botoes-despesas" />
+              <span ref={setHostDespesas} className="flex flex-none gap-[5px] whitespace-nowrap" data-testid="botoes-despesas" />
             )}
           </div>
         </div>

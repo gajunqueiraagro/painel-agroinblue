@@ -236,6 +236,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - A pagina e' pt-BR e nao se traduz. Barra lateral 152px num token. Graficos de saida: laranja/violeta/vermelho/cinza; azul so' entrada.
 - FIN-V2-LISTA-VIRTUAL-01: a lista de Lancamentos so desenha as linhas a vista; a linha tem 19px fixos e conteudo mais alto que 16px
   quebra a conta da janela.
+- OC-CC-BOTAO-BUSCAR-DESLOCA-01: faixa com abas + texto + botoes = tres lugares — abas `flex-none`, texto no meio `min-w-0 flex-1
+  truncate` com `title` (sempre presente), botoes `flex-none` a' direita; o `check:ui-cortes` tem `botoesDentro` (botao inteiro na faixa).
 - Acesso a tela por perfil tem um dono (`NIVEL_POR_TELA`); visibilidade nao e' permissao (quem permite e' o banco).
 - Guardas do Claude Code: o comando comeca com `cd "$CLAUDE_PROJECT_DIR" &&`; a guarda le^ o texto do comando.
 

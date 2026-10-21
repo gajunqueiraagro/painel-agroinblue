@@ -806,12 +806,19 @@ describe('OC-CC-MODAL-FINANCEIRO-01 — "Programar" abre o modal do Financeiro; 
     const { unmount } = render(<AbaContaCorrenteOC api={api(coberto)} somenteLeitura={false} onProgramar={onProgramar} />);
     expect(screen.getByTestId('botao-programar')).toHaveProperty('disabled', true);
     expect(screen.getByTestId('motivo-programar').textContent).toBe('Principal já programado até o valor da operação');
+    /* o motivo mora no MEIO da faixa (corta com "…" e o inteiro no title); os botões ficam num grupo que não encolhe */
+    expect(screen.getByTestId('motivo-programar').className).toMatch(/min-w-0 flex-1 truncate/);
+    expect(screen.getByTestId('motivo-programar').getAttribute('title')).toBe('Principal já programado até o valor da operação');
+    expect(screen.getByTestId('botoes-conta').className).toMatch(/flex-none/);
+    expect(screen.getByTestId('botoes-conta').contains(screen.getByTestId('motivo-programar'))).toBe(false);
     fireEvent.click(screen.getByTestId('botao-programar'));
     expect(onProgramar).not.toHaveBeenCalled();
     unmount();
     render(<AbaContaCorrenteOC api={api(cc())} somenteLeitura={false} onProgramar={onProgramar} />);
     expect(screen.getByTestId('botao-programar')).toHaveProperty('disabled', false);
-    expect(screen.queryByTestId('motivo-programar')).toBeNull();
+    /* OC-CC-BOTAO-BUSCAR-DESLOCA-01 — o lugar do motivo existe sempre (os botões não andam), vazio sem motivo */
+    expect(screen.getByTestId('motivo-programar').textContent).toBe('');
+    expect(screen.getByTestId('motivo-programar').getAttribute('title')).toBeNull();
   });
 
   it('"Cancelar recebimento programado": com compromisso VALE; sem compromisso (programado antes do modal) fica apagado com o motivo', () => {

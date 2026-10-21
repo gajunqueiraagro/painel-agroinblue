@@ -66,15 +66,14 @@ const FRASE_DA_ESPECIE: Partial<Record<EspecieDoc, string>> = {
   declaracao: 'Declaração · informativo · não soma no valor',
 };
 const FRASE_OUTRO = 'Outro · informativo · não soma';
-/* OC-DOC-VENDA-01 — as frases da venda: a NF do produtor e' a nota da venda (soma); a operacao e' informativa; o "outro" da venda
-   SOMA (regra do banco desde antes: so' GTA, guia, declaracao e os da operacao ficam fora). */
+/* OC-DOC-VENDA-01 — as frases da venda: a NF do produtor e' a nota da venda (soma); a operacao e o "outro" (21/10) sao informativos. */
 const FRASE_DA_ESPECIE_VENDA: Partial<Record<EspecieDoc, string>> = {
   nf_produtor: 'NF produtor · é a nota da venda · soma no valor da operação',
   gta: FRASE_DA_ESPECIE.gta, guia: FRASE_DA_ESPECIE.guia, declaracao: FRASE_DA_ESPECIE.declaracao,
   contrato: 'Contrato / pedido de venda · informativo · não soma no valor',
   nf_entrada: 'NF de entrada do comprador · informativo · não soma no valor',
   comprovante: 'Comprovante · informativo · não soma no valor',
-  outro: 'Outro · soma no valor da venda',
+  outro: FRASE_OUTRO,
 };
 /** O endereco que abre a OC na aba Documentos — a convencao de `abrirOperacao` (AbaDocumentosLancamento): o parametro do tipo,
  *  `oc_id` e `oc_aba`. Abre noutra aba, para nao perder o formulario em curso. */

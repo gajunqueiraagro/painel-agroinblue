@@ -73,6 +73,9 @@ describe('OC-DOC-VENDA-01 — o mesmo componente no abate e na venda', () => {
     for (const e of ['Contrato', 'NF entrada', 'Comprovante'])
       expect(within(screen.getByTestId('grupo-especie-OPERAÇÃO')).getByRole('button', { name: e })).toBeInTheDocument();
     expect(screen.getByTestId('faixa-conferencia').textContent).toContain('é a nota da venda');
+    /* 21/10: o "Outro" da venda e' informativo, igual ao abate */
+    fireEvent.click(saida.getByRole('button', { name: 'Outro' }));
+    expect(screen.getByTestId('faixa-conferencia').textContent).toBe('Outro · informativo · não soma');
   });
 
   it('a lista da venda: a tabela do abate em dois blocos, DA OPERAÇÃO e SAÍDA DA FAZENDA; o informativo mostra o seu valor', () => {
