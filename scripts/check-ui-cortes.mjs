@@ -198,6 +198,11 @@ const CENARIOS = [
     soRegras: ['corte', 'quebra', 'numero', 'sobreposicao', 'italico', 'cabecalho', 'valor', 'altura', 'rolagem', 'tabela'] },
   { nome: 'oc-cc-buscar-recebimento', url: 'tela=oc-cc&v=buscar', tamanhos: TAMANHOS_DO_CONSORCIO,
     soRegras: ['corte', 'quebra', 'numero', 'sobreposicao', 'italico', 'cabecalho', 'valor', 'altura', 'rolagem', 'tabela'] },
+  /* OC-CC-BOTAO-BUSCAR-DESLOCA-01 — a faixa das sub-abas da conta corrente DENTRO do modal da OC (venda e abate), com o principal ja'
+     programado: o motivo no meio com "…" e os dois botoes inteiros a' direita. Os tamanhos em que o modal da OC tem desenho. */
+  ...['venda', 'abate'].map((v) => ({ nome: `oc-cc-faixa-${v}`, url: `tela=oc&v=${v}&aba=financeiro&cc=1`,
+    tamanhos: [[1000, 600], [1126, 579], [1300, 704], [1440, 800]], botoesDentro: '[data-testid="faixa-subabas"]',
+    soRegras: ['corte', 'quebra', 'numero', 'sobreposicao', 'italico', 'cabecalho', 'valor', 'altura', 'rolagem', 'tabela', 'botao'] })),
   /* UI-SEM-CORTE-02 — o consultor: o ⚑ aberto (Pendências do cliente), a Nova pendência e o Resumo dos clientes */
   { nome: 'pendencias-do-cliente', url: 'tela=pendencias', tamanhos: TAMANHOS_DO_CONSORCIO },
   { nome: 'pendencias-nova', url: 'tela=pendencias&v=nova', tamanhos: TAMANHOS_DO_CONSORCIO },
@@ -253,6 +258,22 @@ function medirRolagem({ dentro, exceto }) {
   return achados;
 }
 /* FIN-CONSORCIO-04 — a tabela que rola por dentro mostra, sem rolar, o cabeçalho, N linhas e o Total inteiros (roda NA PAGINA) */
+/* OC-CC-BOTAO-BUSCAR-DESLOCA-01 — `botoesDentro` (opcional, por cenario): todo botao da faixa cabe INTEIRO nela (nao sai pela borda
+   nem corta o proprio texto). O "+ Buscar recebimento" saia da faixa por cima do resumo lateral, sem ser irmao dele: a sobreposicao nao via. */
+function medirBotoesDentro(sel) {
+  const caixas = [...document.querySelectorAll(sel)]; if (!caixas.length) return [{ regra: 'botao', texto: `${sel} nao achado` }];
+  const achados = [];
+  for (const caixa of caixas) {
+    const c = caixa.getBoundingClientRect();
+    for (const b of caixa.querySelectorAll('button')) {
+      const r = b.getBoundingClientRect(); if (r.width < 2) continue;
+      const nome = b.textContent.trim().slice(0, 40);
+      if (r.right > c.right + 0.5 || r.left < c.left - 0.5) achados.push({ regra: 'botao', texto: `botao "${nome}" sai da faixa (${Math.round(r.right - c.right)}px)` });
+      if (b.scrollWidth > b.clientWidth + 1) achados.push({ regra: 'botao', texto: `botao "${nome}" corta o texto` });
+    }
+  }
+  return achados;
+}
 function medirTabelaMinima({ sel, linhas }) {
   const caixa = document.querySelector(sel); if (!caixa) return [{ regra: 'tabela', texto: `${sel} nao achado` }];
   const cb = caixa.getBoundingClientRect();
@@ -537,6 +558,7 @@ try {
     if (cen.regiao && !(await p.$(cen.regiao))) erros.push(`regiao ${cen.regiao} nao achada`);
     const daRolagem = cen.semRolagem ? await p.evaluate(medirRolagem, cen.semRolagem) : [];
     if (cen.tabelaMinima) daRolagem.push(...(await p.evaluate(medirTabelaMinima, cen.tabelaMinima)));
+    if (cen.botoesDentro) daRolagem.push(...(await p.evaluate(medirBotoesDentro, cen.botoesDentro)));
     const achadosTodos = [...daRolagem, ...(await p.evaluate(medir, cen.regiao ?? null)), ...(await p.evaluate(medirCabecalho, cen.regiao ?? null)),
       ...(await p.evaluate(medirSobreposicao, cen.regiao ?? null)), ...(daAltura ? [daAltura] : []), ...dasAlturas, ...erros.map((e) => ({ regra: 'erro', texto: e }))];
     /* `soRegras` (UI-SEM-CORTE-02): o cenario conta so' estas regras — a tabela do Financeiro V2, suspensa (FIN-V2-SEM-CORTE-01), entra

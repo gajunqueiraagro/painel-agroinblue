@@ -361,8 +361,12 @@ if (tela === 'mesclar') {
      da operacao FECHADO no P1 (a faixa "Reabrir mês" no rodape). */
   const aba = q.get('aba') ?? '';
   const fechado = q.get('p1') !== 'aberto';
+  /* OC-CC-BOTAO-BUSCAR-DESLOCA-01 — `&cc=1`: a OC em CONTA CORRENTE (o `oc_conta_corrente` responde o envelope sintetico, com o
+     principal ja' programado ate' o valor da operacao: o motivo e os dois botoes na faixa das sub-abas, como no print de 14h36). */
+  const comCC = q.get('cc') === '1';
   g.__bancoBancada = { from: () => [], rpc: (fn: string) => fn === 'get_status_pilares_fechamento'
-    ? { p1_mapa_pastos: { status: fechado ? 'oficial' : 'aberto' }, p2_valor_rebanho: { status: 'aberto' } } : null };
+    ? { p1_mapa_pastos: { status: fechado ? 'oficial' : 'aberto' }, p2_valor_rebanho: { status: 'aberto' } }
+    : comCC && fn === 'oc_conta_corrente' ? OC.envelopeContaCorrente(q.get('coberto') !== '0') : null };
   const p: any = v === 'abate' ? OC.propsAbate(aba) : v === 'compra' ? OC.propsCompra(aba) : OC.propsVenda(aba);
   if (v === 'compra' && fechado) p.mesFechadoMsg = OC.MES_FECHADO;
   /* OC-DOC-VENDA-01 — `&docs=1`: a aba Documentos com documentos (abate x venda) e a nota repetida */
@@ -383,19 +387,7 @@ if (tela === 'mesclar') {
   /* OC-RECEB-PARCIAL-01 — a conta corrente da venda com o recebimento parcial DIVIDIDO (Receb. 1/2 conciliado + 2/2 programado,
      a faixa "Falta receber …, já programado.") e o "Buscar recebimento no Financeiro" com os dois grupos (`&v=buscar`, nome longo).
      Dados SINTETICOS na forma do `oc_conta_corrente`. */
-  const cc = lerContaCorrente({
-    modelo: 'conta_corrente', versao: 9, valor_acordado: 150000, entregue: 150000, cab_entregue: 50, recebido: 100000, programado: 50000,
-    devolvido: 0, saldo: -50000, explicado: 0, saldo_a_explicar: -50000, falta_explicar: -50000, situacao: 'falta_receber', a_entregar: 0,
-    ultima_entrega: '2026-09-03', recebimentos_sem_conta_bancaria: 0, saidas_sem_entrega: 0, explicacoes: [],
-    linhas: [
-      { tipo: 'entrega', data: '2026-09-03', parte_id: 'e1', lote_ordem: 1, cab: 50, categoria: 'desmama_f', conta_ordem: 1110,
-        conta: 'Venda de Desmama Fêmeas', mov_entrega: -150000, status: 'sem_caixa', no_saldo: true, saldo: -150000 },
-      { tipo: 'recebimento', data: '2026-09-04', parte_id: 'r1', lancamento_id: 'l1', conta_ordem: 1110, conta: 'Venda de Desmama Fêmeas',
-        banco: 'Banco do Brasil', descricao: 'Venda 050 Desmama F · Recebimento', mov_recebido: 100000, status: 'conciliado', no_saldo: true, saldo: -50000 },
-      { tipo: 'recebimento', data: '2026-09-04', parte_id: 'r2', lancamento_id: 'l2', conta_ordem: 1110, conta: 'Venda de Desmama Fêmeas',
-        banco: 'Banco do Brasil', descricao: 'Venda 050 Desmama F · Recebimento', mov_recebido: 50000, status: 'programado', no_saldo: false, saldo: -50000 },
-    ],
-  });
+  const cc = lerContaCorrente(OC.envelopeContaCorrente());
   const itens = [
     { lancamentoId: 'm1', data: '2026-09-20', valor: 50000, descricao: 'Pix do comprador Exemplo da Silva', subcentro: 'Venda de Desmama Fêmeas',
       mesmoFavorecido: true, semContaBancaria: false, status: 'realizado', conciliado: false },
