@@ -93,7 +93,7 @@ BEGIN
   x := pg_temp.tit_oc(150); e := pg_temp.ext(200, date '2031-03-09'); msg := null;
   begin perform public.fn_espelho_casar(e, jsonb_build_array(jsonb_build_object('lancamento_id', x, 'valor', 200)), false, 'teste');
   exception when others then msg := sqlerrm; end;
-  if msg is distinct from 'O extrato de R$ 200,00 é maior que o lançamento (R$ 150,00 em aberto). Corrija o valor do lançamento antes de ligar. Nada foi gravado.'
+  if msg is distinct from 'O extrato de R$ 200,00 é maior que o lançamento (R$ 150,00 em aberto), e o valor deste lançamento é da operação comercial: corrija lá antes de ligar. Nada foi gravado.'
      or (select round(abs(valor), 2) from public.financeiro_lancamentos_v2 where id = x) <> 150 then raise exception 'P4b casar maior: %', msg; end if;
 
   -- P5 desfazer o bloco do P1 junta de volta
