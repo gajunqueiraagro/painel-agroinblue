@@ -305,14 +305,15 @@ describe('CONC-BLOCOS-TELA-01 — Casar com o banco · bloco', () => {
     expect(dlg.scrollWidth).toBeLessThanOrEqual(dlg.clientWidth);
     expect(screen.getByTestId('conciliar-bloco')).toBeInTheDocument();
     await waitFor(() => expect(screen.getByTestId('frase-bloco').textContent).toBe('Confere com o banco ✓ · os 7 lançamentos ficam quitados'));
-    /* a descrição sai INTEIRA e não trunca; o histórico ROLA dentro da célula (sem "…"), com o texto inteiro no title
-       (CONC-BLOCO-SINAL-MISTO-01, contrato novo: UI-SEM-CORTE-01) */
+    /* a descrição sai INTEIRA e não trunca; o histórico, texto em CÉLULA, termina em "…" quando não cabe, com o texto inteiro no title
+       (regra de corte de 21/10 07h25, FORN-01b — antes rolava escondido: corte seco) */
     const descricoes = screen.getAllByTestId('descricao-levada');
     expect(descricoes[0].textContent).toBe('Arranquio Mandioca 40,34 t · NF 9287581');
     for (const d of descricoes) expect(d.className).not.toContain('truncate');
     const hist = [...document.querySelectorAll('[title]')].find((el) => el.getAttribute('title') === HIST)!;
-    expect(hist.className).toContain('uma-linha-que-rola');
-    expect(hist.className).not.toContain('truncate');
+    expect(hist.className).toContain('truncate');
+    expect(hist.className).not.toContain('uma-linha-que-rola');
+    expect(hist.closest('td')).not.toBeNull();
     expect(screen.getByTestId('diferenca-bloco').textContent).toBe('0,00');
     expect(screen.getByTestId('conciliar-bloco')).not.toBeDisabled();
   });
@@ -491,14 +492,18 @@ describe('CONC-BLOCO-SINAL-MISTO-01 — somas com sinal, recusa traduzida, sem r
     await waitFor(() => expect(recusa.textContent).toBe('o bloco soma zero: entrada e saída se anulam — use o par de estorno.'));
   });
 
-  it('nenhum texto com "…" no modal (rodapé diz o nome do menu)', async () => {
+  it('nenhum texto com "…" no modal fora das células com title (rodapé diz o nome do menu)', async () => {
     BLOCO.resposta = { data: null, error: { code: 'CBLOC', message: 'direcao_mista: x' } };
     montar('mais_antigo_primeiro');
     await screen.findByTestId('recusa-bloco');
     const dlg = screen.getByTestId('casar-bloco');
     expect(dlg.textContent).not.toContain('…');
     expect(texto('onde-desfazer-bloco')).toBe('Para desfazer: menu "Ações" (⋯) da linha do bloco › Desfazer bloco.');
-    expect(dlg.querySelector('.truncate')).toBeNull();
+    /* FORN-01b — "…" só em célula de tabela, e com o texto inteiro no title */
+    for (const t of dlg.querySelectorAll('.truncate')) {
+      expect(t.closest('td')).not.toBeNull();
+      expect(t.getAttribute('title') ?? '').toContain((t.textContent ?? '').trim());
+    }
   });
 });
 
