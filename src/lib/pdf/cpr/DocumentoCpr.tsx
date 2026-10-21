@@ -289,6 +289,8 @@ export function DocumentoCpr({ modelo: m, logoData }: { modelo: ModeloCpr; logoD
           <Valor c={m.fim.pagar} largura={W.pagar} negrito corFixa="#fca5a5" />
           <Valor c={m.fim.saldo} largura={W.saldo} negrito corFixa={m.fim.saldo?.tom === 'neg' ? '#fca5a5' : m.fim.saldo?.tom === 'pos' ? '#86efac' : COR.branco} />
         </View>
+        {/* CPR-AJUSTES-20-10c — período encerrado: os vencidos em aberto do período, DEPOIS do Fim do período e fora da soma dele */}
+        {m.saemHoje ? <BlocoSimples b={m.saemHoje} comConta={m.comColunaConta} inteiro={m.saemHoje.contas.length <= CABE_INTEIRO} /> : null}
       </Page>
 
       {m.semVencimento && semVencimentoLongo ? (
