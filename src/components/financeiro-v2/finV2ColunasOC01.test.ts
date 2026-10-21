@@ -28,7 +28,7 @@ function larguras(modo: Modo): number[] {
 const soma = (v: number[]) => v.reduce((a, b) => a + b, 0);
 
 describe('a coluna Vínc. (FIN-V2-COLUNAS-02; era "OC")', () => {
-  const linha = tela.slice(tela.indexOf('<tr key={l.id}'), tela.indexOf('<DropdownMenuTrigger asChild>', tela.indexOf('<tr key={l.id}')));
+  const linha = tela.slice(tela.indexOf('<tr key={l.id}'), tela.indexOf('<MenuDaLinhaSobDemanda', tela.indexOf('<tr key={l.id}')));
   const celulaProduto = linha.slice(linha.indexOf('title={isParcelaFinanciamento ? `Parcela de financiamento'), linha.indexOf('title={fornNome || \'\'}'));
   const celulaVinc = linha.slice(linha.indexOf('data-testid="celula-oc"'), linha.indexOf('title={isParcelaFinanciamento ? `Parcela de financiamento'));
   it('a busca sabe achar: a célula do Produto e a dos vínculos foram recortadas da linha', () => {
