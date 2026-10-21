@@ -10489,3 +10489,23 @@ curta nas secoes de regras) e a pendencia (na FILA); o bloco inteiro vai para do
   ⚠ NAO EXISTE gesto em lote "trocar fornecedor com trilha": proposta (nao feita) `fn_lancamentos_trocar_fornecedor(ids, de, para, motivo,
     simular)` no molde da `fn_fornecedor_sem_cadastro_ligar`. Correcao so' com a lista de pares aprovada pelo Gabriel.
   ⚠ O importador legado segue com o defeito (decisao: aposentar ou consertar).
+- CPR-AJUSTES-20-10c — A CAIXA "INCLUIR VENCIDOS" SAIU DA CONTAS A PAGAR E RECEBER (Gabriel, 20/10/2026 20h01: "tira"). Regra: o que conta
+  no saldo nunca fica escondido; nada de escolha que muda o que a lista mostra sem mudar a conta. Saiu a caixa, o estado `incluirVencidos`, o
+  campo do instantaneo de ida e volta ao contrato (`cprRetorno.ts`; o instantaneo antigo com o campo e' lido e o campo ignorado), o
+  `rotuloDoTotal` (so' existia por ela) e o "· sem listar os vencidos" do cabecalho do PDF. Nao havia preferencia gravada nem query param.
+  · Periodo com hoje e futuro: sem mudanca (20-10b). PERIODO ENCERRADO (ate < hoje): o dono (`recortarCpr`) devolve `saemHoje` = os
+    vencidos em aberto com vencimento DENTRO do periodo; a tela os desenha SEMPRE num grupo `saem_hoje` DEPOIS da linha "Fim do periodo"
+    (`gruposDepoisDoFim`), titulo "Saem hoje · fora do saldo do periodo", a frase "Ainda nao aconteceram; entram no saldo de hoje.", o selo
+    vencido e a data de vencimento original em cada linha, subtotal A receber / A pagar; NAO entram no rodape nem no Saldo no fim. Os de
+    vencimento ANTES do inicio do periodo nao aparecem (o cartao Vencidos segue com todos). No encerrado `total` nao soma vencido (o rodape
+    sem saldo conferido fica zero; com saldo, e' o realizado, como antes).
+  · PDF: o bloco `saemHoje` (BlocoSimples) logo depois do Fim do periodo. Excel ("Saldo por dia"): linhas PROPRIAS depois da linha "Fim do
+    periodo" (titulo com o subtotal, a frase, uma linha por conta "vencido em dd/mm/aaaa · descricao"), fora da soma; na aba Contas o Grupo
+    "sai hoje · fora do saldo do periodo". Tela, PDF e Excel leem os MESMOS grupos.
+  · Seletor de conta: no encerrado a conta so' de vencido entra se o vencido e' do periodo; o "a pagar" dela e' 0 (vencido do encerrado nao
+    soma).
+  Testes: `cprAjustes2010.test.ts` (bloco 20-10c: o dono, o invariante tela = PDF = Excel no encerrado, o rodape igual com e sem o grupo,
+  PDF, Excel, com hoje / futuro sem grupo, a tela, nenhum "Incluir vencidos" em src fora de teste), `cprRetorno.test.ts` (instantaneo
+  antigo). Mutacoes: somar o grupo no rodape derruba 2; esconder o grupo no dono derruba 3; tirar o grupo da tela derruba 1. Bancada:
+  `cpr-encerrado` e `cpr-encerrado-saem-hoje` (`tela=cpr&v=encerrado`) nos sete tamanhos; prints em ~/Downloads/cpr-20-10c/.
+  ⚠ NAO PROVADO: nada com login no app real (bancada e testes).
