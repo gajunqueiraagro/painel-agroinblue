@@ -10589,3 +10589,21 @@ curta nas secoes de regras) e a pendencia (na FILA); o bloco inteiro vai para do
     o `fn_desfazer_bloco` restaura o status de um titulo ainda casado por outro bloco e o guarda recusa.
   · CONC-LIGAR-FUTURO-01 (a queixa do Vivo): a lista de candidatos do Espelho (`fn_extratos_espelhados`) so' traz lancamento com
     `data_vencimento <= fim do mes do extrato`; o vinculo em si nao recusa vencimento futuro (recusa valor acima do lancamento).
+- ⚠ LIGAR O EXTRATO AO LANCAMENTO DE VENCIMENTO FUTURO (CONC-LIGAR-FUTURO-01a, Gabriel 21/10/2026 — so' BANCO; a tela vem com
+  mock). 20261028101000. (1) `fn_conc_buscar_para_ligar(extrato, texto, limite)` — busca LIVRE: lancamento em aberto (previsto,
+  programado, agendado), mesma conta OU sem conta, MESMO SINAL do extrato, SEM limite de data; casa por fornecedor (a busca unica
+  `fn_fornecedor_buscar`), descricao, valor (506,51 · 506.51 · R$ 1.234,56 · 1.234) e documento (texto ou so' os digitos); ordem
+  valor igual > nome casando > vencimento mais perto; devolve vencimento, competencia, status, origem (oc | recorrencia | parcela |
+  saldo | avulso), a_confirmar, valor, ja_aplicado, livre, diferenca. STABLE: quem chama em SQL cria o extrato num comando antes.
+  (2) `fn_extratos_espelhados` ('espelhados-06-adiantados'): os candidatos do MES SEGUINTE vem numa chave NOVA,
+  `sistema_candidatos_adiantados` (adiantado: true) — nao em `sistema_candidatos`, porque `mesaDoDia.ts` abre um dia por vencimento
+  de candidato e a tela de setembro ganharia dias de outubro antes do mock. (3) Valor diferente: so' a recorrencia A CONFIRMAR
+  (`tipo_valor = 'estimado'`) aceita o valor do extrato (`fn_conc_ligar_com_valor_real`, a mesma, agora restrita); valor certo com
+  extrato MAIOR: o 1:1 recusa com frase pronta (o `sobre_aplicacao` cru saiu); MENOR: divide (CONC-BAIXA-NO-VINCULO-01).
+  · O Vivo Casa (recorrencia afca114b) esta cadastrado como valor CERTO (473,66) e o banco cobrou 506,51 em 01/09 e 506,84 nas
+    seguintes: pela regra nova, ligar o proximo com diferenca recusa — a recorrencia talvez devesse ser "A confirmar" (decisao do
+    Gabriel). O conserto de 21/10 (bac38a7f) foi feito antes desta regra.
+- REGISTRADO, NAO FEITO (21/10/2026): (a) `fn_desfazer_bloco` cai no T3 -> T4b do `conc_parcial_um_estado_01_test.sql` desde
+  FIN-CONCILIADO-NAO-REBAIXA-01 (20261027196700): restaura o status de um titulo ainda ligado a OUTRO bloco e o guarda de "casado nao
+  rebaixa" recusa. (b) NJ, conta Sicredi PJ Pecuaria: saldo final de out/2026 digitado 0,00 (manual) sem nenhum extrato no mes —
+  -2.147,50 sem explicacao na conta do Caixa.
