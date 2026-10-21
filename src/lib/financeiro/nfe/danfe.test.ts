@@ -13,7 +13,7 @@ import { itensDoPdf, type PdfjsMinimo } from './lerNotaPdf';
 import { lerNFe } from './lerNFe';
 import { proporLancamento } from './proporLancamento';
 import { resolverEmitente } from './resolverEmitente';
-import { PAGINAS_DANFE_SINTETICO } from './__fixtures__/danfeSintetico';
+import { PAGINAS_DANFE_SINTETICO, danfeSinteticoSemDuplicata } from './__fixtures__/danfeSintetico';
 import { montarNFe, utf8 } from './__fixtures__/notas';
 
 function lida(r: ResultadoDoDanfe) {
@@ -155,5 +155,43 @@ describe.skipIf(!existsSync(REAL))('D6 — o PDF real da prova (NF 937), pelo pd
     expect(r.nota.emitente.nome.endsWith(' LTD')).toBe(true);
     expect(r.divergencias).toEqual([]);
     expect((await itensDoPdf(bytes, pdfjs)).tamanhos[0].largura).toBeGreaterThan(800);
+  });
+});
+
+describe('D7 — FIN-NOTA-PDF-01b: o DANFE sintetico SEM duplicata (o molde do caso de 21/10)', () => {
+  it("lido inteiro, chave confere, sem duplicatas; a proposta e' um lancamento so', sem vencimento inventado", () => {
+    const r = lida(notaDoDanfe(danfeSinteticoSemDuplicata()));
+    expect([r.nota.numero, r.nota.emissao, r.nota.totais.notaCent, r.nota.duplicatas.length]).toEqual(['3241', '2026-09-29', 958300, 0]);
+    expect(r.nota.itens.reduce((s, i) => s + i.valorCent, 0)).toBe(958300);
+    expect(r.nota.emitente.nome).toBe('INDUSTRIA SINTETICA DE POSTES LTD');
+    expect(r.divergencias).toEqual([]);
+    expect(r.avisos).toContain('sem_duplicatas');
+    const p = proporLancamento({ nota: r.nota, avisosDoLeitor: r.avisos, fazendas: [], emitente: resolverEmitente(r.nota.emitente, [], null), favorecidoId: null, ultima: null });
+    if (p.ok === false) throw new Error(p.frase);
+    expect(p.proposta.parcelamento).toEqual({ tipo: 'unico', vencimento: '' });
+    expect(p.proposta.valorCent).toBe(958300);
+  });
+});
+
+describe('D8 — FIN-NOTA-PDF-01b: valores vizinhos num pedaco so\' (V.UNIT + V.TOTAL) nao perdem o item', () => {
+  it('o pedaco "3.194,3300 3.194,33" que atravessa a coluna se parte: os 3 itens somam a nota', () => {
+    const paginas = danfeSinteticoSemDuplicata().map((p) => {
+      const linha224 = (i: ItemDoDanfe) => Math.round(i.y) === 224;
+      const unit = p.find((i) => linha224(i) && i.str === '3.194,3300');
+      const fora = p.filter((i) => !(linha224(i) && (i.str === '3.194,3300' || (i.str === '3.194,33' && i.x > 650))));
+      return unit ? [...fora, { ...unit, str: '3.194,3300 3.194,33', w: 65 }] : fora;
+    });
+    const r = lida(notaDoDanfe(paginas));
+    expect(r.nota.itens.map((i) => i.valorCent)).toEqual([319433, 319433, 319434]);
+  });
+  it('o caminho da bancada: o DANFE desenhado pelo jsPDF e relido pelo pdfjs da os 3 itens', async () => {
+    const { jsPDF } = await import('jspdf');
+    const pdfjs: PdfjsMinimo = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: [841.89, 595.28] });
+    for (const it of danfeSinteticoSemDuplicata()[0]) { doc.setFontSize(Math.max(4, it.h * 1.15)); doc.text(it.str, it.x, 595.28 - it.y); }
+    const r = await lerNota(doc.output('arraybuffer'), { pdfjs });
+    if (r.ok === false) throw new Error(r.frase);
+    expect(r.nota.itens.reduce((s, i) => s + i.valorCent, 0)).toBe(958300);
+    expect([r.nota.numero, r.nota.duplicatas.length, r.divergencias]).toEqual(['3241', 0, []]);
   });
 });
