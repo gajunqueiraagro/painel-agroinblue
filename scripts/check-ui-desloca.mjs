@@ -51,6 +51,11 @@ const CENARIOS = [
   { nome: 'recorrencias', url: 'tela=recorrencias&barra=32', auto: true },
   { nome: 'cpr', url: 'tela=cpr', auto: true },
   { nome: 'mesclar', url: 'tela=mesclar', auto: true },
+  /* OC-CC-BOTAO-BUSCAR-DESLOCA-01 — os botoes da conta corrente nao andam com o motivo ("Principal já programado…") aparecendo ou
+     sumindo, nem as abas com a sub-aba Despesas. So' nos tamanhos em que o modal da OC tem desenho (>= 1000). */
+  ...['venda', 'abate'].map((v) => ({ nome: `oc-cc-faixa-${v}`, url: `tela=oc&v=${v}&aba=financeiro&cc=1`, minLargura: 1000, estados: [
+    ['sem principal programado (sem o motivo)', { url: `tela=oc&v=${v}&aba=financeiro&cc=1&coberto=0` }],
+  ] })),
 ];
 
 /* roda NA PAGINA: o retangulo de cada elemento medido, pela identidade */
@@ -109,6 +114,7 @@ try {
 
   const todos = []; let medicoes = 0;
   for (const cen of CENARIOS.filter((c) => !SO || c.nome.startsWith(SO))) for (const [w, h] of TAMANHOS) {
+    if (w < (cen.minLargura ?? 0)) continue; /* tela sem desenho abaixo desta largura (o modal da OC: >= 1000) */
     const p = await navegador.newPage({ viewport: { width: w, height: h } });
     const erros = []; p.on('pageerror', (e) => erros.push(String(e).slice(0, 160)));
     const abrir = async (pg, url) => { await pg.goto(`${base}/index.html?${url}`); await pg.evaluate(() => document.fonts.ready); await espera(pg, 1300); };

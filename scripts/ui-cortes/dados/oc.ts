@@ -119,3 +119,19 @@ export const PENDENCIAS = [
 export const fontePendencias = (lista = PENDENCIAS) => ({
   listar: async () => ({ ok: true, lista }), criar: nadaNull, cobrar: nadaNull, resolver: nadaNull,
 });
+
+/* OC-RECEB-PARCIAL-01 / OC-CC-BOTAO-BUSCAR-DESLOCA-01 — o envelope do `oc_conta_corrente` de uma venda em conta corrente, SINTETICO:
+   Receb. 1/2 conciliado + 2/2 programado. `coberto = false` tira o programado (o principal deixa de estar coberto: sem o motivo). */
+export const envelopeContaCorrente = (coberto = true) => ({
+    modelo: 'conta_corrente', versao: 9, valor_acordado: 150000, entregue: 150000, cab_entregue: 50, recebido: 100000, programado: coberto ? 50000 : 0,
+    devolvido: 0, saldo: -50000, explicado: 0, saldo_a_explicar: -50000, falta_explicar: -50000, situacao: 'falta_receber', a_entregar: 0,
+    ultima_entrega: '2026-09-03', recebimentos_sem_conta_bancaria: 0, saidas_sem_entrega: 0, explicacoes: [],
+    linhas: [
+      { tipo: 'entrega', data: '2026-09-03', parte_id: 'e1', lote_ordem: 1, cab: 50, categoria: 'desmama_f', conta_ordem: 1110,
+        conta: 'Venda de Desmama Fêmeas', mov_entrega: -150000, status: 'sem_caixa', no_saldo: true, saldo: -150000 },
+      { tipo: 'recebimento', data: '2026-09-04', parte_id: 'r1', lancamento_id: 'l1', conta_ordem: 1110, conta: 'Venda de Desmama Fêmeas',
+        banco: 'Banco do Brasil', descricao: 'Venda 050 Desmama F · Recebimento', mov_recebido: 100000, status: 'conciliado', no_saldo: true, saldo: -50000 },
+      { tipo: 'recebimento', data: '2026-09-04', parte_id: 'r2', lancamento_id: 'l2', conta_ordem: 1110, conta: 'Venda de Desmama Fêmeas',
+        banco: 'Banco do Brasil', descricao: 'Venda 050 Desmama F · Recebimento', mov_recebido: 50000, status: 'programado', no_saldo: false, saldo: -50000 },
+    ],
+  });
