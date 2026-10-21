@@ -179,7 +179,10 @@ describe('a tela de Recorrências (V2Recorrencias, lida da FONTE): a tela não s
   });
   it('valor de cartão e de linha nunca corta: o componente do valor é `whitespace-nowrap` e não leva `truncate`', () => {
     expect(f).toContain("<span className={cn('whitespace-nowrap tabular-nums', estimado ? AMBAR : entrada ? COR_SINAL.pos : COR_SINAL.neg, className)}>");
-    expect(f).toContain("const TD_NUM = cn(TD, 'text-right tabular-nums whitespace-nowrap');");
+    /* FORN-01b — a régua da tabela mora em `regua-tabela` (uma só para a casa): a célula de número de lá nunca corta */
+    expect(f).toContain('const TD_NUM = TD_REGUA_NUM;');
+    const regua = fonte('src/components/ui/regua-tabela.tsx');
+    expect(regua).toContain("export const TD_REGUA_NUM = cn(TD_REGUA, 'text-right tabular-nums whitespace-nowrap');");
     expect(f).not.toMatch(/TD_NUM[^;]{0,40}truncate/);
   });
   it('layout sem movimento: `table-fixed` com a MESMA régua de colunas na tabela e no rodapé, e a linha de filtros com altura declarada', () => {
