@@ -48,6 +48,8 @@ const TH = 'h-[22px] bg-primary px-2 text-left text-[10px] font-semibold text-pr
 const TH_R = `${TH} text-right`;
 const TD = 'h-[25px] px-2 text-[10.5px] whitespace-nowrap';
 const ROLA = 'uma-linha-que-rola';
+/* FORN-01b (regra de corte de 21/10 07h25) — texto em CÉLULA de tabela: uma linha, "…" quando não cabe, o inteiro no `title` */
+const CELULA = 'block truncate';
 const TD_R = `${TD} text-right tabular-nums`;
 const TOTAL = 'h-[25px] px-2 text-[10.5px] font-bold bg-[#E8E6DF] whitespace-nowrap';
 
@@ -156,7 +158,7 @@ export function BlocoLiberacoes({ api, contaDoContrato, onAbrirLancamento, clien
               <tr key={l.id} className="border-b" data-testid="linha-liberacao">
                 <td className={`${TD} tabular-nums`}>{br(l.data)}</td>
                 <td className={TD} title={`${t?.destino ?? 'sem destinação'} · ${origem}`} data-testid="destino-da-liberacao">
-                  {t?.destino ? <span className={ROLA}>{t.destino}</span> : <span className="text-amber-700">—</span>}
+                  {t?.destino ? <span className={CELULA}>{t.destino}</span> : <span className="text-amber-700">—</span>}
                 </td>
                 <td className={TD_R}>{num2(l.valor)}</td>
                 <td className={TD_R} data-testid="entrou-na-conta">{t === null ? '…' : t.entrou === null ? <span className="text-muted-foreground" title="não passa pela conta do cliente">—</span> : num2(t.entrou)}</td>
@@ -338,10 +340,10 @@ export const BlocoDocumentos = forwardRef<HTMLDivElement, { api: ApiDoContrato }
           {docs === null && <tr><td colSpan={5} className={`${TD} text-muted-foreground`}>…</td></tr>}
           {(docs ?? []).map((d) => (
             <tr key={d.id} className="border-b" data-testid="linha-documento">
-              <td className={TD}><span className={ROLA}>{ROTULO_DA_ESPECIE[d.especie]}</span></td>
-              <td className={TD}><span className={ROLA}>{d.nome}</span></td>
+              <td className={TD}><span className={CELULA} title={ROTULO_DA_ESPECIE[d.especie]}>{ROTULO_DA_ESPECIE[d.especie]}</span></td>
+              <td className={TD}><span className={CELULA} title={d.nome}>{d.nome}</span></td>
               <td className={`${TD} tabular-nums`}>{br(d.criadoEm.slice(0, 10))}</td>
-              <td className={TD}><span className={ROLA}>{d.enviadoPor ?? '—'}</span></td>
+              <td className={TD}><span className={CELULA} title={d.enviadoPor ?? undefined}>{d.enviadoPor ?? '—'}</span></td>
               <td className={`${TD} text-right`}>
                 <button type="button" className="mr-2 text-primary hover:underline" onClick={() => void abrir(d.storagePath)}>abrir</button>
                 <button type="button" className="text-muted-foreground hover:text-destructive" onClick={() => setRemovendo({ id: d.id, nome: d.nome })} data-testid="remover-documento">remover</button>
