@@ -34,19 +34,23 @@ const TAMANHOS_DO_CONSORCIO = [[750, 520], [750, 600], [814, 530], [1000, 600], 
 /* FIN-CONSORCIO-04 — no consórcio rolam por dentro só a lista de parcelas e a tabela das faixas (cabeçalho e Total presos nelas) */
 const EXCETO_CONSORCIO = '[data-testid="lista-parcelas-consorcio"], [data-testid="lista-faixas-consorcio"]';
 const clicar = (sel) => async (p) => { await p.locator(sel).first().click(); await p.waitForTimeout(500); };
+const clicarRotulo = (re) => async (p) => { await p.getByRole('button', { name: re }).first().click(); await p.waitForTimeout(500); };
 const clicarTexto = (txt) => async (p) => { await p.getByText(txt, { exact: true }).first().click(); await p.waitForTimeout(500); };
 const CENARIOS = [
   { nome: 'mesclar-vazio', url: 'tela=mesclar&vazio=1' },
   { nome: 'mesclar-comparar', url: 'tela=mesclar' },
   { nome: 'mesclar-uso', url: 'tela=mesclar', antes: clicarTexto('Uso') },
   { nome: 'mesclar-recentes', url: 'tela=mesclar', antes: clicar('[data-testid="abrir-recentes"]') },
-  { nome: 'fornecedores-lista', url: 'tela=fornecedores' },
+  /* FORN-LISTA-01 — a lista nos tamanhos do contrato; os filtros pelo rótulo que começa com a situação (o número vem depois) */
+  { nome: 'fornecedores-lista', url: 'tela=fornecedores', tamanhos: TAMANHOS_DO_CONTRATO },
+  { nome: 'fornecedores-mesclados', url: 'tela=fornecedores', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicarRotulo(/^Mesclados /) },
+  { nome: 'fornecedores-sem-documento', url: 'tela=fornecedores', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicar('[data-testid="filtro-sem-documento"]') },
   /* FORN-SEM-CADASTRO-01 — a aba "Sem cadastro" (substitui a "Pendentes") nos tamanhos do mock, fechada e com uma linha aberta */
   { nome: 'fornecedores-sem-cadastro', url: 'tela=fornecedores', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicar('[data-testid="aba-sem-cadastro"]') },
   { nome: 'fornecedores-sem-cadastro-aberta', url: 'tela=fornecedores', tamanhos: TAMANHOS_DO_CONTRATO,
     antes: async (p) => { await clicar('[data-testid="aba-sem-cadastro"]')(p); await clicar('[data-testid="sem-cadastro-linha"] td')(p); } },
-  { nome: 'fornecedores-inativos', url: 'tela=fornecedores', antes: clicarTexto('Inativos') },
-  { nome: 'fornecedores-todos', url: 'tela=fornecedores', antes: clicarTexto('Todos') },
+  { nome: 'fornecedores-inativos', url: 'tela=fornecedores', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicarRotulo(/^Inativos /) },
+  { nome: 'fornecedores-todos', url: 'tela=fornecedores', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicarRotulo(/^Todos /) },
   /* FORN-BUSCA-UNICA-01 — SO' OS FILTROS do Financeiro V2 (decisao do Gabriel, 19/10): a TABELA tem 60 achados (reticencias em Produto,
      Fornecedor e Centro; datas dd/mm/aa; cabecalho) e e' a frente FIN-V2-SEM-CORTE-01. Tirar a `regiao` mede a tela inteira. */
   { nome: 'financeiro-filtros', url: 'tela=financeiro', regiao: '[data-testid="filtros-da-lista"]' },
