@@ -788,6 +788,8 @@ export const MOTIVO_CASAR_LABEL: Readonly<Record<string, string>> = {
   soma_nao_bate: 'A soma dos lançamentos não bate com o valor do banco.',
   /* FIN-POS-FIXADO-01b: o juro de parcela pós-fixada só se grava pelo dono (a `fn_espelho_casar` direta recusa). */
   parcela_pos: 'Parcela de contrato pós-fixado: case pelo modal da linha do extrato para gravar o juro real.',
+  /* CONC-VALOR-CERTO-ACEITA-01: o extrato maior que um valor certo só grava com a confirmação, que é do modal. */
+  confirmar_valor_extrato: 'O extrato é maior que o lançamento: case em "Casar com o banco…" para confirmar o valor do extrato.',
   /* Só do sentido N:1 (`fn_espelho_casar_n1`). */
   minimo_dois_extratos: 'Marque ao menos dois movimentos do banco.',
   contas_diferentes: 'Os movimentos são de contas diferentes.',
