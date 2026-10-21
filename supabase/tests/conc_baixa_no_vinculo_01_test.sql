@@ -132,7 +132,7 @@ BEGIN
   if not ok then raise exception 'B9 valor real sem tenant'; end if;
   perform set_config('request.jwt.claims', '{"sub":"7bd0b6ad-2527-4be1-af58-f2cc0c0edd8e","role":"authenticated"}', true);
   if has_function_privilege('anon', 'public.fn_conc_baixar_vinculado(uuid, text, boolean)', 'EXECUTE')
-     or has_function_privilege('anon', 'public.fn_conc_ligar_com_valor_real(uuid, uuid, text)', 'EXECUTE')
+     or has_function_privilege('anon', 'public.fn_conc_ligar_com_valor_real(uuid, uuid, text, boolean)', 'EXECUTE')
      or has_function_privilege('authenticated', 'public._fn_conc_baixa_no_vinculo(uuid, text, text)', 'EXECUTE')
      or has_function_privilege('authenticated', 'public._fn_trg_conc_baixa_no_vinculo()', 'EXECUTE')
      or has_function_privilege('authenticated', 'public._fn_trg_conc_juntar_ao_desfazer()', 'EXECUTE') then raise exception 'B9 ACL'; end if;
