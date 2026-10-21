@@ -42,6 +42,8 @@ import { NovaPendenciaDialog } from '@/components/consultor/NovaPendenciaDialog'
 import { ResumoClientesPainel } from '@/components/consultor/ResumoClientesPainel';
 import * as OC from './dados/oc';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { AbaContaCorrenteOC } from '@/components/venda/AbaContaCorrenteOC';
+import { lerContaCorrente } from '@/lib/oc/contaCorrente';
 import { AcessosTab } from '@/pages/AcessosTab';
 import { ContasPagarReceberTab } from '@/components/financeiro-v2/ContasPagarReceberTab';
 import V2Recorrencias from '@/v2/pages/V2Recorrencias';
@@ -334,6 +336,39 @@ if (tela === 'mesclar') {
   if (v === 'nova') montar(<NovaPendenciaDialog open onOpenChange={() => {}} clientes={[{ id: 'cli', nome: 'Cliente Bancada' }]} clienteFixo="cli" criar={async () => null} />);
   else if (v === 'resumo') montar(<ResumoClientesPainel fonte={fonte} />);
   else montar(<div className="bg-primary p-2"><AvisoPendenciasCliente cliente={{ id: 'cli', nome: 'Cliente Bancada' }} onVerNoResumo={() => {}} fonte={fonte} /><Abre /></div>);
+} else if (tela === 'oc-cc') {
+  /* OC-RECEB-PARCIAL-01 — a conta corrente da venda com o recebimento parcial DIVIDIDO (Receb. 1/2 conciliado + 2/2 programado,
+     a faixa "Falta receber …, já programado.") e o "Buscar recebimento no Financeiro" com os dois grupos (`&v=buscar`, nome longo).
+     Dados SINTETICOS na forma do `oc_conta_corrente`. */
+  const cc = lerContaCorrente({
+    modelo: 'conta_corrente', versao: 9, valor_acordado: 150000, entregue: 150000, cab_entregue: 50, recebido: 100000, programado: 50000,
+    devolvido: 0, saldo: -50000, explicado: 0, saldo_a_explicar: -50000, falta_explicar: -50000, situacao: 'falta_receber', a_entregar: 0,
+    ultima_entrega: '2026-09-03', recebimentos_sem_conta_bancaria: 0, saidas_sem_entrega: 0, explicacoes: [],
+    linhas: [
+      { tipo: 'entrega', data: '2026-09-03', parte_id: 'e1', lote_ordem: 1, cab: 50, categoria: 'desmama_f', conta_ordem: 1110,
+        conta: 'Venda de Desmama Fêmeas', mov_entrega: -150000, status: 'sem_caixa', no_saldo: true, saldo: -150000 },
+      { tipo: 'recebimento', data: '2026-09-04', parte_id: 'r1', lancamento_id: 'l1', conta_ordem: 1110, conta: 'Venda de Desmama Fêmeas',
+        banco: 'Banco do Brasil', descricao: 'Venda 050 Desmama F · Recebimento', mov_recebido: 100000, status: 'conciliado', no_saldo: true, saldo: -50000 },
+      { tipo: 'recebimento', data: '2026-09-04', parte_id: 'r2', lancamento_id: 'l2', conta_ordem: 1110, conta: 'Venda de Desmama Fêmeas',
+        banco: 'Banco do Brasil', descricao: 'Venda 050 Desmama F · Recebimento', mov_recebido: 50000, status: 'programado', no_saldo: false, saldo: -50000 },
+    ],
+  });
+  const itens = [
+    { lancamentoId: 'm1', data: '2026-09-20', valor: 50000, descricao: 'Pix do comprador Exemplo da Silva', subcentro: 'Venda de Desmama Fêmeas',
+      mesmoFavorecido: true, semContaBancaria: false, status: 'realizado', conciliado: false },
+    { lancamentoId: 'o1', data: '2026-09-10', valor: 5000, descricao: 'Pix recebido de terceiro com um nome muito comprido que nao cabe na coluna',
+      subcentro: 'Venda de Desmama Fêmeas', mesmoFavorecido: false, semContaBancaria: false, status: 'realizado', conciliado: false },
+  ];
+  const nada = async () => null;
+  const api: any = { contaCorrente: cc, loading: false, erro: null, ocupado: false, recarregar: async () => {}, sincronizarEntregas: nada,
+    listarVinculaveis: async () => ({ erro: null, itens }), vincularRecebimento: nada, explicarSaldo: nada, desfazerExplicacao: nada,
+    simularExplicacao: async () => ({ previa: null, erro: null }), lerRolCancelamento: async () => ({ rol: null, erro: null }),
+    listarLotes: async () => [], listarContas: async () => [] };
+  const Abre = () => { React.useEffect(() => { if (v === 'buscar') setTimeout(() => (Array.from(document.querySelectorAll('button'))
+    .find(b => b.textContent === '+ Buscar recebimento no Financeiro') as HTMLElement | undefined)?.click(), 50); }, []); return null; };
+  /* no "Buscar" a pagina atras do dialogo fica escondida: o X do dialogo sobre o texto da pagina e' sobreposicao da bancada, nao da tela */
+  montar(<div className="bg-background p-2" style={v === 'buscar' ? { visibility: 'hidden' } : undefined}>
+    <AbaContaCorrenteOC api={api} somenteLeitura={false} /><Abre /></div>);
 } else if (tela === 'oc-dialogo') {
   /* OC-DESFAZER-PREVISTO-01b — os tres estados do mock (460x344): bloqueio por realizado/conciliado, agendado com confirmacao e
      o Atualizar com a data proposta ja passada. Dados SINTETICOS; o banco e' o simulado do proprio dialogo (rpc/api). */
