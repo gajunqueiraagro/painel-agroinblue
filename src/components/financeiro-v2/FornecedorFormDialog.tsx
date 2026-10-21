@@ -173,10 +173,13 @@ export function FornecedorFormDialog({
     ? { texto: validado.motivo ?? '', tom: 'erro' }
     : legadoIntocado ? { texto: `Fora do padrão · ${gravado?.motivo ?? ''}${validado.valido && validado.formatado ? ` Ao salvar, grava ${validado.formatado}.` : ''}`, tom: 'aviso' }
     : null;
-  /* documento duplicado no mesmo cliente: AVISO, não bloqueia */
+  /* documento duplicado no mesmo cliente: AVISO, não bloqueia. FORN-01b (Gabriel, 21/10): no cadastro ATIVO (ou novo), um INATIVO com o
+     mesmo documento não avisa nem cobra — vale o ativo; só outro ATIVO conta */
+  const editandoAtivo = !editing || editing.ativo !== false;
   const duplicados = useMemo(() => (cadastro && documentoParaGravar
-    ? acharRepetidos({ proprioId: editing?.id ?? null, nome: d.nome, cpfCnpj: documentoParaGravar, conferirNome: false }, cadastro).porDocumento : []),
-  [cadastro, documentoParaGravar, editing?.id, d.nome]);
+    ? acharRepetidos({ proprioId: editing?.id ?? null, nome: d.nome, cpfCnpj: documentoParaGravar, conferirNome: false }, cadastro).porDocumento
+      .filter((f) => !editandoAtivo || f.ativo) : []),
+  [cadastro, documentoParaGravar, editing?.id, d.nome, editandoAtivo]);
   const dup = duplicados[0] ?? null;
   const faltas = oQueFalta(d, { documentoInvalido: documentoBloqueia, duplicadoCom: dup ? dup.nome : null });
   const pendentes = abasComPendencia(faltas);
