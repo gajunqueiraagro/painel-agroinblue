@@ -12,6 +12,10 @@
  *   (3) DATA INCOMPLETA — celula de coluna de data (cabecalho Data, Venc., Vencimento, Pgto., Pagamento, Emissão) que nao e' dd/mm/aaaa;
  *   (4) ALTURA QUE MUDA (FIN-FILTRO-DOC-01) — o cenario com `alturaFixa` mede o elemento antes e depois do gesto: nada empurra a tela.
  *   (5) CAMPO DE VALOR (UI-CAMPO-MOEDA-01) — todo campo de valor visivel tem de mostrar 999.999.999,99 inteiro ao lado do "R$" (regra `valor`).
+ *   (6) FORN-01b (regra de corte do Gabriel, 21/10 07h25 — substitui o "nenhum '…'" do item (1) para NOME/TEXTO EM TABELA): em celula,
+ *       o texto pode terminar em "…" se o texto inteiro estiver no `title`; numero, valor, data, CPF/CNPJ e contador nunca cortam (nem com
+ *       "…", regra `numero`); CORTE SECO em celula (o texto que passa da caixa sem "…", como o `uma-linha-que-rola`) reprova — o gatilho
+ *       de seletor dentro da celula e' campo e fica de fora. Fora de tabela, "…" segue proibido.
  * Baseline = a lista de EXCECOES abaixo (vazia). Antes de varrer, o detector se prova num fixture com os defeitos: se nao os achar,
  * sai com codigo 2 ("zero achados" so' vale quando a busca provou que sabe achar). `--fotos DIR` grava um print por tela e tamanho.
  */
@@ -42,15 +46,23 @@ const CENARIOS = [
   { nome: 'mesclar-uso', url: 'tela=mesclar', antes: clicarTexto('Uso') },
   { nome: 'mesclar-recentes', url: 'tela=mesclar', antes: clicar('[data-testid="abrir-recentes"]') },
   /* FORN-LISTA-01 — a lista nos tamanhos do contrato; os filtros pelo rótulo que começa com a situação (o número vem depois) */
-  { nome: 'fornecedores-lista', url: 'tela=fornecedores', tamanhos: TAMANHOS_DO_CONTRATO },
-  { nome: 'fornecedores-mesclados', url: 'tela=fornecedores', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicarRotulo(/^Mesclados /) },
-  { nome: 'fornecedores-sem-documento', url: 'tela=fornecedores', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicar('[data-testid="filtro-sem-documento"]') },
+  /* FORN-01b — a lista com a barra REAL do topo (32px) e 2.356 cadastros, como no app; a régua dela é a de Recorrências (abaixo) */
+  { nome: 'fornecedores-lista', url: 'tela=fornecedores&barra=32&n=2356', tamanhos: TAMANHOS_DO_CONTRATO },
+  { nome: 'fornecedores-mesclados', url: 'tela=fornecedores&barra=32&n=2356', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicarRotulo(/^Mesclados /) },
+  { nome: 'fornecedores-sem-documento', url: 'tela=fornecedores&barra=32&n=2356', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicar('[data-testid="filtro-sem-documento"]') },
   /* FORN-SEM-CADASTRO-01 — a aba "Sem cadastro" (substitui a "Pendentes") nos tamanhos do mock, fechada e com uma linha aberta */
-  { nome: 'fornecedores-sem-cadastro', url: 'tela=fornecedores', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicar('[data-testid="aba-sem-cadastro"]') },
-  { nome: 'fornecedores-sem-cadastro-aberta', url: 'tela=fornecedores', tamanhos: TAMANHOS_DO_CONTRATO,
+  { nome: 'fornecedores-sem-cadastro', url: 'tela=fornecedores&barra=32&n=2356', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicar('[data-testid="aba-sem-cadastro"]') },
+  { nome: 'fornecedores-sem-cadastro-aberta', url: 'tela=fornecedores&barra=32&n=2356', tamanhos: TAMANHOS_DO_CONTRATO,
     antes: async (p) => { await clicar('[data-testid="aba-sem-cadastro"]')(p); await clicar('[data-testid="sem-cadastro-linha"] td')(p); } },
-  { nome: 'fornecedores-inativos', url: 'tela=fornecedores', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicarRotulo(/^Inativos /) },
-  { nome: 'fornecedores-todos', url: 'tela=fornecedores', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicarRotulo(/^Todos /) },
+  { nome: 'fornecedores-inativos', url: 'tela=fornecedores&barra=32&n=2356', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicarRotulo(/^Inativos /) },
+  { nome: 'fornecedores-todos', url: 'tela=fornecedores&barra=32&n=2356', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicarRotulo(/^Todos /) },
+  { nome: 'fornecedores-por-pagina-200', url: 'tela=fornecedores&barra=32&n=2356', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicarRotulo(/^200$/) },
+  { nome: 'fornecedores-ultima-pagina', url: 'tela=fornecedores&barra=32&n=2356', tamanhos: TAMANHOS_DO_CONTRATO,
+    antes: async (p) => { for (let i = 0; i < 3; i++) await clicarRotulo(/^Próxima/)(p); } },
+  /* FORN-01b — Financeiro › Recorrências, a RÉGUA de tabela aprovada (a mesma barra real do topo): entra na bancada para ser MEDIDA e
+     fotografada ao lado de Fornecedores, e conta so' erro de pagina. Ela tem 9 achados proprios na regra de hoje (os cartões do topo
+     com "…" fora de tabela; "Situação", "Descrição" e "Favorecido" do cabeçalho a 750/814) — divida dela, frente UI-TABELA-PADRAO-01. */
+  { nome: 'recorrencias', url: 'tela=recorrencias&barra=32', tamanhos: TAMANHOS_DO_CONTRATO, soRegras: [] },
   /* FORN-BUSCA-UNICA-01 — SO' OS FILTROS do Financeiro V2 (decisao do Gabriel, 19/10): a TABELA tem 60 achados (reticencias em Produto,
      Fornecedor e Centro; datas dd/mm/aa; cabecalho) e e' a frente FIN-V2-SEM-CORTE-01. Tirar a `regiao` mede a tela inteira. */
   { nome: 'financeiro-filtros', url: 'tela=financeiro', regiao: '[data-testid="filtros-da-lista"]' },
@@ -225,6 +237,8 @@ function medirTabelaMinima({ sel, linhas }) {
 /* roda NA PAGINA: devolve os achados [{regra, texto}] */
 function medir(regiao) {
   const achados = [];
+  /* FORN-01b — o que nunca corta: numero, valor, data, hora, CPF/CNPJ, nota, contador (so' digitos e pontuacao de numero) */
+  const EH_NUMERO = (t) => /^[▲▼+\-−]?\s*(R\$\s?)?[\d.,/:\-–]+%?$/.test(t);
   const raiz = (regiao && document.querySelector(regiao)) || document.body;
   const texto = (e) => (e.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 80);
   /* UI-CAMPO-MOEDA-01 — todo campo de valor visível tem de mostrar 999.999.999,99 inteiro ao lado do "R$": o texto é posto no input SEM
@@ -244,13 +258,27 @@ function medir(regiao) {
     const cs = getComputedStyle(e);
     if (cs.display === 'none' || cs.visibility === 'hidden' || !e.textContent.trim()) continue;
     const r = e.getBoundingClientRect(); if (r.width <= 2 || r.height <= 2) continue;   /* sr-only (so' para leitor de tela) fica de fora */
-    if (cs.textOverflow === 'ellipsis' && e.scrollWidth > e.clientWidth + 0.5) achados.push({ regra: 'reticencias', texto: texto(e) });
+    /* FORN-01b (regra de corte do Gabriel, 21/10 07h25): NOME/TEXTO em celula de tabela pode terminar em "…" se a celula leva o texto
+       inteiro no `title`; numero, valor, data, CPF/CNPJ e contador nunca cortam (nem com "…"); fora de tabela, "…" segue proibido */
+    const naCelula = e.closest('td, th');
+    if (cs.textOverflow === 'ellipsis' && e.scrollWidth > e.clientWidth + 0.5) {
+      const t = texto(e); const inteiro = (e.textContent ?? '').replace(/\s+/g, ' ').trim();
+      const dono = e.closest('[title]');
+      const comTitle = !!(naCelula && dono && (dono === naCelula || naCelula.contains(dono) || dono.contains(naCelula))
+        && (dono.getAttribute('title') ?? '').replace(/\s+/g, ' ').includes(inteiro));
+      if (naCelula && EH_NUMERO(inteiro)) achados.push({ regra: 'numero', texto: `numero/data/documento com "…": ${t}` });
+      else if (!comTitle) achados.push({ regra: 'reticencias', texto: naCelula ? `${t} (sem o texto inteiro no title)` : t });
+    }
     else if (cs.webkitLineClamp && cs.webkitLineClamp !== 'none' && e.scrollHeight > e.clientHeight + 0.5) achados.push({ regra: 'reticencias', texto: texto(e) });
     /* vazamento: celula de tabela cujo conteudo passa da largura dela (invade a vizinha) */
     else if ((e.tagName === 'TD' || e.tagName === 'TH') && cs.overflowX === 'visible' && e.scrollWidth > e.clientWidth + 1) achados.push({ regra: 'corte', texto: `${texto(e)} (vaza: pede ${e.scrollWidth}px, tem ${e.clientWidth})` });
     /* corte calado: texto proprio cortado por overflow escondido numa linha so' (sem "…", mas cortado do mesmo jeito) */
     else if ((cs.overflowX === 'hidden' || cs.overflowX === 'clip') && cs.whiteSpace.startsWith('nowrap') && e.scrollWidth > e.clientWidth + 1
       && (e.tagName === 'TD' || e.tagName === 'TH' || [...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()))) achados.push({ regra: 'corte', texto: `${texto(e)} (pede ${e.scrollWidth}px, tem ${e.clientWidth})` });
+    /* FORN-01b — CORTE SECO em celula: o texto que passa da caixa sem "…" (o `uma-linha-que-rola`, que rola escondido: "ALVORADA PRODUTOS A") */
+    /* (o gatilho de um seletor dentro da celula e' CAMPO: rola como o input, fica de fora) */
+    else if (naCelula && !e.closest('button, [role="combobox"]') && (cs.overflowX === 'auto' || cs.overflowX === 'scroll') && cs.whiteSpace.startsWith('nowrap') && e.scrollWidth > e.clientWidth + 1
+      && [...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())) achados.push({ regra: 'corte', texto: `corte seco: ${texto(e)} (pede ${e.scrollWidth}px, tem ${e.clientWidth})` });
   }
   /* data, hora e numero NUNCA quebram a linha: o texto da celula numa linha so' */
   for (const td of raiz.querySelectorAll('td, th')) {
@@ -353,7 +381,9 @@ function medirSobreposicao(regiao) {
     const folga = inclinado ? 0.21 * parseFloat(cs.fontSize) : 0;
     const t = texto(e);
     /* com "…" o texto ja' e' achado da regra das reticencias; o INCLINADO conta sempre (o span que encolhe ao texto corta a ultima letra) */
-    if (!corta.rola && (inclinado || cs.textOverflow !== 'ellipsis') && rt.right + folga > corta.r + 0.5)
+    /* FORN-01b — o texto dentro de uma CELULA com "…" (o `truncate` no `td`, o texto num `span` filho) e' a regra das reticencias que julga */
+    const reticenciasNoCorte = getComputedStyle(corta.el).textOverflow === 'ellipsis' && !!corta.el.closest('td, th');
+    if (!corta.rola && (inclinado || (cs.textOverflow !== 'ellipsis' && !reticenciasNoCorte)) && rt.right + folga > corta.r + 0.5)
       achados.push({ regra: inclinado ? 'italico' : 'corte', texto: `"${t}" passa ${(rt.right + folga - corta.r).toFixed(1)}px da caixa${inclinado ? ' (texto inclinado)' : ''}` });
     /* so' o numero PARTIDO (parte a' vista, parte escondida); o que rola inteiro para fora da vista e o que mora numa tabela que rola
        por inteiro (a coluna segue inteira, a tabela e' que rola) nao contam. CPR-AJUSTES-20-10: a tabela feita de `div` (a lista da
@@ -407,6 +437,9 @@ try {
   const p0 = await navegador.newPage({ viewport: { width: 800, height: 400 } });
   await p0.setContent(`<div data-testid="campo-moeda" style="position:relative"><span>R$</span><input style="width:50px;padding-left:24px"></div>
 <div style="width:80px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">Nome muito comprido demais para caber</div>
+    <table style="width:120px;table-layout:fixed"><tbody><tr><td title="Nome aceito com reticencias e title inteiro" style="overflow:hidden;white-space:nowrap;text-overflow:ellipsis">Nome aceito com reticencias e title inteiro</td></tr>
+    <tr><td><span style="display:block;overflow-x:auto;white-space:nowrap">Nome cortado seco rolando escondido</span></td></tr>
+    <tr><td title="12.345.678/0001-90" style="width:40px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">12.345.678/0001-90</td></tr></tbody></table>
     <div style="width:80px;overflow:hidden;white-space:nowrap">Outro nome comprido demais para caber</div>
     <table style="width:40px;table-layout:fixed"><tbody><tr><td style="word-break:break-all">19/10/2026</td></tr></tbody></table>
     <div style="height:120px;overflow:auto;padding-top:8px"><table><thead><tr><th style="position:sticky;top:0;background:rgba(255,255,255,.5)">Data</th></tr></thead>
@@ -438,6 +471,11 @@ try {
     <div style="width:40px;overflow-x:auto;white-space:nowrap"><span>1.234.567,89</span></div>`);
   const daSobre0 = await p0.evaluate(medirSobreposicao, null);
   const prova = [...daRolagem0, ...daTabela0, ...daPagina0, ...daSobre0, ...(comMudanca && !semMudar ? [comMudanca] : [])].map((a) => a.regra);
+  /* FORN-01b — o detector se prova na regra nova: o nome com "…" e title passa; o corte seco e o documento com "…" sao achados */
+  const aceitoErrado = daPagina0.some((a) => a.texto.startsWith('Nome aceito'));
+  const seco0 = daPagina0.some((a) => a.texto.startsWith('corte seco: Nome cortado seco'));
+  const doc0 = daPagina0.some((a) => a.regra === 'numero' && a.texto.includes('12.345.678/0001-90'));
+  if (aceitoErrado || !seco0 || !doc0) { console.error(`check-ui-cortes: AUTO-TESTE DA REGRA DE CORTE FALHOU (aceito acusado: ${aceitoErrado}, corte seco: ${seco0}, documento: ${doc0})`); process.exit(2); }
   await p0.close();
   if (!['reticencias', 'corte', 'quebra', 'data', 'cabecalho', 'altura', 'rolagem', 'valor', 'tabela', 'sobreposicao', 'italico', 'numero'].every((r) => prova.includes(r))
     || prova.filter((r) => r === 'cabecalho').length < 3 || daSobre0.filter((a) => a.regra === 'sobreposicao').length < 2) { console.error(`check-ui-cortes: AUTO-TESTE FALHOU (achou ${prova.join(',') || 'nada'})`); process.exit(2); }
