@@ -70,6 +70,7 @@ const CENARIOS = [
      cabecalho do dia em janela estreita) — frente CPR-SEM-CORTE-01. Tirar a `regiao` mede a tela inteira. */
   /* CPR-SEM-CORTE-01 (CPR-AJUSTES-20-10) — a CPR INTEIRA, lista e Ampliado, nos sete tamanhos: nada de "…" */
   { nome: 'cpr-lista', url: 'tela=cpr', tamanhos: TAMANHOS_DO_CONSORCIO },
+  { nome: 'cpr-futuro', url: 'tela=cpr&v=futuro', tamanhos: TAMANHOS_DO_CONSORCIO },
   { nome: 'cpr-ampliado', url: 'tela=cpr', tamanhos: TAMANHOS_DO_CONSORCIO, antes: clicar('[data-testid="cpr-ampliar"]') },
   { nome: 'cpr-selo-estimado', url: 'tela=cpr', tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[data-testid="cpr-selo-estimado"]' },
   { nome: 'cpr-ampliado-totais', url: 'tela=cpr', tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[data-testid="cpr-confirmado-estimado"]', antes: clicar('[data-testid="cpr-ampliar"]') },

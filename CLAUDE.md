@@ -10339,6 +10339,52 @@ curta nas secoes de regras) e a pendencia (na FILA); o bloco inteiro vai para do
   · FICA PARA O 01b (depende do mock do Gabriel): frases do banco com acento e o lancamento que trava (data, valor, status) com
     "Abrir lancamento"; agendado com confirmacao explicita (hoje o Desfazer o cancela calado e o Atualizar o bloqueia); vencimento
     proposto do Atualizar editavel com aviso quando ja' passou (hoje e' o da parcela viva); motivo guardado entre tentativas.
+- ⚠ CPR: PERIODO QUE NAO INCLUI HOJE NAO MOSTRA HOJE, E VENCIDO QUE ENTRA NO SALDO APARECE SEMPRE (CPR-AJUSTES-20-10b, Gabriel 20/10/2026, so'
+  tela). Nasce da Vera, Global, 01/11–30/11: a lista abria um dia "hoje" com os realizados de 20/10 e o Caixa inicial de 31/10 saia igual
+  ao caixa de hoje.
+  · FASE 0, MEDIDO (proto, so' leitura): na Vera nada em aberto entre 21/10 e 31/10 e nada vencendo hoje; 3 vencidos em aberto = R$ 160,83
+    (15/12/2025 38,63; 15/09/2026 112,82; 15/10/2026 9,38, os tres da conta fazenda). O Caixa inicial igual ao de hoje era da VERSAO PUBLICADA
+    (a D1/D2 deixava esses vencidos fora do saldo); o CPR-AJUSTES-20-10 ja' os desconta. O dia "hoje" era defeito vivo: a busca traz de hoje
+    ate' "de", e as PAGAS (pilula Realizado) que vencem hoje abriam um dia fora do periodo. Conserto: a lista usa `recorte.pagasNoPeriodo`
+    (dono: so' as pagas com vencimento dentro do periodo); `recorte.pagas` segue para o seletor e as regras de antes.
+  · VENCIDOS: `recorte.vencidosNaLista` (dono) = sempre, menos no periodo ENCERRADO com a caixa desligada. Periodo com hoje: no dia de hoje,
+    qualquer que seja a caixa. Periodo FUTURO: bloco "Vencidos em aberto · N contas · entram no saldo" ANTES da linha do Caixa inicial (que ja'
+    os desconta), com o total; "Entre hoje e dd/mm/aaaa" (o que vence ate' a vespera) tambem antes dele. Os dois prendem a 22px. O rodape
+    (Fim do periodo) soma sempre os vencidos. PDF e Excel na mesma ordem (`GrupoDaTela.antesDoCaixaInicial`).
+  · A CAIXA "INCLUIR VENCIDOS" SO' DECIDE NO PERIODO ENCERRADO (o vencido sai hoje, depois do periodo, e nao mexe no saldo dele); a frase vai
+    no `title` dela. PROPOSTA AO GABRIEL: retira'-la (no encerrado, mostrar sempre o grupo "saem hoje"). Nao removida.
+  · VERA, Global, 01/11–30/11, pelo dado de 20/10 (caixa de hoje 1.450.296,76, o da tela publicada): vencidos 160,83 (3) · Caixa inicial
+    31/10 = 1.450.135,93 · Fim do periodo: a pagar 206.581,23 (57 saidas 186.395,93 + 3 pontas de transferencia 20.024,47 + vencidos) ·
+    a receber 232.473,50 (212.449,03 + as 3 pontas) · saldo no fim 1.476.189,03 (as transferencias sao entre duas contas do caixa).
+  · Gate: cenario `cpr-futuro` (bancada `tela=cpr&v=futuro`, o periodo pelo retorno de sessao da tela) nos sete tamanhos.
+  Testes: `cprAjustes2010.test.ts` 12 -> 18 (+6); `cprRecorte.test.ts` 81 -> 82; `cprEstimado.test.ts` trocado ao contrato novo; SUITE 5973
+  passando, 3 falhas de sempre, 1 erro de sempre; gate de tela completo 113 telas, 613 medicoes, 0 achados. Os testes antigos trocados
+  (a caixa nao muda nada num periodo com hoje; no encerrado ela ainda decide). 5 mutacoes mortas.
+  ⚠ NAO PROVADO: com login no app real · a Vera aberta na tela depois da publicacao.
+- ⚠ O RODAPE "FIM DO PERIODO" DA CPR TEM UM DONO E SOMA SO' O QUE ESTA' DEPOIS DA LINHA DO CAIXA INICIAL (CPR-AJUSTES-20-10b, correcao do
+  rodape, Gabriel 20/10/2026, so' tela). CORRIGE, no bloco do CPR-AJUSTES-20-10b logo acima, "O rodape (Fim do periodo) soma sempre os
+  vencidos" e o "a pagar 206.581,23 (… + vencidos)": no periodo FUTURO os vencidos ja' estao dentro do Caixa inicial previsto, e soma'-los
+  de novo contava duas vezes (Vera, Global, nov/26: 1.450.135,93 + 232.473,50 − 206.581,23 = 1.476.028,20 contra o saldo no fim
+  1.476.189,03, a diferenca de 160,83 = os vencidos).
+  · INVARIANTE, em tela, PDF e Excel, centavo a centavo: Caixa inicial + A receber do rodape − A pagar do rodape = Saldo no fim.
+  · DONO: `rodapeDoPeriodoCpr(recorte, serie)` (`src/lib/financeiro/cprRecorte.ts`) -> {pagar, receber, contas, realizados, encerrado};
+    o titulo e' `contagemDoRodapeCpr` ("N contas", "N contas · M lançamentos realizados", encerrado "M lançamentos realizados").
+      futuro: so' o em aberto do periodo — vencidos e "Entre hoje e dd/mm" (antes do Caixa inicial) ficam fora; `recorte.total` e as
+        fatias confirmado / estimado seguem a mesma regra (`recorte.vencidosNoRodape` = `vencidosNaLista && de <= hoje`);
+      com hoje: os dias REALIZADOS de "de" ate' hoje (hoje inclusive, `serie.totalRealizado`) + os vencidos (no dia de hoje) + o em
+        aberto — ⚠ MUDANCA DECLARADA: antes o rodape do periodo com hoje somava so' o em aberto e o invariante nao fechava (o Caixa
+        inicial e' a vespera de "de"); a lista ja' mostrava os dias realizados depois do Caixa inicial;
+      encerrado: o realizado do periodo, como antes; sem o realizado (sem saldo conferido), o em aberto da lista, como antes.
+  · A tela, o PDF (`rodape.realizados`) e o Excel leem o MESMO objeto; o Excel ganhou a linha final "Fim do período · dd/mm/aaaa" em
+    "Saldo por dia" (a receber, a pagar, saldo no fim), e as linhas depois do Caixa inicial somam exatamente o rodape.
+  · Vera, Global, 01/11–30/11 (dado de 20/10): A pagar 206.420,40 (186.395,93 + 20.024,47 das pontas de transferencia) · A receber
+    232.473,50 · Caixa inicial 1.450.135,93 · Saldo no fim 1.476.189,03.
+  · A caixa "Incluir vencidos" nao foi tocada (proposta de retirada pendente com o Gabriel).
+  Testes: `cprAjustes2010.test.ts` 18 -> 22 (o invariante no futuro — o caso da Vera em sintetico —, com hoje, comecando hoje, e a
+  ligacao das tres saidas ao dono); `cprRecorte.test.ts` trocado ao contrato novo (o total do futuro sem os vencidos; o rodape do
+  encerrado pelo dono). Mutacoes mortas: somar os vencidos de volta no rodape (cai o invariante do futuro por exatamente 160,83) e o
+  rodape sem o realizado (caem os dois do periodo com hoje).
+  ⚠ NAO PROVADO: com login no app real · a Vera aberta na tela depois da publicacao.
 - ⚠ AS RECUSAS DA OC VEM PRONTAS DO BANCO; DESFAZER/ATUALIZAR COMPROMISSO NO MOCK DE 460x344 (OC-DESFAZER-PREVISTO-01b, Gabriel
   20/10/2026, mock aprovado 19h16). 20261028100800: (1) as recusas de oc_cancelar_programacao, oc_cancelar_compromisso,
   oc_estornar_materializacao, oc_alterar_parcela_programacao, oc_salvar_lotes, oc_desvincular_lancamento, oc_ajustar_valor_compromisso,
