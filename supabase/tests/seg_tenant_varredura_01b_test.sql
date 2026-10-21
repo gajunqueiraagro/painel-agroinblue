@@ -99,17 +99,17 @@ begin
   a := pg_temp.ch(format(q_anos, c_x));
   if a <> v_anos_x then raise exception 'T3 ux anos de X: % (esperado %)', a, v_anos_x; end if;
   a := pg_temp.ch(format(q_esp, c_x, bx, '2031-01'));
-  if a <> 'OK SINT SEG B X|ofx=1|sis=1|v=111.00|espelhados-05-caixa' then raise exception 'T3 ux espelhados de X: %', a; end if;
+  if a <> 'OK SINT SEG B X|ofx=1|sis=1|v=111.00|espelhados-06-adiantados' then raise exception 'T3 ux espelhados de X: %', a; end if;
   a := pg_temp.ch(format(q_esp, c_x, bx, '2031-02'));
   if a is distinct from 'OK null' then raise exception 'T3 ux espelhados de X em mes sem movimento: %', a; end if;
   perform pg_temp.como(uy);
   a := pg_temp.ch(format(q_anos, c_y));
   if a <> v_anos_y then raise exception 'T3 uy anos de Y: % (esperado %)', a, v_anos_y; end if;
   a := pg_temp.ch(format(q_esp, c_y, b_y, '2031-01'));
-  if a <> 'OK SINT SEG B Y|ofx=1|sis=1|v=222.00|espelhados-05-caixa' then raise exception 'T3 uy espelhados de Y: %', a; end if;
+  if a <> 'OK SINT SEG B Y|ofx=1|sis=1|v=222.00|espelhados-06-adiantados' then raise exception 'T3 uy espelhados de Y: %', a; end if;
   perform pg_temp.como(adm);
-  if pg_temp.ch(format(q_anos, c_y)) <> v_anos_y or pg_temp.ch(format(q_anos, c_x)) <> v_anos_x or pg_temp.ch(format(q_esp, c_y, b_y, '2031-01')) <> 'OK SINT SEG B Y|ofx=1|sis=1|v=222.00|espelhados-05-caixa'
-     or pg_temp.ch(format(q_esp, c_x, bx, '2031-01')) <> 'OK SINT SEG B X|ofx=1|sis=1|v=111.00|espelhados-05-caixa' then
+  if pg_temp.ch(format(q_anos, c_y)) <> v_anos_y or pg_temp.ch(format(q_anos, c_x)) <> v_anos_x or pg_temp.ch(format(q_esp, c_y, b_y, '2031-01')) <> 'OK SINT SEG B Y|ofx=1|sis=1|v=222.00|espelhados-06-adiantados'
+     or pg_temp.ch(format(q_esp, c_x, bx, '2031-01')) <> 'OK SINT SEG B X|ofx=1|sis=1|v=111.00|espelhados-06-adiantados' then
     raise exception 'T3 admin: % · % · %', pg_temp.ch(format(q_anos, c_y)), pg_temp.ch(format(q_esp, c_y, b_y, '2031-01')), pg_temp.ch(format(q_esp, c_x, bx, '2031-01'));
   end if;
   -- o admin tambem nao cruza cliente e conta
