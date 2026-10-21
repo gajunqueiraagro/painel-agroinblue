@@ -110,9 +110,11 @@ describe('FinanceiroV2Tab — a coluna ST', () => {
   /* ⚠ CONTRATO MUDOU NO FIN-V2-COLUNAS-OC-01 (Gabriel, 05/10): o status renderiza a 8px (`.celula-status`) e a coluna foi
      remedida — 77 → 64. A pílula e a cor continuam vindo do dono. */
   /* ⚠ CONTRATO MUDOU NO FIN-V2-COLUNAS-02 (Gabriel, 16/10, mock v4): Status 64→60, Valor 90→88, Doc 90→78. */
-  it('ST com 60px (a 8px), Valor 88, Doc 78, e o status em pílula', () => {
+  /* ⚠ CONTRATO MUDOU NO FIN-V2-DESEMPENHO-01b: Valor 88→94 (o maior valor da casa pede 93px) */
+  it('ST com 60px (a 8px), Valor 94, Doc 78, e o status em pílula', () => {
     expect(tela).toContain('<col style={{ width: 60 }} />');
-    expect(tela).toContain('<col style={{ width: 88 }} />');
+    expect(tela).toContain('<col style={{ width: 94 }} />');
+    expect(tela).not.toContain('<col style={{ width: 88 }} />');
     expect(tela).toContain('<col style={{ width: 78 }} />');
     for (const velho of [64, 77, 70, 90]) expect(tela).not.toContain(`<col style={{ width: ${velho} }} />`);
     expect(tela).toContain('<span className={cn(STATUS_PILULA_BASE, stPilula)} data-status={stKey}>{stLabel}</span>');
@@ -137,7 +139,7 @@ describe('FinanceiroV2Tab — a coluna ST', () => {
       return Number(tern ? tern[1] : l.match(/width: (\d+)/)![1]);
     });
     expect(larguras.length).toBe(15);   // FIN-V2-COLUNAS-02: Macro e Centro viraram UMA coluna
-    expect(larguras.reduce((a, b) => a + b, 0)).toBe(906);
+    expect(larguras.reduce((a, b) => a + b, 0)).toBe(916);   // FIN-V2-DESEMPENHO-01b: datas dd/mm/aaaa e Valor 94
     expect(larguras.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(919);
   });
 });

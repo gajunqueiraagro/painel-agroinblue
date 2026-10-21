@@ -48,7 +48,10 @@ export function CelulaVinculos({ vinculos, abrir }: {
 export function CelulaSafra({ safra }: { safra: SafraNaLista }) {
   return (
     <span className="flex min-w-0 flex-col leading-none" title={safra.titulo} data-testid="safra-da-linha">
-      <span className="truncate pr-0.5 font-medium" data-testid="safra-linha1">{safra.linha1}</span>
+      <span className="flex items-center gap-[2px] whitespace-nowrap font-medium tabular-nums" data-testid="safra-linha1">
+        <span data-testid="safra-periodo">{safra.periodo}</span>
+        {safra.selo && <span className="safra-selo rounded-[2px] border px-[1px] font-semibold text-muted-foreground" data-testid="safra-selo">{safra.selo}</span>}
+      </span>
       {safra.linha2 && <span className="safra-atividade truncate pr-0.5 font-normal text-muted-foreground" data-testid="safra-linha2">{safra.linha2}</span>}
     </span>
   );
