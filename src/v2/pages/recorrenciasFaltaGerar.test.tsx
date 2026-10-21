@@ -37,12 +37,12 @@ describe('a linha: o selo e o botão Gerar têm lugar reservado', () => {
   it('o selo vem do dono, num lugar de largura reservada que existe em toda linha', () => {
     expect(TELA).toContain('const falta = faltaGerarDaRegra(aGerar, r.id);');
     expect(TELA).toContain('const selo = seloFaltaGerar(falta);');
-    /* RECORRENCIAS-COLUNAS-01 (Gabriel 17/10): a Situação é UM lugar de 106px — o selo quando há o que gerar, senão a situação */
+    /* RECORRENCIAS-COLUNAS-01 (Gabriel 17/10): a Situação é UM lugar (116px desde o REC-COLUNAS-01) — o selo quando há o que gerar, senão a situação */
     expect(TELA).toContain("data-testid=\"rec-lugar-do-selo\"");
     const lugar = TELA.slice(TELA.indexOf('data-testid="rec-lugar-do-selo"'), TELA.indexOf('data-testid="rec-lugar-do-gerar"'));
     expect(lugar).toContain('{selo ? (');
     expect(TELA).toContain("{ campo: 'situacao', rotulo: 'Situação', largura: LARGURA_SITUACAO },");
-    expect(TELA).toContain('const LARGURA_SITUACAO = 106;');
+    expect(TELA).toContain('const LARGURA_SITUACAO = 116;');
   });
   it('o botão Gerar fica ANTES do "⋯", num lugar reservado (vazio e `aria-hidden` sem nada a gerar), e abre o mesmo diálogo', () => {
     const acoes = TELA.slice(TELA.indexOf('GERAR NA LINHA'), TELA.indexOf('<DropdownMenuContent'));
@@ -52,7 +52,7 @@ describe('a linha: o selo e o botão Gerar têm lugar reservado', () => {
     expect(acoes).toContain('onClick={() => setGerando(r)}');
     expect(acoes).toContain('title={tituloDoGerarNaLinha(falta)}');
     expect(acoes.indexOf('rec-gerar-na-linha')).toBeLessThan(acoes.indexOf('<DropdownMenu>'));
-    expect(TELA).toContain('const LARGURA_ACOES = LARGURA_GERAR + 22;');
+    expect(TELA).toContain('const LARGURA_ACOES = LARGURA_GERAR + 24;');
     /* o clique no botão não abre a linha: o invólucro da célula segura o clique, como no "⋯" */
     expect(TELA.slice(TELA.indexOf("cn(TD, 'px-0 text-right select-none')"), TELA.indexOf('GERAR NA LINHA'))).toContain('onClick={e => e.stopPropagation()}');
     /* o item do "⋯" continua */
@@ -95,7 +95,7 @@ describe('RECORRENCIAS-COLUNAS-01 — a régua', () => {
   it('a soma escrita das fixas é a soma das colunas fixas + ações; Favorecido ~55% do resto; sem a trava de largura', async () => {
     const larg = [...TELA.matchAll(/largura: (\d+)(?:, direita: true)? \}/g)].map((m) => Number(m[1]));
     const n = (nome: string) => Number(TELA.match(new RegExp(`const ${nome} = (\\d+);`))?.[1]);
-    expect(larg.reduce((a, b) => a + b, 0) + n('LARGURA_SITUACAO') + n('LARGURA_GERAR') + 22).toBe(n('LARGURA_DAS_FIXAS'));
+    expect(larg.reduce((a, b) => a + b, 0) + n('LARGURA_SITUACAO') + n('LARGURA_GERAR') + 24).toBe(n('LARGURA_DAS_FIXAS'));
     expect(TELA).toContain('const FATIA_FAVORECIDO = 0.55;');
     expect(TELA).not.toContain('max-w-5xl');
     expect(TELA).not.toMatch(/<h1/);

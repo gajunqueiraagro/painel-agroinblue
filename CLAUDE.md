@@ -10548,6 +10548,21 @@ curta nas secoes de regras) e a pendencia (na FILA); o bloco inteiro vai para do
   antigo). Mutacoes: somar o grupo no rodape derruba 2; esconder o grupo no dono derruba 3; tirar o grupo da tela derruba 1. Bancada:
   `cpr-encerrado` e `cpr-encerrado-saem-hoje` (`tela=cpr&v=encerrado`) nos sete tamanhos; prints em ~/Downloads/cpr-20-10c/.
   ⚠ NAO PROVADO: nada com login no app real (bancada e testes).
+- ⚠ AS COLUNAS CURTAS DE RECORRENCIAS TEM A LARGURA DO MAIOR TEXTO, E A SOBRA E' DE DESCRICAO E FAVORECIDO (REC-COLUNAS-01, Gabriel 21/10/2026,
+  so' tela, `src/v2/pages/V2Recorrencias.tsx`). REGRA (vale para toda tabela daqui em diante): coluna de valor curto = o MAIOR texto
+  possivel dela, cabecalho incluido (com a seta de 12px, que FICA — lei de estabilidade visual), medido RENDERIZADO no dado real de todos os
+  clientes e no dominio, + 8 de folga + 8 de padding; `table-layout: fixed` com colgroup; a sobra inteira para o texto longo (uma linha,
+  "…" e `title`); numero, valor e data nunca cortam. Regua (px): Conta 127 (107,8 "Cartão Sicredi Lavoura", o maior nome de conta USADO
+  em recorrencia; nome maior corta com `title` — decisao do Gabriel) · Tipo 73 · Dia 43 (o cabecalho) · Forma 57 (o cabecalho; sem
+  `truncate`, lista fechada) · Previsto 74 ("999.999,99": o maior valor base real tem seis digitos) · Valor do mes 88 (o cabecalho virou
+  "Valor do mês"; o mes esta' no seletor do topo) · Situacao 116 ("falta gerar · 44 meses" 99,4; o texto do selo NAO muda) · "⋯" 64;
+  `LARGURA_DAS_FIXAS` 642 (era 676). Descricao + Favorecido: 1126 240 -> 274, 1440 554 -> 588 (+34). Trocar mes, filtro e busca nao move
+  cabecalho nem colunas (medido nos quatro tamanhos). Bancada `tela=recorrencias` (`scripts/ui-cortes/dados/recorrencias.ts`, sintetica) e
+  cenario `recorrencias` no `check:ui-cortes` (de 1000px para cima).
+  ⚠ DIVIDA REC-COLUNAS-01b (anterior a este PR, NAO resolvida): em 750x520, 750x600 e 814x530 os cartoes do topo se sobrepoem ("Valor certo"
+    e "A confirmar" sobre o valor vizinho) e o "Gerar" sai da tabela (a soma das fixas passa da largura e o wrapper corta na horizontal).
+    O cenario do gate so' mede de 1000px para cima ate' ela fechar. (O cabecalho "Descrição" vazando 3px a 1000 fechou com o +34.)
+  ⚠ NAO PROVADO: nada com login no app real (bancada).
 - ⚠ TODO VINCULO COM EXTRATO DA' BAIXA; O PARCIAL VIRA DIVISAO EXPLICITA (CONC-BAIXA-NO-VINCULO-01, Gabriel 21/10/2026).
   20261028100900 + 20261028100910. (1) `fn_promover_lancamento_realizado_ao_conciliar` promove tambem PREVISTO (era o buraco do 1:1
   manual e do "vincular exatos"). (2) GATILHO ADIADO `trg_zzz_conc_baixa_no_vinculo` (restricao DEFERRABLE INITIALLY DEFERRED em
