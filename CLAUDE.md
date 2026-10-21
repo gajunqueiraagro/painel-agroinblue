@@ -10563,6 +10563,33 @@ curta nas secoes de regras) e a pendencia (na FILA); o bloco inteiro vai para do
     e "A confirmar" sobre o valor vizinho) e o "Gerar" sai da tabela (a soma das fixas passa da largura e o wrapper corta na horizontal).
     O cenario do gate so' mede de 1000px para cima ate' ela fechar. (O cabecalho "Descrição" vazando 3px a 1000 fechou com o +34.)
   ⚠ NAO PROVADO: nada com login no app real (bancada).
+- ⚠ TODO VINCULO COM EXTRATO DA' BAIXA; O PARCIAL VIRA DIVISAO EXPLICITA (CONC-BAIXA-NO-VINCULO-01, Gabriel 21/10/2026).
+  20261028100900 + 20261028100910. (1) `fn_promover_lancamento_realizado_ao_conciliar` promove tambem PREVISTO (era o buraco do 1:1
+  manual e do "vincular exatos"). (2) GATILHO ADIADO `trg_zzz_conc_baixa_no_vinculo` (restricao DEFERRABLE INITIALLY DEFERRED em
+  `conciliacao_bancaria_itens`) roda no fim da transacao o nucleo `_fn_conc_baixa_no_vinculo`: lancamento ligado sem baixa recebe
+  baixa (realizado, data do ultimo extrato vivo); PARCIAL (aplicado vivo < valor) se DIVIDE — o original fica com o aplicado,
+  realizado e ligado; a falta vira um IRMAO programado (mesmo fornecedor/classificacao/competencia/conta/VENCIMENTO original, sem
+  recorrencia por causa de `uniq_lanc_recorrencia_competencia`), preso por `financeiro_lancamentos_v2.saldo_de_id`. Adiado porque o
+  1:N e o grupo gravam varios vinculos do mesmo lancamento em comandos seguidos: so' no fim se sabe se ficou inteiro. Os corpos do
+  1:1, do grupo e do bloco NAO mudaram. FORA da divisao: transferencia, TITULO DE OC (uma parte viva por parcela da programacao —
+  `zoo_operacao_partes_parcela_prog_ativa_uniq`; o parcial da OC fica explicito na liquidacao automatica e no "Falta" da OC) e
+  lancamento de financiamento (a parcela acompanha o valor). (3) DESFAZER JUNTA (`trg_zzz_conc_juntar_ao_desfazer`): o irmao em
+  aberto e' cancelado com motivo e o original volta ao valor anterior; irmao ja' pago recusa com a frase e o id no DETAIL.
+  (4) TRAVA no fim do gatilho adiado: vinculo vivo exige realizado/conciliado com data de pagamento (nao exige data = data do
+  extrato); excecao unica o titulo de OC com recebimento parcial; META nao se liga a extrato. (5) O desvio `app.conc_dividindo`
+  deixa `guard_lancamento_casado_nao_rebaixa` aceitar so' a troca de valor/estado da divisao/juncao (idioma do
+  `app.conciliar_bloco`). Trilha em `financeiro_baixas_no_vinculo` (divisao | juncao | baixa | valor_real, antes/depois).
+  Gestos de conserto: `fn_conc_baixar_vinculado(lancamento, motivo, simular)` e `fn_conc_ligar_com_valor_real(extrato, lancamento,
+  motivo)` (recorrencia estimada aceita o valor do extrato e liga 1:1). Consertados 21/10: NJ d320635d (2.561,60 + irmao 300,00
+  ligado ao PIX de 01/10), a2baca6c e 84fc61e5 (baixa 05/10), Vivo bac38a7f (506,51, 01/09) — NJ set/2026 fecha por conta.
+  · FICA: o titulo de OC parcial da Santa Rita (17f14dbc, 150.000 com 100.000 ligado) nao foi dividido (OC); o vinculo 1:1 de
+    jun/2026 da Santa Rita que aplica 375.000 num lancamento de 215.000 (eabe167e) so' registrado; os testes da casa que terminam em
+    ROLLBACK nao disparam o gatilho adiado — teste novo de conciliacao usa `set constraints all immediate` antes do OK.
+  · O `conc_parcial_um_estado_01_test.sql` (T3 -> T4b) cai desde FIN-CONCILIADO-NAO-REBAIXA-01 (20261027196700), nao por este bloco:
+    o `fn_desfazer_bloco` restaura o status de um titulo ainda casado por outro bloco e o guarda recusa.
+  · CONC-LIGAR-FUTURO-01 (a queixa do Vivo): a lista de candidatos do Espelho (`fn_extratos_espelhados`) so' traz lancamento com
+    `data_vencimento <= fim do mes do extrato`; o vinculo em si nao recusa vencimento futuro (recusa valor acima do lancamento).
+
 - ⚠ A BARRA LATERAL TEM 152px, NUM TOKEN SO' (UI-SIDEBAR-ESTREITA-01, Gabriel 09/10 e 21/10/2026, so' tela; SUBSTITUI o "176px (`w-44`)" do
   UI-BOTOES-LUGAR-FIXO-01). A largura mora em `LARGURA_DA_LATERAL` (`src/v2/components/V2Sidebar.tsx`), aplicada por `style` no `aside`; a
   bancada do `check:ui-cortes` le' a mesma constante. Nenhuma tela calibra largura pela barra (medido: os `calc(100vw - N)` do repo sao todos
