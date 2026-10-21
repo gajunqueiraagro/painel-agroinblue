@@ -67,11 +67,13 @@ describe('situacaoDaLinha', () => {
   it('absorvido: "Mesclado em <nome>", a data dd/mm/aaaa no title', () => {
     const s = situacaoDaLinha({ ativo: false, fundido_em_id: 'dono', fundido_em: '2026-10-19T15:00:00Z' }, 'Sintq Dono');
     expect(s.rotulo).toBe('Mesclado em Sintq Dono');
+    /* FORN-01b — a coluna é estreita: o selo é "Mesclado"; em quem e quando vão no `title` */
+    expect(s.selo).toBe('Mesclado');
     expect(s.mesclado).toBe(true);
-    expect(s.title).toBe('mesclado em Sintq Dono em 19/10/2026 — desfaça a mesclagem para reativar');
+    expect(s.title).toBe('Mesclado em Sintq Dono em 19/10/2026 — desfaça a mesclagem para reativar');
   });
   it('sem mesclagem: Ativo / Inativo, como antes', () => {
-    expect(situacaoDaLinha({ ativo: true }, null)).toEqual({ rotulo: 'Ativo', title: undefined, mesclado: false });
+    expect(situacaoDaLinha({ ativo: true }, null)).toEqual({ rotulo: 'Ativo', selo: 'Ativo', title: undefined, mesclado: false });
     expect(situacaoDaLinha({ ativo: false, fundido_em_id: null }, null).rotulo).toBe('Inativo');
   });
 });
@@ -83,13 +85,12 @@ describe('Cadastros › Fornecedores com um absorvido', () => {
     expect(screen.queryByText('Sintq Absorvido Zeta')).toBeNull();
     expect(screen.queryByTestId('situacao-mesclado')).toBeNull();
   });
-  it('em "Todos" a situação diz "Mesclado em <nome>", inteira, com a data no title; o inativo comum segue "Inativo"', async () => {
+  it('em "Todos" o selo diz "Mesclado" (FORN-01b: coluna estreita), com o dono e a data no title; o inativo comum segue "Inativo"', async () => {
     render(<FinV2FornecedoresTab />);
     fireEvent.click(screen.getByRole('button', { name: /^Todos / }));
-    await waitFor(() => expect(screen.getByTestId('situacao-mesclado').textContent)
-      .toBe('Mesclado em Sintq Dono Zeta Comércio de Insumos Agropecuários'));
+    await waitFor(() => expect(screen.getByTestId('situacao-mesclado').textContent).toBe('Mesclado'));
     const selo = screen.getByTestId('situacao-mesclado');
-    expect(selo.getAttribute('title')).toContain('em 19/10/2026 — desfaça a mesclagem para reativar');
+    expect(selo.getAttribute('title')).toBe('Mesclado em Sintq Dono Zeta Comércio de Insumos Agropecuários em 19/10/2026 — desfaça a mesclagem para reativar');
     expect(selo.className).not.toMatch(/truncate|line-clamp/);
     expect(screen.getAllByText('Inativo').length).toBeGreaterThan(0);
   });
