@@ -34,7 +34,6 @@ import { esperarGraficoNoDom, AVISO_PDF_SEM_GRAFICO, TAMANHO_DO_GRAFICO_NO_PDF }
 import { lerEstimadosDaCpr } from '@/lib/financeiro/estimadosDaCprBanco';
 import { origensPresentes, SEM_ESTIMADOS, tituloDoEstimado } from '@/lib/financeiro/estimadosDaCpr';
 import { DatePicker } from '@/components/ui/date-picker';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   ATALHOS_CPR, periodoDoAtalho, recortarCpr, ramoDaConsultaCpr, doSegmentoCpr, contaEmAberto,
   ehReceberCpr, contaDaConta, resumoPorContaCpr, contasDaFaixaCpr, SEM_CONTA, ehTransferenciaCpr, chaveDaLinhaCpr, type ContaCpr,
@@ -279,7 +278,8 @@ interface Grupo {
   /** CPR-CAIXA-INICIAL-SEMPRE-01: 'hoje' é a MARCA de hoje no meio da lista (o saldo em caixa), no lugar dela no tempo. */
   /* CPR-AJUSTES-20-10: o "Saldo hoje" e os dois grupos de vencidos sairam — hoje e' um DIA (com os vencidos dentro); 'vencidos' so'
      existe fora de um período que contém hoje. */
-  tipo: 'vencidos' | 'entre' | 'dia' | 'sem_vencimento';
+  /* CPR-AJUSTES-20-10c: 'saem_hoje' — período encerrado, os vencidos em aberto do período, DEPOIS da linha "Fim do período". */
+  tipo: 'vencidos' | 'entre' | 'dia' | 'sem_vencimento' | 'saem_hoje';
   titulo: string;
   /** O sufixo de contagem ("em 3 dias"). Vazio fora dos dias. */
   quando: string;
@@ -299,6 +299,10 @@ interface Grupo {
   avisoHoje?: string;
   /** CPR-AJUSTES-20-10b — o bloco vem ANTES da linha do Caixa inicial (os vencidos do período futuro: o Caixa inicial já os desconta) */
   antesDoCaixaInicial?: boolean;
+  /** CPR-AJUSTES-20-10c — o bloco vem DEPOIS da linha "Fim do período" e fica fora da soma dela (o grupo "Saem hoje") */
+  depoisDoFim?: boolean;
+  /** a frase curta sob o título do bloco */
+  frase?: string;
 }
 
 export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento }: {
@@ -319,10 +323,9 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
   const [retorno] = useState(consumirRetornoCpr);
   const [visao, setVisao] = useState<Visao>(retorno?.visao ?? 'lista');
   /* CPR-PERIODO-VENCIDOS-01 — UM PERÍODO, igual nas duas visões. O atalho dá as datas; editar uma data vira "Escolher datas".
-     30 dias segue o default (PR-CPR-2B.3.6). Os vencidos ficam à parte, atrás da caixa "Incluir vencidos" (ligada). */
+     30 dias segue o default (PR-CPR-2B.3.6). CPR-AJUSTES-20-10c: os vencidos não têm caixa — o dono diz onde cada um mora. */
   const [atalho, setAtalho] = useState<AtalhoCpr>(retorno?.atalho ?? '30');
   const [datas, setDatas] = useState<PeriodoCpr | null>(retorno?.datas ?? null);
-  const [incluirVencidos, setIncluirVencidos] = useState(retorno?.incluirVencidos ?? true);
   /* CPR-CONTA-01 — o filtro de conta: `null` = todas; um id; ou `SEM_CONTA`. Trocar de cliente volta a "Todas". */
   const [contaSel, setContaSel] = useState<FiltroContaCpr>(retorno?.contaSel ?? null);
   /* trocar de CLIENTE volta a "Todas"; a montagem não é troca (senão a conta restaurada da ida ao contrato seria apagada) */
@@ -663,9 +666,9 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
   const tituloDoSelo = tituloDoEstimado(estimadasDoCliente ? origensPresentes(estimadasDoCliente) : undefined, avisoEstimadasIncompleto);
   const tituloDoSeloDaLinha = (id: string) => tituloDoEstimado(estimadasDoCliente?.origens.get(id), avisoEstimadasIncompleto);
   const recorte = useMemo(
-    () => recortarCpr(linhas, { periodo, hoje: hojeIso, incluirVencidos, conta: contaSel, ancoras, estimadas }),
-    [linhas, periodo, hojeIso, incluirVencidos, contaSel, ancoras, estimadas]);
-  /* A SÉRIE DO SALDO — do dono, a partir do MESMO número do cartão Caixa. A caixa "Incluir vencidos" não entra nela (D3). */
+    () => recortarCpr(linhas, { periodo, hoje: hojeIso, conta: contaSel, ancoras, estimadas }),
+    [linhas, periodo, hojeIso, contaSel, ancoras, estimadas]);
+  /* A SÉRIE DO SALDO — do dono, a partir do MESMO número do cartão Caixa. */
   /* CPR-PDF-ACABAMENTO-01 — o REALIZADO do período (Caixa inicial + o que entrou e saiu por dia, até hoje): do MESMO dono do cartão
      Caixa, sobre a MESMA entrada dele e as mesmas contas (uma, ou todas). Nulo quando o dono não responde na véspera do período. */
   const realizado = useMemo(() => {
@@ -680,15 +683,15 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
     [recorte, caixa, realizado]);
   /* o resumo por conta (opções do seletor e a faixa): do MESMO dono, sobre os MESMOS dados, sempre de TODAS as contas */
   const recorteDeTodas = useMemo(
-    () => (contaSel == null ? recorte : recortarCpr(linhas, { periodo, hoje: hojeIso, incluirVencidos, ancoras, estimadas })),
-    [recorte, contaSel, linhas, periodo, hojeIso, incluirVencidos, ancoras, estimadas]);
+    () => (contaSel == null ? recorte : recortarCpr(linhas, { periodo, hoje: hojeIso, ancoras, estimadas })),
+    [recorte, contaSel, linhas, periodo, hojeIso, ancoras, estimadas]);
   /* quem teve movimento realizado no período (do dono do caixa, sempre de TODAS as contas): entra no seletor em qualquer pílula */
   const comRealizado = useMemo(
     () => (caixaTodas ? contasComRealizadoNoPeriodo(caixaTodas.argumentos, periodo.de, periodo.ate) : []),
     [caixaTodas, periodo.de, periodo.ate]);
   const resumoContas = useMemo(
-    () => resumoPorContaCpr(linhas, { periodo, hoje: hojeIso, incluirVencidos, contaEscolhida: contaSel, comRealizado }),
-    [linhas, periodo, hojeIso, incluirVencidos, contaSel, comRealizado]);
+    () => resumoPorContaCpr(linhas, { periodo, hoje: hojeIso, contaEscolhida: contaSel, comRealizado }),
+    [linhas, periodo, hojeIso, contaSel, comRealizado]);
   /* a faixa só desenha conta com a pagar > 0 (do dono); o seletor segue com todas */
   const contasNaFaixa = useMemo(() => contasDaFaixaCpr(resumoContas), [resumoContas]);
   /* o que a lista desenha por dia: o período em aberto + as pagas do período (pílula Realizado), que nunca somam */
@@ -800,10 +803,9 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
       const p = passos.get(chave);
       if (hojeNoPeriodo && chave === hojeIso) {
         /* HOJE: o que já foi realizado hoje (está dentro do caixa), os VENCIDOS (todos contam no saldo de hoje: saem / entram hoje)
-           e o que vence hoje. A linha de saldo fecha no saldo depois disso; com "Incluir vencidos" desligado eles não são listados,
-           mas seguem no saldo (D3), e a faixa diz. */
+           e o que vence hoje. A linha de saldo fecha no saldo depois disso. */
         const th = totaisDeHojeCpr(serie);
-        /* CPR-AJUSTES-20-10b — o vencido que entra no saldo aparece SEMPRE (a caixa "Incluir vencidos" não o esconde mais) */
+        /* CPR-AJUSTES-20-10b — o vencido que entra no saldo aparece SEMPRE */
         const listados = ordenarDoDiaCpr([...doSeg(vencidos.linhas), ...(mapa.get(chave) ?? [])]);
         const datasAnt = ant.ancoras.length === 1 ? format(parseISO(ant.ancoras[0]), 'dd/MM/yyyy') : null;
         const aviso = nAnt === 0 ? '' : `${nAnt} ${nAnt === 1 ? 'vencido que não apareceu' : 'vencidos que não apareceram'} no extrato conciliado ${datasAnt ? `até ${datasAnt}` : 'de cada conta'} ${nAnt === 1 ? 'entra' : 'entram'} hoje · confirme se ainda vai acontecer`;
@@ -824,14 +826,24 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
        Caixa inicial previsto. Um grupo à parte, sem linha de saldo. */
     const topo: Grupo[] = [];
     /* CPR-AJUSTES-20-10b — período FUTURO: os vencidos entram no saldo (o Caixa inicial previsto já os desconta), então aparecem
-       SEMPRE, num bloco ANTES da linha do Caixa inicial, com o total. Período ENCERRADO: saem hoje, depois dele, e não mexem no saldo
-       do período — só aí a caixa "Incluir vencidos" ainda decide se aparecem (depois dos dias). */
-    if (!hojeNoPeriodo && recorte.vencidosNaLista && nVencidos > 0) topo.push({
-      chave: 'vencidos', tipo: 'vencidos', quando: '', antesDoCaixaInicial: futuro,
-      titulo: futuro ? `Vencidos em aberto · ${contas(nVencidos)} · entram no saldo` : `Vencidos · ${contas(nVencidos)} · saem hoje`,
-      dica: futuro ? 'vencidos em aberto: já estão descontados no Caixa inicial previsto, logo abaixo' : 'saem (ou entram) hoje, depois do período',
+       SEMPRE, num bloco ANTES da linha do Caixa inicial, com o total. */
+    if (futuro && nVencidos > 0) topo.push({
+      chave: 'vencidos', tipo: 'vencidos', quando: '', antesDoCaixaInicial: true,
+      titulo: `Vencidos em aberto · ${contas(nVencidos)} · entram no saldo`,
+      dica: 'vencidos em aberto: já estão descontados no Caixa inicial previsto, logo abaixo',
       linhas: ordenarDoDiaCpr(doSeg(vencidos.linhas)), pagar: vencidos.pagar.valor, receber: vencidos.receber.valor, saldo: undefined,
     });
+    /* CPR-AJUSTES-20-10c (Gabriel, 20/10/2026: a caixa que escondia os vencidos saiu) — período ENCERRADO: os vencidos em aberto com
+       vencimento DENTRO do período (do dono, `saemHoje`) aparecem SEMPRE, num grupo DEPOIS da linha "Fim do período", com o
+       subtotal; não entram no rodapé nem no Saldo no fim (o encerrado mostra o que aconteceu). Na ordem do vencimento original. */
+    const sh = recorte.saemHoje;
+    const nSh = sh.pagar.contas + sh.receber.contas;
+    const depois: Grupo[] = nSh === 0 ? [] : [{
+      chave: 'saem-hoje', tipo: 'saem_hoje', quando: '', depoisDoFim: true,
+      titulo: 'Saem hoje · fora do saldo do período', frase: 'Ainda não aconteceram; entram no saldo de hoje.',
+      dica: `${contas(nSh)} em aberto com vencimento no período: não aconteceram, saem (ou entram) hoje, depois do período`,
+      linhas: doSeg(sh.linhas), pagar: sh.pagar.valor, receber: sh.receber.valor, saldo: undefined,
+    }];
     if (serie.entreHojeEDe) topo.push({
       chave: 'entre', tipo: 'entre', quando: '', linhas: [], antesDoCaixaInicial: true,
       titulo: `Entre hoje e ${format(parseISO(periodo.de), 'dd/MM/yyyy')} · ${contas(recorte.antesDoPeriodo.pagar.contas + recorte.antesDoPeriodo.receber.contas)}`,
@@ -844,7 +856,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
       titulo: `Sem vencimento · ${contas(sv.pagar.contas + sv.receber.contas)} · fora do saldo`,
       linhas: ordenarDoDiaCpr(doSeg(sv.linhas)), pagar: sv.pagar.valor, receber: sv.receber.valor, saldo: undefined,
     }];
-    if (serie.encerrado) return [...dias, ...topo, ...fim];
+    if (serie.encerrado) return [...dias, ...fim, ...depois];
     if (futuro) return [...topo, ...dias, ...fim];
     return [...dias, ...fim];
   }, [doPeriodoNaLista, recorte, serie, segmento, periodo.de, hoje, hojeIso]);
@@ -967,16 +979,6 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
       <span data-testid="cpr-ate"><DatePicker size="compact" className="w-[108px]" value={periodo.ate} onChange={(v) => editarData('ate', v)} /></span>
     </>
   );
-  const ctlIncluir = (
-    /* CPR-AJUSTES-20-10b — a caixa só decide no período ENCERRADO (lá o vencido sai hoje, depois do período, e não mexe no saldo
-       dele); em todo outro período o vencido entra no saldo e aparece sempre. Proposta de retirá-la à espera do Gabriel. */
-    <label className="flex shrink-0 cursor-pointer items-center gap-1 text-[10px] text-foreground"
-      title="Só vale para período já encerrado: mostra os vencidos que saem hoje, depois dele. Nos outros períodos todo vencido em aberto entra no saldo e aparece sempre.">
-      <Checkbox data-testid="cpr-incluir-vencidos" className="h-3 w-3" checked={incluirVencidos}
-        onCheckedChange={(v) => setIncluirVencidos(v === true)} />
-      Incluir vencidos
-    </label>
-  );
   /* o seletor de conta: cada opção diz o total A PAGAR e a contagem daquela conta no recorte atual */
   const ctlConta = (
     <div data-testid="cpr-conta" className="w-[114px] shrink-0" title={contaSel == null ? 'Todas as contas' : nomeConta(contaSel)}>
@@ -1066,7 +1068,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
       const modelo = montarModeloCpr<LinhaCpr>({
         ...identidadeDoArquivo, grafico,
         fazendaNome: fazScope ? (fazendaAtual?.nome ?? undefined) : undefined,
-        segmento, incluirVencidos, emitidoEm: format(new Date(), 'dd/MM/yyyy HH:mm'),
+        segmento, emitidoEm: format(new Date(), 'dd/MM/yyyy HH:mm'),
         serie, grupos,
         cartoes: {
           vencidosContamPagar: recorte.cartoes.vencidosContam.pagar, vencidosContamReceber: recorte.cartoes.vencidosContam.receber,
@@ -1077,7 +1079,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
         rodape,
         semanas: resumoPorSemanaCpr(serie, periodo),
         porConta: contaSel == null
-          ? saldoPorContaCpr(linhas, { periodo, hoje: hojeIso, incluirVencidos, ancoras }, caixaDe, (caixaTodas?.ancoraPorConta ?? []).map((a) => a.contaId))
+          ? saldoPorContaCpr(linhas, { periodo, hoje: hojeIso, ancoras }, caixaDe, (caixaTodas?.ancoraPorConta ?? []).map((a) => a.contaId))
           : null,
         motivoSemSaldo, de: resolvedores,
       });
@@ -1099,7 +1101,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
     setExportando('excel'); setRecadoExport(null);
     try {
       triggerXlsxDownload(montarPayloadExcelCpr<LinhaCpr>({
-        arquivo: nomeDoArquivoCpr(identidadeDoArquivo), grupos, serie, de: resolvedores, incluirVencidos, hoje: hojeIso, inicio: periodo.de,
+        arquivo: nomeDoArquivoCpr(identidadeDoArquivo), grupos, serie, de: resolvedores, hoje: hojeIso, inicio: periodo.de,
         fim: periodo.ate, rodape,
       }));
     } catch (e) {
@@ -1184,7 +1186,10 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
 
 
   /* o índice do primeiro grupo que vem DEPOIS do Caixa inicial (o bloco dos vencidos do período futuro vem antes dele) */
-  const iCaixaInicial = grupos.findIndex((g) => !g.antesDoCaixaInicial);
+  /* CPR-AJUSTES-20-10c — o grupo "Saem hoje" (período encerrado) é desenhado DEPOIS da linha "Fim do período" */
+  const gruposAntesDoFim = grupos.filter((g) => !g.depoisDoFim);
+  const gruposDepoisDoFim = grupos.filter((g) => g.depoisDoFim);
+  const iCaixaInicial = gruposAntesDoFim.findIndex((g) => !g.antesDoCaixaInicial);
   /* CAIXA INICIAL — fixo sob o cabeçalho, em TODO filtro (R1): o saldo no fim do dia anterior ao período, do mesmo dono do cartão
      Caixa. Nunca o saldo de hoje. Período futuro: o previsto na véspera — que já desconta os vencidos do bloco acima dele. */
   const linhaDoCaixaInicial = (
@@ -1201,6 +1206,174 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
     motivoSemSaldo={motivoSemSaldo}
   />
   );
+  /* um grupo da lista (faixa, linhas e, no dia, o "Saldo em"): o MESMO desenho antes e depois da linha "Fim do período" */
+  const desenharGrupo = (g: Grupo, i?: number): ReactNode => (
+    <Fragment key={g.chave}>
+    {i === iCaixaInicial && linhaDoCaixaInicial}
+    <div data-testid={`cpr-grupo-${g.tipo}`} data-total={Math.round((g.receber - g.pagar) * 100) / 100}
+      data-saldo={g.saldo ?? ''}>
+      {/* CPR-AJUSTES-20-10 — o DIA: em cima a faixa FINA só com a data e o quando (sem totais, sem saldo); os outros grupos
+          (vencidos fora do período de hoje, "entre hoje e de", sem vencimento) seguem com os totais na faixa. Fundo OPACO e
+          `z` acima das linhas (A21). */}
+      {g.tipo === 'dia' ? (
+        <FaixaDoDia titulo={g.titulo} quando={g.quando} hoje={!!g.hoje} aviso={g.avisoHoje} />
+      ) : (
+        <Faixa
+          regua={regua}
+          /* o bloco ANTES do Caixa inicial prende logo abaixo do cabeçalho (22px): em 42 ele descia sobre a própria linha;
+             o "Saem hoje" (depois do Fim do período, que é fixo no pé) não prende */
+          className={cn(g.depoisDoFim ? 'relative' : 'sticky z-10', !g.depoisDoFim && (g.antesDoCaixaInicial ? 'top-[22px]' : 'top-[42px]'),
+            g.tipo === 'entre' ? cn('h-[22px] border-t-[1.5px] border-t-primary/50 font-bold text-primary', FUNDO_DIA)
+              : g.tipo === 'vencidos' || g.tipo === 'saem_hoje' ? cn('h-[22px] border-t-[1.5px] border-t-[#b91c1c]/40 font-bold', COR_SINAL.neg, FUNDO_VENCIDOS)
+              : 'h-[20px] border-b bg-muted font-medium text-muted-foreground')}
+          titulo={g.titulo} quando={g.quando} dica={g.dica}
+          pagar={g.pagar} receber={g.receber} saldo={g.saldo}
+          semSeta={g.tipo === 'sem_vencimento'}
+          fundoNegativo motivoSemSaldo={motivoSemSaldo}
+        />
+      )}
+      {g.frase && (
+        <div data-testid="cpr-frase-do-grupo" className="flex h-[18px] shrink-0 items-center border-b border-l-[3px] border-l-transparent px-3 text-[10px] text-muted-foreground">
+          <span className="uma-linha-que-rola min-w-0 flex-1" title={g.frase}>{g.frase}</span>
+        </div>
+      )}
+
+      {g.linhas.map((l) => {
+        const valor = Math.abs(Number(l.valor ?? 0));
+        const receber = ehReceber(l);
+        const grande = valor >= CORTE_DESTAQUE;
+        const paga = !contaEmAberto(l);
+        /* CPR-TRANSFERENCIAS-NO-FLUXO-01 — a ponta de transferência: a marca "Transf." da casa (a cor do total de
+           transferências da lista de Lançamentos); a ponta em conta fora do caixa aparece apagada e não soma. */
+        const transf = ehTransferenciaCpr(l);
+        const { conta_bancaria_id: origemId, conta_destino_id: destinoId } = l;
+        const foraDoCaixa = chavesForaDoCaixa.has(chaveDaLinhaCpr(l));
+        const seloTransf = transf
+          ? <span className="shrink-0 whitespace-nowrap font-medium text-sky-700 dark:text-sky-400" data-testid="cpr-selo-transf"
+              title={`transferência · ${nomeConta(origemId)} → ${nomeConta(destinoId)} · esta linha é a ${l.ponta === 'entrada' ? 'entrada no destino' : 'saída da origem'}`}>Transf.</span>
+          : null;
+        const status = (l.status_transacao ?? '').toLowerCase();
+        const fornecedor = (l.favorecido_id && nomesFornecedores.get(l.favorecido_id)) || '—';
+        const anexo = comAnexo?.has(l.id) ?? false;
+        /* PARC-CONTRATO-01 item 4 — o texto do Doc é o do DONO (`docDaLinha`), o mesmo da lista de Lançamentos, do PDF e do Excel. */
+        const doc = docDaLinha({ tipo_documento: l.tipo_documento, numero_documento: l.numero_documento }, null).rotulo;
+        /* Origem, Doc e Conta saíram da grade: moram no `title` da Descrição. */
+        const np = nomeEParcela(l.descricao, parcelasDosLancamentos?.get(l.id));
+        const seloDaParcela = np.parcela
+          ? <span className="shrink-0 whitespace-nowrap tabular-nums text-foreground" data-testid="cpr-parcela-i-n">{np.parcela}</span>
+          : null;
+        const dicaDescricao = `${np.inteiro || '—'}\norigem: ${rotuloOrigem(l.origem_lancamento)} · doc: ${doc || '—'} · conta: ${nomeConta(contaDaConta(l))}`;
+        /* REC-VALOR-CERTO-02 — a conta ESTIMADA (pelo conjunto da regra única): selo depois da descrição e valor em âmbar. */
+        const estimada = !paga && contaEstimadaCpr(l, estimadas);
+        /* CPR-AJUSTES-20-10 — o vencido (conta no saldo de hoje): o selo "vencido", no estilo do "estimado" */
+        const vencida = chavesVencidas.has(chaveDaLinhaCpr(l));
+        const seloVencido = vencida
+          ? <span data-testid="cpr-selo-vencido" title={`vencido em ${l.data_vencimento ? format(parseISO(l.data_vencimento), 'dd/MM/yyyy') : '—'}: conta no saldo de hoje · confirme se ainda vai acontecer`}
+              className="h-[14px] shrink-0 whitespace-nowrap rounded bg-red-100 px-1 text-[9px] leading-[14px] text-red-700">vencido</span>
+          : null;
+        const celValor = (
+          <span data-valor-da-linha className={cn('whitespace-nowrap text-right tabular-nums', estimada ? COR_ESTIMADO : receber ? COR_SINAL.pos : COR_SINAL.neg, (paga || foraDoCaixa) && 'opacity-50')}
+            title={paga ? 'já paga — está no realizado do dia do pagamento, não na projeção' : foraDoCaixa ? 'ponta em conta que não entra no saldo em caixa — não soma; a outra ponta é o que mexe no saldo' : undefined}>
+            {formatMoeda(valor)}
+          </span>
+        );
+        return (
+          <button
+            key={chaveDaLinhaCpr(l)}
+            data-ponta={l.ponta}
+            type="button"
+            disabled={!catalogosProntos || abrindo}
+            onClick={() => void abrir(l.id)}
+            title={catalogosProntos ? 'Abrir o lançamento' : 'Carregando os catálogos…'}
+            className={cn(
+              'flex h-[18px] w-full shrink-0 items-center gap-1 border-b px-3 text-left text-[10px]',
+              'transition-colors hover:bg-muted/50 disabled:cursor-default',
+              /* A faixa de 3px do destaque: `border-l-[3px]` em TODAS as linhas, transparente nas comuns (A27). */
+              'border-l-[3px]',
+              grande ? (receber ? 'border-l-success' : 'border-l-destructive') : 'border-l-transparent',
+            )}
+          >
+            {regua.comp > 0 && (
+              <span style={larg(regua.comp)} className={cn(FONTE_FINA, 'whitespace-nowrap tabular-nums text-muted-foreground')} data-celula-data>
+                {l.data_competencia ? format(parseISO(l.data_competencia), 'MM/yy') : '—'}
+              </span>
+            )}
+            <span style={larg(regua.venc)} className={cn(FONTE_FINA, 'whitespace-nowrap tabular-nums text-muted-foreground')} data-celula-data>
+              {l.data_vencimento ? format(parseISO(l.data_vencimento), 'dd/MM/yy') : '—'}
+            </span>
+            {regua.pgto > 0 && (
+              <span style={larg(regua.pgto)} className={cn(FONTE_FINA, 'whitespace-nowrap tabular-nums text-muted-foreground')} data-celula-data>
+                {paga && l.data_pagamento ? format(parseISO(l.data_pagamento), 'dd/MM/yy') : ''}
+              </span>
+            )}
+            {/* A DESCRIÇÃO, numa linha: a marca "Transf.", o nome (CPR-SEM-CORTE-01: o que não cabe ROLA na própria linha, nunca
+                "…"), o "i/N" do contrato e os selos "estimado" / "vencido" — marcas e selos nunca cortam; a linha segue com 18px. */}
+            <span className="flex min-w-0 flex-1 items-center gap-1" data-celula-descricao>
+              {seloTransf}
+              <span className="uma-linha-que-rola min-w-0 text-foreground" title={dicaDescricao}>{(np.parcela ? np.nome : l.descricao) || '—'}</span>
+              {seloDaParcela}
+              {estimada && (
+                <span data-testid="cpr-selo-estimado" title={tituloDoSeloDaLinha(l.id)}
+                  className="h-[14px] shrink-0 whitespace-nowrap rounded bg-amber-100 px-1 text-[9px] leading-[14px] text-amber-700">
+                  estimado
+                </span>
+              )}
+              {seloVencido}
+            </span>
+            <span style={larg(regua.fornecedor)} className="uma-linha-que-rola text-muted-foreground" title={fornecedor}>
+              {fornecedor}
+            </span>
+            <span style={larg(regua.subcentro)} className={cn(FONTE_FINA, 'uma-linha-que-rola text-muted-foreground')} title={l.subcentro ?? undefined}>
+              {l.subcentro || '—'}
+            </span>
+            {regua.safra > 0 && (
+              <span style={larg(regua.safra)} className={cn(FONTE_FINA, 'uma-linha-que-rola text-muted-foreground')} title={codigoDaSafra(l.safra_id)}>
+                {codigoDaSafra(l.safra_id)}
+              </span>
+            )}
+            {regua.faz > 0 && (
+              <span style={larg(regua.faz)} className={cn(FONTE_FINA, 'uma-linha-que-rola text-muted-foreground')} title={codigoDaFazenda(l.fazenda_id)}>
+                {codigoDaFazenda(l.fazenda_id)}
+              </span>
+            )}
+            {/* ⚠ PÍLULA SEM BORDA (FIN-LISTA-VISUAL-01): o mapa de COR marca o status; a palavra nunca corta. */}
+            <span style={larg(regua.status)} className="text-center" data-celula-status>
+              <span className={cn(
+                'inline-block rounded bg-muted px-0.5 whitespace-nowrap', FONTE_STATUS,
+                STATUS_FILTRO_COR[status] ?? 'text-muted-foreground',
+              )}>
+                {STATUS_FILTRO_LABEL[status] ?? (status || '—')}
+              </span>
+            </span>
+            {/* ⚠ A COLUNA DO CLIPE EXISTE EM TODA LINHA (A27); o rótulo mora no `span`, não no ícone. */}
+            <span style={larg(regua.anexo)}
+              title={anexo ? 'tem documento anexado' : undefined}
+              aria-label={anexo ? 'tem documento anexado' : undefined}>
+              {anexo && <Paperclip className="h-2.5 w-2.5 text-muted-foreground" aria-hidden />}
+            </span>
+            {/* o valor da linha cai na coluna do SEU lado, na cor do sinal, sem seta; o Saldo da linha fica vazio */}
+            <span style={larg(regua.receber)} className="text-right">{receber ? celValor : null}</span>
+            <span style={larg(regua.pagar)} className="text-right">{receber ? null : celValor}</span>
+            <span style={larg(regua.saldo)} aria-hidden />
+          </button>
+        );
+      })}
+      {/* CPR-AJUSTES-20-10 — a ÚLTIMA linha do dia: "Saldo em dd/mm/aaaa", o total a receber (▲), o total a pagar (▼) e o
+          saldo. Fundo azul claro, texto navy em negrito, filete embaixo; a célula do saldo em vermelho quando negativo. */}
+      {g.tipo === 'dia' && (
+        <Faixa
+          testId={g.hoje ? 'cpr-saldo-do-dia-hoje' : 'cpr-saldo-do-dia'} regua={regua}
+          className={cn('h-[22px] border-b-[1.5px] border-b-primary/50 font-bold text-primary', FUNDO_DIA)}
+          titulo={`Saldo em ${format(parseISO(g.chave), 'dd/MM/yyyy')}`}
+          dica={g.hoje ? 'hoje: o realizado de hoje (já no caixa), os vencidos (contam no saldo de hoje) e o que vence hoje' : undefined}
+          pagar={g.pagar} receber={g.receber} saldo={g.saldo}
+          fundoNegativo motivoSemSaldo={motivoSemSaldo}
+        />
+      )}
+    </div>
+    </Fragment>
+  );
+
   return (
     /* ⚠ `h-full`, E NÃO `flex-1` — a mesma lição de `V2Recorrencias`: a altura vem do pai, e
        o `/v2` só a dá porque esta seção entrou em `SECOES_APP_SHELL`. Sem isso o `sticky`
@@ -1226,7 +1399,6 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
             {ctlDatas}
             {ctlConta}
             {ctlSegmento}
-            {ctlIncluir}
             <div className="min-w-0 flex-1" />
             <button type="button" data-testid="cpr-recolher" onClick={() => setAmpliado(false)} title="Voltar à tela normal"
               className="flex h-[22px] shrink-0 items-center justify-center gap-1 rounded-md border border-primary bg-primary px-1.5 text-[10px] font-medium text-primary-foreground">
@@ -1276,12 +1448,11 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
           </div>
         </div>
 
-        {/* BARRA 1 — UMA linha, sem quebra: visão · período (atalho + as duas datas) · "Incluir vencidos" · conta. */}
+        {/* BARRA 1 — UMA linha, sem quebra: visão · período (atalho + as duas datas) · conta. */}
         <div className="flex flex-nowrap items-center gap-2 whitespace-nowrap" data-testid="cpr-barra-periodo">
           {ctlVisao}
           {ctlAtalho}
           {ctlDatas}
-          {ctlIncluir}
           <div className="min-w-0 flex-1" />
           <span className="text-[10px] text-muted-foreground">Conta</span>
           {ctlConta}
@@ -1462,170 +1633,11 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
                   entram no saldo" (período futuro); sem grupos, ela fica sozinha */}
               {iCaixaInicial === -1 && linhaDoCaixaInicial}
 
-              {grupos.map((g, i) => (
-                <Fragment key={g.chave}>
-                {i === iCaixaInicial && linhaDoCaixaInicial}
-                <div data-testid={`cpr-grupo-${g.tipo}`} data-total={Math.round((g.receber - g.pagar) * 100) / 100}
-                  data-saldo={g.saldo ?? ''}>
-                  {/* CPR-AJUSTES-20-10 — o DIA: em cima a faixa FINA só com a data e o quando (sem totais, sem saldo); os outros grupos
-                      (vencidos fora do período de hoje, "entre hoje e de", sem vencimento) seguem com os totais na faixa. Fundo OPACO e
-                      `z` acima das linhas (A21). */}
-                  {g.tipo === 'dia' ? (
-                    <FaixaDoDia titulo={g.titulo} quando={g.quando} hoje={!!g.hoje} aviso={g.avisoHoje} />
-                  ) : (
-                    <Faixa
-                      regua={regua}
-                      /* o bloco ANTES do Caixa inicial prende logo abaixo do cabeçalho (22px): em 42 ele descia sobre a própria linha */
-                      className={cn('sticky z-10', g.antesDoCaixaInicial ? 'top-[22px]' : 'top-[42px]',
-                        g.tipo === 'entre' ? cn('h-[22px] border-t-[1.5px] border-t-primary/50 font-bold text-primary', FUNDO_DIA)
-                          : g.tipo === 'vencidos' ? cn('h-[22px] border-t-[1.5px] border-t-[#b91c1c]/40 font-bold', COR_SINAL.neg, FUNDO_VENCIDOS)
-                          : 'h-[20px] border-b bg-muted font-medium text-muted-foreground')}
-                      titulo={g.titulo} quando={g.quando} dica={g.dica}
-                      pagar={g.pagar} receber={g.receber} saldo={g.saldo}
-                      semSeta={g.tipo === 'sem_vencimento'}
-                      fundoNegativo motivoSemSaldo={motivoSemSaldo}
-                    />
-                  )}
-
-                  {g.linhas.map((l) => {
-                    const valor = Math.abs(Number(l.valor ?? 0));
-                    const receber = ehReceber(l);
-                    const grande = valor >= CORTE_DESTAQUE;
-                    const paga = !contaEmAberto(l);
-                    /* CPR-TRANSFERENCIAS-NO-FLUXO-01 — a ponta de transferência: a marca "Transf." da casa (a cor do total de
-                       transferências da lista de Lançamentos); a ponta em conta fora do caixa aparece apagada e não soma. */
-                    const transf = ehTransferenciaCpr(l);
-                    const { conta_bancaria_id: origemId, conta_destino_id: destinoId } = l;
-                    const foraDoCaixa = chavesForaDoCaixa.has(chaveDaLinhaCpr(l));
-                    const seloTransf = transf
-                      ? <span className="shrink-0 whitespace-nowrap font-medium text-sky-700 dark:text-sky-400" data-testid="cpr-selo-transf"
-                          title={`transferência · ${nomeConta(origemId)} → ${nomeConta(destinoId)} · esta linha é a ${l.ponta === 'entrada' ? 'entrada no destino' : 'saída da origem'}`}>Transf.</span>
-                      : null;
-                    const status = (l.status_transacao ?? '').toLowerCase();
-                    const fornecedor = (l.favorecido_id && nomesFornecedores.get(l.favorecido_id)) || '—';
-                    const anexo = comAnexo?.has(l.id) ?? false;
-                    /* PARC-CONTRATO-01 item 4 — o texto do Doc é o do DONO (`docDaLinha`), o mesmo da lista de Lançamentos, do PDF e do Excel. */
-                    const doc = docDaLinha({ tipo_documento: l.tipo_documento, numero_documento: l.numero_documento }, null).rotulo;
-                    /* Origem, Doc e Conta saíram da grade: moram no `title` da Descrição. */
-                    const np = nomeEParcela(l.descricao, parcelasDosLancamentos?.get(l.id));
-                    const seloDaParcela = np.parcela
-                      ? <span className="shrink-0 whitespace-nowrap tabular-nums text-foreground" data-testid="cpr-parcela-i-n">{np.parcela}</span>
-                      : null;
-                    const dicaDescricao = `${np.inteiro || '—'}\norigem: ${rotuloOrigem(l.origem_lancamento)} · doc: ${doc || '—'} · conta: ${nomeConta(contaDaConta(l))}`;
-                    /* REC-VALOR-CERTO-02 — a conta ESTIMADA (pelo conjunto da regra única): selo depois da descrição e valor em âmbar. */
-                    const estimada = !paga && contaEstimadaCpr(l, estimadas);
-                    /* CPR-AJUSTES-20-10 — o vencido (conta no saldo de hoje): o selo "vencido", no estilo do "estimado" */
-                    const vencida = chavesVencidas.has(chaveDaLinhaCpr(l));
-                    const seloVencido = vencida
-                      ? <span data-testid="cpr-selo-vencido" title={`vencido em ${l.data_vencimento ? format(parseISO(l.data_vencimento), 'dd/MM/yyyy') : '—'}: conta no saldo de hoje · confirme se ainda vai acontecer`}
-                          className="h-[14px] shrink-0 whitespace-nowrap rounded bg-red-100 px-1 text-[9px] leading-[14px] text-red-700">vencido</span>
-                      : null;
-                    const celValor = (
-                      <span data-valor-da-linha className={cn('whitespace-nowrap text-right tabular-nums', estimada ? COR_ESTIMADO : receber ? COR_SINAL.pos : COR_SINAL.neg, (paga || foraDoCaixa) && 'opacity-50')}
-                        title={paga ? 'já paga — está no realizado do dia do pagamento, não na projeção' : foraDoCaixa ? 'ponta em conta que não entra no saldo em caixa — não soma; a outra ponta é o que mexe no saldo' : undefined}>
-                        {formatMoeda(valor)}
-                      </span>
-                    );
-                    return (
-                      <button
-                        key={chaveDaLinhaCpr(l)}
-                        data-ponta={l.ponta}
-                        type="button"
-                        disabled={!catalogosProntos || abrindo}
-                        onClick={() => void abrir(l.id)}
-                        title={catalogosProntos ? 'Abrir o lançamento' : 'Carregando os catálogos…'}
-                        className={cn(
-                          'flex h-[18px] w-full shrink-0 items-center gap-1 border-b px-3 text-left text-[10px]',
-                          'transition-colors hover:bg-muted/50 disabled:cursor-default',
-                          /* A faixa de 3px do destaque: `border-l-[3px]` em TODAS as linhas, transparente nas comuns (A27). */
-                          'border-l-[3px]',
-                          grande ? (receber ? 'border-l-success' : 'border-l-destructive') : 'border-l-transparent',
-                        )}
-                      >
-                        {regua.comp > 0 && (
-                          <span style={larg(regua.comp)} className={cn(FONTE_FINA, 'whitespace-nowrap tabular-nums text-muted-foreground')} data-celula-data>
-                            {l.data_competencia ? format(parseISO(l.data_competencia), 'MM/yy') : '—'}
-                          </span>
-                        )}
-                        <span style={larg(regua.venc)} className={cn(FONTE_FINA, 'whitespace-nowrap tabular-nums text-muted-foreground')} data-celula-data>
-                          {l.data_vencimento ? format(parseISO(l.data_vencimento), 'dd/MM/yy') : '—'}
-                        </span>
-                        {regua.pgto > 0 && (
-                          <span style={larg(regua.pgto)} className={cn(FONTE_FINA, 'whitespace-nowrap tabular-nums text-muted-foreground')} data-celula-data>
-                            {paga && l.data_pagamento ? format(parseISO(l.data_pagamento), 'dd/MM/yy') : ''}
-                          </span>
-                        )}
-                        {/* A DESCRIÇÃO, numa linha: a marca "Transf.", o nome (CPR-SEM-CORTE-01: o que não cabe ROLA na própria linha, nunca
-                            "…"), o "i/N" do contrato e os selos "estimado" / "vencido" — marcas e selos nunca cortam; a linha segue com 18px. */}
-                        <span className="flex min-w-0 flex-1 items-center gap-1" data-celula-descricao>
-                          {seloTransf}
-                          <span className="uma-linha-que-rola min-w-0 text-foreground" title={dicaDescricao}>{(np.parcela ? np.nome : l.descricao) || '—'}</span>
-                          {seloDaParcela}
-                          {estimada && (
-                            <span data-testid="cpr-selo-estimado" title={tituloDoSeloDaLinha(l.id)}
-                              className="h-[14px] shrink-0 whitespace-nowrap rounded bg-amber-100 px-1 text-[9px] leading-[14px] text-amber-700">
-                              estimado
-                            </span>
-                          )}
-                          {seloVencido}
-                        </span>
-                        <span style={larg(regua.fornecedor)} className="uma-linha-que-rola text-muted-foreground" title={fornecedor}>
-                          {fornecedor}
-                        </span>
-                        <span style={larg(regua.subcentro)} className={cn(FONTE_FINA, 'uma-linha-que-rola text-muted-foreground')} title={l.subcentro ?? undefined}>
-                          {l.subcentro || '—'}
-                        </span>
-                        {regua.safra > 0 && (
-                          <span style={larg(regua.safra)} className={cn(FONTE_FINA, 'uma-linha-que-rola text-muted-foreground')} title={codigoDaSafra(l.safra_id)}>
-                            {codigoDaSafra(l.safra_id)}
-                          </span>
-                        )}
-                        {regua.faz > 0 && (
-                          <span style={larg(regua.faz)} className={cn(FONTE_FINA, 'uma-linha-que-rola text-muted-foreground')} title={codigoDaFazenda(l.fazenda_id)}>
-                            {codigoDaFazenda(l.fazenda_id)}
-                          </span>
-                        )}
-                        {/* ⚠ PÍLULA SEM BORDA (FIN-LISTA-VISUAL-01): o mapa de COR marca o status; a palavra nunca corta. */}
-                        <span style={larg(regua.status)} className="text-center" data-celula-status>
-                          <span className={cn(
-                            'inline-block rounded bg-muted px-0.5 whitespace-nowrap', FONTE_STATUS,
-                            STATUS_FILTRO_COR[status] ?? 'text-muted-foreground',
-                          )}>
-                            {STATUS_FILTRO_LABEL[status] ?? (status || '—')}
-                          </span>
-                        </span>
-                        {/* ⚠ A COLUNA DO CLIPE EXISTE EM TODA LINHA (A27); o rótulo mora no `span`, não no ícone. */}
-                        <span style={larg(regua.anexo)}
-                          title={anexo ? 'tem documento anexado' : undefined}
-                          aria-label={anexo ? 'tem documento anexado' : undefined}>
-                          {anexo && <Paperclip className="h-2.5 w-2.5 text-muted-foreground" aria-hidden />}
-                        </span>
-                        {/* o valor da linha cai na coluna do SEU lado, na cor do sinal, sem seta; o Saldo da linha fica vazio */}
-                        <span style={larg(regua.receber)} className="text-right">{receber ? celValor : null}</span>
-                        <span style={larg(regua.pagar)} className="text-right">{receber ? null : celValor}</span>
-                        <span style={larg(regua.saldo)} aria-hidden />
-                      </button>
-                    );
-                  })}
-                  {/* CPR-AJUSTES-20-10 — a ÚLTIMA linha do dia: "Saldo em dd/mm/aaaa", o total a receber (▲), o total a pagar (▼) e o
-                      saldo. Fundo azul claro, texto navy em negrito, filete embaixo; a célula do saldo em vermelho quando negativo. */}
-                  {g.tipo === 'dia' && (
-                    <Faixa
-                      testId={g.hoje ? 'cpr-saldo-do-dia-hoje' : 'cpr-saldo-do-dia'} regua={regua}
-                      className={cn('h-[22px] border-b-[1.5px] border-b-primary/50 font-bold text-primary', FUNDO_DIA)}
-                      titulo={`Saldo em ${format(parseISO(g.chave), 'dd/MM/yyyy')}`}
-                      dica={g.hoje ? 'hoje: o realizado de hoje (já no caixa), os vencidos (contam no saldo de hoje) e o que vence hoje' : undefined}
-                      pagar={g.pagar} receber={g.receber} saldo={g.saldo}
-                      fundoNegativo motivoSemSaldo={motivoSemSaldo}
-                    />
-                  )}
-                </div>
-                </Fragment>
-              ))}
+              {gruposAntesDoFim.map((g, i) => desenharGrupo(g, i))}
 
               <div className="min-h-0 flex-1" />
-              {/* FIM DO PERÍODO — navy, FIXO no pé do scrollport. Totais a pagar e a receber da lista (vencidos, se ligados, +
-                  período — a caixa decide a lista e o total) e o SALDO NO FIM, que é o último ponto da série e NÃO muda com a caixa. */}
+              {/* FIM DO PERÍODO — navy, FIXO no pé do scrollport. Os totais do dono (`rodapeDoPeriodoCpr`) e o SALDO NO FIM, o último
+                  ponto da série. */}
               <Faixa
                 testId="cpr-total" regua={regua} navy
                 className="sticky bottom-0 z-20 h-[26px] bg-primary text-[11px] font-bold text-primary-foreground"
@@ -1635,6 +1647,8 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
                 pagar={rodape.pagar} receber={rodape.receber} saldo={serie.fim}
                 motivoSemSaldo={motivoSemSaldo}
               />
+              {/* CPR-AJUSTES-20-10c — período encerrado: os vencidos em aberto do período, DEPOIS do Fim do período e fora da soma dele */}
+              {gruposDepoisDoFim.map((g) => desenharGrupo(g))}
              </div>
             </div>
           )}
@@ -1654,7 +1668,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
         }}
         onDelete={cancelarLancamento}
         onAbrirContrato={onAbrirFinanciamento ? (finId) => {
-          guardarRetornoCpr({ visao, atalho, datas, incluirVencidos, contaSel, segmento, statusLigados, ampliado });
+          guardarRetornoCpr({ visao, atalho, datas, contaSel, segmento, statusLigados, ampliado });
           onAbrirFinanciamento(finId);
         } : undefined}
         lancamento={lancEdicao}
