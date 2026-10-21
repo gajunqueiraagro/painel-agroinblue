@@ -78,7 +78,7 @@ const OPCOES_ATIVIDADE: ReadonlyArray<OpcaoSegmentada<Atividade | ''>> = ATIVIDA
 
 export function ClassificacaoLancamento({
   value, onChange, classificacoes, safras, dataCompetencia,
-  culturasDaSafra = [], subcentroDesabilitado = false, tipoOperacao, travado = false, motivoTravado, erroSubcentro = null,
+  culturasDaSafra = [], subcentroDesabilitado = false, tipoOperacao, travado = false, motivoTravado, motivoSubcentroDesabilitado, erroSubcentro = null,
   ocultarCulturaFase = false, ocultarLinhaDaSafra = false, regua,
 }: {
   value: ClassificacaoValor;
@@ -120,6 +120,8 @@ export function ClassificacaoLancamento({
   regua?: 'compacta' | 'linha';
   /** OC-CC-MODAL-FINANCEIRO-01 — por que esta' travado, quando NAO e' a transferencia (ex.: a conta do principal e' a da OC). Sem a prop, a frase de sempre. */
   motivoTravado?: string;
+  /** OC-CORRECOES-01 C (P3): por que o subcentro esta' apagado e onde mudar (vira `title` do campo). */
+  motivoSubcentroDesabilitado?: string;
   /** A recusa do save sobre o subcentro (direcao x conta do plano) — mora embaixo do campo. */
   erroSubcentro?: string | null;
   /**
@@ -335,8 +337,8 @@ export function ClassificacaoLancamento({
                 </div>
               </div>
               )}
-              {/* Subcentro — PR-U2c-1D: <PlanoSubcentroSelect /> (fonte única) */}
-              <div className={regua === 'linha' ? 'min-w-0' : 'col-span-8'}>
+              {/* Subcentro — PR-U2c-1D: <PlanoSubcentroSelect /> (fonte única). OC-CORRECOES-01 C (P3): apagado, o `title` diz por que. */}
+              <div className={regua === 'linha' ? 'min-w-0' : 'col-span-8'} title={subcentroDesabilitado ? motivoSubcentroDesabilitado : undefined}>
                 <PlanoSubcentroSelect
                   value={subcentro}
                   onChange={(v) => setClassificacao((c) => ({ ...c, subcentro: v }))}
