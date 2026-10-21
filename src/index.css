@@ -224,6 +224,12 @@
 .table-financeiro td.celula-grupo * {
   font-size: 9.5px !important;
 }
+/* FIN-V2-LISTA-VIRTUAL-01 — a lista de Lançamentos só desenha as linhas à vista, e a conta da janela exige ALTURA FIXA: 19px
+   por linha (`ALTURA_DA_LINHA`, corpoDaLista.tsx). Altura e respiro em px, a borda de baixo conta dentro deles. As linhas
+   espaçadoras (acima e abaixo da janela) não têm padding nem borda: a altura delas é exatamente N × 19. */
+.table-financeiro tr.linha-da-lista { height: 19px !important; }
+.table-financeiro tr.linha-da-lista > td { height: 18px !important; max-height: 18px; padding-top: 1px !important; padding-bottom: 1px !important; overflow: hidden; }
+.table-financeiro td.espaco-da-lista { padding: 0 !important; border: 0 !important; }
 /* Forçar herança em elementos internos */
 .table-financeiro td span,
 .table-financeiro td div {
