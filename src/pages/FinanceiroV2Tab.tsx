@@ -44,6 +44,7 @@ import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
 import { apenasAtivos, guardarFiltros, lerFiltros, esquecerFiltros } from '@/lib/financeiro/filtrosPersistidos';
 import { CHAVE_RETORNO_OC, extrasDoRetornoOC, type ExtrasRetornoOC } from '@/lib/financeiro/retornoOC';
 import { Button } from '@/components/ui/button';
+import { CorpoDaListaMemo, MenuDaLinhaSobDemanda } from '@/components/financeiro-v2/corpoDaLista';
 import { Textarea } from '@/components/ui/textarea';
 import { MOTIVO_BLOQUEIO_TITULO_OC } from '@/lib/financeiro/cancelamentoLancamento';
 import { Input } from '@/components/ui/input';
@@ -1833,6 +1834,29 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     </div>
   );
 
+  /* FIN-MODAL-FAZENDA-TRAVA-01 (Gabriel 21/10/2026) — A LISTA NÃO SE REDESENHA PELO MODAL. Com o NJ em Global a lista desenha
+     5.279 linhas, e abrir o Novo lançamento (estado `dialogOpen` aqui no pai) redesenhava todas: 2,85 s numa máquina livre,
+     16,8 s na do Gabriel. As linhas moram em `CorpoDaListaMemo`, que só redesenha quando um item da `chaveDaLista` muda — o
+     que as linhas LEEM (dado, mapas, filtros de exibição, seleção). Estado do modal NÃO entra na chave. As ações das linhas
+     passam por `acoesDaLista`, estável: o clique sempre chama a versão atual (filtros de agora), sem redesenhar. Quem
+     acrescentar uma leitura nova às linhas a põe na chave. ⚠ A lista ainda desenha TODAS as linhas (sem virtualização nem
+     paginação no servidor): frente FIN-V2-DESEMPENHO-01. */
+  const acoesDaListaRef = useRef({ openEdit, toggleSelect, handleDuplicate, abrirOCFinanceiro, abrirFinanciamentoDaParcela, recarregarVinculos });
+  acoesDaListaRef.current = { openEdit, toggleSelect, handleDuplicate, abrirOCFinanceiro, abrirFinanciamentoDaParcela, recarregarVinculos };
+  const acoesDaLista = useMemo(() => ({
+    openEdit: (l: LancamentoV2) => acoesDaListaRef.current.openEdit(l),
+    toggleSelect: (id: string) => acoesDaListaRef.current.toggleSelect(id),
+    handleDuplicate: (l: LancamentoV2) => acoesDaListaRef.current.handleDuplicate(l),
+    abrirOCFinanceiro: (operacaoId: string, tipo?: string | null) => acoesDaListaRef.current.abrirOCFinanceiro(operacaoId, tipo),
+    abrirFinanciamentoDaParcela: (l: LancamentoV2) => acoesDaListaRef.current.abrirFinanciamentoDaParcela(l),
+    recarregarVinculos: () => acoesDaListaRef.current.recarregarVinculos(),
+  }), []);
+  const chaveDaLista: readonly unknown[] = [
+    linhasDaGrade, modoIntensivo, contasAmpliado, fornecedoresMap, rotulosDoRecorte, parcelasDosLancamentos, conciliados,
+    hojeISO, coberturaExtrato, documentosPorLancamento, selectedIds, lancamentosComOC, contratosDoCliente,
+    podeAbrirFinanciamento, onAbrirFinanciamento, podeAbrirOC, nivelClassif, fazendaNameMap, fazendaCodigoMap,
+    safraCodigoMap, safraEscopoMap, contaNomeMap, foco,
+  ];
   return (
     /* ⚠ O AFASTAMENTO MORA AQUI, NO RAIZ — FIN-LISTA-VISUAL-03. A seção do /v2 não tem
        padding lateral (`w-full min-w-0 pb-16`), então tudo encostava na borda da tela. Pôr
@@ -2773,6 +2797,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 </tr>
               </thead>
               <tbody className="[&_tr:last-child]:border-0">
+                {/* FIN-MODAL-FAZENDA-TRAVA-01 — as linhas só se redesenham quando a CHAVE muda (dado, filtro, seleção); abrir o
+                    modal ou mexer nele não as toca. As ações entram por referência estável (`acoesDaLista`). */}
+                <CorpoDaListaMemo chave={chaveDaLista} desenhar={() => {
+                  const { openEdit, toggleSelect, handleDuplicate, abrirOCFinanceiro, abrirFinanciamentoDaParcela, recarregarVinculos } = acoesDaLista;
+                  return (<>
                 {linhasDaGrade.length === 0 ? (
                   <tr className="border-b">
                     <td colSpan={modoIntensivo && contasAmpliado ? 17 : 15} className="text-center text-muted-foreground py-4 text-[10px]">
@@ -3036,13 +3065,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                             que é a regra da casa para botão cinza. */}
                         <td className="!py-0 px-0 align-middle" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-center">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-5 w-5 rounded-sm" title="Ações">
-                                  <MoreHorizontal className="h-3 w-3" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="min-w-[150px]">
+                            {/* FIN-MODAL-FAZENDA-TRAVA-01 — o menu do Radix só monta na linha aberta (`MenuDaLinhaSobDemanda`): montado nas 5.279
+                                linhas, cada um registrava um ouvinte de tecla no documento e cada tecla do modal rodava todos. */}
+                            <MenuDaLinhaSobDemanda itens={() => (<>
                                 {isParcelaFinanciamento ? (
                                   /* ACESSOS-02b — "Ver contrato" leva a Financiamentos: so' para quem acessa a tela. */
                                   podeAbrirFinanciamento ? (
@@ -3077,14 +3102,15 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                                     <FilePlus2 className="mr-1.5 h-3 w-3" /> Criar OC a partir deste lançamento
                                   </DropdownMenuItem>
                                 )}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                            </>)} />
                           </div>
                         </td>
                       </tr>
                     );
                   })
                 )}
+                  </>);
+                }} />
               </tbody>
             </table>
           </div>

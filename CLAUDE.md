@@ -10751,3 +10751,25 @@ curta nas secoes de regras) e a pendencia (na FILA); o bloco inteiro vai para do
     750/814 = divida REC-COLUNAS-01b); com `&barra=32` a mesma bancada serve a medida da regua e o `check:ui-desloca`.
   ⚠ NAO PROVADO: nada com login no app real — regua, linhas que cabem e prints sao da bancada (componentes reais, barra de 32px da
     `BarraSecao`).
+- ⚠ A LISTA DE LANCAMENTOS NAO SE REDESENHA PELO MODAL, E O "⋯" DA LINHA SO' MONTA O MENU QUANDO ABERTO (FIN-MODAL-FAZENDA-TRAVA-01, Gabriel
+  21/10/2026, so' tela). Nasce do "escolher a fazenda trava" do Gabriel: 16,8 s na maquina dele, NJ em Global (5.279 linhas, ~150 mil nos).
+  · CAUSA MEDIDA (bancada com o volume do NJ, CPU 4x): abrir o Novo lancamento redesenhava as 5.279 linhas (o estado do modal mora no
+    pai) — tarefa longa de 9,5 s; e cada linha montava um `DropdownMenu` do Radix, que registra um ouvinte de `keydown` no documento e,
+    a cada tecla, pendura mais dois — cada tecla do modal rodava 5.279 deles (~400 ms por tecla). Escolher a fazenda NAO redesenhava a
+    lista nem antes (a fazenda ja' era estado do modal).
+  · AS LINHAS MORAM EM `CorpoDaListaMemo` (`src/components/financeiro-v2/corpoDaLista.tsx`), que so' redesenha quando um item de
+    `chaveDaLista` (FinanceiroV2Tab) muda: o que as linhas LEEM (dado, mapas, filtros de exibicao, selecao). Estado do modal NAO entra
+    na chave. As acoes das linhas passam por `acoesDaLista` (proxies estaveis sobre uma ref): o clique chama a versao atual, sem
+    redesenhar. ⚠ QUEM ACRESCENTAR UMA LEITURA NOVA AS LINHAS A POE NA CHAVE, senao a linha fica velha.
+  · O "⋯" e' `MenuDaLinhaSobDemanda`: fechado, botao comum; o clique monta o menu do Radix ja' aberto; fechar o desmonta. Itens os de sempre.
+  · MEDIDO (bancada, 5.279 linhas, CPU 4x, antes -> depois): abrir o modal 9.510 -> 2.616 ms (tarefa longa), lista redesenhada 1 -> 0
+    vez; abrir o seletor de fazenda ~330 ms igual; escolher a fazenda ~170 ms (igual, 0 redesenhos); tecla no fornecedor ~400 ms ->
+    sem tarefa longa (82–112 ms de relogio com a ida do Playwright). App local (NJ, sem throttling): abrir 2.853 -> 633 ms; escolher a
+    fazenda sem tarefa longa e sem redesenhar.
+  · ⚠ O QUE SOBRA NA ABERTURA (2,6 s com CPU 4x) NAO E' REACT: e' o navegador recalculando estilo da pagina inteira (a animacao, o foco e
+    a trava de rolagem do Radix forcam o recalculo sobre ~150 mil nos). So' cai reduzindo o DOM.
+  ⚠ FRENTE FIN-V2-DESEMPENHO-01 (NA FILA): a lista de Lancamentos AINDA DESENHA TODAS AS LINHAS — sem virtualizacao nem paginacao no
+    servidor (a paginacao do arquivo, `getInitialPageSize` / `paginatedLancamentos`, e' codigo morto; a lista paginada do servidor esta'
+    atras da flag `VITE_LISTA_PAGINADA_V2`, desligada).
+  Teste: `src/components/financeiro-v2/listaNaoRedesenha.test.tsx` (5; mutacao "comparador sempre falso" derruba o primeiro).
+  ⚠ NAO PROVADO: com CPU 4x no app real com login (medido na bancada) · a maquina do Gabriel (o Chat mede no publicado).

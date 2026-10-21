@@ -27,6 +27,7 @@ import contratoCadastro from './dados/contrato-cadastro.json';
 import { CadastroDeContratoDialog } from '@/components/financiamentos/CadastroDeContratoDialog';
 import { ConsorcioDialog } from '@/components/financiamentos/ConsorcioDialog';
 import { LANCAMENTOS } from './dados/financeiro';
+import { volumeNJ } from './dados/volumeNJ';
 import { buscarFornecedores } from '@/lib/fornecedores/buscaDeFornecedor';
 import { FinanceiroV2Tab } from '@/pages/FinanceiroV2Tab';
 import { GRUPOS, LEITOR, LINHAS, LISTA, RECENTES, SEM_CADASTRO, USO } from './dados/fornecedores';
@@ -153,9 +154,14 @@ if (tela === 'mesclar') {
   montar(BARRA === 32 ? <div className="flex h-full min-h-0 w-full min-w-0 flex-col"><FinV2FornecedoresTab /></div> : <div className="p-3"><FinV2FornecedoresTab /></div>);
 } else if (tela === 'financeiro') {
   /* FORN-BUSCA-UNICA-01 — a lista do Financeiro V2 (filtros + tabela), com o filtro de fornecedor da busca única */
+  /* FIN-MODAL-FAZENDA-TRAVA-01 — `&v=volume`: o volume do NJ, sintético (2.356 ativos + 861 mesclados, ~3.000 lançamentos, 5 fazendas no Global) */
+  if (q.get('n')) g.__nLanc = Number(q.get('n'));
+  const VOL = v === 'volume' ? volumeNJ() : null;
+  if (VOL) { g.__fornecedoresBancada = VOL.fornecedores; g.__fazendaBancada = { fazendas: VOL.fazendas, fazendaAtual: { id: '__global__', nome: 'Global', owner_id: '' },
+    isGlobal: true, fazendaId: '__global__', setFazendaAtual: () => {} }; }
   g.__bancoBancada = {
-    from: (t: string, e: any) => t === 'financeiro_lancamentos_v2' ? (e.in.id ? [] : LANCAMENTOS)
-      : t === 'financeiro_fornecedores' ? LISTA
+    from: (t: string, e: any) => t === 'financeiro_lancamentos_v2' ? (e.in.id ? [] : VOL ? VOL.lancamentos : LANCAMENTOS)
+      : t === 'financeiro_fornecedores' ? (VOL ? VOL.fornecedores : LISTA)
       : t === 'financeiro_contas_bancarias' ? [{ id: 'bb', nome_conta: 'Banco Alfa', banco: 'BB', fazenda_id: 'f1', ativo: true, ordem_exibicao: 1 }] : [],
     rpc: (fn: string) => fn === 'get_anos_financeiro_v2' ? [{ ano: '2026' }] : fn === 'fn_parcelas_dos_lancamentos' ? {} : null,
   };
@@ -550,6 +556,25 @@ if (desc) {
   const d = desc === 'longo' ? DESC_LONGA : DESC_CURTA;
   if (props.lancamento) props.lancamento = { ...props.lancamento, descricao: d };
   else props.prefill = { ...(props.prefill ?? {}), descricao: d };
+}
+/* FIN-MODAL-FAZENDA-TRAVA-01 — `&v=volume`: o VOLUME do NJ (21/10/2026), sintético — 2.356 fornecedores ativos + 861 mesclados (com
+   apelidos e documento), 5 fazendas, e o campo Fazenda nascendo vazio (o Global). Mede abrir e escolher a fazenda. */
+let FAZ_VOL: any = null;
+if (v === 'volume') {
+  const PAL = ['Agro', 'Comercial', 'Transportes', 'Cooperativa', 'Posto', 'Mecânica', 'Veterinária', 'Insumos', 'Rural', 'Pecuária'];
+  const vol = Array.from({ length: 2356 + 861 }, (_, i) => {
+    const mescl = i >= 2356;
+    return { id: `fv${i}`, nome: `${PAL[i % 10]} Exemplo ${PAL[(i * 7) % 10]} ${i} Ltda`, nome_fantasia: i % 3 ? `Fantasia ${i}` : null,
+      cpf_cnpj: i % 4 ? String(10000000000000 + i * 7919).slice(0, 14) : null, fazenda_id: null, ativo: !mescl,
+      fundido_em_id: mescl ? `fv${i % 2356}` : null, tipo_recebimento: null,
+      aliases: i % 5 ? [`APELIDO ${i}`, `OUTRO NOME ${i}`] : [], aliases_norm: i % 5 ? [`apelido ${i}`, `outro nome ${i}`] : [] };
+  });
+  props.fornecedores = vol;
+  g.__fornecedoresBancada = vol;
+  FAZ_VOL = [{ id: 'f-pur', nome: 'Faz. Pureza' }, { id: 'f-exp', nome: 'Faz. Sto. Expedito' }, { id: 'f-ter', nome: 'Faz. Sta. Tereza' },
+    { id: 'f-ret', nome: 'Retiro Agricultura' }, { id: 'f-adm', nome: 'Administrativo' }];
+  props.fazendas = FAZ_VOL;
+  props.prefill = { tipo_operacao: '2-Saídas', valor: 100 };
 }
 if (v === 'ref') props.referenciaOperacionalInfo = { fornecedor_texto: 'AGROPECUARIA EXEMPLO LTDA', fazenda_texto: 'EXEMPLO', plano_texto: 'Nutrição Engorda',
   centro_texto: 'Suplementação', produto_texto: 'Sal mineral', valor: -1345.5, data_referencia: '10/09/2026' };
