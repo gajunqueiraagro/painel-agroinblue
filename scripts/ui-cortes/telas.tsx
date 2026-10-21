@@ -33,6 +33,8 @@ import { GRUPOS, LEITOR, LINHAS, LISTA, RECENTES, SEM_CADASTRO, USO } from './da
 import { CasarBlocoModal } from '@/components/financeiro-v2/CasarComBancoModal';
 import { CasarComBancoModal } from '@/components/financeiro-v2/CasarComBancoModal';
 import { VendaModalShell } from '@/components/venda/VendaModalShell';
+import { DialogoDesfazerCompromisso } from '@/components/compra/DialogoDesfazerCompromisso';
+import { DialogoAtualizarCompromisso } from '@/components/compra/DialogoAtualizarCompromisso';
 import { AbateModalShell } from '@/components/abate/AbateModalShell';
 import { CompraModalShell } from '@/components/compra/CompraModalShell';
 import { AvisoPendenciasCliente } from '@/components/consultor/AvisoPendenciasCliente';
@@ -320,6 +322,34 @@ if (tela === 'mesclar') {
   if (v === 'nova') montar(<NovaPendenciaDialog open onOpenChange={() => {}} clientes={[{ id: 'cli', nome: 'Cliente Bancada' }]} clienteFixo="cli" criar={async () => null} />);
   else if (v === 'resumo') montar(<ResumoClientesPainel fonte={fonte} />);
   else montar(<div className="bg-primary p-2"><AvisoPendenciasCliente cliente={{ id: 'cli', nome: 'Cliente Bancada' }} onVerNoResumo={() => {}} fonte={fonte} /><Abre /></div>);
+} else if (tela === 'oc-dialogo') {
+  /* OC-DESFAZER-PREVISTO-01b — os tres estados do mock (460x344): bloqueio por realizado/conciliado, agendado com confirmacao e
+     o Atualizar com a data proposta ja passada. Dados SINTETICOS; o banco e' o simulado do proprio dialogo (rpc/api). */
+  const LANC = '2448e772-1111-4222-8333-944444444444';
+  const OP = '1645ba75-0000-4000-8000-000000000000';
+  const IDENT = 'Abate 036 N · novilhas · 36 cab';
+  const ROL = ['estornar o título de R$ 213.645,23 (venc. 16/10/2026)', 'cancelar a programação', 'cancelar o compromisso'];
+  const retorno = (agendados: unknown[]) => ({ ok: true, simulado: true, estorno_id: 'e1', compromisso_id: 'c1', titulos_estornados: [],
+    agendados, programacoes_canceladas: 1, operacao_id: OP, operacao_versao: 19 });
+  if (v === 'atualizar') {
+    const api = {
+      simulando: false, reprogramando: false,
+      simular: async () => ({ ok: true, valorAntigo: 228400, valorNovo: 213645.23, vencimentoProposto: '2026-10-15', agendados: [], bloqueios: [],
+        rol: [{ tipo: 'parcela', descricao: 'Cancela a parcela 1/1 de R$ 228.400,00 (prevista).', id: 'p1' },
+          { tipo: 'compromisso', descricao: 'O compromisso passa de R$ 228.400,00 para R$ 213.645,23.', id: 'c1' },
+          { tipo: 'parcela_nova', descricao: 'Nova parcela única de R$ 213.645,23 com vencimento em 15/10/2026.', id: null }] }),
+      reprogramar: async () => null,
+    } as any;
+    montar(<DialogoAtualizarCompromisso api={api} loteId="l1" rotulo="Novilhas · 36 cab" versao={18} identidade={IDENT} operacaoId={OP}
+      tipoOperacao="abate" onFechar={() => {}} onAtualizado={() => {}} />);
+  } else {
+    const rpc = async () => v === 'bloqueio'
+      ? { data: null, error: { code: 'P0001', message: 'O lançamento de R$ 213.150,75 de 13/07/2026 já foi pago ou conciliado. Desfaça o pagamento no lançamento antes.',
+          details: LANC, hint: JSON.stringify({ lancamento_id: LANC, data: '2026-07-13', valor: 213150.75, status: 'realizado', sinal: '1', conciliado: true, sequencia: 1, total: 1 }) } }
+      : { data: retorno(v === 'agendado' ? [{ lancamento_id: LANC, sequencia: 1, total: 1, valor: 213645.23, data: '2026-10-16', sinal: '1' }] : []), error: null };
+    montar(<DialogoDesfazerCompromisso operacaoId={OP} compromissoId="c1" versao={19} identidade={IDENT} rol={ROL} tipoOperacao="abate"
+      onFechar={() => {}} onDesfeito={() => {}} onAbrirLancamento={() => {}} rpc={rpc as any} />);
+  }
 } else if (tela === 'casar-1x1') {
   /* UI-SEM-CORTE-02 — o Casar com o banco 1:1 (o rendimento de R$ 0,01 da Vera, sintetico): o banco simulado diz que nao fecha. */
   if (v === 'pos') {

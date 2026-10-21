@@ -1,26 +1,44 @@
 /**
- * O diálogo de "Atualizar compromisso" — [OC-EDITAR-LOTE-FECHADA] 128b/128e.
+ * O diálogo de "Atualizar compromisso" — [OC-EDITAR-LOTE-FECHADA] 128b/128e; casa nova no OC-DESFAZER-PREVISTO-01b (mock do
+ * Gabriel, 20/10 19h16: estado 3, 460x344 fixo).
  *
  * ⚠ IRMÃO DO `DialogoExcluirLoteOC`, e de propósito: mesma mecânica (simula ao abrir,
  * lista o rol do banco, pede motivo, executa com a versão da tela), porque o operador
  * aprende UM gesto e o usa nos dois. O que muda é o que ele afirma — aqui há um valor
  * antigo e um novo, e eles são a razão do diálogo existir.
  *
- * ⚠ ENQUANTO A SIMULAÇÃO NÃO CHEGA, O BOTÃO NÃO EXISTE: um "Atualizar" clicável sobre uma
+ * ⚠ ENQUANTO A SIMULAÇÃO NÃO CHEGA, O BOTÃO NÃO LIGA: um "Atualizar" clicável sobre uma
  * lista vazia diria "nada acontece" sobre algo que cancela título e cria parcela.
+ *
+ * ⚠ OC-DESFAZER-PREVISTO-01b:
+ *   · o VENCIMENTO da nova parcela é escolhido aqui, no DatePicker da casa; a proposta é o da parcela viva (a simulação o
+ *     devolve). Data anterior a hoje: borda e linha âmbar — AVISO, não bloqueio (o caso de 20/10 propunha 15/10, já passado);
+ *   · o rol vem do banco com R$ formatado; trocar a data simula de novo (a última linha mostra o vencimento escolhido);
+ *   · AGENDADO cai junto só com a confirmação explícita (a faixa âmbar); REALIZADO/CONCILIADO bloqueia com a linha de quem
+ *     trava e "Abrir lançamento" (o id vem do banco);
+ *   · o motivo é uma linha de 24px e fica guardado por lote enquanto a OC estiver aberta.
  */
 import { useEffect, useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { AlertTriangle } from 'lucide-react';
-import type { ReprogramarCompromissoApi, SimulacaoReprogramacao } from '@/hooks/useReprogramarCompromissoLote';
+import { DatePicker } from '@/components/ui/date-picker';
+import { cn } from '@/lib/utils';
+import { ehRecusa, type ReprogramarCompromissoApi, type SimulacaoReprogramacao } from '@/hooks/useReprogramarCompromissoLote';
+import type { LancamentoQueTrava } from '@/lib/oc/desfazerCompromisso';
+import { chaveDoMotivo, esquecerMotivo, useMotivoGuardado } from '@/lib/oc/motivoGuardado';
+import {
+  BLOCO_OC, BotaoAcaoOC, BotaoVoltarOC, CampoMotivoOC, CascaDialogoOC, FaixaAgendadoOC, FaixaBloqueioOC, ROTULO_OC, VALOR_OC,
+  brlOC, dataBr, ehRecebimento,
+} from './CascaDialogoOC';
 
-const brl = (n: number | null) =>
-  n == null ? '—' : n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+/** Hoje em aaaa-mm-dd (fuso local) — a régua do aviso de data passada. */
+export const hojeIso = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+export const vencimentoJaPassou = (iso: string | null | undefined, hoje = hojeIso()) => !!iso && iso.slice(0, 10) < hoje;
 
 export function DialogoAtualizarCompromisso({
-  api, loteId, rotulo, versao, onFechar, onAtualizado, motivoReabertura = null,
+  api, loteId, rotulo, versao, onFechar, onAtualizado, motivoReabertura = null, operacaoId = null, identidade, tipoOperacao,
+  onAbrirLancamento = () => {},
 }: {
   api: ReprogramarCompromissoApi;
   loteId: string;
@@ -37,13 +55,25 @@ export function DialogoAtualizarCompromisso({
    * decisoes, com dois registros. Omitido (compra) = campo vazio, como sempre.
    */
   motivoReabertura?: string | null;
+  /** A operação — a chave do motivo guardado. */
+  operacaoId?: string | null;
+  /** "Abate 036 N · novilhas · 36 cab"; sem ela, o rótulo do lote. */
+  identidade?: string;
+  tipoOperacao?: string | null;
+  onAbrirLancamento?: (lancamentoId: string) => void;
 }) {
   const [simulacao, setSimulacao] = useState<SimulacaoReprogramacao | null>(null);
-  const [motivo, setMotivo] = useState(motivoReabertura ?? '');
+  const chave = chaveDoMotivo(operacaoId, 'atualizar', loteId);
+  const [motivo, setMotivo] = useMotivoGuardado(chave, motivoReabertura);
   const motivoESugestao = !!motivoReabertura && motivo === motivoReabertura;
+  /** O vencimento escolhido; nulo = o proposto pelo banco. */
+  const [vencimento, setVencimento] = useState<string | null>(null);
+  const [confirmado, setConfirmado] = useState(false);
+  const [recusa, setRecusa] = useState<{ frase: string; trava: LancamentoQueTrava | null } | null>(null);
 
   /* ⚠ A SIMULACAO RODA UMA VEZ POR ABERTURA (OC-CC-EXPLICAR-CONGELA-01): o efeito depende da FUNCAO (`useCallback` estavel no
-     hook) e do lote — nunca do objeto `api`, que e' recriado a cada render e refazia a simulacao a cada render do pai. */
+     hook) e do lote — nunca do objeto `api`, que e' recriado a cada render e refazia a simulacao a cada render do pai.
+     Trocar a data simula de novo pelo `onChange` do campo, nunca por este efeito. */
   const { simular } = api;
   useEffect(() => {
     let vivo = true;
@@ -51,84 +81,87 @@ export function DialogoAtualizarCompromisso({
     return () => { vivo = false; };
   }, [simular, loteId]);
 
-  const bloqueado = !!simulacao && simulacao.bloqueios.length > 0;
-  const motivoTravado = !simulacao ? 'Consultando o que será refeito…'
-    : bloqueado ? 'Há título realizado ou conciliado; estorne antes.'
+  const venc = vencimento ?? simulacao?.vencimentoProposto ?? null;
+  const passou = vencimentoJaPassou(venc);
+  const trocarVencimento = (v: string) => {
+    setVencimento(v || null);
+    void simular(loteId, v || null).then(s => { if (s) setSimulacao(s); });
+  };
+
+  const bloqueio = recusa ?? (simulacao && simulacao.bloqueios.length > 0
+    ? { frase: simulacao.bloqueios[0].descricao, trava: simulacao.bloqueios[0].trava } : null);
+  const temAgendado = (simulacao?.agendados.length ?? 0) > 0;
+  const recebimento = ehRecebimento(bloqueio?.trava?.sinal ?? simulacao?.agendados[0]?.sinal, tipoOperacao);
+  const falta = !simulacao ? 'Consultando o que será refeito'
+    : bloqueio ? 'Nada foi alterado.'
+    : !venc ? 'Informe o vencimento da nova parcela.'
+    : temAgendado && !confirmado ? 'Confirme o cancelamento do lançamento agendado.'
     : !motivo.trim() ? 'Informe o motivo.'
     : versao == null ? 'Versão da operação indisponível; reabra a operação.'
     : null;
 
   const confirmar = async () => {
-    if (motivoTravado || versao == null) return;
-    const r = await api.reprogramar(loteId, versao, motivo.trim());
-    if (r) onAtualizado(r.operacaoVersao);
+    if (falta || versao == null) return;
+    const r = await api.reprogramar(loteId, versao, motivo.trim(), { vencimento: venc, confirmarAgendado: confirmado });
+    if (ehRecusa(r)) { setRecusa({ frase: r.erro, trava: r.trava }); return; }
+    if (r) { esquecerMotivo(chave); onAtualizado(r.operacaoVersao); }
   };
 
   return (
-    <Dialog open onOpenChange={(o) => { if (!o) onFechar(); }}>
-      <DialogContent className="max-w-md">
-        <DialogTitle className="text-[14px]">Atualizar compromisso</DialogTitle>
-        <DialogDescription className="text-[11px]">
-          {rotulo} — o compromisso volta a valer o que o lote vale hoje.
-        </DialogDescription>
-
-        {!simulacao ? (
-          <p className="py-3 text-[11px] text-muted-foreground">Consultando o que será refeito…</p>
-        ) : bloqueado ? (
-          <div className="space-y-1 rounded-md border border-destructive/50 bg-destructive/5 px-3 py-2">
-            <div className="flex items-center gap-1.5 text-[11px] font-medium text-destructive">
-              <AlertTriangle className="h-3.5 w-3.5" /> Não é possível atualizar agora
+    <CascaDialogoOC testid="dialogo-atualizar-compromisso" titulo="Atualizar compromisso" identidade={identidade ?? rotulo}
+      onFechar={onFechar} bloqueado={api.reprogramando}
+      dica={falta ?? 'Cancela as parcelas não pagas e refaz pelo valor do lote.'}
+      botoes={<>
+        <BotaoVoltarOC onClick={onFechar} disabled={api.reprogramando} />
+        {!bloqueio && (
+          <BotaoAcaoOC testid="confirmar-atualizar" tom="navy" texto={api.reprogramando ? 'Atualizando' : 'Atualizar compromisso'}
+            disabled={!!falta || api.reprogramando} onClick={() => { void confirmar(); }}
+            title={falta ?? 'Cancelar as parcelas não pagas e reprogramar pelo valor novo'} />
+        )}
+      </>}>
+      {!simulacao ? (
+        <div className={BLOCO_OC}><span className={ROTULO_OC}>Consultando o que será refeito</span></div>
+      ) : bloqueio ? (
+        <FaixaBloqueioOC trava={bloqueio.trava} frase={bloqueio.frase} recebimento={recebimento} onAbrirLancamento={onAbrirLancamento} />
+      ) : (
+        <>
+          <div className={cn(BLOCO_OC, 'grid grid-cols-[1fr_1fr_156px] items-end gap-x-2')} data-testid="topo-atualizar">
+            <div className="min-w-0">
+              <div className={ROTULO_OC}>compromisso hoje</div>
+              <div className="whitespace-nowrap text-[11px] leading-[24px] tabular-nums text-[#6B7280] line-through" data-testid="valor-antigo">
+                {brlOC(simulacao.valorAntigo)}
+              </div>
             </div>
-            <ul className="ml-4 list-disc text-[11px] leading-tight text-destructive">
-              {simulacao.bloqueios.map((b, i) => <li key={i}>{b.descricao}</li>)}
-            </ul>
-            {/* ⚠ DINHEIRO REALIZADO NÃO SE MEXE SEM ESTORNO — a divergência fica INFORMADA
-                na aba, que é a decisão do 128b: informar é melhor que refazer por baixo. */}
-            <p className="text-[10px] leading-tight text-muted-foreground">
-              Estorne o pagamento ou a conciliação pelo Financeiro e tente de novo. Até lá a
-              divergência fica visível na aba, sem ser desfeita.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <div className="flex items-baseline gap-2 rounded-md border bg-muted/20 px-3 py-2 text-[12px] tabular-nums">
-              <span className="text-muted-foreground line-through">{brl(simulacao.valorAntigo)}</span>
-              <span aria-hidden className="text-muted-foreground">→</span>
-              <span className="font-medium">{brl(simulacao.valorNovo)}</span>
+            <div className="min-w-0">
+              <div className={ROTULO_OC}>o lote vale hoje</div>
+              <div className="whitespace-nowrap text-[11px] font-semibold leading-[24px] tabular-nums text-[#111827]" data-testid="valor-novo">
+                {brlOC(simulacao.valorNovo)}
+              </div>
             </div>
-            <div className="rounded-md border bg-muted/20 px-3 py-2">
-              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">O que será refeito</div>
-              <ul className="mt-1 space-y-0.5 text-[11px] leading-tight">
-                {simulacao.rol.length === 0
-                  ? <li className="text-muted-foreground">Nada a desfazer — só o valor muda.</li>
-                  : simulacao.rol.map((r, i) => <li key={i}>· {r.descricao}</li>)}
-              </ul>
+            <div className="min-w-0">
+              <div className={ROTULO_OC}>vencimento da nova parcela *</div>
+              <DatePicker value={venc ?? ''} onChange={trocarVencimento} size="compact" data-testid="vencimento-nova-parcela"
+                className={cn('h-6 w-full text-[11px]', passou && 'border-[#EFD08A] bg-[#FFF8E6]')} />
             </div>
-            <Textarea rows={2} value={motivo} onChange={e => setMotivo(e.target.value)}
-              placeholder="Motivo da atualização" data-testid="motivo-atualizar"
-              className={`text-[12px] ${motivoESugestao ? 'bg-amber-50 border-amber-300 dark:bg-amber-950/30 dark:border-amber-800' : ''}`} />
-            {motivoESugestao && (
-              <div className="text-[10px] leading-tight text-amber-800 dark:text-amber-300" data-testid="motivo-sugerido">
-                motivo da reabertura — confirme ou troque
+            {passou && (
+              <div className="col-span-3 pt-1 text-[10px] leading-[13px] text-[#92400E]" data-testid="aviso-vencimento-passado">
+                Vence em {dataBr(venc)}, que já passou. Confira a data antes de atualizar.
               </div>
             )}
           </div>
-        )}
-
-        <div className="flex items-center justify-end gap-2">
-          {motivoTravado && !bloqueado && (
-            <span className="mr-auto text-[10px] leading-tight text-muted-foreground">{motivoTravado}</span>
-          )}
-          <Button type="button" variant="ghost" onClick={onFechar}>Voltar</Button>
-          {!bloqueado && (
-            <Button type="button" disabled={!!motivoTravado || api.reprogramando}
-              title={motivoTravado ?? 'Cancelar as parcelas não pagas e reprogramar pelo valor novo'}
-              onClick={() => { void confirmar(); }}>
-              {api.reprogramando ? 'Atualizando…' : 'Atualizar compromisso'}
-            </Button>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
+          <div className={BLOCO_OC} data-testid="rol-atualizar">
+            <div className={ROTULO_OC}>o que será refeito</div>
+            <ul className={VALOR_OC}>
+              {simulacao.rol.length === 0
+                ? <li className="text-[#4B5563]">Nada a desfazer: só o valor muda.</li>
+                : simulacao.rol.map((r, i) => <li key={i}>{r.descricao}</li>)}
+            </ul>
+          </div>
+          {temAgendado && <FaixaAgendadoOC confirmado={confirmado} onConfirmar={setConfirmado} />}
+          <CampoMotivoOC testid="motivo-atualizar" motivo={motivo} onMotivo={setMotivo} sugerido={motivoESugestao} disabled={api.reprogramando}
+            placeholder="Motivo da atualização" />
+        </>
+      )}
+    </CascaDialogoOC>
   );
 }

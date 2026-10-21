@@ -47,7 +47,7 @@ function apiFalsa() {
     simulando: false,
     reprogramando: false,
     simular: async (): Promise<SimulacaoReprogramacao | null> => (
-      { ok: true, rol: [], bloqueios: [], valorAntigo: 487028.79, valorNovo: 490000 }
+      { ok: true, rol: [], bloqueios: [], valorAntigo: 487028.79, valorNovo: 490000, vencimentoProposto: '2026-11-15', agendados: [] }
     ),
     reprogramar,
   };
@@ -55,7 +55,8 @@ function apiFalsa() {
 }
 /* Sem cast: o elemento e' conferido, nao afirmado. */
 function valorDe(el: Element): string {
-  if (!(el instanceof HTMLTextAreaElement)) throw new Error('campo de motivo nao e textarea');
+  /* OC-DESFAZER-PREVISTO-01b: o motivo virou uma linha de 24px (input), no mock de 460x344. */
+  if (!(el instanceof HTMLInputElement)) throw new Error('campo de motivo nao e input');
   return el.value;
 }
 
@@ -75,7 +76,8 @@ describe('Atualizar compromisso depois de reabrir', () => {
     expect(screen.queryByTestId('motivo-sugerido')).toBeNull();
     expect(campo.className).not.toMatch(/amber/);
     fireEvent.click(screen.getByText('Atualizar compromisso', { selector: 'button' }));
-    await waitFor(() => expect(reprogramar).toHaveBeenCalledWith('lote', 8, 'valor ajustado'));
+    await waitFor(() => expect(reprogramar).toHaveBeenCalledWith('lote', 8, 'valor ajustado',
+      { vencimento: '2026-11-15', confirmarAgendado: false }));
   });
 
   it('compra (sem motivo da reabertura): campo vazio, sem marca — como sempre', async () => {

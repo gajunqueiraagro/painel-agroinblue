@@ -102,6 +102,11 @@ const CENARIOS = [
   { nome: 'lancamento-novo-Geral-7', url: 'tela=lancamento&m=novo', tamanhos: TAMANHOS_DO_CONSORCIO },
   { nome: 'lancamento-vencimento-falta', url: 'tela=lancamento&m=editar&v=semvenc', tamanhos: TAMANHOS_DO_CONSORCIO,
     antes: async (p) => { await p.locator('button[tabindex="17"]').first().click(); await p.waitForTimeout(500); } },
+  /* OC-DESFAZER-PREVISTO-01b — os tres estados do "Desfazer"/"Atualizar compromisso" (mock de 20/10 19h16), 460x344 fixo e sem
+     rolagem, nos sete tamanhos: bloqueio por realizado/conciliado, agendado com confirmacao, Atualizar com data ja passada (e o
+     desfazer pronto, o rol de sempre). */
+  ...['bloqueio', 'agendado', 'pronto', 'atualizar'].map((e) => ({ nome: `oc-dialogo-${e}`, url: `tela=oc-dialogo&v=${e}`,
+    tamanhos: TAMANHOS_DO_CONSORCIO, semRolagem: { dentro: '[role="dialog"]' } })),
   { nome: 'lancamento-xml-Pagamento-longo', url: 'tela=lancamento&m=novo&v=xml&desc=longo', alturasComo: 'tela=lancamento&m=novo&v=xml&desc=curto', antes: clicarTexto('Pagamento') },
   /* FIN-CONSORCIO-02 — o cadastro do consórcio, aba a aba, nos sete tamanhos do mock: nada rola dentro do modal além da lista de
      parcelas (`semRolagem`: a lista é a única exceção) e nada passa da caixa dele */

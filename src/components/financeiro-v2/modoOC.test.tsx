@@ -215,12 +215,14 @@ describe('o mapa de frases do banco (expressão completa, nunca pedaço solto)',
     ['Soma dos compromissos principais excede a base da operacao (10000.01 > 10000.00)', 'A programação passa do valor da operação.'],
     ['A classificacao escolhida nao e a que o plano resolve para "Impostos e Despesas de Abates e Vendas"', 'Esta classificação não corresponde à conta desta operação.'],
     ['Classificacao nao encontrada no plano de contas deste cliente', 'Classificação não encontrada no plano de contas deste cliente.'],
-    ['Estorne a liquidacao ou conciliacao financeira antes de estornar esta materializacao.', 'Este lançamento já foi pago ou conciliado. Desfaça o pagamento ou a conciliação no Financeiro antes.'],
-    ['Compromisso ja cancelado', 'Este lançamento já foi cancelado.'],
   ];
+  /* OC-DESFAZER-PREVISTO-01b — o banco passou a devolver a frase pronta destas recusas: o mapa não as traduz mais (uma fonte só). */
+  const PRONTAS_DO_BANCO = ['O lançamento de R$ 213.150,75 de 13/07/2026 já foi pago ou conciliado. Desfaça o pagamento no lançamento antes.',
+    'Este compromisso já foi cancelado.'];
   it('cada amostra do RAISE vira a frase do operador, com acento', () => {
     for (const [banco, tela] of AMOSTRAS) expect(fraseDoBancoOC(banco)).toBe(tela);
-    expect(FRASES_DO_BANCO_OC).toHaveLength(5);
+    expect(FRASES_DO_BANCO_OC).toHaveLength(3);
+    for (const pronta of PRONTAS_DO_BANCO) expect(fraseDoBancoOC(pronta)).toBe(pronta);
   });
   it('pedaço solto NÃO casa, nem a frase dentro de outra: passa como veio', () => {
     for (const solto of ['excede a base', 'Soma dos compromissos principais', 'excede a base da operacao', 'classificacao escolhida',

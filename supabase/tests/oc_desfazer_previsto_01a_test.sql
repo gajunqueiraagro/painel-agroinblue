@@ -2,7 +2,8 @@
 -- Termina em RAISE 'OK'. Transacao revertida. Autor = o admin da casa (as RPCs da OC exigem acesso ao cliente).
 --   T1 OC 1645ba75 / compromisso 6347b5a1 (o caso de 20/10): o desfazer SIMULADO passa (estorna o titulo programado, cancela a
 --      programacao e o compromisso); o 2448e772 (desvinculado em 14/10) segue vivo, realizado e conciliado, intocado.
---   T2 compromisso com parte viva e titulo REALIZADO (6a7393ae): o desfazer continua recusando (P0001), com a frase do estorno.
+--   T2 compromisso com parte viva e titulo REALIZADO (6a7393ae): o desfazer continua recusando (P0001), com a frase do estorno
+--      (desde o 01b, pronta do banco: "O lançamento de R$ … já foi pago ou conciliado…").
 --   T3 compromisso com titulo so' programado (ff50d197): o desfazer DE VERDADE cancela o titulo junto, com data, autor e motivo.
 --   T4 "Atualizar compromisso" (65cab185, lote 0fcf05cb, titulo previsto 1e34a184): o lancamento cancelado leva cancelado_em,
 --      cancelado_por, cancelado_motivo e updated_by.
@@ -37,7 +38,8 @@ begin
     perform public.oc_desfazer_compromisso(v_op, v_ver, '6a7393ae-8c8c-4eac-bd04-31cb1847dc70', 'teste', true);
   exception when others then e := sqlstate; m := sqlerrm;
   end;
-  if e is distinct from 'P0001' or m not like 'Estorne a liquidacao ou conciliacao financeira%' then
+  -- desde o 01b a frase vem pronta do banco ("O lançamento de R$ … já foi pago ou conciliado…")
+  if e is distinct from 'P0001' or m not like 'O lançamento de R$ %' then
     raise exception 'T2 titulo realizado: % %', coalesce(e, 'aceitou'), m; end if;
 
   -- T3

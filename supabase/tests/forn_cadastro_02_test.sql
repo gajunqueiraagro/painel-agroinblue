@@ -36,9 +36,9 @@ BEGIN
   r := public.fn_fornecedor_uso(f);
   if (r->>'lancamentos')::int <> 0 or (r->>'compras_parceladas')::int <> 0 or (r->>'documentos')::int <> 0 or r->>'ultimo_lancamento' is not null
      or r->>'cadastrado_em' is null then raise exception 'C3 vazio: %', r; end if;
-  insert into financeiro_lancamentos_v2 (cliente_id, fazenda_id, tipo_operacao, valor, sinal, data_competencia, data_pagamento, status_transacao,
-    favorecido_id, conta_bancaria_id, descricao, cenario, origem_lancamento)
-  values (k, fz, '2-Saídas', 10, -1, date '2026-09-01', date '2026-09-05', 'realizado', f, cta, 'SINT uso', 'realizado', 'manual');
+  insert into financeiro_lancamentos_v2 (cliente_id, fazenda_id, tipo_operacao, valor, sinal, data_competencia, data_vencimento, data_pagamento,
+    status_transacao, favorecido_id, conta_bancaria_id, descricao, cenario, origem_lancamento)
+  values (k, fz, '2-Saídas', 10, -1, date '2026-09-01', date '2026-09-05', date '2026-09-05', 'realizado', f, cta, 'SINT uso', 'realizado', 'manual');
   insert into financeiro_lancamentos_v2 (cliente_id, fazenda_id, tipo_operacao, valor, sinal, data_competencia, status_transacao,
     favorecido_id, conta_bancaria_id, descricao, cenario, origem_lancamento, cancelado)
   values (k, fz, '2-Saídas', 20, -1, date '2026-10-01', 'previsto', f, cta, 'SINT cancelado', 'realizado', 'manual', true);
@@ -55,8 +55,12 @@ BEGIN
   perform set_config('request.jwt.claims', '{"sub":"7bd0b6ad-2527-4be1-af58-f2cc0c0edd8e","role":"authenticated"}', true);
   if has_function_privilege('anon', 'public.fn_fornecedor_uso(uuid)', 'execute') then raise exception 'C4 anon executa'; end if;
   if not has_function_privilege('authenticated', 'public.fn_fornecedor_uso(uuid)', 'execute') then raise exception 'C4 authenticated sem execute'; end if;
+  /* ACESSOS-01 (20261027120600): as policies viraram select/insert/update `_tenant`, só authenticated, sem DELETE */
   select count(*) into n from pg_policy where polrelid = 'public.financeiro_fornecedores'::regclass;
-  if n <> 4 then raise exception 'C4 policies: %', n; end if;
+  if n <> 3 then raise exception 'C4 policies: %', n; end if;
+  if exists (select 1 from pg_policy where polrelid = 'public.financeiro_fornecedores'::regclass
+             and (polcmd in ('d', '*') or polroles <> array['authenticated'::regrole]::oid[])) then
+    raise exception 'C4 policy de delete ou fora do authenticated'; end if;
 
   RAISE EXCEPTION 'OK';
 END $t$;
