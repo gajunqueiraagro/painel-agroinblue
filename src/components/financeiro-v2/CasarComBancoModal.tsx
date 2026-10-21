@@ -801,7 +801,7 @@ export function CasarBlocoModal({
                   <tr key={id} className="h-[18px]" data-testid="pix-levado">
                     <td className="border-b px-1.5 tabular-nums whitespace-nowrap">{dataCurta(e.data)}</td>
                     {/* O HISTÓRICO DO BANCO ROLA DENTRO DA CÉLULA (UI-SEM-CORTE-01: sem "…"), inteiro também no `title`. */}
-                    <td className="border-b px-1.5"><div className="uma-linha-que-rola" data-testid="historico-bloco" title={e.historico ?? ''}>{e.historico ?? '—'}</div></td>
+                    <td className="border-b px-1.5"><div className="truncate" data-testid="historico-bloco" title={e.historico ?? ''}>{e.historico ?? '—'}</div></td>
                     <td className={cn('border-b px-1.5 text-right tabular-nums whitespace-nowrap', corVal(e.valor))}>{fmtBRL(e.valor)}</td>
                   </tr>
                 );
