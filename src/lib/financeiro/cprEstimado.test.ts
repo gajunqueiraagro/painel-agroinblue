@@ -29,48 +29,41 @@ const LINHAS: ContaCpr[] = [
   conta('paga-est', '2026-10-08', 123, { status_transacao: 'realizado', data_pagamento: '2026-10-08' }),
 ];
 const ESTIMADAS = new Set(['rec-est-1', 'rec-est-2', 'rec-est-venc', 'rec-est-fora', 'entrada-est', 'paga-est']);
-const recorte = (incluirVencidos: boolean, estimadas?: ReadonlySet<string>) =>
-  recortarCpr(LINHAS, { periodo: PERIODO, hoje: HOJE, incluirVencidos, estimadas });
+const recorte = (estimadas?: ReadonlySet<string>) =>
+  recortarCpr(LINHAS, { periodo: PERIODO, hoje: HOJE, estimadas });
 
 describe('o dono reparte o total a pagar em confirmado + estimado, em centavos', () => {
   it('com os vencidos: as duas fatias, valor e quantidade', () => {
-    const r = recorte(true, ESTIMADAS);
+    const r = recorte(ESTIMADAS);
     expect(r.aPagarEstimado).toEqual({ valor: 33333 + 7 + 8000, qtd: 3 });
     expect(r.aPagarConfirmado).toEqual({ valor: 100000 + 25010 + 4000, qtd: 3 });
   });
-  it('INVARIANTE: confirmado + estimado = total a pagar do MESMO recorte, ao centavo — com e sem os vencidos', () => {
-    for (const inc of [true, false]) {
-      const r = recorte(inc, ESTIMADAS);
-      expect(r.aPagarConfirmado.valor + r.aPagarEstimado.valor).toBe(centavosDe(r.total.pagar.valor));
-      expect(r.aPagarConfirmado.qtd + r.aPagarEstimado.qtd).toBe(r.total.pagar.contas);
-      expect(r.aReceberConfirmado.valor + r.aReceberEstimado.valor).toBe(centavosDe(r.total.receber.valor));
-      expect(r.aReceberConfirmado.qtd + r.aReceberEstimado.qtd).toBe(r.total.receber.contas);
-    }
-  });
-  it('CPR-AJUSTES-20-10b: num período com hoje a caixa "Incluir vencidos" não tira a vencida das fatias (ela entra no saldo e no rodapé)', () => {
-    const r = recorte(false, ESTIMADAS);
-    expect(r.aPagarEstimado).toEqual(recorte(true, ESTIMADAS).aPagarEstimado);
-    expect(r.aPagarConfirmado).toEqual(recorte(true, ESTIMADAS).aPagarConfirmado);
+  it('INVARIANTE: confirmado + estimado = total a pagar do MESMO recorte, ao centavo — com os vencidos', () => {
+    const r = recorte(ESTIMADAS);
+    expect(r.aPagarConfirmado.valor + r.aPagarEstimado.valor).toBe(centavosDe(r.total.pagar.valor));
+    expect(r.aPagarConfirmado.qtd + r.aPagarEstimado.qtd).toBe(r.total.pagar.contas);
+    expect(r.aReceberConfirmado.valor + r.aReceberEstimado.valor).toBe(centavosDe(r.total.receber.valor));
+    expect(r.aReceberConfirmado.qtd + r.aReceberEstimado.qtd).toBe(r.total.receber.contas);
   });
   it('conta que NÃO é de recorrência é confirmada; sem o conjunto, tudo é confirmado e o estimado é zero', () => {
     expect(contaEstimadaCpr({ id: 'avulsa' }, ESTIMADAS)).toBe(false);
-    const r = recorte(true);
+    const r = recorte();
     expect(r.aPagarEstimado).toEqual({ valor: 0, qtd: 0 });
     expect(r.aPagarConfirmado.valor).toBe(centavosDe(r.total.pagar.valor));
-    expect(recorte(true, new Set()).aPagarEstimado).toEqual({ valor: 0, qtd: 0 });
+    expect(recorte(new Set()).aPagarEstimado).toEqual({ valor: 0, qtd: 0 });
   });
   it('fora do período e PAGA não entram em fatia nenhuma, mesmo estando no conjunto', () => {
-    const r = recorte(true, ESTIMADAS);
+    const r = recorte(ESTIMADAS);
     const soma = r.aPagarConfirmado.valor + r.aPagarEstimado.valor;
     expect(soma).toBe(100000 + 25010 + 4000 + 33333 + 7 + 8000);          // sem os 999,00 de fora e sem os 123,00 pagos
   });
   it('A RECEBER tem as suas duas fatias, à parte', () => {
-    const r = recorte(true, ESTIMADAS);
+    const r = recorte(ESTIMADAS);
     expect(r.aReceberEstimado).toEqual({ valor: 70000, qtd: 1 });
     expect(r.aReceberConfirmado).toEqual({ valor: 500000, qtd: 1 });
   });
   it('NADA MUDA NO SALDO: baldes, totais e a série (partida, menor e fim) são os mesmos com e sem o conjunto', () => {
-    const sem = recorte(true), com = recorte(true, ESTIMADAS);
+    const sem = recorte(), com = recorte(ESTIMADAS);
     expect(com.total).toEqual(sem.total);
     expect(com.vencidos.pagar).toEqual(sem.vencidos.pagar);
     expect(com.periodoSoma.linhas.map(l => l.id)).toEqual(sem.periodoSoma.linhas.map(l => l.id));
@@ -101,8 +94,8 @@ describe('quem julga é a regra única (`ocorrenciaEstimada`)', () => {
     expect([...ids].sort()).toEqual(['a', 'd']);
   });
   it('a estimada que ganha a marca sai do estimado e entra no confirmado — o total não muda', () => {
-    const antes = recorte(true, ESTIMADAS);
-    const depois = recorte(true, new Set([...ESTIMADAS].filter(id => id !== 'rec-est-1')));
+    const antes = recorte(ESTIMADAS);
+    const depois = recorte(new Set([...ESTIMADAS].filter(id => id !== 'rec-est-1')));
     expect(depois.aPagarEstimado.valor).toBe(antes.aPagarEstimado.valor - 33333);
     expect(depois.aPagarConfirmado.valor).toBe(antes.aPagarConfirmado.valor + 33333);
     expect(depois.total).toEqual(antes.total);
