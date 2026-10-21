@@ -10785,3 +10785,45 @@ curta nas secoes de regras) e a pendencia (na FILA); o bloco inteiro vai para do
   guardado por nome + md5 dos statements + "a versao nova nao existe"; md5 do ledger `b1238fd86fdc43950a9c95d450fbbcd0` = md5 do arquivo
   sem o `\n` final (o ledger guarda o texto sem ele). COMO EVITAR: aplicar SEMPRE pelo nome do arquivo — logo depois do `apply_migration`,
   no MESMO passo, o UPDATE da versao para o numero do arquivo e a conferencia md5(arquivo sem `\n` final) = md5(statements), antes do commit.
+- FORN-FILIAL-01 — FORNECEDOR COM FILIAIS (Gabriel, 21/10/2026 08h17; junta o FORN-FILIAL-MESMO-NOME-01). REGRA: matriz e filiais tem a
+  MESMA razao social; diferenciam-se pelo CNPJ (mesma raiz de 8 digitos) e pela cidade/UF. Cadastro: razao social como na NF, SEM cidade
+  no nome; o CNPJ da filial; municipio/UF nos campos proprios; fantasia opcional.
+  · CRIACAO, UMA REGRA (`decidirCadastro`, `src/lib/fornecedores/cadastroDaCasa.ts` — o "+" dos seletores pelo `NovoFornecedorDialog` e o
+    cadastro completo pelo `FornecedorFormDialog`, que deixou a barreira propria sobre os 100 da pagina e pergunta a mesma regra lida do
+    banco). Ordem: o CPF/CNPJ de OUTRO ativo vem primeiro (com o mesmo nome e' o proprio cadastro — seleciona; com outro nome, nao cria);
+    mesmo nome + o novo SEM documento → seleciona o existente (como antes); mesmo nome + CNPJ valido DIFERENTE → `filial`: cria, com o
+    aviso "Ja existe <nome> com CNPJ <completo>; este fica como outro cadastro" (no formulario: aviso e "Salvar mesmo assim"; no "+":
+    "Criar este cadastro"); homonimo SEM documento (vazio ou fora do padrao) e o novo com CNPJ → `homonimo_sem_documento`: pergunta —
+    "Preencher naquele" (grava o CNPJ so' se ele continuar sem documento, `preencherDocumento` da fonte) ou criar outro; inativo com outro
+    CNPJ e' outra filial; inativo sem documento → reativar (como antes); o CNPJ de um INATIVO nao bloqueia (FORN-01b).
+  · TRAVA NO BANCO (migration 20261028110100, ledger alinhado no mesmo passo): `trg_fornecedor_documento_ativo_unico`, CONSTRAINT TRIGGER
+    ADIADO (fim da transacao; o Mesclar e o desfazer passam), so' em gravacao nova (INSERT ou UPDATE que muda a chave do documento):
+    o CPF/CNPJ de outro cadastro ATIVO e nao mesclado do mesmo cliente → 23505 "Este CPF/CNPJ ja' e' de <nome> (ativo). Nada foi
+    gravado." Legado intocado (1 grupo no NJ, 2 ativos com o mesmo documento). Indice novo (cliente_id, `_fn_fornecedor_chave_documento`).
+  · SELETOR (`FavorecidoSelect`, toda tela de lancamento): cada opcao "Razao social · Municipio/UF · CNPJ completo" — o nome corta com
+    "…" e a linha inteira no `title`; cidade (`favorecido-cidade-da-opcao`) e CNPJ nunca cortam. O leitor unico (`useFornecedoresDoCliente`)
+    e o `useFinanceiroV2` passaram a ler `municipio, uf`. A BUSCA UNICA acha pela cidade: alguma palavra do termo COMECA uma palavra do
+    municipio/UF e todas comecam uma palavra da razao social, da fantasia ou da cidade ("zeta tres", "pres pru"; o "g" solto nao casa com
+    "Lagoas"); sem palavra na cidade nada muda. Tela (`casaComOTermo`) e banco
+    (`fn_fornecedor_buscar`) presos pelo `buscaDeFornecedor.casos.json` (5 casos novos; o teste SQL regerado tambem grava municipio/uf).
+  · CONSULTA PUBLICA DO CNPJ (`src/lib/fornecedores/consultaCnpj.ts`): FASE 0 — BrasilAPI sem chave e com CORS aberto (ReceitaWS sem CORS;
+    cnpj.ws nao respondeu); o municipio vem em caixa alta sem acento, e o nome certo sai da API de localidades do IBGE pelo codigo (CORS
+    aberto). No cadastro, o CNPJ DIGITADO e valido (14, numerico) e' consultado (500ms de espera, 6s de prazo) e preenche SO' campo vazio
+    (razao social, fantasia, municipio/UF, endereco; PJ se o tipo estava vazio); a frase fica no lugar reservado sob o campo. Rede fora,
+    429, 404, prazo ou CNPJ alfanumerico → frase, e o cadastro segue a' mao (o Salvar nunca espera). No vitest nenhuma chamada sai: o
+    `src/test/setup.ts` responde 503 para brasilapi/ibge.
+  · XML: o emitente ja' preenchia municipio/UF/IE/endereco no cadastro novo e no proposto, so' campo vazio (`completarCadastroPeloXml`,
+    FORN-CADASTRO-02). NOVO: o cadastro achado pelo NOME que e' OUTRA filial (mesma raiz, CNPJ diferente) NAO e' proposto (`filialDiferente`
+    no `resolverEmitente`) e nunca recebe o CNPJ do XML; a faixa diz "… e' outra filial (CNPJ …) · o XML traz …" e oferece "criar o cadastro
+    desta filial". O gravar o CNPJ do XML continua so' em cadastro SEM documento (o UPDATE filtra `cpf_cnpj` vazio).
+  · EXISTENTES: SIMULADOS, NADA APLICADO (espera o OK do Gabriel) — ~/agroinblue-local/forn-filial/antes_depois.csv (273 cadastros com
+    CNPJ de 14: completar cidade 201, os dois 13, limpar nome 3, revisar 12, nada 44; sem CNPJ fica como esta'). A limpeza so' tira o
+    sufixo que e' a cidade da propria consulta (ou apelido conhecido: CG, PP, TL, "3 Lagoas"); a razao social da Receita so' aparece para
+    comparar. Aplicar vai criar homonimos ativos (filiais) — a regra aceita.
+  Testes: SQL `forn_filial_01_test.sql` (F1–F6: filiais coexistem; o CNPJ de outro ativo nao grava, no INSERT e no UPDATE; inativo nao
+  bloqueia; o Mesclar na mesma transacao passa; busca pela cidade; o XML de uma filial nao grava na outra) e `forn_busca_unica_01`
+  (B1–B19) OK no proto; vitest `fornFilial01.test.ts` (11), `cadastroDaCasa.test.ts` (ordem nova e filiais), `favorecidoSelectDono`
+  (a opcao com cidade e CNPJ), `buscaDeFornecedor` (casos), `fornecedorEditar` (a consulta nao trava o Salvar). Mutacoes: filial vira
+  "ja existe", homonimo sem documento nao pergunta, busca sem a cidade, o XML propoe a outra filial, a consulta lanca na falha, a
+  consulta sobrescreve o digitado, o seletor sem a cidade — cada uma derruba teste.
+  ⚠ NAO PROVADO: nada com login no app real; a consulta publica foi provada por curl (FASE 0) e por teste com resposta simulada.
