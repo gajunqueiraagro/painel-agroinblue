@@ -56,6 +56,15 @@ const CENARIOS = [
   ...['venda', 'abate'].map((v) => ({ nome: `oc-cc-faixa-${v}`, url: `tela=oc&v=${v}&aba=financeiro&cc=1`, minLargura: 1000, estados: [
     ['sem principal programado (sem o motivo)', { url: `tela=oc&v=${v}&aba=financeiro&cc=1&coberto=0` }],
   ] })),
+  /* OC-CORRECOES-01 C3 — o "Buscar recebimento no Financeiro": a busca e a escolha nao mexem no campo, no cabecalho nem nos botoes */
+  { nome: 'oc-cc-buscar', url: 'tela=oc-cc&v=buscar', antes: async (p) => { await p.locator('[data-testid="busca-recebimento"]').waitFor(); await espera(p); },
+    estados: [
+      ['busca com resultado', digitar('[data-testid="busca-recebimento"]', '118')],
+      ['busca sem resultado', digitar('[data-testid="busca-recebimento"]', 'zzzzzz nada')],
+      ['busca limpa', digitar('[data-testid="busca-recebimento"]', '')],
+      ['escolher um', clicar('tr[data-lancamento="m1"]')],
+      ['vincular sem motivo (aviso)', botao(/^Vincular$/)],
+    ] },
 ];
 
 /* roda NA PAGINA: o retangulo de cada elemento medido, pela identidade */
