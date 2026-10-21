@@ -222,10 +222,12 @@ export interface FaixaConferencia {
   titulo: string;
 }
 
-/** A faixa de 24px da lista do abate. */
-export function faixaDaConferencia(r: ResultadoConferencia): FaixaConferencia {
+/** A faixa de 24px da lista do abate. OC-DOC-VENDA-01: na VENDA (`semFrigorifico`) nao se cobra NF, Acerto, NPR nem Romaneio do
+ *  frigorifico — a venda nao os tem; fica a conferencia da saida da fazenda (a GTA contra as cabecas da OC). */
+export function faixaDaConferencia(r: ResultadoConferencia, opcoes: { semFrigorifico?: boolean } = {}): FaixaConferencia {
   const ps = partesDaSaida(r.saida);
-  const faltaPartes = [...(r.faltam.length ? [`falta: ${r.faltam.map(g => ROTULO_GRUPO[g]).join(', ')}`] : []), ...ps.falta];
+  const faltam = opcoes.semFrigorifico ? [] : r.faltam;
+  const faltaPartes = [...(faltam.length ? [`falta: ${faltam.map(g => ROTULO_GRUPO[g]).join(', ')}`] : []), ...ps.falta];
   const falta = faltaPartes.length ? faltaPartes.join(' · ') : null;
   let texto: string;
   let titulo: string;
@@ -275,7 +277,7 @@ export interface CelulaConferencia { texto: string; tom: 'verde' | 'vermelho' | 
 
 /** A celula "Conferência" de um documento da lista. */
 export function conferenciaDoDocumento(r: ResultadoConferencia, especie: EspecieDoc, cancelado = false,
-  doc?: Pick<DocConferencia, 'numero' | 'serie' | 'dados'>): CelulaConferencia {
+  doc?: Pick<DocConferencia, 'numero' | 'serie' | 'dados'> & { somaNoValor?: boolean | null }): CelulaConferencia {
   if (cancelado) return { texto: '', tom: 'neutro' };
   /* 7f — a linha de cada NF produtor: citada na NF do frigorifico? e a GTA que ela cita esta' registrada? */
   if (especie === 'nf_produtor' && r.saida.nfProdutor) {
@@ -293,7 +295,9 @@ export function conferenciaDoDocumento(r: ResultadoConferencia, especie: Especie
   }
   const g = grupoDaEspecie(especie);
   if (g === 'nf') return { texto: 'soma no valor da OC', tom: 'neutro' };
-  if (!g) return { texto: 'informativo · não soma', tom: 'neutro' };
+  /* OC-DOC-VENDA-01: fora dos grupos do frigorifico, quem diz se soma e' o BANCO (`soma_no_valor` da view): na venda a NF do
+     produtor e o "outro" somam; no abate, nada da saida soma (`somaNoValor` falso — o texto de sempre). */
+  if (!g) return doc?.somaNoValor === true ? { texto: 'soma no valor da OC', tom: 'neutro' } : { texto: 'informativo · não soma', tom: 'neutro' };
   if (r.semValores.includes(g)) return { texto: 'sem valores', tom: 'neutro' };
   const meus = r.itens.filter(i => i.lados.some(l => l.grupo === g));
   const divergenciasMinhas = meus.flatMap(i => i.divergencias.filter(d => d.a.grupo === g || d.b.grupo === g).map(d => ({ i: i.item, d })));

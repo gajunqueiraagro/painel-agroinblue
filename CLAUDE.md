@@ -214,7 +214,10 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - Fornecedor: um leitor so' (`useFornecedoresDoCliente`), um seletor so' (`FavorecidoSelect`), uma busca so' (tela + `fn_fornecedor_buscar`,
   presas pelo `buscaDeFornecedor.casos.json`), uma regra de criacao (`decidirCadastro`); mesclar e' RPC com desfazer e o absorvido e'
   inativo sempre; nome gravado em caixa padronizada por funcao do banco; FILIAIS tem a mesma razao social (CNPJ e cidade distinguem) e
-  o CNPJ de outro ATIVO nao grava (trava adiada no banco); "Sem cadastro" so' com o real; "Ultimo uso"/"Lanc." so' realizado ate' hoje.
+  o CNPJ de outro ATIVO nao grava (trava adiada no banco); "Sem cadastro" so' com o real (SEM-CADASTRO-02: fornecedor escrito = coluna
+  de fornecedor da planilha ou descricao de EXTRATO `extrato`/`ofx`; nunca descricao de TXT/Excel/manual); "Ultimo uso"/"Lanc." so' realizado ate' hoje.
+- Documentos da OC (OC-DOC-VENDA-01): abate E venda usam o MESMO componente (`AbaDocumentosOC`/`DocumentoFormAbate`, pelo tipo); na
+  venda a NF do produtor SOMA e contrato/NF entrada/comprovante nao; a mesma chave viva no cliente e' barrada no banco (23505, com link).
 
 ### Tela (detalhes em docs/PADROES-UI.md)
 - REGRA DE CORTE (21/10 07h25): nome/texto em tabela = uma linha com "…" e o texto inteiro no `title`; numero, valor, data, CPF/CNPJ e

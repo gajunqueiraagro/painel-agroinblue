@@ -369,6 +369,9 @@ if (tela === 'mesclar') {
     : comCC && fn === 'oc_conta_corrente' ? OC.envelopeContaCorrente(q.get('coberto') !== '0') : null };
   const p: any = v === 'abate' ? OC.propsAbate(aba) : v === 'compra' ? OC.propsCompra(aba) : OC.propsVenda(aba);
   if (v === 'compra' && fechado) p.mesFechadoMsg = OC.MES_FECHADO;
+  /* OC-DOC-VENDA-01 — `&docs=1`: a aba Documentos com documentos (abate x venda) e a nota repetida */
+  if (q.get('docs') === '1') p.documentosApi = { ...p.documentosApi, documentos: OC.documentosDaOC(v), notaRepetida: OC.notaRepetidaLonga,
+    lotes: [{ loteId: 'l1', ordem: 1, categoria: 'bois', qtd: 75 }, { loteId: 'l2', ordem: 2, categoria: 'bois', qtd: 75 }] };
   /* o MESMO DialogContent do `LancamentosTab` (o shell manda na propria altura) */
   montar(<Dialog open><DialogContent className="max-w-5xl max-h-none p-0 gap-0 overflow-hidden [&>button.absolute]:hidden">
     {v === 'abate' ? <AbateModalShell {...p} /> : v === 'compra' ? <CompraModalShell {...p} /> : <VendaModalShell {...p} />}

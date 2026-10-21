@@ -95,7 +95,7 @@ export const TITULO_DO_MOTIVO: Record<MotivoDaSugestao, string> = {
   parecido: 'Sugestão: nome parecido',
 };
 export const MOTIVO_DO_DESFAZER = 'desfeito na aba Sem cadastro';
-export const EXPLICACAO_SEM_CADASTRO = 'Lançamentos com o fornecedor escrito à mão (planilha, extrato ou importação) que ainda não estão ligados a um cadastro. Cada linha junta os lançamentos com o mesmo texto. Ligue a um cadastro que já existe ou crie um novo — você revisa o cadastro antes de salvar, e tudo pode ser desfeito.';
+export const EXPLICACAO_SEM_CADASTRO = 'Lançamentos com o fornecedor escrito na coluna de fornecedor da planilha importada ou na descrição do extrato do banco, que ainda não estão ligados a um cadastro. Cada linha junta os lançamentos com o mesmo texto. Ligue a um cadastro que já existe ou crie um novo — você revisa o cadastro antes de salvar, e tudo pode ser desfeito.';
 
 /** o mês do último lançamento, "set/2026" */
 export function mesDoUltimo(iso: string | null): string {

@@ -181,6 +181,15 @@ const CENARIOS = [
     ['compra', ['compra', 'negociacao', 'recebimento', 'documentos', 'financeiro', 'auditoria']]].flatMap(([v, abas]) => abas.map((aba) => ({
     nome: `oc-${v}-${aba}`, url: `tela=oc&v=${v}&aba=${aba === 'auditoria' && v === 'compra' ? '' : aba}`,
     antes: aba === 'auditoria' && v === 'compra' ? clicarTexto('Auditoria') : undefined }))),
+  /* OC-DOC-VENDA-01 — a aba Documentos COM documentos, ABATE x VENDA (o mesmo componente): a lista em blocos, o Novo documento (250px)
+     e, na venda, a nota repetida (chave digitada; o rotulo longo na faixa com o link). No modal real, nos tamanhos da OC.
+     ⚠ SEM A REGRA "data": a tabela do abate escreve dd/mm/aa (`dataCurta`) — a mesma divida do oc-cc (OC-CC-DATA-INTEIRA). */
+  ...['abate', 'venda'].flatMap(t => [
+    { nome: `oc-docs-${t}-lista`, url: `tela=oc&v=${t}&aba=documentos&docs=1` },
+    { nome: `oc-docs-${t}-novo`, url: `tela=oc&v=${t}&aba=documentos&docs=1`, antes: clicarRotulo(/Novo documento/) },
+  ]).concat([{ nome: 'oc-docs-venda-repetida', url: 'tela=oc&v=venda&aba=documentos&docs=1',
+    antes: async (p) => { await clicarRotulo(/Novo documento/)(p); await p.locator('[data-campo="chaveAcesso"] input').fill('50261002935843000105558900094447901000000017'); await p.waitForTimeout(500); } }])
+    .map(c => ({ ...c, soRegras: ['corte', 'quebra', 'numero', 'sobreposicao', 'italico', 'cabecalho', 'valor', 'altura', 'rolagem', 'tabela'] })),
   /* OC-RECEB-PARCIAL-01 — a conta corrente da venda com o recebimento parcial dividido (Receb. 1/2 + 2/2, a faixa do que falta) e o
      "Buscar recebimento no Financeiro" com os dois grupos e o nome longo numa linha */
   /* ⚠ SEM A REGRA "data": a conta corrente escreve dd/mm/aa DE PROPOSITO (`dataCurta`, coluna Data de 53px na `REGUA_EXTRATO`
