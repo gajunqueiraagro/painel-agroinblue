@@ -39,7 +39,7 @@ import {
 import { leitorDeFornecedores, useFornecedoresDoCliente } from '@/hooks/useFornecedoresDoCliente';
 import type { FornecedorLido } from '@/lib/fornecedores/leitorDeFornecedores';
 import {
-  LIMITE_DE_OPCOES, fantasiaDe, formatarDocumento, fraseDoLimite, linhaDoDocumento as textoDaLinhaDoDocumento, montarOpcoes,
+  LIMITE_DE_OPCOES, fantasiaDe, cidadeDe, formatarDocumento, fraseDoLimite, linhaDoDocumento as textoDaLinhaDoDocumento, montarOpcoes,
   recortarOpcoes, seloDeIguais,
 } from '@/lib/fornecedores/fornecedorTexto';
 import { situacaoDoItem, type SituacaoDaBusca } from '@/lib/fornecedores/buscaDeFornecedor';
@@ -346,7 +346,9 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
                   <Check className={cn("mr-2 h-3.5 w-3.5 shrink-0", value === o.f.id ? "opacity-100" : "opacity-0")} />
                   {/* nome à esquerda: é o ÚNICO que corta (inteiro no `title`) */}
                   {/* FORN-CADASTRO-02: "RAZÃO SOCIAL · Fantasia" (a fantasia em tom apagado), numa linha — o item de menu é o da casa */}
-                  <span className="min-w-0 flex-1 truncate text-left" title={[favorecidoLabel(o.f, showCpfCnpj), fantasiaDe(o.f)].filter(Boolean).join(' · ')}>
+                  {/* FORN-FILIAL-01: "Razão social · Município/UF · CNPJ completo" — a cidade e o documento à direita NUNCA cortam (filiais têm
+                      a mesma razão social: é a cidade e o CNPJ que as distinguem); o `title` leva a linha inteira */}
+                  <span className="min-w-0 flex-1 truncate text-left" title={[o.f.nome, fantasiaDe(o.f), cidadeDe(o.f), o.documento].filter(Boolean).join(' · ')}>
                     {o.f.nome}{fantasiaDe(o.f) ? <span data-testid="favorecido-fantasia" className={MENU_SECUNDARIO}> · {fantasiaDe(o.f)}</span> : null}
                   </span>
                   {/* FORN-BUSCA-UNICA-01 — inativo / "mesclado em <dono>": só aparece quando o filtro pede (situação ≠ 'ativos') */}
@@ -356,6 +358,9 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
                   {o.iguais > 0 && (
                     <span data-testid="favorecido-iguais" className="ml-1.5 shrink-0 rounded-sm bg-amber-400/90 px-1 text-zinc-900"
                       title={`${o.iguais} cadastros ativos com este nome — confira o CNPJ/CPF`}>{seloDeIguais(o.iguais)}</span>
+                  )}
+                  {cidadeDe(o.f) && (
+                    <span data-testid="favorecido-cidade-da-opcao" className={cn("ml-2 shrink-0 whitespace-nowrap", MENU_SECUNDARIO)}>{cidadeDe(o.f)}</span>
                   )}
                   {/* documento à direita, em tom apagado: NUNCA corta. Sem documento a área fica vazia (D5). */}
                   <span data-testid="favorecido-doc-da-opcao" className={cn("ml-2 shrink-0 whitespace-nowrap tabular-nums", MENU_SECUNDARIO)}>{o.documento}</span>

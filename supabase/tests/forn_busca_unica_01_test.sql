@@ -28,43 +28,64 @@ BEGIN
   if public._fn_fornecedor_busca_doc('12.ABC.345/01DE-35') is distinct from '123450135' then raise exception 'C2 digitos do documento de %: %', '12.ABC.345/01DE-35', public._fn_fornecedor_busca_doc('12.ABC.345/01DE-35'); end if;
   if public._fn_fornecedor_busca_doc(null) is distinct from '' then raise exception 'C3 digitos do documento de %: %', null, public._fn_fornecedor_busca_doc(null); end if;
   -- FORNECEDORES (e o uso: N lancamentos vivos de cada um)
-  insert into financeiro_fornecedores (cliente_id, nome, nome_fantasia, cpf_cnpj, ativo, aliases, fundido_em_id, fundido_em)
-    values (k, 'Sintq G F Rezendezeta Junqueira', 'Agrozetablue', '54.442.418/0001-88', true, '[]'::jsonb, null, null) returning id into v;
+  insert into financeiro_fornecedores (cliente_id, nome, nome_fantasia, cpf_cnpj, ativo, aliases, fundido_em_id, fundido_em, municipio, uf)
+    values (k, 'Sintq G F Rezendezeta Junqueira', 'Agrozetablue', '54.442.418/0001-88', true, '[]'::jsonb, null, null, null, null) returning id into v;
   ids := ids || jsonb_build_object('gf', v);
   insert into financeiro_lancamentos_v2 (cliente_id, fazenda_id, tipo_operacao, sinal, valor, status_transacao, data_competencia,
                                          data_vencimento, cenario, descricao, plano_conta_id, favorecido_id)
     select k, v_faz, '2-Saídas', '-1', 10, 'previsto', date '2031-01-10', date '2031-01-10', 'realizado', 'SINT busca unica', v_plano, v
       from generate_series(1, 2);
-  insert into financeiro_fornecedores (cliente_id, nome, nome_fantasia, cpf_cnpj, ativo, aliases, fundido_em_id, fundido_em)
-    values (k, 'Sintq Agrozetablue Comercio', null, null, true, '[]'::jsonb, null, null) returning id into v;
+  insert into financeiro_fornecedores (cliente_id, nome, nome_fantasia, cpf_cnpj, ativo, aliases, fundido_em_id, fundido_em, municipio, uf)
+    values (k, 'Sintq Agrozetablue Comercio', null, null, true, '[]'::jsonb, null, null, null, null) returning id into v;
   ids := ids || jsonb_build_object('agz', v);
   insert into financeiro_lancamentos_v2 (cliente_id, fazenda_id, tipo_operacao, sinal, valor, status_transacao, data_competencia,
                                          data_vencimento, cenario, descricao, plano_conta_id, favorecido_id)
     select k, v_faz, '2-Saídas', '-1', 10, 'previsto', date '2031-01-10', date '2031-01-10', 'realizado', 'SINT busca unica', v_plano, v
       from generate_series(1, 5);
-  insert into financeiro_fornecedores (cliente_id, nome, nome_fantasia, cpf_cnpj, ativo, aliases, fundido_em_id, fundido_em)
-    values (k, 'Sintq Comercial Jerê', null, null, true, '[]'::jsonb, null, null) returning id into v;
+  insert into financeiro_fornecedores (cliente_id, nome, nome_fantasia, cpf_cnpj, ativo, aliases, fundido_em_id, fundido_em, municipio, uf)
+    values (k, 'Sintq Comercial Jerê', null, null, true, '[]'::jsonb, null, null, null, null) returning id into v;
   ids := ids || jsonb_build_object('jere', v);
-  insert into financeiro_fornecedores (cliente_id, nome, nome_fantasia, cpf_cnpj, ativo, aliases, fundido_em_id, fundido_em)
-    values (k, 'Sintq Comercial Jere Alimentos', null, null, true, '[]'::jsonb, null, null) returning id into v;
+  insert into financeiro_fornecedores (cliente_id, nome, nome_fantasia, cpf_cnpj, ativo, aliases, fundido_em_id, fundido_em, municipio, uf)
+    values (k, 'Sintq Comercial Jere Alimentos', null, null, true, '[]'::jsonb, null, null, null, null) returning id into v;
   ids := ids || jsonb_build_object('jere2', v);
   insert into financeiro_lancamentos_v2 (cliente_id, fazenda_id, tipo_operacao, sinal, valor, status_transacao, data_competencia,
                                          data_vencimento, cenario, descricao, plano_conta_id, favorecido_id)
     select k, v_faz, '2-Saídas', '-1', 10, 'previsto', date '2031-01-10', date '2031-01-10', 'realizado', 'SINT busca unica', v_plano, v
       from generate_series(1, 3);
-  insert into financeiro_fornecedores (cliente_id, nome, nome_fantasia, cpf_cnpj, ativo, aliases, fundido_em_id, fundido_em)
-    values (k, 'Sintq Dono Zetamesc', null, null, true, '["Sintq Antigo Nomezeta","11.444.777/0001-61"]'::jsonb, null, null) returning id into v;
+  insert into financeiro_fornecedores (cliente_id, nome, nome_fantasia, cpf_cnpj, ativo, aliases, fundido_em_id, fundido_em, municipio, uf)
+    values (k, 'Sintq Dono Zetamesc', null, null, true, '["Sintq Antigo Nomezeta","11.444.777/0001-61"]'::jsonb, null, null, null, null) returning id into v;
   ids := ids || jsonb_build_object('dono', v);
   insert into financeiro_lancamentos_v2 (cliente_id, fazenda_id, tipo_operacao, sinal, valor, status_transacao, data_competencia,
                                          data_vencimento, cenario, descricao, plano_conta_id, favorecido_id)
     select k, v_faz, '2-Saídas', '-1', 10, 'previsto', date '2031-01-10', date '2031-01-10', 'realizado', 'SINT busca unica', v_plano, v
       from generate_series(1, 1);
-  insert into financeiro_fornecedores (cliente_id, nome, nome_fantasia, cpf_cnpj, ativo, aliases, fundido_em_id, fundido_em)
-    values (k, 'Sintq Antigo Nomezeta', null, '11.444.777/0001-61', false, '[]'::jsonb, (ids->>'dono')::uuid, now()) returning id into v;
+  insert into financeiro_fornecedores (cliente_id, nome, nome_fantasia, cpf_cnpj, ativo, aliases, fundido_em_id, fundido_em, municipio, uf)
+    values (k, 'Sintq Antigo Nomezeta', null, '11.444.777/0001-61', false, '[]'::jsonb, (ids->>'dono')::uuid, now(), null, null) returning id into v;
   ids := ids || jsonb_build_object('abs', v);
-  insert into financeiro_fornecedores (cliente_id, nome, nome_fantasia, cpf_cnpj, ativo, aliases, fundido_em_id, fundido_em)
-    values (k, 'Sintq Inativo Zetamesc', null, null, false, '[]'::jsonb, null, null) returning id into v;
+  insert into financeiro_fornecedores (cliente_id, nome, nome_fantasia, cpf_cnpj, ativo, aliases, fundido_em_id, fundido_em, municipio, uf)
+    values (k, 'Sintq Inativo Zetamesc', null, null, false, '[]'::jsonb, null, null, null, null) returning id into v;
   ids := ids || jsonb_build_object('ina', v);
+  insert into financeiro_fornecedores (cliente_id, nome, nome_fantasia, cpf_cnpj, ativo, aliases, fundido_em_id, fundido_em, municipio, uf)
+    values (k, 'Sintq Filialzeta Produtos Agropecuarios', null, '11.222.333/0004-24', true, '[]'::jsonb, null, null, 'Três Lagoas', 'MS') returning id into v;
+  ids := ids || jsonb_build_object('fil_tl', v);
+  insert into financeiro_lancamentos_v2 (cliente_id, fazenda_id, tipo_operacao, sinal, valor, status_transacao, data_competencia,
+                                         data_vencimento, cenario, descricao, plano_conta_id, favorecido_id)
+    select k, v_faz, '2-Saídas', '-1', 10, 'previsto', date '2031-01-10', date '2031-01-10', 'realizado', 'SINT busca unica', v_plano, v
+      from generate_series(1, 1);
+  insert into financeiro_fornecedores (cliente_id, nome, nome_fantasia, cpf_cnpj, ativo, aliases, fundido_em_id, fundido_em, municipio, uf)
+    values (k, 'Sintq Filialzeta Produtos Agropecuarios', null, '11.222.333/0038-73', true, '[]'::jsonb, null, null, 'Presidente Prudente', 'SP') returning id into v;
+  ids := ids || jsonb_build_object('fil_pp', v);
+  insert into financeiro_lancamentos_v2 (cliente_id, fazenda_id, tipo_operacao, sinal, valor, status_transacao, data_competencia,
+                                         data_vencimento, cenario, descricao, plano_conta_id, favorecido_id)
+    select k, v_faz, '2-Saídas', '-1', 10, 'previsto', date '2031-01-10', date '2031-01-10', 'realizado', 'SINT busca unica', v_plano, v
+      from generate_series(1, 3);
+  insert into financeiro_fornecedores (cliente_id, nome, nome_fantasia, cpf_cnpj, ativo, aliases, fundido_em_id, fundido_em, municipio, uf)
+    values (k, 'Sintq Filialzeta Produtos Agropecuarios', null, null, true, '[]'::jsonb, null, null, null, null) returning id into v;
+  ids := ids || jsonb_build_object('fil_sem', v);
+  insert into financeiro_lancamentos_v2 (cliente_id, fazenda_id, tipo_operacao, sinal, valor, status_transacao, data_competencia,
+                                         data_vencimento, cenario, descricao, plano_conta_id, favorecido_id)
+    select k, v_faz, '2-Saídas', '-1', 10, 'previsto', date '2031-01-10', date '2031-01-10', 'realizado', 'SINT busca unica', v_plano, v
+      from generate_series(1, 2);
   -- BUSCAS (a ordem exata, so entre os fornecedores deste arquivo)
   r := public.fn_fornecedor_buscar(k, 'agrozetablue', 'ativos', null, 0);
   select coalesce(array_agg(m.chave order by e.o), '{}'::text[]) into got
@@ -136,5 +157,40 @@ BEGIN
     from jsonb_array_elements(r->'itens') with ordinality e(x, o)
     join (select key as chave, value #>> '{}' as id from jsonb_each(ids)) m on m.id = e.x->>'id';
   if got is distinct from '{}'::text[] then raise exception 'B14 % (%): %', 'nada', 'zzzqqqzeta', got; end if;
+  r := public.fn_fornecedor_buscar(k, 'filialzeta', 'ativos', null, 0);
+  select coalesce(array_agg(m.chave order by e.o), '{}'::text[]) into got
+    from jsonb_array_elements(r->'itens') with ordinality e(x, o)
+    join (select key as chave, value #>> '{}' as id from jsonb_each(ids)) m on m.id = e.x->>'id';
+  if got is distinct from ARRAY['fil_pp', 'fil_sem', 'fil_tl']::text[] then raise exception 'B15 % (%): %', 'FORN-FILIAL-01: o nome acha as tres filiais (mesma razao social), pela ordem do uso', 'filialzeta', got; end if;
+  r := public.fn_fornecedor_buscar(k, 'filialzeta tres', 'ativos', null, 0);
+  select coalesce(array_agg(m.chave order by e.o), '{}'::text[]) into got
+    from jsonb_array_elements(r->'itens') with ordinality e(x, o)
+    join (select key as chave, value #>> '{}' as id from jsonb_each(ids)) m on m.id = e.x->>'id';
+  if got is distinct from ARRAY['fil_tl']::text[] then raise exception 'B16 % (%): %', 'FORN-FILIAL-01: nome + cidade acha so'' a filial daquela cidade', 'filialzeta tres', got; end if;
+  r := public.fn_fornecedor_buscar(k, 'presidente prudente', 'ativos', null, 0);
+  select coalesce(array_agg(m.chave order by e.o), '{}'::text[]) into got
+    from jsonb_array_elements(r->'itens') with ordinality e(x, o)
+    join (select key as chave, value #>> '{}' as id from jsonb_each(ids)) m on m.id = e.x->>'id';
+  if got is distinct from ARRAY['fil_pp']::text[] then raise exception 'B17 % (%): %', 'FORN-FILIAL-01: a cidade sozinha acha a filial', 'presidente prudente', got; end if;
+  r := public.fn_fornecedor_buscar(k, 'filialzeta sp', 'ativos', null, 0);
+  select coalesce(array_agg(m.chave order by e.o), '{}'::text[]) into got
+    from jsonb_array_elements(r->'itens') with ordinality e(x, o)
+    join (select key as chave, value #>> '{}' as id from jsonb_each(ids)) m on m.id = e.x->>'id';
+  if got is distinct from ARRAY['fil_pp']::text[] then raise exception 'B18 % (%): %', 'FORN-FILIAL-01: a UF entra na cidade', 'filialzeta sp', got; end if;
+  r := public.fn_fornecedor_buscar(k, 'filialzeta campo', 'ativos', null, 0);
+  select coalesce(array_agg(m.chave order by e.o), '{}'::text[]) into got
+    from jsonb_array_elements(r->'itens') with ordinality e(x, o)
+    join (select key as chave, value #>> '{}' as id from jsonb_each(ids)) m on m.id = e.x->>'id';
+  if got is distinct from '{}'::text[] then raise exception 'B19 % (%): %', 'FORN-FILIAL-01: palavra fora do nome e da cidade nao casa', 'filialzeta campo', got; end if;
+  r := public.fn_fornecedor_buscar(k, 'sintq g f', 'todos', null, 0);
+  select coalesce(array_agg(m.chave order by e.o), '{}'::text[]) into got
+    from jsonb_array_elements(r->'itens') with ordinality e(x, o)
+    join (select key as chave, value #>> '{}' as id from jsonb_each(ids)) m on m.id = e.x->>'id';
+  if got is distinct from ARRAY['gf']::text[] then raise exception 'B20 % (%): %', 'FORN-FILIAL-01: so'' comeco de palavra conta (o ''g'' solto nao casa com ''lagoas'')', 'sintq g f', got; end if;
+  r := public.fn_fornecedor_buscar(k, 'filialzeta pres pru', 'ativos', null, 0);
+  select coalesce(array_agg(m.chave order by e.o), '{}'::text[]) into got
+    from jsonb_array_elements(r->'itens') with ordinality e(x, o)
+    join (select key as chave, value #>> '{}' as id from jsonb_each(ids)) m on m.id = e.x->>'id';
+  if got is distinct from ARRAY['fil_pp']::text[] then raise exception 'B21 % (%): %', 'FORN-FILIAL-01: comeco da cidade casa (''pres pru'')', 'filialzeta pres pru', got; end if;
   RAISE EXCEPTION 'OK';
 END $t$;

@@ -12,6 +12,8 @@ import { buscarFornecedores, digitosDaBusca, digitosDoDocumento, normalizarNome,
 const lista = casos.fornecedores.map((f) => ({
   id: f.chave, nome: f.nome, nome_fantasia: f.nome_fantasia ?? null, cpf_cnpj: f.cpf_cnpj ?? null, ativo: f.ativo,
   fundido_em_id: f.fundido_em ?? null, aliases_norm: f.aliases ?? [], uso: f.uso,
+  /* FORN-FILIAL-01 — a cidade da filial (a busca também acha por ela) */
+  municipio: 'municipio' in f ? f.municipio : null, uf: 'uf' in f ? f.uf : null,
 }));
 
 describe('a lista única de casos, contra a função da tela', () => {

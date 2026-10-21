@@ -2,6 +2,7 @@
  * FORN-EDITAR-01 — o cadastro completo (`FornecedorFormDialog`) com o validador e a conferência de repetido, e o lápis do
  * seletor (`FavorecidoSelect`) que o abre em modo edição. Fornecedores SINTÉTICOS; o banco é de mentira.
  */
+import { FRASE_CONSULTA_INDISPONIVEL } from '@/lib/fornecedores/consultaCnpj';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useState } from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -60,7 +61,10 @@ describe('o campo CPF/CNPJ do cadastro completo', () => {
     expect(screen.getByTestId('cpf-cnpj-recado').textContent).toBe(MOTIVO_CNPJ_DV);
     expect(botaoSalvar().disabled).toBe(true);
     fireEvent.change(campoDoc(), { target: { value: '11222333000181' } });
-    expect(screen.getByTestId('cpf-cnpj-recado').textContent).toBe('');
+    /* FORN-FILIAL-01 — CNPJ válido: o lugar do recado diz a consulta pública (aqui sem rede: "indisponível"); o Salvar NÃO espera nem trava */
+    expect(screen.getByTestId('cpf-cnpj-recado').textContent).toBe('Consultando o CNPJ…');
+    expect(botaoSalvar().disabled).toBe(false);
+    await waitFor(() => expect(screen.getByTestId('cpf-cnpj-recado').textContent).toBe(FRASE_CONSULTA_INDISPONIVEL), { timeout: 3000 });
     expect(botaoSalvar().disabled).toBe(false);
   });
   it('o lugar do recado existe sempre, com a mesma altura', () => {

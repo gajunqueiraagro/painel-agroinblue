@@ -10,7 +10,7 @@ import { DocumentoFormOC, FORM_VAZIO, ESPECIE_LABEL, brl, fmtNumeroDoc, type For
 import { notificarFornecedoresMudaram } from '@/hooks/useFornecedoresDoCliente';
 import { DocumentoFormAbate } from './DocumentoFormAbate';
 import { formAbateDoDetalhe, formAbateVazio, type FormAbate } from '@/lib/oc/formDocumentoAbate';
-import { ROTULO_SEGMENTO, ESPECIES_DA_SAIDA, tipoDoDocumento } from '@/lib/oc/camposDaEspecie';
+import { ROTULO_SEGMENTO, ESPECIES_DA_SAIDA, tipoDoDocumento, usaGradePorEspecie, camposDaEspecie, blocosDaLista } from '@/lib/oc/camposDaEspecie';
 import { formatCasas } from '@/lib/calculos/numeroBR';
 import { conferirDocumentosAbate, conferenciaDoDocumento, faixaDaConferencia, type ResultadoConferencia } from '@/lib/oc/conferirDocumentosAbate';
 
@@ -28,7 +28,7 @@ interface Props {
      Nulo = operacao ainda sem valor negociado; o confronto nao acontece. */
   valorNegociado?: number | null;
   /** OC-DOC-ESPECIE-ABATE-01 passo 2 — 'abate' troca o formulario pela grade por especie e a lista pela tabela do abate.
-   *  Ausente: compra e venda, como sempre. */
+   *  OC-DOC-VENDA-01: 'venda' tambem (o MESMO componente; os blocos e as especies saem do tipo). Ausente: compra, como sempre. */
   tipoOperacao?: string | null;
 }
 
@@ -41,6 +41,7 @@ const PREFIXO_ESPECIE: Record<EspecieDoc, string> = {
   nf_principal: 'NF', nf_complementar: 'NF compl.', recibo: 'Recibo', outro: 'Doc.',
   npr: 'NPR', acerto: 'Acerto', romaneio: 'Romaneio',
   nf_produtor: 'NF prod.', gta: 'GTA', guia: 'Guia', declaracao: 'Decl.',
+  contrato: 'Contrato', nf_entrada: 'NF entrada', comprovante: 'Comprov.',
 };
 
 /* "2 notas · 1 recibo". Conta o que ESTA VALENDO; cancelado vira um termo proprio, e
@@ -50,13 +51,15 @@ const CONTAGEM_ROTULO: Record<EspecieDoc, [string, string]> = {
   recibo: ['recibo', 'recibos'], outro: ['outro documento', 'outros documentos'],
   npr: ['NPR', 'NPRs'], acerto: ['acerto', 'acertos'], romaneio: ['romaneio', 'romaneios'],
   nf_produtor: ['NF produtor', 'NFs produtor'], gta: ['GTA', 'GTAs'], guia: ['guia', 'guias'], declaracao: ['declaração', 'declarações'],
+  contrato: ['contrato', 'contratos'], nf_entrada: ['NF entrada', 'NFs entrada'], comprovante: ['comprovante', 'comprovantes'],
 };
 
 /* 7f-fix1b: no ABATE a contagem mora na faixa de cada bloco (18px, 9,5px): rotulos curtos ("1 NF · 1 acerto", "2 NF prod. · 2 GTA"). */
 const CONTAGEM_DA_FAIXA: Record<EspecieDoc, [string, string]> = {   // na ordem de leitura do bloco; "outro" por ultimo
   nf_principal: ['NF', 'NF'], nf_complementar: ['NF compl.', 'NF compl.'], npr: ['NPR', 'NPR'], acerto: ['acerto', 'acertos'],
   romaneio: ['romaneio', 'romaneios'], nf_produtor: ['NF prod.', 'NF prod.'], gta: ['GTA', 'GTA'], guia: ['guia', 'guias'],
-  declaracao: ['declaração', 'declarações'], recibo: ['recibo', 'recibos'], outro: ['outro', 'outros'],
+  declaracao: ['declaração', 'declarações'], contrato: ['contrato', 'contratos'], nf_entrada: ['NF entrada', 'NF entrada'],
+  comprovante: ['comprovante', 'comprovantes'], recibo: ['recibo', 'recibos'], outro: ['outro', 'outros'],
 };
 
 /** A contagem dos documentos. 7f-fix1: guia e declaracao COM tipo gravado contam pelo tipo (`tipoDoDocumento`: "1 Modelo B ·
@@ -80,7 +83,11 @@ export function partesDaContagem(docs: Pick<DocumentosApi['documentos'][number],
 }
 
 export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedores, contraparteId, clienteId, recarregarFornecedores, valorNegociado, tipoOperacao }: Props) {
-  const ehAbate = tipoOperacao === 'abate';
+  /* OC-DOC-VENDA-01: a grade por especie e a lista em blocos valem para abate E venda (um dono so'). */
+  const ehAbate = usaGradePorEspecie(tipoOperacao);
+  const tipoGrade = tipoOperacao === 'venda' ? 'venda' : 'abate';
+  /* O documento novo da venda nasce na NF do produtor (a nota da venda); o do abate, na NF do frigorifico. */
+  const especieInicial = tipoGrade === 'venda' ? 'nf_produtor' : 'nf_principal';
   /* Cadastro rapido do emitente — MESMO mecanismo de AbaCompromissosOC:1 insert direto e
      `recarregar` da lista que o alimenta. Nao ha segundo cadastro nem segunda lista; a
      fonte e a mesma `liquidacaoApi`.
@@ -117,7 +124,9 @@ export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedo
   };
   const [modo, setModo] = useState<'lista' | 'form'>('lista');
   const [formInicial, setFormInicial] = useState<FormState>(FORM_VAZIO);
-  const [formAbateInicial, setFormAbateInicial] = useState<FormAbate>(() => formAbateVazio());
+  const [formAbateInicial, setFormAbateInicial] = useState<FormAbate>(() => formAbateVazio(especieInicial, tipoGrade));
+  /* A edicao de um documento da venda que nao e' da grade (o legado: NF principal, complementar, recibo) abre no formulario de hoje. */
+  const [formNaGrade, setFormNaGrade] = useState(ehAbate);
   const [formKey, setFormKey] = useState(0);
   const [cancelId, setCancelId] = useState<string | null>(null);
   const [cancelMotivo, setCancelMotivo] = useState('');
@@ -137,11 +146,17 @@ export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedo
     if (url) window.open(url, '_blank', 'noopener,noreferrer');
   };
 
-  const abrirNovo = () => { setFormInicial(FORM_VAZIO); setFormAbateInicial(formAbateVazio()); setFormKey(k => k + 1); setModo('form'); };
+  const abrirNovo = () => {
+    setFormInicial(FORM_VAZIO); setFormAbateInicial(formAbateVazio(especieInicial, tipoGrade)); setFormNaGrade(ehAbate);
+    setFormKey(k => k + 1); setModo('form');
+  };
   const abrirEdicao = async (docId: string) => {
     const d = await api.carregarDetalhe(docId);
     if (!d) return;
-    if (ehAbate) { setFormAbateInicial(formAbateDoDetalhe(d)); setFormKey(k => k + 1); setModo('form'); return; }
+    if (ehAbate && camposDaEspecie(tipoGrade, d.especie)) {
+      setFormAbateInicial(formAbateDoDetalhe(d, tipoGrade)); setFormNaGrade(true); setFormKey(k => k + 1); setModo('form'); return;
+    }
+    setFormNaGrade(false);
     setFormInicial({
       documentoId: d.documentoId, versao: d.versao, especie: d.especie, numero: d.numero, serie: d.serie,
       chaveAcesso: d.chaveAcesso, dataEmissao: d.dataEmissao, observacao: d.observacao, url: d.url,
@@ -164,7 +179,7 @@ export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedo
   };
 
   // ── FORM (reutiliza o componente extraído) ──
-  if (modo === 'form' && ehAbate) {
+  if (modo === 'form' && ehAbate && formNaGrade) {
     return (
       <DocumentoFormAbate
         key={formKey}
@@ -272,7 +287,7 @@ export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedo
           <span data-testid="confronto-documentado" title={confronto?.texto}
             className={`truncate text-right ${confronto?.ok ? 'text-emerald-700 dark:text-emerald-500' : 'text-amber-700 dark:text-amber-500'}`}>{confronto?.texto ?? ''}</span>
         </div>
-        {ehAbate && <FaixaConferenciaAbate r={conferencia} />}
+        {ehAbate && <FaixaConferenciaAbate r={conferencia} semFrigorifico={tipoGrade === 'venda'} />}
       </div>
 
       {/* ── LISTA DENSA DE REGISTROS (PR-OC-DOC-TABELA-02 · padrao A18) ───────────
@@ -288,6 +303,7 @@ export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedo
           uma a uma. Registrado como A18 em docs/PADROES-UI.md. */}
       {ehAbate ? (
         <TabelaDocumentosAbate documentos={api.documentos} loading={api.loading} somenteLeitura={somenteLeitura} conferencia={conferencia}
+          blocos={blocosDaLista(tipoGrade)}
           onAbrir={c => void abrirArquivo(c)} onEditar={id => void abrirEdicao(id)}
           onCancelar={id => { setCancelId(id); setCancelMotivo(''); }} />
       ) : (
@@ -397,16 +413,12 @@ const textoDe = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : 
 
 /* 7f — o rotulo da pilula na coluna Tipo (64px): os longos encurtam (o nome inteiro vai no `title` da linha). */
 const PILULA_CURTA: Partial<Record<EspecieDoc, string>> = { nf_produtor: 'NF prod.', declaracao: 'Decl.' };
-/* 7f — os dois blocos da lista do abate. */
-const BLOCOS: { chave: 'abate' | 'saida'; rotulo: string }[] = [
-  { chave: 'abate', rotulo: 'ABATE · FRIGORÍFICO' }, { chave: 'saida', rotulo: 'SAÍDA DA FAZENDA' },
-];
 const TOM_CONFERENCIA = { verde: 'text-emerald-700', vermelho: 'text-destructive', neutro: 'text-muted-foreground' };
 
 /* A faixa de 24px do topo: verde (comparado e bate), vermelha (diverge, com a diferenca) ou cinza (nada a conferir); "falta" em
    cinza no fim. Uma linha so', altura fixa; o texto inteiro no `title`. */
-function FaixaConferenciaAbate({ r }: { r: ResultadoConferencia }) {
-  const f = faixaDaConferencia(r);
+function FaixaConferenciaAbate({ r, semFrigorifico }: { r: ResultadoConferencia; semFrigorifico?: boolean }) {
+  const f = faixaDaConferencia(r, { semFrigorifico });
   return (
     <div data-testid="faixa-conferencia-abate" data-estado={f.estado} title={f.titulo}
       className={`flex h-6 items-center gap-2 overflow-hidden rounded-md border px-2 text-[10px] ${
@@ -419,8 +431,10 @@ function FaixaConferenciaAbate({ r }: { r: ResultadoConferencia }) {
   );
 }
 
-function TabelaDocumentosAbate({ documentos, loading, somenteLeitura, conferencia, onAbrir, onEditar, onCancelar }: {
+function TabelaDocumentosAbate({ documentos, loading, somenteLeitura, conferencia, blocos, onAbrir, onEditar, onCancelar }: {
   documentos: DocumentosApi['documentos']; loading: boolean; somenteLeitura?: boolean; conferencia: ResultadoConferencia;
+  /** 7f — os dois blocos da lista (`blocosDaLista`): o do frigorifico (abate) ou o da operacao (venda), e a saida da fazenda. */
+  blocos: { chave: 'abate' | 'operacao' | 'saida'; rotulo: string }[];
   onAbrir: (caminho: string) => void; onEditar: (id: string) => void; onCancelar: (id: string) => void;
 }) {
   const linha = (d: DocumentosApi['documentos'][number], daSaida: boolean) => {
@@ -430,9 +444,11 @@ function TabelaDocumentosAbate({ documentos, loading, somenteLeitura, conferenci
             const data = d.dataEmissao ?? d.dataAbate;
             /* 7f: na saida da fazenda o valor e' o do componente INFORMATIVO (guia, NFP-e), em cinza; sem valor, "—" — nunca 0,00
                so' porque o liquido proprio e' 0. */
+            /* OC-DOC-VENDA-01: fora da saida, o documento que nao soma e tem valor informativo (contrato, NF de entrada,
+               comprovante) mostra ESSE valor, em cinza — nunca 0,00 so' porque o liquido proprio e' 0. */
             const valor: number | null = daSaida
               ? (d.totalInformativo ?? (d.qtdComponentes > 0 ? (d.liquidoProprio ?? d.valorLiquido) : null))
-              : (d.liquidoProprio ?? d.valorLiquido);
+              : (!soma && d.totalInformativo != null ? d.totalInformativo : (d.liquidoProprio ?? d.valorLiquido));
             const url = d.url;
             const conf = conferenciaDoDocumento(conferencia, d.especie, d.cancelado, d);
             /* 7f-fix1: a declaracao mostra o TIPO gravado ("Modelo B", "Carta garantia"); a guia segue "Guia" (o nome dela ja' vai
@@ -505,8 +521,8 @@ function TabelaDocumentosAbate({ documentos, loading, somenteLeitura, conferenci
             <tr><td colSpan={10} className="px-2 py-3 text-center text-[10px] text-muted-foreground">{loading ? 'Carregando…' : 'Nenhum documento.'}</td></tr>
           )}
           {/* 7f — DOIS BLOCOS, cada um aberto por uma faixa de LARGURA INTEIRA (18px); bloco vazio nao mostra a faixa. */}
-          {BLOCOS.map(b => {
-            const docs = documentos.filter(d => (ESPECIES_DA_SAIDA.includes(d.especie) ? 'saida' : 'abate') === b.chave);
+          {blocos.map(b => {
+            const docs = documentos.filter(d => (ESPECIES_DA_SAIDA.includes(d.especie) ? 'saida' : blocos[0].chave) === b.chave);
             if (!docs.length) return null;
             return [
               <tr key={`faixa-${b.chave}`} data-testid={`faixa-bloco-${b.chave}`} className="h-[18px]">

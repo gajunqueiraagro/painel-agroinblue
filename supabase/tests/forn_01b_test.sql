@@ -1,7 +1,8 @@
 -- FORN-01b — a lista de Fornecedores e a aba "Sem cadastro" so' com o que e' real; os consertos de dado do Gabriel (21/10).
 -- Roda como `postgres`, DEPOIS da migration 20261028110000, e TERMINA EM RAISE: nada fica no banco. Sucesso = a excecao final
 -- comeca com "OK". Fixtures sinteticos no cliente Teste (43f32d07); T2/T3/T5 conferem o DADO REAL do proto (so' leitura).
--- T1 Sem cadastro: entra o realizado de extrato; NAO entram a Meta, o gerado pelo sistema (origem_tipo) nem a descricao digitada (manual).
+-- T1 Sem cadastro: entra o realizado de extrato; NAO entram a Meta, o gerado pelo sistema (origem_tipo), a descricao digitada (manual) e
+--    (SEM-CADASTRO-02) a descricao de importacao TXT/Excel.
 -- T2 o lancamento 792c02d0 (Meta que tinha virado previsto) esta' cancelado, com o motivo do Gabriel e a trilha "cancelou".
 -- T3 a deducao de abate fa242c27 (realizada, sem fornecedor) tem o comprador daquele abate (8bc01e51) e a trilha "editou".
 -- T4 Lista: "Lanç." conta so' o realizado vivo; "Último uso" e' o ultimo realizado ate' hoje (o previsto futuro e a Meta nao contam).
@@ -40,10 +41,11 @@ begin
   perform pg_temp.lan('SINT F1B Digitado', null, 'realizado', 'manual');
   perform pg_temp.lan('SINT F1B Importado', null, 'realizado', 'importacao_incremental');
   select string_agg(b.texto, ',' order by b.texto) into t from public._fn_sem_cadastro_base(c_cli) b where b.texto like 'SINT F1B %';
-  if t is distinct from 'SINT F1B Extrato Real,SINT F1B Importado' then raise exception 'T1 base: %', t; end if;
+  /* SEM-CADASTRO-02: a descricao de importacao (TXT/Excel de produto) nao conta mais; so' a do extrato */
+  if t is distinct from 'SINT F1B Extrato Real' then raise exception 'T1 base: %', t; end if;
   v := public.fn_fornecedor_sem_cadastro(c_cli);
   select count(*) into n from jsonb_array_elements(v->'textos') x where x->>'texto' like 'SINT F1B %';
-  if n <> 2 then raise exception 'T1 aba: % textos', n; end if;
+  if n <> 1 then raise exception 'T1 aba: % textos', n; end if;
 
   -- T2
   select count(*) into n from financeiro_lancamentos_v2

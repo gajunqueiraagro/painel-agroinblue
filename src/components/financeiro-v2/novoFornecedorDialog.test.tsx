@@ -19,10 +19,12 @@ afterEach(() => cleanup());
 function montar(base: FornecedorDoCadastro[], o: { reativarFalha?: boolean; lerFalha?: boolean; clienteId?: string | null } = {}) {
   const salvar = vi.fn(async () => {}); const selecionar = vi.fn(); const fechar = vi.fn();
   const reativar = vi.fn(async () => { if (o.reativarFalha) throw new Error('rls'); });
+  const preencherDocumento = vi.fn(async () => {});
   const fonte: FonteDoCadastro = {
     lerPorNome: async (_c, norm) => { if (o.lerFalha) throw new Error('rede'); return base.filter((x) => normalizeFornecedorNome(x.nome) === norm); },
     lerAtivos: async () => base.filter((x) => x.ativo),
     reativar,
+    preencherDocumento,
   };
   render(<NovoFornecedorDialog open onClose={fechar} clienteId={o.clienteId === undefined ? 'cli' : o.clienteId} onSave={salvar} onSelecionar={selecionar} fonte={fonte} />);
   const digitar = (nome: string, doc = '') => {

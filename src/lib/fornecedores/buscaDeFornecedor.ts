@@ -13,7 +13,9 @@
  *     `_fn_fornecedor_busca_digitos`. DÍGITOS DO DOCUMENTO — `soDigitos`; no banco, `regexp_replace(…, '\D', '', 'g')`.
  *   CASA quando o termo normalizado está DENTRO da razão social, da fantasia ou de um apelido (`aliases_norm`: os nomes e documentos
  *     dos absorvidos e os textos aprendidos), ou — busca só de número — os dígitos estão dentro do documento ou de um apelido que é
- *     documento (só dígitos e pontuação). Busca vazia casa com todos.
+ *     documento (só dígitos e pontuação). FORN-FILIAL-01: casa também quando alguma palavra do termo começa uma palavra da CIDADE
+ *     (municipio/UF) e todas começam uma palavra da razão social, da fantasia ou da cidade — "zeta tres" acha a filial de Três Lagoas.
+ *     Busca vazia casa com todos.
  *   SITUAÇÃO — 'ativos' (padrão): só o ativo de verdade (ativo e não mesclado); 'inativos': só o inativo ou mesclado; 'todos'.
  *   ORDEM — ativo de verdade primeiro → começa com o termo (razão social, fantasia ou documento) → mais uso → razão social
  *     normalizada → id (comparação por código, a do `COLLATE "C"` no banco).
@@ -40,6 +42,9 @@ export interface FornecedorBuscavel {
   ativo?: boolean | null;
   fundido_em_id?: string | null;
   aliases_norm?: readonly string[] | null;
+  /** FORN-FILIAL-01 — a cidade da filial (a busca também acha por ela) */
+  municipio?: string | null;
+  uf?: string | null;
   /** Quanto este fornecedor é usado (quem chama diz o quê: lançamentos no recorte, no banco…). Ausente = 0. */
   uso?: number | null;
 }
@@ -57,6 +62,8 @@ export interface Preparado<F extends FornecedorBuscavel> {
   digitos: string;
   apelidos: string[];
   apelidosDoc: string[];
+  /** FORN-FILIAL-01 — "presidente prudente sp" (municipio e UF normalizados); '' sem cidade */
+  cidadeNorm: string;
   ativoDeVerdade: boolean;
   uso: number;
 }
@@ -71,6 +78,7 @@ export function prepararParaBusca<F extends FornecedorBuscavel>(lista: readonly 
       digitos: digitosDoDocumento(f.cpf_cnpj),
       apelidos,
       apelidosDoc: apelidos.map((a) => digitosDaBusca(a)).filter((d): d is string => d !== null),
+      cidadeNorm: normalizarNome([f.municipio, f.uf].filter(Boolean).join(' ')),
       ativoDeVerdade: f.ativo !== false && !f.fundido_em_id,
       uso: f.uso ?? 0,
     };
@@ -83,10 +91,20 @@ function passaNaSituacao(p: { ativoDeVerdade: boolean }, situacao: SituacaoDaBus
 }
 
 /** Casa? (sem olhar a situação) */
-export function casaComOTermo(p: Pick<Preparado<FornecedorBuscavel>, 'nomeNorm' | 'fantasiaNorm' | 'digitos' | 'apelidos' | 'apelidosDoc'>, busca: string): boolean {
+export function casaComOTermo(p: Pick<Preparado<FornecedorBuscavel>, 'nomeNorm' | 'fantasiaNorm' | 'digitos' | 'apelidos' | 'apelidosDoc' | 'cidadeNorm'>, busca: string): boolean {
   const q = normalizarNome(busca);
   if (!q) return true;
   if (p.nomeNorm.includes(q) || p.fantasiaNorm.includes(q) || p.apelidos.some((a) => a.includes(q))) return true;
+  /* FORN-FILIAL-01 — com a CIDADE: ao menos uma palavra COMEÇA uma palavra da cidade, e todas começam uma palavra da razão social, da
+     fantasia ou da cidade ("zeta tres" → "Três Lagoas"; o "g" solto não casa com "Lagoas"). Sem palavra na cidade a regra não entra (o
+     "fornecedor 1" segue casando só o termo inteiro). No banco: `strpos(' ' || cn, ' ' || w) > 0` e
+     `strpos(' ' || nn || ' ' || fnn || ' ' || cn, ' ' || w) > 0`. */
+  const palavras = q.split(' ').filter(Boolean);
+  const comecaPalavra = (texto: string, w: string) => ` ${texto}`.includes(` ${w}`);
+  if (p.cidadeNorm && palavras.some((w) => comecaPalavra(p.cidadeNorm, w))) {
+    const juntos = `${p.nomeNorm} ${p.fantasiaNorm} ${p.cidadeNorm}`;
+    if (palavras.every((w) => comecaPalavra(juntos, w))) return true;
+  }
   const d = digitosDaBusca(busca);
   return d !== null && (p.digitos.includes(d) || p.apelidosDoc.some((a) => a.includes(d)));
 }

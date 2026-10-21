@@ -111,6 +111,25 @@ export function FaixaDoFornecedor({ xml, fechada, gravarDocumento, onGravarDocum
       </Faixa>
     );
   }
+  /* FORN-FILIAL-01 — o cadastro achado pelo nome é OUTRA filial (mesma raiz, CNPJ diferente): não é proposto e nunca recebe este CNPJ;
+     a faixa oferece criar o cadastro DESTA filial (nome, CNPJ e cidade do XML) */
+  if (r.achadoPor === 'nome' && r.filialDiferente) {
+    const docDoCadastro = documentoFormatado(r.candidatos[0]?.cpf_cnpj ?? '');
+    const frase = `Fornecedor achado pelo nome · "${nome}" é outra filial (CNPJ ${docDoCadastro}) · o XML traz ${doc}`;
+    return (
+      <Faixa testid="xml-faixa-fornecedor" titulo={frase}>
+        <span className="flex min-w-0 items-center">
+          <span className="shrink-0 whitespace-pre">{'Fornecedor achado pelo nome · '}</span>
+          <span className="min-w-[72px] shrink-[10] truncate font-medium" title={nome} data-testid="xml-nome-do-fornecedor">"{nome}"</span>
+          <span className="min-w-0 truncate whitespace-pre" data-testid="xml-outra-filial">{` é outra filial (CNPJ ${docDoCadastro}) · o XML traz ${doc}`}</span>
+        </span>
+        <button type="button" className={`${LINK} ml-auto shrink-0`} disabled={criando} onClick={onCriar} data-testid="xml-criar-filial">
+          {criando ? 'criando…' : 'criar o cadastro desta filial'}
+        </button>
+        {trocar}
+      </Faixa>
+    );
+  }
   if (r.achadoPor === 'nome') {
     const frase = `Fornecedor achado pelo nome · "${nome}" · o cadastro tem outro documento · o XML traz ${doc}`;
     return (

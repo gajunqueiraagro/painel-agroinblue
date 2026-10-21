@@ -46,6 +46,30 @@ export const documentosApi = () => ({
   carregarDetalhe: nadaNull,
 });
 
+/* OC-DOC-VENDA-01 — a aba Documentos COM documentos (`&docs=1`): o abate (frigorifico + saida) e a venda (operacao + saida), com o
+   numero longo do contrato e a nota repetida (rotulo longo) para a faixa. SINTETICO. */
+const docOC = (p: Record<string, unknown>) => ({ documentoId: String(p.documentoId), especie: 'outro', numero: null, serie: null,
+  dataEmissao: '2026-10-01', situacao: 'ativo', cancelado: false, valorLiquido: 0, totalAcrescimos: 0, totalDescontosComerciais: 0,
+  totalRetencoesSemCaixa: 0, totalDespesasDesembolso: 0, qtdComponentes: 1, qtdLotes: 2, documentoOrigemId: null, url: 'x.pdf', emitenteId: null,
+  emitenteNome: null, emitenteDocumento: null, cab: null, pesoKg: null, dataAbate: null, vencimento: null, dados: null, liquidoProprio: 0,
+  somaNoValor: false, ...p });
+export const documentosDaOC = (tipo: string) => (tipo === 'abate' ? [
+  docOC({ documentoId: 'n1', especie: 'nf_principal', numero: '000008812', cab: 150, pesoKg: 38250.5, liquidoProprio: 739102.11, valorLiquido: 739102.11, somaNoValor: true }),
+  docOC({ documentoId: 'a1', especie: 'acerto', dados: { ordem_compra: '10352' }, cab: 150, pesoKg: 38250.5, liquidoProprio: 739102.11 }),
+  docOC({ documentoId: 'r1', especie: 'romaneio', dados: { op: '88123' }, cab: 150, pesoKg: 38250.5, qtdComponentes: 0 }),
+  docOC({ documentoId: 'p1', especie: 'nf_produtor', numero: '9444790', cab: 150, totalInformativo: 750000 }),
+  docOC({ documentoId: 'g1', especie: 'gta', serie: 'Q', numero: '745856', cab: 150, qtdComponentes: 0 }),
+] : [
+  docOC({ documentoId: 'c1', especie: 'contrato', numero: 'PEDIDO DE VENDA Nº 2026/000731 · COMPRADOR EXEMPLO AGROPECUÁRIA LTDA', totalInformativo: 750000 }),
+  docOC({ documentoId: 'e1', especie: 'nf_entrada', numero: '123456', totalInformativo: 750000 }),
+  docOC({ documentoId: 'p1', especie: 'nf_produtor', numero: '9444790', cab: 150, liquidoProprio: 750000, valorLiquido: 750000, somaNoValor: true }),
+  docOC({ documentoId: 'g1', especie: 'gta', serie: 'Q', numero: '745856', cab: 150, qtdComponentes: 0 }),
+  docOC({ documentoId: 'u1', especie: 'guia', numero: 'Fundersul', dados: { tipo_guia: 'fundersul' }, totalInformativo: 3120.5 }),
+  docOC({ documentoId: 'm1', especie: 'declaracao', numero: '12', dados: { tipo_declaracao: 'modelo_b' }, qtdComponentes: 0 }),
+]);
+export const notaRepetidaLonga = async () => ({ documentoId: 'z', operacaoId: 'op-z', tipoOperacao: 'venda',
+  rotulo: 'Venda de 02/04/2026 · Comprador Exemplo Agropecuária e Participações Societárias Ltda' });
+
 export const eventosApi = () => ({
   eventos: [
     { id: 'e1', acao: 'salvar_lotes', detalhes: null, dados_anteriores: null, dados_novos: null, usuario_id: null, origem: 'tela',

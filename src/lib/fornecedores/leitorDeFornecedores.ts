@@ -35,6 +35,9 @@ export interface FornecedorLido {
   /** FORN-BUSCA-UNICA-01 — os apelidos normalizados (a busca única os lê) e a marca da mesclagem */
   aliases_norm?: string[] | null;
   fundido_em_id?: string | null;
+  /** FORN-FILIAL-01 — a cidade da filial: a opção do seletor a mostra e a busca acha por ela */
+  municipio?: string | null;
+  uf?: string | null;
 }
 
 export interface PaginaDeFornecedores { linhas: FornecedorLido[]; total: number | null }

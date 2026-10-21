@@ -27,7 +27,10 @@
     { "chave": "jere2", "nome": "Sintq Comercial Jere Alimentos", "ativo": true, "uso": 3 },
     { "chave": "dono", "nome": "Sintq Dono Zetamesc", "aliases": ["Sintq Antigo Nomezeta", "11.444.777/0001-61"], "ativo": true, "uso": 1 },
     { "chave": "abs", "nome": "Sintq Antigo Nomezeta", "cpf_cnpj": "11.444.777/0001-61", "ativo": false, "fundido_em": "dono", "uso": 0 },
-    { "chave": "ina", "nome": "Sintq Inativo Zetamesc", "ativo": false, "uso": 0 }
+    { "chave": "ina", "nome": "Sintq Inativo Zetamesc", "ativo": false, "uso": 0 },
+    { "chave": "fil_tl", "nome": "Sintq Filialzeta Produtos Agropecuarios", "cpf_cnpj": "11.222.333/0004-24", "municipio": "Três Lagoas", "uf": "MS", "ativo": true, "uso": 1 },
+    { "chave": "fil_pp", "nome": "Sintq Filialzeta Produtos Agropecuarios", "cpf_cnpj": "11.222.333/0038-73", "municipio": "Presidente Prudente", "uf": "SP", "ativo": true, "uso": 3 },
+    { "chave": "fil_sem", "nome": "Sintq Filialzeta Produtos Agropecuarios", "ativo": true, "uso": 2 }
   ],
   "buscas": [
     { "caso": "fantasia acha a razao social (o caso AGROinBLUE); quem comeca com o termo vem antes do mais usado", "busca": "agrozetablue", "situacao": "ativos", "esperado": ["gf", "agz"] },
@@ -43,6 +46,13 @@
     { "caso": "so os inativos", "busca": "zetamesc", "situacao": "inativos", "esperado": ["ina"] },
     { "caso": "todos: ativo primeiro", "busca": "zetamesc", "situacao": "todos", "esperado": ["dono", "ina"] },
     { "caso": "busca de letras nao casa por documento", "busca": "sintq g f", "situacao": "ativos", "esperado": ["gf"] },
-    { "caso": "nada", "busca": "zzzqqqzeta", "situacao": "todos", "esperado": [] }
+    { "caso": "nada", "busca": "zzzqqqzeta", "situacao": "todos", "esperado": [] },
+    { "caso": "FORN-FILIAL-01: o nome acha as tres filiais (mesma razao social), pela ordem do uso", "busca": "filialzeta", "situacao": "ativos", "esperado": ["fil_pp", "fil_sem", "fil_tl"] },
+    { "caso": "FORN-FILIAL-01: nome + cidade acha so' a filial daquela cidade", "busca": "filialzeta tres", "situacao": "ativos", "esperado": ["fil_tl"] },
+    { "caso": "FORN-FILIAL-01: a cidade sozinha acha a filial", "busca": "presidente prudente", "situacao": "ativos", "esperado": ["fil_pp"] },
+    { "caso": "FORN-FILIAL-01: a UF entra na cidade", "busca": "filialzeta sp", "situacao": "ativos", "esperado": ["fil_pp"] },
+    { "caso": "FORN-FILIAL-01: palavra fora do nome e da cidade nao casa", "busca": "filialzeta campo", "situacao": "ativos", "esperado": [] },
+    { "caso": "FORN-FILIAL-01: so' comeco de palavra conta (o 'g' solto nao casa com 'lagoas')", "busca": "sintq g f", "situacao": "todos", "esperado": ["gf"] },
+    { "caso": "FORN-FILIAL-01: comeco da cidade casa ('pres pru')", "busca": "filialzeta pres pru", "situacao": "ativos", "esperado": ["fil_pp"] }
   ]
 }

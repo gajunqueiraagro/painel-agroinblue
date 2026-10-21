@@ -8,14 +8,45 @@ const rotulos = (tipo: string, e: Parameters<typeof camposDaEspecie>[1]) =>
   (camposDaEspecie(tipo, e) ?? []).map(l => l.map(c => `${c.rotulo}${c.obrigatorio ? '*' : ''}${c.calculado ? '=' : ''}`));
 
 describe('camposDaEspecie', () => {
-  it('abate oferece NF, NPR, Acerto, Romaneio | NF produtor, GTA, Guia, Declaração e Outro (7f); compra e venda as 4 de sempre', () => {
+  it('abate oferece NF, NPR, Acerto, Romaneio | NF produtor, GTA, Guia, Declaração e Outro (7f); compra as 4 de sempre', () => {
     expect(especiesDaOC('abate')).toEqual(['nf_principal', 'npr', 'acerto', 'romaneio', 'nf_produtor', 'gta', 'guia', 'declaracao', 'outro']);
     expect(especiesDaOC('compra')).toEqual(['nf_principal', 'nf_complementar', 'recibo', 'outro']);
-    expect(especiesDaOC('venda')).toEqual(['nf_principal', 'nf_complementar', 'recibo', 'outro']);
   });
 
-  it('compra e venda nao tem grade: seguem com o formulario de hoje', () => {
-    for (const t of ['compra', 'venda']) for (const e of especiesDaOC(t)) expect(camposDaEspecie(t, e)).toBeNull();
+  /* OC-DOC-VENDA-01 — a venda: a operacao no lugar do frigorifico, a saida da fazenda IGUAL a' do abate. */
+  it('venda oferece Contrato, NF entrada, Comprovante | a mesma saida do abate', () => {
+    expect(especiesDaOC('venda')).toEqual(['contrato', 'nf_entrada', 'comprovante', 'nf_produtor', 'gta', 'guia', 'declaracao', 'outro']);
+  });
+
+  it('compra nao tem grade; o legado da venda (NF principal, complementar, recibo) segue no formulario de hoje', () => {
+    for (const e of especiesDaOC('compra')) expect(camposDaEspecie('compra', e)).toBeNull();
+    for (const e of ['nf_principal', 'nf_complementar', 'recibo'] as const) expect(camposDaEspecie('venda', e)).toBeNull();
+  });
+
+  it(`venda: a saida da fazenda e' a do abate (a NF do produtor com o valor obrigatorio: e' a nota da venda)`, () => {
+    for (const e of ['gta', 'guia', 'declaracao', 'outro'] as const) expect(camposDaEspecie('venda', e)).toBe(camposDaEspecie('abate', e));
+    expect(rotulos('venda', 'nf_produtor').slice(0, 2)).toEqual(rotulos('abate', 'nf_produtor').slice(0, 2));
+    expect(rotulos('venda', 'nf_produtor')[2]).toEqual(['Cab*', 'Valor da nota R$*', 'GTA citada', 'Observação']);
+    expect(rotulos('abate', 'nf_produtor')[2]).toEqual(['Cab*', 'Valor da nota R$', 'GTA citada', 'Observação']);
+    expect(rotulos('venda', 'nf_entrada')).toEqual([
+      ['Número*', 'Série', 'Emissão*', 'Valor da nota R$', 'Lote'], ['Emitente (comprador)', 'Chave de acesso'], ['Observação']]);
+  });
+
+  it('venda: a NF do produtor grava o valor como ACRESCIMO (soma); no abate, e nos da operacao, INFORMATIVO', () => {
+    const nat = (tipo: string, especie: Parameters<typeof formAbateVazio>[0]) => {
+      const f = { ...formAbateVazio(especie, tipo), valorInformativo: 1000 };
+      return payloadDoFormAbate(f).componentes?.map(c => c.natureza);
+    };
+    expect(nat('venda', 'nf_produtor')).toEqual(['acrescimo']);
+    expect(nat('abate', 'nf_produtor')).toEqual(['informativo']);
+    for (const e of ['contrato', 'nf_entrada', 'comprovante'] as const) expect(nat('venda', e)).toEqual(['informativo']);
+    /* e le de volta no mesmo campo */
+    const det = { documentoId: 'd', versao: 1, especie: 'nf_produtor', url: '', documentoOrigemId: null, numero: '1', serie: '', chaveAcesso: '',
+      dataEmissao: '', observacao: '', emitenteId: null, emitenteNome: '', emitenteDocumento: '', dataAbate: null, vencimento: null, cab: 10,
+      pesoKg: null, dados: null, loteIds: [], componentes: [{ tipo: 'valor_bruto', natureza: 'acrescimo', valor: 750000, descricao: null, ordem: 1 }],
+    } as unknown as DocumentoDetalhe;
+    expect(formAbateDoDetalhe(det, 'venda').valorInformativo).toBe(750000);
+    expect(formAbateDoDetalhe(det, 'abate').valorInformativo).toBeNull();
   });
 
   it('NF: as 5 linhas do briefing', () => {
