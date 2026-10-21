@@ -71,6 +71,11 @@ export interface OcContaCorrenteApi {
   listarLotes: () => Promise<LoteParaAjuste[]>;
   /** Contas que a explicacao aceita: pecuaria, compoem o DRE (decisao 4), na direcao do tipo. */
   listarContas: (tipoOperacao: '1-Entradas' | '2-Saídas') => Promise<ContaParaExplicacao[]>;
+  /** OC-CORRECOES-01 C2 — os gestos do titulo (cancelar, desvincular, parcelar), o legado sem compromisso incluido. Com compromisso, o
+   *  desvincular vai por `oc_desvincular_lancamento`; o resto por `oc_recebimento_gesto`. Devolve a frase do banco, ou nulo. Opcional:
+   *  sem ele os itens seguem apagados. */
+  gestoNoTitulo?: (lancamentoId: string, gesto: 'cancelar' | 'desvincular' | 'parcelar', motivo: string,
+    parcelas: { valor: number | null; vencimento: string }[] | null, comCompromisso: boolean) => Promise<string | null>;
 }
 
 export interface LoteParaAjuste { id: string; ordem: number; categoria: string | null; cab: number | null; total: number | null }
@@ -292,9 +297,33 @@ export function useOcContaCorrente({ operacaoId, enabled, versao, onVersaoChange
     return lista(data).map(c => ({ id: String(c.id), ordem: c.ordem_exibicao == null ? null : Number(c.ordem_exibicao), subcentro: String(c.subcentro ?? '') }));
   }, []);
 
+  const gestoNoTitulo = useCallback(async (lancamentoId: string, gesto: 'cancelar' | 'desvincular' | 'parcelar', motivo: string,
+    parcelas: { valor: number | null; vencimento: string }[] | null, comCompromisso: boolean): Promise<string | null> => {
+    if (!operacaoId || versaoAtual == null) return 'Operação não carregada.';
+    if (!motivo.trim()) return 'Informe o motivo.';
+    setOcupado(true);
+    try {
+      const { data, error } = gesto === 'desvincular' && comCompromisso
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+        ? await (supabase as any).rpc('oc_desvincular_lancamento', {
+            p_operacao_id: operacaoId, p_versao_esperada: versaoAtual, p_lancamento_id: lancamentoId, p_motivo: motivo.trim() })
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+        : await (supabase as any).rpc('oc_recebimento_gesto', {
+            p_lancamento_id: lancamentoId, p_gesto: gesto, p_motivo: motivo.trim(), p_parcelas: parcelas, p_simular: false });
+      if (error) return normalizarErroRpc(error).message;
+      if (data && data.ok === false) return String(data.motivo ?? 'Não foi possível.');
+      const v = Number(data?.operacao_versao);
+      if (Number.isFinite(v)) onVersaoChange(v);
+      await recarregar();
+      return null;
+    } finally {
+      setOcupado(false);
+    }
+  }, [operacaoId, versaoAtual, onVersaoChange, recarregar]);
+
   return {
     contaCorrente, loading, erro, ocupado, recarregar, sincronizarEntregas, listarVinculaveis, vincularRecebimento,
-    explicarSaldo, desfazerExplicacao, simularExplicacao, lerRolCancelamento, listarLotes, listarContas,
+    explicarSaldo, desfazerExplicacao, simularExplicacao, lerRolCancelamento, listarLotes, listarContas, gestoNoTitulo,
   };
 }
 

@@ -8,6 +8,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Segmentado } from '@/components/ui/segmentado';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { formatMoeda } from '@/lib/calculos/formatters';
+import { DialogoGestoNoTitulo, type TituloDoGesto } from './DialogoGestoNoTitulo';
+import type { GestoNoTitulo } from '@/lib/oc/gestoNoTitulo';
 import { principalJaCoberto, MOTIVO_PRINCIPAL_COBERTO } from '@/lib/oc/lancarPeloModal';
 import { CATEGORIAS } from '@/types/cattle';
 import { parseNumericValue } from '@/lib/calculos/abate';
@@ -134,8 +136,9 @@ const TEXTOS: Record<LadoContaCorrente, {
 /* ═══ O MENU "⋯" DE CADA LINHA DO EXTRATO — OC-CC-ACOES-LINHA-02 ═══════════════════════════════════════════════════════════════
    Toda linha e' clicavel e tem "⋯" (regra do Gabriel, 30/09: toda linha/titulo tem sempre acoes). ⚠ ITEM QUE NAO VALE NUNCA SOME:
    fica desabilitado com o MOTIVO escrito no proprio item (e no `title`). O clique na linha e' o PRIMEIRO item do menu dela.
-   ⚠ NADA DE BANCO NOVO: o que ainda depende de RPC (parcelar, desvincular e cancelar o programado da conta corrente; abrir a
-   entrega em so' leitura) entra apagado com "disponível em breve" e acende no PR seguinte. */
+   OC-CORRECOES-01 C2 (Gabriel 21/10: todo gesto nasce com o contrario) — os "disponível em breve" ACENDERAM: parcelar, desvincular e
+   cancelar valem para todo titulo EM ABERTO (o legado sem compromisso incluido: `oc_recebimento_gesto`), e a entrega abre o
+   lancamento. Conciliado e recebido seguem apagados com o porque e onde ir. */
 export type ChaveAcaoDaLinha =
   | 'abrir' | 'parcelar' | 'desvincular' | 'cancelar_programado' | 'ir_entrega' | 'abrir_leitura' | 'abrir_explicacoes' | 'desfazer_explicacao';
 
@@ -175,7 +178,7 @@ export function acoesDaLinha(l: LinhaContaCorrente, lado: LadoContaCorrente, som
   if (l.tipo === 'entrega') {
     return [
       { chave: 'ir_entrega', texto: t.irEntrega, motivo: null },
-      { chave: 'abrir_leitura', texto: 'Abrir lançamento (só leitura)', motivo: semLanc ?? MOTIVO_ACAO.emBreve },
+      { chave: 'abrir_leitura', texto: 'Abrir lançamento (só leitura)', motivo: semLanc },
       { chave: 'desvincular', texto: 'Desvincular da operação', motivo: t.entregaEDaOperacao },
     ];
   }
@@ -193,6 +196,9 @@ export function acoesDaLinha(l: LinhaContaCorrente, lado: LadoContaCorrente, som
         motivo: gravar(l.status === 'conciliado' ? MOTIVO_ACAO.conciliado : null) },
     ];
   }
+  /* OC-CORRECOES-01 C2: os tres gestos valem em aberto (com ou sem compromisso — o legado tambem); `temCompromisso` so' decide QUAL
+     cancelar/desvincular a tela chama. */
+  void temCompromisso;
   /* ABATE-PROJETADO-01c — o PREVISTO (abate so' projetado) e' dinheiro em aberto como o programado: parcela-se e cancela-se igual.
      OC-RECEB-PARCIAL-01 — UMA REGRA SO', pelo estado da linha: CONCILIADO trava os tres gestos com o mesmo motivo (o dinheiro esta
      ligado ao extrato: desfaca a conciliacao na Conferencia); RECEBIDO sem conciliacao diz que ja' e' dinheiro e o caminho de cada
@@ -205,12 +211,11 @@ export function acoesDaLinha(l: LinhaContaCorrente, lado: LadoContaCorrente, som
   return [
     { chave: 'abrir', texto: 'Abrir lançamento', motivo: semLanc },
     { chave: 'parcelar', texto: `Parcelar este ${t.nomeDinheiro}`,
-      motivo: motivoDe(MOTIVO_ACAO.emBreve, `${t.jaDinheiro} · só se parcela o que está programado`) },
+      motivo: motivoDe(null, `${t.jaDinheiro} · só se parcela o que está programado`) },
     { chave: 'desvincular', texto: 'Desvincular da operação',
-      motivo: motivoDe(MOTIVO_ACAO.emBreve, MOTIVO_ACAO.emBreve) },
+      motivo: motivoDe(null, `${t.jaDinheiro} · para desvincular, estorne o ${t.nomeDinheiro} no lançamento`) },
     { chave: 'cancelar_programado', texto: `Cancelar ${t.nomeDinheiro} programado`, perigo: true,
-      motivo: motivoDe(temCompromisso ? null : MOTIVO_ACAO.semCompromisso,
-        `${t.jaDinheiro} · para desfazer, estorne o ${t.nomeDinheiro} no lançamento`) },
+      motivo: motivoDe(null, `${t.jaDinheiro} · para desfazer, estorne o ${t.nomeDinheiro} no lançamento`) },
   ];
 }
 
@@ -281,6 +286,7 @@ export function AbaContaCorrenteOC({ api, somenteLeitura, lado = 'venda', despes
   const [erroAcao, setErroAcao] = useState<string | null>(null);
   const [dialogo, setDialogo] = useState<'buscar' | 'explicar' | null>(null);
   const [cancelarAlvo, setCancelarAlvo] = useState<{ id: string; parcelas: number } | null>(null);
+  const [gestoAlvo, setGestoAlvo] = useState<{ gesto: GestoNoTitulo; comCompromisso: boolean; titulo: TituloDoGesto } | null>(null);
   /* a explicacao cujo "Desfazer" abriu o dialogo: ele nasce no passo de remocao DAQUELA linha (nada sai sem o motivo e o confirmar) */
   const [removerAlvo, setRemoverAlvo] = useState<string | null>(null);
   const [subLocal, setSubLocal] = useState<SubAbaContaCorrente>('conta');
@@ -323,10 +329,17 @@ export function AbaContaCorrenteOC({ api, somenteLeitura, lado = 'venda', despes
   /* O gesto de cada item do menu da linha. So' chega aqui item que VALE (o apagado nao dispara). */
   const executarAcao = (l: LinhaContaCorrente, chave: ChaveAcaoDaLinha) => {
     setErroAcao(null);
-    if (chave === 'abrir') { if (l.lancamentoId) onAbrirLancamento?.(l.lancamentoId); return; }
+    if (chave === 'abrir' || chave === 'abrir_leitura') { if (l.lancamentoId) onAbrirLancamento?.(l.lancamentoId); return; }
     if (chave === 'ir_entrega') { onIrParaEntrega?.(); return; }
     if (chave === 'abrir_explicacoes') { setRemoverAlvo(null); setDialogo('explicar'); return; }
-    if (chave === 'cancelar_programado') { setCancelarAlvo(l.lancamentoId ? cancelarProgramado?.compromissoDe(l.lancamentoId) ?? null : null); return; }
+    /* OC-CORRECOES-01 C2 — com compromisso, o cancelar de sempre (com as N parcelas); sem (o legado), o gesto novo. */
+    const comCompromisso = !!(l.lancamentoId && cancelarProgramado?.compromissoDe(l.lancamentoId));
+    if (chave === 'cancelar_programado' && comCompromisso) { setCancelarAlvo(cancelarProgramado?.compromissoDe(l.lancamentoId!) ?? null); return; }
+    if ((chave === 'cancelar_programado' || chave === 'desvincular' || chave === 'parcelar') && l.lancamentoId) {
+      setGestoAlvo({ gesto: chave === 'cancelar_programado' ? 'cancelar' : chave, comCompromisso, titulo: {
+        lancamentoId: l.lancamentoId, descricao: l.descricao, valor: Math.abs(l.movRecebido ?? 0), vencimento: l.data } });
+      return;
+    }
     if (chave === 'desfazer_explicacao') {
       setRemoverAlvo(cc.explicacoes.some(e => e.parteId === l.parteId) ? l.parteId : null);
       setDialogo('explicar');
@@ -513,6 +526,11 @@ export function AbaContaCorrenteOC({ api, somenteLeitura, lado = 'venda', despes
       {cancelarAlvo && cancelarProgramado && (
         <DialogoCancelarProgramado lado={lado} parcelas={cancelarAlvo.parcelas}
           onConfirmar={motivo => cancelarProgramado.executar(cancelarAlvo.id, motivo)} onFechar={() => setCancelarAlvo(null)} />
+      )}
+      {gestoAlvo && api.gestoNoTitulo && (
+        <DialogoGestoNoTitulo gesto={gestoAlvo.gesto} titulo={gestoAlvo.titulo} nomeDinheiro={t.nomeDinheiro}
+          onConfirmar={(motivo, parcelas) => api.gestoNoTitulo!(gestoAlvo.titulo.lancamentoId, gestoAlvo.gesto, motivo, parcelas, gestoAlvo.comCompromisso)}
+          onFechar={() => setGestoAlvo(null)} />
       )}
       {dialogo === 'explicar' && (
         <DialogoExplicarDiferenca api={api} somenteLeitura={somenteLeitura} lado={lado} removerAoAbrir={removerAlvo}
