@@ -33,6 +33,8 @@ export const ESCALA_DO_CONTRATO = {
   total: 'text-[10.5px] font-bold',
   recado: 'text-[11px]',
   rola: 'uma-linha-que-rola',
+  /* FORN-01b (regra de corte de 21/10 07h25) — texto em CÉLULA de tabela: uma linha, "…" quando não cabe, o inteiro no `title` */
+  celula: 'block truncate',
 };
 const E = ESCALA_DO_CONTRATO;
 const reais = (v: number) => `R$ ${num2(v)}`;
@@ -215,12 +217,12 @@ export function TabelaDePagamentos({ tela, onAbrirLancamento }: { tela: TelaDoCo
           {(linhas ?? []).map((p, i) => (
             <tr key={`${p.item}-${i}`} className="border-b" data-testid="linha-pagamento">
               <td className={TD_D}>{dataBr(p.data) ?? '—'}</td>
-              <td className={TD}><span className={E.rola}>{p.item}</span></td>
+              <td className={TD}><span className={E.celula} title={p.item}>{p.item}</span></td>
               <td className={TD_R}>{p.principal ? num2(p.principal) : ''}</td>
               <td className={TD_R}>{p.juros ? num2(p.juros) : ''}</td>
               <td className={TD_R}>{p.encargos ? num2(p.encargos) : ''}</td>
               <td className={`${TD_R} font-medium`}>{num2(p.total)}</td>
-              <td className={TD}><span className={E.rola}>{p.conta ?? '—'}</span></td>
+              <td className={TD}><span className={E.celula} title={p.conta ?? undefined}>{p.conta ?? '—'}</span></td>
               <td className={TD}>{p.lancamentoId
                 ? <button type="button" className="text-primary hover:underline" onClick={() => onAbrirLancamento(p.lancamentoId!)}>↔ abrir</button>
                 : <span className="text-muted-foreground" title="parcela paga sem lançamento no Financeiro">sem lançamento</span>}</td>
@@ -254,7 +256,7 @@ export function TabelaDoHistorico({ tela, onDesfazerJuncao }: { tela: TelaDoCont
           {(linhas ?? []).map((e, i) => (
             <tr key={`${e.evento}-${i}`} className="border-b" data-testid="linha-historico">
               <td className={TD_D}>{dataBr(e.data) ?? '—'}</td>
-              <td className={TD}><span className={E.rola}>{e.evento}</span></td>
+              <td className={TD}><span className={E.celula} title={e.evento}>{e.evento}</span></td>
               <td className={TD_R}>{e.valor === null ? '' : num2(e.valor)}</td>
               <td className={TD}>
                 {e.juncaoId && e.desfazivel && onDesfazerJuncao && (
