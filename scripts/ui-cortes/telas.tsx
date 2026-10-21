@@ -29,7 +29,7 @@ import { ConsorcioDialog } from '@/components/financiamentos/ConsorcioDialog';
 import { LANCAMENTOS } from './dados/financeiro';
 import { buscarFornecedores } from '@/lib/fornecedores/buscaDeFornecedor';
 import { FinanceiroV2Tab } from '@/pages/FinanceiroV2Tab';
-import { GRUPOS, LEITOR, LINHAS, LISTA, RECENTES, USO } from './dados/fornecedores';
+import { GRUPOS, LEITOR, LINHAS, LISTA, RECENTES, SEM_CADASTRO, USO } from './dados/fornecedores';
 import { CasarBlocoModal } from '@/components/financeiro-v2/CasarComBancoModal';
 import { CasarComBancoModal } from '@/components/financeiro-v2/CasarComBancoModal';
 import { VendaModalShell } from '@/components/venda/VendaModalShell';
@@ -78,7 +78,8 @@ const bancoDeFornecedores = {
     return [];
   },
   rpc: (fn: string, a: any) => fn === 'fn_fornecedor_repetidos' ? GRUPOS : fn === 'fn_fornecedor_uso' ? USO[a.p_fornecedor] ?? { lancamentos: 0 }
-    : fn === 'fn_fornecedor_buscar' ? buscarNaBancada(a) : null,
+    : fn === 'fn_fornecedor_buscar' ? buscarNaBancada(a) : fn === 'fn_fornecedor_sem_cadastro' ? SEM_CADASTRO
+    : fn === 'fn_fornecedor_sem_cadastro_recentes' ? [] : null,
 };
 /* FORN-BUSCA-UNICA-01 — a RPC da busca única, respondida pela PROPRIA funcao da tela (o espelho e' provado pelo teste SQL) */
 function buscarNaBancada(a: any) {
