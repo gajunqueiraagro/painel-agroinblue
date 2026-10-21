@@ -77,6 +77,9 @@ export interface UltimaClassificacao {
   escopo_negocio: string | null;
   /** 'YYYY-MM-DD' — a competencia do lancamento de onde veio. */
   data: string;
+  /** FIN-NOTA-PDF-01b — a safra e a cultura daquele lancamento (a sugestao de sempre na lavoura); o XML nao as usa. */
+  safra_id?: string | null;
+  cultura?: string | null;
 }
 
 export type CampoDoXml =
