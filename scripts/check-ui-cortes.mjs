@@ -41,7 +41,10 @@ const CENARIOS = [
   { nome: 'mesclar-uso', url: 'tela=mesclar', antes: clicarTexto('Uso') },
   { nome: 'mesclar-recentes', url: 'tela=mesclar', antes: clicar('[data-testid="abrir-recentes"]') },
   { nome: 'fornecedores-lista', url: 'tela=fornecedores' },
-  { nome: 'fornecedores-pendentes', url: 'tela=fornecedores', antes: clicarTexto('Pendentes') },
+  /* FORN-SEM-CADASTRO-01 — a aba "Sem cadastro" (substitui a "Pendentes") nos tamanhos do mock, fechada e com uma linha aberta */
+  { nome: 'fornecedores-sem-cadastro', url: 'tela=fornecedores', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicar('[data-testid="aba-sem-cadastro"]') },
+  { nome: 'fornecedores-sem-cadastro-aberta', url: 'tela=fornecedores', tamanhos: TAMANHOS_DO_CONTRATO,
+    antes: async (p) => { await clicar('[data-testid="aba-sem-cadastro"]')(p); await clicar('[data-testid="sem-cadastro-linha"] td')(p); } },
   { nome: 'fornecedores-inativos', url: 'tela=fornecedores', antes: clicarTexto('Inativos') },
   { nome: 'fornecedores-todos', url: 'tela=fornecedores', antes: clicarTexto('Todos') },
   /* FORN-BUSCA-UNICA-01 — SO' OS FILTROS do Financeiro V2 (decisao do Gabriel, 19/10): a TABELA tem 60 achados (reticencias em Produto,
