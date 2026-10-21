@@ -15,8 +15,13 @@ import { normalizarErroRpc } from '@/hooks/useOcCompromissos';
 /* OC-DOC-SAIDA-FAZENDA-01 (7f) — os documentos da SAIDA DA FAZENDA: `nf_produtor` (NFP-e, so' no abate), `gta`, `guia` e
    `declaracao` (abate e venda). NUNCA somam no valor da OC (`_oc_documento_soma_no_valor`); o valor da NFP-e e da guia e' componente
    de natureza 'informativo'. */
+/* OC-DOC-VENDA-01 — a venda usa a aba do abate: `nf_produtor` passa a existir na venda (e la' e' a nota da venda: SOMA), e os
+   documentos DA OPERACAO da venda — `contrato`, `nf_entrada` (NF de entrada do comprador) e `comprovante` — sao informativos. */
 export type EspecieDoc = 'nf_principal' | 'nf_complementar' | 'recibo' | 'outro' | 'npr' | 'acerto' | 'romaneio'
-  | 'nf_produtor' | 'gta' | 'guia' | 'declaracao';
+  | 'nf_produtor' | 'gta' | 'guia' | 'declaracao' | 'contrato' | 'nf_entrada' | 'comprovante';
+
+/** OC-DOC-VENDA-01 — a nota (chave de acesso) ja' viva noutro documento do cliente: a OC dela e como o operador a conhece. */
+export interface NotaRepetida { documentoId: string; operacaoId: string; tipoOperacao: string | null; rotulo: string }
 export type NaturezaComp = 'acrescimo' | 'desconto_comercial' | 'retencao_sem_caixa' | 'despesa_desembolso' | 'informativo';
 
 export interface DocumentoLista {
@@ -127,6 +132,9 @@ export interface DocumentosApi {
   editar: (documentoId: string, versaoEsperada: number, p: DocumentoPayload) => Promise<boolean>;
   cancelar: (documentoId: string, motivo: string) => Promise<boolean>;
   carregarDetalhe: (documentoId: string) => Promise<DocumentoDetalhe | null>;
+  /** OC-DOC-VENDA-01 — a chave ja' esta' viva noutro documento do cliente? (`oc_documento_nota_repetida`; nulo = nao, ou chave
+   *  sem 44 digitos). `ignorar` = o proprio documento na edicao. Opcional: quem nao a tem nao pergunta (o banco barra igual). */
+  notaRepetida?: (chave: string, ignorar: string | null) => Promise<NotaRepetida | null>;
 }
 
 interface Params {
@@ -381,6 +389,19 @@ export function useOperacaoDocumentos({ operacaoId, clienteId, enabled }: Params
     }
   }, [operacaoId]);
 
-  return useMemo(() => ({ documentos, lotes, loading, saving, registrar, editar, cancelar, carregarDetalhe, anexarArquivo, urlAssinada }),
-    [documentos, lotes, loading, saving, registrar, editar, cancelar, carregarDetalhe, anexarArquivo, urlAssinada]);
+  /* OC-DOC-VENDA-01 — a mesma pergunta que o banco faz ao gravar; aqui so' para a faixa avisar antes, com o link. Falha = nulo
+     (o banco continua barrando). */
+  const notaRepetida = useCallback(async (chave: string, ignorar: string | null): Promise<NotaRepetida | null> => {
+    if (!clienteId || chave.replace(/\D/g, '').length !== 44) return null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+    const { data, error } = await (supabase as any).rpc('oc_documento_nota_repetida', { p_cliente_id: clienteId, p_chave: chave, p_ignorar: ignorar });
+    if (error || !data) return null;
+    const r = data as { documento_id?: string; operacao_id?: string; tipo_operacao?: string | null; rotulo?: string };
+    return r.documento_id && r.operacao_id
+      ? { documentoId: r.documento_id, operacaoId: r.operacao_id, tipoOperacao: r.tipo_operacao ?? null, rotulo: r.rotulo ?? 'outra operação' }
+      : null;
+  }, [clienteId]);
+
+  return useMemo(() => ({ documentos, lotes, loading, saving, registrar, editar, cancelar, carregarDetalhe, anexarArquivo, urlAssinada, notaRepetida }),
+    [documentos, lotes, loading, saving, registrar, editar, cancelar, carregarDetalhe, anexarArquivo, urlAssinada, notaRepetida]);
 }
