@@ -10,7 +10,7 @@
  * (3) O "⋯" da linha só monta o menu do Radix depois do clique.
  */
 import { describe, it, expect } from 'vitest';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { readFileSync } from 'node:fs';
 import { CorpoDaListaMemo, MenuDaLinhaSobDemanda, rendersDoCorpoDaLista, mesmaChaveDaLista } from './corpoDaLista';
@@ -21,15 +21,17 @@ function PaiComModal() {
   const [linhas, setLinhas] = useState(LINHAS);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [fazendaId, setFazendaId] = useState('');
+  const rolagem = useRef<HTMLDivElement>(null);
   return (
     <div>
       <button onClick={() => setDialogOpen(true)}>abrir modal</button>
       <button onClick={() => setFazendaId('f-pur')}>escolher fazenda</button>
       <button onClick={() => setLinhas((ls) => [...ls, { id: 'novo', nome: 'Novo' }])}>dado novo</button>
       <span data-testid="estado">{dialogOpen ? 'aberto' : 'fechado'}·{fazendaId}</span>
-      <table><tbody>
-        <CorpoDaListaMemo chave={[linhas]} desenhar={() => linhas.map((l) => <tr key={l.id}><td>{l.nome}</td></tr>)} />
-      </tbody></table>
+      <div ref={rolagem}><table><tbody>
+        <CorpoDaListaMemo chave={[linhas]} total={linhas.length} colunas={1} rolagem={rolagem}
+          desenhar={(i, f) => linhas.slice(i, f).map((l) => <tr key={l.id}><td>{l.nome}</td></tr>)} />
+      </tbody></table></div>
     </div>
   );
 }
@@ -56,7 +58,7 @@ describe('FIN-MODAL-FAZENDA-TRAVA-01 — a lista não se redesenha pelo modal', 
 
   it('a tela usa o corpo memoizado, e nem a chave nem as linhas dependem do estado do modal', () => {
     const fonte = readFileSync('src/pages/FinanceiroV2Tab.tsx', 'utf8');
-    expect(fonte).toMatch(/<CorpoDaListaMemo chave=\{chaveDaLista\} desenhar=/);
+    expect(fonte).toMatch(/<CorpoDaListaMemo chave=\{chaveDaLista\} total=\{linhasDaGrade\.length\}/);
     const chave = fonte.slice(fonte.indexOf('const chaveDaLista'), fonte.indexOf('];', fonte.indexOf('const chaveDaLista')));
     expect(chave.length).toBeGreaterThan(50);
     for (const proibido of ['dialogOpen', 'editingLanc', 'prefillDuplicar', 'prefillXml', 'linhaXmlAberta']) {
