@@ -10478,3 +10478,14 @@ curta nas secoes de regras) e a pendencia (na FILA); o bloco inteiro vai para do
     navegador (sem tabela de preferencia por usuario).
   ⚠ NAO PROVADO: nada com login no app real (bancada) · a altura da pagina no shell real (a bancada usa 96px de barra).
   · SUITE depois do FORN-LISTA-01: 5994 passando (+7 `fornecedoresLista.test.tsx`; +2 em `buscaUnicaNasTelas.test.tsx`), 22 skipped, as 3 falhas de sempre. Gate de tela completo: 116 telas, 650 medicoes, 0 achados.
+- ⚠ FORNECEDOR ERRADO NOS LANCAMENTOS DO IMPORTADOR ANTIGO — SO' FASE 0, NADA CORRIGIDO (FORN-LEGADO-ERRADO-01, noite de 20/10/2026). O
+  importador legado (`src/hooks/useFinanceiro.ts` ~:1012–1105, `resolveOrCreateFornecedorId`) ligou lancamentos ao cadastro errado: (1) lia
+  os fornecedores do cliente SEM paginar (cortava em 1.000; o NJ tinha 2.775 na importacao de 20/04/2026), (2) casava o APROXIMADO antes do
+  exato no banco e (3) o nivel 3 do aproximado aceitava palavra contida em outra com limite 0,5 ("IAGRO", "AGROLINE", "AGROCENTER" contem
+  "AGRO" -> um cadastro "… Agro …"). Medido no NJ (planilha original cruzada por data + valor + produto): 7.035 lancamentos suspeitos em 996
+  pares texto -> fornecedor; destino obvio (o texto tem UM cadastro com esse nome ou apelido) 759 pares / 4.851 lancamentos. Transferencias
+  com fornecedor pessoa (~R$ 59 mi) a' parte. Os outros clientes nao foram cruzados (sem a planilha identificada). Lista e proposta em
+  ~/Downloads/noite-20-10/FORN-LEGADO-ERRADO-01.md e ~/Downloads/noite-20-10/forn-legado-errado/ (fora do repo).
+  ⚠ NAO EXISTE gesto em lote "trocar fornecedor com trilha": proposta (nao feita) `fn_lancamentos_trocar_fornecedor(ids, de, para, motivo,
+    simular)` no molde da `fn_fornecedor_sem_cadastro_ligar`. Correcao so' com a lista de pares aprovada pelo Gabriel.
+  ⚠ O importador legado segue com o defeito (decisao: aposentar ou consertar).
