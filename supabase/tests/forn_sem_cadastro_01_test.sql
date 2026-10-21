@@ -9,6 +9,8 @@
 -- S5 "Pec.3M-": texto de rateio nao se liga a cadastro sem o prefixo (simulacao e gravacao).
 -- S6 criar + ligar + desfazer: o cadastro criado e sem uso pode sair de uso junto, pelo dono do excluir.
 -- S7 as internas nao sao executaveis pela tela.
+-- FORN-01b: os lancamentos sinteticos vem de EXTRATO (`origem_lancamento`): desde o 01b a descricao so' vale como fornecedor escrito
+-- no que veio de extrato ou importacao.
 begin;
 set local lock_timeout = '2s';
 set local statement_timeout = '30s';
@@ -16,11 +18,12 @@ create function pg_temp.forn(p_nome text) returns uuid language sql as $f$
   insert into financeiro_fornecedores (cliente_id, nome) values ('43f32d07-dba8-4670-900c-bf645440c04a', p_nome) returning id $f$;
 create function pg_temp.lan(p_desc text, p_tipo text default '2-Saídas', p_cancelado boolean default false) returns uuid language sql as $f$
   insert into financeiro_lancamentos_v2 (cliente_id, fazenda_id, conta_bancaria_id, conta_destino_id, data_competencia, data_vencimento, valor,
-      sinal, tipo_operacao, status_transacao, descricao, favorecido_id, cenario, cancelado)
+      sinal, tipo_operacao, status_transacao, descricao, favorecido_id, cenario, cancelado, origem_lancamento)
   values ('43f32d07-dba8-4670-900c-bf645440c04a', 'c2498ace-8478-410c-a697-d3f2e2934d1f',
       case when p_tipo like '2-%' then '131b8501-caf7-4964-b1b1-3f552ad2b75d'::uuid end,
       case when p_tipo like '2-%' then null else '131b8501-caf7-4964-b1b1-3f552ad2b75d'::uuid end,
-      '2026-09-01', '2026-09-10', 100, case when p_tipo like '1-%' then '1' else '-1' end, p_tipo, 'programado', p_desc, null, 'realizado', p_cancelado)
+      '2026-09-01', '2026-09-10', 100, case when p_tipo like '1-%' then '1' else '-1' end, p_tipo, 'programado', p_desc, null, 'realizado', p_cancelado,
+      'extrato')
   returning id $f$;
 create function pg_temp.foto(p_ids uuid[]) returns text language sql as $f$
   select md5(string_agg((to_jsonb(l) - 'updated_at' - 'updated_by')::text, '|' order by l.id))
