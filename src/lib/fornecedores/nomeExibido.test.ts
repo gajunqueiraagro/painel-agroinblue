@@ -9,7 +9,7 @@ import { resolve } from 'node:path';
 import {
   chaveDoNomeComparado, finalDoDocumento, rotulosDosFornecedores, sufixoDoRotulo, FINAL_SEM_DOCUMENTO,
 } from './fornecedorTexto';
-import { avisoDeInativos, contarFornecedoresDistintos } from '@/pages/FinV2FornecedoresTab';
+import { faixaDoInativo, inativosDasLinhas } from '@/pages/FinV2FornecedoresTab';
 
 const LINEAGRO = [
   { id: 'a', nome: 'Lineagro Produtos Agropecuarios AS', cpf_cnpj: null, ativo: false },
@@ -69,15 +69,20 @@ describe('os rótulos de uma lista', () => {
   });
 });
 
-describe('o aviso de Cadastros', () => {
-  it('conta fornecedores distintos, não lançamentos', () => {
-    expect(contarFornecedoresDistintos([{ favorecido_id: 'a' }, { favorecido_id: 'a' }, { favorecido_id: 'b' }, { favorecido_id: null }])).toBe(2);
+describe('a faixa de Cadastros (FORN-01b: nomeia o inativo)', () => {
+  it('junta por fornecedor (uma linha por lançamento), o de maior valor primeiro', () => {
+    const r = inativosDasLinhas([{ favorecido_id: 'a', valor: -100, nome: 'Alfa' }, { favorecido_id: 'a', valor: -50, nome: 'Alfa' },
+      { favorecido_id: 'b', valor: 1000, nome: 'Beta' }, { favorecido_id: null, valor: 5, nome: null }]);
+    expect(r).toEqual([{ id: 'b', nome: 'Beta', lancamentos: 1, valor: 1000 }, { id: 'a', nome: 'Alfa', lancamentos: 2, valor: 150 }]);
   });
-  it('sem nada a dizer, nulo — nunca "0"', () => {
-    expect(avisoDeInativos(null)).toBeNull();
-    expect(avisoDeInativos(0)).toBeNull();
-    expect(avisoDeInativos(1)).toBe('1 fornecedor inativo ainda tem lançamentos e aparece em Lançamentos Financeiros. Una ao cadastro certo pelo Mesclar.');
-    expect(avisoDeInativos(19)).toContain('19 fornecedores inativos ainda têm');
+  it('a frase diz quem, quantos e quanto; com mais de um, "e mais N"; sem nada a dizer, nula — nunca "0"', () => {
+    expect(faixaDoInativo(null)).toBeNull();
+    expect(faixaDoInativo([])).toBeNull();
+    const um = faixaDoInativo([{ id: 'x', nome: 'Cartório Exemplo de Notas', lancamentos: 6, valor: 38876 }]);
+    expect(um?.texto).toBe('Cartório Exemplo de Notas (inativo) · 6 lançamentos · R$\u00a038.876,00');
+    expect(um?.primeiro.id).toBe('x');
+    expect(faixaDoInativo([{ id: 'x', nome: 'Um', lancamentos: 1, valor: 1 }, { id: 'y', nome: 'Dois', lancamentos: 2, valor: 0.5 }])?.texto)
+      .toBe('Um (inativo) · 1 lançamento · R$\u00a01,00 · e mais 1 inativo com lançamentos');
   });
 });
 
