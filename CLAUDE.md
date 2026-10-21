@@ -10805,3 +10805,22 @@ curta nas secoes de regras) e a pendencia (na FILA); o bloco inteiro vai para do
   `conc_baixa_no_vinculo_01` (assinatura nova) — OK no proto. Mutacoes SQL (aceita sem confirmar, nucleo sem trilha, estimado
   perguntando, Casar gravando sem confirmar, sem guarda) e de tela (sem a marca de aceito, ignorar o pedido ao gravar, pergunta
   escondida) — todas derrubam teste. ⚠ O Vivo (valor certo) agora liga com a pergunta; virar "A confirmar" continua decisao do Gabriel.
+- ⚠ A LISTA DE LANCAMENTOS FINANCEIROS SO' DESENHA AS LINHAS A' VISTA, E A LINHA TEM 19px FIXOS (FIN-V2-LISTA-VIRTUAL-01, Gabriel 21/10/2026,
+  so' tela; fecha a parte "desenha todas as linhas" da FIN-V2-DESEMPENHO-01). `CorpoDaListaMemo` (`src/components/financeiro-v2/corpoDaLista.tsx`)
+  recebe `total`, `colunas`, `rolagem` (o scrollport da lista, `scrollContainerRef`) e `desenhar(inicio, fim)`; a tela desenha
+  `linhasDaGrade.slice(inicio, fim)`. A janela e' aritmetica (`janelaDasLinhas`: o que cabe no scrollport + `FOLGA_DE_LINHAS` 15 de cada
+  lado, em degraus de `PASSO_DA_JANELA` 10), relida por `scroll` (um quadro) e `ResizeObserver`; acima e abaixo, duas linhas espacadoras de
+  N × `ALTURA_DA_LINHA` (classe `espaco-da-lista`, sem padding nem borda). SEM BIBLIOTECA: altura fixa numa `<table>` e' uma conta, e as
+  libs de janela pedem `div` absoluto (perderiam o `colgroup` e o thead `sticky`). Totais, contagens, seleção e ordenação seguem sobre TODOS
+  os lancamentos (nao passam pelo corpo). ⚠ A LINHA TEM DE CABER EM 19px (`tr.linha-da-lista` no index.css: td de 18px, 1px de respiro): o
+  "⋯" passou de 20 a 16px (`h-4 w-4`); conteudo novo mais alto que 16px quebra a conta da janela.
+  MEDIDO — bancada `tela=financeiro&v=volume&n=5279` (Chromium 1440x900), antes x depois: nos no DOM 149.487 x 2.040; linhas 5.279 x ~60;
+  abrir o Novo lancamento (maior tarefa longa) CPU 1x 800 x 58 ms, CPU 4x 3.355 x 194 ms; clicar Status 199 x 0 / 929 x 56 ms; clicar
+  Fazenda 136 x 0 / 489 x 0 ms; rolar ate' o fim (40 saltos, soma das tarefas longas) 2.645 x 0 / 14.162 x 6.103 ms. App local com login,
+  NJ Global 2026 (5.290 lancamentos, CPU normal): 40 linhas e 1.672 nos; a lista inteira rolada com TODA linha desenhada a 19,0px, no
+  maximo 60 no DOM, 0 tarefas longas, cabecalho preso, a ultima linha alcancada; abrir modal 73 ms, Fazenda 15 ms, marcar linha 29 ms,
+  ordenar Valor 40 ms, "⋯" 32 ms (Editar, Duplicar).
+  Teste: `src/components/financeiro-v2/listaVirtual.test.tsx` (4: 5.000 lancamentos montam <= 100 linhas, rolar ao meio e ao fim, os
+  degraus, a ligacao na tela e no CSS); mutacao "a janela desenha tudo" derruba 3. `listaNaoRedesenha.test.tsx` trocado ao contrato novo.
+  ⚠ NAO PROVADO: CPU 4x no app real com login (so' na bancada) · o Ampliado e a secao "sem caixa" (fora do corpo, segue desenhando tudo) ·
+    rolagem por teclado (Page Down) e Ctrl+F do navegador (acha so' as linhas desenhadas).

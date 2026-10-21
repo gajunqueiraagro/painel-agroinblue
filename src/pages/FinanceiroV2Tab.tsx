@@ -1839,8 +1839,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
      16,8 s na do Gabriel. As linhas moram em `CorpoDaListaMemo`, que só redesenha quando um item da `chaveDaLista` muda — o
      que as linhas LEEM (dado, mapas, filtros de exibição, seleção). Estado do modal NÃO entra na chave. As ações das linhas
      passam por `acoesDaLista`, estável: o clique sempre chama a versão atual (filtros de agora), sem redesenhar. Quem
-     acrescentar uma leitura nova às linhas a põe na chave. ⚠ A lista ainda desenha TODAS as linhas (sem virtualização nem
-     paginação no servidor): frente FIN-V2-DESEMPENHO-01. */
+     acrescentar uma leitura nova às linhas a põe na chave. FIN-V2-LISTA-VIRTUAL-01: o corpo só desenha a FATIA à vista
+     (`desenhar(inicio, fim)`), com linha de 19px fixos; totais, contagens e seleção seguem sobre todos os lançamentos. */
   const acoesDaListaRef = useRef({ openEdit, toggleSelect, handleDuplicate, abrirOCFinanceiro, abrirFinanciamentoDaParcela, recarregarVinculos });
   acoesDaListaRef.current = { openEdit, toggleSelect, handleDuplicate, abrirOCFinanceiro, abrirFinanciamentoDaParcela, recarregarVinculos };
   const acoesDaLista = useMemo(() => ({
@@ -2799,7 +2799,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
               <tbody className="[&_tr:last-child]:border-0">
                 {/* FIN-MODAL-FAZENDA-TRAVA-01 — as linhas só se redesenham quando a CHAVE muda (dado, filtro, seleção); abrir o
                     modal ou mexer nele não as toca. As ações entram por referência estável (`acoesDaLista`). */}
-                <CorpoDaListaMemo chave={chaveDaLista} desenhar={() => {
+                <CorpoDaListaMemo chave={chaveDaLista} total={linhasDaGrade.length} colunas={modoIntensivo && contasAmpliado ? 17 : 15}
+                  rolagem={scrollContainerRef} desenhar={(inicio, fim) => {
                   const { openEdit, toggleSelect, handleDuplicate, abrirOCFinanceiro, abrirFinanciamentoDaParcela, recarregarVinculos } = acoesDaLista;
                   return (<>
                 {linhasDaGrade.length === 0 ? (
@@ -2809,7 +2810,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     </td>
                   </tr>
                 ) : (
-                  linhasDaGrade.map(l => {
+                  linhasDaGrade.slice(inicio, fim).map(l => {
                     const fornNome = fornecedoresMap.get(l.favorecido_id || '');
                     const rotuloForn = rotulosDoRecorte.get(l.favorecido_id || '');
                     // PR-OC-FIN-EDIT-FIX-01 — apresentação: título de OC não exibe o fornecedor no Produto.
@@ -2872,7 +2873,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                        um clique que não faz nada ensina a desconfiar do resto da tela. */
                     return (
                       <tr key={l.id}
-                        className={`border-b !h-auto hover:bg-muted/50 transition-colors${canEditRow ? ' cursor-pointer' : ''} ${selectedIds.has(l.id) ? 'bg-primary/5' : ''}`}
+                        className={`linha-da-lista border-b hover:bg-muted/50 transition-colors${canEditRow ? ' cursor-pointer' : ''} ${selectedIds.has(l.id) ? 'bg-primary/5' : ''}`}
                         onClick={canEditRow ? () => openEdit(l) : undefined}>
                         {/* ⚠ A FAIXA CINZA COMEÇA NA BORDA — FIN-LISTA-DENSIDADE-01, e isto
                             DESFAZ o `bg-card` que estas duas células ganharam no c9cefcf3.
