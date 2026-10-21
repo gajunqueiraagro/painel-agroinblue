@@ -3,6 +3,7 @@ import { FaixaDaReferencia, type ReferenciaOperacionalInfo } from './FaixaDaRefe
 import { BLOCO_FORMULARIO, BlocoFormulario, REGUA_ROTULO, TituloDoBloco } from '@/components/ui/bloco-formulario';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { tituloOCAjustavel, motivoTituloOCTravado, camposDoAjusteOC } from '@/lib/oc/ajusteDoTituloOC';
 // PR-FIN-STATUS-UX-03A-1 — domínio financeiro (dono único). normalizeStatusTransacao
 //   (v2Transferencia, compartilhado) mapeava 'previsto'→'meta'; o modal passa a usar o
 //   normalizador próprio do domínio (normalizeStatusModal), sem tocar o compartilhado.
@@ -665,6 +666,9 @@ export function LancamentoV2Dialog({
     return () => { vivo = false; };
   }, [idParaLerCasado]);
   const travaCasado = camposTravadosDoCasado(casadoComExtrato, lancamento);
+  /* OC-TITULO-AJUSTAR-01 — em aberto e sem conciliacao, o titulo de OC tem vencimento, conta e classificacao editaveis aqui. */
+  const ocAjustavel = tituloOCAjustavel(lancamento?.status_transacao, casadoComExtrato);
+  const motivoOCTravado = motivoTituloOCTravado(lancamento?.status_transacao, casadoComExtrato);
   const [consultandoParcela, setConsultandoParcela] = useState(false);
   const abrirCancelamento = async () => {
     if (consultandoParcela) return;
@@ -863,6 +867,9 @@ export function LancamentoV2Dialog({
   // de abertura implementado (hoje: compra — CompraModalShell/PR-OC-COMPRA-OPEN-01). Venda/abate
   // ainda não têm abridor de operação OC → botão NÃO é exibido (evita botão morto).
   const [operacaoId, setOperacaoId] = useState<string | null>(null);
+  /* OC-TITULO-AJUSTAR-01 — o lancamento e' titulo de OC (parte VIVA), qualquer que seja a origem: o "Receb. 2/2" adotado do
+     legado (origem movimentacao_rebanho) tambem e'. E' ele que manda o ajuste pela OC. */
+  const [tituloDaOC, setTituloDaOC] = useState(false);
   const [operacaoTipo, setOperacaoTipo] = useState<string | null>(null);
   /* ⚠ ERA `operacaoTipo === 'compra'` — OC-BOITEL-VALOR-01 · B3. A restricao existia porque
      `abrirOperacaoOC` assume COMPRA por omissao (V2Index: `tipo: string = 'compra'`), e abrir uma
@@ -1342,6 +1349,18 @@ export function LancamentoV2Dialog({
     })();
     return () => { cancelled = true; };
   }, [open, isOCTitulo, lancamento?.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setTituloDaOC(false);
+    if (!open || !isEdit || !lancamento?.id) return;
+    (async () => {
+      const { data: parte } = await (supabase as any)
+        .from('zoo_operacao_partes').select('id').eq('financeiro_lancamento_id', lancamento.id).eq('cancelada', false).limit(1).maybeSingle();
+      if (!cancelled) setTituloDaOC(!!parte);
+    })();
+    return () => { cancelled = true; };
+  }, [open, isEdit, lancamento?.id]);
 
   /* VINCULAR-LANC-OC-01 — "Vincular à operação" so' onde o banco aceitaria: subcentro no mapa
      (`_oc_vinculo_mapa`), lancamento salvo, nao cancelado e sem parte de OC. E' espelho para
@@ -2098,6 +2117,17 @@ export function LancamentoV2Dialog({
       setSaving(false);
       return;
     }
+    /* OC-TITULO-AJUSTAR-01 — titulo de OC em aberto com vencimento, conta ou classificacao mudados: os tres vao PRIMEIRO pela OC
+       (`oc_titulo_ajustar`: lancamento + parte + parcela + compromisso de parcela unica, com trilha). Recusou: a frase fica ao lado
+       do botao e nada e' gravado. Passou: o gravador de sempre leva o resto (e os mesmos valores). */
+    if (currentIsEdit && lancamento && lancamento.id === currentEditId && tituloDaOC && ocAjustavel) {
+      const campos = camposDoAjusteOC(lancamento, form);
+      if (Object.keys(campos).length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+        const { error } = await (supabase as any).rpc('oc_titulo_ajustar', { p_lancamento_id: lancamento.id, p_campos: campos, p_motivo: null });
+        if (error) { setErroAntesDeSalvar(error.message); setSaving(false); return; }
+      }
+    }
     if (currentIsEdit && contratoDaParcela && edicaoParcela && edicaoParcela.mudou) {
       const recusa = await gravarParcelaDoModal(contratoDaParcela.financiamentoId, edicaoParcela.lista, edicaoParcela.totalDepoisCent);
       if (recusa) { setErroAntesDeSalvar(recusa); setSaving(false); return; }
@@ -2506,7 +2536,12 @@ export function LancamentoV2Dialog({
               <div className="rounded-md border border-sky-200 dark:border-sky-800 bg-sky-50/60 dark:bg-sky-950/30 px-2 py-1 mb-2 flex items-start gap-2">
                 <p className="text-[10px] text-sky-700 dark:text-sky-400 leading-tight flex-1">
                   <span className="font-semibold text-sky-800 dark:text-sky-300">Origem: Operação Comercial.</span>{' '}
-                  Valor, favorecido, classificação, tipo e competência são somente leitura ({ondeAjustarTituloOC(podeAbrirOC)}); data prevista, conta, descrição, observação e documento continuam editáveis.
+                  {/* OC-TITULO-AJUSTAR-01: vencimento, conta e classificacao se ajustam aqui com o titulo em aberto (a OC acompanha);
+                      travados, a frase diz por que e onde. */}
+                  Valor, favorecido, tipo e competência são somente leitura ({ondeAjustarTituloOC(podeAbrirOC)});{' '}
+                  {ocAjustavel
+                    ? 'vencimento, conta e classificação se ajustam aqui (a operação acompanha, com trilha); descrição, observação e documento também.'
+                    : <span data-testid="motivo-titulo-oc-travado">{motivoOCTravado}</span>}
                 </p>
                 {/* link só aparece quando o vínculo resolve E o tipo tem fluxo soberano de abertura (compra). */}
                 {operacaoAbrivel && (
@@ -2570,7 +2605,7 @@ export function LancamentoV2Dialog({
                   {modoOC ? (tentouOC && faltaVencimentoOC ? `Vencimento * · ${MOTIVO_VENCIMENTO_OBRIGATORIO}` : 'Vencimento *')
                     : xmlAmbar('vencimento') ? xmlRot('Vencimento *', 'vencimento') : 'Data vencimento *'}</Label>
                 {/* parcela paga: em leitura; o motivo está escrito no rodapé (`parcela-do-contrato`) — sem invólucro aqui, o HTML do lançamento comum não muda */}
-                <DatePicker value={dataVencimento} onChange={setDataVencimento} disabled={isOCTitulo || parcelaPaga} className={cn(dateFieldCls, xmlCls('vencimento'), ((modoOC && tentouOC && faltaVencimentoOC) || vencimentoEmErro) && 'border-destructive')} />
+                <DatePicker value={dataVencimento} onChange={setDataVencimento} disabled={(isOCTitulo && !ocAjustavel) || parcelaPaga} className={cn(dateFieldCls, xmlCls('vencimento'), ((modoOC && tentouOC && faltaVencimentoOC) || vencimentoEmErro) && 'border-destructive')} />
               </div>
               {!modoOC && (
               <div className="col-span-2"
@@ -2800,7 +2835,7 @@ export function LancamentoV2Dialog({
               tipoOperacao={tipoOperacao}
               travado={subcentroTravado || travado('classificacao')}
               motivoTravado={travado('classificacao') ? MOTIVO_CLASSIFICACAO_DA_OC : undefined}
-              subcentroDesabilitado={isOCTitulo || subcentroTravado || travado('classificacao')}
+              subcentroDesabilitado={(isOCTitulo && !ocAjustavel) || subcentroTravado || travado('classificacao')}
               ocultarCulturaFase={!!modoOC || undefined}
               ocultarLinhaDaSafra={!!modoOC || undefined}
               erroSubcentro={erroDirecao && erroDirecao.subcentro === subcentro && erroDirecao.tipo === tipoOperacao
@@ -2817,7 +2852,7 @@ export function LancamentoV2Dialog({
                 `zoo_operacao_partes`; deixar edita-la aqui criaria duas verdades sobre o mesmo
                 lancamento — a parte diria 1140 e o titulo 1150, calados. E' a mesma familia do
                 "duas telas, dois numeros, nenhum erro visivel". */}
-            {isOCTitulo && (
+            {isOCTitulo && !ocAjustavel && (
               <p className="text-[10px] text-muted-foreground -mt-1 flex items-center gap-1">
                 Classificação pertence à operação.
                 {operacaoAbrivel && (

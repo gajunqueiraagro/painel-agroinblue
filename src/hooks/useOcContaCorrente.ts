@@ -21,6 +21,14 @@ export interface RecebimentoVinculavel {
   semContaBancaria: boolean;
   status: string | null;
   conciliado: boolean;
+  /* OC-CORRECOES-01 C3 (`oc_recebimentos_do_financeiro`): as tres datas, o favorecido e a conta bancaria pelo nome, e — do comprador —
+     o MOTIVO de a regra o excluir (nulo = vinculavel). Opcionais: quem monta fixture antigo continua valendo. */
+  competencia?: string | null;
+  vencimento?: string | null;
+  pagamento?: string | null;
+  favorecido?: string | null;
+  contaBancaria?: string | null;
+  motivoExcluido?: string | null;
 }
 
 /** Uma linha do dialogo "Explicar diferenca", como a RPC a recebe. */
@@ -71,6 +79,11 @@ export interface OcContaCorrenteApi {
   listarLotes: () => Promise<LoteParaAjuste[]>;
   /** Contas que a explicacao aceita: pecuaria, compoem o DRE (decisao 4), na direcao do tipo. */
   listarContas: (tipoOperacao: '1-Entradas' | '2-Saídas') => Promise<ContaParaExplicacao[]>;
+  /** OC-CORRECOES-01 C2 — os gestos do titulo (cancelar, desvincular, parcelar), o legado sem compromisso incluido. Com compromisso, o
+   *  desvincular vai por `oc_desvincular_lancamento`; o resto por `oc_recebimento_gesto`. Devolve a frase do banco, ou nulo. Opcional:
+   *  sem ele os itens seguem apagados. */
+  gestoNoTitulo?: (lancamentoId: string, gesto: 'cancelar' | 'desvincular' | 'parcelar', motivo: string,
+    parcelas: { valor: number | null; vencimento: string }[] | null, comCompromisso: boolean) => Promise<string | null>;
 }
 
 export interface LoteParaAjuste { id: string; ordem: number; categoria: string | null; cab: number | null; total: number | null }
@@ -158,21 +171,25 @@ export function useOcContaCorrente({ operacaoId, enabled, versao, onVersaoChange
 
   const listarVinculaveis = useCallback(async () => {
     if (!operacaoId) return { itens: [], erro: 'Operação não carregada.' };
-    const { data, error } = await (supabase as any).rpc('oc_recebimentos_vinculaveis', { p_operacao_id: operacaoId });
+    /* OC-CORRECOES-01 C3 — a lista nova: os vinculaveis de sempre + o do comprador que a regra exclui, com o motivo. */
+    const { data, error } = await (supabase as any).rpc('oc_recebimentos_do_financeiro', { p_operacao_id: operacaoId });
     if (error) return { itens: [], erro: normalizarErroRpc(error).message };
     const linhas: Array<Record<string, unknown>> = Array.isArray(data) ? data : [];
+    const txt = (v: unknown) => (typeof v === 'string' && v !== '' ? v : null);
     return {
       erro: null,
       itens: linhas.map((r) => ({
         lancamentoId: String(r.lancamento_id),
-        data: String(r.data ?? ''),
+        data: String(r.data_pagamento ?? r.data_vencimento ?? r.data_competencia ?? ''),
         valor: Number(r.valor) || 0,
-        descricao: typeof r.descricao === 'string' ? r.descricao : null,
-        subcentro: typeof r.subcentro === 'string' ? r.subcentro : null,
-        mesmoFavorecido: r.mesmo_favorecido === true,
+        descricao: txt(r.descricao),
+        subcentro: txt(r.subcentro),
+        mesmoFavorecido: r.do_comprador === true,
         semContaBancaria: r.conta_bancaria_id == null,
-        status: typeof r.status_transacao === 'string' ? r.status_transacao : null,
+        status: txt(r.status_transacao),
         conciliado: r.conciliado === true,
+        competencia: txt(r.data_competencia), vencimento: txt(r.data_vencimento), pagamento: txt(r.data_pagamento),
+        favorecido: txt(r.favorecido_nome), contaBancaria: txt(r.conta_bancaria_nome), motivoExcluido: txt(r.motivo_excluido),
       })),
     };
   }, [operacaoId]);
@@ -292,9 +309,33 @@ export function useOcContaCorrente({ operacaoId, enabled, versao, onVersaoChange
     return lista(data).map(c => ({ id: String(c.id), ordem: c.ordem_exibicao == null ? null : Number(c.ordem_exibicao), subcentro: String(c.subcentro ?? '') }));
   }, []);
 
+  const gestoNoTitulo = useCallback(async (lancamentoId: string, gesto: 'cancelar' | 'desvincular' | 'parcelar', motivo: string,
+    parcelas: { valor: number | null; vencimento: string }[] | null, comCompromisso: boolean): Promise<string | null> => {
+    if (!operacaoId || versaoAtual == null) return 'Operação não carregada.';
+    if (!motivo.trim()) return 'Informe o motivo.';
+    setOcupado(true);
+    try {
+      const { data, error } = gesto === 'desvincular' && comCompromisso
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+        ? await (supabase as any).rpc('oc_desvincular_lancamento', {
+            p_operacao_id: operacaoId, p_versao_esperada: versaoAtual, p_lancamento_id: lancamentoId, p_motivo: motivo.trim() })
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+        : await (supabase as any).rpc('oc_recebimento_gesto', {
+            p_lancamento_id: lancamentoId, p_gesto: gesto, p_motivo: motivo.trim(), p_parcelas: parcelas, p_simular: false });
+      if (error) return normalizarErroRpc(error).message;
+      if (data && data.ok === false) return String(data.motivo ?? 'Não foi possível.');
+      const v = Number(data?.operacao_versao);
+      if (Number.isFinite(v)) onVersaoChange(v);
+      await recarregar();
+      return null;
+    } finally {
+      setOcupado(false);
+    }
+  }, [operacaoId, versaoAtual, onVersaoChange, recarregar]);
+
   return {
     contaCorrente, loading, erro, ocupado, recarregar, sincronizarEntregas, listarVinculaveis, vincularRecebimento,
-    explicarSaldo, desfazerExplicacao, simularExplicacao, lerRolCancelamento, listarLotes, listarContas,
+    explicarSaldo, desfazerExplicacao, simularExplicacao, lerRolCancelamento, listarLotes, listarContas, gestoNoTitulo,
   };
 }
 

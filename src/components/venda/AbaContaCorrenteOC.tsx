@@ -8,6 +8,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Segmentado } from '@/components/ui/segmentado';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { formatMoeda } from '@/lib/calculos/formatters';
+import { TH_REGUA, TD_REGUA, TD_REGUA_TEXTO, TD_REGUA_NUM, QUADRO_REGUA } from '@/components/ui/regua-tabela';
+import { DialogoGestoNoTitulo, type TituloDoGesto } from './DialogoGestoNoTitulo';
+import type { GestoNoTitulo } from '@/lib/oc/gestoNoTitulo';
 import { principalJaCoberto, MOTIVO_PRINCIPAL_COBERTO } from '@/lib/oc/lancarPeloModal';
 import { CATEGORIAS } from '@/types/cattle';
 import { parseNumericValue } from '@/lib/calculos/abate';
@@ -134,8 +137,9 @@ const TEXTOS: Record<LadoContaCorrente, {
 /* ═══ O MENU "⋯" DE CADA LINHA DO EXTRATO — OC-CC-ACOES-LINHA-02 ═══════════════════════════════════════════════════════════════
    Toda linha e' clicavel e tem "⋯" (regra do Gabriel, 30/09: toda linha/titulo tem sempre acoes). ⚠ ITEM QUE NAO VALE NUNCA SOME:
    fica desabilitado com o MOTIVO escrito no proprio item (e no `title`). O clique na linha e' o PRIMEIRO item do menu dela.
-   ⚠ NADA DE BANCO NOVO: o que ainda depende de RPC (parcelar, desvincular e cancelar o programado da conta corrente; abrir a
-   entrega em so' leitura) entra apagado com "disponível em breve" e acende no PR seguinte. */
+   OC-CORRECOES-01 C2 (Gabriel 21/10: todo gesto nasce com o contrario) — os "disponível em breve" ACENDERAM: parcelar, desvincular e
+   cancelar valem para todo titulo EM ABERTO (o legado sem compromisso incluido: `oc_recebimento_gesto`), e a entrega abre o
+   lancamento. Conciliado e recebido seguem apagados com o porque e onde ir. */
 export type ChaveAcaoDaLinha =
   | 'abrir' | 'parcelar' | 'desvincular' | 'cancelar_programado' | 'ir_entrega' | 'abrir_leitura' | 'abrir_explicacoes' | 'desfazer_explicacao';
 
@@ -175,7 +179,7 @@ export function acoesDaLinha(l: LinhaContaCorrente, lado: LadoContaCorrente, som
   if (l.tipo === 'entrega') {
     return [
       { chave: 'ir_entrega', texto: t.irEntrega, motivo: null },
-      { chave: 'abrir_leitura', texto: 'Abrir lançamento (só leitura)', motivo: semLanc ?? MOTIVO_ACAO.emBreve },
+      { chave: 'abrir_leitura', texto: 'Abrir lançamento (só leitura)', motivo: semLanc },
       { chave: 'desvincular', texto: 'Desvincular da operação', motivo: t.entregaEDaOperacao },
     ];
   }
@@ -193,6 +197,9 @@ export function acoesDaLinha(l: LinhaContaCorrente, lado: LadoContaCorrente, som
         motivo: gravar(l.status === 'conciliado' ? MOTIVO_ACAO.conciliado : null) },
     ];
   }
+  /* OC-CORRECOES-01 C2: os tres gestos valem em aberto (com ou sem compromisso — o legado tambem); `temCompromisso` so' decide QUAL
+     cancelar/desvincular a tela chama. */
+  void temCompromisso;
   /* ABATE-PROJETADO-01c — o PREVISTO (abate so' projetado) e' dinheiro em aberto como o programado: parcela-se e cancela-se igual.
      OC-RECEB-PARCIAL-01 — UMA REGRA SO', pelo estado da linha: CONCILIADO trava os tres gestos com o mesmo motivo (o dinheiro esta
      ligado ao extrato: desfaca a conciliacao na Conferencia); RECEBIDO sem conciliacao diz que ja' e' dinheiro e o caminho de cada
@@ -205,12 +212,11 @@ export function acoesDaLinha(l: LinhaContaCorrente, lado: LadoContaCorrente, som
   return [
     { chave: 'abrir', texto: 'Abrir lançamento', motivo: semLanc },
     { chave: 'parcelar', texto: `Parcelar este ${t.nomeDinheiro}`,
-      motivo: motivoDe(MOTIVO_ACAO.emBreve, `${t.jaDinheiro} · só se parcela o que está programado`) },
+      motivo: motivoDe(null, `${t.jaDinheiro} · só se parcela o que está programado`) },
     { chave: 'desvincular', texto: 'Desvincular da operação',
-      motivo: motivoDe(MOTIVO_ACAO.emBreve, MOTIVO_ACAO.emBreve) },
+      motivo: motivoDe(null, `${t.jaDinheiro} · para desvincular, estorne o ${t.nomeDinheiro} no lançamento`) },
     { chave: 'cancelar_programado', texto: `Cancelar ${t.nomeDinheiro} programado`, perigo: true,
-      motivo: motivoDe(temCompromisso ? null : MOTIVO_ACAO.semCompromisso,
-        `${t.jaDinheiro} · para desfazer, estorne o ${t.nomeDinheiro} no lançamento`) },
+      motivo: motivoDe(null, `${t.jaDinheiro} · para desfazer, estorne o ${t.nomeDinheiro} no lançamento`) },
   ];
 }
 
@@ -281,6 +287,7 @@ export function AbaContaCorrenteOC({ api, somenteLeitura, lado = 'venda', despes
   const [erroAcao, setErroAcao] = useState<string | null>(null);
   const [dialogo, setDialogo] = useState<'buscar' | 'explicar' | null>(null);
   const [cancelarAlvo, setCancelarAlvo] = useState<{ id: string; parcelas: number } | null>(null);
+  const [gestoAlvo, setGestoAlvo] = useState<{ gesto: GestoNoTitulo; comCompromisso: boolean; titulo: TituloDoGesto } | null>(null);
   /* a explicacao cujo "Desfazer" abriu o dialogo: ele nasce no passo de remocao DAQUELA linha (nada sai sem o motivo e o confirmar) */
   const [removerAlvo, setRemoverAlvo] = useState<string | null>(null);
   const [subLocal, setSubLocal] = useState<SubAbaContaCorrente>('conta');
@@ -323,10 +330,17 @@ export function AbaContaCorrenteOC({ api, somenteLeitura, lado = 'venda', despes
   /* O gesto de cada item do menu da linha. So' chega aqui item que VALE (o apagado nao dispara). */
   const executarAcao = (l: LinhaContaCorrente, chave: ChaveAcaoDaLinha) => {
     setErroAcao(null);
-    if (chave === 'abrir') { if (l.lancamentoId) onAbrirLancamento?.(l.lancamentoId); return; }
+    if (chave === 'abrir' || chave === 'abrir_leitura') { if (l.lancamentoId) onAbrirLancamento?.(l.lancamentoId); return; }
     if (chave === 'ir_entrega') { onIrParaEntrega?.(); return; }
     if (chave === 'abrir_explicacoes') { setRemoverAlvo(null); setDialogo('explicar'); return; }
-    if (chave === 'cancelar_programado') { setCancelarAlvo(l.lancamentoId ? cancelarProgramado?.compromissoDe(l.lancamentoId) ?? null : null); return; }
+    /* OC-CORRECOES-01 C2 — com compromisso, o cancelar de sempre (com as N parcelas); sem (o legado), o gesto novo. */
+    const comCompromisso = !!(l.lancamentoId && cancelarProgramado?.compromissoDe(l.lancamentoId));
+    if (chave === 'cancelar_programado' && comCompromisso) { setCancelarAlvo(cancelarProgramado?.compromissoDe(l.lancamentoId!) ?? null); return; }
+    if ((chave === 'cancelar_programado' || chave === 'desvincular' || chave === 'parcelar') && l.lancamentoId) {
+      setGestoAlvo({ gesto: chave === 'cancelar_programado' ? 'cancelar' : chave, comCompromisso, titulo: {
+        lancamentoId: l.lancamentoId, descricao: l.descricao, valor: Math.abs(l.movRecebido ?? 0), vencimento: l.data } });
+      return;
+    }
     if (chave === 'desfazer_explicacao') {
       setRemoverAlvo(cc.explicacoes.some(e => e.parteId === l.parteId) ? l.parteId : null);
       setDialogo('explicar');
@@ -514,6 +528,11 @@ export function AbaContaCorrenteOC({ api, somenteLeitura, lado = 'venda', despes
         <DialogoCancelarProgramado lado={lado} parcelas={cancelarAlvo.parcelas}
           onConfirmar={motivo => cancelarProgramado.executar(cancelarAlvo.id, motivo)} onFechar={() => setCancelarAlvo(null)} />
       )}
+      {gestoAlvo && api.gestoNoTitulo && (
+        <DialogoGestoNoTitulo gesto={gestoAlvo.gesto} titulo={gestoAlvo.titulo} nomeDinheiro={t.nomeDinheiro}
+          onConfirmar={(motivo, parcelas) => api.gestoNoTitulo!(gestoAlvo.titulo.lancamentoId, gestoAlvo.gesto, motivo, parcelas, gestoAlvo.comCompromisso)}
+          onFechar={() => setGestoAlvo(null)} />
+      )}
       {dialogo === 'explicar' && (
         <DialogoExplicarDiferenca api={api} somenteLeitura={somenteLeitura} lado={lado} removerAoAbrir={removerAlvo}
           onFechar={() => { setDialogo(null); setRemoverAlvo(null); }} />
@@ -618,12 +637,36 @@ function LinhaExtrato({ l, linhas, lado, acoes, onAcao }: {
 }
 
 /* ─── Buscar recebimento no Financeiro (vincular recebimento ja lancado) ─── */
+/* ─── "Buscar recebimento/pagamento no Financeiro" — OC-CORRECOES-01 C3 (Gabriel 21/10, print 15h41 da 0731374f) ───────────────
+   ⚠ NUNCA ESCONDE EM SILENCIO O DO COMPRADOR: a lista vem de `oc_recebimentos_do_financeiro` — os vinculaveis de sempre e, do comprador
+     (com mesclados e filiais), tambem o que a regra exclui, APAGADO e com o motivo na coluna Status ("já está nesta operação (1/1)").
+   ⚠ MODAL FIXO (a tabela rola por dentro), na regua de tabela (Recorrencias): cabecalho 22, linha 19. Colunas na ordem pedida;
+     data (dd/mm/aaaa) e valor nunca cortam; texto longo "…" com o texto inteiro no `title`. Busca livre no topo (descricao, favorecido,
+     valor). */
+const COLUNAS_BUSCAR: { titulo: string; largura?: number; num?: boolean }[] = [
+  { titulo: '', largura: 22 }, { titulo: 'Competência', largura: 66 }, { titulo: 'Vencimento', largura: 66 }, { titulo: 'Pagamento', largura: 66 },
+  { titulo: 'Descrição' }, { titulo: 'Favorecido', largura: 130 }, { titulo: 'Conta (classificação)', largura: 140 },
+  { titulo: 'Conta bancária', largura: 100 }, { titulo: 'Status', largura: 112 }, { titulo: 'Valor', largura: 96, num: true },
+];
+/** A Descricao nunca some: abaixo disto (janela estreita) a tabela rola de lado, dentro do quadro. */
+const LARGURA_MINIMA_BUSCAR = COLUNAS_BUSCAR.reduce((s, c) => s + (c.largura ?? 160), 0);
+const dataInteira = (iso: string | null | undefined) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '—');
+/** A busca livre: descricao, favorecido ou valor (com ou sem pontuacao). */
+export function casaNaBusca(r: RecebimentoVinculavel, termo: string): boolean {
+  const t = termo.trim().toLowerCase();
+  if (!t) return true;
+  const digitos = t.replace(/\D/g, '');
+  return (r.descricao ?? '').toLowerCase().includes(t) || (r.favorecido ?? '').toLowerCase().includes(t)
+    || (digitos.length > 0 && String(Math.round(r.valor * 100)).includes(digitos.replace(/^0+/, '')));
+}
+
 function DialogoBuscarRecebimento({ api, lado, onFechar }: { api: OcContaCorrenteApi; lado: LadoContaCorrente; onFechar: () => void }) {
   const compra = lado === 'compra';
   const [itens, setItens] = useState<RecebimentoVinculavel[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [escolhido, setEscolhido] = useState<string | null>(null);
   const [motivo, setMotivo] = useState('');
+  const [busca, setBusca] = useState('');
   const [tentou, setTentou] = useState(false);
   const { listarVinculaveis } = api;
 
@@ -642,65 +685,79 @@ function DialogoBuscarRecebimento({ api, lado, onFechar }: { api: OcContaCorrent
     if (e) { setErro(e); return; }
     onFechar();
   };
+  const visiveis = itens?.filter(r => casaNaBusca(r, busca)) ?? null;
+  const nCol = COLUNAS_BUSCAR.length;
 
   return (
     <Dialog open onOpenChange={o => { if (!o) onFechar(); }}>
-      <DialogContent className="max-w-3xl">
-        <DialogHeader><DialogTitle className="text-[12px]">{compra ? 'Buscar pagamento no Financeiro' : 'Buscar recebimento no Financeiro'}</DialogTitle></DialogHeader>
-        <div className="text-[10px] text-muted-foreground">
+      <DialogContent className="flex h-[560px] max-h-[90vh] w-[980px] max-w-[95vw] flex-col gap-2" data-testid="dialogo-buscar-recebimento">
+        <DialogHeader className="shrink-0"><DialogTitle className="text-[12px]">{compra ? 'Buscar pagamento no Financeiro' : 'Buscar recebimento no Financeiro'}</DialogTitle></DialogHeader>
+        <div className="shrink-0 text-[10px] text-muted-foreground">
           {compra
             ? 'O lançamento fica na conta da compra e sai do DRE pela OC (o custo entrou pela entrada do gado). Valor, datas, conta bancária e conciliação não mudam.'
             : 'O lançamento fica na conta da venda e sai do DRE pela OC (a receita entrou pela entrega). Valor, datas, conta bancária e conciliação não mudam.'}
         </div>
-        <div className="max-h-[50vh] overflow-auto rounded border">
-          <table className="w-full table-fixed border-separate border-spacing-0 tabular-nums">
-            <colgroup><col style={{ width: 28 }} /><col style={{ width: 62 }} /><col /><col style={{ width: 180 }} /><col style={{ width: 90 }} /><col style={{ width: 96 }} /></colgroup>
-            <thead>
-              <tr>
-                <th className={`${THG}`} /><th className={THG}>Pagamento</th><th className={THG}>Descrição</th>
-                <th className={THG}>Conta atual</th><th className={THG}>Banco</th><th className={THG}>Valor</th>
-              </tr>
-            </thead>
-            <tbody>
-              {itens === null && <tr><td colSpan={6} className={`${TD} text-center text-muted-foreground`}>Carregando…</td></tr>}
-              {itens?.length === 0 && <tr><td colSpan={6} className={`${TD} text-center text-muted-foreground`}>{compra ? 'Nenhuma saída do cliente disponível para vincular.' : 'Nenhuma entrada do cliente disponível para vincular.'}</td></tr>}
-              {/* OC-RECEB-PARCIAL-01 — DOIS GRUPOS: primeiro os do proprio comprador/fornecedor/frigorifico, depois os de outro
-                  favorecido (separados por um cabecalho, nao por um sufixo no fim da descricao). Descricao e conta em UMA linha com
-                  "…" e o texto inteiro no `title`; data e valor nunca cortam. */}
-              {itens && itens.length > 0 && ([true, false] as const).map(doMesmo => {
-                const grupo = itens.filter(r => r.mesmoFavorecido === doMesmo);
-                if (grupo.length === 0) return null;
-                return (
-                  <Fragment key={doMesmo ? 'mesmo' : 'outro'}>
-                    <tr data-testid={doMesmo ? 'grupo-mesmo-favorecido' : 'grupo-outro-favorecido'}>
-                      <td colSpan={6} className={`${TD} bg-muted/40 font-medium text-muted-foreground`}>
-                        {doMesmo ? `Do ${TEXTOS[lado].grupoSaldo.toLowerCase()} da operação` : 'Outro favorecido'}
-                      </td>
-                    </tr>
-                    {grupo.map(r => (
-                      <tr key={r.lancamentoId} className={`cursor-pointer ${escolhido === r.lancamentoId ? 'bg-primary/10' : 'bg-white'}`}
-                        onClick={() => setEscolhido(r.lancamentoId)} data-lancamento={r.lancamentoId}>
-                        <td className={`${TD} text-center`}>
-                          <input type="radio" aria-label={`Escolher ${r.descricao ?? r.lancamentoId}`} checked={escolhido === r.lancamentoId}
-                            onChange={() => setEscolhido(r.lancamentoId)} />
+        <Input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar por descrição, favorecido ou valor"
+          className="h-[24px] shrink-0 text-[11px]" data-testid="busca-recebimento" aria-label="Buscar" />
+        <div className={`${QUADRO_REGUA} min-h-0 flex-1`}>
+          <div className="min-h-0 flex-1 overflow-auto" data-testid="tabela-buscar-rola">
+            <table className="w-full table-fixed border-separate border-spacing-0" style={{ minWidth: LARGURA_MINIMA_BUSCAR }}>
+              <colgroup>{COLUNAS_BUSCAR.map((c, i) => <col key={i} style={c.largura ? { width: c.largura } : undefined} />)}</colgroup>
+              <thead className="sticky top-0 z-10 bg-primary">
+                <tr>{COLUNAS_BUSCAR.map((c, i) => <th key={i} className={`${TH_REGUA} ${c.num ? 'text-right' : 'text-left'}`}>{c.titulo}</th>)}</tr>
+              </thead>
+              <tbody>
+                {visiveis === null && <tr><td colSpan={nCol} className={`${TD_REGUA} text-center text-muted-foreground`}>Carregando…</td></tr>}
+                {visiveis?.length === 0 && (
+                  <tr><td colSpan={nCol} className={`${TD_REGUA} text-center text-muted-foreground`}>
+                    {busca.trim() ? 'Nada com essa busca.' : compra ? 'Nenhuma saída do cliente disponível para vincular.' : 'Nenhuma entrada do cliente disponível para vincular.'}
+                  </td></tr>
+                )}
+                {visiveis && visiveis.length > 0 && ([true, false] as const).map(doMesmo => {
+                  const grupo = visiveis.filter(r => r.mesmoFavorecido === doMesmo);
+                  if (grupo.length === 0) return null;
+                  return (
+                    <Fragment key={doMesmo ? 'mesmo' : 'outro'}>
+                      <tr data-testid={doMesmo ? 'grupo-mesmo-favorecido' : 'grupo-outro-favorecido'}>
+                        <td colSpan={nCol} className={`${TD_REGUA} bg-muted/40 font-medium text-muted-foreground`}>
+                          {doMesmo ? `Do ${TEXTOS[lado].grupoSaldo.toLowerCase()} da operação` : 'Outro favorecido'}
                         </td>
-                        <td className={`${TD} whitespace-nowrap text-center`}>{dataCurta(r.data)}</td>
-                        <td className={`${TD} max-w-0 truncate`} title={r.descricao ?? undefined}>{r.descricao ?? '—'}</td>
-                        <td className={`${TD} max-w-0 truncate`} title={rotuloDaConta(r.subcentro) ?? undefined}>{rotuloDaConta(r.subcentro) ?? '—'}</td>
-                        <td className={`${TD} whitespace-nowrap text-center ${r.semContaBancaria ? 'text-[#b45309]' : ''}`}>{r.conciliado ? 'conciliado' : (r.semContaBancaria ? 'sem conta' : (r.status ?? '—'))}</td>
-                        <td className={`${NUM} whitespace-nowrap ${compra ? COR.neg : COR.pos}`}>{formatMoeda(r.valor)}</td>
                       </tr>
-                    ))}
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table>
+                      {grupo.map(r => {
+                        const excluido = !!r.motivoExcluido;
+                        const status = r.motivoExcluido ?? (r.conciliado ? 'conciliado' : r.semContaBancaria ? 'sem conta' : (r.status ?? '—'));
+                        const conta = rotuloDaConta(r.subcentro) ?? '—';
+                        return (
+                          <tr key={r.lancamentoId} data-lancamento={r.lancamentoId} data-excluido={excluido ? '' : undefined}
+                            className={excluido ? 'text-muted-foreground' : `cursor-pointer ${escolhido === r.lancamentoId ? 'bg-primary/10' : 'bg-white'}`}
+                            onClick={() => { if (!excluido) setEscolhido(r.lancamentoId); }} title={excluido ? r.motivoExcluido ?? undefined : undefined}>
+                            <td className={`${TD_REGUA} text-center`}>
+                              <input type="radio" aria-label={`Escolher ${r.descricao ?? r.lancamentoId}`} checked={escolhido === r.lancamentoId}
+                                disabled={excluido} onChange={() => setEscolhido(r.lancamentoId)} />
+                            </td>
+                            <td className={`${TD_REGUA} whitespace-nowrap tabular-nums`}>{dataInteira(r.competencia)}</td>
+                            <td className={`${TD_REGUA} whitespace-nowrap tabular-nums`}>{dataInteira(r.vencimento)}</td>
+                            <td className={`${TD_REGUA} whitespace-nowrap tabular-nums`}>{dataInteira(r.pagamento)}</td>
+                            <td className={TD_REGUA_TEXTO} title={r.descricao ?? undefined}>{r.descricao ?? '—'}</td>
+                            <td className={TD_REGUA_TEXTO} title={r.favorecido ?? undefined}>{r.favorecido ?? '—'}</td>
+                            <td className={TD_REGUA_TEXTO} title={conta}>{conta}</td>
+                            <td className={TD_REGUA_TEXTO} title={r.contaBancaria ?? undefined}>{r.contaBancaria ?? '—'}</td>
+                            <td className={`${TD_REGUA_TEXTO} ${excluido || r.semContaBancaria ? 'text-[#b45309]' : ''}`} title={status} data-testid="status-buscar">{status}</td>
+                            <td className={`${TD_REGUA_NUM} ${excluido ? '' : compra ? COR.neg : COR.pos}`}>{formatMoeda(r.valor)}</td>
+                          </tr>
+                        );
+                      })}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
-        {faltaEscolha && <div className="text-[10px] text-destructive">{compra ? 'Escolha o pagamento.' : 'Escolha o recebimento.'}</div>}
-        <CampoMotivo id="motivo-buscar-recebimento" valor={motivo} onChange={setMotivo} falta={faltaMotivo} />
-        <DialogFooter className="items-center">
-          {erro && <span className="mr-auto text-[10px] text-destructive" role="alert">{erro}</span>}
+        <div className="h-[14px] shrink-0 text-[10px] text-destructive">{faltaEscolha ? (compra ? 'Escolha o pagamento.' : 'Escolha o recebimento.') : ''}</div>
+        <div className="shrink-0"><CampoMotivo id="motivo-buscar-recebimento" valor={motivo} onChange={setMotivo} falta={faltaMotivo} reservado /></div>
+        <DialogFooter className="shrink-0 items-center">
+          {erro && <span className="mr-auto min-w-0 truncate text-[10px] text-destructive" role="alert" title={erro}>{erro}</span>}
           <Button type="button" variant="ghost" size="sm" className={BOTAO} onClick={onFechar}>Cancelar</Button>
           <Button type="button" size="sm" className={BOTAO} disabled={api.ocupado} onClick={vincular}>Vincular</Button>
         </DialogFooter>
@@ -709,13 +766,16 @@ function DialogoBuscarRecebimento({ api, lado, onFechar }: { api: OcContaCorrent
   );
 }
 
-function CampoMotivo({ id, valor, onChange, falta }: { id: string; valor: string; onChange: (v: string) => void; falta: boolean }) {
+/** `reservado`: a linha do aviso existe sempre (14px), para nada acima dela andar quando ele aparece (o modal fixo do Buscar). */
+function CampoMotivo({ id, valor, onChange, falta, reservado = false }: { id: string; valor: string; onChange: (v: string) => void; falta: boolean; reservado?: boolean }) {
   return (
     <div>
       <label className="text-[10px] font-medium" htmlFor={id}>Motivo *</label>
       <Textarea id={id} value={valor} onChange={e => onChange(e.target.value)} rows={2}
         className={`text-[11px] ${falta ? 'border-destructive' : ''}`} />
-      {falta && <div className="text-[10px] text-destructive">Informe o motivo.</div>}
+      {reservado
+        ? <div className="h-[14px] text-[10px] text-destructive">{falta ? 'Informe o motivo.' : ''}</div>
+        : falta && <div className="text-[10px] text-destructive">Informe o motivo.</div>}
     </div>
   );
 }

@@ -52,11 +52,27 @@ const CENARIOS = [
   { nome: 'recorrencias', url: 'tela=recorrencias&barra=32', auto: true },
   { nome: 'cpr', url: 'tela=cpr', auto: true },
   { nome: 'mesclar', url: 'tela=mesclar', auto: true },
+  /* FIN-NOTA-PDF-01 — o modal da nota: nada anda quando o "Falta:" troca pelo aviso de baixo, quando a faixa "Atualizar este" aparece,
+     quando a nota e' barrada (ja' registrada, chave que nao confere) ou no pior caso de texto. Cada um contra a nota recem-aberta. */
+  { nome: 'nota-pdf', url: 'tela=nota-pdf', estados: [
+    ['fornecedor cadastrado, subcentro sugerido, "Atualizar este"', { url: 'tela=nota-pdf&v=cadastrado' }],
+    ['nota ja registrada', { url: 'tela=nota-pdf&v=registrada' }], ['chave nao confere', { url: 'tela=nota-pdf&v=diverge' }],
+    ['pior caso de texto', { url: 'tela=nota-pdf&v=longo' }],
+  ] },
   /* OC-CC-BOTAO-BUSCAR-DESLOCA-01 — os botoes da conta corrente nao andam com o motivo ("Principal já programado…") aparecendo ou
      sumindo, nem as abas com a sub-aba Despesas. So' nos tamanhos em que o modal da OC tem desenho (>= 1000). */
   ...['venda', 'abate'].map((v) => ({ nome: `oc-cc-faixa-${v}`, url: `tela=oc&v=${v}&aba=financeiro&cc=1`, minLargura: 1000, estados: [
     ['sem principal programado (sem o motivo)', { url: `tela=oc&v=${v}&aba=financeiro&cc=1&coberto=0` }],
   ] })),
+  /* OC-CORRECOES-01 C3 — o "Buscar recebimento no Financeiro": a busca e a escolha nao mexem no campo, no cabecalho nem nos botoes */
+  { nome: 'oc-cc-buscar', url: 'tela=oc-cc&v=buscar', antes: async (p) => { await p.locator('[data-testid="busca-recebimento"]').waitFor(); await espera(p); },
+    estados: [
+      ['busca com resultado', digitar('[data-testid="busca-recebimento"]', '118')],
+      ['busca sem resultado', digitar('[data-testid="busca-recebimento"]', 'zzzzzz nada')],
+      ['busca limpa', digitar('[data-testid="busca-recebimento"]', '')],
+      ['escolher um', clicar('tr[data-lancamento="m1"]')],
+      ['vincular sem motivo (aviso)', botao(/^Vincular$/)],
+    ] },
 ];
 
 /* roda NA PAGINA: o retangulo de cada elemento medido, pela identidade */

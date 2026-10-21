@@ -121,7 +121,9 @@ describe('a ligacao no modal (LancamentoV2Dialog, lido da FONTE)', () => {
     expect(modal.match(/setVincularAberto\(true\)/g)).toHaveLength(1);
   });
   it('a faixa de origem le o texto do dono, pela tela que a pessoa abre', () => {
-    expect(modal).toContain('são somente leitura ({ondeAjustarTituloOC(podeAbrirOC)}); data prevista');
+    /* OC-CORRECOES-01 C1: depois do dono, o que se ajusta aqui (em aberto) ou o porque da trava */
+    expect(modal).toContain('são somente leitura ({ondeAjustarTituloOC(podeAbrirOC)});{\' \'}');
+    expect(modal).toContain('<span data-testid="motivo-titulo-oc-travado">{motivoOCTravado}</span>');
     expect(modal).not.toContain('(ajuste na OC)');
   });
   it('o rodape recebe o atalho so com a tela — e e a ausencia dele que troca a frase', () => {

@@ -216,6 +216,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   inativo sempre; nome gravado em caixa padronizada por funcao do banco; FILIAIS tem a mesma razao social (CNPJ e cidade distinguem) e
   o CNPJ de outro ATIVO nao grava (trava adiada no banco); "Sem cadastro" so' com o real (SEM-CADASTRO-02: fornecedor escrito = coluna
   de fornecedor da planilha ou descricao de EXTRATO `extrato`/`ofx`; nunca descricao de TXT/Excel/manual); "Ultimo uso"/"Lanc." so' realizado ate' hoje.
+- Nota fiscal (FIN-NOTA-PDF-01): XML e PDF entram por UMA porta (`lerNota`) e saem na MESMA `NotaLida`; o DANFE se le^ pela posicao
+  e a chave de 44 digitos confere o lido (divergiu = nada criado); criar/atualizar pela nota usa o gravador do parcelado e a cadeia de documentos.
 - Documentos da OC (OC-DOC-VENDA-01): abate E venda usam o MESMO componente (`AbaDocumentosOC`/`DocumentoFormAbate`, pelo tipo); na
   venda a NF do produtor SOMA e contrato/NF entrada/comprovante nao; a mesma chave viva no cliente e' barrada no banco (23505, com link).
 

@@ -58,8 +58,10 @@ export interface NotaLida {
   somaDuplicatasCent: number;
   /** `pag/detPag`: o `tPag` cru (o mapa para a forma de pagamento do sistema e' de quem chama). */
   pagamentos: { tPag: string; valorCent: number }[];
-  /** `det/prod`: `quantidade` e' o `qCom` como texto (ate' 4 casas no leiaute). */
-  itens: { descricao: string; quantidade: string; unidade: string; valorCent: number }[];
+  /** `det/prod`: `quantidade` e' o `qCom` como texto (ate' 4 casas no leiaute).
+   *  FIN-NOTA-PDF-01 — `unitario` (o valor unitario escrito, em centavos) e `detalhe` (a linha de baixo do DANFE: lote, validade) so'
+   *  existem na leitura do PDF; o XML nao os preenche (o contrato dele fica como estava). */
+  itens: { descricao: string; quantidade: string; unidade: string; valorCent: number; unitarioCent?: number | null; detalhe?: string | null }[];
   protocolo: { cStat: string; numero: string } | null;
 }
 

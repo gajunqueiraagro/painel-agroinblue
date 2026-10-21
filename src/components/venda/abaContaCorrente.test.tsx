@@ -554,7 +554,7 @@ describe('OC-CC-ACOES-LINHA-02 — clique e menu "⋯" em toda linha do extrato'
     expect(par(linha({ status: 'realizado' }))).toEqual([
       ['Abrir lançamento', null],
       ['Parcelar este recebimento', 'já recebido · só se parcela o que está programado'],
-      ['Desvincular da operação', 'disponível em breve'],
+      ['Desvincular da operação', 'já recebido · para desvincular, estorne o recebimento no lançamento'],
       ['Cancelar recebimento programado', 'já recebido · para desfazer, estorne o recebimento no lançamento'],
     ]);
     /* OC-RECEB-PARCIAL-01 — UMA REGRA SO': conciliado trava os tres gestos com o MESMO motivo, que diz o proximo passo (antes o
@@ -565,11 +565,12 @@ describe('OC-CC-ACOES-LINHA-02 — clique e menu "⋯" em toda linha do extrato'
       ['Desvincular da operação', 'conciliado · desfaça a conciliação na Conferência primeiro'],
       ['Cancelar recebimento programado', 'conciliado · desfaça a conciliação na Conferência primeiro'],
     ]);
+    /* OC-CORRECOES-01 C2: em aberto, os tres gestos VALEM — com ou sem compromisso (o legado programado antes do modal tambem) */
     expect(par(linha({ status: 'programado', noSaldo: false }))).toEqual([
       ['Abrir lançamento', null],
-      ['Parcelar este recebimento', 'disponível em breve'],
-      ['Desvincular da operação', 'disponível em breve'],
-      ['Cancelar recebimento programado', 'programado antes do modal, sem compromisso na operação · ainda sem gesto de cancelar'],
+      ['Parcelar este recebimento', null],
+      ['Desvincular da operação', null],
+      ['Cancelar recebimento programado', null],
     ]);
     expect(par(linha({ lancamentoId: null }))[0]).toEqual(['Abrir lançamento', 'esta linha não tem lançamento']);
     /* so' o cancelar e' vermelho */
@@ -580,22 +581,22 @@ describe('OC-CC-ACOES-LINHA-02 — clique e menu "⋯" em toda linha do extrato'
     expect(par(linha({ status: 'realizado' }), 'compra')).toEqual([
       ['Abrir lançamento', null],
       ['Parcelar este pagamento', 'já pago · só se parcela o que está programado'],
-      ['Desvincular da operação', 'disponível em breve'],
+      ['Desvincular da operação', 'já pago · para desvincular, estorne o pagamento no lançamento'],
       ['Cancelar pagamento programado', 'já pago · para desfazer, estorne o pagamento no lançamento'],
     ]);
   });
 
-  it('ENTREGA: ir para a entrega vale; abrir so leitura e desvincular ficam apagados com o motivo', () => {
+  it('ENTREGA: ir para a entrega e abrir o lancamento valem (C2); desvincular fica apagado com o motivo', () => {
     const e = linha({ tipo: 'entrega', status: 'sem_caixa', movEntrega: -100, movRecebido: null, banco: null });
     expect(par(e)).toEqual([
       ['Ir para a entrega', null],
-      ['Abrir lançamento (só leitura)', 'disponível em breve'],
+      ['Abrir lançamento (só leitura)', null],
       ['Desvincular da operação', 'a entrega é da operação · corrija na aba Entrega'],
     ]);
     expect(par({ ...e, lancamentoId: null })[1]).toEqual(['Abrir lançamento (só leitura)', 'esta linha não tem lançamento']);
     expect(par(e, 'compra')).toEqual([
       ['Ir para a entrada', null],
-      ['Abrir lançamento (só leitura)', 'disponível em breve'],
+      ['Abrir lançamento (só leitura)', null],
       ['Desvincular da operação', 'a entrada é da operação · corrija na aba Recebimento'],
     ]);
     /* operacao fechada nao muda a entrega: ir para a entrega continua valendo */
@@ -648,6 +649,25 @@ describe('OC-CC-ACOES-LINHA-02 — clique e menu "⋯" em toda linha do extrato'
     motivo: i.querySelector('[data-testid="motivo-do-item"]')?.textContent ?? null, title: i.getAttribute('title'),
   }));
 
+  /* OC-CORRECOES-01 C2 — o legado (programado antes do modal, SEM compromisso): "Cancelar" abre o dialogo do gesto (nao o do
+     compromisso) e grava por `gestoNoTitulo` com comCompromisso=false; "Parcelar" e "Desvincular" tambem abrem o dialogo. */
+  it('LEGADO sem compromisso: cancelar/parcelar/desvincular abrem o dialogo do gesto e gravam pelo gesto do legado', async () => {
+    const c = comLanc();
+    const prog = { ...c, linhas: c.linhas.map(l => (l.tipo === 'recebimento' ? { ...l, status: 'programado' as const, noSaldo: false } : l)) };
+    const gesto = vi.fn(async () => null);
+    render(<AbaContaCorrenteOC api={api(prog, { gestoNoTitulo: gesto })} somenteLeitura={false} onAbrirLancamento={vi.fn()} onIrParaEntrega={vi.fn()}
+      cancelarProgramado={{ compromissoDe: () => null, executar: vi.fn(async () => null) }} />);
+    fireEvent.click(within(abrirMenu(linhaTr('recebimento'))).getByTestId('acao-cancelar_programado'));
+    const dlg = await screen.findByTestId('dialogo-gesto-cancelar');
+    expect(screen.queryByTestId('dialogo-cancelar-programado')).toBeNull();
+    fireEvent.change(within(dlg).getByLabelText('Motivo *'), { target: { value: 'refeito na OC nova' } });
+    fireEvent.click(within(dlg).getByTestId('confirmar-gesto'));
+    await waitFor(() => expect(gesto).toHaveBeenCalledWith('L-receb', 'cancelar', 'refeito na OC nova', null, false));
+    await waitFor(() => expect(screen.queryByTestId('dialogo-gesto-cancelar')).toBeNull());
+    fireEvent.click(within(abrirMenu(linhaTr('recebimento'))).getByTestId('acao-parcelar'));
+    expect(await screen.findByTestId('dialogo-gesto-parcelar')).toBeInTheDocument();
+  });
+
   it('TODA linha tem o "⋯"; clicar no RECEBIMENTO abre o lancamento dele (o primeiro item); clicar no "⋯" NAO abre', () => {
     const abrir = vi.fn();
     render(<AbaContaCorrenteOC api={api(comLanc())} somenteLeitura={false} onAbrirLancamento={abrir} onIrParaEntrega={vi.fn()} />);
@@ -687,13 +707,17 @@ describe('OC-CC-ACOES-LINHA-02 — clique e menu "⋯" em toda linha do extrato'
   it('item do menu que vale dispara; apagado nao; e o clique no item nao dispara o clique da linha por tabela', () => {
     const abrir = vi.fn(); const ir = vi.fn();
     render(<AbaContaCorrenteOC api={api(comLanc())} somenteLeitura={false} onAbrirLancamento={abrir} onIrParaEntrega={ir} />);
-    const m = abrirMenu(linhaTr('entrega'));
-    fireEvent.click(within(m).getByTestId('acao-abrir_leitura'));
-    fireEvent.click(within(m).getByTestId('acao-desvincular'));
+    let m = abrirMenu(linhaTr('entrega'));
+    fireEvent.click(within(m).getByTestId('acao-desvincular'));   // apagado: nao dispara
     expect(abrir).not.toHaveBeenCalled();
     expect(ir).not.toHaveBeenCalled();
     fireEvent.click(within(m).getByTestId('acao-ir_entrega'));
     expect(ir).toHaveBeenCalledTimes(1);               // uma vez: o item; a linha por baixo nao repetiu
+    /* OC-CORRECOES-01 C2: o "Abrir lançamento (só leitura)" da entrega acendeu — abre o lancamento dela, uma vez */
+    m = abrirMenu(linhaTr('entrega'));
+    fireEvent.click(within(m).getByTestId('acao-abrir_leitura'));
+    expect(abrir).toHaveBeenCalledTimes(1);
+    expect(ir).toHaveBeenCalledTimes(1);
   });
 
   it('EXPLICACAO: clicar na linha abre o dialogo; "Desfazer explicação" abre o dialogo JA no passo de remocao, e nada sai sem o motivo', async () => {
@@ -821,13 +845,13 @@ describe('OC-CC-MODAL-FINANCEIRO-01 — "Programar" abre o modal do Financeiro; 
     expect(screen.getByTestId('motivo-programar').getAttribute('title')).toBeNull();
   });
 
-  it('"Cancelar recebimento programado": com compromisso VALE; sem compromisso (programado antes do modal) fica apagado com o motivo', () => {
+  it('"Cancelar recebimento programado": VALE com e sem compromisso (C2: o legado ganhou o gesto)', () => {
     const prog = cc().linhas.find(l => l.tipo === 'recebimento');
     if (!prog) throw new Error('fixture sem recebimento');
     const l = { ...prog, status: 'programado' as const, noSaldo: false };
     const item = (tem: boolean, leitura = false) => acoesDaLinha(l, 'venda', leitura, tem).find(a => a.chave === 'cancelar_programado');
     expect(item(true)?.motivo).toBeNull();
-    expect(item(false)?.motivo).toMatch(/sem compromisso na operação/);
+    expect(item(false)?.motivo).toBeNull();
     expect(item(true, true)?.motivo).toBe(motivoSomenteLeitura('venda'));
     /* o que ja' foi recebido nao e' "programado": diz que ja' e' dinheiro e o caminho (OC-RECEB-PARCIAL-01), com ou sem compromisso */
     expect(acoesDaLinha({ ...l, status: 'realizado' }, 'venda', false, true).find(a => a.chave === 'cancelar_programado')?.motivo)

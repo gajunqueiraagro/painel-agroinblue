@@ -388,11 +388,21 @@ if (tela === 'mesclar') {
      a faixa "Falta receber …, já programado.") e o "Buscar recebimento no Financeiro" com os dois grupos (`&v=buscar`, nome longo).
      Dados SINTETICOS na forma do `oc_conta_corrente`. */
   const cc = lerContaCorrente(OC.envelopeContaCorrente());
+  /* OC-CORRECOES-01 C3 — as tres datas, favorecido, conta bancaria; do comprador tambem os que a regra exclui (apagados, com o motivo) */
+  const comum = { subcentro: 'Venda de Desmama Fêmeas', semContaBancaria: false, conciliado: false };
   const itens = [
-    { lancamentoId: 'm1', data: '2026-09-20', valor: 50000, descricao: 'Pix do comprador Exemplo da Silva', subcentro: 'Venda de Desmama Fêmeas',
-      mesmoFavorecido: true, semContaBancaria: false, status: 'realizado', conciliado: false },
-    { lancamentoId: 'o1', data: '2026-09-10', valor: 5000, descricao: 'Pix recebido de terceiro com um nome muito comprido que nao cabe na coluna',
-      subcentro: 'Venda de Desmama Fêmeas', mesmoFavorecido: false, semContaBancaria: false, status: 'realizado', conciliado: false },
+    { ...comum, lancamentoId: 'm1', data: '2026-09-20', competencia: '2026-09-03', vencimento: '2026-09-20', pagamento: '2026-09-20', valor: 50000,
+      descricao: 'Pix do comprador Exemplo da Silva', favorecido: 'Exemplo da Silva Agropecuária Ltda', contaBancaria: 'Banco do Brasil',
+      mesmoFavorecido: true, status: 'realizado', motivoExcluido: null },
+    { ...comum, lancamentoId: 'x1', data: '2026-09-30', competencia: '2026-09-03', vencimento: '2026-09-30', pagamento: null, valor: 215000,
+      descricao: 'Venda 118 Vacas - 1/3', favorecido: 'Exemplo da Silva Agropecuária Ltda', contaBancaria: 'Banco do Brasil',
+      mesmoFavorecido: true, status: 'programado', motivoExcluido: 'já está nesta operação (1/1)' },
+    { ...comum, lancamentoId: 'x2', data: '2026-10-30', competencia: '2026-09-03', vencimento: '2026-10-30', pagamento: null, valor: 1375000.55,
+      descricao: 'Venda 118 Vacas - 2/3', favorecido: 'Exemplo da Silva Agropecuária Ltda', contaBancaria: 'Cooperativa de Crédito Sicredi Exemplo',
+      mesmoFavorecido: true, status: 'programado', motivoExcluido: 'ligado a outra operação comercial' },
+    { ...comum, lancamentoId: 'o1', data: '2026-09-10', competencia: '2026-09-10', vencimento: '2026-09-10', pagamento: '2026-09-10', valor: 5000,
+      descricao: 'Pix recebido de terceiro com um nome muito comprido que nao cabe na coluna', favorecido: 'Terceiro Exemplo',
+      contaBancaria: 'Banco do Brasil', mesmoFavorecido: false, status: 'realizado', motivoExcluido: null },
   ];
   const nada = async () => null;
   const api: any = { contaCorrente: cc, loading: false, erro: null, ocupado: false, recarregar: async () => {}, sincronizarEntregas: nada,
@@ -463,6 +473,67 @@ if (tela === 'mesclar') {
     iniciais={v === 'levado' ? [{ lancamento_id: 'y1', descricao: 'Rendimento de aplicação · junho', fornecedor: 'Banco Exemplo', valor_assinado: 0.01, data_vencimento: '2025-06-30', status_transacao: 'programado' }] : []}
     onConciliado={() => {}} />);
   }
+} else if (tela === 'nota-pdf') {
+  /* FIN-NOTA-PDF-01 — "Novo lançamento · da nota fiscal" (o mock aprovado). O PDF e' SINTETICO: desenhado pelo jspdf a partir do DANFE
+     sintetico (as posicoes do real, dados de teste) e LIDO pelo caminho de verdade (`lerNota` -> pdfjs -> `notaDoDanfe`).
+     `v=` ''        nao cadastrado, sem subcentro (o "Falta:")  ·  `cadastrado` fornecedor achado + a sugestao do subcentro + "Atualizar este"
+         `registrada` a mesma nota ja' no cliente (barrada)       ·  `diverge` a chave nao confere com o numero
+         `longo`     o pior caso: razao social e produtos de 120 caracteres, 12 parcelas e 14 itens (as tabelas rolam dentro do quadro) */
+  const montarNotaPdf = async () => {
+    const { jsPDF } = await import('jspdf');
+    const { PAGINAS_DANFE_SINTETICO } = await import('@/lib/financeiro/nfe/__fixtures__/danfeSintetico');
+    const { lerNota } = await import('@/lib/financeiro/nfe/lerNota');
+    const { NotaFiscalDialog } = await import('@/components/financeiro-v2/NotaFiscalDialog');
+    const { arquivoPdfDaNota } = await import('@/components/financeiro-v2/NovoDeXmlDialog');
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: [841.89, 595.28] });
+    for (const it of PAGINAS_DANFE_SINTETICO[0]) {
+      const str = v === 'diverge' && it.str === 'Nº 000.000.937' ? 'Nº 000.000.938' : it.str;
+      doc.setFontSize(Math.max(4, it.h * 1.15));
+      doc.text(str, it.x, 595.28 - it.y);
+    }
+    const bytes: ArrayBuffer = doc.output('arraybuffer');
+    const lido: any = await lerNota(bytes);
+    if (!lido.ok) { raiz.render(<div>{lido.frase}</div>); return; }
+    if (v === 'longo') {
+      const NOME = 'COOPERATIVA AGROINDUSTRIAL SINTETICA DOS PRODUTORES RURAIS DO MATO GROSSO DO SUL E REGIAO CENTRO OESTE LTDA';
+      lido.nota.emitente.nome = NOME;
+      lido.nota.itens = Array.from({ length: 14 }, (_, i) => ({ descricao: `PRODUTO SINTETICO DE NOME COMPRIDO ${i + 1} PARA MEDIR O CORTE DA COLUNA DE PRODUTO DA TABELA`,
+        quantidade: '1234.0000', unidade: 'UN', valorCent: 99999999, unitarioCent: 8103, detalhe: 'Lote: 000/00 D.Val: 01/01/30' }));
+      lido.nota.duplicatas = Array.from({ length: 12 }, (_, i) => ({ numero: String(i + 1).padStart(3, '0'), vencimento: `20${27 + Math.floor((i + 9) / 12)}-${String(((i + 9) % 12) + 1).padStart(2, '0')}-20`, valorCent: 99999999 }));
+      lido.nota.somaDuplicatasCent = 99999999 * 12;
+      lido.nota.totais = { ...lido.nota.totais, notaCent: 99999999 * 12, descontoCent: 99999999 };
+    }
+    const forn = { id: 'agro-s', nome: 'Agro Sintetica Insumos Agropecuarios Ltda', cpf_cnpj: '11.222.333/0004-24', fazenda_id: null, ativo: true, tipo_recebimento: null } as any;
+    const fornecedores = v === 'cadastrado' || v === 'registrada' ? [forn] : [];
+    const resolucao = resolverEmitente(lido.nota.emitente, fornecedores, null);
+    const ultima = v === 'cadastrado' ? { plano_conta_id: 'pl-nut', subcentro: 'Nutrição Engorda', macro_custo: 'Custeio Produtivo', grupo_custo: 'Nutrição', centro_custo: 'Suplementação', escopo_negocio: 'pecuaria', data: '2026-08-14' } : null;
+    const p: any = proporLancamento({ nota: lido.nota, avisosDoLeitor: lido.avisos, fazendas: [{ id: 'f-pur', nome: 'Faz. Sintetica', ie: '280000002' }], emitente: resolucao,
+      favorecidoId: resolucao.propostoId, ultima });
+    const arquivo = arquivoPdfDaNota(bytes, '000.000.937.pdf');
+    const ocorrencias = v === 'registrada' ? [{ origem: 'lancamento', documentoId: 'd1', lancamentoId: 'l9', operacaoId: null, operacaoTipo: null, numero: '000.000.937',
+      descricao: 'NF 937 · compra registrada antes', data: '2026-09-15', valor: 1966.56 }] : [];
+    g.__bancoBancada = {
+      from: (t: string) => {
+        if (t === 'financeiro_fornecedores') return [{ nome_fantasia: null, inscricao_estadual: null, tipo_pessoa: 'PJ', logradouro: null, numero: null, complemento: null, bairro: null, municipio: null, uf: null, cep: null, telefone: null }];
+        if (t === 'financeiro_lancamentos_v2' && v === 'cadastrado') return [{ id: 'l-ext', data_vencimento: '2026-10-20', data_competencia: '2026-10-20',
+          descricao: 'PAGTO BOLETO AGRO SINTETICA INSUMOS — lançamento criado do extrato bancário com histórico comprido', valor: 491.64, financiamento_id: null, numero_documento: null }];
+        return [];
+      },
+      rpc: () => null,
+    };
+    const receita = async () => ({ ok: true as const, dados: { razaoSocial: v === 'longo' ? lido.nota.emitente.nome : 'AGRO SINTETICA INSUMOS AGROPECUARIOS LTDA', fantasia: '',
+      municipio: 'Campo Grande', uf: 'MS', logradouro: 'Rua das Flores', numero: '100', complemento: 'Sala 1', bairro: 'Centro', cep: '79000-000', matrizFilial: 'FILIAL' } });
+    const PLANO = [
+      { id: 'pl-nut', subcentro: 'Nutrição Engorda', centro_custo: 'Suplementação', grupo_custo: 'Nutrição', macro_custo: 'Custeio Produtivo', tipo_operacao: '2-Saídas', escopo_negocio: 'pecuaria' },
+      { id: 'pl-vet', subcentro: 'Sanidade Animal — Vacinas e Medicamentos Veterinários', centro_custo: 'Sanidade', grupo_custo: 'Custeio Pecuário', macro_custo: 'Custeio Produtivo', tipo_operacao: '2-Saídas', escopo_negocio: 'pecuaria' },
+    ] as any;
+    const CONTAS_N = [{ id: 'sic', nome_conta: 'Sicredi Lavoura', banco: 'Sicredi', fazenda_id: 'f-pur', tipo_conta: null, codigo_conta: null, nome_exibicao: 'Sicredi Lavoura', agencia: null, numero_conta: null, conta_digito: null }] as any;
+    montar(<NotaFiscalDialog open onClose={() => {}} clienteId="cli" clienteNome="Cliente Exemplo"
+      nota={{ arquivo, bytes, lido, doXml: { proposta: p.proposta, emitenteNome: lido.nota.emitente.nome, emitenteDocumento: lido.nota.emitente.documento, emitente: lido.nota.emitente, resolucao, ocorrencias, arquivo } as any }}
+      fazendas={[{ id: 'f-pur', nome: 'Faz. Sintetica' }] as any} contas={CONTAS_N} classificacoes={PLANO} fornecedores={fornecedores}
+      onCriarFornecedor={async () => null} onAbrirNoLancamento={() => {}} onAbrirRegistrada={() => {}} onCriado={() => {}} consultarReceita={receita as any} />);
+  };
+  void montarNotaPdf();
 } else if (tela === 'lancamento') {
   /* com `desc`, a edição é parcela de uma compra parcelada SEM número de contrato: o rodapé fala dela (a descrição do contrato é a longa) */
   /* ACESSOS-PERFIL-01 — a aba Auditoria: eventos de dois membros e um sem autor (com e sem `via`), nomes pela fonte única. */
