@@ -69,7 +69,7 @@ describe('OC-RECEB-PARCIAL-01 — o recebimento parcial dividido, na OC', () => 
     expect(new Set(motivos)).toEqual(new Set(['conciliado · desfaça a conciliação na Conferência primeiro']));
     const doDois = Object.fromEntries(acoesDaLinha(r2, 'venda', false, true).map(a => [a.chave, a.motivo]));
     expect(doDois.cancelar_programado).toBeNull();
-    expect(doDois.parcelar).toBe('disponível em breve');
+    expect(doDois.parcelar).toBeNull();   // OC-CORRECOES-01 C2: o parcelar acendeu
     /* nenhum item do mesmo recebimento contradiz o outro: nao ha "ja' recebido" ao lado de "programado" */
     for (const l of [r1, r2]) {
       const t = acoesDaLinha(l, 'venda', false, true).map(a => a.motivo ?? '').join(' | ');
