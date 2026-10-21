@@ -49,8 +49,8 @@ export function gerarSql(casos) {
     const aliases = f.aliases ? `${lit(JSON.stringify(f.aliases))}::jsonb` : "'[]'::jsonb";
     const dono = f.fundido_em ? `(ids->>${lit(f.fundido_em)})::uuid` : 'null';
     const quando = f.fundido_em ? 'now()' : 'null';
-    L.push(`  insert into financeiro_fornecedores (cliente_id, nome, nome_fantasia, cpf_cnpj, ativo, aliases, fundido_em_id, fundido_em)`);
-    L.push(`    values (k, ${lit(f.nome)}, ${lit(f.nome_fantasia)}, ${lit(f.cpf_cnpj)}, ${f.ativo === false ? 'false' : 'true'}, ${aliases}, ${dono}, ${quando}) returning id into v;`);
+    L.push(`  insert into financeiro_fornecedores (cliente_id, nome, nome_fantasia, cpf_cnpj, ativo, aliases, fundido_em_id, fundido_em, municipio, uf)`);
+    L.push(`    values (k, ${lit(f.nome)}, ${lit(f.nome_fantasia)}, ${lit(f.cpf_cnpj)}, ${f.ativo === false ? 'false' : 'true'}, ${aliases}, ${dono}, ${quando}, ${lit(f.municipio)}, ${lit(f.uf)}) returning id into v;`);
     L.push(`  ids := ids || jsonb_build_object(${lit(f.chave)}, v);`);
     if (f.uso) {
       L.push('  insert into financeiro_lancamentos_v2 (cliente_id, fazenda_id, tipo_operacao, sinal, valor, status_transacao, data_competencia,');
