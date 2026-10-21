@@ -9,7 +9,7 @@ import { soDigitos } from '@/lib/financeiro/nfe/formatos';
 import type { UltimaClassificacao } from '@/lib/financeiro/nfe/proporLancamento';
 import { notificarFornecedoresMudaram } from '@/hooks/useFornecedoresDoCliente';
 import { validarDocumento } from '@/lib/fornecedores/documentoFiscal';
-import { completarPeloEmitente } from '@/lib/fornecedores/cadastroDoFornecedor';
+import { completarPeloEmitente, type CampoDoEmitente } from '@/lib/fornecedores/cadastroDoFornecedor';
 import type { EmitenteNFe } from '@/lib/financeiro/nfe/tipos';
 
 /** Onde uma nota ja' esta' registrada — uma linha de `fn_documento_chave_ja_registrada`. */
@@ -122,4 +122,46 @@ export async function completarCadastroPeloXml(clienteId: string, fornecedorId: 
   if (e2) return e2.message;
   notificarFornecedoresMudaram(clienteId);
   return null;
+}
+
+/**
+ * FIN-NOTA-PDF-01 — o que a nota COMPLETARIA no cadastro do fornecedor achado (so' campo vazio; a regra e' `completarPeloEmitente`).
+ * A tela oferece "Completar …" so' quando a lista nao e' vazia. Falha de leitura = lista vazia (nada a oferecer).
+ */
+export async function camposQueOEmitenteCompleta(clienteId: string, fornecedorId: string, emitente: EmitenteNFe): Promise<CampoDoEmitente[]> {
+  const { data, error } = await supabase.from('financeiro_fornecedores')
+    .select('nome_fantasia, inscricao_estadual, tipo_pessoa, logradouro, numero, complemento, bairro, municipio, uf, cep, telefone')
+    .eq('id', fornecedorId).eq('cliente_id', clienteId).maybeSingle();
+  if (error || !data || typeof data !== 'object' || Array.isArray(data)) return [];
+  return Object.keys(completarPeloEmitente(Object.fromEntries(Object.entries(data)), emitente)).filter(ehCampoDoEmitente);
+}
+const CAMPOS_DO_EMITENTE: readonly string[] = ['nome_fantasia', 'inscricao_estadual', 'tipo_pessoa', 'logradouro', 'numero', 'complemento', 'bairro', 'municipio', 'uf', 'cep', 'telefone'];
+function ehCampoDoEmitente(c: string): c is CampoDoEmitente { return CAMPOS_DO_EMITENTE.includes(c); }
+
+/** Um lancamento ABERTO do fornecedor que pode ser o desta nota (criado antes, do extrato ou da planilha). */
+export interface LancamentoAbertoDaNota {
+  id: string; vencimento: string | null; competencia: string | null; descricao: string | null; valorCent: number;
+  financiamentoId: string | null; numeroDocumento: string | null;
+}
+
+/**
+ * FIN-NOTA-PDF-01 — o pedido do Gabriel: ATUALIZAR o lancamento que ja' existe em vez de criar outro. Os abertos (nao realizados, nao
+ * conciliados, nao cancelados, do cenario realizado — Meta nunca) do MESMO fornecedor e cliente com o valor da nota OU o de uma
+ * parcela. So' leitura; quem atualiza e' o gesto, com confirmacao.
+ */
+export async function lancamentosAbertosComValor(clienteId: string, fornecedorId: string, valoresCent: readonly number[]): Promise<LancamentoAbertoDaNota[]> {
+  const valores = [...new Set(valoresCent.filter((v) => v > 0))].map((v) => v / 100);
+  if (!valores.length) return [];
+  const { data, error } = await supabase.from('financeiro_lancamentos_v2')
+    .select('id, data_vencimento, data_competencia, descricao, valor, financiamento_id, numero_documento')
+    .eq('cliente_id', clienteId).eq('favorecido_id', fornecedorId).eq('cancelado', false).eq('cenario', 'realizado')
+    .not('status_transacao', 'in', '(realizado,conciliado)')
+    .in('valor', valores)
+    .order('data_vencimento', { ascending: true })
+    .limit(20);
+  if (error || !Array.isArray(data)) return [];
+  return data.map((l) => ({
+    id: l.id, vencimento: l.data_vencimento ?? null, competencia: l.data_competencia ?? null, descricao: l.descricao ?? null,
+    valorCent: Math.round(Math.abs(Number(l.valor)) * 100), financiamentoId: l.financiamento_id ?? null, numeroDocumento: l.numero_documento ?? null,
+  }));
 }
