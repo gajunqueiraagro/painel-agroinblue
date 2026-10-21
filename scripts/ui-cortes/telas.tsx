@@ -468,15 +468,17 @@ if (tela === 'mesclar') {
      sintetico (as posicoes do real, dados de teste) e LIDO pelo caminho de verdade (`lerNota` -> pdfjs -> `notaDoDanfe`).
      `v=` ''        nao cadastrado, sem subcentro (o "Falta:")  ·  `cadastrado` fornecedor achado + a sugestao do subcentro + "Atualizar este"
          `registrada` a mesma nota ja' no cliente (barrada)       ·  `diverge` a chave nao confere com o numero
-         `longo`     o pior caso: razao social e produtos de 120 caracteres, 12 parcelas e 14 itens (as tabelas rolam dentro do quadro) */
+         `longo`     o pior caso: razao social e produtos de 120 caracteres, 12 parcelas e 14 itens (as tabelas rolam dentro do quadro)
+         FIN-NOTA-PDF-01b: `lavoura` subcentro de lavoura sugerido (Safra e Cultura do ultimo lancamento)  ·  `semdup` a nota SEM duplicata
+         (o molde do caso de 21/10: "Criar lancamento", vencimento = emissao em ambar)  ·  `parcelar` a confirmacao do "Atualizar e parcelar" */
   const montarNotaPdf = async () => {
     const { jsPDF } = await import('jspdf');
-    const { PAGINAS_DANFE_SINTETICO } = await import('@/lib/financeiro/nfe/__fixtures__/danfeSintetico');
+    const { PAGINAS_DANFE_SINTETICO, danfeSinteticoSemDuplicata } = await import('@/lib/financeiro/nfe/__fixtures__/danfeSintetico');
     const { lerNota } = await import('@/lib/financeiro/nfe/lerNota');
     const { NotaFiscalDialog } = await import('@/components/financeiro-v2/NotaFiscalDialog');
     const { arquivoPdfDaNota } = await import('@/components/financeiro-v2/NovoDeXmlDialog');
     const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: [841.89, 595.28] });
-    for (const it of PAGINAS_DANFE_SINTETICO[0]) {
+    for (const it of (v === 'semdup' ? danfeSinteticoSemDuplicata() : PAGINAS_DANFE_SINTETICO)[0]) {
       const str = v === 'diverge' && it.str === 'Nº 000.000.937' ? 'Nº 000.000.938' : it.str;
       doc.setFontSize(Math.max(4, it.h * 1.15));
       doc.text(str, it.x, 595.28 - it.y);
@@ -494,9 +496,11 @@ if (tela === 'mesclar') {
       lido.nota.totais = { ...lido.nota.totais, notaCent: 99999999 * 12, descontoCent: 99999999 };
     }
     const forn = { id: 'agro-s', nome: 'Agro Sintetica Insumos Agropecuarios Ltda', cpf_cnpj: '11.222.333/0004-24', fazenda_id: null, ativo: true, tipo_recebimento: null } as any;
-    const fornecedores = v === 'cadastrado' || v === 'registrada' ? [forn] : [];
+    const fornecedores = ['cadastrado', 'registrada', 'lavoura', 'semdup', 'parcelar'].includes(v) ? [forn] : [];
     const resolucao = resolverEmitente(lido.nota.emitente, fornecedores, null);
-    const ultima = v === 'cadastrado' ? { plano_conta_id: 'pl-nut', subcentro: 'Nutrição Engorda', macro_custo: 'Custeio Produtivo', grupo_custo: 'Nutrição', centro_custo: 'Suplementação', escopo_negocio: 'pecuaria', data: '2026-08-14' } : null;
+    const ultima = v === 'cadastrado' || v === 'parcelar' ? { plano_conta_id: 'pl-nut', subcentro: 'Nutrição Engorda', macro_custo: 'Custeio Produtivo', grupo_custo: 'Nutrição', centro_custo: 'Suplementação', escopo_negocio: 'pecuaria', data: '2026-08-14' }
+      : v === 'lavoura' ? { plano_conta_id: 'pl-lav', subcentro: 'Insumos Lavoura — Defensivos e Fertilizantes', macro_custo: 'Custeio Produtivo', grupo_custo: 'Custeio Lavoura', centro_custo: 'Insumos', escopo_negocio: 'agricultura', data: '2026-08-14', safra_id: 's-soja', cultura: 'soja' }
+      : null;
     const p: any = proporLancamento({ nota: lido.nota, avisosDoLeitor: lido.avisos, fazendas: [{ id: 'f-pur', nome: 'Faz. Sintetica', ie: '280000002' }], emitente: resolucao,
       favorecidoId: resolucao.propostoId, ultima });
     const arquivo = arquivoPdfDaNota(bytes, '000.000.937.pdf');
@@ -505,7 +509,7 @@ if (tela === 'mesclar') {
     g.__bancoBancada = {
       from: (t: string) => {
         if (t === 'financeiro_fornecedores') return [{ nome_fantasia: null, inscricao_estadual: null, tipo_pessoa: 'PJ', logradouro: null, numero: null, complemento: null, bairro: null, municipio: null, uf: null, cep: null, telefone: null }];
-        if (t === 'financeiro_lancamentos_v2' && v === 'cadastrado') return [{ id: 'l-ext', data_vencimento: '2026-10-20', data_competencia: '2026-10-20',
+        if (t === 'financeiro_lancamentos_v2' && (v === 'cadastrado' || v === 'parcelar')) return [{ id: 'l-ext', data_vencimento: '2026-10-20', data_competencia: '2026-10-20',
           descricao: 'PAGTO BOLETO AGRO SINTETICA INSUMOS — lançamento criado do extrato bancário com histórico comprido', valor: 491.64, financiamento_id: null, numero_documento: null }];
         return [];
       },
@@ -516,12 +520,14 @@ if (tela === 'mesclar') {
     const PLANO = [
       { id: 'pl-nut', subcentro: 'Nutrição Engorda', centro_custo: 'Suplementação', grupo_custo: 'Nutrição', macro_custo: 'Custeio Produtivo', tipo_operacao: '2-Saídas', escopo_negocio: 'pecuaria' },
       { id: 'pl-vet', subcentro: 'Sanidade Animal — Vacinas e Medicamentos Veterinários', centro_custo: 'Sanidade', grupo_custo: 'Custeio Pecuário', macro_custo: 'Custeio Produtivo', tipo_operacao: '2-Saídas', escopo_negocio: 'pecuaria' },
+      { id: 'pl-lav', subcentro: 'Insumos Lavoura — Defensivos e Fertilizantes', centro_custo: 'Insumos', grupo_custo: 'Custeio Lavoura', macro_custo: 'Custeio Produtivo', tipo_operacao: '2-Saídas', escopo_negocio: 'agricultura' },
     ] as any;
+    const SAFRAS_N = [{ id: 's-soja', nome: 'Safra 26/27 Soja — Retiro Agricultura Sintético', ativa: true, codigo: '26/27-SOJ', escopo_negocio: 'agricultura' }] as any;
     const CONTAS_N = [{ id: 'sic', nome_conta: 'Sicredi Lavoura', banco: 'Sicredi', fazenda_id: 'f-pur', tipo_conta: null, codigo_conta: null, nome_exibicao: 'Sicredi Lavoura', agencia: null, numero_conta: null, conta_digito: null }] as any;
     montar(<NotaFiscalDialog open onClose={() => {}} clienteId="cli" clienteNome="Cliente Exemplo"
       nota={{ arquivo, bytes, lido, doXml: { proposta: p.proposta, emitenteNome: lido.nota.emitente.nome, emitenteDocumento: lido.nota.emitente.documento, emitente: lido.nota.emitente, resolucao, ocorrencias, arquivo } as any }}
-      fazendas={[{ id: 'f-pur', nome: 'Faz. Sintetica' }] as any} contas={CONTAS_N} classificacoes={PLANO} fornecedores={fornecedores}
-      onCriarFornecedor={async () => null} onAbrirNoLancamento={() => {}} onAbrirRegistrada={() => {}} onCriado={() => {}} consultarReceita={receita as any} />);
+      fazendas={[{ id: 'f-pur', nome: 'Faz. Sintetica' }] as any} contas={CONTAS_N} classificacoes={PLANO} safras={SAFRAS_N} fornecedores={fornecedores}
+      onCriarFornecedor={async () => null} onCriarLancamento={async () => null} onAbrirNoLancamento={() => {}} onAbrirRegistrada={() => {}} onCriado={() => {}} consultarReceita={receita as any} />);
   };
   void montarNotaPdf();
 } else if (tela === 'lancamento') {
