@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { TH_REGUA, TD_REGUA, TD_REGUA_TEXTO, TD_REGUA_NUM, QUADRO_REGUA, RODAPE_REGUA } from '@/components/ui/regua-tabela';
 import { useFinanceiroV2 } from '@/hooks/useFinanceiroV2';
 import { useRecorrencias, useOcorrenciasDoMes, useRecorrenciasAGerar, cancelarRecorrencia, type Recorrencia, type SituacaoRecorrencia } from '@/hooks/useRecorrencias';
 import {
@@ -68,12 +69,13 @@ type Direcao = 'asc' | 'desc';
 type Modo = 'mes' | 'regras';
 
 /* Cabecalho azul — o mesmo override local da lista de contratos (PR-PARC-05d item 3). */
-const TH = 'h-[19px] px-1 py-0 text-[9.5px] font-medium text-primary-foreground normal-case tracking-normal whitespace-nowrap';
+/* FORN-01b — a régua desta tela virou a da casa (`regua-tabela`): os mesmos valores, agora de um lugar só. */
+const TH = TH_REGUA;
 /* ⚠ PADRAO DE TABELA (CLAUDE.md): 10px na linha, 19px de altura, uma linha por registro. Texto corta com o inteiro no
    `title`; numero, dia e valor NUNCA cortam (`whitespace-nowrap`, sem `truncate`). */
-const TD = 'h-[19px] px-1 py-0 text-[10px] leading-none';
-const TD_TEXTO = cn(TD, 'truncate');
-const TD_NUM = cn(TD, 'text-right tabular-nums whitespace-nowrap');
+const TD = TD_REGUA;
+const TD_TEXTO = TD_REGUA_TEXTO;
+const TD_NUM = TD_REGUA_NUM;
 /* O estimado e' ambar — a cor de "ainda nao sei" da casa. Um lugar so'. */
 const AMBAR = 'text-amber-600';
 const COR_DA_SITUACAO: Record<SituacaoDoMes, string> = { certo: 'text-primary', confirmado: COR_SINAL.pos, estimado: AMBAR };
@@ -412,7 +414,7 @@ export default function V2Recorrencias() {
         /* ⚠ UM SCROLLPORT SÓ (A21): quem rola é o wrapper da tabela; o cabeçalho navy gruda nele e o rodapé "Total do mês"
            fica FORA da rolagem, com a mesma régua de colunas (`colgroup` repetido). */
         <div className="min-h-0 flex-1 px-4 pb-1">
-          <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card shadow-[0_1px_3px_0_rgb(0_0_0/0.04)]">
+          <div className={QUADRO_REGUA}>
             <div className="min-h-0 flex-1" ref={refTabela}>
               <Table density="dense" className="table-fixed" data-testid="rec-tabela"
                 wrapperClassName="h-full overflow-x-hidden overflow-y-scroll">
@@ -531,7 +533,7 @@ export default function V2Recorrencias() {
 
             {/* O RODAPÉ PRESO — "Total do mês", do dono, com o filtro e a busca aplicados. Mesma régua (`Colunas`), fora da
                 rolagem; `overflow-y-scroll` nos dois para a coluna de valor alinhar com a das linhas. */}
-            <div className="shrink-0 overflow-x-hidden overflow-y-scroll border-t bg-primary text-primary-foreground" data-testid="rec-rodape">
+            <div className={cn(RODAPE_REGUA, 'overflow-x-hidden overflow-y-scroll')} data-testid="rec-rodape">
               <table className="w-full table-fixed border-collapse">
                 <Colunas favorecido={larguraFavorecido} />
                 <tbody>
