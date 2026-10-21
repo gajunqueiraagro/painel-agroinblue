@@ -1,5 +1,5 @@
 /**
- * FORN-AVISO-BUSCA-01 (Gabriel 19/10/2026) — o aviso "N fornecedores inativos ainda têm lançamentos" de Cadastros › Fornecedores:
+ * FORN-AVISO-BUSCA-01 (Gabriel 19/10/2026) — o aviso dos inativos com lançamentos de Cadastros › Fornecedores (FORN-01b: a faixa nomeia):
  * sem busca, o total do cliente; com busca, só os inativos que batem com ela (o MESMO filtro da lista, `filtroDaBusca`), e some com 0;
  * relê ao fechar a ferramenta de mesclar. Tela montada sobre banco de mentira.
  */
@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const banco = vi.hoisted(() => ({
-  inativosComLanc: [{ favorecido_id: 'i1' }, { favorecido_id: 'i1' }, { favorecido_id: 'i2' }, { favorecido_id: 'i3' }],
+  inativosComLanc: [] as { favorecido_id: string; valor: number; financeiro_fornecedores: { nome: string } }[],
   nomes: { i1: 'Aguimar F E Cia Ltda', i2: 'Aguimar F. E. Cia Ltda', i3: 'MMM Comércio de Gas' } as Record<string, string>,
   ultimaBusca: null as { p_busca: string; p_situacao: string } | null,
 }));
@@ -64,8 +64,9 @@ vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.f
 
 import { FinV2FornecedoresTab } from './FinV2FornecedoresTab';
 
+const linha = (id: string, valor: number) => ({ favorecido_id: id, valor, financeiro_fornecedores: { nome: banco.nomes[id] } });
 beforeEach(() => {
-  banco.inativosComLanc = [{ favorecido_id: 'i1' }, { favorecido_id: 'i1' }, { favorecido_id: 'i2' }, { favorecido_id: 'i3' }];
+  banco.inativosComLanc = [linha('i1', -100), linha('i1', -100), linha('i2', -50), linha('i3', -10)];
   banco.ultimaBusca = null;
 });
 const aviso = () => screen.getByTestId('aviso-inativos-com-lancamento').textContent ?? '';
@@ -75,15 +76,22 @@ async function buscar(texto: string) {
 }
 
 describe('o aviso dos inativos com lançamento', () => {
-  it('sem busca: o total do cliente (fornecedores distintos)', async () => {
+  it('sem busca: a faixa NOMEIA o inativo de maior valor (quantos lançamentos, quanto) e diz quantos mais (FORN-01b)', async () => {
     render(<FinV2FornecedoresTab />);
-    await waitFor(() => expect(aviso()).toContain('3 fornecedores inativos ainda têm lançamentos'));
+    await waitFor(() => expect(aviso()).toBe('Aguimar F E Cia Ltda (inativo) · 2 lançamentos · R$\u00a0200,00 · e mais 2 inativos com lançamentosUnir pelo Mesclar'));
+  });
+  it('"Unir pelo Mesclar" abre a ferramenta JÁ com o inativo (quem fica, a pessoa escolhe)', async () => {
+    const fonte = readFileSync(resolve(__dirname, 'FinV2FornecedoresTab.tsx'), 'utf8');
+    expect(fonte).toContain("onClick={() => setMesclarPar({ absorver: [faixa.primeiro.id] })}>Unir pelo Mesclar</button>");
+    expect(fonte).toMatch(/<MesclarFornecedoresDialog aberto clienteId=\{clienteAtual\.id\} inicial=\{mesclarPar\}/);
+    render(<FinV2FornecedoresTab />);
+    await waitFor(() => expect(screen.getByTestId('unir-pelo-mesclar')).toBeTruthy());
   });
   it('com busca: só os que batem; some com 0 (o lugar fica)', async () => {
     render(<FinV2FornecedoresTab />);
-    await waitFor(() => expect(aviso()).toContain('3 fornecedores'));
+    await waitFor(() => expect(aviso()).toContain('e mais 2 inativos'));
     await buscar('aguimar');
-    await waitFor(() => expect(aviso()).toContain('2 fornecedores inativos'));
+    await waitFor(() => expect(aviso()).toContain('Aguimar F E Cia Ltda (inativo) · 2 lançamentos · R$\u00a0200,00 · e mais 1 inativo com lançamentos'));
     await buscar('ana ve');
     await waitFor(() => expect(aviso()).toBe(''));
     expect(screen.getByTestId('aviso-inativos-com-lancamento')).toBeTruthy();
