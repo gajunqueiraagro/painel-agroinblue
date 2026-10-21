@@ -76,6 +76,8 @@ export interface ModeloCpr {
   /** segmento "A pagar" ou "A receber": a lista é de um lado só, o saldo é sempre da conta */
   notaSegmento: string | null;
   semVencimento: BlocoSimplesDaFolha | null;
+  /** CPR-AJUSTES-20-10c — período encerrado: os vencidos em aberto do período, DEPOIS do Fim do período e fora da soma dele */
+  saemHoje: BlocoSimplesDaFolha | null;
   semanas: { semana: string; pagar: CelulaValorCpr | null; receber: CelulaValorCpr | null; saldo: CelulaValorCpr | null }[];
   porConta: { linhas: { conta: string; caixa: string; pagar: CelulaValorCpr | null; receber: CelulaValorCpr | null; saldo: CelulaValorCpr | null }[]; total: { caixa: string; pagar: CelulaValorCpr | null; receber: CelulaValorCpr | null; saldo: CelulaValorCpr | null }; nota: string } | null;
   /** o primeiro valor que não é número — a folha sai, e o aviso o nomeia */
@@ -85,7 +87,8 @@ export interface ModeloCpr {
 /** O grupo que a tela desenha (a MESMA lista da tela, na mesma ordem). */
 export interface GrupoDaTela<L> {
   /** CPR-AJUSTES-20-10: hoje é um DIA (com os vencidos dentro); 'vencidos' só existe fora de um período que contém hoje */
-  tipo: 'vencidos' | 'entre' | 'dia' | 'sem_vencimento';
+  /** CPR-AJUSTES-20-10c: 'saem_hoje' — período encerrado, os vencidos em aberto do período (depois do Fim do período) */
+  tipo: 'vencidos' | 'entre' | 'dia' | 'sem_vencimento' | 'saem_hoje';
   /** no dia, a data (AAAA-MM-DD): o título da linha "Saldo em dd/mm/aaaa" */
   chave: string;
   titulo: string; quando: string; linhas: L[];
@@ -95,6 +98,10 @@ export interface GrupoDaTela<L> {
   avisoHoje?: string;
   /** CPR-AJUSTES-20-10b — o bloco vem ANTES do Caixa inicial (os vencidos do período futuro, que o Caixa inicial já desconta) */
   antesDoCaixaInicial?: boolean;
+  /** CPR-AJUSTES-20-10c — o bloco vem DEPOIS da linha "Fim do período" e fica fora da soma dela (o grupo "Saem hoje") */
+  depoisDoFim?: boolean;
+  /** a frase curta sob o título do bloco */
+  frase?: string;
 }
 export interface LinhaDaTela {
   data_competencia?: string | null; data_vencimento?: string | null; data_pagamento?: string | null;
@@ -102,7 +109,7 @@ export interface LinhaDaTela {
 }
 export interface EntradaDoModelo<L extends LinhaDaTela> {
   clienteNome: string; fazendaNome?: string; contaNome: string; todasAsContas: boolean;
-  periodo: PeriodoCpr; segmento: 'pagar' | 'receber' | 'ambos'; incluirVencidos: boolean; emitidoEm: string;
+  periodo: PeriodoCpr; segmento: 'pagar' | 'receber' | 'ambos'; emitidoEm: string;
   serie: SerieDoSaldoCpr; grupos: GrupoDaTela<L>[];
   cartoes: {
     vencidosContamPagar: LadoCpr; vencidosContamReceber: LadoCpr; pagarNoPeriodo: LadoCpr; receberNoPeriodo: LadoCpr;
@@ -209,7 +216,12 @@ export function montarModeloCpr<L extends LinhaDaTela>(e: EntradaDoModelo<L>): M
     pagar: null, receber: null, saldo: celulaDeValor('saldo', s.inicial ? s.inicial.saldo : null), contas: [],
   });
   let semVencimento: BlocoSimplesDaFolha | null = null;
+  let saemHoje: BlocoSimplesDaFolha | null = null;
   for (const g of e.grupos) {
+    if (g.depoisDoFim || g.tipo === 'saem_hoje') {
+      saemHoje = { titulo: g.titulo, frase: g.frase ?? '', contas: g.linhas.map((l) => contaDaFolha(l, e.de)), pagar: formatMoeda(g.pagar), receber: formatMoeda(g.receber) };
+      continue;
+    }
     if (g.tipo === 'sem_vencimento') {
       semVencimento = { titulo: g.titulo, frase: 'sem data de vencimento: fora dos números e do saldo', contas: g.linhas.map((l) => contaDaFolha(l, e.de)), pagar: formatMoeda(g.pagar), receber: formatMoeda(g.receber) };
       continue;
@@ -231,7 +243,7 @@ export function montarModeloCpr<L extends LinhaDaTela>(e: EntradaDoModelo<L>): M
     });
   }
   /* CPR-AJUSTES-20-10b — o bloco dos vencidos do período FUTURO vem ANTES do Caixa inicial (que já os desconta), como na tela */
-  const nAntes = e.grupos.filter((g) => g.antesDoCaixaInicial).length;
+  const nAntes = e.grupos.filter((g) => g.antesDoCaixaInicial && !g.depoisDoFim).length;
   if (nAntes > 0) faixas.splice(nAntes, 0, ...faixas.splice(0, 1));
 
   /* o primeiro valor que não é número: a folha sai, e o aviso o nomeia (o motor recusa NaN em coordenada, não em texto) */
@@ -248,7 +260,7 @@ export function montarModeloCpr<L extends LinhaDaTela>(e: EntradaDoModelo<L>): M
     cabecalho: {
       clienteNome: e.clienteNome, fazenda: e.fazendaNome, contaNome: e.todasAsContas ? 'Todas as contas' : e.contaNome,
       periodo: `${dma(e.periodo.de)} a ${dma(e.periodo.ate)}`,
-      linha2: `${SEGMENTO[e.segmento]}${e.incluirVencidos ? '' : ' · sem listar os vencidos'}   ·   emitido em ${e.emitidoEm}`,
+      linha2: `${SEGMENTO[e.segmento]}   ·   emitido em ${e.emitidoEm}`,
     },
     numeros,
     grafico: e.grafico ?? null,
@@ -261,6 +273,7 @@ export function montarModeloCpr<L extends LinhaDaTela>(e: EntradaDoModelo<L>): M
     notaSemSaldo: s.hoje == null ? `Saldo "—": ${e.motivoSemSaldo}.` : null,
     notaSegmento: e.segmento === 'ambos' ? null : `Lista só as contas ${e.segmento === 'pagar' ? 'a pagar' : 'a receber'}; os totais de cada dia e o saldo consideram a pagar e a receber.`,
     semVencimento,
+    saemHoje,
     semanas: e.semanas.map((w) => ({ semana: `${dm(w.de)} a ${dm(w.ate)}`, pagar: celulaDeValor('pagar', w.pagar), receber: celulaDeValor('receber', w.receber), saldo: celulaDeValor('saldo', w.saldo, { destacarNegativo: true }) })),
     porConta: e.porConta ? {
       linhas: e.porConta.map((c) => ({
