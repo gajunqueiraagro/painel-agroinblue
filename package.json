@@ -13,6 +13,7 @@
     "check:ui-nativo": "node scripts/check-ui-nativo.mjs",
     "check:hooks": "node scripts/check-hooks.mjs",
     "check:ui-cortes": "node scripts/check-ui-cortes.mjs",
+    "check:ui-desloca": "node scripts/check-ui-desloca.mjs",
     "preview:proto": "node scripts/run-vite-safe.mjs preview proto",
     "test": "vitest run",
     "test:watch": "vitest",
