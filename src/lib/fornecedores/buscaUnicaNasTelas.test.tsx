@@ -41,7 +41,10 @@ describe('a busca única nas telas (fonte)', () => {
     ['components/compra/CompraMetaModalShell.tsx', /<CampoDeFornecedor/g, 1],
     ['components/venda/VendaMetaModalShell.tsx', /<CampoDeFornecedor/g, 1],
     ['components/operacao-comercial/central/CentralOperacoesComerciais.tsx', /buscarFornecedores\(contrapartesBusca, busca, 'todos'\)/g, 1],
-    ['pages/FinV2FornecedoresTab.tsx', /buscarFornecedoresNoBanco<[^>]+>\(clienteId, searchDebounced,/g, 3],
+    /* FORN-LISTA-01 — a lista vem de `fn_fornecedor_lista` (que casa pela busca única no banco); o aviso dos inativos segue na RPC da busca */
+    ['pages/FinV2FornecedoresTab.tsx', /buscarFornecedoresNoBanco<[^>]+>\(clienteId, searchDebounced,/g, 1],
+    ['pages/FinV2FornecedoresTab.tsx', /busca: searchDebounced/g, 1],
+    ['lib/fornecedores/listaDeFornecedores.ts', /rpc\('fn_fornecedor_lista'/g, 1],
     ['v2/components/mesa/MesaPareamentoModal.tsx', /buscarFornecedoresNoBanco<[^>]+>\(clienteId, buscaDebounced, 'ativos', 50\)/g, 1],
     ['lib/fornecedores/mesclarFornecedores.ts', /buscarFornecedores\(/g, 1],
     ['lib/fornecedores/fornecedorTexto.ts', /buscarPreparados<F, OpcaoDeFornecedor<F>>\(opcoes, busca, situacao\)/g, 1],
