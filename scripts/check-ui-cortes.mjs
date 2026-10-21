@@ -181,6 +181,14 @@ const CENARIOS = [
     ['compra', ['compra', 'negociacao', 'recebimento', 'documentos', 'financeiro', 'auditoria']]].flatMap(([v, abas]) => abas.map((aba) => ({
     nome: `oc-${v}-${aba}`, url: `tela=oc&v=${v}&aba=${aba === 'auditoria' && v === 'compra' ? '' : aba}`,
     antes: aba === 'auditoria' && v === 'compra' ? clicarTexto('Auditoria') : undefined }))),
+  /* OC-RECEB-PARCIAL-01 — a conta corrente da venda com o recebimento parcial dividido (Receb. 1/2 + 2/2, a faixa do que falta) e o
+     "Buscar recebimento no Financeiro" com os dois grupos e o nome longo numa linha */
+  /* ⚠ SEM A REGRA "data": a conta corrente escreve dd/mm/aa DE PROPOSITO (`dataCurta`, coluna Data de 53px na `REGUA_EXTRATO`
+     medida no modal de 1024); dd/mm/aaaa pede outra regua da tabela inteira — divida registrada no CLAUDE.md (OC-CC-DATA-INTEIRA). */
+  { nome: 'oc-cc-recebimento-parcial', url: 'tela=oc-cc', tamanhos: TAMANHOS_DO_CONSORCIO,
+    soRegras: ['corte', 'quebra', 'numero', 'sobreposicao', 'italico', 'cabecalho', 'valor', 'altura', 'rolagem', 'tabela'] },
+  { nome: 'oc-cc-buscar-recebimento', url: 'tela=oc-cc&v=buscar', tamanhos: TAMANHOS_DO_CONSORCIO,
+    soRegras: ['corte', 'quebra', 'numero', 'sobreposicao', 'italico', 'cabecalho', 'valor', 'altura', 'rolagem', 'tabela'] },
   /* UI-SEM-CORTE-02 — o consultor: o ⚑ aberto (Pendências do cliente), a Nova pendência e o Resumo dos clientes */
   { nome: 'pendencias-do-cliente', url: 'tela=pendencias', tamanhos: TAMANHOS_DO_CONSORCIO },
   { nome: 'pendencias-nova', url: 'tela=pendencias&v=nova', tamanhos: TAMANHOS_DO_CONSORCIO },

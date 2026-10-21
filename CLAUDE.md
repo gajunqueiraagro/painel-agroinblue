@@ -10634,6 +10634,48 @@ curta nas secoes de regras) e a pendencia (na FILA); o bloco inteiro vai para do
     NAO PROVADO no Windows.
   ⚠ NAO PROVADO: nada com login no app real (bancada) · o modo Ampliado (`intensivo`) esconde a barra inteira, como antes; nao ha' modo
     recolhido so' com icones.
+- ⚠ RECORRENCIAS: A SITUACAO TEM A LARGURA DAS SITUACOES COMUNS, O "GERAR" MORA NO "⋯", E A REGRA COM MES FALTANDO TEM MARCA LARANJA
+  (REC-COLUNAS-01c, Gabriel 21/10/2026, so' tela; SUBSTITUI, no REC-COLUNAS-01 e no REC-FALTA-GERAR-A-VISTA-01 commit B, o selo "falta
+  gerar · N meses", a Situacao de 116, o botao "Gerar" na linha e a coluna das acoes de 64).
+  · SELO CURTO (dono `seloFaltaGerar`, `recorrenciasDoMes.ts`): "falta gerar" (ambar) ou "mês fechado" (cinza, so' com mes fechado); o
+    numero vai no `title` ("Faltam gerar 44 meses — de 09/2026 a 04/2030 · 2 passados") e no item do "⋯". O texto do selo nunca leva
+    numero (preso por teste).
+  · REGUA (medida no Chromium com a Inter): Situacao 68 = "confirmado" 55,75 (10px) + 8 de padding + 4 ("não gerado" 54,8, "falta
+    gerar" 47,5 a 9,5px, cabecalho + seta 51,6; "mês fechado" 59,6 cabe nos 60 uteis) · acoes 24 = o "⋯" (20) + 4 ·
+    `LARGURA_DAS_FIXAS` 554 (era 642). Descricao + Favorecido ganham +88 em todo tamanho (1000 172 -> 260 · 1126 298 -> 386 · 1300 472
+    -> 560 · 1440 612 -> 700, bancada); a divisao 45/55 nao mudou.
+  · A REGRA COM MES FALTANDO SEGUE A' VISTA (REC-FALTA-GERAR-A-VISTA-01): alem do selo, 3px laranja (#d97706) na borda esquerda da linha,
+    por SOMBRA INTERNA da primeira celula (`MARCA_FALTA_GERAR`; nao ocupa largura), so' com `aGerar > 0`; `data-falta-gerar` na linha.
+  · O "GERAR" E' A PRIMEIRA OPCAO DO "⋯", em TODA linha (nunca some): "Gerar N meses que faltam" (`rotuloDoGerarNoMenu`), habilitado so'
+    com regra ativa e mes a gerar; sem mes, apagado com "· nenhum mês a gerar" (pausada: "· regra pausada: não gera"); sem a leitura do
+    que falta (erro), "Gerar lançamentos" habilitado (a previa do dialogo diz). Abre o MESMO `GerarLancamentosDialog`. ⚠ MUDA o que
+    valia desde o RECORRENCIA-GERA-A-VIGENCIA-INTEIRA-01 ("Gerar lançamentos" aceso em toda regra ativa): a regra sem mes faltando ja'
+    nao abre o dialogo pelo menu.
+  · MEDIDO (bancada, 1000x600, 1126x579, 1300x704, 1440x800): trocar mes (nov, jan, out), filtro, cartao "Falta gerar", "Todas as
+    regras" e busca — cabecalho, rodape e colunas 0,00px; linhas de 19px. Prints em ~/Downloads/rec-colunas-01c/.
+  ⚠ NAO PROVADO: nada com login no app real (bancada) · o menu aberto no navegador (o item apagado com o motivo so' por teste de fonte).
+- ⚠ TITULO DE OC RECEBIDO POR MENOS QUE O VALOR DIVIDE PELA PROPRIA OC (OC-RECEB-PARCIAL-01, Gabriel 21/10/2026). 20261028101100 +
+  20261028101110. Caso real: Santa Rita, venda 64c0e240 (50 Desmama F, R$ 150.000), Pix de 04/09 de R$ 100.000 ligado pelo bloco ao
+  titulo 8f53e3eb — ficava programado E conciliado (OC "Recebido R$ 0,00", "⋯" contraditorio, Conferencia "— ✓" + o titulo cheio solto).
+  (1) O nucleo `_fn_conc_baixa_no_vinculo` ganhou o ramo do titulo de OC com parcela de programacao: a parcela/parte/titulo ficam com o
+  ligado (realizado na data do extrato) e nasce a parcela seguinte com a falta (vencimento original), materializada pelo dono
+  (`oc_materializar_programacao`) e renumerada (`_oc_renumerar_parcelas_do_grupo`: "Receb. 1/2" e "2/2"); o titulo 2/2 leva
+  `saldo_de_id`; trilha em `financeiro_baixas_no_vinculo` + `zoo_operacao_eventos` ('dividir_recebimento_parcial'). Titulo de OC SEM
+  programacao (parte manual/negociacao/documento) RECUSA o parcial com frase pronta. A trava do fim da transacao perdeu a excecao de OC.
+  (2) Desfazer junta: 2/2 em aberto cancelada (titulo, parte e parcela), 1/2 volta; 2/2 ja' recebida recusa com frase e DETAIL.
+  (3) A promocao imediata so' promove o INTEIRO (o parcial espera o fim da transacao) — o "antes" da divisao e' o estado real e o
+  desfazer devolve o titulo a programado. (4) O 1:1 deixou de recusar o parcial de OC; o "Casar com o banco" nao reescreve o valor de
+  titulo de OC (maior recusa com frase). (5) `fn_extratos_espelhados` devolve `oc_parcela` (sistema e candidatos) e `saldo_de_id`
+  (candidatos): a Conferencia escreve "Venda 050 Desmama F · Receb. 1/2" e a falta uma vez, cinza ("Falta receber R$ X · … · em aberto").
+  · TELA: a faixa da OC diz a falta ja' programada ("Falta receber R$ X, já programado."); o "⋯" do recebimento tem UMA regra por
+    estado (conciliado trava os tres gestos com "conciliado · desfaça a conciliação na Conferência primeiro"); o "Buscar recebimento no
+    Financeiro" separa "Do comprador da operação" de "Outro favorecido", nome numa linha com "…" e `title`.
+  · `valor_total` de `zoo_operacoes_comerciais` e' 0 em TODAS as 233 OCs fora de rascunho (21/10/2026): coluna que nada mantem; a OC vive
+    de `valor_acordado` e das partes, e `oc_conta_corrente` (cards, saldo, "Falta") nao a le. Nao afeta tela.
+  · Conserto 21/10: 8f53e3eb -> 1/2 R$ 100.000 realizado 04/09 (ligado ao Pix) + 16b2e4fb 2/2 R$ 50.000 programado venc 04/09.
+  · FICA (OC-CC-DATA-INTEIRA, registrado): a conta corrente da OC escreve datas dd/mm/aa (coluna Data de 53px da `REGUA_EXTRATO`; o
+    "Buscar" idem); o gate exige dd/mm/aaaa — os cenarios `oc-cc-*` (novos na bancada) rodam sem a regra "data" ate' a regua nova.
+
 
 
 

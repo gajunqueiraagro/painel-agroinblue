@@ -22,7 +22,7 @@ import { useFinanceiroV2 } from '@/hooks/useFinanceiroV2';
 import { useRecorrencias, useOcorrenciasDoMes, useRecorrenciasAGerar, cancelarRecorrencia, type Recorrencia, type SituacaoRecorrencia } from '@/hooks/useRecorrencias';
 import {
   linhasDoMes, resumoDoMes, filtrarLinhas, totalDaLista, proporcoesDoMes, ROTULO_TIPO, ROTULO_SITUACAO_DO_MES, ROTULO_NAO_GERADO, TITULO_NAO_GERADO,
-  faltaGerarDaRegra, resumoFaltaGerar, seloFaltaGerar, tituloDoGerarNaLinha, mesesAGerar, AVISO_A_GERAR_NAO_LIDO,
+  faltaGerarDaRegra, resumoFaltaGerar, seloFaltaGerar, rotuloDoGerarNoMenu, mesesAGerar, AVISO_A_GERAR_NAO_LIDO,
   type LinhaDoMes, type FiltroDoTipo, type FiltroDaSituacao, type Fatia, type SituacaoDoMes,
 } from '@/lib/financeiro/recorrenciasDoMes';
 import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
@@ -79,6 +79,9 @@ const TD_NUM = TD_REGUA_NUM;
 /* O estimado e' ambar — a cor de "ainda nao sei" da casa. Um lugar so'. */
 const AMBAR = 'text-amber-600';
 const COR_DA_SITUACAO: Record<SituacaoDoMes, string> = { certo: 'text-primary', confirmado: COR_SINAL.pos, estimado: AMBAR };
+/* REC-COLUNAS-01c: a marca da regra com mês faltando — 3px laranja na borda esquerda, por SOMBRA INTERNA da primeira célula (não
+   ocupa espaço: nenhuma coluna muda de largura). */
+const MARCA_FALTA_GERAR = '[&>td:first-child]:shadow-[inset_3px_0_0_#d97706]';
 
 /** Centavos -> "99.999.999,99" (sem R$: a coluna e o cartao ja' dizem que e' dinheiro). */
 export const dinheiro = (centavos: number): string =>
@@ -97,11 +100,14 @@ function Valor({ centavos, entrada = false, estimado = false, className }: { cen
   );
 }
 
-/* RECORRENCIAS-COLUNAS-01 (Gabriel 17/10/2026): a Situação é UM lugar — o selo "falta gerar · N meses" quando a regra tem o que
+/* RECORRENCIAS-COLUNAS-01 (Gabriel 17/10/2026): a Situação é UM lugar — o selo do que falta gerar quando a regra tem o que
    gerar (a situação do mês vai no `title` dele), senão a situação do mês.
-   REC-COLUNAS-01 (21/10/2026): o pior selo de dois dígitos, "falta gerar · 44 meses" a 9,5px, mede 99,4px RENDERIZADO (cortava
-   0,6px nos 106 de antes) — + 8 de folga + 8 de padding = 116. */
-const LARGURA_SITUACAO = 116;
+   REC-COLUNAS-01c (Gabriel 21/10/2026): a largura é a das situações COMUNS, medidas RENDERIZADAS no Chromium com a Inter —
+   "confirmado" 55,75 (10px) · "não gerado" 54,8 · "estimado" 44,6 · "certo" 25,4 · o selo "falta gerar" 47,5 (9,5px); o
+   cabeçalho "Situação" + a seta pede 51,6 — + 8 de padding + 4 de folga = 68 (era 116, dimensionada pelo selo raro "falta
+   gerar · 44 meses"). O número de meses foi para o `title` do selo e para o item do "⋯". O selo cinza "mês fechado" (59,6)
+   cabe nos 60 úteis. */
+const LARGURA_SITUACAO = 68;
 
 /** As colunas, em px (`table-layout: fixed`). REC-COLUNAS-01 (Gabriel 21/10/2026): cada coluna curta = o MAIOR texto possível
  *  dela, cabeçalho incluído (com a seta de 12px), MEDIDO renderizado + 8 de folga + 8 de padding — Conta 107,8 ("Cartão Sicredi
@@ -124,11 +130,10 @@ const COLUNAS: ReadonlyArray<{ campo: Coluna; rotulo: string; largura: number | 
 ];
 const FATIA_FAVORECIDO = 0.55;
 /* a soma das fixas (Conta · Tipo · Dia · Forma · Previsto · Valor · Situação) + as ações, ESCRITA — a tela não soma; o teste confere. */
-/* REC-FALTA-GERAR-A-VISTA-01: o lugar do botão "Gerar" (reservado em toda linha) + o "⋯". REC-COLUNAS-01: o conteúdo é o botão
-   Gerar (35,4) + o "⋯" (20) = 55,4 + 8 de folga -> 64 (a célula não tem padding). */
-const LARGURA_GERAR = 40;
-const LARGURA_ACOES = LARGURA_GERAR + 24;
-export const LARGURA_DAS_FIXAS = 642;
+/* REC-COLUNAS-01c: a coluna das ações é só o "⋯" (20) + 4 de folga (a célula não tem padding). O "Gerar" saiu da linha e é a
+   primeira opção do menu; a regra com mês faltando segue À VISTA pelo selo e pela marca laranja da linha. */
+const LARGURA_ACOES = 24;
+export const LARGURA_DAS_FIXAS = 554;
 
 export default function V2Recorrencias() {
   const { recorrencias, loading, recarregar, clienteId } = useRecorrencias();
@@ -444,6 +449,12 @@ export default function V2Recorrencias() {
                     const entrada = r.valorBase > 0;
                     const falta = faltaGerarDaRegra(aGerar, r.id);
                     const selo = seloFaltaGerar(falta);
+                    /* REC-FALTA-GERAR-A-VISTA-01 (Gabriel 11/10): a regra com mês faltando aparece SEM abrir nada — o selo e,
+                       desde o REC-COLUNAS-01c, a marca laranja de 3px na borda esquerda da linha. */
+                    const temMesAGerar = (falta?.aGerar ?? 0) > 0;
+                    const podeGerar = r.ativo && (temMesAGerar || erroAGerar);
+                    const rotuloDoGerar = falta && temMesAGerar ? rotuloDoGerarNoMenu(falta) : erroAGerar ? 'Gerar lançamentos' : 'Gerar meses que faltam';
+                    const motivoSemGerar = !r.ativo ? 'regra pausada: não gera' : 'nenhum mês a gerar';
                     /* ⚠ O QUE SAIU DA LISTA MORA AQUI: periodicidade, próxima competência e a situação da REGRA. */
                     const tituloDescricao = `${r.descricao} · mensal, dia ${r.diaVencimento} · próxima: ${r.proximaCompetencia ? mesBr(r.proximaCompetencia) : '—'} · regra: ${rotuloSituacao(r)}${r.gerados > 0 ? ` · ${r.gerados} geradas` : ''}${r.folha ? ' · folha de pagamento' : ''}`;
                     return (
@@ -453,7 +464,9 @@ export default function V2Recorrencias() {
                         tabIndex={0}
                         onClick={() => setEditando(r)}
                         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); setEditando(r); } }}
-                        className={cn('h-[19px] cursor-pointer hover:bg-muted/40', r.situacao === 'cancelada' && 'opacity-55')}>
+                        data-falta-gerar={temMesAGerar ? '' : undefined}
+                        className={cn('h-[19px] cursor-pointer hover:bg-muted/40', r.situacao === 'cancelada' && 'opacity-55',
+                          temMesAGerar && MARCA_FALTA_GERAR)}>
                         {/* REC-COLUNAS-01: o negrito na própria célula — num <span> dentro dela o texto passava da caixa sem o "…" visível ser dele */}
                         <TableCell className={cn(TD_TEXTO, 'font-semibold')} title={tituloDescricao}>{r.descricao}</TableCell>
                         <TableCell className={TD_TEXTO} title={favorecido}>{favorecido}</TableCell>
@@ -484,17 +497,6 @@ export default function V2Recorrencias() {
                         <TableCell className={cn(TD, 'px-0 text-right select-none')}
                           onClick={e => e.stopPropagation()}>
                           <span className="flex items-center justify-end">
-                          {/* GERAR NA LINHA — lugar RESERVADO em toda linha (vazio sem nada a gerar); o mesmo diálogo do "⋯". */}
-                          <span className="flex shrink-0 justify-center" style={{ width: LARGURA_GERAR }} data-testid="rec-lugar-do-gerar"
-                            aria-hidden={falta && falta.aGerar > 0 && r.ativo ? undefined : true}>
-                            {falta && falta.aGerar > 0 && r.ativo && (
-                              <button type="button" data-testid="rec-gerar-na-linha" title={tituloDoGerarNaLinha(falta)}
-                                onClick={() => setGerando(r)}
-                                className="h-[16px] rounded border border-amber-500/60 px-1 text-[9.5px] leading-none text-amber-700 hover:bg-amber-50">
-                                Gerar
-                              </button>
-                            )}
-                          </span>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="sm" className="h-[17px] w-5 p-0"
@@ -503,17 +505,18 @@ export default function V2Recorrencias() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                              {/* REC-COLUNAS-01c: o Gerar é a PRIMEIRA opção — "Gerar N meses que faltam", habilitada só quando
+                                  o banco diz que falta gerar; senão fica APAGADA com o motivo (nunca some). Sem a leitura do que
+                                  falta (erro), fica "Gerar lançamentos" habilitado: a prévia do diálogo diz. */}
+                              <DropdownMenuItem data-testid="rec-menu-gerar" disabled={!podeGerar}
+                                title={podeGerar ? undefined : motivoSemGerar}
+                                onClick={() => { if (podeGerar) setGerando(r); }}>
+                                <Play className="mr-2 h-3 w-3" /> {rotuloDoGerar}
+                                {!podeGerar && <span className="ml-1 opacity-80">· {motivoSemGerar}</span>}
+                              </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => setEditando(r)}>
                                 <Pencil className="mr-2 h-3 w-3" /> Editar
                               </DropdownMenuItem>
-                              {/* ⚠ GERAR EM TODA REGRA ATIVA, a "gerada até o fim" inclusive: a competência PASSADA sem lançamento
-                                  (vigência levada para trás) é preenchida pelo Gerar — RECORRENCIA-GERA-A-VIGENCIA-INTEIRA-01.
-                                  Sem nada a gerar, a prévia diz. Cancelada não gera (a RPC recusa). */}
-                              {r.ativo && (
-                                <DropdownMenuItem onClick={() => setGerando(r)}>
-                                  <Play className="mr-2 h-3 w-3" /> Gerar lançamentos
-                                </DropdownMenuItem>
-                              )}
                               {r.ativo && (
                                 <DropdownMenuItem className="text-destructive" onClick={() => setCancelando(r)}>
                                   <Ban className="mr-2 h-3 w-3" /> Cancelar

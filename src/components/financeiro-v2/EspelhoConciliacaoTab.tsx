@@ -51,7 +51,7 @@ import { SugestoesCasarModal } from '@/components/financeiro-v2/SugestoesCasarMo
    já importava daqui (o Extrato da planilha, os testes) não mudar. */
 import {
   montarMesa, sinalDoAplicado, ordenar,
-  type EspSis, type EspCandidato, type EspelhadosReais, type FilhaConf,
+  type EspSis, type EspCandidato, type EspelhadosReais, type FilhaConf, descricaoComParcela, fraseDaFalta,
 } from '@/lib/conciliacao/mesaDoDia';
 import { useResumoMes, useReleDonoAoMudarLancamentos } from '@/hooks/useResumoConciliacao';
 import { fraseDoRetido, saldosDaLinha, TIPO_TRANSFERENCIA_INTERNA, type LinhaResumo, type LinhaSistemaDono } from '@/lib/conciliacao/resumoDoDono';
@@ -652,12 +652,17 @@ function LinhaCandidato({ c, marcado, onMarcar, onAbrir, falta = null }: {
 }) {
   const parcial = c.ja_conciliado && falta != null;
   const casavel = !c.ja_conciliado || parcial;
+  /* OC-RECEB-PARCIAL-01 — A FALTA de um vinculo parcial (o "Receb. 2/2" que sobrou): UMA linha, cinza, dizendo o que e'. Segue
+     casavel (e' o que o proximo deposito paga) e, como todo candidato, fora do subtotal do dia. */
+  const eFalta = !!c.saldo_de_id && !c.ja_conciliado;
+  const nome = descricaoComParcela(c.descricao, c.oc_parcela);
   const { isOver, setNodeRef } = useDroppable({ id: `lan:${c.lancamento_id}`, disabled: !casavel });
   const doc = c.numero_documento ? [c.tipo_documento, c.numero_documento].filter(Boolean).join(' ') : null;
   const fornecedorDiferente = c.fornecedor && c.fornecedor !== c.descricao ? c.fornecedor : null;
   /* O `title` continua dizendo TUDO numa frase — é o que o hover mostra quando o texto trunca. */
   const titulo = [
-    `${fmtData(c.data_vencimento)} venc.`, c.descricao || c.fornecedor, fornecedorDiferente && c.descricao ? fornecedorDiferente : null,
+    eFalta ? fraseDaFalta(c) : null,
+    `${fmtData(c.data_vencimento)} venc.`, nome || c.fornecedor, fornecedorDiferente && c.descricao ? fornecedorDiferente : null,
     c.subcentro, STATUS_FILTRO_LABEL[(c.status_transacao ?? '').toLowerCase()] ?? c.status_transacao,
     c.vencido ? 'vencido' : null, c.sem_conta ? 'sem conta' : null,
     c.ja_conciliado ? 'já vinculado' : null, doc,
@@ -665,6 +670,7 @@ function LinhaCandidato({ c, marcado, onMarcar, onAbrir, falta = null }: {
   return (
     <tr ref={setNodeRef} className={cn(H18, 'border-b border-border/50',
       c.ja_conciliado && !parcial && 'opacity-60',
+      eFalta && 'text-muted-foreground',
       marcado && 'bg-amber-500/10',
       isOver && 'bg-emerald-500/10 outline-dashed outline-2 outline-emerald-500')}>
       <td /><td /><td /><td />
@@ -675,7 +681,7 @@ function LinhaCandidato({ c, marcado, onMarcar, onAbrir, falta = null }: {
             onChange={onMarcar} aria-label="Marcar candidato" />
         )}
       </td>
-      <td className={cn(CEL, 'text-left font-medium tabular-nums', corVal(c.valor_assinado))}>{fmtBRL(c.valor_assinado)}</td>
+      <td className={cn(CEL, 'text-left font-medium tabular-nums', eFalta ? 'text-muted-foreground' : corVal(c.valor_assinado))}>{fmtBRL(c.valor_assinado)}</td>
       <CelDataSistema data={c.data_vencimento} vencido={c.vencido} rotulo="vencimento" />
       {/* ⚠ O STATUS ERA A PRIMEIRA COISA A SUMIR — PR-ESPELHO-CANDIDATOS-POR-DATA-05, e é ele que
           o operador vem ler. A célula inteira era uma linha de texto corrido dentro de um
@@ -698,12 +704,16 @@ function LinhaCandidato({ c, marcado, onMarcar, onAbrir, falta = null }: {
       <td className={cn(CEL, 'max-w-0')} title={titulo}>
         <span className="flex items-center gap-1">
           <span className="min-w-0 flex-1 truncate">
-            <span className="font-medium">{c.descricao || c.fornecedor || '—'}</span>
-            <span className="text-muted-foreground">
-              {fornecedorDiferente && c.descricao && <>{' · '}{fornecedorDiferente}</>}
-              {c.subcentro && <>{' · '}{c.subcentro}</>}
-              {doc && <>{' · '}{doc}</>}
-            </span>
+            {eFalta
+              ? <span className="font-medium" data-testid="linha-falta">{fraseDaFalta(c)}</span>
+              : <span className="font-medium">{nome || c.fornecedor || '—'}</span>}
+            {!eFalta && (
+              <span className="text-muted-foreground">
+                {fornecedorDiferente && c.descricao && <>{' · '}{fornecedorDiferente}</>}
+                {c.subcentro && <>{' · '}{c.subcentro}</>}
+                {doc && <>{' · '}{doc}</>}
+              </span>
+            )}
           </span>
           {c.sem_conta && <span className="shrink-0 rounded bg-destructive/10 px-1 font-medium text-destructive">sem conta</span>}
           {parcial && falta != null && <ChipParcial falta={falta} />}
@@ -734,7 +744,7 @@ function ChipParcial({ falta }: { falta: number }) {
 /** O texto inteiro do lançamento para o `title` — é o que o hover mostra quando a célula trunca. */
 function tituloLancamento(s: EspSis | undefined) {
   if (!s) return undefined;
-  return [s.descricao, s.fornecedor, s.subcentro].filter(Boolean).join(' · ') || undefined;
+  return [descricaoComParcela(s.descricao, s.oc_parcela), s.fornecedor, s.subcentro].filter(Boolean).join(' · ') || undefined;
 }
 
 /** Descrição + fornecedor (+ competência quando difere, + origem quando sem par), UMA linha. */
@@ -747,7 +757,8 @@ function textoLancamento(s: EspSis | undefined, mesDoRecorte: string, semPar = f
     <>
       {/* ⚠ 10px COMO TUDO — PR-CONC-CONFERENCIA-MODAL-01: a descrição era 11px e o resto 10; agora a
           tabela tem UMA fonte, e a hierarquia fica só no peso (descrição `font-medium`). */}
-      <span className="font-medium">{s.descricao ?? '—'}</span>
+      {/* OC-RECEB-PARCIAL-01: a parcela da OC no nome ("Venda 050 Desmama F · Receb. 1/2") */}
+      <span className="font-medium">{descricaoComParcela(s.descricao, s.oc_parcela) ?? '—'}</span>
       {/* ⚠ SEM `text-muted-foreground` — PR-ESPELHO-CONFERENCIA-FONTE-07. O fornecedor e a
           competência são o que o operador LÊ para ter certeza de que este lançamento é o par
           daquele movimento do banco; em cinza claro a 10px eles viravam contexto de fundo, e

@@ -20,6 +20,8 @@ export interface EspSis {
   fornecedor?: string | null;
   origem_lancamento?: string | null;
   competencia?: string | null;
+  /** OC-RECEB-PARCIAL-01 — '1/2', '2/2': a parcela da OC, so' quando ha mais de uma (`fn_extratos_espelhados`). */
+  oc_parcela?: string | null;
 }
 /**
  * UM CANDIDATO DO SISTEMA — PR-ESPELHO-CANDIDATOS-FRONT-01 (Etapa 1 do Espelho evoluído).
@@ -51,6 +53,29 @@ export interface EspCandidato {
   vencido: boolean;
   ja_conciliado: boolean;
   sem_conta: boolean;
+  /** OC-RECEB-PARCIAL-01 — a FALTA que nasceu de um vinculo parcial (o original e' este id): a tela a escreve uma vez, em cinza. */
+  saldo_de_id?: string | null;
+  /** OC-RECEB-PARCIAL-01 — '1/2', '2/2': a parcela da OC, so' quando ha mais de uma. */
+  oc_parcela?: string | null;
+}
+
+/**
+ * A DESCRICAO COM A PARCELA DA OC — OC-RECEB-PARCIAL-01. Toda parcela de um recebimento de OC tem a MESMA descricao
+ * ("Venda 050 Desmama F · Recebimento"); dividida, a Conferencia diz qual: "Venda 050 Desmama F · Receb. 1/2" (pagamento:
+ * "Pgto. 1/2"). Sem parcela (ou uma so'), a descricao como veio.
+ */
+export function descricaoComParcela(descricao: string | null | undefined, ocParcela: string | null | undefined): string | null {
+  if (!descricao || !ocParcela) return descricao ?? null;
+  const pagamento = / · Pagamento$/.test(descricao);
+  const base = descricao.replace(/ · (Recebimento|Pagamento)$/, '');
+  return `${base} · ${pagamento ? 'Pgto.' : 'Receb.'} ${ocParcela}`;
+}
+
+/** "Falta receber R$ 50.000,00 · Venda 050 Desmama F · em aberto" — a linha da falta de um vinculo parcial (uma vez, em cinza). */
+export function fraseDaFalta(c: Pick<EspCandidato, 'valor_assinado' | 'descricao' | 'fornecedor'>): string {
+  const v = Math.abs(c.valor_assinado).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const base = (c.descricao ?? c.fornecedor ?? '').replace(/ · (Recebimento|Pagamento)$/, '');
+  return `Falta ${c.valor_assinado >= 0 ? 'receber' : 'pagar'} R$ ${v}${base ? ` · ${base}` : ''} · em aberto`;
 }
 export interface EspVinculo {
   extrato_id: string; lancamento_id: string; valor_aplicado: number;

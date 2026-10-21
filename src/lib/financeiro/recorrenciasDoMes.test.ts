@@ -5,7 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   competenciaQueVenceNoMes, filtrarLinhas, linhasDoMes, proporcoesDoMes, resumoDoMes, totalDaLista,
-  faltaGerarDaRegra, lerAGerar, resumoFaltaGerar, seloFaltaGerar, tituloDoGerarNaLinha, SEM_A_GERAR,
+  faltaGerarDaRegra, lerAGerar, resumoFaltaGerar, seloFaltaGerar, rotuloDoGerarNoMenu, SEM_A_GERAR,
   type OcorrenciaDoMes, type RegraDoMes,
 } from './recorrenciasDoMes';
 
@@ -207,14 +207,17 @@ describe('o que falta gerar (a resposta de fn_recorrencias_a_gerar)', () => {
     expect(resumoFaltaGerar(mapa ?? SEM_A_GERAR)).toEqual({ regras: 2, meses: 4 });
     expect(resumoFaltaGerar(SEM_A_GERAR)).toEqual({ regras: 0, meses: 0 });
   });
-  it('o selo: "falta gerar · N meses" em âmbar, com passados e o intervalo no title; só fechado, cinza; nada, nulo', () => {
+  it('o selo é CURTO ("falta gerar" / "mês fechado") e o número de meses vai no title (REC-COLUNAS-01c)', () => {
     const r = (id: string) => seloFaltaGerar(faltaGerarDaRegra(mapa ?? SEM_A_GERAR, id));
-    expect(r('r1')).toEqual({ texto: 'falta gerar · 3 meses', tom: 'ambar', titulo: '3 meses · 2 passados · de 2026-08 a 2026-12 · gerar pela linha' });
-    expect(r('r2')).toEqual({ texto: 'falta gerar · 1 mês', tom: 'ambar', titulo: '1 mês · 1 passado · em 2026-08 · 1 em mês fechado · gerar pela linha' });
-    expect(r('r3')).toMatchObject({ texto: '2 em mês fechado', tom: 'cinza' });
+    expect(r('r1')).toEqual({ texto: 'falta gerar', tom: 'ambar', titulo: 'Faltam gerar 3 meses — de 08/2026 a 12/2026 · 2 passados' });
+    expect(r('r2')).toEqual({ texto: 'falta gerar', tom: 'ambar', titulo: 'Falta gerar 1 mês — em 08/2026 · 1 passado · 1 em mês fechado' });
+    expect(r('r3')).toMatchObject({ texto: 'mês fechado', tom: 'cinza' });
+    expect(r('r3')?.titulo).toMatch(/^2 meses em mês fechado: /);
     expect(r('limpa')).toBeNull();
-    expect(seloFaltaGerar({ aGerar: 15, fechados: 0, passados: 0, primeira: '2026-10', ultima: '2027-12' })?.titulo).toBe('15 meses · de 2026-10 a 2027-12 · gerar pela linha');
-    expect(tituloDoGerarNaLinha({ aGerar: 1, fechados: 0, passados: 1, primeira: '2026-08', ultima: '2026-08' })).toBe('Gerar o mês que falta');
-    expect(tituloDoGerarNaLinha({ aGerar: 3, fechados: 0, passados: 2, primeira: '2026-08', ultima: '2026-12' })).toBe('Gerar os 3 meses que faltam');
+    expect(seloFaltaGerar({ aGerar: 44, fechados: 0, passados: 0, primeira: '2026-09', ultima: '2030-04' })?.titulo).toBe('Faltam gerar 44 meses — de 09/2026 a 04/2030');
+    /* o texto do selo nunca leva número: é o que deixa a coluna Situação na largura das situações comuns */
+    for (const id of ['r1', 'r2', 'r3']) expect(r(id)?.texto).not.toMatch(/\d/);
+    expect(rotuloDoGerarNoMenu({ aGerar: 1, fechados: 0, passados: 1, primeira: '2026-08', ultima: '2026-08' })).toBe('Gerar 1 mês que falta');
+    expect(rotuloDoGerarNoMenu({ aGerar: 44, fechados: 0, passados: 2, primeira: '2026-09', ultima: '2030-04' })).toBe('Gerar 44 meses que faltam');
   });
 });
