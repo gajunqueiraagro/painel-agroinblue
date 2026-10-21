@@ -10519,3 +10519,11 @@ curta nas secoes de regras) e a pendencia (na FILA); o bloco inteiro vai para do
   · GUARDA DE CLIENTE no `oc_desfazer_compromisso` (20261028100810): a 100800 o recriou SECURITY DEFINER sem guarda propria (os donos
     encadeados checavam; a simulacao lia a operacao antes) e o `guardaDeClienteNasMigrations.test.ts` acusou; a funcao foi
     redefinida inteira com `_fn_exigir_tenant_das_linhas` pelo cliente da operacao (service_role passa, como nos donos). Prova E5.
+- ⚠ OC-DESFAZER-PREVISTO-01c — REGISTRADO, NAO FEITO (Gabriel, 21/10/2026): o "Desfazer" da aba Financeiro da OC (`AbaFinanceiroOC`)
+  e o "Estornar lancamento" da linha ganham a MESMA confirmacao do agendado do 01b (simular antes, bloco "sera cancelado junto", faixa
+  ambar, a caixa "Confirmo o cancelamento do lancamento agendado", o banco exigindo `p_confirmar_agendado`). Hoje o primeiro so' mostra
+  a recusa do banco e o segundo estorna agendado sem perguntar.
+- FIXTURES-VENC-01 (21/10/2026): `forn_cadastro_02_test.sql` e `forn_inativar_trava_01_test.sql` caiam na trava
+  `ck_lancamento_v2_vencimento_vivo` do CRIAR-DO-EXTRATO-01 — os lancamentos VIVOS de teste ganharam `data_vencimento` (a trava nao
+  mudou; o cancelado segue sem data, como a trava permite). O C4 do cadastro_02 contava 4 policies; desde o ACESSOS-01
+  (20261027120600) sao 3 `_tenant` so' para authenticated e sem DELETE — a asercao agora confere exatamente isso. Os dois OK no vivo.
