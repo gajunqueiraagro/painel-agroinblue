@@ -10751,3 +10751,14 @@ curta nas secoes de regras) e a pendencia (na FILA); o bloco inteiro vai para do
     750/814 = divida REC-COLUNAS-01b); com `&barra=32` a mesma bancada serve a medida da regua e o `check:ui-desloca`.
   ⚠ NAO PROVADO: nada com login no app real — regua, linhas que cabem e prints sao da bancada (componentes reais, barra de 32px da
     `BarraSecao`).
+
+- GATE DE TELA COMPLETO COM A REGRA DE CORTE NOVA (FORN-01b, 21/10/2026, a vez do Code 1): em PRIMEIRO PLANO, por grupos de prefixo
+  (`--so`, cada chamada < 9 min): mesclar 4 · fornecedor 14 · financeiro 3 · contrato 9 · lancamento 16 · cpr 7 · recorrencias 1 ·
+  barra 2 · acessos 4 · oc 24 · consorcio 12 · criar 6 · cadastro 17 · campos 1 · pendencias 3 · casar 6 = 129 telas, 0 achados;
+  `check:ui-desloca` 5 telas, 264 trocas, nada se desloca. Os grupos cobrem todos os prefixos dos nomes de cenario (o `fornecedor`
+  pega `fornecedores-*` e `fornecedor-cadastro-*`). O mais lento: cadastro (~6 min).
+- ⚠ LEDGER DO FORN-01b ALINHADO (21/10/2026): a migration `20261028110000_forn_01b_lista_e_sem_cadastro.sql` tinha entrado no ledger do proto
+  como `20261021110700` (o `apply_migration` grava o timestamp do dia). Corrigido pela regra "LEDGER = ARQUIVO": UPDATE de `version`
+  guardado por nome + md5 dos statements + "a versao nova nao existe"; md5 do ledger `b1238fd86fdc43950a9c95d450fbbcd0` = md5 do arquivo
+  sem o `\n` final (o ledger guarda o texto sem ele). COMO EVITAR: aplicar SEMPRE pelo nome do arquivo — logo depois do `apply_migration`,
+  no MESMO passo, o UPDATE da versao para o numero do arquivo e a conferencia md5(arquivo sem `\n` final) = md5(statements), antes do commit.
