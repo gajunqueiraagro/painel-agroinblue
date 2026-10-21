@@ -10385,3 +10385,36 @@ curta nas secoes de regras) e a pendencia (na FILA); o bloco inteiro vai para do
   encerrado pelo dono). Mutacoes mortas: somar os vencidos de volta no rodape (cai o invariante do futuro por exatamente 160,83) e o
   rodape sem o realizado (caem os dois do periodo com hoje).
   ⚠ NAO PROVADO: com login no app real · a Vera aberta na tela depois da publicacao.
+- ⚠ A ABA "SEM CADASTRO" DE CADASTROS › FORNECEDORES TEM UM DONO NO BANCO, LIGA TODOS OS LANCAMENTOS DO TEXTO E SE DESFAZ
+  (FORN-SEM-CADASTRO-01, Gabriel, mock de 19/10/2026; noite de 20/10/2026; migration `supabase/migrations/20261027204700_forn_sem_cadastro_01.sql`,
+  md5 do arquivo 395e675c248095e22a266c8b9f1a50e9 — APLICADA no proto em 20/10/2026, ledger = arquivo). SUBSTITUI a aba "Pendentes" e os botoes
+  "Criar" / "Vincular".
+  · FASE 0, MEDIDO: a aba antiga agrupava pela DESCRICAO do lancamento (o lancamento nao guarda texto de fornecedor: nao ha' coluna; o
+    importador antigo cria o cadastro na hora), lia pela tela ate' 1.000 linhas SEM filtrar cancelados, sugeria comparando com a pagina da
+    lista, ligava so' os 50 primeiros ids do grupo por UPDATE direto e o "Criar" gravava cadastro com o nome da descricao. Desde 19/10 so' a
+    Vera usou o "Criar" (19/10 11:25: 2 cadastros, 12 e 42 lancamentos ligados — TODOS CANCELADOS; um deles depois mesclado). Nada desfeito.
+  · O TEXTO DO GRUPO: o "Fornecedor" da planilha do Enriquecer casada com o lancamento (`excel_fornecedor`, staging mais recente) — origem
+    'planilha' —, senao a descricao — origem 'descricao'; normalizacao = a da busca unica. Entram: vivos, sem fornecedor, fora transferencia,
+    fora o que e' de contrato (`financiamento_id`) e fora titulo com parte viva de OC.
+  · SUGESTAO (do mesmo lado do rateio "Pec.3M-", so' ativo e nao mesclado): 'ja_ligado' (o mesmo texto ja' ligado em outros lancamentos: o
+    mais frequente) > 'nome_igual' (razao social, fantasia ou apelido) > 'parecido' (ESPELHO DECLARADO do criterio do FORN-MESCLAR-02d em
+    `_fn_fornecedor_parecido` / `_fn_fornecedor_chave_comparavel` / `_fn_fornecedor_palavras_sig`: quem mexer num confere o outro).
+  · DONOS: `fn_fornecedor_sem_cadastro(cliente)` (leitura; 5 ms a 1,5 s por cliente, NJ o pior) · `fn_fornecedor_sem_cadastro_ligar(cliente,
+    chave, rateio, fornecedor, criado, simular DEFAULT true)` (liga TODOS os lancamentos do texto sob `app.propagando_plano` — nao vira
+    "editado manualmente" —; o texto vira apelido de busca; trilha em `fornecedor_sem_cadastro_operacoes` com o antes de cada lancamento;
+    simulacao = gravacao 'SCSIM') · `fn_fornecedor_sem_cadastro_desfazer(operacao, motivo, inativar_criado, simular)` (so' os que ainda
+    apontam para o cadastro da operacao voltam; o apelido sai; cadastro criado ali e sem uso sai de uso pelo dono `fn_fornecedor_excluir`)
+    · `fn_fornecedor_sem_cadastro_recentes(cliente)`. Rateio misto recusa com a frase. O texto do lancamento nunca e' apagado.
+  · TELA: `FornecedoresSemCadastro.tsx` + `src/lib/fornecedores/semCadastro.ts` (leitor sem cast, filtros, chamadas). Contador laranja na
+    aba; explicacao do mock; busca + Todos | Com sugestao | Sem sugestao; tabela 11px, linha 26, cabecalho navy e Total presos; ▸ abre os
+    lancamentos (3 + "Ver os N"); "Ligar a" = o seletor da casa (`FavorecidoSelect`, busca unica) com a sugestao escolhida e a etiqueta;
+    "+ Criar cadastro "<texto>"…" abre o `FornecedorFormDialog` (props novas, opcionais: `nomeInicial`, `onCriado`) e SO' depois de salvo
+    liga, marcando o criado. Ligada: verde "✓ Ligado a X" + Desfazer (criado e sem uso pergunta se tira de uso). Abaixo de 900px de janela
+    a coluna "Último" sai. Gate: `fornecedores-sem-cadastro` e `-aberta` nos sete tamanhos do contrato.
+  Testes: `supabase/tests/forn_sem_cadastro_01_test.sql` (S1–S7) OK no vivo; 4 mutacoes de banco mortas (sem rateio, desfazer sem tirar o
+  apelido, base com cancelados, simular gravando). `fornecedoresSemCadastro.test.tsx` 5; 4 mutacoes de tela mortas.
+  ⚠ ESCOLHAS DA NOITE, sem perguntar (conservadoras): o texto e' a descricao quando nao ha' planilha (nao ha' texto de fornecedor gravado);
+    o Desfazer grava o motivo fixo "desfeito na aba Sem cadastro"; reativar um inativo pelo modal nao liga (so' o cadastro novo); a linha
+    ligada pelo cadastro criado mostra o texto como nome.
+  ⚠ NAO PROVADO: nada com login no app real (bancada) · ligar e desfazer pela tela de verdade (so' teste SQL e de componente).
+  · SUITE depois do FORN-SEM-CADASTRO-01: 5982 passando (+5 `fornecedoresSemCadastro.test.tsx`; `useFornecedoresDoCliente.test.tsx` trocado ao contrato novo: o escritor do apelido e' a aba nova, 2 avisos), 22 skipped, as 3 falhas de sempre. Gate de tela completo: 114 telas, 624 medicoes, 0 achados.
