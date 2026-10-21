@@ -612,7 +612,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
      aberto por cima (so' escondida), para a linha voltar marcada "lançada". Nada daqui e' gravado: quem grava e' o Salvar do
      lancamento, pelo caminho de sempre. */
   const [xmlAberto, setXmlAberto] = useState(false);
-  const [prefillXml, setPrefillXml] = useState<ReturnType<typeof prefillDaNota> | null>(null);
+  /* FIN-NOTA-PDF-01b — o prefill do XML (`prefillDaNota`) OU o do modal da nota (`prefillDoModal`: a nota + tudo o que foi escolhido) */
+  const [prefillXml, setPrefillXml] = useState<React.ComponentProps<typeof LancamentoV2Dialog>['prefill'] | null>(null);
   const [linhaXmlAberta, setLinhaXmlAberta] = useState<string | null>(null);
   const [linhasXmlLancadas, setLinhasXmlLancadas] = useState<ReadonlySet<string>>(new Set());
   const abrirLancamentoDoXml = (doXml: DoXml, linhaId: string) => {
@@ -3217,7 +3218,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
           classificacoes={hook.classificacoes}
           fornecedores={hook.fornecedores}
           onCriarFornecedor={hook.criarFornecedor}
-          onAbrirNoLancamento={(d) => { const linha = notaAberta.linhaId; setNotaAberta(null); abrirLancamentoDoXml(d, linha); }}
+          safras={hook.safras}
+          onCriarLancamento={async (form) => { const r = await handleSave(form); return typeof r === 'string' ? r : null; }}
+          onAbrirNoLancamento={(prefill) => {
+            /* NADA ESCOLHIDO NO MODAL SE PERDE: o Novo lancamento abre com a nota E as escolhas */
+            const linha = notaAberta.linhaId;
+            setNotaAberta(null); setEditingLanc(null); setPrefillDuplicar(null); setPrefillXml(prefill); setLinhaXmlAberta(linha); setDialogOpen(true);
+          }}
           onAbrirRegistrada={abrirOcorrenciaDaNota}
           onCriado={() => { const linha = notaAberta.linhaId; setLinhasXmlLancadas((antes) => new Set([...antes, linha])); }}
         />
