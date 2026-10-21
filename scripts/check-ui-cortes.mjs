@@ -24,6 +24,7 @@ import { chromium } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { filtroRapido } from './ui-gate-rapido.mjs';
 
 const AQUI = path.dirname(fileURLToPath(import.meta.url));
 const EXCECOES = [];   // { tela, regra, texto } — vazia por decisao do Gabriel (19/10/2026)
@@ -477,6 +478,13 @@ function medirCabecalho(regiao) {
   return achados;
 }
 
+/* UI-GATE-RAPIDO-01 — `--rapido`: so' as telas cuja arvore de imports alcanca o diff contra o origin/proto (`scripts/ui-gate-rapido.mjs`);
+   mudanca compartilhada sai com 3 ("rode o completo"); diff sem tela, com 0. */
+const RAPIDO = process.argv.includes('--rapido');
+const naRapida = RAPIDO ? filtroRapido('check-ui-cortes') : () => true;
+/* no modo rapido, o cenario sem tamanhos proprios mede nos 7 (os do contrato); o que declara os seus (o modal da OC: >= 1000) fica neles */
+const tamanhosDe = (c) => (c.tamanhos && !arg('--tamanhos') ? c.tamanhos : RAPIDO && !arg('--tamanhos') ? TAMANHOS_DO_CONSORCIO : TAMANHOS);
+const ESCOLHIDOS = CENARIOS.filter((c) => (!SO || c.nome.startsWith(SO)) && naRapida(c));
 const servidor = await createServer({ configFile: path.join(AQUI, 'ui-cortes/vite.config.mts'), server: { port: 0, host: '127.0.0.1' } });
 await servidor.listen();
 const base = `http://127.0.0.1:${servidor.config.server.port === 0 ? servidor.httpServer.address().port : servidor.httpServer.address().port}`;
@@ -531,7 +539,7 @@ try {
     || prova.filter((r) => r === 'cabecalho').length < 3 || daSobre0.filter((a) => a.regra === 'sobreposicao').length < 2) { console.error(`check-ui-cortes: AUTO-TESTE FALHOU (achou ${prova.join(',') || 'nada'})`); process.exit(2); }
 
   const todos = [];
-  for (const cen of CENARIOS.filter((c) => !SO || c.nome.startsWith(SO))) for (const [w, h] of (cen.tamanhos && !arg('--tamanhos') ? cen.tamanhos : TAMANHOS)) {
+  for (const cen of ESCOLHIDOS) for (const [w, h] of tamanhosDe(cen)) {
     const p = await navegador.newPage({ viewport: { width: w, height: h } });
     const erros = []; p.on('pageerror', (e) => erros.push(String(e).slice(0, 160)));
     await p.goto(`${base}/index.html?${cen.url}`); await p.evaluate(() => document.fonts.ready); await p.waitForTimeout(1300);
@@ -572,6 +580,6 @@ try {
     codigo = 1;
     console.error(`check-ui-cortes: ${unicos.length} achado(s) (baseline: ${EXCECOES.length} excecoes):`);
     for (const a of unicos) console.error(`  ${a.tela} [${todos.filter((x) => x.tela === a.tela && x.regra === a.regra && x.texto === a.texto).map((x) => x.tamanho).join(' ')}] ${a.regra}: ${a.texto}`);
-  } else console.log(`check-ui-cortes: ${CENARIOS.filter((c) => !SO || c.nome.startsWith(SO)).length} telas, ${CENARIOS.filter((c) => !SO || c.nome.startsWith(SO)).reduce((n, c) => n + (c.tamanhos && !arg('--tamanhos') ? c.tamanhos : TAMANHOS).length, 0)} medicoes, sem reticencias, sem vao no cabecalho preso e com data dd/mm/aaaa (baseline: ${EXCECOES.length} excecoes).`);
+  } else console.log(`check-ui-cortes: ${ESCOLHIDOS.length} telas, ${ESCOLHIDOS.reduce((n, c) => n + tamanhosDe(c).length, 0)} medicoes, sem reticencias, sem vao no cabecalho preso e com data dd/mm/aaaa (baseline: ${EXCECOES.length} excecoes).`);
 } finally { await navegador.close(); await servidor.close(); }
 process.exit(codigo);

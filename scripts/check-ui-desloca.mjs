@@ -19,6 +19,7 @@ import { createServer } from 'vite';
 import { chromium } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { filtroRapido } from './ui-gate-rapido.mjs';
 
 const AQUI = path.dirname(fileURLToPath(import.meta.url));
 const arg = (n) => { const i = process.argv.indexOf(n); return i > 0 ? process.argv[i + 1] : null; };
@@ -96,6 +97,13 @@ const comparar = (a, b, estado) => {
   return achados;
 };
 
+/* UI-GATE-RAPIDO-01 — `--rapido`: so' as telas cuja arvore de imports alcanca o diff contra o origin/proto (`scripts/ui-gate-rapido.mjs`);
+   mudanca compartilhada sai com 3 ("rode o completo"); diff sem tela, com 0. */
+const RAPIDO = process.argv.includes('--rapido');
+const naRapida = RAPIDO ? filtroRapido('check-ui-desloca') : () => true;
+/* no modo rapido, os 7 tamanhos do contrato (o `minLargura` do cenario continua valendo) */
+const TAMANHOS_DA_VEZ = RAPIDO && !arg('--tamanhos') ? [[750, 520], [750, 600], [814, 530], [1000, 600], [1126, 579], [1300, 704], [1440, 800]] : TAMANHOS;
+const ESCOLHIDOS = CENARIOS.filter((c) => (!SO || c.nome.startsWith(SO)) && naRapida(c));
 const servidor = await createServer({ configFile: path.join(AQUI, 'ui-cortes/vite.config.mts'), server: { port: 0, host: '127.0.0.1' } });
 await servidor.listen();
 const base = `http://127.0.0.1:${servidor.httpServer.address().port}`;
@@ -113,7 +121,7 @@ try {
   if (!prova.some((x) => x.texto.startsWith('"Próxima"')) || prova.length !== 1) { console.error(`check-ui-desloca: AUTO-TESTE FALHOU (${JSON.stringify(prova)})`); process.exit(2); }
 
   const todos = []; let medicoes = 0;
-  for (const cen of CENARIOS.filter((c) => !SO || c.nome.startsWith(SO))) for (const [w, h] of TAMANHOS) {
+  for (const cen of ESCOLHIDOS) for (const [w, h] of TAMANHOS_DA_VEZ) {
     if (w < (cen.minLargura ?? 0)) continue; /* tela sem desenho abaixo desta largura (o modal da OC: >= 1000) */
     const p = await navegador.newPage({ viewport: { width: w, height: h } });
     const erros = []; p.on('pageerror', (e) => erros.push(String(e).slice(0, 160)));
@@ -153,6 +161,6 @@ try {
     codigo = 1;
     console.error(`check-ui-desloca: ${unicos.length} achado(s):`);
     for (const a of unicos) console.error(`  ${a.tela} [${todos.filter((x) => x.tela === a.tela && x.estado === a.estado && x.texto === a.texto).map((x) => x.tamanho).join(' ')}] ${a.estado}: ${a.texto}`);
-  } else console.log(`check-ui-desloca: ${CENARIOS.filter((c) => !SO || c.nome.startsWith(SO)).length} telas, ${medicoes} trocas de estado medidas (${TAMANHOS.length} tamanhos): nada se desloca.`);
+  } else console.log(`check-ui-desloca: ${ESCOLHIDOS.length} telas, ${medicoes} trocas de estado medidas (${TAMANHOS_DA_VEZ.length} tamanhos): nada se desloca.`);
 } finally { await navegador.close(); await servidor.close(); }
 process.exit(codigo);
