@@ -39,12 +39,14 @@ import type { ParcelaDoPayload } from '@/lib/financiamentos/montarPayloadParcela
 import { gravarParcelamento } from './LancamentoV2Dialog';
 import { ondeEsta } from './LancamentoDoXml';
 import type { DoXml } from '@/lib/financeiro/nfePrefill';
+import { resolverEmitente } from '@/lib/financeiro/nfe/resolverEmitente';
 import type { NotaDoArquivo } from '@/lib/financeiro/nfe/lerNota';
 import type { CampoConferido, CampoDaMarca } from '@/lib/financeiro/nfe/danfe';
 import type { EmitenteNFe } from '@/lib/financeiro/nfe/tipos';
 import { dataCurta, documentoFormatado, numeroDaNota, numeroFalado, reais, soDigitos } from '@/lib/financeiro/nfe/formatos';
 import {
-  camposQueOEmitenteCompleta, completarCadastroPeloXml, gravarDocumentoNoCadastro, lancamentosAbertosComValor,
+  camposQueOEmitenteCompleta, completarCadastroPeloXml, fornecedorPeloDocumento, gravarDocumentoNoCadastro, lancamentosAbertosComValor,
+  usoDoFornecedor, type CadastroComODocumento,
   type LancamentoAbertoDaNota, type OcorrenciaDaNota,
 } from '@/lib/financeiro/nfeConsultas';
 import { caixaDeTitulo, consultarCnpj, type DadosDoCnpj } from '@/lib/fornecedores/consultaCnpj';
@@ -146,9 +148,22 @@ export function NotaFiscalDialog({
   const { lido, doXml, bytes, arquivo } = nota;
   const n = lido.nota;
   const p = doXml.proposta;
-  const res = doXml.resolucao;
+  /* NOTA-FORNECEDOR-DUPLICA-01 — a resolucao e' refeita com a lista DE AGORA (a da leitura pode estar velha: o cadastro criado depois
+     de ler a nota, a nota reaberta da lista). Pelo documento manda a de agora; senao, a da leitura (o resolvedor do banco); senao, a
+     busca do cadastro entre os SEM documento (o nome, sem o prefixo de CNPJ do MEI, a fantasia, a razao social da Receita). */
+  const [receitaNome, setReceitaNome] = useState<string | null>(null);
+  const res = useMemo(() => {
+    const deAgora = resolverEmitente(n.emitente, fornecedores, null, [receitaNome]);
+    if (deAgora.achadoPor === 'documento') return deAgora;
+    return doXml.resolucao.achadoPor ? doXml.resolucao : deAgora;
+  }, [n.emitente, fornecedores, receitaNome, doXml.resolucao]);
 
-  const [favorecidoId, setFavorecidoId] = useState<string | null>(p.favorecidoId);
+  const [favorecidoId, setFavorecidoId] = useState<string | null>(() => resolverEmitente(n.emitente, fornecedores, null).propostoId ?? p.favorecidoId);
+  /* "Cadastrar outro": criar e' escolha do operador, nunca o padrao quando ha' cadastro sem CNPJ com o mesmo nome */
+  const [novoPorEscolha, setNovoPorEscolha] = useState(false);
+  const [conflito, setConflito] = useState<CadastroComODocumento | null>(null);
+  const [cnpjGravado, setCnpjGravado] = useState(false);
+  const [uso, setUso] = useState<{ lancamentos: number; ultimo: string | null } | null>(null);
   const [fazendaId, setFazendaId] = useState<string>(p.fazendaId ?? '');
   const [contaId, setContaId] = useState<string>('__none__');
   const [planoId, setPlanoId] = useState<string>(p.classificacao?.plano_conta_id ?? '');
@@ -172,7 +187,7 @@ export function NotaFiscalDialog({
     if (soDigitos(n.emitente.documento).length !== 14) return;
     void consultarReceita(n.emitente.documento).then((r) => {
       if (!vivo) return;
-      if (r.ok === true) setReceita(r.dados); else setReceitaFrase(r.frase);
+      if (r.ok === true) { setReceita(r.dados); setReceitaNome(r.dados.razaoSocial || null); } else setReceitaFrase(r.frase);
     });
     return () => { vivo = false; };
   }, [n.emitente.documento, consultarReceita]);
@@ -192,9 +207,21 @@ export function NotaFiscalDialog({
     return () => { vivo = false; };
   }, [clienteId, favorecidoId, emitente, doXml.ocorrencias.length, n.totais.notaCent, p.duplicatas]);
 
+  /* o proposto que aparece depois (a lista de agora, a Receita) entra sozinho — salvo se o operador escolheu cadastrar outro */
+  useEffect(() => {
+    if (!favorecidoId && !novoPorEscolha && res.propostoId && !res.inativo) setFavorecidoId(res.propostoId);
+  }, [favorecidoId, novoPorEscolha, res.propostoId, res.inativo]);
   const fornecedor = favorecidoId ? fornecedores.find((f) => f.id === favorecidoId) ?? null : null;
-  const precisaCadastrar = !favorecidoId && (!res.achadoPor || res.filialDiferente);
-  const escolherEntre = !favorecidoId && res.candidatos.length > 1 ? res.candidatos : [];
+  /* o cadastro escolhido NAO tem documento (achado pelo nome): a previa oferece completar com o CNPJ da nota */
+  const semDocumento = !!fornecedor && soDigitos(fornecedor.cpf_cnpj) === '' && !cnpjGravado;
+  useEffect(() => {
+    let vivo = true;
+    if (!semDocumento || !favorecidoId) { setUso(null); return; }
+    void usoDoFornecedor(favorecidoId).then((u) => { if (vivo) setUso(u); });
+    return () => { vivo = false; };
+  }, [semDocumento, favorecidoId]);
+  const precisaCadastrar = !favorecidoId && !conflito && (novoPorEscolha || !res.achadoPor || res.filialDiferente);
+  const escolherEntre = !favorecidoId && !novoPorEscolha && res.candidatos.length > 1 ? res.candidatos : [];
   const saidas = useMemo(() => classificacoes.filter((c) => !!c.id && c.tipo_operacao.startsWith('2')), [classificacoes]);
   const plano = saidas.find((c) => c.id === planoId) ?? null;
   const lavoura = plano?.escopo_negocio === 'agricultura';
@@ -244,8 +271,12 @@ export function NotaFiscalDialog({
   const cadastrar = async () => {
     setOcupado('cadastrar'); setErro(null);
     try {
+      /* o CNPJ ja' cadastrado (a lista pode estar velha): conferido no BANCO antes de criar — conflito vira frase e "Usar este" */
+      const ja = await fornecedorPeloDocumento(clienteId, n.emitente.documento);
+      if (ja) { setConflito(ja); return; }
       const novo = await onCriarFornecedor(razaoSocial, fazendaId || null, documentoFormatado(n.emitente.documento));
-      if (!novo) return;
+      if (!novo) { setConflito(await fornecedorPeloDocumento(clienteId, n.emitente.documento)); return; }
+      setNovoPorEscolha(false); setConflito(null);
       setFavorecidoId(novo.id);
       const e = await completarCadastroPeloXml(clienteId, novo.id, emitente);
       if (e) toast.error(`Fornecedor criado, mas os dados da nota não foram gravados nele: ${e}`);
@@ -255,9 +286,13 @@ export function NotaFiscalDialog({
     if (!favorecidoId) return;
     setOcupado('completar'); setErro(null);
     try {
-      if (res.cadastroSemDocumento && favorecidoId === p.favorecidoId) {
+      if (semDocumento) {
+        /* o CNPJ de outro cadastro nao entra aqui: conferido antes (a trava do banco recusaria com a frase) */
+        const ja = await fornecedorPeloDocumento(clienteId, n.emitente.documento);
+        if (ja && ja.id !== favorecidoId) { setConflito(ja); return; }
         const e1 = await gravarDocumentoNoCadastro(clienteId, favorecidoId, n.emitente.documento);
         if (e1) { setErro(e1); return; }
+        setCnpjGravado(true);
       }
       const e = await completarCadastroPeloXml(clienteId, favorecidoId, emitente);
       if (e) { setErro(e); return; }
@@ -300,10 +335,11 @@ export function NotaFiscalDialog({
   const marcasVermelhas = divergencias.flatMap((d) => MARCA_DO_CONFERIDO[d]);
   const erroEm = (c: CampoConferido) => divergencias.includes(c);
   const chipFornecedor = favorecidoId
-    ? (res.inativo && favorecidoId === p.favorecidoId ? <span className={CHIP_AVISO}>inativo no cadastro</span>
-      : res.achadoPor === 'nome' && favorecidoId === p.favorecidoId ? <span className={CHIP_AVISO}>achado pelo nome</span>
-        : <span className={CHIP_OK}>cadastrado</span>)
-    : escolherEntre.length ? <span className={CHIP_AVISO}>dois cadastros com este CNPJ</span>
+    ? (res.inativo && favorecidoId === res.propostoId ? <span className={CHIP_AVISO}>inativo no cadastro</span>
+      : semDocumento ? <span className={CHIP_AVISO} data-testid="nota-chip-fornecedor">achado pelo nome · sem CNPJ</span>
+        : <span className={CHIP_OK} data-testid="nota-chip-fornecedor">cadastrado</span>)
+    : conflito ? <span className={CHIP_ERRO} data-testid="nota-chip-fornecedor">CNPJ já cadastrado</span>
+    : escolherEntre.length ? <span className={CHIP_AVISO}>{res.achadoPor === 'nome' ? 'achado pelo nome: escolha' : 'dois cadastros com este CNPJ'}</span>
       : res.filialDiferente ? <span className={CHIP_AVISO}>outra filial no cadastro</span>
         : <span className={CHIP_AVISO}>não cadastrado neste cliente</span>;
   const end = emitente.endereco;
@@ -365,8 +401,16 @@ export function NotaFiscalDialog({
                   <Kv num k="IE" v={n.emitente.ie ?? '—'} />
                   <Kv k="Endereço" v={enderecoTexto || '—'} titulo={enderecoTexto} className="col-span-2" />
                   <Kv k="Cidade/UF" v={cidade} titulo={cidade} />
-                  <Kv k="Nome" v={receita ? <span className="text-[#1f7a45]">completo pela Receita</span> : <span className="text-amber-800">como no DANFE</span>}
-                    titulo={receita ? 'Razão social inteira da consulta pública do CNPJ.' : (receitaFrase ?? 'Consultando a Receita…')} />
+                  {conflito ? (
+                    <Kv k="Já é de" v={`${conflito.nome}${conflito.ativo ? '' : ' (inativo)'}`} erro testid="nota-conflito"
+                      titulo={`Este CNPJ já é de ${conflito.nome}${conflito.ativo ? ' (ativo)' : ' (inativo)'}. Use este cadastro.`} />
+                  ) : semDocumento ? (
+                    <Kv k="Cadastro" v={`sem CNPJ${uso ? ` · ${uso.lancamentos} lanç. · último ${uso.ultimo ? dataInteira(uso.ultimo) : '—'}` : ''}`} testid="nota-sem-cnpj"
+                      titulo={`${fornecedor?.nome ?? ''} — cadastro achado pelo nome, sem CNPJ. Completar este cadastro com o CNPJ da nota em vez de criar outro.`} />
+                  ) : (
+                    <Kv k="Nome" v={receita ? <span className="text-[#1f7a45]">completo pela Receita</span> : <span className="text-amber-800">como no DANFE</span>}
+                      titulo={receita ? 'Razão social inteira da consulta pública do CNPJ.' : (receitaFrase ?? 'Consultando a Receita…')} />
+                  )}
                 </div>
                 <div className="campos-uma-linha flex w-[150px] shrink-0 flex-col items-stretch gap-1">
                   {precisaCadastrar && (
@@ -380,11 +424,20 @@ export function NotaFiscalDialog({
                         options={escolherEntre.map((c) => ({ value: c.id, label: c.nome }))} placeholder="Buscar…" triggerClassName="h-[22px] text-[10.5px]" />
                     </div>
                   )}
-                  {favorecidoId && completar.length > 0 && (
-                    <Button type="button" size="sm" variant="outline" className="h-[22px] px-2 text-[10.5px]" disabled={!!ocupado} onClick={() => { void completarCadastro(); }} data-testid="nota-completar-fornecedor"
-                      title={`Preenche no cadastro só o que está vazio: ${fraseDoCompletar(completar)}.`}>
-                      {ocupado === 'completar' ? 'Completando…' : 'Completar cadastro'}
+                  {conflito && conflito.ativo && (
+                    <Button type="button" size="sm" className="h-[22px] px-2 text-[10.5px]" disabled={!!ocupado} data-testid="nota-usar-este"
+                      onClick={() => { setFavorecidoId(conflito.id); setConflito(null); setNovoPorEscolha(false); }}>Usar este</Button>
+                  )}
+                  {favorecidoId && (semDocumento || completar.length > 0) && (
+                    <Button type="button" size="sm" variant={semDocumento ? 'default' : 'outline'} className="h-[22px] px-2 text-[10.5px]" disabled={!!ocupado}
+                      onClick={() => { void completarCadastro(); }} data-testid="nota-completar-fornecedor"
+                      title={semDocumento ? 'Completar este cadastro com o CNPJ (e o que estiver vazio) em vez de criar outro.' : `Preenche no cadastro só o que está vazio: ${fraseDoCompletar(completar)}.`}>
+                      {ocupado === 'completar' ? 'Completando…' : semDocumento ? 'Completar com o CNPJ' : 'Completar cadastro'}
                     </Button>
+                  )}
+                  {((semDocumento && favorecidoId === res.propostoId) || escolherEntre.length > 0) && (
+                    <button type="button" className="h-[16px] text-[10px] text-muted-foreground underline underline-offset-2" disabled={!!ocupado} data-testid="nota-cadastrar-outro"
+                      onClick={() => { setNovoPorEscolha(true); setFavorecidoId(null); }}>Cadastrar outro</button>
                   )}
                 </div>
               </div>
