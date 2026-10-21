@@ -205,7 +205,7 @@ describe('a ponta de transferência chega escrita ao PDF e ao Excel', () => {
     { id: 't1', data_vencimento: '2026-10-09', data_pagamento: null, status_transacao: 'programado', tipo_operacao: '3-Transferências', valor: 290000, conta_bancaria_id: 'A', conta_destino_id: 'C', descricao: 'Aplicação', data_competencia: '2026-10-09' },
     { id: 'c1', data_vencimento: '2026-10-09', data_pagamento: null, status_transacao: 'agendado', tipo_operacao: '2-Saídas', valor: 40, conta_bancaria_id: 'A', descricao: 'Conta', data_competencia: '2026-10-01' },
   ];
-  const recorte = recortarCpr(linhas, { periodo: P, hoje: HOJE, incluirVencidos: true, ancoras: new Map([['A', '2026-09-30']]) });
+  const recorte = recortarCpr(linhas, { periodo: P, hoje: HOJE, ancoras: new Map([['A', '2026-09-30']]) });
   const serie = serieDoSaldoCpr(recorte, 300000);
   const fora = new Set(recorte.foraDoCaixa.map(chaveDaLinhaCpr));
   const de: EntradaDoModelo<Linha>['de'] = {
@@ -224,7 +224,7 @@ describe('a ponta de transferência chega escrita ao PDF e ao Excel', () => {
     ]);
   });
   it('o modelo leva o gráfico como recebeu (ou nulo), e o saldo do fim é o da série com a ponta', () => {
-    const base = { clienteNome: 'C', contaNome: 'Todas as contas', todasAsContas: true, periodo: P, segmento: 'ambos' as const, incluirVencidos: true, emitidoEm: 'x',
+    const base = { clienteNome: 'C', contaNome: 'Todas as contas', todasAsContas: true, periodo: P, segmento: 'ambos' as const, emitidoEm: 'x',
       serie, grupos, cartoes: { vencidosContamPagar: recorte.cartoes.vencidosContam.pagar, vencidosContamReceber: recorte.cartoes.vencidosContam.receber, pagarNoPeriodo: recorte.cartoes.periodo.pagar, receberNoPeriodo: recorte.cartoes.periodo.receber,
         porStatus: recorte.cartoes.porStatus, transferencias: recorte.cartoes.transferencias, hoje: HOJE, conciliadoAte: '2026-09-30' },
       rodape: { pagar: recorte.total.pagar.valor, receber: recorte.total.receber.valor, contas: recorte.total.ambos.contas }, semanas: [], porConta: null, motivoSemSaldo: '', de };
@@ -237,7 +237,7 @@ describe('a ponta de transferência chega escrita ao PDF e ao Excel', () => {
     expect(m.fim.pagar?.texto).toBe('R$ 290.040,00');
   });
   it('o Excel diz o grupo da ponta fora do caixa e traz o mesmo saldo do fim', () => {
-    const x = montarPayloadExcelCpr<Linha>({ arquivo: 'a', grupos, serie, de, incluirVencidos: true, hoje: HOJE, inicio: P.de });
+    const x = montarPayloadExcelCpr<Linha>({ arquivo: 'a', grupos, serie, de, hoje: HOJE, inicio: P.de });
     const contas = x.sheets[0].rows;
     expect(Array.isArray(contas) ? contas.length : 0).toBe(3);
     expect(JSON.stringify(contas)).toContain('transferência · conta fora do caixa (não soma)');
