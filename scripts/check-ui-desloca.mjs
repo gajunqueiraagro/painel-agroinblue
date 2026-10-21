@@ -19,6 +19,7 @@ import { createServer } from 'vite';
 import { chromium } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { filtroRapido } from './ui-gate-rapido.mjs';
 
 const AQUI = path.dirname(fileURLToPath(import.meta.url));
 const arg = (n) => { const i = process.argv.indexOf(n); return i > 0 ? process.argv[i + 1] : null; };
@@ -64,6 +65,15 @@ const CENARIOS = [
   ...['venda', 'abate'].map((v) => ({ nome: `oc-cc-faixa-${v}`, url: `tela=oc&v=${v}&aba=financeiro&cc=1`, minLargura: 1000, estados: [
     ['sem principal programado (sem o motivo)', { url: `tela=oc&v=${v}&aba=financeiro&cc=1&coberto=0` }],
   ] })),
+  /* OC-CORRECOES-01 C3 — o "Buscar recebimento no Financeiro": a busca e a escolha nao mexem no campo, no cabecalho nem nos botoes */
+  { nome: 'oc-cc-buscar', url: 'tela=oc-cc&v=buscar', antes: async (p) => { await p.locator('[data-testid="busca-recebimento"]').waitFor(); await espera(p); },
+    estados: [
+      ['busca com resultado', digitar('[data-testid="busca-recebimento"]', '118')],
+      ['busca sem resultado', digitar('[data-testid="busca-recebimento"]', 'zzzzzz nada')],
+      ['busca limpa', digitar('[data-testid="busca-recebimento"]', '')],
+      ['escolher um', clicar('tr[data-lancamento="m1"]')],
+      ['vincular sem motivo (aviso)', botao(/^Vincular$/)],
+    ] },
 ];
 
 /* roda NA PAGINA: o retangulo de cada elemento medido, pela identidade */
@@ -104,6 +114,13 @@ const comparar = (a, b, estado) => {
   return achados;
 };
 
+/* UI-GATE-RAPIDO-01 — `--rapido`: so' as telas cuja arvore de imports alcanca o diff contra o origin/proto (`scripts/ui-gate-rapido.mjs`);
+   mudanca compartilhada sai com 3 ("rode o completo"); diff sem tela, com 0. */
+const RAPIDO = process.argv.includes('--rapido');
+const naRapida = RAPIDO ? filtroRapido('check-ui-desloca') : () => true;
+/* o modo rapido mede nos MESMOS tamanhos do completo (ver check-ui-cortes) */
+const TAMANHOS_DA_VEZ = TAMANHOS;
+const ESCOLHIDOS = CENARIOS.filter((c) => (!SO || c.nome.startsWith(SO)) && naRapida(c));
 const servidor = await createServer({ configFile: path.join(AQUI, 'ui-cortes/vite.config.mts'), server: { port: 0, host: '127.0.0.1' } });
 await servidor.listen();
 const base = `http://127.0.0.1:${servidor.httpServer.address().port}`;
@@ -121,7 +138,7 @@ try {
   if (!prova.some((x) => x.texto.startsWith('"Próxima"')) || prova.length !== 1) { console.error(`check-ui-desloca: AUTO-TESTE FALHOU (${JSON.stringify(prova)})`); process.exit(2); }
 
   const todos = []; let medicoes = 0;
-  for (const cen of CENARIOS.filter((c) => !SO || c.nome.startsWith(SO))) for (const [w, h] of TAMANHOS) {
+  for (const cen of ESCOLHIDOS) for (const [w, h] of TAMANHOS_DA_VEZ) {
     if (w < (cen.minLargura ?? 0)) continue; /* tela sem desenho abaixo desta largura (o modal da OC: >= 1000) */
     const p = await navegador.newPage({ viewport: { width: w, height: h } });
     const erros = []; p.on('pageerror', (e) => erros.push(String(e).slice(0, 160)));
@@ -161,6 +178,6 @@ try {
     codigo = 1;
     console.error(`check-ui-desloca: ${unicos.length} achado(s):`);
     for (const a of unicos) console.error(`  ${a.tela} [${todos.filter((x) => x.tela === a.tela && x.estado === a.estado && x.texto === a.texto).map((x) => x.tamanho).join(' ')}] ${a.estado}: ${a.texto}`);
-  } else console.log(`check-ui-desloca: ${CENARIOS.filter((c) => !SO || c.nome.startsWith(SO)).length} telas, ${medicoes} trocas de estado medidas (${TAMANHOS.length} tamanhos): nada se desloca.`);
+  } else console.log(`check-ui-desloca: ${ESCOLHIDOS.length} telas, ${medicoes} trocas de estado medidas (${TAMANHOS_DA_VEZ.length} tamanhos): nada se desloca.`);
 } finally { await navegador.close(); await servidor.close(); }
 process.exit(codigo);

@@ -223,6 +223,9 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   venda a NF do produtor SOMA e contrato/NF entrada/comprovante nao; a mesma chave viva no cliente e' barrada no banco (23505, com link).
 
 ### Tela (detalhes em docs/PADROES-UI.md)
+- UI-GATE-RAPIDO-01: durante o trabalho, `npm run check:ui-rapido` (cortes + deslocamento so' das telas que o diff contra o origin/proto
+  alcanca); sai com 3 e "rode o completo" quando o diff toca `src/components/ui/*`, `index.css`, a barra lateral, a bancada/os gates ou
+  arquivo que metade das telas alcanca — ai' o completo e' obrigatorio antes de publicar. Um gate de tela completo por vez na maquina.
 - REGRA DE CORTE (21/10 07h25): nome/texto em tabela = uma linha com "…" e o texto inteiro no `title`; numero, valor, data, CPF/CNPJ e
   contador nunca cortam; corte SECO reprova; fora de tabela, nada de "…" (o texto rola no lugar dele ou quebra). Data sempre dd/mm/aaaa.
 - NADA SE DESLOCA (UI-SEM-DESLOCAR-01): texto que muda com a selecao tem largura reservada (`TextoReservado`, algarismos tabulares);
