@@ -1,7 +1,7 @@
 /** FIN-NOTA-PDF-01 — um DANFE SINTETICO: as POSICOES de um DANFE real (folha deitada, canhoto ao lado) com nomes, documentos,
  *  chave, inscricoes e enderecos trocados por dados de teste (CNPJ 11.222.333/0004-24, CPF 111.444.777-35; a chave recalculada com
  *  o digito certo). O PDF real da prova fica fora do repo (~/agroinblue-local/fin-nota-pdf/). */
-import type { ItemDoDanfe } from '../danfe';
+import { digitoDaChave, type ItemDoDanfe } from '../danfe';
 
 export const PAGINAS_DANFE_SINTETICO: ItemDoDanfe[][] = [[
   {str: "RECEBEMOS DE AGRO SINTETICA INSUMOS AGROPECUARIOS LTD OS PRODUTOS/SERVIÇOS CONSTANTES DA NOTA FISCAL INDICADA ABAIXO. EMISSÃO: 15/09/2026 VALOR TOTAL: 1.966,56", x: 21.35, y: 25.51, w: 451.65, h: 5},
@@ -194,3 +194,33 @@ export const PAGINAS_DANFE_SINTETICO: ItemDoDanfe[][] = [[
   {str: "DADOS SINTETICOS PARA TESTE", x: 70.87, y: 31.07, w: 149.9, h: 7},
   {str: "RESERVADO AO FISCO", x: 632.13, y: 65.4, w: 53.89, h: 5},
 ]];
+
+/**
+ * FIN-NOTA-PDF-01b — um DANFE SINTETICO SEM DUPLICATA, no molde do caso de 21/10 (nota de produto industrial paga de uma vez): o mesmo
+ * leiaute, sem o quadro de duplicatas, NF 3.241 de R$ 9.583,00 emitida em 29/09/2026, a chave refeita com o digito certo. Dados de teste.
+ */
+export function danfeSinteticoSemDuplicata(): ItemDoDanfe[][] {
+  const base = '502609' + '11222333000424' + '55' + '010' + '000003241' + '1' + '21753829';
+  const chave = `${base}${digitoDaChave(base)}`;
+  const chaveEscrita = chave.replace(/(\d{4})(?=\d)/g, '$1 ');
+  const TOTAIS_POR_LINHA: Record<number, string> = { 241: '3.194,33', 224: '3.194,33', 207: '3.194,34' };
+  const troca = (it: ItemDoDanfe): ItemDoDanfe | null => {
+    const s = it.str;
+    if (/^00\d \d{2}\/\d{2}\/\d{4} [\d.,]+$/.test(s)) return null;          // as duplicatas saem
+    const linha = Math.round(it.y);
+    if (it.x > 650 && it.x < 690 && TOTAIS_POR_LINHA[linha]) return { ...it, str: TOTAIS_POR_LINHA[linha] };   // V.TOTAL
+    if (it.x > 610 && it.x < 650 && /^\d+,\d{4}$/.test(s) && TOTAIS_POR_LINHA[linha]) return { ...it, str: `${TOTAIS_POR_LINHA[linha]}00` };   // V.UNIT
+    if (it.x > 580 && it.x < 615 && /^\d,0000$/.test(s)) return { ...it, str: '1,0000' };   // QTD
+    const t = s
+      .replace('5026 0911 2223 3300 0424 5501 0000 0009 3712 1753 8298', chaveEscrita)
+      .replace('Nº 000.000.937', 'Nº 000.003.241').replace('Nº 937', 'Nº 3241')
+      .replace(/15\/09\/2026/g, '29/09/2026')
+      .replace(/1\.966,56/g, '9.583,00').replace('2.040,00', '9.583,00')
+      .replace('AGRO SINTETICA INSUMOS AGROPECUARIOS LTD', 'INDUSTRIA SINTETICA DE POSTES LTD')
+      .replace('HERBICIDA SINTETICO 5 LT', 'POSTE DE CONCRETO SINTETICO 9M');
+    if (s === '73,44') return { ...it, str: '0,00' };
+    if (s === '937') return { ...it, str: '3241' };
+    return t === s ? it : { ...it, str: t };
+  };
+  return PAGINAS_DANFE_SINTETICO.map((p) => p.map(troca).filter((x): x is ItemDoDanfe => x !== null));
+}
