@@ -218,6 +218,7 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   de fornecedor da planilha ou descricao de EXTRATO `extrato`/`ofx`; nunca descricao de TXT/Excel/manual); "Ultimo uso"/"Lanc." so' realizado ate' hoje.
 - Nota fiscal (FIN-NOTA-PDF-01): XML e PDF entram por UMA porta (`lerNota`) e saem na MESMA `NotaLida`; o DANFE se le^ pela posicao
   e a chave de 44 digitos confere o lido (divergiu = nada criado); criar/atualizar pela nota usa o gravador do parcelado e a cadeia de documentos.
+  FIN-NOTA-PDF-01b: NADA ESCOLHIDO NA PREVIA SE PERDE — todo caminho que abre outro modal leva tudo (`prefillDoModal`); o pago nunca muda de valor.
 - Documentos da OC (OC-DOC-VENDA-01): abate E venda usam o MESMO componente (`AbaDocumentosOC`/`DocumentoFormAbate`, pelo tipo); na
   venda a NF do produtor SOMA e contrato/NF entrada/comprovante nao; a mesma chave viva no cliente e' barrada no banco (23505, com link).
 
