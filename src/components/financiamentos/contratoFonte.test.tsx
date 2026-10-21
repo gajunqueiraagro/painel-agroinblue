@@ -20,7 +20,10 @@ const trecho = (texto: string, inicio: string, fim: string) => {
 
 const CORTE = /\btruncate\b|\btext-ellipsis\b|\bline-clamp-\d/;
 const MAIOR_QUE_13 = /\btext-(sm|base|lg|xl|[2-9]xl)\b|\btext-\[(1[4-9]|[2-9]\d)(\.\d+)?px\]/;
-const achados = (texto: string) => texto.split('\n').filter((l) => CORTE.test(l) || MAIOR_QUE_13.test(l));
+/* FORN-01b (regra de corte de 21/10 07h25): texto em CÉLULA de tabela pode terminar em "…" com o inteiro no `title` — a constante da
+   célula (`CELULA` / `E.celula`) é a única peça com `truncate`, e o teste abaixo cobra o `title` em todo uso dela */
+const CELULA_COM_TITLE = /const CELULA = 'block truncate';|celula: 'block truncate',/;
+const achados = (texto: string) => texto.split('\n').filter((l) => (CORTE.test(l) && !CELULA_COM_TITLE.test(l)) || MAIOR_QUE_13.test(l));
 
 const CONTRATO = ler('ContratoDeCredito.tsx');
 const PECAS: Record<string, string> = {
@@ -46,6 +49,15 @@ describe('a fonte da tela do contrato', () => {
 
   it.each(Object.keys(PECAS))('%s: sem "…" e sem fonte acima de 13px', (peca) => {
     expect(achados(PECAS[peca])).toEqual([]);
+  });
+
+  it('FORN-01b — todo texto de célula que pode terminar em "…" leva o inteiro no title (na linha ou no td logo acima)', () => {
+    for (const fonte of [CONTRATO, ler('TelaDoContratoV3.tsx'), ler('../../pages/FinanciamentoDetalhe.tsx')]) {
+      const linhas = fonte.split('\n');
+      const usos = linhas.map((l, i) => [l, i] as const).filter(([l]) => /className=\{(CELULA|E\.celula)\}/.test(l));
+      expect(usos.length).toBeGreaterThan(0);
+      for (const [l, i] of usos) expect(/title=/.test(l) || /<td[^>]*title=/.test(linhas[i - 1] ?? ''), l.trim()).toBe(true);
+    }
   });
 
   it('a escala mora em constantes, com os tamanhos aprovados', () => {
