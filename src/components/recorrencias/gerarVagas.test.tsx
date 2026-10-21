@@ -151,9 +151,11 @@ describe('a tela de Recorrências (lida da FONTE): a regra vigente sem lançamen
     expect(f).toContain('linhasDoMes(recorrencias, ocorrencias, mes, { canceladas, mesesFechados })');
     expect(f).toContain('title={TITULO_NAO_GERADO[l.naoGerado]}>{ROTULO_NAO_GERADO}</span>');
   });
-  it('o Gerar é oferecido a TODA regra ativa (a "gerada até o fim" inclusive), e a tela não decide por situação', () => {
-    const trecho = f.slice(f.indexOf('GERAR EM TODA REGRA ATIVA'), f.indexOf('Gerar lançamentos'));
-    expect(trecho).toContain('{r.ativo && (');
+  it('o Gerar está no menu de TODA regra (nunca some) e a tela não decide por situação; acende pelo banco (REC-COLUNAS-01c)', () => {
+    /* REC-COLUNAS-01c (Gabriel 21/10/2026): habilitado só quando o banco diz que falta gerar — a "gerada até o fim" com vigência
+       levada para trás aparece no `fn_recorrencias_a_gerar` e acende; sem a leitura, fica habilitado ("Gerar lançamentos"). */
+    expect(f).toContain('const podeGerar = r.ativo && (temMesAGerar || erroAGerar);');
+    expect(f).toContain('<DropdownMenuItem data-testid="rec-menu-gerar" disabled={!podeGerar}');
     expect(f).not.toContain("{r.situacao === 'ativa' && (");
   });
 });

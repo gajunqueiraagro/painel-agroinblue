@@ -1,6 +1,6 @@
 /* REC-COLUNAS-01 — Financeiro › Recorrências na bancada: regras SINTÉTICAS com o PIOR texto de cada coluna curta (medido em 21/10/2026
    no dado real de todos os clientes e no domínio): Conta "Cartão BB - Ourocard Visa" (o maior nome de conta corrente/cartão), Tipo
-   "A confirmar", Forma "Dinheiro" (a maior das formas do cadastro da recorrência), Situação "falta gerar · 44 meses" e "12 em mês
+   "A confirmar", Forma "Dinheiro" (a maior das formas do cadastro da recorrência), Situação "falta gerar" (o número no `title`, REC-COLUNAS-01c) e "mês
    fechado"; e Descrição/Favorecido longos (o caso do print: consórcio). Valores até 999.999,99 (o maior valor base real tem seis dígitos). A conta "Cartão BB - Ourocard Visa" é maior que a régua (corta com
    o inteiro no `title`); a do pior caso é "Cartão Sicredi Lavoura", o maior nome usado em recorrência. Nenhum nome de cliente. */
 const hj = new Date();
