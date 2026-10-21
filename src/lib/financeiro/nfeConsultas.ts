@@ -66,7 +66,7 @@ export async function fornecedorPeloNome(clienteId: string, nome: string): Promi
 export async function ultimaClassificacaoDoFornecedor(clienteId: string, fornecedorId: string): Promise<UltimaClassificacao | null> {
   const { data, error } = await supabase
     .from('financeiro_lancamentos_v2')
-    .select('plano_conta_id, subcentro, macro_custo, grupo_custo, centro_custo, escopo_negocio, data_competencia')
+    .select('plano_conta_id, subcentro, macro_custo, grupo_custo, centro_custo, escopo_negocio, data_competencia, safra_id, cultura')
     .eq('cliente_id', clienteId).eq('favorecido_id', fornecedorId).eq('cancelado', false)
     .not('plano_conta_id', 'is', null)
     .order('data_competencia', { ascending: false }).order('created_at', { ascending: false })
@@ -76,6 +76,7 @@ export async function ultimaClassificacaoDoFornecedor(clienteId: string, fornece
   return {
     plano_conta_id: l.plano_conta_id, subcentro: l.subcentro, macro_custo: l.macro_custo ?? null, grupo_custo: l.grupo_custo ?? null,
     centro_custo: l.centro_custo ?? null, escopo_negocio: l.escopo_negocio ?? null, data: l.data_competencia,
+    safra_id: l.safra_id ?? null, cultura: l.cultura ?? null,
   };
 }
 
@@ -142,20 +143,22 @@ function ehCampoDoEmitente(c: string): c is CampoDoEmitente { return CAMPOS_DO_E
 export interface LancamentoAbertoDaNota {
   id: string; vencimento: string | null; competencia: string | null; descricao: string | null; valorCent: number;
   financiamentoId: string | null; numeroDocumento: string | null;
+  /** FIN-NOTA-PDF-01b — pago (realizado, conciliado ou com data de pagamento): o valor dele nao muda ao parcelar. */
+  pago: boolean;
 }
 
 /**
- * FIN-NOTA-PDF-01 — o pedido do Gabriel: ATUALIZAR o lancamento que ja' existe em vez de criar outro. Os abertos (nao realizados, nao
- * conciliados, nao cancelados, do cenario realizado — Meta nunca) do MESMO fornecedor e cliente com o valor da nota OU o de uma
- * parcela. So' leitura; quem atualiza e' o gesto, com confirmacao.
+ * FIN-NOTA-PDF-01 — o pedido do Gabriel: ATUALIZAR o lancamento que ja' existe em vez de criar outro. Os lancamentos vivos (nao
+ * cancelados, do cenario realizado — Meta nunca) do MESMO fornecedor e cliente com o valor da nota OU o de uma parcela. So' leitura;
+ * quem atualiza e' o gesto, com confirmacao. FIN-NOTA-PDF-01b: o PAGO entra (marcado `pago`) — o a' vista pago pode virar a parcela
+ * 1/N sem mudar de valor ("Atualizar e parcelar"); a parcela de um parcelamento so' entra aberta (anexar a nota).
  */
 export async function lancamentosAbertosComValor(clienteId: string, fornecedorId: string, valoresCent: readonly number[]): Promise<LancamentoAbertoDaNota[]> {
   const valores = [...new Set(valoresCent.filter((v) => v > 0))].map((v) => v / 100);
   if (!valores.length) return [];
   const { data, error } = await supabase.from('financeiro_lancamentos_v2')
-    .select('id, data_vencimento, data_competencia, descricao, valor, financiamento_id, numero_documento')
+    .select('id, data_vencimento, data_competencia, descricao, valor, financiamento_id, numero_documento, status_transacao, data_pagamento')
     .eq('cliente_id', clienteId).eq('favorecido_id', fornecedorId).eq('cancelado', false).eq('cenario', 'realizado')
-    .not('status_transacao', 'in', '(realizado,conciliado)')
     .in('valor', valores)
     .order('data_vencimento', { ascending: true })
     .limit(20);
@@ -163,5 +166,6 @@ export async function lancamentosAbertosComValor(clienteId: string, fornecedorId
   return data.map((l) => ({
     id: l.id, vencimento: l.data_vencimento ?? null, competencia: l.data_competencia ?? null, descricao: l.descricao ?? null,
     valorCent: Math.round(Math.abs(Number(l.valor)) * 100), financiamentoId: l.financiamento_id ?? null, numeroDocumento: l.numero_documento ?? null,
-  }));
+    pago: l.status_transacao === 'realizado' || l.status_transacao === 'conciliado' || !!l.data_pagamento,
+  })).filter((l) => !(l.pago && l.financiamentoId));
 }
