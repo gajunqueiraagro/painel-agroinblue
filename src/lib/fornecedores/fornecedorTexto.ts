@@ -41,11 +41,20 @@ import { normalizarNome, prepararParaBusca, buscarPreparados, casaComOTermo, typ
 /** FORN-CADASTRO-02: `nome` é a RAZÃO SOCIAL; `nome_fantasia` (opcional) entra na opção e na busca. */
 export interface FornecedorDoSeletor { id: string; nome: string; cpf_cnpj?: string | null; ativo?: boolean | null; nome_fantasia?: string | null;
   /** FORN-BUSCA-UNICA-01 — a busca única também lê: a marca da mesclagem, os apelidos e o uso */
-  fundido_em_id?: string | null; aliases_norm?: readonly string[] | null; uso?: number | null }
+  fundido_em_id?: string | null; aliases_norm?: readonly string[] | null; uso?: number | null;
+  /** FORN-FILIAL-01 — a cidade da filial */
+  municipio?: string | null; uf?: string | null }
 
 /** Cadastro de projeção ("[META]" no nome): fora da lista por padrão; só entra em modal de meta. A regra mora aqui. */
 /** FORN-CADASTRO-02 — a fantasia de qualquer linha de fornecedor (o campo é opcional nos tipos dos hospedeiros) */
 export const fantasiaDe = (f: object): string | null => { const v: unknown = Reflect.get(f, 'nome_fantasia'); return typeof v === 'string' && v.trim() ? v : null; };
+/** FORN-FILIAL-01 — a cidade da filial como a opção a escreve: "Presidente Prudente/SP" (só a cidade ou só a UF quando falta a outra);
+ *  sem nenhuma, nula. Lida de qualquer linha de fornecedor (o campo é opcional nos tipos dos hospedeiros). */
+export const cidadeDe = (f: object): string | null => {
+  const ler = (k: string): string => { const v: unknown = Reflect.get(f, k); return typeof v === 'string' ? v.trim() : ''; };
+  const m = ler('municipio'), u = ler('uf');
+  return m && u ? `${m}/${u}` : m || u || null;
+};
 
 export const ehCadastroDeMeta = (nome: string): boolean => nome.includes('[META]');
 
