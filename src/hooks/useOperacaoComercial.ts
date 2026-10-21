@@ -63,6 +63,8 @@ export interface OcRascunhoPayload {
   valor_acordado?: number | null;
   numero_documento?: string | null;
   observacoes?: string | null;
+  /** OC-TIPO-VENDA-01: so' a venda manda ('' = sem tipo); ausente preserva. */
+  tipo_venda?: 'desmama' | 'gado_adulto' | 'boitel' | '';
   // Lote (Ordem de Compra): uma ou mais movimentações. Consideradas só na criação.
   movimentacoes: string[];
   partes: OcPartePayload[];
