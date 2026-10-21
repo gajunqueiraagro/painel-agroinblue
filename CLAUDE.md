@@ -137,7 +137,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   ausente; dado conciliado nunca deve aparentar ausencia.
 
 ## GATES (comandos oficiais; a historia das baselines em docs/historico/gates-baselines.md e nos meses)
-- TSC: `npx tsc --noEmit -p tsconfig.app.json` — baseline 139 erros (so' pode cair; numero novo = PR quebrou).
+- TSC: `npx tsc --noEmit -p tsconfig.app.json` — TSC baseline: 139 erros (so' pode cair; numero novo = PR quebrou). ⚠ A guarda de commit
+  (`.claude/hooks/guard-commit-tsc.sh`) le^ exatamente "TSC baseline: N" deste arquivo: a frase nao pode sumir.
 - Build: `npm run build:proto` verde antes de todo commit.
 - `npm run check:tdz` (funcao chamada antes de declarada no render) · `npm run check:hooks` (hook condicional; baseline 0) ·
   `npm run check:ui-nativo` (controle nativo e seletor sem busca: zero novo; regua dos modais so' pode cair).
@@ -173,6 +174,9 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   id de linha resolve o cliente e chama `tenant_ok` (42501, nunca vazio). Interna sem usuario nao leva a guarda no corpo.
 - RLS por tenant no ar (ACESSOS-01): consulta sem `.eq('cliente_id', …)` passa a ver so' o do cliente; 4 policies `true` sao
   referencia global.
+- GATILHO que chama funcao interna e' SECURITY DEFINER; INDICE DE EXPRESSAO avalia a funcao com os privilegios de QUEM GRAVA — a funcao
+  do indice precisa de EXECUTE para `authenticated` (FORN-FILIAL-01-FIX: a trava de 21/10 quebrou toda gravacao de fornecedor). Teste
+  de gatilho/indice novo roda como `authenticated` (`set local role authenticated` + claims de um usuario real), nunca so' como postgres.
 - RPC chamada pela tela roda sob pg_safeupdate (todo UPDATE/DELETE com WHERE, inclusive em tabela temporaria). Funcao chamada a cada
   carga com parametro de conta leva `SET plan_cache_mode = force_custom_plan`. REPLACE de VIEW leva `security_invoker = true`.
 - Migration de corpo grande: patch guardado por md5. Ancora que casa 1x pode ser a errada. Deslocar chave de indice unico em lote exige
