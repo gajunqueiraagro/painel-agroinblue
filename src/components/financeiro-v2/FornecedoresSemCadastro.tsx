@@ -37,13 +37,14 @@ interface Ligado { operacaoId: string; nome: string; qtd: number; criado: boolea
 /* abaixo de 900px de janela a coluna "Último" sai e "Ligar a" encolhe (medido: a 814 o texto ficava com 6px) */
 const COLS = { abrir: 22, qtd: 50, valor: 112, ultimo: 74, destino: 250, destinoEstreito: 172, acao: 84 };
 const TH = 'sticky top-0 z-10 h-[26px] bg-[#1f3554] px-2 text-left text-[10.5px] font-semibold text-white whitespace-nowrap';
+/* FORN-01b — texto em célula: UMA linha, "…" quando não cabe, o inteiro no `title` (regra de corte do Gabriel, 21/10 07h25) */
 const TD = 'h-[26px] border-b border-border/60 px-2 align-middle text-[11px]';
 const TF = 'sticky bottom-0 z-10 h-[26px] border-t border-border bg-[#e3e8ef] px-2 text-[11px] font-semibold';
 const dma = (iso: string | null) => (iso && iso.length >= 10 ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '—');
 const ROTULO_DO_STATUS = new Map<string, string>(Object.entries(STATUS_FINANCEIRO_LABEL));
 const rotuloDoStatus = (s: string | null): string => ROTULO_DO_STATUS.get((s ?? '').toLowerCase()) ?? (s ?? '—');
 
-export function FornecedoresSemCadastro({ clienteId, fazendas, aoContar, visivel = true, alturaDaLista = 'max-h-[calc(100dvh-330px)]' }: Props) {
+export function FornecedoresSemCadastro({ clienteId, fazendas, aoContar, visivel = true, alturaDaLista = 'flex-1' }: Props) {
   const [dados, setDados] = useState<SemCadastro | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [filtro, setFiltro] = useState<FiltroSemCadastro>('todos');
@@ -119,9 +120,10 @@ export function FornecedoresSemCadastro({ clienteId, fazendas, aoContar, visivel
 
   if (!visivel) return null;
   return (
-    <div className="flex min-h-0 flex-col gap-2" data-testid="fornecedores-sem-cadastro">
-      <p className="text-[11px] leading-[1.4] text-muted-foreground" data-testid="sem-cadastro-explicacao">{EXPLICACAO_SEM_CADASTRO}</p>
-      <div className="flex items-center gap-2">
+    /* FORN-01b — a aba ocupa a altura que a tela dá: a lista estica (`flex-1`) e o recado e o rodapé ficam no pé — filtrar não os move */
+    <div className="flex h-full min-h-0 flex-col gap-2" data-testid="fornecedores-sem-cadastro">
+      <p className="shrink-0 text-[11px] leading-[1.4] text-muted-foreground" data-testid="sem-cadastro-explicacao">{EXPLICACAO_SEM_CADASTRO}</p>
+      <div className="flex shrink-0 items-center gap-2">
         <div className="relative min-w-0 flex-1">
           <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar pelo texto…" data-testid="sem-cadastro-busca"
@@ -159,10 +161,10 @@ export function FornecedoresSemCadastro({ clienteId, fazendas, aoContar, visivel
               if (lig) {
                 return (
                   <tr key={t.chave} className="bg-[#e6f4ea]" data-testid="sem-cadastro-ligado">
-                    <td className={TD} /><td className={TD}><span className="uma-linha-que-rola block font-medium">{t.texto}</span></td>
+                    <td className={TD} /><td className={TD}><span className="block truncate font-medium" title={t.texto}>{t.texto}</span></td>
                     <td className={cn(TD, 'text-right')}>{t.qtd}</td><td className={cn(TD, 'text-right')}>{formatMoeda(t.valor)}</td>
                     {!estreita && <td className={TD}>{mesDoUltimo(t.ultimo)}</td>}
-                    <td className={cn(TD, 'font-semibold text-[#1e7a44]')}><span className="uma-linha-que-rola block">✓ Ligado a {lig.nome}</span></td>
+                    <td className={cn(TD, 'font-semibold text-[#1e7a44]')}><span className="block truncate" title={`Ligado a ${lig.nome}`}>✓ Ligado a {lig.nome}</span></td>
                     <td className={TD}>
                       <button type="button" className="text-[11px] font-semibold text-[#24406a] underline" data-testid="sem-cadastro-desfazer"
                         onClick={() => void desfazer(t.chave, lig.operacaoId, lig.nome, lig.criado)}>Desfazer</button>
@@ -176,7 +178,7 @@ export function FornecedoresSemCadastro({ clienteId, fazendas, aoContar, visivel
                     <td className={cn(TD, 'cursor-pointer text-muted-foreground')} onClick={() => setAberta(abertaEsta ? null : t.chave)}
                       aria-label={abertaEsta ? 'Fechar' : 'Ver os lançamentos'}>{abertaEsta ? '▾' : '▸'}</td>
                     <td className={TD} title={t.origem === 'planilha' ? 'texto da planilha do Enriquecer' : 'descrição do lançamento'}>
-                      <span className="uma-linha-que-rola block font-medium">{t.texto}</span>
+                      <span className="block truncate font-medium" title={t.texto}>{t.texto}</span>
                     </td>
                     <td className={cn(TD, 'text-right')}>{t.qtd}</td>
                     <td className={cn(TD, 'text-right')}>{formatMoeda(t.valor)}</td>
@@ -207,14 +209,14 @@ export function FornecedoresSemCadastro({ clienteId, fazendas, aoContar, visivel
                   {abertaEsta && lista.map((l) => (
                     <tr key={l.id} className="bg-[#fafbfc]" data-testid="sem-cadastro-lancamento">
                       <td className={cn(TD, 'h-[22px]')} />
-                      <td className={cn(TD, 'h-[22px] pl-[30px] text-muted-foreground')}><span className="uma-linha-que-rola block">{l.descricao ?? '—'}</span></td>
+                      <td className={cn(TD, 'h-[22px] pl-[30px] text-muted-foreground')}><span className="block truncate" title={l.descricao ?? undefined}>{l.descricao ?? '—'}</span></td>
                       <td className={cn(TD, 'h-[22px]')} />
                       <td className={cn(TD, 'h-[22px] text-right')}>{formatMoeda(l.valor)}</td>
                       {estreita ? (
-                        <td className={cn(TD, 'h-[22px] text-muted-foreground')}><span className="uma-linha-que-rola block">{dma(l.data)} · {fazendaNome(l.fazendaId)}</span></td>
+                        <td className={cn(TD, 'h-[22px] text-muted-foreground')}><span className="block truncate" title={`${dma(l.data)} · ${fazendaNome(l.fazendaId)}`}>{dma(l.data)} · {fazendaNome(l.fazendaId)}</span></td>
                       ) : (<>
                         <td className={cn(TD, 'h-[22px] text-muted-foreground')}>{dma(l.data)}</td>
-                        <td className={cn(TD, 'h-[22px] text-muted-foreground')}><span className="uma-linha-que-rola block">{fazendaNome(l.fazendaId)}</span></td>
+                        <td className={cn(TD, 'h-[22px] text-muted-foreground')}><span className="block truncate" title={fazendaNome(l.fazendaId)}>{fazendaNome(l.fazendaId)}</span></td>
                       </>)}
                       <td className={cn(TD, 'h-[22px] text-muted-foreground')}>{rotuloDoStatus(l.status)}</td>
                     </tr>
@@ -243,7 +245,7 @@ export function FornecedoresSemCadastro({ clienteId, fazendas, aoContar, visivel
         </table>
       </div>
       {/* recado e pergunta: lugar fixo de 18px, sempre presente */}
-      <div className="flex h-[18px] min-w-0 items-center gap-2 text-[11px]" data-testid="sem-cadastro-recado">
+      <div className="flex h-[18px] min-w-0 shrink-0 items-center gap-2 text-[11px]" data-testid="sem-cadastro-recado">
         {perguntaInativar ? (
           <>
             <span className="uma-linha-que-rola min-w-0 text-amber-800">O cadastro "{perguntaInativar.nome}" foi criado nesta ligação e fica sem uso: tirar de uso também?</span>
@@ -256,7 +258,7 @@ export function FornecedoresSemCadastro({ clienteId, fazendas, aoContar, visivel
           <span className={cn('uma-linha-que-rola min-w-0', recado.tom === 'erro' ? 'text-destructive' : recado.tom === 'ok' ? 'text-[#1e7a44]' : 'text-amber-800')}>{recado.texto}</span>
         ) : null}
       </div>
-      <div className="flex items-center gap-2 text-[11px] text-muted-foreground" data-testid="sem-cadastro-rodape">
+      <div className="flex shrink-0 items-center gap-2 text-[11px] text-muted-foreground" data-testid="sem-cadastro-rodape">
         <span>Ligados nesta sessão: <b className="font-semibold text-foreground">{nLigados} {nLigados === 1 ? 'texto' : 'textos'} · {qtdLigados} {qtdLigados === 1 ? 'lançamento' : 'lançamentos'}</b></span>
         <button type="button" className="ml-auto font-semibold text-[#24406a] underline" onClick={() => void abrirRecentes()}
           data-testid="sem-cadastro-ver-recentes">Ver ligações recentes (desfazer)</button>
@@ -280,8 +282,8 @@ export function FornecedoresSemCadastro({ clienteId, fazendas, aoContar, visivel
                 {recentes?.map((o) => (
                   <tr key={o.id}>
                     <td className={TD}>{dma(o.feitaEm.slice(0, 10))}</td>
-                    <td className={TD}><span className="uma-linha-que-rola block">{o.texto}</span></td>
-                    <td className={TD}><span className="uma-linha-que-rola block">{o.fornecedorNome}{o.fornecedorCriado ? ' · criado aqui' : ''}</span></td>
+                    <td className={TD}><span className="block truncate" title={o.texto}>{o.texto}</span></td>
+                    <td className={TD}><span className="block truncate" title={`${o.fornecedorNome}${o.fornecedorCriado ? ' · criado aqui' : ''}`}>{o.fornecedorNome}{o.fornecedorCriado ? ' · criado aqui' : ''}</span></td>
                     <td className={cn(TD, 'text-right')}>{o.lancamentos}</td>
                     <td className={TD}>
                       {o.desfeitaEm ? <span className="text-muted-foreground">desfeita</span> : (
