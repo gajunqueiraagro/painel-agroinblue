@@ -11,12 +11,13 @@ import { contaDaFolha, datasDoModelo, type EntradaDoModelo, type GrupoDaTela, ty
 
 const ROTULO_DO_GRUPO: Record<GrupoDaTela<unknown>['tipo'], string> = {
   vencidos: 'vencido (conta hoje)', entre: 'antes do período', dia: 'período', sem_vencimento: 'sem vencimento',
+  saem_hoje: 'sai hoje · fora do saldo do período',
 };
 const dataCheia = (iso: string | null | undefined): string => (iso && iso.length >= 10 ? datasDoModelo.dma(iso) : '');
 const numero = (v: unknown): number | null => { const n = Math.abs(Number(v ?? 0)); return Number.isFinite(n) ? n : null; };
 
 export function montarPayloadExcelCpr<L extends LinhaDaTela>(e: {
-  arquivo: string; grupos: GrupoDaTela<L>[]; serie: SerieDoSaldoCpr; de: EntradaDoModelo<L>['de']; incluirVencidos: boolean; hoje: string;
+  arquivo: string; grupos: GrupoDaTela<L>[]; serie: SerieDoSaldoCpr; de: EntradaDoModelo<L>['de']; hoje: string;
   /** o primeiro dia do período (`periodo.de`): depois de hoje, o Caixa inicial é o previsto e não há linha de hoje */
   inicio: string;
   /** CPR-AJUSTES-20-10b — o último dia do período e o rodapé do dono (`rodapeDoPeriodoCpr`): a linha "Fim do período" fecha a aba
@@ -34,7 +35,7 @@ export function montarPayloadExcelCpr<L extends LinhaDaTela>(e: {
         'Descrição': c.parcela ? `${c.descricao === '—' ? '' : c.descricao} ${c.parcela}`.trim() : c.descricao, 'Fornecedor': c.fornecedor, 'Conta': c.conta, 'Subcentro': c.subcentro, 'Centro': c.centro, 'Macro': c.macro,
         'Safra': c.safra, 'Faz.': c.faz, 'Status': c.status, 'Origem': c.origem, 'Doc': c.doc,
         'A receber': receber ? numero(l.valor) : null, 'A pagar': receber ? null : numero(l.valor),
-        'Grupo': c.paga ? 'paga (não soma)' : c.foraDoCaixa ? 'transferência · conta fora do caixa (não soma)'
+        'Grupo': g.depoisDoFim ? ROTULO_DO_GRUPO[g.tipo] : c.paga ? 'paga (não soma)' : c.foraDoCaixa ? 'transferência · conta fora do caixa (não soma)'
           : c.vencido ? 'vencido (conta hoje)' : g.hoje ? 'hoje' : ROTULO_DO_GRUPO[g.tipo],
       });
     }
@@ -46,15 +47,26 @@ export function montarPayloadExcelCpr<L extends LinhaDaTela>(e: {
   const saldoPorDia: XlsxCellValue[][] = [
     ['Data', 'A receber', 'A pagar', 'Saldo depois do dia'],
     /* CPR-AJUSTES-20-10b — o bloco dos vencidos do período futuro vem ANTES do Caixa inicial (que já os desconta), como na tela */
-    ...e.grupos.filter((g) => g.antesDoCaixaInicial).map((g): XlsxCellValue[] => [g.titulo, g.receber, g.pagar, null]),
+    ...e.grupos.filter((g) => g.antesDoCaixaInicial && !g.depoisDoFim).map((g): XlsxCellValue[] => [g.titulo, g.receber, g.pagar, null]),
     [`Caixa inicial${futuro ? ' (previsto)' : ''}${s.inicial ? ` · ${dataCheia(s.inicial.data)}` : ''}`, null, null, s.inicial ? s.inicial.saldo : null],
     ...e.grupos
-      .filter((g) => g.tipo !== 'sem_vencimento' && !g.antesDoCaixaInicial)
+      .filter((g) => g.tipo !== 'sem_vencimento' && !g.antesDoCaixaInicial && !g.depoisDoFim)
       .map((g): XlsxCellValue[] => [
         g.tipo === 'dia' ? `${dataCheia(g.chave)}${g.hoje ? ' · hoje' : g.passado ? ' · realizado' : ''}` : g.titulo,
         g.receber, g.pagar, g.saldo ?? null,
       ]),
     ...(e.fim && e.rodape ? [[`Fim do período · ${dataCheia(e.fim)}`, e.rodape.receber, e.rodape.pagar, s.fim] as XlsxCellValue[]] : []),
+    /* CPR-AJUSTES-20-10c — período encerrado: o grupo "Saem hoje" em linhas PRÓPRIAS depois do Fim do período, fora da soma dele:
+       o título com o subtotal, a frase e uma linha por conta (vencimento original e descrição) */
+    ...e.grupos.filter((g) => g.depoisDoFim).flatMap((g): XlsxCellValue[][] => [
+      [g.titulo, g.receber, g.pagar, null],
+      ...(g.frase ? [[g.frase, null, null, null] as XlsxCellValue[]] : []),
+      ...g.linhas.map((l): XlsxCellValue[] => {
+        const c = contaDaFolha(l, e.de);
+        const receber = e.de.receber(l);
+        return [`vencido em ${dataCheia(l.data_vencimento)} · ${c.descricao}`, receber ? numero(l.valor) : null, receber ? null : numero(l.valor), null];
+      }),
+    ]),
   ];
   return {
     filename: `${e.arquivo}.xlsx`,
