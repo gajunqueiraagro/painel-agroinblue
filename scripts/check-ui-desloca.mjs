@@ -57,6 +57,7 @@ const CENARIOS = [
     ['fornecedor cadastrado, subcentro sugerido, "Atualizar este"', { url: 'tela=nota-pdf&v=cadastrado' }],
     ['nota ja registrada', { url: 'tela=nota-pdf&v=registrada' }], ['chave nao confere', { url: 'tela=nota-pdf&v=diverge' }],
     ['pior caso de texto', { url: 'tela=nota-pdf&v=longo' }],
+    ['subcentro de lavoura (Safra e Cultura)', { url: 'tela=nota-pdf&v=lavoura' }], ['nota sem duplicata (Criar lancamento)', { url: 'tela=nota-pdf&v=semdup' }],
   ] },
   /* OC-CC-BOTAO-BUSCAR-DESLOCA-01 — os botoes da conta corrente nao andam com o motivo ("Principal já programado…") aparecendo ou
      sumindo, nem as abas com a sub-aba Despesas. So' nos tamanhos em que o modal da OC tem desenho (>= 1000). */
