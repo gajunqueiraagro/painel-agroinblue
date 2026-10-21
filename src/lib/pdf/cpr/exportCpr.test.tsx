@@ -35,21 +35,20 @@ const de: EntradaDoModelo<Linha>['de'] = {
   vencido: (l) => (l.data_vencimento ?? '') < HOJE,
 };
 function entrada(linhas: Linha[] = LINHAS, caixa: number | null = 1000, extra: Partial<EntradaDoModelo<Linha>> = {}): EntradaDoModelo<Linha> {
-  const recorte = recortarCpr(linhas, { periodo: P, hoje: HOJE, incluirVencidos: true, ancoras: new Map([['A', '2026-09-30']]) });
+  const recorte = recortarCpr(linhas, { periodo: P, hoje: HOJE, ancoras: new Map([['A', '2026-09-30']]) });
   /* o período começa HOJE: o dono do caixa entrega o Caixa inicial (o fim de ontem) e o dia de hoje, sem movimento */
   const serie = serieDoSaldoCpr(recorte, caixa, caixa == null ? null : { inicial: { data: '2026-10-04', saldo: caixa }, dias: [{ data: HOJE, entradas: 0, saidas: 0, nEntradas: 0, nSaidas: 0, saldo: caixa }] });
   const dias = new Map(serie.dias.map((d) => [d.data, d]));
-  /* CPR-AJUSTES-20-10 — como a tela: hoje é um DIA, com os vencidos dentro (fora da lista com a caixa desligada, mas no saldo) */
-  const incluir = extra.incluirVencidos ?? true;
+  /* CPR-AJUSTES-20-10 — como a tela: hoje é um DIA, com os vencidos dentro */
   const grupos: GrupoDaTela<Linha>[] = [
-    { tipo: 'dia', chave: HOJE, titulo: HOJE, quando: incluir ? 'hoje' : 'hoje · o saldo inclui 1 vencido fora da lista', hoje: true,
+    { tipo: 'dia', chave: HOJE, titulo: HOJE, quando: 'hoje', hoje: true,
       avisoHoje: '1 vencido que não apareceu no extrato conciliado até 30/09/2026 entra hoje · confirme se ainda vai acontecer',
-      linhas: incluir ? recorte.vencidos.contam.linhas : [], pagar: serie.partida.pagar.valor, receber: serie.partida.receber.valor,
+      linhas: recorte.vencidos.contam.linhas, pagar: serie.partida.pagar.valor, receber: serie.partida.receber.valor,
       saldo: serie.hoje == null ? null : serie.partida.saldo },
     ...Array.from(dias.values()).map((d): GrupoDaTela<Linha> => ({ tipo: 'dia', chave: d.data, titulo: d.data, quando: 'em breve', linhas: recorte.periodoSoma.linhas.filter((l) => l.data_vencimento === d.data), pagar: d.pagar.valor, receber: d.receber.valor, saldo: d.saldo })),
   ];
   return {
-    clienteNome: 'NJ Pecuária', contaNome: 'Banco do Brasil', todasAsContas: false, periodo: P, segmento: 'ambos', incluirVencidos: true, emitidoEm: '05/10/2026 08:00',
+    clienteNome: 'NJ Pecuária', contaNome: 'Banco do Brasil', todasAsContas: false, periodo: P, segmento: 'ambos', emitidoEm: '05/10/2026 08:00',
     serie, grupos,
     cartoes: { vencidosContamPagar: recorte.cartoes.vencidosContam.pagar, vencidosContamReceber: recorte.cartoes.vencidosContam.receber, pagarNoPeriodo: recorte.cartoes.periodo.pagar, receberNoPeriodo: recorte.cartoes.periodo.receber,
       porStatus: recorte.cartoes.porStatus, transferencias: recorte.cartoes.transferencias, hoje: HOJE, conciliadoAte: '2026-09-30' },
@@ -125,14 +124,12 @@ describe('o modelo — os mesmos números da tela, em texto', () => {
     expect(celulaDeValor('saldo', null)).toMatchObject({ texto: '—', seta: null });
     expect(celulaDeValor('saldo', undefined)).toBeNull();
   });
-  it('caixa de vencidos desligada: a faixa do saldo de hoje diz "após vencidos" e os cartões não mudam; cartão de crédito: "—" com a nota', () => {
-    const off = montarModeloCpr(entrada(LINHAS, 1000, { incluirVencidos: false }));
-    expect(off.numeros.map((x) => x.rotulo)).toEqual(montarModeloCpr(entrada()).numeros.map((x) => x.rotulo));
-    expect(off.faixas[0].titulo).toContain('Caixa inicial');
-    /* desligada, o vencido sai da LISTA e o saldo de hoje continua contando com ele (a semântica de antes, D3) */
-    expect(off.faixas[1].contas).toEqual([]);
-    expect(off.faixas[1].fecho?.saldo?.texto).toBe('R$ 899,90');
-    expect(off.faixas[1].titulo).toContain('fora da lista');
+  it('o dia de hoje traz o vencido na lista e no saldo; o cabeçalho não fala de caixa de vencidos; cartão de crédito: "—" com a nota', () => {
+    const m = montarModeloCpr(entrada(LINHAS, 1000));
+    expect(m.faixas[0].titulo).toContain('Caixa inicial');
+    expect(m.faixas[1].contas.length).toBe(1);
+    expect(m.faixas[1].fecho?.saldo?.texto).toBe('R$ 899,90');
+    expect(m.cabecalho.linha2).not.toContain('vencidos');
     const cartao = montarModeloCpr(entrada(LINHAS, null));
     expect(cartao.numeros.filter((x) => ['Caixa hoje', 'Mínimo', 'Saldo no fim'].includes(x.rotulo)).map((x) => x.valor)).toEqual(['—', '—', '—']);
     expect(cartao.notaSemSaldo).toContain('Cartão não entra no saldo em caixa');
@@ -152,7 +149,7 @@ describe('o modelo — os mesmos números da tela, em texto', () => {
 describe('a planilha — valores como número, pelo caminho de sempre', () => {
   it('uma linha por conta listada; a pagar e a receber NUMÉRICOS; "Saldo por dia" fecha no saldo no fim', () => {
     const e = entrada();
-    const p = montarPayloadExcelCpr({ arquivo: 'arq', grupos: e.grupos, serie: e.serie, de, incluirVencidos: true, hoje: HOJE, inicio: P.de });
+    const p = montarPayloadExcelCpr({ arquivo: 'arq', grupos: e.grupos, serie: e.serie, de, hoje: HOJE, inicio: P.de });
     expect(p.filename).toBe('arq.xlsx');
     expect(p.sheets.map((s) => s.name)).toEqual(['Contas', 'Saldo por dia']);
     const contas = p.sheets[0].rows;
@@ -254,7 +251,7 @@ describe('o bloco de números — o detalhe ocupa uma linha só (árvore do docu
     return achar(no.props.children, texto);
   };
   it('cada linha pequena do cartão é de UMA linha, com reticência; o valor não corta', () => {
-    const m = montarModeloCpr(entrada(LINHAS, 604088.31, { incluirVencidos: false }));
+    const m = montarModeloCpr(entrada(LINHAS, 604088.31));
     const detalhe = m.numeros[6].detalhes[1] ?? '';
     expect(detalhe).toBe('conciliado até 30/09');
     const el = achar(DocumentoCpr({ modelo: m }), detalhe);
@@ -273,7 +270,7 @@ describe('CPR-PDF-ACABAMENTO-01 — os sete cartões da folha', () => {
   const dia = (data: string, entradas: number, saidas: number, saldo: number) => ({ data, entradas, saidas, nEntradas: entradas > 0 ? 1 : 0, nSaidas: saidas > 0 ? 1 : 0, saldo });
   /** a entrada com o realizado do dono do caixa, num período qualquer */
   function comRealizado(periodo: { de: string; ate: string }, linhas: Linha[], real: Parameters<typeof serieDoSaldoCpr>[2], caixa: number | null = 1000, conciliadoAte: string | null = HOJE): EntradaDoModelo<Linha> {
-    const recorte = recortarCpr(linhas, { periodo, hoje: HOJE, incluirVencidos: true, ancoras: new Map([['A', '2026-09-30'], ['B', '2026-09-30']]) });
+    const recorte = recortarCpr(linhas, { periodo, hoje: HOJE, ancoras: new Map([['A', '2026-09-30'], ['B', '2026-09-30']]) });
     const serie = serieDoSaldoCpr(recorte, caixa, real);
     const base = entrada(linhas, caixa);
     const passado: GrupoDaTela<Linha>[] = serie.realizados.map((d) => ({ tipo: 'dia', chave: d.data, titulo: d.data, quando: 'realizado', linhas: [], pagar: d.pagar.valor, receber: d.receber.valor, saldo: d.saldo, passado: true }));
@@ -351,14 +348,14 @@ describe('CPR-PDF-ACABAMENTO-01 — os sete cartões da folha', () => {
     expect(m.faixas[0].saldo?.texto).toBe(formatMoeda(294782.71));
     expect(m.faixas.some((f) => f.titulo.includes('· hoje'))).toBe(false);
     /* a planilha também: começa no Caixa inicial previsto, sem linha de hoje, e fecha no Saldo no fim */
-    const dias = montarPayloadExcelCpr({ arquivo: 'a', grupos: e.grupos, serie: e.serie, de, incluirVencidos: true, hoje: HOJE, inicio: FUT.de }).sheets[1].rows;
+    const dias = montarPayloadExcelCpr({ arquivo: 'a', grupos: e.grupos, serie: e.serie, de, hoje: HOJE, inicio: FUT.de }).sheets[1].rows;
     expect(dias[1]).toEqual(['Caixa inicial (previsto) · 12/10/2026', null, null, 294782.71]);
     expect(JSON.stringify(dias)).not.toContain('· hoje');
     expect(dias[dias.length - 1][3]).toBe(e.serie.fim);
   });
   it('planilha em período com dias realizados: Caixa inicial → realizados → hoje → o que vem, fechando no Saldo no fim', () => {
     const e = comRealizado(OUT, LIN, REAL, 296679.54);
-    const dias = montarPayloadExcelCpr({ arquivo: 'a', grupos: e.grupos, serie: e.serie, de, incluirVencidos: true, hoje: HOJE, inicio: OUT.de }).sheets[1].rows;
+    const dias = montarPayloadExcelCpr({ arquivo: 'a', grupos: e.grupos, serie: e.serie, de, hoje: HOJE, inicio: OUT.de }).sheets[1].rows;
     expect(dias.slice(1, 5).map((r) => [r[0], r[3]])).toEqual([
       ['Caixa inicial · 30/09/2026', 5884.14], ['02/10/2026 · realizado', 476673.78], ['03/10/2026 · realizado', 296679.54], ['05/10/2026 · hoje', 296679.54],
     ]);
@@ -368,7 +365,7 @@ describe('CPR-PDF-ACABAMENTO-01 — os sete cartões da folha', () => {
     const SET = { de: '2026-09-01', ate: '2026-09-30' };
     const real = { inicial: { data: '2026-08-31', saldo: 30943.91 }, dias: [dia('2026-09-10', 0, 31000, -56.09), dia('2026-09-30', 5940.23, 0, 5884.14)] };
     const e = comRealizado(SET, LIN, real, 296679.54, '2026-09-30');
-    const dias = montarPayloadExcelCpr({ arquivo: 'a', grupos: e.grupos, serie: e.serie, de, incluirVencidos: true, hoje: HOJE, inicio: SET.de }).sheets[1].rows;
+    const dias = montarPayloadExcelCpr({ arquivo: 'a', grupos: e.grupos, serie: e.serie, de, hoje: HOJE, inicio: SET.de }).sheets[1].rows;
     expect(dias.slice(1)).toEqual([['Caixa inicial · 31/08/2026', null, null, 30943.91], ['10/09/2026 · realizado', 0, 31000, -56.09], ['30/09/2026 · realizado', 5940.23, 0, 5884.14]]);
     const tr = e.serie.totalRealizado;
     const m = montarModeloCpr({ ...e, rodape: { pagar: tr.pagar.valor, receber: tr.receber.valor, contas: tr.pagar.contas + tr.receber.contas, realizado: true } });
