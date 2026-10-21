@@ -1629,7 +1629,9 @@ export default function V2Index() {
      tem referência, a página inteira cresce, e quem rola é o `<section>` — então o cabeçalho
      "fixo" de qualquer lista interna sobe junto. Foi o caso da colheita
      (`lancamentos-agricultura`), que nasceu escrita para app-shell e estava fora da lista. */
-  const SECOES_APP_SHELL = new Set(['conciliacao', 'mapa-pastos', 'conferencia-lancamentos', 'financiamentos', 'recorrencias', 'lancamentos-agricultura', 'barter-contratos', 'contas-a-pagar-receber', 'config-acessos']);
+  const SECOES_APP_SHELL = new Set(['conciliacao', 'mapa-pastos', 'conferencia-lancamentos', 'financiamentos', 'recorrencias', 'lancamentos-agricultura', 'barter-contratos', 'contas-a-pagar-receber', 'config-acessos',
+    /* FORN-01b — a lista de Fornecedores vai até o fim da tela: a altura vem do pai, não de `calc(100dvh-120px)` */
+    'fornecedores']);
   const appShell = modoResumo || SECOES_APP_SHELL.has(section);
 
   return (
