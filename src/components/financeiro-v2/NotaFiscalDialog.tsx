@@ -44,13 +44,15 @@ import { gravarItensSemTravar } from '@/lib/financeiro/itensDaNotaBanco';
 import { casarJaLancados, parcelasParaCasar, type LancamentoJaLancado } from '@/lib/financeiro/nfe/jaLancada';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
+import { CompararCadastroDialog } from './CompararCadastroDialog';
+import type { CadastroParaComparar } from '@/lib/fornecedores/compararCadastro';
 import type { NotaDoArquivo } from '@/lib/financeiro/nfe/lerNota';
 import type { CampoConferido, CampoDaMarca } from '@/lib/financeiro/nfe/danfe';
 import type { EmitenteNFe } from '@/lib/financeiro/nfe/tipos';
 import { dataCurta, documentoFormatado, numeroDaNota, numeroFalado, reais, soDigitos } from '@/lib/financeiro/nfe/formatos';
 import {
-  camposQueOEmitenteCompleta, completarCadastroPeloXml, fornecedorPeloDocumento, gravarDocumentoNoCadastro, lancamentosAbertosComValor,
-  notaJaLancada, usoDoFornecedor, type CadastroComODocumento,
+  camposQueOEmitenteCompleta, completarCadastroPeloXml, fornecedorPeloDocumento, lancamentosAbertosComValor,
+  atualizarCamposDoCadastro, cadastroParaComparar, desfazerCamposDoCadastro, notaJaLancada, usoDoFornecedor, type CadastroComODocumento,
   type LancamentoAbertoDaNota, type OcorrenciaDaNota,
 } from '@/lib/financeiro/nfeConsultas';
 import { caixaDeTitulo, consultarCnpj, type DadosDoCnpj } from '@/lib/fornecedores/consultaCnpj';
@@ -191,6 +193,8 @@ export function NotaFiscalDialog({
   const [trocarFornecedor, setTrocarFornecedor] = useState(false);
   const [criarFaltam, setCriarFaltam] = useState(true);
   const [mesmoAssim, setMesmoAssim] = useState<string | null>(null);
+  /* NOTA-FORNECEDOR-COMPARAR-01 — o cadastro de HOJE, para mostrar o que a nota muda antes de gravar */
+  const [comparar, setComparar] = useState<CadastroParaComparar | null>(null);
 
   /* a Receita: o nome inteiro (o DANFE corta) e o endereco escrito direito; nunca trava */
   useEffect(() => {
@@ -307,6 +311,8 @@ export function NotaFiscalDialog({
       if (e) toast.error(`Fornecedor criado, mas os dados da nota não foram gravados nele: ${e}`);
     } finally { setOcupado(null); }
   };
+  /* NOTA-FORNECEDOR-COMPARAR-01 — "Completar …" NAO grava direto: abre a comparacao (como esta' hoje x o que a nota traz; so' o
+     marcado e' gravado, com trilha e desfazer) */
   const completarCadastro = async () => {
     if (!favorecidoId) return;
     setOcupado('completar'); setErro(null);
@@ -315,15 +321,30 @@ export function NotaFiscalDialog({
         /* o CNPJ de outro cadastro nao entra aqui: conferido antes (a trava do banco recusaria com a frase) */
         const ja = await fornecedorPeloDocumento(clienteId, n.emitente.documento);
         if (ja && ja.id !== favorecidoId) { setConflito(ja); return; }
-        const e1 = await gravarDocumentoNoCadastro(clienteId, favorecidoId, n.emitente.documento);
-        if (e1) { setErro(e1); return; }
-        setCnpjGravado(true);
       }
-      const e = await completarCadastroPeloXml(clienteId, favorecidoId, emitente);
-      if (e) { setErro(e); return; }
-      setCompletar([]);
-      toast.success('Cadastro do fornecedor completado com os dados da nota');
+      const hoje = await cadastroParaComparar(clienteId, favorecidoId);
+      if (!hoje) { setErro('O cadastro não foi lido. Nada foi gravado.'); return; }
+      setComparar(hoje);
     } finally { setOcupado(null); }
+  };
+  const end0 = emitente.endereco;
+  const propostaDaNota: CadastroParaComparar = {
+    nome: razaoSocial, nome_fantasia: emitente.fantasia, cpf_cnpj: documentoFormatado(n.emitente.documento), inscricao_estadual: emitente.ie,
+    logradouro: end0?.logradouro ?? null, numero: end0?.numero ?? null, complemento: end0?.complemento ?? null, bairro: end0?.bairro ?? null,
+    cep: end0?.cep ?? null, municipio: end0?.municipio ?? null, uf: end0?.uf ?? null,
+  };
+  const gravarComparacao = async (campos: Record<string, string>): Promise<string | null> => {
+    if (!favorecidoId) return 'Sem cadastro escolhido.';
+    const r = await atualizarCamposDoCadastro(favorecidoId, campos, receita ? 'receita' : 'nota', `${p.rotuloNota}`, clienteId);
+    if (r.ok === false) return r.frase;
+    if (campos.cpf_cnpj) setCnpjGravado(true);
+    setCompletar([]);
+    const alt = r.alteracaoId;
+    const nCampos = Object.keys(campos).length;
+    toast.success(`Cadastro atualizado (${nCampos} ${nCampos === 1 ? 'coluna' : 'colunas'})`, alt ? {
+      action: { label: 'Desfazer', onClick: () => { void desfazerCamposDoCadastro(alt, clienteId).then((e) => (e ? toast.error(e) : toast.success('Desfeito'))); } },
+    } : undefined);
+    return null;
   };
   const g: Gravadores = gravadores ?? { ...GRAVADORES, gravar: (payload, cli) => gravarParcelamento(payload, cli, () => qc.invalidateQueries()) };
   const criar = async (motivo?: string) => {
@@ -761,6 +782,14 @@ export function NotaFiscalDialog({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {comparar && favorecidoId && (
+        <CompararCadastroDialog hoje={comparar} proposta={propostaDaNota} rotuloOrigem={receita ? 'Da nota (Receita)' : 'Da nota'}
+          emitente={{ documento: n.emitente.documento, nomes: [n.emitente.nome, n.emitente.fantasia, receitaNome] }} uso={uso}
+          onConfirmar={gravarComparacao} onClose={() => setComparar(null)}
+          onEscolherOutro={() => { setComparar(null); setFavorecidoId(null); setNovoPorEscolha(false); }}
+          onCadastrarNovo={() => { setComparar(null); setFavorecidoId(null); setNovoPorEscolha(true); }} />
+      )}
 
       {/* NOTA-JA-LANCADA-01 — "Criar mesmo assim": e' outra compra; o motivo fica na observacao do que nasce */}
       <AlertDialog open={mesmoAssim !== null} onOpenChange={(o) => { if (!o && ocupado !== 'criar') setMesmoAssim(null); }}>
