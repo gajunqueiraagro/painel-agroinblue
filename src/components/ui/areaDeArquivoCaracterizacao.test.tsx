@@ -20,6 +20,7 @@ vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.f
 vi.mock('@/lib/financeiro/nfeConsultas', () => ({
   iePorFazenda: async () => ({ 'f-pur': '28.987.654-3' }), fornecedorPeloNome: async () => null, notaJaRegistrada: async () => [],
   ultimaClassificacaoDoFornecedor: async () => null, gravarDocumentoNoCadastro: async () => null,
+  notaJaLancada: async () => [],   // NOTA-JA-LANCADA-01
 }));
 
 import { FormDocumento } from '@/components/financeiro-v2/AbaDocumentosLancamento';
