@@ -68,6 +68,8 @@ function paginaDaBancada(base: any[], a: any) {
     totais: (({ entradas, saidas, transferencias, entradasSemCaixa, saidasSemCaixa }) => ({ entradas, saidas, transferencias,
       entradas_sem_caixa: entradasSemCaixa, saidas_sem_caixa: saidasSemCaixa }))(totaisDaListaV2(base, null)),
     sem_caixa: { linhas: base.length - caixa.length, total: 0 },
+    /* FIN-V2-FILTRO-FORNECEDOR-01 — o uso por fornecedor no recorte (sem o filtro de fornecedor) */
+    fornecedores: caixa.reduce((m: Record<string, number>, l) => { if (l.favorecido_id) m[l.favorecido_id] = (m[l.favorecido_id] ?? 0) + 1; return m; }, {}),
   };
 }
 

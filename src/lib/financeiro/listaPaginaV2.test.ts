@@ -12,7 +12,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
   filtrosDaPaginaV2, ordemDaPaginaV2, lerPaginaV2, intervaloDaPaginaV2, paginasDaListaV2, reservasDaPaginaV2,
-  lerPorPaginaV2, guardarPorPaginaV2, porPaginaV2DoTexto, textoDoPorPaginaV2, type FiltrosDaTelaV2,
+  lerPorPaginaV2, guardarPorPaginaV2, porPaginaV2DoTexto, textoDoPorPaginaV2, fornecedoresDoFiltroV2, type FiltrosDaTelaV2,
 } from './listaPaginaV2';
 
 const VAZIO: FiltrosDaTelaV2 = {
@@ -48,6 +48,7 @@ const RESPOSTA = {
   linhas: [{ id: 'a', cliente_id: 'c', valor: 10, conciliado: true }, { id: 'b', cliente_id: 'c', valor: 5, conciliado: false }],
   totais: { entradas: 10, saidas: 5, transferencias: 0, entradas_sem_caixa: 1, saidas_sem_caixa: 2 },
   sem_caixa: { linhas: 3, total: -7.5 },
+  fornecedores: { fa: 2, fb: 7 },
 };
 
 describe('o leitor da resposta', () => {
@@ -58,6 +59,7 @@ describe('o leitor da resposta', () => {
     expect([...(p?.conciliados ?? [])]).toEqual(['a']);
     expect(p?.totais).toEqual({ entradas: 10, saidas: 5, transferencias: 0, entradasSemCaixa: 1, saidasSemCaixa: 2 });
     expect(p?.semCaixa).toEqual({ linhas: 3, total: -7.5 });
+    expect([...(p?.usoPorFornecedor ?? [])]).toEqual([['fa', 2], ['fb', 7]]);
   });
   it('peça torta = nulo inteiro (nunca zeros inventados)', () => {
     expect(lerPaginaV2(null)).toBeNull();
@@ -66,6 +68,32 @@ describe('o leitor da resposta', () => {
     expect(lerPaginaV2({ ...RESPOSTA, totais: { ...RESPOSTA.totais, saidas: null } })).toBeNull();
     expect(lerPaginaV2({ ...RESPOSTA, sem_caixa: undefined })).toBeNull();
     expect(lerPaginaV2({ ...RESPOSTA, linhas: [{ id: 'a' }] })).toBeNull();
+    expect(lerPaginaV2({ ...RESPOSTA, fornecedores: undefined })).toBeNull();
+    expect(lerPaginaV2({ ...RESPOSTA, fornecedores: { fa: '2' } })).toBeNull();
+  });
+});
+
+describe('FIN-V2-FILTRO-FORNECEDOR-01 — a lista do filtro de fornecedor', () => {
+  /* o caso do print (NJ, "lineag"), sintético: o destino ativo, uma filial ativa sem uso, mesclados com o nome antigo, um inativo com e um sem lançamento */
+  const CADASTRO = [
+    { id: 'dest', nome: 'Lineagro Produtos Agropecuários SA', ativo: true, fundido_em_id: null },
+    { id: 'nova', nome: 'Nova Lineagro Produtos Agropecuarios Ltda', ativo: true, fundido_em_id: null },
+    { id: 'm1', nome: 'Lineagro Nf 26959', ativo: false, fundido_em_id: 'dest' },
+    { id: 'm2', nome: 'Lineagro', ativo: false, fundido_em_id: 'dest' },
+    { id: 'in1', nome: 'Inativo Com Uso', ativo: false, fundido_em_id: null },
+    { id: 'in0', nome: 'Inativo Sem Uso', ativo: false, fundido_em_id: null },
+  ];
+  it('ativos sempre; inativo só com lançamento no recorte; mesclado nunca; o uso é o do servidor', () => {
+    const l = fornecedoresDoFiltroV2(CADASTRO, new Map([['dest', 42], ['in1', 3], ['m1', 5]]));
+    expect(l.map((f) => [f.id, f.uso])).toEqual([['dest', 42], ['nova', 0], ['in1', 3]]);
+  });
+  it('sem a contagem (página carregando): só os ativos, uso nulo — nunca "0 lanç." inventado', () => {
+    expect(fornecedoresDoFiltroV2(CADASTRO, null).map((f) => [f.id, f.uso])).toEqual([['dest', null], ['nova', null]]);
+  });
+  it('na tela: a lista vem do servidor, sem o selo "N iguais", e o uso só aparece com a página lida', () => {
+    const tela = readFileSync(resolve(__dirname, '../../pages/FinanceiroV2Tab.tsx'), 'utf8');
+    expect(tela).toContain('const fornecedoresDoFiltro = useMemo(() => fornecedoresDoFiltroV2(hook.fornecedores, paginaDaLista?.usoPorFornecedor ?? null),');
+    expect(tela.match(/situacao="todos" nomeInteiro mostrarUso=\{!!paginaDaLista\} mostrarIguais=\{false\}/g)).toHaveLength(2);
   });
 });
 

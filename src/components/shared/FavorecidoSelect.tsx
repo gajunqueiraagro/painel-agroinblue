@@ -120,6 +120,9 @@ export interface FavorecidoSelectProps<F extends FavorecidoOpcao = FornecedorV2>
   nomeInteiro?: boolean;
   /** FORN-BUSCA-UNICA-01 — o uso de cada um (o `uso` da linha) aparece à direita do item: "12 lanç." */
   mostrarUso?: boolean;
+  /** FIN-V2-FILTRO-FORNECEDOR-01 — o selo "N iguais" (padrão: aparece). O filtro de Lançamentos o desliga: lá a lista é a dos ativos e
+   *  as filiais se distinguem pela cidade/UF e pelo CNPJ inteiro. */
+  mostrarIguais?: boolean;
 }
 
 export const FRASE_FALHA_AO_ABRIR_CADASTRO = 'Não foi possível abrir o cadastro do fornecedor.';
@@ -162,6 +165,7 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
   label, triggerClassName, size = 'default', tabIndex, disabled, showCpfCnpj = false,
   limpavel = false, placeholder = 'Selecione fornecedor...', linhaDoDocumento, incluirMeta = false, acaoFinal,
   novoDesabilitado = false, novoRotulo, rotuloDoVazio = '— nenhum —', situacao = 'ativos', nomeInteiro = false, mostrarUso = false,
+  mostrarIguais = true,
 }: FavorecidoSelectProps<F>) {
   const [open, setOpen] = useState(false);
   const [buscaPropria, setBuscaPropria] = useState('');
@@ -355,7 +359,7 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
                   {situacaoDoItem(o.f, (id) => nomePorId.get(id)) && (
                     <span data-testid="favorecido-situacao" className="ml-1.5 shrink-0 rounded-sm bg-zinc-200/90 px-1 text-zinc-900">{situacaoDoItem(o.f, (id) => nomePorId.get(id))}</span>
                   )}
-                  {o.iguais > 0 && (
+                  {mostrarIguais && o.iguais > 0 && (
                     <span data-testid="favorecido-iguais" className="ml-1.5 shrink-0 rounded-sm bg-amber-400/90 px-1 text-zinc-900"
                       title={`${o.iguais} cadastros ativos com este nome — confira o CNPJ/CPF`}>{seloDeIguais(o.iguais)}</span>
                   )}

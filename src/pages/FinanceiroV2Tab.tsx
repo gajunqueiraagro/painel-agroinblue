@@ -96,6 +96,7 @@ import { useAlturaAteOFim } from '@/hooks/useAlturaAteOFim';
 import {
   filtrosDaPaginaV2, ordemDaPaginaV2, intervaloDaPaginaV2, paginasDaListaV2, reservasDaPaginaV2,
   lerPorPaginaV2, guardarPorPaginaV2, POR_PAGINA_V2, TOTAIS_VAZIOS, porPaginaV2DoTexto, textoDoPorPaginaV2, type PorPaginaV2, type PorPaginaV2Texto,
+  fornecedoresDoFiltroV2,
 } from '@/lib/financeiro/listaPaginaV2';
 import { RODAPE_REGUA, TextoReservado, reservaDeNumero } from '@/components/ui/regua-tabela';
 /* a reserva dos totais do topo: o maior valor que a faixa mostra (dezenas de milhões) */
@@ -325,9 +326,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   /* FIN-V2-DESEMPENHO-01b — com a página do servidor não há mais "todas as linhas" na tela: o filtro e a grade leem o CADASTRO do
      cliente inteiro (os parecidos e o "inativo" saem dele), e o uso (`· N`) deixou de existir. */
   const rotulosDoRecorte = useMemo(() => rotulosDosFornecedores(hook.fornecedores), [hook.fornecedores]);
-  /* FORN-BUSCA-UNICA-01 — o filtro é o seletor padrão (`FavorecidoSelect`, a busca única): os fornecedores do recorte, inativos
-     inclusive (têm lançamento), cada um com o uso = os lançamentos dele no recorte. */
-  const fornecedoresDoFiltro = hook.fornecedores;
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const currentYear = new Date().getFullYear();
@@ -1240,6 +1238,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const listaV2 = useListaPaginaV2(clienteAtual?.id, { filtros: filtrosV2, ordem: ordemV2, pagina: paginaV2, porPagina },
     !FEATURE_FLAGS.LISTA_PAGINADA_V2 && podeConsultar && mode === 'list');
   const paginaDaLista = listaV2.pagina;
+  /* FORN-BUSCA-UNICA-01 — o filtro é o seletor padrão (`FavorecidoSelect`, a busca única). FIN-V2-FILTRO-FORNECEDOR-01: os ATIVOS; o
+     inativo só com lançamento no recorte; o mesclado nunca (o nome antigo acha o destino pelos apelidos); o uso é o do SERVIDOR no
+     recorte sem o filtro de fornecedor (`usoPorFornecedor`, na mesma ida da página) — a lista não encolhe ao escolher. */
+  const fornecedoresDoFiltro = useMemo(() => fornecedoresDoFiltroV2(hook.fornecedores, paginaDaLista?.usoPorFornecedor ?? null),
+    [hook.fornecedores, paginaDaLista]);
   const fornecedoresMap = useMemo(
     /* FIN-V2-DESEMPENHO-01b: os nomes da página (`listaV2.nomes`, uma ida por id) valem até o cadastro inteiro chegar */
     () => new Map([...listaV2.nomes, ...hook.fornecedores.map((f): [string, string] => [f.id, f.nome])]),
@@ -2004,7 +2007,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     value={fornecedorFiltro === '__all__' ? '' : fornecedorFiltro}
                     onChange={(id) => setFornecedorFiltro(id || '__all__')}
                     fornecedores={fornecedoresDoFiltro}
-                    situacao="todos" nomeInteiro mostrarUso limpavel rotuloDoVazio="Todos" placeholder="Todos"
+                    situacao="todos" nomeInteiro mostrarUso={!!paginaDaLista} mostrarIguais={false} limpavel rotuloDoVazio="Todos" placeholder="Todos"
                     linhaDoDocumento={false} size="compact" triggerClassName="bg-white border-[#C9D4E2] !text-[9px]"
                   />
                 </div>
@@ -2424,7 +2427,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     value={fornecedorFiltro === '__all__' ? '' : fornecedorFiltro}
                     onChange={(id) => setFornecedorFiltro(id || '__all__')}
                     fornecedores={fornecedoresDoFiltro}
-                    situacao="todos" nomeInteiro mostrarUso limpavel rotuloDoVazio="Todos" placeholder="Todos"
+                    situacao="todos" nomeInteiro mostrarUso={!!paginaDaLista} mostrarIguais={false} limpavel rotuloDoVazio="Todos" placeholder="Todos"
                     linhaDoDocumento={false} size="compact" triggerClassName="bg-white border-[#C9D4E2] !text-[9px]"
                   />
                   </div>
