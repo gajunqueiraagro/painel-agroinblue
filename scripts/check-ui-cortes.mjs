@@ -145,6 +145,19 @@ const CENARIOS = [
       antes: async (p) => { await p.getByRole('tab', { name: /^Itens da nota/ }).first().click(); await p.waitForTimeout(500); if (f) await clicarTexto(f)(p); } },
     { nome: `itens-nota-oc${s}`, url: 'tela=itens-nota', tamanhos: TAMANHOS_DO_CONSORCIO,
       semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="itens-rolagem"]' }, antes: f ? clicarTexto(f) : undefined }]),
+  /* ITENS-NOTA-FONTE-01 — ate' 18 itens SEM rolar a partir de 1126x579 (a tabela tambem, so' o corpo poderia); nos menores, nada corta */
+  ...['xml18', 'xml14'].flatMap((x) => [
+    { nome: `lancamento-${x}-Itens`, url: `tela=lancamento&m=novo&v=${x}`, tamanhos: TAMANHOS_DO_CONSORCIO,
+      semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="itens-rolagem"]' },
+      antes: async (p) => { await p.getByRole('tab', { name: /^Itens da nota/ }).first().click(); await p.waitForTimeout(500); } },
+    { nome: `lancamento-${x}-Itens-sem-rolar`, url: `tela=lancamento&m=novo&v=${x}`, tamanhos: [[1126, 579], [1300, 704], [1440, 800]],
+      semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="itens-rolagem"]' }, semRolarVertical: '[data-testid="itens-rolagem"]',
+      antes: async (p) => { await p.getByRole('tab', { name: /^Itens da nota/ }).first().click(); await p.waitForTimeout(500); } }]),
+  /* NOTA-FORNECEDOR-COMPARAR-01 — o comparar antes de atualizar o cadastro, normal e "nao parece o certo"; e o "Confirmar" */
+  ...['', 'errado'].map((x) => ({ nome: `comparar-cadastro${x ? `-${x}` : ''}`, url: `tela=comparar-cadastro&v=${x}`, tamanhos: TAMANHOS_DO_CONSORCIO,
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="comparar-corpo"]' } })),
+  { nome: 'comparar-cadastro-confirmar', url: 'tela=comparar-cadastro', tamanhos: TAMANHOS_DO_CONSORCIO, semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="comparar-corpo"]' },
+    antes: clicar('[data-testid="comparar-atualizar"]') },
   { nome: 'itens-nota-guardadas', url: 'tela=itens-nota&v=guardadas', tamanhos: TAMANHOS_DO_CONSORCIO, semRolagem: { dentro: '[role="dialog"]' } },
   { nome: 'itens-nota-guardadas-simulado', url: 'tela=itens-nota&v=guardadas', tamanhos: TAMANHOS_DO_CONSORCIO,
     semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="itens-guardadas"] .overflow-y-auto' },
@@ -323,6 +336,13 @@ function medirTabelaMinima({ sel, linhas }) {
   const inteiras = [...caixa.querySelectorAll('tbody tr')].filter((r) => { const b = r.getBoundingClientRect(); return b.top >= th.bottom - 0.5 && b.bottom <= fundo + 0.5; }).length;
   const totalInteiro = tf.bottom <= cb.bottom + 0.5 && tf.top >= th.bottom - 0.5;
   return inteiras >= linhas && totalInteiro ? [] : [{ regra: 'tabela', texto: `${caixa.getAttribute('data-testid') || sel}: ${inteiras} linhas inteiras (pede ${linhas})${totalInteiro ? '' : ', Total fora'} em ${Math.round(cb.height)}px` }];
+}
+/* ITENS-NOTA-FONTE-01 — `semRolarVertical` (opcional): a caixa (o corpo de uma tabela que PODERIA rolar) mostra tudo sem rolar na
+   vertical — o corte na horizontal (descricao com "…" e `title`) continua com a regra de corte da varredura principal (roda NA PAGINA) */
+function medirSemRolarVertical(sel) {
+  const caixas = [...document.querySelectorAll(sel)]; if (!caixas.length) return [{ regra: 'rolagem', texto: `${sel} nao achado` }];
+  return caixas.filter((e) => e.scrollHeight > e.clientHeight + 1)
+    .map((e) => ({ regra: 'rolagem', texto: `${e.getAttribute('data-testid') || sel} rola: pede ${e.scrollHeight}px, tem ${e.clientHeight}` }));
 }
 /* roda NA PAGINA: devolve os achados [{regra, texto}] */
 function medir(regiao) {
@@ -606,6 +626,7 @@ try {
     if (cen.regiao && !(await p.$(cen.regiao))) erros.push(`regiao ${cen.regiao} nao achada`);
     const daRolagem = cen.semRolagem ? await p.evaluate(medirRolagem, cen.semRolagem) : [];
     if (cen.tabelaMinima) daRolagem.push(...(await p.evaluate(medirTabelaMinima, cen.tabelaMinima)));
+    if (cen.semRolarVertical) daRolagem.push(...(await p.evaluate(medirSemRolarVertical, cen.semRolarVertical)));
     if (cen.botoesDentro) daRolagem.push(...(await p.evaluate(medirBotoesDentro, cen.botoesDentro)));
     const achadosTodos = [...daRolagem, ...(await p.evaluate(medir, cen.regiao ?? null)), ...(await p.evaluate(medirCabecalho, cen.regiao ?? null)),
       ...(await p.evaluate(medirSobreposicao, cen.regiao ?? null)), ...(daAltura ? [daAltura] : []), ...dasAlturas, ...erros.map((e) => ({ regra: 'erro', texto: e }))];
