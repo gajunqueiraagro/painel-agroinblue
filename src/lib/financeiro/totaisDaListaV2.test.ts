@@ -58,7 +58,8 @@ describe('totais do Financeiro V2: caixa x sem caixa', () => {
     /* FIN-V2-COLUNAS-02: o total sem caixa saiu da faixa (nao cabia numa linha com os seletores) e vai no `title` do "Mostrar" —
        o mesmo numero do rodape da secao. */
     expect(tela).not.toContain('data-testid="topo-sem-caixa"');
-    expect(tela).toContain('? `Sem caixa (só DRE): ${formatMoeda(totalSemCaixa(linhasSemCaixa))} — na seção abaixo da lista`');
+    /* ⚠ CONTRATO MUDOU NO FIN-V2-DESEMPENHO-01b: o número é o do servidor (`sem_caixa.total`, a mesma regra do `totalSemCaixa`) */
+    expect(tela).toContain("? `Sem caixa (só DRE): ${paginaDaLista ? formatMoeda(paginaDaLista.semCaixa.total) : '—'} — na seção abaixo da lista`");
     /* FIN-V2-COLUNAS-02: a chave virou o seletor de tres posicoes; o padrao e' "Ocultar" (o desligado de antes) */
     expect(tela).toContain("lerPreferencia(CHAVE_PREF.semCaixa, null, MODOS_SEM_CAIXA, 'ocultar')");
     expect(tela).toContain('const mostrarSemCaixa = secaoSemCaixaVisivel(modoSemCaixa);');

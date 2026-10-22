@@ -54,7 +54,10 @@ describe('Sem caixa em três posições', () => {
     expect([t.entradasSemCaixa, t.saidasSemCaixa]).toEqual([70, 0]);
     expect(tela).toContain("const totalEntradas = modoSemCaixa === 'so_dre' ? totais.entradasSemCaixa : totais.entradas;");
     expect(tela).toContain("const totalSaidas = modoSemCaixa === 'so_dre' ? totais.saidasSemCaixa : totais.saidas;");
-    expect(tela).toContain('const items = linhasDaGradePorModo(filteredLancamentos, modoSemCaixa);');
+    /* ⚠ CONTRATO MUDOU NO FIN-V2-DESEMPENHO-01b: a grade por modo é feita no BANCO (`fn_fin_v2_lista_pagina`, `modo_sem_caixa`);
+       a tela manda o modo e lê os totais do recorte inteiro */
+    expect(tela).toContain('fornecedor: fornecedorFiltro, modoSemCaixa,');
+    expect(tela).toContain('const totais = paginaDaLista?.totais ?? TOTAIS_VAZIOS;');
     expect(tela).not.toContain('Mostrar lançamentos sem caixa (entregas, barter, consumo)');
   });
 });
@@ -87,21 +90,26 @@ describe('a coluna Vínc.', () => {
 
 describe('a coluna Safra em duas linhas', () => {
   it('período + atividade da safra; embaixo a fase / cultura SÓ quando existe; sem fase só a linha 1; sem safra "—"; nunca "rateio"', () => {
-    expect(safraNaLista({ codigo: '25/26-Pec', escopo: 'pecuaria', fase: 'engorda' })).toEqual({ linha1: '25/26 Pec', linha2: 'Engorda', titulo: '25/26-Pec · Engorda' });
-    expect(safraNaLista({ codigo: '25/26-MAND', escopo: 'agricultura', cultura: 'mandioca' })).toEqual({ linha1: '25/26 Agr', linha2: 'Mandioca', titulo: '25/26-MAND · Mandioca' });
-    expect(safraNaLista({ codigo: '25/26-Pec', escopo: 'pecuaria' })).toEqual({ linha1: '25/26 Pec', linha2: null, titulo: '25/26-Pec' });
-    expect(safraNaLista({ codigo: '26/27-Lav', escopo: 'agricultura' })).toEqual({ linha1: '26/27 Agr', linha2: null, titulo: '26/27-Lav' });
-    expect(safraNaLista({ codigo: null })).toEqual({ linha1: '—', linha2: null, titulo: 'Sem safra' });
+    expect(safraNaLista({ codigo: '25/26-Pec', escopo: 'pecuaria', fase: 'engorda' })).toEqual({ periodo: '25/26', selo: 'PEC', linha2: 'Engorda', titulo: '25/26-Pec · Pecuária · Engorda' });
+    expect(safraNaLista({ codigo: '25/26-MAND', escopo: 'agricultura', cultura: 'mandioca' })).toEqual({ periodo: '25/26', selo: 'LAV', linha2: 'Mandioca', titulo: '25/26-MAND · Lavoura · Mandioca' });
+    expect(safraNaLista({ codigo: '25/26-Pec', escopo: 'pecuaria' })).toEqual({ periodo: '25/26', selo: 'PEC', linha2: null, titulo: '25/26-Pec · Pecuária' });
+    expect(safraNaLista({ codigo: '26/27-Lav', escopo: 'agricultura' })).toEqual({ periodo: '26/27', selo: 'LAV', linha2: null, titulo: '26/27-Lav · Lavoura' });
+    /* sem atividade conhecida: o código inteiro, sem selo */
+    expect(safraNaLista({ codigo: '25/26-X', escopo: null })).toEqual({ periodo: '25/26-X', selo: null, linha2: null, titulo: '25/26-X' });
+    expect(safraNaLista({ codigo: null })).toEqual({ periodo: '—', selo: null, linha2: null, titulo: 'Sem safra' });
     for (const c of [{ codigo: '25/26-Pec', escopo: 'pecuaria' }, { codigo: '26/27-Lav', escopo: 'agricultura' }, { codigo: '25/26-Pec', escopo: 'pecuaria', fase: 'cria' }])
       expect(JSON.stringify(safraNaLista(c))).not.toContain('rateio');
   });
   it('a célula: duas linhas, a segunda com a classe de 7px; sem safra, só o traço', () => {
     const { unmount } = render(<CelulaSafra safra={safraNaLista({ codigo: '26/27-Pec', escopo: 'pecuaria', fase: 'cria' })} />);
-    expect(screen.getByTestId('safra-linha1').textContent).toBe('26/27 Pec');
+    expect(screen.getByTestId('safra-periodo').textContent).toBe('26/27');
+    expect(screen.getByTestId('safra-selo').textContent).toBe('PEC');
+    expect(screen.getByTestId('safra-selo').className).toContain('safra-selo');
     expect(screen.getByTestId('safra-linha2').className).toContain('safra-atividade');
     unmount();
     render(<CelulaSafra safra={safraNaLista({ codigo: null })} />);
     expect(screen.getByTestId('safra-linha1').textContent).toBe('—');
+    expect(screen.queryByTestId('safra-selo')).toBeNull();
     expect(screen.queryByTestId('safra-linha2')).toBeNull();
     expect(css).toMatch(/\.table-financeiro td \.safra-atividade \{\s*font-size: 7px !important;/);
   });
@@ -121,7 +129,8 @@ describe('o Ampliado com e sem as contas, e as preferências', () => {
   afterEach(() => { vi.restoreAllMocks(); });
   it('o chip liga e desliga as duas contas; desligado, o espaço vai para Produto, Fornecedor e Classificação', () => {
     expect(tela).toContain('data-testid="chip-contas" aria-pressed={contasAmpliado} onClick={alternarContasAmpliado}');
-    expect(tela).toContain('<col style={{ width: modoIntensivo ? (contasAmpliado ? 140 : 202) : 128 }} />');
+    /* FIN-V2-DESEMPENHO-01b: o Ampliado devolveu às datas dd/mm/aaaa e ao Valor os 24px (140→128, 202→190) */
+    expect(tela).toContain('<col style={{ width: modoIntensivo ? (contasAmpliado ? 128 : 190) : 123 }} />');
   });
   it('a escolha é lembrada; valor desconhecido = o padrão', () => {
     instalarStorage();

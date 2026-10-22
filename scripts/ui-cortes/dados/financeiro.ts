@@ -19,5 +19,7 @@ export const LANCAMENTOS = ids.map((fid: string, i: number) => {
     descricao: DESCR[i % DESCR.length], favorecido_id: fid, macro_custo: macro, grupo_custo: grupo, centro_custo: centro, subcentro: sub,
     escopo_negocio: 'pecuaria', numero_documento: i % 3 === 0 ? '000.000.518' : null, tipo_documento: i % 3 === 0 ? 'Nota Fiscal' : null,
     conta_bancaria_id: 'bb', conta_destino_id: null, sem_movimentacao_caixa: false, compoe_dre: true, created_at: '2026-10-01T12:00:00Z',
+    /* FIN-V2-DESEMPENHO-01b — a Safra com o selo (PEC | LAV) e a 2ª linha (fase/cultura), e o "sem safra" */
+    safra_id: ['s-pec', 's-lav', null][i % 3], fase: i % 3 === 0 ? 'recria' : null, cultura: i % 3 === 1 ? 'mandioca' : null,
   };
 });

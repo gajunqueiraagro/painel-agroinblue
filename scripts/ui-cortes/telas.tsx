@@ -27,6 +27,7 @@ import contratoCadastro from './dados/contrato-cadastro.json';
 import { CadastroDeContratoDialog } from '@/components/financiamentos/CadastroDeContratoDialog';
 import { ConsorcioDialog } from '@/components/financiamentos/ConsorcioDialog';
 import { LANCAMENTOS } from './dados/financeiro';
+import { totaisDaListaV2 } from '@/lib/financeiro/totaisDaListaV2';
 import { volumeNJ } from './dados/volumeNJ';
 import { buscarFornecedores } from '@/lib/fornecedores/buscaDeFornecedor';
 import { FinanceiroV2Tab } from '@/pages/FinanceiroV2Tab';
@@ -53,6 +54,20 @@ import { V2Sidebar, LARGURA_DA_LATERAL } from '@/v2/components/V2Sidebar';
 import { ClienteSelector } from '@/components/ClienteSelector';
 import { FazendaSelector } from '@/components/FazendaSelector';
 import { TooltipProvider } from '@/components/ui/tooltip';
+
+/* FIN-V2-DESEMPENHO-01b — a `fn_fin_v2_lista_pagina` da bancada: a página pedida do conjunto SINTÉTICO, com o total e os totais
+   do conjunto inteiro (a regra do topo, `totaisDaListaV2`). Sem filtro: a bancada mede a tela, não o predicado. */
+function paginaDaBancada(base: any[], a: any) {
+  const caixa = base.filter((l) => l.sem_movimentacao_caixa !== true);
+  const por = Number(a?.p_por_pagina) || 200, pag = Number(a?.p_pagina) || 0;
+  return {
+    versao: 'bancada', pagina: pag, por_pagina: por, total_linhas: caixa.length,
+    linhas: caixa.slice(pag * por, (pag + 1) * por).map((l) => ({ ...l, conciliado: false })),
+    totais: (({ entradas, saidas, transferencias, entradasSemCaixa, saidasSemCaixa }) => ({ entradas, saidas, transferencias,
+      entradas_sem_caixa: entradasSemCaixa, saidas_sem_caixa: saidasSemCaixa }))(totaisDaListaV2(base, null)),
+    sem_caixa: { linhas: base.length - caixa.length, total: 0 },
+  };
+}
 
 const q = new URLSearchParams(location.search);
 const tela = q.get('tela') ?? 'mesclar';
@@ -162,8 +177,11 @@ if (tela === 'mesclar') {
   g.__bancoBancada = {
     from: (t: string, e: any) => t === 'financeiro_lancamentos_v2' ? (e.in.id ? [] : VOL ? VOL.lancamentos : LANCAMENTOS)
       : t === 'financeiro_fornecedores' ? (VOL ? VOL.fornecedores : LISTA)
+      : t === 'financeiro_safras' ? [{ id: 's-pec', nome: 'Pecuária 25/26', codigo: '25/26-Pec', escopo_negocio: 'pecuaria', ativa: true },
+        { id: 's-lav', nome: 'Mandioca 25/26', codigo: '25/26-MAND', escopo_negocio: 'agricultura', ativa: true }]
       : t === 'financeiro_contas_bancarias' ? [{ id: 'bb', nome_conta: 'Banco Alfa', banco: 'BB', fazenda_id: 'f1', ativo: true, ordem_exibicao: 1 }] : [],
-    rpc: (fn: string) => fn === 'get_anos_financeiro_v2' ? [{ ano: '2026' }] : fn === 'fn_parcelas_dos_lancamentos' ? {} : null,
+    rpc: (fn: string, a: any) => fn === 'get_anos_financeiro_v2' ? [{ ano: '2026' }] : fn === 'fn_parcelas_dos_lancamentos' ? {}
+      : fn === 'fn_fin_v2_lista_pagina' ? paginaDaBancada(VOL ? VOL.lancamentos : LANCAMENTOS, a) : null,
   };
   montar(<div className="p-3 h-full"><FinanceiroV2Tab filtroAnoInicial="2026" /></div>);
 } else if (tela === 'fornecedor-cadastro') {

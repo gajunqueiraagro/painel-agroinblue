@@ -30,6 +30,8 @@ const TAMANHOS = arg('--tamanhos') ? arg('--tamanhos').split(',').map((t) => t.s
 const espera = (p, ms = 450) => p.waitForTimeout(ms);
 const botao = (re) => async (p) => { await p.getByRole('button', { name: re }).first().click(); await espera(p); };
 const clicar = (sel) => async (p) => { await p.locator(sel).first().click(); await espera(p); };
+/* o gesto e, depois, a casca da bancada de volta ao topo (o clique rola a PAGINA para trazer o botao a vista; o que se mede e' a tela) */
+const noTopo = (g) => async (p) => { await g(p); await p.evaluate(() => { window.scrollTo(0, 0); document.querySelectorAll('[data-casca]').forEach((c) => { c.scrollTop = 0; }); }); await espera(p, 150); };
 const digitar = (sel, txt) => async (p) => { await p.locator(sel).first().fill(txt); await espera(p, 800); };
 
 /* Cada estado e' um gesto aplicado em sequencia; cada um e' comparado com o estado INICIAL da tela. `url` = outra pagina inteira
@@ -48,6 +50,16 @@ const CENARIOS = [
   ] },
   /* as outras telas do `check:ui-cortes` que tem escolhas: `auto` troca cada opcao de cada `Segmentado` (pelas classes do componente) e cada aba
      (`role=tab`) visivel, uma por vez a partir da tela recem-aberta, e compara com a inicial; `antes` prepara a tela */
+  /* FIN-V2-DESEMPENHO-01b — Lançamentos Financeiros paginado no servidor: trocar "por página", página e os seletores da faixa não move
+     nada (o intervalo, a página e os totais têm largura reservada; a faixa cresce para baixo só pela largura da janela) */
+  { nome: 'financeiro', url: 'tela=financeiro&v=volume&n=450', antes: async (p) => { await p.locator('[data-testid="rodape-lancamentos"]').waitFor(); await espera(p, 900); },
+    estados: [
+      ['por pagina 50', noTopo(botao(/^50$/))], ['por pagina 100', noTopo(botao(/^100$/))], ['por pagina 200', noTopo(botao(/^200$/))],
+      ['proxima pagina', noTopo(clicar('[data-testid="pagina-proxima"]'))], ['proxima de novo', noTopo(clicar('[data-testid="pagina-proxima"]'))],
+      ['pagina anterior', noTopo(clicar('[data-testid="pagina-anterior"]'))],
+      ['Classificação Macro', noTopo(botao(/^Macro$/))], ['Classificação Subcentro', noTopo(botao(/^Subcentro$/))], ['Classificação Centro', noTopo(botao(/^Centro$/))],
+      ['Sem caixa Só c/ DRE', noTopo(botao(/^Só c\/ DRE$/))], ['Sem caixa Ocultar', noTopo(botao(/^Ocultar$/))],
+    ] },
   { nome: 'fornecedores-sem-cadastro', url: 'tela=fornecedores&barra=32&n=2356', antes: clicar('[data-testid="aba-sem-cadastro"]'), auto: true },
   { nome: 'recorrencias', url: 'tela=recorrencias&barra=32', auto: true },
   { nome: 'cpr', url: 'tela=cpr', auto: true },
