@@ -92,6 +92,7 @@ import {
 } from '@/lib/financeiro/estadoFiltrosLista';
 import { hojeLocal } from '@/lib/datas/hojeLocal';
 import { useListaPaginaV2 } from '@/hooks/useListaPaginaV2';
+import { useAlturaAteOFim } from '@/hooks/useAlturaAteOFim';
 import {
   filtrosDaPaginaV2, ordemDaPaginaV2, intervaloDaPaginaV2, paginasDaListaV2, reservasDaPaginaV2,
   lerPorPaginaV2, guardarPorPaginaV2, POR_PAGINA_V2, TOTAIS_VAZIOS, porPaginaV2DoTexto, textoDoPorPaginaV2, type PorPaginaV2, type PorPaginaV2Texto,
@@ -1638,6 +1639,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     setModoIntensivo(next);
     onIntensiveToggle?.(next);
   }, [modoIntensivo, onIntensiveToggle]);
+  /* TABELA-ALTURA-FIXA-01 — na lista normal o quadro vai do topo dele até o fim da janela, com qualquer número de linhas (no Ampliado
+     o `flex-1` da coluna já faz isso) */
+  const quadroAteOFim = useAlturaAteOFim({ ativo: !modoIntensivo });
 
 /* ⚠ ESTE BOTÃO EXISTE EM DOIS LUGARES, E A FLAG DECIDE QUAL APARECE — e é a TERCEIRA vez
    que o mount duplo morde (a primeira foi o menu de exportação, a segunda a coluna de
@@ -2578,8 +2582,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 diferença não era de tema, era o card que faltava. */}
            {/* FIN-V2-DESEMPENHO-01b — O QUADRO: a tabela que rola e, DENTRO dele, a barra da página (régua de Recorrências). O
                scrollport continua sendo o mesmo `scrollContainerRef` (a lista virtual mede por ele). */}
-           <div className={cn("flex min-h-0 flex-col overflow-hidden border border-[hsl(var(--border))] bg-card", modoIntensivo && "flex-1")} data-testid="quadro-lancamentos">
-           <div ref={scrollContainerRef} className={cn("min-h-0 bg-card overflow-auto relative rolagem-fina rolagem-sem-tampar respiro-lista", modoIntensivo && "flex-1")} style={modoIntensivo ? undefined : { maxHeight: 'calc(100vh - 264px)' }}>
+           {/* TABELA-ALTURA-FIXA-01 (Gabriel, 22/10): o quadro tem ALTURA FIXA até o fim da tela, independente do número de linhas — com 6, 1
+               ou 0 lançamentos o espaço vazio fica DENTRO do quadro e a barra da página não sobe. Antes: `maxHeight: calc(100vh − 264px)`
+               no scrollport, e o quadro encolhia com a lista. */}
+           <div ref={quadroAteOFim.ref} className={cn("flex min-h-0 flex-col overflow-hidden border border-[hsl(var(--border))] bg-card", modoIntensivo && "flex-1")}
+             style={modoIntensivo ? undefined : { height: quadroAteOFim.altura ?? 'calc(100vh - 264px)' }} data-testid="quadro-lancamentos">
+           <div ref={scrollContainerRef} className="min-h-0 flex-1 bg-card overflow-auto relative rolagem-fina rolagem-sem-tampar respiro-lista">
             <table className="table-financeiro w-full caption-bottom text-sm border-collapse" style={{ tableLayout: 'fixed' }}>
               {/*
                 Larguras das colunas:
@@ -2769,7 +2777,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 {linhasDaGrade.length === 0 ? (
                   <tr className="border-b">
                     <td colSpan={modoIntensivo && contasAmpliado ? 17 : 15} className="text-center text-muted-foreground py-4 text-[10px]">
-                      {paginaDaLista ? 'Nenhum lançamento encontrado.' : (listaV2.erro ?? 'Carregando…')}
+                      {paginaDaLista ? 'Nenhum lançamento neste filtro' : (listaV2.erro ?? 'Carregando…')}
                     </td>
                   </tr>
                 ) : (

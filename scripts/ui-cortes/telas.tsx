@@ -58,7 +58,9 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 /* FIN-V2-DESEMPENHO-01b — a `fn_fin_v2_lista_pagina` da bancada: a página pedida do conjunto SINTÉTICO, com o total e os totais
    do conjunto inteiro (a regra do topo, `totaisDaListaV2`). Sem filtro: a bancada mede a tela, não o predicado. */
 function paginaDaBancada(base: any[], a: any) {
-  const caixa = base.filter((l) => l.sem_movimentacao_caixa !== true);
+  /* TABELA-ALTURA-FIXA-01 — `&linhas=N`: o recorte de um filtro que acha so' N lancamentos (6, 1, 0): o quadro nao encolhe */
+  const corte = new URLSearchParams(location.search).get('linhas');
+  const caixa = base.filter((l) => l.sem_movimentacao_caixa !== true).slice(0, corte === null ? undefined : Number(corte));
   const por = Number(a?.p_por_pagina) || 200, pag = Number(a?.p_pagina) || 0;
   return {
     versao: 'bancada', pagina: pag, por_pagina: por, total_linhas: caixa.length,
@@ -183,7 +185,10 @@ if (tela === 'mesclar') {
     rpc: (fn: string, a: any) => fn === 'get_anos_financeiro_v2' ? [{ ano: '2026' }] : fn === 'fn_parcelas_dos_lancamentos' ? {}
       : fn === 'fn_fin_v2_lista_pagina' ? paginaDaBancada(VOL ? VOL.lancamentos : LANCAMENTOS, a) : null,
   };
-  montar(<div className="p-3 h-full"><FinanceiroV2Tab filtroAnoInicial="2026" /></div>);
+  /* TABELA-ALTURA-FIXA-01 — com `&barra=32` a tela entra como no app (medido em 22/10: Lançamentos abre sem a sub-barra "Financeiro"):
+     a barra da secao (32) e a secao que rola, sem o `p-3` da bancada */
+  montar(BARRA === 32 ? <div className="w-full min-w-0"><FinanceiroV2Tab filtroAnoInicial="2026" /></div>
+    : <div className="p-3 h-full"><FinanceiroV2Tab filtroAnoInicial="2026" /></div>);
 } else if (tela === 'fornecedor-cadastro') {
   g.__bancoBancada = { from: () => [], rpc: () => null };
   const linha = { ...LINHAS.b, inscricao_municipal: '1234567', cep: '79002-000', complemento: 'Sala 1001 Bloco B', bairro: 'Jardim dos Estados', telefone: '(67) 3333-4444',
