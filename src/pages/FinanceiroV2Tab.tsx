@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { formatMoeda } from '@/lib/calculos/formatters';
+import { idDoLancamento, valorDividido } from '@/lib/financeiro/divisaoDaClassificacao';
+import { ClassificacaoComSelo, ValorDaParte } from '@/components/financeiro-v2/CelulasDaDivisao';
 // PR-FIN-STATUS-UX-03A-1 — domínio financeiro (dono único); statusOperacional (compartilhado) não é mais usado aqui.
 import {
   STATUS_FINANCEIRO_OPCOES_FILTRO,
@@ -1003,7 +1005,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     });
     setFavOCEdit(permiteFavOC);   // PR-OC-FIN-EDIT-FIX-02 — só o fluxo "Editar" da OC passa true
     setPrefillDuplicar(null);
-    setEditingLanc(l);
+    /* FIN-CLASSIF-DIVIDIDA-01c — REGRA DO ID: abrir e' sempre pelo lancamento (a linha da parte 2+ de uma visao por parte e' "id#2") */
+    setEditingLanc(idDoLancamento(l) === l.id ? l : { ...l, id: idDoLancamento(l) });
     setDialogOpen(true);
   };
 
@@ -2755,6 +2758,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     const isParcelaFinanciamento = l.origem_lancamento === 'parcela_financiamento' || (l as any).origem_tipo === 'financiamento_captacao' || (l.origem_lancamento === 'financiamento' && !!(l as any).financiamento_id);
                     const isImported = !!l.lote_importacao_id;
                     const canEditRow = !isHistoricoReadOnly && !isParcelaFinanciamento;
+                    const dividida = valorDividido(l);
 
                     /* ⚠ A LINHA INTEIRA ABRE O LANÇAMENTO — FIN-LISTA-VISUAL-01. O alvo de
                        clique era um ícone de 20px no fim de uma linha de 21px de altura, e
@@ -2848,8 +2852,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                           {fornNome ? <span className="flex min-w-0"><span className="truncate pr-0.5">{fornNome}</span></span> : (!l.favorecido_id ? '-' : hook.fornecedores.length === 0 ? <span className="text-muted-foreground">…</span> : <span className="text-warning">n/c</span>)}
                         </td>
                         {/* FIN-V2-COLUNAS-02 — a Classificação no nível escolhido; o caminho inteiro no `title`. */}
+                        {/* FIN-CLASSIF-DIVIDIDA-01c — o lancamento dividido: o selo "1 de 2 contas" (o filtro pega parte) ou "dividido" (sem filtro
+                            de conta), sempre a' vista; quem corta e' o texto da classificacao */}
                         <td className="celula-classe truncate px-1 py-1 align-middle text-[11px] leading-tight text-muted-foreground" data-testid="celula-classificacao"
-                          title={caminhoDaClassificacao(l)}>{textoDaClassificacao(l, nivelClassif)}</td>
+                          title={caminhoDaClassificacao(l)}>{dividida
+                            ? <ClassificacaoComSelo texto={textoDaClassificacao(l, nivelClassif)} dividida={dividida} />
+                            : textoDaClassificacao(l, nivelClassif)}</td>
                         <td className="whitespace-nowrap px-0.5 py-1 align-middle text-center text-[11px] font-medium leading-tight text-muted-foreground" title={fazendaNameMap.get(l.fazenda_id) || ''}>{fazendaCodigoMap.get(l.fazenda_id) || '-'}</td>
                         {/* ⚠ "—" É AUSÊNCIA, e aqui ela é informação: financiamento de
                             investimento e administrativo NÃO têm safra por regra. Um traço
@@ -2895,8 +2903,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                             ganha o MESMO fundo das colunas de data — `bg-background`, medido no
                             `LancamentosTabela.tsx` da referência, que é o cinza
                             `--background: 220 17% 97%` sobre o branco do card. */}
-                        <td className={`celula-valor text-right font-semibold whitespace-nowrap px-1 py-1 align-middle text-[12px] leading-tight bg-background ${valorDaLinha(l).classe}`}>
-                          {valorDaLinha(l).texto}
+                        <td className={`celula-valor text-right font-semibold whitespace-nowrap px-1 py-1 align-middle text-[12px] leading-tight bg-background ${valorDaLinha(l).classe}`}
+                          data-testid="celula-valor">
+                          {/* FIN-CLASSIF-DIVIDIDA-01c — o filtro pega PARTE do lancamento dividido: a parte (o que entra no total do filtro) e, embaixo,
+                              "de R$ <o lancamento>" — sem coluna nova, a linha segue com 19px */}
+                          {dividida && dividida.parte != null
+                            ? <ValorDaParte textoDaParte={valorDaLinha({ ...l, valor: (Math.sign(Number(l.valor)) || 1) * dividida.parte }).texto} total={dividida.total} />
+                            : valorDaLinha(l).texto}
                         </td>
                         {/* O CLIPE (PARC-LIVRES-01 passo 3), entre Valor e Doc. desde o PARC-FECHA-02 item 6: aceso quando há documento —
                             arquivo anexado OU a nota da compra ligada —, com o que tem no `title`. Coluna de 14px, não congelada. */}
