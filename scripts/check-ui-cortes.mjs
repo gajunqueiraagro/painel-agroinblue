@@ -143,7 +143,7 @@ const CENARIOS = [
     tamanhos: TAMANHOS_DO_CONSORCIO, semRolagem: { dentro: '[role="dialog"]' } })),
   /* FIN-NOTA-PDF-01 — "Novo lançamento · da nota fiscal" (o mock aprovado), o PDF SINTETICO lido de verdade, nos sete tamanhos: o modal
      fixo nao rola (so' as duas tabelas rolam dentro do quadro delas, no pior caso de 12 parcelas e 14 itens), nada passa da caixa. */
-  ...['', 'cadastrado', 'registrada', 'diverge', 'longo', 'lavoura', 'semdup', 'jalancada'].map((v) => ({ nome: `nota-pdf${v ? `-${v}` : ''}`, url: `tela=nota-pdf&v=${v}`, tamanhos: TAMANHOS_DO_CONSORCIO,
+  ...['', 'cadastrado', 'registrada', 'diverge', 'longo', 'lavoura', 'semdup', 'jalancada', 'avulsa'].map((v) => ({ nome: `nota-pdf${v ? `-${v}` : ''}`, url: `tela=nota-pdf&v=${v}`, tamanhos: TAMANHOS_DO_CONSORCIO,
     semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-parcelas-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="nota-ja-lancada-rolagem"]' } })),
   /* FIN-NOTA-PDF-01b — a confirmacao do "Atualizar e parcelar" (o texto que diz que o existente vira 1/4) */
   { nome: 'nota-pdf-parcelar-confirmar', url: 'tela=nota-pdf&v=parcelar', tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[role="alertdialog"]',
