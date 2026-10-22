@@ -82,6 +82,14 @@ import {
   type CadastroComODocumento, type OcorrenciaDaNota,
 } from '@/lib/financeiro/nfeConsultas';
 import { CompararCadastroDialog } from './CompararCadastroDialog';
+import { ContasDosItens } from './ContasDosItens';
+import { PartesDaClassificacao } from './PartesDaClassificacao';
+import { DividirClassificacaoDialog, MotivoDaDivisaoDialog } from './DivisaoDialogs';
+import {
+  classificacaoGravada, contasDasPartes, desfazerDivisao, dividir, dividirPelosItens, lerDivisao, percentuaisDosItens, porContaDosItens,
+  voltarUmaConta, type DivisaoLida, type ResultadoDaDivisao,
+} from '@/lib/financeiro/divisaoDaClassificacao';
+import { aprender, historicoDoEmitente, sugerir } from '@/lib/financeiro/sugestaoDeContaDosItens';
 import { propostaDoEmitente, type CadastroParaComparar } from '@/lib/fornecedores/compararCadastro';
 import { documentoFormatado, reais } from '@/lib/financeiro/nfe/formatos';
 import { fraseParcelasComoNaNota, type CampoDoXml } from '@/lib/financeiro/nfe/proporLancamento';
@@ -593,6 +601,20 @@ export function LancamentoV2Dialog({
     chaves: (documentosApi.documentos ?? []).map((d) => d.chaveAcesso ?? '').filter(Boolean),
     arquivo: !lancamento ? prefill?.doXml?.arquivo ?? null : null,
   });
+  /* FIN-CLASSIF-DIVIDIDA-01b — a classificacao dividida do lancamento SALVO: as partes gravadas e a ultima operacao que se desfaz (relidas
+     a cada dividir/voltar/desfazer: `divisaoSeq`). O que se grava e' so' pelas RPCs da divisao, com motivo. */
+  const [divisao, setDivisao] = useState<DivisaoLida | null>(null);
+  const [divisaoSeq, setDivisaoSeq] = useState(0);
+  const [dividirAberto, setDividirAberto] = useState(false);
+  const [motivoDaDivisao, setMotivoDaDivisao] = useState<{ tipo: 'itens'; mapa: ReadonlyMap<number, string> } | { tipo: 'voltar' } | { tipo: 'desfazer' } | null>(null);
+  const [contasAprendidas, setContasAprendidas] = useState<ReadonlyMap<number, string>>(new Map());
+  useEffect(() => {
+    let vivo = true;
+    setDivisao(null);
+    if (!open || !lancamento?.id) return;
+    void lerDivisao(lancamento.id).then((d) => { if (vivo) setDivisao(d); }, () => undefined);
+    return () => { vivo = false; };
+  }, [open, lancamento?.id, divisaoSeq]);
   /* FIN-NFE-PARCELAS-01 — os documentos do lançamento NOVO, em memória até o salvar. `posSalvar`
      existe quando o lançamento já foi gravado e algum documento não: a partir dali o botão principal
      some (salvar de novo criaria OUTRO lançamento) e sobra o "Tentar de novo". */
@@ -2354,6 +2376,81 @@ export function LancamentoV2Dialog({
       setXmlCriandoFornecedor(false);
     }
   };
+  /* FIN-CLASSIF-DIVIDIDA-01b — quem pode dividir: o lancamento SALVO, fora da OC (a classificacao e' da operacao), fora da transferencia
+     e com a classificacao livre. Parcela de financiamento/compra parcelada divide no CADASTRO (todas as parcelas, a mesma proporcao). */
+  const lancDividido = !!divisao && divisao.partes.length > 1;
+  const financiamentoDoLanc = lancamento && typeof Reflect.get(lancamento, 'financiamento_id') === 'string' ? String(Reflect.get(lancamento, 'financiamento_id')) : null;
+  const podeDividir = isEdit && !!lancamento && !isOCTitulo && !isTransferencia && !subcentroTravado && !travado('classificacao')
+    && Reflect.get(lancamento, 'cenario') !== 'meta';
+  /* a sugestao aprendida dos itens (as divisoes ja' feitas pelos itens, do mesmo emitente) */
+  const chaveDaNotaDosItens = itensDaNota?.cabecalho.chave ?? null;
+  const emitenteDosItens = itensDaNota?.cabecalho.emitenteDocumento ?? null;
+  useEffect(() => {
+    let vivo = true;
+    setContasAprendidas(new Map());
+    const cli = clienteAtual?.id;
+    if (!podeDividir || !cli || !itensDaNota) return;
+    void historicoDoEmitente(cli, emitenteDosItens, chaveDaNotaDosItens).then((h) => {
+      if (!vivo || !h.length) return;
+      const validas = new Set(classificacoesDoModal.filter((c) => c.tipo_operacao === tipoOperacao).map((c) => c.id));
+      setContasAprendidas(sugerir(itensDaNota.lidos.itens, aprender(h), (id) => validas.has(id)));
+    });
+    return () => { vivo = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- a nota e o emitente bastam: a lista do plano so' valida
+  }, [podeDividir, clienteAtual?.id, chaveDaNotaDosItens, emitenteDosItens]);
+  const contasIniciaisDosItens = useMemo(() => {
+    const gravadas = divisao ? contasDasPartes(divisao.partes) : new Map<number, string>();
+    return gravadas.size ? gravadas : contasAprendidas;
+  }, [divisao, contasAprendidas]);
+  /** Depois de dividir/voltar/desfazer: rele^ as partes e a classificacao gravada (o Salvar seguinte manda o que o banco deixou — a trava
+   *  do banco recusa reclassificar direto um lancamento dividido) e avisa, com "Desfazer". A lista de tras ja' foi avisada pela RPC. */
+  const aposDividir = async (frase: string, desfazivel: boolean) => {
+    setDivisaoSeq((n) => n + 1);
+    if (lancamento?.id) {
+      const c = await classificacaoGravada(lancamento.id);
+      if (c) setClassificacao((atual) => ({
+        ...atual, plano_conta_id: c.plano_conta_id, subcentro: c.subcentro ?? '', macro_custo: c.macro_custo ?? '', grupo_custo: c.grupo_custo ?? '',
+        centro_custo: c.centro_custo ?? '', escopo_negocio: c.escopo_negocio ?? '', safra_id: c.safra_id ?? '', cultura: c.cultura ?? '', fase: c.fase ?? '',
+        atividade: atividadeValida(c.escopo_negocio),
+      }));
+    }
+    toast.success(frase, desfazivel ? { action: { label: 'Desfazer', onClick: () => setMotivoDaDivisao({ tipo: 'desfazer' }) } } : undefined);
+  };
+  const simularDivisao = useMemo(() => {
+    const cli = clienteAtual?.id;
+    const id = lancamento?.id;
+    const m = motivoDaDivisao;
+    if (!cli || !id || !m || m.tipo === 'desfazer') return undefined;
+    if (m.tipo === 'voltar') return () => voltarUmaConta(cli, id, null, 'prévia', true);
+    if (financiamentoDoLanc && itensDaNota) {
+      const ps = percentuaisDosItens(porContaDosItens(itensDaNota.lidos.itens, m.mapa));
+      return () => dividir(cli, { lancamentoId: id, financiamentoId: financiamentoDoLanc }, ps, 'prévia', true);
+    }
+    return () => dividirPelosItens(cli, id, m.mapa, 'prévia', true);
+  }, [clienteAtual?.id, lancamento?.id, motivoDaDivisao, financiamentoDoLanc, itensDaNota]);
+  const confirmarDivisao = async (motivo: string): Promise<ResultadoDaDivisao> => {
+    const cli = clienteAtual?.id;
+    const id = lancamento?.id;
+    const m = motivoDaDivisao;
+    if (!cli || !id || !m) return { ok: false, frase: 'Lançamento não salvo.' };
+    if (m.tipo === 'desfazer') {
+      if (!divisao?.ultimaOperacaoId) return { ok: false, frase: 'Não há o que desfazer.' };
+      const r = await desfazerDivisao(cli, divisao.ultimaOperacaoId, motivo);
+      if (r.ok) await aposDividir('Desfeito: a classificação voltou ao que era.', false);
+      return r;
+    }
+    if (m.tipo === 'voltar') {
+      const r = await voltarUmaConta(cli, id, null, motivo, false);
+      if (r.ok) await aposDividir('A classificação voltou para 1 conta.', true);
+      return r;
+    }
+    const r = financiamentoDoLanc && itensDaNota
+      ? await dividir(cli, { lancamentoId: id, financiamentoId: financiamentoDoLanc }, percentuaisDosItens(porContaDosItens(itensDaNota.lidos.itens, m.mapa)), motivo, false)
+      : await dividirPelosItens(cli, id, m.mapa, motivo, false);
+    if (r.ok) await aposDividir(financiamentoDoLanc ? 'Dividido: todas as parcelas receberam a mesma proporção.' : `Dividido em ${new Set(m.mapa.values()).size} contas pelos itens da nota.`, !financiamentoDoLanc);
+    return r;
+  };
+
   /* NOTA-FORNECEDOR-COMPARAR-01 — "comparar e atualizar o cadastro" da faixa: o CNPJ de OUTRO cadastro nao entra (a faixa do conflito
      oferece "usar este"); depois, o MESMO modal da previa ("+ Da nota"), que so' grava o marcado (trilha por campo, desfazer) */
   const abrirComparacaoDoXml = async () => {
@@ -2871,7 +2968,20 @@ export function LancamentoV2Dialog({
             </div>
 
             </BlocoFormulario>
-            <BlocoFormulario titulo="Classificação" testId="bloco-classificacao" className="gap-1">
+            <BlocoFormulario titulo="Classificação" testId="bloco-classificacao" className="gap-1"
+              dica={lancDividido && divisao ? `dividida em ${divisao.partes.length} contas` : undefined}
+              acao={podeDividir ? (
+                /* FIN-CLASSIF-DIVIDIDA-01b — as acoes da divisao no titulo do bloco (nao somam altura) */
+                <span className="flex items-center gap-2 text-[10px]" data-testid="acoes-da-divisao">
+                  <button type="button" className="font-medium text-primary underline-offset-2 hover:underline" onClick={() => setDividirAberto(true)} data-testid="divisao-dividir">Dividir…</button>
+                  {lancDividido && !financiamentoDoLanc && (
+                    <button type="button" className="underline-offset-2 hover:underline" onClick={() => setMotivoDaDivisao({ tipo: 'voltar' })} data-testid="divisao-voltar">Voltar para 1 conta</button>
+                  )}
+                  {divisao?.ultimaOperacaoId && !financiamentoDoLanc && (
+                    <button type="button" className="text-muted-foreground underline-offset-2 hover:underline" onClick={() => setMotivoDaDivisao({ tipo: 'desfazer' })} data-testid="divisao-desfazer">Desfazer</button>
+                  )}
+                </span>
+              ) : undefined}>
             {/* ⚠ O CLUSTER DE CLASSIFICAÇÃO SAIU DAQUI — PAR-01a-ii. Atividade, Subcentro, Safra,
                 Cultura e Fase, mais as regras que os cruzam, viraram `ClassificacaoLancamento`
                 em `@/components/shared`, para o parcelamento montar a MESMA classificação sem
@@ -2887,6 +2997,9 @@ export function LancamentoV2Dialog({
                 teria ficado `true`.
                 ⚠ `culturasDaSafra` VAI POR PROP: o hook não tem cache e esta tela também a usa,
                 no aviso de rateio logo abaixo — chamar dos dois lados seria duas consultas. */}
+            {lancDividido && divisao ? (
+              <PartesDaClassificacao partes={divisao.partes} total={Math.abs(Number(lancamento?.valor ?? 0))} />
+            ) : (
             <ClassificacaoLancamento
               regua="linha"
               key={`cls-${lancamento?.id ?? 'novo'}-${aberturaSeq}`}
@@ -2910,6 +3023,7 @@ export function LancamentoV2Dialog({
               erroSubcentro={erroDirecao && erroDirecao.subcentro === subcentro && erroDirecao.tipo === tipoOperacao
                 ? erroDirecao.texto : null}
             />
+            )}
 
             {/* ⚠ O MOTIVO MORA AO LADO DO CAMPO, nao so' no aviso do topo — OC-BOITEL-VALOR-01 · B3.
                 O banner de origem ja' dizia "classificacao ... somente leitura (ajuste na OC)", a
@@ -3230,7 +3344,12 @@ export function LancamentoV2Dialog({
             {/* ═══ ABA ITENS DA NOTA (ITENS-NOTA-01) — so' leitura; o quadro ocupa a altura do corpo e a tabela rola dentro ═══ */}
             {itensDaNota && (
               <TabsContent value="itens" className="mt-0 h-full focus-visible:outline-none" data-testid="aba-itens-da-nota">
-                <ItensDaNota cabecalho={itensDaNota.cabecalho} lidos={itensDaNota.lidos} contaDoLancamento={subcentro || null} />
+                <ItensDaNota cabecalho={itensDaNota.cabecalho} lidos={itensDaNota.lidos} contaDoLancamento={subcentro || null}
+                  vistaContas={podeDividir ? (
+                    <ContasDosItens itens={itensDaNota.lidos.itens} classificacoes={classificacoesDoModal} tipoOperacao={tipoOperacao}
+                      contaDeHoje={lancDividido ? null : (classificacao.plano_conta_id ?? null)} sugeridas={contasIniciaisDosItens}
+                      gravando={!!motivoDaDivisao} onDividir={(mapa) => setMotivoDaDivisao({ tipo: 'itens', mapa })} />
+                  ) : undefined} />
               </TabsContent>
             )}
             <TabsContent value="auditoria" className="mt-0 focus-visible:outline-none">
@@ -3736,6 +3855,24 @@ export function LancamentoV2Dialog({
           if (f) handleFornecedorCriado(f);
         }}
       />
+      {/* FIN-CLASSIF-DIVIDIDA-01b — dividir a mao; o motivo de dividir pelos itens, voltar para 1 conta e desfazer */}
+      {dividirAberto && lancamento && clienteAtual?.id && (
+        <DividirClassificacaoDialog clienteId={clienteAtual.id} classificacoes={classificacoesDoModal}
+          lancamento={{ id: lancamento.id, valor: Number(lancamento.valor), tipo_operacao: tipoOperacao, financiamento_id: financiamentoDoLanc, plano_conta_id: classificacao.plano_conta_id ?? null }}
+          partesDeHoje={lancDividido && divisao ? divisao.partes : []}
+          onDividido={() => { void aposDividir(financiamentoDoLanc ? 'Dividido: todas as parcelas receberam a mesma proporção.' : 'Classificação dividida.', !financiamentoDoLanc); }}
+          onClose={() => setDividirAberto(false)} />
+      )}
+      {motivoDaDivisao && (
+        <MotivoDaDivisaoDialog
+          titulo={motivoDaDivisao.tipo === 'itens' ? 'Dividir pelos itens da nota' : motivoDaDivisao.tipo === 'voltar' ? 'Voltar para 1 conta' : 'Desfazer a última divisão'}
+          explicacao={motivoDaDivisao.tipo === 'itens'
+            ? (financiamentoDoLanc ? 'Compra parcelada: a divisão é do cadastro — todas as parcelas recebem a mesma proporção dos itens.' : 'Cada conta recebe a soma dos seus itens. Continua um lançamento só: um pagamento, uma conciliação.')
+            : motivoDaDivisao.tipo === 'voltar' ? 'O lançamento volta inteiro para a maior parte; depois a conta pode ser trocada no campo.'
+              : 'Volta a classificação ao que era antes da última operação.'}
+          botao={motivoDaDivisao.tipo === 'itens' ? 'Dividir' : motivoDaDivisao.tipo === 'voltar' ? 'Voltar para 1 conta' : 'Desfazer'}
+          simular={simularDivisao} confirmar={confirmarDivisao} onClose={() => setMotivoDaDivisao(null)} />
+      )}
       {xml && xmlComparar && (
         <CompararCadastroDialog hoje={xmlComparar} rotuloOrigem="Da nota"
           proposta={propostaDoEmitente(xml.emitente ?? { documento: xml.emitenteDocumento, nome: xml.emitenteNome, fantasia: null, ie: null })}
