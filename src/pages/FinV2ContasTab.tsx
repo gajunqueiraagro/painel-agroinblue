@@ -39,6 +39,8 @@ interface ContaBancaria {
   ordem_exibicao: number;
   mes_inicio: string | null;
   saldo_inicial_oficial: number | null;
+  /** CONC-TRANSF-DUAS-PONTAS-01b: conta sem extrato bancario (investimento, cartao, caixa) — a ponta de transferencia aqui nao e' exigida */
+  sem_extrato_bancario?: boolean | null;
 }
 
 // PR-H1 — vocabulário oficial CURTO: cc | inv | cartao.
@@ -106,6 +108,7 @@ export function FinV2ContasTab() {
   const [bancoOutro, setBancoOutro] = useState('');
   const [fazendaId, setFazendaId] = useState('');
   const [ativa, setAtiva] = useState(true);
+  const [semExtrato, setSemExtrato] = useState(false);
 
   // Form fields — avançado
   const [codigoConta, setCodigoConta] = useState('');
@@ -201,6 +204,7 @@ export function FinV2ContasTab() {
     setBancoOutro('');
     setFazendaId(fazendas[0]?.id || '');
     setAtiva(true);
+    setSemExtrato(false);
     setCodigoConta('');
     setAgencia('');
     setNumeroConta('');
@@ -228,6 +232,7 @@ export function FinV2ContasTab() {
     }
     setFazendaId(c.fazenda_id);
     setAtiva(c.ativa);
+    setSemExtrato(!!c.sem_extrato_bancario);
     setCodigoConta(c.codigo_conta || '');
     setAgencia(c.agencia || '');
     setNumeroConta(c.numero_conta || '');
@@ -269,6 +274,7 @@ export function FinV2ContasTab() {
         numero_conta: numeroConta.trim() || null,
         conta_digito: contaDigito.trim() || null,
         ativa,
+        sem_extrato_bancario: semExtrato,
         mes_inicio: mesInicio.trim() || null,
       };
       // Parse robusto: aceita "1000", "1000.50", "1.000,50"
@@ -578,6 +584,17 @@ export function FinV2ContasTab() {
             <div className="flex items-center gap-2">
               <Switch checked={ativa} onCheckedChange={setAtiva} />
               <Label>Conta ativa</Label>
+            </div>
+            {/* CONC-TRANSF-DUAS-PONTAS-01b (Gabriel 22/10): investimento, cartao, caixa — a conta que nao tem extrato do banco. A
+                transferencia com uma ponta aqui fica conciliada quando a ponta da conta com extrato esta' ligada. */}
+            <div className="flex items-start gap-2">
+              <Switch checked={semExtrato} onCheckedChange={setSemExtrato} id="sem-extrato-bancario" />
+              <div>
+                <Label htmlFor="sem-extrato-bancario">Conta sem extrato bancário</Label>
+                <p className="text-[11px] text-muted-foreground">
+                  Investimento, cartão, caixa: a transferência fica conciliada só pela outra conta.
+                </p>
+              </div>
             </div>
 
             <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
