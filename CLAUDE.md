@@ -233,6 +233,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   entrega futura e' aviso, nunca bloqueio. NOTA-FORNECEDOR-CNPJ-ACHADO-01: quem grava cadastro avisa COM o id (`notificarFornecedoresMudaram`).
 - NOTA-FAZENDA-PELA-IE-01: fazenda pela IE do destinatario (`fazenda_cadastros.ie`), sem ela pelo nome no endereco ("confira"); a IE da
   fazenda so' por `fn_fazenda_gravar_ie` (so' vazia, nunca sobrescreve, trilha).
+- FIN-CLASSIF-DIVIDIDA-01b/01c: dividir/voltar/desfazer SO' pelas RPCs (motivo, simula antes); depois, o modal rele^ a classificacao gravada
+  (a trava recusa reclassificar direto). Linha da visao por parte ("id#2") abre SEMPRE o lancamento (`lerLancamentoDaLinha`, `idDoLancamento`).
 - ITENS-NOTA-01: os itens sao do DOCUMENTO (cliente + chave, `nota_fiscal`), nunca da parcela; escrita so' pela `fn_nota_fiscal_gravar`
   (confere o liquido de cada item; o XML sempre manda sobre o PDF); a conta do item nao existe — a do lancamento e' a de DRE e caixa.
 - OC-ABRIR-LENTO-01: erro do banco nunca vai cru ao toast (frase pronta, o texto no console); leitura de tela que termina depois de
