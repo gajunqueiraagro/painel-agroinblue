@@ -8,14 +8,16 @@
  *   · a tabela na REGUA (a de Recorrencias): cabecalho e total presos, so' o corpo rola, descricao com "…" e o inteiro no `title`,
  *     numero nunca corta. O quadro ocupa a altura que o pai der (modal fixo, sem rolagem).
  */
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Segmentado } from '@/components/ui/segmentado';
 import { QUADRO_REGUA, RODAPE_REGUA } from '@/components/ui/regua-tabela';
 import { conferirSoma, type CabecalhoDaNota, type ItemFiscal, type ItensLidos } from '@/lib/financeiro/nfe/itensDaNota';
 import { documentoFormatado, numeroDaNota, reais } from '@/lib/financeiro/nfe/formatos';
 import { cn } from '@/lib/utils';
 
-type Visao = 'valores' | 'fiscal';
+type Visao = 'valores' | 'fiscal' | 'contas';
+const VISOES: { valor: Visao; rotulo: string }[] = [{ valor: 'valores', rotulo: 'Valores' }, { valor: 'fiscal', rotulo: 'Fiscal' }];
+const VISOES_COM_CONTAS: { valor: Visao; rotulo: string }[] = [...VISOES, { valor: 'contas', rotulo: 'Contas' }];
 const REGIME: Record<string, string> = { '1': 'Simples Nacional', '2': 'Simples (excesso)', '3': 'Regime normal', '4': 'MEI' };
 const CHIP = 'inline-flex h-[18px] shrink-0 items-center whitespace-nowrap rounded-full px-2 text-[10px] font-medium leading-none';
 /* ITENS-NOTA-FONTE-01 (Gabriel 22/10 08h10 e 08h47) — a tabela dos itens e' COMPACTA (excecao declarada ao piso de 9,5px, como a grade do
@@ -39,9 +41,11 @@ function unitario(u: string | null): string {
 const acrescimos = (i: ItemFiscal) => i.freteCent + i.seguroCent + i.outrasCent + (i.ipi?.valorCent ?? 0) + (i.icmsSt?.valorCent ?? 0) + (i.fcpSt?.valorCent ?? 0);
 const imp = (v: { valorCent?: number } | null) => (v?.valorCent ? reais(v.valorCent) : '0,00');
 
-export function ItensDaNota({ cabecalho, lidos, contaDoLancamento, testId = 'itens-da-nota' }: {
+export function ItensDaNota({ cabecalho, lidos, contaDoLancamento, testId = 'itens-da-nota', vistaContas }: {
   cabecalho: CabecalhoDaNota;
   lidos: ItensLidos;
+  /** FIN-CLASSIF-DIVIDIDA-01b — a vista "Contas" (a conta de cada item e o dividir): so' no lancamento salvo que pode dividir */
+  vistaContas?: ReactNode;
   /** o subcentro do lancamento (a conta que vale para DRE e caixa) — so' para dizer na barra */
   contaDoLancamento?: string | null;
   testId?: string;
@@ -55,7 +59,7 @@ export function ItensDaNota({ cabecalho, lidos, contaDoLancamento, testId = 'ite
     ['Produtos', t.produtosCent, false], ['Desconto', t.descontoCent, false], ['Frete', t.freteCent, false], ['Seguro', t.seguroCent, false],
     ['Outras', t.outrasCent, false], ['IPI + ST', ipiSt, false], ['Valor NF', t.notaCent, true],
   ];
-  const valores = visao === 'valores';
+  const valores = visao !== 'fiscal';
   /* o codigo NUNCA corta: a coluna tem a largura do maior codigo da nota (em `ch` da fonte da tabela); a descricao cede */
   const maiorCodigo = Math.max(9, ...lidos.itens.map((i) => (i.codigo ?? '').length));   // 9ch: o rotulo "Cód. forn." inteiro
   const larguraCodigo = `calc(${maiorCodigo}ch + 10px)`;
@@ -117,7 +121,7 @@ export function ItensDaNota({ cabecalho, lidos, contaDoLancamento, testId = 'ite
       {/* ── A BARRA ──────────────────────────────────────────────────────────────────────────────────────────────────── */}
       <div className="flex h-[22px] shrink-0 items-center gap-1.5 overflow-hidden">
         <Segmentado<Visao> altura={22} valor={visao} onEscolher={setVisao}
-          opcoes={[{ valor: 'valores', rotulo: 'Valores' }, { valor: 'fiscal', rotulo: 'Fiscal' }]} />
+          opcoes={vistaContas ? VISOES_COM_CONTAS : VISOES} />
         <span className={cn(CHIP, prova.confere ? 'bg-[#e5f4ea] text-[#1f7a45]' : 'bg-amber-50 text-amber-800')} data-testid="itens-prova">
           {prova.confere ? '✓ Soma dos itens = valor da nota' : `Soma dos itens ${reais(prova.somaCent)} · nota ${reais(prova.notaCent)}`}
         </span>
@@ -129,6 +133,7 @@ export function ItensDaNota({ cabecalho, lidos, contaDoLancamento, testId = 'ite
       </div>
 
       {/* ── A TABELA (a regua) — Valores x Fiscal trocam as COLUNAS de proposito (`data-desloca-livre`); a barra acima segue medida ── */}
+      {visao === 'contas' && vistaContas ? <div className="min-h-0 flex-1" data-desloca-livre="">{vistaContas}</div> : (
       <div className={cn(QUADRO_REGUA, 'min-h-0 flex-1')} data-testid="itens-quadro" data-desloca-livre="">
         <table className="w-full shrink-0 table-fixed border-collapse bg-primary text-[8.5px]">{colgroup}
           <thead><tr>{cols.map((c) => <th key={c.h} className={cn(TH_ITENS, 'truncate', c.num ? 'text-right' : 'text-left')} title={c.h}>{c.h}</th>)}</tr></thead>
@@ -163,6 +168,7 @@ export function ItensDaNota({ cabecalho, lidos, contaDoLancamento, testId = 'ite
           </tr></tbody>
         </table>
       </div>
+      )}
     </div>
   );
 }
