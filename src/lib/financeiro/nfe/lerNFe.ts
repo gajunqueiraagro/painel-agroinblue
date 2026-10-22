@@ -140,6 +140,7 @@ export function lerNFe(bytes: ArrayBuffer): ResultadoNFe {
       documento: soDigitos(texto(dest, 'CNPJ')) ?? soDigitos(texto(dest, 'CPF')),
       nome: texto(dest, 'xNome'),
       ie: soDigitos(texto(dest, 'IE')),
+      endereco: [texto(dest, 'enderDest', 'xLgr'), texto(dest, 'enderDest', 'nro'), texto(dest, 'enderDest', 'xBairro')].filter(Boolean).join(', ') || null,
     },
     totais: { produtosCent: cent(tot, 'vProd'), freteCent: cent(tot, 'vFrete'), descontoCent: cent(tot, 'vDesc'), notaCent },
     fatura: fat ? { origCent: cent(fat, 'vOrig'), descCent: cent(fat, 'vDesc'), liqCent: cent(fat, 'vLiq') } : null,
