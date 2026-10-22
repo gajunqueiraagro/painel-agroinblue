@@ -141,7 +141,10 @@ describe('a ligação na tela (lida da fonte)', () => {
   const tela = readFileSync(resolve(__dirname, '../../pages/FinanceiroV2Tab.tsx'), 'utf8');
   it('a grade é a página do servidor; a lista inteira não é mais lida', () => {
     expect(tela).toContain('const listaV2 = useListaPaginaV2(clienteAtual?.id, { filtros: filtrosV2, ordem: ordemV2, pagina: paginaV2, porPagina },');
-    expect(tela).toContain("const linhasDaGrade = useMemo(() => (LISTA_V2 ? hook.listaPagina : (paginaDaLista?.linhas ?? [])), [LISTA_V2, hook.listaPagina, paginaDaLista]);");
+    expect(tela).toContain("const linhasDaGrade = useMemo(() => paginaDaLista?.linhas ?? [], [paginaDaLista]);");
+    /* FIN-V2-LISTA-FLAG-01: a flag LISTA_PAGINADA_V2 saiu — a grade nao tem outro caminho */
+    expect(tela).not.toContain('LISTA_V2 ?');
+    expect(tela).not.toContain('FEATURE_FLAGS.LISTA_PAGINADA_V2');
     expect(tela).not.toContain('hook.loadLancamentos(');
     expect(tela).not.toContain('const sortedLancamentos');
     expect(tela).toContain('const totalLancamentosFiltrados = paginaDaLista?.total ?? 0;');
