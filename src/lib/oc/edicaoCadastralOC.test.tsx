@@ -77,7 +77,7 @@ describe('o caminho do Salvar e o que ele leva', () => {
   });
 
   it('so os cadastrais vao — data e fazenda ficam de fora mesmo sujas; o tipo de venda vai (OC-TIPO-VENDA-01)', () => {
-    expect(CAMPOS_CADASTRAIS_OC).toEqual(['contraparte_id', 'observacoes', 'numero_documento', 'tipo_venda']);
+    expect(CAMPOS_CADASTRAIS_OC).toEqual(['contraparte_id', 'observacoes', 'numero_documento', 'tipo_venda', 'propriedade_destino']);
     expect(soCadastrais({ contraparte_id: 'ricardo', data_operacao: '2025-07-30', observacoes: 'x', fazenda_id: 'f', tipo_venda: 'desmama' }))
       .toEqual({ contraparte_id: 'ricardo', observacoes: 'x', tipo_venda: 'desmama' });
     /* e a busca sabe achar: sem nada cadastral, sai vazio */
