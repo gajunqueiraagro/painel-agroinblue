@@ -803,7 +803,7 @@ interface ExtratoIgnorado { extrato_id: string; data: string | null; historico: 
 
 /** O envelope que `fn_espelho_casar` / `fn_espelho_casar_n1` devolvem pelo PostgREST. */
 interface RespostaCasar {
-  data: { ok?: boolean; motivo?: string } | null;
+  data: { ok?: boolean; motivo?: string; frase?: string } | null;
   error: { message: string } | null;
 }
 
@@ -1110,7 +1110,7 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
       const { data: r, error } = await comPrazo<RespostaCasar>(chamada, PRAZO_CONCILIAR_MS);
       if (error) { setErro(error.message); return; }
       const res = r ?? {};
-      if (res.ok === false) { setErro(MOTIVO_CASAR_LABEL[res.motivo ?? ''] ?? res.motivo ?? 'Não foi possível conciliar.'); return; }
+      if (res.ok === false) { setErro(res.frase ?? MOTIVO_CASAR_LABEL[res.motivo ?? ''] ?? res.motivo ?? 'Não foi possível conciliar.'); return; }
       limpar();
       onMudou();
     } catch (e: unknown) {
