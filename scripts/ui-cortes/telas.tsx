@@ -619,6 +619,22 @@ if (tela === 'mesclar') {
       onCriarFornecedor={async () => null} onCriarLancamento={async () => null} onAbrirNoLancamento={() => {}} onAbrirRegistrada={() => {}} onCriado={() => {}} consultarReceita={receita as any} />);
   };
   void montarNotaPdf();
+} else if (tela === 'comparar-cadastro') {
+  /* NOTA-FORNECEDOR-COMPARAR-01 — o "Atualizar o cadastro" (comparar antes de gravar), dados SINTETICOS e longos:
+     `v=` ''  o cadastro sem CNPJ, nome digitado a' mao (diferente), cidade igual · `errado` o cadastro com OUTRO CNPJ (o aviso e os botoes) */
+  const montarComparar = async () => {
+    const { CompararCadastroDialog } = await import('@/components/financeiro-v2/CompararCadastroDialog');
+    const hoje = v === 'errado'
+      ? { nome: 'Posto Exemplo Combustiveis e Lubrificantes da Regiao Centro Oeste Sintetico Ltda', cpf_cnpj: '11.444.777/0001-61', municipio: 'Campo Grande', uf: 'MS' }
+      : { nome: 'Pec.3M-Esc. Garças Cooperativa Agroindustrial Sintetica dos Produtores de Exemplo', cpf_cnpj: null, municipio: 'Campo Grande', uf: 'MS' };
+    const proposta = { nome: 'COOPERATIVA AGROINDUSTRIAL SINTETICA DOS PRODUTORES RURAIS DE EXEMPLO E REGIAO LTDA', nome_fantasia: 'COOP EXEMPLO',
+      cpf_cnpj: '11.222.333/0004-24', inscricao_estadual: '283456789', logradouro: 'Rodovia Sintetica BR-000 Km 12, Galpao 3', numero: 'S/N', bairro: 'Distrito Industrial',
+      cep: '79000-000', municipio: 'Campo Grande', uf: 'MS' };
+    raiz.render(<CompararCadastroDialog hoje={hoje} proposta={proposta} rotuloOrigem="Da nota (Receita)" uso={{ lancamentos: 9999, ultimo: '2026-10-20' }}
+      emitente={{ documento: '11222333000424', nomes: [proposta.nome, proposta.nome_fantasia] }} onConfirmar={async () => null} onClose={() => {}}
+      onEscolherOutro={() => {}} onCadastrarNovo={() => {}} />);
+  };
+  void montarComparar();
 } else if (tela === 'itens-nota') {
   /* ITENS-NOTA-01 — os itens da nota fora do lancamento, com dado SINTETICO (a nota de 3 itens do teste, repetida):
      `v=` ''         o dialogo da aba Documentos da OC, PIOR CASO: 40 itens, metade com descricao de 120 caracteres (o corpo rola no quadro)
@@ -707,6 +723,23 @@ if (v === 'xmlnome') {
   props.prefill = { ...prefillDaNota({ proposta: p.proposta, emitenteNome: lido.nota.emitente.nome, emitenteDocumento: lido.nota.emitente.documento, resolucao,
     ocorrencias: [], arquivo: arquivoXmlDaNota(bytes, 'NFe-12345.XML') } as any), conta_bancaria_id: 'bb' };
   props.fornecedores = [SEM_DOC];
+  props.documentosAntesDeSalvar = true;
+}
+/* ITENS-NOTA-FONTE-01 — `xml18`: 18 itens com descricao longa (o molde da nota de 18 itens); `xml14`: 14 itens com codigo de 14 digitos
+   (o molde da nota de 14 itens). Dados SINTETICOS; a aba "Itens da nota" tem de mostrar as 18 linhas sem rolar a partir de 1126x579. */
+if (v === 'xml18' || v === 'xml14') {
+  const n = v === 'xml18' ? 18 : 14;
+  const itens: [string, string, string, string, string?][] = Array.from({ length: n }, (_, i) => [
+    v === 'xml18' ? `MATERIAL ELETRICO SINTETICO REFERENCIA ${i + 1} CABO FLEXIVEL 2,5MM ROLO 100M COR ${['AZUL', 'PRETO', 'VERDE'][i % 3]}` : `PECA SINTETICA ${i + 1} KIT REPARO`,
+    String(i + 1) + '.0000', 'UN', `${(100 + i * 37).toFixed(2)}`, v === 'xml14' ? `78912345${String(100000 + i)}` : undefined]);
+  const vNF = itens.reduce((t, x) => t + Number(x[3]), 0).toFixed(2);
+  const bytes = utf8(montarNFe({ itens, vNF, duplicatas: [['001', '2026-10-30', vNF]] }));
+  const lido: any = lerNFe(bytes);
+  const resolucao = resolverEmitente(lido.nota.emitente, [AGRO], null);
+  const p: any = proporLancamento({ nota: lido.nota, avisosDoLeitor: lido.avisos, fazendas: [{ id: 'f-pur', nome: 'Faz. Exemplo', ie: null }], emitente: resolucao,
+    favorecidoId: resolucao.propostoId, ultima: null });
+  props.prefill = prefillDaNota({ proposta: p.proposta, emitenteNome: lido.nota.emitente.nome, emitenteDocumento: lido.nota.emitente.documento, resolucao,
+    ocorrencias: [], arquivo: arquivoXmlDaNota(bytes, 'NFe-sintetica.XML') } as any);
   props.documentosAntesDeSalvar = true;
 }
 if (v === 'xml') {
