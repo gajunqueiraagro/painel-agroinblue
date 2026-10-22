@@ -29,7 +29,7 @@ describe('F1 — nfeProc completo, autorizado (2026, com os grupos da reforma tr
       tipoNota: 'saida', finalidade: 'normal', naturezaOperacao: 'VENDA DE MERCADORIA',
       /* FORN-CADASTRO-02: o `enderEmit` passou a ser lido (completa o cadastro do fornecedor) */
       emitente: { documento: EMITENTE_CNPJ, nome: 'AGROPECUARIA EXEMPLO LTDA', fantasia: 'CASA DO CAMPO', ie: '283456789', endereco: { logradouro: 'RUA FICTICIA', numero: '100', complemento: null, bairro: 'CENTRO', municipio: 'CAMPO GRANDE', uf: 'MS', cep: '79000000', telefone: null } },
-      destinatario: { documento: DESTINATARIO_CPF, nome: 'PRODUTOR RURAL DE TESTE', ie: '289876543' },
+      destinatario: { documento: DESTINATARIO_CPF, nome: 'PRODUTOR RURAL DE TESTE', ie: '289876543', endereco: 'FAZENDA MODELO, SN, ZONA RURAL' },
       totais: { produtosCent: 1623800, freteCent: 0, descontoCent: 0, notaCent: 1623800 },
       fatura: { origCent: 1623800, descCent: 0, liqCent: 1623800 },
       duplicatas: [
