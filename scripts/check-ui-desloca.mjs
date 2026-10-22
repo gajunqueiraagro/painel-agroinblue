@@ -84,6 +84,21 @@ const CENARIOS = [
   ...['venda', 'abate'].map((v) => ({ nome: `oc-cc-faixa-${v}`, url: `tela=oc&v=${v}&aba=financeiro&cc=1`, minLargura: 1000, estados: [
     ['sem principal programado (sem o motivo)', { url: `tela=oc&v=${v}&aba=financeiro&cc=1&coberto=0` }],
   ] })),
+  /* CONC-SEM-TRAVA-01 (tela) — o modal Conciliar: trocar de cartao, escolher outra sugestao, buscar e tentar sem motivo nao mexem
+     nos lados, na caixa da diferenca, nos cartoes, no motivo nem no rodape (tamanho fixo) */
+  { nome: 'conciliar-sobra', url: 'tela=conciliar&v=sobra', antes: async (p) => { await p.locator('[data-testid="botao-conciliar"]').waitFor(); await espera(p); },
+    estados: [
+      ['cartao lancar na OC', clicar('[data-testid="cartao-sobra_na_oc"] input[name="opcao-conciliar"]')],
+      ['cartao criar a diferenca', clicar('[data-testid="cartao-criar_diferenca"] input[name="opcao-conciliar"]')],
+      ['busca com resultado', digitar('[data-testid="busca-acrescentar"]', 'Novilhas')],
+      ['conciliar sem motivo (aviso)', clicar('[data-testid="botao-conciliar"]')],
+    ] },
+  { nome: 'conciliar-falta', url: 'tela=conciliar&v=falta', antes: async (p) => { await p.locator('[data-testid="botao-conciliar"]').waitFor(); await espera(p); },
+    estados: [
+      ['cartao deixar em aberto', clicar('[data-testid="cartao-ligar_com_falta"] input[name="opcao-conciliar"]')],
+      ['cartao desconto na OC', clicar('[data-testid="cartao-desconto_na_oc"] input[name="opcao-conciliar"]')],
+      ['conciliar sem motivo (aviso)', clicar('[data-testid="botao-conciliar"]')],
+    ] },
   /* OC-CORRECOES-01 C3 — o "Buscar recebimento no Financeiro": a busca e a escolha nao mexem no campo, no cabecalho nem nos botoes */
   { nome: 'oc-cc-buscar', url: 'tela=oc-cc&v=buscar', antes: async (p) => { await p.locator('[data-testid="busca-recebimento"]').waitFor(); await espera(p); },
     estados: [
