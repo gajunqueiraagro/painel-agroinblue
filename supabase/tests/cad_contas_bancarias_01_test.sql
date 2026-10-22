@@ -7,6 +7,7 @@
 --   C3 marcar "Sem extrato" na conta que falta numa transferencia: o "falta o ..." some
 --   C4 criar: uma linha "criou" na Auditoria, a semente do mes, codigo gerado, texto vazio vira nulo
 --   C5 campo fora da lista (senha) recusado; C6 outro cliente recusado (salvar e painel)
+--   C7 a conta de investimento que vive dentro da corrente: o vinculo vai para a de investimento (consolida_em_conta_id) e sai
 SELECT set_config('request.jwt.claims','{"sub":"7bd0b6ad-2527-4be1-af58-f2cc0c0edd8e","role":"authenticated"}',true);
 DO $t$
 DECLARE
@@ -15,7 +16,7 @@ DECLARE
   ct uuid := '1afe76df-b61e-49f4-b637-f5ce020c778b';
   fp0 text; fp1 text; sv0 text; sv1 text; ct0 text; ct1 text; r record; res jsonb; sem text[] := '{}'; n int := 0;
   i1 numeric; rs1 numeric; aud text; lt uuid; fa text; fd text; falta uuid; p jsonb; novo jsonb; na int; ns int; t text;
-  falhas text[] := '{}';
+  falhas text[] := '{}'; inv uuid := '990456bd-b19e-421c-969d-a41fad934671'; c7a uuid; c7b uuid;
 BEGIN
   SELECT md5(string_agg(concat_ws('|',k,m,x.conta_id,x.saldo_inicial,x.saldo_sistema,x.saldo_extrato,x.diferenca,x.status), ',' ORDER BY k,m,x.conta_id)) INTO fp0
     FROM unnest(cli) k, unnest(meses) m, LATERAL _fn_conciliacao_resumo(k, m, NULL, false, false) x;
@@ -67,6 +68,12 @@ BEGIN
      OR NOT (SELECT banco IS NULL AND aliases IS NULL AND gerente_nome = 'Ger' FROM financeiro_contas_bancarias WHERE id = (novo->>'id')::uuid) THEN
     falhas := falhas || format('C4 criou=%s semente=%s codigo=%s', na, ns, novo->>'codigo_conta');
   END IF;
+
+  res := fn_conta_bancaria_salvar(cli[1], ct, jsonb_build_object('conta_interna_id', inv));
+  SELECT consolida_em_conta_id INTO c7a FROM financeiro_contas_bancarias WHERE id = inv;
+  res := fn_conta_bancaria_salvar(cli[1], ct, '{"conta_interna_id": null}');
+  SELECT consolida_em_conta_id INTO c7b FROM financeiro_contas_bancarias WHERE id = inv;
+  IF c7a IS DISTINCT FROM ct OR c7b IS NOT NULL THEN falhas := falhas || format('C7 ligou=%s soltou=%s', c7a = ct, c7b IS NULL); END IF;
 
   BEGIN res := fn_conta_bancaria_salvar(cli[1], ct, '{"senha":"x"}'); t := 'aceitou'; EXCEPTION WHEN others THEN t := SQLERRM; END;
   IF t NOT LIKE 'Campo desconhecido%' THEN falhas := falhas || ('C5 ' || t); END IF;
