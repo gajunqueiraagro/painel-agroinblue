@@ -42,6 +42,8 @@ const consultas = vi.hoisted(() => ({
   gravarDocumentoNoCadastro: vi.fn(async () => null as string | null),
   /* NOTA-FORNECEDOR-DUPLICA-01 — o CNPJ conferido no banco antes de criar (nenhum cadastro com ele, por padrao) */
   fornecedorPeloDocumento: vi.fn(async (): Promise<{ id: string; nome: string; ativo: boolean } | null> => null),
+  /* NOTA-JA-LANCADA-01 — nada ja' lancado, por padrao */
+  notaJaLancada: vi.fn(async (_c: string, _e: unknown): Promise<{ id: string }[]> => []),
 }));
 vi.mock('@/lib/financeiro/nfeConsultas', () => consultas);
 vi.mock('@/hooks/useFornecedoresDoCliente', async () => (await import('@/test/leitorDeFornecedoresFake')).moduloDoLeitorFake());
@@ -94,6 +96,7 @@ beforeEach(() => {
   consultas.notaJaRegistrada.mockImplementation(async () => []);
   consultas.fornecedorPeloNome.mockImplementation(async () => null);
   consultas.ultimaClassificacaoDoFornecedor.mockImplementation(async () => null);
+  consultas.notaJaLancada.mockImplementation(async () => []);
 });
 
 function montarModal(props: Partial<React.ComponentProps<typeof LancamentoV2Dialog>>, fornecedores: FornecedorV2[] = [AGRO]) {
@@ -568,6 +571,31 @@ describe('tela B — a faixa do fornecedor', () => {
     expect(m.onCriarFornecedor).not.toHaveBeenCalled();
     fireEvent.click(screen.getByTestId('xml-usar-este'));
     await waitFor(() => expect(screen.queryByTestId('xml-faixa-fornecedor')).toBeNull());
+  });
+});
+
+describe('NOTA-JA-LANCADA-01 — o XML que parece ja\' lancado', () => {
+  it('a linha diz "parece já lançada" e a nota abre na previa da nota (que oferece anexar), nao no Novo lançamento direto', async () => {
+    consultas.notaJaLancada.mockImplementation(async () => [{ id: 'velho' }]);
+    const onAbrirNota = vi.fn();
+    const onAbrir = vi.fn();
+    render(<NovoDeXmlDialog open onClose={() => {}} clienteId="cli" fazendas={FAZENDAS} fornecedores={[AGRO]} onAbrirLancamento={onAbrir} onAbrirNota={onAbrirNota} lancadas={new Set()} />);
+    soltar([arquivo('a.xml', montarNFe())]);
+    await waitFor(() => expect(screen.getAllByTestId('xml-linha')).toHaveLength(1));
+    expect(screen.getByTestId('xml-situacao').textContent).toBe('parece já lançada');
+    expect(onAbrirNota).toHaveBeenCalledTimes(1);
+    expect(onAbrirNota.mock.calls[0][0].lido.origem).toBe('xml');
+    const pedido = consultas.notaJaLancada.mock.calls[0][1] as { chave: string; parcelas: unknown[] };
+    expect(pedido.chave).toBe(chaveDe(EMITENTE_CNPJ, '55', '12345'));
+    expect(pedido.parcelas).toHaveLength(2);
+  });
+  it('nada achado: o XML segue para o Novo lançamento, como sempre', async () => {
+    const onAbrirNota = vi.fn();
+    render(<NovoDeXmlDialog open onClose={() => {}} clienteId="cli" fazendas={FAZENDAS} fornecedores={[AGRO]} onAbrirLancamento={() => {}} onAbrirNota={onAbrirNota} lancadas={new Set()} />);
+    soltar([arquivo('a.xml', montarNFe())]);
+    await waitFor(() => expect(screen.getAllByTestId('xml-linha')).toHaveLength(1));
+    expect(screen.getByTestId('xml-situacao').textContent).not.toBe('parece já lançada');
+    expect(onAbrirNota).not.toHaveBeenCalled();
   });
 });
 
