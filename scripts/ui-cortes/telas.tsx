@@ -54,6 +54,8 @@ import { V2Sidebar, LARGURA_DA_LATERAL } from '@/v2/components/V2Sidebar';
 import { ClienteSelector } from '@/components/ClienteSelector';
 import { FazendaSelector } from '@/components/FazendaSelector';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { ConciliarDiferencaModal } from '@/components/conciliacao/ConciliarDiferencaModal';
+import { lerSimulacao } from '@/lib/conciliacao/conciliarDiferenca';
 
 /* FIN-V2-DESEMPENHO-01b — a `fn_fin_v2_lista_pagina` da bancada: a página pedida do conjunto SINTÉTICO, com o total e os totais
    do conjunto inteiro (a regra do topo, `totaisDaListaV2`). Sem filtro: a bancada mede a tela, não o predicado. */
@@ -491,6 +493,47 @@ if (tela === 'mesclar') {
     iniciais={v === 'levado' ? [{ lancamento_id: 'y1', descricao: 'Rendimento de aplicação · junho', fornecedor: 'Banco Exemplo', valor_assinado: 0.01, data_vencimento: '2025-06-30', status_transacao: 'programado' }] : []}
     onConciliado={() => {}} />);
   }
+} else if (tela === 'conciliar') {
+  /* CONC-SEM-TRAVA-01 (tela) — o modal "Conciliar" no formato da resposta de `fn_conc_simular_diferenca` provada no caso real (OC
+     0731374f, Banco do Brasil), com NOMES SINTETICOS: v=sobra (Pix 30/06 R$ 375.000 x Receb. 1/3), v=falta (Pix 30/07 R$ 290.000 x
+     Receb. 2/3), v=igual, e v=teto (valores no teto, descricoes longas, 5 lancamentos levados -> "+2"). */
+  const COMPRADOR = 'PIX RECEBIDO · COMPRADOR SINTETICO EXEMPLO DA SILVA AGROPECUARIA LTDA';
+  const teto = v === 'teto';
+  const ext = v === 'falta' ? [{ id: 'e2', data: '2026-07-30', descricao: COMPRADOR, valor: 290000 }]
+    : [{ id: 'e1', data: '2026-06-30', descricao: COMPRADOR, valor: teto ? 99999999.99 : 375000 }];
+  const lan = v === 'falta' ? [{ id: 'r2', data: '2026-07-30', descricao: 'Venda 118 Vacas - 2/3', valor: 375000, parcela: '2/3' }]
+    : v === 'igual' ? [{ id: 'r1', data: '2026-06-30', descricao: 'Venda 118 Vacas - 1/3', valor: 375000, parcela: '1/3' }]
+    : teto ? Array.from({ length: 5 }, (_, i) => ({ id: `t${i}`, data: '2026-06-30',
+        descricao: `Venda de 150 Novilhas e Vacas de Descarte com Nome Muito Comprido · Recebimento ${i + 1}/9`, valor: 11111111.11, parcela: `${i + 1}/9` }))
+    : [{ id: 'r1', data: '2026-06-30', descricao: 'Venda 118 Vacas - 1/3', valor: 215000, parcela: '1/3' }];
+  const somaE = ext.reduce((x, e) => x + e.valor, 0); const somaL = lan.reduce((x, l) => x + l.valor, 0);
+  const dif = Math.round((somaE - somaL) * 100) / 100;
+  const brlB = (n: number) => `R$ ${Math.abs(n).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`;
+  const resposta = v === 'igual'
+    ? { ok: true, sentido: 'igual', soma_extratos: somaE, soma_lancamentos: somaL, diferenca: 0, frase: 'Confere com o banco.', opcoes: [] }
+    : v === 'falta'
+    ? { ok: true, sentido: 'a_menos', soma_extratos: somaE, soma_lancamentos: somaL, diferenca: dif, data_extrato: '2026-07-30', ocs: [{ operacao_id: 'oc' }],
+        frase: `O banco tem ${brlB(somaE)} e os lançamentos ${brlB(somaL)}. Escolha o que fazer com a falta.`,
+        opcoes: [
+          { codigo: 'juntar_extrato', frase: `Juntar outro movimento do banco de ${brlB(dif)}, do mesmo comprador.`, sugestoes: [
+            { extrato_id: 'p85', descricao: COMPRADOR, data: '2026-07-30', valor: 85000, fecha_exato: true, mesmo_favorecido: true },
+            { extrato_id: 'p50', descricao: COMPRADOR, data: '2026-07-28', valor: 50000, fecha_exato: false, mesmo_favorecido: true }] },
+          { codigo: 'ligar_com_falta', frase: `Ligar o que entrou e deixar ${brlB(dif)} em aberto no Receb. 2/3.`, previa: { recebido: 290000, em_aberto: 85000, vencimento: '2026-07-30' } },
+          { codigo: 'desconto_na_oc', frase: `Lançar ${brlB(dif)} de desconto ou abatimento na operação comercial.`, previa: { desconto: 85000, lancamento: 'Venda 118 Vacas - 2/3', recebido: 290000 } },
+        ] }
+    : { ok: true, sentido: 'a_mais', soma_extratos: somaE, soma_lancamentos: somaL, diferenca: dif, data_extrato: '2026-06-30', ocs: [{ operacao_id: 'oc' }],
+        frase: `O banco tem ${brlB(somaE)} e os lançamentos ${brlB(somaL)}. Escolha o destino da sobra.`,
+        opcoes: [
+          { codigo: 'acrescentar_lancamento', frase: `Acrescentar o lançamento que falta (${brlB(dif)}).`, sugestoes: [
+            { lancamento_id: 'r3', descricao: teto ? 'Venda de 150 Novilhas e Vacas de Descarte com Nome Muito Comprido · Recebimento 9/9' : 'Venda 150 Novilhas/Vacas · Recebimento', data: '2026-06-30', valor: dif, parcela: teto ? '9/9' : '3/3', fecha_exato: true },
+            { lancamento_id: 'r4', descricao: 'Venda 40 Bezerros · Recebimento', data: '2026-07-15', valor: 98000, parcela: '1/2', fecha_exato: false },
+            { lancamento_id: 'r5', descricao: 'Venda 12 Touros · Recebimento', data: '2026-08-01', valor: 61000, parcela: null, fecha_exato: false }] },
+          { codigo: 'sobra_na_oc', frase: `Lançar a sobra de ${brlB(dif)} na conta corrente da operação comercial.`, previa: { operacao_id: 'oc', valor: dif, saldo_depois: teto ? -99999999.99 : -590000 } },
+          { codigo: 'criar_diferenca', frase: `Criar o lançamento da diferença de ${brlB(dif)}.`, previa: { valor: dif, data: '2026-06-30', subcentro: 'Venda de Fêmeas Adultas', favorecido_origem: 'extrato' } },
+        ] };
+  const api = { simular: async () => lerSimulacao(resposta), executar: async () => null,
+    buscar: async () => [{ id: 'b1', descricao: 'Venda 150 Novilhas/Vacas · Recebimento', data: '2026-06-30', valor: 160000, parcela: '3/3', fechaExato: true }] };
+  montar(<ConciliarDiferencaModal open onClose={() => {}} extratos={ext} lancamentos={lan} onConciliado={() => {}} api={api as any} />);
 } else if (tela === 'nota-pdf') {
   /* FIN-NOTA-PDF-01 — "Novo lançamento · da nota fiscal" (o mock aprovado). O PDF e' SINTETICO: desenhado pelo jspdf a partir do DANFE
      sintetico (as posicoes do real, dados de teste) e LIDO pelo caminho de verdade (`lerNota` -> pdfjs -> `notaDoDanfe`).
