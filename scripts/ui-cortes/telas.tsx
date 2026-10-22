@@ -61,9 +61,14 @@ import { lerSimulacao } from '@/lib/conciliacao/conciliarDiferenca';
 
 /* FIN-V2-DESEMPENHO-01b — a `fn_fin_v2_lista_pagina` da bancada: a página pedida do conjunto SINTÉTICO, com o total e os totais
    do conjunto inteiro (a regra do topo, `totaisDaListaV2`). Sem filtro: a bancada mede a tela, não o predicado. */
-function paginaDaBancada(base: any[], a: any) {
+function paginaDaBancada(base0: any[], a: any) {
   /* TABELA-ALTURA-FIXA-01 — `&linhas=N`: o recorte de um filtro que acha so' N lancamentos (6, 1, 0): o quadro nao encolhe */
   const corte = new URLSearchParams(location.search).get('linhas');
+  /* FIN-CLASSIF-DIVIDIDA-01c — `&div=1`: duas linhas DIVIDIDAS — a 1a filtrada por uma das contas (a parte "de R$ total", "1 de 2 contas"),
+     a 2a inteira ("dividido"); o maior valor do mock, R$ 9.583,00. SINTETICO. */
+  const base = new URLSearchParams(location.search).get('div') !== '1' ? base0 : base0.map((l, k) => (k === 0
+    ? { ...l, valor: -9583, sinal: -1, tipo_operacao: '2-Saídas', valor_parte: 1055, partes_total: 2, partes_casadas: 1 }
+    : k === 1 ? { ...l, valor_parte: Math.abs(Number(l.valor)), partes_total: 2, partes_casadas: 2 } : l));
   const caixa = base.filter((l) => l.sem_movimentacao_caixa !== true).slice(0, corte === null ? undefined : Number(corte));
   const por = Number(a?.p_por_pagina) || 200, pag = Number(a?.p_pagina) || 0;
   return {
@@ -716,13 +721,29 @@ if (tela === 'mesclar') {
   const docBase = { cliente_id: 'cli', lancamento_id: 'lanc-milho', origem: 'lancamento', operacao_id: null, tamanho_bytes: 1, uploaded_em: '2026-05-10T12:00:00Z',
     uploaded_por: 'u1', observacao: null, cancelado: false, cancelado_em: null, cancelado_motivo: null, versao: 1, ligado_a_qtd: 1, emitente_id: 'agro',
     emitente_nome: 'COOPERATIVA AGROINDUSTRIAL DOS PRODUTORES RURAIS DO MATO GROSSO DO SUL E REGIAO CENTRO OESTE LTDA', emitente_documento: '11222333000181' };
-  const DOCS_NOTA = q.get('docs') !== 'nota' ? [] : [
+  const DOCS_NOTA = q.get('docs') !== 'nota' && q.get('div') !== '1' ? [] : [
     { ...docBase, documento_id: 'd-pdf', nome: 'NF 15786.pdf', tipo: 'application/pdf', url: 'c/l/a.pdf', especie: 'nf', numero: '15786', serie: null, chave_acesso: CH, data_emissao: '2026-05-08', valor_documento: 102000 },
     { ...docBase, documento_id: 'd-xml', nome: 'NFe15786.xml', tipo: 'text/xml', url: 'c/l/b.xml', especie: 'nf', numero: '000.015.786', serie: '2', chave_acesso: CH, data_emissao: '2026-05-08', valor_documento: 102000 },
     { ...docBase, documento_id: 'd-xml2', nome: 'NFe15790.xml', tipo: 'text/xml', url: 'c/l/c.xml', especie: 'nf', numero: '000.015.790', serie: '2', chave_acesso: CH.slice(0, 34) + '1579011234', data_emissao: '2026-05-09', valor_documento: 1250.4 },
     { ...docBase, documento_id: 'd-bol', nome: 'boleto.pdf', tipo: 'application/pdf', url: 'c/l/d.pdf', especie: 'boleto', numero: '15786', serie: null, chave_acesso: null, data_emissao: '2026-05-10', valor_documento: 102000 },
   ];
-  g.__bancoBancada = { from: (t: string) => t === 'audit_log' ? AUDIT : t === 'vw_lancamento_documentos' ? DOCS_NOTA : [], rpc: (fn: string) => fn === 'fn_nomes_dos_autores' ? [
+  /* FIN-CLASSIF-DIVIDIDA-01b — `div=1`: o lancamento (Sal, R$ 1.345,50) DIVIDIDO pelos itens da nota em 2 contas, a ultima operacao que se
+     desfaz e a nota guardada com 18 itens (descricao longa) — a aba Geral mostra as partes; a aba Itens, a vista "Contas". SINTETICO. */
+  const DIV = q.get('div') === '1';
+  const CENT_DOS_ITENS = [30000, 25000, 25000, 20000, 20000, ...Array.from({ length: 12 }, () => 1100), 1350];
+  const NOTA_DIV = { id: 'nf-div', cliente_id: 'cli', chave_acesso: CH, origem: 'xml', regime: '3', numero: '3241', serie: '1', emissao: '2026-09-29',
+    natureza: 'VENDA DE MERCADORIA', emitente_documento: '11222333000181', emitente_nome: 'INDUSTRIA SINTETICA DE MATERIAL ELETRICO E POSTES LTDA',
+    lido_em: '2026-10-01T10:00:00Z', totais: { produtos_cent: 134550, nota_cent: 134550 } };
+  const ITENS_DIV = CENT_DOS_ITENS.map((c, k) => ({ nota_id: 'nf-div', n_item: k + 1, codigo: `78912345${String(1000 + k)}`, unidade: 'UN', quantidade: '1.0000',
+    unitario: String(c / 100), descricao: `MATERIAL SINTETICO ${k + 1} CABO FLEXIVEL ISOLADO 1KV ${k % 2 ? 'PRETO' : 'AZUL'} ROLO COM 100 METROS`,
+    produto_cent: c, liquido_cent: c, desconto_cent: 0, frete_cent: 0, seguro_cent: 0, outras_cent: 0 }));
+  const PARTES_DIV = [
+    { ordem: 1, valor: 1200, percentual: 89.18617614, plano_conta_id: 'pl-nut', subcentro: 'Nutrição Engorda', centro_custo: 'Suplementação', escopo_negocio: 'pecuaria', origem: 'nota', nota_itens: [1, 2, 3, 4, 5] },
+    { ordem: 2, valor: 145.5, percentual: 10.81382386, plano_conta_id: 'pl-ins', subcentro: 'Insumos Lavoura Milho', centro_custo: 'Insumos', escopo_negocio: 'agricultura', origem: 'nota', nota_itens: Array.from({ length: 13 }, (_, k) => k + 6) },
+  ];
+  g.__bancoBancada = { from: (t: string) => t === 'audit_log' ? AUDIT : t === 'vw_lancamento_documentos' ? DOCS_NOTA
+      : DIV && t === 'financeiro_lancamento_partes' ? PARTES_DIV : DIV && t === 'financeiro_lancamento_divisoes' ? [{ id: 'op-div', acao: 'dividir_nota' }]
+      : DIV && t === 'nota_fiscal' ? [NOTA_DIV] : DIV && t === 'nota_fiscal_itens' ? ITENS_DIV : [], rpc: (fn: string) => fn === 'fn_nomes_dos_autores' ? [
       { user_id: 'u-outro', nome: 'Beltrano Gestor da Silva', email: 'beltrano@exemplo.com', situacao: 'ex-membro' },
       { user_id: 'u1', nome: 'Eu Mesmo da Bancada', email: 'bancada@exemplo.com', situacao: 'membro ativo' }]
     : (desc && fn === 'fn_lancamento_financiamento') ? {
