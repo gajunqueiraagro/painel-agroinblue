@@ -207,6 +207,7 @@ describe('aba conta corrente da OC — extrato pelo caixa da fazenda', () => {
 });
 
 const ROL: RolCancelamento = {
+  modelo: 'conta_corrente',
   entregas: [{ data: '2025-03-19', loteOrdem: 1, valor: 566879.55 }],
   explicacoes: [{ tipo: 'permuta_despesa', valor: 357.89, conta: 'Frete' }],
   recebimentos: [{ data: '2025-04-17', valor: 992138.24, contaAtual: 'Venda de Desmama Machos', contaOriginal: 'Venda de Desmama Machos', acao: 'volta_para_conta_original' }],
