@@ -4,7 +4,7 @@
  * arquivo (ainda nao gravados). `null` = sem nota lida -> a aba nao aparece.
  */
 import { useEffect, useState } from 'react';
-import { chavesGuardadas, lerItensDoArquivo, lerItensGuardados } from '@/lib/financeiro/itensDaNotaBanco';
+import { chavesGuardadas, lerItensGuardados, notaComItensDoArquivo } from '@/lib/financeiro/itensDaNotaBanco';
 import type { CabecalhoDaNota, ItensLidos } from '@/lib/financeiro/nfe/itensDaNota';
 
 export interface NotaComItens { cabecalho: CabecalhoDaNota; lidos: ItensLidos }
@@ -17,12 +17,8 @@ export function useItensDaNota({ clienteId, chaves, arquivo }: { clienteId: stri
     (async () => {
       try {
         if (arquivo) {
-          const r = await lerItensDoArquivo(await arquivo.arrayBuffer());
-          if (!vivo) return;
-          if (r.ok === false) { setNota(null); return; }
-          const n = r.payload.nota;
-          setNota({ lidos: r.lidos, cabecalho: { chave: n.chave_acesso, origem: r.lidos.origem, numero: n.numero, serie: n.serie, emissao: n.emissao,
-            natureza: n.natureza, regime: n.regime, emitenteDocumento: n.emitente_documento, emitenteNome: n.emitente_nome } });
+          const lida = await notaComItensDoArquivo(await arquivo.arrayBuffer());
+          if (vivo) setNota(lida);
           return;
         }
         if (!clienteId || !chave) { setNota(null); return; }
