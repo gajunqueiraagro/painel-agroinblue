@@ -2923,7 +2923,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                           {/* FIN-V2-FORNECEDOR-SEM-SUFIXO-01 (Gabriel, 22/10: "não ficou legal! esconde o nome") — na TABELA, SÓ o nome
                               (uma linha, "…"); o CNPJ inteiro ou "sem CNPJ", a cidade/UF e o "inativo" vão no `title`. O final da filial
                               ("…0007-69", "sem CNPJ") fica no seletor/busca, onde ele separa as filiais (FORN-FILIAL-01). */}
-                          {fornNome ? fornNome : (!l.favorecido_id ? '-' : hook.fornecedores.length === 0 ? <span className="text-muted-foreground">…</span> : <span className="text-warning">n/c</span>)}
+                          {fornNome ? <span className="flex min-w-0"><span className="truncate pr-0.5">{fornNome}</span></span> : (!l.favorecido_id ? '-' : hook.fornecedores.length === 0 ? <span className="text-muted-foreground">…</span> : <span className="text-warning">n/c</span>)}
                         </td>
                         {/* FIN-V2-COLUNAS-02 — a Classificação no nível escolhido; o caminho inteiro no `title`. */}
                         <td className="celula-classe truncate px-1 py-1 align-middle text-[11px] leading-tight text-muted-foreground" data-testid="celula-classificacao"

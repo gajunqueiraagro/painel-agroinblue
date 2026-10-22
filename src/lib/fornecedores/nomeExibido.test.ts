@@ -101,7 +101,7 @@ describe('a ligação nas telas (fonte)', () => {
     const ini = tela.indexOf('<td className="truncate px-1 py-1 align-middle text-[12px] leading-tight text-muted-foreground"');
     const celula = tela.slice(ini, tela.indexOf('</td>', ini));
     expect(celula).toContain("title={rotuloForn?.title ?? fornNome ?? ''} data-testid=\"celula-fornecedor\"");
-    expect(celula).toContain('{fornNome ? fornNome : ');
+    expect(celula).toContain('{fornNome ? <span className="flex min-w-0"><span className="truncate pr-0.5">{fornNome}</span></span> : ');
     expect(tela).not.toContain('data-testid="final-fornecedor"');
     expect(tela).not.toContain('data-testid="inativo-fornecedor"');
     expect(celula).not.toContain('rotuloForn?.final');

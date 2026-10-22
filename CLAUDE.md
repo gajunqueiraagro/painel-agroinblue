@@ -246,6 +246,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - A pagina e' pt-BR e nao se traduz. Barra lateral 152px num token. Graficos de saida: laranja/violeta/vermelho/cinza; azul so' entrada.
 - TABELA-ALTURA-FIXA-01: o quadro da tabela tem ALTURA (nunca `maxHeight`) ate' o fim da tela, qualquer que seja o numero de linhas; o
   vazio fica dentro do quadro; em pagina que rola, `useAlturaAteOFim` (topo do quadro → fim da janela). O gate: filtrar para 6/1/0 linhas.
+- FIN-V2-FORNECEDOR-SEM-SUFIXO-01: em TABELA o fornecedor e' so' o nome ("…" + `title` com CNPJ/"sem CNPJ", cidade/UF, inativo); o final
+  de filial ("…0007-69", "sem CNPJ") so' no seletor/busca e no Mesclar.
 - FIN-V2-LISTA-VIRTUAL-01: a lista de Lancamentos so desenha as linhas a vista; a linha tem 19px fixos e conteudo mais alto que 16px
   quebra a conta da janela.
 - FIN-V2-DESEMPENHO-01b: Lancamentos Financeiros pede SO' A PAGINA (`fn_fin_v2_lista_pagina`, `useListaPaginaV2`); filtro, ordem,
