@@ -22,7 +22,7 @@ BEGIN
   s := public.fn_conc_simular_diferenca(ARRAY[pix], ARRAY[r1]);
   SELECT string_agg(o->>'codigo', ',' ORDER BY o->>'codigo') INTO ops FROM jsonb_array_elements(s->'opcoes') o;
   IF s->>'sentido' <> 'a_mais' OR (s->>'diferenca')::numeric <> 160000 OR ops <> 'acrescentar_lancamento,criar_diferenca,sobra_na_oc'
-     OR s->>'frase' <> 'O banco tem R$ 375.000,00 e os lançamentos R$ 215.000,00: sobram R$ 160.000,00. Escolha o destino da sobra.'
+     OR s->>'frase' <> 'O banco tem R$ 375.000,00 e os lançamentos R$ 215.000,00. Escolha o destino da sobra.'
     THEN RAISE EXCEPTION 'T1 simulacao: %', s; END IF;
 
   -- T2 (c)

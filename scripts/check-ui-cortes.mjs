@@ -230,6 +230,10 @@ const CENARIOS = [
   { nome: 'pendencias-resumo', url: 'tela=pendencias&v=resumo', tamanhos: TAMANHOS_DO_CONSORCIO },
   /* UI-SEM-CORTE-02 — o Casar com o banco 1:1 (Acessos: os cenarios do ACESSOS-PERFIL-01, acima) */
   { nome: 'casar-1x1-vazio', url: 'tela=casar-1x1', tamanhos: TAMANHOS_DO_CONSORCIO },
+  { nome: 'conciliar-sobra', url: 'tela=conciliar&v=sobra', tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[data-testid="modal-conciliar"]' },
+  { nome: 'conciliar-falta', url: 'tela=conciliar&v=falta', tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[data-testid="modal-conciliar"]' },
+  { nome: 'conciliar-igual', url: 'tela=conciliar&v=igual', tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[data-testid="modal-conciliar"]' },
+  { nome: 'conciliar-teto', url: 'tela=conciliar&v=teto', tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[data-testid="modal-conciliar"]' },
   { nome: 'casar-1x1-levado', url: 'tela=casar-1x1&v=levado', tamanhos: TAMANHOS_DO_CONSORCIO },
   /* FIN-POS-FIXADO-01b — o 1:1 da parcela pós-fixada (a linha do juro real) e a frase do bloco */
   { nome: 'casar-1x1-pos', url: 'tela=casar-1x1&v=pos', tamanhos: TAMANHOS_DO_CONSORCIO },

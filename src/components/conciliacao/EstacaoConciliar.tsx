@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { CriarLancamentoDaLinha } from '@/components/conciliacao/CriarLancamentoDaLinha';
+import { ConciliarDiferencaModal } from '@/components/conciliacao/ConciliarDiferencaModal';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import {
   useVinculosDoMovimento, useCandidatosDoMovimento, vincularSelecao, desfazerGrupo, TOL,
@@ -99,6 +100,7 @@ export function EstacaoConciliar({ movimento, aoFechar, aoMudar, contaBancariaId
   const [confirmandoGrupo, setConfirmandoGrupo] = useState<string | null>(null);
   const [vinculando, setVinculando] = useState(false);
   const [criando, setCriando] = useState(false);
+  const [comDiferenca, setComDiferenca] = useState(false);
   /* ⚠ MARCADO É UM MAPA id → VALOR A APLICAR, não um conjunto de ids: dois
      candidatos podem entrar no mesmo movimento com valores diferentes, e é o
      valor que vai ao banco. O default de cada um é o SALDO do lançamento —
@@ -171,6 +173,12 @@ export function EstacaoConciliar({ movimento, aoFechar, aoMudar, contaBancariaId
     : marcados.size > 1 && Math.abs(somaMarcada - alvo) > TOL
       ? `Em grupo, a soma tem de fechar o valor cheio do movimento (${formatMoeda(alvo)}); a seleção soma ${formatMoeda(somaMarcada)}.`
       : null;
+
+  /* CONC-SEM-TRAVA-01 (tela): movimento sem vinculo e selecao que nao fecha o valor cheio (grupo que diverge, ou um lancamento maior
+     que o movimento) -> o botao vira "Conciliar…" e abre o modal da diferenca, com as tres saidas. Um lancamento MENOR que o
+     movimento continua sendo o vinculo parcial de sempre. */
+  const comDiferencaPossivel = vinculos.length === 0 && marcados.size > 0 && !vinculando
+    && Math.abs(somaMarcada - alvo) > TOL && (marcados.size > 1 || restaDepois < -TOL);
 
   const alternar = (c: CandidatoConciliacao) => {
     setMarcados(prev => {
@@ -552,12 +560,12 @@ export function EstacaoConciliar({ movimento, aoFechar, aoMudar, contaBancariaId
               </Button>
             )}
             {estado !== 'fecha' && (
-              <Button type="button" size="sm" className="gap-1.5"
-                disabled={impedimento !== null || vinculando}
-                title={impedimento ?? undefined}
-                onClick={() => { void vincular(); }}>
+              <Button type="button" size="sm" className="gap-1.5" data-testid="vincular-estacao"
+                disabled={(impedimento !== null && !comDiferencaPossivel) || vinculando}
+                title={comDiferencaPossivel ? 'A soma não fecha com o movimento: escolha o que fazer com a diferença.' : impedimento ?? undefined}
+                onClick={() => { if (comDiferencaPossivel) setComDiferenca(true); else void vincular(); }}>
                 {vinculando ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link2 className="h-3.5 w-3.5" />}
-                Vincular ({marcados.size})
+                {comDiferencaPossivel ? 'Conciliar…' : `Vincular (${marcados.size})`}
               </Button>
             )}
           </span>
@@ -567,6 +575,14 @@ export function EstacaoConciliar({ movimento, aoFechar, aoMudar, contaBancariaId
       {/* ⚠ O FORMULÁRIO ABRE POR CIMA E A ESTAÇÃO NÃO FECHA. Criado o
           lançamento, a estação recarrega vínculos e candidatos da mesma fonte —
           o movimento aparece conciliado sem ninguém sair da tela. */}
+      {comDiferenca && (
+        <ConciliarDiferencaModal open onClose={() => setComDiferenca(false)}
+          extratos={[{ id: movimento.id, data: movimento.data_movimento, descricao: movimento.descricao ?? '—', valor: Math.abs(movimento.valor) }]}
+          lancamentos={(candidatos ?? []).filter(c => marcados.has(c.id))
+            .map(c => ({ id: c.id, data: c.dataReferencia, descricao: c.descricao ?? '—', valor: Math.abs(c.valor) }))}
+          onConciliado={() => { setComDiferenca(false); setMarcados(new Map()); void recarregar(); void recarregarCand(); void aoMudar(); }} />
+      )}
+
       {criando && (
         <CriarLancamentoDaLinha
           movimento={movimento}
