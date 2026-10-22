@@ -183,7 +183,7 @@ begin
     IF SQLSTATE <> '42501' THEN f := f || ('V8 serie ' || SQLSTATE); END IF; END;
   PERFORM set_config('request.jwt.claims', '{"role":"authenticated"}', true);
   BEGIN PERFORM count(*) FROM fn_vg_serie(c_nj, '2026-09-01', '2026-09-30'); f := f || 'V8 sem usuario leu'::text; EXCEPTION WHEN others THEN NULL; END;
-  IF has_function_privilege('anon', 'public.fn_vg_serie(uuid,date,date,uuid[],uuid[],uuid,text)', 'EXECUTE')
+  IF has_function_privilege('anon', 'public.fn_vg_serie(uuid,date,date,uuid[],uuid[],uuid,text,date)', 'EXECUTE')
      OR has_function_privilege('anon', 'public.fn_vg_saldos(uuid,date,date,uuid[],date)', 'EXECUTE') THEN f := f || 'V8 anon executa'::text; END IF;
   PERFORM set_config('request.jwt.claims', json_build_object('sub', adm, 'role', 'authenticated')::text, true);
 
