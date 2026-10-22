@@ -33,8 +33,11 @@ export type MotivoDoPdf = 'pdf_sem_texto' | 'pdf_nao_e_danfe' | 'incompleta';
 export const FRASE_PDF_SEM_TEXTO = 'PDF sem texto (foto ou escaneado): a leitura dele chega na etapa 2. Nada foi criado.';
 export const FRASE_PDF_NAO_E_DANFE = 'O PDF não parece um DANFE (a nota fiscal eletrônica): nada foi lido.';
 
+/** ITENS-NOTA-01 — os totais do quadro do imposto que a `NotaLida` nao tem (o rateio dos itens e o cabecalho da aba usam). */
+export interface TotaisExtrasDoDanfe { seguroCent: number; outrasCent: number; ipiCent: number; stCent: number; tributosAproxCent: number | null }
+
 export type ResultadoDoDanfe =
-  | { ok: true; nota: NotaLida; avisos: AvisoNFe[]; marcas: MarcaNoPdf[]; divergencias: CampoConferido[] }
+  | { ok: true; nota: NotaLida; avisos: AvisoNFe[]; marcas: MarcaNoPdf[]; divergencias: CampoConferido[]; extras: TotaisExtrasDoDanfe }
   | { ok: false; motivo: MotivoDoPdf; frase: string };
 
 type ItemNaPagina = ItemDoDanfe & { pagina: number };
@@ -277,6 +280,13 @@ export function notaDoDanfe(paginas: readonly ItemDoDanfe[][]): ResultadoDoDanfe
   const itFrete = d.campo('VALOR DO FRETE', faixaImp);
   const itDesconto = d.campo('DESCONTO', faixaImp) ?? d.campo('VALOR DO DESCONTO', faixaImp);
   const itTotal = d.campo('VALOR TOTAL DA NOTA', faixaImp);
+  const extras: TotaisExtrasDoDanfe = {
+    seguroCent: centavosBr(d.campo('VALOR DO SEGURO', faixaImp)?.str) ?? 0,
+    outrasCent: centavosBr(d.campo('OUTRAS DESPESAS', faixaImp, true)?.str) ?? 0,
+    ipiCent: centavosBr(d.campo('VALOR DO IPI', faixaImp)?.str) ?? 0,
+    stCent: centavosBr(d.campo('VALOR DO ICMS ST', faixaImp)?.str ?? d.campo('VALOR DO ICMS SUBST', faixaImp, true)?.str) ?? 0,
+    tributosAproxCent: centavosBr(d.campo('VALOR APROX', faixaImp, true)?.str ?? d.campo('V. TOT. TRIB', faixaImp, true)?.str),
+  };
   d.marcar('produtos', itProdutos); d.marcar('desconto', itDesconto); d.marcar('valor_nota', itTotal);
 
   /* ITENS: o cabecalho da tabela da' as colunas; linha com valor total e' produto, linha sem ele completa o de cima (lote…). */
@@ -291,6 +301,16 @@ export function notaDoDanfe(paginas: readonly ItemDoDanfe[][]): ResultadoDoDanfe
       const cQtd = col((n) => n.startsWith('QTD') || n.startsWith('QUANT'));
       const cUnit = col((n) => n.startsWith('V.UNIT') || n.startsWith('VALOR UNIT') || n.startsWith('VLR. UNIT') || n.startsWith('V. UNIT'));
       const cTotal = col((n) => n.startsWith('V.TOTAL') || n.startsWith('VALOR TOTAL') || n.startsWith('VLR. TOTAL') || n.startsWith('V. TOTAL'));
+      /* ITENS-NOTA-01 — as colunas fiscais do item, quando o DANFE as tem */
+      const cCod = col((n) => n.startsWith('CODIGO') || n.startsWith('COD.'));
+      const cNcm = col((n) => n.startsWith('NCM'));
+      const cCst = col((n) => n === 'CST' || n.startsWith('CST') || n.startsWith('CSOSN') || n.startsWith('O/CST') || n.startsWith('O/CSOSN'));
+      const cCfop = col((n) => n.startsWith('CFOP'));
+      const cBcIcms = col((n) => n.startsWith('BC.ICMS') || n.startsWith('B.CALC') || n.startsWith('BC ICMS') || n.startsWith('BASE CALC'));
+      const cVIcms = col((n) => n.startsWith('V.ICMS') || n === 'VALOR ICMS' || n.startsWith('VLR.ICMS') || n.startsWith('V. ICMS'));
+      const cVIpi = col((n) => n.startsWith('V.IPI') || n === 'VALOR IPI' || n.startsWith('VLR.IPI') || n.startsWith('V. IPI'));
+      const cAIcms = col((n) => n.startsWith('%ICMS') || n.startsWith('ALIQ. ICMS') || n.startsWith('ALIQ.ICMS'));
+      const cAIpi = col((n) => n.startsWith('%IPI') || n.startsWith('ALIQ. IPI') || n.startsWith('ALIQ.IPI'));
       const rotFim = d.itens.filter((o) => o.pagina === pg && o.y < rotDescr.y && /^(DADOS ADICIONAIS|CALCULO DO ISSQN)/.test(normalizar(o.str))).sort((a, b) => b.y - a.y)[0];
       const naCol = (linha: ItemNaPagina[], c: { de: number; ate: number } | null) => (c ? linha.filter((o) => o.x >= c.de && o.x < c.ate) : []);
       /* a descricao fica inteira (tem espaco de proposito); o pedaco que comeca DEPOIS dela e passa da coluna onde comeca, se parte */
@@ -303,9 +323,15 @@ export function notaDoDanfe(paginas: readonly ItemDoDanfe[][]): ResultadoDoDanfe
         const descr = naCol(linha, cDesc).map((o) => o.str.trim()).join(' ').trim();
         if (total != null && descr) {
           const qtd = naCol(linha, cQtd).map((o) => o.str.trim()).join('');
+          const txt = (c: { de: number; ate: number } | null) => naCol(linha, c).map((o) => o.str.trim()).join('') || null;
           itens.push({
             descricao: descr, quantidade: qtd.replace(/\./g, '').replace(',', '.'), unidade: naCol(linha, cUn).map((o) => o.str.trim()).join(''),
             valorCent: total, unitarioCent: centavosBr(naCol(linha, cUnit).map((o) => o.str.trim()).join('')), detalhe: null,
+            fiscal: {
+              codigo: txt(cCod), ncm: txt(cNcm), cst: txt(cCst), cfop: txt(cCfop),
+              bcIcmsCent: centavosBr(txt(cBcIcms)), vIcmsCent: centavosBr(txt(cVIcms)), vIpiCent: centavosBr(txt(cVIpi)),
+              aliqIcms: txt(cAIcms), aliqIpi: txt(cAIpi),
+            },
           });
           for (const o of naCol(linha, cDesc)) d.marcar('itens', o);
         } else if (descr && itens.length) {
@@ -369,5 +395,5 @@ export function notaDoDanfe(paginas: readonly ItemDoDanfe[][]): ResultadoDoDanfe
   else if (somaDuplicatasCent !== notaCent) avisos.push('duplicatas_diferem_da_nota');
   if (finalidade === 'complementar') avisos.push('complementar');
   if (finalidade === 'devolucao') avisos.push('devolucao');
-  return { ok: true, nota, avisos, marcas: d.marcas, divergencias: conferirChave(nota) };
+  return { ok: true, nota, avisos, marcas: d.marcas, divergencias: conferirChave(nota), extras };
 }
