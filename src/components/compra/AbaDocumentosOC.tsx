@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Plus, Pencil, Ban, Paperclip, MoreHorizontal } from 'lucide-react';
+import { Plus, Pencil, Ban, Paperclip, MoreHorizontal, ListTree } from 'lucide-react';
+import { ItensDaNotaDialog } from '@/components/financeiro-v2/ItensDaNotaDialog';
+import { useChavesComItens } from '@/hooks/useItensDaNota';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -85,6 +87,9 @@ export function partesDaContagem(docs: Pick<DocumentosApi['documentos'][number],
 export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedores, contraparteId, clienteId, recarregarFornecedores, valorNegociado, tipoOperacao }: Props) {
   /* OC-DOC-VENDA-01: a grade por especie e a lista em blocos valem para abate E venda (um dono so'). */
   const ehAbate = usaGradePorEspecie(tipoOperacao);
+  /* ITENS-NOTA-01 — o documento com nota guardada (a mesma chave do lancamento) mostra os itens, pela MESMA componente */
+  const chavesComItens = useChavesComItens(clienteId, api.documentos.map((d) => d.chaveAcesso));
+  const [itensDaChave, setItensDaChave] = useState<string | null>(null);
   const tipoGrade = tipoOperacao === 'venda' ? 'venda' : 'abate';
   /* O documento novo da venda nasce na NF do produtor (a nota da venda); o do abate, na NF do frigorifico. */
   const especieInicial = tipoGrade === 'venda' ? 'nf_produtor' : 'nf_principal';
@@ -305,7 +310,8 @@ export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedo
         <TabelaDocumentosAbate documentos={api.documentos} loading={api.loading} somenteLeitura={somenteLeitura} conferencia={conferencia}
           blocos={blocosDaLista(tipoGrade)}
           onAbrir={c => void abrirArquivo(c)} onEditar={id => void abrirEdicao(id)}
-          onCancelar={id => { setCancelId(id); setCancelMotivo(''); }} />
+          onCancelar={id => { setCancelId(id); setCancelMotivo(''); }}
+          chavesComItens={chavesComItens} onItens={setItensDaChave} />
       ) : (
       <div className="rounded-md border divide-y">
         {api.documentos.length === 0 && (
@@ -364,6 +370,11 @@ export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedo
                     title="Abrir arquivo" aria-label="Abrir arquivo"
                     onClick={() => void abrirArquivo(d.url!)}><Paperclip className="h-3.5 w-3.5" /></Button>
                 )}
+                {d.chaveAcesso && chavesComItens.has(d.chaveAcesso) && (
+                  <Button type="button" variant="ghost" size="icon" className="h-6 w-6" data-testid="doc-oc-itens"
+                    title="Itens da nota" aria-label="Itens da nota"
+                    onClick={() => setItensDaChave(d.chaveAcesso ?? null)}><ListTree className="h-3.5 w-3.5" /></Button>
+                )}
                 {!somenteLeitura && !d.cancelado && (
                   <>
                     <Button type="button" variant="ghost" size="icon" className="h-6 w-6"
@@ -380,6 +391,8 @@ export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedo
         })}
       </div>
       )}
+
+      {itensDaChave && clienteId && <ItensDaNotaDialog clienteId={clienteId} chave={itensDaChave} onClose={() => setItensDaChave(null)} />}
 
       {/* Cancelamento com motivo obrigatório */}
       {cancelId && (
@@ -431,11 +444,13 @@ function FaixaConferenciaAbate({ r, semFrigorifico }: { r: ResultadoConferencia;
   );
 }
 
-function TabelaDocumentosAbate({ documentos, loading, somenteLeitura, conferencia, blocos, onAbrir, onEditar, onCancelar }: {
+function TabelaDocumentosAbate({ documentos, loading, somenteLeitura, conferencia, blocos, onAbrir, onEditar, onCancelar, chavesComItens, onItens }: {
   documentos: DocumentosApi['documentos']; loading: boolean; somenteLeitura?: boolean; conferencia: ResultadoConferencia;
   /** 7f — os dois blocos da lista (`blocosDaLista`): o do frigorifico (abate) ou o da operacao (venda), e a saida da fazenda. */
   blocos: { chave: 'abate' | 'operacao' | 'saida'; rotulo: string }[];
   onAbrir: (caminho: string) => void; onEditar: (id: string) => void; onCancelar: (id: string) => void;
+  /** ITENS-NOTA-01 — as chaves com nota guardada e o gesto de ver os itens */
+  chavesComItens?: ReadonlySet<string>; onItens?: (chave: string) => void;
 }) {
   const linha = (d: DocumentosApi['documentos'][number], daSaida: boolean) => {
             const soma = d.somaNoValor !== false;
@@ -483,6 +498,12 @@ function TabelaDocumentosAbate({ documentos, loading, somenteLeitura, conferenci
                   )}
                 </td>
                 <td className={TD_ICONE}>
+                  {d.chaveAcesso && chavesComItens?.has(d.chaveAcesso) && onItens && (somenteLeitura || d.cancelado) && (
+                    <button type="button" title="Itens da nota" aria-label="Itens da nota" onClick={() => onItens(d.chaveAcesso ?? '')} data-testid="doc-oc-itens"
+                      className="inline-flex h-4 w-4 items-center justify-center text-muted-foreground hover:text-foreground">
+                      <ListTree className="h-3 w-3" />
+                    </button>
+                  )}
                   {!somenteLeitura && !d.cancelado && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -491,6 +512,9 @@ function TabelaDocumentosAbate({ documentos, loading, somenteLeitura, conferenci
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
+                        {d.chaveAcesso && chavesComItens?.has(d.chaveAcesso) && onItens && (
+                          <DropdownMenuItem onSelect={() => onItens(d.chaveAcesso ?? '')}><ListTree className="mr-2 h-3 w-3" /> Itens da nota</DropdownMenuItem>
+                        )}
                         <DropdownMenuItem onSelect={() => onEditar(d.documentoId)}><Pencil className="mr-2 h-3 w-3" /> Editar</DropdownMenuItem>
                         <DropdownMenuItem onSelect={() => onCancelar(d.documentoId)}><Ban className="mr-2 h-3 w-3" /> Cancelar documento</DropdownMenuItem>
                       </DropdownMenuContent>
