@@ -191,7 +191,9 @@ function notifyPastosChanged(clienteId: string) {
   for (const cb of [...subs]) cb();
 }
 
-export function usePastos() {
+/* OC-HOSPEDEIRO-LEVE-01 — `enabled: false` nao le^ nada (nem pastos, nem categorias, nem a recarga por notificacao): quem monta o hook
+   sem usar o resultado agora (o rebanho oficial desligado) nao paga a leitura. Ao ligar, le^ como sempre. */
+export function usePastos({ enabled = true }: { enabled?: boolean } = {}) {
   const { fazendaAtual, fazendas: todasFazendas } = useFazenda();
   const { clienteAtual } = useCliente();
   const [pastos, setPastos] = useState<Pasto[]>([]);
@@ -258,8 +260,8 @@ export function usePastos() {
     }
   }, [pastosCacheKey, isGlobal, fazendaId, globalFazendaIds]);
 
-  useEffect(() => { loadCategorias(); }, [loadCategorias]);
-  useEffect(() => { loadPastos(); }, [loadPastos]);
+  useEffect(() => { if (enabled) loadCategorias(); }, [enabled, loadCategorias]);
+  useEffect(() => { if (enabled) loadPastos(); }, [enabled, loadPastos]);
 
   // Referência estável para o loader corrente. Sem o ref, a inscrição teria de
   // depender de `loadPastos`, que muda a cada troca de fazenda — e reinscrever a
@@ -272,7 +274,7 @@ export function usePastos() {
   // cliente sai do Set antigo pelo cleanup e entra no novo. Trocar de FAZENDA não
   // reinscreve — o mesmo callback passa a chamar o loader novo via ref.
   useEffect(() => {
-    if (!clienteId) return;
+    if (!clienteId || !enabled) return;
     const cb = () => { void loadPastosRef.current(); };
     let set = pastosSubscribers.get(clienteId);
     if (!set) { set = new Set(); pastosSubscribers.set(clienteId, set); }
@@ -281,7 +283,7 @@ export function usePastos() {
       set!.delete(cb);
       if (set!.size === 0) pastosSubscribers.delete(clienteId);
     };
-  }, [clienteId]);
+  }, [clienteId, enabled]);
 
   const criarPasto = useCallback(async (pasto: Omit<Pasto, 'id' | 'created_at' | 'updated_at'>) => {
     if (clienteId) invalidatePastosForCliente(clienteId);

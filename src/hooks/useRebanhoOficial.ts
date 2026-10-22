@@ -349,7 +349,7 @@ export function useRebanhoOficial({ ano, cenario, global, enabled = true }: UseR
   const fazendaId = fazendaAtual?.id === '__global__' ? undefined : fazendaAtual?.id;
   const clienteId = clienteAtual?.id;
   const { rows: metaGmdRows } = useMetaGmd(String(ano), enabled);
-  const { pastos } = usePastos();
+  const { pastos } = usePastos({ enabled });
 
   const {
     data: categoriasData,
