@@ -6,10 +6,22 @@
  *   · o cadastro que nao parece o certo (outro CNPJ, nome sem palavra em comum) e' dito no topo.
  * O mesmo componente serve a Receita (P31): quem chama diz a origem.
  */
-import { soDigitos } from '@/lib/financeiro/nfe/formatos';
+import { documentoFormatado, soDigitos } from '@/lib/financeiro/nfe/formatos';
+import type { EmitenteNFe } from '@/lib/financeiro/nfe/tipos';
 
 export type CampoDoCadastro = 'nome' | 'nome_fantasia' | 'cpf_cnpj' | 'inscricao_estadual' | 'logradouro' | 'numero' | 'complemento' | 'bairro' | 'cep' | 'municipio' | 'uf';
 export type CadastroParaComparar = Partial<Record<CampoDoCadastro, string | null>>;
+
+/** O cadastro como a NOTA o escreve (o emitente; a razao social pode vir da Receita). Os dois caminhos da nota — a previa ("+ Da nota")
+ *  e a faixa do XML do Novo lancamento — comparam contra ESTE, nunca cada um o seu. */
+export function propostaDoEmitente(emitente: EmitenteNFe, razaoSocial: string = emitente.nome): CadastroParaComparar {
+  const e = emitente.endereco;
+  return {
+    nome: razaoSocial, nome_fantasia: emitente.fantasia, cpf_cnpj: documentoFormatado(emitente.documento), inscricao_estadual: emitente.ie,
+    logradouro: e?.logradouro ?? null, numero: e?.numero ?? null, complemento: e?.complemento ?? null, bairro: e?.bairro ?? null,
+    cep: e?.cep ?? null, municipio: e?.municipio ?? null, uf: e?.uf ?? null,
+  };
+}
 
 export interface GrupoDoCadastro { chave: string; rotulo: string; colunas: CampoDoCadastro[]; comparar: 'texto' | 'digitos' }
 export const GRUPOS_DO_CADASTRO: readonly GrupoDoCadastro[] = [

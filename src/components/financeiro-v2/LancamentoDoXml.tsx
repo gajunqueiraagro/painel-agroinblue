@@ -47,11 +47,12 @@ export function ondeEsta(o: OcorrenciaDaNota): string {
  * A FAIXA DO FORNECEDOR — uma so', conforme o caso. `null` quando o fornecedor foi achado pelo documento, unico e ativo
  * (nada a decidir), ou quando o operador ja' resolveu (`fechada`).
  */
-export function FaixaDoFornecedor({ xml, fechada, gravarDocumento, onGravarDocumento, onTrocar, onEscolher, onCriar, criando, conflito = null, onUsarConflito }: {
+export function FaixaDoFornecedor({ xml, fechada, cadastro = null, onTrocar, onEscolher, onCriar, criando, conflito = null, onUsarConflito }: {
   xml: DoXml;
   fechada: boolean;
-  gravarDocumento: boolean;
-  onGravarDocumento: (v: boolean) => void;
+  /** NOTA-FORNECEDOR-COMPARAR-01 — atualizar o cadastro pela nota SO' pela comparacao (campo · hoje · da nota, confirmar): `oferece` =
+   *  a nota traz algo que o cadastro nao tem (achado pelo CNPJ); `atualizado` = ja' confirmado nesta abertura. Nunca grava ao salvar. */
+  cadastro?: { oferece: boolean; atualizado: boolean; abrindo: boolean; onComparar: () => void } | null;
   onTrocar: () => void;
   onEscolher: (fornecedorId: string) => void;
   onCriar: () => void;
@@ -76,6 +77,11 @@ export function FaixaDoFornecedor({ xml, fechada, gravarDocumento, onGravarDocum
   const doc = documentoFormatado(xml.emitenteDocumento);
   const rotuloDoc = soDigitos(xml.emitenteDocumento).length === 11 ? 'CPF' : 'CNPJ';
   const trocar = <button type="button" className={LINK} onClick={onTrocar} data-testid="xml-trocar-fornecedor">trocar fornecedor</button>;
+  const comparar = cadastro && (cadastro.atualizado
+    ? <span className="shrink-0 font-medium" data-testid="xml-cadastro-atualizado">cadastro atualizado</span>
+    : <button type="button" className={LINK} disabled={cadastro.abrindo} onClick={cadastro.onComparar} data-testid="xml-comparar-cadastro">
+        {cadastro.abrindo ? 'lendo o cadastro…' : 'comparar e atualizar o cadastro'}
+      </button>);
 
   if (!r.achadoPor) {
     const frase = `Fornecedor não encontrado no cadastro · "${xml.emitenteNome}" · ${rotuloDoc} ${doc}`;
@@ -109,7 +115,7 @@ export function FaixaDoFornecedor({ xml, fechada, gravarDocumento, onGravarDocum
   if (r.achadoPor === 'nome' && r.cadastroSemDocumento) {
     const frase = `Fornecedor achado pelo nome · "${nome}" · cadastro sem ${rotuloDoc} · o XML traz ${doc}`;
     /* O NOME encolhe primeiro (reticencias; inteiro no `title` dele, a frase toda no `title` da faixa), ate' 72px; so' depois o fim da frase
-       cede. A caixa e "trocar fornecedor" nao encolhem nunca. */
+       cede. "comparar e atualizar o cadastro" e "trocar fornecedor" nao encolhem nunca. */
     return (
       <Faixa testid="xml-faixa-fornecedor" titulo={frase}>
         <span className="flex min-w-0 items-center">
@@ -117,11 +123,7 @@ export function FaixaDoFornecedor({ xml, fechada, gravarDocumento, onGravarDocum
           <span className="min-w-[72px] shrink-[10] truncate font-medium" title={nome} data-testid="xml-nome-do-fornecedor">"{nome}"</span>
           <span className="min-w-0 truncate whitespace-pre">{` · cadastro sem ${rotuloDoc} · o XML traz ${doc}`}</span>
         </span>
-        <label className="ml-auto flex shrink-0 cursor-pointer items-center gap-1">
-          <input type="checkbox" className="h-3 w-3 accent-amber-700" checked={gravarDocumento} onChange={(e) => onGravarDocumento(e.target.checked)} data-testid="xml-gravar-documento" />
-          Gravar o {rotuloDoc} neste cadastro ao salvar
-        </label>
-        {trocar}
+        <span className="ml-auto flex shrink-0 items-center gap-2">{comparar}{trocar}</span>
       </Faixa>
     );
   }
@@ -154,6 +156,20 @@ export function FaixaDoFornecedor({ xml, fechada, gravarDocumento, onGravarDocum
           <span className="min-w-0 truncate whitespace-pre">{` · o cadastro tem outro documento · o XML traz ${doc}`}</span>
         </span>
         <span className="ml-auto shrink-0">{trocar}</span>
+      </Faixa>
+    );
+  }
+  /* achado pelo CNPJ, unico e ativo: so' ha' faixa quando a nota traz algo que o cadastro nao tem (endereco, IE, fantasia) */
+  if (r.achadoPor === 'documento' && cadastro && (cadastro.oferece || cadastro.atualizado)) {
+    const frase = `Fornecedor achado pelo ${rotuloDoc} · "${nome}" · a nota traz dados que o cadastro não tem`;
+    return (
+      <Faixa testid="xml-faixa-fornecedor" titulo={frase}>
+        <span className="flex min-w-0 items-center">
+          <span className="shrink-0 whitespace-pre">{`Fornecedor achado pelo ${rotuloDoc} · `}</span>
+          <span className="min-w-[72px] shrink-[10] truncate font-medium" title={nome} data-testid="xml-nome-do-fornecedor">"{nome}"</span>
+          <span className="min-w-0 truncate whitespace-pre">{' · a nota traz dados que o cadastro não tem'}</span>
+        </span>
+        <span className="ml-auto flex shrink-0 items-center gap-2">{comparar}</span>
       </Faixa>
     );
   }

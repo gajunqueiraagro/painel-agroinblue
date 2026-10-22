@@ -128,15 +128,14 @@ describe('(d) emitente e emissão em colunas próprias, na ordem do cabeçalho',
       .toEqual(['Documento', 'Emitente', 'Emissão', 'Valor', 'Situação', '']);
     const [a, vazio] = linhas();
     expect([...a.children].map(c => n(c.textContent)).slice(0, 5))
-      .toEqual(['NF 000.018.112', EMITENTE, '18/07/2026', 'R$ 1.705,30', 'Ativo']);
-    /* a grade é UMA, na tabela; o cabeçalho e as linhas são subgrades dela — alinham por construção */
-    expect(screen.getByTestId('tabela-documentos').className)
-      .toContain('grid-cols-[max-content_minmax(0,1fr)_70px_92px_66px_72px]');
-    for (const el of [screen.getByTestId('cabecalho-documentos'), a, vazio]) {
-      expect(el.className).toContain('[grid-template-columns:subgrid]');
-      expect(el.className).toContain('col-span-full');
-      expect(el.className).not.toMatch(/grid-cols-\[/);
-    }
+      /* DOC-NOTA-XML-PDF-01 — a celula Documento leva o selo do arquivo que a nota tem (aqui o PDF) */
+      .toEqual(['NF 000.018.112PDF', EMITENTE, '18/07/2026', 'R$ 1.705,30', 'Ativo']);
+    /* DOC-NOTA-XML-PDF-01 — a régua da casa: UMA tabela fixa com colgroup em px; cabeçalho e linhas alinham por construção */
+    const tabela = screen.getByTestId('tabela-documentos').querySelector('table')!;
+    expect(tabela.className).toContain('table-fixed');
+    expect([...tabela.querySelectorAll('col')].map((c) => c.style.width)).toEqual([expect.stringMatching(/px$/), '', '66px', '88px', '62px', '66px']);
+    expect(screen.getByTestId('cabecalho-documentos').tagName).toBe('TR');
+    expect([a.tagName, vazio.tagName]).toEqual(['TR', 'TR']);
     /* dado ausente é "—", nunca vazio */
     expect([...vazio.children].map(c => n(c.textContent)).slice(1, 4)).toEqual(['—', '—', '—']);
   });
@@ -151,7 +150,7 @@ describe('(e) uma linha por registro: o nome fica inteiro e o emitente CORTA com
   const DA_OC = doc({ id: 'oc', origem: 'operacao', operacaoId: 'op1', numero: '84', serie: '1', ligadoAQtd: 3,
     emitenteNome: LONGO, valorDocumento: 315000, dataEmissao: '2026-09-10' });
 
-  it('nome longo com os dois selos: inteiro, sem corte e sem quebra; a linha tem ALTURA FIXA de 22px', () => {
+  it('nome longo com os dois selos: inteiro, sem corte e sem quebra; a linha tem ALTURA FIXA de 19px', () => {
     monta([DA_OC, { ...CANCELADO, canceladoMotivo: MOTIVO }]);
     fireEvent.click(screen.getByText('mostrar'));
     for (const l of linhas()) {
@@ -159,8 +158,8 @@ describe('(e) uma linha por registro: o nome fica inteiro e o emitente CORTA com
       expect(nome.className).not.toContain('truncate');
       expect(nome.getAttribute('title')).toBeNull();
       expect(nome.parentElement?.className).toContain('whitespace-nowrap');
-      expect(l.className).toMatch(/(^| )h-\[22px\]/);
-      expect(l.className).not.toContain('min-h-[22px]');
+      expect(l.className).toMatch(/(^| )h-\[19px\]/);   // a régua da casa (DOC-NOTA-XML-PDF-01)
+      expect(l.className).not.toContain('min-h-');
     }
     const [oc] = linhas();
     expect(within(oc).getByTestId('doc-nome').textContent).toBe('NF 000.000.084 · série 1');

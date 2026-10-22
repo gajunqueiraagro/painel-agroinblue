@@ -224,3 +224,25 @@ export function danfeSinteticoSemDuplicata(): ItemDoDanfe[][] {
   };
   return PAGINAS_DANFE_SINTETICO.map((p) => p.map(troca).filter((x): x is ItemDoDanfe => x !== null));
 }
+
+/**
+ * NOTA-AVULSA-890-01 — um DANFE SINTETICO de NOTA AVULSA (serie 890, emitida pelo fisco em nome do produtor): o emitente e' um CPF de
+ * teste e a CHAVE carrega o CNPJ de um orgao (de teste, 11.444.777/0001-61); natureza de remessa de entrega futura e os dados adicionais
+ * citando a "NFP originaria". `serie` e `cnpjDaChave` mudam o molde (a nota comum com o CNPJ trocado continua barrada). Dados de teste.
+ */
+export function danfeSinteticoAvulsa(opcoes: { serie?: string; cnpjDaChave?: string } = {}): ItemDoDanfe[][] {
+  const serie = opcoes.serie ?? '890';
+  const base = '502609' + (opcoes.cnpjDaChave ?? '11444777000161') + '55' + serie.padStart(3, '0') + '000000937' + '1' + '21753829';
+  const chave = `${base}${digitoDaChave(base)}`;
+  const chaveEscrita = chave.replace(/(\d{4})(?=\d)/g, '$1 ');
+  let primeiraInfo = true;
+  return PAGINAS_DANFE_SINTETICO.map((p) => p.map((it) => {
+    const s = it.str;
+    if (s === '5026 0911 2223 3300 0424 5501 0000 0009 3712 1753 8298') return { ...it, str: chaveEscrita };
+    if (s === 'SÉRIE 10') return { ...it, str: `SÉRIE ${serie}` };
+    if (s === '11.222.333/0004-24' && it.y > 455 && it.y < 465) return { ...it, str: '111.444.777-35' };
+    if (s === 'VENDA DE MERCADORIA ADQ TERC') return { ...it, str: '42 - SAIDA COM DIFERIMENTO REMESSA ENTREGA FUTURA' };
+    if (s === 'DADOS SINTETICOS PARA TESTE' && primeiraInfo) { primeiraInfo = false; return { ...it, str: 'NFP ORIGINARIA Nº 123.456 DADOS SINTETICOS' }; }
+    return it;
+  }));
+}

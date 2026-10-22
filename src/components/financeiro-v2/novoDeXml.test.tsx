@@ -40,6 +40,12 @@ const consultas = vi.hoisted(() => ({
   notaJaRegistrada: vi.fn(async (_c: string, _k: string) => [] as unknown[]),
   ultimaClassificacaoDoFornecedor: vi.fn(async () => null as unknown),
   gravarDocumentoNoCadastro: vi.fn(async () => null as string | null),
+  /* NOTA-FORNECEDOR-COMPARAR-01 — o cadastro so' muda pela comparacao (o mesmo modal da previa) */
+  completarCadastroPeloXml: vi.fn(async () => null as string | null),
+  camposQueOEmitenteCompleta: vi.fn(async (): Promise<string[]> => []),
+  cadastroParaComparar: vi.fn(async (): Promise<Record<string, string | null> | null> => ({ nome: 'Agropecuaria Exemplo', cpf_cnpj: null })),
+  atualizarCamposDoCadastro: vi.fn(async (..._a: unknown[]): Promise<{ ok: true; alteracaoId: string | null } | { ok: false; frase: string }> => ({ ok: true, alteracaoId: 'alt1' })),
+  desfazerCamposDoCadastro: vi.fn(async () => null as string | null),
   /* NOTA-FORNECEDOR-DUPLICA-01 — o CNPJ conferido no banco antes de criar (nenhum cadastro com ele, por padrao) */
   fornecedorPeloDocumento: vi.fn(async (): Promise<{ id: string; nome: string; ativo: boolean } | null> => null),
   /* NOTA-JA-LANCADA-01 — nada ja' lancado, por padrao */
@@ -83,7 +89,7 @@ function doXmlDe(o: OpcoesNota, fornecedores: FornecedorV2[], extra: { idPeloNom
   const resolucao: ResolucaoEmitente = resolverEmitente(lido.nota.emitente, fornecedores, extra.idPeloNome ?? null);
   const p = proporLancamento({ nota: lido.nota, avisosDoLeitor: lido.avisos, fazendas: FAZ_IE, emitente: resolucao, favorecidoId: resolucao.propostoId, ultima: extra.ultima === undefined ? ULTIMA : extra.ultima });
   if (p.ok === false) throw new Error(p.frase);
-  return { proposta: p.proposta, emitenteNome: lido.nota.emitente.nome, emitenteDocumento: lido.nota.emitente.documento, resolucao, ocorrencias: extra.ocorrencias ?? [], arquivo: arquivoXmlDaNota(bytes, 'NFe-12345.XML') };
+  return { proposta: p.proposta, emitenteNome: lido.nota.emitente.nome, emitenteDocumento: lido.nota.emitente.documento, emitente: lido.nota.emitente, resolucao, ocorrencias: extra.ocorrencias ?? [], arquivo: arquivoXmlDaNota(bytes, 'NFe-12345.XML') };
 }
 
 beforeEach(() => {
@@ -469,11 +475,12 @@ describe('tela B — o Novo lançamento preenchido pela nota', () => {
 });
 
 describe('tela B — a faixa do fornecedor', () => {
-  it('achado pelo NOME, cadastro sem CNPJ: a faixa, a caixa marcada por padrao e "trocar fornecedor"', async () => {
+  it('achado pelo NOME, cadastro sem CNPJ: a faixa, "comparar e atualizar o cadastro" (sem caixa que grava ao salvar) e "trocar fornecedor"', async () => {
     montarModal({ prefill: prefillDaNota(doXmlDe({}, [AGRO_SEM_DOC], { idPeloNome: 'agro' })) }, [AGRO_SEM_DOC]);
     await screen.findByDisplayValue('16.238,00');
-    expect(screen.getByTestId('xml-faixa-fornecedor').textContent).toBe('Fornecedor achado pelo nome · "Agropecuaria Exemplo" · cadastro sem CNPJ · o XML traz 11.222.333/0001-81Gravar o CNPJ neste cadastro ao salvartrocar fornecedor');
-    expect((screen.getByTestId('xml-gravar-documento') as HTMLInputElement).checked).toBe(true);
+    expect(screen.getByTestId('xml-faixa-fornecedor').textContent).toBe('Fornecedor achado pelo nome · "Agropecuaria Exemplo" · cadastro sem CNPJ · o XML traz 11.222.333/0001-81comparar e atualizar o cadastrotrocar fornecedor');
+    expect(screen.queryByTestId('xml-gravar-documento')).toBeNull();
+    expect(screen.getByTestId('xml-faixa-fornecedor').querySelector('input[type="checkbox"]')).toBeNull();
     expect(screen.getByText('Fornecedor * · pelo nome')).toBeTruthy();
     fireEvent.click(screen.getByTestId('xml-trocar-fornecedor'));
     expect(screen.queryByTestId('xml-faixa-fornecedor')).toBeNull();
@@ -494,7 +501,7 @@ describe('tela B — a faixa do fornecedor', () => {
     expect(nome.className).toMatch(/\btruncate\b/);
     expect(nome.className).toMatch(/shrink-\[10\]/);
     /* os gestos nao encolhem: sempre a' vista, a' direita */
-    expect(screen.getByTestId('xml-gravar-documento').closest('label')!.className).toMatch(/\bshrink-0\b/);
+    expect(screen.getByTestId('xml-comparar-cadastro').parentElement!.className).toMatch(/\bshrink-0\b/);
     expect(screen.getByTestId('xml-trocar-fornecedor').className).toMatch(/\bshrink-0\b/);
     /* a raiz: a coluna principal da grade tem minimo ZERO, e a coluna do corpo tambem */
     const dialogo = screen.getByRole('dialog');
@@ -510,31 +517,64 @@ describe('tela B — a faixa do fornecedor', () => {
     for (const c of ['h-6', 'min-w-0', 'overflow-hidden']) expect(cls.className.split(' ')).toContain(c);
   });
 
-  it('o CNPJ so e gravado no cadastro DEPOIS de o lancamento nascer; se o Salvar falha, nao grava', async () => {
-    const d = doXmlDe({ duplicatas: null }, [AGRO_SEM_DOC], { idPeloNome: 'agro' });
-    /* CRIAR-DO-EXTRATO-01 — a nota à vista abre sem vencimento e o Salvar o exige: aqui o operador já o informou */
-    const m = montarModal({ prefill: { ...comConta(d), data_vencimento: '2026-10-30' } }, [AGRO_SEM_DOC]);
-    await screen.findByDisplayValue('16.238,00');
-    expect(consultas.gravarDocumentoNoCadastro).not.toHaveBeenCalled();
-    m.onSave.mockImplementationOnce(async () => false);
-    fireEvent.click(botaoSalvar());
-    await waitFor(() => expect(m.onSave).toHaveBeenCalledTimes(1));
-    expect(consultas.gravarDocumentoNoCadastro).not.toHaveBeenCalled();
-    expect(m.onLancamentoCriado).not.toHaveBeenCalled();
-    fireEvent.click(botaoSalvar());
-    await waitFor(() => expect(consultas.gravarDocumentoNoCadastro).toHaveBeenCalledTimes(1));
-    expect(consultas.gravarDocumentoNoCadastro).toHaveBeenCalledWith('cli', 'agro', EMITENTE_CNPJ);
-    /* a ordem: primeiro o lancamento, depois o cadastro */
-    expect(m.onSave.mock.invocationCallOrder[1]).toBeLessThan(consultas.gravarDocumentoNoCadastro.mock.invocationCallOrder[0]);
-  });
-
-  it('caixa DESMARCADA: o lancamento nasce e o cadastro nao e tocado', async () => {
+  it('o Salvar NUNCA grava o cadastro: o CNPJ so entra pela comparacao (campo · hoje · da nota) confirmada', async () => {
     const m = montarModal({ prefill: { ...comConta(doXmlDe({ duplicatas: null }, [AGRO_SEM_DOC], { idPeloNome: 'agro' })), data_vencimento: '2026-10-30' } }, [AGRO_SEM_DOC]);
     await screen.findByDisplayValue('16.238,00');
-    fireEvent.click(screen.getByTestId('xml-gravar-documento'));
     fireEvent.click(botaoSalvar());
     await waitFor(() => expect(m.onLancamentoCriado).toHaveBeenCalledTimes(1));
     expect(consultas.gravarDocumentoNoCadastro).not.toHaveBeenCalled();
+    expect(consultas.completarCadastroPeloXml).not.toHaveBeenCalled();
+    expect(consultas.atualizarCamposDoCadastro).not.toHaveBeenCalled();
+  });
+
+  it('"comparar e atualizar o cadastro": abre o MESMO modal da previa (hoje x da nota), o CNPJ vazio vem marcado e so grava ao confirmar', async () => {
+    montarModal({ prefill: prefillDaNota(doXmlDe({}, [AGRO_SEM_DOC], { idPeloNome: 'agro' })) }, [AGRO_SEM_DOC]);
+    await screen.findByDisplayValue('16.238,00');
+    fireEvent.click(screen.getByTestId('xml-comparar-cadastro'));
+    const modal = await screen.findByTestId('comparar-cadastro');
+    expect(consultas.fornecedorPeloDocumento).toHaveBeenCalledWith('cli', EMITENTE_CNPJ);
+    expect(consultas.cadastroParaComparar).toHaveBeenCalledWith('cli', 'agro');
+    const cnpj = within(modal).getAllByTestId('comparar-linha').find((l) => (l.textContent ?? '').includes('11.222.333/0001-81'))!;
+    expect(cnpj.getAttribute('data-estado')).toBe('vazio');
+    /* o nome igual nao e' oferecido; nada gravado antes de confirmar (dois cliques no mesmo botao) */
+    fireEvent.click(screen.getByTestId('comparar-atualizar'));
+    expect(consultas.atualizarCamposDoCadastro).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('comparar-atualizar'));
+    await waitFor(() => expect(consultas.atualizarCamposDoCadastro).toHaveBeenCalledTimes(1));
+    const [fornecedor, campos, origem] = consultas.atualizarCamposDoCadastro.mock.calls[0];
+    expect([fornecedor, origem]).toEqual(['agro', 'nota']);
+    expect(campos).toMatchObject({ cpf_cnpj: '11.222.333/0001-81' });
+    expect(campos).not.toHaveProperty('nome');
+    await waitFor(() => expect(screen.queryByTestId('comparar-cadastro')).toBeNull());
+    expect(screen.getByTestId('xml-cadastro-atualizado').textContent).toBe('cadastro atualizado');
+  });
+
+  it('o CNPJ ja e de OUTRO cadastro: a comparacao nem abre — a faixa do conflito oferece "usar este"', async () => {
+    consultas.fornecedorPeloDocumento.mockResolvedValueOnce({ id: 'outro', nome: 'Agro Outro', ativo: true });
+    montarModal({ prefill: prefillDaNota(doXmlDe({}, [AGRO_SEM_DOC], { idPeloNome: 'agro' })) }, [AGRO_SEM_DOC]);
+    await screen.findByDisplayValue('16.238,00');
+    fireEvent.click(screen.getByTestId('xml-comparar-cadastro'));
+    await screen.findByTestId('xml-conflito');
+    expect(screen.queryByTestId('comparar-cadastro')).toBeNull();
+    expect(consultas.cadastroParaComparar).not.toHaveBeenCalled();
+  });
+
+  it('achado pelo CNPJ: a faixa so aparece quando a nota completa algo; o Salvar nao preenche o cadastro calado', async () => {
+    consultas.camposQueOEmitenteCompleta.mockResolvedValue(['municipio']);
+    const m = montarModal({ prefill: { ...comConta(doXmlDe({ duplicatas: null }, [AGRO])), data_vencimento: '2026-10-30' } }, [AGRO]);
+    await screen.findByDisplayValue('16.238,00');
+    await waitFor(() => expect(screen.getByTestId('xml-faixa-fornecedor').textContent).toBe('Fornecedor achado pelo CNPJ · "Agropecuaria Exemplo" · a nota traz dados que o cadastro não temcomparar e atualizar o cadastro'));
+    fireEvent.click(botaoSalvar());
+    await waitFor(() => expect(m.onLancamentoCriado).toHaveBeenCalledTimes(1));
+    expect(consultas.completarCadastroPeloXml).not.toHaveBeenCalled();
+    consultas.camposQueOEmitenteCompleta.mockResolvedValue([]);
+  });
+
+  it('achado pelo CNPJ e nada a completar: nenhuma faixa', async () => {
+    montarModal({ prefill: prefillDaNota(doXmlDe({}, [AGRO])) }, [AGRO]);
+    await screen.findByDisplayValue('16.238,00');
+    await waitFor(() => expect(consultas.camposQueOEmitenteCompleta).toHaveBeenCalled());
+    expect(screen.queryByTestId('xml-faixa-fornecedor')).toBeNull();
   });
 
   it('DOIS cadastros ativos com o mesmo CNPJ: o operador escolhe na faixa', async () => {

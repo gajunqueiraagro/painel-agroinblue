@@ -45,9 +45,10 @@ import { casarJaLancados, parcelasParaCasar, type LancamentoJaLancado } from '@/
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { CompararCadastroDialog } from './CompararCadastroDialog';
-import type { CadastroParaComparar } from '@/lib/fornecedores/compararCadastro';
+import { propostaDoEmitente, type CadastroParaComparar } from '@/lib/fornecedores/compararCadastro';
 import type { NotaDoArquivo } from '@/lib/financeiro/nfe/lerNota';
-import type { CampoConferido, CampoDaMarca } from '@/lib/financeiro/nfe/danfe';
+import { ehSerieAvulsa, type CampoConferido, type CampoDaMarca } from '@/lib/financeiro/nfe/danfe';
+import { fraseDaRemessa } from '@/lib/financeiro/nfe/remessaEntregaFutura';
 import type { EmitenteNFe } from '@/lib/financeiro/nfe/tipos';
 import { dataCurta, documentoFormatado, numeroDaNota, numeroFalado, reais, soDigitos } from '@/lib/financeiro/nfe/formatos';
 import {
@@ -74,7 +75,10 @@ const MARCA_DO_CONFERIDO: Record<CampoConferido, CampoDaMarca[]> = {
   cnpj: ['emitente_cnpj'], numero: ['numero'], serie: ['serie'], mes: ['emissao'], modelo: ['chave'], digito: ['chave'],
 };
 const NOME_DO_CONFERIDO: Record<CampoConferido, string> = { cnpj: 'CNPJ', numero: 'nº', serie: 'série', mes: 'mês', modelo: 'modelo', digito: 'dígito da chave' };
-export const fraseDaChave = (d: readonly CampoConferido[]) => (d.length === 0 ? 'chave confere: CNPJ, nº, série e mês' : `chave não confere: ${d.map((x) => NOME_DO_CONFERIDO[x]).join(', ')}`);
+/* NOTA-AVULSA-890-01 — a avulsa (serie 890–899) tem na chave o CNPJ do orgao emissor: o selo diz que o CNPJ nao foi comparado */
+export const fraseDaChave = (d: readonly CampoConferido[], avulsa = false) => (d.length === 0
+  ? (avulsa ? 'chave confere: nº, série e mês · nota avulsa' : 'chave confere: CNPJ, nº, série e mês')
+  : `chave não confere: ${d.map((x) => NOME_DO_CONFERIDO[x]).join(', ')}`);
 
 const ROTULO_DO_CAMPO: Partial<Record<CampoDoEmitente, string>> = {
   inscricao_estadual: 'IE', logradouro: 'endereço', numero: 'endereço', bairro: 'endereço', cep: 'endereço', municipio: 'cidade', uf: 'cidade',
@@ -272,6 +276,8 @@ export function NotaFiscalDialog({
   }, [lavoura, planoId, safraEditada, p.classificacao, p.competencia, safras]);
   const registrada = doXml.ocorrencias[0] ?? null;
   const divergencias = lido.divergencias;
+  const avulsa = ehSerieAvulsa(n.serie) || ehSerieAvulsa(n.chave.slice(22, 25));
+  const remessa = fraseDaRemessa(n);
   const somaItens = n.itens.reduce((s, i) => s + i.valorCent, 0);
 
   const faltas: string[] = [];
@@ -327,12 +333,7 @@ export function NotaFiscalDialog({
       setComparar(hoje);
     } finally { setOcupado(null); }
   };
-  const end0 = emitente.endereco;
-  const propostaDaNota: CadastroParaComparar = {
-    nome: razaoSocial, nome_fantasia: emitente.fantasia, cpf_cnpj: documentoFormatado(n.emitente.documento), inscricao_estadual: emitente.ie,
-    logradouro: end0?.logradouro ?? null, numero: end0?.numero ?? null, complemento: end0?.complemento ?? null, bairro: end0?.bairro ?? null,
-    cep: end0?.cep ?? null, municipio: end0?.municipio ?? null, uf: end0?.uf ?? null,
-  };
+  const propostaDaNota: CadastroParaComparar = propostaDoEmitente(emitente, razaoSocial);
   const gravarComparacao = async (campos: Record<string, string>): Promise<string | null> => {
     if (!favorecidoId) return 'Sem cadastro escolhido.';
     const r = await atualizarCamposDoCadastro(favorecidoId, campos, receita ? 'receita' : 'nota', `${p.rotuloNota}`, clienteId);
@@ -457,7 +458,8 @@ export function NotaFiscalDialog({
           <div className="flex min-h-0 min-w-0 flex-col gap-1.5">
             {/* ── NOTA ─────────────────────────────────────────────────────────────────────────────── */}
             <section className={BLOCO} data-testid="nota-bloco-nota">
-              <TituloDoBloco nome="Nota" acao={<span className={divergencias.length ? CHIP_ERRO : CHIP_OK} data-testid="nota-chave">{fraseDaChave(divergencias)}</span>} />
+              <TituloDoBloco nome="Nota" acao={<span className={divergencias.length ? CHIP_ERRO : CHIP_OK} data-testid="nota-chave"
+                title={avulsa ? 'Nota avulsa (série 890–899): emitida pelo fisco em nome do produtor; a chave traz o CNPJ do órgão emissor.' : undefined}>{fraseDaChave(divergencias, avulsa)}</span>} />
               <div className={GRADE_KV}>
                 <Kv num k="NF" v={numeroDaNota(n.numero)} erro={erroEm('numero')} testid="nota-numero" />
                 <Kv num k="Série" v={n.serie} erro={erroEm('serie')} />
@@ -467,6 +469,18 @@ export function NotaFiscalDialog({
                 <Kv num k="Desconto" v={`R$ ${reais(n.totais.descontoCent)}`} />
                 <Kv k="Destinatário" v={`${n.destinatario.nome ? caixaDeTitulo(n.destinatario.nome) : '—'}${clienteNome ? ` · ${clienteNome}` : ''}`}
                   titulo={`${n.destinatario.nome ?? ''}${clienteNome ? ` · ${clienteNome}` : ''}`} />
+                {/* NOTA-AVULSA-890-01 — UMA LINHA RESERVADA (nada se desloca de uma nota para outra): os dados adicionais da nota; na remessa
+                    de entrega futura, o aviso (ambar, nunca bloqueio) */}
+                {remessa ? (
+                  <div className="col-span-full flex h-[16px] min-w-0 items-center rounded-sm bg-amber-50 px-1 text-[10px] text-amber-900" data-testid="nota-aviso-remessa" title={remessa}>
+                    <span className="min-w-0 uma-linha-que-rola">{remessa}</span>
+                  </div>
+                ) : (
+                  <div className="col-span-full flex h-[16px] min-w-0 items-center gap-1.5 px-1 text-[10px]" data-testid="nota-dados-adicionais" title={n.informacoesComplementares ?? undefined}>
+                    <span className="shrink-0 text-muted-foreground">Dados adicionais</span>
+                    <span className="min-w-0 uma-linha-que-rola">{n.informacoesComplementares || '—'}</span>
+                  </div>
+                )}
               </div>
             </section>
 
@@ -477,7 +491,7 @@ export function NotaFiscalDialog({
                 <div className={cn(GRADE_KV, 'min-w-0 flex-1')}>
                   <Kv k="Razão social" v={fornecedor ? fornecedor.nome : caixaDeTitulo(razaoSocial)} className="col-span-2"
                     titulo={fornecedor ? fornecedor.nome : `${caixaDeTitulo(razaoSocial)}${receita ? ' (Receita)' : ''} — no DANFE: ${n.emitente.nome}`} />
-                  <Kv num k="CNPJ" v={documentoFormatado(n.emitente.documento)} erro={erroEm('cnpj')} />
+                  <Kv num k={soDigitos(n.emitente.documento).length === 11 ? 'CPF' : 'CNPJ'} v={documentoFormatado(n.emitente.documento)} erro={erroEm('cnpj')} testid="nota-documento-emitente" />
                   <Kv num k="IE" v={n.emitente.ie ?? '—'} />
                   <Kv k="Endereço" v={enderecoTexto || '—'} titulo={enderecoTexto} className="col-span-2" />
                   <Kv k="Cidade/UF" v={cidade} titulo={cidade} />

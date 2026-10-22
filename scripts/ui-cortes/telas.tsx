@@ -592,12 +592,12 @@ if (tela === 'mesclar') {
          (o molde do caso de 21/10: "Criar lancamento", vencimento = emissao em ambar)  ·  `parcelar` a confirmacao do "Atualizar e parcelar" */
   const montarNotaPdf = async () => {
     const { jsPDF } = await import('jspdf');
-    const { PAGINAS_DANFE_SINTETICO, danfeSinteticoSemDuplicata } = await import('@/lib/financeiro/nfe/__fixtures__/danfeSintetico');
+    const { PAGINAS_DANFE_SINTETICO, danfeSinteticoSemDuplicata, danfeSinteticoAvulsa } = await import('@/lib/financeiro/nfe/__fixtures__/danfeSintetico');
     const { lerNota } = await import('@/lib/financeiro/nfe/lerNota');
     const { NotaFiscalDialog } = await import('@/components/financeiro-v2/NotaFiscalDialog');
     const { arquivoPdfDaNota } = await import('@/components/financeiro-v2/NovoDeXmlDialog');
     const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: [841.89, 595.28] });
-    for (const it of (v === 'semdup' ? danfeSinteticoSemDuplicata() : PAGINAS_DANFE_SINTETICO)[0]) {
+    for (const it of (v === 'semdup' ? danfeSinteticoSemDuplicata() : v === 'avulsa' ? danfeSinteticoAvulsa() : PAGINAS_DANFE_SINTETICO)[0]) {
       const str = v === 'diverge' && it.str === 'Nº 000.000.937' ? 'Nº 000.000.938' : it.str;
       doc.setFontSize(Math.max(4, it.h * 1.15));
       doc.text(str, it.x, 595.28 - it.y);
@@ -729,7 +729,19 @@ if (tela === 'mesclar') {
     { id: 'a2', acao: 'editou', usuario_id: null, created_at: '2026-10-11T10:00:00Z', dados_anteriores: { status_transacao: 'previsto' }, dados_novos: { status_transacao: 'programado' }, via: 'sistema:fn_recorrencia_gerar' },
     { id: 'a3', acao: 'editou', usuario_id: null, created_at: '2026-09-11T10:00:00Z', dados_anteriores: { valor: 900 }, dados_novos: { valor: 1000 }, via: null },
     { id: 'a4', acao: 'editou', usuario_id: 'u1', created_at: '2026-09-10T15:00:00Z', dados_anteriores: { observacao: null }, dados_novos: { observacao: 'conferido' }, via: null }];
-  g.__bancoBancada = { from: (t: string) => t === 'audit_log' ? AUDIT : [], rpc: (fn: string) => fn === 'fn_nomes_dos_autores' ? [
+  /* DOC-NOTA-XML-PDF-01 — `docs=nota`: a aba Documentos com a MESMA nota em PDF e XML (uma linha, selos PDF e XML), uma nota so' em XML
+     (abre os itens) e um boleto; emitente de nome longo. Dados SINTETICOS. */
+  const CH = '50311011222333000181550020000157861123456789';
+  const docBase = { cliente_id: 'cli', lancamento_id: 'lanc-milho', origem: 'lancamento', operacao_id: null, tamanho_bytes: 1, uploaded_em: '2026-05-10T12:00:00Z',
+    uploaded_por: 'u1', observacao: null, cancelado: false, cancelado_em: null, cancelado_motivo: null, versao: 1, ligado_a_qtd: 1, emitente_id: 'agro',
+    emitente_nome: 'COOPERATIVA AGROINDUSTRIAL DOS PRODUTORES RURAIS DO MATO GROSSO DO SUL E REGIAO CENTRO OESTE LTDA', emitente_documento: '11222333000181' };
+  const DOCS_NOTA = q.get('docs') !== 'nota' ? [] : [
+    { ...docBase, documento_id: 'd-pdf', nome: 'NF 15786.pdf', tipo: 'application/pdf', url: 'c/l/a.pdf', especie: 'nf', numero: '15786', serie: null, chave_acesso: CH, data_emissao: '2026-05-08', valor_documento: 102000 },
+    { ...docBase, documento_id: 'd-xml', nome: 'NFe15786.xml', tipo: 'text/xml', url: 'c/l/b.xml', especie: 'nf', numero: '000.015.786', serie: '2', chave_acesso: CH, data_emissao: '2026-05-08', valor_documento: 102000 },
+    { ...docBase, documento_id: 'd-xml2', nome: 'NFe15790.xml', tipo: 'text/xml', url: 'c/l/c.xml', especie: 'nf', numero: '000.015.790', serie: '2', chave_acesso: CH.slice(0, 34) + '1579011234', data_emissao: '2026-05-09', valor_documento: 1250.4 },
+    { ...docBase, documento_id: 'd-bol', nome: 'boleto.pdf', tipo: 'application/pdf', url: 'c/l/d.pdf', especie: 'boleto', numero: '15786', serie: null, chave_acesso: null, data_emissao: '2026-05-10', valor_documento: 102000 },
+  ];
+  g.__bancoBancada = { from: (t: string) => t === 'audit_log' ? AUDIT : t === 'vw_lancamento_documentos' ? DOCS_NOTA : [], rpc: (fn: string) => fn === 'fn_nomes_dos_autores' ? [
       { user_id: 'u-outro', nome: 'Beltrano Gestor da Silva', email: 'beltrano@exemplo.com', situacao: 'ex-membro' },
       { user_id: 'u1', nome: 'Eu Mesmo da Bancada', email: 'bancada@exemplo.com', situacao: 'membro ativo' }]
     : (desc && fn === 'fn_lancamento_financiamento') ? {

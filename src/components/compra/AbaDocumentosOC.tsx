@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Plus, Pencil, Ban, Paperclip, MoreHorizontal, ListTree } from 'lucide-react';
 import { ItensDaNotaDialog } from '@/components/financeiro-v2/ItensDaNotaDialog';
 import { useChavesComItens } from '@/hooks/useItensDaNota';
+import { formatoDoArquivo } from '@/lib/financeiro/notaDosDocumentos';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -90,6 +91,8 @@ export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedo
   /* ITENS-NOTA-01 — o documento com nota guardada (a mesma chave do lancamento) mostra os itens, pela MESMA componente */
   const chavesComItens = useChavesComItens(clienteId, api.documentos.map((d) => d.chaveAcesso));
   const [itensDaChave, setItensDaChave] = useState<string | null>(null);
+  /* DOC-NOTA-XML-PDF-01 — o XML e' dado de importacao: abre como os itens da nota (lidos dele), nunca cru */
+  const [xmlAberto, setXmlAberto] = useState<string | null>(null);
   const tipoGrade = tipoOperacao === 'venda' ? 'venda' : 'abate';
   /* O documento novo da venda nasce na NF do produtor (a nota da venda); o do abate, na NF do frigorifico. */
   const especieInicial = tipoGrade === 'venda' ? 'nf_produtor' : 'nf_principal';
@@ -147,8 +150,15 @@ export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedo
   /* ABRIR o arquivo: o bucket e PRIVADO, entao link direto nao funciona — a url guardada
      e o CAMINHO, nao um endereco. Assina na hora e abre em aba nova. */
   const abrirArquivo = async (caminho: string) => {
+    if (formatoDoArquivo({ nome: caminho, tipo: null }) === 'xml') { setXmlAberto(caminho); return; }
     const url = await api.urlAssinada(caminho);
     if (url) window.open(url, '_blank', 'noopener,noreferrer');
+  };
+  const bytesDoXml = async (caminho: string): Promise<ArrayBuffer | null> => {
+    const url = await api.urlAssinada(caminho);
+    if (!url) return null;
+    const r = await fetch(url);
+    return r.ok ? r.arrayBuffer() : null;
   };
 
   const abrirNovo = () => {
@@ -393,6 +403,10 @@ export function AbaDocumentosOC({ api, operacaoPronta, somenteLeitura, fornecedo
       )}
 
       {itensDaChave && clienteId && <ItensDaNotaDialog clienteId={clienteId} chave={itensDaChave} onClose={() => setItensDaChave(null)} />}
+      {xmlAberto && (
+        <ItensDaNotaDialog clienteId={clienteId ?? ''} chave={api.documentos.find((d) => d.url === xmlAberto)?.chaveAcesso?.replace(/\D/g, '') ?? ''}
+          onClose={() => setXmlAberto(null)} lerArquivo={() => bytesDoXml(xmlAberto)} />
+      )}
 
       {/* Cancelamento com motivo obrigatório */}
       {cancelId && (

@@ -81,7 +81,17 @@ export function partesDaChave(chave: string) {
   };
 }
 
-/** O que a chave contradiz no que foi lido. Vazio = confere. */
+/**
+ * NOTA-AVULSA-890-01 (Gabriel 22/10/2026) — serie 890 a 899 = NF-e AVULSA, emitida pelo FISCO (a Sefaz) em nome do produtor: a chave
+ * carrega o CNPJ do ORGAO emissor, nao o CPF/CNPJ do produtor que o DANFE mostra como emitente.
+ */
+export function ehSerieAvulsa(serie: string | null | undefined): boolean {
+  const s = Number(soDigitos(serie ?? '') || -1);
+  return s >= 890 && s <= 899;
+}
+
+/** O que a chave contradiz no que foi lido. Vazio = confere. Nota avulsa (serie 890–899): o CNPJ da chave e' do orgao emissor e NAO
+ *  se compara com o emitente; numero, serie, mes, modelo e digito continuam conferidos. */
 export function conferirChave(nota: Pick<NotaLida, 'chave' | 'numero' | 'serie' | 'emissao' | 'emitente'>): CampoConferido[] {
   const c = nota.chave;
   if (!/^\d{44}$/.test(c)) return ['digito'];
@@ -89,11 +99,21 @@ export function conferirChave(nota: Pick<NotaLida, 'chave' | 'numero' | 'serie' 
   const fora: CampoConferido[] = [];
   if (digitoDaChave(c.slice(0, 43)) !== Number(p.dv)) fora.push('digito');
   if (p.modelo !== '55') fora.push('modelo');
-  if (soDigitos(nota.emitente.documento).padStart(14, '0') !== p.cnpj) fora.push('cnpj');
+  if (!ehSerieAvulsa(p.serie) && soDigitos(nota.emitente.documento).padStart(14, '0') !== p.cnpj) fora.push('cnpj');
   if (Number(soDigitos(nota.numero) || -1) !== Number(p.numero)) fora.push('numero');
   if (Number(soDigitos(nota.serie) || -1) !== Number(p.serie)) fora.push('serie');
   if (`${nota.emissao.slice(2, 4)}${nota.emissao.slice(5, 7)}` !== p.aamm) fora.push('mes');
   return fora;
+}
+
+/** NOTA-AVULSA-890-01 — o texto do quadro "Informações complementares" (abaixo do rotulo, na primeira pagina que o tem). */
+function textoDosDadosAdicionais(d: { itens: readonly ItemNaPagina[] }): string | null {
+  const rot = d.itens.find((o) => /^INFORMACOES COMPLEMENTARES/.test(normalizar(o.str)));
+  if (!rot) return null;
+  const abaixo = d.itens.filter((o) => o.pagina === rot.pagina && o.y < rot.y - 1 && o.y > rot.y - 120 && o.x >= rot.x - 5 && o.x < rot.x + 360)
+    .sort((a, b) => b.y - a.y || a.x - b.x);
+  const t = abaixo.map((o) => o.str.trim()).filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+  return t || null;
 }
 
 const TOL_LINHA = 1.5;
@@ -387,6 +407,8 @@ export function notaDoDanfe(paginas: readonly ItemDoDanfe[][]): ResultadoDoDanfe
     itens,
     /* O DANFE com protocolo impresso e' o de uma nota autorizada (o DANFE so' se imprime depois da autorizacao). */
     protocolo: protocoloNum ? { cStat: '100', numero: protocoloNum } : null,
+    informacoesComplementares: textoDosDadosAdicionais(d),
+    cfops: itens.map((i) => i.fiscal?.cfop ?? '').filter(Boolean),
   };
 
   const avisos: AvisoNFe[] = [];

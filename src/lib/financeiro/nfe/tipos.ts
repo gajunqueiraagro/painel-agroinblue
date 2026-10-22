@@ -65,6 +65,11 @@ export interface NotaLida {
     /** ITENS-NOTA-01 — as colunas fiscais do DANFE por item (so' o PDF; o XML le^ o item inteiro em `itensDoXml`). */
     fiscal?: ColunasFiscaisDoDanfe | null }[];
   protocolo: { cStat: string; numero: string } | null;
+  /** NOTA-AVULSA-890-01 — os dados adicionais (`infAdic/infCpl`; no DANFE, o quadro "Informações complementares"): onde a remessa de
+   *  entrega futura cita a nota originaria. Opcional: quem nao le^, nao tem. */
+  informacoesComplementares?: string | null;
+  /** NOTA-AVULSA-890-01 — os CFOP dos itens (XML: `det/prod/CFOP`; PDF: a coluna do DANFE). */
+  cfops?: string[];
 }
 
 /** ITENS-NOTA-01 — o que o DANFE mostra por item alem de descricao/qtd/unitario/total. */
