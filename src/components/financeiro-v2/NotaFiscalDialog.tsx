@@ -45,7 +45,7 @@ import { casarJaLancados, parcelasParaCasar, type LancamentoJaLancado } from '@/
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { CompararCadastroDialog } from './CompararCadastroDialog';
-import type { CadastroParaComparar } from '@/lib/fornecedores/compararCadastro';
+import { propostaDoEmitente, type CadastroParaComparar } from '@/lib/fornecedores/compararCadastro';
 import type { NotaDoArquivo } from '@/lib/financeiro/nfe/lerNota';
 import type { CampoConferido, CampoDaMarca } from '@/lib/financeiro/nfe/danfe';
 import type { EmitenteNFe } from '@/lib/financeiro/nfe/tipos';
@@ -327,12 +327,7 @@ export function NotaFiscalDialog({
       setComparar(hoje);
     } finally { setOcupado(null); }
   };
-  const end0 = emitente.endereco;
-  const propostaDaNota: CadastroParaComparar = {
-    nome: razaoSocial, nome_fantasia: emitente.fantasia, cpf_cnpj: documentoFormatado(n.emitente.documento), inscricao_estadual: emitente.ie,
-    logradouro: end0?.logradouro ?? null, numero: end0?.numero ?? null, complemento: end0?.complemento ?? null, bairro: end0?.bairro ?? null,
-    cep: end0?.cep ?? null, municipio: end0?.municipio ?? null, uf: end0?.uf ?? null,
-  };
+  const propostaDaNota: CadastroParaComparar = propostaDoEmitente(emitente, razaoSocial);
   const gravarComparacao = async (campos: Record<string, string>): Promise<string | null> => {
     if (!favorecidoId) return 'Sem cadastro escolhido.';
     const r = await atualizarCamposDoCadastro(favorecidoId, campos, receita ? 'receita' : 'nota', `${p.rotuloNota}`, clienteId);
