@@ -268,6 +268,7 @@ export function notaDoDanfe(paginas: readonly ItemDoDanfe[][]): ResultadoDoDanfe
   const itDocDest = d.campo('CNPJ / CPF', faixaDest, true) ?? d.campo('CNPJ', faixaDest, true);
   const itIeDest = d.campo('INSCRICAO ESTADUAL', faixaDest);
   d.marcar('destinatario_ie', itIeDest);
+  const itEnderDest = d.campo('ENDERECO', faixaDest, true);
   const itEmissao = d.campo('DATA DA EMISSAO', faixaDest, true) ?? d.campo('DATA DE EMISSAO', faixaDest, true);
   d.marcar('emissao', itEmissao);
   const itSaida = d.campo('DATA DA ENTRADA / SAIDA', faixaDest, true) ?? d.campo('DATA DA SAIDA', faixaDest, true) ?? d.campo('DATA DE SAIDA', faixaDest, true);
@@ -395,7 +396,7 @@ export function notaDoDanfe(paginas: readonly ItemDoDanfe[][]): ResultadoDoDanfe
       documento: docEmit, nome: nomeEmit, fantasia: null, ie: ie(itIeEmit),
       endereco: { logradouro, numero: numeroEnd, complemento: null, bairro, municipio, uf, cep, telefone },
     },
-    destinatario: { documento: soDigitos(itDocDest?.str) || null, nome: itNomeDest?.str.trim() || null, ie: ie(itIeDest) },
+    destinatario: { documento: soDigitos(itDocDest?.str) || null, nome: itNomeDest?.str.trim() || null, ie: ie(itIeDest), endereco: itEnderDest?.str.trim() || null },
     totais: {
       produtosCent: centavosBr(itProdutos?.str) ?? 0, freteCent: centavosBr(itFrete?.str) ?? 0,
       descontoCent: centavosBr(itDesconto?.str) ?? 0, notaCent,
