@@ -92,6 +92,12 @@ const CENARIOS = [
   /* ITENS-NOTA-01 — os itens da nota: Valores <-> Fiscal (o `auto` troca o Segmentado) no dialogo da OC; o backfill antes e depois do
      Simular (a contagem e as linhas chegam, os botoes nao andam) */
   { nome: 'itens-nota-oc', url: 'tela=itens-nota', auto: true },
+  /* FIN-CLASSIF-DIVIDIDA-01b — a aba Itens do lancamento dividido: Valores / Fiscal / Contas (a tabela troca de proposito, `data-desloca-livre`;
+     a barra e o cabecalho da nota nao andam) e a volta para a Geral (as partes) */
+  { nome: 'lancamento-dividido', url: 'tela=lancamento&m=editar&v=sal&div=1', antes: async (p) => {
+      await p.getByRole('tab', { name: /Itens da nota/ }).first().click(); await espera(p); }, estados: [
+    ['vista Contas', botao(/^Contas$/)], ['vista Fiscal', botao(/^Fiscal$/)], ['vista Valores', botao(/^Valores$/)],
+  ] },
   /* NOTA-FORNECEDOR-COMPARAR-01 — "Atualizar N campos" -> "Confirmar" (a frase aparece no rodape) e o estado "nao parece o certo" */
   { nome: 'comparar-cadastro', url: 'tela=comparar-cadastro', estados: [
     ['pedindo a confirmacao', clicar('[data-testid="comparar-atualizar"]')],
