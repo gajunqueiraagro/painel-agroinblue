@@ -55,7 +55,7 @@ import type { DocumentoPendente, ParcelaGravada } from '@/lib/financeiro/documen
 import { notaDoDanfe, type ItemDoDanfe } from '@/lib/financeiro/nfe/danfe';
 import { proporLancamento } from '@/lib/financeiro/nfe/proporLancamento';
 import { resolverEmitente } from '@/lib/financeiro/nfe/resolverEmitente';
-import { PAGINAS_DANFE_SINTETICO, danfeSinteticoSemDuplicata } from '@/lib/financeiro/nfe/__fixtures__/danfeSintetico';
+import { PAGINAS_DANFE_SINTETICO, danfeSinteticoAvulsa, danfeSinteticoSemDuplicata } from '@/lib/financeiro/nfe/__fixtures__/danfeSintetico';
 import type { LancamentoJaLancado } from '@/lib/financeiro/nfe/jaLancada';
 import type { OcorrenciaDaNota } from '@/lib/financeiro/nfeConsultas';
 
@@ -248,6 +248,27 @@ describe('N3 — o que barra', () => {
     expect(screen.getByTestId('nota-numero').innerHTML).toContain('text-red-700');
     expect(screen.getByTestId('nota-bloqueio').textContent).toContain('A chave não confere');
     expect(screen.getByTestId('nota-criar')).toBeDisabled();
+  });
+  /* NOTA-AVULSA-890-01 — a NF-e avulsa (serie 890–899): a chave traz o CNPJ do ORGAO emissor; o emitente e' o CPF do produtor */
+  it('nota AVULSA (série 890): não trava; "CPF" no rótulo, sem vermelho; e o aviso da remessa de entrega futura', () => {
+    abrir(montarNota({ paginas: danfeSinteticoAvulsa() }));
+    expect(screen.getByTestId('nota-chave').textContent).toBe('chave confere: nº, série e mês · nota avulsa');
+    expect(screen.queryByTestId('nota-bloqueio')).toBeNull();
+    const doc = screen.getByTestId('nota-documento-emitente');
+    expect(doc.textContent).toBe('CPF111.444.777-35');
+    expect(doc.innerHTML).not.toContain('text-red-700');
+    expect(screen.getByTestId('nota-aviso-remessa').textContent).toBe('Remessa de entrega futura: confira se a nota da venda futura (originária) já foi lançada — esta pode ser só a entrega. A nota cita a originária nº 123.456.');
+  });
+  it('a nota COMUM com o CNPJ da chave trocado continua barrada (e o vermelho no documento)', () => {
+    abrir(montarNota({ paginas: danfeSinteticoAvulsa({ serie: '10' }) }));
+    expect(screen.getByTestId('nota-chave').textContent).toBe('chave não confere: CNPJ');
+    expect(screen.getByTestId('nota-documento-emitente').innerHTML).toContain('text-red-700');
+    expect(screen.getByTestId('nota-bloqueio').textContent).toContain('A chave não confere com o lido (CNPJ). Nada será criado.');
+    expect(screen.getByTestId('nota-criar')).toBeDisabled();
+  });
+  it('venda comum: sem aviso de remessa', () => {
+    abrir(montarNota({ fornecedores: [FORN] }));
+    expect(screen.queryByTestId('nota-aviso-remessa')).toBeNull();
   });
 });
 
