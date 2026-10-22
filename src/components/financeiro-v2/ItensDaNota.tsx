@@ -10,7 +10,7 @@
  */
 import { useState } from 'react';
 import { Segmentado } from '@/components/ui/segmentado';
-import { QUADRO_REGUA, RODAPE_REGUA, TD_REGUA, TD_REGUA_NUM, TD_REGUA_TEXTO, TH_REGUA } from '@/components/ui/regua-tabela';
+import { QUADRO_REGUA, RODAPE_REGUA } from '@/components/ui/regua-tabela';
 import { conferirSoma, type CabecalhoDaNota, type ItemFiscal, type ItensLidos } from '@/lib/financeiro/nfe/itensDaNota';
 import { documentoFormatado, numeroDaNota, reais } from '@/lib/financeiro/nfe/formatos';
 import { cn } from '@/lib/utils';
@@ -18,6 +18,12 @@ import { cn } from '@/lib/utils';
 type Visao = 'valores' | 'fiscal';
 const REGIME: Record<string, string> = { '1': 'Simples Nacional', '2': 'Simples (excesso)', '3': 'Regime normal', '4': 'MEI' };
 const CHIP = 'inline-flex h-[18px] shrink-0 items-center whitespace-nowrap rounded-full px-2 text-[10px] font-medium leading-none';
+/* ITENS-NOTA-FONTE-01 (Gabriel 22/10 08h10 e 08h47) — a tabela dos itens e' COMPACTA (excecao declarada ao piso de 9,5px, como a grade do
+   DRE): 8,5px, linha de 14px, cabecalho e rodape de 16px — ate' 18 itens cabem sem rolar a partir de 1126x579; acima, so' o corpo rola. */
+const TH_ITENS = 'h-[16px] px-1 py-0 text-[8.5px] font-medium text-primary-foreground normal-case tracking-normal whitespace-nowrap';
+const TD_ITENS = 'h-[14px] px-1 py-0 text-[8.5px] leading-none';
+const TD_ITENS_TEXTO = cn(TD_ITENS, 'truncate');
+const TD_ITENS_NUM = cn(TD_ITENS, 'text-right tabular-nums whitespace-nowrap');
 
 /** 'YYYY-MM-DD' -> 'dd/mm/aaaa'. */
 const dataBr = (iso: string | null) => (iso && /^\d{4}-\d{2}-\d{2}/.test(iso) ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '—');
@@ -50,30 +56,33 @@ export function ItensDaNota({ cabecalho, lidos, contaDoLancamento, testId = 'ite
     ['Outras', t.outrasCent, false], ['IPI + ST', ipiSt, false], ['Valor NF', t.notaCent, true],
   ];
   const valores = visao === 'valores';
+  /* o codigo NUNCA corta: a coluna tem a largura do maior codigo da nota (em `ch` da fonte da tabela); a descricao cede */
+  const maiorCodigo = Math.max(9, ...lidos.itens.map((i) => (i.codigo ?? '').length));   // 9ch: o rotulo "Cód. forn." inteiro
+  const larguraCodigo = `calc(${maiorCodigo}ch + 10px)`;
   /* as colunas: Nº, codigo, descricao (o resto da largura) e as de numero, que nunca cortam */
-  const cols: { h: string; w?: number; num?: boolean; f: (i: ItemFiscal) => string; titulo?: (i: ItemFiscal) => string }[] = valores ? [
-    { h: 'Nº', w: 26, num: true, f: (i) => String(i.nItem) },
-    { h: 'Cód. forn.', w: 66, f: (i) => i.codigo ?? '—' },
+  const cols: { h: string; w?: number | string; num?: boolean; codigo?: boolean; f: (i: ItemFiscal) => string; titulo?: (i: ItemFiscal) => string }[] = valores ? [
+    { h: 'Nº', w: 22, num: true, f: (i) => String(i.nItem) },
+    { h: 'Cód. forn.', w: larguraCodigo, codigo: true, f: (i) => i.codigo ?? '—' },
     { h: 'Descrição na nota', f: (i) => i.descricao, titulo: (i) => [i.descricao, i.infoAdicional].filter(Boolean).join(' · ') },
-    { h: 'Qtd', w: 52, num: true, f: (i) => qtd(i.quantidade) },
-    { h: 'Un', w: 30, f: (i) => i.unidade ?? '—' },
-    { h: 'Unitário', w: 74, num: true, f: (i) => unitario(i.unitario) },
-    { h: 'Total', w: 80, num: true, f: (i) => reais(i.produtoCent) },
-    { h: 'Desc.', w: 66, num: true, f: (i) => reais(i.descontoCent) },
-    { h: 'Acrésc.', w: 66, num: true, f: (i) => reais(acrescimos(i)) },
-    { h: 'Líquido', w: 84, num: true, f: (i) => reais(i.liquidoCent) },
+    { h: 'Qtd', w: 44, num: true, f: (i) => qtd(i.quantidade) },
+    { h: 'Un', w: 26, f: (i) => i.unidade ?? '—' },
+    { h: 'Unitário', w: 62, num: true, f: (i) => unitario(i.unitario) },
+    { h: 'Total', w: 66, num: true, f: (i) => reais(i.produtoCent) },
+    { h: 'Desc.', w: 54, num: true, f: (i) => reais(i.descontoCent) },
+    { h: 'Acrésc.', w: 54, num: true, f: (i) => reais(acrescimos(i)) },
+    { h: 'Líquido', w: 70, num: true, f: (i) => reais(i.liquidoCent) },
   ] : [
-    { h: 'Nº', w: 26, num: true, f: (i) => String(i.nItem) },
+    { h: 'Nº', w: 22, num: true, f: (i) => String(i.nItem) },
     { h: 'Descrição na nota', f: (i) => i.descricao, titulo: (i) => i.descricao },
-    { h: 'NCM', w: 66, f: (i) => i.ncm ?? '—' },
-    { h: 'CFOP', w: 40, f: (i) => i.cfop ?? '—' },
-    { h: 'CST/CSOSN', w: 66, f: (i) => i.csosn ?? i.cst ?? '—' },
-    { h: 'BC ICMS', w: 70, num: true, f: (i) => (i.icms?.bcCent ? reais(i.icms.bcCent) : '0,00') },
-    { h: 'ICMS', w: 62, num: true, f: (i) => imp(i.icms) },
-    { h: 'ST', w: 58, num: true, f: (i) => imp(i.icmsSt) },
-    { h: 'IPI', w: 58, num: true, f: (i) => imp(i.ipi) },
-    { h: 'PIS/COFINS', w: 72, num: true, f: (i) => reais((i.pis?.valorCent ?? 0) + (i.cofins?.valorCent ?? 0)) },
-    { h: 'IBS/CBS', w: 64, f: (i) => i.ibsCbs?.cClassTrib ?? (i.ibsCbs ? 'sim' : '—'), titulo: (i) => (i.ibsCbs ? Object.entries(i.ibsCbs).map(([k, v]) => `${k} ${v}`).join(' · ') : '') },
+    { h: 'NCM', w: 56, codigo: true, f: (i) => i.ncm ?? '—' },
+    { h: 'CFOP', w: 34, codigo: true, f: (i) => i.cfop ?? '—' },
+    { h: 'CST/CSOSN', w: 60, f: (i) => i.csosn ?? i.cst ?? '—' },
+    { h: 'BC ICMS', w: 60, num: true, f: (i) => (i.icms?.bcCent ? reais(i.icms.bcCent) : '0,00') },
+    { h: 'ICMS', w: 52, num: true, f: (i) => imp(i.icms) },
+    { h: 'ST', w: 50, num: true, f: (i) => imp(i.icmsSt) },
+    { h: 'IPI', w: 50, num: true, f: (i) => imp(i.ipi) },
+    { h: 'PIS/COFINS', w: 62, num: true, f: (i) => reais((i.pis?.valorCent ?? 0) + (i.cofins?.valorCent ?? 0)) },
+    { h: 'IBS/CBS', w: 54, f: (i) => i.ibsCbs?.cClassTrib ?? (i.ibsCbs ? 'sim' : '—'), titulo: (i) => (i.ibsCbs ? Object.entries(i.ibsCbs).map(([k, v]) => `${k} ${v}`).join(' · ') : '') },
   ];
   const colgroup = <colgroup>{cols.map((c) => <col key={c.h} style={c.w ? { width: c.w } : undefined} />)}</colgroup>;
   const soma = (f: (i: ItemFiscal) => number) => reais(lidos.itens.reduce((s, i) => s + f(i), 0));
@@ -81,7 +90,7 @@ export function ItensDaNota({ cabecalho, lidos, contaDoLancamento, testId = 'ite
   return (
     <div className="flex h-full min-h-0 flex-col gap-1.5" data-testid={testId}>
       {/* ── O CABECALHO DA NOTA E OS TOTAIS ─────────────────────────────────────────────────────────────────────────── */}
-      <div className="grid shrink-0 grid-cols-[minmax(0,1fr)_minmax(0,1.7fr)] gap-x-3 rounded-lg border bg-card px-2.5 py-1.5 text-[10.5px] leading-[15px]" data-testid="itens-cabecalho">
+      <div className="grid shrink-0 grid-cols-[minmax(0,1fr)_minmax(0,1.7fr)] gap-x-3 rounded-lg border bg-card px-2.5 py-1.5 text-[9.5px] leading-[15px]" data-testid="itens-cabecalho">
         <div className="min-w-0">
           <div className="flex min-w-0 gap-1.5 whitespace-nowrap">
             <span className="text-muted-foreground">NF-e</span><b className="tabular-nums">{numeroDaNota(cabecalho.numero ?? '')}</b>
@@ -96,11 +105,11 @@ export function ItensDaNota({ cabecalho, lidos, contaDoLancamento, testId = 'ite
         </div>
         <div className="min-w-0">
           <div className="grid grid-cols-7 gap-x-1.5 tabular-nums" data-testid="itens-totais">
-            {totais.map(([r]) => <span key={r} className="uma-linha-que-rola text-right text-[9.5px] uppercase text-muted-foreground">{r}</span>)}
+            {totais.map(([r]) => <span key={r} className="uma-linha-que-rola text-right text-[8px] uppercase tracking-normal text-muted-foreground">{r}</span>)}
             {totais.map(([r, v, nf]) => <b key={r} className={cn('whitespace-nowrap text-right', nf ? 'text-primary' : v === 0 && 'font-normal text-muted-foreground')}>{reais(v)}</b>)}
           </div>
-          <div className="uma-linha-que-rola text-muted-foreground" data-testid="itens-tributos">
-            Tributos aprox. (Lei 12.741): {t.tributosAproxCent != null ? <b className="text-foreground">R$ {reais(t.tributosAproxCent)}</b> : '—'} · só informação
+          <div className="uma-linha-que-rola text-[8px] text-muted-foreground/70" data-testid="itens-tributos">
+            Tributos aprox. (Lei 12.741): {t.tributosAproxCent != null ? <span className="font-medium">R$ {reais(t.tributosAproxCent)}</span> : '—'} · só informação
           </div>
         </div>
       </div>
@@ -121,26 +130,26 @@ export function ItensDaNota({ cabecalho, lidos, contaDoLancamento, testId = 'ite
 
       {/* ── A TABELA (a regua) — Valores x Fiscal trocam as COLUNAS de proposito (`data-desloca-livre`); a barra acima segue medida ── */}
       <div className={cn(QUADRO_REGUA, 'min-h-0 flex-1')} data-testid="itens-quadro" data-desloca-livre="">
-        <table className="w-full shrink-0 table-fixed border-collapse bg-primary">{colgroup}
-          <thead><tr>{cols.map((c) => <th key={c.h} className={cn(TH_REGUA, 'truncate', c.num ? 'text-right' : 'text-left')} title={c.h}>{c.h}</th>)}</tr></thead>
+        <table className="w-full shrink-0 table-fixed border-collapse bg-primary text-[8.5px]">{colgroup}
+          <thead><tr>{cols.map((c) => <th key={c.h} className={cn(TH_ITENS, 'truncate', c.num ? 'text-right' : 'text-left')} title={c.h}>{c.h}</th>)}</tr></thead>
         </table>
         <div className="min-h-0 flex-1 overflow-y-auto" data-testid="itens-rolagem">
-          <table className="w-full table-fixed border-collapse">{colgroup}
+          <table className="w-full table-fixed border-collapse text-[8.5px]">{colgroup}
             <tbody>
               {lidos.itens.map((i) => (
                 <tr key={i.nItem} className="border-b border-border/50 even:bg-muted/30" data-testid="itens-linha">
                   {cols.map((c) => {
                     const v = c.f(i);
-                    return c.num
-                      ? <td key={c.h} className={TD_REGUA_NUM}>{v}</td>
-                      : <td key={c.h} className={TD_REGUA_TEXTO} title={c.titulo ? c.titulo(i) : v}>{v}</td>;
+                    return c.num ? <td key={c.h} className={TD_ITENS_NUM}>{v}</td>
+                      : c.codigo ? <td key={c.h} className={cn(TD_ITENS, 'whitespace-nowrap tabular-nums')}>{v}</td>
+                        : <td key={c.h} className={TD_ITENS_TEXTO} title={c.titulo ? c.titulo(i) : v}>{v}</td>;
                   })}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <table className={cn('w-full table-fixed border-collapse', RODAPE_REGUA)}>{colgroup}
+        <table className={cn('w-full table-fixed border-collapse', RODAPE_REGUA, 'text-[8.5px]')}>{colgroup}
           <tbody><tr data-testid="itens-rodape">
             {cols.map((c, k) => {
               let v = '';
@@ -149,7 +158,7 @@ export function ItensDaNota({ cabecalho, lidos, contaDoLancamento, testId = 'ite
               else if (c.h === 'Desc.') v = soma((i) => i.descontoCent);
               else if (c.h === 'Acrésc.') v = soma(acrescimos);
               else if (c.h === 'Líquido') v = soma((i) => i.liquidoCent);
-              return <td key={c.h} className={cn(c.num ? TD_REGUA_NUM : TD_REGUA, 'h-[22px] font-semibold')} data-col={k}>{v}</td>;
+              return <td key={c.h} className={cn(c.num ? TD_ITENS_NUM : TD_ITENS, 'h-[16px] font-semibold')} data-col={k}>{v}</td>;
             })}
           </tr></tbody>
         </table>
