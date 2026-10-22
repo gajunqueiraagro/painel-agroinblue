@@ -771,6 +771,10 @@ function textoLancamento(s: EspSis | undefined, mesDoRecorte: string, semPar = f
         {comp && ` · competência ${comp}`}
         {semPar && s.origem_lancamento && ` · ${rotuloOrigem(s.origem_lancamento)}`}
       </span>
+      {/* CONC-TRANSF-DUAS-PONTAS-01: a transferencia com uma ponta so' diz qual falta (a frase vem do banco) */}
+      {s.pontas && !(s.pontas.origem && s.pontas.destino) && (
+        <span className="text-amber-700" data-testid="pontas-transferencia">{' · '}{s.pontas.frase}</span>
+      )}
     </>
   );
 }
