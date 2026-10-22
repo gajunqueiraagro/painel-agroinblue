@@ -19,6 +19,7 @@
 import { useCallback, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { FONTE_POR_PARTE, chaveDaParte } from '@/lib/financeiro/partesDaClassificacao';
 import { useFazenda, type Fazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -188,15 +189,8 @@ interface RawLancPec { fazenda_id: string; data: string; tipo: string; quantidad
 // Helpers
 // ---------------------------------------------------------------------------
 
-/**
- * FIN-CLASSIF-DIVIDIDA-01a-2 — a FONTE de quem soma por classificacao: a visao unica (1 linha por parte; lancamento sem divisao = ele
- * mesmo). As colunas sao as do lancamento, com o `valor` e a classificacao da parte.
- */
-export const FONTE_POR_PARTE = 'vw_fin_classificacao_por_parte';
-/** A chave da linha: o lancamento na parte 1 (e sem divisao); "id#n" nas demais, para nada se repetir (dedup, chave da lista). */
-export function chaveDaParte(r: { id?: string; parte_ordem?: number | null }): string {
-  return r.parte_ordem && r.parte_ordem > 1 ? `${r.id}#${r.parte_ordem}` : String(r.id);
-}
+/* FIN-CLASSIF-DIVIDIDA-01a-2: a fonte por parte e a chave da linha moram em `partesDaClassificacao` (regra do id la'). */
+export { FONTE_POR_PARTE, chaveDaParte };
 
 /**
  * Paginated fetch — loads ALL rows from a query, bypassing the 1000-row default.
