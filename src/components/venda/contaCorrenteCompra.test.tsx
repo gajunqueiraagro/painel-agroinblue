@@ -205,6 +205,7 @@ describe('compra em conta corrente — extrato espelho da venda (mock v1)', () =
         { componente: 'frete', nome: 'Frete', favorecido: 'Manoel Marcelo Tavares Videira', valor: 1800, pago: 1800 },
         { componente: 'comissao', nome: 'Comissão', favorecido: null, valor: 1000, pago: 0 },
       ],
+      titulosSaida: [], avisos: [],
       bloqueios: [],
     };
     const onCancelar = vi.fn(async () => null);
@@ -212,20 +213,19 @@ describe('compra em conta corrente — extrato espelho da venda (mock v1)', () =
       lado="compra" onCancelar={onCancelar} onFechar={vi.fn()} />);
     const d = await screen.findByTestId('dialogo-cancelar-cc');
     await waitFor(() => expect(d.textContent).toContain('Entradas canceladas (saem do DRE)'));
-    expect(d.textContent).toContain('Pagamentos que saem da OC (voltam a compor o DRE como compra)');
+    /* OC-CANCELAR-CASCATA-01: o pagamento em aberto e a entrada (registrada ou adotada) sao cancelados junto; a despesa sem
+       pagamento fecha junto e so' a PAGA fica */
+    expect(d.textContent).toContain('Pagamentos em aberto cancelados (1)');
     expect(d.textContent).toContain('Investimento Compra Bovinos Machos');
     expect(d.textContent).not.toContain('→');
-    expect(d.textContent).toContain('volta a ser uma compra comum no DRE');
-    /* decisao 3: as despesas pagas a terceiros FICAM — a secao as lista, com o que ja' foi pago */
     const ficam = within(d).getByTestId('cc-cancelar-ficam');
     const txtFicam = (ficam.textContent ?? '').replace(/\u00a0/g, ' ');
-    expect(txtFicam).toContain('Ficam (pagas a terceiros) (2)');
+    expect(txtFicam).toContain('Ficam (pagas a terceiros) (1)');
     expect(txtFicam).toContain('Frete · Manoel Marcelo Tavares Videira · R$ 1.800,00 · pago');
-    expect(txtFicam).toContain('Comissão · R$ 1.000,00 · em aberto');
+    expect((d.textContent ?? '').replace(/\u00a0/g, ' ')).toContain('Despesas em aberto canceladas (1)Comissão · R$ 1.000,00');
     expect(d.textContent).not.toContain('Compromissos cancelados');
-    /* a entrada REGISTRADA nao se desvincula (e' o bloqueio do banco): o bloco das adotadas fica vazio */
-    expect(d.textContent).toContain('Entradas adotadas desvinculadas (o gado continua no zootécnico) (0)');
-    expect(d.textContent).not.toContain('121 cab');
+    expect(d.textContent).toContain('Entradas canceladas (saem do zootécnico) (1)');
+    expect(d.textContent).toContain('121 cab');
     expect(d.textContent).not.toContain('Recebimentos');
     fireEvent.click(within(d).getByRole('button', { name: 'Cancelar operação' }));
     expect(onCancelar).not.toHaveBeenCalled();
@@ -282,7 +282,7 @@ describe('a VENDA nao muda', () => {
       entregas: [{ data: '2025-03-19', loteOrdem: 1, valor: 566879.55 }],
       explicacoes: [{ tipo: 'permuta_despesa', valor: 357.89, conta: 'Frete' }],
       recebimentos: [{ data: '2025-04-17', valor: 992138.24, contaAtual: 'Venda de Desmama Machos', contaOriginal: 'Venda de Desmama Machos', acao: 'volta_para_conta_original' }],
-      saidas: [{ data: '2025-03-19', cab: 178, categoria: 'desmama_m', origem: 'adotada' }], compromissos: [], despesas: [], bloqueios: [],
+      saidas: [{ data: '2025-03-19', cab: 178, categoria: 'desmama_m', origem: 'adotada' }], compromissos: [], despesas: [], titulosSaida: [], avisos: [], bloqueios: [],
     };
     render(<CancelarContaCorrenteDialog api={api(venda(), { lerRolCancelamento: vi.fn(async () => ({ rol, erro: null })) })}
       onCancelar={vi.fn(async () => null)} onFechar={vi.fn()} />);
