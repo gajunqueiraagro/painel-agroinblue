@@ -19,7 +19,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { carregarPartes, porParte } from '@/lib/financeiro/partesDaClassificacao';
+import { carregarPartes, lerLancamentoDaLinha, porParte } from '@/lib/financeiro/partesDaClassificacao';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -142,11 +142,8 @@ export function PainelPeriodoTab() {
   const abrirLancamento = async (id: string) => {
     setAbrindo(true);
     try {
-      /* Sem `as`: o idioma `(supabase as any)` já devolve `any`, e anotar o destino é o que
-         estreita o tipo — um segundo cast só repetiria o que a anotação diz. */
-      const { data } = await (supabase as any).from('financeiro_lancamentos_v2')
-        .select('*').eq('id', id).maybeSingle();
-      const linha: LancamentoV2 | null = data ?? null;
+      /* FIN-CLASSIF-DIVIDIDA-01b — a linha da parte 2+ chega como "id#2": abre o lancamento (`lerLancamentoDaLinha`) */
+      const linha = await lerLancamentoDaLinha<LancamentoV2>(id);
       if (linha) setEditando(linha);
     } finally {
       setAbrindo(false);
