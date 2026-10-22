@@ -166,6 +166,11 @@ function buildRows(
         contasExibidasDoLancamento(l.tipo_operacao, l.conta_bancaria_id, l.conta_destino_id),
         cadastros.contas,
       ),
+
+      /* FIN-V2-LISTA-FLAG-01 / FIN-CLASSIF-DIVIDIDA-01a: o lancamento dividido sai pela parte (`abrirDivididasParaExportar`): o total do
+         lancamento e "1 de 2 contas" / "dividido em 2 contas". Sem divisao, vazio (nunca "-"). */
+      totalLancamento: typeof Reflect.get(l, 'total_lancamento') === 'number' ? Math.abs(Number(Reflect.get(l, 'total_lancamento'))) : '',
+      divisao: String(Reflect.get(l, 'divisao') ?? ''),
     };
   });
 }
@@ -206,6 +211,8 @@ function exportExcel(
     'Macro': r.macro,
     'Centro': r.centro,
     'Subcentro': r.subcentro,
+    'Divisão': r.divisao,
+    'Total do lançamento': r.totalLancamento,
   }));
 
   const faz = fazendaNome ? `_${fazendaNome.replace(/\s+/g, '_')}` : '';
