@@ -792,7 +792,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     if (editingReclassId) return;
     setReclassFazendaId(fazendaSemeada(fazendaAtual?.id));
   }, [fazendaAtual?.id, editingReclassId]);
-  const reclassState = useReclassificacaoState({ onAdicionar, dataInicial, cenarioInicial: defaultCenario === 'meta' ? 'meta' : 'realizado', fazendaId: reclassFazendaId, exigeFazenda: true });
+  /* OC-HOSPEDEIRO-LEVE-01 — na tela da OC nao ha' aba de reclassificacao: o rebanho do mes (o peso sugerido) nao e' lido */
+  const reclassState = useReclassificacaoState({ onAdicionar, dataInicial, cenarioInicial: defaultCenario === 'meta' ? 'meta' : 'realizado', fazendaId: reclassFazendaId, exigeFazenda: true,
+    carregarRebanho: !somenteOperacao });
   // Pré-seleciona cenário da Reclassificação quando navegado da Evolução por Categoria
   useEffect(() => {
     if (initialReclassCenario && abaInicial === 'reclassificacao') {
@@ -1266,6 +1268,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     parseNumericValue(pesoKg) || 0,
     clienteAtual?.id,
     metaLancamentoEmEdicao,
+    /* OC-HOSPEDEIRO-LEVE-01 — o bloqueio META so' e' consultado no cenario meta (`handleSubmit`); na tela da OC o rebanho meta so'
+       e' lido se o cenario virar meta */
+    !somenteOperacao || isCenarioMeta,
   );
   const isConfirmado = statusOp === 'programado';
   const isConciliado = statusOp === 'realizado';
@@ -1726,7 +1731,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   };
 
   // FONTE OFICIAL: anos reais do banco
-  const { data: anosDisponiveis = [String(new Date().getFullYear())] } = useAnosDisponiveis();
+  /* OC-HOSPEDEIRO-LEVE-01 — o seletor de ano do historico nao existe na tela da OC */
+  const { data: anosDisponiveis = [String(new Date().getFullYear())] } = useAnosDisponiveis({ enabled: !somenteOperacao });
 
   const MESES = [
     { value: 'todos', label: 'Todos' },

@@ -181,7 +181,7 @@ interface V2LancamentosWrapperProps {
    *  por foto e com o `LancamentosTab` em modo "somente operação" (so' os modais da OC). */
   somenteOperacao?: boolean;
 }
-function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEdit, onNavegarChuvas, onNavegarMapaRebanho, cenarioInicial, cenariosPermitidos, onFecharOperacaoOC, onNovaCompraOC, onNovaVendaOC, onNovoAbateOC, somenteOperacao = false }: V2LancamentosWrapperProps = {}) {
+export function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEdit, onNavegarChuvas, onNavegarMapaRebanho, cenarioInicial, cenariosPermitidos, onFecharOperacaoOC, onNovaCompraOC, onNovaVendaOC, onNovoAbateOC, somenteOperacao = false }: V2LancamentosWrapperProps = {}) {
   const navigate = useNavigate();
   const { isGlobal, fazendaAtual: fazendaDosDocumentos } = useFazenda();
   const clienteDosDocumentos = useCliente().clienteAtual?.id ?? null;
@@ -196,8 +196,11 @@ function V2LancamentosWrapper({ abateParaEditar, vendaParaEditar, onReturnFromEd
     invalidarZoot,
     revalidarListaEIndicadores,
     revalidando,
-  } = useLancamentos();
-  const { loadData: metaLoadData } = useLancamentos('meta');
+  /* OC-HOSPEDEIRO-LEVE-01 — na tela da OC (`somenteOperacao`) a lista do rebanho nao e' desenhada: os dois conjuntos (realizado e meta)
+     NAO sao lidos. Os writers seguem os mesmos (o cache otimista so' mexe em cache que existe) e a releitura depois de salvar segue
+     invalidando `lancamentos-zoo`: quem mostra a lista a le^ de novo ao montar. */
+  } = useLancamentos({ cenario: 'realizado', enabled: !somenteOperacao });
+  const { loadData: metaLoadData } = useLancamentos({ cenario: 'meta', enabled: !somenteOperacao });
 
   const noOp = async (_id?: string) => { toast.error('Selecione uma fazenda específica para editar lançamentos.'); };
   /* ⚠ `&& !isGlobal` SAIU (PR-OC-FIX-NASC-FAZENDA-NAO-SALVA-01). Ele trocava o writer
