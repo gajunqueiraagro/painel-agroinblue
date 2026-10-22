@@ -37,6 +37,10 @@ import { ajudaDaRegra } from '@/lib/arquivo/aceitarArquivo';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { faixaDoConfronto } from '@/lib/financeiro/faixaDoConfronto';
 import { formatNFNumber } from '@/lib/financeiro/documentoHelper';
+import { QUADRO_REGUA, SECUNDARIA_REGUA, TD_REGUA, TD_REGUA_NUM, TH_REGUA } from '@/components/ui/regua-tabela';
+import { cn } from '@/lib/utils';
+import { linhasDosDocumentos, oQueAbrir, type LinhaDeDocumento } from '@/lib/financeiro/notaDosDocumentos';
+import { ItensDaNotaDialog } from './ItensDaNotaDialog';
 import {
   ESPECIES_LANC_DOC, rotuloEspecieDoc, type EspecieLancDoc, type LancDocumento, type LancDocPayload,
   type LancamentoDocumentosApi, type DestinoDocumento, REGRA_ARQUIVO_DO_DOCUMENTO,
@@ -55,19 +59,20 @@ function identidade(d: LancDocumento): string {
 const dataBr = (iso: string | null) => (iso ? iso.split('-').reverse().join('/') : null);
 
 /**
- * A GRADE DA LISTA — FIN-DOCUMENTOS-LAYOUT-01 (mock do Gabriel, 04/10/2026): Documento · Emitente · Emissão · Valor ·
- * Situação · ações. A grade é UMA, na tabela (`GRADE_DOCUMENTOS`); o cabeçalho e cada linha são SUBGRADES dela
- * (`LINHA_DOCUMENTOS`), então as colunas alinham por construção — inclusive a de Documento, cuja largura é a do maior
- * conteúdo entre todas as linhas.
- *
- * ⚠ UMA LINHA POR REGISTRO, SEMPRE (UI-LINHA-UNICA-01, Gabriel 04/10/2026): Documento é `max-content` e não quebra nem corta —
- *   identidade e selos sempre inteiros; Emitente (e o "motivo: …" do cancelado) fica com o resto e CORTA na célula com "…",
- *   com o texto inteiro no `title` — a linha tem 22px, nunca mais. As quatro últimas são fixas; o respiro de
- *   10px das bordas mora na primeira e na última célula (padding numa subgrade encolheria as trilhas das pontas), por
- *   isso a última trilha tem 72 = 62 + 10.
+ * A TABELA DA LISTA — FIN-DOCUMENTOS-LAYOUT-01 (mock do Gabriel, 04/10/2026): Documento · Emitente · Emissão · Valor · Situação · ações;
+ * DOC-NOTA-XML-PDF-01 (22/10/2026): na RÉGUA DA CASA (`regua-tabela`, tabela fixa, colgroup em px, linha de 19px, data a 9,5px).
+ * ⚠ UMA LINHA POR REGISTRO, SEMPRE (UI-LINHA-UNICA-01): a coluna Documento tem a largura do maior documento da lista (identidade e
+ *   selos sempre inteiros); Emitente (e o "motivo: …" do cancelado) fica com o resto e CORTA com "…", com o texto inteiro no `title`.
  */
-const GRADE_DOCUMENTOS = 'grid grid-cols-[max-content_minmax(0,1fr)_70px_92px_66px_72px] gap-x-[10px]';
-const LINHA_DOCUMENTOS = 'col-span-full grid [grid-template-columns:subgrid] items-center';
+/** A largura da coluna Documento: o maior "identidade + selos" da lista (10px semibold ≈ 6,2px por caractere; selos medidos). */
+function larguraDaColunaDocumento(ls: readonly LinhaDeDocumento[]): number {
+  const uma = (l: LinhaDeDocumento) => {
+    const d = l.principal;
+    const selos = (l.pdf ? 28 : 0) + (l.xml ? 30 : 0) + ((d.ligadoAQtd ?? 1) > 1 ? 66 : 0) + (d.origem === 'operacao' ? 70 : 0);
+    return Math.ceil(identidade(d).length * 6.2) + selos + 18;
+  };
+  return Math.max(96, ...ls.map(uma));
+}
 
 export function AbaDocumentosLancamento({ api, somenteLeitura, clienteId, onAnexarBoletosDasParcelas, sugestao, semBoleto }: {
   api: LancamentoDocumentosApi;
@@ -86,7 +91,10 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, clienteId, onAnex
   const [searchParams, setSearchParams] = useSearchParams();
   const [formAberto, setFormAberto] = useState(false);
   const [editando, setEditando] = useState<LancDocumento | null>(null);
-  const [cancelando, setCancelando] = useState<LancDocumento | null>(null);
+  /* DOC-NOTA-XML-PDF-01 — cancelar a LINHA da nota cancela os arquivos dela (o PDF e o XML), com o mesmo motivo */
+  const [cancelando, setCancelando] = useState<LinhaDeDocumento | null>(null);
+  /* a nota sem PDF abre os itens (a leitura do XML), nunca o XML cru */
+  const [itensDe, setItensDe] = useState<LancDocumento | null>(null);
   const [motivo, setMotivo] = useState('');
 
   const faixa = faixaDoConfronto(api.confronto);
@@ -96,7 +104,10 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, clienteId, onAnex
      ocultas de "Saldos por conta". Estado local: não persiste e volta a ocultar quando o modal fecha. */
   const cancelados = api.documentos.filter(d => d.cancelado);
   const [mostrarCancelados, setMostrarCancelados] = useState(false);
-  const linhas = mostrarCancelados ? [...ativos, ...cancelados] : ativos;
+  /* DOC-NOTA-XML-PDF-01 — UMA NOTA = UMA LINHA: o PDF e o XML da mesma nota (a regra do banco, `linhasDosDocumentos`) numa linha so',
+     com os selos dos arquivos que ela tem. O cancelado nunca se junta. */
+  const linhasAtivas = linhasDosDocumentos(ativos);
+  const linhas = mostrarCancelados ? [...linhasAtivas, ...linhasDosDocumentos(cancelados)] : linhasAtivas;
 
   /**
    * Abre a OC na aba Documentos — DOC-UMA-FONTE-01.
@@ -124,6 +135,20 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, clienteId, onAnex
     if (!url) { toast.error('Não foi possível abrir o arquivo.'); return; }
     window.open(url, '_blank', 'noopener');
   };
+  /** O PDF; sem PDF, os itens da nota (lidos do XML) — o XML e' dado de importacao, nunca aberto cru. */
+  const abrirLinha = (l: LinhaDeDocumento) => {
+    const o = oQueAbrir(l);
+    if (!o) return;
+    if (o.tipo === 'itens') setItensDe(o.doc);
+    else void abrirArquivo(o.doc);
+  };
+  const bytesDoXml = async (d: LancDocumento): Promise<ArrayBuffer | null> => {
+    if (!d.url) return null;
+    const url = await api.urlAssinada(d.url, d.origem);
+    if (!url) return null;
+    const r = await fetch(url);
+    return r.ok ? r.arrayBuffer() : null;
+  };
 
   const confirmarCancelamento = async () => {
     if (!cancelando) return;
@@ -131,8 +156,8 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, clienteId, onAnex
        um ano, e "cancelado sem motivo" é um registro que não explica nada. */
     if (!motivo.trim()) { toast.error('Informe o motivo do cancelamento.'); return; }
     try {
-      await api.cancelar(cancelando.id, motivo.trim());
-      toast.success('Documento cancelado.');
+      for (const m of cancelando.membros) await api.cancelar(m.id, motivo.trim());
+      toast.success(cancelando.membros.length > 1 ? 'Nota cancelada (PDF e XML).' : 'Documento cancelado.');
       setCancelando(null); setMotivo('');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Falha ao cancelar o documento.');
@@ -168,8 +193,8 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, clienteId, onAnex
 
       <div className="flex items-center justify-between">
         <span className="text-[10px] text-muted-foreground">
-          {ativos.length === 0 ? 'Nenhum documento anexado'
-            : `${ativos.length} ${ativos.length === 1 ? 'documento' : 'documentos'}`}
+          {linhasAtivas.length === 0 ? 'Nenhum documento anexado'
+            : `${linhasAtivas.length} ${linhasAtivas.length === 1 ? 'documento' : 'documentos'}`}
           {/* O destino do PRÓXIMO documento, dito antes do clique — nunca depois. */}
           {api.operacaoId && ' · o próximo documento nasce na operação comercial'}
         </span>
@@ -190,35 +215,51 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, clienteId, onAnex
       {/* ── A TABELA DOS DOCUMENTOS ───────────────────────────────────────────── */}
       {/* ⚠ TABELA COMPACTA DE LINHA ÚNICA — FIN-DOCUMENTOS-LAYOUT-01 (padrão de tabela da casa: cabeçalho navy 9,5px, linha
           10px). Era um cartão de duas linhas por documento (12px + 10px), com emitente e data dividindo a segunda; agora
-          cada informação tem a sua coluna e a linha tem 22px, sempre (o emitente corta, não quebra). Cabeçalho e linhas são
-          subgrades da grade da tabela (`GRADE_DOCUMENTOS`). */}
+          cada informação tem a sua coluna e a linha tem altura fixa (o emitente corta, não quebra). Desde DOC-NOTA-XML-PDF-01, a
+          régua da casa (19px). */}
       {api.documentos.length > 0 && (
-        <div className={`${GRADE_DOCUMENTOS} overflow-hidden rounded-md border`} data-testid="tabela-documentos">
-          <div className={`${LINHA_DOCUMENTOS} h-[18px] bg-primary text-[9.5px] font-medium leading-none text-primary-foreground/85`} data-testid="cabecalho-documentos">
-            <span className="pl-[10px]">Documento</span>
-            <span>Emitente</span>
-            <span>Emissão</span>
-            <span className="text-right">Valor</span>
-            <span className="text-center">Situação</span>
-            <span />
-          </div>
-          {linhas.map(d => {
+        <div className={cn(QUADRO_REGUA, 'h-auto')} data-testid="tabela-documentos">
+          {/* DOC-NOTA-XML-PDF-01 — a RÉGUA DA CASA (`regua-tabela`): tabela fixa, colgroup em px; a coluna Documento tem a largura do
+              maior documento da lista (identidade + selos) e nunca corta; o emitente corta com "…" e o texto inteiro no `title` */}
+          <table className="w-full table-fixed border-collapse">
+            <colgroup>
+              <col style={{ width: larguraDaColunaDocumento(linhas) }} /><col />
+              <col style={{ width: 66 }} /><col style={{ width: 88 }} /><col style={{ width: 62 }} /><col style={{ width: 66 }} />
+            </colgroup>
+            <thead className="bg-primary">
+              <tr data-testid="cabecalho-documentos">
+                <th className={cn(TH_REGUA, 'pl-[10px] text-left')}>Documento</th>
+                <th className={cn(TH_REGUA, 'text-left')}>Emitente</th>
+                <th className={cn(TH_REGUA, 'text-left')}>Emissão</th>
+                <th className={cn(TH_REGUA, 'text-right')}>Valor</th>
+                <th className={cn(TH_REGUA, 'text-center')}>Situação</th>
+                <th className={TH_REGUA} />
+              </tr>
+            </thead>
+            <tbody>
+          {linhas.map(l => {
+            const d = l.principal;
             const nome = identidade(d);
             /* Na linha cancelada a coluna Emitente diz POR QUE saiu (o motivo); sem motivo, o emitente. */
             const emitente = d.cancelado && d.canceladoMotivo ? `motivo: ${d.canceladoMotivo}` : (d.emitenteNome || '');
-            const semArquivo = !d.url && !d.cancelado;
+            const semArquivo = !l.membros.some((m) => m.url) && !d.cancelado;
+            const abrir = oQueAbrir(l);
             return (
-            <div key={d.id} data-testid="linha-documento" data-cancelado={d.cancelado ? 'sim' : undefined}
-              className={`${LINHA_DOCUMENTOS} h-[22px] border-t text-[10px] leading-none ${d.cancelado ? 'bg-muted/40 text-muted-foreground/70' : ''}`}>
-              <div className="flex items-center gap-1.5 whitespace-nowrap pl-[10px]">
+            <tr key={d.id} data-testid="linha-documento" data-cancelado={d.cancelado ? 'sim' : undefined}
+              className={`h-[19px] border-t text-[10px] leading-none ${d.cancelado ? 'bg-muted/40 text-muted-foreground/70' : ''}`}>
+              <td className={cn(TD_REGUA, 'pl-[10px]')}>
+              <div className="flex items-center gap-1.5 whitespace-nowrap">
                 <span className={d.cancelado ? 'line-through' : 'font-semibold text-foreground'} data-testid="doc-nome">{nome}</span>
+                {/* DOC-NOTA-XML-PDF-01 — os arquivos que a nota tem */}
+                {l.pdf && <span className="shrink-0 rounded bg-rose-50 px-1 text-[9.5px] font-medium leading-[13px] text-rose-700" data-testid="selo-pdf" title="A nota tem o PDF">PDF</span>}
+                {l.xml && <span className="shrink-0 rounded bg-amber-50 px-1 text-[9.5px] font-medium leading-[13px] text-amber-800" data-testid="selo-xml" title="A nota tem o XML (dado de importação: abre como os itens da nota)">XML</span>}
                 {/* ⚠ A PÍLULA DIZ DE QUEM É O PAPEL, e o clique leva até ele. Sem ela, a
                     NF da operação pareceria um documento do lançamento — e o operador
                     anexaria a segunda cópia da mesma nota, que é justamente o que esta
                     frente existe para impedir. */}
                 {/* PR 2b — a NF da compra, ligada às parcelas: o selo diz a quantas. Irmão do "da operação". */}
                 {(d.ligadoAQtd ?? 1) > 1 && (
-                  <span className="shrink-0 rounded-full bg-sky-100 px-1.5 py-px text-[9.5px] text-sky-800" data-testid="selo-parcelas"
+                  <span className="shrink-0 rounded-full bg-sky-100 px-1.5 text-[9.5px] leading-[13px] text-sky-800" data-testid="selo-parcelas"
                     title="Esta nota está em várias parcelas da mesma compra">
                     {d.ligadoAQtd} parcelas
                   </span>
@@ -227,11 +268,13 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, clienteId, onAnex
                   <button type="button"
                     title="Este documento é da operação comercial — abrir a OC na aba Documentos"
                     onClick={() => abrirOperacao(d)}
-                    className="shrink-0 rounded-full bg-blue-100 px-1.5 py-px text-[9.5px] text-blue-700 underline-offset-2 hover:underline dark:bg-blue-900/40 dark:text-blue-300">
+                    className="shrink-0 rounded-full bg-blue-100 px-1.5 text-[9.5px] leading-[13px] text-blue-700 underline-offset-2 hover:underline dark:bg-blue-900/40 dark:text-blue-300">
                     da operação
                   </button>
                 )}
               </div>
+              </td>
+              <td className={TD_REGUA}>
               <div className="flex min-w-0 items-center gap-1.5 text-muted-foreground" data-testid="cel-emitente">
                 {/* ⚠ SEM ARQUIVO É AVISO, NÃO ERRO: registrar primeiro e anexar depois é
                     um caminho legítimo, e a linha diz o que falta em vez de esconder.
@@ -239,24 +282,26 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, clienteId, onAnex
                 {semArquivo && <span className="shrink-0 whitespace-nowrap text-amber-700">sem arquivo</span>}
                 <span className={`min-w-0 truncate ${d.cancelado ? 'text-muted-foreground/70' : ''}`} title={emitente || undefined} data-testid="doc-emitente-texto">{emitente || (semArquivo ? '' : '—')}</span>
               </div>
-              <span className={`whitespace-nowrap ${d.cancelado ? '' : 'text-muted-foreground'}`} data-testid="doc-emissao">{dataBr(d.dataEmissao) ?? '—'}</span>
-              <span className="whitespace-nowrap text-right tabular-nums" data-testid="doc-valor">
+              </td>
+              <td className={cn(TD_REGUA, SECUNDARIA_REGUA, 'whitespace-nowrap tabular-nums', d.cancelado ? '' : 'text-muted-foreground')} data-testid="doc-emissao">{dataBr(d.dataEmissao) ?? '—'}</td>
+              <td className={TD_REGUA_NUM} data-testid="doc-valor">
                 {d.valorDocumento == null ? '—' : formatMoeda(d.valorDocumento)}
-              </span>
-              <span className="text-center">
+              </td>
+              <td className={cn(TD_REGUA, 'text-center')}>
                 {d.cancelado ? (
-                  <span className="rounded-full bg-muted px-1.5 py-px text-[9.5px] text-muted-foreground"
+                  <span className="rounded-full bg-muted px-1.5 text-[9.5px] leading-[13px] text-muted-foreground"
                     title={d.canceladoMotivo ?? undefined}>Cancelado</span>
                 ) : (
-                  <span className="rounded-full bg-emerald-100 px-1.5 py-px text-[9.5px] text-emerald-700">Ativo</span>
+                  <span className="rounded-full bg-emerald-100 px-1.5 text-[9.5px] leading-[13px] text-emerald-700">Ativo</span>
                 )}
-              </span>
+              </td>
               {/* Documento cancelado não tem ações: é história, não trabalho pendente. */}
-              {d.cancelado ? <span /> : (
-                <div className="flex items-center justify-end gap-2 pr-[10px] text-muted-foreground">
-                  <button type="button" title={d.url ? 'Abrir arquivo' : 'Sem arquivo anexado'}
-                    aria-label="Abrir arquivo" disabled={!d.url}
-                    onClick={() => abrirArquivo(d)}
+              <td className={cn(TD_REGUA, 'pr-[10px]')}>
+              {d.cancelado ? null : (
+                <div className="flex items-center justify-end gap-2 text-muted-foreground">
+                  <button type="button" title={!abrir ? 'Sem arquivo anexado' : abrir.tipo === 'itens' ? 'Ver os itens da nota (lidos do XML)' : 'Abrir arquivo'}
+                    aria-label="Abrir arquivo" disabled={!abrir} data-testid="doc-abrir"
+                    onClick={() => abrirLinha(l)}
                     className="hover:text-foreground disabled:opacity-30">
                     <Paperclip className="h-3 w-3" />
                   </button>
@@ -267,21 +312,24 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, clienteId, onAnex
                   </button>
                   {/* ⚠ NF DA COMPRA NÃO SE CANCELA PELO CARTÃO (decisão do Gabriel, PR 2b): ela está em N
                       parcelas, e o caminho é o lápis, que avisa e pede o motivo. */}
-                  {(d.ligadoAQtd ?? 1) <= 1 && (
+                  {l.membros.every((m) => (m.ligadoAQtd ?? 1) <= 1) && (
                     <button type="button" title="Cancelar documento" aria-label="Cancelar documento"
-                      disabled={somenteLeitura} onClick={() => { setCancelando(d); setMotivo(''); }}
+                      disabled={somenteLeitura} onClick={() => { setCancelando(l); setMotivo(''); }}
                       className="hover:text-destructive disabled:opacity-30">
                       <Ban className="h-3 w-3" />
                     </button>
                   )}
                 </div>
               )}
-            </div>
+              </td>
+            </tr>
             );
           })}
+            </tbody>
+          </table>
           {/* O rodapé dos cancelados — só exibição, estado local, não persiste. */}
           {cancelados.length > 0 && (
-            <div className="col-span-full flex h-5 items-center border-t px-[10px] text-[10px] leading-none text-muted-foreground" data-testid="rodape-cancelados">
+            <div className="flex h-5 items-center border-t px-[10px] text-[10px] leading-none text-muted-foreground" data-testid="rodape-cancelados">
               {cancelados.length} {cancelados.length === 1 ? 'documento cancelado' : 'documentos cancelados'}
               {!mostrarCancelados && (cancelados.length === 1 ? ' oculto' : ' ocultos')}
               {' · '}
@@ -294,6 +342,11 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, clienteId, onAnex
         </div>
       )}
 
+      {itensDe && (
+        <ItensDaNotaDialog clienteId={clienteId ?? ''} chave={(itensDe.chaveAcesso ?? '').replace(/\D/g, '')} onClose={() => setItensDe(null)}
+          lerArquivo={() => bytesDoXml(itensDe)} />
+      )}
+
       {formAberto && (
         <FormDocumento api={api} documento={editando} clienteId={clienteId} sugestao={sugestao} semBoleto={semBoleto}
           onFechar={() => { setFormAberto(false); setEditando(null); }} />
@@ -304,7 +357,7 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, clienteId, onAnex
           <DialogContent className="max-w-sm">
             <DialogTitle className="text-[14px]">Cancelar documento</DialogTitle>
             <DialogDescription className="text-[11px]">
-              {identidade(cancelando)} — o documento sai do confronto e fica registrado como cancelado.
+              {identidade(cancelando.principal)}{cancelando.membros.length > 1 ? ' (o PDF e o XML)' : ''} — o documento sai do confronto e fica registrado como cancelado.
             </DialogDescription>
             <Textarea rows={3} value={motivo} onChange={e => setMotivo(e.target.value)}
               placeholder="Motivo do cancelamento" className="text-[12px]" />
