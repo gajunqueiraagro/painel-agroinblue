@@ -188,7 +188,8 @@ describe('N2 — a prova: cadastrar, escolher o subcentro, criar 4 parcelas com 
     expect(payload).toMatchObject({
       cliente_id: 'cli', fazenda_id: 'faz-1', valor_total: 1966.56, total_parcelas: 4, data_primeira_parcela: '2026-10-20', intervalo_meses: 1,
       data_competencia: '2026-09-15', tipo_operacao: '2-Saídas', plano_conta_id: 'pl-nut', favorecido_id: 'forn-novo', tipo_financiamento: 'pecuaria',
-      safra_id: null, conta_bancaria_id: null,
+      /* NOTA-PREVIA-ATIVIDADE-01 — pecuaria leva a safra da pecuaria pela data (a mesma regra do Novo lancamento) */
+      safra_id: 's-pec', conta_bancaria_id: null,
     });
     expect(payload.parcelas).toBeUndefined();
     expect(g.parcelas).toHaveBeenCalledWith('fin-1');
@@ -207,8 +208,10 @@ describe('N2 — a prova: cadastrar, escolher o subcentro, criar 4 parcelas com 
   it('FIN-NOTA-PDF-01b — subcentro de lavoura: Safra (sugerida pela data) e Cultura (sem resposta até escolher); safra e cultura gravadas', async () => {
     const { g, comoGravadores } = gravadoresFalsos();
     abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
-    expect(screen.getByTestId('nota-safra').textContent).toContain('só lavoura');
+    /* NOTA-PREVIA-ATIVIDADE-01 — sem subcentro: a Atividade e a Safra pela data, as duas em "—" (nada de "só lavoura") */
+    expect(screen.getByTestId('nota-atividade-valor').textContent).toBe('—');
     await escolherSubcentro('Insumos Lavoura');
+    expect(screen.getByTestId('nota-safra').textContent).toContain('Safra * · Lavoura');
     await waitFor(() => expect(screen.getByTestId('nota-safra').textContent).toContain('Safra 26/27 Soja'));
     expect(screen.getByTestId('nota-falta').textContent).toBe('⚠ Falta: cultura');
     expect(screen.getByTestId('nota-criar')).toBeDisabled();
@@ -218,6 +221,21 @@ describe('N2 — a prova: cadastrar, escolher o subcentro, criar 4 parcelas com 
     fireEvent.click(screen.getByTestId('nota-criar'));
     await waitFor(() => expect(g.gravar).toHaveBeenCalled());
     expect(g.gravar.mock.calls[0][0]).toMatchObject({ plano_conta_id: 'pl-ins', safra_id: 's-soja', cultura: 'soja', total_parcelas: 4 });
+  });
+  /* NOTA-PREVIA-ATIVIDADE-01 (o caso da Elos, sintetico): o subcentro de PECUARIA nao vira lavoura na tela — a atividade aparece (so'
+     leitura) e a safra que se grava e' a da pecuaria pela data, a mesma do Novo lancamento */
+  it('subcentro de pecuária: "Atividade · Pecuária" e a safra 26/27-Pec pela data — e é ela que se grava; sem os campos de lavoura', async () => {
+    const { g, comoGravadores } = gravadoresFalsos();
+    abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
+    await escolherSubcentro('Nutrição Engorda');
+    await waitFor(() => expect(screen.getByTestId('nota-atividade-valor').textContent).toBe('Pecuária'));
+    expect(screen.getByTestId('nota-safra-pela-data-valor').textContent).toBe('26/27-Pec');
+    expect(screen.queryByTestId('nota-safra')).toBeNull();
+    expect(screen.queryByTestId('nota-cultura')).toBeNull();
+    await waitFor(() => expect(screen.getByTestId('nota-criar')).toBeEnabled());
+    fireEvent.click(screen.getByTestId('nota-criar'));
+    await waitFor(() => expect(g.gravar).toHaveBeenCalled());
+    expect(g.gravar.mock.calls[0][0]).toMatchObject({ plano_conta_id: 'pl-nut', safra_id: 's-pec', cultura: null });
   });
   it('"Todas (rateia)" é uma resposta: a cultura vai nula (rateia), sem o "Falta:"', async () => {
     const { g, comoGravadores } = gravadoresFalsos();
