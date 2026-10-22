@@ -12,8 +12,7 @@ import {
 } from '@/lib/financeiro/statusFinanceiro';
 import { isTransferenciaTipo } from '@/lib/financeiro/v2Transferencia';
 import { contaEmFoco, formatarValorLinha } from '@/lib/financeiro/sinalPorConta';
-import { totaisDaListaV2 } from '@/lib/financeiro/totaisDaListaV2';
-import { SecaoSemCaixa, totalSemCaixa } from '@/components/financeiro-v2/SecaoSemCaixa';
+import { SecaoSemCaixa } from '@/components/financeiro-v2/SecaoSemCaixa';
 import { CelulaSafra, CelulaVinculos } from '@/components/financeiro-v2/ColunasDaListaV2';
 import { Segmentado } from '@/components/ui/segmentado';
 import {
@@ -92,6 +91,14 @@ import {
   type EstadoLista, type FiltrosEditaveis,
 } from '@/lib/financeiro/estadoFiltrosLista';
 import { hojeLocal } from '@/lib/datas/hojeLocal';
+import { useListaPaginaV2 } from '@/hooks/useListaPaginaV2';
+import {
+  filtrosDaPaginaV2, ordemDaPaginaV2, intervaloDaPaginaV2, paginasDaListaV2, reservasDaPaginaV2,
+  lerPorPaginaV2, guardarPorPaginaV2, POR_PAGINA_V2, TOTAIS_VAZIOS, porPaginaV2DoTexto, textoDoPorPaginaV2, type PorPaginaV2, type PorPaginaV2Texto,
+} from '@/lib/financeiro/listaPaginaV2';
+import { RODAPE_REGUA, TextoReservado, reservaDeNumero } from '@/components/ui/regua-tabela';
+/* a reserva dos totais do topo: o maior valor que a faixa mostra (dezenas de milhões) */
+const RESERVA_TOTAL = 'R$ 00.000.000,00';
 
 /**
  * A memória da busca dos comboboxes desta tela.
@@ -193,7 +200,8 @@ const MESES_LIST = [
 
 function fmtDate(d: string | null) {
   if (!d) return '-';
-  try { return format(parseISO(d), 'dd/MM/yy'); } catch { return d; }
+  /* FIN-V2-DESEMPENHO-01b (FIN-V2-SEM-CORTE-01): a data da casa é dd/mm/aaaa, inclusive nesta lista */
+  try { return format(parseISO(d), 'dd/MM/yyyy'); } catch { return d; }
 }
 // Display compacto: só o número (tipo vai no tooltip)
 function formatNF(l: LancamentoV2): string {
@@ -252,7 +260,6 @@ function getInitialPageSize() {
 export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, onIntensiveToggle, drillFilters, onAbrirFinanciamento, lancamentoIdAlvo, onLancamentoAlvoConsumido, onCloseDialog, ocEditFavorecido, onAbrirOperacaoOCFinanceiro }: Props) {
   const { fazendas, fazendaAtual } = useFazenda();
   const [pageSize] = useState(getInitialPageSize);
-  const [currentPage, setCurrentPage] = useState(0);
   const hook = useFinanceiroV2(pageSize);
   /* LANC-STATUS-CONCILIADO-01 — o mapa dos vínculos ativos, uma consulta por
      cliente. A lista carrega tudo em lote e pagina no cliente; um mapa completo
@@ -263,7 +270,16 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
      da parcela) continua: so' o controle que navega some. */
   const podeAbrirOC = usePodeAbrir(TELA_DA_OPERACAO);
   const podeAbrirFinanciamento = usePodeAbrir('financiamentos');
-  const { conciliados, recarregar: recarregarVinculos } = useLancamentosConciliados(clienteAtual?.id ?? null);
+  const { conciliados, carregando: carregandoVinculos, recarregar: recarregarVinculos } = useLancamentosConciliados(clienteAtual?.id ?? null);
+  /* FIN-V2-DESEMPENHO-01b — o mapa dos vínculos vem em levas (segundos no NJ); até a PRIMEIRA carga terminar, a pílula
+     "Conciliado" sai da marca que a própria página traz (`conciliado` da RPC, o mesmo vínculo vivo). Depois, o mapa manda
+     (ele é o que o desfazer relê). */
+  const [vinculosProntos, setVinculosProntos] = useState(false);
+  const viuCarregarVinculos = useRef(false);
+  useEffect(() => {
+    if (carregandoVinculos) viuCarregarVinculos.current = true;
+    else if (viuCarregarVinculos.current) setVinculosProntos(true);
+  }, [carregandoVinculos]);
   /* VINCULAR-FIX-01 — o icone de OC da linha sai da PARTE VIVA, nao da origem: um lancamento vinculado
      (importado ou manual) tambem e' titulo da OC, e o desvinculado deixa de ser. Mesmo molde do mapa acima. */
   const lancamentosComOC = useLancamentosComOC(clienteAtual?.id ?? null);
@@ -305,23 +321,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
    */
   /* FORN-NOME-EXIBIDO-01 — os fornecedores do RECORTE e o rótulo de cada um (`rotulosDosFornecedores`, o dono): o filtro e a grade
      leem o MESMO rótulo, então "…0007-69" / "sem CNPJ" e "inativo" aparecem iguais nos dois. */
-  const usosNoRecorte = useMemo(() => {
-    const noRecorte = new Map<string, number>();
-    hook.lancamentos.forEach((l) => {
-      if (l.favorecido_id) noRecorte.set(l.favorecido_id, (noRecorte.get(l.favorecido_id) ?? 0) + 1);
-    });
-    return noRecorte;
-  }, [hook.lancamentos]);
-  const rotulosDoRecorte = useMemo(
-    () => rotulosDosFornecedores(hook.fornecedores.filter((f) => usosNoRecorte.has(f.id))),
-    [hook.fornecedores, usosNoRecorte],
-  );
+  /* FIN-V2-DESEMPENHO-01b — com a página do servidor não há mais "todas as linhas" na tela: o filtro e a grade leem o CADASTRO do
+     cliente inteiro (os parecidos e o "inativo" saem dele), e o uso (`· N`) deixou de existir. */
+  const rotulosDoRecorte = useMemo(() => rotulosDosFornecedores(hook.fornecedores), [hook.fornecedores]);
   /* FORN-BUSCA-UNICA-01 — o filtro é o seletor padrão (`FavorecidoSelect`, a busca única): os fornecedores do recorte, inativos
      inclusive (têm lançamento), cada um com o uso = os lançamentos dele no recorte. */
-  const fornecedoresDoFiltro = useMemo(
-    () => hook.fornecedores.filter((f) => usosNoRecorte.has(f.id)).map((f) => ({ ...f, uso: usosNoRecorte.get(f.id) ?? 0 })),
-    [hook.fornecedores, usosNoRecorte],
-  );
+  const fornecedoresDoFiltro = hook.fornecedores;
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const currentYear = new Date().getFullYear();
@@ -891,16 +896,14 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     /* ⚠ NÃO CONSULTAR É UMA DECISÃO, e ela precisa LIMPAR a lista: deixar as linhas do filtro
        anterior na tela enquanto a frase pede um filtro novo seria a mesma mentira que o token
        monotônico acabou de matar — a tela dizendo uma coisa e mostrando outra. */
-    if (!podeConsultar) { hook.limparLancamentos(); return; }
-    hook.loadLancamentos(filtros, 0);
+    /* FIN-V2-DESEMPENHO-01b — a lista inteira NÃO é mais lida: a grade é a página do servidor (`useListaPaginaV2`, abaixo). */
+    hook.limparLancamentos();
   }, [filtros, podeConsultar]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    setCurrentPage(0);
     setSelectedIds(new Set());
   }, [filtros, produtoFiltro, documentoFiltro, fornecedorFiltro, atividadeFiltro]);
 
-  const handlePageChange = (p: number) => setCurrentPage(p);
 
   const handleSave = async (form: any, id?: string) => {
     // Validação obrigatória antes de salvar
@@ -947,7 +950,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
        aparecer na posição certa da ordenação, e errar por omissão seria a linha sumir. */
     if (!id) {
       const scrollTop = scrollContainerRef.current?.scrollTop ?? 0;
-      await hook.loadLancamentos(filtros, hook.page);
+      await listaV2.recarregar();
       requestAnimationFrame(() => {
         if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = scrollTop;
       });
@@ -960,7 +963,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     const ok = await hook.excluirLancamento(id, motivo);
     if (ok) {
       const scrollTop = scrollContainerRef.current?.scrollTop ?? 0;
-      await hook.loadLancamentos(filtros, hook.page);
+      await listaV2.recarregar();
       requestAnimationFrame(() => {
         if (scrollContainerRef.current) scrollContainerRef.current.scrollTop = scrollTop;
       });
@@ -1085,10 +1088,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     [hook.safras],
   );
 
-  const fornecedoresMap = useMemo(
-    () => new Map(hook.fornecedores.map(f => [f.id, f.nome])),
-    [hook.fornecedores],
-  );
+
 
   const fazendaNameMap = useMemo(
     () => new Map(fazOperacionais.map(f => [f.id, f.nome])),
@@ -1113,8 +1113,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     return map;
   }, [hook.classificacoes]);
 
-  const filteredLancamentos = useMemo(() => {
-    let items = hook.lancamentos;
+  /* FIN-V2-DESEMPENHO-01b — as conferências de memória viraram FUNÇÃO: a grade é do servidor, e quem ainda lê o recorte inteiro
+     (a seção "sem caixa" do Mostrar) passa por elas, com a mesma regra de antes. */
+  const filtrarEmMemoria = useCallback((base: LancamentoV2[]) => {
+    let items = base;
 
     // Directional conta filtering:
     const hasContaOrigem = contaOrigem && contaOrigem !== '__all__';
@@ -1196,23 +1198,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     }
 
     return items;
-  }, [hook.lancamentos, contaOrigem, contaDestino, produtoFiltro, documentoFiltro, documentosPorLancamento, fornecedorFiltro, tipoOperacao, atividadeFiltro, safraFiltro, culturaFiltro, grupoFiltro, centroToGrupo, statusSelecionados, conciliados]);
+  }, [contaOrigem, contaDestino, produtoFiltro, documentoFiltro, documentosPorLancamento, fornecedorFiltro, tipoOperacao, atividadeFiltro, safraFiltro, culturaFiltro, grupoFiltro, centroToGrupo, statusSelecionados, conciliados]);
 
-  const compareDefaultOrder = useCallback((a: LancamentoV2, b: LancamentoV2) => {
-    // PR-FIN-GRADE-DATAS-03 — a ordenação padrão acompanha a dimensão selecionada (Data por). Chave
-    //   primária = data da dimensão (financeira = COALESCE(pagamento, vencimento)); linhas sem essa data
-    //   vão para o fim ('9999-12-31'). Desempate estável e temporal: data_competencia → id (sem fornecedor/
-    //   produto/valor, para garantir estabilidade determinística do contrato aprovado).
-    const dataA = dataDaDimensao(a, dataPor) || '9999-12-31';
-    const dataB = dataDaDimensao(b, dataPor) || '9999-12-31';
-    const dataCmp = dataA.localeCompare(dataB);
-    if (dataCmp !== 0) return dataCmp;
-
-    const compCmp = (a.data_competencia || '').localeCompare(b.data_competencia || '');
-    if (compCmp !== 0) return compCmp;
-
-    return a.id.localeCompare(b.id);
-  }, [dataPor]);
 
   // Sorted lancamentos
   /* FIN-V2-SEM-CAIXA-01 — a lista padrao e' SO' DINHEIRO. O sem caixa (entrega da conta corrente, barter, consumo) entrou no DRE
@@ -1232,80 +1219,38 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const alternarContasAmpliado = useCallback(() => {
     setContasAmpliadoEstado(v => { gravarPreferencia(CHAVE_PREF.contas, null, v ? 'nao' : 'sim'); return !v; });
   }, []);
-  const semCaixaLocal = useMemo(
-    () => filteredLancamentos.filter(l => l.sem_movimentacao_caixa === true),
-    [filteredLancamentos],
-  );
-  const sortedLancamentos = useMemo(() => {
-    const items = linhasDaGradePorModo(filteredLancamentos, modoSemCaixa);
-    items.sort((a, b) => {
-      if (sortField === 'default') {
-        return compareDefaultOrder(a, b);
-      }
 
-      const dir = sortDir === 'asc' ? 1 : -1;
-      let primary = 0;
-
-      switch (sortField) {
-        case 'data':
-          primary = dir * a.data_competencia.localeCompare(b.data_competencia);
-          break;
-        case 'venc':
-          // PR-FIN-GRADE-DATAS-03 — coluna VENC. ordena SÓ por data_vencimento (nunca fundido com pagamento).
-          primary = dir * ((a.data_vencimento || '').localeCompare(b.data_vencimento || ''));
-          break;
-        case 'pgto':
-          // PR-FIN-GRADE-DATAS-03 — coluna PGTO. ordena SÓ por data_pagamento (nunca fundido com vencimento).
-          primary = dir * ((a.data_pagamento || '').localeCompare(b.data_pagamento || ''));
-          break;
-        case 'valor':
-          primary = dir * ((a.valor * a.sinal) - (b.valor * b.sinal));
-          break;
-        case 'produto':
-          primary = dir * (a.descricao || '').localeCompare(b.descricao || '', 'pt-BR');
-          break;
-        case 'fornecedor': {
-          const nA = fornecedoresMap.get(a.favorecido_id || '') || '';
-          const nB = fornecedoresMap.get(b.favorecido_id || '') || '';
-          primary = dir * nA.localeCompare(nB, 'pt-BR');
-          break;
-        }
-        case 'safra': {
-          /* ⚠ ORDENA PELO CÓDIGO EXIBIDO, não pelo id: "25/26-AMD" ordena como texto e
-             agrupa por temporada, que é como o operador lê a coluna. Ordenar por uuid
-             agruparia por nada.
-             ⚠ E O "SEM SAFRA" VAI PARA O FIM nos dois sentidos, como o "(Sem X)" do
-             drill-down: ele é o resto, não o primeiro nem o último alfabético. */
-          const cA = a.safra_id ? (safraCodigoMap.get(a.safra_id) || '') : '';
-          const cB = b.safra_id ? (safraCodigoMap.get(b.safra_id) || '') : '';
-          if (!cA && !cB) primary = 0;
-          else if (!cA) primary = 1;
-          else if (!cB) primary = -1;
-          else primary = dir * cA.localeCompare(cB, 'pt-BR');
-          break;
-        }
-        case 'centro':
-          /* FIN-V2-COLUNAS-02: ordena pelo NIVEL que a coluna mostra */
-          primary = dir * textoDaClassificacao(a, nivelClassif).localeCompare(textoDaClassificacao(b, nivelClassif), 'pt-BR');
-          break;
-        case 'status':
-          primary = dir * (a.status_transacao || '').localeCompare(b.status_transacao || '', 'pt-BR');
-          break;
-        case 'doc':
-          // Ordena pelo número do documento exibido na coluna DOC (mesmo valor de formatNF).
-          primary = dir * (a.numero_documento || '').localeCompare(b.numero_documento || '', 'pt-BR');
-          break;
-        default:
-          primary = 0;
-      }
-
-      if (primary !== 0) return primary;
-      return compareDefaultOrder(a, b);
-    });
-    return items;
-  }, [filteredLancamentos, sortField, sortDir, compareDefaultOrder, fornecedoresMap, safraCodigoMap, modoSemCaixa, nivelClassif]);
-
-  const totalLancamentosFiltrados = sortedLancamentos.length;
+  /* ── FIN-V2-DESEMPENHO-01b — A GRADE É A PÁGINA DO SERVIDOR (`fn_fin_v2_lista_pagina`, a RPC do 01a) ──────────────────────
+     Filtros, busca, ordem, contagem e os totais do topo saem do banco, sobre o recorte INTEIRO; a tela pede só a página (50 | 100
+     | 200, lembrado no navegador). Trocar filtro, ordem ou "por página" volta à primeira. */
+  const [porPagina, setPorPaginaEstado] = useState<PorPaginaV2>(() => lerPorPaginaV2(null));
+  const [paginaV2, setPaginaV2] = useState(0);
+  const escolherPorPagina = useCallback((v: PorPaginaV2) => { setPorPaginaEstado(v); guardarPorPaginaV2(null, v); }, []);
+  const filtrosV2 = useMemo(() => filtrosDaPaginaV2({
+    fazendaId, anos: anosSelecionados, meses: mesesSelecionados, dimensao: dataPor, tipoOperacao, status: statusSelecionados,
+    contaOrigem, contaDestino, macro: macroFiltro, grupo: grupoFiltro, centro: centroFiltro, subcentro: subcentroFiltro,
+    safra: safraFiltro, cultura: culturaFiltro, atividade: atividadeFiltro, produto: produtoFiltro, documento: documentoFiltro,
+    fornecedor: fornecedorFiltro, modoSemCaixa,
+  }), [fazendaId, anosSelecionados, mesesSelecionados, dataPor, tipoOperacao, statusSelecionados, contaOrigem, contaDestino, macroFiltro,
+       grupoFiltro, centroFiltro, subcentroFiltro, safraFiltro, culturaFiltro, atividadeFiltro, produtoFiltro, documentoFiltro, fornecedorFiltro, modoSemCaixa]);
+  const ordemV2 = useMemo(() => ordemDaPaginaV2(sortField, sortDir, nivelClassif), [sortField, sortDir, nivelClassif]);
+  const chaveDoRecorte = JSON.stringify([filtrosV2, ordemV2, porPagina]);
+  useEffect(() => { setPaginaV2(0); }, [chaveDoRecorte]);
+  const listaV2 = useListaPaginaV2(clienteAtual?.id, { filtros: filtrosV2, ordem: ordemV2, pagina: paginaV2, porPagina },
+    !FEATURE_FLAGS.LISTA_PAGINADA_V2 && podeConsultar && mode === 'list');
+  const paginaDaLista = listaV2.pagina;
+  const fornecedoresMap = useMemo(
+    /* FIN-V2-DESEMPENHO-01b: os nomes da página (`listaV2.nomes`, uma ida por id) valem até o cadastro inteiro chegar */
+    () => new Map([...listaV2.nomes, ...hook.fornecedores.map((f): [string, string] => [f.id, f.nome])]),
+    [hook.fornecedores, listaV2.nomes],
+  );  const totalLancamentosFiltrados = paginaDaLista?.total ?? 0;
+  const totalDePaginas = paginasDaListaV2(totalLancamentosFiltrados, porPagina);
+  /* a página passou do fim (o recorte encolheu): volta à última real */
+  useEffect(() => { if (paginaV2 > totalDePaginas - 1) setPaginaV2(Math.max(0, totalDePaginas - 1)); }, [paginaV2, totalDePaginas]);
+  /* as reservas do rodapé: o maior total já lido deste cliente (nada se desloca ao trocar de página, de filtro ou de "por página") */
+  const maiorTotalRef = useRef(0);
+  if (totalLancamentosFiltrados > maiorTotalRef.current) maiorTotalRef.current = totalLancamentosFiltrados;
+  const reservasDoRodape = reservasDaPaginaV2(Math.max(maiorTotalRef.current, 99999));
 
   // ───────────────────────────────────────────────────────────────────────────
   // PR-FIN-LISTA-VENCIMENTO-03 · 2C-4 — rascunho x aplicado, atras da flag.
@@ -1395,7 +1340,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
 
   // Linhas que a GRADE pinta. Com a flag ON sao no maximo 30, vindas do
   // servidor; com a flag OFF, o array completo de sempre.
-  const linhasDaGrade = LISTA_V2 ? hook.listaPagina : sortedLancamentos;
+  /* FIN-V2-DESEMPENHO-01b: sem a flag, a página do servidor (no máximo `porPagina` linhas, já filtradas e ordenadas no banco) */
+  const linhasDaGrade = useMemo(() => (LISTA_V2 ? hook.listaPagina : (paginaDaLista?.linhas ?? [])), [LISTA_V2, hook.listaPagina, paginaDaLista]);
 
   // Busca o conjunto inteiro SO no clique de exportar. Nunca na renderizacao.
   const carregarConjuntoExportacao = useCallback(
@@ -1411,31 +1357,36 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
      da lista com `caixa: 'sem'`, so' com a chave ligada. Sem paginacao (poucas linhas). */
   const [semCaixaServidor, setSemCaixaServidor] = useState<{ linhas: LancamentoV2[]; carregando: boolean; erro: string | null }>(
     { linhas: [], carregando: false, erro: null });
+  /* FIN-V2-DESEMPENHO-01b — sem a flag também: só as linhas SEM CAIXA vêm do servidor (`caixa: 'sem'`, poucas) e passam pela
+     MESMA conferência de memória de antes (`filtrarEmMemoria`); a lista inteira não é mais lida para achá-las. */
+  const versaoDaPagina = paginaDaLista;
   useEffect(() => {
-    if (!LISTA_V2 || !mostrarSemCaixa) return;
+    if (!mostrarSemCaixa || !podeConsultar) return;
     let vivo = true;
     setSemCaixaServidor(s => ({ ...s, carregando: true, erro: null }));
     hook.buscarConjuntoFiltrado(filtrosAplicados, { incluirSemVencimento: incluirSemVencimentoAplicado, caixa: 'sem' })
-      .then(linhas => { if (vivo) setSemCaixaServidor({ linhas, carregando: false, erro: null }); })
+      .then(linhas => { if (vivo) setSemCaixaServidor({ linhas: LISTA_V2 ? linhas : filtrarEmMemoria(linhas).filter(l => l.sem_movimentacao_caixa === true), carregando: false, erro: null }); })
       .catch(e => { if (vivo) setSemCaixaServidor({ linhas: [], carregando: false, erro: e instanceof Error ? e.message : 'Falha ao carregar os lançamentos sem caixa.' }); });
     return () => { vivo = false; };
-  }, [LISTA_V2, mostrarSemCaixa, filtrosAplicados, incluirSemVencimentoAplicado]); // eslint-disable-line react-hooks/exhaustive-deps
-  const linhasSemCaixa = LISTA_V2 ? semCaixaServidor.linhas : semCaixaLocal;
+  }, [LISTA_V2, mostrarSemCaixa, podeConsultar, filtrosAplicados, incluirSemVencimentoAplicado, filtrarEmMemoria, versaoDaPagina]); // eslint-disable-line react-hooks/exhaustive-deps
+  const linhasSemCaixa = semCaixaServidor.linhas;
 
 
   // ── Bulk selection (depends on sortedLancamentos) ──
-  const allSelected = useMemo(() => selectedIds.size > 0 && sortedLancamentos.length > 0 && sortedLancamentos.every(l => selectedIds.has(l.id)), [selectedIds, sortedLancamentos]);
+  /* FIN-V2-DESEMPENHO-01b: a seleção é da PÁGINA (trocar de página limpa); "selecionar todos" = as linhas à vista */
+  useEffect(() => { setSelectedIds(new Set()); }, [paginaV2, porPagina]);
+  const allSelected = useMemo(() => selectedIds.size > 0 && linhasDaGrade.length > 0 && linhasDaGrade.every(l => selectedIds.has(l.id)), [selectedIds, linhasDaGrade]);
   const someSelected = selectedIds.size > 0;
 
   const toggleSelectAll = () => {
     if (allSelected) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(sortedLancamentos.map(l => l.id)));
+      setSelectedIds(new Set(linhasDaGrade.map(l => l.id)));
     }
   };
 
-  const selectedLancamentos = useMemo(() => hook.lancamentos.filter(l => selectedIds.has(l.id)), [hook.lancamentos, selectedIds]);
+  const selectedLancamentos = useMemo(() => linhasDaGrade.filter(l => selectedIds.has(l.id)), [linhasDaGrade, selectedIds]);
   const bloqueadosInfo = useMemo(() => {
     // Fechamento mensal financeiro descontinuado: nenhum lançamento é bloqueado
     // por mês fechado. Todos os selecionados são deletáveis.
@@ -1501,7 +1452,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         toast.error(`${result.bloqueados.length} importado(s) não puderam ser excluídos`);
       }
       setSelectedIds(new Set());
-      await hook.loadLancamentos(filtros, hook.page);
+      await listaV2.recarregar();
     } finally {
       setBulkDeleting(false);
       setConfirmDeleteOpen(false);
@@ -1529,7 +1480,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         toast.success(`${result.atualizados} lançamento${result.atualizados !== 1 ? 's' : ''} marcado${result.atualizados !== 1 ? 's' : ''} como realizado`);
       }
       setSelectedIds(new Set());
-      await hook.loadLancamentos(filtros, hook.page);
+      await listaV2.recarregar();
     } finally {
       setBulkRealizando(false);
       setConfirmRealizarOpen(false);
@@ -1537,19 +1488,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   };
 
 
-  const totalPages = Math.max(1, Math.ceil(totalLancamentosFiltrados / pageSize));
 
-
-  useEffect(() => {
-    if (currentPage > totalPages - 1) {
-      setCurrentPage(Math.max(0, totalPages - 1));
-    }
-  }, [currentPage, totalPages]);
-
-  const paginatedLancamentos = useMemo(() => {
-    const start = currentPage * pageSize;
-    return sortedLancamentos.slice(start, start + pageSize);
-  }, [sortedLancamentos, currentPage, pageSize]);
 
   const toggleSort = (field: SortField) => {
     if (sortField === field) {
@@ -1587,7 +1526,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
    */
   /* OC-VENDA-ENTREGAS-01b (D2): "Entradas"/"Saidas" sao SO' CAIXA; o sem caixa (entrega, barter, consumo, funrural) tem
      total proprio. A regra mora em `totaisDaListaV2` — nada contado duas vezes. */
-  const totais = useMemo(() => totaisDaListaV2(sortedLancamentos, foco), [sortedLancamentos, foco]);
+  /* FIN-V2-DESEMPENHO-01b: os totais são do SERVIDOR, sobre o recorte inteiro (a mesma regra, `totaisDaListaV2`, reescrita na RPC
+     e conferida no teste 01a/01b); sem resposta, zeros — e a faixa diz "—" pelo `paginaDaLista` nulo. */
+  const totais = paginaDaLista?.totais ?? TOTAIS_VAZIOS;
   /* O `foco` é o mesmo dos totais: a linha e o rodapé não podem discordar sobre o que é
      entrada. Uma função só, um foco só. */
   const valorDaLinha = (l: LancamentoV2) => formatarValorLinha(l, foco);
@@ -1650,7 +1591,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     setDataPor('financeira');   // PR-FIN-GRADE-DATAS-03 — volta à dimensão padrão ao limpar filtros
     setSortField('default');
     setSortDir('asc');
-    setCurrentPage(0);
     /* ⚠ "Limpar" LIMPA A BUSCA TAMBEM. Zerar o fornecedor selecionado e deixar
        "wilson" digitado no combobox deixaria a tela dizendo "Todos" com uma lista
        de seis nomes — o filtro limpo e a busca suja. */
@@ -1865,7 +1805,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     linhasDaGrade, modoIntensivo, contasAmpliado, fornecedoresMap, rotulosDoRecorte, parcelasDosLancamentos, conciliados,
     hojeISO, coberturaExtrato, documentosPorLancamento, selectedIds, lancamentosComOC, contratosDoCliente,
     podeAbrirFinanciamento, onAbrirFinanciamento, podeAbrirOC, nivelClassif, fazendaNameMap, fazendaCodigoMap,
-    safraCodigoMap, safraEscopoMap, contaNomeMap, foco,
+    safraCodigoMap, safraEscopoMap, contaNomeMap, foco, vinculosProntos, paginaDaLista,
   ];
   return (
     /* ⚠ O AFASTAMENTO MORA AQUI, NO RAIZ — FIN-LISTA-VISUAL-03. A seção do /v2 não tem
@@ -1879,8 +1819,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
        Lançamentos", senão a página fica com dois recuos parecidos e diferentes, que é pior
        que um recuo errado. O que mudou foi o número dos DOIS, juntos, no mesmo PR.
        ⚠ 8 E NÃO 4: com `px-1` o traço do card fica a um fio da borda da tela e a sombra do
-       card não tem onde cair. 8px é o menor recuo em que ainda se vê que é um card. */
-    <div className={cn("relative px-2", modoIntensivo ? "flex flex-col h-[calc(100vh-8px)]" : "space-y-1 pb-20")}>
+       card não tem onde cair. 8px é o menor recuo em que ainda se vê que é um card.
+       FIN-V2-DESEMPENHO-01b: o Ampliado desconta a barra do topo (32px) — com 100vh−8 a página rolava 24px e o rodapé da página
+       (agora DENTRO do quadro) ficava abaixo da janela. */
+    <div className={cn("relative px-2", modoIntensivo ? "flex flex-col h-[calc(100vh-40px)]" : "space-y-1 pb-20")}>
       {/* FILTERS */}
       {/* ⚠ CANTO RETO NOS DOIS CARDS — FIN-LISTA-VISUAL-05. O raio de 8px comia a largura
           justamente nas pontas, onde moram a primeira e a última coluna, e um card
@@ -2530,19 +2472,24 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         * ponto de partida vertical.
         */}
       {mode === 'list' && (
-        <div className="flex h-6 shrink-0 flex-wrap items-center gap-x-2 px-1 text-[10px] tabular-nums">
+        /* FIN-V2-DESEMPENHO-01b — a faixa SOBREPUNHA a de baixo: `h-6` fixo com `flex-wrap` — numa janela estreita os controles
+           desciam para uma segunda linha DENTRO de 24px e transbordavam por cima do que vinha depois (a barra "Classificação ·
+           Sem caixa" coberta pelo cabeçalho azul da tabela). Agora a altura é a do conteúdo (`min-h-6`, sem teto) e cada total
+           tem LARGURA RESERVADA (`TextoReservado`, o maior valor possível): se a faixa quebra, quebra pela largura da janela,
+           nunca porque um número cresceu — e o que vem embaixo desce junto, sem nada por cima. */
+        <div className="flex min-h-6 shrink-0 flex-wrap items-center gap-x-2 gap-y-0.5 px-1 py-0.5 text-[10px] tabular-nums" data-testid="faixa-totais">
           {/* FIN-V2-SEM-CAIXA-01: no padrao so' dinheiro — Entradas, Saidas, Transf. e a contagem. O total sem caixa so' existe
               com a chave ligada, e e' o mesmo numero do rodape da secao (`totalSemCaixa`). */}
-          <span className="font-bold text-success" title={modoSemCaixa === 'so_dre' ? 'Só os lançamentos sem caixa que compõem o DRE.' : 'Só o que movimenta caixa.'}>Entradas: {formatMoeda(totalEntradas)}</span>
+          <span className="font-bold text-success" title={modoSemCaixa === 'so_dre' ? 'Só os lançamentos sem caixa que compõem o DRE.' : 'Só o que movimenta caixa.'}>Entradas: <TextoReservado reserva={RESERVA_TOTAL} texto={paginaDaLista ? formatMoeda(totalEntradas) : '—'} /></span>
           <span className="text-muted-foreground/40">|</span>
-          <span className="font-bold text-destructive" title={modoSemCaixa === 'so_dre' ? 'Só os lançamentos sem caixa que compõem o DRE.' : 'Só o que movimenta caixa.'}>Saídas: {formatMoeda(totalSaidas)}</span>
+          <span className="font-bold text-destructive" title={modoSemCaixa === 'so_dre' ? 'Só os lançamentos sem caixa que compõem o DRE.' : 'Só o que movimenta caixa.'}>Saídas: <TextoReservado reserva={RESERVA_TOTAL} texto={paginaDaLista ? formatMoeda(totalSaidas) : '—'} /></span>
           <span className="text-muted-foreground/40">|</span>
           <span className="font-bold text-sky-700 dark:text-sky-400"
             title="Transferências entre contas do próprio cliente: não são entrada nem saída do caixa, por isso ficam fora dos dois totais.">
-            Transf.: {formatMoeda(totalTransferencias)}
+            Transf.: <TextoReservado reserva={RESERVA_TOTAL} texto={paginaDaLista ? formatMoeda(totalTransferencias) : '—'} />
           </span>
           <span className="text-muted-foreground/40">|</span>
-          <span className="text-muted-foreground">{totalLancamentosFiltrados} lanç.</span>
+          <span className="text-muted-foreground"><TextoReservado reserva={reservaDeNumero(6)} alinhar="direita" texto={paginaDaLista ? totalLancamentosFiltrados.toLocaleString('pt-BR') : '—'} /> lanç.</span>
           {/* FIN-V2-COLUNAS-02: o total sem caixa saiu da faixa (com os dois seletores ela não cabe numa linha, medido: 846px dos
               ~919 sem ele, ~1.040 com ele no pior número). Ele é o MESMO número do rodapé da seção sem caixa, e vai no `title`
               do "Mostrar". */}
@@ -2564,7 +2511,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
             <Segmentado altura={20} valor={modoSemCaixa} onEscolher={setModoSemCaixa} opcoes={[
               { valor: 'ocultar', rotulo: 'Ocultar', title: 'Só o que movimenta caixa' },
               { valor: 'mostrar', rotulo: 'Mostrar', title: mostrarSemCaixa
-                ? `Sem caixa (só DRE): ${formatMoeda(totalSemCaixa(linhasSemCaixa))} — na seção abaixo da lista`
+                ? `Sem caixa (só DRE): ${paginaDaLista ? formatMoeda(paginaDaLista.semCaixa.total) : '—'} — na seção abaixo da lista`
                 : 'Também o sem caixa (entregas, barter, consumo), na seção abaixo da lista' },
               { valor: 'so_dre', rotulo: 'Só c/ DRE', title: 'Só os lançamentos sem caixa que compõem o DRE' },
             ]} />
@@ -2594,9 +2541,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         </div>
       )}
 
-      {hook.loading && (
-        <div className="text-center text-muted-foreground py-4 text-[10px] animate-pulse">Carregando...</div>
-      )}
 
       {mode === 'rapido' && (fazendaId === '__all__' || fazendaId) && (
         <ModoRapidoGrid
@@ -2607,16 +2551,16 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
           contas={hook.contasBancarias}
           classificacoes={hook.classificacoes}
           onSaveBatch={hook.criarLancamentosEmLote}
-          onDone={() => hook.loadLancamentos(filtros, 0)}
+          onDone={() => { void listaV2.recarregar(); }}
         />
       )}
 
-      {mode === 'list' && !hook.loading && podeConsultar && (
+      {mode === 'list' && podeConsultar && (
         <>
           {!modoIntensivo && (
             <CorrecaoTransferenciasBanner
               contas={hook.contasBancarias}
-              onFixed={() => hook.loadLancamentos(filtros, hook.page)}
+              onFixed={() => { void listaV2.recarregar(); }}
             />
           )}
            {/* ⚠ `rolagem-fina rolagem-sem-tampar` — FIN-LISTA-SCROLLBAR-01. A barra desenhava
@@ -2632,7 +2576,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 `--background` da página. Medido, os dois repos têm os MESMOS tokens —
                 `--background: 220 17% 97%` (cinza) e `--card: 0 0% 100%` (branco) —, então a
                 diferença não era de tema, era o card que faltava. */}
-           <div ref={scrollContainerRef} className={cn("rounded-none border border-[hsl(var(--border))] bg-card overflow-auto relative rolagem-fina rolagem-sem-tampar respiro-lista", modoIntensivo && "flex-1")} style={modoIntensivo ? undefined : { maxHeight: 'calc(100vh - 240px)' }}>
+           {/* FIN-V2-DESEMPENHO-01b — O QUADRO: a tabela que rola e, DENTRO dele, a barra da página (régua de Recorrências). O
+               scrollport continua sendo o mesmo `scrollContainerRef` (a lista virtual mede por ele). */}
+           <div className={cn("flex min-h-0 flex-col overflow-hidden border border-[hsl(var(--border))] bg-card", modoIntensivo && "flex-1")} data-testid="quadro-lancamentos">
+           <div ref={scrollContainerRef} className={cn("min-h-0 bg-card overflow-auto relative rolagem-fina rolagem-sem-tampar respiro-lista", modoIntensivo && "flex-1")} style={modoIntensivo ? undefined : { maxHeight: 'calc(100vh - 264px)' }}>
             <table className="table-financeiro w-full caption-bottom text-sm border-collapse" style={{ tableLayout: 'fixed' }}>
               {/*
                 Larguras das colunas:
@@ -2657,9 +2604,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     A data renderiza com
                     `letter-spacing: -0.4px` (regra `.celula-data` do index.css), e "31/12/26"
                     pede ~32px — 40 ainda sobra para o padding de 1px de cada lado. */}
-                <col style={{ width: 40 }} />
-                <col style={{ width: 40 }} />
-                <col style={{ width: 40 }} />
+                {/* FIN-V2-DESEMPENHO-01b: 40→46 cada, para dd/mm/aaaa ("31/12/2026" ~41px a 9px com o -0,4 da `.celula-data`);
+                    a cadeia congelada passou a 0/28/74/120 (as três datas) */}
+                <col style={{ width: 46 }} />
+                <col style={{ width: 46 }} />
+                <col style={{ width: 46 }} />
                 {/* Produto 175→150 na lista normal — FIN-LISTA-LAYOUT-01. É a coluna mais
                     larga e a que mais tolera truncar: o texto inteiro está no `title`.
                     ⚠ NO AMPLIADO, 170→140: a célula renderiza a 9px (`.table-financeiro td`
@@ -2687,15 +2636,18 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 {/* PARC-LIVRES-01 passo 3: Produto 136→130 (Ampliado 150→144) e Macro/Centro 56→49 devolvem 20px à coluna Doc. */}
                 {/* FIN-V2-COLUNAS-02 — larguras novas (normal 906; Ampliado 1.088 com e sem as contas: desligadas, os 184px delas vão para
                     Produto, Fornecedor e Classificação). Produto, Fornecedor e Classificação são as únicas que cortam (inteiro no `title`). */}
-                <col style={{ width: modoIntensivo ? (contasAmpliado ? 140 : 202) : 128 }} />
+                {/* FIN-V2-DESEMPENHO-01b: no Ampliado 140→128 e 202→190 (com Fornecedor 116→104 e 177→165): as datas em dd/mm/aaaa
+                    tomaram 18px e o Valor 6; a soma do Ampliado volta à de antes. Na normal, Produto 128→123, Fornecedor 122→117 e
+                    Classificação 124→120: a soma vai a 916, dentro dos 919 medidos na janela do Gabriel (nomes cortam com o `title`) */}
+                <col style={{ width: modoIntensivo ? (contasAmpliado ? 128 : 190) : 123 }} />
                 {/* Fornecedor 140→120 — FIN-LISTA-VISUAL-06; 120→100 no fix1. Trunca com o nome inteiro no `title`. */}
                 {/* ⚠ 100 → 124 — PARC-LIVRES-01 fechamento C (pedido do Gabriel: Fornecedor mais largo). Os 24px saem de Macro (49→33,
                     que já cortava em 5.250 de 5.251 linhas do NJ) e de Centro (49→41). Medido no NJ a 1.126. */}
-                <col style={{ width: modoIntensivo ? (contasAmpliado ? 116 : 177) : 122 }} />
+                <col style={{ width: modoIntensivo ? (contasAmpliado ? 104 : 165) : 117 }} />
                 {/* Macro e Centro 66→56, a 8,5px (`.celula-classe`, exceção ao piso só nesta lista): cortam com o texto inteiro no
                     `title`, como já cortavam — medido no NJ: 3 das 11 macros cabiam em 66 a 9px, e as mesmas 3 cabem em 56 a 8,5. */}
                 {/* FIN-V2-COLUNAS-02: Macro e Centro viram UMA coluna, a Classificação no nível escolhido. */}
-                <col style={{ width: modoIntensivo ? (contasAmpliado ? 116 : 177) : 124 }} />
+                <col style={{ width: modoIntensivo ? (contasAmpliado ? 116 : 177) : 120 }} />
                 {/* FIN-V2-HOMOLOG-FIX-01: a coluna OC (58px, do FIN-V2-SEM-CAIXA-01) SAIU — empurrava a tabela para a rolagem
                     horizontal e escondia o "…" (onde mora "Criar OC a partir deste lançamento"). A OC continua a um clique: o
                     icone ao lado do produto abre a operacao na aba Financeiro, e o "…" ganhou "Abrir OC". */}
@@ -2732,7 +2684,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 {modoIntensivo && contasAmpliado && <col style={{ width: 92 }} />}
                 {modoIntensivo && contasAmpliado && <col style={{ width: 92 }} />}
                 {/* FIN-V2-COLUNAS-02: Valor 90→88. */}
-                <col style={{ width: 88 }} />
+                {/* FIN-V2-DESEMPENHO-01b: 88→94 — o maior valor da casa, "-R$ 99.999.999,99", pede 93px (medido pelo gate) */}
+                <col style={{ width: 94 }} />
                 {/* PARC-FECHA-02 item 6 — o CLIPE, 14px, entre Valor e Doc. (vale também no Ampliado). Não é congelada. */}
                 <col style={{ width: 14 }} />
                 {/* Doc: 55 na normal, 90→60 no Ampliado — FIN-LISTA-VISUAL-06.
@@ -2780,8 +2733,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       isso o defeito viveu escondido.
                       ⚠ QUEM MEXER NA LARGURA DE UMA DESTAS CINCO refaz a conta aqui. São quatro
                       números em oito lugares (th + td). */}
-                  <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[68px] z-30 bg-primary" onClick={() => toggleSort('venc')}>Venc.<SortIndicator field="venc" /></th>
-                  <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[108px] z-30 bg-primary" onClick={() => toggleSort('pgto')}>Pgto.<SortIndicator field="pgto" /></th>
+                  <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[74px] z-30 bg-primary" onClick={() => toggleSort('venc')}>Venc.<SortIndicator field="venc" /></th>
+                  <th className="px-0.5 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none sticky left-[120px] z-30 bg-primary" onClick={() => toggleSort('pgto')}>Pgto.<SortIndicator field="pgto" /></th>
                   <th className="px-0 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground" title="Vínculos: O operação comercial · F financiamento · R recorrência · P parcelamento">Vínc.</th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('produto')}>Produto<SortIndicator field="produto" /></th>
                   <th className="px-1 py-[3px] text-center align-middle text-[8px] uppercase leading-tight font-semibold text-primary-foreground cursor-pointer select-none" onClick={() => toggleSort('fornecedor')}>Fornecedor<SortIndicator field="fornecedor" /></th>
@@ -2816,7 +2769,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 {linhasDaGrade.length === 0 ? (
                   <tr className="border-b">
                     <td colSpan={modoIntensivo && contasAmpliado ? 17 : 15} className="text-center text-muted-foreground py-4 text-[10px]">
-                      Nenhum lançamento encontrado.
+                      {paginaDaLista ? 'Nenhum lançamento encontrado.' : (listaV2.erro ?? 'Carregando…')}
                     </td>
                   </tr>
                 ) : (
@@ -2848,7 +2801,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                        NÃO a herda: 574 linhas têm esse status gravado sem vínculo
                        nenhum — legado de 10/04/2026. Elas caem no rótulo
                        "Conciliado (legado)", muted, distinguível do fato. */
-                    const stKey = vinculo && stCru === 'realizado' ? 'conciliado_real' : stCru;
+                    const temVinculo = vinculosProntos ? !!vinculo : !!paginaDaLista?.conciliados.has(l.id);
+                    const stKey = temVinculo && stCru === 'realizado' ? 'conciliado_real' : stCru;
                     const stLabel = STATUS_FILTRO_LABEL[stKey] || l.status_transacao || '-';
                     const stColor = STATUS_FILTRO_COR[stKey] || 'text-muted-foreground';
                     const stPilula = STATUS_FILTRO_PILULA[stKey];
@@ -2900,13 +2854,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                             o status, que são o que se lê primeiro. Vencido = tem vencimento no
                             passado E não tem pagamento; um lançamento pago ontem com
                             vencimento anteontem não está atrasado, está resolvido. */}
-                        <td className="celula-data tabular-nums px-0.5 py-1 align-middle leading-tight sticky left-[28px] z-10 bg-background text-center text-muted-foreground">{fmtDate(l.data_competencia)}</td>
+                        <td className="celula-data tabular-nums px-[1px] py-1 align-middle leading-tight sticky left-[28px] z-10 bg-background text-center text-muted-foreground">{fmtDate(l.data_competencia)}</td>
                         {/* PR-FIN-GRADE-DATAS-03 — VENC. e PGTO. em colunas separadas, cada uma a sua coluna real
                             (nunca fundidas, nunca a data financeira derivada). fmtDate(null) já rende o sentinela '-'.
                             VENC. permanece visível mesmo quando há PGTO. */}
-                        <td className={`celula-data tabular-nums px-0.5 py-1 align-middle leading-tight sticky left-[68px] z-10 bg-background text-center ${vencido ? 'font-semibold text-destructive' : 'text-muted-foreground'}`}
+                        <td className={`celula-data tabular-nums px-[1px] py-1 align-middle leading-tight sticky left-[74px] z-10 bg-background text-center ${vencido ? 'font-semibold text-destructive' : 'text-muted-foreground'}`}
                           title={vencido ? 'Vencido e não pago' : undefined}>{fmtDate(l.data_vencimento)}</td>
-                        <td className="celula-data tabular-nums px-0.5 py-1 align-middle leading-tight sticky left-[108px] z-10 bg-background text-center text-muted-foreground">{fmtDate(l.data_pagamento)}</td>
+                        <td className="celula-data tabular-nums px-[1px] py-1 align-middle leading-tight sticky left-[120px] z-10 bg-background text-center text-muted-foreground">{fmtDate(l.data_pagamento)}</td>
                         {/* FIN-V2-COLUNAS-OC-01 — A MARCA DA OC TEM COLUNA PRÓPRIA, antes do Produto (Gabriel, 05/10: "o ícone vem depois do
                             texto e some quando o texto é longo"). O bloco abaixo é o que estava no fim da célula do Produto, MOVIDO
                             VERBATIM: com acesso, o botão que abre a operação (e para a propagação — a linha não abre); sem acesso, só a
@@ -2965,7 +2919,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                               {rotuloForn?.final && <span className="shrink-0 whitespace-nowrap text-[10px]" data-testid="final-fornecedor">· {rotuloForn.final}</span>}
                               {rotuloForn?.inativo && <span className="shrink-0 whitespace-nowrap text-[10px] text-amber-700" data-testid="inativo-fornecedor">· inativo</span>}
                             </span>
-                          ) : (!l.favorecido_id ? '-' : <span className="text-warning">n/c</span>)}
+                          ) : (!l.favorecido_id ? '-' : hook.fornecedores.length === 0 ? <span className="text-muted-foreground">…</span> : <span className="text-warning">n/c</span>)}
                         </td>
                         {/* FIN-V2-COLUNAS-02 — a Classificação no nível escolhido; o caminho inteiro no `title`. */}
                         <td className="celula-classe truncate px-1 py-1 align-middle text-[11px] leading-tight text-muted-foreground" data-testid="celula-classificacao"
@@ -2984,7 +2938,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                             numa lista que se lê pela densidade. Safra e cultura vão na MESMA linha e
                             truncam; o texto inteiro fica no `title`. Safra pode truncar; valor, status e
                             data não. */}
-                        <td className="px-1 py-[1px] align-middle text-[10px] leading-tight text-muted-foreground" data-testid="celula-safra">
+                        <td className="px-0.5 py-[1px] align-middle text-[10px] leading-tight text-muted-foreground" data-testid="celula-safra">
                           {/* FIN-V2-COLUNAS-02 — o período + a atividade DA SAFRA; embaixo a fase / cultura do lançamento SÓ quando existe
                               (sem fase não é rateio). A altura da linha da tabela não muda. */}
                           <CelulaSafra safra={safraNaLista({
@@ -3125,10 +3079,31 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
               </tbody>
             </table>
           </div>
+            {/* a barra da página: intervalo, "por página" e Anterior/Próxima, com lugar reservado (nada se desloca) */}
+            <div className={cn(RODAPE_REGUA, 'flex h-[23px] items-center gap-1.5 whitespace-nowrap px-1.5')} data-testid="rodape-lancamentos">
+              <TextoReservado testid="intervalo-lancamentos" reserva={reservasDoRodape.intervalo}
+                texto={paginaDaLista ? intervaloDaPaginaV2(totalLancamentosFiltrados, paginaV2, porPagina) : (listaV2.erro ? '—' : '…')} />
+              <span className="flex flex-none items-center gap-1" title="Lançamentos por página">Por pág.
+                <Segmentado<PorPaginaV2Texto> valor={textoDoPorPaginaV2(porPagina)} onEscolher={(v) => escolherPorPagina(porPaginaV2DoTexto(v))} altura={20} fonte={10} className="bg-card"
+                  opcoes={POR_PAGINA_V2.map((v) => ({ valor: textoDoPorPaginaV2(v), rotulo: String(v) }))} />
+              </span>
+              <span className="min-w-0 flex-1 truncate text-primary-foreground/80" title={listaV2.erro ?? undefined} data-testid="estado-lancamentos">
+                {listaV2.erro ?? (listaV2.carregando ? 'Carregando…' : '')}
+              </span>
+              <div className="flex flex-none items-center gap-1">
+                <button type="button" data-testid="pagina-anterior" className="h-[18px] rounded px-1.5 hover:bg-white/10 disabled:opacity-40 disabled:hover:bg-transparent"
+                  disabled={paginaV2 <= 0 || listaV2.carregando} onClick={() => setPaginaV2(p => Math.max(0, p - 1))} title="Página anterior" aria-label="Página anterior">←<span className="max-[820px]:hidden"> Anterior</span></button>
+                <TextoReservado testid="pagina-lancamentos" alinhar="direita" reserva={reservasDoRodape.pagina}
+                  texto={`Página ${(paginaV2 + 1).toLocaleString('pt-BR')} de ${totalDePaginas.toLocaleString('pt-BR')}`} />
+                <button type="button" data-testid="pagina-proxima" className="h-[18px] rounded px-1.5 hover:bg-white/10 disabled:opacity-40 disabled:hover:bg-transparent"
+                  disabled={paginaV2 >= totalDePaginas - 1 || listaV2.carregando} onClick={() => setPaginaV2(p => Math.min(totalDePaginas - 1, p + 1))} title="Próxima página" aria-label="Próxima página"><span className="max-[820px]:hidden">Próxima </span>→</button>
+              </div>
+            </div>
+           </div>
 
           {mostrarSemCaixa && (
-            <SecaoSemCaixa linhas={linhasSemCaixa} carregando={LISTA_V2 && semCaixaServidor.carregando}
-              erro={LISTA_V2 ? semCaixaServidor.erro : null}
+            <SecaoSemCaixa linhas={linhasSemCaixa} carregando={semCaixaServidor.carregando}
+              erro={semCaixaServidor.erro}
               ocDe={id => lancamentosComOC.get(id)} onAbrirOC={podeAbrirOC ? abrirOCFinanceiro : undefined} />
           )}
 
@@ -3157,15 +3132,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
             </div>
           )}
 
-          {/* A contagem, FORA da área que rola. A legenda dos ícones de origem saiu com a coluna (PARC-LIVRES-01 passo 3): a
-              origem de cada linha está no `title` do Status. */}
-          {/* 8px = o padding interno do scrollport, para o rodapé alinhar com a PRIMEIRA
-              COLUNA da tabela, não com a borda do card. */}
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-2 py-1">
-            <span className="text-[10px] text-muted-foreground">
-              {totalLancamentosFiltrados} lançamento{totalLancamentosFiltrados !== 1 ? 's' : ''} encontrado{totalLancamentosFiltrados !== 1 ? 's' : ''}
-            </span>
-          </div>
+          {/* FIN-V2-DESEMPENHO-01b: a contagem ("N lançamentos encontrados") virou o intervalo na barra da página, dentro do quadro. */}
         </>
       )}
 

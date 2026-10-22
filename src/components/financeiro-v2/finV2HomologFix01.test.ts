@@ -27,7 +27,8 @@ describe('item 3 — lista sem a coluna OC de 58px, "..." sempre visivel, "Abrir
     expect(tela).toContain('<td colSpan={modoIntensivo && contasAmpliado ? 17 : 15}');
     expect(tela).not.toContain('<td colSpan={16}');
     /* a busca sabe achar: a secao sem caixa ainda usa a celula OC (cabe sem rolagem la') */
-    expect(tela).toContain("import { SecaoSemCaixa, totalSemCaixa } from '@/components/financeiro-v2/SecaoSemCaixa';");
+    /* FIN-V2-DESEMPENHO-01b: o total sem caixa vem do servidor; o `totalSemCaixa` saiu do import da tela */
+    expect(tela).toContain("import { SecaoSemCaixa } from '@/components/financeiro-v2/SecaoSemCaixa';");
   });
 
   /* ⚠ CONTRATO MUDOU NO PR-FIN-V2-STATUS-PGTO-01-fix1 (decisao do Gabriel, 30/09): o "..." NAO e' mais fixo — fixo, ele cobria

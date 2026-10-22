@@ -44,27 +44,31 @@ describe('a coluna Vínc. (FIN-V2-COLUNAS-02; era "OC")', () => {
     expect(tela.match(/<CelulaVinculos /g)?.length).toBe(1);
     expect(linha).not.toContain('🏦');
   });
-  it('vem depois das congeladas e NÃO é sticky; a cadeia é 0/28/68/108', () => {
-    expect(linha.indexOf('data-testid="celula-oc"')).toBeGreaterThan(linha.indexOf('sticky left-[108px]'));
+  /* ⚠ CONTRATO MUDOU NO FIN-V2-DESEMPENHO-01b: as datas em dd/mm/aaaa (40→46 cada); a cadeia congelada passou a 0/28/74/120 */
+  it('vem depois das congeladas e NÃO é sticky; a cadeia é 0/28/74/120', () => {
+    expect(linha.indexOf('data-testid="celula-oc"')).toBeGreaterThan(linha.indexOf('sticky left-[120px]'));  /* FIN-V2-DESEMPENHO-01b: datas dd/mm/aaaa, 40→46 */
     expect(/<td className="[^"]*sticky[^"]*" data-testid="celula-oc"/.test(linha)).toBe(false);
-    for (const left of ['left-0', 'left-[28px]', 'left-[68px]', 'left-[108px]']) expect(linha, left).toContain(`sticky ${left}`);
+    for (const left of ['left-0', 'left-[28px]', 'left-[74px]', 'left-[120px]']) expect(linha, left).toContain(`sticky ${left}`);
     for (const velho of ['left-[42px]', 'left-[82px]', 'left-[122px]']) expect(tela, velho).not.toContain(`sticky ${velho}`);
-    expect(tela.match(/sticky left-\[(28|68|108)px\]/g)?.length).toBe(6);
-    expect(larguras('normal').slice(0, 4)).toEqual([28, 40, 40, 40]);
+    expect(tela.match(/sticky left-\[(28|74|120)px\]/g)?.length).toBe(6);
+    expect(tela.match(/sticky left-\[(68|108)px\]/g)).toBeNull();
+    expect(larguras('normal').slice(0, 4)).toEqual([28, 46, 46, 46]);
     expect(tela).toContain('>Vínc.</th>');
   });
 });
 
 describe('as larguras (FIN-V2-COLUNAS-02)', () => {
-  it('normal: Vínc 36 · Produto 128 · Fornecedor 122 · Classificação 124 · Faz 30 · Safra 50 · Valor 88 · Doc 78 · Status 60 = 906', () => {
+  /* ⚠ CONTRATO MUDOU NO FIN-V2-DESEMPENHO-01b (FIN-V2-SEM-CORTE-01): datas dd/mm/aaaa 46, Valor 94 (o maior valor pede 93); Produto,
+     Fornecedor e Classificação devolveram 14px — a soma fica em 916, dentro dos 919 medidos */
+  it('normal: datas 46 · Vínc 36 · Produto 123 · Fornecedor 117 · Classificação 120 · Faz 30 · Safra 50 · Valor 94 · Doc 78 · Status 60 = 916', () => {
     const n = larguras('normal');
-    expect(n).toEqual([28, 40, 40, 40, 36, 128, 122, 124, 30, 50, 88, 14, 78, 60, 28]);
-    expect(soma(n)).toBe(906);
+    expect(n).toEqual([28, 46, 46, 46, 36, 123, 117, 120, 30, 50, 94, 14, 78, 60, 28]);
+    expect(soma(n)).toBe(916);
   });
   it('Ampliado com e sem as contas: a mesma soma (1.088); desligadas, os 184px vão para Produto, Fornecedor e Classificação', () => {
     const a = larguras('amp'); const s = larguras('ampSem');
-    expect(a).toEqual([28, 40, 40, 40, 36, 140, 116, 116, 30, 50, 92, 92, 88, 14, 78, 60, 28]);
-    expect(s).toEqual([28, 40, 40, 40, 36, 202, 177, 177, 30, 50, 88, 14, 78, 60, 28]);
+    expect(a).toEqual([28, 46, 46, 46, 36, 128, 104, 116, 30, 50, 92, 92, 94, 14, 78, 60, 28]);
+    expect(s).toEqual([28, 46, 46, 46, 36, 190, 165, 177, 30, 50, 94, 14, 78, 60, 28]);
     expect(soma(a)).toBe(1088); expect(soma(s)).toBe(1088);
     expect((s[5] - a[5]) + (s[6] - a[6]) + (s[7] - a[7])).toBe(92 + 92);
     expect(tela).toContain('<td colSpan={modoIntensivo && contasAmpliado ? 17 : 15}');
@@ -109,8 +113,8 @@ describe('passo 3 — clipe, Doc. e origem (lidos da fonte da lista)', () => {
     expect(thDoc).toBeGreaterThan(thClipe);
     for (const modo of ['normal', 'amp', 'ampSem'] as const) {
       const n = larguras(modo);
-      expect(n.slice(-5)).toEqual([88, 14, 78, 60, 28]);               // FIN-V2-COLUNAS-02: Valor 88, clipe 14, Doc 78, Status 60
-      expect(n[1]).toBe(40);
+      expect(n.slice(-5)).toEqual([94, 14, 78, 60, 28]);               // FIN-V2-DESEMPENHO-01b: Valor 94, clipe 14, Doc 78, Status 60
+      expect(n[1]).toBe(46);
     }
   });
   it('o clipe acende por `doc.clipe`, com o que tem no `title`', () => {

@@ -84,9 +84,11 @@ export function tituloDoContrato(numero: string | null | undefined, descricao: s
   return [n, d].filter(Boolean).join(' · ') || NOME_VINCULO.F;
 }
 
-export interface SafraNaLista { linha1: string; linha2: string | null; titulo: string }
+/** FIN-V2-DESEMPENHO-01b — a Safra na lista: o PERÍODO ("25/26") e, ao lado, um SELO pequeno da atividade da safra (PEC
+ *  pecuária, LAV lavoura). Embaixo, a fase/cultura do lançamento (7px). O código inteiro fica no `titulo`. */
+export interface SafraNaLista { periodo: string; selo: 'PEC' | 'LAV' | null; linha2: string | null; titulo: string }
 
-const SIGLA_ATIVIDADE: Record<string, string> = { pecuaria: 'Pec', agricultura: 'Agr' };
+const SELO_ATIVIDADE: Record<string, 'PEC' | 'LAV'> = { pecuaria: 'PEC', agricultura: 'LAV' };
 
 export function safraNaLista(e: {
   codigo?: string | null;          // o código da safra (ex.: "25/26-Pec", "25/26-MAND"); nulo = sem safra
@@ -95,15 +97,15 @@ export function safraNaLista(e: {
   cultura?: string | null;         // do lançamento
 }): SafraNaLista {
   const codigo = (e.codigo ?? '').trim();
-  if (!codigo) return { linha1: '—', linha2: null, titulo: 'Sem safra' };
-  const periodo = codigo.includes('/') ? codigo.split('-')[0] : codigo;
-  const sigla = e.escopo ? SIGLA_ATIVIDADE[e.escopo] : undefined;
-  const linha1 = sigla && periodo !== codigo ? `${periodo} ${sigla}` : codigo;
+  if (!codigo) return { periodo: '—', selo: null, linha2: null, titulo: 'Sem safra' };
+  const selo = e.escopo ? (SELO_ATIVIDADE[e.escopo] ?? null) : null;
+  /* o período só se separa do sufixo quando há a sigla para pôr no lugar dele; sem ela, o código inteiro */
+  const periodo = selo && codigo.includes('/') && codigo.includes('-') ? codigo.split('-')[0] : codigo;
   let linha2: string | null = null;
   if (e.escopo === 'pecuaria' && e.fase) linha2 = FASES.find(f => f.valor === e.fase)?.label ?? null;
   else if (e.escopo === 'agricultura' && e.cultura) linha2 = CULTURAS_LANCAMENTO.find(c => c.valor === e.cultura)?.label ?? null;
-  const titulo = [codigo, linha2].filter(Boolean).join(' · ');
-  return { linha1, linha2, titulo };
+  const titulo = [codigo, selo === 'PEC' ? 'Pecuária' : selo === 'LAV' ? 'Lavoura' : null, linha2].filter(Boolean).join(' · ');
+  return { periodo, selo, linha2, titulo };
 }
 
 /* ── preferências no navegador ── */
