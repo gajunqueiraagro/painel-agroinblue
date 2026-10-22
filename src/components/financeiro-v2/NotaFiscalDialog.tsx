@@ -34,6 +34,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DatePicker } from '@/components/ui/date-picker';
 import { CULTURAS_LANCAMENTO, SEM_CULTURA } from '@/lib/agri/rateioLancamento';
 import { safraSugerida } from '@/lib/agri/safraSugerida';
+import { ATIVIDADES } from '@/lib/financeiro/ultimaAtividade';
 import { useCulturasDaSafra } from '@/hooks/useAreaPlantada';
 import type { ParcelaDoPayload } from '@/lib/financiamentos/montarPayloadParcelamento';
 import { gravarParcelamento } from './LancamentoV2Dialog';
@@ -45,14 +46,16 @@ import { casarJaLancados, parcelasParaCasar, type LancamentoJaLancado } from '@/
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { CompararCadastroDialog } from './CompararCadastroDialog';
+import { GravarIeDaFazendaDialog } from './GravarIeDaFazendaDialog';
 import { propostaDoEmitente, type CadastroParaComparar } from '@/lib/fornecedores/compararCadastro';
 import type { NotaDoArquivo } from '@/lib/financeiro/nfe/lerNota';
 import { ehSerieAvulsa, type CampoConferido, type CampoDaMarca } from '@/lib/financeiro/nfe/danfe';
 import { fraseDaRemessa } from '@/lib/financeiro/nfe/remessaEntregaFutura';
+import { ORIGEM_FAZENDA_PELO_ENDERECO } from '@/lib/financeiro/nfe/proporLancamento';
 import type { EmitenteNFe } from '@/lib/financeiro/nfe/tipos';
 import { dataCurta, documentoFormatado, numeroDaNota, numeroFalado, reais, soDigitos } from '@/lib/financeiro/nfe/formatos';
 import {
-  camposQueOEmitenteCompleta, completarCadastroPeloXml, fornecedorPeloDocumento, lancamentosAbertosComValor,
+  camposQueOEmitenteCompleta, completarCadastroPeloXml, desfazerIeDaFazenda, fornecedorPeloDocumento, iePorFazenda, inscreverEmFazendas, lancamentosAbertosComValor,
   atualizarCamposDoCadastro, cadastroParaComparar, desfazerCamposDoCadastro, notaJaLancada, usoDoFornecedor, type CadastroComODocumento,
   type LancamentoAbertoDaNota, type OcorrenciaDaNota,
 } from '@/lib/financeiro/nfeConsultas';
@@ -177,6 +180,17 @@ export function NotaFiscalDialog({
   const [cnpjGravado, setCnpjGravado] = useState(false);
   const [uso, setUso] = useState<{ lancamentos: number; ultimo: string | null } | null>(null);
   const [fazendaId, setFazendaId] = useState<string>(p.fazendaId ?? '');
+  /* NOTA-FAZENDA-PELA-IE-01 — a IE das fazendas (relida quando muda): a fazenda escolhida sem IE e a nota com a IE do destinatario =
+     oferecer gravar; a fazenda com OUTRA IE = so' avisar (nunca sobrescrever) */
+  const [iesDasFazendas, setIesDasFazendas] = useState<Record<string, string> | null>(null);
+  const [gravarIeAberto, setGravarIeAberto] = useState(false);
+  useEffect(() => {
+    let vivo = true;
+    const ler = () => { void iePorFazenda(clienteId).then((m) => { if (vivo) setIesDasFazendas(m); }, () => undefined); };
+    ler();
+    const sair = inscreverEmFazendas((c) => { if (c === clienteId) ler(); });
+    return () => { vivo = false; sair(); };
+  }, [clienteId]);
   const [contaId, setContaId] = useState<string>('__none__');
   const [planoId, setPlanoId] = useState<string>(p.classificacao?.plano_conta_id ?? '');
   const [receita, setReceita] = useState<DadosDoCnpj | null>(null);
@@ -258,6 +272,12 @@ export function NotaFiscalDialog({
   const saidas = useMemo(() => classificacoes.filter((c) => !!c.id && c.tipo_operacao.startsWith('2')), [classificacoes]);
   const plano = saidas.find((c) => c.id === planoId) ?? null;
   const lavoura = plano?.escopo_negocio === 'agricultura';
+  /* NOTA-PREVIA-ATIVIDADE-01 — a ATIVIDADE vem do subcentro (so' leitura); fora da lavoura a safra e' a da atividade PELA DATA (a mesma regra
+     do Novo lancamento, `ClassificacaoLancamento`: administrativo nao tem safra) — e e' ela que se grava */
+  const atividadeDoPlano = plano?.escopo_negocio || null;
+  const rotuloDaAtividade = ATIVIDADES.find((a) => a.valor === atividadeDoPlano)?.rotulo ?? (atividadeDoPlano ?? '—');
+  const safraPelaData = !lavoura && atividadeDoPlano && atividadeDoPlano !== 'administrativo'
+    ? safraSugerida(p.competencia, atividadeDoPlano, safras, { desempatar: false }) : null;
   const nParcelas = p.duplicatas.length;
   const cabeAqui = nParcelas >= 2;
   const semDuplicata = nParcelas === 0;
@@ -277,6 +297,12 @@ export function NotaFiscalDialog({
   const registrada = doXml.ocorrencias[0] ?? null;
   const divergencias = lido.divergencias;
   const avulsa = ehSerieAvulsa(n.serie) || ehSerieAvulsa(n.chave.slice(22, 25));
+  const fazendaPeloEndereco = p.origens.fazenda === ORIGEM_FAZENDA_PELO_ENDERECO && !!p.fazendaId && fazendaId === p.fazendaId;
+  const ieDaNota = soDigitos(n.destinatario.ie ?? '');
+  const ieDaFazenda = fazendaId && iesDasFazendas ? soDigitos(iesDasFazendas[fazendaId] ?? '') : null;
+  const acaoDaIe: 'gravar' | 'diverge' | null = !fazendaId || !ieDaNota || ieDaFazenda === null ? null
+    : ieDaFazenda === '' ? 'gravar' : ieDaFazenda !== ieDaNota ? 'diverge' : null;
+  const nomeDaFazenda = fazendas.find((f) => f.id === fazendaId)?.nome ?? 'A fazenda';
   const remessa = fraseDaRemessa(n);
   const somaItens = n.itens.reduce((s, i) => s + i.valorCent, 0);
 
@@ -294,13 +320,13 @@ export function NotaFiscalDialog({
   const contaEscolhida = contaId && contaId !== '__none__' ? contaId : null;
   const escolhas = (): EscolhasDaNota | null => (favorecidoId && plano?.id ? {
     fazendaId, favorecidoId, contaBancariaId: contaEscolhida, planoContaId: plano.id, escopoNegocio: plano.escopo_negocio || null,
-    safraId: lavoura ? safraId || null : null, cultura: lavoura ? cultura || null : null,
+    safraId: lavoura ? safraId || null : safraPelaData, cultura: lavoura ? cultura || null : null,
   } : null);
   /* NADA ESCOLHIDO AQUI SE PERDE: o Novo lancamento recebe a nota E as escolhas */
   const abrirNoLancamento = () => onAbrirNoLancamento(prefillDoModal(doXml, {
     fazendaId, contaBancariaId: contaEscolhida, favorecidoId, favorecidoNome: fornecedores.find((f) => f.id === favorecidoId)?.nome ?? null,
     plano: plano?.id ? { id: plano.id, subcentro: plano.subcentro, macro_custo: plano.macro_custo, grupo_custo: plano.grupo_custo, centro_custo: plano.centro_custo, escopo_negocio: plano.escopo_negocio } : null,
-    safraId: lavoura ? safraId || null : null, cultura: lavoura ? cultura : null, vencimento: cabeAqui ? null : vencimento || null,
+    safraId: lavoura ? safraId || null : safraPelaData, cultura: lavoura ? cultura : null, vencimento: cabeAqui ? null : vencimento || null,
   }));
 
   const cadastrar = async () => {
@@ -418,7 +444,9 @@ export function NotaFiscalDialog({
   const chipFornecedor = favorecidoId
     ? (res.inativo && favorecidoId === res.propostoId ? <span className={CHIP_AVISO}>inativo no cadastro</span>
       : semDocumento ? <span className={CHIP_AVISO} data-testid="nota-chip-fornecedor">achado pelo nome · sem CNPJ</span>
-        : <span className={CHIP_OK} data-testid="nota-chip-fornecedor">cadastrado</span>)
+        /* NOTA-FORNECEDOR-CNPJ-ACHADO-01 — o documento do cadastro casa com o da nota (digitos dos dois lados; o cadastro guarda com mascara) */
+        : <span className={CHIP_OK} data-testid="nota-chip-fornecedor">{fornecedor && soDigitos(fornecedor.cpf_cnpj) !== '' && soDigitos(fornecedor.cpf_cnpj) === soDigitos(n.emitente.documento)
+          ? `achado pelo ${soDigitos(n.emitente.documento).length === 11 ? 'CPF' : 'CNPJ'}` : 'cadastrado'}</span>)
     : conflito ? <span className={CHIP_ERRO} data-testid="nota-chip-fornecedor">CNPJ já cadastrado</span>
     : escolherEntre.length ? <span className={CHIP_AVISO}>{res.achadoPor === 'nome' ? 'achado pelo nome: escolha' : 'dois cadastros com este CNPJ'}</span>
       : res.filialDiferente ? <span className={CHIP_AVISO}>outra filial no cadastro</span>
@@ -645,10 +673,20 @@ export function NotaFiscalDialog({
 
             {/* ── LANCAMENTO ───────────────────────────────────────────────────────────────────────── */}
             <section className={BLOCO} data-testid="nota-bloco-lancamento">
-              <TituloDoBloco nome="Lançamento" dica="o que a nota não diz, você escolhe" />
+              <TituloDoBloco nome="Lançamento" dica="o que a nota não diz, você escolhe" acao={acaoDaIe === 'gravar' ? (
+                <button type="button" className="text-[10px] font-medium text-primary underline-offset-2 hover:underline" onClick={() => setGravarIeAberto(true)} data-testid="nota-gravar-ie">
+                  Gravar a IE {n.destinatario.ie} nesta fazenda
+                </button>
+              ) : acaoDaIe === 'diverge' ? (
+                <span className="text-[10px] text-amber-800" data-testid="nota-ie-diverge"
+                  title={`${nomeDaFazenda} tem a IE ${iesDasFazendas?.[fazendaId] ?? ''} e a nota traz ${n.destinatario.ie ?? ''}: a IE gravada não é trocada pela nota.`}>
+                  {nomeDaFazenda} tem outra IE ({iesDasFazendas?.[fazendaId]}) · a nota traz {n.destinatario.ie}
+                </span>
+              ) : undefined} />
               <div className="campos-uma-linha grid grid-cols-4 gap-x-3 gap-y-1">
                 <div className="min-w-0">
-                  <span className={cn(REGUA_ROTULO, 'uma-linha-que-rola')}>Fazenda{p.fazendaId && fazendaId === p.fazendaId ? ' · pela nota' : ''}</span>
+                  <span className={cn(REGUA_ROTULO, 'uma-linha-que-rola', fazendaPeloEndereco && 'text-amber-800')} data-testid="nota-fazenda-origem">
+                    Fazenda{p.fazendaId && fazendaId === p.fazendaId ? (fazendaPeloEndereco ? ` · ${ORIGEM_FAZENDA_PELO_ENDERECO}` : ' · pela IE') : ''}</span>
                   <FazendaSelect value={fazendaId} onChange={setFazendaId} fazendas={fazendas} forcaAdministrativo={false} obrigatorio hideAviso triggerClassName="h-[22px] text-[10.5px]" />
                 </div>
                 <div className="min-w-0">
@@ -667,9 +705,12 @@ export function NotaFiscalDialog({
                   <span className={REGUA_ROTULO}>Status</span>
                   <div className="flex h-[22px] items-center rounded-md border bg-background px-2 text-[10.5px]" title="Nasce programado, como no Novo lançamento.">Programado</div>
                 </div>
+                {/* FIN-NOTA-PDF-01b — a segunda linha EXISTE SEMPRE (nada se desloca). NOTA-PREVIA-ATIVIDADE-01: na lavoura, Safra e Cultura
+                    (a atividade no rotulo); nas outras, a ATIVIDADE (do subcentro, so' leitura) e a safra que sera' gravada (pela data) */}
+                {lavoura ? (<>
                 {/* FIN-NOTA-PDF-01b — a segunda linha EXISTE SEMPRE (nada se desloca): Safra e Cultura so' valem na lavoura */}
                 <div className="min-w-0" data-testid="nota-safra">
-                  <span className={cn(REGUA_ROTULO, 'uma-linha-que-rola', lavoura && !safraId && 'text-destructive')}>{lavoura ? 'Safra *' : 'Safra · só lavoura'}</span>
+                  <span className={cn(REGUA_ROTULO, 'uma-linha-que-rola', lavoura && !safraId && 'text-destructive')}>Safra * · Lavoura</span>
                   <div title={safras.find((sf) => sf.id === safraId)?.nome}>
                     <SearchableSelect value={safraId} onValueChange={(v) => { setSafraId(v); setSafraEditada(true); setCultura(null); }} semTodos allValue=""
                       allLabel={lavoura ? 'Selecione a safra…' : 'não se aplica'} dense disabled={!lavoura}
@@ -678,7 +719,7 @@ export function NotaFiscalDialog({
                   </div>
                 </div>
                 <div className="min-w-0" data-testid="nota-cultura">
-                  <span className={cn(REGUA_ROTULO, 'uma-linha-que-rola', lavoura && cultura === null && 'text-destructive')}>{lavoura ? 'Cultura *' : 'Cultura · só lavoura'}</span>
+                  <span className={cn(REGUA_ROTULO, 'uma-linha-que-rola', lavoura && cultura === null && 'text-destructive')}>Cultura *</span>
                   <Select value={cultura === null ? '' : cultura || SEM_CULTURA} disabled={!lavoura}
                     onValueChange={(v) => { setCultura(v === SEM_CULTURA ? '' : v); setSafraEditada(true); }}>
                     <SelectTrigger className={cn('h-[22px] text-[10.5px]', lavoura && cultura === null && 'border-destructive')} data-testid="nota-cultura-gatilho">
@@ -691,6 +732,20 @@ export function NotaFiscalDialog({
                     </SelectContent>
                   </Select>
                 </div>
+                </>) : (<>
+                <div className="min-w-0" data-testid="nota-atividade">
+                  <span className={REGUA_ROTULO} title="A atividade vem do subcentro escolhido.">Atividade</span>
+                  <div className="flex h-[22px] items-center rounded-md border bg-muted/40 px-2 text-[10.5px]" data-testid="nota-atividade-valor">{plano ? rotuloDaAtividade : '—'}</div>
+                </div>
+                <div className="min-w-0" data-testid="nota-safra-pela-data">
+                  <span className={REGUA_ROTULO}>Safra · pela data</span>
+                  <div className="flex h-[22px] min-w-0 items-center rounded-md border bg-muted/40 px-2 text-[10.5px] text-muted-foreground" data-testid="nota-safra-pela-data-valor"
+                    title={safraPelaData ? safras.find((sf) => sf.id === safraPelaData)?.nome : undefined}>
+                    <span className="min-w-0 uma-linha-que-rola">{!plano ? '—' : atividadeDoPlano === 'administrativo' ? 'sem safra (administrativo)'
+                      : safraPelaData ? (safras.find((sf) => sf.id === safraPelaData)?.codigo || safras.find((sf) => sf.id === safraPelaData)?.nome || '—') : 'nenhuma safra nesta data'}</span>
+                  </div>
+                </div>
+                </>)}
                 <div className="col-span-2 min-w-0" data-testid="nota-vencimento">
                   <span className={cn(REGUA_ROTULO, 'uma-linha-que-rola', !cabeAqui && semDuplicata && 'text-amber-800')}>
                     {cabeAqui ? 'Vencimento · pelas parcelas da nota' : semDuplicata ? 'Vencimento · nota sem duplicata: confira o vencimento' : 'Vencimento · da duplicata'}
@@ -803,6 +858,18 @@ export function NotaFiscalDialog({
           onConfirmar={gravarComparacao} onClose={() => setComparar(null)}
           onEscolherOutro={() => { setComparar(null); setFavorecidoId(null); setNovoPorEscolha(false); }}
           onCadastrarNovo={() => { setComparar(null); setFavorecidoId(null); setNovoPorEscolha(true); }} />
+      )}
+
+      {/* NOTA-FAZENDA-PELA-IE-01 — gravar a IE do destinatario na fazenda escolhida (campo · hoje · da nota, trilha, desfazer) */}
+      {gravarIeAberto && fazendaId && n.destinatario.ie && (
+        <GravarIeDaFazendaDialog clienteId={clienteId} fazenda={{ id: fazendaId, nome: nomeDaFazenda }} ie={n.destinatario.ie} referencia={p.rotuloNota}
+          onClose={() => setGravarIeAberto(false)}
+          onGravada={(trilha) => {
+            setIesDasFazendas((m) => ({ ...(m ?? {}), [fazendaId]: ieDaNota }));
+            toast.success(`IE gravada em ${nomeDaFazenda}`, trilha ? {
+              action: { label: 'Desfazer', onClick: () => { void desfazerIeDaFazenda(trilha, clienteId).then((e) => (e ? toast.error(e) : toast.success('Desfeito'))); } },
+            } : undefined);
+          }} />
       )}
 
       {/* NOTA-JA-LANCADA-01 — "Criar mesmo assim": e' outra compra; o motivo fica na observacao do que nasce */}

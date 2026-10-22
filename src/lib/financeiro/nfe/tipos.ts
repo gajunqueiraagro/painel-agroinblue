@@ -28,6 +28,8 @@ export interface DestinatarioNFe {
   documento: string | null;
   nome: string | null;
   ie: string | null;
+  /** NOTA-FAZENDA-PELA-IE-01 — o endereco do destinatario numa linha ("FAZENDA PUREZA, S/N"): sem a IE gravada, acha a fazenda pelo nome */
+  endereco?: string | null;
 }
 
 export interface DuplicataNFe {

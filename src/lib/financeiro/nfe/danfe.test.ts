@@ -33,7 +33,7 @@ describe('D1 — o DANFE sintetico lido inteiro', () => {
       documento: '11222333000424', nome: 'AGRO SINTETICA INSUMOS AGROPECUARIOS LTD', fantasia: null, ie: '280000001',
       endereco: { logradouro: 'RUA DAS FLORES', numero: '100', complemento: null, bairro: 'CENTRO', municipio: 'CAMPO GRANDE', uf: 'MS', cep: '79000000', telefone: '6730000000' },
     });
-    expect(n.destinatario).toEqual({ documento: '11144477735', nome: 'PRODUTOR SINTETICO DE TESTE', ie: '280000002' });
+    expect(n.destinatario).toEqual({ documento: '11144477735', nome: 'PRODUTOR SINTETICO DE TESTE', ie: '280000002', endereco: 'FAZ SINTETICA, S/N' });
     expect(n.totais).toEqual({ produtosCent: 204000, freteCent: 0, descontoCent: 7344, notaCent: 196656 });
     expect(n.fatura).toEqual({ origCent: 196656, descCent: 0, liqCent: 196656 });
     expect(n.duplicatas).toEqual([

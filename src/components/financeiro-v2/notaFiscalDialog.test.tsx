@@ -27,6 +27,14 @@ const consultas = vi.hoisted(() => ({
   gravarDocumentoNoCadastro: vi.fn(async (): Promise<string | null> => null),
   lancamentosAbertosComValor: vi.fn(async (_c: string, _f: string, _v: readonly number[]): Promise<unknown[]> => []),
   iePorFazenda: vi.fn(async (): Promise<Record<string, string>> => ({ 'faz-1': '280000002' })),
+  /* NOTA-FAZENDA-PELA-IE-01 — gravar a IE na fazenda (simula e grava) */
+  inscreverEmFazendas: vi.fn((_cb: (c: string) => void) => () => undefined),
+  aliasesDasFazendas: vi.fn(async (): Promise<Record<string, string[]>> => ({})),
+  gravarIeDaFazenda: vi.fn(async (_f: string, _ie: string, _r: string | null, simular: boolean, _c: string)
+    : Promise<{ ok: true; frase: string | null; trilhaId: string | null } | { ok: false; frase: string }> => (simular
+      ? { ok: true, frase: 'Faz. Sintetica passa a ter a IE 280000002: as próximas notas com esta IE de destinatário já vêm com a fazenda.', trilhaId: null }
+      : { ok: true, frase: null, trilhaId: 'trilha-1' })),
+  desfazerIeDaFazenda: vi.fn(async (): Promise<string | null> => null),
   fornecedorPeloNome: vi.fn(async (): Promise<string | null> => null),
   notaJaRegistrada: vi.fn(async (): Promise<unknown[]> => []),
   ultimaClassificacaoDoFornecedor: vi.fn(async (): Promise<unknown> => null),
@@ -85,13 +93,15 @@ const RECEITA = vi.fn(async (_cnpj: string): Promise<RespostaDoCnpj> => ({ ok: t
   complemento: '', bairro: 'Centro', cep: '79000-000', matrizFilial: 'FILIAL',
 } }));
 
-function montarNota(opcoes: { paginas?: ItemDoDanfe[][]; fornecedores?: FornecedorV2[]; ocorrencias?: OcorrenciaDaNota[]; umaParcela?: boolean } = {}): NotaParaLancar {
+function montarNota(opcoes: { paginas?: ItemDoDanfe[][]; fornecedores?: FornecedorV2[]; ocorrencias?: OcorrenciaDaNota[]; umaParcela?: boolean;
+  /* NOTA-FAZENDA-PELA-IE-01 — as fazendas que a leitura conhece (padrao: a Faz. Sintetica COM a IE da nota) */
+  fazendasDaLeitura?: { id: string; nome: string; ie: string | null; aliases?: string[] }[] } = {}): NotaParaLancar {
   const r = notaDoDanfe(opcoes.paginas ?? PAGINAS_DANFE_SINTETICO);
   if (r.ok === false) throw new Error(r.frase);
   /* nota de UMA parcela: a duplicata unica com o valor da nota */
   if (opcoes.umaParcela) { r.nota.duplicatas = [{ numero: '001', vencimento: '2026-10-20', valorCent: r.nota.totais.notaCent }]; r.nota.somaDuplicatasCent = r.nota.totais.notaCent; }
   const resolucao = resolverEmitente(r.nota.emitente, opcoes.fornecedores ?? [], null);
-  const p = proporLancamento({ nota: r.nota, avisosDoLeitor: r.avisos, fazendas: [{ id: 'faz-1', nome: 'Faz. Sintetica', ie: '280000002' }], emitente: resolucao, favorecidoId: resolucao.propostoId, ultima: null });
+  const p = proporLancamento({ nota: r.nota, avisosDoLeitor: r.avisos, fazendas: opcoes.fazendasDaLeitura ?? [{ id: 'faz-1', nome: 'Faz. Sintetica', ie: '280000002' }], emitente: resolucao, favorecidoId: resolucao.propostoId, ultima: null });
   if (p.ok === false) throw new Error(p.frase);
   const bytes = new TextEncoder().encode('%PDF-1.4 sintetico').buffer;
   const arquivo = arquivoPdfDaNota(bytes, '000.000.937.pdf');
@@ -188,7 +198,8 @@ describe('N2 — a prova: cadastrar, escolher o subcentro, criar 4 parcelas com 
     expect(payload).toMatchObject({
       cliente_id: 'cli', fazenda_id: 'faz-1', valor_total: 1966.56, total_parcelas: 4, data_primeira_parcela: '2026-10-20', intervalo_meses: 1,
       data_competencia: '2026-09-15', tipo_operacao: '2-Saídas', plano_conta_id: 'pl-nut', favorecido_id: 'forn-novo', tipo_financiamento: 'pecuaria',
-      safra_id: null, conta_bancaria_id: null,
+      /* NOTA-PREVIA-ATIVIDADE-01 — pecuaria leva a safra da pecuaria pela data (a mesma regra do Novo lancamento) */
+      safra_id: 's-pec', conta_bancaria_id: null,
     });
     expect(payload.parcelas).toBeUndefined();
     expect(g.parcelas).toHaveBeenCalledWith('fin-1');
@@ -207,8 +218,10 @@ describe('N2 — a prova: cadastrar, escolher o subcentro, criar 4 parcelas com 
   it('FIN-NOTA-PDF-01b — subcentro de lavoura: Safra (sugerida pela data) e Cultura (sem resposta até escolher); safra e cultura gravadas', async () => {
     const { g, comoGravadores } = gravadoresFalsos();
     abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
-    expect(screen.getByTestId('nota-safra').textContent).toContain('só lavoura');
+    /* NOTA-PREVIA-ATIVIDADE-01 — sem subcentro: a Atividade e a Safra pela data, as duas em "—" (nada de "só lavoura") */
+    expect(screen.getByTestId('nota-atividade-valor').textContent).toBe('—');
     await escolherSubcentro('Insumos Lavoura');
+    expect(screen.getByTestId('nota-safra').textContent).toContain('Safra * · Lavoura');
     await waitFor(() => expect(screen.getByTestId('nota-safra').textContent).toContain('Safra 26/27 Soja'));
     expect(screen.getByTestId('nota-falta').textContent).toBe('⚠ Falta: cultura');
     expect(screen.getByTestId('nota-criar')).toBeDisabled();
@@ -218,6 +231,21 @@ describe('N2 — a prova: cadastrar, escolher o subcentro, criar 4 parcelas com 
     fireEvent.click(screen.getByTestId('nota-criar'));
     await waitFor(() => expect(g.gravar).toHaveBeenCalled());
     expect(g.gravar.mock.calls[0][0]).toMatchObject({ plano_conta_id: 'pl-ins', safra_id: 's-soja', cultura: 'soja', total_parcelas: 4 });
+  });
+  /* NOTA-PREVIA-ATIVIDADE-01 (o caso da Elos, sintetico): o subcentro de PECUARIA nao vira lavoura na tela — a atividade aparece (so'
+     leitura) e a safra que se grava e' a da pecuaria pela data, a mesma do Novo lancamento */
+  it('subcentro de pecuária: "Atividade · Pecuária" e a safra 26/27-Pec pela data — e é ela que se grava; sem os campos de lavoura', async () => {
+    const { g, comoGravadores } = gravadoresFalsos();
+    abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
+    await escolherSubcentro('Nutrição Engorda');
+    await waitFor(() => expect(screen.getByTestId('nota-atividade-valor').textContent).toBe('Pecuária'));
+    expect(screen.getByTestId('nota-safra-pela-data-valor').textContent).toBe('26/27-Pec');
+    expect(screen.queryByTestId('nota-safra')).toBeNull();
+    expect(screen.queryByTestId('nota-cultura')).toBeNull();
+    await waitFor(() => expect(screen.getByTestId('nota-criar')).toBeEnabled());
+    fireEvent.click(screen.getByTestId('nota-criar'));
+    await waitFor(() => expect(g.gravar).toHaveBeenCalled());
+    expect(g.gravar.mock.calls[0][0]).toMatchObject({ plano_conta_id: 'pl-nut', safra_id: 's-pec', cultura: null });
   });
   it('"Todas (rateia)" é uma resposta: a cultura vai nula (rateia), sem o "Falta:"', async () => {
     const { g, comoGravadores } = gravadoresFalsos();
@@ -229,6 +257,41 @@ describe('N2 — a prova: cadastrar, escolher o subcentro, criar 4 parcelas com 
     fireEvent.click(screen.getByTestId('nota-criar'));
     await waitFor(() => expect(g.gravar).toHaveBeenCalled());
     expect(g.gravar.mock.calls[0][0]).toMatchObject({ safra_id: 's-soja', cultura: null });
+  });
+});
+
+/* ═══ NOTA-FAZENDA-PELA-IE-01 — a fazenda pela nota: a IE do destinatario; sem IE gravada, o nome no endereco ("FAZ SINTETICA, S/N") ═══ */
+describe('N10 — a fazenda pela nota', () => {
+  const SEM_IE = [{ id: 'faz-1', nome: 'Faz. Sintetica', ie: null }, { id: 'faz-2', nome: 'Faz. Sintetica Dois', ie: null }];
+  it('pela IE: "Fazenda · pela IE" e nada a gravar', async () => {
+    abrir(montarNota({ fornecedores: [FORN] }));
+    expect(screen.getByTestId('nota-fazenda-origem').textContent).toBe('Fazenda · pela IE');
+    await waitFor(() => expect(consultas.iePorFazenda).toHaveBeenCalled());
+    expect(screen.queryByTestId('nota-gravar-ie')).toBeNull();
+  });
+  it('sem IE gravada: a fazenda pelo endereço ("confira", âmbar) e "Gravar a IE … nesta fazenda" — campo · hoje · da nota, a prévia, grava', async () => {
+    consultas.iePorFazenda.mockResolvedValue({});
+    abrir(montarNota({ fornecedores: [FORN], fazendasDaLeitura: SEM_IE }));
+    const origem = screen.getByTestId('nota-fazenda-origem');
+    expect(origem.textContent).toBe('Fazenda · pelo endereço, confira');
+    expect(origem.className).toContain('text-amber-800');
+    fireEvent.click(await screen.findByTestId('nota-gravar-ie'));
+    expect(screen.getByTestId('nota-gravar-ie').textContent).toBe('Gravar a IE 280000002 nesta fazenda');
+    const modal = await screen.findByTestId('gravar-ie-fazenda');
+    expect(within(modal).getByTestId('gravar-ie-linha').textContent).toBe('Inscrição estadual(vazia)280000002');
+    await waitFor(() => expect(screen.getByTestId('gravar-ie-previa').textContent).toContain('passa a ter a IE 280000002'));
+    expect(consultas.gravarIeDaFazenda).toHaveBeenCalledWith('faz-1', '280000002', expect.anything(), true, 'cli');
+    fireEvent.click(screen.getByTestId('gravar-ie-confirmar'));
+    await waitFor(() => expect(consultas.gravarIeDaFazenda).toHaveBeenCalledWith('faz-1', '280000002', expect.anything(), false, 'cli'));
+    await waitFor(() => expect(screen.queryByTestId('nota-gravar-ie')).toBeNull());
+    consultas.iePorFazenda.mockResolvedValue({ 'faz-1': '280000002' });
+  });
+  it('a fazenda já tem OUTRA IE: só o aviso — nunca oferece trocar', async () => {
+    consultas.iePorFazenda.mockResolvedValue({ 'faz-1': '281111119' });
+    abrir(montarNota({ fornecedores: [FORN], fazendasDaLeitura: SEM_IE }));
+    expect((await screen.findByTestId('nota-ie-diverge')).textContent).toBe('Faz. Sintetica tem outra IE (281111119) · a nota traz 280000002');
+    expect(screen.queryByTestId('nota-gravar-ie')).toBeNull();
+    consultas.iePorFazenda.mockResolvedValue({ 'faz-1': '280000002' });
   });
 });
 
@@ -442,8 +505,27 @@ describe('N9 — NOTA-FORNECEDOR-DUPLICA-01: o cadastro sem CNPJ e o CNPJ ja\' c
     const lidaAntes = montarNota();                       // lida quando ainda nao havia cadastro
     expect(lidaAntes.doXml.resolucao.achadoPor).toBeNull();
     abrir(lidaAntes, { fornecedores: [FORN] });           // o cadastro com o CNPJ existe agora
-    expect(screen.getByTestId('nota-chip-fornecedor').textContent).toBe('cadastrado');
+    expect(screen.getByTestId('nota-chip-fornecedor').textContent).toBe('achado pelo CNPJ');
     expect(screen.queryByTestId('nota-cadastrar-fornecedor')).toBeNull();
+  });
+  /* NOTA-FORNECEDOR-CNPJ-ACHADO-01 (o caso da Elos, sintetico): o cadastro ganhou o CNPJ (com mascara, como todos no banco) pela
+     comparacao da nota anterior; a lista da tela chega relida — a previa da nota seguinte casa pelo CNPJ e nao oferece completar */
+  it('a lista chega relida com o CNPJ (mascarado) gravado: de "sem CNPJ · Completar" para "achado pelo CNPJ", sem o botão', () => {
+    const tela = (fornecedores: FornecedorV2[]) => (
+      <QueryClientProvider client={new QueryClient()}>
+        <NotaFiscalDialog open clienteId="cli" clienteNome="NJ" nota={nota} fazendas={FAZENDAS} contas={CONTAS} classificacoes={PLANO} safras={SAFRAS}
+          fornecedores={fornecedores} consultarReceita={RECEITA} onClose={vi.fn()} onCriado={vi.fn()} onAbrirNoLancamento={vi.fn()} onAbrirRegistrada={vi.fn()}
+          onCriarFornecedor={vi.fn(async () => null)} gravarItens={vi.fn(async () => null)} />
+      </QueryClientProvider>
+    );
+    const nota = montarNota({ fornecedores: [SEM_DOC] });
+    const r = render(tela([SEM_DOC]));
+    expect(screen.getByTestId('nota-chip-fornecedor').textContent).toBe('achado pelo nome · sem CNPJ');
+    expect(screen.getByTestId('nota-completar-fornecedor').textContent).toBe('Completar com o CNPJ');
+    r.rerender(tela([{ ...SEM_DOC, cpf_cnpj: '11.222.333/0004-24' }]));
+    expect(screen.getByTestId('nota-chip-fornecedor').textContent).toBe('achado pelo CNPJ');
+    expect(screen.queryByTestId('nota-completar-fornecedor')).toBeNull();
+    expect(screen.queryByTestId('nota-sem-cnpj')).toBeNull();
   });
 });
 

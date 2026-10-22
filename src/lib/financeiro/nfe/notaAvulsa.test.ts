@@ -48,3 +48,35 @@ describe('a remessa de entrega futura', () => {
     expect(originariaCitada('sem referencia')).toBeNull();
   });
 });
+
+/* NOTA-FAZENDA-PELA-IE-01 — sem a IE gravada, a fazenda pelo nome no endereco do destinatario (so' quando e' UMA) */
+import { fazendaPeloEndereco, proporLancamento, ORIGEM_FAZENDA_PELO_ENDERECO } from './proporLancamento';
+import { resolverEmitente } from './resolverEmitente';
+describe('a fazenda pelo endereço do destinatário', () => {
+  const FAZ = [
+    { id: 'pur', nome: 'Faz. Pureza', ie: null, aliases: ['Faz Pureza'] }, { id: 'exp', nome: 'Faz. Sto. Expedito', ie: null },
+    { id: 'ret', nome: 'Retiro Agricultura', ie: null, aliases: ['Faz Retiro do Indaiá'] }, { id: 'adm', nome: 'Administrativo', ie: null },
+  ];
+  it('"FAZENDA PUREZA, S/N" -> Faz. Pureza; "FAZENDA SANTO EXPEDITO" -> Faz. Sto. Expedito; pelo apelido; nada -> nulo', () => {
+    expect(fazendaPeloEndereco('FAZENDA PUREZA, S/N', FAZ)?.id).toBe('pur');
+    expect(fazendaPeloEndereco('Fazenda Santo Expedito - Zona Rural', FAZ)?.id).toBe('exp');
+    expect(fazendaPeloEndereco('FAZ. RETIRO DO INDAIA, KM 12', FAZ)?.id).toBe('ret');
+    expect(fazendaPeloEndereco('RUA DAS FLORES, 100', FAZ)).toBeNull();
+    expect(fazendaPeloEndereco('FAZENDA PUREZANOVA', FAZ)).toBeNull();
+    expect(fazendaPeloEndereco('', FAZ)).toBeNull();
+  });
+  it('duas fazendas casam: nenhuma (o operador escolhe)', () => {
+    expect(fazendaPeloEndereco('FAZENDA PUREZA E SANTO EXPEDITO', FAZ)).toBeNull();
+  });
+  it('proporLancamento: a IE manda; sem IE gravada, o endereço — com a origem "pelo endereço, confira"', () => {
+    const r = ler({ serie: '10' }); r.nota.destinatario.endereco = 'FAZENDA PUREZA, S/N';
+    const emit = resolverEmitente(r.nota.emitente, [], null);
+    const pelaEnd = proporLancamento({ nota: r.nota, avisosDoLeitor: [], fazendas: FAZ, emitente: emit, favorecidoId: null, ultima: null });
+    if (pelaEnd.ok === false) throw new Error(pelaEnd.frase);
+    expect([pelaEnd.proposta.fazendaId, pelaEnd.proposta.origens.fazenda]).toEqual(['pur', ORIGEM_FAZENDA_PELO_ENDERECO]);
+    const comIe = FAZ.map((f) => (f.id === 'exp' ? { ...f, ie: r.nota.destinatario.ie } : f));
+    const pelaIe = proporLancamento({ nota: r.nota, avisosDoLeitor: [], fazendas: comIe, emitente: emit, favorecidoId: null, ultima: null });
+    if (pelaIe.ok === false) throw new Error(pelaIe.frase);
+    expect(pelaIe.proposta.fazendaId).toBe('exp');
+  });
+});

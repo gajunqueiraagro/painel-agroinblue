@@ -24,7 +24,7 @@ import { proporLancamento, type FazendaComIE, type PropostaDeLancamento } from '
 import { resolverEmitente, type FornecedorParaResolver, type ResolucaoEmitente } from '@/lib/financeiro/nfe/resolverEmitente';
 import { dataCurta, diaMes, documentoFormatado, numeroDaNota, reais } from '@/lib/financeiro/nfe/formatos';
 import {
-  fornecedorPeloNome, iePorFazenda, notaJaLancada, notaJaRegistrada, ultimaClassificacaoDoFornecedor, type OcorrenciaDaNota,
+  aliasesDasFazendas, fornecedorPeloNome, iePorFazenda, notaJaLancada, notaJaRegistrada, ultimaClassificacaoDoFornecedor, type OcorrenciaDaNota,
 } from '@/lib/financeiro/nfeConsultas';
 import { arquivoXmlDaNota, type DoXml } from '@/lib/financeiro/nfePrefill';
 import { parcelasParaCasar } from '@/lib/financeiro/nfe/jaLancada';
@@ -122,8 +122,9 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
     if (!clienteId || arquivos.length === 0) return;
     setLendo(true);
     try {
-      const ies = await iePorFazenda(clienteId);
-      const fazendasComIE: FazendaComIE[] = fazendas.map((f) => ({ id: f.id, nome: f.nome, ie: ies[f.id] ?? null }));
+      const [ies, apelidos] = await Promise.all([iePorFazenda(clienteId), aliasesDasFazendas(clienteId)]);
+      /* NOTA-FAZENDA-PELA-IE-01 — com os apelidos: sem a IE gravada, a fazenda pelo nome no endereco do destinatario */
+      const fazendasComIE: FazendaComIE[] = fazendas.map((f) => ({ id: f.id, nome: f.nome, ie: ies[f.id] ?? null, aliases: apelidos[f.id] ?? null }));
       const novas: LinhaDeNota[] = [];
       for (const arquivo of arquivos) {
         seq += 1;
