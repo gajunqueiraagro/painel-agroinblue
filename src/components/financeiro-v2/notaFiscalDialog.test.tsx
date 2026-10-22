@@ -116,6 +116,8 @@ function abrir(nota: NotaParaLancar, extra: { fornecedores?: FornecedorV2[]; g?:
   const onCriarFornecedor = vi.fn(async (nome: string, _faz: string | null, _doc?: string): Promise<FornecedorV2 | null> => ({ ...FORN, id: 'forn-novo', nome }));
   const props = {
     onClose: vi.fn(), onCriado: vi.fn(), onAbrirNoLancamento: vi.fn(), onAbrirRegistrada: vi.fn(), onCriarFornecedor,
+    /* ITENS-NOTA-01 — o gravador dos itens (o de verdade vai ao banco) */
+    gravarItens: vi.fn(async (_c: string, _b: ArrayBuffer): Promise<string | null> => null),
   };
   render(
     <QueryClientProvider client={new QueryClient()}>
@@ -187,6 +189,9 @@ describe('N2 — a prova: cadastrar, escolher o subcentro, criar 4 parcelas com 
     expect(pendentes[0].arquivo?.name).toBe('000.000.937.pdf');
     expect(pendentes[0].payload).toMatchObject({ especie: 'nf', numero: '000.000.937', serie: '10', chaveAcesso: '50260911222333000424550100000009371217538298', dataEmissao: '2026-09-15', valorDocumento: 1966.56 });
     expect(props.onClose).toHaveBeenCalled();
+    expect(props.gravarItens).toHaveBeenCalledTimes(1);
+    expect(props.gravarItens.mock.calls[0][0]).toBe('cli');
+    expect(props.gravarItens.mock.calls[0][1].byteLength).toBeGreaterThan(0);
   });
   it('FIN-NOTA-PDF-01b — subcentro de lavoura: Safra (sugerida pela data) e Cultura (sem resposta até escolher); safra e cultura gravadas', async () => {
     const { g, comoGravadores } = gravadoresFalsos();
@@ -346,6 +351,7 @@ describe('N8 — FIN-NOTA-PDF-01b: "Atualizar e parcelar" (o à vista existente 
     expect(g.gravar).not.toHaveBeenCalled();
     expect(g.parcelas).toHaveBeenCalledWith('fin-velho');
     expect(g.documentosDoParcelamento.mock.calls[0][2][0].arquivo?.type).toBe('application/pdf');
+    expect(props.gravarItens).toHaveBeenCalledTimes(1);
   });
   it('PAGO com valor diferente da parcela 1: a diferença em R$ e a decisão (o valor pago cobre a nota: só anexar)', async () => {
     consultas.lancamentosAbertosComValor.mockResolvedValue([
