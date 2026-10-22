@@ -86,6 +86,25 @@ describe('ItensDaNota — Valores e Fiscal', () => {
   });
 });
 
+describe('ITENS-NOTA-FONTE-01 — o codigo nunca corta; a tabela compacta', () => {
+  it('a coluna do codigo tem a largura do MAIOR codigo da nota (14 digitos -> 14ch), sem "…"; a descricao e\' que corta', () => {
+    const l = doXml();
+    const comCodigo = { ...l, itens: l.itens.map((i, k) => ({ ...i, codigo: k === 1 ? '78912345100013' : i.codigo })) };
+    render(<ItensDaNota cabecalho={CAB} lidos={comCodigo} />);
+    const cols = screen.getByTestId('itens-quadro').querySelector('table')?.querySelectorAll('col');
+    expect(cols?.[1].getAttribute('style')).toContain('calc(14ch + 10px)');
+    const cel = within(screen.getAllByTestId('itens-linha')[1]).getByText('78912345100013');
+    expect(cel.className).not.toContain('truncate');
+    expect(cel.className).toContain('whitespace-nowrap');
+    expect(cel.className).toContain('text-[8.5px]');
+  });
+  it('codigos curtos: a coluna nao fica menor que o rotulo (9ch)', () => {
+    render(<ItensDaNota cabecalho={CAB} lidos={doXml()} />);
+    const cols = screen.getByTestId('itens-quadro').querySelector('table')?.querySelectorAll('col');
+    expect(cols?.[1].getAttribute('style')).toContain('calc(9ch + 10px)');
+  });
+});
+
 describe('ItensDasNotasGuardadasDialog — o backfill com trilha', () => {
   const C1 = { chave: '5'.repeat(44), numero: '000000010', bucket: 'fin-documentos', caminho: 'cli/a.xml', origem: 'lancamento' };
   const C2 = { chave: '4'.repeat(44), numero: '000000011', bucket: 'oc-documentos', caminho: 'cli/b.pdf', origem: 'oc' };
