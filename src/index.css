@@ -560,3 +560,14 @@ input[type='number'] {
     padding-right: 12px;
   }
 }
+/* FIN-CLASSIF-DIVIDIDA-01c — EXCEÇÃO (7) AO PISO, SÓ NESTA LISTA (mock aprovado 22/10): o lançamento DIVIDIDO filtrado por uma conta
+   mostra a parte e, embaixo, "de R$ <o lançamento>" a 7px (como a 2ª linha da Safra); o selo "1 de 2 contas" / "dividido" a 7,5px. A
+   linha segue com 19px (9 + 7 = 16px de conteúdo). */
+.table-financeiro td .valor-de-total {
+  font-size: 7px !important;
+  line-height: 1 !important;
+}
+.table-financeiro td .selo-divisao {
+  font-size: 7.5px !important;
+  line-height: 11px !important;
+}
