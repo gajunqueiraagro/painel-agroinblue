@@ -24,9 +24,10 @@ import { proporLancamento, type FazendaComIE, type PropostaDeLancamento } from '
 import { resolverEmitente, type FornecedorParaResolver, type ResolucaoEmitente } from '@/lib/financeiro/nfe/resolverEmitente';
 import { dataCurta, diaMes, documentoFormatado, numeroDaNota, reais } from '@/lib/financeiro/nfe/formatos';
 import {
-  fornecedorPeloNome, iePorFazenda, notaJaRegistrada, ultimaClassificacaoDoFornecedor, type OcorrenciaDaNota,
+  fornecedorPeloNome, iePorFazenda, notaJaLancada, notaJaRegistrada, ultimaClassificacaoDoFornecedor, type OcorrenciaDaNota,
 } from '@/lib/financeiro/nfeConsultas';
 import { arquivoXmlDaNota, type DoXml } from '@/lib/financeiro/nfePrefill';
+import { parcelasParaCasar } from '@/lib/financeiro/nfe/jaLancada';
 import type { NotaLidaOk, NotaParaLancar } from './NotaFiscalDialog';
 import { ItensDasNotasGuardadasDialog } from './ItensDasNotasGuardadasDialog';
 
@@ -43,6 +44,8 @@ export interface LinhaDeNota {
   lancada: boolean;
   /** FIN-NOTA-PDF-01 — a nota do PDF: o arquivo, os bytes e o lido (marcas, conferencia da chave) para o `NotaFiscalDialog`. */
   paraLancar?: NotaParaLancar | null;
+  /** NOTA-JA-LANCADA-01 — quantos lancamentos do cliente ja' parecem ser esta nota (0 = nenhum). */
+  jaLancados?: number;
 }
 
 /** "2 × 8.119,00 · 05/11 e 05/12" | "sem duplicatas" | "3 · parcelas livres" | "1 × 16.238,00 · 30/10". */
@@ -54,17 +57,19 @@ export function resumoDasDuplicatas(p: PropostaDeLancamento): string {
   return `${d.length} × ${reais(d[0].valorCent)} · ${datas}`;
 }
 
-export type SituacaoDaNota = 'recusada' | 'lancada' | 'ja_registrada' | 'sem_protocolo' | 'nova';
+export type SituacaoDaNota = 'recusada' | 'lancada' | 'ja_registrada' | 'ja_lancada' | 'sem_protocolo' | 'nova';
 export function situacaoDaNota(l: LinhaDeNota): SituacaoDaNota {
   if (l.recusa) return 'recusada';
   if (l.lancada) return 'lancada';
   if ((l.doXml?.ocorrencias.length ?? 0) > 0) return 'ja_registrada';
+  if ((l.jaLancados ?? 0) > 0) return 'ja_lancada';
   if (l.avisos.includes('sem_protocolo')) return 'sem_protocolo';
   return 'nova';
 }
 const TEXTO_DA_SITUACAO: Record<Exclude<SituacaoDaNota, 'recusada'>, { texto: string; cor: string }> = {
   nova: { texto: 'autorizada · nova', cor: 'text-[#15803d]' },
   ja_registrada: { texto: 'já registrada', cor: 'text-amber-700' },
+  ja_lancada: { texto: 'parece já lançada', cor: 'text-amber-700' },
   sem_protocolo: { texto: 'sem protocolo', cor: 'text-amber-700' },
   lancada: { texto: 'lançada', cor: 'text-primary' },
 };
@@ -142,11 +147,19 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
           ocorrencias, arquivo: ehPdf ? arquivoPdfDaNota(bytes, arquivo.name) : arquivoXmlDaNota(bytes, arquivo.name),
         };
         const lidoOk: NotaLidaOk = lido;
+        /* NOTA-JA-LANCADA-01 — a nota ja' lancada (qualquer status, cadastro parecido): a linha avisa e abre a previa da nota
+           (que oferece anexar), nunca o Novo lancamento direto */
+        const pr = proposta.proposta;
+        const jaLancados = ocorrencias.length ? 0 : await notaJaLancada(clienteId, {
+          parcelas: parcelasParaCasar(pr.duplicatas, nota.totais.notaCent, pr.duplicatas[0]?.vencimento ?? nota.emissao),
+          numero: pr.numeroDocumento || nota.numero, chave: nota.chave, emitenteDocumento: nota.emitente.documento,
+          nomes: [nota.emitente.nome, nota.emitente.fantasia],
+        }).then((l) => l.length, () => 0);   // a busca nunca trava a leitura
         novas.push({
           ...base, nota, avisos, recusa: null,
           fazenda: fazendasComIE.find((f) => f.id === proposta.proposta.fazendaId) ?? null,
-          doXml,
-          paraLancar: ehPdf ? { arquivo: doXml.arquivo, bytes, lido: lidoOk, doXml } : null,
+          doXml, jaLancados,
+          paraLancar: ehPdf || jaLancados > 0 ? { arquivo: doXml.arquivo, bytes, lido: lidoOk, doXml } : null,
         });
       }
       /* FIN-NOTA-PDF-01 — um PDF so', lido e aceito: abre direto a nota (o mock), sem passar pela lista. */
