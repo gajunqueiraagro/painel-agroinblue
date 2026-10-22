@@ -221,6 +221,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - Nota fiscal (FIN-NOTA-PDF-01): XML e PDF entram por UMA porta (`lerNota`) e saem na MESMA `NotaLida`; o DANFE se le^ pela posicao
   e a chave de 44 digitos confere o lido (divergiu = nada criado); criar/atualizar pela nota usa o gravador do parcelado e a cadeia de documentos.
   FIN-NOTA-PDF-01b: NADA ESCOLHIDO NA PREVIA SE PERDE — todo caminho que abre outro modal leva tudo (`prefillDoModal`); o pago nunca muda de valor.
+- FORN-TROCAR-LOTE-01: troca de fornecedor em lote SO' pela `fn_lancamentos_trocar_favorecido` (simular/aplicar com trilha/desfazer; so'
+  `favorecido_id`); "Marcar todos os N do filtro" pela MESMA RPC da grade (`so_linhas`); nunca UPDATE solto de favorecido.
 - NOTA-JA-LANCADA-01: antes de oferecer criar pela nota, `fn_nota_ja_lancada` (qualquer status, cadastro parecido, numero, chave); achou =
   anexar (nunca muda valor/data/status/conciliacao); trocar fornecedor so' marcando (`fn_lancamentos_trocar_favorecido`, com trilha).
 - NOTA-FORNECEDOR-COMPARAR-01: cadastro atualizado pela nota/Receita so' pelo `CompararCadastroDialog` (hoje x proposto; diferente vem

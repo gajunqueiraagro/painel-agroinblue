@@ -85,6 +85,7 @@ import { CULTURAS_LANCAMENTO } from '@/lib/agri/rateioLancamento';
 import { ATIVIDADES } from '@/lib/financeiro/ultimaAtividade';
 import { filtrosAplicadosDaLista } from '@/lib/financeiro/listaPaginadaV2';
 import { lerListaInteira, abrirDivididasParaExportar, type PedirPaginaDaLista } from '@/lib/financeiro/exportacaoPelaLista';
+import { TrocarFornecedorDialog } from '@/components/financeiro-v2/TrocarFornecedorDialog';
 import { hojeLocal } from '@/lib/datas/hojeLocal';
 import { useListaPaginaV2 } from '@/hooks/useListaPaginaV2';
 import { useAlturaAteOFim } from '@/hooks/useAlturaAteOFim';
@@ -1327,6 +1328,34 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   useEffect(() => { setSelectedIds(new Set()); }, [paginaV2, porPagina]);
   const allSelected = useMemo(() => selectedIds.size > 0 && linhasDaGrade.length > 0 && linhasDaGrade.every(l => selectedIds.has(l.id)), [selectedIds, linhasDaGrade]);
   const someSelected = selectedIds.size > 0;
+
+  /* FORN-TROCAR-LOTE-01 — "Marcar todos os N do filtro": os ids do recorte INTEIRO, pela MESMA RPC da grade (`so_linhas`, como a
+     exportacao); so' para o "Trocar fornecedor" (Excluir e Marcar realizado seguem so' na pagina). Trocar o recorte desmarca. */
+  const [todosDoFiltro, setTodosDoFiltro] = useState(false);
+  const [marcandoTodos, setMarcandoTodos] = useState(false);
+  const [trocarAberto, setTrocarAberto] = useState(false);
+  const idsMarcados = useMemo(() => [...selectedIds], [selectedIds]);   // estavel: o modal simula de novo so' quando a selecao muda
+  const todosDoFiltroRef = useRef(false);
+  todosDoFiltroRef.current = todosDoFiltro;
+  useEffect(() => { if (todosDoFiltroRef.current) { setSelectedIds(new Set()); setTodosDoFiltro(false); } }, [chaveDoRecorte, paginaV2]);
+  const marcarTodosDoFiltro = async () => {
+    const cli = clienteAtual?.id;
+    if (!cli) return;
+    setMarcandoTodos(true);
+    try {
+      const pedir: PedirPaginaDaLista = async (pagina, por) => {
+        const { data, error } = await (supabase as any).rpc('fn_fin_v2_lista_pagina', {
+          p_cliente: cli, p_filtros: filtrosV2, p_ordem: { ...ordemV2, so_linhas: true }, p_pagina: pagina, p_por_pagina: por });
+        if (error) throw error;
+        return data;
+      };
+      const todas = await lerListaInteira(pedir, { teto: 20000 });
+      setSelectedIds(new Set(todas.map((l) => l.id)));
+      setTodosDoFiltro(true);
+    } catch (e) {
+      toast.error(e instanceof Error && e.message ? e.message : 'Não foi possível marcar todos do filtro.');
+    } finally { setMarcandoTodos(false); }
+  };
 
   const toggleSelectAll = () => {
     if (allSelected) {
@@ -3006,20 +3035,40 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
 
           {/* Bulk action bar */}
           {someSelected && (
-            <div className="flex flex-wrap items-center gap-2 px-2 py-1.5 bg-muted border border-border rounded-lg">
-              <span className="text-[11px] font-semibold">{selectedIds.size} selecionado{selectedIds.size !== 1 ? 's' : ''}</span>
+            <div className="flex flex-wrap items-center gap-2 px-2 py-1.5 bg-muted border border-border rounded-lg" data-testid="barra-lote">
+              <span className="text-[11px] font-semibold" data-testid="lote-contagem">{selectedIds.size} selecionado{selectedIds.size !== 1 ? 's' : ''}{todosDoFiltro ? ' · todos do filtro' : ''}</span>
+              {allSelected && !todosDoFiltro && totalLancamentosFiltrados > linhasDaGrade.length && (
+                <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2 underline underline-offset-2" disabled={marcandoTodos}
+                  onClick={() => { void marcarTodosDoFiltro(); }} data-testid="lote-marcar-todos-filtro">
+                  {marcandoTodos ? 'Marcando…' : `Marcar todos os ${totalLancamentosFiltrados.toLocaleString('pt-BR')} do filtro`}
+                </Button>
+              )}
               <Button
                 size="sm"
                 variant="default"
                 className="h-6 text-[10px] gap-1 px-2"
-                disabled={realizarInfo.elegiveis.length === 0}
+                disabled={realizarInfo.elegiveis.length === 0 || todosDoFiltro}
+                title={todosDoFiltro ? 'Com "todos do filtro" marcado, só o Trocar fornecedor vale (as outras ações são da página).' : undefined}
                 onClick={() => { setDataPagamentoModo('vencimento'); setDataPagamentoUnica(''); setConfirmRealizarOpen(true); }}
               >
                 <CheckCircle2 className="h-3 w-3" /> Marcar realizado{realizarInfo.elegiveis.length > 0 ? ` (${realizarInfo.elegiveis.length})` : ''}
               </Button>
-              <Button size="sm" variant="destructive" className="h-6 text-[10px] gap-1 px-2" onClick={() => { setMotivoLote(''); setConfirmDeleteOpen(true); }}>
+              <Button size="sm" variant="destructive" className="h-6 text-[10px] gap-1 px-2" disabled={todosDoFiltro}
+                title={todosDoFiltro ? 'Com "todos do filtro" marcado, só o Trocar fornecedor vale (as outras ações são da página).' : undefined}
+                onClick={() => { setMotivoLote(''); setConfirmDeleteOpen(true); }}>
                 <Trash2 className="h-3 w-3" /> Excluir selecionados
               </Button>
+              {/* FORN-TROCAR-LOTE-01 — o "…" da barra: Trocar fornecedor (as marcadas, ou todos do filtro) */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant="outline" className="h-6 w-7 px-0" aria-label="Mais ações" title="Mais ações" data-testid="lote-mais">
+                    <MoreHorizontal className="h-3.5 w-3.5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuItem onSelect={() => setTrocarAberto(true)} data-testid="lote-trocar-fornecedor">Trocar fornecedor…</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Button size="sm" variant="ghost" className="h-6 text-[10px] gap-1 px-2" onClick={() => setSelectedIds(new Set())}>
                 <X className="h-3 w-3" /> Cancelar seleção
               </Button>
@@ -3031,6 +3080,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
 
           {/* FIN-V2-DESEMPENHO-01b: a contagem ("N lançamentos encontrados") virou o intervalo na barra da página, dentro do quadro. */}
         </>
+      )}
+
+      {trocarAberto && clienteAtual?.id && (
+        <TrocarFornecedorDialog clienteId={clienteAtual.id} ids={idsMarcados} onClose={() => setTrocarAberto(false)}
+          onTrocado={() => { setSelectedIds(new Set()); setTodosDoFiltro(false); void listaV2.recarregar(); }} />
       )}
 
       <LancamentoV2Dialog
