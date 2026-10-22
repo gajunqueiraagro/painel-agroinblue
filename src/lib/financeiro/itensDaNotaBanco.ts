@@ -22,6 +22,15 @@ export async function lerItensDoArquivo(bytes: ArrayBuffer): Promise<{ ok: true;
   return { ok: true, payload: payloadDaNotaFiscal(lido.nota, lidos, xml), lidos };
 }
 
+/** A nota com os itens, lida do proprio arquivo (sem gravar) — o lancamento novo e a nota sem itens guardados. `null` = nao legivel. */
+export async function notaComItensDoArquivo(bytes: ArrayBuffer): Promise<{ cabecalho: CabecalhoDaNota; lidos: ItensLidos } | null> {
+  const r = await lerItensDoArquivo(bytes);
+  if (r.ok === false) return null;
+  const n = r.payload.nota;
+  return { lidos: r.lidos, cabecalho: { chave: n.chave_acesso, origem: r.lidos.origem, numero: n.numero, serie: n.serie, emissao: n.emissao,
+    natureza: n.natureza, regime: n.regime, emitenteDocumento: n.emitente_documento, emitenteNome: n.emitente_nome } };
+}
+
 /** Le^ e grava (ou simula). `operacao` = a do backfill (trilha). */
 export async function gravarItensDoArquivo(clienteId: string, bytes: ArrayBuffer, opcoes: { simular?: boolean; operacao?: string | null } = {}): Promise<ResultadoDosItens> {
   const r = await lerItensDoArquivo(bytes);
