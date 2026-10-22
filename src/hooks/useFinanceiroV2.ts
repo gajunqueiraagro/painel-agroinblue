@@ -446,6 +446,25 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     setFornecedores(all);
   }, [clienteId]);
 
+  /* FIN-V2-LISTA-RELE-APOS-CADASTRO-01 — o cadastro mudou em alguns fornecedores: relê SÓ esses (uma ida, as mesmas colunas) e troca
+     no cadastro da tela pelo id (o que não estava entra no fim) — nada de reler o cadastro inteiro */
+  const atualizarFornecedoresPorId = useCallback(async (ids: readonly string[]) => {
+    if (!clienteId || ids.length === 0) return;
+    const { data, error } = await supabase
+      .from('financeiro_fornecedores')
+      .select('id, nome, nome_fantasia, cpf_cnpj, fazenda_id, ativo, tipo_recebimento, pix_tipo_chave, pix_chave, banco, agencia, conta, tipo_conta, cpf_cnpj_pagamento, nome_favorecido, observacao_pagamento, aliases_norm, fundido_em_id, municipio, uf')
+      .eq('cliente_id', clienteId)
+      .in('id', [...ids]);
+    if (error || !data) { console.error('[atualizarFornecedoresPorId]', error); return; }
+    const lidos: FornecedorV2[] = data;
+    const novos = new Map(lidos.map((f) => [f.id, f]));
+    setFornecedores((prev) => {
+      const fora = new Set(novos.keys());
+      const trocados = prev.map((f) => { const n = novos.get(f.id); if (n) fora.delete(f.id); return n ?? f; });
+      return [...trocados, ...[...fora].map((id) => novos.get(id)).filter((f): f is FornecedorV2 => !!f)];
+    });
+  }, [clienteId]);
+
   // PR-FORNECEDOR-FAZENDA-01: fazenda é OPCIONAL — fornecedor é entidade do cliente.
   // fazendaId null vai como null (NUNCA ''); lookups são por cliente_id+nome (sem fazenda).
   const criarFornecedor = useCallback(async (nome: string, fazendaId: string | null, cpfCnpj?: string) => {
@@ -1715,6 +1734,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     pageSize: PAGE_SIZE,
     loadContas,
     loadFornecedores,
+    atualizarFornecedoresPorId,
     loadClassificacoes,
     buscarLancamentoPorId,
     loadSafras,

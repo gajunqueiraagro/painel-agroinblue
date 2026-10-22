@@ -64,17 +64,12 @@ function ehLinha(v: unknown): v is LancamentoV2 {
   return !!o && typeof g(o, 'id') === 'string' && typeof g(o, 'cliente_id') === 'string';
 }
 
-/** O leitor da resposta: qualquer peça torta = nulo (a tela diz que não carregou; nunca "0 lançamentos"). */
-export function lerPaginaV2(r: unknown): PaginaDaListaV2 | null {
+/** FIN-V2-DESEMPENHO-01c — o leitor da resposta "só linhas" (`so_linhas`: trocar de página sem recontar): as linhas, os conciliados e
+ *  o total; peça torta = nulo. */
+export function lerLinhasV2(r: unknown): Pick<PaginaDaListaV2, 'linhas' | 'conciliados' | 'total'> | null {
   const o = obj(r); if (!o) return null;
-  const total = num(g(o, 'total_linhas')); const t = obj(g(o, 'totais')); const sc = obj(g(o, 'sem_caixa'));
-  const brutas = g(o, 'linhas'); const forn = obj(g(o, 'fornecedores'));
-  if (total === null || !t || !sc || !forn || !Array.isArray(brutas)) return null;
-  const entradas = num(g(t, 'entradas')), saidas = num(g(t, 'saidas')), transferencias = num(g(t, 'transferencias'));
-  const entradasSemCaixa = num(g(t, 'entradas_sem_caixa')), saidasSemCaixa = num(g(t, 'saidas_sem_caixa'));
-  const scLinhas = num(g(sc, 'linhas')), scTotal = num(g(sc, 'total'));
-  if (entradas === null || saidas === null || transferencias === null || entradasSemCaixa === null || saidasSemCaixa === null
-    || scLinhas === null || scTotal === null) return null;
+  const total = num(g(o, 'total_linhas')); const brutas = g(o, 'linhas');
+  if (total === null || !Array.isArray(brutas)) return null;
   const linhas: LancamentoV2[] = [];
   const conciliados = new Set<string>();
   for (const l of brutas) {
@@ -82,6 +77,21 @@ export function lerPaginaV2(r: unknown): PaginaDaListaV2 | null {
     linhas.push(l);
     if (g(l, 'conciliado') === true) conciliados.add(l.id);
   }
+  return { linhas, conciliados, total };
+}
+
+/** O leitor da resposta: qualquer peça torta = nulo (a tela diz que não carregou; nunca "0 lançamentos"). */
+export function lerPaginaV2(r: unknown): PaginaDaListaV2 | null {
+  const o = obj(r); if (!o) return null;
+  const base = lerLinhasV2(r); const t = obj(g(o, 'totais')); const sc = obj(g(o, 'sem_caixa'));
+  const forn = obj(g(o, 'fornecedores'));
+  if (!base || !t || !sc || !forn) return null;
+  const entradas = num(g(t, 'entradas')), saidas = num(g(t, 'saidas')), transferencias = num(g(t, 'transferencias'));
+  const entradasSemCaixa = num(g(t, 'entradas_sem_caixa')), saidasSemCaixa = num(g(t, 'saidas_sem_caixa'));
+  const scLinhas = num(g(sc, 'linhas')), scTotal = num(g(sc, 'total'));
+  if (entradas === null || saidas === null || transferencias === null || entradasSemCaixa === null || saidasSemCaixa === null
+    || scLinhas === null || scTotal === null) return null;
+  const { linhas, conciliados, total } = base;
   const usoPorFornecedor = new Map<string, number>();
   for (const [id, v] of Object.entries(forn)) {
     const n = num(v);

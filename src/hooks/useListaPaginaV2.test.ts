@@ -67,6 +67,46 @@ describe('useListaPaginaV2', () => {
     expect(banco.pedidos[1].args.p_pagina).toBe(3);
   });
 
+  it('FIN-V2-DESEMPENHO-01c — o nome que a tela já conhece (cadastro ou página anterior) não é buscado de novo; a página fica pronta antes dos nomes', async () => {
+    banco.nomes = [{ id: 'f-a', nome: 'A' }, { id: 'f-b', nome: 'B' }];
+    const { result, rerender } = renderHook(({ p }) => useListaPaginaV2('cli', pedido(p), true, (id) => id === 'f-c'), { initialProps: { p: 0 } });
+    await act(async () => { banco.pedidos[0].resolver({ data: resposta(['a', 'c'], 3), error: null }); });
+    expect(result.current.carregando).toBe(false);
+    await waitFor(() => expect(result.current.nomes.get('f-a')).toBe('A'));
+    expect(banco.idsPedidos).toEqual([['f-a']]);
+    rerender({ p: 1 });
+    await act(async () => { banco.pedidos[1].resolver({ data: resposta(['a', 'b', 'c'], 3), error: null }); });
+    await waitFor(() => expect(result.current.nomes.get('f-b')).toBe('B'));
+    expect(banco.idsPedidos).toEqual([['f-a'], ['f-b']]);
+  });
+
+  it('FIN-V2-DESEMPENHO-01c — trocar SÓ a página pede só as linhas e guarda os totais; gravar (o canal) relê completa', async () => {
+    const soLinhas = (ids: string[], total: number) => ({ total_linhas: total, linhas: ids.map((id) => ({ id, cliente_id: 'cli', favorecido_id: null })),
+      totais: null, sem_caixa: null, contagens: null, fornecedores: null });
+    const completa = { ...resposta(['a'], 300), totais: { entradas: 9, saidas: 0, transferencias: 0, entradas_sem_caixa: 0, saidas_sem_caixa: 0 }, fornecedores: { fx: 4 } };
+    const { result, rerender } = renderHook(({ p }) => useListaPaginaV2('cli', pedido(p), true), { initialProps: { p: 0 } });
+    await act(async () => { banco.pedidos[0].resolver({ data: completa, error: null }); });
+    rerender({ p: 1 });
+    expect(banco.pedidos[1].args.p_ordem).toEqual({ campo: 'default', dir: 'asc', nivel: 'centro', so_linhas: true });
+    await act(async () => { banco.pedidos[1].resolver({ data: soLinhas(['b'], 300), error: null }); });
+    expect(result.current.pagina?.linhas.map((l) => l.id)).toEqual(['b']);
+    expect(result.current.pagina?.totais.entradas).toBe(9);
+    expect(result.current.pagina?.usoPorFornecedor.get('fx')).toBe(4);
+    act(() => { notificarLancamentosMudaram('cli'); });
+    expect(banco.pedidos[2].args.p_ordem).toEqual({ campo: 'default', dir: 'asc', nivel: 'centro' });
+  });
+
+  it('FIN-V2-DESEMPENHO-01c — o total mudou entre as páginas: relê completa (os totais da tela ficaram velhos)', async () => {
+    const { result, rerender } = renderHook(({ p }) => useListaPaginaV2('cli', pedido(p), true), { initialProps: { p: 0 } });
+    await act(async () => { banco.pedidos[0].resolver({ data: resposta(['a'], 300), error: null }); });
+    rerender({ p: 1 });
+    await act(async () => { banco.pedidos[1].resolver({ data: { total_linhas: 301, linhas: [] }, error: null }); });
+    expect(banco.pedidos).toHaveLength(3);
+    expect(banco.pedidos[2].args.p_ordem).toEqual({ campo: 'default', dir: 'asc', nivel: 'centro' });
+    await act(async () => { banco.pedidos[2].resolver({ data: resposta(['b'], 301), error: null }); });
+    expect(result.current.pagina?.total).toBe(301);
+  });
+
   it('falha ou resposta torta = a frase da tela, e a página não vira "0 lançamentos"', async () => {
     const erro = vi.spyOn(console, 'error').mockImplementation(() => {});
     const { result } = renderHook(() => useListaPaginaV2('cli', pedido(0), true));

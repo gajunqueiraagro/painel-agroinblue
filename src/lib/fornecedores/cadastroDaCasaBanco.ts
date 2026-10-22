@@ -48,7 +48,7 @@ export const fonteDoCadastroNoBanco: FonteDoCadastro = {
       .select('id');
     if (error) throw new Error(error.message);
     if (!data || data.length === 0) throw new Error('nenhuma linha reativada');
-    notificarFornecedoresMudaram(clienteId);
+    notificarFornecedoresMudaram(clienteId, [id]);
   },
   /* FORN-FILIAL-01 — "preencher o CNPJ naquele cadastro": só no cadastro DESTE cliente que está SEM documento (o banco ainda trava o
      CNPJ de outro ativo, no fim da transação) */
@@ -62,7 +62,7 @@ export const fonteDoCadastroNoBanco: FonteDoCadastro = {
       .select('id');
     if (error) throw new Error(error.message);
     if (!data || data.length === 0) throw new Error('o cadastro já tem documento');
-    notificarFornecedoresMudaram(clienteId);
+    notificarFornecedoresMudaram(clienteId, [id]);   /* FIN-V2-LISTA-RELE-APOS-CADASTRO-01: com o id, quem mostra relê só ele */
   },
 };
 

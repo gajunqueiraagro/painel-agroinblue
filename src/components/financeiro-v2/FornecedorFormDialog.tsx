@@ -255,7 +255,8 @@ export function FornecedorFormDialog({
     if (error) { setRecado({ texto: `Não foi possível gravar: ${error.message}`, tom: 'erro' }); return; }
     if (!editing && onCriado && criado && typeof criado.id === 'string') onCriado(criado.id);
     toast.success(editing ? 'Fornecedor atualizado' : 'Fornecedor criado');
-    notificarFornecedoresMudaram(clienteId);
+    const gravado = editing ? editing.id : criado && typeof criado.id === 'string' ? criado.id : null;
+    notificarFornecedoresMudaram(clienteId, gravado ? [gravado] : undefined);
     onClose(); onSaved();
   }, [saving, documentoBloqueia, linhaLida, clienteId, d, editing, allFornecedores, lerCadastro, lerTrava, documentoParaGravar, onClose, onSaved, onCriado]);
 
@@ -279,7 +280,7 @@ export function FornecedorFormDialog({
     if (error) { setRecado({ texto: `Não foi possível reativar: ${error.message}`, tom: 'erro' }); return; }
     toast.success(`Fornecedor "${reativarTarget.nome}" reativado`);
     setReativarTarget(null);
-    notificarFornecedoresMudaram(clienteId);
+    notificarFornecedoresMudaram(clienteId, [reativarTarget.id]);
     onClose(); onSaved();
   }, [reativarTarget, onClose, onSaved, clienteId]);
 
@@ -297,7 +298,7 @@ export function FornecedorFormDialog({
     const r = (data ?? {}) as { ok?: boolean; recusa?: { frase?: string } };
     if (r.ok === false) { setRecado({ texto: r.recusa?.frase ?? 'Não foi possível excluir.', tom: 'erro' }); return; }
     toast.success('Fornecedor excluído (fica fora de uso)');
-    notificarFornecedoresMudaram(clienteId);
+    notificarFornecedoresMudaram(clienteId, [editing.id]);
     onClose(); onSaved();
   };
 
