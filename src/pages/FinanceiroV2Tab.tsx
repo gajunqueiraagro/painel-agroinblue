@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef, useReducer } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { formatMoeda } from '@/lib/calculos/formatters';
 // PR-FIN-STATUS-UX-03A-1 — domínio financeiro (dono único); statusOperacional (compartilhado) não é mais usado aqui.
 import {
@@ -17,7 +17,7 @@ import { CelulaSafra, CelulaVinculos } from '@/components/financeiro-v2/ColunasD
 import { Segmentado } from '@/components/ui/segmentado';
 import {
   CHAVE_PREF, MODOS_SEM_CAIXA, NIVEIS_CLASSIFICACAO, ROTULO_NIVEL, caminhoDaClassificacao, gravarPreferencia,
-  lerPreferencia, linhasDaGradePorModo, safraNaLista, secaoSemCaixaVisivel, textoDaClassificacao, vinculosDaLinha,
+  lerPreferencia, safraNaLista, secaoSemCaixaVisivel, textoDaClassificacao, vinculosDaLinha,
   SIM_NAO, type ModoSemCaixa, type NivelClassificacao,
 } from '@/lib/financeiro/colunasDaListaV2';
 import { useLancamentosConciliados, desfazerVinculo, desfazerGrupo } from '@/hooks/useConciliacaoDoMes';
@@ -83,13 +83,8 @@ import { CULTURAS_LANCAMENTO } from '@/lib/agri/rateioLancamento';
    aqui é como o filtro ficou dois anos oferecendo Pecuária e Agricultura enquanto o resto do
    sistema já conhecia quatro: uma lista escrita à mão não sabe quando a outra cresce. */
 import { ATIVIDADES } from '@/lib/financeiro/ultimaAtividade';
-import { filtrosAplicadosDaLista, TAMANHO_PAGINA_LISTA } from '@/lib/financeiro/listaPaginadaV2';
-import { FEATURE_FLAGS } from '@/lib/featureFlags';
-import { FinanceiroV2ControlesLista, BotaoAplicarFiltros } from '@/components/financeiro-v2/FinanceiroV2ControlesLista';
-import {
-  reduzirLista, ESTADO_INICIAL, temPendencias, calcularPaginacao,
-  type EstadoLista, type FiltrosEditaveis,
-} from '@/lib/financeiro/estadoFiltrosLista';
+import { filtrosAplicadosDaLista } from '@/lib/financeiro/listaPaginadaV2';
+import { lerListaInteira, abrirDivididasParaExportar, type PedirPaginaDaLista } from '@/lib/financeiro/exportacaoPelaLista';
 import { hojeLocal } from '@/lib/datas/hojeLocal';
 import { useListaPaginaV2 } from '@/hooks/useListaPaginaV2';
 import { useAlturaAteOFim } from '@/hooks/useAlturaAteOFim';
@@ -1239,7 +1234,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const idsDoCadastro = useMemo(() => new Set(hook.fornecedores.map((f) => f.id)), [hook.fornecedores]);
   const conhecidoNoCadastro = useCallback((id: string) => idsDoCadastro.has(id), [idsDoCadastro]);
   const listaV2 = useListaPaginaV2(clienteAtual?.id, { filtros: filtrosV2, ordem: ordemV2, pagina: paginaV2, porPagina },
-    !FEATURE_FLAGS.LISTA_PAGINADA_V2 && podeConsultar && mode === 'list', conhecidoNoCadastro);
+    podeConsultar && mode === 'list', conhecidoNoCadastro);
   const paginaDaLista = listaV2.pagina;
   const paginaRef = useRef(paginaDaLista);
   paginaRef.current = paginaDaLista;
@@ -1277,106 +1272,36 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   if (totalLancamentosFiltrados > maiorTotalRef.current) maiorTotalRef.current = totalLancamentosFiltrados;
   const reservasDoRodape = reservasDaPaginaV2(Math.max(maiorTotalRef.current, 99999));
 
-  // ───────────────────────────────────────────────────────────────────────────
-  // PR-FIN-LISTA-VENCIMENTO-03 · 2C-4 — rascunho x aplicado, atras da flag.
-  //
-  //   flag OFF  nada disto entra em cena: os campos continuam consultando a cada
-  //             tecla e a grade continua pintando `sortedLancamentos`.
-  //   flag ON   os campos alimentam o RASCUNHO; a lista, o count, os totais, a
-  //             exportacao e o cancelamento leem o APLICADO, que so muda em
-  //             "Aplicar filtros" ou "Limpar".
-  // ───────────────────────────────────────────────────────────────────────────
-  const LISTA_V2 = FEATURE_FLAGS.LISTA_PAGINADA_V2;
-  const [estadoLista, despacharLista] = useReducer(reduzirLista, ESTADO_INICIAL);
+  // Filtros que a lista, os totais e a exportacao enxergam: o estado corrente da barra (FIN-V2-LISTA-FLAG-01: a barra filtra ao vivo;
+  // o "rascunho x aplicado" da flag LISTA_PAGINADA_V2 saiu com ela).
+  const filtrosAplicados = useMemo(() => filtrosAplicadosDaLista(filtros, {
+    contaOrigem, contaDestino,
+    produto: produtoFiltro, documento: documentoFiltro,
+    fornecedor: fornecedorFiltro, atividade: atividadeFiltro, grupo: grupoFiltro,
+  }), [filtros, contaOrigem, contaDestino, produtoFiltro, documentoFiltro, fornecedorFiltro, atividadeFiltro, grupoFiltro]);
+  const incluirSemVencimentoAplicado = false;
 
-  // O rascunho e alimentado pelos MESMOS campos da tela. Com a flag OFF este
-  // efeito e inerte: ninguem le `estadoLista`.
-  useEffect(() => {
-    if (!LISTA_V2) return;
-    const atual: FiltrosEditaveis = {
-      contaOrigem, contaDestino,
-      produto: produtoFiltro, documento: documentoFiltro,
-      fornecedor: fornecedorFiltro, atividade: atividadeFiltro, grupo: grupoFiltro,
-      incluirSemVencimento: estadoLista.rascunho.incluirSemVencimento,
-    };
-    (Object.keys(atual) as (keyof FiltrosEditaveis)[]).forEach((campo) => {
-      if (estadoLista.rascunho[campo] !== atual[campo]) {
-        despacharLista({ tipo: 'editar', campo, valor: atual[campo] });
-      }
-    });
-  }, [LISTA_V2, contaOrigem, contaDestino, produtoFiltro, documentoFiltro,
-      fornecedorFiltro, atividadeFiltro, grupoFiltro, estadoLista.rascunho]);
-
-  // Filtros que a lista, os totais e a exportacao enxergam.
-  //   flag ON  -> o APLICADO
-  //   flag OFF -> o estado corrente, como sempre foi
-  const filtrosAplicados = useMemo(() => filtrosAplicadosDaLista(
-    filtros,
-    LISTA_V2 ? estadoLista.aplicado : {
-      contaOrigem, contaDestino,
-      produto: produtoFiltro, documento: documentoFiltro,
-      fornecedor: fornecedorFiltro, atividade: atividadeFiltro, grupo: grupoFiltro,
-    },
-  ), [filtros, LISTA_V2, estadoLista.aplicado, contaOrigem, contaDestino,
-      produtoFiltro, documentoFiltro, fornecedorFiltro, atividadeFiltro, grupoFiltro]);
-
-  const incluirSemVencimentoAplicado = LISTA_V2
-    ? estadoLista.aplicado.incluirSemVencimento === true
-    : false;
-
-  // Consulta paginada: dispara SO quando o aplicado ou a pagina mudam.
-  useEffect(() => {
-    if (!LISTA_V2) return;
-    hook.carregarPagina(filtrosAplicados, {
-      pagina: estadoLista.pagina,
-      incluirSemVencimento: incluirSemVencimentoAplicado,
-      caixa: 'com',
-    });
-  }, [LISTA_V2, filtrosAplicados, estadoLista.pagina, incluirSemVencimentoAplicado]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const pendenteAplicar = LISTA_V2 && temPendencias(estadoLista);
-  const paginacao = useMemo(
-    () => calcularPaginacao(hook.listaTotal, estadoLista.pagina, TAMANHO_PAGINA_LISTA),
-    [hook.listaTotal, estadoLista.pagina],
-  );
-
-  // Count encolheu e a pagina atual passou do fim: reposiciona na ultima real.
-  useEffect(() => {
-    if (!LISTA_V2) return;
-    if (paginacao.pagina !== estadoLista.pagina) {
-      despacharLista({ tipo: 'pagina', pagina: paginacao.pagina });
-    }
-  }, [LISTA_V2, paginacao.pagina, estadoLista.pagina]);
-
-  const handleAplicarFiltros = useCallback(() => despacharLista({ tipo: 'aplicar' }), []);
-  // `handleLimparFiltros` e declarado mais abaixo no componente; a ref evita a
-  // dependencia circular sem duplicar a logica de limpeza dos campos.
-  const limparCamposRef = useRef<() => void>(() => {});
-  const handleLimparLista = useCallback(() => {
-    limparCamposRef.current();
-    despacharLista({ tipo: 'limpar' });
-  }, []);
-  const handleToggleSemVencimento = useCallback(() => {
-    despacharLista({
-      tipo: 'editar', campo: 'incluirSemVencimento',
-      valor: !estadoLista.rascunho.incluirSemVencimento,
-    });
-  }, [estadoLista.rascunho.incluirSemVencimento]);
-
-  // Linhas que a GRADE pinta. Com a flag ON sao no maximo 30, vindas do
-  // servidor; com a flag OFF, o array completo de sempre.
-  /* FIN-V2-DESEMPENHO-01b: sem a flag, a página do servidor (no máximo `porPagina` linhas, já filtradas e ordenadas no banco) */
-  const linhasDaGrade = useMemo(() => (LISTA_V2 ? hook.listaPagina : (paginaDaLista?.linhas ?? [])), [LISTA_V2, hook.listaPagina, paginaDaLista]);
+  /* FIN-V2-DESEMPENHO-01b: a página do servidor (no máximo `porPagina` linhas, já filtradas e ordenadas no banco) */
+  const linhasDaGrade = useMemo(() => paginaDaLista?.linhas ?? [], [paginaDaLista]);
 
   // Busca o conjunto inteiro SO no clique de exportar. Nunca na renderizacao.
-  const carregarConjuntoExportacao = useCallback(
-    /* A exportacao segue a TELA (decisao do Gabriel): so' caixa com a chave desligada; caixa e sem caixa com ela ligada. */
-    () => hook.buscarConjuntoFiltrado(filtrosAplicados, {
-      incluirSemVencimento: incluirSemVencimentoAplicado,
-      caixa: modoSemCaixa === 'ocultar' ? 'com' : modoSemCaixa === 'so_dre' ? 'sem' : undefined,
-    }).then(ls => (modoSemCaixa === 'so_dre' ? linhasDaGradePorModo(ls, 'so_dre') : ls)),
-    [hook.buscarConjuntoFiltrado, filtrosAplicados, incluirSemVencimentoAplicado, modoSemCaixa],
-  );
+  const carregarConjuntoExportacao = useCallback(async (): Promise<LancamentoV2[]> => {
+    /* FIN-V2-LISTA-FLAG-01 (parte 3) — a exportacao sai da MESMA RPC da tela (filtros, ordem e modo sem caixa da grade), pagina a
+       pagina, e o lancamento DIVIDIDO sai pela parte (`abrirDivididasParaExportar`). Com a chave "mostrar", as linhas sem caixa vem da
+       MESMA fonte da secao sem caixa da tela, depois das de caixa (decisao do Gabriel: a exportacao segue a TELA). */
+    const cli = clienteAtual?.id;
+    if (!cli) return [];
+    const pedir: PedirPaginaDaLista = async (pagina, por) => {
+      const { data, error } = await (supabase as any).rpc('fn_fin_v2_lista_pagina', {
+        p_cliente: cli, p_filtros: filtrosV2, p_ordem: { ...ordemV2, so_linhas: true }, p_pagina: pagina, p_por_pagina: por });
+      if (error) throw error;
+      return data;
+    };
+    const caixa = abrirDivididasParaExportar(await lerListaInteira(pedir));
+    if (modoSemCaixa !== 'mostrar') return caixa;
+    const sem = await hook.buscarConjuntoFiltrado(filtrosAplicados, { incluirSemVencimento: incluirSemVencimentoAplicado, caixa: 'sem' });
+    return [...caixa, ...filtrarEmMemoria(sem).filter(l => l.sem_movimentacao_caixa === true)];
+  }, [clienteAtual?.id, filtrosV2, ordemV2, modoSemCaixa, hook.buscarConjuntoFiltrado, filtrosAplicados, incluirSemVencimentoAplicado, filtrarEmMemoria]);
 
   /* A secao sem caixa: no caminho em memoria ja' esta' filtrada (`semCaixaLocal`); no paginado vem do servidor, pelo MESMO plano
      da lista com `caixa: 'sem'`, so' com a chave ligada. Sem paginacao (poucas linhas). */
@@ -1390,10 +1315,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     let vivo = true;
     setSemCaixaServidor(s => ({ ...s, carregando: true, erro: null }));
     hook.buscarConjuntoFiltrado(filtrosAplicados, { incluirSemVencimento: incluirSemVencimentoAplicado, caixa: 'sem' })
-      .then(linhas => { if (vivo) setSemCaixaServidor({ linhas: LISTA_V2 ? linhas : filtrarEmMemoria(linhas).filter(l => l.sem_movimentacao_caixa === true), carregando: false, erro: null }); })
+      .then(linhas => { if (vivo) setSemCaixaServidor({ linhas: filtrarEmMemoria(linhas).filter(l => l.sem_movimentacao_caixa === true), carregando: false, erro: null }); })
       .catch(e => { if (vivo) setSemCaixaServidor({ linhas: [], carregando: false, erro: e instanceof Error ? e.message : 'Falha ao carregar os lançamentos sem caixa.' }); });
     return () => { vivo = false; };
-  }, [LISTA_V2, mostrarSemCaixa, podeConsultar, filtrosAplicados, incluirSemVencimentoAplicado, filtrarEmMemoria, versaoDaPagina]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mostrarSemCaixa, podeConsultar, filtrosAplicados, incluirSemVencimentoAplicado, filtrarEmMemoria, versaoDaPagina]); // eslint-disable-line react-hooks/exhaustive-deps
   const linhasSemCaixa = semCaixaServidor.linhas;
 
 
@@ -1628,7 +1553,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   // Determine which fazenda_id to pass to loadLancamentos
 
   // Liga a limpeza dos campos ao botao Limpar do 2C-4 (declarado acima).
-  limparCamposRef.current = handleLimparFiltros;
 
   const queryFazendaId = fazendaId !== '__all__' ? fazendaId : undefined;
 
@@ -1667,15 +1591,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
      o `flex-1` da coluna já faz isso) */
   const quadroAteOFim = useAlturaAteOFim({ ativo: !modoIntensivo });
 
-/* ⚠ ESTE BOTÃO EXISTE EM DOIS LUGARES, E A FLAG DECIDE QUAL APARECE — e é a TERCEIRA vez
-   que o mount duplo morde (a primeira foi o menu de exportação, a segunda a coluna de
-   atividade). `actionButtons = LISTA_V2 ? <FinanceiroV2ControlesLista/> : <div>…inline…</div>`,
-   e `LISTA_V2` é `FEATURE_FLAGS.LISTA_PAGINADA_V2`, que vem de `VITE_LISTA_PAGINADA_V2` —
-   uma variável que NÃO ESTÁ EM NENHUM `.env` do repo (medido em 11/09/2026). Logo:
-     • o ramo que RENDERIZA hoje é o INLINE, aqui embaixo;
-     • o ramo com TESTE é o `FinanceiroV2ControlesLista`, que ninguém vê.
-   Quem mexer em um tem de mexer no outro, ou a tela e o teste passam a discordar em
-   silêncio — foi exatamente assim que o menu de exportação ficou meio ligado. */
   /* UI-BOTOES-LUGAR-FIXO-01 — O BLOCO DE AÇÕES DO DESKTOP É UMA GRADE FIXA de 2 colunas × 3 linhas, 190px, células iguais:
          Novo   | Exportar
          Do XML | Ampliar (ou Retornar)
@@ -1683,7 +1598,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
      BOTÃO PONTUAL TEM LUGAR RESERVADO: a célula do Voltar existe SEMPRE; sem `onBack` fica vazia, fora da tabulação. Com
      `onBack` eram TRÊS botões numa linha de 190px (Voltar + Do XML + Ampliar) e o bloco vazava por cima dos filtros Fazenda e
      Documento. A entrada do Voltar não muda posição, tamanho nem linha de nenhum outro botão, e o cabeçalho tem a mesma altura
-     com e sem ele. O gêmeo com teste (`FinanceiroV2ControlesLista`) tem o MESMO desenho: os dois mudam juntos. */
+     com e sem ele. */
   const blocoDeAcoesDesktop = (
     <div data-testid="bloco-acoes" className="grid w-[190px] shrink-0 grid-cols-2 gap-1 [&>*]:min-w-0">
       <Button size="sm" onClick={openNew} className="h-6 w-full text-[10px] gap-0.5 px-1.5 bg-[#E7C873] text-foreground hover:bg-[#D9B95F]" title="Novo Lançamento">
@@ -1731,41 +1646,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   );
 
   /* ⚠ `actionButtons` (o bloco em linhas) ficou SÓ para o ramo MOBILE, que não foi redesenhado; com a flag ligada ele é o gêmeo. */
-  const actionButtons = LISTA_V2 ? (
-    <FinanceiroV2ControlesLista
-      pendente={pendenteAplicar}
-      onLimpar={handleLimparLista}
-      onNovo={openNew}
-      onNovoDeXml={() => setXmlAberto(true)}
-      exportar={(
-        <FinanceiroV2ExportMenu
-          carregarConjunto={carregarConjuntoExportacao}
-          fornecedores={hook.fornecedores}
-          ano={ano}
-          fazendaNome={fazOperacionais.find(f => f.id === fazendaId)?.nome}
-          totalCount={hook.listaTotal}
-          dimensao={dataPor}
-          /* ⚠ OS TRÊS CADASTROS QUE A TELA JÁ TEM. Nada é buscado por causa da exportação:
-             `fazendas` desenha o seletor, `contasBancarias` a coluna de conta e `safras` o
-             filtro de safra. O arquivo passa a nomear pelo MESMO cadastro que a tela usa —
-             se um dia divergirem, divergem juntos, e não um contra o outro. */
-          fazendas={fazendas}
-          contas={contasParaExportar}
-          safras={hook.safras}
-        />
-      )}
-      modoIntensivo={modoIntensivo}
-      onToggleIntensivo={() => toggleIntensivo()}
-      onVoltar={onBack}
-      excluidosSemVencimento={hook.listaExcluidosSemVencimento}
-      incluirSemVencimento={estadoLista.rascunho.incluirSemVencimento === true}
-      onToggleSemVencimento={handleToggleSemVencimento}
-      paginacao={paginacao}
-      total={hook.listaTotal}
-      onPagina={(pg) => despacharLista({ tipo: 'pagina', pagina: pg })}
-      carregandoLista={hook.carregandoLista}
-    />
-  ) : (
+  const actionButtons = (
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-1">
         <Button size="sm" onClick={openNew} className="h-6 text-[10px] gap-0.5 px-1.5 bg-[#E7C873] text-foreground hover:bg-[#D9B95F]" title="Novo Lançamento">
@@ -2132,12 +2013,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                         </SelectContent>
                       </Select>
                     </div>
-                    {/* 2C-4 — Aplicar filtros junto de Atividade, dentro do painel. */}
-                    {LISTA_V2 && (
-                      <div className="flex items-end">
-                        <BotaoAplicarFiltros pendente={pendenteAplicar} onAplicar={handleAplicarFiltros} className="w-full" />
-                      </div>
-                    )}
                   </div>
                 </CollapsibleContent>
               </Collapsible>
@@ -2455,12 +2330,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                   
               </div>
 
-              {/* O "Aplicar" só existe com a lista paginada; fora dela a barra filtra ao vivo. */}
-              {LISTA_V2 && (
-                <div className="flex items-end pt-1">
-                  <BotaoAplicarFiltros pendente={pendenteAplicar} onAplicar={handleAplicarFiltros} />
-                </div>
-              )}
                 </div>
                 {/* ⚠ AÇÕES E TOTAIS NA MESMA COLUNA À DIREITA — FIN-LISTA-LAYOUT-01. Os totais
                     moravam no fim da terceira linha de filtros, então mudavam de lugar toda vez
@@ -2472,7 +2341,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 <div className="flex w-[190px] shrink-0 flex-col items-end gap-1 pb-[1px]">
                   {/* UI-BOTOES-LUGAR-FIXO-01: a grade fixa (o Limpar mora na célula da linha 3). Com a flag da lista paginada,
                       o gêmeo, que tem a mesma grade e o Limpar dele. */}
-                  {LISTA_V2 ? actionButtons : blocoDeAcoesDesktop}
+                  {blocoDeAcoesDesktop}
                   {/* ⚠ OS TOTAIS SAÍRAM DAQUI — FIN-LISTA-TOTAIS-FAIXA-01. Empilhados nesta
                       coluna, eles cresciam e encolhiam com o filtro (o "Transf." só existia
                       quando havia transferência), e a tabela subia e descia junto. Agora vivem

@@ -5,6 +5,7 @@
  */
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { FONTE_POR_PARTE } from '@/lib/financeiro/partesDaClassificacao';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { toast } from 'sonner';
@@ -804,8 +805,8 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string, enabl
       let allRows: any[] = [];
       let from = 0;
       while (true) {
-        const { data: rows, error } = await (supabase
-          .from('financeiro_lancamentos_v2')
+        const { data: rows, error } = await ((supabase as any)
+          .from(FONTE_POR_PARTE)
           .select('macro_custo, grupo_custo, centro_custo, subcentro, escopo_negocio, ano_mes, valor')
           .eq('fazenda_id', fazendaId!)
           .eq('cancelado', false)
@@ -938,8 +939,8 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string, enabl
       let from = 0;
       const PAGE = 1000;
       while (true) {
-        const { data, error } = await (supabase
-          .from('financeiro_lancamentos_v2')
+        const { data, error } = await ((supabase as any)
+          .from(FONTE_POR_PARTE)
           .select('ano_mes, valor')
           .eq('cliente_id', clienteId)
           .eq('fazenda_id', fazendaId)

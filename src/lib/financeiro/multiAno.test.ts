@@ -10,7 +10,6 @@
  */
 import { describe, it, expect } from 'vitest';
 import { montarPlanoBaseV2, anosDoRecorte, semRecorteDePeriodo, type FiltrosV2 } from './filtrosBaseV2';
-import { faixasDoRecorte } from './listaPaginadaV2';
 
 const CLI = 'cli-1';
 const plano = (f: FiltrosV2) => montarPlanoBaseV2(CLI, f, { relacao: 'tabela' });
@@ -67,23 +66,3 @@ describe('a consulta da lista', () => {
   });
 });
 
-describe('os totais recortam o MESMO período', () => {
-  it('as faixas da RPC acompanham os anos, sem nada novo no banco', () => {
-    /* `p_faixas` sempre foi uma LISTA — os meses já podiam ser vários. Anos são mais
-       intervalos na mesma lista, e por isso a RPC não mudou. */
-    expect(faixasDoRecorte({ anos: ['2025', '2026'] }))
-      .toEqual(['[2025-01-01,2026-01-01)', '[2026-01-01,2027-01-01)']);
-  });
-
-  it('dois anos × dois meses = quatro faixas, como na consulta', () => {
-    expect(faixasDoRecorte({ anos: ['2025', '2026'], meses: ['08', '09'] })).toHaveLength(4);
-  });
-
-  it('sem ano nenhum, sem faixa — e aí o recorte é "todos"', () => {
-    expect(faixasDoRecorte({ anos: [] })).toBeNull();
-  });
-
-  it('um ano só devolve a mesma faixa de antes', () => {
-    expect(faixasDoRecorte({ anos: ['2026' ] })).toEqual(faixasDoRecorte({ ano: '2026' }));
-  });
-});

@@ -12,32 +12,16 @@ import { isTituloOC, detectarViolacoesEstruturaisOC } from '@/lib/financeiro/pro
 import { STATUS_FINANCEIRO_INICIAL, type StatusFiltroFinanceiro } from '@/lib/financeiro/statusFinanceiro';
 import { reportarErro, normalizarErro, ErroUsuarioSeguro } from '@/lib/erroOperacional';
 import { montarPlanoBaseV2, mesesDoRecorte, anosDoRecorte } from '@/lib/financeiro/filtrosBaseV2';
-import { FEATURE_FLAGS } from '@/lib/featureFlags';
 import { MOTIVO_OBRIGATORIO, MOTIVO_BLOQUEIO_TITULO_OC, motivoInformado, separarTitulosOC } from '@/lib/financeiro/cancelamentoLancamento';
 import { separarParcelas } from '@/lib/financiamentos/cancelarParcela';
 import { lerParcelasDosLancamentos } from '@/lib/financiamentos/nomeDaParcela';
 import {
-  consultarPagina,
-  consultarTotais,
   buscarConjuntoCompleto,
-  contarConjunto,
-  planoDaLista,
-  faixaDaPagina,
-  totaisNoCliente,
-  filtrarSeisNoCliente,
-  ordenarPorVencimentoNoCliente,
-  paramsDosTotais,
-  TAMANHO_PAGINA_LISTA,
   VIEW_LISTA_DOC,
-  RPC_TOTAIS,
   type BuilderView,
   type OpcoesAbertura,
   type AbrirView,
-  type ChamarRpcTotais,
-  type OpcoesPagina,
   type OpcoesConjunto,
-  type RegistroListaV2,
-  type TotaisLista,
 } from '@/lib/financeiro/listaPaginadaV2';
 
 // PR-FIN-LISTA-VENCIMENTO-03 · 2C-2B — `FiltrosV2` e a dimensão temporal passaram
@@ -671,10 +655,8 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     // ano is optional now ('__todos__' means all years)
 
     /**
-     * ⚠ GUARDA DE CORRIDA — FIN-LISTA-FILTRO-FONTE-01, e ela já existia neste arquivo,
-     * oitocentas linhas abaixo, protegendo o caminho PAGINADO (`carregarPagina`, atrás de
-     * `LISTA_PAGINADA_V2`, que não está ligada em `.env` nenhum). O caminho que a tela usa
-     * não a tinha.
+     * ⚠ GUARDA DE CORRIDA — FIN-LISTA-FILTRO-FONTE-01 (a mesma que protegia o `carregarPagina` da flag LISTA_PAGINADA_V2, que
+     * saiu em FIN-V2-LISTA-FLAG-01). O caminho que a tela usava não a tinha.
      *
      * ⚠ O QUE ACONTECIA, e explica TRÊS relatos diferentes do operador: duas cargas ficam em
      * voo na montagem — a do padrão (ano corrente, 4 mil linhas em cinco idas em série) e a
@@ -1505,38 +1487,6 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     return true;
   }, [clienteId, user]);
 
-  // ───────────────────────────────────────────────────────────────────────────
-  // PR-FIN-LISTA-VENCIMENTO-03 · 2C-2B — lista paginada, atrás de feature flag.
-  //
-  // Superfície NOVA e isolada: `loadLancamentos` e `lancamentos` continuam
-  // exatamente como estavam, e a tela não consome nada disto ainda. Ligar a flag
-  // hoje não muda uma linha do que está em produção — a fase de interface é que
-  // fará a troca.
-  //
-  // OFF: uma leitura (fetchAll) e tudo derivado dela em memória — o que a tela
-  //      faz hoje, com a ordenação do contrato aplicada por cima.
-  // ON:  três consultas independentes ao servidor. A lista NUNCA baixa o conjunto.
-  //
-  // Lista, contagem e totais têm loading e erro próprios porque falham por
-  // motivos diferentes: a lista pode voltar enquanto a contagem ainda roda, e
-  // uma contagem que estoura timeout não pode apagar a lista já exibida.
-  // ───────────────────────────────────────────────────────────────────────────
-  const [listaPagina, setListaPagina] = useState<LancamentoV2[]>([]);
-  const [listaTotal, setListaTotal] = useState(0);
-  const [listaTotais, setListaTotais] = useState<TotaisLista>({ total: 0, entradas: 0, saidas: 0, excluidosSemVencimento: 0, entradasSemCaixa: 0, saidasSemCaixa: 0 });
-  const [listaExcluidosSemVencimento, setListaExcluidosSemVencimento] = useState(0);
-  const [carregandoLista, setCarregandoLista] = useState(false);
-  const [carregandoContagem, setCarregandoContagem] = useState(false);
-  const [carregandoTotais, setCarregandoTotais] = useState(false);
-  const [erroLista, setErroLista] = useState<string | null>(null);
-  const [erroContagem, setErroContagem] = useState<string | null>(null);
-  const [erroTotais, setErroTotais] = useState<string | null>(null);
-
-  // Guarda de corrida: token monotônico. Toda escrita de estado passa por `vivo()`,
-  // então uma resposta lenta de um filtro antigo é DESCARTADA em vez de sobrescrever
-  // a resposta do filtro atual. AbortController não serviria sozinho aqui: ele
-  // cancelaria o fetch, mas não a janela entre `await` e `setState`.
-  const tokenListaRef = useRef(0);
 
   // ───────────────────────────────────────────────────────────────────────────
   // PR-FIN-LISTA-VENCIMENTO-03 · 2C-3 — conjunto completo sob demanda.
@@ -1556,90 +1506,6 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     return linhas as unknown as LancamentoV2[];
   }, [clienteId, abrirView]);
 
-  const carregarPagina = useCallback(async (filtros: FiltrosV2, opcoes: OpcoesPagina = {}) => {
-    if (!clienteId) return;
-    const token = ++tokenListaRef.current;
-    const vivo = () => token === tokenListaRef.current;
-    const tamanho = opcoes.tamanhoPagina ?? TAMANHO_PAGINA_LISTA;
-    const opts: OpcoesPagina = { ...opcoes, tamanhoPagina: tamanho };
-
-    setCarregandoLista(true); setCarregandoContagem(true); setCarregandoTotais(true);
-    setErroLista(null); setErroContagem(null); setErroTotais(null);
-
-    if (!FEATURE_FLAGS.LISTA_PAGINADA_V2) {
-      try {
-        const todos = await fetchAllLancamentos(filtros);
-        if (!vivo()) return;
-        /* FIN-V2-SEM-CAIXA-01: com `caixa`, o caminho em memoria recorta como o plano da view (nulo conta como caixa). */
-        const ordenadas = ordenarPorVencimentoNoCliente(
-          filtrarSeisNoCliente(todos as unknown as RegistroListaV2[], filtros),
-        ).filter((l) => !opts.caixa || (opts.caixa === 'sem') === (l.sem_movimentacao_caixa === true));
-        const [de] = faixaDaPagina(opts.pagina ?? 0, tamanho);
-        const somas = totaisNoCliente(ordenadas);
-        setListaPagina(ordenadas.slice(de, de + tamanho) as unknown as LancamentoV2[]);
-        setListaTotal(ordenadas.length);
-        setListaTotais({ total: ordenadas.length, ...somas, excluidosSemVencimento: 0 });
-        // O caminho antigo nao conhece o universo SEM recorte temporal, entao nao
-        // tem como medir o que o periodo cortou. Reporta 0 em vez de estimar.
-        setListaExcluidosSemVencimento(0);
-      } catch (err) {
-        if (!vivo()) return;
-        const msg = normalizarErro(err, 'carregarPagina').mensagem;
-        setErroLista(msg); setErroContagem(msg); setErroTotais(msg);
-      } finally {
-        if (vivo()) {
-          setCarregandoLista(false); setCarregandoContagem(false); setCarregandoTotais(false);
-        }
-      }
-      return;
-    }
-
-    const abrir = abrirView;
-
-    const chamarTotais: ChamarRpcTotais = (params) =>
-      (supabase as unknown as {
-        rpc: (n: string, p: Record<string, unknown>) => Promise<{
-          data: unknown; error: { message?: string } | null;
-        }>;
-      }).rpc(RPC_TOTAIS, params as unknown as Record<string, unknown>)
-        .then((r) => ({ data: r.data as never, error: r.error }));
-
-    await Promise.allSettled([
-      consultarPagina(abrir, clienteId, filtros, opts)
-        .then((linhas) => { if (vivo()) setListaPagina(linhas as unknown as LancamentoV2[]); })
-        .catch((err) => { if (vivo()) setErroLista(normalizarErro(err, 'listaPaginada').mensagem); })
-        .finally(() => { if (vivo()) setCarregandoLista(false); }),
-
-      // Contagem e totais saem da MESMA RPC: e uma passagem so no servidor, e
-      // separa-las em duas chamadas seria varrer a tabela duas vezes para exibir
-      // numeros do mesmo rodape. Os dois estados de loading/erro continuam
-      // existindo e se movem juntos — que e a verdade do que acontece.
-      /* FIN-V2-SEM-CAIXA-01: a RPC conta caixa e sem caixa juntos. Com a lista so' de caixa, a contagem da pagina e' o total
-         da RPC MENOS a contagem sem caixa do mesmo plano (decisao do Gabriel: sem mudar o banco). Entradas e saidas da RPC
-         ja' sao so' caixa. */
-      Promise.all([
-        consultarTotais(chamarTotais, clienteId, filtros, opts),
-        opts.caixa === 'com'
-          ? contarConjunto(abrir, planoDaLista(clienteId, filtros, { ...opts, caixa: 'sem' }))
-          : Promise.resolve(0),
-      ])
-        .then(([bruto, semCaixa]) => {
-          if (!vivo()) return;
-          const t = { ...bruto, total: Math.max(0, bruto.total - semCaixa) };
-          setListaTotal(t.total);
-          setListaTotais(t);
-          setListaExcluidosSemVencimento(t.excluidosSemVencimento);
-        })
-        .catch((err) => {
-          if (!vivo()) return;
-          const msg = normalizarErro(err, 'totaisLista').mensagem;
-          setErroContagem(msg); setErroTotais(msg);
-        })
-        .finally(() => {
-          if (vivo()) { setCarregandoContagem(false); setCarregandoTotais(false); }
-        }),
-    ]);
-  }, [clienteId, fetchAllLancamentos]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -1766,17 +1632,5 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     abrirView,
     // PR-FIN-LISTA-VENCIMENTO-03 · 2C-3 — conjunto completo sob demanda (exportação).
     buscarConjuntoFiltrado,
-    // PR-FIN-LISTA-VENCIMENTO-03 · 2C-2B — superfície paginada. Nenhum consumidor ainda.
-    carregarPagina,
-    listaPagina,
-    listaTotal,
-    listaTotais,
-    listaExcluidosSemVencimento,
-    carregandoLista,
-    carregandoContagem,
-    carregandoTotais,
-    erroLista,
-    erroContagem,
-    erroTotais,
   };
 }

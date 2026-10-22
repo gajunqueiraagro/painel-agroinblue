@@ -13,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { FileText, Plus, Lock, Unlock, RefreshCw, Download, Sparkles, ChevronLeft, Edit3, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { FONTE_POR_PARTE } from '@/lib/financeiro/partesDaClassificacao';
 import { FechExecResumoPage } from '@/components/fechamento-exec/FechExecResumoPage';
 import { FechExecOperacaoPage } from '@/components/fechamento-exec/FechExecOperacaoPage';
 import { FechExecZootecnicoPage } from '@/components/fechamento-exec/FechExecZootecnicoPage';
@@ -77,8 +78,8 @@ export function FechamentoExecutivoTab({ onBack, filtroAnoInicial, filtroMesInic
     if (!clienteId) return {};
 
     // Fetch financial data for the period
-    let finQuery = supabase
-      .from('financeiro_lancamentos_v2')
+    let finQuery = (supabase as any)
+      .from(FONTE_POR_PARTE)
       .select('*')
       .eq('cliente_id', clienteId)
       .eq('cancelado', false)

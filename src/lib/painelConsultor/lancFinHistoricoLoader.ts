@@ -29,7 +29,7 @@
  * os agregadores reutilizem o tipo canônico já consumido em produção.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { mapV2ToLancamento, type FinanceiroLancamento } from '@/hooks/useFinanceiro';
+import { mapV2ToLancamento, chaveDaParte, FONTE_POR_PARTE, type FinanceiroLancamento } from '@/hooks/useFinanceiro';
 
 interface CarregarLancFinAnoAntRealParams {
   clienteId: string;
@@ -55,8 +55,8 @@ export async function carregarLancFinAnoAntReal(
   let from = 0;
   // eslint-disable-next-line no-constant-condition
   while (true) {
-    let q = (supabase
-      .from('financeiro_lancamentos_v2')
+    let q = ((supabase as any)
+      .from(FONTE_POR_PARTE)
       .select('*') as unknown as {
         eq: (k: string, v: unknown) => typeof q;
         gte: (k: string, v: unknown) => typeof q;
@@ -80,6 +80,7 @@ export async function carregarLancFinAnoAntReal(
     const { data, error } = await q
       .order('data_pagamento', { ascending: true })
       .order('id', { ascending: true })
+      .order('parte_ordem', { ascending: true })
       .range(from, from + PAGE - 1);
     if (error) throw error;
     if (!data || data.length === 0) break;
@@ -92,7 +93,8 @@ export async function carregarLancFinAnoAntReal(
   // entre páginas se a ordenação não for totalmente determinística.
   const seenIds = new Set<string>();
   const dedupRows = allRows.filter((r) => {
-    const id = (r as { id?: string })?.id;
+    // FIN-CLASSIF-DIVIDIDA-01a-2: a fonte e' a visao por parte; a chave e' a da parte (o dividido tem N linhas do mesmo lancamento)
+    const id = (r as { id?: string })?.id ? chaveDaParte(r as { id?: string; parte_ordem?: number }) : undefined;
     if (!id || seenIds.has(id)) return false;
     seenIds.add(id);
     return true;

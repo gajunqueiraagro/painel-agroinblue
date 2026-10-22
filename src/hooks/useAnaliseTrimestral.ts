@@ -19,6 +19,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { FONTE_POR_PARTE } from '@/lib/financeiro/partesDaClassificacao';
 import { isLancamentoDRERealizada } from '@/lib/financeiro/dreRealizada';
 
 export type Trimestre = 1 | 2 | 3 | 4;
@@ -74,9 +75,9 @@ export function useAnaliseTrimestral({ clienteId, ano, trimestre }: Params) {
           .eq('cliente_id', clienteId).eq('ano', ano).eq('cenario', 'meta').in('mes', meses),
         supabase.from('zoot_mensal_cache' as any).select('*')
           .eq('cliente_id', clienteId).eq('ano', anoPrev).eq('cenario', 'realizado').in('mes', meses),
-        supabase.from('financeiro_lancamentos_v2').select('ano_mes, valor, tipo_operacao, macro_custo, grupo_custo, subcentro, centro_custo, compoe_dre')
+        (supabase as any).from(FONTE_POR_PARTE).select('ano_mes, valor, tipo_operacao, macro_custo, grupo_custo, subcentro, centro_custo, compoe_dre')
           .eq('cliente_id', clienteId).eq('cancelado', false).in('ano_mes', anoMesTri),
-        supabase.from('financeiro_lancamentos_v2').select('ano_mes, valor, tipo_operacao, macro_custo, grupo_custo, compoe_dre')
+        (supabase as any).from(FONTE_POR_PARTE).select('ano_mes, valor, tipo_operacao, macro_custo, grupo_custo, compoe_dre')
           .eq('cliente_id', clienteId).eq('cancelado', false).in('ano_mes', anoMesTriPrev),
         supabase.from('financeiro_saldos_bancarios_v2').select('ano_mes, saldo_inicial, saldo_final, total_entradas, total_saidas')
           .eq('cliente_id', clienteId).in('ano_mes', anoMesTri),
@@ -370,10 +371,10 @@ export function useAnaliseDREPeriodo({ clienteId, ano, ateMes }: DREPeriodoParam
       const dataFim = `${ano}-${pad(ateMes)}-${String(new Date(ano, ateMes, 0).getDate()).padStart(2, '0')}`;
 
       const [fin, finPrev, compras, zootAtu, vrf] = await Promise.all([
-        supabase.from('financeiro_lancamentos_v2')
+        (supabase as any).from(FONTE_POR_PARTE)
           .select('ano_mes, valor, tipo_operacao, macro_custo, grupo_custo, compoe_dre')
           .eq('cliente_id', clienteId).eq('cancelado', false).in('ano_mes', anoMes),
-        supabase.from('financeiro_lancamentos_v2')
+        (supabase as any).from(FONTE_POR_PARTE)
           .select('ano_mes, valor, tipo_operacao, macro_custo, grupo_custo, compoe_dre')
           .eq('cliente_id', clienteId).eq('cancelado', false).in('ano_mes', anoMesPrev),
         supabase.from('lancamentos')

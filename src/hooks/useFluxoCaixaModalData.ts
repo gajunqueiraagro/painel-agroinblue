@@ -22,6 +22,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { FONTE_POR_PARTE } from '@/lib/financeiro/partesDaClassificacao';
 import { fetchAllPaginated } from '@/lib/supabase/fetchAllPaginated';
 import type { PainelConsultorDataResult } from './usePainelConsultorData';
 import type { SubcentroGrid } from './usePlanejamentoFinanceiro';
@@ -79,10 +80,10 @@ async function fetchLancamentosDoAno(
   const { data } = await fetchAllPaginated<LancamentoRow>({
     // Factory builder — `fetchAllPaginated` aplica `.range()` por página.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    query: () => (supabase
-      .from('financeiro_lancamentos_v2')
+    query: () => ((supabase as any)
+      .from(FONTE_POR_PARTE)
       .select(
-        'id, ano_mes, valor, sinal, status_transacao, cenario, tipo_operacao, subcentro, centro_custo, grupo_custo, macro_custo',
+        'id, parte_ordem, ano_mes, valor, sinal, status_transacao, cenario, tipo_operacao, subcentro, centro_custo, grupo_custo, macro_custo',
       ) as any)
       .eq('cliente_id', clienteId)
       .eq('cenario', 'realizado')
@@ -91,7 +92,8 @@ async function fetchLancamentosDoAno(
       .gte('ano_mes', inicio)
       .lte('ano_mes', fim)
       .order('ano_mes', { ascending: true })
-      .order('id', { ascending: true }),
+      .order('id', { ascending: true })
+      .order('parte_ordem', { ascending: true }),
     pageSize: 1000,
     maxRows: 100000,
     context: 'fluxoCaixaModal/lancamentos',

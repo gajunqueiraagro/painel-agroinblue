@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { FONTE_POR_PARTE, chaveDaParte } from '@/lib/financeiro/partesDaClassificacao';
 import {
   agregaReceitaPecZootComp, agregaReposicaoBovinosZootComp,
 } from '@/lib/painelConsultor/agregadosZootCompetencia';
@@ -1712,9 +1713,9 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       const allRows: any[] = [];
       let from = 0;
       while (true) {
-        let q = (supabase
-          .from('financeiro_lancamentos_v2')
-          .select('id, data_pagamento, valor, grupo_custo') as any)
+        let q = ((supabase as any)
+          .from(FONTE_POR_PARTE)
+          .select('id, parte_ordem, data_pagamento, valor, grupo_custo') as any)
           .eq('cancelado', false)
           .eq('sem_movimentacao_caixa', false)
           .eq('status_transacao', 'realizado')
@@ -1737,6 +1738,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
         const { data, error } = await q
           .order('data_pagamento', { ascending: true })
           .order('id', { ascending: true })
+          .order('parte_ordem', { ascending: true })
           .range(from, from + PAGE - 1);
         if (cancelled) return;
         if (error || !data || data.length === 0) break;
@@ -1749,8 +1751,8 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
       // entre páginas se a ordenação não for totalmente determinística.
       const seenIds = new Set<string>();
       const dedupRows = allRows.filter((r: any) => {
-        if (!r?.id || seenIds.has(r.id)) return false;
-        seenIds.add(r.id);
+        if (!r?.id || seenIds.has(chaveDaParte(r))) return false;
+        seenIds.add(chaveDaParte(r));
         return true;
       });
       const out = Array(12).fill(0);

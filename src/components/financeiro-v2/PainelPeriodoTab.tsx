@@ -19,6 +19,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { carregarPartes, porParte } from '@/lib/financeiro/partesDaClassificacao';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -45,9 +46,11 @@ import {
    puro. O lançamento inteiro é buscado por id quando o operador abre um. */
 const COLUNAS = 'id, data_pagamento, data_vencimento, data_competencia, valor, tipo_operacao, '
   + 'descricao, numero_documento, documento, favorecido_id, macro_custo, grupo_custo, '
-  + 'centro_custo, subcentro, escopo_negocio, status_transacao, safra_id';
+  + 'centro_custo, subcentro, escopo_negocio, status_transacao, safra_id, classificacao_dividida';
 
 interface LancRecorte {
+  /** FIN-CLASSIF-DIVIDIDA-01a-2: a classificacao em N contas — a distribuicao economica abre o movimento pelas partes */
+  classificacao_dividida?: boolean | null;
   id: string; data_pagamento: string | null; data_vencimento: string | null; data_competencia: string | null;
   valor: number; tipo_operacao: string; descricao: string | null;
   numero_documento: string | null; documento: string | null; favorecido_id: string | null;
@@ -232,7 +235,16 @@ export function PainelPeriodoTab() {
      conta selecionada — e faz sentido lá, onde existe uma. Aqui o padrão é "todas", e não há
      foco: entrada é `1-`, saída é o resto. As transferências são excluídas pelas próprias
      agregações, então o caso em que os dois critérios discordariam não chega a elas. */
-  const itens = useMemo(() => lancs.map((l) => ({
+  /* FIN-CLASSIF-DIVIDIDA-01a-2: as partes dos lancamentos DIVIDIDOS (so' eles; sem nenhum, nenhuma consulta). As linhas e os totais
+     continuam um movimento por lancamento; a distribuicao economica (macro/grupo/centro/subcentro/atividade) abre pelo valor de cada
+     parte. Item da parte 2+ tem a chave "id#n" — abrir o lancamento e' sempre pelo id do lancamento. */
+  const idsDivididos = useMemo(() => lancs.filter((l) => l.classificacao_dividida).map((l) => l.id).sort(), [lancs]);
+  const { data: partes } = useQuery({
+    queryKey: ['painel-periodo-partes', idsDivididos],
+    enabled: idsDivididos.length > 0,
+    queryFn: () => carregarPartes(idsDivididos),
+  });
+  const itens = useMemo(() => lancs.flatMap((l) => { const item = {
     id: l.id,
     data: l.data_pagamento || l.data_vencimento || l.data_competencia || '',
     mov: ((l.tipo_operacao || '').startsWith('1') ? 1 : -1) * Math.abs(Number(l.valor) || 0),
@@ -246,7 +258,9 @@ export function PainelPeriodoTab() {
     centroPlano: l.centro_custo ?? null,
     subcentro: l.subcentro ?? null,
     escopo: l.escopo_negocio ?? null,
-  })), [lancs, fornMap]);
+  }; return porParte(item, partes?.get(l.id), item.mov, (p, mov) => ({ ...item, id: p.ordem > 1 ? `${l.id}#${p.ordem}` : l.id, mov,
+    macro: p.macro_custo, grupo: p.grupo_custo, centro: p.centro_custo, centroPlano: p.centro_custo, subcentro: p.subcentro,
+    escopo: p.escopo_negocio })); }), [lancs, fornMap, partes]);
 
   /* O bloco de topo conta o recorte INTEIRO, transferências incluídas na contagem de linhas e
      excluídas dos valores — a mesma régua das agregações, para os números do topo e os das

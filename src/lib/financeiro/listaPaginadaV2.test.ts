@@ -12,28 +12,34 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  consultarPagina,
-  consultarTotais,
   aplicarPlanoNaView,
+  ordenarPorVencimento,
   ordenarPorVencimentoNoCliente,
   filtrarSeisNoCliente,
   totaisNoCliente,
-  faixaDaPagina,
-  faixasDoRecorte,
-  paramsDosTotais,
   planoDaLista,
   sinalNumerico,
   COLUNAS_VIEW_DOC,
-  TAMANHO_PAGINA_LISTA,
   type AbrirView,
   type BuilderView,
-  type ChamarRpcTotais,
   type LinhaViewDoc,
   type RegistroListaV2,
   type RespostaView,
 } from './listaPaginadaV2';
 import { montarPlanoBaseV2, type FiltrosV2 } from './filtrosBaseV2';
 import { formatDocumento } from './documentoHelper';
+
+/* FIN-V2-LISTA-FLAG-01: a pagina da flag LISTA_PAGINADA_V2 (`consultarPagina`) saiu com ela; o PLANO da view continua vivo (export, secao
+   sem caixa, CPR). Estes testes seguem conferindo o plano pela mesma montagem: plano -> ordem do contrato -> range (30 por pagina). */
+async function consultarPagina(abrir: AbrirView, clienteId: string, filtros: FiltrosV2,
+  opcoes: { pagina?: number; tamanhoPagina?: number; incluirSemVencimento?: boolean } = {}): Promise<LinhaViewDoc[]> {
+  const tamanho = opcoes.tamanhoPagina ?? 30;
+  const de = Math.max(0, Math.trunc(opcoes.pagina ?? 0)) * tamanho;
+  const q = aplicarPlanoNaView(abrir('*'), planoDaLista(clienteId, filtros, opcoes));
+  const { data, error } = await ordenarPorVencimento(q).range(de, de + tamanho - 1);
+  if (error) throw error;
+  return data ?? [];
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PostgREST simulado
@@ -300,113 +306,6 @@ describe('E2 — ordem: data_vencimento ASC NULLS LAST, id ASC', () => {
   });
 });
 
-describe('E3/E4 — contagem e totais vêm da RPC, não de varredura', () => {
-  /** RPC simulada: recebe os params e devolve o que o Postgres devolveria. */
-  function rpcSimulada(linhas: readonly Linha[], filtros: FiltrosV2) {
-    const chamadas: unknown[] = [];
-    const chamar: ChamarRpcTotais = async (params) => {
-      chamadas.push(params);
-      const alvo = referencia(filtros, linhas) as unknown as RegistroListaV2[];
-      const { entradas, saidas, entradasSemCaixa, saidasSemCaixa } = totaisNoCliente(alvo);
-      return {
-        data: [{
-          total: alvo.length, entradas, saidas,
-          excluidos_sem_vencimento: 0,
-          entradas_sem_caixa: entradasSemCaixa, saidas_sem_caixa: saidasSemCaixa,
-        }],
-        error: null,
-      };
-    };
-    return { chamar, chamadas };
-  }
-
-  it('total bate com o cliente e ignora a paginação', async () => {
-    const { chamar } = rpcSimulada(ACERVO, MARCO);
-    const t = await consultarTotais(chamar, CLIENTE, MARCO, { pagina: 3, tamanhoPagina: 2 });
-    expect(t.total).toBe(referencia(MARCO).length);
-  });
-
-  it('entradas e saídas batem com a soma do cliente', async () => {
-    const { chamar } = rpcSimulada(ACERVO, MARCO);
-    const t = await consultarTotais(chamar, CLIENTE, MARCO);
-    const esperado = totaisNoCliente(referencia(MARCO) as unknown as RegistroListaV2[]);
-    /* OC-VENDA-ENTREGAS-01b: o contrato ganhou os dois totais sem caixa; o caso compara os quatro. */
-    expect({ entradas: t.entradas, saidas: t.saidas, entradasSemCaixa: t.entradasSemCaixa, saidasSemCaixa: t.saidasSemCaixa }).toEqual(esperado);
-  });
-
-  it('UMA chamada, e nenhuma linha trafegada', async () => {
-    const { chamar, chamadas } = rpcSimulada(ACERVO, MARCO);
-    await consultarTotais(chamar, CLIENTE, MARCO);
-    expect(chamadas).toHaveLength(1);
-  });
-
-  it('a RPC recebe os seis filtros da lista', () => {
-    const p = paramsDosTotais(CLIENTE, {
-      ...MARCO,
-      lista_conta_direcao: 'origem', lista_produto: 'racao', lista_fornecedor_id: 'forn-1',
-      lista_grupo_custo: 'Nutricao', lista_atividade: 'outros', lista_documento: '9876',
-    });
-    expect(p.p_lista_conta_direcao).toBe('origem');
-    expect(p.p_lista_produto).toBe('racao');
-    expect(p.p_lista_fornecedor_id).toBe('forn-1');
-    expect(p.p_lista_grupo_custo).toBe('Nutricao');
-    expect(p.p_lista_atividade).toBe('outros');
-    expect(p.p_lista_documento).toBe('9876');
-  });
-
-  /**
-   * ⚠ ESTE TESTE JÁ COBROU TRÊS VEZES, e é o que impede a lista somar um período e o rodapé
-   * somar outro. A primeira foi `anos` (FIN-LISTA-MULTIANO-01), que passou a chegar à RPC sem
-   * nada ser pedido ao banco — `p_faixas` já era uma lista. A segunda é `safra_id` abaixo, e
-   * essa NÃO passou: a RPC não tem onde recebê-la. A terceira é `cultura`
-   * (FIN-AUDITORIA-CULTURA-01), e ela cobrou no COMPILADOR antes de rodar — o
-   * `Required<Omit<FiltrosV2,'meses'>>` recusou o objeto no dia em que o campo nasceu.
-   */
-  it('TODO campo de FiltrosV2 chega à RPC — nenhum filtro fica fora dos totais', () => {
-    // Se alguém acrescentar um filtro e esquecer dos totais, este teste quebra.
-    const completo: Required<Omit<FiltrosV2, 'meses'>> & { meses?: string[] } = {
-      safra_id: 'sf-1',
-      ano: '2026', anos: ['2026'], mes: '03', fazenda_id: 'f-1', dimensao: 'vencimento',
-      conta_bancaria_id: 'cb', conta_destino_id: 'cd', tipo_operacao: '2-Saídas',
-      status_transacoes: ['previsto', 'conciliado'],
-      macro_custo: 'M', grupo_custo: 'G', centro_custo: 'C', subcentro: 'S',
-      lista_conta_direcao: 'origem', lista_produto: 'p', lista_fornecedor_id: 'ff',
-      lista_grupo_custo: 'lg', lista_atividade: 'pecuaria', lista_documento: 'd',
-      cultura: 'mandioca',
-    };
-    const p = paramsDosTotais(CLIENTE, completo);
-    const semValor = Object.entries(p).filter(([, v]) => v === null || v === undefined);
-    /* Só p_meses fica nulo: "mês em qualquer ano" exige ano '__todos__'.
-       p_tipo_operacao é nulo de propósito quando há origem E destino (vira transferência).
-       ⚠ E `safra_id` NÃO APARECE AQUI — não por esquecimento, e a distinção importa: a RPC
-       `fn_lista_v2_totais` NÃO TEM o parâmetro (conferido em `pg_get_function_arguments`,
-       11/09/2026). O filtro existe, vai ao `WHERE` da consulta (o caminho vivo soma em
-       memória, então hoje lista e totais concordam), mas o caminho PAGINADO somaria sem a
-       safra se fosse ligado.
-       ⚠ DÍVIDA BLOQUEANTE PARA `LISTA_PAGINADA_V2`: ligar a flag sem `p_safra_id` na RPC faz
-       a lista mostrar a safra e o rodapé somar o período inteiro. A correção é migration —
-       do arquiteto, não daqui. Registrado em vez de silenciado, porque um gate que aprende a
-       aceitar exceção deixa de ser gate.
-       ⚠ E `cultura` ENTRA NA MESMA DÍVIDA, POR DOIS MOTIVOS MEDIDOS EM 12/09/2026: a RPC dos
-       totais não tem `p_cultura`, e a view `vw_financeiro_lancamentos_v2_doc` não tem a
-       COLUNA `cultura` (tem `safra_id`; não tem `cultura` nem `fase`). No caminho vivo o
-       filtro vai ao `WHERE` e os totais somam em memória, então lista e rodapé concordam;
-       no paginado, a view nem saberia filtrar. Duas migrations, do arquiteto. */
-    expect(semValor.map(([k]) => k).sort()).toEqual(['p_meses', 'p_tipo_operacao']);
-    expect(p.p_faixas).toEqual(['[2026-03-01,2026-04-01)']);
-    expect(p.p_status_transacoes).toEqual(['previsto']);
-    expect(p.p_incluir_conciliado).toBe(true);
-  });
-
-  it('faixas do recorte cobrem virada de ano e multimês', () => {
-    expect(faixasDoRecorte({ ano: '2026', mes: '12' })).toEqual(['[2026-12-01,2027-01-01)']);
-    expect(faixasDoRecorte({ ano: '2026', meses: ['01', '02'] }))
-      .toEqual(['[2026-01-01,2026-02-01)', '[2026-02-01,2026-03-01)']);
-    expect(faixasDoRecorte({ ano: '2026' })).toEqual(['[2026-01-01,2027-01-01)']);
-    expect(faixasDoRecorte({ ano: '__todos__' })).toBeNull();
-  });
-});
-
 describe('E5 — busca de documento, com equivalência de caractere literal', () => {
   it('casa pelo número cru', async () => {
     const { abrir } = simulador(ACERVO);
@@ -540,12 +439,6 @@ describe('bordas de paginação — 0, 30, 31 e a última parcial', () => {
     expect(juntas).toEqual(ids(referencia(MARCO, muitas)));
   });
 
-  it('faixaDaPagina é inclusiva nas duas pontas', () => {
-    expect(faixaDaPagina(0, 30)).toEqual([0, 29]);
-    expect(faixaDaPagina(1, 30)).toEqual([30, 59]);
-    expect(faixaDaPagina(-5, 30)).toEqual([0, 29]);
-    expect(TAMANHO_PAGINA_LISTA).toBe(30);
-  });
 });
 
 describe('período e o eixo de vencimento', () => {
@@ -572,10 +465,6 @@ describe('período e o eixo de vencimento', () => {
     expect(com[com.length - 1].id).toBe('a03');
   });
 
-  it('a opção chega à RPC', () => {
-    expect(paramsDosTotais(CLIENTE, MARCO, { incluirSemVencimento: true }).p_incluir_sem_vencimento).toBe(true);
-    expect(paramsDosTotais(CLIENTE, MARCO).p_incluir_sem_vencimento).toBe(false);
-  });
 });
 
 describe('mês em qualquer ano — agora resolvido no servidor', () => {
@@ -651,93 +540,6 @@ describe('a projeção da view é nominal e única', () => {
                      'dados_pagamento', 'editado_manual', 'movimentacao_rebanho_id', 'safra_id']) {
       expect(COLUNAS_VIEW_DOC as readonly string[]).toContain(c);
     }
-  });
-});
-
-describe('guarda de corrida — resposta antiga nunca sobrescreve a nova', () => {
-  function criarGuarda() {
-    let token = 0;
-    let estado: string[] = [];
-    return {
-      estado: () => estado,
-      async carregar(rotulo: string, atraso: number, valores: string[]) {
-        const meu = ++token;
-        await new Promise((r) => setTimeout(r, atraso));
-        if (meu !== token) return `${rotulo}: descartada`;
-        estado = valores;
-        return `${rotulo}: aplicada`;
-      },
-    };
-  }
-
-  it('a resposta lenta do filtro antigo é descartada', async () => {
-    const g = criarGuarda();
-    const lenta = g.carregar('antiga', 40, ['velho']);
-    await new Promise((r) => setTimeout(r, 5));
-    const rapida = g.carregar('nova', 5, ['novo']);
-    const [rl, rr] = await Promise.all([lenta, rapida]);
-    expect(rl).toBe('antiga: descartada');
-    expect(rr).toBe('nova: aplicada');
-    expect(g.estado()).toEqual(['novo']);
-  });
-
-  it('sem a guarda, o estado ficaria com o resultado errado', async () => {
-    let estado: string[] = [];
-    const semGuarda = async (atraso: number, v: string[]) => {
-      await new Promise((r) => setTimeout(r, atraso));
-      estado = v;
-    };
-    await Promise.all([semGuarda(40, ['velho']), semGuarda(5, ['novo'])]);
-    expect(estado).toEqual(['velho']);   // exatamente o defeito que a guarda evita
-  });
-});
-
-describe('flag OFF/ON — as duas vias concordam', () => {
-  function viaOff(filtros: FiltrosV2, pagina: number, tamanho: number) {
-    const todas = referencia(filtros);
-    const [de] = faixaDaPagina(pagina, tamanho);
-    return {
-      linhas: todas.slice(de, de + tamanho),
-      total: todas.length,
-      totais: totaisNoCliente(todas as unknown as RegistroListaV2[]),
-    };
-  }
-
-  const casos: [string, FiltrosV2][] = [
-    ['março/2026', MARCO],
-    ['sem período', SEM_PERIODO],
-    ['com documento', { ...MARCO, lista_documento: '456' }],
-    ['com atividade outros', { ...MARCO, lista_atividade: 'outros' }],
-    ['mês em qualquer ano', { ano: '__todos__', mes: '03' }],
-  ];
-
-  it.each(casos)('%s — ids coincidem', async (_n, filtros) => {
-    const { abrir } = simulador(ACERVO);
-    const off = viaOff(filtros, 0, 5);
-    const on = await consultarPagina(abrir, CLIENTE, filtros, { pagina: 0, tamanhoPagina: 5 });
-    expect(ids(on)).toEqual(ids(off.linhas));
-  });
-
-  it('a via ON pede no máximo o tamanho da página', async () => {
-    const muitas = Array.from({ length: 500 }, (_, i) => linha({ id: `q${String(i).padStart(4, '0')}` }));
-    const { abrir, registro } = simulador(muitas);
-    const p = await consultarPagina(abrir, CLIENTE, MARCO, { pagina: 0 });
-    expect(p.length).toBe(30);
-    const faixas = registro.filter((c) => c.metodo === 'range');
-    expect(faixas).toHaveLength(1);
-    expect(faixas[0].args).toEqual([0, 29]);
-  });
-
-  it('os totais NÃO trafegam linha alguma: é uma RPC', async () => {
-    const muitas = Array.from({ length: 5000 }, (_, i) => linha({ id: `r${i}` }));
-    let linhasTrafegadas = 0;
-    const chamar: ChamarRpcTotais = async () => {
-      linhasTrafegadas += 0;   // a RPC devolve UMA linha de agregados
-      return { data: [{ total: muitas.length, entradas: 0, saidas: 0, excluidos_sem_vencimento: 0, entradas_sem_caixa: 0, saidas_sem_caixa: 0 }], error: null };
-    };
-    const t = await consultarTotais(chamar, CLIENTE, MARCO);
-    expect(t.total).toBe(5000);
-    expect(linhasTrafegadas).toBe(0);
   });
 });
 

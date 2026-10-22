@@ -20,6 +20,7 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { FONTE_POR_PARTE } from '@/lib/financeiro/partesDaClassificacao';
 import { fetchAllPaginated } from '@/lib/supabase/fetchAllPaginated';
 import {
   cabecasMediaPeriodoFromRows,
@@ -548,8 +549,8 @@ export function useHistoricoIndicador({
           {
             let from = 0;
             while (true) {
-              let q = (supabase
-                .from('financeiro_lancamentos_v2')
+              let q = ((supabase as any)
+                .from(FONTE_POR_PARTE)
                 .select('data_pagamento, valor, grupo_custo') as any)
                 .eq('cancelado', false)
                 .eq('sem_movimentacao_caixa', false)

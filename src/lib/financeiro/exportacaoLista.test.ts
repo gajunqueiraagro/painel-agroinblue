@@ -12,7 +12,6 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-  consultarPagina,
   buscarConjuntoCompleto,
   prepararCancelamentoEmLote,
   lotesDeCancelamento,
@@ -23,7 +22,6 @@ import {
   filtrarSeisNoCliente,
   ErroConjuntoIncompleto,
   ErroConjuntoObsoleto,
-  TAMANHO_PAGINA_LISTA,
   TODOS,
   type AbrirView,
   type BuilderView,
@@ -32,6 +30,9 @@ import {
   type RespostaView,
 } from './listaPaginadaV2';
 import type { FiltrosV2 } from './filtrosBaseV2';
+
+/* FIN-V2-LISTA-FLAG-01: a pagina visual da flag LISTA_PAGINADA_V2 (30 linhas) saiu; a referencia de "uma pagina" segue 30. */
+const TAMANHO_PAGINA_LISTA = 30;
 import { formatDocumento } from './documentoHelper';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -226,25 +227,6 @@ function referencia(filtros: FiltrosV2, linhas: readonly Linha[]): Linha[] {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-
-describe('E1 — a lista visual continua pedindo apenas 30 por página', () => {
-  it('uma página, um range de 30, mesmo com 87 disponíveis', async () => {
-    const { abrir, registro } = simulador(MUITAS);
-    const p = await consultarPagina(abrir, CLIENTE, MARCO, { pagina: 0 });
-    expect(p.length).toBe(TAMANHO_PAGINA_LISTA);
-    const faixas = registro.filter((c) => c.metodo === 'range');
-    expect(faixas).toHaveLength(1);
-    expect(faixas[0].args).toEqual([0, 29]);
-  });
-
-  it('a lista NÃO usa a busca de conjunto completo', async () => {
-    const { abrir, registro } = simulador(MUITAS);
-    await consultarPagina(abrir, CLIENTE, MARCO, { pagina: 2 });
-    const faixas = registro.filter((c) => c.metodo === 'range');
-    expect(faixas).toHaveLength(1);
-    expect(faixas[0].args).toEqual([60, 89]);
-  });
-});
 
 describe('E2 — a exportação traz TODO o conjunto, não a página', () => {
   it('87 registros saem 87, não 30', async () => {
@@ -473,13 +455,6 @@ describe('E6 — erro e obsolescência não contaminam nem geram arquivo parcial
     await expect(promessa).rejects.toBeInstanceOf(ErroConjuntoObsoleto);
   });
 
-  it('a lista visual continua funcionando depois de uma exportação que falhou', async () => {
-    const { abrir: abrirFalho } = simuladorQueFalha(MUITAS, 1);
-    await expect(buscarConjuntoCompleto(abrirFalho, CLIENTE, MARCO, { tamanhoLote: 30 })).rejects.toBeDefined();
-    const { abrir } = simulador(MUITAS);
-    const pagina = await consultarPagina(abrir, CLIENTE, MARCO, { pagina: 0 });
-    expect(pagina.length).toBe(30);
-  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

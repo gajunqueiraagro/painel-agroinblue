@@ -46,7 +46,9 @@ export interface LancamentoDaSafra {
   compoe_dre: boolean | null;
 }
 
-const COLUNAS = 'id, valor, tipo_operacao, cultura, macro_custo, grupo_custo, centro_custo,'
+/* FIN-CLASSIF-DIVIDIDA-01a-2: le a visao por parte (o filtro de safra e o valor sao os da PARTE); `id` = o lancamento (o drill abre o
+   lancamento), `parte_ordem` desempata a paginacao. */
+const COLUNAS = 'id, parte_ordem, valor, tipo_operacao, cultura, macro_custo, grupo_custo, centro_custo,'
   + ' subcentro, descricao, favorecido_id, numero_documento, documento,'
   + ' data_pagamento, data_vencimento, data_competencia, compoe_dre';
 
@@ -87,12 +89,13 @@ export function useLancamentosDaSafra(clienteId: string | null | undefined, safr
     queryFn: async (): Promise<LancamentoDaSafra[]> => paginarTudo<LancamentoDaSafra>(
       async (de, tamanho) => {
         const { data: linhas, error } = await (supabase as any)
-          .from('financeiro_lancamentos_v2')
+          .from('vw_fin_classificacao_por_parte')
           .select(COLUNAS)
           .eq('cliente_id', clienteId)
           .eq('safra_id', safraId)
           .eq('cancelado', false)
           .order('id', { ascending: true })
+          .order('parte_ordem', { ascending: true })
           .range(de, de + tamanho - 1);
         if (error) throw error;
         const lista = (linhas ?? []) as LancamentoDaSafra[];

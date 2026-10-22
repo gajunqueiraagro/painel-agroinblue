@@ -15,6 +15,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { carregarPartes, porParte } from '@/lib/financeiro/partesDaClassificacao';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { ContaBancariaSelect, type ContaSelecionavel } from '@/components/shared/ContaBancariaSelect';
@@ -38,6 +39,8 @@ import { MinimodalOrigemLancamento } from '@/components/financeiro-v2/MinimodalO
 
 interface ContaRow extends ContaSelecionavel { fazenda_id: string | null; }
 interface LancExtrato {
+  /** FIN-CLASSIF-DIVIDIDA-01a-2: a classificacao em N contas — a distribuicao economica abre o movimento pelas partes */
+  classificacao_dividida?: boolean | null;
   id: string; data_pagamento: string | null; data_vencimento: string | null; valor: number;
   tipo_operacao: string; descricao: string | null; numero_documento: string | null; documento: string | null; tipo_documento: string | null;
   favorecido_id: string | null; centro_custo: string | null; plano_conta_id: string | null; status_transacao: string | null;
@@ -208,7 +211,7 @@ export function ExtratoGerencialTab({ periodo }: { periodo: PeriodoControlado })
     enabled: !!clienteId && !!contaId,
     queryFn: async (): Promise<LancExtrato[]> => {
       let q = (supabase as any).from('financeiro_lancamentos_v2')
-        .select('id, data_pagamento, data_vencimento, valor, tipo_operacao, descricao, numero_documento, documento, tipo_documento, favorecido_id, macro_custo, grupo_custo, centro_custo, subcentro, escopo_negocio, plano_conta_id, status_transacao, conta_bancaria_id, conta_destino_id, editado_manual, origem_lancamento, created_by, created_at')
+        .select('id, data_pagamento, data_vencimento, valor, tipo_operacao, descricao, numero_documento, documento, tipo_documento, favorecido_id, macro_custo, grupo_custo, centro_custo, subcentro, escopo_negocio, plano_conta_id, status_transacao, conta_bancaria_id, conta_destino_id, editado_manual, origem_lancamento, created_by, created_at, classificacao_dividida')
         .eq('cliente_id', clienteId).eq('cancelado', false)
         .or(`conta_bancaria_id.eq.${contaId},conta_destino_id.eq.${contaId}`)
         .or(`and(data_pagamento.gte.${ini},data_pagamento.lt.${fim}),and(data_pagamento.is.null,data_vencimento.gte.${ini},data_vencimento.lt.${fim})`);
@@ -290,7 +293,16 @@ export function ExtratoGerencialTab({ periodo }: { periodo: PeriodoControlado })
   }, [lancs, statusSel, incluirLegados, saldoIni, contaId]);
 
   // Mesma fonte do gráfico: itens da Organização derivados de `linhas` (só reorganiza, sem cálculo novo).
-  const dadosOrg = useMemo(() => linhas.map((x) => ({
+  /* FIN-CLASSIF-DIVIDIDA-01a-2: o EXTRATO (linhas, saldo corrido) continua um movimento por lancamento; a distribuicao economica, os
+     maiores compromissos e o PDF executivo abrem o movimento do lancamento DIVIDIDO pelas partes (o valor de cada conta). So' os
+     divididos consultam as partes. Item da parte 2+ tem a chave "id#n" — abrir o lancamento e' sempre pelo id do lancamento. */
+  const idsDivididos = useMemo(() => lancs.filter((l) => l.classificacao_dividida).map((l) => l.id).sort(), [lancs]);
+  const { data: partes } = useQuery({
+    queryKey: ['extrato-ger-partes', idsDivididos],
+    enabled: idsDivididos.length > 0,
+    queryFn: () => carregarPartes(idsDivididos),
+  });
+  const dadosOrg = useMemo(() => linhas.flatMap((x) => { const item = {
     id: x.l.id,
     data: x.data,
     mov: x.mov,
@@ -309,7 +321,9 @@ export function ExtratoGerencialTab({ periodo }: { periodo: PeriodoControlado })
     subcentro: x.l.subcentro ?? null,
     // Dimensão de negócio = escopo_negocio persistido no lançamento (soberano; nunca conta/texto).
     escopo: x.l.escopo_negocio ?? null,
-  })), [linhas, fornMap]);
+  }; return porParte(item, partes?.get(x.l.id), x.mov, (p, mov) => ({ ...item, id: p.ordem > 1 ? `${x.l.id}#${p.ordem}` : x.l.id, mov,
+    centro: p.centro_custo, macro: p.macro_custo, grupo: p.grupo_custo, centroPlano: p.centro_custo, subcentro: p.subcentro,
+    escopo: p.escopo_negocio })); }), [linhas, fornMap, partes]);
 
   const totais = useMemo(() => {
     let ent = 0, sai = 0;
