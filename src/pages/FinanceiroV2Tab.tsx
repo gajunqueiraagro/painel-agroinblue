@@ -17,7 +17,7 @@ import { CelulaSafra, CelulaVinculos } from '@/components/financeiro-v2/ColunasD
 import { Segmentado } from '@/components/ui/segmentado';
 import {
   CHAVE_PREF, MODOS_SEM_CAIXA, NIVEIS_CLASSIFICACAO, ROTULO_NIVEL, caminhoDaClassificacao, gravarPreferencia,
-  lerPreferencia, linhasDaGradePorModo, safraNaLista, secaoSemCaixaVisivel, textoDaClassificacao, vinculosDaLinha,
+  lerPreferencia, safraNaLista, secaoSemCaixaVisivel, textoDaClassificacao, vinculosDaLinha,
   SIM_NAO, type ModoSemCaixa, type NivelClassificacao,
 } from '@/lib/financeiro/colunasDaListaV2';
 import { useLancamentosConciliados, desfazerVinculo, desfazerGrupo } from '@/hooks/useConciliacaoDoMes';
@@ -84,6 +84,7 @@ import { CULTURAS_LANCAMENTO } from '@/lib/agri/rateioLancamento';
    sistema já conhecia quatro: uma lista escrita à mão não sabe quando a outra cresce. */
 import { ATIVIDADES } from '@/lib/financeiro/ultimaAtividade';
 import { filtrosAplicadosDaLista } from '@/lib/financeiro/listaPaginadaV2';
+import { lerListaInteira, abrirDivididasParaExportar, type PedirPaginaDaLista } from '@/lib/financeiro/exportacaoPelaLista';
 import { hojeLocal } from '@/lib/datas/hojeLocal';
 import { useListaPaginaV2 } from '@/hooks/useListaPaginaV2';
 import { useAlturaAteOFim } from '@/hooks/useAlturaAteOFim';
@@ -1284,14 +1285,23 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const linhasDaGrade = useMemo(() => paginaDaLista?.linhas ?? [], [paginaDaLista]);
 
   // Busca o conjunto inteiro SO no clique de exportar. Nunca na renderizacao.
-  const carregarConjuntoExportacao = useCallback(
-    /* A exportacao segue a TELA (decisao do Gabriel): so' caixa com a chave desligada; caixa e sem caixa com ela ligada. */
-    () => hook.buscarConjuntoFiltrado(filtrosAplicados, {
-      incluirSemVencimento: incluirSemVencimentoAplicado,
-      caixa: modoSemCaixa === 'ocultar' ? 'com' : modoSemCaixa === 'so_dre' ? 'sem' : undefined,
-    }).then(ls => (modoSemCaixa === 'so_dre' ? linhasDaGradePorModo(ls, 'so_dre') : ls)),
-    [hook.buscarConjuntoFiltrado, filtrosAplicados, incluirSemVencimentoAplicado, modoSemCaixa],
-  );
+  const carregarConjuntoExportacao = useCallback(async (): Promise<LancamentoV2[]> => {
+    /* FIN-V2-LISTA-FLAG-01 (parte 3) — a exportacao sai da MESMA RPC da tela (filtros, ordem e modo sem caixa da grade), pagina a
+       pagina, e o lancamento DIVIDIDO sai pela parte (`abrirDivididasParaExportar`). Com a chave "mostrar", as linhas sem caixa vem da
+       MESMA fonte da secao sem caixa da tela, depois das de caixa (decisao do Gabriel: a exportacao segue a TELA). */
+    const cli = clienteAtual?.id;
+    if (!cli) return [];
+    const pedir: PedirPaginaDaLista = async (pagina, por) => {
+      const { data, error } = await (supabase as any).rpc('fn_fin_v2_lista_pagina', {
+        p_cliente: cli, p_filtros: filtrosV2, p_ordem: { ...ordemV2, so_linhas: true }, p_pagina: pagina, p_por_pagina: por });
+      if (error) throw error;
+      return data;
+    };
+    const caixa = abrirDivididasParaExportar(await lerListaInteira(pedir));
+    if (modoSemCaixa !== 'mostrar') return caixa;
+    const sem = await hook.buscarConjuntoFiltrado(filtrosAplicados, { incluirSemVencimento: incluirSemVencimentoAplicado, caixa: 'sem' });
+    return [...caixa, ...filtrarEmMemoria(sem).filter(l => l.sem_movimentacao_caixa === true)];
+  }, [clienteAtual?.id, filtrosV2, ordemV2, modoSemCaixa, hook.buscarConjuntoFiltrado, filtrosAplicados, incluirSemVencimentoAplicado, filtrarEmMemoria]);
 
   /* A secao sem caixa: no caminho em memoria ja' esta' filtrada (`semCaixaLocal`); no paginado vem do servidor, pelo MESMO plano
      da lista com `caixa: 'sem'`, so' com a chave ligada. Sem paginacao (poucas linhas). */
