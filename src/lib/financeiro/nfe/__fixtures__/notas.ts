@@ -40,6 +40,8 @@ export interface OpcoesNota {
   /** Prefixo de namespace nos elementos (`nfe:`), para provar a leitura por localName. */
   prefixo?: string;
   semCampo?: 'nNF' | 'dhEmi' | 'emit' | 'vNF' | 'chave';
+  /** ITENS-NOTA-FONTE-01 — outros itens [xProd, qCom, uCom, vProd, cProd?] (o vNF e' de quem chama); padrao: os 6 de sempre. */
+  itens?: [string, string, string, string, string?][];
 }
 
 const ITENS: [string, string, string, string][] = [
@@ -75,7 +77,7 @@ function nfe(o: OpcoesNota, p: string): string {
   const dest = `<${p}dest>${t('CPF', DESTINATARIO_CPF)}${t('xNome', 'PRODUTOR RURAL DE TESTE')}<${p}enderDest>${t('xLgr', 'FAZENDA MODELO')}${
     t('nro', 'SN')}${t('xBairro', 'ZONA RURAL')}${t('cMun', '5002704')}${t('xMun', 'CAMPO GRANDE')}${t('UF', 'MS')}</${p}enderDest>${
     t('indIEDest', '1')}${t('IE', '28.987.654-3')}</${p}dest>`;
-  const det = ITENS.map(([x, q, u, v], i) => `<${p}det nItem="${i + 1}"><${p}prod>${t('cProd', String(1000 + i))}${t('cEAN', 'SEM GTIN')}${
+  const det = (o.itens ?? ITENS).map(([x, q, u, v, c], i) => `<${p}det nItem="${i + 1}"><${p}prod>${t('cProd', c ?? String(1000 + i))}${t('cEAN', 'SEM GTIN')}${
     t('xProd', x)}${t('NCM', '23099090')}${t('CFOP', '5102')}${t('uCom', u)}${t('qCom', q)}${t('vUnCom', '1.0000000000')}${t('vProd', v)}${
     t('indTot', '1')}</${p}prod><${p}imposto><${p}ICMS><${p}ICMS00>${t('orig', '0')}${t('CST', '00')}${t('vBC', v)}${t('pICMS', '0.00')}${
     t('vICMS', '0.00')}</${p}ICMS00></${p}ICMS><${p}IBSCBS>${t('CST', '000')}${t('cClassTrib', '000001')}<${p}gIBSCBS>${t('vBC', v)}<${p}gIBSUF>${
