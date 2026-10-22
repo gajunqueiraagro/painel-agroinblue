@@ -28,6 +28,7 @@ import {
 } from '@/lib/financeiro/nfeConsultas';
 import { arquivoXmlDaNota, type DoXml } from '@/lib/financeiro/nfePrefill';
 import type { NotaLidaOk, NotaParaLancar } from './NotaFiscalDialog';
+import { ItensDasNotasGuardadasDialog } from './ItensDasNotasGuardadasDialog';
 
 export interface LinhaDeNota {
   id: string;
@@ -110,6 +111,7 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
 }) {
   const [linhas, setLinhas] = useState<LinhaDeNota[]>([]);
   const [lendo, setLendo] = useState(false);
+  const [guardadas, setGuardadas] = useState(false);
 
   const lerArquivos = useCallback(async (arquivos: File[]) => {
     if (!clienteId || arquivos.length === 0) return;
@@ -280,9 +282,12 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
         </div>
 
         <div className="flex h-8 items-center justify-end gap-2 border-t bg-muted/30 px-4">
+          <Button type="button" size="sm" variant="ghost" className="mr-auto h-[22px] px-[9px] text-[10px]" disabled={!clienteId}
+            onClick={() => setGuardadas(true)} data-testid="xml-itens-guardadas">Itens das notas já guardadas</Button>
           <Button type="button" size="sm" variant="outline" className="h-[22px] px-[9px] text-[10px]" onClick={fechar}>Fechar</Button>
         </div>
       </DialogContent>
+      {guardadas && clienteId && <ItensDasNotasGuardadasDialog clienteId={clienteId} onClose={() => setGuardadas(false)} />}
     </Dialog>
   );
 }

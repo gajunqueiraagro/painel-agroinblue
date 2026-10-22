@@ -198,6 +198,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
   );
   // PR-OC-EDIT-01B — diálogo de confirmação das ações de ciclo (motivo obrigatório no cancelamento).
   const [acaoConfirm, setAcaoConfirm] = useState<null | 'confirmar' | 'cancelar' | 'reabrir'>(null);
+  const [cancelarTituloAberto, setCancelarTituloAberto] = useState(false);
   const [motivoAcao, setMotivoAcao] = useState('');
   /* ESTORNO EM DUAS ETAPAS, decisao de produto: `null` fechado, 1 = o que sera
      desfeito, 2 = motivo. Separar existe porque a etapa 1 e' informacao (quantas
@@ -907,7 +908,7 @@ export function CompraModalShell(api: CompraModalShellProps) {
                   apareceria depois do clique. Nao uniformizar com Confirmar e Reabrir. */}
               {(api.ocStatusComercial === 'programada' || api.ocStatusComercial === 'fechada') && !api.ocTemTitulo && (
                 <Button type="button" variant="outline" disabled={!!api.acaoOcLoading}
-                  onClick={() => { setMotivoAcao(''); setAcaoConfirm('cancelar'); }}
+                  onClick={() => setCancelarTituloAberto(true)}
                   className="h-[22px] px-[9px] text-[10px] border-red-300/60 text-red-100 hover:bg-red-500/20 bg-transparent gap-1">
                   {api.acaoOcLoading === 'cancelar' ? 'Cancelando...' : 'Cancelar operação'}
                 </Button>
@@ -1160,6 +1161,13 @@ export function CompraModalShell(api: CompraModalShellProps) {
       </Dialog>
 
       <RecusaNegociacaoDialog frase={recusaNegociacao} onFechar={() => setRecusaNegociacao(null)} />
+
+      {/* P32 — o cancelar do modelo ANTIGO usa o mesmo dialogo da conta corrente: a lista do que fecha junto vem do banco
+          (`oc_cancelar_rol`: os compromissos, com vencimento e R$), motivo obrigatorio */}
+      {cancelarTituloAberto && (
+        <CancelarContaCorrenteDialog api={ccApi} lado="compra" onFechar={() => setCancelarTituloAberto(false)}
+          onCancelar={async (m) => { await api.onCancelarOC?.(m); return null; }} />
+      )}
 
       {cancelarCcAberto && api.onCancelarContaCorrente && (
         <CancelarContaCorrenteDialog api={ccApi} lado="compra" onCancelar={api.onCancelarContaCorrente}

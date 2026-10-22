@@ -571,6 +571,29 @@ describe('tela B — a faixa do fornecedor', () => {
   });
 });
 
+describe('ITENS-NOTA-01 — a aba "Itens da nota (N)" do Novo lançamento pela nota', () => {
+  const abaItens = () => screen.queryAllByRole('tab').find((t) => /Itens da nota/.test(t.textContent ?? ''));
+  it('com a nota: a aba leva o N lido do proprio arquivo; ao criar, os itens vao ao banco pela RPC da nota (a mesma chave)', async () => {
+    banco.rpc.mockImplementation(async (nome: unknown) => (nome === 'fn_parcelamento_cadastrar' ? { data: 'fin-1', error: null } : { data: null, error: null }));
+    const d = doXmlDe({}, [AGRO]);
+    /* o jsdom nao tem `File.arrayBuffer` (o navegador tem): o mesmo jeito do `arquivo()` da tela A */
+    const bytes = utf8(montarNFe({}));
+    Object.defineProperty(d.arquivo, 'arrayBuffer', { value: async () => bytes });
+    const m = montarModal({ prefill: comConta(d) });
+    await waitFor(() => expect(abaItens()?.textContent).toMatch(/^Itens da nota \(\d+\)$/));
+    fireEvent.click(botaoSalvar());
+    await waitFor(() => expect(m.onLancamentoCriado).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(banco.rpc.mock.calls.some((c) => c[0] === 'fn_nota_fiscal_gravar')).toBe(true));
+    const args = banco.rpc.mock.calls.find((c) => c[0] === 'fn_nota_fiscal_gravar')?.[1] as { p_cliente: string; p_nota: { chave_acesso: string; origem: string }; p_simular: boolean };
+    expect(args).toMatchObject({ p_cliente: 'cli', p_simular: false, p_nota: { chave_acesso: d.proposta.documento.chaveAcesso, origem: 'xml' } });
+  });
+  it('sem nota: a aba nao existe', async () => {
+    montarModal({});
+    await waitFor(() => expect(botaoSalvar()).toBeTruthy());
+    expect(abaItens()).toBeUndefined();
+  });
+});
+
 describe('sem XML, o modal e o de sempre', () => {
   it('nenhuma peca do XML e montada no Novo lançamento comum', async () => {
     montarModal({});

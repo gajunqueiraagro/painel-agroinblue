@@ -81,6 +81,13 @@ const CENARIOS = [
     ['pior caso de texto', { url: 'tela=nota-pdf&v=longo' }],
     ['subcentro de lavoura (Safra e Cultura)', { url: 'tela=nota-pdf&v=lavoura' }], ['nota sem duplicata (Criar lancamento)', { url: 'tela=nota-pdf&v=semdup' }],
   ] },
+  /* ITENS-NOTA-01 — os itens da nota: Valores <-> Fiscal (o `auto` troca o Segmentado) no dialogo da OC; o backfill antes e depois do
+     Simular (a contagem e as linhas chegam, os botoes nao andam) */
+  { nome: 'itens-nota-oc', url: 'tela=itens-nota', auto: true },
+  { nome: 'itens-nota-guardadas', url: 'tela=itens-nota&v=guardadas', estados: [
+    ['simulado (30 linhas, contagem)', async (p) => { await p.locator('[data-testid="itens-guardadas-simular"]').click();
+      await p.waitForFunction(() => document.querySelectorAll('[data-testid="itens-guardadas-linha"]').length === 30); await espera(p); }],
+  ] },
   /* OC-CC-BOTAO-BUSCAR-DESLOCA-01 — os botoes da conta corrente nao andam com o motivo ("Principal já programado…") aparecendo ou
      sumindo, nem as abas com a sub-aba Despesas. So' nos tamanhos em que o modal da OC tem desenho (>= 1000). */
   ...['venda', 'abate'].map((v) => ({ nome: `oc-cc-faixa-${v}`, url: `tela=oc&v=${v}&aba=financeiro&cc=1`, minLargura: 1000, estados: [

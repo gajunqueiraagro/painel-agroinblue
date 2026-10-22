@@ -81,6 +81,9 @@ import { completarCadastroPeloXml, fornecedorPeloDocumento, gravarDocumentoNoCad
 import { documentoFormatado, reais } from '@/lib/financeiro/nfe/formatos';
 import { fraseParcelasComoNaNota, type CampoDoXml } from '@/lib/financeiro/nfe/proporLancamento';
 import { AvisosDoXml, CAMPO_AMBAR, FaixaDoFornecedor, OrigemDoXml, PilulaDoXml } from './LancamentoDoXml';
+import { ItensDaNota } from './ItensDaNota';
+import { useItensDaNota } from '@/hooks/useItensDaNota';
+import { gravarItensSemTravar } from '@/lib/financeiro/itensDaNotaBanco';
 import type { ExcelContext } from '@/v2/lib/mesa/buildExcelContext';
 import { planoDeTransferencia, ehTipoTransferencia } from '@/v2/lib/mesa/transferenciaPlano';
 import { ATIVIDADES, lembrarAtividade, ultimaAtividade, type Atividade } from '@/lib/financeiro/ultimaAtividade';
@@ -281,11 +284,13 @@ const TIPOS_OPERACAO = [
 // `<span>` inerte saiu. `'auditoria'` NÃO entra em `AbaFinanceira` de propósito — aquele
 // tipo é o da VALIDAÇÃO, e uma aba de leitura não tem campo para validar; incluí-la
 // obrigaria `validaPorAba` a inventar um `true` que não significa nada.
-type AbaVisual = AbaFinanceira | 'auditoria';
+type AbaVisual = AbaFinanceira | 'auditoria' | 'itens';
+/* ITENS-NOTA-01 — "Itens da nota (N)" entre Documentos e Auditoria, SO' quando o lancamento tem nota lida (o rotulo leva o N) */
 const ABAS_TAB: { value: AbaVisual; label: string }[] = [
   { value: 'geral', label: 'Geral' },
   { value: 'pagamento', label: 'Pagamento' },
   { value: 'documentos', label: 'Documentos' },
+  { value: 'itens', label: 'Itens da nota' },
   { value: 'auditoria', label: 'Auditoria' },
 ];
 
@@ -577,6 +582,12 @@ export function LancamentoV2Dialog({
      nasce desligado (`null`) e a aba diz o que fazer, em vez de oferecer um botão que
      recusaria no servidor. */
   const documentosApi = useLancamentoDocumentos(lancamento?.id ?? null, clienteAtual?.id ?? null);
+  /* ITENS-NOTA-01 — os itens da nota: os guardados pela chave dos documentos; no novo que nasce de uma nota, os do proprio arquivo */
+  const itensDaNota = useItensDaNota({
+    clienteId: clienteAtual?.id ?? null,
+    chaves: (documentosApi.documentos ?? []).map((d) => d.chaveAcesso ?? '').filter(Boolean),
+    arquivo: !lancamento ? prefill?.doXml?.arquivo ?? null : null,
+  });
   /* FIN-NFE-PARCELAS-01 — os documentos do lançamento NOVO, em memória até o salvar. `posSalvar`
      existe quando o lançamento já foi gravado e algum documento não: a partir dali o botão principal
      some (salvar de novo criaria OUTRO lançamento) e sobra o "Tentar de novo". */
@@ -2338,6 +2349,11 @@ export function LancamentoV2Dialog({
       const erro = await completarCadastroPeloXml(clienteAtual.id, xmlFornecedorProposto, xml.emitente);
       if (erro) toast.error(`Lançamento gravado, mas os dados do emitente não foram gravados no cadastro: ${erro}`);
     }
+    /* ITENS-NOTA-01 — os itens da nota ficam guardados pela chave (o documento), sem travar o salvar */
+    if (clienteAtual?.id) {
+      const erroItens = await gravarItensSemTravar(clienteAtual.id, xml.arquivo);
+      if (erroItens) toast.error(`Lançamento gravado, mas os itens da nota não foram guardados: ${erroItens}`);
+    }
     onLancamentoCriado?.();
   };
 
@@ -2348,7 +2364,7 @@ export function LancamentoV2Dialog({
   const barraDeAbas = (
     <TabsList className={cn("w-full justify-start gap-1 rounded-none border-b border-border bg-card px-2 py-1 h-auto shrink-0",
       faixaNaBarra && "w-auto border-b-0")}>
-      {ABAS_TAB.map(({ value, label }) => (
+      {ABAS_TAB.filter(({ value }) => value !== 'itens' || !!itensDaNota).map(({ value, label }) => (
         // PR-FIN-MODAL-02J — restyle das abas (ERP moderno): inativa discreta
         // (font-medium/muted, hover suave), ativa evidente sem borda grossa —
         // fundo background, cantos sup. arredondados, borda fininha, sombra leve e
@@ -2363,7 +2379,7 @@ export function LancamentoV2Dialog({
             "data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none",
           )}
         >
-          {label}
+          {value === 'itens' && itensDaNota ? `${label} (${itensDaNota.lidos.itens.length})` : label}
           {abaComErro(value) && (
             <span
               className="absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-destructive"
@@ -3169,6 +3185,12 @@ export function LancamentoV2Dialog({
                 ⚠ `mountOnly` pela montagem do próprio Tabs: o Radix só renderiza o
                 TabsContent ativo, então a consulta da trilha nasce no primeiro clique na
                 aba e não na abertura do modal. */}
+            {/* ═══ ABA ITENS DA NOTA (ITENS-NOTA-01) — so' leitura; o quadro ocupa a altura do corpo e a tabela rola dentro ═══ */}
+            {itensDaNota && (
+              <TabsContent value="itens" className="mt-0 h-full focus-visible:outline-none" data-testid="aba-itens-da-nota">
+                <ItensDaNota cabecalho={itensDaNota.cabecalho} lidos={itensDaNota.lidos} contaDoLancamento={subcentro || null} />
+              </TabsContent>
+            )}
             <TabsContent value="auditoria" className="mt-0 focus-visible:outline-none">
               <AbaAuditoriaLancamento
                 lancamentoId={lancamento?.id ?? null}

@@ -55,6 +55,8 @@ export interface DocumentoLista {
      nao o do cadastro: sao coisas diferentes e a nota e' que vale aqui. Emitente
      proprio ausente => nulo, e quem exibe usa o documento da CONTRAPARTE. */
   emitenteDocumento: string | null;
+  /** ITENS-NOTA-01 — a chave de 44 digitos (a view ja' a trazia): e' por ela que a OC acha os itens da nota guardados. */
+  chaveAcesso?: string | null;
   /* OC-DOC-ESPECIE-ABATE-01 passo 2 — os campos do abate (colunas no fim da view) e o liquido do PROPRIO documento, some ou
      nao no valor da operacao. Opcionais: quem monta a lista a' mao (testes, fixtures) nao precisa deles. */
   cab?: number | null;
@@ -150,6 +152,7 @@ interface DocRow {
   qtd_componentes: number; qtd_lotes: number; documento_origem_id: string | null;
   url: string | null;
   emitente_id: string | null; emitente_nome: string | null; emitente_documento: string | null;
+  chave_acesso?: string | null;
   liquido_proprio?: number | null; soma_no_valor?: boolean | null;
   cab?: number | null; peso_kg?: number | null; data_abate?: string | null; vencimento?: string | null;
   dados?: Record<string, unknown> | null;
@@ -218,6 +221,7 @@ export function useOperacaoDocumentos({ operacaoId, clienteId, enabled }: Params
         url: d.url ?? null,
         emitenteId: d.emitente_id ?? null, emitenteNome: d.emitente_nome ?? null,
         emitenteDocumento: d.emitente_documento ?? null,
+        chaveAcesso: d.chave_acesso ?? null,
         cab: d.cab ?? null, pesoKg: d.peso_kg == null ? null : Number(d.peso_kg),
         dataAbate: d.data_abate ?? null, vencimento: d.vencimento ?? null, dados: d.dados ?? null,
         liquidoProprio: d.liquido_proprio == null ? Number(d.valor_liquido) : Number(d.liquido_proprio),

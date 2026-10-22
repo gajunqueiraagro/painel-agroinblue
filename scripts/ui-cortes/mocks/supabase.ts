@@ -31,6 +31,10 @@ export const supabase: any = {
     return Promise.resolve(r && typeof r === 'object' && '__erro' in r ? { data: null, error: { code: 'CBLOC', message: r.__erro } } : { data: r, error: null });
   },
   auth: { getUser: async () => ({ data: { user: { id: 'u1' } } }), getSession: async () => ({ data: { session: null } }), onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }) },
-  storage: { from: () => ({ createSignedUrl: async () => ({ data: null, error: null }) }) },
+  /* ITENS-NOTA-01 — `download` le^ de `globalThis.__arquivosBancada[caminho]` (bytes SINTETICOS que a tela registra); sem ele, o "nao achado" */
+  storage: { from: () => ({ createSignedUrl: async () => ({ data: null, error: null }), download: async (c: string) => {
+    const a = (globalThis as unknown as { __arquivosBancada?: Record<string, ArrayBuffer> }).__arquivosBancada?.[c];
+    return a ? { data: new Blob([a]), error: null } : { data: null, error: { message: 'Object not found' } };
+  } }) },
   channel: () => ({ on() { return this; }, subscribe() { return this; } }), removeChannel() {},
 };

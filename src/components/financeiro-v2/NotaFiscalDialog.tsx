@@ -40,6 +40,7 @@ import { gravarParcelamento } from './LancamentoV2Dialog';
 import { ondeEsta } from './LancamentoDoXml';
 import type { DoXml } from '@/lib/financeiro/nfePrefill';
 import { resolverEmitente } from '@/lib/financeiro/nfe/resolverEmitente';
+import { gravarItensSemTravar } from '@/lib/financeiro/itensDaNotaBanco';
 import type { NotaDoArquivo } from '@/lib/financeiro/nfe/lerNota';
 import type { CampoConferido, CampoDaMarca } from '@/lib/financeiro/nfe/danfe';
 import type { EmitenteNFe } from '@/lib/financeiro/nfe/tipos';
@@ -120,7 +121,7 @@ export interface NotaParaLancar { arquivo: File; bytes: ArrayBuffer; lido: NotaL
 
 export function NotaFiscalDialog({
   open, onClose, clienteId, clienteNome, nota, fazendas, contas, classificacoes, safras = [], fornecedores, onCriarFornecedor, onCriarLancamento,
-  onAbrirNoLancamento, onAbrirRegistrada, onCriado, gravadores, consultarReceita = consultarCnpj,
+  onAbrirNoLancamento, onAbrirRegistrada, onCriado, gravadores, consultarReceita = consultarCnpj, gravarItens = gravarItensSemTravar,
 }: {
   open: boolean;
   onClose: () => void;
@@ -143,6 +144,8 @@ export function NotaFiscalDialog({
   gravadores?: Gravadores;
   /** So' para teste: a consulta da Receita (padrao: `consultarCnpj`). */
   consultarReceita?: typeof consultarCnpj;
+  /** ITENS-NOTA-01 — guarda os itens da nota depois de criar (padrao: `gravarItensSemTravar`; o teste troca). */
+  gravarItens?: (clienteId: string, arquivo: ArrayBuffer) => Promise<string | null>;
 }) {
   const qc = useQueryClient();
   const { lido, doXml, bytes, arquivo } = nota;
@@ -312,6 +315,9 @@ export function NotaFiscalDialog({
       if (r.ok === false) { setErro(r.erro); return; }
       if (r.erroDoDocumento) toast.error(r.erroDoDocumento);
       else toast.success(`${cabeAqui ? `${r.parcelas} parcelas criadas` : 'Lançamento criado'} · ${p.rotuloNota} anexada`);
+      /* ITENS-NOTA-01 — os itens ficam guardados pela chave (o documento), sem travar */
+      const erroItens = await gravarItens(clienteId, bytes);
+      if (erroItens) toast.error(`Os itens da nota não foram guardados: ${erroItens}`);
       onCriado(); onClose();
     } finally { setOcupado(null); }
   };
@@ -328,6 +334,9 @@ export function NotaFiscalDialog({
       const falhaDoDocumento = 'erroDoDocumento' in r && typeof r.erroDoDocumento === 'string' ? r.erroDoDocumento : null;
       if (falhaDoDocumento) toast.error(falhaDoDocumento);
       else toast.success(parcelas ? `Lançamento parcelado em ${parcelas.length} · ${p.rotuloNota} anexada` : `Lançamento atualizado · ${p.rotuloNota} anexada`);
+      /* ITENS-NOTA-01 — os itens ficam guardados pela chave (o documento), sem travar */
+      const erroItens = await gravarItens(clienteId, bytes);
+      if (erroItens) toast.error(`Os itens da nota não foram guardados: ${erroItens}`);
       onCriado(); onClose();
     } finally { setOcupado(null); setConfirmarAtualizar(null); }
   };

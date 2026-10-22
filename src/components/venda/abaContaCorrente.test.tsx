@@ -207,12 +207,15 @@ describe('aba conta corrente da OC — extrato pelo caixa da fazenda', () => {
 });
 
 const ROL: RolCancelamento = {
+  modelo: 'conta_corrente',
   entregas: [{ data: '2025-03-19', loteOrdem: 1, valor: 566879.55 }],
   explicacoes: [{ tipo: 'permuta_despesa', valor: 357.89, conta: 'Frete' }],
   recebimentos: [{ data: '2025-04-17', valor: 992138.24, contaAtual: 'Venda de Desmama Machos', contaOriginal: 'Venda de Desmama Machos', acao: 'volta_para_conta_original' }],
   saidas: [{ data: '2025-03-19', cab: 178, categoria: 'desmama_m', origem: 'adotada' }],
   compromissos: [],
   despesas: [],
+  titulosSaida: [{ data: '2025-03-19', valor: 1200, descricao: 'Venda 178 Desm.M - parcela antiga' }],
+  avisos: ['03/2025 fechado no Financeiro: títulos desse mês serão cancelados mesmo assim.'],
   bloqueios: [],
 };
 
@@ -223,11 +226,17 @@ describe('cancelar a venda em conta corrente', () => {
     const onFechar = vi.fn();
     const { rerender } = render(<CancelarContaCorrenteDialog api={a} onCancelar={onCancelar} onFechar={onFechar} />);
     const dlg = await screen.findByTestId('dialogo-cancelar-cc');
-    await waitFor(() => expect(dlg.textContent).toContain('Recebimentos que saem da OC (voltam a compor o DRE como venda) (1)'));
-    /* OC-CC-CLASSIFICACAO-01: o recebimento ja' esta' na conta da venda — sem seta, e o rodape diz que ele volta ao DRE */
-    expect((dlg.textContent ?? '').replace(/\u00a0/g, ' ')).toContain('R$ 992.138,24 · Venda de Desmama Machos');
+    /* OC-CANCELAR-CASCATA-01: nada volta avulso — o recebimento em aberto, a saida e o titulo dela sao cancelados junto */
+    await waitFor(() => expect(dlg.textContent).toContain('Recebimentos em aberto cancelados (1)'));
+    const txt = (dlg.textContent ?? '').replace(/\u00a0/g, ' ');
+    expect(txt).toContain('R$ 992.138,24 · Venda de Desmama Machos');
     expect(dlg.textContent).not.toContain('→');
-    expect(dlg.textContent).toContain('volta a ser uma venda comum no DRE');
+    expect(dlg.textContent).toContain('nada volta avulso');
+    expect(dlg.textContent).not.toContain('volta a ser uma venda comum no DRE');
+    expect(dlg.textContent).toContain('Saídas canceladas (saem do zootécnico) (1)');
+    expect(txt).toContain('Títulos das saídas cancelados (1)');
+    expect(txt).toContain('19/03/25 · Venda 178 Desm.M - parcela antiga · R$ 1.200,00');
+    expect(within(dlg).getByTestId('cc-cancelar-avisos').textContent).toContain('03/2025 fechado no Financeiro');
     expect(dlg.textContent).toContain('Entregas canceladas (saem do DRE) (1)');
     expect(dlg.textContent).toContain('Permuta / outra despesa · Frete');
     expect(dlg.textContent).toContain('178 cab · Desmama M');
