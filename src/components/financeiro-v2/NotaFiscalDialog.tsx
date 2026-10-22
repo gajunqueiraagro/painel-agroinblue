@@ -418,7 +418,9 @@ export function NotaFiscalDialog({
   const chipFornecedor = favorecidoId
     ? (res.inativo && favorecidoId === res.propostoId ? <span className={CHIP_AVISO}>inativo no cadastro</span>
       : semDocumento ? <span className={CHIP_AVISO} data-testid="nota-chip-fornecedor">achado pelo nome · sem CNPJ</span>
-        : <span className={CHIP_OK} data-testid="nota-chip-fornecedor">cadastrado</span>)
+        /* NOTA-FORNECEDOR-CNPJ-ACHADO-01 — o documento do cadastro casa com o da nota (digitos dos dois lados; o cadastro guarda com mascara) */
+        : <span className={CHIP_OK} data-testid="nota-chip-fornecedor">{fornecedor && soDigitos(fornecedor.cpf_cnpj) !== '' && soDigitos(fornecedor.cpf_cnpj) === soDigitos(n.emitente.documento)
+          ? `achado pelo ${soDigitos(n.emitente.documento).length === 11 ? 'CPF' : 'CNPJ'}` : 'cadastrado'}</span>)
     : conflito ? <span className={CHIP_ERRO} data-testid="nota-chip-fornecedor">CNPJ já cadastrado</span>
     : escolherEntre.length ? <span className={CHIP_AVISO}>{res.achadoPor === 'nome' ? 'achado pelo nome: escolha' : 'dois cadastros com este CNPJ'}</span>
       : res.filialDiferente ? <span className={CHIP_AVISO}>outra filial no cadastro</span>
