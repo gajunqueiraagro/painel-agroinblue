@@ -12,6 +12,7 @@ import { validarDocumento } from '@/lib/fornecedores/documentoFiscal';
 import { completarPeloEmitente, type CampoDoEmitente } from '@/lib/fornecedores/cadastroDoFornecedor';
 import type { EmitenteNFe } from '@/lib/financeiro/nfe/tipos';
 import { lerJaLancados, type LancamentoJaLancado } from '@/lib/financeiro/nfe/jaLancada';
+import type { CadastroParaComparar } from '@/lib/fornecedores/compararCadastro';
 
 /** Onde uma nota ja' esta' registrada — uma linha de `fn_documento_chave_ja_registrada`. */
 export interface OcorrenciaDaNota {
@@ -208,4 +209,36 @@ export async function notaJaLancada(clienteId: string, entrada: {
   });
   if (error) { console.error('fn_nota_ja_lancada', error); return []; }
   return lerJaLancados(data);
+}
+
+/** NOTA-FORNECEDOR-COMPARAR-01 — o cadastro como esta' HOJE (as colunas que a nota ou a Receita podem mudar). Falha = `null`. */
+export async function cadastroParaComparar(clienteId: string, fornecedorId: string): Promise<CadastroParaComparar | null> {
+  const { data, error } = await supabase.from('financeiro_fornecedores')
+    .select('nome, nome_fantasia, cpf_cnpj, inscricao_estadual, logradouro, numero, complemento, bairro, cep, municipio, uf')
+    .eq('id', fornecedorId).eq('cliente_id', clienteId).maybeSingle();
+  if (error || !data || typeof data !== 'object' || Array.isArray(data)) return null;
+  return Object.fromEntries(Object.entries(data).map(([k, v]) => [k, typeof v === 'string' ? v : null]));
+}
+
+/** NOTA-FORNECEDOR-COMPARAR-01 — grava SO' os campos marcados, com a trilha por campo (`fn_fornecedor_atualizar_campos`). */
+export async function atualizarCamposDoCadastro(fornecedorId: string, campos: Record<string, string>, origem: 'nota' | 'receita', referencia: string | null,
+  clienteId: string): Promise<{ ok: true; alteracaoId: string | null } | { ok: false; frase: string }> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+  const { data, error } = await (supabase as any).rpc('fn_fornecedor_atualizar_campos', {
+    p_fornecedor: fornecedorId, p_campos: campos, p_origem: origem, p_referencia: referencia, p_simular: false,
+  });
+  if (error) {
+    const m = typeof error.message === 'string' ? error.message : '';
+    return { ok: false, frase: /documento_ativo|duplicate|23505|já é de/i.test(m) ? 'Este CNPJ já é de outro cadastro ativo. Nada foi gravado.' : (m || 'O cadastro não foi atualizado.') };
+  }
+  notificarFornecedoresMudaram(clienteId);
+  const id: unknown = data && typeof data === 'object' ? Reflect.get(data, 'alteracao_id') : null;
+  return { ok: true, alteracaoId: typeof id === 'string' ? id : null };
+}
+export async function desfazerCamposDoCadastro(alteracaoId: string, clienteId: string): Promise<string | null> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+  const { error } = await (supabase as any).rpc('fn_fornecedor_atualizar_campos_desfazer', { p_alteracao: alteracaoId, p_motivo: 'desfeito logo depois de atualizar pela nota', p_simular: false });
+  if (error) return typeof error.message === 'string' && error.message ? error.message : 'Não foi desfeito.';
+  notificarFornecedoresMudaram(clienteId);
+  return null;
 }
