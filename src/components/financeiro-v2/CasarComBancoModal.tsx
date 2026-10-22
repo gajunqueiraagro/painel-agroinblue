@@ -435,8 +435,9 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
               <button type="button" disabled={!podeConciliar && !podeComDiferenca} data-testid="conciliar-casar"
                 title={!podeConciliar && !podeComDiferenca && editado && sim && !sim.ok ? 'Com um valor editado, a soma precisa fechar com o banco.' : undefined}
                 onClick={() => { if (podeConciliar) void conciliar(); else setComDiferenca(true); }}
-                className={cn('rounded px-2.5 py-0.5 text-[11px] font-medium',
+                className={cn('min-w-[86px] rounded px-2.5 py-0.5 text-[11px] font-medium',
                   podeConciliar || podeComDiferenca ? 'bg-[#E7C873] text-foreground hover:bg-[#D9B95F]' : 'bg-muted text-muted-foreground cursor-not-allowed')}>
+                {/* min-w: "Conciliar…" / "Conciliar" / "Conciliando…" trocam o texto, nunca a posicao dos botoes ao lado */}
                 {gravando ? 'Conciliando…' : podeComDiferenca ? 'Conciliar…' : 'Conciliar'}
               </button>
             )}
@@ -652,7 +653,7 @@ export function CasarN1Modal({
           <button type="button" onClick={onClose} className="text-[11px] text-muted-foreground underline underline-offset-2">Cancelar</button>
           <button type="button" disabled={!(sim?.ok && !gravando) && !podeComDiferenca} data-testid="conciliar-n1"
             onClick={() => { if (sim?.ok) void conciliar(); else setComDiferenca(true); }}
-            className={cn('rounded px-2.5 py-0.5 text-[11px] font-medium',
+            className={cn('min-w-[86px] rounded px-2.5 py-0.5 text-[11px] font-medium',
               (sim?.ok && !gravando) || podeComDiferenca ? 'bg-[#E7C873] text-foreground hover:bg-[#D9B95F]' : 'bg-muted text-muted-foreground cursor-not-allowed')}>
             {gravando ? 'Conciliando…' : podeComDiferenca ? 'Conciliar…' : 'Conciliar'}
           </button>
@@ -956,7 +957,7 @@ export function CasarBlocoModal({
             <button type="button" disabled={!!motivoDesabilitado && !podeComDiferenca}
               onClick={() => { if (podeComDiferenca) setComDiferenca(true); else void conciliar(); }}
               title={podeComDiferenca ? 'A soma não fecha: escolha o que fazer com a diferença.' : motivoDesabilitado ?? undefined} data-testid="conciliar-bloco"
-              className={cn('rounded px-2.5 py-0.5 text-[11px] font-semibold',
+              className={cn('min-w-[104px] rounded px-2.5 py-0.5 text-[11px] font-semibold',
                 motivoDesabilitado && !podeComDiferenca ? 'bg-muted text-muted-foreground cursor-not-allowed' : 'bg-[#E7C873] text-foreground hover:bg-[#D9B95F]')}>
               {gravando ? 'Conciliando…' : podeComDiferenca ? 'Conciliar…' : 'Conciliar bloco'}
             </button>
