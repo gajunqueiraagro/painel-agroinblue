@@ -254,6 +254,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   o destino pelos apelidos); "N lanç." vem do servidor (`fornecedores` da `fn_fin_v2_lista_pagina`, recorte sem o filtro de fornecedor).
 - FIN-V2-DESEMPENHO-01c: trocar SO' a pagina pede `so_linhas` (sem recontar) e reaproveita totais/uso; gravar ou total diferente relê
   completa; vinculos e nomes so' da pagina (a pilula "Conciliado" sai da marca `conciliado` da RPC).
+- FIN-V2-LISTA-RELE-APOS-CADASTRO-01: quem grava fornecedor avisa com os ids (`notificarFornecedoresMudaram(cliente, ids)`); a lista de
+  Lancamentos relê so' esses (`in(id)`), nunca o cadastro inteiro.
 - FIN-V2-LISTA-VIRTUAL-01: a lista de Lancamentos so desenha as linhas a vista; a linha tem 19px fixos e conteudo mais alto que 16px
   quebra a conta da janela.
 - FIN-V2-DESEMPENHO-01b: Lancamentos Financeiros pede SO' A PAGINA (`fn_fin_v2_lista_pagina`, `useListaPaginaV2`); filtro, ordem,

@@ -93,6 +93,7 @@ import {
 import { hojeLocal } from '@/lib/datas/hojeLocal';
 import { useListaPaginaV2 } from '@/hooks/useListaPaginaV2';
 import { useAlturaAteOFim } from '@/hooks/useAlturaAteOFim';
+import { leitorDeFornecedores } from '@/hooks/useFornecedoresDoCliente';
 import {
   filtrosDaPaginaV2, ordemDaPaginaV2, intervaloDaPaginaV2, paginasDaListaV2, reservasDaPaginaV2,
   lerPorPaginaV2, guardarPorPaginaV2, POR_PAGINA_V2, TOTAIS_VAZIOS, porPaginaV2DoTexto, textoDoPorPaginaV2, type PorPaginaV2, type PorPaginaV2Texto,
@@ -1240,7 +1241,22 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const listaV2 = useListaPaginaV2(clienteAtual?.id, { filtros: filtrosV2, ordem: ordemV2, pagina: paginaV2, porPagina },
     !FEATURE_FLAGS.LISTA_PAGINADA_V2 && podeConsultar && mode === 'list', conhecidoNoCadastro);
   const paginaDaLista = listaV2.pagina;
+  const paginaRef = useRef(paginaDaLista);
+  paginaRef.current = paginaDaLista;
   useEffect(() => { setIdsDaPagina(paginaDaLista ? paginaDaLista.linhas.map((l) => l.id) : []); }, [paginaDaLista]);
+  /* FIN-V2-LISTA-RELE-APOS-CADASTRO-01 (Gabriel 22/10, Agnaldo: editou o fornecedor pelo modal e a lista ficou com o nome antigo
+     até o F5) — o nome da coluna sai do cadastro da TELA; quem grava um fornecedor avisa (com os ids) e a tela relê SÓ esses; sem
+     ids, os da página. A página e os totais não se releem (o nome não muda valor nem classificação). */
+  const atualizarFornecedoresPorId = hook.atualizarFornecedoresPorId;
+  useEffect(() => {
+    const cli = clienteAtual?.id;
+    if (!cli) return;
+    return leitorDeFornecedores.inscrever(cli, (ids) => {
+      const alvo = ids && ids.length > 0 ? ids
+        : [...new Set((paginaRef.current?.linhas ?? []).map((l) => l.favorecido_id).filter((x): x is string => !!x))];
+      void atualizarFornecedoresPorId(alvo);
+    });
+  }, [clienteAtual?.id, atualizarFornecedoresPorId]);
   /* desfazer um vínculo: o detalhe E a marca da página voltam (a pílula sai da página) */
   const recarregarVinculos = useCallback(() => { recarregarSoVinculos(); void listaV2.recarregar(); }, [recarregarSoVinculos, listaV2.recarregar]);
   /* FORN-BUSCA-UNICA-01 — o filtro é o seletor padrão (`FavorecidoSelect`, a busca única). FIN-V2-FILTRO-FORNECEDOR-01: os ATIVOS; o

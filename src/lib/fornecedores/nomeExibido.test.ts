@@ -106,6 +106,20 @@ describe('a ligação nas telas (fonte)', () => {
     expect(tela).not.toContain('data-testid="inativo-fornecedor"');
     expect(celula).not.toContain('rotuloForn?.final');
   });
+  it('FIN-V2-LISTA-RELE-APOS-CADASTRO-01 — quem grava o cadastro avisa com o id; a lista relê só esses (nunca o cadastro inteiro)', () => {
+    const form = readFileSync(resolve(__dirname, '../../components/financeiro-v2/FornecedorFormDialog.tsx'), 'utf8');
+    expect(form).toContain('notificarFornecedoresMudaram(clienteId, gravado ? [gravado] : undefined);');
+    expect(readFileSync(resolve(__dirname, './cadastroDaCasaBanco.ts'), 'utf8')).toContain('notificarFornecedoresMudaram(clienteId, [id]);   /* FIN-V2-LISTA-RELE');
+    expect(form).toContain('notificarFornecedoresMudaram(clienteId, [reativarTarget.id]);');
+    expect(form).toContain('notificarFornecedoresMudaram(clienteId, [editing.id]);');
+    expect(form).not.toMatch(/notificarFornecedoresMudaram\(clienteId\);/);
+    expect(tela).toContain('return leitorDeFornecedores.inscrever(cli, (ids) => {');
+    expect(tela).toContain('void atualizarFornecedoresPorId(alvo);');
+    const hookFin = readFileSync(resolve(__dirname, '../../hooks/useFinanceiroV2.ts'), 'utf8');
+    const corpo = hookFin.slice(hookFin.indexOf('const atualizarFornecedoresPorId'), hookFin.indexOf('}, [clienteId]);', hookFin.indexOf('const atualizarFornecedoresPorId')));
+    expect(corpo).toContain(".in('id', [...ids])");
+    expect(corpo).not.toContain('.range(');
+  });
   it('Cadastros tem o lugar reservado do aviso, sempre presente', () => {
     const cad = readFileSync(resolve(__dirname, '../../pages/FinV2FornecedoresTab.tsx'), 'utf8');
     expect(cad).toMatch(/<div className="h-4 [^"]*" data-testid="aviso-inativos-com-lancamento">/);
