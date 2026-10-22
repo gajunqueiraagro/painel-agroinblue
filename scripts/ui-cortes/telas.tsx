@@ -51,6 +51,10 @@ import { ContasPagarReceberTab } from '@/components/financeiro-v2/ContasPagarRec
 import V2Recorrencias from '@/v2/pages/V2Recorrencias';
 import * as REC from './dados/recorrencias';
 import * as CONTAS_BANC from './dados/contas';
+import * as VG from './dados/visaoGeral';
+import { BarraSecao } from '@/v2/components/BarraSecao';
+import { VisaoGeralFinanceiro } from '@/v2/pages/VisaoGeralFinanceiro';
+import { FiltrosBarraVG } from '@/components/financeiro-v2/visaoGeral/FiltrosBarraVG';
 import { FinV2ContasTab } from '@/pages/FinV2ContasTab';
 import { V2Sidebar, LARGURA_DA_LATERAL } from '@/v2/components/V2Sidebar';
 import { ClienteSelector } from '@/components/ClienteSelector';
@@ -379,6 +383,21 @@ if (tela === 'mesclar') {
     const aba = q.get('aba');
     if (aba) setTimeout(() => (document.querySelector(`[data-testid="aba-conta-${aba}"]`) as HTMLElement | null)?.click(), 200);
   }, 400);
+} else if (tela === 'visao-geral') {
+  /* FIN-VISAO-GERAL-01 PR 3 — Financeiro › Visão Geral: a BARRA REAL (`BarraSecao` com Contas · Fazenda · Safra · Atividade) e a tela, com
+     hoje = 22/10/2026. Banco SINTÉTICO (`dados/visaoGeral.ts`); `globalThis.__vgReal` (posto pelo ensaio, nunca no repo) troca a
+     resposta da `fn_vg_tela` por uma do banco de verdade. `&modo=sai|ent` abre no modo; `&mes=AAAA-MM` clica o mês. */
+  g.__fazendaBancada = { fazendas: [{ id: 'f1', nome: 'Fazenda Exemplo Nome Longo Retiro', cliente_id: 'cli' }, { id: 'f2', nome: 'Faz. Exemplo Dois', cliente_id: 'cli' }],
+    fazendaAtual: null, isGlobal: true, fazendaId: '__global__', setFazendaAtual: () => {} };
+  g.__bancoBancada = { from: () => [], rpc: (fn: string, a: any) => fn === 'fn_vg_filtros' ? (g.__vgFiltrosReal ?? VG.FILTROS)
+    : fn === 'fn_vg_tela' ? (g.__vgReal ?? VG.tela(a)) : null };
+  montar(
+    <div className="flex h-full flex-col">
+      <BarraSecao area="Financeiro" secao="Visão Geral" atalho={<FiltrosBarraVG />} />
+      <div className="min-h-0 flex-1"><VisaoGeralFinanceiro hoje="2026-10-22" onAnalisar={(x) => { g.__vgIntencao = x; }}
+        inicial={{ modo: (q.get('modo') as any) ?? undefined, faixa: (q.get('faixa') as any) ?? undefined, de: q.get('de') ?? undefined,
+          ate: q.get('ate') ?? undefined, sel: q.get('mes') ?? undefined }} /></div>
+    </div>);
 } else if (tela === 'recorrencias') {
   /* REC-COLUNAS-01 — Financeiro › Recorrências (a lista do mês), com o pior texto de cada coluna curta. SINTÉTICO (`dados/recorrencias.ts`). */
   g.__bancoBancada = {

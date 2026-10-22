@@ -72,6 +72,17 @@ const CENARIOS = [
   { nome: 'fornecedores-sem-cadastro', url: 'tela=fornecedores&barra=32&n=2356', antes: clicar('[data-testid="aba-sem-cadastro"]'), auto: true },
   { nome: 'recorrencias', url: 'tela=recorrencias&barra=32', auto: true },
   /* CAD-CONTAS-BANCARIAS-01 — a lista (segmentos, busca com e sem resultado, inativas) e o modal (abas, tipo, formato), editando e criando */
+  /* FIN-VISAO-GERAL-01 PR 3 — nada muda de altura ou posição ao trocar modo, mês, contas, atividade ou período: os QUADROS (card, gráfico,
+     grade — `data-desloca`) e todos os controles ficam; o miolo deles é `data-desloca-livre` (o conteúdo que muda de propósito) */
+  { nome: 'visao-geral', url: 'tela=visao-geral&barra=0', auto: true, estados: [
+    ['mês de março', clicar('[data-testid="vg-mes-3"]')], ['mês de dezembro (previsto)', clicar('[data-testid="vg-mes-12"]')],
+    ['ano anterior', botao(/^Ano anterior$/)],
+    ['Últ. 12', botao(/^Últ\. 12$/)], ['6 + 6', botao(/^6 \+ 6$/)],
+    /* abaixo de 768px os filtros da barra somem (`hidden md:flex`, a regra do atalho da barra): ali o gesto não existe e é pulado */
+    ['só uma conta', async (p) => { if (!(await p.locator('[data-testid="vg-contas"]').isVisible())) return; await clicar('[data-testid="vg-contas"]')(p); await p.locator('button', { hasText: 'só esta' }).first().click({ force: true }); await espera(p); await p.keyboard.press('Escape'); await espera(p); }],
+    ['atividade agricultura', async (p) => { if (!(await p.locator('[data-testid="vg-atividade"]').isVisible())) return; await clicar('[data-testid="vg-atividade"]')(p); await clicar('[data-testid="vg-atividade-agricultura"]')(p); }],
+    ['coluna do gráfico', async (p) => { await p.locator('[data-testid="coluna-2026-05"]').click({ force: true }); await espera(p); }]] },
+  { nome: 'visao-geral-24m', url: 'tela=visao-geral&barra=0&faixa=per&de=2025-01&ate=2026-12', auto: true },
   { nome: 'contas-lista', url: 'tela=contas&barra=32&n=longo', auto: true, estados: [
     ['busca com resultado', digitar('[data-testid="busca-contas"]', 'bradesco')], ['busca sem resultado', digitar('[data-testid="busca-contas"]', 'zzzz')],
     ['mostrar inativas', clicar('[data-testid="mostrar-inativas"]')]] },
