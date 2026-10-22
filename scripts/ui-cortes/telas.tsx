@@ -619,6 +619,18 @@ if (tela === 'mesclar') {
       onCriarFornecedor={async () => null} onCriarLancamento={async () => null} onAbrirNoLancamento={() => {}} onAbrirRegistrada={() => {}} onCriado={() => {}} consultarReceita={receita as any} />);
   };
   void montarNotaPdf();
+} else if (tela === 'trocar-fornecedor') {
+  /* FORN-TROCAR-LOTE-01 — o "Trocar fornecedor" da lista: o resumo de 4.851 lancamentos SINTETICOS saindo de 40 fornecedores de nome
+     longo (a lista rola dentro do quadro), com os avisos (conciliados, meses fechados, OC) — o pior caso de texto */
+  const montarTroca = async () => {
+    const { TrocarFornecedorDialog } = await import('@/components/financeiro-v2/TrocarFornecedorDialog');
+    const origens = Array.from({ length: 40 }, (_, i) => ({ id: `o${i}`, nome: `Fornecedor Sintetico de Nome Bem Comprido Numero ${i + 1} Comercio de Insumos Agropecuarios Ltda`, lancamentos: 300 - i * 7, soma: 99999.99 - i }));
+    g.__bancoBancada = { rpc: (fn: string) => fn === 'fn_lancamentos_trocar_favorecido' ? { ok: true, simulado: true, sem_destino: true, lancamentos: 4851, soma: 1234567.89,
+      origens, meses_fechados: [{ fazenda: 'Faz. Exemplo', ano_mes: '2024-03' }, { fazenda: 'Faz. Exemplo Dois', ano_mes: '2024-04' }], meses_fechados_lancamentos: 37,
+      conciliados: 1234, ligados_a_oc: 12, ja_no_destino: 0, cancelados: 3, operacao_id: null } : null };
+    raiz.render(<TrocarFornecedorDialog clienteId="cli" ids={['x']} onClose={() => {}} />);
+  };
+  void montarTroca();
 } else if (tela === 'comparar-cadastro') {
   /* NOTA-FORNECEDOR-COMPARAR-01 — o "Atualizar o cadastro" (comparar antes de gravar), dados SINTETICOS e longos:
      `v=` ''  o cadastro sem CNPJ, nome digitado a' mao (diferente), cidade igual · `errado` o cadastro com OUTRO CNPJ (o aviso e os botoes) */
