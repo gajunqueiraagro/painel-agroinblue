@@ -57,3 +57,14 @@ export function porParte<T>(item: T, partes: readonly ParteDaClassificacao[] | u
     return comParte(p, m);
   });
 }
+
+/**
+ * FIN-CLASSIF-DIVIDIDA-01b — o lancamento de uma linha para ABRIR/EDITAR (Painel por periodo, Extrato gerencial): a linha da parte 2+
+ * chega com "id#2"; o lancamento e' o id antes do "#". Antes disto o clique na parte 2 pedia `id = 'x#2'` ao banco e nada abria.
+ */
+export async function lerLancamentoDaLinha<T>(idDaLinha: string): Promise<T | null> {
+  const i = idDaLinha.indexOf('#');
+  const id = i > 0 ? idDaLinha.slice(0, i) : idDaLinha;
+  const { data } = await (supabase as any).from('financeiro_lancamentos_v2').select('*').eq('id', id).maybeSingle();
+  return data ?? null;
+}
