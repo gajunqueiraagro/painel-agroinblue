@@ -23,6 +23,8 @@ export type V2Section =
   | 'importacao-lanc-excel'
   // financeiro — lançamentos
   | 'financeiro-lanc' | 'contratos'
+  // FIN-VISAO-GERAL-01 PR 3 — a Visão Geral do Financeiro (topo do grupo)
+  | 'fin-visao-geral'
   // financeiro — conciliação
   | 'conciliacao' | 'conciliacao-extrato' | 'extrato-gerencial' | 'visao-consolidada' | 'saldos-mensais'
   // financeiro — financiamentos
@@ -203,6 +205,9 @@ export const NAV_GRUPOS: NavGrupo[] = [
       {
         titulo: 'Operação',
         itens: [
+          /* FIN-VISAO-GERAL-01 PR 3 — no TOPO do Financeiro, com o mesmo acesso de Lançamentos Financeiros. O "Dashboard Financeiro"
+             (Gestão) fica onde está até a homologação desta. */
+          { id: 'fin-visao-geral',     label: 'Visão Geral',             status: 'ready', liberadaClientes: true },
           { id: 'financeiro-lanc',     label: 'Lançamentos Financeiros', status: 'ready', liberadaClientes: true },
           { id: 'conciliacao',         label: 'Conciliação Bancária',    status: 'ready', liberadaClientes: true },
           /* ⚠ A TELA NOVA ENTRA AO LADO DAS VELHAS, e nao no lugar delas —
@@ -396,7 +401,7 @@ export const SECTION_TO_GROUP: Partial<Record<V2Section, string>> = {
   'financeiro-home': 'financeiro', 'financeiro-dashboard': 'financeiro',
   'fluxo-caixa': 'financeiro', 'rateio-adm': 'financeiro', 'painel-periodo': 'financeiro',
   'contas-a-pagar-receber': 'financeiro',
-  'importacao-extratos': 'financeiro', 'importacao-custeio-txt': 'financeiro', 'financeiro-lanc': 'financeiro',
+  'importacao-extratos': 'financeiro', 'importacao-custeio-txt': 'financeiro', 'financeiro-lanc': 'financeiro', 'fin-visao-geral': 'financeiro',
   'recorrencias': 'financeiro',
   'conciliacao-extrato': 'financeiro',
   'importacao-lanc-excel': 'financeiro',

@@ -66,6 +66,8 @@ import { DividendosTab } from '@/pages/DividendosTab';
 import { FinV2PlanoContasTab } from '@/pages/FinV2PlanoContasTab';
 import { FinV2SaldosTab } from '@/pages/FinV2SaldosTab';
 import { FinV2ContasTab } from '@/pages/FinV2ContasTab';
+import { VisaoGeralFinanceiro } from '@/v2/pages/VisaoGeralFinanceiro';
+import { FiltrosBarraVG } from '@/components/financeiro-v2/visaoGeral/FiltrosBarraVG';
 import { FinV2FornecedoresTab } from '@/pages/FinV2FornecedoresTab';
 import { FinV2SubcentroAliasesTab } from '@/pages/FinV2SubcentroAliasesTab';
 import { FinV2SafrasTab } from '@/pages/FinV2SafrasTab';
@@ -1052,6 +1054,8 @@ export default function V2Index() {
         }}
       />
     );
+    /* FIN-VISAO-GERAL-01 PR 3 — a Visão Geral (render-only; o modal de análise é o PR 4) */
+    if (section === 'fin-visao-geral') return <VisaoGeralFinanceiro />;
     if (section === 'visao-consolidada') return (
       <VisaoConsolidadaTab clienteId={clienteAtual?.id ?? null} />
     );
@@ -1633,6 +1637,8 @@ export default function V2Index() {
      "fixo" de qualquer lista interna sobe junto. Foi o caso da colheita
      (`lancamentos-agricultura`), que nasceu escrita para app-shell e estava fora da lista. */
   const SECOES_APP_SHELL = new Set(['conciliacao', 'mapa-pastos', 'conferencia-lancamentos', 'financiamentos', 'recorrencias', 'lancamentos-agricultura', 'barter-contratos', 'contas-a-pagar-receber', 'config-acessos',
+    /* FIN-VISAO-GERAL-01 PR 3 — a Visão Geral tem blocos de altura fixa e nada rola na página: a altura vem do pai */
+    'fin-visao-geral',
     /* FORN-01b — a lista de Fornecedores vai até o fim da tela: a altura vem do pai, não de `calc(100dvh-120px)` */
     'fornecedores']);
   const appShell = modoResumo || SECOES_APP_SHELL.has(section);
@@ -1692,6 +1698,8 @@ export default function V2Index() {
             if (modoResumo) return undefined;
             /* ACESSOS-02a — sem acesso a' tela, nenhum atalho para as vizinhas. */
             if (semAcesso) return undefined;
+            /* FIN-VISAO-GERAL-01 PR 3 — na Visão Geral, a barra leva os filtros dela: Contas · Fazenda · Safra · Atividade */
+            if (section === 'fin-visao-geral') return <FiltrosBarraVG />;
             const ativa = secaoDoAtalho(section);
             /* ACESSOS-OC-02 (M7) — atalho para tela sem acesso nao e' oferecido: so' as opcoes que a pessoa abre; sobrando so' a
                propria tela, a faixa some. Para o admin, as tres de sempre. */

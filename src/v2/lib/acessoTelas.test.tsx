@@ -25,23 +25,25 @@ vi.mock('@/assets/logo.png', () => ({ default: 'logo.png' }));
 const como = (perfil: string | null, isAdmin = false) => { quem.perfil = perfil; quem.isAdmin = isAdmin; };
 beforeEach(() => como('financeiro'));
 
-const PILOTO: V2Section[] = ['financeiro-lanc', 'conciliacao', 'contas-a-pagar-receber'];
+/* FIN-VISAO-GERAL-01 PR 3 — a Visão Geral do Financeiro entra com o MESMO acesso de Lançamentos Financeiros (a marca, sem linha na lista
+   do ACESSOS-FIN-01): fica junto das tres do piloto */
+const PILOTO: V2Section[] = ['fin-visao-geral', 'financeiro-lanc', 'conciliacao', 'contas-a-pagar-receber'];
 const PERFIS = ['gestor_cliente', 'financeiro', 'campo', 'leitura'] as const;
 /* ACESSOS-FIN-01 — o que o gestor e o financeiro veem no menu, na ORDEM do menu (ids e rotulos escritos a' mao, de proposito). */
 const PRODUCAO_FIN: V2Section[] = ['lancamentos-zoot', 'fechamento', 'conferencia-lancamentos', 'operacoes-comerciais', 'estoque-graos', 'barter-contratos'];
-const FINANCEIRO_FIN: V2Section[] = ['financeiro-lanc', 'conciliacao', 'visao-consolidada', 'financiamentos', 'contratos', 'recorrencias',
+const FINANCEIRO_FIN: V2Section[] = ['fin-visao-geral', 'financeiro-lanc', 'conciliacao', 'visao-consolidada', 'financiamentos', 'contratos', 'recorrencias',
   'fluxo-caixa', 'contas-a-pagar-receber', 'painel-financiamentos'];
 const EXECUTIVO_FIN: V2Section[] = ['painel-consultor', 'valor-rebanho', 'dre'];
 const CADASTROS_FIN: V2Section[] = ['contas-bancarias', 'fornecedores'];
 const ROTULOS_PRODUCAO_FIN = ['Pecuária', 'Fechamento Área', 'Lançamentos', 'Operações Comerciais', 'Estoque de Grãos', 'Barter'];
-const ROTULOS_FINANCEIRO_FIN = ['Lançamentos Financeiros', 'Conciliação Bancária', 'Visão Consolidada', 'Financ. e Parcelamentos', 'Contratos',
+const ROTULOS_FINANCEIRO_FIN = ['Visão Geral', 'Lançamentos Financeiros', 'Conciliação Bancária', 'Visão Consolidada', 'Financ. e Parcelamentos', 'Contratos',
   'Recorrências', 'Fluxo Caixa', 'Contas a Pagar/Receber', 'Painel Financiamentos'];
 const todosOsItens = NAV_GRUPOS.flatMap((g) => g.drawer.flatMap((s) => s.itens.map((i) => ({ grupo: g.id, item: i }))));
 
 describe('a marca de liberacao (navGrupos)', () => {
   it('as telas liberadas: as tres do piloto, a lista de Operações Comerciais (ACESSOS-OC-01) e as 16 do ACESSOS-FIN-01; a Visão Geral NAO', () => {
     expect(todosOsItens.filter((x) => x.item.liberadaClientes).map((x) => x.item.id)).toEqual([...PRODUCAO_FIN, ...FINANCEIRO_FIN, ...EXECUTIVO_FIN, ...CADASTROS_FIN]);
-    expect(todosOsItens.filter((x) => x.item.liberadaClientes).length).toBe(3 + 1 + 16);
+    expect(todosOsItens.filter((x) => x.item.liberadaClientes).length).toBe(4 + 1 + 16);
     /* nenhuma tela de Planejamento, Auditoria ou Validar tem a marca */
     expect(todosOsItens.filter((x) => x.item.liberadaClientes && ['planejamento', 'auditoria', 'validar'].includes(x.grupo))).toEqual([]);
     /* toda tela marcada fora do piloto tem linha propria no mapa por tela (marca sem linha cairia na matriz do grupo) */
@@ -241,7 +243,8 @@ describe('o que o menu oferece (gruposVisiveis / secoesVisiveis)', () => {
     expect(nivelDaTela('gestor_cliente', false, 'mapa-pastos')).toBe('nao');
     expect(primeiraTelaPermitida('gestor_cliente', false, 'mapa-pastos')).toBe('lancamentos-zoot');
     expect(primeiraTelaPermitida('financeiro', false, 'mapa-pastos')).toBe('lancamentos-zoot');
-    expect(primeiraTelaPermitida('leitura', false, 'mapa-pastos')).toBe('financeiro-lanc');
+    // FIN-VISAO-GERAL-01 PR 3 — a Visão Geral passou a ser a 1ª do Financeiro no menu (a PREFERIDA de entrada segue Lançamentos)
+    expect(primeiraTelaPermitida('leitura', false, 'mapa-pastos')).toBe('fin-visao-geral');
     expect(primeiraTelaPermitida('campo', false, 'mapa-pastos')).toBeNull();
     expect(primeiraTelaPermitida('admin_agroinblue', true, 'mapa-pastos')).toBe('home');
   });
@@ -299,7 +302,7 @@ describe('o drawer (V2ContextDrawer)', () => {
   });
   it('leitura, grupo Financeiro: as tres do piloto, como antes', () => {
     como('leitura');
-    expect(itensDoDrawer('financeiro').itens).toEqual(['Lançamentos Financeiros', 'Conciliação Bancária', 'Contas a Pagar/Receber']);
+    expect(itensDoDrawer('financeiro').itens).toEqual(['Visão Geral', 'Lançamentos Financeiros', 'Conciliação Bancária', 'Contas a Pagar/Receber']);
   });
   it('financeiro, grupo sem tela liberada (aberto por fora do menu): nenhuma secao, nenhum item', () => {
     for (const g of ['validar', 'planejamento', 'auditoria']) expect(itensDoDrawer(g)).toEqual({ itens: [], secoes: [] });
