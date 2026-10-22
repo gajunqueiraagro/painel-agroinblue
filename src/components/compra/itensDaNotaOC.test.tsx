@@ -56,6 +56,19 @@ describe('ITENS-NOTA-01 — "Itens da nota" na aba Documentos da OC', () => {
     fireEvent.click(botoes[0]);
     expect(screen.getByTestId('dialogo-itens').textContent).toBe(COM);
   });
+  it('DOC-NOTA-XML-PDF-01 — o arquivo XML abre como os itens da nota (lidos dele), nunca cru; o PDF abre o arquivo', async () => {
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+    const a = api([doc({ documentoId: 'x1', url: 'oc/x1/nota.xml', chaveAcesso: SEM }), doc({ documentoId: 'p1', numero: '000000939', url: 'oc/p1/nota.pdf' })]);
+    a.urlAssinada = vi.fn(async (c: string) => `https://assinada/${c}`);
+    render(<AbaDocumentosOC api={a} operacaoPronta tipoOperacao="compra" fornecedores={[]} clienteId="cli" />);
+    const [xml, pdf] = screen.getAllByLabelText('Abrir arquivo');
+    fireEvent.click(xml);
+    expect((await screen.findByTestId('dialogo-itens')).textContent).toBe(SEM);
+    expect(open).not.toHaveBeenCalled();
+    fireEvent.click(pdf);
+    await vi.waitFor(() => expect(open).toHaveBeenCalledWith('https://assinada/oc/p1/nota.pdf', '_blank', 'noopener,noreferrer'));
+    open.mockRestore();
+  });
   it('nenhuma chave com itens: nenhum botao', () => {
     itens.useChavesComItens.mockImplementation(() => new Set());
     render(<AbaDocumentosOC api={api(DOCS)} operacaoPronta tipoOperacao="compra" fornecedores={[]} clienteId="cli" />);
