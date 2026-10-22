@@ -198,6 +198,7 @@ describe('compra em conta corrente — extrato espelho da venda (mock v1)', () =
 
   it('cancelar a compra lista o rol com as palavras dela; sem motivo nao cancela', async () => {
     const rol: RolCancelamento = {
+  modelo: 'conta_corrente',
       entregas: [{ data: '2026-03-25', loteOrdem: 1, valor: 307460 }], explicacoes: [],
       recebimentos: [{ data: '2026-04-25', valor: 307460, contaAtual: 'Investimento Compra Bovinos Machos', contaOriginal: 'Investimento Compra Bovinos Machos', acao: 'volta_para_conta_original' }],
       saidas: [{ data: '2026-03-25', cab: 121, categoria: 'desmama_m', origem: 'registrada' }], compromissos: [],
@@ -279,6 +280,7 @@ describe('a VENDA nao muda', () => {
     expect(semIdRadix(ent.container.innerHTML)).toMatchSnapshot();
     ent.unmount();
     const rol: RolCancelamento = {
+  modelo: 'conta_corrente',
       entregas: [{ data: '2025-03-19', loteOrdem: 1, valor: 566879.55 }],
       explicacoes: [{ tipo: 'permuta_despesa', valor: 357.89, conta: 'Frete' }],
       recebimentos: [{ data: '2025-04-17', valor: 992138.24, contaAtual: 'Venda de Desmama Machos', contaOriginal: 'Venda de Desmama Machos', acao: 'volta_para_conta_original' }],
