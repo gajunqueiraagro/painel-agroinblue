@@ -82,6 +82,6 @@ BEGIN
   IF t <> 'Sem acesso a este cliente.' OR fn_conta_bancaria_painel(ct) IS NOT NULL THEN falhas := falhas || ('C6 ' || t); END IF;
 
   IF cardinality(falhas) > 0 THEN RAISE EXCEPTION 'CAD01 FALHOU: %', array_to_string(falhas, ' || '); END IF;
-  RAISE EXCEPTION 'CAD01 OK (C1 % contas iguais; C2 semente e mes seguinte 1000; C3 falta antes=% depois=%; C4; C5; C6)', n,
+  RAISE EXCEPTION 'CAD01 OK (C1 % contas iguais; C2 semente e mes seguinte 1000; C3 falta antes=% depois=%; C4; C5; C6; C7)', n,
     fa LIKE '%falta o%', fd LIKE '%falta o%';
 END $t$;

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { ouvirContasBancarias } from '@/lib/financeiro/canalContasBancarias';
 import { useCliente } from '@/contexts/ClienteContext';
 import { PainelExtratoMes } from '@/components/conciliacao/PainelExtratoMes';
 import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
@@ -326,6 +327,22 @@ export function ConciliacaoBancariaTab({ onNavigateToLancamentos, onBack, initia
     supabase.from('financeiro_fornecedores')
       .select('id,nome').eq('cliente_id',clienteId).eq('ativo',true)
       .then(({data}) => setFornecedores((data as FornecedorRef[])||[]));
+  }, [clienteId]);
+
+  /* CAD-CONTAS-BANCARIAS-01 — o cadastro de Contas bancárias salvou uma conta: relê SÓ ela, sem F5 (a inativa sai da lista). Os saldos
+     e a régua chegam pelo dono (`invalidarDono`, que o cadastro chama quando muda o saldo inicial, a data ou a marca "Sem extrato"). */
+  useEffect(() => {
+    if (!clienteId) return;
+    return ouvirContasBancarias(clienteId, (contaId) => {
+      void supabase.from('financeiro_contas_bancarias')
+        .select('id,nome_conta,nome_exibicao,tipo_conta,codigo_conta,mes_inicio,saldo_inicial_oficial,ativa')
+        .eq('id', contaId).maybeSingle()
+        .then(({ data }) => setContas(atual => {
+          const outras = atual.filter(c => c.id !== contaId);
+          const lida = data as (ContaRef & { ativa?: boolean }) | null;
+          return lida && lida.ativa ? sortContas([...outras, lida]) : outras;
+        }));
+    });
   }, [clienteId]);
 
   /* ⚠ OS ÍCONES DE CONFIANÇA DO SALDO — PR-SALDO-ICONES-LINHA-02C. Duas consultas por
