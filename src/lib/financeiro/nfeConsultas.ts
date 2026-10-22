@@ -104,7 +104,9 @@ export async function gravarDocumentoNoCadastro(clienteId: string, fornecedorId:
   const { error } = await supabase.from('financeiro_fornecedores').update({ cpf_cnpj: validado.formatado })
     .eq('id', fornecedorId).eq('cliente_id', clienteId).or('cpf_cnpj.is.null,cpf_cnpj.eq.');
   if (error) return error.message;
-  notificarFornecedoresMudaram(clienteId);   /* FORN-SELETOR-PADRAO-01: o documento do cadastro mudou */
+  /* NOTA-FORNECEDOR-CNPJ-ACHADO-01 — COM O ID: a tela de Lancamentos rele^ so' os avisados (sem id, so' os da pagina — e a previa da
+     proxima nota ficava com este cadastro velho, "sem CNPJ") */
+  notificarFornecedoresMudaram(clienteId, [fornecedorId]);   /* FORN-SELETOR-PADRAO-01: o documento do cadastro mudou */
   return null;
 }
 
@@ -123,7 +125,7 @@ export async function completarCadastroPeloXml(clienteId: string, fornecedorId: 
   if (Object.keys(patch).length === 0) return null;
   const { error: e2 } = await supabase.from('financeiro_fornecedores').update(patch).eq('id', fornecedorId).eq('cliente_id', clienteId);
   if (e2) return e2.message;
-  notificarFornecedoresMudaram(clienteId);
+  notificarFornecedoresMudaram(clienteId, [fornecedorId]);
   return null;
 }
 
@@ -231,7 +233,8 @@ export async function atualizarCamposDoCadastro(fornecedorId: string, campos: Re
     const m = typeof error.message === 'string' ? error.message : '';
     return { ok: false, frase: /documento_ativo|duplicate|23505|já é de/i.test(m) ? 'Este CNPJ já é de outro cadastro ativo. Nada foi gravado.' : (m || 'O cadastro não foi atualizado.') };
   }
-  notificarFornecedoresMudaram(clienteId);
+  /* NOTA-FORNECEDOR-CNPJ-ACHADO-01 — com o id do cadastro: as telas abertas releem ESTE (a previa da proxima nota ja' o ve^ com o CNPJ) */
+  notificarFornecedoresMudaram(clienteId, [fornecedorId]);
   const id: unknown = data && typeof data === 'object' ? Reflect.get(data, 'alteracao_id') : null;
   return { ok: true, alteracaoId: typeof id === 'string' ? id : null };
 }
@@ -239,6 +242,10 @@ export async function desfazerCamposDoCadastro(alteracaoId: string, clienteId: s
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
   const { error } = await (supabase as any).rpc('fn_fornecedor_atualizar_campos_desfazer', { p_alteracao: alteracaoId, p_motivo: 'desfeito logo depois de atualizar pela nota', p_simular: false });
   if (error) return typeof error.message === 'string' && error.message ? error.message : 'Não foi desfeito.';
-  notificarFornecedoresMudaram(clienteId);
+  /* o cadastro desfeito (a trilha diz qual): as telas releem esse */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- a tabela da trilha ainda nao esta' nos tipos gerados
+  const { data: alt } = await (supabase as any).from('fornecedor_campos_alteracoes').select('fornecedor_id').eq('id', alteracaoId).maybeSingle();
+  const f: unknown = alt && typeof alt === 'object' ? Reflect.get(alt, 'fornecedor_id') : null;
+  notificarFornecedoresMudaram(clienteId, typeof f === 'string' && f ? [f] : undefined);
   return null;
 }
