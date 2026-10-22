@@ -142,7 +142,7 @@ describe('useFornecedoresDoCliente', () => {
       'src/components/financeiro-v2/FornecedorFormDialog.tsx': 3,   /* FORN-CADASTRO-02: salvar, reativar e excluir (inativar é a Situação + Salvar) */
       'src/components/compra/AbaDocumentosOC.tsx': 2,
       'src/components/compra/AbaCompromissosOC.tsx': 1,
-      'src/lib/financeiro/nfeConsultas.ts': 2,   /* o CNPJ do XML e (FORN-CADASTRO-02) a fantasia / IE / endereço do emitente */
+      'src/lib/financeiro/nfeConsultas.ts': 4,   /* o CNPJ do XML e (FORN-CADASTRO-02) a fantasia / IE / endereço do emitente; (NOTA-FORNECEDOR-COMPARAR-01) atualizar o marcado e desfazer */
       'src/components/financeiro-v2/FornecedoresSemCadastro.tsx': 2,   /* FORN-SEM-CADASTRO-01: ligar e desfazer (o apelido do cadastro) */
       'src/hooks/useFinanceiroV2.ts': 1,
       'src/lib/fornecedores/cadastroDaCasaBanco.ts': 3,   /* a reativação (fatia 2c, 1a), o criar da casa (1b, o credor do contrato) e (FORN-FILIAL-01) o CNPJ preenchido no homônimo sem documento */
