@@ -34,6 +34,12 @@ const consultas = vi.hoisted(() => ({
   usoDoFornecedor: vi.fn(async (_f: string): Promise<{ lancamentos: number; ultimo: string | null } | null> => ({ lancamentos: 3, ultimo: '2026-09-01' })),
   /* NOTA-JA-LANCADA-01 — nada ja' lancado, por padrao */
   notaJaLancada: vi.fn(async (_c: string, _e: unknown): Promise<LancamentoJaLancado[]> => []),
+  /* NOTA-FORNECEDOR-COMPARAR-01 — o cadastro de hoje e a gravacao com trilha */
+  cadastroParaComparar: vi.fn(async (_c: string, _f: string): Promise<Record<string, string | null> | null> => ({
+    nome: 'Agro Sintetica Insumos Agropecuarios Ltda', nome_fantasia: null, cpf_cnpj: null, inscricao_estadual: null, logradouro: null, numero: null,
+    complemento: null, bairro: null, cep: null, municipio: 'Campo Grande', uf: 'MS' })),
+  atualizarCamposDoCadastro: vi.fn(async (_f: string, _c: Record<string, string>, _o: string, _r: string | null, _cli: string): Promise<{ ok: true; alteracaoId: string | null } | { ok: false; frase: string }> => ({ ok: true, alteracaoId: 'alt-1' })),
+  desfazerCamposDoCadastro: vi.fn(async (): Promise<string | null> => null),
 }));
 vi.mock('@/lib/financeiro/nfeConsultas', () => consultas);
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() } }));
@@ -383,7 +389,16 @@ describe('N9 — NOTA-FORNECEDOR-DUPLICA-01: o cadastro sem CNPJ e o CNPJ ja\' c
     expect(screen.queryByTestId('nota-cadastrar-fornecedor')).toBeNull();
     expect((await screen.findByTestId('nota-sem-cnpj')).textContent).toContain('sem CNPJ · 3 lanç. · último 01/09/2026');
     fireEvent.click(screen.getByTestId('nota-completar-fornecedor'));
-    await waitFor(() => expect(consultas.gravarDocumentoNoCadastro).toHaveBeenCalledWith('cli', 'semdoc', CNPJ));
+    /* NOTA-FORNECEDOR-COMPARAR-01 — abre a comparacao; o CNPJ (vazio hoje) vem marcado; dois cliques: "Atualizar N" e "Confirmar" */
+    await screen.findByTestId('comparar-cadastro');
+    fireEvent.click(screen.getByTestId('comparar-atualizar'));
+    expect(consultas.atualizarCamposDoCadastro).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('comparar-atualizar'));
+    await waitFor(() => expect(consultas.atualizarCamposDoCadastro).toHaveBeenCalled());
+    const [forn, campos] = consultas.atualizarCamposDoCadastro.mock.calls[0];
+    expect(forn).toBe('semdoc');
+    expect(campos.cpf_cnpj).toBe('11.222.333/0004-24');
+    expect(consultas.gravarDocumentoNoCadastro).not.toHaveBeenCalled();
     await waitFor(() => expect(screen.getByTestId('nota-chip-fornecedor').textContent).toBe('cadastrado'));
   });
   it('"Cadastrar outro" e\' escolha do operador: so\' entao aparece "Cadastrar com estes dados"', async () => {
@@ -496,5 +511,59 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
     await waitFor(() => expect(consultas.notaJaLancada).toHaveBeenCalled());
     expect(screen.queryByTestId('nota-ja-lancada')).toBeNull();
     expect(screen.getByTestId('nota-criar').textContent).toBe('Criar 4 parcelas');
+  });
+});
+
+/* ═══ NOTA-FORNECEDOR-COMPARAR-01 — "Completar cadastro" mostra como esta' e o que muda; so' o marcado e' gravado ═══ */
+describe('NOTA-FORNECEDOR-COMPARAR-01 — comparar antes de atualizar o cadastro', () => {
+  const SEM_DOC: FornecedorV2 = { ...FORN, id: 'semdoc', nome: 'Agro Sintetica Insumos Agropecuarios Ltda', cpf_cnpj: null };
+  const abrirComparar = async (hoje: Record<string, string | null>) => {
+    consultas.cadastroParaComparar.mockResolvedValue(hoje);
+    abrir(montarNota({ fornecedores: [SEM_DOC] }), { fornecedores: [SEM_DOC] });
+    await screen.findByTestId('nota-sem-cnpj');
+    fireEvent.click(screen.getByTestId('nota-completar-fornecedor'));
+    return screen.findByTestId('comparar-cadastro');
+  };
+  const linha = (rotulo: string) => screen.getAllByTestId('comparar-linha').find((l) => l.firstElementChild?.textContent === rotulo);
+  it('o nome digitado a mao ("Pec.3M-Esc. Garças") vem DESMARCADO e nao muda; o CNPJ vazio vem marcado; "igual" sem caixa', async () => {
+    await abrirComparar({ nome: 'Pec.3M-Esc. Garças Agro Sintetica', nome_fantasia: null, cpf_cnpj: null, inscricao_estadual: null, municipio: 'Campo Grande', uf: 'MS' });
+    expect(linha('Razão social')?.getAttribute('data-estado')).toBe('diferente');
+    expect(linha('CNPJ/CPF')?.getAttribute('data-estado')).toBe('vazio');
+    expect(linha('Cidade/UF')?.getAttribute('data-estado')).toBe('igual');
+    expect(within(linha('Cidade/UF') as HTMLElement).queryByRole('checkbox')).toBeNull();
+    fireEvent.click(screen.getByTestId('comparar-atualizar'));
+    fireEvent.click(screen.getByTestId('comparar-atualizar'));
+    await waitFor(() => expect(consultas.atualizarCamposDoCadastro).toHaveBeenCalled());
+    const campos = consultas.atualizarCamposDoCadastro.mock.calls[0][1];
+    expect(campos.nome).toBeUndefined();
+    expect(campos.municipio).toBeUndefined();
+    expect(campos.cpf_cnpj).toBe('11.222.333/0004-24');
+  });
+  it('marcar a razao social: entra no que vai ao banco; desmarcar o CNPJ: sai', async () => {
+    await abrirComparar({ nome: 'Pec.3M-Esc. Garças Agro Sintetica', cpf_cnpj: null, municipio: 'Campo Grande', uf: 'MS' });
+    fireEvent.click(screen.getByTestId('comparar-marcar-razao'));
+    fireEvent.click(screen.getByTestId('comparar-marcar-cnpj'));
+    fireEvent.click(screen.getByTestId('comparar-atualizar'));
+    fireEvent.click(screen.getByTestId('comparar-atualizar'));
+    await waitFor(() => expect(consultas.atualizarCamposDoCadastro).toHaveBeenCalled());
+    const campos = consultas.atualizarCamposDoCadastro.mock.calls[0][1];
+    expect(campos.nome).toBe('AGRO SINTETICA INSUMOS AGROPECUARIOS LTDA');
+    expect(campos.cpf_cnpj).toBeUndefined();
+  });
+  it('o cadastro nao parece o certo (nome sem palavra em comum): a frase no topo e "Cadastrar novo" volta ao cadastrar', async () => {
+    await abrirComparar({ nome: 'Posto Exemplo Combustiveis', cpf_cnpj: null, municipio: null, uf: null });
+    expect(screen.getByTestId('comparar-aviso').textContent).toContain('não parece o do emitente');
+    fireEvent.click(screen.getByTestId('comparar-cadastrar-novo'));
+    expect(screen.queryByTestId('comparar-cadastro')).toBeNull();
+    expect(await screen.findByTestId('nota-cadastrar-fornecedor')).toBeTruthy();
+    expect(consultas.atualizarCamposDoCadastro).not.toHaveBeenCalled();
+  });
+  it('a recusa do banco (CNPJ de outro ativo) fica escrita no modal; nada muda na previa', async () => {
+    consultas.atualizarCamposDoCadastro.mockResolvedValueOnce({ ok: false, frase: 'Este CNPJ já é de outro cadastro ativo. Nada foi gravado.' });
+    await abrirComparar({ nome: 'Agro Sintetica Insumos Agropecuarios Ltda', cpf_cnpj: null, municipio: 'Campo Grande', uf: 'MS' });
+    fireEvent.click(screen.getByTestId('comparar-atualizar'));
+    fireEvent.click(screen.getByTestId('comparar-atualizar'));
+    await waitFor(() => expect(screen.getByTestId('comparar-frase').textContent).toContain('já é de outro cadastro ativo'));
+    expect(screen.getByTestId('nota-chip-fornecedor').textContent).toBe('achado pelo nome · sem CNPJ');
   });
 });
