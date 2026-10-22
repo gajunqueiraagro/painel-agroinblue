@@ -56,7 +56,7 @@ interface Entrada {
   lista: FornecedorLido[] | null;
   lendo: Promise<FornecedorLido[]> | null;
   porId: Map<string, Promise<FornecedorLido | null>>;
-  ouvintes: Set<() => void>;
+  ouvintes: Set<(ids?: readonly string[]) => void>;
 }
 
 export interface LeitorDeFornecedores {
@@ -66,9 +66,10 @@ export interface LeitorDeFornecedores {
   doCache: (clienteId: string) => FornecedorLido[] | null;
   /** O fornecedor gravado, ativo ou não, deste cliente. */
   lerPorId: (clienteId: string, id: string) => Promise<FornecedorLido | null>;
-  /** O cadastro deste cliente mudou: o cache esquece e quem ouve relê. */
-  notificarMudou: (clienteId: string) => void;
-  inscrever: (clienteId: string, aoMudar: () => void) => () => void;
+  /** O cadastro deste cliente mudou: o cache esquece e quem ouve relê. FIN-V2-LISTA-RELE-APOS-CADASTRO-01: `ids` = os cadastros
+   *  gravados, quando quem grava sabe (quem ouve pode reler só esses). */
+  notificarMudou: (clienteId: string, ids?: readonly string[]) => void;
+  inscrever: (clienteId: string, aoMudar: (ids?: readonly string[]) => void) => () => void;
 }
 
 /** Todas as páginas, até o fim. Com o total: a primeira e as demais em paralelo. Sem o total: serial, até a página curta. */
@@ -147,13 +148,13 @@ export function criarLeitorDeFornecedores(fonte: FonteDeFornecedores, tamanho: n
     ler,
     lerPorId,
     doCache: (clienteId) => porCliente.get(clienteId)?.lista ?? null,
-    notificarMudou: (clienteId) => {
+    notificarMudou: (clienteId, ids) => {
       const e = entradaDe(clienteId);
       e.geracao += 1;
       e.lista = null;
       e.lendo = null;
       e.porId = new Map();
-      for (const cb of [...e.ouvintes]) cb();
+      for (const cb of [...e.ouvintes]) cb(ids);
     },
     inscrever: (clienteId, aoMudar) => {
       const e = entradaDe(clienteId);

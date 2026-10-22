@@ -75,7 +75,7 @@ import { FinanceiroV2ExportMenu } from '@/components/financeiro-v2/FinanceiroV2E
 import { CorrecaoTransferenciasBanner } from '@/components/financeiro-v2/CorrecaoTransferenciasBanner';
 import { format, parseISO } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
-import { rotulosDosFornecedores, sufixoDoRotulo } from '@/lib/fornecedores/fornecedorTexto';
+import { rotulosDosFornecedores } from '@/lib/fornecedores/fornecedorTexto';
 import { normalizarAtividade, casaTipoOperacao } from '@/lib/financeiro/filtrosListaV2';
 import { temFiltroLimitante, FRASE_SEM_FILTRO, SEM_SAFRA, SEM_CULTURA } from '@/lib/financeiro/filtroLimitante';
 import { CULTURAS_LANCAMENTO } from '@/lib/agri/rateioLancamento';
@@ -92,9 +92,12 @@ import {
 } from '@/lib/financeiro/estadoFiltrosLista';
 import { hojeLocal } from '@/lib/datas/hojeLocal';
 import { useListaPaginaV2 } from '@/hooks/useListaPaginaV2';
+import { useAlturaAteOFim } from '@/hooks/useAlturaAteOFim';
+import { leitorDeFornecedores } from '@/hooks/useFornecedoresDoCliente';
 import {
   filtrosDaPaginaV2, ordemDaPaginaV2, intervaloDaPaginaV2, paginasDaListaV2, reservasDaPaginaV2,
   lerPorPaginaV2, guardarPorPaginaV2, POR_PAGINA_V2, TOTAIS_VAZIOS, porPaginaV2DoTexto, textoDoPorPaginaV2, type PorPaginaV2, type PorPaginaV2Texto,
+  fornecedoresDoFiltroV2,
 } from '@/lib/financeiro/listaPaginaV2';
 import { RODAPE_REGUA, TextoReservado, reservaDeNumero } from '@/components/ui/regua-tabela';
 /* a reserva dos totais do topo: o maior valor que a faixa mostra (dezenas de milhões) */
@@ -270,16 +273,15 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
      da parcela) continua: so' o controle que navega some. */
   const podeAbrirOC = usePodeAbrir(TELA_DA_OPERACAO);
   const podeAbrirFinanciamento = usePodeAbrir('financiamentos');
-  const { conciliados, carregando: carregandoVinculos, recarregar: recarregarVinculos } = useLancamentosConciliados(clienteAtual?.id ?? null);
-  /* FIN-V2-DESEMPENHO-01b — o mapa dos vínculos vem em levas (segundos no NJ); até a PRIMEIRA carga terminar, a pílula
-     "Conciliado" sai da marca que a própria página traz (`conciliado` da RPC, o mesmo vínculo vivo). Depois, o mapa manda
-     (ele é o que o desfazer relê). */
-  const [vinculosProntos, setVinculosProntos] = useState(false);
-  const viuCarregarVinculos = useRef(false);
-  useEffect(() => {
-    if (carregandoVinculos) viuCarregarVinculos.current = true;
-    else if (viuCarregarVinculos.current) setVinculosProntos(true);
-  }, [carregandoVinculos]);
+  /* FIN-V2-DESEMPENHO-01c — os vínculos SÓ dos lançamentos da página (uma consulta pequena por página; antes, as levas do cliente
+     inteiro em segundo plano). A pílula "Conciliado" sai da marca da própria página (`conciliado` da RPC, o mesmo vínculo vivo); o
+     mapa dá o detalhe (o `title` com o movimento, o ícone). Os ids chegam por estado: a página é lida mais abaixo. */
+  const [idsDaPagina, setIdsDaPagina] = useState<string[]>([]);
+  const { conciliados, recarregar: recarregarSoVinculos } = useLancamentosConciliados(clienteAtual?.id ?? null, idsDaPagina);
+  /* a seção "sem caixa" também passa pelo `filtrarEmMemoria`: ele lê o mapa por ref, para não reler a seção a cada página
+     (medido 22/10: nenhum lançamento sem caixa tem vínculo vivo — 0 de 365) */
+  const conciliadosRef = useRef(conciliados);
+  conciliadosRef.current = conciliados;
   /* VINCULAR-FIX-01 — o icone de OC da linha sai da PARTE VIVA, nao da origem: um lancamento vinculado
      (importado ou manual) tambem e' titulo da OC, e o desvinculado deixa de ser. Mesmo molde do mapa acima. */
   const lancamentosComOC = useLancamentosComOC(clienteAtual?.id ?? null);
@@ -324,9 +326,6 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   /* FIN-V2-DESEMPENHO-01b — com a página do servidor não há mais "todas as linhas" na tela: o filtro e a grade leem o CADASTRO do
      cliente inteiro (os parecidos e o "inativo" saem dele), e o uso (`· N`) deixou de existir. */
   const rotulosDoRecorte = useMemo(() => rotulosDosFornecedores(hook.fornecedores), [hook.fornecedores]);
-  /* FORN-BUSCA-UNICA-01 — o filtro é o seletor padrão (`FavorecidoSelect`, a busca única): os fornecedores do recorte, inativos
-     inclusive (têm lançamento), cada um com o uso = os lançamentos dele no recorte. */
-  const fornecedoresDoFiltro = hook.fornecedores;
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const currentYear = new Date().getFullYear();
@@ -1193,12 +1192,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     if (querRealizado !== querConciliado) {
       items = items.filter(l => {
         if ((l.status_transacao || '').toLowerCase() !== 'realizado') return true;
-        return querConciliado ? conciliados.has(l.id) : !conciliados.has(l.id);
+        return querConciliado ? conciliadosRef.current.has(l.id) : !conciliadosRef.current.has(l.id);
       });
     }
 
     return items;
-  }, [contaOrigem, contaDestino, produtoFiltro, documentoFiltro, documentosPorLancamento, fornecedorFiltro, tipoOperacao, atividadeFiltro, safraFiltro, culturaFiltro, grupoFiltro, centroToGrupo, statusSelecionados, conciliados]);
+  }, [contaOrigem, contaDestino, produtoFiltro, documentoFiltro, documentosPorLancamento, fornecedorFiltro, tipoOperacao, atividadeFiltro, safraFiltro, culturaFiltro, grupoFiltro, centroToGrupo, statusSelecionados]);
 
 
   // Sorted lancamentos
@@ -1236,9 +1235,35 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const ordemV2 = useMemo(() => ordemDaPaginaV2(sortField, sortDir, nivelClassif), [sortField, sortDir, nivelClassif]);
   const chaveDoRecorte = JSON.stringify([filtrosV2, ordemV2, porPagina]);
   useEffect(() => { setPaginaV2(0); }, [chaveDoRecorte]);
+  /* FIN-V2-DESEMPENHO-01c — com o cadastro carregado, a página não busca os nomes de novo */
+  const idsDoCadastro = useMemo(() => new Set(hook.fornecedores.map((f) => f.id)), [hook.fornecedores]);
+  const conhecidoNoCadastro = useCallback((id: string) => idsDoCadastro.has(id), [idsDoCadastro]);
   const listaV2 = useListaPaginaV2(clienteAtual?.id, { filtros: filtrosV2, ordem: ordemV2, pagina: paginaV2, porPagina },
-    !FEATURE_FLAGS.LISTA_PAGINADA_V2 && podeConsultar && mode === 'list');
+    !FEATURE_FLAGS.LISTA_PAGINADA_V2 && podeConsultar && mode === 'list', conhecidoNoCadastro);
   const paginaDaLista = listaV2.pagina;
+  const paginaRef = useRef(paginaDaLista);
+  paginaRef.current = paginaDaLista;
+  useEffect(() => { setIdsDaPagina(paginaDaLista ? paginaDaLista.linhas.map((l) => l.id) : []); }, [paginaDaLista]);
+  /* FIN-V2-LISTA-RELE-APOS-CADASTRO-01 (Gabriel 22/10, Agnaldo: editou o fornecedor pelo modal e a lista ficou com o nome antigo
+     até o F5) — o nome da coluna sai do cadastro da TELA; quem grava um fornecedor avisa (com os ids) e a tela relê SÓ esses; sem
+     ids, os da página. A página e os totais não se releem (o nome não muda valor nem classificação). */
+  const atualizarFornecedoresPorId = hook.atualizarFornecedoresPorId;
+  useEffect(() => {
+    const cli = clienteAtual?.id;
+    if (!cli) return;
+    return leitorDeFornecedores.inscrever(cli, (ids) => {
+      const alvo = ids && ids.length > 0 ? ids
+        : [...new Set((paginaRef.current?.linhas ?? []).map((l) => l.favorecido_id).filter((x): x is string => !!x))];
+      void atualizarFornecedoresPorId(alvo);
+    });
+  }, [clienteAtual?.id, atualizarFornecedoresPorId]);
+  /* desfazer um vínculo: o detalhe E a marca da página voltam (a pílula sai da página) */
+  const recarregarVinculos = useCallback(() => { recarregarSoVinculos(); void listaV2.recarregar(); }, [recarregarSoVinculos, listaV2.recarregar]);
+  /* FORN-BUSCA-UNICA-01 — o filtro é o seletor padrão (`FavorecidoSelect`, a busca única). FIN-V2-FILTRO-FORNECEDOR-01: os ATIVOS; o
+     inativo só com lançamento no recorte; o mesclado nunca (o nome antigo acha o destino pelos apelidos); o uso é o do SERVIDOR no
+     recorte sem o filtro de fornecedor (`usoPorFornecedor`, na mesma ida da página) — a lista não encolhe ao escolher. */
+  const fornecedoresDoFiltro = useMemo(() => fornecedoresDoFiltroV2(hook.fornecedores, paginaDaLista?.usoPorFornecedor ?? null),
+    [hook.fornecedores, paginaDaLista]);
   const fornecedoresMap = useMemo(
     /* FIN-V2-DESEMPENHO-01b: os nomes da página (`listaV2.nomes`, uma ida por id) valem até o cadastro inteiro chegar */
     () => new Map([...listaV2.nomes, ...hook.fornecedores.map((f): [string, string] => [f.id, f.nome])]),
@@ -1638,6 +1663,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     setModoIntensivo(next);
     onIntensiveToggle?.(next);
   }, [modoIntensivo, onIntensiveToggle]);
+  /* TABELA-ALTURA-FIXA-01 — na lista normal o quadro vai do topo dele até o fim da janela, com qualquer número de linhas (no Ampliado
+     o `flex-1` da coluna já faz isso) */
+  const quadroAteOFim = useAlturaAteOFim({ ativo: !modoIntensivo });
 
 /* ⚠ ESTE BOTÃO EXISTE EM DOIS LUGARES, E A FLAG DECIDE QUAL APARECE — e é a TERCEIRA vez
    que o mount duplo morde (a primeira foi o menu de exportação, a segunda a coluna de
@@ -1805,7 +1833,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     linhasDaGrade, modoIntensivo, contasAmpliado, fornecedoresMap, rotulosDoRecorte, parcelasDosLancamentos, conciliados,
     hojeISO, coberturaExtrato, documentosPorLancamento, selectedIds, lancamentosComOC, contratosDoCliente,
     podeAbrirFinanciamento, onAbrirFinanciamento, podeAbrirOC, nivelClassif, fazendaNameMap, fazendaCodigoMap,
-    safraCodigoMap, safraEscopoMap, contaNomeMap, foco, vinculosProntos, paginaDaLista,
+    safraCodigoMap, safraEscopoMap, contaNomeMap, foco, paginaDaLista,
   ];
   return (
     /* ⚠ O AFASTAMENTO MORA AQUI, NO RAIZ — FIN-LISTA-VISUAL-03. A seção do /v2 não tem
@@ -2000,7 +2028,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     value={fornecedorFiltro === '__all__' ? '' : fornecedorFiltro}
                     onChange={(id) => setFornecedorFiltro(id || '__all__')}
                     fornecedores={fornecedoresDoFiltro}
-                    situacao="todos" nomeInteiro mostrarUso limpavel rotuloDoVazio="Todos" placeholder="Todos"
+                    situacao="todos" nomeInteiro mostrarUso={!!paginaDaLista} mostrarIguais={false} limpavel rotuloDoVazio="Todos" placeholder="Todos"
                     linhaDoDocumento={false} size="compact" triggerClassName="bg-white border-[#C9D4E2] !text-[9px]"
                   />
                 </div>
@@ -2420,7 +2448,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     value={fornecedorFiltro === '__all__' ? '' : fornecedorFiltro}
                     onChange={(id) => setFornecedorFiltro(id || '__all__')}
                     fornecedores={fornecedoresDoFiltro}
-                    situacao="todos" nomeInteiro mostrarUso limpavel rotuloDoVazio="Todos" placeholder="Todos"
+                    situacao="todos" nomeInteiro mostrarUso={!!paginaDaLista} mostrarIguais={false} limpavel rotuloDoVazio="Todos" placeholder="Todos"
                     linhaDoDocumento={false} size="compact" triggerClassName="bg-white border-[#C9D4E2] !text-[9px]"
                   />
                   </div>
@@ -2578,8 +2606,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 diferença não era de tema, era o card que faltava. */}
            {/* FIN-V2-DESEMPENHO-01b — O QUADRO: a tabela que rola e, DENTRO dele, a barra da página (régua de Recorrências). O
                scrollport continua sendo o mesmo `scrollContainerRef` (a lista virtual mede por ele). */}
-           <div className={cn("flex min-h-0 flex-col overflow-hidden border border-[hsl(var(--border))] bg-card", modoIntensivo && "flex-1")} data-testid="quadro-lancamentos">
-           <div ref={scrollContainerRef} className={cn("min-h-0 bg-card overflow-auto relative rolagem-fina rolagem-sem-tampar respiro-lista", modoIntensivo && "flex-1")} style={modoIntensivo ? undefined : { maxHeight: 'calc(100vh - 264px)' }}>
+           {/* TABELA-ALTURA-FIXA-01 (Gabriel, 22/10): o quadro tem ALTURA FIXA até o fim da tela, independente do número de linhas — com 6, 1
+               ou 0 lançamentos o espaço vazio fica DENTRO do quadro e a barra da página não sobe. Antes: `maxHeight: calc(100vh − 264px)`
+               no scrollport, e o quadro encolhia com a lista. */}
+           <div ref={quadroAteOFim.ref} className={cn("flex min-h-0 flex-col overflow-hidden border border-[hsl(var(--border))] bg-card", modoIntensivo && "flex-1")}
+             style={modoIntensivo ? undefined : { height: quadroAteOFim.altura ?? 'calc(100vh - 264px)' }} data-testid="quadro-lancamentos">
+           <div ref={scrollContainerRef} className="min-h-0 flex-1 bg-card overflow-auto relative rolagem-fina rolagem-sem-tampar respiro-lista">
             <table className="table-financeiro w-full caption-bottom text-sm border-collapse" style={{ tableLayout: 'fixed' }}>
               {/*
                 Larguras das colunas:
@@ -2769,7 +2801,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 {linhasDaGrade.length === 0 ? (
                   <tr className="border-b">
                     <td colSpan={modoIntensivo && contasAmpliado ? 17 : 15} className="text-center text-muted-foreground py-4 text-[10px]">
-                      {paginaDaLista ? 'Nenhum lançamento encontrado.' : (listaV2.erro ?? 'Carregando…')}
+                      {paginaDaLista ? 'Nenhum lançamento neste filtro' : (listaV2.erro ?? 'Carregando…')}
                     </td>
                   </tr>
                 ) : (
@@ -2801,7 +2833,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                        NÃO a herda: 574 linhas têm esse status gravado sem vínculo
                        nenhum — legado de 10/04/2026. Elas caem no rótulo
                        "Conciliado (legado)", muted, distinguível do fato. */
-                    const temVinculo = vinculosProntos ? !!vinculo : !!paginaDaLista?.conciliados.has(l.id);
+                    const temVinculo = !!paginaDaLista?.conciliados.has(l.id);
                     const stKey = temVinculo && stCru === 'realizado' ? 'conciliado_real' : stCru;
                     const stLabel = STATUS_FILTRO_LABEL[stKey] || l.status_transacao || '-';
                     const stColor = STATUS_FILTRO_COR[stKey] || 'text-muted-foreground';
@@ -2912,14 +2944,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                         </td>
                         <td className="truncate px-1 py-1 align-middle text-[12px] leading-tight text-muted-foreground"
                           title={rotuloForn?.title ?? fornNome ?? ''} data-testid="celula-fornecedor">
-                          {fornNome ? (
-                            /* FORN-NOME-EXIBIDO-01 — o nome corta; o final e o "inativo" ficam inteiros à direita */
-                            <span className="flex min-w-0 items-baseline gap-1">
-                              <span className="truncate pr-0.5">{fornNome}</span>
-                              {rotuloForn?.final && <span className="shrink-0 whitespace-nowrap text-[10px]" data-testid="final-fornecedor">· {rotuloForn.final}</span>}
-                              {rotuloForn?.inativo && <span className="shrink-0 whitespace-nowrap text-[10px] text-amber-700" data-testid="inativo-fornecedor">· inativo</span>}
-                            </span>
-                          ) : (!l.favorecido_id ? '-' : hook.fornecedores.length === 0 ? <span className="text-muted-foreground">…</span> : <span className="text-warning">n/c</span>)}
+                          {/* FIN-V2-FORNECEDOR-SEM-SUFIXO-01 (Gabriel, 22/10: "não ficou legal! esconde o nome") — na TABELA, SÓ o nome
+                              (uma linha, "…"); o CNPJ inteiro ou "sem CNPJ", a cidade/UF e o "inativo" vão no `title`. O final da filial
+                              ("…0007-69", "sem CNPJ") fica no seletor/busca, onde ele separa as filiais (FORN-FILIAL-01). */}
+                          {fornNome ? <span className="flex min-w-0"><span className="truncate pr-0.5">{fornNome}</span></span> : (!l.favorecido_id ? '-' : hook.fornecedores.length === 0 ? <span className="text-muted-foreground">…</span> : <span className="text-warning">n/c</span>)}
                         </td>
                         {/* FIN-V2-COLUNAS-02 — a Classificação no nível escolhido; o caminho inteiro no `title`. */}
                         <td className="celula-classe truncate px-1 py-1 align-middle text-[11px] leading-tight text-muted-foreground" data-testid="celula-classificacao"

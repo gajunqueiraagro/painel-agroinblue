@@ -525,10 +525,14 @@ describe('criar pela diferença com centavo', () => {
       iniciais={[]} nomeConta="Itaú Personalite" contaBancariaId="itau" onConciliado={() => {}} />);
     await waitFor(() => expect(criar()).not.toBeDisabled());
   });
-  it('com um levado que deixa R$ 0,01 de diferença: criar liberado e Conciliar apagado', async () => {
+  /* CONC-SEM-TRAVA-01 (tela): a diferenca nao apaga mais o Conciliar — vira "Conciliar…", que abre o modal da diferenca */
+  it('com um levado que deixa R$ 0,01 de diferença: criar liberado e "Conciliar…" abre o modal da diferença', async () => {
     montar([{ ...VIVO, valor_assinado: -506.52 }]);
     await waitFor(() => expect(criar()).not.toBeDisabled());
-    expect(screen.getByRole('button', { name: 'Conciliar' })).toBeDisabled();
+    const botao = screen.getByRole('button', { name: 'Conciliar…' });
+    expect(botao).not.toBeDisabled();
+    fireEvent.click(botao);
+    await waitFor(() => expect(screen.getByTestId('modal-conciliar')).toBeTruthy());
   });
   it('com um levado que fecha: criar apagado', async () => {
     montar([{ ...VIVO, valor_assinado: -506.51 }]);
@@ -572,5 +576,30 @@ describe('CONC-VALOR-CERTO-ACEITA-01 — valor certo com extrato maior pergunta 
     fireEvent.click(screen.getByTestId('aceitar-valor-extrato'));
     await waitFor(() => expect(feito).toHaveBeenCalledTimes(1));
     expect(gravacoes().map((c) => c.p_itens[0].aceitar_valor_extrato ?? false)).toEqual([false, true]);
+  });
+});
+
+/* CONC-SEM-TRAVA-01 (tela) — nos modos N:1 e bloco a diferenca de valor tambem nao trava: o Conciliar vira "Conciliar…" e abre o
+   modal da diferenca (o mesmo componente do 1:N), com os extratos e os lancamentos levados. */
+describe('CONC-SEM-TRAVA-01 — N:1 e bloco abrem o modal da diferença', () => {
+  it('N:1 com a soma diferente: "Conciliar…" liberado abre o modal Conciliar', async () => {
+    VALORES.set('l-n1s', -3000); VALORES.set('n1a', -2000); VALORES.set('n1b', -900);
+    render(<CasarN1Modal open onClose={() => {}} sis={{ lancamento_id: 'l-n1s', descricao: 'Folha', fornecedor: 'X', valor_assinado: -3000 }}
+      extratos={[{ extrato_id: 'n1a', data: '2026-09-04', historico: 'Pix a', valor: -2000 }, { extrato_id: 'n1b', data: '2026-09-04', historico: 'Pix b', valor: -900 }]}
+      nomeConta="Banco do Brasil" onConciliado={() => {}} />);
+    const botao = await screen.findByRole('button', { name: 'Conciliar…' });
+    expect(botao).not.toBeDisabled();
+    fireEvent.click(botao);
+    await waitFor(() => expect(screen.getByTestId('modal-conciliar')).toBeTruthy());
+  });
+  it('bloco com a soma diferente e recusa do banco: "Conciliar…" abre o modal Conciliar', async () => {
+    BLOCO.resposta = { data: null, error: { code: 'CBLOC', message: 'soma_nao_bate: os Pix somam R$ 290.000,00 e os lançamentos R$ 375.000,00.' } };
+    render(<CasarBlocoModal open onClose={() => {}}
+      extratos={[{ extrato_id: 'b1', data: '2026-07-30', historico: 'PIX RECEBIDO', valor: 290000 }]}
+      lancamentos={[{ lancamento_id: 'bl1', data: '2026-07-30', descricao: 'Receb. 2/3', valor_assinado: 375000 }]} onConciliado={() => {}} />);
+    await waitFor(() => expect(screen.getByTestId('conciliar-bloco').textContent).toBe('Conciliar…'));
+    expect(screen.getByTestId('conciliar-bloco')).not.toBeDisabled();
+    fireEvent.click(screen.getByTestId('conciliar-bloco'));
+    await waitFor(() => expect(screen.getByTestId('modal-conciliar')).toBeTruthy());
   });
 });

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { rotuloDaConta } from '@/lib/financeiro/rotuloConta';
-import { dataCurta } from '@/lib/oc/contaCorrente';
+import { dataBR } from '@/lib/datas/dataBR';
 import type { OCDoLancamento } from '@/hooks/useLancamentosComOC';
 
 /* FIN-V2-SEM-CAIXA-01 — o Financeiro V2 mostra SO' DINHEIRO por padrao (mock docs/mocks/fin_v2_sem_caixa_mock_v1.html).
@@ -121,7 +121,7 @@ export function SecaoSemCaixa({ linhas, carregando, erro, ocDe, onAbrirOC }: Pro
               const cab = cabecas.get(l.id);
               return (
                 <tr key={l.id} data-sem-caixa={l.id}>
-                  <td className={`${TD} text-center`}>{dataCurta(l.data_competencia)}</td>
+                  <td className={`${TD} text-center`}>{dataBR(l.data_competencia)}</td>
                   <td className={`${TD} break-words`}>{l.descricao ?? '—'}</td>
                   <td className={`${TD} text-right`}>{cab ?? '—'}</td>
                   <td className={`${TD} break-words`}>{rotuloDaConta(l.subcentro) ?? '—'}</td>

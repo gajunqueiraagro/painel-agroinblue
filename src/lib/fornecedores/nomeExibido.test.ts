@@ -56,8 +56,11 @@ describe('os rótulos de uma lista', () => {
     expect(r.get('d')).toMatchObject({ final: null, inativo: false });
     expect(sufixoDoRotulo(r.get('a'))).toBe('sem CNPJ · inativo');
     expect(sufixoDoRotulo(r.get('d'))).toBe('');
-    expect(r.get('a')?.title).toBe('Lineagro Produtos Agropecuarios AS · inativo');
+    /* FIN-V2-FORNECEDOR-SEM-SUFIXO-01 — o `title` leva o detalhe que a tabela não escreve: documento inteiro ou "sem CNPJ", cidade/UF, inativo */
+    expect(r.get('a')?.title).toBe('Lineagro Produtos Agropecuarios AS · sem CNPJ · inativo');
     expect(r.get('b')?.title).toBe('Lineagro Produtos Agropecuários S.A. · 21.018.928/0007-69');
+    expect(rotulosDosFornecedores([{ id: 'f', nome: 'Lineagro Produtos Agropecuários S.A.', cpf_cnpj: '21018928000769', ativo: true, municipio: 'Dourados', uf: 'MS' }])
+      .get('f')?.title).toBe('Lineagro Produtos Agropecuários S.A. · 21.018.928/0007-69 · Dourados/MS');
   });
   it('o final depende da LISTA: sozinho na lista, sem final', () => {
     const r = rotulosDosFornecedores([LINEAGRO[1], LINEAGRO[3]]);
@@ -93,13 +96,29 @@ describe('a ligação nas telas (fonte)', () => {
     /* FORN-BUSCA-UNICA-01 — o filtro é o seletor padrão: o documento inteiro, a situação e o uso no item (não mais o final) */
     expect(tela).toMatch(/<FavorecidoSelect[\s\S]{0,200}fornecedores=\{fornecedoresDoFiltro\}[\s\S]{0,40}situacao="todos"/);
     expect(tela).toContain("const rotuloForn = rotulosDoRecorte.get(l.favorecido_id || '');");
-    expect(tela).toContain('data-testid="final-fornecedor"');
-    expect(tela).toContain('data-testid="inativo-fornecedor"');
   });
-  it('o final e o "inativo" não cortam (shrink-0); só o nome corta', () => {
-    const celula = tela.slice(tela.indexOf('data-testid="celula-fornecedor"'), tela.indexOf('data-testid="inativo-fornecedor"') + 40);
-    expect(celula).toContain('<span className="truncate pr-0.5">{fornNome}</span>');
-    expect(celula.match(/shrink-0 whitespace-nowrap/g)).toHaveLength(2);
+  it('FIN-V2-FORNECEDOR-SEM-SUFIXO-01 — na tabela, SÓ o nome (corta com "…"); o detalhe vai no `title`; sem final nem "inativo" grudado', () => {
+    const ini = tela.indexOf('<td className="truncate px-1 py-1 align-middle text-[12px] leading-tight text-muted-foreground"');
+    const celula = tela.slice(ini, tela.indexOf('</td>', ini));
+    expect(celula).toContain("title={rotuloForn?.title ?? fornNome ?? ''} data-testid=\"celula-fornecedor\"");
+    expect(celula).toContain('{fornNome ? <span className="flex min-w-0"><span className="truncate pr-0.5">{fornNome}</span></span> : ');
+    expect(tela).not.toContain('data-testid="final-fornecedor"');
+    expect(tela).not.toContain('data-testid="inativo-fornecedor"');
+    expect(celula).not.toContain('rotuloForn?.final');
+  });
+  it('FIN-V2-LISTA-RELE-APOS-CADASTRO-01 — quem grava o cadastro avisa com o id; a lista relê só esses (nunca o cadastro inteiro)', () => {
+    const form = readFileSync(resolve(__dirname, '../../components/financeiro-v2/FornecedorFormDialog.tsx'), 'utf8');
+    expect(form).toContain('notificarFornecedoresMudaram(clienteId, gravado ? [gravado] : undefined);');
+    expect(readFileSync(resolve(__dirname, './cadastroDaCasaBanco.ts'), 'utf8')).toContain('notificarFornecedoresMudaram(clienteId, [id]);   /* FIN-V2-LISTA-RELE');
+    expect(form).toContain('notificarFornecedoresMudaram(clienteId, [reativarTarget.id]);');
+    expect(form).toContain('notificarFornecedoresMudaram(clienteId, [editing.id]);');
+    expect(form).not.toMatch(/notificarFornecedoresMudaram\(clienteId\);/);
+    expect(tela).toContain('return leitorDeFornecedores.inscrever(cli, (ids) => {');
+    expect(tela).toContain('void atualizarFornecedoresPorId(alvo);');
+    const hookFin = readFileSync(resolve(__dirname, '../../hooks/useFinanceiroV2.ts'), 'utf8');
+    const corpo = hookFin.slice(hookFin.indexOf('const atualizarFornecedoresPorId'), hookFin.indexOf('}, [clienteId]);', hookFin.indexOf('const atualizarFornecedoresPorId')));
+    expect(corpo).toContain(".in('id', [...ids])");
+    expect(corpo).not.toContain('.range(');
   });
   it('Cadastros tem o lugar reservado do aviso, sempre presente', () => {
     const cad = readFileSync(resolve(__dirname, '../../pages/FinV2FornecedoresTab.tsx'), 'utf8');

@@ -47,9 +47,10 @@ export const fonteDoBanco: FonteDeFornecedores = {
 
 export const leitorDeFornecedores: LeitorDeFornecedores = criarLeitorDeFornecedores(fonteDoBanco);
 
-/** O cadastro de fornecedores deste cliente mudou (criar, editar, inativar, reativar, fundir): quem mostra relê. */
-export function notificarFornecedoresMudaram(clienteId: string | null | undefined): void {
-  if (clienteId) leitorDeFornecedores.notificarMudou(clienteId);
+/** O cadastro de fornecedores deste cliente mudou (criar, editar, inativar, reativar, fundir): quem mostra relê.
+ *  `ids` (FIN-V2-LISTA-RELE-APOS-CADASTRO-01): os cadastros gravados, quando se sabe — a lista de Lançamentos relê só esses. */
+export function notificarFornecedoresMudaram(clienteId: string | null | undefined, ids?: readonly string[]): void {
+  if (clienteId) leitorDeFornecedores.notificarMudou(clienteId, ids);
 }
 
 export const FRASE_FALHA_AO_LER_FORNECEDORES = 'Não foi possível carregar os fornecedores.';

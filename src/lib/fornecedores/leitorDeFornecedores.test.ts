@@ -146,6 +146,14 @@ describe('releitura quando o cadastro muda', () => {
     leitor.notificarMudou('X');
     expect(ouviuX).toBe(1);                           /* quem saiu não ouve mais */
   });
+  it('FIN-V2-LISTA-RELE-APOS-CADASTRO-01 — o aviso leva os ids gravados a quem ouve (sem ids, nada)', () => {
+    const leitor = criarLeitorDeFornecedores(banco({ X: [forn('a1')] }).fonte);
+    const ouvidos: (readonly string[] | undefined)[] = [];
+    leitor.inscrever('X', (ids) => { ouvidos.push(ids); });
+    leitor.notificarMudou('X', ['a1']);
+    leitor.notificarMudou('X');
+    expect(ouvidos).toEqual([['a1'], undefined]);
+  });
   it('o gravado lido por id também é esquecido no aviso (o inativo reativado volta a valer)', async () => {
     const b = banco({ X: [forn('i1', { ativo: false })] });
     const leitor = criarLeitorDeFornecedores(b.fonte);

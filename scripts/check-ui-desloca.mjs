@@ -32,6 +32,7 @@ const botao = (re) => async (p) => { await p.getByRole('button', { name: re }).f
 const clicar = (sel) => async (p) => { await p.locator(sel).first().click(); await espera(p); };
 /* o gesto e, depois, a casca da bancada de volta ao topo (o clique rola a PAGINA para trazer o botao a vista; o que se mede e' a tela) */
 const noTopo = (g) => async (p) => { await g(p); await p.evaluate(() => { window.scrollTo(0, 0); document.querySelectorAll('[data-casca]').forEach((c) => { c.scrollTop = 0; }); }); await espera(p, 150); };
+const ampliar = async (p) => { await p.locator('[data-testid="rodape-lancamentos"]').waitFor(); await espera(p, 900); await p.getByRole('button', { name: /^Ampliar$/ }).first().click(); await espera(p, 700); };
 const digitar = (sel, txt) => async (p) => { await p.locator(sel).first().fill(txt); await espera(p, 800); };
 
 /* Cada estado e' um gesto aplicado em sequencia; cada um e' comparado com o estado INICIAL da tela. `url` = outra pagina inteira
@@ -59,7 +60,15 @@ const CENARIOS = [
       ['pagina anterior', noTopo(clicar('[data-testid="pagina-anterior"]'))],
       ['Classificação Macro', noTopo(botao(/^Macro$/))], ['Classificação Subcentro', noTopo(botao(/^Subcentro$/))], ['Classificação Centro', noTopo(botao(/^Centro$/))],
       ['Sem caixa Só c/ DRE', noTopo(botao(/^Só c\/ DRE$/))], ['Sem caixa Ocultar', noTopo(botao(/^Ocultar$/))],
+      /* TABELA-ALTURA-FIXA-01 — filtrar de muitos para poucos (6), um ou nenhum lançamento: o quadro não encolhe e a barra da página
+         (Anterior/Próxima, "Por pág.") fica no mesmo lugar */
+      ...[6, 1, 0].map((n) => [`filtro com ${n} lancamento(s)`, { url: `tela=financeiro&v=volume&n=450&linhas=${n}` }]),
     ] },
+  /* TABELA-ALTURA-FIXA-01 — o mesmo no Ampliado (como no app: a tela da barra de 32px) */
+  { nome: 'financeiro-ampliado', url: 'tela=financeiro&v=volume&n=450&barra=32', antes: ampliar,
+    estados: [6, 1, 0].map((n) => [`filtro com ${n} lancamento(s)`, async (p) => {
+      await p.goto(p.url().replace(/&linhas=\d+/, '') + `&linhas=${n}`); await p.evaluate(() => document.fonts.ready); await espera(p, 1300); await ampliar(p);
+    }]) },
   { nome: 'fornecedores-sem-cadastro', url: 'tela=fornecedores&barra=32&n=2356', antes: clicar('[data-testid="aba-sem-cadastro"]'), auto: true },
   { nome: 'recorrencias', url: 'tela=recorrencias&barra=32', auto: true },
   { nome: 'cpr', url: 'tela=cpr', auto: true },
@@ -85,6 +94,33 @@ const CENARIOS = [
   ...['venda', 'abate'].map((v) => ({ nome: `oc-cc-faixa-${v}`, url: `tela=oc&v=${v}&aba=financeiro&cc=1`, minLargura: 1000, estados: [
     ['sem principal programado (sem o motivo)', { url: `tela=oc&v=${v}&aba=financeiro&cc=1&coberto=0` }],
   ] })),
+  /* fatia "casar" (ate' aqui sem cenario: "0 telas"): no 1:1 digitar outro valor e corrigir o valor do lancamento nao mexem no cabecalho, no resumo nem no
+     rodape; no bloco trocar a regra nao mexe nas tabelas nem no Conciliar */
+  { nome: 'casar-1x1-levado', url: 'tela=casar-1x1&v=levado', antes: async (p) => { await p.locator('[data-testid="levado"]').waitFor(); await espera(p); },
+    estados: [
+      ['valor do campo diferente do banco', digitar('input[aria-label^="Valor de"]', '0,02')],
+      ['corrigir o valor do lancamento', botao(/Corrigir o valor do lançamento/)],
+    ] },
+  { nome: 'casar-bloco', url: 'tela=casar-bloco', antes: async (p) => { await p.locator('[data-testid="conciliar-bloco"]').waitFor(); await espera(p); },
+    estados: [
+      ['regra mais antigo primeiro', botao(/Mais antigo primeiro/)],
+      ['regra soma exata de volta', botao(/Soma exata/)],
+    ] },
+  /* CONC-SEM-TRAVA-01 (tela) — o modal Conciliar: trocar de cartao, escolher outra sugestao, buscar e tentar sem motivo nao mexem
+     nos lados, na caixa da diferenca, nos cartoes, no motivo nem no rodape (tamanho fixo) */
+  { nome: 'conciliar-sobra', url: 'tela=conciliar&v=sobra', antes: async (p) => { await p.locator('[data-testid="botao-conciliar"]').waitFor(); await espera(p); },
+    estados: [
+      ['cartao lancar na OC', clicar('[data-testid="cartao-sobra_na_oc"] input[name="opcao-conciliar"]')],
+      ['cartao criar a diferenca', clicar('[data-testid="cartao-criar_diferenca"] input[name="opcao-conciliar"]')],
+      ['busca com resultado', digitar('[data-testid="busca-acrescentar"]', 'Novilhas')],
+      ['conciliar sem motivo (aviso)', clicar('[data-testid="botao-conciliar"]')],
+    ] },
+  { nome: 'conciliar-falta', url: 'tela=conciliar&v=falta', antes: async (p) => { await p.locator('[data-testid="botao-conciliar"]').waitFor(); await espera(p); },
+    estados: [
+      ['cartao deixar em aberto', clicar('[data-testid="cartao-ligar_com_falta"] input[name="opcao-conciliar"]')],
+      ['cartao desconto na OC', clicar('[data-testid="cartao-desconto_na_oc"] input[name="opcao-conciliar"]')],
+      ['conciliar sem motivo (aviso)', clicar('[data-testid="botao-conciliar"]')],
+    ] },
   /* OC-CORRECOES-01 C3 — o "Buscar recebimento no Financeiro": a busca e a escolha nao mexem no campo, no cabecalho nem nos botoes */
   { nome: 'oc-cc-buscar', url: 'tela=oc-cc&v=buscar', antes: async (p) => { await p.locator('[data-testid="busca-recebimento"]').waitFor(); await espera(p); },
     estados: [

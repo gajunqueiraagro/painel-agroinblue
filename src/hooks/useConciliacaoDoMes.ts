@@ -676,8 +676,11 @@ export interface ConciliadoDoLancamento {
  * ⚠ E É UMA CONSULTA SÓ POR CLIENTE, não por página: a lista carrega tudo em
  * lote e pagina no cliente, então um mapa completo é o que casa com ela. Trocar
  * de página não repergunta nada.
+ *
+ * FIN-V2-DESEMPENHO-01c — `ids` (opcional): SÓ os vínculos destes lançamentos (a página do servidor de Lançamentos Financeiros,
+ * até 200 ids: uma consulta pequena por página, em vez das levas do cliente inteiro). Sem `ids`, o de sempre; lista vazia = mapa vazio.
  */
-export function useLancamentosConciliados(clienteId: string | null) {
+export function useLancamentosConciliados(clienteId: string | null, ids?: readonly string[]) {
   const [mapa, setMapa] = useState<ReadonlyMap<string, ConciliadoDoLancamento>>(new Map());
   const [carregando, setCarregando] = useState(false);
   /* ⚠ CONTADOR, NÃO REESCRITA DO EFEITO — PR-CONC-B-2. Desfazer um vínculo tem de mudar o
@@ -686,21 +689,26 @@ export function useLancamentosConciliados(clienteId: string | null) {
      `useCallback` mexeria em código que funciona para ganhar a mesma coisa. */
   const [versao, setVersao] = useState(0);
   const recarregar = useCallback(() => setVersao((v) => v + 1), []);
+  const chaveDosIds = ids ? [...ids].sort().join(',') : null;
 
   useEffect(() => {
     let cancelado = false;
     if (!clienteId) { setMapa(new Map()); return; }
+    const soEstes = chaveDosIds === null ? null : chaveDosIds === '' ? [] : chaveDosIds.split(',');
+    if (soEstes && soEstes.length === 0) { setMapa(new Map()); setCarregando(false); return; }
     setCarregando(true);
     (async () => {
       const PAGE = 1000;
       const m = new Map<string, ConciliadoDoLancamento>();
       for (let from = 0; ; from += PAGE) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado
-        const { data, error } = await (supabase as any)
+        let consulta = (supabase as any)
           .from('conciliacao_bancaria_itens')
           .select('lancamento_id, valor_aplicado, tipo_aprovacao, extrato_bancario_v2!inner(data_movimento, descricao, cliente_id)')
           .is('desfeito_em', null)
-          .eq('extrato_bancario_v2.cliente_id', clienteId)
+          .eq('extrato_bancario_v2.cliente_id', clienteId);
+        if (soEstes) consulta = consulta.in('lancamento_id', soEstes);
+        const { data, error } = await consulta
           .order('lancamento_id', { ascending: true })
           .range(from, from + PAGE - 1);
         if (error) { console.error('[useLancamentosConciliados]', error); break; }
@@ -736,7 +744,7 @@ export function useLancamentosConciliados(clienteId: string | null) {
       if (!cancelado) { setMapa(m); setCarregando(false); }
     })();
     return () => { cancelado = true; };
-  }, [clienteId, versao]);
+  }, [clienteId, versao, chaveDosIds]);
 
   return { conciliados: mapa, carregando, recarregar };
 }
