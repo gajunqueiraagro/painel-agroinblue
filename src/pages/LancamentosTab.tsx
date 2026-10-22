@@ -493,7 +493,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
      nao reflete na closure (a armadilha que mordeu na fatia 2).
      ⚠ Sem isto o salvamento automatico gravaria a cada navegacao, subindo `versao` e
      enchendo a auditoria de eventos que nao mudaram nada. */
-  const ocSnapshotRef = useRef({ contraparte_id: '', data_operacao: '', observacoes: '', numero_documento: '', tipo_venda: '' });
+  const ocSnapshotRef = useRef({ contraparte_id: '', data_operacao: '', observacoes: '', numero_documento: '', tipo_venda: '', propriedade_destino: '' });
   // PR-OC-EDIT-01A — existe título financeiro materializado nesta operação? (parte ativa com
   //   financeiro_lancamento_id). Bloqueia a edição da base econômica (ADR Soberania Financeira).
   const [ocTemTitulo, setOcTemTitulo] = useState<boolean>(false);
@@ -977,6 +977,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         ocSnapshotRef.current = {
           contraparte_id: op.contraparte_id ?? '', data_operacao: op.data_operacao ?? '',
           observacoes: op.observacoes ?? '', numero_documento: op.numero_documento ?? '', tipo_venda: '',
+          propriedade_destino: (op as { propriedade_destino?: string | null }).propriedade_destino ?? '',
         };
         setOcOperacaoId(op.id);
         setOcVersao(op.versao);
@@ -1092,6 +1093,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         setData(op.data_operacao ?? format(new Date(), 'yyyy-MM-dd'));
         setVendaDestinoFornecedorId(op.contraparte_id ?? '');
         setVendaFazendaId(op.fazenda_id ?? '');
+        /* OC-PROPRIEDADE-DESTINO-01: a OC passou a guardar a propriedade de destino */
+        setVendaPropriedadeDestino((op as { propriedade_destino?: string | null }).propriedade_destino ?? '');
         setObservacao(op.observacoes ?? '');
         setNotaFiscal(op.numero_documento ?? '');
         setStatusOp(op.cenario === 'meta' ? 'meta' : 'realizado');
@@ -1100,6 +1103,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         ocSnapshotRef.current = {
           contraparte_id: op.contraparte_id ?? '', data_operacao: op.data_operacao ?? '',
           observacoes: op.observacoes ?? '', numero_documento: op.numero_documento ?? '', tipo_venda: '',
+          propriedade_destino: (op as { propriedade_destino?: string | null }).propriedade_destino ?? '',
         };
         setOcOperacaoId(op.id);
         setOcVersao(op.versao);
@@ -1200,6 +1204,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
         ocSnapshotRef.current = {
           contraparte_id: op.contraparte_id ?? '', data_operacao: op.data_operacao ?? '',
           observacoes: op.observacoes ?? '', numero_documento: op.numero_documento ?? '', tipo_venda: '',
+          propriedade_destino: (op as { propriedade_destino?: string | null }).propriedade_destino ?? '',
         };
         setOcOperacaoId(op.id);
         setOcVersao(op.versao);
@@ -2851,6 +2856,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     if ((observacao || '')         !== snap.observacoes)      sujo.observacoes      = observacao || null;
     if ((notaFiscal || '')         !== snap.numero_documento) sujo.numero_documento = notaFiscal || null;
     if (modoOCVenda && (vendaTipoVenda || '') !== snap.tipo_venda) sujo.tipo_venda = vendaTipoVenda || null;
+    if (modoOCVenda && (vendaPropriedadeDestino || '').trim() !== snap.propriedade_destino) sujo.propriedade_destino = vendaPropriedadeDestino.trim() || null;
     return sujo;
   };
   const ocDadosSujos = Object.keys(camposSujosOC()).length > 0;
@@ -2859,6 +2865,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     ocSnapshotRef.current = {
       contraparte_id: contraparteDoModoOC || '', data_operacao: data || '',
       observacoes: observacao || '', numero_documento: notaFiscal || '', tipo_venda: modoOCVenda ? vendaTipoVenda || '' : '',
+      propriedade_destino: modoOCVenda ? (vendaPropriedadeDestino || '').trim() : '',
     };
   };
 
@@ -3308,6 +3315,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       const env = await ocRpc.salvarRascunho(ocOperacaoId, clienteId, ocVersao, {
         tipo_operacao: 'venda',
         tipo_venda: (vendaTipoVenda || '') as TipoVendaOC | '',   // OC-TIPO-VENDA-01: a OC guarda o tipo (vazio = sem tipo)
+        propriedade_destino: (vendaPropriedadeDestino || '').trim(),   // OC-PROPRIEDADE-DESTINO-01
         data_operacao: data,
         cenario: isCenarioMeta ? 'meta' : 'realizado',
         fazenda_id: vendaFazendaId,
@@ -3607,6 +3615,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
     ocSnapshotRef.current = {
       contraparte_id: op.contraparte_id ?? '', data_operacao: op.data_operacao ?? '',
       observacoes: op.observacoes ?? '', numero_documento: op.numero_documento ?? '', tipo_venda: tipoRecarregado,
+      propriedade_destino: (op as { propriedade_destino?: string | null }).propriedade_destino ?? '',
     };
     setOcVersao(op.versao);
     setOcStatusComercial(op.status_comercial);

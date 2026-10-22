@@ -13,8 +13,9 @@
  */
 
 /** As chaves que `oc_editar_dados_operacao` aceita — espelho de `v_permitidas` (migrations 20261027155000 e 20261028110620: o
- *  tipo de venda entrou como CLASSIFICACAO, so' desmama <-> gado adulto; boitel o banco recusa e a tela nem oferece). */
-export const CAMPOS_CADASTRAIS_OC: ReadonlyArray<string> = ['contraparte_id', 'observacoes', 'numero_documento', 'tipo_venda'];
+ *  tipo de venda entrou como CLASSIFICACAO, so' desmama <-> gado adulto; boitel o banco recusa e a tela nem oferece;
+ *  20261028110650: a propriedade de destino da venda, cadastral). */
+export const CAMPOS_CADASTRAIS_OC: ReadonlyArray<string> = ['contraparte_id', 'observacoes', 'numero_documento', 'tipo_venda', 'propriedade_destino'];
 
 export type CaminhoSalvarOC = 'nenhum' | 'editar_dados' | 'salvar_rascunho';
 

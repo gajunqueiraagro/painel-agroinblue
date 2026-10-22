@@ -47,6 +47,8 @@ export interface ExplicacaoRascunho {
 
 /** O que o cancelamento da OC vai fazer (`oc_cancelar_rol`), para o dialogo mostrar antes de confirmar. */
 export interface RolCancelamento {
+  /** P32: 'titulo' = modelo antigo — o rol traz so' os compromissos que fecham (o resto o banco ja' exige estornado). */
+  modelo: 'conta_corrente' | 'titulo';
   entregas: Array<{ data: string; loteOrdem: number | null; valor: number }>;
   explicacoes: Array<{ tipo: string; valor: number; conta: string | null }>;
   /** OC-CC-CLASSIFICACAO-01: `contaAtual` ja' e' a da operacao e `contaOriginal` e' a do `vincular_recebimento` (a mesma, desde que
@@ -54,9 +56,13 @@ export interface RolCancelamento {
    *  'fica_manual' (nascido na OC e ja' pago) ou 'cancela_programado' (nascido na OC e nao pago). */
   recebimentos: Array<{ data: string; valor: number; contaAtual: string | null; contaOriginal: string | null; acao: string }>;
   saidas: Array<{ data: string; cab: number; categoria: string | null; origem: string }>;
-  compromissos: Array<{ componente: string; valor: number }>;
+  compromissos: Array<{ componente: string; valor: number; vencimento: string | null; descricao: string | null }>;
   /** OC-CONTA-CORRENTE-TODOS-01a (decisao 3): despesas pagas a terceiros — frete, comissao, ICMS, Fundersul, Iagro. FICAM. */
   despesas: Array<{ componente: string; nome: string | null; favorecido: string | null; valor: number; pago: number }>;
+  /** OC-CANCELAR-CASCATA-01: os titulos das saidas fora da OC (a parcela da venda antiga adotada) — cancelados junto. */
+  titulosSaida: Array<{ data: string; valor: number; descricao: string | null }>;
+  /** OC-CANCELAR-CASCATA-01: mes fechado no Financeiro (o de P1 e' bloqueio). */
+  avisos: string[];
   bloqueios: string[];
 }
 
@@ -347,16 +353,26 @@ const txt = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? 
 export function lerRol(raw: unknown): RolCancelamento | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const r = Object.fromEntries(Object.entries(raw));
+  const comps = lista(r.compromissos).map(e => ({ componente: String(e.componente ?? ''), valor: Number(e.valor) || 0,
+    vencimento: txt(e.vencimento), descricao: txt(e.descricao) }));
+  /* P32 — o modelo antigo: o banco lista so' os compromissos que fecham junto (OC-CANCELAR-CASCATA-01) */
+  if (r.modelo === 'titulo') {
+    return { modelo: 'titulo', entregas: [], explicacoes: [], recebimentos: [], saidas: [], compromissos: comps, despesas: [],
+             titulosSaida: [], avisos: [], bloqueios: [] };
+  }
   if (r.modelo !== 'conta_corrente') return null;
   return {
+    modelo: 'conta_corrente',
     entregas: lista(r.entregas).map(e => ({ data: String(e.data ?? ''), loteOrdem: e.lote_ordem == null ? null : Number(e.lote_ordem), valor: Number(e.valor) || 0 })),
     explicacoes: lista(r.explicacoes).map(e => ({ tipo: String(e.tipo ?? ''), valor: Number(e.valor) || 0, conta: txt(e.conta) })),
     recebimentos: lista(r.recebimentos).map(e => ({ data: String(e.data ?? ''), valor: Number(e.valor) || 0,
       contaAtual: txt(e.conta_atual), contaOriginal: txt(e.conta_original), acao: String(e.acao ?? '') })),
     saidas: lista(r.saidas).map(e => ({ data: String(e.data ?? ''), cab: Number(e.cab) || 0, categoria: txt(e.categoria), origem: String(e.origem ?? '') })),
-    compromissos: lista(r.compromissos).map(e => ({ componente: String(e.componente ?? ''), valor: Number(e.valor) || 0 })),
+    compromissos: comps,
     despesas: lista(r.despesas).map(e => ({ componente: String(e.componente ?? ''), nome: txt(e.nome), favorecido: txt(e.favorecido),
       valor: Number(e.valor) || 0, pago: Number(e.pago) || 0 })),
+    titulosSaida: lista(r.titulos_saida).map(e => ({ data: String(e.data ?? ''), valor: Number(e.valor) || 0, descricao: txt(e.descricao) })),
+    avisos: Array.isArray(r.avisos) ? r.avisos.map(a => String(a)) : [],
     bloqueios: lista(r.bloqueios).map(e => String(e.descricao ?? '')),
   };
 }

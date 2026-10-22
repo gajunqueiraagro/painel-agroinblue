@@ -183,7 +183,7 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
       p_extrato_id: extrato.extrato_id, p_itens: itens, p_simular: true, p_motivo: 'casado_no_espelho',
     });
     if (error) { setSim(null); setErroRodape(error.message); return; }
-    const r = (data ?? {}) as { ok?: boolean; motivo?: string; no_extrato?: number; soma?: number; diferenca?: number;
+    const r = (data ?? {}) as { ok?: boolean; motivo?: string; frase?: string; no_extrato?: number; soma?: number; diferenca?: number;
       pergunta?: { lancamento_id: string; frase: string } };
     if (r.ok) {
       setErroRodape(null);
@@ -197,7 +197,7 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
       return;
     }
     setSim(null);
-    setErroRodape(MOTIVO_CASAR_LABEL[r.motivo ?? ''] ?? r.motivo ?? 'Não foi possível simular.');
+    setErroRodape(r.frase ?? MOTIVO_CASAR_LABEL[r.motivo ?? ''] ?? r.motivo ?? 'Não foi possível simular.');
   }, [extrato, itens, parcelaPos, idsLevados]);
 
   /* Debounce de 300ms: digitar um valor não dispara uma chamada por tecla. */
@@ -228,10 +228,10 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
     });
     setGravando(false);
     if (error) { setErroRodape(error.message); return; }
-    const r = (data ?? {}) as { ok?: boolean; motivo?: string; pergunta?: { lancamento_id: string; frase: string } };
+    const r = (data ?? {}) as { ok?: boolean; motivo?: string; frase?: string; pergunta?: { lancamento_id: string; frase: string } };
     /* o banco ainda pede confirmacao (outro item maior): mostra a pergunta, nada foi gravado */
     if (r.ok === false && r.motivo === 'confirmar_valor_extrato' && r.pergunta) { setPergunta(r.pergunta); return; }
-    if (r.ok === false) { setErroRodape(MOTIVO_CASAR_LABEL[r.motivo ?? ''] ?? r.motivo ?? 'Não foi possível conciliar.'); return; }
+    if (r.ok === false) { setErroRodape(r.frase ?? MOTIVO_CASAR_LABEL[r.motivo ?? ''] ?? r.motivo ?? 'Não foi possível conciliar.'); return; }
     onClose();
     onConciliado();
   };
@@ -516,7 +516,7 @@ export function CasarN1Modal({
       });
       if (cancelado) return;
       if (error) { setSim(null); setErro(error.message); return; }
-      const r = (data ?? {}) as { ok?: boolean; motivo?: string; no_lancamento?: number; soma_extratos?: number; diferenca?: number };
+      const r = (data ?? {}) as { ok?: boolean; motivo?: string; frase?: string; no_lancamento?: number; soma_extratos?: number; diferenca?: number };
       if (r.ok) {
         setErro(null);
         setSim({ ok: true, noLancamento: Number(r.no_lancamento ?? 0), soma: Number(r.soma_extratos ?? 0), diferenca: 0 });
@@ -525,7 +525,7 @@ export function CasarN1Modal({
         setSim({ ok: false, noLancamento: Number(r.no_lancamento ?? 0), soma: Number(r.soma_extratos ?? 0), diferenca: Number(r.diferenca ?? 0) });
       } else {
         setSim(null);
-        setErro(MOTIVO_CASAR_LABEL[r.motivo ?? ''] ?? r.motivo ?? 'Não foi possível simular.');
+        setErro(r.frase ?? MOTIVO_CASAR_LABEL[r.motivo ?? ''] ?? r.motivo ?? 'Não foi possível simular.');
       }
     })();
     return () => { cancelado = true; };
@@ -540,8 +540,8 @@ export function CasarN1Modal({
     });
     setGravando(false);
     if (error) { setErro(error.message); return; }
-    const r = (data ?? {}) as { ok?: boolean; motivo?: string };
-    if (r.ok === false) { setErro(MOTIVO_CASAR_LABEL[r.motivo ?? ''] ?? r.motivo ?? 'Não foi possível conciliar.'); return; }
+    const r = (data ?? {}) as { ok?: boolean; motivo?: string; frase?: string };
+    if (r.ok === false) { setErro(r.frase ?? MOTIVO_CASAR_LABEL[r.motivo ?? ''] ?? r.motivo ?? 'Não foi possível conciliar.'); return; }
     onClose();
     onConciliado();
   };

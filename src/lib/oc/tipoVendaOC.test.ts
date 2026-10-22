@@ -31,4 +31,9 @@ describe('a tela (lida da fonte): salvar, reabrir, editar fechada', () => {
     expect(tab).toContain("if (modoOCVenda && (vendaTipoVenda || '') !== snap.tipo_venda) sujo.tipo_venda = vendaTipoVenda || null;");
     expect(tab).not.toContain("else { setVendaTipoVenda(''); setOcBoitel(null); }");
   });
+  it('OC-PROPRIEDADE-DESTINO-01: a propriedade de destino vai no Salvar, volta na carga e entra no sujo da OC fechada', () => {
+    expect(tab).toContain("propriedade_destino: (vendaPropriedadeDestino || '').trim(),");
+    expect(tab).toContain("setVendaPropriedadeDestino((op as { propriedade_destino?: string | null }).propriedade_destino ?? '');");
+    expect(tab).toContain("if (modoOCVenda && (vendaPropriedadeDestino || '').trim() !== snap.propriedade_destino) sujo.propriedade_destino");
+  });
 });
