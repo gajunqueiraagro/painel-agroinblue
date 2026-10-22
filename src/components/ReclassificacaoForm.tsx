@@ -35,6 +35,9 @@ interface Props {
   fazendaId?: string;
   /** Com `true`, a fazenda e' obrigatoria: sem ela `podeSalvar` e' falso (o Registrar de "Lancar movimentacao"). */
   exigeFazenda?: boolean;
+  /** OC-HOSPEDEIRO-LEVE-01 — `false` nao le^ o rebanho do mes (o peso sugerido): o hospedeiro da OC monta o estado sem a aba de
+   *  reclassificacao. Padrao `true`, como sempre. */
+  carregarRebanho?: boolean;
 }
 
 type StatusOpcao = 'realizado' | 'meta';
@@ -191,7 +194,7 @@ export function ReclassificacaoFormFields(props: FormFieldsProps) {
 
 // ── Hook ──
 
-export function useReclassificacaoState({ onAdicionar, dataInicial, autoSugerir = true, cenarioInicial, fazendaId, exigeFazenda = false }: Props) {
+export function useReclassificacaoState({ onAdicionar, dataInicial, autoSugerir = true, cenarioInicial, fazendaId, exigeFazenda = false, carregarRebanho = true }: Props) {
   const [categoriaOrigem, setCategoriaOrigem] = useState<Categoria>('garrotes');
   const [categoriaDestino, setCategoriaDestino] = useState<Categoria>('bois');
   const [data, setData] = useState(dataInicial || format(new Date(), 'yyyy-MM-dd'));
@@ -226,7 +229,7 @@ export function useReclassificacaoState({ onAdicionar, dataInicial, autoSugerir 
    * ⚠ SEM DADO NO MÊS, CAMPO VAZIO: não há segunda fonte a tentar. Reclassificar uma categoria
    * que o rebanho não conhece naquele mês é pergunta para o operador, não para a tela.
    */
-  const { rawCategorias } = useRebanhoOficial({ ano: anoDaData, cenario: 'realizado' });
+  const { rawCategorias } = useRebanhoOficial({ ano: anoDaData, cenario: 'realizado', enabled: carregarRebanho });
 
   const origemInfo = useMemo(() => {
     const mes = Number(data?.slice(5, 7));

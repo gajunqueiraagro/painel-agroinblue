@@ -808,14 +808,16 @@ export function MetaLancamentoPanel({ ano, mes, categoria, tipo, quantidade, pes
 /**
  * Hook que retorna true se há bloqueios para um lançamento META.
  * Usa exatamente a mesma lógica do painel (calcularValidacoesMeta).
+ * `enabled` (OC-HOSPEDEIRO-LEVE-01): `false` nao le^ o rebanho meta nem os parametros — o hospedeiro da OC so' o liga quando o cenario
+ * e' meta (o unico em que o bloqueio e' consultado).
  */
 export function useMetaValidacaoBloqueios(
   ano: number, mes: number, categoria: Categoria | '',
   tipo: TipoMovimentacao, quantidade: number, pesoKg: number, clienteId?: string,
-  lancamentoEmEdicao?: Props['lancamentoEmEdicao'],
+  lancamentoEmEdicao?: Props['lancamentoEmEdicao'], enabled = true,
 ): { hasBloqueio: boolean; primeiroBloqueio: string | null } {
-  const { getSaldoMap, getPesoMedioMap } = useRebanhoOficial({ ano, cenario: 'meta' });
-  const { getParametros } = useCategoriaParametros(clienteId);
+  const { getSaldoMap, getPesoMedioMap } = useRebanhoOficial({ ano, cenario: 'meta', enabled });
+  const { getParametros } = useCategoriaParametros(clienteId, enabled);
 
   return useMemo(() => {
     if (!categoria || quantidade <= 0) return { hasBloqueio: false, primeiroBloqueio: null };

@@ -51,9 +51,11 @@ function mapRow(row: any): CategoriaParametros {
   };
 }
 
-export function useCategoriaParametros(clienteId?: string) {
+/** `enabled` (OC-HOSPEDEIRO-LEVE-01): `false` nao le^ os parametros (quem monta sem usar agora); padrao, le^ como sempre. */
+export function useCategoriaParametros(clienteId?: string, enabled = true) {
   const { data, isLoading } = useQuery({
     queryKey: ['cfg_categoria_parametros', clienteId],
+    enabled,
     queryFn: async () => {
       const { data: rows, error } = await supabase
         .from('cfg_categoria_parametros')

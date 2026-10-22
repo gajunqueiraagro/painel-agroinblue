@@ -24,7 +24,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 
-export function useAnosDisponiveis() {
+/** `enabled` (OC-HOSPEDEIRO-LEVE-01): `false` nao le^ nada — o hospedeiro da OC nao mostra seletor de ano. Padrao, le^ como sempre. */
+export function useAnosDisponiveis({ enabled = true }: { enabled?: boolean } = {}) {
   const { fazendaAtual } = useFazenda();
   const { clienteAtual } = useCliente();
   const fazendaId = fazendaAtual?.id;
@@ -33,7 +34,7 @@ export function useAnosDisponiveis() {
 
   return useQuery({
     queryKey: ['anos-disponiveis', isGlobal ? `global-${clienteId}` : fazendaId],
-    enabled: isGlobal ? !!clienteId : !!fazendaId,
+    enabled: enabled && (isGlobal ? !!clienteId : !!fazendaId),
     staleTime: 60_000,
     queryFn: async (): Promise<string[]> => {
       const anos = new Set<number>();
