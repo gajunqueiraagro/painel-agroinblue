@@ -33,6 +33,8 @@ export interface EscolhasDaNota {
   /** FIN-NOTA-PDF-01b — lavoura: a safra e a cultura escolhidas ('' = "Todas (rateia)"); fora da lavoura, nulos. */
   safraId?: string | null;
   cultura?: string | null;
+  /** NOTA-JA-LANCADA-01 — "Criar mesmo assim": o motivo vai para a observacao do que nasce. */
+  observacao?: string | null;
 }
 
 /** As parcelas da nota como a lista explicita do payload (numero, vencimento, valor em reais). */
@@ -84,7 +86,7 @@ export function payloadDaNota(clienteId: string, d: DoXml, e: EscolhasDaNota, ex
     contaBancariaId: e.contaBancariaId,
     tipoFinanciamento: e.escopoNegocio || null,
     numeroContrato: null,
-    observacao: null,
+    observacao: e.observacao ?? null,
   }, { plano_conta_id: e.planoContaId, safra_id: e.safraId || null, cultura: e.cultura || null, fase: null });
 }
 
@@ -99,6 +101,7 @@ export function formDaNota(d: DoXml, e: EscolhasDaNota, vencimento: string, text
     centro_custo: textos.centro_custo, escopo_negocio: e.escopoNegocio ?? undefined,
     numero_documento: p.numeroDocumento, tipo_documento: 'Nota Fiscal', favorecido_id: e.favorecidoId,
     forma_pagamento: p.formaPagamento || null, safra_id: e.safraId || null, cultura: e.cultura || null, fase: null,
+    ...(e.observacao ? { observacao: e.observacao } : {}),
   };
 }
 
@@ -112,6 +115,19 @@ export interface Gravadores {
   parcelarExistente: (lancamentoId: string, payload: PayloadParcelamento) => Promise<string | null>;
   /** FIN-NOTA-PDF-01b — o gravador do lancamento unico: o da TELA (`handleSave`), que devolve o id criado. Sem ele, nao cria. */
   lancamento?: (form: LancamentoV2Form) => Promise<string | null>;
+  /** NOTA-JA-LANCADA-01 — troca o fornecedor dos lancamentos pela funcao do lote (FORN-TROCAR-LOTE-01, com trilha). */
+  trocarFornecedor?: (clienteId: string, ids: readonly string[], fornecedorId: string, motivo: string) => Promise<string | null>;
+}
+
+/** NOTA-JA-LANCADA-01 — a troca do fornecedor pela funcao do lote (simular=false, com o motivo). Devolve a frase da recusa, ou `null`. */
+async function trocarFornecedorNoBanco(clienteId: string, ids: readonly string[], fornecedorId: string, motivo: string): Promise<string | null> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+  const { error } = await (supabase as any).rpc('fn_lancamentos_trocar_favorecido', {
+    p_cliente: clienteId, p_ids: [...ids], p_fornecedor: fornecedorId, p_motivo: motivo, p_simular: false,
+  });
+  if (error) return typeof error.message === 'string' && error.message ? error.message : 'O fornecedor não foi trocado.';
+  notificarLancamentosMudaram(clienteId);
+  return null;
 }
 
 /** Grava o numero da NF (e o tipo) SO' onde o lancamento nao tem documento. Devolve a mensagem de erro, ou `null`. */
@@ -140,6 +156,7 @@ export const GRAVADORES: Gravadores = {
   documentosDoLancamento: gravarDocumentosPendentes,
   numeroNoLancamento: numeroNoLancamentoDoBanco,
   parcelarExistente: parcelarExistenteNoBanco,
+  trocarFornecedor: trocarFornecedorNoBanco,
 };
 
 export type ResultadoDaNota = { ok: true; parcelas: number; erroDoDocumento: string | null } | { ok: false; erro: string };
@@ -258,4 +275,46 @@ export function prefillDoModal(d: DoXml, e: {
     ...(e.cultura != null ? { cultura: e.cultura } : {}),
     doXml,
   };
+}
+
+/**
+ * NOTA-JA-LANCADA-01 — "Anexar a nota a estes N": a nota (PDF/XML) entra como NF num deles e fica LIGADA a todos; o numero do documento
+ * so' onde esta' vazio. NAO muda valor, data, status, conta nem conciliacao. As parcelas que FALTAM (se o operador pediu) nascem antes,
+ * uma por uma, pelo gravador da tela (o valor e o vencimento da parcela da nota), e recebem a nota junto. Trocar o fornecedor e' opcao
+ * marcada, pela funcao do lote (com trilha e desfazer).
+ */
+export async function anexarAosJaLancados(
+  clienteId: string, d: DoXml, alvos: readonly { id: string; numero: number }[], favorecidoDaNota: string,
+  opcoes: { faltam?: { form: LancamentoV2Form; numero: number }[]; trocarPara?: string | null; motivoTroca?: string },
+  g: Gravadores = GRAVADORES,
+): Promise<{ ok: true; criados: number; avisos: string[] } | { ok: false; erro: string }> {
+  const avisos: string[] = [];
+  const todos = [...alvos];
+  let criados = 0;
+  for (const f of opcoes.faltam ?? []) {
+    if (!g.lancamento) return { ok: false, erro: 'Gravador do lançamento indisponível. Nada foi criado.' };
+    let id: string | null;
+    try { id = await g.lancamento(f.form); } catch (x) { return { ok: false, erro: erroDe(x, 'Falha ao criar a parcela que faltava.') }; }
+    if (!id) return { ok: false, erro: `A parcela ${f.numero} não foi criada (veja o aviso ao lado).` };
+    todos.push({ id, numero: f.numero });
+    criados += 1;
+  }
+  try {
+    const parcelas: ParcelaGravada[] = todos.map((x, i) => ({ numero: x.numero || i + 1, lancamentoId: x.id }));
+    const lista = await g.documentosDoParcelamento(clienteId, parcelas, [pendenteDaNota(d, favorecidoDaNota)]);
+    const falha = falhaDosDocumentos(lista);
+    if (falha) return { ok: false, erro: `A nota não foi anexada: ${falha}` };
+    const e = await g.numeroNoLancamento(clienteId, todos.map((x) => x.id), d.proposta.numeroDocumento);
+    if (e) avisos.push(`A nota foi anexada, mas o número do documento não foi gravado: ${e}`);
+  } catch (x) {
+    return { ok: false, erro: erroDe(x, 'Falha ao anexar a nota.') };
+  }
+  if (opcoes.trocarPara) {
+    if (!g.trocarFornecedor) avisos.push('A troca do fornecedor não está disponível aqui.');
+    else {
+      const e = await g.trocarFornecedor(clienteId, todos.map((x) => x.id), opcoes.trocarPara, opcoes.motivoTroca ?? 'fornecedor da nota');
+      if (e) avisos.push(`A nota foi anexada, mas o fornecedor não foi trocado: ${e}`);
+    }
+  }
+  return { ok: true, criados, avisos };
 }

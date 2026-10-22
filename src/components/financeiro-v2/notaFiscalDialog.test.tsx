@@ -32,6 +32,8 @@ const consultas = vi.hoisted(() => ({
   ultimaClassificacaoDoFornecedor: vi.fn(async (): Promise<unknown> => null),
   fornecedorPeloDocumento: vi.fn(async (_c: string, _d: string): Promise<{ id: string; nome: string; ativo: boolean } | null> => null),
   usoDoFornecedor: vi.fn(async (_f: string): Promise<{ lancamentos: number; ultimo: string | null } | null> => ({ lancamentos: 3, ultimo: '2026-09-01' })),
+  /* NOTA-JA-LANCADA-01 — nada ja' lancado, por padrao */
+  notaJaLancada: vi.fn(async (_c: string, _e: unknown): Promise<LancamentoJaLancado[]> => []),
 }));
 vi.mock('@/lib/financeiro/nfeConsultas', () => consultas);
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() } }));
@@ -48,6 +50,7 @@ import { notaDoDanfe, type ItemDoDanfe } from '@/lib/financeiro/nfe/danfe';
 import { proporLancamento } from '@/lib/financeiro/nfe/proporLancamento';
 import { resolverEmitente } from '@/lib/financeiro/nfe/resolverEmitente';
 import { PAGINAS_DANFE_SINTETICO, danfeSinteticoSemDuplicata } from '@/lib/financeiro/nfe/__fixtures__/danfeSintetico';
+import type { LancamentoJaLancado } from '@/lib/financeiro/nfe/jaLancada';
 import type { OcorrenciaDaNota } from '@/lib/financeiro/nfeConsultas';
 
 beforeEach(() => {
@@ -56,6 +59,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   consultas.camposQueOEmitenteCompleta.mockResolvedValue([]);
   consultas.lancamentosAbertosComValor.mockResolvedValue([]);
+  consultas.notaJaLancada.mockResolvedValue([]);
 });
 
 const FAZENDAS: Fazenda[] = [{ id: 'faz-1', nome: 'Faz. Sintetica', owner_id: 'u1', cliente_id: 'cli', codigo: null },
@@ -103,6 +107,7 @@ function gravadoresFalsos() {
     numeroNoLancamento: vi.fn(async (_c: string, _ids: readonly string[], _n: string): Promise<string | null> => null),
     parcelarExistente: vi.fn(async (_l: string, _p: PayloadParcelamento): Promise<string | null> => 'fin-velho'),
     lancamento: vi.fn(async (_f: LancamentoV2Form): Promise<string | null> => 'lanc-unico'),
+    trocarFornecedor: vi.fn(async (_c: string, _ids: readonly string[], _f: string, _m: string): Promise<string | null> => null),
   };
   const comoGravadores: Gravadores = g;
   return { g, comoGravadores };
@@ -403,5 +408,93 @@ describe('N9 — NOTA-FORNECEDOR-DUPLICA-01: o cadastro sem CNPJ e o CNPJ ja\' c
     abrir(lidaAntes, { fornecedores: [FORN] });           // o cadastro com o CNPJ existe agora
     expect(screen.getByTestId('nota-chip-fornecedor').textContent).toBe('cadastrado');
     expect(screen.queryByTestId('nota-cadastrar-fornecedor')).toBeNull();
+  });
+});
+
+/* ═══ NOTA-JA-LANCADA-01 — o molde do caso de 22/10 (NJ, NF 111): 3 parcelas pagas + 1 programada num cadastro SEM CNPJ com nome
+   parecido. A NF 937 sintetica: 4 x 491,64 (20/10/2026 a 20/01/2027). A busca (o banco) e' falsa: devolve os lancamentos achados. */
+const LINEAGRO_SEM_CNPJ = 'forn-parecido';
+const jaLancado = (n: number, venc: string, status: string, extra: Partial<LancamentoJaLancado> = {}): LancamentoJaLancado => ({
+  id: `velho-${n}`, vencimento: venc, pagamento: status === 'realizado' ? venc : null, competencia: '2026-09-15', descricao: `Insumos Sinteticos ${n}/4`,
+  valorCent: 49164, status, conciliado: status === 'realizado', financiamentoId: 'fin-antigo', numeroDocumento: null,
+  fornecedorId: LINEAGRO_SEM_CNPJ, fornecedorNome: 'Agro Sintetica Insumos SA', fornecedorPor: 'nome',
+  parcelas: [{ n, difCent: 0, difDias: 0 }], por: ['valor'], ...extra,
+});
+const QUATRO = [jaLancado(1, '2026-10-20', 'realizado'), jaLancado(2, '2026-11-20', 'realizado'), jaLancado(3, '2026-12-20', 'realizado', { valorCent: 49165, parcelas: [{ n: 3, difCent: 1, difDias: 0 }] }),
+  jaLancado(4, '2027-01-20', 'programado')];
+
+describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
+  it('reconhece as 4 (3 pagas + 1 programada, cadastro sem CNPJ parecido): o bloco no lugar das parcelas, "Anexar a nota a estes 4"; nada e\' criado', async () => {
+    consultas.notaJaLancada.mockResolvedValue(QUATRO);
+    const { g, comoGravadores } = gravadoresFalsos();
+    const props = abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
+    const bloco = await screen.findByTestId('nota-ja-lancada');
+    expect(within(bloco).getAllByTestId('nota-ja-lancada-linha')).toHaveLength(4);
+    expect(screen.queryByTestId('nota-criar')).toBeNull();
+    expect(screen.getByTestId('nota-ja-lancada-frase').textContent).toContain('4 de 4 parcelas');
+    const pedido = consultas.notaJaLancada.mock.calls[0][1] as { parcelas: { n: number; vencimento: string; valorCent: number }[]; chave: string };
+    expect(pedido.parcelas).toEqual([1, 2, 3, 4].map((n, i) => ({ n, vencimento: ['2026-10-20', '2026-11-20', '2026-12-20', '2027-01-20'][i], valorCent: 49164 })));
+    expect(pedido.chave).toBe('50260911222333000424550100000009371217538298');
+    const botao = screen.getByTestId('nota-anexar-ja-lancados');
+    expect(botao.textContent).toBe('Anexar a nota a estes 4');
+    fireEvent.click(botao);
+    await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
+    const [, parcelas, pendentes] = g.documentosDoParcelamento.mock.calls[0];
+    expect(parcelas.map((x) => x.lancamentoId)).toEqual(['velho-1', 'velho-2', 'velho-3', 'velho-4']);
+    expect(pendentes[0].parcela).toBeNull();
+    expect(pendentes[0].arquivo?.type).toBe('application/pdf');
+    expect(g.numeroNoLancamento.mock.calls[0][1]).toEqual(['velho-1', 'velho-2', 'velho-3', 'velho-4']);
+    expect(g.gravar).not.toHaveBeenCalled();
+    expect(g.lancamento).not.toHaveBeenCalled();
+    expect(g.trocarFornecedor).not.toHaveBeenCalled();
+    expect(props.gravarItens).toHaveBeenCalledTimes(1);
+  });
+  it('achou 3 de 4: a que falta aparece em ambar; "Anexar e criar a que falta" cria SO\' a 4/4 (valor e vencimento da nota) e anexa a nota as 4', async () => {
+    consultas.notaJaLancada.mockResolvedValue(QUATRO.slice(0, 3));
+    const { g, comoGravadores } = gravadoresFalsos();
+    const props = abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
+    await screen.findByTestId('nota-ja-lancada');
+    expect(screen.getByTestId('nota-ja-lancada-frase').textContent).toContain('faltam 4/4');
+    expect(screen.getByTestId('nota-anexar-ja-lancados')).toBeDisabled();   // falta o subcentro para criar a que falta
+    await escolherSubcentro('Nutrição Engorda');
+    await waitFor(() => expect(screen.getByTestId('nota-anexar-ja-lancados')).toBeEnabled());
+    expect(screen.getByTestId('nota-anexar-ja-lancados').textContent).toBe('Anexar e criar a que falta');
+    fireEvent.click(screen.getByTestId('nota-anexar-ja-lancados'));
+    await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
+    expect(g.lancamento).toHaveBeenCalledTimes(1);
+    expect(g.lancamento.mock.calls[0][0]).toMatchObject({ valor: 491.64, data_vencimento: '2027-01-20', favorecido_id: 'f1', plano_conta_id: 'pl-nut' });
+    expect(g.documentosDoParcelamento.mock.calls[0][1].map((x) => x.lancamentoId)).toEqual(['velho-1', 'velho-2', 'velho-3', 'lanc-unico']);
+    expect(g.gravar).not.toHaveBeenCalled();
+  });
+  it('fornecedor diferente: "Trocar o fornecedor" so\' marcando — desmarcado nao troca; marcado troca os 4 pela funcao do lote', async () => {
+    consultas.notaJaLancada.mockResolvedValue(QUATRO);
+    const { g, comoGravadores } = gravadoresFalsos();
+    const props = abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores, fornecedores: [FORN] });
+    const caixa = await screen.findByTestId('nota-trocar-fornecedor');
+    expect(caixa.textContent).toContain('Trocar o fornecedor para Agro Sintetica');
+    fireEvent.click(within(caixa).getByRole('checkbox'));
+    fireEvent.click(screen.getByTestId('nota-anexar-ja-lancados'));
+    await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
+    expect(g.trocarFornecedor).toHaveBeenCalledWith('cli', ['velho-1', 'velho-2', 'velho-3', 'velho-4'], 'f1', expect.stringContaining('fornecedor da'));
+  });
+  it('"Criar mesmo assim" pede o motivo; o parcelamento nasce com o motivo na observacao', async () => {
+    consultas.notaJaLancada.mockResolvedValue(QUATRO);
+    const { g, comoGravadores } = gravadoresFalsos();
+    const props = abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
+    await screen.findByTestId('nota-ja-lancada');
+    await escolherSubcentro('Nutrição Engorda');
+    fireEvent.click(screen.getByTestId('nota-criar-mesmo-assim'));
+    expect(screen.getByTestId('nota-mesmo-assim-confirmar')).toBeDisabled();
+    fireEvent.change(screen.getByTestId('nota-mesmo-assim-motivo'), { target: { value: 'outra compra igual no mesmo dia' } });
+    fireEvent.click(screen.getByTestId('nota-mesmo-assim-confirmar'));
+    await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
+    expect(g.gravar.mock.calls[0][0].observacao).toContain('outra compra igual no mesmo dia');
+    expect(g.documentosDoParcelamento.mock.calls[0][1].map((x) => x.lancamentoId)).toEqual(['lanc-1', 'lanc-2', 'lanc-3', 'lanc-4']);
+  });
+  it('nada achado: o de sempre ("Criar 4 parcelas"), sem o bloco', async () => {
+    abrir(montarNota({ fornecedores: [FORN] }));
+    await waitFor(() => expect(consultas.notaJaLancada).toHaveBeenCalled());
+    expect(screen.queryByTestId('nota-ja-lancada')).toBeNull();
+    expect(screen.getByTestId('nota-criar').textContent).toBe('Criar 4 parcelas');
   });
 });

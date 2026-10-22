@@ -591,7 +591,18 @@ if (tela === 'mesclar') {
           descricao: 'PAGTO BOLETO AGRO SINTETICA INSUMOS — lançamento criado do extrato bancário com histórico comprido', valor: 491.64, financiamento_id: null, numero_documento: null }];
         return [];
       },
-      rpc: () => null,
+      /* NOTA-JA-LANCADA-01 — `v=jalancada`: 3 das 4 parcelas ja' lancadas (2 pagas, 1 programada, conciliada uma) num cadastro SEM CNPJ
+         de nome comprido; a serie-irma de 1 centavo a mais; a 4a falta. Dados SINTETICOS. */
+      rpc: (fn: string) => fn === 'fn_nota_ja_lancada' && v === 'jalancada' ? [
+        ...[['2026-10-20', 'realizado'], ['2026-11-20', 'realizado'], ['2026-12-20', 'programado']].map(([venc, st], i) => ({
+          id: `jl-${i}`, vencimento: venc, pagamento: st === 'realizado' ? venc : null, competencia: '2026-09-15',
+          descricao: `Medicamentos Bovinos Sinteticos com descricao bem comprida para o pior caso ${i + 1}/4`, valor_cent: 49164, status: st,
+          conciliado: i === 0, financiamento_id: 'fin-x', numero_documento: null, fornecedor_id: 'sem-cnpj',
+          fornecedor_nome: 'Cooperativa Agroindustrial Sintetica dos Produtores Rurais de Exemplo SA', fornecedor_por: 'nome',
+          parcelas: [{ n: i + 1, dif_cent: 0, dif_dias: 0 }], por: ['valor'] })),
+        { id: 'jl-irma', vencimento: '2026-10-20', valor_cent: 49165, status: 'realizado', conciliado: true, fornecedor_id: 'sem-cnpj',
+          fornecedor_nome: 'Cooperativa Sintetica', fornecedor_por: 'nome', parcelas: [{ n: 1, dif_cent: 1, dif_dias: 0 }], por: ['valor'] },
+      ] : null,
     };
     const receita = async () => ({ ok: true as const, dados: { razaoSocial: v === 'longo' ? lido.nota.emitente.nome : 'AGRO SINTETICA INSUMOS AGROPECUARIOS LTDA', fantasia: '',
       municipio: 'Campo Grande', uf: 'MS', logradouro: 'Rua das Flores', numero: '100', complemento: 'Sala 1', bairro: 'Centro', cep: '79000-000', matrizFilial: 'FILIAL' } });

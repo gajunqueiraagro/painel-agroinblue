@@ -221,6 +221,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - Nota fiscal (FIN-NOTA-PDF-01): XML e PDF entram por UMA porta (`lerNota`) e saem na MESMA `NotaLida`; o DANFE se le^ pela posicao
   e a chave de 44 digitos confere o lido (divergiu = nada criado); criar/atualizar pela nota usa o gravador do parcelado e a cadeia de documentos.
   FIN-NOTA-PDF-01b: NADA ESCOLHIDO NA PREVIA SE PERDE — todo caminho que abre outro modal leva tudo (`prefillDoModal`); o pago nunca muda de valor.
+- NOTA-JA-LANCADA-01: antes de oferecer criar pela nota, `fn_nota_ja_lancada` (qualquer status, cadastro parecido, numero, chave); achou =
+  anexar (nunca muda valor/data/status/conciliacao); trocar fornecedor so' marcando (`fn_lancamentos_trocar_favorecido`, com trilha).
 - ITENS-NOTA-01: os itens sao do DOCUMENTO (cliente + chave, `nota_fiscal`), nunca da parcela; escrita so' pela `fn_nota_fiscal_gravar`
   (confere o liquido de cada item; o XML sempre manda sobre o PDF); a conta do item nao existe — a do lancamento e' a de DRE e caixa.
 - OC-ABRIR-LENTO-01: erro do banco nunca vai cru ao toast (frase pronta, o texto no console); leitura de tela que termina depois de
