@@ -67,7 +67,7 @@ describe('secao sem caixa', () => {
     expect([...linhas].map(r => r.getAttribute('data-sem-caixa'))).toEqual(['b1', 'e1', 'e2']);
     await waitFor(() => expect(linhas[1].querySelectorAll('td')[2].textContent).toBe('178'));
     const e1 = linhas[1].querySelectorAll('td');
-    expect(e1[0].textContent).toBe('19/03/25');
+    expect(e1[0].textContent).toBe('19/03/2025');   /* FIN-V2-DESEMPENHO-01c: data sempre dd/mm/aaaa (era dd/mm/aa) */
     expect(e1[1].textContent).toBe('Venda 178 DM');
     expect(e1[3].textContent).toBe('Venda de Desmama Machos');
     expect(linhas[0].querySelectorAll('td')[2].textContent).toBe('—');
