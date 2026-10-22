@@ -29,7 +29,10 @@ describe('Classificação por nível', () => {
   });
   it('a tela: o cabeçalho e a célula leem o MESMO nível; o title é o caminho; o padrão é Centro', () => {
     expect(tela).toContain('data-testid="th-classificacao" onClick={() => toggleSort(\'centro\')}>{ROTULO_NIVEL[nivelClassif]}');
-    expect(tela).toContain('title={caminhoDaClassificacao(l)}>{textoDaClassificacao(l, nivelClassif)}</td>');
+    /* FIN-CLASSIF-DIVIDIDA-01c — o lancamento dividido leva o selo; o texto e' o MESMO nivel */
+    expect(tela).toContain('title={caminhoDaClassificacao(l)}>{dividida');
+    expect(tela).toContain('? <ClassificacaoComSelo texto={textoDaClassificacao(l, nivelClassif)} dividida={dividida} />');
+    expect(tela).toContain(': textoDaClassificacao(l, nivelClassif)}</td>');
     expect(tela).toContain("lerPreferencia(CHAVE_PREF.nivel, null, NIVEIS_CLASSIFICACAO, 'centro')");
     expect(tela).toContain('<Segmentado altura={20} valor={nivelClassif} onEscolher={setNivelClassif}');
     expect(tela).not.toContain('>Macro</th>');
