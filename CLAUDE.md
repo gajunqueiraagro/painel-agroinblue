@@ -227,6 +227,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   anexar (nunca muda valor/data/status/conciliacao); trocar fornecedor so' marcando (`fn_lancamentos_trocar_favorecido`, com trilha).
 - NOTA-FORNECEDOR-COMPARAR-01: cadastro atualizado pela nota/Receita so' pelo `CompararCadastroDialog` (hoje x proposto; diferente vem
   desmarcado) e pela `fn_fornecedor_atualizar_campos` (trilha por campo, desfazer); nunca UPDATE direto do que a nota traz.
+- DOC-NOTA-XML-PDF-01: a mesma nota em PDF e XML = UMA linha (`linhasDosDocumentos`, a mesma regra do `fin_documento_confronto`, que nao
+  a da' como repetida); abrir = o PDF, sem PDF os itens da nota — o XML nunca abre cru (e' dado de importacao).
 - ITENS-NOTA-01: os itens sao do DOCUMENTO (cliente + chave, `nota_fiscal`), nunca da parcela; escrita so' pela `fn_nota_fiscal_gravar`
   (confere o liquido de cada item; o XML sempre manda sobre o PDF); a conta do item nao existe — a do lancamento e' a de DRE e caixa.
 - OC-ABRIR-LENTO-01: erro do banco nunca vai cru ao toast (frase pronta, o texto no console); leitura de tela que termina depois de
