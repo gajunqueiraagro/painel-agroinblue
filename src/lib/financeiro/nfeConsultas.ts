@@ -11,6 +11,7 @@ import { notificarFornecedoresMudaram } from '@/hooks/useFornecedoresDoCliente';
 import { validarDocumento } from '@/lib/fornecedores/documentoFiscal';
 import { completarPeloEmitente, type CampoDoEmitente } from '@/lib/fornecedores/cadastroDoFornecedor';
 import type { EmitenteNFe } from '@/lib/financeiro/nfe/tipos';
+import { lerJaLancados, type LancamentoJaLancado } from '@/lib/financeiro/nfe/jaLancada';
 
 /** Onde uma nota ja' esta' registrada — uma linha de `fn_documento_chave_ja_registrada`. */
 export interface OcorrenciaDaNota {
@@ -191,4 +192,20 @@ export async function usoDoFornecedor(fornecedorId: string): Promise<{ lancament
   const n: unknown = Reflect.get(data, 'lancamentos');
   const u: unknown = Reflect.get(data, 'ultimo_lancamento');
   return { lancamentos: typeof n === 'number' ? n : Number(n) || 0, ultimo: typeof u === 'string' && u ? u : null };
+}
+
+/** NOTA-JA-LANCADA-01 — os lancamentos do cliente que ja' parecem ser esta nota (`fn_nota_ja_lancada`). Falha = lista vazia (nunca trava). */
+export async function notaJaLancada(clienteId: string, entrada: {
+  parcelas: readonly { n: number; vencimento: string; valorCent: number }[]; numero: string | null; chave: string | null;
+  emitenteDocumento: string | null; nomes: readonly (string | null | undefined)[];
+}): Promise<LancamentoJaLancado[]> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+  const { data, error } = await (supabase as any).rpc('fn_nota_ja_lancada', {
+    p_cliente: clienteId,
+    p_parcelas: entrada.parcelas.map((p) => ({ n: p.n, vencimento: p.vencimento, valor_cent: p.valorCent })),
+    p_numero: entrada.numero, p_chave: entrada.chave, p_emitente_documento: entrada.emitenteDocumento,
+    p_nomes: [...new Set(entrada.nomes.filter((x): x is string => !!x && !!x.trim()))],
+  });
+  if (error) { console.error('fn_nota_ja_lancada', error); return []; }
+  return lerJaLancados(data);
 }
