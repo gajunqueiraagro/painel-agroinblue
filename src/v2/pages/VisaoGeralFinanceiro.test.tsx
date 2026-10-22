@@ -1,0 +1,111 @@
+/**
+ * FIN-VISAO-GERAL-01 PR 3 — a tela "Visão Geral" (render-only).
+ *   V1 A TELA NÃO SOMA (SPEC §7.4): o banco devolve totais, média, %, % do mês, vs média, resultado e saldos propositalmente "errados"
+ *      (que não fecham com os meses) e a tela escreve EXATAMENTE esses — se ela somasse ou dividisse, o número mudaria
+ *   V2 abre em Entradas × saídas, Ano (jan–dez) e no mês vigente, e pede ao banco o ano inteiro
+ *   V3 clicar num total ou grupo (grade ou card) só registra a intenção — nada abre (o modal é o PR 4)
+ *   V4 "Sem classificação" e "Transferências para outras contas" aparecem quando o banco as manda; o vencido marca o mês vigente
+ *   V5 trocar o mês pela pílula muda o card sem pedir de novo ao banco (o ano é o mesmo)
+ */
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+
+const rpc = vi.hoisted(() => vi.fn());
+vi.mock('@/integrations/supabase/client', () => ({ supabase: { rpc, from: () => ({}) } }));
+vi.mock('@/contexts/ClienteContext', () => ({ useCliente: () => ({ clienteAtual: { id: 'cli', nome: 'Cliente' } }) }));
+vi.mock('@/contexts/FazendaContext', () => ({ useFazenda: () => ({ fazendas: [] }) }));
+
+import { VisaoGeralFinanceiro } from './VisaoGeralFinanceiro';
+import { filtrosVG } from '@/lib/financeiro/visaoGeral';
+
+const M = ['2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10', '2026-11', '2026-12'];
+const z = (v: number | null = 0) => M.map(() => v);
+const TELA = {
+  mes_atual: '2026-02',
+  meses: M.map((am) => ({ am, previsto: am > '2026-02', vigente: am === '2026-02' })),
+  linhas: [
+    { chave: 'saldo_inicial', tipo: 'saldo', rotulo: 'SALDO INICIAL', valores: M.map((_, i) => 1000 + i) },
+    { chave: 'entrada:total::', tipo: 'total', lado: 'entrada', rotulo: 'ENTRADAS', valores: M.map((_, i) => 100 * (i + 1)), vencidos: z(), pct_mes: z(100), vs_media: z(), total: 999, media: 123, pct: null },
+    { chave: 'entrada:grupo:Receitas operacionais:', tipo: 'grupo', lado: 'entrada', grupo: 'Receitas operacionais', rotulo: 'Receitas operacionais', valores: M.map((_, i) => 60 * (i + 1)), vencidos: z(), pct_mes: z(33.3), vs_media: z(12.5), total: 555, media: 44, pct: 77.7 },
+    { chave: 'entrada:grupo:Sem classificação:', tipo: 'grupo', lado: 'entrada', grupo: 'Sem classificação', rotulo: 'Sem classificação', valores: M.map((_, i) => 40 * (i + 1)), vencidos: z(), pct_mes: z(66.6), vs_media: z(-3), total: 444, media: 37, pct: 22.2 },
+    { chave: 'saida:total::', tipo: 'total', lado: 'saida', rotulo: 'SAÍDAS TOTAIS', valores: z(80), vencidos: M.map((am) => (am === '2026-02' ? 30 : 0)), pct_mes: z(100), vs_media: z(), total: 888, media: 74, pct: null },
+    { chave: 'saida:grupo:Custeio:', tipo: 'grupo', lado: 'saida', grupo: 'Custeio', rotulo: 'Custeio', valores: z(50), vencidos: M.map((am) => (am === '2026-02' ? 30 : 0)), pct_mes: z(11.1), vs_media: z(25), total: 600, media: 50, pct: 61.6 },
+    { chave: 'saida:grupo:Outras saídas:', tipo: 'grupo', lado: 'saida', grupo: 'Outras saídas', rotulo: 'Outras saídas', valores: z(30), vencidos: z(), pct_mes: z(88.8), vs_media: z(-40), total: 288, media: 24, pct: 38.4 },
+    { chave: 'saida:transf:Outras saídas:Transferências para outras contas', tipo: 'transf', lado: 'saida', grupo: 'Outras saídas', rotulo: 'Transferências para outras contas', valores: z(10), vencidos: z(), pct_mes: z(5), vs_media: z(), total: 120, media: 10, pct: 13.5 },
+    { chave: 'resultado', tipo: 'resultado', rotulo: 'RESULTADO', valores: M.map((_, i) => 7 + i), total: 42, media: 3 },
+    { chave: 'saldo_final', tipo: 'saldo', rotulo: 'SALDO FINAL', valores: M.map((_, i) => 5000 + i) },
+  ],
+  grafico: { entrada: { media_acumulada: z(null), meta: z(null) }, saida: { media_acumulada: z(null), meta: z(null) } },
+  conciliado_ate: '2026-02-11',
+  contas_sem_ancora: [],
+};
+
+const celula = (id: string) => screen.getByTestId(id).textContent?.replace(/\s+/g, ' ').trim();
+
+beforeEach(() => {
+  rpc.mockReset();
+  rpc.mockImplementation(async (fn: string) => ({ data: fn === 'fn_vg_tela' ? TELA : { contas: [], atividades: [], safras: [] }, error: null }));
+  filtrosVG.mudar({ contas: null, fazenda: null, safra: null, atividade: null, clienteId: null, lista: null });
+  (globalThis as any).ResizeObserver ??= class { observe() {} disconnect() {} };
+});
+
+describe('Visão Geral — render-only', () => {
+  it('V1 a tela escreve os totais, médias, % e saldos do banco, mesmo quando eles NÃO fecham com os meses', async () => {
+    render(<VisaoGeralFinanceiro hoje="2026-02-15" />);
+    await screen.findByTestId('grade-vg');
+    /* os meses de entrada somam 7.800, mas o banco disse 999: a tela mostra 999 */
+    expect(celula('grade-total-entrada:total::')).toBe('999');
+    expect(celula('grade-media-entrada:total::')).toBe('123');
+    expect(celula('grade-pct-entrada:grupo:Receitas operacionais:')).toBe('77,7%');
+    /* resultado de fev: entradas 200 - saídas 80 seriam 120; o banco disse 8 */
+    expect(celula('grade-celula-resultado-2026-02')).toBe('8');
+    expect(celula('grade-total-resultado')).toBe('42');
+    expect(celula('grade-celula-saldo_final-2026-02')).toBe('5.001');
+    /* o card: o mês vigente (fev), os valores e os % do mês do banco */
+    expect(celula('card-valor-entrada')).toBe('R$ 200,00');
+    expect(celula('card-resultado')).toBe('R$ 8,00');
+    expect(celula('card-saldo-inicial')).toBe('R$ 1.001,00');
+    expect(celula('card-saldo-final')).toBe('R$ 5.001,00');
+    expect(within(screen.getByTestId('card-grupo-entrada:grupo:Receitas operacionais:')).getByText('33,3%')).toBeTruthy();
+    expect(screen.getByTestId('card-conciliado').textContent).toContain('Conciliado até 11/02');
+  });
+
+  it('V2 abre em Entradas × saídas, Ano e no mês vigente, e pede o ano inteiro ao banco', async () => {
+    render(<VisaoGeralFinanceiro hoje="2026-02-15" />);
+    await screen.findByTestId('grade-vg');
+    expect(screen.getByTestId('card-vg-titulo').textContent).toBe('Entradas e saídas · fev/26');
+    const pedido = rpc.mock.calls.find((c) => c[0] === 'fn_vg_tela')![1];
+    expect(pedido).toMatchObject({ p_cliente: 'cli', p_de: '2026-01-01', p_ate: '2026-12-31', p_contas: null, p_atividade: null, p_hoje: '2026-02-15' });
+  });
+
+  it('V3 clicar em total ou grupo só registra a intenção — nada abre', async () => {
+    const onAnalisar = vi.fn();
+    render(<VisaoGeralFinanceiro hoje="2026-02-15" onAnalisar={onAnalisar} />);
+    await screen.findByTestId('grade-vg');
+    fireEvent.click(screen.getByTestId('grade-linha-saida:grupo:Custeio:'));
+    fireEvent.click(screen.getByTestId('card-total-entrada'));
+    expect(onAnalisar.mock.calls.map((c) => c[0])).toEqual([
+      { lado: 'saida', grupo: 'Custeio', am: '2026-02' }, { lado: 'entrada', grupo: null, am: '2026-02' }]);
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('V4 Sem classificação e a transferência aparecem; o vencido marca o mês vigente', async () => {
+    render(<VisaoGeralFinanceiro hoje="2026-02-15" />);
+    await screen.findByTestId('grade-vg');
+    expect(screen.getByTestId('grade-linha-entrada:grupo:Sem classificação:')).toBeTruthy();
+    expect(screen.getByTestId('grade-linha-saida:transf:Outras saídas:Transferências para outras contas').textContent).toContain('Transferências para outras contas');
+    const marcas = screen.getAllByTestId('marca-vencido');
+    expect(marcas).toHaveLength(2);
+    expect(screen.getByTestId('grade-celula-saida:grupo:Custeio:-2026-02').getAttribute('title')).toContain('R$ 30,00 de previsto vencido');
+  });
+
+  it('V5 trocar o mês pela pílula muda o card sem pedir de novo ao banco', async () => {
+    render(<VisaoGeralFinanceiro hoje="2026-02-15" />);
+    await screen.findByTestId('grade-vg');
+    const pedidos = rpc.mock.calls.filter((c) => c[0] === 'fn_vg_tela').length;
+    fireEvent.click(screen.getByTestId('vg-mes-4'));
+    await waitFor(() => expect(screen.getByTestId('card-vg-titulo').textContent).toBe('Entradas e saídas · abr/26 (previsto)'));
+    expect(celula('card-valor-entrada')).toBe('R$ 400,00');
+    expect(rpc.mock.calls.filter((c) => c[0] === 'fn_vg_tela').length).toBe(pedidos);
+  });
+});

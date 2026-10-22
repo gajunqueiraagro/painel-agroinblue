@@ -35,6 +35,7 @@ const FOTOS = arg('--fotos');
 const SO = arg('--so');
 
 const TAMANHOS_DO_CONTRATO = [[750, 483], [750, 530], [814, 530], [1000, 600], [1126, 579], [1300, 704], [1440, 800]];
+const TAMANHOS_DA_VG = [[1000, 600], [1126, 579], [1130, 580], [1440, 800], [1440, 860]];
 const TAMANHOS_DO_CONSORCIO = [[750, 520], [750, 600], [814, 530], [1000, 600], [1126, 579], [1300, 704], [1440, 800]];
 /* FIN-CONSORCIO-04 — no consórcio rolam por dentro só a lista de parcelas e a tabela das faixas (cabeçalho e Total presos nelas) */
 const EXCETO_CONSORCIO = '[data-testid="lista-parcelas-consorcio"], [data-testid="lista-faixas-consorcio"]';
@@ -105,6 +106,15 @@ const CENARIOS = [
   { nome: 'cpr-futuro', url: 'tela=cpr&v=futuro', tamanhos: TAMANHOS_DO_CONSORCIO },
   /* CAD-CONTAS-BANCARIAS-01 — Financeiro › Contas bancárias nos sete tamanhos: a lista do mock, o pior caso (nome, banco e gerente longos,
      saldo de 999.999.999,99), com as inativas, e o modal (780x500) em cada aba, editando e criando */
+  /* FIN-VISAO-GERAL-01 PR 3 — a Visão Geral nos três tamanhos do gate + os dois do mock (1130x580 e 1440x860), nos três modos, com 24
+     meses (R$ mil) e com o filtro de atividade; `semRolagem`: a PÁGINA não rola — só a grade e a lista do card rolam por dentro */
+  ...[['flx', ''], ['sai', ''], ['ent', ''], ['flx', '&faixa=per&de=2025-01&ate=2026-12'], ['sai', '&faixa=66']].map(([m, extra]) => ({
+    nome: `visao-geral-${m}${extra ? extra.replace(/[&=]/g, '-') : ''}`, url: `tela=visao-geral&barra=0&modo=${m}${extra}`, tamanhos: TAMANHOS_DA_VG,
+    semRolagem: { dentro: '[data-testid="visao-geral"]', exceto: '[data-testid="grade-vg-rolagem"], [data-testid="card-vg-lista"]' } })),
+  { nome: 'visao-geral-agricultura', url: 'tela=visao-geral&barra=0', tamanhos: TAMANHOS_DA_VG,
+    semRolagem: { dentro: '[data-testid="visao-geral"]', exceto: '[data-testid="grade-vg-rolagem"], [data-testid="card-vg-lista"]' },
+    /* abaixo de 768px os filtros da barra somem (`hidden md:flex`): ali o gesto não existe e é pulado */
+    antes: async (p) => { if (!(await p.locator('[data-testid="vg-atividade"]').isVisible())) return; await clicar('[data-testid="vg-atividade"]')(p); await clicar('[data-testid="vg-atividade-agricultura"]')(p); } },
   { nome: 'contas-lista', url: 'tela=contas&barra=32', tamanhos: TAMANHOS_DO_CONTRATO },
   { nome: 'contas-lista-longo', url: 'tela=contas&barra=32&n=longo', tamanhos: TAMANHOS_DO_CONTRATO },
   { nome: 'contas-inativas', url: 'tela=contas&barra=32&n=longo', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicar('[data-testid="mostrar-inativas"]') },
