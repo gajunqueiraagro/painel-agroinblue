@@ -71,6 +71,12 @@ const CENARIOS = [
     }]) },
   { nome: 'fornecedores-sem-cadastro', url: 'tela=fornecedores&barra=32&n=2356', antes: clicar('[data-testid="aba-sem-cadastro"]'), auto: true },
   { nome: 'recorrencias', url: 'tela=recorrencias&barra=32', auto: true },
+  /* CAD-CONTAS-BANCARIAS-01 — a lista (segmentos, busca com e sem resultado, inativas) e o modal (abas, tipo, formato), editando e criando */
+  { nome: 'contas-lista', url: 'tela=contas&barra=32&n=longo', auto: true, estados: [
+    ['busca com resultado', digitar('[data-testid="busca-contas"]', 'bradesco')], ['busca sem resultado', digitar('[data-testid="busca-contas"]', 'zzzz')],
+    ['mostrar inativas', clicar('[data-testid="mostrar-inativas"]')]] },
+  { nome: 'contas-modal', url: 'tela=contas&barra=32&v=editar', auto: true },
+  { nome: 'contas-nova', url: 'tela=contas&barra=32&v=nova', auto: true },
   { nome: 'cpr', url: 'tela=cpr', auto: true },
   { nome: 'mesclar', url: 'tela=mesclar', auto: true },
   /* FIN-NOTA-PDF-01 — o modal da nota: nada anda quando o "Falta:" troca pelo aviso de baixo, quando a faixa "Atualizar este" aparece,

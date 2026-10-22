@@ -50,6 +50,8 @@ import { AcessosTab } from '@/pages/AcessosTab';
 import { ContasPagarReceberTab } from '@/components/financeiro-v2/ContasPagarReceberTab';
 import V2Recorrencias from '@/v2/pages/V2Recorrencias';
 import * as REC from './dados/recorrencias';
+import * as CONTAS_BANC from './dados/contas';
+import { FinV2ContasTab } from '@/pages/FinV2ContasTab';
 import { V2Sidebar, LARGURA_DA_LATERAL } from '@/v2/components/V2Sidebar';
 import { ClienteSelector } from '@/components/ClienteSelector';
 import { FazendaSelector } from '@/components/FazendaSelector';
@@ -357,6 +359,26 @@ if (tela === 'mesclar') {
   if (v === 'futuro') sessionStorage.setItem('cpr_retorno_do_contrato', JSON.stringify({ atalho: 'datas', datas: { de: dia(10), ate: dia(40) } }));
   if (v === 'encerrado') sessionStorage.setItem('cpr_retorno_do_contrato', JSON.stringify({ atalho: 'datas', datas: { de: dia(-40), ate: dia(-10) }, segmento: 'ambos' }));
   montar(<div className="h-full"><ContasPagarReceberTab onIntensiveToggle={() => {}} /></div>);
+} else if (tela === 'contas') {
+  /* CAD-CONTAS-BANCARIAS-01 — Financeiro › Contas bancárias: a lista (`&n=longo` = o pior caso), o modal da conta (`&v=editar&aba=dados|gerente|
+     saldo|importacao`, aberto pela 1ª linha) e a nova conta (`&v=nova`). SINTÉTICO (`dados/contas.ts`). */
+  const lista = q.get('n') === 'longo' ? CONTAS_BANC.CONTAS_LONGAS : CONTAS_BANC.CONTAS;
+  g.__bancoBancada = {
+    from: (t: string, e: any) => t === 'financeiro_contas_bancarias' ? (e.in.id ? lista.filter((c: any) => e.in.id.includes(c.id)) : lista)
+      : t === 'bancos_referencia' ? CONTAS_BANC.BANCOS
+      : t === 'financeiro_saldos_bancarios_v2' ? [{ saldo_final: 30943.91, saldo_data: '2026-08-31' }] : [],
+    rpc: (fn: string, a: any) => fn === 'fn_conta_bancaria_painel' ? CONTAS_BANC.PAINEL
+      : fn === 'fn_nomes_dos_autores' ? [{ user_id: 'u1', nome: 'Usuário Exemplo', email: null, situacao: 'membro ativo' }]
+      : fn === 'fn_conciliacao_status_ano' ? CONTAS_BANC.reguaDoAno(Number(a.p_ano)) : null,
+  };
+  montar(<div className="h-full"><FinV2ContasTab /></div>);
+  const abre = q.get('v');
+  if (abre) setTimeout(() => {
+    const alvo = abre === 'nova' ? document.querySelector('[data-testid="nova-conta"]') : document.querySelector('[data-testid="linha-conta"]');
+    (alvo as HTMLElement | null)?.click();
+    const aba = q.get('aba');
+    if (aba) setTimeout(() => (document.querySelector(`[data-testid="aba-conta-${aba}"]`) as HTMLElement | null)?.click(), 200);
+  }, 400);
 } else if (tela === 'recorrencias') {
   /* REC-COLUNAS-01 — Financeiro › Recorrências (a lista do mês), com o pior texto de cada coluna curta. SINTÉTICO (`dados/recorrencias.ts`). */
   g.__bancoBancada = {
