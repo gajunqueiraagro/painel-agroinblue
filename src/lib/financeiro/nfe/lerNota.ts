@@ -5,13 +5,15 @@
  * ⚠ So' o PDF traz `marcas` (o amarelo da previa) e `divergencias` (a conferencia pela chave); no XML a chave vem do protocolo.
  */
 import { lerNFe } from './lerNFe';
-import { notaDoDanfe, type CampoConferido, type MarcaNoPdf } from './danfe';
+import { notaDoDanfe, type CampoConferido, type MarcaNoPdf, type TotaisExtrasDoDanfe } from './danfe';
 import { itensDoPdf, type PaginasDoPdf, type PdfjsMinimo } from './lerNotaPdf';
 import type { AvisoNFe, NotaLida } from './tipos';
 
 export type NotaDoArquivo =
   | { ok: true; origem: 'xml' | 'pdf'; nota: NotaLida; avisos: AvisoNFe[]; marcas: MarcaNoPdf[]; divergencias: CampoConferido[];
-      tamanhos: PaginasDoPdf['tamanhos'] }
+      tamanhos: PaginasDoPdf['tamanhos'];
+      /** ITENS-NOTA-01 — so' o PDF: os totais do quadro do imposto (seguro, outras, IPI, ST, tributos aprox.) */
+      extras?: TotaisExtrasDoDanfe | null }
   | { ok: false; origem: 'xml' | 'pdf'; frase: string };
 
 export const FRASE_PDF_ILEGIVEL = 'Não foi possível abrir o PDF (arquivo danificado ou protegido). Nada foi lido.';
@@ -36,5 +38,5 @@ export async function lerNota(bytes: ArrayBuffer, opcoes: { pdfjs?: PdfjsMinimo 
   }
   const r = notaDoDanfe(lido.paginas);
   if (r.ok === false) return { ok: false, origem: 'pdf', frase: r.frase };
-  return { ok: true, origem: 'pdf', nota: r.nota, avisos: r.avisos, marcas: r.marcas, divergencias: r.divergencias, tamanhos: lido.tamanhos };
+  return { ok: true, origem: 'pdf', nota: r.nota, avisos: r.avisos, marcas: r.marcas, divergencias: r.divergencias, tamanhos: lido.tamanhos, extras: r.extras };
 }
