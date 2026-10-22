@@ -36,6 +36,8 @@ vi.mock('@/integrations/supabase/client', () => {
 });
 const consultas = vi.hoisted(() => ({
   iePorFazenda: vi.fn(async () => ({ 'f-pur': '28.987.654-3' } as Record<string, string>)),
+  /* NOTA-FAZENDA-PELA-IE-01 — os apelidos das fazendas (nenhum, por padrao) */
+  aliasesDasFazendas: vi.fn(async (): Promise<Record<string, string[]>> => ({})),
   fornecedorPeloNome: vi.fn(async () => null as string | null),
   notaJaRegistrada: vi.fn(async (_c: string, _k: string) => [] as unknown[]),
   ultimaClassificacaoDoFornecedor: vi.fn(async () => null as unknown),
