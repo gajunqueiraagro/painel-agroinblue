@@ -27,6 +27,7 @@ import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Segmentado } from '@/components/ui/segmentado';
 import { CriarLancamentoDaLinha } from '@/components/conciliacao/CriarLancamentoDaLinha';
+import { ConciliarDiferencaModal } from '@/components/conciliacao/ConciliarDiferencaModal';
 import { MOTIVO_CASAR_LABEL } from '@/components/financeiro-v2/EspelhoConciliacaoTab';
 import { STATUS_PALETA, STATUS_FILTRO_LABEL } from '@/lib/financeiro/statusFinanceiro';
 import { FRASE_LEVE_O_PAR, fraseDoJuroReal, lerRespostaPosPagar, levadosSaoOPar, mapaDaParcelaPos, parcelaPosDosLevados,
@@ -104,6 +105,8 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
   const [erroRodape, setErroRodape] = useState<string | null>(null);
   const [gravando, setGravando] = useState(false);
   const [criando, setCriando] = useState(false);
+  /* CONC-SEM-TRAVA-01 (tela): diferenca de valor nao trava mais o Conciliar — abre o modal "Conciliar" com as tres saidas */
+  const [comDiferenca, setComDiferenca] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /* FIN-POS-FIXADO-01b — lancamento (principal ou juros) -> parcela pos com juros estimado, lido do banco ao abrir. */
   const [mapaPos, setMapaPos] = useState<Map<string, string> | null>(null);
@@ -248,10 +251,13 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
     setLevados((v) => v.map((x) => x.lancamento_id === id ? { ...x, valorTexto: texto } : x));
   /* Com a simulação viajando (sim nulo ou erro), "absorver" não tem diferença para absorver. */
   const difAtual = sim && !sim.ok ? sim.diferenca : null;
+  /* O modal da diferenca trabalha com o valor GRAVADO de cada lancamento: com um campo editado, o caminho e' o Conciliar exato. */
+  const editado = levados.some((l) => valorDe(l.valorTexto) !== Math.abs(l.valor_assinado));
+  const podeComDiferenca = !!sim && !sim.ok && !semItens && !gravando && !parcelaPos && !editado;
 
   return (
     <>
-      <Dialog open={open && !criando} onOpenChange={(v) => { if (!v) onClose(); }}>
+      <Dialog open={open && !criando && !comDiferenca} onOpenChange={(v) => { if (!v) onClose(); }}>
         {/* ⚠ `grid-cols-[minmax(0,1fr)]` — PR-CONC-CASAR-VALOR-BANCO-01. O `DialogContent` da casa é `grid`, e a coluna
             implícita cresce até o conteúdo mínimo: com o botão "Usar valor do banco" a linha pedia 634px num modal de
             560, e o `overflow-hidden` cortava a conta, o resumo e o Conciliar (medido na tela).
@@ -378,12 +384,12 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
               {/* ⚠ O SENTIDO E O VALOR, e a 10px (a frase estava a 9, abaixo do piso da casa). */}
               {sim && sentido === 'a_mais' && (
                 <div className="text-[10px] text-muted-foreground" data-testid="frase-diferenca">
-                  Os lançamentos somam R$ {fmtBRL(Math.abs(sim.diferenca))} a mais que o banco. Corrija o valor do lançamento, ajuste uma linha ou crie um lançamento pela diferença (ex.: desconto).
+                  Os lançamentos somam R$ {fmtBRL(Math.abs(sim.diferenca))} a mais que o banco. Conciliar… mostra as saídas (acrescentar, lançar na OC, criar a diferença), ou corrija o valor do lançamento.
                 </div>
               )}
               {sim && sentido === 'a_menos' && (
                 <div className="text-[10px] text-muted-foreground" data-testid="frase-diferenca">
-                  Os lançamentos somam R$ {fmtBRL(Math.abs(sim.diferenca))} a menos que o banco. Corrija o valor do lançamento, ajuste uma linha ou crie um lançamento pela diferença (ex.: juros, tarifa).
+                  Os lançamentos somam R$ {fmtBRL(Math.abs(sim.diferenca))} a menos que o banco. Conciliar… mostra as saídas (juntar outro extrato, deixar em aberto, desconto na OC), ou corrija o valor do lançamento.
                 </div>
               )}
               {sim?.ok && (
@@ -426,10 +432,12 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
                 Ligar com o valor do extrato
               </button>
             ) : (
-              <button type="button" disabled={!podeConciliar} onClick={() => { void conciliar(); }}
+              <button type="button" disabled={!podeConciliar && !podeComDiferenca} data-testid="conciliar-casar"
+                title={!podeConciliar && !podeComDiferenca && editado && sim && !sim.ok ? 'Com um valor editado, a soma precisa fechar com o banco.' : undefined}
+                onClick={() => { if (podeConciliar) void conciliar(); else setComDiferenca(true); }}
                 className={cn('rounded px-2.5 py-0.5 text-[11px] font-medium',
-                  podeConciliar ? 'bg-[#E7C873] text-foreground hover:bg-[#D9B95F]' : 'bg-muted text-muted-foreground cursor-not-allowed')}>
-                {gravando ? 'Conciliando…' : 'Conciliar'}
+                  podeConciliar || podeComDiferenca ? 'bg-[#E7C873] text-foreground hover:bg-[#D9B95F]' : 'bg-muted text-muted-foreground cursor-not-allowed')}>
+                {gravando ? 'Conciliando…' : podeComDiferenca ? 'Conciliar…' : 'Conciliar'}
               </button>
             )}
           </div>
@@ -440,6 +448,13 @@ export function CasarComBancoModal({ open, onClose, extrato, iniciais, nomeConta
           de verdade, trava o que o extrato dita e, com `semVinculo`, CRIA sem vincular —
           exatamente o que o grupo precisa: o vínculo de todos nasce depois, numa gravação só.
           `aoCriado` devolve o id, que é o que o `onSave` do diálogo sozinho não devolve. */}
+      {comDiferenca && (
+        <ConciliarDiferencaModal open onClose={() => setComDiferenca(false)}
+          extratos={[{ id: extrato.extrato_id, data: extrato.data, descricao: extrato.historico ?? '—', valor: Math.abs(extrato.valor) }]}
+          lancamentos={levados.map((l) => ({ id: l.lancamento_id, data: l.data_vencimento ?? null, descricao: l.descricao ?? '—', valor: Math.abs(l.valor_assinado) }))}
+          onConciliado={() => { setComDiferenca(false); onClose(); onConciliado(); }} />
+      )}
+
       {criando && extrato && (
         <CriarLancamentoDaLinha
           movimento={{
@@ -504,6 +519,7 @@ export function CasarN1Modal({
   const [sim, setSim] = useState<{ ok: boolean; noLancamento: number; soma: number; diferenca: number } | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [gravando, setGravando] = useState(false);
+  const [comDiferenca, setComDiferenca] = useState(false);
   const ids = useMemo(() => extratos.map((e) => e.extrato_id), [extratos]);
 
   useEffect(() => {
@@ -547,9 +563,17 @@ export function CasarN1Modal({
   };
 
   if (!sis) return null;
+  const podeComDiferenca = !!sim && !sim.ok && !gravando;
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+    <>
+    {comDiferenca && (
+      <ConciliarDiferencaModal open onClose={() => setComDiferenca(false)}
+        extratos={extratos.map((e) => ({ id: e.extrato_id, data: e.data, descricao: e.historico ?? '—', valor: Math.abs(e.valor) }))}
+        lancamentos={[{ id: sis.lancamento_id, data: null, descricao: sis.descricao ?? '—', valor: Math.abs(sis.valor_assinado) }]}
+        onConciliado={() => { setComDiferenca(false); onClose(); onConciliado(); }} />
+    )}
+    <Dialog open={open && !comDiferenca} onOpenChange={(v) => { if (!v) onClose(); }}>
       {/* ⚠ `grid-cols-[minmax(0,1fr)]` — a MESMA regra da variante 1:N (PR-CONC-CASAR-VALOR-BANCO-01), CONC-CASAR-N1-LARGURA-01.
           O `DialogContent` da casa é `grid`, e a coluna implícita cresce até o conteúdo mínimo: o histórico longo do banco
           ("PAGAMENTO PIX-PIX_DEB 15412257000128 GOVERNO DO ESTADO DE MATO GROSSO DO SUL") alargava a coluna além dos 560px,
@@ -612,7 +636,7 @@ export function CasarN1Modal({
               return sentidoN1 === 'confere' ? null : (
                 <div className="text-[10px] text-muted-foreground" data-testid="frase-diferenca-n1">
                   Os extratos somam R$ {fmtBRL(Math.abs(sim.diferenca))} {sentidoN1 === 'a_mais' ? 'a mais' : 'a menos'} que o lançamento.
-                  {' '}O valor do banco não se edita: abra o lançamento e ajuste o valor lá, ou tire um extrato da seleção.
+                  {' '}Conciliar… mostra as saídas; o valor do banco não se edita.
                 </div>
               );
             })()}
@@ -626,14 +650,16 @@ export function CasarN1Modal({
 
         <div className="flex h-[34px] shrink-0 items-center justify-end gap-2 border-t px-3 whitespace-nowrap">
           <button type="button" onClick={onClose} className="text-[11px] text-muted-foreground underline underline-offset-2">Cancelar</button>
-          <button type="button" disabled={!sim?.ok || gravando} onClick={conciliar}
+          <button type="button" disabled={!(sim?.ok && !gravando) && !podeComDiferenca} data-testid="conciliar-n1"
+            onClick={() => { if (sim?.ok) void conciliar(); else setComDiferenca(true); }}
             className={cn('rounded px-2.5 py-0.5 text-[11px] font-medium',
-              sim?.ok && !gravando ? 'bg-[#E7C873] text-foreground hover:bg-[#D9B95F]' : 'bg-muted text-muted-foreground cursor-not-allowed')}>
-            {gravando ? 'Conciliando…' : 'Conciliar'}
+              (sim?.ok && !gravando) || podeComDiferenca ? 'bg-[#E7C873] text-foreground hover:bg-[#D9B95F]' : 'bg-muted text-muted-foreground cursor-not-allowed')}>
+            {gravando ? 'Conciliando…' : podeComDiferenca ? 'Conciliar…' : 'Conciliar'}
           </button>
         </div>
       </DialogContent>
     </Dialog>
+    </>
   );
 }
 
@@ -726,6 +752,7 @@ export function CasarBlocoModal({
   /* ⚠ TRAVA DE DUPLO CLIQUE SÍNCRONA: o `gravando` do estado só chega no próximo render, e dois cliques no mesmo quadro
      passariam os dois. A ref fecha a porta no mesmo instante. */
   const gravandoRef = useRef(false);
+  const [comDiferenca, setComDiferenca] = useState(false);
   const idsExt = useMemo(() => extratos.map((e) => e.extrato_id), [extratos]);
   const idsLan = useMemo(() => lancamentos.map((l) => l.lancamento_id), [lancamentos]);
 
@@ -787,9 +814,19 @@ export function CasarBlocoModal({
     : carregando ? 'Simulando o bloco…'
     : recusa ? recusa
     : !resp ? 'Simulando o bloco…' : null;
+  /* CONC-SEM-TRAVA-01 (tela): a soma da selecao nao fecha e o banco recusou o bloco -> o Conciliar abre o modal da diferenca
+     (as tres saidas, com previa), em vez de ficar apagado com a recusa. */
+  const podeComDiferenca = !gravando && !carregando && !!recusa && Math.abs(somas.diferenca) > 0.005;
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+    <>
+    {comDiferenca && (
+      <ConciliarDiferencaModal open onClose={() => setComDiferenca(false)}
+        extratos={extratos.map((e) => ({ id: e.extrato_id, data: e.data, descricao: e.historico ?? '—', valor: Math.abs(e.valor) }))}
+        lancamentos={lancamentos.map((l) => ({ id: l.lancamento_id, data: l.data, descricao: l.descricao ?? '—', valor: Math.abs(l.valor_assinado) }))}
+        onConciliado={() => { setComDiferenca(false); onClose(); onConciliado(); }} />
+    )}
+    <Dialog open={open && !comDiferenca} onOpenChange={(v) => { if (!v) onClose(); }}>
       {/* ⚠ `grid-cols-[minmax(0,1fr)]` — a MESMA regra do fix N1 (CONC-CASAR-N1-LARGURA-01): o `DialogContent` é grid e a
           coluna implícita cresceria até o histórico mais longo do banco, cortando valores e botões. Largura FIXA de
           700px (o mock), para qualquer texto. */}
@@ -916,15 +953,17 @@ export function CasarBlocoModal({
           <span className="text-muted-foreground" data-testid="onde-desfazer-bloco">{ONDE_DESFAZER_BLOCO}</span>
           <span className="flex items-center gap-2">
             <button type="button" onClick={onClose} className="rounded border px-2.5 py-0.5 text-[11px] hover:bg-muted">Cancelar</button>
-            <button type="button" disabled={!!motivoDesabilitado} onClick={() => { void conciliar(); }}
-              title={motivoDesabilitado ?? undefined} data-testid="conciliar-bloco"
+            <button type="button" disabled={!!motivoDesabilitado && !podeComDiferenca}
+              onClick={() => { if (podeComDiferenca) setComDiferenca(true); else void conciliar(); }}
+              title={podeComDiferenca ? 'A soma não fecha: escolha o que fazer com a diferença.' : motivoDesabilitado ?? undefined} data-testid="conciliar-bloco"
               className={cn('rounded px-2.5 py-0.5 text-[11px] font-semibold',
-                motivoDesabilitado ? 'bg-muted text-muted-foreground cursor-not-allowed' : 'bg-[#E7C873] text-foreground hover:bg-[#D9B95F]')}>
-              {gravando ? 'Conciliando…' : 'Conciliar bloco'}
+                motivoDesabilitado && !podeComDiferenca ? 'bg-muted text-muted-foreground cursor-not-allowed' : 'bg-[#E7C873] text-foreground hover:bg-[#D9B95F]')}>
+              {gravando ? 'Conciliando…' : podeComDiferenca ? 'Conciliar…' : 'Conciliar bloco'}
             </button>
           </span>
         </div>
       </DialogContent>
     </Dialog>
+    </>
   );
 }
