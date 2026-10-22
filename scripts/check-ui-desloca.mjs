@@ -32,6 +32,7 @@ const botao = (re) => async (p) => { await p.getByRole('button', { name: re }).f
 const clicar = (sel) => async (p) => { await p.locator(sel).first().click(); await espera(p); };
 /* o gesto e, depois, a casca da bancada de volta ao topo (o clique rola a PAGINA para trazer o botao a vista; o que se mede e' a tela) */
 const noTopo = (g) => async (p) => { await g(p); await p.evaluate(() => { window.scrollTo(0, 0); document.querySelectorAll('[data-casca]').forEach((c) => { c.scrollTop = 0; }); }); await espera(p, 150); };
+const ampliar = async (p) => { await p.locator('[data-testid="rodape-lancamentos"]').waitFor(); await espera(p, 900); await p.getByRole('button', { name: /^Ampliar$/ }).first().click(); await espera(p, 700); };
 const digitar = (sel, txt) => async (p) => { await p.locator(sel).first().fill(txt); await espera(p, 800); };
 
 /* Cada estado e' um gesto aplicado em sequencia; cada um e' comparado com o estado INICIAL da tela. `url` = outra pagina inteira
@@ -59,7 +60,15 @@ const CENARIOS = [
       ['pagina anterior', noTopo(clicar('[data-testid="pagina-anterior"]'))],
       ['Classificação Macro', noTopo(botao(/^Macro$/))], ['Classificação Subcentro', noTopo(botao(/^Subcentro$/))], ['Classificação Centro', noTopo(botao(/^Centro$/))],
       ['Sem caixa Só c/ DRE', noTopo(botao(/^Só c\/ DRE$/))], ['Sem caixa Ocultar', noTopo(botao(/^Ocultar$/))],
+      /* TABELA-ALTURA-FIXA-01 — filtrar de muitos para poucos (6), um ou nenhum lançamento: o quadro não encolhe e a barra da página
+         (Anterior/Próxima, "Por pág.") fica no mesmo lugar */
+      ...[6, 1, 0].map((n) => [`filtro com ${n} lancamento(s)`, { url: `tela=financeiro&v=volume&n=450&linhas=${n}` }]),
     ] },
+  /* TABELA-ALTURA-FIXA-01 — o mesmo no Ampliado (como no app: a tela da barra de 32px) */
+  { nome: 'financeiro-ampliado', url: 'tela=financeiro&v=volume&n=450&barra=32', antes: ampliar,
+    estados: [6, 1, 0].map((n) => [`filtro com ${n} lancamento(s)`, async (p) => {
+      await p.goto(p.url().replace(/&linhas=\d+/, '') + `&linhas=${n}`); await p.evaluate(() => document.fonts.ready); await espera(p, 1300); await ampliar(p);
+    }]) },
   { nome: 'fornecedores-sem-cadastro', url: 'tela=fornecedores&barra=32&n=2356', antes: clicar('[data-testid="aba-sem-cadastro"]'), auto: true },
   { nome: 'recorrencias', url: 'tela=recorrencias&barra=32', auto: true },
   { nome: 'cpr', url: 'tela=cpr', auto: true },

@@ -35,14 +35,14 @@ const FILIAIS: Forn[] = [
   f('outro', 'Beltrano Comércio de Insumos Agropecuários e Representações Ltda', '99888777000166'),
 ];
 
-function Campo(props: { modo: 'leitor' | 'lista'; lista?: Forn[]; inicial?: string; linha?: boolean; incluirMeta?: boolean; onSelected?: (x: { id: string }) => void }) {
+function Campo(props: { modo: 'leitor' | 'lista'; lista?: Forn[]; inicial?: string; linha?: boolean; incluirMeta?: boolean; mostrarIguais?: boolean; onSelected?: (x: { id: string }) => void }) {
   const [value, setValue] = useState(props.inicial ?? '');
   const [busca, setBusca] = useState('');
   return (
     <FavorecidoSelect
       value={value} onChange={setValue} onSelected={props.onSelected}
       search={busca} onSearchChange={setBusca}
-      linhaDoDocumento={props.linha} incluirMeta={props.incluirMeta}
+      linhaDoDocumento={props.linha} incluirMeta={props.incluirMeta} mostrarIguais={props.mostrarIguais}
       {...(props.modo === 'leitor' ? { clienteId: 'cli' } : { fornecedores: props.lista ?? BASE })}
     />
   );
@@ -111,6 +111,12 @@ describe.each(['leitor', 'lista'] as const)('a opção, a busca e o selo — mod
     abrir();
     const selos = opcoes().map((o) => within(o).queryByTestId('favorecido-iguais')?.textContent ?? '');
     expect(selos).toEqual(['', '', '3 iguais', '3 iguais', '3 iguais', '']);
+  });
+  it('FIN-V2-FILTRO-FORNECEDOR-01 — `mostrarIguais={false}` (o filtro de Lançamentos): os mesmos cadastros, sem o selo', () => {
+    render(<Campo modo={modo} mostrarIguais={false} />);
+    abrir();
+    expect(opcoes()).toHaveLength(6);
+    expect(screen.queryAllByTestId('favorecido-iguais')).toHaveLength(0);
   });
   it('busca por nome sem acento e por dígitos do documento (com e sem pontuação)', () => {
     render(<Campo modo={modo} />);

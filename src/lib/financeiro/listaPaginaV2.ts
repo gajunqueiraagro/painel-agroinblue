@@ -51,6 +51,8 @@ export interface PaginaDaListaV2 {
   total: number;
   totais: TotaisDaListaV2;
   semCaixa: { linhas: number; total: number };
+  /** FIN-V2-FILTRO-FORNECEDOR-01 — quantos lançamentos cada fornecedor tem no recorte (SEM o filtro de fornecedor), da RPC */
+  usoPorFornecedor: ReadonlyMap<string, number>;
 }
 
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
@@ -66,8 +68,8 @@ function ehLinha(v: unknown): v is LancamentoV2 {
 export function lerPaginaV2(r: unknown): PaginaDaListaV2 | null {
   const o = obj(r); if (!o) return null;
   const total = num(g(o, 'total_linhas')); const t = obj(g(o, 'totais')); const sc = obj(g(o, 'sem_caixa'));
-  const brutas = g(o, 'linhas');
-  if (total === null || !t || !sc || !Array.isArray(brutas)) return null;
+  const brutas = g(o, 'linhas'); const forn = obj(g(o, 'fornecedores'));
+  if (total === null || !t || !sc || !forn || !Array.isArray(brutas)) return null;
   const entradas = num(g(t, 'entradas')), saidas = num(g(t, 'saidas')), transferencias = num(g(t, 'transferencias'));
   const entradasSemCaixa = num(g(t, 'entradas_sem_caixa')), saidasSemCaixa = num(g(t, 'saidas_sem_caixa'));
   const scLinhas = num(g(sc, 'linhas')), scTotal = num(g(sc, 'total'));
@@ -80,11 +82,36 @@ export function lerPaginaV2(r: unknown): PaginaDaListaV2 | null {
     linhas.push(l);
     if (g(l, 'conciliado') === true) conciliados.add(l.id);
   }
+  const usoPorFornecedor = new Map<string, number>();
+  for (const [id, v] of Object.entries(forn)) {
+    const n = num(v);
+    if (n === null) return null;
+    usoPorFornecedor.set(id, n);
+  }
   return {
     linhas, conciliados, total,
     totais: { entradas, saidas, transferencias, entradasSemCaixa, saidasSemCaixa },
     semCaixa: { linhas: scLinhas, total: scTotal },
+    usoPorFornecedor,
   };
+}
+
+/**
+ * FIN-V2-FILTRO-FORNECEDOR-01 (Gabriel 22/10: "tem que aparecer só o que é ativo… isso tava funcionando") — a lista do filtro de
+ * fornecedor: os cadastros ATIVOS; o inativo só quando tem lançamento no recorte; o MESCLADO nunca (o nome antigo dele acha o destino
+ * pelos apelidos). Cada um com o uso do servidor no recorte (`usoPorFornecedor`); sem a contagem ainda (página carregando), uso nulo.
+ */
+export function fornecedoresDoFiltroV2<F extends { id: string; ativo?: boolean | null; fundido_em_id?: string | null }>(
+  cadastro: readonly F[], uso: ReadonlyMap<string, number> | null,
+): (F & { uso: number | null })[] {
+  const lista: (F & { uso: number | null })[] = [];
+  for (const f of cadastro) {
+    if (f.fundido_em_id) continue;
+    const n = uso ? (uso.get(f.id) ?? 0) : null;
+    if (f.ativo === false && !(n && n > 0)) continue;
+    lista.push({ ...f, uso: n });
+  }
+  return lista;
 }
 
 /** "Mostrando 1–200 de 5.303" — com zero, "Nenhum lançamento" */

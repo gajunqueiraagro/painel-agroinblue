@@ -31,6 +31,7 @@ const resposta = (ids: string[], total = ids.length) => ({
   versao: 't', pagina: 0, por_pagina: 200, total_linhas: total,
   linhas: ids.map((id) => ({ id, cliente_id: 'cli', favorecido_id: `f-${id}`, conciliado: false })),
   totais: { entradas: 0, saidas: 0, transferencias: 0, entradas_sem_caixa: 0, saidas_sem_caixa: 0 }, sem_caixa: { linhas: 0, total: 0 },
+  fornecedores: {},
 });
 const pedido = (pagina: number) => ({ filtros: { anos: [2026] }, ordem: { campo: 'default', dir: 'asc', nivel: 'centro' }, pagina, porPagina: 200 });
 
