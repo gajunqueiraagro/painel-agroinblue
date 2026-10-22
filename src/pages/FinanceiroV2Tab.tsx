@@ -272,16 +272,15 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
      da parcela) continua: so' o controle que navega some. */
   const podeAbrirOC = usePodeAbrir(TELA_DA_OPERACAO);
   const podeAbrirFinanciamento = usePodeAbrir('financiamentos');
-  const { conciliados, carregando: carregandoVinculos, recarregar: recarregarVinculos } = useLancamentosConciliados(clienteAtual?.id ?? null);
-  /* FIN-V2-DESEMPENHO-01b — o mapa dos vínculos vem em levas (segundos no NJ); até a PRIMEIRA carga terminar, a pílula
-     "Conciliado" sai da marca que a própria página traz (`conciliado` da RPC, o mesmo vínculo vivo). Depois, o mapa manda
-     (ele é o que o desfazer relê). */
-  const [vinculosProntos, setVinculosProntos] = useState(false);
-  const viuCarregarVinculos = useRef(false);
-  useEffect(() => {
-    if (carregandoVinculos) viuCarregarVinculos.current = true;
-    else if (viuCarregarVinculos.current) setVinculosProntos(true);
-  }, [carregandoVinculos]);
+  /* FIN-V2-DESEMPENHO-01c — os vínculos SÓ dos lançamentos da página (uma consulta pequena por página; antes, as levas do cliente
+     inteiro em segundo plano). A pílula "Conciliado" sai da marca da própria página (`conciliado` da RPC, o mesmo vínculo vivo); o
+     mapa dá o detalhe (o `title` com o movimento, o ícone). Os ids chegam por estado: a página é lida mais abaixo. */
+  const [idsDaPagina, setIdsDaPagina] = useState<string[]>([]);
+  const { conciliados, recarregar: recarregarSoVinculos } = useLancamentosConciliados(clienteAtual?.id ?? null, idsDaPagina);
+  /* a seção "sem caixa" também passa pelo `filtrarEmMemoria`: ele lê o mapa por ref, para não reler a seção a cada página
+     (medido 22/10: nenhum lançamento sem caixa tem vínculo vivo — 0 de 365) */
+  const conciliadosRef = useRef(conciliados);
+  conciliadosRef.current = conciliados;
   /* VINCULAR-FIX-01 — o icone de OC da linha sai da PARTE VIVA, nao da origem: um lancamento vinculado
      (importado ou manual) tambem e' titulo da OC, e o desvinculado deixa de ser. Mesmo molde do mapa acima. */
   const lancamentosComOC = useLancamentosComOC(clienteAtual?.id ?? null);
@@ -1192,12 +1191,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     if (querRealizado !== querConciliado) {
       items = items.filter(l => {
         if ((l.status_transacao || '').toLowerCase() !== 'realizado') return true;
-        return querConciliado ? conciliados.has(l.id) : !conciliados.has(l.id);
+        return querConciliado ? conciliadosRef.current.has(l.id) : !conciliadosRef.current.has(l.id);
       });
     }
 
     return items;
-  }, [contaOrigem, contaDestino, produtoFiltro, documentoFiltro, documentosPorLancamento, fornecedorFiltro, tipoOperacao, atividadeFiltro, safraFiltro, culturaFiltro, grupoFiltro, centroToGrupo, statusSelecionados, conciliados]);
+  }, [contaOrigem, contaDestino, produtoFiltro, documentoFiltro, documentosPorLancamento, fornecedorFiltro, tipoOperacao, atividadeFiltro, safraFiltro, culturaFiltro, grupoFiltro, centroToGrupo, statusSelecionados]);
 
 
   // Sorted lancamentos
@@ -1235,9 +1234,15 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   const ordemV2 = useMemo(() => ordemDaPaginaV2(sortField, sortDir, nivelClassif), [sortField, sortDir, nivelClassif]);
   const chaveDoRecorte = JSON.stringify([filtrosV2, ordemV2, porPagina]);
   useEffect(() => { setPaginaV2(0); }, [chaveDoRecorte]);
+  /* FIN-V2-DESEMPENHO-01c — com o cadastro carregado, a página não busca os nomes de novo */
+  const idsDoCadastro = useMemo(() => new Set(hook.fornecedores.map((f) => f.id)), [hook.fornecedores]);
+  const conhecidoNoCadastro = useCallback((id: string) => idsDoCadastro.has(id), [idsDoCadastro]);
   const listaV2 = useListaPaginaV2(clienteAtual?.id, { filtros: filtrosV2, ordem: ordemV2, pagina: paginaV2, porPagina },
-    !FEATURE_FLAGS.LISTA_PAGINADA_V2 && podeConsultar && mode === 'list');
+    !FEATURE_FLAGS.LISTA_PAGINADA_V2 && podeConsultar && mode === 'list', conhecidoNoCadastro);
   const paginaDaLista = listaV2.pagina;
+  useEffect(() => { setIdsDaPagina(paginaDaLista ? paginaDaLista.linhas.map((l) => l.id) : []); }, [paginaDaLista]);
+  /* desfazer um vínculo: o detalhe E a marca da página voltam (a pílula sai da página) */
+  const recarregarVinculos = useCallback(() => { recarregarSoVinculos(); void listaV2.recarregar(); }, [recarregarSoVinculos, listaV2.recarregar]);
   /* FORN-BUSCA-UNICA-01 — o filtro é o seletor padrão (`FavorecidoSelect`, a busca única). FIN-V2-FILTRO-FORNECEDOR-01: os ATIVOS; o
      inativo só com lançamento no recorte; o mesclado nunca (o nome antigo acha o destino pelos apelidos); o uso é o do SERVIDOR no
      recorte sem o filtro de fornecedor (`usoPorFornecedor`, na mesma ida da página) — a lista não encolhe ao escolher. */
@@ -1812,7 +1817,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     linhasDaGrade, modoIntensivo, contasAmpliado, fornecedoresMap, rotulosDoRecorte, parcelasDosLancamentos, conciliados,
     hojeISO, coberturaExtrato, documentosPorLancamento, selectedIds, lancamentosComOC, contratosDoCliente,
     podeAbrirFinanciamento, onAbrirFinanciamento, podeAbrirOC, nivelClassif, fazendaNameMap, fazendaCodigoMap,
-    safraCodigoMap, safraEscopoMap, contaNomeMap, foco, vinculosProntos, paginaDaLista,
+    safraCodigoMap, safraEscopoMap, contaNomeMap, foco, paginaDaLista,
   ];
   return (
     /* ⚠ O AFASTAMENTO MORA AQUI, NO RAIZ — FIN-LISTA-VISUAL-03. A seção do /v2 não tem
@@ -2812,7 +2817,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                        NÃO a herda: 574 linhas têm esse status gravado sem vínculo
                        nenhum — legado de 10/04/2026. Elas caem no rótulo
                        "Conciliado (legado)", muted, distinguível do fato. */
-                    const temVinculo = vinculosProntos ? !!vinculo : !!paginaDaLista?.conciliados.has(l.id);
+                    const temVinculo = !!paginaDaLista?.conciliados.has(l.id);
                     const stKey = temVinculo && stCru === 'realizado' ? 'conciliado_real' : stCru;
                     const stLabel = STATUS_FILTRO_LABEL[stKey] || l.status_transacao || '-';
                     const stColor = STATUS_FILTRO_COR[stKey] || 'text-muted-foreground';

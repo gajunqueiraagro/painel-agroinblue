@@ -11,7 +11,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
-  filtrosDaPaginaV2, ordemDaPaginaV2, lerPaginaV2, intervaloDaPaginaV2, paginasDaListaV2, reservasDaPaginaV2,
+  filtrosDaPaginaV2, ordemDaPaginaV2, lerPaginaV2, lerLinhasV2, intervaloDaPaginaV2, paginasDaListaV2, reservasDaPaginaV2,
   lerPorPaginaV2, guardarPorPaginaV2, porPaginaV2DoTexto, textoDoPorPaginaV2, fornecedoresDoFiltroV2, type FiltrosDaTelaV2,
 } from './listaPaginaV2';
 
@@ -60,6 +60,14 @@ describe('o leitor da resposta', () => {
     expect(p?.totais).toEqual({ entradas: 10, saidas: 5, transferencias: 0, entradasSemCaixa: 1, saidasSemCaixa: 2 });
     expect(p?.semCaixa).toEqual({ linhas: 3, total: -7.5 });
     expect([...(p?.usoPorFornecedor ?? [])]).toEqual([['fa', 2], ['fb', 7]]);
+  });
+  it('FIN-V2-DESEMPENHO-01c — a resposta "só linhas": linhas, conciliados e total; torta = nulo', () => {
+    const so = lerLinhasV2({ total_linhas: 2, linhas: RESPOSTA.linhas, totais: null, fornecedores: null });
+    expect(so?.total).toBe(2);
+    expect([...(so?.conciliados ?? [])]).toEqual(['a']);
+    expect(lerLinhasV2({ total_linhas: '2', linhas: [] })).toBeNull();
+    expect(lerLinhasV2({ total_linhas: 2, linhas: [{ id: 'a' }] })).toBeNull();
+    expect(lerPaginaV2({ ...RESPOSTA, totais: null })).toBeNull();
   });
   it('peça torta = nulo inteiro (nunca zeros inventados)', () => {
     expect(lerPaginaV2(null)).toBeNull();
@@ -161,7 +169,10 @@ describe('a ligação na tela (lida da fonte)', () => {
     expect(tela).not.toContain('<div className="flex h-6 shrink-0 flex-wrap');
     expect(tela).toContain("Entradas: <TextoReservado reserva={RESERVA_TOTAL} texto={paginaDaLista ? formatMoeda(totalEntradas) : '—'} />");
   });
-  it('enquanto o mapa dos vínculos não chega, a pílula "Conciliado" sai da marca da página', () => {
-    expect(tela).toContain('const temVinculo = vinculosProntos ? !!vinculo : !!paginaDaLista?.conciliados.has(l.id);');
+  it('FIN-V2-DESEMPENHO-01c — a pílula "Conciliado" sai da marca da página; os vínculos (o detalhe) são só os da página', () => {
+    expect(tela).toContain('const temVinculo = !!paginaDaLista?.conciliados.has(l.id);');
+    expect(tela).toContain('useLancamentosConciliados(clienteAtual?.id ?? null, idsDaPagina)');
+    expect(tela).toContain('useEffect(() => { setIdsDaPagina(paginaDaLista ? paginaDaLista.linhas.map((l) => l.id) : []); }, [paginaDaLista]);');
+    expect(tela).not.toContain('vinculosProntos');
   });
 });
