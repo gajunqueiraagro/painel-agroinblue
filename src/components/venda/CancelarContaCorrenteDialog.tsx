@@ -13,7 +13,10 @@ import type { OcContaCorrenteApi, RolCancelamento } from '@/hooks/useOcContaCorr
    `vincular_recebimento`), saidas adotadas desvinculadas, compromissos cancelados. Titulo nunca se apaga; o recebimento nao
    perde valor, data, conta bancaria nem conciliacao. Motivo obrigatorio, recusa ao lado do botao (UX-TOAST-01).
    OC-CONTA-CORRENTE-TODOS-01a: so' se cancelam os compromissos da conta corrente; as despesas pagas a terceiros ficam e o rol
-   as lista em "Ficam (pagas a terceiros)". */
+   as lista em "Ficam (pagas a terceiros)".
+   OC-CANCELAR-CASCATA-01 (Gabriel 21/10) — NADA VOLTA AVULSO: recebimento em aberto, saida (adotada ou registrada), titulo da
+   saida e despesa sem pagamento sao CANCELADOS junto; o ja' pago recusa (frase do banco); mes fechado no P1 recusa, no Financeiro
+   avisa. */
 
 const rotuloCategoria = (slug: string | null) => (slug ? (CATEGORIAS.find(c => c.value === slug)?.label ?? slug) : '—');
 const rotuloExplicacao = (t: string, lado: LadoContaCorrente) => {
@@ -25,20 +28,20 @@ const rotuloExplicacao = (t: string, lado: LadoContaCorrente) => {
 /* OC-CONTA-CORRENTE-TODOS-01a — a compra usa o mesmo rol, com as palavras do lado dela. A venda segue com as frases de antes. */
 const TEXTOS: Record<LadoContaCorrente, { entregas: string; recebimentos: string; saidas: string; rodape: string }> = {
   venda: {
-    entregas: 'Entregas canceladas (saem do DRE)', recebimentos: 'Recebimentos que saem da OC (voltam a compor o DRE como venda)',
-    saidas: 'Saídas adotadas desvinculadas (o gado continua no zootécnico)',
-    rodape: 'Nenhum título é apagado; valor, datas, conta bancária e conciliação dos recebimentos não mudam. O dinheiro entrou de verdade: sem a OC, cada recebimento volta a ser uma venda comum no DRE, na conta em que está.',
+    entregas: 'Entregas canceladas (saem do DRE)', recebimentos: 'Recebimentos em aberto cancelados',
+    saidas: 'Saídas canceladas (saem do zootécnico)',
+    rodape: 'Tudo o que a operação carrega e ainda não foi pago é cancelado junto (nada volta avulso). Nenhum título é apagado: fica cancelado, com o motivo.',
   },
   compra: {
-    entregas: 'Entradas canceladas (saem do DRE)', recebimentos: 'Pagamentos que saem da OC (voltam a compor o DRE como compra)',
-    saidas: 'Entradas adotadas desvinculadas (o gado continua no zootécnico)',
-    rodape: 'Nenhum título é apagado; valor, datas, conta bancária e conciliação dos pagamentos não mudam. O dinheiro saiu de verdade: sem a OC, cada pagamento volta a ser uma compra comum no DRE, na conta em que está.',
+    entregas: 'Entradas canceladas (saem do DRE)', recebimentos: 'Pagamentos em aberto cancelados',
+    saidas: 'Entradas canceladas (saem do zootécnico)',
+    rodape: 'Tudo o que a operação carrega e ainda não foi pago é cancelado junto (nada volta avulso). Nenhum título é apagado: fica cancelado, com o motivo.',
   },
   /* OC-CC-ABATE-01 PR 2 — so' para o tipo fechar; o cancelar do abate e' do PR 3. */
   abate: {
-    entregas: 'Entregas canceladas (saem do DRE)', recebimentos: 'Recebimentos que saem da OC (voltam a compor o DRE como venda)',
-    saidas: 'Saídas adotadas desvinculadas (o gado continua no zootécnico)',
-    rodape: 'Nenhum título é apagado; valor, datas, conta bancária e conciliação dos recebimentos não mudam. O dinheiro entrou de verdade: sem a OC, cada recebimento volta a ser um abate comum no DRE, na conta em que está.',
+    entregas: 'Entregas canceladas (saem do DRE)', recebimentos: 'Recebimentos em aberto cancelados',
+    saidas: 'Saídas canceladas (saem do zootécnico)',
+    rodape: 'Tudo o que a operação carrega e ainda não foi pago é cancelado junto (nada volta avulso). Nenhum título é apagado: fica cancelado, com o motivo.',
   },
 };
 
@@ -77,7 +80,8 @@ export function CancelarContaCorrenteDialog({ api, onCancelar, onFechar, lado = 
 
   const faltaMotivo = tentou && !motivo.trim();
   const bloqueado = !!rol && rol.bloqueios.length > 0;
-  const adotadas = rol ? rol.saidas.filter(s => s.origem === 'adotada') : [];
+  const despesasAbertas = rol ? rol.despesas.filter(d => d.pago <= 0) : [];
+  const despesasPagas = rol ? rol.despesas.filter(d => d.pago > 0) : [];
   const confirmar = async () => {
     setTentou(true);
     if (!motivo.trim() || !rol || bloqueado) return;
@@ -103,16 +107,24 @@ export function CancelarContaCorrenteDialog({ api, onCancelar, onFechar, lado = 
               {rol.explicacoes.map((e, i) => <li key={i}>{rotuloExplicacao(e.tipo, lado)} · {rotuloDaConta(e.conta) ?? '—'} · {formatMoeda(e.valor)}</li>)}
             </Bloco>
             <Bloco titulo={t.recebimentos} n={rol.recebimentos.length}>
-              {rol.recebimentos.map((r, i) => (
-                /* OC-CC-CLASSIFICACAO-01: a conta ja' e' a da operacao; a seta so' aparece se o banco ainda for repor outra */
-                <li key={i}>{dataCurta(r.data)} · {formatMoeda(r.valor)} · {rotuloDaConta(r.contaAtual) ?? '—'}
-                  {r.contaOriginal && r.contaOriginal !== r.contaAtual ? <> → <b>{rotuloDaConta(r.contaOriginal)}</b></> : null}</li>
+              {rol.recebimentos.filter(r => r.acao !== 'pago').map((r, i) => (
+                <li key={i}>{dataCurta(r.data)} · {formatMoeda(r.valor)} · {rotuloDaConta(r.contaAtual) ?? '—'}</li>
               ))}
             </Bloco>
-            {/* so' as ADOTADAS se desvinculam; a registrada e' o bloqueio do banco (estornar antes) — listava-se tudo sob este titulo */}
-            <Bloco titulo={t.saidas} n={adotadas.length}>
-              {adotadas.map((s, i) => <li key={i}>{dataCurta(s.data)} · {s.cab} cab · {rotuloCategoria(s.categoria)}</li>)}
+            {/* OC-CANCELAR-CASCATA-01: adotadas e registradas, todas canceladas junto */}
+            <Bloco titulo={t.saidas} n={rol.saidas.length}>
+              {rol.saidas.map((s, i) => <li key={i}>{dataCurta(s.data)} · {s.cab} cab · {rotuloCategoria(s.categoria)}</li>)}
             </Bloco>
+            {rol.titulosSaida.length > 0 && (
+              <Bloco titulo="Títulos das saídas cancelados" n={rol.titulosSaida.length}>
+                {rol.titulosSaida.map((x, i) => <li key={i}>{dataCurta(x.data)} · {x.descricao ?? '—'} · {formatMoeda(x.valor)}</li>)}
+              </Bloco>
+            )}
+            {despesasAbertas.length > 0 && (
+              <Bloco titulo="Despesas em aberto canceladas" n={despesasAbertas.length}>
+                {despesasAbertas.map((d, i) => <li key={i}>{d.nome ?? d.componente}{d.favorecido ? ` · ${d.favorecido}` : ''} · {formatMoeda(d.valor)}</li>)}
+              </Bloco>
+            )}
             {rol.compromissos.length > 0 && (
               <Bloco titulo="Compromissos cancelados" n={rol.compromissos.length}>
                 {rol.compromissos.map((c, i) => <li key={i}>{c.componente} · {formatMoeda(c.valor)}</li>)}
@@ -120,10 +132,10 @@ export function CancelarContaCorrenteDialog({ api, onCancelar, onFechar, lado = 
             )}
             {/* OC-CONTA-CORRENTE-TODOS-01a, decisao 3 — uma regra para todos os tipos: despesa paga a terceiro NUNCA se cancela.
                 Compromisso, titulo e liquidacao dela ficam como estao; a secao so' aparece quando ha' alguma. */}
-            {rol.despesas.length > 0 && (
+            {despesasPagas.length > 0 && (
               <div data-testid="cc-cancelar-ficam">
-                <Bloco titulo="Ficam (pagas a terceiros)" n={rol.despesas.length}>
-                  {rol.despesas.map((d, i) => (
+                <Bloco titulo="Ficam (pagas a terceiros)" n={despesasPagas.length}>
+                  {despesasPagas.map((d, i) => (
                     <li key={i}>
                       {d.nome ?? d.componente}{d.favorecido ? ` · ${d.favorecido}` : ''} · {formatMoeda(d.valor)}
                       {' · '}{Math.round(d.pago * 100) >= Math.round(d.valor * 100) ? 'pago' : d.pago > 0 ? `pago ${formatMoeda(d.pago)}` : 'em aberto'}
@@ -133,6 +145,11 @@ export function CancelarContaCorrenteDialog({ api, onCancelar, onFechar, lado = 
               </div>
             )}
             <div className="text-[10px] text-muted-foreground">{t.rodape}</div>
+            {rol.avisos.length > 0 && (
+              <div className="rounded border border-amber-400/60 p-1.5 text-[10px] text-amber-800" data-testid="cc-cancelar-avisos">
+                {rol.avisos.map((a, i) => <div key={i}>{a}</div>)}
+              </div>
+            )}
             {bloqueado && (
               <div className="rounded border border-destructive/40 p-1.5 text-[10px] text-destructive" role="alert">
                 {rol.bloqueios.map((b, i) => <div key={i}>{b}</div>)}
