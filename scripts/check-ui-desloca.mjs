@@ -93,6 +93,18 @@ const CENARIOS = [
   ...['venda', 'abate'].map((v) => ({ nome: `oc-cc-faixa-${v}`, url: `tela=oc&v=${v}&aba=financeiro&cc=1`, minLargura: 1000, estados: [
     ['sem principal programado (sem o motivo)', { url: `tela=oc&v=${v}&aba=financeiro&cc=1&coberto=0` }],
   ] })),
+  /* fatia "casar" (ate' aqui sem cenario: "0 telas"): no 1:1 digitar outro valor e corrigir o valor do lancamento nao mexem no cabecalho, no resumo nem no
+     rodape; no bloco trocar a regra nao mexe nas tabelas nem no Conciliar */
+  { nome: 'casar-1x1-levado', url: 'tela=casar-1x1&v=levado', antes: async (p) => { await p.locator('[data-testid="levado"]').waitFor(); await espera(p); },
+    estados: [
+      ['valor do campo diferente do banco', digitar('input[aria-label^="Valor de"]', '0,02')],
+      ['corrigir o valor do lancamento', botao(/Corrigir o valor do lançamento/)],
+    ] },
+  { nome: 'casar-bloco', url: 'tela=casar-bloco', antes: async (p) => { await p.locator('[data-testid="conciliar-bloco"]').waitFor(); await espera(p); },
+    estados: [
+      ['regra mais antigo primeiro', botao(/Mais antigo primeiro/)],
+      ['regra soma exata de volta', botao(/Soma exata/)],
+    ] },
   /* CONC-SEM-TRAVA-01 (tela) — o modal Conciliar: trocar de cartao, escolher outra sugestao, buscar e tentar sem motivo nao mexem
      nos lados, na caixa da diferenca, nos cartoes, no motivo nem no rodape (tamanho fixo) */
   { nome: 'conciliar-sobra', url: 'tela=conciliar&v=sobra', antes: async (p) => { await p.locator('[data-testid="botao-conciliar"]').waitFor(); await espera(p); },
