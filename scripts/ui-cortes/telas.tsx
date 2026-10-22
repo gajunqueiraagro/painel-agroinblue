@@ -573,12 +573,12 @@ if (tela === 'mesclar') {
          (o molde do caso de 21/10: "Criar lancamento", vencimento = emissao em ambar)  ·  `parcelar` a confirmacao do "Atualizar e parcelar" */
   const montarNotaPdf = async () => {
     const { jsPDF } = await import('jspdf');
-    const { PAGINAS_DANFE_SINTETICO, danfeSinteticoSemDuplicata } = await import('@/lib/financeiro/nfe/__fixtures__/danfeSintetico');
+    const { PAGINAS_DANFE_SINTETICO, danfeSinteticoSemDuplicata, danfeSinteticoAvulsa } = await import('@/lib/financeiro/nfe/__fixtures__/danfeSintetico');
     const { lerNota } = await import('@/lib/financeiro/nfe/lerNota');
     const { NotaFiscalDialog } = await import('@/components/financeiro-v2/NotaFiscalDialog');
     const { arquivoPdfDaNota } = await import('@/components/financeiro-v2/NovoDeXmlDialog');
     const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: [841.89, 595.28] });
-    for (const it of (v === 'semdup' ? danfeSinteticoSemDuplicata() : PAGINAS_DANFE_SINTETICO)[0]) {
+    for (const it of (v === 'semdup' ? danfeSinteticoSemDuplicata() : v === 'avulsa' ? danfeSinteticoAvulsa() : PAGINAS_DANFE_SINTETICO)[0]) {
       const str = v === 'diverge' && it.str === 'Nº 000.000.937' ? 'Nº 000.000.938' : it.str;
       doc.setFontSize(Math.max(4, it.h * 1.15));
       doc.text(str, it.x, 595.28 - it.y);
