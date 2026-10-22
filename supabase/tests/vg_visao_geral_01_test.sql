@@ -2,7 +2,8 @@
 -- 'VG01 FALHOU: ...'. pg_temp.vg01(clientes) e' o teste (nulo = todos; o canal MCP corta em ~60 s, entao ele roda em duas metades e as
 -- mutacoes so' na Vera — V7 e V8 rodam sempre). Clientes e usuarios REAIS do proto
 -- (os mesmos do seg_tenant_varredura_01b2: ux = gestor so' da NJ, adm = admin AgroinBlue).
---   V1 grupos: nenhuma linha ativa de 1-/2- sem grupo; cada linha = fn_plano_grupo_fluxo; Juros fora do Custeio; a 1155 em Outras saídas
+--   V1 grupos: nenhuma linha ativa de 1-/2- sem grupo; cada linha = fn_plano_grupo_fluxo; Juros fora do Custeio; a 1155 em Outras saídas;
+--      V1b o usuario logado (role authenticated) grava linha nova no plano e ela nasce com o grupo
 --   V2 INVARIANTE saldo_final = saldo_inicial + entradas - saidas e saldo_inicial = saldo_final do mes anterior, 2025-01..2026-12, em
 --      (a) todas as contas de cada cliente, (b) cada conta sozinha, (c) o par de contas de uma transferencia realizada de 2026 — e o par
 --      soma os saldos das duas sozinhas (a transferencia entre elas nao entra nem sai)
@@ -36,6 +37,14 @@ begin
   IF (SELECT string_agg(DISTINCT grupo_fluxo, ',') FROM financeiro_plano_contas WHERE grupo_custo LIKE 'Juros de Financiamento%') <> 'Juros'
      OR (SELECT grupo_fluxo FROM financeiro_plano_contas WHERE ordem_exibicao = 1155) <> 'Outras saídas'
      OR fn_plano_grupo_fluxo('2-Saídas', 'Custeio Produção', 'Custo Fixo Pecuária') <> 'Custeio' THEN f := f || 'V1 mapa'::text; END IF;
+  -- V1b o usuario logado grava linha nova no plano e ela nasce com o grupo (o gatilho chama a regra com o privilegio dele)
+  BEGIN
+    SET LOCAL ROLE authenticated;
+    INSERT INTO financeiro_plano_contas (tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro, escopo_negocio, ativo, ordem_exibicao)
+    VALUES ('2-Saídas', 'Tributos', 'Tributos e Impostos', 'Ensaio', 'Ensaio VG01', 'administrativo', true, 99996) RETURNING grupo_fluxo INTO x;
+    RESET ROLE;
+    IF x IS DISTINCT FROM 'Impostos e deduções' THEN f := f || ('V1b grupo ' || coalesce(x, 'nulo')); END IF;
+  EXCEPTION WHEN others THEN RESET ROLE; f := f || ('V1b ' || SQLSTATE || ' ' || SQLERRM); END;
 
   FOREACH k IN ARRAY clis LOOP
     -- V2a + V3 (todas as contas)
