@@ -442,8 +442,27 @@ describe('N9 — NOTA-FORNECEDOR-DUPLICA-01: o cadastro sem CNPJ e o CNPJ ja\' c
     const lidaAntes = montarNota();                       // lida quando ainda nao havia cadastro
     expect(lidaAntes.doXml.resolucao.achadoPor).toBeNull();
     abrir(lidaAntes, { fornecedores: [FORN] });           // o cadastro com o CNPJ existe agora
-    expect(screen.getByTestId('nota-chip-fornecedor').textContent).toBe('cadastrado');
+    expect(screen.getByTestId('nota-chip-fornecedor').textContent).toBe('achado pelo CNPJ');
     expect(screen.queryByTestId('nota-cadastrar-fornecedor')).toBeNull();
+  });
+  /* NOTA-FORNECEDOR-CNPJ-ACHADO-01 (o caso da Elos, sintetico): o cadastro ganhou o CNPJ (com mascara, como todos no banco) pela
+     comparacao da nota anterior; a lista da tela chega relida — a previa da nota seguinte casa pelo CNPJ e nao oferece completar */
+  it('a lista chega relida com o CNPJ (mascarado) gravado: de "sem CNPJ · Completar" para "achado pelo CNPJ", sem o botão', () => {
+    const tela = (fornecedores: FornecedorV2[]) => (
+      <QueryClientProvider client={new QueryClient()}>
+        <NotaFiscalDialog open clienteId="cli" clienteNome="NJ" nota={nota} fazendas={FAZENDAS} contas={CONTAS} classificacoes={PLANO} safras={SAFRAS}
+          fornecedores={fornecedores} consultarReceita={RECEITA} onClose={vi.fn()} onCriado={vi.fn()} onAbrirNoLancamento={vi.fn()} onAbrirRegistrada={vi.fn()}
+          onCriarFornecedor={vi.fn(async () => null)} gravarItens={vi.fn(async () => null)} />
+      </QueryClientProvider>
+    );
+    const nota = montarNota({ fornecedores: [SEM_DOC] });
+    const r = render(tela([SEM_DOC]));
+    expect(screen.getByTestId('nota-chip-fornecedor').textContent).toBe('achado pelo nome · sem CNPJ');
+    expect(screen.getByTestId('nota-completar-fornecedor').textContent).toBe('Completar com o CNPJ');
+    r.rerender(tela([{ ...SEM_DOC, cpf_cnpj: '11.222.333/0004-24' }]));
+    expect(screen.getByTestId('nota-chip-fornecedor').textContent).toBe('achado pelo CNPJ');
+    expect(screen.queryByTestId('nota-completar-fornecedor')).toBeNull();
+    expect(screen.queryByTestId('nota-sem-cnpj')).toBeNull();
   });
 });
 
