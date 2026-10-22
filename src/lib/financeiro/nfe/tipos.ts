@@ -61,8 +61,16 @@ export interface NotaLida {
   /** `det/prod`: `quantidade` e' o `qCom` como texto (ate' 4 casas no leiaute).
    *  FIN-NOTA-PDF-01 — `unitario` (o valor unitario escrito, em centavos) e `detalhe` (a linha de baixo do DANFE: lote, validade) so'
    *  existem na leitura do PDF; o XML nao os preenche (o contrato dele fica como estava). */
-  itens: { descricao: string; quantidade: string; unidade: string; valorCent: number; unitarioCent?: number | null; detalhe?: string | null }[];
+  itens: { descricao: string; quantidade: string; unidade: string; valorCent: number; unitarioCent?: number | null; detalhe?: string | null;
+    /** ITENS-NOTA-01 — as colunas fiscais do DANFE por item (so' o PDF; o XML le^ o item inteiro em `itensDoXml`). */
+    fiscal?: ColunasFiscaisDoDanfe | null }[];
   protocolo: { cStat: string; numero: string } | null;
+}
+
+/** ITENS-NOTA-01 — o que o DANFE mostra por item alem de descricao/qtd/unitario/total. */
+export interface ColunasFiscaisDoDanfe {
+  codigo?: string | null; ncm?: string | null; cst?: string | null; cfop?: string | null;
+  bcIcmsCent?: number | null; vIcmsCent?: number | null; vIpiCent?: number | null; aliqIcms?: string | null; aliqIpi?: string | null;
 }
 
 /** Nao recusam: a tela mostra. */
