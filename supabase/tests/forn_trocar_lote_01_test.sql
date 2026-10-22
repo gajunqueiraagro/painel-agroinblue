@@ -3,7 +3,8 @@
 -- `authenticated` com as claims de um admin (e de um usuario SEM acesso, para a guarda) e TERMINA EM RAISE: nada fica no banco.
 -- T0 catalogo (SECDEF; anon nao executa) · T1 simular: contagem, soma, origens, mes fechado, nada gravado · T2 recusas (destino inativo,
 -- id de outro cliente, motivo vazio ao aplicar) · T3 aplicar: so' o fornecedor muda (valor, datas, conta, status iguais), a operacao
--- guarda o antes · T4 desfazer: volta so' quem segue no destino, conta o que outra mao trocou · T5 guarda de acesso (42501).
+-- guarda o antes · T4 desfazer: volta so' quem segue no destino, conta o que outra mao trocou · T5 guarda de acesso (42501)
+-- T6 (01b, migration 20261028111460) o resumo sem destino inclui o lancamento sem fornecedor; aplicar sem destino recusa.
 -- Mutacoes: tirar o filtro "segue no destino" do desfazer derruba T4; tirar a guarda `tenant_ok` derruba T5; trocar sem gravar o
 -- antes derruba T3/T4.
 begin;
@@ -94,6 +95,17 @@ begin
   exception when others then t := sqlerrm; end;
   if t <> 'Esta troca já foi desfeita. Nada foi gravado.' then raise exception 'T4 duas vezes: %', t; end if;
 
+  -- T6 (01b): o resumo SEM destino (a tela antes de escolher) — o lancamento SEM fornecedor entra; aplicar sem destino recusa
+  reset role;
+  update public.financeiro_lancamentos_v2 set favorecido_id = null where id = ids[1];
+  set local role authenticated;
+  r := public.fn_lancamentos_trocar_favorecido(c_cli, ids, null, null, true);
+  if (r->>'sem_destino')::boolean is not true or (r->>'lancamentos')::int <> 4
+     or not exists (select 1 from jsonb_array_elements(r->'origens') o where o->>'nome' = 'Sem fornecedor') then raise exception 'T6: %', r; end if;
+  begin r := public.fn_lancamentos_trocar_favorecido(c_cli, ids, null, 'x', false); t := 'PASSOU';
+  exception when others then t := sqlerrm; end;
+  if t <> 'O fornecedor escolhido não é deste cliente. Nada foi gravado.' then raise exception 'T6 aplicar sem destino: %', t; end if;
+
   -- T5
   perform set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}', true);
   begin
@@ -101,6 +113,6 @@ begin
   exception when others then t := sqlstate; end;
   if t <> '42501' then raise exception 'T5: %', t; end if;
 
-  raise exception 'OK forn_trocar_lote_01 (T0–T5)';
+  raise exception 'OK forn_trocar_lote_01 (T0–T6)';
 end $teste$;
 rollback;
