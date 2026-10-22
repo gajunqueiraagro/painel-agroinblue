@@ -223,6 +223,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   FIN-NOTA-PDF-01b: NADA ESCOLHIDO NA PREVIA SE PERDE — todo caminho que abre outro modal leva tudo (`prefillDoModal`); o pago nunca muda de valor.
 - NOTA-JA-LANCADA-01: antes de oferecer criar pela nota, `fn_nota_ja_lancada` (qualquer status, cadastro parecido, numero, chave); achou =
   anexar (nunca muda valor/data/status/conciliacao); trocar fornecedor so' marcando (`fn_lancamentos_trocar_favorecido`, com trilha).
+- NOTA-FORNECEDOR-COMPARAR-01: cadastro atualizado pela nota/Receita so' pelo `CompararCadastroDialog` (hoje x proposto; diferente vem
+  desmarcado) e pela `fn_fornecedor_atualizar_campos` (trilha por campo, desfazer); nunca UPDATE direto do que a nota traz.
 - ITENS-NOTA-01: os itens sao do DOCUMENTO (cliente + chave, `nota_fiscal`), nunca da parcela; escrita so' pela `fn_nota_fiscal_gravar`
   (confere o liquido de cada item; o XML sempre manda sobre o PDF); a conta do item nao existe — a do lancamento e' a de DRE e caixa.
 - OC-ABRIR-LENTO-01: erro do banco nunca vai cru ao toast (frase pronta, o texto no console); leitura de tela que termina depois de
@@ -241,7 +243,7 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - REGUA DE TABELA UNICA (`src/components/ui/regua-tabela.tsx`, a de Recorrencias): cabecalho navy 22px 9,5/500, linha 19px 10px, padding
   0 4px, barra do rodape navy 23px dentro do quadro. Cabecalho e totais presos, so' o corpo rola, UM scrollport por tela, fundo opaco.
   O `th` alinha como o `td`; tabela de regua fixa (`table-layout: fixed`, `colgroup` em px medido) nao estica com a janela.
-- Piso de 9,5px (excecoes declaradas: grade do DRE, selos da Conferencia, Mesa compacta, Lancamentos Financeiros). Tamanhos do A18.
+- Piso de 9,5px (excecoes declaradas: grade do DRE, selos da Conferencia, Mesa compacta, Lancamentos Financeiros, a tabela dos Itens da nota — ITENS-NOTA-FONTE-01). Tamanhos do A18.
 - Selecao se marca com navy (`Segmentado`, o unico); controle nativo nunca; seletor de entidade tem busca; todo menu aberto pelo
   `menuPadrao`; todo campo de valor e' o `CampoMoeda` ("R$" e "0,00"); todo campo de arquivo aceita arrastar.
 - UX-OBRIGATORIOS-01: Salvar com pendencia nao fecha nem grava; o campo pendente fica vermelho com a mensagem; UX-TOAST-01: validacao
