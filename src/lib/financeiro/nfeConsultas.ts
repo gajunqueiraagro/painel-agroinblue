@@ -91,6 +91,39 @@ export async function iePorFazenda(clienteId: string): Promise<Record<string, st
   return mapa;
 }
 
+/** NOTA-FAZENDA-PELA-IE-01 — os apelidos das fazendas (`fazendas.aliases`): sem a IE gravada, a fazenda e' achada pelo nome no endereco
+ *  do destinatario. Falha = sem apelidos (so' o nome). */
+export async function aliasesDasFazendas(clienteId: string): Promise<Record<string, string[]>> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- `aliases` ainda nao esta' nos tipos gerados
+  const { data, error } = await (supabase as any).from('fazendas').select('id, aliases').eq('cliente_id', clienteId);
+  const m: Record<string, string[]> = {};
+  if (error || !Array.isArray(data)) return m;
+  for (const f of data) if (f?.id && Array.isArray(f.aliases)) m[f.id] = f.aliases.filter((a: unknown): a is string => typeof a === 'string');
+  return m;
+}
+
+/** NOTA-FAZENDA-PELA-IE-01 — gravar a IE da fazenda pela nota (`fn_fazenda_gravar_ie`: simula; so' IE vazia; trilha). */
+export async function gravarIeDaFazenda(fazendaId: string, ie: string, referencia: string | null, simular: boolean, clienteId: string)
+  : Promise<{ ok: true; frase: string | null; trilhaId: string | null } | { ok: false; frase: string }> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+  const { data, error } = await (supabase as any).rpc('fn_fazenda_gravar_ie', { p_fazenda_id: fazendaId, p_ie: ie, p_referencia: referencia, p_simular: simular });
+  if (error) return { ok: false, frase: typeof error.message === 'string' && error.message ? error.message : 'A IE não foi gravada.' };
+  if (!simular) notificarFazendasMudaram(clienteId);
+  const o: Record<string, unknown> = data && typeof data === 'object' ? Object.fromEntries(Object.entries(data)) : {};
+  return { ok: true, frase: typeof o.frase === 'string' ? o.frase : null, trilhaId: typeof o.trilha_id === 'string' ? o.trilha_id : null };
+}
+export async function desfazerIeDaFazenda(trilhaId: string, clienteId: string): Promise<string | null> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+  const { error } = await (supabase as any).rpc('fn_fazenda_gravar_ie_desfazer', { p_trilha_id: trilhaId, p_motivo: 'desfeito logo depois de gravar pela nota' });
+  if (error) return typeof error.message === 'string' && error.message ? error.message : 'Não foi desfeito.';
+  notificarFazendasMudaram(clienteId);
+  return null;
+}
+/* quem le^ a IE das fazendas (a previa) rele^ quando ela muda */
+const ouvintesDasFazendas = new Set<(clienteId: string) => void>();
+export function notificarFazendasMudaram(clienteId: string) { for (const cb of [...ouvintesDasFazendas]) cb(clienteId); }
+export function inscreverEmFazendas(cb: (clienteId: string) => void): () => void { ouvintesDasFazendas.add(cb); return () => { ouvintesDasFazendas.delete(cb); }; }
+
 /**
  * Grava o CNPJ/CPF do XML no cadastro do fornecedor — o MESMO update da edicao de fornecedor (`FornecedorFormDialog`), no
  * formato dos demais cadastros (com mascara). ⚠ SO' EM CADASTRO SEM DOCUMENTO: o filtro vai no proprio update, para nunca
