@@ -22,6 +22,9 @@ export interface EspSis {
   competencia?: string | null;
   /** OC-RECEB-PARCIAL-01 — '1/2', '2/2': a parcela da OC, so' quando ha mais de uma (`fn_extratos_espelhados`). */
   oc_parcela?: string | null;
+  /** CONC-TRANSF-DUAS-PONTAS-01 — so' na transferencia entre contas: cada ponta concilia no extrato da sua conta; a frase pronta
+   *  ("conciliado no Banco Bradesco · falta o Banco do Brasil") vem do banco (`_fn_conc_transf_pontas`). */
+  pontas?: { origem: boolean; destino: boolean; frase: string } | null;
 }
 /**
  * UM CANDIDATO DO SISTEMA — PR-ESPELHO-CANDIDATOS-FRONT-01 (Etapa 1 do Espelho evoluído).
