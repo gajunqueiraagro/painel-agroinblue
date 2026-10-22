@@ -17218,40 +17218,6 @@ export type Database = {
           valor: number
         }[]
       }
-      fn_lista_v2_totais: {
-        Args: {
-          p_centro_custo?: string
-          p_cliente_id: string
-          p_conta_bancaria_id?: string
-          p_conta_destino_id?: string
-          p_dimensao?: string
-          p_exigir_data_dimensao?: boolean
-          p_faixas?: unknown[]
-          p_fazenda_id?: string
-          p_grupo_custo?: string
-          p_incluir_conciliado?: boolean
-          p_incluir_sem_vencimento?: boolean
-          p_lista_atividade?: string
-          p_lista_conta_direcao?: string
-          p_lista_documento?: string
-          p_lista_fornecedor_id?: string
-          p_lista_grupo_custo?: string
-          p_lista_produto?: string
-          p_macro_custo?: string
-          p_meses?: number[]
-          p_status_transacoes?: string[]
-          p_subcentro?: string
-          p_tipo_operacao?: string
-        }
-        Returns: {
-          entradas: number
-          entradas_sem_caixa: number
-          excluidos_sem_vencimento: number
-          saidas: number
-          saidas_sem_caixa: number
-          total: number
-        }[]
-      }
       fn_locais_estoque: { Args: { p_cliente: string }; Returns: Json }
       fn_locais_sugeridos_mes: {
         Args: { p_ano_mes: string; p_fazenda_id: string }
