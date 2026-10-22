@@ -77,7 +77,12 @@ import {
   MOTIVO_CONTA_PAGA, MOTIVO_SALVAR_PENDENTE, type RegraDaRecorrencia, type OrigemDoValorDoMes, type PedidoDoValorDoMes,
 } from '@/lib/financeiro/valorDoMes';
 import { pendenteDaNota, type DoXml } from '@/lib/financeiro/nfePrefill';
-import { completarCadastroPeloXml, fornecedorPeloDocumento, gravarDocumentoNoCadastro, type CadastroComODocumento, type OcorrenciaDaNota } from '@/lib/financeiro/nfeConsultas';
+import {
+  atualizarCamposDoCadastro, cadastroParaComparar, camposQueOEmitenteCompleta, completarCadastroPeloXml, desfazerCamposDoCadastro, fornecedorPeloDocumento,
+  type CadastroComODocumento, type OcorrenciaDaNota,
+} from '@/lib/financeiro/nfeConsultas';
+import { CompararCadastroDialog } from './CompararCadastroDialog';
+import { propostaDoEmitente, type CadastroParaComparar } from '@/lib/fornecedores/compararCadastro';
 import { documentoFormatado, reais } from '@/lib/financeiro/nfe/formatos';
 import { fraseParcelasComoNaNota, type CampoDoXml } from '@/lib/financeiro/nfe/proporLancamento';
 import { AvisosDoXml, CAMPO_AMBAR, FaixaDoFornecedor, OrigemDoXml, PilulaDoXml } from './LancamentoDoXml';
@@ -595,7 +600,12 @@ export function LancamentoV2Dialog({
   /* FIN-NFE-XML-01d — o que o operador decidiu sobre o que veio do XML. Tudo e' ESTADO DE TELA: nada e' gravado antes do Salvar. */
   const [xmlFaixaFechada, setXmlFaixaFechada] = useState(false);
   const [xmlRegistradaDispensada, setXmlRegistradaDispensada] = useState(false);
-  const [xmlGravarDocumento, setXmlGravarDocumento] = useState(false);
+  /* NOTA-FORNECEDOR-COMPARAR-01 — o cadastro so' muda pela COMPARACAO (campo · hoje · da nota, confirmada no modal), nunca ao salvar:
+     `xmlComparar` = o cadastro de hoje (modal aberto); `xmlNotaCompleta` = a nota traz algo que o cadastro achado pelo CNPJ nao tem */
+  const [xmlComparar, setXmlComparar] = useState<CadastroParaComparar | null>(null);
+  const [xmlAbrindoComparar, setXmlAbrindoComparar] = useState(false);
+  const [xmlCadastroAtualizado, setXmlCadastroAtualizado] = useState(false);
+  const [xmlNotaCompleta, setXmlNotaCompleta] = useState(false);
   const [xmlFornecedorProposto, setXmlFornecedorProposto] = useState<string | null>(null);
   const [xmlCriandoFornecedor, setXmlCriandoFornecedor] = useState(false);
   /* NOTA-FORNECEDOR-DUPLICA-01 — o CNPJ da nota ja' e' de um cadastro (conferido no banco ANTES de criar): a faixa diz de quem e oferece usar */
@@ -1326,13 +1336,23 @@ export function LancamentoV2Dialog({
     setPendentes(doXml ? [pendenteDaNota(doXml, doXml.proposta.favorecidoId)] : []);
     setXmlFaixaFechada(false);
     setXmlRegistradaDispensada(false);
-    setXmlGravarDocumento(!!doXml?.resolucao.cadastroSemDocumento);
+    setXmlComparar(null);
+    setXmlCadastroAtualizado(false);
     setXmlFornecedorProposto(doXml?.proposta.favorecidoId ?? null);
     setPosSalvar(null);
     setAnexarBoletos(null);
     setErroAntesDeSalvar(null);
     setItemOC(''); setTentouOC(false); setSimOC(null);
   }, [open, lancamento, defaultFazendaId, prefill, lockedFields]);
+  useEffect(() => {
+    const d = open && !lancamento ? prefill?.doXml ?? null : null;
+    const cli = clienteAtual?.id;
+    setXmlNotaCompleta(false);
+    if (!d?.emitente || !cli || !xmlFornecedorProposto || d.resolucao.achadoPor !== 'documento') return;
+    let vivo = true;
+    void camposQueOEmitenteCompleta(cli, xmlFornecedorProposto, d.emitente).then((l) => { if (vivo) setXmlNotaCompleta(l.length > 0); }, () => undefined);
+    return () => { vivo = false; };
+  }, [open, lancamento, prefill, clienteAtual?.id, xmlFornecedorProposto]);
 
   // FIN-MODAL-FECHO-01 item 2 — resolve o operacao_id do título OC pelo vínculo
   // zoo_operacao_partes.financeiro_lancamento_id (leitura). Só quando o modal está
@@ -2334,21 +2354,41 @@ export function LancamentoV2Dialog({
       setXmlCriandoFornecedor(false);
     }
   };
+  /* NOTA-FORNECEDOR-COMPARAR-01 — "comparar e atualizar o cadastro" da faixa: o CNPJ de OUTRO cadastro nao entra (a faixa do conflito
+     oferece "usar este"); depois, o MESMO modal da previa ("+ Da nota"), que so' grava o marcado (trilha por campo, desfazer) */
+  const abrirComparacaoDoXml = async () => {
+    const cli = clienteAtual?.id;
+    if (!xml || !xmlFornecedorProposto || !cli) return;
+    setXmlAbrindoComparar(true);
+    try {
+      if (xml.resolucao.cadastroSemDocumento) {
+        const ja = await fornecedorPeloDocumento(cli, xml.emitenteDocumento);
+        if (ja && ja.id !== xmlFornecedorProposto) { setXmlConflito(ja); return; }
+      }
+      const hoje = await cadastroParaComparar(cli, xmlFornecedorProposto);
+      if (!hoje) { toast.error('O cadastro não foi lido. Nada foi gravado.'); return; }
+      setXmlComparar(hoje);
+    } finally { setXmlAbrindoComparar(false); }
+  };
+  const gravarComparacaoDoXml = async (campos: Record<string, string>): Promise<string | null> => {
+    const cli = clienteAtual?.id;
+    if (!xml || !xmlFornecedorProposto || !cli) return 'Sem cadastro escolhido.';
+    const r = await atualizarCamposDoCadastro(xmlFornecedorProposto, campos, 'nota', xml.proposta.rotuloNota, cli);
+    if (r.ok === false) return r.frase;
+    setXmlCadastroAtualizado(true);
+    const alt = r.alteracaoId;
+    const nCampos = Object.keys(campos).length;
+    toast.success(`Cadastro atualizado (${nCampos} ${nCampos === 1 ? 'coluna' : 'colunas'})`, alt ? {
+      action: { label: 'Desfazer', onClick: () => { void desfazerCamposDoCadastro(alt, cli).then((e) => (e ? toast.error(e) : toast.success('Desfeito'))); } },
+    } : undefined);
+    return null;
+  };
   /**
-   * Depois que o LANCAMENTO nasceu (nunca antes): grava o CNPJ do XML no cadastro, se a caixa ficou marcada e o fornecedor
-   * ainda e' o proposto, e avisa quem abriu o modal. ⚠ Falha aqui NAO desfaz o lancamento: ele ja' esta' gravado.
+   * Depois que o LANCAMENTO nasceu (nunca antes): guarda os itens da nota e avisa quem abriu o modal. O cadastro do fornecedor NAO e'
+   * tocado aqui (NOTA-FORNECEDOR-COMPARAR-01: so' pela comparacao confirmada). ⚠ Falha aqui NAO desfaz o lancamento.
    */
   const aposCriarDoXml = async () => {
     if (!xml) return;
-    if (xmlGravarDocumento && xml.resolucao.cadastroSemDocumento && xmlFornecedorProposto && favorecidoId === xmlFornecedorProposto && clienteAtual?.id) {
-      const erro = await gravarDocumentoNoCadastro(clienteAtual.id, xmlFornecedorProposto, xml.emitenteDocumento);
-      if (erro) toast.error(`Lançamento gravado, mas o documento não foi gravado no cadastro do fornecedor: ${erro}`);
-    }
-    /* FORN-CADASTRO-02 — fornecedor existente: o XML só PREENCHE o que está vazio (fantasia, IE, endereço); nunca sobrescreve */
-    if (xml.emitente && xmlFornecedorProposto && favorecidoId === xmlFornecedorProposto && clienteAtual?.id) {
-      const erro = await completarCadastroPeloXml(clienteAtual.id, xmlFornecedorProposto, xml.emitente);
-      if (erro) toast.error(`Lançamento gravado, mas os dados do emitente não foram gravados no cadastro: ${erro}`);
-    }
     /* ITENS-NOTA-01 — os itens da nota ficam guardados pela chave (o documento), sem travar o salvar */
     if (clienteAtual?.id) {
       const erroItens = await gravarItensSemTravar(clienteAtual.id, xml.arquivo);
@@ -2509,11 +2549,13 @@ export function LancamentoV2Dialog({
             {/* FIN-NFE-XML-01d — o que a nota pede que o operador decida: o fornecedor (uma faixa) e os avisos. */}
             {xml && (
               <div className="space-y-1" data-testid="xml-faixas">
-                <FaixaDoFornecedor xml={xml} fechada={xmlFaixaFechada} gravarDocumento={xmlGravarDocumento}
-                  onGravarDocumento={setXmlGravarDocumento}
+                <FaixaDoFornecedor xml={xml} fechada={xmlFaixaFechada}
+                  cadastro={xmlFornecedorProposto && favorecidoId === xmlFornecedorProposto && (xml.resolucao.cadastroSemDocumento || xml.resolucao.achadoPor === 'documento')
+                    ? { oferece: xml.resolucao.cadastroSemDocumento || xmlNotaCompleta, atualizado: xmlCadastroAtualizado, abrindo: xmlAbrindoComparar,
+                        onComparar: () => { void abrirComparacaoDoXml(); } }
+                    : null}
                   onTrocar={() => {
                     setXmlFaixaFechada(true);
-                    setXmlGravarDocumento(false);
                     document.getElementById('campo-fornecedor-financeiro')?.querySelector('button')?.focus();
                   }}
                   onEscolher={(id) => { setFavorecidoId(id); setXmlFornecedorProposto(id); setXmlFaixaFechada(true); }}
@@ -3694,6 +3736,16 @@ export function LancamentoV2Dialog({
           if (f) handleFornecedorCriado(f);
         }}
       />
+      {xml && xmlComparar && (
+        <CompararCadastroDialog hoje={xmlComparar} rotuloOrigem="Da nota"
+          proposta={propostaDoEmitente(xml.emitente ?? { documento: xml.emitenteDocumento, nome: xml.emitenteNome, fantasia: null, ie: null })}
+          emitente={{ documento: xml.emitenteDocumento, nomes: [xml.emitenteNome, xml.emitente?.fantasia] }}
+          onConfirmar={gravarComparacaoDoXml} onClose={() => setXmlComparar(null)}
+          onEscolherOutro={() => {
+            setXmlComparar(null); setXmlFaixaFechada(true);
+            document.getElementById('campo-fornecedor-financeiro')?.querySelector('button')?.focus();
+          }} />
+      )}
     </>
   );
 }
