@@ -98,7 +98,18 @@ export function CancelarContaCorrenteDialog({ api, onCancelar, onFechar, lado = 
       <DialogContent className="max-w-xl" data-testid="dialogo-cancelar-cc">
         <DialogHeader><DialogTitle className="text-[12px]">Cancelar a operação</DialogTitle></DialogHeader>
         {!rol && !erro && <div className="text-[10.5px] text-muted-foreground">Carregando o que será desfeito…</div>}
-        {rol && (
+        {rol && rol.modelo === 'titulo' && (
+          /* P32 — o modelo antigo: so' os compromissos que fecham junto, com vencimento e R$ (titulo ativo o banco ja' recusa) */
+          <div className="max-h-[50vh] space-y-1.5 overflow-auto" data-testid="cancelar-modelo-titulo">
+            <Bloco titulo="Compromissos e programações cancelados" n={rol.compromissos.length}>
+              {rol.compromissos.map((c, i) => (
+                <li key={i}>{c.vencimento ? dataCurta(c.vencimento) : 'sem vencimento'} · {c.descricao ?? c.componente} · {formatMoeda(c.valor)}</li>
+              ))}
+            </Bloco>
+            <div className="text-[10px] text-muted-foreground">Nenhum título é apagado; o que a operação programou e ainda não virou pagamento é cancelado junto.</div>
+          </div>
+        )}
+        {rol && rol.modelo !== 'titulo' && (
           <div className="max-h-[50vh] space-y-1.5 overflow-auto">
             <Bloco titulo={t.entregas} n={rol.entregas.length}>
               {rol.entregas.map((e, i) => <li key={i}>{dataCurta(e.data)} · lote {e.loteOrdem ?? '—'} · {formatMoeda(e.valor)}</li>)}
@@ -127,7 +138,7 @@ export function CancelarContaCorrenteDialog({ api, onCancelar, onFechar, lado = 
             )}
             {rol.compromissos.length > 0 && (
               <Bloco titulo="Compromissos cancelados" n={rol.compromissos.length}>
-                {rol.compromissos.map((c, i) => <li key={i}>{c.componente} · {formatMoeda(c.valor)}</li>)}
+                {rol.compromissos.map((c, i) => <li key={i}>{c.vencimento ? `${dataCurta(c.vencimento)} · ` : ''}{c.descricao ?? c.componente} · {formatMoeda(c.valor)}</li>)}
               </Bloco>
             )}
             {/* OC-CONTA-CORRENTE-TODOS-01a, decisao 3 — uma regra para todos os tipos: despesa paga a terceiro NUNCA se cancela.
