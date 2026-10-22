@@ -540,6 +540,39 @@ if (tela === 'mesclar') {
       onCriarFornecedor={async () => null} onCriarLancamento={async () => null} onAbrirNoLancamento={() => {}} onAbrirRegistrada={() => {}} onCriado={() => {}} consultarReceita={receita as any} />);
   };
   void montarNotaPdf();
+} else if (tela === 'itens-nota') {
+  /* ITENS-NOTA-01 — os itens da nota fora do lancamento, com dado SINTETICO (a nota de 3 itens do teste, repetida):
+     `v=` ''         o dialogo da aba Documentos da OC, PIOR CASO: 40 itens, metade com descricao de 120 caracteres (o corpo rola no quadro)
+         `guardadas` "Itens das notas ja' guardadas" (o backfill): 30 candidatas, 4 sem arquivo no armazenamento; o Simular le^ de verdade */
+  const montarItens = async () => {
+    const { itensDoXml } = await import('@/lib/financeiro/nfe/itensDaNota');
+    const { XML_ITENS_SINTETICO } = await import('@/lib/financeiro/nfe/__fixtures__/xmlItensSintetico');
+    const bytes = new TextEncoder().encode(XML_ITENS_SINTETICO).buffer;
+    if (v === 'guardadas') {
+      const { ItensDasNotasGuardadasDialog } = await import('@/components/financeiro-v2/ItensDasNotasGuardadasDialog');
+      const chave = (k: number) => `5026091122233300042455001${String(k).padStart(9, '0')}1000000010`;
+      const docs = Array.from({ length: 30 }, (_, k) => ({ chave_acesso: chave(k), numero: String(1000 + k).padStart(9, '0'), url: k % 7 === 3 ? `cli/sumiu-${k}.pdf` : `cli/nota-${k}.xml` }));
+      const nfe = utf8(montarNFe({}));   /* a NF-e SINTETICA completa (6 itens) — o arquivo que o Simular le^ de verdade */
+      g.__arquivosBancada = Object.fromEntries(docs.filter((d) => d.url.endsWith('.xml')).map((d) => [d.url, nfe]));
+      g.__bancoBancada = {
+        from: (t: string) => t === 'financeiro_lancamento_documentos' ? docs.slice(0, 18) : t === 'zoo_operacao_documentos' ? docs.slice(18) : [],
+        rpc: (fn: string, a: any) => fn === 'fn_nota_fiscal_gravar' ? { acao: 'criada', itens: a.p_itens.length, soma_cent: a.p_nota.totais.nota_cent, nota_cent: a.p_nota.totais.nota_cent, confere: true, simulado: true } : null,
+      };
+      raiz.render(<ItensDasNotasGuardadasDialog clienteId="cli" onClose={() => {}} />);
+      return;
+    }
+    const { ItensDaNotaDialog } = await import('@/components/financeiro-v2/ItensDaNotaDialog');
+    const base: any = itensDoXml(bytes);
+    const LONGA = 'DEFENSIVO AGRICOLA SINTETICO DE NOME MUITO COMPRIDO PARA O PIOR CASO DA BANCADA COM EMBALAGEM DE 20 LITROS E LOTE ';
+    const itens = Array.from({ length: 40 }, (_, k) => ({ ...base.itens[k % 3], nItem: k + 1, descricao: k % 2 ? `${LONGA}${k}`.slice(0, 120) : base.itens[k % 3].descricao }));
+    const soma = (f: (i: any) => number) => itens.reduce((s, i) => s + f(i), 0);
+    const lidos = { ...base, itens, totais: { ...base.totais, produtosCent: soma((i) => i.produtoCent), descontoCent: soma((i) => i.descontoCent),
+      freteCent: soma((i) => i.freteCent), seguroCent: soma((i) => i.seguroCent), outrasCent: soma((i) => i.outrasCent), notaCent: soma((i) => i.liquidoCent) } };
+    const cabecalho = { chave: '50260911222333000424550010000032411000000010', origem: 'xml', numero: '3241', serie: '1', emissao: '2026-09-29', natureza: 'VENDA',
+      regime: '3', emitenteDocumento: '11222333000424', emitenteNome: 'COOPERATIVA AGROINDUSTRIAL SINTETICA DOS PRODUTORES RURAIS DO MATO GROSSO DO SUL E REGIAO CENTRO OESTE LTDA' };
+    raiz.render(<ItensDaNotaDialog clienteId="cli" chave={cabecalho.chave} onClose={() => {}} carregar={async () => ({ cabecalho, lidos } as any)} />);
+  };
+  void montarItens();
 } else if (tela === 'lancamento') {
   /* com `desc`, a edição é parcela de uma compra parcelada SEM número de contrato: o rodapé fala dela (a descrição do contrato é a longa) */
   /* ACESSOS-PERFIL-01 — a aba Auditoria: eventos de dois membros e um sem autor (com e sem `via`), nomes pela fonte única. */
