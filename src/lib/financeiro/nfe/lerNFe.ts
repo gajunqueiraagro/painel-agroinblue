@@ -146,6 +146,8 @@ export function lerNFe(bytes: ArrayBuffer): ResultadoNFe {
     duplicatas,
     somaDuplicatasCent,
     pagamentos: filhos(filho(inf, 'pag'), 'detPag').map((p) => ({ tPag: texto(p, 'tPag') ?? '', valorCent: cent(p, 'vPag') })),
+    informacoesComplementares: texto(inf, 'infAdic', 'infCpl'),
+    cfops: filhos(inf, 'det').map((d) => texto(filho(d, 'prod'), 'CFOP') ?? '').filter(Boolean),
     itens: filhos(inf, 'det').map((d) => {
       const prod = filho(d, 'prod');
       return { descricao: texto(prod, 'xProd') ?? '', quantidade: texto(prod, 'qCom') ?? '', unidade: texto(prod, 'uCom') ?? '', valorCent: cent(prod, 'vProd') };
