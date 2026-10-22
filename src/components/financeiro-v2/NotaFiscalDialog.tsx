@@ -46,14 +46,16 @@ import { casarJaLancados, parcelasParaCasar, type LancamentoJaLancado } from '@/
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { CompararCadastroDialog } from './CompararCadastroDialog';
+import { GravarIeDaFazendaDialog } from './GravarIeDaFazendaDialog';
 import { propostaDoEmitente, type CadastroParaComparar } from '@/lib/fornecedores/compararCadastro';
 import type { NotaDoArquivo } from '@/lib/financeiro/nfe/lerNota';
 import { ehSerieAvulsa, type CampoConferido, type CampoDaMarca } from '@/lib/financeiro/nfe/danfe';
 import { fraseDaRemessa } from '@/lib/financeiro/nfe/remessaEntregaFutura';
+import { ORIGEM_FAZENDA_PELO_ENDERECO } from '@/lib/financeiro/nfe/proporLancamento';
 import type { EmitenteNFe } from '@/lib/financeiro/nfe/tipos';
 import { dataCurta, documentoFormatado, numeroDaNota, numeroFalado, reais, soDigitos } from '@/lib/financeiro/nfe/formatos';
 import {
-  camposQueOEmitenteCompleta, completarCadastroPeloXml, fornecedorPeloDocumento, lancamentosAbertosComValor,
+  camposQueOEmitenteCompleta, completarCadastroPeloXml, desfazerIeDaFazenda, fornecedorPeloDocumento, iePorFazenda, inscreverEmFazendas, lancamentosAbertosComValor,
   atualizarCamposDoCadastro, cadastroParaComparar, desfazerCamposDoCadastro, notaJaLancada, usoDoFornecedor, type CadastroComODocumento,
   type LancamentoAbertoDaNota, type OcorrenciaDaNota,
 } from '@/lib/financeiro/nfeConsultas';
@@ -178,6 +180,17 @@ export function NotaFiscalDialog({
   const [cnpjGravado, setCnpjGravado] = useState(false);
   const [uso, setUso] = useState<{ lancamentos: number; ultimo: string | null } | null>(null);
   const [fazendaId, setFazendaId] = useState<string>(p.fazendaId ?? '');
+  /* NOTA-FAZENDA-PELA-IE-01 — a IE das fazendas (relida quando muda): a fazenda escolhida sem IE e a nota com a IE do destinatario =
+     oferecer gravar; a fazenda com OUTRA IE = so' avisar (nunca sobrescrever) */
+  const [iesDasFazendas, setIesDasFazendas] = useState<Record<string, string> | null>(null);
+  const [gravarIeAberto, setGravarIeAberto] = useState(false);
+  useEffect(() => {
+    let vivo = true;
+    const ler = () => { void iePorFazenda(clienteId).then((m) => { if (vivo) setIesDasFazendas(m); }, () => undefined); };
+    ler();
+    const sair = inscreverEmFazendas((c) => { if (c === clienteId) ler(); });
+    return () => { vivo = false; sair(); };
+  }, [clienteId]);
   const [contaId, setContaId] = useState<string>('__none__');
   const [planoId, setPlanoId] = useState<string>(p.classificacao?.plano_conta_id ?? '');
   const [receita, setReceita] = useState<DadosDoCnpj | null>(null);
@@ -284,6 +297,12 @@ export function NotaFiscalDialog({
   const registrada = doXml.ocorrencias[0] ?? null;
   const divergencias = lido.divergencias;
   const avulsa = ehSerieAvulsa(n.serie) || ehSerieAvulsa(n.chave.slice(22, 25));
+  const fazendaPeloEndereco = p.origens.fazenda === ORIGEM_FAZENDA_PELO_ENDERECO && !!p.fazendaId && fazendaId === p.fazendaId;
+  const ieDaNota = soDigitos(n.destinatario.ie ?? '');
+  const ieDaFazenda = fazendaId && iesDasFazendas ? soDigitos(iesDasFazendas[fazendaId] ?? '') : null;
+  const acaoDaIe: 'gravar' | 'diverge' | null = !fazendaId || !ieDaNota || ieDaFazenda === null ? null
+    : ieDaFazenda === '' ? 'gravar' : ieDaFazenda !== ieDaNota ? 'diverge' : null;
+  const nomeDaFazenda = fazendas.find((f) => f.id === fazendaId)?.nome ?? 'A fazenda';
   const remessa = fraseDaRemessa(n);
   const somaItens = n.itens.reduce((s, i) => s + i.valorCent, 0);
 
@@ -654,10 +673,20 @@ export function NotaFiscalDialog({
 
             {/* ── LANCAMENTO ───────────────────────────────────────────────────────────────────────── */}
             <section className={BLOCO} data-testid="nota-bloco-lancamento">
-              <TituloDoBloco nome="Lançamento" dica="o que a nota não diz, você escolhe" />
+              <TituloDoBloco nome="Lançamento" dica="o que a nota não diz, você escolhe" acao={acaoDaIe === 'gravar' ? (
+                <button type="button" className="text-[10px] font-medium text-primary underline-offset-2 hover:underline" onClick={() => setGravarIeAberto(true)} data-testid="nota-gravar-ie">
+                  Gravar a IE {n.destinatario.ie} nesta fazenda
+                </button>
+              ) : acaoDaIe === 'diverge' ? (
+                <span className="text-[10px] text-amber-800" data-testid="nota-ie-diverge"
+                  title={`${nomeDaFazenda} tem a IE ${iesDasFazendas?.[fazendaId] ?? ''} e a nota traz ${n.destinatario.ie ?? ''}: a IE gravada não é trocada pela nota.`}>
+                  {nomeDaFazenda} tem outra IE ({iesDasFazendas?.[fazendaId]}) · a nota traz {n.destinatario.ie}
+                </span>
+              ) : undefined} />
               <div className="campos-uma-linha grid grid-cols-4 gap-x-3 gap-y-1">
                 <div className="min-w-0">
-                  <span className={cn(REGUA_ROTULO, 'uma-linha-que-rola')}>Fazenda{p.fazendaId && fazendaId === p.fazendaId ? ' · pela nota' : ''}</span>
+                  <span className={cn(REGUA_ROTULO, 'uma-linha-que-rola', fazendaPeloEndereco && 'text-amber-800')} data-testid="nota-fazenda-origem">
+                    Fazenda{p.fazendaId && fazendaId === p.fazendaId ? (fazendaPeloEndereco ? ` · ${ORIGEM_FAZENDA_PELO_ENDERECO}` : ' · pela IE') : ''}</span>
                   <FazendaSelect value={fazendaId} onChange={setFazendaId} fazendas={fazendas} forcaAdministrativo={false} obrigatorio hideAviso triggerClassName="h-[22px] text-[10.5px]" />
                 </div>
                 <div className="min-w-0">
@@ -829,6 +858,18 @@ export function NotaFiscalDialog({
           onConfirmar={gravarComparacao} onClose={() => setComparar(null)}
           onEscolherOutro={() => { setComparar(null); setFavorecidoId(null); setNovoPorEscolha(false); }}
           onCadastrarNovo={() => { setComparar(null); setFavorecidoId(null); setNovoPorEscolha(true); }} />
+      )}
+
+      {/* NOTA-FAZENDA-PELA-IE-01 — gravar a IE do destinatario na fazenda escolhida (campo · hoje · da nota, trilha, desfazer) */}
+      {gravarIeAberto && fazendaId && n.destinatario.ie && (
+        <GravarIeDaFazendaDialog clienteId={clienteId} fazenda={{ id: fazendaId, nome: nomeDaFazenda }} ie={n.destinatario.ie} referencia={p.rotuloNota}
+          onClose={() => setGravarIeAberto(false)}
+          onGravada={(trilha) => {
+            setIesDasFazendas((m) => ({ ...(m ?? {}), [fazendaId]: ieDaNota }));
+            toast.success(`IE gravada em ${nomeDaFazenda}`, trilha ? {
+              action: { label: 'Desfazer', onClick: () => { void desfazerIeDaFazenda(trilha, clienteId).then((e) => (e ? toast.error(e) : toast.success('Desfeito'))); } },
+            } : undefined);
+          }} />
       )}
 
       {/* NOTA-JA-LANCADA-01 — "Criar mesmo assim": e' outra compra; o motivo fica na observacao do que nasce */}
