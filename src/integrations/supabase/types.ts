@@ -6411,6 +6411,7 @@ export type Database = {
           numero_conta: string | null
           ordem_exibicao: number | null
           saldo_inicial_oficial: number | null
+          sem_extrato_bancario: boolean
           tipo_conta: string | null
           updated_at: string | null
         }
@@ -6432,6 +6433,7 @@ export type Database = {
           numero_conta?: string | null
           ordem_exibicao?: number | null
           saldo_inicial_oficial?: number | null
+          sem_extrato_bancario?: boolean
           tipo_conta?: string | null
           updated_at?: string | null
         }
@@ -6453,6 +6455,7 @@ export type Database = {
           numero_conta?: string | null
           ordem_exibicao?: number | null
           saldo_inicial_oficial?: number | null
+          sem_extrato_bancario?: boolean
           tipo_conta?: string | null
           updated_at?: string | null
         }
