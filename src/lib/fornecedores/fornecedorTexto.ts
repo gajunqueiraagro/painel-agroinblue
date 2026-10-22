@@ -160,7 +160,8 @@ export interface RotuloDoFornecedor {
   /** O final que distingue os parecidos; nulo quando o nome comparado é único na lista. */
   final: string | null;
   inativo: boolean;
-  /** O `title`: nome inteiro · documento formatado · inativo. */
+  /** O `title`: nome inteiro · documento formatado (ou "sem CNPJ") · cidade/UF · inativo — o detalhe que a TABELA não escreve
+   *  (FIN-V2-FORNECEDOR-SEM-SUFIXO-01). */
   title: string;
 }
 
@@ -179,12 +180,11 @@ export function rotulosDosFornecedores(fornecedores: readonly FornecedorDoSeleto
     const k = chaveDoNomeComparado(f.nome);
     const parecidos = k ? (porChave.get(k)?.size ?? 0) : 0;
     const inativo = f.ativo === false;
-    const titulo = nomeEDocumento(f.nome, f.cpf_cnpj);
     rotulos.set(f.id, {
       nome: f.nome,
       final: parecidos > 1 ? finalDoDocumento(f.cpf_cnpj) : null,
       inativo,
-      title: inativo ? `${titulo} · inativo` : titulo,
+      title: [f.nome.trim(), formatarDocumento(f.cpf_cnpj) || FINAL_SEM_DOCUMENTO, cidadeDe(f), inativo ? 'inativo' : null].filter(Boolean).join(' · '),
     });
   }
   return rotulos;
