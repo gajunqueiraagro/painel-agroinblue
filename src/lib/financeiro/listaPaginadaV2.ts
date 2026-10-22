@@ -1,9 +1,10 @@
 /**
  * PR-FIN-LISTA-VENCIMENTO-03 — lista paginada no servidor.
  *
- * Lê a view `vw_financeiro_lancamentos_v2_doc` (security_invoker, RLS intacta) e
- * agrega os totais por RPC. A lista NUNCA baixa o conjunto inteiro, e os totais
- * também não: quem soma é o Postgres.
+ * Lê a view `vw_financeiro_lancamentos_v2_doc` (security_invoker, RLS intacta) pelo plano dos filtros da tela.
+ * FIN-V2-LISTA-FLAG-01: a lista da tela e' a RPC `fn_fin_v2_lista_pagina` (`listaPaginaV2`); aqui ficou o plano da view e o conjunto
+ * completo que o export e a secao sem caixa usam, e o CPR (`aplicarPlanoNaView`). A pagina e os totais da flag LISTA_PAGINADA_V2
+ * (RPC `fn_lista_v2_totais`) sairam com ela.
  *
  * ─────────────────────────────────────────────────────────────────────────────
  * TIPAGEM DAS COLUNAS
@@ -22,23 +23,13 @@ import { filtrarListaV2NoCliente, ramoImatch, type LinhaFiltravel } from './filt
 import { formatDocumento } from './documentoHelper';
 import {
   montarPlanoBaseV2,
-  anosDoRecorte,
-  mesesDoRecorte,
-  faixaMes,
   semRecorteDePeriodo,
   type FiltrosV2,
   type PlanoBaseV2,
-  type DimensaoDataFinanceiro,
 } from './filtrosBaseV2';
 
 /** Nome da view. */
 export const VIEW_LISTA_DOC = 'vw_financeiro_lancamentos_v2_doc';
-
-/** Nome da RPC de agregação. */
-export const RPC_TOTAIS = 'fn_lista_v2_totais';
-
-/** Tamanho de página congelado no GO. */
-export const TAMANHO_PAGINA_LISTA = 30;
 
 /**
  * Projeção da view, NOMINAL e na mesma ordem do gate VW4 da migration.
@@ -149,12 +140,6 @@ export interface BuilderView extends PromiseLike<RespostaView> {
 /** Abre uma consulta sobre a view. */
 export type AbrirView = (colunas: string, opcoes?: OpcoesAbertura) => BuilderView;
 
-/** Executa a RPC de totais. */
-export type ChamarRpcTotais = (params: ParamsTotais) => Promise<{
-  data: LinhaTotais[] | LinhaTotais | null;
-  error: { message?: string } | null;
-}>;
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Aplicação do plano — sequência FIXA de `if`s, jamais um laço
 //
@@ -234,13 +219,6 @@ export function ordenarPorVencimento(q: BuilderView): BuilderView {
     .order('id', { ascending: true });
 }
 
-/** Faixa `[de, até]` inclusiva que o `range()` do PostgREST espera. */
-export function faixaDaPagina(pagina: number, tamanho: number): [number, number] {
-  const p = Math.max(0, Math.trunc(pagina));
-  const de = p * tamanho;
-  return [de, de + tamanho - 1];
-}
-
 /** Plano da lista: view + ramo aditivo de sem-vencimento quando pedido. */
 export function planoDaLista(clienteId: string, filtros: FiltrosV2, opcoes: OpcoesPagina): PlanoBaseV2 {
   const ramoExtra = opcoes.incluirSemVencimento && !semRecorteDePeriodo(filtros)
@@ -248,21 +226,6 @@ export function planoDaLista(clienteId: string, filtros: FiltrosV2, opcoes: Opco
     : undefined;
   const plano = montarPlanoBaseV2(clienteId, filtros, { relacao: 'view', ramoTemporalExtra: ramoExtra });
   return opcoes.caixa ? { ...plano, caixa: opcoes.caixa } : plano;
-}
-
-/** Uma página da lista, ordenada pelo contrato e recortada por `range`. */
-export async function consultarPagina(
-  abrir: AbrirView,
-  clienteId: string,
-  filtros: FiltrosV2,
-  opcoes: OpcoesPagina = {},
-): Promise<LinhaViewDoc[]> {
-  const tamanho = opcoes.tamanhoPagina ?? TAMANHO_PAGINA_LISTA;
-  const [de, ate] = faixaDaPagina(opcoes.pagina ?? 0, tamanho);
-  const q = aplicarPlanoNaView(abrir('*'), planoDaLista(clienteId, filtros, opcoes));
-  const { data, error } = await ordenarPorVencimento(q).range(de, ate);
-  if (error) throw error;
-  return data ?? [];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -527,143 +490,6 @@ export function filtrosAplicadosDaLista(base: FiltrosV2, estado: EstadoFiltrosLi
     lista_fornecedor_id: ativo(estado.fornecedor),
     lista_atividade: ativo(estado.atividade),
     lista_grupo_custo: ativo(estado.grupo),
-  };
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Totais e contagem — uma RPC, uma passagem, zero linhas trafegadas
-// ─────────────────────────────────────────────────────────────────────────────
-
-export interface LinhaTotais {
-  total: number;
-  /** OC-VENDA-ENTREGAS-01b (D2): so' caixa. O sem caixa vem nas duas colunas do fim. */
-  entradas: number;
-  saidas: number;
-  excluidos_sem_vencimento: number;
-  entradas_sem_caixa: number;
-  saidas_sem_caixa: number;
-}
-
-export interface TotaisLista {
-  total: number;
-  entradas: number;
-  saidas: number;
-  excluidosSemVencimento: number;
-  entradasSemCaixa: number;
-  saidasSemCaixa: number;
-}
-
-/** Argumentos da RPC. Nomeados como no SQL — o compilador confere cada um. */
-export interface ParamsTotais {
-  p_cliente_id: string;
-  p_fazenda_id: string | null;
-  p_dimensao: DimensaoDataFinanceiro;
-  p_faixas: string[] | null;
-  p_meses: number[] | null;
-  p_exigir_data_dimensao: boolean;
-  p_incluir_sem_vencimento: boolean;
-  p_conta_bancaria_id: string | null;
-  p_conta_destino_id: string | null;
-  p_tipo_operacao: string | null;
-  p_status_transacoes: string[] | null;
-  p_incluir_conciliado: boolean;
-  p_macro_custo: string | null;
-  p_grupo_custo: string | null;
-  p_centro_custo: string | null;
-  p_subcentro: string | null;
-  p_lista_conta_direcao: string | null;
-  p_lista_produto: string | null;
-  p_lista_fornecedor_id: string | null;
-  p_lista_grupo_custo: string | null;
-  p_lista_atividade: string | null;
-  p_lista_documento: string | null;
-}
-
-/** Faixas `[ini,fim)` do recorte, no formato `daterange` do Postgres. */
-export function faixasDoRecorte(filtros: FiltrosV2): string[] | null {
-  /* ⚠ A MULTISSELEÇÃO DE ANOS NÃO PEDIU NADA AO BANCO — FIN-LISTA-MULTIANO-01. `p_faixas` já
-     é uma LISTA de intervalos, porque os meses sempre puderam ser vários; anos são mais
-     intervalos na mesma lista. A RPC dos totais não mudou, e é por isso que os totais não
-     têm como divergir da lista: as duas leem a mesma função. */
-  const anos = anosDoRecorte(filtros);
-  const meses = mesesDoRecorte(filtros);
-  if (anos.length === 0) return null;
-  if (meses.length > 0) {
-    /* Produto cartesiano, como no plano: dois anos × três meses = seis faixas. */
-    return anos.flatMap((ano) => meses.map((m) => {
-      const [ini, fim] = faixaMes(ano, Number(m));
-      return `[${ini},${fim})`;
-    }));
-  }
-  return anos.map((ano) => `[${ano}-01-01,${ano + 1}-01-01)`);
-}
-
-/**
- * Monta os argumentos da RPC a partir dos MESMOS `FiltrosV2` da lista.
- * Função pura e exaustiva: existe teste que confere que todo campo de
- * `FiltrosV2` chega aqui, para que um filtro novo não fique fora dos totais.
- */
-export function paramsDosTotais(
-  clienteId: string,
-  filtros: FiltrosV2,
-  opcoes: OpcoesPagina = {},
-): ParamsTotais {
-  const dimensao: DimensaoDataFinanceiro = filtros.dimensao ?? 'financeira';
-  const isTodosAnos = anosDoRecorte(filtros).length === 0;
-  const meses = mesesDoRecorte(filtros);
-  const contaOrigem = filtros.conta_bancaria_id?.trim() || null;
-  const contaDestino = filtros.conta_destino_id?.trim() || null;
-  const status = filtros.status_transacoes ?? [];
-  const temConciliado = status.includes('conciliado');
-  const statusReais = status.filter((s) => s !== 'conciliado');
-
-  return {
-    p_cliente_id: clienteId,
-    p_fazenda_id: filtros.fazenda_id || null,
-    p_dimensao: dimensao,
-    p_faixas: faixasDoRecorte(filtros),
-    // "Mês em qualquer ano" só existe quando o ano é "todos".
-    p_meses: isTodosAnos && meses.length > 0 ? meses.map((m) => Number(m)) : null,
-    // Sem faixa e sem meses, a dimensão continua soberana: exige data não-nula.
-    p_exigir_data_dimensao: isTodosAnos && meses.length === 0,
-    p_incluir_sem_vencimento: opcoes.incluirSemVencimento === true,
-    p_conta_bancaria_id: contaOrigem,
-    p_conta_destino_id: contaDestino,
-    // Com origem E destino o recorte vira transferência, e tipo_operacao é imposto
-    // pela própria RPC — mandar o do filtro aqui seria conflitar com ele.
-    p_tipo_operacao: contaOrigem && contaDestino ? null : (filtros.tipo_operacao || null),
-    p_status_transacoes: statusReais.length > 0 ? statusReais : null,
-    p_incluir_conciliado: temConciliado,
-    p_macro_custo: filtros.macro_custo || null,
-    p_grupo_custo: filtros.grupo_custo || null,
-    p_centro_custo: filtros.centro_custo || null,
-    p_subcentro: filtros.subcentro || null,
-    p_lista_conta_direcao: filtros.lista_conta_direcao || null,
-    p_lista_produto: filtros.lista_produto?.trim() || null,
-    p_lista_fornecedor_id: filtros.lista_fornecedor_id || null,
-    p_lista_grupo_custo: filtros.lista_grupo_custo || null,
-    p_lista_atividade: filtros.lista_atividade || null,
-    p_lista_documento: filtros.lista_documento?.trim() || null,
-  };
-}
-
-/** Totais e contagem do conjunto filtrado inteiro. Uma chamada, nenhuma linha. */
-export async function consultarTotais(
-  chamar: ChamarRpcTotais,
-  clienteId: string,
-  filtros: FiltrosV2,
-  opcoes: OpcoesPagina = {},
-): Promise<TotaisLista> {
-  const { data, error } = await chamar(paramsDosTotais(clienteId, filtros, opcoes));
-  if (error) throw error;
-  const linha = Array.isArray(data) ? data[0] : data;
-  return {
-    total: Number(linha?.total ?? 0),
-    entradas: Number(linha?.entradas ?? 0),
-    saidas: Number(linha?.saidas ?? 0),
-    excluidosSemVencimento: Number(linha?.excluidos_sem_vencimento ?? 0),
-    entradasSemCaixa: Number(linha?.entradas_sem_caixa ?? 0),
-    saidasSemCaixa: Number(linha?.saidas_sem_caixa ?? 0),
   };
 }
 
