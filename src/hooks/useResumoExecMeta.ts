@@ -12,6 +12,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { FONTE_POR_PARTE } from '@/lib/financeiro/partesDaClassificacao';
 
 // ─── Tipos ──────────────────────────────────────────────────────────────
 
@@ -205,8 +206,8 @@ export function useResumoExecMeta(
             .eq('cliente_id', clienteId).eq('fazenda_id', fazendaId).eq('ano', ano)
             .eq('cenario', 'meta'),
           // D) financeiro realizado ano anterior
-          supabase
-            .from('financeiro_lancamentos_v2')
+          (supabase as any)
+            .from(FONTE_POR_PARTE)
             .select('macro_custo, valor')
             .eq('cliente_id', clienteId).eq('fazenda_id', fazendaId)
             .eq('cenario', 'realizado').eq('cancelado', false).eq('sem_movimentacao_caixa', false)
