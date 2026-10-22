@@ -70,8 +70,9 @@ export function GraficoVG({ tela, modo, sel, onSel }: { tela: TelaVG; modo: Modo
     const els: JSX.Element[] = [];
     if (fut >= 0) {
       const x0 = L + fut * slot;
-      els.push(<rect key="fut" x={x0} y={T} width={L + iw - x0} height={ih} fill="#f4f6f9" />,
-        <text key="futt" x={x0 + 3} y={T + 8} fontSize={7.5} fill="#8d9cad">previsto</text>);
+      els.push(<rect key="fut" x={x0} y={T} width={L + iw - x0} height={ih} fill="#f4f6f9" />);
+      /* o rótulo só quando a faixa cabe a palavra (faixa de um mês estreito: só o fundo) */
+      if (L + iw - x0 >= 40) els.push(<text key="futt" x={x0 + 3} y={T + 8} fontSize={7.5} fill="#8d9cad">previsto</text>);
     }
     if (dn > 0) els.push(<rect key="neg" x={L} y={y0} width={iw} height={T + ih - y0} fill="#fbf3f3" opacity={0.7} />);
     for (let k = -dn; k <= up; k++) {

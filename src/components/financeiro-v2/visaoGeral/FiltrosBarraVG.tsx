@@ -35,18 +35,20 @@ export function useCarregarFiltrosVG() {
   return e;
 }
 
-function BotaoBarra({ rotulo, title, largura, destacado, testid, children }: {
-  rotulo: string; title: string; largura: number; destacado?: boolean; testid: string; children: ReactNode | ((fechar: () => void) => ReactNode);
+function BotaoBarra({ rotulo, rotuloCurto, title, largura, destacado, testid, children }: {
+  rotulo: string; rotuloCurto: string; title: string; largura: string; destacado?: boolean; testid: string; children: ReactNode | ((fechar: () => void) => ReactNode);
 }) {
   const [aberto, setAberto] = useState(false);
   return (
     <Popover open={aberto} onOpenChange={setAberto}>
       <PopoverTrigger asChild>
         <button type="button" data-testid={testid} title={title}
-          className={cn('flex h-5 shrink-0 items-center justify-between gap-1 rounded border px-2 text-[10px] text-white',
+          className={cn('flex h-5 shrink-0 items-center justify-between gap-1 rounded border px-2 text-[10px] text-white', largura,
             destacado ? 'border-[#f2b84b]' : 'border-[#4a6a92]')}
-          style={{ width: largura, background: '#2b4c75' }}>
-          <span className="min-w-0 truncate">{rotulo}</span>
+          style={{ background: '#2b4c75' }}>
+          {/* abaixo de 1024px a barra aperta: o rótulo curto (o inteiro fica no title) — nada corta */}
+          <span className="hidden min-w-0 whitespace-nowrap lg:inline">{rotulo}</span>
+          <span className="min-w-0 whitespace-nowrap lg:hidden">{rotuloCurto}</span>
           <ChevronDown className="h-3 w-3 shrink-0 opacity-80" />
         </button>
       </PopoverTrigger>
@@ -92,12 +94,13 @@ export function FiltrosBarraVG() {
     filtrosVG.mudar({ contas: ehPadrao ? null : lista });
   };
   const rotContas = rotuloDasContas(contas, e.contas);
+  const curtoContas = e.contas === null ? 'Contas' : e.contas.length === 1 ? '1 conta' : `${e.contas.length} contas`;
   const fazendaNome = fazendas.find((f: { id: string }) => f.id === e.fazenda)?.nome;
   const safraNome = e.lista?.safras.find((s) => s.id === e.safra)?.nome;
   let ultimoTipo = '';
   return (
     <span className="hidden items-center gap-1.5 md:flex" data-testid="filtros-barra-vg">
-      <BotaoBarra testid="vg-contas" largura={124} rotulo={rotContas} title={`Contas: ${rotContas}`} destacado={e.contas !== null}>
+      <BotaoBarra testid="vg-contas" largura="w-[78px] lg:w-[124px]" rotulo={rotContas} rotuloCurto={curtoContas} title={`Contas: ${rotContas}`} destacado={e.contas !== null}>
         <Opcao marcada={e.contas === null} onClick={() => filtrosVG.mudar({ contas: null })} testid="vg-contas-padrao">
           Contas do caixa (cc + investimento; cartão fora)
         </Opcao>
@@ -120,19 +123,19 @@ export function FiltrosBarraVG() {
         </div>
       </BotaoBarra>
       {/* Fazenda e Safra: o seletor DA CASA com busca (`SearchableSelect`, regra do check:ui-nativo), com "Todas" no topo */}
-      <span className="shrink-0" style={{ width: 120 }} title={`Fazenda: ${fazendaNome ?? 'todas'}`} data-testid="vg-fazenda">
+      <span className="w-[92px] shrink-0 lg:w-[120px]" title={`Fazenda: ${fazendaNome ?? 'todas'}`} data-testid="vg-fazenda">
         <SearchableSelect value={e.fazenda ?? TODAS} onValueChange={(v) => filtrosVG.mudar({ fazenda: v === TODAS ? null : v })}
-          allValue={TODAS} allLabel="Fazenda: todas" dense
+          allValue={TODAS} allLabel="Fazendas" dense
           options={fazendas.filter((f: { id: string }) => f.id !== '__global__').map((f: { id: string; nome: string }) => ({ value: f.id, label: f.nome }))}
           triggerClassName={cn(GATILHO_ESCURO, e.fazenda !== null ? 'border-[#f2b84b]' : 'border-[#4a6a92]')} />
       </span>
-      <span className="shrink-0" style={{ width: 108 }} title={`Safra: ${safraNome ?? 'todas'}`} data-testid="vg-safra">
+      <span className="w-[72px] shrink-0 lg:w-[108px]" title={`Safra: ${safraNome ?? 'todas'}`} data-testid="vg-safra">
         <SearchableSelect value={e.safra ?? TODAS} onValueChange={(v) => filtrosVG.mudar({ safra: v === TODAS ? null : v })}
-          allValue={TODAS} allLabel="Safra: todas" dense
+          allValue={TODAS} allLabel="Safras" dense
           options={(e.lista?.safras ?? []).map((x) => ({ value: x.id, label: x.nome }))}
           triggerClassName={cn(GATILHO_ESCURO, e.safra !== null ? 'border-[#f2b84b]' : 'border-[#4a6a92]')} />
       </span>
-      <BotaoBarra testid="vg-atividade" largura={116} rotulo={e.atividade ? rotuloAtividade(e.atividade) : 'Atividade: todas'}
+      <BotaoBarra testid="vg-atividade" largura="w-[84px] lg:w-[116px]" rotulo={e.atividade ? rotuloAtividade(e.atividade) : 'Atividade: todas'} rotuloCurto={e.atividade ? '1 atividade' : 'Atividades'}
         title={`Atividade: ${e.atividade ? rotuloAtividade(e.atividade) : 'todas'}`} destacado={e.atividade !== null}>
         {(fechar) => (
           <>
