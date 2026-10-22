@@ -57,6 +57,10 @@ export interface RolCancelamento {
   compromissos: Array<{ componente: string; valor: number }>;
   /** OC-CONTA-CORRENTE-TODOS-01a (decisao 3): despesas pagas a terceiros — frete, comissao, ICMS, Fundersul, Iagro. FICAM. */
   despesas: Array<{ componente: string; nome: string | null; favorecido: string | null; valor: number; pago: number }>;
+  /** OC-CANCELAR-CASCATA-01: os titulos das saidas fora da OC (a parcela da venda antiga adotada) — cancelados junto. */
+  titulosSaida: Array<{ data: string; valor: number; descricao: string | null }>;
+  /** OC-CANCELAR-CASCATA-01: mes fechado no Financeiro (o de P1 e' bloqueio). */
+  avisos: string[];
   bloqueios: string[];
 }
 
@@ -357,6 +361,8 @@ export function lerRol(raw: unknown): RolCancelamento | null {
     compromissos: lista(r.compromissos).map(e => ({ componente: String(e.componente ?? ''), valor: Number(e.valor) || 0 })),
     despesas: lista(r.despesas).map(e => ({ componente: String(e.componente ?? ''), nome: txt(e.nome), favorecido: txt(e.favorecido),
       valor: Number(e.valor) || 0, pago: Number(e.pago) || 0 })),
+    titulosSaida: lista(r.titulos_saida).map(e => ({ data: String(e.data ?? ''), valor: Number(e.valor) || 0, descricao: txt(e.descricao) })),
+    avisos: Array.isArray(r.avisos) ? r.avisos.map(a => String(a)) : [],
     bloqueios: lista(r.bloqueios).map(e => String(e.descricao ?? '')),
   };
 }
