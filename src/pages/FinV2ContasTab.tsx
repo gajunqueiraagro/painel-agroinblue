@@ -1,727 +1,211 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+/**
+ * Financeiro › Contas bancárias — CAD-CONTAS-BANCARIAS-01 (mock aprovado 20/10 12h53, vista "Lista").
+ *   · colunas: Cód. · Nome da conta · Tipo · Banco · Agência · Conta · Fazenda · Gerente · Telefone · Início · Saldo inicial · Status · ✎
+ *   · faixas por tipo ("Conta corrente · 5"), rodapé preso com "N contas · N ativas" e a soma do saldo inicial
+ *   · vazio "não inf." em cinza; caixa físico "não se aplica"; sem saldo/início em âmbar
+ *   · barra: busca (conta, banco ou gerente) · Todas/Conta corrente/Investimento/Cartão · fazenda · Mostrar inativas · + Nova conta
+ *   · estreitando, somem Telefone e Início, depois Gerente e Agência, depois Fazenda (`colunasEscondidas`, pela largura da lista)
+ *   · clique na linha abre o modal (`ContaBancariaModal`); salvou, a lista relê SÓ a conta salva
+ */
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { Switch } from '@/components/ui/switch';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Plus, Pencil, ChevronDown, MoreHorizontal, Power, PowerOff, Trash2, Eye, EyeOff } from 'lucide-react';
-import { toast } from 'sonner';
-
+import { Checkbox } from '@/components/ui/checkbox';
+import { Segmentado } from '@/components/ui/segmentado';
 import { SearchableSelect } from '@/components/ui/searchable-select';
-interface BancoRef {
-  codigo_banco: string;
-  nome_banco: string;
-  nome_curto: string;
-}
+import { cn } from '@/lib/utils';
+import { ContaBancariaModal } from '@/components/financeiro-v2/ContaBancariaModal';
+import {
+  brl, celulaAgencia, celulaBanco, celulaConta, celulaGerente, celulaInicio, celulaSaldo, celulaTelefone, colunasEscondidas,
+  faixaDaConta, faixasDaLista, filtrarContas, nomeDaConta, rodapeDaLista, SELO_TIPO,
+  type BancoReferencia, type Celula, type ColunaOpcional, type ContaBancariaCadastro, type SegmentoDaLista,
+} from '@/lib/financeiro/contasBancarias';
 
-interface ContaBancaria {
-  id: string;
-  nome_conta: string;
-  banco: string | null;
-  numero_conta: string | null;
-  agencia: string | null;
-  tipo_conta: string | null;
-  codigo_conta: string | null;
-  nome_exibicao: string | null;
-  conta_digito: string | null;
-  fazenda_id: string;
-  ativa: boolean;
-  ordem_exibicao: number;
-  mes_inicio: string | null;
-  saldo_inicial_oficial: number | null;
-  /** CONC-TRANSF-DUAS-PONTAS-01b: conta sem extrato bancario (investimento, cartao, caixa) — a ponta de transferencia aqui nao e' exigida */
-  sem_extrato_bancario?: boolean | null;
-}
-
-// PR-H1 — vocabulário oficial CURTO: cc | inv | cartao.
-const TIPO_ORDER: Record<string, number> = {
-  cc: 0,
-  inv: 1,
-  cartao: 2,
-};
-const TIPO_LABEL: Record<string, string> = {
-  cc: 'Contas Correntes',
-  inv: 'Investimentos',
-  cartao: 'Cartões',
-};
-const BADGE_LABEL: Record<string, string> = {
-  cc: 'CC',
-  inv: 'INV',
-  cartao: 'CARTÃO',
-};
-const BADGE_CLASS: Record<string, string> = {
-  cc: 'bg-blue-100 text-blue-700 border-blue-200',
-  inv: 'bg-purple-100 text-purple-700 border-purple-200',
-  cartao: 'bg-orange-100 text-orange-700 border-orange-200',
-};
-
-function parseNum(code: string | null) {
-  if (!code) return 0;
-  const parts = code.split('-');
-  return parseInt(parts[parts.length - 1] || '0', 10);
-}
-
-/** Build display label: "Nome (Ag-Conta)" when bank details exist */
+/** Mantido para quem já o importava: "Nome (Ag Conta-Dv)" quando há dados bancários. */
 export function contaDisplayLabel(c: { nome_exibicao?: string | null; nome_conta: string; agencia?: string | null; numero_conta?: string | null; conta_digito?: string | null }): string {
   const nome = c.nome_exibicao || c.nome_conta;
   const parts: string[] = [];
   if (c.agencia) parts.push(c.agencia);
-  if (c.numero_conta) {
-    parts.push(c.conta_digito ? `${c.numero_conta}-${c.conta_digito}` : c.numero_conta);
-  }
-  if (parts.length > 0) return `${nome} (${parts.join(' ')})`;
-  return nome;
+  if (c.numero_conta) parts.push(c.conta_digito ? `${c.numero_conta}-${c.conta_digito}` : c.numero_conta);
+  return parts.length > 0 ? `${nome} (${parts.join(' ')})` : nome;
+}
+
+const SEGMENTOS: Array<{ valor: SegmentoDaLista; rotulo: string }> = [
+  { valor: 'todas', rotulo: 'Todas' }, { valor: 'cc', rotulo: 'Conta corrente' }, { valor: 'inv', rotulo: 'Investimento' }, { valor: 'cartao', rotulo: 'Cartão' },
+];
+const TODAS_FAZENDAS = '__todas__';
+const SELO_CLASSE: Record<'cc' | 'inv' | 'cartao', string> = {
+  cc: 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-200',
+  inv: 'bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-200',
+  cartao: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200',
+};
+const TH = 'sticky top-0 z-[2] h-[23px] whitespace-nowrap bg-primary px-1.5 text-left text-[10.5px] font-semibold text-primary-foreground';
+const TD = 'h-[22px] whitespace-nowrap border-b border-border/60 px-1.5 text-[11px]';
+const TF = 'sticky bottom-0 z-[2] h-[23px] whitespace-nowrap border-t bg-muted px-1.5 text-[11px] font-semibold';
+
+function Cel({ c, className }: { c: Celula; className?: string }) {
+  return <td title={c.texto} className={cn(TD, c.tom === 'vazio' && 'text-muted-foreground', c.tom === 'aviso' && 'font-semibold text-amber-700 dark:text-amber-400', className)}>{c.texto}</td>;
 }
 
 export function FinV2ContasTab() {
   const { clienteAtual } = useCliente();
   const { fazendas } = useFazenda();
-  const [contas, setContas] = useState<ContaBancaria[]>([]);
-  const [bancos, setBancos] = useState<BancoRef[]>([]);
-  const [contasComLancamento, setContasComLancamento] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editing, setEditing] = useState<ContaBancaria | null>(null);
-  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const clienteId = clienteAtual?.id ?? null;
+  const [contas, setContas] = useState<ContaBancariaCadastro[]>([]);
+  const [bancos, setBancos] = useState<BancoReferencia[]>([]);
+  const [carregando, setCarregando] = useState(false);
+  const [busca, setBusca] = useState('');
+  const [segmento, setSegmento] = useState<SegmentoDaLista>('todas');
+  const [fazendaFiltro, setFazendaFiltro] = useState(TODAS_FAZENDAS);
   const [mostrarInativas, setMostrarInativas] = useState(false);
+  const [modal, setModal] = useState<{ conta: ContaBancariaCadastro | null } | null>(null);
 
-  // Confirm dialogs
-  const [confirmDesativar, setConfirmDesativar] = useState<ContaBancaria | null>(null);
-  const [confirmAtivar, setConfirmAtivar] = useState<ContaBancaria | null>(null);
-  const [confirmExcluir, setConfirmExcluir] = useState<ContaBancaria | null>(null);
-
-  // Form fields — principal
-  const [nomeExibicao, setNomeExibicao] = useState('');
-  const [tipoConta, setTipoConta] = useState('cc');
-  const [banco, setBanco] = useState('');
-  const [bancoOutro, setBancoOutro] = useState('');
-  const [fazendaId, setFazendaId] = useState('');
-  const [ativa, setAtiva] = useState(true);
-  const [semExtrato, setSemExtrato] = useState(false);
-
-  // Form fields — avançado
-  const [codigoConta, setCodigoConta] = useState('');
-  const [agencia, setAgencia] = useState('');
-  const [numeroConta, setNumeroConta] = useState('');
-  const [contaDigito, setContaDigito] = useState('');
-  const [mesInicio, setMesInicio] = useState('2026-04');
-  const [saldoInicialOficial, setSaldoInicialOficial] = useState('');
-
-  const loadBancos = useCallback(async () => {
-    const { data } = await supabase
-      .from('bancos_referencia')
-      .select('codigo_banco, nome_banco, nome_curto')
-      .eq('ativo', true)
-      .order('ordem_exibicao');
-    setBancos((data as BancoRef[]) || []);
+  useEffect(() => {
+    void supabase.from('bancos_referencia').select('codigo_banco, nome_banco, nome_curto').eq('ativo', true).order('ordem_exibicao')
+      .then(({ data }) => setBancos((data as BancoReferencia[]) ?? []));
   }, []);
 
-  const load = useCallback(async () => {
-    if (!clienteAtual?.id) return;
-    setLoading(true);
+  const carregar = useCallback(async () => {
+    if (!clienteId) return;
+    setCarregando(true);
+    const { data } = await supabase.from('financeiro_contas_bancarias').select('*').eq('cliente_id', clienteId).order('ordem_exibicao');
+    setContas((data as unknown as ContaBancariaCadastro[]) ?? []);
+    setCarregando(false);
+  }, [clienteId]);
+  useEffect(() => { void carregar(); }, [carregar]);
 
-    const [contasRes, lancamentosRes] = await Promise.all([
-      supabase
-        .from('financeiro_contas_bancarias')
-        .select('*')
-        .eq('cliente_id', clienteAtual.id)
-        .order('ordem_exibicao'),
-      supabase
-        .from('financeiro_lancamentos_v2')
-        .select('conta_bancaria_id')
-        .eq('cliente_id', clienteAtual.id)
-        .eq('cancelado', false)
-        .not('conta_bancaria_id', 'is', null),
-    ]);
-
-    setContas((contasRes.data as ContaBancaria[]) || []);
-
-    // Build set of conta IDs that have lancamentos
-    const ids = new Set<string>();
-    (lancamentosRes.data || []).forEach((r: any) => {
-      if (r.conta_bancaria_id) ids.add(r.conta_bancaria_id);
+  /* salvou: relê SÓ a conta salva (e a de investimento cujo vínculo o modal mudou, que mora nela) */
+  const releConta = useCallback(async (ids: readonly string[]) => {
+    if (!clienteId || ids.length === 0) return;
+    const { data } = await supabase.from('financeiro_contas_bancarias').select('*').eq('cliente_id', clienteId).in('id', [...new Set(ids)]);
+    const novas = (data as unknown as ContaBancariaCadastro[]) ?? [];
+    setContas(atual => {
+      const porId = new Map(atual.map(c => [c.id, c]));
+      for (const n of novas) porId.set(n.id, n);
+      return [...porId.values()];
     });
-    setContasComLancamento(ids);
-    setLoading(false);
-  }, [clienteAtual?.id]);
+  }, [clienteId]);
 
-  useEffect(() => { loadBancos(); }, [loadBancos]);
-  useEffect(() => { load(); }, [load]);
+  const fazendasReais = useMemo(() => fazendas.filter(f => f.id !== '__global__'), [fazendas]);
+  const filtradas = useMemo(() => filtrarContas(contas, {
+    busca, segmento, fazendaId: fazendaFiltro === TODAS_FAZENDAS ? null : fazendaFiltro, mostrarInativas,
+  }, bancos), [contas, busca, segmento, fazendaFiltro, mostrarInativas, bancos]);
+  const faixas = useMemo(() => faixasDaLista(filtradas), [filtradas]);
+  const rodape = useMemo(() => rodapeDaLista(filtradas), [filtradas]);
+  const fazendaNome = (id: string | null) => fazendasReais.find(f => f.id === id)?.nome ?? '';
 
-  const bancoOptions = useMemo(() =>
-    bancos.map(b => ({
-      value: b.nome_curto,
-      label: `${b.nome_banco}`,
-      searchText: `${b.nome_banco} ${b.nome_curto} ${b.codigo_banco}`.toLowerCase(),
-    })),
-  [bancos]);
-
-  const contasFiltradas = useMemo(() => {
-    if (mostrarInativas) return contas;
-    return contas.filter(c => c.ativa);
-  }, [contas, mostrarInativas]);
-
-  const grouped = useMemo(() => {
-    // PR-H1 — vocabulário oficial CURTO cc/inv/cartao.
-    const groups: { tipo: string; label: string; items: ContaBancaria[] }[] = [
-      { tipo: 'cc',     label: TIPO_LABEL.cc,     items: [] },
-      { tipo: 'inv',    label: TIPO_LABEL.inv,    items: [] },
-      { tipo: 'cartao', label: TIPO_LABEL.cartao, items: [] },
-    ];
-    const sorted = [...contasFiltradas].sort((a, b) => {
-      const ga = TIPO_ORDER[a.tipo_conta || 'cc'] ?? 99;
-      const gb = TIPO_ORDER[b.tipo_conta || 'cc'] ?? 99;
-      if (ga !== gb) return ga - gb;
-      return parseNum(a.codigo_conta) - parseNum(b.codigo_conta);
-    });
-    sorted.forEach(c => {
-      const t = c.tipo_conta || 'cc';
-      const g = groups.find(g => g.tipo === t);
-      if (g) g.items.push(c);
-      else groups[0].items.push(c);
-    });
-    return groups.filter(g => g.items.length > 0);
-  }, [contasFiltradas]);
-
-  const totalInativas = useMemo(() => contas.filter(c => !c.ativa).length, [contas]);
-
-  const openNew = () => {
-    setEditing(null);
-    setNomeExibicao('');
-    setTipoConta('cc');
-    setBanco('');
-    setBancoOutro('');
-    setFazendaId(fazendas[0]?.id || '');
-    setAtiva(true);
-    setSemExtrato(false);
-    setCodigoConta('');
-    setAgencia('');
-    setNumeroConta('');
-    setContaDigito('');
-    setAdvancedOpen(false);
-    setMesInicio('2026-04');
-    setSaldoInicialOficial('');
-    setDialogOpen(true);
-  };
-
-  const openEdit = (c: ContaBancaria) => {
-    setEditing(c);
-    setNomeExibicao(c.nome_exibicao || c.nome_conta || '');
-    setTipoConta(c.tipo_conta || 'cc');
-    const knownBanco = bancos.find(b => b.nome_curto === c.banco);
-    if (knownBanco) {
-      setBanco(c.banco || '');
-      setBancoOutro('');
-    } else if (c.banco) {
-      setBanco('Outros');
-      setBancoOutro(c.banco);
-    } else {
-      setBanco('');
-      setBancoOutro('');
-    }
-    setFazendaId(c.fazenda_id);
-    setAtiva(c.ativa);
-    setSemExtrato(!!c.sem_extrato_bancario);
-    setCodigoConta(c.codigo_conta || '');
-    setAgencia(c.agencia || '');
-    setNumeroConta(c.numero_conta || '');
-    setContaDigito(c.conta_digito || '');
-    setAdvancedOpen(!!(c.codigo_conta || c.agencia || c.numero_conta || c.conta_digito));
-    setMesInicio(c.mes_inicio || '');
-    setSaldoInicialOficial(c.saldo_inicial_oficial !== null && c.saldo_inicial_oficial !== undefined
-      ? String(c.saldo_inicial_oficial).replace('.', ',') : '');
-    setDialogOpen(true);
-  };
-
-  const save = async () => {
-    if (isSaving) return;
-    if (!clienteAtual?.id || !nomeExibicao.trim() || !fazendaId) {
-      toast.error('Preencha o nome da conta e a fazenda');
-      return;
-    }
-    // mes_inicio obrigatório em criar e editar
-    if (!mesInicio.trim()) {
-      toast.error('Informe o mês inicial da conta.');
-      return;
-    }
-    if (saldoInicialOficial.trim() === '') {
-      toast.error('Informe o saldo inicial da conta.');
-      return;
-    }
-    setIsSaving(true);
-    try {
-      const displayName = nomeExibicao.trim();
-      const payload = {
-        cliente_id: clienteAtual.id,
-        fazenda_id: fazendaId,
-        nome_conta: displayName,
-        nome_exibicao: displayName,
-        banco: banco === 'Outros' ? (bancoOutro.trim() || 'Outros') : (banco || null),
-        tipo_conta: tipoConta,
-        codigo_conta: codigoConta.trim() || null,
-        agencia: agencia.trim() || null,
-        numero_conta: numeroConta.trim() || null,
-        conta_digito: contaDigito.trim() || null,
-        ativa,
-        sem_extrato_bancario: semExtrato,
-        mes_inicio: mesInicio.trim() || null,
-      };
-      // Parse robusto: aceita "1000", "1000.50", "1.000,50"
-      const rawSaldoInicial = saldoInicialOficial.replace(/\s/g, '');
-      const normalizedSaldoInicial = rawSaldoInicial.includes(',')
-        ? rawSaldoInicial.replace(/\./g, '').replace(',', '.')
-        : rawSaldoInicial;
-      const parsedSaldo = normalizedSaldoInicial ? parseFloat(normalizedSaldoInicial) : null;
-      const payloadComSaldo = {
-        ...payload,
-        saldo_inicial_oficial: (parsedSaldo !== null && !isNaN(parsedSaldo)) ? parsedSaldo : null,
-      };
-
-      if (editing) {
-        const { error } = await supabase.from('financeiro_contas_bancarias').update(payloadComSaldo).eq('id', editing.id);
-        if (error) { toast.error('Erro ao atualizar'); return; }
-        // Permite UPDATE do saldo v2 mesmo quando a conta já tinha
-        // saldo_inicial_oficial preenchido (ex: 0 herdado de migração).
-        // Proteção contra sobrescrita inadvertida é feita abaixo via
-        // existRow.origem_saldo_inicial === 'manual'.
-        if (payloadComSaldo.saldo_inicial_oficial !== null && payloadComSaldo.mes_inicio) {
-          const saldo = payloadComSaldo.saldo_inicial_oficial;
-          const { data: existRow } = await supabase
-            .from('financeiro_saldos_bancarios_v2')
-            .select('id, origem_saldo_inicial')
-            .eq('conta_bancaria_id', editing.id)
-            .eq('ano_mes', payloadComSaldo.mes_inicio)
-            .maybeSingle();
-          if (!existRow) {
-            await supabase.from('financeiro_saldos_bancarios_v2').insert({
-              cliente_id: clienteAtual.id, fazenda_id: editing.fazenda_id,
-              conta_bancaria_id: editing.id, ano_mes: payloadComSaldo.mes_inicio,
-              saldo_inicial: saldo, saldo_final: saldo,
-              origem_saldo_inicial: 'manual', origem_saldo: 'manual',
-              status_mes: 'aberto', fechado: false,
-            });
-          } else if (existRow.origem_saldo_inicial === 'manual') {
-            await supabase.from('financeiro_saldos_bancarios_v2')
-              .update({ saldo_inicial: saldo, saldo_final: saldo })
-              .eq('id', existRow.id);
-          }
-        }
-        toast.success('Conta atualizada');
-      } else {
-        const { data: insertedContas, error } = await supabase
-          .from('financeiro_contas_bancarias').insert(payloadComSaldo).select('id,fazenda_id,codigo_conta');
-        if (error) { toast.error('Erro ao criar conta'); return; }
-        const novaContaId = insertedContas?.[0]?.id;
-        const novaFazendaId = insertedContas?.[0]?.fazenda_id;
-        // PR-ContaCodigoAuto: trigger gera codigo_conta quando vazio no input.
-        // Mostrar no toast só quando o código foi gerado pelo banco (não
-        // quando operador digitou manualmente — codigoConta tem valor).
-        const novoCodigo = insertedContas?.[0]?.codigo_conta;
-        const codigoGeradoSuffix = (novoCodigo && !codigoConta.trim()) ? ` com código ${novoCodigo}` : '';
-        if (novaContaId && payloadComSaldo.mes_inicio) {
-          const saldo = payloadComSaldo.saldo_inicial_oficial ?? 0;
-          const { error: sErr } = await supabase.from('financeiro_saldos_bancarios_v2').insert({
-            cliente_id: clienteAtual.id,
-            fazenda_id: novaFazendaId,
-            conta_bancaria_id: novaContaId,
-            ano_mes: payloadComSaldo.mes_inicio,
-            saldo_inicial: saldo,
-            saldo_final: saldo,
-            origem_saldo_inicial: 'manual',
-            origem_saldo: 'manual',
-            status_mes: 'aberto',
-            fechado: false,
-          });
-          if (sErr) toast.error('Conta criada, mas erro ao salvar saldo inicial');
-          else toast.success(`Conta criada${codigoGeradoSuffix} com saldo inicial`);
-        } else {
-          toast.success(`Conta criada${codigoGeradoSuffix}`);
-        }
-      }
-      setDialogOpen(false);
-      load();
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleDesativar = async () => {
-    if (!confirmDesativar) return;
-    const { error } = await supabase
-      .from('financeiro_contas_bancarias')
-      .update({ ativa: false })
-      .eq('id', confirmDesativar.id);
-    if (error) { toast.error('Erro ao desativar conta'); }
-    else { toast.success('Conta desativada'); }
-    setConfirmDesativar(null);
-    load();
-  };
-
-  const handleAtivar = async () => {
-    if (!confirmAtivar) return;
-    const { error } = await supabase
-      .from('financeiro_contas_bancarias')
-      .update({ ativa: true })
-      .eq('id', confirmAtivar.id);
-    if (error) { toast.error('Erro ao reativar conta'); }
-    else { toast.success('Conta reativada'); }
-    setConfirmAtivar(null);
-    load();
-  };
-
-  const handleExcluir = async () => {
-    if (!confirmExcluir) return;
-    // Double-check no lancamentos
-    const { count } = await supabase
-      .from('financeiro_lancamentos_v2')
-      .select('id', { count: 'exact', head: true })
-      .eq('conta_bancaria_id', confirmExcluir.id)
-      .eq('cancelado', false);
-    if (count && count > 0) {
-      toast.error('Não é possível excluir: existem lançamentos vinculados a esta conta.');
-      setConfirmExcluir(null);
-      return;
-    }
-    const { error } = await supabase
-      .from('financeiro_contas_bancarias')
-      .delete()
-      .eq('id', confirmExcluir.id);
-    if (error) { toast.error('Erro ao excluir conta'); }
-    else { toast.success('Conta excluída permanentemente'); }
-    setConfirmExcluir(null);
-    load();
-  };
-
-  const fazendaNome = (id: string) => fazendas.find(f => f.id === id)?.nome || '-';
-  const cellClass = "text-[12px] font-medium leading-tight py-1 px-2";
-
-  const formatContaBancaria = (c: ContaBancaria) => {
-    const parts: string[] = [];
-    if (c.agencia) parts.push(c.agencia);
-    if (c.numero_conta) {
-      parts.push(c.conta_digito ? `${c.numero_conta}-${c.conta_digito}` : c.numero_conta);
-    }
-    return parts.length > 0 ? parts.join(' ') : '-';
-  };
+  /* as colunas que somem conforme a LARGURA DA LISTA */
+  const caixaRef = useRef<HTMLDivElement>(null);
+  const [largura, setLargura] = useState(1400);
+  useLayoutEffect(() => {
+    const el = caixaRef.current;
+    if (!el) return;
+    setLargura(el.clientWidth);
+    const ro = new ResizeObserver(() => setLargura(el.clientWidth));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const escondidas = colunasEscondidas(largura);
+  const mostra = (c: ColunaOpcional) => !escondidas.has(c);
+  const nColunas = 13 - escondidas.size;
 
   return (
-    <div className="w-full p-4 pb-20 space-y-4 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-foreground">Contas Bancárias</h2>
-        <div className="flex items-center gap-2">
-          {totalInativas > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-xs text-muted-foreground gap-1"
-              onClick={() => setMostrarInativas(v => !v)}
-            >
-              {mostrarInativas ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-              {mostrarInativas ? 'Ocultar inativas' : `Mostrar inativas (${totalInativas})`}
-            </Button>
-          )}
-          <Button size="sm" onClick={openNew}><Plus className="h-4 w-4 mr-1" /> Nova Conta</Button>
+    <div className="flex h-full min-h-0 w-full flex-col gap-1.5 px-3 pb-2.5 pt-2" data-testid="tela-contas-bancarias">
+      <div className="flex shrink-0 items-baseline gap-2">
+        <h2 className="whitespace-nowrap text-[13px] font-semibold text-foreground">Contas bancárias</h2>
+        <span className="uma-linha-que-rola min-w-0 text-[11px] text-muted-foreground">
+          {clienteAtual?.nome ? `${clienteAtual.nome} · ` : ''}{contas.length} {contas.length === 1 ? 'conta' : 'contas'}
+        </span>
+      </div>
+      <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+        <Input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar conta, banco ou gerente" className="h-6 w-[200px] text-[11px]" data-testid="busca-contas" />
+        <Segmentado altura={24} valor={segmento} onEscolher={setSegmento} opcoes={SEGMENTOS} />
+        <div className="w-[170px]">
+          <SearchableSelect value={fazendaFiltro} onValueChange={setFazendaFiltro} allValue={TODAS_FAZENDAS} allLabel="Todas as fazendas"
+            options={fazendasReais.map(f => ({ value: f.id, label: f.nome }))} placeholder="Todas as fazendas" dense triggerClassName="h-6 text-[11px]" />
         </div>
+        <label className="flex items-center gap-1 whitespace-nowrap text-[11px] text-muted-foreground">
+          <Checkbox checked={mostrarInativas} onCheckedChange={v => setMostrarInativas(v === true)} data-testid="mostrar-inativas" />Mostrar inativas
+        </label>
+        <Button size="sm" className="ml-auto h-6 px-2.5 text-[11px]" onClick={() => setModal({ conta: null })} data-testid="nova-conta">+ Nova conta</Button>
       </div>
 
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow className="border-b">
-                <TableHead className="text-[11px] font-semibold uppercase tracking-wide py-1.5 px-2">Tipo</TableHead>
-                <TableHead className="text-[11px] font-semibold uppercase tracking-wide py-1.5 px-2">Nome da Conta</TableHead>
-                <TableHead className="text-[11px] font-semibold uppercase tracking-wide py-1.5 px-2">Banco</TableHead>
-                <TableHead className="text-[11px] font-semibold uppercase tracking-wide py-1.5 px-2">Ag / Conta</TableHead>
-                <TableHead className="text-[11px] font-semibold uppercase tracking-wide py-1.5 px-2">Fazenda</TableHead>
-                <TableHead className="text-[11px] font-semibold uppercase tracking-wide py-1.5 px-2">Status</TableHead>
-                <TableHead className="w-10 py-1.5 px-2" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading && (
-                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Carregando...</TableCell></TableRow>
-              )}
-              {!loading && contasFiltradas.length === 0 && (
-                <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Nenhuma conta cadastrada</TableCell></TableRow>
-              )}
-              {!loading && grouped.map((group) => (
-                <>
-                  <TableRow key={`group-${group.tipo}`} className="bg-muted/40 hover:bg-muted/40">
-                    <TableCell colSpan={7} className="text-[13px] font-semibold text-foreground/80 py-1.5 px-2 border-t">
-                      {group.label}
-                    </TableCell>
-                  </TableRow>
-                  {group.items.map(c => {
-                    const temLancamentos = contasComLancamento.has(c.id);
-                    return (
-                      <TableRow key={c.id} className={`h-auto ${!c.ativa ? 'opacity-50' : ''}`}>
-                        <TableCell className={cellClass}>
-                          <Badge variant="outline" className={`text-[9px] font-bold px-1.5 py-0 leading-tight border ${BADGE_CLASS[c.tipo_conta || 'cc']}`}>
-                            {BADGE_LABEL[c.tipo_conta || 'cc']}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className={cellClass}>
-                          <span className="font-semibold">{c.nome_exibicao || c.nome_conta}</span>
-                          {c.saldo_inicial_oficial === null && (
-                            <span className="ml-1.5 text-[9px] font-semibold text-amber-700 border border-amber-300 bg-amber-50 rounded px-1 py-0 align-middle" title="Saldo inicial não definido para esta conta">⚠ Saldo inicial</span>
-                          )}
-                          {c.codigo_conta && (
-                            <span className="ml-1.5 text-[10px] text-muted-foreground tabular-nums">({c.codigo_conta})</span>
-                          )}
-                        </TableCell>
-                        <TableCell className={cellClass}>{c.banco || '-'}</TableCell>
-                        <TableCell className={`${cellClass} tabular-nums text-[11px]`}>{formatContaBancaria(c)}</TableCell>
-                        <TableCell className={cellClass}>{fazendaNome(c.fazenda_id)}</TableCell>
-                        <TableCell className={cellClass}>
-                          <Badge variant={c.ativa ? 'default' : 'secondary'} className="text-[9px] px-1.5 py-0 leading-tight">
-                            {c.ativa ? 'Ativa' : 'Inativa'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="py-1 px-1">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-6 w-6">
-                                <MoreHorizontal className="h-3.5 w-3.5" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-44">
-                              <DropdownMenuItem onClick={() => openEdit(c)} className="gap-2 text-xs">
-                                <Pencil className="h-3 w-3" /> Editar
-                              </DropdownMenuItem>
-                              {c.ativa ? (
-                                <DropdownMenuItem onClick={() => setConfirmDesativar(c)} className="gap-2 text-xs text-amber-600">
-                                  <PowerOff className="h-3 w-3" /> Desativar
-                                </DropdownMenuItem>
-                              ) : (
-                                <DropdownMenuItem onClick={() => setConfirmAtivar(c)} className="gap-2 text-xs text-emerald-600">
-                                  <Power className="h-3 w-3" /> Reativar
-                                </DropdownMenuItem>
-                              )}
-                              {!temLancamentos && (
-                                <DropdownMenuItem onClick={() => setConfirmExcluir(c)} className="gap-2 text-xs text-destructive">
-                                  <Trash2 className="h-3 w-3" /> Excluir
-                                </DropdownMenuItem>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      {/* ─── Dialog Criar/Editar ─── */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>{editing ? 'Editar Conta' : 'Nova Conta Bancária'}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label>Nome da Conta *</Label>
-              <Input value={nomeExibicao} onChange={e => setNomeExibicao(e.target.value)} placeholder="Ex: Itaú Personalité ADM" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Tipo de Conta *</Label>
-                <Select value={tipoConta} onValueChange={setTipoConta}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {/* PR-H1 — vocabulário oficial CURTO cc/inv/cartao. */}
-                    <SelectItem value="cc">Conta Corrente / Caixa</SelectItem>
-                    <SelectItem value="inv">Investimento</SelectItem>
-                    <SelectItem value="cartao">Cartão</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Banco</Label>
-                <Select value={banco} onValueChange={(v) => { setBanco(v); if (v !== 'Outros') setBancoOutro(''); }}>
-                  <SelectTrigger><SelectValue placeholder="Selecione o banco" /></SelectTrigger>
-                  <SelectContent className="max-h-[220px]">
-                    {bancos.map(b => (
-                      <SelectItem key={b.codigo_banco} value={b.nome_curto}>
-                        <span className="flex items-center gap-1.5">
-                          <span className="text-[10px] text-muted-foreground tabular-nums w-7">{b.codigo_banco}</span>
-                          <span>{b.nome_banco}</span>
+      <div ref={caixaRef} className="min-h-0 flex-1 overflow-auto rounded-lg border bg-card" data-testid="lista-contas">
+        {/* `table-fixed`: as larguras não seguem o conteúdo — filtrar (só Investimento, busca) não mexe nas colunas */}
+        <table className="h-full w-full table-fixed border-separate border-spacing-0">
+          <colgroup>
+            {/* o Nome (e o Gerente, quando aparece) ficam com a sobra: cortam com "…" e o nome inteiro no `title`; número, data e valor nunca */}
+            <col style={{ width: 38 }} /><col /><col style={{ width: 50 }} /><col style={{ width: 100 }} />
+            {mostra('agencia') && <col style={{ width: 80 }} />}<col style={{ width: 92 }} />
+            {mostra('fazenda') && <col style={{ width: 120 }} />}{mostra('gerente') && <col />}
+            {mostra('telefone') && <col style={{ width: 112 }} />}{mostra('inicio') && <col style={{ width: 84 }} />}
+            <col style={{ width: 128 }} /><col style={{ width: 54 }} /><col style={{ width: 24 }} />
+          </colgroup>
+          <thead><tr>
+            <th className={TH}>Cód.</th><th className={TH}>Nome da conta</th><th className={TH}>Tipo</th><th className={TH}>Banco</th>
+            {mostra('agencia') && <th className={TH}>Agência</th>}<th className={TH}>Conta</th>
+            {mostra('fazenda') && <th className={TH}>Fazenda</th>}{mostra('gerente') && <th className={TH}>Gerente</th>}
+            {mostra('telefone') && <th className={TH}>Telefone</th>}{mostra('inicio') && <th className={TH}>Início</th>}
+            <th className={cn(TH, 'text-right')}>Saldo inicial</th><th className={cn(TH, 'text-center')}>Status</th><th className={TH} aria-label="Editar" />
+          </tr></thead>
+          <tbody>
+            {carregando && contas.length === 0 && <tr><td colSpan={nColunas} className={cn(TD, 'text-muted-foreground')}>Carregando…</td></tr>}
+            {!carregando && filtradas.length === 0 && <tr><td colSpan={nColunas} className={cn(TD, 'text-muted-foreground')}>Nenhuma conta.</td></tr>}
+            {faixas.map(f => (
+              <FaixaLinhas key={f.tipo} rotulo={`${f.rotulo} · ${f.contas.length}`} n={nColunas}>
+                {f.contas.map(c => {
+                  const t = faixaDaConta(c);
+                  return (
+                    <tr key={c.id} onClick={() => setModal({ conta: c })} data-testid="linha-conta"
+                      className={cn('cursor-pointer hover:[&>td]:bg-muted/50', !c.ativa && '[&>td]:text-muted-foreground')}>
+                      <td className={cn(TD, 'tabular-nums text-muted-foreground')}>{c.codigo_conta ?? ''}</td>
+                      <td className={cn(TD, 'max-w-0 truncate font-semibold')} title={nomeDaConta(c)}>{nomeDaConta(c)}</td>
+                      <td className={TD}><span className={cn('inline-block rounded px-1.5 text-[9.5px] font-bold leading-[15px]', SELO_CLASSE[t])}>{SELO_TIPO[t]}</span></td>
+                      <Cel c={celulaBanco(c, bancos)} className="max-w-0 truncate" />
+                      {mostra('agencia') && <Cel c={celulaAgencia(c)} className="tabular-nums" />}
+                      <Cel c={celulaConta(c)} className="tabular-nums" />
+                      {mostra('fazenda') && <td className={cn(TD, 'max-w-0 truncate')} title={fazendaNome(c.fazenda_id)}>{fazendaNome(c.fazenda_id)}</td>}
+                      {mostra('gerente') && <Cel c={celulaGerente(c)} className="max-w-0 truncate" />}
+                      {mostra('telefone') && <Cel c={celulaTelefone(c)} className="tabular-nums" />}
+                      {mostra('inicio') && <Cel c={celulaInicio(c)} className="tabular-nums" />}
+                      <Cel c={celulaSaldo(c)} className="text-right tabular-nums" />
+                      <td className={cn(TD, 'text-center')}>
+                        <span className={cn('inline-block rounded-full px-1.5 text-[10px] font-semibold leading-[15px]',
+                          c.ativa ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-muted text-muted-foreground')}>
+                          {c.ativa ? 'Ativa' : 'Inativa'}
                         </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {banco === 'Outros' && (
-                  <Input
-                    className="mt-1.5"
-                    value={bancoOutro}
-                    onChange={e => setBancoOutro(e.target.value)}
-                    placeholder="Digite o nome do banco"
-                  />
-                )}
-              </div>
-            </div>
-            <div>
-              <Label>Fazenda *</Label>
-              <SearchableSelect value={fazendaId} onValueChange={setFazendaId} options={fazendas.map(f => ({ value: f.id, label: f.nome }))}
-                semTodos allValue="" allLabel="Selecione" placeholder="Buscar fazenda..." dense />
-            </div>
-            <div className="flex items-center gap-2">
-              <Switch checked={ativa} onCheckedChange={setAtiva} />
-              <Label>Conta ativa</Label>
-            </div>
-            {/* CONC-TRANSF-DUAS-PONTAS-01b (Gabriel 22/10): investimento, cartao, caixa — a conta que nao tem extrato do banco. A
-                transferencia com uma ponta aqui fica conciliada quando a ponta da conta com extrato esta' ligada. */}
-            <div className="flex items-start gap-2">
-              <Switch checked={semExtrato} onCheckedChange={setSemExtrato} id="sem-extrato-bancario" />
-              <div>
-                <Label htmlFor="sem-extrato-bancario">Conta sem extrato bancário</Label>
-                <p className="text-[11px] text-muted-foreground">
-                  Investimento, cartão, caixa: a transferência fica conciliada só pela outra conta.
-                </p>
-              </div>
-            </div>
+                      </td>
+                      <td className={cn(TD, 'text-[12px] text-muted-foreground')} aria-label="Editar">✎</td>
+                    </tr>
+                  );
+                })}
+              </FaixaLinhas>
+            ))}
+            {/* a sobra do quadro fica aqui: o total desce ao pé da tela (preso quando a lista rola) */}
+            <tr aria-hidden="true" className="h-full"><td colSpan={nColunas} className="p-0" /></tr>
+          </tbody>
+          <tfoot><tr data-testid="rodape-contas">
+            <td colSpan={nColunas - 3} className={TF}>{rodape.texto}</td>
+            <td className={cn(TF, 'text-right tabular-nums')}>{brl(rodape.saldo)}</td><td className={TF} /><td className={TF} />
+          </tr></tfoot>
+        </table>
+      </div>
 
-            <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
-              <CollapsibleTrigger asChild>
-                <Button variant="ghost" size="sm" className="w-full justify-between text-muted-foreground text-xs">
-                  Dados bancários avançados
-                  <ChevronDown className={`h-3.5 w-3.5 transition-transform ${advancedOpen ? 'rotate-180' : ''}`} />
-                </Button>
-              </CollapsibleTrigger>
-              <CollapsibleContent className="space-y-3 pt-2">
-                <div>
-                  <Label>Código curto</Label>
-                  <Input
-                    value={codigoConta}
-                    onChange={e => setCodigoConta(e.target.value)}
-                    placeholder={editing ? 'Ex: cc-001 (uso técnico/importação)' : 'Auto (gerado pelo sistema)'}
-                    className="tabular-nums text-sm"
-                  />
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  <div>
-                    <Label>Agência</Label>
-                    <Input value={agencia} onChange={e => setAgencia(e.target.value)} placeholder="1234" />
-                  </div>
-                  <div>
-                    <Label>Nº Conta</Label>
-                    <Input value={numeroConta} onChange={e => setNumeroConta(e.target.value)} placeholder="56789" />
-                  </div>
-                  <div>
-                    <Label>Dígito</Label>
-                    <Input value={contaDigito} onChange={e => setContaDigito(e.target.value)} placeholder="0" maxLength={2} />
-                  </div>
-                </div>
-              </CollapsibleContent>
-            </Collapsible>
-          </div>
-
-          <div className="border border-amber-200 bg-amber-50 rounded-md p-3 space-y-3">
-            <p className="text-[11px] font-semibold text-amber-700">⚠ Saldo inicial da conta</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-[11px]">
-                  Mês inicial <span className="text-red-500">*</span>
-                </Label>
-                <input
-                  type="month"
-                  value={mesInicio}
-                  onChange={e => setMesInicio(e.target.value)}
-                  className="w-full border rounded px-2 py-1 text-[11px] mt-0.5"
-                  required
-                />
-                <p className="text-[9px] text-muted-foreground mt-0.5">Primeiro mês de operação</p>
-              </div>
-              <div>
-                <Label className="text-[11px]">
-                  Saldo inicial (R$) <span className="text-red-500">*</span>
-                </Label>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={saldoInicialOficial}
-                  onChange={e => setSaldoInicialOficial(e.target.value)}
-                  placeholder="0,00"
-                  className="w-full border rounded px-2 py-1 text-[11px] mt-0.5 text-right tabular-nums"
-                  required
-                />
-                <p className="text-[9px] text-muted-foreground mt-0.5">Saldo real no início do período</p>
-              </div>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={save} disabled={isSaving}>{isSaving ? 'Salvando...' : (editing ? 'Salvar' : 'Criar')}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ─── Confirmar Desativação ─── */}
-      <AlertDialog open={!!confirmDesativar} onOpenChange={(open) => !open && setConfirmDesativar(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Desativar conta</AlertDialogTitle>
-            <AlertDialogDescription>
-              Essa conta será desativada e não poderá mais ser usada em novos lançamentos. Lançamentos existentes não serão afetados. Deseja continuar?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDesativar}>Desativar</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* ─── Confirmar Reativação ─── */}
-      <AlertDialog open={!!confirmAtivar} onOpenChange={(open) => !open && setConfirmAtivar(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Reativar conta</AlertDialogTitle>
-            <AlertDialogDescription>
-              Essa conta voltará a ficar disponível para novos lançamentos. Deseja continuar?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleAtivar}>Reativar</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* ─── Confirmar Exclusão ─── */}
-      <AlertDialog open={!!confirmExcluir} onOpenChange={(open) => !open && setConfirmExcluir(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Excluir conta permanentemente</AlertDialogTitle>
-            <AlertDialogDescription>
-              Essa conta será excluída permanentemente. Essa ação não pode ser desfeita. Deseja continuar?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleExcluir} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Excluir
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {modal && clienteId && (
+        <ContaBancariaModal aberto onFechar={() => setModal(null)} clienteId={clienteId} clienteNome={clienteAtual?.nome}
+          conta={modal.conta} contas={contas} bancos={bancos} fazendas={fazendasReais}
+          onSalvo={(ids) => { void releConta(ids); }} />
+      )}
     </div>
   );
+}
+
+function FaixaLinhas({ rotulo, n, children }: { rotulo: string; n: number; children: ReactNode }) {
+  return (<>
+    <tr data-testid="faixa-contas"><td colSpan={n} className={cn(TD, 'bg-primary/10 font-semibold text-primary')}>{rotulo}</td></tr>
+    {children}
+  </>);
 }
