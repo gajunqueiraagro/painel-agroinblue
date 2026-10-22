@@ -104,6 +104,12 @@ export interface FinanceiroLancamento {
   /** Flag oficial de pertencimento à DRE (FIN-FLAGS-01A). Materializada no banco;
    *  autoridade única via isLancamentoDRERealizada. true=entra, false/null=fora. */
   compoe_dre?: boolean | null;
+  /** FIN-CLASSIF-DIVIDIDA-01a-2: a linha e' uma PARTE da classificacao (lancamento dividido em N contas). `valor` e a classificacao
+   *  sao os da parte; `lancamento_id` e' o lancamento (o `id` da parte 2+ ganha "#n" para a chave nao repetir). */
+  lancamento_id?: string;
+  parte_ordem?: number;
+  partes_total?: number;
+  valor_lancamento?: number;
   /** FK para `lancamentos.id` quando o registro foi gerado a partir de uma
    *  movimentação zootécnica (compra/abate/venda). Read-only — usado para
    *  indicador visual nas listagens financeiras. */
@@ -183,6 +189,16 @@ interface RawLancPec { fazenda_id: string; data: string; tipo: string; quantidad
 // ---------------------------------------------------------------------------
 
 /**
+ * FIN-CLASSIF-DIVIDIDA-01a-2 — a FONTE de quem soma por classificacao: a visao unica (1 linha por parte; lancamento sem divisao = ele
+ * mesmo). As colunas sao as do lancamento, com o `valor` e a classificacao da parte.
+ */
+export const FONTE_POR_PARTE = 'vw_fin_classificacao_por_parte';
+/** A chave da linha: o lancamento na parte 1 (e sem divisao); "id#n" nas demais, para nada se repetir (dedup, chave da lista). */
+export function chaveDaParte(r: { id?: string; parte_ordem?: number | null }): string {
+  return r.parte_ordem && r.parte_ordem > 1 ? `${r.id}#${r.parte_ordem}` : String(r.id);
+}
+
+/**
  * Paginated fetch — loads ALL rows from a query, bypassing the 1000-row default.
  * Same strategy used in useFluxoCaixa to guarantee data completeness.
  */
@@ -207,7 +223,7 @@ async function fetchAllPaginated<T>(
   const seen = new Set<string>();
   const deduped: T[] = [];
   for (const row of allData) {
-    const id = (row as any).id as string;
+    const id = chaveDaParte(row as any);
     if (seen.has(id)) continue;
     seen.add(id);
     deduped.push(row);
@@ -218,7 +234,11 @@ async function fetchAllPaginated<T>(
 /** Map a V2 row to the FinanceiroLancamento interface for backward compatibility */
 export function mapV2ToLancamento(r: any): FinanceiroLancamento {
   return {
-    id: r.id,
+    id: chaveDaParte(r),
+    lancamento_id: r.lancamento_id ?? r.id,
+    parte_ordem: r.parte_ordem ?? 1,
+    partes_total: r.partes_total ?? 1,
+    valor_lancamento: r.valor_lancamento ?? r.valor,
     fazenda_id: r.fazenda_id,
     importacao_id: r.lote_importacao_id || null,
     origem_dado: r.origem_lancamento || 'manual',
@@ -465,13 +485,13 @@ export function useFinanceiro(options: UseFinanceiroOptions = {}) {
 
           const [allLancsRaw, ccResult, impResult, contasResult, saldoResult, lancPecResult] = await Promise.all([
             fetchAllPaginated<any>((from, to) => {
-              let q = (supabase.from('financeiro_lancamentos_v2').select('*') as any).eq('cliente_id', clienteId).eq('cancelado', false)
+              let q = ((supabase as any).from(FONTE_POR_PARTE).select('*') as any).eq('cliente_id', clienteId).eq('cancelado', false)
                 .eq('cenario', 'realizado');
               if (!competencia) q = q.eq('status_transacao', 'realizado').eq('sem_movimentacao_caixa', false);
               if (anoFiltro) q = competencia
                 ? q.gte('data_competencia', `${anoFiltro}-01-01`).lte('data_competencia', `${anoFiltro}-12-31`)
                 : q.gte('data_pagamento', `${anoFiltro}-01-01`).lte('data_pagamento', `${anoFiltro}-12-31`);
-              return q.order(competencia ? 'data_competencia' : 'data_pagamento', { ascending: false }).order('id', { ascending: false }).range(from, to);
+              return q.order(competencia ? 'data_competencia' : 'data_pagamento', { ascending: false }).order('id', { ascending: false }).order('parte_ordem', { ascending: true }).range(from, to);
             }),
             supabase.from('financeiro_centros_custo').select('tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro').in('fazenda_id', allFazendaIds).eq('ativo', true),
             supabase.from('financeiro_importacoes_v2').select('id, nome_arquivo, data_importacao, status, total_linhas, total_validas, total_com_erro').eq('cliente_id', clienteId!).neq('status', 'cancelada').order('data_importacao', { ascending: false }),
@@ -496,24 +516,24 @@ export function useFinanceiro(options: UseFinanceiroOptions = {}) {
         const needsRateio = fazendaADM && fazendaADM.id !== fazendaId;
 
         const lancPromise = fetchAllPaginated<any>((from, to) => {
-          let q = (supabase.from('financeiro_lancamentos_v2').select('*') as any).eq('fazenda_id', fazendaId).eq('cancelado', false)
+          let q = ((supabase as any).from(FONTE_POR_PARTE).select('*') as any).eq('fazenda_id', fazendaId).eq('cancelado', false)
               .eq('cenario', 'realizado');
           if (!competencia) q = q.eq('status_transacao', 'realizado').eq('sem_movimentacao_caixa', false);
           if (anoFiltro) q = competencia
             ? q.gte('data_competencia', `${anoFiltro}-01-01`).lte('data_competencia', `${anoFiltro}-12-31`)
             : q.gte('data_pagamento', `${anoFiltro}-01-01`).lte('data_pagamento', `${anoFiltro}-12-31`);
-          return q.order(competencia ? 'data_competencia' : 'data_pagamento', { ascending: false }).order('id', { ascending: false }).range(from, to);
+          return q.order(competencia ? 'data_competencia' : 'data_pagamento', { ascending: false }).order('id', { ascending: false }).order('parte_ordem', { ascending: true }).range(from, to);
         }).then(rows => rows.map(mapV2ToLancamento));
 
         const admPromise = needsRateio
           ? fetchAllPaginated<any>((from, to) => {
-              let q = (supabase.from('financeiro_lancamentos_v2').select('*') as any).eq('fazenda_id', fazendaADM.id).eq('cancelado', false)
+              let q = ((supabase as any).from(FONTE_POR_PARTE).select('*') as any).eq('fazenda_id', fazendaADM.id).eq('cancelado', false)
               .eq('cenario', 'realizado');
               if (!competencia) q = q.eq('status_transacao', 'realizado').eq('sem_movimentacao_caixa', false);
               if (anoFiltro) q = competencia
                 ? q.gte('data_competencia', `${anoFiltro}-01-01`).lte('data_competencia', `${anoFiltro}-12-31`)
                 : q.gte('data_pagamento', `${anoFiltro}-01-01`).lte('data_pagamento', `${anoFiltro}-12-31`);
-              return q.order(competencia ? 'data_competencia' : 'data_pagamento', { ascending: false }).order('id', { ascending: false }).range(from, to);
+              return q.order(competencia ? 'data_competencia' : 'data_pagamento', { ascending: false }).order('id', { ascending: false }).order('parte_ordem', { ascending: true }).range(from, to);
             }).then(rows => rows.map(mapV2ToLancamento))
           : Promise.resolve([] as FinanceiroLancamento[]);
 
