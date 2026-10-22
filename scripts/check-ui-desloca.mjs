@@ -85,6 +85,11 @@ const CENARIOS = [
   /* ITENS-NOTA-01 — os itens da nota: Valores <-> Fiscal (o `auto` troca o Segmentado) no dialogo da OC; o backfill antes e depois do
      Simular (a contagem e as linhas chegam, os botoes nao andam) */
   { nome: 'itens-nota-oc', url: 'tela=itens-nota', auto: true },
+  /* NOTA-FORNECEDOR-COMPARAR-01 — "Atualizar N campos" -> "Confirmar" (a frase aparece no rodape) e o estado "nao parece o certo" */
+  { nome: 'comparar-cadastro', url: 'tela=comparar-cadastro', estados: [
+    ['pedindo a confirmacao', clicar('[data-testid="comparar-atualizar"]')],
+    ['cadastro que nao parece o certo', { url: 'tela=comparar-cadastro&v=errado' }],
+  ] },
   { nome: 'itens-nota-guardadas', url: 'tela=itens-nota&v=guardadas', estados: [
     ['simulado (30 linhas, contagem)', async (p) => { await p.locator('[data-testid="itens-guardadas-simular"]').click();
       await p.waitForFunction(() => document.querySelectorAll('[data-testid="itens-guardadas-linha"]').length === 30); await espera(p); }],
