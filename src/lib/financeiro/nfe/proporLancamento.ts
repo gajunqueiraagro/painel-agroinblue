@@ -32,6 +32,8 @@ export const FORMA_POR_TPAG: Readonly<Record<string, string>> = {
 
 export const FRASE_NOTA_DE_VENDA = 'Nota de venda entra pela Operação Comercial.';
 export const FRASE_FAZENDA_NAO_IDENTIFICADA = 'Fazenda não identificada pela inscrição estadual.';
+/** NOTA-FAZENDA-PELA-IE-01 — a origem da fazenda achada pelo nome no endereco do destinatario (sem a IE gravada): o operador confere. */
+export const ORIGEM_FAZENDA_PELO_ENDERECO = 'pelo endereço, confira';
 export const FRASE_SEM_DUPLICATAS = 'Nota sem duplicatas. Preencha o vencimento.';
 export const FRASE_SEM_PROTOCOLO = 'Nota sem protocolo de autorização.';
 /** PARC-LIVRES-01 — duplicatas com valor ou data próprios entram como PARCELAS LIVRES, como estão na nota (o recado da grade). */
@@ -65,7 +67,7 @@ export function duplicatasCabemNoParcelamentoDeHoje(duplicatas: readonly Duplica
   });
 }
 
-export interface FazendaComIE { id: string; nome: string; ie: string | null }
+export interface FazendaComIE { id: string; nome: string; ie: string | null; /** NOTA-FAZENDA-PELA-IE-01 — os apelidos (`fazendas.aliases`) */ aliases?: readonly string[] | null }
 
 /** A classificacao do ultimo lancamento vivo e classificado do fornecedor. */
 export interface UltimaClassificacao {
@@ -137,6 +139,22 @@ export function ladoDoCliente(nota: NotaLida, fazendas: readonly FazendaComIE[])
   return { lado: 'destinatario', fazenda: (ieDest && comIE.find((f) => soDigitos(f.ie) === ieDest)) || null };
 }
 
+/* NOTA-FAZENDA-PELA-IE-01 — o NUCLEO do nome da fazenda: sem acento, "FAZ."/"STO."/"STA." por extenso, sem as palavras genericas e a
+   pontuacao ("Faz. Pureza" -> "PUREZA"; "FAZENDA PUREZA, S/N" -> "PUREZA S N"). */
+const GENERICAS = new Set(['FAZENDA', 'SITIO', 'ESTANCIA', 'CHACARA', 'GLEBA', 'LOTE', 'DE', 'DA', 'DO', 'DAS', 'DOS', 'E']);
+function nucleo(s: string): string[] {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase()
+    .replace(/\bFAZ\b\.?/g, 'FAZENDA').replace(/\bSTO\b\.?/g, 'SANTO').replace(/\bSTA\b\.?/g, 'SANTA')
+    .replace(/[^A-Z0-9]+/g, ' ').trim().split(' ').filter((p) => p && !GENERICAS.has(p));
+}
+/** A fazenda cujo nome (ou apelido) esta' no endereco do destinatario — so' quando e' UMA. */
+export function fazendaPeloEndereco(endereco: string | null | undefined, fazendas: readonly FazendaComIE[]): FazendaComIE | null {
+  const end = ` ${nucleo(endereco ?? '').join(' ')} `;
+  if (end.trim() === '') return null;
+  const casam = fazendas.filter((f) => [f.nome, ...(f.aliases ?? [])].some((n) => { const k = nucleo(n).join(' '); return k !== '' && end.includes(` ${k} `); }));
+  return casam.length === 1 ? casam[0] : null;
+}
+
 export function proporLancamento(entrada: {
   nota: NotaLida;
   avisosDoLeitor: readonly AvisoNFe[];
@@ -185,8 +203,11 @@ export function proporLancamento(entrada: {
 
   if (avisosDoLeitor.includes('sem_protocolo')) avisos.push(FRASE_SEM_PROTOCOLO);
 
-  /* A FAZENDA. */
-  if (lado.fazenda) origens.fazenda = `IE ${nota.destinatario.ie ?? ''}`;
+  /* A FAZENDA: pela IE do destinatario; sem IE gravada, pelo nome no endereco dele (NOTA-FAZENDA-PELA-IE-01, "confira") */
+  const pelaIe = lado.fazenda;
+  const peloEndereco = pelaIe ? null : fazendaPeloEndereco(nota.destinatario.endereco, fazendas);
+  if (pelaIe) origens.fazenda = `IE ${nota.destinatario.ie ?? ''}`;
+  else if (peloEndereco) origens.fazenda = ORIGEM_FAZENDA_PELO_ENDERECO;
   else avisos.push(FRASE_FAZENDA_NAO_IDENTIFICADA);
 
   /* O FORNECEDOR. */
@@ -206,7 +227,7 @@ export function proporLancamento(entrada: {
       tipoOperacao: '2-Saídas',
       competencia: nota.emissao,
       favorecidoId,
-      fazendaId: lado.fazenda?.id ?? null,
+      fazendaId: lado.fazenda?.id ?? peloEndereco?.id ?? null,
       valorCent,
       classificacao: ultima,
       parcelamento,
