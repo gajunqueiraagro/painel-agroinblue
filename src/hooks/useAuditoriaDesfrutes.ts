@@ -13,6 +13,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { FONTE_POR_PARTE } from '@/lib/financeiro/partesDaClassificacao';
 import { trimestreMeses, type Trimestre } from '@/hooks/useAnaliseTrimestral';
 
 export type TipoDesfrute = 'abate' | 'venda' | 'consumo';
@@ -160,7 +161,7 @@ export function useAuditoriaDesfrutes({ clienteId, ano, trimestre }: Params) {
           .gte('data', `${ano - 5}-01-01`)
           .lte('data', `${ano}-12-31`),
         // Faturamento Receita Pecuária (trimestre-equivalente por ano)
-        supabase.from('financeiro_lancamentos_v2')
+        (supabase as any).from(FONTE_POR_PARTE)
           .select('ano_mes, valor')
           .eq('cliente_id', clienteId).eq('cancelado', false)
           .eq('tipo_operacao', '1-Entradas').eq('grupo_custo', 'Receita Pecuária')
