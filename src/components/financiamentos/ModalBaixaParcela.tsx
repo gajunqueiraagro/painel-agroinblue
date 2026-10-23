@@ -554,11 +554,11 @@ export default function ModalBaixaParcela({ parcela, financiamento, onClose, mod
               <div className="grid grid-cols-3 gap-2">
                 <div>
                   <Label className={ROTULO}>Principal</Label>
-                  <Input type="number" step="0.01" value={principal} onChange={e => setPrincipal(Number(e.target.value))} className={CAMPO} />
+                  <CampoMoeda valor={principal} onChange={n => setPrincipal(n ?? 0)} className={CAMPO} />
                 </div>
                 <div>
                   <Label className={ROTULO}>Juros</Label>
-                  <Input type="number" step="0.01" value={juros} onChange={e => setJuros(Number(e.target.value))} className={CAMPO} />
+                  <CampoMoeda valor={juros} onChange={n => setJuros(n ?? 0)} className={CAMPO} />
                 </div>
                 <div>
                   <Label className={ROTULO}>Total</Label>

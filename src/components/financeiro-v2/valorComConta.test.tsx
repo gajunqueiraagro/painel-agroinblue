@@ -412,7 +412,9 @@ describe('a fonte — um dono da conta, nenhum atalho de salvar no teclado', () 
     const lib = ler('../../lib/calculos/contaNoCampo.ts');
     expect(campoFonte).toContain("from '@/lib/calculos/contaNoCampo'");
     for (const f of [campoFonte, lib]) { expect(f).not.toMatch(/\beval\s*\(/); expect(f).not.toMatch(/new\s+Function/); }
-    expect(lib).toContain("import { parseMoeda, round2 } from '@/lib/calculos/numeroBR';");
+    /* FIN-VALOR-CALC-01b: o arredondamento passou a seguir as `casas` do campo (`roundCasas`, que com 2 casas é o `round2`); os operandos
+       seguem lidos SÓ pelo `parseMoeda` */
+    expect(lib).toContain("import { parseMoeda, roundCasas } from '@/lib/calculos/numeroBR';");
   });
   it('o modal não tem <form> nem tecla que salve: Enter no campo não tem para onde subir', () => {
     const modal = ler('./LancamentoV2Dialog.tsx');

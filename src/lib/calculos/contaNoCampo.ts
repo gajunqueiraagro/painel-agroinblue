@@ -11,7 +11,7 @@
  *   arquivo NÃO escreve um segundo: ele só recorta o pedaço de texto que é número e o entrega.
  * ⚠ A ARITMÉTICA É EXATA: cada operando vira uma FRAÇÃO de inteiros (`bigint`), as quatro operações são feitas em fração, e só
  *   o resultado final é arredondado a centavos (metade para cima) — 0,1 + 0,2 dá 0,30 e 100/3 dá 33,33 sem depender da sorte
- *   do ponto flutuante. O número que sai ainda passa pelo `round2` da casa, que nele é identidade.
+ *   do ponto flutuante. O número que sai ainda passa pelo `roundCasas` da casa (o `round2` com 2 casas), que nele é identidade.
  *
  * GRAMÁTICA
  *   conta  := ["="] soma
@@ -19,13 +19,24 @@
  *   termo  := fator { ("*" | "/") fator }
  *   fator  := ( número | "(" soma ")" ) ["%"]
  *   "*" também se escreve x, X, × ; "/" também ÷ ; "-" também o "−" tipográfico. Espaços são ignorados.
- *   NÃO HÁ sinal unário: "-5" não é conta (o campo não aceita valor negativo).
+ *   NÃO HÁ sinal unário: "-5" não é conta (o campo não aceita valor negativo). Exceção: campo que aceita negativo
+ *   (`aceitaNegativo`), onde "−1.845,32+100" é conta e o "-" no começo (ou depois de "(") é o sinal.
  * O "%" É O DA CALCULADORA COMUM
  *   na multiplicação e na divisão vale "por cento":            A * 50% = A × 0,5      A / 50% = A ÷ 0,5
  *   somado ou subtraído SOZINHO, é por cento do que está à esquerda: A + 10% = A × 1,1   A − 10% = A × 0,9
  *   (termo com mais de um fator não é "sozinho": 100 + 50%*200 = 100 + 100.)
  */
-import { parseMoeda, round2 } from '@/lib/calculos/numeroBR';
+import { parseMoeda, roundCasas } from '@/lib/calculos/numeroBR';
+
+/**
+ * AS OPÇÕES DO CAMPO — FIN-VALOR-CALC-01b (o `CampoMoeda` passa as dele). Sem opção, é a conta de sempre: 2 casas, sem negativo.
+ * - `casas`: a quantas casas o RESULTADO se arredonda (o R$/saca da venda de grão usa 4).
+ * - `aceitaNegativo`: o resultado pode ser negativo, e o "-" no começo (ou depois de "(") é sinal. Sem ela, negativo é recusa.
+ * - `base`: o valor que o campo tinha. A conta que é SÓ um percentual ("10%") vale como percentual DELE (10% de `base`).
+ *   `base: null` (campo vazio) faz "10%" sozinho ser recusa (percentual de nada). SEM a chave `base`, é a conta de sempre:
+ *   "10%" = 0,10 (é o que o Valor do lançamento e os campos do lote fazem desde a 01a).
+ */
+export interface OpcoesDaConta { casas?: number; aceitaNegativo?: boolean; base?: number | null }
 
 export type MotivoDaConta = 'vazia' | 'invalida' | 'divisao_por_zero' | 'negativa' | 'grande_demais';
 export type ResultadoDaConta =
@@ -113,7 +124,7 @@ function tokenizar(texto: string): Token[] {
 /** Um termo já calculado; `soPorcento` = ele é UM fator marcado com "%" e mais nada (o "+ 10%" da calculadora). */
 interface Termo { valor: Fracao; soPorcento: boolean }
 
-function analisar(tokens: Token[]): Fracao {
+function analisar(tokens: Token[], aceitaNegativo: boolean): { valor: Fracao; soPorcento: boolean } {
   let p = 0;
   const olhar = () => tokens[p];
   const fim = () => new ErroDaConta('invalida', true);
@@ -122,6 +133,8 @@ function analisar(tokens: Token[]): Fracao {
     const tk = olhar();
     if (!tk) throw fim();
     let valor: Fracao;
+    /* Sinal só onde o campo aceita negativo: "−1.845,32+100", "(−5+2)*3". */
+    if (aceitaNegativo && tk.t === 'op' && tk.v === '-') { p++; const f = fator(); return { valor: fr(-f.valor.n, f.valor.d), porcento: f.porcento }; }
     if (tk.t === 'num') { valor = tk.v; p++; }
     else if (tk.t === '(') {
       p++;
@@ -154,47 +167,68 @@ function analisar(tokens: Token[]): Fracao {
     return { valor, soPorcento: fatores === 1 && primeiro.porcento };
   };
 
+  /** `soPorcento` da soma = ela é um termo só e esse termo é só um percentual ("10%"). */
+  let somaSoPorcento = false;
   function soma(): Fracao {
-    let acumulado = termo().valor;
+    const primeiro = termo();
+    let acumulado = primeiro.valor;
+    let termos = 1;
     for (;;) {
       const tk = olhar();
       if (!tk || tk.t !== 'op' || (tk.v !== '+' && tk.v !== '-')) break;
       p++;
+      termos++;
       const t = termo();
       /* "A + 10%": dez por cento DE A — o termo sozinho com "%" é proporção do que está à esquerda. */
       const parcela = t.soPorcento ? multiplicar(acumulado, t.valor) : t.valor;
       acumulado = tk.v === '+' ? somar(acumulado, parcela) : subtrair(acumulado, parcela);
     }
+    somaSoPorcento = termos === 1 && primeiro.soPorcento;
     return acumulado;
   }
 
   const resultado = soma();
   if (p < tokens.length) throw new ErroDaConta('invalida');
-  return resultado;
+  return { valor: resultado, soPorcento: somaSoPorcento };
 }
 
-/** Fração → centavos inteiros, metade para cima (só chega aqui valor não negativo). */
-function centavos(f: Fracao): bigint {
+/** Fração NÃO NEGATIVA → unidades da última casa (centavos com 2 casas), metade para cima. */
+function unidades(f: Fracao, casas: number): bigint {
   const DOIS = BigInt(2);
-  return (f.n * CEM * DOIS + f.d) / (f.d * DOIS);
+  return (f.n * DEZ ** BigInt(casas) * DOIS + f.d) / (f.d * DOIS);
 }
 
 /**
  * CALCULA A CONTA. Devolve o valor em reais, já em duas casas, ou o motivo da recusa.
  * Um número sozinho ("16.238,00") é uma conta válida de um termo só — o campo em modo conta pode ter ficado sem operador.
  */
-export function calcularConta(texto: string | null | undefined): ResultadoDaConta {
+export function calcularConta(texto: string | null | undefined, opcoes: OpcoesDaConta = {}): ResultadoDaConta {
+  const casas = opcoes.casas ?? 2;
+  const aceitaNegativo = opcoes.aceitaNegativo === true;
   let t = (texto ?? '').trim();
   if (t.startsWith('=')) t = t.slice(1).trim();
   if (!t) return { ok: false, motivo: 'vazia', incompleta: false };
   try {
     const tokens = tokenizar(t);
     if (tokens.length === 0) return { ok: false, motivo: 'vazia', incompleta: false };
-    const f = analisar(tokens);
-    if (f.n < ZERO) return { ok: false, motivo: 'negativa', incompleta: false };
-    const c = centavos(f);
-    if (c > BigInt(Math.round(TETO_DA_CONTA * 100))) return { ok: false, motivo: 'grande_demais', incompleta: false };
-    return { ok: true, valor: round2(Number(c) / 100) };
+    const a = analisar(tokens, aceitaNegativo);
+    let f = a.valor;
+    /* "10%" sozinho: dez por cento do valor que o campo tinha. Sem valor, é percentual de nada. */
+    if (a.soPorcento && opcoes.base !== undefined) {
+      const base = opcoes.base;
+      const fb = base == null || !Number.isFinite(base) ? null : fracaoDoNumero(Math.abs(base));
+      if (!fb) return { ok: false, motivo: 'invalida', incompleta: false };
+      f = multiplicar(f, base < 0 ? fr(-fb.n, fb.d) : fb);
+    }
+    if (f.n < ZERO && !aceitaNegativo) return { ok: false, motivo: 'negativa', incompleta: false };
+    const negativo = f.n < ZERO;
+    const u = unidades(negativo ? fr(-f.n, f.d) : f, casas);
+    /* O teto é em reais: em unidades da última casa ele é TETO × 10^casas (inteiro, sem passar pelo binário). */
+    const tetoCent = BigInt(Math.round(TETO_DA_CONTA * 100));
+    const teto = casas >= 2 ? tetoCent * DEZ ** BigInt(casas - 2) : tetoCent / DEZ ** BigInt(2 - casas);
+    if (u > teto) return { ok: false, motivo: 'grande_demais', incompleta: false };
+    const v = roundCasas(Number(u) / 10 ** casas, casas);
+    return { ok: true, valor: negativo && v !== 0 ? -v : v };
   } catch (e) {
     if (e instanceof ErroDaConta) return { ok: false, motivo: e.motivo, incompleta: e.incompleta };
     throw e;

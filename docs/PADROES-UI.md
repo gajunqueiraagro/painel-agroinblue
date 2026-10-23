@@ -529,6 +529,15 @@ separadores de um jeito que não se acerta por improviso: com `.` e `,` juntos o
 manda; só `,` é decimal; só `.` é decimal quando há 1-2 dígitos depois (`10.50`) e
 milhar quando há mais (`10.000`).
 
+**A conta no campo (FIN-VALOR-CALC-01b, 23/10/2026).** Todo `CampoMoeda` aceita conta:
+`988.224-976.224`, `16.238,00/2`, `976.224,00+10%`, `10%` (dez por cento do valor que o
+campo tinha). O operador abre o modo conta; o resultado aparece num balão sob o campo
+(absoluto, não desloca nada); Enter ou sair aplica, Esc cancela e volta ao valor do foco
+sem fechar o modal; conta que não fecha não grava e deixa a frase da lib. O hospedeiro
+**só recebe o resultado**, nas `casas` do campo; sem `aceitaNegativo`, resultado negativo
+é recusa. Quem calcula é `src/lib/calculos/contaNoCampo.ts` — não escrever outro
+avaliador. Sem operador o campo é byte a byte o de antes (`campoMoeda.fotos.json`).
+
 > Este padrão nasceu de um defeito com causa conhecida: o campo já existia, mas **como
 > função local não exportada** dentro de `AbaCompromissosOC.tsx`. Nenhuma outra tela
 > conseguia reusá-lo, e a aba Documentos exibia `106425`. Componente compartilhado que
