@@ -15,7 +15,7 @@ import { COMBOBOX_CONTENT } from '@/components/ui/command';
 import { Segmentado } from '@/components/ui/segmentado';
 import { ATIVIDADES, type Atividade } from '@/lib/financeiro/ultimaAtividade';
 import {
-  MENU_BUSCA, MENU_ESCOLHIDO, MENU_ITEM, MENU_REALCE, MENU_REALCE_HOVER, MENU_SECUNDARIO, MENU_VAZIO,
+  MENU_BUSCA, MENU_ESCOLHIDO, MENU_SEGMENTADO, MENU_ITEM, MENU_REALCE, MENU_REALCE_HOVER, MENU_SECUNDARIO, MENU_VAZIO,
 } from '@/components/ui/menuPadrao';
 
 export interface PlanoSubcentroSelectProps {
@@ -262,7 +262,7 @@ export function PlanoSubcentroSelect({
           {/* SELETOR-CONTA-POR-ATIVIDADE-01 — a barra de atividade EM CIMA da busca (a mesma da aba Geral, o `Segmentado` da casa) */}
           {atividadeNaLista && atividadesDaBarra.length > 0 && (
             <div className="border-b border-zinc-500/40 px-2 py-1" data-testid="conta-barra-atividade">
-              <Segmentado altura={22} valor={atividadeDaLista ?? ''} className="flex w-full border-zinc-500/60 [&>button]:flex-1 [&>button.bg-transparent]:text-zinc-100 [&>button.bg-transparent:hover]:bg-zinc-700"
+              <Segmentado altura={22} valor={atividadeDaLista ?? ''} className={MENU_SEGMENTADO}
                 onEscolher={(a) => { setAtividadeDaLista((hoje) => (hoje === a || !a ? null : atividadeValidaDaBarra(a))); setHighlight(0); searchInputRef.current?.focus(); }}
                 opcoes={atividadesDaBarra.map((a) => ({ valor: a, rotulo: ATIVIDADES.find((x) => x.valor === a)?.rotulo ?? a }))} />
             </div>
