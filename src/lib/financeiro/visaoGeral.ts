@@ -82,7 +82,8 @@ export const dataCurta = (d: string | null) => (d ? `${d.slice(8, 10)}/${d.slice
 
 // ── cores (SPEC §6) ────────────────────────────────────────────────────────────────────────────────────────────────────
 export const COR = {
-  saida: '#b3261e', entrada: '#1f3864', meta: '#d97400', saldo: '#1e7a3c', neg: '#b3261e', pos: '#1e7a3c', muted: '#5b6878',
+  /* P83 (Gabriel 23/10): positivo em AZUL, negativo em VERMELHO em toda a tela — nenhum valor preto; entradas navy, saídas vermelhas */
+  saida: '#b3261e', entrada: '#1f3864', meta: '#d97400', saldo: '#1d5fb3', neg: '#b3261e', pos: '#1d5fb3', muted: '#5b6878',
   barraEnt: '#3c6db3', barraEntP: '#b9cbe6', barraSai: '#c0504d', barraSaiP: '#e7b6b4', mediaSai: '#7f1d1d', mediaEnt: '#1f3864',
 } as const;
 export const corSinal = (v: number | null | undefined) => (v == null ? COR.muted : v < 0 ? COR.neg : COR.pos);

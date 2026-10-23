@@ -112,7 +112,7 @@ function LinhaGrade({ l, meses, sel, fmt, comp, onAnalisar }: {
           <td data-testid={`grade-media-${l.chave}`} className={cn(TD_REGUA_NUM, fs, 'border-l border-l-[#dde2e8] font-bold')}
             style={{ background: FUNDO_RESUMO, color: porSinal ? corSinal(l.media) : cor }}>{fmt(l.media)}</td>
           <td data-testid={`grade-pct-${l.chave}`} className={cn(TD_REGUA_NUM, 'border-l border-l-[#dde2e8] font-normal')}
-            style={{ background: FUNDO_RESUMO, color: COR.muted }}>{l.tipo === 'grupo' || l.tipo === 'transf' ? pct1(l.pct) : ''}</td>
+            style={{ background: FUNDO_RESUMO, color: cor }}>{l.tipo === 'grupo' || l.tipo === 'transf' ? pct1(l.pct) : ''}</td>
         </>
       )}
     </tr>

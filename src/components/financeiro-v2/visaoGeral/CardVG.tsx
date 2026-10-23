@@ -57,7 +57,7 @@ function CardFluxo({ tela, k, sel, v, previsto, vigente, onAnalisar }: {
             {venc(t) ? <span className="ml-1.5 text-[9.5px] font-semibold text-amber-700" data-testid={`card-vencido-${lado}`}>vencidos {brl(venc(t))}</span> : null}
           </td>
           <td className="h-5 whitespace-nowrap px-1 text-right text-[13px] font-bold tabular-nums" style={{ color: cor }} data-testid={`card-valor-${lado}`}>{brl(v(t))}</td>
-          <td className="h-5 whitespace-nowrap px-1 text-right text-[10px] font-bold tabular-nums text-muted-foreground">{v(t) == null ? '' : '100%'}</td>
+          <td className="h-5 whitespace-nowrap px-1 text-right text-[10px] font-bold tabular-nums" style={{ color: cor }}>{v(t) == null ? '' : '100%'}</td>
         </tr>
         {gruposDe(tela, lado).map((g, gi) => (
           <tr key={g.chave} className="cursor-pointer border-b border-[#eef1f5] hover:bg-muted/40" onClick={() => onAnalisar({ lado, grupo: g.grupo ?? null, am: sel })}
@@ -65,8 +65,8 @@ function CardFluxo({ tela, k, sel, v, previsto, vigente, onAnalisar }: {
             <td className="h-[17px] truncate px-1 text-[10px]" title={`${g.rotulo} ›`}>
               <i className="mr-1.5 inline-block h-2 w-2 rounded-sm align-middle" style={{ background: corDoGrupo(lado, gi) }} />{g.rotulo} <span className="text-[#8d9cad]">›</span>
             </td>
-            <td className="h-[17px] whitespace-nowrap px-1 text-right text-[10px] tabular-nums">{brl(v(g))}</td>
-            <td className="h-[17px] whitespace-nowrap px-1 text-right text-[10px] tabular-nums text-muted-foreground">{pct1(g.pct_mes?.[k])}</td>
+            <td className="h-[17px] whitespace-nowrap px-1 text-right text-[10px] tabular-nums" style={{ color: cor }}>{brl(v(g))}</td>
+            <td className="h-[17px] whitespace-nowrap px-1 text-right text-[10px] tabular-nums" style={{ color: cor }}>{pct1(g.pct_mes?.[k])}</td>
           </tr>
         ))}
       </>
@@ -141,7 +141,7 @@ function CardGrupos({ tela, lado, k, sel, v, previsto, onAnalisar }: {
                 <tr className="cursor-pointer border-b-2 border-[#1b2430]" onClick={() => onAnalisar({ lado, grupo: null, am: sel })} data-testid={`card-total-${lado}`}>
                   <td className="h-[26px] truncate px-1 text-[10.5px] font-bold" title={`${nome} totais`}>{nome} totais <span className="text-[#8d9cad]">›</span></td>
                   <td className="h-[26px] whitespace-nowrap px-1 text-right text-[13px] font-bold tabular-nums" style={{ color: cor }} data-testid={`card-valor-${lado}`}>{brl(v(t))}</td>
-                  <td className="h-[26px] whitespace-nowrap px-1 text-right text-[10px] font-bold tabular-nums text-muted-foreground">{v(t) == null ? '' : '100%'}</td>
+                  <td className="h-[26px] whitespace-nowrap px-1 text-right text-[10px] font-bold tabular-nums" style={{ color: cor }}>{v(t) == null ? '' : '100%'}</td>
                   <td />
                 </tr>
                 <tr className="text-[7.5px] text-muted-foreground">
@@ -154,8 +154,8 @@ function CardGrupos({ tela, lado, k, sel, v, previsto, onAnalisar }: {
                     <td className="h-[21px] truncate px-1 text-[10.5px]" title={`${g.rotulo} ›`}>
                       <i className="mr-1.5 inline-block h-2 w-2 rounded-sm align-middle" style={{ background: corDoGrupo(lado, gi) }} />{g.rotulo} <span className="text-[#8d9cad]">›</span>
                     </td>
-                    <td className="h-[21px] whitespace-nowrap px-1 text-right text-[10.5px] tabular-nums">{brl(v(g))}</td>
-                    <td className="h-[21px] whitespace-nowrap px-1 text-right text-[10px] tabular-nums text-muted-foreground">{pct1(g.pct_mes?.[k])}</td>
+                    <td className="h-[21px] whitespace-nowrap px-1 text-right text-[10.5px] tabular-nums" style={{ color: cor }}>{brl(v(g))}</td>
+                    <td className="h-[21px] whitespace-nowrap px-1 text-right text-[10px] tabular-nums" style={{ color: cor }}>{pct1(g.pct_mes?.[k])}</td>
                     <td className="h-[21px] whitespace-nowrap px-1 text-right text-[10px] tabular-nums" style={{ color: corVariacao(lado, g.vs_media?.[k]) }}
                       data-testid={`card-vs-media-${g.chave}`}>{vsMedia(g.vs_media?.[k])}</td>
                   </tr>
