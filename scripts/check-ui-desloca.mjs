@@ -100,6 +100,7 @@ const CENARIOS = [
     ['nota ja lancada (NOTA-JA-LANCADA-01)', { url: 'tela=nota-pdf&v=jalancada' }],
     ['nota avulsa, remessa de entrega futura (NOTA-AVULSA-890-01)', { url: 'tela=nota-pdf&v=avulsa' }],
     ['nota ja lancada em parcela (NOTA-CONTAS-NA-CRIACAO-01 C)', { url: 'tela=nota-pdf&v=emparcela' }],
+    ['nota ja lancada com cancelados no fim (D)', { url: 'tela=nota-pdf&v=cancelados' }], ['so cancelados (D)', { url: 'tela=nota-pdf&v=socancelados' }],
   ] },
   /* ITENS-NOTA-01 — os itens da nota: Valores <-> Fiscal (o `auto` troca o Segmentado) no dialogo da OC; o backfill antes e depois do
      Simular (a contagem e as linhas chegam, os botoes nao andam) */
