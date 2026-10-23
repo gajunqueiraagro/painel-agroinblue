@@ -13,8 +13,8 @@
 --   S7 a tela ecoa o que usou (status, incluir_vencidos)
 --   S8 seguranca: o gestor da NJ recebe 42501 no Agnaldo; sem usuario, 42501; anon sem EXECUTE nas assinaturas novas
 --   S9 IGUALDADE COM A CPR (111934): o saldo do fim de out/2026 da fn_vg_saldos = o da CPR replicada (cprRecorte.ts + saldoEmCaixa.ts:
---      caixa de hoje pelas ancoras + todo em aberto ate' 31/10 com os MESMOS status — vencidos inclusive —, a compra no cartao inclusive,
---      so' a ponta de transferencia fora do caixa de fora), nos tres clientes, com os tres status, so' agendado e nenhum
+--      caixa de hoje pelas ancoras — o cartao no conjunto desde o P82 — + todo em aberto ate' 31/10 com os MESMOS status, vencidos
+--      inclusive; a ponta de transferencia fora do conjunto de fora: o pagamento da fatura se anula), nos tres clientes, com os tres status, so' agendado e nenhum
 set local statement_timeout = '600s';
 
 create function pg_temp.vgst() returns text language plpgsql as $f$
@@ -83,7 +83,7 @@ begin
   WITH cl(id) AS (SELECT unnest(ARRAY[c_ag, c_vera, c_nj])),
   comb(st) AS (SELECT unnest(ARRAY['{previsto,programado,agendado}', '{agendado}', '{}'])::text[]),
   contas AS (SELECT k.id, k.cliente_id, lower(coalesce(k.tipo_conta, '')) tipo FROM financeiro_contas_bancarias k JOIN cl ON cl.id = k.cliente_id
-              WHERE k.ativa AND lower(coalesce(k.tipo_conta, '')) IN ('cc', 'inv', 'permuta')),
+              WHERE k.ativa AND (lower(coalesce(k.tipo_conta, '')) IN ('cc', 'inv', 'permuta') OR fn_vg_eh_cartao(k.tipo_conta))),  -- P82: o cartao no conjunto
   legs AS (SELECT kk.id conta, l.data_pagamento dia,
              CASE WHEN l.conta_destino_id = kk.id AND l.conta_bancaria_id IS DISTINCT FROM kk.id THEN abs(l.valor)
                   ELSE abs(l.valor) * CASE l.sinal::text WHEN '1' THEN 1 WHEN '-1' THEN -1 ELSE CASE WHEN l.tipo_operacao = '1-Entradas' THEN 1
@@ -166,9 +166,8 @@ begin
     ('M7 serie conta o vencido sem o chip', 'public.fn_vg_serie(uuid,date,date,uuid[],uuid[],uuid,text,date,text[],boolean)',
      'AND (v_venc OR coalesce(v.data_vencimento, v.data_competencia) >= p_hoje)', 'AND (true OR coalesce(v.data_vencimento, v.data_competencia) >= p_hoje)'),
     ('M8 tela ecoa sempre vencidos ligado', 'public.fn_vg_tela(uuid,date,date,uuid[],uuid[],uuid,text,date,text[],boolean)',
-     '''incluir_vencidos'', v_venc,', '''incluir_vencidos'', true,'),
-    ('M9 saldos deixam o cartao de fora', 'public.fn_vg_saldos(uuid,date,date,uuid[],date,text[],boolean)',
-     'OR (NOT x.tr AND NOT EXISTS', 'OR (false AND NOT EXISTS')
+     '''incluir_vencidos'', v_venc,', '''incluir_vencidos'', true,')
+    -- (a M9 da 111934 — o cartao como "sem conta" — saiu com a regra do P82; as mutacoes do cartao estao em vg_cartao_test.sql)
   ) v(nome, fn, de, para) LOOP
     IF p_so IS NOT NULL AND NOT substr(m.nome, 2, position(' ' in m.nome) - 2)::int = ANY (p_so) THEN CONTINUE; END IF;
     total := total + 1;

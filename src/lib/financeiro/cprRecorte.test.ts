@@ -240,7 +240,7 @@ describe('a tela só renderiza o dono (lido da fonte)', () => {
     expect(tela).not.toMatch(/ramoDoHorizonte|limiteDoHorizonte/);
   });
   it('os cartões e o total leem `recorte`; nenhuma soma de `linhas` na tela', () => {
-    expect(tela).toContain('recortarCpr(linhas, { periodo, hoje: hojeIso, ancoras, estimadas })');
+    expect(tela).toContain('recortarCpr(linhas, { periodo, hoje: hojeIso, ancoras, estimadas, cartoes })');  // P82: os cartões do banco
     /* CPR-TRANSFERENCIAS-NO-FLUXO-01: os cartões leem `recorte.cartoes` (só contas, sem as pontas de transferência) */
     for (const campo of ['recorte.cartoes.vencidos.pagar.valor', 'recorte.cartoes.periodo.pagar.valor', 'recorte.cartoes.periodo.receber.valor', 'rodapeDoPeriodoCpr(recorte, serie)', 'serie.fim', 'serie.menor']) {
       expect(tela, campo).toContain(campo);
@@ -260,7 +260,7 @@ describe('a tela só renderiza o dono (lido da fonte)', () => {
     expect(Array.from(tela.matchAll(/overflow-auto rolagem-fina/g)).length).toBe(1);
   });
   it('CPR-CONTA-01: o filtro entra no dono e chega a tudo — cartões, lista, total, gráfico, caixa e cabeçalho', () => {
-    expect(tela).toContain('recortarCpr(linhas, { periodo, hoje: hojeIso, conta: contaSel, ancoras, estimadas })');
+    expect(tela).toContain('recortarCpr(linhas, { periodo, hoje: hojeIso, conta: contaSel, ancoras, estimadas, cartoes })');
     expect(tela).toContain('resumoPorContaCpr(linhas, { periodo, hoje: hojeIso, contaEscolhida: contaSel, comRealizado })');
     /* o gráfico desenha o que sai do MESMO recorte filtrado, e parte do saldo da MESMA conta */
     expect(tela).toContain('const doFluxo = useMemo(() => linhasDoSaldoCpr(recorte), [recorte]);');
@@ -281,7 +281,8 @@ describe('a tela só renderiza o dono (lido da fonte)', () => {
     expect(Array.from(new Set(Array.from(tela.matchAll(/queryKey: \['(cpr-[a-z]+)'/g)).map(m => m[1]))).sort())
       /* REC-VALOR-CERTO-02: entrou UMA leitura por cliente (`cpr-estimadas`, o conjunto dos lançamentos ainda estimados) — a view da
          lista não expõe `recorrencia_id` nem a marca do valor do mês. Continua sem consulta por linha. */
-      .toEqual(['cpr-anexos', 'cpr-caixa', 'cpr-estimadas', 'cpr-lancs']);
+      /* P82: entrou `cpr-cartoes` (os cartões e o saldo deles, do banco: `fn_cpr_cartoes`), uma leitura por cliente */
+      .toEqual(['cpr-anexos', 'cpr-caixa', 'cpr-cartoes', 'cpr-estimadas', 'cpr-lancs']);
   });
   it('o cartão tem 40px e o valor não corta; o gráfico começa em "de"', () => {
     expect(tela).toContain("'flex min-w-0 h-[40px] items-center gap-1 rounded-md border border-l-[3px] px-1 py-[3px]'");
@@ -460,7 +461,8 @@ describe('CPR-SALDO-DIA-01 — a tela só renderiza (lido da fonte)', () => {
   it('âncoras e série vêm do dono, da mesma entrada do Caixa; lista e gráfico partem do MESMO saldo', () => {
     expect(tela).toContain('ancorasDoCaixaCpr(caixaTodas.ancoraPorConta)');
     /* CPR-PDF-ACABAMENTO-01: a série recebe também o REALIZADO do dono do caixa (o passado do período) */
-    expect(tela).toContain('serieDoSaldoCpr(recorte, caixa && caixa.ancoradas > 0 ? caixa.total : null, realizado)');
+    /* P82: em "todas as contas" a série soma o saldo dos cartões (do banco), no caixa de hoje e no realizado */
+    expect(tela).toContain('serieDoSaldoCpr(recorte, caixa && caixa.ancoradas > 0 ? caixa.total + saldoDosCartoes : null, realizadoComCartoesCpr(realizado, saldoDosCartoes))');
     expect(tela).toContain('saldoInicial={serie.encerrado ? serie.fim : serie.hoje}');
     /* o gráfico não tem regra própria de vencido: desconta todo vencido que RECEBE, sem piso e sem "conciliado até" */
     expect(fluxo).toContain('ajusteVencidoPorDia(linhas, null, hoje, null)');

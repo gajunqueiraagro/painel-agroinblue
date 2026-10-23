@@ -10,6 +10,7 @@
  *      desligar Vencidos pede p_incluir_vencidos = false
  *   V7 P79: o aviso do que ficou fora vem do ECO do banco (status / incluir_vencidos), não do estado da tela
  *   V8 P79: o card mostra "vencidos R$ x" no total do lado, do banco, só quando há
+ *   V9 P82: a linha "Pagamento de cartão (transferência)" vem do banco e fica entre as saídas e o RESULTADO; não abre análise
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render as renderCru, screen, fireEvent, waitFor, within } from '@testing-library/react';
@@ -157,5 +158,21 @@ describe('Visão Geral — render-only', () => {
     await screen.findByTestId('grade-vg');
     expect(celula('card-vencido-saida')).toBe('vencidos R$ 30,00');
     expect(screen.queryByTestId('card-vencido-entrada')).toBeNull();
+  });
+
+  it('V9 a linha do pagamento de cartão: do banco, entre as saídas e o resultado, sem análise', async () => {
+    const onAnalisar = vi.fn();
+    const linhas = [...TELA.linhas];
+    linhas.splice(linhas.findIndex((l) => l.chave === 'resultado'), 0,
+      { chave: 'cartao', tipo: 'cartao', rotulo: 'PAGAMENTO DE CARTÃO (transferência)', valores: M.map((_, i) => 31 + i), total: 77, media: 6 } as any);
+    rpc.mockImplementation(async (fn: string) => ({ data: fn === 'fn_vg_tela' ? { ...TELA, linhas } : { contas: [], atividades: [], safras: [] }, error: null }));
+    render(<VisaoGeralFinanceiro hoje="2026-02-15" onAnalisar={onAnalisar} />);
+    await screen.findByTestId('grade-vg');
+    const tipos = Array.from(document.querySelectorAll('[data-testid^="grade-linha-"]')).map((tr) => tr.getAttribute('data-tipo'));
+    expect(tipos.slice(-3)).toEqual(['cartao', 'resultado', 'saldo']);
+    expect(celula('grade-celula-cartao-2026-02')).toBe('32');
+    expect(celula('grade-total-cartao')).toBe('77');
+    fireEvent.click(screen.getByTestId('grade-linha-cartao'));
+    expect(onAnalisar).not.toHaveBeenCalled();
   });
 });
