@@ -186,3 +186,72 @@ export function percentuaisDosItens(porConta: readonly ContaDosItens[]): ParteNo
     return { plano_conta_id: c.planoContaId, percentual: p };
   });
 }
+
+/* ── NOTA-CONTAS-NA-CRIACAO-01 A (P77) — a divisao pelos itens escolhida no NOVO lancamento ──────────────────────────────────────── */
+
+/** O motivo da divisao feita junto com a criacao (a RPC pede motivo; o gesto e' o proprio "Dividir … ao salvar"). */
+export const MOTIVO_DA_DIVISAO_NA_CRIACAO = 'dividido pelos itens da nota ao criar o lançamento';
+
+/**
+ * Por que a divisao pendente NAO pode ir junto com a criacao (a frase), ou `null`. Confere ANTES de gravar o que o banco recusaria depois:
+ * item sem conta, uma conta so', conta fora do plano ou de outro tipo (o "mostrar todos" deixa escolher) — assim o banco so' recusa o que
+ * a tela nao pode saber (mes fechado, acesso, rede).
+ */
+export function porQueNaoDivideNaCriacao(itens: readonly Pick<ItemFiscal, 'nItem'>[], mapa: ReadonlyMap<number, string>,
+  classificacoes: readonly { id?: string; subcentro: string; tipo_operacao: string }[], tipoOperacao: string): string | null {
+  const base = porQueNaoDivideOsItens(itens, mapa);
+  if (base) return base;
+  for (const id of new Set(mapa.values())) {
+    const c = classificacoes.find((x) => x.id === id);
+    if (!c) return 'Uma das contas escolhidas não está no plano de contas. Escolha de novo.';
+    if (c.tipo_operacao !== tipoOperacao) return `A conta "${c.subcentro}" é de ${c.tipo_operacao} e o lançamento é de ${tipoOperacao}.`;
+  }
+  return null;
+}
+
+/**
+ * As partes da divisao PENDENTE (so' para mostrar na aba Geral antes de salvar): o percentual dos itens aplicado ao valor do lancamento,
+ * a ultima fecha o centavo — a mesma conta que o banco faz quando a nota e o lancamento diferem.
+ */
+export function partesPendentes(itens: readonly Pick<ItemFiscal, 'nItem' | 'liquidoCent'>[], mapa: ReadonlyMap<number, string>,
+  classificacoes: readonly { id?: string; subcentro: string; centro_custo: string; escopo_negocio?: string | null }[], total: number): ParteGravada[] {
+  const porConta = porContaDosItens(itens, mapa);
+  const totalCent = Math.round(Math.abs(total) * 100);
+  let acum = 0;
+  return porConta.map((c, k) => {
+    const cent = k < porConta.length - 1 ? Math.round((totalCent * c.percentual) / 100) : totalCent - acum;
+    acum += cent;
+    const cls = classificacoes.find((x) => x.id === c.planoContaId);
+    return { ordem: k + 1, valor: cent / 100, percentual: c.percentual, plano_conta_id: c.planoContaId, subcentro: cls?.subcentro ?? null,
+      centro_custo: cls?.centro_custo ?? null, escopo_negocio: cls?.escopo_negocio ?? null, origem: 'nota', itens: c.itens,
+      notaItens: itens.filter((i) => mapa.get(i.nItem) === c.planoContaId).map((i) => i.nItem) };
+  });
+}
+
+/** A conta que o lancamento leva quando dividido: a MAIOR parte (empate: a primeira) — a regra do banco (`_fn_fin_dividir`). */
+export function contaDaMaiorParte(itens: readonly Pick<ItemFiscal, 'nItem' | 'liquidoCent'>[], mapa: ReadonlyMap<number, string>): string | null {
+  const porConta = porContaDosItens(itens, mapa);
+  return [...porConta].sort((a, b) => b.liquidoCent - a.liquidoCent)[0]?.planoContaId ?? null;
+}
+
+/**
+ * O lancamento A VISTA acabou de nascer (e a nota dele ja' esta' anexada e com os itens guardados): divide pelos itens com a MESMA
+ * `fn_lancamento_dividir_pelos_itens`. Recusou: o lancamento recem-criado e' CANCELADO (`fn_cancelar_lancamento_auditoria`, motivo
+ * escrito) — nada fica valendo pela metade — e volta a frase. `null` = dividido.
+ */
+export async function dividirNaCriacao(clienteId: string, lancamentoId: string, mapa: ReadonlyMap<number, string>): Promise<string | null> {
+  const r = await dividirPelosItens(clienteId, lancamentoId, mapa, MOTIVO_DA_DIVISAO_NA_CRIACAO, false);
+  if (r.ok === false) return desfazerCriacao(clienteId, lancamentoId, r.frase);
+  return null;
+}
+
+/** Cancela o lancamento recem-criado cuja divisao nao foi gravada, e devolve a frase do que aconteceu. */
+export async function desfazerCriacao(clienteId: string, lancamentoId: string, porque: string): Promise<string> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+  const { error } = await (supabase as any).rpc('fn_cancelar_lancamento_auditoria', { p_lancamento_id: lancamentoId, p_motivo: `divisão pelos itens não gravada na criação: ${porque}` });
+  notificarLancamentosMudaram(clienteId);
+  return error
+    ? `A divisão não foi gravada (${porque}) e o lançamento criado NÃO pôde ser cancelado: cancele-o na lista antes de lançar de novo.`
+    : `Nada ficou valendo: a divisão não foi gravada (${porque}) e o lançamento recém-criado foi cancelado. Corrija e salve de novo.`;
+}
+

@@ -119,7 +119,8 @@ describe('ligação com o salvar (lida da fonte)', () => {
   });
 
   it('parcelado: o uuid da RPC leva às parcelas gravadas, e só então fecha (PR 2b: todas, não só a 1)', () => {
-    expect(dialogo).toContain('const financiamentoId = await gravarParcelamento(payload, clienteAtual.id, () => qc.invalidateQueries());');
+    /* NOTA-CONTAS-NA-CRIACAO-01 A — a divisao pendente (ou `undefined`) vai na MESMA chamada */
+    expect(dialogo).toContain('const financiamentoId = await gravarParcelamento(payload, clienteAtual.id, () => qc.invalidateQueries(), divisaoDoParcelado);');
     expect(dialogo).toContain('const parcelasGravadas = financiamentoId ? await lancamentosDoParcelamento(financiamentoId) : [];');
     expect(dialogo).toContain("if (!(await gravarPendentesDepoisDoSalvar({ tipo: 'parcelado', parcelas: parcelasGravadas }))) return;");
     expect(dialogo).not.toContain('lancamentoDaParcela1');

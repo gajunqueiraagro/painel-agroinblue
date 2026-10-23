@@ -12,7 +12,9 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Segmentado } from '@/components/ui/segmentado';
 import { CampoMoeda, CampoPercentual } from '@/components/ui/campo-moeda';
-import { PlanoSubcentroSelect } from '@/components/shared/PlanoSubcentroSelect';
+import { EscolherConta } from '@/components/shared/EscolherConta';
+import { atividadeValida } from '@/components/shared/ClassificacaoLancamento';
+import type { Atividade } from '@/lib/financeiro/ultimaAtividade';
 import { QUADRO_REGUA } from '@/components/ui/regua-tabela';
 import type { ClassificacaoItem } from '@/hooks/useFinanceiroV2';
 import { dividir, type ParteNova, type RespostaDaDivisao, type ResultadoDaDivisao } from '@/lib/financeiro/divisaoDaClassificacao';
@@ -77,15 +79,14 @@ export function MotivoDaDivisaoDialog({ titulo, explicacao, botao, simular, conf
 interface LinhaDaParte { chave: number; plano: string; valor: number | null; percentual: number | null }
 const TD = 'h-[22px] px-1 py-0 text-[10px] leading-none';
 
-function ContaDaParte({ valor, classificacoes, tipoOperacao, onEscolher, chave }: {
-  valor: string; classificacoes: ClassificacaoItem[]; tipoOperacao: string; onEscolher: (p: string) => void; chave: number;
+function ContaDaParte({ valor, classificacoes, tipoOperacao, onEscolher, chave, atividadeSugerida }: {
+  valor: string; classificacoes: ClassificacaoItem[]; tipoOperacao: string; onEscolher: (p: string) => void; chave: number; atividadeSugerida: Atividade | null;
 }) {
-  const [busca, setBusca] = useState('');
+  /* SELETOR-CONTA-POR-ATIVIDADE-01 — o `EscolherConta` (a atividade primeiro, nascendo da conta da parte) */
   return (
     <div data-testid={`dividir-conta-${chave}`}>
-      <PlanoSubcentroSelect value={classificacoes.find((c) => c.id === valor)?.subcentro ?? ''} onChange={() => undefined}
-        onSelected={(_s, cls) => { if (cls?.id) onEscolher(cls.id); }} classificacoes={classificacoes} tipoOperacao={tipoOperacao}
-        search={busca} onSearchChange={setBusca} triggerClassName="h-[20px] px-1.5 text-[10px] [&_svg]:h-3 [&_svg]:w-3" itemClassName="text-[10.5px]" />
+      <EscolherConta valor={valor} onEscolher={(c) => onEscolher(c.id)} classificacoes={classificacoes} tipoOperacao={tipoOperacao} atividadeSugerida={atividadeSugerida}
+        triggerClassName="h-[20px] px-1.5 text-[10px] [&_svg]:h-3 [&_svg]:w-3" itemClassName="text-[10.5px]" />
     </div>
   );
 }
@@ -100,6 +101,8 @@ export function DividirClassificacaoDialog({ clienteId, lancamento, classificaco
   onClose: () => void;
 }) {
   const total = Math.abs(lancamento.valor);
+  /* a parte sem conta abre a barra na atividade da conta de hoje do lancamento */
+  const atividadeDoLancamento = atividadeValida(classificacoes.find((c) => c.id === lancamento.plano_conta_id)?.escopo_negocio);
   const doCadastro = !!lancamento.financiamento_id;
   const [modo, setModo] = useState<'valor' | 'percentual'>(doCadastro ? 'percentual' : 'valor');
   const [linhas, setLinhas] = useState<LinhaDaParte[]>(() => (partesDeHoje.length
@@ -172,7 +175,7 @@ export function DividirClassificacaoDialog({ clienteId, lancamento, classificaco
                     return (
                       <tr key={l.chave} className="border-b border-border/50" data-testid="dividir-linha">
                         <td className={TD}>
-                          <ContaDaParte chave={l.chave} valor={l.plano} classificacoes={classificacoes} tipoOperacao={lancamento.tipo_operacao}
+                          <ContaDaParte chave={l.chave} valor={l.plano} classificacoes={classificacoes} tipoOperacao={lancamento.tipo_operacao} atividadeSugerida={atividadeDoLancamento}
                             onEscolher={(p) => { setLinhas((ls) => ls.map((x) => (x.chave === l.chave ? { ...x, plano: p } : x))); mexeu(); }} />
                         </td>
                         <td className={TD}>

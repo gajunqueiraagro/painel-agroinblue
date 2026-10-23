@@ -220,14 +220,15 @@ describe('aba Documentos do abate', () => {
     const inicial = { ...formAbateVazio('acerto'), documentoId: 'ac', versao: 2, bruto: 1 };
     render(<DocumentoFormAbate api={api()} initialForm={inicial} contraparteId="cp" clienteId="cli" onSaved={() => {}} onCancel={() => {}} />);
     fireEvent.change(screen.getByTestId('arquivo-abate'), { target: { files: [new File(['%PDF'], 'acerto.pdf', { type: 'application/pdf' })] } });
-    const faixa = await screen.findByText('lido do PDF (Acerto Minerva): 8 campos · confira antes de salvar');
+    /* P85 (c) — o rotulo e' o frigorifico LIDO do PDF (razao social e CNPJ), nunca o nome do layout */
+    const faixa = await screen.findByText('lido do PDF (Acerto · FORTUNCERES S.A. 52.168.923/0002-31): 8 campos · confira antes de salvar');
     expect(faixa.closest('[data-testid=faixa-conferencia]')!.getAttribute('data-tom')).toBe('neutro');
     const campo = (k: string) => screen.getByTestId('area-campos').querySelector(`[data-campo=${k}] input`) as HTMLInputElement;
     expect(campo('ordemCompra').value).toBe('10352');
     expect(campo('bruto').value).toMatch(/1,00$/); /* o que ja' tinha fica */
   });
 
-  it('passo 4 — NPR imagem: so anexa, com o aviso; especie trocada: so avisa', async () => {
+  it('passo 4 — NPR imagem: so anexa, com o aviso; especie trocada NA EDICAO (especie fixa): so avisa', async () => {
     leitorLinhas.extrairLinhasPdf.mockResolvedValueOnce({ linhas: [], paginas: 1, temTexto: false });
     const { unmount } = render(<DocumentoFormAbate api={api()} initialForm={formAbateVazio('npr')} contraparteId="cp" clienteId="cli"
       onSaved={() => {}} onCancel={() => {}} />);
@@ -235,10 +236,10 @@ describe('aba Documentos do abate', () => {
     expect((await screen.findByText(FRASE_SEM_TEXTO)).closest('[data-testid=faixa-conferencia]')!.getAttribute('data-tom')).toBe('atencao');
     unmount();
     leitorLinhas.extrairLinhasPdf.mockResolvedValueOnce({ linhas: ROMANEIO_MINERVA, paginas: 1, temTexto: true });
-    render(<DocumentoFormAbate api={api()} initialForm={formAbateVazio('acerto')} contraparteId="cp" clienteId="cli"
+    render(<DocumentoFormAbate api={api()} initialForm={{ ...formAbateVazio('acerto'), documentoId: 'ac', versao: 2 }} contraparteId="cp" clienteId="cli"
       onSaved={() => {}} onCancel={() => {}} />);
     fireEvent.change(screen.getByTestId('arquivo-abate'), { target: { files: [new File(['%PDF'], 'rom.pdf', { type: 'application/pdf' })] } });
-    await screen.findByText('Este PDF é Romaneio Minerva; a espécie escolhida é Acerto · nada preenchido');
+    await screen.findByText('Este PDF é Romaneio (frigorífico da OC); a espécie escolhida é Acerto · nada preenchido');
     expect((screen.getByTestId('area-campos').querySelector('[data-campo=cab] input') as HTMLInputElement).value).toBe('');
   });
 

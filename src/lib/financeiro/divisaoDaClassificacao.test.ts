@@ -6,6 +6,7 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('@/integrations/supabase/client', () => ({ supabase: { rpc: vi.fn(), from: vi.fn() } }));
 vi.mock('@/hooks/useFinanceiroV2', () => ({ notificarLancamentosMudaram: vi.fn() }));
 import {
+  contaDaMaiorParte, partesPendentes, porQueNaoDivideNaCriacao,
   contasDasPartes, idDoLancamento, percentuaisDosItens, porContaDosItens, porQueNaoDivideOsItens, valorDividido, type ParteGravada,
 } from './divisaoDaClassificacao';
 
@@ -60,3 +61,28 @@ describe('valorDividido — a celula da lista (01c)', () => {
     expect(valorDividido({ valor: 100, partes_total: 1 })).toBeNull();
   });
 });
+
+/* NOTA-CONTAS-NA-CRIACAO-01 A — a divisao PENDENTE do novo lancamento (sintetico: 3 itens, 600 + 300 + 100) */
+describe('a divisao pendente na criacao', () => {
+  const ITENS3 = [{ nItem: 1, liquidoCent: 60000 }, { nItem: 2, liquidoCent: 30000 }, { nItem: 3, liquidoCent: 10000 }];
+  const PL = [{ id: 'a', subcentro: 'Conta A', centro_custo: 'CA', tipo_operacao: '2-Saídas', escopo_negocio: 'pecuaria' },
+    { id: 'b', subcentro: 'Conta B', centro_custo: 'CB', tipo_operacao: '2-Saídas', escopo_negocio: 'agricultura' },
+    { id: 'e', subcentro: 'Conta de Entrada', centro_custo: 'CE', tipo_operacao: '1-Entradas', escopo_negocio: 'pecuaria' }];
+  const mapa = (a: string, b: string, c: string) => new Map([[1, a], [2, b], [3, c]]);
+  it('porQueNaoDivideNaCriacao: o que o banco recusaria — item sem conta, uma conta so\', conta fora do plano, conta de outro tipo', () => {
+    expect(porQueNaoDivideNaCriacao(ITENS3, new Map([[1, 'a'], [2, 'b']]), PL, '2-Saídas')).toBe('Faltam 1 de 3 itens sem conta. Escolha a conta de cada item.');
+    expect(porQueNaoDivideNaCriacao(ITENS3, mapa('a', 'a', 'a'), PL, '2-Saídas')).toBe('Todos os itens estão na mesma conta: não há o que dividir.');
+    expect(porQueNaoDivideNaCriacao(ITENS3, mapa('a', 'b', 'x'), PL, '2-Saídas')).toBe('Uma das contas escolhidas não está no plano de contas. Escolha de novo.');
+    expect(porQueNaoDivideNaCriacao(ITENS3, mapa('a', 'b', 'e'), PL, '2-Saídas')).toBe('A conta "Conta de Entrada" é de 1-Entradas e o lançamento é de 2-Saídas.');
+    expect(porQueNaoDivideNaCriacao(ITENS3, mapa('a', 'b', 'b'), PL, '2-Saídas')).toBeNull();
+  });
+  it('partesPendentes: o % dos itens sobre o valor do lancamento (a ultima fecha o centavo); contaDaMaiorParte = a maior', () => {
+    const p = partesPendentes(ITENS3, mapa('b', 'a', 'b'), PL, 333.33);
+    expect(p.map((x) => [x.plano_conta_id, x.valor, x.itens, x.notaItens.join('+')])).toEqual([['b', 233.33, 2, '1+3'], ['a', 100, 1, '2']]);
+    expect(p.reduce((s, x) => s + x.valor, 0)).toBeCloseTo(333.33, 2);
+    expect(p[0].subcentro).toBe('Conta B');
+    expect(contaDaMaiorParte(ITENS3, mapa('b', 'a', 'a'))).toBe('b');
+    expect(contaDaMaiorParte(ITENS3, mapa('a', 'b', 'b'))).toBe('a');
+  });
+});
+

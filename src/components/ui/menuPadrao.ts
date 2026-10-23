@@ -48,6 +48,9 @@ export const MENU_VAZIO = 'text-[9.5px] text-zinc-200';
 
 /** O campo de busca dentro do menu: fundo zinc-700, texto branco, placeholder zinc-300, 9,5px. */
 export const MENU_BUSCA = 'bg-zinc-700 text-[9.5px] text-white placeholder:text-zinc-300';
+/** SELETOR-CONTA-POR-ATIVIDADE-01 — o `Segmentado` DENTRO de um menu (a barra de atividade do seletor de conta): ocupa a largura, borda do
+ *  painel, a opcao nao marcada em branco sobre o zinc-600 e o realce de sempre ao passar; a marcada segue navy (o `Segmentado`). */
+export const MENU_SEGMENTADO = 'flex w-full border-zinc-500/60 [&>button]:flex-1 [&>button.bg-transparent]:text-white [&>button.bg-transparent:hover]:bg-zinc-700';
 
 /**
  * MENU FECHADO NAO ACEITA CLIQUE — MENU-CLIQUE-FECHANDO-01 (Gabriel, 08/10/2026).
