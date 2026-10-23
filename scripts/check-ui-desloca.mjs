@@ -111,6 +111,16 @@ const CENARIOS = [
       await p.getByRole('tab', { name: /Itens da nota/ }).first().click(); await espera(p); }, estados: [
     ['vista Contas', botao(/^Contas$/)], ['vista Fiscal', botao(/^Fiscal$/)], ['vista Valores', botao(/^Valores$/)],
   ] },
+  /* SELETOR-CONTA-POR-ATIVIDADE-01 — a conta do item aberta (o `EscolherConta`): trocar a atividade na barra nao mexe na barra, na busca
+     nem no lugar/tamanho da lista (`data-desloca`); so' os itens dentro dela mudam */
+  { nome: 'escolher-conta', url: 'tela=lancamento&m=editar&v=sal&div=1', antes: async (p) => {
+      await p.getByRole('tab', { name: /Itens da nota/ }).first().click(); await espera(p); await botao(/^Contas$/)(p);
+      await clicar('[data-testid="conta-do-item-1"] [role="combobox"]')(p); }, estados: [
+    /* o plano da bancada usa pecuaria e agricultura: a barra tem essas duas */
+    ['atividade Lavoura', clicar('[data-testid="conta-barra-atividade"] button:has-text("Lavoura")')],
+    ['todas (desmarca)', clicar('[data-testid="conta-barra-atividade"] button:has-text("Lavoura")')],
+    ['atividade Pecuária', clicar('[data-testid="conta-barra-atividade"] button:has-text("Pecuária")')],
+  ] },
   /* NOTA-FORNECEDOR-COMPARAR-01 — "Atualizar N campos" -> "Confirmar" (a frase aparece no rodape) e o estado "nao parece o certo" */
   { nome: 'comparar-cadastro', url: 'tela=comparar-cadastro', estados: [
     ['pedindo a confirmacao', clicar('[data-testid="comparar-atualizar"]')],
