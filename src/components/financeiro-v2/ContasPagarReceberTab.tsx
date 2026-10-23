@@ -29,6 +29,7 @@ import { useFinanceiroV2, type LancamentoV2 } from '@/hooks/useFinanceiroV2';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
 import { PageHeader } from '@/components/ui/page-header';
 import { Segmentado } from '@/components/ui/segmentado';
+import { TextoReservado, reservaDeNumero } from '@/components/ui/regua-tabela';
 import { ChipsDeStatus, STATUS_DISPONIVEIS, STATUS_INICIAIS, alternarNaLista, pilulasDosStatus } from '@/components/financeiro-v2/ChipsDeStatus';
 import { CprFluxoPrevisto } from '@/components/financeiro-v2/CprFluxoPrevisto';
 import { esperarGraficoNoDom, AVISO_PDF_SEM_GRAFICO, TAMANHO_DO_GRAFICO_NO_PDF } from '@/lib/pdf/cpr/graficoDoDom';
@@ -189,6 +190,9 @@ const MOTIVO_SALDO_DOIS_LADOS = 'saldo considera a pagar e a receber';
  */
 /** CPR-CONTA-01: quantas contas a faixa do resumo desenha antes do "+N" — MEDIDO a 1.126px (ver CLAUDE.md). */
 const MAX_CONTAS_NA_FAIXA = 4;
+/* P80 (Gabriel 23/10) — o valor de cada conta da faixa "A pagar por conta" ocupa SEMPRE a largura do maior valor possível (até
+   R$ 9.999.999.999,99): trocar o período ("Este mês") mudava o valor e a largura do botão, e os vizinhos andavam (ui-desloca). */
+const RESERVA_DO_VALOR_NA_FAIXA = `R$\u00a0${reservaDeNumero(10)},99`;
 const FONTE_STATUS = 'text-[9px]';
 /** Subcentro, Safra, Faz. e datas: 9,5px (o piso global) — CPR-SALDO-DIA-01. */
 const FONTE_FINA = 'text-[9.5px]';
@@ -1516,7 +1520,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
               className={cn('flex h-[16px] shrink-0 items-center gap-1 rounded px-1.5 transition-colors',
                 contaSel === c.conta ? 'bg-primary text-primary-foreground' : 'text-foreground hover:bg-muted')}>
               <span className="uma-linha-que-rola max-w-[96px]">{nomeConta(c.conta)}</span>
-              <span className="tabular-nums" data-valor-da-faixa>{formatMoeda(c.pagar.valor)}</span>
+              <TextoReservado texto={formatMoeda(c.pagar.valor)} reserva={RESERVA_DO_VALOR_NA_FAIXA} alinhar="direita" testid="valor-da-faixa" />
             </button>
           ))}
           {contasNaFaixa.length > MAX_CONTAS_NA_FAIXA && (
