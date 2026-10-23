@@ -186,7 +186,8 @@ function Legenda({ modo, tela, sel }: { modo: ModoVG; tela: TelaVG | null; sel: 
     <div className="flex items-center gap-[9px] whitespace-nowrap text-[8.5px] text-[#3a4655]">
       <span>{i({ width: 8, height: 8, background: COR.barraEnt })}entradas</span>
       <span>{i({ width: 8, height: 8, background: COR.barraSai })}saídas</span>
-      <span className="hidden lg:inline">{i({ width: 8, height: 8, background: COR.barraSaiP })}previsto</span>
+      {/* P90 — o previsto: a coluna clara e a linha do saldo laranja pontilhada */}
+      <span className="hidden lg:inline">{i({ width: 8, height: 8, background: COR.barraSaiP })}{i({ width: 9, borderTop: `2px dotted ${COR.previsto}` })}previsto</span>
       {/* P83 — sem contas no recorte não há saldo: o lugar da legenda do saldo fica, com o aviso curto */}
       {tela?.sem_saldo ? (
         <span className="inline-block w-[93px] text-[#a05a00]" title="Saldo existe só por conta — escolha contas para ver o saldo" data-testid="legenda-sem-saldo">saldo só por conta</span>
