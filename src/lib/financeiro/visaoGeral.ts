@@ -37,6 +37,8 @@ export interface TelaVG {
   /** P79 — o que o banco USOU (eco dos chips): os não realizados que entraram e se o vencido entrou */
   status?: string[];
   incluir_vencidos?: boolean;
+  /** P83 — o recorte não é de contas (fazenda/atividade): o banco não devolve saldo e a tela diz isso no lugar */
+  sem_saldo?: boolean;
 }
 export interface ContaVG { id: string; nome: string; tipo: string; ativa: boolean; no_caixa: boolean }
 export interface FiltrosVG { contas: ContaVG[]; atividades: string[]; safras: { id: string; nome: string }[] }
@@ -82,7 +84,8 @@ export const dataCurta = (d: string | null) => (d ? `${d.slice(8, 10)}/${d.slice
 
 // ── cores (SPEC §6) ────────────────────────────────────────────────────────────────────────────────────────────────────
 export const COR = {
-  saida: '#b3261e', entrada: '#1f3864', meta: '#d97400', saldo: '#1e7a3c', neg: '#b3261e', pos: '#1e7a3c', muted: '#5b6878',
+  /* P83 (Gabriel 23/10): positivo em AZUL, negativo em VERMELHO em toda a tela — nenhum valor preto; entradas navy, saídas vermelhas */
+  saida: '#b3261e', entrada: '#1f3864', meta: '#d97400', saldo: '#1d5fb3', neg: '#b3261e', pos: '#1d5fb3', muted: '#5b6878',
   barraEnt: '#3c6db3', barraEntP: '#b9cbe6', barraSai: '#c0504d', barraSaiP: '#e7b6b4', mediaSai: '#7f1d1d', mediaEnt: '#1f3864',
 } as const;
 export const corSinal = (v: number | null | undefined) => (v == null ? COR.muted : v < 0 ? COR.neg : COR.pos);
@@ -126,3 +129,27 @@ export const lerStatusVG = (bruto: string): string[] => ORDEM_STATUS.filter((x) 
 export const escreverStatusVG = (v: string[]): string => ORDEM_STATUS.filter((x) => v.includes(x)).join(',');
 export const lerVencidosVG = (bruto: string): boolean => bruto !== '0';
 export const escreverVencidosVG = (v: boolean): string => (v ? '1' : '0');
+
+// ── P83 — a LINHA DO SALDO no gráfico: azul acima de zero, vermelha abaixo (a cor troca NO cruzamento), tracejada no futuro ────────────
+/** Um trecho da linha do saldo entre dois meses (ou até o cruzamento do zero). Pixels; `neg` = abaixo de zero; `tracejado` = previsto. */
+export interface TrechoSaldo { x1: number; y1: number; x2: number; y2: number; neg: boolean; tracejado: boolean }
+/**
+ * Corta a linha do saldo em trechos de UM sinal só — a regra das duas áreas da CPR (`CprFluxoPrevisto`: cada sinal pinta até o zero e a
+ * cor troca no ponto do cruzamento, por construção). Entre dois meses de sinais opostos o trecho é partido no x onde a reta passa pelo
+ * zero (interpolação linear: a tela não soma valores, só acha o pixel). O trecho é tracejado quando chega num mês PREVISTO.
+ */
+export function trechosDoSaldo(pts: readonly { x: number; y: number; v: number; previsto: boolean }[], y0: number): TrechoSaldo[] {
+  const out: TrechoSaldo[] = [];
+  for (let k = 0; k + 1 < pts.length; k++) {
+    const a = pts[k], b = pts[k + 1];
+    const tracejado = b.previsto;
+    if ((a.v < 0) === (b.v < 0) || a.v === 0 || b.v === 0) {
+      out.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y, neg: (a.v < 0 || b.v < 0) && a.v <= 0 && b.v <= 0, tracejado });
+      continue;
+    }
+    const t = a.v / (a.v - b.v);
+    const xc = a.x + t * (b.x - a.x);
+    out.push({ x1: a.x, y1: a.y, x2: xc, y2: y0, neg: a.v < 0, tracejado }, { x1: xc, y1: y0, x2: b.x, y2: b.y, neg: b.v < 0, tracejado });
+  }
+  return out;
+}

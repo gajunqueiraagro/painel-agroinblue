@@ -30,13 +30,14 @@ export const FILTROS = {
   safras: [{ id: 's1', nome: 'Safra 2026/27' }, { id: 's2', nome: 'Safra 2025/26' }],
 };
 
-export function tela(a: { p_de: string; p_ate: string; p_contas?: string[] | null; p_atividade?: string | null; p_safra?: string | null;
+export function tela(a: { p_de: string; p_ate: string; p_contas?: string[] | null; p_atividade?: string | null; p_safra?: string | null; p_fazendas?: string[] | null;
   p_status?: string[] | null; p_incluir_vencidos?: boolean | null }) {
   const ms = meses(a.p_de, a.p_ate);
   /* P79 — os chips: o previsto (meses depois de hoje) na proporção dos status ligados; o vencido sai com o chip desligado */
   const st = a.p_status ?? ['previsto', 'programado', 'agendado'];
   const incl = a.p_incluir_vencidos ?? true;
   const fs = st.length / 3;
+  const semSaldo = !!(a.p_fazendas?.length || a.p_atividade || a.p_safra);
   const peso = a.p_contas ? Math.max(0.2, a.p_contas.length / 3) : 1;
   const ativ = a.p_atividade ?? null;
   const sai = GRUPOS_SAI.filter((g) => !(ativ === 'agricultura' && (g === 'Reposição de bovinos' || g === 'Dividendos')) && !(ativ === 'administrativo' && g === 'Custeio'));
@@ -87,23 +88,24 @@ export function tela(a: { p_de: string; p_ate: string; p_contas?: string[] | nul
   linhas.sort((x, y) => (x.lado === y.lado ? ordem(x) - ordem(y) : x.lado < y.lado ? -1 : 1));
   const res = ms.map((_, i) => r2(tot.entrada[i] - tot.saida[i]));
   /* P82 — contas escolhidas SEM o cartão: o pagamento da fatura vem numa linha própria (transferência, nunca saída) */
-  const semCartao = !!a.p_contas && !a.p_contas.includes('c4');
+  const semCartao = !semSaldo && !!a.p_contas && !a.p_contas.includes('c4');
   const cartaoVals = ms.map((x) => (semCartao && x <= HOJE ? r2(31773.11 * peso) : 0));
   const resT = res.reduce((x, y) => x + y, 0);
   const mediaAcc = (lado: string) => { let acc = 0, q = 0; return ms.map((_, i) => { if (!real[i]) return null; acc += tot[lado][i]; q++; return r2(acc / q); }); };
   return {
     mes_atual: HOJE,
     meses: ms.map((x) => ({ am: x, previsto: x > HOJE, vigente: x === HOJE })),
-    linhas: [{ chave: 'saldo_inicial', tipo: 'saldo', rotulo: 'SALDO INICIAL', valores: saldoIni }, ...linhas,
+    /* P83 — saldo só por conta: com fazenda ou atividade, nenhuma linha de saldo (o banco diz `sem_saldo`) */
+    linhas: [...(semSaldo ? [] : [{ chave: 'saldo_inicial', tipo: 'saldo', rotulo: 'Saldo inicial', valores: saldoIni, total: saldoIni[0] }]), ...linhas,
       ...(semCartao ? [{ chave: 'cartao', tipo: 'cartao', rotulo: 'PAGAMENTO DE CARTÃO (transferência)', valores: cartaoVals,
         total: r2(cartaoVals.reduce((x, y) => x + y, 0)), media: r2(cartaoVals.reduce((x, y) => x + y, 0) / ms.length) }] : []),
-      { chave: 'resultado', tipo: 'resultado', rotulo: 'RESULTADO', valores: res, total: r2(resT), media: r2(resT / ms.length) },
-      { chave: 'saldo_final', tipo: 'saldo', rotulo: 'SALDO FINAL', valores: saldoFim }],
+      { chave: 'resultado', tipo: 'resultado', rotulo: 'Resultado no mês', valores: res, total: r2(resT), media: r2(resT / ms.length) },
+      ...(semSaldo ? [] : [{ chave: 'saldo_final', tipo: 'saldo', rotulo: 'Saldo final · fluxo de caixa', valores: saldoFim, total: saldoFim[saldoFim.length - 1] }])],
     grafico: {
       entrada: { media_acumulada: mediaAcc('entrada'), meta: ms.map(() => r2(1700000 * peso)) },
       saida: { media_acumulada: mediaAcc('saida'), meta: ms.map((x) => (x.startsWith('2026') ? r2(2300000 * peso) : null)) },
     },
-    conciliado_ate: '2026-10-15',
+    conciliado_ate: semSaldo ? null : '2026-10-15', sem_saldo: semSaldo,
     status: st, incluir_vencidos: incl,
     contas_sem_ancora: a.p_contas?.includes('c4') ? ['Cartão Exemplo'] : [],
   };
