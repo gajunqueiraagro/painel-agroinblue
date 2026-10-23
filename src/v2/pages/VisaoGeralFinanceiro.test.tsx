@@ -15,6 +15,8 @@
  *   V11 P83: o MESMO "ampliar" nos três blocos abre o modal com o bloco inteiro (a grade sem rolagem)
  *   V12 P83: saldo SÓ por conta — com fazenda ou atividade o banco diz `sem_saldo` e nenhum saldo aparece (card, grade, legenda do
  *       gráfico); o aviso fica no lugar. A Safra saiu: o pedido não leva p_safra
+ *   V13 P83: no TOTAL da grade, o saldo inicial e o saldo final DO PERÍODO vêm do banco (`total` das linhas de saldo) — propositalmente
+ *       "errados" aqui, para provar que a grade não soma nem pega o 1º/último mês sozinha
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render as renderCru, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
@@ -220,5 +222,14 @@ describe('Visão Geral — render-only', () => {
     /* entradas, saídas e resultado continuam */
     expect(celula('card-valor-entrada')).toBe('R$ 200,00');
     expect(celula('card-resultado')).toBe('R$ 8,00');
+  });
+
+  it('V13 o TOTAL dos saldos é o do banco (a grade não soma)', async () => {
+    const linhas = TELA.linhas.map((l) => (l.chave === 'saldo_inicial' ? { ...l, total: 4321 } : l.chave === 'saldo_final' ? { ...l, total: 8765 } : l));
+    rpc.mockImplementation(async (fn: string) => ({ data: fn === 'fn_vg_tela' ? { ...TELA, linhas } : { contas: [], atividades: [], safras: [] }, error: null }));
+    render(<VisaoGeralFinanceiro hoje="2026-02-15" />);
+    await screen.findByTestId('grade-vg');
+    expect(celula('grade-total-saldo_inicial')).toBe('4.321');
+    expect(celula('grade-total-saldo_final')).toBe('8.765');
   });
 });
