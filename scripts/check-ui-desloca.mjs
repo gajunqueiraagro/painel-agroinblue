@@ -82,6 +82,10 @@ const CENARIOS = [
     ['só uma conta', async (p) => { if (!(await p.locator('[data-testid="vg-contas"]').isVisible())) return; await clicar('[data-testid="vg-contas"]')(p); await p.locator('button', { hasText: 'só esta' }).first().click({ force: true }); await espera(p); await p.keyboard.press('Escape'); await espera(p); }],
     ['atividade agricultura', async (p) => { if (!(await p.locator('[data-testid="vg-atividade"]').isVisible())) return; await clicar('[data-testid="vg-atividade"]')(p); await clicar('[data-testid="vg-atividade-agricultura"]')(p); }],
     ['coluna do gráfico', async (p) => { await p.locator('[data-testid="coluna-2026-05"]').click({ force: true }); await espera(p); }],
+    /* P83 — fazenda escolhida: o saldo some (só por conta) e o aviso fica no lugar dele; a altura de nada muda */
+    ['fazenda escolhida (sem saldo)', async (p) => { if (!(await p.locator('[data-testid="vg-fazenda"]').isVisible())) return;
+      await p.locator('[data-testid="vg-fazenda"] button').first().click(); await espera(p, 300);
+      await p.getByText('Faz. Exemplo Dois', { exact: true }).last().click(); await espera(p); await p.keyboard.press('Escape'); await espera(p, 300); }],
     /* P79 — os chips: desligar Programado, Previsto e Agendado (nenhum: o aviso aparece) e Vencidos; o aviso tem lugar próprio */
     ['sem Programado', clicar('[data-testid="vg-status-programado"]')], ['sem Previsto', clicar('[data-testid="vg-status-previsto"]')],
     ['nenhum status', clicar('[data-testid="vg-status-agendado"]')], ['sem Vencidos', clicar('[data-testid="vg-status-vencidos"]')],

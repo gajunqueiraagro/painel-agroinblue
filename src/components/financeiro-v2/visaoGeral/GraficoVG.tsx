@@ -44,7 +44,9 @@ export function GraficoVG({ tela, modo, sel, onSel }: { tela: TelaVG; modo: Modo
     : [{ nome: ladoUnico === 'entrada' ? 'entradas' : 'saídas', vals: total(ladoUnico)?.valores ?? [],
          cor: ladoUnico === 'entrada' ? COR.barraEnt : COR.barraSai, corP: ladoUnico === 'entrada' ? COR.barraEntP : COR.barraSaiP,
          txt: ladoUnico === 'entrada' ? COR.entrada : COR.mediaSai }];
-  const saldo = flx ? (linha('saldo_final')?.valores ?? []) : null;
+  /* P83 — sem contas no recorte (fazenda/atividade) o banco não manda saldo: nenhuma linha de saldo */
+  const saldoBanco = linha('saldo_final')?.valores ?? null;
+  const saldo = flx && !tela.sem_saldo && saldoBanco && saldoBanco.length ? saldoBanco : null;
   const media = flx ? null : tela.grafico?.[ladoUnico]?.media_acumulada ?? null;
   const meta = flx ? null : tela.grafico?.[ladoUnico]?.meta ?? null;
   const ks = meses.findIndex((m) => m.am === sel);

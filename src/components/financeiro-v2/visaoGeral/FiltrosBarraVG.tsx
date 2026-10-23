@@ -1,6 +1,6 @@
 /**
  * FIN-VISAO-GERAL-01 PR 3 — os filtros da Visão Geral que moram na barra azul do shell (SPEC §3.1 + seção 9 do AGRO): Contas
- * (todas / várias / "só esta"), Fazenda, Safra e Atividade, um ao lado do outro, cada um com LARGURA FIXA (trocar a escolha não empurra
+ * (todas / várias / "só esta"), Fazenda e Atividade (P83: a Safra saiu), um ao lado do outro, cada um com LARGURA FIXA (trocar a escolha não empurra
  * nada — o gate `check:ui-desloca`). O estado é o `filtrosVG` (lib), que a tela lê.
  *   · Contas: o padrão é o conjunto do banco (`no_caixa` — cc, investimento/permuta e, desde o P82, os cartões: a compra no cartão é
  *     saída, o pagamento da fatura é transferência dentro do conjunto). O botão fica
@@ -97,7 +97,6 @@ export function FiltrosBarraVG() {
   const rotContas = rotuloDasContas(contas, e.contas);
   const curtoContas = e.contas === null ? 'Contas' : e.contas.length === 1 ? '1 conta' : `${e.contas.length} contas`;
   const fazendaNome = fazendas.find((f: { id: string }) => f.id === e.fazenda)?.nome;
-  const safraNome = e.lista?.safras.find((s) => s.id === e.safra)?.nome;
   let ultimoTipo = '';
   return (
     <span className="hidden items-center gap-1.5 md:flex" data-testid="filtros-barra-vg">
@@ -123,19 +122,14 @@ export function FiltrosBarraVG() {
           })}
         </div>
       </BotaoBarra>
-      {/* Fazenda e Safra: o seletor DA CASA com busca (`SearchableSelect`, regra do check:ui-nativo), com "Todas" no topo */}
+      {/* Fazenda: o seletor DA CASA com busca (`SearchableSelect`, regra do check:ui-nativo), com "Todas" no topo */}
       <span className="w-[92px] shrink-0 lg:w-[120px]" title={`Fazenda: ${fazendaNome ?? 'todas'}`} data-testid="vg-fazenda">
         <SearchableSelect value={e.fazenda ?? TODAS} onValueChange={(v) => filtrosVG.mudar({ fazenda: v === TODAS ? null : v })}
           allValue={TODAS} allLabel="Fazendas" dense
           options={fazendas.filter((f: { id: string }) => f.id !== '__global__').map((f: { id: string; nome: string }) => ({ value: f.id, label: f.nome }))}
           triggerClassName={cn(GATILHO_ESCURO, e.fazenda !== null ? 'border-[#f2b84b]' : 'border-[#4a6a92]')} />
       </span>
-      <span className="w-[72px] shrink-0 lg:w-[108px]" title={`Safra: ${safraNome ?? 'todas'}`} data-testid="vg-safra">
-        <SearchableSelect value={e.safra ?? TODAS} onValueChange={(v) => filtrosVG.mudar({ safra: v === TODAS ? null : v })}
-          allValue={TODAS} allLabel="Safras" dense
-          options={(e.lista?.safras ?? []).map((x) => ({ value: x.id, label: x.nome }))}
-          triggerClassName={cn(GATILHO_ESCURO, e.safra !== null ? 'border-[#f2b84b]' : 'border-[#4a6a92]')} />
-      </span>
+      {/* P83 — a Safra saiu da Visão Geral: caixa por safra fica no Painel da Safra / DRE (saldo existe só por conta) */}
       <BotaoBarra testid="vg-atividade" largura="w-[84px] lg:w-[116px]" rotulo={e.atividade ? rotuloAtividade(e.atividade) : 'Atividade: todas'} rotuloCurto={e.atividade ? '1 atividade' : 'Atividades'}
         title={`Atividade: ${e.atividade ? rotuloAtividade(e.atividade) : 'todas'}`} destacado={e.atividade !== null}>
         {(fechar) => (
