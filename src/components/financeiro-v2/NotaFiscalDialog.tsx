@@ -42,7 +42,7 @@ import { ondeEsta } from './LancamentoDoXml';
 import type { DoXml } from '@/lib/financeiro/nfePrefill';
 import { resolverEmitente } from '@/lib/financeiro/nfe/resolverEmitente';
 import { gravarItensSemTravar } from '@/lib/financeiro/itensDaNotaBanco';
-import { casarJaLancados, fraseEmParcelas, parcelasParaCasar, type LancamentoJaLancado } from '@/lib/financeiro/nfe/jaLancada';
+import { canceladosDaNota, casarJaLancados, fraseEmParcelas, parcelasParaCasar, type LancamentoJaLancado } from '@/lib/financeiro/nfe/jaLancada';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { CompararCadastroDialog } from './CompararCadastroDialog';
@@ -112,6 +112,8 @@ const CHIP = 'inline-flex h-[15px] items-center whitespace-nowrap rounded-full p
 const CHIP_OK = `${CHIP} bg-[#e5f4ea] text-[#1f7a45]`;
 const CHIP_AVISO = `${CHIP} bg-amber-50 text-amber-800`;
 const CHIP_ERRO = `${CHIP} bg-red-50 text-red-700`;
+/* NOTA-CONTAS-NA-CRIACAO-01 D — o cancelado: cinza, sem cor de aviso (nao conta) */
+const CHIP_CANCELADO = `${CHIP} bg-muted text-muted-foreground`;
 const TH = 'h-[19px] px-1.5 text-left text-[9.5px] font-medium text-primary-foreground truncate';
 const TD = 'h-[19px] px-1.5 text-[10px] leading-none truncate';
 const TDN = 'h-[19px] px-1.5 text-right text-[10px] leading-none whitespace-nowrap tabular-nums';
@@ -252,6 +254,8 @@ export function NotaFiscalDialog({
     }).then((l) => { if (vivo) setAchados(l); }, () => { if (vivo) setAchados([]); });
     return () => { vivo = false; };
   }, [clienteId, doXml.ocorrencias.length, parcelasDaBusca, p.numeroDocumento, n.numero, n.chave, n.emitente.documento, n.emitente.nome, n.emitente.fantasia, receitaNome]);
+  /* D — a nota que so' tem lancamento CANCELADO nao esta' lancada: o rodape so' diz quantos */
+  const canceladosSo = useMemo(() => (achados && !achados.some((l) => !l.cancelado) ? canceladosDaNota(achados) : []), [achados]);
   const jaLancada = useMemo(() => (achados ? casarJaLancados(parcelasDaBusca, achados, n.totais.notaCent) : null), [achados, parcelasDaBusca, n.totais.notaCent]);
 
   /* o proposto que aparece depois (a lista de agora, a Receita) entra sozinho — salvo se o operador escolheu cadastrar outro */
@@ -586,14 +590,21 @@ export function NotaFiscalDialog({
                           const fr = jaLancada.fracoes.get(l.id);
                           return { chave: l.id, rotulo: fr ? `?/${fr}` : 'nº doc.', l, parcela: null,
                             dica: fr ? `parcela ? de ${fr} da nota: ${fr} × R$ ${reais(l.valorCent)} = R$ ${reais(n.totais.notaCent)} (qual das ${fr}, a nota não diz)` : undefined };
-                        })].map((x) => (
-                        <tr key={x.chave} className={cn('border-b border-border/50', !x.l && 'bg-amber-50/60')} data-testid="nota-ja-lancada-linha">
+                        }),
+                        /* D — os CANCELADOS desta nota: no fim, cinza, com o selo; nunca contam nem recebem o "Anexar" */
+                        ...jaLancada.cancelados.map((l) => ({ chave: l.id, rotulo: '—', l, parcela: null, dica: 'cancelado: não conta como já lançada' }))].map((x) => (
+                        <tr key={x.chave} className={cn('border-b border-border/50', !x.l && 'bg-amber-50/60', x.l?.cancelado && 'text-muted-foreground')}
+                          data-testid={x.l?.cancelado ? 'nota-ja-lancada-cancelado' : 'nota-ja-lancada-linha'}>
                           <td className={cn(TDN, 'text-left')} title={x.dica} data-testid="nota-ja-lancada-parc">{x.rotulo}</td>
                           {x.l ? (<>
                             <td className={cn(TDN, 'text-left')}>{dataInteira(x.l.vencimento ?? x.l.pagamento ?? x.l.competencia)}</td>
                             <td className={TD} title={x.l.descricao ?? ''}>{x.l.descricao ?? '—'}</td>
                             <td className={TDN}>{reais(x.l.valorCent)}</td>
-                            <td className={TD} title={x.l.conciliado ? 'conciliado com o extrato' : undefined}>{x.l.status ?? '—'}{x.l.conciliado ? ' · conc.' : ''}</td>
+                            {x.l.cancelado ? (
+                              <td className={TD} title={`cancelado (era ${x.l.status ?? '—'})`}><span className={CHIP_CANCELADO} data-testid="nota-selo-cancelado">cancelado</span></td>
+                            ) : (
+                              <td className={TD} title={x.l.conciliado ? 'conciliado com o extrato' : undefined}>{x.l.status ?? '—'}{x.l.conciliado ? ' · conc.' : ''}</td>
+                            )}
                             <td className={TD} title={`${x.l.fornecedorNome ?? ''}${x.l.fornecedorPor === 'nome' ? ' — sem CNPJ, nome parecido' : x.l.fornecedorPor === 'mesclado' ? ' — mesclado' : ''}`}>{x.l.fornecedorNome ?? '—'}</td>
                           </>) : (<>
                             <td className={cn(TDN, 'text-left')}>{dataInteira(x.parcela?.vencimento)}</td>
@@ -802,6 +813,8 @@ export function NotaFiscalDialog({
           ) : !bloqueio && !erro ? (
             <span className="min-w-0 uma-linha-que-rola text-muted-foreground">
               O {lido.origem === 'pdf' ? 'PDF' : 'XML'} fica anexado {cabeAqui ? `às ${nParcelas} parcelas` : 'ao lançamento'} como a NF {numeroFalado(n.numero)}.
+              {/* D — so' cancelados desta nota: ela NAO esta' lancada; diz, sem contar */}
+              {canceladosSo.length > 0 && <span data-testid="nota-so-cancelados">{` ${canceladosSo.length === 1 ? 'Há 1 lançamento cancelado' : `Há ${canceladosSo.length} lançamentos cancelados`} desta nota (não contam).`}</span>}
             </span>
           ) : null}
           <span className="ml-auto" />
