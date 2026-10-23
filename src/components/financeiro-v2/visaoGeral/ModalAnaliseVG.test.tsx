@@ -56,6 +56,8 @@ describe('modal de análise', () => {
       p_criterio: 'mes', p_unidade: 'rs', p_status: ['previsto'], p_incluir_vencidos: true }));
     expect(screen.getByTestId('analise-aba-Custeio').getAttribute('aria-pressed')).toBe('true');
     expect(screen.getByTestId('analise-aba-raiz').getAttribute('aria-pressed')).toBe('false');
+    /* o período do cabeçalho é o da tela (jan–dez), não a janela do critério */
+    expect(screen.getByTestId('analise-contexto').textContent).toBe('jan/26 – dez/26 · Caixa + cartões');
   });
 
   it('A2 os números são os do banco; sem meta → —', async () => {

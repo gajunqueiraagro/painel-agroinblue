@@ -79,7 +79,7 @@ export function ModalAnaliseVG({ alvo, ctx, rotuloContas, onFechar, onLancamento
               ))}
             </div>
             <span className="shrink-0 whitespace-nowrap text-[10px] text-[#d5dce6]" data-testid="analise-contexto">
-              {d ? `${rotuloMes(d.periodo.de)} – ${rotuloMes(d.periodo.ate_mes)}` : ''} · {rotuloContas}
+              {rotuloMes(ctx.de.slice(0, 7))} – {rotuloMes(ctx.ate.slice(0, 7))} · {rotuloContas}
             </span>
             <DialogPrimitive.Close aria-label="Fechar" data-testid="analise-fechar"
               className="flex h-6 w-6 shrink-0 items-center justify-center rounded border border-[#8a98ab] text-white hover:bg-white/10"><X className="h-3.5 w-3.5" /></DialogPrimitive.Close>
