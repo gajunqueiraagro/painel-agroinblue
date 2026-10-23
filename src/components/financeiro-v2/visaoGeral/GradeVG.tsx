@@ -9,19 +9,24 @@
  *   · P83 (Gabriel 23/10): cabeçalho de UMA linha (o ano só na virada, pequeno, antes do mês); linhas de grupo mais baixas e em fonte
  *     menor (cabe mais sem rolar); "Saldo inicial" em caixa normal e fonte menor; no TOTAL, o saldo inicial do PERÍODO e o saldo final do
  *     período (`total` das linhas de saldo, do banco) — "Resultado no mês" no TOTAL é o do período.
+ *   · P90 — o critério (mês · média · acumulado): cada célula de mês escreve a série do banco para ele (média/soma do início do período
+ *     até aquele mês); TOTAL, MÉDIA e % seguem do período; saldo é posição (igual nos três). O formato (R$ ou R$ mil) é decidido pelas
+ *     TRÊS séries juntas: trocar o critério nunca muda a largura das colunas.
  */
 import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { TH_REGUA, TD_REGUA, TD_REGUA_NUM } from '@/components/ui/regua-tabela';
 import {
-  COR, brl, corSinal, mil1, n0, pct1, anoDe, mes0De, MESES_ABR,
-  type AlvoAnaliseVG, type LinhaVG, type MesVG, type TelaVG,
+  COR, brl, corSinal, mil1, n0, pct1, anoDe, mes0De, MESES_ABR, serieDoCriterio,
+  type AlvoAnaliseVG, type CriterioTelaVG, type LinhaVG, type MesVG, type TelaVG,
 } from '@/lib/financeiro/visaoGeral';
 
 const FUNDO_RESUMO = 'rgba(68,84,106,.07)';
 
-export function GradeVG({ tela, sel, onAnalisar, ampliado = false, acao }: {
+export function GradeVG({ tela, sel, onAnalisar, ampliado = false, acao, criterio = 'mes' }: {
   tela: TelaVG; sel: string; onAnalisar: (a: AlvoAnaliseVG) => void;
+  /** P90 — mês · média · acumulado */
+  criterio?: CriterioTelaVG;
   /** P83 — no modal "ampliar": a grade inteira, sem rolagem */
   ampliado?: boolean;
   /** o botão "ampliar", no canto da 1ª célula do cabeçalho */
@@ -30,7 +35,7 @@ export function GradeVG({ tela, sel, onAnalisar, ampliado = false, acao }: {
   const meses = tela.meses;
   /* R$ mil com 1 decimal: mais de 14 meses (SPEC §3.5) OU valor de mês na casa do milhão — "2.256.036" não cabe em 12 colunas a 1130px
      (medido na NJ, 22/10). É escrita do número que veio, não conta. */
-  const maior = Math.max(0, ...tela.linhas.flatMap((l) => l.valores.map((v) => Math.abs(v ?? 0))));
+  const maior = Math.max(0, ...tela.linhas.flatMap((l) => [...l.valores, ...(l.valores_acum ?? []), ...(l.valores_media ?? [])].map((v) => Math.abs(v ?? 0))));
   const comp = meses.length > 14 || maior >= 1_000_000;
   const fmt = comp ? mil1 : n0;
   const larguraMes = meses.length > 14 ? 52 : 46;
@@ -47,9 +52,9 @@ export function GradeVG({ tela, sel, onAnalisar, ampliado = false, acao }: {
         </colgroup>
         <thead className="sticky top-0 z-10 bg-primary">
           <tr>
-            <th className={cn(TH_REGUA, 'h-[19px] text-left align-middle text-[8.5px]')} title={`R$${comp ? ' mil' : ''} · ${algumPrevisto ? 'realizado + previsto' : 'realizado'}`}>
+            <th className={cn(TH_REGUA, 'h-[19px] text-left align-middle text-[8.5px]')} title={`R$${comp ? ' mil' : ''} · ${algumPrevisto ? 'realizado + previsto' : 'realizado'}${criterio === 'mes' ? '' : criterio === 'media' ? ' · média do início do período até o mês' : ' · acumulado do início do período até o mês'}`}>
               <span className="flex items-center justify-between gap-1">
-                <span className="truncate">R${comp ? ' mil' : ''} · {algumPrevisto ? 'realizado + previsto' : 'realizado'}</span>
+                <span className="truncate" data-testid="grade-criterio">R${comp ? ' mil' : ''} · {criterio === 'mes' ? (algumPrevisto ? 'realizado + previsto' : 'realizado') : criterio === 'media' ? 'média até o mês' : 'acumulado até o mês'}</span>
                 {acao && <span className="shrink-0 rounded bg-white/90">{acao}</span>}
               </span>
             </th>
@@ -70,7 +75,7 @@ export function GradeVG({ tela, sel, onAnalisar, ampliado = false, acao }: {
           </tr>
         </thead>
         <tbody>
-          {tela.linhas.map((l) => <LinhaGrade key={l.chave} l={l} meses={meses} sel={sel} fmt={fmt} comp={comp} onAnalisar={onAnalisar} />)}
+          {tela.linhas.map((l) => <LinhaGrade key={l.chave} l={l} meses={meses} sel={sel} fmt={fmt} comp={comp} onAnalisar={onAnalisar} criterio={criterio} />)}
         </tbody>
       </table>
     </div>
@@ -80,9 +85,11 @@ export function GradeVG({ tela, sel, onAnalisar, ampliado = false, acao }: {
 const TITULO_CARTAO = 'Pagamento de fatura de cartão de crédito que não está entre as contas escolhidas: o caixa cai, mas é transferência, '
   + 'não saída — a saída foi a compra no cartão. Saldo final = inicial + entradas − saídas − esta linha.';
 
-function LinhaGrade({ l, meses, sel, fmt, comp, onAnalisar }: {
+function LinhaGrade({ l, meses, sel, fmt, comp, onAnalisar, criterio }: {
   l: LinhaVG; meses: MesVG[]; sel: string; fmt: (v: number | null | undefined) => string; comp: boolean; onAnalisar: (a: AlvoAnaliseVG) => void;
+  criterio: CriterioTelaVG;
 }) {
+  const serie = serieDoCriterio(l, criterio);
   const saldo = l.tipo === 'saldo';
   const forte = saldo || l.tipo === 'total' || l.tipo === 'resultado';
   const porSinal = saldo || l.tipo === 'resultado';
@@ -93,21 +100,23 @@ function LinhaGrade({ l, meses, sel, fmt, comp, onAnalisar }: {
   const clicavel = (l.tipo === 'total' || l.tipo === 'grupo') && !!l.lado;
   const recuo = l.tipo === 'grupo' ? 16 : l.tipo === 'transf' ? 26 : 5;
   const nome = l.tipo === 'total' || l.tipo === 'grupo' ? `${l.rotulo} ›` : l.rotulo;
-  /* P83 — linhas de grupo (e a transferência) mais baixas e em fonte menor; o saldo inicial em fonte menor, sem negrito */
+  /* P83/P90 — linhas mais baixas para caber mais sem rolar: totais, resultado e saldos 16px/9,5; grupo e transferência 14px/8,5; o
+     saldo inicial em fonte menor, sem negrito */
   const miuda = l.tipo === 'grupo' || l.tipo === 'transf';
   const saldoIni = l.chave === 'saldo_inicial';
-  const fs = cn(comp ? 'text-[9px]' : '', miuda && 'h-[16px] text-[9px]', saldoIni && 'text-[9px]');
+  const fs = cn('h-[16px] text-[9.5px]', comp && 'text-[9px]', miuda && 'h-[14px] text-[8.5px]', saldoIni && 'text-[9px]');
+  const alt = miuda ? 'h-[14px]' : 'h-[16px]';
   const analisar = (am: string) => clicavel && onAnalisar({ lado: l.lado!, grupo: l.tipo === 'grupo' ? l.grupo ?? null : null, am });
   return (
     <tr data-testid={`grade-linha-${l.chave}`} data-tipo={l.tipo}
       className={cn('border-b border-[#eef1f5]', forte && !saldoIni && 'font-bold', saldoIni && 'font-semibold', clicavel && 'cursor-pointer hover:brightness-[.98]')}
       style={{ background: fundo }} onClick={() => analisar(sel)}
       title={clicavel ? `Analisar ${l.rotulo.toLowerCase()} (a análise abre no PR 4)` : cartao ? TITULO_CARTAO : undefined}>
-      <td className={cn(TD_REGUA, 'truncate', miuda && 'h-[16px] text-[9.5px]', saldoIni && 'text-[9.5px]', l.tipo === 'transf' && 'text-[9px] font-normal opacity-80')}
+      <td className={cn(TD_REGUA, 'h-[16px] truncate text-[10px]', miuda && 'h-[14px] text-[9px]', saldoIni && 'text-[9.5px]', l.tipo === 'transf' && 'text-[8.5px] font-normal opacity-80')}
         style={{ paddingLeft: recuo, color: cor }} title={nome}>{nome}</td>
       {meses.map((m, k) => {
-        const v = l.valores[k] ?? null;
-        const venc = m.vigente ? l.vencidos?.[k] ?? 0 : 0;
+        const v = serie[k] ?? null;
+        const venc = m.vigente && criterio === 'mes' ? l.vencidos?.[k] ?? 0 : 0;
         return (
           <td key={m.am} data-testid={`grade-celula-${l.chave}-${m.am}`}
             className={cn(TD_REGUA_NUM, fs, 'relative border-l border-[#eef1f5]', m.am === sel && 'font-bold', m.am !== sel && m.previsto && 'italic')}
@@ -124,8 +133,8 @@ function LinhaGrade({ l, meses, sel, fmt, comp, onAnalisar }: {
           {/* P83 — no TOTAL, o saldo do PERÍODO (inicial do 1º mês; final do último), do banco */}
           <td data-testid={`grade-total-${l.chave}`} className={cn(TD_REGUA_NUM, fs, 'border-l-2 border-l-[#8a96a6] font-bold')}
             style={{ background: FUNDO_RESUMO, color: corSinal(l.total) }}>{l.total == null ? '' : fmt(l.total)}</td>
-          <td className={cn(TD_REGUA, 'border-l border-l-[#dde2e8]')} style={{ background: FUNDO_RESUMO }} />
-          <td className={cn(TD_REGUA, 'border-l border-l-[#dde2e8]')} style={{ background: FUNDO_RESUMO }} />
+          <td className={cn(TD_REGUA, alt, 'border-l border-l-[#dde2e8]')} style={{ background: FUNDO_RESUMO }} />
+          <td className={cn(TD_REGUA, alt, 'border-l border-l-[#dde2e8]')} style={{ background: FUNDO_RESUMO }} />
         </>
       ) : (
         <>
@@ -133,7 +142,7 @@ function LinhaGrade({ l, meses, sel, fmt, comp, onAnalisar }: {
             style={{ background: FUNDO_RESUMO, color: porSinal ? corSinal(l.total) : cor }}>{fmt(l.total)}</td>
           <td data-testid={`grade-media-${l.chave}`} className={cn(TD_REGUA_NUM, fs, 'border-l border-l-[#dde2e8] font-bold')}
             style={{ background: FUNDO_RESUMO, color: porSinal ? corSinal(l.media) : cor }}>{fmt(l.media)}</td>
-          <td data-testid={`grade-pct-${l.chave}`} className={cn(TD_REGUA_NUM, 'border-l border-l-[#dde2e8] font-normal')}
+          <td data-testid={`grade-pct-${l.chave}`} className={cn(TD_REGUA_NUM, alt, 'border-l border-l-[#dde2e8] text-[9px] font-normal')}
             style={{ background: FUNDO_RESUMO, color: cor }}>{l.tipo === 'grupo' || l.tipo === 'transf' ? pct1(l.pct) : ''}</td>
         </>
       )}

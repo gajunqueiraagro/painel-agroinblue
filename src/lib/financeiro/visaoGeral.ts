@@ -23,6 +23,10 @@ export interface LinhaVG {
   vencidos?: number[];
   pct_mes?: (number | null)[];
   vs_media?: (number | null)[];
+  /** P90 — as séries do critério, do banco: soma e média do início do período até o mês; a parte no total do lado no mesmo intervalo */
+  valores_acum?: (number | null)[];
+  valores_media?: (number | null)[];
+  pct_acum?: (number | null)[];
   total?: number | null;
   media?: number | null;
   pct?: number | null;
@@ -33,6 +37,8 @@ export interface TelaVG {
   linhas: LinhaVG[];
   grafico: Partial<Record<LadoVG, { media_acumulada: (number | null)[]; meta: (number | null)[] }>> | null;
   conciliado_ate: string | null;
+  /** P70 — o saldo das contas escolhidas no dia do `conciliado_ate` (fn_vg_conciliado); nulo sem saldo */
+  conciliado_saldo?: number | null;
   contas_sem_ancora: string[];
   /** P79 — o que o banco USOU (eco dos chips): os não realizados que entraram e se o vencido entrou */
   status?: string[];
@@ -44,6 +50,15 @@ export interface ContaVG { id: string; nome: string; tipo: string; ativa: boolea
 export interface FiltrosVG { contas: ContaVG[]; atividades: string[]; safras: { id: string; nome: string }[] }
 
 /** o que a tela pede ao clicar num total ou grupo — o modal de análise é o PR 4; aqui só a intenção */
+/** P90 — o seletor "mês · média · acumulado" do card, da grade e dos ampliados (SPEC §4: média e acumulado do início do período até o
+    mês escolhido). A tela NÃO soma nem divide: escolhe a série que o banco já mandou. Saldo é posição: não tem média nem acumulado. */
+export type CriterioTelaVG = 'mes' | 'media' | 'acumulado';
+export const serieDoCriterio = (l: LinhaVG, c: CriterioTelaVG): (number | null)[] =>
+  l.tipo === 'saldo' || c === 'mes' ? l.valores : (c === 'media' ? l.valores_media : l.valores_acum) ?? l.valores;
+export const pctDoCriterio = (l: LinhaVG, c: CriterioTelaVG): (number | null)[] | undefined => (c === 'mes' ? l.pct_mes : l.pct_acum);
+export const rotuloDoCriterio = (c: CriterioTelaVG, de: string, ate: string) =>
+  c === 'mes' ? rotuloMes(ate) : `${c === 'media' ? 'média' : 'acumulado'} ${rotuloMes(de)}–${rotuloMes(ate)}`;
+
 export interface AlvoAnaliseVG { lado: LadoVG; grupo: string | null; am: string }
 
 export const MESES_ABR = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'] as const;
@@ -87,6 +102,8 @@ export const COR = {
   /* P83 (Gabriel 23/10): positivo em AZUL, negativo em VERMELHO em toda a tela — nenhum valor preto; entradas navy, saídas vermelhas */
   saida: '#b3261e', entrada: '#1f3864', meta: '#d97400', saldo: '#1d5fb3', neg: '#b3261e', pos: '#1d5fb3', muted: '#5b6878',
   barraEnt: '#3c6db3', barraEntP: '#b9cbe6', barraSai: '#c0504d', barraSaiP: '#e7b6b4', mediaSai: '#7f1d1d', mediaEnt: '#1f3864',
+  /* P90 — o PREVISTO da linha do saldo: sempre laranja, pontilhado fino (qualquer sinal) */
+  previsto: '#d97400',
 } as const;
 export const corSinal = (v: number | null | undefined) => (v == null ? COR.muted : v < 0 ? COR.neg : COR.pos);
 /** variação contra a média: saída acima = vermelho, abaixo = verde (economia); entrada ao contrário */
@@ -129,27 +146,3 @@ export const lerStatusVG = (bruto: string): string[] => ORDEM_STATUS.filter((x) 
 export const escreverStatusVG = (v: string[]): string => ORDEM_STATUS.filter((x) => v.includes(x)).join(',');
 export const lerVencidosVG = (bruto: string): boolean => bruto !== '0';
 export const escreverVencidosVG = (v: boolean): string => (v ? '1' : '0');
-
-// ── P83 — a LINHA DO SALDO no gráfico: azul acima de zero, vermelha abaixo (a cor troca NO cruzamento), tracejada no futuro ────────────
-/** Um trecho da linha do saldo entre dois meses (ou até o cruzamento do zero). Pixels; `neg` = abaixo de zero; `tracejado` = previsto. */
-export interface TrechoSaldo { x1: number; y1: number; x2: number; y2: number; neg: boolean; tracejado: boolean }
-/**
- * Corta a linha do saldo em trechos de UM sinal só — a regra das duas áreas da CPR (`CprFluxoPrevisto`: cada sinal pinta até o zero e a
- * cor troca no ponto do cruzamento, por construção). Entre dois meses de sinais opostos o trecho é partido no x onde a reta passa pelo
- * zero (interpolação linear: a tela não soma valores, só acha o pixel). O trecho é tracejado quando chega num mês PREVISTO.
- */
-export function trechosDoSaldo(pts: readonly { x: number; y: number; v: number; previsto: boolean }[], y0: number): TrechoSaldo[] {
-  const out: TrechoSaldo[] = [];
-  for (let k = 0; k + 1 < pts.length; k++) {
-    const a = pts[k], b = pts[k + 1];
-    const tracejado = b.previsto;
-    if ((a.v < 0) === (b.v < 0) || a.v === 0 || b.v === 0) {
-      out.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y, neg: (a.v < 0 || b.v < 0) && a.v <= 0 && b.v <= 0, tracejado });
-      continue;
-    }
-    const t = a.v / (a.v - b.v);
-    const xc = a.x + t * (b.x - a.x);
-    out.push({ x1: a.x, y1: a.y, x2: xc, y2: y0, neg: a.v < 0, tracejado }, { x1: xc, y1: y0, x2: b.x, y2: b.y, neg: b.v < 0, tracejado });
-  }
-  return out;
-}

@@ -20,17 +20,22 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Segmentado } from '@/components/ui/segmentado';
 import { cn } from '@/lib/utils';
-import { useCarregarFiltrosVG } from '@/components/financeiro-v2/visaoGeral/FiltrosBarraVG';
+import { rotuloDasContas, useCarregarFiltrosVG } from '@/components/financeiro-v2/visaoGeral/FiltrosBarraVG';
 import { CardVG } from '@/components/financeiro-v2/visaoGeral/CardVG';
 import { GraficoVG } from '@/components/financeiro-v2/visaoGeral/GraficoVG';
 import { GradeVG } from '@/components/financeiro-v2/visaoGeral/GradeVG';
 import { AmpliarVG } from '@/components/financeiro-v2/visaoGeral/AmpliarVG';
+import { SeletorCriterioVG } from '@/components/financeiro-v2/visaoGeral/SeletorCriterioVG';
+import { PainelMesVG } from '@/components/financeiro-v2/visaoGeral/PainelMesVG';
+import { BotaoPdfGradeVG, CabecalhoGradeVG } from '@/components/financeiro-v2/visaoGeral/CabecalhoGradeVG';
+import { montarModeloGradeVG } from '@/lib/pdf/vg/modeloGradeVG';
+import { useFazenda } from '@/contexts/FazendaContext';
 import { ChipsDeStatus, STATUS_INICIAIS, alternarNaLista, pilulasDosStatus } from '@/components/financeiro-v2/ChipsDeStatus';
 import { useFiltroUrl } from '@/v2/hooks/useFiltroUrl';
 import {
   COR, MESES_ABR, amDe, amHoje, anoDe, contarMeses, corSinal, faixaDoPeriodo, mil1, primeiroDia, rotuloMes, somarMeses, ultimoDia,
   dataCurta, escreverStatusVG, escreverVencidosVG, lerStatusVG, lerVencidosVG,
-  type AlvoAnaliseVG, type FaixaVG, type ModoVG, type TelaVG,
+  rotuloAtividade, type AlvoAnaliseVG, type CriterioTelaVG, type FaixaVG, type ModoVG, type TelaVG,
 } from '@/lib/financeiro/visaoGeral';
 
 /* as pílulas: os três status não realizados (o realizado entra sempre, sem pílula) e a dos vencidos */
@@ -53,6 +58,8 @@ export function VisaoGeralFinanceiro({ hoje = hojeLocal(), onAnalisar, inicial }
   const [per, setPer] = useState<[string, string]>([inicial?.de ?? somarMeses(atual, -9), inicial?.ate ?? somarMeses(atual, 2)]);
   const [de, ate] = faixaDoPeriodo(faixa, sel, per[0], per[1]);
   const [tela, setTela] = useState<TelaVG | null>(null);
+  /* P90 — mês · média · acumulado: o card, a grade e os ampliados (a série vem do banco; trocar não pede nada de novo) */
+  const [criterio, setCriterio] = useState<CriterioTelaVG>('mes');
   const [erro, setErro] = useState<string | null>(null);
   const [, setIntencao] = useState<AlvoAnaliseVG | null>(null);
   const clienteId = clienteAtual?.id ?? null;
@@ -81,6 +88,19 @@ export function VisaoGeralFinanceiro({ hoje = hojeLocal(), onAnalisar, inicial }
   const analisar = (a: AlvoAnaliseVG) => { setIntencao(a); onAnalisar?.(a); };
   /* a tela só desenha o que o banco devolveu para ESTE período; enquanto o novo não chega, fica o anterior (nada pisca nem encolhe) */
   const pronta = tela && tela.meses.length > 0 ? tela : null;
+  /* P90 — o cabeçalho da grade ampliada e o PDF: o MESMO modelo (cliente, período, contas, recorte, chips, critério e o resumo do mês) */
+  const { fazendas } = useFazenda();
+  const rotuloContas = rotuloDasContas(filtros.lista?.contas ?? [], filtros.contas);
+  const modeloGrade = () => {
+    const agora = new Date();
+    const fazendaNome = filtros.fazenda ? fazendas.find((f) => f.id === filtros.fazenda)?.nome ?? null : null;
+    return montarModeloGradeVG({
+      tela: pronta!, sel, criterio, clienteNome: clienteAtual?.nome ?? '', rotuloContas,
+      recorte: [fazendaNome ? `Fazenda: ${fazendaNome}` : 'Global', ...(filtros.atividade ? [`Atividade: ${rotuloAtividade(filtros.atividade)}`] : [])],
+      chipsLigados: [...STATUS_INICIAIS.filter((x) => status.includes(x)).map((x) => x.charAt(0).toUpperCase() + x.slice(1)), ...(vencidos ? ['Vencidos'] : [])],
+      emissao: `${agora.toLocaleDateString('pt-BR')} ${agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`,
+    });
+  };
   const ano = anoDe(sel);
 
   return (
@@ -119,6 +139,7 @@ export function VisaoGeralFinanceiro({ hoje = hojeLocal(), onAnalisar, inicial }
         <span className="uma-linha-que-rola min-w-0 flex-1 text-[10px] text-amber-700" data-testid="vg-status-aviso" data-desloca-livre="">
           {pronta ? avisoDoFiltro(pronta, hoje) : ''}
         </span>
+        <SeletorCriterioVG valor={criterio} onEscolher={setCriterio} />
       </div>
 
       {/* QUADROS — linhas da grade do quadro pela janela (nunca pelo conteúdo) */}
@@ -126,9 +147,10 @@ export function VisaoGeralFinanceiro({ hoje = hojeLocal(), onAnalisar, inicial }
         <div className="grid min-h-0 gap-2" style={{ gridTemplateColumns: 'clamp(430px, 43%, 560px) minmax(0, 1fr)' }}>
           <section className="min-h-0 overflow-hidden rounded-md border border-[#dfe4ea] bg-white px-2.5 py-[7px]" data-testid="vg-card" data-desloca="">
             <div className="h-full" data-desloca-livre="">
-              {pronta ? <CardVG tela={pronta} modo={modo} sel={sel} onAnalisar={analisar}
-                acao={<AmpliarVG titulo={`${modo === 'flx' ? 'Entradas e saídas' : modo === 'sai' ? 'Saídas por grupo' : 'Entradas por grupo'} · ${rotuloMes(sel)}`} testid="card" largura="w-[min(640px,96vw)]">
-                  {() => <CardVG tela={pronta} modo={modo} sel={sel} onAnalisar={analisar} ampliado />}</AmpliarVG>} /> : <Estado erro={erro} />}
+              {pronta ? <CardVG tela={pronta} modo={modo} sel={sel} onAnalisar={analisar} criterio={criterio}
+                acao={<AmpliarVG titulo={`${modo === 'flx' ? 'Entradas e saídas' : modo === 'sai' ? 'Saídas por grupo' : 'Entradas por grupo'} · ${rotuloMes(sel)}`} testid="card" largura="w-[min(640px,96vw)]"
+                  extra={<SeletorCriterioVG valor={criterio} onEscolher={setCriterio} testid="vg-criterio-ampliado-card" />}>
+                  {() => <CardVG tela={pronta} modo={modo} sel={sel} onAnalisar={analisar} ampliado criterio={criterio} />}</AmpliarVG>} /> : <Estado erro={erro} />}
             </div>
           </section>
           <section className="flex min-h-0 min-w-0 flex-col rounded-md border border-[#dfe4ea] bg-white pb-1 pl-2.5 pr-2 pt-[7px]" data-testid="vg-grafico" data-desloca="">
@@ -137,8 +159,18 @@ export function VisaoGeralFinanceiro({ hoje = hojeLocal(), onAnalisar, inicial }
               <span className="whitespace-nowrap text-[11.5px] font-bold">{modo === 'flx' ? 'Entradas × saídas' : modo === 'sai' ? 'Saídas totais' : 'Entradas totais'}<span className="hidden lg:inline"> por mês</span></span>
               <span className="flex min-w-0 items-center gap-1.5">
                 <Legenda modo={modo} tela={pronta} sel={sel} />
-                {pronta && <AmpliarVG titulo={modo === 'flx' ? 'Entradas × saídas por mês' : modo === 'sai' ? 'Saídas totais por mês' : 'Entradas totais por mês'} testid="grafico">
-                  {() => <div className="flex h-[70vh] min-h-0 flex-col"><GraficoVG tela={pronta} modo={modo} sel={sel} onSel={setSel} /></div>}</AmpliarVG>}
+                {/* P90 — o gráfico ampliado: com margem, mais compacto, e o PAINEL DO MÊS ao lado (clicar numa coluna troca o mês) */}
+                {pronta && <AmpliarVG titulo={modo === 'flx' ? 'Entradas × saídas por mês' : modo === 'sai' ? 'Saídas totais por mês' : 'Entradas totais por mês'} testid="grafico"
+                  largura="w-[min(1180px,94vw)]" altura="h-[min(86vh,620px)]" corpo="bg-[#f4f6f9] p-4">
+                  {() => (
+                    <div className="flex h-full min-h-0 gap-4">
+                      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-1 rounded-md border border-[#dfe4ea] bg-white px-3 pb-2 pt-2.5">
+                        <div className="flex h-[17px] shrink-0 justify-end"><Legenda modo={modo} tela={pronta} sel={sel} /></div>
+                        <GraficoVG tela={pronta} modo={modo} sel={sel} onSel={setSel} />
+                      </div>
+                      <PainelMesVG tela={pronta} sel={sel} />
+                    </div>
+                  )}</AmpliarVG>}
               </span>
             </div>
             <div className="mt-[3px] flex min-h-0 flex-1 flex-col" data-desloca-livre="">
@@ -148,8 +180,10 @@ export function VisaoGeralFinanceiro({ hoje = hojeLocal(), onAnalisar, inicial }
         </div>
         <section className="min-h-0 overflow-hidden rounded-md border border-[#dfe4ea] bg-white" data-testid="vg-grade" data-desloca="">
           <div className="h-full" data-desloca-livre="">
-            {pronta ? <GradeVG tela={pronta} sel={sel} onAnalisar={analisar}
-              acao={<AmpliarVG titulo="Entradas e saídas · grade" testid="grade" corpo="px-3">{() => <GradeVG tela={pronta} sel={sel} onAnalisar={analisar} ampliado />}</AmpliarVG>} />
+            {pronta ? <GradeVG tela={pronta} sel={sel} onAnalisar={analisar} criterio={criterio}
+              acao={<AmpliarVG titulo="Entradas e saídas · grade" testid="grade" corpo="px-3"
+                extra={<><SeletorCriterioVG valor={criterio} onEscolher={setCriterio} testid="vg-criterio-ampliado-grade" /><BotaoPdfGradeVG modelo={modeloGrade} /></>}>
+                {() => <><CabecalhoGradeVG modelo={modeloGrade()} /><GradeVG tela={pronta} sel={sel} onAnalisar={analisar} ampliado criterio={criterio} /></>}</AmpliarVG>} />
               : <Estado erro={erro} />}
           </div>
         </section>
@@ -179,7 +213,8 @@ function Legenda({ modo, tela, sel }: { modo: ModoVG; tela: TelaVG | null; sel: 
     <div className="flex items-center gap-[9px] whitespace-nowrap text-[8.5px] text-[#3a4655]">
       <span>{i({ width: 8, height: 8, background: COR.barraEnt })}entradas</span>
       <span>{i({ width: 8, height: 8, background: COR.barraSai })}saídas</span>
-      <span className="hidden lg:inline">{i({ width: 8, height: 8, background: COR.barraSaiP })}previsto</span>
+      {/* P90 — o previsto: a coluna clara e a linha do saldo laranja pontilhada */}
+      <span className="hidden lg:inline">{i({ width: 8, height: 8, background: COR.barraSaiP })}{i({ width: 9, borderTop: `2px dotted ${COR.previsto}` })}previsto</span>
       {/* P83 — sem contas no recorte não há saldo: o lugar da legenda do saldo fica, com o aviso curto */}
       {tela?.sem_saldo ? (
         <span className="inline-block w-[93px] text-[#a05a00]" title="Saldo existe só por conta — escolha contas para ver o saldo" data-testid="legenda-sem-saldo">saldo só por conta</span>

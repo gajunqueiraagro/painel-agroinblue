@@ -3,6 +3,9 @@
  *   V1 A TELA NÃO SOMA (SPEC §7.4): o banco devolve totais, média, %, % do mês, vs média, resultado e saldos propositalmente "errados"
  *      (que não fecham com os meses) e a tela escreve EXATAMENTE esses — se ela somasse ou dividisse, o número mudaria
  *   V2 abre em Entradas × saídas, Ano (jan–dez) e no mês vigente, e pede ao banco o ano inteiro
+ *   V17 a grade ampliada com o cabeçalho e o resumo do mês (o mesmo modelo do PDF)
+ *   V16 o gráfico ampliado com o painel do mês (do banco)
+ *   V14 o critério escreve a série do banco (card e grade), sem novo pedido; V15 no acumulado, o saldo de cima é o do período
  *   V3 clicar num total ou grupo (grade ou card) só registra a intenção — nada abre (o modal é o PR 4)
  *   V4 "Sem classificação" e "Transferências para outras contas" aparecem quando o banco as manda; o vencido marca o mês vigente
  *   V5 trocar o mês pela pílula muda o card sem pedir de novo ao banco (o ano é o mesmo)
@@ -38,18 +41,21 @@ const TELA = {
   meses: M.map((am) => ({ am, previsto: am > '2026-02', vigente: am === '2026-02' })),
   linhas: [
     { chave: 'saldo_inicial', tipo: 'saldo', rotulo: 'SALDO INICIAL', valores: M.map((_, i) => 1000 + i) },
-    { chave: 'entrada:total::', tipo: 'total', lado: 'entrada', rotulo: 'ENTRADAS', valores: M.map((_, i) => 100 * (i + 1)), vencidos: z(), pct_mes: z(100), vs_media: z(), total: 999, media: 123, pct: null },
+    { chave: 'entrada:total::', tipo: 'total', lado: 'entrada', rotulo: 'ENTRADAS', valores: M.map((_, i) => 100 * (i + 1)), vencidos: z(), pct_mes: z(100), vs_media: z(), total: 999, media: 123, pct: null,
+      valores_acum: z(4444), valores_media: z(2222) },
     { chave: 'entrada:grupo:Receitas operacionais:', tipo: 'grupo', lado: 'entrada', grupo: 'Receitas operacionais', rotulo: 'Receitas operacionais', valores: M.map((_, i) => 60 * (i + 1)), vencidos: z(), pct_mes: z(33.3), vs_media: z(12.5), total: 555, media: 44, pct: 77.7 },
     { chave: 'entrada:grupo:Sem classificação:', tipo: 'grupo', lado: 'entrada', grupo: 'Sem classificação', rotulo: 'Sem classificação', valores: M.map((_, i) => 40 * (i + 1)), vencidos: z(), pct_mes: z(66.6), vs_media: z(-3), total: 444, media: 37, pct: 22.2 },
     { chave: 'saida:total::', tipo: 'total', lado: 'saida', rotulo: 'SAÍDAS TOTAIS', valores: z(80), vencidos: M.map((am) => (am === '2026-02' ? 30 : 0)), pct_mes: z(100), vs_media: z(), total: 888, media: 74, pct: null },
-    { chave: 'saida:grupo:Custeio:', tipo: 'grupo', lado: 'saida', grupo: 'Custeio', rotulo: 'Custeio', valores: z(50), vencidos: M.map((am) => (am === '2026-02' ? 30 : 0)), pct_mes: z(11.1), vs_media: z(25), total: 600, media: 50, pct: 61.6 },
+    { chave: 'saida:grupo:Custeio:', tipo: 'grupo', lado: 'saida', grupo: 'Custeio', rotulo: 'Custeio', valores: z(50), vencidos: M.map((am) => (am === '2026-02' ? 30 : 0)), pct_mes: z(11.1), vs_media: z(25), total: 600, media: 50, pct: 61.6,
+      /* P90 — séries do critério que NÃO fecham com os meses: a tela escreve as do banco */
+      valores_acum: z(777), valores_media: z(333), pct_acum: z(44.4) },
     { chave: 'saida:grupo:Outras saídas:', tipo: 'grupo', lado: 'saida', grupo: 'Outras saídas', rotulo: 'Outras saídas', valores: z(30), vencidos: z(), pct_mes: z(88.8), vs_media: z(-40), total: 288, media: 24, pct: 38.4 },
     { chave: 'saida:transf:Outras saídas:Transferências para outras contas', tipo: 'transf', lado: 'saida', grupo: 'Outras saídas', rotulo: 'Transferências para outras contas', valores: z(10), vencidos: z(), pct_mes: z(5), vs_media: z(), total: 120, media: 10, pct: 13.5 },
     { chave: 'resultado', tipo: 'resultado', rotulo: 'RESULTADO', valores: M.map((_, i) => 7 + i), total: 42, media: 3 },
     { chave: 'saldo_final', tipo: 'saldo', rotulo: 'SALDO FINAL', valores: M.map((_, i) => 5000 + i) },
   ],
   grafico: { entrada: { media_acumulada: z(null), meta: z(null) }, saida: { media_acumulada: z(null), meta: z(null) } },
-  conciliado_ate: '2026-02-11',
+  conciliado_ate: '2026-02-11', conciliado_saldo: 1_234_567.89,
   contas_sem_ancora: [],
   status: ['previsto', 'programado', 'agendado'],
   incluir_vencidos: true,
@@ -85,6 +91,8 @@ describe('Visão Geral — render-only', () => {
     expect(celula('card-saldo-final')).toBe('R$ 5.001,00');
     expect(within(screen.getByTestId('card-grupo-entrada:grupo:Receitas operacionais:')).getByText('33,3%')).toBeTruthy();
     expect(screen.getByTestId('card-conciliado').textContent).toContain('Conciliado até 11/02');
+    /* P70 — o saldo das contas no dia do conciliado, o número do banco */
+    expect(screen.getByTestId('card-conciliado-saldo').textContent).toBe('R$ 1.234.567,89');
   });
 
   it('V2 abre em Entradas × saídas, Ano e no mês vigente, e pede o ano inteiro ao banco', async () => {
@@ -222,6 +230,58 @@ describe('Visão Geral — render-only', () => {
     /* entradas, saídas e resultado continuam */
     expect(celula('card-valor-entrada')).toBe('R$ 200,00');
     expect(celula('card-resultado')).toBe('R$ 8,00');
+  });
+
+  it('V14 o critério (mês · média · acumulado) escreve a série do banco no card e na grade, sem pedir de novo', async () => {
+    render(<VisaoGeralFinanceiro hoje="2026-02-15" inicial={{ modo: 'sai' }} />);
+    await screen.findByTestId('grade-vg');
+    const pedidos = rpc.mock.calls.filter((c) => c[0] === 'fn_vg_tela').length;
+    const custeio = () => screen.getByTestId('card-grupo-saida:grupo:Custeio:').textContent ?? '';
+    expect(custeio()).toContain('R$ 50,00');
+    fireEvent.click(within(screen.getByTestId('vg-criterio')).getByText('Acumulado'));
+    expect(custeio()).toContain('R$ 777,00');
+    expect(custeio()).toContain('44,4%');
+    expect(screen.getByTestId('card-vs-media-saida:grupo:Custeio:').textContent).toBe('—');
+    expect(celula('grade-celula-saida:grupo:Custeio:-2026-02')).toBe('777');
+    expect(celula('grade-celula-saldo_inicial-2026-02')).toBe('1.001');
+    fireEvent.click(within(screen.getByTestId('vg-criterio')).getByText('Média'));
+    expect(custeio()).toContain('R$ 333,00');
+    expect(celula('grade-celula-saida:grupo:Custeio:-2026-02')).toBe('333');
+    /* nenhuma marca de vencido fora de "mês" */
+    expect(screen.queryAllByTestId('marca-vencido').length).toBe(0);
+    expect(rpc.mock.calls.filter((c) => c[0] === 'fn_vg_tela').length).toBe(pedidos);
+  });
+
+  it('V15 no acumulado, o saldo de cima é o inicial do PERÍODO (o do 1º mês, do banco)', async () => {
+    render(<VisaoGeralFinanceiro hoje="2026-02-15" />);
+    await screen.findByTestId('grade-vg');
+    fireEvent.click(within(screen.getByTestId('vg-criterio')).getByText('Acumulado'));
+    expect(screen.getByTestId('card-saldo-inicial-rotulo').textContent).toBe('Saldo inicial · jan/26');
+    expect(screen.getByTestId('card-saldo-inicial').textContent).toBe('R$ 1.000,00');
+  });
+
+  it('V16 o gráfico ampliado traz o PAINEL DO MÊS escolhido, com o mês, o acumulado e a média do banco', async () => {
+    render(<VisaoGeralFinanceiro hoje="2026-02-15" />);
+    await screen.findByTestId('grade-vg');
+    fireEvent.click(screen.getByTestId('ampliar-grafico'));
+    const painel = await screen.findByTestId('painel-mes');
+    expect(within(painel).getByTestId('painel-mes-titulo').textContent).toBe('Fevereiro 2026');
+    expect(within(painel).getByTestId('painel-mes-entradas').textContent).toBe('R$ 200,00');
+    expect(within(painel).getByTestId('painel-acum-entradas').textContent).toBe('R$ 4.444,00');
+    expect(within(painel).getByTestId('painel-media-entradas').textContent).toBe('R$ 2.222,00');
+    expect(within(painel).getByTestId('painel-saldo-final').textContent).toBe('R$ 5.001,00');
+  });
+
+  it('V17 a grade ampliada traz o cabeçalho (cliente, contas, chips, critério) e o resumo do mês, do banco, e o botão PDF', async () => {
+    render(<VisaoGeralFinanceiro hoje="2026-02-15" />);
+    await screen.findByTestId('grade-vg');
+    fireEvent.click(screen.getByTestId('ampliar-grade'));
+    const cab = await screen.findByTestId('grade-ampliada-cabecalho');
+    expect(within(cab).getByTestId('grade-ampliada-cliente').textContent).toBe('Cliente');
+    expect(within(cab).getByTestId('grade-ampliada-contexto').textContent).toContain('Realizado + Previsto, Programado, Agendado, Vencidos');
+    expect(within(cab).getByTestId('grade-ampliada-resumo').textContent).toContain('R$ 200,00');
+    expect(within(cab).getByTestId('grade-ampliada-resumo').textContent).toContain('R$ 5.001,00');
+    expect(screen.getByTestId('vg-pdf')).toBeTruthy();
   });
 
   it('V13 o TOTAL dos saldos é o do banco (a grade não soma)', async () => {

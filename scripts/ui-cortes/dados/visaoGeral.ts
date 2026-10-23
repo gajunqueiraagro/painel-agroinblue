@@ -65,6 +65,9 @@ export function tela(a: { p_de: string; p_ate: string; p_contas?: string[] | nul
   add('saida', 'Sem classificação', ms.map((x) => (x <= HOJE ? r2(8900 * peso) : 0)));
   const ladoTotal = (lado: string) => tot[lado].reduce((x, y) => x + y, 0);
   const real = ms.map((x) => x <= HOJE);
+  /* P90 — as séries do critério (o banco sintético faz o papel da fn_vg_tela: soma e média do início do período até o mês) */
+  const acum = (vals: number[]) => { let a2 = 0; return vals.map((v) => r2((a2 += v))); };
+  const media = (vals: number[]) => acum(vals).map((v, i) => r2(v / (i + 1)));
   const linha = (lado: string, tipo: string, grupo: string, rotulo: string, vals: number[], vv: number[]) => {
     const t = vals.reduce((x, y) => x + y, 0);
     const vr = vals.filter((_, i) => real[i]);
@@ -73,6 +76,8 @@ export function tela(a: { p_de: string; p_ate: string; p_contas?: string[] | nul
       chave: `${lado}:${tipo}:${grupo}`, tipo, lado, grupo: tipo === 'total' ? null : grupo, rotulo, valores: vals.map(r2), vencidos: vv.map(r2),
       pct_mes: vals.map((v, i) => (tot[lado][i] ? r1((v / tot[lado][i]) * 100) : null)),
       vs_media: vals.map((v) => (md ? r1(((v - md) / Math.abs(md)) * 100) : null)),
+      valores_acum: acum(vals), valores_media: media(vals),
+      pct_acum: acum(vals).map((v, i) => { const tt = acum(tot[lado])[i]; return tt ? r1((v / tt) * 100) : null; }),
       total: r2(t), media: r2(t / ms.length), pct: tipo === 'total' ? null : ladoTotal(lado) ? r1((t / ladoTotal(lado)) * 100) : null,
     };
   };
@@ -99,13 +104,14 @@ export function tela(a: { p_de: string; p_ate: string; p_contas?: string[] | nul
     linhas: [...(semSaldo ? [] : [{ chave: 'saldo_inicial', tipo: 'saldo', rotulo: 'Saldo inicial', valores: saldoIni, total: saldoIni[0] }]), ...linhas,
       ...(semCartao ? [{ chave: 'cartao', tipo: 'cartao', rotulo: 'PAGAMENTO DE CARTÃO (transferência)', valores: cartaoVals,
         total: r2(cartaoVals.reduce((x, y) => x + y, 0)), media: r2(cartaoVals.reduce((x, y) => x + y, 0) / ms.length) }] : []),
-      { chave: 'resultado', tipo: 'resultado', rotulo: 'Resultado no mês', valores: res, total: r2(resT), media: r2(resT / ms.length) },
+      { chave: 'resultado', tipo: 'resultado', rotulo: 'Resultado no mês', valores: res, total: r2(resT), media: r2(resT / ms.length),
+        valores_acum: acum(res), valores_media: media(res) },
       ...(semSaldo ? [] : [{ chave: 'saldo_final', tipo: 'saldo', rotulo: 'Saldo final · fluxo de caixa', valores: saldoFim, total: saldoFim[saldoFim.length - 1] }])],
     grafico: {
       entrada: { media_acumulada: mediaAcc('entrada'), meta: ms.map(() => r2(1700000 * peso)) },
       saida: { media_acumulada: mediaAcc('saida'), meta: ms.map((x) => (x.startsWith('2026') ? r2(2300000 * peso) : null)) },
     },
-    conciliado_ate: semSaldo ? null : '2026-10-15', sem_saldo: semSaldo,
+    conciliado_ate: semSaldo ? null : '2026-10-15', conciliado_saldo: semSaldo ? null : 9_876_543.21, sem_saldo: semSaldo,
     status: st, incluir_vencidos: incl,
     contas_sem_ancora: a.p_contas?.includes('c4') ? ['Cartão Exemplo'] : [],
   };

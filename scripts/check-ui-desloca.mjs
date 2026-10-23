@@ -110,6 +110,10 @@ const CENARIOS = [
     ['sem Programado', clicar('[data-testid="vg-status-programado"]')], ['sem Previsto', clicar('[data-testid="vg-status-previsto"]')],
     ['nenhum status', clicar('[data-testid="vg-status-agendado"]')], ['sem Vencidos', clicar('[data-testid="vg-status-vencidos"]')],
     ['Programado de volta', clicar('[data-testid="vg-status-programado"]')],
+    /* P90 — o critério (mês · média · acumulado): trocar não desloca nada (card, grade e o próprio seletor) */
+    ['critério média', async (p) => { await p.locator('[data-testid="vg-criterio"]').getByText('Média', { exact: true }).click(); await espera(p, 300); }],
+    ['critério acumulado', async (p) => { await p.locator('[data-testid="vg-criterio"]').getByText('Acumulado', { exact: true }).click(); await espera(p, 300); }],
+    ['critério de volta ao mês', async (p) => { await p.locator('[data-testid="vg-criterio"]').getByText('Mês', { exact: true }).click(); await espera(p, 300); }],
     /* P83 — abrir e fechar o "ampliar" de cada bloco não desloca nada. O clique vai ao botão onde ele está (sem o "rolar até ele" do
        Playwright): abaixo de 1000px a VG rola de lado (não tem desenho ali) e o rolar do robô seria lido como deslocamento do modal */
     ...['card', 'grafico', 'grade'].map((b) => [`ampliar o ${b} e fechar`, async (p) => {

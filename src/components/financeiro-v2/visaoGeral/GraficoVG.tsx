@@ -3,22 +3,39 @@
  *   · colunas por mês: realizado cheio, previsto claro hachurado, fundo cinza na faixa prevista;
  *   · Entradas × saídas: duas colunas por mês + a LINHA DO SALDO FINAL (mesmo eixo);
  *   · Saídas | Entradas: uma coluna + a MÉDIA ACUMULADA (curva) + a META (pontilhado laranja), com os valores na ponta direita;
- *   · valor da coluna VERTICAL, pequeno, dentro da coluna junto à base; um eixo só; com negativo, o eixo desce com os mesmos intervalos;
+ *   · P90 (Gabriel 23/10 11h05): o valor da coluna na HORIZONTAL, pequeno, EM CIMA da própria coluna; um eixo só; com negativo, o eixo
+ *     desce com os mesmos intervalos;
  *   · clicar numa coluna seleciona o mês.
  *   · P83 (Gabriel 23/10): Entradas × saídas abre com a coluna "i" = o SALDO INICIAL do período (barra única, cor do sinal), antes do 1º
- *     mês; a linha do saldo é AZUL acima de zero e VERMELHA abaixo (a cor troca no cruzamento — `trechosDoSaldo`, a regra das áreas da
- *     CPR), TRACEJADA nos meses previstos, e o valor dela fica na horizontal, em fonte pequena, numa faixa no topo de cada coluna.
+ *     mês. P90: a linha do saldo COMEÇA no ponto "i" e é CURVA (suave); no realizado, AZUL acima de zero e VERMELHA abaixo — a cor troca
+ *     EXATAMENTE no cruzamento (a mesma curva desenhada duas vezes, cada uma recortada de um lado do zero); no PREVISTO, sempre LARANJA e
+ *     pontilhado fino, qualquer que seja o sinal. O valor do saldo fica EM CIMA do próprio ponto. Nenhum rótulo encosta noutro: entram
+ *     por prioridade (o mês escolhido primeiro) e o que cruzaria um já posto não entra (coluna estreita: só os que cabem).
  * Os números desenhados vêm do banco (`fn_vg_tela`: valores, saldo final, média acumulada, meta). Aqui só há a ESCALA do desenho.
  */
-import { useLayoutEffect, useRef, useState } from 'react';
-import { COR, brl, corSinal, mes0De, anoDe, MESES_ABR, mil1, n0, rotuloMes, trechosDoSaldo, type ModoVG, type TelaVG } from '@/lib/financeiro/visaoGeral';
+import { useId, useLayoutEffect, useRef, useState } from 'react';
+import { COR, brl, corSinal, mes0De, anoDe, MESES_ABR, mil1, n0, rotuloMes, type ModoVG, type TelaVG } from '@/lib/financeiro/visaoGeral';
 
 const passoBonito = (x: number) => { const p = Math.pow(10, Math.floor(Math.log10(x))); const m = x / p; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 2.5 ? 2.5 : m <= 5 ? 5 : 10) * p; };
+/** P90 — curva MONÓTONA (Fritsch–Carlson, a `curveMonotoneX` do d3): suave, mas nunca passa além dos pontos — entre dois saldos
+    positivos a linha não mergulha abaixo de zero (a Catmull-Rom de antes "inventava" um negativo entre ago e set) */
 const curva = (pts: [number, number][]) => {
+  const n = pts.length;
+  if (n < 2) return n ? `M${pts[0][0]} ${pts[0][1]}` : '';
+  const h = pts.slice(1).map((p, i) => p[0] - pts[i][0]);
+  const m = pts.slice(1).map((p, i) => (h[i] ? (p[1] - pts[i][1]) / h[i] : 0));
+  const t = pts.map((_, i) => {
+    if (i === 0 || i === n - 1) return 0;
+    const s0 = m[i - 1], s1 = m[i], pp = (s0 * h[i] + s1 * h[i - 1]) / (h[i - 1] + h[i]);
+    return (Math.sign(s0) + Math.sign(s1)) * Math.min(Math.abs(s0), Math.abs(s1), 0.5 * Math.abs(pp)) || 0;
+  });
+  if (n > 2) { t[0] = (3 * m[0] - t[1]) / 2; t[n - 1] = (3 * m[n - 2] - t[n - 2]) / 2; } else { t[0] = m[0]; t[1] = m[0]; }
+  /* as pontas também não passam além (a tangente da ponta fica no sentido do primeiro/último trecho e no máximo 3× a inclinação) */
+  [0, n - 1].forEach((i) => { const s = m[i === 0 ? 0 : n - 2]; if (Math.sign(t[i]) !== Math.sign(s)) t[i] = 0; else if (Math.abs(t[i]) > 3 * Math.abs(s)) t[i] = 3 * s; });
   let d = `M${pts[0][0]} ${pts[0][1]}`;
-  for (let j = 0; j < pts.length - 1; j++) {
-    const p0 = pts[j - 1] ?? pts[j], p1 = pts[j], p2 = pts[j + 1], p3 = pts[j + 2] ?? p2;
-    d += ` C${p1[0] + (p2[0] - p0[0]) / 6} ${p1[1] + (p2[1] - p0[1]) / 6},${p2[0] - (p3[0] - p1[0]) / 6} ${p2[1] - (p3[1] - p1[1]) / 6},${p2[0]} ${p2[1]}`;
+  for (let j = 0; j < n - 1; j++) {
+    const dx = h[j] / 3;
+    d += ` C${pts[j][0] + dx} ${pts[j][1] + t[j] * dx},${pts[j + 1][0] - dx} ${pts[j + 1][1] - t[j + 1] * dx},${pts[j + 1][0]} ${pts[j + 1][1]}`;
   }
   return d;
 };
@@ -58,12 +75,14 @@ export function GraficoVG({ tela, modo, sel, onSel }: { tela: TelaVG; modo: Modo
   const ks = meses.findIndex((m) => m.am === sel);
   const metaSel = meta ? meta[ks >= 0 ? ks : meta.length - 1] ?? null : null;
 
+  const id = `vg${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
   let svg: JSX.Element | null = null;
+  let defsSaldo: JSX.Element | null = null;
   if (W0 > 0 && H > 0 && meses.length) {
     const n = meses.length, ns = series.length;
     const dois = new Set(meses.map((m) => anoDe(m.am))).size > 1;
     const off = temI ? 1 : 0;
-    const L = 40, Rm = flx ? 6 : 34, T = saldo ? 24 : 14, B = dois ? 24 : 14, iw = W0 - L - Rm, ih = H - T - B;
+    const L = 40, Rm = flx ? 6 : 34, T = 16, B = dois ? 24 : 14, iw = W0 - L - Rm, ih = H - T - B;
     const nums = (a: (number | null)[] | null | undefined) => (a ?? []).filter((x): x is number => x != null);
     const todos = [...series.flatMap((s) => nums(s.vals)), ...nums(saldo), ...nums(media), ...nums(meta), ...(saldoIni != null ? [saldoIni] : []), 0];
     const mx = Math.max(...todos, 1), mn = Math.min(...todos);
@@ -74,6 +93,12 @@ export function GraficoVG({ tela, modo, sel, onSel }: { tela: TelaVG; modo: Modo
     const slot = iw / (n + off), X = (k: number) => L + (k + off + 0.5) * slot;
     const bw = Math.min(34, slot * (ns > 1 ? 0.38 : 0.62));
     const fmtL = (v: number) => (useK ? mil1(v) : n0(v));
+    /* o rótulo curto da coluna: R$ mil inteiro (cabe em cima de uma coluna estreita) */
+    const fmtC = (v: number) => (useK ? n0(v / 1000) : n0(v));
+    /* os rótulos (colunas e saldo) disputam o mesmo espaço: cada um ocupa um retângulo; quem cruzaria um já posto não entra */
+    type Rotulo = { chave: string; x: number; y: number; t: string; cor: string; forte: boolean; prio: number; testid?: string };
+    const rotulos: Rotulo[] = [];
+    const larg = (t: string) => t.length * 3.9 + 2;
     const fut = meses.findIndex((m) => m.previsto);
     const passoX = Math.max(1, Math.ceil(22 / slot));
     const els: JSX.Element[] = [];
@@ -102,12 +127,8 @@ export function GraficoVG({ tela, modo, sel, onSel }: { tela: TelaVG; modo: Modo
           stroke={m.am === sel ? '#1b2430' : undefined} strokeWidth={m.am === sel ? 1.2 : undefined} data-testid={`barra-${se.nome}-${m.am}`}>
           <title>{`${rotuloMes(m.am)} · ${se.nome}: ${brl(v)}${real ? '' : ' (previsto)'}`}</title></rect>);
         if (!real) els.push(<rect key={`h${k}${si}`} x={x} y={y} width={bw} height={h} fill="url(#hachura-vg)" pointerEvents="none" />);
-        const lab = fmtL(v), lw = lab.length * 4.4 + 6;
-        if (bw >= 9 && h > lw) {
-          els.push(<text key={`l${k}${si}`} transform={`translate(${X(k) + off},${v >= 0 ? y0 - 4 : y0 + 4}) rotate(-90)`} fontSize={7.5}
-            textAnchor={v >= 0 ? 'start' : 'end'} dominantBaseline="central" fill={real ? '#fff' : '#5b6878'} fontWeight={m.am === sel ? 700 : 400}
-            pointerEvents="none">{lab}</text>);
-        }
+        if (v !== 0) rotulos.push({ chave: `l${k}${si}`, x: X(k) + off, y: Math.min(yv, y0) - 2.5, t: fmtC(v), cor: real ? se.txt : '#8d9cad',
+          forte: m.am === sel, prio: m.am === sel ? 0 : 3, testid: `rotulo-coluna-${se.nome}-${m.am}` });
       });
     });
     const mostra = new Set(meses.map((m) => m.am).filter((am) => mes0De(am) % passoX === 0));
@@ -153,38 +174,56 @@ export function GraficoVG({ tela, modo, sel, onSel }: { tela: TelaVG; modo: Modo
     if (yMeta !== null && metaSel != null) els.push(<text key="mtv" x={L + iw + 3} y={yMeta + 3} fontSize={7.5} fill="#a85a00">{fmtL(metaSel)}</text>);
     if (yMed !== null && vMed != null) els.push(<text key="mdv" x={L + iw + 3} y={yMed + 3} fontSize={7.5} fontWeight={700} fill={ladoUnico === 'entrada' ? COR.mediaEnt : COR.mediaSai}>{fmtL(vMed)}</text>);
     if (saldo) {
-      const pts = saldo.map((v, k) => ({ x: X(k), y: Y(v ?? 0), v: v ?? 0, previsto: !!meses[k].previsto, k }));
-      /* a linha em trechos de UM sinal (azul ≥ 0, vermelho < 0), tracejada até os meses previstos */
-      trechosDoSaldo(pts, y0).forEach((t, j) => els.push(<line key={`st${j}`} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2} stroke={t.neg ? COR.neg : COR.pos}
-        strokeWidth={2} strokeLinecap="round" strokeDasharray={t.tracejado ? '5 4' : undefined} data-testid={`trecho-saldo-${t.neg ? 'neg' : 'pos'}${t.tracejado ? '-previsto' : ''}`} />));
-      /* o valor de cada mês na HORIZONTAL, numa faixa no topo da coluna. Fica DENTRO do desenho (x preso às bordas pela largura do texto,
-         ≈ 4px por letra no corpo 7) e um rótulo nunca encosta no outro: entram por prioridade — o mês escolhido, o "i", as pontas, o resto —
-         e o que cruzaria um já posto não entra (coluna estreita: só os que cabem) */
-      const larg = (t: string) => t.length * 4 + 2;
-      const xDentro = (x: number, t: string) => Math.min(Math.max(x, L + larg(t) / 2), L + iw - larg(t) / 2);
-      const cands: { chave: string; x: number; v: number; prio: number; am?: string }[] = [];
-      if (saldoIni != null) cands.push({ chave: 'svi', x: L + 0.5 * slot, v: saldoIni, prio: 1 });
+      const pts = saldo.map((v, k) => ({ x: X(k), y: Y(v ?? 0), v: v ?? 0, k }));
+      /* a curva começa no "i" (o saldo inicial do período) e liga em jan */
+      const linha: [number, number][] = [...(saldoIni != null ? [[L + 0.5 * slot, Y(saldoIni)] as [number, number]] : []), ...pts.map((p) => [p.x, p.y] as [number, number])];
+      const ult = meses.reduce((u, m, k) => (m.previsto ? u : k), -1);
+      const xr = ult >= 0 ? X(ult) : L + 0.5 * slot;
+      const d = curva(linha);
+      els.push(
+        <g key="saldo-real" clipPath={`url(#${id}-real)`}>
+          <path d={d} fill="none" stroke={COR.pos} strokeWidth={2} clipPath={`url(#${id}-acima)`} data-testid="linha-saldo-pos" />
+          <path d={d} fill="none" stroke={COR.neg} strokeWidth={2} clipPath={`url(#${id}-abaixo)`} data-testid="linha-saldo-neg" />
+        </g>,
+        ult < meses.length - 1 ? (
+          <g key="saldo-prev" clipPath={`url(#${id}-prev)`}>
+            <path d={d} fill="none" stroke={COR.previsto} strokeWidth={1.4} strokeDasharray="1.2 2.6" strokeLinecap="round" data-testid="linha-saldo-previsto" />
+          </g>
+        ) : null);
+      defsSaldo = (
+        <>
+          <clipPath id={`${id}-acima`}><rect x={0} y={0} width={W0} height={y0} /></clipPath>
+          <clipPath id={`${id}-abaixo`}><rect x={0} y={y0} width={W0} height={Math.max(0, H - y0)} /></clipPath>
+          <clipPath id={`${id}-real`}><rect x={0} y={0} width={xr} height={H} /></clipPath>
+          <clipPath id={`${id}-prev`}><rect x={xr} y={0} width={Math.max(0, W0 - xr)} height={H} /></clipPath>
+        </>
+      );
+      if (saldoIni != null) rotulos.push({ chave: 'svi', x: L + 0.5 * slot, y: Y(saldoIni) - 5, t: fmtL(saldoIni), cor: corSinal(saldoIni), forte: false, prio: 1, testid: 'rotulo-saldo-inicial' });
       pts.forEach((p) => {
-        const am = meses[p.k].am;
-        els.push(<circle key={`sc${p.k}`} cx={p.x} cy={p.y} r={am === sel ? 3.4 : 2.4} fill={corSinal(p.v)} stroke="#fff" strokeWidth={1}>
-          <title>{`saldo final de ${rotuloMes(am)}: ${brl(p.v)}`}</title></circle>);
-        cands.push({ chave: `sv${p.k}`, x: p.x, v: p.v, am, prio: am === sel ? 0 : p.k === pts.length - 1 ? 2 : p.k === 0 ? 3 : 4 });
-      });
-      const postos: { l: number; r: number }[] = [];
-      [...cands].sort((a, b) => a.prio - b.prio).forEach((c) => {
-        const t = fmtL(c.v), x = xDentro(c.x, t), l = x - larg(t) / 2 - 2, r = x + larg(t) / 2 + 2;
-        if (postos.some((q) => l < q.r && r > q.l)) return;
-        postos.push({ l, r });
-        els.push(<text key={c.chave} x={x} y={T - 6} fontSize={7} textAnchor="middle" fill={corSinal(c.v)} fontWeight={c.am === sel ? 700 : 400}
-          data-testid={c.am ? `rotulo-saldo-${c.am}` : 'rotulo-saldo-inicial'}>{t}</text>);
+        const am = meses[p.k].am, prev = !!meses[p.k].previsto;
+        els.push(<circle key={`sc${p.k}`} cx={p.x} cy={p.y} r={am === sel ? 3.4 : 2.4} fill={prev ? COR.previsto : corSinal(p.v)} stroke="#fff" strokeWidth={1}>
+          <title>{`saldo final de ${rotuloMes(am)}${prev ? ' (previsto)' : ''}: ${brl(p.v)}`}</title></circle>);
+        rotulos.push({ chave: `sv${p.k}`, x: p.x, y: p.y - 5, t: fmtL(p.v), cor: prev ? COR.previsto : corSinal(p.v), forte: am === sel,
+          prio: am === sel ? -1 : 2, testid: `rotulo-saldo-${am}` });
       });
     }
+    /* os rótulos, por prioridade, dentro do desenho e sem encostar uns nos outros nem no "i"/eixo */
+    const postos: { l: number; r: number; t: number; b: number }[] = [];
+    [...rotulos].sort((a, b) => a.prio - b.prio || a.x - b.x).forEach((r) => {
+      const w = larg(r.t), x = Math.min(Math.max(r.x, L + w / 2), L + iw - w / 2), y = Math.max(r.y, 8);
+      const q = { l: x - w / 2 - 1, r: x + w / 2 + 1, t: y - 7, b: y + 1 };
+      if (postos.some((o) => q.l < o.r && q.r > o.l && q.t < o.b && q.b > o.t)) return;
+      postos.push(q);
+      /* contorno branco por baixo da letra: legível mesmo em cima de uma coluna da mesma cor */
+      els.push(<text key={r.chave} x={x} y={y} fontSize={7} textAnchor="middle" fill={r.cor} fontWeight={r.forte ? 700 : 400} pointerEvents="none"
+        stroke="#fff" strokeWidth={2.4} strokeLinejoin="round" paintOrder="stroke" data-testid={r.testid}>{r.t}</text>);
+    });
     meses.forEach((m, k) => els.push(<rect key={`c${k}`} x={L + (k + off) * slot} y={T} width={slot} height={ih + B} fill="transparent" style={{ cursor: 'pointer' }}
       onClick={() => onSel(m.am)} data-testid={`coluna-${m.am}`}><title>{`Ver ${rotuloMes(m.am)}`}</title></rect>));
     svg = (
       <svg width={W0} height={H} style={{ display: 'block' }} aria-hidden="true">
         <defs><pattern id="hachura-vg" width={5} height={5} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-          <line x1={0} y1={0} x2={0} y2={5} stroke="#fff" strokeWidth={2} strokeOpacity={0.6} /></pattern></defs>
+          <line x1={0} y1={0} x2={0} y2={5} stroke="#fff" strokeWidth={2} strokeOpacity={0.6} /></pattern>{defsSaldo}</defs>
         {els}
       </svg>
     );
