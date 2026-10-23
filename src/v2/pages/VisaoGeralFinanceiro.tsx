@@ -22,6 +22,7 @@ import { useCarregarFiltrosVG } from '@/components/financeiro-v2/visaoGeral/Filt
 import { CardVG } from '@/components/financeiro-v2/visaoGeral/CardVG';
 import { GraficoVG } from '@/components/financeiro-v2/visaoGeral/GraficoVG';
 import { GradeVG } from '@/components/financeiro-v2/visaoGeral/GradeVG';
+import { AmpliarVG } from '@/components/financeiro-v2/visaoGeral/AmpliarVG';
 import { ChipsDeStatus, STATUS_INICIAIS, alternarNaLista, pilulasDosStatus } from '@/components/financeiro-v2/ChipsDeStatus';
 import { useFiltroUrl } from '@/v2/hooks/useFiltroUrl';
 import {
@@ -123,13 +124,19 @@ export function VisaoGeralFinanceiro({ hoje = hojeLocal(), onAnalisar, inicial }
         <div className="grid min-h-0 gap-2" style={{ gridTemplateColumns: 'clamp(430px, 43%, 560px) minmax(0, 1fr)' }}>
           <section className="min-h-0 overflow-hidden rounded-md border border-[#dfe4ea] bg-white px-2.5 py-[7px]" data-testid="vg-card" data-desloca="">
             <div className="h-full" data-desloca-livre="">
-              {pronta ? <CardVG tela={pronta} modo={modo} sel={sel} onAnalisar={analisar} /> : <Estado erro={erro} />}
+              {pronta ? <CardVG tela={pronta} modo={modo} sel={sel} onAnalisar={analisar}
+                acao={<AmpliarVG titulo={`${modo === 'flx' ? 'Entradas e saídas' : modo === 'sai' ? 'Saídas por grupo' : 'Entradas por grupo'} · ${rotuloMes(sel)}`} testid="card" largura="w-[min(640px,96vw)]">
+                  {() => <CardVG tela={pronta} modo={modo} sel={sel} onAnalisar={analisar} ampliado />}</AmpliarVG>} /> : <Estado erro={erro} />}
             </div>
           </section>
           <section className="flex min-h-0 min-w-0 flex-col rounded-md border border-[#dfe4ea] bg-white pb-1 pl-2.5 pr-2 pt-[7px]" data-testid="vg-grafico" data-desloca="">
             <div className="flex h-[17px] shrink-0 items-baseline justify-between gap-2" data-desloca-livre="">
               <span className="whitespace-nowrap text-[11.5px] font-bold">{modo === 'flx' ? 'Entradas × saídas por mês' : modo === 'sai' ? 'Saídas totais por mês' : 'Entradas totais por mês'}</span>
-              <Legenda modo={modo} tela={pronta} sel={sel} />
+              <span className="flex min-w-0 items-center gap-1.5">
+                <Legenda modo={modo} tela={pronta} sel={sel} />
+                {pronta && <AmpliarVG titulo={modo === 'flx' ? 'Entradas × saídas por mês' : modo === 'sai' ? 'Saídas totais por mês' : 'Entradas totais por mês'} testid="grafico">
+                  {() => <div className="flex h-[70vh] min-h-0 flex-col"><GraficoVG tela={pronta} modo={modo} sel={sel} onSel={setSel} /></div>}</AmpliarVG>}
+              </span>
             </div>
             <div className="mt-[3px] flex min-h-0 flex-1 flex-col" data-desloca-livre="">
               {pronta && <GraficoVG tela={pronta} modo={modo} sel={sel} onSel={setSel} />}
@@ -138,7 +145,9 @@ export function VisaoGeralFinanceiro({ hoje = hojeLocal(), onAnalisar, inicial }
         </div>
         <section className="min-h-0 overflow-hidden rounded-md border border-[#dfe4ea] bg-white" data-testid="vg-grade" data-desloca="">
           <div className="h-full" data-desloca-livre="">
-            {pronta ? <GradeVG tela={pronta} sel={sel} onAnalisar={analisar} /> : <Estado erro={erro} />}
+            {pronta ? <GradeVG tela={pronta} sel={sel} onAnalisar={analisar}
+              acao={<AmpliarVG titulo="Entradas e saídas · grade" testid="grade">{() => <GradeVG tela={pronta} sel={sel} onAnalisar={analisar} ampliado />}</AmpliarVG>} />
+              : <Estado erro={erro} />}
           </div>
         </section>
       </div>

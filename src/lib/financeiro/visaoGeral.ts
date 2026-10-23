@@ -37,6 +37,8 @@ export interface TelaVG {
   /** P79 — o que o banco USOU (eco dos chips): os não realizados que entraram e se o vencido entrou */
   status?: string[];
   incluir_vencidos?: boolean;
+  /** P83 — o recorte não é de contas (fazenda/atividade): o banco não devolve saldo e a tela diz isso no lugar */
+  sem_saldo?: boolean;
 }
 export interface ContaVG { id: string; nome: string; tipo: string; ativa: boolean; no_caixa: boolean }
 export interface FiltrosVG { contas: ContaVG[]; atividades: string[]; safras: { id: string; nome: string }[] }

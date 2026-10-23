@@ -7,6 +7,7 @@
  *   · Vencido: no mês corrente, a célula com previsto vencido leva uma marca âmbar discreta (absoluta: não muda altura) e o valor no title.
  *   · Lista longa rola DENTRO do quadro (cabeçalho preso); o quadro tem altura do bloco, nunca do conteúdo.
  */
+import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { TH_REGUA, TD_REGUA, TD_REGUA_NUM } from '@/components/ui/regua-tabela';
 import {
@@ -16,7 +17,13 @@ import {
 
 const FUNDO_RESUMO = 'rgba(68,84,106,.07)';
 
-export function GradeVG({ tela, sel, onAnalisar }: { tela: TelaVG; sel: string; onAnalisar: (a: AlvoAnaliseVG) => void }) {
+export function GradeVG({ tela, sel, onAnalisar, ampliado = false, acao }: {
+  tela: TelaVG; sel: string; onAnalisar: (a: AlvoAnaliseVG) => void;
+  /** P83 — no modal "ampliar": a grade inteira, sem rolagem */
+  ampliado?: boolean;
+  /** o botão "ampliar", no canto da 1ª célula do cabeçalho */
+  acao?: ReactNode;
+}) {
   const meses = tela.meses;
   /* R$ mil com 1 decimal: mais de 14 meses (SPEC §3.5) OU valor de mês na casa do milhão — "2.256.036" não cabe em 12 colunas a 1130px
      (medido na NJ, 22/10). É escrita do número que veio, não conta. */
@@ -26,17 +33,23 @@ export function GradeVG({ tela, sel, onAnalisar }: { tela: TelaVG; sel: string; 
   const larguraMes = meses.length > 14 ? 52 : 46;
   const algumPrevisto = meses.some((m) => m.previsto);
   return (
-    <div className="h-full min-h-0 overflow-auto" data-testid="grade-vg-rolagem">
-      <table className="w-full table-fixed border-collapse" style={{ minWidth: 170 + meses.length * larguraMes + (comp ? 150 : 166) }}
+    <div className={ampliado ? '' : 'h-full min-h-0 overflow-auto'} data-testid={ampliado ? 'grade-vg-ampliada' : 'grade-vg-rolagem'}>
+      {/* no ampliado (print) o nome da linha cabe inteiro: a 1ª coluna com 230px */}
+      <table className="w-full table-fixed border-collapse" style={{ minWidth: (ampliado ? 230 : 170) + meses.length * larguraMes + (comp ? 150 : 166) }}
         data-testid="grade-vg">
         <colgroup>
-          <col style={{ width: 170 }} />
+          <col style={{ width: ampliado ? 230 : 170 }} />
           {meses.map((m) => <col key={m.am} />)}
           <col style={{ width: comp ? 56 : 66 }} /><col style={{ width: comp ? 50 : 58 }} /><col style={{ width: 44 }} />
         </colgroup>
         <thead className="sticky top-0 z-10 bg-primary">
           <tr>
-            <th className={cn(TH_REGUA, 'h-[26px] text-left align-bottom')}>R${comp ? ' MIL' : ''} · {algumPrevisto ? 'REALIZADO + PREVISTO' : 'REALIZADO'}</th>
+            <th className={cn(TH_REGUA, 'h-[26px] text-left align-bottom')}>
+              <span className="flex items-end justify-between gap-1">
+                <span className="truncate">R${comp ? ' MIL' : ''} · {algumPrevisto ? 'REALIZADO + PREVISTO' : 'REALIZADO'}</span>
+                {acao && <span className="shrink-0 rounded bg-white/90">{acao}</span>}
+              </span>
+            </th>
             {meses.map((m, k) => {
               const virada = k === 0 || mes0De(m.am) === 0;
               return (

@@ -85,7 +85,10 @@ const CENARIOS = [
     /* P79 — os chips: desligar Programado, Previsto e Agendado (nenhum: o aviso aparece) e Vencidos; o aviso tem lugar próprio */
     ['sem Programado', clicar('[data-testid="vg-status-programado"]')], ['sem Previsto', clicar('[data-testid="vg-status-previsto"]')],
     ['nenhum status', clicar('[data-testid="vg-status-agendado"]')], ['sem Vencidos', clicar('[data-testid="vg-status-vencidos"]')],
-    ['Programado de volta', clicar('[data-testid="vg-status-programado"]')]] },
+    ['Programado de volta', clicar('[data-testid="vg-status-programado"]')],
+    /* P83 — abrir e fechar o "ampliar" de cada bloco não desloca nada */
+    ...['card', 'grafico', 'grade'].map((b) => [`ampliar o ${b} e fechar`, async (p) => {
+      await p.locator(`[data-testid="ampliar-${b}"]`).click(); await espera(p, 400); await p.keyboard.press('Escape'); await espera(p, 400); }])] },
   { nome: 'visao-geral-24m', url: 'tela=visao-geral&barra=0&faixa=per&de=2025-01&ate=2026-12', auto: true },
   { nome: 'contas-lista', url: 'tela=contas&barra=32&n=longo', auto: true, estados: [
     ['busca com resultado', digitar('[data-testid="busca-contas"]', 'bradesco')], ['busca sem resultado', digitar('[data-testid="busca-contas"]', 'zzzz')],

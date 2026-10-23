@@ -18,28 +18,44 @@ const linhaDe = (tela: TelaVG, chave: string) => tela.linhas.find((l) => l.chave
 const totalDe = (tela: TelaVG, lado: LadoVG) => tela.linhas.find((l) => l.tipo === 'total' && l.lado === lado);
 const gruposDe = (tela: TelaVG, lado: LadoVG) => tela.linhas.filter((l) => l.tipo === 'grupo' && l.lado === lado);
 
-export function CardVG({ tela, modo, sel, onAnalisar }: { tela: TelaVG; modo: ModoVG; sel: string; onAnalisar: (a: AlvoAnaliseVG) => void }) {
+/** P83 — o aviso no lugar do saldo quando o recorte não é de contas (fazenda/atividade): saldo existe só por conta */
+export const AVISO_SEM_SALDO = 'Saldo existe só por conta — escolha contas para ver o saldo';
+
+export function CardVG({ tela, modo, sel, onAnalisar, ampliado = false, acao }: {
+  tela: TelaVG; modo: ModoVG; sel: string; onAnalisar: (a: AlvoAnaliseVG) => void;
+  /** P83 — no modal "ampliar": todas as linhas (os grupos sem valor inclusive), sem rolagem */
+  ampliado?: boolean;
+  /** o botão "ampliar" no canto do título */
+  acao?: ReactNode;
+}) {
   const k = tela.meses.findIndex((m) => m.am === sel);
   const mes = tela.meses[k];
   const v = (l: LinhaVG | undefined) => (l && k >= 0 ? l.valores[k] ?? null : null);
   const previsto = !!mes?.previsto;
   if (k < 0) return <div className="text-[10px] text-muted-foreground">O mês escolhido está fora do período.</div>;
   return modo === 'flx'
-    ? <CardFluxo tela={tela} k={k} sel={sel} v={v} previsto={previsto} vigente={!!mes?.vigente} onAnalisar={onAnalisar} />
-    : <CardGrupos tela={tela} lado={modo === 'sai' ? 'saida' : 'entrada'} k={k} sel={sel} v={v} previsto={previsto} onAnalisar={onAnalisar} />;
+    ? <CardFluxo tela={tela} k={k} sel={sel} v={v} previsto={previsto} vigente={!!mes?.vigente} onAnalisar={onAnalisar} ampliado={ampliado} acao={acao} />
+    : <CardGrupos tela={tela} lado={modo === 'sai' ? 'saida' : 'entrada'} k={k} sel={sel} v={v} previsto={previsto} onAnalisar={onAnalisar} ampliado={ampliado} acao={acao} />;
 }
 
-const Titulo = ({ children }: { children: ReactNode }) => (
-  <div className="flex h-[17px] shrink-0 items-baseline justify-between gap-2">
-    <span className="whitespace-nowrap text-[11.5px] font-bold" data-testid="card-vg-titulo">{children}</span>
-    <span className="whitespace-nowrap text-[9px] text-muted-foreground">clique para analisar</span>
+const Titulo = ({ children, acao }: { children: ReactNode; acao?: ReactNode }) => (
+  <div className="flex h-[16px] shrink-0 items-center justify-between gap-2">
+    <span className="whitespace-nowrap text-[11px] font-bold" data-testid="card-vg-titulo">{children}</span>
+    <span className="flex shrink-0 items-center gap-1.5">
+      <span className="whitespace-nowrap text-[8.5px] text-muted-foreground">clique para analisar</span>
+      {acao}
+    </span>
   </div>
 );
 
-function CardFluxo({ tela, k, sel, v, previsto, vigente, onAnalisar }: {
+/** P83 — os grupos do mês: com valor, na ordem do banco; os sem valor recolhidos numa linha (no ampliado, todos à vista) */
+const comValor = (g: LinhaVG, k: number) => (g.valores[k] ?? 0) !== 0;
+
+function CardFluxo({ tela, k, sel, v, previsto, vigente, onAnalisar, ampliado, acao }: {
   tela: TelaVG; k: number; sel: string; v: (l: LinhaVG | undefined) => number | null; previsto: boolean; vigente: boolean;
-  onAnalisar: (a: AlvoAnaliseVG) => void;
+  onAnalisar: (a: AlvoAnaliseVG) => void; ampliado: boolean; acao?: ReactNode;
 }) {
+  const semSaldo = !!tela.sem_saldo;
   const si = v(linhaDe(tela, 'saldo_inicial'));
   const sf = v(linhaDe(tela, 'saldo_final'));
   const res = v(linhaDe(tela, 'resultado'));
@@ -48,34 +64,52 @@ function CardFluxo({ tela, k, sel, v, previsto, vigente, onAnalisar }: {
   const bloco = (lado: LadoVG) => {
     const t = totalDe(tela, lado);
     const cor = lado === 'saida' ? COR.saida : COR.entrada;
+    const grupos = gruposDe(tela, lado);
+    const vistos = ampliado ? grupos : grupos.filter((g) => comValor(g, k));
+    const zerados = grupos.length - vistos.length;
     return (
       <>
         <tr className="cursor-pointer border-b-2 border-[#1b2430]" onClick={() => onAnalisar({ lado, grupo: null, am: sel })} data-testid={`card-total-${lado}`}>
           {/* P79 — quanto do mês é ATRASO: o vencido não realizado que entrou neste mês (do banco), ao lado do rótulo; sem vencido, nada */}
-          <td className="h-5 truncate px-1 text-[10px] font-bold" title={`${lado === 'saida' ? 'Saídas' : 'Entradas'}${venc(t) ? ` · dos quais vencidos ${brl(venc(t))}` : ''}`}>
+          <td className="h-[18px] truncate px-1 text-[9.5px] font-bold" title={`${lado === 'saida' ? 'Saídas' : 'Entradas'}${venc(t) ? ` · dos quais vencidos ${brl(venc(t))}` : ''}`}>
             {lado === 'saida' ? 'Saídas' : 'Entradas'} <span className="text-[#8d9cad]">›</span>
-            {venc(t) ? <span className="ml-1.5 text-[9.5px] font-semibold text-amber-700" data-testid={`card-vencido-${lado}`}>vencidos {brl(venc(t))}</span> : null}
+            {venc(t) ? <span className="ml-1.5 text-[9px] font-semibold text-amber-700" data-testid={`card-vencido-${lado}`}>vencidos {brl(venc(t))}</span> : null}
           </td>
-          <td className="h-5 whitespace-nowrap px-1 text-right text-[13px] font-bold tabular-nums" style={{ color: cor }} data-testid={`card-valor-${lado}`}>{brl(v(t))}</td>
-          <td className="h-5 whitespace-nowrap px-1 text-right text-[10px] font-bold tabular-nums" style={{ color: cor }}>{v(t) == null ? '' : '100%'}</td>
+          <td className="h-[18px] whitespace-nowrap px-1 text-right text-[12px] font-bold tabular-nums" style={{ color: cor }} data-testid={`card-valor-${lado}`}>{brl(v(t))}</td>
+          <td className="h-[18px] whitespace-nowrap px-1 text-right text-[9.5px] font-bold tabular-nums" style={{ color: cor }}>{v(t) == null ? '' : '100%'}</td>
         </tr>
-        {gruposDe(tela, lado).map((g, gi) => (
-          <tr key={g.chave} className="cursor-pointer border-b border-[#eef1f5] hover:bg-muted/40" onClick={() => onAnalisar({ lado, grupo: g.grupo ?? null, am: sel })}
-            data-testid={`card-grupo-${g.chave}`}>
-            <td className="h-[17px] truncate px-1 text-[10px]" title={`${g.rotulo} ›`}>
-              <i className="mr-1.5 inline-block h-2 w-2 rounded-sm align-middle" style={{ background: corDoGrupo(lado, gi) }} />{g.rotulo} <span className="text-[#8d9cad]">›</span>
+        {vistos.map((g) => {
+          const gi = grupos.indexOf(g);
+          return (
+            <tr key={g.chave} className="cursor-pointer border-b border-[#eef1f5] hover:bg-muted/40" onClick={() => onAnalisar({ lado, grupo: g.grupo ?? null, am: sel })}
+              data-testid={`card-grupo-${g.chave}`}>
+              <td className="h-[15px] truncate px-1 text-[9.5px] leading-[14px]" title={`${g.rotulo} ›`}>
+                <i className="mr-1.5 inline-block h-[7px] w-[7px] rounded-sm align-middle" style={{ background: corDoGrupo(lado, gi) }} />{g.rotulo} <span className="text-[#8d9cad]">›</span>
+              </td>
+              <td className="h-[15px] whitespace-nowrap px-1 text-right text-[9.5px] leading-[14px] tabular-nums" style={{ color: cor }}>{brl(v(g))}</td>
+              <td className="h-[15px] whitespace-nowrap px-1 text-right text-[9px] leading-[14px] tabular-nums" style={{ color: cor }}>{pct1(g.pct_mes?.[k])}</td>
+            </tr>
+          );
+        })}
+        {zerados > 0 && (
+          <tr className="border-b border-[#eef1f5]" data-testid={`card-zerados-${lado}`}>
+            <td colSpan={3} className="h-[15px] px-1 text-[9px] leading-[14px] text-muted-foreground"
+              title={grupos.filter((g) => !comValor(g, k)).map((g) => g.rotulo).join(', ')}>
+              + {zerados} {zerados === 1 ? 'grupo' : 'grupos'} sem valor no mês
             </td>
-            <td className="h-[17px] whitespace-nowrap px-1 text-right text-[10px] tabular-nums" style={{ color: cor }}>{brl(v(g))}</td>
-            <td className="h-[17px] whitespace-nowrap px-1 text-right text-[10px] tabular-nums" style={{ color: cor }}>{pct1(g.pct_mes?.[k])}</td>
           </tr>
-        ))}
+        )}
       </>
     );
   };
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <Titulo>Entradas e saídas · {rotuloMes(sel)}{previsto ? ' (previsto)' : ''}</Titulo>
-      <div className="mt-[3px] grid h-[17px] shrink-0 grid-cols-2 gap-2.5 text-[10px]">
+    <div className={cn('flex min-h-0 flex-col', !ampliado && 'h-full')}>
+      <Titulo acao={acao}>Entradas e saídas · {rotuloMes(sel)}{previsto ? ' (previsto)' : ''}</Titulo>
+      {/* P83 — o lugar do saldo existe sempre (a altura não muda); sem contas no recorte, o aviso fica nele */}
+      {semSaldo ? (
+        <div className="mt-[3px] flex h-[17px] shrink-0 items-center bg-[#fdf6e7] px-1.5 text-[9.5px] text-amber-800" data-testid="card-sem-saldo">{AVISO_SEM_SALDO}</div>
+      ) : (
+      <div className="mt-[3px] grid h-[17px] shrink-0 grid-cols-2 gap-2.5 text-[9.5px]">
         <span className="flex items-center justify-between bg-[#f1f3f6] px-1.5">
           <span className="whitespace-nowrap font-semibold">Saldo 1º/{rotuloMes(sel)}</span>
           <span className="whitespace-nowrap font-bold tabular-nums" style={{ color: corSinal(si) }} data-testid="card-saldo-inicial">{brl(si)}</span>
@@ -84,32 +118,37 @@ function CardFluxo({ tela, k, sel, v, previsto, vigente, onAnalisar }: {
           <span className="flex items-center justify-between bg-[#eaf4ec] px-1.5" data-testid="card-conciliado"
             title={tela.contas_sem_ancora.length ? `Contas sem saldo conciliado (fora do saldo): ${tela.contas_sem_ancora.join(', ')}` : 'A conta mais atrasada entre as escolhidas'}>
             <span className="whitespace-nowrap font-semibold">Conciliado até {dataCurta(tela.conciliado_ate)}</span>
-            <span className="whitespace-nowrap text-[9px] text-muted-foreground">{tela.contas_sem_ancora.length ? `${tela.contas_sem_ancora.length} sem saldo` : ''}</span>
+            <span className="whitespace-nowrap text-[8.5px] text-muted-foreground">{tela.contas_sem_ancora.length ? `${tela.contas_sem_ancora.length} sem saldo` : ''}</span>
           </span>
         ) : (
           <span className="flex items-center px-1.5 text-muted-foreground">{previsto ? 'mês previsto' : 'mês conciliado'}</span>
         )}
       </div>
-      <div className="mt-0.5 min-h-0 flex-1 overflow-y-auto" data-testid="card-vg-lista">
+      )}
+      <div className={cn('mt-0.5', ampliado ? '' : 'min-h-0 flex-1 overflow-y-auto')} data-testid="card-vg-lista">
         <table className="w-full table-fixed border-collapse">
-          <colgroup><col /><col style={{ width: 118 }} /><col style={{ width: 46 }} /></colgroup>
+          <colgroup><col /><col style={{ width: 112 }} /><col style={{ width: 42 }} /></colgroup>
           <tbody>{bloco('entrada')}{bloco('saida')}</tbody>
         </table>
       </div>
-      <div className="flex h-[18px] shrink-0 items-center justify-between px-1 text-[10.5px] font-bold">
+      <div className="flex h-[17px] shrink-0 items-center justify-between px-1 text-[10px] font-bold">
         <span>Resultado</span><span className="tabular-nums" style={{ color: corSinal(res) }} data-testid="card-resultado">{brl(res)}</span>
       </div>
-      <div className="flex h-[18px] shrink-0 items-center justify-between bg-[#f1f3f6] px-1 text-[10.5px] font-bold">
-        <span className="whitespace-nowrap">Saldo final{futuro ? ' previsto' : ''}</span>
-        <span className="tabular-nums" style={{ color: corSinal(sf) }} data-testid="card-saldo-final">{brl(sf)}</span>
+      <div className="flex h-[17px] shrink-0 items-center justify-between bg-[#f1f3f6] px-1 text-[10px] font-bold">
+        {semSaldo ? <span /> : (
+          <>
+            <span className="whitespace-nowrap">Saldo final{futuro ? ' previsto' : ''}</span>
+            <span className="tabular-nums" style={{ color: corSinal(sf) }} data-testid="card-saldo-final">{brl(sf)}</span>
+          </>
+        )}
       </div>
     </div>
   );
 }
 
-function CardGrupos({ tela, lado, k, sel, v, previsto, onAnalisar }: {
+function CardGrupos({ tela, lado, k, sel, v, previsto, onAnalisar, ampliado, acao }: {
   tela: TelaVG; lado: LadoVG; k: number; sel: string; v: (l: LinhaVG | undefined) => number | null; previsto: boolean;
-  onAnalisar: (a: AlvoAnaliseVG) => void;
+  onAnalisar: (a: AlvoAnaliseVG) => void; ampliado: boolean; acao?: ReactNode;
 }) {
   const t = totalDe(tela, lado);
   const outro = totalDe(tela, lado === 'saida' ? 'entrada' : 'saida');
@@ -125,7 +164,7 @@ function CardGrupos({ tela, lado, k, sel, v, previsto, onAnalisar }: {
   const fundo = fatias.length ? `conic-gradient(${fatias.join(', ')}, #eef1f5 ${acc}% 100%)` : '#eef1f5';
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <Titulo>{nome} por grupo · {rotuloMes(sel)}{previsto ? ' (previsto)' : ''}</Titulo>
+      <Titulo acao={acao}>{nome} por grupo · {rotuloMes(sel)}{previsto ? ' (previsto)' : ''}</Titulo>
       <div className="mt-[7px] flex min-h-0 flex-1 items-start gap-2.5">
         <div className="flex h-[86px] w-[86px] shrink-0 items-center justify-center rounded-full" style={{ background: fundo }} role="img" aria-label="Gráfico de rosca">
           <div className="flex h-[62px] w-[62px] flex-col items-center justify-center rounded-full bg-white text-center">
@@ -134,7 +173,7 @@ function CardGrupos({ tela, lado, k, sel, v, previsto, onAnalisar }: {
           </div>
         </div>
         <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
-          <div className="min-h-0 flex-1 overflow-y-auto" data-testid="card-vg-lista">
+          <div className={cn(ampliado ? '' : 'min-h-0 flex-1 overflow-y-auto')} data-testid="card-vg-lista">
             <table className="w-full table-fixed border-collapse">
               <colgroup><col /><col style={{ width: 112 }} /><col style={{ width: 42 }} /><col style={{ width: 50 }} /></colgroup>
               <tbody>
@@ -148,7 +187,7 @@ function CardGrupos({ tela, lado, k, sel, v, previsto, onAnalisar }: {
                   <td className="px-1">GRUPO</td><td className="px-1 text-right">{rotuloMes(sel).toUpperCase()}</td><td className="px-1 text-right">%</td>
                   <td className="whitespace-nowrap px-1 text-right">VS MÉDIA</td>
                 </tr>
-                {grupos.map((g, gi) => (
+                {grupos.map((g, gi) => (ampliado || comValor(g, k)) && (
                   <tr key={g.chave} className="cursor-pointer border-b border-[#eef1f5] hover:bg-muted/40" onClick={() => onAnalisar({ lado, grupo: g.grupo ?? null, am: sel })}
                     data-testid={`card-grupo-${g.chave}`}>
                     <td className="h-[21px] truncate px-1 text-[10.5px]" title={`${g.rotulo} ›`}>
@@ -160,6 +199,13 @@ function CardGrupos({ tela, lado, k, sel, v, previsto, onAnalisar }: {
                       data-testid={`card-vs-media-${g.chave}`}>{vsMedia(g.vs_media?.[k])}</td>
                   </tr>
                 ))}
+                {!ampliado && grupos.some((g) => !comValor(g, k)) && (
+                  <tr data-testid={`card-zerados-${lado}`}>
+                    <td colSpan={4} className="h-[15px] px-1 text-[9px] text-muted-foreground" title={grupos.filter((g) => !comValor(g, k)).map((g) => g.rotulo).join(', ')}>
+                      + {grupos.filter((g) => !comValor(g, k)).length} sem valor no mês
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -169,8 +215,12 @@ function CardGrupos({ tela, lado, k, sel, v, previsto, onAnalisar }: {
             <span className="whitespace-nowrap font-bold tabular-nums" style={{ color: corSinal(res) }}>Resultado {brl(res)}</span>
           </div>
           <div className="flex h-[18px] shrink-0 items-center justify-between gap-2 bg-[#f1f3f6] px-1 text-[10px]">
-            <span className="whitespace-nowrap">Saldo inicial <b className="tabular-nums" style={{ color: corSinal(si) }}>{brl(si)}</b></span>
-            <span className="whitespace-nowrap">Saldo final <b className="tabular-nums" style={{ color: corSinal(sf) }}>{brl(sf)}</b></span>
+            {tela.sem_saldo ? <span className="truncate text-[9.5px] text-amber-800" title={AVISO_SEM_SALDO} data-testid="card-sem-saldo">{AVISO_SEM_SALDO}</span> : (
+              <>
+                <span className="whitespace-nowrap">Saldo inicial <b className="tabular-nums" style={{ color: corSinal(si) }}>{brl(si)}</b></span>
+                <span className="whitespace-nowrap">Saldo final <b className="tabular-nums" style={{ color: corSinal(sf) }}>{brl(sf)}</b></span>
+              </>
+            )}
           </div>
         </div>
       </div>

@@ -11,6 +11,8 @@
  *   V7 P79: o aviso do que ficou fora vem do ECO do banco (status / incluir_vencidos), não do estado da tela
  *   V8 P79: o card mostra "vencidos R$ x" no total do lado, do banco, só quando há
  *   V9 P82: a linha "Pagamento de cartão (transferência)" vem do banco e fica entre as saídas e o RESULTADO; não abre análise
+ *   V10 P83: no card, os grupos sem valor no mês ficam numa linha só ("+ N grupos sem valor no mês"); no ampliado, todos à vista
+ *   V11 P83: o MESMO "ampliar" nos três blocos abre o modal com o bloco inteiro (a grade sem rolagem)
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render as renderCru, screen, fireEvent, waitFor, within } from '@testing-library/react';
@@ -174,5 +176,29 @@ describe('Visão Geral — render-only', () => {
     expect(celula('grade-total-cartao')).toBe('77');
     fireEvent.click(screen.getByTestId('grade-linha-cartao'));
     expect(onAnalisar).not.toHaveBeenCalled();
+  });
+
+  it('V10 os grupos sem valor no mês ficam numa linha só; ampliado, todos à vista', async () => {
+    const linhas = TELA.linhas.map((l) => (l.chave === 'saida:grupo:Outras saídas:' ? { ...l, valores: z(0) } : l));
+    rpc.mockImplementation(async (fn: string) => ({ data: fn === 'fn_vg_tela' ? { ...TELA, linhas } : { contas: [], atividades: [], safras: [] }, error: null }));
+    render(<VisaoGeralFinanceiro hoje="2026-02-15" />);
+    await screen.findByTestId('grade-vg');
+    expect(screen.queryByTestId('card-grupo-saida:grupo:Outras saídas:')).toBeNull();
+    expect(screen.getByTestId('card-zerados-saida').textContent).toContain('+ 1 grupo sem valor no mês');
+    expect(screen.getByTestId('card-grupo-saida:grupo:Custeio:')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('ampliar-card'));
+    const modal = await screen.findByTestId('modal-ampliado-card');
+    expect(within(modal).getByTestId('card-grupo-saida:grupo:Outras saídas:')).toBeTruthy();
+    expect(within(modal).queryByTestId('card-zerados-saida')).toBeNull();
+  });
+
+  it('V11 o mesmo ampliar nos três blocos; a grade ampliada não rola', async () => {
+    render(<VisaoGeralFinanceiro hoje="2026-02-15" />);
+    await screen.findByTestId('grade-vg');
+    for (const b of ['card', 'grafico', 'grade']) expect(screen.getByTestId(`ampliar-${b}`).getAttribute('aria-label')).toMatch(/^Ampliar /);
+    fireEvent.click(screen.getByTestId('ampliar-grade'));
+    const modal = await screen.findByTestId('modal-ampliado-grade');
+    expect(within(modal).getByTestId('grade-vg-ampliada').className).not.toContain('overflow');
+    expect(within(modal).getByTestId('grade-linha-saldo_final')).toBeTruthy();
   });
 });

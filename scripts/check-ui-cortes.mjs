@@ -127,6 +127,10 @@ const CENARIOS = [
     semRolagem: { dentro: '[data-testid="visao-geral"]', exceto: '[data-testid="grade-vg-rolagem"], [data-testid="card-vg-lista"]' },
     /* abaixo de 768px os filtros da barra somem (`hidden md:flex`): ali o gesto não existe e é pulado */
     antes: async (p) => { if (!(await p.locator('[data-testid="vg-atividade"]').isVisible())) return; await clicar('[data-testid="vg-atividade"]')(p); await clicar('[data-testid="vg-atividade-agricultura"]')(p); } },
+  /* P83 — o "ampliar" de cada bloco: o modal mostra o bloco inteiro, sem rolagem dentro dele */
+  ...['card', 'grafico', 'grade'].map((b) => ({ nome: `visao-geral-ampliado-${b}`, url: 'tela=visao-geral&barra=0', tamanhos: TAMANHOS_DA_VG, regiao: '[role="dialog"]',
+    semRolagem: { dentro: '[role="dialog"]' },
+    antes: async (p) => { await p.locator(`[data-testid="ampliar-${b}"]`).click(); await p.locator(`[data-testid="modal-ampliado-${b}"]`).waitFor(); await p.waitForTimeout(600); } })),
   /* P79 — os chips de status: nenhum status e vencidos desligado (o aviso mais longo), aberto pela URL (`vg_status=`, `vg_venc=0`) */
   { nome: 'visao-geral-sem-status', url: 'tela=visao-geral&barra=0&vg_status=&vg_venc=0', tamanhos: TAMANHOS_DA_VG,
     semRolagem: { dentro: '[data-testid="visao-geral"]', exceto: '[data-testid="grade-vg-rolagem"], [data-testid="card-vg-lista"]' } },
