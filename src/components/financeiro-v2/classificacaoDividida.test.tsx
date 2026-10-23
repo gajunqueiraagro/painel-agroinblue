@@ -4,7 +4,7 @@
  *   · dividido: a Geral mostra as PARTES no lugar do seletor de conta, e "Dividir… / Voltar para 1 conta / Desfazer" no título do bloco;
  *   · "Voltar para 1 conta" pede o motivo e chama a RPC; depois a classificação do modal é RELIDA do banco — o Salvar seguinte manda o
  *     que ficou gravado (a trava do banco recusa reclassificar direto);
- *   · a aba Itens da nota ganha a vista "Contas"; título de OC não divide; parcela divide no cadastro (sem Voltar/Desfazer).
+ *   · a aba Itens da nota ganha a vista "Contas"; título de OC não divide; parcela divide no cadastro e (P72) volta/desfaz pelo cadastro.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
@@ -30,7 +30,13 @@ const div = vi.hoisted(() => ({
   lerDivisao: vi.fn(async (_id: string): Promise<DivisaoLida | null> => null),
   voltarUmaConta: vi.fn(async (..._a: unknown[]) => ({ ok: true, valor: { frase: 'Volta inteiro para "Investimento em Instalações".', fraseNota: null, operacaoId: 'op2', partes: [] } })),
   classificacaoGravada: vi.fn(async (_id: string): Promise<Record<string, string | null> | null> => null),
+  /* P72 — voltar/desfazer pelo CADASTRO (a parcela) */
+  voltarUmaContaDoCadastro: vi.fn(async (..._a: unknown[]) => ({ ok: true, valor: { frase: 'As 4 parcelas voltam inteiras para "Investimento em Instalações".', fraseNota: null, operacaoId: null, partes: [] } })),
+  desfazerDivisaoDoCadastro: vi.fn(async (..._a: unknown[]) => ({ ok: true, valor: { frase: 'Desfaz a última operação (a divisão) nas 4 parcelas desta compra.', fraseNota: null, operacaoId: null, partes: [] } })),
 }));
+/* P72 — as irmas da parcela (4 vivas e 1 cancelada): o aviso diz "as 4 parcelas" */
+vi.mock('@/lib/financeiro/documentosPendentes', async (orig) => ({ ...(await orig<object>()),
+  irmasDaParcela: async () => [1, 2, 3, 4, 5].map((numero) => ({ numero, lancamentoId: `p${numero}`, vencimento: null, valor: 100, cancelada: numero === 5, temBoleto: false })) }));
 vi.mock('@/lib/financeiro/divisaoDaClassificacao', async (orig) => ({ ...(await orig<object>()), ...div }));
 const ITENS = vi.hoisted(() => [154000, 100000, 105500].map((liquidoCent, k) => ({ nItem: k + 1, codigo: `C${k + 1}`, descricao: `Item ${k + 1}`, liquidoCent })));
 vi.mock('@/hooks/useItensDaNota', () => ({
@@ -76,7 +82,7 @@ beforeEach(() => {
   Element.prototype.hasPointerCapture = () => false;
   Element.prototype.releasePointerCapture = () => {};
   div.lerDivisao.mockReset(); div.lerDivisao.mockImplementation(async () => null);
-  div.voltarUmaConta.mockClear(); div.classificacaoGravada.mockReset(); div.classificacaoGravada.mockImplementation(async () => null);
+  div.voltarUmaConta.mockClear(); div.voltarUmaContaDoCadastro.mockClear(); div.desfazerDivisaoDoCadastro.mockClear(); div.classificacaoGravada.mockReset(); div.classificacaoGravada.mockImplementation(async () => null);
 });
 
 function montar(lancamento: LancamentoV2) {
@@ -145,13 +151,45 @@ describe('Geral — a classificação dividida', () => {
     expect(screen.queryByTestId('acoes-da-divisao')).toBeNull();
   });
 
-  it('parcela de compra parcelada: só "Dividir…" (no cadastro); o modal avisa que todas as parcelas recebem a mesma proporção', async () => {
+  it('parcela de compra parcelada: "Dividir…" (no cadastro) e, P72, "Voltar para 1 conta" e "Desfazer"; o dividir avisa a mesma proporção', async () => {
     div.lerDivisao.mockImplementation(async () => DIVIDIDO);
     montar({ ...LANC, financiamento_id: 'fin-1' } as LancamentoV2);
     await screen.findByTestId('partes-da-classificacao');
-    expect(within(screen.getByTestId('acoes-da-divisao')).getAllByRole('button').map((b) => b.textContent)).toEqual(['Dividir…']);
+    expect(within(screen.getByTestId('acoes-da-divisao')).getAllByRole('button').map((b) => b.textContent)).toEqual(['Dividir…', 'Voltar para 1 conta', 'Desfazer']);
     fireEvent.click(screen.getByTestId('divisao-dividir'));
     expect((await screen.findByTestId('dividir-aviso-parcelas')).textContent).toBe('Compra parcelada: a divisão é do cadastro — todas as parcelas recebem a mesma proporção.');
+  });
+});
+
+/* P72 — na parcela, voltar e desfazer valem pelo CADASTRO: o aviso diz "as N parcelas", a previa e' a do banco nas N, e depois a
+   classificacao e' relida do banco */
+describe('P72 — a parcela volta e desfaz pelo cadastro', () => {
+  const PARCELA = { ...LANC, financiamento_id: 'fin-1' } as LancamentoV2;
+  it('"Voltar para 1 conta": "vale para as 4 parcelas", a prévia do banco nas N, a RPC do CADASTRO e a classificação relida', async () => {
+    div.lerDivisao.mockImplementation(async () => DIVIDIDO);
+    montar(PARCELA);
+    await screen.findByTestId('partes-da-classificacao');
+    fireEvent.click(screen.getByTestId('divisao-voltar'));
+    const dialogo = await screen.findByTestId('divisao-motivo');
+    await waitFor(() => expect(dialogo.textContent).toContain('Vale para as 4 parcelas desta compra (o cadastro): todas voltam inteiras para a maior parte.'));
+    await waitFor(() => expect(screen.getByTestId('divisao-previa').textContent).toBe('As 4 parcelas voltam inteiras para "Investimento em Instalações".'));
+    expect(div.voltarUmaContaDoCadastro).toHaveBeenCalledWith('nj', 'fin-1', null, 'prévia', true);
+    fireEvent.change(screen.getByTestId('divisao-motivo-texto'), { target: { value: 'tudo numa conta' } });
+    fireEvent.click(screen.getByTestId('divisao-confirmar'));
+    await waitFor(() => expect(div.voltarUmaContaDoCadastro).toHaveBeenLastCalledWith('nj', 'fin-1', null, 'tudo numa conta', false));
+    expect(div.voltarUmaConta).not.toHaveBeenCalled();
+    await waitFor(() => expect(div.classificacaoGravada).toHaveBeenCalledWith('lanc-sel'));
+  });
+  it('"Desfazer": a prévia do banco ("nas 4 parcelas") e a RPC do cadastro; nunca o desfazer de UMA parcela', async () => {
+    div.lerDivisao.mockImplementation(async () => DIVIDIDO);
+    montar(PARCELA);
+    await screen.findByTestId('partes-da-classificacao');
+    fireEvent.click(screen.getByTestId('divisao-desfazer'));
+    await waitFor(() => expect(screen.getByTestId('divisao-previa').textContent).toBe('Desfaz a última operação (a divisão) nas 4 parcelas desta compra.'));
+    fireEvent.change(screen.getByTestId('divisao-motivo-texto'), { target: { value: 'errei' } });
+    fireEvent.click(screen.getByTestId('divisao-confirmar'));
+    await waitFor(() => expect(div.desfazerDivisaoDoCadastro).toHaveBeenLastCalledWith('nj', 'fin-1', 'errei', false));
+    await waitFor(() => expect(div.classificacaoGravada).toHaveBeenCalledWith('lanc-sel'));
   });
 });
 
