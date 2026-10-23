@@ -174,8 +174,9 @@ describe('fonte: todo import() dinâmico passa pelo dono', () => {
     }
     expect(crus).toEqual([]);
     /* 12 pedaços sob demanda (+1 no OC-DOC-ESPECIE-ABATE-01 passo 4: o pdfjs de `extrairLinhasPdf`) + 3 telas em lazy(
-       + 2 no FIN-NOTA-PDF-01: o pdfjs de `itensDoPdf` (a leitura do DANFE) e o de `PreviaDaNota` (a folha desenhada) */
-    expect(tratados).toBe(17);
+       + 2 no FIN-NOTA-PDF-01: o pdfjs de `itensDoPdf` (a leitura do DANFE) e o de `PreviaDaNota` (a folha desenhada)
+       + 3 no P90 (PDF da grade da Visão Geral): o gerador sob demanda (`CabecalhoGradeVG`) e, nele, o react-pdf e o documento */
+    expect(tratados).toBe(20);
   });
   it('quem usa o dono o importa ESTATICAMENTE', () => {
     for (const p of arquivos(resolve(process.cwd(), 'src'))) {
