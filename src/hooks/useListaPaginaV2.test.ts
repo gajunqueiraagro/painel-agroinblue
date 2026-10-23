@@ -5,6 +5,8 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 type Resolver = (v: { data: unknown; error: unknown }) => void;
 const banco: { pedidos: { args: Record<string, unknown>; resolver: Resolver }[]; nomes: { id: string; nome: string }[]; idsPedidos: string[][] } =
@@ -114,5 +116,83 @@ describe('useListaPaginaV2', () => {
     expect(result.current.erro).toBe(FRASE_LISTA_INDISPONIVEL);
     expect(result.current.pagina).toBeNull();
     erro.mockRestore();
+  });
+});
+
+/* P73 — salvou UM lançamento: o canal traz o id e a lista relê SÓ essa linha (`so_ids`); os totais só quando o que mudou mexe neles */
+describe('P73 — salvou, relê só o lançamento', () => {
+  const ordem = { campo: 'default', dir: 'asc', nivel: 'centro' };
+  const linha = (id: string, extra: Record<string, unknown> = {}) => ({ id, cliente_id: 'cli', favorecido_id: null, valor: 10, conciliado: false, ...extra });
+  const completa = (linhas: Record<string, unknown>[], total = 300, entradas = 9) => ({
+    versao: 't', pagina: 0, por_pagina: 200, total_linhas: total, linhas,
+    totais: { entradas, saidas: 0, transferencias: 0, entradas_sem_caixa: 0, saidas_sem_caixa: 0 }, sem_caixa: { linhas: 0, total: 0 }, fornecedores: { fx: 4 },
+  });
+  const soIds = (linhas: Record<string, unknown>[]) => ({ total_linhas: null, linhas, totais: null, sem_caixa: null, contagens: null, fornecedores: null });
+  async function montar(linhas: Record<string, unknown>[], filtros: Record<string, unknown> = { anos: [2026] }) {
+    const h = renderHook(() => useListaPaginaV2('cli', { ...pedido(0), filtros }, true));
+    await act(async () => { banco.pedidos[0].resolver({ data: completa(linhas), error: null }); });
+    return h;
+  }
+
+  it('só a descrição mudou: UMA ida com `so_ids`, a linha trocada NO LUGAR, os totais guardados', async () => {
+    const { result } = await montar([linha('a'), linha('b', { descricao: 'antes' }), linha('c')]);
+    act(() => { notificarLancamentosMudaram('cli', null, ['b']); });
+    expect(banco.pedidos[1].args.p_ordem).toEqual({ ...ordem, so_ids: ['b'] });
+    await act(async () => { banco.pedidos[1].resolver({ data: soIds([linha('b', { descricao: 'depois', conciliado: true })]), error: null }); });
+    expect(banco.pedidos).toHaveLength(2);
+    expect(result.current.pagina?.linhas.map((l) => `${l.id}:${l.descricao ?? ''}`)).toEqual(['a:', 'b:depois', 'c:']);
+    expect(result.current.pagina?.conciliados.has('b')).toBe(true);
+    expect(result.current.pagina?.totais.entradas).toBe(9);
+    expect(result.current.pagina?.total).toBe(300);
+  });
+
+  it('o valor mudou: segunda ida com `so_ids_totais`, e os totais da tela passam a ser os novos', async () => {
+    const { result } = await montar([linha('a'), linha('b')]);
+    act(() => { notificarLancamentosMudaram('cli', null, ['b']); });
+    await act(async () => { banco.pedidos[1].resolver({ data: soIds([linha('b', { valor: 25 })]), error: null }); });
+    expect(banco.pedidos[2].args.p_ordem).toEqual({ ...ordem, so_ids: ['b'], so_ids_totais: true });
+    await act(async () => { banco.pedidos[2].resolver({ data: completa([linha('b', { valor: 25 })], 300, 24), error: null }); });
+    expect(result.current.pagina?.totais.entradas).toBe(24);
+    expect(result.current.pagina?.linhas.map((l) => `${l.id}:${l.valor}`)).toEqual(['a:10', 'b:25']);
+  });
+
+  it('dividido com filtro de conta: relê os totais mesmo sem o valor mudar (o total soma a PARTE)', async () => {
+    await montar([linha('a', { classificacao_dividida: true })], { anos: [2026], subcentro: 'S' });
+    act(() => { notificarLancamentosMudaram('cli', null, ['a']); });
+    await act(async () => { banco.pedidos[1].resolver({ data: soIds([linha('a', { classificacao_dividida: true })]), error: null }); });
+    expect(banco.pedidos[2].args.p_ordem).toEqual({ ...ordem, so_ids: ['a'], so_ids_totais: true });
+  });
+
+  it('id fora da página (lançamento novo), a linha saiu do recorte, ou o total mudou: relê a página COMPLETA', async () => {
+    await montar([linha('a'), linha('b')]);
+    act(() => { notificarLancamentosMudaram('cli', null, ['zz']); });
+    expect(banco.pedidos[1].args.p_ordem).toEqual(ordem);
+    await act(async () => { banco.pedidos[1].resolver({ data: completa([linha('a'), linha('b')]), error: null }); });
+    act(() => { notificarLancamentosMudaram('cli', null, ['b']); });
+    await act(async () => { banco.pedidos[2].resolver({ data: soIds([]), error: null }); });
+    expect(banco.pedidos[3].args.p_ordem).toEqual(ordem);
+    await act(async () => { banco.pedidos[3].resolver({ data: completa([linha('a'), linha('b')]), error: null }); });
+    act(() => { notificarLancamentosMudaram('cli', null, ['b']); });
+    await act(async () => { banco.pedidos[4].resolver({ data: soIds([linha('b', { valor: 1 })]), error: null }); });
+    await act(async () => { banco.pedidos[5].resolver({ data: completa([linha('b', { valor: 1 })], 299), error: null }); });
+    expect(banco.pedidos[6].args.p_ordem).toEqual(ordem);
+  });
+
+  it('uma releitura completa em voo: o aviso com ids não a derruba — relê completa, e a resposta dela escreve', async () => {
+    const { result } = await montar([linha('a'), linha('b')]);
+    act(() => { notificarLancamentosMudaram('cli'); });
+    act(() => { notificarLancamentosMudaram('cli', null, ['a']); });
+    expect(banco.pedidos[2].args.p_ordem).toEqual(ordem);
+    await act(async () => { banco.pedidos[2].resolver({ data: completa([linha('a', { valor: 7 }), linha('b')], 300, 3), error: null }); });
+    expect(result.current.pagina?.totais.entradas).toBe(3);
+  });
+
+  it('quem grava UM lançamento manda o id: o editar do Financeiro e a divisão de um lançamento', () => {
+    const fin = readFileSync(resolve(__dirname, './useFinanceiroV2.ts'), 'utf8');
+    expect(fin.match(/toast\.success\('Lançamento atualizado'\); avisarOsOutros\(\[id\]\);/g)).toHaveLength(2);
+    const div = readFileSync(resolve(__dirname, '../lib/financeiro/divisaoDaClassificacao.ts'), 'utf8');
+    expect(div).toContain("'A divisão não foi feita.', [alvo.lancamentoId]);");
+    expect(div).toContain("'A classificação não voltou para uma conta.', [lancamentoId]);");
+    expect(div).toContain('notificarLancamentosMudaram(clienteId, null, ids);');
   });
 });
