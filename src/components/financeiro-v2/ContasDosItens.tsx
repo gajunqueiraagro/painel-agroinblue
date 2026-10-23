@@ -7,7 +7,8 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { PlanoSubcentroSelect } from '@/components/shared/PlanoSubcentroSelect';
+import { EscolherConta } from '@/components/shared/EscolherConta';
+import type { Atividade } from '@/lib/financeiro/ultimaAtividade';
 import { QUADRO_REGUA } from '@/components/ui/regua-tabela';
 import type { ClassificacaoItem } from '@/hooks/useFinanceiroV2';
 import type { ItemFiscal } from '@/lib/financeiro/nfe/itensDaNota';
@@ -23,21 +24,20 @@ const TD = 'h-[14px] px-1 py-0 text-[8.5px] leading-none';
 const GATILHO = 'h-[12px] rounded-sm px-1 text-[8px] leading-none [&_svg]:h-2 [&_svg]:w-2';
 const pct = (v: number) => `${v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
 
-function ContaDoItem({ valor, classificacoes, tipoOperacao, onEscolher, nItem, disabled }: {
+/* SELETOR-CONTA-POR-ATIVIDADE-01 — o `EscolherConta`: a atividade primeiro (a da conta do item, senao a do lancamento), a busca filtrada */
+function ContaDoItem({ valor, classificacoes, tipoOperacao, onEscolher, nItem, disabled, atividadeSugerida }: {
   valor: string; classificacoes: ClassificacaoItem[]; tipoOperacao: string; onEscolher: (planoContaId: string) => void; nItem: number; disabled?: boolean;
+  atividadeSugerida: Atividade | null;
 }) {
-  const [busca, setBusca] = useState('');
-  const sub = classificacoes.find((c) => c.id === valor)?.subcentro ?? '';
   return (
     <div data-testid={`conta-do-item-${nItem}`}>
-      <PlanoSubcentroSelect value={sub} onChange={() => undefined} onSelected={(_s, cls) => { if (cls?.id) onEscolher(cls.id); }}
-        classificacoes={classificacoes} tipoOperacao={tipoOperacao} search={busca} onSearchChange={setBusca} disabled={disabled}
-        triggerClassName={GATILHO} itemClassName="text-[10.5px]" />
+      <EscolherConta valor={valor} onEscolher={(c) => onEscolher(c.id)} classificacoes={classificacoes} tipoOperacao={tipoOperacao} disabled={disabled}
+        atividadeSugerida={atividadeSugerida} triggerClassName={GATILHO} itemClassName="text-[10.5px]" />
     </div>
   );
 }
 
-export function ContasDosItens({ itens, classificacoes, tipoOperacao, contaDeHoje, sugeridas, gravando, somenteLeitura, onDividir }: {
+export function ContasDosItens({ itens, classificacoes, tipoOperacao, contaDeHoje, sugeridas, gravando, somenteLeitura, onDividir, atividadeSugerida = null }: {
   itens: readonly Pick<ItemFiscal, 'nItem' | 'descricao' | 'liquidoCent'>[];
   classificacoes: ClassificacaoItem[];
   tipoOperacao: string;
@@ -49,6 +49,8 @@ export function ContasDosItens({ itens, classificacoes, tipoOperacao, contaDeHoj
   somenteLeitura?: boolean;
   /** pede o motivo e chama o banco (quem chama e' o modal) */
   onDividir: (mapa: ReadonlyMap<number, string>) => void;
+  /** a atividade do lancamento: a barra do seletor nasce nela quando o item ainda nao tem conta */
+  atividadeSugerida?: Atividade | null;
 }) {
   const inicial = useMemo(() => {
     const m = new Map<number, string>();
@@ -120,6 +122,7 @@ export function ContasDosItens({ itens, classificacoes, tipoOperacao, contaDeHoj
                         <i className="h-2 w-2 shrink-0 rounded-full" style={{ background: c ? cor(c) : 'transparent', outline: c ? undefined : '1px dashed #d97706' }} />
                         <div className="min-w-0 flex-1">
                           <ContaDoItem nItem={i.nItem} valor={c} classificacoes={classificacoes} tipoOperacao={tipoOperacao} disabled={somenteLeitura || gravando}
+                            atividadeSugerida={atividadeSugerida}
                             onEscolher={(p) => setMapa((m) => new Map(m).set(i.nItem, p))} />
                         </div>
                       </div>
