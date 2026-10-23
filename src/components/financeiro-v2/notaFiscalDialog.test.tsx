@@ -536,7 +536,7 @@ const jaLancado = (n: number, venc: string, status: string, extra: Partial<Lanca
   id: `velho-${n}`, vencimento: venc, pagamento: status === 'realizado' ? venc : null, competencia: '2026-09-15', descricao: `Insumos Sinteticos ${n}/4`,
   valorCent: 49164, status, conciliado: status === 'realizado', financiamentoId: 'fin-antigo', numeroDocumento: null,
   fornecedorId: LINEAGRO_SEM_CNPJ, fornecedorNome: 'Agro Sintetica Insumos SA', fornecedorPor: 'nome',
-  parcelas: [{ n, difCent: 0, difDias: 0 }], por: ['valor'], ...extra,
+  parcelas: [{ n, difCent: 0, difDias: 0 }], por: ['valor'], cancelado: false, ...extra,
 });
 const QUATRO = [jaLancado(1, '2026-10-20', 'realizado'), jaLancado(2, '2026-11-20', 'realizado'), jaLancado(3, '2026-12-20', 'realizado', { valorCent: 49165, parcelas: [{ n: 3, difCent: 1, difDias: 0 }] }),
   jaLancado(4, '2027-01-20', 'programado')];
@@ -623,6 +623,30 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
     expect(screen.getByTestId('nota-ja-lancada-frase').textContent).toBe('Esta nota parece já lançada em parcelas: achada 1 de 4 (R$ 491,64 cada). Nada será criado em dobro.');
     expect(screen.queryByTestId('nota-criar-faltam')).toBeNull();
     expect(screen.getByTestId('nota-anexar-ja-lancados').textContent).toBe('Anexar a nota a este');
+  });
+  /* NOTA-CONTAS-NA-CRIACAO-01 D (P76) — os lancamentos antigos da nota foram CANCELADOS (o caso de 23/10): aparecem cinza, no fim, com o
+     selo, e nunca contam */
+  const CANCELADOS = [jaLancado(1, '2026-10-20', 'programado', { id: 'canc-1', cancelado: true, parcelas: [], por: ['chave'] }),
+    jaLancado(2, '2026-11-20', 'agendado', { id: 'canc-2', cancelado: true, parcelas: [], por: ['numero', 'chave'] })];
+  it('D — com os vivos: os 2 cancelados no FIM, com o selo "cancelado" (nunca o status antigo); a frase e o Anexar contam so\' os 4', async () => {
+    consultas.notaJaLancada.mockResolvedValue([...CANCELADOS, ...QUATRO]);
+    abrir(montarNota({ fornecedores: [FORN] }));
+    const bloco = await screen.findByTestId('nota-ja-lancada');
+    expect(within(bloco).getAllByTestId('nota-ja-lancada-linha')).toHaveLength(4);
+    const linhas = within(bloco).getAllByRole('row').slice(1);
+    expect(linhas.slice(4).map((r) => r.getAttribute('data-testid'))).toEqual(['nota-ja-lancada-cancelado', 'nota-ja-lancada-cancelado']);
+    expect(within(linhas[4]).getByTestId('nota-selo-cancelado').textContent).toBe('cancelado');
+    expect(linhas[4].textContent).not.toContain('programado');
+    expect(linhas[5].textContent).not.toContain('agendado');
+    expect(screen.getByTestId('nota-ja-lancada-frase').textContent).toContain('4 de 4 parcelas');
+    expect(screen.getByTestId('nota-anexar-ja-lancados').textContent).toBe('Anexar a nota a estes 4');
+  });
+  it('D — so\' cancelados: a nota NAO esta\' lancada — "Criar 4 parcelas" e o rodape diz "Há 2 lançamentos cancelados desta nota (não contam)"', async () => {
+    consultas.notaJaLancada.mockResolvedValue(CANCELADOS);
+    abrir(montarNota({ fornecedores: [FORN] }));
+    expect((await screen.findByTestId('nota-so-cancelados')).textContent).toBe(' Há 2 lançamentos cancelados desta nota (não contam).');
+    expect(screen.queryByTestId('nota-ja-lancada')).toBeNull();
+    expect(screen.getByTestId('nota-criar').textContent).toBe('Criar 4 parcelas');
   });
   it('nada achado: o de sempre ("Criar 4 parcelas"), sem o bloco', async () => {
     abrir(montarNota({ fornecedores: [FORN] }));
