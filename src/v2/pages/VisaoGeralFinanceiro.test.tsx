@@ -6,9 +6,16 @@
  *   V3 clicar num total ou grupo (grade ou card) só registra a intenção — nada abre (o modal é o PR 4)
  *   V4 "Sem classificação" e "Transferências para outras contas" aparecem quando o banco as manda; o vencido marca o mês vigente
  *   V5 trocar o mês pela pílula muda o card sem pedir de novo ao banco (o ano é o mesmo)
+ *   V6 P79: os chips (a mesma peça da CPR) só REPASSAM ao banco: padrão os três status e vencidos; desligar Programado pede sem ele;
+ *      desligar Vencidos pede p_incluir_vencidos = false
+ *   V7 P79: o aviso do que ficou fora vem do ECO do banco (status / incluir_vencidos), não do estado da tela
+ *   V8 P79: o card mostra "vencidos R$ x" no total do lado, do banco, só quando há
+ *   V9 P82: a linha "Pagamento de cartão (transferência)" vem do banco e fica entre as saídas e o RESULTADO; não abre análise
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { render as renderCru, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import type { ReactElement } from 'react';
 
 const rpc = vi.hoisted(() => vi.fn());
 vi.mock('@/integrations/supabase/client', () => ({ supabase: { rpc, from: () => ({}) } }));
@@ -38,8 +45,12 @@ const TELA = {
   grafico: { entrada: { media_acumulada: z(null), meta: z(null) }, saida: { media_acumulada: z(null), meta: z(null) } },
   conciliado_ate: '2026-02-11',
   contas_sem_ancora: [],
+  status: ['previsto', 'programado', 'agendado'],
+  incluir_vencidos: true,
 };
 
+/* o filtro de status mora na URL (`useFiltroUrl`): a tela precisa do roteador */
+const render = (el: ReactElement) => renderCru(<MemoryRouter>{el}</MemoryRouter>);
 const celula = (id: string) => screen.getByTestId(id).textContent?.replace(/\s+/g, ' ').trim();
 
 beforeEach(() => {
@@ -75,7 +86,8 @@ describe('Visão Geral — render-only', () => {
     await screen.findByTestId('grade-vg');
     expect(screen.getByTestId('card-vg-titulo').textContent).toBe('Entradas e saídas · fev/26');
     const pedido = rpc.mock.calls.find((c) => c[0] === 'fn_vg_tela')![1];
-    expect(pedido).toMatchObject({ p_cliente: 'cli', p_de: '2026-01-01', p_ate: '2026-12-31', p_contas: null, p_atividade: null, p_hoje: '2026-02-15' });
+    expect(pedido).toMatchObject({ p_cliente: 'cli', p_de: '2026-01-01', p_ate: '2026-12-31', p_contas: null, p_atividade: null, p_hoje: '2026-02-15',
+      p_status: ['previsto', 'programado', 'agendado'], p_incluir_vencidos: true });
   });
 
   it('V3 clicar em total ou grupo só registra a intenção — nada abre', async () => {
@@ -107,5 +119,60 @@ describe('Visão Geral — render-only', () => {
     await waitFor(() => expect(screen.getByTestId('card-vg-titulo').textContent).toBe('Entradas e saídas · abr/26 (previsto)'));
     expect(celula('card-valor-entrada')).toBe('R$ 400,00');
     expect(rpc.mock.calls.filter((c) => c[0] === 'fn_vg_tela').length).toBe(pedidos);
+  });
+
+  const ultimoPedido = () => rpc.mock.calls.filter((c) => c[0] === 'fn_vg_tela').at(-1)![1];
+  it('V6 os chips só repassam ao banco: desligar Programado tira o status do pedido', async () => {
+    render(<VisaoGeralFinanceiro hoje="2026-02-15" />);
+    await screen.findByTestId('grade-vg');
+    expect(screen.getByTestId('vg-status-programado').getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(screen.getByTestId('vg-status-programado'));
+    await waitFor(() => expect(ultimoPedido()).toMatchObject({ p_status: ['previsto', 'agendado'], p_incluir_vencidos: true }));
+  });
+  it('V6 desligar Vencidos pede p_incluir_vencidos = false', async () => {
+    render(<VisaoGeralFinanceiro hoje="2026-02-15" />);
+    await screen.findByTestId('grade-vg');
+    expect(screen.getByTestId('vg-status-vencidos').getAttribute('aria-pressed')).toBe('true');
+    fireEvent.click(screen.getByTestId('vg-status-vencidos'));
+    await waitFor(() => expect(ultimoPedido()).toMatchObject({ p_status: ['previsto', 'programado', 'agendado'], p_incluir_vencidos: false }));
+    expect(screen.getByTestId('vg-status-vencidos').getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('V7 o aviso vem do eco do banco', async () => {
+    rpc.mockImplementation(async (fn: string) => ({ data: fn === 'fn_vg_tela' ? { ...TELA, status: [], incluir_vencidos: false } : { contas: [], atividades: [], safras: [] }, error: null }));
+    render(<VisaoGeralFinanceiro hoje="2026-02-15" />);
+    await screen.findByTestId('grade-vg');
+    const aviso = screen.getByTestId('vg-status-aviso').textContent ?? '';
+    expect(aviso).toBe('só o realizado nas somas · vencidos antes de 15/02 fora das somas e do saldo');
+    /* a tela pediu os padrões; quem disse que ficou de fora foi o banco */
+    expect(ultimoPedido()).toMatchObject({ p_status: ['previsto', 'programado', 'agendado'], p_incluir_vencidos: true });
+  });
+  it('V7 com o eco padrão, nenhum aviso', async () => {
+    render(<VisaoGeralFinanceiro hoje="2026-02-15" />);
+    await screen.findByTestId('grade-vg');
+    expect(screen.getByTestId('vg-status-aviso').textContent).toBe('');
+  });
+
+  it('V8 o card mostra o vencido do mês no total do lado, do banco', async () => {
+    render(<VisaoGeralFinanceiro hoje="2026-02-15" />);
+    await screen.findByTestId('grade-vg');
+    expect(celula('card-vencido-saida')).toBe('vencidos R$ 30,00');
+    expect(screen.queryByTestId('card-vencido-entrada')).toBeNull();
+  });
+
+  it('V9 a linha do pagamento de cartão: do banco, entre as saídas e o resultado, sem análise', async () => {
+    const onAnalisar = vi.fn();
+    const linhas = [...TELA.linhas];
+    linhas.splice(linhas.findIndex((l) => l.chave === 'resultado'), 0,
+      { chave: 'cartao', tipo: 'cartao', rotulo: 'PAGAMENTO DE CARTÃO (transferência)', valores: M.map((_, i) => 31 + i), total: 77, media: 6 } as any);
+    rpc.mockImplementation(async (fn: string) => ({ data: fn === 'fn_vg_tela' ? { ...TELA, linhas } : { contas: [], atividades: [], safras: [] }, error: null }));
+    render(<VisaoGeralFinanceiro hoje="2026-02-15" onAnalisar={onAnalisar} />);
+    await screen.findByTestId('grade-vg');
+    const tipos = Array.from(document.querySelectorAll('[data-testid^="grade-linha-"]')).map((tr) => tr.getAttribute('data-tipo'));
+    expect(tipos.slice(-3)).toEqual(['cartao', 'resultado', 'saldo']);
+    expect(celula('grade-celula-cartao-2026-02')).toBe('32');
+    expect(celula('grade-total-cartao')).toBe('77');
+    fireEvent.click(screen.getByTestId('grade-linha-cartao'));
+    expect(onAnalisar).not.toHaveBeenCalled();
   });
 });

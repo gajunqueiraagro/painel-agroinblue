@@ -29,6 +29,8 @@ import { useFinanceiroV2, type LancamentoV2 } from '@/hooks/useFinanceiroV2';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
 import { PageHeader } from '@/components/ui/page-header';
 import { Segmentado } from '@/components/ui/segmentado';
+import { TextoReservado, reservaDeNumero } from '@/components/ui/regua-tabela';
+import { ChipsDeStatus, STATUS_DISPONIVEIS, STATUS_INICIAIS, alternarNaLista, pilulasDosStatus } from '@/components/financeiro-v2/ChipsDeStatus';
 import { CprFluxoPrevisto } from '@/components/financeiro-v2/CprFluxoPrevisto';
 import { esperarGraficoNoDom, AVISO_PDF_SEM_GRAFICO, TAMANHO_DO_GRAFICO_NO_PDF } from '@/lib/pdf/cpr/graficoDoDom';
 import { lerEstimadosDaCpr } from '@/lib/financeiro/estimadosDaCprBanco';
@@ -37,7 +39,7 @@ import { DatePicker } from '@/components/ui/date-picker';
 import {
   ATALHOS_CPR, periodoDoAtalho, recortarCpr, ramoDaConsultaCpr, doSegmentoCpr, contaEmAberto,
   ehReceberCpr, contaDaConta, resumoPorContaCpr, contasDaFaixaCpr, SEM_CONTA, ehTransferenciaCpr, chaveDaLinhaCpr, type ContaCpr,
-  ancorasDoCaixaCpr, serieDoSaldoCpr, ordenarDoDiaCpr, totaisDeHojeCpr, linhasDoSaldoCpr, resumoPorSemanaCpr, saldoPorContaCpr, contaEstimadaCpr, somarDiasIso,
+  ancorasDoCaixaCpr, serieDoSaldoCpr, realizadoComCartoesCpr, ordenarDoDiaCpr, totaisDeHojeCpr, linhasDoSaldoCpr, resumoPorSemanaCpr, saldoPorContaCpr, contaEstimadaCpr, somarDiasIso,
   rodapeDoPeriodoCpr, contagemDoRodapeCpr,
   type AtalhoCpr, type PeriodoCpr, type FiltroContaCpr,
 } from '@/lib/financeiro/cprRecorte';
@@ -89,8 +91,8 @@ type Agrupamento = 'vencimento' | 'categoria';
 const agrupamento: Agrupamento = 'vencimento';
 
 /** Os três status que a tela liga de saída. `realizado` existe e nasce DESLIGADO. */
-const STATUS_DISPONIVEIS = ['previsto', 'programado', 'agendado', 'realizado'] as const;
-const STATUS_INICIAIS: string[] = ['previsto', 'programado', 'agendado'];
+/* P79 — as pílulas de status e o padrão moram no componente compartilhado (a Visão Geral usa o MESMO) */
+const PILULAS_DA_CPR = pilulasDosStatus(STATUS_DISPONIVEIS);
 
 /**
  * O corte do destaque — R$ 100.000.
@@ -188,6 +190,9 @@ const MOTIVO_SALDO_DOIS_LADOS = 'saldo considera a pagar e a receber';
  */
 /** CPR-CONTA-01: quantas contas a faixa do resumo desenha antes do "+N" — MEDIDO a 1.126px (ver CLAUDE.md). */
 const MAX_CONTAS_NA_FAIXA = 4;
+/* P80 (Gabriel 23/10) — o valor de cada conta da faixa "A pagar por conta" ocupa SEMPRE a largura do maior valor possível (até
+   R$ 9.999.999.999,99): trocar o período ("Este mês") mudava o valor e a largura do botão, e os vizinhos andavam (ui-desloca). */
+const RESERVA_DO_VALOR_NA_FAIXA = `R$\u00a0${reservaDeNumero(10)},99`;
 const FONTE_STATUS = 'text-[9px]';
 /** Subcentro, Safra, Faz. e datas: 9,5px (o piso global) — CPR-SALDO-DIA-01. */
 const FONTE_FINA = 'text-[9.5px]';
@@ -435,6 +440,18 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
    * último mês que CONCILIA e soma os realizados desde aquela posição: R$ 198.299,74, o mesmo
    * que a Conciliação mostra. Quem decide é `estimarSaldoEmCaixa`, que é puro e testado.
    */
+  /* P82 — os cartões do cliente e o saldo deles hoje (a fatura em aberto), pela MESMA regra do banco que a Visão Geral usa
+     (`fn_cpr_cartoes`): a ponta no cartão conta como dentro do caixa e o saldo entra na série em "todas as contas". */
+  const { data: cartoesDoCliente } = useQuery({
+    queryKey: ['cpr-cartoes', clienteId, isoLocal(hoje)],
+    enabled: !!clienteId,
+    queryFn: async (): Promise<{ ids: ReadonlySet<string>; saldo: number }> => {
+      const { data, error } = await (supabase.rpc as any)('fn_cpr_cartoes', { p_cliente: clienteId, p_hoje: isoLocal(hoje) });
+      if (error) throw error;
+      return { ids: new Set<string>((data?.ids ?? []) as string[]), saldo: Number(data?.saldo ?? 0) };
+    },
+  });
+  const cartoes = cartoesDoCliente?.ids;
   const { data: caixaTodas } = useQuery({
     queryKey: ['cpr-caixa', clienteId, isoLocal(hoje)],
     enabled: !!clienteId,
@@ -666,8 +683,8 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
   const tituloDoSelo = tituloDoEstimado(estimadasDoCliente ? origensPresentes(estimadasDoCliente) : undefined, avisoEstimadasIncompleto);
   const tituloDoSeloDaLinha = (id: string) => tituloDoEstimado(estimadasDoCliente?.origens.get(id), avisoEstimadasIncompleto);
   const recorte = useMemo(
-    () => recortarCpr(linhas, { periodo, hoje: hojeIso, conta: contaSel, ancoras, estimadas }),
-    [linhas, periodo, hojeIso, contaSel, ancoras, estimadas]);
+    () => recortarCpr(linhas, { periodo, hoje: hojeIso, conta: contaSel, ancoras, estimadas, cartoes }),
+    [linhas, periodo, hojeIso, contaSel, ancoras, estimadas, cartoes]);
   /* A SÉRIE DO SALDO — do dono, a partir do MESMO número do cartão Caixa. */
   /* CPR-PDF-ACABAMENTO-01 — o REALIZADO do período (Caixa inicial + o que entrou e saiu por dia, até hoje): do MESMO dono do cartão
      Caixa, sobre a MESMA entrada dele e as mesmas contas (uma, ou todas). Nulo quando o dono não responde na véspera do período. */
@@ -678,13 +695,15 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
       : caixaTodas.argumentos;
     return realizadoDoCaixa(args, periodo.de, periodo.ate);
   }, [caixaTodas, caixaDeUmaConta, contaSel, periodo.de, periodo.ate]);
+  /* P82 — em "todas as contas" a série é a do caixa + o saldo dos cartões (o conjunto da Visão Geral); o cartão Caixa segue sem ele */
+  const saldoDosCartoes = contaSel == null ? (cartoesDoCliente?.saldo ?? 0) : 0;
   const serie = useMemo(
-    () => serieDoSaldoCpr(recorte, caixa && caixa.ancoradas > 0 ? caixa.total : null, realizado),
-    [recorte, caixa, realizado]);
+    () => serieDoSaldoCpr(recorte, caixa && caixa.ancoradas > 0 ? caixa.total + saldoDosCartoes : null, realizadoComCartoesCpr(realizado, saldoDosCartoes)),
+    [recorte, caixa, realizado, saldoDosCartoes]);
   /* o resumo por conta (opções do seletor e a faixa): do MESMO dono, sobre os MESMOS dados, sempre de TODAS as contas */
   const recorteDeTodas = useMemo(
-    () => (contaSel == null ? recorte : recortarCpr(linhas, { periodo, hoje: hojeIso, ancoras, estimadas })),
-    [recorte, contaSel, linhas, periodo, hojeIso, ancoras, estimadas]);
+    () => (contaSel == null ? recorte : recortarCpr(linhas, { periodo, hoje: hojeIso, ancoras, estimadas, cartoes })),
+    [recorte, contaSel, linhas, periodo, hojeIso, ancoras, estimadas, cartoes]);
   /* quem teve movimento realizado no período (do dono do caixa, sempre de TODAS as contas): entra no seletor em qualquer pílula */
   const comRealizado = useMemo(
     () => (caixaTodas ? contasComRealizadoNoPeriodo(caixaTodas.argumentos, periodo.de, periodo.ate) : []),
@@ -1159,29 +1178,8 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
     </div>
   );
   const ctlStatus = (
-    <div className="flex shrink-0 items-center gap-1" data-testid="cpr-status">
-      {STATUS_DISPONIVEIS.map((s) => {
-        const ligado = statusLigados.includes(s);
-        return (
-          <button
-            key={s}
-            type="button"
-            aria-pressed={ligado}
-            onClick={() => setStatusLigados((atual) =>
-              atual.includes(s) ? atual.filter((x) => x !== s) : [...atual, s])}
-            className={cn(
-              'rounded-md border font-medium transition-colors',
-              ampliado ? 'h-[16px] px-1.5 text-[9.5px] leading-none' : 'h-[22px] px-2 text-[10px]',
-              ligado
-                ? 'bg-primary text-primary-foreground border-primary'
-                : 'bg-transparent text-muted-foreground hover:bg-muted',
-            )}
-          >
-            {STATUS_FILTRO_LABEL[s] ?? s}
-          </button>
-        );
-      })}
-    </div>
+    <ChipsDeStatus pilulas={PILULAS_DA_CPR} ligados={statusLigados} compacto={ampliado}
+      onAlternar={(st) => setStatusLigados((atual) => alternarNaLista(atual, st))} />
   );
 
 
@@ -1536,7 +1534,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
               className={cn('flex h-[16px] shrink-0 items-center gap-1 rounded px-1.5 transition-colors',
                 contaSel === c.conta ? 'bg-primary text-primary-foreground' : 'text-foreground hover:bg-muted')}>
               <span className="uma-linha-que-rola max-w-[96px]">{nomeConta(c.conta)}</span>
-              <span className="tabular-nums" data-valor-da-faixa>{formatMoeda(c.pagar.valor)}</span>
+              <TextoReservado texto={formatMoeda(c.pagar.valor)} reserva={RESERVA_DO_VALOR_NA_FAIXA} alinhar="direita" testid="valor-da-faixa" />
             </button>
           ))}
           {contasNaFaixa.length > MAX_CONTAS_NA_FAIXA && (

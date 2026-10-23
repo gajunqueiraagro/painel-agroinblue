@@ -123,7 +123,8 @@ describe('uma regra só, e a tela só desenha (lido da FONTE)', () => {
   it('a tela entrega o conjunto ao dono, lê as duas fatias dele e não julga', () => {
     const f = fonte('src/components/financeiro-v2/ContasPagarReceberTab.tsx');
     expect(f).toContain("queryKey: ['cpr-estimadas', clienteId],");
-    expect(f.match(/recortarCpr\(linhas, \{[^}]*estimadas \}\)/g)).toHaveLength(2);
+    /* P82: o recorte leva também os cartões do banco (`cartoes`), depois das estimadas */
+    expect(f.match(/recortarCpr\(linhas, \{[^}]*estimadas, cartoes \}\)/g)).toHaveLength(2);
     expect(f).toContain('const estimada = !paga && contaEstimadaCpr(l, estimadas);');
     expect(f).toContain('const temEstimado = recorte.aPagarEstimado.valor > 0;');
     for (const proibido of ['valor_do_mes', 'tipo_valor', 'ocorrenciaEstimada']) expect(`${proibido}:${f.includes(proibido)}`).toBe(`${proibido}:false`);

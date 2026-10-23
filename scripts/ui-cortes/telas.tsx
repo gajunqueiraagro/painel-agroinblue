@@ -7,7 +7,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import '@/index.css';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter } from 'react-router-dom';
+import { BrowserRouter, MemoryRouter } from 'react-router-dom';
 import { MesclarFornecedoresDialog } from '@/components/financeiro-v2/MesclarFornecedoresDialog';
 import { FornecedorFormDialog } from '@/components/financeiro-v2/FornecedorFormDialog';
 import { FinV2FornecedoresTab } from '@/pages/FinV2FornecedoresTab';
@@ -125,6 +125,9 @@ const Casca = ({ children }: { children?: React.ReactNode }) => (
     <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}><div style={{ height: BARRA, flexShrink: 0, background: BARRA === 32 ? '#1e3a5f' : '#e9edf2' }} />
       <div data-casca="" style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>{children}</div></div></div>);
 const montar = (n: React.ReactNode) => raiz.render(<QueryClientProvider client={qc}><MemoryRouter><Casca>{n}</Casca></MemoryRouter></QueryClientProvider>);
+/* P79 — a tela cujo filtro mora na URL (`useFiltroUrl` lê `window.location`) monta no roteador do NAVEGADOR, como no app: no de memória
+   dois cliques seguidos não se somariam */
+const montarNaUrl = (n: React.ReactNode) => raiz.render(<QueryClientProvider client={qc}><BrowserRouter><Casca>{n}</Casca></BrowserRouter></QueryClientProvider>);
 
 g.__fornecedoresBancada = LEITOR;
 const bancoDeFornecedores = {
@@ -416,7 +419,7 @@ if (tela === 'mesclar') {
     fazendaAtual: null, isGlobal: true, fazendaId: '__global__', setFazendaAtual: () => {} };
   g.__bancoBancada = { from: () => [], rpc: (fn: string, a: any) => fn === 'fn_vg_filtros' ? (g.__vgFiltrosReal ?? VG.FILTROS)
     : fn === 'fn_vg_tela' ? (g.__vgReal ?? VG.tela(a)) : null };
-  montar(
+  montarNaUrl(
     <div className="flex h-full flex-col">
       <BarraSecao area="Financeiro" secao="Visão Geral" atalho={<FiltrosBarraVG />} />
       <div className="min-h-0 flex-1"><VisaoGeralFinanceiro hoje="2026-10-22" onAnalisar={(x) => { g.__vgIntencao = x; }}
