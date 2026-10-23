@@ -25,12 +25,13 @@ import { CardVG } from '@/components/financeiro-v2/visaoGeral/CardVG';
 import { GraficoVG } from '@/components/financeiro-v2/visaoGeral/GraficoVG';
 import { GradeVG } from '@/components/financeiro-v2/visaoGeral/GradeVG';
 import { AmpliarVG } from '@/components/financeiro-v2/visaoGeral/AmpliarVG';
+import { SeletorCriterioVG } from '@/components/financeiro-v2/visaoGeral/SeletorCriterioVG';
 import { ChipsDeStatus, STATUS_INICIAIS, alternarNaLista, pilulasDosStatus } from '@/components/financeiro-v2/ChipsDeStatus';
 import { useFiltroUrl } from '@/v2/hooks/useFiltroUrl';
 import {
   COR, MESES_ABR, amDe, amHoje, anoDe, contarMeses, corSinal, faixaDoPeriodo, mil1, primeiroDia, rotuloMes, somarMeses, ultimoDia,
   dataCurta, escreverStatusVG, escreverVencidosVG, lerStatusVG, lerVencidosVG,
-  type AlvoAnaliseVG, type FaixaVG, type ModoVG, type TelaVG,
+  type AlvoAnaliseVG, type CriterioTelaVG, type FaixaVG, type ModoVG, type TelaVG,
 } from '@/lib/financeiro/visaoGeral';
 
 /* as pílulas: os três status não realizados (o realizado entra sempre, sem pílula) e a dos vencidos */
@@ -53,6 +54,8 @@ export function VisaoGeralFinanceiro({ hoje = hojeLocal(), onAnalisar, inicial }
   const [per, setPer] = useState<[string, string]>([inicial?.de ?? somarMeses(atual, -9), inicial?.ate ?? somarMeses(atual, 2)]);
   const [de, ate] = faixaDoPeriodo(faixa, sel, per[0], per[1]);
   const [tela, setTela] = useState<TelaVG | null>(null);
+  /* P90 — mês · média · acumulado: o card, a grade e os ampliados (a série vem do banco; trocar não pede nada de novo) */
+  const [criterio, setCriterio] = useState<CriterioTelaVG>('mes');
   const [erro, setErro] = useState<string | null>(null);
   const [, setIntencao] = useState<AlvoAnaliseVG | null>(null);
   const clienteId = clienteAtual?.id ?? null;
@@ -119,6 +122,7 @@ export function VisaoGeralFinanceiro({ hoje = hojeLocal(), onAnalisar, inicial }
         <span className="uma-linha-que-rola min-w-0 flex-1 text-[10px] text-amber-700" data-testid="vg-status-aviso" data-desloca-livre="">
           {pronta ? avisoDoFiltro(pronta, hoje) : ''}
         </span>
+        <SeletorCriterioVG valor={criterio} onEscolher={setCriterio} />
       </div>
 
       {/* QUADROS — linhas da grade do quadro pela janela (nunca pelo conteúdo) */}
@@ -126,9 +130,10 @@ export function VisaoGeralFinanceiro({ hoje = hojeLocal(), onAnalisar, inicial }
         <div className="grid min-h-0 gap-2" style={{ gridTemplateColumns: 'clamp(430px, 43%, 560px) minmax(0, 1fr)' }}>
           <section className="min-h-0 overflow-hidden rounded-md border border-[#dfe4ea] bg-white px-2.5 py-[7px]" data-testid="vg-card" data-desloca="">
             <div className="h-full" data-desloca-livre="">
-              {pronta ? <CardVG tela={pronta} modo={modo} sel={sel} onAnalisar={analisar}
-                acao={<AmpliarVG titulo={`${modo === 'flx' ? 'Entradas e saídas' : modo === 'sai' ? 'Saídas por grupo' : 'Entradas por grupo'} · ${rotuloMes(sel)}`} testid="card" largura="w-[min(640px,96vw)]">
-                  {() => <CardVG tela={pronta} modo={modo} sel={sel} onAnalisar={analisar} ampliado />}</AmpliarVG>} /> : <Estado erro={erro} />}
+              {pronta ? <CardVG tela={pronta} modo={modo} sel={sel} onAnalisar={analisar} criterio={criterio}
+                acao={<AmpliarVG titulo={`${modo === 'flx' ? 'Entradas e saídas' : modo === 'sai' ? 'Saídas por grupo' : 'Entradas por grupo'} · ${rotuloMes(sel)}`} testid="card" largura="w-[min(640px,96vw)]"
+                  extra={<SeletorCriterioVG valor={criterio} onEscolher={setCriterio} testid="vg-criterio-ampliado-card" />}>
+                  {() => <CardVG tela={pronta} modo={modo} sel={sel} onAnalisar={analisar} ampliado criterio={criterio} />}</AmpliarVG>} /> : <Estado erro={erro} />}
             </div>
           </section>
           <section className="flex min-h-0 min-w-0 flex-col rounded-md border border-[#dfe4ea] bg-white pb-1 pl-2.5 pr-2 pt-[7px]" data-testid="vg-grafico" data-desloca="">
@@ -148,8 +153,10 @@ export function VisaoGeralFinanceiro({ hoje = hojeLocal(), onAnalisar, inicial }
         </div>
         <section className="min-h-0 overflow-hidden rounded-md border border-[#dfe4ea] bg-white" data-testid="vg-grade" data-desloca="">
           <div className="h-full" data-desloca-livre="">
-            {pronta ? <GradeVG tela={pronta} sel={sel} onAnalisar={analisar}
-              acao={<AmpliarVG titulo="Entradas e saídas · grade" testid="grade" corpo="px-3">{() => <GradeVG tela={pronta} sel={sel} onAnalisar={analisar} ampliado />}</AmpliarVG>} />
+            {pronta ? <GradeVG tela={pronta} sel={sel} onAnalisar={analisar} criterio={criterio}
+              acao={<AmpliarVG titulo="Entradas e saídas · grade" testid="grade" corpo="px-3"
+                extra={<SeletorCriterioVG valor={criterio} onEscolher={setCriterio} testid="vg-criterio-ampliado-grade" />}>
+                {() => <GradeVG tela={pronta} sel={sel} onAnalisar={analisar} ampliado criterio={criterio} />}</AmpliarVG>} />
               : <Estado erro={erro} />}
           </div>
         </section>

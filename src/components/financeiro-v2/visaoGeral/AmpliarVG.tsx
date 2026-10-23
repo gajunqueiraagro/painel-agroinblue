@@ -8,8 +8,10 @@ import { useState, type ReactNode } from 'react';
 import { Maximize2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
-export function AmpliarVG({ titulo, testid, children, largura = 'w-[min(1400px,96vw)]', corpo = 'p-3' }: {
+export function AmpliarVG({ titulo, testid, children, largura = 'w-[min(1400px,96vw)]', corpo = 'p-3', extra }: {
   titulo: string; testid: string; children: () => ReactNode;
+  /** P90 — controles no canto direito do título do modal (o seletor de critério, o PDF) */
+  extra?: ReactNode;
   /** a largura fixa do modal (o card, estreito, cabe num print de celular) */
   largura?: string;
   /** o respiro do corpo — a grade usa só o lateral: o cabeçalho dela (preso) encosta no topo, sem vão */
@@ -25,8 +27,9 @@ export function AmpliarVG({ titulo, testid, children, largura = 'w-[min(1400px,9
       </button>
       <Dialog open={aberto} onOpenChange={setAberto}>
         <DialogContent className={`flex h-[min(92vh,900px)] ${largura} max-w-none flex-col gap-0 p-0`} data-testid={`modal-ampliado-${testid}`}>
-          <DialogHeader className="h-9 shrink-0 justify-center bg-primary px-3">
-            <DialogTitle className="text-[13px] font-semibold text-primary-foreground">{titulo}</DialogTitle>
+          <DialogHeader className="flex h-9 shrink-0 flex-row items-center justify-between gap-3 space-y-0 bg-primary pl-3 pr-10">
+            <DialogTitle className="truncate text-[13px] font-semibold text-primary-foreground" title={titulo}>{titulo}</DialogTitle>
+            {extra && <div className="flex shrink-0 items-center gap-2 rounded bg-white/95 px-1 py-0.5">{extra}</div>}
           </DialogHeader>
           <div className={`flex min-h-0 flex-1 flex-col overflow-auto bg-white ${corpo}`}>{aberto ? children() : null}</div>
         </DialogContent>

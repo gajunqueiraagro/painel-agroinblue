@@ -23,6 +23,10 @@ export interface LinhaVG {
   vencidos?: number[];
   pct_mes?: (number | null)[];
   vs_media?: (number | null)[];
+  /** P90 — as séries do critério, do banco: soma e média do início do período até o mês; a parte no total do lado no mesmo intervalo */
+  valores_acum?: (number | null)[];
+  valores_media?: (number | null)[];
+  pct_acum?: (number | null)[];
   total?: number | null;
   media?: number | null;
   pct?: number | null;
@@ -46,6 +50,15 @@ export interface ContaVG { id: string; nome: string; tipo: string; ativa: boolea
 export interface FiltrosVG { contas: ContaVG[]; atividades: string[]; safras: { id: string; nome: string }[] }
 
 /** o que a tela pede ao clicar num total ou grupo — o modal de análise é o PR 4; aqui só a intenção */
+/** P90 — o seletor "mês · média · acumulado" do card, da grade e dos ampliados (SPEC §4: média e acumulado do início do período até o
+    mês escolhido). A tela NÃO soma nem divide: escolhe a série que o banco já mandou. Saldo é posição: não tem média nem acumulado. */
+export type CriterioTelaVG = 'mes' | 'media' | 'acumulado';
+export const serieDoCriterio = (l: LinhaVG, c: CriterioTelaVG): (number | null)[] =>
+  l.tipo === 'saldo' || c === 'mes' ? l.valores : (c === 'media' ? l.valores_media : l.valores_acum) ?? l.valores;
+export const pctDoCriterio = (l: LinhaVG, c: CriterioTelaVG): (number | null)[] | undefined => (c === 'mes' ? l.pct_mes : l.pct_acum);
+export const rotuloDoCriterio = (c: CriterioTelaVG, de: string, ate: string) =>
+  c === 'mes' ? rotuloMes(ate) : `${c === 'media' ? 'média' : 'acumulado'} ${rotuloMes(de)}–${rotuloMes(ate)}`;
+
 export interface AlvoAnaliseVG { lado: LadoVG; grupo: string | null; am: string }
 
 export const MESES_ABR = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'] as const;
