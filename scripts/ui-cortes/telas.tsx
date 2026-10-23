@@ -602,7 +602,7 @@ if (tela === 'mesclar') {
     const { NotaFiscalDialog } = await import('@/components/financeiro-v2/NotaFiscalDialog');
     const { arquivoPdfDaNota } = await import('@/components/financeiro-v2/NovoDeXmlDialog');
     const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: [841.89, 595.28] });
-    for (const it of (v === 'semdup' ? danfeSinteticoSemDuplicata() : v === 'avulsa' ? danfeSinteticoAvulsa() : PAGINAS_DANFE_SINTETICO)[0]) {
+    for (const it of (v === 'semdup' || v === 'emparcela' ? danfeSinteticoSemDuplicata() : v === 'avulsa' ? danfeSinteticoAvulsa() : PAGINAS_DANFE_SINTETICO)[0]) {
       const str = v === 'diverge' && it.str === 'Nº 000.000.937' ? 'Nº 000.000.938' : it.str;
       doc.setFontSize(Math.max(4, it.h * 1.15));
       doc.text(str, it.x, 595.28 - it.y);
@@ -620,7 +620,7 @@ if (tela === 'mesclar') {
       lido.nota.totais = { ...lido.nota.totais, notaCent: 99999999 * 12, descontoCent: 99999999 };
     }
     const forn = { id: 'agro-s', nome: 'Agro Sintetica Insumos Agropecuarios Ltda', cpf_cnpj: '11.222.333/0004-24', fazenda_id: null, ativo: true, tipo_recebimento: null } as any;
-    const fornecedores = ['cadastrado', 'registrada', 'lavoura', 'semdup', 'parcelar'].includes(v) ? [forn] : [];
+    const fornecedores = ['cadastrado', 'registrada', 'lavoura', 'semdup', 'parcelar', 'emparcela'].includes(v) ? [forn] : [];
     const resolucao = resolverEmitente(lido.nota.emitente, fornecedores, null);
     const ultima = v === 'cadastrado' || v === 'parcelar' ? { plano_conta_id: 'pl-nut', subcentro: 'Nutrição Engorda', macro_custo: 'Custeio Produtivo', grupo_custo: 'Nutrição', centro_custo: 'Suplementação', escopo_negocio: 'pecuaria', data: '2026-08-14' }
       : v === 'lavoura' ? { plano_conta_id: 'pl-lav', subcentro: 'Insumos Lavoura — Defensivos e Fertilizantes', macro_custo: 'Custeio Produtivo', grupo_custo: 'Custeio Lavoura', centro_custo: 'Insumos', escopo_negocio: 'agricultura', data: '2026-08-14', safra_id: 's-soja', cultura: 'soja' }
@@ -648,7 +648,14 @@ if (tela === 'mesclar') {
           parcelas: [{ n: i + 1, dif_cent: 0, dif_dias: 0 }], por: ['valor'] })),
         { id: 'jl-irma', vencimento: '2026-10-20', valor_cent: 49165, status: 'realizado', conciliado: true, fornecedor_id: 'sem-cnpj',
           fornecedor_nome: 'Cooperativa Sintetica', fornecedor_por: 'nome', parcelas: [{ n: 1, dif_cent: 1, dif_dias: 0 }], por: ['valor'] },
-      ] : null,
+      ]
+        /* NOTA-CONTAS-NA-CRIACAO-01 C — `v=emparcela`: a nota SEM duplicata ja' lancada como UMA parcela de 4 (valor x 4 = a nota), achada
+           pelo numero escrito de outro jeito ("NF_000.000.937"). Dados SINTETICOS. */
+        : fn === 'fn_nota_ja_lancada' && v === 'emparcela' ? [{ id: 'jl-p1', vencimento: '2026-10-20', pagamento: null, competencia: '2026-09-15',
+          descricao: 'Medicamentos Bovinos Sinteticos — lançado à mão como uma parcela da nota', valor_cent: 49164, status: 'agendado', conciliado: false,
+          financiamento_id: null, numero_documento: 'NF_000.000.937', fornecedor_id: 'agro-s', fornecedor_nome: 'Agro Sintetica Insumos Agropecuarios Ltda',
+          fornecedor_por: 'cnpj', parcelas: [], por: ['numero'] }]
+        : null,
     };
     const receita = async () => ({ ok: true as const, dados: { razaoSocial: v === 'longo' ? lido.nota.emitente.nome : 'AGRO SINTETICA INSUMOS AGROPECUARIOS LTDA', fantasia: '',
       municipio: 'Campo Grande', uf: 'MS', logradouro: 'Rua das Flores', numero: '100', complemento: 'Sala 1', bairro: 'Centro', cep: '79000-000', matrizFilial: 'FILIAL' } });
