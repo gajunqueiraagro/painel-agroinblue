@@ -71,29 +71,29 @@ function CardFluxo({ tela, k, sel, v, previsto, vigente, onAnalisar, ampliado, a
       <>
         <tr className="cursor-pointer border-b-2 border-[#1b2430]" onClick={() => onAnalisar({ lado, grupo: null, am: sel })} data-testid={`card-total-${lado}`}>
           {/* P79 — quanto do mês é ATRASO: o vencido não realizado que entrou neste mês (do banco), ao lado do rótulo; sem vencido, nada */}
-          <td className="h-[18px] truncate px-1 text-[9.5px] font-bold" title={`${lado === 'saida' ? 'Saídas' : 'Entradas'}${venc(t) ? ` · dos quais vencidos ${brl(venc(t))}` : ''}`}>
+          <td className="h-[14px] truncate px-1 text-[9px] font-bold leading-[13px]" title={`${lado === 'saida' ? 'Saídas' : 'Entradas'}${venc(t) ? ` · dos quais vencidos ${brl(venc(t))}` : ''}`}>
             {lado === 'saida' ? 'Saídas' : 'Entradas'} <span className="text-[#8d9cad]">›</span>
             {venc(t) ? <span className="ml-1.5 text-[9px] font-semibold text-amber-700" data-testid={`card-vencido-${lado}`}>vencidos {brl(venc(t))}</span> : null}
           </td>
-          <td className="h-[18px] whitespace-nowrap px-1 text-right text-[12px] font-bold tabular-nums" style={{ color: cor }} data-testid={`card-valor-${lado}`}>{brl(v(t))}</td>
-          <td className="h-[18px] whitespace-nowrap px-1 text-right text-[9.5px] font-bold tabular-nums" style={{ color: cor }}>{v(t) == null ? '' : '100%'}</td>
+          <td className="h-[14px] whitespace-nowrap px-1 text-right text-[11px] font-bold leading-[13px] tabular-nums" style={{ color: cor }} data-testid={`card-valor-${lado}`}>{brl(v(t))}</td>
+          <td className="h-[14px] whitespace-nowrap px-1 text-right text-[9px] font-bold leading-[13px] tabular-nums" style={{ color: cor }}>{v(t) == null ? '' : '100%'}</td>
         </tr>
         {vistos.map((g) => {
           const gi = grupos.indexOf(g);
           return (
             <tr key={g.chave} className="cursor-pointer border-b border-[#eef1f5] hover:bg-muted/40" onClick={() => onAnalisar({ lado, grupo: g.grupo ?? null, am: sel })}
               data-testid={`card-grupo-${g.chave}`}>
-              <td className="h-[15px] truncate px-1 text-[9.5px] leading-[14px]" title={`${g.rotulo} ›`}>
-                <i className="mr-1.5 inline-block h-[7px] w-[7px] rounded-sm align-middle" style={{ background: corDoGrupo(lado, gi) }} />{g.rotulo} <span className="text-[#8d9cad]">›</span>
+              <td className="h-[12px] truncate px-1 text-[9px] leading-[11px]" title={`${g.rotulo} ›`}>
+                <i className="mr-1.5 inline-block h-[6px] w-[6px] rounded-sm align-middle" style={{ background: corDoGrupo(lado, gi) }} />{g.rotulo} <span className="text-[#8d9cad]">›</span>
               </td>
-              <td className="h-[15px] whitespace-nowrap px-1 text-right text-[9.5px] leading-[14px] tabular-nums" style={{ color: cor }}>{brl(v(g))}</td>
-              <td className="h-[15px] whitespace-nowrap px-1 text-right text-[9px] leading-[14px] tabular-nums" style={{ color: cor }}>{pct1(g.pct_mes?.[k])}</td>
+              <td className="h-[12px] whitespace-nowrap px-1 text-right text-[9px] leading-[11px] tabular-nums" style={{ color: cor }}>{brl(v(g))}</td>
+              <td className="h-[12px] whitespace-nowrap px-1 text-right text-[8.5px] leading-[11px] tabular-nums" style={{ color: cor }}>{pct1(g.pct_mes?.[k])}</td>
             </tr>
           );
         })}
         {zerados > 0 && (
           <tr className="border-b border-[#eef1f5]" data-testid={`card-zerados-${lado}`}>
-            <td colSpan={3} className="h-[15px] px-1 text-[9px] leading-[14px] text-muted-foreground"
+            <td colSpan={3} className="h-[12px] px-1 text-[8.5px] leading-[11px] text-muted-foreground"
               title={grupos.filter((g) => !comValor(g, k)).map((g) => g.rotulo).join(', ')}>
               + {zerados} {zerados === 1 ? 'grupo' : 'grupos'} sem valor no mês
             </td>
@@ -135,10 +135,10 @@ function CardFluxo({ tela, k, sel, v, previsto, vigente, onAnalisar, ampliado, a
           <tbody>{bloco('entrada')}{bloco('saida')}</tbody>
         </table>
       </div>
-      <div className="flex h-[17px] shrink-0 items-center justify-between px-1 text-[10px] font-bold">
+      <div className="flex h-[16px] shrink-0 items-center justify-between px-1 text-[10px] font-bold">
         <span>Resultado</span><span className="tabular-nums" style={{ color: corSinal(res) }} data-testid="card-resultado">{brl(res)}</span>
       </div>
-      <div className="flex h-[17px] shrink-0 items-center justify-between bg-[#f1f3f6] px-1 text-[10px] font-bold">
+      <div className="flex h-[16px] shrink-0 items-center justify-between bg-[#f1f3f6] px-1 text-[10px] font-bold">
         {semSaldo ? <span /> : (
           <>
             <span className="whitespace-nowrap">Saldo final{futuro ? ' previsto' : ''}</span>
@@ -182,9 +182,9 @@ function CardGrupos({ tela, lado, k, sel, v, previsto, onAnalisar, ampliado, aca
               <colgroup><col /><col style={{ width: 112 }} /><col style={{ width: 42 }} /><col style={{ width: 50 }} /></colgroup>
               <tbody>
                 <tr className="cursor-pointer border-b-2 border-[#1b2430]" onClick={() => onAnalisar({ lado, grupo: null, am: sel })} data-testid={`card-total-${lado}`}>
-                  <td className="h-[26px] truncate px-1 text-[10.5px] font-bold" title={`${nome} totais`}>{nome} totais <span className="text-[#8d9cad]">›</span></td>
-                  <td className="h-[26px] whitespace-nowrap px-1 text-right text-[13px] font-bold tabular-nums" style={{ color: cor }} data-testid={`card-valor-${lado}`}>{brl(v(t))}</td>
-                  <td className="h-[26px] whitespace-nowrap px-1 text-right text-[10px] font-bold tabular-nums" style={{ color: cor }}>{v(t) == null ? '' : '100%'}</td>
+                  <td className="h-[20px] truncate px-1 text-[10px] font-bold" title={`${nome} totais`}>{nome} totais <span className="text-[#8d9cad]">›</span></td>
+                  <td className="h-[20px] whitespace-nowrap px-1 text-right text-[12px] font-bold tabular-nums" style={{ color: cor }} data-testid={`card-valor-${lado}`}>{brl(v(t))}</td>
+                  <td className="h-[20px] whitespace-nowrap px-1 text-right text-[9.5px] font-bold tabular-nums" style={{ color: cor }}>{v(t) == null ? '' : '100%'}</td>
                   <td />
                 </tr>
                 <tr className="text-[7.5px] text-muted-foreground">
@@ -194,18 +194,18 @@ function CardGrupos({ tela, lado, k, sel, v, previsto, onAnalisar, ampliado, aca
                 {grupos.map((g, gi) => (ampliado || comValor(g, k)) && (
                   <tr key={g.chave} className="cursor-pointer border-b border-[#eef1f5] hover:bg-muted/40" onClick={() => onAnalisar({ lado, grupo: g.grupo ?? null, am: sel })}
                     data-testid={`card-grupo-${g.chave}`}>
-                    <td className="h-[21px] truncate px-1 text-[10.5px]" title={`${g.rotulo} ›`}>
-                      <i className="mr-1.5 inline-block h-2 w-2 rounded-sm align-middle" style={{ background: corDoGrupo(lado, gi) }} />{g.rotulo} <span className="text-[#8d9cad]">›</span>
+                    <td className="h-[16px] truncate px-1 text-[9.5px]" title={`${g.rotulo} ›`}>
+                      <i className="mr-1.5 inline-block h-[7px] w-[7px] rounded-sm align-middle" style={{ background: corDoGrupo(lado, gi) }} />{g.rotulo} <span className="text-[#8d9cad]">›</span>
                     </td>
-                    <td className="h-[21px] whitespace-nowrap px-1 text-right text-[10.5px] tabular-nums" style={{ color: cor }}>{brl(v(g))}</td>
-                    <td className="h-[21px] whitespace-nowrap px-1 text-right text-[10px] tabular-nums" style={{ color: cor }}>{pct1(g.pct_mes?.[k])}</td>
-                    <td className="h-[21px] whitespace-nowrap px-1 text-right text-[10px] tabular-nums" style={{ color: corVariacao(lado, g.vs_media?.[k]) }}
+                    <td className="h-[16px] whitespace-nowrap px-1 text-right text-[9.5px] tabular-nums" style={{ color: cor }}>{brl(v(g))}</td>
+                    <td className="h-[16px] whitespace-nowrap px-1 text-right text-[9px] tabular-nums" style={{ color: cor }}>{pct1(g.pct_mes?.[k])}</td>
+                    <td className="h-[16px] whitespace-nowrap px-1 text-right text-[9px] tabular-nums" style={{ color: corVariacao(lado, g.vs_media?.[k]) }}
                       data-testid={`card-vs-media-${g.chave}`}>{vsMedia(g.vs_media?.[k])}</td>
                   </tr>
                 ))}
                 {!ampliado && grupos.some((g) => !comValor(g, k)) && (
                   <tr data-testid={`card-zerados-${lado}`}>
-                    <td colSpan={4} className="h-[15px] px-1 text-[9px] text-muted-foreground" title={grupos.filter((g) => !comValor(g, k)).map((g) => g.rotulo).join(', ')}>
+                    <td colSpan={4} className="h-[14px] px-1 text-[8.5px] text-muted-foreground" title={grupos.filter((g) => !comValor(g, k)).map((g) => g.rotulo).join(', ')}>
                       + {grupos.filter((g) => !comValor(g, k)).length} sem valor no mês
                     </td>
                   </tr>

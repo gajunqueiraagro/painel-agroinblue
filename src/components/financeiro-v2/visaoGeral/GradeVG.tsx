@@ -93,17 +93,19 @@ function LinhaGrade({ l, meses, sel, fmt, comp, onAnalisar }: {
   const clicavel = (l.tipo === 'total' || l.tipo === 'grupo') && !!l.lado;
   const recuo = l.tipo === 'grupo' ? 16 : l.tipo === 'transf' ? 26 : 5;
   const nome = l.tipo === 'total' || l.tipo === 'grupo' ? `${l.rotulo} ›` : l.rotulo;
-  /* P83 — linhas de grupo (e a transferência) mais baixas e em fonte menor; o saldo inicial em fonte menor, sem negrito */
+  /* P83/P90 — linhas mais baixas para caber mais sem rolar: totais, resultado e saldos 16px/9,5; grupo e transferência 14px/8,5; o
+     saldo inicial em fonte menor, sem negrito */
   const miuda = l.tipo === 'grupo' || l.tipo === 'transf';
   const saldoIni = l.chave === 'saldo_inicial';
-  const fs = cn(comp ? 'text-[9px]' : '', miuda && 'h-[16px] text-[9px]', saldoIni && 'text-[9px]');
+  const fs = cn('h-[16px] text-[9.5px]', comp && 'text-[9px]', miuda && 'h-[14px] text-[8.5px]', saldoIni && 'text-[9px]');
+  const alt = miuda ? 'h-[14px]' : 'h-[16px]';
   const analisar = (am: string) => clicavel && onAnalisar({ lado: l.lado!, grupo: l.tipo === 'grupo' ? l.grupo ?? null : null, am });
   return (
     <tr data-testid={`grade-linha-${l.chave}`} data-tipo={l.tipo}
       className={cn('border-b border-[#eef1f5]', forte && !saldoIni && 'font-bold', saldoIni && 'font-semibold', clicavel && 'cursor-pointer hover:brightness-[.98]')}
       style={{ background: fundo }} onClick={() => analisar(sel)}
       title={clicavel ? `Analisar ${l.rotulo.toLowerCase()} (a análise abre no PR 4)` : cartao ? TITULO_CARTAO : undefined}>
-      <td className={cn(TD_REGUA, 'truncate', miuda && 'h-[16px] text-[9.5px]', saldoIni && 'text-[9.5px]', l.tipo === 'transf' && 'text-[9px] font-normal opacity-80')}
+      <td className={cn(TD_REGUA, 'h-[16px] truncate text-[10px]', miuda && 'h-[14px] text-[9px]', saldoIni && 'text-[9.5px]', l.tipo === 'transf' && 'text-[8.5px] font-normal opacity-80')}
         style={{ paddingLeft: recuo, color: cor }} title={nome}>{nome}</td>
       {meses.map((m, k) => {
         const v = l.valores[k] ?? null;
@@ -124,8 +126,8 @@ function LinhaGrade({ l, meses, sel, fmt, comp, onAnalisar }: {
           {/* P83 — no TOTAL, o saldo do PERÍODO (inicial do 1º mês; final do último), do banco */}
           <td data-testid={`grade-total-${l.chave}`} className={cn(TD_REGUA_NUM, fs, 'border-l-2 border-l-[#8a96a6] font-bold')}
             style={{ background: FUNDO_RESUMO, color: corSinal(l.total) }}>{l.total == null ? '' : fmt(l.total)}</td>
-          <td className={cn(TD_REGUA, 'border-l border-l-[#dde2e8]')} style={{ background: FUNDO_RESUMO }} />
-          <td className={cn(TD_REGUA, 'border-l border-l-[#dde2e8]')} style={{ background: FUNDO_RESUMO }} />
+          <td className={cn(TD_REGUA, alt, 'border-l border-l-[#dde2e8]')} style={{ background: FUNDO_RESUMO }} />
+          <td className={cn(TD_REGUA, alt, 'border-l border-l-[#dde2e8]')} style={{ background: FUNDO_RESUMO }} />
         </>
       ) : (
         <>
@@ -133,7 +135,7 @@ function LinhaGrade({ l, meses, sel, fmt, comp, onAnalisar }: {
             style={{ background: FUNDO_RESUMO, color: porSinal ? corSinal(l.total) : cor }}>{fmt(l.total)}</td>
           <td data-testid={`grade-media-${l.chave}`} className={cn(TD_REGUA_NUM, fs, 'border-l border-l-[#dde2e8] font-bold')}
             style={{ background: FUNDO_RESUMO, color: porSinal ? corSinal(l.media) : cor }}>{fmt(l.media)}</td>
-          <td data-testid={`grade-pct-${l.chave}`} className={cn(TD_REGUA_NUM, 'border-l border-l-[#dde2e8] font-normal')}
+          <td data-testid={`grade-pct-${l.chave}`} className={cn(TD_REGUA_NUM, alt, 'border-l border-l-[#dde2e8] text-[9px] font-normal')}
             style={{ background: FUNDO_RESUMO, color: cor }}>{l.tipo === 'grupo' || l.tipo === 'transf' ? pct1(l.pct) : ''}</td>
         </>
       )}
