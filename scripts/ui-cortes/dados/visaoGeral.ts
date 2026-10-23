@@ -105,7 +105,7 @@ export function tela(a: { p_de: string; p_ate: string; p_contas?: string[] | nul
       entrada: { media_acumulada: mediaAcc('entrada'), meta: ms.map(() => r2(1700000 * peso)) },
       saida: { media_acumulada: mediaAcc('saida'), meta: ms.map((x) => (x.startsWith('2026') ? r2(2300000 * peso) : null)) },
     },
-    conciliado_ate: semSaldo ? null : '2026-10-15', sem_saldo: semSaldo,
+    conciliado_ate: semSaldo ? null : '2026-10-15', conciliado_saldo: semSaldo ? null : 9_876_543.21, sem_saldo: semSaldo,
     status: st, incluir_vencidos: incl,
     contas_sem_ancora: a.p_contas?.includes('c4') ? ['Cartão Exemplo'] : [],
   };

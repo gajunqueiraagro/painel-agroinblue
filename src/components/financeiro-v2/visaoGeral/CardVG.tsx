@@ -116,9 +116,13 @@ function CardFluxo({ tela, k, sel, v, previsto, vigente, onAnalisar, ampliado, a
         </span>
         {vigente ? (
           <span className="flex items-center justify-between bg-[#eaf4ec] px-1.5" data-testid="card-conciliado"
-            title={tela.contas_sem_ancora.length ? `Contas sem saldo conciliado (fora do saldo): ${tela.contas_sem_ancora.join(', ')}` : 'A conta mais atrasada entre as escolhidas'}>
+            title={`Saldo das contas escolhidas no dia do conciliado (a conta mais atrasada entre elas)${tela.contas_sem_ancora.length ? ` · contas sem saldo conciliado (fora do saldo): ${tela.contas_sem_ancora.join(', ')}` : ''}`}>
             <span className="whitespace-nowrap font-semibold">Conciliado até {dataCurta(tela.conciliado_ate)}</span>
-            <span className="whitespace-nowrap text-[8.5px] text-muted-foreground">{tela.contas_sem_ancora.length ? `${tela.contas_sem_ancora.length} sem saldo` : ''}</span>
+            {/* P70 — o saldo das contas escolhidas NAQUELE dia (do banco); conta sem saldo conciliado: a marca âmbar, o nome no title */}
+            <span className="flex items-center gap-1 whitespace-nowrap font-bold tabular-nums">
+              {tela.contas_sem_ancora.length ? <span className="text-[8.5px] font-semibold text-amber-700" data-testid="card-conciliado-sem-ancora">{tela.contas_sem_ancora.length} sem saldo ·</span> : null}
+              <span style={{ color: corSinal(tela.conciliado_saldo ?? 0) }} data-testid="card-conciliado-saldo">{tela.conciliado_saldo == null ? '—' : brl(tela.conciliado_saldo)}</span>
+            </span>
           </span>
         ) : (
           <span className="flex items-center px-1.5 text-muted-foreground">{previsto ? 'mês previsto' : 'mês conciliado'}</span>

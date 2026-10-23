@@ -33,6 +33,8 @@ export interface TelaVG {
   linhas: LinhaVG[];
   grafico: Partial<Record<LadoVG, { media_acumulada: (number | null)[]; meta: (number | null)[] }>> | null;
   conciliado_ate: string | null;
+  /** P70 — o saldo das contas escolhidas no dia do `conciliado_ate` (fn_vg_conciliado); nulo sem saldo */
+  conciliado_saldo?: number | null;
   contas_sem_ancora: string[];
   /** P79 — o que o banco USOU (eco dos chips): os não realizados que entraram e se o vencido entrou */
   status?: string[];

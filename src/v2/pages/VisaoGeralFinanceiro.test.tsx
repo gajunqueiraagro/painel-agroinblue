@@ -49,7 +49,7 @@ const TELA = {
     { chave: 'saldo_final', tipo: 'saldo', rotulo: 'SALDO FINAL', valores: M.map((_, i) => 5000 + i) },
   ],
   grafico: { entrada: { media_acumulada: z(null), meta: z(null) }, saida: { media_acumulada: z(null), meta: z(null) } },
-  conciliado_ate: '2026-02-11',
+  conciliado_ate: '2026-02-11', conciliado_saldo: 1_234_567.89,
   contas_sem_ancora: [],
   status: ['previsto', 'programado', 'agendado'],
   incluir_vencidos: true,
@@ -85,6 +85,8 @@ describe('Visão Geral — render-only', () => {
     expect(celula('card-saldo-final')).toBe('R$ 5.001,00');
     expect(within(screen.getByTestId('card-grupo-entrada:grupo:Receitas operacionais:')).getByText('33,3%')).toBeTruthy();
     expect(screen.getByTestId('card-conciliado').textContent).toContain('Conciliado até 11/02');
+    /* P70 — o saldo das contas no dia do conciliado, o número do banco */
+    expect(screen.getByTestId('card-conciliado-saldo').textContent).toBe('R$ 1.234.567,89');
   });
 
   it('V2 abre em Entradas × saídas, Ano e no mês vigente, e pede o ano inteiro ao banco', async () => {
