@@ -221,6 +221,14 @@ export interface FinV2DrillFilters {
   centro?: string;
   subcentro?: string;
   statusTransacao?: string;
+  /* FIN-VISAO-GERAL-01 PR 5 — "Ver na lista de Lançamentos ›" da gaveta: os filtros EQUIVALENTES, todos à vista na barra (P94: a
+     tela nunca filtra o que não mostra). Com o drill, a lista NÃO lê a memória de filtros (nem a da sessão, nem a da volta da OC). */
+  anos?: string[];
+  meses?: string[];
+  statusSelecionados?: string[];
+  fazendaId?: string;
+  contaOrigem?: string;
+  atividade?: string;
 }
 
 interface Props {
@@ -335,6 +343,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
 
   // Load dynamic years from DB
   useEffect(() => {
+    if (drillFilters) return; /* PR 5 — com o drill, só os filtros dele (à vista na barra) */
     const saved = sessionStorage.getItem('financeiro_v2_state');
     if (!saved) return;
     try {
@@ -469,6 +478,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
        instantâneo vence — ele descreve a tela de onde o operador saiu há dois cliques.
        ⚠ E É UM EFEITO SÓ, de propósito: dois efeitos de restauração competindo pela mesma
        montagem dependeriam da ordem de declaração para decidir quem escreve por último. */
+    if (drillFilters) return; /* PR 5 — com o drill, a memória não entra: a lista mostra só os filtros dele */
     const instantaneo = sessionStorage.getItem(CHAVE_RETORNO_OC);
     const raw = instantaneo ?? (() => {
       const ativos = lerFiltros();
@@ -794,7 +804,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     if (drillFilters.grupo) setGrupoFiltro(drillFilters.grupo);
     if (drillFilters.centro) setCentroFiltro(drillFilters.centro);
     if (drillFilters.subcentro) setSubcentroFiltro(drillFilters.subcentro);
-    setFazendaId('__all__'); // Fluxo de Caixa is always global
+    /* PR 5 — o drill da Visão Geral: anos e meses da janela, status, conta, atividade e a fazenda da tela */
+    if (drillFilters.anos?.length) setAnosSelecionados(drillFilters.anos);
+    if (drillFilters.meses?.length) setMesesSelecionados(drillFilters.meses);
+    if (drillFilters.statusSelecionados?.length) setStatusSelecionados(drillFilters.statusSelecionados.filter(isStatusFiltroFinanceiro));
+    if (drillFilters.contaOrigem) setContaOrigem(drillFilters.contaOrigem);
+    if (drillFilters.atividade) setAtividadeFiltro(drillFilters.atividade);
+    setFazendaId(drillFilters.fazendaId ?? '__all__'); // Fluxo de Caixa is always global
   }, []); // Run once on mount
 
   // PR-VENDA-V2-FINVINC-ABRIR-POR-LANCAMENTO-B1: abre lançamento alvo recebido

@@ -12,6 +12,9 @@
  *   · P79 (Gabriel 23/10) — os chips de STATUS (o MESMO `ChipsDeStatus` da CPR: Previsto · Programado · Agendado, padrão os três; o
  *     realizado entra sempre) e o de VENCIDOS (padrão ligado, a regra da CPR) numa SEGUNDA linha fixa dos filtros; estado na URL
  *     (`vg_status`, `vg_venc`). A tela só repassa ao banco (`p_status`, `p_incluir_vencidos`) e escreve o que ele diz que usou.
+ *   · PR 5 — a GAVETA de lançamentos (no modal de análise): o lançamento abre no modal padrão por cima (`LancamentoDaGavetaVG`) e,
+ *     salvo, o canal de lançamentos avisa (`inscreverEmLancamentos`) e a `versao` sobe — a Visão Geral, o modal e a gaveta releem o que mostram, sem F5. "Ver na lista de Lançamentos ›" leva os
+ *     filtros equivalentes e o LUGAR (`RetornoVG`): o Voltar da lista reabre a tela, o modal e a gaveta onde estavam.
  */
 import { useEffect, useState, type CSSProperties } from 'react';
 import { ChevronDown } from 'lucide-react';
@@ -22,6 +25,9 @@ import { Segmentado } from '@/components/ui/segmentado';
 import { cn } from '@/lib/utils';
 import { rotuloDasContas, useCarregarFiltrosVG } from '@/components/financeiro-v2/visaoGeral/FiltrosBarraVG';
 import { ModalAnaliseVG } from '@/components/financeiro-v2/visaoGeral/ModalAnaliseVG';
+import { LancamentoDaGavetaVG } from '@/components/financeiro-v2/visaoGeral/LancamentoDaGavetaVG';
+import type { CaminhoVG, EstadoAnaliseVG } from '@/lib/financeiro/visaoGeralAnalise';
+import type { FiltrosListaVG } from '@/lib/financeiro/visaoGeralGaveta';
 import { CardVG } from '@/components/financeiro-v2/visaoGeral/CardVG';
 import { GraficoVG } from '@/components/financeiro-v2/visaoGeral/GraficoVG';
 import { GradeVG } from '@/components/financeiro-v2/visaoGeral/GradeVG';
@@ -31,6 +37,7 @@ import { PainelMesVG } from '@/components/financeiro-v2/visaoGeral/PainelMesVG';
 import { BotaoPdfGradeVG, CabecalhoGradeVG } from '@/components/financeiro-v2/visaoGeral/CabecalhoGradeVG';
 import { montarModeloGradeVG } from '@/lib/pdf/vg/modeloGradeVG';
 import { useFazenda } from '@/contexts/FazendaContext';
+import { inscreverEmLancamentos } from '@/hooks/useFinanceiroV2';
 import { ChipsDeStatus, STATUS_INICIAIS, alternarNaLista, pilulasDosStatus } from '@/components/financeiro-v2/ChipsDeStatus';
 import { useFiltroUrl } from '@/v2/hooks/useFiltroUrl';
 import {
@@ -43,32 +50,50 @@ import {
 const PILULAS_VG = [...pilulasDosStatus(STATUS_INICIAIS),
   { chave: 'vencidos', rotulo: 'Vencidos', title: 'O que venceu antes de hoje e não foi pago entra no mês corrente (a regra da Contas a Pagar e Receber)' }];
 
+/** PR 5 — o lugar da tela para a volta da lista de Lançamentos: período, mês, critério, o modal (estado) e a gaveta */
+export interface RetornoVG {
+  modo: ModoVG; sel: string; faixa: FaixaVG; per: [string, string]; criterio: CriterioTelaVG;
+  alvo: AlvoAnaliseVG; estado: EstadoAnaliseVG; gaveta: CaminhoVG;
+}
+
 const hojeLocal = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
-export function VisaoGeralFinanceiro({ hoje = hojeLocal(), onAnalisar, inicial }: {
+export function VisaoGeralFinanceiro({ hoje = hojeLocal(), onAnalisar, inicial, retorno, onVerNaLista }: {
   hoje?: string; onAnalisar?: (a: AlvoAnaliseVG) => void;
   /** só a bancada/teste abrem noutro estado; o app abre SEMPRE em Entradas × saídas, Ano, mês vigente */
   inicial?: { modo?: ModoVG; faixa?: FaixaVG; de?: string; ate?: string; sel?: string };
+  /** a volta da lista de Lançamentos (o Voltar dela): a tela, o modal e a gaveta onde estavam */
+  retorno?: RetornoVG | null;
+  /** "Ver na lista de Lançamentos ›" da gaveta: os filtros equivalentes e o lugar para voltar */
+  onVerNaLista?: (f: FiltrosListaVG, volta: RetornoVG) => void;
 }) {
   const { clienteAtual } = useCliente();
   const filtros = useCarregarFiltrosVG();
   const atual = amHoje(hoje);
-  const [modo, setModo] = useState<ModoVG>(inicial?.modo ?? 'flx');
-  const [sel, setSel] = useState(inicial?.sel ?? atual);
-  const [faixa, setFaixa] = useState<FaixaVG>(inicial?.faixa ?? 'ano');
-  const [per, setPer] = useState<[string, string]>([inicial?.de ?? somarMeses(atual, -9), inicial?.ate ?? somarMeses(atual, 2)]);
+  const [modo, setModo] = useState<ModoVG>(retorno?.modo ?? inicial?.modo ?? 'flx');
+  const [sel, setSel] = useState(retorno?.sel ?? inicial?.sel ?? atual);
+  const [faixa, setFaixa] = useState<FaixaVG>(retorno?.faixa ?? inicial?.faixa ?? 'ano');
+  const [per, setPer] = useState<[string, string]>(retorno?.per ?? [inicial?.de ?? somarMeses(atual, -9), inicial?.ate ?? somarMeses(atual, 2)]);
   const [de, ate] = faixaDoPeriodo(faixa, sel, per[0], per[1]);
   const [tela, setTela] = useState<TelaVG | null>(null);
   /* P90 — mês · média · acumulado: o card, a grade e os ampliados (a série vem do banco; trocar não pede nada de novo) */
-  const [criterio, setCriterio] = useState<CriterioTelaVG>('mes');
+  const [criterio, setCriterio] = useState<CriterioTelaVG>(retorno?.criterio ?? 'mes');
   const [erro, setErro] = useState<string | null>(null);
   /* PR 4 — o modal de análise: abre no lado, na aba (grupo) e no mês clicados */
-  const [alvo, setAlvo] = useState<AlvoAnaliseVG | null>(null);
+  const [alvo, setAlvo] = useState<AlvoAnaliseVG | null>(retorno?.alvo ?? null);
+  /* PR 5 — o lançamento aberto pela gaveta e a VERSÃO (sobe a cada salvar: tudo o que está na tela relê) */
+  const [lancamentoId, setLancamentoId] = useState<string | null>(null);
+  const [usouLancamento, setUsouLancamento] = useState(false);
+  const [versao, setVersao] = useState(0);
   const clienteId = clienteAtual?.id ?? null;
   const contasChave = filtros.contas?.join(',') ?? '';
   const [status, setStatus] = useFiltroUrl<string[]>('vg_status', STATUS_INICIAIS, lerStatusVG, escreverStatusVG);
   const [vencidos, setVencidos] = useFiltroUrl<boolean>('vg_venc', true, lerVencidosVG, escreverVencidosVG);
   const alternar = (chave: string) => (chave === 'vencidos' ? setVencidos((v) => !v) : setStatus((a) => alternarNaLista(a, chave)));
+
+  /* A versão sobe a cada aviso do canal de lançamentos (com ou sem os ids do P73): o salvar do modal padrão, o dividir/voltar
+     para uma conta dentro dele e o que as outras telas gravarem. O aviso de um lançamento só basta: aqui tudo é soma. */
+  useEffect(() => (clienteId ? inscreverEmLancamentos(clienteId, () => setVersao((v) => v + 1)) : undefined), [clienteId]);
 
   useEffect(() => {
     if (!clienteId) return;
@@ -85,7 +110,7 @@ export function VisaoGeralFinanceiro({ hoje = hojeLocal(), onAnalisar, inicial }
     });
     return () => { vivo = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clienteId, de, ate, contasChave, filtros.fazenda, filtros.atividade, hoje, status.join(','), vencidos]);
+  }, [clienteId, de, ate, contasChave, filtros.fazenda, filtros.atividade, hoje, status.join(','), vencidos, versao]);
 
   const analisar = (a: AlvoAnaliseVG) => { setAlvo(a); onAnalisar?.(a); };
   /* a tela só desenha o que o banco devolveu para ESTE período; enquanto o novo não chega, fica o anterior (nada pisca nem encolhe) */
@@ -93,12 +118,13 @@ export function VisaoGeralFinanceiro({ hoje = hojeLocal(), onAnalisar, inicial }
   /* P90 — o cabeçalho da grade ampliada e o PDF: o MESMO modelo (cliente, período, contas, recorte, chips, critério e o resumo do mês) */
   const { fazendas } = useFazenda();
   const rotuloContas = rotuloDasContas(filtros.lista?.contas ?? [], filtros.contas);
+  const fazendaNome = filtros.fazenda ? fazendas.find((f) => f.id === filtros.fazenda)?.nome ?? null : null;
+  const recorte = [fazendaNome ? `Fazenda: ${fazendaNome}` : 'Global', ...(filtros.atividade ? [`Atividade: ${rotuloAtividade(filtros.atividade)}`] : [])];
   const modeloGrade = () => {
     const agora = new Date();
-    const fazendaNome = filtros.fazenda ? fazendas.find((f) => f.id === filtros.fazenda)?.nome ?? null : null;
     return montarModeloGradeVG({
       tela: pronta!, sel, criterio, clienteNome: clienteAtual?.nome ?? '', rotuloContas,
-      recorte: [fazendaNome ? `Fazenda: ${fazendaNome}` : 'Global', ...(filtros.atividade ? [`Atividade: ${rotuloAtividade(filtros.atividade)}`] : [])],
+      recorte,
       chipsLigados: [...STATUS_INICIAIS.filter((x) => status.includes(x)).map((x) => x.charAt(0).toUpperCase() + x.slice(1)), ...(vencidos ? ['Vencidos'] : [])],
       emissao: `${agora.toLocaleDateString('pt-BR')} ${agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`,
     });
@@ -191,9 +217,16 @@ export function VisaoGeralFinanceiro({ hoje = hojeLocal(), onAnalisar, inicial }
         </section>
       </div>
       {alvo && clienteId && (
-        <ModalAnaliseVG alvo={alvo} onFechar={() => setAlvo(null)} rotuloContas={rotuloContas}
+        <ModalAnaliseVG alvo={alvo} onFechar={() => setAlvo(null)} rotuloContas={rotuloContas} recorte={recorte.join(' · ')} versao={versao}
+          inicial={retorno && retorno.alvo === alvo ? { estado: retorno.estado, gaveta: retorno.gaveta } : undefined}
           ctx={{ clienteId, de: primeiroDia(de), ate: ultimoDia(ate), contas: filtros.contas, fazendas: filtros.fazenda ? [filtros.fazenda] : null,
-                 atividade: filtros.atividade, hoje, status, comVencidos: vencidos }} />
+                 atividade: filtros.atividade, hoje, status, comVencidos: vencidos }}
+          onAbrirLancamento={(id) => { setUsouLancamento(true); setLancamentoId(id); }}
+          onVerNaLista={onVerNaLista ? (f, v) => onVerNaLista(f, { modo, sel, faixa, per, criterio, alvo, ...v }) : undefined} />
+      )}
+      {/* o modal padrão do lançamento, por cima do modal de análise (montado só depois do 1º clique: os catálogos vêm com ele) */}
+      {usouLancamento && (
+        <LancamentoDaGavetaVG lancamentoId={lancamentoId} onFechar={() => setLancamentoId(null)} />
       )}
     </div>
   );
