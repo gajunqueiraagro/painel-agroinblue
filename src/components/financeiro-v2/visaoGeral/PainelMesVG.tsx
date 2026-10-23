@@ -26,7 +26,7 @@ export function PainelMesVG({ tela, sel }: { tela: TelaVG; sel: string }) {
     </div>
   );
   const Bloco = ({ titulo, s, id }: { titulo: string; s: 'valores' | 'valores_acum' | 'valores_media'; id: string }) => (
-    <section className="flex flex-col gap-0.5 border-t border-[#e3e7ec] pt-2" data-testid={`painel-${id}`}>
+    <section className="flex flex-col gap-0.5 border-t border-[#e3e7ec] pt-2" data-testid={`painel-bloco-${id}`}>
       <h4 className="mb-0.5 text-[9px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{titulo}</h4>
       <Linha rotulo="Entradas" v={em(ent, s)} cor={COR.entrada} testid={`painel-${id}-entradas`} />
       <Linha rotulo="Saídas" v={em(sai, s)} cor={COR.saida} testid={`painel-${id}-saidas`} />
