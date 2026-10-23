@@ -26,6 +26,7 @@ import { GraficoVG } from '@/components/financeiro-v2/visaoGeral/GraficoVG';
 import { GradeVG } from '@/components/financeiro-v2/visaoGeral/GradeVG';
 import { AmpliarVG } from '@/components/financeiro-v2/visaoGeral/AmpliarVG';
 import { SeletorCriterioVG } from '@/components/financeiro-v2/visaoGeral/SeletorCriterioVG';
+import { PainelMesVG } from '@/components/financeiro-v2/visaoGeral/PainelMesVG';
 import { ChipsDeStatus, STATUS_INICIAIS, alternarNaLista, pilulasDosStatus } from '@/components/financeiro-v2/ChipsDeStatus';
 import { useFiltroUrl } from '@/v2/hooks/useFiltroUrl';
 import {
@@ -142,8 +143,18 @@ export function VisaoGeralFinanceiro({ hoje = hojeLocal(), onAnalisar, inicial }
               <span className="whitespace-nowrap text-[11.5px] font-bold">{modo === 'flx' ? 'Entradas × saídas' : modo === 'sai' ? 'Saídas totais' : 'Entradas totais'}<span className="hidden lg:inline"> por mês</span></span>
               <span className="flex min-w-0 items-center gap-1.5">
                 <Legenda modo={modo} tela={pronta} sel={sel} />
-                {pronta && <AmpliarVG titulo={modo === 'flx' ? 'Entradas × saídas por mês' : modo === 'sai' ? 'Saídas totais por mês' : 'Entradas totais por mês'} testid="grafico">
-                  {() => <div className="flex h-[70vh] min-h-0 flex-col"><GraficoVG tela={pronta} modo={modo} sel={sel} onSel={setSel} /></div>}</AmpliarVG>}
+                {/* P90 — o gráfico ampliado: com margem, mais compacto, e o PAINEL DO MÊS ao lado (clicar numa coluna troca o mês) */}
+                {pronta && <AmpliarVG titulo={modo === 'flx' ? 'Entradas × saídas por mês' : modo === 'sai' ? 'Saídas totais por mês' : 'Entradas totais por mês'} testid="grafico"
+                  largura="w-[min(1180px,94vw)]" altura="h-[min(86vh,620px)]" corpo="bg-[#f4f6f9] p-5">
+                  {() => (
+                    <div className="flex h-full min-h-0 gap-4">
+                      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-1 rounded-md border border-[#dfe4ea] bg-white px-3 pb-2 pt-2.5">
+                        <div className="flex h-[17px] shrink-0 justify-end"><Legenda modo={modo} tela={pronta} sel={sel} /></div>
+                        <GraficoVG tela={pronta} modo={modo} sel={sel} onSel={setSel} />
+                      </div>
+                      <PainelMesVG tela={pronta} sel={sel} />
+                    </div>
+                  )}</AmpliarVG>}
               </span>
             </div>
             <div className="mt-[3px] flex min-h-0 flex-1 flex-col" data-desloca-livre="">

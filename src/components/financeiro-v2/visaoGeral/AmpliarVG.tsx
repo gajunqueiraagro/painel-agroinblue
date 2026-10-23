@@ -7,11 +7,14 @@
 import { useState, type ReactNode } from 'react';
 import { Maximize2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
 
-export function AmpliarVG({ titulo, testid, children, largura = 'w-[min(1400px,96vw)]', corpo = 'p-3', extra }: {
+export function AmpliarVG({ titulo, testid, children, largura = 'w-[min(1400px,96vw)]', corpo = 'p-3', extra, altura = 'h-[min(92vh,900px)]' }: {
   titulo: string; testid: string; children: () => ReactNode;
   /** P90 — controles no canto direito do título do modal (o seletor de critério, o PDF) */
   extra?: ReactNode;
+  /** P90 — a altura fixa do modal (o gráfico ampliado é mais compacto) */
+  altura?: string;
   /** a largura fixa do modal (o card, estreito, cabe num print de celular) */
   largura?: string;
   /** o respiro do corpo — a grade usa só o lateral: o cabeçalho dela (preso) encosta no topo, sem vão */
@@ -26,12 +29,12 @@ export function AmpliarVG({ titulo, testid, children, largura = 'w-[min(1400px,9
         <Maximize2 className="h-3 w-3" />
       </button>
       <Dialog open={aberto} onOpenChange={setAberto}>
-        <DialogContent className={`flex h-[min(92vh,900px)] ${largura} max-w-none flex-col gap-0 p-0`} data-testid={`modal-ampliado-${testid}`}>
+        <DialogContent className={cn('flex max-w-none flex-col gap-0 p-0', altura, largura)} data-testid={`modal-ampliado-${testid}`}>
           <DialogHeader className="flex h-9 shrink-0 flex-row items-center justify-between gap-3 space-y-0 bg-primary pl-3 pr-10">
             <DialogTitle className="truncate text-[13px] font-semibold text-primary-foreground" title={titulo}>{titulo}</DialogTitle>
             {extra && <div className="flex shrink-0 items-center gap-2 rounded bg-white/95 px-1 py-0.5">{extra}</div>}
           </DialogHeader>
-          <div className={`flex min-h-0 flex-1 flex-col overflow-auto bg-white ${corpo}`}>{aberto ? children() : null}</div>
+          <div className={cn('flex min-h-0 flex-1 flex-col overflow-auto bg-white', corpo)}>{aberto ? children() : null}</div>
         </DialogContent>
       </Dialog>
     </>

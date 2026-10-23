@@ -3,6 +3,7 @@
  *   V1 A TELA NÃO SOMA (SPEC §7.4): o banco devolve totais, média, %, % do mês, vs média, resultado e saldos propositalmente "errados"
  *      (que não fecham com os meses) e a tela escreve EXATAMENTE esses — se ela somasse ou dividisse, o número mudaria
  *   V2 abre em Entradas × saídas, Ano (jan–dez) e no mês vigente, e pede ao banco o ano inteiro
+ *   V16 o gráfico ampliado com o painel do mês (do banco)
  *   V14 o critério escreve a série do banco (card e grade), sem novo pedido; V15 no acumulado, o saldo de cima é o do período
  *   V3 clicar num total ou grupo (grade ou card) só registra a intenção — nada abre (o modal é o PR 4)
  *   V4 "Sem classificação" e "Transferências para outras contas" aparecem quando o banco as manda; o vencido marca o mês vigente
@@ -39,7 +40,8 @@ const TELA = {
   meses: M.map((am) => ({ am, previsto: am > '2026-02', vigente: am === '2026-02' })),
   linhas: [
     { chave: 'saldo_inicial', tipo: 'saldo', rotulo: 'SALDO INICIAL', valores: M.map((_, i) => 1000 + i) },
-    { chave: 'entrada:total::', tipo: 'total', lado: 'entrada', rotulo: 'ENTRADAS', valores: M.map((_, i) => 100 * (i + 1)), vencidos: z(), pct_mes: z(100), vs_media: z(), total: 999, media: 123, pct: null },
+    { chave: 'entrada:total::', tipo: 'total', lado: 'entrada', rotulo: 'ENTRADAS', valores: M.map((_, i) => 100 * (i + 1)), vencidos: z(), pct_mes: z(100), vs_media: z(), total: 999, media: 123, pct: null,
+      valores_acum: z(4444), valores_media: z(2222) },
     { chave: 'entrada:grupo:Receitas operacionais:', tipo: 'grupo', lado: 'entrada', grupo: 'Receitas operacionais', rotulo: 'Receitas operacionais', valores: M.map((_, i) => 60 * (i + 1)), vencidos: z(), pct_mes: z(33.3), vs_media: z(12.5), total: 555, media: 44, pct: 77.7 },
     { chave: 'entrada:grupo:Sem classificação:', tipo: 'grupo', lado: 'entrada', grupo: 'Sem classificação', rotulo: 'Sem classificação', valores: M.map((_, i) => 40 * (i + 1)), vencidos: z(), pct_mes: z(66.6), vs_media: z(-3), total: 444, media: 37, pct: 22.2 },
     { chave: 'saida:total::', tipo: 'total', lado: 'saida', rotulo: 'SAÍDAS TOTAIS', valores: z(80), vencidos: M.map((am) => (am === '2026-02' ? 30 : 0)), pct_mes: z(100), vs_media: z(), total: 888, media: 74, pct: null },
@@ -255,6 +257,18 @@ describe('Visão Geral — render-only', () => {
     fireEvent.click(within(screen.getByTestId('vg-criterio')).getByText('Acumulado'));
     expect(screen.getByTestId('card-saldo-inicial-rotulo').textContent).toBe('Saldo inicial · jan/26');
     expect(screen.getByTestId('card-saldo-inicial').textContent).toBe('R$ 1.000,00');
+  });
+
+  it('V16 o gráfico ampliado traz o PAINEL DO MÊS escolhido, com o mês, o acumulado e a média do banco', async () => {
+    render(<VisaoGeralFinanceiro hoje="2026-02-15" />);
+    await screen.findByTestId('grade-vg');
+    fireEvent.click(screen.getByTestId('ampliar-grafico'));
+    const painel = await screen.findByTestId('painel-mes');
+    expect(within(painel).getByTestId('painel-mes-titulo').textContent).toBe('Fevereiro 2026');
+    expect(within(painel).getByTestId('painel-mes-entradas').textContent).toBe('R$ 200,00');
+    expect(within(painel).getByTestId('painel-acum-entradas').textContent).toBe('R$ 4.444,00');
+    expect(within(painel).getByTestId('painel-media-entradas').textContent).toBe('R$ 2.222,00');
+    expect(within(painel).getByTestId('painel-saldo-final').textContent).toBe('R$ 5.001,00');
   });
 
   it('V13 o TOTAL dos saldos é o do banco (a grade não soma)', async () => {
