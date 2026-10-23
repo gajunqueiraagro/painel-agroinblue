@@ -4,10 +4,12 @@
  *   · Esquerda: o resumo da aba (donut, valor, meta, vs meta, período, seguindo o seletor) e a tabela dos filhos da aba com o seletor
  *     `mês | Média do período | Acumulado` e a UNIDADE (só as que o banco diz que valem) → Realizado · Meta · Dif. R$ · %.
  *   · Direita: o gráfico do item (caminho clicável, ‹ › entre irmãos, KPIs) e a tabela do nível de baixo, com a régua "vs meta" e o
- *     "N lanç. ›" (por ora só registra a intenção — a gaveta é frente própria).
+ *     "N lanç. ›", que abre a GAVETA DE LANÇAMENTOS (PR 5, `GavetaVG`) na lateral direita do modal, no nó da linha.
  *   · Sem meta: "—". A TELA NUNCA SOMA: todo número vem pronto da `fn_vg_analise`; aqui só se escreve e se desenha.
  *   · REGRA SOBERANA: nada muda de altura ou posição ao trocar aba, item, mês, critério, unidade ou nível — toda lista rola por dentro
  *     do próprio quadro, e o número anterior fica até o novo chegar (nada pisca).
+ *   · PR 5 — a gaveta segue o mês e o critério do modal (a mesma janela); Esc fecha a gaveta antes do modal; o lançamento abre no
+ *     modal padrão (por cima, pela página) e, salvo, a página sobe a `versao`: modal e gaveta releem o que mostram, no mesmo lugar.
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
@@ -19,6 +21,10 @@ import { cn } from '@/lib/utils';
 import {
   COR, MESES_ABR, brl, corDoGrupo, corVariacao, mes0De, mil1, n0, pct1, rotuloMes, type AlvoAnaliseVG, type LadoVG,
 } from '@/lib/financeiro/visaoGeral';
+import { GavetaVG } from '@/components/financeiro-v2/visaoGeral/GavetaVG';
+import {
+  avisosDaLista, carregarGavetaVG, filtrosDaLista, recarregarGavetaVG, type FiltrosListaVG, type GavetaVG as DadosGavetaVG, type LancamentoGavetaVG,
+} from '@/lib/financeiro/visaoGeralGaveta';
 import {
   COR_FAIXA, ROTULO_FAIXA, andarEntreIrmaos, carregarAnaliseVG, chaveCaminho, descer, escolherNaDireita, escolherNaEsquerda,
   estadoInicialAnalise, irParaAba, irParaCaminho, mesmoCaminho, pctVar, posicaoNaRegua,
@@ -31,16 +37,33 @@ const corDoLado = (lado: LadoVG) => (lado === 'saida' ? COR.saida : COR.entrada)
 const corDaLinha = (d: AnaliseVG, l: { caminho: CaminhoVG; grupo: string | null }, i: number) =>
   corDoGrupo(d.lado, l.caminho.length === 1 ? Math.max(0, d.abas.findIndex((a) => a.grupo === l.grupo)) : i);
 
-export function ModalAnaliseVG({ alvo, ctx, rotuloContas, onFechar, onLancamentos }: {
+export function ModalAnaliseVG({ alvo, ctx, rotuloContas, recorte = '', versao = 0, inicial, onFechar, onLancamentos, onAbrirLancamento, onVerNaLista }: {
   alvo: AlvoAnaliseVG; ctx: ContextoAnaliseVG; rotuloContas: string; onFechar: () => void;
-  /** "N lanç. ›" — por ora só a INTENÇÃO (a gaveta de lançamentos é frente própria) */
+  /** fazenda · atividade da tela (o contexto da gaveta) */
+  recorte?: string;
+  /** sobe quando um lançamento foi salvo: modal e gaveta releem o que mostram (sem F5, sem perder o lugar) */
+  versao?: number;
+  /** a volta da lista de Lançamentos: o modal e a gaveta onde estavam */
+  inicial?: { estado: EstadoAnaliseVG; gaveta: CaminhoVG | null };
+  /** "N lanç. ›" — a gaveta abriu neste nó (quem chama pode guardar o lugar) */
   onLancamentos?: (caminho: CaminhoVG, e: EstadoAnaliseVG) => void;
+  /** clique num lançamento da gaveta — SEMPRE o `lancamento_id` (a parte 2+ da divisão tem a chave "id#2") */
+  onAbrirLancamento?: (lancamentoId: string, l: LancamentoGavetaVG) => void;
+  /** "Ver na lista de Lançamentos ›" — os filtros equivalentes e o lugar para voltar */
+  onVerNaLista?: (f: FiltrosListaVG, volta: { estado: EstadoAnaliseVG; gaveta: CaminhoVG }) => void;
 }) {
-  const [e, setE] = useState<EstadoAnaliseVG>(() => estadoInicialAnalise(alvo.lado, alvo.grupo, alvo.am));
+  const [e, setE] = useState<EstadoAnaliseVG>(() => inicial?.estado ?? estadoInicialAnalise(alvo.lado, alvo.grupo, alvo.am));
   const [d, setD] = useState<AnaliseVG | null>(null);
   const [erro, setErro] = useState<string | null>(null);
-  const [intencao, setIntencao] = useState<CaminhoVG | null>(null);
   const ctxChave = JSON.stringify(ctx);
+  /* PR 5 — a gaveta: o nó (a janela é a do modal: mês e critério) e o que o banco devolveu, página a página */
+  const [gaveta, setGaveta] = useState<CaminhoVG | null>(inicial?.gaveta ?? null);
+  const [dg, setDg] = useState<DadosGavetaVG | null>(null);
+  const [gCarregando, setGCarregando] = useState(false);
+  const [gErro, setGErro] = useState<string | null>(null);
+  const gChave = gaveta ? JSON.stringify([gaveta, e.lado, e.am, e.criterio]) : '';
+  const paginasRef = useRef(1);
+  const ultimaChaveG = useRef('');
 
   useEffect(() => {
     let vivo = true;
@@ -53,21 +76,50 @@ export function ModalAnaliseVG({ alvo, ctx, rotuloContas, onFechar, onLancamento
     }).catch((err: Error) => { if (vivo) setErro(err.message); });
     return () => { vivo = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ctxChave, JSON.stringify(e)]);
+  }, [ctxChave, JSON.stringify(e), versao]);
+
+  /* a gaveta: troca de nó, mês ou critério pede a 1ª página; o salvar de um lançamento (versao) relê as páginas já abertas */
+  useEffect(() => {
+    if (!gaveta) { setDg(null); ultimaChaveG.current = ''; return; }
+    let vivo = true;
+    const mesmoNo = ultimaChaveG.current === gChave + ctxChave;
+    ultimaChaveG.current = gChave + ctxChave;
+    if (!mesmoNo) paginasRef.current = 1;
+    setGCarregando(true);
+    const pedido = { lado: e.lado, caminho: gaveta, am: e.am, criterio: e.criterio };
+    (mesmoNo ? recarregarGavetaVG(ctx, pedido, paginasRef.current) : carregarGavetaVG(ctx, pedido)).then((x) => {
+      if (!vivo) return;
+      setGErro(null); setDg(x);
+    }).catch((err: Error) => { if (vivo) setGErro(err.message); }).finally(() => { if (vivo) setGCarregando(false); });
+    return () => { vivo = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gChave, ctxChave, versao]);
+
+  const maisDaGaveta = () => {
+    if (!gaveta || !dg || gCarregando) return;
+    setGCarregando(true);
+    carregarGavetaVG(ctx, { lado: e.lado, caminho: gaveta, am: e.am, criterio: e.criterio }, dg.pagina + 1).then((x) => {
+      paginasRef.current = x.pagina;
+      setDg((atual) => (atual ? { ...x, linhas: [...atual.linhas, ...x.linhas] } : x));
+    }).catch((err: Error) => setGErro(err.message)).finally(() => setGCarregando(false));
+  };
 
   const lado = e.lado;
   const raizRotulo = lado === 'saida' ? 'Saídas' : 'Entradas';
-  const lancar = (c: CaminhoVG) => { setIntencao(c); onLancamentos?.(c, e); };
+  const lancar = (c: CaminhoVG) => { setGaveta(c); onLancamentos?.(c, e); };
 
   return (
     <DialogPrimitive.Root open onOpenChange={(o) => { if (!o) onFechar(); }}>
       <DialogPortal>
         <DialogOverlay />
         <DialogPrimitive.Content aria-describedby={undefined} data-testid="modal-analise"
-          className="fixed left-1/2 top-1/2 z-50 flex h-[calc(100vh-16px)] max-h-[940px] w-[calc(100vw-16px)] max-w-[1520px] -translate-x-1/2 -translate-y-1/2 flex-col overflow-y-hidden overflow-x-auto rounded-lg bg-[#f4f6f9] text-[10px] shadow-2xl"
-          data-intencao-lancamentos={intencao ? chaveCaminho(intencao) : undefined}>
+          className="fixed left-1/2 top-1/2 z-50 flex h-[calc(100vh-16px)] max-h-[940px] w-[calc(100vw-16px)] max-w-[1520px] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-lg bg-[#f4f6f9] text-[10px] shadow-2xl"
+          data-gaveta={gaveta ? chaveCaminho(gaveta) : undefined}
+          onEscapeKeyDown={(ev) => { if (gaveta) { ev.preventDefault(); setGaveta(null); } }}>
           <DialogPrimitive.Title className="sr-only">Análise de {raizRotulo.toLowerCase()}</DialogPrimitive.Title>
-          {/* abaixo de 1000px a Visão Geral não tem desenho (rola de lado): o modal também — largura mínima de 984px, nada cortado */}
+          {/* abaixo de 1000px a Visão Geral não tem desenho (rola de lado): o modal também — largura mínima de 984px, nada cortado.
+              PR 5: quem rola é esta caixa (não o modal), para a gaveta ficar presa à borda direita da janela */}
+          <div className="h-full min-h-0 overflow-x-auto overflow-y-hidden" data-testid="analise-rolagem-lateral">
           <div className="flex h-full min-w-[984px] flex-col">
           {/* CABEÇALHO — abas na ordem do banco (a lista não muda ao clicar: a posição de cada uma é fixa) */}
           <div className="flex h-9 shrink-0 items-center gap-2 bg-[#2f3d4f] px-2.5 text-white">
@@ -172,6 +224,14 @@ export function ModalAnaliseVG({ alvo, ctx, rotuloContas, onFechar, onLancamento
             </div>
           </div>
           </div>
+          </div>
+          {gaveta && (
+            <GavetaVG g={dg} caminho={gaveta} carregando={gCarregando} erro={gErro}
+              contexto={[rotuloContas, recorte].filter(Boolean).join(' · ')} avisos={avisosDaLista(ctx, dg)}
+              onIr={setGaveta} onFechar={() => setGaveta(null)} onMais={maisDaGaveta}
+              onAbrirLancamento={(l) => onAbrirLancamento?.(l.lancamento_id, l)}
+              onVerNaLista={() => dg && onVerNaLista?.(filtrosDaLista(ctx, dg, gaveta), { estado: e, gaveta })} />
+          )}
         </DialogPrimitive.Content>
       </DialogPortal>
     </DialogPrimitive.Root>

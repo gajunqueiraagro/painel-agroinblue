@@ -4,7 +4,15 @@
  *   A2 a tela não soma: valor, meta, Dif. R$, %, KPIs e o centro do donut são os do banco, escritos; sem meta → "—"
  *   A3 critério e unidade vão ao banco; a unidade que não vale fica apagada; a que o novo foco não aceita volta para R$
  *   A4 navegação: linha da direita → item do gráfico; ‹ › → o irmão seguinte; caminho → aba; esquerda → foco
- *   A5 "N lanç. ›" só registra a intenção (não pede nada ao banco nem troca o gráfico)
+ *   A5 PR 5 — "N lanç. ›" abre a GAVETA no nó da linha: pede a `fn_vg_gaveta` (nó, mês, critério e o recorte da tela) e não troca o
+ *      gráfico; Esc fecha a gaveta antes do modal
+ *   G1 a gaveta escreve o que o banco mandou (a tela não soma): indicadores, resumo, filhos (clique desce), total fixo
+ *   G2 subcentro: lançamentos com data dd/mm/aaaa; a parte 2 da divisão ("id#2") abre o LANÇAMENTO (o lancamento_id); "Mais N de M ›"
+ *      pede a página seguinte e a acrescenta; nó vazio: a frase dentro do quadro
+ *   G3 salvou (a versão subiu): a gaveta relê as páginas já abertas, sem fechar; "Ver na lista" leva os filtros equivalentes
+ *   G4 (G4, G4a–c) o AVISO acima do "Ver na lista" (a tela nunca esconde diferença): várias contas, vencidos de antes da janela, transferências
+ *      entre contas escolhidas — cada um com a sua frase; sem diferença a linha fica vazia; o lugar existe em qualquer nível. O nó de
+ *      transferências abre a lista no tipo "3-Transferências", sem centro
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act, within } from '@testing-library/react';
@@ -14,6 +22,7 @@ vi.mock('@/integrations/supabase/client', () => ({ supabase: { rpc, from: () => 
 
 import { ModalAnaliseVG } from './ModalAnaliseVG';
 import type { AnaliseVG, LinhaAnaliseVG } from '@/lib/financeiro/visaoGeralAnalise';
+import type { GavetaVG, LancamentoGavetaVG } from '@/lib/financeiro/visaoGeralGaveta';
 
 const linha = (caminho: (string | null)[], rotulo: string, valor: number | null, meta: number | null, extra: Partial<LinhaAnaliseVG> = {}): LinhaAnaliseVG => ({
   caminho, rotulo, grupo: caminho[0] ?? null, valor, meta, dif: meta == null || valor == null ? null : Math.round((valor - meta) * 100) / 100,
@@ -40,13 +49,45 @@ const ANALISE: AnaliseVG = {
 };
 const CTX = { clienteId: 'cli', de: '2026-01-01', ate: '2026-12-31', contas: null, fazendas: null, atividade: null, hoje: '2026-10-23', status: ['previsto'], comVencidos: true };
 
+const lanc = (i: number, extra: Partial<LancamentoGavetaVG> = {}): LancamentoGavetaVG => ({
+  chave: `l${i}`, lancamento_id: `l${i}`, parte_ordem: 1, partes_total: 1, data: `2026-09-${String(10 + i).padStart(2, '0')}`,
+  favorecido: `Favorecido ${i}`, descricao: `Compra ${i}`, conta: 'Banco X', valor: 100 * (i + 1), valor_lancamento: 100 * (i + 1),
+  status: 'realizado', previsto: false, vencido: false, ...extra,
+});
+const GAV_FILHOS: GavetaVG = {
+  lado: 'saida', mes: '2026-09', criterio: 'mes', janela: { de: '2026-09-01', ate: '2026-09-30' }, folha: false,
+  caminho: [{ caminho: [], rotulo: 'Saídas' }, { caminho: ['Custeio'], rotulo: 'Custeio' }, { caminho: ['Custeio', 'agricultura'], rotulo: 'Agricultura' }],
+  irmaos: [{ caminho: ['Custeio', 'pecuaria'], rotulo: 'Pecuária', valor: 754685.64 }, { caminho: ['Custeio', 'agricultura'], rotulo: 'Agricultura', valor: 18719.09 }],
+  qtd: 9, total: 18719.09, medio: 2079.9,
+  resumo: { tipo: 'filhos', linhas: [{ rotulo: 'Insumos', qtd: 6, valor: 15000, pct: 80.1 }, { rotulo: 'Mão de obra', qtd: 3, valor: 3719.09, pct: 19.9 }] },
+  linhas: [{ caminho: ['Custeio', 'agricultura', 'Insumos'], rotulo: 'Insumos', qtd: 6, valor: 15000, pct: 80.1 },
+           { caminho: ['Custeio', 'agricultura', 'Mão de obra'], rotulo: 'Mão de obra', qtd: 3, valor: 3719.09, pct: 19.9 }],
+  total_linhas: 2, pagina: 1, por_pagina: 500, paginas: 1,
+};
+const SUB: (string | null)[] = ['Custeio', 'agricultura', 'Insumos', 'Sementes'];
+const GAV_FOLHA = (pagina = 1): GavetaVG => ({
+  ...GAV_FILHOS, folha: true, caminho: [...GAV_FILHOS.caminho, { caminho: SUB.slice(0, 3), rotulo: 'Insumos' }, { caminho: SUB, rotulo: 'Sementes' }],
+  irmaos: [{ caminho: SUB, rotulo: 'Sementes', valor: 1234.56 }], qtd: 501, total: 98765.43, medio: 197.13,
+  resumo: { tipo: 'favorecido', linhas: [{ rotulo: 'Favorecido 1', qtd: 3, valor: 600 }] },
+  linhas: pagina === 1 ? [lanc(0), lanc(1, { chave: 'l9#2', lancamento_id: 'l9', parte_ordem: 2, partes_total: 2, valor: 40, valor_lancamento: 100 })]
+                       : [lanc(2, { previsto: true, vencido: true, status: 'previsto' })],
+  total_linhas: 3, pagina, por_pagina: 2, paginas: 2,
+});
+
 let resposta: AnaliseVG = ANALISE;
-beforeEach(() => { (globalThis as any).ResizeObserver ??= class { observe() {} disconnect() {} }; rpc.mockReset(); resposta = ANALISE; rpc.mockImplementation(async () => ({ data: resposta, error: null })); });
-const ultimo = () => rpc.mock.calls[rpc.mock.calls.length - 1][1];
-const abrir = async (grupo: string | null = 'Custeio', onLanc = vi.fn()) => {
-  render(<ModalAnaliseVG alvo={{ lado: 'saida', grupo, am: '2026-09' }} ctx={CTX} rotuloContas="Caixa + cartões" onFechar={() => {}} onLancamentos={onLanc} />);
+let gaveta: (args: any) => GavetaVG = () => GAV_FILHOS;
+beforeEach(() => {
+  (globalThis as any).ResizeObserver ??= class { observe() {} disconnect() {} };
+  rpc.mockReset(); resposta = ANALISE; gaveta = () => GAV_FILHOS;
+  rpc.mockImplementation(async (fn: string, args: any) => ({ data: fn === 'fn_vg_gaveta' ? gaveta(args) : resposta, error: null }));
+});
+const ultimo = () => rpc.mock.calls.filter((c) => c[0] === 'fn_vg_analise').at(-1)![1];
+const daGaveta = () => rpc.mock.calls.filter((c) => c[0] === 'fn_vg_gaveta').map((c) => c[1]);
+const passar = () => act(async () => { for (let i = 0; i < 6; i += 1) await Promise.resolve(); });
+const abrir = async (grupo: string | null = 'Custeio', onLanc = vi.fn(), extra: Partial<React.ComponentProps<typeof ModalAnaliseVG>> = {}) => {
+  const r = render(<ModalAnaliseVG alvo={{ lado: 'saida', grupo, am: '2026-09' }} ctx={CTX} rotuloContas="Caixa + cartões" onFechar={() => {}} onLancamentos={onLanc} {...extra} />);
   await act(async () => { await Promise.resolve(); await Promise.resolve(); });
-  return onLanc;
+  return Object.assign(onLanc, { rerender: r.rerender });
 };
 
 describe('modal de análise', () => {
@@ -111,13 +152,144 @@ describe('modal de análise', () => {
     expect(ultimo()).toMatchObject({ p_foco: ['Custeio', 'agricultura'] });
   });
 
-  it('A5 "N lanç. ›" só registra a intenção', async () => {
-    const onLanc = await abrir();
-    const n = rpc.mock.calls.length;
+  it('A5 "N lanç. ›" abre a gaveta no nó da linha; Esc fecha a gaveta antes do modal', async () => {
+    const onFechar = vi.fn();
+    const onLanc = await abrir('Custeio', vi.fn(), { onFechar });
+    const nAnalise = rpc.mock.calls.filter((c) => c[0] === 'fn_vg_analise').length;
     fireEvent.click(screen.getByTestId('analise-lanc-1'));
-    await act(async () => { await Promise.resolve(); });
+    await passar();
     expect(onLanc).toHaveBeenCalledWith(['Custeio', 'agricultura'], expect.objectContaining({ aba: 'Custeio' }));
-    expect(rpc.mock.calls.length).toBe(n);
-    expect(screen.getByTestId('modal-analise').getAttribute('data-intencao-lancamentos')).toBe('["Custeio","agricultura"]');
+    expect(daGaveta()[0]).toMatchObject({ p_lado: 'saida', p_caminho: ['Custeio', 'agricultura'], p_mes: '2026-09', p_criterio: 'mes',
+      p_contas: null, p_status: ['previsto'], p_incluir_vencidos: true, p_pagina: 1, p_por_pagina: 500 });
+    /* o gráfico não trocou (nenhum pedido novo ao modal) */
+    expect(rpc.mock.calls.filter((c) => c[0] === 'fn_vg_analise').length).toBe(nAnalise);
+    expect(screen.getByTestId('modal-analise').getAttribute('data-gaveta')).toBe('["Custeio","agricultura"]');
+    fireEvent.keyDown(screen.getByTestId('modal-analise'), { key: 'Escape' });
+    expect(screen.queryByTestId('gaveta')).toBeNull();
+    expect(onFechar).not.toHaveBeenCalled();
+  });
+
+  it('G1 a gaveta escreve o que o banco mandou; filho desce; o caminho e os irmãos trocam o nó', async () => {
+    await abrir();
+    fireEvent.click(screen.getByTestId('analise-lanc-1'));
+    await passar();
+    expect(screen.getByTestId('gaveta-qtd').textContent).toBe('9');
+    expect(screen.getByTestId('gaveta-total').textContent).toBe('R$ 18.719,09');
+    expect(screen.getByTestId('gaveta-medio').textContent).toBe('R$ 2.079,90');
+    expect(screen.getByTestId('gaveta-rodape-total').textContent).toBe('R$ 18.719,09');
+    expect(screen.getByTestId('gaveta-resumo').textContent).toContain('80,1%');
+    expect(screen.getByTestId('gaveta-contexto').textContent).toBe('set/26 · Caixa + cartões');
+    expect(screen.getByTestId('gaveta-linha-0').textContent).toContain('R$ 15.000,00');
+    fireEvent.click(screen.getByTestId('gaveta-linha-1'));
+    await passar();
+    expect(daGaveta().at(-1)).toMatchObject({ p_caminho: ['Custeio', 'agricultura', 'Mão de obra'] });
+    fireEvent.click(screen.getByTestId('gaveta-irmao-0'));
+    await passar();
+    expect(daGaveta().at(-1)).toMatchObject({ p_caminho: ['Custeio', 'pecuaria'] });
+    fireEvent.click(screen.getByTestId('gaveta-caminho-1'));
+    await passar();
+    expect(daGaveta().at(-1)).toMatchObject({ p_caminho: ['Custeio'] });
+  });
+
+  it('G2 subcentro: datas dd/mm/aaaa, a parte 2 abre o lançamento, "Mais" pagina, nó vazio com a frase', async () => {
+    gaveta = (a) => GAV_FOLHA(a.p_pagina);
+    const onAbrir = vi.fn();
+    await abrir('Custeio', vi.fn(), { onAbrirLancamento: onAbrir });
+    fireEvent.click(screen.getByTestId('analise-lanc-1'));
+    await passar();
+    fireEvent.click(screen.getByTestId('gaveta-irmao-0'));   /* o subcentro */
+    await passar();
+    expect(daGaveta().at(-1)).toMatchObject({ p_caminho: SUB });
+    expect(screen.getByTestId('gaveta-linha-0').textContent).toContain('10/09/2026');
+    expect(screen.getByTestId('gaveta-parte-1').textContent).toBe('parte 2/2 · ');
+    fireEvent.click(screen.getByTestId('gaveta-linha-1'));
+    expect(onAbrir).toHaveBeenCalledWith('l9', expect.objectContaining({ chave: 'l9#2' }));
+    expect(screen.getByTestId('gaveta-mais').textContent).toBe('Mais 1 de 1 ›');
+    fireEvent.click(screen.getByTestId('gaveta-mais'));
+    await passar();
+    expect(daGaveta().at(-1)).toMatchObject({ p_pagina: 2 });
+    expect(screen.getByTestId('gaveta-linha-2').textContent).toContain('12/09/2026');
+    expect(screen.queryByTestId('gaveta-mais')).toBeNull();
+    /* o total é o do banco (o nó inteiro), não a soma das linhas na tela */
+    expect(screen.getByTestId('gaveta-rodape-total').textContent).toBe('R$ 98.765,43');
+    gaveta = () => ({ ...GAV_FOLHA(), linhas: [], total_linhas: 0, qtd: 0, total: 0, medio: null, paginas: 1 });
+    fireEvent.click(screen.getByTestId('gaveta-caminho-3'));
+    await passar();
+    expect(screen.getByTestId('gaveta-vazio').textContent).toBe('Nenhum lançamento neste item em set/26.');
+  });
+
+  it('G3 salvou: a gaveta relê as páginas abertas, sem fechar; "Ver na lista" leva os filtros equivalentes', async () => {
+    gaveta = (a) => GAV_FOLHA(a.p_pagina);
+    const onVer = vi.fn();
+    const m = await abrir('Custeio', vi.fn(), { onVerNaLista: onVer, versao: 0 });
+    fireEvent.click(screen.getByTestId('analise-lanc-1'));
+    await passar();
+    fireEvent.click(screen.getByTestId('gaveta-irmao-0'));
+    await passar();
+    fireEvent.click(screen.getByTestId('gaveta-mais'));
+    await passar();
+    const antes = daGaveta().length;
+    m.rerender(<ModalAnaliseVG alvo={{ lado: 'saida', grupo: 'Custeio', am: '2026-09' }} ctx={CTX} rotuloContas="Caixa + cartões" onFechar={() => {}}
+      onLancamentos={m} onVerNaLista={onVer} versao={1} />);
+    await passar();
+    expect(daGaveta().slice(antes).map((x) => x.p_pagina).sort()).toEqual([1, 2]);
+    expect(screen.getByTestId('gaveta')).toBeTruthy();
+    expect(screen.getByTestId('gaveta-linha-2')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('gaveta-ver-lista'));
+    expect(onVer).toHaveBeenCalledWith(
+      { tipo: '2-Saídas', anos: ['2026'], meses: ['09'], status: ['realizado', 'previsto'], fazendaId: null, contaId: null,
+        atividade: 'agricultura', centro: 'Insumos', subcentro: 'Sementes' },
+      expect.objectContaining({ gaveta: SUB }));
+  });
+
+  /* o banco devolve a folha (irmão 0 = o subcentro) com o `lista` pedido; a FOLHA da tela é o caminho de 4 níveis */
+  const comLista = (lista: GavetaVG['lista'], base: () => GavetaVG = () => GAV_FOLHA()) => (a: any) => ({ ...base(), folha: a.p_caminho.length === 4, lista });
+  const aoSubcentro = async () => {
+    fireEvent.click(screen.getByTestId('analise-lanc-1'));
+    await passar();
+    expect(screen.getByTestId('gaveta-aviso').textContent).toBe('');   /* nível com filhos: a linha existe, vazia */
+    expect(screen.getByTestId('gaveta-aviso').getAttribute('data-avisos')).toBe('0');
+    fireEvent.click(screen.getByTestId('gaveta-irmao-0'));
+    await passar();
+    expect(daGaveta().at(-1)!.p_caminho).toHaveLength(4);
+  };
+  const aviso = () => screen.getByTestId('gaveta-aviso');
+
+  it('G4 sem diferença: a linha fica vazia (o lugar continua reservado)', async () => {
+    gaveta = comLista({ vencidos_fora: 0, transf_internas: 0 });
+    await abrir('Custeio');
+    await aoSubcentro();
+    expect(aviso().textContent).toBe('');
+    expect(aviso().getAttribute('data-avisos')).toBe('0');
+    expect(screen.getByTestId('gaveta-ver-lista')).toBeTruthy();
+  });
+
+  it('G4a vencidos trazidos de antes da janela → "Na lista, os vencidos ficam no mês do vencimento."', async () => {
+    gaveta = comLista({ vencidos_fora: 2, transf_internas: 0 });
+    await abrir('Custeio');
+    await aoSubcentro();
+    expect(aviso().textContent).toBe('Na lista, os vencidos ficam no mês do vencimento.');
+  });
+
+  it('G4b várias contas → a frase das contas (vários avisos: a primeira na linha, todas no title)', async () => {
+    gaveta = comLista({ vencidos_fora: 1, transf_internas: 0 });
+    await abrir('Custeio', vi.fn(), { ctx: { ...CTX, contas: ['c1', 'c2'] } });
+    await aoSubcentro();
+    expect(aviso().textContent).toBe('A lista filtra uma conta por vez: vai abrir com todas as contas.');
+    expect(aviso().getAttribute('data-avisos')).toBe('2');
+    expect(aviso().getAttribute('title')).toContain('Na lista, os vencidos ficam no mês do vencimento.');
+  });
+
+  it('G4c transferências entre as contas escolhidas → a frase delas; "Ver na lista" no tipo 3, sem centro', async () => {
+    const TRANSF: (string | null)[] = ['Outras saídas', null, 'Transferências para outras contas', null];
+    gaveta = comLista({ vencidos_fora: 0, transf_internas: 6 },
+      () => ({ ...GAV_FOLHA(), irmaos: [{ caminho: TRANSF, rotulo: 'Sem subcentro', valor: 10 }] }));
+    const onVer = vi.fn();
+    await abrir('Custeio', vi.fn(), { onVerNaLista: onVer, ctx: { ...CTX, contas: ['c1'] } });
+    await aoSubcentro();
+    expect(daGaveta().at(-1)!.p_caminho).toEqual(TRANSF);
+    expect(aviso().textContent).toBe('A lista mostra as transferências entre as contas escolhidas; aqui elas se anulam.');
+    fireEvent.click(screen.getByTestId('gaveta-ver-lista'));
+    expect(onVer.mock.calls[0][0]).toMatchObject({ tipo: '3-Transferências', centro: null, subcentro: null, atividade: null, contaId: 'c1' });
   });
 });
