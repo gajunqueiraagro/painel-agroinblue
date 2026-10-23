@@ -116,3 +116,69 @@ export function tela(a: { p_de: string; p_ate: string; p_contas?: string[] | nul
     contas_sem_ancora: a.p_contas?.includes('c4') ? ['Cartão Exemplo'] : [],
   };
 }
+
+/* PR 4 — o banco SINTÉTICO do MODAL DE ANÁLISE (`fn_vg_analise`). A árvore: grupo › atividade › centro › subcentro, com os nomes
+ * MAIS LONGOS que os reais (o pior caso de largura) e valores na casa dos milhões; a parte de cada filho fecha com o pai. Meta só no
+ * Custeio (a régua e o "—" do resto). Unidade: R$/cab, R$/UA, R$/@ e R$/ha com denominadores fixos; só onde vale (pecuária, etc.). */
+const ATIV: [string | null, number][] = [['pecuaria', 0.62], ['agricultura', 0.23], ['administrativo', 0.1], [null, 0.05]];
+const CENTROS: [string, number][] = [['Nutrição e suplementação mineral do rebanho de cria e recria', 0.5], ['Sanidade animal e reprodução assistida', 0.3],
+  ['Manutenção de pastagens, cercas e aguadas', 0.2]];
+const SUBS: [string, number][] = [['Sal mineral proteinado de seca', 0.4], ['Ração de creep-feeding para bezerros', 0.3], ['Vacinas e vermífugos', 0.2], ['Outros insumos', 0.1]];
+const ROT_ATIV: Record<string, string> = { pecuaria: 'Pecuária', agricultura: 'Agricultura', administrativo: 'Administrativo' };
+const DEN: Record<string, number> = { rs_cab: 7082.5, rs_ua: 5310.2, rs_arroba: 1840.4, rs_ha_prod: 2650, rs_ha_pec: 1980, rs_ha_agri: 670, rs_ha_plant: 540 };
+const UNID: [string, string][] = [['rs', 'R$'], ['rs_cab', 'R$/cab/mês'], ['rs_ua', 'R$/UA/mês'], ['rs_arroba', 'R$/@'], ['rs_ha_prod', 'R$/ha produtiva'],
+  ['rs_ha_pec', 'R$/ha pecuária'], ['rs_ha_agri', 'R$/ha agricultura'], ['rs_ha_plant', 'R$/ha plantado']];
+const validas = (ativ: string | null | undefined) => ativ === 'pecuaria' ? ['rs', 'rs_cab', 'rs_ua', 'rs_arroba', 'rs_ha_prod', 'rs_ha_pec']
+  : ativ === 'agricultura' ? ['rs', 'rs_ha_prod', 'rs_ha_agri', 'rs_ha_plant'] : ['rs', 'rs_ha_prod'];
+
+export function analise(a: { p_de: string; p_ate: string; p_mes: string; p_lado: 'entrada' | 'saida'; p_aba?: string | null; p_foco?: (string | null)[];
+  p_grafico?: (string | null)[] | null; p_criterio?: string; p_unidade?: string; p_contas?: string[] | null }) {
+  const ms = meses(a.p_de, a.p_ate);
+  const k = ms.indexOf(a.p_mes);
+  const crit = a.p_criterio ?? 'mes', uni = a.p_unidade ?? 'rs';
+  const peso = a.p_contas ? Math.max(0.2, a.p_contas.length / 3) : 1;
+  const grupos = a.p_lado === 'saida' ? GRUPOS_SAI : GRUPOS_ENT;
+  const parte = (p: (string | null)[]) => (p.length > 1 ? ATIV.find((x) => x[0] === p[1])?.[1] ?? 0 : 1)
+    * (p.length > 2 ? CENTROS.find((x) => x[0] === p[2])?.[1] ?? 0 : 1) * (p.length > 3 ? SUBS.find((x) => x[0] === p[3])?.[1] ?? 0 : 1);
+  const base = (p: (string | null)[]) => (p.length === 0 ? grupos.reduce((s, g) => s + (BASE[g] ?? 50000), 0) : (BASE[p[0]!] ?? 50000) * parte(p));
+  const mesV = (p: (string | null)[], i: number) => r2(base(p) * 3 * peso * (1 + 0.15 * Math.sin(i * 1.1 + p.length)));
+  const janela = (p: (string | null)[]) => { const vs = ms.slice(0, k + 1).map((_, i) => mesV(p, i)); const s = vs.reduce((x, y) => x + y, 0);
+    return crit === 'mes' ? mesV(p, k) : crit === 'media' ? s / (k + 1) : s; };
+  const ok = (p: (string | null)[]) => validas(p[1] ?? null).includes(uni);
+  const u = (v: number, p: (string | null)[]) => (!ok(p) ? null : r2(uni === 'rs' ? v : v / DEN[uni]));
+  const temMeta = (p: (string | null)[]) => p[0] === 'Custeio';
+  const rotulo = (p: (string | null)[]) => p.length === 0 ? (a.p_lado === 'saida' ? 'Saídas' : 'Entradas') : p.length === 1 ? p[0]!
+    : p.length === 2 ? (p[1] ? ROT_ATIV[p[1]] : 'Sem atividade') : p[p.length - 1]!;
+  const linha = (p: (string | null)[]) => {
+    const v = u(janela(p), p), mt = temMeta(p) && v != null ? r2(v * 0.92) : null;
+    const razao = mt ? Math.round((v! / mt) * 10000) / 10000 : null;
+    return { caminho: p, rotulo: rotulo(p), grupo: p[0] ?? null, valor: v, meta: mt, dif: mt == null || v == null ? null : r2(v - mt),
+      pct: mt ? r1(((v! - mt) / mt) * 100) : null, razao, qtd: 12 + p.length * 7, unidade_valida: ok(p),
+      faixa: razao == null ? null : razao < 0.9 ? 'boa' : razao < 1 ? 'ideal' : razao < 1.15 ? 'risco' : 'critica' };
+  };
+  const filhos = (p: (string | null)[]): (string | null)[][] => p.length === 0 ? grupos.map((g) => [g]) : p.length === 1 ? ATIV.map((x) => [...p, x[0]])
+    : p.length === 2 ? CENTROS.map((x) => [...p, x[0]]) : p.length === 3 ? SUBS.map((x) => [...p, x[0]]) : [];
+  const n = a.p_aba ? [a.p_aba] : [];
+  const f = a.p_foco ?? [];
+  const g = a.p_grafico ?? f;
+  const pai = g.slice(0, Math.max(0, g.length - 1));
+  const tot = janela(n);
+  return {
+    lado: a.p_lado, mes: a.p_mes, criterio: crit, unidade: uni, meses_janela: crit === 'mes' ? 1 : k + 1, periodo: { de: ms[0], ate_mes: a.p_mes },
+    abas: grupos.map((x) => ({ grupo: x, rotulo: x })),
+    unidades: UNID.map(([id, rot]) => ({ id, rotulo: rot, valida: validas(f[1] ?? null).includes(id) })),
+    resumo: { ...linha(n), valor_rs: r2(tot), pct_da_raiz: n.length ? r1((tot / janela([])) * 100) : null,
+      fatias: filhos(n).map((c) => ({ caminho: c, rotulo: rotulo(c), grupo: c[0], pct: r1((janela(c) / tot) * 100) })) },
+    tabela: { total: linha(n), linhas: filhos(n).map(linha) },
+    foco: { total: linha(f), linhas: filhos(f).map(linha) },
+    grafico: {
+      item: linha(g), caminho: [[], ...g.map((_, i) => g.slice(0, i + 1))].map((c) => ({ caminho: c, rotulo: rotulo(c) })),
+      irmaos: g.length ? filhos(pai) : [],
+      serie: !ok(g) ? [] : ms.map((x, i) => { const v = mesV(g, i); const ac = ms.slice(0, i + 1).reduce((s, _, j) => s + mesV(g, j), 0);
+        return { am: x, realizado: x <= HOJE ? u(v, g) : 0, previsto: x > HOJE ? u(v, g) : 0, total: u(v, g), media: x <= HOJE ? u(ac / (i + 1), g) : null,
+          meta: temMeta(g) ? u(v * 0.92, g) : null }; }),
+      kpis: !ok(g) ? null : { mes: u(mesV(g, k), g), media: u(ms.slice(0, k + 1).reduce((s, _, j) => s + mesV(g, j), 0) / (k + 1), g),
+        vs_meta: temMeta(g) ? 8.7 : null, tendencia: r1(((mesV(g, k) - mesV(g, 0)) / mesV(g, 0)) * 100) },
+    },
+  };
+}

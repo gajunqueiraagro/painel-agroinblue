@@ -424,10 +424,12 @@ if (tela === 'mesclar') {
   /* FIN-VISAO-GERAL-01 PR 3 — Financeiro › Visão Geral: a BARRA REAL (`BarraSecao` com Contas · Fazenda · Safra · Atividade) e a tela, com
      hoje = 22/10/2026. Banco SINTÉTICO (`dados/visaoGeral.ts`); `globalThis.__vgReal` (posto pelo ensaio, nunca no repo) troca a
      resposta da `fn_vg_tela` por uma do banco de verdade. `&modo=sai|ent` abre no modo; `&mes=AAAA-MM` clica o mês. */
-  g.__fazendaBancada = { fazendas: [{ id: 'f1', nome: 'Fazenda Exemplo Nome Longo Retiro', cliente_id: 'cli' }, { id: 'f2', nome: 'Faz. Exemplo Dois', cliente_id: 'cli' }],
+  /* P71 — a fazenda de nome mais longo que o maior real (proto 23/10: 18 letras): 33 e 43 letras */
+  g.__fazendaBancada = { fazendas: [{ id: 'f1', nome: 'Fazenda Exemplo Nome Longo Retiro', cliente_id: 'cli' }, { id: 'f2', nome: 'Faz. Exemplo Dois', cliente_id: 'cli' },
+    { id: 'f3', nome: 'Fazenda Exemplo Nome Muito Longo Retiro Sul', cliente_id: 'cli' }],
     fazendaAtual: null, isGlobal: true, fazendaId: '__global__', setFazendaAtual: () => {} };
   g.__bancoBancada = { from: () => [], rpc: (fn: string, a: any) => fn === 'fn_vg_filtros' ? (g.__vgFiltrosReal ?? VG.FILTROS)
-    : fn === 'fn_vg_tela' ? (g.__vgReal ?? VG.tela(a)) : null };
+    : fn === 'fn_vg_tela' ? (g.__vgReal ?? VG.tela(a)) : fn === 'fn_vg_analise' ? VG.analise(a) : null };
   montarNaUrl(
     <div className="flex h-full flex-col">
       <BarraSecao area="Financeiro" secao="Visão Geral" atalho={<FiltrosBarraVG />} />

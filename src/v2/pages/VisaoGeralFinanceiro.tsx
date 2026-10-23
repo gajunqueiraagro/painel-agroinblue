@@ -21,6 +21,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Segmentado } from '@/components/ui/segmentado';
 import { cn } from '@/lib/utils';
 import { rotuloDasContas, useCarregarFiltrosVG } from '@/components/financeiro-v2/visaoGeral/FiltrosBarraVG';
+import { ModalAnaliseVG } from '@/components/financeiro-v2/visaoGeral/ModalAnaliseVG';
 import { CardVG } from '@/components/financeiro-v2/visaoGeral/CardVG';
 import { GraficoVG } from '@/components/financeiro-v2/visaoGeral/GraficoVG';
 import { GradeVG } from '@/components/financeiro-v2/visaoGeral/GradeVG';
@@ -61,7 +62,8 @@ export function VisaoGeralFinanceiro({ hoje = hojeLocal(), onAnalisar, inicial }
   /* P90 — mês · média · acumulado: o card, a grade e os ampliados (a série vem do banco; trocar não pede nada de novo) */
   const [criterio, setCriterio] = useState<CriterioTelaVG>('mes');
   const [erro, setErro] = useState<string | null>(null);
-  const [, setIntencao] = useState<AlvoAnaliseVG | null>(null);
+  /* PR 4 — o modal de análise: abre no lado, na aba (grupo) e no mês clicados */
+  const [alvo, setAlvo] = useState<AlvoAnaliseVG | null>(null);
   const clienteId = clienteAtual?.id ?? null;
   const contasChave = filtros.contas?.join(',') ?? '';
   const [status, setStatus] = useFiltroUrl<string[]>('vg_status', STATUS_INICIAIS, lerStatusVG, escreverStatusVG);
@@ -85,7 +87,7 @@ export function VisaoGeralFinanceiro({ hoje = hojeLocal(), onAnalisar, inicial }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clienteId, de, ate, contasChave, filtros.fazenda, filtros.atividade, hoje, status.join(','), vencidos]);
 
-  const analisar = (a: AlvoAnaliseVG) => { setIntencao(a); onAnalisar?.(a); };
+  const analisar = (a: AlvoAnaliseVG) => { setAlvo(a); onAnalisar?.(a); };
   /* a tela só desenha o que o banco devolveu para ESTE período; enquanto o novo não chega, fica o anterior (nada pisca nem encolhe) */
   const pronta = tela && tela.meses.length > 0 ? tela : null;
   /* P90 — o cabeçalho da grade ampliada e o PDF: o MESMO modelo (cliente, período, contas, recorte, chips, critério e o resumo do mês) */
@@ -188,6 +190,11 @@ export function VisaoGeralFinanceiro({ hoje = hojeLocal(), onAnalisar, inicial }
           </div>
         </section>
       </div>
+      {alvo && clienteId && (
+        <ModalAnaliseVG alvo={alvo} onFechar={() => setAlvo(null)} rotuloContas={rotuloContas}
+          ctx={{ clienteId, de: primeiroDia(de), ate: ultimoDia(ate), contas: filtros.contas, fazendas: filtros.fazenda ? [filtros.fazenda] : null,
+                 atividade: filtros.atividade, hoje, status, comVencidos: vencidos }} />
+      )}
     </div>
   );
 }

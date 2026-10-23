@@ -30,6 +30,7 @@ const TAMANHOS = arg('--tamanhos') ? arg('--tamanhos').split(',').map((t) => t.s
 const espera = (p, ms = 450) => p.waitForTimeout(ms);
 const botao = (re) => async (p) => { await p.getByRole('button', { name: re }).first().click(); await espera(p); };
 const clicar = (sel) => async (p) => { await p.locator(sel).first().click(); await espera(p); };
+const noLugar = (sel) => async (p) => { await p.locator(sel).first().dispatchEvent('click'); await espera(p); };
 /* o gesto e, depois, a casca da bancada de volta ao topo (o clique rola a PAGINA para trazer o botao a vista; o que se mede e' a tela) */
 const noTopo = (g) => async (p) => { await g(p); await p.evaluate(() => { window.scrollTo(0, 0); document.querySelectorAll('[data-casca]').forEach((c) => { c.scrollTop = 0; }); }); await espera(p, 150); };
 const ampliar = async (p) => { await p.locator('[data-testid="rodape-lancamentos"]').waitFor(); await espera(p, 900); await p.getByRole('button', { name: /^Ampliar$/ }).first().click(); await espera(p, 700); };
@@ -106,6 +107,10 @@ const CENARIOS = [
     ['fazenda escolhida (sem saldo)', async (p) => { if (!(await p.locator('[data-testid="vg-fazenda"]').isVisible())) return;
       await p.locator('[data-testid="vg-fazenda"] button').first().click(); await espera(p, 300);
       await p.getByText('Faz. Exemplo Dois', { exact: true }).last().click(); await espera(p); await p.keyboard.press('Escape'); await espera(p, 300); }],
+    /* P71 — a fazenda de nome mais longo (43 letras): o seletor tem largura fixa — nada na barra se desloca */
+    ['fazenda de nome longo', async (p) => { if (!(await p.locator('[data-testid="vg-fazenda"]').isVisible())) return;
+      await p.locator('[data-testid="vg-fazenda"] button').first().click(); await espera(p, 300);
+      await p.getByText('Fazenda Exemplo Nome Muito Longo Retiro Sul', { exact: true }).last().click(); await espera(p); await p.keyboard.press('Escape'); await espera(p, 300); }],
     /* P79 — os chips: desligar Programado, Previsto e Agendado (nenhum: o aviso aparece) e Vencidos; o aviso tem lugar próprio */
     ['sem Programado', clicar('[data-testid="vg-status-programado"]')], ['sem Previsto', clicar('[data-testid="vg-status-previsto"]')],
     ['nenhum status', clicar('[data-testid="vg-status-agendado"]')], ['sem Vencidos', clicar('[data-testid="vg-status-vencidos"]')],
@@ -118,6 +123,21 @@ const CENARIOS = [
        Playwright): abaixo de 1000px a VG rola de lado (não tem desenho ali) e o rolar do robô seria lido como deslocamento do modal */
     ...['card', 'grafico', 'grade'].map((b) => [`ampliar o ${b} e fechar`, async (p) => {
       await p.locator(`[data-testid="ampliar-${b}"]`).dispatchEvent('click'); await espera(p, 400); await p.keyboard.press('Escape'); await espera(p, 400); }])] },
+  /* PR 4 — o MODAL DE ANÁLISE: nada muda de altura ou posição ao trocar aba, linha, item, ‹ ›, critério, unidade, nível, caminho e mês.
+     O clique vai ao elemento onde ele está (`noLugar`, sem o "rolar até ele" do Playwright): abaixo de 1000px o modal rola de lado
+     (largura mínima, como a Visão Geral) e o rolar do robô seria lido como deslocamento */
+  { nome: 'visao-geral-analise', url: 'tela=visao-geral&barra=0', antes: async (p) => {
+      await p.locator('[data-testid^="grade-linha-saida:grupo:Custeio"]').dispatchEvent('click'); await p.locator('[data-testid="modal-analise"]').waitFor(); await espera(p, 700); },
+    estados: [
+      ['aba da raiz', noLugar('[data-testid="analise-aba-raiz"]')], ['aba Juros', noLugar('[data-testid="analise-aba-Juros"]')],
+      ['aba Custeio', noLugar('[data-testid="analise-aba-Custeio"]')], ['linha da esquerda', noLugar('[data-testid="analise-tabela-linha-0"]')],
+      ['item do gráfico', noLugar('[data-testid="analise-foco-linha-1"]')], ['próximo irmão', noLugar('[data-testid="analise-proximo"]')],
+      ['irmão anterior', noLugar('[data-testid="analise-anterior"]')],
+      ['média do período', async (p) => { await p.locator('[data-testid="analise-tabela"]').getByText('Média', { exact: true }).dispatchEvent('click'); await espera(p); }],
+      ['acumulado', async (p) => { await p.locator('[data-testid="analise-tabela"]').getByText('Acum.', { exact: true }).dispatchEvent('click'); await espera(p); }],
+      ['unidade R$/cab', async (p) => { await p.locator('[data-testid="analise-unidade"]').dispatchEvent('click'); await espera(p, 200); await p.locator('[data-testid="analise-unidade-rs_cab"]').dispatchEvent('click'); await espera(p); }],
+      ['descer um nível', noLugar('[data-testid="analise-descer-0"]')], ['caminho até o grupo', noLugar('[data-testid="analise-caminho-1"]')],
+      ['outro mês na coluna', async (p) => { await p.locator('[data-testid="analise-coluna-2026-03"]').dispatchEvent('click'); await espera(p); }]] },
   { nome: 'visao-geral-24m', url: 'tela=visao-geral&barra=0&faixa=per&de=2025-01&ate=2026-12', auto: true },
   { nome: 'contas-lista', url: 'tela=contas&barra=32&n=longo', auto: true, estados: [
     ['busca com resultado', digitar('[data-testid="busca-contas"]', 'bradesco')], ['busca sem resultado', digitar('[data-testid="busca-contas"]', 'zzzz')],

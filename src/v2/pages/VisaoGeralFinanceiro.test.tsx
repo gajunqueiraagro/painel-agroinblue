@@ -6,7 +6,7 @@
  *   V17 a grade ampliada com o cabeçalho e o resumo do mês (o mesmo modelo do PDF)
  *   V16 o gráfico ampliado com o painel do mês (do banco)
  *   V14 o critério escreve a série do banco (card e grade), sem novo pedido; V15 no acumulado, o saldo de cima é o do período
- *   V3 clicar num total ou grupo (grade ou card) só registra a intenção — nada abre (o modal é o PR 4)
+ *   V3 clicar num total ou grupo (grade ou card) abre o MODAL DE ANÁLISE (PR 4) no lado, na aba e no mês clicados
  *   V4 "Sem classificação" e "Transferências para outras contas" aparecem quando o banco as manda; o vencido marca o mês vigente
  *   V5 trocar o mês pela pílula muda o card sem pedir de novo ao banco (o ano é o mesmo)
  *   V6 P79: os chips (a mesma peça da CPR) só REPASSAM ao banco: padrão os três status e vencidos; desligar Programado pede sem ele;
@@ -104,15 +104,15 @@ describe('Visão Geral — render-only', () => {
       p_status: ['previsto', 'programado', 'agendado'], p_incluir_vencidos: true });
   });
 
-  it('V3 clicar em total ou grupo só registra a intenção — nada abre', async () => {
+  it('V3 clicar em total ou grupo abre o modal de análise no lado, na aba e no mês clicados', async () => {
     const onAnalisar = vi.fn();
     render(<VisaoGeralFinanceiro hoje="2026-02-15" onAnalisar={onAnalisar} />);
     await screen.findByTestId('grade-vg');
+    expect(screen.queryByTestId('modal-analise')).toBeNull();
     fireEvent.click(screen.getByTestId('grade-linha-saida:grupo:Custeio:'));
-    fireEvent.click(screen.getByTestId('card-total-entrada'));
-    expect(onAnalisar.mock.calls.map((c) => c[0])).toEqual([
-      { lado: 'saida', grupo: 'Custeio', am: '2026-02' }, { lado: 'entrada', grupo: null, am: '2026-02' }]);
-    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(onAnalisar.mock.calls.map((c) => c[0])).toEqual([{ lado: 'saida', grupo: 'Custeio', am: '2026-02' }]);
+    expect(screen.getByTestId('modal-analise')).toBeTruthy();
+    expect(rpc).toHaveBeenCalledWith('fn_vg_analise', expect.objectContaining({ p_lado: 'saida', p_aba: 'Custeio', p_foco: ['Custeio'], p_mes: '2026-02' }));
   });
 
   it('V4 Sem classificação e a transferência aparecem; o vencido marca o mês vigente', async () => {
