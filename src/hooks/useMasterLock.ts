@@ -12,6 +12,7 @@
  */
 import { useEffect, useCallback, useMemo, useState, useSyncExternalStore } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { criarUmPedidoPorVez } from '@/lib/app/umPedidoPorVez';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
@@ -51,6 +52,18 @@ function lockKey(key: string) {
 }
 
 // Cache de status de fechamento por chave (fazendaId|anoMes).
+/* P53 — o pedido da trava do mês, dividido entre as instâncias que perguntam a MESMA chave ao mesmo tempo (só o do cache; o
+   `checkLockNow` continua indo direto ao banco) */
+const travaUmaPorVez = criarUmPedidoPorVez<Awaited<ReturnType<typeof consultarTrava>>>();
+function consultarTrava(fazendaId: string, anoMes: string) {
+  const primeiroDiaMes = `${anoMes}-01`;
+  return Promise.all([
+    supabase.from('pastos').select('id, data_inicio').eq('fazenda_id', fazendaId).eq('ativo', true).eq('entra_conciliacao', true)
+      .or(`data_inicio.is.null,data_inicio.lte.${primeiroDiaMes}`),
+    supabase.from('fechamento_pastos').select('pasto_id, status').eq('fazenda_id', fazendaId).eq('ano_mes', anoMes),
+    supabase.from('valor_rebanho_mensal').select('categoria').eq('fazenda_id', fazendaId).eq('ano_mes', anoMes).limit(1),
+  ]);
+}
 type LockedMap = Map<string, boolean>;
 
 export function useMasterLock(anoMes?: string) {
@@ -74,27 +87,8 @@ export function useMasterLock(anoMes?: string) {
     if (!fazendaId || !anoMes) return;
     setLoadingLock(true);
     try {
-      const primeiroDiaMes = `${anoMes}-01`;
-      const [pastosRes, fpRes, vrRes] = await Promise.all([
-        supabase
-          .from('pastos')
-          .select('id, data_inicio')
-          .eq('fazenda_id', fazendaId)
-          .eq('ativo', true)
-          .eq('entra_conciliacao', true)
-          .or(`data_inicio.is.null,data_inicio.lte.${primeiroDiaMes}`),
-        supabase
-          .from('fechamento_pastos')
-          .select('pasto_id, status')
-          .eq('fazenda_id', fazendaId)
-          .eq('ano_mes', anoMes),
-        supabase
-          .from('valor_rebanho_mensal')
-          .select('categoria')
-          .eq('fazenda_id', fazendaId)
-          .eq('ano_mes', anoMes)
-          .limit(1),
-      ]);
+      /* P53 — as instâncias que perguntam o MESMO mês ao mesmo tempo (2× na abertura da OC) dividem UM pedido (as 3 consultas) */
+      const [pastosRes, fpRes, vrRes] = await travaUmaPorVez(checkKey, () => consultarTrava(fazendaId, anoMes));
 
       const pastos = pastosRes.data ?? [];
       const fps = fpRes.data ?? [];
