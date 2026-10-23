@@ -3,7 +3,7 @@
  * cada parcela fica com o MAIS proximo, cada lancamento uma vez so'; a outra serie vira "parecidos a mais"; numero/chave entram juntos.
  */
 import { describe, it, expect } from 'vitest';
-import { casarJaLancados, lerJaLancados, parcelasParaCasar, type LancamentoJaLancado } from './jaLancada';
+import { casarJaLancados, fracaoDaNota, fraseEmParcelas, lerJaLancados, parcelasParaCasar, type LancamentoJaLancado } from './jaLancada';
 
 const l = (id: string, n: number, difCent: number, difDias = 0, por: LancamentoJaLancado['por'] = ['valor']): LancamentoJaLancado => ({
   id, vencimento: null, pagamento: null, competencia: null, descricao: null, valorCent: 34134 + difCent, status: 'realizado', conciliado: false,
@@ -43,3 +43,30 @@ describe('casarJaLancados', () => {
     expect(lerJaLancados(null)).toEqual([]);
   });
 });
+
+/* NOTA-CONTAS-NA-CRIACAO-01 C (P75) — o molde do Agnaldo (23/10): a nota de 3.284,88 sem duplicata, lancada antes como 821,22 ("NF_000.778.618"). */
+describe('a nota ja\' lancada EM PARCELA', () => {
+  const parcela = (id: string, valorCent: number): LancamentoJaLancado => ({ ...l(id, 0, 0, 0, ['numero']), valorCent });
+  it('fracaoDaNota: 821,22 x 4 = 3.284,88; 1 centavo de folga por parcela; o valor da nota inteira ou maior nao e\' fracao', () => {
+    expect(fracaoDaNota(82122, 328488)).toBe(4);
+    expect(fracaoDaNota(82123, 328488)).toBe(4);
+    expect(fracaoDaNota(82130, 328488)).toBeNull();
+    expect(fracaoDaNota(328488, 328488)).toBeNull();
+    expect(fracaoDaNota(0, 328488)).toBeNull();
+  });
+  it('a nota de 1 parcela achada em parcela: "?/4", nenhuma "que falta" (seria a nota inteira em dobro) e a frase', () => {
+    const r = casarJaLancados([{ n: 1, vencimento: '2026-08-10', valorCent: 328488 }], [parcela('p1', 82122)], 328488);
+    expect(r?.fracoes.get('p1')).toBe(4);
+    expect(r?.emParcelas).toBe(true);
+    expect(r?.faltam).toEqual([]);
+    expect(r?.alvos.map((a) => a.id)).toEqual(['p1']);
+    expect(r && fraseEmParcelas(r)).toBe('Esta nota parece já lançada em parcelas: achada 1 de 4 (R$ 821,22 cada). Nada será criado em dobro.');
+  });
+  it('o achado pelo numero com o valor da nota inteira nao e\' parcela: a que falta continua (o de sempre)', () => {
+    const r = casarJaLancados([{ n: 1, vencimento: '2026-08-10', valorCent: 328488 }], [parcela('t', 328400)], 328488);
+    expect(r?.fracoes.size).toBe(0);
+    expect(r?.emParcelas).toBe(false);
+    expect(r?.faltam.map((f) => f.n)).toEqual([1]);
+  });
+});
+
