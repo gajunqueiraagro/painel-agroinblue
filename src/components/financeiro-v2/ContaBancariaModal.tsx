@@ -6,11 +6,11 @@
  * ⚠ GRAVA PELO ESCRITOR UNICO (`fn_conta_bancaria_salvar`), e SO' O QUE MUDOU (`mudancas`). Saldo inicial e data seguem a semente do mes
  *   em `financeiro_saldos_bancarios_v2` (o caminho de sempre), a Auditoria registra quem, quando, antes -> depois.
  * ⚠ SENHA NUNCA: nenhum campo de senha ou acesso de internet banking (e o escritor recusa chave fora da lista).
- * ⚠ "Efeito na Conciliacao" e' o DONO da Conciliacao (`fn_conciliacao_status_ano`, a mesma chave de cache da tela), lido so' quando a
+ * ⚠ "Efeito na Conciliacao" e' o DONO da Conciliacao (P58: `fn_conta_bancaria_efeito_conciliacao`, a mesma interna do status mensal), lido so' quando a
  *   aba abre — nenhum calculo paralelo.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { X } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -28,8 +28,7 @@ import { AreaDeArquivo } from '@/components/ui/area-de-arquivo';
 import { cn } from '@/lib/utils';
 import { REGRA_ARQUIVO_DO_DOCUMENTO } from '@/hooks/useLancamentoDocumentos';
 import { anexarSaldoDocumento, cancelarSaldoDocumento, useSaldoDocumentos } from '@/hooks/useExtratoDaConta';
-import { CHAVE_STATUS_ANO, invalidarDono } from '@/hooks/useResumoConciliacao';
-import { lerStatusAno } from '@/lib/conciliacao/resumoDoDono';
+import { invalidarDono } from '@/hooks/useResumoConciliacao';
 import { avisarContaBancariaMudou } from '@/lib/financeiro/canalContasBancarias';
 import {
   brl, faltasDoFormulario, formularioDaConta, mudancas, mudaOSaldoInicial, nomeDaConta, subtituloDaConta,
@@ -134,42 +133,17 @@ export function ContaBancariaModal({ aberto, onFechar, clienteId, clienteNome, c
     },
   });
 
-  /* "Efeito na Conciliação": a régua do ano da Conciliação, ano a ano desde o início (a MESMA chave do cache da tela) */
+  /* "Efeito na Conciliação" — P58 (Gabriel 23/10/2026): UMA ida ao banco (`fn_conta_bancaria_efeito_conciliacao`): os meses conciliados,
+     o último e o saldo dele, pela MESMA interna do status mensal da Conciliação, só desta conta (antes: o status do ano de TODAS as contas,
+     um pedido por ano — ~25 s no NJ). A igualdade com a régua antiga foi provada no banco (Vera 6 e NJ 17 contas, 0 diferenças). */
   const mesInicio = conta?.mes_inicio && /^\d{4}-\d{2}$/.test(conta.mes_inicio) ? conta.mes_inicio : null;
-  const anos = useMemo(() => {
-    if (!mesInicio) return [] as number[];
-    const ini = Number(mesInicio.slice(0, 4)); const fim = new Date().getFullYear();
-    return Array.from({ length: Math.max(0, fim - ini + 1) }, (_, i) => ini + i);
-  }, [mesInicio]);
-  const reguas = useQueries({
-    queries: anos.map(ano => ({
-      queryKey: [CHAVE_STATUS_ANO, clienteId, ano],
-      enabled: aberto && aba === 'saldo' && !!conta,
-      queryFn: async () => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
-        const { data, error } = await (supabase as any).rpc('fn_conciliacao_status_ano', { p_cliente_id: clienteId, p_ano: ano });
-        if (error) throw error;
-        return lerStatusAno(data);
-      },
-    })),
+  const efeitoLido = useQuery({
+    queryKey: ['conta-bancaria-efeito-conciliacao', conta?.id, mesInicio],
+    enabled: aberto && aba === 'saldo' && !!conta && !!mesInicio,
+    queryFn: async () => lerEfeitoDaConciliacao(await efeitoDaConciliacaoDoBanco(conta!.id)),
   });
-  const reguaPronta = anos.length > 0 && reguas.every(r => r.isSuccess);
-  const efeito = useMemo(() => {
-    if (!conta || !reguaPronta) return null;
-    const meses = reguas.flatMap(r => r.data ?? [])
-      .filter(l => l.conta_id === conta.id && l.status === 'conciliado' && (!mesInicio || l.ano_mes >= mesInicio));
-    const ultimo = meses.map(l => l.ano_mes).sort().at(-1) ?? null;
-    return { meses: meses.length, ultimo };
-  }, [conta, reguaPronta, reguas, mesInicio]);
-  const saldoDoUltimo = useQuery({
-    queryKey: ['conta-bancaria-saldo-do-mes', conta?.id, efeito?.ultimo],
-    enabled: !!conta && !!efeito?.ultimo,
-    queryFn: async () => {
-      const { data } = await supabase.from('financeiro_saldos_bancarios_v2').select('saldo_final, saldo_data')
-        .eq('conta_bancaria_id', conta!.id).eq('ano_mes', efeito!.ultimo!).maybeSingle();
-      return data as { saldo_final: number | null; saldo_data: string | null } | null;
-    },
-  });
+  const efeito = efeitoLido.data ? { meses: efeitoLido.data.meses, ultimo: efeitoLido.data.ultimo } : null;
+  const saldoDoUltimo = { data: efeitoLido.data && efeitoLido.data.ultimo ? { saldo_final: efeitoLido.data.saldoFinal, saldo_data: efeitoLido.data.saldoData } : null };
 
   /* o comprovante do saldo: o anexo do mês de início (`financeiro_saldo_documentos`, o mesmo da Conciliação) */
   const [anoIni, mesIni] = mesInicio ? mesInicio.split('-').map(Number) : [0, 0];
@@ -472,4 +446,19 @@ export function ContaBancariaModal({ aberto, onFechar, clienteId, clienteNome, c
       </DialogContent>
     </Dialog>
   );
+}
+
+/** P58 — a resposta de `fn_conta_bancaria_efeito_conciliacao`, lida sem cast. `ultimo` = 'AAAA-MM' (ou nulo). */
+export interface EfeitoDaConciliacao { meses: number; ultimo: string | null; saldoData: string | null; saldoFinal: number | null }
+export function lerEfeitoDaConciliacao(r: unknown): EfeitoDaConciliacao {
+  const o = r && typeof r === 'object' ? r : {};
+  const txt = (k: string) => { const v: unknown = Reflect.get(o, k); return typeof v === 'string' && v ? v : null; };
+  const n: unknown = Reflect.get(o, 'saldo_final');
+  return { meses: Number(Reflect.get(o, 'meses')) || 0, ultimo: txt('ultimo'), saldoData: txt('saldo_data'), saldoFinal: n == null ? null : Number(n) };
+}
+async function efeitoDaConciliacaoDoBanco(contaId: string): Promise<unknown> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+  const { data, error } = await (supabase as any).rpc('fn_conta_bancaria_efeito_conciliacao', { p_conta_id: contaId });
+  if (error) throw error;
+  return data;
 }

@@ -6,6 +6,7 @@
  */
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { criarUmPedidoPorVez } from '@/lib/app/umPedidoPorVez';
 
 /* PR-PILARES-CALCULO-01 — vocabulario alinhado ao que a funcao EMITE.
    Antes o tipo era oficial|provisorio|bloqueado e a funcao emitia oficial|pendente:
@@ -49,6 +50,8 @@ function parsePilar(raw: unknown): PilarInfo {
   };
 }
 
+const pilaresUmPorVez = criarUmPedidoPorVez<{ data: unknown; error: { message: string } | null }>();
+
 export function useStatusPilares(fazendaId: string | undefined, anoMes: string | undefined, enabled = true) {
   const [data, setData] = useState<StatusPilares>(DEFAULT_STATUS);
   const [loading, setLoading] = useState(false);
@@ -64,10 +67,11 @@ export function useStatusPilares(fazendaId: string | undefined, anoMes: string |
     setError(null);
 
     try {
-      const { data: result, error: err } = await supabase.rpc(
+      /* P53 — os componentes que perguntam o MESMO mês ao mesmo tempo (3× na abertura da OC) dividem UM pedido */
+      const { data: result, error: err } = await pilaresUmPorVez(`${fazendaId}|${anoMes}`, async () => supabase.rpc(
         'get_status_pilares_fechamento',
         { _fazenda_id: fazendaId, _ano_mes: anoMes }
-      );
+      ));
 
       if (err) {
         setError(err.message);
