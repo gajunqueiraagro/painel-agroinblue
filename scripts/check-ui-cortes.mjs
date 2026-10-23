@@ -77,6 +77,18 @@ const CENARIOS = [
   { nome: 'contrato-titulo-longo', url: 'tela=contrato&v=titulo', tamanhos: TAMANHOS_DO_CONTRATO },
   { nome: 'contrato-parcelamento', url: 'tela=contrato&v=parcelamento', tamanhos: TAMANHOS_DO_CONTRATO },
   { nome: 'contrato-consorcio', url: 'tela=contrato&v=consorcio', tamanhos: TAMANHOS_DO_CONTRATO },
+  /* PARC-DOCS-TABELA-01 — Editar obrigação › Documentos da compra parcelada com 2 (o caso real), 18 e 36 parcelas e uma nota: a tabela das
+     Parcelas vai até o fim do modal, cabeçalho e Total inteiros, só o corpo rola; as 2 nunca rolam; as 18 não rolam a 1440x800 (abaixo,
+     o bloco dos documentos da compra deixa menos que as 18 linhas compactas: o corpo rola com cabeçalho e Total presos) */
+  ...[[2], [18], [36], [18, 'sem-rolar']].map(([np, sufixo]) => ({ nome: `parcelamento-documentos-${np}${sufixo ? `-${sufixo}` : ''}`, url: `tela=contrato&v=parcelamento&np=${np}&docs=1`, tamanhos: sufixo ? [[1440, 800]] : TAMANHOS_DO_CONTRATO, regiao: '[role="dialog"]',
+    /* abaixo de lg o Resumo desce para baixo da aba e o corpo do modal rola inteiro (em todas as abas, desde o OBRIGACAO-UI): só ele e o
+       corpo da tabela das parcelas podem rolar */
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="corpo-das-parcelas"], [data-testid="corpo-da-obrigacao"]' },
+    tabelaMinima: { sel: '[data-testid="quadro-das-parcelas"]', linhas: Math.min(np, 3) },
+    ...(np === 2 || sufixo ? { semRolarVertical: '[data-testid="corpo-das-parcelas"]' } : {}),
+    antes: async (p) => { await p.locator('button[title="Nota fiscal e boletos das parcelas"]').click(); await p.locator('[data-testid="parcelas-da-compra"]').waitFor(); await p.waitForTimeout(500); } })),
+  /* PARC-DETALHE-FONTE-01 — o detalhe da compra parcelada com 2, 18 e 36 parcelas */
+  ...[2, 18, 36].map((np) => ({ nome: `contrato-parcelamento-${np}`, url: `tela=contrato&v=parcelamento&np=${np}&docs=1`, tamanhos: TAMANHOS_DO_CONTRATO })),
   ...['Geral', 'Pagamento', 'Documentos'].flatMap((aba) => ['novo', 'editar'].map((m) => ({ nome: `lancamento-${m}-${aba}`, url: `tela=lancamento&m=${m}`, antes: clicarTexto(aba) }))),
   /* DOC-NOTA-XML-PDF-01 — a aba Documentos com a nota em PDF + XML numa linha (selos), a nota so' em XML e um boleto */
   { nome: 'lancamento-editar-Documentos-nota', url: 'tela=lancamento&m=editar&docs=nota', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicarTexto('Documentos') },

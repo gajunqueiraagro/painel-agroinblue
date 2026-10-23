@@ -227,9 +227,29 @@ if (tela === 'mesclar') {
       : base;
   const c: any = consorcio;
   if (v === 'consorcio') d.fin = { ...base.fin, id: c.tela.contrato.id, natureza: 'consorcio' };
+  /* PARC-DOCS-TABELA-01 — `&np=N`: a compra parcelada com N parcelas de R$ 344,00 (o caso real tem 2), todas com lançamento, e
+     `&docs=1` uma nota da compra ligada a elas (a lista de documentos da aba ocupa a sua linha). Tudo SINTÉTICO. */
+  const NP = Number(q.get('np') ?? 0);
+  if (v === 'parcelamento' && NP > 0) {
+    const t0: any = d.situacao.parcelas[0], p0: any = base.parcelas[0];
+    const venc = (i: number) => { const dt = new Date(Date.UTC(2026, 9 + i, 9)); return dt.toISOString().slice(0, 10); };
+    d.parcelas = Array.from({ length: NP }, (_x, i) => ({ ...p0, id: `pp-${i + 1}`, numero_parcela: i + 1, data_vencimento: venc(i), valor_principal: 344, valor_juros: 0,
+      valor_total: 344, lancamento_id: `lp-${i + 1}`, lancamento_juros_id: null, status: 'pendente' }));
+    d.situacao = { ...d.situacao, parcelas: Array.from({ length: NP }, (_x, i) => ({ ...t0, id: `pp-${i + 1}`, numero: i + 1, data_vencimento: venc(i), competencia: venc(i),
+      valor_principal: 344, valor_juros: 0, valor_total: 344, lancamento_id: `lp-${i + 1}`, lancamento_juros_id: null, situacao: 'pendente', prazo: { dias: 17 + 28 * i, tipo: 'a_vencer' },
+      conta_nome: CONTA_LONGA, tipo_documento: 'Nota Fiscal', numero_documento: '000012345' })),
+      cartoes: { ...d.situacao.cartoes, parcelas: NP, a_vencer_qtde: NP, vencido_qtde: 0, vencido: 0, soma_principal: 344 * NP, soma_total: 344 * NP, a_vencer: 344 * NP, juros_previstos: 0, valor_contrato: 344 * NP } };
+    d.fin = { ...d.fin, total_parcelas: NP, valor_total: 344 * NP, descricao: 'Max Prata Exemplo FR 500 ML · compra sintética de medicamento veterinário' };
+  }
+  const DOCS_DA_COMPRA = q.get('docs') === '1' ? Array.from({ length: Math.max(NP, 1) }, (_x, i) => ({ cliente_id: 'cli', lancamento_id: `lp-${i + 1}`, origem: 'lancamento',
+    operacao_id: null, tamanho_bytes: 1, uploaded_em: '2026-10-01T12:00:00Z', uploaded_por: 'u1', observacao: null, cancelado: false, cancelado_em: null, cancelado_motivo: null,
+    versao: 1, ligado_a_qtd: Math.max(NP, 1), emitente_id: null, emitente_nome: 'DISTRIBUIDORA SINTÉTICA DE PRODUTOS VETERINÁRIOS DO CENTRO OESTE LTDA', emitente_documento: '11222333000181',
+    documento_id: 'd-nf-compra', nome: 'NF 12345.pdf', tipo: 'application/pdf', url: 'c/l/nf.pdf', especie: 'nf', numero: '12345', serie: null, chave_acesso: null,
+    data_emissao: '2026-10-01', valor_documento: 344 * Math.max(NP, 1) })) : [];
   g.__bancoBancada = {
-    from: (t: string) => t === 'financiamentos' ? [d.fin] : t === 'financiamento_parcelas' ? d.parcelas : t === 'financiamento_liberacoes' ? d.liberacoes ?? []
-      : t === 'financiamento_destinacoes' ? d.destinacoes ?? [] : t === 'financiamento_documentos' ? d.documentos ?? [] : [],
+    from: (t: string, e: any) => t === 'financiamentos' ? [d.fin] : t === 'financiamento_parcelas' ? d.parcelas : t === 'financiamento_liberacoes' ? d.liberacoes ?? []
+      : t === 'financiamento_destinacoes' ? d.destinacoes ?? [] : t === 'financiamento_documentos' ? d.documentos ?? []
+      : t === 'vw_lancamento_documentos' ? DOCS_DA_COMPRA.filter((x) => (e?.eq?.especie == null || x.especie === e.eq.especie) && (e?.eq?.lancamento_id == null || x.lancamento_id === e.eq.lancamento_id)) : [],
     rpc: (fn: string) => fn === 'fn_financiamento_situacao' ? d.situacao : fn === 'fn_contrato_tela' ? d.tela ?? null : fn === 'fn_financiamento_captacoes_livres' ? []
       : fn === 'fn_consorcio_tela' ? c.tela : fn === 'fn_consorcio_cronograma' ? c.cronograma : null,
   };
