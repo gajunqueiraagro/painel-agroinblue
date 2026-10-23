@@ -32,7 +32,7 @@ import {
 } from '@/components/financiamentos/ObrigacaoDialog';
 import { FinanciamentoForm } from '@/hooks/useFinanciamentoCadastro';
 import { alinhamentoDoCabecalho, colunasDasParcelas, type ColunaDasParcelas } from '@/lib/financiamentos/reguaDasParcelas';
-import { TD_DATA_LANC, TD_VALOR_LANC, LINHA_LANC, SeloDoContrato } from '@/components/financiamentos/ListaDeFinanciamentos';
+import { TD_DATA_LANC, TD_VALOR_LANC, SeloDoContrato } from '@/components/financiamentos/ListaDeFinanciamentos';
 import { GradeChaveValor } from '@/components/shared/GradeChaveValor';
 import { formatarDocumento, nomeEDocumento } from '@/lib/fornecedores/fornecedorTexto';
 import { BlocoDocumentos, BlocoLiberacoes, RemoverDialog } from '@/components/financiamentos/ContratoDeCredito';
@@ -79,10 +79,13 @@ const MOEDA = TD_VALOR_LANC;
 /* PARC-FECHA-02 item 5 — o Total é o RODAPÉ PADRÃO DA CASA (o `TF` de `ParcelasDaCompra`): fundo #E8E6DF, negrito, 2px em cima.
    ⚠ O filete de 2px é SOMBRA INTERNA da célula, não borda: o `tfoot` é `sticky` e borda de célula em tabela colapsada fica
    para trás quando a lista rola. A sombra anda com a célula e não ocupa espaço (a linha segue com 19px). */
-const TOTAL = `bg-[#E8E6DF] ${ESCALA_DO_CONTRATO.total} shadow-[inset_0_2px_0_#9aa7b6]`;
+/* PARC-DETALHE-FONTE-01 (Gabriel 22/10) — a tabela da compra parcelada na RÉGUA DA CASA (`regua-tabela.tsx`): linha 19px, célula 10px,
+   cabeçalho 9,5px, Total 10px negrito; as datas um degrau abaixo (9px), sempre dd/mm/aaaa. Antes: 10,5px em tudo, linha de 25px. */
+const FONTE_PARC = { td: 'text-[10px]', th: 'text-[9.5px]', total: 'text-[10px] font-bold', data: 'text-[9px]' } as const;
+const TOTAL = `bg-[#E8E6DF] ${FONTE_PARC.total} shadow-[inset_0_2px_0_#9aa7b6]`;
 /* linha da parcela: 19px (o padrão de tabela, A31). Nada dentro dela passa de 16px — o filho mais alto manda na altura. */
 /* ⚠ a entrelinha vai ESCRITA: a celula herdava 20px e, sozinha, levava a linha a 20,5–21px (medido). 18 + 1 de borda = 19. */
-const LINHA = LINHA_LANC;
+const LINHA = 'h-[19px]';
 /* TELA DO CONTRATO v4 — a régua do cronograma do CRÉDITO: célula 10,5px, linha de 24px, 3px de padding lateral; cabeçalho navy 10px/600;
    Total preso em cinza forte. Situação: Vencida vermelho sólido, A vencer contornado, Paga verde. */
 /* FIN-CONTRATO-TELA-FONTE-01 — a escala é UMA, a de `ESCALA_DO_CONTRATO` (TelaDoContratoV3); aqui só se lê dela */
@@ -91,8 +94,10 @@ const TH_V4 = `sticky top-0 z-10 h-[24px] whitespace-nowrap bg-[#1d3a5d] px-[2.5
 const TD_V4 = `h-[24px] whitespace-nowrap px-[2.5px] ${E.td} text-[#111827]`;
 const TF_V4 = `sticky bottom-0 z-10 h-[24px] whitespace-nowrap bg-[#e4e9ef] px-[2.5px] ${E.total} text-[#111827] shadow-[inset_0_1px_0_#c5ced9]`;
 /* a tabela da COMPRA PARCELADA na mesma escala (deixou a régua de Lançamentos, 8/9px): cabeçalho 10px, célula 10,5px, total 10,5px bold */
-const TH_PARC = `px-2 py-0 align-middle ${E.th} font-semibold normal-case tracking-normal text-primary-foreground`;
-const TD_PARC = `${E.td} whitespace-nowrap`;
+const TH_PARC = `h-[22px] px-2 py-0 align-middle ${FONTE_PARC.th} font-semibold normal-case tracking-normal text-primary-foreground`;
+const TD_PARC = `${FONTE_PARC.td} whitespace-nowrap`;
+/** a data da linha num span de fonte menor (a célula leva a fonte da linha; duas classes de fonte na mesma célula dependeriam do CSS) */
+const DataDaLinha = ({ iso }: { iso: string | null }) => <span className={FONTE_PARC.data} data-testid="data-da-parcela">{fmtDate(iso)}</span>;
 const SELO_V4: Record<'paga' | 'vencida' | 'pendente' | 'parcial', string> = {
   vencida: 'bg-[#b42318] text-white', pendente: 'border border-[#8a96a8] text-[#334155]', paga: 'bg-[#dcf2e3] text-[#166534]', parcial: 'bg-[#fdf0dc] text-[#b45309]',
 };
@@ -772,7 +777,7 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
           )}
           <div className="min-h-0 flex-1">
             {/* FIN-CONTRATO-TELA-FONTE-01 — fixas 744px (régua) + 160 para a Conta: abaixo disso a tabela rola dentro do cartão */}
-            <Table density="dense" className="min-w-[904px] table-fixed [&_td]:font-normal [&_td]:text-[10.5px]" wrapperClassName="h-full overflow-auto">
+            <Table density="dense" className="min-w-[904px] table-fixed [&_td]:font-normal [&_td]:py-0 [&_td]:text-[10px] [&_td]:leading-[18px]" wrapperClassName="h-full overflow-auto">
               {/* ⚠ A RÉGUA TEM UM DONO (`reguaDasParcelas.ts`): o `colgroup` e o cabeçalho saem da MESMA lista — largura medida no
                   pior texto e o th alinhado como o conteúdo da coluna. Só a Conta (sem largura) fica com o resto e corta. */}
               <colgroup>
@@ -795,9 +800,9 @@ export default function FinanciamentoDetalhe({ id, onVoltar, from }: Financiamen
                     <TableRow key={p.id} className={`${LINHA} ${p.lancamentoId ? 'cursor-pointer' : ''}`} data-testid="linha-do-contrato" data-situacao={p.situacao}
                       onClick={abrir} title={p.lancamentoId ? undefined : MOTIVO_PARCELA_SEM_LANCAMENTO}>
                       <TableCell className={NUM}>{p.numero ?? '—'}{cartoes ? `/${cartoes.parcelas}` : ''}</TableCell>
-                      {ehParcelamento && <TableCell className={TD_DATA_LANC} data-testid="competencia">{fmtDate(d?.competencia ?? null)}</TableCell>}
-                      <TableCell className={`${TD_DATA_LANC} ${p.situacao === 'vencida' ? '!font-semibold text-[#b91c1c]' : ''}`}>{fmtDate(p.dataVencimento)}</TableCell>
-                      <TableCell className={TD_DATA_LANC} data-testid="pago-em">{fmtDate(p.pagoEm)}</TableCell>
+                      {ehParcelamento && <TableCell className={TD_DATA_LANC} data-testid="competencia"><DataDaLinha iso={d?.competencia ?? null} /></TableCell>}
+                      <TableCell className={`${TD_DATA_LANC} ${p.situacao === 'vencida' ? '!font-semibold text-[#b91c1c]' : ''}`}><DataDaLinha iso={p.dataVencimento} /></TableCell>
+                      <TableCell className={TD_DATA_LANC} data-testid="pago-em"><DataDaLinha iso={p.pagoEm} /></TableCell>
                       <TableCell className={`${TD_PARC} ${d?.prazo ? COR_DO_PRAZO[TOM_DO_PRAZO[d.prazo.tipo]] : 'text-muted-foreground'}`} data-testid="prazo">
                         {textoDoPrazo(d?.prazo ?? null)}
                       </TableCell>
