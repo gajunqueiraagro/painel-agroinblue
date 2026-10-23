@@ -240,6 +240,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   devolve `cancelado` (nunca conta como já lançada). SELETOR-CONTA-POR-ATIVIDADE-01: conta fora da Geral se escolhe pelo `EscolherConta`.
 - ITENS-NOTA-01: os itens sao do DOCUMENTO (cliente + chave, `nota_fiscal`), nunca da parcela; escrita so' pela `fn_nota_fiscal_gravar`
   (confere o liquido de cada item; o XML sempre manda sobre o PDF); a conta do item nao existe — a do lancamento e' a de DRE e caixa.
+- P85/P86 (leitura do abate): a conta do PDF que não fecha preenche com o impresso e DIZ a diferença (≤ R$ 0,05 nota; acima âmbar), nunca
+  "nada preenchido"; o rótulo é o frigorífico lido (nunca o nome do layout); espécie trocada troca e relê; a recusa do banco fica na faixa.
 - OC-ABRIR-LENTO-01: erro do banco nunca vai cru ao toast (frase pronta, o texto no console); leitura de tela que termina depois de
   a tela sair nao escreve nem avisa; leituras independentes da abertura saem juntas (`Promise.all`), nunca em serie.
 - Documentos da OC (OC-DOC-VENDA-01): abate E venda usam o MESMO componente (`AbaDocumentosOC`/`DocumentoFormAbate`, pelo tipo); na
