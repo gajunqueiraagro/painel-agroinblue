@@ -78,11 +78,13 @@ function lerResposta(data: unknown): RespostaDaDivisao {
   return { frase: texto(o.frase), fraseNota: texto(o.frase_nota), operacaoId: texto(o.divisao_id), partes };
 }
 
-async function chamar(fn: string, args: Record<string, unknown>, clienteId: string, simular: boolean, padrao: string): Promise<Resultado<RespostaDaDivisao>> {
+/* P73 — `ids`: o lançamento que a operação mexe, quando é UM (a lista troca só essa linha); o cadastro (N parcelas) avisa sem ids */
+async function chamar(fn: string, args: Record<string, unknown>, clienteId: string, simular: boolean, padrao: string,
+  ids?: readonly string[]): Promise<Resultado<RespostaDaDivisao>> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
   const { data, error } = await (supabase as any).rpc(fn, args);
   if (error) return { ok: false, frase: fraseDoErro(error, padrao) };
-  if (!simular) notificarLancamentosMudaram(clienteId);
+  if (!simular) notificarLancamentosMudaram(clienteId, null, ids);
   return { ok: true, valor: lerResposta(data) };
 }
 
@@ -94,20 +96,20 @@ export function dividir(clienteId: string, alvo: { lancamentoId: string; financi
       clienteId, simular, 'A divisão não foi feita.');
   }
   return chamar('fn_lancamento_dividir', { p_lancamento_id: alvo.lancamentoId, p_partes: partes, p_motivo: motivo, p_simular: simular },
-    clienteId, simular, 'A divisão não foi feita.');
+    clienteId, simular, 'A divisão não foi feita.', [alvo.lancamentoId]);
 }
 
 /** Pelos itens da nota: a conta de CADA item; o banco soma por conta (e, nota de valor diferente, divide pela proporcao). */
 export function dividirPelosItens(clienteId: string, lancamentoId: string, mapa: ReadonlyMap<number, string>, motivo: string, simular: boolean) {
   const p_mapa = [...mapa].map(([n_item, plano_conta_id]) => ({ n_item, plano_conta_id }));
   return chamar('fn_lancamento_dividir_pelos_itens', { p_lancamento_id: lancamentoId, p_mapa, p_motivo: motivo, p_simular: simular },
-    clienteId, simular, 'A divisão pelos itens não foi feita.');
+    clienteId, simular, 'A divisão pelos itens não foi feita.', [lancamentoId]);
 }
 
 /** Voltar para 1 conta (`null` = a maior parte). */
 export function voltarUmaConta(clienteId: string, lancamentoId: string, planoContaId: string | null, motivo: string, simular: boolean) {
   return chamar('fn_lancamento_voltar_uma_conta', { p_lancamento_id: lancamentoId, p_plano_conta_id: planoContaId, p_motivo: motivo, p_simular: simular },
-    clienteId, simular, 'A classificação não voltou para uma conta.');
+    clienteId, simular, 'A classificação não voltou para uma conta.', [lancamentoId]);
 }
 
 /** P72 — a PARCELA de compra parcelada / financiamento volta para 1 conta pelo CADASTRO: as N parcelas de uma vez, numa transacao
