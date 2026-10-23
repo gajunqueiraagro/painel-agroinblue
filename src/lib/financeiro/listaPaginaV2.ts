@@ -80,6 +80,42 @@ export function lerLinhasV2(r: unknown): Pick<PaginaDaListaV2, 'linhas' | 'conci
   return { linhas, conciliados, total };
 }
 
+/** P73 — o leitor da resposta "só os ids salvos" (`so_ids`): as linhas e os conciliados, sem total (a RPC não reconta); peça torta = nulo. */
+export function lerSoIdsV2(r: unknown): Pick<PaginaDaListaV2, 'linhas' | 'conciliados'> | null {
+  const o = obj(r); if (!o) return null;
+  const brutas = g(o, 'linhas');
+  if (!Array.isArray(brutas)) return null;
+  const linhas: LancamentoV2[] = [];
+  const conciliados = new Set<string>();
+  for (const l of brutas) {
+    if (!ehLinha(l)) return null;
+    linhas.push(l);
+    if (g(l, 'conciliado') === true) conciliados.add(l.id);
+  }
+  return { linhas, conciliados };
+}
+
+/* P73 — o que, mudando na linha, mexe nos totais do rodapé, no "sem caixa" ou no uso por fornecedor do recorte */
+const CAMPOS_DOS_TOTAIS = ['valor', 'sinal', 'tipo_operacao', 'status_transacao', 'sem_movimentacao_caixa', 'conta_bancaria_id',
+  'conta_destino_id', 'conta_efetiva_id', 'cancelado', 'favorecido_id'];
+const FILTROS_DE_CONTA = ['macro', 'grupo', 'centro', 'subcentro'];
+
+/** P73 — salvou: os totais do recorte precisam ser relidos? Sim quando um campo que soma mudou, ou quando a linha é (ou era) DIVIDIDA
+ *  com filtro de conta ativo (o total soma o valor da PARTE, que a linha não mostra). */
+export function precisaDosTotaisV2(antes: LancamentoV2, depois: LancamentoV2, filtros: Record<string, unknown>): boolean {
+  if (CAMPOS_DOS_TOTAIS.some((k) => g(antes, k) !== g(depois, k))) return true;
+  const dividida = g(antes, 'classificacao_dividida') === true || g(depois, 'classificacao_dividida') === true;
+  return dividida && FILTROS_DE_CONTA.some((k) => g(filtros, k) !== undefined);
+}
+
+/** P73 — a página com as linhas relidas no LUGAR delas (mesma posição); a marca de conciliado dessas linhas sai da releitura. */
+export function trocarLinhasV2(pagina: PaginaDaListaV2, novas: Pick<PaginaDaListaV2, 'linhas' | 'conciliados'>): PaginaDaListaV2 {
+  const porId = new Map(novas.linhas.map((l) => [l.id, l]));
+  const conciliados = new Set(pagina.conciliados);
+  for (const id of porId.keys()) { if (novas.conciliados.has(id)) conciliados.add(id); else conciliados.delete(id); }
+  return { ...pagina, linhas: pagina.linhas.map((l) => porId.get(l.id) ?? l), conciliados };
+}
+
 /** O leitor da resposta: qualquer peça torta = nulo (a tela diz que não carregou; nunca "0 lançamentos"). */
 export function lerPaginaV2(r: unknown): PaginaDaListaV2 | null {
   const o = obj(r); if (!o) return null;
