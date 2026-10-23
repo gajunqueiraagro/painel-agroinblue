@@ -609,6 +609,21 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
     expect(g.gravar.mock.calls[0][0].observacao).toContain('outra compra igual no mesmo dia');
     expect(g.documentosDoParcelamento.mock.calls[0][1].map((x) => x.lancamentoId)).toEqual(['lanc-1', 'lanc-2', 'lanc-3', 'lanc-4']);
   });
+  /* NOTA-CONTAS-NA-CRIACAO-01 C (P75) — o molde do Agnaldo (23/10): a nota de UMA parcela (1.966,56) ja' lancada como 491,64 com o numero
+     escrito de outro jeito ("NF_000.000.937"): achada pelo numero, e' "?/4" — nunca "falta" a nota inteira */
+  it('C — achada em PARCELA (valor x 4 = a nota): "?/4" com a conta no title, a frase "achada 1 de 4" e nada de criar a que falta', async () => {
+    consultas.notaJaLancada.mockResolvedValue([jaLancado(1, '2026-10-20', 'agendado', { parcelas: [], por: ['numero'], numeroDocumento: 'NF_000.000.937', financiamentoId: null })]);
+    abrir(montarNota({ fornecedores: [FORN], umaParcela: true }));
+    const bloco = await screen.findByTestId('nota-ja-lancada');
+    const linhas = within(bloco).getAllByTestId('nota-ja-lancada-linha');
+    expect(linhas).toHaveLength(1);
+    const parc = within(linhas[0]).getByTestId('nota-ja-lancada-parc');
+    expect(parc.textContent).toBe('?/4');
+    expect(parc.getAttribute('title')).toBe('parcela ? de 4 da nota: 4 × R$ 491,64 = R$ 1.966,56 (qual das 4, a nota não diz)');
+    expect(screen.getByTestId('nota-ja-lancada-frase').textContent).toBe('Esta nota parece já lançada em parcelas: achada 1 de 4 (R$ 491,64 cada). Nada será criado em dobro.');
+    expect(screen.queryByTestId('nota-criar-faltam')).toBeNull();
+    expect(screen.getByTestId('nota-anexar-ja-lancados').textContent).toBe('Anexar a nota a este');
+  });
   it('nada achado: o de sempre ("Criar 4 parcelas"), sem o bloco', async () => {
     abrir(montarNota({ fornecedores: [FORN] }));
     await waitFor(() => expect(consultas.notaJaLancada).toHaveBeenCalled());
