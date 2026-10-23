@@ -238,6 +238,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - NOTA-CONTAS-NA-CRIACAO-01: divisão pelos itens no NOVO só pendente na tela; o parcelado grava cadastro+divisão numa transação
   (`fn_parcelamento_cadastrar_dividido`), o à vista divide depois de anexar a nota e CANCELA o recém-criado se recusar. `fn_nota_ja_lancada`
   devolve `cancelado` (nunca conta como já lançada). SELETOR-CONTA-POR-ATIVIDADE-01: conta fora da Geral se escolhe pelo `EscolherConta`.
+- P72: parcela dividida volta/desfaz SÓ pelo cadastro (`fn_financiamento_voltar_uma_conta` / `_divisao_desfazer`, as N numa transação, a
+  recusa diz a parcela). P31: dado da Receita nunca por cima — o vazio preenche, o diferente é OFERECIDO ("Usar", `ofertasDaReceita`).
 - ITENS-NOTA-01: os itens sao do DOCUMENTO (cliente + chave, `nota_fiscal`), nunca da parcela; escrita so' pela `fn_nota_fiscal_gravar`
   (confere o liquido de cada item; o XML sempre manda sobre o PDF); a conta do item nao existe — a do lancamento e' a de DRE e caixa.
 - P85/P86 (leitura do abate): a conta do PDF que não fecha preenche com o impresso e DIZ a diferença (≤ R$ 0,05 nota; acima âmbar), nunca

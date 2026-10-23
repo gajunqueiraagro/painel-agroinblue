@@ -86,8 +86,8 @@ import { ContasDosItens } from './ContasDosItens';
 import { PartesDaClassificacao } from './PartesDaClassificacao';
 import { DividirClassificacaoDialog, MotivoDaDivisaoDialog } from './DivisaoDialogs';
 import {
-  classificacaoGravada, contaDaMaiorParte, contasDasPartes, desfazerCriacao, desfazerDivisao, dividir, dividirNaCriacao, dividirPelosItens, lerDivisao,
-  MOTIVO_DA_DIVISAO_NA_CRIACAO, partesPendentes, percentuaisDosItens, porContaDosItens, porQueNaoDivideNaCriacao, voltarUmaConta,
+  classificacaoGravada, contaDaMaiorParte, contasDasPartes, desfazerCriacao, desfazerDivisao, desfazerDivisaoDoCadastro, dividir, dividirNaCriacao, dividirPelosItens, lerDivisao,
+  MOTIVO_DA_DIVISAO_NA_CRIACAO, partesPendentes, percentuaisDosItens, porContaDosItens, porQueNaoDivideNaCriacao, voltarUmaConta, voltarUmaContaDoCadastro,
   type DivisaoLida, type ParteNova, type ResultadoDaDivisao,
 } from '@/lib/financeiro/divisaoDaClassificacao';
 import { aprender, historicoDoEmitente, sugerir } from '@/lib/financeiro/sugestaoDeContaDosItens';
@@ -2403,6 +2403,9 @@ export function LancamentoV2Dialog({
   /* FIN-CLASSIF-DIVIDIDA-01b — quem pode dividir: o lancamento SALVO, fora da OC (a classificacao e' da operacao), fora da transferencia
      e com a classificacao livre. Parcela de financiamento/compra parcelada divide no CADASTRO (todas as parcelas, a mesma proporcao). */
   const lancDividido = !!divisao && divisao.partes.length > 1;
+  /* P72 — quantas parcelas vivas a compra tem (as irmas da parcela aberta) */
+  const nParcelasDaCompra = irmas ? irmas.filter((x) => !x.cancelada).length : null;
+  const asParcelasDaCompra = nParcelasDaCompra ? `as ${nParcelasDaCompra} parcelas` : 'as parcelas';
   const financiamentoDoLanc = lancamento && typeof Reflect.get(lancamento, 'financiamento_id') === 'string' ? String(Reflect.get(lancamento, 'financiamento_id')) : null;
   const podeDividir = isEdit && !!lancamento && !isOCTitulo && !isTransferencia && !subcentroTravado && !travado('classificacao')
     && Reflect.get(lancamento, 'cenario') !== 'meta';
@@ -2466,8 +2469,11 @@ export function LancamentoV2Dialog({
     const cli = clienteAtual?.id;
     const id = lancamento?.id;
     const m = motivoDaDivisao;
-    if (!cli || !id || !m || m.tipo === 'desfazer') return undefined;
-    if (m.tipo === 'voltar') return () => voltarUmaConta(cli, id, null, 'prévia', true);
+    if (!cli || !id || !m) return undefined;
+    /* P72 — a parcela: o banco simula nas N parcelas (a frase diz quantas, ou QUAL parcela recusa) */
+    if (m.tipo === 'desfazer') return financiamentoDoLanc ? () => desfazerDivisaoDoCadastro(cli, financiamentoDoLanc, 'prévia', true) : undefined;
+    if (m.tipo === 'voltar') return financiamentoDoLanc ? () => voltarUmaContaDoCadastro(cli, financiamentoDoLanc, null, 'prévia', true)
+      : () => voltarUmaConta(cli, id, null, 'prévia', true);
     if (financiamentoDoLanc && itensDaNota) {
       const ps = percentuaisDosItens(porContaDosItens(itensDaNota.lidos.itens, m.mapa));
       return () => dividir(cli, { lancamentoId: id, financiamentoId: financiamentoDoLanc }, ps, 'prévia', true);
@@ -2480,14 +2486,19 @@ export function LancamentoV2Dialog({
     const m = motivoDaDivisao;
     if (!cli || !id || !m) return { ok: false, frase: 'Lançamento não salvo.' };
     if (m.tipo === 'desfazer') {
+      if (financiamentoDoLanc) {
+        const r = await desfazerDivisaoDoCadastro(cli, financiamentoDoLanc, motivo, false);
+        if (r.ok) await aposDividir(`Desfeito em ${asParcelasDaCompra} desta compra.`, false);
+        return r;
+      }
       if (!divisao?.ultimaOperacaoId) return { ok: false, frase: 'Não há o que desfazer.' };
       const r = await desfazerDivisao(cli, divisao.ultimaOperacaoId, motivo);
       if (r.ok) await aposDividir('Desfeito: a classificação voltou ao que era.', false);
       return r;
     }
     if (m.tipo === 'voltar') {
-      const r = await voltarUmaConta(cli, id, null, motivo, false);
-      if (r.ok) await aposDividir('A classificação voltou para 1 conta.', true);
+      const r = financiamentoDoLanc ? await voltarUmaContaDoCadastro(cli, financiamentoDoLanc, null, motivo, false) : await voltarUmaConta(cli, id, null, motivo, false);
+      if (r.ok) await aposDividir(financiamentoDoLanc ? `${asParcelasDaCompra.replace(/^a/, 'A')} desta compra voltaram para 1 conta.` : 'A classificação voltou para 1 conta.', true);
       return r;
     }
     const r = financiamentoDoLanc && itensDaNota
@@ -3041,10 +3052,11 @@ export function LancamentoV2Dialog({
                 /* FIN-CLASSIF-DIVIDIDA-01b — as acoes da divisao no titulo do bloco (nao somam altura) */
                 <span className="flex items-center gap-2 text-[10px]" data-testid="acoes-da-divisao">
                   <button type="button" className="font-medium text-primary underline-offset-2 hover:underline" onClick={() => setDividirAberto(true)} data-testid="divisao-dividir">Dividir…</button>
-                  {lancDividido && !financiamentoDoLanc && (
+                  {/* P72 — na parcela de compra parcelada / financiamento os dois tambem aparecem: valem pelo CADASTRO (as N parcelas) */}
+                  {lancDividido && (
                     <button type="button" className="underline-offset-2 hover:underline" onClick={() => setMotivoDaDivisao({ tipo: 'voltar' })} data-testid="divisao-voltar">Voltar para 1 conta</button>
                   )}
-                  {divisao?.ultimaOperacaoId && !financiamentoDoLanc && (
+                  {divisao?.ultimaOperacaoId && (
                     <button type="button" className="text-muted-foreground underline-offset-2 hover:underline" onClick={() => setMotivoDaDivisao({ tipo: 'desfazer' })} data-testid="divisao-desfazer">Desfazer</button>
                   )}
                 </span>
@@ -3948,8 +3960,12 @@ export function LancamentoV2Dialog({
           titulo={motivoDaDivisao.tipo === 'itens' ? 'Dividir pelos itens da nota' : motivoDaDivisao.tipo === 'voltar' ? 'Voltar para 1 conta' : 'Desfazer a última divisão'}
           explicacao={motivoDaDivisao.tipo === 'itens'
             ? (financiamentoDoLanc ? 'Compra parcelada: a divisão é do cadastro — todas as parcelas recebem a mesma proporção dos itens.' : 'Cada conta recebe a soma dos seus itens. Continua um lançamento só: um pagamento, uma conciliação.')
-            : motivoDaDivisao.tipo === 'voltar' ? 'O lançamento volta inteiro para a maior parte; depois a conta pode ser trocada no campo.'
-              : 'Volta a classificação ao que era antes da última operação.'}
+            : financiamentoDoLanc
+              /* P72 — a parcela: o aviso diz que vale para as N parcelas da compra */
+              ? `Vale para ${asParcelasDaCompra} desta compra (o cadastro): ${motivoDaDivisao.tipo === 'voltar'
+                ? 'todas voltam inteiras para a maior parte.' : 'todas voltam ao que eram antes da última operação do cadastro.'}`
+              : motivoDaDivisao.tipo === 'voltar' ? 'O lançamento volta inteiro para a maior parte; depois a conta pode ser trocada no campo.'
+                : 'Volta a classificação ao que era antes da última operação.'}
           botao={motivoDaDivisao.tipo === 'itens' ? 'Dividir' : motivoDaDivisao.tipo === 'voltar' ? 'Voltar para 1 conta' : 'Desfazer'}
           simular={simularDivisao} confirmar={confirmarDivisao} onClose={() => setMotivoDaDivisao(null)} />
       )}
