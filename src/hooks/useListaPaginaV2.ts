@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { inscreverEmLancamentos } from '@/hooks/useFinanceiroV2';
-import { lerLinhasV2, lerPaginaV2, type PaginaDaListaV2 } from '@/lib/financeiro/listaPaginaV2';
+import { lerLinhasV2, lerPaginaV2, lerSoIdsV2, precisaDosTotaisV2, trocarLinhasV2, type PaginaDaListaV2 } from '@/lib/financeiro/listaPaginaV2';
 import { normalizarErro } from '@/lib/erroOperacional';
 
 export interface PedidoDaPaginaV2 {
@@ -39,6 +39,20 @@ export function useListaPaginaV2(clienteId: string | null | undefined, pedido: P
   /* FIN-V2-DESEMPENHO-01c — a última resposta COMPLETA e o recorte dela (cliente, filtros, ordem, "por página"): trocar SÓ a página
      pede só as linhas (`so_linhas`) e reaproveita totais, contagens e o uso por fornecedor */
   const ultima = useRef<{ recorte: string; pagina: PaginaDaListaV2 } | null>(null);
+  /* P73 — uma leitura da página em voo: a releitura dos ids não a derruba (o token novo a mataria) — relê completa */
+  const emVoo = useRef(false);
+
+  const buscarNomes = useCallback(async (lida: PaginaDaListaV2, vivo: () => boolean) => {
+    if (!clienteId) return;
+    const sabe = conhecidoRef.current;
+    const ids = [...new Set(lida.linhas.map((l) => l.favorecido_id).filter((x): x is string => !!x))]
+      .filter((id) => !nomesRef.current.has(id) && !(sabe && sabe(id)));
+    if (ids.length > 0) {
+      const { data: fs, error: ef } = await supabase.from('financeiro_fornecedores').select('id, nome').eq('cliente_id', clienteId).in('id', ids);
+      if (!vivo()) return;
+      if (!ef && fs) setNomes((antes) => { const m = new Map(antes); for (const f of fs) m.set(f.id, f.nome); return m; });
+    }
+  }, [clienteId]);
 
   const carregar = useCallback(async (completa: boolean = false): Promise<void> => {
     const meu = ++token.current;
@@ -48,7 +62,7 @@ export function useListaPaginaV2(clienteId: string | null | undefined, pedido: P
     const recorte = JSON.stringify([clienteId, p.filtros, p.ordem, p.porPagina]);
     const anterior = ultima.current;
     const soLinhas = !completa && !!anterior && anterior.recorte === recorte;
-    setCarregando(true); setErro(null);
+    setCarregando(true); setErro(null); emVoo.current = true;
     try {
       const { data, error } = await (supabase as any).rpc('fn_fin_v2_lista_pagina', {
         p_cliente: clienteId, p_filtros: p.filtros, p_ordem: soLinhas ? { ...p.ordem, so_linhas: true } : p.ordem,
@@ -72,29 +86,67 @@ export function useListaPaginaV2(clienteId: string | null | undefined, pedido: P
       /* FIN-V2-DESEMPENHO-01c — a página está PRONTA aqui: os nomes que faltam vêm por trás (a célula mostra "…" até chegarem) e só os
          que a tela ainda não conhece (nem do cadastro, nem de uma página anterior) — trocar de página com o cadastro carregado = uma ida */
       setCarregando(false);
-      const sabe = conhecidoRef.current;
-      const ids = [...new Set(lida.linhas.map((l) => l.favorecido_id).filter((x): x is string => !!x))]
-        .filter((id) => !nomesRef.current.has(id) && !(sabe && sabe(id)));
-      if (ids.length > 0) {
-        const { data: fs, error: ef } = await supabase.from('financeiro_fornecedores').select('id, nome').eq('cliente_id', clienteId).in('id', ids);
-        if (!vivo()) return;
-        if (!ef && fs) setNomes((antes) => { const m = new Map(antes); for (const f of fs) m.set(f.id, f.nome); return m; });
-      }
+      await buscarNomes(lida, vivo);
     } catch (e) {
       if (!vivo()) return;
       console.error('fn_fin_v2_lista_pagina', normalizarErro(e, 'listaPaginaV2').diagnostico);
       setErro(FRASE_LISTA_INDISPONIVEL);
     } finally {
-      if (vivo()) setCarregando(false);
+      if (vivo()) { setCarregando(false); emVoo.current = false; }
     }
-  }, [clienteId, habilitado]);
+  }, [clienteId, habilitado, buscarNomes]);
+
+  /* P73 — salvou UM lançamento (o canal trouxe os ids): relê SÓ essas linhas (`so_ids`, ~20 ms no NJ contra ~160 ms da página) e as
+     troca no lugar. Os totais só voltam quando o que mudou mexe neles (`precisaDosTotaisV2`: valor, status, conta, sem caixa, fornecedor;
+     ou o dividido com filtro de conta) — numa segunda ida, `so_ids_totais`. Qualquer dúvida relê a página COMPLETA, como antes: id fora
+     da página (lançamento novo), a linha saiu do recorte, o total de linhas mudou, recorte trocado no meio ou erro. */
+  const releSoIds = useCallback(async (ids: readonly string[]): Promise<void> => {
+    const anterior = ultima.current;
+    const p: PedidoDaPaginaV2 = JSON.parse(chaveRef.current);
+    const recorte = JSON.stringify([clienteId, p.filtros, p.ordem, p.porPagina]);
+    if (!clienteId || !habilitado || !anterior || anterior.recorte !== recorte || emVoo.current) return carregar(true);
+    const antes = new Map(anterior.pagina.linhas.map((l) => [l.id, l]));
+    if (!ids.every((id) => antes.has(id))) return carregar(true);
+    const meu = ++token.current;
+    const vivo = () => meu === token.current;
+    const pedir = (totais: boolean) => (supabase as any).rpc('fn_fin_v2_lista_pagina', {
+      p_cliente: clienteId, p_filtros: p.filtros, p_ordem: { ...p.ordem, so_ids: [...ids], ...(totais ? { so_ids_totais: true } : {}) },
+      p_pagina: p.pagina, p_por_pagina: p.porPagina,
+    });
+    try {
+      const { data, error } = await pedir(false);
+      if (!vivo()) return;
+      if (error) throw error;
+      const so = lerSoIdsV2(data);
+      if (!so) throw new Error('resposta da lista fora do formato');
+      if (so.linhas.length !== ids.length) return carregar(true);
+      let base = anterior.pagina;
+      if (so.linhas.some((l) => { const a = antes.get(l.id); return !a || precisaDosTotaisV2(a, l, p.filtros); })) {
+        const r = await pedir(true);
+        if (!vivo()) return;
+        if (r.error) throw r.error;
+        const t = lerPaginaV2(r.data);
+        if (!t) throw new Error('resposta da lista fora do formato');
+        if (t.total !== anterior.pagina.total) return carregar(true);
+        base = { ...base, totais: t.totais, semCaixa: t.semCaixa, usoPorFornecedor: t.usoPorFornecedor };
+      }
+      const lida = trocarLinhasV2(base, so);
+      ultima.current = { recorte, pagina: lida };
+      setPagina(lida);
+      await buscarNomes(lida, vivo);
+    } catch (e) {
+      if (!vivo()) return;
+      console.error('fn_fin_v2_lista_pagina so_ids', normalizarErro(e, 'listaPaginaV2').diagnostico);
+      return carregar(true);
+    }
+  }, [clienteId, habilitado, carregar, buscarNomes]);
 
   useEffect(() => { carregar(); }, [carregar, chave]);
-  /* quem grava lançamento avisa o canal; a página é relida (mesmo pedido) — COMPLETA: os totais mudaram */
+  /* quem grava lançamento avisa o canal; a página é relida (mesmo pedido) — COMPLETA: os totais mudaram. Com os ids (P73), só eles. */
   useEffect(() => {
     if (!clienteId) return;
-    return inscreverEmLancamentos(clienteId, () => { carregar(true); });
-  }, [clienteId, carregar]);
+    return inscreverEmLancamentos(clienteId, (ids) => { void (ids && ids.length > 0 ? releSoIds(ids) : carregar(true)); });
+  }, [clienteId, carregar, releSoIds]);
   /* saiu da tela: a resposta que chegar depois não escreve nada */
   useEffect(() => () => { token.current += 1; }, []);
   const recarregar = useCallback(() => carregar(true), [carregar]);
