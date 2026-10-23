@@ -131,6 +131,20 @@ const CENARIOS = [
   ...['card', 'grafico', 'grade'].map((b) => ({ nome: `visao-geral-ampliado-${b}`, url: 'tela=visao-geral&barra=0', tamanhos: TAMANHOS_DA_VG, regiao: '[role="dialog"]',
     semRolagem: { dentro: '[role="dialog"]' },
     antes: async (p) => { await p.locator(`[data-testid="ampliar-${b}"]`).click(); await p.locator(`[data-testid="modal-ampliado-${b}"]`).waitFor(); await p.waitForTimeout(600); } })),
+  /* PR 4 — o MODAL DE ANÁLISE (banco sintético com nomes maiores que os reais e valores em milhões): aberto pela grade (aba Custeio),
+     pelo card (aba da raiz) e no nível mais fundo (Custeio › Pecuária › centro, em R$/cab). Rolam por dentro só as duas listas, as abas
+     e o caminho (linhas que rolam de lado). */
+  ...[['custeio', async (p) => { await p.locator('[data-testid^="grade-linha-saida:grupo:Custeio"]').dispatchEvent('click'); }],
+      ['raiz', async (p) => { await p.locator('[data-testid="card-total-saida"]').dispatchEvent('click'); }],
+      ['fundo', async (p) => {
+        await p.locator('[data-testid^="grade-linha-saida:grupo:Custeio"]').dispatchEvent('click'); await p.locator('[data-testid="modal-analise"]').waitFor(); await p.waitForTimeout(500);
+        await p.locator('[data-testid="analise-tabela-linha-0"]').click(); await p.waitForTimeout(400);
+        await p.locator('[data-testid="analise-unidade"]').click(); await p.locator('[data-testid="analise-unidade-rs_cab"]').click(); await p.waitForTimeout(400);
+        await p.locator('[data-testid="analise-descer-0"]').click(); await p.waitForTimeout(400);
+        await p.locator('[data-testid="analise-foco-linha-1"]').click(); }]].map(([n, abrir]) => ({
+    nome: `visao-geral-analise-${n}`, url: 'tela=visao-geral&barra=0', tamanhos: TAMANHOS_DA_VG, regiao: '[data-testid="modal-analise"]',
+    semRolagem: { dentro: '[data-testid="modal-analise"]', exceto: '[data-testid="analise-tabela-lista"], [data-testid="analise-foco-lista"], [data-testid="analise-abas"], [data-testid="analise-caminho"]' },
+    antes: async (p) => { await abrir(p); await p.locator('[data-testid="modal-analise"]').waitFor(); await p.waitForTimeout(700); } })),
   /* P79 — os chips de status: nenhum status e vencidos desligado (o aviso mais longo), aberto pela URL (`vg_status=`, `vg_venc=0`) */
   { nome: 'visao-geral-sem-status', url: 'tela=visao-geral&barra=0&vg_status=&vg_venc=0', tamanhos: TAMANHOS_DA_VG,
     semRolagem: { dentro: '[data-testid="visao-geral"]', exceto: '[data-testid="grade-vg-rolagem"], [data-testid="card-vg-lista"]' } },

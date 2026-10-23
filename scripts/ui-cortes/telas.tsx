@@ -427,7 +427,7 @@ if (tela === 'mesclar') {
   g.__fazendaBancada = { fazendas: [{ id: 'f1', nome: 'Fazenda Exemplo Nome Longo Retiro', cliente_id: 'cli' }, { id: 'f2', nome: 'Faz. Exemplo Dois', cliente_id: 'cli' }],
     fazendaAtual: null, isGlobal: true, fazendaId: '__global__', setFazendaAtual: () => {} };
   g.__bancoBancada = { from: () => [], rpc: (fn: string, a: any) => fn === 'fn_vg_filtros' ? (g.__vgFiltrosReal ?? VG.FILTROS)
-    : fn === 'fn_vg_tela' ? (g.__vgReal ?? VG.tela(a)) : null };
+    : fn === 'fn_vg_tela' ? (g.__vgReal ?? VG.tela(a)) : fn === 'fn_vg_analise' ? VG.analise(a) : null };
   montarNaUrl(
     <div className="flex h-full flex-col">
       <BarraSecao area="Financeiro" secao="Visão Geral" atalho={<FiltrosBarraVG />} />

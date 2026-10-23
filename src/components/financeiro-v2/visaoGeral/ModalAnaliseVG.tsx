@@ -64,9 +64,11 @@ export function ModalAnaliseVG({ alvo, ctx, rotuloContas, onFechar, onLancamento
       <DialogPortal>
         <DialogOverlay />
         <DialogPrimitive.Content aria-describedby={undefined} data-testid="modal-analise"
-          className="fixed left-1/2 top-1/2 z-50 flex h-[calc(100vh-16px)] max-h-[940px] w-[calc(100vw-16px)] max-w-[1520px] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-lg bg-[#f4f6f9] text-[10px] shadow-2xl"
+          className="fixed left-1/2 top-1/2 z-50 flex h-[calc(100vh-16px)] max-h-[940px] w-[calc(100vw-16px)] max-w-[1520px] -translate-x-1/2 -translate-y-1/2 flex-col overflow-y-hidden overflow-x-auto rounded-lg bg-[#f4f6f9] text-[10px] shadow-2xl"
           data-intencao-lancamentos={intencao ? chaveCaminho(intencao) : undefined}>
           <DialogPrimitive.Title className="sr-only">Análise de {raizRotulo.toLowerCase()}</DialogPrimitive.Title>
+          {/* abaixo de 1000px a Visão Geral não tem desenho (rola de lado): o modal também — largura mínima de 984px, nada cortado */}
+          <div className="flex h-full min-w-[984px] flex-col">
           {/* CABEÇALHO — abas na ordem do banco (a lista não muda ao clicar: a posição de cada uma é fixa) */}
           <div className="flex h-9 shrink-0 items-center gap-2 bg-[#2f3d4f] px-2.5 text-white">
             <div className="uma-linha-que-rola flex min-w-0 flex-1 items-center gap-1" data-testid="analise-abas">
@@ -85,36 +87,46 @@ export function ModalAnaliseVG({ alvo, ctx, rotuloContas, onFechar, onLancamento
 
           {erro && <div className="shrink-0 bg-[#fdecea] px-3 py-1 text-[10px] text-[#b3261e]" data-testid="analise-erro">{erro}</div>}
 
-          <div className="grid min-h-0 flex-1 gap-2 p-2" style={{ gridTemplateColumns: 'minmax(380px, 0.8fr) minmax(0, 1.2fr)' }}>
+          <div className="grid min-h-0 flex-1 gap-2 p-2" style={{ gridTemplateColumns: 'minmax(400px, 0.9fr) minmax(0, 1.1fr)' }}>
             {/* ESQUERDA */}
             <div className="flex min-h-0 min-w-0 flex-col gap-2">
               <Resumo d={d} e={e} rotuloContas={rotuloContas} />
-              <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-[#dfe4ea] bg-white" data-testid="analise-tabela">
+              <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-[#dfe4ea] bg-white" data-testid="analise-tabela" data-desloca="">
                 <div className="flex h-[30px] shrink-0 items-center justify-between gap-2 px-2">
-                  <span className="truncate text-[11px] font-bold" title={d?.tabela.total?.rotulo}>
+                  <span className="uma-linha-que-rola min-w-0 text-[11px] font-bold" title={`${e.aba === null ? 'Grupos' : 'Atividades'} · ${d?.tabela.total?.rotulo ?? ''}`}>
                     {e.aba === null ? 'Grupos' : 'Atividades'} · {d?.tabela.total?.rotulo ?? ''}
                   </span>
                   <div className="flex shrink-0 items-center gap-1.5">
                     <Segmentado<CriterioVG> altura={20} fonte={9.5} valor={e.criterio} onEscolher={(c) => setE({ ...e, criterio: c })} opcoes={[
-                      { valor: 'mes', rotulo: rotuloMes(e.am) }, { valor: 'media', rotulo: 'Média do período' }, { valor: 'acumulado', rotulo: 'Acumulado' }]} />
+                      { valor: 'mes', rotulo: <span className="inline-block w-[36px] text-center">{rotuloMes(e.am)}</span>, title: 'O mês escolhido' },
+                      { valor: 'media', rotulo: 'Média', title: 'Média do período: do início do período até o mês escolhido' },
+                      { valor: 'acumulado', rotulo: 'Acum.', title: 'Acumulado: a soma do início do período até o mês escolhido' }]} />
                     <SeletorUnidade d={d} valor={e.unidade} onEscolher={(u) => setE({ ...e, unidade: u })} />
                   </div>
                 </div>
-                <CabecalhoTabela colunas={COLS_ESQ} rotulos={[e.aba === null ? 'GRUPO' : 'ATIVIDADE', rotuloCriterio(e), 'META', 'DIF. R$', '%']} />
-                {d?.tabela.total && <LinhaEsquerda d={d} l={d.tabela.total} i={-1} forte ativa={mesmoCaminho(e.foco, d.tabela.total.caminho)}
-                  onClick={() => setE(escolherNaEsquerda(e, d.tabela.total!.caminho))} />}
+                {/* a tabela: cabeçalho e a linha do total presos (thead), as linhas rolam por dentro; o nome longo termina em "…" com o title */}
                 <div className="min-h-0 flex-1 overflow-y-auto" data-testid="analise-tabela-lista">
-                  {d?.tabela.linhas.map((l, i) => (
-                    <LinhaEsquerda key={chaveCaminho(l.caminho)} d={d} l={l} i={i} ativa={e.foco.length > (e.aba ? 1 : 0) && mesmoCaminho(e.foco.slice(0, l.caminho.length), l.caminho)}
-                      onClick={() => setE(escolherNaEsquerda(e, l.caminho))} />
-                  ))}
+                  <table className="w-full table-fixed border-collapse">
+                    <Colunas larguras={LARG_ESQ} />
+                    <thead className="sticky top-0 z-[1] bg-white">
+                      <Cabecalho rotulos={[e.aba === null ? 'GRUPO' : 'ATIVIDADE', rotuloCriterio(e), 'META', 'DIF. R$', '%']} />
+                      {d?.tabela.total && <LinhaEsquerda d={d} l={d.tabela.total} i={-1} forte ativa={mesmoCaminho(e.foco, d.tabela.total.caminho)}
+                        onClick={() => setE(escolherNaEsquerda(e, d.tabela.total!.caminho))} />}
+                    </thead>
+                    <tbody>
+                      {d?.tabela.linhas.map((l, i) => (
+                        <LinhaEsquerda key={chaveCaminho(l.caminho)} d={d} l={l} i={i} ativa={e.foco.length > (e.aba ? 1 : 0) && mesmoCaminho(e.foco.slice(0, l.caminho.length), l.caminho)}
+                          onClick={() => setE(escolherNaEsquerda(e, l.caminho))} />
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </section>
             </div>
 
             {/* DIREITA */}
             <div className="flex min-h-0 min-w-0 flex-col gap-2">
-              <section className="flex min-h-[150px] flex-1 flex-col overflow-hidden rounded-md border border-[#dfe4ea] bg-white px-2 pb-1 pt-1.5" data-testid="analise-grafico">
+              <section className="flex min-h-[150px] flex-1 flex-col overflow-hidden rounded-md border border-[#dfe4ea] bg-white px-2 pb-1 pt-1.5" data-testid="analise-grafico" data-desloca="">
                 <div className="grid h-[26px] shrink-0 items-center gap-1.5" style={{ gridTemplateColumns: '22px minmax(0, 1fr) 22px' }}>
                   <BotaoSeta rotulo="Anterior" testid="analise-anterior" desligado={(d?.grafico.irmaos.length ?? 0) < 2}
                     onClick={() => d && setE(andarEntreIrmaos(e, d.grafico.irmaos, -1))}>‹</BotaoSeta>
@@ -135,22 +147,30 @@ export function ModalAnaliseVG({ alvo, ctx, rotuloContas, onFechar, onLancamento
                 <GraficoItem d={d} e={e} onSel={(am) => setE({ ...e, am })} />
               </section>
 
-              <section className="flex h-[clamp(150px,44%,270px)] shrink-0 flex-col overflow-hidden rounded-md border border-[#dfe4ea] bg-white" data-testid="analise-foco">
+              <section className="flex h-[clamp(150px,44%,270px)] shrink-0 flex-col overflow-hidden rounded-md border border-[#dfe4ea] bg-white" data-testid="analise-foco" data-desloca="">
                 <div className="flex h-[26px] shrink-0 items-center justify-between gap-2 px-2">
-                  <span className="truncate text-[11px] font-bold" title={d?.foco.total?.rotulo}>{ROTULO_NIVEL[e.foco.length + 1] ?? 'Itens'} · {d?.foco.total?.rotulo ?? ''}</span>
+                  <span className="uma-linha-que-rola min-w-0 text-[11px] font-bold" title={`${ROTULO_NIVEL[e.foco.length + 1] ?? 'Itens'} · ${d?.foco.total?.rotulo ?? ''}`}>{ROTULO_NIVEL[e.foco.length + 1] ?? 'Itens'} · {d?.foco.total?.rotulo ?? ''}</span>
                   <Regua lado={lado} razao={d?.grafico.item?.razao ?? null} />
                 </div>
-                <CabecalhoTabela colunas={COLS_DIR} rotulos={[(ROTULO_NIVEL[e.foco.length + 1] ?? 'ITEM').toUpperCase(), rotuloCriterio(e), 'META', 'DIF. R$', '%', 'LANÇ.']} />
-                {d?.foco.total && <LinhaDireita d={d} l={d.foco.total} forte ativa={!e.grafico} onClick={() => setE({ ...e, grafico: null })} onLanc={lancar} />}
                 <div className="min-h-0 flex-1 overflow-y-auto" data-testid="analise-foco-lista">
-                  {d?.foco.linhas.map((l, i) => (
-                    <LinhaDireita key={chaveCaminho(l.caminho)} d={d} l={l} i={i} ativa={mesmoCaminho(e.grafico, l.caminho)}
-                      onClick={() => setE(escolherNaDireita(e, l.caminho))} onLanc={lancar}
-                      onDescer={l.caminho.length < 4 ? () => setE(descer(e, l.caminho)) : undefined} />
-                  ))}
+                  <table className="w-full table-fixed border-collapse">
+                    <Colunas larguras={LARG_DIR} />
+                    <thead className="sticky top-0 z-[1] bg-white">
+                      <Cabecalho rotulos={[(ROTULO_NIVEL[e.foco.length + 1] ?? 'ITEM').toUpperCase(), rotuloCriterio(e), 'META', 'DIF. R$', '%', 'LANÇ.']} />
+                      {d?.foco.total && <LinhaDireita d={d} l={d.foco.total} forte ativa={!e.grafico} onClick={() => setE({ ...e, grafico: null })} onLanc={lancar} />}
+                    </thead>
+                    <tbody>
+                      {d?.foco.linhas.map((l, i) => (
+                        <LinhaDireita key={chaveCaminho(l.caminho)} d={d} l={l} i={i} ativa={mesmoCaminho(e.grafico, l.caminho)}
+                          onClick={() => setE(escolherNaDireita(e, l.caminho))} onLanc={lancar}
+                          onDescer={l.caminho.length < 4 ? () => setE(descer(e, l.caminho)) : undefined} />
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </section>
             </div>
+          </div>
           </div>
         </DialogPrimitive.Content>
       </DialogPortal>
@@ -160,8 +180,6 @@ export function ModalAnaliseVG({ alvo, ctx, rotuloContas, onFechar, onLancamento
 
 const ROTULO_NIVEL: Record<number, string> = { 1: 'Grupos', 2: 'Atividades', 3: 'Centros', 4: 'Subcentros' };
 const rotuloCriterio = (e: EstadoAnaliseVG) => (e.criterio === 'mes' ? rotuloMes(e.am).toUpperCase() : e.criterio === 'media' ? 'MÉDIA/MÊS' : 'ACUMULADO');
-const COLS_ESQ = 'minmax(0,1fr) 92px 92px 84px 44px';
-const COLS_DIR = 'minmax(0,1fr) 92px 92px 84px 44px 58px';
 
 function AbaBotao({ ativa, forte, onClick, testid, children }: { ativa: boolean; forte?: boolean; onClick: () => void; testid: string; children: React.ReactNode }) {
   return (
@@ -180,62 +198,74 @@ function BotaoSeta({ rotulo, testid, desligado, onClick, children }: { rotulo: s
   );
 }
 
-function CabecalhoTabela({ colunas, rotulos }: { colunas: string; rotulos: string[] }) {
+/* as colunas (px; o nome leva o resto) — as mesmas no cabeçalho, no total e nas linhas: uma tabela só */
+const LARG_ESQ = [98, 98, 90, 44];
+const LARG_DIR = [98, 98, 90, 44, 62];
+function Colunas({ larguras }: { larguras: number[] }) {
+  return <colgroup><col />{larguras.map((w, i) => <col key={i} style={{ width: w }} />)}</colgroup>;
+}
+
+function Cabecalho({ rotulos }: { rotulos: string[] }) {
   return (
-    <div className="grid h-[18px] shrink-0 items-center gap-1 bg-[#2f3d4f] px-2 text-[8.5px] font-semibold tracking-[0.03em] text-white" style={{ gridTemplateColumns: colunas }}>
-      {rotulos.map((r, i) => <span key={i} className={cn('whitespace-nowrap', i > 0 && 'text-right', r === 'META' && 'text-[#ffd08a]')}>{r}</span>)}
-    </div>
+    <tr className="h-[18px] bg-[#2f3d4f] text-[8.5px] font-semibold tracking-[0.03em] text-white">
+      {rotulos.map((r, i) => <th key={i} className={cn('whitespace-nowrap px-1 font-semibold', i > 0 ? 'text-right' : 'text-left', r === 'META' && 'text-[#ffd08a]')}>{r}</th>)}
+    </tr>
   );
 }
 
 /** valor, meta, Dif. R$ e % — os quatro do banco; sem meta (ou unidade que não vale), "—" */
 function Numeros({ d, l, forte }: { d: AnaliseVG; l: LinhaAnaliseVG; forte?: boolean }) {
   const cv = corVariacao(d.lado, l.pct);
+  const td = 'whitespace-nowrap px-1 text-right tabular-nums';
   return (
     <>
-      <span className={cn('whitespace-nowrap text-right tabular-nums', forte && 'font-bold')} style={{ color: corDoLado(d.lado) }}>{brl(l.valor)}</span>
-      <span className="whitespace-nowrap text-right tabular-nums" style={{ color: COR_META }}>{brl(l.meta)}</span>
-      <span className="whitespace-nowrap text-right font-semibold tabular-nums" style={{ color: cv }}>{brl(l.dif)}</span>
-      <span className="whitespace-nowrap text-right font-semibold tabular-nums" style={{ color: cv }}>{pctVar(l.pct)}</span>
+      <td className={cn(td, forte && 'font-bold')} style={{ color: corDoLado(d.lado) }}>{brl(l.valor)}</td>
+      <td className={td} style={{ color: COR_META }}>{brl(l.meta)}</td>
+      <td className={cn(td, 'font-semibold')} style={{ color: cv }}>{brl(l.dif)}</td>
+      <td className={cn(td, 'font-semibold')} style={{ color: cv }}>{pctVar(l.pct)}</td>
     </>
   );
 }
 
+const linhaCls = (forte: boolean | undefined, ativa: boolean) => cn('cursor-pointer border-b border-[#eef1f5]',
+  forte ? 'h-[21px] border-b-[#cfd6df] text-[10.5px] font-bold' : 'h-[18px] text-[9.5px]', ativa ? 'bg-[#e8eef7]' : forte ? 'bg-[#f7f8fa]' : 'bg-white hover:bg-muted/40');
+
 function LinhaEsquerda({ d, l, i, forte, ativa, onClick }: { d: AnaliseVG; l: LinhaAnaliseVG; i: number; forte?: boolean; ativa: boolean; onClick: () => void }) {
+  const nome = `${l.rotulo}${forte ? ' · total' : ''}`;
   return (
-    <button type="button" onClick={onClick} data-testid={forte ? 'analise-tabela-total' : `analise-tabela-linha-${i}`} aria-pressed={ativa}
-      className={cn('grid w-full items-center gap-1 border-b border-[#eef1f5] px-2 text-left', forte ? 'h-[21px] border-b-[#cfd6df] text-[10.5px] font-bold' : 'h-[18px] text-[9.5px]',
-        ativa ? 'bg-[#e8eef7]' : forte ? 'bg-[#f7f8fa]' : 'hover:bg-muted/40')} style={{ gridTemplateColumns: COLS_ESQ }}>
-      <span className="flex min-w-0 items-center gap-1.5">
-        <i className="h-2 w-2 shrink-0 rounded-[2px]" style={{ background: forte ? corDoLado(d.lado) : corDaLinha(d, l, i) }} />
-        <span className="truncate" title={l.rotulo}>{l.rotulo}{forte ? ' · total' : ''}</span>
-      </span>
+    <tr onClick={onClick} data-testid={forte ? 'analise-tabela-total' : `analise-tabela-linha-${i}`} aria-selected={ativa} className={linhaCls(forte, ativa)}>
+      <td className="px-1.5">
+        <span className="flex min-w-0 items-center gap-1.5">
+          <i className="h-2 w-2 shrink-0 rounded-[2px]" style={{ background: forte ? corDoLado(d.lado) : corDaLinha(d, l, i) }} />
+          <span className="truncate" title={nome}>{nome}</span>
+        </span>
+      </td>
       <Numeros d={d} l={l} forte={forte} />
-    </button>
+    </tr>
   );
 }
 
 function LinhaDireita({ d, l, i = -1, forte, ativa, onClick, onLanc, onDescer }: {
   d: AnaliseVG; l: LinhaAnaliseVG; i?: number; forte?: boolean; ativa: boolean; onClick: () => void; onLanc: (c: CaminhoVG) => void; onDescer?: () => void;
 }) {
+  const nome = `${l.rotulo}${forte ? ' · total' : ''}`;
   return (
-    <div role="button" tabIndex={0} onClick={onClick} onKeyDown={(ev) => { if (ev.key === 'Enter') onClick(); }} aria-pressed={ativa}
-      data-testid={forte ? 'analise-foco-total' : `analise-foco-linha-${i}`} title={forte ? undefined : `Ver a evolução de ${l.rotulo} no gráfico`}
-      className={cn('grid w-full cursor-pointer items-center gap-1 border-b border-[#eef1f5] px-2', forte ? 'h-[21px] border-b-[#cfd6df] text-[10.5px] font-bold' : 'h-[18px] text-[9.5px]',
-        ativa ? 'bg-[#e8eef7]' : forte ? 'bg-[#f7f8fa]' : 'hover:bg-muted/40')} style={{ gridTemplateColumns: COLS_DIR }}>
-      <span className="flex min-w-0 items-center gap-1">
-        <span className="truncate" title={l.rotulo}>{l.rotulo}{forte ? ' · total' : ''}</span>
-        {onDescer && (
-          <button type="button" className="shrink-0 rounded px-1 text-[9px] text-[#1f5fa8] hover:bg-[#e8eef7]" title={`Abrir ${l.rotulo}`} aria-label={`Abrir ${l.rotulo}`}
-            onClick={(ev) => { ev.stopPropagation(); onDescer(); }} data-testid={`analise-descer-${i}`}>abrir ›</button>
-        )}
-      </span>
+    <tr onClick={onClick} aria-selected={ativa} data-testid={forte ? 'analise-foco-total' : `analise-foco-linha-${i}`} className={linhaCls(forte, ativa)}>
+      <td className="px-1.5">
+        <span className="flex min-w-0 items-center gap-1">
+          <span className="truncate" title={nome}>{nome}</span>
+          {onDescer && (
+            <button type="button" className="shrink-0 rounded px-1 text-[9px] font-normal text-[#1f5fa8] hover:bg-[#e8eef7]" title={`Abrir ${l.rotulo}`} aria-label={`Abrir ${l.rotulo}`}
+              onClick={(ev) => { ev.stopPropagation(); onDescer(); }} data-testid={`analise-descer-${i}`}>abrir ›</button>
+          )}
+        </span>
+      </td>
       <Numeros d={d} l={l} forte={forte} />
-      <span className="flex justify-end">
+      <td className="px-1.5 text-right">
         <button type="button" className="h-[15px] w-[54px] whitespace-nowrap rounded-[3px] border border-[#cfd6df] bg-white text-[9px] font-normal hover:border-[#1f5fa8] hover:text-[#1f5fa8]"
           onClick={(ev) => { ev.stopPropagation(); onLanc(l.caminho); }} data-testid={forte ? 'analise-lanc-total' : `analise-lanc-${i}`}>{l.qtd} lanç. ›</button>
-      </span>
-    </div>
+      </td>
+    </tr>
   );
 }
 
@@ -268,7 +298,7 @@ function Resumo({ d, e, rotuloContas }: { d: AnaliseVG | null; e: EstadoAnaliseV
   const raiz = lado === 'saida' ? 'SAÍDAS' : 'ENTRADAS';
   const per = d ? (e.criterio === 'mes' ? rotuloMes(e.am) : `${rotuloMes(d.periodo.de)}–${rotuloMes(e.am)} (${d.meses_janela}m)`) : '';
   return (
-    <section className="flex h-[86px] shrink-0 items-center gap-3 rounded-md border border-[#dfe4ea] bg-white px-2.5" data-testid="analise-resumo">
+    <section className="flex h-[86px] shrink-0 items-center gap-3 rounded-md border border-[#dfe4ea] bg-white px-2.5" data-testid="analise-resumo" data-desloca="">
       <Donut d={d} centro={r ? (e.aba === null ? `${mil1(r.valor_rs)} mil` : pct1(r.pct_da_raiz)) : ''} legenda={e.aba === null ? raiz : `DAS ${raiz}`} />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="truncate text-[8.5px] font-semibold tracking-[0.04em] text-muted-foreground" title={`${r?.rotulo ?? ''} · ${rotuloCriterio(e)} · ${rotuloContas}`}>

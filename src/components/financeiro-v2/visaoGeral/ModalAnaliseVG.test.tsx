@@ -74,7 +74,7 @@ describe('modal de análise', () => {
 
   it('A3 critério e unidade vão ao banco; a que não vale fica apagada', async () => {
     await abrir();
-    fireEvent.click(screen.getByText('Média do período'));
+    fireEvent.click(within(screen.getByTestId('analise-tabela')).getByText('Média'));
     await act(async () => { await Promise.resolve(); });
     expect(ultimo()).toMatchObject({ p_criterio: 'media' });
     fireEvent.click(screen.getByTestId('analise-unidade'));
