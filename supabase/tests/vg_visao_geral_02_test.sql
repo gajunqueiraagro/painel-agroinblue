@@ -9,7 +9,7 @@
 --      area do periodo = media dos meses com area; @ do periodo = soma
 --   W4 unidade: pecuaria Custeio set/2026 em R$/cab no mes = realizado / cab media (a mao); media = acumulado / 9 meses; R$/cab em no'
 --      administrativo = nulo e unidade_valida falso; no' de agricultura aceita rs_ha_plant e recusa rs_cab; unidade invalida = 22023
---   W5 vencido: nenhum previsto antes de out/2026; previsto_vencido de out = soma direta dos vencidos; nos saldos, vencido so' em out,
+--   W5 vencido: nenhum previsto antes de out/2026; previsto_vencido de out = soma direta dos vencidos (P79: vencimento antes de hoje); nos saldos, vencido so' em out,
 --      dentro das saidas e o invariante fecha
 --   W6 seguranca: o gestor da NJ recebe 42501 no Agnaldo nas 4 funcoes novas; sem usuario, 42501; anon sem EXECUTE nelas
 set local statement_timeout = '600s';
@@ -93,7 +93,10 @@ begin
   SELECT sum(previsto_vencido) INTO a FROM fn_vg_serie(c_nj, '2026-01-01', '2026-12-31', p_hoje => hoje) WHERE nivel = 'raiz' AND ano_mes = '2026-10';
   SELECT round(sum(abs(l.valor)), 2) INTO b FROM financeiro_lancamentos_v2 l
    WHERE l.cliente_id = c_nj AND NOT l.cancelado AND l.cenario IS DISTINCT FROM 'meta' AND NOT coalesce(l.sem_movimentacao_caixa, false)
-     AND l.status_transacao IN ('previsto', 'programado', 'agendado') AND coalesce(l.data_vencimento, l.data_competencia) < '2026-10-01';
+     AND l.status_transacao IN ('previsto', 'programado', 'agendado') AND coalesce(l.data_vencimento, l.data_competencia) < hoje  -- P79: vencido = antes de HOJE (a regra da CPR)
+     -- as contas do caixa (a regra das funcoes) ou sem conta; o vencido em cartao/conta inativa nao entra (medido: R$ 5.749,11 no NJ)
+     AND ((l.conta_bancaria_id IS NULL AND l.conta_destino_id IS NULL) OR EXISTS (SELECT 1 FROM financeiro_contas_bancarias k
+          WHERE k.cliente_id = c_nj AND k.ativa AND lower(coalesce(k.tipo_conta, '')) IN ('cc', 'inv', 'permuta') AND k.id IN (l.conta_bancaria_id, l.conta_destino_id)));
   IF a IS DISTINCT FROM b THEN f := f || format('W5 serie vencido out %s <> %s', a, b); END IF;
   SELECT count(*) FILTER (WHERE s.ano_mes <> '2026-10' AND (s.entradas_vencidas <> 0 OR s.saidas_vencidas <> 0))
        + count(*) FILTER (WHERE s.entradas_vencidas > s.entradas OR s.saidas_vencidas > s.saidas)
@@ -120,8 +123,8 @@ begin
   EXCEPTION WHEN others THEN IF SQLSTATE <> '42501' THEN f := f || ('W6 sem usuario ' || SQLSTATE); END IF; END;
   SELECT string_agg(p, ', ') INTO x FROM unnest(ARRAY['public.fn_vg_meta(uuid,date,date,uuid[],text)',
       'public.fn_vg_denominadores(uuid,date,date,uuid[],uuid)', 'public.fn_pec_arrobas_produzidas(uuid,text,text)',
-      'public.fn_vg_serie_unidade(uuid,date,date,text,text,uuid[],uuid[],uuid,text,date)',
-      'public.fn_vg_serie(uuid,date,date,uuid[],uuid[],uuid,text,date)', 'public.fn_vg_saldos(uuid,date,date,uuid[],date)',
+      'public.fn_vg_serie_unidade(uuid,date,date,text,text,uuid[],uuid[],uuid,text,date,text[],boolean)',
+      'public.fn_vg_serie(uuid,date,date,uuid[],uuid[],uuid,text,date,text[],boolean)', 'public.fn_vg_saldos(uuid,date,date,uuid[],date,text[],boolean)',
       'public._fn_planejamento_plano_conta()']) p
    WHERE has_function_privilege('anon', p, 'EXECUTE');
   IF x IS NOT NULL THEN f := f || ('W6 anon executa ' || x); END IF;
@@ -141,10 +144,10 @@ begin
     ('M2 @ por 15', 'public.fn_pec_arrobas_produzidas(uuid,text,text)', 'round(sum(z.producao_biologica) / 30.0, 2)', 'round(sum(z.producao_biologica) / 15.0, 2)'),
     ('M3 area sem snapshot vira zero', 'public.fn_vg_denominadores(uuid,date,date,uuid[],uuid)', 'nullif(am_.hp, 0) AS hp', 'coalesce(am_.hp, 0) AS hp'),
     ('M4 UA por 400', 'public.fn_vg_denominadores(uuid,date,date,uuid[],uuid)', 'round(zf.pf / zf.sf, 2) / 450.0', 'round(zf.pf / zf.sf, 2) / 400.0'),
-    ('M5 R$/cab valido em todo no', 'public.fn_vg_serie_unidade(uuid,date,date,text,text,uuid[],uuid[],uuid,text,date)', 'ELSE ARRAY[''rs'', ''rs_ha_prod''] END', 'ELSE ARRAY[''rs'', ''rs_ha_prod'', ''rs_cab''] END'),
-    ('M6 media sem dividir pelos meses', 'public.fn_vg_serie_unidade(uuid,date,date,text,text,uuid[],uuid[],uuid,text,date)', 'THEN s.k::numeric', 'THEN 1::numeric'),
-    ('M7 serie deixa o vencido no passado', 'public.fn_vg_serie(uuid,date,date,uuid[],uuid[],uuid,text,date)', 'ELSE greatest(coalesce(v.data_vencimento, v.data_competencia), v_atual) END AS dia', 'ELSE coalesce(v.data_vencimento, v.data_competencia) END AS dia'),
-    ('M8 saldos sem o vencido', 'public.fn_vg_saldos(uuid,date,date,uuid[],date)', 'greatest(coalesce(l.data_vencimento, l.data_competencia), v_atual) BETWEEN v_ini AND v_fim_dia', 'coalesce(l.data_vencimento, l.data_competencia) BETWEEN greatest(v_atual, v_ini) AND v_fim_dia')
+    ('M5 R$/cab valido em todo no', 'public.fn_vg_serie_unidade(uuid,date,date,text,text,uuid[],uuid[],uuid,text,date,text[],boolean)', 'ELSE ARRAY[''rs'', ''rs_ha_prod''] END', 'ELSE ARRAY[''rs'', ''rs_ha_prod'', ''rs_cab''] END'),
+    ('M6 media sem dividir pelos meses', 'public.fn_vg_serie_unidade(uuid,date,date,text,text,uuid[],uuid[],uuid,text,date,text[],boolean)', 'THEN s.k::numeric', 'THEN 1::numeric'),
+    ('M7 serie deixa o vencido no passado', 'public.fn_vg_serie(uuid,date,date,uuid[],uuid[],uuid,text,date,text[],boolean)', 'ELSE greatest(coalesce(v.data_vencimento, v.data_competencia), v_atual) END AS dia', 'ELSE coalesce(v.data_vencimento, v.data_competencia) END AS dia'),
+    ('M8 saldos sem o vencido', 'public.fn_vg_saldos(uuid,date,date,uuid[],date,text[],boolean)', 'greatest(coalesce(l.data_vencimento, l.data_competencia), v_atual) BETWEEN v_ini AND v_fim_dia', 'coalesce(l.data_vencimento, l.data_competencia) BETWEEN greatest(v_atual, v_ini) AND v_fim_dia')
   ) v(nome, fn, de, para) LOOP
     total := total + 1;
     d := pg_get_functiondef(m.fn::regprocedure);
