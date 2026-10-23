@@ -29,7 +29,7 @@ import {
   conferirCadastro, preencherDocumentoDoCadastro, fraseDaFilial, fraseDoDocumento, fraseDoHomonimoSemDocumento, type FornecedorDoCadastro,
 } from '@/lib/fornecedores/cadastroDaCasa';
 import { fonteDoCadastroNoBanco } from '@/lib/fornecedores/cadastroDaCasaBanco';
-import { consultarCnpj, preencherVazios, fraseDoPreenchido } from '@/lib/fornecedores/consultaCnpj';
+import { consultarCnpj, preencherVazios, fraseDoPreenchido, ofertasDaReceita, type CampoDaReceita, type OfertaDaReceita } from '@/lib/fornecedores/consultaCnpj';
 import { notificarFornecedoresMudaram } from '@/hooks/useFornecedoresDoCliente';
 import { mascararAoDigitar, situacaoDoGravado, validarDocumento } from '@/lib/fornecedores/documentoFiscal';
 import {
@@ -120,13 +120,22 @@ const ABAS: { valor: AbaDoFornecedor; rotulo: string }[] = [
 ];
 const UFS = ['AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MG', 'MS', 'MT', 'PA', 'PB', 'PE', 'PI', 'PR', 'RJ', 'RN', 'RO', 'RR', 'RS', 'SC', 'SE', 'SP', 'TO'];
 
-/** um campo de texto com o rótulo da régua (10px, sentence case) */
-function Campo({ rotulo, obrig, valor, onChange, placeholder, testId, className, invalido, maxLength }: {
+/** um campo de texto com o rótulo da régua (10px, sentence case). P31: `oferta` = o valor da Receita que DIFERE do escrito — na linha do
+ *  rótulo (13px, nada se desloca): "Receita: … · Usar"; o texto rola no lugar e vai inteiro no `title`. Nunca escreve por cima sozinho. */
+function Campo({ rotulo, obrig, valor, onChange, placeholder, testId, className, invalido, maxLength, oferta }: {
   rotulo: string; obrig?: boolean; valor: string; onChange: (v: string) => void; placeholder?: string; testId?: string; className?: string; invalido?: boolean; maxLength?: number;
+  oferta?: { receita: string; testId: string; onUsar: () => void } | null;
 }) {
   return (
     <div className={`min-w-0 ${className ?? ''}`}>
-      <Rotulo texto={rotulo} obrig={obrig} />
+      {oferta ? (
+        <div className="mb-0.5 flex h-[13px] min-w-0 items-center gap-1.5" data-testid={oferta.testId}>
+          <Rotulo texto={rotulo} obrig={obrig} className="mb-0 shrink-0" />
+          <span className="min-w-0 flex-1 uma-linha-que-rola text-[10px] leading-[13px] text-[#b45309]" title={`Na Receita: ${oferta.receita}`}>· Receita: {oferta.receita}</span>
+          <button type="button" className="h-[13px] shrink-0 text-[10px] font-medium leading-[13px] text-primary underline underline-offset-2" onClick={oferta.onUsar}
+            data-testid={`${oferta.testId}-usar`}>Usar</button>
+        </div>
+      ) : <Rotulo texto={rotulo} obrig={obrig} />}
       <Input value={valor} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} data-testid={testId} maxLength={maxLength} title={valor || undefined}
         aria-invalid={invalido || undefined} className={`${CAMPO} ${invalido ? 'border-destructive' : ''}`} />
     </div>
@@ -182,10 +191,17 @@ export function FornecedorFormDialog({
   /* FORN-FILIAL-01 — o CNPJ DIGITADO (válido, 14) é consultado na base pública (BrasilAPI): razão social, fantasia e endereço entram SÓ
      onde está vazio. Falha (rede, não achado, limite) não trava nada: a frase fica na linha do documento e o cadastro segue à mão. */
   const [consulta, setConsulta] = useState<{ cnpj: string; texto: string } | null>(null);
+  /* P31 — o que a Receita tem DIFERENTE do escrito (razão social, fantasia): oferecido no campo, "Usar"; some ao usar ou ao trocar o CNPJ */
+  const [ofertas, setOfertas] = useState<OfertaDaReceita[]>([]);
+  const ofertaDe = (campo: CampoDaReceita) => {
+    const o = ofertas.find((x) => x.campo === campo);
+    return o ? { receita: o.receita, testId: `oferta-receita-${campo}`, onUsar: () => { set(campo, o.receita); setOfertas((xs) => xs.filter((x) => x.campo !== campo)); } } : null;
+  };
   const dAtual = useRef(d);
   dAtual.current = d;
   const cnpjParaConsultar = docTocado && validado.valido && validado.tipo === 'cnpj' ? validado.digitos : '';
   useEffect(() => {
+    setOfertas([]);
     if (!cnpjParaConsultar) { setConsulta(null); return; }
     let vivo = true;
     setConsulta({ cnpj: cnpjParaConsultar, texto: 'Consultando o CNPJ…' });
@@ -195,8 +211,11 @@ export function FornecedorFormDialog({
         if (r.ok === false) { setConsulta({ cnpj: cnpjParaConsultar, texto: r.frase }); return; }
         /* a frase sai do formulário de AGORA; o preenchimento confere de novo no estado da hora (só vazio) */
         const frase = fraseDoPreenchido(preencherVazios(dAtual.current, r.dados).campos, r.dados.matrizFilial);
+        const oferecidas = ofertasDaReceita(dAtual.current, r.dados);
         setD((x) => ({ ...x, ...preencherVazios(x, r.dados).patch }));
-        setConsulta({ cnpj: cnpjParaConsultar, texto: frase ?? 'Consulta do CNPJ: nada a preencher (os campos já estão preenchidos).' });
+        setOfertas(oferecidas);
+        const outra = oferecidas.length ? `A Receita tem outra ${oferecidas.map((o) => o.rotulo.toLowerCase()).join(' e outra ')}: "Usar" no campo.` : null;
+        setConsulta({ cnpj: cnpjParaConsultar, texto: [frase, outra].filter(Boolean).join(' ') || 'Consulta do CNPJ: nada a preencher (os campos já estão preenchidos).' });
       });
     }, 500);
     return () => { vivo = false; clearTimeout(t); };
@@ -377,14 +396,14 @@ export function FornecedorFormDialog({
                     </div>
                   </div>
                   <div className="grid grid-cols-[minmax(0,1fr)_150px] gap-2">
-                    <Campo rotulo="Razão social" obrig valor={d.nome} onChange={(v) => set('nome', v)} placeholder="Razão social" testId="campo-razao-social" />
+                    <Campo rotulo="Razão social" obrig valor={d.nome} onChange={(v) => set('nome', v)} placeholder="Razão social" testId="campo-razao-social" oferta={ofertaDe('nome')} />
                     <div>
                       <Rotulo texto="Situação" />
                       <Segmentado<'ativo' | 'inativo'> altura={26} valor={d.ativo ? 'ativo' : 'inativo'} onEscolher={(v) => set('ativo', v === 'ativo')}
                         opcoes={[{ valor: 'ativo', rotulo: 'Ativo' }, { valor: 'inativo', rotulo: 'Inativo' }]} />
                     </div>
                   </div>
-                  <Campo rotulo="Nome fantasia" valor={d.nome_fantasia} onChange={(v) => set('nome_fantasia', v)} placeholder="Como aparece na nota" testId="campo-fantasia" />
+                  <Campo rotulo="Nome fantasia" valor={d.nome_fantasia} onChange={(v) => set('nome_fantasia', v)} placeholder="Como aparece na nota" testId="campo-fantasia" oferta={ofertaDe('nome_fantasia')} />
                   <div className="grid grid-cols-2 gap-2">
                     <Campo rotulo="Inscrição estadual" valor={d.inscricao_estadual} onChange={(v) => set('inscricao_estadual', v)} />
                     <Campo rotulo="Inscrição municipal" valor={d.inscricao_municipal} onChange={(v) => set('inscricao_municipal', v)} />
