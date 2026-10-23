@@ -138,6 +138,27 @@ const CENARIOS = [
       ['unidade R$/cab', async (p) => { await p.locator('[data-testid="analise-unidade"]').dispatchEvent('click'); await espera(p, 200); await p.locator('[data-testid="analise-unidade-rs_cab"]').dispatchEvent('click'); await espera(p); }],
       ['descer um nível', noLugar('[data-testid="analise-descer-0"]')], ['caminho até o grupo', noLugar('[data-testid="analise-caminho-1"]')],
       ['outro mês na coluna', async (p) => { await p.locator('[data-testid="analise-coluna-2026-03"]').dispatchEvent('click'); await espera(p); }]] },
+  /* PR 5 — a GAVETA de lançamentos (no modal): estrutura FIXA — nada da gaveta (cabeçalho, indicadores, resumo, tabela, total, rodapé)
+     nem do modal muda de altura ou posição ao descer de nível, trocar de irmão, subir pelo caminho, chegar ao subcentro com 523
+     lançamentos (e pedir a página seguinte), ao de texto longo e ao vazio, nem ao trocar o critério do modal */
+  { nome: 'visao-geral-gaveta', url: 'tela=visao-geral&barra=0', antes: async (p) => {
+      await p.locator('[data-testid^="grade-linha-saida:grupo:Custeio"]').dispatchEvent('click'); await p.locator('[data-testid="modal-analise"]').waitFor(); await espera(p, 700);
+      await p.locator('[data-testid="analise-lanc-total"]').dispatchEvent('click'); await p.locator('[data-testid="gaveta"]').waitFor(); await espera(p, 500); },
+    estados: [
+      ['desce: atividade', noLugar('[data-testid="gaveta-linha-0"]')], ['desce: centro', noLugar('[data-testid="gaveta-linha-0"]')],
+      ['desce: subcentro com 523', noLugar('[data-testid="gaveta-linha-0"]')], ['mais 23', noLugar('[data-testid="gaveta-mais"]')],
+      ['irmão com texto longo', noLugar('[data-testid="gaveta-irmao-1"]')], ['irmão vazio', noLugar('[data-testid="gaveta-irmao-3"]')],
+      ['sobe pelo caminho', noLugar('[data-testid="gaveta-caminho-2"]')],
+      ['acumulado no modal', async (p) => { await p.locator('[data-testid="analise-tabela"]').getByText('Acum.', { exact: true }).dispatchEvent('click'); await espera(p); }],
+      ['irmão de grupo', noLugar('[data-testid="gaveta-caminho-1"]')]] },
+  /* PR 5 — o AVISO do rodapé com duas contas escolhidas: a frase das contas entra e sai ao descer e subir — o lugar é reservado */
+  { nome: 'visao-geral-gaveta-contas', url: 'tela=visao-geral&barra=0&contas=2', antes: async (p) => {
+      await p.locator('[data-testid^="grade-linha-saida:grupo:Custeio"]').dispatchEvent('click'); await p.locator('[data-testid="modal-analise"]').waitFor(); await espera(p, 700);
+      await p.locator('[data-testid="analise-lanc-total"]').dispatchEvent('click'); await p.locator('[data-testid="gaveta"]').waitFor(); await espera(p, 500); },
+    estados: [
+      ['desce: atividade', noLugar('[data-testid="gaveta-linha-0"]')], ['desce: centro', noLugar('[data-testid="gaveta-linha-0"]')],
+      ['desce: subcentro (aviso das contas)', noLugar('[data-testid="gaveta-linha-0"]')], ['irmão longo', noLugar('[data-testid="gaveta-irmao-1"]')],
+      ['sobe pelo caminho (sem aviso)', noLugar('[data-testid="gaveta-caminho-2"]')]] },
   { nome: 'visao-geral-24m', url: 'tela=visao-geral&barra=0&faixa=per&de=2025-01&ate=2026-12', auto: true },
   { nome: 'contas-lista', url: 'tela=contas&barra=32&n=longo', auto: true, estados: [
     ['busca com resultado', digitar('[data-testid="busca-contas"]', 'bradesco')], ['busca sem resultado', digitar('[data-testid="busca-contas"]', 'zzzz')],
