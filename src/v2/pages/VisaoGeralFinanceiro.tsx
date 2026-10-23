@@ -161,7 +161,7 @@ export function VisaoGeralFinanceiro({ hoje = hojeLocal(), onAnalisar, inicial }
                 <Legenda modo={modo} tela={pronta} sel={sel} />
                 {/* P90 — o gráfico ampliado: com margem, mais compacto, e o PAINEL DO MÊS ao lado (clicar numa coluna troca o mês) */}
                 {pronta && <AmpliarVG titulo={modo === 'flx' ? 'Entradas × saídas por mês' : modo === 'sai' ? 'Saídas totais por mês' : 'Entradas totais por mês'} testid="grafico"
-                  largura="w-[min(1180px,94vw)]" altura="h-[min(86vh,620px)]" corpo="bg-[#f4f6f9] p-5">
+                  largura="w-[min(1180px,94vw)]" altura="h-[min(86vh,620px)]" corpo="bg-[#f4f6f9] p-4">
                   {() => (
                     <div className="flex h-full min-h-0 gap-4">
                       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-1 rounded-md border border-[#dfe4ea] bg-white px-3 pb-2 pt-2.5">

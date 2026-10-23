@@ -17,9 +17,10 @@ export function CabecalhoGradeVG({ modelo }: { modelo: ModeloGradeVG }) {
   return (
     <div className="flex shrink-0 items-stretch justify-between gap-4 border-b border-[#dfe4ea] bg-white py-2" data-testid="grade-ampliada-cabecalho">
       <div className="flex min-w-0 flex-col justify-center gap-0.5">
-        <span className="truncate text-[13px] font-bold text-[#1b2430]" title={c.clienteNome} data-testid="grade-ampliada-cliente">{c.clienteNome}</span>
-        <span className="truncate text-[10px] text-[#3a4655]" title={`${c.contaNome} · ${c.periodo}`}>Contas: {c.contaNome}   ·   {c.periodo}</span>
-        <span className="truncate text-[9.5px] text-muted-foreground" title={c.linha2} data-testid="grade-ampliada-contexto">{c.linha2}</span>
+        {/* janela estreita: cada linha rola de lado (nada cortado, nada quebrado) — o print/PDF é na janela larga */}
+        <span className="uma-linha-que-rola text-[13px] font-bold text-[#1b2430]" data-testid="grade-ampliada-cliente">{c.clienteNome}</span>
+        <span className="uma-linha-que-rola text-[10px] text-[#3a4655]">Contas: {c.contaNome}   ·   {c.periodo}</span>
+        <span className="uma-linha-que-rola text-[9.5px] text-muted-foreground" data-testid="grade-ampliada-contexto">{c.linha2}</span>
       </div>
       <div className="flex shrink-0 divide-x divide-[#dfe4ea] rounded border border-[#dfe4ea]" data-testid="grade-ampliada-resumo">
         {modelo.resumo.map((r) => (
