@@ -343,7 +343,10 @@ function residualDimensaoTodosAnos(filtros: FiltrosV2): ((l: LancamentoV2) => bo
  * nunca antes — notificar antes faz o ouvinte reler o estado velho e concluir que nada
  * mudou.
  */
-const lancamentosSubscribers = new Map<string, Set<() => void>>();
+/* P73 — o ouvinte recebe, quando quem gravou sabe, OS IDS gravados (editar um lançamento): a lista troca só essas linhas. Sem ids =
+   "mudou" como sempre (relê o que mostra). */
+export type OuvinteDeLancamentos = (ids?: readonly string[]) => void;
+const lancamentosSubscribers = new Map<string, Set<OuvinteDeLancamentos>>();
 
 /**
  * ⚠ EXPORTADA EM [CONCIL-MES-02] (132). Ela era privada porque só os writers deste hook a
@@ -353,12 +356,12 @@ const lancamentosSubscribers = new Map<string, Set<() => void>>();
  * notificação seria a segunda fonte da mesma pergunta.
  * ⚠ CHAMAR DEPOIS DA ESCRITA, NUNCA ANTES — a regra que já valia aqui dentro.
  */
-export function notificarLancamentosMudaram(clienteId: string, menosEste?: (() => void) | null) {
+export function notificarLancamentosMudaram(clienteId: string, menosEste?: OuvinteDeLancamentos | null, ids?: readonly string[]) {
   const subs = lancamentosSubscribers.get(clienteId);
   if (!subs) return;
   /* `menosEste` (CONC-SEM-F5-01): quem gravou e ja' remendou a propria tela nao precisa se reler — o editar do Financeiro
      remenda a linha (PR-FIN-SAVE-LENTO-01) e recarregar a lista inteira a cada edicao desfaria isso. Os OUTROS ouvem. */
-  for (const cb of [...subs]) if (cb !== menosEste) cb();
+  for (const cb of [...subs]) if (cb !== menosEste) cb(ids);
 }
 
 /**
@@ -367,7 +370,7 @@ export function notificarLancamentosMudaram(clienteId: string, menosEste?: (() =
  * ⚠ QUEM SE INSCREVE RELÊ O QUE MOSTRA, e nada mais: o registro não carrega dado, só diz
  * "mudou". Cada tela sabe o que precisa reler.
  */
-export function inscreverEmLancamentos(clienteId: string, cb: () => void): () => void {
+export function inscreverEmLancamentos(clienteId: string, cb: OuvinteDeLancamentos): () => void {
   let set = lancamentosSubscribers.get(clienteId);
   if (!set) { set = new Set(); lancamentosSubscribers.set(clienteId, set); }
   set.add(cb);
@@ -783,7 +786,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
   };
 
   useEffect(() => { loadLancamentosRef.current = loadLancamentos; }, [loadLancamentos]);
-  const meuOuvinteRef = useRef<(() => void) | null>(null);
+  const meuOuvinteRef = useRef<OuvinteDeLancamentos | null>(null);
 
   /* Inscrição por cliente: trocar de cliente sai do Set antigo pelo cleanup e entra no
      novo. Só o `clienteId` na dependência — o callback alcança o loader corrente pelo ref,
@@ -809,8 +812,8 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
   /* CONC-SEM-F5-01 — editar, excluir, excluir em lote e realizar em lote AVISAM o canal depois de gravar: a Conciliacao (o dono
      do resumo e a regua), o DRE da lavoura e as outras instancias deste hook releem sem F5. Esta instancia fica de fora
      (`menosEste`): quem a usa ja' atualiza a propria lista como sempre fez. */
-  const avisarOsOutros = useCallback(() => {
-    if (clienteId) notificarLancamentosMudaram(clienteId, meuOuvinteRef.current);
+  const avisarOsOutros = useCallback((ids?: readonly string[]) => {
+    if (clienteId) notificarLancamentosMudaram(clienteId, meuOuvinteRef.current, ids);
   }, [clienteId]);
 
   /* ⚠ O SEGUNDO ARGUMENTO É OPCIONAL DE PROPÓSITO: os 20 chamadores existentes seguem
@@ -1116,7 +1119,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
         /* ⚠ A MESMA RELEITURA DO RAMO COMUM — FIN-V2-REFRESH-01. O que o ramo pode GRAVAR
            continua restrito acima; o que muda e' so' a tela passar a mostrar o que ficou. */
         await remendarComOBanco();
-        if (!opts?.silent) { toast.success('Lançamento atualizado'); avisarOsOutros(); }
+        if (!opts?.silent) { toast.success('Lançamento atualizado'); avisarOsOutros([id]); }
         return true;
       }
     }
@@ -1224,7 +1227,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     }
 
     /* `silent` e' o laco do importador de Excel: quem roda em lote avisa uma vez no fim, nao a cada linha. */
-    if (!opts?.silent) { toast.success('Lançamento atualizado'); avisarOsOutros(); }
+    if (!opts?.silent) { toast.success('Lançamento atualizado'); avisarOsOutros([id]); }
     return true;
   }, [clienteId, user, classificacoes, avisarOsOutros]);
 
