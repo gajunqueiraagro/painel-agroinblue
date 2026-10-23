@@ -37,7 +37,7 @@ function ContaDoItem({ valor, classificacoes, tipoOperacao, onEscolher, nItem, d
   );
 }
 
-export function ContasDosItens({ itens, classificacoes, tipoOperacao, contaDeHoje, sugeridas, gravando, somenteLeitura, onDividir, atividadeSugerida = null }: {
+export function ContasDosItens({ itens, classificacoes, tipoOperacao, contaDeHoje, sugeridas, gravando, somenteLeitura, onDividir, atividadeSugerida = null, aoSalvar = false }: {
   itens: readonly Pick<ItemFiscal, 'nItem' | 'descricao' | 'liquidoCent'>[];
   classificacoes: ClassificacaoItem[];
   tipoOperacao: string;
@@ -51,6 +51,8 @@ export function ContasDosItens({ itens, classificacoes, tipoOperacao, contaDeHoj
   onDividir: (mapa: ReadonlyMap<number, string>) => void;
   /** a atividade do lancamento: a barra do seletor nasce nela quando o item ainda nao tem conta */
   atividadeSugerida?: Atividade | null;
+  /** NOTA-CONTAS-NA-CRIACAO-01 A — no NOVO lancamento: o botao deixa a divisao PENDENTE ("… ao salvar"); quem grava e' o Salvar */
+  aoSalvar?: boolean;
 }) {
   const inicial = useMemo(() => {
     const m = new Map<number, string>();
@@ -92,7 +94,7 @@ export function ContasDosItens({ itens, classificacoes, tipoOperacao, contaDeHoj
           )}
           <Button type="button" size="sm" className="h-[20px] w-[190px] shrink-0 px-2 text-[10px]" disabled={!!recusa || gravando || somenteLeitura}
             onClick={() => onDividir(mapa)} data-testid="contas-dividir">
-            {gravando ? 'Dividindo…' : `Dividir o lançamento em ${Math.max(2, porConta.length)} contas`}
+            {gravando ? (aoSalvar ? 'Salvando…' : 'Dividindo…') : aoSalvar ? `Dividir em ${Math.max(2, porConta.length)} contas ao salvar` : `Dividir o lançamento em ${Math.max(2, porConta.length)} contas`}
           </Button>
         </div>
       </div>
