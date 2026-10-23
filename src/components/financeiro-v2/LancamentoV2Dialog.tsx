@@ -86,8 +86,9 @@ import { ContasDosItens } from './ContasDosItens';
 import { PartesDaClassificacao } from './PartesDaClassificacao';
 import { DividirClassificacaoDialog, MotivoDaDivisaoDialog } from './DivisaoDialogs';
 import {
-  classificacaoGravada, contasDasPartes, desfazerDivisao, dividir, dividirPelosItens, lerDivisao, percentuaisDosItens, porContaDosItens,
-  voltarUmaConta, type DivisaoLida, type ResultadoDaDivisao,
+  classificacaoGravada, contaDaMaiorParte, contasDasPartes, desfazerCriacao, desfazerDivisao, dividir, dividirNaCriacao, dividirPelosItens, lerDivisao,
+  MOTIVO_DA_DIVISAO_NA_CRIACAO, partesPendentes, percentuaisDosItens, porContaDosItens, porQueNaoDivideNaCriacao, voltarUmaConta,
+  type DivisaoLida, type ParteNova, type ResultadoDaDivisao,
 } from '@/lib/financeiro/divisaoDaClassificacao';
 import { aprender, historicoDoEmitente, sugerir } from '@/lib/financeiro/sugestaoDeContaDosItens';
 import { propostaDoEmitente, type CadastroParaComparar } from '@/lib/fornecedores/compararCadastro';
@@ -450,9 +451,14 @@ export function DadosParaPagamento({
  */
 export async function gravarParcelamento(
   payload: ReturnType<typeof montarPayloadParcelamento>, clienteId: string, invalidar: () => Promise<unknown>,
+  divisao?: { partes: ParteNova[]; motivo: string },
 ): Promise<string | null> {
+  /* NOTA-CONTAS-NA-CRIACAO-01 A — com a divisao pelos itens escolhida antes de salvar: o cadastro E a divisao numa chamada so'
+     (`fn_parcelamento_cadastrar_dividido`, uma transacao: a divisao recusada desfaz o cadastro inteiro). Sem ela, o de sempre. */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
-  const { data, error } = await (supabase as any).rpc('fn_parcelamento_cadastrar', { p_payload: payload });
+  const { data, error } = divisao ? await (supabase as any).rpc('fn_parcelamento_cadastrar_dividido', { p_payload: payload, p_partes: divisao.partes, p_motivo: divisao.motivo })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+    : await (supabase as any).rpc('fn_parcelamento_cadastrar', { p_payload: payload });
   if (error) throw error;
   /* ⚠ INVALIDAÇÃO AMPLA, e é deliberado: este modal é montado por DEZ telas diferentes,
      cada uma com o seu `onSave` e a sua forma de recarregar, e o parcelamento não passa
@@ -608,6 +614,9 @@ export function LancamentoV2Dialog({
   const [dividirAberto, setDividirAberto] = useState(false);
   const [motivoDaDivisao, setMotivoDaDivisao] = useState<{ tipo: 'itens'; mapa: ReadonlyMap<number, string> } | { tipo: 'voltar' } | { tipo: 'desfazer' } | null>(null);
   const [contasAprendidas, setContasAprendidas] = useState<ReadonlyMap<number, string>>(new Map());
+  /* NOTA-CONTAS-NA-CRIACAO-01 A — a divisao pelos itens escolhida no NOVO lancamento: PENDENTE na tela (nada vai ao banco antes do Salvar);
+     o Salvar cria e divide (o parcelado numa transacao so'; o a' vista cancela o recem-criado se a divisao recusar) */
+  const [divisaoNaCriacao, setDivisaoNaCriacao] = useState<ReadonlyMap<number, string> | null>(null);
   useEffect(() => {
     let vivo = true;
     setDivisao(null);
@@ -1356,6 +1365,7 @@ export function LancamentoV2Dialog({
     /* FIN-NFE-XML-01d — o XML da nota ja' nasce como o documento NF pendente do lancamento novo. */
     const doXml = !lancamento ? prefill?.doXml ?? null : null;
     setPendentes(doXml ? [pendenteDaNota(doXml, doXml.proposta.favorecidoId)] : []);
+    setDivisaoNaCriacao(null);
     setXmlFaixaFechada(false);
     setXmlRegistradaDispensada(false);
     setXmlComparar(null);
@@ -2075,7 +2085,10 @@ export function LancamentoV2Dialog({
             fase: faseParaGravar(atividade, fase),
           },
         );
-        const financiamentoId = await gravarParcelamento(payload, clienteAtual.id, () => qc.invalidateQueries());
+        /* NOTA-CONTAS-NA-CRIACAO-01 A — a divisao pendente vai NA MESMA chamada (percentual dos itens: todas as parcelas na mesma proporcao) */
+        const divisaoDoParcelado = divisaoNaCriacao && itensDaNota
+          ? { partes: percentuaisDosItens(porContaDosItens(itensDaNota.lidos.itens, divisaoNaCriacao)), motivo: MOTIVO_DA_DIVISAO_NA_CRIACAO } : undefined;
+        const financiamentoId = await gravarParcelamento(payload, clienteAtual.id, () => qc.invalidateQueries(), divisaoDoParcelado);
         await aposCriarDoXml();
         toast.success(`Parcelamento criado: ${numParcelas} parcelas`);
         /* FIN-NFE-PARCELAS-01 PR 2b — a NF da compra vai para a parcela 1 e é LIGADA às N; cada boleto,
@@ -2096,7 +2109,9 @@ export function LancamentoV2Dialog({
            — a biblioteca só constrói `PostgrestError` quando se pede `.throwOnError()`.
            Resultado: de 18 a 21/09 o botão recusava com o genérico enquanto o banco dizia
            `42809: op ANY/ALL (array) requires array on right side`, e ninguém viu. */
-        toast.error(mensagemDoErro(e, 'Falha ao criar o parcelamento'));
+        /* com a divisao: a recusa do banco desfez TUDO (uma transacao) — a frase fica ao lado do botao e a tela continua como estava */
+        if (divisaoNaCriacao) setErroAntesDeSalvar(`Nada foi criado: ${mensagemDoErro(e, 'a divisão pelos itens foi recusada')}`);
+        else toast.error(mensagemDoErro(e, 'Falha ao criar o parcelamento'));
       } finally {
         setSaving(false);
       }
@@ -2193,6 +2208,15 @@ export function LancamentoV2Dialog({
     // CRITICAL: pass the stable ID for edits — ensures UPDATE, never INSERT
     const ok = await onSave(form, currentEditId || undefined);
     if (!ok) { setSaving(false); return; }
+    /* NOTA-CONTAS-NA-CRIACAO-01 A — a' vista com a divisao pendente: os itens, a nota e a divisao, nessa ordem (a RPC divide pela nota
+       ANEXADA); qualquer um que falhe cancela o recem-criado (`desfazerCriacao`) e a frase fica ao lado do botao — nada fica pela metade */
+    if (!currentIsEdit && divisaoNaCriacao) {
+      const frase = await criarDividido(typeof ok === 'string' ? ok : null, divisaoNaCriacao);
+      setSaving(false);
+      if (frase) { setErroAntesDeSalvar(frase); return; }
+      onClose();
+      return;
+    }
     if (!currentIsEdit) await aposCriarDoXml();
     /* FIN-NFE-PARCELAS-01 — lançamento novo com documentos pendentes: o `onSave` devolveu o id (quem
        liga `documentosAntesDeSalvar` devolve), e a cadeia de sempre roda nele antes de fechar. */
@@ -2382,6 +2406,28 @@ export function LancamentoV2Dialog({
   const financiamentoDoLanc = lancamento && typeof Reflect.get(lancamento, 'financiamento_id') === 'string' ? String(Reflect.get(lancamento, 'financiamento_id')) : null;
   const podeDividir = isEdit && !!lancamento && !isOCTitulo && !isTransferencia && !subcentroTravado && !travado('classificacao')
     && Reflect.get(lancamento, 'cenario') !== 'meta';
+  /* NOTA-CONTAS-NA-CRIACAO-01 A — o NOVO que nasce da nota (com os documentos antes de salvar: e' por eles que o id volta e a nota e'
+     anexada antes de dividir), fora da OC e da transferencia */
+  const podeDividirNaCriacao = !isEdit && !lancamento && !!itensDaNota && !!xml && !modoOC && !isTransferencia && !subcentroTravado
+    && !travado('classificacao') && !!documentosAntesDeSalvar;
+  /** "Dividir em N contas ao salvar": confere o que o banco recusaria, guarda o mapa e poe a MAIOR parte na conta do lancamento (a regra
+   *  do banco: o lancamento dividido fica com a maior parte) — o Salvar valida o subcentro como sempre. */
+  const aplicarDivisaoNaCriacao = (mapa: ReadonlyMap<number, string>) => {
+    if (!itensDaNota) return;
+    const recusa = porQueNaoDivideNaCriacao(itensDaNota.lidos.itens, mapa, classificacoesDoModal, tipoOperacao);
+    if (recusa) { setErroAntesDeSalvar(recusa); return; }
+    setErroAntesDeSalvar(null);
+    setDivisaoNaCriacao(new Map(mapa));
+    const c = classificacoesDoModal.find((x) => x.id === contaDaMaiorParte(itensDaNota.lidos.itens, mapa));
+    if (c) {
+      /* a safra so' fica se a maior parte e' da MESMA atividade (a regra de trocar a atividade na Geral; o campo esta' oculto enquanto pendente,
+         e a safra de outra atividade seria recusada no Salvar — PR-FIN-SAFRA-ESCOPO-01) */
+      const escopo = (c.escopo_negocio || '').trim();
+      setClassificacao((atual) => ({ ...atual, plano_conta_id: c.id ?? null, subcentro: c.subcentro, macro_custo: c.macro_custo, grupo_custo: c.grupo_custo || '',
+        centro_custo: c.centro_custo, escopo_negocio: c.escopo_negocio || '', atividade: atividadeValida(c.escopo_negocio),
+        safra_id: escopo === 'administrativo' || escopo !== (atual.escopo_negocio || '').trim() ? '' : atual.safra_id }));
+    }
+  };
   /* a sugestao aprendida dos itens (as divisoes ja' feitas pelos itens, do mesmo emitente) */
   const chaveDaNotaDosItens = itensDaNota?.cabecalho.chave ?? null;
   const emitenteDosItens = itensDaNota?.cabecalho.emitenteDocumento ?? null;
@@ -2389,7 +2435,7 @@ export function LancamentoV2Dialog({
     let vivo = true;
     setContasAprendidas(new Map());
     const cli = clienteAtual?.id;
-    if (!podeDividir || !cli || !itensDaNota) return;
+    if ((!podeDividir && !podeDividirNaCriacao) || !cli || !itensDaNota) return;
     void historicoDoEmitente(cli, emitenteDosItens, chaveDaNotaDosItens).then((h) => {
       if (!vivo || !h.length) return;
       const validas = new Set(classificacoesDoModal.filter((c) => c.tipo_operacao === tipoOperacao).map((c) => c.id));
@@ -2397,7 +2443,7 @@ export function LancamentoV2Dialog({
     });
     return () => { vivo = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- a nota e o emitente bastam: a lista do plano so' valida
-  }, [podeDividir, clienteAtual?.id, chaveDaNotaDosItens, emitenteDosItens]);
+  }, [podeDividir, podeDividirNaCriacao, clienteAtual?.id, chaveDaNotaDosItens, emitenteDosItens]);
   const contasIniciaisDosItens = useMemo(() => {
     const gravadas = divisao ? contasDasPartes(divisao.partes) : new Map<number, string>();
     return gravadas.size ? gravadas : contasAprendidas;
@@ -2484,6 +2530,26 @@ export function LancamentoV2Dialog({
    * Depois que o LANCAMENTO nasceu (nunca antes): guarda os itens da nota e avisa quem abriu o modal. O cadastro do fornecedor NAO e'
    * tocado aqui (NOTA-FORNECEDOR-COMPARAR-01: so' pela comparacao confirmada). ⚠ Falha aqui NAO desfaz o lancamento.
    */
+  /**
+   * NOTA-CONTAS-NA-CRIACAO-01 A — o a' vista recem-criado COM a divisao pendente: guarda os itens (a RPC le^ os itens guardados), anexa a
+   * nota (a RPC divide pela nota ANEXADA) e divide pela `fn_lancamento_dividir_pelos_itens`. O primeiro passo que falhar cancela o
+   * recem-criado (`desfazerCriacao`) e devolve a frase; `null` = criado e dividido. ⚠ Os pendentes NAO sao marcados gravados aqui: depois
+   * de cancelar, o proximo Salvar anexa a nota de novo no lancamento novo.
+   */
+  const criarDividido = async (idCriado: string | null, mapa: ReadonlyMap<number, string>): Promise<string | null> => {
+    const cli = clienteAtual?.id;
+    if (!idCriado || !cli) return 'Lançamento gravado, mas sem o id para dividir — divida pela aba Itens no Editar.';
+    const erroItens = xml ? await gravarItensSemTravar(cli, xml.arquivo) : 'o lançamento não veio de uma nota';
+    if (erroItens) return desfazerCriacao(cli, idCriado, `os itens da nota não foram guardados: ${erroItens}`);
+    if (pendentes.length > 0) {
+      const lista = await gravarDocumentosPendentes(cli, idCriado, pendentes);
+      const falha = lista.find((x) => !x.gravado);
+      if (falha) return desfazerCriacao(cli, idCriado, `a nota não foi anexada: ${falha.erro ?? 'falha'}`);
+    }
+    const frase = await dividirNaCriacao(cli, idCriado, mapa);
+    if (!frase) onLancamentoCriado?.();
+    return frase;
+  };
   const aposCriarDoXml = async () => {
     if (!xml) return;
     /* ITENS-NOTA-01 — os itens da nota ficam guardados pela chave (o documento), sem travar o salvar */
@@ -2969,7 +3035,8 @@ export function LancamentoV2Dialog({
 
             </BlocoFormulario>
             <BlocoFormulario titulo="Classificação" testId="bloco-classificacao" className="gap-1"
-              dica={lancDividido && divisao ? `dividida em ${divisao.partes.length} contas` : undefined}
+              dica={lancDividido && divisao ? `dividida em ${divisao.partes.length} contas`
+                : divisaoNaCriacao ? `dividida em ${new Set(divisaoNaCriacao.values()).size} contas ao salvar` : undefined}
               acao={podeDividir ? (
                 /* FIN-CLASSIF-DIVIDIDA-01b — as acoes da divisao no titulo do bloco (nao somam altura) */
                 <span className="flex items-center gap-2 text-[10px]" data-testid="acoes-da-divisao">
@@ -2980,6 +3047,11 @@ export function LancamentoV2Dialog({
                   {divisao?.ultimaOperacaoId && !financiamentoDoLanc && (
                     <button type="button" className="text-muted-foreground underline-offset-2 hover:underline" onClick={() => setMotivoDaDivisao({ tipo: 'desfazer' })} data-testid="divisao-desfazer">Desfazer</button>
                   )}
+                </span>
+              ) : divisaoNaCriacao ? (
+                /* A — a divisao pendente se desfaz na tela (nada foi gravado): volta a 1 conta, a maior parte */
+                <span className="flex items-center gap-2 text-[10px]" data-testid="acoes-da-divisao-na-criacao">
+                  <button type="button" className="underline-offset-2 hover:underline" onClick={() => setDivisaoNaCriacao(null)} data-testid="divisao-na-criacao-voltar">Voltar para 1 conta</button>
                 </span>
               ) : undefined}>
             {/* ⚠ O CLUSTER DE CLASSIFICAÇÃO SAIU DAQUI — PAR-01a-ii. Atividade, Subcentro, Safra,
@@ -2999,6 +3071,9 @@ export function LancamentoV2Dialog({
                 no aviso de rateio logo abaixo — chamar dos dois lados seria duas consultas. */}
             {lancDividido && divisao ? (
               <PartesDaClassificacao partes={divisao.partes} total={Math.abs(Number(lancamento?.valor ?? 0))} />
+            ) : divisaoNaCriacao && itensDaNota ? (
+              /* A — a divisao PENDENTE: as partes como vao ficar (o % dos itens sobre o valor do lancamento) */
+              <PartesDaClassificacao partes={partesPendentes(itensDaNota.lidos.itens, divisaoNaCriacao, classificacoesDoModal, Math.abs(valorNum))} total={Math.abs(valorNum)} />
             ) : (
             <ClassificacaoLancamento
               regua="linha"
@@ -3349,6 +3424,11 @@ export function LancamentoV2Dialog({
                     <ContasDosItens itens={itensDaNota.lidos.itens} classificacoes={classificacoesDoModal} tipoOperacao={tipoOperacao}
                       contaDeHoje={lancDividido ? null : (classificacao.plano_conta_id ?? null)} sugeridas={contasIniciaisDosItens} atividadeSugerida={classificacao.atividade}
                       gravando={!!motivoDaDivisao} onDividir={(mapa) => setMotivoDaDivisao({ tipo: 'itens', mapa })} />
+                  ) : podeDividirNaCriacao ? (
+                    /* NOTA-CONTAS-NA-CRIACAO-01 A — no NOVO: a mesma vista; "Dividir … ao salvar" deixa a divisao PENDENTE (o Salvar grava) */
+                    <ContasDosItens itens={itensDaNota.lidos.itens} classificacoes={classificacoesDoModal} tipoOperacao={tipoOperacao} aoSalvar
+                      contaDeHoje={classificacao.plano_conta_id ?? null} sugeridas={divisaoNaCriacao ?? contasAprendidas} atividadeSugerida={classificacao.atividade}
+                      gravando={saving} onDividir={aplicarDivisaoNaCriacao} />
                   ) : undefined} />
               </TabsContent>
             )}
