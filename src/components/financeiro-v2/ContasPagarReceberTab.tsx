@@ -39,7 +39,7 @@ import { DatePicker } from '@/components/ui/date-picker';
 import {
   ATALHOS_CPR, periodoDoAtalho, recortarCpr, ramoDaConsultaCpr, doSegmentoCpr, contaEmAberto,
   ehReceberCpr, contaDaConta, resumoPorContaCpr, contasDaFaixaCpr, SEM_CONTA, ehTransferenciaCpr, chaveDaLinhaCpr, type ContaCpr,
-  ancorasDoCaixaCpr, serieDoSaldoCpr, ordenarDoDiaCpr, totaisDeHojeCpr, linhasDoSaldoCpr, resumoPorSemanaCpr, saldoPorContaCpr, contaEstimadaCpr, somarDiasIso,
+  ancorasDoCaixaCpr, serieDoSaldoCpr, realizadoComCartoesCpr, ordenarDoDiaCpr, totaisDeHojeCpr, linhasDoSaldoCpr, resumoPorSemanaCpr, saldoPorContaCpr, contaEstimadaCpr, somarDiasIso,
   rodapeDoPeriodoCpr, contagemDoRodapeCpr,
   type AtalhoCpr, type PeriodoCpr, type FiltroContaCpr,
 } from '@/lib/financeiro/cprRecorte';
@@ -440,6 +440,18 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
    * último mês que CONCILIA e soma os realizados desde aquela posição: R$ 198.299,74, o mesmo
    * que a Conciliação mostra. Quem decide é `estimarSaldoEmCaixa`, que é puro e testado.
    */
+  /* P82 — os cartões do cliente e o saldo deles hoje (a fatura em aberto), pela MESMA regra do banco que a Visão Geral usa
+     (`fn_cpr_cartoes`): a ponta no cartão conta como dentro do caixa e o saldo entra na série em "todas as contas". */
+  const { data: cartoesDoCliente } = useQuery({
+    queryKey: ['cpr-cartoes', clienteId, isoLocal(hoje)],
+    enabled: !!clienteId,
+    queryFn: async (): Promise<{ ids: ReadonlySet<string>; saldo: number }> => {
+      const { data, error } = await (supabase.rpc as any)('fn_cpr_cartoes', { p_cliente: clienteId, p_hoje: isoLocal(hoje) });
+      if (error) throw error;
+      return { ids: new Set<string>((data?.ids ?? []) as string[]), saldo: Number(data?.saldo ?? 0) };
+    },
+  });
+  const cartoes = cartoesDoCliente?.ids;
   const { data: caixaTodas } = useQuery({
     queryKey: ['cpr-caixa', clienteId, isoLocal(hoje)],
     enabled: !!clienteId,
@@ -671,8 +683,8 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
   const tituloDoSelo = tituloDoEstimado(estimadasDoCliente ? origensPresentes(estimadasDoCliente) : undefined, avisoEstimadasIncompleto);
   const tituloDoSeloDaLinha = (id: string) => tituloDoEstimado(estimadasDoCliente?.origens.get(id), avisoEstimadasIncompleto);
   const recorte = useMemo(
-    () => recortarCpr(linhas, { periodo, hoje: hojeIso, conta: contaSel, ancoras, estimadas }),
-    [linhas, periodo, hojeIso, contaSel, ancoras, estimadas]);
+    () => recortarCpr(linhas, { periodo, hoje: hojeIso, conta: contaSel, ancoras, estimadas, cartoes }),
+    [linhas, periodo, hojeIso, contaSel, ancoras, estimadas, cartoes]);
   /* A SÉRIE DO SALDO — do dono, a partir do MESMO número do cartão Caixa. */
   /* CPR-PDF-ACABAMENTO-01 — o REALIZADO do período (Caixa inicial + o que entrou e saiu por dia, até hoje): do MESMO dono do cartão
      Caixa, sobre a MESMA entrada dele e as mesmas contas (uma, ou todas). Nulo quando o dono não responde na véspera do período. */
@@ -683,13 +695,15 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
       : caixaTodas.argumentos;
     return realizadoDoCaixa(args, periodo.de, periodo.ate);
   }, [caixaTodas, caixaDeUmaConta, contaSel, periodo.de, periodo.ate]);
+  /* P82 — em "todas as contas" a série é a do caixa + o saldo dos cartões (o conjunto da Visão Geral); o cartão Caixa segue sem ele */
+  const saldoDosCartoes = contaSel == null ? (cartoesDoCliente?.saldo ?? 0) : 0;
   const serie = useMemo(
-    () => serieDoSaldoCpr(recorte, caixa && caixa.ancoradas > 0 ? caixa.total : null, realizado),
-    [recorte, caixa, realizado]);
+    () => serieDoSaldoCpr(recorte, caixa && caixa.ancoradas > 0 ? caixa.total + saldoDosCartoes : null, realizadoComCartoesCpr(realizado, saldoDosCartoes)),
+    [recorte, caixa, realizado, saldoDosCartoes]);
   /* o resumo por conta (opções do seletor e a faixa): do MESMO dono, sobre os MESMOS dados, sempre de TODAS as contas */
   const recorteDeTodas = useMemo(
-    () => (contaSel == null ? recorte : recortarCpr(linhas, { periodo, hoje: hojeIso, ancoras, estimadas })),
-    [recorte, contaSel, linhas, periodo, hojeIso, ancoras, estimadas]);
+    () => (contaSel == null ? recorte : recortarCpr(linhas, { periodo, hoje: hojeIso, ancoras, estimadas, cartoes })),
+    [recorte, contaSel, linhas, periodo, hojeIso, ancoras, estimadas, cartoes]);
   /* quem teve movimento realizado no período (do dono do caixa, sempre de TODAS as contas): entra no seletor em qualquer pílula */
   const comRealizado = useMemo(
     () => (caixaTodas ? contasComRealizadoNoPeriodo(caixaTodas.argumentos, periodo.de, periodo.ate) : []),

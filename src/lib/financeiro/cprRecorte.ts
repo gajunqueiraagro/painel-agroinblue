@@ -174,16 +174,35 @@ export const ehReceberCpr = (c: Pick<ContaCpr, 'tipo_operacao' | 'ponta'>) =>
 
 /**
  * A PONTA QUE NÃO MEXE NO SALDO EM CAIXA: em "todas as contas" (e em "sem conta") o saldo é o do caixa inteiro, e a ponta de uma
- * transferência só o move quando a conta DELA entra no caixa (tem âncora). Ponta sem conta, em cartão de crédito ou em conta sem
- * saldo conferido aparece na lista do dia, apagada, e NÃO soma — a outra ponta, sozinha, é o que sai do (ou entra no) caixa.
+ * transferência só o move quando a conta DELA entra no caixa (tem âncora). Ponta sem conta ou em conta sem saldo conferido aparece
+ * na lista do dia, apagada, e NÃO soma — a outra ponta, sozinha, é o que sai do (ou entra no) caixa.
  * Com UMA conta escolhida a ponta é dela e conta como qualquer linha.
+ * ⚠ P82 (Gabriel 23/10/2026 08h10) — "a compra do cartão é SAÍDA; o pagamento do cartão é TRANSFERÊNCIA". A ponta no CARTÃO do
+ *   cliente (`cartoes`, do banco: `fn_cpr_cartoes`, a mesma regra da Visão Geral) conta como DENTRO: o pagamento da fatura (banco →
+ *   cartão) tem as duas pontas e se anula; a saída é a compra no cartão, que já conta. Antes, a ponta do banco contava sozinha e a
+ *   fatura em aberto saía DUAS vezes (NJ out/26: R$ 5.017,49).
  */
 export function pontaForaDoCaixaCpr(
   c: Pick<ContaCpr, 'tipo_operacao' | 'conta_bancaria_id' | 'conta_destino_id' | 'ponta'>, filtro: FiltroContaCpr, ancoras: AncorasCpr | undefined,
+  cartoes?: ReadonlySet<string>,
 ): boolean {
   if (!ehTransferenciaCpr(c) || (filtro != null && filtro !== SEM_CONTA)) return false;
   const conta = contaDaConta(c);
-  return !conta || !ancoras?.has(conta);
+  return !conta || (!ancoras?.has(conta) && !cartoes?.has(conta));
+}
+
+/**
+ * P82 — O SALDO DOS CARTÕES (a fatura em aberto, do banco: `fn_cpr_cartoes`) somado ao caixa da SÉRIE em "todas as contas": o cartão
+ * entra no conjunto como na Visão Geral, e a série dá o mesmo número que ela. O cartão "Caixa" segue sem ele (cartão é limite, não
+ * dinheiro). ⚠ O saldo de HOJE vale para o realizado do período: medido em 23/10/2026, a compra e o pagamento da fatura se anulam no
+ * mesmo mês (o saldo conciliado dos cartões é zero mês a mês).
+ */
+export function realizadoComCartoesCpr(realizado: RealizadoCpr | null, saldoCartoes: number): RealizadoCpr | null {
+  if (!realizado || !saldoCartoes) return realizado;
+  return {
+    inicial: { ...realizado.inicial, saldo: realizado.inicial.saldo + saldoCartoes },
+    dias: realizado.dias.map((d) => ({ ...d, saldo: d.saldo + saldoCartoes })),
+  };
 }
 
 /** O valor da conta em CENTAVOS inteiros, em módulo (a direção é do tipo, não do sinal). */
@@ -270,7 +289,9 @@ function somar<T extends ContaCpr>(linhas: readonly T[]): SomaCpr & { cPagar: nu
 
 export function recortarCpr<T extends ContaCpr>(
   linhas: readonly T[],
-  opcoes: { periodo: PeriodoCpr; hoje: string; conta?: FiltroContaCpr; ancoras?: AncorasCpr; estimadas?: ReadonlySet<string> },
+  opcoes: { periodo: PeriodoCpr; hoje: string; conta?: FiltroContaCpr; ancoras?: AncorasCpr; estimadas?: ReadonlySet<string>;
+    /** P82 — os cartões do cliente (do banco): a ponta neles conta como dentro do caixa */
+    cartoes?: ReadonlySet<string> },
 ): RecorteCpr<T> {
   const { periodo, hoje } = opcoes;
   const porBalde: Record<BaldeCpr, T[]> = { paga: [], sem_vencimento: [], vencido: [], periodo: [], antes_do_periodo: [], fora: [] };
@@ -283,7 +304,7 @@ export function recortarCpr<T extends ContaCpr>(
     /* a ponta em conta fora do caixa não passa pelo saldo: no período fica à vista (sem somar); antes dele, nem é listada.
        CPR-AJUSTES-20-10: a VENCIDA também não (agora todo vencido conta hoje; a ponta numa conta que não está no caixa, não — a
        outra ponta, a da conta do caixa, é a que mexe no saldo e aparece com o selo) */
-    if ((balde === 'periodo' || balde === 'antes_do_periodo' || balde === 'vencido') && pontaForaDoCaixaCpr(l, filtro, opcoes.ancoras)) {
+    if ((balde === 'periodo' || balde === 'antes_do_periodo' || balde === 'vencido') && pontaForaDoCaixaCpr(l, filtro, opcoes.ancoras, opcoes.cartoes)) {
       if (balde === 'periodo') foraDoCaixa.push(l);
       continue;
     }
