@@ -24,6 +24,7 @@ import {
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { BLOCO_FORMULARIO, REGUA_ROTULO, TituloDoBloco } from '@/components/ui/bloco-formulario';
 import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
+import { EscolherConta } from '@/components/shared/EscolherConta';
 import { FazendaSelect } from '@/components/shared/FazendaSelect';
 import { PreviaDaNota } from './PreviaDaNota';
 import {
@@ -458,7 +459,6 @@ export function NotaFiscalDialog({
   const end = emitente.endereco;
   const enderecoTexto = [[end?.logradouro, end?.numero].filter(Boolean).join(', '), end?.bairro, end?.cep ? `${end.cep.slice(0, 5)}-${end.cep.slice(5)}` : null].filter(Boolean).join(' · ');
   const cidade = end?.municipio ? `${receita ? end.municipio : caixaDeTitulo(end.municipio)}/${end.uf ?? ''}` : '—';
-  const opcoesPlano = saidas.map((c) => ({ value: c.id ?? '', label: c.subcentro, sub: [c.centro_custo, c.grupo_custo].filter(Boolean).join(' · ') }));
   const aberto = abertos[0] ?? null;
   /* a' vista existente + nota parcelada: o gesto e' "Atualizar e parcelar" */
   const parcelarAberto = !!aberto && !aberto.financiamentoId && cabeAqui;
@@ -715,8 +715,9 @@ export function NotaFiscalDialog({
                 <div className="min-w-0" data-testid="nota-subcentro">
                   <span className={cn(REGUA_ROTULO, 'uma-linha-que-rola', !planoId && 'text-destructive')} title={origemPlano ? `Sugestão: o ${origemPlano}` : undefined}>Subcentro *{origemPlano ? ` · ${origemPlano}` : ''}</span>
                   <div title={plano?.subcentro}>
-                    <SearchableSelect value={planoId} onValueChange={(v) => { setPlanoId(v); setSafraEditada(false); }} semTodos allValue="" allLabel="Selecione o subcentro…" dense options={opcoesPlano}
-                      placeholder="Buscar subcentro…" triggerClassName={cn('h-[22px] text-[10.5px]', !planoId && 'border-destructive')} />
+                    {/* SELETOR-CONTA-POR-ATIVIDADE-01 — o `EscolherConta` (a atividade primeiro, a busca ja' filtrada por ela) */}
+                    <EscolherConta valor={planoId} onEscolher={(c) => { setPlanoId(c.id); setSafraEditada(false); }} classificacoes={saidas} tipoOperacao=""
+                      triggerClassName={cn('h-[22px] px-2 text-[10.5px]', !planoId && 'border-destructive')} itemClassName="text-[10.5px]" />
                   </div>
                 </div>
                 <div className="min-w-0">
