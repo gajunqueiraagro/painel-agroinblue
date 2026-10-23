@@ -106,3 +106,20 @@ export function fraseDoPreenchido(campos: readonly (keyof DadosDoFornecedor)[], 
   const lista = nomes.length > 1 ? `${nomes.slice(0, -1).join(', ')} e ${nomes[nomes.length - 1]}` : nomes[0];
   return `Da consulta do CNPJ${matrizFilial ? ` (${matrizFilial.toLowerCase()})` : ''}: ${lista}. Confira antes de salvar.`;
 }
+
+/**
+ * P31 — FORN-CNPJ-RECEITA-02 (Gabriel 23/10/2026). A consulta preenchia SÓ campo vazio: com a razão social (ou a fantasia) já escrita e
+ * DIFERENTE da Receita, o dado da Receita sumia calado — "não preenche a razão social". Agora o que difere é OFERECIDO ("Usar"), nunca
+ * escrito por cima: campo · hoje · Receita. Igual a menos de caixa, acento e espaço não é diferença (a gravação padroniza a caixa:
+ * `trg_aa_fornecedor_nome_caixa`, FORN-NOME-CAIXA-01).
+ */
+export type CampoDaReceita = 'nome' | 'nome_fantasia';
+export interface OfertaDaReceita { campo: CampoDaReceita; rotulo: string; hoje: string; receita: string }
+const comparavel = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+export function ofertasDaReceita(d: Pick<DadosDoFornecedor, CampoDaReceita>, c: Pick<DadosDoCnpj, 'razaoSocial' | 'fantasia'>): OfertaDaReceita[] {
+  const pares: [CampoDaReceita, string, string][] = [['nome', 'Razão social', c.razaoSocial], ['nome_fantasia', 'Fantasia', c.fantasia]];
+  return pares.flatMap(([campo, rotulo, receita]) => {
+    const hoje = d[campo].trim();
+    return receita.trim() && hoje && comparavel(hoje) !== comparavel(receita) ? [{ campo, rotulo, hoje, receita: receita.trim() }] : [];
+  });
+}
