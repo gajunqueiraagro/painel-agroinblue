@@ -86,7 +86,7 @@ export function DocumentosNaCriacao({ pendentes, onMudar, parcelas, clienteId, c
         ))}
       </div>
       <div className="min-h-0 flex-1 overflow-hidden">
-        <ParcelasDaCompra parcelas={parcelas}
+        <ParcelasDaCompra preencher parcelas={parcelas}
           notaFiscal={numeroDaNotaDaCompra(pendentes, '')}
           qtdNotas={daCompra.filter(p => p.payload.especie === 'nf').length}
           boletos={pendentes.filter(p => p.parcela != null && p.parcela <= n)}

@@ -186,6 +186,23 @@ export function DocumentosDoContrato({ financiamentoId, clienteId, hoje, credorI
   const notaConfere = nf?.valorDocumento != null ? centavos(nf.valorDocumento) === centavos(somaDasParcelas) : null;
   const parcelaDoTirar = tirar ? boletos.find((b) => b.chave === tirar)?.parcela ?? null : null;
 
+  /* lugar fixo do recado e da confirmação de tirar: a linha do título das Parcelas (PARC-DOCS-TABELA-01 — a linha própria de 22px
+     saiu para a tabela ganhar altura); sem recado, a dica de sempre */
+  const aviso = tirar || recado ? (
+    <span className="flex min-w-0 items-center gap-2 text-[10px] font-normal" data-testid="docs-contrato-recado">
+      {tirar ? (
+        <>
+          <span className="shrink-0 font-medium text-amber-700">Tirar o boleto da parcela {parcelaDoTirar}?</span>
+          <button type="button" className="shrink-0 font-semibold text-destructive underline" data-testid="tirar-boleto-sim" disabled={ocupado}
+            onClick={() => { const id = tirar; setTirar(null); setOcupado(true); void api.cancelar(id, MOTIVO_TIRAR_BOLETO).then(reler).catch((e: unknown) => setRecado({ texto: `O boleto não foi tirado: ${e instanceof Error ? e.message : 'falha'}`, erro: true })).finally(() => setOcupado(false)); }}>
+            Sim, tirar
+          </button>
+          <button type="button" className="shrink-0 text-muted-foreground underline" onClick={() => setTirar(null)}>Não</button>
+        </>
+      ) : recado ? <span className={`min-w-0 truncate ${recado.erro ? 'text-destructive' : 'text-[#15803d]'}`} title={recado.texto}>{recado.texto}</span> : null}
+    </span>
+  ) : undefined;
+
   return (
     <div className="flex h-full min-h-0 flex-col gap-2" data-testid="documentos-do-contrato">
       {/* ── Documentos da compra ── */}
@@ -208,9 +225,9 @@ export function DocumentosDoContrato({ financiamentoId, clienteId, hoje, credorI
         </p>
       </div>
 
-      {/* ── As parcelas e o boleto de cada uma (só esta grade rola) ── */}
-      <div className="min-h-0 flex-1 overflow-auto" data-testid="docs-contrato-rolagem">
-        <ParcelasDaCompra
+      {/* ── As parcelas e o boleto de cada uma: a tabela vai até o fim do quadro, só o corpo dela rola (PARC-DOCS-TABELA-01) ── */}
+      <div className="min-h-0 flex-1" data-testid="docs-contrato-rolagem">
+        <ParcelasDaCompra preencher aviso={aviso}
           parcelas={vivas.map((p) => ({ numero: p.numero, dataVencimento: p.dataVencimento ?? '', valor: p.valorTotal }))}
           notaFiscal={nf?.numero ?? null} qtdNotas={qtdNotas} boletos={boletos} foraDoPlano={[]} travado={ocupado}
           onBoleto={(parcela, arquivo) => { setRecado(null); void gravarBoletos([{ parcela, arquivo }]).then((erro) => { if (erro) setRecado({ texto: erro, erro: true }); }); }}
@@ -221,20 +238,6 @@ export function DocumentosDoContrato({ financiamentoId, clienteId, hoje, credorI
             void api.urlAssinada(b.url).then((u) => { if (u) window.open(u, '_blank', 'noopener'); else setRecado({ texto: 'Não foi possível abrir o boleto.', erro: true }); });
           }}
           onAnexarVarios={() => setAnexarVarios(true)} />
-      </div>
-
-      {/* lugar fixo do recado e da confirmação de tirar — sempre presente */}
-      <div className="flex h-[22px] shrink-0 items-center gap-2 text-[10px]" data-testid="docs-contrato-recado">
-        {tirar ? (
-          <>
-            <span className="font-medium text-amber-700">Tirar o boleto da parcela {parcelaDoTirar}?</span>
-            <button type="button" className="font-semibold text-destructive underline" data-testid="tirar-boleto-sim" disabled={ocupado}
-              onClick={() => { const id = tirar; setTirar(null); setOcupado(true); void api.cancelar(id, MOTIVO_TIRAR_BOLETO).then(reler).catch((e: unknown) => setRecado({ texto: `O boleto não foi tirado: ${e instanceof Error ? e.message : 'falha'}`, erro: true })).finally(() => setOcupado(false)); }}>
-              Sim, tirar
-            </button>
-            <button type="button" className="text-muted-foreground underline" onClick={() => setTirar(null)}>Não</button>
-          </>
-        ) : recado ? <span className={`min-w-0 truncate ${recado.erro ? 'text-destructive' : 'text-[#15803d]'}`} title={recado.texto}>{recado.texto}</span> : null}
       </div>
 
       {/* ── A nota lida do XML, contra o contrato — num DIÁLOGO próprio, de tamanho fixo: a aba não muda de altura (a 523px de

@@ -103,7 +103,7 @@ describe('tela A — grade de parcelas do novo parcelado', () => {
     const linhas = screen.getAllByTestId('linha-parcela');
     expect(linhas).toHaveLength(3);
     expect(linhas[0].textContent).toContain('1/3');
-    expect(linhas[0].textContent).toContain('26/10/26');
+    expect(linhas[0].textContent).toContain('26/10/2026');
     expect(linhas[0].textContent).toContain('3.006,50');
     expect(linhas.every(l => l.textContent?.includes('000.018.112'))).toBe(true);
     expect(linhas[1].textContent).toContain('boleto_002.pdf');
