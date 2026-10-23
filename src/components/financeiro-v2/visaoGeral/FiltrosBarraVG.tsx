@@ -14,6 +14,7 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Checkbox } from '@/components/ui/checkbox';
+import { AcoesDaListaMultipla } from '@/components/ui/acoes-lista-multipla';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { cn } from '@/lib/utils';
 import { filtrosVG, rotuloAtividade, useFiltrosVG, type ContaVG, type FiltrosVG } from '@/lib/financeiro/visaoGeral';
@@ -75,6 +76,7 @@ const TIPO_DA_CONTA: Record<string, string> = { cc: 'CONTA CORRENTE', inv: 'INVE
 export function rotuloDasContas(contas: ContaVG[], escolha: string[] | null): string {
   const sel = escolha ?? contas.filter((c) => c.no_caixa).map((c) => c.id);
   if (escolha === null) return 'Caixa + cartões';
+  if (sel.length === 0) return 'Nenhuma conta';
   if (sel.length === 1) return contas.find((c) => c.id === sel[0])?.nome ?? '1 conta';
   return `${sel.length} contas`;
 }
@@ -89,18 +91,20 @@ export function FiltrosBarraVG() {
   const alternar = (id: string) => {
     const nova = new Set(marcadas);
     if (nova.has(id)) nova.delete(id); else nova.add(id);
-    if (nova.size === 0) return;
     const lista = ativas.map((c) => c.id).filter((x) => nova.has(x));
     const ehPadrao = lista.length === padrao.length && lista.every((x) => padrao.includes(x));
     filtrosVG.mudar({ contas: ehPadrao ? null : lista });
   };
   const rotContas = rotuloDasContas(contas, e.contas);
-  const curtoContas = e.contas === null ? 'Contas' : e.contas.length === 1 ? '1 conta' : `${e.contas.length} contas`;
+  const curtoContas = e.contas === null ? 'Contas' : e.contas.length === 0 ? 'Nenhuma' : e.contas.length === 1 ? '1 conta' : `${e.contas.length} contas`;
   const fazendaNome = fazendas.find((f: { id: string }) => f.id === e.fazenda)?.nome;
   let ultimoTipo = '';
   return (
     <span className="hidden items-center gap-1.5 md:flex" data-testid="filtros-barra-vg">
       <BotaoBarra testid="vg-contas" largura="w-[78px] lg:w-[124px]" rotulo={rotContas} rotuloCurto={curtoContas} title={`Contas: ${rotContas}`} destacado={e.contas !== null}>
+        {/* P83 — "Todas · Limpar" no topo (o par da casa para seleção múltipla): Todas = todas as ativas; Limpar = nenhuma, para marcar à mão */}
+        <AcoesDaListaMultipla testid="vg-contas-acoes" todasMarcadas={ativas.every((c) => marcadas.has(c.id))} nenhumaMarcada={marcadas.size === 0}
+          onTodas={() => filtrosVG.mudar({ contas: ativas.map((c) => c.id) })} onLimpar={() => filtrosVG.mudar({ contas: [] })} />
         <Opcao marcada={e.contas === null} onClick={() => filtrosVG.mudar({ contas: null })} testid="vg-contas-padrao">
           Caixa + cartões (a fatura do cartão é transferência)
         </Opcao>
