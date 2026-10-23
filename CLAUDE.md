@@ -238,8 +238,12 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - NOTA-CONTAS-NA-CRIACAO-01: divisão pelos itens no NOVO só pendente na tela; o parcelado grava cadastro+divisão numa transação
   (`fn_parcelamento_cadastrar_dividido`), o à vista divide depois de anexar a nota e CANCELA o recém-criado se recusar. `fn_nota_ja_lancada`
   devolve `cancelado` (nunca conta como já lançada). SELETOR-CONTA-POR-ATIVIDADE-01: conta fora da Geral se escolhe pelo `EscolherConta`.
+- P72: parcela dividida volta/desfaz SÓ pelo cadastro (`fn_financiamento_voltar_uma_conta` / `_divisao_desfazer`, as N numa transação, a
+  recusa diz a parcela). P31: dado da Receita nunca por cima — o vazio preenche, o diferente é OFERECIDO ("Usar", `ofertasDaReceita`).
 - ITENS-NOTA-01: os itens sao do DOCUMENTO (cliente + chave, `nota_fiscal`), nunca da parcela; escrita so' pela `fn_nota_fiscal_gravar`
   (confere o liquido de cada item; o XML sempre manda sobre o PDF); a conta do item nao existe — a do lancamento e' a de DRE e caixa.
+- P85/P86 (leitura do abate): a conta do PDF que não fecha preenche com o impresso e DIZ a diferença (≤ R$ 0,05 nota; acima âmbar), nunca
+  "nada preenchido"; o rótulo é o frigorífico lido (nunca o nome do layout); espécie trocada troca e relê; a recusa do banco fica na faixa.
 - OC-ABRIR-LENTO-01: erro do banco nunca vai cru ao toast (frase pronta, o texto no console); leitura de tela que termina depois de
   a tela sair nao escreve nem avisa; leituras independentes da abertura saem juntas (`Promise.all`), nunca em serie.
 - Documentos da OC (OC-DOC-VENDA-01): abate E venda usam o MESMO componente (`AbaDocumentosOC`/`DocumentoFormAbate`, pelo tipo); na
@@ -259,6 +263,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - Piso de 9,5px (excecoes declaradas: grade do DRE, selos da Conferencia, Mesa compacta, Lancamentos Financeiros, a tabela dos Itens da nota — ITENS-NOTA-FONTE-01). Tamanhos do A18.
 - Selecao se marca com navy (`Segmentado`, o unico); controle nativo nunca; seletor de entidade tem busca; todo menu aberto pelo
   `menuPadrao`; todo campo de valor e' o `CampoMoeda` ("R$" e "0,00"); todo campo de arquivo aceita arrastar.
+- FIN-VALOR-CALC-01b: todo `CampoMoeda` faz conta (a lib `contaNoCampo`, nenhuma outra); o hospedeiro so' recebe o RESULTADO; o Esc/Enter
+  da conta aberta sao pegos na JANELA (captura), antes do Radix; campo de valor novo = `CampoMoeda` (nunca `Input type="number"`).
 - UX-OBRIGATORIOS-01: Salvar com pendencia nao fecha nem grava; o campo pendente fica vermelho com a mensagem; UX-TOAST-01: validacao
   e erro de preenchimento nunca em toast. Dialogo/menu fechando nao aceita clique. Modal em blocos pela primitiva da casa; o
   `DialogContent` renderiza a 95%.

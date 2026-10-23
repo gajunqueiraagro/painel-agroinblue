@@ -31,6 +31,21 @@ export function loteSugeridoPelaQuantidade(lotes: { loteId: string; qtd?: number
   return iguais.length === 1 ? iguais[0].loteId : null;
 }
 export const FRASE_LOTE_SUGERIDO = 'lote sugerido pela quantidade · confira';
+/**
+ * P85 (d) (Gabriel 23/10/2026) — o lote da OC de UM documento lido (acerto de um lote so', romaneio): primeiro pela ORDEM DE COMPRA do
+ * frigorifico que o lote guarda na observacao ("10527"; o numero do lote do frigorifico, "Lote - 4", NAO e' a ordem do lote na OC),
+ * depois pela quantidade de cabecas — sempre um lote SO'; senao, nenhum. Devolve o lote e a frase do porque.
+ */
+export function loteDoDocumentoLido(lotes: { loteId: string; qtd?: number | null; observacao?: string | null }[],
+  lido: { ordemCompra?: string | null; cab?: number | null }): { loteId: string; frase: string } | null {
+  const oc = (lido.ordemCompra ?? '').replace(/\D/g, '');
+  if (oc) {
+    const pelaOc = lotes.filter(l => (l.observacao ?? '').split(/\D+/).includes(oc));
+    if (pelaOc.length === 1) return { loteId: pelaOc[0].loteId, frase: `lote pela ordem de compra ${oc} · confira` };
+  }
+  const q = loteSugeridoPelaQuantidade(lotes, lido.cab);
+  return q ? { loteId: q, frase: FRASE_LOTE_SUGERIDO } : null;
+}
 
 /** Os valores digitaveis. Numero = number | null (vazio e' ausencia, nao zero); texto = string. */
 export interface FormAbate {

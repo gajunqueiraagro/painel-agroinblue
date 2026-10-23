@@ -110,6 +110,18 @@ export function voltarUmaConta(clienteId: string, lancamentoId: string, planoCon
     clienteId, simular, 'A classificação não voltou para uma conta.');
 }
 
+/** P72 — a PARCELA de compra parcelada / financiamento volta para 1 conta pelo CADASTRO: as N parcelas de uma vez, numa transacao
+ *  (`fn_financiamento_voltar_uma_conta`; a recusa diz QUAL parcela). `null` = a maior parte da divisao do cadastro. */
+export function voltarUmaContaDoCadastro(clienteId: string, financiamentoId: string, planoContaId: string | null, motivo: string, simular: boolean) {
+  return chamar('fn_financiamento_voltar_uma_conta', { p_financiamento_id: financiamentoId, p_plano_conta_id: planoContaId, p_motivo: motivo, p_simular: simular },
+    clienteId, simular, 'As parcelas não voltaram para uma conta.');
+}
+/** P72 — desfazer a ultima operacao DO CADASTRO nas N parcelas (`fn_financiamento_divisao_desfazer`; simula por padrao). */
+export function desfazerDivisaoDoCadastro(clienteId: string, financiamentoId: string, motivo: string, simular: boolean) {
+  return chamar('fn_financiamento_divisao_desfazer', { p_financiamento_id: financiamentoId, p_motivo: motivo, p_simular: simular },
+    clienteId, simular, 'Não foi desfeito.');
+}
+
 /** Desfazer a ultima operacao (sempre grava; o banco recusa se houve outra depois). */
 export function desfazerDivisao(clienteId: string, operacaoId: string, motivo: string) {
   return chamar('fn_lancamento_divisao_desfazer', { p_divisao_id: operacaoId, p_motivo: motivo }, clienteId, false, 'Não foi desfeito.');

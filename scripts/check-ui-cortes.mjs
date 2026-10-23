@@ -251,6 +251,11 @@ const CENARIOS = [
   ...[['novo-consorcio', ''], ['novo-custos', 'Custos e parcelas']].map(([n, aba]) => ({
     nome: `consorcio-${n}`, url: 'tela=consorcio&novo=1', tamanhos: TAMANHOS_DO_CONSORCIO, semRolagem: { dentro: '[role="dialog"]', exceto: EXCETO_CONSORCIO },
     antes: aba ? async (p) => { await p.getByRole('button', { name: aba }).first().click(); await p.waitForTimeout(500); } : undefined })),
+  /* P87 — o Negociar lote (dado sintético do caso de 23/10), aba a aba: a regra `valor` põe 999.999.999,99 em cada campo de valor
+     (os seis da aba dos bônus inclusive) e o número não pode cortar. Antes do P87 os bônus tinham 99px e pediam 121. */
+  ...[['desempenho', null], ['preco', 'Preço'], ['bonus', 'Bônus, descontos e impostos']].map(([n, aba]) => ({
+    nome: `negociar-lote-${n}`, url: 'tela=negociar-lote', tamanhos: TAMANHOS_DO_CONSORCIO,
+    antes: aba ? async (p) => { await p.getByRole('button', { name: aba, exact: true }).first().click(); await p.waitForTimeout(400); } : undefined })),
   /* UI-CAMPO-MOEDA-01 — os campos de valor de largura fixa dos modais fora da bancada (a regra `valor` os mede com 999.999.999,99) */
   { nome: 'campos-moeda', url: 'tela=campos-moeda', tamanhos: TAMANHOS_DO_CONSORCIO },
   /* CONC-BLOCO-SINAL-MISTO-01 — o bloco da Conferência com saída + reembolso: o que fecha e a recusa, nos sete tamanhos */

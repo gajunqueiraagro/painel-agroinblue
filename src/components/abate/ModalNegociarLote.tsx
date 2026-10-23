@@ -367,8 +367,12 @@ export function ModalNegociarLote({ lote, linha, cenario, onAplicar, onFechar, s
           `h-auto` com piso de 300 (o modal mede 302 em Desempenho e 333 em Bonus, em vez de
           400 sempre), os campos foram de 30px/12px para 24px/11px e os botoes para 22px/10px.
           Encolher a largura exigiria tirar uma coluna da grade de bonus — o que e' mudar
-          layout de campo, nao regua. */}
-      <DialogContent className="flex max-w-[820px] min-h-[300px] flex-col p-0 gap-0 overflow-hidden">
+          layout de campo, nao regua.
+          ⚠ P87 (Gabriel 23/10/2026) — 892, NAO 820: NUMERO NUNCA CORTA. Em 820 (de 1024 para cima, com o resumo de 330 ao lado)
+          cada coluna dos bonus deixava o campo com 99px, e "999.999.999,99" (o teto do campo de valor) pede 121 — medido pelo
+          `check:ui-cortes` (cenarios `negociar-lote-*`). +22 por coluna × 3 = +66, e +6 de folga (121 justo dependeria do arredondamento da fonte). Abaixo de 1024 a grade e' de uma coluna e o
+          campo ja' tinha 185–209px: nada muda ali. Fonte e regua dos campos ficam como estao (11px, 24px). */}
+      <DialogContent className="flex max-w-[892px] min-h-[300px] flex-col p-0 gap-0 overflow-hidden">
         <div className="h-9 shrink-0 bg-primary px-3 text-primary-foreground flex items-center gap-2">
           <DialogTitle className="text-[12px] font-semibold">
             Negociar lote · {lote.categoriaLabel} · {lote.quantidade} cab

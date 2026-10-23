@@ -27,7 +27,7 @@ import {
 } from '@/lib/oc/camposDaEspecie';
 import {
   nfsProdutorDoTexto, payloadDoFormAbate, pendenciasDoFormAbate, textoDasNfsProdutor, valorDasNfsProdutor,
-  lotesPadraoDaEspecie, loteSugeridoPelaQuantidade, totalDosIncentivos, FRASE_LOTE_SUGERIDO, DESCRICAO_INCENTIVO, cabDaGta,
+  lotesPadraoDaEspecie, loteDoDocumentoLido, totalDosIncentivos, DESCRICAO_INCENTIVO, cabDaGta,
   type FormAbate, type NfProdutor,
 } from '@/lib/oc/formDocumentoAbate';
 import { conferenciaAoVivo, type DocConferencia } from '@/lib/oc/conferirDocumentosAbate';
@@ -264,30 +264,50 @@ export function DocumentoFormAbate({ api, somenteLeitura, fornecedores, clienteI
 
   /* A LEITURA DO PDF (passo 4): o layout do frigorifico, tudo ou nada, SO' nos campos vazios — no documento novo e na edicao.
      O que nao foi lido fica escrito na faixa, e o arquivo segue anexado. NF sem layout conhecido: o DANFE de sempre. */
-  const lerArquivo = async (file: File) => {
+  const lerArquivo = async (file: File, especie: EspecieDoc = form.especie, trocadaDe: EspecieDoc | null = null,
+    jaLido: Awaited<ReturnType<typeof extrairLinhasPdf>> | null = null) => {
     if (file.type !== 'application/pdf') { setAviso(null); return; }
     setLendo(true); setAviso(null); setAvisoAtencao(false);
+    /* P85 (a) / P86 — a leitura e' SEMPRE na especie pedida (a escolhida agora, ou a que o PDF disse ser): o form de base ja' nela */
+    const naEspecie = (f: FormAbate): FormAbate => (f.especie === especie ? f : { ...f, especie, loteIds: lotesPadraoDaEspecie(especie, api.lotes) });
+    const base = naEspecie(form);
     try {
-      const pdf = await extrairLinhasPdf(file);
-      const r = lerPdfDoAbate(pdf, { especie: form.especie, cnpjContraparte: contraparte?.cpfCnpj ?? null });
+      const pdf = jaLido ?? await extrairLinhasPdf(file);
+      const r = lerPdfDoAbate(pdf, { especie, cnpjContraparte: contraparte?.cpfCnpj ?? null });
+      /* P85 (a) — o PDF e' de OUTRA especie: no documento novo, troca sozinha para ela e le^ de novo ("lido como Acerto"); na edicao a
+         especie e' fixa, e a faixa diz qual e' */
+      if (r.tipo === 'nao_lido' && r.motivo === 'especie_trocada' && r.especieSugerida && !editando && !trocadaDe
+        && gruposDoTipo.some(g => g.especies.includes(r.especieSugerida ?? especie))) {
+        setTentou(false);
+        await lerArquivo(file, r.especieSugerida, especie, pdf);
+        return;
+      }
       if (r.tipo === 'lido') {
         /* 7f: o numero so' ganha a mascara de NF nas notas (frigorifico e produtor); GTA e declaracao ficam como o PDF escreve. */
-        const mascara = ehNotaFiscal(form.especie) || form.especie === 'nf_produtor' || form.especie === 'nf_entrada' ? numeroEmRepouso : undefined;
-        const n = aplicarLeitura(form, r.campos, r.dados, mascara).preenchidos.length;
-        /* passo 7e: o Romaneio sem lote ganha o lote cuja quantidade de cabecas e' a do romaneio, se for UM so'. */
-        const sugerido = r.grupo === 'romaneio' && form.loteIds.length === 0 ? loteSugeridoPelaQuantidade(api.lotes, r.campos.cab) : null;
+        const mascara = ehNotaFiscal(especie) || especie === 'nf_produtor' || especie === 'nf_entrada' ? numeroEmRepouso : undefined;
+        const n = aplicarLeitura(base, r.campos, r.dados, mascara).preenchidos.length;
+        /* P85 (d) — o documento de UM lote (o romaneio; o acerto de um bloco so') acha o lote da OC pela ordem de compra (a observacao do
+           lote) ou pela quantidade; so' troca o lote padrao (vazio, ou "todos" do acerto), nunca o que o operador escolheu */
+        const umLote = r.grupo === 'romaneio' || (r.grupo === 'acerto' && !(r.campos.ordemCompra ?? '').includes('·'));
+        const padrao = lotesPadraoDaEspecie(especie, api.lotes);
+        const lotePadrao = base.loteIds.length === 0 || (base.loteIds.length === padrao.length && padrao.every(id => base.loteIds.includes(id)));
+        const ocLida = r.campos.ordemCompra ?? (typeof r.dados.ordem_compra === 'string' ? r.dados.ordem_compra : null);
+        const sugerido = umLote && lotePadrao && (r.grupo === 'romaneio' || api.lotes.length > 1)
+          ? loteDoDocumentoLido(api.lotes, { ordemCompra: ocLida, cab: r.campos.cab }) : null;
         setForm(f => {
-          const g = aplicarLeitura(f, r.campos, r.dados, mascara).form;
-          return sugerido && g.loteIds.length === 0 ? { ...g, loteIds: [sugerido] } : g;
+          const g = aplicarLeitura(naEspecie(f), r.campos, r.dados, mascara).form;
+          return sugerido ? { ...g, loteIds: [sugerido.loteId] } : g;
         });
         const exato = r.grupo === 'nf' ? emitenteDaNota(r.campos.emitenteCnpj ?? null, r.campos.emitenteNome ?? null) : null;
-        const avisos = [...r.avisos, ...(sugerido ? [FRASE_LOTE_SUGERIDO] : [])];
-        setAviso([fraseDaLeitura(r.rotulo, n), ...avisos].join(' · ')
+        const avisos = [...r.avisos, ...(sugerido ? [sugerido.frase] : [])];
+        const comoLido = trocadaDe ? `lido como ${ESPECIE_LABEL[especie] ?? especie} (a espécie era ${ESPECIE_LABEL[trocadaDe] ?? trocadaDe})` : null;
+        /* a diferenca de centavos (nota) logo depois da leitura: e' o que o operador precisa ver antes dos avisos de sempre */
+        setAviso([...(comoLido ? [comoLido] : []), fraseDaLeitura(r.rotulo, n), ...r.notas, ...avisos].join(' · ')
           + (r.grupo === 'nf' && r.campos.emitenteCnpj && !exato ? ` · emitente ${r.campos.emitenteCnpj} fora do cadastro` : ''));
         setAvisoAtencao(avisos.length > 0);
         return;
       }
-      if (r.motivo === 'desconhecido' && (ehNotaFiscal(form.especie) || form.especie === 'nf_entrada')) {
+      if (r.motivo === 'desconhecido' && (ehNotaFiscal(especie) || especie === 'nf_entrada')) {
         const d = extrairDanfe(pdf.linhas.join('\n'));
         if (!d.chaveAcesso && !d.numero && !d.valorTotal) { setAviso('Não reconheci o formato de DANFE: preencha os campos.'); setAvisoAtencao(true); return; }
         const exato = emitenteDaNota(d.emitenteCnpj, d.emitenteNome);
@@ -302,11 +322,11 @@ export function DocumentoFormAbate({ api, somenteLeitura, fornecedores, clienteI
             ? { valorInformativo: f.valorInformativo != null || !d.valorTotal ? f.valorInformativo : d.valorTotal }
             : { bruto: f.bruto != null || !d.valorTotal ? f.bruto : d.valorTotal }),
         }));
-        setAviso(`Nota lida pelo DANFE${f2Rotulo(form.especie)}${d.valorTotal ? ` · total ${brl(d.valorTotal)}` : ''}`
+        setAviso(`Nota lida pelo DANFE${f2Rotulo(especie)}${d.valorTotal ? ` · total ${brl(d.valorTotal)}` : ''}`
           + (d.emitenteCnpj && !exato ? ` · emitente ${d.emitenteNome ?? ''} ${d.emitenteCnpj} fora do cadastro` : '') + ' · confira antes de registrar');
         return;
       }
-      setAviso(r.frase); setAvisoAtencao(true);
+      setAviso(r.motivo === 'especie_trocada' ? `${r.frase} · nada preenchido` : r.frase); setAvisoAtencao(true);
     } catch {
       setAviso('Falha ao ler o arquivo: preencha os campos.'); setAvisoAtencao(true);
     } finally { setLendo(false); }
@@ -339,14 +359,16 @@ export function DocumentoFormAbate({ api, somenteLeitura, fornecedores, clienteI
     setTentou(true);
     if (pendencias.length > 0 || repetida) return;
     const payload = payloadDoFormAbate(form);
+    /* P86 — a recusa do banco fica ESCRITA na faixa (a frase pronta), nunca so' no toast que some */
+    const recusou = () => { setAviso(`Nada foi gravado: ${api.ultimaRecusa?.() ?? 'o banco recusou o documento'}`); setAvisoAtencao(true); };
     if (form.documentoId) {
       const ok = await api.editar(form.documentoId, form.versao, payload);
-      if (!ok) return;
+      if (!ok) { recusou(); return; }
       if (arquivo) await api.anexarArquivo(form.documentoId, form.versao + 1, arquivo);
       onSaved(); return;
     }
     const id = await api.registrar(payload);
-    if (!id) return;
+    if (!id) { recusou(); return; }
     if (arquivo) await api.anexarArquivo(id, 1, arquivo);
     onSaved();
   };
@@ -360,7 +382,12 @@ export function DocumentoFormAbate({ api, somenteLeitura, fornecedores, clienteI
     return { rotulo: g.rotulo, opcoes: especies.map(e => ({ valor: e, rotulo: ROTULO_SEGMENTO[e] ?? ESPECIE_LABEL[e], desabilitada: editando && e !== form.especie })) };
   });
   const escolherEspecie = (e: EspecieDoc) => {
-    if (!editando) { setForm(f => ({ ...f, especie: e, loteIds: lotesPadraoDaEspecie(e, api.lotes) })); setTentou(false); }
+    if (!editando) {
+      setForm(f => ({ ...f, especie: e, loteIds: lotesPadraoDaEspecie(e, api.lotes) })); setTentou(false);
+      /* P86 — o arquivo ja' escolhido e' LIDO DE NOVO na especie nova (antes, a troca deixava os campos vazios e o Registrar parava nas
+         pendencias — o romaneio que "nao gravava") */
+      if (arquivo) void lerArquivo(arquivo, e);
+    }
   };
 
   const rotuloContraparte = contraparte?.nome ? `Mesmo da operação — ${contraparte.nome}` : 'Mesmo da operação';
@@ -544,7 +571,8 @@ export function DocumentoFormAbate({ api, somenteLeitura, fornecedores, clienteI
                 : tomFaixa === 'confere' ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
                   : 'bg-muted/30 text-muted-foreground')}
         style={{ height: ALTURA_FAIXA }}>
-        <span className="min-w-0 flex-1 truncate">{fraseFaixa}</span>
+        {/* P85 — a frase da leitura pode ser longa: rola no lugar (fora de tabela nada de "…"), o texto inteiro no `title` */}
+        <span className="min-w-0 flex-1 uma-linha-que-rola">{fraseFaixa}</span>
         {repetida && (
           <a data-testid="abrir-nota-repetida" href={enderecoDaOC(repetida)} target="_blank" rel="noopener noreferrer"
             className="shrink-0 underline underline-offset-2">abrir</a>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { BUCKET_OC_DOCUMENTOS, caminhoDocumentoOC, extensaoDoArquivo, REGRA_ARQUIVO_DA_OC } from '@/lib/oc/caminhoDocumento';
@@ -121,7 +121,8 @@ export interface DocumentoDetalhe {
 }
 
 /* `qtd` (cabecas negociadas do lote) — o seletor de lote do abate escreve "Lote 1 · 18 cab". */
-export interface LoteOpcao { loteId: string; ordem: number; categoria: string | null; qtd?: number | null; }
+/* P85 (d) — `observacao`: o lote guarda nela a ordem de compra do frigorifico (o acerto/romaneio lido acha o lote por ela). */
+export interface LoteOpcao { loteId: string; ordem: number; categoria: string | null; qtd?: number | null; observacao?: string | null; }
 
 export interface DocumentosApi {
   documentos: DocumentoLista[];
@@ -137,6 +138,8 @@ export interface DocumentosApi {
   /** OC-DOC-VENDA-01 — a chave ja' esta' viva noutro documento do cliente? (`oc_documento_nota_repetida`; nulo = nao, ou chave
    *  sem 44 digitos). `ignorar` = o proprio documento na edicao. Opcional: quem nao a tem nao pergunta (o banco barra igual). */
   notaRepetida?: (chave: string, ignorar: string | null) => Promise<NotaRepetida | null>;
+  /** P86 — a frase da ULTIMA recusa do registrar/editar (a do banco, pronta): o formulario a escreve na faixa, nunca some no toast. */
+  ultimaRecusa?: () => string | null;
 }
 
 interface Params {
@@ -157,7 +160,7 @@ interface DocRow {
   cab?: number | null; peso_kg?: number | null; data_abate?: string | null; vencimento?: string | null;
   dados?: Record<string, unknown> | null;
 }
-interface LoteRow { id: string; ordem: number; categoria_negociada: string | null; qtd_negociada?: number | null; }
+interface LoteRow { id: string; ordem: number; categoria_negociada: string | null; qtd_negociada?: number | null; observacao?: string | null; }
 
 export function payloadJson(p: DocumentoPayload): Record<string, unknown> {
   return {
@@ -203,7 +206,7 @@ export function useOperacaoDocumentos({ operacaoId, clienteId, enabled }: Params
     try {
       const [docs, los, infos] = await Promise.all([
         (supabase as any).from('vw_oc_documentos').select('*').eq('operacao_id', operacaoId),
-        (supabase as any).from('zoo_operacao_lotes').select('id, ordem, categoria_negociada, qtd_negociada').eq('operacao_id', operacaoId).order('ordem'),
+        (supabase as any).from('zoo_operacao_lotes').select('id, ordem, categoria_negociada, qtd_negociada, observacao').eq('operacao_id', operacaoId).order('ordem'),
         /* 7f: o valor do documento informativo (guia, NFP-e) — uma leitura por OC, nunca por linha. */
         (supabase as any).from('zoo_operacao_documento_componentes').select('documento_id, valor')
           .eq('operacao_id', operacaoId).eq('natureza', 'informativo').eq('cancelado', false),
@@ -228,7 +231,7 @@ export function useOperacaoDocumentos({ operacaoId, clienteId, enabled }: Params
         somaNoValor: d.soma_no_valor ?? true,
         totalInformativo: informativo.get(d.documento_id) ?? null,
       })));
-      setLotes(((los.data ?? []) as LoteRow[]).map(l => ({ loteId: l.id, ordem: l.ordem, categoria: l.categoria_negociada, qtd: l.qtd_negociada ?? null })));
+      setLotes(((los.data ?? []) as LoteRow[]).map(l => ({ loteId: l.id, ordem: l.ordem, categoria: l.categoria_negociada, qtd: l.qtd_negociada ?? null, observacao: l.observacao ?? null })));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Falha ao carregar documentos.');
     } finally {
@@ -251,7 +254,10 @@ export function useOperacaoDocumentos({ operacaoId, clienteId, enabled }: Params
      falhasse — sem linha, sem dono, sem quem limpe. Registrando primeiro, a falha no
      upload deixa uma LINHA SEM ARQUIVO: visivel na tela e corrigivel pelo anexar.
      Lixo visivel e melhor que lixo invisivel. */
+  const recusa = useRef<string | null>(null);
+  const ultimaRecusa = useCallback(() => recusa.current, []);
   const registrar = useCallback(async (p: DocumentoPayload): Promise<string | null> => {
+    recusa.current = null;
     if (!guard()) return null;
     setSaving(true);
     try {
@@ -266,7 +272,8 @@ export function useOperacaoDocumentos({ operacaoId, clienteId, enabled }: Params
       await carregar();
       return id;
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Falha ao registrar documento.');
+      recusa.current = e instanceof Error ? e.message : 'Falha ao registrar documento.';
+      toast.error(recusa.current);
       return null;
     } finally { setSaving(false); }
   }, [operacaoId, clienteId, carregar]);
@@ -317,6 +324,7 @@ export function useOperacaoDocumentos({ operacaoId, clienteId, enabled }: Params
   }, []);
 
   const editar = useCallback(async (documentoId: string, versaoEsperada: number, p: DocumentoPayload): Promise<boolean> => {
+    recusa.current = null;
     if (!guard()) return false;
     setSaving(true);
     try {
@@ -330,7 +338,8 @@ export function useOperacaoDocumentos({ operacaoId, clienteId, enabled }: Params
       await carregar();
       return true;
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Falha ao editar documento.');
+      recusa.current = e instanceof Error ? e.message : 'Falha ao editar documento.';
+      toast.error(recusa.current);
       return false;
     } finally { setSaving(false); }
   }, [operacaoId, clienteId, carregar]);
@@ -406,6 +415,6 @@ export function useOperacaoDocumentos({ operacaoId, clienteId, enabled }: Params
       : null;
   }, [clienteId]);
 
-  return useMemo(() => ({ documentos, lotes, loading, saving, registrar, editar, cancelar, carregarDetalhe, anexarArquivo, urlAssinada, notaRepetida }),
-    [documentos, lotes, loading, saving, registrar, editar, cancelar, carregarDetalhe, anexarArquivo, urlAssinada, notaRepetida]);
+  return useMemo(() => ({ documentos, lotes, loading, saving, registrar, editar, cancelar, carregarDetalhe, anexarArquivo, urlAssinada, notaRepetida, ultimaRecusa }),
+    [documentos, lotes, loading, saving, registrar, editar, cancelar, carregarDetalhe, anexarArquivo, urlAssinada, notaRepetida, ultimaRecusa]);
 }

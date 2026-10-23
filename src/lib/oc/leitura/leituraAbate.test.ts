@@ -104,9 +104,17 @@ describe('nunca preenche pela metade', () => {
   it('texto que bate em dois layouts: nada', () => {
     expect(ler([...ACERTO_MINERVA, ...ACERTO_JBS], 'acerto', CNPJ_JBS)).toMatchObject({ tipo: 'nao_lido', motivo: 'dois_layouts' });
   });
-  it('um centavo no Total Geral: a conta do PDF nao fecha e nada e preenchido', () => {
-    const r = ler(ACERTO_MINERVA.map(l => (l === 'Total Geral | 96.535,70' ? 'Total Geral | 96.535,71' : l)), 'acerto');
-    expect(r).toMatchObject({ tipo: 'nao_lido', motivo: 'nao_fecha' });
+  /* P85 (b) (Gabriel 23/10/2026) — a conta que nao fecha NAO apaga a leitura: vale o impresso e a diferenca e' dita (antes: "nada") */
+  it('um centavo no Total Geral: preenche com o impresso e a NOTA discreta do arredondamento (nao e\' aviso)', () => {
+    const r = campos(ler(ACERTO_MINERVA.map(l => (l === 'Total Geral | 96.535,70' ? 'Total Geral | 96.535,71' : l)), 'acerto'));
+    expect(r.campos.liquido).toBe(96535.71);
+    expect(r.notas).toEqual(['diferença de R$ 0,01 de arredondamento no PDF (bruto − despesas + créditos ≠ total geral)']);
+    expect(r.avisos).toEqual([]);
+  });
+  it('R$ 10,00 no Total Geral: preenche MESMO ASSIM e o AVISO (ambar) diz a diferenca em R$', () => {
+    const r = campos(ler(ACERTO_MINERVA.map(l => (l === 'Total Geral | 96.535,70' ? 'Total Geral | 96.545,70' : l)), 'acerto'));
+    expect(r.campos.liquido).toBe(96545.7);
+    expect(r.avisos).toContain('a conta do PDF não fecha (bruto − despesas + créditos ≠ total geral): diferença de R$ 10,00 · confira');
   });
   it('Acerto JBS sem o "Data:": a data do abate e obrigatoria, nada e preenchido', () => {
     const sem = ACERTO_JBS.map(l => (l.startsWith('Documento:') ? 'Documento: 3010402 | NF: | Instrução: 970373' : l));
@@ -120,9 +128,15 @@ describe('nunca preenche pela metade', () => {
     expect(lerPdfDoAbate({ linhas: [], temTexto: false }, { especie: 'npr', cnpjContraparte: null }))
       .toEqual({ tipo: 'nao_lido', motivo: 'sem_texto', frase: FRASE_SEM_TEXTO });
   });
-  it('especie trocada: um Acerto lido com a especie Romaneio so avisa', () => {
-    expect(ler(ACERTO_MINERVA, 'romaneio')).toEqual({ tipo: 'nao_lido', motivo: 'especie_trocada',
-      frase: 'Este PDF é Acerto Minerva; a espécie escolhida é Romaneio · nada preenchido' });
+  /* P85 (a)/(c) — a especie certa vem junto (a tela troca e le^ de novo); o rotulo e' o frigorifico LIDO, nunca o nome do layout */
+  it('especie trocada: um Acerto lido com a especie Romaneio diz a especie certa e o frigorifico do PDF', () => {
+    expect(ler(ACERTO_MINERVA, 'romaneio')).toEqual({ tipo: 'nao_lido', motivo: 'especie_trocada', especieSugerida: 'acerto',
+      frase: 'Este PDF é Acerto · FORTUNCERES S.A. 52.168.923/0002-31; a espécie escolhida é Romaneio' });
+  });
+  it('o frigorifico do PDF diferente do da OC: le^ e avisa', () => {
+    const r = campos(ler(ACERTO_MINERVA, 'acerto', '11.222.333/0001-81'));
+    expect(r.avisos[0]).toBe('o frigorífico do PDF (52.168.923/0002-31) não é o da OC (11.222.333/0001-81) · confira');
+    expect(campos(ler(ACERTO_MINERVA, 'acerto', CNPJ_MINERVA)).avisos.some((a) => a.startsWith('o frigorífico do PDF'))).toBe(false);
   });
   it('sem CNPJ no texto: a contraparte da OC tem de ser do frigorifico', () => {
     expect(ler(ACERTO_JBS, 'acerto', CNPJ_MINERVA)).toMatchObject({ tipo: 'nao_lido', motivo: 'contraparte' });
@@ -139,7 +153,8 @@ describe('aplicarLeitura: so campo vazio, so o que a especie desenha', () => {
     expect(form.liquido).toBe(212449.03);
     expect(preenchidos).toEqual(['dataAbate', 'vencimento', 'ordemCompra', 'cab', 'pesoKg', 'precoArroba', 'liquido']);
     expect(form.dadosLidos).toEqual({ instrucao: 'ja', documento_frig: '3010402' });
-    expect(fraseDaLeitura(r.rotulo, preenchidos.length)).toBe('lido do PDF (Acerto JBS): 7 campos · confira antes de salvar');
+    /* P85 (c) — o Acerto da JBS nao traz o CNPJ no texto: "(frigorífico da OC)", nunca "Acerto JBS" */
+    expect(fraseDaLeitura(r.rotulo, preenchidos.length)).toBe('lido do PDF (Acerto (frigorífico da OC)): 7 campos · confira antes de salvar');
   });
   it('NF JBS na grade da NF: RAT e as NFs do produtor', () => {
     const r = campos(ler(NF_JBS, 'nf_principal'));

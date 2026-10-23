@@ -226,3 +226,40 @@ export const CARTA_GARANTIA_SAIDA = [
   'acompanhados da(s) GTA(s) Nº: 745856/Q e 745874/Q.',
   'Data Embarque: 09/10/2026',
 ];
+
+/* P85/P86 (Gabriel 23/10/2026) — o MESMO layout dos PDFs da Fortunceres de 21/10, com dados SINTETICOS: uma OC de 2 lotes (ordens de compra
+   20001 e 20002), cada lote com o seu acerto e o seu romaneio, e os dois romaneios com a MESMA "Ord. Prod." (como no caso real). O acerto do
+   lote 7 tem o centavo de arredondamento do frigorifico: as linhas somam 124.000,01 e o PDF imprime TOTAL 124.000,00. */
+export const ACERTO_LOTE7_UM_CENTAVO = [
+  'FORTUNCERES S.A.',
+  'RODOVIA SINTETICA, KM 0 - DISTRITO INDUSTRIAL',
+  'CNPJ: 52.168.923/0002-31 INSC. EST.: 284881082',
+  'Ordem Compra - 20002 - PRODUTOR TESTE',
+  'Lote - 7 | Data Abate - 05/10/2026',
+  'Resumo de Abate | Cabeça | Peso | Valor @ | Total',
+  '1 - Bois Normal - Balcão | 20 | 6.000,00 | 300,00 | 120.000,01',
+  '2 - Bois Tratamento Frio - Trat.Frio - Balcão | 1 | 300,00 | 200,00 | 4.000,00',
+  'TOTAL Animais | 21 | 6.300,00 | 124.000,00',
+  'Vencimento: 15/10/2026',
+  'Acertos no Pagamento | Valor',
+  'OC: 20002 - SENAR (0,2%) | 248,00',
+  'Total Despesas | 248,00',
+  'OC: 20002 - INCENTIVO PROAPE-PRECOCE/MS | 5.000,00',
+  'Total Créditos | 5.000,00',
+  'Total Geral | 128.752,00',
+  'VALOR TOTAL DO PRODUTO R$ 124.000,00 Base de cálculo: R$ 124.000,00 x 0.2 (SENAR) R$ 248,00',
+];
+export const ROMANEIO_LOTE6 = [
+  'ROMANEIO DE ABATE',
+  'Lote: | 6 | Ordem Compra: | 20001 | Ord. Prod.: | 50001',
+  'Fornecedor: | PRODUTOR TESTE | Qtd. Programada: | 30 | Data Abate: | 05/10/2026',
+  'Total | 30 | 9.000,00 | Média Total (KG): | 300,00',
+  'Média Total (@): | 20,00',
+];
+export const ROMANEIO_LOTE7 = [
+  'ROMANEIO DE ABATE',
+  'Lote: | 7 | Ordem Compra: | 20002 | Ord. Prod.: | 50001',
+  'Fornecedor: | PRODUTOR TESTE | Qtd. Programada: | 21 | Data Abate: | 05/10/2026',
+  'Total | 21 | 6.300,00 | Média Total (KG): | 300,00',
+  'Média Total (@): | 20,00',
+];

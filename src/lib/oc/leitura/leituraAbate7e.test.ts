@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { lerPdfDoAbate, FRASE_NF_SEM_FUNRURAL, type LeituraDoAbate } from './layoutsAbate';
 import { aplicarLeitura } from './aplicarLeitura';
 import {
-  formAbateVazio, formAbateDoDetalhe, payloadDoFormAbate, lotesPadraoDaEspecie, loteSugeridoPelaQuantidade, totalDosIncentivos,
+  formAbateVazio, formAbateDoDetalhe, payloadDoFormAbate, lotesPadraoDaEspecie, loteSugeridoPelaQuantidade, loteDoDocumentoLido, totalDosIncentivos,
   type FormAbate,
 } from '@/lib/oc/formDocumentoAbate';
 import { retencoesDoAcerto } from '@/lib/oc/camposDaEspecie';
@@ -51,14 +51,16 @@ describe('Acerto Minerva com 2 lotes e creditos', () => {
       { lote: '12', ordem_compra: '10314', cab: 36, kg: 8695.5, bruto: 208080.69 },
     ]);
   });
-  it('sem os creditos a conta nao fecha: nada e preenchido (tudo ou nada)', () => {
+  /* P85 (b) — a conta que nao fecha preenche e AVISA a diferenca em R$ (antes: "nada e preenchido") */
+  it('sem os creditos a conta nao fecha: preenche e o aviso diz a diferenca', () => {
     const sem = ACERTO_MINERVA_2LOTES.filter(l => !l.includes('INCENTIVO') && !l.startsWith('Total Créditos'));
-    const x = ler(sem, 'acerto');
-    expect(x.tipo === 'nao_lido' && x.frase).toContain('bruto − despesas + créditos ≠ total geral');
+    const x = lido(ler(sem, 'acerto'));
+    expect(x.avisos.some((a) => a.startsWith('a conta do PDF não fecha (bruto − despesas + créditos ≠ total geral): diferença de R$'))).toBe(true);
   });
-  it('um credito que nao soma o "Total Créditos" recusa', () => {
-    const x = ler(ACERTO_MINERVA_2LOTES.map(l => (l.startsWith('OC: 10315 - INCENTIVO') ? 'OC: 10315 - INCENTIVO PROAPE-PRECOCE/MS | 2.849,90' : l)), 'acerto');
-    expect(x.tipo === 'nao_lido' && x.frase).toContain('créditos ≠ Total Créditos');
+  it('um credito que nao soma o "Total Créditos": 3 centavos = nota de arredondamento; R$ 1.000,00 = aviso; os dois preenchem', () => {
+    const com = (v: string) => lido(ler(ACERTO_MINERVA_2LOTES.map(l => (l.startsWith('OC: 10315 - INCENTIVO') ? `OC: 10315 - INCENTIVO PROAPE-PRECOCE/MS | ${v}` : l)), 'acerto'));
+    expect(com('2.849,90').notas).toContain('diferença de R$ 0,03 de arredondamento no PDF (créditos ≠ Total Créditos)');
+    expect(com('1.849,93').avisos).toContain('a conta do PDF não fecha (créditos ≠ Total Créditos): diferença de R$ 1.000,00 · confira');
   });
   it('datas de abate diferentes entre os lotes: a data fica vazia e a faixa avisa, o resto e lido', () => {
     const x = lido(ler(ACERTO_MINERVA_2LOTES.map(l => (l === 'Lote - 12 | Data Abate - 01/10/2026' ? 'Lote - 12 | Data Abate - 02/10/2026' : l)), 'acerto'));
@@ -167,3 +169,15 @@ describe('a conferencia da OC de 2 lotes (passo 3, com incentivo)', () => {
     expect(fx.texto).not.toMatch(/Bruto|Cab|Peso/);
   });
 });
+
+/* P85 (d) — o lote da OC de um documento lido: pela ORDEM DE COMPRA guardada na observacao do lote, depois pela quantidade; um so' */
+describe('loteDoDocumentoLido', () => {
+  const LOTES = [{ loteId: 'a', qtd: 21, observacao: '20001' }, { loteId: 'b', qtd: 21, observacao: 'OC 20002 / frig.' }, { loteId: 'c', qtd: 9, observacao: null }];
+  it('a ordem de compra decide (mesmo com a quantidade empatada); sem ela, a quantidade unica; senao, nenhum', () => {
+    expect(loteDoDocumentoLido(LOTES, { ordemCompra: '20002', cab: 21 })).toEqual({ loteId: 'b', frase: 'lote pela ordem de compra 20002 · confira' });
+    expect(loteDoDocumentoLido(LOTES, { ordemCompra: '99999', cab: 9 })).toEqual({ loteId: 'c', frase: 'lote sugerido pela quantidade · confira' });
+    expect(loteDoDocumentoLido(LOTES, { ordemCompra: null, cab: 21 })).toBeNull();
+    expect(loteDoDocumentoLido(LOTES, { ordemCompra: '2000', cab: null })).toBeNull();
+  });
+});
+

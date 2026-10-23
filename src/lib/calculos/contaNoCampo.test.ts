@@ -140,3 +140,43 @@ describe('ehConta — o que tira o campo da máscara de centavos', () => {
     expect(ehConta(texto)).toBe(esperado);
   });
 });
+
+/** FIN-VALOR-CALC-01b — as opções do campo (o `CampoMoeda` passa as dele). Sem opção, tudo acima continua valendo. */
+describe('calcularConta — as opções do campo', () => {
+  const com = (texto: string, o: Parameters<typeof calcularConta>[1]) => { const r = calcularConta(texto, o); return contaOk(r) ? r.valor : `RECUSA:${r.motivo}`; };
+  it('os casos do Gabriel (23/10): bônus = pago − preço base', () => {
+    expect(com('976.224,00+12.000', {})).toBe(988224);
+    expect(com('1.000.000-976.224', {})).toBe(23776);
+    expect(com('988.224-976.224', {})).toBe(12000);
+    expect(com('16.238,00/2', {})).toBe(8119);
+  });
+  it('"10%" sozinho é dez por cento do valor que o campo tinha (base)', () => {
+    expect(com('10%', { base: 976224 })).toBe(97622.4);
+    expect(com('=10%', { base: 1000 })).toBe(100);
+    expect(com('(5+5)%', { base: 1000 })).toBe(100);
+    /* conta com mais de um termo não é "sozinho": o "%" é o da calculadora, a base não entra */
+    expect(com('1.000+10%', { base: 5 })).toBe(1100);
+    expect(com('50%*200', { base: 5 })).toBe(100);
+    /* campo vazio: percentual de nada */
+    expect(com('10%', { base: null })).toBe('RECUSA:invalida');
+    /* sem a chave base, o de sempre */
+    expect(com('10%', {})).toBe(0.1);
+  });
+  it('negativo: recusa no campo que não aceita; vale no que aceita, com o "-" do começo como sinal', () => {
+    expect(com('5-10', {})).toBe('RECUSA:negativa');
+    expect(com('5-10', { aceitaNegativo: true })).toBe(-5);
+    expect(com('−1.845,32+100', { aceitaNegativo: true })).toBe(-1745.32);
+    expect(com('-1.845,32+100', {})).toBe('RECUSA:invalida');
+    expect(com('(-5+2)*3', { aceitaNegativo: true })).toBe(-9);
+    expect(com('10%', { base: -200, aceitaNegativo: true })).toBe(-20);
+    expect(com('2-2,004', { aceitaNegativo: true })).toBe(0);
+  });
+  it('casas: o resultado se arredonda nas casas do campo (o teto segue em reais)', () => {
+    expect(com('97,85321*1', { casas: 4 })).toBe(97.8532);
+    expect(com('100/3', { casas: 4 })).toBe(33.3333);
+    expect(com('100/3', { casas: 2 })).toBe(33.33);
+    expect(com('100/3', { casas: 0 })).toBe(33);
+    expect(com('999.999.999,99*1', { casas: 4 })).toBe(TETO_DA_CONTA);
+    expect(com('999.999.999,99+0,0001', { casas: 4 })).toBe('RECUSA:grande_demais');
+  });
+});
