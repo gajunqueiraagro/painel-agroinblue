@@ -12,8 +12,10 @@ import { Search, Check, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ClassificacaoItem } from '@/hooks/useFinanceiroV2';
 import { COMBOBOX_CONTENT } from '@/components/ui/command';
+import { Segmentado } from '@/components/ui/segmentado';
+import { ATIVIDADES, type Atividade } from '@/lib/financeiro/ultimaAtividade';
 import {
-  MENU_BUSCA, MENU_ESCOLHIDO, MENU_ITEM, MENU_REALCE, MENU_REALCE_HOVER, MENU_SECUNDARIO, MENU_VAZIO,
+  MENU_BUSCA, MENU_ESCOLHIDO, MENU_SEGMENTADO, MENU_ITEM, MENU_REALCE, MENU_REALCE_HOVER, MENU_SECUNDARIO, MENU_VAZIO,
 } from '@/components/ui/menuPadrao';
 
 export interface PlanoSubcentroSelectProps {
@@ -61,14 +63,36 @@ export interface PlanoSubcentroSelectProps {
   itemClassName?: string;                                          // itens do dropdown: fonte/padding menores
   tabIndex?: number;
   disabled?: boolean;
+  /**
+   * SELETOR-CONTA-POR-ATIVIDADE-01 (P78, Gabriel 23/10/2026) — a ATIVIDADE PRIMEIRO, dentro da lista: em cima a barra (Pecuária · Lavoura ·
+   * Silvicultura · Administrativo — so' as que o plano do cliente usa neste tipo), embaixo a busca JA' filtrada por ela. A atividade nasce
+   * da conta escolhida (o escopo dela) ou de `atividadeInicial` (a sugestao); clicar na marcada desmarca (a lista inteira). A lista tem
+   * ALTURA FIXA: trocar a atividade nao mexe na barra nem no lugar da lista. Opt-in: sem a prop, o de sempre. Quem usa e' o `EscolherConta`.
+   */
+  atividadeNaLista?: boolean;
+  atividadeInicial?: Atividade | null;
+}
+
+const atividadeValidaDaBarra = (v: string): Atividade | null => ATIVIDADES.find((a) => a.valor === v)?.valor ?? null;
+
+/** As atividades que o plano usa NESTE tipo de operacao (a ordem da casa). */
+export function atividadesDoPlano(classificacoes: readonly ClassificacaoItem[], tipoOperacao: string): Atividade[] {
+  const doTipo = (c: ClassificacaoItem) => !tipoOperacao || (tipoOperacao.startsWith('3-') ? c.tipo_operacao.startsWith('3-') : c.tipo_operacao === tipoOperacao);
+  const usadas = new Set(classificacoes.filter(doTipo).map((c) => (c.escopo_negocio || '').trim()));
+  return ATIVIDADES.filter((a) => usadas.has(a.valor)).map((a) => a.valor);
 }
 
 export function PlanoSubcentroSelect({
   value, onChange, onSelected, classificacoes, tipoOperacao, escopoNegocio,
   escopoObrigatorio = false, somenteCompoeDre = false,
   search, onSearchChange, label, triggerClassName, size = 'default', contentClassName, itemClassName, tabIndex, disabled,
+  atividadeNaLista = false, atividadeInicial = null,
 }: PlanoSubcentroSelectProps) {
   const [open, setOpen] = useState(false);
+  /* SELETOR-CONTA-POR-ATIVIDADE-01 — a atividade escolhida NA LISTA (estado da abertura): nasce do escopo da conta de hoje, senao da sugestao */
+  const [atividadeDaLista, setAtividadeDaLista] = useState<Atividade | null>(null);
+  const atividadesDaBarra = useMemo(() => (atividadeNaLista ? atividadesDoPlano(classificacoes, tipoOperacao) : []),
+    [atividadeNaLista, classificacoes, tipoOperacao]);
   const [highlight, setHighlight] = useState(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -106,15 +130,16 @@ export function PlanoSubcentroSelect({
   /* ⚠ SEM ESCOPO, PASSA TUDO — e é isso que mantém os outros três chamadores intactos. A
      comparação é frouxa de propósito: o plano tem linhas com escopo vazio, e escondê-las de
      quem escolheu uma atividade tiraria da lista contas que servem a todas. */
+  const escopoEfetivo = atividadeNaLista ? (atividadeDaLista ?? undefined) : escopoNegocio;
   const combinaEscopo = (c: ClassificacaoItem) => {
-    if (!escopoNegocio) return true;
+    if (!escopoEfetivo) return true;
     const e = (c.escopo_negocio || '').trim();
     /* ⚠ COM A TRAVA LIGADA, VAZIO NÃO PASSA — PR-AGRI-BARTER-POLISH. Escopo em branco é conta
        que NINGUÉM classificou, e uma tela que exige atividade não pode oferecê-la como se
        servisse a todas. Sem `escopoObrigatorio` o comportamento é o de sempre (o vazio passa),
        que é o que mantém os outros chamadores intactos. */
-    if (escopoObrigatorio) return e === escopoNegocio;
-    return e === '' || e === escopoNegocio;
+    if (escopoObrigatorio) return e === escopoEfetivo;
+    return e === '' || e === escopoEfetivo;
   };
 
   /** Subcentros filtered by tipo_operacao then by search text.
@@ -137,7 +162,7 @@ export function PlanoSubcentroSelect({
     const term = search.toLowerCase();
     return byTipo.filter(c => c.subcentro.toLowerCase().includes(term));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [classMap, search, tipoOperacao, escopoNegocio, escopoObrigatorio, somenteCompoeDre, mostrarTodos]);
+  }, [classMap, search, tipoOperacao, escopoEfetivo, escopoObrigatorio, somenteCompoeDre, mostrarTodos]);
 
   /**
    * Quantos a busca ACHOU do outro lado da árvore, e que o filtro escondeu.
@@ -156,7 +181,7 @@ export function PlanoSubcentroSelect({
       (!escopoObrigatorio || combinaEscopo(c)) && combinaDre(c)
       && !combinaTipo(c) && (!term || c.subcentro.toLowerCase().includes(term))).length;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [classMap, search, tipoOperacao, escopoNegocio, escopoObrigatorio, somenteCompoeDre, mostrarTodos]);
+  }, [classMap, search, tipoOperacao, escopoEfetivo, escopoObrigatorio, somenteCompoeDre, mostrarTodos]);
 
   const handleSelect = (sub: string) => {
     onChange(sub);
@@ -217,7 +242,15 @@ export function PlanoSubcentroSelect({
   return (
     <div>
       {label && <Label className="text-[10px]">{label}</Label>}
-      <Popover open={open} onOpenChange={v => { setOpen(v); if (!v) { onSearchChange(''); setHighlight(0); } }}>
+      <Popover open={open} onOpenChange={v => {
+        setOpen(v);
+        if (v && atividadeNaLista) {
+          const daConta = (classMap.get(value)?.escopo_negocio || '').trim();
+          const inicial = atividadesDaBarra.find((a) => a === daConta) ?? atividadesDaBarra.find((a) => a === atividadeInicial) ?? null;
+          setAtividadeDaLista(inicial);
+        }
+        if (!v) { onSearchChange(''); setHighlight(0); }
+      }}>
         <PopoverTrigger asChild>
           <Button tabIndex={tabIndex} variant="outline" role="combobox" aria-expanded={open} disabled={disabled} className={cn("w-full h-8 justify-between font-normal text-[12px]", size === 'compact' && 'h-5 px-1.5 text-[11px] [&_svg]:h-3 [&_svg]:w-3', triggerClassName)}>
             {/* UI-DROPDOWN-PADRAO-01: o texto que não cabe começa na borda esquerda (o botão centraliza por padrão) */}
@@ -225,7 +258,15 @@ export function PlanoSubcentroSelect({
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className={cn(COMBOBOX_CONTENT, contentClassName)} align="start">
+        <PopoverContent className={cn(COMBOBOX_CONTENT, atividadeNaLista && 'min-w-[300px]', contentClassName)} align="start">
+          {/* SELETOR-CONTA-POR-ATIVIDADE-01 — a barra de atividade EM CIMA da busca (a mesma da aba Geral, o `Segmentado` da casa) */}
+          {atividadeNaLista && atividadesDaBarra.length > 0 && (
+            <div className="border-b border-zinc-500/40 px-2 py-1" data-testid="conta-barra-atividade">
+              <Segmentado altura={22} valor={atividadeDaLista ?? ''} className={MENU_SEGMENTADO}
+                onEscolher={(a) => { setAtividadeDaLista((hoje) => (hoje === a || !a ? null : atividadeValidaDaBarra(a))); setHighlight(0); searchInputRef.current?.focus(); }}
+                opcoes={atividadesDaBarra.map((a) => ({ valor: a, rotulo: ATIVIDADES.find((x) => x.valor === a)?.rotulo ?? a }))} />
+            </div>
+          )}
           {/* Input de busca do padrão de menu (`MENU_BUSCA`, fix1): zinc-700, texto branco, 9,5px, ícone 14px. */}
           <div className="flex items-center border-b border-zinc-500/40 px-2">
             <Search className="mr-2 h-3.5 w-3.5 shrink-0 opacity-50" />
@@ -239,7 +280,10 @@ export function PlanoSubcentroSelect({
               autoFocus
             />
           </div>
-          <div className="max-h-56 overflow-y-auto p-1">
+          {/* com a barra: ALTURA (nunca so' o maximo) — 14rem, ou o que cabe do lado em que a lista abriu (a 750x483 ela abre para cima e a
+              barra saia da tela); o espaco do lado nao muda ao trocar a atividade, entao a lista nao anda */}
+          <div className={cn(atividadeNaLista ? 'h-[min(14rem,calc(var(--radix-popover-content-available-height)_-_68px))]' : 'max-h-56', 'overflow-y-auto p-1')} data-testid={atividadeNaLista ? 'conta-lista' : undefined}
+            data-desloca={atividadeNaLista ? 'lista-de-contas' : undefined}>
             {/* ⚠ "NENHUM ENCONTRADO" SÓ QUANDO NÃO HÁ MESMO. Havendo do outro
                 lado, a mensagem diz quantos e oferece a porta — dizer "nenhum"
                 com dois escondidos é a tela mentindo sobre o próprio cadastro. */}

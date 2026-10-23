@@ -111,6 +111,8 @@ const CENARIOS = [
     ['subcentro de lavoura (Safra e Cultura)', { url: 'tela=nota-pdf&v=lavoura' }], ['nota sem duplicata (Criar lancamento)', { url: 'tela=nota-pdf&v=semdup' }],
     ['nota ja lancada (NOTA-JA-LANCADA-01)', { url: 'tela=nota-pdf&v=jalancada' }],
     ['nota avulsa, remessa de entrega futura (NOTA-AVULSA-890-01)', { url: 'tela=nota-pdf&v=avulsa' }],
+    ['nota ja lancada em parcela (NOTA-CONTAS-NA-CRIACAO-01 C)', { url: 'tela=nota-pdf&v=emparcela' }],
+    ['nota ja lancada com cancelados no fim (D)', { url: 'tela=nota-pdf&v=cancelados' }], ['so cancelados (D)', { url: 'tela=nota-pdf&v=socancelados' }],
   ] },
   /* ITENS-NOTA-01 — os itens da nota: Valores <-> Fiscal (o `auto` troca o Segmentado) no dialogo da OC; o backfill antes e depois do
      Simular (a contagem e as linhas chegam, os botoes nao andam) */
@@ -120,6 +122,16 @@ const CENARIOS = [
   { nome: 'lancamento-dividido', url: 'tela=lancamento&m=editar&v=sal&div=1', antes: async (p) => {
       await p.getByRole('tab', { name: /Itens da nota/ }).first().click(); await espera(p); }, estados: [
     ['vista Contas', botao(/^Contas$/)], ['vista Fiscal', botao(/^Fiscal$/)], ['vista Valores', botao(/^Valores$/)],
+  ] },
+  /* SELETOR-CONTA-POR-ATIVIDADE-01 — a conta do item aberta (o `EscolherConta`): trocar a atividade na barra nao mexe na barra, na busca
+     nem no lugar/tamanho da lista (`data-desloca`); so' os itens dentro dela mudam */
+  { nome: 'escolher-conta', url: 'tela=lancamento&m=editar&v=sal&div=1', antes: async (p) => {
+      await p.getByRole('tab', { name: /Itens da nota/ }).first().click(); await espera(p); await botao(/^Contas$/)(p);
+      await clicar('[data-testid="conta-do-item-1"] [role="combobox"]')(p); }, estados: [
+    /* o plano da bancada usa pecuaria e agricultura: a barra tem essas duas */
+    ['atividade Lavoura', clicar('[data-testid="conta-barra-atividade"] button:has-text("Lavoura")')],
+    ['todas (desmarca)', clicar('[data-testid="conta-barra-atividade"] button:has-text("Lavoura")')],
+    ['atividade Pecuária', clicar('[data-testid="conta-barra-atividade"] button:has-text("Pecuária")')],
   ] },
   /* NOTA-FORNECEDOR-COMPARAR-01 — "Atualizar N campos" -> "Confirmar" (a frase aparece no rodape) e o estado "nao parece o certo" */
   { nome: 'comparar-cadastro', url: 'tela=comparar-cadastro', estados: [

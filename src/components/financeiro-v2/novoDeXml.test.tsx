@@ -9,7 +9,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { LancamentoV2Form, ClassificacaoItem, ContaBancariaV2, FornecedorV2 } from '@/hooks/useFinanceiroV2';
+import type { LancamentoV2Form, ClassificacaoItem, ContaBancariaV2, FornecedorV2, Safra } from '@/hooks/useFinanceiroV2';
 import type { Fazenda } from '@/contexts/FazendaContext';
 
 const banco = vi.hoisted(() => ({
@@ -681,5 +681,148 @@ describe('NOTA-FORNECEDOR-DUPLICA-01 — a linha reaberta rele^ o fornecedor com
     const agora = comFornecedoresDeAgora(lida, [AGRO]);
     expect([agora.resolucao.achadoPor, agora.proposta.favorecidoId, agora.proposta.documento.emitenteId]).toEqual(['documento', 'agro', 'agro']);
     expect(comFornecedoresDeAgora(agora, [AGRO])).toBe(agora);
+  });
+});
+
+/* ═══ NOTA-CONTAS-NA-CRIACAO-01 A (P77) — a aba "Contas" dos Itens da nota no NOVO lancamento: a divisao fica PENDENTE na tela e o Salvar a
+   grava junto com a criacao; recusada, nada fica valendo pela metade. O plano sintetico ganha uma segunda conta. ═══ */
+describe('A — dividir pelos itens no NOVO lançamento', () => {
+  const CLASSIF2: ClassificacaoItem[] = [...CLASSIF,
+    { id: 'pl-san', subcentro: 'Sanidade Sintetica', centro_custo: 'Sanidade', grupo_custo: 'Sanidade', macro_custo: 'Custeio Produtivo', tipo_operacao: '2-Saídas', escopo_negocio: 'pecuaria' }];
+  const SETE_A: [string, string, string][] = [['001', '2026-05-23', '33000.00'], ['002', '2026-06-19', '12833.34'], ['003', '2026-07-17', '12833.34'],
+    ['004', '2026-08-14', '12833.33'], ['005', '2026-09-11', '12833.33'], ['006', '2026-10-09', '12833.33'], ['007', '2026-11-06', '12833.33']];
+  /* a aba Itens nasce depois que o arquivo da nota e' lido: espera por ela */
+  const aba = async (re: RegExp) => {
+    const t = await waitFor(() => { const x = screen.getAllByRole('tab').find((y) => re.test(y.textContent ?? '')); if (!x) throw new Error(`sem a aba ${re}`); return x; });
+    fireEvent.mouseDown(t); fireEvent.click(t);
+  };
+  const chamadas = (nome: string) => banco.rpc.mock.calls.filter((c) => c[0] === nome);
+  /** os argumentos da 1a chamada da RPC, lidos sem cast */
+  const argsDe = (nome: string): Record<string, unknown> => { const a: unknown = chamadas(nome)[0]?.[1]; return a && typeof a === 'object' ? Object.fromEntries(Object.entries(a)) : {}; };
+  /* o jsdom nao le^ o `File` (sem `arrayBuffer`): o arquivo da nota devolve os MESMOS bytes, e os itens saem do leitor de verdade */
+  const notaComItens = (o: OpcoesNota) => {
+    const d = doXmlDe(o, [AGRO]);
+    const bytes = utf8(montarNFe(o));
+    Object.defineProperty(d.arquivo, 'arrayBuffer', { value: async () => bytes });
+    return d;
+  };
+  /** Itens da nota → Contas; o item 1 vai para "Sanidade Sintetica" (os outros ficam na conta do lancamento); "Dividir em 2 contas ao salvar" */
+  const dividirOItem1 = async () => {
+    await aba(/Itens da nota/);
+    fireEvent.click(await screen.findByRole('button', { name: 'Contas' }));
+    fireEvent.click(within(await screen.findByTestId('conta-do-item-1')).getByRole('combobox'));
+    fireEvent.click(await screen.findByText('Sanidade Sintetica'));
+    const botao = screen.getByTestId('contas-dividir');
+    expect(botao.textContent).toBe('Dividir em 2 contas ao salvar');
+    fireEvent.click(botao);
+  };
+  const bancoQueAceita = (recusa: Record<string, string> = {}) => banco.rpc.mockImplementation(async (nome: unknown) => (
+    typeof nome === 'string' && recusa[nome] ? { data: null, error: { message: recusa[nome] } }
+      : nome === 'fin_documento_registrar' ? { data: { documento_id: 'doc-1' }, error: null }
+        : nome === 'fn_parcelamento_cadastrar_dividido' || nome === 'fn_parcelamento_cadastrar' ? { data: 'fin-1', error: null }
+          : { data: null, error: null }));
+
+  it('a vista: pendente na tela (as partes na Geral, nada no banco); o Salvar cria, guarda os itens, anexa a nota e SO\' ENTAO divide', async () => {
+    bancoQueAceita();
+    const m = montarModal({ prefill: { ...comConta(notaComItens({ duplicatas: null })), data_vencimento: '2026-10-30' }, classificacoes: CLASSIF2 });
+    await screen.findByDisplayValue('16.238,00');
+    await dividirOItem1();
+    expect(chamadas('fn_lancamento_dividir_pelos_itens')).toHaveLength(0);
+    await aba(/Geral/);
+    const bloco = await screen.findByTestId('bloco-classificacao');
+    expect(bloco.textContent).toContain('dividida em 2 contas ao salvar');
+    expect(within(bloco).getAllByTestId('parte-linha')).toHaveLength(2);
+    expect(within(bloco).getByTestId('partes-total').textContent).toContain('16.238,00');
+    fireEvent.click(botaoSalvar());
+    await waitFor(() => expect(m.onClose).toHaveBeenCalled());
+    expect(m.onSave).toHaveBeenCalledTimes(1);
+    const ordem = banco.rpc.mock.calls.map((c) => c[0]).filter((x) => ['fn_nota_fiscal_gravar', 'fin_documento_registrar', 'fn_lancamento_dividir_pelos_itens'].includes(String(x)));
+    expect(ordem).toEqual(['fn_nota_fiscal_gravar', 'fin_documento_registrar', 'fn_lancamento_dividir_pelos_itens']);
+    const pedido = argsDe('fn_lancamento_dividir_pelos_itens');
+    expect(pedido.p_lancamento_id).toBe('lanc-novo');
+    expect(pedido.p_simular).toBe(false);
+    expect(pedido.p_motivo).toBe('dividido pelos itens da nota ao criar o lançamento');
+    expect(pedido.p_mapa).toEqual(['pl-san', 'pl-nut', 'pl-nut', 'pl-nut', 'pl-nut', 'pl-nut'].map((plano_conta_id, k) => ({ n_item: k + 1, plano_conta_id })));
+    expect(chamadas('fn_cancelar_lancamento_auditoria')).toHaveLength(0);
+    expect(m.onLancamentoCriado).toHaveBeenCalledTimes(1);
+  });
+
+  it('a vista, a divisao RECUSADA: o recem-criado e\' cancelado, a frase fica ao lado do botao e o modal continua aberto', async () => {
+    bancoQueAceita({ fn_lancamento_dividir_pelos_itens: 'Outubro de 2026 está fechado no Financeiro.' });
+    const m = montarModal({ prefill: { ...comConta(notaComItens({ duplicatas: null })), data_vencimento: '2026-10-30' }, classificacoes: CLASSIF2 });
+    await screen.findByDisplayValue('16.238,00');
+    await dividirOItem1();
+    await aba(/Geral/);
+    fireEvent.click(botaoSalvar());
+    await waitFor(() => expect(chamadas('fn_cancelar_lancamento_auditoria')).toHaveLength(1));
+    expect(argsDe('fn_cancelar_lancamento_auditoria').p_lancamento_id).toBe('lanc-novo');
+    await waitFor(() => expect(screen.getByTestId('erro-antes-de-salvar').textContent).toBe(
+      'Nada ficou valendo: a divisão não foi gravada (Outubro de 2026 está fechado no Financeiro.) e o lançamento recém-criado foi cancelado. Corrija e salve de novo.'));
+    expect(m.onClose).not.toHaveBeenCalled();
+    expect(m.onLancamentoCriado).not.toHaveBeenCalled();
+  });
+
+  it('parcelado: a divisao vai NA MESMA chamada do cadastro (os percentuais dos itens, soma 100); a de sempre nao e\' chamada', async () => {
+    bancoQueAceita();
+    const m = montarModal({ prefill: comConta(notaComItens({ duplicatas: SETE_A })), classificacoes: CLASSIF2 });
+    await screen.findByDisplayValue('110.000,00');
+    await dividirOItem1();
+    await aba(/Geral/);
+    await waitFor(() => expect(botaoSalvar().textContent).toBe('Criar 7 Parcelas'));
+    fireEvent.click(botaoSalvar());
+    await waitFor(() => expect(chamadas('fn_parcelamento_cadastrar_dividido')).toHaveLength(1));
+    expect(chamadas('fn_parcelamento_cadastrar')).toHaveLength(0);
+    const { p_partes, p_motivo, p_payload } = argsDe('fn_parcelamento_cadastrar_dividido');
+    const partes: unknown[] = Array.isArray(p_partes) ? p_partes : [];
+    expect(partes.map((x) => (x && typeof x === 'object' ? Reflect.get(x, 'plano_conta_id') : null))).toEqual(['pl-san', 'pl-nut']);
+    expect(Math.round(partes.reduce<number>((s, x) => s + (x && typeof x === 'object' ? Number(Reflect.get(x, 'percentual')) : 0), 0) * 1e6) / 1e6).toBe(100);
+    expect(p_motivo).toBe('dividido pelos itens da nota ao criar o lançamento');
+    expect(p_payload).toMatchObject({ total_parcelas: 7, valor_total: 110000 });
+    await waitFor(() => expect(m.onLancamentoCriado).toHaveBeenCalledTimes(1));
+  });
+
+  it('parcelado RECUSADO: "Nada foi criado" ao lado do botao (o banco desfez o cadastro inteiro); nenhum cadastro sem divisao', async () => {
+    bancoQueAceita({ fn_parcelamento_cadastrar_dividido: 'A conta "Sanidade Sintetica" é de 1-Entradas e o lançamento é de 2-Saídas.' });
+    const m = montarModal({ prefill: comConta(notaComItens({ duplicatas: SETE_A })), classificacoes: CLASSIF2 });
+    await screen.findByDisplayValue('110.000,00');
+    await dividirOItem1();
+    await aba(/Geral/);
+    await waitFor(() => expect(botaoSalvar().textContent).toBe('Criar 7 Parcelas'));
+    fireEvent.click(botaoSalvar());
+    await waitFor(() => expect(screen.getByTestId('erro-antes-de-salvar').textContent).toContain('Nada foi criado: A conta "Sanidade Sintetica" é de 1-Entradas'));
+    expect(chamadas('fn_parcelamento_cadastrar')).toHaveLength(0);
+    expect(m.onClose).not.toHaveBeenCalled();
+  });
+
+  it('a maior parte numa conta de OUTRA atividade: a safra da atividade de antes sai (o campo esta\' oculto; o Salvar a recusaria)', async () => {
+    bancoQueAceita();
+    const LAV: ClassificacaoItem = { id: 'pl-lav', subcentro: 'Insumos Lavoura Sintetica', centro_custo: 'Insumos', grupo_custo: 'Custeio Lavoura', macro_custo: 'Custeio Produtivo', tipo_operacao: '2-Saídas', escopo_negocio: 'agricultura' };
+    const SAFRA_PEC: Safra = { id: 's-pec', nome: 'Safra 26/27 Pecuária', ativa: true, codigo: '26/27-PEC', escopo_negocio: 'pecuaria' };
+    const m = montarModal({ prefill: { ...comConta(notaComItens({ duplicatas: null })), data_vencimento: '2026-10-30', safra_id: 's-pec' }, classificacoes: [...CLASSIF2, LAV],
+      safras: [SAFRA_PEC] });
+    await screen.findByDisplayValue('16.238,00');
+    await aba(/Itens da nota/);
+    fireEvent.click(await screen.findByRole('button', { name: 'Contas' }));
+    fireEvent.click(within(await screen.findByTestId('conta-do-item-1')).getByRole('combobox'));
+    fireEvent.click(within(screen.getByTestId('conta-barra-atividade')).getByText('Lavoura'));
+    fireEvent.click(await screen.findByText('Insumos Lavoura Sintetica'));
+    fireEvent.click(screen.getByTestId('contas-dividir'));
+    await aba(/Geral/);
+    fireEvent.click(botaoSalvar());
+    await waitFor(() => expect(m.onSave).toHaveBeenCalledTimes(1));
+    expect(m.onSave.mock.calls[0][0]).toMatchObject({ plano_conta_id: 'pl-lav', safra_id: null });
+  });
+  it('"Voltar para 1 conta" desfaz a pendente na tela; quem nao divide salva como sempre (nenhuma RPC de divisao)', async () => {
+    bancoQueAceita();
+    const m = montarModal({ prefill: { ...comConta(notaComItens({ duplicatas: null })), data_vencimento: '2026-10-30' }, classificacoes: CLASSIF2 });
+    await screen.findByDisplayValue('16.238,00');
+    await dividirOItem1();
+    await aba(/Geral/);
+    fireEvent.click(await screen.findByTestId('divisao-na-criacao-voltar'));
+    expect(screen.queryByTestId('partes-da-classificacao')).toBeNull();
+    fireEvent.click(botaoSalvar());
+    await waitFor(() => expect(m.onClose).toHaveBeenCalled());
+    expect(chamadas('fn_lancamento_dividir_pelos_itens')).toHaveLength(0);
+    expect(chamadas('fn_cancelar_lancamento_auditoria')).toHaveLength(0);
   });
 });
