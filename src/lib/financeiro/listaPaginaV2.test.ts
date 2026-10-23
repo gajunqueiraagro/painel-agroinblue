@@ -13,6 +13,7 @@ import { resolve } from 'node:path';
 import {
   filtrosDaPaginaV2, ordemDaPaginaV2, lerPaginaV2, lerLinhasV2, intervaloDaPaginaV2, paginasDaListaV2, reservasDaPaginaV2,
   lerPorPaginaV2, guardarPorPaginaV2, porPaginaV2DoTexto, textoDoPorPaginaV2, fornecedoresDoFiltroV2, type FiltrosDaTelaV2,
+  lerSoIdsV2, precisaDosTotaisV2, trocarLinhasV2,
 } from './listaPaginaV2';
 
 const VAZIO: FiltrosDaTelaV2 = {
@@ -177,5 +178,36 @@ describe('a ligação na tela (lida da fonte)', () => {
     expect(tela).toContain('useLancamentosConciliados(clienteAtual?.id ?? null, idsDaPagina)');
     expect(tela).toContain('useEffect(() => { setIdsDaPagina(paginaDaLista ? paginaDaLista.linhas.map((l) => l.id) : []); }, [paginaDaLista]);');
     expect(tela).not.toContain('vinculosProntos');
+  });
+});
+
+/* P73 — salvou, relê só o lançamento */
+describe('P73 — a releitura dos ids salvos', () => {
+  const L = (extra: Record<string, unknown> = {}) => lerSoIdsV2({ linhas: [{ id: 'a', cliente_id: 'c', valor: 10, ...extra }] })!.linhas[0];
+  it('o leitor do `so_ids`: sem total; peça torta = nulo', () => {
+    expect(lerSoIdsV2({ total_linhas: null, linhas: [{ id: 'a', cliente_id: 'c', conciliado: true }] })?.conciliados.has('a')).toBe(true);
+    expect(lerSoIdsV2({ linhas: [{ id: 'a' }] })).toBeNull();
+    expect(lerSoIdsV2({ linhas: null })).toBeNull();
+  });
+  it('os totais voltam quando muda o que soma (valor, status, conta, sem caixa, fornecedor, cancelado) — a descrição não', () => {
+    expect(precisaDosTotaisV2(L(), L({ descricao: 'x' }), {})).toBe(false);
+    for (const k of ['valor', 'status_transacao', 'conta_bancaria_id', 'sem_movimentacao_caixa', 'favorecido_id', 'cancelado', 'tipo_operacao']) {
+      expect(precisaDosTotaisV2(L(), L({ [k]: 'outro' }), {})).toBe(true);
+    }
+  });
+  it('dividido (antes ou depois) + filtro de conta = relê os totais; sem filtro de conta, não', () => {
+    expect(precisaDosTotaisV2(L({ classificacao_dividida: true }), L({ classificacao_dividida: true }), { anos: [2026] })).toBe(false);
+    expect(precisaDosTotaisV2(L({ classificacao_dividida: false }), L({ classificacao_dividida: true }), { centro: 'C' })).toBe(true);
+    expect(precisaDosTotaisV2(L({ classificacao_dividida: true }), L({ classificacao_dividida: false }), { subcentro: 'S' })).toBe(true);
+    expect(precisaDosTotaisV2(L(), L(), { macro: 'M' })).toBe(false);
+  });
+  it('a troca: a linha no LUGAR dela; a marca de conciliado sai da releitura (entra e sai)', () => {
+    const pg = lerPaginaV2(RESPOSTA)!;
+    const t = trocarLinhasV2(pg, lerSoIdsV2({ linhas: [{ id: 'a', cliente_id: 'c', valor: 99, conciliado: false }] })!);
+    expect(t.linhas.map((l) => `${l.id}:${l.valor}`)).toEqual(['a:99', 'b:5']);
+    expect([...t.conciliados]).toEqual([]);
+    expect(t.totais).toBe(pg.totais);
+    const t2 = trocarLinhasV2(pg, lerSoIdsV2({ linhas: [{ id: 'b', cliente_id: 'c', valor: 5, conciliado: true }] })!);
+    expect([...t2.conciliados].sort()).toEqual(['a', 'b']);
   });
 });
