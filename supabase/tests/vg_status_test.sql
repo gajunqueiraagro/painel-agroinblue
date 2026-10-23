@@ -12,6 +12,9 @@
 --   S6 status fora dos tres (realizado, texto qualquer, nulo no meio): 22023
 --   S7 a tela ecoa o que usou (status, incluir_vencidos)
 --   S8 seguranca: o gestor da NJ recebe 42501 no Agnaldo; sem usuario, 42501; anon sem EXECUTE nas assinaturas novas
+--   S9 IGUALDADE COM A CPR (111934): o saldo do fim de out/2026 da fn_vg_saldos = o da CPR replicada (cprRecorte.ts + saldoEmCaixa.ts:
+--      caixa de hoje pelas ancoras + todo em aberto ate' 31/10 com os MESMOS status — vencidos inclusive —, a compra no cartao inclusive,
+--      so' a ponta de transferencia fora do caixa de fora), nos tres clientes, com os tres status, so' agendado e nenhum
 set local statement_timeout = '600s';
 
 create function pg_temp.vgst() returns text language plpgsql as $f$
@@ -76,6 +79,40 @@ begin
     IF n > 0 THEN f := f || format('S5 %s: %s lado-mes nao somam', left(c::text, 4), n); END IF;
   END LOOP;
 
+  -- S9
+  WITH cl(id) AS (SELECT unnest(ARRAY[c_ag, c_vera, c_nj])),
+  comb(st) AS (SELECT unnest(ARRAY['{previsto,programado,agendado}', '{agendado}', '{}'])::text[]),
+  contas AS (SELECT k.id, k.cliente_id, lower(coalesce(k.tipo_conta, '')) tipo FROM financeiro_contas_bancarias k JOIN cl ON cl.id = k.cliente_id
+              WHERE k.ativa AND lower(coalesce(k.tipo_conta, '')) IN ('cc', 'inv', 'permuta')),
+  legs AS (SELECT kk.id conta, l.data_pagamento dia,
+             CASE WHEN l.conta_destino_id = kk.id AND l.conta_bancaria_id IS DISTINCT FROM kk.id THEN abs(l.valor)
+                  ELSE abs(l.valor) * CASE l.sinal::text WHEN '1' THEN 1 WHEN '-1' THEN -1 ELSE CASE WHEN l.tipo_operacao = '1-Entradas' THEN 1
+                       WHEN l.tipo_operacao LIKE '2-%' OR l.tipo_operacao LIKE '3-%' THEN -1 ELSE 0 END END END mov
+        FROM financeiro_lancamentos_v2 l JOIN contas kk ON kk.id = l.conta_bancaria_id OR kk.id = l.conta_destino_id
+       WHERE NOT l.cancelado AND l.cenario IS DISTINCT FROM 'meta' AND l.status_transacao = 'realizado' AND NOT coalesce(l.sem_movimentacao_caixa, false)
+         AND l.data_pagamento BETWEEN '2026-01-01' AND hoje),
+  cand AS (SELECT s.conta_bancaria_id conta, s.ano_mes, coalesce(s.saldo_data, (to_date(s.ano_mes || '-01', 'YYYY-MM-DD') + interval '1 month - 1 day')::date) pos,
+             coalesce(s.saldo_inicial, 0) si, s.saldo_final sf, kk.tipo, s.updated_at
+        FROM financeiro_saldos_bancarios_v2 s JOIN contas kk ON kk.id = s.conta_bancaria_id WHERE s.saldo_final IS NOT NULL AND s.ano_mes BETWEEN '2026-04' AND '2026-10'),
+  anc AS (SELECT DISTINCT ON (cc.conta) cc.conta, cc.pos, round(cc.sf, 2) valor FROM cand cc
+       WHERE cc.tipo = 'permuta' OR round(cc.si + coalesce((SELECT sum(g.mov) FROM legs g WHERE g.conta = cc.conta AND to_char(g.dia, 'YYYY-MM') = cc.ano_mes AND g.dia <= cc.pos), 0), 2) = round(cc.sf, 2)
+       ORDER BY cc.conta, cc.ano_mes DESC, cc.updated_at DESC),
+  caixa AS (SELECT kk.cliente_id, sum(an.valor + coalesce((SELECT sum(g.mov) FROM legs g WHERE g.conta = an.conta AND g.dia > an.pos), 0)) saldo_hoje
+        FROM anc an JOIN contas kk ON kk.id = an.conta GROUP BY 1),
+  abertos AS (SELECT comb.st, l.cliente_id,
+     sum(CASE WHEN l.tipo_operacao LIKE '1-%' THEN abs(l.valor) WHEN l.tipo_operacao LIKE '2-%' THEN -abs(l.valor)
+              WHEN l.tipo_operacao LIKE '3-%' THEN (CASE WHEN l.conta_destino_id IN (SELECT conta FROM anc) THEN abs(l.valor) ELSE 0 END)
+                                                - (CASE WHEN l.conta_bancaria_id IN (SELECT conta FROM anc) THEN abs(l.valor) ELSE 0 END) ELSE 0 END) liq
+     FROM comb JOIN financeiro_lancamentos_v2 l ON l.status_transacao = ANY (comb.st)
+     WHERE l.cliente_id IN (SELECT id FROM cl) AND NOT l.cancelado AND l.cenario IS DISTINCT FROM 'meta' AND NOT coalesce(l.sem_movimentacao_caixa, false)
+       AND l.data_vencimento IS NOT NULL AND l.data_vencimento <= '2026-10-31'
+     GROUP BY 1, 2)
+  SELECT string_agg(format('%s %s cpr %s vg %s', left(cl.id::text, 4), comb.st, round(caixa.saldo_hoje + coalesce(a.liq, 0), 2), v.saldo_final), '; ') INTO x
+    FROM cl CROSS JOIN comb LEFT JOIN caixa ON caixa.cliente_id = cl.id LEFT JOIN abertos a ON a.st = comb.st AND a.cliente_id = cl.id,
+         LATERAL (SELECT y.saldo_final FROM fn_vg_saldos(cl.id, '2026-10-01', '2026-10-31', NULL, hoje, comb.st, true) y) v
+   WHERE round(caixa.saldo_hoje + coalesce(a.liq, 0), 2) IS DISTINCT FROM v.saldo_final;
+  IF x IS NOT NULL THEN f := f || ('S9 VG <> CPR: ' || x); END IF;
+
   -- S6
   FOR x IN SELECT unnest(ARRAY['{realizado}', '{previsto,qualquer}', '{previsto,NULL}']) LOOP
     st := x::text[];
@@ -129,7 +166,9 @@ begin
     ('M7 serie conta o vencido sem o chip', 'public.fn_vg_serie(uuid,date,date,uuid[],uuid[],uuid,text,date,text[],boolean)',
      'AND (v_venc OR coalesce(v.data_vencimento, v.data_competencia) >= p_hoje)', 'AND (true OR coalesce(v.data_vencimento, v.data_competencia) >= p_hoje)'),
     ('M8 tela ecoa sempre vencidos ligado', 'public.fn_vg_tela(uuid,date,date,uuid[],uuid[],uuid,text,date,text[],boolean)',
-     '''incluir_vencidos'', v_venc,', '''incluir_vencidos'', true,')
+     '''incluir_vencidos'', v_venc,', '''incluir_vencidos'', true,'),
+    ('M9 saldos deixam o cartao de fora', 'public.fn_vg_saldos(uuid,date,date,uuid[],date,text[],boolean)',
+     'OR (NOT x.tr AND NOT EXISTS', 'OR (false AND NOT EXISTS')
   ) v(nome, fn, de, para) LOOP
     IF p_so IS NOT NULL AND NOT substr(m.nome, 2, position(' ' in m.nome) - 2)::int = ANY (p_so) THEN CONTINUE; END IF;
     total := total + 1;

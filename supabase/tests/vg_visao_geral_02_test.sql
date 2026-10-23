@@ -94,8 +94,8 @@ begin
   SELECT round(sum(abs(l.valor)), 2) INTO b FROM financeiro_lancamentos_v2 l
    WHERE l.cliente_id = c_nj AND NOT l.cancelado AND l.cenario IS DISTINCT FROM 'meta' AND NOT coalesce(l.sem_movimentacao_caixa, false)
      AND l.status_transacao IN ('previsto', 'programado', 'agendado') AND coalesce(l.data_vencimento, l.data_competencia) < hoje  -- P79: vencido = antes de HOJE (a regra da CPR)
-     -- as contas do caixa (a regra das funcoes) ou sem conta; o vencido em cartao/conta inativa nao entra (medido: R$ 5.749,11 no NJ)
-     AND ((l.conta_bancaria_id IS NULL AND l.conta_destino_id IS NULL) OR EXISTS (SELECT 1 FROM financeiro_contas_bancarias k
+     -- as contas do caixa ou sem conta; e, desde a 111934 (a regra da CPR), o que nao e' transferencia em qualquer conta (o cartao)
+     AND ((l.conta_bancaria_id IS NULL AND l.conta_destino_id IS NULL) OR l.tipo_operacao NOT LIKE '3-%' OR EXISTS (SELECT 1 FROM financeiro_contas_bancarias k
           WHERE k.cliente_id = c_nj AND k.ativa AND lower(coalesce(k.tipo_conta, '')) IN ('cc', 'inv', 'permuta') AND k.id IN (l.conta_bancaria_id, l.conta_destino_id)));
   IF a IS DISTINCT FROM b THEN f := f || format('W5 serie vencido out %s <> %s', a, b); END IF;
   SELECT count(*) FILTER (WHERE s.ano_mes <> '2026-10' AND (s.entradas_vencidas <> 0 OR s.saidas_vencidas <> 0))
