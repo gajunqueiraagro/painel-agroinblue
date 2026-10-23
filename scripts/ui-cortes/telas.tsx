@@ -630,6 +630,11 @@ if (tela === 'mesclar') {
     const arquivo = arquivoPdfDaNota(bytes, '000.000.937.pdf');
     const ocorrencias = v === 'registrada' ? [{ origem: 'lancamento', documentoId: 'd1', lancamentoId: 'l9', operacaoId: null, operacaoTipo: null, numero: '000.000.937',
       descricao: 'NF 937 · compra registrada antes', data: '2026-09-15', valor: 1966.56 }] : [];
+    const CANCELADOS_DA_NOTA = ['programado', 'agendado'].map((st, i) => ({ id: `jl-canc-${i}`, vencimento: `2026-0${8 + i}-10`, pagamento: null,
+      competencia: '2026-08-10', descricao: `Lançamento antigo desta nota, cancelado antes de refazer pelo Novo lançamento — descrição comprida ${i + 1}`,
+      valor_cent: i ? 49164 : 196656, status: st, conciliado: false, financiamento_id: null, numero_documento: i ? 'NF_000.000.937' : '937',
+      fornecedor_id: 'sem-cnpj', fornecedor_nome: 'Cooperativa Agroindustrial Sintetica dos Produtores Rurais de Exemplo SA', fornecedor_por: 'nome',
+      parcelas: [], por: ['numero', 'chave'], cancelado: true }));
     g.__bancoBancada = {
       from: (t: string) => {
         if (t === 'financeiro_fornecedores') return [{ nome_fantasia: null, inscricao_estadual: null, tipo_pessoa: 'PJ', logradouro: null, numero: null, complemento: null, bairro: null, municipio: null, uf: null, cep: null, telefone: null }];
@@ -639,7 +644,9 @@ if (tela === 'mesclar') {
       },
       /* NOTA-JA-LANCADA-01 — `v=jalancada`: 3 das 4 parcelas ja' lancadas (2 pagas, 1 programada, conciliada uma) num cadastro SEM CNPJ
          de nome comprido; a serie-irma de 1 centavo a mais; a 4a falta. Dados SINTETICOS. */
-      rpc: (fn: string) => fn === 'fn_nota_ja_lancada' && v === 'jalancada' ? [
+      rpc: (fn: string) => fn === 'fn_nota_ja_lancada' && (v === 'jalancada' || v === 'cancelados') ? [
+        /* NOTA-CONTAS-NA-CRIACAO-01 D — `v=cancelados`: os mesmos, e mais 2 CANCELADOS desta nota no fim (selo cinza) */
+        ...(v === 'cancelados' ? CANCELADOS_DA_NOTA : []),
         ...[['2026-10-20', 'realizado'], ['2026-11-20', 'realizado'], ['2026-12-20', 'programado']].map(([venc, st], i) => ({
           id: `jl-${i}`, vencimento: venc, pagamento: st === 'realizado' ? venc : null, competencia: '2026-09-15',
           descricao: `Medicamentos Bovinos Sinteticos com descricao bem comprida para o pior caso ${i + 1}/4`, valor_cent: 49164, status: st,
@@ -651,6 +658,8 @@ if (tela === 'mesclar') {
       ]
         /* NOTA-CONTAS-NA-CRIACAO-01 C — `v=emparcela`: a nota SEM duplicata ja' lancada como UMA parcela de 4 (valor x 4 = a nota), achada
            pelo numero escrito de outro jeito ("NF_000.000.937"). Dados SINTETICOS. */
+        /* D — `v=socancelados`: so' cancelados (a nota NAO esta' lancada; o rodape diz quantos) */
+        : fn === 'fn_nota_ja_lancada' && v === 'socancelados' ? CANCELADOS_DA_NOTA
         : fn === 'fn_nota_ja_lancada' && v === 'emparcela' ? [{ id: 'jl-p1', vencimento: '2026-10-20', pagamento: null, competencia: '2026-09-15',
           descricao: 'Medicamentos Bovinos Sinteticos — lançado à mão como uma parcela da nota', valor_cent: 49164, status: 'agendado', conciliado: false,
           financiamento_id: null, numero_documento: 'NF_000.000.937', fornecedor_id: 'agro-s', fornecedor_nome: 'Agro Sintetica Insumos Agropecuarios Ltda',
