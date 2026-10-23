@@ -20,19 +20,22 @@ import { useCliente } from '@/contexts/ClienteContext';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Segmentado } from '@/components/ui/segmentado';
 import { cn } from '@/lib/utils';
-import { useCarregarFiltrosVG } from '@/components/financeiro-v2/visaoGeral/FiltrosBarraVG';
+import { rotuloDasContas, useCarregarFiltrosVG } from '@/components/financeiro-v2/visaoGeral/FiltrosBarraVG';
 import { CardVG } from '@/components/financeiro-v2/visaoGeral/CardVG';
 import { GraficoVG } from '@/components/financeiro-v2/visaoGeral/GraficoVG';
 import { GradeVG } from '@/components/financeiro-v2/visaoGeral/GradeVG';
 import { AmpliarVG } from '@/components/financeiro-v2/visaoGeral/AmpliarVG';
 import { SeletorCriterioVG } from '@/components/financeiro-v2/visaoGeral/SeletorCriterioVG';
 import { PainelMesVG } from '@/components/financeiro-v2/visaoGeral/PainelMesVG';
+import { BotaoPdfGradeVG, CabecalhoGradeVG } from '@/components/financeiro-v2/visaoGeral/CabecalhoGradeVG';
+import { montarModeloGradeVG } from '@/lib/pdf/vg/modeloGradeVG';
+import { useFazenda } from '@/contexts/FazendaContext';
 import { ChipsDeStatus, STATUS_INICIAIS, alternarNaLista, pilulasDosStatus } from '@/components/financeiro-v2/ChipsDeStatus';
 import { useFiltroUrl } from '@/v2/hooks/useFiltroUrl';
 import {
   COR, MESES_ABR, amDe, amHoje, anoDe, contarMeses, corSinal, faixaDoPeriodo, mil1, primeiroDia, rotuloMes, somarMeses, ultimoDia,
   dataCurta, escreverStatusVG, escreverVencidosVG, lerStatusVG, lerVencidosVG,
-  type AlvoAnaliseVG, type CriterioTelaVG, type FaixaVG, type ModoVG, type TelaVG,
+  rotuloAtividade, type AlvoAnaliseVG, type CriterioTelaVG, type FaixaVG, type ModoVG, type TelaVG,
 } from '@/lib/financeiro/visaoGeral';
 
 /* as pílulas: os três status não realizados (o realizado entra sempre, sem pílula) e a dos vencidos */
@@ -85,6 +88,19 @@ export function VisaoGeralFinanceiro({ hoje = hojeLocal(), onAnalisar, inicial }
   const analisar = (a: AlvoAnaliseVG) => { setIntencao(a); onAnalisar?.(a); };
   /* a tela só desenha o que o banco devolveu para ESTE período; enquanto o novo não chega, fica o anterior (nada pisca nem encolhe) */
   const pronta = tela && tela.meses.length > 0 ? tela : null;
+  /* P90 — o cabeçalho da grade ampliada e o PDF: o MESMO modelo (cliente, período, contas, recorte, chips, critério e o resumo do mês) */
+  const { fazendas } = useFazenda();
+  const rotuloContas = rotuloDasContas(filtros.lista?.contas ?? [], filtros.contas);
+  const modeloGrade = () => {
+    const agora = new Date();
+    const fazendaNome = filtros.fazenda ? fazendas.find((f) => f.id === filtros.fazenda)?.nome ?? null : null;
+    return montarModeloGradeVG({
+      tela: pronta!, sel, criterio, clienteNome: clienteAtual?.nome ?? '', rotuloContas,
+      recorte: [fazendaNome ? `Fazenda: ${fazendaNome}` : 'Global', ...(filtros.atividade ? [`Atividade: ${rotuloAtividade(filtros.atividade)}`] : [])],
+      chipsLigados: [...STATUS_INICIAIS.filter((x) => status.includes(x)).map((x) => x.charAt(0).toUpperCase() + x.slice(1)), ...(vencidos ? ['Vencidos'] : [])],
+      emissao: `${agora.toLocaleDateString('pt-BR')} ${agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`,
+    });
+  };
   const ano = anoDe(sel);
 
   return (
@@ -166,8 +182,8 @@ export function VisaoGeralFinanceiro({ hoje = hojeLocal(), onAnalisar, inicial }
           <div className="h-full" data-desloca-livre="">
             {pronta ? <GradeVG tela={pronta} sel={sel} onAnalisar={analisar} criterio={criterio}
               acao={<AmpliarVG titulo="Entradas e saídas · grade" testid="grade" corpo="px-3"
-                extra={<SeletorCriterioVG valor={criterio} onEscolher={setCriterio} testid="vg-criterio-ampliado-grade" />}>
-                {() => <GradeVG tela={pronta} sel={sel} onAnalisar={analisar} ampliado criterio={criterio} />}</AmpliarVG>} />
+                extra={<><SeletorCriterioVG valor={criterio} onEscolher={setCriterio} testid="vg-criterio-ampliado-grade" /><BotaoPdfGradeVG modelo={modeloGrade} /></>}>
+                {() => <><CabecalhoGradeVG modelo={modeloGrade()} /><GradeVG tela={pronta} sel={sel} onAnalisar={analisar} ampliado criterio={criterio} /></>}</AmpliarVG>} />
               : <Estado erro={erro} />}
           </div>
         </section>

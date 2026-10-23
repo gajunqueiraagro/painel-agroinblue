@@ -3,6 +3,7 @@
  *   V1 A TELA NÃO SOMA (SPEC §7.4): o banco devolve totais, média, %, % do mês, vs média, resultado e saldos propositalmente "errados"
  *      (que não fecham com os meses) e a tela escreve EXATAMENTE esses — se ela somasse ou dividisse, o número mudaria
  *   V2 abre em Entradas × saídas, Ano (jan–dez) e no mês vigente, e pede ao banco o ano inteiro
+ *   V17 a grade ampliada com o cabeçalho e o resumo do mês (o mesmo modelo do PDF)
  *   V16 o gráfico ampliado com o painel do mês (do banco)
  *   V14 o critério escreve a série do banco (card e grade), sem novo pedido; V15 no acumulado, o saldo de cima é o do período
  *   V3 clicar num total ou grupo (grade ou card) só registra a intenção — nada abre (o modal é o PR 4)
@@ -269,6 +270,18 @@ describe('Visão Geral — render-only', () => {
     expect(within(painel).getByTestId('painel-acum-entradas').textContent).toBe('R$ 4.444,00');
     expect(within(painel).getByTestId('painel-media-entradas').textContent).toBe('R$ 2.222,00');
     expect(within(painel).getByTestId('painel-saldo-final').textContent).toBe('R$ 5.001,00');
+  });
+
+  it('V17 a grade ampliada traz o cabeçalho (cliente, contas, chips, critério) e o resumo do mês, do banco, e o botão PDF', async () => {
+    render(<VisaoGeralFinanceiro hoje="2026-02-15" />);
+    await screen.findByTestId('grade-vg');
+    fireEvent.click(screen.getByTestId('ampliar-grade'));
+    const cab = await screen.findByTestId('grade-ampliada-cabecalho');
+    expect(within(cab).getByTestId('grade-ampliada-cliente').textContent).toBe('Cliente');
+    expect(within(cab).getByTestId('grade-ampliada-contexto').textContent).toContain('Realizado + Previsto, Programado, Agendado, Vencidos');
+    expect(within(cab).getByTestId('grade-ampliada-resumo').textContent).toContain('R$ 200,00');
+    expect(within(cab).getByTestId('grade-ampliada-resumo').textContent).toContain('R$ 5.001,00');
+    expect(screen.getByTestId('vg-pdf')).toBeTruthy();
   });
 
   it('V13 o TOTAL dos saldos é o do banco (a grade não soma)', async () => {
