@@ -242,8 +242,9 @@ const fonte = (arq: string) => readFileSync(arq, 'utf8').replace(/\{\/\*[\s\S]*?
 describe('(3) os pontos que não se montam em teste, lidos da FONTE', () => {
   it('`useFinanceiroV2`: editar (os dois ramos), excluir, excluir em lote e realizar em lote avisam os OUTROS, depois de gravar', () => {
     const hook = fonte('src/hooks/useFinanceiroV2.ts');
-    expect(hook).toContain('if (clienteId) notificarLancamentosMudaram(clienteId, meuOuvinteRef.current);');
-    expect(hook.match(/if \(!opts\?\.silent\) \{ toast\.success\('Lançamento atualizado'\); avisarOsOutros\(\); \}/g)).toHaveLength(2);
+    expect(hook).toContain('if (clienteId) notificarLancamentosMudaram(clienteId, meuOuvinteRef.current, ids);');
+    /* P73 — o editar avisa COM o id salvo (a lista troca só essa linha) */
+    expect(hook.match(/if \(!opts\?\.silent\) \{ toast\.success\('Lançamento atualizado'\); avisarOsOutros\(\[id\]\); \}/g)).toHaveLength(2);
     expect(hook).toContain("toast.success('Lançamento excluído com sucesso'); avisarOsOutros(); return true;");
     expect(hook).toContain('if (totalExcluidos > 0) avisarOsOutros(); return { excluidos: totalExcluidos, bloqueados: [], puladosOC, puladosParcela, puladosSplit };');
     expect(hook).toContain('if (atualizados > 0) avisarOsOutros(); return { atualizados }; }, [clienteId, user, avisarOsOutros]);');
