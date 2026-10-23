@@ -53,7 +53,9 @@ const FORMATOS: Array<{ valor: FormatoNaTela; rotulo: string }> = [
 ];
 const SEM_VINCULO = '__nenhuma__';
 export const FRASE_SEM_SENHA = 'Senhas e acessos do internet banking nunca ficam no sistema.';
-export const FRASE_AVISO_SALDO = 'Mudar o saldo ou a data refaz os saldos de todos os meses seguintes. A alteração fica na Auditoria com quem fez e quando.';
+/* P59 (Gabriel 23/10/2026) — medido no CAD-CONTAS: so' o MES SEGUINTE parte do saldo inicial; os outros partem do saldo do proprio banco.
+   A frase antiga ("refaz os saldos de todos os meses seguintes") dizia mais do que acontece. */
+export const FRASE_AVISO_SALDO = 'Mudar o saldo ou a data muda o ponto de partida da Conciliação (o mês seguinte começa daqui). A alteração fica na Auditoria com quem fez e quando.';
 export const FRASE_SEM_EXTRATO = 'Conta sem extrato não exige a ponta dela nas transferências.';
 
 interface Painel {
