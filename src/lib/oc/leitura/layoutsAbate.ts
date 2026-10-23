@@ -45,9 +45,15 @@ export interface CamposLidos {
 }
 
 export type MotivoNaoLido = 'sem_texto' | 'desconhecido' | 'dois_layouts' | 'especie_trocada' | 'contraparte' | 'incompleto' | 'nao_fecha';
+/** P85 (Gabriel 23/10/2026): o frigorifico LIDO do proprio PDF (razao social e CNPJ) — o que a faixa mostra; o nome do layout nunca. */
+export interface FrigorificoLido { nome: string | null; cnpj: string | null }
 export type LeituraDoAbate =
-  | { tipo: 'lido'; layout: string; rotulo: string; grupo: GrupoDoc; campos: CamposLidos; dados: Record<string, unknown>; avisos: string[] }
-  | { tipo: 'nao_lido'; motivo: MotivoNaoLido; frase: string };
+  | { tipo: 'lido'; layout: string; rotulo: string; grupo: GrupoDoc; campos: CamposLidos; dados: Record<string, unknown>; avisos: string[];
+      /** P85 (b) — o que se diz sem alarme (a diferenca de centavos de arredondamento do proprio PDF) */
+      notas: string[]; frigorifico: FrigorificoLido | null }
+  | { tipo: 'nao_lido'; motivo: MotivoNaoLido; frase: string;
+      /** P85 (a) — a especie em que o PDF SE LE (a escolhida era outra): a tela troca e le^ de novo */
+      especieSugerida?: EspecieDoc };
 
 /* ── O TEXTO ──────────────────────────────────────────────────────────────────────────────── */
 interface Texto { linhas: string[]; corrido: string; comQuebras: string }
@@ -86,7 +92,7 @@ const somaCent = (xs: number[]) => xs.reduce((s, x) => s + centavos(x), 0);
 /* ── OS LAYOUTS ───────────────────────────────────────────────────────────────────────────── */
 /* `avisos`: o que a faixa escreve em ambar sem impedir a leitura. `dispensados`: obrigatorio que o PROPRIO PDF nao permite preencher
    (datas diferentes entre os lotes do acerto) — fica vazio e avisado, nunca inventado. */
-type Ler = (t: Texto) => { ok: true; campos: CamposLidos; dados?: Record<string, unknown>; avisos?: string[]; dispensados?: (keyof CamposLidos)[] }
+type Ler = (t: Texto) => { ok: true; campos: CamposLidos; dados?: Record<string, unknown>; avisos?: string[]; notas?: string[]; dispensados?: (keyof CamposLidos)[] }
   | { ok: false; motivo: 'incompleto' | 'nao_fecha'; detalhe: string };
 interface Layout {
   /** Nulo nos documentos da saida da fazenda (7f): o vinculo e' o proprio texto. */
@@ -96,6 +102,8 @@ interface Layout {
   reconhece: (t: Texto) => boolean;
   obrigatorios: (keyof CamposLidos)[];
   ler: Ler;
+  /** P85 (c) — o frigorifico escrito no PDF (so' nos layouts que o trazem no texto) */
+  frigorificoDoTexto?: (t: Texto) => FrigorificoLido;
 }
 const cnpjDaChave = (t: Texto) => { const c = acharChaveNFe(t.comQuebras); return c ? c.slice(6, 20) : null; };
 const daLista = (f: Frigorifico, cnpj: string | null) => cnpj != null && CNPJS_DO_FRIGORIFICO[f].some(x => x === cnpj);
@@ -129,6 +137,7 @@ const produtosDaNf = (t: Texto) => linhasDeProduto(t, /^0102\d{4}$/);
 /** Passo 7e: na NF da Minerva o incentivo PROAPE-PRECOCE/MS e' linha de produto com NCM 00000000 (regra do Gabriel, 15/10). */
 const incentivosDaNf = (t: Texto) => linhasDeProduto(t, /^0{8}$/);
 const fmt2 = (n: number) => formatCasas(n, 2);
+const brlDeCent = (c: number) => `R$ ${formatCasas(c / 100, 2)}`;
 export const fraseDoIncentivo = (total: number) => `Incentivo ${fmt2(total)} incluído`;
 export const FRASE_NF_SEM_FUNRURAL = 'NF sem Funrural destacado';
 /** A linha dos volumes ("QUANTIDADE | ESPÉCIE | … | PESO LÍQUIDO" e os valores embaixo). */
@@ -141,6 +150,7 @@ function volumesDaNf(t: Texto) {
 
 const NF_MINERVA: Layout = {
   id: 'nf_minerva', rotulo: 'NF Minerva', frigorifico: 'minerva', grupo: 'nf', cnpjNoTexto: true,
+  frigorificoDoTexto: t => { const d = extrairDanfe(t.comQuebras); return { nome: d.emitenteNome, cnpj: d.emitenteCnpj }; },
   /* Passo 7e: a chave (com DV valido) e' da Minerva e o texto tem a referencia da NF do produtor e o SENAR. "Inf. Contribuinte:" nao
      e' ancora (uma impressao da NF 8815 nao o traz), nem "FUNR R$" (a NF pode vir sem Funrural destacado). */
   reconhece: t => daLista('minerva', cnpjDaChave(t)) && temTodos(t, ['REF NOTA FISCAL DE PRODUTOR', 'SENAR R$']),
@@ -191,6 +201,7 @@ const NF_MINERVA: Layout = {
 
 const NF_JBS: Layout = {
   id: 'nf_jbs', rotulo: 'NF JBS', frigorifico: 'jbs', grupo: 'nf', cnpjNoTexto: true,
+  frigorificoDoTexto: t => { const d = extrairDanfe(t.comQuebras); return { nome: d.emitenteNome, cnpj: d.emitenteCnpj }; },
   reconhece: t => daLista('jbs', cnpjDaChave(t)) && temTodos(t, ['DESCONTO DO FUNRURAL NO VALOR DE R$']),
   obrigatorios: ['chaveAcesso', 'dataEmissao', 'cab', 'pesoKg', 'bruto', 'funrural'],
   ler: t => {
@@ -239,8 +250,25 @@ const ACERTO_MINERVA: Layout = {
      A CONTA, tudo ou nada: cada bloco = o seu resumo; as linhas de despesa = "Total Despesas"; as de credito = "Total Créditos";
      soma dos blocos = "VALOR TOTAL DO PRODUTO" (quando existe); bruto − despesas + creditos = "Total Geral".
      R$/@: com UM bloco, o impresso (o resumo de uma linha); com varios, a MEDIA PONDERADA = bruto do gado ÷ (kg ÷ 15), 2 casas.
-     Vencimento e data do abate: os dos blocos; se diferirem entre os lotes, nao preenche e a faixa avisa. */
+     Vencimento e data do abate: os dos blocos; se diferirem entre os lotes, nao preenche e a faixa avisa.
+     ⚠ P85 (b) (Gabriel 23/10/2026, o LT04 da Fortunceres: 351.302,67 + 4.986,37 = 356.289,04 e o PDF imprime 356.289,03) — a conta que
+     NAO FECHA nao apaga mais a leitura: vale o que o PDF IMPRIME (os totais) e a diferenca e' dita. Ate' R$ 0,05 e' arredondamento do
+     frigorifico (nota discreta); acima, aviso em ambar com a diferenca em R$ — o sistema explica, o operador decide. */
+  frigorificoDoTexto: t => {
+    const i = t.linhas.findIndex(l => /^CNPJ:/.test(l));
+    const cnpj = re1(t.corrido, /CNPJ:\s*([\d./-]{14,18})/) ?? null;
+    return { nome: i > 0 ? (celulas(t.linhas[0])[0] || null) : null, cnpj };
+  },
   ler: t => {
+    const avisos: string[] = [];
+    const notas: string[] = [];
+    /** a conta do PDF que nao fecha: a diferenca dita (centavos de arredondamento = nota; mais = aviso) */
+    const conferir = (lido: number, impresso: number, oque: string) => {
+      const d = Math.abs(lido - impresso);
+      if (d === 0) return;
+      if (d <= 5) notas.push(`diferença de ${brlDeCent(d)} de arredondamento no PDF (${oque})`);
+      else avisos.push(`a conta do PDF não fecha (${oque}): diferença de ${brlDeCent(d)} · confira`);
+    };
     const linhas = t.linhas.map(celulas);
     type Bloco = { ordem: string; lote: string; data?: string; venc?: string; prods: string[][]; total?: string[] };
     const blocos: Bloco[] = [];
@@ -259,9 +287,11 @@ const ACERTO_MINERVA: Layout = {
       if (v && atual.venc == null) atual.venc = data(v[1]);
     }
     if (blocos.length === 0 || blocos.some(bl => !bl.total)) return { ok: false, motivo: 'incompleto', detalhe: 'TOTAL Animais' };
-    for (const bl of blocos)
-      if (bl.prods.length && somaCent(bl.prods.map(p => num(p[4]) ?? 0)) !== centavos(num(bl.total?.[3]) ?? NaN))
-        return { ok: false, motivo: 'nao_fecha', detalhe: 'soma do resumo ≠ total' };
+    for (const bl of blocos) {
+      const totalDoBloco = num(bl.total?.[3]);
+      if (bl.prods.length && totalDoBloco != null)
+        conferir(somaCent(bl.prods.map(p => num(p[4]) ?? 0)), centavos(totalDoBloco), `soma do resumo${blocos.length > 1 ? ` do lote ${bl.lote}` : ''} ≠ total`);
+    }
     const cabs = blocos.map(bl => num(bl.total?.[1])), kgs = blocos.map(bl => num(bl.total?.[2])), brutos = blocos.map(bl => num(bl.total?.[3]));
     const soma = (xs: (number | undefined)[]) => (xs.some(x => x == null) ? undefined : somaCent(xs.map(x => x ?? 0)) / 100);
     /* As linhas do fecho: "OC: N - <texto> | valor", ate' o total de cada secao. */
@@ -278,14 +308,10 @@ const ACERTO_MINERVA: Layout = {
     if (despesas == null) return { ok: false, motivo: 'incompleto', detalhe: 'Total Despesas' };
     if (creditos == null) return { ok: false, motivo: 'incompleto', detalhe: 'Total Créditos' };
     const bruto = soma(brutos), cab = soma(cabs), pesoKg = soma(kgs);
-    if (despLinhas.length && somaCent(despLinhas.map(c => num(c[c.length - 1]) ?? NaN)) !== centavos(despesas))
-      return { ok: false, motivo: 'nao_fecha', detalhe: 'despesas ≠ Total Despesas' };
-    if (somaCent(credLinhas.map(c => num(c[c.length - 1]) ?? NaN)) !== centavos(creditos))
-      return { ok: false, motivo: 'nao_fecha', detalhe: 'créditos ≠ Total Créditos' };
-    if (bruto != null && valorProduto != null && centavos(bruto) !== centavos(valorProduto))
-      return { ok: false, motivo: 'nao_fecha', detalhe: 'soma dos lotes ≠ valor total do produto' };
-    if (bruto != null && totalGeral != null && centavos(bruto) - centavos(despesas) + centavos(creditos) !== centavos(totalGeral))
-      return { ok: false, motivo: 'nao_fecha', detalhe: 'bruto − despesas + créditos ≠ total geral' };
+    if (despLinhas.length) conferir(somaCent(despLinhas.map(c => num(c[c.length - 1]) ?? 0)), centavos(despesas), 'despesas ≠ Total Despesas');
+    conferir(somaCent(credLinhas.map(c => num(c[c.length - 1]) ?? 0)), centavos(creditos), 'créditos ≠ Total Créditos');
+    if (bruto != null && valorProduto != null) conferir(centavos(bruto), centavos(valorProduto), 'soma dos lotes ≠ valor total do produto');
+    if (bruto != null && totalGeral != null) conferir(centavos(bruto) - centavos(despesas) + centavos(creditos), centavos(totalGeral), 'bruto − despesas + créditos ≠ total geral');
     if (cab != null && !Number.isInteger(cab)) return { ok: false, motivo: 'nao_fecha', detalhe: 'cab não inteiro' };
     const unico = <T,>(xs: (T | undefined)[]) => { const u = [...new Set(xs.filter((x): x is T => x != null))]; return u.length === 1 && xs.every(x => x != null) ? u[0] : undefined; };
     const dataAbate = unico(blocos.map(bl => bl.data));
@@ -303,12 +329,11 @@ const ACERTO_MINERVA: Layout = {
     };
     const dados: Record<string, unknown> = {};
     if (varios) dados.lotes_frigorifico = blocos.map((bl, i) => ({ lote: bl.lote, ordem_compra: bl.ordem, cab: cabs[i], kg: kgs[i], bruto: brutos[i] }));
-    const avisos: string[] = [];
     const dispensados: (keyof CamposLidos)[] = [];
     if (dataAbate == null && blocos.some(bl => bl.data)) { avisos.push('data do abate diferente entre os lotes: preencha'); dispensados.push('dataAbate'); }
     if (vencimento == null && blocos.some(bl => bl.venc)) avisos.push('vencimento diferente entre os lotes: preencha');
     if (creditos > 0) avisos.push(fraseDoIncentivo(creditos));
-    return { ok: true, campos, dados, avisos, dispensados };
+    return { ok: true, campos, dados, avisos, notas, dispensados };
   },
 };
 
@@ -520,6 +545,10 @@ export const LAYOUTS_DO_ABATE: readonly Layout[] = [NF_MINERVA, NF_JBS, ACERTO_M
 
 /* ── A LEITURA ────────────────────────────────────────────────────────────────────────────── */
 const ROTULO_DO_GRUPO: Record<GrupoDoc, string> = { nf: 'NF', acerto: 'Acerto', romaneio: 'Romaneio', nf_produtor: 'NF produtor', gta: 'GTA', declaracao: 'Declaração' };
+/** P85 (a) — a especie em que cada grupo se le^ (a tela troca para ela quando o PDF e' de outra especie). */
+const ESPECIE_DO_GRUPO: Record<GrupoDoc, EspecieDoc> = { nf: 'nf_principal', acerto: 'acerto', romaneio: 'romaneio', nf_produtor: 'nf_produtor', gta: 'gta', declaracao: 'declaracao' };
+/** "52168923000231" -> "52.168.923/0002-31" (o que nao tem 14 digitos fica como veio). */
+const cnpjComMascara = (c: string) => { const d = digitos(c); return d.length === 14 ? `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}` : c; };
 export const grupoDaEspecie = (e: EspecieDoc): GrupoDoc | null =>
   (e === 'nf_principal' || e === 'nf_complementar' ? 'nf'
     : e === 'acerto' || e === 'romaneio' || e === 'nf_produtor' || e === 'gta' || e === 'declaracao' ? e : null);
@@ -544,21 +573,31 @@ export function lerPdfDoAbate(
   if (achados.length > 1)
     return { tipo: 'nao_lido', motivo: 'dois_layouts', frase: `Formato ambíguo (${achados.map(l => l.rotulo).join(' / ')}): arquivo anexado, preencha os campos` };
   const L = achados[0];
+  /* P85 (c) — o que a tela MOSTRA e' a especie e o frigorifico LIDO do PDF (razao social e CNPJ), nunca o nome do layout ("Minerva" e' o
+     molde do PDF, nao o frigorifico); sem o frigorifico no texto, "Romaneio (frigorífico da OC)". Os da saida da fazenda: o de sempre. */
+  const frig = L.frigorificoDoTexto?.(t) ?? null;
+  const rotulo = L.frigorifico == null ? L.rotulo
+    : `${ROTULO_DO_GRUPO[L.grupo]}${frig && (frig.nome || frig.cnpj) ? ` · ${[frig.nome, frig.cnpj ? cnpjComMascara(frig.cnpj) : null].filter(Boolean).join(' ')}` : ' (frigorífico da OC)'}`;
   const grupo = grupoDaEspecie(ctx.especie);
   if (grupo !== L.grupo)
-    return { tipo: 'nao_lido', motivo: 'especie_trocada', frase: `Este PDF é ${L.rotulo}; a espécie escolhida é ${grupo ? ROTULO_DO_GRUPO[grupo] : 'outra'} · nada preenchido` };
+    return { tipo: 'nao_lido', motivo: 'especie_trocada', frase: `Este PDF é ${rotulo}; a espécie escolhida é ${grupo ? ROTULO_DO_GRUPO[grupo] : 'outra'}`,
+      especieSugerida: ESPECIE_DO_GRUPO[L.grupo] };
   if (!L.cnpjNoTexto && L.frigorifico && !daLista(L.frigorifico, ctx.cnpjContraparte ? digitos(ctx.cnpjContraparte) : null))
-    return { tipo: 'nao_lido', motivo: 'contraparte', frase: `${L.rotulo}, mas a contraparte da operação não é desse frigorífico: arquivo anexado, preencha os campos` };
+    return { tipo: 'nao_lido', motivo: 'contraparte', frase: `${rotulo}, mas a contraparte da operação não é desse frigorífico: arquivo anexado, preencha os campos` };
   const r = L.ler(t);
   /* `=== false`: com `strict: false` o `!r.ok` nao estreita a uniao. */
   if (r.ok === false) {
     return r.motivo === 'incompleto'
-      ? { tipo: 'nao_lido', motivo: 'incompleto', frase: `${L.rotulo} reconhecido, mas falta ${r.detalhe} no PDF · nada preenchido` }
-      : { tipo: 'nao_lido', motivo: 'nao_fecha', frase: `${L.rotulo} reconhecido, mas a conta do PDF não fecha (${r.detalhe}) · nada preenchido` };
+      ? { tipo: 'nao_lido', motivo: 'incompleto', frase: `${rotulo} reconhecido, mas falta ${r.detalhe} no PDF · nada preenchido` }
+      : { tipo: 'nao_lido', motivo: 'nao_fecha', frase: `${rotulo} reconhecido, mas a conta do PDF não fecha (${r.detalhe}) · nada preenchido` };
   }
   if (r.ok !== true) return { tipo: 'nao_lido', motivo: 'incompleto', frase: FRASE_NAO_RECONHECIDO };
   const lido = r;
   const falta = L.obrigatorios.find(k => !(lido.dispensados ?? []).includes(k) && (lido.campos[k] == null || lido.campos[k] === ''));
-  if (falta) return { tipo: 'nao_lido', motivo: 'incompleto', frase: `${L.rotulo} reconhecido, mas falta ${ROTULO_DO_CAMPO[falta] ?? falta} no PDF · nada preenchido` };
-  return { tipo: 'lido', layout: L.id, rotulo: L.rotulo, grupo: L.grupo, campos: lido.campos, dados: lido.dados ?? {}, avisos: lido.avisos ?? [] };
+  if (falta) return { tipo: 'nao_lido', motivo: 'incompleto', frase: `${rotulo} reconhecido, mas falta ${ROTULO_DO_CAMPO[falta] ?? falta} no PDF · nada preenchido` };
+  /* P85 (c) — o frigorifico do PDF NAO e' o da OC: avisa (a leitura vale; quem decide e' o operador) */
+  const outro = frig?.cnpj && ctx.cnpjContraparte && digitos(frig.cnpj) !== digitos(ctx.cnpjContraparte)
+    ? [`o frigorífico do PDF (${cnpjComMascara(frig.cnpj)}) não é o da OC (${cnpjComMascara(ctx.cnpjContraparte)}) · confira`] : [];
+  return { tipo: 'lido', layout: L.id, rotulo, grupo: L.grupo, campos: lido.campos, dados: lido.dados ?? {}, avisos: [...outro, ...(lido.avisos ?? [])],
+    notas: lido.notas ?? [], frigorifico: frig };
 }
