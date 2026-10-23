@@ -149,7 +149,8 @@ function abrir(nota: NotaParaLancar, extra: { fornecedores?: FornecedorV2[]; g?:
   return props;
 }
 async function escolherSubcentro(nome: string) {
-  fireEvent.click(within(screen.getByTestId('nota-subcentro')).getByRole('button', { name: /Selecione o subcentro/ }));
+  /* SELETOR-CONTA-POR-ATIVIDADE-01 — o subcentro da previa e' o `EscolherConta` (o gatilho e' o combobox do seletor do plano) */
+  fireEvent.click(within(screen.getByTestId('nota-subcentro')).getByRole('combobox'));
   fireEvent.click(await screen.findByText(nome));
 }
 
