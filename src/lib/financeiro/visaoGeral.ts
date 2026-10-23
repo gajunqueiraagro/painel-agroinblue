@@ -129,3 +129,27 @@ export const lerStatusVG = (bruto: string): string[] => ORDEM_STATUS.filter((x) 
 export const escreverStatusVG = (v: string[]): string => ORDEM_STATUS.filter((x) => v.includes(x)).join(',');
 export const lerVencidosVG = (bruto: string): boolean => bruto !== '0';
 export const escreverVencidosVG = (v: boolean): string => (v ? '1' : '0');
+
+// ── P83 — a LINHA DO SALDO no gráfico: azul acima de zero, vermelha abaixo (a cor troca NO cruzamento), tracejada no futuro ────────────
+/** Um trecho da linha do saldo entre dois meses (ou até o cruzamento do zero). Pixels; `neg` = abaixo de zero; `tracejado` = previsto. */
+export interface TrechoSaldo { x1: number; y1: number; x2: number; y2: number; neg: boolean; tracejado: boolean }
+/**
+ * Corta a linha do saldo em trechos de UM sinal só — a regra das duas áreas da CPR (`CprFluxoPrevisto`: cada sinal pinta até o zero e a
+ * cor troca no ponto do cruzamento, por construção). Entre dois meses de sinais opostos o trecho é partido no x onde a reta passa pelo
+ * zero (interpolação linear: a tela não soma valores, só acha o pixel). O trecho é tracejado quando chega num mês PREVISTO.
+ */
+export function trechosDoSaldo(pts: readonly { x: number; y: number; v: number; previsto: boolean }[], y0: number): TrechoSaldo[] {
+  const out: TrechoSaldo[] = [];
+  for (let k = 0; k + 1 < pts.length; k++) {
+    const a = pts[k], b = pts[k + 1];
+    const tracejado = b.previsto;
+    if ((a.v < 0) === (b.v < 0) || a.v === 0 || b.v === 0) {
+      out.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y, neg: (a.v < 0 || b.v < 0) && a.v <= 0 && b.v <= 0, tracejado });
+      continue;
+    }
+    const t = a.v / (a.v - b.v);
+    const xc = a.x + t * (b.x - a.x);
+    out.push({ x1: a.x, y1: a.y, x2: xc, y2: y0, neg: a.v < 0, tracejado }, { x1: xc, y1: y0, x2: b.x, y2: b.y, neg: b.v < 0, tracejado });
+  }
+  return out;
+}
