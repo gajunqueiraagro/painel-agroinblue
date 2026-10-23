@@ -14,7 +14,8 @@ export type LadoVG = 'entrada' | 'saida';
 export interface MesVG { am: string; previsto: boolean; vigente: boolean }
 export interface LinhaVG {
   chave: string;
-  tipo: 'saldo' | 'total' | 'grupo' | 'transf' | 'resultado';
+  /** `cartao` (P82): o pagamento de fatura com o cartão fora das contas escolhidas — transferência, nunca saída */
+  tipo: 'saldo' | 'total' | 'grupo' | 'transf' | 'resultado' | 'cartao';
   lado?: LadoVG;
   grupo?: string | null;
   rotulo: string;

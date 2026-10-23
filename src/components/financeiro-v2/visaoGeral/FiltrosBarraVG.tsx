@@ -2,7 +2,8 @@
  * FIN-VISAO-GERAL-01 PR 3 — os filtros da Visão Geral que moram na barra azul do shell (SPEC §3.1 + seção 9 do AGRO): Contas
  * (todas / várias / "só esta"), Fazenda, Safra e Atividade, um ao lado do outro, cada um com LARGURA FIXA (trocar a escolha não empurra
  * nada — o gate `check:ui-desloca`). O estado é o `filtrosVG` (lib), que a tela lê.
- *   · Contas: o padrão são as contas que contam no caixa (`no_caixa` do banco — cc, investimento/permuta; cartão fora). O botão fica
+ *   · Contas: o padrão é o conjunto do banco (`no_caixa` — cc, investimento/permuta e, desde o P82, os cartões: a compra no cartão é
+ *     saída, o pagamento da fatura é transferência dentro do conjunto). O botão fica
  *     âmbar quando a escolha não é o padrão.
  *   · Atividade: a lista é a que o cliente USA (escopo dos lançamentos, do banco) — nada fixo aqui.
  */
@@ -73,7 +74,7 @@ const TIPO_DA_CONTA: Record<string, string> = { cc: 'CONTA CORRENTE', inv: 'INVE
 
 export function rotuloDasContas(contas: ContaVG[], escolha: string[] | null): string {
   const sel = escolha ?? contas.filter((c) => c.no_caixa).map((c) => c.id);
-  if (escolha === null) return 'Contas do caixa';
+  if (escolha === null) return 'Caixa + cartões';
   if (sel.length === 1) return contas.find((c) => c.id === sel[0])?.nome ?? '1 conta';
   return `${sel.length} contas`;
 }
@@ -102,7 +103,7 @@ export function FiltrosBarraVG() {
     <span className="hidden items-center gap-1.5 md:flex" data-testid="filtros-barra-vg">
       <BotaoBarra testid="vg-contas" largura="w-[78px] lg:w-[124px]" rotulo={rotContas} rotuloCurto={curtoContas} title={`Contas: ${rotContas}`} destacado={e.contas !== null}>
         <Opcao marcada={e.contas === null} onClick={() => filtrosVG.mudar({ contas: null })} testid="vg-contas-padrao">
-          Contas do caixa (cc + investimento; cartão fora)
+          Caixa + cartões (a fatura do cartão é transferência)
         </Opcao>
         <div className="max-h-[260px] overflow-y-auto">
           {ativas.map((c) => {

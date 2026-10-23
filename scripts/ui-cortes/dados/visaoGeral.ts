@@ -24,7 +24,7 @@ export const FILTROS = {
     { id: 'c1', nome: 'Banco Exemplo Conta Movimento Principal', tipo: 'cc', ativa: true, no_caixa: true },
     { id: 'c2', nome: 'Cooperativa Exemplo', tipo: 'cc', ativa: true, no_caixa: true },
     { id: 'c3', nome: 'Aplicação Exemplo CDB', tipo: 'inv', ativa: true, no_caixa: true },
-    { id: 'c4', nome: 'Cartão Exemplo', tipo: 'cartao', ativa: true, no_caixa: false },
+    { id: 'c4', nome: 'Cartão Exemplo', tipo: 'cartao', ativa: true, no_caixa: true },
   ],
   atividades: ['pecuaria', 'agricultura', 'silvicultura', 'administrativo'],
   safras: [{ id: 's1', nome: 'Safra 2026/27' }, { id: 's2', nome: 'Safra 2025/26' }],
@@ -86,12 +86,17 @@ export function tela(a: { p_de: string; p_ate: string; p_contas?: string[] | nul
   const ordem = (l: any) => (l.tipo === 'total' ? 0 : l.grupo === 'Sem classificação' ? 99 : (l.lado === 'saida' ? GRUPOS_SAI : GRUPOS_ENT).indexOf(String(l.grupo).split(':')[0]) + (l.tipo === 'transf' ? 1.5 : 1));
   linhas.sort((x, y) => (x.lado === y.lado ? ordem(x) - ordem(y) : x.lado < y.lado ? -1 : 1));
   const res = ms.map((_, i) => r2(tot.entrada[i] - tot.saida[i]));
+  /* P82 — contas escolhidas SEM o cartão: o pagamento da fatura vem numa linha própria (transferência, nunca saída) */
+  const semCartao = !!a.p_contas && !a.p_contas.includes('c4');
+  const cartaoVals = ms.map((x) => (semCartao && x <= HOJE ? r2(31773.11 * peso) : 0));
   const resT = res.reduce((x, y) => x + y, 0);
   const mediaAcc = (lado: string) => { let acc = 0, q = 0; return ms.map((_, i) => { if (!real[i]) return null; acc += tot[lado][i]; q++; return r2(acc / q); }); };
   return {
     mes_atual: HOJE,
     meses: ms.map((x) => ({ am: x, previsto: x > HOJE, vigente: x === HOJE })),
     linhas: [{ chave: 'saldo_inicial', tipo: 'saldo', rotulo: 'SALDO INICIAL', valores: saldoIni }, ...linhas,
+      ...(semCartao ? [{ chave: 'cartao', tipo: 'cartao', rotulo: 'PAGAMENTO DE CARTÃO (transferência)', valores: cartaoVals,
+        total: r2(cartaoVals.reduce((x, y) => x + y, 0)), media: r2(cartaoVals.reduce((x, y) => x + y, 0) / ms.length) }] : []),
       { chave: 'resultado', tipo: 'resultado', rotulo: 'RESULTADO', valores: res, total: r2(resT), media: r2(resT / ms.length) },
       { chave: 'saldo_final', tipo: 'saldo', rotulo: 'SALDO FINAL', valores: saldoFim }],
     grafico: {

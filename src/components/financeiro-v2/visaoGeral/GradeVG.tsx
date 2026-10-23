@@ -61,13 +61,18 @@ export function GradeVG({ tela, sel, onAnalisar }: { tela: TelaVG; sel: string; 
   );
 }
 
+const TITULO_CARTAO = 'Pagamento de fatura de cartão de crédito que não está entre as contas escolhidas: o caixa cai, mas é transferência, '
+  + 'não saída — a saída foi a compra no cartão. Saldo final = inicial + entradas − saídas − esta linha.';
+
 function LinhaGrade({ l, meses, sel, fmt, comp, onAnalisar }: {
   l: LinhaVG; meses: MesVG[]; sel: string; fmt: (v: number | null | undefined) => string; comp: boolean; onAnalisar: (a: AlvoAnaliseVG) => void;
 }) {
   const saldo = l.tipo === 'saldo';
   const forte = saldo || l.tipo === 'total' || l.tipo === 'resultado';
   const porSinal = saldo || l.tipo === 'resultado';
-  const cor = porSinal ? undefined : l.lado === 'saida' ? COR.saida : COR.entrada;
+  /* P82 — "Pagamento de cartão (transferência)": o caixa cai por ela, mas não é saída (a saída foi a compra) — cor neutra */
+  const cartao = l.tipo === 'cartao';
+  const cor = porSinal ? undefined : cartao ? COR.muted : l.lado === 'saida' ? COR.saida : COR.entrada;
   const fundo = saldo || l.tipo === 'resultado' ? '#f1f3f6' : l.tipo === 'total' ? (l.lado === 'saida' ? '#fbeeee' : '#eef3fa') : '#fff';
   const clicavel = (l.tipo === 'total' || l.tipo === 'grupo') && !!l.lado;
   const recuo = l.tipo === 'grupo' ? 16 : l.tipo === 'transf' ? 26 : 5;
@@ -78,7 +83,7 @@ function LinhaGrade({ l, meses, sel, fmt, comp, onAnalisar }: {
     <tr data-testid={`grade-linha-${l.chave}`} data-tipo={l.tipo}
       className={cn('border-b border-[#eef1f5]', forte && 'font-bold', clicavel && 'cursor-pointer hover:brightness-[.98]')}
       style={{ background: fundo }} onClick={() => analisar(sel)}
-      title={clicavel ? `Analisar ${l.rotulo.toLowerCase()} (a análise abre no PR 4)` : undefined}>
+      title={clicavel ? `Analisar ${l.rotulo.toLowerCase()} (a análise abre no PR 4)` : cartao ? TITULO_CARTAO : undefined}>
       <td className={cn(TD_REGUA, 'truncate', l.tipo === 'transf' && 'text-[9.5px] font-normal opacity-80')} style={{ paddingLeft: recuo, color: cor }} title={nome}>{nome}</td>
       {meses.map((m, k) => {
         const v = l.valores[k] ?? null;
