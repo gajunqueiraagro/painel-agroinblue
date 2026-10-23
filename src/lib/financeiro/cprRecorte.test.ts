@@ -612,7 +612,9 @@ describe('CPR-SALDO-DIA-02 — pílulas de status no Ampliado: o mesmo nó, o me
   it('as pílulas são UM nó (`ctlStatus`), posicionado na tela normal e na 3ª linha do Ampliado', () => {
     expect(Array.from(tela.matchAll(/const ctlStatus = \(/g)).length).toBe(1);
     expect(Array.from(tela.matchAll(/\{ctlStatus\}/g)).length).toBe(2);
-    expect(Array.from(tela.matchAll(/STATUS_DISPONIVEIS\.map\(/g)).length).toBe(1);     // a lista de pílulas é desenhada num lugar só
+    /* a lista de pílulas é desenhada num lugar só — desde o P79, nas pílulas compartilhadas (`ChipsDeStatus`), uma vez na tela */
+    expect(Array.from(tela.matchAll(/<ChipsDeStatus /g)).length).toBe(1);
+    expect(tela).toContain('const PILULAS_DA_CPR = pilulasDosStatus(STATUS_DISPONIVEIS);');
     /* um estado só: uma declaração, um escritor (o clique da pílula) */
     expect(Array.from(tela.matchAll(/useState<string\[\]>\(/g)).length).toBe(1);
     expect(Array.from(tela.matchAll(/setStatusLigados\(/g)).length).toBe(1);
@@ -627,8 +629,11 @@ describe('CPR-SALDO-DIA-02 — pílulas de status no Ampliado: o mesmo nó, o me
     expect(ampliado).toContain('{ctlStatus}');
     expect(ampliado).not.toMatch(/\{[^}]*&&\s*<div data-testid="cpr-linha-status"/);   // nenhuma condição: a linha existe sempre
     expect(tela).not.toMatch(/cpr-status-ligados|statusLigadosTexto|status: \{/);
-    /* no Ampliado a pílula encolhe (16px / 9,5px, o piso) — pela classe do MESMO botão */
-    expect(tela).toContain("ampliado ? 'h-[16px] px-1.5 text-[9.5px] leading-none' : 'h-[22px] px-2 text-[10px]',");
+    /* no Ampliado a pílula encolhe (16px / 9,5px, o piso) — pela classe do MESMO botão, que desde o P79 mora nas pílulas
+       compartilhadas (`ChipsDeStatus`, a mesma da Visão Geral): a CPR liga o compacto pelo Ampliado */
+    const chips = readFileSync(resolve(__dirname, '../../components/financeiro-v2/ChipsDeStatus.tsx'), 'utf8');
+    expect(chips).toContain("compacto ? 'h-[16px] px-1.5 text-[9.5px] leading-none' : 'h-[22px] px-2 text-[10px]',");
+    expect(tela).toContain('<ChipsDeStatus pilulas={PILULAS_DA_CPR} ligados={statusLigados} compacto={ampliado}');
     /* todas desligadas: a MESMA mensagem, num lugar só */
     expect(Array.from(tela.matchAll(/Nenhum status selecionado — ligue ao menos um acima/g)).length).toBe(1);
   });

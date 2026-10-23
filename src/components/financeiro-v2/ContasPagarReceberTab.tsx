@@ -29,6 +29,7 @@ import { useFinanceiroV2, type LancamentoV2 } from '@/hooks/useFinanceiroV2';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
 import { PageHeader } from '@/components/ui/page-header';
 import { Segmentado } from '@/components/ui/segmentado';
+import { ChipsDeStatus, STATUS_DISPONIVEIS, STATUS_INICIAIS, alternarNaLista, pilulasDosStatus } from '@/components/financeiro-v2/ChipsDeStatus';
 import { CprFluxoPrevisto } from '@/components/financeiro-v2/CprFluxoPrevisto';
 import { esperarGraficoNoDom, AVISO_PDF_SEM_GRAFICO, TAMANHO_DO_GRAFICO_NO_PDF } from '@/lib/pdf/cpr/graficoDoDom';
 import { lerEstimadosDaCpr } from '@/lib/financeiro/estimadosDaCprBanco';
@@ -89,8 +90,8 @@ type Agrupamento = 'vencimento' | 'categoria';
 const agrupamento: Agrupamento = 'vencimento';
 
 /** Os três status que a tela liga de saída. `realizado` existe e nasce DESLIGADO. */
-const STATUS_DISPONIVEIS = ['previsto', 'programado', 'agendado', 'realizado'] as const;
-const STATUS_INICIAIS: string[] = ['previsto', 'programado', 'agendado'];
+/* P79 — as pílulas de status e o padrão moram no componente compartilhado (a Visão Geral usa o MESMO) */
+const PILULAS_DA_CPR = pilulasDosStatus(STATUS_DISPONIVEIS);
 
 /**
  * O corte do destaque — R$ 100.000.
@@ -1159,29 +1160,8 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
     </div>
   );
   const ctlStatus = (
-    <div className="flex shrink-0 items-center gap-1" data-testid="cpr-status">
-      {STATUS_DISPONIVEIS.map((s) => {
-        const ligado = statusLigados.includes(s);
-        return (
-          <button
-            key={s}
-            type="button"
-            aria-pressed={ligado}
-            onClick={() => setStatusLigados((atual) =>
-              atual.includes(s) ? atual.filter((x) => x !== s) : [...atual, s])}
-            className={cn(
-              'rounded-md border font-medium transition-colors',
-              ampliado ? 'h-[16px] px-1.5 text-[9.5px] leading-none' : 'h-[22px] px-2 text-[10px]',
-              ligado
-                ? 'bg-primary text-primary-foreground border-primary'
-                : 'bg-transparent text-muted-foreground hover:bg-muted',
-            )}
-          >
-            {STATUS_FILTRO_LABEL[s] ?? s}
-          </button>
-        );
-      })}
-    </div>
+    <ChipsDeStatus pilulas={PILULAS_DA_CPR} ligados={statusLigados} compacto={ampliado}
+      onAlternar={(st) => setStatusLigados((atual) => alternarNaLista(atual, st))} />
   );
 
 
