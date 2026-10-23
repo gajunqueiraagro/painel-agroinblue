@@ -65,7 +65,12 @@ import type { EscopoDePropagacao } from '@/components/financeiro-v2/OpcoesDeEsco
    rodape libera pixel FIXO enquanto a area de conteudo cresce em PROPORCAO — os
    dois nunca se anulam em toda altura de janela, e o caso que importa e' a janela
    BAIXA, onde o modal quase nao cabe. */
-const ALTURA_CORPO = 'h-[69vh]';
+/* PARC-DOCS-TABELA-01 — e nunca mais alto que a janela menos cabeçalho, abas e rodapé (159px medidos) e 9 de folga: a 750x483 o modal
+   passava da janela por 9px (medido: 492). Acima de 542px de janela a conta de sempre (69vh) é a menor e nada muda. */
+const ALTURA_CORPO = 'h-[min(69vh,calc(100vh_-_168px))]';
+/* PARC-DOCS-TABELA-01 — a aba Documentos ocupa a coluna INTEIRA (o corpo menos o `p-4`): a tabela das parcelas vai até o fim do modal.
+   Antes era `clamp(250px, 100vh - 262px, 420px)`, menor que a coluna, e a tabela parava no meio com o Total cortado. */
+const ALTURA_DA_ABA_DOCUMENTOS = 'calc(min(69vh, 100vh - 168px) - 32px)';
 /**
  * A ALTURA DA TABELA DE PARCELAS — OBRIGACAO-UI-03.
  *
@@ -1585,8 +1590,8 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                 {/* ══ ABA DOCUMENTOS (parcelamento) — edição: PARC-LIVRES-01 passo 6; criação: PARC-CONTRATO-01 item 3 ═══ */}
                 {ehParcelamento && (!ehEdicao || (!!financiamentoId && !!clienteId)) && (
                   <TabsContent value="documentos" className="mt-0">
-                    {/* altura FIXA pela janela (como a grade das parcelas): só a grade dos boletos rola */}
-                    <div style={{ height: 'clamp(250px, calc(100vh - 262px), 420px)' }}>
+                    {/* altura FIXA pela janela, a da coluna: só o corpo da tabela das parcelas rola */}
+                    <div style={{ height: ALTURA_DA_ABA_DOCUMENTOS }}>
                       {!ehEdicao ? (
                         <DocumentosNaCriacao pendentes={pendentesDaCriacao} onMudar={setPendentesDaCriacao}
                           parcelas={parcelasParaOsBoletos} clienteId={clienteId || null} credorId={form.credor_id || null}

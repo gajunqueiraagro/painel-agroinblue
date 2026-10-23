@@ -126,6 +126,12 @@ const CENARIOS = [
     ['pedindo a confirmacao', clicar('[data-testid="comparar-atualizar"]')],
     ['cadastro que nao parece o certo', { url: 'tela=comparar-cadastro&v=errado' }],
   ] },
+  /* PARC-DOCS-TABELA-01 — Editar obrigação da compra parcelada (18 parcelas, uma nota): trocar de aba e voltar a Documentos não mexe no
+     cabeçalho do modal, nas abas, no rodapé nem no cabeçalho da tabela das parcelas; e a densidade é a mesma na volta */
+  ...[2, 18].map((np) => ({ nome: `parcelamento-abas-${np}`, url: `tela=contrato&v=parcelamento&np=${np}&docs=1`, antes: async (p) => {
+      await p.locator('button[title="Nota fiscal e boletos das parcelas"]').click(); await p.locator('[data-testid="parcelas-da-compra"]').waitFor(); await espera(p, 600); },
+    estados: ['Contrato', 'Parcelas', 'Classificação', 'Documentos'].map((aba) => [`aba ${aba}`, async (p) => {
+      await p.getByRole('dialog').getByRole('tab', { name: aba, exact: true }).click(); await espera(p, 500); }]) })),
   { nome: 'itens-nota-guardadas', url: 'tela=itens-nota&v=guardadas', estados: [
     ['simulado (30 linhas, contagem)', async (p) => { await p.locator('[data-testid="itens-guardadas-simular"]').click();
       await p.waitForFunction(() => document.querySelectorAll('[data-testid="itens-guardadas-linha"]').length === 30); await espera(p); }],

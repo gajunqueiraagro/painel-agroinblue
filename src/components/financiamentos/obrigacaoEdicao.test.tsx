@@ -789,13 +789,14 @@ describe('4 — a tela do contrato mostra o que o banco derivou do lançamento',
     /* a rolagem mora no wrapper da tabela: só as parcelas rolam */
     /* FIN-CONTRATO-TELA-FONTE-01: o wrapper rola nos dois eixos (largura mínima da tabela em janela estreita) */
     expect(rodape.closest('table')!.parentElement!.className).toContain('overflow-auto');
-    /* FIN-FINANC-28-P3-FIX: a linha é a de Lançamentos (25px), e a tabela leva a régua de lá */
+    /* PARC-DETALHE-FONTE-01 (22/10): a linha é a da régua da casa (19px; antes a de Lançamentos, 25px) */
     for (const linha of [...linhasDoContrato(), rodape.querySelector('tr')!]) {
-      expect(linha.className).toContain('h-[25px]');
+      expect(linha.className).toContain('h-[19px]');
     }
     /* FIN-CONTRATO-TELA-FONTE-01: a tabela saiu da régua de Lançamentos (8/9px) para a escala da tela do contrato (10,5px) */
     expect(rodape.closest('table')!.className).not.toContain('table-financeiro');
-    expect(rodape.closest('table')!.className).toContain('[&_td]:text-[10.5px]');
+    /* PARC-DETALHE-FONTE-01: e da escala do contrato (10,5px) para a da régua da casa (10px) */
+    expect(rodape.closest('table')!.className).toContain('[&_td]:text-[10px]');
     /* nada dentro da linha passa de 16px, e nenhum valor fica abaixo de 10px */
     expect(screen.getAllByRole('button', { name: 'Abrir o lançamento da parcela' })[0].className).toContain('h-4');
     /* (FIN-FINANC-28-P3-FIX2: o piso de 10px saiu — a régua é a de Lançamentos, valor a 9px/600) */
@@ -857,8 +858,8 @@ describe('4 — a tela do contrato mostra o que o banco derivou do lançamento',
     /* o cartão e, desde 17/10, o par da coluna 2 do cabeçalho (ordem do Gabriel) */
     expect(screen.getAllByText('Valor da compra').length).toBe(2);
     expect(screen.queryByText('Valor do contrato')).toBeNull();
-    /* FIN-CONTRATO-TELA-FONTE-01: célula da tabela do contrato a 10,5px (a escala da tela) */
-    expect(screen.getAllByTestId('prazo').every((c) => c.className.includes('text-[10.5px]'))).toBe(true);
+    /* PARC-DETALHE-FONTE-01: célula da tabela da compra a 10px (a régua da casa; era 10,5px) */
+    expect(screen.getAllByTestId('prazo').every((c) => c.className.includes('text-[10px]'))).toBe(true);
   });
 
   it('PARC-CONTRATO-01: a nota que NÃO confere escreve a diferença do banco; sem detalhe (banco antigo) a tela diz "—", nunca inventa', async () => {
@@ -875,6 +876,23 @@ describe('4 — a tela do contrato mostra o que o banco derivou do lançamento',
     expect(screen.getByTestId('total-notas').textContent).toBe('—');
     expect(screen.getByTestId('total-boletos').textContent).toBe('…');
     expect(cartao('A vencer')).toBe('A vencerR$ 16.238,00');
+  });
+
+  it('PARC-DETALHE-FONTE-01: a tabela da compra parcelada na régua da casa — linha 19px a 10px, cabeçalho 9,5px, Total 10px e as datas (dd/mm/aaaa) a 9px', async () => {
+    banco.contrato = PARCELAMENTO();
+    banco.situacao = SITUACAO([{ ...DET() }, { ...DET() }], CART());
+    await abrirDetalhe();
+    const linhas = await screen.findAllByTestId('linha-do-contrato');
+    expect(linhas.length).toBe(2);
+    expect(linhas[0].className).toContain('h-[19px]');
+    expect(linhas[0].closest('table')!.className).toContain('[&_td]:text-[10px]');
+    expect(linhas[0].closest('table')!.className).toContain('[&_td]:leading-[18px]');
+    const datas = Array.from(linhas[0].querySelectorAll('[data-testid="data-da-parcela"]'));
+    expect(datas.length).toBe(3);
+    for (const d of datas) expect(d.className).toContain('text-[9px]');
+    expect(datas.map((d) => d.textContent).filter((t) => t !== '—').every((t) => /^\d{2}\/\d{2}\/\d{4}$/.test(t ?? ''))).toBe(true);
+    expect(screen.getByText('Venc.').className).toContain('text-[9.5px]');
+    expect(screen.getByTestId('total-das-parcelas').className).toContain('text-[10px]');
   });
 
   it('FIN-CONTRATO-TELA-FONTE-01: título 13px que QUEBRA em duas linhas reservadas (nunca "…", botões com lugar reservado); Documentos e Editar parcelas abrem o diálogo na aba certa', async () => {
