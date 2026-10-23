@@ -33,6 +33,9 @@ export interface TelaVG {
   grafico: Partial<Record<LadoVG, { media_acumulada: (number | null)[]; meta: (number | null)[] }>> | null;
   conciliado_ate: string | null;
   contas_sem_ancora: string[];
+  /** P79 — o que o banco USOU (eco dos chips): os não realizados que entraram e se o vencido entrou */
+  status?: string[];
+  incluir_vencidos?: boolean;
 }
 export interface ContaVG { id: string; nome: string; tipo: string; ativa: boolean; no_caixa: boolean }
 export interface FiltrosVG { contas: ContaVG[]; atividades: string[]; safras: { id: string; nome: string }[] }
@@ -114,3 +117,11 @@ export const filtrosVG = {
 export const useFiltrosVG = () => useSyncExternalStore(filtrosVG.ouvir, filtrosVG.ler, filtrosVG.ler);
 /** as contas que vão ao banco: a escolha, ou as do caixa (o padrão) — null quando são exatamente as do caixa (o banco decide) */
 export const contasDoPedido = (e: EstadoFiltrosVG): string[] | null => e.contas;
+
+// ── P79 — os chips de status (o MESMO componente da CPR) e o de vencidos, na URL como os filtros da casa (`useFiltroUrl`) ─────────
+const ORDEM_STATUS = ['previsto', 'programado', 'agendado'];
+/** status lido da URL: só os três válidos, na ordem da CPR (vazio = nenhum: só o realizado) */
+export const lerStatusVG = (bruto: string): string[] => ORDEM_STATUS.filter((x) => bruto.split(',').includes(x));
+export const escreverStatusVG = (v: string[]): string => ORDEM_STATUS.filter((x) => v.includes(x)).join(',');
+export const lerVencidosVG = (bruto: string): boolean => bruto !== '0';
+export const escreverVencidosVG = (v: boolean): string => (v ? '1' : '0');

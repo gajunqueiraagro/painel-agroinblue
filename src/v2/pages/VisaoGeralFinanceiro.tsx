@@ -7,6 +7,9 @@
  *     atividade ou período não move nada; lista longa rola dentro do próprio quadro.
  *   · RENDER-ONLY: todo número vem de `fn_vg_tela` (o banco). A tela escolhe o período (datas) e escreve.
  *   · Clique em total/grupo (card ou grade): neste PR só REGISTRA a intenção (`onAnalisar`) — o modal de análise é o PR 4.
+ *   · P79 (Gabriel 23/10) — os chips de STATUS (o MESMO `ChipsDeStatus` da CPR: Previsto · Programado · Agendado, padrão os três; o
+ *     realizado entra sempre) e o de VENCIDOS (padrão ligado, a regra da CPR) numa SEGUNDA linha fixa dos filtros; estado na URL
+ *     (`vg_status`, `vg_venc`). A tela só repassa ao banco (`p_status`, `p_incluir_vencidos`) e escreve o que ele diz que usou.
  */
 import { useEffect, useState, type CSSProperties } from 'react';
 import { ChevronDown } from 'lucide-react';
@@ -19,10 +22,17 @@ import { useCarregarFiltrosVG } from '@/components/financeiro-v2/visaoGeral/Filt
 import { CardVG } from '@/components/financeiro-v2/visaoGeral/CardVG';
 import { GraficoVG } from '@/components/financeiro-v2/visaoGeral/GraficoVG';
 import { GradeVG } from '@/components/financeiro-v2/visaoGeral/GradeVG';
+import { ChipsDeStatus, STATUS_INICIAIS, alternarNaLista, pilulasDosStatus } from '@/components/financeiro-v2/ChipsDeStatus';
+import { useFiltroUrl } from '@/v2/hooks/useFiltroUrl';
 import {
   COR, MESES_ABR, amDe, amHoje, anoDe, contarMeses, corSinal, faixaDoPeriodo, mil1, primeiroDia, rotuloMes, somarMeses, ultimoDia,
+  dataCurta, escreverStatusVG, escreverVencidosVG, lerStatusVG, lerVencidosVG,
   type AlvoAnaliseVG, type FaixaVG, type ModoVG, type TelaVG,
 } from '@/lib/financeiro/visaoGeral';
+
+/* as pílulas: os três status não realizados (o realizado entra sempre, sem pílula) e a dos vencidos */
+const PILULAS_VG = [...pilulasDosStatus(STATUS_INICIAIS),
+  { chave: 'vencidos', rotulo: 'Vencidos', title: 'O que venceu antes de hoje e não foi pago entra no mês corrente (a regra da Contas a Pagar e Receber)' }];
 
 const hojeLocal = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
@@ -44,6 +54,9 @@ export function VisaoGeralFinanceiro({ hoje = hojeLocal(), onAnalisar, inicial }
   const [, setIntencao] = useState<AlvoAnaliseVG | null>(null);
   const clienteId = clienteAtual?.id ?? null;
   const contasChave = filtros.contas?.join(',') ?? '';
+  const [status, setStatus] = useFiltroUrl<string[]>('vg_status', STATUS_INICIAIS, lerStatusVG, escreverStatusVG);
+  const [vencidos, setVencidos] = useFiltroUrl<boolean>('vg_venc', true, lerVencidosVG, escreverVencidosVG);
+  const alternar = (chave: string) => (chave === 'vencidos' ? setVencidos((v) => !v) : setStatus((a) => alternarNaLista(a, chave)));
 
   useEffect(() => {
     if (!clienteId) return;
@@ -51,6 +64,7 @@ export function VisaoGeralFinanceiro({ hoje = hojeLocal(), onAnalisar, inicial }
     (supabase.rpc as any)('fn_vg_tela', {
       p_cliente: clienteId, p_de: primeiroDia(de), p_ate: ultimoDia(ate), p_contas: filtros.contas,
       p_fazendas: filtros.fazenda ? [filtros.fazenda] : null, p_safra: filtros.safra, p_atividade: filtros.atividade, p_hoje: hoje,
+      p_status: status, p_incluir_vencidos: vencidos,
     }).then(({ data, error }: { data: TelaVG | null; error: { message: string } | null }) => {
       if (!vivo) return;
       if (error) { setErro(error.message); return; }
@@ -59,7 +73,7 @@ export function VisaoGeralFinanceiro({ hoje = hojeLocal(), onAnalisar, inicial }
     });
     return () => { vivo = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clienteId, de, ate, contasChave, filtros.fazenda, filtros.safra, filtros.atividade, hoje]);
+  }, [clienteId, de, ate, contasChave, filtros.fazenda, filtros.safra, filtros.atividade, hoje, status.join(','), vencidos]);
 
   const analisar = (a: AlvoAnaliseVG) => { setIntencao(a); onAnalisar?.(a); };
   /* a tela só desenha o que o banco devolveu para ESTE período; enquanto o novo não chega, fica o anterior (nada pisca nem encolhe) */
@@ -95,6 +109,15 @@ export function VisaoGeralFinanceiro({ hoje = hojeLocal(), onAnalisar, inicial }
         </div>
       </div>
 
+      {/* P79 — a SEGUNDA linha dos filtros, de altura fixa: as pílulas e, ao lado, o que ficou de fora (pelo eco do banco) */}
+      <div className="flex h-[26px] shrink-0 items-center gap-1.5 border-b border-[#dfe4ea] bg-white px-3" data-testid="vg-status-linha">
+        <span className="shrink-0 text-[10px] text-muted-foreground">Realizado sempre entra ·</span>
+        <ChipsDeStatus testId="vg-status" pilulas={PILULAS_VG} ligados={vencidos ? [...status, 'vencidos'] : status} onAlternar={alternar} />
+        <span className="uma-linha-que-rola min-w-0 flex-1 text-[10px] text-amber-700" data-testid="vg-status-aviso" data-desloca-livre="">
+          {pronta ? avisoDoFiltro(pronta, hoje) : ''}
+        </span>
+      </div>
+
       {/* QUADROS — linhas da grade do quadro pela janela (nunca pelo conteúdo) */}
       <div className="grid min-h-0 flex-1 gap-2 p-2" style={{ gridTemplateRows: 'minmax(200px, 0.9fr) minmax(150px, 1fr)' }}>
         <div className="grid min-h-0 gap-2" style={{ gridTemplateColumns: 'clamp(430px, 43%, 560px) minmax(0, 1fr)' }}>
@@ -121,6 +144,15 @@ export function VisaoGeralFinanceiro({ hoje = hojeLocal(), onAnalisar, inicial }
       </div>
     </div>
   );
+}
+
+/** o que ficou FORA das somas, pelo que o banco diz que usou (o eco), nunca pelo estado da tela */
+export function avisoDoFiltro(tela: TelaVG, hoje: string): string {
+  const partes: string[] = [];
+  if (tela.status && tela.status.length === 0) partes.push('só o realizado nas somas');
+  else if (tela.status && tela.status.length < 3) partes.push(`dos não realizados, só ${tela.status.join(' e ')}`);
+  if (tela.incluir_vencidos === false) partes.push(`vencidos antes de ${dataCurta(hoje)} fora das somas e do saldo`);
+  return partes.join(' · ');
 }
 
 const Estado = ({ erro }: { erro: string | null }) => (

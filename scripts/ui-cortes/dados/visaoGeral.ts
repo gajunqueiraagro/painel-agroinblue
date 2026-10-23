@@ -30,13 +30,19 @@ export const FILTROS = {
   safras: [{ id: 's1', nome: 'Safra 2026/27' }, { id: 's2', nome: 'Safra 2025/26' }],
 };
 
-export function tela(a: { p_de: string; p_ate: string; p_contas?: string[] | null; p_atividade?: string | null; p_safra?: string | null }) {
+export function tela(a: { p_de: string; p_ate: string; p_contas?: string[] | null; p_atividade?: string | null; p_safra?: string | null;
+  p_status?: string[] | null; p_incluir_vencidos?: boolean | null }) {
   const ms = meses(a.p_de, a.p_ate);
+  /* P79 — os chips: o previsto (meses depois de hoje) na proporção dos status ligados; o vencido sai com o chip desligado */
+  const st = a.p_status ?? ['previsto', 'programado', 'agendado'];
+  const incl = a.p_incluir_vencidos ?? true;
+  const fs = st.length / 3;
   const peso = a.p_contas ? Math.max(0.2, a.p_contas.length / 3) : 1;
   const ativ = a.p_atividade ?? null;
   const sai = GRUPOS_SAI.filter((g) => !(ativ === 'agricultura' && (g === 'Reposição de bovinos' || g === 'Dividendos')) && !(ativ === 'administrativo' && g === 'Custeio'));
   const ent = GRUPOS_ENT.filter((g) => !(ativ && g === 'Entradas de capital e financiamento'));
-  const serie = (g: string, gi: number) => ms.map((x, i) => r2((BASE[g] ?? 50000) * peso * (a.p_safra ? 0.6 : 1) * (1 + 0.12 * Math.sin(i * 1.3 + gi)) * (ativ ? 0.55 : 1)));
+  const serie = (g: string, gi: number) => ms.map((x, i) => r2((BASE[g] ?? 50000) * peso * (a.p_safra ? 0.6 : 1) * (1 + 0.12 * Math.sin(i * 1.3 + gi)) * (ativ ? 0.55 : 1)
+    * (x > HOJE ? fs : 1)));
   const linhas: any[] = [];
   const tot: Record<string, number[]> = { entrada: ms.map(() => 0), saida: ms.map(() => 0) };
   const venc: Record<string, number[]> = { entrada: ms.map(() => 0), saida: ms.map(() => 0) };
@@ -49,9 +55,10 @@ export function tela(a: { p_de: string; p_ate: string; p_contas?: string[] | nul
   if (!ativ) add('entrada', 'Outras entradas', ms.map((_, i) => r2(12000 * peso + i * 300)), 'transf', 'Transferências de outras contas');
   add('entrada', 'Sem classificação', ms.map((x) => (x <= HOJE ? r2(4200 * peso) : 0)));
   sai.forEach((g, gi) => {
-    const vals = serie(g, gi + 3);
-    const vv = ms.map((x, i) => (x === HOJE && g === 'Custeio' ? r2(vals[i] * 0.18) : 0));
-    add('saida', g, vals, 'grupo', '', vv);
+    const vals0 = serie(g, gi + 3);
+    const vv0 = ms.map((x, i) => (x === HOJE && g === 'Custeio' ? r2(vals0[i] * 0.18 * fs) : 0));
+    const vals = incl ? vals0 : vals0.map((v, i) => r2(v - vv0[i]));
+    add('saida', g, vals, 'grupo', '', incl ? vv0 : ms.map(() => 0));
   });
   if (!ativ) add('saida', 'Outras saídas', ms.map((_, i) => r2(31773.11 * peso + i * 250)), 'transf', 'Transferências para outras contas');
   add('saida', 'Sem classificação', ms.map((x) => (x <= HOJE ? r2(8900 * peso) : 0)));
@@ -92,6 +99,7 @@ export function tela(a: { p_de: string; p_ate: string; p_contas?: string[] | nul
       saida: { media_acumulada: mediaAcc('saida'), meta: ms.map((x) => (x.startsWith('2026') ? r2(2300000 * peso) : null)) },
     },
     conciliado_ate: '2026-10-15',
+    status: st, incluir_vencidos: incl,
     contas_sem_ancora: a.p_contas?.includes('c4') ? ['Cartão Exemplo'] : [],
   };
 }

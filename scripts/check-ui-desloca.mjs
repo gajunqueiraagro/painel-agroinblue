@@ -81,7 +81,11 @@ const CENARIOS = [
     /* abaixo de 768px os filtros da barra somem (`hidden md:flex`, a regra do atalho da barra): ali o gesto não existe e é pulado */
     ['só uma conta', async (p) => { if (!(await p.locator('[data-testid="vg-contas"]').isVisible())) return; await clicar('[data-testid="vg-contas"]')(p); await p.locator('button', { hasText: 'só esta' }).first().click({ force: true }); await espera(p); await p.keyboard.press('Escape'); await espera(p); }],
     ['atividade agricultura', async (p) => { if (!(await p.locator('[data-testid="vg-atividade"]').isVisible())) return; await clicar('[data-testid="vg-atividade"]')(p); await clicar('[data-testid="vg-atividade-agricultura"]')(p); }],
-    ['coluna do gráfico', async (p) => { await p.locator('[data-testid="coluna-2026-05"]').click({ force: true }); await espera(p); }]] },
+    ['coluna do gráfico', async (p) => { await p.locator('[data-testid="coluna-2026-05"]').click({ force: true }); await espera(p); }],
+    /* P79 — os chips: desligar Programado, Previsto e Agendado (nenhum: o aviso aparece) e Vencidos; o aviso tem lugar próprio */
+    ['sem Programado', clicar('[data-testid="vg-status-programado"]')], ['sem Previsto', clicar('[data-testid="vg-status-previsto"]')],
+    ['nenhum status', clicar('[data-testid="vg-status-agendado"]')], ['sem Vencidos', clicar('[data-testid="vg-status-vencidos"]')],
+    ['Programado de volta', clicar('[data-testid="vg-status-programado"]')]] },
   { nome: 'visao-geral-24m', url: 'tela=visao-geral&barra=0&faixa=per&de=2025-01&ate=2026-12', auto: true },
   { nome: 'contas-lista', url: 'tela=contas&barra=32&n=longo', auto: true, estados: [
     ['busca com resultado', digitar('[data-testid="busca-contas"]', 'bradesco')], ['busca sem resultado', digitar('[data-testid="busca-contas"]', 'zzzz')],

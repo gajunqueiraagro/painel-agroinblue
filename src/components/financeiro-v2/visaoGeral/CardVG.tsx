@@ -44,13 +44,18 @@ function CardFluxo({ tela, k, sel, v, previsto, vigente, onAnalisar }: {
   const sf = v(linhaDe(tela, 'saldo_final'));
   const res = v(linhaDe(tela, 'resultado'));
   const futuro = previsto || vigente;
+  const venc = (l: LinhaVG | undefined) => (l?.vencidos?.[k] ? l.vencidos[k] : null);
   const bloco = (lado: LadoVG) => {
     const t = totalDe(tela, lado);
     const cor = lado === 'saida' ? COR.saida : COR.entrada;
     return (
       <>
         <tr className="cursor-pointer border-b-2 border-[#1b2430]" onClick={() => onAnalisar({ lado, grupo: null, am: sel })} data-testid={`card-total-${lado}`}>
-          <td className="h-5 truncate px-1 text-[10px] font-bold" title={lado === 'saida' ? 'Saídas' : 'Entradas'}>{lado === 'saida' ? 'Saídas' : 'Entradas'} <span className="text-[#8d9cad]">›</span></td>
+          {/* P79 — quanto do mês é ATRASO: o vencido não realizado que entrou neste mês (do banco), ao lado do rótulo; sem vencido, nada */}
+          <td className="h-5 truncate px-1 text-[10px] font-bold" title={`${lado === 'saida' ? 'Saídas' : 'Entradas'}${venc(t) ? ` · dos quais vencidos ${brl(venc(t))}` : ''}`}>
+            {lado === 'saida' ? 'Saídas' : 'Entradas'} <span className="text-[#8d9cad]">›</span>
+            {venc(t) ? <span className="ml-1.5 text-[9.5px] font-semibold text-amber-700" data-testid={`card-vencido-${lado}`}>vencidos {brl(venc(t))}</span> : null}
+          </td>
           <td className="h-5 whitespace-nowrap px-1 text-right text-[13px] font-bold tabular-nums" style={{ color: cor }} data-testid={`card-valor-${lado}`}>{brl(v(t))}</td>
           <td className="h-5 whitespace-nowrap px-1 text-right text-[10px] font-bold tabular-nums text-muted-foreground">{v(t) == null ? '' : '100%'}</td>
         </tr>
