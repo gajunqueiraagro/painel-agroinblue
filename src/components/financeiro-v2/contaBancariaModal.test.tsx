@@ -108,6 +108,8 @@ describe('CAD-CONTAS-BANCARIAS-01 — o modal', () => {
   it('M5 mudar o saldo inicial: aviso e o saldo vai ao escritor', async () => {
     montar(CONTA, 'saldo');
     expect(screen.getByTestId('aviso-saldo-inicial')).toHaveTextContent(FRASE_AVISO_SALDO);
+    /* P59 — a frase diz o que acontece: só o mês seguinte parte do saldo inicial */
+    expect(FRASE_AVISO_SALDO).toBe('Mudar o saldo ou a data muda o ponto de partida da Conciliação (o mês seguinte começa daqui). A alteração fica na Auditoria com quem fez e quando.');
     const valor = screen.getByDisplayValue('0,00');
     fireEvent.change(valor, { target: { value: '48.210,37' } });
     fireEvent.blur(valor);
