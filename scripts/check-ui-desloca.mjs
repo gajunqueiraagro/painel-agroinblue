@@ -69,6 +69,26 @@ const CENARIOS = [
     estados: [6, 1, 0].map((n) => [`filtro com ${n} lancamento(s)`, async (p) => {
       await p.goto(p.url().replace(/&linhas=\d+/, '') + `&linhas=${n}`); await p.evaluate(() => document.fonts.ready); await espera(p, 1300); await ampliar(p);
     }]) },
+  /* FIN-VALOR-CALC-01b — abrir o modo conta num campo de valor não desloca nada, no Negociar lote do caso do Gabriel (dado sintético):
+     a conta aberta (balão sob o campo), o Esc, a conta que não fecha e a recusa depois de sair do campo. Nenhum estado aplica valor.
+     ⚠ APLICAR um bônus faz o modal crescer 13px nas janelas até 1000 (a leitura "R$/@ · R$/cab" que o modal escreve sob o campo
+     preenchido, a MESMA de digitar o número direto): por isso o aplicar se mede no segundo cenário, a partir do bônus já preenchido. */
+  ...(() => {
+    const campo = (r) => `xpath=//label[normalize-space()="${r}"]/following-sibling::div[1]//input`;
+    const conta = (r, t) => async (p) => { const c = p.locator(campo(r)).first(); await c.click(); await c.fill(t); await espera(p, 300); };
+    const tecla = (k) => async (p) => { await p.keyboard.press(k); await espera(p, 300); };
+    const aba = botao(/^Bônus, descontos e impostos$/);
+    return [
+      { nome: 'negociar-lote-conta', url: 'tela=negociar-lote', antes: aba, estados: [
+        ['conta aberta no Precoce', conta('Precoce', '988.224-976.224')], ['Esc com a conta aberta (o modal fica)', tecla('Escape')],
+        ['conta que nao fecha, aberta', conta('Lista / trace', '5/0')], ['recusa depois de sair do campo', tecla('Tab')],
+      ] },
+      { nome: 'negociar-lote-conta-aplicada', url: 'tela=negociar-lote',
+        antes: async (p) => { await aba(p); await conta('Precoce', '12.000')(p); await tecla('Tab')(p); }, estados: [
+        ['conta aberta sobre o bonus preenchido', conta('Precoce', '988.224-976.224')], ['conta aplicada (Enter)', tecla('Enter')],
+      ] },
+    ];
+  })(),
   { nome: 'fornecedores-sem-cadastro', url: 'tela=fornecedores&barra=32&n=2356', antes: clicar('[data-testid="aba-sem-cadastro"]'), auto: true },
   { nome: 'recorrencias', url: 'tela=recorrencias&barra=32', auto: true },
   /* CAD-CONTAS-BANCARIAS-01 — a lista (segmentos, busca com e sem resultado, inativas) e o modal (abas, tipo, formato), editando e criando */

@@ -38,6 +38,9 @@ import { VendaModalShell } from '@/components/venda/VendaModalShell';
 import { DialogoDesfazerCompromisso } from '@/components/compra/DialogoDesfazerCompromisso';
 import { DialogoAtualizarCompromisso } from '@/components/compra/DialogoAtualizarCompromisso';
 import { AbateModalShell } from '@/components/abate/AbateModalShell';
+import { ModalNegociarLote } from '@/components/abate/ModalNegociarLote';
+import { linhaVazia, type LoteAbate } from '@/components/abate/calculoDoLote';
+import type { LinhaAbate } from '@/hooks/useOperacaoAbate';
 import { CompraModalShell } from '@/components/compra/CompraModalShell';
 import { AvisoPendenciasCliente } from '@/components/consultor/AvisoPendenciasCliente';
 import { NovaPendenciaDialog } from '@/components/consultor/NovaPendenciaDialog';
@@ -291,6 +294,12 @@ if (tela === 'mesclar') {
         <tbody><tr><td>1</td><td>—</td><td className="px-1"><CampoMoeda className={REGUA_CAMPO} valor={null} onChange={nada} /></td><td className="px-1"><CampoMoeda className={REGUA_CAMPO} valor={null} onChange={nada} /></td></tr></tbody></table></div>
     </div>,
   );
+} else if (tela === 'negociar-lote') {
+  /* FIN-VALOR-CALC-01b — o Negociar lote do caso do Gabriel (23/10 09h32), com dado SINTÉTICO: Bois, 136 cab, Realizado, carcaça
+     40.676 kg no lote → 2.711,7333 @ × R$ 360,00 = preço base R$ 976.224,00. `&aba=bonus` abre direto na aba dos bônus. */
+  const lote: LoteAbate = { id: 'l1', ordem: 1, categoria: 'bois', categoriaLabel: 'Bois', quantidade: 136, pesoMedioKg: 540 };
+  const linha: LinhaAbate = { ...linhaVazia('l1'), pesoCarcacaKg: 40676, pesoCarcacaFonte: 'total', precoArroba: 360, precoFonte: 'arroba' };
+  montar(<ModalNegociarLote lote={lote} linha={linha} cenario="realizado" onAplicar={() => {}} onFechar={() => {}} />);
 } else if (tela === 'consorcio') {
   /* FIN-CONSORCIO-02 — o cadastro do consórcio: a tela e o gerador vêm do banco simulado (dado SINTÉTICO, `dados/consorcio.json`, lido do
      banco num bloco revertido); `&novo=1` abre o cadastro novo (sem tela do banco: só o gerador) */
