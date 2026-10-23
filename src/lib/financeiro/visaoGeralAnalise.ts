@@ -42,7 +42,7 @@ export interface EstadoAnaliseVG {
 }
 export interface ContextoAnaliseVG {
   clienteId: string; de: string; ate: string; contas: string[] | null; fazendas: string[] | null; atividade: string | null; hoje: string;
-  status: string[]; incluirVencidos: boolean;
+  status: string[]; comVencidos: boolean;
 }
 
 export const estadoInicialAnalise = (lado: LadoVG, grupo: string | null, am: string): EstadoAnaliseVG => ({
@@ -54,7 +54,7 @@ export async function carregarAnaliseVG(ctx: ContextoAnaliseVG, e: EstadoAnalise
     p_cliente: ctx.clienteId, p_de: ctx.de, p_ate: ctx.ate, p_mes: e.am, p_lado: e.lado,
     p_aba: e.aba, p_foco: e.foco, p_grafico: e.grafico, p_criterio: e.criterio, p_unidade: e.unidade,
     p_contas: ctx.contas, p_fazendas: ctx.fazendas, p_atividade: ctx.atividade, p_hoje: ctx.hoje,
-    p_status: ctx.status, p_incluir_vencidos: ctx.incluirVencidos,
+    p_status: ctx.status, p_incluir_vencidos: ctx.comVencidos,
   });
   if (error) throw new Error(error.message);
   return data as AnaliseVG;

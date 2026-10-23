@@ -38,7 +38,7 @@ const ANALISE: AnaliseVG = {
     kpis: { mes: 773404.73, media: 686702.37, vs_meta: 10.5, tendencia: 28.9 },
   },
 };
-const CTX = { clienteId: 'cli', de: '2026-01-01', ate: '2026-12-31', contas: null, fazendas: null, atividade: null, hoje: '2026-10-23', status: ['previsto'], incluirVencidos: true };
+const CTX = { clienteId: 'cli', de: '2026-01-01', ate: '2026-12-31', contas: null, fazendas: null, atividade: null, hoje: '2026-10-23', status: ['previsto'], comVencidos: true };
 
 let resposta: AnaliseVG = ANALISE;
 beforeEach(() => { (globalThis as any).ResizeObserver ??= class { observe() {} disconnect() {} }; rpc.mockReset(); resposta = ANALISE; rpc.mockImplementation(async () => ({ data: resposta, error: null })); });

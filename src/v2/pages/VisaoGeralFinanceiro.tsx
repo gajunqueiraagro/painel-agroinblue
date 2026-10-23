@@ -193,7 +193,7 @@ export function VisaoGeralFinanceiro({ hoje = hojeLocal(), onAnalisar, inicial }
       {alvo && clienteId && (
         <ModalAnaliseVG alvo={alvo} onFechar={() => setAlvo(null)} rotuloContas={rotuloContas}
           ctx={{ clienteId, de: primeiroDia(de), ate: ultimoDia(ate), contas: filtros.contas, fazendas: filtros.fazenda ? [filtros.fazenda] : null,
-                 atividade: filtros.atividade, hoje, status, incluirVencidos: vencidos }} />
+                 atividade: filtros.atividade, hoje, status, comVencidos: vencidos }} />
       )}
     </div>
   );
