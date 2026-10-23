@@ -42,7 +42,7 @@ import { ondeEsta } from './LancamentoDoXml';
 import type { DoXml } from '@/lib/financeiro/nfePrefill';
 import { resolverEmitente } from '@/lib/financeiro/nfe/resolverEmitente';
 import { gravarItensSemTravar } from '@/lib/financeiro/itensDaNotaBanco';
-import { casarJaLancados, parcelasParaCasar, type LancamentoJaLancado } from '@/lib/financeiro/nfe/jaLancada';
+import { casarJaLancados, fraseEmParcelas, parcelasParaCasar, type LancamentoJaLancado } from '@/lib/financeiro/nfe/jaLancada';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { CompararCadastroDialog } from './CompararCadastroDialog';
@@ -252,7 +252,7 @@ export function NotaFiscalDialog({
     }).then((l) => { if (vivo) setAchados(l); }, () => { if (vivo) setAchados([]); });
     return () => { vivo = false; };
   }, [clienteId, doXml.ocorrencias.length, parcelasDaBusca, p.numeroDocumento, n.numero, n.chave, n.emitente.documento, n.emitente.nome, n.emitente.fantasia, receitaNome]);
-  const jaLancada = useMemo(() => (achados ? casarJaLancados(parcelasDaBusca, achados) : null), [achados, parcelasDaBusca]);
+  const jaLancada = useMemo(() => (achados ? casarJaLancados(parcelasDaBusca, achados, n.totais.notaCent) : null), [achados, parcelasDaBusca, n.totais.notaCent]);
 
   /* o proposto que aparece depois (a lista de agora, a Receita) entra sozinho — salvo se o operador escolheu cadastrar outro */
   useEffect(() => {
@@ -578,10 +578,17 @@ export function NotaFiscalDialog({
                         <th key={h} className={cn(TH, h === 'Valor' && 'text-right')} title={h}>{h}</th>))}
                     </tr></thead>
                     <tbody>
-                      {[...jaLancada.porParcela.map((x) => ({ chave: `p${x.parcela.n}`, rotulo: `${x.parcela.n}/${jaLancada.porParcela.length}`, l: x.lancamento, parcela: x.parcela })),
-                        ...jaLancada.pelaNota.map((l) => ({ chave: l.id, rotulo: 'nº doc.', l, parcela: null }))].map((x) => (
+                      {/* NOTA-CONTAS-NA-CRIACAO-01 C — a nota achada EM PARCELAS (valor x N = a nota): "?/N" (qual das N, a nota nao diz); a linha
+                          "falta" da nota inteira sai (seria ela de novo, em dobro) */}
+                      {[...jaLancada.porParcela.filter((x) => x.lancamento || !jaLancada.emParcelas)
+                          .map((x) => ({ chave: `p${x.parcela.n}`, rotulo: `${x.parcela.n}/${jaLancada.porParcela.length}`, dica: undefined, l: x.lancamento, parcela: x.parcela })),
+                        ...jaLancada.pelaNota.map((l) => {
+                          const fr = jaLancada.fracoes.get(l.id);
+                          return { chave: l.id, rotulo: fr ? `?/${fr}` : 'nº doc.', l, parcela: null,
+                            dica: fr ? `parcela ? de ${fr} da nota: ${fr} × R$ ${reais(l.valorCent)} = R$ ${reais(n.totais.notaCent)} (qual das ${fr}, a nota não diz)` : undefined };
+                        })].map((x) => (
                         <tr key={x.chave} className={cn('border-b border-border/50', !x.l && 'bg-amber-50/60')} data-testid="nota-ja-lancada-linha">
-                          <td className={cn(TDN, 'text-left')}>{x.rotulo}</td>
+                          <td className={cn(TDN, 'text-left')} title={x.dica} data-testid="nota-ja-lancada-parc">{x.rotulo}</td>
                           {x.l ? (<>
                             <td className={cn(TDN, 'text-left')}>{dataInteira(x.l.vencimento ?? x.l.pagamento ?? x.l.competencia)}</td>
                             <td className={TD} title={x.l.descricao ?? ''}>{x.l.descricao ?? '—'}</td>
@@ -775,8 +782,9 @@ export function NotaFiscalDialog({
           ) : null}
           {!bloqueio && !erro && jaLancada ? (
             <span className="min-w-0 uma-linha-que-rola font-medium text-amber-900" data-testid="nota-ja-lancada-frase">
+              {jaLancada.emParcelas ? fraseEmParcelas(jaLancada) : <>
               Esta nota parece já lançada: {jaLancada.porParcela.length - jaLancada.faltam.length} de {jaLancada.porParcela.length} {jaLancada.porParcela.length === 1 ? 'parcela' : 'parcelas'}
-              {jaLancada.faltam.length ? ` · faltam ${jaLancada.faltam.map((f) => `${f.n}/${jaLancada.porParcela.length}`).join(', ')}` : ''}. Nada será criado em dobro.
+              {jaLancada.faltam.length ? ` · faltam ${jaLancada.faltam.map((f) => `${f.n}/${jaLancada.porParcela.length}`).join(', ')}` : ''}. Nada será criado em dobro.</>}
             </span>
           ) : !bloqueio && !erro && aberto ? (
             /* o pedido do Gabriel: ATUALIZAR o que ja' existe, em vez de criar outro (so' com confirmacao) */
