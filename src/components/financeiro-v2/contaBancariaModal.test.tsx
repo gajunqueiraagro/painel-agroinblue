@@ -118,4 +118,17 @@ describe('CAD-CONTAS-BANCARIAS-01 — o modal', () => {
     await waitFor(() => expect(salvos()).toHaveLength(1));
     expect(salvos()[0].p_dados).toEqual({ saldo_inicial_oficial: 48210.37 });
   });
+
+  /* P58 — "Efeito na Conciliação" numa ida: UM pedido (`fn_conta_bancaria_efeito_conciliacao`), nunca o status do ano por ano */
+  it('P58 a aba Saldo inicial lê o efeito numa ida só: meses, o último saldo conferido e o saldo dele', async () => {
+    rpc.mockImplementation(async (fn: string) => (fn === 'fn_conta_bancaria_efeito_conciliacao'
+      ? { data: { meses: 30, ultimo: '2026-09', saldo_data: '2026-09-30', saldo_final: 1234.56 }, error: null } : { data: null, error: null }));
+    montar(CONTA, 'saldo');
+    await waitFor(() => expect(screen.getByTestId('meses-conciliados')).toHaveTextContent('30'));
+    expect(screen.getByTestId('bloco-efeito-conciliacao')).toHaveTextContent('30/09/2026');
+    expect(screen.getByTestId('bloco-efeito-conciliacao')).toHaveTextContent('R$ 1.234,56');
+    expect(rpc.mock.calls.filter(c => c[0] === 'fn_conta_bancaria_efeito_conciliacao')).toEqual([['fn_conta_bancaria_efeito_conciliacao', { p_conta_id: 'c1' }]]);
+    expect(rpc.mock.calls.some(c => c[0] === 'fn_conciliacao_status_ano')).toBe(false);
+  });
 });
+
