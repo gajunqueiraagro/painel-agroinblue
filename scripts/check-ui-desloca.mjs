@@ -107,6 +107,10 @@ const CENARIOS = [
     ['fazenda escolhida (sem saldo)', async (p) => { if (!(await p.locator('[data-testid="vg-fazenda"]').isVisible())) return;
       await p.locator('[data-testid="vg-fazenda"] button').first().click(); await espera(p, 300);
       await p.getByText('Faz. Exemplo Dois', { exact: true }).last().click(); await espera(p); await p.keyboard.press('Escape'); await espera(p, 300); }],
+    /* P71 — a fazenda de nome mais longo (43 letras): o seletor tem largura fixa — nada na barra se desloca */
+    ['fazenda de nome longo', async (p) => { if (!(await p.locator('[data-testid="vg-fazenda"]').isVisible())) return;
+      await p.locator('[data-testid="vg-fazenda"] button').first().click(); await espera(p, 300);
+      await p.getByText('Fazenda Exemplo Nome Muito Longo Retiro Sul', { exact: true }).last().click(); await espera(p); await p.keyboard.press('Escape'); await espera(p, 300); }],
     /* P79 — os chips: desligar Programado, Previsto e Agendado (nenhum: o aviso aparece) e Vencidos; o aviso tem lugar próprio */
     ['sem Programado', clicar('[data-testid="vg-status-programado"]')], ['sem Previsto', clicar('[data-testid="vg-status-previsto"]')],
     ['nenhum status', clicar('[data-testid="vg-status-agendado"]')], ['sem Vencidos', clicar('[data-testid="vg-status-vencidos"]')],

@@ -127,7 +127,8 @@ export function FiltrosBarraVG() {
         </div>
       </BotaoBarra>
       {/* Fazenda: o seletor DA CASA com busca (`SearchableSelect`, regra do check:ui-nativo), com "Todas" no topo */}
-      <span className="w-[92px] shrink-0 lg:w-[120px]" title={`Fazenda: ${fazendaNome ?? 'todas'}`} data-testid="vg-fazenda">
+      {/* P71 — largura FIXA: o nome longo termina em "…" e o title leva o nome inteiro (a barra nunca cresce com o nome) */}
+      <span className="w-[92px] shrink-0 lg:w-[120px]" title={`Fazenda: ${fazendaNome ?? 'todas'}`} data-testid="vg-fazenda" data-reticencias-com-title="">
         <SearchableSelect value={e.fazenda ?? TODAS} onValueChange={(v) => filtrosVG.mudar({ fazenda: v === TODAS ? null : v })}
           allValue={TODAS} allLabel="Fazendas" dense
           options={fazendas.filter((f: { id: string }) => f.id !== '__global__').map((f: { id: string; nome: string }) => ({ value: f.id, label: f.nome }))}

@@ -145,6 +145,13 @@ const CENARIOS = [
     nome: `visao-geral-analise-${n}`, url: 'tela=visao-geral&barra=0', tamanhos: TAMANHOS_DA_VG, regiao: '[data-testid="modal-analise"]',
     semRolagem: { dentro: '[data-testid="modal-analise"]', exceto: '[data-testid="analise-tabela-lista"], [data-testid="analise-foco-lista"], [data-testid="analise-abas"], [data-testid="analise-caminho"]' },
     antes: async (p) => { await abrir(p); await p.locator('[data-testid="modal-analise"]').waitFor(); await p.waitForTimeout(700); } })),
+  /* P71 — o seletor de Fazenda com o nome MAIS LONGO (43 letras; o maior real tem 18): largura fixa, o nome termina em "…" com o title
+     inteiro, e a barra não cresce */
+  { nome: 'visao-geral-fazenda-longa', url: 'tela=visao-geral&barra=0', tamanhos: TAMANHOS_DA_VG,
+    semRolagem: { dentro: '[data-testid="visao-geral"]', exceto: '[data-testid="grade-vg-rolagem"], [data-testid="card-vg-lista"]' },
+    antes: async (p) => { if (!(await p.locator('[data-testid="vg-fazenda"]').isVisible())) return;
+      await p.locator('[data-testid="vg-fazenda"] button').first().click(); await p.waitForTimeout(300);
+      await p.getByText('Fazenda Exemplo Nome Muito Longo Retiro Sul', { exact: true }).last().click(); await p.waitForTimeout(500); await p.keyboard.press('Escape'); await p.waitForTimeout(300); } },
   /* P79 — os chips de status: nenhum status e vencidos desligado (o aviso mais longo), aberto pela URL (`vg_status=`, `vg_venc=0`) */
   { nome: 'visao-geral-sem-status', url: 'tela=visao-geral&barra=0&vg_status=&vg_venc=0', tamanhos: TAMANHOS_DA_VG,
     semRolagem: { dentro: '[data-testid="visao-geral"]', exceto: '[data-testid="grade-vg-rolagem"], [data-testid="card-vg-lista"]' } },
@@ -459,7 +466,10 @@ function medir(regiao) {
       const t = texto(e); const inteiro = (e.textContent ?? '').replace(/\s+/g, ' ').trim();
       const dono = e.closest('[title]');
       const comTitle = !!(naCelula && dono && (dono === naCelula || naCelula.contains(dono) || dono.contains(naCelula))
-        && (dono.getAttribute('title') ?? '').replace(/\s+/g, ' ').includes(inteiro));
+        && (dono.getAttribute('title') ?? '').replace(/\s+/g, ' ').includes(inteiro))
+        /* P71 (Gabriel 23/10) — a exceção DECLARADA fora de tabela: o seletor de largura fixa marcado `data-reticencias-com-title` (hoje só o
+           de Fazenda da Visão Geral) pode terminar em "…" se o title dele leva o texto inteiro */
+        || !!((() => { const m = e.closest('[data-reticencias-com-title]'); return m && (m.getAttribute('title') ?? '').replace(/\s+/g, ' ').includes(inteiro); })());
       if (naCelula && EH_NUMERO(inteiro)) achados.push({ regra: 'numero', texto: `numero/data/documento com "…": ${t}` });
       else if (!comTitle) achados.push({ regra: 'reticencias', texto: naCelula ? `${t} (sem o texto inteiro no title)` : t });
     }
