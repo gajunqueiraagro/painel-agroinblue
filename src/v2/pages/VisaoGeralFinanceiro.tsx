@@ -149,7 +149,7 @@ export function VisaoGeralFinanceiro({ hoje = hojeLocal(), onAnalisar, inicial }
         <section className="min-h-0 overflow-hidden rounded-md border border-[#dfe4ea] bg-white" data-testid="vg-grade" data-desloca="">
           <div className="h-full" data-desloca-livre="">
             {pronta ? <GradeVG tela={pronta} sel={sel} onAnalisar={analisar}
-              acao={<AmpliarVG titulo="Entradas e saídas · grade" testid="grade">{() => <GradeVG tela={pronta} sel={sel} onAnalisar={analisar} ampliado />}</AmpliarVG>} />
+              acao={<AmpliarVG titulo="Entradas e saídas · grade" testid="grade" corpo="px-3">{() => <GradeVG tela={pronta} sel={sel} onAnalisar={analisar} ampliado />}</AmpliarVG>} />
               : <Estado erro={erro} />}
           </div>
         </section>

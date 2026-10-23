@@ -8,10 +8,12 @@ import { useState, type ReactNode } from 'react';
 import { Maximize2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
-export function AmpliarVG({ titulo, testid, children, largura = 'w-[min(1400px,96vw)]' }: {
+export function AmpliarVG({ titulo, testid, children, largura = 'w-[min(1400px,96vw)]', corpo = 'p-3' }: {
   titulo: string; testid: string; children: () => ReactNode;
   /** a largura fixa do modal (o card, estreito, cabe num print de celular) */
   largura?: string;
+  /** o respiro do corpo — a grade usa só o lateral: o cabeçalho dela (preso) encosta no topo, sem vão */
+  corpo?: string;
 }) {
   const [aberto, setAberto] = useState(false);
   return (
@@ -26,7 +28,7 @@ export function AmpliarVG({ titulo, testid, children, largura = 'w-[min(1400px,9
           <DialogHeader className="h-9 shrink-0 justify-center bg-primary px-3">
             <DialogTitle className="text-[13px] font-semibold text-primary-foreground">{titulo}</DialogTitle>
           </DialogHeader>
-          <div className="flex min-h-0 flex-1 flex-col overflow-auto bg-white p-3">{aberto ? children() : null}</div>
+          <div className={`flex min-h-0 flex-1 flex-col overflow-auto bg-white ${corpo}`}>{aberto ? children() : null}</div>
         </DialogContent>
       </Dialog>
     </>

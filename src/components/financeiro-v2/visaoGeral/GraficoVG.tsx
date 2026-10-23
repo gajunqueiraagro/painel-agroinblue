@@ -157,18 +157,27 @@ export function GraficoVG({ tela, modo, sel, onSel }: { tela: TelaVG; modo: Modo
       /* a linha em trechos de UM sinal (azul ≥ 0, vermelho < 0), tracejada até os meses previstos */
       trechosDoSaldo(pts, y0).forEach((t, j) => els.push(<line key={`st${j}`} x1={t.x1} y1={t.y1} x2={t.x2} y2={t.y2} stroke={t.neg ? COR.neg : COR.pos}
         strokeWidth={2} strokeLinecap="round" strokeDasharray={t.tracejado ? '5 4' : undefined} data-testid={`trecho-saldo-${t.neg ? 'neg' : 'pos'}${t.tracejado ? '-previsto' : ''}`} />));
-      /* o valor de cada mês na HORIZONTAL, numa faixa no topo da coluna (com coluna estreita, só o mês escolhido e as pontas) */
-      const todosRotulos = slot >= 30;
+      /* o valor de cada mês na HORIZONTAL, numa faixa no topo da coluna. Fica DENTRO do desenho (x preso às bordas pela largura do texto,
+         ≈ 4px por letra no corpo 7) e um rótulo nunca encosta no outro: entram por prioridade — o mês escolhido, o "i", as pontas, o resto —
+         e o que cruzaria um já posto não entra (coluna estreita: só os que cabem) */
+      const larg = (t: string) => t.length * 4 + 2;
+      const xDentro = (x: number, t: string) => Math.min(Math.max(x, L + larg(t) / 2), L + iw - larg(t) / 2);
+      const cands: { chave: string; x: number; v: number; prio: number; am?: string }[] = [];
+      if (saldoIni != null) cands.push({ chave: 'svi', x: L + 0.5 * slot, v: saldoIni, prio: 1 });
       pts.forEach((p) => {
         const am = meses[p.k].am;
         els.push(<circle key={`sc${p.k}`} cx={p.x} cy={p.y} r={am === sel ? 3.4 : 2.4} fill={corSinal(p.v)} stroke="#fff" strokeWidth={1}>
           <title>{`saldo final de ${rotuloMes(am)}: ${brl(p.v)}`}</title></circle>);
-        if (todosRotulos || am === sel || p.k === 0 || p.k === pts.length - 1) {
-          els.push(<text key={`sv${p.k}`} x={p.x} y={T - 6} fontSize={7} textAnchor="middle" fill={corSinal(p.v)} fontWeight={am === sel ? 700 : 400}
-            data-testid={`rotulo-saldo-${am}`}>{fmtL(p.v)}</text>);
-        }
+        cands.push({ chave: `sv${p.k}`, x: p.x, v: p.v, am, prio: am === sel ? 0 : p.k === pts.length - 1 ? 2 : p.k === 0 ? 3 : 4 });
       });
-      if (saldoIni != null) els.push(<text key="svi" x={L + 0.5 * slot} y={T - 6} fontSize={7} textAnchor="middle" fill={corSinal(saldoIni)}>{fmtL(saldoIni)}</text>);
+      const postos: { l: number; r: number }[] = [];
+      [...cands].sort((a, b) => a.prio - b.prio).forEach((c) => {
+        const t = fmtL(c.v), x = xDentro(c.x, t), l = x - larg(t) / 2 - 2, r = x + larg(t) / 2 + 2;
+        if (postos.some((q) => l < q.r && r > q.l)) return;
+        postos.push({ l, r });
+        els.push(<text key={c.chave} x={x} y={T - 6} fontSize={7} textAnchor="middle" fill={corSinal(c.v)} fontWeight={c.am === sel ? 700 : 400}
+          data-testid={c.am ? `rotulo-saldo-${c.am}` : 'rotulo-saldo-inicial'}>{t}</text>);
+      });
     }
     meses.forEach((m, k) => els.push(<rect key={`c${k}`} x={L + (k + off) * slot} y={T} width={slot} height={ih + B} fill="transparent" style={{ cursor: 'pointer' }}
       onClick={() => onSel(m.am)} data-testid={`coluna-${m.am}`}><title>{`Ver ${rotuloMes(m.am)}`}</title></rect>));
