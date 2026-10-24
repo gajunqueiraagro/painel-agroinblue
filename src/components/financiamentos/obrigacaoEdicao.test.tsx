@@ -90,6 +90,8 @@ vi.mock('@/integrations/supabase/client', () => {
         if (fn === 'fn_financiamento_situacao') return Promise.resolve({ data: banco.situacao, error: null });
         /* TELA DO CONTRATO v3: a leitura da tela; sem resposta a tela mostra "…" (nao e' gesto de escrita) */
         if (fn === 'fn_contrato_tela') return Promise.resolve({ data: null, error: null });
+        /* P74b — a prévia do "Voltar para à vista" e' a funcao SIMULADA (leitura): nao e' gesto de escrita; sem resposta, o botao nao se oferece */
+        if (fn === 'fn_parcelamento_voltar_a_vista' && args.p_simular === true) return Promise.resolve({ data: null, error: null });
         if (fn === 'fn_parcelamento_propagar' && args.p_simular === true) {
           banco.previas.push(args);
           return Promise.resolve({ data: banco.propagar, error: null });
