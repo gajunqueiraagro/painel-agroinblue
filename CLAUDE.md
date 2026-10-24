@@ -280,8 +280,10 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   vazio fica dentro do quadro; em pagina que rola, `useAlturaAteOFim` (topo do quadro → fim da janela). O gate: filtrar para 6/1/0 linhas.
 - FIN-V2-FORNECEDOR-SEM-SUFIXO-01: em TABELA o fornecedor e' so' o nome ("…" + `title` com CNPJ/"sem CNPJ", cidade/UF, inativo); o final
   de filial ("…0007-69", "sem CNPJ") so' no seletor/busca e no Mesclar.
-- FIN-V2-FILTRO-FORNECEDOR-01: filtro de fornecedor = ativos (+ inativo com lançamento no recorte); mesclado nunca (o nome antigo acha
+- FIN-V2-FILTRO-FORNECEDOR-01: filtro de fornecedor = ativos (+ inativo com lançamento no recorte ou escolhido, P94); mesclado nunca (o nome antigo acha
   o destino pelos apelidos); "N lanç." vem do servidor (`fornecedores` da `fn_fin_v2_lista_pagina`, recorte sem o filtro de fornecedor).
+- P94 (FIN-V2-FILTRO-FANTASMA-01): a tela nunca filtra o que não mostra — memória da lista POR CLIENTE (`chaveDoCliente`); troca de cliente
+  volta ao padrão; o restaurado se confere com as opções CARREGADAS (`useConferenciaDosFiltros`); fora das opções = "valor inexistente (limpar)".
 - FIN-V2-DESEMPENHO-01c: trocar SO' a pagina pede `so_linhas` (sem recontar) e reaproveita totais/uso; gravar ou total diferente relê
   completa; vinculos e nomes so' da pagina (a pilula "Conciliado" sai da marca `conciliado` da RPC).
 - P73: salvou UM lançamento → o canal leva o id (`notificarLancamentosMudaram(cliente, menosEste, ids)`) e a lista relê SÓ a linha
