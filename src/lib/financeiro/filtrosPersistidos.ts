@@ -14,6 +14,13 @@
  */
 export const CHAVE_FILTROS_LISTA = 'financeirov2_filtros_ativos';
 
+/**
+ * ⚠ A MEMÓRIA É DO CLIENTE — P94 (FIN-V2-FILTRO-FANTASMA-01). A chave era uma só para a sessão inteira: um fornecedor (ou fazenda,
+ * conta, safra) filtrado no NJ voltava ao abrir o Agnaldo, ia para o banco e zerava a lista com o seletor dizendo "Todos". Agora toda
+ * memória da lista leva o `cliente_id` (`<base>:<cliente>`); a chave antiga, sem cliente, nunca é lida (e sai na primeira leitura).
+ */
+export const chaveDoCliente = (base: string, clienteId: string) => `${base}:${clienteId}`;
+
 /** O que vale a pena lembrar. Datas e paginação ficam de fora: são do momento, não da escolha. */
 export interface FiltrosPersistiveis {
   [campo: string]: string | string[] | undefined;
@@ -50,16 +57,18 @@ export function vazio(f: FiltrosPersistiveis): boolean {
   return Object.keys(f).length === 0;
 }
 
-export function guardarFiltros(ativos: FiltrosPersistiveis): void {
+export function guardarFiltros(clienteId: string, ativos: FiltrosPersistiveis): void {
   try {
-    if (vazio(ativos)) sessionStorage.removeItem(CHAVE_FILTROS_LISTA);
-    else sessionStorage.setItem(CHAVE_FILTROS_LISTA, JSON.stringify(ativos));
+    const chave = chaveDoCliente(CHAVE_FILTROS_LISTA, clienteId);
+    if (vazio(ativos)) sessionStorage.removeItem(chave);
+    else sessionStorage.setItem(chave, JSON.stringify(ativos));
   } catch { /* storage bloqueado — a memória é conforto, não contrato */ }
 }
 
-export function lerFiltros(): FiltrosPersistiveis | null {
+export function lerFiltros(clienteId: string): FiltrosPersistiveis | null {
   try {
-    const raw = sessionStorage.getItem(CHAVE_FILTROS_LISTA);
+    sessionStorage.removeItem(CHAVE_FILTROS_LISTA);   /* a de antes do P94, sem cliente: nunca se aplica */
+    const raw = sessionStorage.getItem(chaveDoCliente(CHAVE_FILTROS_LISTA, clienteId));
     if (!raw) return null;
     /* Sem `as`: `JSON.parse` devolve `any`, e a anotação do destino é o que estreita o tipo.
        A guarda abaixo é de RUNTIME — o tipo não prova nada sobre o que veio do storage. */
@@ -69,6 +78,6 @@ export function lerFiltros(): FiltrosPersistiveis | null {
   } catch { return null; }
 }
 
-export function esquecerFiltros(): void {
-  try { sessionStorage.removeItem(CHAVE_FILTROS_LISTA); } catch { /* idem */ }
+export function esquecerFiltros(clienteId: string): void {
+  try { sessionStorage.removeItem(chaveDoCliente(CHAVE_FILTROS_LISTA, clienteId)); } catch { /* idem */ }
 }
