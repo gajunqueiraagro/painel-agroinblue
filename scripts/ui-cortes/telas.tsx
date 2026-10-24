@@ -636,13 +636,22 @@ if (tela === 'mesclar') {
     const { NotaFiscalDialog } = await import('@/components/financeiro-v2/NotaFiscalDialog');
     const { arquivoPdfDaNota } = await import('@/components/financeiro-v2/NovoDeXmlDialog');
     const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: [841.89, 595.28] });
-    for (const it of (v === 'semdup' || v === 'emparcela' ? danfeSinteticoSemDuplicata() : v === 'avulsa' ? danfeSinteticoAvulsa() : PAGINAS_DANFE_SINTETICO)[0]) {
+    /* P95 — `pelachave`: o PDF ESCANEADO (so' imagem, nenhum texto) seguido pela chave digitada (sintetica): a previa com o chip e a
+       emissao e o valor em ambar; `irmas`: a nota sem duplicata achada em 4 parcelas soltas ("… - k/4"), a frase com soma e diferenca */
+    if (v === 'pelachave') { doc.setFillColor(214, 211, 204); doc.rect(40, 40, 760, 515, 'F'); }
+    else for (const it of (v === 'semdup' || v === 'emparcela' || v === 'irmas' ? danfeSinteticoSemDuplicata() : v === 'avulsa' ? danfeSinteticoAvulsa() : PAGINAS_DANFE_SINTETICO)[0]) {
       const str = v === 'diverge' && it.str === 'Nº 000.000.937' ? 'Nº 000.000.938' : it.str;
       doc.setFontSize(Math.max(4, it.h * 1.15));
       doc.text(str, it.x, 595.28 - it.y);
     }
     const bytes: ArrayBuffer = doc.output('arraybuffer');
-    const lido: any = await lerNota(bytes);
+    let lido: any;
+    if (v === 'pelachave') {
+      const { notaDaChaveDigitada, lidoDaChave } = await import('@/lib/financeiro/nfe/chaveDigitada');
+      const r = notaDaChaveDigitada('5026 0911 2223 3300 0424 5501 0000 0009 3712 1753 8298');
+      if (r.ok === false) { raiz.render(<div>{r.frase}</div>); return; }
+      lido = lidoDaChave(r.nota, [{ largura: 841.89, altura: 595.28 }]);
+    } else lido = await lerNota(bytes);
     if (!lido.ok) { raiz.render(<div>{lido.frase}</div>); return; }
     if (v === 'longo') {
       const NOME = 'COOPERATIVA AGROINDUSTRIAL SINTETICA DOS PRODUTORES RURAIS DO MATO GROSSO DO SUL E REGIAO CENTRO OESTE LTDA';
@@ -654,7 +663,7 @@ if (tela === 'mesclar') {
       lido.nota.totais = { ...lido.nota.totais, notaCent: 99999999 * 12, descontoCent: 99999999 };
     }
     const forn = { id: 'agro-s', nome: 'Agro Sintetica Insumos Agropecuarios Ltda', cpf_cnpj: '11.222.333/0004-24', fazenda_id: null, ativo: true, tipo_recebimento: null } as any;
-    const fornecedores = ['cadastrado', 'registrada', 'lavoura', 'semdup', 'parcelar', 'emparcela'].includes(v) ? [forn] : [];
+    const fornecedores = ['cadastrado', 'registrada', 'lavoura', 'semdup', 'parcelar', 'emparcela', 'pelachave', 'irmas'].includes(v) ? [forn] : [];
     const resolucao = resolverEmitente(lido.nota.emitente, fornecedores, null);
     const ultima = v === 'cadastrado' || v === 'parcelar' ? { plano_conta_id: 'pl-nut', subcentro: 'Nutrição Engorda', macro_custo: 'Custeio Produtivo', grupo_custo: 'Nutrição', centro_custo: 'Suplementação', escopo_negocio: 'pecuaria', data: '2026-08-14' }
       : v === 'lavoura' ? { plano_conta_id: 'pl-lav', subcentro: 'Insumos Lavoura — Defensivos e Fertilizantes', macro_custo: 'Custeio Produtivo', grupo_custo: 'Custeio Lavoura', centro_custo: 'Insumos', escopo_negocio: 'agricultura', data: '2026-08-14', safra_id: 's-soja', cultura: 'soja' }
@@ -694,6 +703,12 @@ if (tela === 'mesclar') {
            pelo numero escrito de outro jeito ("NF_000.000.937"). Dados SINTETICOS. */
         /* D — `v=socancelados`: so' cancelados (a nota NAO esta' lancada; o rodape diz quantos) */
         : fn === 'fn_nota_ja_lancada' && v === 'socancelados' ? CANCELADOS_DA_NOTA
+        /* P95 — `v=irmas`: 4 parcelas soltas no cartao (a nota sem duplicata, R$ 9.583,00), o numero so' em duas; somam R$ 0,02 a menos
+           que a nota. SINTETICAS. */
+        : fn === 'fn_nota_ja_lancada' && v === 'irmas' ? [239576, 239573, 239575, 239574].map((valor_cent, i) => ({ id: `jl-irma-${i}`, vencimento: `2026-${String(10 + i).padStart(2, '0')}-10`.replace('2026-13', '2027-01'),
+          pagamento: null, competencia: '2026-09-15', descricao: `Medicamentos Bovinos Sinteticos no cartão, lançado à mão com descrição comprida - ${i + 1}/4`, valor_cent,
+          status: i < 2 ? 'realizado' : 'agendado', conciliado: false, financiamento_id: null, numero_documento: i >= 2 ? 'NF_000.000.937' : null, fornecedor_id: 'agro-s',
+          fornecedor_nome: 'Agro Sintetica Insumos Agropecuarios Ltda', fornecedor_por: 'cnpj', parcelas: [], por: i >= 2 ? ['numero', 'fracao'] : ['fracao'], fracao_n: 4 }))
         : fn === 'fn_nota_ja_lancada' && v === 'emparcela' ? [{ id: 'jl-p1', vencimento: '2026-10-20', pagamento: null, competencia: '2026-09-15',
           descricao: 'Medicamentos Bovinos Sinteticos — lançado à mão como uma parcela da nota', valor_cent: 49164, status: 'agendado', conciliado: false,
           financiamento_id: null, numero_documento: 'NF_000.000.937', fornecedor_id: 'agro-s', fornecedor_nome: 'Agro Sintetica Insumos Agropecuarios Ltda',
@@ -715,6 +730,45 @@ if (tela === 'mesclar') {
       onCriarFornecedor={async () => null} onCriarLancamento={async () => null} onAbrirNoLancamento={() => {}} onAbrirRegistrada={() => {}} onCriado={() => {}} consultarReceita={receita as any} />);
   };
   void montarNotaPdf();
+} else if (tela === 'novo-da-nota') {
+  /* P95 — "Novo a partir da nota" no pior caso de texto: uma nota lida, uma pela CHAVE DIGITADA (emissao e valor "—"), duas recusadas com
+     o campo "Digitar a chave" (nome de arquivo comprido; PDF escaneado e nota sem chave) e o aviso do arquivo repetido. Dados SINTETICOS. */
+  const montarNovoDaNota = async () => {
+    const { jsPDF } = await import('jspdf');
+    const { PAGINAS_DANFE_SINTETICO } = await import('@/lib/financeiro/nfe/__fixtures__/danfeSintetico');
+    const { lerNota } = await import('@/lib/financeiro/nfe/lerNota');
+    const { notaDaChaveDigitada, lidoDaChave } = await import('@/lib/financeiro/nfe/chaveDigitada');
+    const { FRASE_NOTA_SEM_CHAVE, FRASE_PDF_SEM_TEXTO } = await import('@/lib/financeiro/nfe/danfe');
+    const { NovoDeXmlDialog, arquivoPdfDaNota, fraseJaNaLista } = await import('@/components/financeiro-v2/NovoDeXmlDialog');
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: [841.89, 595.28] });
+    for (const it of PAGINAS_DANFE_SINTETICO[0]) { doc.setFontSize(Math.max(4, it.h * 1.15)); doc.text(it.str, it.x, 595.28 - it.y); }
+    const bytes: ArrayBuffer = doc.output('arraybuffer');
+    const lido: any = await lerNota(bytes);
+    if (!lido.ok) { raiz.render(<div>{lido.frase}</div>); return; }
+    const forn: any = { id: 'agro-s', nome: 'Agro Sintetica Insumos Agropecuarios Ltda', cpf_cnpj: '11.222.333/0004-24', fazenda_id: null, ativo: true, tipo_recebimento: null };
+    const fazendas = [{ id: 'f-pur', nome: 'Faz. Sintetica', ie: '280000002' }];
+    const linha = (id: string, nome: string, l: any) => {
+      const resolucao = resolverEmitente(l.nota.emitente, [forn], null);
+      const p: any = proporLancamento({ nota: l.nota, avisosDoLeitor: l.avisos, fazendas, emitente: resolucao, favorecidoId: resolucao.propostoId, ultima: null });
+      const arquivo = arquivoPdfDaNota(bytes, nome);
+      const doXml: any = { proposta: p.proposta, emitenteNome: l.nota.emitente.nome, emitenteDocumento: l.nota.emitente.documento, emitente: l.nota.emitente, resolucao, ocorrencias: [], arquivo };
+      return { id, arquivoNome: nome, arquivoTamanho: bytes.byteLength, nota: l.nota, avisos: l.avisos, fazenda: p.proposta.fazendaId ? { ...fazendas[0], aliases: null } : null,
+        recusa: null, lancada: false, doXml, jaLancados: 0, paraLancar: { arquivo, bytes, lido: l, doXml } };
+    };
+    const r: any = notaDaChaveDigitada('5026 0911 2223 3300 0424 5501 0000 0009 3712 1753 8298');
+    const LONGO = 'NOTA FISCAL ESCANEADA DO FORNECEDOR SINTETICO DE NOME BEM COMPRIDO 000.000.938 - copia digitalizada em baixa resolucao.pdf';
+    const recusada = (id: string, nome: string, frase: string): any => ({ id, arquivoNome: nome, arquivoTamanho: 1000 + id.length, doXml: null, nota: null, avisos: [], fazenda: null,
+      lancada: false, recusa: frase, paraDigitar: { arquivo: arquivoPdfDaNota(bytes, nome), bytes } });
+    const linhas: any[] = [
+      linha('l-lida', '000.000.937.pdf', lido),
+      linha('l-chave', '000.000.939.pdf', lidoDaChave(r.nota, [{ largura: 841.89, altura: 595.28 }])),
+      recusada('l-escaneado', LONGO, FRASE_PDF_SEM_TEXTO),
+      recusada('l-semchave', '46.995.pdf', FRASE_NOTA_SEM_CHAVE),
+    ];
+    montar(<NovoDeXmlDialog open onClose={() => {}} clienteId="cli" fazendas={[{ id: 'f-pur', nome: 'Faz. Sintetica' }]} fornecedores={[forn]}
+      onAbrirLancamento={() => {}} onAbrirNota={() => {}} lancadas={new Set()} linhasIniciais={linhas} avisoInicial={`${fraseJaNaLista(LONGO)} ${fraseJaNaLista('46.995.pdf')}`} />);
+  };
+  void montarNovoDaNota();
 } else if (tela === 'trocar-fornecedor') {
   /* FORN-TROCAR-LOTE-01 — o "Trocar fornecedor" da lista: o resumo de 4.851 lancamentos SINTETICOS saindo de 40 fornecedores de nome
      longo (a lista rola dentro do quadro), com os avisos (conciliados, meses fechados, OC) — o pior caso de texto */
