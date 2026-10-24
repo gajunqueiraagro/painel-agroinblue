@@ -208,6 +208,20 @@ const CENARIOS = [
     /* P95 — a previa pela chave digitada (emissao e valor em ambar no lugar dos lidos) e a nota achada em parcelas soltas */
     ['nota pela chave digitada (P95)', { url: 'tela=nota-pdf&v=pelachave' }], ['nota em parcelas soltas, "k/4" (P95)', { url: 'tela=nota-pdf&v=irmas' }],
   ] },
+  /* P74 — "Como foi pago?": trocar À vista → Cartão em N× → (cartão, 4) → Parcelas livres → Duplicatas apagado não move o título do bloco, os
+     outros blocos nem o rodapé (o conteúdo do bloco troca por dentro, na altura dele) */
+  { nome: 'nota-pdf-como-foi-pago', url: 'tela=nota-pdf&v=semdup', minLargura: 1000, estados: [
+    ['Cartao em Nx', async (p) => { await clicar('[data-testid="nota-como-foi-pago"]')(p); await clicar('[data-testid="nota-como-cartao"]')(p); }],
+    ['cartao escolhido, 4 parcelas', async (p) => {
+      await clicar('[data-testid="nota-como-foi-pago"]')(p); await clicar('[data-testid="nota-como-cartao"]')(p);
+      await p.locator('[data-testid="nota-cartao"] button', { hasText: 'Selecione o cartão' }).first().click(); await espera(p, 300);
+      await p.getByText('Cartão Elo Exemplo', { exact: true }).last().click(); await espera(p, 300);
+      await digitar('[data-testid="nota-cartao-parcelas"]', '4')(p);
+    }],
+  ] },
+  /* P74 B — "Parcelar este lançamento": abrir o bloco e escolher 4 não move a aba Pagamento acima dele nem o rodapé */
+  { nome: 'lancamento-parcelar', url: 'tela=lancamento&m=editar&v=salcartao', antes: async (p) => { await clicar('text=Pagamento')(p); },
+    estados: [['aberto com 4 parcelas', async (p) => { await clicar('[data-testid="parcelar-este-abrir"]')(p); await digitar('[data-testid="parcelar-este-n"]', '4')(p); }]] },
   /* P95 — "Novo a partir da nota": digitar a chave errada troca a frase pelo erro no MESMO lugar; o campo e o "Usar" nao andam. De 1000px
      para cima: abaixo disso o modal ja' passava da janela ANTES do P95 (o mesmo achado do check-ui-cortes, registrado no relatorio) */
   { nome: 'nota-novo-da-nota', url: 'tela=novo-da-nota', minLargura: 1000, estados: [
