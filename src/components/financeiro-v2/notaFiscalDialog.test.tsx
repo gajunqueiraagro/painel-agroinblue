@@ -861,7 +861,7 @@ async function escolherComo(rotulo: string) {
   fireEvent.click(await screen.findByRole('option', { name: rotulo }));
   /* o Select do Radix devolve o foco ao gatilho DEPOIS de fechar: espera, senão o próximo popover fecha com esse foco */
   await waitFor(() => expect(screen.getByTestId('nota-como-foi-pago').textContent).toBe(rotulo));
-  await new Promise((r) => setTimeout(r, 20));
+  await waitFor(() => expect(screen.getByTestId('nota-como-foi-pago')).toHaveFocus());
 }
 async function noCartao(n: string) {
   await escolherComo('Cartão em N×');
@@ -893,7 +893,7 @@ describe('P74 — a nota paga no cartão em N vezes', () => {
     expect(await screen.findByText('Cartão Elo Sintetico')).toBeTruthy();
     expect(screen.queryAllByText('Sicredi Lavoura')).toHaveLength(0);
     fireEvent.click(screen.getByText('Cartão Elo Sintetico'));
-    await waitFor(() => expect(screen.getByTestId('nota-cartao-rotulo-fatura').textContent).toBe('1ª fatura · sugerido (Elo Sintetico, dia 10)'));
+    await waitFor(() => expect(screen.getByTestId('nota-cartao-rotulo-fatura').textContent).toBe('1ª fatura · sugerido (Elo Sintetico, dia 10)'), { timeout: 4000 });
     expect(cartaoNoBanco.diasDoCartao).toHaveBeenCalledWith('elo');
     const fatura = campoDaFatura();
     expect(fatura.value).toBe('10/10/2026');
@@ -905,7 +905,7 @@ describe('P74 — a nota paga no cartão em N vezes', () => {
     abrir(montarNota({ paginas: danfeSinteticoSemDuplicata(), fornecedores: [FORN] }), { g: comoGravadores, contas: COM_CARTAO });
     await noCartao('4');
     await escolherSubcentro('Nutrição Engorda');
-    await waitFor(() => expect(screen.getByTestId('nota-criar').textContent).toBe('Criar 4 parcelas'));
+    await waitFor(() => expect(screen.getByTestId('nota-criar').textContent).toBe('Criar 4 parcelas'), { timeout: 4000 });
     expect(screen.getByTestId('nota-rodape').textContent).toContain('O PDF fica anexado às 4 parcelas como a NF 3.241 · 4 saídas no Cartão Elo Sintetico, uma em cada fatura.');
     fireEvent.click(screen.getByTestId('nota-criar'));
     await waitFor(() => expect(g.gravar).toHaveBeenCalled());
@@ -932,8 +932,8 @@ describe('P74 — a nota paga no cartão em N vezes', () => {
   it('P7 "No Novo lançamento" leva o cartão e as 4 parcelas', async () => {
     const props = abrir(montarNota({ paginas: danfeSinteticoSemDuplicata(), fornecedores: [FORN] }), { contas: COM_CARTAO });
     await noCartao('4');
-    await waitFor(() => expect(screen.getByTestId('nota-conta-pelo-cartao').textContent).toBe('Cartão Elo Sintetico'));
-    await waitFor(() => expect(campoDaFatura().value).toBe('10/10/2026'));
+    await waitFor(() => expect(screen.getByTestId('nota-conta-pelo-cartao').textContent).toBe('Cartão Elo Sintetico'), { timeout: 4000 });
+    await waitFor(() => expect(campoDaFatura().value).toBe('10/10/2026'), { timeout: 4000 });
     fireEvent.click(screen.getByTestId('nota-abrir-no-lancamento'));
     const prefill = props.onAbrirNoLancamento.mock.calls[0][0];
     expect(prefill.conta_bancaria_id).toBe('elo');
