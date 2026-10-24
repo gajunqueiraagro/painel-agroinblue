@@ -159,6 +159,25 @@ const CENARIOS = [
       ['desce: atividade', noLugar('[data-testid="gaveta-linha-0"]')], ['desce: centro', noLugar('[data-testid="gaveta-linha-0"]')],
       ['desce: subcentro (aviso das contas)', noLugar('[data-testid="gaveta-linha-0"]')], ['irmão longo', noLugar('[data-testid="gaveta-irmao-1"]')],
       ['sobe pelo caminho (sem aviso)', noLugar('[data-testid="gaveta-caminho-2"]')]] },
+  /* PR 5b — a VIRADA DO ANO (período nov/25–out/26, acumulado no modal): a frase da virada entra no subcentro, troca pela dos vencidos
+     no "Sal…" e sai ao subir — o lugar é reservado */
+  { nome: 'visao-geral-gaveta-virada', url: 'tela=visao-geral&barra=0&faixa=per&de=2025-11&ate=2026-10', antes: async (p) => {
+      await p.locator('[data-testid^="grade-linha-saida:grupo:Custeio"]').dispatchEvent('click'); await p.locator('[data-testid="modal-analise"]').waitFor(); await espera(p, 700);
+      await p.locator('[data-testid="analise-tabela"]').getByText('Acum.', { exact: true }).dispatchEvent('click'); await espera(p, 600);
+      await p.locator('[data-testid="analise-lanc-total"]').dispatchEvent('click'); await p.locator('[data-testid="gaveta"]').waitFor(); await espera(p, 500); },
+    estados: [
+      ['desce: atividade', noLugar('[data-testid="gaveta-linha-0"]')], ['desce: centro', noLugar('[data-testid="gaveta-linha-0"]')],
+      ['desce: subcentro (vencidos + virada)', noLugar('[data-testid="gaveta-linha-0"]')], ['irmão vazio (só a virada)', noLugar('[data-testid="gaveta-irmao-3"]')],
+      ['sobe pelo caminho (sem aviso)', noLugar('[data-testid="gaveta-caminho-2"]')]] },
+  /* PR 5b — a FATURA DO CARTÃO (`&fatura=1`, a 5ª frase, a mais longa): entra no subcentro, troca pela dos vencidos no "Sal…" e sai ao
+     subir — o lugar é reservado */
+  { nome: 'visao-geral-gaveta-fatura', url: 'tela=visao-geral&barra=0&fatura=1', antes: async (p) => {
+      await p.locator('[data-testid^="grade-linha-saida:grupo:Custeio"]').dispatchEvent('click'); await p.locator('[data-testid="modal-analise"]').waitFor(); await espera(p, 700);
+      await p.locator('[data-testid="analise-lanc-total"]').dispatchEvent('click'); await p.locator('[data-testid="gaveta"]').waitFor(); await espera(p, 500); },
+    estados: [
+      ['desce: atividade', noLugar('[data-testid="gaveta-linha-0"]')], ['desce: centro', noLugar('[data-testid="gaveta-linha-0"]')],
+      ['desce: subcentro (vencidos + fatura)', noLugar('[data-testid="gaveta-linha-0"]')], ['irmão vazio (só a fatura)', noLugar('[data-testid="gaveta-irmao-3"]')],
+      ['sobe pelo caminho (sem aviso)', noLugar('[data-testid="gaveta-caminho-2"]')]] },
   { nome: 'visao-geral-24m', url: 'tela=visao-geral&barra=0&faixa=per&de=2025-01&ate=2026-12', auto: true },
   { nome: 'contas-lista', url: 'tela=contas&barra=32&n=longo', auto: true, estados: [
     ['busca com resultado', digitar('[data-testid="busca-contas"]', 'bradesco')], ['busca sem resultado', digitar('[data-testid="busca-contas"]', 'zzzz')],
