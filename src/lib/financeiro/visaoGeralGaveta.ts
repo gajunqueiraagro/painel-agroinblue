@@ -7,7 +7,7 @@
  *     manda junto (nunca pela chave da linha).
  */
 import { supabase } from '@/integrations/supabase/client';
-import type { LadoVG } from '@/lib/financeiro/visaoGeral';
+import { MESES_ABR, rotuloMes, type LadoVG } from '@/lib/financeiro/visaoGeral';
 import type { CaminhoVG, ContextoAnaliseVG, CriterioVG } from '@/lib/financeiro/visaoGeralAnalise';
 
 export const POR_PAGINA_GAVETA = 500;
@@ -27,8 +27,9 @@ export interface GavetaVG {
   linhas: (LancamentoGavetaVG | FilhoGavetaVG)[];
   total_linhas: number; pagina: number; por_pagina: number; paginas: number;
   /** só na folha (111947): o que a lista de Lançamentos não reproduz — vencidos trazidos de antes da janela; no nó de transferências,
-   *  as transferências entre duas contas do conjunto (aqui se anulam) */
-  lista?: { vencidos_fora: number; transf_internas: number } | null;
+   *  as transferências entre duas contas do conjunto (aqui se anulam); no de saída, os pagamentos de fatura com o cartão fora do conjunto
+   *  (111949: aqui não entram — P82) */
+  lista?: { vencidos_fora: number; transf_internas: number; faturas_cartao?: number } | null;
 }
 /** o que a gaveta pede: o nó, o mês e o critério do modal (a janela); o resto vem da tela */
 export interface PedidoGavetaVG { lado: LadoVG; caminho: CaminhoVG; am: string; criterio: CriterioVG }
@@ -61,12 +62,19 @@ export const dataLonga = (d: string | null) => (d ? `${d.slice(8, 10)}/${d.slice
  * levado para o mês de hoje e a transferência entre contas escolhidas (a lista mostra; a gaveta anula) — `avisoDaLista` diz qual.
  *   · O nó de TRANSFERÊNCIAS ("Outras saídas › Transferências para outras contas", sem atividade nem subcentro) abre a lista no tipo
  *     "3-Transferências", sem centro (na lista a transferência não tem centro nem subcentro: com "2-Saídas" ela abriria vazia).
+ *   · A CONTA (quando é uma) vai pelo LADO: saída em Conta Origem; ENTRADA em CONTA DESTINO — a entrada grava a conta em
+ *     `conta_destino_id` (NJ 2026: 354 de 374, nenhuma em `conta_bancaria_id`) e a transferência recebida também; a lista, no tipo
+ *     Entradas, até apaga a Conta Origem (PR 5b: pela origem, a entrada abria vazia e a transferência de entrada mostrava as que SAEM).
+ *   · STATUS: na lista "Realizado" EXCLUI os conciliados ("Conciliado", `conciliado_real`, é a outra metade — LANC-STATUS-LISTA-UNICA-01);
+ *     o realizado da Visão Geral são os dois, então vão os dois (PR 5b: só "realizado" escondia os conciliados).
  */
 export interface FiltrosListaVG {
   tipo: '1-Entradas' | '2-Saídas' | '3-Transferências'; anos: string[]; meses: string[]; status: string[];
-  fazendaId: string | null; contaId: string | null; atividade: string | null; centro: string | null; subcentro: string | null;
+  fazendaId: string | null; contaId: string | null; contaDestinoId: string | null; atividade: string | null; centro: string | null; subcentro: string | null;
 }
-const CENTROS_DE_TRANSFERENCIA = ['Transferências para outras contas', 'Transferências de outras contas'];
+const TRANSF_SAIDA = 'Transferências para outras contas';
+const TRANSF_ENTRADA = 'Transferências de outras contas';
+const CENTROS_DE_TRANSFERENCIA = [TRANSF_SAIDA, TRANSF_ENTRADA];
 export const ehNoDeTransferencia = (caminho: CaminhoVG) => !caminho[1] && CENTROS_DE_TRANSFERENCIA.includes(caminho[2] ?? '');
 
 export function filtrosDaLista(ctx: ContextoAnaliseVG, g: Pick<GavetaVG, 'lado' | 'janela'>, caminho: CaminhoVG): FiltrosListaVG {
@@ -78,30 +86,71 @@ export function filtrosDaLista(ctx: ContextoAnaliseVG, g: Pick<GavetaVG, 'lado' 
     meses.add(String(m).padStart(2, '0'));
   }
   const transf = ehNoDeTransferencia(caminho);
+  const umaConta = ctx.contas?.length === 1 ? ctx.contas[0] : null;
+  const entra = g.lado === 'entrada';
   return {
     tipo: transf ? '3-Transferências' : g.lado === 'saida' ? '2-Saídas' : '1-Entradas', anos, meses: [...meses].sort(),
-    status: ['realizado', ...ctx.status],
+    status: ['realizado', 'conciliado_real', ...ctx.status],
     fazendaId: ctx.fazendas?.length === 1 ? ctx.fazendas[0] : null,
-    contaId: ctx.contas?.length === 1 ? ctx.contas[0] : null,
+    contaId: entra ? null : umaConta, contaDestinoId: entra ? umaConta : null,
     atividade: caminho[1] ?? ctx.atividade ?? null, centro: transf ? null : caminho[2] ?? null, subcentro: transf ? null : caminho[3] ?? null,
   };
 }
 
-/** as frases do rodapé (Gabriel: a tela nunca esconde diferença) — na ordem em que valem: a primeira que vale ocupa a linha */
+/** as frases do rodapé (Gabriel: a tela nunca esconde diferença) — na ordem em que valem: a primeira que vale ocupa a linha; a 4ª, a
+ *  da virada do ano, é montada com os meses do caso (`avisoDaViradaDeAno`); a 5ª, a da fatura do cartão (regra do Gabriel, P82: compra
+ *  no cartão = saída, pagamento da fatura = transferência) */
 export const AVISOS_DA_LISTA = {
   contas: 'A lista filtra uma conta por vez: vai abrir com todas as contas.',
   vencidos: 'Na lista, os vencidos ficam no mês do vencimento.',
   transferencias: 'A lista mostra as transferências entre as contas escolhidas; aqui elas se anulam.',
+  fatura: 'A lista mostra o pagamento da fatura como transferência; aqui não entra (a compra já foi a saída).',
 } as const;
+
+/** "jan–fev" / "nov" — meses (1–12, em ordem) em faixas seguidas */
+function faixasDeMeses(ms: number[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < ms.length;) {
+    let j = i;
+    while (j + 1 < ms.length && ms[j + 1] === ms[j] + 1) j += 1;
+    out.push(i === j ? MESES_ABR[ms[i] - 1] : `${MESES_ABR[ms[i] - 1]}–${MESES_ABR[ms[j] - 1]}`);
+    i = j + 1;
+  }
+  return out;
+}
+/**
+ * PR 5b — o 4º aviso: a janela que ATRAVESSA o ano (média ou acumulado, ex.: nov/25 → fev/26). A lista filtra ano × mês, então os
+ * meses escolhidos valem em todos os anos escolhidos: além da janela, ela traz os meses que sobram em cada ano. A frase usa os meses
+ * do caso; dentro do mesmo ano não há sobra (null). O conserto (a lista aceitar período de datas) é do P98.
+ */
+export function avisoDaViradaDeAno(janela: { de: string; ate: string }): string | null {
+  const [ad, md] = [Number(janela.de.slice(0, 4)), Number(janela.de.slice(5, 7))];
+  const [aa, ma] = [Number(janela.ate.slice(0, 4)), Number(janela.ate.slice(5, 7))];
+  if (ad === aa) return null;
+  const dentro = new Set<string>(); const meses = new Set<number>();
+  for (let a = ad, m = md; a < aa || (a === aa && m <= ma); m === 12 ? (a += 1, m = 1) : (m += 1)) { dentro.add(`${a}-${m}`); meses.add(m); }
+  const ordem = [...meses].sort((x, y) => x - y);
+  const sobras: string[] = [];
+  for (let a = ad; a <= aa; a += 1) {
+    const ms = ordem.filter((m) => !dentro.has(`${a}-${m}`));
+    if (ms.length) sobras.push(`${faixasDeMeses(ms).join(', ')}/${String(a).slice(2)}`);
+  }
+  if (!sobras.length) return null;
+  const lista = sobras.length === 1 ? sobras[0] : `${sobras.slice(0, -1).join(', ')} e ${sobras[sobras.length - 1]}`;
+  return `A lista filtra por ano e mês: o período ${rotuloMes(janela.de.slice(0, 7))}–${rotuloMes(janela.ate.slice(0, 7))} traz também ${lista}.`;
+}
 /**
  * O que a lista de Lançamentos NÃO reproduz desta folha, para a linha acima do "Ver na lista ›". Sem diferença: [] (a linha fica vazia,
  * o lugar continua reservado). Os números vêm do banco (`lista`); a tela só escolhe a frase. Fora da folha: [].
  */
-export function avisosDaLista(ctx: Pick<ContextoAnaliseVG, 'contas'>, g: Pick<GavetaVG, 'folha' | 'lista'> | null): string[] {
+export function avisosDaLista(ctx: Pick<ContextoAnaliseVG, 'contas'>, g: Pick<GavetaVG, 'folha' | 'lista' | 'janela'> | null): string[] {
   if (!g?.folha) return [];
   const a: string[] = [];
   if ((ctx.contas?.length ?? 0) > 1) a.push(AVISOS_DA_LISTA.contas);
   if ((g.lista?.vencidos_fora ?? 0) > 0) a.push(AVISOS_DA_LISTA.vencidos);
   if ((g.lista?.transf_internas ?? 0) > 0) a.push(AVISOS_DA_LISTA.transferencias);
+  const virada = g.janela ? avisoDaViradaDeAno(g.janela) : null;
+  if (virada) a.push(virada);
+  if ((g.lista?.faturas_cartao ?? 0) > 0) a.push(AVISOS_DA_LISTA.fatura);
   return a;
 }
