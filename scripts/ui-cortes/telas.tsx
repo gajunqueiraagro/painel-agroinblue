@@ -31,6 +31,11 @@ import { totaisDaListaV2 } from '@/lib/financeiro/totaisDaListaV2';
 import { volumeNJ } from './dados/volumeNJ';
 import { buscarFornecedores } from '@/lib/fornecedores/buscaDeFornecedor';
 import { FinanceiroV2Tab } from '@/pages/FinanceiroV2Tab';
+import { SearchableSelect } from '@/components/ui/searchable-select';
+import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
+import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ValorInexistente } from '@/components/shared/ValorInexistente';
 import { GRUPOS, LEITOR, LINHAS, LISTA, RECENTES, SEM_CADASTRO, USO } from './dados/fornecedores';
 import { CasarBlocoModal } from '@/components/financeiro-v2/CasarComBancoModal';
 import { CasarComBancoModal } from '@/components/financeiro-v2/CasarComBancoModal';
@@ -195,6 +200,13 @@ if (tela === 'mesclar') {
   /* FORN-BUSCA-UNICA-01 — a lista do Financeiro V2 (filtros + tabela), com o filtro de fornecedor da busca única */
   /* FIN-MODAL-FAZENDA-TRAVA-01 — `&v=volume`: o volume do NJ, sintético (2.356 ativos + 861 mesclados, ~3.000 lançamentos, 5 fazendas no Global) */
   if (q.get('n')) g.__nLanc = Number(q.get('n'));
+  /* P94 — `&fantasma=1`: a sessão chega com a memória DESTE cliente apontando para cadastros que não existem (fornecedor, fazenda, conta)
+     e com o instantâneo da OC (Competência + sem caixa): a tela abre com os avisos e os chips na faixa dos totais */
+  if (q.get('fantasma')) {
+    sessionStorage.setItem('financeirov2_filtros_ativos:cli', JSON.stringify({ fornecedorFiltro: 'forn-de-outro-cliente', fazendaId: 'faz-de-outro-cliente' }));
+    sessionStorage.setItem('financeirov2_return_filters:cli', JSON.stringify({ dataPor: 'competencia', mostrarSemCaixa: true, anosSelecionados: ['2026'],
+      fornecedorFiltro: 'forn-de-outro-cliente', fazendaId: 'faz-de-outro-cliente', contaOrigem: 'conta-de-outro-cliente' }));
+  }
   const VOL = v === 'volume' ? volumeNJ() : null;
   if (VOL) { g.__fornecedoresBancada = VOL.fornecedores; g.__fazendaBancada = { fazendas: VOL.fazendas, fazendaAtual: { id: '__global__', nome: 'Global', owner_id: '' },
     isGlobal: true, fazendaId: '__global__', setFazendaAtual: () => {} }; }
@@ -211,6 +223,23 @@ if (tela === 'mesclar') {
      a barra da secao (32) e a secao que rola, sem o `p-3` da bancada */
   montar(BARRA === 32 ? <div className="w-full min-w-0"><FinanceiroV2Tab filtroAnoInicial="2026" /></div>
     : <div className="p-3 h-full"><FinanceiroV2Tab filtroAnoInicial="2026" /></div>);
+} else if (tela === 'valor-inexistente') {
+  /* P94 — os seletores da barra de Lançamentos com o valor fora das opções, na largura da barra (12 faixas): a frase vermelha cabe
+     rolando no lugar, sem "…" e sem crescer o campo */
+  const sel = 'h-6 text-[10px] bg-white border-[#C9D4E2]';
+  const X = 'ffffffff-0000-0000-0000-000000000001';
+  montar(
+    <div className="p-3">
+      <div className="grid grid-cols-12 gap-1 items-end" data-testid="barra-inexistente">
+        <div className="col-span-2 min-w-0"><SearchableSelect value={X} onValueChange={() => {}} options={[{ value: 'f1', label: 'Faz. Exemplo' }]} allValue="__all__" allLabel="Todas" triggerClassName={sel} valorInexistente /></div>
+        <div className="col-span-2 min-w-0"><ContaBancariaSelect value={X} onValueChange={() => {}} contas={[{ id: 'bb', nome_conta: 'Banco Alfa', nome_exibicao: null, tipo_conta: 'cc' }]} placeholder="Todas" prependItems={[{ value: '__all__', label: 'Todas' }]} className={sel} valorInexistente /></div>
+        <div className="col-span-2 min-w-0"><SearchableSelect value="Subcentro de outro cliente" onValueChange={() => {}} options={[]} placeholder="Todos" valorInexistente /></div>
+        <div className="col-span-2 min-w-0"><FavorecidoSelect value={X} onChange={() => {}} fornecedores={[]} situacao="todos" nomeInteiro limpavel rotuloDoVazio="Todos" placeholder="Todos"
+          linhaDoDocumento={false} size="compact" triggerClassName="bg-white border-[#C9D4E2] !text-[9px]" valorInexistente /></div>
+        <div className="col-span-2 min-w-0"><Select value={X} onValueChange={() => {}}><SelectTrigger className={`${sel} !border-destructive !text-destructive`}><SelectValue><ValorInexistente onLimpar={() => {}} /></SelectValue></SelectTrigger>
+          <SelectContent><SelectItem value="__all__">Todas</SelectItem></SelectContent></Select></div>
+      </div>
+    </div>);
 } else if (tela === 'fornecedor-cadastro') {
   g.__bancoBancada = { from: () => [], rpc: () => null };
   const linha = { ...LINHAS.b, inscricao_municipal: '1234567', cep: '79002-000', complemento: 'Sala 1001 Bloco B', bairro: 'Jardim dos Estados', telefone: '(67) 3333-4444',
