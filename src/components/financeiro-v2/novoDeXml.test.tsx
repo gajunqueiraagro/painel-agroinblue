@@ -156,7 +156,8 @@ describe('tela A — a lista de notas', () => {
     const linhas = screen.getAllByTestId('xml-linha');
     expect(linhas.map((l) => l.getAttribute('data-situacao'))).toEqual(['nova', 'nova', 'recusada']);
     expect(linhas[0].textContent).toContain('000.012.345');
-    expect(linhas[0].textContent).toContain('30/09/26');
+    /* P95 — a emissao na lista em dd/mm/aaaa (a regra da casa; o gate de tela da lista entrou com o P95) */
+    expect(linhas[0].textContent).toContain('30/09/2026');
     expect(linhas[0].textContent).toContain('AGROPECUARIA EXEMPLO LTDA');
     expect(linhas[0].textContent).toContain('11.222.333/0001-81');
     expect(linhas[0].textContent).toContain('Faz. Pureza');
