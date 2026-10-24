@@ -127,6 +127,7 @@ import { podeOferecerDesvinculo } from '@/lib/oc/desvincularLancamento';
 import { DesvincularOperacaoDialog } from '@/components/financeiro-v2/DesvincularOperacaoDialog';
 import { DocumentosPendentes } from '@/components/financeiro-v2/DocumentosPendentes';
 import { ParcelasDaCompra } from '@/components/financeiro-v2/ParcelasDaCompra';
+import { ParcelarEsteLancamento } from './ParcelarEsteLancamento';
 import { GradeDeParcelas, type ModoDasParcelas } from '@/components/financiamentos/GradeDeParcelas';
 import {
   centavos, houveEdicao, motivoNaoSalva, parcelasComoPrevistas, parcelasDaNota, parcelasDoMensal, parcelasParaPayload,
@@ -3242,6 +3243,24 @@ export function LancamentoV2Dialog({
                   />
                 </div>
               </div>
+
+              {/* P74 B (NOTA-CARTAO-PARCELADO-01) — o lançamento À VISTA gravado vira parcelado: "Parcelar este lançamento" (o mesmo id vira a
+                  1/N, nascem as demais; documentos e classificação, inclusive dividida, vão às N). Parcela de parcelamento/financiamento ou
+                  gerada pelo sistema não mostra o bloco (a origem já tem o caminho dela); pago/conciliado mostra o botão apagado com a frase. */}
+              {isEdit && lancamento && clienteAtual?.id && !financiamentoDoLanc && !lancamento.origem_tipo && !lancamento.cancelado
+                && lancamento.tipo_operacao.startsWith('2') && (
+                <ParcelarEsteLancamento clienteId={clienteAtual.id}
+                  lancamento={{
+                    id: lancamento.id, valorCent: Math.round(Math.abs(Number(lancamento.valor)) * 100), descricao: lancamento.descricao ?? '',
+                    dataCompetencia: lancamento.data_competencia, fazendaId: lancamento.fazenda_id, planoContaId: lancamento.plano_conta_id ?? null,
+                    safraId: lancamento.safra_id ?? null, cultura: lancamento.cultura ?? null, fase: lancamento.fase ?? null, favorecidoId: lancamento.favorecido_id,
+                    formaPagamento: lancamento.forma_pagamento, contaId: lancamento.conta_bancaria_id, escopo: lancamento.escopo_negocio,
+                  }}
+                  situacao={{ status: lancamento.status_transacao, dataPagamento: lancamento.data_pagamento, conciliadoEm: lancamento.conciliado_em }}
+                  vencimentoAtual={lancamento.data_vencimento}
+                  conta={(() => { const c = contas.find((x) => x.id === lancamento.conta_bancaria_id); return c ? { id: c.id, nome: c.nome_exibicao || c.nome_conta, cartao: c.tipo_conta === 'cartao' } : null; })()}
+                  onParcelado={() => { void qc.invalidateQueries(); onClose(); }} />
+              )}
 
               {/* Frequency + Installment — only for new, e nunca no modo extrato */}
               {!isEdit && !ocultarParcelamento && (
