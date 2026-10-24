@@ -99,9 +99,14 @@ describe('FIN-V2-FILTRO-FORNECEDOR-01 — a lista do filtro de fornecedor', () =
   it('sem a contagem (página carregando): só os ativos, uso nulo — nunca "0 lanç." inventado', () => {
     expect(fornecedoresDoFiltroV2(CADASTRO, null).map((f) => [f.id, f.uso])).toEqual([['dest', null], ['nova', null]]);
   });
+  it('P94 — o inativo ESCOLHIDO fica na lista mesmo fora do recorte (o seletor nunca diz "Todos" filtrando); o mesclado escolhido, não', () => {
+    expect(fornecedoresDoFiltroV2(CADASTRO, new Map([['dest', 1]]), 'in0').map((f) => f.id)).toEqual(['dest', 'nova', 'in0']);
+    expect(fornecedoresDoFiltroV2(CADASTRO, null, 'in0').map((f) => f.id)).toEqual(['dest', 'nova', 'in0']);
+    expect(fornecedoresDoFiltroV2(CADASTRO, null, 'm2').map((f) => f.id)).toEqual(['dest', 'nova']);
+  });
   it('na tela: a lista vem do servidor, sem o selo "N iguais", e o uso só aparece com a página lida', () => {
     const tela = readFileSync(resolve(__dirname, '../../pages/FinanceiroV2Tab.tsx'), 'utf8');
-    expect(tela).toContain('const fornecedoresDoFiltro = useMemo(() => fornecedoresDoFiltroV2(hook.fornecedores, paginaDaLista?.usoPorFornecedor ?? null),');
+    expect(tela).toContain('const fornecedoresDoFiltro = useMemo(() => fornecedoresDoFiltroV2(hook.fornecedores, paginaDaLista?.usoPorFornecedor ?? null, fornecedorFiltro),');
     expect(tela.match(/situacao="todos" nomeInteiro mostrarUso=\{!!paginaDaLista\} mostrarIguais=\{false\}/g)).toHaveLength(2);
   });
 });
