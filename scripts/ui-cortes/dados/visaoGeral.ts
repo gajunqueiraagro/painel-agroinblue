@@ -182,3 +182,55 @@ export function analise(a: { p_de: string; p_ate: string; p_mes: string; p_lado:
     },
   };
 }
+
+/* PR 5 — o banco SINTÉTICO da GAVETA (`fn_vg_gaveta`), na mesma árvore do modal. Os piores casos de largura e de volume: no
+ * subcentro "Sal mineral…" 523 lançamentos (paginam: 500 + 23); no "Ração…" o favorecido de 60 letras, a descrição longa e uma parte
+ * 2/2 da classificação dividida; o "Outros insumos" vem VAZIO (a frase dentro do quadro). O `lista` (111947, o aviso do rodapé): o
+ * "Sal…" tem vencidos de antes da janela; o "Ração…" leva a frase MAIS LONGA (transferências entre as contas escolhidas — no banco
+ * ela só vem no nó de transferências; aqui fica no subcentro do pior caso de largura); os outros, nenhuma diferença. */
+const FAV_LONGO = 'Cooperativa Agroindustrial dos Produtores Rurais do Centro-Oeste'.slice(0, 60);
+export function gaveta(a: { p_de: string; p_ate: string; p_mes: string; p_lado: 'entrada' | 'saida'; p_caminho?: (string | null)[]; p_criterio?: string;
+  p_contas?: string[] | null; p_pagina?: number; p_por_pagina?: number }) {
+  const c = a.p_caminho ?? [];
+  const crit = a.p_criterio ?? 'mes';
+  const an = analise({ ...a, p_aba: c[0] ?? null, p_foco: c.slice(0, Math.min(c.length, 3)).length >= 1 ? c.slice(0, Math.min(c.length, 3)) : [],
+    p_grafico: c.length === 4 ? c : null, p_criterio: crit === 'media' ? 'acumulado' : crit, p_unidade: 'rs' });
+  const rot = (p: (string | null)[]) => p.length === 0 ? (a.p_lado === 'saida' ? 'Saídas' : 'Entradas') : p.length === 1 ? p[0]!
+    : p.length === 2 ? (p[1] ? ROT_ATIV[p[1]] : 'Sem atividade') : p[p.length - 1]!;
+  const no = c.length === 4 ? an.grafico.item : an.foco.total;
+  const total = c.length === 4 && c[3] === 'Outros insumos' ? 0 : (no?.valor ?? 0);
+  const filhos = c.length < 4 ? an.foco.linhas : [];
+  const irmaos = c.length === 0 ? [] : c.length === 4 ? an.grafico.irmaos : (c.length === 1 ? an.abas.map((x) => [x.grupo]) : an.tabela.linhas.map((l) => l.caminho));
+  const ms = meses(a.p_de, a.p_ate);
+  const ini = crit === 'mes' ? a.p_mes : ms[0];
+  const nLanc = c.length < 4 ? 0 : c[3] === 'Outros insumos' ? 0 : c[3] === 'Sal mineral proteinado de seca' ? 523 : c[3] === 'Ração de creep-feeding para bezerros' ? 8 : 12;
+  const longo = c[3] === 'Ração de creep-feeding para bezerros';
+  const todas = Array.from({ length: nLanc }, (_, i) => {
+    const am = crit === 'mes' ? a.p_mes : ms[Math.min(ms.indexOf(a.p_mes), i % (ms.indexOf(a.p_mes) + 1))];
+    const v = i < nLanc - 1 ? r2(total / nLanc) : r2(total - r2(total / nLanc) * (nLanc - 1));
+    const parte = longo && i === 2;
+    return { chave: parte ? `lanc-${i}#2` : `lanc-${i}`, lancamento_id: `lanc-${i}`, parte_ordem: parte ? 2 : 1, partes_total: parte ? 2 : 1,
+      data: `${am}-${String(1 + (i * 7) % 28).padStart(2, '0')}`,
+      favorecido: longo && i % 2 === 0 ? FAV_LONGO : ['Agropecuária Boa Vista Ltda', 'Casa do Produtor', 'Posto Rodoviário Central'][i % 3],
+      descricao: longo ? 'Compra de ração de creep-feeding para bezerros do lote de cria — nota fiscal e frete incluídos' : `NF ${1000 + i}`,
+      conta: i % 4 === 3 ? 'Cartão de crédito corporativo da fazenda' : 'Banco do Brasil · conta movimento', valor: v, valor_lancamento: parte ? r2(v * 2.5) : v,
+      status: am > HOJE ? 'previsto' : 'realizado', previsto: am > HOJE, vencido: false };
+  });
+  const pp = a.p_por_pagina ?? 500, pg = a.p_pagina ?? 1;
+  const porFav = new Map<string, { q: number; v: number }>();
+  for (const l of todas) { const x = porFav.get(l.favorecido) ?? { q: 0, v: 0 }; x.q += 1; x.v = r2(x.v + l.valor); porFav.set(l.favorecido, x); }
+  return {
+    lado: a.p_lado, mes: a.p_mes, criterio: crit, janela: { de: `${ini}-01`, ate: `${a.p_mes}-28` }, folha: c.length === 4,
+    caminho: [[], ...c.map((_, i) => c.slice(0, i + 1))].map((p) => ({ caminho: p, rotulo: rot(p) })),
+    irmaos: irmaos.map((p) => ({ caminho: p, rotulo: rot(p), valor: 0 })),
+    qtd: c.length === 4 ? nLanc : 37 + c.length * 11, total, medio: nLanc ? r2(total / nLanc) : total ? r2(total / 40) : null,
+    resumo: c.length === 4
+      ? { tipo: 'favorecido', linhas: [...porFav.entries()].sort((x, y) => y[1].v - x[1].v).slice(0, 4).map(([rotulo, x]) => ({ rotulo, qtd: x.q, valor: x.v })) }
+      : { tipo: 'filhos', linhas: [...filhos].sort((x, y) => (y.valor ?? 0) - (x.valor ?? 0)).slice(0, 4)
+          .map((l) => ({ rotulo: l.rotulo, qtd: l.qtd, valor: l.valor ?? 0, pct: total ? r1(((l.valor ?? 0) / total) * 100) : null })) },
+    linhas: c.length === 4 ? todas.slice((pg - 1) * pp, pg * pp)
+      : filhos.map((l) => ({ caminho: l.caminho, rotulo: l.rotulo, qtd: l.qtd, valor: l.valor ?? 0, pct: total ? r1(((l.valor ?? 0) / total) * 100) : null })),
+    total_linhas: c.length === 4 ? nLanc : filhos.length, pagina: pg, por_pagina: pp, paginas: c.length === 4 ? Math.max(1, Math.ceil(nLanc / pp)) : 1,
+    lista: c.length === 4 ? { vencidos_fora: c[3] === 'Sal mineral proteinado de seca' ? 4 : 0, transf_internas: longo ? 3 : 0 } : null,
+  };
+}

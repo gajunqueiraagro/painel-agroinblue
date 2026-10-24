@@ -66,7 +66,8 @@ import { DividendosTab } from '@/pages/DividendosTab';
 import { FinV2PlanoContasTab } from '@/pages/FinV2PlanoContasTab';
 import { FinV2SaldosTab } from '@/pages/FinV2SaldosTab';
 import { FinV2ContasTab } from '@/pages/FinV2ContasTab';
-import { VisaoGeralFinanceiro } from '@/v2/pages/VisaoGeralFinanceiro';
+import { VisaoGeralFinanceiro, type RetornoVG } from '@/v2/pages/VisaoGeralFinanceiro';
+import type { FinV2DrillFilters } from '@/pages/FinanceiroV2Tab';
 import { FiltrosBarraVG } from '@/components/financeiro-v2/visaoGeral/FiltrosBarraVG';
 import { FinV2FornecedoresTab } from '@/pages/FinV2FornecedoresTab';
 import { FinV2SubcentroAliasesTab } from '@/pages/FinV2SubcentroAliasesTab';
@@ -531,6 +532,15 @@ export default function V2Index() {
   // navegamos para 'financeiro-lanc' com ano/mês do contexto e habilitamos onBack
   // para retornar a 'conciliacao'. Resetar ao redirecionar para outras sections.
   const [voltarParaConciliacao, setVoltarParaConciliacao] = useState(false);
+  /* FIN-VISAO-GERAL-01 PR 5 — "Ver na lista de Lançamentos ›" da gaveta: os filtros equivalentes (à vista na barra da lista) e o
+     LUGAR da Visão Geral; o Voltar da lista reabre a tela, o modal de análise e a gaveta onde estavam. Sair por outro caminho limpa. */
+  const [drillDaVisaoGeral, setDrillDaVisaoGeral] = useState<FinV2DrillFilters | null>(null);
+  const [retornoVG, setRetornoVG] = useState<RetornoVG | null>(null);
+  useEffect(() => {
+    if (section !== 'financeiro-lanc') setDrillDaVisaoGeral(null);
+    if ((section !== 'fin-visao-geral' && section !== 'financeiro-lanc') || (section === 'financeiro-lanc' && !drillDaVisaoGeral)) setRetornoVG(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [section]);
   const limparEdicaoAvancada = () => {
     setAbateParaEditar(null);
     setVendaParaEditar(null);
@@ -1055,7 +1065,16 @@ export default function V2Index() {
       />
     );
     /* FIN-VISAO-GERAL-01 PR 3 — a Visão Geral (render-only; o modal de análise é o PR 4) */
-    if (section === 'fin-visao-geral') return <VisaoGeralFinanceiro />;
+    if (section === 'fin-visao-geral') return (
+      <VisaoGeralFinanceiro retorno={retornoVG}
+        onVerNaLista={(f, volta) => {
+          setRetornoVG(volta);
+          setDrillDaVisaoGeral({ tipo: f.tipo, anos: f.anos, meses: f.meses, statusSelecionados: f.status, fazendaId: f.fazendaId ?? undefined,
+            contaOrigem: f.contaId ?? undefined, atividade: f.atividade ?? undefined, centro: f.centro ?? undefined, subcentro: f.subcentro ?? undefined });
+          setVoltarParaConciliacao(false);
+          setSection('financeiro-lanc');
+        }} />
+    );
     if (section === 'visao-consolidada') return (
       <VisaoConsolidadaTab clienteId={clienteAtual?.id ?? null} />
     );
@@ -1335,10 +1354,12 @@ export default function V2Index() {
           setFinanciamentoIdAlvo(id);
           setSection('financiamentos');
         }}
-        onBack={voltarParaConciliacao ? () => {
+        onBack={drillDaVisaoGeral ? () => { setDrillDaVisaoGeral(null); setSection('fin-visao-geral'); }
+          : voltarParaConciliacao ? () => {
           setVoltarParaConciliacao(false);
           setSection('conciliacao');
         } : undefined}
+        drillFilters={drillDaVisaoGeral}
         lancamentoIdAlvo={flancIdAlvo}
         ocEditFavorecido={flancOcEdit}
         /* ⚠ O TIPO VAI JUNTO — OC-BOITEL-VALOR-01 · B3. Sem ele `abrirOperacaoOC` cai no

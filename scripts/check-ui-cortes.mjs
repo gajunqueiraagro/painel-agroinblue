@@ -145,6 +145,18 @@ const CENARIOS = [
     nome: `visao-geral-analise-${n}`, url: 'tela=visao-geral&barra=0', tamanhos: TAMANHOS_DA_VG, regiao: '[data-testid="modal-analise"]',
     semRolagem: { dentro: '[data-testid="modal-analise"]', exceto: '[data-testid="analise-tabela-lista"], [data-testid="analise-foco-lista"], [data-testid="analise-abas"], [data-testid="analise-caminho"]' },
     antes: async (p) => { await abrir(p); await p.locator('[data-testid="modal-analise"]').waitFor(); await p.waitForTimeout(700); } })),
+  /* PR 5 — a GAVETA de lançamentos (banco sintético): nos filhos do Custeio; no subcentro de 523 lançamentos (paginado); no de texto
+     longo (favorecido de 60 letras, descrição longa, conta longa e a parte 2/2 da divisão); e no nó VAZIO (a frase dentro do quadro).
+     Rolam por dentro só a lista, o caminho, o contexto e os atalhos dos irmãos (e as do modal, por baixo). O AVISO do rodapé: "523"
+     (vencidos), "longo" (a frase mais longa, transferências), "vazio" (nenhuma) e "contas" (duas contas escolhidas: `&contas=2`). */
+  ...[['filhos', []], ['523', [0, 0, 0]], ['longo', [0, 0, 1]], ['vazio', [0, 0, 3]], ['contas', [0, 0, 3], '&contas=2']].map(([n, descer, extra = '']) => ({
+    nome: `visao-geral-gaveta-${n}`, url: `tela=visao-geral&barra=0${extra}`, tamanhos: TAMANHOS_DA_VG, regiao: '[data-testid="modal-analise"]',
+    semRolagem: { dentro: '[data-testid="modal-analise"]', exceto: '[data-testid="analise-tabela-lista"], [data-testid="analise-foco-lista"], [data-testid="analise-abas"], [data-testid="analise-caminho"], [data-testid="gaveta-lista"], [data-testid="gaveta-caminho"], [data-testid="gaveta-contexto"], [data-testid="gaveta-irmaos"], [data-testid="gaveta-resumo"]' },
+    antes: async (p) => {
+      await p.locator('[data-testid^="grade-linha-saida:grupo:Custeio"]').dispatchEvent('click'); await p.locator('[data-testid="modal-analise"]').waitFor(); await p.waitForTimeout(600);
+      await p.locator('[data-testid="analise-lanc-total"]').dispatchEvent('click'); await p.locator('[data-testid="gaveta"]').waitFor(); await p.waitForTimeout(400);
+      for (const i of descer) { await p.locator(`[data-testid="gaveta-linha-${i}"]`).dispatchEvent('click'); await p.waitForTimeout(350); }
+      await p.waitForTimeout(400); } })),
   /* P71 — o seletor de Fazenda com o nome MAIS LONGO (43 letras; o maior real tem 18): largura fixa, o nome termina em "…" com o title
      inteiro, e a barra não cresce */
   { nome: 'visao-geral-fazenda-longa', url: 'tela=visao-geral&barra=0', tamanhos: TAMANHOS_DA_VG,
@@ -574,6 +586,10 @@ function medirSobreposicao(regiao) {
       /* o texto que ROLOU para baixo de um cabecalho preso (sticky) esta' coberto pelo cabecalho, nao pelo botao que mora nele */
       const preso = (() => { for (let a = bt.parentElement; a; a = a.parentElement) if (getComputedStyle(a).position === 'sticky') return a; return null; })();
       if (preso && !preso.contains(t)) continue;
+      /* PR 5 — a exceção DECLARADA: o painel que fica POR CIMA de propósito (`data-painel-por-cima`: hoje só a gaveta de lançamentos do
+         modal de análise, como no mock) cobre o que está embaixo — o texto embaixo dele está coberto pelo painel, não pelo botão */
+      const painel = bt.closest('[data-painel-por-cima]');
+      if (painel && !painel.contains(t)) continue;
       if (bt.contains(topo) && !t.contains(topo)) achados.push({ regra: 'sobreposicao', texto: `botão "${texto(bt)}" sobre "${texto(t)}"` });
     }
   }

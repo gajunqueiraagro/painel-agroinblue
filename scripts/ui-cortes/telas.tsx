@@ -58,6 +58,7 @@ import * as VG from './dados/visaoGeral';
 import { BarraSecao } from '@/v2/components/BarraSecao';
 import { VisaoGeralFinanceiro } from '@/v2/pages/VisaoGeralFinanceiro';
 import { FiltrosBarraVG } from '@/components/financeiro-v2/visaoGeral/FiltrosBarraVG';
+import { filtrosVG } from '@/lib/financeiro/visaoGeral';
 import { FinV2ContasTab } from '@/pages/FinV2ContasTab';
 import { V2Sidebar, LARGURA_DA_LATERAL } from '@/v2/components/V2Sidebar';
 import { ClienteSelector } from '@/components/ClienteSelector';
@@ -428,8 +429,12 @@ if (tela === 'mesclar') {
   g.__fazendaBancada = { fazendas: [{ id: 'f1', nome: 'Fazenda Exemplo Nome Longo Retiro', cliente_id: 'cli' }, { id: 'f2', nome: 'Faz. Exemplo Dois', cliente_id: 'cli' },
     { id: 'f3', nome: 'Fazenda Exemplo Nome Muito Longo Retiro Sul', cliente_id: 'cli' }],
     fazendaAtual: null, isGlobal: true, fazendaId: '__global__', setFazendaAtual: () => {} };
-  g.__bancoBancada = { from: () => [], rpc: (fn: string, a: any) => fn === 'fn_vg_filtros' ? (g.__vgFiltrosReal ?? VG.FILTROS)
-    : fn === 'fn_vg_tela' ? (g.__vgReal ?? VG.tela(a)) : fn === 'fn_vg_analise' ? VG.analise(a) : null };
+  /* PR 5 — `&contas=2`: duas contas escolhidas (o aviso "A lista filtra uma conta por vez" no rodapé da gaveta). Vai DEPOIS da carga
+     dos filtros: ela zera a escolha ao trocar de cliente (`useCarregarFiltrosVG`) */
+  const duasContas = q.get('contas') === '2';
+  g.__bancoBancada = { from: () => [], rpc: (fn: string, a: any) => fn === 'fn_vg_filtros'
+      ? (duasContas && setTimeout(() => filtrosVG.mudar({ contas: ['c1', 'c2'] }), 0), g.__vgFiltrosReal ?? VG.FILTROS)
+    : fn === 'fn_vg_tela' ? (g.__vgReal ?? VG.tela(a)) : fn === 'fn_vg_analise' ? VG.analise(a) : fn === 'fn_vg_gaveta' ? VG.gaveta(a) : null };
   montarNaUrl(
     <div className="flex h-full flex-col">
       <BarraSecao area="Financeiro" secao="Visão Geral" atalho={<FiltrosBarraVG />} />
