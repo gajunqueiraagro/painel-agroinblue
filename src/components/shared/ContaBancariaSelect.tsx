@@ -96,6 +96,9 @@ interface Props {
    * `check:ui-nativo`. A altura de cada tela segue valendo: `size` e `className` vestem o GATILHO (`triggerClassName`).
    */
   comBusca?: boolean;
+  /** P94 — a conta escolhida NAO esta' entre as `contas` (de outro cliente, inativa): o gatilho diz "valor inexistente (limpar)"
+   *  em vermelho (`SearchableSelect`), nunca o id cru. Quem decide e' o chamador, depois que as contas carregaram. Ausente = nada muda. */
+  valorInexistente?: boolean;
 }
 
 /**
@@ -193,6 +196,7 @@ export function ContaBancariaSelect({
   contentClassName,
   prependItems,
   comBusca = true,
+  valorInexistente = false,
 }: Props) {
   // Excluir IDs (transferência: origem ≠ destino).
   const excl = new Set(excluirIds ?? []);
@@ -230,6 +234,7 @@ export function ContaBancariaSelect({
       <div className="min-w-0" title={atual?.label}>
         <SearchableSelect value={selectValue ?? vazio} onValueChange={onValueChange} options={opcoes} semTodos
           allValue={vazio} allLabel={prependItems?.[0]?.label ?? placeholder} placeholder="Buscar conta..." disabled={disabled} dense
+          valorInexistente={valorInexistente}
           contentClassName={contentClassName}
           triggerClassName={cn(size === 'compact' && 'h-5 px-1.5 text-[11px]', className)} />
       </div>
