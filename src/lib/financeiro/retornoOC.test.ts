@@ -5,7 +5,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import type { DimensaoDataFinanceiro } from './filtrosBaseV2';
-import { CHAVE_RETORNO_OC, extrasDoRetornoOC, type ExtrasRetornoOC } from './retornoOC';
+import { CHAVE_RETORNO_OC, chaveRetornoOC, chipsVindosDaOC, extrasDoRetornoOC, type ExtrasRetornoOC } from './retornoOC';
 
 /** O que o FinanceiroV2Tab grava e le': JSON pelo sessionStorage. */
 const idaEVolta = (o: object): unknown => {
@@ -47,5 +47,23 @@ describe('extrasDoRetornoOC', () => {
     for (const d of dimensoes) {
       expect(extrasDoRetornoOC({ dataPor: d }).dataPor).toBe(d);
     }
+  });
+});
+
+describe('P94 — o instantaneo da OC e\' do cliente', () => {
+  it('a chave leva o cliente: o do A nunca e\' o do B', () => {
+    expect(chaveRetornoOC('cli-a')).toBe(`${CHAVE_RETORNO_OC}:cli-a`);
+    expect(chaveRetornoOC('cli-a')).not.toBe(chaveRetornoOC('cli-b'));
+  });
+});
+
+describe('P94 — chipsVindosDaOC', () => {
+  it('o que a OC trouxe fora do padrao vira chip; o padrao nao', () => {
+    expect(chipsVindosDaOC({ dataPor: 'competencia', mostrarSemCaixa: true }, { dataPor: 'competencia', mostrarSemCaixa: true }))
+      .toEqual([{ campo: 'dataPor', texto: 'Vindo da OC: Data por = Competência' }, { campo: 'semCaixa', texto: 'Vindo da OC: Sem caixa = Mostrar' }]);
+    expect(chipsVindosDaOC({ dataPor: 'financeira', mostrarSemCaixa: false }, { dataPor: 'financeira', mostrarSemCaixa: false })).toEqual([]);
+  });
+  it('trocou na barra: o chip sai', () => {
+    expect(chipsVindosDaOC({ dataPor: 'competencia' }, { dataPor: 'vencimento', mostrarSemCaixa: false })).toEqual([]);
   });
 });
