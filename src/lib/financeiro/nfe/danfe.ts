@@ -32,6 +32,7 @@ export type CampoConferido = 'cnpj' | 'numero' | 'serie' | 'mes' | 'modelo' | 'd
 export type MotivoDoPdf = 'pdf_sem_texto' | 'pdf_nao_e_danfe' | 'incompleta';
 export const FRASE_PDF_SEM_TEXTO = 'PDF sem texto (foto ou escaneado): a leitura dele chega na etapa 2. Nada foi criado.';
 export const FRASE_PDF_NAO_E_DANFE = 'O PDF não parece um DANFE (a nota fiscal eletrônica): nada foi lido.';
+export const FRASE_NOTA_SEM_CHAVE = 'Nota sem chave de acesso.';
 
 /** ITENS-NOTA-01 — os totais do quadro do imposto que a `NotaLida` nao tem (o rateio dos itens e o cabecalho da aba usam). */
 export interface TotaisExtrasDoDanfe { seguroCent: number; outrasCent: number; ipiCent: number; stCent: number; tributosAproxCent: number | null }
@@ -151,6 +152,12 @@ class Danfe {
     for (const r of rs) { const v = this.valorDe(r); if (v) return v; }
     return null;
   }
+  /** DANFE-CHAVE-EM-GRUPOS-01 — o item logo a' direita, na mesma linha (o valor de um rotulo escrito em item separado: "N°." | "46.994"). */
+  aoLado(r: ItemNaPagina): ItemNaPagina | null {
+    const fim = r.x + r.w;
+    const dir = this.itens.filter((o) => o.pagina === r.pagina && o !== r && Math.abs(o.y - r.y) <= 2 && o.x >= fim - 1 && o.x - fim <= 40);
+    return dir.sort((a, b) => a.x - b.x)[0] ?? null;
+  }
   /** As linhas (itens da mesma altura, da esquerda para a direita) entre duas alturas, numa pagina. */
   linhasEntre(pagina: number, de: number, ate: number): ItemNaPagina[][] {
     const dentro = this.itens.filter((o) => o.pagina === pagina && o.y < de && o.y > ate);
@@ -180,6 +187,29 @@ export function partirPelosEspacos<T extends ItemDoDanfe>(o: T): T[] {
 }
 
 const RE_CHAVE = /^(\d{4}\s?){10}\d{4}$/;
+
+/**
+ * DANFE-CHAVE-EM-GRUPOS-01 (Gabriel 23/10/2026: "Sistema não está lendo essa NF") — a chave PICADA em itens: emissores (JasperReports +
+ * iText) escrevem cada grupo de 4 digitos num item, com itens " " entre eles. Na mesma pagina e na mesma linha (|Δy| ≤ 2), em ordem de x,
+ * os itens so' de digitos e espacos se juntam ate' 44 digitos; vale SO' com o digito verificador certo (modulo 11) — nunca adivinha.
+ * Devolve os itens que formaram a chave (o amarelo cobre todos).
+ */
+export function chaveEmGrupos<T extends ItemDoDanfe & { pagina: number }>(itens: readonly T[]): { chave: string; itens: T[] } | null {
+  const pedacos = itens.filter((o) => /^[\d\s]+$/.test(o.str) && soDigitos(o.str).length > 0 && soDigitos(o.str).length < 44);
+  const vistos = new Set<T>();
+  for (const p of pedacos) {
+    if (vistos.has(p)) continue;
+    const linha = pedacos.filter((o) => o.pagina === p.pagina && Math.abs(o.y - p.y) <= 2).sort((a, b) => a.x - b.x);
+    for (const o of linha) vistos.add(o);
+    for (let i = 0; i < linha.length; i++) {
+      let digitos = '';
+      const usados: T[] = [];
+      for (let j = i; j < linha.length && digitos.length < 44; j++) { digitos += soDigitos(linha[j].str); usados.push(linha[j]); }
+      if (digitos.length === 44 && digitoDaChave(digitos.slice(0, 43)) === Number(digitos[43])) return { chave: digitos, itens: usados };
+    }
+  }
+  return null;
+}
 const RE_NUMERO = /^N[º°O.]?\.?\s*:?\s*(\d{1,3}(?:\.\d{3}){0,2}|\d{1,9})$/;
 const RE_SERIE = /^SERIE:?\s*(\d{1,3})$/;
 const RE_DUPLICATA = /(?:NUM\.?:?\s*)?(\d{1,4}[A-Z]?)\s+(?:VENC\.?:?\s*)?(\d{2}\/\d{2}\/\d{4})\s+(?:VALOR:?\s*)?(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*,\d{2})/g;
@@ -189,14 +219,15 @@ export function notaDoDanfe(paginas: readonly ItemDoDanfe[][]): ResultadoDoDanfe
   const d = new Danfe(paginas);
   if (d.itens.length === 0) return { ok: false, motivo: 'pdf_sem_texto', frase: FRASE_PDF_SEM_TEXTO };
 
-  /* A CHAVE: o item de 44 digitos (em grupos de 4 ou corrido). */
+  /* A CHAVE: o item de 44 digitos (em grupos de 4 ou corrido); sem ele, a chave picada em itens na mesma linha (com o DV certo). */
   const itemChave = d.itens.find((it) => RE_CHAVE.test(it.str.trim()));
-  const ehDanfe = !!itemChave || d.itens.some((it) => normalizar(it.str) === 'DANFE');
+  const grupos = itemChave ? null : chaveEmGrupos(d.itens);
+  const ehDanfe = !!itemChave || !!grupos || d.itens.some((it) => normalizar(it.str) === 'DANFE');
   if (!ehDanfe) return { ok: false, motivo: 'pdf_nao_e_danfe', frase: FRASE_PDF_NAO_E_DANFE };
-  if (!itemChave) return { ok: false, motivo: 'incompleta', frase: 'Nota sem chave de acesso.' };
-  const chave = soDigitos(itemChave.str);
-  d.marcar('chave', itemChave);
-  const pg = itemChave.pagina;
+  if (!itemChave && !grupos) return { ok: false, motivo: 'incompleta', frase: FRASE_NOTA_SEM_CHAVE };
+  const chave = itemChave ? soDigitos(itemChave.str) : grupos?.chave ?? '';
+  for (const it of itemChave ? [itemChave] : grupos?.itens ?? []) d.marcar('chave', it);
+  const pg = itemChave?.pagina ?? grupos?.itens[0]?.pagina ?? 1;
 
   /* AS FAIXAS DA PRIMEIRA FOLHA: emitente acima do "DESTINATARIO / REMETENTE"; destinatario ate' a fatura/imposto. */
   const rotDest = d.rotulos('DESTINATARIO / REMETENTE', true).find((r) => r.pagina === pg) ?? d.rotulos('DESTINATARIO', true).find((r) => r.pagina === pg);
@@ -209,12 +240,18 @@ export function notaDoDanfe(paginas: readonly ItemDoDanfe[][]): ResultadoDoDanfe
   const yProdutos = rotProdutos?.y ?? 0;
 
   /* NUMERO E SERIE: o "Nº" com mais digitos (o do quadro do DANFE, nao o do canhoto) e a "SERIE" ao lado dele. */
-  const nums = d.itens.map((it) => ({ it, m: RE_NUMERO.exec(normalizar(it.str)) })).filter((x) => x.m)
+  /* DANFE-CHAVE-EM-GRUPOS-01 — e o rotulo num item com o valor no item ao lado ("N°." | "46.994", "SÉRIE" | "001"): lido junto, marca o valor */
+  const juntos = (rotulo: RegExp) => d.itens.filter((it) => rotulo.test(normalizar(it.str))).flatMap((it) => {
+    const v = d.aoLado(it);
+    return v ? [{ it: v, texto: `${normalizar(it.str)} ${normalizar(v.str)}` }] : [];
+  });
+  const candidatos = (rotulo: RegExp) => [...d.itens.map((it) => ({ it, texto: normalizar(it.str) })), ...juntos(rotulo)];
+  const nums = candidatos(/^N[º°O]?\.?:?$/).map(({ it, texto }) => ({ it, m: RE_NUMERO.exec(texto) })).filter((x) => x.m)
     .sort((a, b) => soDigitos(b.m?.[1] ?? '').length - soDigitos(a.m?.[1] ?? '').length);
   const itNumero = nums[0]?.it ?? null;
   const numero = soDigitos(nums[0]?.m?.[1] ?? '').replace(/^0+(?=\d)/, '');
   d.marcar('numero', itNumero);
-  const series = d.itens.map((it) => ({ it, m: RE_SERIE.exec(normalizar(it.str)) })).filter((x) => x.m)
+  const series = candidatos(/^SERIE:?$/).map(({ it, texto }) => ({ it, m: RE_SERIE.exec(texto) })).filter((x) => x.m)
     .sort((a, b) => (itNumero ? Math.hypot(a.it.x - itNumero.x, a.it.y - itNumero.y) - Math.hypot(b.it.x - itNumero.x, b.it.y - itNumero.y) : 0));
   const serie = series[0]?.m?.[1] ?? '';
   d.marcar('serie', series[0]?.it);
@@ -230,7 +267,8 @@ export function notaDoDanfe(paginas: readonly ItemDoDanfe[][]): ResultadoDoDanfe
   d.marcar('emitente_ie', itIeEmit);
   const itNatureza = d.campo('NATUREZA DA OPERACAO', { acimaDe: yDest });
   d.marcar('natureza', itNatureza);
-  const itProtocolo = d.campo('PROTOCOLO DE AUTORIZACAO DE USO', { acimaDe: yDest }, true);
+  /* DANFE-CHAVE-EM-GRUPOS-01 — ha' leiaute com o rotulo curto ("PROTOCOLO DE AUTORIZAÇÃO", sem o "DE USO") */
+  const itProtocolo = d.campo('PROTOCOLO DE AUTORIZACAO DE USO', { acimaDe: yDest }, true) ?? d.campo('PROTOCOLO DE AUTORIZACAO', { acimaDe: yDest }, true);
   d.marcar('protocolo', itProtocolo);
 
   /* O ENDERECO DO EMITENTE: as linhas logo abaixo do nome, no quadro dele (a esquerda do "DANFE"). */
