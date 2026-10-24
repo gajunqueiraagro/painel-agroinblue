@@ -5,6 +5,7 @@ import { ChevronsUpDown, X } from 'lucide-react';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { Popover, PopoverContent } from '@/components/ui/popover';
 import { COMBOBOX_CONTENT } from '@/components/ui/command';
+import { CLASSE_DO_INEXISTENTE, FRASE_VALOR_INEXISTENTE } from '@/components/shared/ValorInexistente';
 import {
   MENU_BUSCA, MENU_ITEM, MENU_REALCE, MENU_REALCE_HOVER, MENU_SECUNDARIO, MENU_VAZIO,
 } from '@/components/ui/menuPadrao';
@@ -109,6 +110,9 @@ interface SearchableSelectProps {
   triggerClassName?: string;
   /** Ordem de tabulação do gatilho (o modal do lançamento numera os campos). Ausente = 0, como sempre. */
   tabIndex?: number;
+  /** P94 — o valor NÃO está nas opções do cliente (quem decide é o chamador, depois que as opções carregaram): o gatilho diz
+   *  "valor inexistente (limpar)" em vermelho, nunca o rótulo do vazio nem o valor cru; o ✕ de sempre limpa. Ausente = nada muda. */
+  valorInexistente?: boolean;
 }
 
 export function SearchableSelect({
@@ -127,6 +131,7 @@ export function SearchableSelect({
   persistKey,
   triggerClassName,
   tabIndex,
+  valorInexistente = false,
 }: SearchableSelectProps) {
   const [open, setOpen] = useState(false);
   /* "Ativo" = o campo está filtrando alguma coisa. É a mesma pergunta que decide se o
@@ -165,6 +170,7 @@ export function SearchableSelect({
   const listRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
+  const inexistente = valorInexistente && value !== allValue;
   const selectedLabel = value === allValue
     ? allLabel
     : options.find(o => o.value === value)?.label || value;
@@ -314,11 +320,16 @@ export function SearchableSelect({
           'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1',
           disabled && 'opacity-50 cursor-not-allowed',
           triggerClassName,
+          inexistente && CLASSE_DO_INEXISTENTE,
         )}
       >
-        <span className="truncate text-left flex-1">
-          {open ? '' : selectedLabel}
-        </span>
+        {inexistente && !open
+          ? <span data-testid="valor-inexistente" className="uma-linha-que-rola min-w-0 flex-1 text-left">{FRASE_VALOR_INEXISTENTE}</span>
+          : (
+            <span className="truncate text-left flex-1">
+              {open ? '' : selectedLabel}
+            </span>
+          )}
         <span className="flex items-center gap-0">
           {/* ⚠ O "X" OCUPA O LUGAR DELE SEMPRE — A23. Antes ele só existia com valor
               escolhido, e aparecer roubava ~14px do texto: o rótulo truncava no ato de
