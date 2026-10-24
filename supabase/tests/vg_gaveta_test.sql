@@ -24,6 +24,20 @@
 --      entre si: no no' de transferencias transf_internas = as transferencias realizadas entre as duas no mes (contadas direto na
 --      tabela) e, com so' uma das contas, 0 — e o no' passa a ter essas transferencias como saida (qtd soma)
 --      Rodado em 23/10/2026: 61 folhas com `lista`, 0 fora; vencidos_fora 1–2 em 5 subcentros; transf_internas 6 = 6; qtd 5 → 11.
+--      PR 5b (111948): vencidos_fora conta os DOIS sentidos — o vencido que a Visao Geral traz para a janela E o que ela leva para fora
+--      (vencimento dentro da janela, no mes de hoje). Em out/26 (o mes de hoje) nada sai: a conta do G5 segue a mesma.
+--   G6 GAVETA = LISTA (PR 5b): pg_temp.vgga_lista_igual(mut). NJ set/26, UMA conta (as duas do G5, uma por vez), TODO subcentro dos
+--      dois lados: a `fn_fin_v2_lista_pagina` com os filtros que o "Ver na lista ›" manda (tipo do lado ou "3-Transferências" no no' de
+--      transferencias, sem centro; a conta em Conta Origem na saida e em CONTA DESTINO na entrada; atividade, centro, subcentro; ano/mes;
+--      status realizado + CONCILIADO + os da tela) tem o mesmo nº de lancamentos da gaveta — ou a gaveta avisa (vencidos_fora ou
+--      transf_internas). Exigido: os dois subcentros de transferencia (entrada e saida) com lancamentos e iguais. mut = true poe a
+--      entrada pela Conta Origem: tem de FALHAR.
+--      Rodado em 23/10/2026: 65 subcentros, 63 iguais, 2 com a lista +1 e o aviso dos vencidos (vencimento 10/09, na Visao Geral em
+--      out/26); transferencias: saida 11 = 11, entrada 6 = 6. Mutacao: entrada 6 x 2 — falhou como devia.
+--   G7 PAGAMENTO DA FATURA (111949): pg_temp.vgga_fatura(mut). NJ out/26, conta 3b9a (o cartao fora): no no' "Transferencias para
+--      outras contas" a gaveta conta 1 (a transferencia que nao e' fatura), a lista 2 e lista.faturas_cartao = 1 = a diferenca; sem
+--      caso: 7f39 set/26 (11 transferencias, nenhuma para cartao) e todas as contas (o cartao no conjunto) com faturas_cartao 0.
+--      mut = true ignora o faturas_cartao como aviso: tem de FALHAR (a diferenca fica sem aviso).
 set local statement_timeout = '900s';
 
 create function pg_temp.vgga_no(cli uuid, mes text, crit text, ctas uuid[], lado text, so_no text[] default null)
@@ -244,4 +258,69 @@ begin
               else 'G5 FALHOU: ' || array_to_string(e, '; ') end;
 end $f$;
 
-do $$ begin raise exception 'VGGA % | % | %', pg_temp.vgga(), pg_temp.vgga_mut(), pg_temp.vgga_lista(); end $$;
+create function pg_temp.vgga_lista_igual(mut boolean default false) returns text language plpgsql as $f$
+declare
+  c_nj constant uuid := 'f2d67cd4-24d0-456f-a079-a3281dcce7fd';
+  r record; tr int := 0; e text[] := '{}'; n int := 0; iguais int := 0;
+begin
+  perform set_config('request.jwt.claims', '{"sub":"7bd0b6ad-2527-4be1-af58-f2cc0c0edd8e","role":"authenticated"}', true);
+  for r in
+    with c(conta) as (values ('7f39d18f-d9c9-4027-9d81-78e80b87ea88'::uuid), ('3b9afa7a-0af6-4bce-8ec9-03b91484dfd8'::uuid)),
+    nos as (select distinct c.conta, p.lado, ARRAY[p.grupo, p.atividade, p.centro, p.subcentro] as cam
+              from c, public.fn_vg_partes(c_nj, '2026-09-01', '2026-09-30', ARRAY[c.conta], NULL, NULL, NULL, '2026-10-23', NULL, true) p),
+    g as (select n.*, public.fn_vg_gaveta(c_nj, '2026-01-01', '2026-12-31', '2026-09', n.lado, n.cam, 'mes', ARRAY[n.conta], NULL, NULL, '2026-10-23', NULL, true, 1, 500) as j,
+                 n.cam[2] is null and n.cam[3] like 'Transferências %' as transf from nos n)
+    select g.conta, g.lado, g.cam, g.transf, (g.j ->> 'qtd')::int as gav, g.j -> 'lista' as l,
+      (public.fn_fin_v2_lista_pagina(c_nj,
+         jsonb_strip_nulls(jsonb_build_object('dimensao', 'financeira', 'modo_sem_caixa', 'ocultar',
+           'tipo_operacao', case when g.transf then '3-Transferências' when g.lado = 'saida' then '2-Saídas' else '1-Entradas' end,
+           case when g.lado = 'saida' or mut then 'conta_origem' else 'conta_destino' end, g.conta,
+           'atividade', g.cam[2], 'centro', case when g.transf then null else g.cam[3] end, 'subcentro', g.cam[4],
+           'anos', jsonb_build_array(2026), 'meses', jsonb_build_array(9),
+           'status', jsonb_build_array('realizado', 'conciliado_real', 'previsto', 'programado', 'agendado'))),
+         '{"campo":"default","dir":"asc","nivel":"subcentro"}'::jsonb, 0, 5) ->> 'total_linhas')::int as lis
+      from g
+  loop
+    n := n + 1;
+    if r.gav = r.lis then iguais := iguais + 1;
+    elsif (r.l ->> 'vencidos_fora')::int = 0 and (r.l ->> 'transf_internas')::int = 0 and coalesce((r.l ->> 'faturas_cartao')::int, 0) = 0 then
+      e := e || format('%s %s %s: gaveta %s x lista %s sem aviso', left(r.conta::text, 4), r.lado, array_to_string(r.cam, '>', '-'), r.gav, r.lis);
+    end if;
+    if r.transf and r.gav > 0 then
+      tr := tr + 1;
+      if r.gav <> r.lis then e := e || format('transferencia %s %s: gaveta %s x lista %s', left(r.conta::text, 4), r.lado, r.gav, r.lis); end if;
+    end if;
+  end loop;
+  if tr < 2 then e := e || 'faltou o no de transferencia de entrada ou de saida com lancamentos (o caso sumiu)'::text; end if;
+  return case when cardinality(e) = 0 then format('G6 OK (%s subcentros, %s iguais, %s transferencias iguais)', n, iguais, tr)
+              else 'G6 FALHOU: ' || array_to_string(e, '; ') end;
+end $f$;
+
+create function pg_temp.vgga_fatura(mut boolean default false) returns text language plpgsql as $f$
+declare
+  c_nj constant uuid := 'f2d67cd4-24d0-456f-a079-a3281dcce7fd';
+  no_tr constant text[] := ARRAY['Outras saídas', NULL, 'Transferências para outras contas', NULL];
+  st constant jsonb := jsonb_build_array('realizado', 'conciliado_real', 'previsto', 'programado', 'agendado');
+  r record; g jsonb; lis int; fat int; e text[] := '{}';
+begin
+  perform set_config('request.jwt.claims', '{"sub":"7bd0b6ad-2527-4be1-af58-f2cc0c0edd8e","role":"authenticated"}', true);
+  for r in select * from (values ('3b9afa7a-0af6-4bce-8ec9-03b91484dfd8'::uuid, '2026-10', 10, true),
+                                 ('7f39d18f-d9c9-4027-9d81-78e80b87ea88'::uuid, '2026-09', 9, false)) t(conta, mes, m, caso) loop
+    g := public.fn_vg_gaveta(c_nj, '2026-01-01', '2026-12-31', r.mes, 'saida', no_tr, 'mes', ARRAY[r.conta], NULL, NULL, '2026-10-23', NULL, true, 1, 500);
+    lis := (public.fn_fin_v2_lista_pagina(c_nj, jsonb_build_object('dimensao', 'financeira', 'modo_sem_caixa', 'ocultar',
+              'tipo_operacao', '3-Transferências', 'conta_origem', r.conta, 'anos', jsonb_build_array(2026), 'meses', jsonb_build_array(r.m),
+              'status', st), '{"campo":"default","dir":"asc","nivel":"subcentro"}'::jsonb, 0, 5) ->> 'total_linhas')::int;
+    fat := case when mut then 0 else coalesce((g #>> '{lista,faturas_cartao}')::int, 0) end;
+    if (g ->> 'qtd')::int = 0 then e := e || format('%s %s: no de transferencia vazio (o caso sumiu)', left(r.conta::text, 4), r.mes); end if;
+    if r.caso and fat = 0 then e := e || format('%s %s: gaveta %s x lista %s sem o aviso da fatura', left(r.conta::text, 4), r.mes, g ->> 'qtd', lis); end if;
+    if not r.caso and fat <> 0 then e := e || format('%s %s: faturas_cartao %s sem caso', left(r.conta::text, 4), r.mes, fat); end if;
+    if (g ->> 'qtd')::int + fat <> lis then e := e || format('%s %s: gaveta %s + faturas %s <> lista %s', left(r.conta::text, 4), r.mes, g ->> 'qtd', fat, lis); end if;
+  end loop;
+  -- todas as contas: o cartao esta' no conjunto, o pagamento e' transferencia interna (sem no' de saida; se houver, 0)
+  g := public.fn_vg_gaveta(c_nj, '2026-01-01', '2026-12-31', '2026-10', 'saida', no_tr, 'mes', NULL, NULL, NULL, '2026-10-23', NULL, true, 1, 500);
+  if coalesce((g #>> '{lista,faturas_cartao}')::int, 0) <> 0 then e := e || 'todas as contas com faturas_cartao <> 0'::text; end if;
+  return case when cardinality(e) = 0 then 'G7 OK (3b9a out/26: gaveta 1 + 1 fatura = lista 2; sem caso 0)' else 'G7 FALHOU: ' || array_to_string(e, '; ') end;
+end $f$;
+
+do $$ begin raise exception 'VGGA % | % | % | % | mutacao entrada pela origem: % | % | mutacao sem o aviso da fatura: %', pg_temp.vgga(), pg_temp.vgga_mut(),
+  pg_temp.vgga_lista(), pg_temp.vgga_lista_igual(), pg_temp.vgga_lista_igual(true), pg_temp.vgga_fatura(), pg_temp.vgga_fatura(true); end $$;
