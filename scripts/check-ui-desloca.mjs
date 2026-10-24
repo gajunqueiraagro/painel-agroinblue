@@ -157,6 +157,14 @@ const CENARIOS = [
     ['nota avulsa, remessa de entrega futura (NOTA-AVULSA-890-01)', { url: 'tela=nota-pdf&v=avulsa' }],
     ['nota ja lancada em parcela (NOTA-CONTAS-NA-CRIACAO-01 C)', { url: 'tela=nota-pdf&v=emparcela' }],
     ['nota ja lancada com cancelados no fim (D)', { url: 'tela=nota-pdf&v=cancelados' }], ['so cancelados (D)', { url: 'tela=nota-pdf&v=socancelados' }],
+    /* P95 — a previa pela chave digitada (emissao e valor em ambar no lugar dos lidos) e a nota achada em parcelas soltas */
+    ['nota pela chave digitada (P95)', { url: 'tela=nota-pdf&v=pelachave' }], ['nota em parcelas soltas, "k/4" (P95)', { url: 'tela=nota-pdf&v=irmas' }],
+  ] },
+  /* P95 — "Novo a partir da nota": digitar a chave errada troca a frase pelo erro no MESMO lugar; o campo e o "Usar" nao andam. De 1000px
+     para cima: abaixo disso o modal ja' passava da janela ANTES do P95 (o mesmo achado do check-ui-cortes, registrado no relatorio) */
+  { nome: 'nota-novo-da-nota', url: 'tela=novo-da-nota', minLargura: 1000, estados: [
+    ['chave errada digitada e "Usar"', async (p) => { await digitar('[data-testid="xml-digitar-chave"]', '5026 0911 2223 3300 0424 5501 0000 0009 3712 1753 8290')(p); await clicar('[data-testid="xml-usar-chave"]')(p); }],
+    ['chave curta e "Usar"', async (p) => { await digitar('[data-testid="xml-digitar-chave"]', '5026')(p); await clicar('[data-testid="xml-usar-chave"]')(p); }],
   ] },
   /* ITENS-NOTA-01 — os itens da nota: Valores <-> Fiscal (o `auto` troca o Segmentado) no dialogo da OC; o backfill antes e depois do
      Simular (a contagem e as linhas chegam, os botoes nao andam) */
