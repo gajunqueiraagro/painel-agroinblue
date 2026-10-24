@@ -128,6 +128,7 @@ import { DesvincularOperacaoDialog } from '@/components/financeiro-v2/Desvincula
 import { DocumentosPendentes } from '@/components/financeiro-v2/DocumentosPendentes';
 import { ParcelasDaCompra } from '@/components/financeiro-v2/ParcelasDaCompra';
 import { ParcelarEsteLancamento } from './ParcelarEsteLancamento';
+import { VoltarParaAVista } from './VoltarParaAVista';
 import { GradeDeParcelas, type ModoDasParcelas } from '@/components/financiamentos/GradeDeParcelas';
 import {
   centavos, houveEdicao, motivoNaoSalva, parcelasComoPrevistas, parcelasDaNota, parcelasDoMensal, parcelasParaPayload,
@@ -3260,6 +3261,13 @@ export function LancamentoV2Dialog({
                   vencimentoAtual={lancamento.data_vencimento}
                   conta={(() => { const c = contas.find((x) => x.id === lancamento.conta_bancaria_id); return c ? { id: c.id, nome: c.nome_exibicao || c.nome_conta, cartao: c.tipo_conta === 'cartao' } : null; })()}
                   onParcelado={() => { void qc.invalidateQueries(); onClose(); }} />
+              )}
+
+              {/* P74b — a parcela de uma compra parcelada: "Voltar para à vista" (a compra inteira volta a ser UM lançamento; só sem parcela
+                  paga/conciliada — senão o botão fica apagado com a frase do banco). Financiamento/consórcio: o bloco não aparece. */}
+              {isEdit && lancamento && clienteAtual?.id && financiamentoDoLanc && !lancamento.cancelado && (
+                <VoltarParaAVista clienteId={clienteAtual.id} financiamentoId={financiamentoDoLanc} emBloco comFrase
+                  onVoltou={() => { void qc.invalidateQueries(); onClose(); }} />
               )}
 
               {/* Frequency + Installment — only for new, e nunca no modo extrato */}
