@@ -22,7 +22,10 @@ export interface LancamentoJaLancado {
   /** como o cadastro dele se parece com o emitente: 'cnpj' (mesma raiz), 'nome' (sem CNPJ, nome parecido), 'mesclado' */
   fornecedorPor: string | null;
   parcelas: { n: number; difCent: number; difDias: number }[];
-  por: ('valor' | 'numero' | 'chave')[];
+  /** P95 — 'fracao': a IRMA de uma achada pelo numero/chave ("… - 3/6": mesmo fornecedor, mesmo N, valor ≈ nota/N) */
+  por: ('valor' | 'numero' | 'chave' | 'fracao')[];
+  /** P95 — o N da fracao "k/N" da descricao, quando o banco a conferiu (valor ≈ nota/N); `null` sem ela */
+  fracaoN?: number | null;
   /** NOTA-CONTAS-NA-CRIACAO-01 D — cancelado: aparece cinza, no fim, e NUNCA conta como "ja' lancada" nem recebe o "Anexar" */
   cancelado: boolean;
 }
@@ -71,13 +74,14 @@ export function casarJaLancados(parcelas: readonly ParcelaDaNotaParaCasar[], tod
     daParcela.set(x.n, x.l);
     usados.add(x.l.id);
   }
-  const pelaNota = achados.filter((l) => !usados.has(l.id) && (l.por.includes('numero') || l.por.includes('chave')));
+  const pelaNota = achados.filter((l) => !usados.has(l.id) && (l.por.includes('numero') || l.por.includes('chave') || l.por.includes('fracao')));
   for (const l of pelaNota) usados.add(l.id);
   if (usados.size === 0) return null;
   const outrosParecidos = achados.filter((l) => !usados.has(l.id)).length;
   const porParcela = parcelas.map((parcela) => ({ parcela, lancamento: daParcela.get(parcela.n) ?? null }));
   const fracoes = new Map<string, number>();
-  for (const l of pelaNota) { const n = fracaoDaNota(l.valorCent, notaCent); if (n) fracoes.set(l.id, n); }
+  /* P95 — o N conferido pelo banco (a fracao da descricao) vale antes do calculo pelo valor (1 centavo por parcela) */
+  for (const l of pelaNota) { const n = l.fracaoN ?? fracaoDaNota(l.valorCent, notaCent); if (n) fracoes.set(l.id, n); }
   /* a nota de UMA parcela (sem duplicatas) ja' lancada EM PARCELAS: a "que falta" seria a nota inteira de novo — em dobro. Nao se oferece. */
   const emParcelas = parcelas.length === 1 && fracoes.size > 0;
   return {
@@ -93,13 +97,28 @@ export function canceladosDaNota(todos: readonly LancamentoJaLancado[]): Lancame
   return todos.filter((l) => l.cancelado).sort((a, b) => data(a).localeCompare(data(b)) || a.id.localeCompare(b.id));
 }
 
-/** A frase do rodape da nota achada EM PARCELAS: "achadas 1 de 4 parcelas (R$ 821,22 cada)" — o N mais comum entre as achadas. */
-export function fraseEmParcelas(j: Pick<NotaJaLancada, 'fracoes' | 'pelaNota'>): string {
+/** A frase do rodape da nota achada EM PARCELAS: "achadas 1 de 4 parcelas (R$ 821,22 cada)" — o N mais comum entre as achadas.
+ *  P95 — achadas TODAS as N: a soma delas e a da nota, e a diferenca quando ha' (mostrar, nunca "fazer bater"). */
+export function fraseEmParcelas(j: Pick<NotaJaLancada, 'fracoes' | 'pelaNota'>, notaCent = 0): string {
   const porN = new Map<number, number>();
   for (const n of j.fracoes.values()) porN.set(n, (porN.get(n) ?? 0) + 1);
   const [n, qtd] = [...porN].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0] ?? [0, 0];
-  const uma = j.pelaNota.find((l) => j.fracoes.get(l.id) === n);
+  const dasN = j.pelaNota.filter((l) => j.fracoes.get(l.id) === n);
+  const uma = dasN[0];
+  if (qtd === n && n > 0 && notaCent > 0) {
+    const soma = dasN.reduce((s, l) => s + l.valorCent, 0);
+    const dif = soma - notaCent;
+    return `Esta nota parece já lançada em parcelas: achadas ${n} de ${n} · soma R$ ${reais(soma)} · nota R$ ${reais(notaCent)}${dif ? ` · diferença R$ ${reais(Math.abs(dif))}` : ''}. Nada será criado em dobro.`;
+  }
   return `Esta nota parece já lançada em parcelas: ${qtd === 1 ? 'achada 1' : `achadas ${qtd}`} de ${n} (R$ ${reais(uma?.valorCent ?? 0)} cada). Nada será criado em dobro.`;
+}
+
+/** P95 — a fracao "k/N" no fim da descricao ("Tinta … - 3/6" -> { k: 3, n: 6 }); `null` sem ela. A mesma regra do banco. */
+export function fracaoDaDescricao(descricao: string | null | undefined): { k: number; n: number } | null {
+  const m = /(\d{1,2})\s*\/\s*(\d{1,2})\s*$/.exec(descricao ?? '');
+  if (!m) return null;
+  const k = Number(m[1]); const n = Number(m[2]);
+  return n >= 2 && n <= 72 && k >= 1 && k <= n ? { k, n } : null;
 }
 
 /** As parcelas da nota para a busca: as duplicatas; sem duplicata, o valor da nota no vencimento escolhido (ou na emissao). */
@@ -125,7 +144,8 @@ export function lerJaLancados(r: unknown): LancamentoJaLancado[] {
       fornecedorId: texto(o, 'fornecedor_id'), fornecedorNome: texto(o, 'fornecedor_nome'), fornecedorPor: texto(o, 'fornecedor_por'),
       parcelas: Array.isArray(parc) ? parc.flatMap((p: unknown) => (p && typeof p === 'object'
         ? [{ n: Number(Reflect.get(p, 'n')), difCent: Number(Reflect.get(p, 'dif_cent')) || 0, difDias: Number(Reflect.get(p, 'dif_dias')) || 0 }] : [])) : [],
-      por: Array.isArray(por) ? por.filter((x): x is 'valor' | 'numero' | 'chave' => x === 'valor' || x === 'numero' || x === 'chave') : [],
+      por: Array.isArray(por) ? por.filter((x): x is 'valor' | 'numero' | 'chave' | 'fracao' => x === 'valor' || x === 'numero' || x === 'chave' || x === 'fracao') : [],
+      fracaoN: Number.isInteger(Reflect.get(o, 'fracao_n')) ? Number(Reflect.get(o, 'fracao_n')) : null,
       cancelado: Reflect.get(o, 'cancelado') === true,
     }];
   });
