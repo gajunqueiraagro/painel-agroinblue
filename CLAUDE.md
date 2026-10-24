@@ -247,6 +247,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - P62: transferência é "3-Transferências" (plural); vivo no singular o banco recusa (`chk_transferencia_no_plural`); as 587 canceladas
   no singular são histórico. P58: o efeito do saldo inicial na Conciliação é UMA ida por conta (`fn_conta_bancaria_efeito_conciliacao`),
   nunca o status do ano por ano. P59: o aviso do saldo inicial é a `FRASE_AVISO_SALDO` (o mês seguinte começa daqui).
+- P74 (NOTA-CARTAO-PARCELADO-01): "Como foi pago?" na prévia da nota vira a PROPOSTA (`comPagamento`; nada de gravador novo); 1ª fatura =
+  dia mais frequente do cartão em 12 meses (`fn_cartao_dias_de_vencimento`); "Parcelar este lançamento" pela RPC (divisão às N) + docs às N.
 - P53: a mesma pergunta ao mesmo tempo = um pedido (`criarUmPedidoPorVez`, só o voo, nada guardado); o `checkLockNow` segue direto.
 - P95 (DANFE-CHAVE-EM-GRUPOS-01): DANFE com a chave/rótulos picados em itens se lê pela linha (`chaveEmGrupos` SÓ com DV certo; `aoLado`);
   sem chave legível, DIGITAR A CHAVE (`chaveDigitada.ts`: DV, modelo 55; avulsa 890 não usa o CNPJ; o resto em branco, âmbar na prévia);
