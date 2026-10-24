@@ -148,13 +148,14 @@ export function lerPaginaV2(r: unknown): PaginaDaListaV2 | null {
  * pelos apelidos). Cada um com o uso do servidor no recorte (`usoPorFornecedor`); sem a contagem ainda (página carregando), uso nulo.
  */
 export function fornecedoresDoFiltroV2<F extends { id: string; ativo?: boolean | null; fundido_em_id?: string | null }>(
-  cadastro: readonly F[], uso: ReadonlyMap<string, number> | null,
+  cadastro: readonly F[], uso: ReadonlyMap<string, number> | null, selecionado: string | null = null,
 ): (F & { uso: number | null })[] {
   const lista: (F & { uso: number | null })[] = [];
   for (const f of cadastro) {
     if (f.fundido_em_id) continue;
     const n = uso ? (uso.get(f.id) ?? 0) : null;
-    if (f.ativo === false && !(n && n > 0)) continue;
+    /* P94 — o INATIVO ESCOLHIDO nunca some do seletor (fora do recorte ele saía da lista e o campo dizia "Todos", filtrando) */
+    if (f.ativo === false && !(n && n > 0) && f.id !== selecionado) continue;
     lista.push({ ...f, uso: n });
   }
   return lista;
