@@ -31,6 +31,7 @@ import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Search, Check, ChevronsUpDown, Plus, Pencil } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { CLASSE_DO_INEXISTENTE, ValorInexistente } from '@/components/shared/ValorInexistente';
 import type { FornecedorV2 } from '@/hooks/useFinanceiroV2';
 import { COMBOBOX_CONTENT } from '@/components/ui/command';
 import {
@@ -123,6 +124,11 @@ export interface FavorecidoSelectProps<F extends FavorecidoOpcao = FornecedorV2>
   /** FIN-V2-FILTRO-FORNECEDOR-01 — o selo "N iguais" (padrão: aparece). O filtro de Lançamentos o desliga: lá a lista é a dos ativos e
    *  as filiais se distinguem pela cidade/UF e pelo CNPJ inteiro. */
   mostrarIguais?: boolean;
+  /** P94 — o filtro escolhido NAO esta' entre as opcoes (de outro cliente, mesclado): o gatilho diz "valor inexistente (limpar)" em
+   *  vermelho com o ✕, nunca o `placeholder` ("Todos"). Quem decide e' o chamador, depois que o cadastro carregou. Ausente = nada muda. */
+  valorInexistente?: boolean;
+  /** P94 — o selo "inativo" no gatilho tambem com `situacao` 'todos' (o filtro de Lancamentos): o inativo escolhido fica a' vista. */
+  marcarInativo?: boolean;
 }
 
 export const FRASE_FALHA_AO_ABRIR_CADASTRO = 'Não foi possível abrir o cadastro do fornecedor.';
@@ -165,7 +171,7 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
   label, triggerClassName, size = 'default', tabIndex, disabled, showCpfCnpj = false,
   limpavel = false, placeholder = 'Selecione fornecedor...', linhaDoDocumento, incluirMeta = false, acaoFinal,
   novoDesabilitado = false, novoRotulo, rotuloDoVazio = '— nenhum —', situacao = 'ativos', nomeInteiro = false, mostrarUso = false,
-  mostrarIguais = true,
+  mostrarIguais = true, valorInexistente = false, marcarInativo = false,
 }: FavorecidoSelectProps<F>) {
   const [open, setOpen] = useState(false);
   const [buscaPropria, setBuscaPropria] = useState('');
@@ -204,7 +210,8 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
     if (doLeitor) return lidos.gravado;
     return (fornecedores ?? []).find(f => f.id === value) ?? null;
   }, [value, ativos, doLeitor, lidos.gravado, fornecedores]);
-  const inativo = !!escolhido && escolhido.ativo === false && situacao === 'ativos';
+  const inativo = !!escolhido && escolhido.ativo === false && (situacao === 'ativos' || marcarInativo);
+  const inexistente = valorInexistente && !!value;
 
   /**
    * Abre POSICIONADO no fornecedor atual — 133h adendo item 14.
@@ -283,9 +290,11 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
       <div className="flex items-center gap-1">
         <Popover open={open} onOpenChange={v => { setOpen(v); if (!v) onSearchChange(''); }}>
           <PopoverTrigger asChild>
-            <Button tabIndex={tabIndex} variant="outline" role="combobox" aria-expanded={open} disabled={disabled} title={tituloDoGatilho} className={cn("flex-1 min-w-0 h-8 justify-between font-normal text-[12px]", size === 'compact' && 'h-5 px-1.5 text-[11px] [&_svg]:h-3 [&_svg]:w-3', triggerClassName)}>
+            <Button tabIndex={tabIndex} variant="outline" role="combobox" aria-expanded={open} disabled={disabled} title={tituloDoGatilho} className={cn("flex-1 min-w-0 h-8 justify-between font-normal text-[12px]", size === 'compact' && 'h-5 px-1.5 text-[11px] [&_svg]:h-3 [&_svg]:w-3', triggerClassName, inexistente && CLASSE_DO_INEXISTENTE)}>
               {/* UI-DROPDOWN-PADRAO-01: o texto que não cabe começa na borda esquerda (o botão centraliza por padrão) */}
-              <span data-testid="favorecido-gatilho-texto" className={cn("min-w-0 flex-1 text-left", nomeInteiro ? "uma-linha-que-rola" : "truncate")}>{textoDoGatilho}</span>
+              {inexistente
+                ? <ValorInexistente onLimpar={() => onChange('')} />
+                : <span data-testid="favorecido-gatilho-texto" className={cn("min-w-0 flex-1 text-left", nomeInteiro ? "uma-linha-que-rola" : "truncate")}>{textoDoGatilho}</span>}
               {inativo && (
                 /* o gravado que não está mais entre os ativos: o campo não esvazia, e diz por quê */
                 <span data-testid="favorecido-inativo" className="ml-1 shrink-0 rounded border border-amber-400 bg-amber-50 px-1 text-[9.5px] leading-[14px] text-amber-800">inativo</span>
