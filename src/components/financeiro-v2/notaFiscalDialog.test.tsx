@@ -53,6 +53,8 @@ vi.mock('@/lib/financeiro/nfeConsultas', () => consultas);
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() } }));
 const leitura = vi.hoisted(() => ({ lerNota: vi.fn() }));
 vi.mock('@/lib/financeiro/nfe/lerNota', () => leitura);
+/* P95 — o tamanho das paginas do PDF da chave digitada (o leitor de verdade carrega o pdfjs) */
+vi.mock('@/lib/financeiro/nfe/lerNotaPdf', () => ({ itensDoPdf: vi.fn(async () => ({ paginas: [[]], tamanhos: [{ largura: 595.28, altura: 841.89 }] })) }));
 
 import { NotaFiscalDialog, fraseDoCompletar, quantidadeCurta, type NotaParaLancar } from './NotaFiscalDialog';
 import { NovoDeXmlDialog, arquivoPdfDaNota } from './NovoDeXmlDialog';
@@ -60,7 +62,8 @@ import type { Gravadores } from './criarDaNota';
 import type { RespostaDoCnpj } from '@/lib/fornecedores/consultaCnpj';
 import type { PayloadParcelamento } from '@/lib/financiamentos/montarPayloadParcelamento';
 import type { DocumentoPendente, ParcelaGravada } from '@/lib/financeiro/documentosPendentes';
-import { notaDoDanfe, type ItemDoDanfe } from '@/lib/financeiro/nfe/danfe';
+import { FRASE_NOTA_SEM_CHAVE, FRASE_PDF_SEM_TEXTO, digitoDaChave, notaDoDanfe, type ItemDoDanfe } from '@/lib/financeiro/nfe/danfe';
+import { FRASE_CHAVE_INVALIDA, lidoDaChave, notaDaChaveDigitada } from '@/lib/financeiro/nfe/chaveDigitada';
 import { proporLancamento } from '@/lib/financeiro/nfe/proporLancamento';
 import { resolverEmitente } from '@/lib/financeiro/nfe/resolverEmitente';
 import { PAGINAS_DANFE_SINTETICO, danfeSinteticoAvulsa, danfeSinteticoSemDuplicata } from '@/lib/financeiro/nfe/__fixtures__/danfeSintetico';
@@ -708,5 +711,126 @@ describe('NOTA-FORNECEDOR-COMPARAR-01 — comparar antes de atualizar o cadastro
     fireEvent.click(screen.getByTestId('comparar-atualizar'));
     await waitFor(() => expect(screen.getByTestId('comparar-frase').textContent).toContain('já é de outro cadastro ativo'));
     expect(screen.getByTestId('nota-chip-fornecedor').textContent).toBe('achado pelo nome · sem CNPJ');
+  });
+});
+
+/* P95 (DANFE-CHAVE-EM-GRUPOS-01) — o molde do caso de 23/10: a nota de UMA parcela paga no cartao em N parcelas lancadas SOLTAS ("… - k/N"),
+   o numero so' em algumas; o banco devolve as IRMAS (`fracao`, `fracao_n`). Valores sinteticos: 4 parcelas que somam 4 centavos a menos. */
+describe('P95 — a nota achada em N parcelas soltas (as irmas da fracao)', () => {
+  const VENC = ['2026-10-10', '2026-11-10', '2026-12-10', '2027-01-10'];
+  const irma = (n: number, valorCent: number, por: LancamentoJaLancado['por']) => jaLancado(n, VENC[n - 1], 'realizado',
+    { id: `irma-${n}`, descricao: `Tinta sintetica - ${n}/4`, valorCent, parcelas: [], por, fracaoN: 4, financiamentoId: null });
+  const IRMAS = [irma(1, 49165, ['fracao']), irma(2, 49160, ['fracao']), irma(3, 49164, ['numero', 'fracao']), irma(4, 49163, ['numero', 'fracao'])];
+  it('as 4 na lista com "k/4" (a descricao diz qual), a frase com a soma, a nota e a diferenca; nada a criar', async () => {
+    consultas.notaJaLancada.mockResolvedValue(IRMAS);
+    abrir(montarNota({ fornecedores: [FORN], umaParcela: true }));
+    const bloco = await screen.findByTestId('nota-ja-lancada');
+    const parcs = within(bloco).getAllByTestId('nota-ja-lancada-parc').map((x) => x.textContent);
+    expect(parcs).toEqual(['1/4', '2/4', '3/4', '4/4']);
+    expect(screen.getByTestId('nota-ja-lancada-frase').textContent)
+      .toBe('Esta nota parece já lançada em parcelas: achadas 4 de 4 · soma R$ 1.966,52 · nota R$ 1.966,56 · diferença R$ 0,04. Nada será criado em dobro.');
+    expect(screen.queryByTestId('nota-criar-faltam')).toBeNull();
+    expect(screen.getByTestId('nota-anexar-ja-lancados').textContent).toBe('Anexar a nota a estes 4');
+  });
+});
+
+/* P95 (DANFE-CHAVE-EM-GRUPOS-01 + DIGITAR A CHAVE) — o mesmo arquivo duas vezes; a chave digitada na linha recusada; a previa pela chave.
+   Chaves SINTETICAS (o CNPJ 11.222.333/0004-24 do fixture; o DV recalculado). */
+describe('P95 — o mesmo arquivo duas vezes e DIGITAR A CHAVE', () => {
+  const comDv = (c43: string) => `${c43}${digitoDaChave(c43)}`;
+  const CHAVE = comDv('5026091122233300042455001000000937121753829');
+  const AVULSA = comDv('5026091122233300042455890000000937121753829');
+  const NFCE = comDv('5026091122233300042465001000000937121753829');
+  const pdf = (nome = 'nota-sintetica.pdf') => {
+    const f = new File([new TextEncoder().encode('%PDF-1.4 escaneado')], nome, { type: 'application/pdf' });
+    Object.defineProperty(f, 'arrayBuffer', { value: async () => new TextEncoder().encode('%PDF-1.4 escaneado').buffer });
+    return f;
+  };
+  const lista = (onAbrirNota = vi.fn()) => {
+    render(<NovoDeXmlDialog open onClose={() => {}} clienteId="cli" fazendas={[{ id: 'faz-1', nome: 'Faz. Sintetica' }]} fornecedores={[FORN]}
+      onAbrirLancamento={vi.fn()} onAbrirNota={onAbrirNota} lancadas={new Set()} />);
+    return onAbrirNota;
+  };
+  const soltar = (f: File) => fireEvent.change(screen.getByTestId('xml-input'), { target: { files: [f] } });
+  const digitar = (v: string) => {
+    fireEvent.change(screen.getByTestId('xml-digitar-chave'), { target: { value: v } });
+    fireEvent.click(screen.getByTestId('xml-usar-chave'));
+  };
+
+  it('o mesmo arquivo solto duas vezes: UMA linha e o aviso "<nome> já está na lista."', async () => {
+    leitura.lerNota.mockResolvedValue({ ok: false, origem: 'pdf', frase: FRASE_NOTA_SEM_CHAVE });
+    lista();
+    soltar(pdf());
+    await screen.findByTestId('xml-recusa-digitar');
+    soltar(pdf());
+    await waitFor(() => expect(screen.getByTestId('xml-aviso').textContent).toBe('nota-sintetica.pdf já está na lista.'));
+    expect(screen.getAllByTestId('xml-linha')).toHaveLength(1);
+    expect(leitura.lerNota).toHaveBeenCalledTimes(1);
+  });
+  it('o campo so\' na nota sem chave e no PDF sem texto; DV errado = a frase da chave invalida, nada muda', async () => {
+    leitura.lerNota.mockResolvedValue({ ok: false, origem: 'pdf', frase: FRASE_PDF_SEM_TEXTO });
+    lista();
+    soltar(pdf());
+    await screen.findByTestId('xml-recusa-digitar');
+    digitar(`${CHAVE.slice(0, 43)}${(Number(CHAVE[43]) + 1) % 10}`);
+    await waitFor(() => expect(screen.getByTestId('xml-recusa').textContent).toBe(FRASE_CHAVE_INVALIDA));
+    expect(screen.getByTestId('xml-linha').getAttribute('data-situacao')).toBe('recusada');
+    digitar(NFCE);
+    await waitFor(() => expect(screen.getByTestId('xml-recusa').textContent).toBe('Cupom (NFC-e) ainda não é lido; preencha à mão.'));
+  });
+  it('chave valida (colada com espacos): a linha segue lida — o emitente do cadastro pelo CNPJ; emissao e valor "—"; a busca pelo numero e CNPJ', async () => {
+    leitura.lerNota.mockResolvedValue({ ok: false, origem: 'pdf', frase: FRASE_NOTA_SEM_CHAVE });
+    const onAbrirNota = lista();
+    soltar(pdf());
+    await screen.findByTestId('xml-recusa-digitar');
+    digitar(CHAVE.replace(/(\d{4})/g, '$1 '));
+    await waitFor(() => expect(screen.getByTestId('xml-linha').getAttribute('data-situacao')).not.toBe('recusada'));
+    const celulas = within(screen.getByTestId('xml-linha')).getAllByRole('cell').map((c) => c.textContent);
+    /* a chave nao traz a IE do destinatario: a fazenda nao vem (o operador escolhe na previa) */
+    expect(celulas.slice(0, 6)).toEqual(['000.000.937', '—', 'Agro Sintetica', '11.222.333/0004-24', '—', '—']);
+    expect(consultas.notaJaLancada).toHaveBeenCalledWith('cli', expect.objectContaining({ parcelas: [], numero: '937', chave: CHAVE, emitenteDocumento: '11222333000424' }));
+    fireEvent.click(screen.getByTestId('xml-abrir-lancamento'));
+    const [paraLancar] = onAbrirNota.mock.calls[0];
+    expect([paraLancar.lido.pelaChave, paraLancar.doXml.proposta.favorecidoId, paraLancar.arquivo.type]).toEqual([true, 'f1', 'application/pdf']);
+  });
+  it('nota avulsa (serie 890): o CNPJ da chave e\' do fisco — nao acha o fornecedor por ele', async () => {
+    leitura.lerNota.mockResolvedValue({ ok: false, origem: 'pdf', frase: FRASE_NOTA_SEM_CHAVE });
+    const onAbrirNota = lista();
+    soltar(pdf());
+    await screen.findByTestId('xml-recusa-digitar');
+    digitar(AVULSA);
+    await waitFor(() => expect(screen.getByTestId('xml-linha').getAttribute('data-situacao')).not.toBe('recusada'));
+    expect(consultas.notaJaLancada).toHaveBeenCalledWith('cli', expect.objectContaining({ emitenteDocumento: '' }));
+    fireEvent.click(screen.getByTestId('xml-abrir-lancamento'));
+    expect(onAbrirNota.mock.calls[0][0].doXml.proposta.favorecidoId).toBeNull();
+  });
+
+  it('a previa pela chave: o chip, emissao e valor em ambar e pedidos; criar leva o que foi digitado', async () => {
+    const r = notaDaChaveDigitada(CHAVE);
+    if (r.ok === false) throw new Error(r.frase);
+    const lido = lidoDaChave(r.nota, [{ largura: 595.28, altura: 841.89 }]);
+    const resolucao = resolverEmitente(r.nota.emitente, [FORN], null);
+    const p = proporLancamento({ nota: r.nota, avisosDoLeitor: lido.avisos, fazendas: [{ id: 'faz-1', nome: 'Faz. Sintetica', ie: '280000002' }], emitente: resolucao, favorecidoId: resolucao.propostoId, ultima: null });
+    if (p.ok === false) throw new Error(p.frase);
+    const bytes = new TextEncoder().encode('%PDF-1.4 escaneado').buffer;
+    const arquivo = arquivoPdfDaNota(bytes, 'nota-sintetica.pdf');
+    const { g, comoGravadores } = gravadoresFalsos();
+    /* a fazenda ja' escolhida (a chave nao a traz; o teste e' sobre a emissao e o valor) */
+    const props = abrir({ arquivo, bytes, lido, doXml: { proposta: { ...p.proposta, fazendaId: 'faz-1' }, emitenteNome: '', emitenteDocumento: CNPJ, emitente: r.nota.emitente, resolucao, ocorrencias: [], arquivo } },
+      { fornecedores: [FORN], g: comoGravadores });
+    expect(screen.getByTestId('nota-chave').textContent).toBe('Pela chave digitada · confira');
+    expect(screen.getByTestId('nota-numero').textContent).toContain('000.000.937');
+    await escolherSubcentro('Nutrição Engorda');
+    expect(screen.getByTestId('nota-falta').textContent).toBe('⚠ Falta: vencimento, emissão, valor');
+    const emissao = screen.getByTestId('nota-emissao-campo');
+    fireEvent.change(emissao, { target: { value: '06/09/2026' } });
+    fireEvent.blur(emissao);
+    const valor = within(screen.getByTestId('nota-valor-campo')).getByPlaceholderText('0,00');
+    fireEvent.change(valor, { target: { value: '1.234,50' } });
+    fireEvent.blur(valor);
+    await waitFor(() => expect(screen.queryByTestId('nota-falta')).toBeNull());
+    fireEvent.click(screen.getByTestId('nota-criar'));
+    await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
+    expect(g.lancamento.mock.calls[0][0]).toMatchObject({ valor: 1234.5, data_competencia: '2026-09-06', data_vencimento: '2026-09-06' });
   });
 });
