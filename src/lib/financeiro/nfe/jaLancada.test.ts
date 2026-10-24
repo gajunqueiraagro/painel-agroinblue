@@ -3,7 +3,7 @@
  * cada parcela fica com o MAIS proximo, cada lancamento uma vez so'; a outra serie vira "parecidos a mais"; numero/chave entram juntos.
  */
 import { describe, it, expect } from 'vitest';
-import { canceladosDaNota, casarJaLancados, fracaoDaNota, fraseEmParcelas, lerJaLancados, parcelasParaCasar, type LancamentoJaLancado } from './jaLancada';
+import { canceladosDaNota, casarJaLancados, fracaoDaDescricao, fracaoDaNota, fraseEmParcelas, lerJaLancados, parcelasParaCasar, type LancamentoJaLancado } from './jaLancada';
 
 const l = (id: string, n: number, difCent: number, difDias = 0, por: LancamentoJaLancado['por'] = ['valor']): LancamentoJaLancado => ({
   id, vencimento: null, pagamento: null, competencia: null, descricao: null, valorCent: 34134 + difCent, status: 'realizado', conciliado: false,
@@ -89,3 +89,29 @@ describe('o cancelado nunca conta', () => {
   });
 });
 
+
+/* P95 — as IRMAS da fracao: o banco as devolve com `por` 'fracao' e `fracao_n`; a nota de uma parcela fica "em parcelas", nada a criar */
+describe('P95 — a nota em N parcelas soltas (as irmas da fracao)', () => {
+  const linha = (id: string, valor: number, por: string[], fracao: number | null) => ({ id, descricao: `Tinta sintetica - ${id}/3`, valor_cent: valor, por, fracao_n: fracao,
+    parcelas: [], cancelado: false, status: 'realizado' });
+  it('o leitor: `fracao` e `fracao_n` (ausente = sem fracao)', () => {
+    const [a, b] = lerJaLancados([linha('1', 10002, ['fracao'], 3), { id: 'x', valor_cent: 1, por: ['numero'] }]);
+    expect([a.por, a.fracaoN]).toEqual([['fracao'], 3]);
+    expect(b.fracaoN).toBeNull();
+  });
+  it('as 3 irmas: alvos, "em parcelas", nada falta; a frase com a soma, a nota e a diferenca', () => {
+    const todos = lerJaLancados([linha('1', 10002, ['fracao'], 3), linha('2', 9997, ['numero', 'fracao'], 3), linha('3', 10000, ['fracao'], 3)]);
+    const j = casarJaLancados([{ n: 1, vencimento: '2031-04-06', valorCent: 30000 }], todos, 30000);
+    expect(j?.alvos.map((x) => x.id)).toEqual(['1', '2', '3']);
+    expect([j?.emParcelas, j?.faltam]).toEqual([true, []]);
+    expect(j && fraseEmParcelas(j, 30000)).toBe('Esta nota parece já lançada em parcelas: achadas 3 de 3 · soma R$ 299,99 · nota R$ 300,00 · diferença R$ 0,01. Nada será criado em dobro.');
+    expect(j && fraseEmParcelas(j)).toBe('Esta nota parece já lançada em parcelas: achadas 3 de 3 (R$ 100,02 cada). Nada será criado em dobro.');
+  });
+  it('a fracao da descricao (a mesma regra do banco)', () => {
+    expect(fracaoDaDescricao('Tinta latex - 3/6')).toEqual({ k: 3, n: 6 });
+    expect(fracaoDaDescricao('Parcela 2 / 4 ')).toEqual({ k: 2, n: 4 });
+    expect(fracaoDaDescricao('7/6')).toBeNull();
+    expect(fracaoDaDescricao('3/6 tinta')).toBeNull();
+    expect(fracaoDaDescricao(null)).toBeNull();
+  });
+});
