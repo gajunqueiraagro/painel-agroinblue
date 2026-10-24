@@ -65,6 +65,14 @@ const CENARIOS = [
          (Anterior/Próxima, "Por pág.") fica no mesmo lugar */
       ...[6, 1, 0].map((n) => [`filtro com ${n} lancamento(s)`, { url: `tela=financeiro&v=volume&n=450&linhas=${n}` }]),
     ] },
+  /* P94 — os avisos da conferência e os chips do que veio da OC têm LUGAR RESERVADO na faixa dos totais: fechar um aviso, tirar um chip e
+     a tela sem aviso nenhum (o mesmo recorte) não movem a barra, os totais nem a tabela */
+  { nome: 'financeiro-fantasma', url: 'tela=financeiro&fantasma=1', antes: async (p) => { await p.locator('[data-testid="aviso-do-filtro"]').first().waitFor(); await espera(p, 600); },
+    estados: [
+      ['fecha um aviso', noTopo(clicar('[aria-label="Fechar o aviso"]'))],
+      ['tira o chip da OC', noTopo(clicar('[data-testid="chip-vindo-da-oc"]'))],
+      ['sem aviso nenhum (a tela limpa)', { url: 'tela=financeiro' }],
+    ] },
   /* TABELA-ALTURA-FIXA-01 — o mesmo no Ampliado (como no app: a tela da barra de 32px) */
   { nome: 'financeiro-ampliado', url: 'tela=financeiro&v=volume&n=450&barra=32', antes: ampliar,
     estados: [6, 1, 0].map((n) => [`filtro com ${n} lancamento(s)`, async (p) => {
