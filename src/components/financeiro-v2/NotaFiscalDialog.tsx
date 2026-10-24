@@ -33,6 +33,8 @@ import {
 } from './criarDaNota';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DatePicker } from '@/components/ui/date-picker';
+import { CampoMoeda } from '@/components/ui/campo-moeda';
+import { ROTULO_PELA_CHAVE, comDadosDigitados } from '@/lib/financeiro/nfe/chaveDigitada';
 import { CULTURAS_LANCAMENTO, SEM_CULTURA } from '@/lib/agri/rateioLancamento';
 import { safraSugerida } from '@/lib/agri/safraSugerida';
 import { ATIVIDADES } from '@/lib/financeiro/ultimaAtividade';
@@ -43,7 +45,7 @@ import { ondeEsta } from './LancamentoDoXml';
 import type { DoXml } from '@/lib/financeiro/nfePrefill';
 import { resolverEmitente } from '@/lib/financeiro/nfe/resolverEmitente';
 import { gravarItensSemTravar } from '@/lib/financeiro/itensDaNotaBanco';
-import { canceladosDaNota, casarJaLancados, fraseEmParcelas, parcelasParaCasar, type LancamentoJaLancado } from '@/lib/financeiro/nfe/jaLancada';
+import { canceladosDaNota, casarJaLancados, fracaoDaDescricao, fraseEmParcelas, parcelasParaCasar, type LancamentoJaLancado } from '@/lib/financeiro/nfe/jaLancada';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { CompararCadastroDialog } from './CompararCadastroDialog';
@@ -163,7 +165,12 @@ export function NotaFiscalDialog({
   gravarItens?: (clienteId: string, arquivo: ArrayBuffer) => Promise<string | null>;
 }) {
   const qc = useQueryClient();
-  const { lido, doXml, bytes, arquivo } = nota;
+  /* P95 — a nota da CHAVE DIGITADA: o que a chave nao traz (emissao, valor) o operador preenche aqui; a nota e a proposta usadas daqui
+     para baixo (busca, criar, anexar, abrir no Novo lancamento) ja' levam o que foi digitado */
+  const [digitado, setDigitado] = useState<{ emissao: string; valorCent: number | null }>({ emissao: '', valorCent: null });
+  const pelaChave = nota.lido.pelaChave === true;
+  const efetiva = useMemo(() => (pelaChave ? comDadosDigitados(nota, digitado) : nota), [pelaChave, nota, digitado]);
+  const { lido, doXml, bytes, arquivo } = efetiva;
   const n = lido.nota;
   const p = doXml.proposta;
   /* NOTA-FORNECEDOR-DUPLICA-01 — a resolucao e' refeita com a lista DE AGORA (a da leitura pode estar velha: o cadastro criado depois
@@ -244,7 +251,8 @@ export function NotaFiscalDialog({
   }, [clienteId, favorecidoId, emitente, doXml.ocorrencias.length, n.totais.notaCent, p.duplicatas]);
 
   /* NOTA-JA-LANCADA-01 — antes de oferecer criar: a nota ja' esta' lancada? (refeito quando a Receita traz a razao social inteira) */
-  const parcelasDaBusca = useMemo(() => parcelasParaCasar(p.duplicatas, n.totais.notaCent, p.duplicatas[0]?.vencimento ?? n.emissao),
+  /* P95 — pela chave, sem a emissao digitada nao ha' parcela para casar pelo valor: busca so' pelo numero e pela chave */
+  const parcelasDaBusca = useMemo(() => (p.duplicatas.length || n.emissao ? parcelasParaCasar(p.duplicatas, n.totais.notaCent, p.duplicatas[0]?.vencimento ?? n.emissao) : []),
     [p.duplicatas, n.totais.notaCent, n.emissao]);
   useEffect(() => {
     let vivo = true;
@@ -319,6 +327,8 @@ export function NotaFiscalDialog({
   if (lavoura && !safraId) faltas.push('safra');
   if (lavoura && cultura === null) faltas.push('cultura');
   if (!cabeAqui && !vencimento) faltas.push('vencimento');
+  if (pelaChave && !digitado.emissao) faltas.push('emissão');
+  if (pelaChave && !(digitado.valorCent && digitado.valorCent > 0)) faltas.push('valor');
   const bloqueio = divergencias.length ? `A chave não confere com o lido (${divergencias.map((x) => NOME_DO_CONFERIDO[x]).join(', ')}). Nada será criado.`
     : registrada ? `Nota já registrada neste cliente · ${ondeEsta(registrada)}` : null;
   const podeCriar = !bloqueio && faltas.length === 0 && !ocupado;
@@ -477,28 +487,40 @@ export function NotaFiscalDialog({
         <div className="grid min-h-0 flex-1 gap-2 bg-muted p-2" style={{ gridTemplateColumns: 'minmax(160px, 28%) minmax(0, 1fr)' }}>
           {/* ── ARQUIVO ─────────────────────────────────────────────────────────────────────────────── */}
           <section className={cn(BLOCO, 'min-h-0')} data-testid="nota-bloco-arquivo">
-            <TituloDoBloco nome="Arquivo" acao={<span className={CHIP_OK}>{lido.origem === 'pdf' ? 'PDF com texto · leitura direta' : 'XML da nota'}</span>} />
+            <TituloDoBloco nome="Arquivo" acao={<span className={pelaChave ? CHIP_AVISO : CHIP_OK}>{pelaChave ? 'PDF · pela chave digitada' : lido.origem === 'pdf' ? 'PDF com texto · leitura direta' : 'XML da nota'}</span>} />
             {lido.origem === 'pdf'
               ? <PreviaDaNota bytes={bytes} marcas={lido.marcas} tamanho={lido.tamanhos[0] ?? null} divergentes={marcasVermelhas} />
               : <div className="flex flex-1 items-center justify-center rounded border bg-[#f7f7f5] text-[10px] text-muted-foreground">XML: os dados vêm direto do arquivo.</div>}
             <div className="mt-1 flex h-4 shrink-0 items-center justify-between gap-2 text-[10px] text-muted-foreground">
               <span className="min-w-0 uma-linha-que-rola" title={arquivo.name}>{arquivo.name} · {Math.max(1, Math.round(arquivo.size / 1024))} KB</span>
-              {lido.origem === 'pdf' && <span className="shrink-0">amarelo = lido</span>}
+              {lido.origem === 'pdf' && !pelaChave && <span className="shrink-0">amarelo = lido</span>}
             </div>
           </section>
 
           <div className="flex min-h-0 min-w-0 flex-col gap-1.5">
             {/* ── NOTA ─────────────────────────────────────────────────────────────────────────────── */}
             <section className={BLOCO} data-testid="nota-bloco-nota">
-              <TituloDoBloco nome="Nota" acao={<span className={divergencias.length ? CHIP_ERRO : CHIP_OK} data-testid="nota-chave"
+              <TituloDoBloco nome="Nota" acao={pelaChave
+                ? <span className={CHIP_AVISO} data-testid="nota-chave" title="Da chave vêm o CNPJ, o número, a série e o mês; a emissão e o valor são seus.">{ROTULO_PELA_CHAVE}</span>
+                : <span className={divergencias.length ? CHIP_ERRO : CHIP_OK} data-testid="nota-chave"
                 title={avulsa ? 'Nota avulsa (série 890–899): emitida pelo fisco em nome do produtor; a chave traz o CNPJ do órgão emissor.' : undefined}>{fraseDaChave(divergencias, avulsa)}</span>} />
               <div className={GRADE_KV}>
                 <Kv num k="NF" v={numeroDaNota(n.numero)} erro={erroEm('numero')} testid="nota-numero" />
                 <Kv num k="Série" v={n.serie} erro={erroEm('serie')} />
-                <Kv num k="Emissão" v={dataInteira(n.emissao)} erro={erroEm('mes')} />
-                <Kv num k="Valor" v={`R$ ${reais(n.totais.notaCent)}`} />
+                {pelaChave ? (<>
+                  {/* P95 — o que a chave nao traz: campos em ambar, no lugar dos lidos */}
+                  <Kv num k="Emissão" v={<DatePicker value={digitado.emissao} onChange={(v) => { setVencimento((x) => (!x || x === digitado.emissao ? v : x)); setDigitado((d) => ({ ...d, emissao: v })); }} data-testid="nota-emissao-campo" size="compact"
+                    className={cn('h-4 w-[108px] text-[10px] border-amber-400 bg-amber-50', !digitado.emissao && 'border-destructive')} />} />
+                  <Kv num k="Valor" v={<span data-testid="nota-valor-campo"><CampoMoeda valor={digitado.valorCent == null ? null : digitado.valorCent / 100}
+                    onChange={(v) => setDigitado((d) => ({ ...d, valorCent: v == null ? null : Math.round(v * 100) }))}
+                    className={cn('h-4 w-[120px] text-[10px] border-amber-400 bg-amber-50', !digitado.valorCent && 'border-destructive')} /></span>} />
+                </>) : (<>
+                  <Kv num k="Emissão" v={dataInteira(n.emissao)} erro={erroEm('mes')} />
+                  <Kv num k="Valor" v={`R$ ${reais(n.totais.notaCent)}`} />
+                </>)}
                 <Kv k="Natureza" v={n.naturezaOperacao || '—'} titulo={n.naturezaOperacao} className="col-span-2" />
-                <Kv num k="Desconto" v={`R$ ${reais(n.totais.descontoCent)}`} />
+                {/* P95 — pela chave, o desconto nao e' conhecido: "—" (zero nunca substitui dado ausente) */}
+                <Kv num k="Desconto" v={pelaChave ? '—' : `R$ ${reais(n.totais.descontoCent)}`} />
                 <Kv k="Destinatário" v={`${n.destinatario.nome ? caixaDeTitulo(n.destinatario.nome) : '—'}${clienteNome ? ` · ${clienteNome}` : ''}`}
                   titulo={`${n.destinatario.nome ?? ''}${clienteNome ? ` · ${clienteNome}` : ''}`} />
                 {/* NOTA-AVULSA-890-01 — UMA LINHA RESERVADA (nada se desloca de uma nota para outra): os dados adicionais da nota; na remessa
@@ -588,8 +610,12 @@ export function NotaFiscalDialog({
                           .map((x) => ({ chave: `p${x.parcela.n}`, rotulo: `${x.parcela.n}/${jaLancada.porParcela.length}`, dica: undefined, l: x.lancamento, parcela: x.parcela })),
                         ...jaLancada.pelaNota.map((l) => {
                           const fr = jaLancada.fracoes.get(l.id);
-                          return { chave: l.id, rotulo: fr ? `?/${fr}` : 'nº doc.', l, parcela: null,
-                            dica: fr ? `parcela ? de ${fr} da nota: ${fr} × R$ ${reais(l.valorCent)} = R$ ${reais(n.totais.notaCent)} (qual das ${fr}, a nota não diz)` : undefined };
+                          /* P95 — a irma conferida pelo banco (`fracao`): a descricao diz qual das N ("… - 3/6") -> "3/6"; sem ela, "?/N" */
+                          const k = fr && l.por.includes('fracao') ? fracaoDaDescricao(l.descricao) : null;
+                          const qual = k && k.n === fr ? k.k : null;
+                          return { chave: l.id, rotulo: fr ? `${qual ?? '?'}/${fr}` : 'nº doc.', l, parcela: null,
+                            dica: fr ? (qual ? `parcela ${qual} de ${fr} (pela descrição do lançamento)`
+                              : `parcela ? de ${fr} da nota: ${fr} × R$ ${reais(l.valorCent)} = R$ ${reais(n.totais.notaCent)} (qual das ${fr}, a nota não diz)`) : undefined };
                         }),
                         /* D — os CANCELADOS desta nota: no fim, cinza, com o selo; nunca contam nem recebem o "Anexar" */
                         ...jaLancada.cancelados.map((l) => ({ chave: l.id, rotulo: '—', l, parcela: null, dica: 'cancelado: não conta como já lançada' }))].map((x) => (
@@ -703,9 +729,12 @@ export function NotaFiscalDialog({
               ) : undefined} />
               <div className="campos-uma-linha grid grid-cols-4 gap-x-3 gap-y-1">
                 <div className="min-w-0">
-                  <span className={cn(REGUA_ROTULO, 'uma-linha-que-rola', fazendaPeloEndereco && 'text-amber-800')} data-testid="nota-fazenda-origem">
+                  {/* P95 — a falta da fazenda como a do subcentro (rotulo e borda vermelhos; o rodape diz "Falta: fazenda"): a linha "Selecione a
+                      fazenda…" do seletor obrigatorio aumentava o bloco e o deslocava ao escolher (a nota sem IE do destinatario, a da chave digitada) */}
+                  <span className={cn(REGUA_ROTULO, 'uma-linha-que-rola', fazendaPeloEndereco && 'text-amber-800', !fazendaId && 'text-destructive')} data-testid="nota-fazenda-origem">
                     Fazenda{p.fazendaId && fazendaId === p.fazendaId ? (fazendaPeloEndereco ? ` · ${ORIGEM_FAZENDA_PELO_ENDERECO}` : ' · pela IE') : ''}</span>
-                  <FazendaSelect value={fazendaId} onChange={setFazendaId} fazendas={fazendas} forcaAdministrativo={false} obrigatorio hideAviso triggerClassName="h-[22px] text-[10.5px]" />
+                  <FazendaSelect value={fazendaId} onChange={setFazendaId} fazendas={fazendas} forcaAdministrativo={false} hideAviso
+                    triggerClassName={cn('h-[22px] text-[10.5px]', !fazendaId && 'border-destructive')} />
                 </div>
                 <div className="min-w-0">
                   <span className={REGUA_ROTULO}>Conta origem</span>
@@ -794,7 +823,7 @@ export function NotaFiscalDialog({
           ) : null}
           {!bloqueio && !erro && jaLancada ? (
             <span className="min-w-0 uma-linha-que-rola font-medium text-amber-900" data-testid="nota-ja-lancada-frase">
-              {jaLancada.emParcelas ? fraseEmParcelas(jaLancada) : <>
+              {jaLancada.emParcelas ? fraseEmParcelas(jaLancada, n.totais.notaCent) : <>
               Esta nota parece já lançada: {jaLancada.porParcela.length - jaLancada.faltam.length} de {jaLancada.porParcela.length} {jaLancada.porParcela.length === 1 ? 'parcela' : 'parcelas'}
               {jaLancada.faltam.length ? ` · faltam ${jaLancada.faltam.map((f) => `${f.n}/${jaLancada.porParcela.length}`).join(', ')}` : ''}. Nada será criado em dobro.</>}
             </span>
