@@ -5,7 +5,7 @@
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
-  apenasAtivos, vazio, guardarFiltros, lerFiltros, esquecerFiltros, CHAVE_FILTROS_LISTA,
+  apenasAtivos, vazio, guardarFiltros, lerFiltros, esquecerFiltros, CHAVE_FILTROS_LISTA, chaveDoCliente,
 } from './filtrosPersistidos';
 
 const PADROES = { fornecedor: '__all__', macro: '__all__', produto: '', meses: [] as string[] };
@@ -39,28 +39,44 @@ describe('só o ativo é lembrado', () => {
 
 describe('a ida e a volta do storage', () => {
   it('guarda o que está ativo e lê de volta igual', () => {
-    guardarFiltros({ fornecedor: 'f1', meses: ['08', '09'] });
-    expect(lerFiltros()).toEqual({ fornecedor: 'f1', meses: ['08', '09'] });
+    guardarFiltros('cli-a', { fornecedor: 'f1', meses: ['08', '09'] });
+    expect(lerFiltros('cli-a')).toEqual({ fornecedor: 'f1', meses: ['08', '09'] });
   });
 
   it('guardar nada APAGA o que havia — é o "Limpar"', () => {
-    guardarFiltros({ fornecedor: 'f1' });
-    guardarFiltros({});
-    expect(sessionStorage.getItem(CHAVE_FILTROS_LISTA)).toBeNull();
-    expect(lerFiltros()).toBeNull();
+    guardarFiltros('cli-a', { fornecedor: 'f1' });
+    guardarFiltros('cli-a', {});
+    expect(sessionStorage.getItem(chaveDoCliente(CHAVE_FILTROS_LISTA, 'cli-a'))).toBeNull();
+    expect(lerFiltros('cli-a')).toBeNull();
   });
 
   it('lixo no storage devolve null em vez de estourar', () => {
-    sessionStorage.setItem(CHAVE_FILTROS_LISTA, '{isto não é json');
-    expect(lerFiltros()).toBeNull();
-    sessionStorage.setItem(CHAVE_FILTROS_LISTA, '["lista"]');
-    expect(lerFiltros()).toBeNull();
+    sessionStorage.setItem(chaveDoCliente(CHAVE_FILTROS_LISTA, 'cli-a'), '{isto não é json');
+    expect(lerFiltros('cli-a')).toBeNull();
+    sessionStorage.setItem(chaveDoCliente(CHAVE_FILTROS_LISTA, 'cli-a'), '["lista"]');
+    expect(lerFiltros('cli-a')).toBeNull();
   });
 
   it('esquecer apaga', () => {
-    guardarFiltros({ fornecedor: 'f1' });
-    esquecerFiltros();
-    expect(lerFiltros()).toBeNull();
+    guardarFiltros('cli-a', { fornecedor: 'f1' });
+    esquecerFiltros('cli-a');
+    expect(lerFiltros('cli-a')).toBeNull();
+  });
+});
+
+/** P94 — A MEMÓRIA É DO CLIENTE: o que se guardou no A nunca volta no B (o caso do Agnaldo × NJ). */
+describe('P94 — memória por cliente', () => {
+  it('gravada no cliente A, lida no cliente B: nada', () => {
+    guardarFiltros('cli-a', { fornecedorFiltro: 'forn-do-a', fazendaId: 'faz-do-a' });
+    expect(lerFiltros('cli-b')).toBeNull();
+    expect(lerFiltros('cli-a')).toEqual({ fornecedorFiltro: 'forn-do-a', fazendaId: 'faz-do-a' });
+    esquecerFiltros('cli-b');
+    expect(lerFiltros('cli-a')).not.toBeNull();   // esquecer o B não apaga o A
+  });
+  it('a chave de antes (sem cliente) nunca é aplicada, e sai na leitura', () => {
+    sessionStorage.setItem(CHAVE_FILTROS_LISTA, JSON.stringify({ fornecedorFiltro: 'de-quem' }));
+    expect(lerFiltros('cli-b')).toBeNull();
+    expect(sessionStorage.getItem(CHAVE_FILTROS_LISTA)).toBeNull();
   });
 });
 
@@ -86,7 +102,7 @@ describe('o filtro de safra persiste como qualquer outro', () => {
   it('"Sem safra" é escolha, não ausência — e sobrevive à ida e volta', () => {
     const ativos = apenasAtivos({ safraFiltro: '__sem_safra__' }, PADRAO);
     expect(ativos).toEqual({ safraFiltro: '__sem_safra__' });
-    guardarFiltros(ativos);
-    expect(lerFiltros()).toEqual({ safraFiltro: '__sem_safra__' });
+    guardarFiltros('cli-a', ativos);
+    expect(lerFiltros('cli-a')).toEqual({ safraFiltro: '__sem_safra__' });
   });
 });
