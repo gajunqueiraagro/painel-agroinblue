@@ -10,8 +10,11 @@
  * so' os aplica quando o que ele leu e' este instantaneo.
  */
 import type { DimensaoDataFinanceiro } from '@/lib/financeiro/filtrosBaseV2';
+import { chaveDoCliente } from '@/lib/financeiro/filtrosPersistidos';
 
 export const CHAVE_RETORNO_OC = 'financeirov2_return_filters';
+/** P94 — o instantaneo da OC tambem e' do cliente: abrir a OC no NJ e voltar no Agnaldo nao traz o recorte do NJ. */
+export const chaveRetornoOC = (clienteId: string) => chaveDoCliente(CHAVE_RETORNO_OC, clienteId);
 
 export interface ExtrasRetornoOC {
   dataPor: DimensaoDataFinanceiro;
@@ -39,4 +42,27 @@ export function extrasDoRetornoOC(f: unknown): Partial<ExtrasRetornoOC> {
   if (typeof mostrarSemCaixa === 'boolean') extras.mostrarSemCaixa = mostrarSemCaixa;
   if (typeof culturaFiltro === 'string') extras.culturaFiltro = culturaFiltro;
   return extras;
+}
+
+const ROTULO_DA_DIMENSAO: Record<DimensaoDataFinanceiro, string> = {
+  financeira: 'Financeira', competencia: 'Competência', vencimento: 'Vencimento', pagamento: 'Pagamento',
+};
+
+export interface ChipDaOC { campo: 'dataPor' | 'semCaixa'; texto: string }
+
+/**
+ * P94 — O QUE VEIO DA OC E MUDA O RECORTE FICA A' VISTA, como chip na faixa dos totais ("Vindo da OC: Data por = Competência ✕"):
+ * so' o que difere do padrao (Financeira; sem caixa oculto) e so' enquanto a tela ainda esta' no valor que a OC trouxe — o operador
+ * que troca na barra ja' decidiu, e o chip sai.
+ */
+export function chipsVindosDaOC(
+  vindo: Partial<Pick<ExtrasRetornoOC, 'dataPor' | 'mostrarSemCaixa'>>,
+  atual: { dataPor: DimensaoDataFinanceiro; mostrarSemCaixa: boolean },
+): ChipDaOC[] {
+  const chips: ChipDaOC[] = [];
+  if (vindo.dataPor && vindo.dataPor !== 'financeira' && atual.dataPor === vindo.dataPor) {
+    chips.push({ campo: 'dataPor', texto: `Vindo da OC: Data por = ${ROTULO_DA_DIMENSAO[vindo.dataPor]}` });
+  }
+  if (vindo.mostrarSemCaixa === true && atual.mostrarSemCaixa) chips.push({ campo: 'semCaixa', texto: 'Vindo da OC: Sem caixa = Mostrar' });
+  return chips;
 }
