@@ -105,13 +105,16 @@ export interface GradeDeParcelasProps {
   extras?: { titulo: string; largura: number; celula: (numero: number) => ReactNode; rodape?: ReactNode }[];
   /** Altura da linha do total, em px (padrão 20). O Editar obrigação usa 25 (FIN-FINANC-28-P3-FIX3). */
   alturaDoTotal?: number;
+  /** P74 — a grade em meio bloco (a prévia da nota, a aba Pagamento): o vencimento das parcelas não editáveis por inteiro (dd/mm/aaaa, a
+   *  regra da casa) e o rodapé com "Soma" no lugar de "Soma das parcelas". Ausente = como sempre. */
+  compacta?: boolean;
 }
 
 const PADRAO = { frase: 'a compra', rotulo: 'Valor da compra', passaAValer: 'A compra vale' };
 
 export function GradeDeParcelas({
   modo, onModo, parcelas, onParcelas, compraCent, oQue = PADRAO, onCompraVale, base = null, rotuloVoltar = 'Voltar às duplicatas da nota',
-  recado = null, altura = 236, travado = false, extras = [], alturaDoTotal = 20,
+  recado = null, altura = 236, travado = false, extras = [], alturaDoTotal = 20, compacta = false,
 }: GradeDeParcelasProps) {
   const [perguntaVoltarAoMensal, setPerguntaVoltarAoMensal] = useState(false);
   const livres = modo === 'livres';
@@ -196,7 +199,7 @@ export function GradeDeParcelas({
                     {editavel
                       ? <DatePicker size="compact" value={p.vencimento} onChange={(v) => onParcelas(editarVencimento(parcelas, p.chave, v))}
                           className={`${CAMPO} pl-1 pr-5 ${m.vencimento ? AMBAR : ''}`} />
-                      : dataBR(p.vencimento)}
+                      : compacta && /^\d{4}-\d{2}-\d{2}$/.test(p.vencimento) ? `${p.vencimento.slice(8, 10)}/${p.vencimento.slice(5, 7)}/${p.vencimento.slice(0, 4)}` : dataBR(p.vencimento)}
                   </td>
                   <td className={`${TD} text-right whitespace-nowrap tabular-nums`} data-testid="cel-valor">
                     {editavel
@@ -229,7 +232,7 @@ export function GradeDeParcelas({
         <tbody>
           <tr style={{ height: alturaDoTotal }}>
             <td className="px-1.5 font-bold whitespace-nowrap" data-testid="rodape-n">{r.n} {r.n === 1 ? 'parcela' : 'parcelas'}</td>
-            <td className="px-1.5 text-right whitespace-nowrap"><span className="text-muted-foreground">Soma das parcelas&nbsp;</span><span className="font-bold tabular-nums" data-testid="rodape-soma">{brCentavos(r.somaCent)}</span></td>
+            <td className="px-1.5 text-right whitespace-nowrap"><span className="text-muted-foreground">{compacta ? 'Soma' : 'Soma das parcelas'}&nbsp;</span><span className="font-bold tabular-nums" data-testid="rodape-soma">{brCentavos(r.somaCent)}</span></td>
             <td className="px-1.5 text-right whitespace-nowrap"><span className="text-muted-foreground">{oQue.rotulo}&nbsp;</span><span className="font-bold tabular-nums" data-testid="rodape-compra">{brCentavos(r.compraCent)}</span></td>
             <td className="px-1.5 text-right whitespace-nowrap"><span className="text-muted-foreground">Diferença&nbsp;</span><Diferenca cent={r.diferencaCent} /></td>
           </tr>

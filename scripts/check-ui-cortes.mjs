@@ -42,6 +42,19 @@ const EXCETO_CONSORCIO = '[data-testid="lista-parcelas-consorcio"], [data-testid
 const clicar = (sel) => async (p) => { await p.locator(sel).first().click(); await p.waitForTimeout(500); };
 const clicarRotulo = (re) => async (p) => { await p.getByRole('button', { name: re }).first().click(); await p.waitForTimeout(500); };
 const clicarTexto = (txt) => async (p) => { await p.getByText(txt, { exact: true }).first().click(); await p.waitForTimeout(500); };
+/* P74 — a nota no cartão em 4 (a prévia) e o "Parcelar este lançamento" em 4 (o Editar) */
+const cartaoEm4 = async (p) => {
+  await p.locator('[data-testid="nota-como-foi-pago"]').click(); await p.waitForTimeout(300);
+  await p.locator('[data-testid="nota-como-cartao"]').click(); await p.waitForTimeout(300);
+  await p.locator('[data-testid="nota-cartao"] button', { hasText: 'Selecione o cartão' }).first().click(); await p.waitForTimeout(300);
+  await p.getByText('Cartão Elo Exemplo', { exact: true }).last().click(); await p.waitForTimeout(300);
+  await p.locator('[data-testid="nota-cartao-parcelas"]').fill('4'); await p.waitForTimeout(600);
+};
+const parcelarEm4 = async (p) => {
+  await clicarTexto('Pagamento')(p);
+  await p.locator('[data-testid="parcelar-este-abrir"]').click(); await p.waitForTimeout(300);
+  await p.locator('[data-testid="parcelar-este-n"]').fill('4'); await p.waitForTimeout(600);
+};
 const CENARIOS = [
   { nome: 'mesclar-vazio', url: 'tela=mesclar&vazio=1' },
   { nome: 'mesclar-comparar', url: 'tela=mesclar' },
@@ -227,6 +240,20 @@ const CENARIOS = [
   /* nos tres tamanhos oficiais: abaixo de 1000px o modal ja' passava da janela ANTES do P95 (128px a 750, so' com a nota lida) — achado
      registrado no relatorio do P95, fora do escopo dele */
   { nome: 'nota-novo-da-nota', url: 'tela=novo-da-nota' },
+  /* P74 — "Como foi pago?" › Cartão em N× na nota sem duplicata: o cartão, 4 parcelas, a 1ª fatura sugerida em âmbar e a grade (Igual todo
+     mês e Parcelas livres); o modal fixo não rola (só a lista da grade) */
+  /* De 1000px para cima (os tamanhos oficiais): abaixo disso a prévia deixa ~50px de altura ao bloco de parcelas (a 750x520, medido) e os
+     campos do cartão empilhados não cabem — o mesmo achado de largura do "Novo a partir da nota" no P95, registrado como pendência */
+  ...[['', null], ['-livres', 'Parcelas livres']].map(([s, livres]) => ({ nome: `nota-pdf-cartao${s}`, url: 'tela=nota-pdf&v=semdup',
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-itens-rolagem"], [data-testid="nota-parcelas-rolagem"], [data-testid="lista-de-parcelas"]' },
+    antes: async (p) => { await cartaoEm4(p); if (livres) await clicarTexto(livres)(p); } })),
+  /* P74 B — "Parcelar este lançamento" (aba Pagamento do Editar): fechado, aberto com 4 no cartão (a sugestão em âmbar, a Situação) e a
+     confirmação antes → depois; e o pago (o botão apagado com a frase) */
+  { nome: 'lancamento-parcelar-fechado', url: 'tela=lancamento&m=editar&v=salcartao', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicarTexto('Pagamento') },
+  { nome: 'lancamento-parcelar-aberto', url: 'tela=lancamento&m=editar&v=salcartao', tamanhos: TAMANHOS_DO_CONTRATO, antes: parcelarEm4 },
+  { nome: 'lancamento-parcelar-pago', url: 'tela=lancamento&m=editar&v=salpago', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicarTexto('Pagamento') },
+  { nome: 'lancamento-parcelar-confirmar', url: 'tela=lancamento&m=editar&v=salcartao', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[role="alertdialog"]',
+    antes: async (p) => { await parcelarEm4(p); await p.locator('[data-testid="parcelar-este-confirmar"]').click(); await p.waitForTimeout(500); } },
   /* FIN-NOTA-PDF-01b — a confirmacao do "Atualizar e parcelar" (o texto que diz que o existente vira 1/4) */
   { nome: 'nota-pdf-parcelar-confirmar', url: 'tela=nota-pdf&v=parcelar', tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[role="alertdialog"]',
     antes: async (p) => { await p.locator('[data-testid="nota-atualizar-este"]').first().click(); await p.waitForTimeout(600); } },

@@ -55,6 +55,9 @@ const leitura = vi.hoisted(() => ({ lerNota: vi.fn() }));
 vi.mock('@/lib/financeiro/nfe/lerNota', () => leitura);
 /* P95 — o tamanho das paginas do PDF da chave digitada (o leitor de verdade carrega o pdfjs) */
 vi.mock('@/lib/financeiro/nfe/lerNotaPdf', () => ({ itensDoPdf: vi.fn(async () => ({ paginas: [[]], tamanhos: [{ largura: 595.28, altura: 841.89 }] })) }));
+/* P74 — os dias de vencimento do cartão (a RPC de verdade vai ao banco): o Elo sintético vence no dia 10 */
+const cartaoNoBanco = vi.hoisted(() => ({ diasDoCartao: vi.fn(async (_c: string): Promise<{ dia: number; lancamentos: number; ultimo: string }[]> => []) }));
+vi.mock('@/lib/financeiro/diasDoCartao', () => cartaoNoBanco);
 
 import { NotaFiscalDialog, fraseDoCompletar, quantidadeCurta, type NotaParaLancar } from './NotaFiscalDialog';
 import { NovoDeXmlDialog, arquivoPdfDaNota } from './NovoDeXmlDialog';
@@ -136,7 +139,7 @@ const FORN: FornecedorV2 = {
   banco: null, agencia: null, conta: null, tipo_conta: null, cpf_cnpj_pagamento: null, nome_favorecido: null, observacao_pagamento: null,
 };
 
-function abrir(nota: NotaParaLancar, extra: { fornecedores?: FornecedorV2[]; g?: Gravadores; onCriarLancamento?: (f: LancamentoV2Form) => Promise<string | null> } = {}) {
+function abrir(nota: NotaParaLancar, extra: { fornecedores?: FornecedorV2[]; g?: Gravadores; onCriarLancamento?: (f: LancamentoV2Form) => Promise<string | null>; contas?: ContaBancariaV2[] } = {}) {
   const onCriarFornecedor = vi.fn(async (nome: string, _faz: string | null, _doc?: string): Promise<FornecedorV2 | null> => ({ ...FORN, id: 'forn-novo', nome }));
   const props = {
     onClose: vi.fn(), onCriado: vi.fn(), onAbrirNoLancamento: vi.fn(), onAbrirRegistrada: vi.fn(), onCriarFornecedor,
@@ -145,7 +148,7 @@ function abrir(nota: NotaParaLancar, extra: { fornecedores?: FornecedorV2[]; g?:
   };
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <NotaFiscalDialog open clienteId="cli" clienteNome="NJ" nota={nota} fazendas={FAZENDAS} contas={CONTAS} classificacoes={PLANO} safras={SAFRAS}
+      <NotaFiscalDialog open clienteId="cli" clienteNome="NJ" nota={nota} fazendas={FAZENDAS} contas={extra.contas ?? CONTAS} classificacoes={PLANO} safras={SAFRAS}
         fornecedores={extra.fornecedores ?? []} gravadores={extra.g} consultarReceita={RECEITA} onCriarLancamento={extra.onCriarLancamento} {...props} />
     </QueryClientProvider>,
   );
@@ -832,5 +835,108 @@ describe('P95 — o mesmo arquivo duas vezes e DIGITAR A CHAVE', () => {
     fireEvent.click(screen.getByTestId('nota-criar'));
     await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
     expect(g.lancamento.mock.calls[0][0]).toMatchObject({ valor: 1234.5, data_competencia: '2026-09-06', data_vencimento: '2026-09-06' });
+  });
+});
+
+/**
+ * P74 — NOTA-CARTAO-PARCELADO-01: "Como foi pago?" (Duplicatas da nota | À vista | Cartão em N×). Nota SEM duplicata sintética (R$ 9.583,00,
+ * emissão 29/09/2026) paga num cartão sintético em 4 × 2.395,75, 1ª fatura sugerida pelo dia mais frequente do cartão (10) → 10/10/2026.
+ *   P1 abre em À vista (sem duplicata; "Duplicatas da nota (0)" apagado com a frase) e em Duplicatas quando a nota as traz
+ *   P2 o seletor do cartão só tem contas do tipo cartão · P3 a 1ª fatura sugerida em âmbar, com o rótulo; a conta origem "pelo cartão"
+ *   P4 criar grava as 4 pelo parcelamento da nota (cartão, competência = emissão, as faturas) e o PDF nas 4
+ *   P5 sem histórico no cartão: a 1ª fatura vazia e obrigatória · P6 a busca de "já lançada" procura as parcelas do cartão
+ *   P7 "No Novo lançamento" leva o cartão e as parcelas
+ */
+const CARTAO: ContaBancariaV2 = { id: 'elo', nome_conta: 'Cartão Elo Sintetico', banco: null, fazenda_id: 'faz-1', tipo_conta: 'cartao', codigo_conta: null,
+  nome_exibicao: 'Cartão Elo Sintetico', agencia: null, numero_conta: null, conta_digito: null, aliases: null };
+const COM_CARTAO = [...CONTAS, CARTAO];
+/* o campo de texto do DatePicker da 1ª fatura (sem cast: o tipo se prova em runtime) */
+function campoDaFatura(): HTMLInputElement {
+  const el = within(screen.getByTestId('nota-cartao-fatura').closest('div') ?? document.body).getByRole('textbox');
+  if (!(el instanceof HTMLInputElement)) throw new Error('a 1ª fatura não é um campo de texto');
+  return el;
+}
+async function escolherComo(rotulo: string) {
+  fireEvent.click(screen.getByTestId('nota-como-foi-pago'));
+  fireEvent.click(await screen.findByRole('option', { name: rotulo }));
+  /* o Select do Radix devolve o foco ao gatilho DEPOIS de fechar: espera, senão o próximo popover fecha com esse foco */
+  await waitFor(() => expect(screen.getByTestId('nota-como-foi-pago').textContent).toBe(rotulo));
+  await new Promise((r) => setTimeout(r, 20));
+}
+async function noCartao(n: string) {
+  await escolherComo('Cartão em N×');
+  fireEvent.click(within(screen.getByTestId('nota-cartao')).getByRole('button', { name: /Selecione o cartão/ }));
+  fireEvent.click(await screen.findByText('Cartão Elo Sintetico'));
+  fireEvent.change(screen.getByTestId('nota-cartao-parcelas'), { target: { value: n } });
+}
+
+describe('P74 — a nota paga no cartão em N vezes', () => {
+  beforeEach(() => { cartaoNoBanco.diasDoCartao.mockResolvedValue([{ dia: 10, lancamentos: 409, ultimo: '2026-09-10' }, { dia: 13, lancamentos: 1, ultimo: '2026-09-13' }]); });
+
+  it('P1 sem duplicata abre em À vista ("Duplicatas da nota (0)" apagado, com a frase); com duplicatas, em Duplicatas', () => {
+    abrir(montarNota({ paginas: danfeSinteticoSemDuplicata(), fornecedores: [FORN] }), { contas: COM_CARTAO });
+    expect(screen.getByTestId('nota-como-foi-pago').textContent).toBe('À vista');
+    fireEvent.click(screen.getByTestId('nota-como-foi-pago'));
+    const dup = screen.getByTestId('nota-como-duplicatas');
+    expect(dup.textContent).toBe('Duplicatas da nota (0)');
+    expect(dup.getAttribute('data-disabled')).not.toBeNull();
+    expect(dup.getAttribute('title')).toBe('A nota não traz duplicatas.');
+  });
+  it('P1 com duplicatas abre em "Duplicatas da nota (4)"', () => {
+    abrir(montarNota(), { contas: COM_CARTAO });
+    expect(screen.getByTestId('nota-como-foi-pago').textContent).toBe('Duplicatas (4)');
+  });
+  it('P2/P3 o cartão: só contas do tipo cartão; a 1ª fatura sugerida em âmbar; a conta origem pelo cartão', async () => {
+    abrir(montarNota({ paginas: danfeSinteticoSemDuplicata(), fornecedores: [FORN] }), { contas: COM_CARTAO });
+    await escolherComo('Cartão em N×');
+    fireEvent.click(within(screen.getByTestId('nota-cartao')).getByRole('button', { name: /Selecione o cartão/ }));
+    expect(await screen.findByText('Cartão Elo Sintetico')).toBeTruthy();
+    expect(screen.queryAllByText('Sicredi Lavoura')).toHaveLength(0);
+    fireEvent.click(screen.getByText('Cartão Elo Sintetico'));
+    await waitFor(() => expect(screen.getByTestId('nota-cartao-rotulo-fatura').textContent).toBe('1ª fatura · sugerido (Elo Sintetico, dia 10)'));
+    expect(cartaoNoBanco.diasDoCartao).toHaveBeenCalledWith('elo');
+    const fatura = campoDaFatura();
+    expect(fatura.value).toBe('10/10/2026');
+    expect(fatura.className).toContain('border-amber-400');
+    expect(screen.getByTestId('nota-conta-pelo-cartao').textContent).toBe('Cartão Elo Sintetico');
+  });
+  it('P4 criar: as 4 parcelas pelo parcelamento da nota, no cartão, com o PDF nas 4', async () => {
+    const { g, comoGravadores } = gravadoresFalsos();
+    abrir(montarNota({ paginas: danfeSinteticoSemDuplicata(), fornecedores: [FORN] }), { g: comoGravadores, contas: COM_CARTAO });
+    await noCartao('4');
+    await escolherSubcentro('Nutrição Engorda');
+    await waitFor(() => expect(screen.getByTestId('nota-criar').textContent).toBe('Criar 4 parcelas'));
+    expect(screen.getByTestId('nota-rodape').textContent).toContain('O PDF fica anexado às 4 parcelas como a NF 3.241 · 4 saídas no Cartão Elo Sintetico, uma em cada fatura.');
+    fireEvent.click(screen.getByTestId('nota-criar'));
+    await waitFor(() => expect(g.gravar).toHaveBeenCalled());
+    expect(g.lancamento).not.toHaveBeenCalled();
+    expect(g.gravar.mock.calls[0][0]).toMatchObject({ valor_total: 9583, total_parcelas: 4, data_primeira_parcela: '2026-10-10', conta_bancaria_id: 'elo',
+      data_competencia: '2026-09-29', plano_conta_id: 'pl-nut' });
+    await waitFor(() => expect(g.documentosDoParcelamento).toHaveBeenCalled());
+    expect(g.documentosDoParcelamento.mock.calls[0][1]).toHaveLength(4);
+  });
+  it('P5 sem histórico no cartão: a 1ª fatura vazia e obrigatória', async () => {
+    cartaoNoBanco.diasDoCartao.mockResolvedValue([]);
+    abrir(montarNota({ paginas: danfeSinteticoSemDuplicata(), fornecedores: [FORN] }), { contas: COM_CARTAO });
+    await noCartao('4');
+    await escolherSubcentro('Nutrição Engorda');
+    await waitFor(() => expect(screen.getByTestId('nota-falta').textContent).toBe('⚠ Falta: 1ª fatura'));
+    expect(screen.getByTestId('nota-cartao-rotulo-fatura').textContent).toBe('1ª fatura');
+    expect(screen.getByTestId('nota-criar')).toBeDisabled();
+  });
+  it('P6 a busca de "nota já lançada" procura as parcelas do cartão', async () => {
+    abrir(montarNota({ paginas: danfeSinteticoSemDuplicata(), fornecedores: [FORN] }), { contas: COM_CARTAO });
+    await noCartao('4');
+    await waitFor(() => expect(consultas.notaJaLancada.mock.calls.some(([, e]) => JSON.stringify(e).includes('"valorCent":239575'))).toBe(true));
+  });
+  it('P7 "No Novo lançamento" leva o cartão e as 4 parcelas', async () => {
+    const props = abrir(montarNota({ paginas: danfeSinteticoSemDuplicata(), fornecedores: [FORN] }), { contas: COM_CARTAO });
+    await noCartao('4');
+    await waitFor(() => expect(screen.getByTestId('nota-conta-pelo-cartao').textContent).toBe('Cartão Elo Sintetico'));
+    await waitFor(() => expect(campoDaFatura().value).toBe('10/10/2026'));
+    fireEvent.click(screen.getByTestId('nota-abrir-no-lancamento'));
+    const prefill = props.onAbrirNoLancamento.mock.calls[0][0];
+    expect(prefill.conta_bancaria_id).toBe('elo');
+    expect(prefill.doXml.proposta.duplicatas.map((d: { valorCent: number }) => d.valorCent)).toEqual([239575, 239575, 239575, 239575]);
   });
 });

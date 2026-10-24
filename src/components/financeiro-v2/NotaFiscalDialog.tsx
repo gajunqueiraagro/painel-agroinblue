@@ -39,6 +39,14 @@ import { CULTURAS_LANCAMENTO, SEM_CULTURA } from '@/lib/agri/rateioLancamento';
 import { safraSugerida } from '@/lib/agri/safraSugerida';
 import { ATIVIDADES } from '@/lib/financeiro/ultimaAtividade';
 import { useCulturasDaSafra } from '@/hooks/useAreaPlantada';
+import { Input } from '@/components/ui/input';
+import { GradeDeParcelas, type ModoDasParcelas } from '@/components/financiamentos/GradeDeParcelas';
+import { motivoNaoSalva, parcelasDoMensal, type ParcelaLivre } from '@/lib/financiamentos/parcelasLivres';
+import {
+  FRASE_NOTA_SEM_DUPLICATAS, MAX_PARCELAS_DO_CARTAO, MIN_PARCELAS_DO_CARTAO, comPagamento, comoAbre, diaMaisFrequente, fraseDoRodapeDoCartao,
+  parcelasDoCartao, primeiraFatura, rotuloDaSugestao, type ComoFoiPago,
+} from '@/lib/financeiro/pagamentoNoCartao';
+import { diasDoCartao } from '@/lib/financeiro/diasDoCartao';
 import type { ParcelaDoPayload } from '@/lib/financiamentos/montarPayloadParcelamento';
 import { gravarParcelamento } from './LancamentoV2Dialog';
 import { ondeEsta } from './LancamentoDoXml';
@@ -170,8 +178,49 @@ export function NotaFiscalDialog({
   const [digitado, setDigitado] = useState<{ emissao: string; valorCent: number | null }>({ emissao: '', valorCent: null });
   const pelaChave = nota.lido.pelaChave === true;
   const efetiva = useMemo(() => (pelaChave ? comDadosDigitados(nota, digitado) : nota), [pelaChave, nota, digitado]);
-  const { lido, doXml, bytes, arquivo } = efetiva;
+  const { lido, doXml: doXmlLido, bytes, arquivo } = efetiva;
   const n = lido.nota;
+  /* ── P74 — "COMO FOI PAGO?" (NOTA-CARTAO-PARCELADO-01): Duplicatas da nota | À vista | Cartão em N×. A escolha vira a PROPOSTA da nota
+     (`comPagamento`) e daí para baixo é o caminho de sempre: criar, o PDF nas N, a busca de "já lançada" (procura as parcelas do cartão), o
+     "No Novo lançamento" e o "Atualizar e parcelar". Abre em Duplicatas quando a nota as traz, senão À vista; só o operador muda. */
+  const nDuplicatasDaNota = doXmlLido.proposta.duplicatas.length;
+  const [como, setComo] = useState<ComoFoiPago>(() => comoAbre(nDuplicatasDaNota));
+  const [cartaoId, setCartaoId] = useState('');
+  const [nCartaoTexto, setNCartaoTexto] = useState('');
+  const [primeira, setPrimeira] = useState('');
+  const [primeiraEditada, setPrimeiraEditada] = useState(false);
+  const [diaSugerido, setDiaSugerido] = useState<number | null>(null);
+  const [modoCartao, setModoCartao] = useState<ModoDasParcelas>('mensal');
+  const [livresCartao, setLivresCartao] = useState<ParcelaLivre[]>([]);
+  const [baseLivresCartao, setBaseLivresCartao] = useState<ParcelaLivre[] | null>(null);
+  /* só as contas do tipo cartão (as ativas: a lista da tela já é a das ativas) */
+  const cartoes = useMemo(() => contas.filter((c) => c.tipo_conta === 'cartao'), [contas]);
+  const cartao = cartoes.find((c) => c.id === cartaoId) ?? null;
+  const nomeDoCartao = cartao ? (cartao.nome_exibicao || cartao.nome_conta) : '';
+  const nCartao = /^\d+$/.test(nCartaoTexto.trim()) ? Number(nCartaoTexto.trim()) : 0;
+  const nCartaoValido = nCartao >= MIN_PARCELAS_DO_CARTAO && nCartao <= MAX_PARCELAS_DO_CARTAO;
+  /* a 1ª fatura SUGERIDA: o dia mais frequente do cartão nos últimos 12 meses, no mês seguinte à emissão (sem histórico: vazio) */
+  useEffect(() => {
+    let vivo = true;
+    if (!cartaoId) { setDiaSugerido(null); return; }
+    void diasDoCartao(cartaoId).then((d) => { if (vivo) setDiaSugerido(diaMaisFrequente(d)); }, () => { if (vivo) setDiaSugerido(null); });
+    return () => { vivo = false; };
+  }, [cartaoId]);
+  const primeiraSugerida = diaSugerido ? primeiraFatura(n.emissao, diaSugerido) : '';
+  useEffect(() => { if (!primeiraEditada) setPrimeira(primeiraSugerida); }, [primeiraSugerida, primeiraEditada]);
+  const sugeridaAtiva = !!primeiraSugerida && !primeiraEditada && primeira === primeiraSugerida;
+  const mensalDoCartao = useMemo(() => (nCartaoValido && primeira
+    ? parcelasDoMensal(parcelasDoCartao(n.totais.notaCent, nCartao, primeira).map((x) => ({ numero: Number(x.numero), dataVencimento: x.vencimento, valor: x.valorCent / 100 })))
+    : []), [nCartaoValido, primeira, n.totais.notaCent, nCartao]);
+  const gradeDoCartao = modoCartao === 'livres' ? livresCartao : mensalDoCartao;
+  const parcelasEscolhidas = useMemo(() => gradeDoCartao.map((x, i) => ({ numero: String(i + 1), vencimento: x.vencimento, valorCent: x.valorCent })), [gradeDoCartao]);
+  const doXml = useMemo(() => comPagamento(doXmlLido, como, como === 'cartao' ? parcelasEscolhidas : []), [doXmlLido, como, parcelasEscolhidas]);
+  const trocarModoDoCartao = (m: ModoDasParcelas) => {
+    if (m === 'livres') { setLivresCartao(mensalDoCartao); setBaseLivresCartao(mensalDoCartao); } else { setLivresCartao([]); setBaseLivresCartao(null); }
+    setModoCartao(m);
+  };
+  const motivoDoCartao = como !== 'cartao' || modoCartao !== 'livres' ? null
+    : livresCartao.length < MIN_PARCELAS_DO_CARTAO ? 'o parcelado pede ao menos duas parcelas' : motivoNaoSalva(livresCartao, n.totais.notaCent, 'a nota');
   const p = doXml.proposta;
   /* NOTA-FORNECEDOR-DUPLICA-01 — a resolucao e' refeita com a lista DE AGORA (a da leitura pode estar velha: o cadastro criado depois
      de ler a nota, a nota reaberta da lista). Pelo documento manda a de agora; senao, a da leitura (o resolvedor do banco); senao, a
@@ -293,7 +342,7 @@ export function NotaFiscalDialog({
     ? safraSugerida(p.competencia, atividadeDoPlano, safras, { desempatar: false }) : null;
   const nParcelas = p.duplicatas.length;
   const cabeAqui = nParcelas >= 2;
-  const semDuplicata = nParcelas === 0;
+  const semDuplicata = nDuplicatasDaNota === 0;
   const culturasDaSafra = useCulturasDaSafra(lavoura && safraId ? safraId : null);
   const safrasDaLavoura = useMemo(() => safras.filter((sf) => (sf.escopo_negocio ?? '') === 'agricultura' || sf.id === safraId), [safras, safraId]);
 
@@ -326,13 +375,20 @@ export function NotaFiscalDialog({
   if (!planoId) faltas.push('subcentro');
   if (lavoura && !safraId) faltas.push('safra');
   if (lavoura && cultura === null) faltas.push('cultura');
-  if (!cabeAqui && !vencimento) faltas.push('vencimento');
+  if (como !== 'cartao' && !cabeAqui && !vencimento) faltas.push('vencimento');
+  if (como === 'cartao') {
+    if (!cartaoId) faltas.push('cartão');
+    if (modoCartao === 'mensal' && !nCartaoValido) faltas.push(`nº de parcelas (${MIN_PARCELAS_DO_CARTAO} a ${MAX_PARCELAS_DO_CARTAO})`);
+    if (modoCartao === 'mensal' && !primeira) faltas.push('1ª fatura');
+    if (motivoDoCartao) faltas.push(motivoDoCartao);
+  }
   if (pelaChave && !digitado.emissao) faltas.push('emissão');
   if (pelaChave && !(digitado.valorCent && digitado.valorCent > 0)) faltas.push('valor');
   const bloqueio = divergencias.length ? `A chave não confere com o lido (${divergencias.map((x) => NOME_DO_CONFERIDO[x]).join(', ')}). Nada será criado.`
     : registrada ? `Nota já registrada neste cliente · ${ondeEsta(registrada)}` : null;
   const podeCriar = !bloqueio && faltas.length === 0 && !ocupado;
-  const contaEscolhida = contaId && contaId !== '__none__' ? contaId : null;
+  /* P74 — com o cartão, a conta origem das N é o cartão escolhido */
+  const contaEscolhida = como === 'cartao' ? (cartaoId || null) : contaId && contaId !== '__none__' ? contaId : null;
   const escolhas = (): EscolhasDaNota | null => (favorecidoId && plano?.id ? {
     fazendaId, favorecidoId, contaBancariaId: contaEscolhida, planoContaId: plano.id, escopoNegocio: plano.escopo_negocio || null,
     safraId: lavoura ? safraId || null : safraPelaData, cultura: lavoura ? cultura || null : null,
@@ -663,28 +719,88 @@ export function NotaFiscalDialog({
               </section>
             ) : (
             <div className="grid min-h-0 flex-1 grid-cols-2 gap-1.5">
-              <section className={cn(BLOCO, 'min-h-0')} data-testid="nota-bloco-parcelas">
-                <TituloDoBloco nome="Parcelas da nota" acao={nParcelas === 0 ? <span className={CHIP_AVISO}>sem duplicatas</span>
-                  : n.somaDuplicatasCent === n.totais.notaCent ? <span className={CHIP_OK}>soma = valor da nota</span>
-                    : <span className={CHIP_AVISO}>soma {reais(n.somaDuplicatasCent)} ≠ nota</span>} />
+              <section className={cn(BLOCO, 'min-h-0', como === 'cartao' && 'col-span-2')} data-testid="nota-bloco-parcelas">
+                {/* P74 — "Como foi pago?" no lugar de "Parcelas da nota": a escolha no título; o conteúdo troca DENTRO do bloco (a altura é a
+                    do bloco, nada de fora se desloca) */}
+                {/* o seletor no título: suspenso (cabe em qualquer largura; o segmentado de três opções não cabia na meia coluna a 750px) e LOGO DEPOIS
+                    do nome, à esquerda — no cartão o bloco fica mais largo, e na ponta direita o seletor andaria (o título é o do TituloDoBloco) */}
+                <div className="mb-1 flex min-h-[16px] min-w-0 items-center gap-2 border-b border-border/60" data-titulo-do-bloco="">
+                  <h3 className="shrink-0 text-[11px] font-semibold leading-[15px] text-foreground">Como foi pago?</h3>
+                  <Select value={como} onValueChange={(v) => { if (v === 'duplicatas' || v === 'avista' || v === 'cartao') setComo(v); }}>
+                    <SelectTrigger className="h-[18px] w-[128px] shrink-0 whitespace-nowrap px-1.5 text-[10px]" data-testid="nota-como-foi-pago" title={como === 'duplicatas' ? `Duplicatas da nota (${nDuplicatasDaNota})` : undefined}>
+                      {/* no gatilho, o rótulo curto (largura fixa: nada anda de uma nota para outra); na lista, o nome inteiro */}
+                      <SelectValue>{como === 'duplicatas' ? `Duplicatas (${nDuplicatasDaNota})` : como === 'avista' ? 'À vista' : 'Cartão em N×'}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="duplicatas" disabled={nDuplicatasDaNota === 0} title={nDuplicatasDaNota === 0 ? FRASE_NOTA_SEM_DUPLICATAS : undefined}
+                        data-testid="nota-como-duplicatas">Duplicatas da nota ({nDuplicatasDaNota})</SelectItem>
+                      <SelectItem value="avista" data-testid="nota-como-avista">À vista</SelectItem>
+                      <SelectItem value="cartao" data-testid="nota-como-cartao">Cartão em N×</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {como === 'cartao' ? (
+                  /* P74 — no cartão o bloco ocupa também o lugar dos Itens (a grade de sempre não cabe em meia coluna): os campos à esquerda, a
+                     grade (Igual todo mês / Parcelas livres) à direita, na altura do bloco */
+                  <div className="grid min-h-0 flex-1 gap-2" style={{ gridTemplateColumns: '176px minmax(0, 1fr)' }} data-testid="nota-cartao">
+                    <div className="campos-uma-linha flex min-w-0 flex-col gap-1">
+                      <div className="min-w-0">
+                        <span className={cn(REGUA_ROTULO, !cartaoId && 'text-destructive')}>Cartão</span>
+                        <ContaBancariaSelect value={cartaoId || '__none__'} onValueChange={(v) => { setCartaoId(v === '__none__' ? '' : v); setPrimeiraEditada(false); }}
+                          contas={cartoes} placeholder="Selecione" prependItems={[{ value: '__none__', label: 'Selecione o cartão' }]}
+                          className={cn('h-[22px] text-[10.5px]', !cartaoId && 'border-destructive')} />
+                      </div>
+                      <div className="min-w-0">
+                        <span className={cn(REGUA_ROTULO, modoCartao === 'mensal' && !nCartaoValido && 'text-destructive')}>Parcelas</span>
+                        <Input value={modoCartao === 'livres' ? String(livresCartao.length) : nCartaoTexto} onChange={(e) => setNCartaoTexto(e.target.value.replace(/\D/g, '').slice(0, 2))}
+                          disabled={modoCartao === 'livres'} inputMode="numeric" placeholder={`${MIN_PARCELAS_DO_CARTAO} a ${MAX_PARCELAS_DO_CARTAO}`} data-testid="nota-cartao-parcelas"
+                          title={modoCartao === 'livres' ? 'Em Parcelas livres, acrescente ou retire na grade.' : undefined}
+                          className={cn('h-[22px] px-2 text-[10.5px] tabular-nums', modoCartao === 'mensal' && !nCartaoValido && 'border-destructive')} />
+                      </div>
+                      <div className="min-w-0">
+                        <span className={cn(REGUA_ROTULO, 'uma-linha-que-rola', sugeridaAtiva && 'text-amber-800', modoCartao === 'mensal' && !primeira && 'text-destructive')}
+                          data-testid="nota-cartao-rotulo-fatura" title={sugeridaAtiva ? 'O dia mais frequente das faturas deste cartão nos últimos 12 meses, no mês seguinte à emissão.' : undefined}>
+                          {sugeridaAtiva && diaSugerido ? rotuloDaSugestao(nomeDoCartao, diaSugerido) : '1ª fatura'}</span>
+                        <DatePicker value={modoCartao === 'livres' ? (livresCartao[0]?.vencimento ?? '') : primeira} disabled={modoCartao === 'livres'} data-testid="nota-cartao-fatura"
+                          onChange={(v) => { setPrimeira(v); setPrimeiraEditada(true); }}
+                          className={cn('h-[22px] text-[10.5px]', sugeridaAtiva && 'border-amber-400 bg-amber-50', modoCartao === 'mensal' && !primeira && 'border-destructive')} />
+                      </div>
+                    </div>
+                    <div className="min-h-0 min-w-0">
+                      <GradeDeParcelas modo={modoCartao} onModo={trocarModoDoCartao} parcelas={gradeDoCartao} onParcelas={setLivresCartao} compraCent={n.totais.notaCent}
+                        oQue={{ frase: 'a nota', rotulo: 'Valor da nota', passaAValer: 'A nota vale' }} base={baseLivresCartao} rotuloVoltar="Desfazer edições"
+                        recado={gradeDoCartao.length && gradeDoCartao.every((x) => x.valorCent === gradeDoCartao[0].valorCent)
+                          ? `${gradeDoCartao.length} × ${reais(gradeDoCartao[0].valorCent)} = valor da nota` : 'soma = valor da nota'}
+                        altura="100%" compacta />
+                    </div>
+                  </div>
+                ) : (
                 <div className="min-h-0 flex-1 overflow-y-auto" data-testid="nota-parcelas-rolagem">
                   <table className="w-full table-fixed border-collapse">
                     <colgroup><col style={{ width: 44 }} /><col /><col style={{ width: 90 }} /></colgroup>
                     <thead className="sticky top-0 z-10 bg-primary"><tr><th className={TH}>Nº</th><th className={TH}>Vencimento</th><th className={cn(TH, 'text-right')}>Valor</th></tr></thead>
                     <tbody>
-                      {p.duplicatas.map((d, i) => (
+                      {como === 'avista' ? (
+                        /* P74 — à vista: UM lançamento, no vencimento escolhido no bloco Lançamento */
+                        <tr className="border-b border-border/50" data-testid="nota-parcela-avista">
+                          <td className={cn(TDN, 'text-left')}>1/1</td>
+                          <td className={cn(TDN, 'text-left')}>{vencimento ? dataInteira(vencimento) : '—'}</td>
+                          <td className={TDN}>{reais(p.valorCent)}</td>
+                        </tr>
+                      ) : p.duplicatas.map((d, i) => (
                         <tr key={`${d.numero}-${i}`} className="border-b border-border/50" data-testid="nota-parcela">
                           <td className={cn(TDN, 'text-left')}>{i + 1}/{nParcelas}</td>
                           <td className={cn(TDN, 'text-left')}>{dataInteira(d.vencimento)}</td>
                           <td className={TDN}>{reais(d.valorCent)}</td>
                         </tr>
                       ))}
-                      <tr className="bg-muted/60 font-semibold"><td className={TD}>Total</td><td className={TD} /><td className={TDN} data-testid="nota-parcelas-total">{reais(n.somaDuplicatasCent)}</td></tr>
+                      <tr className="bg-muted/60 font-semibold"><td className={TD}>Total</td><td className={TD} /><td className={TDN} data-testid="nota-parcelas-total">{reais(como === 'avista' ? p.valorCent : n.somaDuplicatasCent)}</td></tr>
                     </tbody>
                   </table>
                 </div>
+                )}
               </section>
-              <section className={cn(BLOCO, 'min-h-0')} data-testid="nota-bloco-itens">
+              {como !== 'cartao' && <section className={cn(BLOCO, 'min-h-0')} data-testid="nota-bloco-itens">
                 <TituloDoBloco nome="Itens" dica="vão para Produto / descrição" />
                 <div className="min-h-0 flex-1 overflow-y-auto" data-testid="nota-itens-rolagem">
                   <table className="w-full table-fixed border-collapse">
@@ -711,7 +827,7 @@ export function NotaFiscalDialog({
                     </tbody>
                   </table>
                 </div>
-              </section>
+              </section>}
             </div>
             )}
 
@@ -737,9 +853,13 @@ export function NotaFiscalDialog({
                     triggerClassName={cn('h-[22px] text-[10.5px]', !fazendaId && 'border-destructive')} />
                 </div>
                 <div className="min-w-0">
-                  <span className={REGUA_ROTULO}>Conta origem</span>
-                  <ContaBancariaSelect value={contaId} onValueChange={setContaId} contas={contas} placeholder="Selecione" prependItems={[{ value: '__none__', label: 'Nenhuma' }]}
-                    className="h-[22px] text-[10.5px]" />
+                  {/* P74 — com o cartão, a conta origem é a do cartão (só leitura) */}
+                  <span className={cn(REGUA_ROTULO, 'uma-linha-que-rola')}>{como === 'cartao' ? 'Conta origem · pelo cartão' : 'Conta origem'}</span>
+                  {como === 'cartao'
+                    ? <div className="flex h-[22px] min-w-0 items-center rounded-md border bg-muted/40 px-2 text-[10.5px]" data-testid="nota-conta-pelo-cartao" title={nomeDoCartao || undefined}>
+                        <span className="min-w-0 uma-linha-que-rola">{nomeDoCartao || '—'}</span></div>
+                    : <ContaBancariaSelect value={contaId} onValueChange={setContaId} contas={contas} placeholder="Selecione" prependItems={[{ value: '__none__', label: 'Nenhuma' }]}
+                        className="h-[22px] text-[10.5px]" />}
                 </div>
                 <div className="min-w-0" data-testid="nota-subcentro">
                   <span className={cn(REGUA_ROTULO, 'uma-linha-que-rola', !planoId && 'text-destructive')} title={origemPlano ? `Sugestão: o ${origemPlano}` : undefined}>Subcentro *{origemPlano ? ` · ${origemPlano}` : ''}</span>
@@ -795,10 +915,13 @@ export function NotaFiscalDialog({
                 </div>
                 </>)}
                 <div className="col-span-2 min-w-0" data-testid="nota-vencimento">
-                  <span className={cn(REGUA_ROTULO, 'uma-linha-que-rola', !cabeAqui && semDuplicata && 'text-amber-800')}>
-                    {cabeAqui ? 'Vencimento · pelas parcelas da nota' : semDuplicata ? 'Vencimento · nota sem duplicata: confira o vencimento' : 'Vencimento · da duplicata'}
+                  <span className={cn(REGUA_ROTULO, 'uma-linha-que-rola', como !== 'cartao' && !cabeAqui && semDuplicata && 'text-amber-800')}>
+                    {como === 'cartao' ? 'Vencimento · pelas faturas do cartão' : cabeAqui ? 'Vencimento · pelas parcelas da nota' : semDuplicata ? 'Vencimento · nota sem duplicata: confira o vencimento'
+                      : como === 'avista' ? 'Vencimento · à vista' : 'Vencimento · da duplicata'}
                   </span>
-                  {cabeAqui
+                  {como === 'cartao' && !cabeAqui
+                    ? <div className="flex h-[22px] items-center rounded-md border bg-muted/40 px-2 text-[10.5px] tabular-nums">—</div>
+                    : cabeAqui
                     ? <div className="flex h-[22px] items-center rounded-md border bg-muted/40 px-2 text-[10.5px] tabular-nums">{dataInteira(p.duplicatas[0]?.vencimento)} a {dataInteira(p.duplicatas[nParcelas - 1]?.vencimento)}</div>
                     : <DatePicker value={vencimento} onChange={setVencimento} data-testid="nota-vencimento-campo"
                         className={cn('h-[22px] text-[10.5px]', semDuplicata && 'border-amber-400 bg-amber-50', !vencimento && 'border-destructive')} />}
@@ -842,7 +965,8 @@ export function NotaFiscalDialog({
             </span>
           ) : !bloqueio && !erro ? (
             <span className="min-w-0 uma-linha-que-rola text-muted-foreground">
-              O {lido.origem === 'pdf' ? 'PDF' : 'XML'} fica anexado {cabeAqui ? `às ${nParcelas} parcelas` : 'ao lançamento'} como a NF {numeroFalado(n.numero)}.
+              {como === 'cartao' && cabeAqui && nomeDoCartao ? fraseDoRodapeDoCartao(lido.origem === 'pdf' ? 'PDF' : 'XML', nParcelas, numeroFalado(n.numero), nomeDoCartao)
+                : `O ${lido.origem === 'pdf' ? 'PDF' : 'XML'} fica anexado ${cabeAqui ? `às ${nParcelas} parcelas` : 'ao lançamento'} como a NF ${numeroFalado(n.numero)}.`}
               {/* D — so' cancelados desta nota: ela NAO esta' lancada; diz, sem contar */}
               {canceladosSo.length > 0 && <span data-testid="nota-so-cancelados">{` ${canceladosSo.length === 1 ? 'Há 1 lançamento cancelado' : `Há ${canceladosSo.length} lançamentos cancelados`} desta nota (não contam).`}</span>}
             </span>

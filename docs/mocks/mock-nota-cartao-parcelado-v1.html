@@ -1,0 +1,232 @@
+
+<!-- P74 — o mock aprovado (Gabriel 23/10/2026 11h52), com os NOMES do cliente, do fornecedor, da fazenda e o número da NF trocados por sintéticos: dado real de cliente não entra no repositório --><title>Nota no cartão parcelado</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: mock fiel do AGROinBLUE (tema claro único, igual ao app). Três vistas: prévia da nota com "Como foi pago?", lançamento existente com "Parcelar este lançamento", e a confirmação antes/depois. */
+:root{
+  --bg:#e9edf3; --page:#f1f3f6; --white:#ffffff; --navy:#1b3358; --ink:#1c2533; --muted:#667085; --line:#dfe4ec;
+  --gold:#f2c94c; --gold-ink:#3b2f00; --green:#1f8a4c; --green-bg:#e6f4ec; --amber:#a15c00; --amber-bg:#fff4e0;
+  --blue:#2563eb; --blue-bg:#e8efff; --red:#c0392b; --red-bg:#fdecea; --hl:#fff3a3; --new:#7c3aed; --new-bg:#f3edff;
+  --f:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  color-scheme:light;
+}
+body{background:var(--bg);color:var(--ink);font-family:var(--f);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 40px}
+.wrap{max-width:1094px;margin:0 auto;display:grid;gap:14px}
+.cap{font-size:12px;color:var(--muted);line-height:1.5}.cap b{color:var(--ink)}
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:7px;overflow:hidden;background:var(--white);justify-self:start}
+.seg button{border:0;background:transparent;padding:7px 13px;font:inherit;font-size:12.5px;color:var(--muted);cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--navy);color:#fff}
+button:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
+.scroller{overflow-x:auto;border-radius:10px;box-shadow:0 10px 30px rgba(20,35,60,.18)}
+.frame{width:1094px;height:600px;background:var(--white);border-radius:10px;overflow:hidden;display:flex;flex-direction:column;position:relative}
+.mh{height:36px;flex:none;background:var(--navy);color:#fff;display:flex;align-items:center;gap:10px;padding:0 14px}
+.mh h1{font-size:13px;font-weight:600;margin:0}.mh .sub{opacity:.8;font-size:11px}.mh .x{margin-left:auto;opacity:.8;font-size:13px}
+.corpo{flex:1;min-height:0;background:var(--page);padding:8px;display:grid;gap:8px}
+.blk{background:var(--white);border:1px solid var(--line);border-radius:7px;padding:6px 8px;display:flex;flex-direction:column;min-height:0}
+.bt{display:flex;align-items:center;gap:8px;height:20px;flex:none;margin-bottom:4px}
+.bt b{font-size:11.5px}.bt .d{font-size:10px;color:var(--muted)}.bt .sp{flex:1}
+.chip{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:1px 8px;font-size:10px;white-space:nowrap}
+.ok{background:var(--green-bg);color:var(--green)}.av{background:var(--amber-bg);color:var(--amber)}.info{background:var(--blue-bg);color:var(--blue)}
+.nv{background:var(--new-bg);color:var(--new);font-weight:600}
+.kv{display:grid;grid-template-columns:repeat(4,1fr);gap:3px 12px}
+.kv div{min-width:0;display:flex;gap:6px;font-size:10.5px;height:17px;align-items:center}
+.kv .k{color:var(--muted);flex:none}.kv .v{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.c2{grid-column:span 2}.cf{grid-column:1/-1}
+table{border-collapse:collapse;width:100%;table-layout:fixed;font-variant-numeric:tabular-nums}
+th{background:var(--navy);color:#fff;font-size:9.5px;font-weight:500;text-align:left;padding:0 6px;height:20px;white-space:nowrap}
+td{font-size:10.5px;height:19px;padding:0 6px;border-bottom:1px solid #eef1f5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.r{text-align:right}.mut{color:var(--muted)}.tot td{background:#f3f5f8;font-weight:600}
+.lab{font-size:9.5px;color:var(--muted);display:block;height:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fld{height:22px;border:1px solid var(--line);border-radius:5px;display:flex;align-items:center;padding:0 7px;font-size:10.5px;background:var(--white);white-space:nowrap;overflow:hidden;font-variant-numeric:tabular-nums}
+.fld.ro{background:#f3f5f8}.fld.amb{border-color:#f0b54d;background:#fff8ea}.fld.sel::after{content:"▾";margin-left:auto;color:var(--muted);padding-left:6px}
+.g4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px 12px}
+.mf{height:38px;flex:none;border-top:1px solid var(--line);background:var(--white);display:flex;align-items:center;gap:10px;padding:0 12px;font-size:10.5px}
+.mf .msg{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted)}
+.btn{border:1px solid var(--line);background:var(--white);border-radius:6px;height:24px;padding:0 10px;font:inherit;font-size:10.5px;cursor:pointer;white-space:nowrap;flex:none}
+.btn.p{background:var(--navy);border-color:var(--navy);color:#fff;font-weight:600}
+.btn.w180{width:180px}
+.pag{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.pag button{border:0;border-left:1px solid var(--line);background:var(--white);font:inherit;font-size:10px;padding:0 9px;height:20px;cursor:pointer;color:var(--ink);white-space:nowrap}
+.pag button:first-child{border-left:0}
+.pag button[aria-pressed="true"]{background:var(--navy);color:#fff}
+.pag button:disabled{color:#a8b0bd;cursor:not-allowed;background:#f6f7f9}
+.novo{outline:2px dashed var(--new);outline-offset:2px;border-radius:7px}
+.tag{position:absolute;background:var(--new);color:#fff;font-size:9.5px;font-weight:600;padding:2px 7px;border-radius:4px;z-index:5;white-space:nowrap;pointer-events:none}
+.pdf{flex:1;min-height:0;border:1px solid var(--line);border-radius:4px;background:#fbfbf8;padding:10px;display:grid;align-content:start;gap:6px;font-size:8px;color:#444;overflow:hidden}
+.pdf .l{height:6px;background:#e3e3dc;border-radius:2px}.pdf .h{background:var(--hl);padding:1px 3px;border-radius:2px;color:#222}
+.tabs{height:32px;flex:none;background:var(--white);display:flex;gap:2px;padding:0 12px;border-bottom:1px solid var(--line);align-items:flex-end}
+.tab{padding:7px 12px;color:var(--muted);border-bottom:2px solid transparent;font-size:11.5px}
+.tab.on{color:var(--navy);border-color:var(--navy);font-weight:600}
+.recado{font-size:10px;line-height:1.45;color:var(--ink);background:var(--blue-bg);border-radius:5px;padding:5px 8px}
+.modo{display:inline-flex;gap:0;border:1px solid var(--line);border-radius:5px;overflow:hidden}
+.modo span{font-size:10px;padding:2px 8px}.modo .on{background:var(--navy);color:#fff}
+.veil{position:absolute;inset:0;background:rgba(20,30,50,.45);display:flex;align-items:center;justify-content:center;z-index:8}
+.alert{width:560px;background:var(--white);border-radius:9px;padding:16px 18px;display:grid;gap:10px;box-shadow:0 20px 50px rgba(0,0,0,.3)}
+.alert h3{margin:0;font-size:14px}.alert p{margin:0;font-size:11.5px;line-height:1.5;color:var(--ink)}
+.alert .bts{display:flex;justify-content:flex-end;gap:8px}
+.doc{background:var(--white);border:1px solid var(--line);border-radius:10px;padding:18px clamp(16px,3vw,28px);display:grid;gap:10px}
+.doc h2{font-size:16px;margin:0;color:var(--navy)}
+.doc li{font-size:13px;line-height:1.5;max-width:86ch}
+.doc ul{margin:0;padding-left:20px;display:grid;gap:5px}
+.q{background:var(--amber-bg);border-radius:8px;padding:12px 14px;font-size:13px;line-height:1.5}
+.azul{color:var(--blue)}.verm{color:var(--red)}
+</style>
+
+<div class="wrap">
+  <div class="cap"><b>Mock v1 · P74 · NOTA-CARTAO-PARCELADO-01</b> · caso real: Cliente Exemplo · NF 000.937 · Fornecedor Exemplo de Insumos · emissão 10/08/2026 · R$ 3.284,88 · 10 itens · paga no <b>Cartão Elo em 4 × R$ 821,22</b> (faturas 10/09 a 10/12/2026). Hoje a prévia só cria 1/1 de R$ 3.284,88 e não tem como dizer "cartão em 4×". Roxo tracejado = o que é novo. 1094×600, o tamanho do modal real.</div>
+  <div class="seg" role="group" aria-label="Vista">
+    <button data-v="previa" aria-pressed="true">1 · Prévia da nota · Como foi pago?</button>
+    <button data-v="existente" aria-pressed="false">2 · Lançamento criado · Parcelar este lançamento</button>
+    <button data-v="confirma" aria-pressed="false">3 · Confirmação antes → depois</button>
+  </div>
+  <div class="scroller"><div class="frame" id="frame"></div></div>
+
+  <div class="doc">
+    <h2>Como funciona</h2>
+    <ul>
+      <li><b>"Como foi pago?" no lugar de "Parcelas da nota".</b> O bloco ganha três opções: <b>Duplicatas da nota</b> (como hoje, quando a nota traz duplicatas), <b>À vista</b> (um lançamento, vencimento editável) e <b>Cartão em N×</b>. Nota sem duplicata abre em À vista, como hoje; com duplicatas abre em Duplicatas. Clique nas opções da vista 1 para ver cada estado.</li>
+      <li><b>Cartão em N×:</b> escolhe o cartão (só contas do tipo cartão), o número de parcelas e o vencimento da 1ª fatura. As parcelas saem iguais, todo mês no mesmo dia, com o mesmo arredondamento do Novo lançamento › Parcelada. "Parcelas livres" deixa mudar data e valor de cada uma, igual à grade do Novo lançamento.</li>
+      <li><b>O cartão escolhido vira a Conta origem</b> das N parcelas (o campo fica só leitura, com "pelo cartão"). Cada parcela é uma SAÍDA no Cartão Elo no mês da fatura; o pagamento da fatura continua sendo transferência (regra do cartão).</li>
+      <li><b>Nada muda no resto:</b> competência = emissão (10/08/2026) nas 4; o PDF fica anexado às 4 como a NF 000.937; descrição "… 1/4 … 4/4"; mesmo subcentro (Sanidade › Vacinas e Vermífugos). A busca de nota já lançada continua procurando também as parcelas de R$ 821,22.</li>
+      <li><b>Lançamento já criado:</b> na aba Pagamento do Editar lançamento aparece "Parcelar este lançamento" quando ele é à vista (1/1) e não está pago nem conciliado. O lançamento atual vira a 1/N (mesmo id, mesmos documentos e classificação, inclusive dividida, na proporção); nascem as outras N−1. Confirma mostrando antes → depois. Desfazer = "voltar para à vista" pelo cadastro do parcelamento (o caminho do P72).</li>
+      <li><b>Pago ou conciliado:</b> o botão aparece desabilitado com a frase "Já pago em dd/mm/aaaa: parcelar mudaria o que saiu da conta. Desfaça o pagamento antes." Nunca some.</li>
+    </ul>
+    <div class="q"><b>Para você decidir:</b> (1) o vencimento da 1ª fatura vem em branco ou sugerido pelo último lançamento do mesmo cartão (no Elo, dia 10)? Recomendo sugerido, em âmbar, para conferir. (2) Em "Cartão em N×" o limite de parcelas é 24, como no Novo lançamento. Ok?</div>
+  </div>
+</div>
+
+<script>
+const F = document.getElementById('frame');
+const ITENS = [["PRODUCE FR 1 L","1 FR","109,00","109,00"],["LONTAL POUR ON FR 1 L","2 FR","135,00","270,00"],["BERTAC LIQUIDO FR 1 L","3 FR","58,00","174,00"],["BACTROVET PRATA AM FR 500 ML","2 FR","27,75","55,50"],["RIPERCOL ORAL FR 1 L","2 FR","98,00","196,00"],["CORTVET FR 10 ML","6 FR","7,90","47,40"],["GANAVET PLUS FR 30 ML","4 FR","36,00","144,00"],["TERRAMICINA LA FR 50 ML","3 FR","26,00","78,00"],["AGROVET PLUS FR 50 ML","5 FR","52,20","260,98"],["VAC. POLICLOSTRIGEN 25 DS FR 125 ML","20 FR","97,50","1.950,00"]];
+const PARC = [["1/4","10/09/2026","821,22"],["2/4","10/10/2026","821,22"],["3/4","10/11/2026","821,22"],["4/4","10/12/2026","821,22"]];
+let modo = 'cartao';
+
+function itensHtml(){
+  return `<table><colgroup><col><col style="width:46px"><col style="width:52px"><col style="width:64px"></colgroup>
+  <thead><tr><th>Produto</th><th class="r">Qtd</th><th class="r">Unit.</th><th class="r">Total</th></tr></thead><tbody>
+  ${ITENS.map(i=>`<tr><td title="${i[0]}">${i[0]}</td><td class="r">${i[1]}</td><td class="r">${i[2]}</td><td class="r">${i[3]}</td></tr>`).join('')}
+  <tr class="tot"><td>Produtos − desconto</td><td></td><td></td><td class="r">3.284,88</td></tr></tbody></table>`;
+}
+
+function comoFoiPago(){
+  const pag = `<span class="pag" role="group" aria-label="Como foi pago">
+    <button disabled title="A nota não traz duplicatas.">Duplicatas da nota (0)</button>
+    <button data-m="avista" aria-pressed="${modo==='avista'}">À vista</button>
+    <button data-m="cartao" aria-pressed="${modo==='cartao'}">Cartão em N×</button></span>`;
+  let corpo;
+  if (modo==='cartao') {
+    corpo = `<div style="display:grid;grid-template-columns:1.3fr .6fr 1fr;gap:6px;margin-bottom:5px">
+      <div><span class="lab">Cartão</span><div class="fld sel">Cartão Elo</div></div>
+      <div><span class="lab">Parcelas</span><div class="fld">4</div></div>
+      <div><span class="lab" style="color:var(--amber)">1ª fatura · sugerido (Elo, dia 10)</span><div class="fld amb">10/09/2026</div></div></div>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><span class="modo"><span class="on">Igual todo mês</span><span>Parcelas livres</span></span><span class="sp" style="flex:1"></span><span class="chip ok">4 × 821,22 = valor da nota</span></div>
+      <table><colgroup><col style="width:40px"><col><col style="width:80px"></colgroup>
+      <thead><tr><th>Nº</th><th>Vencimento (fatura)</th><th class="r">Valor</th></tr></thead><tbody>
+      ${PARC.map(p=>`<tr><td>${p[0]}</td><td>${p[1]}</td><td class="r">${p[2]}</td></tr>`).join('')}
+      <tr class="tot"><td>Total</td><td></td><td class="r">3.284,88</td></tr></tbody></table>`;
+  } else {
+    corpo = `<div class="recado" style="background:var(--amber-bg)">Nota sem duplicata: <b>um lançamento</b> de R$ 3.284,88. Confira o vencimento no bloco Lançamento (vem a emissão, em âmbar).</div>
+      <table style="margin-top:6px"><colgroup><col style="width:40px"><col><col style="width:80px"></colgroup>
+      <thead><tr><th>Nº</th><th>Vencimento</th><th class="r">Valor</th></tr></thead><tbody>
+      <tr><td>1/1</td><td>10/08/2026</td><td class="r">3.284,88</td></tr>
+      <tr class="tot"><td>Total</td><td></td><td class="r">3.284,88</td></tr></tbody></table>`;
+  }
+  return `<section class="blk novo" style="min-height:0"><div class="bt"><b>Como foi pago?</b><span class="sp"></span>${pag}</div>${corpo}</section>`;
+}
+
+function previa(){
+  const cartao = modo==='cartao';
+  F.innerHTML = `
+  <div class="mh"><h1>Novo lançamento · da nota fiscal</h1><span class="sub">PDF lido · confira antes de criar</span><span class="x">✕</span></div>
+  <div class="corpo" style="grid-template-columns:28% minmax(0,1fr)">
+    <section class="blk"><div class="bt"><b>Arquivo</b><span class="sp"></span><span class="chip ok">PDF com texto · leitura direta</span></div>
+      <div class="pdf"><div style="font-weight:700;font-size:9px">DANFE</div><div>FORNECEDOR EXEMPLO DE INSUMOS LTDA</div>
+      <div>NF-e Nº <span class="h">000.000.937</span> Série <span class="h">1</span></div><div>Emissão <span class="h">10/08/2026</span></div>
+      <div class="l" style="width:90%"></div><div class="l" style="width:70%"></div><div class="l" style="width:84%"></div>
+      <div>FATURA/DUPLICATA: —</div><div class="l"></div><div class="l" style="width:60%"></div><div class="l" style="width:88%"></div><div class="l" style="width:76%"></div><div class="l" style="width:82%"></div><div class="l" style="width:66%"></div>
+      <div>VALOR TOTAL DA NOTA <span class="h">3.284,88</span></div><div class="l" style="width:72%"></div><div class="l" style="width:54%"></div></div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:4px"><span>NF_000.000.937.pdf · 212 KB</span><span>amarelo = lido</span></div></section>
+    <div style="display:flex;flex-direction:column;gap:6px;min-width:0;min-height:0">
+      <section class="blk"><div class="bt"><b>Nota</b><span class="sp"></span><span class="chip ok">chave confere</span></div>
+        <div class="kv"><div><span class="k">NF</span><span class="v">000.937</span></div><div><span class="k">Série</span><span class="v">1</span></div><div><span class="k">Emissão</span><span class="v">10/08/2026</span></div><div><span class="k">Valor</span><span class="v">R$ 3.284,88</span></div>
+        <div class="c2"><span class="k">Natureza</span><span class="v">(como na nota)</span></div><div><span class="k">Desconto</span><span class="v">R$ 0,00</span></div><div><span class="k">Destinatário</span><span class="v">· Cliente Exemplo</span></div></div></section>
+      <section class="blk"><div class="bt"><b>Fornecedor</b><span class="sp"></span><span class="chip ok">cadastrado · pelo CNPJ</span></div>
+        <div class="kv"><div class="c2"><span class="k">Nome</span><span class="v">Fornecedor Exemplo de Insumos Ltda</span></div></div></section>
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px;flex:1;min-height:0">
+        ${comoFoiPago()}
+        <section class="blk" style="min-height:0;overflow:hidden"><div class="bt"><b>Itens</b><span class="d">vão para Produto / descrição</span></div>${itensHtml()}</section>
+      </div>
+      <section class="blk"><div class="bt"><b>Lançamento</b><span class="d">o que a nota não diz, você escolhe</span></div>
+        <div class="g4">
+          <div><span class="lab">Fazenda · pela IE</span><div class="fld sel">Faz. Exemplo</div></div>
+          <div class="${cartao?'novo':''}"><span class="lab">${cartao?'Conta origem · pelo cartão':'Conta origem'}</span><div class="fld ${cartao?'ro':'sel'}">${cartao?'Cartão Elo':'Selecione'}</div></div>
+          <div><span class="lab">Subcentro *</span><div class="fld sel">Vacinas e Vermífugos</div></div>
+          <div><span class="lab">Status</span><div class="fld">Programado</div></div>
+          <div><span class="lab">Atividade</span><div class="fld ro">Pecuária</div></div>
+          <div><span class="lab">Safra · pela data</span><div class="fld ro mut">nenhuma safra nesta data</div></div>
+          <div class="c2 ${cartao?'novo':''}"><span class="lab" style="${cartao?'':'color:var(--amber)'}">${cartao?'Vencimento · pelas faturas do cartão':'Vencimento · nota sem duplicata: confira o vencimento'}</span>
+            <div class="fld ${cartao?'ro':'amb'}">${cartao?'10/09/2026 a 10/12/2026':'10/08/2026'}</div></div>
+        </div></section>
+    </div>
+  </div>
+  <div class="mf"><span class="msg">${cartao?'O PDF fica anexado às 4 parcelas como a NF 000.937 · 4 saídas no Cartão Elo, uma em cada fatura.':'O PDF fica anexado ao lançamento como a NF 000.937.'}</span><span style="margin-left:auto"></span>
+    <button class="btn">Cancelar</button><button class="btn">No Novo lançamento</button><button class="btn p w180">${cartao?'Criar 4 parcelas':'Criar lançamento'}</button></div>`;
+  F.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{modo=b.dataset.m;previa();});
+}
+
+function editar(confirma){
+  F.innerHTML = `
+  <div class="mh"><h1>Editar Lançamento</h1><span class="sub">PRODUCE FR 1 L, LONTAL POUR ON FR 1 L · 10 itens 1/1 · R$ 3.284,88</span><span class="x">✕</span></div>
+  <div class="tabs"><span class="tab">Geral</span><span class="tab on">Pagamento</span><span class="tab">Documentos (1)</span><span class="tab">Histórico</span></div>
+  <div class="corpo" style="grid-template-rows:auto minmax(0,1fr);align-content:start">
+    <section class="blk"><div class="bt"><b>Pagamento</b></div>
+      <div class="g4">
+        <div><span class="lab">Conta origem</span><div class="fld sel">Cartão Elo</div></div>
+        <div><span class="lab">Forma de pagamento</span><div class="fld sel">Cartão</div></div>
+        <div><span class="lab">Vencimento</span><div class="fld">10/08/2026</div></div>
+        <div><span class="lab">Status</span><div class="fld">Programado</div></div>
+      </div></section>
+    <section class="blk novo" style="min-height:0"><div class="bt"><b>Parcelamento</b><span class="d">hoje: à vista (1/1)</span><span class="sp"></span><span class="chip nv">novo</span></div>
+      <div style="display:grid;grid-template-columns:260px minmax(0,1fr);gap:14px;min-height:0">
+        <div style="display:grid;gap:6px;align-content:start">
+          <div><span class="lab">Modalidade</span><div class="fld sel">Parcelada</div></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+            <div><span class="lab">Nº de parcelas *</span><div class="fld">4</div></div>
+            <div><span class="lab" style="color:var(--amber)">1º vencimento · sugerido</span><div class="fld amb">10/09/2026</div></div></div>
+          <div class="recado">Este lançamento <b>vira a 1/4</b> (mesmo lançamento, mesmo PDF da NF 000.937, mesmo subcentro). Nascem a 2/4, 3/4 e 4/4 no Cartão Elo. Competência 10/08/2026 nas quatro.</div>
+          <div style="font-size:10px;color:var(--muted);line-height:1.45">Só para lançamento à vista que não está pago nem conciliado. Pago: o botão fica cinza com o motivo.</div>
+        </div>
+        <div style="min-width:0">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px"><span class="modo"><span class="on">Igual todo mês</span><span>Parcelas livres</span></span><span style="flex:1"></span><span class="chip ok">4 × 821,22 = R$ 3.284,88</span></div>
+          <table><colgroup><col style="width:46px"><col><col style="width:110px"><col style="width:96px"></colgroup>
+          <thead><tr><th>Nº</th><th>Vencimento</th><th>Situação</th><th class="r">Valor</th></tr></thead><tbody>
+          <tr><td>1/4</td><td>10/09/2026</td><td class="mut">este lançamento</td><td class="r">821,22</td></tr>
+          ${PARC.slice(1).map(p=>`<tr><td>${p[0]}</td><td>${p[1]}</td><td style="color:var(--new)">nova</td><td class="r">${p[2]}</td></tr>`).join('')}
+          <tr class="tot"><td>Total</td><td></td><td></td><td class="r">3.284,88</td></tr></tbody></table>
+        </div>
+      </div></section>
+  </div>
+  <div class="mf"><span class="msg">Parcelar muda o valor e o vencimento deste lançamento e cria 3. Desfazer: "Voltar para à vista" no cadastro do parcelamento.</span><span style="margin-left:auto"></span>
+    <button class="btn">Cancelar</button><button class="btn p w180">Parcelar em 4</button></div>
+  ${confirma?`<div class="veil"><div class="alert">
+    <h3>Parcelar este lançamento em 4?</h3>
+    <p>Fornecedor Exemplo de Insumos · NF 000.937 · Cartão Elo</p>
+    <table><colgroup><col style="width:90px"><col><col style="width:96px"></colgroup>
+      <thead><tr><th></th><th>Vencimento</th><th class="r">Valor</th></tr></thead><tbody>
+      <tr><td class="mut">Antes</td><td>1/1 · 10/08/2026</td><td class="r verm">−3.284,88</td></tr>
+      <tr><td><b>Depois</b></td><td>1/4 · 10/09/2026 <span class="mut">(este)</span></td><td class="r verm">−821,22</td></tr>
+      <tr><td></td><td>2/4 · 10/10/2026 <span style="color:var(--new)">nova</span></td><td class="r verm">−821,22</td></tr>
+      <tr><td></td><td>3/4 · 10/11/2026 <span style="color:var(--new)">nova</span></td><td class="r verm">−821,22</td></tr>
+      <tr><td></td><td>4/4 · 10/12/2026 <span style="color:var(--new)">nova</span></td><td class="r verm">−821,22</td></tr>
+      <tr class="tot"><td>Total</td><td>igual ao antes</td><td class="r verm">−3.284,88</td></tr></tbody></table>
+    <p class="mut" style="font-size:10.5px">O PDF da nota e a classificação vão para as 4. Saída do caixa: sai de agosto e vai para setembro a dezembro, uma por fatura.</p>
+    <div class="bts"><button class="btn">Cancelar</button><button class="btn p">Parcelar em 4</button></div></div></div>`:''}`;
+}
+
+function show(v){
+  document.querySelectorAll('.seg button').forEach(b=>b.setAttribute('aria-pressed', b.dataset.v===v));
+  if(v==='previa') previa(); else editar(v==='confirma');
+}
+document.querySelectorAll('.seg button').forEach(b=>b.onclick=()=>show(b.dataset.v));
+show('previa');
+</script>
