@@ -13,7 +13,9 @@ export type NotaDoArquivo =
   | { ok: true; origem: 'xml' | 'pdf'; nota: NotaLida; avisos: AvisoNFe[]; marcas: MarcaNoPdf[]; divergencias: CampoConferido[];
       tamanhos: PaginasDoPdf['tamanhos'];
       /** ITENS-NOTA-01 — so' o PDF: os totais do quadro do imposto (seguro, outras, IPI, ST, tributos aprox.) */
-      extras?: TotaisExtrasDoDanfe | null }
+      extras?: TotaisExtrasDoDanfe | null;
+      /** P95 — a nota veio da CHAVE DIGITADA (o arquivo nao a deu): o resto em branco, a previa pede o valor e a emissao */
+      pelaChave?: boolean }
   | { ok: false; origem: 'xml' | 'pdf'; frase: string };
 
 export const FRASE_PDF_ILEGIVEL = 'Não foi possível abrir o PDF (arquivo danificado ou protegido). Nada foi lido.';
