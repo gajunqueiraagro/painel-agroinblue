@@ -394,6 +394,12 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
   const [fornecedores, setFornecedores] = useState<FornecedorV2[]>([]);
   const [classificacoes, setClassificacoes] = useState<ClassificacaoItem[]>([]);
   const [safras, setSafras] = useState<Safra[]>([]);
+  /* P94 — de que cliente sao os cadastros carregados (contas, fornecedores, plano, safras): a conferencia dos filtros restaurados so'
+     roda com os QUATRO deste cliente na mao — nunca contra uma lista vazia ainda carregando, nem contra a do cliente anterior. */
+  const [carregadosPara, setCarregadosPara] = useState<Record<'contas' | 'fornecedores' | 'classificacoes' | 'safras', string | undefined>>(
+    { contas: undefined, fornecedores: undefined, classificacoes: undefined, safras: undefined });
+  const marcarCarregado = useCallback((k: 'contas' | 'fornecedores' | 'classificacoes' | 'safras', cli: string) =>
+    setCarregadosPara((c) => (c[k] === cli ? c : { ...c, [k]: cli })), []);
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
@@ -408,7 +414,8 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       .eq('ativa', true)
       .order('ordem_exibicao');
     setContasBancarias((data as ContaBancariaV2[]) || []);
-  }, [clienteId]);
+    marcarCarregado('contas', clienteId);
+  }, [clienteId, marcarCarregado]);
 
   const loadFornecedores = useCallback(async () => {
     if (!clienteId) return;
@@ -431,7 +438,8 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       from += batchSize;
     }
     setFornecedores(all);
-  }, [clienteId]);
+    marcarCarregado('fornecedores', clienteId);
+  }, [clienteId, marcarCarregado]);
 
   /* FIN-V2-LISTA-RELE-APOS-CADASTRO-01 — o cadastro mudou em alguns fornecedores: relê SÓ esses (uma ida, as mesmas colunas) e troca
      no cadastro da tela pelo id (o que não estava entra no fim) — nada de reler o cadastro inteiro */
@@ -513,7 +521,8 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     }
 
     setClassificacoes(planoCls);
-  }, [clienteId]);
+    marcarCarregado('classificacoes', clienteId);
+  }, [clienteId, marcarCarregado]);
 
   const loadSafras = useCallback(async () => {
     if (!clienteId) return;
@@ -527,7 +536,8 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       .order('ordem_exibicao', { ascending: true })
       .order('nome', { ascending: true });
     setSafras((data as Safra[]) || []);
-  }, [clienteId]);
+    marcarCarregado('safras', clienteId);
+  }, [clienteId, marcarCarregado]);
 
   // PR-FIN-LISTA-VENCIMENTO-03 — as DECISOES de filtro vivem em montarPlanoBaseV2,
   //   compartilhadas com o caminho paginado. A APLICACAO fica aqui, sobre o builder
@@ -1590,8 +1600,13 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     [],
   );
 
+  const cadastrosDoCliente = !!clienteId && carregadosPara.contas === clienteId && carregadosPara.fornecedores === clienteId
+    && carregadosPara.classificacoes === clienteId && carregadosPara.safras === clienteId ? clienteId : null;
+
   return {
     lancamentos,
+    /** P94 — o cliente cujos quatro cadastros (contas, fornecedores, plano, safras) ja' carregaram; nulo enquanto carrega */
+    cadastrosDoCliente,
     contasBancarias,
     fornecedores,
     classificacoes,
