@@ -42,8 +42,11 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { SearchableSelect, limparBuscasLembradas } from '@/components/ui/searchable-select';
 import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
-import { apenasAtivos, guardarFiltros, lerFiltros, esquecerFiltros } from '@/lib/financeiro/filtrosPersistidos';
-import { CHAVE_RETORNO_OC, extrasDoRetornoOC, type ExtrasRetornoOC } from '@/lib/financeiro/retornoOC';
+import { apenasAtivos, guardarFiltros, lerFiltros, esquecerFiltros, chaveDoCliente } from '@/lib/financeiro/filtrosPersistidos';
+import { CHAVE_RETORNO_OC, chaveRetornoOC, chipsVindosDaOC, extrasDoRetornoOC, type ExtrasRetornoOC } from '@/lib/financeiro/retornoOC';
+import { camposForaDasOpcoes, type CampoDeCadastro, type Conferencia, type FiltrosDeCadastro, type OpcoesDoCliente } from '@/lib/financeiro/conferirFiltrosDaLista';
+import { useConferenciaDosFiltros } from '@/hooks/useConferenciaDosFiltros';
+import { ValorInexistente, CLASSE_DO_INEXISTENTE } from '@/components/shared/ValorInexistente';
 import { Button } from '@/components/ui/button';
 import { CorpoDaListaMemo, MenuDaLinhaSobDemanda } from '@/components/financeiro-v2/corpoDaLista';
 import { Textarea } from '@/components/ui/textarea';
@@ -98,6 +101,9 @@ import {
   fornecedoresDoFiltroV2,
 } from '@/lib/financeiro/listaPaginaV2';
 import { RODAPE_REGUA, TextoReservado, reservaDeNumero } from '@/components/ui/regua-tabela';
+/* a volta do financiamento (ano, meses, contas) — P94: guardada POR CLIENTE (`chaveDoCliente`) */
+const CHAVE_ESTADO_FIN = 'financeiro_v2_state';
+
 /* a reserva dos totais do topo: o maior valor que a faixa mostra (dezenas de milhões) */
 const RESERVA_TOTAL = 'R$ 00.000.000,00';
 
@@ -269,7 +275,7 @@ function getInitialPageSize() {
 }
 
 export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, onIntensiveToggle, drillFilters, onAbrirFinanciamento, lancamentoIdAlvo, onLancamentoAlvoConsumido, onCloseDialog, ocEditFavorecido, onAbrirOperacaoOCFinanceiro }: Props) {
-  const { fazendas, fazendaAtual } = useFazenda();
+  const { fazendas, fazendaAtual, loading: fazendasCarregando } = useFazenda();
   const [pageSize] = useState(getInitialPageSize);
   const hook = useFinanceiroV2(pageSize);
   /* LANC-STATUS-CONCILIADO-01 — o mapa dos vínculos ativos, uma consulta por
@@ -346,7 +352,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   // Load dynamic years from DB
   useEffect(() => {
     if (drillFilters) return; /* PR 5 — com o drill, só os filtros dele (à vista na barra) */
-    const saved = sessionStorage.getItem('financeiro_v2_state');
+    /* P94 — a volta do financiamento também é do cliente (`financeiro_v2_state:<cliente>`); a chave de antes, sem cliente, não volta */
+    if (!clienteAtual?.id) return;
+    const chaveEstado = chaveDoCliente(CHAVE_ESTADO_FIN, clienteAtual.id);
+    sessionStorage.removeItem(CHAVE_ESTADO_FIN);
+    const saved = sessionStorage.getItem(chaveEstado);
     if (!saved) return;
     try {
       const state = JSON.parse(saved);
@@ -354,7 +364,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
       if (Array.isArray(state.mesesSelecionados)) setMesesSelecionados(state.mesesSelecionados);
       if (state.contaOrigem) setContaOrigem(state.contaOrigem);
       if (state.contaDestino) setContaDestino(state.contaDestino);
-      sessionStorage.removeItem('financeiro_v2_state');
+      sessionStorage.removeItem(chaveEstado);
     } catch (e) {
       console.error('Erro ao restaurar estado do financeiro', e);
     }
@@ -446,6 +456,9 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   //   montada (sem localStorage/sessionStorage/URL/preferência persistida). Padrão 'financeira'.
   const [dataPor, setDataPor] = useState<DimensaoDataFinanceiro>('financeira');
   // Estreitamento por control-flow (sem cast): valida a string do Select contra a união.
+  /* P94 — o que veio do instantâneo da OC (chip na faixa dos totais enquanto vale) e os avisos da conferência dos filtros restaurados */
+  const [vindoDaOC, setVindoDaOC] = useState<Partial<Pick<ExtrasRetornoOC, 'dataPor' | 'mostrarSemCaixa'>>>({});
+  const [avisosDoFiltro, setAvisosDoFiltro] = useState<string[]>([]);
   const handleDataPorChange = (v: string) => {
     if (v === 'financeira' || v === 'competencia' || v === 'vencimento' || v === 'pagamento') {
       setDataPor(v);
@@ -471,6 +484,43 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     if (filtroMesInicial) setMesesSelecionados([String(filtroMesInicial).padStart(2, '0')]);
   }, [filtroMesInicial]);
 
+  /**
+   * APLICA UM CONJUNTO DE FILTROS GUARDADO (a memória do cliente ou o instantâneo da OC) — extraído do efeito de restauração no P94,
+   * porque a troca de cliente com a tela aberta aplica a memória DO NOVO cliente pelo mesmo caminho. O que não existir no cliente a
+   * conferência tira depois (`useConferenciaDosFiltros`), quando as opções carregarem.
+   */
+  const aplicarFiltrosGuardados = (f: any, doInstantaneo: boolean) => {
+    /* OC-HOMOLOG-FIX-02 — "Data por" e o sem caixa voltam SO' do instantaneo da OC; a memoria geral nao os
+       guarda (decisao do PR-FIN-GRADE-DATAS-03 mantida). Cultura ja' voltava pela linha de baixo. */
+    if (doInstantaneo) {
+      const extras = extrasDoRetornoOC(f);
+      if (extras.dataPor !== undefined) setDataPor(extras.dataPor);
+      if (extras.mostrarSemCaixa !== undefined) setModoSemCaixa(extras.mostrarSemCaixa ? 'mostrar' : 'ocultar');
+      /* P94 — o que a OC trouxe e muda o recorte fica à vista, como chip na faixa dos totais */
+      setVindoDaOC({ dataPor: extras.dataPor, mostrarSemCaixa: extras.mostrarSemCaixa });
+    }
+    if (f.fazendaId !== undefined) setFazendaId(f.fazendaId);
+    /* Compatibilidade com o que foi guardado antes da multisseleção: um `ano` solto vira
+       lista de um. Sem isto, quem tem sessão aberta volta com a lista vazia = "Todos". */
+    if (Array.isArray(f.anosSelecionados)) setAnosSelecionados(f.anosSelecionados);
+    else if (f.ano !== undefined) setAnosSelecionados(f.ano === '__todos__' ? [] : [f.ano]);
+    if (Array.isArray(f.mesesSelecionados)) setMesesSelecionados(f.mesesSelecionados);
+    if (Array.isArray(f.statusSelecionados)) setStatusSelecionados(f.statusSelecionados.filter(isStatusFiltroFinanceiro));
+    if (f.tipoOperacao !== undefined) setTipoOperacao(f.tipoOperacao);
+    if (f.contaOrigem !== undefined) setContaOrigem(f.contaOrigem);
+    if (f.contaDestino !== undefined) setContaDestino(f.contaDestino);
+    if (f.macroFiltro !== undefined) setMacroFiltro(f.macroFiltro);
+    if (f.grupoFiltro !== undefined) setGrupoFiltro(f.grupoFiltro);
+    if (f.centroFiltro !== undefined) setCentroFiltro(f.centroFiltro);
+    if (f.subcentroFiltro !== undefined) setSubcentroFiltro(f.subcentroFiltro);
+    if (f.produtoFiltro !== undefined) setProdutoFiltro(f.produtoFiltro);
+    if (f.documentoFiltro !== undefined) setDocumentoFiltro(f.documentoFiltro);
+    if (f.fornecedorFiltro !== undefined) setFornecedorFiltro(f.fornecedorFiltro);
+    if (f.atividadeFiltro !== undefined) setAtividadeFiltro(f.atividadeFiltro);
+    if (f.safraFiltro !== undefined) setSafraFiltro(f.safraFiltro);
+    if (f.culturaFiltro !== undefined) setCulturaFiltro(f.culturaFiltro);
+  };
+
   // ── Restauração de filtros ao voltar de FinanciamentoDetalhe ──
   useEffect(() => {
     /* ⚠ DUAS FONTES, UMA PRECEDÊNCIA — FIN-LISTA-FILTROS-01a. O `return_filters` é o
@@ -479,47 +529,24 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
        a memória geral, e só guardam o que difere do padrão. Quando os dois existem, o
        instantâneo vence — ele descreve a tela de onde o operador saiu há dois cliques.
        ⚠ E É UM EFEITO SÓ, de propósito: dois efeitos de restauração competindo pela mesma
-       montagem dependeriam da ordem de declaração para decidir quem escreve por último. */
+       montagem dependeriam da ordem de declaração para decidir quem escreve por último.
+       ⚠ P94 — AS DUAS SÃO DO CLIENTE (`<chave>:<cliente>`): a de outro cliente nunca volta; a de antes, sem cliente, sai sem aplicar. */
     if (drillFilters) return; /* PR 5 — com o drill, a memória não entra: a lista mostra só os filtros dele */
-    const instantaneo = sessionStorage.getItem(CHAVE_RETORNO_OC);
+    const cli = clienteAtual?.id;
+    if (!cli) return;
+    sessionStorage.removeItem(CHAVE_RETORNO_OC);
+    const instantaneo = sessionStorage.getItem(chaveRetornoOC(cli));
     const raw = instantaneo ?? (() => {
-      const ativos = lerFiltros();
+      const ativos = lerFiltros(cli);
       return ativos ? JSON.stringify(ativos) : null;
     })();
     if (!raw) return;
     try {
-      const f = JSON.parse(raw);
-      /* OC-HOMOLOG-FIX-02 — "Data por" e o sem caixa voltam SO' do instantaneo da OC; a memoria geral nao os
-         guarda (decisao do PR-FIN-GRADE-DATAS-03 mantida). Cultura ja' voltava pela linha de baixo. */
-      if (instantaneo) {
-        const extras = extrasDoRetornoOC(f);
-        if (extras.dataPor !== undefined) setDataPor(extras.dataPor);
-        if (extras.mostrarSemCaixa !== undefined) setModoSemCaixa(extras.mostrarSemCaixa ? 'mostrar' : 'ocultar');
-      }
-      if (f.fazendaId !== undefined) setFazendaId(f.fazendaId);
-      /* Compatibilidade com o que foi guardado antes da multisseleção: um `ano` solto vira
-         lista de um. Sem isto, quem tem sessão aberta volta com a lista vazia = "Todos". */
-      if (Array.isArray(f.anosSelecionados)) setAnosSelecionados(f.anosSelecionados);
-      else if (f.ano !== undefined) setAnosSelecionados(f.ano === '__todos__' ? [] : [f.ano]);
-      if (Array.isArray(f.mesesSelecionados)) setMesesSelecionados(f.mesesSelecionados);
-      if (Array.isArray(f.statusSelecionados)) setStatusSelecionados(f.statusSelecionados.filter(isStatusFiltroFinanceiro));
-      if (f.tipoOperacao !== undefined) setTipoOperacao(f.tipoOperacao);
-      if (f.contaOrigem !== undefined) setContaOrigem(f.contaOrigem);
-      if (f.contaDestino !== undefined) setContaDestino(f.contaDestino);
-      if (f.macroFiltro !== undefined) setMacroFiltro(f.macroFiltro);
-      if (f.grupoFiltro !== undefined) setGrupoFiltro(f.grupoFiltro);
-      if (f.centroFiltro !== undefined) setCentroFiltro(f.centroFiltro);
-      if (f.subcentroFiltro !== undefined) setSubcentroFiltro(f.subcentroFiltro);
-      if (f.produtoFiltro !== undefined) setProdutoFiltro(f.produtoFiltro);
-      if (f.documentoFiltro !== undefined) setDocumentoFiltro(f.documentoFiltro);
-      if (f.fornecedorFiltro !== undefined) setFornecedorFiltro(f.fornecedorFiltro);
-      if (f.atividadeFiltro !== undefined) setAtividadeFiltro(f.atividadeFiltro);
-      if (f.safraFiltro !== undefined) setSafraFiltro(f.safraFiltro);
-      if (f.culturaFiltro !== undefined) setCulturaFiltro(f.culturaFiltro);
+      aplicarFiltrosGuardados(JSON.parse(raw), !!instantaneo);
     } catch (e) {
       console.error('[FinanceiroV2Tab] erro ao restaurar filtros:', e);
     } finally {
-      sessionStorage.removeItem(CHAVE_RETORNO_OC);
+      sessionStorage.removeItem(chaveRetornoOC(cli));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -534,8 +561,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
    * exatamente no momento de ser usado, e o sintoma seria "nunca lembra".
    */
   useEffect(() => {
+    /* P94 — guarda no cliente ATUAL. ⚠ O cliente NÃO entra nas dependências: na troca, o estado ainda é o do anterior até o efeito
+       da troca voltá-lo ao padrão; gravar nesse instante poria os filtros do cliente anterior na memória do novo. */
+    const cli = clienteAtual?.id;
+    if (!cli) return;
     const p = getDefaults();
-    guardarFiltros(apenasAtivos(
+    guardarFiltros(cli, apenasAtivos(
       {
         fazendaId, anosSelecionados, mesesSelecionados, statusSelecionados, tipoOperacao,
         contaOrigem, contaDestino, macroFiltro, grupoFiltro, centroFiltro,
@@ -560,7 +591,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
       documentoFiltro, fornecedorFiltro, atividadeFiltro, safraFiltro, culturaFiltro]);
 
   const abrirFinanciamentoDaParcela = async (l: any) => {
-    const salvarEstado = () => sessionStorage.setItem('financeiro_v2_state', JSON.stringify({
+    const salvarEstado = () => clienteAtual?.id && sessionStorage.setItem(chaveDoCliente(CHAVE_ESTADO_FIN, clienteAtual.id), JSON.stringify({
       ano, mesesSelecionados, contaOrigem, contaDestino,
     }));
 
@@ -668,6 +699,11 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
    const [sortDir, setSortDir] = useState<SortDir>('asc');
 
   const fazOperacionais = useMemo(() => sortFazendas(fazendas.filter(f => f.id !== '__global__')), [fazendas]);
+  /* P94 — as opções do cliente ATUAL na mão: os quatro cadastros do hook e as fazendas do contexto (as do cliente anterior não valem).
+     Antes disso nada se confere nem se limpa por "não estar na lista" — a lista ainda vazia apagaria o filtro restaurado. */
+  const cadastrosProntos = !!clienteAtual?.id && hook.cadastrosDoCliente === clienteAtual.id;
+  const fazendasProntas = !fazendasCarregando && fazendas.every(f => f.id === '__global__' || !f.cliente_id || f.cliente_id === clienteAtual?.id);
+  const prontoParaConferir = cadastrosProntos && fazendasProntas ? (clienteAtual?.id ?? null) : null;
 
   const sortedContas = useMemo(() => sortContas(hook.contasBancarias), [hook.contasBancarias]);
   /* ⚠ A CONTA TEM DOIS NOMES no cadastro: `nome_exibicao` é o que o operador lê nas telas e
@@ -725,28 +761,32 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
 
   // Auto-clear invalid downstream filters when upstream changes
   useEffect(() => {
+    if (!cadastrosProntos) return;   /* P94 — nunca contra o plano ainda carregando */
     if (macroFiltro !== '__all__' && !macrosUnicos.includes(macroFiltro)) {
       setMacroFiltro('__all__'); setMacroLocked(false);
     }
-  }, [macrosUnicos, macroFiltro]);
+  }, [macrosUnicos, macroFiltro, cadastrosProntos]);
 
   useEffect(() => {
+    if (!cadastrosProntos) return;   /* P94 — nunca contra o plano ainda carregando */
     if (grupoFiltro !== '__all__' && !gruposUnicos.includes(grupoFiltro)) {
       setGrupoFiltro('__all__');
     }
-  }, [gruposUnicos, grupoFiltro]);
+  }, [gruposUnicos, grupoFiltro, cadastrosProntos]);
 
   useEffect(() => {
+    if (!cadastrosProntos) return;   /* P94 — nunca contra o plano ainda carregando */
     if (centroFiltro !== '__all__' && !centrosUnicos.includes(centroFiltro)) {
       setCentroFiltro('__all__');
     }
-  }, [centrosUnicos, centroFiltro]);
+  }, [centrosUnicos, centroFiltro, cadastrosProntos]);
 
   useEffect(() => {
+    if (!cadastrosProntos) return;   /* P94 — nunca contra o plano ainda carregando */
     if (subcentroFiltro !== '__all__' && !subcentrosUnicos.includes(subcentroFiltro)) {
       setSubcentroFiltro('__all__');
     }
-  }, [subcentrosUnicos, subcentroFiltro]);
+  }, [subcentrosUnicos, subcentroFiltro, cadastrosProntos]);
 
   /**
    * O QUE DEVOLVER AOS PAIS QUANDO O SUBCENTRO SAIR — FIN-CABECALHO-CASCATA-01.
@@ -1036,7 +1076,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
       /* OC-HOMOLOG-FIX-02 — mais os tres que o painel tambem ajusta; sem eles a volta trazia "Financeira", a chave do
          sem caixa desligada e a cultura em "Todas" (src/lib/financeiro/retornoOC.ts). */
       const extras: ExtrasRetornoOC = { dataPor, mostrarSemCaixa: modoSemCaixa !== 'ocultar', culturaFiltro };
-      sessionStorage.setItem(CHAVE_RETORNO_OC, JSON.stringify({
+      if (clienteAtual?.id) sessionStorage.setItem(chaveRetornoOC(clienteAtual.id), JSON.stringify({
         fazendaId, anosSelecionados, mesesSelecionados, statusSelecionados, tipoOperacao,
         contaOrigem, contaDestino, macroFiltro, grupoFiltro, centroFiltro,
         subcentroFiltro, produtoFiltro, documentoFiltro, fornecedorFiltro, atividadeFiltro, safraFiltro,
@@ -1080,9 +1120,10 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
    * ⚠ "Sem safra" SOBREVIVE A QUALQUER ATIVIDADE: ele não é uma safra, é a ausência delas.
    */
   useEffect(() => {
+    if (!cadastrosProntos) return;   /* P94 — nunca contra as safras ainda carregando */
     if (safraFiltro === '__all__' || safraFiltro === SEM_SAFRA) return;
     if (!safrasDoFiltro.some(sf => sf.id === safraFiltro)) setSafraFiltro('__all__');
-  }, [safrasDoFiltro, safraFiltro]);
+  }, [safrasDoFiltro, safraFiltro, cadastrosProntos]);
 
   /**
    * ⚠ A CULTURA SÓ EXISTE NA LAVOURA — FIN-AUDITORIA-CULTURA-01. Escolher "Pecuária" com
@@ -1280,8 +1321,54 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   /* FORN-BUSCA-UNICA-01 — o filtro é o seletor padrão (`FavorecidoSelect`, a busca única). FIN-V2-FILTRO-FORNECEDOR-01: os ATIVOS; o
      inativo só com lançamento no recorte; o mesclado nunca (o nome antigo acha o destino pelos apelidos); o uso é o do SERVIDOR no
      recorte sem o filtro de fornecedor (`usoPorFornecedor`, na mesma ida da página) — a lista não encolhe ao escolher. */
-  const fornecedoresDoFiltro = useMemo(() => fornecedoresDoFiltroV2(hook.fornecedores, paginaDaLista?.usoPorFornecedor ?? null),
-    [hook.fornecedores, paginaDaLista]);
+  const fornecedoresDoFiltro = useMemo(() => fornecedoresDoFiltroV2(hook.fornecedores, paginaDaLista?.usoPorFornecedor ?? null, fornecedorFiltro),
+    [hook.fornecedores, paginaDaLista, fornecedorFiltro]);
+
+  /* ── P94 — FIN-V2-FILTRO-FANTASMA-01: A TELA NUNCA FILTRA O QUE NÃO MOSTRA ──────────────────────────────────────────────────────
+     (1) o que volta (memória, instantâneo da OC, drill, troca de cliente) se confere UMA vez contra as opções do cliente, carregadas:
+         o inexistente volta ao padrão e o mesclado vira o destino, com o aviso na faixa dos totais;
+     (2) o seletor cujo valor não está nas SUAS opções (as que ele mostra) diz "valor inexistente (limpar)" em vermelho, nunca "Todos". */
+  const filtrosDeCadastro: FiltrosDeCadastro = {
+    fazendaId, contaOrigem, contaDestino, macroFiltro, grupoFiltro, centroFiltro, subcentroFiltro, fornecedorFiltro, safraFiltro,
+    culturaFiltro, atividadeFiltro,
+  };
+  const opcoesDoCliente: OpcoesDoCliente = useMemo(() => ({
+    fazendas: fazOperacionais.map(f => f.id), contas: hook.contasBancarias.map(c => c.id), plano: hook.classificacoes,
+    fornecedores: hook.fornecedores, safras: (hook.safras ?? []).map(sf => sf.id), culturas: CULTURAS_LANCAMENTO.map(c => c.valor),
+    atividades: ATIVIDADES.map(a => a.valor), sentinelas: [SEM_SAFRA, SEM_CULTURA],
+  }), [fazOperacionais, hook.contasBancarias, hook.classificacoes, hook.fornecedores, hook.safras]);
+  const opcoesDaBarra: OpcoesDoCliente = useMemo(() => ({
+    ...opcoesDoCliente, contas: sortedContas.map(c => c.id), fornecedores: fornecedoresDoFiltro, safras: safrasDoFiltro.map(sf => sf.id),
+    plano: [...macrosUnicos.map(m => ({ macro_custo: m })), ...gruposUnicos.map(g => ({ grupo_custo: g })),
+      ...centrosUnicos.map(c => ({ centro_custo: c })), ...subcentrosUnicos.map(x => ({ subcentro: x }))],
+  }), [opcoesDoCliente, sortedContas, fornecedoresDoFiltro, safrasDoFiltro, macrosUnicos, gruposUnicos, centrosUnicos, subcentrosUnicos]);
+  const camposInexistentes = useMemo(
+    () => new Set<CampoDeCadastro>(prontoParaConferir ? camposForaDasOpcoes(filtrosDeCadastro, opcoesDaBarra) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [prontoParaConferir, opcoesDaBarra, fazendaId, contaOrigem, contaDestino, macroFiltro, grupoFiltro, centroFiltro, subcentroFiltro,
+      fornecedorFiltro, safraFiltro, culturaFiltro, atividadeFiltro]);
+  const inexistente = (c: CampoDeCadastro) => camposInexistentes.has(c);
+  const aplicarConferencia = (c: Conferencia) => {
+    const t = c.trocas;
+    if (t.fazendaId !== undefined) setFazendaId(t.fazendaId);
+    if (t.contaOrigem !== undefined) setContaOrigem(t.contaOrigem);
+    if (t.contaDestino !== undefined) setContaDestino(t.contaDestino);
+    if (t.macroFiltro !== undefined) { setMacroFiltro(t.macroFiltro); setMacroLocked(false); }
+    if (t.grupoFiltro !== undefined) setGrupoFiltro(t.grupoFiltro);
+    if (t.centroFiltro !== undefined) setCentroFiltro(t.centroFiltro);
+    if (t.subcentroFiltro !== undefined) setSubcentroFiltro(t.subcentroFiltro);
+    if (t.fornecedorFiltro !== undefined) setFornecedorFiltro(t.fornecedorFiltro);
+    if (t.safraFiltro !== undefined) setSafraFiltro(t.safraFiltro);
+    if (t.culturaFiltro !== undefined) setCulturaFiltro(t.culturaFiltro);
+    if (t.atividadeFiltro !== undefined) setAtividadeFiltro(t.atividadeFiltro);
+    setAvisosDoFiltro(c.avisos);
+  };
+  const conferencia = useConferenciaDosFiltros({ pronto: prontoParaConferir, filtros: filtrosDeCadastro, opcoes: opcoesDoCliente, aplicar: aplicarConferencia });
+  const chipsDaOC = chipsVindosDaOC(vindoDaOC, { dataPor, mostrarSemCaixa: modoSemCaixa !== 'ocultar' });
+  const tirarChipDaOC = (campo: 'dataPor' | 'semCaixa') => {
+    if (campo === 'dataPor') setDataPor('financeira'); else setModoSemCaixa('ocultar');
+    setVindoDaOC(v => (campo === 'dataPor' ? { ...v, dataPor: undefined } : { ...v, mostrarSemCaixa: undefined }));
+  };
   const fornecedoresMap = useMemo(
     /* FIN-V2-DESEMPENHO-01b: os nomes da página (`listaV2.nomes`, uma ida por id) valem até o cadastro inteiro chegar */
     () => new Map([...listaV2.nomes, ...hook.fornecedores.map((f): [string, string] => [f.id, f.nome])]),
@@ -1564,7 +1651,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
       ? STATUS_FILTRO_LABEL[statusSelecionados[0]]
       : `${statusSelecionados.length} selecionados`;
 
-  const handleLimparFiltros = () => {
+  /* P94 — os campos ao padrão, sem tocar na memória: é o "Limpar" e é a troca de cliente (que depois aplica a memória do NOVO) */
+  const voltarAoPadrao = () => {
     const d = getDefaults();
     setAnosSelecionados(d.anosSelecionados);
     setMesesSelecionados([]);
@@ -1592,14 +1680,42 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     setDataPor('financeira');   // PR-FIN-GRADE-DATAS-03 — volta à dimensão padrão ao limpar filtros
     setSortField('default');
     setSortDir('asc');
+  };
+
+  const handleLimparFiltros = () => {
+    voltarAoPadrao();
     /* ⚠ "Limpar" LIMPA A BUSCA TAMBEM. Zerar o fornecedor selecionado e deixar
        "wilson" digitado no combobox deixaria a tela dizendo "Todos" com uma lista
        de seis nomes — o filtro limpo e a busca suja. */
     limparBuscasLembradas(PREFIXO_BUSCA);
     /* ⚠ "Limpar" APAGA A MEMÓRIA, não só os campos. Zerar a tela e deixar o filtro guardado
        faria o próximo retorno ressuscitar exatamente o que o operador acabou de limpar. */
-    esquecerFiltros();
+    if (clienteAtual?.id) esquecerFiltros(clienteAtual.id);
+    setAvisosDoFiltro([]);
+    setVindoDaOC({});
   };
+
+  /**
+   * ⚠ TROCAR DE CLIENTE COM A LISTA ABERTA — P94. O `V2Index` NÃO remonta esta tela na troca (sem `key` de cliente): todo `useState` dos
+   * filtros sobrevivia, e a fazenda/fornecedor/conta do cliente anterior ia ao banco no novo (Agnaldo × NJ: 45 → 0 lançamentos). Agora a
+   * troca volta tudo ao padrão, esquece a busca digitada, aplica a memória DO NOVO cliente (se houver) e pede a conferência — que roda
+   * quando as opções dele carregarem.
+   */
+  const clienteDaTelaRef = useRef(clienteAtual?.id);
+  useEffect(() => {
+    const cli = clienteAtual?.id;
+    if (clienteDaTelaRef.current === cli) return;
+    clienteDaTelaRef.current = cli;
+    voltarAoPadrao();
+    setFazendaId('__all__');   /* a do topo (`fazendaAtual`) entra pelo efeito dela, já a do novo cliente */
+    limparBuscasLembradas(PREFIXO_BUSCA);
+    setAvisosDoFiltro([]);
+    setVindoDaOC({});
+    const memoria = cli ? lerFiltros(cli) : null;
+    if (memoria) aplicarFiltrosGuardados(memoria, false);
+    conferencia.pedir();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clienteAtual?.id]);
 
   // Determine which fazenda_id to pass to loadLancamentos
 
@@ -1907,6 +2023,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                   {/* PR-H2 — ContaBancariaSelect compartilhado. */}
                   <ContaBancariaSelect
                     value={contaOrigem}
+                    valorInexistente={inexistente('contaOrigem')}
                     onValueChange={setContaOrigem}
                     contas={sortedContas}
                     placeholder="Todas"
@@ -1920,6 +2037,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                   <label className={lblCls}>Conta Destino</label>
                   <ContaBancariaSelect
                     value={contaDestino}
+                    valorInexistente={inexistente('contaDestino')}
                     onValueChange={setContaDestino}
                     contas={sortedContas}
                     placeholder="Todas"
@@ -1933,6 +2051,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                   <label className={lblCls}>Macro</label>
                   <SearchableSelect
                     value={macroFiltro}
+                    valorInexistente={inexistente('macroFiltro')}
                     persistKey={CHAVE_BUSCA_MACRO}
                     onValueChange={v => { setMacroFiltro(v); setGrupoFiltro('__all__'); setCentroFiltro('__all__'); setSubcentroFiltro('__all__'); setMacroLocked(false); }}
                     options={macrosUnicos.map(m => ({ value: m, label: m }))}
@@ -1962,6 +2081,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     fornecedores={fornecedoresDoFiltro}
                     situacao="todos" nomeInteiro mostrarUso={!!paginaDaLista} mostrarIguais={false} limpavel rotuloDoVazio="Todos" placeholder="Todos"
                     linhaDoDocumento={false} size="compact" triggerClassName="bg-white border-[#C9D4E2] !text-[9px]"
+                    valorInexistente={inexistente('fornecedorFiltro')} marcarInativo
                   />
                 </div>
                 <div>
@@ -1993,6 +2113,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       <label className={lblCls}>Grupo</label>
                       <SearchableSelect
                         value={grupoFiltro}
+                        valorInexistente={inexistente('grupoFiltro')}
                         persistKey={CHAVE_BUSCA_GRUPO}
                         onValueChange={v => { setGrupoFiltro(v); setCentroFiltro('__all__'); setSubcentroFiltro('__all__'); setMacroLocked(false); }}
                         options={gruposUnicos.map(g => ({ value: g, label: g }))}
@@ -2004,6 +2125,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       <label className={lblCls}>Centro</label>
                       <SearchableSelect
                         value={centroFiltro}
+                        valorInexistente={inexistente('centroFiltro')}
                         persistKey={CHAVE_BUSCA_CENTRO}
                         onValueChange={v => { setCentroFiltro(v); setSubcentroFiltro('__all__'); setMacroLocked(false); }}
                         options={centrosUnicos.map(c => ({ value: c, label: c }))}
@@ -2015,6 +2137,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                       <label className={lblCls}>Subcentro</label>
                       <SearchableSelect
                         value={subcentroFiltro}
+                        valorInexistente={inexistente('subcentroFiltro')}
                         persistKey={CHAVE_BUSCA_SUBCENTRO}
                         onValueChange={handleSubcentroChange}
                         options={subcentrosUnicos.map(s => ({ value: s, label: s }))}
@@ -2025,13 +2148,13 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                   <div className="grid grid-cols-2 gap-1 items-end">
                     <div>
                       <label className={lblCls}>Fazenda</label>
-                      <SearchableSelect value={fazendaId} onValueChange={setFazendaId} options={fazOperacionais.map(f => ({ value: f.id, label: f.nome }))}
+                      <SearchableSelect value={fazendaId} valorInexistente={inexistente('fazendaId')} onValueChange={setFazendaId} options={fazOperacionais.map(f => ({ value: f.id, label: f.nome }))}
                         allValue="__all__" allLabel="Todas" placeholder="Buscar fazenda..." triggerClassName={`${selCls} bg-white border-[#C9D4E2]`} />
                     </div>
                     <div>
                       <label className={lblCls}>Atividade</label>
                       <Select value={atividadeFiltro} onValueChange={setAtividadeFiltro}>
-                        <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2]`}><SelectValue /></SelectTrigger>
+                        <SelectTrigger className={cn(`${selCls} bg-white border-[#C9D4E2]`, inexistente('atividadeFiltro') && CLASSE_DO_INEXISTENTE)}><SelectValue>{inexistente('atividadeFiltro') ? <ValorInexistente onLimpar={() => setAtividadeFiltro('__all__')} /> : undefined}</SelectValue></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="__all__">Todas</SelectItem>
                           {/* ⚠ O VALOR É O `escopo_negocio`, o texto é o do card. A comparação
@@ -2045,7 +2168,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     <div>
                       <label className={lblCls}>Safra</label>
                       <Select value={safraFiltro} onValueChange={setSafraFiltro}>
-                        <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2]`}><SelectValue /></SelectTrigger>
+                        <SelectTrigger className={cn(`${selCls} bg-white border-[#C9D4E2]`, inexistente('safraFiltro') && CLASSE_DO_INEXISTENTE)}><SelectValue>{inexistente('safraFiltro') ? <ValorInexistente onLimpar={() => setSafraFiltro('__all__')} /> : undefined}</SelectValue></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="__all__">Todas</SelectItem>
                           {/* ⚠ "Sem safra" NÃO é "Todas": é a pergunta oposta, e é a que acha o
@@ -2221,14 +2344,14 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                 </div>
                   <div className="col-span-2 min-w-0">
                   <label className={lblCls}>Fazenda</label>
-                  <SearchableSelect value={fazendaId} onValueChange={setFazendaId} options={fazOperacionais.map(f => ({ value: f.id, label: f.nome }))}
+                  <SearchableSelect value={fazendaId} valorInexistente={inexistente('fazendaId')} onValueChange={setFazendaId} options={fazOperacionais.map(f => ({ value: f.id, label: f.nome }))}
                     allValue="__all__" allLabel="Todas" placeholder="Buscar fazenda..."
                     triggerClassName={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F]`} />
                 </div>
                   <div className="col-span-2 min-w-0">
                   <label className={lblCls}>Atividade</label>
                   <Select value={atividadeFiltro} onValueChange={setAtividadeFiltro}>
-                    <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F]`}><SelectValue /></SelectTrigger>
+                    <SelectTrigger className={cn(`${selCls} bg-white border-[#C9D4E2] hover:border-[#AFC2D8] focus:border-[#1E3A5F]`, inexistente('atividadeFiltro') && CLASSE_DO_INEXISTENTE)}><SelectValue>{inexistente('atividadeFiltro') ? <ValorInexistente onLimpar={() => setAtividadeFiltro('__all__')} /> : undefined}</SelectValue></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__all__">Todas</SelectItem>
                       {/* Mesma fonte do painel mobile, dez linhas acima — e do card do modal. */}
@@ -2241,7 +2364,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                   <div className="col-span-2 min-w-0">
                   <label className={lblCls}>Safra</label>
                   <Select value={safraFiltro} onValueChange={setSafraFiltro}>
-                    <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2]`}><SelectValue /></SelectTrigger>
+                    <SelectTrigger className={cn(`${selCls} bg-white border-[#C9D4E2]`, inexistente('safraFiltro') && CLASSE_DO_INEXISTENTE)}><SelectValue>{inexistente('safraFiltro') ? <ValorInexistente onLimpar={() => setSafraFiltro('__all__')} /> : undefined}</SelectValue></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="__all__">Todas</SelectItem>
                       {/* ⚠ "Sem safra" NÃO é "Todas": é a pergunta oposta, e é a que acha o
@@ -2264,7 +2387,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                   <div className="col-span-2 min-w-0">
                     <label className={lblCls}>Cultura</label>
                     <Select value={culturaFiltro} onValueChange={setCulturaFiltro}>
-                      <SelectTrigger className={`${selCls} bg-white border-[#C9D4E2]`}><SelectValue /></SelectTrigger>
+                      <SelectTrigger className={cn(`${selCls} bg-white border-[#C9D4E2]`, inexistente('culturaFiltro') && CLASSE_DO_INEXISTENTE)}><SelectValue>{inexistente('culturaFiltro') ? <ValorInexistente onLimpar={() => setCulturaFiltro('__all__')} /> : undefined}</SelectValue></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__all__">Todas</SelectItem>
                         {/* ⚠ "Sem cultura" É A PERGUNTA DA AUDITORIA: são os compartilhados, os
@@ -2283,6 +2406,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     {/* PR-H2 — ContaBancariaSelect compartilhado. */}
                     <ContaBancariaSelect
                       value={contaOrigem}
+                      valorInexistente={inexistente('contaOrigem')}
                       onValueChange={setContaOrigem}
                       contas={sortedContas}
                       placeholder="Todas"
@@ -2296,6 +2420,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     <label className={lblCls}>Conta Destino</label>
                     <ContaBancariaSelect
                       value={contaDestino}
+                      valorInexistente={inexistente('contaDestino')}
                       onValueChange={setContaDestino}
                       contas={sortedContas}
                       placeholder="Todas"
@@ -2319,6 +2444,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     <label className={lblCls}>Macro</label>
                     <SearchableSelect
                       value={macroFiltro}
+                      valorInexistente={inexistente('macroFiltro')}
                       persistKey={CHAVE_BUSCA_MACRO}
                       onValueChange={v => { setMacroFiltro(v); setGrupoFiltro('__all__'); setCentroFiltro('__all__'); setSubcentroFiltro('__all__'); setMacroLocked(false); }}
                       options={macrosUnicos.map(m => ({ value: m, label: m }))}
@@ -2330,6 +2456,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     <label className={lblCls}>Grupo</label>
                     <SearchableSelect
                       value={grupoFiltro}
+                      valorInexistente={inexistente('grupoFiltro')}
                       persistKey={CHAVE_BUSCA_GRUPO}
                       onValueChange={v => { setGrupoFiltro(v); setCentroFiltro('__all__'); setSubcentroFiltro('__all__'); setMacroLocked(false); }}
                       options={gruposUnicos.map(g => ({ value: g, label: g }))}
@@ -2341,6 +2468,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     <label className={lblCls}>Centro</label>
                     <SearchableSelect
                       value={centroFiltro}
+                      valorInexistente={inexistente('centroFiltro')}
                       persistKey={CHAVE_BUSCA_CENTRO}
                       onValueChange={v => { setCentroFiltro(v); setSubcentroFiltro('__all__'); setMacroLocked(false); }}
                       options={centrosUnicos.map(c => ({ value: c, label: c }))}
@@ -2352,6 +2480,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     <label className={lblCls}>Subcentro</label>
                     <SearchableSelect
                       value={subcentroFiltro}
+                      valorInexistente={inexistente('subcentroFiltro')}
                       persistKey={CHAVE_BUSCA_SUBCENTRO}
                       onValueChange={handleSubcentroChange}
                       options={subcentrosUnicos.map(s => ({ value: s, label: s }))}
@@ -2376,6 +2505,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
                     fornecedores={fornecedoresDoFiltro}
                     situacao="todos" nomeInteiro mostrarUso={!!paginaDaLista} mostrarIguais={false} limpavel rotuloDoVazio="Todos" placeholder="Todos"
                     linhaDoDocumento={false} size="compact" triggerClassName="bg-white border-[#C9D4E2] !text-[9px]"
+                    valorInexistente={inexistente('fornecedorFiltro')} marcarInativo
                   />
                   </div>
                   
@@ -2438,6 +2568,30 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
           </span>
           <span className="text-muted-foreground/40">|</span>
           <span className="text-muted-foreground"><TextoReservado reserva={reservaDeNumero(6)} alinhar="direita" texto={paginaDaLista ? totalLancamentosFiltrados.toLocaleString('pt-BR') : '—'} /> lanç.</span>
+          {/* P94 — O LUGAR DOS AVISOS DO FILTRO, RESERVADO: sempre desenhado (vazio sem aviso), com a largura que sobra (`flex-1`), numa
+              linha que rola no lugar; mínimo de 160px, para caber ao menos o começo do aviso numa janela estreita — o aviso que
+              aparece ou some não move a barra, os totais nem a tabela. Os chips do que veio da OC
+              ("Vindo da OC: Data por = Competência ✕") e as frases da conferência ("… não existe neste cliente — removido.") moram aqui. */}
+          <span data-testid="avisos-do-filtro" data-desloca className="flex h-5 min-w-40 flex-1 basis-40 items-center"
+            title={[...chipsDaOC.map(ch => ch.texto), ...avisosDoFiltro].join('\n') || undefined}>
+           <span data-desloca-livre className="uma-linha-que-rola flex min-w-0 flex-1 items-center gap-1">
+            {avisosDoFiltro.map((frase, i) => (
+              <span key={frase} data-testid="aviso-do-filtro" className="inline-flex shrink-0 items-center gap-0.5 text-[9.5px] text-amber-800">
+                {frase}
+                <button type="button" aria-label="Fechar o aviso" onClick={() => setAvisosDoFiltro(av => av.filter((_, j) => j !== i))}>
+                  <X className="h-2.5 w-2.5" />
+                </button>
+              </span>
+            ))}
+            {chipsDaOC.map(ch => (
+              <button key={ch.campo} type="button" data-testid="chip-vindo-da-oc" onClick={() => tirarChipDaOC(ch.campo)}
+                title="Este filtro veio da Operação Comercial. Clique para voltar ao padrão."
+                className="inline-flex h-4 shrink-0 items-center gap-0.5 rounded border border-amber-400 bg-amber-50 px-1 text-[9.5px] text-amber-900">
+                {ch.texto} <X className="h-2.5 w-2.5" />
+              </button>
+            ))}
+           </span>
+          </span>
           {/* FIN-V2-COLUNAS-02: o total sem caixa saiu da faixa (com os dois seletores ela não cabe numa linha, medido: 846px dos
               ~919 sem ele, ~1.040 com ele no pior número). Ele é o MESMO número do rodapé da seção sem caixa, e vai no `title`
               do "Mostrar". */}
