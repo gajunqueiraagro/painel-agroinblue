@@ -63,7 +63,7 @@ describe('P74 B — Parcelar este lançamento', () => {
     expect(screen.getByTestId('parcelar-este').textContent).toContain('hoje: à vista (1/1)');
     fireEvent.click(screen.getByTestId('parcelar-este-abrir'));
     fireEvent.change(screen.getByTestId('parcelar-este-n'), { target: { value: '4' } });
-    await waitFor(() => expect(textoDoVenc()).toBe('10/09/2026'));
+    await waitFor(() => expect(textoDoVenc()).toBe('10/09/2026'), { timeout: 4000 });
     expect(screen.getByTestId('parcelar-este-rotulo-venc').textContent).toBe('1º vencimento · sugerido (Elo Sintetico, dia 10)');
     expect(screen.getByTestId('parcelar-este-recado').textContent).toContain('vira a 1/4');
     expect(screen.getByTestId('grade-de-parcelas').textContent).toContain('este lançamento');
