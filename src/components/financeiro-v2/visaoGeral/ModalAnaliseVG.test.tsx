@@ -13,6 +13,8 @@
  *   G4 (G4, G4a–c) o AVISO acima do "Ver na lista" (a tela nunca esconde diferença): várias contas, vencidos de antes da janela, transferências
  *      entre contas escolhidas — cada um com a sua frase; sem diferença a linha fica vazia; o lugar existe em qualquer nível. O nó de
  *      transferências abre a lista no tipo "3-Transferências", sem centro
+ *   G5 (PR 5b) a transferência de ENTRADA abre a lista com a conta em CONTA DESTINO (a de saída, em Conta Origem); a VIRADA DO ANO
+ *      (média/acumulado nov/25 → fev/26): a 4ª frase com os meses do caso, depois das outras (hover com todas); no mesmo ano, nada
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act, within } from '@testing-library/react';
@@ -237,8 +239,8 @@ describe('modal de análise', () => {
     expect(screen.getByTestId('gaveta-linha-2')).toBeTruthy();
     fireEvent.click(screen.getByTestId('gaveta-ver-lista'));
     expect(onVer).toHaveBeenCalledWith(
-      { tipo: '2-Saídas', anos: ['2026'], meses: ['09'], status: ['realizado', 'previsto'], fazendaId: null, contaId: null,
-        atividade: 'agricultura', centro: 'Insumos', subcentro: 'Sementes' },
+      { tipo: '2-Saídas', anos: ['2026'], meses: ['09'], status: ['realizado', 'conciliado_real', 'previsto'], fazendaId: null, contaId: null,
+        contaDestinoId: null, atividade: 'agricultura', centro: 'Insumos', subcentro: 'Sementes' },
       expect.objectContaining({ gaveta: SUB }));
   });
 
@@ -290,6 +292,75 @@ describe('modal de análise', () => {
     expect(daGaveta().at(-1)!.p_caminho).toEqual(TRANSF);
     expect(aviso().textContent).toBe('A lista mostra as transferências entre as contas escolhidas; aqui elas se anulam.');
     fireEvent.click(screen.getByTestId('gaveta-ver-lista'));
-    expect(onVer.mock.calls[0][0]).toMatchObject({ tipo: '3-Transferências', centro: null, subcentro: null, atividade: null, contaId: 'c1' });
+    expect(onVer.mock.calls[0][0]).toMatchObject({ tipo: '3-Transferências', centro: null, subcentro: null, atividade: null, contaId: 'c1', contaDestinoId: null });
+  });
+
+  it('G5 transferência de ENTRADA: "Ver na lista" com a conta em Conta Destino, tipo 3, sem centro', async () => {
+    const TRANSF: (string | null)[] = ['Outras entradas', null, 'Transferências de outras contas', null];
+    gaveta = (a) => ({ ...comLista({ vencidos_fora: 0, transf_internas: 0 },
+      () => ({ ...GAV_FOLHA(), irmaos: [{ caminho: TRANSF, rotulo: 'Sem subcentro', valor: 10 }] }))(a), lado: 'entrada' });
+    const onVer = vi.fn();
+    await abrir('Custeio', vi.fn(), { onVerNaLista: onVer, ctx: { ...CTX, contas: ['c1'] } });
+    await aoSubcentro();
+    expect(daGaveta().at(-1)!.p_caminho).toEqual(TRANSF);
+    expect(aviso().textContent).toBe('');
+    fireEvent.click(screen.getByTestId('gaveta-ver-lista'));
+    expect(onVer.mock.calls[0][0]).toMatchObject({ tipo: '3-Transferências', centro: null, subcentro: null, contaId: null, contaDestinoId: 'c1' });
+  });
+
+  it('G5b a virada do ano: a 4ª frase com os meses do caso, depois das outras; no mesmo ano, sem frase', async () => {
+    const VIRADA = 'A lista filtra por ano e mês: o período nov/25–fev/26 traz também jan–fev/25 e nov–dez/26.';
+    gaveta = comLista({ vencidos_fora: 0, transf_internas: 0 },
+      () => ({ ...GAV_FOLHA(), criterio: 'acumulado', mes: '2026-02', janela: { de: '2025-11-01', ate: '2026-02-28' } }));
+    const r = await abrir('Custeio');
+    await aoSubcentro();
+    expect(aviso().textContent).toBe(VIRADA);
+    expect(aviso().getAttribute('data-avisos')).toBe('1');
+    r.rerender(<></>);
+    /* com vencidos movidos: a dos vencidos na linha, a da virada no hover */
+    gaveta = comLista({ vencidos_fora: 2, transf_internas: 0 },
+      () => ({ ...GAV_FOLHA(), criterio: 'acumulado', mes: '2026-02', janela: { de: '2025-11-01', ate: '2026-02-28' } }));
+    await abrir('Custeio');
+    await aoSubcentro();
+    expect(aviso().textContent).toBe('Na lista, os vencidos ficam no mês do vencimento.');
+    expect(aviso().getAttribute('title')).toContain(VIRADA);
+  });
+
+  it('G5d pagamento da fatura do cartão (111949): a 5ª frase; sozinha na linha, depois das 4 no hover; sem fatura, nada', async () => {
+    const FATURA = 'A lista mostra o pagamento da fatura como transferência; aqui não entra (a compra já foi a saída).';
+    const TRANSF: (string | null)[] = ['Outras saídas', null, 'Transferências para outras contas', null];
+    const noTransf = () => ({ ...GAV_FOLHA(), irmaos: [{ caminho: TRANSF, rotulo: 'Sem subcentro', valor: 10 }] });
+    gaveta = comLista({ vencidos_fora: 0, transf_internas: 0, faturas_cartao: 1 }, noTransf);
+    const r = await abrir('Custeio', vi.fn(), { ctx: { ...CTX, contas: ['c1'] } });
+    await aoSubcentro();
+    expect(aviso().textContent).toBe(FATURA);
+    expect(aviso().getAttribute('data-avisos')).toBe('1');
+    r.rerender(<></>);
+    /* com as outras 4: a das contas na linha; no hover todas, a da fatura por último */
+    gaveta = comLista({ vencidos_fora: 1, transf_internas: 2, faturas_cartao: 1 },
+      () => ({ ...noTransf(), criterio: 'acumulado', mes: '2026-02', janela: { de: '2025-11-01', ate: '2026-02-28' } }));
+    const r2 = await abrir('Custeio', vi.fn(), { ctx: { ...CTX, contas: ['c1', 'c2'] } });
+    await aoSubcentro();
+    expect(aviso().textContent).toBe('A lista filtra uma conta por vez: vai abrir com todas as contas.');
+    expect(aviso().getAttribute('data-avisos')).toBe('5');
+    const title = aviso().getAttribute('title')!;
+    expect(title.endsWith(FATURA)).toBe(true);
+    expect(title).toContain('nov/25–fev/26');
+    r2.rerender(<></>);
+    /* sem fatura: nada */
+    gaveta = comLista({ vencidos_fora: 0, transf_internas: 0, faturas_cartao: 0 }, noTransf);
+    await abrir('Custeio', vi.fn(), { ctx: { ...CTX, contas: ['c1'] } });
+    await aoSubcentro();
+    expect(aviso().textContent).toBe('');
+    expect(aviso().getAttribute('data-avisos')).toBe('0');
+  });
+
+  it('G5c acumulado dentro do mesmo ano: sem a frase da virada (a linha fica vazia)', async () => {
+    gaveta = comLista({ vencidos_fora: 0, transf_internas: 0 },
+      () => ({ ...GAV_FOLHA(), criterio: 'acumulado', janela: { de: '2026-01-01', ate: '2026-09-30' } }));
+    await abrir('Custeio');
+    await aoSubcentro();
+    expect(aviso().textContent).toBe('');
+    expect(aviso().getAttribute('data-avisos')).toBe('0');
   });
 });

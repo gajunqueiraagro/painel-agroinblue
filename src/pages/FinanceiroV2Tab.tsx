@@ -228,6 +228,8 @@ export interface FinV2DrillFilters {
   statusSelecionados?: string[];
   fazendaId?: string;
   contaOrigem?: string;
+  /* PR 5b — a transferência de ENTRADA ("Transferências de outras contas"): a conta escolhida é a de DESTINO */
+  contaDestino?: string;
   atividade?: string;
 }
 
@@ -809,6 +811,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     if (drillFilters.meses?.length) setMesesSelecionados(drillFilters.meses);
     if (drillFilters.statusSelecionados?.length) setStatusSelecionados(drillFilters.statusSelecionados.filter(isStatusFiltroFinanceiro));
     if (drillFilters.contaOrigem) setContaOrigem(drillFilters.contaOrigem);
+    if (drillFilters.contaDestino) setContaDestino(drillFilters.contaDestino);
     if (drillFilters.atividade) setAtividadeFiltro(drillFilters.atividade);
     setFazendaId(drillFilters.fazendaId ?? '__all__'); // Fluxo de Caixa is always global
   }, []); // Run once on mount

@@ -432,9 +432,12 @@ if (tela === 'mesclar') {
   /* PR 5 — `&contas=2`: duas contas escolhidas (o aviso "A lista filtra uma conta por vez" no rodapé da gaveta). Vai DEPOIS da carga
      dos filtros: ela zera a escolha ao trocar de cliente (`useCarregarFiltrosVG`) */
   const duasContas = q.get('contas') === '2';
+  /* PR 5b — `&fatura=1`: toda folha com um pagamento de fatura do cartão que a gaveta não conta (a 5ª frase, a mais longa) */
+  const comFatura = q.get('fatura') === '1';
+  const gavetaVG = (a: any) => { const r = VG.gaveta(a); return comFatura && r.lista ? { ...r, lista: { ...r.lista, faturas_cartao: 1 } } : r; };
   g.__bancoBancada = { from: () => [], rpc: (fn: string, a: any) => fn === 'fn_vg_filtros'
       ? (duasContas && setTimeout(() => filtrosVG.mudar({ contas: ['c1', 'c2'] }), 0), g.__vgFiltrosReal ?? VG.FILTROS)
-    : fn === 'fn_vg_tela' ? (g.__vgReal ?? VG.tela(a)) : fn === 'fn_vg_analise' ? VG.analise(a) : fn === 'fn_vg_gaveta' ? VG.gaveta(a) : null };
+    : fn === 'fn_vg_tela' ? (g.__vgReal ?? VG.tela(a)) : fn === 'fn_vg_analise' ? VG.analise(a) : fn === 'fn_vg_gaveta' ? gavetaVG(a) : null };
   montarNaUrl(
     <div className="flex h-full flex-col">
       <BarraSecao area="Financeiro" secao="Visão Geral" atalho={<FiltrosBarraVG />} />

@@ -1070,7 +1070,7 @@ export default function V2Index() {
         onVerNaLista={(f, volta) => {
           setRetornoVG(volta);
           setDrillDaVisaoGeral({ tipo: f.tipo, anos: f.anos, meses: f.meses, statusSelecionados: f.status, fazendaId: f.fazendaId ?? undefined,
-            contaOrigem: f.contaId ?? undefined, atividade: f.atividade ?? undefined, centro: f.centro ?? undefined, subcentro: f.subcentro ?? undefined });
+            contaOrigem: f.contaId ?? undefined, contaDestino: f.contaDestinoId ?? undefined, atividade: f.atividade ?? undefined, centro: f.centro ?? undefined, subcentro: f.subcentro ?? undefined });
           setVoltarParaConciliacao(false);
           setSection('financeiro-lanc');
         }} />
