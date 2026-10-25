@@ -33,6 +33,7 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { Segmentado } from '@/components/ui/segmentado';
 import { FavorecidoSelect } from '@/components/shared/FavorecidoSelect';
 import { CampoMoeda } from '@/components/ui/campo-moeda';
+import { CampoNumeroComConta } from '@/components/ui/campo-numero-com-conta';
 import type { CenarioBoitel } from '@/components/venda/BoitelNegociacaoDerivado';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Pencil, TrendingUp, Wallet, Tag, Banknote, BarChart3, ImageDown, Factory } from 'lucide-react';
@@ -309,18 +310,6 @@ export function CampoNum({ label, valor, onChange, casas = 2, sufixo, obrigatori
      Omitido, o proprio label serve de titulo: nunca fica sem. */
   titulo?: string;
 }) {
-  const fmt = (v: number | null) => v ? v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas }) : '';
-  /* ⚠ `rascunho` E' NULO QUANDO NAO SE ESTA DIGITANDO, e ai o campo mostra o valor
-     formatado. Guardar o texto sempre exigiria sincronizar estado com prop — e' o
-     caminho que leva a `setState` durante o render. Aqui nao ha o que sincronizar:
-     fora do foco, o que aparece e' derivado do valor. */
-  const [rascunho, setRascunho] = useState<string | null>(null);
-  const parse = (t: string) => {
-    let limpo = t.replace(/%/g, '').trim();
-    if (limpo.includes(',')) limpo = limpo.replace(/\./g, '').replace(',', '.');
-    const n = parseFloat(limpo);
-    return isNaN(n) ? 0 : Math.round(n * Math.pow(10, casas)) / Math.pow(10, casas);
-  };
   /* ─── ROTULO EM CIMA, CAMPO DO TAMANHO DO CONTEUDO ────────────────────────
      PR-OC-VENDA-MODAIS-PAINEIS-01 (mockup aprovado). Substitui o rotulo-a-esquerda do
      01E, e a troca e' consciente: la' o rotulo alinhado numa coluna de 132px era o que
@@ -345,13 +334,9 @@ export function CampoNum({ label, valor, onChange, casas = 2, sufixo, obrigatori
             <CampoMoeda valor={valor} onChange={(n) => onChange(n ?? 0)} disabled={desabilitado}
               className={`h-8 w-[130px] px-2 text-[12px] tabular-nums text-right bg-card${erro ? ' border-destructive' : ''}`} />
           ) : (
-            <Input
-              value={rascunho ?? fmt(valor)} disabled={desabilitado} inputMode="decimal"
-              onChange={e => { setRascunho(e.target.value); onChange(parse(e.target.value)); }}
-              onFocus={() => setRascunho(valor ? String(valor).replace('.', ',') : '')}
-              onBlur={() => { if (rascunho !== null) onChange(parse(rascunho)); setRascunho(null); }}
-              className={`h-8 w-[90px] px-2 text-[12px] tabular-nums text-right bg-card${erro ? ' border-destructive' : ''}`}
-            />
+            /* P91 — o campo de numero do sistema, com a conta ("36+18" cab, "1,2*0,98" GMD). O zero segue aparecendo vazio, como antes. */
+            <CampoNumeroComConta valor={valor ? valor : null} onChange={n => onChange(n ?? 0)} casas={casas} percentual={sufixo === '%'}
+              disabled={desabilitado} invalido={!!erro} className="h-8 w-[90px] px-2 text-[12px] bg-card" />
           )}
           {sufixo && <span className="text-[10px] text-muted-foreground shrink-0 whitespace-nowrap">{sufixo}</span>}
         </div>
@@ -461,25 +446,16 @@ function CampoNumBase({ valor, onChange, casas, sufixo, moeda, desabilitado, inv
   /** Borda vermelha — a mensagem mora em quem chama. */
   invalido?: boolean;
 }) {
-  const fmt = (v: number | null) => v ? v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas }) : '';
-  const [rascunho, setRascunho] = useState<string | null>(null);
-  const parse = (t: string) => {
-    let limpo = t.replace(/%/g, '').trim();
-    if (limpo.includes(',')) limpo = limpo.replace(/\./g, '').replace(',', '.');
-    const n = parseFloat(limpo);
-    return isNaN(n) ? 0 : Math.round(n * Math.pow(10, casas)) / Math.pow(10, casas);
-  };
+  /* P89/P91 — dinheiro e' sempre o `CampoMoeda` (a media de 5 casas tambem: "R$" dentro e a conta); o resto e' o
+     `CampoNumeroComConta`. As duas medias (5 casas) seguem mostrando o zero como vazio, como antes. */
   return (
     <div className="flex items-center gap-1">
-      {moeda && casas === 2 ? (
-        <CampoMoeda valor={valor} onChange={n => onChange(n ?? 0)} disabled={desabilitado}
+      {moeda ? (
+        <CampoMoeda valor={casas === 2 ? valor : (valor ? valor : null)} onChange={n => onChange(n ?? 0)} disabled={desabilitado} casas={casas}
           className={`h-8 w-[130px] px-2 text-[12px] tabular-nums text-right bg-card${invalido ? ' border-destructive' : ''}`} />
       ) : (
-        <Input value={rascunho ?? fmt(valor)} disabled={desabilitado} inputMode="decimal"
-          onChange={e => { setRascunho(e.target.value); onChange(parse(e.target.value)); }}
-          onFocus={() => setRascunho(valor ? String(valor).replace('.', ',') : '')}
-          onBlur={() => { if (rascunho !== null) onChange(parse(rascunho)); setRascunho(null); }}
-          className={`h-8 ${casas > 2 ? 'w-[120px]' : 'w-[110px]'} px-2 text-[12px] tabular-nums text-right bg-card${invalido ? ' border-destructive' : ''}`} />
+        <CampoNumeroComConta valor={valor ? valor : null} onChange={n => onChange(n ?? 0)} casas={casas} disabled={desabilitado} invalido={invalido}
+          className={`h-8 ${casas > 2 ? 'w-[120px]' : 'w-[110px]'} px-2 text-[12px] bg-card`} />
       )}
       {sufixo && <span className="text-[10px] text-muted-foreground shrink-0 whitespace-nowrap">{sufixo}</span>}
     </div>
