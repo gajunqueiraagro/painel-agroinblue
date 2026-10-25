@@ -35,6 +35,7 @@ import {
 } from '@/lib/financiamentos/valorDasParcelas';
 import { TableFooter } from '@/components/ui/table';
 import { Pencil } from 'lucide-react';
+import { VoltarParaAVista } from '@/components/financeiro-v2/VoltarParaAVista';
 import { useQueryClient } from '@tanstack/react-query';
 import { GradeDeParcelas, type ModoDasParcelas } from '@/components/financiamentos/GradeDeParcelas';
 import {
@@ -1161,6 +1162,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                         showBankDetails="banco"
                         className={CAMPO}
                         comBusca
+                        nomeInteiro
                       />
                       <p className={APOIO}>De onde saem as parcelas</p>
                     </div>
@@ -1884,6 +1886,11 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
               )}
             </p>
             <div className="flex items-center gap-2 shrink-0">
+              {/* P74b — a compra parcelada volta a ser UM lançamento à vista (só sem parcela paga/conciliada; senão apagado com a frase) */}
+              {edicaoDeParcelamento && financiamentoId && clienteId && (
+                <VoltarParaAVista clienteId={clienteId} financiamentoId={financiamentoId} botaoClassName="h-8 text-xs"
+                  onVoltou={() => { void qc.invalidateQueries(); onSalvo?.(); onOpenChange(false); }} />
+              )}
               <Button variant="outline" size="sm" className="h-8" onClick={() => onOpenChange(false)} disabled={gravando}>
                 Cancelar
               </Button>

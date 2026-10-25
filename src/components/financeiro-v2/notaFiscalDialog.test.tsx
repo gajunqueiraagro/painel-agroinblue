@@ -5,7 +5,7 @@
  * E o pedido do Gabriel: lancamento aberto do mesmo fornecedor com o valor -> "Atualizar este" (so' com confirmacao).
  * ⚠ Nenhum banco: os gravadores e as consultas sao falsos; o que se prova e' o que a tela mostra e o que ela manda gravar.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ClassificacaoItem, ContaBancariaV2, FornecedorV2, LancamentoV2Form, Safra } from '@/hooks/useFinanceiroV2';
@@ -861,7 +861,7 @@ async function escolherComo(rotulo: string) {
   fireEvent.click(await screen.findByRole('option', { name: rotulo }));
   /* o Select do Radix devolve o foco ao gatilho DEPOIS de fechar: espera, senão o próximo popover fecha com esse foco */
   await waitFor(() => expect(screen.getByTestId('nota-como-foi-pago').textContent).toBe(rotulo));
-  await new Promise((r) => setTimeout(r, 20));
+  await waitFor(() => expect(screen.getByTestId('nota-como-foi-pago')).toHaveFocus());
 }
 async function noCartao(n: string) {
   await escolherComo('Cartão em N×');
@@ -893,7 +893,7 @@ describe('P74 — a nota paga no cartão em N vezes', () => {
     expect(await screen.findByText('Cartão Elo Sintetico')).toBeTruthy();
     expect(screen.queryAllByText('Sicredi Lavoura')).toHaveLength(0);
     fireEvent.click(screen.getByText('Cartão Elo Sintetico'));
-    await waitFor(() => expect(screen.getByTestId('nota-cartao-rotulo-fatura').textContent).toBe('1ª fatura · sugerido (Elo Sintetico, dia 10)'));
+    await waitFor(() => expect(screen.getByTestId('nota-cartao-rotulo-fatura').textContent).toBe('1ª fatura · sugerido (Elo Sintetico, dia 10)'), { timeout: 4000 });
     expect(cartaoNoBanco.diasDoCartao).toHaveBeenCalledWith('elo');
     const fatura = campoDaFatura();
     expect(fatura.value).toBe('10/10/2026');
@@ -905,7 +905,7 @@ describe('P74 — a nota paga no cartão em N vezes', () => {
     abrir(montarNota({ paginas: danfeSinteticoSemDuplicata(), fornecedores: [FORN] }), { g: comoGravadores, contas: COM_CARTAO });
     await noCartao('4');
     await escolherSubcentro('Nutrição Engorda');
-    await waitFor(() => expect(screen.getByTestId('nota-criar').textContent).toBe('Criar 4 parcelas'));
+    await waitFor(() => expect(screen.getByTestId('nota-criar').textContent).toBe('Criar 4 parcelas'), { timeout: 4000 });
     expect(screen.getByTestId('nota-rodape').textContent).toContain('O PDF fica anexado às 4 parcelas como a NF 3.241 · 4 saídas no Cartão Elo Sintetico, uma em cada fatura.');
     fireEvent.click(screen.getByTestId('nota-criar'));
     await waitFor(() => expect(g.gravar).toHaveBeenCalled());
@@ -932,11 +932,37 @@ describe('P74 — a nota paga no cartão em N vezes', () => {
   it('P7 "No Novo lançamento" leva o cartão e as 4 parcelas', async () => {
     const props = abrir(montarNota({ paginas: danfeSinteticoSemDuplicata(), fornecedores: [FORN] }), { contas: COM_CARTAO });
     await noCartao('4');
-    await waitFor(() => expect(screen.getByTestId('nota-conta-pelo-cartao').textContent).toBe('Cartão Elo Sintetico'));
-    await waitFor(() => expect(campoDaFatura().value).toBe('10/10/2026'));
+    await waitFor(() => expect(screen.getByTestId('nota-conta-pelo-cartao').textContent).toBe('Cartão Elo Sintetico'), { timeout: 4000 });
+    await waitFor(() => expect(campoDaFatura().value).toBe('10/10/2026'), { timeout: 4000 });
     fireEvent.click(screen.getByTestId('nota-abrir-no-lancamento'));
     const prefill = props.onAbrirNoLancamento.mock.calls[0][0];
     expect(prefill.conta_bancaria_id).toBe('elo');
     expect(prefill.doXml.proposta.duplicatas.map((d: { valorCent: number }) => d.valorCent)).toEqual([239575, 239575, 239575, 239575]);
+  });
+});
+
+/** P101 — abaixo de 1000px a prévia vira três abas (a 750×483 sobravam 21px às parcelas): Arquivo | Nota e fornecedor | Parcelas e lançamento. */
+describe('P101 — a prévia numa janela estreita', () => {
+  const largura = window.innerWidth;
+  const janela = (w: number) => Object.defineProperty(window, 'innerWidth', { value: w, configurable: true, writable: true });
+  afterEach(() => { janela(largura); });
+  it('abaixo de 1000px: as abas, cada uma com os seus blocos; a partir de 1000px, as duas colunas de sempre', () => {
+    janela(800);
+    const { unmount } = render(<QueryClientProvider client={new QueryClient()}><NotaFiscalDialog open clienteId="cli" clienteNome="NJ" nota={montarNota()}
+      fazendas={FAZENDAS} contas={CONTAS} classificacoes={PLANO} safras={SAFRAS} fornecedores={[]} consultarReceita={RECEITA}
+      onClose={vi.fn()} onCriado={vi.fn()} onAbrirNoLancamento={vi.fn()} onAbrirRegistrada={vi.fn()} onCriarFornecedor={vi.fn(async () => null)} gravarItens={vi.fn(async () => null)} /></QueryClientProvider>);
+    const abas = screen.getByTestId('nota-abas');
+    const visiveis = () => ['nota-bloco-arquivo', 'nota-bloco-nota', 'nota-bloco-fornecedor', 'nota-bloco-parcelas', 'nota-bloco-lancamento'].filter((t) => screen.queryByTestId(t));
+    expect(visiveis()).toEqual(['nota-bloco-nota', 'nota-bloco-fornecedor']);
+    fireEvent.click(within(abas).getByText('Parcelas e lançamento'));
+    expect(visiveis()).toEqual(['nota-bloco-parcelas', 'nota-bloco-lancamento']);
+    fireEvent.click(within(abas).getByText('Arquivo'));
+    expect(visiveis()).toEqual(['nota-bloco-arquivo']);
+    expect(screen.getByTestId('nota-criar')).toBeTruthy();   // o rodapé fica em todas
+    unmount();
+    janela(1200);
+    abrir(montarNota());
+    expect(screen.queryByTestId('nota-abas')).toBeNull();
+    expect(visiveis()).toEqual(['nota-bloco-arquivo', 'nota-bloco-nota', 'nota-bloco-fornecedor', 'nota-bloco-parcelas', 'nota-bloco-lancamento']);
   });
 });

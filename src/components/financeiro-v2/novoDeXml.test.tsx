@@ -5,7 +5,7 @@
  * ⚠ O `LancamentoV2Dialog` E' MONTADO DE VERDADE; so' as bordas sao falsas (banco, cliente, modais filhos). O que se prova e'
  *   o que a tela MOSTRA e o que ela manda GRAVAR.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -66,6 +66,7 @@ import { lerNFe } from '@/lib/financeiro/nfe/lerNFe';
 import { proporLancamento, FRASE_SEM_DUPLICATAS, type UltimaClassificacao } from '@/lib/financeiro/nfe/proporLancamento';
 import { resolverEmitente, type ResolucaoEmitente } from '@/lib/financeiro/nfe/resolverEmitente';
 import { arquivoXmlDaNota, pendenteDaNota, prefillDaNota, type DoXml } from '@/lib/financeiro/nfePrefill';
+import { documentoFormatado } from '@/lib/financeiro/nfe/formatos';
 import { CTE, EMITENTE_CNPJ, chaveDe, montarNFe, utf8, type OpcoesNota } from '@/lib/financeiro/nfe/__fixtures__/notas';
 import type { OcorrenciaDaNota } from '@/lib/financeiro/nfeConsultas';
 import { TIPOS_ACEITOS } from '@/hooks/useLancamentoDocumentos';
@@ -825,5 +826,27 @@ describe('A — dividir pelos itens no NOVO lançamento', () => {
     await waitFor(() => expect(m.onClose).toHaveBeenCalled());
     expect(chamadas('fn_lancamento_dividir_pelos_itens')).toHaveLength(0);
     expect(chamadas('fn_cancelar_lancamento_auditoria')).toHaveLength(0);
+  });
+});
+
+/** P101 — abaixo de 1000px a lista não passava da janela só porque perdia a coluna CNPJ (155px a mais a 750): o CNPJ vai no `title` do Emitente. */
+describe('P101 — "Novo a partir da nota" numa janela estreita', () => {
+  const largura = window.innerWidth;
+  const janela = (w: number) => Object.defineProperty(window, 'innerWidth', { value: w, configurable: true, writable: true });
+  afterEach(() => { janela(largura); });
+  it('abaixo de 1000px: sem a coluna CNPJ, o CNPJ no title do Emitente; a partir de 1000px, a coluna de sempre', async () => {
+    janela(800);
+    const { unmount } = montarLista();
+    soltar([arquivo('a.xml', montarNFe())]);
+    await waitFor(() => expect(screen.getAllByTestId('xml-linha')).toHaveLength(1));
+    const titulos = () => within(screen.getByTestId('xml-tabela')).getAllByRole('columnheader').map((h) => h.textContent);
+    expect(titulos()).not.toContain('CNPJ');
+    expect(screen.getAllByTestId('xml-linha')[0].querySelector(`td[title*="${documentoFormatado(EMITENTE_CNPJ)}"]`)).not.toBeNull();
+    unmount();
+    janela(1200);
+    montarLista();
+    soltar([arquivo('a.xml', montarNFe())]);
+    await waitFor(() => expect(screen.getAllByTestId('xml-linha')).toHaveLength(1));
+    expect(titulos()).toContain('CNPJ');
   });
 });

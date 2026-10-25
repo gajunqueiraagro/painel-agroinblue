@@ -233,7 +233,11 @@ const CENARIOS = [
   ] },
   /* P74 — "Como foi pago?": trocar À vista → Cartão em N× → (cartão, 4) → Parcelas livres → Duplicatas apagado não move o título do bloco, os
      outros blocos nem o rodapé (o conteúdo do bloco troca por dentro, na altura dele) */
-  { nome: 'nota-pdf-como-foi-pago', url: 'tela=nota-pdf&v=semdup', minLargura: 1000, estados: [
+  /* P101 — em todos os tamanhos: abaixo de 1000px, na aba "Parcelas e lançamento" */
+  { nome: 'nota-pdf-como-foi-pago', url: 'tela=nota-pdf&v=semdup', antes: async (p) => {
+    const t = p.locator('[data-testid="nota-abas"] button', { hasText: 'Parcelas e lançamento' });
+    if (await t.count()) { await t.first().click(); await espera(p, 300); }
+  }, estados: [
     ['Cartao em Nx', async (p) => { await clicar('[data-testid="nota-como-foi-pago"]')(p); await clicar('[data-testid="nota-como-cartao"]')(p); }],
     ['cartao escolhido, 4 parcelas', async (p) => {
       await clicar('[data-testid="nota-como-foi-pago"]')(p); await clicar('[data-testid="nota-como-cartao"]')(p);
@@ -242,12 +246,16 @@ const CENARIOS = [
       await digitar('[data-testid="nota-cartao-parcelas"]', '4')(p);
     }],
   ] },
+  /* P102 — o Editar obrigação da compra parcelada: trocar de aba não move a barra de abas nem o rodapé (o "Voltar para à vista" e o Salvar) */
+  { nome: 'obrigacao-editar', url: 'tela=contrato&v=parcelamento&np=18&docs=1', antes: async (p) => {
+    await p.locator('[data-testid="botoes-do-contrato"] button', { hasText: 'Editar' }).first().click(); await p.locator('[role="dialog"]').first().waitFor(); await espera(p, 900);
+  }, estados: [1, 2, 3].map((i) => [`aba ${i}`, async (p) => { const t = p.locator('[role="dialog"] [role="tab"]').nth(i); if (await t.count()) { await t.click(); await espera(p, 500); } }]) },
   /* P74 B — "Parcelar este lançamento": abrir o bloco e escolher 4 não move a aba Pagamento acima dele nem o rodapé */
   { nome: 'lancamento-parcelar', url: 'tela=lancamento&m=editar&v=salcartao', antes: async (p) => { await clicar('text=Pagamento')(p); },
     estados: [['aberto com 4 parcelas', async (p) => { await clicar('[data-testid="parcelar-este-abrir"]')(p); await digitar('[data-testid="parcelar-este-n"]', '4')(p); }]] },
-  /* P95 — "Novo a partir da nota": digitar a chave errada troca a frase pelo erro no MESMO lugar; o campo e o "Usar" nao andam. De 1000px
-     para cima: abaixo disso o modal ja' passava da janela ANTES do P95 (o mesmo achado do check-ui-cortes, registrado no relatorio) */
-  { nome: 'nota-novo-da-nota', url: 'tela=novo-da-nota', minLargura: 1000, estados: [
+  /* P95 — "Novo a partir da nota": digitar a chave errada troca a frase pelo erro no MESMO lugar; o campo e o "Usar" nao andam. P101: em
+     todos os tamanhos (abaixo de 1000px a tabela perde a coluna CNPJ e cabe) */
+  { nome: 'nota-novo-da-nota', url: 'tela=novo-da-nota', estados: [
     ['chave errada digitada e "Usar"', async (p) => { await digitar('[data-testid="xml-digitar-chave"]', '5026 0911 2223 3300 0424 5501 0000 0009 3712 1753 8290')(p); await clicar('[data-testid="xml-usar-chave"]')(p); }],
     ['chave curta e "Usar"', async (p) => { await digitar('[data-testid="xml-digitar-chave"]', '5026')(p); await clicar('[data-testid="xml-usar-chave"]')(p); }],
   ] },

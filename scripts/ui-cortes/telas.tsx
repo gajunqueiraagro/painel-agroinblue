@@ -282,12 +282,31 @@ if (tela === 'mesclar') {
     versao: 1, ligado_a_qtd: Math.max(NP, 1), emitente_id: null, emitente_nome: 'DISTRIBUIDORA SINTÉTICA DE PRODUTOS VETERINÁRIOS DO CENTRO OESTE LTDA', emitente_documento: '11222333000181',
     documento_id: 'd-nf-compra', nome: 'NF 12345.pdf', tipo: 'application/pdf', url: 'c/l/nf.pdf', especie: 'nf', numero: '12345', serie: null, chave_acesso: null,
     data_emissao: '2026-10-01', valor_documento: 344 * Math.max(NP, 1) })) : [];
+  /* P102 — o Editar obrigação da compra parcelada (o "Editar" do detalhe): os lançamentos das N parcelas e a prévia do "Voltar para à vista"
+     (pronta; `&volta=paga`: a parcela 2 paga, a recusa do banco). SINTÉTICO. */
+  const LANC_DA_COMPRA = (d.parcelas ?? []).map((x: any, i: number) => ({ id: x.lancamento_id ?? `lp-${i + 1}`, cliente_id: 'cli', fazenda_id: d.fin.fazenda_id ?? null,
+    valor: x.valor_total, data_vencimento: x.data_vencimento, data_competencia: x.data_vencimento, data_pagamento: null, status_transacao: 'programado',
+    forma_pagamento: 'Boleto', conta_bancaria_id: null, financiamento_id: d.fin.id, numero_parcela: x.numero_parcela, safra_id: null, cultura: null, fase: null,
+    plano_conta_id: null, descricao: `${d.fin.descricao} ${i + 1}/${(d.parcelas ?? []).length}`, cancelado: false }));
+  /* a fazenda e a conta do contrato da bancada existem nas listas (sem elas o Editar obrigação mostrava o id cru, o que o app real não faz) */
+  if (NP > 0) g.__fazendaBancada = { fazendas: [{ id: d.fin.fazenda_id, nome: 'Faz. Exemplo', cliente_id: 'cli' }], fazendaAtual: null, isGlobal: true, fazendaId: '__global__',
+    setFazendaAtual: () => {} };
+  const CONTAS_DO_CONTRATO = [{ id: d.fin.conta_bancaria_id, nome_conta: 'Banco Exemplo Cooperativo', nome_exibicao: 'Banco Exemplo Cooperativo', banco: 'Exemplo',
+    tipo_conta: 'cc', fazenda_id: d.fin.fazenda_id, codigo_conta: null, agencia: '0001', numero_conta: '12345', conta_digito: '6', ativa: true, aliases: null }];
+  const ANTES_DA_VOLTA = LANC_DA_COMPRA.map((l: any, i: number) => ({ numero: i + 1, lancamento_id: l.id, vencimento: l.data_vencimento, valor: l.valor }));
+  const VOLTA = q.get('volta') === 'paga'
+    ? { ok: false, simulado: true, financiamento_id: d.fin.id, antes: ANTES_DA_VOLTA, recusa: { motivo: 'ha_paga', parcela: 2, frase: `A parcela 2/${ANTES_DA_VOLTA.length} já foi paga em 09/11/2026: desfaça o pagamento antes.` } }
+    : { ok: true, simulado: true, financiamento_id: d.fin.id, lancamento_id: LANC_DA_COMPRA[0]?.id ?? 'lp-1', valor: ANTES_DA_VOLTA.reduce((s: number, x: any) => s + Number(x.valor), 0),
+        vencimento: ANTES_DA_VOLTA[0]?.vencimento ?? null, competencia: ANTES_DA_VOLTA[0]?.vencimento ?? null, descricao: d.fin.descricao, canceladas: Math.max(ANTES_DA_VOLTA.length - 1, 0),
+        original_guardado: false, antes: ANTES_DA_VOLTA };
   g.__bancoBancada = {
     from: (t: string, e: any) => t === 'financiamentos' ? [d.fin] : t === 'financiamento_parcelas' ? d.parcelas : t === 'financiamento_liberacoes' ? d.liberacoes ?? []
+      : t === 'financeiro_lancamentos_v2' ? LANC_DA_COMPRA : t === 'financeiro_contas_bancarias' ? CONTAS_DO_CONTRATO
       : t === 'financiamento_destinacoes' ? d.destinacoes ?? [] : t === 'financiamento_documentos' ? d.documentos ?? []
       : t === 'vw_lancamento_documentos' ? DOCS_DA_COMPRA.filter((x) => (e?.eq?.especie == null || x.especie === e.eq.especie) && (e?.eq?.lancamento_id == null || x.lancamento_id === e.eq.lancamento_id)) : [],
     rpc: (fn: string) => fn === 'fn_financiamento_situacao' ? d.situacao : fn === 'fn_contrato_tela' ? d.tela ?? null : fn === 'fn_financiamento_captacoes_livres' ? []
-      : fn === 'fn_consorcio_tela' ? c.tela : fn === 'fn_consorcio_cronograma' ? c.cronograma : null,
+      : fn === 'fn_consorcio_tela' ? c.tela : fn === 'fn_consorcio_cronograma' ? c.cronograma
+      : fn === 'fn_parcelamento_voltar_a_vista' ? VOLTA : null,
   };
   montar(<FinanciamentoDetalhe id={d.fin.id} />);
 } else if (tela === 'casar-bloco') {
@@ -915,7 +934,15 @@ if (tela === 'mesclar') {
     atual: { tipo: 'parcela', financiamento_id: 'fin-sint', numero_contrato: null, descricao: DESC_LONGA, parcela: 3, papel: 'principal', vinculo_id: null },
     parcelas: [], liberacoes: [] }
     /* P74 — os dias de vencimento do cartão SINTÉTICO (o mais frequente: 10) */
-    : fn === 'fn_cartao_dias_de_vencimento' ? [{ dia: 10, lancamentos: 409, ultimo: '2026-10-10' }, { dia: 13, lancamentos: 1, ultimo: '2026-10-13' }] : null };
+    : fn === 'fn_cartao_dias_de_vencimento' ? [{ dia: 10, lancamentos: 409, ultimo: '2026-10-10' }, { dia: 13, lancamentos: 1, ultimo: '2026-10-13' }]
+    /* P74b — a volta para à vista da compra em 4 (pronta; `salparcelapaga`: a parcela 2 paga, a recusa do banco). SINTÉTICO. */
+    : fn === 'fn_parcelamento_voltar_a_vista' ? (() => {
+      const antes = [1, 2, 3, 4].map((numero) => ({ numero, lancamento_id: `lp-${numero}`, vencimento: `2026-${String(8 + numero).padStart(2, '0')}-10`, valor: 821.22 }));
+      return v === 'salparcelapaga'
+        ? { ok: false, simulado: true, financiamento_id: 'fin-sint', antes, recusa: { motivo: 'ha_paga', parcela: 2, frase: 'A parcela 2/4 já foi paga em 15/10/2026: desfaça o pagamento antes.' } }
+        : { ok: true, simulado: true, financiamento_id: 'fin-sint', lancamento_id: 'lanc-1', valor: 3284.88, vencimento: '2026-08-10', competencia: '2026-08-10',
+            descricao: DESC_LONGA, canceladas: 3, original_guardado: true, antes };
+    })() : null };
 
 const FAZENDAS = [{ id: 'f-pur', nome: 'Faz. Exemplo' }, { id: 'f-exp', nome: 'Faz. Exemplo Dois' }] as any;
 const CONTAS = [{ id: 'bb', nome_conta: 'Banco Alfa', banco: 'BB', fazenda_id: 'f-pur', tipo_conta: null, codigo_conta: null, nome_exibicao: 'Banco Alfa', agencia: null, numero_conta: null, conta_digito: null },
@@ -947,6 +974,9 @@ const props: any = {};
 if (m === 'editar') props.lancamento = (v === 'sal') ? SAL : MILHO;
 /* P74 — `salcartao`: a compra à vista no cartão (o caso da NF 778.618, valores do caso, dados SINTÉTICOS) para o "Parcelar este lançamento";
    `salpago`: a mesma, já paga (o botão apagado com a frase) */
+/* P74b — `salparcela`: a parcela 1/4 de uma compra parcelada (a volta para à vista); `salparcelapaga`: a mesma, com a 2/4 paga */
+if (m === 'editar' && (v === 'salparcela' || v === 'salparcelapaga')) props.lancamento = { ...SAL, conta_bancaria_id: 'elo', valor: 821.22, data_competencia: '2026-08-10',
+  data_vencimento: '2026-09-10', descricao: `${DESC_LONGA} 1/4`, financiamento_id: 'fin-sint', origem_tipo: 'parcela_principal' };
 if (m === 'editar' && (v === 'salcartao' || v === 'salpago')) props.lancamento = { ...SAL, conta_bancaria_id: 'elo', valor: 3284.88, data_competencia: '2026-08-10',
   data_vencimento: '2026-08-10', forma_pagamento: 'Cartão', ...(v === 'salpago' ? { status_transacao: 'realizado', data_pagamento: '2026-08-12' } : {}) };
 if (v === 'rateio' && m === 'novo') props.prefill = { tipo_operacao: '2-Saídas', escopo_negocio: 'agricultura', subcentro: 'Insumos Lavoura Milho', plano_conta_id: 'pl-ins',

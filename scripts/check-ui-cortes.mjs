@@ -48,7 +48,19 @@ const clicar = (sel) => async (p) => { await p.locator(sel).first().click(); awa
 const clicarRotulo = (re) => async (p) => { await p.getByRole('button', { name: re }).first().click(); await p.waitForTimeout(500); };
 const clicarTexto = (txt) => async (p) => { await p.getByText(txt, { exact: true }).first().click(); await p.waitForTimeout(500); };
 /* P74 — a nota no cartão em 4 (a prévia) e o "Parcelar este lançamento" em 4 (o Editar) */
+/* P102 — o Editar obrigação: o "Editar" do detalhe do contrato */
+const abrirEditarObrigacao = async (p) => {
+  await p.locator('[data-testid="botoes-do-contrato"] button', { hasText: 'Editar' }).first().click();
+  await p.locator('[role="dialog"]').first().waitFor(); await p.waitForTimeout(900);
+};
+/* P101 — os tamanhos em que a prévia da nota tem abas (abaixo de 1000px) */
+const TAMANHOS_ESTREITOS_DA_NOTA = [[750, 483], [750, 530], [750, 600], [814, 530], [900, 600]];
+const abaDoLancamentoSeHouver = async (p) => {
+  const t = p.locator('[data-testid="nota-abas"] button', { hasText: 'Parcelas e lançamento' });
+  if (await t.count()) { await t.first().click(); await p.waitForTimeout(300); }
+};
 const cartaoEm4 = async (p) => {
+  await abaDoLancamentoSeHouver(p);
   await p.locator('[data-testid="nota-como-foi-pago"]').click(); await p.waitForTimeout(300);
   await p.locator('[data-testid="nota-como-cartao"]').click(); await p.waitForTimeout(300);
   await p.locator('[data-testid="nota-cartao"] button', { hasText: 'Selecione o cartão' }).first().click(); await p.waitForTimeout(300);
@@ -109,6 +121,14 @@ const CENARIOS = [
     tabelaMinima: { sel: '[data-testid="quadro-das-parcelas"]', linhas: Math.min(np, 3) },
     ...(np === 2 || sufixo ? { semRolarVertical: '[data-testid="corpo-das-parcelas"]' } : {}),
     antes: async (p) => { await p.locator('button[title="Nota fiscal e boletos das parcelas"]').click(); await p.locator('[data-testid="parcelas-da-compra"]').waitFor(); await p.waitForTimeout(500); } })),
+  /* P102 — o Editar obrigação da compra parcelada (o "Editar" do detalhe) com 18 parcelas e a nota ligada: cada aba; o "Voltar para à vista"
+     pronto (rodapé) e apagado com a frase (a parcela 2 paga); a confirmação antes → depois. O modal fixo não rola (só as listas dele). */
+  ...[0, 1, 2, 3].map((i) => ({ nome: `obrigacao-editar-aba${i}`, url: 'tela=contrato&v=parcelamento&np=18&docs=1', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[role="dialog"]',
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="lista-de-parcelas"], [data-testid="corpo-das-parcelas"], [data-testid="corpo-da-obrigacao"]' },
+    antes: async (p) => { await abrirEditarObrigacao(p); const t = p.locator('[role="dialog"] [role="tab"]').nth(i); if (await t.count()) { await t.click(); await p.waitForTimeout(500); } } })),
+  { nome: 'obrigacao-editar-volta-paga', url: 'tela=contrato&v=parcelamento&np=18&docs=1&volta=paga', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[role="dialog"]', antes: (p) => abrirEditarObrigacao(p) },
+  { nome: 'obrigacao-editar-volta-confirmar', url: 'tela=contrato&v=parcelamento&np=18&docs=1', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[role="alertdialog"]',
+    antes: async (p) => { await abrirEditarObrigacao(p); await p.locator('[data-testid="voltar-a-vista-botao"]').click(); await p.waitForTimeout(500); } },
   /* PARC-DETALHE-FONTE-01 — o detalhe da compra parcelada com 2, 18 e 36 parcelas */
   ...[2, 18, 36].map((np) => ({ nome: `contrato-parcelamento-${np}`, url: `tela=contrato&v=parcelamento&np=${np}&docs=1`, tamanhos: TAMANHOS_DO_CONTRATO })),
   ...['Geral', 'Pagamento', 'Documentos'].flatMap((aba) => ['novo', 'editar'].map((m) => ({ nome: `lancamento-${m}-${aba}`, url: `tela=lancamento&m=${m}`, antes: clicarTexto(aba) }))),
@@ -274,15 +294,19 @@ const CENARIOS = [
   /* P95 — `pelachave` (a previa da chave digitada: o chip, emissao e valor em ambar) e `irmas` (a nota em 4 parcelas soltas, "k/4") */
   ...['', 'cadastrado', 'registrada', 'diverge', 'longo', 'lavoura', 'semdup', 'jalancada', 'avulsa', 'emparcela', 'cancelados', 'socancelados', 'pelachave', 'irmas'].map((v) => ({ nome: `nota-pdf${v ? `-${v}` : ''}`, url: `tela=nota-pdf&v=${v}`, tamanhos: TAMANHOS_DO_CONSORCIO,
     semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-parcelas-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="nota-ja-lancada-rolagem"]' } })),
+  /* P101 — abaixo de 1000px a prévia tem três abas: as outras duas (Parcelas e lançamento; Arquivo) em todas as variantes, nos estreitos */
+  ...['', 'cadastrado', 'registrada', 'diverge', 'longo', 'lavoura', 'semdup', 'jalancada', 'avulsa', 'emparcela', 'cancelados', 'socancelados', 'pelachave', 'irmas']
+    .flatMap((v) => [['lancamento', 'Parcelas e lançamento'], ['arquivo', 'Arquivo']].map(([a, rotulo]) => ({ nome: `nota-pdf-aba-${a}${v ? `-${v}` : ''}`,
+      url: `tela=nota-pdf&v=${v}`, tamanhos: TAMANHOS_ESTREITOS_DA_NOTA,
+      semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-parcelas-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="nota-ja-lancada-rolagem"]' },
+      antes: async (p) => { await p.locator('[data-testid="nota-abas"] button', { hasText: rotulo }).first().click(); await p.waitForTimeout(400); } }))),
   /* P95 — "Novo a partir da nota": a nota lida, a da chave digitada, as recusadas com o campo da chave (nome comprido) e o aviso do repetido */
-  /* nos tres tamanhos oficiais: abaixo de 1000px o modal ja' passava da janela ANTES do P95 (128px a 750, so' com a nota lida) — achado
-     registrado no relatorio do P95, fora do escopo dele */
-  { nome: 'nota-novo-da-nota', url: 'tela=novo-da-nota' },
+  /* P101 — em TODOS os tamanhos: abaixo de 1000px a tabela perde a coluna CNPJ (no `title` do Emitente) e estreita (antes vazava 155px a 750) */
+  { nome: 'nota-novo-da-nota', url: 'tela=novo-da-nota', tamanhos: TAMANHOS_DO_CONSORCIO },
   /* P74 — "Como foi pago?" › Cartão em N× na nota sem duplicata: o cartão, 4 parcelas, a 1ª fatura sugerida em âmbar e a grade (Igual todo
      mês e Parcelas livres); o modal fixo não rola (só a lista da grade) */
-  /* De 1000px para cima (os tamanhos oficiais): abaixo disso a prévia deixa ~50px de altura ao bloco de parcelas (a 750x520, medido) e os
-     campos do cartão empilhados não cabem — o mesmo achado de largura do "Novo a partir da nota" no P95, registrado como pendência */
-  ...[['', null], ['-livres', 'Parcelas livres']].map(([s, livres]) => ({ nome: `nota-pdf-cartao${s}`, url: 'tela=nota-pdf&v=semdup',
+  /* P101 — em TODOS os tamanhos: abaixo de 1000px a prévia vira três abas e o cartão mora na "Parcelas e lançamento" */
+  ...[['', null], ['-livres', 'Parcelas livres']].map(([s, livres]) => ({ nome: `nota-pdf-cartao${s}`, url: 'tela=nota-pdf&v=semdup', tamanhos: TAMANHOS_DO_CONSORCIO,
     semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-itens-rolagem"], [data-testid="nota-parcelas-rolagem"], [data-testid="lista-de-parcelas"]' },
     antes: async (p) => { await cartaoEm4(p); if (livres) await clicarTexto(livres)(p); } })),
   /* P74 B — "Parcelar este lançamento" (aba Pagamento do Editar): fechado, aberto com 4 no cartão (a sugestão em âmbar, a Situação) e a
@@ -290,6 +314,11 @@ const CENARIOS = [
   { nome: 'lancamento-parcelar-fechado', url: 'tela=lancamento&m=editar&v=salcartao', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicarTexto('Pagamento') },
   { nome: 'lancamento-parcelar-aberto', url: 'tela=lancamento&m=editar&v=salcartao', tamanhos: TAMANHOS_DO_CONTRATO, antes: parcelarEm4 },
   { nome: 'lancamento-parcelar-pago', url: 'tela=lancamento&m=editar&v=salpago', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicarTexto('Pagamento') },
+  /* P74b — a parcela no Editar: o bloco "Parcelamento" com "Voltar para à vista" (pronto e apagado com a frase) e a confirmação antes → depois */
+  { nome: 'lancamento-voltar-a-vista', url: 'tela=lancamento&m=editar&v=salparcela', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicarTexto('Pagamento') },
+  { nome: 'lancamento-voltar-a-vista-paga', url: 'tela=lancamento&m=editar&v=salparcelapaga', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicarTexto('Pagamento') },
+  { nome: 'lancamento-voltar-a-vista-confirmar', url: 'tela=lancamento&m=editar&v=salparcela', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[role="alertdialog"]',
+    antes: async (p) => { await clicarTexto('Pagamento')(p); await p.locator('[data-testid="voltar-a-vista-botao"]').click(); await p.waitForTimeout(500); } },
   { nome: 'lancamento-parcelar-confirmar', url: 'tela=lancamento&m=editar&v=salcartao', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[role="alertdialog"]',
     antes: async (p) => { await parcelarEm4(p); await p.locator('[data-testid="parcelar-este-confirmar"]').click(); await p.waitForTimeout(500); } },
   /* FIN-NOTA-PDF-01b — a confirmacao do "Atualizar e parcelar" (o texto que diz que o existente vira 1/4) */

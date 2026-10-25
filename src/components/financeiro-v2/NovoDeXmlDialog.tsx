@@ -13,6 +13,7 @@
  * ⚠ O PADRAO DA TABELA E' O A31: cabecalho navy 9,5px, linha de 18px a 10px, uma linha por nota; numero, valor e data nunca
  *   cortam, texto longo corta com o inteiro no `title`.
  */
+import { useLarguraDaJanela } from '@/hooks/useLarguraDaJanela';
 import { useCallback, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -133,6 +134,8 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
 }) {
   const [linhas, setLinhas] = useState<LinhaDeNota[]>(() => linhasIniciais ?? []);
   const [lendo, setLendo] = useState(false);
+  /* P101 — abaixo de 1000px a tabela passava da janela (155px a 750): sem a coluna CNPJ (vai no `title` do Emitente) e colunas mais estreitas */
+  const estreito = useLarguraDaJanela() < 1000;
   const [guardadas, setGuardadas] = useState(false);
   /* P95 — a lista de agora (a leitura em lote compara com ela), o aviso do arquivo repetido e a chave digitada de cada linha recusada */
   const linhasRef = useRef(linhas);
@@ -276,16 +279,22 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
               <colgroup>
                 {/* Medido a 1.135 (tabela de 1.044): numero, data, CNPJ, valor e duplicatas nunca cortam; Emitente fica com o resto
                     e corta com o nome inteiro no `title`; Fazenda corta com `title`. */}
+                {estreito ? (<>
+                  <col style={{ width: 84 }} /><col style={{ width: 78 }} /><col />
+                  <col style={{ width: 90 }} /><col style={{ width: 82 }} /><col style={{ width: 118 }} />
+                  <col style={{ width: 92 }} /><col style={{ width: 104 }} />
+                </>) : (<>
                 <col style={{ width: 92 }} /><col style={{ width: 74 }} /><col /><col style={{ width: 124 }} />
                 <col style={{ width: 118 }} /><col style={{ width: 88 }} /><col style={{ width: 160 }} />
                 <col style={{ width: 104 }} /><col style={{ width: 110 }} />
+                </>)}
               </colgroup>
               <thead className="sticky top-0 z-10 bg-primary">
                 <tr>
                   <th className={`${TH} text-left`}>Nota</th>
                   <th className={`${TH} text-center`}>Emissão</th>
                   <th className={`${TH} text-left`}>Emitente</th>
-                  <th className={`${TH} text-left`}>CNPJ</th>
+                  {!estreito && <th className={`${TH} text-left`}>CNPJ</th>}
                   <th className={`${TH} text-left border-l border-primary-foreground/30`}>Fazenda (pela IE)</th>
                   <th className={`${TH} text-right`}>Valor R$</th>
                   <th className={`${TH} text-left`}>Duplicatas</th>
@@ -295,7 +304,7 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
               </thead>
               <tbody>
                 {linhas.length === 0 && (
-                  <tr><td colSpan={9} className="h-[18px] px-[7px] text-[10px] text-muted-foreground">Nenhuma nota lida.</td></tr>
+                  <tr><td colSpan={estreito ? 8 : 9} className="h-[18px] px-[7px] text-[10px] text-muted-foreground">Nenhuma nota lida.</td></tr>
                 )}
                 {linhas.map((l) => {
                   const lancada = l.lancada || lancadas.has(l.id);
@@ -310,7 +319,7 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
                         {l.paraDigitar ? (
                           /* P95 — DIGITAR A CHAVE: a frase (ou o erro da chave) no lugar dela e o campo de largura fixa a' direita (nada se desloca; a frase
                              `w-0` nao entra na largura do modal: trocar pelo erro nao o estreita) */
-                          <td colSpan={7} className="h-[18px] px-[7px]" data-testid="xml-recusa-digitar">
+                          <td colSpan={estreito ? 6 : 7} className="h-[18px] px-[7px]" data-testid="xml-recusa-digitar">
                             <div className="flex h-full min-w-0 items-center gap-1.5">
                               <span className="w-0 min-w-0 flex-1 truncate text-[10px] leading-none text-destructive" title={frase} data-testid="xml-recusa">{frase}</span>
                               <Input value={chaves[l.id] ?? ''} placeholder="Digitar a chave (44 dígitos)" aria-label="Digitar a chave (44 dígitos)"
@@ -322,7 +331,7 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
                             </div>
                           </td>
                         ) : (
-                          <td colSpan={7} className={`${TD} text-destructive`} title={l.recusa ?? ''} data-testid="xml-recusa">{l.recusa}</td>
+                          <td colSpan={estreito ? 6 : 7} className={`${TD} text-destructive`} title={l.recusa ?? ''} data-testid="xml-recusa">{l.recusa}</td>
                         )}
                         <td className={`${TD_ACAO} ${DIVISOR}`}>
                           <Button type="button" size="sm" variant="outline" className="h-4 px-1.5 text-[9.5px]" disabled title={l.recusa ?? ''}>Abrir lançamento</Button>
@@ -342,8 +351,8 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
                     <tr key={l.id} className="border-t" data-testid="xml-linha" data-situacao={sit}>
                       <td className={`${TD} tabular-nums`}>{numeroDaNota(n.numero)}</td>
                       <td className={`${TD} text-center tabular-nums`}>{pelaChave ? '—' : dataInteira(n.emissao)}</td>
-                      <td className={TD} title={pelaChave ? `${emitenteNome} · pela chave digitada` : n.emitente.nome}>{emitenteNome}</td>
-                      <td className={`${TD} tabular-nums`}>{documentoFormatado(n.emitente.documento)}</td>
+                      <td className={TD} title={`${pelaChave ? `${emitenteNome} · pela chave digitada` : n.emitente.nome}${estreito ? ` · ${documentoFormatado(n.emitente.documento)}` : ''}`}>{emitenteNome}</td>
+                      {!estreito && <td className={`${TD} tabular-nums`}>{documentoFormatado(n.emitente.documento)}</td>}
                       <td className={`${TD} ${DIVISOR} ${l.fazenda ? '' : 'text-muted-foreground'}`} title={l.fazenda?.nome ?? 'Fazenda não identificada pela inscrição estadual.'}>{l.fazenda?.nome ?? '—'}</td>
                       <td className={`${TD} text-right tabular-nums`}>{pelaChave ? '—' : reais(n.totais.notaCent)}</td>
                       <td className={TD} title={resumoDasDuplicatas(d.proposta)}>{resumoDasDuplicatas(d.proposta)}</td>
