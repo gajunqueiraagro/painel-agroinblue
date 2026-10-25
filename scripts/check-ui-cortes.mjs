@@ -16,6 +16,11 @@
  *       o texto pode terminar em "…" se o texto inteiro estiver no `title`; numero, valor, data, CPF/CNPJ e contador nunca cortam (nem com
  *       "…", regra `numero`); CORTE SECO em celula (o texto que passa da caixa sem "…", como o `uma-linha-que-rola`) reprova — o gatilho
  *       de seletor dentro da celula e' campo e fica de fora. Fora de tabela, "…" segue proibido.
+ *   (7) ROTULO DE GRAFICO (P100) — o cenario com `rotulosSvg` (seletor dos textos de um grafico SVG): todo rotulo fica dentro do proprio
+ *       SVG e nenhum encosta em outro (valor de coluna, valor de ponto, eixo); o texto com `data-cabe-em="N"` nao passa de N px de largura
+ *       (o centro do donut no furo).
+ *   (8) FOLGA ENTRE CELULAS (P100 item 5) — o cenario com `folgaCelulas` (seletor de tabelas): em cada linha, o texto visivel de uma
+ *       celula e o da vizinha ficam a 6 px ou mais um do outro ("R$ 11.252.742,85+257,9%" colado = achado), cabecalho inclusive.
  * Baseline = a lista de EXCECOES abaixo (vazia). Antes de varrer, o detector se prova num fixture com os defeitos: se nao os achar,
  * sai com codigo 2 ("zero achados" so' vale quando a busca provou que sabe achar). `--fotos DIR` grava um print por tela e tamanho.
  */
@@ -149,19 +154,52 @@ const CENARIOS = [
     semRolagem: { dentro: '[role="dialog"]' },
     antes: async (p) => { await p.locator(`[data-testid="ampliar-${b}"]`).click(); await p.locator(`[data-testid="modal-ampliado-${b}"]`).waitFor(); await p.waitForTimeout(600); } })),
   /* PR 4 — o MODAL DE ANÁLISE (banco sintético com nomes maiores que os reais e valores em milhões): aberto pela grade (aba Custeio),
-     pelo card (aba da raiz) e no nível mais fundo (Custeio › Pecuária › centro, em R$/cab). Rolam por dentro só as duas listas, as abas
-     e o caminho (linhas que rolam de lado). */
+     pelo card (aba da raiz) e no nível mais fundo (Custeio › Pecuária em R$/cab, um SUBCENTRO no gráfico — o caminho com a cadeia
+     inteira). Rolam por dentro só as duas listas, as abas e o caminho (linhas que rolam de lado). P100: a tabela da direita lista os
+     SUBCENTROS do item (Custeio · total: 48 — a lista longa rola por dentro). */
   ...[['custeio', async (p) => { await p.locator('[data-testid^="grade-linha-saida:grupo:Custeio"]').dispatchEvent('click'); }],
       ['raiz', async (p) => { await p.locator('[data-testid="card-total-saida"]').dispatchEvent('click'); }],
+      /* P100 v4 — a esquerda desce (Pecuária → "Centros · Pecuária") e um centro fica selecionado (a direita sem a coluna Centro) */
+      ['nivel', async (p) => {
+        await p.locator('[data-testid^="grade-linha-saida:grupo:Custeio"]').dispatchEvent('click'); await p.locator('[data-testid="modal-analise"]').waitFor(); await p.waitForTimeout(500);
+        await p.locator('[data-testid="analise-tabela-linha-0"]').click(); await p.waitForTimeout(400);
+        await p.locator('[data-testid="analise-tabela-linha-1"]').click(); }],
+      /* P100 — um subcentro da tabela da direita no gráfico (o caminho com a cadeia inteira) */
+      ['subcentro', async (p) => {
+        await p.locator('[data-testid^="grade-linha-saida:grupo:Custeio"]').dispatchEvent('click'); await p.locator('[data-testid="modal-analise"]').waitFor(); await p.waitForTimeout(500);
+        await p.locator('[data-testid="analise-foco-linha-3"]').dispatchEvent('click'); }],
       ['fundo', async (p) => {
         await p.locator('[data-testid^="grade-linha-saida:grupo:Custeio"]').dispatchEvent('click'); await p.locator('[data-testid="modal-analise"]').waitFor(); await p.waitForTimeout(500);
         await p.locator('[data-testid="analise-tabela-linha-0"]').click(); await p.waitForTimeout(400);
         await p.locator('[data-testid="analise-unidade"]').click(); await p.locator('[data-testid="analise-unidade-rs_cab"]').click(); await p.waitForTimeout(400);
-        await p.locator('[data-testid="analise-descer-0"]').click(); await p.waitForTimeout(400);
         await p.locator('[data-testid="analise-foco-linha-1"]').click(); }]].map(([n, abrir]) => ({
     nome: `visao-geral-analise-${n}`, url: 'tela=visao-geral&barra=0', tamanhos: TAMANHOS_DA_VG, regiao: '[data-testid="modal-analise"]',
+    /* P100 — os rótulos do gráfico (colunas, média, meta e eixo) e o centro do donut; a folga entre as células das duas tabelas */
+    rotulosSvg: '[data-testid="analise-grafico-svg"] text, [data-testid="analise-donut-centro"]',
+    folgaCelulas: '[data-testid="analise-tabela-lista"] table, [data-testid="analise-foco-lista"] table',
     semRolagem: { dentro: '[data-testid="modal-analise"]', exceto: '[data-testid="analise-tabela-lista"], [data-testid="analise-foco-lista"], [data-testid="analise-abas"], [data-testid="analise-caminho"]' },
     antes: async (p) => { await abrir(p); await p.locator('[data-testid="modal-analise"]').waitFor(); await p.waitForTimeout(700); } })),
+  /* P100 item 5 — o PIOR CASO de largura das tabelas do modal ("NJ Saídas · Acumulado 12 meses"): `&vg_grande=1` (valores na casa
+     de dezenas de milhões, % perto de +999,9%, 5 dígitos de lançamentos), dez/26 (12 meses), aba da raiz, Acum.: nada corta, nada cola
+     (folga >= 6 px), o centro do donut cabe no furo */
+  { nome: 'visao-geral-analise-grande', url: 'tela=visao-geral&barra=0&vg_grande=1&mes=2026-12', tamanhos: TAMANHOS_DA_VG, regiao: '[data-testid="modal-analise"]',
+    rotulosSvg: '[data-testid="analise-grafico-svg"] text, [data-testid="analise-donut-centro"]',
+    folgaCelulas: '[data-testid="analise-tabela-lista"] table, [data-testid="analise-foco-lista"] table',
+    semRolagem: { dentro: '[data-testid="modal-analise"]', exceto: '[data-testid="analise-tabela-lista"], [data-testid="analise-foco-lista"], [data-testid="analise-abas"], [data-testid="analise-caminho"]' },
+    antes: async (p) => { await p.locator('[data-testid="card-total-saida"]').dispatchEvent('click'); await p.locator('[data-testid="modal-analise"]').waitFor(); await p.waitForTimeout(600);
+      await p.locator('[data-testid="analise-tabela"]').getByText('Acum.', { exact: true }).dispatchEvent('click'); await p.waitForTimeout(700); } },
+  /* P100 item 6 — o mês escolhido é o fim do período: Ano com AGO (8 meses), Últ. 12 (set/25–ago/26), 6 + 6 (inalterado) e Ano com
+     DEZ (12, nov e dez previstos) — o gráfico e a grade no mesmo quadro */
+  /* P100 item 7 — a grade rolada até o FIM: o cabeçalho e as duas linhas do rodapé (Resultado, Saldo final) à vista, nada cortado */
+  { nome: 'visao-geral-grade-rolada', url: 'tela=visao-geral&barra=0', tamanhos: TAMANHOS_DA_VG,
+    semRolagem: { dentro: '[data-testid="visao-geral"]', exceto: '[data-testid="grade-vg-rolagem"], [data-testid="card-vg-lista"]' },
+    antes: async (p) => { await p.locator('[data-testid="grade-vg-rolagem"]').evaluate((e) => { e.scrollTop = e.scrollHeight; }); await p.waitForTimeout(300); } },
+  /* P100 item 8 — o card com 8 grupos de saída (ago, `&vg_grupos=varia`) */
+  { nome: 'visao-geral-card-8-grupos', url: 'tela=visao-geral&barra=0&vg_grupos=varia&mes=2026-08', tamanhos: TAMANHOS_DA_VG,
+    semRolagem: { dentro: '[data-testid="visao-geral"]', exceto: '[data-testid="grade-vg-rolagem"], [data-testid="card-vg-lista"]' } },
+  ...[['ano-ago', '&mes=2026-08'], ['u12-ago', '&faixa=u12&mes=2026-08'], ['66-ago', '&faixa=66&mes=2026-08'], ['ano-dez', '&mes=2026-12']].map(([n, extra]) => ({
+    nome: `visao-geral-periodo-${n}`, url: `tela=visao-geral&barra=0${extra}`, tamanhos: TAMANHOS_DA_VG,
+    semRolagem: { dentro: '[data-testid="visao-geral"]', exceto: '[data-testid="grade-vg-rolagem"], [data-testid="card-vg-lista"]' } })),
   /* PR 5 — a GAVETA de lançamentos (banco sintético): nos filhos do Custeio; no subcentro de 523 lançamentos (paginado); no de texto
      longo (favorecido de 60 letras, descrição longa, conta longa e a parte 2/2 da divisão); e no nó VAZIO (a frase dentro do quadro).
      Rolam por dentro só a lista, o caminho, o contexto e os atalhos dos irmãos (e as do modal, por baixo). O AVISO do rodapé: "523"
@@ -482,6 +520,45 @@ function medirTabelaMinima({ sel, linhas }) {
 }
 /* ITENS-NOTA-FONTE-01 — `semRolarVertical` (opcional): a caixa (o corpo de uma tabela que PODERIA rolar) mostra tudo sem rolar na
    vertical — o corte na horizontal (descricao com "…" e `title`) continua com a regra de corte da varredura principal (roda NA PAGINA) */
+/* P100 — `rotulosSvg` (opcional): os textos do grafico ficam dentro do proprio SVG e nao encostam um no outro (roda NA PAGINA) */
+function medirRotulosSvg(sel) {
+  const ts = [...document.querySelectorAll(sel)].filter((t) => (t.textContent ?? '').trim());
+  if (!ts.length) return [{ regra: 'rotulo', texto: `${sel} nao achado` }];
+  const achados = [];
+  const cx = ts.map((t) => ({ t, r: t.getBoundingClientRect(), s: t.closest('svg').getBoundingClientRect(), x: (t.textContent ?? '').trim() }));
+  for (const a of cx) if (a.r.left < a.s.left - 0.5 || a.r.right > a.s.right + 0.5 || a.r.top < a.s.top - 0.5 || a.r.bottom > a.s.bottom + 0.5)
+    achados.push({ regra: 'rotulo', texto: `"${a.x}" sai do grafico` });
+  for (const a of cx) { const max = Number(a.t.getAttribute('data-cabe-em')); if (max && a.r.width > max + 0.5) achados.push({ regra: 'rotulo', texto: `"${a.x}" nao cabe em ${max}px (${Math.round(a.r.width)}px)` }); }
+  for (let i = 0; i < cx.length; i += 1) for (let j = i + 1; j < cx.length; j += 1) {
+    const a = cx[i].r, b = cx[j].r;
+    if (a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5)
+      achados.push({ regra: 'rotulo', texto: `"${cx[i].x}" encosta em "${cx[j].x}"` });
+  }
+  return achados;
+}
+/* P100 item 5 — `folgaCelulas` (opcional): o texto visivel de uma celula e o da vizinha a >= 6 px (roda NA PAGINA). O que passa da
+   caixa da celula (o nome com "…") conta so' ate' a borda de conteudo dela. */
+function medirFolgaCelulas(sel) {
+  const tabs = [...document.querySelectorAll(sel)]; if (!tabs.length) return [{ regra: 'folga', texto: `${sel} nao achado` }];
+  const achados = [];
+  const extensao = (c) => {
+    const rg = document.createRange(); rg.selectNodeContents(c);
+    const rs = [...rg.getClientRects()].filter((r) => r.width > 0.5 && r.height > 0.5); if (!rs.length) return null;
+    const cr = c.getBoundingClientRect(), cs = getComputedStyle(c);
+    const l0 = cr.left + parseFloat(cs.paddingLeft), r0 = cr.right - parseFloat(cs.paddingRight);
+    return { l: Math.max(l0, Math.min(...rs.map((r) => r.left))), r: Math.min(r0, Math.max(...rs.map((r) => r.right))), t: (c.textContent ?? '').trim().slice(0, 30) };
+  };
+  for (const t of tabs) for (const tr of t.querySelectorAll('tr')) {
+    const es = [...tr.children].map(extensao);
+    for (let i = 0; i + 1 < es.length; i += 1) {
+      const a = es[i]; if (!a) continue;
+      const j = es.slice(i + 1).findIndex(Boolean); if (j < 0) continue;
+      const b = es[i + 1 + j];
+      if (b.l - a.r < 6 - 0.01) achados.push({ regra: 'folga', texto: `"${a.t}" e "${b.t}": folga ${(b.l - a.r).toFixed(1)}px` });
+    }
+  }
+  return achados;
+}
 function medirSemRolarVertical(sel) {
   const caixas = [...document.querySelectorAll(sel)]; if (!caixas.length) return [{ regra: 'rolagem', texto: `${sel} nao achado` }];
   return caixas.filter((e) => e.scrollHeight > e.clientHeight + 1)
@@ -741,6 +818,20 @@ try {
     <div style="display:inline-block;overflow:hidden;white-space:nowrap;font-style:italic;font-size:12px">Maderat</div>
     <div style="width:40px;overflow-x:auto;white-space:nowrap"><span>1.234.567,89</span></div>`);
   const daSobre0 = await p0.evaluate(medirSobreposicao, null);
+  /* P100 — o detector de rotulo se prova: dois textos um sobre o outro e um fora do SVG */
+  await p0.setContent(`<svg id="g" width="200" height="60"><text x="10" y="20" font-size="10">38,4k</text><text x="14" y="22" font-size="10">40,1k</text>
+    <text x="190" y="40" font-size="10">99,9k</text><text x="80" y="50" font-size="10">ok</text></svg>`);
+  const daRotulo0 = await p0.evaluate(medirRotulosSvg, '#g text');
+  /* P100 item 5 — o detector de folga se prova: "R$ 11.252.742,85" colado em "+257,9%" (achado) e um par com folga (nao) */
+  await p0.setContent(`<table id="f" style="table-layout:fixed;width:140px;font-size:10px;border-collapse:collapse"><tr><td style="width:100px;text-align:right;padding:0">R$ 11.252.742,85</td>
+    <td style="text-align:right;padding:0;width:40px">+257,9%</td></tr><tr><td style="text-align:right;padding:0 20px 0 0">ok</td><td style="text-align:left;padding:0 0 0 4px">bem</td></tr></table>`);
+  const daFolga0 = await p0.evaluate(medirFolgaCelulas, '#f');
+  if (!daFolga0.some((a) => a.texto.includes('+257,9%')) || daFolga0.some((a) => a.texto.includes('"ok"'))) {
+    console.error(`check-ui-cortes: AUTO-TESTE DA FOLGA FALHOU (${daFolga0.map((a) => a.texto).join(' | ') || 'nada'})`); process.exit(2);
+  }
+  if (!daRotulo0.some((a) => a.texto.includes('encosta')) || !daRotulo0.some((a) => a.texto.includes('sai do grafico')) || daRotulo0.some((a) => a.texto.includes('"ok"'))) {
+    console.error(`check-ui-cortes: AUTO-TESTE DO ROTULO DE GRAFICO FALHOU (${daRotulo0.map((a) => a.texto).join(' | ') || 'nada'})`); process.exit(2);
+  }
   const prova = [...daRolagem0, ...daTabela0, ...daPagina0, ...daSobre0, ...(comMudanca && !semMudar ? [comMudanca] : [])].map((a) => a.regra);
   /* FORN-01b — o detector se prova na regra nova: o nome com "…" e title passa; o corte seco e o documento com "…" sao achados */
   const aceitoErrado = daPagina0.some((a) => a.texto.startsWith('Nome aceito'));
@@ -780,6 +871,8 @@ try {
     const daRolagem = cen.semRolagem ? await p.evaluate(medirRolagem, cen.semRolagem) : [];
     if (cen.tabelaMinima) daRolagem.push(...(await p.evaluate(medirTabelaMinima, cen.tabelaMinima)));
     if (cen.semRolarVertical) daRolagem.push(...(await p.evaluate(medirSemRolarVertical, cen.semRolarVertical)));
+    if (cen.rotulosSvg) daRolagem.push(...(await p.evaluate(medirRotulosSvg, cen.rotulosSvg)));
+    if (cen.folgaCelulas) daRolagem.push(...(await p.evaluate(medirFolgaCelulas, cen.folgaCelulas)));
     if (cen.botoesDentro) daRolagem.push(...(await p.evaluate(medirBotoesDentro, cen.botoesDentro)));
     const achadosTodos = [...daRolagem, ...(await p.evaluate(medir, cen.regiao ?? null)), ...(await p.evaluate(medirCabecalho, cen.regiao ?? null)),
       ...(await p.evaluate(medirSobreposicao, cen.regiao ?? null)), ...(daAltura ? [daAltura] : []), ...dasAlturas, ...erros.map((e) => ({ regra: 'erro', texto: e }))];
