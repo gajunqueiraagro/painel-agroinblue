@@ -70,3 +70,50 @@ describe('a conta no bônus do lote', () => {
     expect(totalDaLinha('Bruto')).toBe('R$ 976.224,00');
   });
 });
+
+/* P91 — o caso do Gabriel (25/10): Negociar lote · Novilhas · 39 cab, "445,97*0,50" na carcaça (peso vivo × 50%), em kg por cabeça.
+   Dado SINTÉTICO: 39 cab, peso vivo 445,97 kg/cab, sem carcaça ainda. */
+describe('P91 — a conta na carcaça do lote', () => {
+  const NOVILHAS: LoteAbate = { id: 'n1', ordem: 1, categoria: 'novilhas', categoriaLabel: 'Novilhas', quantidade: 39, pesoMedioKg: 445.97 };
+  const montarNovilhas = () => {
+    const onAplicar = vi.fn();
+    render(<ModalNegociarLote lote={NOVILHAS} linha={{ ...linhaVazia('n1'), precoArroba: 300, precoFonte: 'arroba' }} cenario="projetado"
+      onAplicar={onAplicar} onFechar={vi.fn()} />);
+    return { onAplicar, carcaca: campoPorRotulo('Carcaça') };
+  };
+
+  it('"445,97*0,50" em kg/cab → 222,99 kg/cab; o lote grava 39 × 222,99 = 8.696,61 kg, fonte cabeça', () => {
+    const { onAplicar, carcaca } = montarNovilhas();
+    fireEvent.focus(carcaca);
+    fireEvent.change(carcaca, { target: { value: '445,97*0,50' } });
+    expect(screen.getByTestId('conta-do-campo').textContent).toBe('= 222,99');
+    /* durante a conta nada foi ao lote: o rendimento derivado ainda não existe */
+    expect(screen.getByTestId('carcaca-derivada').textContent).toBe('');
+    fireEvent.keyDown(carcaca, { key: 'Enter' });
+    expect(carcaca.value).toBe('222,99');
+    expect(screen.getByTestId('carcaca-derivada').textContent).toBe('RC 50,00%');
+    fireEvent.blur(carcaca);
+    fireEvent.click(screen.getByText('Aplicar'));
+    expect(onAplicar.mock.calls[0][0]).toMatchObject({ pesoCarcacaKg: 8696.61, pesoCarcacaFonte: 'cabeca' });
+  });
+
+  it('antes do P91 o texto com operador apagava a carcaça em silêncio (NaN → 0); agora a conta que não fecha não grava e diz por quê', () => {
+    const { onAplicar, carcaca } = montarNovilhas();
+    fireEvent.focus(carcaca);
+    fireEvent.change(carcaca, { target: { value: '445,97*' } });
+    fireEvent.blur(carcaca);
+    expect(carcaca.value).toBe('');
+    expect(screen.getByTestId('conta-do-campo').getAttribute('data-erro')).toBe('sim');
+    fireEvent.click(screen.getByText('Aplicar'));
+    expect(onAplicar.mock.calls[0][0]).toMatchObject({ pesoCarcacaKg: null });
+  });
+
+  it('Esc com a conta aberta na carcaça não fecha o modal', () => {
+    const { carcaca } = montarNovilhas();
+    fireEvent.focus(carcaca);
+    fireEvent.change(carcaca, { target: { value: '445,97*0,5' } });
+    fireEvent.keyDown(carcaca, { key: 'Escape' });
+    expect(screen.getByText('Aplicar')).toBeInTheDocument();
+    expect(carcaca.value).toBe('');
+  });
+});

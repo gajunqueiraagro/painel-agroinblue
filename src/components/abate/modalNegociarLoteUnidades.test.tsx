@@ -114,7 +114,8 @@ describe('Rendimento: derivado em cabeça/total, digitável em RC % (a carcaça 
 describe('ABATE-PROJETADO-01b — rendimento pode ser digitado; carcaça derivada pelo dono', () => {
   const vazio = () => linha({ pesoCarcacaKg: null, pesoCarcacaFonte: null, rendimentoCarcacaPct: null });
   const escolherRc = () => fireEvent.click(screen.getByText('RC %'));
-  const digitar = (v: string) => { fireEvent.change(campoPorRotulo('Carcaça'), { target: { value: v } }); fireEvent.blur(campoPorRotulo('Carcaça')); };
+  /* P91: com foco antes, como no navegador — o campo (`CampoNumeroComConta`) guarda o valor do foco, que e' para onde a conta recusada volta. */
+  const digitar = (v: string) => { fireEvent.focus(campoPorRotulo('Carcaça')); fireEvent.change(campoPorRotulo('Carcaça'), { target: { value: v } }); fireEvent.blur(campoPorRotulo('Carcaça')); };
 
   it('a unidade escolhida ANTES de digitar vale: RC % 52 → carcaça 260 kg/cab (total 2.600) pelo dono, fonte cabeça', () => {
     const onAplicar = montar(vazio());
@@ -130,13 +131,15 @@ describe('ABATE-PROJETADO-01b — rendimento pode ser digitado; carcaça derivad
     expect(screen.getAllByText('R$ 52.000,00').length).toBeGreaterThan(0);
   });
 
-  it('o RC aceita conta (pelo dono do lote), 2 casas; conta que nao fecha vira recusa com a frase do dono', () => {
+  it('o RC aceita conta (a lib do campo), 2 casas; conta que nao fecha vira recusa com a frase no balao do campo', () => {
     const onAplicar = montar(vazio());
     escolherRc();
     digitar('51+0,96');
     expect(campoPorRotulo('Carcaça').value).toBe('51,96');
     digitar('52+');
-    expect(screen.getByTestId('linha-carcaca').className).toContain('text-destructive');
+    /* P91: a recusa mora no balao do campo (o mesmo do `CampoMoeda`); a linha de baixo segue sendo a instrucao */
+    expect(screen.getByTestId('conta-do-campo').getAttribute('data-erro')).toBe('sim');
+    expect(screen.getByTestId('linha-carcaca').className).not.toContain('text-destructive');
     expect(campoPorRotulo('Carcaça').value).toBe('51,96');
     fireEvent.click(screen.getByText('Aplicar'));
     expect(onAplicar.mock.calls[0][0].rendimentoCarcacaPct).toBe(51.96);
