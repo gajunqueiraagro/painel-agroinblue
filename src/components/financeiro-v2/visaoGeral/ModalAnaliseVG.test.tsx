@@ -15,6 +15,10 @@
  *      transferências abre a lista no tipo "3-Transferências", sem centro
  *   G5 (PR 5b) a transferência de ENTRADA abre a lista com a conta em CONTA DESTINO (a de saída, em Conta Origem); a VIRADA DO ANO
  *      (média/acumulado nov/25 → fev/26): a 4ª frase com os meses do caso, depois das outras (hover com todas); no mesmo ano, nada
+ *   P100 P1 o caminho com respiro ("Saídas › Custeio › …", o › em cinza); P4 a tabela da direita = os SUBCENTROS do item (Subcentro ·
+ *      Centro · …), o clique põe o subcentro no gráfico e as setas andam pelos irmãos do banco; P2/P3 o gráfico (quadro 700×300): o
+ *      valor da coluna no meio dela (6px) ou logo acima (coluna baixa); a média e a meta com marcador em cada mês e o valor escrito =
+ *      o do banco; a curva passa por todo marcador; a meta que colidiria com a média vai abaixo do marcador
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act, within } from '@testing-library/react';
@@ -149,9 +153,8 @@ describe('modal de análise', () => {
     fireEvent.click(screen.getByTestId('analise-tabela-linha-0'));
     await act(async () => { await Promise.resolve(); });
     expect(ultimo()).toMatchObject({ p_foco: ['Custeio', 'pecuaria'], p_grafico: null });
-    fireEvent.click(screen.getByTestId('analise-descer-1'));
-    await act(async () => { await Promise.resolve(); });
-    expect(ultimo()).toMatchObject({ p_foco: ['Custeio', 'agricultura'] });
+    /* P100: a tabela da direita não desce mais ("abrir ›" saiu) — o nível se escolhe pelo caminho e pelas setas */
+    expect(screen.queryByTestId('analise-descer-1')).toBeNull();
   });
 
   it('A5 "N lanç. ›" abre a gaveta no nó da linha; Esc fecha a gaveta antes do modal', async () => {
@@ -362,5 +365,147 @@ describe('modal de análise', () => {
     await aoSubcentro();
     expect(aviso().textContent).toBe('');
     expect(aviso().getAttribute('data-avisos')).toBe('0');
+  });
+
+  /* ── P100 ── */
+  const S1: (string | null)[] = ['Custeio', 'pecuaria', 'Mão de Obra', 'Salários'];
+  const S2: (string | null)[] = ['Custeio', 'pecuaria', 'Nutrição e suplementação mineral do rebanho', 'Sal mineral'];
+  const P100: AnaliseVG = {
+    ...ANALISE,
+    foco: { total: linha(['Custeio'], 'Custeio', 773404.73, 700000),
+      linhas: [{ ...linha(S1, 'Salários', 500000, 450000), centro: 'Mão de Obra' }, { ...linha(S2, 'Sal mineral', 273404.73, null), centro: 'Nutrição e suplementação mineral do rebanho' }] },
+    grafico: { ...ANALISE.grafico,
+      caminho: [{ caminho: [], rotulo: 'Saídas' }, { caminho: ['Custeio'], rotulo: 'Custeio' }, { caminho: ['Custeio', 'pecuaria'], rotulo: 'Pecuária' },
+        { caminho: S1.slice(0, 3), rotulo: 'Mão de Obra' }, { caminho: S1, rotulo: 'Salários' }],
+      irmaos: [S1, S2],
+      serie: [{ am: '2026-07', realizado: 640000, previsto: 0, total: 640000, media: 640000, meta: 700000 },
+              { am: '2026-08', realizado: 600000, previsto: 0, total: 600000, media: 620000, meta: 620000 },
+              { am: '2026-09', realizado: 20000, previsto: 0, total: 20000, media: 420000, meta: 700000 },
+              { am: '2026-10', realizado: 0, previsto: 700000, total: 700000, media: null, meta: 700000 }] },
+  };
+  const medidas: Record<string, PropertyDescriptor | undefined> = {};
+  const comQuadro = (f: () => Promise<void>) => async () => {
+    for (const [k, v] of [['clientWidth', 700], ['clientHeight', 300]] as const) {
+      medidas[k] = Object.getOwnPropertyDescriptor(HTMLElement.prototype, k);
+      Object.defineProperty(HTMLElement.prototype, k, { configurable: true, get: () => v });
+    }
+    try { await f(); } finally { for (const k of ['clientWidth', 'clientHeight']) if (medidas[k]) Object.defineProperty(HTMLElement.prototype, k, medidas[k]!); }
+  };
+
+  it('P1 o caminho com respiro: "Saídas › Custeio › Pecuária › Mão de Obra › Salários", o › em cinza, cada nível clicável', async () => {
+    resposta = P100;
+    await abrir();
+    expect(screen.getByTestId('analise-caminho').textContent).toBe('Saídas › Custeio › Pecuária › Mão de Obra › Salários');
+    const seps = screen.getAllByTestId('analise-caminho-sep');
+    expect(seps).toHaveLength(4);
+    expect(seps.every((x) => x.className.includes('text-[#9aa5b4]'))).toBe(true);
+    fireEvent.click(screen.getByTestId('analise-caminho-3'));
+    await act(async () => { await Promise.resolve(); });
+    expect(ultimo()).toMatchObject({ p_foco: S1.slice(0, 3), p_grafico: null });
+  });
+
+  it('P4 a tabela da direita = os SUBCENTROS do item: Subcentro · Centro · …; o clique põe o subcentro no gráfico; ‹ › pelos irmãos', async () => {
+    resposta = P100;
+    await abrir();
+    expect(screen.getByTestId('analise-foco-titulo').textContent).toBe('Subcentros · Custeio');
+    const cab = within(screen.getByTestId('analise-foco')).getAllByRole('columnheader').map((x) => x.textContent);
+    expect(cab).toEqual(['SUBCENTRO', 'CENTRO', 'SET/26', 'META', 'DIF. R$', '%', 'LANÇ.']);
+    expect(screen.getByTestId('analise-foco-total').textContent).toContain('R$ 773.404,73');
+    expect(screen.getByTestId('analise-foco-centro-1').getAttribute('title')).toBe('Nutrição e suplementação mineral do rebanho');
+    expect(screen.getByTestId('analise-foco-linha-0').textContent).toContain('Salários');
+    fireEvent.click(screen.getByTestId('analise-foco-linha-1'));
+    await act(async () => { await Promise.resolve(); });
+    expect(ultimo()).toMatchObject({ p_foco: ['Custeio'], p_grafico: S2 });
+    fireEvent.click(screen.getByTestId('analise-proximo'));
+    await act(async () => { await Promise.resolve(); });
+    expect(ultimo().p_grafico).toEqual(S1);
+    /* o "N lanç. ›" do subcentro abre a gaveta nele */
+    fireEvent.click(screen.getByTestId('analise-lanc-0'));
+    await passar();
+    expect(daGaveta().at(-1)).toMatchObject({ p_caminho: S1 });
+  });
+
+  it('P2/P3 o gráfico: coluna no meio ou acima; média e meta com marcador e o valor do banco; a curva passa por todo marcador', comQuadro(async () => {
+    resposta = P100;
+    await abrir();
+    const col = (am: string) => screen.getByTestId(`analise-rotulo-coluna-${am}`);
+    expect(col('2026-07').textContent).toBe('640,0k');
+    expect(col('2026-07').getAttribute('data-lugar')).toBe('meio');
+    expect(col('2026-07').getAttribute('font-size')).toBe('6');
+    expect(col('2026-09').getAttribute('data-lugar')).toBe('acima');   /* 20 mil: coluna baixa demais */
+    expect(col('2026-10').getAttribute('data-lugar')).toBe('meio');    /* o previsto segue a mesma regra */
+    for (const p of P100.grafico.serie) {
+      for (const q of ['media', 'meta'] as const) {
+        const v = p[q];
+        const marca = screen.queryByTestId(`analise-ponto-${q}-${p.am}`);
+        if (v == null) { expect(marca).toBeNull(); continue; }
+        expect(Number(marca!.getAttribute('data-valor'))).toBe(v);
+        const r = screen.queryByTestId(`analise-rotulo-${q}-${p.am}`);
+        if (r) expect(r.textContent).toBe(`${(v / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}k`);
+      }
+    }
+    /* todo valor de ponto foi escrito (há lugar para todos neste quadro) */
+    expect(document.querySelectorAll('[data-rotulo="media"]')).toHaveLength(3);
+    expect(document.querySelectorAll('[data-rotulo="meta"]')).toHaveLength(4);
+    /* ago: média = meta (620 mil) → a da média acima, a da meta abaixo do marcador */
+    expect(screen.getByTestId('analise-rotulo-media-2026-08').getAttribute('data-lugar')).toBe('acima');
+    expect(screen.getByTestId('analise-rotulo-meta-2026-08').getAttribute('data-lugar')).toBe('abaixo');
+    /* a curva passa por todo marcador (cada um é ponta de um trecho do caminho) */
+    for (const q of ['media', 'meta'] as const) {
+      const d = screen.getByTestId(`analise-linha-${q}`).getAttribute('d')!;
+      const nums = (d.match(/-?\d+(\.\d+)?(e-?\d+)?/g) ?? []).map(Number);
+      const pares = new Set<string>();
+      for (let i = 0; i < nums.length; i += 2) pares.add(`${nums[i].toFixed(3)},${nums[i + 1].toFixed(3)}`);
+      for (const c of document.querySelectorAll(`[data-testid^="analise-ponto-${q}-"]`)) {
+        expect(pares.has(`${Number(c.getAttribute('cx')).toFixed(3)},${Number(c.getAttribute('cy')).toFixed(3)}`)).toBe(true);
+      }
+      expect(d).toContain('C');   /* curva (Bézier), não reta */
+    }
+  }));
+
+  it('P4a a ESQUERDA navega: Atividades → (Pecuária) Centros · Pecuária com "‹"; centro fica selecionado; "‹" volta; o caminho também', async () => {
+    const PEC = ['Custeio', 'pecuaria'], MO = ['Custeio', 'pecuaria', 'Mão de Obra'];
+    const nivelDe = (foco: (string | null)[]) => (foco.length >= 3 ? foco.slice(0, 2) : foco);
+    rpc.mockImplementation(async (fn: string, a: any) => {
+      if (fn !== 'fn_vg_analise') return { data: GAV_FILHOS, error: null };
+      const niv = nivelDe(a.p_foco);
+      const tabela = niv.length === 1 ? { ...ANALISE.tabela, nivel: niv }
+        : { nivel: niv, total: linha(PEC, 'Pecuária', 754685.64, null),
+            linhas: [linha(MO, 'Mão de Obra', 500000, null), linha(['Custeio', 'pecuaria', 'Nutrição'], 'Nutrição', 254685.64, null)] };
+      return { data: { ...P100, tabela, foco: { ...P100.foco, total: linha(a.p_foco, a.p_foco.length === 3 ? 'Mão de Obra' : 'Pecuária', 1, null) } }, error: null };
+    });
+    await abrir();
+    expect(screen.getByTestId('analise-tabela-titulo').textContent).toBe('Atividades · Custeio');
+    expect((screen.getByTestId('analise-tabela-subir') as HTMLButtonElement).disabled).toBe(true);   /* na aba: o lugar existe, apagado */
+    fireEvent.click(screen.getByTestId('analise-tabela-linha-0'));   /* Pecuária: desce */
+    await passar();
+    expect(ultimo()).toMatchObject({ p_foco: PEC, p_grafico: null });
+    expect(screen.getByTestId('analise-tabela-titulo').textContent).toBe('Centros · Pecuária');
+    expect((screen.getByTestId('analise-tabela-subir') as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.getByTestId('analise-tabela-total').getAttribute('aria-selected')).toBe('true');
+    /* com a atividade selecionada, a direita tem a coluna Centro */
+    expect(within(screen.getByTestId('analise-foco')).getAllByRole('columnheader').map((x) => x.textContent)).toContain('CENTRO');
+    fireEvent.click(screen.getByTestId('analise-tabela-linha-0'));   /* Mão de Obra: selecionado, a esquerda não desce */
+    await passar();
+    expect(ultimo()).toMatchObject({ p_foco: MO, p_grafico: null });
+    expect(screen.getByTestId('analise-tabela-titulo').textContent).toBe('Centros · Pecuária');
+    expect(screen.getByTestId('analise-tabela-linha-0').getAttribute('aria-selected')).toBe('true');
+    /* seleção = centro: a coluna Centro some */
+    expect(within(screen.getByTestId('analise-foco')).getAllByRole('columnheader').map((x) => x.textContent)).not.toContain('CENTRO');
+    /* um subcentro no gráfico: a esquerda continua onde estava */
+    fireEvent.click(screen.getByTestId('analise-foco-linha-0'));
+    await passar();
+    expect(ultimo()).toMatchObject({ p_foco: MO, p_grafico: S1 });
+    expect(screen.getByTestId('analise-tabela-titulo').textContent).toBe('Centros · Pecuária');
+    /* "‹": volta às atividades (a seleção vira o nível de cima) */
+    fireEvent.click(screen.getByTestId('analise-tabela-subir'));
+    await passar();
+    expect(ultimo()).toMatchObject({ p_foco: ['Custeio'], p_grafico: null });
+    expect(screen.getByTestId('analise-tabela-titulo').textContent).toBe('Atividades · Custeio');
+    /* o caminho do gráfico leva a esquerda ao nível do ponto clicado (Pecuária = caminho 2) */
+    fireEvent.click(screen.getByTestId('analise-caminho-2'));
+    await passar();
+    expect(ultimo()).toMatchObject({ p_foco: PEC, p_grafico: null });
+    expect(screen.getByTestId('analise-tabela-titulo').textContent).toBe('Centros · Pecuária');
   });
 });
