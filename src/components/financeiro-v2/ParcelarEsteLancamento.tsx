@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DatePicker } from '@/components/ui/date-picker';
-import { REGUA_ROTULO, TituloDoBloco, BLOCO_FORMULARIO } from '@/components/ui/bloco-formulario';
+import { TituloDoBloco, BLOCO_FORMULARIO } from '@/components/ui/bloco-formulario';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
@@ -26,10 +26,11 @@ import {
   fraseDaConfirmacao, parcelarEsteLancamento, travaDoParcelar, type GravadoresDoParcelar, type LancamentoParaParcelar,
 } from '@/lib/financeiro/parcelarLancamento';
 import { cn } from '@/lib/utils';
+import { achadasDaFracao, buscarIrmasSoltas, fraseDaParcelaSolta, parcelaSolta } from '@/lib/financeiro/parcelaSolta';
 
 const dataBR = (iso: string | null | undefined) => (iso && /^\d{4}-\d{2}-\d{2}/.test(iso) ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '—');
 
-export function ParcelarEsteLancamento({ clienteId, lancamento, situacao, vencimentoAtual, conta, onParcelado, gravadores }: {
+export function ParcelarEsteLancamento({ clienteId, lancamento, situacao, vencimentoAtual, conta, onParcelado, gravadores, buscarIrmas = buscarIrmasSoltas }: {
   clienteId: string;
   lancamento: LancamentoParaParcelar;
   /** o que trava: status, pagamento e conciliação GRAVADOS */
@@ -40,7 +41,22 @@ export function ParcelarEsteLancamento({ clienteId, lancamento, situacao, vencim
   onParcelado: () => void;
   /** só para teste */
   gravadores?: GravadoresDoParcelar;
+  /** P104 — as candidatas a irmãs da parcela solta (padrão: o banco); só para teste */
+  buscarIrmas?: typeof buscarIrmasSoltas;
 }) {
+  /* P104 — a PARCELA SOLTA ("… - 6/6", lançada à mão sem parcelamento) não se parcela de novo: o bloco diz o que ela é e quantas irmãs há */
+  const solta = parcelaSolta(lancamento.descricao);
+  const [achadas, setAchadas] = useState<number | null>(null);
+  useEffect(() => {
+    let vivo = true;
+    setAchadas(null);
+    if (!solta || !lancamento.favorecidoId) return;
+    void buscarIrmas(clienteId, lancamento.favorecidoId, solta.n).then((c) => {
+      if (vivo && c) setAchadas(achadasDaFracao({ id: lancamento.id, valorCent: lancamento.valorCent, fracao: solta }, c));
+    }, () => undefined);
+    return () => { vivo = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clienteId, lancamento.id, lancamento.favorecidoId, lancamento.valorCent, solta?.k, solta?.n, buscarIrmas]);
   const trava = travaDoParcelar(situacao);
   const [aberto, setAberto] = useState(false);
   const [nTexto, setNTexto] = useState('');
@@ -90,6 +106,13 @@ export function ParcelarEsteLancamento({ clienteId, lancamento, situacao, vencim
     } finally { setGravando(false); }
   };
 
+  if (solta) return (
+    <section className={cn(BLOCO_FORMULARIO, 'gap-1')} data-testid="parcela-solta">
+      <TituloDoBloco nome="Parcelamento" />
+      <p className="text-[10.5px] leading-[14px] text-foreground" data-testid="parcela-solta-frase">{fraseDaParcelaSolta(solta, achadas)}</p>
+    </section>
+  );
+
   return (
     <section className={cn(BLOCO_FORMULARIO, 'gap-1')} data-testid="parcelar-este">
       <TituloDoBloco nome="Parcelamento" dica="hoje: à vista (1/1)" acao={!aberto ? (
@@ -98,17 +121,21 @@ export function ParcelarEsteLancamento({ clienteId, lancamento, situacao, vencim
       ) : undefined} />
       {trava && <p className="text-[10px] text-muted-foreground" data-testid="parcelar-este-trava">{trava}</p>}
       {aberto && !trava && (
-        <div className="grid min-w-0 gap-2" style={{ gridTemplateColumns: 'minmax(180px, 32%) minmax(0, 1fr)' }}>
+        /* P104 — a coluna tem ao menos 260px e os dois rótulos ocupam duas linhas RESERVADAS, fonte menor: nunca rolam escondidos no lugar
+           ("1º vencimento · sugeric…" no print do Gabriel, a 1750px); lado a lado, o bloco não passa da altura da grade */
+        <div className="grid min-w-0 gap-2" style={{ gridTemplateColumns: 'minmax(260px, 36%) minmax(0, 1fr)' }}>
           <div className="flex min-w-0 flex-col gap-1">
-            <div className="campos-uma-linha grid grid-cols-2 gap-1.5">
+            <div className="campos-uma-linha grid gap-1.5" style={{ gridTemplateColumns: '64px minmax(0, 1fr)' }}>
               <div className="min-w-0">
-                <span className={cn(REGUA_ROTULO, modo === 'mensal' && !nValido && 'text-destructive')}>Nº de parcelas *</span>
+                <span className={cn('mb-0.5 block h-[26px] overflow-hidden whitespace-normal text-[9.5px] font-normal leading-[13px] text-muted-foreground',
+                  modo === 'mensal' && !nValido && 'text-destructive')}>Nº de parcelas *</span>
                 <Input value={modo === 'livres' ? String(livres.length) : nTexto} onChange={(e) => setNTexto(e.target.value.replace(/\D/g, '').slice(0, 2))}
                   disabled={modo === 'livres'} inputMode="numeric" placeholder={`${MIN_PARCELAS_DO_CARTAO} a ${MAX_PARCELAS_DO_CARTAO}`} data-testid="parcelar-este-n"
                   className={cn('h-[22px] px-2 text-[10.5px] tabular-nums', modo === 'mensal' && !nValido && 'border-destructive')} />
               </div>
               <div className="min-w-0">
-                <span className={cn(REGUA_ROTULO, 'uma-linha-que-rola', sugeridaAtiva && 'text-amber-800', modo === 'mensal' && !primeira && 'text-destructive')} data-testid="parcelar-este-rotulo-venc">
+                <span className={cn('mb-0.5 block h-[26px] overflow-hidden whitespace-normal break-words text-[9.5px] font-normal leading-[13px] text-muted-foreground',
+                  sugeridaAtiva && 'text-amber-800', modo === 'mensal' && !primeira && 'text-destructive')} data-testid="parcelar-este-rotulo-venc">
                   {sugeridaAtiva && dia && conta ? rotuloDaSugestao(conta.nome, dia).replace('1ª fatura', '1º vencimento') : '1º vencimento'}</span>
                 <DatePicker value={modo === 'livres' ? (livres[0]?.vencimento ?? '') : primeira} disabled={modo === 'livres'} data-testid="parcelar-este-venc"
                   onChange={(v) => { setPrimeira(v); setEditada(true); }}
@@ -120,8 +147,9 @@ export function ParcelarEsteLancamento({ clienteId, lancamento, situacao, vencim
                 ? <>Este lançamento <b>vira a 1/{nGrade}</b> (mesmo lançamento, mesmos documentos, mesma classificação). Nascem {nGrade === 2 ? 'a 2/2' : `da 2/${nGrade} à ${nGrade}/${nGrade}`} em {nomeDaConta}. Competência {dataBR(lancamento.dataCompetencia)} nas {nGrade}.</>
                 : 'Escolha o nº de parcelas e o 1º vencimento.'}
             </p>
-            <div className="mt-auto flex items-center gap-2">
-              <span className="min-w-0 flex-1 uma-linha-que-rola text-[10px] text-destructive" data-testid="parcelar-este-motivo">{erro ?? motivo ?? ''}</span>
+            {/* P104 — a frase do que falta tem LINHA PRÓPRIA (duas linhas reservadas), acima dos botões: nunca cortada ao lado deles */}
+            <p className="mt-auto h-[26px] overflow-hidden text-[10px] leading-[13px] text-destructive" data-testid="parcelar-este-motivo">{erro ?? motivo ?? ''}</p>
+            <div className="flex items-center justify-end gap-2">
               <Button type="button" size="sm" variant="outline" className="h-[24px] shrink-0 px-2.5 text-[10.5px]" onClick={() => { setAberto(false); setErro(null); }}>Cancelar</Button>
               <Button type="button" size="sm" className="h-[24px] w-[120px] shrink-0 px-2.5 text-[10.5px]" disabled={!!motivo || nGrade < 2}
                 onClick={() => setConfirmar(true)} data-testid="parcelar-este-confirmar">{nGrade >= 2 ? `Parcelar em ${nGrade}` : 'Parcelar'}</Button>

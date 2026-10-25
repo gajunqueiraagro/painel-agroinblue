@@ -895,9 +895,10 @@ describe('P74 — a nota paga no cartão em N vezes', () => {
     fireEvent.click(screen.getByText('Cartão Elo Sintetico'));
     await waitFor(() => expect(screen.getByTestId('nota-cartao-rotulo-fatura').textContent).toBe('1ª fatura · sugerido (Elo Sintetico, dia 10)'), { timeout: 4000 });
     expect(cartaoNoBanco.diasDoCartao).toHaveBeenCalledWith('elo');
-    const fatura = campoDaFatura();
-    expect(fatura.value).toBe('10/10/2026');
-    expect(fatura.className).toContain('border-amber-400');
+    /* P105 — o DatePicker copia o valor para o texto dele num efeito PRÓPRIO, um passo depois do rótulo: espera o campo também (a leitura
+       logo depois do rótulo caía com a máquina carregada — "expected '' to be '10/10/2026'" no vitest completo) */
+    await waitFor(() => expect(campoDaFatura().value).toBe('10/10/2026'), { timeout: 4000 });
+    expect(campoDaFatura().className).toContain('border-amber-400');
     expect(screen.getByTestId('nota-conta-pelo-cartao').textContent).toBe('Cartão Elo Sintetico');
   });
   it('P4 criar: as 4 parcelas pelo parcelamento da nota, no cartão, com o PDF nas 4', async () => {

@@ -485,7 +485,7 @@ if (tela === 'mesclar') {
   const gavetaVG = (a: any) => { const r = VG.gaveta(a); return comFatura && r.lista ? { ...r, lista: { ...r.lista, faturas_cartao: 1 } } : r; };
   g.__bancoBancada = { from: () => [], rpc: (fn: string, a: any) => fn === 'fn_vg_filtros'
       ? (duasContas && setTimeout(() => filtrosVG.mudar({ contas: ['c1', 'c2'] }), 0), g.__vgFiltrosReal ?? VG.FILTROS)
-    : fn === 'fn_vg_tela' ? (g.__vgReal ?? VG.tela(a)) : fn === 'fn_vg_analise' ? VG.analise(a) : fn === 'fn_vg_gaveta' ? gavetaVG(a) : null };
+    : fn === 'fn_vg_tela' ? (g.__vgReal ?? VG.tela({ ...a, varia: q.get('vg_grupos') === 'varia' })) : fn === 'fn_vg_analise' ? VG.analise({ ...a, grande: q.get('vg_grande') === '1' }) : fn === 'fn_vg_gaveta' ? gavetaVG(a) : null };
   montarNaUrl(
     <div className="flex h-full flex-col">
       <BarraSecao area="Financeiro" secao="Visão Geral" atalho={<FiltrosBarraVG />} />
@@ -924,7 +924,11 @@ if (tela === 'mesclar') {
     { ordem: 1, valor: 1200, percentual: 89.18617614, plano_conta_id: 'pl-nut', subcentro: 'Nutrição Engorda', centro_custo: 'Suplementação', escopo_negocio: 'pecuaria', origem: 'nota', nota_itens: [1, 2, 3, 4, 5] },
     { ordem: 2, valor: 145.5, percentual: 10.81382386, plano_conta_id: 'pl-ins', subcentro: 'Insumos Lavoura Milho', centro_custo: 'Insumos', escopo_negocio: 'agricultura', origem: 'nota', nota_itens: Array.from({ length: 13 }, (_, k) => k + 6) },
   ];
-  g.__bancoBancada = { from: (t: string) => t === 'audit_log' ? AUDIT : t === 'vw_lancamento_documentos' ? DOCS_NOTA
+  /* P104 — `salsolta`: a 6/6 de uma compra lançada em 6 parcelas SOLTAS (o caso da NF 46.994, SINTÉTICO): as 5 irmãs do mesmo fornecedor */
+  const IRMAS_SOLTAS = [1, 2, 3, 4, 5, 6].map((k) => ({ id: k === 6 ? 'lanc-1' : `irma-${k}`, descricao: `Tinta sintetica de nome comprido para medir - ${k}/6`,
+    valor: k === 1 ? 620.85 : k === 2 ? 620.80 : 620.83 }));
+  g.__bancoBancada = { from: (t: string, e: any) => v === 'salsolta' && t === 'financeiro_lancamentos_v2' && e?.eq?.favorecido_id ? IRMAS_SOLTAS
+      : t === 'audit_log' ? AUDIT : t === 'vw_lancamento_documentos' ? DOCS_NOTA
       : DIV && t === 'financeiro_lancamento_partes' ? PARTES_DIV : DIV && t === 'financeiro_lancamento_divisoes' ? [{ id: 'op-div', acao: 'dividir_nota' }]
       : DIV && t === 'nota_fiscal' ? [NOTA_DIV] : DIV && t === 'nota_fiscal_itens' ? ITENS_DIV : [], rpc: (fn: string) => fn === 'fn_nomes_dos_autores' ? [
       { user_id: 'u-outro', nome: 'Beltrano Gestor da Silva', email: 'beltrano@exemplo.com', situacao: 'ex-membro' },
@@ -977,6 +981,9 @@ if (m === 'editar') props.lancamento = (v === 'sal') ? SAL : MILHO;
 /* P74b — `salparcela`: a parcela 1/4 de uma compra parcelada (a volta para à vista); `salparcelapaga`: a mesma, com a 2/4 paga */
 if (m === 'editar' && (v === 'salparcela' || v === 'salparcelapaga')) props.lancamento = { ...SAL, conta_bancaria_id: 'elo', valor: 821.22, data_competencia: '2026-08-10',
   data_vencimento: '2026-09-10', descricao: `${DESC_LONGA} 1/4`, financiamento_id: 'fin-sint', origem_tipo: 'parcela_principal' };
+/* P104 — `salsolta`: a parcela 6/6 lançada solta (o bloco não oferece parcelar) */
+if (m === 'editar' && v === 'salsolta') props.lancamento = { ...SAL, conta_bancaria_id: 'elo', valor: 620.83, data_competencia: '2026-10-10', data_vencimento: '2026-10-10',
+  descricao: 'Tinta sintetica de nome comprido para medir - 6/6', status_transacao: 'agendado' };
 if (m === 'editar' && (v === 'salcartao' || v === 'salpago')) props.lancamento = { ...SAL, conta_bancaria_id: 'elo', valor: 3284.88, data_competencia: '2026-08-10',
   data_vencimento: '2026-08-10', forma_pagamento: 'Cartão', ...(v === 'salpago' ? { status_transacao: 'realizado', data_pagamento: '2026-08-12' } : {}) };
 if (v === 'rateio' && m === 'novo') props.prefill = { tipo_operacao: '2-Saídas', escopo_negocio: 'agricultura', subcentro: 'Insumos Lavoura Milho', plano_conta_id: 'pl-ins',

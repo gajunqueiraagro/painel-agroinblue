@@ -13,6 +13,9 @@
  *   - So' comparam os que existem nos dois estados (o que aparece ou some e' conteudo); o que ESTAVA e mudou de lugar ou de largura,
  *     reprova.
  * Antes de varrer, o detector se prova num fixture (um rotulo que cresce empurra o vizinho): se nao achar, sai com codigo 2.
+ * P100 — `presos` (opcional, seletor): o que tem de ficar PRESO e A VISTA em todo estado (as linhas congeladas da grade, o "Resultado"
+ * e o "Saldo final" do card) e' medido SEMPRE — mesmo dentro de area que rola ou `data-desloca-livre` — e, alem de nao mudar de lugar,
+ * tem de estar inteiro dentro da caixa visivel de todo ancestral que corta (rolou para fora ou sumiu = achado).
  * `--so NOME` mede so' os cenarios que comecam com NOME; `--tamanhos 1126x579,...` troca os tamanhos.
  */
 import { createServer } from 'vite';
@@ -153,7 +156,9 @@ const CENARIOS = [
       ['média do período', async (p) => { await p.locator('[data-testid="analise-tabela"]').getByText('Média', { exact: true }).dispatchEvent('click'); await espera(p); }],
       ['acumulado', async (p) => { await p.locator('[data-testid="analise-tabela"]').getByText('Acum.', { exact: true }).dispatchEvent('click'); await espera(p); }],
       ['unidade R$/cab', async (p) => { await p.locator('[data-testid="analise-unidade"]').dispatchEvent('click'); await espera(p, 200); await p.locator('[data-testid="analise-unidade-rs_cab"]').dispatchEvent('click'); await espera(p); }],
-      ['descer um nível', noLugar('[data-testid="analise-descer-0"]')], ['caminho até o grupo', noLugar('[data-testid="analise-caminho-1"]')],
+      /* P100 — um subcentro da tabela no gráfico (o caminho ganha a cadeia inteira) e, pelo caminho, o centro dele */
+      ['subcentro no gráfico', noLugar('[data-testid="analise-foco-linha-2"]')], ['caminho até o centro', noLugar('[data-testid="analise-caminho-3"]')],
+      ['caminho até o grupo', noLugar('[data-testid="analise-caminho-1"]')],
       ['outro mês na coluna', async (p) => { await p.locator('[data-testid="analise-coluna-2026-03"]').dispatchEvent('click'); await espera(p); }]] },
   /* PR 5 — a GAVETA de lançamentos (no modal): estrutura FIXA — nada da gaveta (cabeçalho, indicadores, resumo, tabela, total, rodapé)
      nem do modal muda de altura ou posição ao descer de nível, trocar de irmão, subir pelo caminho, chegar ao subcentro com 523
@@ -195,6 +200,24 @@ const CENARIOS = [
       ['desce: atividade', noLugar('[data-testid="gaveta-linha-0"]')], ['desce: centro', noLugar('[data-testid="gaveta-linha-0"]')],
       ['desce: subcentro (vencidos + fatura)', noLugar('[data-testid="gaveta-linha-0"]')], ['irmão vazio (só a fatura)', noLugar('[data-testid="gaveta-irmao-3"]')],
       ['sobe pelo caminho (sem aviso)', noLugar('[data-testid="gaveta-caminho-2"]')]] },
+  /* P100 item 6 + 8 — trocar o MÊS (o período vai até ele) não desloca os blocos; o card com 1 a 8 grupos de saída (`&vg_grupos=varia`:
+     jan 1 … ago 8) não move "Resultado" nem "Saldo final" */
+  { nome: 'visao-geral-mes-grupos', url: 'tela=visao-geral&barra=0&vg_grupos=varia&mes=2026-01',
+    presos: '[data-testid="card-linha-resultado"], [data-testid="card-linha-saldo-final"]',
+    estados: [1, 2, 4, 8, 3, 12, 10].map((m) => [`mês ${m}`, noLugar(`[data-testid="vg-mes-${m}"]`)]) },
+  /* P100 item 7 — rolar a grade até o fim e de volta: o cabeçalho e as linhas do rodapé (Resultado, Saldo final) não saem do lugar */
+  { nome: 'visao-geral-grade-rola', url: 'tela=visao-geral&barra=0',
+    presos: '[data-testid="grade-linha-resultado"], [data-testid="grade-linha-saldo_final"]',
+    estados: [['grade no fim', async (p) => { await p.locator('[data-testid="grade-vg-rolagem"]').evaluate((e) => { e.scrollTop = e.scrollHeight; }); await espera(p, 200); }],
+              ['grade no topo', async (p) => { await p.locator('[data-testid="grade-vg-rolagem"]').evaluate((e) => { e.scrollTop = 0; }); await espera(p, 200); }]] },
+  /* P100 v4 — a esquerda do modal desce e volta ("‹"), o centro selecionado e o subcentro no gráfico: nada se desloca (o cabeçalho
+     da tabela da direita é livre: a coluna "Centro" some de propósito) */
+  { nome: 'visao-geral-analise-nivel', url: 'tela=visao-geral&barra=0', antes: async (p) => {
+      await p.locator('[data-testid^="grade-linha-saida:grupo:Custeio"]').dispatchEvent('click'); await p.locator('[data-testid="modal-analise"]').waitFor(); await espera(p, 700); },
+    estados: [
+      ['desce à atividade', noLugar('[data-testid="analise-tabela-linha-0"]')], ['centro selecionado', noLugar('[data-testid="analise-tabela-linha-1"]')],
+      ['subcentro no gráfico', noLugar('[data-testid="analise-foco-linha-0"]')], ['volta (‹)', noLugar('[data-testid="analise-tabela-subir"]')],
+      ['outra atividade', noLugar('[data-testid="analise-tabela-linha-1"]')]] },
   { nome: 'visao-geral-24m', url: 'tela=visao-geral&barra=0&faixa=per&de=2025-01&ate=2026-12', auto: true },
   { nome: 'contas-lista', url: 'tela=contas&barra=32&n=longo', auto: true, estados: [
     ['busca com resultado', digitar('[data-testid="busca-contas"]', 'bradesco')], ['busca sem resultado', digitar('[data-testid="busca-contas"]', 'zzzz')],
@@ -323,7 +346,7 @@ const CENARIOS = [
 ];
 
 /* roda NA PAGINA: o retangulo de cada elemento medido, pela identidade */
-function medirPosicoes() {
+function medirPosicoes(presos) {
   const SEL = 'button, [role="tab"], [role="button"], [role="combobox"], input, select, textarea, h1, h2, h3, h4, th, [data-desloca]';
   const raiz = document.getElementById('root') ?? document.body;
   const caminho = (e) => { const p = []; for (let x = e; x && x !== raiz; x = x.parentElement) { const pai = x.parentElement; p.unshift(`${x.tagName.toLowerCase()}${pai ? `:${[...pai.children].indexOf(x)}` : ''}`); } return p.join('>'); };
@@ -348,12 +371,27 @@ function medirPosicoes() {
     const n = vistos.get(chave) ?? 0; vistos.set(chave, n + 1); if (n) chave += `[${n}]`;
     out[chave] = { x: r.left, y: r.top, w: r.width, rotulo: (e.getAttribute('aria-label') || e.textContent || e.getAttribute('placeholder') || e.tagName).replace(/\s+/g, ' ').trim().slice(0, 40) };
   }
+  if (presos) for (const e of document.querySelectorAll(presos)) {
+    const r = e.getBoundingClientRect();
+    let aVista = r.width > 1 && r.height > 1;
+    /* ate' a casca da bancada (`data-casca`): ela e' a PAGINA (rolar a pagina nao conta — a mesma regra do `rolaPorDentro`) */
+    for (let a = e.parentElement; a && aVista && !a.hasAttribute('data-casca'); a = a.parentElement) {
+      const cs = getComputedStyle(a); if (cs.overflowY === 'visible' && cs.overflowX === 'visible') continue;
+      const c = a.getBoundingClientRect();
+      const topo = c.top + a.clientTop;   /* a caixa visivel: dentro da borda */
+      if (r.top < topo - 0.5 || r.bottom > topo + a.clientHeight + 0.5) aVista = false;
+    }
+    const tid = e.getAttribute('data-testid') ?? e.tagName;
+    out[`!${tid}`] = { x: r.left, y: r.top, w: r.width, preso: true, aVista, rotulo: (e.textContent ?? tid).replace(/\s+/g, ' ').trim().slice(0, 40) };
+  }
   return out;
 }
 const comparar = (a, b, estado) => {
   const achados = [];
   for (const [k, va] of Object.entries(a)) {
-    const vb = b[k]; if (!vb) continue;
+    const vb = b[k];
+    if (va.preso && (!vb || !vb.aVista)) { achados.push({ estado, texto: `"${va.rotulo}" (preso) ${vb ? 'saiu da vista' : 'sumiu'}` }); continue; }
+    if (!vb) continue;
     const d = [['x', vb.x - va.x], ['y', vb.y - va.y], ['largura', vb.w - va.w]].filter(([, v]) => Math.abs(v) > 0.5);
     if (d.length) achados.push({ estado, texto: `"${va.rotulo}"${va.rotulo !== vb.rotulo ? ` -> "${vb.rotulo}"` : ''}: ${d.map(([n, v]) => `${n} ${v > 0 ? '+' : ''}${v.toFixed(1)}`).join(', ')}` });
   }
@@ -382,6 +420,20 @@ try {
   const prova = comparar(a0, await p0.evaluate(medirPosicoes), 'prova');
   await p0.close();
   if (!prova.some((x) => x.texto.startsWith('"Próxima"')) || prova.length !== 1) { console.error(`check-ui-desloca: AUTO-TESTE FALHOU (${JSON.stringify(prova)})`); process.exit(2); }
+  /* P100 — `presos` se prova: numa lista que rola, o rodape preso (sticky) fica; o que nao e' preso sai da vista ao rolar (achado) */
+  const pp = await navegador.newPage({ viewport: { width: 400, height: 300 } });
+  await pp.setContent(`<div id="root"><div id="rola" style="height:100px;overflow:auto"><table><tbody>${'<tr><td>linha</td></tr>'.repeat(30)}</tbody>
+    <tfoot style="position:sticky;bottom:0;background:#fff"><tr data-testid="preso-ok"><td>Resultado</td></tr></tfoot></table>
+    <div data-testid="preso-mal">Saldo final solto</div></div></div>`);
+  const sel0 = '[data-testid="preso-ok"], [data-testid="preso-mal"]';
+  await pp.evaluate(() => { document.getElementById('rola').scrollTop = 0; });
+  const q0 = await pp.evaluate(medirPosicoes, sel0);
+  await pp.evaluate(() => { document.getElementById('rola').scrollTop = 30; });
+  const q1 = comparar(q0, await pp.evaluate(medirPosicoes, sel0), 'prova presos');
+  await pp.close();
+  if (q1.some((x) => x.texto.startsWith('"Resultado"')) || !q1.some((x) => x.texto.startsWith('"Saldo final solto"'))) {
+    console.error(`check-ui-desloca: AUTO-TESTE DOS PRESOS FALHOU (${JSON.stringify(q1)})`); process.exit(2);
+  }
 
   const todos = []; let medicoes = 0;
   for (const cen of ESCOLHIDOS) for (const [w, h] of TAMANHOS_DA_VEZ) {
@@ -391,7 +443,7 @@ try {
     const abrir = async (pg, url) => { await pg.goto(`${base}/index.html?${url}`); await pg.evaluate(() => document.fonts.ready); await espera(pg, 1300); };
     await abrir(p, cen.url);
     if (cen.antes) await cen.antes(p);
-    const inicial = await p.evaluate(medirPosicoes);
+    const inicial = await p.evaluate(medirPosicoes, cen.presos ?? null);
     /* `auto`: as escolhas da tela, por indice (a lista e' relida na tela recem-aberta a cada troca) */
     /* o `Segmentado` da casa: `div.inline-flex.shrink-0.overflow-hidden.rounded-md.border` com os botoes filhos (src/components/ui/segmentado) */
     const ESCOLHAS = 'div.inline-flex.shrink-0.overflow-hidden.rounded-md.border > button:not([disabled]), [role="tab"]:not([disabled])';
@@ -409,10 +461,10 @@ try {
       medicoes++;
       if (typeof gesto === 'function') {
         try { await gesto(p); } catch (e) { erros.push(`${nome}: ${String(e).slice(0, 100)}`); continue; }
-        todos.push(...comparar(inicial, await p.evaluate(medirPosicoes), nome).map((a) => ({ tela: cen.nome, tamanho: `${w}x${h}`, ...a })));
+        todos.push(...comparar(inicial, await p.evaluate(medirPosicoes, cen.presos ?? null), nome).map((a) => ({ tela: cen.nome, tamanho: `${w}x${h}`, ...a })));
       } else {
         const pu = await navegador.newPage({ viewport: { width: w, height: h } }); await abrir(pu, gesto.url);
-        todos.push(...comparar(inicial, await pu.evaluate(medirPosicoes), nome).map((a) => ({ tela: cen.nome, tamanho: `${w}x${h}`, ...a })));
+        todos.push(...comparar(inicial, await pu.evaluate(medirPosicoes, cen.presos ?? null), nome).map((a) => ({ tela: cen.nome, tamanho: `${w}x${h}`, ...a })));
         await pu.close();
       }
     }

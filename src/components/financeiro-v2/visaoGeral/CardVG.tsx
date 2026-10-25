@@ -147,10 +147,12 @@ function CardFluxo({ tela, k, sel, v, previsto, vigente, onAnalisar, ampliado, a
           <tbody>{bloco('entrada')}{bloco('saida')}</tbody>
         </table>
       </div>
-      <div className="flex h-[16px] shrink-0 items-center justify-between px-1 text-[10px] font-bold">
+      {/* P100 item 8 — um respiro FIXO antes do "Resultado" (6px + a borda): a última saída nunca encosta nele. A lista de cima é a que
+          estica e rola; "Resultado" e "Saldo final" ficam presos embaixo, na mesma posição com 1 ou 8 grupos */}
+      <div className="mt-[6px] flex h-[16px] shrink-0 items-center justify-between border-t border-[#cfd6df] px-1 text-[10px] font-bold" data-testid="card-linha-resultado" data-desloca="">
         <span>Resultado</span><span className="tabular-nums" style={{ color: corSinal(res) }} data-testid="card-resultado">{brl(res)}</span>
       </div>
-      <div className="flex h-[16px] shrink-0 items-center justify-between bg-[#f1f3f6] px-1 text-[10px] font-bold">
+      <div className="flex h-[16px] shrink-0 items-center justify-between bg-[#f1f3f6] px-1 text-[10px] font-bold" data-testid="card-linha-saldo-final" data-desloca="">
         {semSaldo ? <span /> : (
           <>
             <span className="whitespace-nowrap">Saldo final{futuro ? ' previsto' : ''}</span>

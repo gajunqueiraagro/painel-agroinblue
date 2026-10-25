@@ -4,8 +4,9 @@
  * decide O QUE pedir (aba, foco, item do gráfico, mês, critério, unidade) e se escreve o número que veio.
  *   · Árvore: Raiz (lado) › Grupo › Atividade › Centro › Subcentro. Um nó é o seu CAMINHO ([grupo, atividade, centro, subcentro] até a
  *     profundidade dele; atividade/centro nulos vão como null).
- *   · ABA = o grupo (ou a raiz) da tabela da esquerda e do resumo; FOCO = o nó cujos filhos vão na tabela da direita; GRÁFICO = o foco
- *     ou um filho dele.
+ *   · ABA = o grupo (ou a raiz) da tabela da esquerda e do resumo; FOCO = o nó cujos SUBCENTROS vão na tabela da direita (P100, 111951:
+ *     todos os do nível 4 abaixo dele — nunca os filhos, que repetiam a esquerda); GRÁFICO = o foco, um filho dele ou um desses
+ *     subcentros.
  */
 import { supabase } from '@/integrations/supabase/client';
 import { pct1, type LadoVG } from '@/lib/financeiro/visaoGeral';
@@ -19,6 +20,8 @@ export interface LinhaAnaliseVG {
   caminho: CaminhoVG; rotulo: string; grupo: string | null;
   valor: number | null; meta: number | null; dif: number | null; pct: number | null; razao: number | null;
   qtd: number; unidade_valida: boolean; faixa: FaixaMetaVG | null;
+  /** P100: só nas linhas da tabela da direita (os subcentros) — o centro do subcentro */
+  centro?: string | null;
 }
 export interface PontoAnaliseVG { am: string; realizado: number | null; previsto: number | null; total: number | null; media: number | null; meta: number | null }
 export interface AnaliseVG {
@@ -28,7 +31,9 @@ export interface AnaliseVG {
   unidades: { id: UnidadeVG; rotulo: string; valida: boolean }[];
   resumo: (LinhaAnaliseVG & { valor_rs: number | null; pct_da_raiz: number | null;
     fatias: { caminho: CaminhoVG; rotulo: string; grupo: string | null; pct: number | null }[] }) | null;
-  tabela: { total: LinhaAnaliseVG | null; linhas: LinhaAnaliseVG[] };
+  /** P100 v4 (111952): a tabela da ESQUERDA navega um nível por vez — `nivel` = o caminho do nível mostrado (a aba, a atividade
+      escolhida, ou a atividade do centro escolhido); `total` = ele; `linhas` = os filhos dele */
+  tabela: { total: LinhaAnaliseVG | null; linhas: LinhaAnaliseVG[]; nivel?: CaminhoVG };
   foco: { total: LinhaAnaliseVG | null; linhas: LinhaAnaliseVG[] };
   grafico: {
     item: LinhaAnaliseVG | null; caminho: { caminho: CaminhoVG; rotulo: string }[]; irmaos: CaminhoVG[]; serie: PontoAnaliseVG[];
@@ -69,10 +74,18 @@ export const chaveCaminho = (c: CaminhoVG) => JSON.stringify(c);
 export const irParaAba = (e: EstadoAnaliseVG, grupo: string | null): EstadoAnaliseVG =>
   ({ ...e, aba: grupo, foco: grupo ? [grupo] : [], grafico: null });
 
-/** clique numa linha da tabela da ESQUERDA (um filho da aba, ou o total = a própria aba): ela vira o foco */
+/** clique numa linha da tabela da ESQUERDA (um filho do nível mostrado, ou o total = o próprio nível): ela vira a SELEÇÃO (o foco).
+    P100 v4: a esquerda navega — grupo ou atividade escolhidos DESCEM (a tabela passa a mostrar os filhos deles); o centro fica só
+    selecionado (o último nível dela). O gráfico volta à seleção. */
 export const escolherNaEsquerda = (e: EstadoAnaliseVG, caminho: CaminhoVG): EstadoAnaliseVG => ({ ...e, foco: caminho, grafico: null });
 
-/** clique numa linha da tabela da DIREITA (um filho do foco): o gráfico mostra ela; clicar de novo volta ao foco */
+/** "‹" do título da esquerda: sobe um nível (nunca acima da aba) — a seleção vira o nível de cima */
+export const subirNaEsquerda = (e: EstadoAnaliseVG, nivel: CaminhoVG): EstadoAnaliseVG =>
+  (nivel.length <= (e.aba ? 1 : 0) ? e : { ...e, foco: nivel.slice(0, -1), grafico: null });
+/** o título da tabela da esquerda pelo nível mostrado */
+export const TITULO_NIVEL_ESQ = ['Grupos', 'Atividades', 'Centros'] as const;
+
+/** clique numa linha da tabela da DIREITA (um subcentro do foco): o gráfico mostra ela; clicar de novo volta ao foco */
 export const escolherNaDireita = (e: EstadoAnaliseVG, caminho: CaminhoVG): EstadoAnaliseVG =>
   ({ ...e, grafico: mesmoCaminho(e.grafico, caminho) ? null : caminho });
 
