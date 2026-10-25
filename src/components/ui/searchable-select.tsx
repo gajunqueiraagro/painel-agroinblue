@@ -113,6 +113,9 @@ interface SearchableSelectProps {
   /** P94 — o valor NÃO está nas opções do cliente (quem decide é o chamador, depois que as opções carregaram): o gatilho diz
    *  "valor inexistente (limpar)" em vermelho, nunca o rótulo do vazio nem o valor cru; o ✕ de sempre limpa. Ausente = nada muda. */
   valorInexistente?: boolean;
+  /** P102 — o nome escolhido inteiro no gatilho, rolando no lugar (`uma-linha-que-rola`), nunca com "…" (fora de tabela, a regra da casa).
+   *  Ausente = como sempre (truncate). */
+  nomeInteiro?: boolean;
 }
 
 export function SearchableSelect({
@@ -132,6 +135,7 @@ export function SearchableSelect({
   triggerClassName,
   tabIndex,
   valorInexistente = false,
+  nomeInteiro = false,
 }: SearchableSelectProps) {
   const [open, setOpen] = useState(false);
   /* "Ativo" = o campo está filtrando alguma coisa. É a mesma pergunta que decide se o
@@ -326,7 +330,7 @@ export function SearchableSelect({
         {inexistente && !open
           ? <span data-testid="valor-inexistente" className="uma-linha-que-rola min-w-0 flex-1 text-left">{FRASE_VALOR_INEXISTENTE}</span>
           : (
-            <span className="truncate text-left flex-1">
+            <span className={nomeInteiro ? 'uma-linha-que-rola min-w-0 text-left flex-1' : 'truncate text-left flex-1'}>
               {open ? '' : selectedLabel}
             </span>
           )}
