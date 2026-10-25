@@ -251,6 +251,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   dia mais frequente do cartão em 12 meses (`fn_cartao_dias_de_vencimento`); "Parcelar este lançamento" pela RPC (divisão às N) + docs às N.
 - P74b: voltar para à vista SÓ por `fn_parcelamento_voltar_a_vista` (sem parcela paga; a 1/N volta pelo `avista_original`, N−1 canceladas
   "voltou para à vista"); `fn_parcelamento_excluir` cancela a compra inteira, inclusive a 1/N — não é a volta.
+- P101: abaixo de 1000px a prévia da nota tem ABAS (Arquivo | Nota e fornecedor | Parcelas e lançamento; `useLarguraDaJanela`) e o "Novo a
+  partir da nota" perde a coluna CNPJ — nunca exceção "de 1000px para cima" no gate. P102: o Editar obrigação tem cenário (`obrigacao-*`).
 - P53: a mesma pergunta ao mesmo tempo = um pedido (`criarUmPedidoPorVez`, só o voo, nada guardado); o `checkLockNow` segue direto.
 - P95 (DANFE-CHAVE-EM-GRUPOS-01): DANFE com a chave/rótulos picados em itens se lê pela linha (`chaveEmGrupos` SÓ com DV certo; `aoLado`);
   sem chave legível, DIGITAR A CHAVE (`chaveDigitada.ts`: DV, modelo 55; avulsa 890 não usa o CNPJ; o resto em branco, âmbar na prévia);
