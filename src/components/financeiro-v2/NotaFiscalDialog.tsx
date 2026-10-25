@@ -40,6 +40,8 @@ import { safraSugerida } from '@/lib/agri/safraSugerida';
 import { ATIVIDADES } from '@/lib/financeiro/ultimaAtividade';
 import { useCulturasDaSafra } from '@/hooks/useAreaPlantada';
 import { Input } from '@/components/ui/input';
+import { Segmentado } from '@/components/ui/segmentado';
+import { useLarguraDaJanela } from '@/hooks/useLarguraDaJanela';
 import { GradeDeParcelas, type ModoDasParcelas } from '@/components/financiamentos/GradeDeParcelas';
 import { motivoNaoSalva, parcelasDoMensal, type ParcelaLivre } from '@/lib/financiamentos/parcelasLivres';
 import {
@@ -142,6 +144,8 @@ function Kv({ k, v, titulo, erro, className, testid, num }: { k: string; v: Reac
 }
 const GRADE_KV = 'grid gap-x-3 gap-y-0.5 [grid-template-columns:repeat(auto-fill,minmax(150px,1fr))]';
 
+type AbaDaNota = 'arquivo' | 'nota' | 'lancamento';
+
 export interface NotaParaLancar { arquivo: File; bytes: ArrayBuffer; lido: NotaLidaOk; doXml: DoXml }
 
 export function NotaFiscalDialog({
@@ -179,6 +183,9 @@ export function NotaFiscalDialog({
   const pelaChave = nota.lido.pelaChave === true;
   const efetiva = useMemo(() => (pelaChave ? comDadosDigitados(nota, digitado) : nota), [pelaChave, nota, digitado]);
   const { lido, doXml: doXmlLido, bytes, arquivo } = efetiva;
+  /* P101 — abaixo de 1000px: as abas (Arquivo | Nota e fornecedor | Parcelas e lançamento) no lugar das duas colunas */
+  const estreito = useLarguraDaJanela() < 1000;
+  const [aba, setAba] = useState<AbaDaNota>('nota');
   const n = lido.nota;
   /* ── P74 — "COMO FOI PAGO?" (NOTA-CARTAO-PARCELADO-01): Duplicatas da nota | À vista | Cartão em N×. A escolha vira a PROPOSTA da nota
      (`comPagamento`) e daí para baixo é o caminho de sempre: criar, o PDF nas N, a busca de "já lançada" (procura as parcelas do cartão), o
@@ -536,12 +543,21 @@ export function NotaFiscalDialog({
       <DialogContent className="flex h-[min(600px,95vh)] w-[min(1094px,97vw)] max-w-none flex-col gap-0 overflow-hidden p-0" data-testid="nota-fiscal">
         <div className="flex h-9 shrink-0 items-center gap-2.5 bg-primary px-3.5 pr-10">
           <DialogTitle className="text-[13px] font-semibold leading-none text-primary-foreground">Novo lançamento · da nota fiscal</DialogTitle>
-          <span className="text-[11px] text-primary-foreground/80">{lido.origem === 'pdf' ? 'PDF lido' : 'XML lido'} · confira antes de criar</span>
+          {!estreito && <span className="text-[11px] text-primary-foreground/80">{lido.origem === 'pdf' ? 'PDF lido' : 'XML lido'} · confira antes de criar</span>}
           <DialogDescription className="sr-only">O que foi lido da nota fiscal, para criar o lançamento parcelado.</DialogDescription>
+          {/* P101 — abaixo de 1000px a prévia não cabe em duas colunas sem rolar (a 750×483 sobravam 21px às parcelas): três abas, na barra do
+              título (não gastam altura) */}
+          {estreito && (
+            <span className="ml-auto rounded-md bg-card" data-testid="nota-abas">
+              <Segmentado<AbaDaNota> altura={22} valor={aba} onEscolher={setAba}
+                opcoes={[{ valor: 'arquivo', rotulo: 'Arquivo' }, { valor: 'nota', rotulo: 'Nota e fornecedor' }, { valor: 'lancamento', rotulo: 'Parcelas e lançamento' }]} />
+            </span>
+          )}
         </div>
 
-        <div className="grid min-h-0 flex-1 gap-2 bg-muted p-2" style={{ gridTemplateColumns: 'minmax(160px, 28%) minmax(0, 1fr)' }}>
+        <div className="grid min-h-0 flex-1 gap-2 bg-muted p-2" style={{ gridTemplateColumns: estreito ? 'minmax(0, 1fr)' : 'minmax(160px, 28%) minmax(0, 1fr)' }}>
           {/* ── ARQUIVO ─────────────────────────────────────────────────────────────────────────────── */}
+          {(!estreito || aba === 'arquivo') && (
           <section className={cn(BLOCO, 'min-h-0')} data-testid="nota-bloco-arquivo">
             <TituloDoBloco nome="Arquivo" acao={<span className={pelaChave ? CHIP_AVISO : CHIP_OK}>{pelaChave ? 'PDF · pela chave digitada' : lido.origem === 'pdf' ? 'PDF com texto · leitura direta' : 'XML da nota'}</span>} />
             {lido.origem === 'pdf'
@@ -552,8 +568,11 @@ export function NotaFiscalDialog({
               {lido.origem === 'pdf' && !pelaChave && <span className="shrink-0">amarelo = lido</span>}
             </div>
           </section>
+          )}
 
+          {(!estreito || aba !== 'arquivo') && (
           <div className="flex min-h-0 min-w-0 flex-col gap-1.5">
+            {(!estreito || aba === 'nota') && (<>
             {/* ── NOTA ─────────────────────────────────────────────────────────────────────────────── */}
             <section className={BLOCO} data-testid="nota-bloco-nota">
               <TituloDoBloco nome="Nota" acao={pelaChave
@@ -646,7 +665,9 @@ export function NotaFiscalDialog({
                 </div>
               </div>
             </section>
+            </>)}
 
+            {(!estreito || aba === 'lancamento') && (<>
             {/* ── NOTA-JA-LANCADA-01: no lugar de Parcelas e Itens, o que ja' esta' lancado (mesma altura: nada se desloca) ───── */}
             {jaLancada && !bloqueio ? (
               <section className={cn(BLOCO, 'min-h-0 flex-1')} data-testid="nota-ja-lancada">
@@ -928,8 +949,10 @@ export function NotaFiscalDialog({
                 </div>
               </div>
             </section>
+            </>)}
 
           </div>
+          )}
         </div>
 
         {/* ── RODAPE FIXO ──────────────────────────────────────────────────────────────────────────── */}
