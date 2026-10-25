@@ -485,7 +485,7 @@ if (tela === 'mesclar') {
   const gavetaVG = (a: any) => { const r = VG.gaveta(a); return comFatura && r.lista ? { ...r, lista: { ...r.lista, faturas_cartao: 1 } } : r; };
   g.__bancoBancada = { from: () => [], rpc: (fn: string, a: any) => fn === 'fn_vg_filtros'
       ? (duasContas && setTimeout(() => filtrosVG.mudar({ contas: ['c1', 'c2'] }), 0), g.__vgFiltrosReal ?? VG.FILTROS)
-    : fn === 'fn_vg_tela' ? (g.__vgReal ?? VG.tela(a)) : fn === 'fn_vg_analise' ? VG.analise(a) : fn === 'fn_vg_gaveta' ? gavetaVG(a) : null };
+    : fn === 'fn_vg_tela' ? (g.__vgReal ?? VG.tela({ ...a, varia: q.get('vg_grupos') === 'varia' })) : fn === 'fn_vg_analise' ? VG.analise({ ...a, grande: q.get('vg_grande') === '1' }) : fn === 'fn_vg_gaveta' ? gavetaVG(a) : null };
   montarNaUrl(
     <div className="flex h-full flex-col">
       <BarraSecao area="Financeiro" secao="Visão Geral" atalho={<FiltrosBarraVG />} />

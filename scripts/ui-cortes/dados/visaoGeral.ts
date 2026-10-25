@@ -31,7 +31,7 @@ export const FILTROS = {
 };
 
 export function tela(a: { p_de: string; p_ate: string; p_contas?: string[] | null; p_atividade?: string | null; p_safra?: string | null; p_fazendas?: string[] | null;
-  p_status?: string[] | null; p_incluir_vencidos?: boolean | null }) {
+  p_status?: string[] | null; p_incluir_vencidos?: boolean | null; varia?: boolean }) {
   const ms = meses(a.p_de, a.p_ate);
   /* P79 — os chips: o previsto (meses depois de hoje) na proporção dos status ligados; o vencido sai com o chip desligado */
   const st = a.p_status ?? ['previsto', 'programado', 'agendado'];
@@ -56,7 +56,9 @@ export function tela(a: { p_de: string; p_ate: string; p_contas?: string[] | nul
   if (!ativ) add('entrada', 'Outras entradas', ms.map((_, i) => r2(12000 * peso + i * 300)), 'transf', 'Transferências de outras contas');
   add('entrada', 'Sem classificação', ms.map((x) => (x <= HOJE ? r2(4200 * peso) : 0)));
   sai.forEach((g, gi) => {
-    const vals0 = serie(g, gi + 3);
+    /* P100 item 8 — `varia` (`&vg_grupos=varia`): o nº de grupos de saída com valor muda com o mês (jan 1 … ago 8): o card com 1 e
+       com 8 grupos, para o gate de deslocamento */
+    const vals0 = serie(g, gi + 3).map((v, i) => (!a.varia || gi < (+ms[i].slice(5, 7) - 1) % 8 + 1 ? v : 0));
     const vv0 = ms.map((x, i) => (x === HOJE && g === 'Custeio' ? r2(vals0[i] * 0.18 * fs) : 0));
     const vals = incl ? vals0 : vals0.map((v, i) => r2(v - vv0[i]));
     add('saida', g, vals, 'grupo', '', incl ? vv0 : ms.map(() => 0));
@@ -132,7 +134,7 @@ const validas = (ativ: string | null | undefined) => ativ === 'pecuaria' ? ['rs'
   : ativ === 'agricultura' ? ['rs', 'rs_ha_prod', 'rs_ha_agri', 'rs_ha_plant'] : ['rs', 'rs_ha_prod'];
 
 export function analise(a: { p_de: string; p_ate: string; p_mes: string; p_lado: 'entrada' | 'saida'; p_aba?: string | null; p_foco?: (string | null)[];
-  p_grafico?: (string | null)[] | null; p_criterio?: string; p_unidade?: string; p_contas?: string[] | null }) {
+  p_grafico?: (string | null)[] | null; p_criterio?: string; p_unidade?: string; p_contas?: string[] | null; grande?: boolean }) {
   const ms = meses(a.p_de, a.p_ate);
   const k = ms.indexOf(a.p_mes);
   const crit = a.p_criterio ?? 'mes', uni = a.p_unidade ?? 'rs';
@@ -150,10 +152,11 @@ export function analise(a: { p_de: string; p_ate: string; p_mes: string; p_lado:
   const rotulo = (p: (string | null)[]) => p.length === 0 ? (a.p_lado === 'saida' ? 'Saídas' : 'Entradas') : p.length === 1 ? p[0]!
     : p.length === 2 ? (p[1] ? ROT_ATIV[p[1]] : 'Sem atividade') : p[p.length - 1]!;
   const linha = (p: (string | null)[]) => {
-    const v = u(janela(p), p), mt = temMeta(p) && v != null ? r2(v * 0.92) : null;
+    /* P100 item 5 — `grande` (o NJ do pior caso: `&vg_grande=1`): a meta a 1/11 do valor (≈ +999,9%) e 5 dígitos de lançamentos */
+    const v = u(janela(p), p), mt = temMeta(p) && v != null ? r2(v * (a.grande ? 1 / 10.999 : 0.92)) : null;
     const razao = mt ? Math.round((v! / mt) * 10000) / 10000 : null;
     return { caminho: p, rotulo: rotulo(p), grupo: p[0] ?? null, valor: v, meta: mt, dif: mt == null || v == null ? null : r2(v - mt),
-      pct: mt ? r1(((v! - mt) / mt) * 100) : null, razao, qtd: 12 + p.length * 7, unidade_valida: ok(p),
+      pct: mt ? r1(((v! - mt) / mt) * 100) : null, razao, qtd: a.grande ? 99999 - p.length * 13 : 12 + p.length * 7, unidade_valida: ok(p),
       faixa: razao == null ? null : razao < 0.9 ? 'boa' : razao < 1 ? 'ideal' : razao < 1.15 ? 'risco' : 'critica' };
   };
   const filhos = (p: (string | null)[]): (string | null)[][] => p.length === 0 ? grupos.map((g) => [g]) : p.length === 1 ? ATIV.map((x) => [...p, x[0]])
@@ -162,6 +165,10 @@ export function analise(a: { p_de: string; p_ate: string; p_mes: string; p_lado:
   const f = a.p_foco ?? [];
   const g = a.p_grafico ?? f;
   const pai = g.slice(0, Math.max(0, g.length - 1));
+  /* P100 (111951) — a tabela da direita: TODOS os subcentros abaixo do foco, com o centro, maior valor primeiro (Custeio · total: 48) */
+  const subcentros = (p: (string | null)[]): (string | null)[][] => (p.length >= 4 ? [] : p.length === 3 ? filhos(p) : filhos(p).flatMap(subcentros));
+  const niv = f.length >= 3 ? f.slice(0, 2) : f;
+  const subs = subcentros(f).map((c) => ({ ...linha(c), centro: c[2] ?? 'Sem centro' })).sort((x, y) => (y.valor ?? 0) - (x.valor ?? 0));
   const tot = janela(n);
   return {
     lado: a.p_lado, mes: a.p_mes, criterio: crit, unidade: uni, meses_janela: crit === 'mes' ? 1 : k + 1, periodo: { de: ms[0], ate_mes: a.p_mes },
@@ -169,11 +176,12 @@ export function analise(a: { p_de: string; p_ate: string; p_mes: string; p_lado:
     unidades: UNID.map(([id, rot]) => ({ id, rotulo: rot, valida: validas(f[1] ?? null).includes(id) })),
     resumo: { ...linha(n), valor_rs: r2(tot), pct_da_raiz: n.length ? r1((tot / janela([])) * 100) : null,
       fatias: filhos(n).map((c) => ({ caminho: c, rotulo: rotulo(c), grupo: c[0], pct: r1((janela(c) / tot) * 100) })) },
-    tabela: { total: linha(n), linhas: filhos(n).map(linha) },
-    foco: { total: linha(f), linhas: filhos(f).map(linha) },
+    /* P100 v4 (111952): a esquerda navega — o nível é a seleção (aba ou atividade) ou a atividade do centro escolhido */
+    tabela: { total: linha(niv), linhas: filhos(niv).map(linha), nivel: niv },
+    foco: { total: linha(f), linhas: subs },
     grafico: {
       item: linha(g), caminho: [[], ...g.map((_, i) => g.slice(0, i + 1))].map((c) => ({ caminho: c, rotulo: rotulo(c) })),
-      irmaos: g.length ? filhos(pai) : [],
+      irmaos: !g.length ? [] : g.length === 4 && g.length > f.length ? subs.map((x) => x.caminho) : filhos(pai),
       serie: !ok(g) ? [] : ms.map((x, i) => { const v = mesV(g, i); const ac = ms.slice(0, i + 1).reduce((s, _, j) => s + mesV(g, j), 0);
         return { am: x, realizado: x <= HOJE ? u(v, g) : 0, previsto: x > HOJE ? u(v, g) : 0, total: u(v, g), media: x <= HOJE ? u(ac / (i + 1), g) : null,
           meta: temMeta(g) ? u(v * 0.92, g) : null }; }),
