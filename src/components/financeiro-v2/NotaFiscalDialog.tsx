@@ -779,7 +779,9 @@ export function NotaFiscalDialog({
                           className={cn('h-[22px] px-2 text-[10.5px] tabular-nums', modoCartao === 'mensal' && !nCartaoValido && 'border-destructive')} />
                       </div>
                       <div className="min-w-0">
-                        <span className={cn(REGUA_ROTULO, 'uma-linha-que-rola', sugeridaAtiva && 'text-amber-800', modoCartao === 'mensal' && !primeira && 'text-destructive')}
+                        {/* P104 — o rótulo da sugestão em duas linhas RESERVADAS, fonte menor: nunca rola escondido no lugar */}
+                        <span className={cn('mb-0.5 block h-[26px] overflow-hidden whitespace-normal break-words text-[9.5px] font-normal leading-[13px] text-muted-foreground',
+                          sugeridaAtiva && 'text-amber-800', modoCartao === 'mensal' && !primeira && 'text-destructive')}
                           data-testid="nota-cartao-rotulo-fatura" title={sugeridaAtiva ? 'O dia mais frequente das faturas deste cartão nos últimos 12 meses, no mês seguinte à emissão.' : undefined}>
                           {sugeridaAtiva && diaSugerido ? rotuloDaSugestao(nomeDoCartao, diaSugerido) : '1ª fatura'}</span>
                         <DatePicker value={modoCartao === 'livres' ? (livresCartao[0]?.vencimento ?? '') : primeira} disabled={modoCartao === 'livres'} data-testid="nota-cartao-fatura"
