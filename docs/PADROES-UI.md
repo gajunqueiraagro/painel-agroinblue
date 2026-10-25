@@ -538,6 +538,14 @@ sem fechar o modal; conta que não fecha não grava e deixa a frase da lib. O ho
 é recusa. Quem calcula é `src/lib/calculos/contaNoCampo.ts` — não escrever outro
 avaliador. Sem operador o campo é byte a byte o de antes (`campoMoeda.fotos.json`).
 
+**A conta no campo de número (P91, 25/10/2026).** Quilo, arroba, percentual, cabeça e dias
+usam o **`CampoNumeroComConta`** (`src/components/ui/campo-numero-com-conta.tsx`): o mesmo
+gesto, porque o gesto mora num hook só (`useContaNoCampo`, em `conta-no-campo.tsx`), que
+o `CampoMoeda` também usa. Lê pelo `parseMoeda`, arredonda nas `casas` do campo (cabeça 0,
+GMD 3, médias 5), escreve com o piso de 2 do A19; `percentual` faz o "%" digitado ser a
+unidade; `soAoSair` entrega o número só ao sair/Enter. Dinheiro continua no `CampoMoeda`,
+inclusive com 5 casas. Campo numérico novo nasce nele, nunca num `Input` cru.
+
 > Este padrão nasceu de um defeito com causa conhecida: o campo já existia, mas **como
 > função local não exportada** dentro de `AbaCompromissosOC.tsx`. Nenhuma outra tela
 > conseguia reusá-lo, e a aba Documentos exibia `106425`. Componente compartilhado que
