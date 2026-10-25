@@ -1162,6 +1162,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                         showBankDetails="banco"
                         className={CAMPO}
                         comBusca
+                        nomeInteiro
                       />
                       <p className={APOIO}>De onde saem as parcelas</p>
                     </div>
