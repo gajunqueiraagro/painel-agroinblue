@@ -282,12 +282,31 @@ if (tela === 'mesclar') {
     versao: 1, ligado_a_qtd: Math.max(NP, 1), emitente_id: null, emitente_nome: 'DISTRIBUIDORA SINTÉTICA DE PRODUTOS VETERINÁRIOS DO CENTRO OESTE LTDA', emitente_documento: '11222333000181',
     documento_id: 'd-nf-compra', nome: 'NF 12345.pdf', tipo: 'application/pdf', url: 'c/l/nf.pdf', especie: 'nf', numero: '12345', serie: null, chave_acesso: null,
     data_emissao: '2026-10-01', valor_documento: 344 * Math.max(NP, 1) })) : [];
+  /* P102 — o Editar obrigação da compra parcelada (o "Editar" do detalhe): os lançamentos das N parcelas e a prévia do "Voltar para à vista"
+     (pronta; `&volta=paga`: a parcela 2 paga, a recusa do banco). SINTÉTICO. */
+  const LANC_DA_COMPRA = (d.parcelas ?? []).map((x: any, i: number) => ({ id: x.lancamento_id ?? `lp-${i + 1}`, cliente_id: 'cli', fazenda_id: d.fin.fazenda_id ?? null,
+    valor: x.valor_total, data_vencimento: x.data_vencimento, data_competencia: x.data_vencimento, data_pagamento: null, status_transacao: 'programado',
+    forma_pagamento: 'Boleto', conta_bancaria_id: null, financiamento_id: d.fin.id, numero_parcela: x.numero_parcela, safra_id: null, cultura: null, fase: null,
+    plano_conta_id: null, descricao: `${d.fin.descricao} ${i + 1}/${(d.parcelas ?? []).length}`, cancelado: false }));
+  /* a fazenda e a conta do contrato da bancada existem nas listas (sem elas o Editar obrigação mostrava o id cru, o que o app real não faz) */
+  if (NP > 0) g.__fazendaBancada = { fazendas: [{ id: d.fin.fazenda_id, nome: 'Faz. Exemplo', cliente_id: 'cli' }], fazendaAtual: null, isGlobal: true, fazendaId: '__global__',
+    setFazendaAtual: () => {} };
+  const CONTAS_DO_CONTRATO = [{ id: d.fin.conta_bancaria_id, nome_conta: 'Banco Exemplo Cooperativo', nome_exibicao: 'Banco Exemplo Cooperativo', banco: 'Exemplo',
+    tipo_conta: 'cc', fazenda_id: d.fin.fazenda_id, codigo_conta: null, agencia: '0001', numero_conta: '12345', conta_digito: '6', ativa: true, aliases: null }];
+  const ANTES_DA_VOLTA = LANC_DA_COMPRA.map((l: any, i: number) => ({ numero: i + 1, lancamento_id: l.id, vencimento: l.data_vencimento, valor: l.valor }));
+  const VOLTA = q.get('volta') === 'paga'
+    ? { ok: false, simulado: true, financiamento_id: d.fin.id, antes: ANTES_DA_VOLTA, recusa: { motivo: 'ha_paga', parcela: 2, frase: `A parcela 2/${ANTES_DA_VOLTA.length} já foi paga em 09/11/2026: desfaça o pagamento antes.` } }
+    : { ok: true, simulado: true, financiamento_id: d.fin.id, lancamento_id: LANC_DA_COMPRA[0]?.id ?? 'lp-1', valor: ANTES_DA_VOLTA.reduce((s: number, x: any) => s + Number(x.valor), 0),
+        vencimento: ANTES_DA_VOLTA[0]?.vencimento ?? null, competencia: ANTES_DA_VOLTA[0]?.vencimento ?? null, descricao: d.fin.descricao, canceladas: Math.max(ANTES_DA_VOLTA.length - 1, 0),
+        original_guardado: false, antes: ANTES_DA_VOLTA };
   g.__bancoBancada = {
     from: (t: string, e: any) => t === 'financiamentos' ? [d.fin] : t === 'financiamento_parcelas' ? d.parcelas : t === 'financiamento_liberacoes' ? d.liberacoes ?? []
+      : t === 'financeiro_lancamentos_v2' ? LANC_DA_COMPRA : t === 'financeiro_contas_bancarias' ? CONTAS_DO_CONTRATO
       : t === 'financiamento_destinacoes' ? d.destinacoes ?? [] : t === 'financiamento_documentos' ? d.documentos ?? []
       : t === 'vw_lancamento_documentos' ? DOCS_DA_COMPRA.filter((x) => (e?.eq?.especie == null || x.especie === e.eq.especie) && (e?.eq?.lancamento_id == null || x.lancamento_id === e.eq.lancamento_id)) : [],
     rpc: (fn: string) => fn === 'fn_financiamento_situacao' ? d.situacao : fn === 'fn_contrato_tela' ? d.tela ?? null : fn === 'fn_financiamento_captacoes_livres' ? []
-      : fn === 'fn_consorcio_tela' ? c.tela : fn === 'fn_consorcio_cronograma' ? c.cronograma : null,
+      : fn === 'fn_consorcio_tela' ? c.tela : fn === 'fn_consorcio_cronograma' ? c.cronograma
+      : fn === 'fn_parcelamento_voltar_a_vista' ? VOLTA : null,
   };
   montar(<FinanciamentoDetalhe id={d.fin.id} />);
 } else if (tela === 'casar-bloco') {
