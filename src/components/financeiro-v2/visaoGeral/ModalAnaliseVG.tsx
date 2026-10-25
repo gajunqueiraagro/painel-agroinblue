@@ -3,15 +3,17 @@
  *   · Abre do clique num total ou grupo (card ou grade), na ABA e no nível clicados; cabeçalho: abas Raiz | grupos (posição fixa).
  *   · Esquerda: o resumo da aba (donut, valor, meta, vs meta, período, seguindo o seletor) e a tabela dos filhos da aba com o seletor
  *     `mês | Média do período | Acumulado` e a UNIDADE (só as que o banco diz que valem) → Realizado · Meta · Dif. R$ · %.
- *   · Direita: o gráfico do item (caminho clicável, ‹ › entre irmãos, KPIs) e a tabela do nível de baixo, com a régua "vs meta" e o
- *     "N lanç. ›", que abre a GAVETA DE LANÇAMENTOS (PR 5, `GavetaVG`) na lateral direita do modal, no nó da linha.
+ *   · Direita: o gráfico do item (caminho clicável, ‹ › entre irmãos, KPIs) e a tabela dos SUBCENTROS do item (P100: nunca repete a
+ *     da esquerda — Custeio · total → todos os subcentros do Custeio; Pecuária → os da Pecuária; um centro → os dele), com a régua
+ *     "vs meta" e o "N lanç. ›", que abre a GAVETA DE LANÇAMENTOS (PR 5, `GavetaVG`) na lateral direita do modal, no nó da linha.
+ *     Clicar num subcentro põe ele no gráfico (o caminho mostra a cadeia inteira); o centro se escolhe pelo caminho e pelas setas.
  *   · Sem meta: "—". A TELA NUNCA SOMA: todo número vem pronto da `fn_vg_analise`; aqui só se escreve e se desenha.
  *   · REGRA SOBERANA: nada muda de altura ou posição ao trocar aba, item, mês, critério, unidade ou nível — toda lista rola por dentro
  *     do próprio quadro, e o número anterior fica até o novo chegar (nada pisca).
  *   · PR 5 — a gaveta segue o mês e o critério do modal (a mesma janela); Esc fecha a gaveta antes do modal; o lançamento abre no
  *     modal padrão (por cima, pela página) e, salvo, a página sobe a `versao`: modal e gaveta releem o que mostram, no mesmo lugar.
  */
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { ChevronDown, X } from 'lucide-react';
 import { DialogOverlay, DialogPortal } from '@/components/ui/dialog';
@@ -22,12 +24,13 @@ import {
   COR, MESES_ABR, brl, corDoGrupo, corVariacao, mes0De, mil1, n0, pct1, rotuloMes, type AlvoAnaliseVG, type LadoVG,
 } from '@/lib/financeiro/visaoGeral';
 import { GavetaVG } from '@/components/financeiro-v2/visaoGeral/GavetaVG';
+import { alturaTexto, curvaMonotona, larguraTexto, posicionar, trechos, type Caixa, type Ponto } from '@/lib/financeiro/graficoAnaliseVG';
 import {
   avisosDaLista, carregarGavetaVG, filtrosDaLista, recarregarGavetaVG, type FiltrosListaVG, type GavetaVG as DadosGavetaVG, type LancamentoGavetaVG,
 } from '@/lib/financeiro/visaoGeralGaveta';
 import {
-  COR_FAIXA, ROTULO_FAIXA, andarEntreIrmaos, carregarAnaliseVG, chaveCaminho, descer, escolherNaDireita, escolherNaEsquerda,
-  estadoInicialAnalise, irParaAba, irParaCaminho, mesmoCaminho, pctVar, posicaoNaRegua,
+  COR_FAIXA, ROTULO_FAIXA, andarEntreIrmaos, carregarAnaliseVG, chaveCaminho, escolherNaDireita, escolherNaEsquerda,
+  TITULO_NIVEL_ESQ, estadoInicialAnalise, irParaAba, irParaCaminho, mesmoCaminho, pctVar, posicaoNaRegua, subirNaEsquerda,
   type AnaliseVG, type CaminhoVG, type ContextoAnaliseVG, type CriterioVG, type EstadoAnaliseVG, type LinhaAnaliseVG, type UnidadeVG,
 } from '@/lib/financeiro/visaoGeralAnalise';
 
@@ -106,6 +109,12 @@ export function ModalAnaliseVG({ alvo, ctx, rotuloContas, recorte = '', versao =
 
   const lado = e.lado;
   const raizRotulo = lado === 'saida' ? 'Saídas' : 'Entradas';
+  /* P100 v4 — o nível que a esquerda mostra (do banco; enquanto não chega, o da seleção) e se há para onde subir ("‹") */
+  const nivelEsq: CaminhoVG = d?.tabela.nivel ?? (e.foco.length >= 3 ? e.foco.slice(0, 2) : e.foco);
+  const podeSubir = nivelEsq.length > (e.aba ? 1 : 0);
+  const tituloEsq = `${TITULO_NIVEL_ESQ[Math.min(nivelEsq.length, 2)]} · ${d?.tabela.total?.rotulo ?? ''}`;
+  /* a seleção é um centro: a coluna "Centro" da direita some */
+  const comCentro = e.foco.length < 3;
   const lancar = (c: CaminhoVG) => { setGaveta(c); onLancamentos?.(c, e); };
 
   return (
@@ -145,9 +154,13 @@ export function ModalAnaliseVG({ alvo, ctx, rotuloContas, recorte = '', versao =
               <Resumo d={d} e={e} rotuloContas={rotuloContas} />
               <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-[#dfe4ea] bg-white" data-testid="analise-tabela" data-desloca="">
                 <div className="flex h-[30px] shrink-0 items-center justify-between gap-2 px-2">
-                  <span className="uma-linha-que-rola min-w-0 text-[11px] font-bold" title={`${e.aba === null ? 'Grupos' : 'Atividades'} · ${d?.tabela.total?.rotulo ?? ''}`}>
-                    {e.aba === null ? 'Grupos' : 'Atividades'} · {d?.tabela.total?.rotulo ?? ''}
-                  </span>
+                  {/* P100 v4 — "‹ Centros · Pecuária": o "‹" tem lugar reservado (apagado quando não há para onde subir) */}
+                  <div className="flex min-w-0 items-center gap-1">
+                    <button type="button" aria-label="Voltar um nível" title="Voltar um nível" disabled={!podeSubir} data-testid="analise-tabela-subir"
+                      onClick={() => setE(subirNaEsquerda(e, nivelEsq))}
+                      className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded border border-[#cfd6df] bg-white text-[12px] leading-none disabled:invisible">‹</button>
+                    <span className="uma-linha-que-rola min-w-0 text-[11px] font-bold" title={tituloEsq} data-testid="analise-tabela-titulo">{tituloEsq}</span>
+                  </div>
                   <div className="flex shrink-0 items-center gap-1.5">
                     <Segmentado<CriterioVG> altura={20} fonte={9.5} valor={e.criterio} onEscolher={(c) => setE({ ...e, criterio: c })} opcoes={[
                       { valor: 'mes', rotulo: <span className="inline-block w-[36px] text-center">{rotuloMes(e.am)}</span>, title: 'O mês escolhido' },
@@ -161,13 +174,13 @@ export function ModalAnaliseVG({ alvo, ctx, rotuloContas, recorte = '', versao =
                   <table className="w-full table-fixed border-collapse">
                     <Colunas larguras={LARG_ESQ} />
                     <thead className="sticky top-0 z-[1] bg-white">
-                      <Cabecalho rotulos={[e.aba === null ? 'GRUPO' : 'ATIVIDADE', rotuloCriterio(e), 'META', 'DIF. R$', '%']} />
+                      <Cabecalho rotulos={[['GRUPO', 'ATIVIDADE', 'CENTRO'][Math.min(nivelEsq.length, 2)], rotuloCriterio(e), 'META', 'DIF. R$', '%']} />
                       {d?.tabela.total && <LinhaEsquerda d={d} l={d.tabela.total} i={-1} forte ativa={mesmoCaminho(e.foco, d.tabela.total.caminho)}
                         onClick={() => setE(escolherNaEsquerda(e, d.tabela.total!.caminho))} />}
                     </thead>
                     <tbody>
                       {d?.tabela.linhas.map((l, i) => (
-                        <LinhaEsquerda key={chaveCaminho(l.caminho)} d={d} l={l} i={i} ativa={e.foco.length > (e.aba ? 1 : 0) && mesmoCaminho(e.foco.slice(0, l.caminho.length), l.caminho)}
+                        <LinhaEsquerda key={chaveCaminho(l.caminho)} d={d} l={l} i={i} ativa={mesmoCaminho(e.foco, l.caminho)}
                           onClick={() => setE(escolherNaEsquerda(e, l.caminho))} />
                       ))}
                     </tbody>
@@ -182,10 +195,14 @@ export function ModalAnaliseVG({ alvo, ctx, rotuloContas, recorte = '', versao =
                 <div className="grid h-[26px] shrink-0 items-center gap-1.5" style={{ gridTemplateColumns: '22px minmax(0, 1fr) 22px' }}>
                   <BotaoSeta rotulo="Anterior" testid="analise-anterior" desligado={(d?.grafico.irmaos.length ?? 0) < 2}
                     onClick={() => d && setE(andarEntreIrmaos(e, d.grafico.irmaos, -1))}>‹</BotaoSeta>
-                  <div className="uma-linha-que-rola flex min-w-0 items-center gap-1" data-testid="analise-caminho">
+                  {/* P100 — o caminho com respiro: "Saídas › Custeio › Pecuária › Mão de Obra" (o › em cinza, um espaço de cada lado) */}
+                  <div className="uma-linha-que-rola flex min-w-0 items-center" data-testid="analise-caminho">
                     {(d?.grafico.caminho ?? []).map((p, j, arr) => j < arr.length - 1 ? (
-                      <button key={chaveCaminho(p.caminho)} type="button" className="shrink-0 whitespace-nowrap text-[10px] text-muted-foreground hover:text-[#1f5fa8]"
-                        onClick={() => setE(irParaCaminho(e, p.caminho))} data-testid={`analise-caminho-${j}`}>{p.rotulo} ›</button>
+                      <Fragment key={chaveCaminho(p.caminho)}>
+                        <button type="button" className="shrink-0 whitespace-nowrap text-[10px] text-muted-foreground hover:text-[#1f5fa8]"
+                          onClick={() => setE(irParaCaminho(e, p.caminho))} data-testid={`analise-caminho-${j}`}>{p.rotulo}</button>
+                        <span aria-hidden className="shrink-0 whitespace-pre text-[10px] text-[#9aa5b4]" data-testid="analise-caminho-sep">{' › '}</span>
+                      </Fragment>
                     ) : (
                       <span key={chaveCaminho(p.caminho)} className="shrink-0 whitespace-nowrap text-[12.5px] font-bold" data-testid="analise-caminho-atual">
                         {p.rotulo}{p.caminho.length === (e.aba ? 1 : 0) ? ' · total' : ''}
@@ -201,21 +218,21 @@ export function ModalAnaliseVG({ alvo, ctx, rotuloContas, recorte = '', versao =
 
               <section className="flex h-[clamp(150px,44%,270px)] shrink-0 flex-col overflow-hidden rounded-md border border-[#dfe4ea] bg-white" data-testid="analise-foco" data-desloca="">
                 <div className="flex h-[26px] shrink-0 items-center justify-between gap-2 px-2">
-                  <span className="uma-linha-que-rola min-w-0 text-[11px] font-bold" title={`${ROTULO_NIVEL[e.foco.length + 1] ?? 'Itens'} · ${d?.foco.total?.rotulo ?? ''}`}>{ROTULO_NIVEL[e.foco.length + 1] ?? 'Itens'} · {d?.foco.total?.rotulo ?? ''}</span>
+                  <span className="uma-linha-que-rola min-w-0 text-[11px] font-bold" title={`Subcentros · ${d?.foco.total?.rotulo ?? ''}`} data-testid="analise-foco-titulo">Subcentros · {d?.foco.total?.rotulo ?? ''}</span>
                   <Regua lado={lado} razao={d?.grafico.item?.razao ?? null} />
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto" data-testid="analise-foco-lista">
                   <table className="w-full table-fixed border-collapse">
-                    <Colunas larguras={LARG_DIR} />
-                    <thead className="sticky top-0 z-[1] bg-white">
-                      <Cabecalho rotulos={[(ROTULO_NIVEL[e.foco.length + 1] ?? 'ITEM').toUpperCase(), rotuloCriterio(e), 'META', 'DIF. R$', '%', 'LANÇ.']} />
-                      {d?.foco.total && <LinhaDireita d={d} l={d.foco.total} forte ativa={!e.grafico} onClick={() => setE({ ...e, grafico: null })} onLanc={lancar} />}
+                    <Colunas larguras={comCentro ? LARG_DIR : LARG_DIR.slice(1)} />
+                    {/* a coluna "Centro" some quando a seleção é um centro (de propósito): o cabeçalho da direita é livre no gate de deslocamento */}
+                    <thead className="sticky top-0 z-[1] bg-white" data-desloca-livre="">
+                      <Cabecalho rotulos={['SUBCENTRO', ...(comCentro ? ['CENTRO'] : []), rotuloCriterio(e), 'META', 'DIF. R$', '%', 'LANÇ.']} />
+                      {d?.foco.total && <LinhaDireita d={d} l={d.foco.total} forte comCentro={comCentro} ativa={!e.grafico} onClick={() => setE({ ...e, grafico: null })} onLanc={lancar} />}
                     </thead>
                     <tbody>
                       {d?.foco.linhas.map((l, i) => (
-                        <LinhaDireita key={chaveCaminho(l.caminho)} d={d} l={l} i={i} ativa={mesmoCaminho(e.grafico, l.caminho)}
-                          onClick={() => setE(escolherNaDireita(e, l.caminho))} onLanc={lancar}
-                          onDescer={l.caminho.length < 4 ? () => setE(descer(e, l.caminho)) : undefined} />
+                        <LinhaDireita key={chaveCaminho(l.caminho)} d={d} l={l} i={i} comCentro={comCentro} ativa={mesmoCaminho(e.grafico, l.caminho)}
+                          onClick={() => setE(escolherNaDireita(e, l.caminho))} onLanc={lancar} />
                       ))}
                     </tbody>
                   </table>
@@ -238,7 +255,6 @@ export function ModalAnaliseVG({ alvo, ctx, rotuloContas, recorte = '', versao =
   );
 }
 
-const ROTULO_NIVEL: Record<number, string> = { 1: 'Grupos', 2: 'Atividades', 3: 'Centros', 4: 'Subcentros' };
 const rotuloCriterio = (e: EstadoAnaliseVG) => (e.criterio === 'mes' ? rotuloMes(e.am).toUpperCase() : e.criterio === 'media' ? 'MÉDIA/MÊS' : 'ACUMULADO');
 
 function AbaBotao({ ativa, forte, onClick, testid, children }: { ativa: boolean; forte?: boolean; onClick: () => void; testid: string; children: React.ReactNode }) {
@@ -258,17 +274,21 @@ function BotaoSeta({ rotulo, testid, desligado, onClick, children }: { rotulo: s
   );
 }
 
-/* as colunas (px; o nome leva o resto) — as mesmas no cabeçalho, no total e nas linhas: uma tabela só */
-const LARG_ESQ = [98, 98, 90, 44];
-const LARG_DIR = [98, 98, 90, 44, 62];
+/* as colunas (px; o nome leva o resto) — as mesmas no cabeçalho, no total e nas linhas: uma tabela só.
+   P100 item 5: cada coluna numérica tem a largura do PIOR caso na fonte do total (negrito, 9,5px, tabular) + 8px de folga —
+   "R$ 99.999.999,99" (valor e meta), "−R$ 99.999.999,99" (Dif.), "+999,9%" e o botão "99999 lanç. ›"; a sobra é do nome ("…" + title).
+   A direita: subcentro (o resto) · centro (curto, cinza, "…" + title; some quando a seleção é um centro) · os números · lanç. */
+const LARG_ESQ = [92, 92, 98, 46];
+const LARG_DIR = [50, 92, 92, 98, 46, 66];
 function Colunas({ larguras }: { larguras: number[] }) {
   return <colgroup><col />{larguras.map((w, i) => <col key={i} style={{ width: w }} />)}</colgroup>;
 }
 
 function Cabecalho({ rotulos }: { rotulos: string[] }) {
   return (
-    <tr className="h-[18px] bg-[#2f3d4f] text-[8.5px] font-semibold tracking-[0.03em] text-white">
-      {rotulos.map((r, i) => <th key={i} className={cn('whitespace-nowrap px-1 font-semibold', i > 0 ? 'text-right' : 'text-left', r === 'META' && 'text-[#ffd08a]')}>{r}</th>)}
+    <tr className="h-[18px] bg-[#2f3d4f] text-[7.5px] font-semibold tracking-[0.03em] text-white">
+      {/* o 1º com o MESMO recuo do corpo (px-1.5): nada cortado à esquerda */}
+      {rotulos.map((r, i) => <th key={i} className={cn('whitespace-nowrap font-semibold', i > 0 ? 'px-1 text-right' : 'px-1.5 text-left', r === 'META' && 'text-[#ffd08a]')}>{r}</th>)}
     </tr>
   );
 }
@@ -287,8 +307,8 @@ function Numeros({ d, l, forte }: { d: AnaliseVG; l: LinhaAnaliseVG; forte?: boo
   );
 }
 
-const linhaCls = (forte: boolean | undefined, ativa: boolean) => cn('cursor-pointer border-b border-[#eef1f5]',
-  forte ? 'h-[21px] border-b-[#cfd6df] text-[10.5px] font-bold' : 'h-[18px] text-[9.5px]', ativa ? 'bg-[#e8eef7]' : forte ? 'bg-[#f7f8fa]' : 'bg-white hover:bg-muted/40');
+const linhaCls = (forte: boolean | undefined, ativa: boolean) => cn('cursor-pointer border-b border-[#eef1f5] tabular-nums',
+  forte ? 'h-[21px] border-b-[#cfd6df] text-[9.5px] font-bold' : 'h-[18px] text-[8.5px]', ativa ? 'bg-[#e8eef7]' : forte ? 'bg-[#f7f8fa]' : 'bg-white hover:bg-muted/40');
 
 function LinhaEsquerda({ d, l, i, forte, ativa, onClick }: { d: AnaliseVG; l: LinhaAnaliseVG; i: number; forte?: boolean; ativa: boolean; onClick: () => void }) {
   const nome = `${l.rotulo}${forte ? ' · total' : ''}`;
@@ -305,24 +325,17 @@ function LinhaEsquerda({ d, l, i, forte, ativa, onClick }: { d: AnaliseVG; l: Li
   );
 }
 
-function LinhaDireita({ d, l, i = -1, forte, ativa, onClick, onLanc, onDescer }: {
-  d: AnaliseVG; l: LinhaAnaliseVG; i?: number; forte?: boolean; ativa: boolean; onClick: () => void; onLanc: (c: CaminhoVG) => void; onDescer?: () => void;
+function LinhaDireita({ d, l, i = -1, forte, comCentro, ativa, onClick, onLanc }: {
+  d: AnaliseVG; l: LinhaAnaliseVG; i?: number; forte?: boolean; comCentro: boolean; ativa: boolean; onClick: () => void; onLanc: (c: CaminhoVG) => void;
 }) {
   const nome = `${l.rotulo}${forte ? ' · total' : ''}`;
   return (
     <tr onClick={onClick} aria-selected={ativa} data-testid={forte ? 'analise-foco-total' : `analise-foco-linha-${i}`} className={linhaCls(forte, ativa)}>
-      <td className="px-1.5">
-        <span className="flex min-w-0 items-center gap-1">
-          <span className="truncate" title={nome}>{nome}</span>
-          {onDescer && (
-            <button type="button" className="shrink-0 rounded px-1 text-[9px] font-normal text-[#1f5fa8] hover:bg-[#e8eef7]" title={`Abrir ${l.rotulo}`} aria-label={`Abrir ${l.rotulo}`}
-              onClick={(ev) => { ev.stopPropagation(); onDescer(); }} data-testid={`analise-descer-${i}`}>abrir ›</button>
-          )}
-        </span>
-      </td>
+      <td className="truncate px-1.5" title={nome}>{nome}</td>
+      {comCentro && <td className="truncate px-1 text-[7.5px] font-normal text-muted-foreground" title={l.centro ?? undefined} data-testid={forte ? undefined : `analise-foco-centro-${i}`}>{forte ? '' : l.centro ?? ''}</td>}
       <Numeros d={d} l={l} forte={forte} />
       <td className="px-1.5 text-right">
-        <button type="button" className="h-[15px] w-[54px] whitespace-nowrap rounded-[3px] border border-[#cfd6df] bg-white text-[9px] font-normal hover:border-[#1f5fa8] hover:text-[#1f5fa8]"
+        <button type="button" className="h-[15px] whitespace-nowrap rounded-[3px] border border-[#cfd6df] bg-white px-1 text-[8px] font-normal tabular-nums hover:border-[#1f5fa8] hover:text-[#1f5fa8]"
           onClick={(ev) => { ev.stopPropagation(); onLanc(l.caminho); }} data-testid={forte ? 'analise-lanc-total' : `analise-lanc-${i}`}>{l.qtd} lanç. ›</button>
       </td>
     </tr>
@@ -359,7 +372,8 @@ function Resumo({ d, e, rotuloContas }: { d: AnaliseVG | null; e: EstadoAnaliseV
   const per = d ? (e.criterio === 'mes' ? rotuloMes(e.am) : `${rotuloMes(d.periodo.de)}–${rotuloMes(e.am)} (${d.meses_janela}m)`) : '';
   return (
     <section className="flex h-[86px] shrink-0 items-center gap-3 rounded-md border border-[#dfe4ea] bg-white px-2.5" data-testid="analise-resumo" data-desloca="">
-      <Donut d={d} centro={r ? (e.aba === null ? `${mil1(r.valor_rs)} mil` : pct1(r.pct_da_raiz)) : ''} legenda={e.aba === null ? raiz : `DAS ${raiz}`} />
+      <Donut d={d} centro={r ? (e.aba === null ? valorNoFuro(r.valor_rs) : pct1(r.pct_da_raiz)) : ''} inteiro={r && e.aba === null ? brl(r.valor_rs) : undefined}
+        legenda={e.aba === null ? raiz : `DAS ${raiz}`} />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="truncate text-[8.5px] font-semibold tracking-[0.04em] text-muted-foreground" title={`${r?.rotulo ?? ''} · ${rotuloCriterio(e)} · ${rotuloContas}`}>
           {(r?.rotulo ?? '').toUpperCase()} · {rotuloCriterio(e)}{e.criterio !== 'mes' ? ` ${per.toUpperCase()}` : ''} · {rotuloContas.toUpperCase()}
@@ -386,8 +400,18 @@ function Kpi({ rotulo, testid, children, direita }: { rotulo: string; testid: st
   );
 }
 
+/** P100 item 5 — o valor no furo do donut, curto: "15,6 mi" / "999 mil" / "850" (o inteiro vai no title); a fonte ainda encolhe para
+    caber nos 34px do furo — nunca vaza */
+const FURO = 34;
+const valorNoFuro = (v: number | null | undefined) => {
+  if (v == null) return '—';
+  const a = Math.abs(v), s = v < 0 ? '−' : '';
+  const f = (x: number, c: number) => x.toLocaleString('pt-BR', { minimumFractionDigits: c, maximumFractionDigits: c });
+  return a >= 1e6 ? `${s}${f(a / 1e6, 1)} mi` : a >= 1e3 ? `${s}${f(Math.round(a / 1e3), 0)} mil` : `${s}${f(Math.round(a), 0)}`;
+};
 /** donut das fatias que o banco mandou (a parte de cada filho, em %); o centro: o total (raiz) ou a parte da aba na raiz */
-function Donut({ d, centro, legenda }: { d: AnaliseVG | null; centro: string; legenda: string }) {
+function Donut({ d, centro, legenda, inteiro }: { d: AnaliseVG | null; centro: string; legenda: string; inteiro?: string }) {
+  const fonte = Math.min(9.5, FURO / Math.max(1, larguraTexto(centro, 1)));
   const R = 30, r = 20, C = 36;
   let a0 = -Math.PI / 2;
   const fatias = (d?.resumo?.fatias ?? []).filter((f) => (f.pct ?? 0) > 0);
@@ -403,7 +427,8 @@ function Donut({ d, centro, legenda }: { d: AnaliseVG | null; centro: string; le
         a0 = a1;
         return <path key={chaveCaminho(f.caminho)} d={path} fill={cor}><title>{`${f.rotulo}: ${pct1(f.pct)}`}</title></path>;
       })}
-      <text x={C} y={C} textAnchor="middle" fontSize={9.5} fontWeight={700} fill="#1b2430" data-testid="analise-donut-centro">{centro}</text>
+      <text x={C} y={C} textAnchor="middle" fontSize={fonte} fontWeight={700} fill="#1b2430" data-testid="analise-donut-centro" data-cabe-em={FURO}>
+        {centro}{inteiro && <title>{inteiro}</title>}</text>
       <text x={C} y={C + 9} textAnchor="middle" fontSize={6} fill={COR.muted}>{legenda}</text>
     </svg>
   );
@@ -433,7 +458,13 @@ function Kpis({ d, e }: { d: AnaliseVG | null; e: EstadoAnaliseVG }) {
 const passoBonito = (x: number) => { const p = Math.pow(10, Math.floor(Math.log10(x))); const m = x / p; return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 2.5 ? 2.5 : m <= 5 ? 5 : 10) * p; };
 
 /** o gráfico do item: colunas por mês (realizado cheio, previsto claro), a média acumulada (curva) e a meta (pontilhado laranja) — os
-    pontos são os do banco, na unidade escolhida; clicar numa coluna escolhe o mês */
+    pontos são os do banco, na unidade escolhida; clicar numa coluna escolhe o mês.
+    P100 — o VALOR DA COLUNA no meio da altura dela (vertical, 6px); coluna baixa demais para o texto: logo acima dela. As LINHAS são
+    curvas monotônicas (passam pelos pontos do banco, sem "barriga" entre dois meses), com marcador em cada mês e o valor escrito: a
+    média acima do marcador (vinho), a meta em laranja (acima; se colidir, abaixo). Nenhum rótulo encosta em outro nem sai da área do
+    gráfico (`posicionar`): sem lugar, não se escreve — o valor segue no title da coluna. */
+const FONTE_COLUNA = 6;
+const FONTE_PONTO = 6.5;
 function GraficoItem({ d, e, onSel }: { d: AnaliseVG | null; e: EstadoAnaliseVG; onSel: (am: string) => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const [[W, H], setTam] = useState<[number, number]>([0, 0]);
@@ -456,11 +487,14 @@ function GraficoItem({ d, e, onSel }: { d: AnaliseVG | null; e: EstadoAnaliseVG;
     const passo = passoBonito((mx - mn) / 4 || 1);
     const topo = Math.ceil(mx / passo) * passo, base = Math.floor(mn / passo) * passo;
     const Y = (v: number) => T + ih - ((v - base) / (topo - base || 1)) * ih;
-    /* escrita curta do eixo e da coluna: R$ mil ("k") quando a escala passa de 10 mil; senão o inteiro */
+    /* escrita curta do eixo, da coluna e dos pontos: R$ mil ("k") quando a escala passa de 10 mil; senão o inteiro */
     const curto = (v: number) => (Math.max(Math.abs(topo), Math.abs(base)) >= 10000 ? `${mil1(v)}k` : n0(v));
     const X = (k: number) => L + (k + 0.5) * slot;
     const bw = Math.max(3, Math.min(26, slot * 0.6));
+    const area: Caixa = { x: L, y: T, w: iw, h: ih };
+    const postos: Caixa[] = [];
     const els: JSX.Element[] = [];
+    const rotulos: JSX.Element[] = [];
     for (let v = base; v <= topo + passo / 2; v += passo) {
       els.push(<line key={`g${v}`} x1={L} x2={L + iw} y1={Y(v)} y2={Y(v)} stroke={v === 0 ? '#9aa5b4' : '#eef1f5'} />);
       els.push(<text key={`t${v}`} x={L - 4} y={Y(v) + 3} fontSize={8} textAnchor="end" fill={COR.muted}>{curto(v)}</text>);
@@ -472,21 +506,62 @@ function GraficoItem({ d, e, onSel }: { d: AnaliseVG | null; e: EstadoAnaliseVG;
       if (r) els.push(<rect key={`r${k}`} x={X(k) - bw / 2} y={Math.min(Y(r), Y(0))} width={bw} height={Math.abs(Y(r) - Y(0))} fill={saida ? COR.barraSai : COR.barraEnt} />);
       /* o previsto empilhado sobre o realizado até o TOTAL que o banco mandou (a tela não soma) */
       if (pv && p.total != null) els.push(<rect key={`p${k}`} x={X(k) - bw / 2} y={Math.min(Y(p.total), Y(r))} width={bw} height={Math.abs(Y(p.total) - Y(r))} fill={saida ? COR.barraSaiP : COR.barraEntP} data-testid={`analise-previsto-${p.am}`} />);
-      if (p.total && bw >= 9 && Math.abs(Y(p.total) - Y(0)) > 30) {
-        els.push(<text key={`v${k}`} x={X(k) + 2.5} y={Y(0) - 3} fontSize={7} fill="#fff" transform={`rotate(-90 ${X(k) + 2.5} ${Y(0) - 3})`}>{curto(p.total)}</text>);
-      }
       els.push(<text key={`m${k}`} x={X(k)} y={H - 3} fontSize={8} textAnchor="middle" fill={ehSel ? '#1b2430' : COR.muted} fontWeight={ehSel ? 700 : 400}>{MESES_ABR[mes0De(p.am)]}</text>);
     });
-    const linha = (chave: 'media' | 'meta') => serie.map((p, k) => (p[chave] == null ? null : [X(k), Y(p[chave]!)] as [number, number])).filter((x): x is [number, number] => !!x);
-    const md = linha('media');
-    if (md.length > 1) els.push(<polyline key="md" points={md.map((q) => q.join(',')).join(' ')} fill="none" stroke={saida ? COR.mediaSai : COR.mediaEnt} strokeWidth={1.6} data-testid="analise-linha-media" />);
-    const mt = linha('meta');
-    if (mt.length > 1) els.push(<polyline key="mt" points={mt.map((q) => q.join(',')).join(' ')} fill="none" stroke={COR.meta} strokeWidth={1.6} strokeDasharray="2 3" data-testid="analise-linha-meta" />);
+    /* as linhas: curva monotônica por trecho (mês sem ponto quebra a linha) e o marcador em cada mês */
+    const pontos = (chave: 'media' | 'meta') => serie.map((p, k) => (p[chave] == null ? null : [X(k), Y(p[chave]!)] as Ponto));
+    const corMedia = saida ? COR.mediaSai : COR.mediaEnt;
+    const md = pontos('media'), mt = pontos('meta');
+    const tm = trechos(md), tt = trechos(mt);
+    if (tm.some((t) => t.length > 1)) els.push(<path key="md" d={tm.map(curvaMonotona).join(' ')} fill="none" stroke={corMedia} strokeWidth={1.6} data-testid="analise-linha-media" />);
+    if (tt.some((t) => t.length > 1)) els.push(<path key="mt" d={tt.map(curvaMonotona).join(' ')} fill="none" stroke={COR.meta} strokeWidth={1.6} strokeDasharray="2 3" data-testid="analise-linha-meta" />);
+    serie.forEach((p, k) => {
+      ([['media', md[k], corMedia], ['meta', mt[k], COR.meta]] as const).forEach(([qual, q, cor]) => {
+        if (!q) return;
+        els.push(<circle key={`${qual}${k}`} cx={q[0]} cy={q[1]} r={1.9} fill="#fff" stroke={cor} strokeWidth={1.2}
+          data-testid={`analise-ponto-${qual}-${p.am}`} data-valor={p[qual]!} />);
+      });
+    });
+    /* os rótulos: primeiro os dos pontos (média acima; meta acima, ou abaixo se colidir), depois o da coluna (no meio dela; sem
+       lugar no meio — coluna baixa ou um ponto em cima —, logo acima da coluna) */
+    const rotuloPonto = (qual: 'media' | 'meta', k: number, q: Ponto, cor: string, v: number) => {
+      const t = curto(v), w = larguraTexto(t, FONTE_PONTO), h = alturaTexto(FONTE_PONTO);
+      const x = Math.min(Math.max(q[0] - w / 2, L), L + iw - w);
+      const acima: Caixa = { x, y: q[1] - 2.5 - h, w, h }, abaixo: Caixa = { x, y: q[1] + 2.5, w, h };
+      const i = posicionar([acima, abaixo], postos, area);
+      if (i < 0) return;
+      const c = i === 0 ? acima : abaixo;
+      rotulos.push(<text key={`l${qual}${k}`} x={c.x + w / 2} y={c.y + h / 2} fontSize={FONTE_PONTO} textAnchor="middle" dominantBaseline="central" fill={cor} fontWeight={600}
+        stroke="#fff" strokeWidth={2} strokeLinejoin="round" paintOrder="stroke"
+        data-rotulo={qual} data-lugar={i === 0 ? 'acima' : 'abaixo'} data-testid={`analise-rotulo-${qual}-${serie[k].am}`}>{t}</text>);
+    };
+    serie.forEach((p, k) => {
+      if (md[k] && p.media != null) rotuloPonto('media', k, md[k]!, corMedia, p.media);
+      if (mt[k] && p.meta != null) rotuloPonto('meta', k, mt[k]!, COR.meta, p.meta);
+    });
+    serie.forEach((p, k) => {
+      if (!p.total) return;
+      const t = curto(p.total), comp = larguraTexto(t, FONTE_COLUNA), w = alturaTexto(FONTE_COLUNA);
+      const yTopo = Math.min(Y(p.total), Y(0)), yBase = Math.max(Y(p.total), Y(0)), alt = yBase - yTopo;
+      const meio: Caixa = { x: X(k) - w / 2, y: (yTopo + yBase) / 2 - comp / 2, w, h: comp };
+      const acima: Caixa = { x: X(k) - w / 2, y: yTopo - 2 - comp, w, h: comp };
+      const cabe = bw >= w && alt >= comp + 4;
+      const i = posicionar(cabe ? [meio, acima] : [acima], postos, area);
+      if (i < 0) return;
+      const c = cabe && i === 0 ? meio : acima;
+      const dentroDaColuna = c === meio;
+      /* no previsto (claro) o branco some: o texto vai escuro */
+      const cor = !dentroDaColuna ? '#1b2430' : (p.previsto ?? 0) > (p.realizado ?? 0) ? '#5b1f1d' : '#fff';
+      const cx = c.x + w / 2, cy = c.y + comp / 2;
+      rotulos.push(<text key={`v${k}`} x={cx} y={cy} fontSize={FONTE_COLUNA} textAnchor="middle" dominantBaseline="central" fill={cor}
+        transform={`rotate(-90 ${cx} ${cy})`} data-rotulo="coluna" data-lugar={dentroDaColuna ? 'meio' : 'acima'}
+        data-testid={`analise-rotulo-coluna-${p.am}`}>{t}</text>);
+    });
     serie.forEach((p, k) => els.push(
       <rect key={`c${k}`} x={L + k * slot} y={T} width={slot} height={ih + B} fill="transparent" style={{ cursor: 'pointer' }} onClick={() => onSel(p.am)} data-testid={`analise-coluna-${p.am}`}>
-        <title>{`${rotuloMes(p.am)}: ${brl(p.total)}${p.meta != null ? ` · meta ${brl(p.meta)}` : ''}`}</title>
+        <title>{`${rotuloMes(p.am)}: ${brl(p.total)}${p.media != null ? ` · média ${brl(p.media)}` : ''}${p.meta != null ? ` · meta ${brl(p.meta)}` : ''}`}</title>
       </rect>));
-    svg = <svg width={W} height={H} className="block">{els}</svg>;
+    svg = <svg width={W} height={H} className="block" data-testid="analise-grafico-svg">{els}<g style={{ pointerEvents: 'none' }}>{rotulos}</g></svg>;
   }
   return (
     <div ref={ref} className="relative min-h-0 flex-1" data-testid="analise-grafico-desenho">

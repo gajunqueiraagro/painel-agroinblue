@@ -6,6 +6,9 @@
  *     cinza e itálico; cabeçalho "·P". Mais de 14 meses: R$ mil com 1 decimal. Ano na 2ª linha do cabeçalho na virada.
  *   · Vencido: no mês corrente, a célula com previsto vencido leva uma marca âmbar discreta (absoluta: não muda altura) e o valor no title.
  *   · Lista longa rola DENTRO do quadro (cabeçalho preso); o quadro tem altura do bloco, nunca do conteúdo.
+ *   · P100 item 7 — "Resultado no mês" e "Saldo final · fluxo de caixa" CONGELADAS no rodapé (uma 2ª tabela com as mesmas colunas,
+ *     embaixo da área que rola, com a borda de cima e o mesmo fundo de hoje); só o corpo (saldo inicial, entradas e saídas com os grupos)
+ *     rola por dentro. No ampliado, a grade inteira numa tabela só.
  *   · P83 (Gabriel 23/10): cabeçalho de UMA linha (o ano só na virada, pequeno, antes do mês); linhas de grupo mais baixas e em fonte
  *     menor (cabe mais sem rolar); "Saldo inicial" em caixa normal e fonte menor; no TOTAL, o saldo inicial do PERÍODO e o saldo final do
  *     período (`total` das linhas de saldo, do banco) — "Resultado no mês" no TOTAL é o do período.
@@ -13,7 +16,7 @@
  *     até aquele mês); TOTAL, MÉDIA e % seguem do período; saldo é posição (igual nos três). O formato (R$ ou R$ mil) é decidido pelas
  *     TRÊS séries juntas: trocar o critério nunca muda a largura das colunas.
  */
-import type { ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import { TH_REGUA, TD_REGUA, TD_REGUA_NUM } from '@/components/ui/regua-tabela';
 import {
@@ -40,16 +43,29 @@ export function GradeVG({ tela, sel, onAnalisar, ampliado = false, acao, criteri
   const fmt = comp ? mil1 : n0;
   const larguraMes = meses.length > 14 ? 52 : 46;
   const algumPrevisto = meses.some((m) => m.previsto);
-  return (
-    <div className={ampliado ? '' : 'h-full min-h-0 overflow-auto'} data-testid={ampliado ? 'grade-vg-ampliada' : 'grade-vg-rolagem'}>
-      {/* no ampliado (print) o nome da linha cabe inteiro: a 1ª coluna com 230px */}
-      <table className="w-full table-fixed border-collapse" style={{ minWidth: (ampliado ? 230 : 170) + meses.length * larguraMes + (comp ? 150 : 166) }}
-        data-testid="grade-vg">
-        <colgroup>
-          <col style={{ width: ampliado ? 230 : 170 }} />
-          {meses.map((m) => <col key={m.am} />)}
-          <col style={{ width: comp ? 56 : 66 }} /><col style={{ width: comp ? 50 : 58 }} /><col style={{ width: 44 }} />
-        </colgroup>
+  const rodapeRef = useRef<HTMLDivElement>(null);
+  const corpoRef = useRef<HTMLDivElement>(null);
+  const largMin = (ampliado ? 230 : 170) + meses.length * larguraMes + (comp ? 150 : 166);
+  const colunas = (
+    <colgroup>
+      <col style={{ width: ampliado ? 230 : 170 }} />
+      {meses.map((m) => <col key={m.am} />)}
+      <col style={{ width: comp ? 56 : 66 }} /><col style={{ width: comp ? 50 : 58 }} /><col style={{ width: 44 }} />
+    </colgroup>
+  );
+  const corpo = tela.linhas.filter((l) => !RODAPE.includes(l.chave));
+  const rodape = RODAPE.map((c) => tela.linhas.find((l) => l.chave === c)).filter((l): l is LinhaVG => !!l);
+  const linha = (l: LinhaVG, topo = false) => <LinhaGrade key={l.chave} l={l} meses={meses} sel={sel} fmt={fmt} comp={comp} onAnalisar={onAnalisar} criterio={criterio} topo={topo} />;
+  /* P100 item 7 — o rodapé ("Resultado no mês" e "Saldo final") NÃO rola: é uma 2ª tabela, com as MESMAS colunas, embaixo da área que
+     rola (a reserva da barra de rolagem é a mesma nas duas, `scrollbar-gutter: stable`, e a rolagem de lado vai junto). No ampliado
+     (sem rolagem) ele fica na mesma tabela. Antes ele era `sticky` dentro da área que rola: a borda colapsada deixa meia linha de pixel
+     e o preso "descia" 0,8px no fim da rolagem. */
+  if (ampliado) {
+    return (
+      <div data-testid="grade-vg-ampliada">
+        {/* no ampliado (print) o nome da linha cabe inteiro: a 1ª coluna com 230px */}
+        <table className="w-full table-fixed border-collapse" style={{ minWidth: largMin }} data-testid="grade-vg">
+          {colunas}
         <thead className="sticky top-0 z-10 bg-primary">
           <tr>
             <th className={cn(TH_REGUA, 'h-[19px] text-left align-middle text-[8.5px]')} title={`R$${comp ? ' mil' : ''} · ${algumPrevisto ? 'realizado + previsto' : 'realizado'}${criterio === 'mes' ? '' : criterio === 'media' ? ' · média do início do período até o mês' : ' · acumulado do início do período até o mês'}`}>
@@ -74,20 +90,69 @@ export function GradeVG({ tela, sel, onAnalisar, ampliado = false, acao, criteri
             <th className={cn(TH_REGUA, 'h-[19px] border-l border-l-white/20 text-right align-middle')} style={{ background: '#2f3d4f' }}>%</th>
           </tr>
         </thead>
-        <tbody>
-          {tela.linhas.map((l) => <LinhaGrade key={l.chave} l={l} meses={meses} sel={sel} fmt={fmt} comp={comp} onAnalisar={onAnalisar} criterio={criterio} />)}
-        </tbody>
-      </table>
+          <tbody>{corpo.map((l) => linha(l))}</tbody>
+          <tbody data-testid="grade-rodape">{rodape.map((l, i) => linha(l, i === 0))}</tbody>
+        </table>
+      </div>
+    );
+  }
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="min-h-0 flex-1 overflow-auto [scrollbar-gutter:stable]" data-testid="grade-vg-rolagem"
+        ref={corpoRef} onScroll={(ev) => { if (rodapeRef.current && rodapeRef.current.scrollLeft !== ev.currentTarget.scrollLeft) rodapeRef.current.scrollLeft = ev.currentTarget.scrollLeft; }}>
+        <table className="w-full table-fixed border-collapse" style={{ minWidth: largMin }} data-testid="grade-vg">
+          {colunas}
+        <thead className="sticky top-0 z-10 bg-primary">
+          <tr>
+            <th className={cn(TH_REGUA, 'h-[19px] text-left align-middle text-[8.5px]')} title={`R$${comp ? ' mil' : ''} · ${algumPrevisto ? 'realizado + previsto' : 'realizado'}${criterio === 'mes' ? '' : criterio === 'media' ? ' · média do início do período até o mês' : ' · acumulado do início do período até o mês'}`}>
+              <span className="flex items-center justify-between gap-1">
+                <span className="truncate" data-testid="grade-criterio">R${comp ? ' mil' : ''} · {criterio === 'mes' ? (algumPrevisto ? 'realizado + previsto' : 'realizado') : criterio === 'media' ? 'média até o mês' : 'acumulado até o mês'}</span>
+                {acao && <span className="shrink-0 rounded bg-white/90">{acao}</span>}
+              </span>
+            </th>
+            {meses.map((m, k) => {
+              const virada = k === 0 || mes0De(m.am) === 0;
+              return (
+                <th key={m.am} data-testid={`grade-mes-${m.am}`}
+                  className={cn(TH_REGUA, 'h-[19px] text-right align-middle leading-none', k > 0 && mes0De(m.am) === 0 ? 'border-l-2 border-l-[#c8d2de]' : 'border-l border-l-white/20')}
+                  style={m.am === sel ? { background: '#1b2430', boxShadow: 'inset 0 -2px 0 #f2b84b' } : m.previsto ? { background: '#55657a' } : undefined}>
+                  {virada && <span className="mr-[2px] text-[7px] font-normal opacity-75">{String(anoDe(m.am)).slice(2)}</span>}
+                  <span>{MESES_ABR[mes0De(m.am)].toUpperCase()}{m.previsto && !comp ? ' ·P' : ''}</span>
+                </th>
+              );
+            })}
+            <th className={cn(TH_REGUA, 'h-[19px] border-l-2 border-l-[#c8d2de] text-right align-middle')} style={{ background: '#2f3d4f' }}>TOTAL</th>
+            <th className={cn(TH_REGUA, 'h-[19px] border-l border-l-white/20 text-right align-middle')} style={{ background: '#2f3d4f' }}>MÉDIA</th>
+            <th className={cn(TH_REGUA, 'h-[19px] border-l border-l-white/20 text-right align-middle')} style={{ background: '#2f3d4f' }}>%</th>
+          </tr>
+        </thead>
+          <tbody>{corpo.map((l) => linha(l))}</tbody>
+        </table>
+      </div>
+      {/* o rodapé rola de lado JUNTO com a grade (nos dois sentidos), sem barra própria; em pé ele não rola */}
+      <div ref={rodapeRef} className="shrink-0 overflow-x-auto overflow-y-hidden [scrollbar-gutter:stable] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        data-testid="grade-rodape-quadro"
+        onScroll={(ev) => { if (corpoRef.current && corpoRef.current.scrollLeft !== ev.currentTarget.scrollLeft) corpoRef.current.scrollLeft = ev.currentTarget.scrollLeft; }}>
+        <table className="w-full table-fixed border-collapse" style={{ minWidth: largMin }}>
+          {colunas}
+          <tbody data-testid="grade-rodape">{rodape.map((l, i) => linha(l, i === 0))}</tbody>
+        </table>
+      </div>
     </div>
   );
 }
 
+/** P100 item 7 — as linhas congeladas no rodapé da grade */
+const RODAPE = ['resultado', 'saldo_final'];
+
 const TITULO_CARTAO = 'Pagamento de fatura de cartão de crédito que não está entre as contas escolhidas: o caixa cai, mas é transferência, '
   + 'não saída — a saída foi a compra no cartão. Saldo final = inicial + entradas − saídas − esta linha.';
 
-function LinhaGrade({ l, meses, sel, fmt, comp, onAnalisar, criterio }: {
+function LinhaGrade({ l, meses, sel, fmt, comp, onAnalisar, criterio, topo }: {
   l: LinhaVG; meses: MesVG[]; sel: string; fmt: (v: number | null | undefined) => string; comp: boolean; onAnalisar: (a: AlvoAnaliseVG) => void;
   criterio: CriterioTelaVG;
+  /** a 1ª linha do rodapé congelado: a borda de cima (sombra por dentro — a borda de tabela não acompanha o `sticky`) */
+  topo?: boolean;
 }) {
   const serie = serieDoCriterio(l, criterio);
   const saldo = l.tipo === 'saldo';
@@ -104,12 +169,15 @@ function LinhaGrade({ l, meses, sel, fmt, comp, onAnalisar, criterio }: {
      saldo inicial em fonte menor, sem negrito */
   const miuda = l.tipo === 'grupo' || l.tipo === 'transf';
   const saldoIni = l.chave === 'saldo_inicial';
+  /* P100 item 7 — a linha do rodapé congelado não tem a borda de baixo (na borda colapsada ela desce meio pixel ao fim da rolagem) */
+  const rodape = RODAPE.includes(l.chave);
   const fs = cn('h-[16px] text-[9.5px]', comp && 'text-[9px]', miuda && 'h-[14px] text-[8.5px]', saldoIni && 'text-[9px]');
   const alt = miuda ? 'h-[14px]' : 'h-[16px]';
   const analisar = (am: string) => clicavel && onAnalisar({ lado: l.lado!, grupo: l.tipo === 'grupo' ? l.grupo ?? null : null, am });
   return (
-    <tr data-testid={`grade-linha-${l.chave}`} data-tipo={l.tipo}
-      className={cn('border-b border-[#eef1f5]', forte && !saldoIni && 'font-bold', saldoIni && 'font-semibold', clicavel && 'cursor-pointer hover:brightness-[.98]')}
+    <tr data-testid={`grade-linha-${l.chave}`} data-tipo={l.tipo} data-desloca={RODAPE.includes(l.chave) ? '' : undefined}
+      className={cn(rodape ? '' : 'border-b border-[#eef1f5]', forte && !saldoIni && 'font-bold', saldoIni && 'font-semibold', clicavel && 'cursor-pointer hover:brightness-[.98]',
+        topo && '[&>td]:shadow-[inset_0_2px_0_#8a96a6]')}
       style={{ background: fundo }} onClick={() => analisar(sel)}
       title={clicavel ? `Analisar ${l.rotulo.toLowerCase()} (a análise abre no PR 4)` : cartao ? TITULO_CARTAO : undefined}>
       <td className={cn(TD_REGUA, 'h-[16px] truncate text-[10px]', miuda && 'h-[14px] text-[9px]', saldoIni && 'text-[9.5px]', l.tipo === 'transf' && 'text-[8.5px] font-normal opacity-80')}

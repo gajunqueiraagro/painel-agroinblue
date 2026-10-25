@@ -75,9 +75,12 @@ export const somarMeses = (am: string, n: number) => { const t = anoDe(am) * 12 
 export const rotuloMes = (am: string) => `${MESES_ABR[mes0De(am)]}/${String(anoDe(am)).slice(2)}`;
 export const amHoje = (hoje: string) => hoje.slice(0, 7);
 
-/** o intervalo de meses pedido ao banco: Ano = jan–dez do ano do mês escolhido; Últ. 12 = 12 até ele; 6 + 6 = 6 antes e 6 depois */
+/** o intervalo de meses pedido ao banco. P100 item 6 (Gabriel 24/10 16h31): O MÊS ESCOLHIDO É O FIM DO PERÍODO — Ano = jan do ano →
+    o mês escolhido (com AGO: jan–ago; nada depois, nem previsto; mês escolhido no futuro: até ele, com o previsto); Últ. 12 = as 12
+    até ele; 6 + 6 = 6 antes e 6 depois (a projeção, de propósito); De → Até = o escolhido. A tela não corta coluna: o banco recebe o
+    intervalo e devolve só esses meses. */
 export function faixaDoPeriodo(faixa: FaixaVG, sel: string, de: string, ate: string): [string, string] {
-  if (faixa === 'ano') return [amDe(anoDe(sel), 0), amDe(anoDe(sel), 11)];
+  if (faixa === 'ano') return [amDe(anoDe(sel), 0), sel];
   if (faixa === 'u12') return [somarMeses(sel, -11), sel];
   if (faixa === '66') return [somarMeses(sel, -5), somarMeses(sel, 6)];
   return de <= ate ? [de, ate] : [ate, de];
