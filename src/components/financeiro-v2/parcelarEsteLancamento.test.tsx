@@ -109,3 +109,26 @@ describe('P74 B — Parcelar este lançamento', () => {
     expect(tela).toMatch(/\{isEdit && lancamento && clienteAtual\?\.id && !financiamentoDoLanc && !lancamento\.origem_tipo && !lancamento\.cancelado\s+&& lancamento\.tipo_operacao\.startsWith\('2'\) && \(\s+<ParcelarEsteLancamento/);
   });
 });
+
+/** P104 — a parcela lançada SOLTA ("… - 6/6", o caso da NF 46.994) não oferece "Parcelar"; o à vista de verdade, sim. */
+describe('P104 — parcela solta no bloco Parcelamento', () => {
+  const IRMAS = [620.85, 620.80, 620.83, 620.83, 620.83, 620.83].map((v, i) => ({ id: i === 5 ? 'lanc-1' : `irma-${i + 1}`,
+    descricao: `Tinta sintetica - ${i + 1}/6`, valorCent: Math.round(v * 100) }));
+  it('B6 a 6/6 com as 5 irmãs: sem "Parcelar", sem "à vista (1/1)", a frase com "achadas 6 de 6"', async () => {
+    const buscar = vi.fn(async (_c: string, _f: string, _n: number) => IRMAS);
+    render(<ParcelarEsteLancamento clienteId="cli" lancamento={{ ...LANC, descricao: 'Tinta sintetica - 6/6', valorCent: 62083 }} situacao={ABERTO}
+      vencimentoAtual="2026-10-10" conta={{ id: 'elo', nome: 'Cartão Elo Sintetico', cartao: true }} onParcelado={vi.fn()} buscarIrmas={buscar} />);
+    await waitFor(() => expect(screen.getByTestId('parcela-solta-frase').textContent).toBe('Parcela 6/6 lançada solta (sem parcelamento) · achadas 6 de 6'));
+    expect(buscar).toHaveBeenCalledWith('cli', 'f1', 6);
+    expect(screen.queryByTestId('parcelar-este-abrir')).toBeNull();
+    expect(screen.queryByText(/à vista \(1\/1\)/)).toBeNull();
+  });
+  it('B7 o à vista de verdade: "hoje: à vista (1/1)" e o "Parcelar"; a busca de irmãs nem roda', () => {
+    const buscar = vi.fn(async () => IRMAS);
+    render(<ParcelarEsteLancamento clienteId="cli" lancamento={LANC} situacao={ABERTO} vencimentoAtual="2026-08-10"
+      conta={{ id: 'elo', nome: 'Cartão Elo Sintetico', cartao: true }} onParcelado={vi.fn()} buscarIrmas={buscar} />);
+    expect(screen.getByTestId('parcelar-este').textContent).toContain('hoje: à vista (1/1)');
+    expect(screen.getByTestId('parcelar-este-abrir')).toBeEnabled();
+    expect(buscar).not.toHaveBeenCalled();
+  });
+});

@@ -106,7 +106,7 @@ export interface GradeDeParcelasProps {
   /** Altura da linha do total, em px (padrão 20). O Editar obrigação usa 25 (FIN-FINANC-28-P3-FIX3). */
   alturaDoTotal?: number;
   /** P74 — a grade em meio bloco (a prévia da nota, a aba Pagamento): o vencimento das parcelas não editáveis por inteiro (dd/mm/aaaa, a
-   *  regra da casa) e o rodapé com "Soma" no lugar de "Soma das parcelas". Ausente = como sempre. */
+   *  regra da casa), o rodapé com "Soma" e "Dif." e sem a coluna "De onde veio" (no `title` da linha) (P104). Ausente = como sempre. */
   compacta?: boolean;
 }
 
@@ -171,7 +171,8 @@ export function GradeDeParcelas({
             <col style={{ width: REGUA_PARCELAS.numero }} />
             <col style={{ width: REGUA_PARCELAS.vencimento }} />
             <col style={{ width: REGUA_PARCELAS.valor }} />
-            <col />
+            {/* P104 — na compacta, sem "De onde veio" (não cabia na meia coluna: 38px a 750); a origem vai no `title` da linha */}
+            {!compacta && <col />}
             {extras.map((x) => <col key={x.titulo} style={{ width: x.largura }} />)}
             <col style={{ width: REGUA_PARCELAS.tirar }} />
           </colgroup>
@@ -180,7 +181,7 @@ export function GradeDeParcelas({
               <th className={`${TH} text-center`}>#</th>
               <th className={`${TH} text-center`}>Vencimento</th>
               <th className={`${TH} text-right`}>Valor (R$)</th>
-              <th className={`${TH} text-left`}>De onde veio</th>
+              {!compacta && <th className={`${TH} text-left`}>De onde veio</th>}
               {extras.map((x) => <th key={x.titulo} className={`${TH} text-center`}>{x.titulo}</th>)}
               <th className={TH} aria-label="Tirar" />
             </tr>
@@ -192,7 +193,7 @@ export function GradeDeParcelas({
               const editavel = livres && !travado && !p.paga;
               const veio = deOndeVeio(p);
               return (
-                <tr key={p.chave} className={p.paga ? 'opacity-50' : i % 2 === 1 ? 'bg-muted/30' : ''} title={paga ?? undefined}
+                <tr key={p.chave} className={p.paga ? 'opacity-50' : i % 2 === 1 ? 'bg-muted/30' : ''} title={paga ?? (compacta ? veio : undefined)}
                     data-testid="linha-da-parcela" data-paga={p.paga ? 'sim' : undefined}>
                   <td className={`${TD} text-center tabular-nums`}>{i + 1}</td>
                   <td className={`${TD} text-center whitespace-nowrap tabular-nums`} data-testid="cel-vencimento">
@@ -207,8 +208,8 @@ export function GradeDeParcelas({
                           onValor={(c) => onParcelas(editarValor(parcelas, p.chave, c))} />
                       : brCentavos(p.valorCent)}
                   </td>
-                  <td className={`${TD} overflow-hidden text-ellipsis whitespace-nowrap ${m.valor || m.vencimento ? 'text-amber-700' : 'text-muted-foreground'}`}
-                      title={veio} data-testid="cel-de-onde-veio">{veio}</td>
+                  {!compacta && <td className={`${TD} overflow-hidden text-ellipsis whitespace-nowrap ${m.valor || m.vencimento ? 'text-amber-700' : 'text-muted-foreground'}`}
+                      title={veio} data-testid="cel-de-onde-veio">{veio}</td>}
                   {extras.map((x) => <td key={x.titulo} className={`${TD} text-center`}>{x.celula(i + 1)}</td>)}
                   <td className={`${TD} px-0 text-center`}>
                     {editavel && (
@@ -221,7 +222,7 @@ export function GradeDeParcelas({
               );
             })}
             {parcelas.length === 0 && (
-              <tr><td colSpan={5 + extras.length} className={`${TD} text-muted-foreground`}>Nenhuma parcela.</td></tr>
+              <tr><td colSpan={(compacta ? 4 : 5) + extras.length} className={`${TD} text-muted-foreground`}>Nenhuma parcela.</td></tr>
             )}
           </tbody>
         </table>
@@ -234,7 +235,7 @@ export function GradeDeParcelas({
             <td className="px-1.5 font-bold whitespace-nowrap" data-testid="rodape-n">{r.n} {r.n === 1 ? 'parcela' : 'parcelas'}</td>
             <td className="px-1.5 text-right whitespace-nowrap"><span className="text-muted-foreground">{compacta ? 'Soma' : 'Soma das parcelas'}&nbsp;</span><span className="font-bold tabular-nums" data-testid="rodape-soma">{brCentavos(r.somaCent)}</span></td>
             <td className="px-1.5 text-right whitespace-nowrap"><span className="text-muted-foreground">{oQue.rotulo}&nbsp;</span><span className="font-bold tabular-nums" data-testid="rodape-compra">{brCentavos(r.compraCent)}</span></td>
-            <td className="px-1.5 text-right whitespace-nowrap"><span className="text-muted-foreground">Diferença&nbsp;</span><Diferenca cent={r.diferencaCent} /></td>
+            <td className="px-1.5 text-right whitespace-nowrap"><span className="text-muted-foreground">{compacta ? 'Dif.' : 'Diferença'}&nbsp;</span><Diferenca cent={r.diferencaCent} /></td>
           </tr>
         </tbody>
       </table>

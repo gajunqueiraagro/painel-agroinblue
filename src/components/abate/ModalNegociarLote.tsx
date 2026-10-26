@@ -39,6 +39,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { CampoMoeda } from '@/components/ui/campo-moeda';
+import { CampoNumeroComConta } from '@/components/ui/campo-numero-com-conta';
 import { X } from 'lucide-react';
 import { formatMoeda, formatNum } from '@/lib/calculos/formatters';
 import { buildAbateCalculation, parseNumericValue } from '@/lib/calculos/abate';
@@ -221,10 +222,8 @@ export function ModalNegociarLote({ lote, linha, cenario, onAplicar, onFechar, s
   somenteLeitura?: boolean;
 }) {
   const [aba, setAba] = useState<AbaModal>('desempenho');
-  /* ⚠ O CAMPO GUARDA TEXTO, o modelo guarda número. É o que permite digitar "12.260,80"
-     com vírgula e ver o valor formatado ao sair do campo, sem que cada tecla reformate o
-     que está sendo escrito (o cursor saltaria). O blur é quem traduz e grava. */
-  const [carcacaTexto, setCarcacaTexto] = useState('');
+  /* ⚠ P91 — O TEXTO DA CARCAÇA MORA NO CAMPO (`CampoNumeroComConta`, com `soAoSair`): digitar "12.260,80" não reformata a cada
+     tecla, o campo devolve o número ao sair (ou no Enter) e aceita CONTA nas três formas ("445,97*0,50" em kg/cab, "52+0,5" no RC). */
   /* ⚠ ABATE-PROJETADO-01b (Gabriel, 14/10) — REVOGA "rendimento e arrobas: derivados, nunca digitados": a carcaca ganha uma
      TERCEIRA forma de informar no MESMO seletor, o RC % ("vai render 52%", tipico do abate projetado). Em RC % o rendimento e'
      DIGITADO e a carcaca e' DERIVADA pelo dono (`buildAbateCalculation`: PV × RC% ÷ 100, sem carcaca informada). O banco segue
@@ -232,7 +231,6 @@ export function ModalNegociarLote({ lote, linha, cenario, onAplicar, onFechar, s
      ⚠ REABRIR: sem coluna para lembrar a forma (seria DDL), reabre em RC % quando o RC gravado tem ate' 2 casas E a carcaca
      gravada e' EXATAMENTE a que o dono deriva dele; senao, pela fonte gravada. */
   const [modoCarcaca, setModoCarcaca] = useState<'cabeca' | 'total' | 'rc'>(() => modoDaCarcacaAoAbrir(linha, lote));
-  const [recusaRc, setRecusaRc] = useState<string | null>(null);
   /* ⚠ RASCUNHO LOCAL: o modal edita uma cópia e só devolve no Aplicar. Fechar pelo X ou
      pelo Esc descarta, que é o que "Cancelar" significa — mesmo contrato do LoteDialog. */
   const [atual, setAtual] = useState<LinhaAbate>(linha ?? linhaVazia(lote.id));
@@ -305,37 +303,32 @@ export function ModalNegociarLote({ lote, linha, cenario, onAplicar, onFechar, s
 
   const carcacaPorCab = atual.pesoCarcacaKg != null && lote.quantidade > 0
     ? round2(atual.pesoCarcacaKg / lote.quantidade) : null;
-  /* O texto do campo segue o modelo: muda ao abrir, ao trocar de unidade e depois de
-     gravar. Não interfere na digitação porque o modelo só muda no blur. */
-  useEffect(() => {
-    if (modoCarcaca === 'rc') {
-      setCarcacaTexto(atual.rendimentoCarcacaPct == null ? '' : formatNum(round2(atual.rendimentoCarcacaPct), 2));
-      return;
-    }
-    const v = (atual.pesoCarcacaFonte ?? 'cabeca') === 'cabeca'
+  /* O número do campo segue o modelo: muda ao abrir, ao trocar de unidade e depois de gravar (o campo só reescreve fora do foco). */
+  const valorDaCarcaca = modoCarcaca === 'rc'
+    ? (atual.rendimentoCarcacaPct == null ? null : round2(atual.rendimentoCarcacaPct))
+    : (atual.pesoCarcacaFonte ?? 'cabeca') === 'cabeca'
       ? (atual.pesoCarcacaKg != null && lote.quantidade > 0 ? atual.pesoCarcacaKg / lote.quantidade : null)
       : atual.pesoCarcacaKg;
-    setCarcacaTexto(v == null ? '' : formatNum(round2(v), 2));
-  }, [atual.pesoCarcacaKg, atual.pesoCarcacaFonte, atual.rendimentoCarcacaPct, lote.quantidade, modoCarcaca]);
   const fonteCarcaca = atual.pesoCarcacaFonte ?? 'cabeca';
-  /* ABATE-PROJETADO-01b — o RC % digitado: aceita conta (pelo dono do lote), 2 casas; a carcaca sai do dono. Recusada, o campo
-     volta ao que tinha e a frase do dono fica escrita na linha de baixo. */
-  const aplicarRc = () => {
-    const r = resolverCampoDoLote(carcacaTexto, 'valor');
-    if (r.ok === false) {
-      setRecusaRc(r.frase);
-      setCarcacaTexto(atual.rendimentoCarcacaPct == null ? '' : formatNum(round2(atual.rendimentoCarcacaPct), 2));
-      return;
-    }
-    setRecusaRc(null);
-    const rc = r.texto ? round2(parseNumericValue(r.texto)) : 0;
-    if (!(rc > 0)) {
-      setCarcacaTexto('');
+  /* ABATE-PROJETADO-01b — o RC % digitado, 2 casas; a carcaca sai do dono. P91: a conta e' do campo (a recusa fica no balao dele e o
+     campo volta ao que tinha, sem gravar). */
+  const aplicarRc = (rc: number | null) => {
+    if (rc == null || !(rc > 0)) {
       trocar({ pesoCarcacaKg: null, pesoCarcacaFonte: null, rendimentoCarcacaPct: null }, 'rc');
       return;
     }
-    setCarcacaTexto(formatNum(rc, 2));
     trocar({ ...carcacaPeloRc(atual, lote, rc), rendimentoCarcacaPct: rc }, 'rc');
+  };
+  /** A carcaça em kg (por cabeça ou do lote), na forma escolhida. */
+  const aplicarKg = (n: number | null) => {
+    if (n == null || n <= 0) {
+      trocar({ pesoCarcacaKg: null, pesoCarcacaFonte: null });
+      return;
+    }
+    trocar({
+      pesoCarcacaKg: fonteCarcaca === 'cabeca' ? round2(n * lote.quantidade) : round2(n),
+      pesoCarcacaFonte: fonteCarcaca === 'cabeca' ? 'cabeca' : 'total',
+    });
   };
   const fontePreco = atual.precoFonte ?? 'arroba';
 
@@ -429,31 +422,14 @@ export function ModalNegociarLote({ lote, linha, cenario, onAplicar, onFechar, s
                     {/* ⚠ A15 + A22: duas casas, sufixo "kg" DENTRO do campo e nada quebra.
                         O `type="number"` foi embora junto com o ponto decimal que ele
                         obriga — quem digita "12.260,80" no teclado brasileiro via o campo
-                        recusar a virgula. O texto e' livre e `parseNumericValue` traduz. */}
-                    <div className="relative">
-                      <Input inputMode="decimal" disabled={somenteLeitura}
-                        className={`${CAMPO} pr-7`}
-                        placeholder={modoCarcaca === 'rc' ? 'rendimento' : fonteCarcaca === 'cabeca' ? 'kg por cabeça' : 'kg total'}
-                        title={modoCarcaca === 'rc' ? 'Aceita conta: 52+0,5' : undefined}
-                        value={carcacaTexto}
-                        onChange={e => setCarcacaTexto(e.target.value)}
-                        onKeyDown={e => { if (modoCarcaca === 'rc' && e.key === 'Enter') { e.preventDefault(); aplicarRc(); } }}
-                        onBlur={() => {
-                          if (modoCarcaca === 'rc') { aplicarRc(); return; }
-                          const n = parseNumericValue(carcacaTexto);
-                          if (!carcacaTexto.trim() || n <= 0) {
-                            setCarcacaTexto('');
-                            trocar({ pesoCarcacaKg: null, pesoCarcacaFonte: null });
-                            return;
-                          }
-                          setCarcacaTexto(formatNum(n, 2));
-                          trocar({
-                            pesoCarcacaKg: fonteCarcaca === 'cabeca' ? round2(n * lote.quantidade) : round2(n),
-                            pesoCarcacaFonte: fonteCarcaca === 'cabeca' ? 'cabeca' : 'total',
-                          });
-                        }} />
-                      <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">{modoCarcaca === 'rc' ? '%' : 'kg'}</span>
-                    </div>
+                        recusar a virgula. O texto e' livre; P91: o campo e' o `CampoNumeroComConta` (le^ pelo
+                        `parseMoeda` e aceita conta, com o balao do resultado). */}
+                    <CampoNumeroComConta soAoSair disabled={somenteLeitura} className={CAMPO}
+                      placeholder={modoCarcaca === 'rc' ? 'rendimento' : fonteCarcaca === 'cabeca' ? 'kg por cabeça' : 'kg total'}
+                      title={modoCarcaca === 'rc' ? 'Aceita conta: 52+0,5' : 'Aceita conta: 445,97*0,50'}
+                      sufixoDentro={modoCarcaca === 'rc' ? '%' : 'kg'}
+                      valor={valorDaCarcaca}
+                      onChange={n => (modoCarcaca === 'rc' ? aplicarRc(n) : aplicarKg(n))} />
                   </div>
                   <div className="flex flex-col gap-[3px]">
                     <Label className={LBL}>&nbsp;</Label>
@@ -462,7 +438,6 @@ export function ModalNegociarLote({ lote, linha, cenario, onAplicar, onFechar, s
                       onChange={v => {
                         /* Trocar de forma NAO mexe nos numeros: a carcaca e o RC gravados seguem coerentes entre si. A
                            escolha vale antes de digitar (o campo vazio guarda a forma). */
-                        setRecusaRc(null);
                         const modo = v === 'rc' ? 'rc' : v === 'total' ? 'total' : 'cabeca';
                         setModoCarcaca(modo);
                         trocar(modo === 'rc' ? {} : { pesoCarcacaFonte: modo }, modo);
@@ -482,9 +457,9 @@ export function ModalNegociarLote({ lote, linha, cenario, onAplicar, onFechar, s
                   <Derivado rotulo="Peso vivo" valor={lote.pesoMedioKg > 0 ? `${num(lote.pesoMedioKg)} kg/cab` : '—'} />
                   <Derivado rotulo="Rendimento" valor={c.rendCalc > 0 ? `${num(c.rendCalc)}%` : '—'} />
                 </div>
-                {/* ABATE-PROJETADO-01b — a recusa da conta do RC fica escrita AQUI, no lugar da instrucao (mesma linha, nada muda de altura). */}
-                <p className={`text-[10px] ${recusaRc ? 'text-destructive' : 'text-muted-foreground'}`} data-testid="linha-carcaca">
-                  {recusaRc ?? 'Inserir o peso total da carcaça, o peso médio por cabeça (kg) ou o rendimento esperado (RC %).'}
+                {/* P91 — a recusa da conta (RC ou kg) fica no balao do campo; esta linha e' so' a instrucao. */}
+                <p className="text-[10px] text-muted-foreground" data-testid="linha-carcaca">
+                  {'Inserir o peso total da carcaça, o peso médio por cabeça (kg) ou o rendimento esperado (RC %).'}
                 </p>
               </>)}
 

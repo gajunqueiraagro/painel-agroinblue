@@ -40,6 +40,8 @@ const FOTOS = arg('--fotos');
 const SO = arg('--so');
 
 const TAMANHOS_DO_CONTRATO = [[750, 483], [750, 530], [814, 530], [1000, 600], [1126, 579], [1300, 704], [1440, 800]];
+/* P104 — os 9 tamanhos do gate e o do print do Gabriel (1750×1000) */
+const TAMANHOS_DO_P104 = [[750, 483], [750, 530], [814, 530], [1000, 600], [1126, 579], [1130, 580], [1300, 704], [1440, 800], [1440, 860], [1750, 1000]];
 const TAMANHOS_DA_VG = [[1000, 600], [1126, 579], [1130, 580], [1440, 800], [1440, 860]];
 const TAMANHOS_DO_CONSORCIO = [[750, 520], [750, 600], [814, 530], [1000, 600], [1126, 579], [1300, 704], [1440, 800]];
 /* FIN-CONSORCIO-04 — no consórcio rolam por dentro só a lista de parcelas e a tabela das faixas (cabeçalho e Total presos nelas) */
@@ -321,12 +323,20 @@ const CENARIOS = [
      mês e Parcelas livres); o modal fixo não rola (só a lista da grade) */
   /* P101 — em TODOS os tamanhos: abaixo de 1000px a prévia vira três abas e o cartão mora na "Parcelas e lançamento" */
   ...[['', null], ['-livres', 'Parcelas livres']].map(([s, livres]) => ({ nome: `nota-pdf-cartao${s}`, url: 'tela=nota-pdf&v=semdup', tamanhos: TAMANHOS_DO_CONSORCIO,
+    semRolarNoLugar: '[data-testid="nota-cartao"] > div:first-child',
     semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-itens-rolagem"], [data-testid="nota-parcelas-rolagem"], [data-testid="lista-de-parcelas"]' },
     antes: async (p) => { await cartaoEm4(p); if (livres) await clicarTexto(livres)(p); } })),
   /* P74 B — "Parcelar este lançamento" (aba Pagamento do Editar): fechado, aberto com 4 no cartão (a sugestão em âmbar, a Situação) e a
      confirmação antes → depois; e o pago (o botão apagado com a frase) */
   { nome: 'lancamento-parcelar-fechado', url: 'tela=lancamento&m=editar&v=salcartao', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicarTexto('Pagamento') },
-  { nome: 'lancamento-parcelar-aberto', url: 'tela=lancamento&m=editar&v=salcartao', tamanhos: TAMANHOS_DO_CONTRATO, antes: parcelarEm4 },
+  /* P104 — o bloco aberto SEM parcelas (a frase do que falta, a sugestão do 1º vencimento) e COM 4, e a parcela solta "6/6": nos 9 tamanhos e
+     no do print (1750×1000), e nada rola escondido no lugar no bloco (`semRolarNoLugar`: o gate do P74 aceitava o `uma-linha-que-rola`
+     fora de tabela, e o estado sem parcelas não tinha cenário) */
+  { nome: 'lancamento-parcelar-aberto', url: 'tela=lancamento&m=editar&v=salcartao', tamanhos: TAMANHOS_DO_P104, antes: parcelarEm4, semRolarNoLugar: '[data-testid="parcelar-este"]' },
+  { nome: 'lancamento-parcelar-aberto-vazio', url: 'tela=lancamento&m=editar&v=salcartao', tamanhos: TAMANHOS_DO_P104, semRolarNoLugar: '[data-testid="parcelar-este"]',
+    antes: async (p) => { await clicarTexto('Pagamento')(p); await p.locator('[data-testid="parcelar-este-abrir"]').click(); await p.waitForTimeout(800); } },
+  { nome: 'lancamento-parcela-solta', url: 'tela=lancamento&m=editar&v=salsolta', tamanhos: TAMANHOS_DO_P104, semRolarNoLugar: '[data-testid="parcela-solta"]',
+    antes: async (p) => { await clicarTexto('Pagamento')(p); await p.locator('[data-testid="parcela-solta-frase"]').waitFor(); await p.waitForTimeout(600); } },
   { nome: 'lancamento-parcelar-pago', url: 'tela=lancamento&m=editar&v=salpago', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicarTexto('Pagamento') },
   /* P74b — a parcela no Editar: o bloco "Parcelamento" com "Voltar para à vista" (pronto e apagado com a frase) e a confirmação antes → depois */
   { nome: 'lancamento-voltar-a-vista', url: 'tela=lancamento&m=editar&v=salparcela', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicarTexto('Pagamento') },
@@ -504,6 +514,24 @@ const alturaDe = (p, sel) => p.evaluate((s) => { const e = document.querySelecto
 const achadoDaAltura = (sel, antes, depois) => (antes === null || depois === null)
   ? { regra: 'altura', texto: `${sel} nao achado para medir a altura` }
   : Math.abs(depois - antes) > 0.5 ? { regra: 'altura', texto: `${sel} mudou de altura: ${antes}px -> ${depois}px` } : null;
+
+/* P104 (print do Gabriel, 25/10: "1º vencimento · sugeric…", "Infor…") — roda NA PAGINA: dentro de `sel`, rótulo e frase NÃO rolam escondidos
+   no lugar (`uma-linha-que-rola` fora de tabela, que a regra geral aceita para CAMPOS) nem passam da altura reservada. Os campos (botão,
+   seletor, input) ficam de fora: neles rolar no lugar é a regra. */
+function medirSemRolarNoLugar(sel) {
+  const achados = [];
+  const raiz = document.querySelector(sel); if (!raiz) return [{ regra: 'corte', texto: `${sel} nao achado` }];
+  for (const e of raiz.querySelectorAll('*')) {
+    if (e.closest('button, [role="combobox"], input, textarea, select, td, th')) continue;
+    const cs = getComputedStyle(e);
+    if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+    if (![...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())) continue;
+    const t = (e.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 50);
+    if (cs.overflowX !== 'visible' && e.scrollWidth > e.clientWidth + 1 && e.clientWidth > 2) achados.push({ regra: 'corte', texto: `rola no lugar: ${t} (pede ${e.scrollWidth}px, tem ${e.clientWidth})` });
+    else if (cs.overflowY !== 'visible' && e.scrollHeight > e.clientHeight + 1 && e.clientHeight > 2) achados.push({ regra: 'corte', texto: `passa da altura reservada: ${t} (pede ${e.scrollHeight}px, tem ${e.clientHeight})` });
+  }
+  return achados;
+}
 
 /* FIN-CONSORCIO-02 — roda NA PAGINA: dentro de `dentro`, nenhum elemento com conteúdo maior que a caixa na vertical (rolando ou
    cortado), fora `exceto` e o que mora nele; e o próprio `dentro` cabe na janela */
@@ -880,6 +908,14 @@ try {
   const aceitoErrado = daPagina0.some((a) => a.texto.startsWith('Nome aceito'));
   const seco0 = daPagina0.some((a) => a.texto.startsWith('corte seco: Nome cortado seco'));
   const doc0 = daPagina0.some((a) => a.regra === 'numero' && a.texto.includes('12.345.678/0001-90'));
+  /* P104 — o detector novo se prova: o rótulo que rola no lugar e a frase que passa da altura reservada são achados; o campo, não */
+  await p0.setContent(`<div id="sem-rolar"><span class="r1" style="display:block;width:60px;overflow-x:auto;white-space:nowrap">1º vencimento · sugerido (Elo, dia 10)</span>
+    <p style="height:13px;width:60px;overflow:hidden;font-size:10px;line-height:13px">Informe o nº de parcelas (2 a 24).</p>
+    <button style="width:40px"><span style="display:block;overflow-x:auto;white-space:nowrap">Campo de seletor comprido</span></button></div>`);
+  const daSemRolar0 = await p0.evaluate(medirSemRolarNoLugar, '#sem-rolar');
+  const semRolar0 = daSemRolar0.some((a) => a.texto.startsWith('rola no lugar: 1º vencimento')) && daSemRolar0.some((a) => a.texto.startsWith('passa da altura reservada: Informe'))
+    && !daSemRolar0.some((a) => a.texto.includes('Campo de seletor'));
+  if (!semRolar0) { console.error(`check-ui-cortes: AUTO-TESTE DO SEM-ROLAR-NO-LUGAR FALHOU (${JSON.stringify(daSemRolar0)})`); process.exit(2); }
   if (aceitoErrado || !seco0 || !doc0) { console.error(`check-ui-cortes: AUTO-TESTE DA REGRA DE CORTE FALHOU (aceito acusado: ${aceitoErrado}, corte seco: ${seco0}, documento: ${doc0})`); process.exit(2); }
   await p0.close();
   if (!['reticencias', 'corte', 'quebra', 'data', 'cabecalho', 'altura', 'rolagem', 'valor', 'tabela', 'sobreposicao', 'italico', 'numero'].every((r) => prova.includes(r))
@@ -917,6 +953,7 @@ try {
     if (cen.rotulosSvg) daRolagem.push(...(await p.evaluate(medirRotulosSvg, cen.rotulosSvg)));
     if (cen.folgaCelulas) daRolagem.push(...(await p.evaluate(medirFolgaCelulas, cen.folgaCelulas)));
     if (cen.botoesDentro) daRolagem.push(...(await p.evaluate(medirBotoesDentro, cen.botoesDentro)));
+    if (cen.semRolarNoLugar) daRolagem.push(...(await p.evaluate(medirSemRolarNoLugar, cen.semRolarNoLugar)));
     const achadosTodos = [...daRolagem, ...(await p.evaluate(medir, cen.regiao ?? null)), ...(await p.evaluate(medirCabecalho, cen.regiao ?? null)),
       ...(await p.evaluate(medirSobreposicao, cen.regiao ?? null)), ...(daAltura ? [daAltura] : []), ...dasAlturas, ...erros.map((e) => ({ regra: 'erro', texto: e }))];
     /* `soRegras` (UI-SEM-CORTE-02): o cenario conta so' estas regras — a tabela do Financeiro V2, suspensa (FIN-V2-SEM-CORTE-01), entra

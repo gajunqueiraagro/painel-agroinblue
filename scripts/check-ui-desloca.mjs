@@ -99,6 +99,15 @@ const CENARIOS = [
         antes: async (p) => { await aba(p); await conta('Precoce', '12.000')(p); await tecla('Tab')(p); }, estados: [
         ['conta aberta sobre o bonus preenchido', conta('Precoce', '988.224-976.224')], ['conta aplicada (Enter)', tecla('Enter')],
       ] },
+      /* P91 — a conta no campo de NUMERO (a carcaca em kg, aba Desempenho; o caso das Novilhas, "445,97*0,50"): aberta, aplicada,
+         a que nao fecha e a recusa depois de sair. ⚠ MEDIDO A PARTIR DA CARCACA JA' COM O RESULTADO (como o bonus acima): trocar o
+         NUMERO da carcaca (40.676 kg -> 8.696,61) muda a largura das colunas do "Resultado do lote" nas janelas de 1126+ — o mesmo
+         de digitar o numero direto, sem conta (a tabela do resumo nao tem largura fixa: fila P92). Aqui se mede so' o gesto. */
+      { nome: 'negociar-lote-carcaca-conta', url: 'tela=negociar-lote',
+        antes: async (p) => { await conta('Carcaça', '222,99')(p); await tecla('Tab')(p); }, estados: [
+        ['conta aberta na Carcaça', conta('Carcaça', '445,97*0,50')], ['conta aplicada (Enter)', tecla('Enter')],
+        ['conta que nao fecha, aberta', conta('Carcaça', '445,97*')], ['recusa depois de sair do campo', tecla('Tab')],
+      ] },
     ];
   })(),
   { nome: 'fornecedores-sem-cadastro', url: 'tela=fornecedores&barra=32&n=2356', antes: clicar('[data-testid="aba-sem-cadastro"]'), auto: true },

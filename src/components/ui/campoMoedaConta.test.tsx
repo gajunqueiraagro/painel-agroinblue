@@ -224,10 +224,13 @@ describe('Esc com a conta aberta dentro de um modal Radix', () => {
 });
 
 describe('a fonte — um dono da conta', () => {
-  const fonte = readFileSync(resolve(__dirname, 'campo-moeda.tsx'), 'utf8');
+  /* P91: o gesto saiu do `CampoMoeda` para o hook `useContaNoCampo` (conta-no-campo.tsx), o mesmo do campo de número. */
+  const fonte = readFileSync(resolve(__dirname, 'conta-no-campo.tsx'), 'utf8');
+  const campo = readFileSync(resolve(__dirname, 'campo-moeda.tsx'), 'utf8');
   it('o campo chama a lib; não há eval nem Function', () => {
     expect(fonte).toContain("from '@/lib/calculos/contaNoCampo'");
     expect(fonte).toContain('calcularConta(conta, { casas, aceitaNegativo, base: valorNoFoco.current })');
-    expect(/\beval\s*\(|new Function\b/.test(fonte)).toBe(false);
+    expect(campo).toContain('useContaNoCampo({ valor, casas, aceitaNegativo, escrever, setTexto, onChange })');
+    for (const f of [fonte, campo]) expect(/\beval\s*\(|new Function\b/.test(f)).toBe(false);
   });
 });

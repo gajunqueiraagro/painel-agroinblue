@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { calcularConta, contaOk, ehConta, FRASE_DA_CONTA, type MotivoDaConta } from '@/lib/calculos/contaNoCampo';
+import { useContaNoCampo, BalaoDaConta } from '@/components/ui/conta-no-campo';
 /* ⚠ `brl`, `round2` e `parseMoeda` SAIRAM DAQUI para `lib/calculos/numeroBR` — regra pura não
    mora em componente, e `lib/agri/colheita` precisava do parser sem arrastar React junto.
    A reexportação mantém os doze consumidores intactos: quem importava daqui continua
@@ -32,8 +32,8 @@ export { brl, round2, parseMoeda };
      modal. A janela vem antes do documento, então com a conta aberta o Esc é do campo e o modal fica (sem tocar nos 29 hospedeiros).
    ⚠ AS OPÇÕES DO CAMPO VALEM NA CONTA: `casas` arredonda o resultado; sem `aceitaNegativo`, resultado negativo é recusa ("resultado
      negativo"); com ele, o "-" no começo é sinal e não operador. "10%" sozinho é dez por cento do valor que o campo tinha. */
-const OPERADOR_SOZINHO = /^[+\-\u2212*/xX\u00d7\u00f7%]$/;
-const OPERADOR_SOZINHO_SEM_SINAL = /^[+*/xX\u00d7\u00f7%]$/;
+/* ⚠ P91: O GESTO SAIU PARA `useContaNoCampo` (src/components/ui/conta-no-campo.tsx), o mesmo do campo de número — movido sem mudar
+   comportamento (as fotos do `campoMoeda.fotos.json` e o `campoMoedaConta.test.tsx` prendem). */
 /* ⚠ `disabled` e' a UNICA linha ACRESCENTADA depois do move — o campo original nao a
    tinha porque nenhum chamador dele precisava. E' opcional e, quando omitida, chega ao
    <Input> como `undefined`: AbaCompromissosOC nao muda em nada. */
@@ -79,116 +79,34 @@ export function CampoMoeda({ valor, onChange, placeholder, className, disabled, 
   };
   const [texto, setTexto] = useState(valor != null ? escrever(valor) : '');
   const [editando, setEditando] = useState(false);
-  /** O texto livre da conta; `null` = fora do modo conta (o campo de sempre). */
-  const [conta, setConta] = useState<string | null>(null);
-  /** A recusa da última conta que não pôde ser aplicada ao sair do campo — fica até a próxima digitação ou foco. */
-  const [recusa, setRecusa] = useState<MotivoDaConta | null>(null);
-  /** O valor que o campo tinha ao ganhar o foco: é para ele que o Esc volta, e é a base do "10%" sozinho. */
-  const valorNoFoco = useRef<number | null>(valor);
-  const colando = useRef(false);
-  const campoRef = useRef<HTMLInputElement>(null);
+  const c = useContaNoCampo({ valor, casas, aceitaNegativo, escrever, setTexto, onChange });
   useEffect(() => { if (!editando) setTexto(valor != null ? escrever(valor) : ''); }, [valor, editando, casas]);
   const { fora, dentro } = separarClasses(className);
-
-  const resultado = conta === null ? null : calcularConta(conta, { casas, aceitaNegativo, base: valorNoFoco.current });
-  /** Aplica a conta se ela vale. Devolve `false` quando não aplicou. */
-  const aplicar = (): boolean => {
-    if (!resultado || !contaOk(resultado)) return false;
-    setConta(null);
-    setTexto(escrever(resultado.valor));
-    onChange(resultado.valor);
-    return true;
-  };
-  /** Cancela a conta: o campo volta ao valor do foco (o hospedeiro só é avisado se tinha recebido outro número no meio). */
-  const cancelar = () => {
-    setConta(null);
-    const antes = valorNoFoco.current;
-    setTexto(antes != null ? escrever(antes) : '');
-    if (antes !== valor) onChange(antes);
-  };
-  const teclaRef = useRef<(e: KeyboardEvent) => void>(() => {});
-  teclaRef.current = (e: KeyboardEvent) => {
-    if (e.target !== campoRef.current || e.isComposing) return;
-    if (e.key === 'Enter') {
-      /* Enter APLICA e não sobe: nada no modal pode tomá-lo por "salvar". Conta que não vale fica aberta, com a frase. */
-      e.preventDefault(); e.stopPropagation();
-      aplicar();
-    } else if (e.key === 'Escape') {
-      e.preventDefault(); e.stopPropagation();
-      cancelar();
-    }
-  };
-  const emConta = conta !== null;
-  useEffect(() => {
-    if (!emConta) return;
-    const ouvir = (e: KeyboardEvent) => teclaRef.current(e);
-    window.addEventListener('keydown', ouvir, true);
-    return () => window.removeEventListener('keydown', ouvir, true);
-  }, [emConta]);
-
-  /** O que o balão diz: o resultado da conta aberta, "= …" enquanto incompleta, ou a frase da recusa. `null` = sem balão. */
-  const dica: { texto: string; erro: boolean } | null = emConta && resultado
-    ? (contaOk(resultado)
-        ? { texto: `= ${escrever(resultado.valor)}`, erro: false }
-        : resultado.incompleta
-          ? { texto: '= …', erro: false }
-          : { texto: FRASE_DA_CONTA[resultado.motivo], erro: true })
-    : recusa ? { texto: FRASE_DA_CONTA[recusa], erro: true } : null;
 
   return (
     <div className={cn('relative', fora)} data-testid="campo-moeda">
       <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground" data-testid="prefixo-rs">R$</span>
       <Input
-        ref={campoRef}
-        inputMode="decimal" value={emConta ? conta : texto} placeholder={placeholder ?? formatCasas(0, casas)} className={cn(dentro, 'pl-6 text-right tabular-nums')}
+        ref={c.campoRef}
+        inputMode="decimal" value={c.emConta ? c.conta : texto} placeholder={placeholder ?? formatCasas(0, casas)} className={cn(dentro, 'pl-6 text-right tabular-nums')}
         disabled={disabled} title={title} autoFocus={autoFocus}
-        onFocus={() => { setEditando(true); valorNoFoco.current = valor; setRecusa(null); }}
-        onPaste={() => { colando.current = true; }}
+        onFocus={() => { setEditando(true); c.focar(); }}
+        onPaste={c.colar}
         onChange={(e) => {
           const cru = e.target.value;
-          const colou = colando.current;
-          colando.current = false;
-          if (recusa) setRecusa(null);
-          if (emConta) {
-            /* Em modo conta o texto é LIVRE. Apagar tudo devolve o campo ao de sempre, vazio. */
-            if (cru.trim() === '') { setConta(null); setTexto(''); onChange(null); return; }
-            setConta(cru);
-            return;
-          }
-          if (!disabled) {
-            /* ⚠ OPERADOR DIGITADO SOBRE O CAMPO TODO SELECIONADO (Tab seleciona): a tecla SUBSTITUI o texto e chega só "/". O
-               valor que estava é o primeiro operando. Colado não: "/2" colado é conta sem começo (a lib recusa). No campo que
-               aceita negativo, o "-" sozinho é o sinal de um número novo, não operador. */
-            const sozinho = aceitaNegativo ? OPERADOR_SOZINHO_SEM_SINAL : OPERADOR_SOZINHO;
-            if (!colou && sozinho.test(cru.trim()) && texto.trim() !== '') { setConta(`${texto.trim()}${cru.trim()}`); return; }
-            if (ehConta(cru)) { setConta(cru); return; }
-          }
+          if (c.digitar(cru, texto, disabled)) return;
           setTexto(cru); onChange(ler(cru));
         }}
         onBlur={() => {
           setEditando(false);
-          if (emConta) {
-            if (aplicar()) return;
-            /* Saiu com conta que não vale: NÃO grava. O valor do foco volta e a frase do motivo fica no balão. */
-            setRecusa(resultado && !contaOk(resultado) ? resultado.motivo : 'invalida');
-            cancelar();
-            return;
-          }
+          if (c.sair()) return;
           const n = ler(texto);
           const r = n != null ? roundCasas(n, casas) : null;
           onChange(r);
           setTexto(r != null ? escrever(r) : '');
         }}
       />
-      {dica && (
-        /* ⚠ O BALÃO NÃO DESLOCA NADA: absoluto, sob o campo, alinhado à direita (onde está o número), por cima do que houver.
-           Uma linha, sem corte: o número é o que o operador precisa ler. */
-        <span role="status" aria-live="polite" data-testid="conta-do-campo" data-erro={dica.erro ? 'sim' : undefined}
-          className={cn('pointer-events-none absolute right-0 top-full z-50 mt-0.5 whitespace-nowrap rounded border bg-popover px-1 text-[10px] leading-[14px] tabular-nums shadow-sm',
-            dica.erro ? 'border-destructive/50 text-destructive' : 'text-muted-foreground')}>
-          {dica.texto}
-        </span>
-      )}
+      <BalaoDaConta dica={c.dica} />
     </div>
   );
 }
