@@ -164,6 +164,18 @@ const CENARIOS = [
       ['sobe pelo caminho', noLugar('[data-testid="gaveta-caminho-2"]')],
       ['acumulado no modal', async (p) => { await p.locator('[data-testid="analise-tabela"]').getByText('Acum.', { exact: true }).dispatchEvent('click'); await espera(p); }],
       ['irmão de grupo', noLugar('[data-testid="gaveta-caminho-1"]')]] },
+  /* P103 — a gaveta no subcentro com TODOS os status ("Ração…": datas, chip de status, "Pagos · Em aberto"): ligar e desligar os
+     CHIPS da tela com a gaveta aberta (o clique vai ao chip onde ele está, por baixo do modal) — os não pagos entram e saem da lista, o
+     "Pagos · Em aberto" some quando não sobra nenhum (o lugar dele é reservado) e nada se desloca */
+  { nome: 'visao-geral-gaveta-chips', url: 'tela=visao-geral&barra=0', antes: async (p) => {
+      await p.locator('[data-testid^="grade-linha-saida:grupo:Custeio"]').dispatchEvent('click'); await p.locator('[data-testid="modal-analise"]').waitFor(); await espera(p, 700);
+      await p.locator('[data-testid="analise-lanc-total"]').dispatchEvent('click'); await p.locator('[data-testid="gaveta"]').waitFor(); await espera(p, 500);
+      for (const i of [0, 0, 1]) { await p.locator(`[data-testid="gaveta-linha-${i}"]`).dispatchEvent('click'); await espera(p, 400); } },
+    estados: [
+      ['sem Previsto', noLugar('[data-testid="vg-status-previsto"]')], ['sem Programado', noLugar('[data-testid="vg-status-programado"]')],
+      ['sem Agendado (só os pagos e o vencido)', noLugar('[data-testid="vg-status-agendado"]')],
+      ['sem Vencidos (só os pagos)', noLugar('[data-testid="vg-status-vencidos"]')],
+      ['Previsto de volta', noLugar('[data-testid="vg-status-previsto"]')], ['Vencidos de volta', noLugar('[data-testid="vg-status-vencidos"]')]] },
   /* PR 5 — o AVISO do rodapé com duas contas escolhidas: a frase das contas entra e sai ao descer e subir — o lugar é reservado */
   { nome: 'visao-geral-gaveta-contas', url: 'tela=visao-geral&barra=0&contas=2', antes: async (p) => {
       await p.locator('[data-testid^="grade-linha-saida:grupo:Custeio"]').dispatchEvent('click'); await p.locator('[data-testid="modal-analise"]').waitFor(); await espera(p, 700);
