@@ -1,6 +1,8 @@
 import { useState, useMemo, useCallback, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Input } from '@/components/ui/input';
+import { CampoMoeda } from '@/components/ui/campo-moeda';
+import { CampoNumeroComConta } from '@/components/ui/campo-numero-com-conta';
+import { numeroDoTextoDeMaquina as numMaq, textoDeMaquina as txtMaq } from '@/lib/calculos/textoDeMaquina';
 import { DatePicker } from '@/components/ui/date-picker';
 import { CampoPrecoVenda } from '@/components/venda/CampoPrecoVenda';
 import { Label } from '@/components/ui/label';
@@ -1001,16 +1003,17 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <Label className="text-[10px]">Frete (R$)</Label>
-                  <Input type="number" value={frete} onChange={e => onFreteChange(e.target.value)} placeholder="0,00" className="h-7 text-[11px]" />
+                  {/* P88 — os campos do sistema (com a conta); os estados seguem no texto de máquina, lidos como antes */}
+                  <CampoMoeda valor={numMaq(frete)} onChange={n => onFreteChange(txtMaq(n))} className="h-7 text-[11px]" />
                 </div>
                 <div>
                   <Label className="text-[10px]">Comissão (%)</Label>
-                  <Input type="number" value={comissao} onChange={e => onComissaoChange(e.target.value)} placeholder="0" className="h-7 text-[11px]" />
+                  <CampoNumeroComConta percentual sufixoDentro="%" valor={numMaq(comissao)} onChange={n => onComissaoChange(txtMaq(n))} placeholder="0" className="h-7 text-[11px]" />
                 </div>
               </div>
               <div>
                 <Label className="text-[10px]">Outros custos extras (R$)</Label>
-                <Input type="number" value={outrosDescontos} onChange={e => onOutrosDescontosChange(e.target.value)} placeholder="0,00" className="h-7 text-[11px]" />
+                <CampoMoeda valor={numMaq(outrosDescontos)} onChange={n => onOutrosDescontosChange(txtMaq(n))} className="h-7 text-[11px]" />
               </div>
             </CollapsibleContent>
           </Collapsible>
@@ -1030,32 +1033,27 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <Label className="text-[10px]">Funrural (%)</Label>
-                  <Input
-                    type="number"
-                    value={funruralPctCalculado}
-                    onChange={e => {
-                      onFunruralPctChange(e.target.value);
-                      if (e.target.value && Number(e.target.value) > 0) onFunruralReaisChange('');
+                  <CampoNumeroComConta percentual sufixoDentro="%"
+                    valor={numMaq(funruralPctCalculado)}
+                    onChange={n => {
+                      onFunruralPctChange(txtMaq(n));
+                      if (n != null && n > 0) onFunruralReaisChange('');
                     }}
                     placeholder="0,00"
-                    step="0.01"
                     className="h-7 text-[11px]"
                     disabled={funruralReaisFilled}
                   />
                 </div>
                 <div>
                   <Label className="text-[10px]">Funrural (R$)</Label>
-                  <Input
-                    type="number"
-                    value={funruralReaisCalculado}
-                    onChange={e => {
-                      onFunruralReaisChange(e.target.value);
-                      if (e.target.value && Number(e.target.value) > 0) onFunruralPctChange('');
+                  <CampoMoeda
+                    valor={numMaq(funruralReaisCalculado)}
+                    onChange={n => {
+                      onFunruralReaisChange(txtMaq(n));
+                      if (n != null && n > 0) onFunruralPctChange('');
                     }}
-                    placeholder="0,00"
                     className={`h-7 text-[11px] ${funruralPctFilled ? 'bg-muted/40' : ''}`}
                     disabled={funruralPctFilled}
-                    readOnly={funruralPctFilled}
                   />
                 </div>
               </div>
@@ -1116,7 +1114,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
                 <div className="space-y-1.5">
                   <div>
                     <Label className="text-[11px]">Quantidade de parcelas</Label>
-                    <Input type="number" min="1" max="48" value={qtdParcelas} onChange={e => handleQtdParcelasChange(e.target.value)} className="h-8 text-[12px]" />
+                    <CampoNumeroComConta casas={0} valor={numMaq(qtdParcelas)} onChange={n => handleQtdParcelasChange(txtMaq(n))} className="h-8 text-[12px]" />
                   </div>
                   {parcelas.map((p, i) => (
                     <div key={i} className="grid grid-cols-2 gap-1.5 bg-muted/30 rounded p-1.5">
@@ -1126,7 +1124,7 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
                       </div>
                       <div>
                         <Label className="text-[10px]">Valor (R$)</Label>
-                        <Input type="number" value={String(p.valor)} onChange={e => { const np = [...parcelas]; np[i] = { ...np[i], valor: Number(e.target.value) || 0 }; setParcelas(np); }} className="h-7 text-[11px]" />
+                        <CampoMoeda valor={p.valor} onChange={n => { const np = [...parcelas]; np[i] = { ...np[i], valor: n ?? 0 }; setParcelas(np); }} className="h-7 text-[11px]" />
                       </div>
                     </div>
                   ))}

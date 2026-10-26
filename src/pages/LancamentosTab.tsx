@@ -62,6 +62,9 @@ import { useOperacaoEventos } from '@/hooks/useOperacaoEventos';
 import { useOperacaoLiquidacao } from '@/hooks/useOperacaoLiquidacao';
 import { useExcluirLoteOC } from '@/hooks/useExcluirLoteOC';
 import { CampoMoeda, brl as brlMoeda } from '@/components/ui/campo-moeda';
+import { CampoNumeroComConta } from '@/components/ui/campo-numero-com-conta';
+import { numeroDoTextoDeMaquina as numMaq, textoDeMaquina as txtMaq } from '@/lib/calculos/textoDeMaquina';
+import { mesDaTravaDoForm } from '@/lib/oc/mesDaTravaDoForm';
 import { usePrecoEstoqueCategoria } from '@/hooks/usePrecoEstoqueCategoria';
 import { gerarFinanceiroConsumo } from '@/components/consumo/gerarFinanceiroConsumo';
 import { AbateDetalhesDialog, AbateDetalhes, EMPTY_ABATE_DETALHES } from '@/components/abate/AbateDetalhesDialog';
@@ -756,7 +759,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
   const [showReabrirP1, setShowReabrirP1] = useState(false);
   /* ZOOT-MES-FECHADO-MODAL-01 — a TRAVA MASTER do mês do formulário, pelo MESMO hook e pela MESMA fazenda (a do cabeçalho)
      que o `handleSubmit` consulta antes de recusar. A regra não muda: só o motivo entra no modal e trava o botão. */
-  const travaMasterDoForm = useMasterLock(formAnoMes);
+  /* P53b — enquanto a OC da URL não chegou, a data do formulário ainda é "hoje": a trava não pergunta esse mês (era o 2º pedido
+     da abertura da OC). Ref lido no render de propósito: ele muda junto do `ocHidratando` (estado), que é quem redesenha. */
+  const travaMasterDoForm = useMasterLock(mesDaTravaDoForm(formAnoMes,
+    { idNaUrl: ocIdParam, hidratando: ocHidratando, idHidratado: ocHidratadoRef.current }));
 
   // Snapshot completo do contexto operacional ao abrir uma edição. Restaurado
   // ao salvar/cancelar para que o usuário retorne EXATAMENTE ao grid original
@@ -5053,7 +5059,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       {usaPrecoKg && (
         <div>
           <Label className={`text-[11px] ${metaLabelClass}`}>R$/kg (preço base)</Label>
-          <Input type="number" value={precoKg} onChange={e => setPrecoKg(e.target.value)} placeholder="0,00" className={`h-8 text-[12px] ${metaInputClass}`} />
+          {/* P88 — o campo de valor do sistema (com a conta); R$/kg guarda 4 casas (o retro-cálculo do líquido escreve 4). O estado segue no texto de máquina. */}
+          <CampoMoeda casas={4} valor={numMaq(precoKg)} onChange={n => setPrecoKg(txtMaq(n))} className={`h-8 text-[12px] ${metaInputClass}`} />
         </div>
       )}
 
@@ -5087,7 +5094,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
             <div className="space-y-1.5">
               <div>
                 <Label className="text-[11px]">Quantidade de parcelas</Label>
-                <Input type="number" min="1" max="48" value={qtdParcelas} onChange={e => handleQtdParcelasChange(e.target.value)} className="h-8 text-[12px]" />
+                <CampoNumeroComConta casas={0} valor={numMaq(qtdParcelas)} onChange={n => handleQtdParcelasChange(txtMaq(n))} className="h-8 text-[12px]" />
               </div>
               {parcelas.map((p, i) => (
                 <div key={i} className="grid grid-cols-2 gap-1.5 bg-muted/30 rounded p-1.5">
@@ -5097,7 +5104,7 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
                   </div>
                   <div>
                     <Label className="text-[10px]">Valor (R$)</Label>
-                    <Input type="number" value={String(p.valor)} onChange={e => { const np = [...parcelas]; np[i] = { ...np[i], valor: Number(e.target.value) || 0 }; setParcelas(np); }} className="h-7 text-[11px]" />
+                    <CampoMoeda valor={p.valor} onChange={n => { const np = [...parcelas]; np[i] = { ...np[i], valor: n ?? 0 }; setParcelas(np); }} className="h-7 text-[11px]" />
                   </div>
                 </div>
               ))}
@@ -5117,8 +5124,8 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           <Separator />
           <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Ajustes (R$)</h4>
           <div className="space-y-1.5">
-            <div><Label className="text-[11px]">Bônus</Label><Input type="number" value={bonus} onChange={e => setBonus(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${metaInputClass}`} /></div>
-            <div><Label className="text-[11px]">Descontos</Label><Input type="number" value={descontos} onChange={e => setDescontos(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${metaInputClass}`} /></div>
+            <div><Label className="text-[11px]">Bônus</Label><CampoMoeda valor={numMaq(bonus)} onChange={n => setBonus(txtMaq(n))} className={`h-8 text-[12px] ${metaInputClass}`} /></div>
+            <div><Label className="text-[11px]">Descontos</Label><CampoMoeda valor={numMaq(descontos)} onChange={n => setDescontos(txtMaq(n))} className={`h-8 text-[12px] ${metaInputClass}`} /></div>
           </div>
         </>
       )}
@@ -5127,12 +5134,10 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
       <Separator />
       <div>
         <Label className={`text-[11px] font-semibold ${metaLabelClass || 'text-foreground'}`}>Valor total líquido (R$)</Label>
-        <Input
-          type="number"
-          value={calc.valorLiquido > 0 ? String(Math.round(calc.valorLiquido * 100) / 100) : ''}
-          onChange={e => {
-            const vt = parseFloat(e.target.value);
-            if (!isNaN(vt)) {
+        <CampoMoeda
+          valor={calc.valorLiquido > 0 ? Math.round(calc.valorLiquido * 100) / 100 : null}
+          onChange={vt => {
+            if (vt != null) {
               const totalBon = (parseNumericValue(bonus) || 0);
               const totalDesc = (parseNumericValue(descontos) || 0);
               const freteVal = parseNumericValue(frete) || 0;
@@ -5153,9 +5158,9 @@ export function LancamentosTab({ lancamentos, onAdicionar, onEditar, onRemover, 
           <Separator />
           <h4 className="text-[10px] font-bold text-muted-foreground uppercase">Despesas Operacionais</h4>
           <div className="space-y-1.5">
-            <div><Label className="text-[11px]">Comissão (%)</Label><Input type="number" value={comissaoPct} onChange={e => setComissaoPct(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${metaInputClass}`} /></div>
-            <div><Label className="text-[11px]">Frete (R$)</Label><Input type="number" value={frete} onChange={e => setFrete(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${metaInputClass}`} /></div>
-            <div><Label className="text-[11px]">Outras (R$)</Label><Input type="number" value={outrasDespesas} onChange={e => setOutrasDespesas(e.target.value)} placeholder="0" className={`h-8 text-[12px] ${metaInputClass}`} /></div>
+            <div><Label className="text-[11px]">Comissão (%)</Label><CampoNumeroComConta percentual sufixoDentro="%" valor={numMaq(comissaoPct)} onChange={n => setComissaoPct(txtMaq(n))} placeholder="0" className={`h-8 text-[12px] ${metaInputClass}`} /></div>
+            <div><Label className="text-[11px]">Frete (R$)</Label><CampoMoeda valor={numMaq(frete)} onChange={n => setFrete(txtMaq(n))} className={`h-8 text-[12px] ${metaInputClass}`} /></div>
+            <div><Label className="text-[11px]">Outras (R$)</Label><CampoMoeda valor={numMaq(outrasDespesas)} onChange={n => setOutrasDespesas(txtMaq(n))} className={`h-8 text-[12px] ${metaInputClass}`} /></div>
           </div>
         </>
       )}
