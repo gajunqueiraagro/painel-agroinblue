@@ -347,7 +347,19 @@ if (tela === 'mesclar') {
   /* FIN-VALOR-CALC-01b — o Negociar lote do caso do Gabriel (23/10 09h32), com dado SINTÉTICO: Bois, 136 cab, Realizado, carcaça
      40.676 kg no lote → 2.711,7333 @ × R$ 360,00 = preço base R$ 976.224,00. `&aba=bonus` abre direto na aba dos bônus. */
   const lote: LoteAbate = { id: 'l1', ordem: 1, categoria: 'bois', categoriaLabel: 'Bois', quantidade: 136, pesoMedioKg: 540 };
-  const linha: LinhaAbate = { ...linhaVazia('l1'), pesoCarcacaKg: 40676, pesoCarcacaFonte: 'total', precoArroba: 360, precoFonte: 'arroba' };
+  /* P92 — `&v=99mi | teto | acima`: o resumo com números grandes (dado SINTÉTICO). Carcaça de 15 kg no lote = 1 @, então o "por @" é o
+     próprio total (as duas colunas de número no mesmo tamanho). `teto`: cada linha em R$ 999.999.999,99 (o teto do campo); `acima`: três
+     bônus no teto e dois descontos no teto (R$ 2.999.999.999,97 e − R$ 1.999.999.999,98: dez dígitos, a fonte desce até caber). */
+  const v = q.get('v');
+  const grande = (n: number, acima: boolean): LinhaAbate => ({ ...linhaVazia('l1'), pesoCarcacaKg: 15, pesoCarcacaFonte: 'total',
+    precoFonte: 'total', valorBaseOverride: n,
+    bonusPrecoce: { valor: n, fonte: 'reais' }, bonusQualidade: { valor: acima ? n : null, fonte: acima ? 'reais' : null },
+    bonusListaTrace: { valor: acima ? n : null, fonte: acima ? 'reais' : null },
+    descontoQualidade: { valor: n, fonte: 'reais' }, outrosDescontos: { valor: acima ? n : null, fonte: acima ? 'reais' : null },
+    funrural: { valor: n, fonte: 'reais' } });
+  const linha: LinhaAbate = v === '99mi' ? grande(99999999.99, false) : v === 'teto' ? grande(999999999.99, false)
+    : v === 'acima' ? grande(999999999.99, true)
+    : { ...linhaVazia('l1'), pesoCarcacaKg: 40676, pesoCarcacaFonte: 'total', precoArroba: 360, precoFonte: 'arroba' };
   montar(<ModalNegociarLote lote={lote} linha={linha} cenario="realizado" onAplicar={() => {}} onFechar={() => {}} />);
 } else if (tela === 'consorcio') {
   /* FIN-CONSORCIO-02 — o cadastro do consórcio: a tela e o gerador vêm do banco simulado (dado SINTÉTICO, `dados/consorcio.json`, lido do

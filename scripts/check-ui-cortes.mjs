@@ -44,6 +44,8 @@ const TAMANHOS_DO_CONTRATO = [[750, 483], [750, 530], [814, 530], [1000, 600], [
 const TAMANHOS_DO_P104 = [[750, 483], [750, 530], [814, 530], [1000, 600], [1126, 579], [1130, 580], [1300, 704], [1440, 800], [1440, 860], [1750, 1000]];
 const TAMANHOS_DA_VG = [[1000, 600], [1126, 579], [1130, 580], [1440, 800], [1440, 860]];
 const TAMANHOS_DO_CONSORCIO = [[750, 520], [750, 600], [814, 530], [1000, 600], [1126, 579], [1300, 704], [1440, 800]];
+/* P92 — os nove tamanhos do Negociar lote (os sete do consórcio + 750x483 e 900x600) e o 1024x600, a fronteira em que o resumo de 400px aparece */
+const TAMANHOS_DO_P92 = [[750, 483], [750, 520], [750, 600], [814, 530], [900, 600], [1000, 600], [1024, 600], [1126, 579], [1300, 704], [1440, 800]];
 /* FIN-CONSORCIO-04 — no consórcio rolam por dentro só a lista de parcelas e a tabela das faixas (cabeçalho e Total presos nelas) */
 const EXCETO_CONSORCIO = '[data-testid="lista-parcelas-consorcio"], [data-testid="lista-faixas-consorcio"]';
 const clicar = (sel) => async (p) => { await p.locator(sel).first().click(); await p.waitForTimeout(500); };
@@ -406,6 +408,11 @@ const CENARIOS = [
   ...[['desempenho', null], ['preco', 'Preço'], ['bonus', 'Bônus, descontos e impostos']].map(([n, aba]) => ({
     nome: `negociar-lote-${n}`, url: 'tela=negociar-lote', tamanhos: TAMANHOS_DO_CONSORCIO,
     antes: aba ? async (p) => { await p.getByRole('button', { name: aba, exact: true }).first().click(); await p.waitForTimeout(400); } : undefined })),
+  /* P92 — o "Resultado do lote" (colunas de largura fixa, 400px de 1024 para cima): o caso real (R$ 976.224,00), R$ 99.999.999,99, o teto
+     (R$ 999.999.999,99 em toda linha) e acima do teto (dez dígitos: a fonte do número desce até caber). Numero que passa da celula =
+     corte seco (regra 6); a folga entre o rotulo e o numero, >= 6px (regra 8). */
+  ...[['real', ''], ['99mi', '&v=99mi'], ['teto', '&v=teto'], ['acima', '&v=acima']].map(([n, q]) => ({
+    nome: `negociar-lote-resumo-${n}`, url: `tela=negociar-lote${q}`, tamanhos: TAMANHOS_DO_P92, folgaCelulas: '[data-testid="resultado-do-lote"]' })),
   /* UI-CAMPO-MOEDA-01 — os campos de valor de largura fixa dos modais fora da bancada (a regra `valor` os mede com 999.999.999,99) */
   { nome: 'campos-moeda', url: 'tela=campos-moeda', tamanhos: TAMANHOS_DO_CONSORCIO },
   /* CONC-BLOCO-SINAL-MISTO-01 — o bloco da Conferência com saída + reembolso: o que fecha e a recusa, nos sete tamanhos */
@@ -605,6 +612,24 @@ function medirFolgaCelulas(sel) {
     const l0 = cr.left + parseFloat(cs.paddingLeft), r0 = cr.right - parseFloat(cs.paddingRight);
     return { l: Math.max(l0, Math.min(...rs.map((r) => r.left))), r: Math.min(r0, Math.max(...rs.map((r) => r.right))), t: (c.textContent ?? '').trim().slice(0, 30) };
   };
+  /* P92 — NUMERO QUE VAZA PARA QUALQUER LADO: o numero alinhado a' direita que nao cabe vaza para a ESQUERDA (sobre a coluna vizinha), e o
+     `scrollWidth` so' ve^ o vazamento para a direita — a regra de corte nao o via. Numero cujo texto sai da caixa da propria celula = achado. */
+  const EH_NUM = (t) => /^[▲▼+\-−]?\s*(R\$\s?)?[\d.,/:\-–]+%?$/.test(t);
+  for (const t of tabs) for (const c of t.querySelectorAll('td, th')) {
+    const txt = (c.textContent ?? '').replace(/\s+/g, ' ').trim(); if (!txt || !EH_NUM(txt)) continue;
+    const rg = document.createRange(); rg.selectNodeContents(c);
+    const rs = [...rg.getClientRects()].filter((r) => r.width > 0.5 && r.height > 0.5); if (!rs.length) continue;
+    /* contra a caixa de CONTEUDO: o numero que come o recuo da celula encosta no vizinho (a folga abaixo nao ve^: ela corta na borda) */
+    const cr = c.getBoundingClientRect(), cs = getComputedStyle(c);
+    const l0 = cr.left + parseFloat(cs.paddingLeft), r0 = cr.right - parseFloat(cs.paddingRight);
+    const l = Math.min(...rs.map((r) => r.left)), r = Math.max(...rs.map((r) => r.right));
+    if (l < l0 - 0.5 || r > r0 + 0.5) achados.push({ regra: 'numero-vaza', texto: `"${txt.slice(0, 30)}" sai da celula (${(l0 - l).toFixed(1)}px a' esquerda, ${(r - r0).toFixed(1)}px a' direita)` });
+  }
+  /* e a TABELA mais larga que a caixa onde mora (ela rola de lado, escondida — o resumo de 330px com colunas soltas) */
+  for (const t of tabs) {
+    const pai = t.parentElement; if (!pai) continue;
+    if (t.getBoundingClientRect().width > pai.clientWidth + 0.5) achados.push({ regra: 'numero-vaza', texto: `tabela de ${t.getBoundingClientRect().width.toFixed(1)}px numa caixa de ${pai.clientWidth}px` });
+  }
   for (const t of tabs) for (const tr of t.querySelectorAll('tr')) {
     const es = [...tr.children].map(extensao);
     for (let i = 0; i + 1 < es.length; i += 1) {
@@ -885,6 +910,13 @@ try {
   const daFolga0 = await p0.evaluate(medirFolgaCelulas, '#f');
   if (!daFolga0.some((a) => a.texto.includes('+257,9%')) || daFolga0.some((a) => a.texto.includes('"ok"'))) {
     console.error(`check-ui-cortes: AUTO-TESTE DA FOLGA FALHOU (${daFolga0.map((a) => a.texto).join(' | ') || 'nada'})`); process.exit(2);
+  }
+  /* P92 — o numero que vaza para a ESQUERDA (alinhado a' direita, numa celula estreita) e' achado; o que cabe, nao */
+  await p0.setContent(`<table id="fv" style="table-layout:fixed;width:160px;font-size:10px;border-collapse:collapse"><tr><td style="width:100px">Rotulo</td>
+    <td style="width:30px;text-align:right;white-space:nowrap;padding:0">R$ 999.999,99</td><td style="width:30px;text-align:right;padding:0">1,5</td></tr></table>`);
+  const daVaza0 = (await p0.evaluate(medirFolgaCelulas, '#fv')).filter((a) => a.regra === 'numero-vaza');
+  if (daVaza0.length !== 1 || !daVaza0[0].texto.includes('R$ 999.999,99')) {
+    console.error(`check-ui-cortes: AUTO-TESTE DO NUMERO QUE VAZA FALHOU (${daVaza0.map((a) => a.texto).join(' | ') || 'nada'})`); process.exit(2);
   }
   if (!daRotulo0.some((a) => a.texto.includes('encosta')) || !daRotulo0.some((a) => a.texto.includes('sai do grafico')) || daRotulo0.some((a) => a.texto.includes('"ok"'))) {
     console.error(`check-ui-cortes: AUTO-TESTE DO ROTULO DE GRAFICO FALHOU (${daRotulo0.map((a) => a.texto).join(' | ') || 'nada'})`); process.exit(2);

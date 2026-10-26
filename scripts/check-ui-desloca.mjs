@@ -30,6 +30,8 @@ const SO = arg('--so');
 const TAMANHOS = arg('--tamanhos') ? arg('--tamanhos').split(',').map((t) => t.split('x').map(Number))
   : [[750, 483], [814, 530], [1000, 600], [1126, 579], [1300, 704], [1440, 800]];
 
+/* P92 — os nove tamanhos do Negociar lote (os sete do consórcio + 750x483 e 900x600) e o 1024x600, a fronteira em que o resumo de 400px aparece */
+const TAMANHOS_DO_P92 = [[750, 483], [750, 520], [750, 600], [814, 530], [900, 600], [1000, 600], [1024, 600], [1126, 579], [1300, 704], [1440, 800]];
 const espera = (p, ms = 450) => p.waitForTimeout(ms);
 const botao = (re) => async (p) => { await p.getByRole('button', { name: re }).first().click(); await espera(p); };
 const clicar = (sel) => async (p) => { await p.locator(sel).first().click(); await espera(p); };
@@ -103,6 +105,14 @@ const CENARIOS = [
          a que nao fecha e a recusa depois de sair. ⚠ MEDIDO A PARTIR DA CARCACA JA' COM O RESULTADO (como o bonus acima): trocar o
          NUMERO da carcaca (40.676 kg -> 8.696,61) muda a largura das colunas do "Resultado do lote" nas janelas de 1126+ — o mesmo
          de digitar o numero direto, sem conta (a tabela do resumo nao tem largura fixa: fila P92). Aqui se mede so' o gesto. */
+      /* P92 — TROCAR A CARCACA nao move nada: o "Resultado do lote" tem colunas de largura fixa (antes, 40.676 -> 8.696,61 kg mudava a
+         largura das colunas de 1126px para cima). Do caso real ao numero pequeno, ao grande e de volta. */
+      { nome: 'negociar-lote-troca-carcaca', url: 'tela=negociar-lote', tamanhos: TAMANHOS_DO_P92, estados: [
+        ['carcaça 8.696,61 kg', async (p) => { await conta('Carcaça', '8.696,61')(p); await tecla('Tab')(p); }],
+        ['carcaça 15 kg', async (p) => { await conta('Carcaça', '15')(p); await tecla('Tab')(p); }],
+        ['carcaça 999.999.999,99 kg', async (p) => { await conta('Carcaça', '999.999.999,99')(p); await tecla('Tab')(p); }],
+        ['de volta a 40.676 kg', async (p) => { await conta('Carcaça', '40.676')(p); await tecla('Tab')(p); }],
+      ] },
       { nome: 'negociar-lote-carcaca-conta', url: 'tela=negociar-lote',
         antes: async (p) => { await conta('Carcaça', '222,99')(p); await tecla('Tab')(p); }, estados: [
         ['conta aberta na Carcaça', conta('Carcaça', '445,97*0,50')], ['conta aplicada (Enter)', tecla('Enter')],
@@ -404,6 +414,8 @@ const RAPIDO = process.argv.includes('--rapido');
 const naRapida = RAPIDO ? filtroRapido('check-ui-desloca') : () => true;
 /* o modo rapido mede nos MESMOS tamanhos do completo (ver check-ui-cortes) */
 const TAMANHOS_DA_VEZ = TAMANHOS;
+/* P92 — o cenario pode pedir os PROPRIOS tamanhos (`tamanhos`), como no check-ui-cortes; o `--tamanhos` da linha de comando manda sobre eles */
+const tamanhosDe = (c) => (c.tamanhos && !arg('--tamanhos') ? c.tamanhos : TAMANHOS_DA_VEZ);
 const ESCOLHIDOS = CENARIOS.filter((c) => (!SO || c.nome.startsWith(SO)) && naRapida(c));
 const servidor = await createServer({ configFile: path.join(AQUI, 'ui-cortes/vite.config.mts'), server: { port: 0, host: '127.0.0.1' } });
 await servidor.listen();
@@ -436,7 +448,7 @@ try {
   }
 
   const todos = []; let medicoes = 0;
-  for (const cen of ESCOLHIDOS) for (const [w, h] of TAMANHOS_DA_VEZ) {
+  for (const cen of ESCOLHIDOS) for (const [w, h] of tamanhosDe(cen)) {
     if (w < (cen.minLargura ?? 0)) continue; /* tela sem desenho abaixo desta largura (o modal da OC: >= 1000) */
     const p = await navegador.newPage({ viewport: { width: w, height: h } });
     const erros = []; p.on('pageerror', (e) => erros.push(String(e).slice(0, 160)));
@@ -476,6 +488,6 @@ try {
     codigo = 1;
     console.error(`check-ui-desloca: ${unicos.length} achado(s):`);
     for (const a of unicos) console.error(`  ${a.tela} [${todos.filter((x) => x.tela === a.tela && x.estado === a.estado && x.texto === a.texto).map((x) => x.tamanho).join(' ')}] ${a.estado}: ${a.texto}`);
-  } else console.log(`check-ui-desloca: ${ESCOLHIDOS.length} telas, ${medicoes} trocas de estado medidas (${TAMANHOS_DA_VEZ.length} tamanhos): nada se desloca.`);
+  } else console.log(`check-ui-desloca: ${ESCOLHIDOS.length} telas, ${medicoes} trocas de estado medidas (${new Set(ESCOLHIDOS.flatMap((c) => tamanhosDe(c).map((t) => t.join('x')))).size} tamanhos): nada se desloca.`);
 } finally { await navegador.close(); await servidor.close(); }
 process.exit(codigo);

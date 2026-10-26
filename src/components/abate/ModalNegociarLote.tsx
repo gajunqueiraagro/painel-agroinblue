@@ -33,7 +33,7 @@
  * `Aplicar` devolve a linha ao rascunho do pai — quem persiste é o rodapé do shell, na
  * ordem lotes → abate → confirmar.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -176,6 +176,49 @@ function CampoComUnidade({ rotulo, valor, fonteA, rotuloA, total, arrobas, cabec
   );
 }
 
+/** P92 — quanto a fonte do número pode descer para caber (1–2 px), e o piso da casa (9,5 px). */
+export const REDUCAO_MAXIMA_PX = 2;
+export const PISO_DA_FONTE_PX = 9.5;
+/**
+ * P92 — O NÚMERO QUE CABE: o valor ACIMA DO TETO do campo (3 bônus no teto: R$ 2,99 bilhões) não cabe na coluna medida para
+ * R$ 999.999.999,99. Ele NÃO QUEBRA em duas linhas e NUNCA CORTA: a fonte desce de 0,5 em 0,5 px, no máximo 2 px e nunca abaixo do
+ * piso de 9,5 px, até o texto caber na caixa de conteúdo da célula. Até o teto, a fonte é a da régua (nada muda).
+ */
+function NumeroQueCabe({ texto }: { texto: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const ajustar = () => {
+    const el = ref.current; const td = el?.parentElement;
+    if (!el || !td) return;
+    el.style.fontSize = '';
+    const base = parseFloat(getComputedStyle(el).fontSize);
+    const cs = getComputedStyle(td);
+    const cabe = td.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    let f = base;
+    while (el.getBoundingClientRect().width > cabe + 0.01 && f - 0.5 >= Math.max(base - REDUCAO_MAXIMA_PX, PISO_DA_FONTE_PX)) {
+      f -= 0.5;
+      el.style.fontSize = `${f}px`;
+    }
+  };
+  useLayoutEffect(ajustar, [texto]);
+  /* ⚠ A FONTE DA WEB CHEGA DEPOIS: medido antes dela, o número parecia caber em 10,5px e, com ela, passava 1px. Mede de novo quando as
+     fontes terminam de carregar (no teste, sem `document.fonts`, não há o que esperar). */
+  useEffect(() => {
+    let vivo = true;
+    void document.fonts?.ready.then(() => { if (vivo) ajustar(); });
+    return () => { vivo = false; };
+  }, [texto]);
+  return <span ref={ref} className="inline-block whitespace-nowrap" data-testid="numero-que-cabe">{texto}</span>;
+}
+
+/* P92 — AS TRÊS COLUNAS TÊM LARGURA FIXA (`table-layout: fixed`): trocar a carcaça (40.676 → 8.696,61 kg) mudava a largura das colunas
+   e o "Total" andava. MEDIDAS no Chromium da bancada (algarismos tabulares, com a fonte carregada) para R$ 999.999.999,99 nas duas
+   colunas de número (o teto do campo): o Total pede 114,5px ("− R$ 999.999.999,99" a 11px; "R$ …" a 12px semibold, 113,9); o "por @"
+   pede 104,4 ("R$ 999.999.999,99" a 11px medium). Acima do teto (dez dígitos) a fonte desce: o "− R$ 1.999.999.999,98" do "por @" a
+   9,5px pede 107,6 — é ele que dita a coluna. Conteúdo de 117 e 109, mais 4px à esquerda e 10 à direita; o rótulo leva o resto
+   (146 de 400; "(−) Funrural e impostos" pede 121,1). */
+export const LARGURA_TOTAL_PX = 131;
+export const LARGURA_POR_ARROBA_PX = 123;
+
 /** Uma linha da tabela do resultado. `forte` marca Bruto e Líquido. */
 function LinhaResultado({ rotulo, total, porArroba, cor, forte }: {
   rotulo: string; total: string; porArroba?: string; cor?: string; forte?: boolean;
@@ -185,8 +228,8 @@ function LinhaResultado({ rotulo, total, porArroba, cor, forte }: {
   return (
     <tr className={forte ? 'border-t' : ''}>
       <td className={`whitespace-nowrap px-2.5 py-1 text-left ${forte ? base : `text-[11px] ${cor ?? 'text-muted-foreground'}`}`}>{rotulo}</td>
-      <td className={`whitespace-nowrap px-2.5 py-1 text-right tabular-nums ${base}`}>{total}</td>
-      <td className={`whitespace-nowrap px-2.5 py-1 text-right tabular-nums ${celulaAt}`}>{porArroba ?? ''}</td>
+      <td className={`whitespace-nowrap py-1 pl-1 pr-2.5 text-right tabular-nums ${base}`}><NumeroQueCabe texto={total} /></td>
+      <td className={`whitespace-nowrap py-1 pl-1 pr-2.5 text-right tabular-nums ${celulaAt}`}>{porArroba ? <NumeroQueCabe texto={porArroba} /> : ''}</td>
     </tr>
   );
 }
@@ -364,8 +407,11 @@ export function ModalNegociarLote({ lote, linha, cenario, onAplicar, onFechar, s
           ⚠ P87 (Gabriel 23/10/2026) — 892, NAO 820: NUMERO NUNCA CORTA. Em 820 (de 1024 para cima, com o resumo de 330 ao lado)
           cada coluna dos bonus deixava o campo com 99px, e "999.999.999,99" (o teto do campo de valor) pede 121 — medido pelo
           `check:ui-cortes` (cenarios `negociar-lote-*`). +22 por coluna × 3 = +66, e +6 de folga (121 justo dependeria do arredondamento da fonte). Abaixo de 1024 a grade e' de uma coluna e o
-          campo ja' tinha 185–209px: nada muda ali. Fonte e regua dos campos ficam como estao (11px, 24px). */}
-      <DialogContent className="flex max-w-[892px] min-h-[300px] flex-col p-0 gap-0 overflow-hidden">
+          campo ja' tinha 185–209px: nada muda ali. Fonte e regua dos campos ficam como estao (11px, 24px).
+          ⚠ P92 (Gabriel 26/10/2026) — 962, NAO 892: o resumo da direita passou de 330 para 400 (o "por @" passava da borda com totais
+          grandes; medido: R$ 999.999.999,99 nas duas colunas pede 217px de numero, e em 330 sobravam 147). O lado esquerdo NAO muda
+          (962 − 400 = 892 − 330 = 562). */}
+      <DialogContent className="flex max-w-[962px] min-h-[300px] flex-col p-0 gap-0 overflow-hidden">
         <div className="h-9 shrink-0 bg-primary px-3 text-primary-foreground flex items-center gap-2">
           <DialogTitle className="text-[12px] font-semibold">
             Negociar lote · {lote.categoriaLabel} · {lote.quantidade} cab
@@ -397,8 +443,8 @@ export function ModalNegociarLote({ lote, linha, cenario, onAplicar, onFechar, s
 
         {/* ⚠ 330 NO ASIDE, NAO 220 — MEDIDO. A tabela de derivados tem tres colunas de dinheiro
               ("Preço base · R$ 104.885,73 · R$ 344,87") e precisa de 324px; em 220 ela rolava na
-              horizontal dentro do modal, que e' rolagem dupla. */}
-        <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[1fr_330px]">
+              horizontal dentro do modal, que e' rolagem dupla. P92: 400 (colunas de largura fixa, medidas para o teto do campo). */}
+        <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[1fr_400px]">
           {/* ── ESQUERDA: as três abas ─────────────────────────────────────── */}
           <div className="flex min-h-0 flex-col">
             <div className="flex shrink-0 gap-1 border-b bg-card px-2 pt-1">
@@ -546,12 +592,13 @@ export function ModalNegociarLote({ lote, linha, cenario, onAplicar, onFechar, s
               Resultado do lote
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto">
-              <table className="w-full border-collapse">
+              <table className="w-full table-fixed border-collapse" data-testid="resultado-do-lote">
+                <colgroup><col /><col style={{ width: LARGURA_TOTAL_PX }} /><col style={{ width: LARGURA_POR_ARROBA_PX }} /></colgroup>
                 <thead>
                   <tr>
                     <th className="border-b px-2.5 pb-0.5 pt-1 text-left text-[10px] font-normal text-muted-foreground" />
-                    <th className="border-b px-2.5 pb-0.5 pt-1 text-right text-[10px] font-normal text-muted-foreground">Total</th>
-                    <th className="border-b px-2.5 pb-0.5 pt-1 text-right text-[10px] font-normal text-muted-foreground">por @</th>
+                    <th className="border-b pb-0.5 pl-1 pr-2.5 pt-1 text-right text-[10px] font-normal text-muted-foreground">Total</th>
+                    <th className="border-b pb-0.5 pl-1 pr-2.5 pt-1 text-right text-[10px] font-normal text-muted-foreground">por @</th>
                   </tr>
                 </thead>
                 <tbody>
