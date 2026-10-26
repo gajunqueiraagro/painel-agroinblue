@@ -16,6 +16,9 @@ export interface LancamentoGavetaVG {
   chave: string; lancamento_id: string; parte_ordem: number; partes_total: number;
   data: string | null; favorecido: string; descricao: string | null; conta: string;
   valor: number; valor_lancamento: number; status: string; previsto: boolean; vencido: boolean;
+  /** P103 (111953): as três datas e o conciliado (realizado com vínculo vivo — derivado no banco, a regra da lista de Lançamentos).
+   *  A conta já vem pelo LADO: saída → origem, entrada → destino, transferência → "Origem → Destino" */
+  competencia?: string | null; vencimento?: string | null; pagamento?: string | null; conciliado?: boolean;
 }
 export interface FilhoGavetaVG { caminho: CaminhoVG; rotulo: string; qtd: number; valor: number; pct: number | null }
 export interface GavetaVG {
@@ -23,6 +26,8 @@ export interface GavetaVG {
   caminho: { caminho: CaminhoVG; rotulo: string }[];
   irmaos: { caminho: CaminhoVG; rotulo: string; valor: number }[];
   qtd: number; total: number; medio: number | null;
+  /** P103 (111953), só na folha: o total separado em pago (realizado) e em aberto (o resto) — total = pago + aberto, do banco */
+  pago?: number | null; aberto?: number | null;
   resumo: { tipo: 'favorecido' | 'filhos'; linhas: { rotulo: string; qtd: number; valor: number; pct?: number | null }[] };
   linhas: (LancamentoGavetaVG | FilhoGavetaVG)[];
   total_linhas: number; pagina: number; por_pagina: number; paginas: number;
@@ -53,7 +58,18 @@ export async function recarregarGavetaVG(ctx: ContextoAnaliseVG, p: PedidoGaveta
 }
 
 /** dd/mm/aaaa (a data do lançamento: pagamento, ou vencimento no previsto) */
-export const dataLonga = (d: string | null) => (d ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}` : '—');
+export const dataLonga = (d: string | null | undefined) => (d ? `${d.slice(8, 10)}/${d.slice(5, 7)}/${d.slice(0, 4)}` : '—');
+
+/**
+ * P103 — a chave do STATUS da linha, no vocabulário da lista de Lançamentos (`STATUS_FILTRO_LABEL`): VENCIDO (não pago e venceu —
+ * o banco diz) vem antes de tudo; o realizado com vínculo vivo é `conciliado_real` (o "Conciliado" de verdade); o resto, o gravado.
+ */
+export type StatusLinhaGavetaVG = 'vencido' | 'conciliado_real' | string;
+export function statusDaLinha(l: Pick<LancamentoGavetaVG, 'status' | 'previsto' | 'vencido' | 'conciliado'>): StatusLinhaGavetaVG {
+  if (l.vencido) return 'vencido';
+  if (!l.previsto && l.conciliado) return 'conciliado_real';
+  return (l.status || '').toLowerCase();
+}
 
 /**
  * "Ver na lista de Lançamentos ›" (P94: a tela nunca filtra o que não mostra) — os filtros EQUIVALENTES que a barra da lista mostra:

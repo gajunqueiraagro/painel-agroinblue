@@ -437,19 +437,30 @@ function Donut({ d, centro, legenda, inteiro }: { d: AnaliseVG | null; centro: s
 function Kpis({ d, e }: { d: AnaliseVG | null; e: EstadoAnaliseVG }) {
   const k = d?.grafico.kpis ?? null;
   const lado = e.lado;
+  /* P103 — no ACUMULADO (111954) as colunas e a meta são acumuladas mês a mês e não há linha da média: os KPIs são o acumulado até o
+     mês, a meta acumulada e o vs meta (do banco) */
+  const acum = e.criterio === 'acumulado';
   return (
     <div className="flex h-[30px] shrink-0 items-center justify-between gap-3">
-      <div className="flex gap-3">
-        <Kpi rotulo={rotuloMes(e.am).toUpperCase()} testid="analise-kpi-mes"><span style={{ color: corDoLado(lado) }}>{brl(k?.mes)}</span></Kpi>
-        <Kpi rotulo="MÉDIA/MÊS" testid="analise-kpi-media"><span>{brl(k?.media)}</span></Kpi>
-        <Kpi rotulo="VS META" testid="analise-kpi-vsmeta"><span style={{ color: corVariacao(lado, k?.vs_meta) }}>{pctVar(k?.vs_meta)}</span></Kpi>
-        <Kpi rotulo="TENDÊNCIA" testid="analise-kpi-tendencia"><span style={{ color: corVariacao(lado, k?.tendencia) }}>{pctVar(k?.tendencia)}</span></Kpi>
-      </div>
+      {acum ? (
+        <div className="flex gap-3">
+          <Kpi rotulo={`ACUMULADO ATÉ ${rotuloMes(e.am).toUpperCase()}`} testid="analise-kpi-mes"><span style={{ color: corDoLado(lado) }}>{brl(k?.mes)}</span></Kpi>
+          <Kpi rotulo="META ACUMULADA" testid="analise-kpi-meta"><span style={{ color: COR_META }}>{brl(k?.meta)}</span></Kpi>
+          <Kpi rotulo="VS META" testid="analise-kpi-vsmeta"><span style={{ color: corVariacao(lado, k?.vs_meta) }}>{pctVar(k?.vs_meta)}</span></Kpi>
+        </div>
+      ) : (
+        <div className="flex gap-3">
+          <Kpi rotulo={rotuloMes(e.am).toUpperCase()} testid="analise-kpi-mes"><span style={{ color: corDoLado(lado) }}>{brl(k?.mes)}</span></Kpi>
+          <Kpi rotulo="MÉDIA/MÊS" testid="analise-kpi-media"><span>{brl(k?.media)}</span></Kpi>
+          <Kpi rotulo="VS META" testid="analise-kpi-vsmeta"><span style={{ color: corVariacao(lado, k?.vs_meta) }}>{pctVar(k?.vs_meta)}</span></Kpi>
+          <Kpi rotulo="TENDÊNCIA" testid="analise-kpi-tendencia"><span style={{ color: corVariacao(lado, k?.tendencia) }}>{pctVar(k?.tendencia)}</span></Kpi>
+        </div>
+      )}
       <div className="hidden items-center gap-2 text-[8.5px] text-muted-foreground xl:flex" data-testid="analise-legenda">
-        <span className="flex items-center gap-1"><i className="h-2 w-2" style={{ background: lado === 'saida' ? COR.barraSai : COR.barraEnt }} />realizado</span>
-        <span className="flex items-center gap-1"><i className="h-2 w-2" style={{ background: lado === 'saida' ? COR.barraSaiP : COR.barraEntP }} />previsto</span>
-        <span className="flex items-center gap-1"><i className="w-3.5 border-t-2" style={{ borderColor: lado === 'saida' ? COR.mediaSai : COR.mediaEnt }} />média acumulada</span>
-        <span className="flex items-center gap-1"><i className="w-3.5 border-t-2 border-dotted" style={{ borderColor: COR.meta }} />meta</span>
+        <span className="flex items-center gap-1"><i className="h-2 w-2" style={{ background: lado === 'saida' ? COR.barraSai : COR.barraEnt }} />{acum ? 'realizado acum.' : 'realizado'}</span>
+        <span className="flex items-center gap-1"><i className="h-2 w-2" style={{ background: lado === 'saida' ? COR.barraSaiP : COR.barraEntP }} />{acum ? 'previsto acum.' : 'previsto'}</span>
+        {!acum && <span className="flex items-center gap-1"><i className="w-3.5 border-t-2" style={{ borderColor: lado === 'saida' ? COR.mediaSai : COR.mediaEnt }} />média acumulada</span>}
+        <span className="flex items-center gap-1"><i className="w-3.5 border-t-2 border-dotted" style={{ borderColor: COR.meta }} />{acum ? 'meta acumulada' : 'meta'}</span>
       </div>
     </div>
   );
@@ -481,14 +492,16 @@ function GraficoItem({ d, e, onSel }: { d: AnaliseVG | null; e: EstadoAnaliseVG;
   const saida = e.lado === 'saida';
   let svg: JSX.Element | null = null;
   if (W > 0 && H > 0 && serie.length) {
-    const L = 44, Rm = 6, T = 8, B = 14, iw = W - L - Rm, ih = H - T - B, n = serie.length, slot = iw / n;
     const vals = serie.flatMap((p) => [p.realizado, p.previsto, p.total, p.media, p.meta]).filter((x): x is number => x != null);
     const mx = Math.max(1, ...vals), mn = Math.min(0, ...vals);
     const passo = passoBonito((mx - mn) / 4 || 1);
     const topo = Math.ceil(mx / passo) * passo, base = Math.floor(mn / passo) * passo;
-    const Y = (v: number) => T + ih - ((v - base) / (topo - base || 1)) * ih;
     /* escrita curta do eixo, da coluna e dos pontos: R$ mil ("k") quando a escala passa de 10 mil; senão o inteiro */
     const curto = (v: number) => (Math.max(Math.abs(topo), Math.abs(base)) >= 10000 ? `${mil1(v)}k` : n0(v));
+    /* P103 — a margem do eixo cabe o MAIOR rótulo dele (no acumulado o eixo chega a "100.000,0k"): nunca menos de 44px */
+    const L = Math.max(44, Math.ceil(Math.max(larguraTexto(curto(topo), 8), larguraTexto(curto(base), 8))) + 6);
+    const Rm = 6, T = 8, B = 14, iw = W - L - Rm, ih = H - T - B, n = serie.length, slot = iw / n;
+    const Y = (v: number) => T + ih - ((v - base) / (topo - base || 1)) * ih;
     const X = (k: number) => L + (k + 0.5) * slot;
     const bw = Math.max(3, Math.min(26, slot * 0.6));
     const area: Caixa = { x: L, y: T, w: iw, h: ih };
@@ -575,20 +588,26 @@ function GraficoItem({ d, e, onSel }: { d: AnaliseVG | null; e: EstadoAnaliseVG;
   );
 }
 
-/** a régua "vs meta" do item do gráfico: as quatro faixas (cortes do banco) e a marca na razão valor/meta que o banco mandou */
+/** a régua "vs meta" do item do gráfico: as quatro faixas (cortes do banco) e a marca na razão valor/meta que o banco mandou.
+    P103 — a MARCA fica FORA da faixa (um triângulo acima apontando para baixo e outro abaixo apontando para cima): nunca cobre o
+    rótulo. Os rótulos são curtos (`ROTULO_FAIXA`) e cabem em toda faixa — o gate de cortes mede cada um */
 function Regua({ lado, razao }: { lado: LadoVG; razao: number | null }) {
   const pos = posicaoNaRegua(lado, razao);
   const nomes = ROTULO_FAIXA[lado];
   const larg = { boa: 36, ideal: 18, risco: 18, critica: 28 } as const;
+  const tri = 'absolute h-0 w-0 -translate-x-1/2 border-x-[4px] border-x-transparent';
   return (
     <div className="flex shrink-0 items-center gap-1.5 text-[9px] text-muted-foreground" data-testid="analise-regua">
       vs meta
-      <div className="relative flex h-3 w-[150px] rounded-[3px] text-center text-[7.5px] leading-3">
+      <div className="relative flex h-3 w-[180px] rounded-[3px] text-center text-[7.5px] leading-3">
         {(['boa', 'ideal', 'risco', 'critica'] as const).map((f) => (
-          <span key={f} className="block overflow-hidden whitespace-nowrap first:rounded-l-[3px] last:rounded-r-[3px]"
+          <span key={f} className="block overflow-hidden whitespace-nowrap first:rounded-l-[3px] last:rounded-r-[3px]" data-testid={`analise-regua-faixa-${f}`}
             style={{ width: `${larg[f]}%`, background: COR_FAIXA[f].fundo, color: COR_FAIXA[f].texto }}>{nomes[f]}</span>
         ))}
-        {pos != null && <span className="absolute -top-[3px] h-[18px] w-[2px] bg-[#1b2430]" style={{ left: `${pos}%` }} data-testid="analise-regua-marca" />}
+        {pos != null && <>
+          <span className={cn(tri, '-top-[5px] border-t-[5px] border-t-[#1b2430]')} style={{ left: `${pos}%` }} data-testid="analise-regua-marca" />
+          <span className={cn(tri, '-bottom-[5px] border-b-[5px] border-b-[#1b2430]')} style={{ left: `${pos}%` }} data-testid="analise-regua-marca-baixo" />
+        </>}
       </div>
     </div>
   );

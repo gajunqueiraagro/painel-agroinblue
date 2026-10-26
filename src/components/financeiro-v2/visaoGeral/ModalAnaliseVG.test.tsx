@@ -9,6 +9,9 @@
  *   G1 a gaveta escreve o que o banco mandou (a tela não soma): indicadores, resumo, filhos (clique desce), total fixo
  *   G2 subcentro: lançamentos com data dd/mm/aaaa; a parte 2 da divisão ("id#2") abre o LANÇAMENTO (o lancamento_id); "Mais N de M ›"
  *      pede a página seguinte e a acrescenta; nó vazio: a frase dentro do quadro
+ *   G6 (P103) o subcentro com as colunas Comp. · Venc. · Pgto. · Status · Favorecido · Descrição · Conta · Valor; o status no chip da
+ *      casa (Realizado, Conciliado, Agendado, Programado, Previsto, Vencido — as cores da lista); "—" no pagamento do não pago; "Pagos"
+ *      e "Em aberto" do banco só quando há não pagos; nível com filhos: as colunas de antes
  *   G3 salvou (a versão subiu): a gaveta relê as páginas já abertas, sem fechar; "Ver na lista" leva os filtros equivalentes
  *   G4 (G4, G4a–c) o AVISO acima do "Ver na lista" (a tela nunca esconde diferença): várias contas, vencidos de antes da janela, transferências
  *      entre contas escolhidas — cada um com a sua frase; sem diferença a linha fica vazia; o lugar existe em qualquer nível. O nó de
@@ -58,7 +61,8 @@ const CTX = { clienteId: 'cli', de: '2026-01-01', ate: '2026-12-31', contas: nul
 const lanc = (i: number, extra: Partial<LancamentoGavetaVG> = {}): LancamentoGavetaVG => ({
   chave: `l${i}`, lancamento_id: `l${i}`, parte_ordem: 1, partes_total: 1, data: `2026-09-${String(10 + i).padStart(2, '0')}`,
   favorecido: `Favorecido ${i}`, descricao: `Compra ${i}`, conta: 'Banco X', valor: 100 * (i + 1), valor_lancamento: 100 * (i + 1),
-  status: 'realizado', previsto: false, vencido: false, ...extra,
+  status: 'realizado', previsto: false, vencido: false,
+  competencia: '2026-09-01', vencimento: `2026-09-${String(10 + i).padStart(2, '0')}`, pagamento: `2026-09-${String(10 + i).padStart(2, '0')}`, conciliado: false, ...extra,
 });
 const GAV_FILHOS: GavetaVG = {
   lado: 'saida', mes: '2026-09', criterio: 'mes', janela: { de: '2026-09-01', ate: '2026-09-30' }, folha: false,
@@ -136,6 +140,26 @@ describe('modal de análise', () => {
     fireEvent.click(screen.getByTestId('analise-aba-raiz'));
     await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); });
     expect(ultimo()).toMatchObject({ p_unidade: 'rs', p_aba: null, p_foco: [] });
+  });
+
+  it('A6 (P103) acumulado: KPIs "Acumulado até · Meta acumulada · vs meta" do banco, sem média; régua com rótulos curtos e a marca fora da faixa', async () => {
+    resposta = { ...ANALISE, criterio: 'acumulado',
+      grafico: { ...ANALISE.grafico, serie: ANALISE.grafico.serie.map((p) => ({ ...p, media: null })),
+                 kpis: { mes: 5400000, meta: 5000000, media: null, vs_meta: 8, tendencia: null } } };
+    await abrir();
+    fireEvent.click(within(screen.getByTestId('analise-tabela')).getByText('Acum.'));
+    await passar();
+    expect(ultimo()).toMatchObject({ p_criterio: 'acumulado' });
+    expect(screen.getByTestId('analise-kpi-mes').previousSibling!.textContent).toBe('ACUMULADO ATÉ SET/26');
+    expect(screen.getByTestId('analise-kpi-mes').textContent).toBe('R$ 5.400.000,00');
+    expect(screen.getByTestId('analise-kpi-meta').textContent).toBe('R$ 5.000.000,00');
+    expect(screen.queryByTestId('analise-kpi-media')).toBeNull();
+    expect(screen.queryByTestId('analise-kpi-tendencia')).toBeNull();
+    expect(screen.getByTestId('analise-legenda').textContent).not.toContain('média');
+    /* a régua: rótulos curtos; a marca são dois triângulos FORA da faixa (acima e abaixo) */
+    expect(['boa', 'ideal', 'risco', 'critica'].map((f) => screen.getByTestId(`analise-regua-faixa-${f}`).textContent)).toEqual(['economia', 'ideal', 'risco', 'crítico']);
+    expect(screen.getByTestId('analise-regua-marca').className).toContain('-top-[5px]');
+    expect(screen.getByTestId('analise-regua-marca-baixo').className).toContain('-bottom-[5px]');
   });
 
   it('A4 navegação', async () => {
@@ -221,6 +245,45 @@ describe('modal de análise', () => {
     fireEvent.click(screen.getByTestId('gaveta-caminho-3'));
     await passar();
     expect(screen.getByTestId('gaveta-vazio').textContent).toBe('Nenhum lançamento neste item em set/26.');
+  });
+
+  it('G6 subcentro: datas, status no chip da casa, Pgto. "—" no não pago, Pagos · Em aberto do banco', async () => {
+    const st: Partial<LancamentoGavetaVG>[] = [
+      {}, { conciliado: true }, { status: 'agendado', previsto: true, pagamento: null }, { status: 'programado', previsto: true, pagamento: null },
+      { status: 'previsto', previsto: true, pagamento: null }, { status: 'previsto', previsto: true, vencido: true, pagamento: null, vencimento: '2026-08-31' }];
+    gaveta = (a) => (a.p_caminho?.length === 4
+      ? { ...GAV_FOLHA(), linhas: st.map((x, i) => lanc(i, { ...x, conta: i === 0 ? 'Itau BBA' : 'Banco do Brasil → Itau BBA' })), total_linhas: 6, paginas: 1,
+          total: 2100, pago: 300, aberto: 1800 }
+      : { ...GAV_FILHOS, irmaos: [{ caminho: SUB, rotulo: 'Sementes', valor: 2100 }] });
+    await abrir('Custeio');
+    fireEvent.click(screen.getByTestId('analise-lanc-1'));
+    await passar();
+    /* nível com filhos: as colunas de antes, sem Pagos/Em aberto */
+    expect(screen.getByTestId('gaveta-lista').querySelector('thead')!.textContent).toBe('LANÇ.ITEM · clique para descer%VALOR');
+    expect(screen.queryByTestId('gaveta-aberto')).toBeNull();
+    fireEvent.click(screen.getByTestId('gaveta-irmao-0'));
+    await passar();
+    expect(screen.getByTestId('gaveta-lista').querySelector('thead')!.textContent).toBe('COMP.VENC.PGTO.STATUSFAVORECIDODESCRIÇÃOCONTAVALOR');
+    const tds = (i: number) => [...screen.getByTestId(`gaveta-linha-${i}`).querySelectorAll('td')].map((td) => td.textContent);
+    expect(tds(0)).toEqual(['01/09/2026', '10/09/2026', '10/09/2026', 'Realizado', 'Favorecido 0', 'Compra 0', 'Itau BBA', 'R$ 100,00']);
+    expect(tds(1)[6]).toBe('Banco do Brasil → Itau BBA');
+    expect(st.map((_, i) => screen.getByTestId(`gaveta-status-${i}`).textContent)).toEqual(['Realizado', 'Conciliado', 'Agendado', 'Programado', 'Previsto', 'Vencido']);
+    /* as cores da lista de Lançamentos: a caixa só no Realizado e no Conciliado; o Vencido em vermelho */
+    expect(screen.getByTestId('gaveta-status-0').className).toContain('bg-[#f0fdf4]');
+    expect(screen.getByTestId('gaveta-status-1').className).toContain('bg-[#166534]');
+    expect(screen.getByTestId('gaveta-status-3').className).toContain('text-[#1d4ed8]');
+    expect(screen.getByTestId('gaveta-status-5').className).toContain('text-destructive');
+    expect([2, 3, 4, 5].map((i) => screen.getByTestId(`gaveta-pgto-${i}`).textContent)).toEqual(['—', '—', '—', '—']);
+    expect(screen.getByTestId('gaveta-pago').textContent).toBe('R$ 300,00');
+    expect(screen.getByTestId('gaveta-aberto').textContent).toBe('R$ 1.800,00');
+    expect(screen.getByTestId('gaveta-rodape-total').textContent).toBe('R$ 2.100,00');
+    /* tudo pago: sem Pagos/Em aberto */
+    gaveta = () => ({ ...GAV_FOLHA(), pago: 98765.43, aberto: 0 });
+    fireEvent.click(screen.getByTestId('gaveta-caminho-3'));
+    await passar();
+    fireEvent.click(screen.getByTestId('gaveta-irmao-0'));
+    await passar();
+    expect(screen.queryByTestId('gaveta-aberto')).toBeNull();
   });
 
   it('G3 salvou: a gaveta relê as páginas abertas, sem fechar; "Ver na lista" leva os filtros equivalentes', async () => {
