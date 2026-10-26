@@ -281,6 +281,7 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - FIN-VALOR-CALC-01b: todo `CampoMoeda` faz conta (a lib `contaNoCampo`, nenhuma outra); o hospedeiro so' recebe o RESULTADO; o Esc/Enter
   da conta aberta sao pegos na JANELA (captura), antes do Radix; campo de valor novo = `CampoMoeda` (nunca `Input type="number"`).
 - P91: campo de NUMERO (kg, @, %, cab, dias) = `CampoNumeroComConta`; o gesto da conta e' UM hook (`useContaNoCampo`), o mesmo do `CampoMoeda`.
+- P88: formulario antigo com estado em TEXTO DE MAQUINA ('1234.56') troca o `type="number"` pelo campo do sistema sem mudar o estado (`numeroDoTextoDeMaquina`/`textoDeMaquina`).
 - UX-OBRIGATORIOS-01: Salvar com pendencia nao fecha nem grava; o campo pendente fica vermelho com a mensagem; UX-TOAST-01: validacao
   e erro de preenchimento nunca em toast. Dialogo/menu fechando nao aceita clique. Modal em blocos pela primitiva da casa; o
   `DialogContent` renderiza a 95%.
