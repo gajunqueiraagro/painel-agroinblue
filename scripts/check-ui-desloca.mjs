@@ -281,6 +281,11 @@ const CENARIOS = [
   { nome: 'obrigacao-editar', url: 'tela=contrato&v=parcelamento&np=18&docs=1', antes: async (p) => {
     await p.locator('[data-testid="botoes-do-contrato"] button', { hasText: 'Editar' }).first().click(); await p.locator('[role="dialog"]').first().waitFor(); await espera(p, 900);
   }, estados: [1, 2, 3].map((i) => [`aba ${i}`, async (p) => { const t = p.locator('[role="dialog"] [role="tab"]').nth(i); if (await t.count()) { await t.click(); await espera(p, 500); } }]) },
+  /* P116 — a aba Auditoria (coluna do autor sempre, 62px): ir e voltar não move a barra de abas, o cabeçalho nem o rodapé; com uma pessoa só, idem */
+  ...['', '&aud=um'].map((a) => ({ nome: `lancamento-auditoria${a ? '-um' : ''}`, url: `tela=lancamento&m=editar${a}`, estados: [
+    ['aba Auditoria', async (p) => { await p.getByRole('tab', { name: /Auditoria/ }).first().click(); await espera(p, 700); }],
+    ['de volta à primeira aba', async (p) => { await p.locator('[role="dialog"] [role="tab"]').first().click(); await espera(p, 500); }],
+  ] })),
   /* P74 B — "Parcelar este lançamento": abrir o bloco e escolher 4 não move a aba Pagamento acima dele nem o rodapé */
   { nome: 'lancamento-parcelar', url: 'tela=lancamento&m=editar&v=salcartao', antes: async (p) => { await clicar('text=Pagamento')(p); },
     estados: [['aberto com 4 parcelas', async (p) => { await clicar('[data-testid="parcelar-este-abrir"]')(p); await digitar('[data-testid="parcelar-este-n"]', '4')(p); }]] },

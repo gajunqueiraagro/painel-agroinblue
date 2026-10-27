@@ -164,7 +164,7 @@ const evento = (id: string, usuario: string | null, via?: string | null) => ({
   id, acao: 'editou', usuario_id: usuario, created_at: `2026-10-0${id.length}T13:00:00Z`, dados_anteriores: { valor: 1 }, dados_novos: { valor: 2 }, via });
 
 describe('a aba Auditoria do lançamento', () => {
-  it('mostra o nome de OUTRO membro (da fonte única) e "sem autor registrado" no evento antigo sem autor', async () => {
+  it('mostra o nome de OUTRO membro (da fonte única) e "autor não registrado" no evento antigo sem autor', async () => {
     estado.audit = [evento('a1', 'u-fin'), evento('a22', null)];
     montarAuditoria();
     await waitFor(() => expect(screen.getAllByTestId('trilha-autor').length).toBe(3));
@@ -185,7 +185,7 @@ describe('a aba Auditoria do lançamento', () => {
     await waitFor(() => expect(screen.getAllByTestId('trilha-autor').map(x => x.textContent)).toContain('sistema · fn_recorrencia_gerar'));
   });
 
-  it('sem a coluna `via` no banco ainda: lê de novo sem ela, e o evento sem autor diz "sem autor registrado"', async () => {
+  it('sem a coluna `via` no banco ainda: lê de novo sem ela, e o evento sem autor diz "autor não registrado"', async () => {
     estado.semVia = true;
     estado.audit = [evento('a1', 'u-fin'), evento('a22', null)];
     montarAuditoria();
@@ -205,7 +205,9 @@ describe('o leitor dos nomes', () => {
     expect(autorNaTrilha('r', m)).toBe('usuário removido (r)');
     expect(autorNaTrilha('z', m)).toBeNull();
     expect(autorNaTrilha(null, m)).toBe(FRASE_SEM_AUTOR);
-    expect(autorNaTrilha(null, m, 'sistema')).toBe('sistema');
+    /* P116 — o "sistema" sem rotina é a manutenção (a mesma frase que o banco grava hoje sem `app.via`) */
+    expect(autorNaTrilha(null, m, 'sistema')).toBe('sistema · manutenção');
+    expect(autorNaTrilha(null, m, 'sistema:manutenção')).toBe('sistema · manutenção');
     expect(autorNaTrilha(null, m, 'sistema:fn_x')).toBe('sistema · fn_x');
   });
 });

@@ -10,6 +10,7 @@ import {
   fraseDoEvento,
   camposMudados,
   CAMPOS_AUDITAVEIS,
+  CAMPOS_INTERNOS,
   type CatalogosAuditoria,
   type EventoAuditoriaBruto,
 } from './auditoriaLancamento';
@@ -62,13 +63,58 @@ describe('fraseDoEvento — edições', () => {
     expect(r.frase).toBe('alterou valor e descrição');
   });
 
-  it('só campos fora da lista branca viram "ajuste técnico", não somem', () => {
+  it('P116 — campo fora da lista branca diz o PRÓPRIO nome (antes → depois), nunca "ajuste técnico"', () => {
     const r = fraseDoEvento(ev({
       antes: { updated_at: '2026-07-01T00:00:00Z', nivel_duplicidade: 0 },
       depois: { updated_at: '2026-07-02T00:00:00Z', nivel_duplicidade: 2 },
     }), CAT);
-    expect(r.frase).toBe('ajuste técnico');
+    expect(r.frase).toBe('alterou marca de duplicidade');
+    expect(r.detalhe).toBe('0 → 2');
     expect(r.tecnico).toBe(true);
+    expect(r.oculto).toBe(false);
+  });
+
+  it('P116 — o Salvar sem mudança (só campo interno) NÃO aparece', () => {
+    const r = fraseDoEvento(ev({
+      antes: { updated_at: '2026-10-23T15:16:35Z', hash_importacao: 'a', valor_do_mes_em: null, editado_manual: null, valor: 821.22 },
+      depois: { updated_at: '2026-10-23T15:16:55Z', hash_importacao: 'b', valor_do_mes_em: '2026-10-01', editado_manual: true, valor: 821.22 },
+    }), CAT);
+    expect(r.oculto).toBe(true);
+    expect(r.frase).not.toBe('ajuste técnico');
+  });
+
+  it('P116 — o caso do Agnaldo: pagamento e situação, com as marcas internas ao lado', () => {
+    const r = fraseDoEvento(ev({
+      antes: { data_pagamento: null, status_transacao: 'programado', updated_by: null, editado_manual: null, updated_at: 'x' },
+      depois: { data_pagamento: '2026-09-10', status_transacao: 'realizado', updated_by: 'u', editado_manual: true, updated_at: 'y' },
+    }), CAT);
+    expect(r.frase).toBe('alterou pagamento e situação');
+    expect(r.oculto).toBe(false);
+  });
+
+  it('P116 — classificação, safra, forma, documento e DRE entram na frase', () => {
+    const cat: CatalogosAuditoria = { ...CAT, classificacao: (id) => (id === 'pl-1' ? 'Vacinas e Vermífugos' : undefined), safra: (id) => (id === 's-1' ? 'Safra 26/27' : undefined) };
+    const um = (antes: Record<string, unknown>, depois: Record<string, unknown>) => fraseDoEvento(ev({ antes, depois }), cat);
+    expect(um({ plano_conta_id: null, subcentro: 'Sal Mineral' }, { plano_conta_id: 'pl-1', subcentro: 'Vacinas e Vermífugos' }))
+      .toMatchObject({ frase: 'alterou a classificação', detalhe: 'Sal Mineral → Vacinas e Vermífugos' });
+    expect(um({ safra_id: null }, { safra_id: 's-1' })).toMatchObject({ frase: 'alterou a safra', detalhe: '— → Safra 26/27' });
+    expect(um({ forma_pagamento: 'Pix' }, { forma_pagamento: 'Cartão' })).toMatchObject({ frase: 'alterou a forma de pagamento', detalhe: 'Pix → Cartão' });
+    expect(um({ tipo_documento: null }, { tipo_documento: 'Nota Fiscal' })).toMatchObject({ frase: 'alterou o tipo do documento' });
+    expect(um({ numero_documento: '1' }, { numero_documento: '2' })).toMatchObject({ frase: 'alterou o número do documento', detalhe: '1 → 2' });
+    expect(um({ compoe_dre: true }, { compoe_dre: false })).toMatchObject({ frase: 'alterou "entra no DRE"', detalhe: 'sim → não' });
+    for (const r of [um({ forma_pagamento: 'Pix' }, { forma_pagamento: 'Cartão' }), um({ compoe_dre: true }, { compoe_dre: false })]) expect(r.tecnico).toBe(false);
+  });
+
+  it('P116 — ligar a chave do plano ao MESMO texto não é mudança (a classificação é dita uma vez)', () => {
+    const cat: CatalogosAuditoria = { ...CAT, classificacao: (id) => (id === 'pl-1' ? 'Sal Mineral' : undefined) };
+    const r = fraseDoEvento(ev({ antes: { plano_conta_id: null, subcentro: 'Sal Mineral' }, depois: { plano_conta_id: 'pl-1', subcentro: 'Sal Mineral' } }), cat);
+    expect(r.oculto).toBe(true);
+  });
+
+  it('P116 — UUID de campo técnico vira "vinculado", nunca o id', () => {
+    const r = fraseDoEvento(ev({ antes: { financiamento_id: null }, depois: { financiamento_id: '9f3c1e77-0000-4000-8000-000000000000' } }), CAT);
+    expect(r.frase).toBe('alterou parcelamento');
+    expect(r.detalhe).toBe('— → vinculado');
   });
 
   it('a ordem da frase é a da lista branca, não a do payload', () => {
@@ -81,6 +127,11 @@ describe('fraseDoEvento — edições', () => {
 });
 
 describe('fraseDoEvento — demais ações', () => {
+  it('P116 — o "criou" do gatilho traz a descrição gravada na criação', () => {
+    const r = fraseDoEvento(ev({ acao: 'criou', antes: null, depois: { descricao: 'PRODUCE FR 1 L · 10 itens 1/4' } }), CAT);
+    expect(r).toMatchObject({ frase: 'criou', detalhe: 'PRODUCE FR 1 L · 10 itens 1/4', oculto: false });
+  });
+
   it('cancelou traz o motivo gravado no próprio registro', () => {
     const r = fraseDoEvento(ev({
       acao: 'cancelou', motivo: 'duplicado na importação',
@@ -160,14 +211,18 @@ describe('valores dentro da frase', () => {
 
   it('payload nulo não quebra', () => {
     expect(camposMudados(null, null, CAT)).toEqual([]);
-    expect(fraseDoEvento(ev({ antes: null, depois: null }), CAT).frase).toBe('ajuste técnico');
+    expect(fraseDoEvento(ev({ antes: null, depois: null }), CAT).oculto).toBe(true);
   });
 });
 
 describe('lista branca', () => {
-  it('tem os 14 campos que uma pessoa decide, sem duplicata', () => {
-    expect(CAMPOS_AUDITAVEIS).toHaveLength(14);
-    expect(new Set(CAMPOS_AUDITAVEIS.map((c) => c.campo)).size).toBe(14);
+  it('tem os 20 campos que uma pessoa decide (P116: +classificação, safra, forma, tipo/número do documento, DRE), sem duplicata', () => {
+    expect(CAMPOS_AUDITAVEIS).toHaveLength(20);
+    expect(new Set(CAMPOS_AUDITAVEIS.map((c) => c.campo)).size).toBe(20);
+  });
+
+  it('nenhum campo é ao mesmo tempo decidido e interno', () => {
+    expect(CAMPOS_AUDITAVEIS.filter((c) => CAMPOS_INTERNOS.has(c.campo))).toEqual([]);
   });
 
   it.each(['updated_at', 'updated_by', 'ano_mes', 'nivel_duplicidade', 'importado_duplicado', 'editado_manual'])(

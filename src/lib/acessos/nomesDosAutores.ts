@@ -38,18 +38,23 @@ export function lerNomesDosAutores(dado: unknown): NomeDoAutor[] | null {
 
 export const mapaDosNomes = (lista: readonly NomeDoAutor[]) => new Map(lista.map((n) => [n.userId, n]));
 
-export const FRASE_SEM_AUTOR = 'sem autor registrado';
+export const FRASE_SEM_AUTOR = 'autor não registrado';
+/** A rotina de quem grava sem se declarar (`_fn_trilha_via`, P116). */
+export const ROTINA_SEM_NOME = 'manutenção';
 
 /**
  * O AUTOR NA TRILHA. Sem autor: "sistema · <via>" quando o evento diz por onde entrou (a coluna `via` do `audit_log`,
- * AUDIT-SEG-01), senao "sem autor registrado" (evento antigo) — nunca "sistema" por conta propria. Com autor: o primeiro nome
- * da fonte unica ("usuário removido (…)" inteiro); sem resposta dela, nulo (a trilha escreve "—").
+ * AUDIT-SEG-01), senao "autor não registrado" (evento antigo, P116: nunca inventar) — nunca "sistema" por conta propria. Com autor:
+ * o primeiro nome da fonte unica ("usuário removido (…)" inteiro); sem resposta dela, nulo (a trilha escreve "—").
+ * P116: o "sistema" sem rotina (as correcoes por migration de 22-23/10, antes da 20261028112390) e' "sistema · manutenção" — a mesma
+ * frase que o banco grava hoje quando nenhuma rotina se declara.
  */
 export function autorNaTrilha(autorId: string | null, nomes: ReadonlyMap<string, NomeDoAutor>, via?: string | null): string | null {
   if (autorId == null) {
     const v = typeof via === 'string' ? via.trim() : '';
     if (!v) return FRASE_SEM_AUTOR;
-    return v.startsWith('sistema') ? v.replace(/^sistema:?/, 'sistema · ').replace(/ · $/, '') : `sistema · ${v}`;
+    if (v === 'sistema' || v === 'sistema:') return `sistema · ${ROTINA_SEM_NOME}`;
+    return v.startsWith('sistema') ? v.replace(/^sistema:?/, 'sistema · ') : `sistema · ${v}`;
   }
   const n = nomes.get(autorId);
   if (!n) return null;

@@ -184,7 +184,9 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - REGRA DO NASCIMENTO (OC-CC-PADRAO-NOVAS-01a): frente que converte dado existente para um padrao novo mede o que nasce errado HOJE e
   conserta o gerador antes.
 - NADA SE APAGA DE VERDADE na conciliacao, extrato, documentos, fornecedores e plano (AUDIT-DELETE-01a). A trilha de auditoria e'
-  imutavel e o autor e' quem esta' logado (AUDIT-SEG-01).
+  imutavel e o autor e' quem esta' logado (AUDIT-SEG-01). P116: sem usuario a `via` diz a rotina (`sistema:<app.via>`, sem ela
+  `sistema:manutenção`; tambem na `conciliacao_audit_log`); a aba do lancamento mostra o autor SEMPRE e esconde o Salvar sem mudanca
+  (que o `editarLancamento` nem grava: `edicaoSemMudanca`).
 - Trilha de eventos mostra o que, nao por que: conserto se brifa depois de reproduzir na tela e ler o chamador.
 - Estado de dado so' depois que a gravacao passa (`aplicarComRollback`). Valor sugerido e' valor aceito. "Hoje" e' `hojeLocal()`.
 

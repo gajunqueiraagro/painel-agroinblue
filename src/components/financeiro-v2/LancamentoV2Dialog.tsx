@@ -755,7 +755,10 @@ export function LancamentoV2Dialog({
        cadastro. A frase usa o mesmo nome que a tela mostra em todo lugar. */
     conta: (id: string) => { const c = contas.find((x) => x.id === id); return c?.nome_exibicao ?? c?.nome_conta; },
     fazenda: (id: string) => fazendas.find((f) => f.id === id)?.nome,
-  }), [fornecedores, contas, fazendas]);
+    /* P116 — a classificação e a safra entram na frase, pelo nome que o seletor mostra */
+    classificacao: (id: string) => classificacoes.find((c) => c.id === id)?.subcentro,
+    safra: (id: string) => safras?.find((x) => x.id === id)?.nome,
+  }), [fornecedores, contas, fazendas, classificacoes, safras]);
   const [fornecedorDialogOpen, setFornecedorDialogOpen] = useState(false);
   // FASE 1 zoo-fin: aviso de origem zootécnica + navegação para LancamentoZooModal.
   // zooModalId é capturado ao clicar no link âmbar; abre só após o V2Dialog

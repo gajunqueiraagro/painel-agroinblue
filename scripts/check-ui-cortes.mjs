@@ -292,6 +292,8 @@ const CENARIOS = [
   { nome: 'acessos-editar-login', url: 'tela=acessos&v=editar', tamanhos: TAMANHOS_DO_CONSORCIO,
     antes: async (p) => { await p.locator('[data-testid="acesso-email"]').fill('novo.login.da.pessoa@exemplo.com.br'); await clicar('[data-testid="acesso-salvar"]')(p); } },
   ...['editar'].map((m) => ({ nome: `lancamento-${m}-Auditoria`, url: `tela=lancamento&m=${m}`, tamanhos: TAMANHOS_DO_CONSORCIO, antes: clicarTexto('Auditoria') })),
+  /* P116 — a aba Auditoria com UMA pessoa só: a coluna do autor (62px) aparece e o nome não corta */
+  { nome: 'lancamento-editar-Auditoria-um', url: 'tela=lancamento&m=editar&aud=um', tamanhos: TAMANHOS_DO_CONSORCIO, antes: clicarTexto('Auditoria') },
   /* CRIAR-DO-EXTRATO-01 — a faixa da referência em UMA linha (extrato e planilha), com o histórico de 300 caracteres: varrida (nenhum
      "…") e com a MESMA altura da faixa curta (`alturasComo`), e a Geral sem rolagem dentro do modal; o vencimento faltando ao salvar */
   ...['extrato', 'planilha'].flatMap((o) => [
