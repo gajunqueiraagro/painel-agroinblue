@@ -13,6 +13,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { toast } from 'sonner';
+import { FRASE_META_NAO_VAI_AO_FINANCEIRO, ehCenarioMeta } from '@/lib/financeiro/metaNaoVaiAoFinanceiro';
 import type { FiltroVisual } from '@/lib/statusOperacional';
 import { CATEGORIAS } from '@/types/cattle';
 import { formatMoeda } from '@/lib/calculos/formatters';
@@ -280,6 +281,8 @@ export const CompraFinanceiroPanel = forwardRef<CompraFinanceiroPanelRef, Props>
   };
 
   const handleGerarFinanceiro = useCallback(async (overrideLancamentoId?: string) => {
+    /* P120 — Meta nunca vai ao financeiro: a movimentação META não gera lançamento (o banco também recusa) */
+    if (ehCenarioMeta(statusOp)) { toast.info(FRASE_META_NAO_VAI_AO_FINANCEIRO); return false; }
     const effectiveId = overrideLancamentoId || lancamentoId;
     if (!effectiveId) { toast.error('Salve o lançamento zootécnico antes de gerar os financeiros.'); return false; }
     if (!fazendaAtual || !clienteAtual) return false;

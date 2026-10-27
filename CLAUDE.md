@@ -259,6 +259,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   menor ou linhas reservadas; lançamento com "k/N" no fim é PARCELA SOLTA (`parcelaSolta`): nunca oferecer "Parcelar".
 - P96a: as N soltas se JUNTAM só por `fn_parcelamento_juntar_lancamentos` (os N ficam; só o elo; competência é OPÇÃO; `juncao_original`) e
   voltam só por `fn_parcelamento_desfazer_juncao` (volta à vista e cancelar a compra recusam a junção); NF digitada nunca se troca sozinha.
+- P120: META NUNCA VAI AO FINANCEIRO — o banco recusa `cenario = 'meta'` em `financeiro_lancamentos_v2` (`trg_00_sem_meta`) e os geradores do
+  rebanho (abate, compra, venda) param na entrada (`metaNaoVaiAoFinanceiro.ts`); a meta do financeiro é calculada (P109/P110), nunca lançada.
 - P53: a mesma pergunta ao mesmo tempo = um pedido (`criarUmPedidoPorVez`, só o voo, nada guardado); o `checkLockNow` segue direto.
 - P95 (DANFE-CHAVE-EM-GRUPOS-01): DANFE com a chave/rótulos picados em itens se lê pela linha (`chaveEmGrupos` SÓ com DV certo; `aoLado`);
   sem chave legível, DIGITAR A CHAVE (`chaveDigitada.ts`: DV, modelo 55; avulsa 890 não usa o CNPJ; o resto em branco, âmbar na prévia);

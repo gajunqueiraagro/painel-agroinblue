@@ -1,5 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { FRASE_META_NAO_VAI_AO_FINANCEIRO, ehCenarioMeta } from '@/lib/financeiro/metaNaoVaiAoFinanceiro';
 import { CATEGORIAS } from '@/types/cattle';
 import type { CompraDetalhes } from '@/components/compra/CompraDetalhesDialog';
 import type { FiltroVisual } from '@/lib/statusOperacional';
@@ -21,6 +22,8 @@ interface GerarFinanceiroCompraParams {
 
 export async function gerarFinanceiroCompra(params: GerarFinanceiroCompraParams): Promise<boolean> {
   const { compraDetalhes, lancamentoId, clienteId, fazendaId, quantidade, pesoKg, data, categoria, statusOp, fazendaOrigem, fornecedorId } = params;
+  /* P120 — Meta nunca vai ao financeiro: a movimentação META não gera lançamento (o banco também recusa) */
+  if (ehCenarioMeta(statusOp)) { toast.info(FRASE_META_NAO_VAI_AO_FINANCEIRO); return false; }
 
   const totalKg = quantidade * pesoKg;
   let valorBase = 0;

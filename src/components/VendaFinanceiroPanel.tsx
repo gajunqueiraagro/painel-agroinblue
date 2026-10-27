@@ -17,6 +17,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { toast } from 'sonner';
+import { FRASE_META_NAO_VAI_AO_FINANCEIRO, ehCenarioMeta } from '@/lib/financeiro/metaNaoVaiAoFinanceiro';
 import { type BasePrecoVenda, CATEGORIAS } from '@/types/cattle';
 import { parseNumericValue } from '@/lib/calculos/abate';
 import { formatMoeda } from '@/lib/calculos/formatters';
@@ -369,6 +370,8 @@ export const VendaFinanceiroPanel = forwardRef<VendaFinanceiroPanelRef, Props>(f
   }), [fornecedorId, formaReceb, parcelas, resetForm, validationErrors, tipoPeso, boitelData]);
 
   const handleGerarFinanceiroInternal = async (targetLancamentoId: string): Promise<boolean> => {
+    /* P120 — Meta nunca vai ao financeiro: a movimentação META não gera lançamento (o banco também recusa) */
+    if (ehCenarioMeta(statusOp)) { toast.info(FRASE_META_NAO_VAI_AO_FINANCEIRO); return false; }
     console.log('[Venda Financeiro] generateFinanceiro chamado', { targetLancamentoId, tipoPeso, temBoitelData: !!boitelData });
     console.log('[VendaFinanceiro] fazendaAtual:', fazendaAtual?.id);
     console.log('[VendaFinanceiro] clienteAtual:', clienteAtual?.id);
