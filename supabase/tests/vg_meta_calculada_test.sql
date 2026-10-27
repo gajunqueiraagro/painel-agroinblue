@@ -12,6 +12,11 @@
 -- Rodado em 26/10/2026: T1 0 em 12 (m4: 3 em 12); T2 3.920.235,00 e 0 meses diferentes; T3 0 diferentes em NJ 417 / Agnaldo 186 /
 -- Vera 391 / Raul 201 celulas (m1 6/2/6/0 — o Raul nao tem prazo; m2 33/32/35/22; m3 1/5/2/3); T4 0 diferentes nos quatro. NJ: a
 -- ponte competencia → caixa e' valor_total − parcelas dos prazo = R$ 378.839,99 (nenhuma parcela da NJ cai em 2027).
+-- P109 (27/10/2026): a VG le' a fn_meta_linhas; o T3 soma as fontes novas (projetos, adiantamento de boitel, financiamento) como a
+-- funcao as devolve (recontadas por fora em fn_meta_linhas_test.sql). Rodado: T3 0 diferentes em NJ 444 / Agnaldo 195 / Vera 407 /
+-- Raul 205 (m1 6/2/6/0; m2 33/32/35/22; m3 1/5/2/3); T2 3.920.235,00.
+-- P120 (111963): a VG nao le^ mais o espelho da v2 meta — o T3 conta SEM ele (espelho = false) e o m3 passa a ser "com o espelho" (tem
+-- de diferir onde houver lancamento META de deducao no financeiro).
 set local statement_timeout = '600s';
 select set_config('request.jwt.claims', '{"sub":"7bd0b6ad-2527-4be1-af58-f2cc0c0edd8e","role":"authenticated"}', true);
 
@@ -30,11 +35,18 @@ returns table(grupo text, sub text, am text, v numeric) language sql as $f$
       from financeiro_lancamentos_v2 l join financeiro_plano_contas pc on pc.id = l.plano_conta_id
      where espelho and l.cliente_id = k and l.cenario = 'meta' and coalesce(l.cancelado, false) = false
        and l.origem_lancamento = 'movimentacao_rebanho' and pc.bloco_dre = 'deducao'
-       and coalesce(l.data_vencimento, l.data_competencia) between '2026-01-01' and '2026-12-31') z
+       and coalesce(l.data_vencimento, l.data_competencia) between '2026-01-01' and '2026-12-31'
+    /* P109 — a VG passou a ler a fn_meta_linhas, que traz TAMBEM projetos, adiantamento de boitel e parcelas de financiamento (caixa);
+       recontados por fora em `fn_meta_linhas_test.sql` (T1). Aqui entram como vem, para o T3 seguir provando as tres fontes do P108. */
+    union all
+    select coalesce(pc.grupo_fluxo, 'x'), pc.subcentro, to_char(make_date(2026, ml.mes, 1), 'YYYY-MM'), abs(ml.valor)
+      from fn_meta_linhas(k, 2026, 'caixa') ml join financeiro_plano_contas pc on pc.id = ml.plano_conta_id
+     where pc.tipo_operacao in ('1-Entradas', '2-Saídas')
+       and (ml.origem = 'calculada:financiamento' or ml.origem_detalhe like 'projeto%' or ml.origem_detalhe = 'adiantamento de boitel')) z
   group by 1, 2, 3
 $f$;
 
-create function pg_temp.t3(k uuid, regime text default 'caixa', vezes int default 1, espelho boolean default true) returns text language sql as $f$
+create function pg_temp.t3(k uuid, regime text default 'caixa', vezes int default 1, espelho boolean default false) returns text language sql as $f$
   with vg as (select coalesce(grupo, 'x') g, subcentro s, ano_mes am, meta v from fn_vg_meta(k, '2026-01-01', '2026-12-31') where nivel = 'subcentro'),
        e as (select * from pg_temp.esperada(k, regime, vezes, espelho))
   select format('%s celulas, %s diferentes', count(*), count(*) filter (where vg.v is distinct from e.v))
@@ -82,7 +94,7 @@ begin
          is distinct from (select array_agg(c::text order by c::text) from fn_meta_calculada_pecuaria(k, ano, 'caixa') c) then t1m := t1m + 1; end if;
     end loop;
     r := r || format(' | %s: T3 %s; m1 %s; m2 %s; m3 %s; T4 %s', left(k::text, 4), pg_temp.t3(k), pg_temp.t3(k, 'competencia'), pg_temp.t3(k, 'caixa', 2),
-                     pg_temp.t3(k, 'caixa', 1, false), pg_temp.t4(k));
+                     pg_temp.t3(k, 'caixa', 1, true), pg_temp.t4(k));
   end loop;
   select sum(meta) into nut from fn_vg_meta(ks[1], '2026-01-01', '2026-12-31') where nivel = 'subcentro' and centro = 'Nutrição' and subcentro = 'Nutrição';
   select count(*) into nutm from (select ano_mes, sum(meta) v from fn_vg_meta(ks[1], '2026-01-01', '2026-12-31') where nivel = 'subcentro' and centro = 'Nutrição' and subcentro = 'Nutrição' group by 1) a

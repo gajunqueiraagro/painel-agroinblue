@@ -13,6 +13,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { FONTE_POR_PARTE } from '@/lib/financeiro/partesDaClassificacao';
+import { lerMetaLinhas } from '@/lib/financeiro/metaLinhas';
+import { loadContasDoPlanoDoCliente } from '@/lib/financeiro/planoContasBuilder';
 
 // ─── Tipos ──────────────────────────────────────────────────────────────
 
@@ -199,12 +201,11 @@ export function useResumoExecMeta(
             .select('*')
             .eq('cliente_id', clienteId).eq('fazenda_id', fazendaId).eq('ano', ano)
             .order('created_at', { ascending: false }).limit(1),
-          // C) financeiro META
-          supabase
-            .from('planejamento_financeiro' as any)
-            .select('macro_custo, grupo_custo, mes, valor_planejado')
-            .eq('cliente_id', clienteId).eq('fazenda_id', fazendaId).eq('ano', ano)
-            .eq('cenario', 'meta'),
+          // C) financeiro META — P109: do dono único (fn_meta_linhas, caixa), na conta do plano; antes era só o digitado, pelo texto
+          Promise.all([
+            (supabase as any).rpc('fn_meta_linhas', { p_cliente: clienteId, p_ano: ano, p_regime: 'caixa' }),
+            loadContasDoPlanoDoCliente(clienteId),
+          ]),
           // D) financeiro realizado ano anterior
           (supabase as any)
             .from(FONTE_POR_PARTE)
@@ -258,15 +259,19 @@ export function useResumoExecMeta(
         const statusAprovacao = aprovacaoAtual?.status ?? null;
 
         // ── C) financeiro META ──
-        const planMetaRows = (planMetaRes.data as any[] | null) ?? [];
+        const [metaRes, contasDoPlano] = planMetaRes;
+        if (metaRes.error) throw metaRes.error;
+        const contaPorId = new Map(contasDoPlano.map((c) => [c.id, c]));
+        const planMetaRows = lerMetaLinhas(metaRes.data).filter((l) => l.fazenda_id === fazendaId);
         const financMetaPorMacro = new Map<string, number>();
         const financMetaMensal = new Map<string, number[]>();
         const financGrupoPorMacro = new Map<string, Map<string, number>>();
         for (const r of planMetaRows) {
-          const macro = r.macro_custo || '—';
-          const grupo = r.grupo_custo || '—';
-          const mes = Number(r.mes);
-          const valor = Number(r.valor_planejado) || 0;
+          const conta = r.plano_conta_id ? contaPorId.get(r.plano_conta_id) : undefined;
+          const macro = conta?.macro_custo || '—';
+          const grupo = conta?.grupo_custo || '—';
+          const mes = r.mes;
+          const valor = Math.abs(r.valor);
           financMetaPorMacro.set(macro, (financMetaPorMacro.get(macro) || 0) + valor);
           if (!financMetaMensal.has(macro)) financMetaMensal.set(macro, new Array(12).fill(0));
           if (mes >= 1 && mes <= 12) {

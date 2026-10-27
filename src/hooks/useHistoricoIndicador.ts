@@ -21,6 +21,8 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { FONTE_POR_PARTE } from '@/lib/financeiro/partesDaClassificacao';
+import { lerMetaLinhas } from '@/lib/financeiro/metaLinhas';
+import { loadContasDoPlanoDoCliente } from '@/lib/financeiro/planoContasBuilder';
 import { fetchAllPaginated } from '@/lib/supabase/fetchAllPaginated';
 import {
   cabecasMediaPeriodoFromRows,
@@ -571,27 +573,33 @@ export function useHistoricoIndicador({
             }
           }
 
-          // 2) Financeiro META — planejamento_financeiro (mensal).
-          const finMetaRows: any[] = [];
+          // 2) Financeiro META — P109: do dono único (fn_meta_linhas, caixa — o realizado acima é pelo pagamento), por ano, na conta
+          //    do plano (o grupo é o da conta, não o texto digitado); antes era só o digitado do planejamento_financeiro.
+          const finMetaRows: { ano: number; mes: number; valor_planejado: number; grupo_custo: string }[] = [];
           {
-            let from = 0;
-            while (true) {
-              let q = (supabase
-                .from('planejamento_financeiro' as any)
-                .select('ano, mes, valor_planejado, grupo_custo') as any)
-                .eq('cenario', 'meta')
-                .in('grupo_custo', ['Custo Fixo Pecuária', 'Custo Variável Pecuária'])
-                .gte('ano', inicio)
-                .lte('ano', anoAtual);
-              if (fazendaId) q = q.eq('fazenda_id', fazendaId);
-              else if (fazendaIds && fazendaIds.length > 0) q = q.in('fazenda_id', fazendaIds);
-              const { data, error } = await q.range(from, from + PAGE - 1);
+            const GRUPOS_CUSTEIO = new Set(['Custo Fixo Pecuária', 'Custo Variável Pecuária']);
+            const doRecorte = (fz: string | null) => (fazendaId ? fz === fazendaId : fazendaIds && fazendaIds.length > 0 ? !!fz && fazendaIds.includes(fz) : true);
+            try {
+              const anos: number[] = [];
+              for (let y = inicio; y <= anoAtual; y++) anos.push(y);
+              const [contas, ...porAno] = await Promise.all([
+                loadContasDoPlanoDoCliente(clienteId),
+                ...anos.map((y) => (supabase as any).rpc('fn_meta_linhas', { p_cliente: clienteId, p_ano: y, p_regime: 'caixa' })),
+              ]);
               if (cancelled) return;
-              if (error) { setHistorico([]); setHistoricoMeta([]); return; }
-              if (!data || data.length === 0) break;
-              finMetaRows.push(...data);
-              if (data.length < PAGE) break;
-              from += PAGE;
+              const grupoDaConta = new Map(contas.map((c) => [c.id, c.grupo_custo]));
+              porAno.forEach((res: { data: unknown; error: unknown }, i: number) => {
+                if (res.error) throw res.error;
+                for (const l of lerMetaLinhas(res.data)) {
+                  const grupo = l.plano_conta_id ? grupoDaConta.get(l.plano_conta_id) : null;
+                  if (!grupo || !GRUPOS_CUSTEIO.has(grupo) || !doRecorte(l.fazenda_id)) continue;
+                  finMetaRows.push({ ano: anos[i], mes: l.mes, valor_planejado: Math.abs(l.valor), grupo_custo: grupo });
+                }
+              });
+            } catch (e) {
+              console.error('[useHistoricoIndicador] meta (fn_meta_linhas):', e);
+              if (!cancelled) { setHistorico([]); setHistoricoMeta([]); }
+              return;
             }
           }
 

@@ -120,7 +120,6 @@ import {
 } from '@/lib/painelConsultor/agregadosFinanceiros';
 import type { SubcentroGrid } from '@/hooks/usePlanejamentoFinanceiro';
 import { usePlanejamentoFinanceiro } from '@/hooks/usePlanejamentoFinanceiro';
-import { composeGridMetaConsolidado } from '@/lib/painelConsultor/composeGridMetaConsolidado';
 import {
   computePeriodGmd,
   rollingAvg,
@@ -1134,7 +1133,7 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
 
   // ─── GRID META FINANCEIRO CONSOLIDADO — fonte soberana única ─────────────
   // Espelha o mesmo grid que o Fluxo de Caixa META renderiza visualmente:
-  //   buildGrid() de planejamento_financeiro + composeGridMetaConsolidado
+  //   buildGrid() de planejamento_financeiro + o consolidado do hub (P109: auto da fn_meta_linhas)
   //   somando os 4 streams auto (rebanho, financiamento, nutrição, projetos).
   //
   // Indicadores soberanos _finSoberano.* (custeioPec, juros, invFaz, etc.) E
@@ -1156,24 +1155,11 @@ export function usePainelConsultorData({ ano, mes, viewMode = 'mes', carregarMet
     isGlobal ? undefined : fazendaId,
     enabled,
   );
-  const _gridMetaBaseInterno = useMemo(
-    () => _planFinInterno.buildGrid(),
-    [_planFinInterno.buildGrid, _planFinInterno.loading],
-  );
+  /* P109 — o grid CONSOLIDADO vem pronto do hub (auto da fn_meta_linhas + digitado, a regra única de juntar) */
   const gridMetaConsolidado = useMemo<SubcentroGrid[]>(
-    () => composeGridMetaConsolidado(_gridMetaBaseInterno, {
-      lancamentosRebanho: _planFinInterno.lancamentosRebanho,
-      lancamentosFinanciamento: _planFinInterno.lancamentosFinanciamento,
-      lancamentosNutricao: _planFinInterno.lancamentosNutricao,
-      lancamentosProjetos: _planFinInterno.lancamentosProjetos,
-    }),
-    [
-      _gridMetaBaseInterno,
-      _planFinInterno.lancamentosRebanho,
-      _planFinInterno.lancamentosFinanciamento,
-      _planFinInterno.lancamentosNutricao,
-      _planFinInterno.lancamentosProjetos,
-    ],
+    () => _planFinInterno.buildGridConsolidado(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [_planFinInterno.buildGridConsolidado, _planFinInterno.loading],
   );
 
   const viewDataMeta = carregarMetaEffective ? viewDataMetaRaw : null;

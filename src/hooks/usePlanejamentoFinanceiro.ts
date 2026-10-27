@@ -3,15 +3,14 @@
  *
  * Simplified: load, save (bulk upsert), import realizado anterior, saldo inicial, dividendos.
  */
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { FONTE_POR_PARTE } from '@/lib/financeiro/partesDaClassificacao';
 import { useCliente } from '@/contexts/ClienteContext';
-import { useFazenda } from '@/contexts/FazendaContext';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useFinanceiro, type FinanceiroLancamento } from '@/hooks/useFinanceiro';
-import { subcentroDaVenda } from '@/lib/financeiro/subcentroVenda';
+import { gridMetaConsolidado, lerMetaLinhas, mapasDaMeta, type MetaLinha } from '@/lib/financeiro/metaLinhas';
 
 export interface PlanejamentoFinanceiroRow {
   id: string;
@@ -33,12 +32,14 @@ export interface PlanejamentoFinanceiroRow {
   origem: 'manual' | 'replicado' | 'calculado' | 'importado_realizado' | 'rebanho_auto';
   cenario: string;
   observacao: string | null;
+  plano_conta_id: string | null;
   created_at: string;
   updated_at: string;
 }
 
 /** Plano de contas row (global, client_id = null) */
 export interface PlanoContasRow {
+  id: string;
   macro_custo: string | null;
   grupo_custo: string | null;
   centro_custo: string;
@@ -60,48 +61,14 @@ export interface SubcentroGrid {
 
 const isValidFazenda = (id?: string) => !!id && id !== '__global__';
 
-/** Map tipo+categoria from lancamentos to financial subcentro */
-function mapRebanhoSubcentro(tipo: string, categoria: string, hasBoitel: boolean): string | null {
-  if (tipo === 'abate') {
-    if (['touros','bois','garrotes','machos','bezerros_m','mamotes_m','desmama_m'].includes(categoria)) return 'Abates de Machos';
-    if (['vacas','novilhas','bezerras_f','desmama_f','femeas','mamotes_f'].includes(categoria)) return 'Abates de Fêmeas';
-  }
-  /* ⚠ A VENDA SAIU DAQUI — OC-BOITEL-VALOR-01. Esta tabela e a de `useOperacaoLiquidacao`
-     eram a MESMA regra escrita duas vezes, e discordavam: aqui o boitel classificava em
-     1150 e la' nao, e `mamotes_*` caia em Adulto aqui e em Desmama la'. A fonte unica
-     ficou em `@/lib/financeiro/subcentroVenda`, com a regra da OC para o mamote — a que
-     tinha o porque escrito. Abate e compra seguem abaixo: os mapas deles tambem divergem
-     dos da OC, e cada divergencia pede decisao propria. */
-  if (tipo === 'venda') {
-    return subcentroDaVenda(categoria, hasBoitel);
-  }
-  if (tipo === 'compra') {
-    if (['garrotes','touros','bois','machos','bezerros_m','mamotes_m','desmama_m'].includes(categoria)) return 'Investimento Compra Bovinos Machos';
-    if (['novilhas','vacas','femeas','bezerras_f','mamotes_f','desmama_f'].includes(categoria)) return 'Investimento Compra Bovinos Fêmeas';
-  }
-  return null;
-}
-
-export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string, enabled = true) {
+/** `comCompetencia`: lê também a meta em regime de COMPETÊNCIA (P109 — as linhas de DRE do PC-100); o padrão é só o caixa. */
+export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string, enabled = true, comCompetencia = false) {
   const { clienteAtual } = useCliente();
   const clienteId = clienteAtual?.id;
-  const { fazendas } = useFazenda();
-
-  // Identifica se a fazenda selecionada é ADM (nome contém "admin")
-  const isAdmFazenda = (id?: string) => {
-    if (!id || id === '__global__') return false;
-    const f = fazendas.find(fz => fz.id === id);
-    return f ? /admin/i.test(f.nome) : false;
-  };
-
-  // Lista de fazendas operacionais (não-ADM) do cliente
-  const fazendasOperacionais = fazendas.filter(f => !/admin/i.test(f.nome));
 
   const qc = useQueryClient();
 
   const [loading, setLoading] = useState(false);
-  const [lancamentosFinanciamento, setLancamentosFinanciamento] = useState<Map<string, number[]>>(new Map());
-  const [lancamentosNutricao, setLancamentosNutricao] = useState<Map<string, number[]>>(new Map());
 
   // ── Fase 1.6.A: 4 loaders triviais migrados para TanStack Query ──
   // Mantém API pública intacta — variáveis derivadas com fallback idêntico ao state anterior.
@@ -110,7 +77,7 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string, enabl
     queryFn: async () => {
       const { data: rows, error } = await (supabase
         .from('financeiro_plano_contas' as any)
-        .select('macro_custo, grupo_custo, centro_custo, subcentro, escopo_negocio, ordem_exibicao')
+        .select('id, macro_custo, grupo_custo, centro_custo, subcentro, escopo_negocio, ordem_exibicao')
         .eq('ativo', true)
         .not('subcentro', 'is', null)
         .neq('macro_custo', 'Dividendos')
@@ -165,39 +132,55 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string, enabl
   });
   const saldoInicial = saldoInicialQuery.data ?? 0;
 
-  const lancamentosProjetosQuery = useQuery<Map<string, number[]>>({
-    queryKey: ['ppf:projetos', clienteId, fazendaId, ano],
+  /* P109 (FIN-META-01) — TODA a meta auto vem do DONO ÚNICO no banco, `fn_meta_linhas(cliente, ano, 'caixa')`: receita e reposição
+     do rebanho (pelo recebimento/pagamento), adiantamento de boitel, nutrição/frete/comercial, parcelas de financiamento e consórcio
+     (a compra parcelada NÃO é meta) e projetos de investimento — a dedução é só a calculada (nunca um lançamento META gravado no
+     financeiro, P120). Aqui só se lê e se põe no subcentro da CONTA DO PLANO; o cálculo do front (nutrição por fazenda, parcelas do
+     snapshot, financiamento pela data local) morreu. */
+  const metaLinhasQuery = useQuery<MetaLinha[]>({
+    queryKey: ['ppf:meta-linhas', clienteId, ano],
     queryFn: async () => {
-      let query = supabase
-        .from('meta_projetos_investimento' as any)
-        .select('subcentro, jan, fev, mar, abr, mai, jun, jul, ago, set, out, nov, dez')
-        .eq('cliente_id', clienteId!)
-        .eq('ano', ano)
-        .neq('status', 'cancelado');
-      if (isValidFazenda(fazendaId)) {
-        query = query.eq('fazenda_id', fazendaId!);
-      }
-      const { data: rows, error } = await (query as any);
+      const { data: rows, error } = await (supabase as any).rpc('fn_meta_linhas', { p_cliente: clienteId, p_ano: ano, p_regime: 'caixa' });
       if (error) throw error;
-      const result = new Map<string, number[]>();
-      const mesKeys = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
-      for (const r of (rows || [])) {
-        const sub = (r as any).subcentro as string;
-        if (!sub) continue;
-        if (!result.has(sub)) result.set(sub, new Array(12).fill(0));
-        const arr = result.get(sub)!;
-        mesKeys.forEach((k, i) => { arr[i] += Math.abs(Number((r as any)[k]) || 0); });
-      }
-      for (const [, arr] of result) {
-        for (let i = 0; i < 12; i++) arr[i] = Math.round(arr[i] * 100) / 100;
-      }
-      return result;
+      return lerMetaLinhas(rows);
     },
     enabled: enabled && !!clienteId,
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
   });
-  const lancamentosProjetos = lancamentosProjetosQuery.data ?? new Map<string, number[]>();
+  const mapasMeta = useMemo(() => {
+    const subcentroDaConta = new Map<string, string>();
+    for (const p of planoContas) if (p.subcentro) subcentroDaConta.set(p.id, p.subcentro);
+    const r = mapasDaMeta(metaLinhasQuery.data ?? [], subcentroDaConta, isValidFazenda(fazendaId) ? fazendaId! : null);
+    if (r.semConta.length > 0) console.warn('[usePlanejamentoFinanceiro] linhas de meta sem conta no plano carregado', r.semConta);
+    return r;
+  }, [metaLinhasQuery.data, planoContas, fazendaId]);
+  const metaLinhasCompetenciaQuery = useQuery<MetaLinha[]>({
+    queryKey: ['ppf:meta-linhas-competencia', clienteId, ano],
+    queryFn: async () => {
+      const { data: rows, error } = await (supabase as any).rpc('fn_meta_linhas', { p_cliente: clienteId, p_ano: ano, p_regime: 'competencia' });
+      if (error) throw error;
+      return lerMetaLinhas(rows);
+    },
+    enabled: enabled && comCompetencia && !!clienteId,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+  });
+  const mapasMetaCompetencia = useMemo(() => {
+    const subcentroDaConta = new Map<string, string>();
+    for (const p of planoContas) if (p.subcentro) subcentroDaConta.set(p.id, p.subcentro);
+    return mapasDaMeta(metaLinhasCompetenciaQuery.data ?? [], subcentroDaConta, isValidFazenda(fazendaId) ? fazendaId! : null);
+  }, [metaLinhasCompetenciaQuery.data, planoContas, fazendaId]);
+  const lancamentosProjetos = mapasMeta.projetos;
+  const lancamentosRebanho = mapasMeta.rebanho;
+  const lancamentosFinanciamento = mapasMeta.financiamento;
+  const lancamentosNutricao = mapasMeta.nutricao;
+  const recarregarMeta = useCallback(async () => {
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ['ppf:meta-linhas'] }),
+      qc.invalidateQueries({ queryKey: ['ppf:meta-linhas-competencia'] }),
+    ]);
+  }, [qc]);
 
   // ── Fase 1.6.B: loadSaved + loadLancamentosRebanho migrados ──
   const savedDataQuery = useQuery<PlanejamentoFinanceiroRow[]>({
@@ -241,174 +224,6 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string, enabl
   const lancFin2025: FinanceiroLancamento[] = real2025.lancamentos ?? [];
   const lancFin2025Loading = real2025.loading;
 
-  // ─── TIPOS LOCAIS — sem `any` ───────────────────────────────────────
-  interface ParcelaZootMeta {
-    data?: string;
-    valor?: number;
-  }
-  interface BoitelSnapshotZootMeta {
-    possuiAdiantamento?: boolean;
-    dataAdiantamento?: string;
-    valorTotalAntecipado?: number;
-  }
-  interface DetalhesSnapshotZootMeta {
-    formaReceb?: string | null;
-    formaPag?: string | null;
-    parcelas?: ParcelaZootMeta[];
-    boitelSnapshot?: BoitelSnapshotZootMeta;
-  }
-  interface RowZootMeta {
-    id: string;
-    tipo: string;
-    categoria: string | null;
-    data: string;
-    valor_total: number | null;
-    boitel_lote_id: string | null;
-    detalhes_snapshot: DetalhesSnapshotZootMeta | null;
-  }
-
-  const lancamentosRebanhoQuery = useQuery<Map<string, number[]>>({
-    queryKey: ['ppf:rebanho:recebimento:boitel2', clienteId, fazendaId, ano],
-    queryFn: async () => {
-      // Sem filtro por intervalo de competência: um abate em mês X pode ter
-      // parcela em mês Y do mesmo ano. O filtro de ano ocorre pelo ano da
-      // PARCELA dentro do loop (avista usa lancamentos.data como recebimento).
-      let query = supabase
-        .from('lancamentos')
-        .select('id, tipo, categoria, data, valor_total, boitel_lote_id, detalhes_snapshot')
-        .eq('cliente_id', clienteId!)
-        .eq('cenario', 'meta')
-        .eq('cancelado', false)
-        .in('tipo', ['abate', 'venda', 'compra'])
-        .not('valor_total', 'is', null);
-      if (isValidFazenda(fazendaId)) {
-        query = query.eq('fazenda_id', fazendaId!);
-      }
-      const { data: rows, error } = await query;
-      if (error) throw error;
-
-      const rowsTyped = (rows ?? []) as RowZootMeta[];
-      const result = new Map<string, number[]>();
-      const yearStr = String(ano);
-
-      const pushIntoResult = (subcentro: string, dataISO: string, valor: number) => {
-        if (!dataISO || dataISO.slice(0, 4) !== yearStr) return; // filtra ano da PARCELA
-        const mes = Number(dataISO.substring(5, 7));
-        if (mes < 1 || mes > 12) return;
-        if (!result.has(subcentro)) result.set(subcentro, new Array(12).fill(0));
-        result.get(subcentro)![mes - 1] += Math.abs(valor || 0);
-      };
-
-      const isValidParcela = (p: ParcelaZootMeta): boolean => {
-        return typeof p?.data === 'string'
-          && p.data.length >= 10
-          && typeof p?.valor === 'number'
-          && Number.isFinite(p.valor);
-      };
-
-      for (const r of rowsTyped) {
-        const det = r.detalhes_snapshot ?? null;
-        // isBoitel via coluna OU via snapshot (boitel_lote_id pode estar null em
-        // lançamentos META mesmo havendo dados do boitel no snapshot)
-        const isBoitel = !!r.boitel_lote_id || !!(det?.boitelSnapshot);
-        const subcentro = mapRebanhoSubcentro(r.tipo, r.categoria ?? '', isBoitel);
-        if (!subcentro) continue;
-
-        // ─── BLOCO INDEPENDENTE: Adiantamento de Boitel ──────────────────
-        // Emite SAÍDA em "Adiantamento de Boitel" no mês de dataAdiantamento.
-        // NÃO substitui nem altera a entrada da venda (que segue via regras 1/2 abaixo).
-        // SEM FALLBACK para r.data ou r.valor_total: dado inválido → warn + skip.
-        if (isBoitel) {
-          const bs = det?.boitelSnapshot ?? null;
-          if (bs && bs.possuiAdiantamento === true) {
-            const dataAdiant = typeof bs.dataAdiantamento === 'string' && bs.dataAdiantamento.length >= 10
-              ? bs.dataAdiantamento
-              : null;
-            const valorAdiant = typeof bs.valorTotalAntecipado === 'number'
-              && Number.isFinite(bs.valorTotalAntecipado)
-              ? bs.valorTotalAntecipado
-              : null;
-
-            if (dataAdiant && valorAdiant !== null && valorAdiant > 0) {
-              pushIntoResult('Adiantamento de Boitel', dataAdiant, valorAdiant);
-            } else {
-              console.warn('[usePlanejamentoFinanceiro] boitel com adiantamento mas dados inválidos — ignorado no Fluxo', {
-                lancamentoId: r.id,
-                possuiAdiantamento: bs.possuiAdiantamento,
-                dataAdiantamento: bs.dataAdiantamento,
-                valorTotalAntecipado: bs.valorTotalAntecipado,
-              });
-            }
-          }
-        }
-
-        // Reconciliação semântica: Compra usa `formaPag`, Abate/Venda usam `formaReceb`.
-        // Ambos representam a mesma forma de liquidação (à vista vs prazo).
-        const formaReceb = det?.formaReceb ?? det?.formaPag ?? null;
-        const parcelas: ParcelaZootMeta[] = Array.isArray(det?.parcelas) ? det!.parcelas! : [];
-
-        // Regra 1: prazo + parcelas → iterar parcelas (data de RECEBIMENTO)
-        if (formaReceb === 'prazo') {
-          if (parcelas.length === 0) {
-            console.warn('[usePlanejamentoFinanceiro] lançamento META prazo SEM parcelas — ignorado no Fluxo', {
-              lancamentoId: r.id,
-              tipo: r.tipo,
-              dataCompetencia: r.data,
-            });
-            continue;
-          }
-          let lancouAlguma = false;
-          for (const p of parcelas) {
-            if (!isValidParcela(p)) {
-              console.warn('[usePlanejamentoFinanceiro] parcela inválida em lançamento META — ignorada', {
-                lancamentoId: r.id,
-                tipo: r.tipo,
-                parcela: p,
-              });
-              continue;
-            }
-            pushIntoResult(subcentro, p.data as string, p.valor as number);
-            lancouAlguma = true;
-          }
-          if (!lancouAlguma) {
-            console.warn('[usePlanejamentoFinanceiro] lançamento META prazo com TODAS parcelas inválidas — ignorado no Fluxo', {
-              lancamentoId: r.id,
-              tipo: r.tipo,
-              dataCompetencia: r.data,
-              parcelasCount: parcelas.length,
-            });
-          }
-          continue;
-        }
-
-        // Regra 2: avista → data principal do lançamento (= recebimento à vista)
-        if (formaReceb === 'avista') {
-          pushIntoResult(subcentro, r.data, Number(r.valor_total) || 0);
-          continue;
-        }
-
-        // Regra 3: formaReceb null/inválida → NÃO LANÇAR no Fluxo
-        // Dado incompleto NÃO cai em competência silenciosa.
-        console.warn('[usePlanejamentoFinanceiro] lançamento META sem formaReceb — ignorado no Fluxo', {
-          lancamentoId: r.id,
-          tipo: r.tipo,
-          formaReceb,
-          dataCompetencia: r.data,
-        });
-      }
-
-      // Round 2 casas
-      for (const [, arr] of result) {
-        for (let i = 0; i < 12; i++) arr[i] = Math.round(arr[i] * 100) / 100;
-      }
-      return result;
-    },
-    enabled: enabled && !!clienteId,
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
-  });
-  const lancamentosRebanho = lancamentosRebanhoQuery.data ?? new Map<string, number[]>();
-
   // ─── Load saved planejamento ──────────────────────────────
   const loadSaved = useCallback(async () => {
     if (!clienteId) return;
@@ -419,300 +234,6 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string, enabl
       setLoading(false);
     }
   }, [qc, clienteId, fazendaId, ano]);
-
-  // ─── Load parcelas de financiamento (pendentes, ano META) ─
-  const loadFinanciamentos = useCallback(async () => {
-    if (!enabled || !clienteId) { setLancamentosFinanciamento(new Map()); return; }
-    // Financiamentos são exclusivos do ADM — não mostrar em fazendas operacionais
-    if (isValidFazenda(fazendaId) && !isAdmFazenda(fazendaId)) {
-      setLancamentosFinanciamento(new Map());
-      return;
-    }
-    try {
-      let query = supabase
-        .from('financiamento_parcelas')
-        .select(`
-          data_vencimento,
-          valor_principal,
-          valor_juros,
-          financiamentos!inner (
-            tipo_financiamento,
-            plano_conta_parcela_id,
-            cliente_id,
-            fazenda_id,
-            financeiro_plano_contas_parcela:financeiro_plano_contas!financiamentos_plano_conta_parcela_id_fkey (
-              subcentro, grupo_custo, centro_custo, macro_custo
-            )
-          )
-        `)
-        /* ⚠ META LE PARCELA DE QUALQUER STATUS, EXCETO CANCELADA. Antes era
-           `.eq('status','pendente')`, e isso fazia o REALIZADO ALTERAR A META:
-           ao pagar, a parcela virava 'pago' e SAIA do planejamento. A meta do
-           ano encolhia conforme o ano avancava, e em dezembro, com tudo pago,
-           a meta de amortizacao seria ZERO.
-           O compromisso foi planejado independente de ja ter sido pago — o que
-           foi planejado nao muda em funcao do que aconteceu depois.
-           Medido em 26/08/2026, Santa Rita 2026 (15 pagas, 3 pendentes):
-             amortizacao  R$ 1.992.000 -> R$ 7.189.110
-             juros        R$   626.339 -> R$ 1.918.048
-           CANCELADA fica de fora porque deixou de existir como compromisso —
-           uma so na base em 2026, R$ 21.000 do Agnaldo. Os status sao
-           exatamente tres (pago 432, pendente 120, cancelado 25): o `.neq` nao
-           deixa entrar nada inesperado hoje, mas passaria a incluir um status
-           novo caso surja.
-           ⚠ Quem voltar a filtrar 'pendente' traz de volta a meta que encolhe:
-           meta NAO e' "o que falta pagar". */
-        .neq('status', 'cancelado')
-        .eq('financiamentos.cliente_id', clienteId)
-        .gte('data_vencimento', `${ano}-01-01`)
-        .lte('data_vencimento', `${ano}-12-31`);
-
-      // Financiamentos sempre vêm do ADM (empresa inteira), sem filtro de fazenda
-
-      const { data: rows, error } = await (query as any);
-      if (error) throw error;
-
-      const result = new Map<string, number[]>();
-
-      const addToMap = (subcentro: string, mes: number, valor: number) => {
-        if (!subcentro || valor <= 0) return;
-        if (!result.has(subcentro)) result.set(subcentro, new Array(12).fill(0));
-        result.get(subcentro)![mes - 1] += valor;
-      };
-
-      for (const r of (rows || [])) {
-        const fin = (r as any).financiamentos;
-        if (!fin) continue;
-        const pc = fin.financeiro_plano_contas_parcela;
-        const mes = new Date(r.data_vencimento).getMonth() + 1;
-        if (mes < 1 || mes > 12) continue;
-
-        // Principal → subcentro do plano_conta_parcela_id
-        if (pc?.subcentro) {
-          addToMap(pc.subcentro, mes, Math.abs(r.valor_principal || 0));
-        }
-
-        // Juros → subcentro de juros conforme tipo_financiamento
-        const tipo = fin.tipo_financiamento;
-        const subJuros = tipo === 'agricultura'
-          ? 'Juros de Financiamento Agricultura'
-          : 'Juros de Financiamento Pecuária';
-        addToMap(subJuros, mes, Math.abs(r.valor_juros || 0));
-      }
-
-      // Round to 2 decimals
-      for (const [, arr] of result) {
-        for (let i = 0; i < 12; i++) arr[i] = Math.round(arr[i] * 100) / 100;
-      }
-
-      setLancamentosFinanciamento(result);
-    } catch (e: any) {
-      console.error('Erro ao carregar financiamentos para META:', e);
-      setLancamentosFinanciamento(new Map());
-    }
-  }, [enabled, clienteId, fazendaId, fazendas, ano]);
-
-  useEffect(() => { loadFinanciamentos(); }, [loadFinanciamentos]);
-
-  // ─── Calcula nutrição para UMA fazenda (helper interno) ──
-  const calcNutricaoFazenda = async (fId: string): Promise<Map<string, number[]>> => {
-    const result = new Map<string, number[]>();
-
-    // 1. Load params
-    const { data: params } = await (supabase
-      .from('meta_parametros_nutricao' as any)
-      .select('*')
-      .eq('fazenda_id', fId)
-      .eq('ano', ano)
-      .maybeSingle() as any);
-
-    if (!params) return result;
-
-    const criaCusto = Number(params.cria_custo_cab_mes) || 0;
-    const recriaCusto = Number(params.recria_custo_cab_mes) || 0;
-    const engordaDias = Number(params.engorda_periodo_dias) || 0;
-    const engordaConsumo = Number(params.engorda_consumo_kg_ms) || 0;
-    const engordaCustoKg = Number(params.engorda_custo_kg_ms) || 0;
-    const freteCustoCab = Number(params.frete_custo_cab) || 0;
-    const comercialCustoCab = Number((params as any).comercial_custo_cab) || 0;
-    const custoPorCabEngorda = engordaDias * engordaConsumo * engordaCustoKg;
-
-    // 2. Load rebanho META (saldo_final por categoria/mês)
-    const { data: rebanhoRows } = await (supabase
-      .from('zoot_mensal_cache' as any)
-      .select('categoria_codigo, mes, saldo_final')
-      .eq('fazenda_id', fId)
-      .eq('cenario', 'meta')
-      .eq('ano', ano)
-      .in('categoria_codigo', ['vacas', 'novilhas', 'garrotes', 'desmama_m', 'desmama_f']) as any);
-
-    // Build lookup: Map<categoria, number[12]>
-    const sfMap = new Map<string, number[]>();
-    for (const r of (rebanhoRows || [])) {
-      if (!sfMap.has(r.categoria_codigo)) sfMap.set(r.categoria_codigo, new Array(12).fill(0));
-      const m = Number(r.mes);
-      if (m >= 1 && m <= 12) sfMap.get(r.categoria_codigo)![m - 1] = Number(r.saldo_final) || 0;
-    }
-
-    // ⚠ AS TRÊS FASES VIRAM UMA CHAVE SÓ, 'Nutrição' (META-SUMIU-01): a PLANO-NUTRICAO-01
-    // (20260912094000) juntou Cria/Recria/Engorda no subcentro 'Nutrição' e inativou os três, e
-    // as telas semeiam do plano ATIVO e pintam por nome — com as chaves antigas o valor ficava
-    // sem linha. Cada fase se calcula como antes; a soma mês a mês é gravada uma vez, aqui.
-    const fasesNutricao: number[][] = [];
-
-    // CRIA: vacas × custo
-    if (criaCusto > 0) {
-      const cria = new Array(12).fill(0);
-      const vacas = sfMap.get('vacas') || new Array(12).fill(0);
-      for (let i = 0; i < 12; i++) cria[i] = Math.round(vacas[i] * criaCusto * 100) / 100;
-      fasesNutricao.push(cria);
-    }
-
-    // RECRIA: (novilhas + garrotes + desmama_m + desmama_f) × custo
-    if (recriaCusto > 0) {
-      const recria = new Array(12).fill(0);
-      const cats = ['novilhas', 'garrotes', 'desmama_m', 'desmama_f'];
-      for (let i = 0; i < 12; i++) {
-        let soma = 0;
-        for (const c of cats) soma += (sfMap.get(c)?.[i] || 0);
-        recria[i] = Math.round(soma * recriaCusto * 100) / 100;
-      }
-      fasesNutricao.push(recria);
-    }
-
-    // ENGORDA: distribuir custo em 4 meses antes de cada abate
-    if (custoPorCabEngorda > 0) {
-      const { data: abates } = await supabase
-        .from('lancamentos')
-        .select('data, quantidade')
-        .eq('cliente_id', clienteId!)
-        .eq('fazenda_id', fId)
-        .eq('cenario', 'meta')
-        .eq('tipo', 'abate')
-        .eq('cancelado', false)
-        .gte('data', `${ano}-01-01`)
-        .lte('data', `${ano}-12-31`);
-
-      const engorda = new Array(12).fill(0);
-      for (const ab of (abates || [])) {
-        const mesAbate = Number((ab.data as string).substring(5, 7));
-        if (mesAbate < 1 || mesAbate > 12) continue;
-        const qtd = Math.abs(Number(ab.quantidade) || 0);
-        const custoTotal = qtd * custoPorCabEngorda;
-        const custoMensal = custoTotal / 4;
-        for (let offset = 4; offset >= 1; offset--) {
-          const m = mesAbate - offset;
-          if (m >= 1 && m <= 12) {
-            engorda[m - 1] += custoMensal;
-          }
-        }
-      }
-      for (let i = 0; i < 12; i++) engorda[i] = Math.round(engorda[i] * 100) / 100;
-      fasesNutricao.push(engorda);
-    }
-
-    // ⚠ SÓ HÁ CHAVE SE ALGUMA FASE EXISTE: sem parâmetro, sem linha auto. Fase ausente é zero.
-    if (fasesNutricao.length > 0) {
-      const nutricao = new Array(12).fill(0);
-      for (const fase of fasesNutricao) {
-        for (let i = 0; i < 12; i++) nutricao[i] = Math.round((nutricao[i] + fase[i]) * 100) / 100;
-      }
-      result.set('Nutrição', nutricao);
-    }
-
-    // FRETE EM TRANSFERÊNCIAS: alocado na fazenda destino (transferencia_entrada)
-    if (freteCustoCab > 0) {
-      const { data: entradas } = await supabase
-        .from('lancamentos')
-        .select('data, quantidade')
-        .eq('cliente_id', clienteId!)
-        .eq('fazenda_id', fId)
-        .eq('cenario', 'meta')
-        .eq('tipo', 'transferencia_entrada')
-        .eq('cancelado', false)
-        .gte('data', `${ano}-01-01`)
-        .lte('data', `${ano}-12-31`);
-
-      const frete = new Array(12).fill(0);
-      for (const r of (entradas || [])) {
-        const mes = Number((r.data as string).substring(5, 7));
-        if (mes < 1 || mes > 12) continue;
-        frete[mes - 1] += Math.abs(Number(r.quantidade) || 0) * freteCustoCab;
-      }
-      for (let i = 0; i < 12; i++) frete[i] = Math.round(frete[i] * 100) / 100;
-      result.set('Transferência de Gado entre Fazendas', frete);
-    }
-
-    // COMERCIAL EM ABATES+VENDAS: taxa por cab abatida/vendida → Impostos e Despesas de Abates e Vendas
-    if (comercialCustoCab > 0) {
-      const { data: saidas } = await supabase
-        .from('lancamentos')
-        .select('data, quantidade')
-        .eq('cliente_id', clienteId!)
-        .eq('fazenda_id', fId)
-        .eq('cenario', 'meta')
-        .in('tipo', ['abate', 'venda'])
-        .eq('cancelado', false)
-        .gte('data', `${ano}-01-01`)
-        .lte('data', `${ano}-12-31`);
-
-      const comercial = new Array(12).fill(0);
-      for (const r of (saidas ?? [])) {
-        const mes = Number((r.data as string).substring(5, 7)) - 1;
-        if (mes < 0 || mes > 11) continue;
-        comercial[mes] += Math.abs(Number(r.quantidade)) * comercialCustoCab;
-      }
-      for (let i = 0; i < 12; i++) comercial[i] = Math.round(comercial[i]);
-      result.set('Impostos e Despesas de Abates e Vendas', comercial);
-    }
-
-    return result;
-  };
-
-  // ─── Soma dois Maps de nutrição ──
-  const mergeNutricaoMaps = (target: Map<string, number[]>, source: Map<string, number[]>) => {
-    for (const [key, arr] of source) {
-      if (!target.has(key)) {
-        target.set(key, [...arr]);
-      } else {
-        const existing = target.get(key)!;
-        for (let i = 0; i < 12; i++) existing[i] = Math.round((existing[i] + arr[i]) * 100) / 100;
-      }
-    }
-  };
-
-  // ─── Load parametros de nutrição + rebanho META → calcular linhas ──
-  const loadNutricao = useCallback(async () => {
-    if (!enabled || !clienteId) { setLancamentosNutricao(new Map()); return; }
-
-    // Global: consolidar todas as fazendas operacionais
-    if (!isValidFazenda(fazendaId)) {
-      if (fazendasOperacionais.length === 0) { setLancamentosNutricao(new Map()); return; }
-      try {
-        const consolidated = new Map<string, number[]>();
-        const results = await Promise.all(
-          fazendasOperacionais.map(f => calcNutricaoFazenda(f.id))
-        );
-        for (const r of results) mergeNutricaoMaps(consolidated, r);
-        setLancamentosNutricao(consolidated);
-      } catch (e: any) {
-        console.error('Erro ao calcular nutrição global:', e);
-        setLancamentosNutricao(new Map());
-      }
-      return;
-    }
-
-    // Fazenda individual
-    try {
-      const result = await calcNutricaoFazenda(fazendaId!);
-      setLancamentosNutricao(result);
-    } catch (e: any) {
-      console.error('Erro ao calcular nutrição:', e);
-      setLancamentosNutricao(new Map());
-    }
-  }, [enabled, clienteId, fazendaId, fazendas, ano]);
-
-  useEffect(() => { loadNutricao(); }, [loadNutricao]);
 
   // ─── Build grid: plano + saved values + dividendos ────────
   const buildGrid = useCallback((): SubcentroGrid[] => {
@@ -761,11 +282,13 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string, enabl
       }
     }
 
-    // Overlay saved values — agrega independente de fazenda_id. O key primário é (centro_custo||subcentro);
-    // se o centro_custo salvo não bate com o plano, cai em fallback por subcentro para não perder valor.
+    // Overlay saved values — agrega independente de fazenda_id. P109: a chave é a CONTA DO PLANO (`plano_conta_id` → a linha dela);
+    // só a linha cuja conta não está no plano carregado cai no texto (centro_custo||subcentro, e o fallback por subcentro).
+    const keyDaConta = new Map<string, string>();
+    for (const p of planoContas) if (p.subcentro) keyDaConta.set(p.id, `${p.centro_custo}||${p.subcentro}`);
     for (const r of savedData) {
       if (!r.subcentro) continue;
-      let key = `${r.centro_custo}||${r.subcentro}`;
+      let key = (r.plano_conta_id ? keyDaConta.get(r.plano_conta_id) : undefined) ?? `${r.centro_custo}||${r.subcentro}`;
       if (!map.has(key)) {
         const fallbackKey = keysBySubcentro.get(r.subcentro);
         if (fallbackKey) {
@@ -795,6 +318,27 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string, enabl
   // Grid META já materializado — consumido pelo Bloco 1 e demais blocos
   // que dependem do shape SubcentroGrid[]. Reflete o ano passado ao hook.
   const gridMeta2026 = useMemo(() => buildGrid(), [buildGrid]);
+
+  /* P109 — o grid de meta CONSOLIDADO (auto do banco + digitado, a regra única de juntar). Subcentro com auto fora do plano semeado
+     ganha a linha da conta do plano (a mesma da fn_meta_linhas), nunca some. */
+  const orfaoDoPlano = useCallback((sub: string, meses: number[]): SubcentroGrid => {
+    const p = planoContas.find((c) => c.subcentro === sub);
+    return {
+      macro_custo: p?.macro_custo ?? null, grupo_custo: p?.grupo_custo ?? null, centro_custo: p?.centro_custo ?? '(Sem centro)',
+      subcentro: sub, escopo_negocio: p?.escopo_negocio ?? null, ordem_exibicao: p?.ordem_exibicao ?? 9999, meses: [...meses],
+    };
+  }, [planoContas]);
+  const buildGridConsolidado = useCallback(
+    (): SubcentroGrid[] => gridMetaConsolidado(buildGrid(), mapasMeta, orfaoDoPlano),
+    [buildGrid, mapasMeta, orfaoDoPlano],
+  );
+  const gridMetaConsolidado2026 = useMemo(() => buildGridConsolidado(), [buildGridConsolidado]);
+  /** O mesmo grid em COMPETÊNCIA (só com `comCompetencia`): o digitado + o auto em competência (sem caixa puro: financiamento,
+   *  adiantamento de boitel e projetos não entram — a fn_meta_linhas não os devolve nesse regime). */
+  const buildGridConsolidadoCompetencia = useCallback(
+    (): SubcentroGrid[] => gridMetaConsolidado(buildGrid(), mapasMetaCompetencia, orfaoDoPlano),
+    [buildGrid, mapasMetaCompetencia, orfaoDoPlano],
+  );
 
   // ─── Import realizado from previous year (returns grid, does NOT save) ──
   const importarRealizado = useCallback(async (): Promise<SubcentroGrid[] | null> => {
@@ -1147,10 +691,14 @@ export function usePlanejamentoFinanceiro(ano: number, fazendaId?: string, enabl
     lancamentosNutricao,
     lancamentosProjetos,
     gridMeta2026,
+    mapasMeta,
+    buildGridConsolidado,
+    gridMetaConsolidado2026,
+    buildGridConsolidadoCompetencia,
     lancFin2025,
     lancFin2025Loading,
-    reloadNutricao: loadNutricao,
-    reloadProjetos: () => qc.invalidateQueries({ queryKey: ['ppf:projetos'] }),
+    reloadNutricao: recarregarMeta,
+    reloadProjetos: recarregarMeta,
     reload: loadSaved,
   };
 }

@@ -21,6 +21,7 @@ import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Download, Save, ChevronDown, ChevronRight, AlertTriangle, Info, Settings, ClipboardList, Bookmark, Camera, ClipboardCheck } from 'lucide-react';
 import { ResumoExecMetaModal } from '@/components/financeiro/ResumoExecMetaModal';
+import { autoDoSubcentro, ROTULO_REGIME } from '@/lib/financeiro/metaLinhas';
 
 const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
@@ -39,29 +40,8 @@ const MACROS_EXCLUIDOS = new Set(['Transferências']);
 
 const ALL_MACRO_ORDER = [...MACROS_ENTRADA_ORDERED, ...MACROS_SAIDA_ORDERED];
 
-const SUBCENTROS_REBANHO = new Set([
-  'Abates de Machos', 'Abates de Fêmeas',
-  'Venda de Desmama Machos', 'Venda de Desmama Fêmeas',
-  'Venda de Machos Adultos', 'Venda de Fêmeas Adultas',
-  'Venda em Boitel',
-  'Adiantamento de Boitel',
-  'Investimento Compra Bovinos Machos', 'Investimento Compra Bovinos Fêmeas',
-]);
-
-const SUBCENTROS_FINANCIAMENTO = new Set([
-  'Amortização Financiamento Pecuária', 'Amortização Financiamento Agricultura',
-  'Juros de Financiamento Pecuária', 'Juros de Financiamento Agricultura',
-]);
-
-const SUBCENTROS_NUTRICAO = new Set([
-  'Nutrição',
-  'Despesas Comerciais Pecuária',
-  'Impostos e Despesas de Abates e Vendas',
-  'Transferência de Gado entre Fazendas',
-]);
-
-const SUBCENTROS_AUTO = new Set([...SUBCENTROS_REBANHO, ...SUBCENTROS_FINANCIAMENTO, ...SUBCENTROS_NUTRICAO]);
-// Investment subcentros are added dynamically from lancamentosProjetos keys
+/* P109 — as listas de NOMES de subcentro auto (rebanho/financiamento/nutrição) morreram: o auto de um subcentro é o que a
+   fn_meta_linhas devolve para a CONTA dele (`autoDoSubcentro`, a regra única de juntar). Sem auto no banco, a linha é só digitada. */
 
 /** Subcentros exclusivos da fazenda Administrativo */
 const SUBCENTROS_ADM_ONLY = new Set([
@@ -170,7 +150,7 @@ export function PlanejamentoFinanceiroTab({ onBack, ano: anoProp, mesAte: _mesAt
 
   const { clienteAtual } = useCliente();
 
-  const { loading, buildGrid, dividendos, importarSubcentro, salvarGrid, salvarCelula, salvarVersao, listarVersoes, restaurarVersao, saldoInicial, lancamentosRebanho, lancamentosFinanciamento, lancamentosNutricao, lancamentosProjetos, reloadNutricao, reloadProjetos } = usePlanejamentoFinanceiro(ano, fazendaId);
+  const { loading, buildGrid, dividendos, importarSubcentro, salvarGrid, salvarCelula, salvarVersao, listarVersoes, restaurarVersao, saldoInicial, lancamentosProjetos, mapasMeta, reloadNutricao, reloadProjetos } = usePlanejamentoFinanceiro(ano, fazendaId);
 
   const [grid, setGrid] = useState<SubcentroGrid[]>([]);
 
@@ -235,16 +215,8 @@ export function PlanejamentoFinanceiroTab({ onBack, ano: anoProp, mesAte: _mesAt
       const centro = g.centro_custo || '(Sem centro)';
 
       // For auto subcentros, effective meses = auto + ajuste
-      const isProjeto = lancamentosProjetos.has(g.subcentro);
-      const isAuto = SUBCENTROS_AUTO.has(g.subcentro) || isProjeto;
-      const isRebanho = SUBCENTROS_REBANHO.has(g.subcentro);
-      const isNutricao = SUBCENTROS_NUTRICAO.has(g.subcentro);
-      const autoMeses = isAuto
-        ? (isRebanho ? lancamentosRebanho.get(g.subcentro)
-          : isNutricao ? lancamentosNutricao.get(g.subcentro)
-          : isProjeto ? lancamentosProjetos.get(g.subcentro)
-          : lancamentosFinanciamento.get(g.subcentro)) || new Array(12).fill(0)
-        : null;
+      const autoMeses = autoDoSubcentro(g.subcentro, mapasMeta);
+      const isAuto = autoMeses !== null;
       const effectiveMeses = isAuto
         ? g.meses.map((v, i) => v + (autoMeses?.[i] || 0))
         : g.meses;
@@ -291,7 +263,7 @@ export function PlanejamentoFinanceiroTab({ onBack, ano: anoProp, mesAte: _mesAt
       const ib = ALL_MACRO_ORDER.indexOf(b.nome);
       return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
     });
-  }, [gridComTodosDividendos, lancamentosRebanho, lancamentosFinanciamento, lancamentosNutricao, lancamentosProjetos]);
+  }, [gridComTodosDividendos, mapasMeta]);
 
   /* ── Filtros de macros por tipo de fazenda ── */
   const macrosEntradaPermitidos = useMemo(() => {
@@ -487,14 +459,9 @@ export function PlanejamentoFinanceiroTab({ onBack, ano: anoProp, mesAte: _mesAt
                     </tr>
 
                     {centroOpen && centro.subs.map((sub, subIdx) => {
-                      const isRebanho = SUBCENTROS_REBANHO.has(sub.subcentro);
-                      const isFinanciamento = SUBCENTROS_FINANCIAMENTO.has(sub.subcentro);
-                      const isNutricao = SUBCENTROS_NUTRICAO.has(sub.subcentro);
                       const isProjeto = lancamentosProjetos.has(sub.subcentro);
-                      const isAuto = isRebanho || isFinanciamento || isNutricao || isProjeto;
-                      const autoMeses = isAuto
-                        ? (isRebanho ? lancamentosRebanho.get(sub.subcentro) : isNutricao ? lancamentosNutricao.get(sub.subcentro) : isProjeto ? lancamentosProjetos.get(sub.subcentro) : lancamentosFinanciamento.get(sub.subcentro)) || new Array(12).fill(0)
-                        : null;
+                      const autoMeses = autoDoSubcentro(sub.subcentro, mapasMeta);
+                      const isAuto = autoMeses !== null;
                       const subBg = subIdx % 2 === 0 ? BG_CARD : BG_DYN;
                       const bloqueio = isSubcentroBloqueado(sub.subcentro, macro.nome, grupo.nome);
 
@@ -611,7 +578,11 @@ export function PlanejamentoFinanceiroTab({ onBack, ano: anoProp, mesAte: _mesAt
     <div className="w-full px-2 sm:px-4 animate-fade-in flex flex-col" style={{ height: 'calc(100vh - 60px)' }}>
       {/* Header — sticky, never scrolls */}
       <div className="sticky top-0 z-30 bg-background py-2 flex flex-wrap items-center gap-2 shrink-0">
-        <span className="text-xs font-semibold text-card-foreground whitespace-nowrap">Fluxo de Caixa META</span>
+        {/* P109 — o regime da meta desta tela, sempre no mesmo lugar: embaixo do título (não alarga a barra, que quebra linha) */}
+        <span className="flex flex-col leading-tight">
+          <span className="text-xs font-semibold text-card-foreground whitespace-nowrap">Fluxo de Caixa META</span>
+          <span data-testid="meta-regime" className="text-[10px] text-muted-foreground whitespace-nowrap">{ROTULO_REGIME.caixa}</span>
+        </span>
         {!isAnoExterno && (
           <Select value={String(ano)} onValueChange={v => setAno(Number(v))}>
             <SelectTrigger className="w-[100px] h-8 text-xs"><SelectValue /></SelectTrigger>

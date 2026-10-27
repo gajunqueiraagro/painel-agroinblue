@@ -114,9 +114,9 @@ import {
   ORDEM_CENTROS_DEDUCOES_RECEITA,
 } from '@/lib/financeiro/classificacao';
 import type { SubcentroGrid } from '@/hooks/usePlanejamentoFinanceiro';
-import { composeGridMetaConsolidado } from '@/lib/painelConsultor/composeGridMetaConsolidado';
 import { carregarLancFinAnoAntReal } from '@/lib/painelConsultor/lancFinHistoricoLoader';
 import { carregarLancFinAnoCorrenteReal } from '@/lib/painelConsultor/lancFinAnoCorrenteLoader';
+import { ROTULO_REGIME } from '@/lib/financeiro/metaLinhas';
 import {
   agregaReceitaPecZootComp,
   agregaDeducoesZootComp,
@@ -396,28 +396,16 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
 
   // Planejamento financeiro do ano (grid META + saldo inicial + extras).
   const planFin = usePlanejamentoFinanceiro(ano, isGlobal ? undefined : fazendaAtual?.id);
-  const grid = useMemo(() => planFin.buildGrid(), [planFin.buildGrid, planFin.loading]);
+  /* P109 — a grade de meta é a CONSOLIDADA do hub (auto da fn_meta_linhas + digitado); os 4 "extras" saíram do builder */
+  const grid = planFin.gridMetaConsolidado2026;
 
   // Grid META consolidado (base + 4 maps de extras: rebanho/financiamento/
   // nutrição/projetos). Necessário para o BlocoResumoExecutivo computar Meta
   // com todas as fontes auto — sem isso, Custeio Pec/Receita Pec/Investimentos
   // /Amortizações META ficam subestimados (caso do bug detectado em NJ Pureza
   // 2026). Espelho exato do padrão de V2PlanejamentoVisaoGeral.
-  const gridMetaConsolidado = useMemo(
-    () => composeGridMetaConsolidado(planFin.gridMeta2026, {
-      lancamentosRebanho: planFin.lancamentosRebanho,
-      lancamentosFinanciamento: planFin.lancamentosFinanciamento,
-      lancamentosNutricao: planFin.lancamentosNutricao,
-      lancamentosProjetos: planFin.lancamentosProjetos,
-    }),
-    [
-      planFin.gridMeta2026,
-      planFin.lancamentosRebanho,
-      planFin.lancamentosFinanciamento,
-      planFin.lancamentosNutricao,
-      planFin.lancamentosProjetos,
-    ],
-  );
+  /* P109 — o grid CONSOLIDADO vem pronto do hub (auto da fn_meta_linhas + digitado, a regra única de juntar) */
+  const gridMetaConsolidado = planFin.gridMetaConsolidado2026;
 
   // financeiro_lancamentos_v2 ano-1 e ano-corrente (REAL).
   const [lancFinAnoAnt, setLancFinAnoAnt] = useState<FinanceiroLancamento[] | null>(null);
@@ -517,12 +505,6 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     grid: grid as any,
     saldoInicial: planFin.saldoInicial,
-    extrasGrid: {
-      lancamentosRebanho: planFin.lancamentosRebanho,
-      lancamentosFinanciamento: planFin.lancamentosFinanciamento,
-      lancamentosNutricao: planFin.lancamentosNutricao,
-      lancamentosProjetos: planFin.lancamentosProjetos,
-    },
     zootComp: zootComp ?? undefined,
     lancFinAnoAnt: lancFinAnoAnt ?? undefined,
     lancFinAnoCorrente: lancFinAnoCorrente ?? undefined,
@@ -531,8 +513,6 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
   }), [
     ano, mesAlvo, modo, isGlobal, fazendaAtual?.id, fazendaAtual?.nome,
     painel, grid, planFin.saldoInicial,
-    planFin.lancamentosRebanho, planFin.lancamentosFinanciamento,
-    planFin.lancamentosNutricao, planFin.lancamentosProjetos,
     zootComp, lancFinAnoAnt, lancFinAnoCorrente,
   ]);
 
@@ -640,7 +620,9 @@ export default function V2FechamentoPeriodo({ periodo, onPeriodoChange }: Props)
   return (
     <div className="fechamento-container px-4 py-4">
       {/* PR-PDF-2: export programático — fora do print (.no-print). */}
-      <div className="no-print mb-3 flex justify-end">
+      <div className="no-print mb-3 flex items-center justify-between gap-2">
+        {/* P109 — o regime da meta deste fechamento, sempre no mesmo lugar */}
+        <span data-testid="meta-regime" className="text-xs text-muted-foreground whitespace-nowrap">{ROTULO_REGIME.caixa}</span>
         <button
           type="button"
           onClick={handleExportarPdf}
