@@ -16,7 +16,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const rpc = vi.hoisted(() => vi.fn());
 vi.mock('@/integrations/supabase/client', () => ({ supabase: { rpc } }));
 
-import { AVISOS_DA_LISTA, avisoDaViradaDeAno, avisosDaLista, carregarGavetaVG, filtrosDaLista, recarregarGavetaVG } from './visaoGeralGaveta';
+import { AVISOS_DA_LISTA, COLUNAS_ORDEM_GAVETA, avisoDaViradaDeAno, avisosDaLista, carregarGavetaVG, filtrosDaLista, proximaOrdem, recarregarGavetaVG } from './visaoGeralGaveta';
 
 const CTX = { clienteId: 'cli', de: '2025-11-01', ate: '2026-10-31', contas: ['c1'], fazendas: ['f1'], atividade: null, hoje: '2026-10-23',
   status: ['previsto', 'agendado'], comVencidos: false };
@@ -27,10 +27,26 @@ beforeEach(() => { rpc.mockReset(); rpc.mockImplementation(async (_: string, a: 
 describe('gaveta (lib)', () => {
   it('F1 o pedido', async () => {
     await carregarGavetaVG(CTX, P, 3);
-    expect(rpc).toHaveBeenCalledWith('fn_vg_gaveta', {
+    expect(rpc).toHaveBeenCalledWith('fn_vg_gaveta_ordenada', {
       p_cliente: 'cli', p_de: '2025-11-01', p_ate: '2026-10-31', p_mes: '2026-02', p_lado: 'saida', p_caminho: P.caminho, p_criterio: 'acumulado',
       p_contas: ['c1'], p_fazendas: ['f1'], p_atividade: null, p_hoje: '2026-10-23', p_status: ['previsto', 'agendado'], p_incluir_vencidos: false,
-      p_pagina: 3, p_por_pagina: 500 });
+      p_pagina: 3, p_por_pagina: 500, p_ordem: null, p_sentido: 'asc' });
+  });
+
+  it('F1b (P119) a ORDEM vai ao banco (coluna e sentido) — inclusive no recarregar das páginas abertas', async () => {
+    await carregarGavetaVG(CTX, { ...P, ordem: { coluna: 'favorecido', sentido: 'desc' } }, 2);
+    expect(rpc).toHaveBeenLastCalledWith('fn_vg_gaveta_ordenada', expect.objectContaining({ p_pagina: 2, p_ordem: 'favorecido', p_sentido: 'desc' }));
+    rpc.mockClear();
+    await recarregarGavetaVG(CTX, { ...P, ordem: { coluna: 'valor', sentido: 'asc' } }, 2);
+    expect(rpc.mock.calls.map((c) => [c[1].p_pagina, c[1].p_ordem, c[1].p_sentido])).toEqual([[1, 'valor', 'asc'], [2, 'valor', 'asc']]);
+  });
+
+  it('F1c (P119) o clique: outra coluna começa crescente; a mesma alterna crescente ↔ decrescente', () => {
+    expect(proximaOrdem(null, 'vencimento')).toEqual({ coluna: 'vencimento', sentido: 'asc' });
+    expect(proximaOrdem({ coluna: 'vencimento', sentido: 'asc' }, 'vencimento')).toEqual({ coluna: 'vencimento', sentido: 'desc' });
+    expect(proximaOrdem({ coluna: 'vencimento', sentido: 'desc' }, 'vencimento')).toEqual({ coluna: 'vencimento', sentido: 'asc' });
+    expect(proximaOrdem({ coluna: 'vencimento', sentido: 'desc' }, 'conta')).toEqual({ coluna: 'conta', sentido: 'asc' });
+    expect(COLUNAS_ORDEM_GAVETA).toEqual(['competencia', 'vencimento', 'pagamento', 'status', 'favorecido', 'descricao', 'conta', 'valor']);
   });
 
   it('F2 recarregar relê as páginas abertas', async () => {

@@ -243,7 +243,10 @@ const CENARIOS = [
      "virada" — período nov/25–out/26 no ACUMULADO do modal: a frase da virada do ano, com os meses do caso; "fatura" (`&fatura=1`): a 5ª
      frase, o pagamento da fatura do cartão — a mais longa das cinco. */
   ...[['filhos', []], ['523', [0, 0, 0]], ['longo', [0, 0, 1]], ['vazio', [0, 0, 3]], ['contas', [0, 0, 3], '&contas=2'],
-      ['virada', [0, 0, 3], '&faixa=per&de=2025-11&ate=2026-10', true], ['fatura', [0, 0, 3], '&fatura=1']].map(([n, descer, extra = '', acum = false]) => ({
+      ['virada', [0, 0, 3], '&faixa=per&de=2025-11&ate=2026-10', true], ['fatura', [0, 0, 3], '&fatura=1'],
+      /* P119 — a lista ORDENADA (a seta no cabeçalho): "longo" por Valor decrescente (o R$ 99.999.999,99 em cima, a seta ▼ no "VALOR"
+         alinhado à direita) e o "523" por Favorecido crescente (▲) */
+      ['longo-ordem', [0, 0, 1], '', false, ['valor', 'valor']], ['523-ordem', [0, 0, 0], '', false, ['favorecido']]].map(([n, descer, extra = '', acum = false, ordenar = []]) => ({
     nome: `visao-geral-gaveta-${n}`, url: `tela=visao-geral&barra=0${extra}`, tamanhos: TAMANHOS_DA_VG, regiao: '[data-testid="modal-analise"]',
     /* P103 — as 8 colunas do subcentro ("longo": favorecido de 60 letras, R$ 99.999.999,99, todos os status): cada texto a 6px do vizinho */
     folgaCelulas: '[data-testid="gaveta-lista"] table, table[data-testid="gaveta-total-fixo"]',
@@ -253,6 +256,7 @@ const CENARIOS = [
       if (acum) { await p.locator('[data-testid="analise-tabela"]').getByText('Acum.', { exact: true }).dispatchEvent('click'); await p.waitForTimeout(600); }
       await p.locator('[data-testid="analise-lanc-total"]').dispatchEvent('click'); await p.locator('[data-testid="gaveta"]').waitFor(); await p.waitForTimeout(400);
       for (const i of descer) { await p.locator(`[data-testid="gaveta-linha-${i}"]`).dispatchEvent('click'); await p.waitForTimeout(350); }
+      for (const c of ordenar) { await p.locator(`[data-testid="gaveta-ordem-${c}"]`).dispatchEvent('click'); await p.waitForTimeout(350); }
       await p.waitForTimeout(400); } })),
   /* P71 — o seletor de Fazenda com o nome MAIS LONGO (43 letras; o maior real tem 18): largura fixa, o nome termina em "…" com o title
      inteiro, e a barra não cresce */

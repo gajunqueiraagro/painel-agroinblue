@@ -89,10 +89,10 @@ let gaveta: (args: any) => GavetaVG = () => GAV_FILHOS;
 beforeEach(() => {
   (globalThis as any).ResizeObserver ??= class { observe() {} disconnect() {} };
   rpc.mockReset(); resposta = ANALISE; gaveta = () => GAV_FILHOS;
-  rpc.mockImplementation(async (fn: string, args: any) => ({ data: fn === 'fn_vg_gaveta' ? gaveta(args) : resposta, error: null }));
+  rpc.mockImplementation(async (fn: string, args: any) => ({ data: fn === 'fn_vg_gaveta_ordenada' ? gaveta(args) : resposta, error: null }));
 });
 const ultimo = () => rpc.mock.calls.filter((c) => c[0] === 'fn_vg_analise').at(-1)![1];
-const daGaveta = () => rpc.mock.calls.filter((c) => c[0] === 'fn_vg_gaveta').map((c) => c[1]);
+const daGaveta = () => rpc.mock.calls.filter((c) => c[0] === 'fn_vg_gaveta_ordenada').map((c) => c[1]);
 const passar = () => act(async () => { for (let i = 0; i < 6; i += 1) await Promise.resolve(); });
 const abrir = async (grupo: string | null = 'Custeio', onLanc = vi.fn(), extra: Partial<React.ComponentProps<typeof ModalAnaliseVG>> = {}) => {
   const r = render(<ModalAnaliseVG alvo={{ lado: 'saida', grupo, am: '2026-09' }} ctx={CTX} rotuloContas="Caixa + cartões" onFechar={() => {}} onLancamentos={onLanc} {...extra} />);
@@ -245,6 +245,68 @@ describe('modal de análise', () => {
     fireEvent.click(screen.getByTestId('gaveta-caminho-3'));
     await passar();
     expect(screen.getByTestId('gaveta-vazio').textContent).toBe('Nenhum lançamento neste item em set/26.');
+  });
+
+  /* P119 — o banco falso ORDENA e PAGINA como o de verdade (`fn_vg_gaveta_ordenada`): 523 lançamentos, o MAIOR (R$ 99.999,00) é o
+     511º na ordem de sempre — na página 2. Ordenar só a página carregada (as 500 primeiras) nunca o põe em cima: a mutação "ordenar no
+     front" derruba este teste. */
+  const BANCO_523 = Array.from({ length: 523 }, (_, i) => lanc(1, { chave: `b${i}`, lancamento_id: `b${i}`, valor: i === 510 ? 99999 : i + 1,
+    favorecido: `Fav ${String(522 - i).padStart(3, '0')}` }));
+  const bancoOrdenado = (a: any): GavetaVG => {
+    const ord = [...BANCO_523];
+    const s = a.p_sentido === 'desc' ? -1 : 1;
+    if (a.p_ordem === 'valor') ord.sort((x, y) => (x.valor - y.valor) * s);
+    if (a.p_ordem === 'favorecido') ord.sort((x, y) => (x.favorecido < y.favorecido ? -1 : 1) * s);
+    const pp = a.p_por_pagina, pg = a.p_pagina;
+    return { ...GAV_FOLHA(), qtd: 523, total: 136915.0, medio: 261.79, resumo: { tipo: 'favorecido', linhas: [{ rotulo: 'Fav 012', qtd: 1, valor: 99999 }] },
+      linhas: ord.slice((pg - 1) * pp, pg * pp), total_linhas: 523, pagina: pg, por_pagina: pp, paginas: Math.ceil(523 / pp) };
+  };
+
+  it('G7 (P119) ordenar pelo cabeçalho: o BANCO ordena antes da página (523 linhas); crescente, depois decrescente, com a seta; total, contagem e resumo não mudam; trocar de nó volta ao padrão', async () => {
+    gaveta = bancoOrdenado;
+    await abrir();
+    fireEvent.click(screen.getByTestId('analise-lanc-1'));
+    await passar();
+    fireEvent.click(screen.getByTestId('gaveta-irmao-0'));   /* o subcentro */
+    await passar();
+    const cabeca = () => [screen.getByTestId('gaveta-qtd').textContent, screen.getByTestId('gaveta-rodape-total').textContent, screen.getByTestId('gaveta-resumo').textContent];
+    const antes = cabeca();
+    expect(daGaveta().at(-1)).toMatchObject({ p_caminho: SUB, p_ordem: null, p_sentido: 'asc' });
+    /* padrão ao abrir: o de sempre, nenhuma seta */
+    for (const c of ['competencia', 'vencimento', 'pagamento', 'status', 'favorecido', 'descricao', 'conta', 'valor']) {
+      expect(screen.getByTestId(`gaveta-seta-${c}`).textContent).toBe('');
+      expect(screen.getByTestId(`gaveta-ordem-${c}`).closest('th')!.getAttribute('aria-sort')).toBe('none');
+    }
+    fireEvent.click(screen.getByTestId('gaveta-ordem-valor'));
+    await passar();
+    expect(daGaveta().at(-1)).toMatchObject({ p_ordem: 'valor', p_sentido: 'asc', p_pagina: 1 });
+    expect(screen.getByTestId('gaveta-seta-valor').textContent).toBe('▲');
+    expect(screen.getByTestId('gaveta-linha-0').textContent).toContain('R$ 1,00');
+    fireEvent.click(screen.getByTestId('gaveta-ordem-valor'));
+    await passar();
+    expect(daGaveta().at(-1)).toMatchObject({ p_ordem: 'valor', p_sentido: 'desc', p_pagina: 1 });
+    expect(screen.getByTestId('gaveta-seta-valor').textContent).toBe('▼');
+    expect(screen.getByTestId('gaveta-ordem-valor').closest('th')!.getAttribute('aria-sort')).toBe('descending');
+    /* o maior de TODOS (estava na página 2 na ordem de sempre) vem em cima */
+    expect(screen.getByTestId('gaveta-linha-0').textContent).toContain('R$ 99.999,00');
+    expect(cabeca()).toEqual(antes);
+    /* "Mais" continua na MESMA ordem (a página 2 do banco ordenado) */
+    fireEvent.click(screen.getByTestId('gaveta-mais'));
+    await passar();
+    expect(daGaveta().at(-1)).toMatchObject({ p_ordem: 'valor', p_sentido: 'desc', p_pagina: 2 });
+    expect(screen.getByTestId('gaveta-linha-522').textContent).toContain('R$ 1,00');
+    /* outra coluna começa crescente; a seta muda de lugar */
+    fireEvent.click(screen.getByTestId('gaveta-ordem-favorecido'));
+    await passar();
+    expect(daGaveta().at(-1)).toMatchObject({ p_ordem: 'favorecido', p_sentido: 'asc', p_pagina: 1 });
+    expect(screen.getByTestId('gaveta-seta-valor').textContent).toBe('');
+    expect(screen.getByTestId('gaveta-seta-favorecido').textContent).toBe('▲');
+    expect(screen.getByTestId('gaveta-linha-0').textContent).toContain('Fav 000');
+    expect(cabeca()).toEqual(antes);
+    /* trocar de nó volta ao padrão */
+    fireEvent.click(screen.getByTestId('gaveta-caminho-3'));
+    await passar();
+    expect(daGaveta().at(-1)).toMatchObject({ p_ordem: null, p_sentido: 'asc' });
   });
 
   it('G6 subcentro: datas, status no chip da casa, Pgto. "—" no não pago, Pagos · Em aberto do banco', async () => {

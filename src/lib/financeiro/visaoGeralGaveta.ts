@@ -1,7 +1,8 @@
 /**
  * FIN-VISAO-GERAL-01 PR 5 (SPEC §5, §7) — a GAVETA DE LANÇAMENTOS do modal de análise: tipos, o pedido ao banco e os filtros da
  * "lista de Lançamentos". A tela NUNCA soma: total, nº de lançamentos, valor médio, resumo, % dos filhos e cada linha vêm prontos da
- * `fn_vg_gaveta` — que lê as MESMAS linhas (por parte) da série do modal, então o total da gaveta é o valor do nó.
+ * `fn_vg_gaveta_ordenada` (P119: a de sempre + a ordem das linhas) — que lê as MESMAS linhas (por parte) da série do modal, então o
+ * total da gaveta é o valor do nó.
  *   · Nó com filhos: a lista são os filhos (clique desce). Subcentro: os lançamentos, paginados (até 500 por página).
  *   · ⚠ REGRA DO ID: a parte 2+ da classificação dividida chega com a chave "id#2"; abrir é SEMPRE pelo `lancamento_id` que o banco
  *     manda junto (nunca pela chave da linha).
@@ -36,16 +37,27 @@ export interface GavetaVG {
    *  (111949: aqui não entram — P82) */
   lista?: { vencidos_fora: number; transf_internas: number; faturas_cartao?: number } | null;
 }
-/** o que a gaveta pede: o nó, o mês e o critério do modal (a janela); o resto vem da tela */
-export interface PedidoGavetaVG { lado: LadoVG; caminho: CaminhoVG; am: string; criterio: CriterioVG }
+/** P119 — as colunas da lista de lançamentos que ordenam (na ordem do cabeçalho) e a ordem escolhida; nula = a de sempre (do banco) */
+export const COLUNAS_ORDEM_GAVETA = ['competencia', 'vencimento', 'pagamento', 'status', 'favorecido', 'descricao', 'conta', 'valor'] as const;
+export type ColunaOrdemGavetaVG = (typeof COLUNAS_ORDEM_GAVETA)[number];
+export interface OrdemGavetaVG { coluna: ColunaOrdemGavetaVG; sentido: 'asc' | 'desc' }
+/** o clique no cabeçalho: outra coluna começa crescente; a mesma alterna crescente ↔ decrescente */
+export function proximaOrdem(atual: OrdemGavetaVG | null, coluna: ColunaOrdemGavetaVG): OrdemGavetaVG {
+  return atual?.coluna === coluna && atual.sentido === 'asc' ? { coluna, sentido: 'desc' } : { coluna, sentido: 'asc' };
+}
+
+/** o que a gaveta pede: o nó, o mês e o critério do modal (a janela) e a ordem das linhas (P119); o resto vem da tela */
+export interface PedidoGavetaVG { lado: LadoVG; caminho: CaminhoVG; am: string; criterio: CriterioVG; ordem?: OrdemGavetaVG | null }
 
 export const ehLancamento = (l: LancamentoGavetaVG | FilhoGavetaVG): l is LancamentoGavetaVG => 'lancamento_id' in l;
 
 export async function carregarGavetaVG(ctx: ContextoAnaliseVG, p: PedidoGavetaVG, pagina = 1): Promise<GavetaVG> {
-  const { data, error } = await (supabase.rpc as any)('fn_vg_gaveta', {
+  /* P119 — a ORDEM é do banco, antes da página (a gaveta é paginada: ordenar só a página carregada mostraria a ordem errada) */
+  const { data, error } = await (supabase.rpc as any)('fn_vg_gaveta_ordenada', {
     p_cliente: ctx.clienteId, p_de: ctx.de, p_ate: ctx.ate, p_mes: p.am, p_lado: p.lado, p_caminho: p.caminho, p_criterio: p.criterio,
     p_contas: ctx.contas, p_fazendas: ctx.fazendas, p_atividade: ctx.atividade, p_hoje: ctx.hoje,
     p_status: ctx.status, p_incluir_vencidos: ctx.comVencidos, p_pagina: pagina, p_por_pagina: POR_PAGINA_GAVETA,
+    p_ordem: p.ordem?.coluna ?? null, p_sentido: p.ordem?.sentido ?? 'asc',
   });
   if (error) throw new Error(error.message);
   return data as GavetaVG;
