@@ -278,8 +278,10 @@ function BotaoSeta({ rotulo, testid, desligado, onClick, children }: { rotulo: s
    P100 item 5: cada coluna numérica tem a largura do PIOR caso na fonte do total (negrito, 9,5px, tabular) + 8px de folga —
    "R$ 99.999.999,99" (valor e meta), "−R$ 99.999.999,99" (Dif.), "+999,9%" e o botão "99999 lanç. ›"; a sobra é do nome ("…" + title).
    A direita: subcentro (o resto) · centro (curto, cinza, "…" + title; some quando a seleção é um centro) · os números · lanç. */
-const LARG_ESQ = [92, 92, 98, 46];
-const LARG_DIR = [50, 92, 92, 98, 46, 66];
+/* P113 — o "%" a 54px: "+999,9%" no negrito do total pede ~43px de conteúdo + 8 do padding; com 46 ele saía 4,8px da célula
+   (o gate numero-vaza do P92 acusou na régua de saídas) */
+const LARG_ESQ = [92, 92, 98, 54];
+const LARG_DIR = [50, 92, 92, 98, 54, 66];
 function Colunas({ larguras }: { larguras: number[] }) {
   return <colgroup><col />{larguras.map((w, i) => <col key={i} style={{ width: w }} />)}</colgroup>;
 }

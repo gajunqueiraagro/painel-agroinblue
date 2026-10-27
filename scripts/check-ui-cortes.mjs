@@ -30,7 +30,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { filtroRapido } from './ui-gate-rapido.mjs';
-import { aplicarInterruptorNumeroVaza } from './ui-cortes/regraNumeroVaza.mjs';
 
 const AQUI = path.dirname(fileURLToPath(import.meta.url));
 const EXCECOES = [];   // { tela, regra, texto } — vazia por decisao do Gabriel (19/10/2026)
@@ -997,12 +996,7 @@ try {
     if (cen.tabelaMinima) daRolagem.push(...(await p.evaluate(medirTabelaMinima, cen.tabelaMinima)));
     if (cen.semRolarVertical) daRolagem.push(...(await p.evaluate(medirSemRolarVertical, cen.semRolarVertical)));
     if (cen.rotulosSvg) daRolagem.push(...(await p.evaluate(medirRotulosSvg, cen.rotulosSvg)));
-    if (cen.folgaCelulas) {
-      /* P113 — a `numero-vaza` pode estar desligada NESTE cenário (lista em ui-cortes/regraNumeroVaza.mjs); o aviso sai sempre que pula */
-      const daFolga = aplicarInterruptorNumeroVaza(cen.nome, await p.evaluate(medirFolgaCelulas, cen.folgaCelulas));
-      if (daFolga.aviso) console.log(`  ${cen.nome} [${w}x${h}] ${daFolga.aviso}`);
-      daRolagem.push(...daFolga.achados);
-    }
+    if (cen.folgaCelulas) daRolagem.push(...(await p.evaluate(medirFolgaCelulas, cen.folgaCelulas)));
     if (cen.botoesDentro) daRolagem.push(...(await p.evaluate(medirBotoesDentro, cen.botoesDentro)));
     if (cen.semRolarNoLugar) daRolagem.push(...(await p.evaluate(medirSemRolarNoLugar, cen.semRolarNoLugar)));
     const achadosTodos = [...daRolagem, ...(await p.evaluate(medir, cen.regiao ?? null)), ...(await p.evaluate(medirCabecalho, cen.regiao ?? null)),
