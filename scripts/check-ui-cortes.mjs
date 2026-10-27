@@ -210,6 +210,18 @@ const CENARIOS = [
     semRolagem: { dentro: '[data-testid="modal-analise"]', exceto: '[data-testid="analise-tabela-lista"], [data-testid="analise-foco-lista"], [data-testid="analise-abas"], [data-testid="analise-caminho"]' },
     antes: async (p) => { await p.locator('[data-testid="card-total-saida"]').dispatchEvent('click'); await p.locator('[data-testid="modal-analise"]').waitFor(); await p.waitForTimeout(600);
       await p.locator('[data-testid="analise-tabela"]').getByText('Acum.', { exact: true }).dispatchEvent('click'); await p.waitForTimeout(700); } },
+  /* P103 — a RÉGUA "vs meta" nos dois lados, com a marca na faixa do fim ("crítico"): ENTRADAS (Receitas operacionais, meta a 125% →
+     razão 0,8) e SAÍDAS no pior caso (`&vg_grande=1`, Custeio: razão ≈ 11, a marca na ponta). Os rótulos das faixas cabem (sem "…",
+     sem corte); a marca é desenhada FORA da faixa. E o gráfico no ACUMULADO (colunas e meta acumuladas, sem a média): os rótulos */
+  ...[['regua-entradas', '', '[data-testid^="grade-linha-entrada:grupo:Receitas operacionais"]', false],
+      ['regua-saidas', '&vg_grande=1', '[data-testid^="grade-linha-saida:grupo:Custeio"]', false],
+      ['acumulado', '', '[data-testid^="grade-linha-saida:grupo:Custeio"]', true]].map(([n, extra, linha, acum]) => ({
+    nome: `visao-geral-analise-${n}`, url: `tela=visao-geral&barra=0${extra}`, tamanhos: TAMANHOS_DA_VG, regiao: '[data-testid="modal-analise"]',
+    rotulosSvg: '[data-testid="analise-grafico-svg"] text, [data-testid="analise-donut-centro"]',
+    folgaCelulas: '[data-testid="analise-tabela-lista"] table, [data-testid="analise-foco-lista"] table',
+    semRolagem: { dentro: '[data-testid="modal-analise"]', exceto: '[data-testid="analise-tabela-lista"], [data-testid="analise-foco-lista"], [data-testid="analise-abas"], [data-testid="analise-caminho"]' },
+    antes: async (p) => { await p.locator(linha).first().dispatchEvent('click'); await p.locator('[data-testid="modal-analise"]').waitFor(); await p.waitForTimeout(600);
+      if (acum) { await p.locator('[data-testid="analise-tabela"]').getByText('Acum.', { exact: true }).dispatchEvent('click'); await p.waitForTimeout(700); } } })),
   /* P100 item 6 — o mês escolhido é o fim do período: Ano com AGO (8 meses), Últ. 12 (set/25–ago/26), 6 + 6 (inalterado) e Ano com
      DEZ (12, nov e dez previstos) — o gráfico e a grade no mesmo quadro */
   /* P100 item 7 — a grade rolada até o FIM: o cabeçalho e as duas linhas do rodapé (Resultado, Saldo final) à vista, nada cortado */
@@ -231,6 +243,8 @@ const CENARIOS = [
   ...[['filhos', []], ['523', [0, 0, 0]], ['longo', [0, 0, 1]], ['vazio', [0, 0, 3]], ['contas', [0, 0, 3], '&contas=2'],
       ['virada', [0, 0, 3], '&faixa=per&de=2025-11&ate=2026-10', true], ['fatura', [0, 0, 3], '&fatura=1']].map(([n, descer, extra = '', acum = false]) => ({
     nome: `visao-geral-gaveta-${n}`, url: `tela=visao-geral&barra=0${extra}`, tamanhos: TAMANHOS_DA_VG, regiao: '[data-testid="modal-analise"]',
+    /* P103 — as 8 colunas do subcentro ("longo": favorecido de 60 letras, R$ 99.999.999,99, todos os status): cada texto a 6px do vizinho */
+    folgaCelulas: '[data-testid="gaveta-lista"] table, table[data-testid="gaveta-total-fixo"]',
     semRolagem: { dentro: '[data-testid="modal-analise"]', exceto: '[data-testid="analise-tabela-lista"], [data-testid="analise-foco-lista"], [data-testid="analise-abas"], [data-testid="analise-caminho"], [data-testid="gaveta-lista"], [data-testid="gaveta-caminho"], [data-testid="gaveta-contexto"], [data-testid="gaveta-irmaos"], [data-testid="gaveta-resumo"]' },
     antes: async (p) => {
       await p.locator('[data-testid^="grade-linha-saida:grupo:Custeio"]').dispatchEvent('click'); await p.locator('[data-testid="modal-analise"]').waitFor(); await p.waitForTimeout(600);

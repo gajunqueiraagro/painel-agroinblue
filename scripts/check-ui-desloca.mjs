@@ -99,6 +99,15 @@ const CENARIOS = [
         antes: async (p) => { await aba(p); await conta('Precoce', '12.000')(p); await tecla('Tab')(p); }, estados: [
         ['conta aberta sobre o bonus preenchido', conta('Precoce', '988.224-976.224')], ['conta aplicada (Enter)', tecla('Enter')],
       ] },
+      /* P91 — a conta no campo de NUMERO (a carcaca em kg, aba Desempenho; o caso das Novilhas, "445,97*0,50"): aberta, aplicada,
+         a que nao fecha e a recusa depois de sair. ⚠ MEDIDO A PARTIR DA CARCACA JA' COM O RESULTADO (como o bonus acima): trocar o
+         NUMERO da carcaca (40.676 kg -> 8.696,61) muda a largura das colunas do "Resultado do lote" nas janelas de 1126+ — o mesmo
+         de digitar o numero direto, sem conta (a tabela do resumo nao tem largura fixa: fila P92). Aqui se mede so' o gesto. */
+      { nome: 'negociar-lote-carcaca-conta', url: 'tela=negociar-lote',
+        antes: async (p) => { await conta('Carcaça', '222,99')(p); await tecla('Tab')(p); }, estados: [
+        ['conta aberta na Carcaça', conta('Carcaça', '445,97*0,50')], ['conta aplicada (Enter)', tecla('Enter')],
+        ['conta que nao fecha, aberta', conta('Carcaça', '445,97*')], ['recusa depois de sair do campo', tecla('Tab')],
+      ] },
     ];
   })(),
   { nome: 'fornecedores-sem-cadastro', url: 'tela=fornecedores&barra=32&n=2356', antes: clicar('[data-testid="aba-sem-cadastro"]'), auto: true },
@@ -164,6 +173,18 @@ const CENARIOS = [
       ['sobe pelo caminho', noLugar('[data-testid="gaveta-caminho-2"]')],
       ['acumulado no modal', async (p) => { await p.locator('[data-testid="analise-tabela"]').getByText('Acum.', { exact: true }).dispatchEvent('click'); await espera(p); }],
       ['irmão de grupo', noLugar('[data-testid="gaveta-caminho-1"]')]] },
+  /* P103 — a gaveta no subcentro com TODOS os status ("Ração…": datas, chip de status, "Pagos · Em aberto"): ligar e desligar os
+     CHIPS da tela com a gaveta aberta (o clique vai ao chip onde ele está, por baixo do modal) — os não pagos entram e saem da lista, o
+     "Pagos · Em aberto" some quando não sobra nenhum (o lugar dele é reservado) e nada se desloca */
+  { nome: 'visao-geral-gaveta-chips', url: 'tela=visao-geral&barra=0', antes: async (p) => {
+      await p.locator('[data-testid^="grade-linha-saida:grupo:Custeio"]').dispatchEvent('click'); await p.locator('[data-testid="modal-analise"]').waitFor(); await espera(p, 700);
+      await p.locator('[data-testid="analise-lanc-total"]').dispatchEvent('click'); await p.locator('[data-testid="gaveta"]').waitFor(); await espera(p, 500);
+      for (const i of [0, 0, 1]) { await p.locator(`[data-testid="gaveta-linha-${i}"]`).dispatchEvent('click'); await espera(p, 400); } },
+    estados: [
+      ['sem Previsto', noLugar('[data-testid="vg-status-previsto"]')], ['sem Programado', noLugar('[data-testid="vg-status-programado"]')],
+      ['sem Agendado (só os pagos e o vencido)', noLugar('[data-testid="vg-status-agendado"]')],
+      ['sem Vencidos (só os pagos)', noLugar('[data-testid="vg-status-vencidos"]')],
+      ['Previsto de volta', noLugar('[data-testid="vg-status-previsto"]')], ['Vencidos de volta', noLugar('[data-testid="vg-status-vencidos"]')]] },
   /* PR 5 — o AVISO do rodapé com duas contas escolhidas: a frase das contas entra e sai ao descer e subir — o lugar é reservado */
   { nome: 'visao-geral-gaveta-contas', url: 'tela=visao-geral&barra=0&contas=2', antes: async (p) => {
       await p.locator('[data-testid^="grade-linha-saida:grupo:Custeio"]').dispatchEvent('click'); await p.locator('[data-testid="modal-analise"]').waitFor(); await espera(p, 700);

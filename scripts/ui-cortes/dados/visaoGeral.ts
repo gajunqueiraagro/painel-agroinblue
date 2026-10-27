@@ -148,12 +148,15 @@ export function analise(a: { p_de: string; p_ate: string; p_mes: string; p_lado:
     return crit === 'mes' ? mesV(p, k) : crit === 'media' ? s / (k + 1) : s; };
   const ok = (p: (string | null)[]) => validas(p[1] ?? null).includes(uni);
   const u = (v: number, p: (string | null)[]) => (!ok(p) ? null : r2(uni === 'rs' ? v : v / DEN[uni]));
-  const temMeta = (p: (string | null)[]) => p[0] === 'Custeio';
+  /* P103 — meta também nas Receitas operacionais (a 125% do valor: razão 0,8 → faixa "crítico" da ENTRADA — a régua de entradas com a
+     marca na faixa mais estreita do fim) */
+  const temMeta = (p: (string | null)[]) => p[0] === 'Custeio' || p[0] === 'Receitas operacionais';
+  const fatorMeta = (p: (string | null)[]) => (p[0] === 'Receitas operacionais' ? 1.25 : 0.92);
   const rotulo = (p: (string | null)[]) => p.length === 0 ? (a.p_lado === 'saida' ? 'Saídas' : 'Entradas') : p.length === 1 ? p[0]!
     : p.length === 2 ? (p[1] ? ROT_ATIV[p[1]] : 'Sem atividade') : p[p.length - 1]!;
   const linha = (p: (string | null)[]) => {
     /* P100 item 5 — `grande` (o NJ do pior caso: `&vg_grande=1`): a meta a 1/11 do valor (≈ +999,9%) e 5 dígitos de lançamentos */
-    const v = u(janela(p), p), mt = temMeta(p) && v != null ? r2(v * (a.grande ? 1 / 10.999 : 0.92)) : null;
+    const v = u(janela(p), p), mt = temMeta(p) && v != null ? r2(v * (a.grande ? 1 / 10.999 : fatorMeta(p))) : null;
     const razao = mt ? Math.round((v! / mt) * 10000) / 10000 : null;
     return { caminho: p, rotulo: rotulo(p), grupo: p[0] ?? null, valor: v, meta: mt, dif: mt == null || v == null ? null : r2(v - mt),
       pct: mt ? r1(((v! - mt) / mt) * 100) : null, razao, qtd: a.grande ? 99999 - p.length * 13 : 12 + p.length * 7, unidade_valida: ok(p),
@@ -182,11 +185,19 @@ export function analise(a: { p_de: string; p_ate: string; p_mes: string; p_lado:
     grafico: {
       item: linha(g), caminho: [[], ...g.map((_, i) => g.slice(0, i + 1))].map((c) => ({ caminho: c, rotulo: rotulo(c) })),
       irmaos: !g.length ? [] : g.length === 4 && g.length > f.length ? subs.map((x) => x.caminho) : filhos(pai),
+      /* P103 (111954) — no ACUMULADO a coluna de cada mês é a soma do início até ele (realizado e previsto, cada um), a meta também;
+         sem a média. KPIs: `mes` = o acumulado, `meta` = a meta acumulada (no mês/média: a do mês), sem média nem tendência */
       serie: !ok(g) ? [] : ms.map((x, i) => { const v = mesV(g, i); const ac = ms.slice(0, i + 1).reduce((s, _, j) => s + mesV(g, j), 0);
+        if (crit === 'acumulado') {
+          const re = ms.slice(0, i + 1).reduce((s, y, j) => s + (y <= HOJE ? mesV(g, j) : 0), 0);
+          return { am: x, realizado: u(re, g), previsto: u(ac - re, g), total: u(ac, g), media: null, meta: temMeta(g) ? u(ac * fatorMeta(g), g) : null };
+        }
         return { am: x, realizado: x <= HOJE ? u(v, g) : 0, previsto: x > HOJE ? u(v, g) : 0, total: u(v, g), media: x <= HOJE ? u(ac / (i + 1), g) : null,
-          meta: temMeta(g) ? u(v * 0.92, g) : null }; }),
-      kpis: !ok(g) ? null : { mes: u(mesV(g, k), g), media: u(ms.slice(0, k + 1).reduce((s, _, j) => s + mesV(g, j), 0) / (k + 1), g),
-        vs_meta: temMeta(g) ? 8.7 : null, tendencia: r1(((mesV(g, k) - mesV(g, 0)) / mesV(g, 0)) * 100) },
+          meta: temMeta(g) ? u(v * fatorMeta(g), g) : null }; }),
+      kpis: !ok(g) ? null : crit === 'acumulado'
+        ? { mes: linha(g).valor, meta: linha(g).meta, media: null, vs_meta: linha(g).pct, tendencia: null }
+        : { mes: u(mesV(g, k), g), meta: temMeta(g) ? u(mesV(g, k) * fatorMeta(g), g) : null, media: u(ms.slice(0, k + 1).reduce((s, _, j) => s + mesV(g, j), 0) / (k + 1), g),
+          vs_meta: temMeta(g) ? 8.7 : null, tendencia: r1(((mesV(g, k) - mesV(g, 0)) / mesV(g, 0)) * 100) },
     },
   };
 }
@@ -198,7 +209,7 @@ export function analise(a: { p_de: string; p_ate: string; p_mes: string; p_lado:
  * ela só vem no nó de transferências; aqui fica no subcentro do pior caso de largura); os outros, nenhuma diferença. */
 const FAV_LONGO = 'Cooperativa Agroindustrial dos Produtores Rurais do Centro-Oeste'.slice(0, 60);
 export function gaveta(a: { p_de: string; p_ate: string; p_mes: string; p_lado: 'entrada' | 'saida'; p_caminho?: (string | null)[]; p_criterio?: string;
-  p_contas?: string[] | null; p_pagina?: number; p_por_pagina?: number }) {
+  p_contas?: string[] | null; p_pagina?: number; p_por_pagina?: number; p_status?: string[] | null; p_incluir_vencidos?: boolean }) {
   const c = a.p_caminho ?? [];
   const crit = a.p_criterio ?? 'mes';
   const an = analise({ ...a, p_aba: c[0] ?? null, p_foco: c.slice(0, Math.min(c.length, 3)).length >= 1 ? c.slice(0, Math.min(c.length, 3)) : [],
@@ -207,23 +218,40 @@ export function gaveta(a: { p_de: string; p_ate: string; p_mes: string; p_lado: 
     : p.length === 2 ? (p[1] ? ROT_ATIV[p[1]] : 'Sem atividade') : p[p.length - 1]!;
   const no = c.length === 4 ? an.grafico.item : an.foco.total;
   const total = c.length === 4 && c[3] === 'Outros insumos' ? 0 : (no?.valor ?? 0);
-  const filhos = c.length < 4 ? an.foco.linhas : [];
-  const irmaos = c.length === 0 ? [] : c.length === 4 ? an.grafico.irmaos : (c.length === 1 ? an.abas.map((x) => [x.grupo]) : an.tabela.linhas.map((l) => l.caminho));
+  /* P103 — os FILHOS diretos do nó (desde o P100 `foco.linhas` são TODOS os subcentros do item: a gaveta pulava do grupo direto
+     para um subcentro, e os cenários de descida não chegavam ao nó pretendido). A tabela da esquerda (111952) tem os filhos do nível:
+     o grupo e a atividade são o nível; no centro, os filhos são os subcentros dele (`foco.linhas`) */
+  const filhos = c.length === 3 ? an.foco.linhas : c.length < 3 ? an.tabela.linhas : [];
+  const irmaos = c.length === 0 ? [] : c.length === 4 ? an.grafico.irmaos : c.length === 1 ? an.abas.map((x) => [x.grupo])
+    : c.length === 2 ? analise({ ...a, p_aba: c[0], p_foco: [c[0]], p_grafico: null, p_criterio: crit === 'media' ? 'acumulado' : crit, p_unidade: 'rs' }).tabela.linhas.map((l) => l.caminho)
+    : an.tabela.linhas.map((l) => l.caminho);
   const ms = meses(a.p_de, a.p_ate);
   const ini = crit === 'mes' ? a.p_mes : ms[0];
   const nLanc = c.length < 4 ? 0 : c[3] === 'Outros insumos' ? 0 : c[3] === 'Sal mineral proteinado de seca' ? 523 : c[3] === 'Ração de creep-feeding para bezerros' ? 8 : 12;
   const longo = c[3] === 'Ração de creep-feeding para bezerros';
-  const todas = Array.from({ length: nLanc }, (_, i) => {
+  /* P103 — cada lançamento com as três datas, o status e o conciliado (111953). No "Ração…" (o pior caso de largura) TODOS os status
+     da casa (realizado, conciliado, agendado, programado, previsto, vencido) e um valor de R$ 99.999.999,99 (o total do nó é a soma) */
+  const ST_LONGO = ['realizado', 'conciliado', 'agendado', 'programado', 'previsto', 'vencido', 'realizado', 'previsto'];
+  const geradas = Array.from({ length: nLanc }, (_, i) => {
     const am = crit === 'mes' ? a.p_mes : ms[Math.min(ms.indexOf(a.p_mes), i % (ms.indexOf(a.p_mes) + 1))];
-    const v = i < nLanc - 1 ? r2(total / nLanc) : r2(total - r2(total / nLanc) * (nLanc - 1));
+    const v = longo && i === 0 ? 99999999.99 : i < nLanc - 1 ? r2(total / nLanc) : r2(total - r2(total / nLanc) * (nLanc - 1));
     const parte = longo && i === 2;
+    const st = longo ? ST_LONGO[i % ST_LONGO.length] : am > HOJE ? 'previsto' : 'realizado';
+    const pago = st === 'realizado' || st === 'conciliado';
+    const dia = `${am}-${String(1 + (i * 7) % 28).padStart(2, '0')}`;
     return { chave: parte ? `lanc-${i}#2` : `lanc-${i}`, lancamento_id: `lanc-${i}`, parte_ordem: parte ? 2 : 1, partes_total: parte ? 2 : 1,
-      data: `${am}-${String(1 + (i * 7) % 28).padStart(2, '0')}`,
+      data: dia, competencia: `${am}-01`, vencimento: dia, pagamento: pago ? dia : null,
       favorecido: longo && i % 2 === 0 ? FAV_LONGO : ['Agropecuária Boa Vista Ltda', 'Casa do Produtor', 'Posto Rodoviário Central'][i % 3],
       descricao: longo ? 'Compra de ração de creep-feeding para bezerros do lote de cria — nota fiscal e frete incluídos' : `NF ${1000 + i}`,
       conta: i % 4 === 3 ? 'Cartão de crédito corporativo da fazenda' : 'Banco do Brasil · conta movimento', valor: v, valor_lancamento: parte ? r2(v * 2.5) : v,
-      status: am > HOJE ? 'previsto' : 'realizado', previsto: am > HOJE, vencido: false };
+      status: st === 'conciliado' ? 'realizado' : st === 'vencido' ? 'previsto' : st, previsto: !pago, vencido: st === 'vencido', conciliado: st === 'conciliado' };
   });
+  /* no "Ração…" os CHIPS da tela valem (como na fn_vg_partes): o não pago só entra com o chip do status dele ligado; o vencido, com o
+     "Vencidos" — o gate de deslocamento liga e desliga os chips com a gaveta aberta */
+  const todas = !longo ? geradas : geradas.filter((l) => !l.previsto
+    || (l.vencido ? a.p_incluir_vencidos !== false : (a.p_status ?? ['previsto', 'programado', 'agendado']).includes(l.status)));
+  const totalNo = longo ? r2(todas.reduce((s, l) => s + l.valor, 0)) : total;
+  const pagoNo = r2(todas.filter((l) => !l.previsto).reduce((s, l) => s + l.valor, 0));
   const pp = a.p_por_pagina ?? 500, pg = a.p_pagina ?? 1;
   const porFav = new Map<string, { q: number; v: number }>();
   for (const l of todas) { const x = porFav.get(l.favorecido) ?? { q: 0, v: 0 }; x.q += 1; x.v = r2(x.v + l.valor); porFav.set(l.favorecido, x); }
@@ -231,14 +259,15 @@ export function gaveta(a: { p_de: string; p_ate: string; p_mes: string; p_lado: 
     lado: a.p_lado, mes: a.p_mes, criterio: crit, janela: { de: `${ini}-01`, ate: `${a.p_mes}-28` }, folha: c.length === 4,
     caminho: [[], ...c.map((_, i) => c.slice(0, i + 1))].map((p) => ({ caminho: p, rotulo: rot(p) })),
     irmaos: irmaos.map((p) => ({ caminho: p, rotulo: rot(p), valor: 0 })),
-    qtd: c.length === 4 ? nLanc : 37 + c.length * 11, total, medio: nLanc ? r2(total / nLanc) : total ? r2(total / 40) : null,
+    qtd: c.length === 4 ? todas.length : 37 + c.length * 11, total: totalNo, medio: todas.length ? r2(totalNo / todas.length) : total ? r2(total / 40) : null,
+    pago: c.length === 4 ? pagoNo : null, aberto: c.length === 4 ? r2(totalNo - pagoNo) : null,
     resumo: c.length === 4
       ? { tipo: 'favorecido', linhas: [...porFav.entries()].sort((x, y) => y[1].v - x[1].v).slice(0, 4).map(([rotulo, x]) => ({ rotulo, qtd: x.q, valor: x.v })) }
       : { tipo: 'filhos', linhas: [...filhos].sort((x, y) => (y.valor ?? 0) - (x.valor ?? 0)).slice(0, 4)
           .map((l) => ({ rotulo: l.rotulo, qtd: l.qtd, valor: l.valor ?? 0, pct: total ? r1(((l.valor ?? 0) / total) * 100) : null })) },
     linhas: c.length === 4 ? todas.slice((pg - 1) * pp, pg * pp)
       : filhos.map((l) => ({ caminho: l.caminho, rotulo: l.rotulo, qtd: l.qtd, valor: l.valor ?? 0, pct: total ? r1(((l.valor ?? 0) / total) * 100) : null })),
-    total_linhas: c.length === 4 ? nLanc : filhos.length, pagina: pg, por_pagina: pp, paginas: c.length === 4 ? Math.max(1, Math.ceil(nLanc / pp)) : 1,
+    total_linhas: c.length === 4 ? todas.length : filhos.length, pagina: pg, por_pagina: pp, paginas: c.length === 4 ? Math.max(1, Math.ceil(todas.length / pp)) : 1,
     lista: c.length === 4 ? { vencidos_fora: c[3] === 'Sal mineral proteinado de seca' ? 4 : 0, transf_internas: longo ? 3 : 0 } : null,
   };
 }

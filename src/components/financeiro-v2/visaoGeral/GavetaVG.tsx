@@ -4,7 +4,11 @@
  *   caminho clicável + contexto + atalhos dos irmãos (2 linhas) → indicadores (lançamentos · total · valor médio) → resumo (4 linhas:
  *   por favorecido no subcentro, maiores filhos acima) → tabela (rola) → total (fixo) → rodapé: a linha do AVISO (o que a lista não
  *   reproduz; lugar reservado, vazia quando não há diferença) e "Ver na lista de Lançamentos ›".
- *   · Nível com filhos: lista os filhos (clique desce). Subcentro: os lançamentos (data · favorecido · descrição · conta · valor).
+ *   · Nível com filhos: lista os filhos (clique desce). Subcentro: os lançamentos (P103: competência · vencimento · pagamento · status ·
+ *     favorecido · descrição · conta · valor; o status no chip da casa — o da lista de Lançamentos; "—" no pagamento do não pago) e, no
+ *     topo, "Pagos" e "Em aberto" quando há não pagos (do banco: total = pago + aberto).
+ *   · P103 — LARGURA: cobre o gráfico e metade da tabela da esquerda (≈ 77,5% do modal), nunca menos de 960px; abaixo disso, a janela
+ *     inteira menos 16px (a largura do modal). A mesma em todo nível: nada muda de lugar ao descer.
  *   · Clique num lançamento: abre o modal padrão do financeiro SEMPRE pelo `lancamento_id` (a parte 2+ tem a chave "id#2").
  *   · A TELA NUNCA SOMA: tudo vem pronto da `fn_vg_gaveta`. Cores do Gabriel: o valor na cor do lado (saída vermelha, entrada azul),
  *     nada preto; datas dd/mm/aaaa em fonte menor; texto longo numa linha com "…" e o title (só em célula de tabela).
@@ -14,16 +18,22 @@ import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { COR, brl, pct1, rotuloMes, type LadoVG } from '@/lib/financeiro/visaoGeral';
 import { chaveCaminho, mesmoCaminho, type CaminhoVG } from '@/lib/financeiro/visaoGeralAnalise';
-import { dataLonga, ehLancamento, type GavetaVG, type LancamentoGavetaVG } from '@/lib/financeiro/visaoGeralGaveta';
+import { dataLonga, ehLancamento, statusDaLinha, type GavetaVG, type LancamentoGavetaVG } from '@/lib/financeiro/visaoGeralGaveta';
+import { STATUS_FILTRO_COR, STATUS_FILTRO_LABEL, STATUS_FILTRO_PILULA, STATUS_PILULA_BASE } from '@/lib/financeiro/statusFinanceiro';
 
 const corDoLado = (lado: LadoVG) => (lado === 'saida' ? COR.saida : COR.entrada);
 const n = (v: number) => v.toLocaleString('pt-BR');
 const parteDe = (l: LancamentoGavetaVG) => (l.partes_total > 1 ? `Parte ${l.parte_ordem} de ${l.partes_total} · de ${brl(l.valor_lancamento)}` : '');
 const prefixoParte = (l: LancamentoGavetaVG) => (l.partes_total > 1 ? `parte ${l.parte_ordem}/${l.partes_total} · ` : '');
-/* as colunas (px; as de texto levam o resto) — as mesmas no cabeçalho, nas linhas e no total: uma tabela só */
-const COLS_FOLHA = [72, null, null, 92, 92];
+/* as colunas (px; favorecido e descrição levam o resto) — as mesmas no cabeçalho, nas linhas e no total: uma tabela só. P103: as três
+   datas (dd/mm/aaaa a 8,5px), o status (o chip mais largo, "Programado"), a conta (a transferência "Origem → Destino" corta com "…") e o
+   valor ("R$ 99.999.999,99") */
+const COLS_FOLHA = [68, 68, 68, 84, null, null, 128, 100];
 /* a 1ª coluna tem a mesma largura nas duas (o "Total" do rodapé não anda ao descer até o subcentro) */
-const COLS_FILHOS = [72, null, 50, 100];
+const COLS_FILHOS = [68, null, 50, 100];
+const CAB_FOLHA = ['COMP.', 'VENC.', 'PGTO.', 'STATUS', 'FAVORECIDO', 'DESCRIÇÃO', 'CONTA', 'VALOR'];
+const CAB_FILHOS = ['LANÇ.', 'ITEM · clique para descer', '%', 'VALOR'];
+const celData = 'whitespace-nowrap px-1 text-[8.5px] tabular-nums text-[#3a4655]';
 
 export function GavetaVG({ g, caminho, carregando, erro, contexto, avisos = [], onIr, onFechar, onAbrirLancamento, onMais, onVerNaLista }: {
   /** o que o banco devolveu (fica o anterior até o novo chegar: nada pisca nem encolhe) */
@@ -43,6 +53,7 @@ export function GavetaVG({ g, caminho, carregando, erro, contexto, avisos = [], 
   const janela = g ? (g.criterio === 'mes' ? rotuloMes(g.mes) : `${rotuloMes(g.janela.de.slice(0, 7))} – ${rotuloMes(g.janela.ate.slice(0, 7))}`) : '';
   const cols = folha ? COLS_FOLHA : COLS_FILHOS;
   const faltam = g ? g.total_linhas - g.linhas.length : 0;
+  const comAberto = folha && !!g && (g.aberto ?? 0) !== 0;
   /* o caminho longo rola de lado: fica no FIM (o nó atual sempre à vista) — por isso o miolo dele é livre no gate de deslocamento;
      a faixa (22px) e o × não andam */
   const caminhoRef = useRef<HTMLDivElement>(null);
@@ -50,8 +61,9 @@ export function GavetaVG({ g, caminho, carregando, erro, contexto, avisos = [], 
 
   return (
     /* por cima do modal, de propósito (como no mock): `data-painel-por-cima` declara isso ao gate de cortes. Presa à borda direita da
-       JANELA (abaixo de 1000px o modal rola de lado, a gaveta não) e nunca mais estreita que 452px (os números inteiros) */
-    <aside className="absolute bottom-0 right-0 top-9 z-[5] flex w-[clamp(452px,46%,500px)] flex-col border-l border-[#cfd6df] bg-white text-[10px] shadow-[-10px_0_30px_rgba(0,0,0,0.18)]"
+       JANELA (abaixo de 1000px o modal rola de lado, a gaveta não). P103: ≈ o gráfico + metade da tabela da esquerda, nunca menos de
+       960px; numa janela menor que isso, o modal inteiro (a janela − 16px) */
+    <aside className="absolute bottom-0 right-0 top-9 z-[5] flex w-[min(100%,max(960px,calc(77.5%_-_2.6px)))] flex-col border-l border-[#cfd6df] bg-white text-[10px] shadow-[-10px_0_30px_rgba(0,0,0,0.18)]"
       aria-label="Lançamentos" data-testid="gaveta" data-desloca="" data-painel-por-cima="" data-carregando={carregando ? '' : undefined}>
       {/* CABEÇALHO — 104px: caminho · contexto · atalhos dos irmãos (2 linhas, rola por dentro) */}
       <div className="flex h-[104px] shrink-0 flex-col gap-1 border-b border-[#e3e7ec] px-2.5 pt-[7px]">
@@ -82,11 +94,15 @@ export function GavetaVG({ g, caminho, carregando, erro, contexto, avisos = [], 
         </div>
       </div>
 
-      {/* INDICADORES — 46px */}
-      <div className="grid h-[46px] shrink-0 grid-cols-3 gap-2 border-b border-[#e3e7ec] px-2.5 py-1.5">
+      {/* INDICADORES — 46px. P103: no subcentro com não pagos, "Pagos" e "Em aberto" (do banco); o lugar deles é sempre reservado */}
+      <div className="grid h-[46px] shrink-0 grid-cols-[80px_repeat(4,minmax(0,1fr))] gap-2 border-b border-[#e3e7ec] px-2.5 py-1.5">
         <Kpi rotulo="LANÇAMENTOS" testid="gaveta-qtd" cor={COR.muted}>{g ? n(g.qtd) : '—'}</Kpi>
         <Kpi rotulo="TOTAL" testid="gaveta-total" cor={cor}>{g ? brl(g.total) : '—'}</Kpi>
         <Kpi rotulo="VALOR MÉDIO" testid="gaveta-medio" cor={cor}>{g ? brl(g.medio) : '—'}</Kpi>
+        {comAberto ? <>
+          <Kpi rotulo="PAGOS" testid="gaveta-pago" cor={cor}>{brl(g!.pago ?? 0)}</Kpi>
+          <Kpi rotulo="EM ABERTO" testid="gaveta-aberto" cor={COR.previsto}>{brl(g!.aberto ?? 0)}</Kpi>
+        </> : <><span /><span /></>}
       </div>
 
       {/* RESUMO — 96px: 4 linhas (por favorecido no subcentro; maiores itens acima) */}
@@ -114,7 +130,7 @@ export function GavetaVG({ g, caminho, carregando, erro, contexto, avisos = [], 
               tabela, o total e o rodapé não andam */}
           <thead className="sticky top-0 z-[1] bg-[#2f3d4f]" data-desloca-livre="">
             <tr className="h-[18px] bg-[#2f3d4f] text-[8.5px] font-semibold tracking-[0.03em] text-white">
-              {(folha ? ['DATA', 'FAVORECIDO', 'DESCRIÇÃO', 'CONTA', 'VALOR'] : ['LANÇ.', 'ITEM · clique para descer', '%', 'VALOR']).map((r, i, a) => (
+              {(folha ? CAB_FOLHA : CAB_FILHOS).map((r, i, a) => (
                 <th key={r} className={cn('whitespace-nowrap px-1 font-semibold', i === a.length - 1 || (!folha && i === 2) ? 'text-right' : 'text-left')}>{r}</th>
               ))}
             </tr>
@@ -125,8 +141,11 @@ export function GavetaVG({ g, caminho, carregando, erro, contexto, avisos = [], 
               : g?.linhas.map((l, i) => ehLancamento(l) ? (
                 <tr key={l.chave} onClick={() => onAbrirLancamento(l)} data-testid={`gaveta-linha-${i}`} data-chave={l.chave}
                   className="h-[19px] cursor-pointer border-b border-[#eef1f5] text-[9.5px] hover:bg-[#e8eef7]">
-                  <td className="whitespace-nowrap px-1 text-[8.5px] tabular-nums" style={{ color: l.vencido ? COR.neg : l.previsto ? COR.previsto : '#3a4655' }}
-                    title={l.vencido ? 'Vencido (no mês de hoje)' : l.previsto ? `Previsto (${l.status})` : 'Pago em'}>{dataLonga(l.data)}</td>
+                  <td className={celData} title="Competência">{dataLonga(l.competencia)}</td>
+                  <td className={cn(celData, l.vencido && 'font-semibold')} style={l.vencido ? { color: COR.neg } : undefined}
+                    title={l.vencido ? 'Vencido e não pago' : 'Vencimento'}>{dataLonga(l.vencimento)}</td>
+                  <td className={celData} title={l.previsto ? 'Não pago' : 'Pagamento'} data-testid={`gaveta-pgto-${i}`}>{l.previsto ? '—' : dataLonga(l.pagamento)}</td>
+                  <td className="whitespace-nowrap px-1"><ChipStatus l={l} i={i} /></td>
                   <td className="truncate px-1 text-[#1b2430]" title={l.favorecido}>{l.favorecido}</td>
                   {/* classificação dividida: a linha é só a PARTE deste nó — "parte 1/2" na descrição e "de R$ (o lançamento)" no title */}
                   <td className="truncate px-1 text-[#3a4655]" title={`${prefixoParte(l)}${l.descricao ?? ''}${l.partes_total > 1 ? ` (de ${brl(l.valor_lancamento)})` : ''}`}>
@@ -162,8 +181,9 @@ export function GavetaVG({ g, caminho, carregando, erro, contexto, avisos = [], 
         <tbody>
           <tr className="h-6 text-[10.5px] font-bold">
             <td className="whitespace-nowrap px-1 tabular-nums text-muted-foreground" data-testid="gaveta-rodape-qtd">{g ? (folha ? `${n(g.total_linhas)}` : n(g.qtd)) : ''}</td>
-            <td className="px-1 text-[#1b2430]" colSpan={cols.length - 2}>Total</td>
-            <td className="whitespace-nowrap px-1 text-right tabular-nums" style={{ color: cor }} data-testid="gaveta-rodape-total">{g ? brl(g.total) : ''}</td>
+            <td className="px-1 text-[#1b2430]" colSpan={cols.length - 3}>Total</td>
+            {/* o total ocupa as duas últimas colunas: o do nó inteiro pode passar de R$ 99.999.999,99 (negrito, 10,5px) */}
+            <td className="whitespace-nowrap px-1 text-right tabular-nums" colSpan={2} style={{ color: cor }} data-testid="gaveta-rodape-total">{g ? brl(g.total) : ''}</td>
           </tr>
         </tbody>
       </table>
@@ -183,6 +203,16 @@ export function GavetaVG({ g, caminho, carregando, erro, contexto, avisos = [], 
       </div>
     </aside>
   );
+}
+
+/** P103 — o status no chip da casa (as cores da lista de Lançamentos, `statusFinanceiro`): Realizado e Conciliado com caixa; Agendado,
+    Programado e Previsto em texto colorido; Vencido em vermelho (o vermelho da data vencida da lista) */
+function ChipStatus({ l, i }: { l: LancamentoGavetaVG; i: number }) {
+  const k = statusDaLinha(l);
+  const rotulo = k === 'vencido' ? 'Vencido' : STATUS_FILTRO_LABEL[k] ?? l.status;
+  const cls = k === 'vencido' ? 'text-destructive border-transparent'
+    : STATUS_FILTRO_PILULA[k] ?? `${STATUS_FILTRO_COR[k] ?? 'text-muted-foreground'} border-transparent`;
+  return <span className={cn(STATUS_PILULA_BASE, cls)} data-testid={`gaveta-status-${i}`} data-status={k}>{rotulo}</span>;
 }
 
 function Kpi({ rotulo, testid, cor, children }: { rotulo: string; testid: string; cor: string; children: React.ReactNode }) {

@@ -37,7 +37,9 @@ export interface AnaliseVG {
   foco: { total: LinhaAnaliseVG | null; linhas: LinhaAnaliseVG[] };
   grafico: {
     item: LinhaAnaliseVG | null; caminho: { caminho: CaminhoVG; rotulo: string }[]; irmaos: CaminhoVG[]; serie: PontoAnaliseVG[];
-    kpis: { mes: number | null; media: number | null; vs_meta: number | null; tendencia: number | null } | null;
+    /** P103 (111954): no ACUMULADO a `serie` é acumulada mês a mês (colunas e meta; `media` nula); `mes` = o acumulado até o mês,
+        `meta` = a meta acumulada (no mês e na média, a do mês), `media` e `tendencia` nulas */
+    kpis: { mes: number | null; meta?: number | null; media: number | null; vs_meta: number | null; tendencia: number | null } | null;
   };
 }
 
@@ -121,8 +123,10 @@ export const ROTULO_CRITERIO = (am: string, rotuloMes: (am: string) => string): 
 
 /** os nomes da régua "vs meta" pelo lado (a faixa vem do banco) */
 export const ROTULO_FAIXA: Record<LadoVG, Record<FaixaMetaVG, string>> = {
-  saida: { boa: 'economia', ideal: 'ideal', risco: 'risco', critica: 'muito alto' },
-  entrada: { boa: 'acima', ideal: 'na meta', risco: 'abaixo', critica: 'muito abaixo' },
+  /* P103 — rótulos CURTOS, que cabem na faixa em toda largura (a régua tem 180px; a faixa estreita, 18% = 32px): sem "…". Antes
+     "na meta" e "muito abaixo" cortavam ("na meta" → "na met") */
+  saida: { boa: 'economia', ideal: 'ideal', risco: 'risco', critica: 'crítico' },
+  entrada: { boa: 'acima', ideal: 'meta', risco: 'abaixo', critica: 'crítico' },
 };
 export const COR_FAIXA: Record<FaixaMetaVG, { fundo: string; texto: string }> = {
   boa: { fundo: '#3b6db3', texto: '#fff' }, ideal: { fundo: '#6fb3d9', texto: '#10304a' },
