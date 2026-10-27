@@ -1,0 +1,30 @@
+{
+  "_leia": "P134 — a LISTA UNICA de casos da busca sem acento. Roda contra `normalizarParaBusca`/`casaNaBusca` (src/lib/texto/busca.ts) no vitest e, pelo teste SQL GERADO (`node scripts/gerar-teste-busca-sem-acento.mjs` -> supabase/tests/p134_busca_sem_acento_test.sql), contra `_fn_normalizar_texto`/`fn_texto_casa` no banco. Mudou aqui: gere o SQL de novo.",
+  "normalizacao": [
+    { "entrada": "Máquinas", "saida": "maquinas" },
+    { "entrada": "MANUTENÇÃO  Máquinas   Pecuária ", "saida": "manutencao maquinas pecuaria" },
+    { "entrada": "Açúcar", "saida": "acucar" },
+    { "entrada": "JOÃO", "saida": "joao" },
+    { "entrada": "Ação Ñandu Ü Ç", "saida": "acao nandu u c" },
+    { "entrada": "", "saida": "" },
+    { "entrada": "   ", "saida": "" }
+  ],
+  "casa": [
+    { "texto": "Máquinas", "termo": "maq", "casa": true },
+    { "texto": "Manutenção Máquinas Pecuária", "termo": "maq", "casa": true },
+    { "texto": "Manutenção", "termo": "manutencao", "casa": true },
+    { "texto": "Açúcar Cristal", "termo": "acucar", "casa": true },
+    { "texto": "João da Silva", "termo": "JOAO", "casa": true },
+    { "texto": "joao da silva", "termo": "João", "casa": true },
+    { "texto": "Café com Leite", "termo": "CAFÉ", "casa": true },
+    { "texto": "Manutenção Máquinas Pecuária", "termo": "maquinas pec", "casa": true },
+    { "texto": "Manutenção Máquinas Pecuária", "termo": "maq manut", "casa": false },
+    { "texto": "Máquinas", "termo": "maquinário", "casa": false },
+    { "texto": "Desconto 50% à vista", "termo": "50%", "casa": true },
+    { "texto": "Desconto à vista", "termo": "%", "casa": false },
+    { "texto": "Parafuso_sextavado", "termo": "o_s", "casa": true },
+    { "texto": "Parafuso sextavado", "termo": "o_s", "casa": false },
+    { "texto": "Qualquer texto", "termo": "", "casa": true },
+    { "texto": "", "termo": "a", "casa": false }
+  ]
+}

@@ -1,3 +1,4 @@
+import { casaNaBusca } from '@/lib/texto/busca';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { idDoLancamento, valorDividido } from '@/lib/financeiro/divisaoDaClassificacao';
@@ -1187,8 +1188,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
     }
 
     if (produtoFiltro.trim()) {
-      const q = produtoFiltro.toLowerCase();
-      items = items.filter(l => l.descricao?.toLowerCase().includes(q));
+      /* P134: sem acento, cedilha e maiúscula nos dois lados (`casaNaBusca`, a regra única; no banco, `_fn_normalizar_texto`) */
+      items = items.filter(l => casaNaBusca(l.descricao, produtoFiltro));
     }
     if (documentoFiltro.trim()) {
       /* FIN-FILTRO-DOC-01 — a MESMA fonte da coluna DOC.: o campo do lançamento + os documentos vivos ligados (OC, parcelas da mesma

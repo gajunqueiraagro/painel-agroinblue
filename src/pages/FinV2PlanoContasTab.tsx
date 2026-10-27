@@ -1,3 +1,4 @@
+import { casaNaBusca } from '@/lib/texto/busca';
 import { useState, useEffect, useCallback } from 'react';
 import { useCliente } from '@/contexts/ClienteContext';
 import { Card, CardContent } from '@/components/ui/card';
@@ -41,13 +42,13 @@ export function FinV2PlanoContasTab() {
     .filter(i => {
       if (!showInativos && !i.ativo) return false;
       if (!search) return true;
-      const s = search.toLowerCase();
+      /* P134: sem acento, cedilha e maiúscula nos dois lados (`casaNaBusca`, a regra única) */
       return (
-        (i.subcentro || '').toLowerCase().includes(s) ||
-        i.centro_custo.toLowerCase().includes(s) ||
-        (i.grupo_custo || '').toLowerCase().includes(s) ||
-        i.macro_custo.toLowerCase().includes(s) ||
-        i.tipo_operacao.toLowerCase().includes(s)
+        casaNaBusca(i.subcentro, search) ||
+        casaNaBusca(i.centro_custo, search) ||
+        casaNaBusca(i.grupo_custo, search) ||
+        casaNaBusca(i.macro_custo, search) ||
+        casaNaBusca(i.tipo_operacao, search)
       );
     })
     .sort((a, b) => {

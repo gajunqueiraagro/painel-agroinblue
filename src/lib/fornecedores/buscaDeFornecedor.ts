@@ -20,10 +20,10 @@
  *   ORDEM — ativo de verdade primeiro → começa com o termo (razão social, fantasia ou documento) → mais uso → razão social
  *     normalizada → id (comparação por código, a do `COLLATE "C"` no banco).
  */
-/** Movida verbatim de `fornecedorTexto.ts` (FORN-BUSCA-UNICA-01). */
-export function normalizarNome(s: string | null | undefined): string {
-  return (s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
-}
+import { normalizarParaBusca } from '@/lib/texto/busca';
+
+/** P134: a regra \u00e9 a de TODA busca do sistema \u2014 o corpo foi movido verbatim para `normalizarParaBusca` (`src/lib/texto/busca.ts`). */
+export const normalizarNome = normalizarParaBusca;
 
 /** A busca digitada é NÚMERO (só dígitos, com ou sem ponto, barra, traço e espaço)? Devolve os dígitos, ou nulo. */
 export function digitosDaBusca(busca: string): string | null {

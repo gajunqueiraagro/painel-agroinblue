@@ -1,3 +1,4 @@
+import { casaNaBusca } from '@/lib/texto/busca';
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -111,8 +112,8 @@ export function ContratoDialog({
   const filteredSubcentros = useMemo(() => {
     const unique = Array.from(classMap.values());
     if (!subcentroSearch.trim()) return unique;
-    const term = subcentroSearch.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-    return unique.filter(c => (c.subcentro || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes(term));
+    /* P134: a regra única de busca (`casaNaBusca`), no lugar do NFD escrito na linha */
+    return unique.filter(c => casaNaBusca(c.subcentro, subcentroSearch));
   }, [classMap, subcentroSearch]);
 
 

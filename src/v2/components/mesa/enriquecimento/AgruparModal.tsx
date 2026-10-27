@@ -21,6 +21,7 @@
  *
  * ⚠ CENTAVOS EM INTEIRO em toda a soma: é a diferença que decide se o botão abre.
  */
+import { casaNaBusca } from '@/lib/texto/busca';
 import { textoSomaDifere } from '@/v2/lib/mesa/desmembrar';
 import { useEffect, useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -85,11 +86,11 @@ export function AgruparModal({
      que já foi escolhido, senão procurar a sexta linha desfaz as cinco primeiras. */
   const [busca, setBusca] = useState('');
   const visiveis = useMemo(() => {
-    const q = busca.trim().toLowerCase();
+    const q = busca.trim();
     if (!q) return candidatas;
+    /* P134: sem acento, cedilha e maiúscula nos dois lados (`casaNaBusca`, a regra única) */
     return candidatas.filter((r) =>
-      `${r.excel_fornecedor ?? ''} ${r.excel_produto ?? ''} ${r.excel_subcentro ?? ''} ${r.excel_valor ?? ''}`
-        .toLowerCase().includes(q));
+      casaNaBusca(`${r.excel_fornecedor ?? ''} ${r.excel_produto ?? ''} ${r.excel_subcentro ?? ''} ${r.excel_valor ?? ''}`, q));
   }, [candidatas, busca]);
 
   const alternar = (id: string) => setMarcadas((prev) => {

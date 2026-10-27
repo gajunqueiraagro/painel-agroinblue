@@ -1,3 +1,4 @@
+import { casaNaBusca as casaSemAcento } from '@/lib/texto/busca';
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -656,7 +657,8 @@ export function casaNaBusca(r: RecebimentoVinculavel, termo: string): boolean {
   const t = termo.trim().toLowerCase();
   if (!t) return true;
   const digitos = t.replace(/\D/g, '');
-  return (r.descricao ?? '').toLowerCase().includes(t) || (r.favorecido ?? '').toLowerCase().includes(t)
+  /* P134: o texto sem acento, cedilha e maiúscula nos dois lados (a regra única); o valor segue pelos dígitos */
+  return casaSemAcento(r.descricao, t) || casaSemAcento(r.favorecido, t)
     || (digitos.length > 0 && String(Math.round(r.valor * 100)).includes(digitos.replace(/^0+/, '')));
 }
 

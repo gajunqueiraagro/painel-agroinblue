@@ -11,6 +11,7 @@
  * tradução não seja demonstravelmente idêntica fica de fora, porque estreitar
  * a mais some com linhas sem erro.
  */
+import { casaNaBusca } from '@/lib/texto/busca';
 import { TIPO_OPERACAO_TRANSFERENCIA } from './v2Transferencia';
 
 /** Os dois valores aceitos como transferência, incluindo a variante legada de importação. */
@@ -185,8 +186,8 @@ export function filtrarListaV2NoCliente<L extends LinhaFiltravel>(
 
   const produto = filtros.lista_produto?.trim();
   if (produto) {
-    const q = produto.toLowerCase();
-    itens = itens.filter((l) => (l.descricao || '').toLowerCase().includes(q));
+    /* P134: sem acento, cedilha e maiúscula nos dois lados (`casaNaBusca`, a regra única) */
+    itens = itens.filter((l) => casaNaBusca(l.descricao, produto));
   }
 
   if (filtros.lista_fornecedor_id) {
