@@ -121,11 +121,13 @@ export type ResultadoDaProposta =
   | { ok: true; proposta: PropostaDeLancamento }
   | { ok: false; frase: string };
 
-/** O resumo dos itens na descricao: "NF 178.766 · <primeiros itens> · N itens". */
+/** O resumo dos itens na descricao: "<primeiros itens> · N itens".
+ *  P133 (Gabriel 27/10/2026): SEM o prefixo "NF 178.766 · " — o numero ja' esta' no documento (coluna Doc.). A caixa alta dos itens vira
+ *  primeira maiuscula no banco, pela regra do P118 (`_fn_descricao_caixa`). Nota sem item legivel: o numero, para a descricao nao nascer vazia. */
 export function descricaoDaNota(nota: NotaLida): string {
   const nomes = nota.itens.map((i) => i.descricao.trim()).filter(Boolean);
-  const partes = [`NF ${numeroFalado(nota.numero)}`];
-  if (nomes.length > 0) partes.push(nomes.slice(0, 2).join(', '));
+  if (nomes.length === 0) return `NF ${numeroFalado(nota.numero)}`;
+  const partes = [nomes.slice(0, 2).join(', ')];
   if (nomes.length > 2) partes.push(`${nomes.length} itens`);
   return partes.join(' · ');
 }

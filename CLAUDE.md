@@ -189,6 +189,10 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   (que o `editarLancamento` nem grava: `edicaoSemMudanca`).
 - Trilha de eventos mostra o que, nao por que: conserto se brifa depois de reproduzir na tela e ler o chamador.
 - Estado de dado so' depois que a gravacao passa (`aplicarComRollback`). Valor sugerido e' valor aceito. "Hoje" e' `hojeLocal()`.
+- CAIXA DO TEXTO (P118): descricao de lancamento e de item da nota TODA em caixa alta grava em primeira maiuscula pelo gatilho
+  `trg_00_descricao_caixa` (`_fn_descricao_caixa` -> `_fn_nome_caixa`, a MESMA regra e a MESMA lista de siglas do fornecedor). Sigla nova
+  entra em `_fn_nome_caixa_siglas()`, nunca no front. Quem grava o texto ja' decidido liga `app.descricao_caixa_escritor`. Conversao em
+  lote so' com backup (`texto_conversao_backup`) e desfazer (`fn_texto_conversao_desfazer`), cliente a cliente.
 
 ### Dado e regra de negocio
 - META x REALIZADO: separacao rigida; Meta nao gera lancamento realizado; tela de aprovacao de Meta sem fallback ("Sem base validada").

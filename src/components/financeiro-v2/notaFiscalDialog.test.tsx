@@ -426,7 +426,8 @@ describe('N7 — o caso de 21/10 16h49: NADA ESCOLHIDO NO MODAL SE PERDE no cami
       conta_bancaria_id: 'sic', fazenda_id: 'faz-2', status_transacao: 'programado', plano_conta_id: 'pl-nut', subcentro: 'Nutrição Engorda',
       favorecido_id: 'f1', data_vencimento: '2026-09-29', valor: 9583, numero_documento: '3241', tipo_documento: 'Nota Fiscal', data_competencia: '2026-09-29',
     });
-    expect(prefill.descricao).toContain('NF 3.241');
+    /* P133 — a descrição é só dos produtos; o número da nota vai no documento (numero_documento acima) */
+    expect(prefill.descricao).not.toContain('NF 3.241');
     expect(prefill.descricao).toContain('POSTE DE CONCRETO SINTETICO 9M');
     expect(prefill.doXml.arquivo.type).toBe('application/pdf');
     expect(prefill.doXml.proposta.favorecidoId).toBe('f1');

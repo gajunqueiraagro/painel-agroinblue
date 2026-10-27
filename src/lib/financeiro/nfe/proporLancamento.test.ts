@@ -79,7 +79,7 @@ describe('proporLancamento — F1, a nota inteira', () => {
       duplicatas: [{ numero: '001', vencimento: '2026-11-05', valorCent: 811900 }, { numero: '002', vencimento: '2026-12-05', valorCent: 811900 }],
       formaPagamento: 'Boleto',
       numeroDocumento: '12345',
-      descricao: 'NF 12.345 · SAL MINERAL 80 P SC 30KG, RACAO ENGORDA 18% SC 40KG · 6 itens',
+      descricao: 'SAL MINERAL 80 P SC 30KG, RACAO ENGORDA 18% SC 40KG · 6 itens',
       documento: {
         numero: '000.012.345', serie: '1', chaveAcesso: p.documento.chaveAcesso, dataEmissao: '2026-09-30', valorCent: 1623800,
         emitenteId: 'forn-1', emitenteNome: 'AGROPECUARIA EXEMPLO LTDA', emitenteDocumento: '11.222.333/0001-81',
@@ -157,8 +157,10 @@ describe('proporLancamento — as decisoes', () => {
     expect(sem.origens.subcentro).toBeUndefined();
   });
   it('13 — a descricao resume os itens', () => {
-    expect(descricaoDaNota(ler().nota)).toBe('NF 12.345 · SAL MINERAL 80 P SC 30KG, RACAO ENGORDA 18% SC 40KG · 6 itens');
-    expect(descricaoDaNota({ ...ler().nota, numero: '178766', itens: ler().nota.itens.slice(0, 1) })).toBe('NF 178.766 · SAL MINERAL 80 P SC 30KG');
+    /* P133 — só os produtos: o número da nota está no documento, não na descrição */
+    expect(descricaoDaNota(ler().nota)).toBe('SAL MINERAL 80 P SC 30KG, RACAO ENGORDA 18% SC 40KG · 6 itens');
+    expect(descricaoDaNota({ ...ler().nota, numero: '178766', itens: ler().nota.itens.slice(0, 1) })).toBe('SAL MINERAL 80 P SC 30KG');
+    expect(descricaoDaNota({ ...ler().nota, numero: '178766', itens: [] })).toBe('NF 178.766');
     expect(descricaoDaNota({ ...ler().nota, itens: [] })).toBe('NF 12.345');
   });
   it('sem protocolo: aviso com a frase exata', () => {
