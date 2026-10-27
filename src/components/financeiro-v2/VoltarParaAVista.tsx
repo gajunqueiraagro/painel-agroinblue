@@ -4,6 +4,8 @@
  * (cadastro do parcelamento) e o bloco "Parcelamento" da aba Pagamento do lançamento que é parcela.
  * ⚠ A prévia é a PRÓPRIA função do banco, simulada: se ela recusa (parcela paga/conciliada), o botão fica APAGADO com a frase dela (no
  *   `title` e, com `comFrase`, embaixo); se não é compra parcelada, o botão não se oferece.
+ * ⚠ P96a — a compra que veio da JUNÇÃO de lançamentos soltos não tem à vista: no lugar (o mesmo botão, a mesma altura) fica
+ *   "Desfazer a junção" (`fn_parcelamento_desfazer_juncao`): os N voltam a ser soltos, nenhum é cancelado.
  */
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -13,7 +15,9 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { brCentavos } from '@/lib/financiamentos/parcelasLivres';
-import { simularVoltaAVista, voltarParaAVista, type GravadoresDaVolta, type VoltaAVista } from '@/lib/financeiro/voltarAVista';
+import {
+  desfazerJuncao, simularDesfazerJuncao, simularVoltaAVista, voltarParaAVista, type DesfazerJuncao, type GravadoresDaVolta, type VoltaAVista,
+} from '@/lib/financeiro/voltarAVista';
 import { cn } from '@/lib/utils';
 
 const dataBR = (iso: string | null | undefined) => (iso && /^\d{4}-\d{2}-\d{2}/.test(iso) ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '—');
@@ -27,6 +31,7 @@ export function VoltarParaAVista({ clienteId, financiamentoId, onVoltou, comFras
   const [confirmar, setConfirmar] = useState(false);
   const [gravando, setGravando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [desfazer, setDesfazer] = useState<DesfazerJuncao | null | 'lendo'>(null);
 
   useEffect(() => {
     let vivo = true;
@@ -34,6 +39,15 @@ export function VoltarParaAVista({ clienteId, financiamentoId, onVoltou, comFras
     void simularVoltaAVista(financiamentoId, gravadores).then((r) => { if (vivo) setPrevia(r); });
     return () => { vivo = false; };
   }, [financiamentoId, gravadores]);
+
+  const juncao = previa !== null && previa !== 'lendo' && previa.ok === false && previa.motivo === 'juncao';
+  useEffect(() => {
+    if (!juncao) { setDesfazer(null); return; }
+    let vivo = true;
+    setDesfazer('lendo');
+    void simularDesfazerJuncao(financiamentoId, gravadores).then((r) => { if (vivo) setDesfazer(r); });
+    return () => { vivo = false; };
+  }, [juncao, financiamentoId, gravadores]);
 
   if (previa === null) return null;
   const lendo = previa === 'lendo';
@@ -53,7 +67,45 @@ export function VoltarParaAVista({ clienteId, financiamentoId, onVoltou, comFras
     } finally { setGravando(false); }
   };
 
-  const conteudo = (
+  const gravarDesfazer = async () => {
+    setGravando(true); setErro(null);
+    try {
+      const r = await desfazerJuncao(clienteId, financiamentoId, gravadores);
+      if (r.ok === false) { setErro(r.erro); setConfirmar(false); return; }
+      toast.success('A junção foi desfeita: os lançamentos voltaram a ser soltos');
+      setConfirmar(false);
+      onVoltou();
+    } finally { setGravando(false); }
+  };
+  const desfazerPronto = desfazer && desfazer !== 'lendo' && desfazer.ok ? desfazer : null;
+  const recusaDoDesfazer = desfazer && desfazer !== 'lendo' && desfazer.ok === false ? desfazer.frase : null;
+
+  const conteudoDaJuncao = (
+    <div className={cn('flex min-w-0 flex-col gap-0.5', emBloco && 'items-start', className)} data-testid="desfazer-juncao">
+      <Button type="button" size="sm" variant="outline" className={cn('h-[24px] shrink-0 px-2.5 text-[10.5px]', botaoClassName)} disabled={!desfazerPronto}
+        title={recusaDoDesfazer ?? (desfazerPronto ? `Os ${desfazerPronto.lancamentos} lançamentos voltam a ser soltos (nenhum é cancelado).` : 'Conferindo a junção…')}
+        onClick={() => setConfirmar(true)} data-testid="desfazer-juncao-botao">Desfazer a junção</Button>
+      {comFrase && (recusaDoDesfazer || erro) && <p className="text-[10px] text-muted-foreground" data-testid="desfazer-juncao-frase">{erro ?? recusaDoDesfazer}</p>}
+      <AlertDialog open={confirmar} onOpenChange={(o) => { if (!o && !gravando) setConfirmar(false); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desfazer a junção?</AlertDialogTitle>
+            <AlertDialogDescription data-testid="desfazer-juncao-texto">
+              {desfazerPronto ? `Os ${desfazerPronto.lancamentos} lançamentos voltam a ser soltos, sem parcelamento. Nenhum é cancelado; valor, vencimento, pagamento e conciliação não mudam.${desfazerPronto.competenciaVolta ? ` A competência volta à de antes em ${desfazerPronto.competenciaVolta}.` : ''}${desfazerPronto.competenciaMantida ? ` ${desfazerPronto.competenciaMantida} ${desfazerPronto.competenciaMantida === 1 ? 'teve a competência mexida depois e fica como está' : 'tiveram a competência mexida depois e ficam como estão'}.` : ''}` : ''}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={gravando}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction disabled={gravando || !desfazerPronto} data-testid="desfazer-juncao-gravar" onClick={(e) => { e.preventDefault(); void gravarDesfazer(); }}>
+              {gravando ? 'Desfazendo…' : 'Desfazer a junção'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+
+  const conteudo = juncao ? conteudoDaJuncao : (
     <div className={cn('flex min-w-0 flex-col gap-0.5', emBloco && 'items-start', className)} data-testid="voltar-a-vista">
       <Button type="button" size="sm" variant="outline" className={cn('h-[24px] shrink-0 px-2.5 text-[10.5px]', botaoClassName)} disabled={lendo || !!recusa}
         title={recusa ?? (lendo ? 'Conferindo as parcelas…' : `As ${n} parcelas voltam a ser um lançamento à vista.`)}
@@ -107,7 +159,8 @@ export function VoltarParaAVista({ clienteId, financiamentoId, onVoltou, comFras
   );
   return emBloco ? (
     <section className={cn(BLOCO_FORMULARIO, 'gap-1')} data-testid="voltar-a-vista-bloco">
-      <TituloDoBloco nome="Parcelamento" dica={lendo ? 'compra parcelada' : `compra parcelada em ${n}`} />
+      <TituloDoBloco nome="Parcelamento" dica={lendo ? 'compra parcelada'
+        : juncao ? (desfazerPronto ? `juntada de ${desfazerPronto.lancamentos} lançamentos soltos` : 'compra juntada de lançamentos soltos') : `compra parcelada em ${n}`} />
       {conteudo}
     </section>
   ) : conteudo;

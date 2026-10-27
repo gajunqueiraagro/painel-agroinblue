@@ -749,6 +749,9 @@ if (tela === 'mesclar') {
     g.__bancoBancada = {
       from: (t: string) => {
         if (t === 'financeiro_fornecedores') return [{ nome_fantasia: null, inscricao_estadual: null, tipo_pessoa: 'PJ', logradouro: null, numero: null, complemento: null, bairro: null, municipio: null, uf: null, cep: null, telefone: null }];
+        /* P96a — `v=irmas`: a 4/4 com a NF DIGITADA À MÃO (valor da parcela, emissão do vencimento) — a faixa "Usar a nota lida". SINTÉTICA. */
+        if (t === 'financeiro_lancamento_documentos' && v === 'irmas') return [{ id: 'doc-irma-3', lancamento_id: 'jl-irma-3', versao: 2, especie: 'nf',
+          numero: '3241', chave_acesso: null, valor_documento: 2395.74, data_emissao: '2027-01-10' }];
         if (t === 'financeiro_lancamentos_v2' && (v === 'cadastrado' || v === 'parcelar')) return [{ id: 'l-ext', data_vencimento: '2026-10-20', data_competencia: '2026-10-20',
           descricao: 'PAGTO BOLETO AGRO SINTETICA INSUMOS — lançamento criado do extrato bancário com histórico comprido', valor: 491.64, financiamento_id: null, numero_documento: null }];
         return [];
@@ -781,6 +784,10 @@ if (tela === 'mesclar') {
           descricao: 'Medicamentos Bovinos Sinteticos — lançado à mão como uma parcela da nota', valor_cent: 49164, status: 'agendado', conciliado: false,
           financiamento_id: null, numero_documento: 'NF_000.000.937', fornecedor_id: 'agro-s', fornecedor_nome: 'Agro Sintetica Insumos Agropecuarios Ltda',
           fornecedor_por: 'cnpj', parcelas: [], por: ['numero'] }]
+        /* P96a — a prévia da junção das 4 (a função do banco simulada): o efeito no DRE de passar a competência para a emissão */
+        : fn === 'fn_parcelamento_juntar_lancamentos' && v === 'irmas' ? { ok: true, simulado: true, parcelas: 4, soma: 9582.98, descricao: 'Medicamentos Bovinos Sinteticos',
+          safra_nova_codigo: '25/26-Pec', lista: [], efeito_por_mes: [{ mes: '2026-09', valor: 9582.98, parcelas: 4 }, { mes: '2026-10', valor: -2395.76, parcelas: -1 },
+            { mes: '2026-11', valor: -2395.73, parcelas: -1 }, { mes: '2026-12', valor: -2395.75, parcelas: -1 }, { mes: '2027-01', valor: -2395.74, parcelas: -1 }] }
         /* P74 — os dias de vencimento do cartão SINTÉTICO (o mais frequente: 10) */
         : fn === 'fn_cartao_dias_de_vencimento' ? [{ dia: 10, lancamentos: 409, ultimo: '2026-10-10' }]
         : null,

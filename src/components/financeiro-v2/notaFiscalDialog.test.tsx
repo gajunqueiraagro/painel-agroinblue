@@ -71,6 +71,7 @@ import { proporLancamento } from '@/lib/financeiro/nfe/proporLancamento';
 import { resolverEmitente } from '@/lib/financeiro/nfe/resolverEmitente';
 import { PAGINAS_DANFE_SINTETICO, danfeSinteticoAvulsa, danfeSinteticoSemDuplicata } from '@/lib/financeiro/nfe/__fixtures__/danfeSintetico';
 import type { LancamentoJaLancado } from '@/lib/financeiro/nfe/jaLancada';
+import type { DocumentoDaParcela, GravadoresDaJuncao } from '@/lib/financeiro/juntarParcelas';
 import type { OcorrenciaDaNota } from '@/lib/financeiro/nfeConsultas';
 
 beforeEach(() => {
@@ -139,7 +140,7 @@ const FORN: FornecedorV2 = {
   banco: null, agencia: null, conta: null, tipo_conta: null, cpf_cnpj_pagamento: null, nome_favorecido: null, observacao_pagamento: null,
 };
 
-function abrir(nota: NotaParaLancar, extra: { fornecedores?: FornecedorV2[]; g?: Gravadores; onCriarLancamento?: (f: LancamentoV2Form) => Promise<string | null>; contas?: ContaBancariaV2[] } = {}) {
+function abrir(nota: NotaParaLancar, extra: { fornecedores?: FornecedorV2[]; g?: Gravadores; onCriarLancamento?: (f: LancamentoV2Form) => Promise<string | null>; contas?: ContaBancariaV2[]; gj?: GravadoresDaJuncao } = {}) {
   const onCriarFornecedor = vi.fn(async (nome: string, _faz: string | null, _doc?: string): Promise<FornecedorV2 | null> => ({ ...FORN, id: 'forn-novo', nome }));
   const props = {
     onClose: vi.fn(), onCriado: vi.fn(), onAbrirNoLancamento: vi.fn(), onAbrirRegistrada: vi.fn(), onCriarFornecedor,
@@ -149,7 +150,7 @@ function abrir(nota: NotaParaLancar, extra: { fornecedores?: FornecedorV2[]; g?:
   render(
     <QueryClientProvider client={new QueryClient()}>
       <NotaFiscalDialog open clienteId="cli" clienteNome="NJ" nota={nota} fazendas={FAZENDAS} contas={extra.contas ?? CONTAS} classificacoes={PLANO} safras={SAFRAS}
-        fornecedores={extra.fornecedores ?? []} gravadores={extra.g} consultarReceita={RECEITA} onCriarLancamento={extra.onCriarLancamento} {...props} />
+        fornecedores={extra.fornecedores ?? []} gravadores={extra.g} consultarReceita={RECEITA} onCriarLancamento={extra.onCriarLancamento} gravadoresDaJuncao={extra.gj} {...props} />
     </QueryClientProvider>,
   );
   return props;
@@ -733,7 +734,105 @@ describe('P95 — a nota achada em N parcelas soltas (as irmas da fracao)', () =
     expect(screen.getByTestId('nota-ja-lancada-frase').textContent)
       .toBe('Esta nota parece já lançada em parcelas: achadas 4 de 4 · soma R$ 1.966,52 · nota R$ 1.966,56 · diferença R$ 0,04. Nada será criado em dobro.');
     expect(screen.queryByTestId('nota-criar-faltam')).toBeNull();
-    expect(screen.getByTestId('nota-anexar-ja-lancados').textContent).toBe('Anexar a nota a estes 4');
+    /* P96a — as 4 achadas inteiras: o gesto é JUNTAR (e anexar); "Só anexar a nota" fica na confirmação */
+    expect(screen.getByTestId('nota-juntar-soltas').textContent).toBe('Juntar as 4 e anexar');
+  });
+});
+
+/* P96a — JUNTAR AS N SOLTAS como parcelas desta nota (o molde do P95: 4 irmãs, soma 1.966,52 × nota 1.966,56). A função do banco é falsa:
+   simular devolve o efeito por mês; gravar devolve ok. A nota se anexa pelo MESMO caminho do "Anexar". */
+describe('P96a — juntar as parcelas soltas na prévia da nota', () => {
+  const VENC = ['2026-10-10', '2026-11-10', '2026-12-10', '2027-01-10'];
+  const irma = (n: number, valorCent: number) => jaLancado(n, VENC[n - 1], 'realizado',
+    { id: `irma-${n}`, descricao: `Tinta sintetica - ${n}/4`, valorCent, parcelas: [], por: ['fracao'], fracaoN: 4, financiamentoId: null });
+  const IRMAS = [irma(1, 49165), irma(2, 49160), irma(3, 49164), irma(4, 49163)];
+  const EFEITO = [{ mes: '2026-09', valor: 1475.0, parcelas: 3 }, { mes: '2026-10', valor: -491.65, parcelas: -1 },
+    { mes: '2026-11', valor: -491.6, parcelas: -1 }, { mes: '2026-12', valor: -491.64, parcelas: -1 }];
+  const falsos = (o: { recusaComCompetencia?: boolean; docs?: DocumentoDaParcela[] } = {}) => {
+    const juntar = vi.fn(async (_c: string, _ids: readonly string[], comp: string | null, simular: boolean): Promise<unknown> => {
+      if (comp && o.recusaComCompetencia) return { ok: false, recusa: { motivo: 'mes_fechado', frase: 'O mês 10/2026 está fechado: reabra antes de mudar a competência.' } };
+      return { ok: true, simulado: simular, parcelas: 4, soma: 1966.52, descricao: 'Tinta sintetica', efeito_por_mes: comp ? EFEITO : [], lista: [] };
+    });
+    const editarDocumento = vi.fn(async (_c: string, _d: string, _v: number, _campos: Record<string, string>) => {});
+    const documentos = vi.fn(async (_c: string, _ids: readonly string[]) => o.docs ?? []);
+    const gj: GravadoresDaJuncao = { juntar, documentos, editarDocumento };
+    return { gj, juntar, editarDocumento };
+  };
+  const abrirJuntar = async () => {
+    fireEvent.click(await screen.findByTestId('nota-juntar-soltas'));
+    const dialogo = await screen.findByTestId('nota-juntar-confirmar');
+    await waitFor(() => expect(within(dialogo).getByTestId('nota-juntar-efeito').textContent).not.toContain('Calculando'));
+    return dialogo;
+  };
+
+  it('J1 a confirmação: o resumo, a competência MARCADA por padrão e o efeito no DRE; "Juntar" grava com a emissão e anexa a nota às 4', async () => {
+    consultas.notaJaLancada.mockResolvedValue(IRMAS);
+    const { g, comoGravadores } = gravadoresFalsos();
+    const { gj, juntar } = falsos();
+    const props = abrir(montarNota({ fornecedores: [FORN], umaParcela: true }), { g: comoGravadores, gj });
+    const dialogo = await abrirJuntar();
+    expect(juntar).toHaveBeenCalledWith('cli', ['irma-1', 'irma-2', 'irma-3', 'irma-4'], '2026-09-15', true);
+    expect(juntar).toHaveBeenCalledWith('cli', ['irma-1', 'irma-2', 'irma-3', 'irma-4'], null, true);
+    expect(within(dialogo).getByTestId('nota-juntar-texto').textContent).toContain('Soma R$\u00a01.966,52 · nota R$\u00a01.966,56 · diferença R$\u00a00,04');
+    expect(within(within(dialogo).getByTestId('nota-juntar-competencia')).getByRole('checkbox').getAttribute('data-state')).toBe('checked');
+    expect(within(dialogo).getByTestId('nota-juntar-efeito').textContent)
+      .toBe('Efeito no DRE: setembro +R$ 1.475,00; outubro, novembro e dezembro −1 parcela cada.');
+    expect(juntar.mock.calls.some((c) => c[3] === false)).toBe(false);
+    fireEvent.click(within(dialogo).getByTestId('nota-juntar-gravar'));
+    await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
+    expect(juntar).toHaveBeenCalledWith('cli', ['irma-1', 'irma-2', 'irma-3', 'irma-4'], '2026-09-15', false);
+    const [, parcelas] = g.documentosDoParcelamento.mock.calls[0];
+    expect(parcelas.map((x) => x.lancamentoId)).toEqual(['irma-1', 'irma-2', 'irma-3', 'irma-4']);
+  });
+  it('J2 desmarcada: grava SEM a competência (o DRE não muda)', async () => {
+    consultas.notaJaLancada.mockResolvedValue(IRMAS);
+    const { comoGravadores } = gravadoresFalsos();
+    const { gj, juntar } = falsos();
+    const props = abrir(montarNota({ fornecedores: [FORN], umaParcela: true }), { g: comoGravadores, gj });
+    const dialogo = await abrirJuntar();
+    fireEvent.click(within(within(dialogo).getByTestId('nota-juntar-competencia')).getByRole('checkbox'));
+    expect(within(dialogo).getByTestId('nota-juntar-efeito').textContent).toBe('A competência de cada uma fica como está: o DRE não muda.');
+    fireEvent.click(within(dialogo).getByTestId('nota-juntar-gravar'));
+    await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
+    expect(juntar).toHaveBeenCalledWith('cli', ['irma-1', 'irma-2', 'irma-3', 'irma-4'], null, false);
+  });
+  it('J3 "Só anexar a nota": nada se junta, a nota vai às 4', async () => {
+    consultas.notaJaLancada.mockResolvedValue(IRMAS);
+    const { g, comoGravadores } = gravadoresFalsos();
+    const { gj, juntar } = falsos();
+    const props = abrir(montarNota({ fornecedores: [FORN], umaParcela: true }), { g: comoGravadores, gj });
+    const dialogo = await abrirJuntar();
+    fireEvent.click(within(dialogo).getByTestId('nota-juntar-so-anexar'));
+    await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
+    expect(juntar.mock.calls.some((c) => c[3] === false)).toBe(false);
+    expect(g.documentosDoParcelamento).toHaveBeenCalledTimes(1);
+  });
+  it('J4 a competência recusada pelo banco (mês fechado): a caixinha sai desmarcada e apagada, com a frase; juntar sem ela segue', async () => {
+    consultas.notaJaLancada.mockResolvedValue(IRMAS);
+    const { comoGravadores } = gravadoresFalsos();
+    const { gj } = falsos({ recusaComCompetencia: true });
+    abrir(montarNota({ fornecedores: [FORN], umaParcela: true }), { g: comoGravadores, gj });
+    const dialogo = await abrirJuntar();
+    const caixa = within(within(dialogo).getByTestId('nota-juntar-competencia')).getByRole('checkbox');
+    await waitFor(() => expect(caixa.getAttribute('data-state')).toBe('unchecked'));
+    expect(caixa).toBeDisabled();
+    expect(within(dialogo).getByTestId('nota-juntar-efeito').textContent).toBe('O mês 10/2026 está fechado: reabra antes de mudar a competência.');
+    expect(within(dialogo).getByTestId('nota-juntar-gravar')).not.toBeDisabled();
+  });
+  it('J5 a NF digitada à mão numa das 4 diverge: a frase e "Usar a nota lida" — troca SÓ com a confirmação (valor e emissão, com a versão)', async () => {
+    consultas.notaJaLancada.mockResolvedValue(IRMAS);
+    const { comoGravadores } = gravadoresFalsos();
+    const doc: DocumentoDaParcela = { id: 'doc-4', lancamentoId: 'irma-4', versao: 2, especie: 'nf', numero: '937', chave: null, valorCent: 49164, emissao: '2026-10-10' };
+    const { gj, editarDocumento } = falsos({ docs: [doc] });
+    abrir(montarNota({ fornecedores: [FORN], umaParcela: true }), { g: comoGravadores, gj });
+    expect((await screen.findByTestId('nota-nf-digitada-frase')).textContent)
+      .toBe('A 4/4 tem uma NF digitada à mão: R$ 491,64, emissão 10/10/2026 — a nota lida é R$ 1.966,56, emissão 15/09/2026');
+    fireEvent.click(screen.getByTestId('nota-usar-nota-lida'));
+    const conf = await screen.findByTestId('nota-lida-confirmar');
+    expect(editarDocumento).not.toHaveBeenCalled();
+    expect(within(conf).getByTestId('nota-lida-texto').textContent).toContain('O que foi digitado fica na Auditoria do documento.');
+    fireEvent.click(within(conf).getByTestId('nota-lida-gravar'));
+    await waitFor(() => expect(editarDocumento).toHaveBeenCalledWith('cli', 'doc-4', 2, { valor_documento: '1966.56', data_emissao: '2026-09-15' }));
   });
 });
 

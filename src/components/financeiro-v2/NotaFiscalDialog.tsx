@@ -78,6 +78,10 @@ import type { ClassificacaoItem, ContaBancariaV2, FornecedorV2, LancamentoV2Form
 import type { Fazenda } from '@/contexts/FazendaContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
+import {
+  fraseDaNfDigitada, fraseDaSafra, fraseDoEfeito, gravarJuncao, GRAVADORES_DA_JUNCAO, nfDigitadaDivergente, simularJuncao, soltasParaJuntar, usarANotaLida,
+  type DocumentoDaParcela, type GravadoresDaJuncao, type Juncao,
+} from '@/lib/financeiro/juntarParcelas';
 
 export type NotaLidaOk = Extract<NotaDoArquivo, { ok: true }>;
 
@@ -151,6 +155,7 @@ export interface NotaParaLancar { arquivo: File; bytes: ArrayBuffer; lido: NotaL
 export function NotaFiscalDialog({
   open, onClose, clienteId, clienteNome, nota, fazendas, contas, classificacoes, safras = [], fornecedores, onCriarFornecedor, onCriarLancamento,
   onAbrirNoLancamento, onAbrirRegistrada, onCriado, gravadores, consultarReceita = consultarCnpj, gravarItens = gravarItensSemTravar,
+  gravadoresDaJuncao = GRAVADORES_DA_JUNCAO,
 }: {
   open: boolean;
   onClose: () => void;
@@ -171,6 +176,8 @@ export function NotaFiscalDialog({
   onCriado: () => void;
   /** So' para teste: os gravadores (padrao: os do banco). */
   gravadores?: Gravadores;
+  /** P96a — so' para teste: juntar as soltas, ler e editar os documentos delas (padrao: os do banco). */
+  gravadoresDaJuncao?: GravadoresDaJuncao;
   /** So' para teste: a consulta da Receita (padrao: `consultarCnpj`). */
   consultarReceita?: typeof consultarCnpj;
   /** ITENS-NOTA-01 — guarda os itens da nota depois de criar (padrao: `gravarItensSemTravar`; o teste troca). */
@@ -264,7 +271,7 @@ export function NotaFiscalDialog({
   const [completar, setCompletar] = useState<CampoDoEmitente[]>([]);
   const [abertos, setAbertos] = useState<LancamentoAbertoDaNota[]>([]);
   const [confirmarAtualizar, setConfirmarAtualizar] = useState<{ alvo: LancamentoAbertoDaNota; parcelar: boolean } | null>(null);
-  const [ocupado, setOcupado] = useState<null | 'cadastrar' | 'completar' | 'criar' | 'atualizar'>(null);
+  const [ocupado, setOcupado] = useState<null | 'cadastrar' | 'completar' | 'criar' | 'atualizar' | 'juntar' | 'nota-lida'>(null);
   /* FIN-NOTA-PDF-01b — lavoura: a safra e a cultura ('' = "Todas (rateia)"; `null` = ainda sem resposta) */
   const [safraId, setSafraId] = useState('');
   const [cultura, setCultura] = useState<string | null>(null);
@@ -322,6 +329,38 @@ export function NotaFiscalDialog({
   /* D — a nota que so' tem lancamento CANCELADO nao esta' lancada: o rodape so' diz quantos */
   const canceladosSo = useMemo(() => (achados && !achados.some((l) => !l.cancelado) ? canceladosDaNota(achados) : []), [achados]);
   const jaLancada = useMemo(() => (achados ? casarJaLancados(parcelasDaBusca, achados, n.totais.notaCent) : null), [achados, parcelasDaBusca, n.totais.notaCent]);
+  /* P96a — as N soltas desta nota (todas as N frações, nenhuma já parcela): o gesto principal vira "Juntar as N e anexar" */
+  const soltas = useMemo(() => soltasParaJuntar(jaLancada), [jaLancada]);
+  const [confirmarJuntar, setConfirmarJuntar] = useState(false);
+  /* a OPÇÃO da competência (marcada por padrão, Gabriel 26/10): as N para a emissão da nota */
+  const [passarCompetencia, setPassarCompetencia] = useState(true);
+  /* as duas prévias do banco (a mesma função simulada): com e sem a competência */
+  const [previa, setPrevia] = useState<{ com: Juncao; sem: Juncao } | null>(null);
+  useEffect(() => {
+    if (!confirmarJuntar || !soltas) { setPrevia(null); return; }
+    let vivo = true;
+    void Promise.all([simularJuncao(clienteId, soltas.ids, n.emissao || null, gravadoresDaJuncao), simularJuncao(clienteId, soltas.ids, null, gravadoresDaJuncao)])
+      .then(([com, sem]) => { if (vivo) { setPrevia({ com, sem }); if (!com.ok) setPassarCompetencia(false); } });
+    return () => { vivo = false; };
+  }, [confirmarJuntar, soltas, clienteId, n.emissao, gravadoresDaJuncao]);
+  /* P96a — a NF já anexada à mão numa das N, com valor/emissão diferentes da nota lida: NUNCA se troca sozinha */
+  const [docsDasSoltas, setDocsDasSoltas] = useState<DocumentoDaParcela[]>([]);
+  useEffect(() => {
+    if (!soltas) { setDocsDasSoltas([]); return; }
+    let vivo = true;
+    void gravadoresDaJuncao.documentos(clienteId, soltas.ids).then((d) => { if (vivo) setDocsDasSoltas(d); }, () => { if (vivo) setDocsDasSoltas([]); });
+    return () => { vivo = false; };
+  }, [soltas, clienteId, gravadoresDaJuncao]);
+  const notaLida = useMemo(() => ({ chave: n.chave || null, numero: p.numeroDocumento || n.numero, totalCent: n.totais.notaCent, emissao: n.emissao || null }),
+    [n.chave, n.numero, p.numeroDocumento, n.totais.notaCent, n.emissao]);
+  const nfDigitada = useMemo(() => nfDigitadaDivergente(docsDasSoltas, (id) => {
+    const l = jaLancada?.pelaNota.find((x) => x.id === id);
+    const f = fracaoDaDescricao(l?.descricao);
+    return f ? `${f.k}/${f.n}` : 'parcela';
+  }, notaLida), [docsDasSoltas, jaLancada, notaLida]);
+  const [confirmarNotaLida, setConfirmarNotaLida] = useState(false);
+  /* a prévia da opção marcada (com ou sem a competência) — a que o "Juntar" grava */
+  const escolhida = previa ? (passarCompetencia ? previa.com : previa.sem) : null;
 
   /* o proposto que aparece depois (a lista de agora, a Receita) entra sozinho — salvo se o operador escolheu cadastrar outro */
   useEffect(() => {
@@ -496,6 +535,27 @@ export function NotaFiscalDialog({
       if (erroItens) toast.error(`Os itens da nota não foram guardados: ${erroItens}`);
       onCriado(); onClose();
     } finally { setOcupado(null); }
+  };
+  /** P96a — "Juntar as N e anexar": as N viram UMA compra parcelada (os lançamentos ficam; com a opção, a competência vai para a emissão)
+   *  e a nota se anexa pelo MESMO caminho do "Anexar". A junção recusada não anexa nada (a frase fica no rodapé). */
+  const juntarEAnexar = async () => {
+    if (!soltas) return;
+    setOcupado('juntar'); setErro(null);
+    const r = await gravarJuncao(clienteId, soltas.ids, passarCompetencia ? n.emissao || null : null, gravadoresDaJuncao);
+    setOcupado(null); setConfirmarJuntar(false);
+    if (r.ok === false) { setErro(r.erro); return; }
+    toast.success(`${soltas.n} parcelas juntadas numa compra parcelada`);
+    await anexarJaLancados();
+  };
+  /** P96a — "Usar a nota lida": só com a confirmação; troca valor e emissão da NF digitada (o digitado fica na Auditoria). */
+  const trocarPelaNotaLida = async () => {
+    if (!nfDigitada || !soltas) return;
+    setOcupado('nota-lida'); setErro(null);
+    const e = await usarANotaLida(clienteId, nfDigitada, notaLida, gravadoresDaJuncao);
+    setOcupado(null); setConfirmarNotaLida(false);
+    if (e) { setErro(e); return; }
+    toast.success(`NF da ${nfDigitada.rotulo} trocada pela nota lida (o digitado fica na Auditoria)`);
+    void gravadoresDaJuncao.documentos(clienteId, soltas.ids).then(setDocsDasSoltas, () => {});
   };
   /** "Atualizar este" (anexar) ou "Atualizar e parcelar" (o a' vista vira 1/N; `parcelas` = a lista que vai ao banco). */
   const atualizar = async (alvo: LancamentoAbertoDaNota, parcelas: ParcelaDoPayload[] | null) => {
@@ -720,6 +780,15 @@ export function NotaFiscalDialog({
                     </tbody>
                   </table>
                 </div>
+                {/* P96a — a NF digitada à mão numa das N que diverge da nota lida: mostrar, nunca trocar sozinho (2 linhas reservadas, P104) */}
+                {nfDigitada && (
+                  <div className="mt-1 flex shrink-0 items-center gap-2 rounded bg-amber-50 px-1.5 text-amber-900" data-testid="nota-nf-digitada">
+                    <p className="h-[26px] min-w-0 flex-1 overflow-hidden whitespace-normal text-[9.5px] leading-[13px]" data-testid="nota-nf-digitada-frase">
+                      {fraseDaNfDigitada(nfDigitada, notaLida)}</p>
+                    <Button type="button" size="sm" variant="outline" className="h-[22px] shrink-0 px-2 text-[10.5px]" disabled={!!ocupado}
+                      onClick={() => setConfirmarNotaLida(true)} data-testid="nota-usar-nota-lida">Usar a nota lida</Button>
+                  </div>
+                )}
                 <div className="mt-1 flex h-5 shrink-0 items-center gap-3 text-[10px]">
                   {jaLancada.faltam.length > 0 && (
                     <label className="flex shrink-0 items-center gap-1.5" data-testid="nota-criar-faltam">
@@ -1003,7 +1072,13 @@ export function NotaFiscalDialog({
             No Novo lançamento
           </Button>
           {/* o botao principal tem a MESMA largura nos dois estados (nada se desloca); "Criar mesmo assim" mora no bloco */}
-          {jaLancada && !bloqueio ? (<>
+          {jaLancada && !bloqueio && soltas ? (
+            /* P96a — as N soltas achadas inteiras: o gesto é JUNTAR (e anexar); "Só anexar a nota" fica na confirmação */
+            <Button type="button" size="sm" className="h-[24px] w-[180px] shrink-0 px-2.5 text-[10.5px]" data-testid="nota-juntar-soltas"
+              disabled={!!ocupado} onClick={() => setConfirmarJuntar(true)}>
+              {ocupado === 'juntar' ? 'Juntando…' : ocupado === 'atualizar' ? 'Anexando…' : `Juntar as ${soltas.n} e anexar`}
+            </Button>
+          ) : jaLancada && !bloqueio ? (<>
             <Button type="button" size="sm" className="h-[24px] w-[180px] shrink-0 px-2.5 text-[10.5px]" data-testid="nota-anexar-ja-lancados"
               disabled={!!ocupado || (criarFaltam && jaLancada.faltam.length > 0 && faltas.length > 0)} onClick={() => { void anexarJaLancados(); }}>
               {ocupado === 'atualizar' ? 'Anexando…' : criarFaltam && jaLancada.faltam.length
@@ -1048,6 +1123,61 @@ export function NotaFiscalDialog({
                 {ocupado === 'atualizar' ? 'Atualizando…' : !confirmarAtualizar?.parcelar ? 'Atualizar este' : decisao?.tipo === 'diferenca' ? 'Repartir o resto nas demais' : 'Atualizar e parcelar'}
               </AlertDialogAction>
             )}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* P96a — juntar as N soltas: o resumo, a OPÇÃO da competência (com o efeito no DRE, da prévia do banco) e "Só anexar a nota" */}
+      <AlertDialog open={confirmarJuntar} onOpenChange={(o) => { if (!o && ocupado !== 'juntar') setConfirmarJuntar(false); }}>
+        <AlertDialogContent data-testid="nota-juntar-confirmar">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Juntar as {soltas?.n ?? 0} como parcelas desta nota?</AlertDialogTitle>
+            <AlertDialogDescription data-testid="nota-juntar-texto">
+              {`As ${soltas?.n ?? 0} viram as parcelas 1 a ${soltas?.n ?? 0} de uma compra parcelada, na ordem do vencimento. Valor, vencimento, pagamento, status e conciliação não mudam. `}
+              {`Soma R$\u00a0${reais(soltas?.somaCent ?? 0)} · nota R$\u00a0${reais(n.totais.notaCent)}`}
+              {soltas && soltas.somaCent !== n.totais.notaCent ? ` · diferença R$\u00a0${reais(Math.abs(soltas.somaCent - n.totais.notaCent))}` : ''}. A {p.rotuloNota} fica anexada às {soltas?.n ?? 0}.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-1 text-[11px]">
+            <label className="flex items-start gap-1.5" data-testid="nota-juntar-competencia">
+              <Checkbox checked={passarCompetencia} disabled={!previa || !previa.com.ok || !n.emissao}
+                onCheckedChange={(v) => setPassarCompetencia(v === true)} className="mt-0.5 h-3 w-3" />
+              <span>Passar a competência das {soltas?.n ?? 0} para a emissão da nota ({dataInteira(n.emissao)})</span>
+            </label>
+            <p className="min-h-[30px] pl-[18px] text-[10.5px] leading-[15px] text-muted-foreground" data-testid="nota-juntar-efeito">
+              {!previa ? 'Calculando o efeito no DRE…'
+                : previa.com.ok === false ? previa.com.frase
+                  : passarCompetencia ? `Efeito no DRE: ${fraseDoEfeito(previa.com.efeito) || 'nenhum (já estão no mês da nota)'}${fraseDaSafra(previa.com.lista) ? `; ${fraseDaSafra(previa.com.lista)}` : ''}.`
+                    : 'A competência de cada uma fica como está: o DRE não muda.'}
+            </p>
+            {escolhida && escolhida.ok === false && <p className="text-[10.5px] text-destructive" data-testid="nota-juntar-recusa">{escolhida.frase}</p>}
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={ocupado === 'juntar'}>Voltar</AlertDialogCancel>
+            <Button type="button" variant="outline" disabled={!!ocupado} data-testid="nota-juntar-so-anexar"
+              onClick={() => { setConfirmarJuntar(false); void anexarJaLancados(); }}>Só anexar a nota</Button>
+            <AlertDialogAction data-testid="nota-juntar-gravar" disabled={!!ocupado || !escolhida || !escolhida.ok}
+              onClick={(e) => { e.preventDefault(); void juntarEAnexar(); }}>
+              {ocupado === 'juntar' ? 'Juntando…' : `Juntar as ${soltas?.n ?? 0}`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* P96a — "Usar a nota lida": a troca da NF digitada só com confirmação; o digitado fica na Auditoria */}
+      <AlertDialog open={confirmarNotaLida} onOpenChange={(o) => { if (!o && ocupado !== 'nota-lida') setConfirmarNotaLida(false); }}>
+        <AlertDialogContent data-testid="nota-lida-confirmar">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Usar a nota lida na NF da {nfDigitada?.rotulo ?? ''}?</AlertDialogTitle>
+            <AlertDialogDescription data-testid="nota-lida-texto">
+              {nfDigitada ? `Valor R$\u00a0${reais(nfDigitada.valorCent ?? 0)} → R$\u00a0${reais(notaLida.totalCent)}; emissão ${dataInteira(nfDigitada.emissao)} → ${dataInteira(notaLida.emissao)}. O que foi digitado fica na Auditoria do documento. Nenhum lançamento muda.` : ''}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={ocupado === 'nota-lida'}>Voltar</AlertDialogCancel>
+            <AlertDialogAction data-testid="nota-lida-gravar" disabled={!!ocupado} onClick={(e) => { e.preventDefault(); void trocarPelaNotaLida(); }}>
+              {ocupado === 'nota-lida' ? 'Trocando…' : 'Usar a nota lida'}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

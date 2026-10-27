@@ -81,3 +81,26 @@ describe('P74b — Voltar para à vista', () => {
     expect(obrigacao).toMatch(/\{edicaoDeParcelamento && financiamentoId && clienteId && \(\s+<VoltarParaAVista clienteId=\{clienteId\} financiamentoId=\{financiamentoId\}/);
   });
 });
+
+/* P96a — a compra que veio da JUNÇÃO de soltas: a volta para à vista recusa ('juncao') e no lugar fica "Desfazer a junção" */
+describe('P96a — Desfazer a junção', () => {
+  const JUNCAO = { ok: false, simulado: true, financiamento_id: 'fin-j', antes: [],
+    recusa: { motivo: 'juncao', frase: 'Esta compra foi juntada de lançamentos soltos: use "Desfazer a junção".' } };
+  it('W7 o botão vira "Desfazer a junção"; a confirmação diz o que volta; gravar chama a função do banco', async () => {
+    const chamar = vi.fn(async (): Promise<unknown> => JUNCAO);
+    const desfazer = vi.fn(async (_f: string, simular: boolean): Promise<unknown> =>
+      ({ ok: true, simulado: simular, financiamento_id: 'fin-j', lancamentos: 6, competencia_volta: 5, competencia_mantida: 1 }));
+    const onVoltou = vi.fn();
+    render(<VoltarParaAVista clienteId="cli" financiamentoId="fin-j" onVoltou={onVoltou} gravadores={{ chamar, desfazer }} />);
+    const botao = await screen.findByTestId('desfazer-juncao-botao');
+    await waitFor(() => expect(botao).toBeEnabled());
+    expect(screen.queryByTestId('voltar-a-vista-botao')).toBeNull();
+    expect(desfazer).toHaveBeenCalledWith('fin-j', true);
+    fireEvent.click(botao);
+    expect((await screen.findByTestId('desfazer-juncao-texto')).textContent).toBe('Os 6 lançamentos voltam a ser soltos, sem parcelamento. '
+      + 'Nenhum é cancelado; valor, vencimento, pagamento e conciliação não mudam. A competência volta à de antes em 5. 1 teve a competência mexida depois e fica como está.');
+    fireEvent.click(screen.getByTestId('desfazer-juncao-gravar'));
+    await waitFor(() => expect(onVoltou).toHaveBeenCalled());
+    expect(desfazer).toHaveBeenCalledWith('fin-j', false);
+  });
+});
