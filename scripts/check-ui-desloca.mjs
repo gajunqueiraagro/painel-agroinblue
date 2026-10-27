@@ -195,6 +195,17 @@ const CENARIOS = [
       ['sem Agendado (só os pagos e o vencido)', noLugar('[data-testid="vg-status-agendado"]')],
       ['sem Vencidos (só os pagos)', noLugar('[data-testid="vg-status-vencidos"]')],
       ['Previsto de volta', noLugar('[data-testid="vg-status-previsto"]')], ['Vencidos de volta', noLugar('[data-testid="vg-status-vencidos"]')]] },
+  /* P119 — ORDENAR a gaveta (no subcentro "Ração…", o pior caso de largura): cada coluna crescente, a mesma de novo decrescente, e trocar de
+     nó volta à ordem de sempre. O cabeçalho é miolo livre (as colunas trocam entre filhos e lançamentos), por isso os 8 botões e as 8
+     setas são `presos`: medidos SEMPRE — a seta tem lugar reservado, nenhum rótulo anda nem muda de largura quando ela aparece */
+  { nome: 'visao-geral-gaveta-ordem', url: 'tela=visao-geral&barra=0', presos: '[data-testid^="gaveta-ordem-"], [data-testid^="gaveta-seta-"]', antes: async (p) => {
+      await p.locator('[data-testid^="grade-linha-saida:grupo:Custeio"]').dispatchEvent('click'); await p.locator('[data-testid="modal-analise"]').waitFor(); await espera(p, 700);
+      await p.locator('[data-testid="analise-lanc-total"]').dispatchEvent('click'); await p.locator('[data-testid="gaveta"]').waitFor(); await espera(p, 500);
+      for (const i of [0, 0, 1]) { await p.locator(`[data-testid="gaveta-linha-${i}"]`).dispatchEvent('click'); await espera(p, 400); } },
+    estados: [
+      ...['competencia', 'vencimento', 'pagamento', 'status', 'favorecido', 'descricao', 'conta', 'valor'].map((c) => [`por ${c} ▲`, noLugar(`[data-testid="gaveta-ordem-${c}"]`)]),
+      ['por valor ▼', noLugar('[data-testid="gaveta-ordem-valor"]')], ['por favorecido ▲', noLugar('[data-testid="gaveta-ordem-favorecido"]')],
+      ['por favorecido ▼', noLugar('[data-testid="gaveta-ordem-favorecido"]')], ['irmão (volta à ordem de sempre)', noLugar('[data-testid="gaveta-irmao-0"]')]] },
   /* PR 5 — o AVISO do rodapé com duas contas escolhidas: a frase das contas entra e sai ao descer e subir — o lugar é reservado */
   { nome: 'visao-geral-gaveta-contas', url: 'tela=visao-geral&barra=0&contas=2', antes: async (p) => {
       await p.locator('[data-testid^="grade-linha-saida:grupo:Custeio"]').dispatchEvent('click'); await p.locator('[data-testid="modal-analise"]').waitFor(); await espera(p, 700);

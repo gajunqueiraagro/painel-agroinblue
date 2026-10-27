@@ -209,7 +209,8 @@ export function analise(a: { p_de: string; p_ate: string; p_mes: string; p_lado:
  * ela só vem no nó de transferências; aqui fica no subcentro do pior caso de largura); os outros, nenhuma diferença. */
 const FAV_LONGO = 'Cooperativa Agroindustrial dos Produtores Rurais do Centro-Oeste'.slice(0, 60);
 export function gaveta(a: { p_de: string; p_ate: string; p_mes: string; p_lado: 'entrada' | 'saida'; p_caminho?: (string | null)[]; p_criterio?: string;
-  p_contas?: string[] | null; p_pagina?: number; p_por_pagina?: number; p_status?: string[] | null; p_incluir_vencidos?: boolean }) {
+  p_contas?: string[] | null; p_pagina?: number; p_por_pagina?: number; p_status?: string[] | null; p_incluir_vencidos?: boolean;
+  p_ordem?: string | null; p_sentido?: string }) {
   const c = a.p_caminho ?? [];
   const crit = a.p_criterio ?? 'mes';
   const an = analise({ ...a, p_aba: c[0] ?? null, p_foco: c.slice(0, Math.min(c.length, 3)).length >= 1 ? c.slice(0, Math.min(c.length, 3)) : [],
@@ -250,6 +251,19 @@ export function gaveta(a: { p_de: string; p_ate: string; p_mes: string; p_lado: 
      "Vencidos" — o gate de deslocamento liga e desliga os chips com a gaveta aberta */
   const todas = !longo ? geradas : geradas.filter((l) => !l.previsto
     || (l.vencido ? a.p_incluir_vencidos !== false : (a.p_status ?? ['previsto', 'programado', 'agendado']).includes(l.status)));
+  /* P119 — a ORDEM escolhida, como o banco (`fn_vg_gaveta_ordenada`): antes da página; desempate pela data e pelo id */
+  if (a.p_ordem) {
+    const chaveDe = (l: (typeof todas)[number]): string | number | null => a.p_ordem === 'valor' ? l.valor : a.p_ordem === 'competencia' ? l.competencia
+      : a.p_ordem === 'vencimento' ? l.vencimento : a.p_ordem === 'pagamento' ? l.pagamento : a.p_ordem === 'favorecido' ? l.favorecido.toLowerCase()
+      : a.p_ordem === 'descricao' ? (l.descricao || null) : a.p_ordem === 'conta' ? l.conta.toLowerCase()
+      : l.vencido ? '0' : l.conciliado ? '5' : String(['', 'previsto', 'programado', 'agendado', 'realizado'].indexOf(l.status));
+    const sinal = a.p_sentido === 'desc' ? -1 : 1;
+    todas.sort((x, y) => {
+      const kx = chaveDe(x), ky = chaveDe(y);
+      if (kx !== ky) { if (kx === null) return 1; if (ky === null) return -1; return (kx < ky ? -1 : 1) * sinal; }
+      return x.data < y.data ? -1 : x.data > y.data ? 1 : x.lancamento_id < y.lancamento_id ? -1 : x.lancamento_id > y.lancamento_id ? 1 : 0;
+    });
+  }
   const totalNo = longo ? r2(todas.reduce((s, l) => s + l.valor, 0)) : total;
   const pagoNo = r2(todas.filter((l) => !l.previsto).reduce((s, l) => s + l.valor, 0));
   const pp = a.p_por_pagina ?? 500, pg = a.p_pagina ?? 1;

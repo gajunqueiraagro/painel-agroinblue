@@ -18,7 +18,8 @@ import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { COR, brl, pct1, rotuloMes, type LadoVG } from '@/lib/financeiro/visaoGeral';
 import { chaveCaminho, mesmoCaminho, type CaminhoVG } from '@/lib/financeiro/visaoGeralAnalise';
-import { dataLonga, ehLancamento, statusDaLinha, type GavetaVG, type LancamentoGavetaVG } from '@/lib/financeiro/visaoGeralGaveta';
+import { COLUNAS_ORDEM_GAVETA, dataLonga, ehLancamento, statusDaLinha, type ColunaOrdemGavetaVG, type GavetaVG, type LancamentoGavetaVG,
+  type OrdemGavetaVG } from '@/lib/financeiro/visaoGeralGaveta';
 import { STATUS_FILTRO_COR, STATUS_FILTRO_LABEL, STATUS_FILTRO_PILULA, STATUS_PILULA_BASE } from '@/lib/financeiro/statusFinanceiro';
 
 const corDoLado = (lado: LadoVG) => (lado === 'saida' ? COR.saida : COR.entrada);
@@ -35,7 +36,8 @@ const CAB_FOLHA = ['COMP.', 'VENC.', 'PGTO.', 'STATUS', 'FAVORECIDO', 'DESCRIÇ�
 const CAB_FILHOS = ['LANÇ.', 'ITEM · clique para descer', '%', 'VALOR'];
 const celData = 'whitespace-nowrap px-1 text-[8.5px] tabular-nums text-[#3a4655]';
 
-export function GavetaVG({ g, caminho, carregando, erro, contexto, avisos = [], onIr, onFechar, onAbrirLancamento, onMais, onVerNaLista }: {
+export function GavetaVG({ g, caminho, carregando, erro, contexto, avisos = [], onIr, onFechar, onAbrirLancamento, onMais, onVerNaLista,
+  ordem = null, onOrdenar }: {
   /** o que o banco devolveu (fica o anterior até o novo chegar: nada pisca nem encolhe) */
   g: GavetaVG | null; caminho: CaminhoVG; carregando: boolean; erro: string | null;
   /** mês ou período · contas · fazenda · atividade (os mesmos da tela) */
@@ -44,6 +46,8 @@ export function GavetaVG({ g, caminho, carregando, erro, contexto, avisos = [], 
   avisos?: string[];
   onIr: (c: CaminhoVG) => void; onFechar: () => void; onAbrirLancamento: (l: LancamentoGavetaVG) => void;
   onMais: () => void; onVerNaLista: () => void;
+  /** P119 — a ordem das linhas (nula = a de sempre) e o clique no cabeçalho da lista de lançamentos; quem ordena é o banco */
+  ordem?: OrdemGavetaVG | null; onOrdenar?: (c: ColunaOrdemGavetaVG) => void;
 }) {
   const lado = g?.lado ?? 'saida';
   const cor = corDoLado(lado);
@@ -130,8 +134,24 @@ export function GavetaVG({ g, caminho, carregando, erro, contexto, avisos = [], 
               tabela, o total e o rodapé não andam */}
           <thead className="sticky top-0 z-[1] bg-[#2f3d4f]" data-desloca-livre="">
             <tr className="h-[18px] bg-[#2f3d4f] text-[8.5px] font-semibold tracking-[0.03em] text-white">
-              {(folha ? CAB_FOLHA : CAB_FILHOS).map((r, i, a) => (
-                <th key={r} className={cn('whitespace-nowrap px-1 font-semibold', i === a.length - 1 || (!folha && i === 2) ? 'text-right' : 'text-left')}>{r}</th>
+              {folha ? CAB_FOLHA.map((r, i, a) => {
+                /* P119 — toda coluna ordena (no BANCO, antes da página): clique = crescente, de novo = decrescente; a seta tem lugar
+                   reservado (nada anda ao aparecer) e só aparece na coluna escolhida — na ordem de sempre, nenhuma */
+                const col = COLUNAS_ORDEM_GAVETA[i];
+                const sentido = ordem?.coluna === col ? ordem.sentido : null;
+                return (
+                  <th key={r} className="whitespace-nowrap px-1 font-semibold" aria-sort={sentido === 'asc' ? 'ascending' : sentido === 'desc' ? 'descending' : 'none'}>
+                    <button type="button" onClick={() => onOrdenar?.(col)} data-testid={`gaveta-ordem-${col}`} title={`Ordenar por ${r.toLowerCase()}`}
+                      className={cn('flex h-[18px] w-full items-center gap-[2px] font-semibold hover:underline', i === a.length - 1 ? 'justify-end' : 'justify-start')}>
+                      <span>{r}</span>
+                      <span className="inline-block h-[9px] w-[7px] shrink-0 text-center text-[7px] leading-[9px]" data-testid={`gaveta-seta-${col}`} aria-hidden>
+                        {sentido === 'asc' ? '▲' : sentido === 'desc' ? '▼' : ''}
+                      </span>
+                    </button>
+                  </th>
+                );
+              }) : CAB_FILHOS.map((r, i, a) => (
+                <th key={r} className={cn('whitespace-nowrap px-1 font-semibold', i === a.length - 1 || i === 2 ? 'text-right' : 'text-left')}>{r}</th>
               ))}
             </tr>
           </thead>
