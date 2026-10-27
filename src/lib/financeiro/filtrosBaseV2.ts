@@ -24,6 +24,7 @@
  * um laço sobre o builder, e reatribuir o builder dentro de laço é justamente o
  * que estoura o TS2589.
  */
+import { normalizarParaBusca } from '@/lib/texto/busca';
 import type { StatusFiltroFinanceiro } from './statusFinanceiro';
 import {
   ramoContaDirecao,
@@ -348,7 +349,11 @@ export function montarPlanoBaseV2(
   const ramoDirecao = ramoContaDirecao(filtros.lista_conta_direcao);
   if (ramoDirecao) plano.orDirecao = ramoDirecao;
 
-  const ramoDescricao = ramoImatch('descricao', filtros.lista_produto);
+  /* P134 — SEM ACENTO NOS DOIS LADOS: o campo calculado `busca_descricao` (na view e na tabela) é a descrição pela
+     `_fn_normalizar_texto`, e o termo vai pela `normalizarParaBusca` (a mesma regra, presa pelo `busca.casos.json`). Tabela e view
+     seguem com o MESMO plano. (O caminho da tabela, `buildLancamentosQuery`, não tem chamador fora do hook desde a lista pela RPC:
+     pendência registrada, não se apaga neste PR.) */
+  const ramoDescricao = ramoImatch('busca_descricao', normalizarParaBusca(filtros.lista_produto));
   if (ramoDescricao) plano.orDescricao = ramoDescricao;
 
   if (filtros.lista_fornecedor_id) plano.favorecidoId = filtros.lista_fornecedor_id;
@@ -376,8 +381,9 @@ export function montarPlanoBaseV2(
   if (opcoes.relacao === 'view') {
     const doc = filtros.lista_documento?.trim();
     if (doc) {
-      const cru = ramoImatch('numero_documento', doc);
-      const fmt = ramoImatch('documento_formatado', doc);
+      /* P134: sem acento nos dois lados (os campos calculados da view + `normalizarParaBusca`) */
+      const cru = ramoImatch('busca_numero_documento', normalizarParaBusca(doc));
+      const fmt = ramoImatch('busca_documento_formatado', normalizarParaBusca(doc));
       if (cru && fmt) plano.orDocumento = `${cru},${fmt}`;
     }
   }

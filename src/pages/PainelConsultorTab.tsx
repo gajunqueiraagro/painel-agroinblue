@@ -59,6 +59,7 @@ import { usePodeVerMeta } from '@/v2/hooks/usePodeAbrir';
 import { MOTIVO_SEM_META } from '@/v2/lib/acessoTelas';
 import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
 import { mesUnico } from '@/v2/lib/periodo';
+import { ROTULO_REGIME_PC100 } from '@/lib/financeiro/metaLinhas';
 
 // ─── Constants ───
 const MESES_LABELS = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -206,9 +207,8 @@ interface FinMetaPainel {
  *
  * Fonte: planejamento_financeiro via usePlanejamentoFinanceiro.buildGrid()
  *
- * Auto lines aplicadas exatamente como em PlanejamentoFinanceiroTab:
- *   effectiveMeses[i] = g.meses[i] + autoMeses[i]
- *   Prioridade: lancNutricao > lancProjetos > lancFinanciamento > lancRebanho
+ * P109: recebe o grid CONSOLIDADO do hub (auto da fn_meta_linhas + digitado, a regra única de juntar). A prioridade própria
+ *   que vivia aqui (nutrição > projetos > financiamento > rebanho) morreu.
  *
  * Classificação por macro_custo (strings reais do banco financeiro_plano_contas):
  *   MACROS_ENTRADA: 'Receita Operacional', 'Entrada Financeira'
@@ -227,10 +227,6 @@ interface FinMetaPainel {
  */
 function agregarGridMetaPainelConsultor(
   grid: SubcentroGrid[],
-  lancNutricao: Map<string, number[]>,
-  lancFinanciamento: Map<string, number[]>,
-  lancRebanho: Map<string, number[]>,
-  lancProjetos: Map<string, number[]>,
 ): FinMetaPainel | null {
   if (grid.length === 0) return null;
 
@@ -261,17 +257,7 @@ function agregarGridMetaPainelConsultor(
     const macro = g.macro_custo ?? '';
     const grupo = g.grupo_custo ?? '';
 
-    // Auto lines — mesma lógica de PlanejamentoFinanceiroTab
-    const autoMeses: number[] | undefined =
-      lancNutricao.has(g.subcentro)        ? lancNutricao.get(g.subcentro)
-      : lancProjetos.has(g.subcentro)      ? lancProjetos.get(g.subcentro)
-      : lancFinanciamento.has(g.subcentro) ? lancFinanciamento.get(g.subcentro)
-      : lancRebanho.has(g.subcentro)       ? lancRebanho.get(g.subcentro)
-      : undefined;
-
-    const effectiveMeses = autoMeses
-      ? g.meses.map((v, i) => v + (autoMeses[i] || 0))
-      : g.meses;
+    const effectiveMeses = g.meses;
 
     for (let i = 0; i < 12; i++) {
       const v = effectiveMeses[i] || 0;
@@ -1952,11 +1938,9 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
 
   const {
     buildGrid: buildGridMeta,
-    lancamentosNutricao: lancNutricaoMeta,
-    lancamentosFinanciamento: lancFinanciamentoMeta,
-    lancamentosRebanho: lancRebanhoMeta,
-    lancamentosProjetos: lancProjetosMeta,
-  } = usePlanejamentoFinanceiro(anoNum, fazendaId);
+    buildGridConsolidado: buildGridMetaConsolidado,
+    buildGridConsolidadoCompetencia: buildGridMetaCompetencia,
+  } = usePlanejamentoFinanceiro(anoNum, fazendaId, true, true);
 
   // Materializa grid META para alimentar usePainelConsultorData (A4).
   // Gate: SOMENTE quando cenario === 'meta'. No Realizado, retorna undefined
@@ -2210,16 +2194,13 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
 
   const finMetaPainel = useMemo<FinMetaPainel | null>(() => {
     if (!isPrevisto) return null;
-    const grid = buildGridMeta();
-    return agregarGridMetaPainelConsultor(
-      grid,
-      lancNutricaoMeta,
-      lancFinanciamentoMeta,
-      lancRebanhoMeta,
-      lancProjetosMeta,
-    );
-  }, [isPrevisto, buildGridMeta, lancNutricaoMeta, lancFinanciamentoMeta,
-      lancRebanhoMeta, lancProjetosMeta]);
+    /* P109 (achado c) — UM regime por linha, declarado no rótulo: as linhas de CAIXA (entradas, saídas) em caixa; as de DRE
+       (receita operacional, custeio, resultados) em competência. */
+    const caixa = agregarGridMetaPainelConsultor(buildGridMetaConsolidado());
+    const competencia = agregarGridMetaPainelConsultor(buildGridMetaCompetencia());
+    if (!caixa || !competencia) return null;
+    return { ...competencia, entradas: caixa.entradas, saidas: caixa.saidas };
+  }, [isPrevisto, buildGridMetaConsolidado, buildGridMetaCompetencia]);
 
   // F1C_DEBUG — remover após diagnóstico
   useEffect(() => {
@@ -2748,6 +2729,9 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
                 </button>
               ))}
             </div>
+            {/* P109 — o regime de cada linha da meta; o lugar fica reservado no Realizado (nada se desloca) */}
+            <span data-testid="meta-regime" className="text-[10px] text-muted-foreground whitespace-nowrap"
+              style={{ visibility: isPrevisto ? 'visible' : 'hidden' }} aria-hidden={!isPrevisto}>{ROTULO_REGIME_PC100}</span>
 
             <div className="ml-auto flex items-center gap-1.5">
               <span className="text-[10px] text-muted-foreground hidden sm:inline">{fazendaNome} · {ano}</span>

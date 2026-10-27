@@ -12,6 +12,7 @@
  *
  * PR2 futuro consumirá referências dentro de ConciliarExtratoDialog.
  */
+import { casaNaBusca } from '@/lib/texto/busca';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Table,
@@ -111,7 +112,8 @@ export function LotesExcelTab({ contaBancariaId, anoMes }: Props) {
   // PR2.1 — aplica filtros (status/origem/busca) e ordenação ANTES do
   // agrupamento. Contagens (acima) seguem sobre o universo total.
   const linhasFiltradas = useMemo(() => {
-    const buscaNorm = busca.trim().toLowerCase();
+    /* P134: sem acento, cedilha e maiúscula nos dois lados (`casaNaBusca`, a regra única) */
+    const buscaNorm = busca.trim();
     let res = linhas;
 
     if (filtroStatus !== 'todos') {
@@ -131,9 +133,8 @@ export function LotesExcelTab({ contaBancariaId, anoMes }: Props) {
           l.observacao,
         ]
           .filter(Boolean)
-          .join(' ')
-          .toLowerCase();
-        return hay.includes(buscaNorm);
+          .join(' ');
+        return casaNaBusca(hay, buscaNorm);
       });
     }
 

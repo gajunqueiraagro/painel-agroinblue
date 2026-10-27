@@ -268,6 +268,23 @@ const CENARIOS = [
   /* P79 — os chips de status: nenhum status e vencidos desligado (o aviso mais longo), aberto pela URL (`vg_status=`, `vg_venc=0`) */
   { nome: 'visao-geral-sem-status', url: 'tela=visao-geral&barra=0&vg_status=&vg_venc=0', tamanhos: TAMANHOS_DA_VG,
     semRolagem: { dentro: '[data-testid="visao-geral"]', exceto: '[data-testid="grade-vg-rolagem"], [data-testid="card-vg-lista"]' } },
+  /* P109 — as 4 telas que leem a meta da `fn_meta_linhas`, com o caso real do NJ 2026 (só os números) e os valores ×400 (`&v=grande`).
+     Cada uma TEM o rótulo do regime à vista, com o texto certo: sem ele o gesto falha e o gate acusa. No PC-100 a meta é a dividida
+     (DRE em competência, caixa em caixa): o gesto passa para Meta (no Realizado o rótulo tem o lugar reservado, escondido) e abre o
+     Financeiro (caixa). SÓ EM VOLTA DO RÓTULO (`regiao`: a faixa que o contém, Gabriel 27/10): os 164 cortes antigos do resto destas
+     telas são o P137 (lista no histórico); tirar a `regiao` mede a tela inteira. */
+  ...[['fluxo', 'Meta em regime de caixa'], ['pc100', 'Meta: DRE em competência · caixa em regime de caixa'], ['vgplan', 'Meta em regime de caixa'],
+      ['fech', 'Meta em regime de caixa']].flatMap(([t, rotulo]) => ['', '&v=grande'].map((extra) => ({
+    nome: `meta-${t}${extra ? '-grande' : ''}`, url: `tela=meta&t=${t}${extra}`, tamanhos: TAMANHOS_DA_VG,
+    regiao: '*:has(> [data-testid="meta-regime"])',
+    antes: async (p) => {
+      if (t === 'pc100') { await p.getByRole('button', { name: 'Meta', exact: true }).first().click(); await p.waitForTimeout(800); }
+      const r = p.locator('[data-testid="meta-regime"]').first();
+      await r.waitFor({ state: 'visible', timeout: 8000 });
+      const lido = ((await r.textContent()) ?? '').trim();
+      if (lido !== rotulo) throw new Error(`rotulo do regime "${lido}" (esperado "${rotulo}")`);
+      if (t === 'pc100') { await p.getByText(/^financeiro \(caixa\)$/i).first().click(); await p.waitForTimeout(800); }
+      await p.waitForTimeout(500); } }))),
   { nome: 'contas-lista', url: 'tela=contas&barra=32', tamanhos: TAMANHOS_DO_CONTRATO },
   { nome: 'contas-lista-longo', url: 'tela=contas&barra=32&n=longo', tamanhos: TAMANHOS_DO_CONTRATO },
   { nome: 'contas-inativas', url: 'tela=contas&barra=32&n=longo', tamanhos: TAMANHOS_DO_CONTRATO, antes: clicar('[data-testid="mostrar-inativas"]') },

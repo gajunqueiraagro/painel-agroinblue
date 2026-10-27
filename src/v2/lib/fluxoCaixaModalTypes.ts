@@ -161,7 +161,7 @@ export interface BuildFluxoCaixaModalInput {
    *  no hook). Builder aplica filtros adicionais de cenario e modo. */
   lancamentos: LancamentoBruto[];
   /** Grid Meta consolidada (base + 4 maps de extras) com granularidade
-   *  subcentro × mês. composeGridMetaConsolidado já aplicado pelo caller. */
+   *  subcentro × mês. o grid consolidado do hub (P109, `buildGridConsolidado`) já aplicado pelo caller. */
   gridMetaConsolidado: SubcentroGrid[];
   /** True quando consumido em modo Fazenda Individual. PC-100 caixaIndicador
    *  é por cliente — flag dispara warning informativo. */

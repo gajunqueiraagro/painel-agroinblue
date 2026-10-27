@@ -33,6 +33,8 @@ const TAMANHOS = arg('--tamanhos') ? arg('--tamanhos').split(',').map((t) => t.s
 /* P92 — os nove tamanhos do Negociar lote (os sete do consórcio + 750x483 e 900x600) e o 1024x600, a fronteira em que o resumo de 400px aparece */
 const TAMANHOS_DO_P92 = [[750, 483], [750, 520], [750, 600], [814, 530], [900, 600], [1000, 600], [1024, 600], [1126, 579], [1300, 704], [1440, 800]];
 const espera = (p, ms = 450) => p.waitForTimeout(ms);
+/* P109 — a faixa em volta do rótulo do regime da meta (o pai dele) */
+const REGIAO_DO_ROTULO = '*:has(> [data-testid="meta-regime"])';
 const botao = (re) => async (p) => { await p.getByRole('button', { name: re }).first().click(); await espera(p); };
 const clicar = (sel) => async (p) => { await p.locator(sel).first().click(); await espera(p); };
 const noLugar = (sel) => async (p) => { await p.locator(sel).first().dispatchEvent('click'); await espera(p); };
@@ -123,6 +125,15 @@ const CENARIOS = [
   { nome: 'fornecedores-sem-cadastro', url: 'tela=fornecedores&barra=32&n=2356', antes: clicar('[data-testid="aba-sem-cadastro"]'), auto: true },
   { nome: 'recorrencias', url: 'tela=recorrencias&barra=32', auto: true },
   /* CAD-CONTAS-BANCARIAS-01 — a lista (segmentos, busca com e sem resultado, inativas) e o modal (abas, tipo, formato), editando e criando */
+  /* P109 — as 4 telas da meta (o caso real do NJ 2026): o rótulo do regime fica PRESO no lugar dele (`presos`: medido sempre, à vista)
+     ao trocar a fazenda e ao passar aos valores ×400; no PC-100 o Realizado ↔ Meta (`auto`) não move nada — o rótulo tem o lugar
+     reservado no Realizado (escondido, por isso não é `preso` lá). SÓ EM VOLTA DO RÓTULO (`regiao`: a faixa que o contém, Gabriel
+     27/10): os 93 deslocamentos antigos do resto destas telas são o P137 (lista no histórico); tirar a `regiao` mede a tela inteira. */
+  ...['fluxo', 'vgplan', 'fech'].map((t) => ({ nome: `meta-${t}`, url: `tela=meta&t=${t}`, presos: '[data-testid="meta-regime"]', regiao: REGIAO_DO_ROTULO,
+    antes: (p) => espera(p, 1500),
+    estados: [['uma fazenda', { url: `tela=meta&t=${t}&fz=f5` }], ['valores x400', { url: `tela=meta&t=${t}&v=grande` }]] })),
+  { nome: 'meta-pc100', url: 'tela=meta&t=pc100', auto: true, regiao: REGIAO_DO_ROTULO, antes: (p) => espera(p, 1500),
+    estados: [['Meta com valores x400', async (p) => { await p.goto(p.url().replace('t=pc100', 't=pc100&v=grande')); await espera(p, 1500); await botao(/^Meta$/)(p); }]] },
   /* FIN-VISAO-GERAL-01 PR 3 — nada muda de altura ou posição ao trocar modo, mês, contas, atividade ou período: os QUADROS (card, gráfico,
      grade — `data-desloca`) e todos os controles ficam; o miolo deles é `data-desloca-livre` (o conteúdo que muda de propósito) */
   { nome: 'visao-geral', url: 'tela=visao-geral&barra=0', auto: true, estados: [
@@ -395,7 +406,9 @@ const CENARIOS = [
 ];
 
 /* roda NA PAGINA: o retangulo de cada elemento medido, pela identidade */
-function medirPosicoes(presos) {
+function medirPosicoes(cfg) {
+  /* P109 — `regiao` (opcional, seletor): so' o que esta' dentro dela conta (os `presos` sempre); o argumento e' `[presos, regiao]` */
+  const [presos, regiao] = Array.isArray(cfg) ? cfg : [cfg, null];
   const SEL = 'button, [role="tab"], [role="button"], [role="combobox"], input, select, textarea, h1, h2, h3, h4, th, [data-desloca]';
   const raiz = document.getElementById('root') ?? document.body;
   const caminho = (e) => { const p = []; for (let x = e; x && x !== raiz; x = x.parentElement) { const pai = x.parentElement; p.unshift(`${x.tagName.toLowerCase()}${pai ? `:${[...pai.children].indexOf(x)}` : ''}`); } return p.join('>'); };
@@ -410,7 +423,7 @@ function medirPosicoes(presos) {
   };
   const vistos = new Map(); const out = {};
   for (const e of document.querySelectorAll(SEL)) {
-    if (e.closest('tbody') || e.closest('[data-desloca-livre]')) continue;
+    if (e.closest('tbody') || e.closest('[data-desloca-livre]') || (regiao && !e.closest(regiao))) continue;
     /* dentro da area que ROLA (a lista) mora o conteudo: so' o cabecalho e o que esta' preso (sticky) contam */
     if (e.tagName !== 'TH' && rolaPorDentro(e)) continue;
     const cs = getComputedStyle(e); if (cs.display === 'none' || cs.visibility === 'hidden') continue;
@@ -494,7 +507,7 @@ try {
     const abrir = async (pg, url) => { await pg.goto(`${base}/index.html?${url}`); await pg.evaluate(() => document.fonts.ready); await espera(pg, 1300); };
     await abrir(p, cen.url);
     if (cen.antes) await cen.antes(p);
-    const inicial = await p.evaluate(medirPosicoes, cen.presos ?? null);
+    const inicial = await p.evaluate(medirPosicoes, [cen.presos ?? null, cen.regiao ?? null]);
     /* `auto`: as escolhas da tela, por indice (a lista e' relida na tela recem-aberta a cada troca) */
     /* o `Segmentado` da casa: `div.inline-flex.shrink-0.overflow-hidden.rounded-md.border` com os botoes filhos (src/components/ui/segmentado) */
     const ESCOLHAS = 'div.inline-flex.shrink-0.overflow-hidden.rounded-md.border > button:not([disabled]), [role="tab"]:not([disabled])';
@@ -512,10 +525,10 @@ try {
       medicoes++;
       if (typeof gesto === 'function') {
         try { await gesto(p); } catch (e) { erros.push(`${nome}: ${String(e).slice(0, 100)}`); continue; }
-        todos.push(...comparar(inicial, await p.evaluate(medirPosicoes, cen.presos ?? null), nome).map((a) => ({ tela: cen.nome, tamanho: `${w}x${h}`, ...a })));
+        todos.push(...comparar(inicial, await p.evaluate(medirPosicoes, [cen.presos ?? null, cen.regiao ?? null]), nome).map((a) => ({ tela: cen.nome, tamanho: `${w}x${h}`, ...a })));
       } else {
         const pu = await navegador.newPage({ viewport: { width: w, height: h } }); await abrir(pu, gesto.url);
-        todos.push(...comparar(inicial, await pu.evaluate(medirPosicoes, cen.presos ?? null), nome).map((a) => ({ tela: cen.nome, tamanho: `${w}x${h}`, ...a })));
+        todos.push(...comparar(inicial, await pu.evaluate(medirPosicoes, [cen.presos ?? null, cen.regiao ?? null]), nome).map((a) => ({ tela: cen.nome, tamanho: `${w}x${h}`, ...a })));
         await pu.close();
       }
     }

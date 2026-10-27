@@ -1,3 +1,4 @@
+import { casaNaBusca } from '@/lib/texto/busca';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -208,10 +209,11 @@ export default function V2Recorrencias() {
      inclusive a que esta' fora da vigencia no mes (a coluna do mes fica "—"); os filtros do mes nao se aplicam a ela.
      ⚠ A BUSCA ALCANÇA TUDO O QUE A LINHA MOSTRA, inclusive o que veio de outro cadastro. */
   const visiveis = useMemo(() => {
-    const termo = busca.trim().toLowerCase();
+    /* P134: sem acento, cedilha e maiúscula nos dois lados (`casaNaBusca`, a regra única) */
+    const termo = busca.trim();
     const naBusca = (r: Recorrencia) => termo === ''
-      || [r.descricao, r.favorecidoNome ?? '', nomeConta(r.contaBancariaId), r.subcentro, r.formaPagamento ?? '', rotuloSituacao(r)]
-        .join(' ').toLowerCase().includes(termo);
+      || casaNaBusca([r.descricao, r.favorecidoNome ?? '', nomeConta(r.contaBancariaId), r.subcentro, r.formaPagamento ?? '', rotuloSituacao(r)]
+        .join(' '), termo);
     if (soFaltaGerar) return recorrencias.filter(r => (faltaGerarDaRegra(aGerar, r.id)?.aGerar ?? 0) > 0 && naBusca(r));
     if (modo === 'regras') return recorrencias.filter(naBusca);
     const doFiltro = new Set(filtrarLinhas(linhas, filtroTipo, filtroSituacao).map(l => l.regraId));

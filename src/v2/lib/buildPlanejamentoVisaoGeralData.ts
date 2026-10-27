@@ -103,16 +103,8 @@ export interface BuildPlanejamentoVisaoGeralInput {
   /** Saldo inicial bancário do ano META (snapshot Dez ano-1). */
   saldoInicial: number;
 
-  /**
-   * Marco 1.1.D — Extras da grade META, unidos ao grid base por subcentro.
-   * Fontes adicionais expostas por usePlanejamentoFinanceiro que NÃO entram
-   * no buildGrid() (são merged na tela de Fluxo de Caixa META):
-   *  - lancamentosRebanho: lancamentos cenario=meta tipo=abate/venda/compra
-   *  - lancamentosFinanciamento: financiamento_parcelas pendentes do ano
-   *  - lancamentosNutricao: Cria/Recria/Engorda auto-calculado
-   *  - lancamentosProjetos: meta_projetos_investimento
-   */
-  extrasGrid?: ExtrasGrid;
+  /* P109 — os 4 "extras" da grade (rebanho, financiamento, nutrição, projetos) saíram: o `grid` de entrada é o CONSOLIDADO do hub
+     (`buildGridConsolidado`, auto da fn_meta_linhas + digitado, a regra única de juntar). */
 
   /**
    * Fase 2 DRE Planejamento — agregadores zootécnicos por COMPETÊNCIA (data
@@ -209,14 +201,6 @@ export interface ZootCompPreload {
   reposicaoBovinosAnoCorrente?: AgregadoZootCompResult;
 }
 
-/** Tipo dos extras de grade — usado por helpers do BLOCO 1 (Marco 1.1.D). */
-export type ExtrasGrid = {
-  lancamentosRebanho: Map<string, number[]>;       // subcentro → meses[12]
-  lancamentosFinanciamento: Map<string, number[]>;
-  lancamentosNutricao: Map<string, number[]>;
-  lancamentosProjetos: Map<string, number[]>;
-};
-
 // ─── HELPERS NUMÉRICOS ────────────────────────────────────────────────────────
 
 function safeNum(v: number | null | undefined): number {
@@ -282,18 +266,16 @@ function mediaSerieMensal(serie: (number | null)[] | number[] | undefined, ate?:
 
 /**
  * Marco 1.1.D + F2.1 — Mensal[12] de subcentros por filtro macro/grupo,
- * unificando grid base (planejamento_financeiro) com as 4 Maps de extras
- * (rebanho, financiamento, nutrição, projetos) — exatamente como faz
- * a tela de Fluxo de Caixa META.
+ * do grid CONSOLIDADO (P109: auto da fn_meta_linhas + digitado, já juntos no hub; antes somava aqui as 4 Maps de extras
+ * (rebanho, financiamento, nutrição, projetos)) — a mesma regra da tela de Fluxo de Caixa META.
  *
  * Marco F2.1: retorna o array mensal completo (não mais escalar anual);
  * a redução temporal fica por conta do caller via `somaAteMes(meses,
  * mesAlvo, modo)`. Isso permite parametrizar o regime das 3 colunas
  * (Real ano-1 / Meta / Real ano-corrente) sincronizadas.
  */
-function mesesGridEExtras(
+function mesesDoGrid(
   grid: SubcentroGrid[],
-  extras: ExtrasGrid | undefined,
   filter: (row: SubcentroGrid) => boolean,
 ): number[] {
   const meses = new Array(12).fill(0);
@@ -302,28 +284,6 @@ function mesesGridEExtras(
     if (!filter(row)) continue;
     for (let i = 0; i < 12 && i < row.meses.length; i++) {
       meses[i] += Number(row.meses[i]) || 0;
-    }
-  }
-  // 2) Para cada Map de extras: somar APENAS os subcentros que passam no filter
-  // — descobrimos os subcentros válidos via grid (lookup macro/grupo).
-  if (extras) {
-    const subcentrosValidos = new Set<string>();
-    for (const row of grid) {
-      if (filter(row)) subcentrosValidos.add(row.subcentro);
-    }
-    const maps = [
-      extras.lancamentosRebanho,
-      extras.lancamentosFinanciamento,
-      extras.lancamentosNutricao,
-      extras.lancamentosProjetos,
-    ];
-    for (const m of maps) {
-      for (const [subcentro, mesesArr] of m.entries()) {
-        if (!subcentrosValidos.has(subcentro)) continue;
-        for (let i = 0; i < 12 && i < mesesArr.length; i++) {
-          meses[i] += Number(mesesArr[i]) || 0;
-        }
-      }
     }
   }
   return meses;
@@ -368,43 +328,6 @@ function valorPC100NoRegime(
 }
 
 /**
- * Patch pós-F2.1 — Subcentros de Nutrição auto-calculados via
- * meta_parametros_nutricao × zoot_mensal_cache (em usePlanejamentoFinanceiro)
- * que compõem Custo Variável Pecuária META.
- *
- * NÃO incluir aqui:
- *   - 'Transferência de Gado entre Fazendas' (macro Transferências, neutro)
- *   - 'Impostos e Despesas de Abates e Vendas' (macro Deduções de Receitas)
- * As duas chaves acima são auto-calculadas pelo mesmo hook mas pertencem
- * a outros macros e NÃO devem entrar em Custo Variável Pec.
- */
-const SUBCENTROS_NUTRICAO_META_AUTO = [
-  'Nutrição',
-] as const;
-
-/**
- * Patch pós-F2.1 — Lê do Map `extras.lancamentosNutricao` apenas a chave de
- * Nutrição auto ('Nutrição', já a soma Cria + Recria + Engorda desde o
- * META-SUMIU-01) e devolve a série mensal[12].
- *
- * Reutiliza a fonte oficial já carregada pelo `usePlanejamentoFinanceiro`
- * (`loadNutricao`) — sem query nova, sem duplicar fórmula. Defensivo:
- * pula chaves ausentes silenciosamente (Map sem aquela linha → 0 no mês).
- */
-function lerNutricaoMetaAutoMensal(extras: ExtrasGrid | undefined): number[] {
-  const meses = new Array(12).fill(0);
-  if (!extras?.lancamentosNutricao) return meses;
-  for (const subcentro of SUBCENTROS_NUTRICAO_META_AUTO) {
-    const arr = extras.lancamentosNutricao.get(subcentro);
-    if (!arr) continue;
-    for (let i = 0; i < 12 && i < arr.length; i++) {
-      meses[i] += Number(arr[i]) || 0;
-    }
-  }
-  return meses;
-}
-
-/**
  * Marco 1.1.D — Saldo mensal "líquido" do Fluxo de Caixa META:
  * receitas - saídas = saldo_mes[12].
  * Caixa Final = saldoInicial + Σ saldo_mes.
@@ -416,7 +339,6 @@ function lerNutricaoMetaAutoMensal(extras: ExtrasGrid | undefined): number[] {
  */
 function calcularSaldoMensal(
   grid: SubcentroGrid[],
-  extras: ExtrasGrid | undefined,
 ): number[] {
   const ENTRADAS_MACROS = new Set(['Receita Operacional', 'Entrada Financeira']);
   const SAIDAS_MACROS = new Set([
@@ -435,45 +357,17 @@ function calcularSaldoMensal(
       saldoMes[i] += sign * (Number(row.meses[i]) || 0);
     }
   }
-  // 2) Extras (mapear subcentro → macro via grid lookup)
-  if (extras) {
-    const subToMacro = new Map<string, string>();
-    for (const row of grid) {
-      if (row.macro_custo && !subToMacro.has(row.subcentro)) {
-        subToMacro.set(row.subcentro, row.macro_custo);
-      }
-    }
-    const maps = [
-      extras.lancamentosRebanho,
-      extras.lancamentosFinanciamento,
-      extras.lancamentosNutricao,
-      extras.lancamentosProjetos,
-    ];
-    for (const m of maps) {
-      for (const [subcentro, meses] of m.entries()) {
-        const macro = subToMacro.get(subcentro);
-        if (!macro) continue;
-        const sign = ENTRADAS_MACROS.has(macro) ? 1 :
-                     SAIDAS_MACROS.has(macro) ? -1 : 0;
-        if (sign === 0) continue;
-        for (let i = 0; i < 12 && i < meses.length; i++) {
-          saldoMes[i] += sign * (Number(meses[i]) || 0);
-        }
-      }
-    }
-  }
   return saldoMes;
 }
 
 /**
- * Marco 1.1.D — Constrói ComparativoDuplo a partir de soma de grid+extras.
+ * Marco 1.1.D — Constrói ComparativoDuplo a partir da soma do grid consolidado (P109).
  * Anual = ate=12. Acum Jan→mesAtual = ate=mesAtual.
  * Comparativo vs ano-1 (serieAnoAnt) NÃO disponível na grade META;
  * fica null (Marco 1.1.E poderá adicionar via segundo buildGrid do ano-1).
  */
 function buildComparativoGrid(
   grid: SubcentroGrid[],
-  extras: ExtrasGrid | undefined,
   filter: (row: SubcentroGrid) => boolean,
   _mesAtual: number,
   origem: OrigemMetric,
@@ -484,7 +378,7 @@ function buildComparativoGrid(
 ): ComparativoDuplo {
   // Marco F2.1: agregação temporal parametrizada (anual quando mesAlvo
   // indefinido — comportamento legado preservado).
-  const meses = mesesGridEExtras(grid, extras, filter);
+  const meses = mesesDoGrid(grid, filter);
   const valor = somaAteMes(meses, mesAlvo, modo);
   return {
     valor,
@@ -775,7 +669,7 @@ function agruparPorCentro(
 // ─── BLOCKS ───────────────────────────────────────────────────────────────────
 
 /**
- * Marco 1.1.D — BLOCO 1 soberano via grade META (grid + 4 extras).
+ * Marco 1.1.D — BLOCO 1 soberano via grade META consolidada (P109).
  *
  * Fonte oficial: usePlanejamentoFinanceiro (buildGrid + lancamentosRebanho
  * + lancamentosFinanciamento + lancamentosNutricao + lancamentosProjetos)
@@ -786,7 +680,6 @@ function agruparPorCentro(
  */
 function buildBloco1Macro(
   grid: SubcentroGrid[],
-  extras: ExtrasGrid | undefined,
   mesAtual: number,
   saldoInicial: number,
   zootComp?: ZootCompPreload,
@@ -806,7 +699,7 @@ function buildBloco1Macro(
     mesAlvo, modo,
   );
   const outrasReceitasBase = buildComparativoGrid(
-    grid, extras,
+    grid,
     r => r.macro_custo === MACRO_RECEITAS
       && r.grupo_custo !== GRUPO_RECEITA_PECUARIA,
     mesAtual, 'planejamento_financeiro', 'acumulado', 'moeda',
@@ -825,13 +718,13 @@ function buildBloco1Macro(
     },
   };
   const entradasFinanceiras = buildComparativoGrid(
-    grid, extras,
+    grid,
     r => r.macro_custo === MACRO_ENTRADA_FINANCEIRA,
     mesAtual, 'planejamento_financeiro', 'acumulado', 'moeda',
     mesAlvo, modo,
   );
   const totalEntradas = buildComparativoGrid(
-    grid, extras,
+    grid,
     r => r.macro_custo === MACRO_RECEITAS
       || r.macro_custo === MACRO_ENTRADA_FINANCEIRA,
     mesAtual, 'planejamento_financeiro', 'acumulado', 'moeda',
@@ -840,7 +733,7 @@ function buildBloco1Macro(
 
   // SAÍDAS — Custeio Pec separado de juros (SEM juros), custeio agri, invest, dividendos
   const custeioPecuaria = buildComparativoGrid(
-    grid, extras,
+    grid,
     r => r.macro_custo === 'Custeio Produção'
       && (r.grupo_custo === 'Custo Fixo Pecuária'
        || r.grupo_custo === 'Custo Variável Pecuária'),
@@ -848,7 +741,7 @@ function buildBloco1Macro(
     mesAlvo, modo,
   );
   const custeioAgricultura = buildComparativoGrid(
-    grid, extras,
+    grid,
     r => r.macro_custo === 'Custeio Produção'
       && (r.grupo_custo === 'Custo Fixo Agricultura'
        || r.grupo_custo === 'Custo Variável Agricultura'),
@@ -856,7 +749,7 @@ function buildBloco1Macro(
     mesAlvo, modo,
   );
   const investimentosPecuariaBase = buildComparativoGrid(
-    grid, extras,
+    grid,
     r => r.macro_custo === 'Investimento na Fazenda'
       && r.escopo_negocio === 'pecuaria',
     mesAtual, 'planejamento_financeiro', 'acumulado', 'moeda',
@@ -875,7 +768,7 @@ function buildBloco1Macro(
     },
   };
   const investimentosAgricultura = buildComparativoGrid(
-    grid, extras,
+    grid,
     r => r.macro_custo === 'Investimento na Fazenda'
       && r.escopo_negocio === 'agricultura',
     mesAtual, 'planejamento_financeiro', 'acumulado', 'moeda',
@@ -890,20 +783,20 @@ function buildBloco1Macro(
     mesAlvo, modo,
   );
   const amortizacoes = buildComparativoGrid(
-    grid, extras,
+    grid,
     r => r.macro_custo === 'Saída Financeira',
     mesAtual, 'planejamento_financeiro', 'acumulado', 'moeda',
     mesAlvo, modo,
   );
   const dividendos = buildComparativoGrid(
-    grid, extras,
+    grid,
     r => r.macro_custo === 'Dividendos',
     mesAtual, 'planejamento_financeiro', 'acumulado', 'moeda',
     mesAlvo, modo,
   );
   // Total Saídas = soma das 6 macros de saída (inclui Deduções de Receitas)
   const totalSaidas = buildComparativoGrid(
-    grid, extras,
+    grid,
     r => r.macro_custo === 'Custeio Produção'
       || r.macro_custo === 'Investimento na Fazenda'
       || r.macro_custo === 'Investimento em Bovinos'
@@ -926,7 +819,7 @@ function buildBloco1Macro(
   };
 
   // Caixa Final = saldoInicial + Σ saldoMes (mensal: receitas − saídas)
-  const saldoMensal = calcularSaldoMensal(grid, extras);
+  const saldoMensal = calcularSaldoMensal(grid);
   const totalSaldoMes = saldoMensal.reduce((a, v) => a + v, 0);
   const geracaoCaixa: ComparativoDuplo = {
     valor: totalSaldoMes,
@@ -1154,7 +1047,7 @@ function buildBloco3AnaliseEconomica(
   bloco3Custos: Bloco3Custos,
   bloco4: Bloco4Financeiro,
 ): Bloco3AnaliseEconomica {
-  const { grid, extrasGrid, painel, mesAtual } = input;
+  const { grid, painel, mesAtual } = input;
 
   // Marco F2.1: mkLinha aceita 3ª série opcional (valorAnoCorrente).
   // deltaRs/deltaPct continuam comparando valor (Meta) vs valorAnoAnt
@@ -1313,7 +1206,9 @@ function buildBloco3AnaliseEconomica(
     painel?.custeioPecIndicador?.serieAno, mesAlvo, modo,
   );
 
-  // Patch pós-F2.1 — Custo Variável Pec META inclui nutrição auto calculada
+  // P109 — o grid de entrada JÁ É o consolidado do hub (auto da fn_meta_linhas + digitado): a nutrição auto (e o frete, que é Custo
+  // Variável Pecuária no plano) já estão no `bloco3Custos`. O remendo que somava a nutrição aqui por um nome de subcentro saiu.
+  // Histórico — Patch pós-F2.1: Custo Variável Pec META incluía nutrição auto calculada
   // via meta_parametros_nutricao × zoot_mensal_cache (helper oficial
   // `extras.lancamentosNutricao`). Esse componente NÃO existe no realizado
   // (Real ano-1 / Real ano-corrente) — apenas em META, por design do Fluxo
@@ -1321,10 +1216,8 @@ function buildBloco3AnaliseEconomica(
   // Composição acontece APENAS no subitem visual da DRE. Total continua
   // soberano via PC-100. Agregadores base intactos.
   // Custo Variável Pec REAL continua puro financeiro_lancamentos_v2.
-  const nutricaoMetaAutoMensal = lerNutricaoMetaAutoMensal(input.extrasGrid);
-  const nutricaoMetaAutoVal = somaAteMes(nutricaoMetaAutoMensal, mesAlvo, modo);
   const custoVarFinanceiroMeta = bloco3Custos.custoVariavelPecuaria.total.valor;
-  const custoVarTotalComposto = safeNum(custoVarFinanceiroMeta) + nutricaoMetaAutoVal;
+  const custoVarTotalComposto = safeNum(custoVarFinanceiroMeta);
   const custoVarMeta: number | null = custoVarTotalComposto > 0 ? custoVarTotalComposto : null;
 
   // Marco F2.1: regime temporal aplicado ao agregador financeiro ano-1.
@@ -1578,14 +1471,14 @@ export function buildPlanejamentoVisaoGeralData(
 ): PlanejamentoVisaoGeralDTO {
   const warnings: string[] = [];
 
-  // Marco 1.1.D — BLOCO 1 soberano via grid + extras (Fluxo de Caixa META).
+  // Marco 1.1.D — BLOCO 1 soberano via grid consolidado (Fluxo de Caixa META; P109).
   // Fase 2 DRE: zootComp opcional pluga Receita Pec + Reposição Bovinos
   // por competência zoot. Receita/Deduções/Reposição também carregam ano-1
   // via mesmo agregador com cenario='realizado' (em ZootCompPreload).
   // Marco 1.1.E: lancFinAnoAnt + ano destravam vsAnoFechado de Outras Receitas
   // e Investimento Fazenda Pec via agregadores financeiros oficiais.
   const bloco1 = buildBloco1Macro(
-    input.grid, input.extrasGrid, input.mesAtual, input.saldoInicial,
+    input.grid, input.mesAtual, input.saldoInicial,
     input.zootComp, input.lancFinAnoAnt, input.ano,
     input.mesAlvo, input.modo,
   );

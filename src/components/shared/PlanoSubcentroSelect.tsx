@@ -12,6 +12,7 @@ import { Search, Check, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ClassificacaoItem } from '@/hooks/useFinanceiroV2';
 import { COMBOBOX_CONTENT } from '@/components/ui/command';
+import { casaNaBusca } from '@/lib/texto/busca';
 import { Segmentado } from '@/components/ui/segmentado';
 import { ATIVIDADES, type Atividade } from '@/lib/financeiro/ultimaAtividade';
 import {
@@ -159,8 +160,8 @@ export function PlanoSubcentroSelect({
       ? unique.filter(trava)
       : unique.filter((c) => combinaTipo(c) && combinaEscopo(c) && combinaDre(c));
     if (!search.trim()) return byTipo;
-    const term = search.toLowerCase();
-    return byTipo.filter(c => c.subcentro.toLowerCase().includes(term));
+    /* P134: "maq" acha "Máquinas" — a busca ignora acento, cedilha e maiúscula nos dois lados (`casaNaBusca`, a regra única) */
+    return byTipo.filter(c => casaNaBusca(c.subcentro, search));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [classMap, search, tipoOperacao, escopoEfetivo, escopoObrigatorio, somenteCompoeDre, mostrarTodos]);
 
@@ -173,13 +174,13 @@ export function PlanoSubcentroSelect({
    */
   const ocultosPorTipo = useMemo(() => {
     if (mostrarTodos || !tipoOperacao) return 0;
-    const term = search.trim().toLowerCase();
+    const term = search.trim();
     return Array.from(classMap.values()).filter(c =>
       /* ⚠ CONTA DENTRO DA TRAVA. Contar fora dela anunciava "83 do outro lado ocultos" para
          quem só podia escolher entre 53 — e o número, sendo sempre alto, fazia do convite a
          clicar um traço permanente da tela em vez de uma resposta à busca. */
       (!escopoObrigatorio || combinaEscopo(c)) && combinaDre(c)
-      && !combinaTipo(c) && (!term || c.subcentro.toLowerCase().includes(term))).length;
+      && !combinaTipo(c) && (!term || casaNaBusca(c.subcentro, term))).length;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [classMap, search, tipoOperacao, escopoEfetivo, escopoObrigatorio, somenteCompoeDre, mostrarTodos]);
 

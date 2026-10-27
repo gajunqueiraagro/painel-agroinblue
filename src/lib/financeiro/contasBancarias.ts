@@ -7,6 +7,7 @@
  *   `aliases` que a importacao ja' le^; a conta de investimento que vive dentro desta e' o `consolida_em_conta_id` DA de investimento.
  * ⚠ SO' O QUE MUDOU VAI AO BANCO (`mudancas`): salvar sem mexer nao toca nada — nem a semente do saldo, nem a Auditoria.
  */
+import { normalizarParaBusca } from '@/lib/texto/busca';
 
 export const BANCO_CAIXA = 'Dinheiro';
 
@@ -156,7 +157,8 @@ export function celulaSaldo(c: ContaBancariaCadastro): Celula {
 
 /* ─── filtros, faixas, rodape ──────────────────────────────────────────────── */
 
-const semAcento = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+/* P134: a regra única de busca (`normalizarParaBusca`), no lugar da cópia local */
+const semAcento = normalizarParaBusca;
 
 export interface FiltrosDaLista { busca: string; segmento: SegmentoDaLista; fazendaId: string | null; mostrarInativas: boolean }
 

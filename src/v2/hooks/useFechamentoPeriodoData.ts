@@ -29,7 +29,6 @@ import { useRebanhoOficial } from '@/hooks/useRebanhoOficial';
 import { usePlanejamentoFinanceiro } from '@/hooks/usePlanejamentoFinanceiro';
 import { totalizarPorMes } from '@/hooks/useZootCategoriaMensal';
 import { buildFechamentoPeriodoData } from '@/v2/lib/buildFechamentoPeriodoData';
-import { composeGridMetaConsolidado } from '@/lib/painelConsultor/composeGridMetaConsolidado';
 import type {
   FechamentoPeriodoDTO,
   RebanhoMensal,
@@ -94,24 +93,11 @@ export function useFechamentoPeriodoData({ periodoInicio, periodoFim }: Args) {
 
   // META — usePlanejamentoFinanceiro tem assinatura posicional (ano, fazendaId?)
   const planFin = usePlanejamentoFinanceiro(anoCorrente, fazendaId);
-  // Base = planFin.buildGrid() (planejamento manual). ENVOLVIDA por
-  // composeGridMetaConsolidado para somar as metas AUTO (Nutrição, Rebanho,
-  // Financiamento, Projetos) — mesmo grid consolidado que a página usa nos
-  // demais blocos (espelho exato de V2FechamentoPeriodo L352). Os 4 autos vão
-  // nas deps p/ recompor quando o React Query carregar (useMemo, sem loop).
+  // P109 — o grid de meta CONSOLIDADO do hub (auto da fn_meta_linhas + digitado, a regra única de juntar).
   const metaGrid = useMemo(
-    () => (enabled ? composeGridMetaConsolidado(planFin.buildGrid(), {
-      lancamentosRebanho: planFin.lancamentosRebanho,
-      lancamentosFinanciamento: planFin.lancamentosFinanciamento,
-      lancamentosNutricao: planFin.lancamentosNutricao,
-      lancamentosProjetos: planFin.lancamentosProjetos,
-    }) : []),
+    () => (enabled ? planFin.buildGridConsolidado() : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [
-      planFin.buildGrid, planFin.loading, enabled,
-      planFin.lancamentosRebanho, planFin.lancamentosFinanciamento,
-      planFin.lancamentosNutricao, planFin.lancamentosProjetos,
-    ],
+    [planFin.buildGridConsolidado, planFin.loading, enabled],
   );
 
   // Rebanho (zoot categoria mensal agregado)

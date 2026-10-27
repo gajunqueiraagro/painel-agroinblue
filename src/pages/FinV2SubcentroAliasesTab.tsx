@@ -13,6 +13,7 @@
  * Cliente_id preenchido = alias específico do cliente, prioridade
  * sobre global na resolução.
  */
+import { casaNaBusca } from '@/lib/texto/busca';
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -169,11 +170,11 @@ export function FinV2SubcentroAliasesTab() {
   const filtrados = useMemo(() => {
     const list = aliasesQuery.data ?? [];
     if (!busca.trim()) return list;
-    const q = busca.toLowerCase();
+    /* P134: sem acento, cedilha e maiúscula nos dois lados (`casaNaBusca`, a regra única) */
     return list.filter(
       (a) =>
-        a.alias_text.toLowerCase().includes(q) ||
-        (a.plano_subcentro ?? '').toLowerCase().includes(q),
+        casaNaBusca(a.alias_text, busca) ||
+        casaNaBusca(a.plano_subcentro, busca),
     );
   }, [aliasesQuery.data, busca]);
 

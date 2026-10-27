@@ -25,7 +25,6 @@ import {
 } from '@/lib/painelConsultor/agregadosZootCompetencia';
 import { carregarLancFinAnoAntReal } from '@/lib/painelConsultor/lancFinHistoricoLoader';
 import { buildBlocoResumoExecutivo } from '@/v2/lib/buildBlocoResumoExecutivo';
-import { composeGridMetaConsolidado } from '@/lib/painelConsultor/composeGridMetaConsolidado';
 import {
   type ComposicaoSubcentro,
   agregaReceitaPecPorSubcentro,
@@ -213,6 +212,7 @@ import { BlocoFinanceiroCapital } from './V2PlanejamentoVisaoGeral.parts/BlocoFi
 import { BlocoMovimentacaoRebanho } from './V2PlanejamentoVisaoGeral.parts/BlocoMovimentacaoRebanho';
 import { BlocoRateioAdministrativo } from './V2PlanejamentoVisaoGeral.parts/BlocoRateioAdministrativo';
 import { SeletorPeriodo } from '@/v2/components/SeletorPeriodo';
+import { ROTULO_REGIME } from '@/lib/financeiro/metaLinhas';
 import { mesUnico } from '@/v2/lib/periodo';
 
 interface Props {
@@ -254,7 +254,8 @@ export function V2PlanejamentoVisaoGeral({ ano, mes, onAnoChange, onMesChange }:
 
   // Planejamento financeiro do ano (grid META + saldo inicial)
   const planFin = usePlanejamentoFinanceiro(ano, isGlobal ? undefined : fazendaAtual?.id);
-  const grid = useMemo(() => planFin.buildGrid(), [planFin.buildGrid, planFin.loading]);
+  /* P109 — a grade de meta é a CONSOLIDADA do hub (auto da fn_meta_linhas + digitado); os 4 "extras" saíram do builder */
+  const grid = planFin.gridMetaConsolidado2026;
 
   // Fase 2 DRE Planejamento — agregadores por COMPETÊNCIA ZOOT (data do
   // lançamento) para 3 linhas do Bloco 3 (Receita Pec, Deduções, Reposição
@@ -327,8 +328,6 @@ export function V2PlanejamentoVisaoGeral({ ano, mes, onAnoChange, onMesChange }:
   }, [clienteId, ano]);
 
   // Monta DTO via camada oficial.
-  // Marco 1.1.D: extrasGrid traz as 4 fontes que não entram em buildGrid()
-  // mas integram o Fluxo de Caixa META (rebanho, financiamento, nutrição, projetos).
   const dto = useMemo(() => buildPlanejamentoVisaoGeralData({
     ano,
     mesAtual: mes,
@@ -338,19 +337,11 @@ export function V2PlanejamentoVisaoGeral({ ano, mes, onAnoChange, onMesChange }:
     painel,
     grid,
     saldoInicial: planFin.saldoInicial,
-    extrasGrid: {
-      lancamentosRebanho: planFin.lancamentosRebanho,
-      lancamentosFinanciamento: planFin.lancamentosFinanciamento,
-      lancamentosNutricao: planFin.lancamentosNutricao,
-      lancamentosProjetos: planFin.lancamentosProjetos,
-    },
     zootComp: zootComp ?? undefined,
     lancFinAnoAnt: lancFinAnoAnt ?? undefined,
   }), [
     ano, mes, isGlobal, fazendaAtual?.id, fazendaAtual?.nome,
     painel, grid, planFin.saldoInicial,
-    planFin.lancamentosRebanho, planFin.lancamentosFinanciamento,
-    planFin.lancamentosNutricao, planFin.lancamentosProjetos,
     zootComp,
     lancFinAnoAnt,
   ]);
@@ -359,21 +350,8 @@ export function V2PlanejamentoVisaoGeral({ ano, mes, onAnoChange, onMesChange }:
   // auto (rebanho/nutrição/financiamento/projetos) somadas ao ajuste manual.
   // Espelha exatamente o que a tela Fluxo de Caixa META já renderiza.
   // Fonte única — Bloco 1 vira espelho da tela oficial, sem reconstrução paralela.
-  const gridMetaConsolidado = useMemo(
-    () => composeGridMetaConsolidado(planFin.gridMeta2026, {
-      lancamentosRebanho: planFin.lancamentosRebanho,
-      lancamentosFinanciamento: planFin.lancamentosFinanciamento,
-      lancamentosNutricao: planFin.lancamentosNutricao,
-      lancamentosProjetos: planFin.lancamentosProjetos,
-    }),
-    [
-      planFin.gridMeta2026,
-      planFin.lancamentosRebanho,
-      planFin.lancamentosFinanciamento,
-      planFin.lancamentosNutricao,
-      planFin.lancamentosProjetos,
-    ],
-  );
+  /* P109 — o grid CONSOLIDADO vem pronto do hub (auto da fn_meta_linhas + digitado, a regra única de juntar) */
+  const gridMetaConsolidado = planFin.gridMetaConsolidado2026;
 
   // Bloco 1: META 2026 (consolidado) vs Real 2025 (lancFin2025 via useFinanceiro).
   // Zero classificação aqui — builder delega tudo aos agregadores oficiais.
@@ -445,10 +423,14 @@ export function V2PlanejamentoVisaoGeral({ ano, mes, onAnoChange, onMesChange }:
     <V2PageContent>
       <header className="mb-4">
         <h1 className="text-xl font-bold text-foreground">Visão Geral Planejamento {ano}</h1>
+        {/* P109 — o rótulo do regime numa linha fixa; o nome da fazenda (que muda de tamanho) na linha de baixo: nada se desloca */}
+        <p className="text-xs text-muted-foreground">
+          META {ano} — anual planejado
+          {' · '}
+          <span data-testid="meta-regime" className="whitespace-nowrap">{ROTULO_REGIME.caixa}</span>
+        </p>
         <p className="text-xs text-muted-foreground">
           {dto.escopo === 'global' ? 'Todas as fazendas' : `Fazenda: ${dto.fazendaNome ?? '—'}`}
-          {' · '}
-          META {ano} — anual planejado
         </p>
       </header>
 

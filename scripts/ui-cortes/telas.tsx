@@ -71,6 +71,11 @@ import { FazendaSelector } from '@/components/FazendaSelector';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { ConciliarDiferencaModal } from '@/components/conciliacao/ConciliarDiferencaModal';
 import { lerSimulacao } from '@/lib/conciliacao/conciliarDiferenca';
+import { PlanejamentoFinanceiroTab } from '@/pages/PlanejamentoFinanceiroTab';
+import { PainelConsultorTab } from '@/pages/PainelConsultorTab';
+import { V2PlanejamentoVisaoGeral } from '@/v2/pages/V2PlanejamentoVisaoGeral';
+import V2FechamentoPeriodo from '@/v2/pages/V2FechamentoPeriodo';
+import * as META from './dados/metaP109';
 
 /* FIN-V2-DESEMPENHO-01b — a `fn_fin_v2_lista_pagina` da bancada: a página pedida do conjunto SINTÉTICO, com o total e os totais
    do conjunto inteiro (a regra do topo, `totaisDaListaV2`). Sem filtro: a bancada mede a tela, não o predicado. */
@@ -505,6 +510,25 @@ if (tela === 'mesclar') {
         inicial={{ modo: (q.get('modo') as any) ?? undefined, faixa: (q.get('faixa') as any) ?? undefined, de: q.get('de') ?? undefined,
           ate: q.get('ate') ?? undefined, sel: q.get('mes') ?? undefined }} /></div>
     </div>);
+} else if (tela === 'meta') {
+  /* P109 — as 4 telas que leem a meta da `fn_meta_linhas` (`&t=fluxo|pc100|vgplan|fech`), com o caso real do NJ 2026 (só os números;
+     `dados/metaP109.ts`): Global ou uma fazenda (`&fz=f5`), e `&v=grande` (todo valor ×400). Cada uma mostra o rótulo do regime. */
+  const T = q.get('t') ?? 'fluxo';
+  const ESCALA = v === 'grande' ? 400 : 1;
+  const FZ = META.FAZENDAS.find((f) => f.id === q.get('fz')) ?? null;
+  const REAL_2025 = META.realizado2025(ESCALA);
+  g.__fazendaBancada = { fazendas: META.FAZENDAS, fazendasComPecuaria: META.FAZENDAS.filter((f) => f.tem_pecuaria), loading: false,
+    fazendaAtual: FZ ?? { id: '__global__', nome: 'Global', owner_id: '' }, isGlobal: !FZ, fazendaId: FZ?.id ?? '__global__', setFazendaAtual: () => {} };
+  g.__bancoBancada = {
+    from: (t: string, e: any) => t === 'financeiro_plano_contas' ? META.PLANO : t === 'financeiro_dividendos' ? META.DIVIDENDOS
+      : t === 'fazendas' ? META.FAZENDAS : t === 'planejamento_financeiro' ? META.planejamento(ESCALA, e.eq.fazenda_id)
+      : t === 'vw_fin_classificacao_por_parte' ? REAL_2025.filter((l) => e.eq.fazenda_id == null || l.fazenda_id === e.eq.fazenda_id) : [],
+    rpc: (fn: string, a: any) => fn === 'fn_meta_linhas' ? META.metaLinhas(ESCALA, a.p_regime) : null,
+  };
+  montar(T === 'fluxo' ? <div className="h-full p-3"><PlanejamentoFinanceiroTab ano={2026} /></div>
+    : T === 'pc100' ? <div className="h-full"><PainelConsultorTab filtroGlobal={{ ano: '2026', mes: 10 }} /></div>
+    : T === 'vgplan' ? <div className="h-full"><V2PlanejamentoVisaoGeral ano={2026} mes={10} /></div>
+    : <div className="h-full"><V2FechamentoPeriodo periodo={{ periodoInicio: '2026-01', periodoFim: '2026-10' }} onPeriodoChange={() => {}} /></div>);
 } else if (tela === 'recorrencias') {
   /* REC-COLUNAS-01 — Financeiro › Recorrências (a lista do mês), com o pior texto de cada coluna curta. SINTÉTICO (`dados/recorrencias.ts`). */
   g.__bancoBancada = {

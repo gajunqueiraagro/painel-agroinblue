@@ -15,6 +15,7 @@
  * 0903…" aparece uma vez, com quantas linhas o usam; responder ali resolve as N. E a
  * resposta fica memorizada: o selo "apelido" diz que aquele texto já foi ensinado.
  */
+import { casaNaBusca } from '@/lib/texto/busca';
 import { useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -125,10 +126,11 @@ export function DeParaCampoModal({
     campo === 'fornecedor' ? (duplicadosPorNome.get(norm(texto)) ?? 0) : 0;
 
   const visiveis = useMemo(() => {
-    const q = busca.trim().toLowerCase();
+    const q = busca.trim();
     return itens
       .filter((it) => (chip === 'todos' ? true : recorteDe(it) === chip))
-      .filter((it) => (q ? it.texto.toLowerCase().includes(q) : true))
+      /* P134: sem acento, cedilha e maiúscula nos dois lados (`casaNaBusca`, a regra única) */
+      .filter((it) => (q ? casaNaBusca(it.texto, q) : true))
       /* Mais linhas primeiro: resolver o texto de 57 linhas vale mais que o de uma. */
       .sort((a, b) => b.qtd - a.qtd);
   }, [itens, chip, busca]);

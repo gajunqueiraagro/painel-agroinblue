@@ -295,6 +295,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   `menuPadrao`; todo campo de valor e' o `CampoMoeda` ("R$" e "0,00"); todo campo de arquivo aceita arrastar.
 - FIN-VALOR-CALC-01b: todo `CampoMoeda` faz conta (a lib `contaNoCampo`, nenhuma outra); o hospedeiro so' recebe o RESULTADO; o Esc/Enter
   da conta aberta sao pegos na JANELA (captura), antes do Radix; campo de valor novo = `CampoMoeda` (nunca `Input type="number"`).
+- P134: TODA busca ignora acento, cedilha e maiúscula nos dois lados — tela `casaNaBusca`/`normalizarParaBusca` (`src/lib/texto/busca.ts`),
+  banco `_fn_normalizar_texto`/`fn_texto_casa` (STABLE e aberta: IMMUTABLE fica 10× mais lenta) e os campos `busca_*`; casos em `busca.casos.json`.
 - P91: campo de NUMERO (kg, @, %, cab, dias) = `CampoNumeroComConta`; o gesto da conta e' UM hook (`useContaNoCampo`), o mesmo do `CampoMoeda`.
 - P88: formulario antigo com estado em TEXTO DE MAQUINA ('1234.56') troca o `type="number"` pelo campo do sistema sem mudar o estado (`numeroDoTextoDeMaquina`/`textoDeMaquina`).
 - P92: resumo do Negociar lote = 400px, colunas fixas (`colgroup` medido para o teto); acima do teto a fonte desce ate' 2px (piso 9,5), nunca quebra; o gate tem `numero-vaza` (numero fora da caixa de conteudo da celula; tabela maior que a caixa).
