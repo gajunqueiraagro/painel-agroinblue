@@ -2388,8 +2388,10 @@ export function LancamentoV2Dialog({
     setXmlCriandoFornecedor(true);
     try {
       if (clienteAtual?.id) {
+        /* P146 — a conferencia que FALHA nao vira "nao ha' cadastro": para e diz por que (criar aqui poderia duplicar o CNPJ) */
         const ja = await fornecedorPeloDocumento(clienteAtual.id, xml.emitenteDocumento);
-        if (ja) { setXmlConflito(ja); return; }
+        if (ja.ok === false) { toast.error(`Não consegui conferir o CNPJ no cadastro (${ja.motivo}). Nada foi gravado — tente de novo.`); return; }
+        if (ja.valor) { setXmlConflito(ja.valor); return; }
       }
       const novo = await onCriarFornecedor(xml.emitenteNome, fazendaId, documentoFormatado(xml.emitenteDocumento));
       if (novo) {
@@ -2521,7 +2523,8 @@ export function LancamentoV2Dialog({
     try {
       if (xml.resolucao.cadastroSemDocumento) {
         const ja = await fornecedorPeloDocumento(cli, xml.emitenteDocumento);
-        if (ja && ja.id !== xmlFornecedorProposto) { setXmlConflito(ja); return; }
+        if (ja.ok === false) { toast.error(`Não consegui conferir o CNPJ no cadastro (${ja.motivo}). Nada foi gravado — tente de novo.`); return; }
+        if (ja.valor && ja.valor.id !== xmlFornecedorProposto) { setXmlConflito(ja.valor); return; }
       }
       const hoje = await cadastroParaComparar(cli, xmlFornecedorProposto);
       if (!hoje) { toast.error('O cadastro não foi lido. Nada foi gravado.'); return; }

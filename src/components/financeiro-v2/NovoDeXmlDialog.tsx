@@ -54,6 +54,10 @@ export interface LinhaDeNota {
   paraLancar?: NotaParaLancar | null;
   /** NOTA-JA-LANCADA-01 — quantos lancamentos do cliente ja' parecem ser esta nota (0 = nenhum). */
   jaLancados?: number;
+  /** P146 — a frase do que NAO se conseguiu verificar (fornecedor pelo nome, nota registrada, nota ja' lancada): a linha nao abre ate'
+   *  "Tentar de novo" responder; `null` = tudo verificado. `paraRefazer` guarda o lido para refazer as consultas. */
+  naoVerificada?: string | null;
+  paraRefazer?: { arquivo: File; bytes: ArrayBuffer; lido: NotaLidaOk } | null;
 }
 
 /** "2 × 8.119,00 · 05/11 e 05/12" | "sem duplicatas" | "3 · parcelas livres" | "1 × 16.238,00 · 30/10". */
@@ -65,10 +69,11 @@ export function resumoDasDuplicatas(p: PropostaDeLancamento): string {
   return `${d.length} × ${reais(d[0].valorCent)} · ${datas}`;
 }
 
-export type SituacaoDaNota = 'recusada' | 'lancada' | 'ja_registrada' | 'ja_lancada' | 'sem_protocolo' | 'nova';
+export type SituacaoDaNota = 'recusada' | 'lancada' | 'nao_verificada' | 'ja_registrada' | 'ja_lancada' | 'sem_protocolo' | 'nova';
 export function situacaoDaNota(l: LinhaDeNota): SituacaoDaNota {
   if (l.recusa) return 'recusada';
   if (l.lancada) return 'lancada';
+  if (l.naoVerificada) return 'nao_verificada';
   if ((l.doXml?.ocorrencias.length ?? 0) > 0) return 'ja_registrada';
   if ((l.jaLancados ?? 0) > 0) return 'ja_lancada';
   if (l.avisos.includes('sem_protocolo')) return 'sem_protocolo';
@@ -78,6 +83,7 @@ const TEXTO_DA_SITUACAO: Record<Exclude<SituacaoDaNota, 'recusada'>, { texto: st
   nova: { texto: 'autorizada · nova', cor: 'text-[#15803d]' },
   ja_registrada: { texto: 'já registrada', cor: 'text-amber-700' },
   ja_lancada: { texto: 'parece já lançada', cor: 'text-amber-700' },
+  nao_verificada: { texto: 'não verificada', cor: 'text-destructive' },
   sem_protocolo: { texto: 'sem protocolo', cor: 'text-amber-700' },
   lancada: { texto: 'lançada', cor: 'text-primary' },
 };
@@ -156,12 +162,20 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
     fazendasComIE: FazendaComIE[]): Promise<LinhaDeNota> => {
     const { nota, avisos } = lido;
     /* O fornecedor: pelo documento; so' vai ao banco pelo nome quando o documento nao achou ninguem (e ha' nome: a chave digitada nao traz). */
+    /* P146 — a consulta que FALHA entra em `falhas` (nunca vira "nao achei"): a linha fica "não verificada" e nao abre */
+    const falhas: string[] = [];
     let resolucao: ResolucaoEmitente = resolverEmitente(nota.emitente, fornecedores, null);
-    if (!resolucao.achadoPor && nota.emitente.nome) resolucao = resolverEmitente(nota.emitente, fornecedores, await fornecedorPeloNome(cli, nota.emitente.nome));
-    const [ocorrencias, ultima] = await Promise.all([
+    if (!resolucao.achadoPor && nota.emitente.nome) {
+      const pelo = await fornecedorPeloNome(cli, nota.emitente.nome);
+      if (pelo.ok === false) falhas.push(`o fornecedor pelo nome (${pelo.motivo})`);
+      resolucao = resolverEmitente(nota.emitente, fornecedores, pelo.ok === false ? null : pelo.valor);
+    }
+    const [registrada, ultima] = await Promise.all([
       notaJaRegistrada(cli, nota.chave),
       resolucao.propostoId ? ultimaClassificacaoDoFornecedor(cli, resolucao.propostoId) : Promise.resolve(null),
     ]);
+    if (registrada.ok === false) falhas.push(`se a nota já está registrada (${registrada.motivo})`);
+    const ocorrencias = registrada.ok === false ? [] : registrada.valor;
     const proposta = proporLancamento({ nota, avisosDoLeitor: avisos, fazendas: fazendasComIE, emitente: resolucao, favorecidoId: resolucao.propostoId, ultima });
     if (proposta.ok === false) return { ...base, nota, avisos, recusa: proposta.frase };
     const ehPdf = lido.origem === 'pdf';
@@ -172,16 +186,21 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
     /* NOTA-JA-LANCADA-01 — a nota ja' lancada (qualquer status, cadastro parecido): a linha avisa e abre a previa da nota
        (que oferece anexar), nunca o Novo lancamento direto. P95 — pela chave, sem valor nem data: so' o numero, o CNPJ e a chave. */
     const pr = proposta.proposta;
-    const jaLancados = ocorrencias.length ? 0 : await notaJaLancada(cli, {
-      parcelas: lido.pelaChave ? [] : parcelasParaCasar(pr.duplicatas, nota.totais.notaCent, pr.duplicatas[0]?.vencimento ?? nota.emissao),
-      numero: pr.numeroDocumento || nota.numero, chave: nota.chave, emitenteDocumento: nota.emitente.documento,
-      nomes: [nota.emitente.nome, nota.emitente.fantasia],
-    }).then((l) => l.length, () => 0);   // a busca nunca trava a leitura
+    let jaLancados = 0;
+    if (registrada.ok === true && ocorrencias.length === 0) {
+      const ja = await notaJaLancada(cli, {
+        parcelas: lido.pelaChave ? [] : parcelasParaCasar(pr.duplicatas, nota.totais.notaCent, pr.duplicatas[0]?.vencimento ?? nota.emissao),
+        numero: pr.numeroDocumento || nota.numero, chave: nota.chave, emitenteDocumento: nota.emitente.documento,
+        nomes: [nota.emitente.nome, nota.emitente.fantasia],
+      });
+      if (ja.ok === false) falhas.push(`se a nota já foi lançada (${ja.motivo})`); else jaLancados = ja.valor.length;
+    }
+    const naoVerificada = falhas.length ? `Não consegui verificar ${falhas.join('; ')}. Nada será lançado até verificar.` : null;
     return {
       ...base, nota, avisos, recusa: null,
       fazenda: fazendasComIE.find((f) => f.id === proposta.proposta.fazendaId) ?? null,
-      doXml, jaLancados,
-      paraLancar: ehPdf || jaLancados > 0 ? { arquivo: doXml.arquivo, bytes, lido, doXml } : null,
+      doXml, jaLancados, naoVerificada, paraRefazer: naoVerificada ? { arquivo, bytes, lido } : null,
+      paraLancar: naoVerificada ? null : ehPdf || jaLancados > 0 ? { arquivo: doXml.arquivo, bytes, lido, doXml } : null,
     };
   }, [fornecedores]);
 
@@ -226,6 +245,20 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
       setLendo(false);
     }
   }, [clienteId, onAbrirNota, fazendasDoCliente, montarLinha]);
+
+  /* P146 — "Tentar de novo" na linha não verificada: refaz as consultas com o MESMO lido (nada se relê do arquivo) e troca a linha */
+  const refazer = useCallback(async (l: LinhaDeNota) => {
+    if (!clienteId || !l.paraRefazer) return;
+    setLendo(true);
+    try {
+      const fazendasComIE = await fazendasDoCliente(clienteId);
+      const base = { id: l.id, arquivoNome: l.arquivoNome, arquivoTamanho: l.arquivoTamanho, doXml: null, nota: null, avisos: [], fazenda: null, lancada: false };
+      const nova = await montarLinha(clienteId, base, l.paraRefazer.arquivo, l.paraRefazer.bytes, l.paraRefazer.lido, fazendasComIE);
+      setLinhas((antes) => antes.map((x) => (x.id === l.id ? nova : x)));
+    } finally {
+      setLendo(false);
+    }
+  }, [clienteId, fazendasDoCliente, montarLinha]);
 
   /* P95 — DIGITAR A CHAVE na linha recusada (nota sem chave, PDF foto/escaneado): conferida (DV), a linha segue como nota lida — o resto
      em branco, para o operador preencher na previa. O PDF (mesmo escaneado) segue anexado como a NF. */
@@ -357,12 +390,20 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
                       <td className={`${TD} text-right tabular-nums`}>{pelaChave ? '—' : reais(n.totais.notaCent)}</td>
                       <td className={TD} title={resumoDasDuplicatas(d.proposta)}>{resumoDasDuplicatas(d.proposta)}</td>
                       <td className={`${TD} ${DIVISOR} ${s.cor}`} data-testid="xml-situacao"
-                        title={sit === 'ja_registrada' && onde ? `Nota já registrada · ${onde.descricao ?? ''} · ${dataCurta(onde.data)}` : s.texto}>
+                        title={sit === 'nao_verificada' ? l.naoVerificada ?? s.texto
+                          : sit === 'ja_registrada' && onde ? `Nota já registrada · ${onde.descricao ?? ''} · ${dataCurta(onde.data)}` : s.texto}>
                         {sit === 'ja_registrada' && onde
                           ? <button type="button" className="underline underline-offset-2" onClick={() => abrirRegistrada(onde)}>{s.texto}</button>
                           : s.texto}
                       </td>
                       <td className={`${TD_ACAO} ${DIVISOR}`}>
+                        {sit === 'nao_verificada' ? (
+                          /* P146 — sem verificar, a nota nao abre (nem a previa, nem o Novo lancamento): so' "Tentar de novo" */
+                          <Button type="button" size="sm" variant="outline" className="h-4 px-1.5 text-[9.5px]" disabled={lendo}
+                            title={l.naoVerificada ?? ''} data-testid="xml-tentar-de-novo" onClick={() => { void refazer(l); }}>
+                            Tentar de novo
+                          </Button>
+                        ) : (
                         <Button type="button" size="sm" variant={lancada ? 'outline' : 'default'} className="h-4 px-1.5 text-[9.5px]"
                           data-testid="xml-abrir-lancamento" onClick={() => {
                             const atual = comFornecedoresDeAgora(d, fornecedores);
@@ -371,6 +412,7 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
                           }}>
                           {lancada ? 'abrir de novo' : 'Abrir lançamento'}
                         </Button>
+                        )}
                       </td>
                     </tr>
                   );

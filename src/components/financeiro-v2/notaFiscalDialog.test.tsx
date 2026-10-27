@@ -6,7 +6,7 @@
  * ⚠ Nenhum banco: os gravadores e as consultas sao falsos; o que se prova e' o que a tela mostra e o que ela manda gravar.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ClassificacaoItem, ContaBancariaV2, FornecedorV2, LancamentoV2Form, Safra } from '@/hooks/useFinanceiroV2';
 import type { Fazenda } from '@/contexts/FazendaContext';
@@ -29,7 +29,8 @@ const consultas = vi.hoisted(() => ({
   camposQueOEmitenteCompleta: vi.fn(async (_c: string, _f: string, _e: unknown): Promise<string[]> => []),
   completarCadastroPeloXml: vi.fn(async (_c: string, _f: string, _e: { ie: string | null; endereco?: { municipio: string | null; uf: string | null } | null }): Promise<string | null> => null),
   gravarDocumentoNoCadastro: vi.fn(async (): Promise<string | null> => null),
-  lancamentosAbertosComValor: vi.fn(async (_c: string, _f: string, _v: readonly number[]): Promise<unknown[]> => []),
+  /* P146 — as consultas que decidem devolvem `Consulta` ({ ok, valor } | { ok: false, motivo }) */
+  lancamentosAbertosComValor: vi.fn(async (_c: string, _f: string, _v: readonly number[]): Promise<Consulta<unknown[]>> => ({ ok: true, valor: [] })),
   iePorFazenda: vi.fn(async (): Promise<Record<string, string>> => ({ 'faz-1': '280000002' })),
   /* NOTA-FAZENDA-PELA-IE-01 — gravar a IE na fazenda (simula e grava) */
   inscreverEmFazendas: vi.fn((_cb: (c: string) => void) => () => undefined),
@@ -39,13 +40,13 @@ const consultas = vi.hoisted(() => ({
       ? { ok: true, frase: 'Faz. Sintetica passa a ter a IE 280000002: as próximas notas com esta IE de destinatário já vêm com a fazenda.', trilhaId: null }
       : { ok: true, frase: null, trilhaId: 'trilha-1' })),
   desfazerIeDaFazenda: vi.fn(async (): Promise<string | null> => null),
-  fornecedorPeloNome: vi.fn(async (): Promise<string | null> => null),
-  notaJaRegistrada: vi.fn(async (): Promise<unknown[]> => []),
+  fornecedorPeloNome: vi.fn(async (): Promise<Consulta<string | null>> => ({ ok: true, valor: null })),
+  notaJaRegistrada: vi.fn(async (): Promise<Consulta<unknown[]>> => ({ ok: true, valor: [] })),
   ultimaClassificacaoDoFornecedor: vi.fn(async (): Promise<unknown> => null),
-  fornecedorPeloDocumento: vi.fn(async (_c: string, _d: string): Promise<{ id: string; nome: string; ativo: boolean } | null> => null),
+  fornecedorPeloDocumento: vi.fn(async (_c: string, _d: string): Promise<Consulta<{ id: string; nome: string; ativo: boolean } | null>> => ({ ok: true, valor: null })),
   usoDoFornecedor: vi.fn(async (_f: string): Promise<{ lancamentos: number; ultimo: string | null } | null> => ({ lancamentos: 3, ultimo: '2026-09-01' })),
   /* NOTA-JA-LANCADA-01 — nada ja' lancado, por padrao */
-  notaJaLancada: vi.fn(async (_c: string, _e: unknown): Promise<LancamentoJaLancado[]> => []),
+  notaJaLancada: vi.fn(async (_c: string, _e: unknown): Promise<Consulta<LancamentoJaLancado[]>> => ({ ok: true, valor: [] })),
   /* NOTA-FORNECEDOR-COMPARAR-01 — o cadastro de hoje e a gravacao com trilha */
   cadastroParaComparar: vi.fn(async (_c: string, _f: string): Promise<Record<string, string | null> | null> => ({
     nome: 'Agro Sintetica Insumos Agropecuarios Ltda', nome_fantasia: null, cpf_cnpj: null, inscricao_estadual: null, logradouro: null, numero: null,
@@ -76,15 +77,15 @@ import { resolverEmitente } from '@/lib/financeiro/nfe/resolverEmitente';
 import { PAGINAS_DANFE_SINTETICO, danfeSinteticoAvulsa, danfeSinteticoSemDuplicata } from '@/lib/financeiro/nfe/__fixtures__/danfeSintetico';
 import type { LancamentoJaLancado } from '@/lib/financeiro/nfe/jaLancada';
 import type { DocumentoDaParcela, GravadoresDaJuncao } from '@/lib/financeiro/juntarParcelas';
-import type { OcorrenciaDaNota } from '@/lib/financeiro/nfeConsultas';
+import type { Consulta, OcorrenciaDaNota } from '@/lib/financeiro/nfeConsultas';
 
 beforeEach(() => {
   Element.prototype.scrollIntoView = () => {};
   Element.prototype.hasPointerCapture = () => false;
   vi.clearAllMocks();
   consultas.camposQueOEmitenteCompleta.mockResolvedValue([]);
-  consultas.lancamentosAbertosComValor.mockResolvedValue([]);
-  consultas.notaJaLancada.mockResolvedValue([]);
+  consultas.lancamentosAbertosComValor.mockResolvedValue({ ok: true, valor: [] });
+  consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: [] });
 });
 
 const FAZENDAS: Fazenda[] = [{ id: 'faz-1', nome: 'Faz. Sintetica', owner_id: 'u1', cliente_id: 'cli', codigo: null },
@@ -349,9 +350,9 @@ describe('N3 — o que barra', () => {
 
 describe('N4 — "Atualizar este": o lançamento aberto do mesmo fornecedor com o valor da parcela', () => {
   it('mostra qual, pede confirmação, anexa a NF às parcelas dele e grava o número só onde está vazio', async () => {
-    consultas.lancamentosAbertosComValor.mockResolvedValue([
+    consultas.lancamentosAbertosComValor.mockResolvedValue({ ok: true, valor: [
       { id: 'l-ext', vencimento: '2026-10-20', competencia: '2026-09-15', descricao: 'Compra do extrato', valorCent: 49164, financiamentoId: 'fin-velho', numeroDocumento: null },
-    ]);
+    ] });
     const { g, comoGravadores } = gravadoresFalsos();
     const props = abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
     expect(screen.getByTestId('nota-bloco-fornecedor').textContent).toContain('cadastrado');
@@ -440,9 +441,9 @@ describe('N7 — o caso de 21/10 16h49: NADA ESCOLHIDO NO MODAL SE PERDE no cami
 
 describe('N8 — FIN-NOTA-PDF-01b: "Atualizar e parcelar" (o à vista existente vira 1/4 + 3 novas)', () => {
   it('aberto de R$ 1.966,56: a RPC recebe o existente e a lista 4 × 491,64; a nota em todas as parcelas', async () => {
-    consultas.lancamentosAbertosComValor.mockResolvedValue([
+    consultas.lancamentosAbertosComValor.mockResolvedValue({ ok: true, valor: [
       { id: 'l-avista', vencimento: '2026-09-20', competencia: '2026-09-15', descricao: 'Compra do extrato', valorCent: 196656, financiamentoId: null, numeroDocumento: null, pago: false },
-    ]);
+    ] });
     const { g, comoGravadores } = gravadoresFalsos();
     const props = abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
     const botao = await screen.findByTestId('nota-atualizar-este');
@@ -462,9 +463,9 @@ describe('N8 — FIN-NOTA-PDF-01b: "Atualizar e parcelar" (o à vista existente 
     expect(props.gravarItens).toHaveBeenCalledTimes(1);
   });
   it('PAGO com valor diferente da parcela 1: a diferença em R$ e a decisão (o valor pago cobre a nota: só anexar)', async () => {
-    consultas.lancamentosAbertosComValor.mockResolvedValue([
+    consultas.lancamentosAbertosComValor.mockResolvedValue({ ok: true, valor: [
       { id: 'l-pago', vencimento: '2026-09-20', competencia: '2026-09-15', descricao: 'Pago no extrato', valorCent: 196656, financiamentoId: null, numeroDocumento: null, pago: true },
-    ]);
+    ] });
     const { g, comoGravadores } = gravadoresFalsos();
     abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
     await escolherSubcentro('Nutrição Engorda');
@@ -504,7 +505,7 @@ describe('N9 — NOTA-FORNECEDOR-DUPLICA-01: o cadastro sem CNPJ e o CNPJ ja\' c
     expect(await screen.findByTestId('nota-cadastrar-fornecedor')).toBeTruthy();
   });
   it('o CNPJ ja\' e\' de um cadastro (conferido no banco antes de criar): a frase e "Usar este"; nada criado', async () => {
-    consultas.fornecedorPeloDocumento.mockResolvedValueOnce({ id: 'ja', nome: 'Cadastro Sintetico Existente', ativo: true });
+    consultas.fornecedorPeloDocumento.mockResolvedValueOnce({ ok: true, valor: { id: 'ja', nome: 'Cadastro Sintetico Existente', ativo: true } });
     const props = abrir(montarNota());
     fireEvent.click(screen.getByTestId('nota-cadastrar-fornecedor'));
     expect((await screen.findByTestId('nota-conflito')).textContent).toContain('Cadastro Sintetico Existente');
@@ -556,7 +557,7 @@ const QUATRO = [jaLancado(1, '2026-10-20', 'realizado'), jaLancado(2, '2026-11-2
 
 describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
   it('reconhece as 4 (3 pagas + 1 programada, cadastro sem CNPJ parecido): o bloco no lugar das parcelas, "Anexar a nota a estes 4"; nada e\' criado', async () => {
-    consultas.notaJaLancada.mockResolvedValue(QUATRO);
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: QUATRO });
     const { g, comoGravadores } = gravadoresFalsos();
     const props = abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
     const bloco = await screen.findByTestId('nota-ja-lancada');
@@ -581,7 +582,7 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
     expect(props.gravarItens).toHaveBeenCalledTimes(1);
   });
   it('achou 3 de 4: a que falta aparece em ambar; "Anexar e criar a que falta" cria SO\' a 4/4 (valor e vencimento da nota) e anexa a nota as 4', async () => {
-    consultas.notaJaLancada.mockResolvedValue(QUATRO.slice(0, 3));
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: QUATRO.slice(0, 3) });
     const { g, comoGravadores } = gravadoresFalsos();
     const props = abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
     await screen.findByTestId('nota-ja-lancada');
@@ -598,7 +599,7 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
     expect(g.gravar).not.toHaveBeenCalled();
   });
   it('fornecedor diferente: "Trocar o fornecedor" so\' marcando — desmarcado nao troca; marcado troca os 4 pela funcao do lote', async () => {
-    consultas.notaJaLancada.mockResolvedValue(QUATRO);
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: QUATRO });
     const { g, comoGravadores } = gravadoresFalsos();
     const props = abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores, fornecedores: [FORN] });
     const caixa = await screen.findByTestId('nota-trocar-fornecedor');
@@ -609,7 +610,7 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
     expect(g.trocarFornecedor).toHaveBeenCalledWith('cli', ['velho-1', 'velho-2', 'velho-3', 'velho-4'], 'f1', expect.stringContaining('fornecedor da'));
   });
   it('"Criar mesmo assim" pede o motivo; o parcelamento nasce com o motivo na observacao', async () => {
-    consultas.notaJaLancada.mockResolvedValue(QUATRO);
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: QUATRO });
     const { g, comoGravadores } = gravadoresFalsos();
     const props = abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
     await screen.findByTestId('nota-ja-lancada');
@@ -625,7 +626,7 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
   /* NOTA-CONTAS-NA-CRIACAO-01 C (P75) — o molde do Agnaldo (23/10): a nota de UMA parcela (1.966,56) ja' lancada como 491,64 com o numero
      escrito de outro jeito ("NF_000.000.937"): achada pelo numero, e' "?/4" — nunca "falta" a nota inteira */
   it('C — achada em PARCELA (valor x 4 = a nota): "?/4" com a conta no title, a frase "achada 1 de 4" e nada de criar a que falta', async () => {
-    consultas.notaJaLancada.mockResolvedValue([jaLancado(1, '2026-10-20', 'agendado', { parcelas: [], por: ['numero'], numeroDocumento: 'NF_000.000.937', financiamentoId: null })]);
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: [jaLancado(1, '2026-10-20', 'agendado', { parcelas: [], por: ['numero'], numeroDocumento: 'NF_000.000.937', financiamentoId: null })] });
     abrir(montarNota({ fornecedores: [FORN], umaParcela: true }));
     const bloco = await screen.findByTestId('nota-ja-lancada');
     const linhas = within(bloco).getAllByTestId('nota-ja-lancada-linha');
@@ -642,7 +643,7 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
   const CANCELADOS = [jaLancado(1, '2026-10-20', 'programado', { id: 'canc-1', cancelado: true, parcelas: [], por: ['chave'] }),
     jaLancado(2, '2026-11-20', 'agendado', { id: 'canc-2', cancelado: true, parcelas: [], por: ['numero', 'chave'] })];
   it('D — com os vivos: os 2 cancelados no FIM, com o selo "cancelado" (nunca o status antigo); a frase e o Anexar contam so\' os 4', async () => {
-    consultas.notaJaLancada.mockResolvedValue([...CANCELADOS, ...QUATRO]);
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: [...CANCELADOS, ...QUATRO] });
     abrir(montarNota({ fornecedores: [FORN] }));
     const bloco = await screen.findByTestId('nota-ja-lancada');
     expect(within(bloco).getAllByTestId('nota-ja-lancada-linha')).toHaveLength(4);
@@ -655,7 +656,7 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
     expect(screen.getByTestId('nota-anexar-ja-lancados').textContent).toBe('Anexar a nota a estes 4');
   });
   it('D — so\' cancelados: a nota NAO esta\' lancada — "Criar 4 parcelas" e o rodape diz "Há 2 lançamentos cancelados desta nota (não contam)"', async () => {
-    consultas.notaJaLancada.mockResolvedValue(CANCELADOS);
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: CANCELADOS });
     abrir(montarNota({ fornecedores: [FORN] }));
     expect((await screen.findByTestId('nota-so-cancelados')).textContent).toBe(' Há 2 lançamentos cancelados desta nota (não contam).');
     expect(screen.queryByTestId('nota-ja-lancada')).toBeNull();
@@ -731,7 +732,7 @@ describe('P95 — a nota achada em N parcelas soltas (as irmas da fracao)', () =
     { id: `irma-${n}`, descricao: `Tinta sintetica - ${n}/4`, valorCent, parcelas: [], por, fracaoN: 4, financiamentoId: null });
   const IRMAS = [irma(1, 49165, ['fracao']), irma(2, 49160, ['fracao']), irma(3, 49164, ['numero', 'fracao']), irma(4, 49163, ['numero', 'fracao'])];
   it('as 4 na lista com "k/4" (a descricao diz qual), a frase com a soma, a nota e a diferenca; nada a criar', async () => {
-    consultas.notaJaLancada.mockResolvedValue(IRMAS);
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: IRMAS });
     abrir(montarNota({ fornecedores: [FORN], umaParcela: true }));
     const bloco = await screen.findByTestId('nota-ja-lancada');
     const parcs = within(bloco).getAllByTestId('nota-ja-lancada-parc').map((x) => x.textContent);
@@ -771,7 +772,7 @@ describe('P96a — juntar as parcelas soltas na prévia da nota', () => {
   };
 
   it('J1 a confirmação: o resumo, a competência MARCADA por padrão e o efeito no DRE; "Juntar" grava com a emissão e anexa a nota às 4', async () => {
-    consultas.notaJaLancada.mockResolvedValue(IRMAS);
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: IRMAS });
     const { g, comoGravadores } = gravadoresFalsos();
     const { gj, juntar } = falsos();
     const props = abrir(montarNota({ fornecedores: [FORN], umaParcela: true }), { g: comoGravadores, gj });
@@ -790,7 +791,7 @@ describe('P96a — juntar as parcelas soltas na prévia da nota', () => {
     expect(parcelas.map((x) => x.lancamentoId)).toEqual(['irma-1', 'irma-2', 'irma-3', 'irma-4']);
   });
   it('J2 desmarcada: grava SEM a competência (o DRE não muda)', async () => {
-    consultas.notaJaLancada.mockResolvedValue(IRMAS);
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: IRMAS });
     const { comoGravadores } = gravadoresFalsos();
     const { gj, juntar } = falsos();
     const props = abrir(montarNota({ fornecedores: [FORN], umaParcela: true }), { g: comoGravadores, gj });
@@ -802,7 +803,7 @@ describe('P96a — juntar as parcelas soltas na prévia da nota', () => {
     expect(juntar).toHaveBeenCalledWith('cli', ['irma-1', 'irma-2', 'irma-3', 'irma-4'], null, false);
   });
   it('J3 "Só anexar a nota": nada se junta, a nota vai às 4', async () => {
-    consultas.notaJaLancada.mockResolvedValue(IRMAS);
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: IRMAS });
     const { g, comoGravadores } = gravadoresFalsos();
     const { gj, juntar } = falsos();
     const props = abrir(montarNota({ fornecedores: [FORN], umaParcela: true }), { g: comoGravadores, gj });
@@ -813,7 +814,7 @@ describe('P96a — juntar as parcelas soltas na prévia da nota', () => {
     expect(g.documentosDoParcelamento).toHaveBeenCalledTimes(1);
   });
   it('J4 a competência recusada pelo banco (mês fechado): a caixinha sai desmarcada e apagada, com a frase; juntar sem ela segue', async () => {
-    consultas.notaJaLancada.mockResolvedValue(IRMAS);
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: IRMAS });
     const { comoGravadores } = gravadoresFalsos();
     const { gj } = falsos({ recusaComCompetencia: true });
     abrir(montarNota({ fornecedores: [FORN], umaParcela: true }), { g: comoGravadores, gj });
@@ -825,7 +826,7 @@ describe('P96a — juntar as parcelas soltas na prévia da nota', () => {
     expect(within(dialogo).getByTestId('nota-juntar-gravar')).not.toBeDisabled();
   });
   it('J5 a NF digitada à mão numa das 4 diverge: a frase e "Usar a nota lida" — troca SÓ com a confirmação (valor e emissão, com a versão)', async () => {
-    consultas.notaJaLancada.mockResolvedValue(IRMAS);
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: IRMAS });
     const { comoGravadores } = gravadoresFalsos();
     const doc: DocumentoDaParcela = { id: 'doc-4', lancamentoId: 'irma-4', versao: 2, especie: 'nf', numero: '937', chave: null, valorCent: 49164, emissao: '2026-10-10' };
     const { gj, editarDocumento } = falsos({ docs: [doc] });
@@ -1069,5 +1070,53 @@ describe('P101 — a prévia numa janela estreita', () => {
     abrir(montarNota());
     expect(screen.queryByTestId('nota-abas')).toBeNull();
     expect(visiveis()).toEqual(['nota-bloco-arquivo', 'nota-bloco-nota', 'nota-bloco-fornecedor', 'nota-bloco-parcelas', 'nota-bloco-lancamento']);
+  });
+});
+
+/* P146 (Gabriel 27/10/2026) — a busca que FALHA não vira "nada achado": a prévia diz "Não consegui verificar…", trava o Criar (e o "No Novo
+   lançamento") até "Tentar de novo" responder. O caso: Neosolar NF 65.089, 27/10 11:01 (10 parcelas criadas por cima de 6 já lançados). */
+describe('P146 — consulta que falha trava o Criar', () => {
+  it('"nota já lançada" falhou: a frase com o motivo, Criar e "No Novo lançamento" travados; "Tentar de novo" respondendo destrava', async () => {
+    consultas.notaJaLancada.mockResolvedValue({ ok: false, motivo: 'tempo esgotado' });
+    const { comoGravadores } = gravadoresFalsos();
+    abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
+    await escolherSubcentro('Nutrição Engorda');
+    await waitFor(() => expect(screen.getByTestId('nota-bloqueio').textContent)
+      .toContain('Não consegui verificar se esta nota já foi lançada (tempo esgotado). Nada será criado até verificar.'));
+    expect(screen.getByTestId('nota-criar')).toBeDisabled();
+    expect(screen.getByTestId('nota-abrir-no-lancamento')).toBeDisabled();
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: [] });
+    fireEvent.click(screen.getByTestId('nota-tentar-de-novo'));
+    await waitFor(() => expect(screen.getByTestId('nota-criar')).toBeEnabled());
+    expect(screen.queryByTestId('nota-bloqueio')).toBeNull();
+  });
+  it('enquanto a busca não responde, o Criar espera (e diz por quê)', async () => {
+    let responder: (v: Consulta<LancamentoJaLancado[]>) => void = () => undefined;
+    consultas.notaJaLancada.mockImplementation(() => new Promise((ok) => { responder = ok; }));
+    const { comoGravadores } = gravadoresFalsos();
+    abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
+    await escolherSubcentro('Nutrição Engorda');
+    await waitFor(() => expect(screen.getByTestId('nota-criar')).toBeDisabled());
+    expect(screen.getByTestId('nota-criar').getAttribute('title')).toBe('Verificando se esta nota já foi lançada…');
+    await act(async () => { responder({ ok: true, valor: [] }); });
+    await waitFor(() => expect(screen.getByTestId('nota-criar')).toBeEnabled());
+  });
+  it('os lançamentos abertos do fornecedor falharam: a frase e o Criar travado', async () => {
+    consultas.lancamentosAbertosComValor.mockResolvedValue({ ok: false, motivo: 'sem rede' });
+    const { comoGravadores } = gravadoresFalsos();
+    abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
+    await escolherSubcentro('Nutrição Engorda');
+    await waitFor(() => expect(screen.getByTestId('nota-bloqueio').textContent)
+      .toContain('Não consegui verificar os lançamentos abertos deste fornecedor (sem rede).'));
+    expect(screen.getByTestId('nota-criar')).toBeDisabled();
+  });
+  it('a conferência do CNPJ falhou ao cadastrar: nada é criado e a frase diz por quê', async () => {
+    consultas.fornecedorPeloDocumento.mockResolvedValueOnce({ ok: false, motivo: 'tempo esgotado' });
+    const props = abrir(montarNota());
+    await waitFor(() => expect(screen.getByTestId('nota-cadastrar-fornecedor')).toBeEnabled());
+    fireEvent.click(screen.getByTestId('nota-cadastrar-fornecedor'));
+    await waitFor(() => expect(screen.getByTestId('nota-erro').textContent)
+      .toContain('Não consegui conferir o CNPJ no cadastro (tempo esgotado). Nada foi gravado — tente de novo.'));
+    expect(props.onCriarFornecedor).not.toHaveBeenCalled();
   });
 });

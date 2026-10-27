@@ -281,6 +281,12 @@ export function NotaFiscalDialog({
   const [erro, setErro] = useState<string | null>(null);
   /* NOTA-JA-LANCADA-01 — os lancamentos que ja' parecem ser esta nota (qualquer status; cadastro parecido; numero; chave) */
   const [achados, setAchados] = useState<LancamentoJaLancado[] | null>(null);
+  /* P146 — a consulta que FALHA nao vira "nada achado": o motivo fica aqui, a previa diz "Não consegui verificar…" e trava o Criar ate'
+     "Tentar de novo" (`tentativa` refaz as consultas) responder. `abertosPendente`: a busca dos abertos ainda nao respondeu. */
+  const [falhaJaLancada, setFalhaJaLancada] = useState<string | null>(null);
+  const [falhaAbertos, setFalhaAbertos] = useState<string | null>(null);
+  const [abertosPendente, setAbertosPendente] = useState(false);
+  const [tentativa, setTentativa] = useState(0);
   const [trocarFornecedor, setTrocarFornecedor] = useState(false);
   const [criarFaltam, setCriarFaltam] = useState(true);
   const [mesmoAssim, setMesmoAssim] = useState<string | null>(null);
@@ -304,14 +310,19 @@ export function NotaFiscalDialog({
   /* fornecedor achado: o que a nota completa nele; e os lancamentos abertos dele com o valor da nota ou de uma parcela */
   useEffect(() => {
     let vivo = true;
-    if (!favorecidoId) { setCompletar([]); setAbertos([]); return; }
+    if (!favorecidoId) { setCompletar([]); setAbertos([]); setFalhaAbertos(null); setAbertosPendente(false); return; }
     void camposQueOEmitenteCompleta(clienteId, favorecidoId, emitente).then((c) => { if (vivo) setCompletar(c.filter((x) => x !== 'tipo_pessoa')); });
     if (doXml.ocorrencias.length === 0) {
+      setAbertosPendente(true); setFalhaAbertos(null);
       void lancamentosAbertosComValor(clienteId, favorecidoId, [n.totais.notaCent, ...p.duplicatas.map((d) => d.valorCent)])
-        .then((l) => { if (vivo) setAbertos(l); });
+        .then((r) => {
+          if (!vivo) return;
+          setAbertosPendente(false);
+          if (r.ok === false) { setAbertos([]); setFalhaAbertos(r.motivo); } else setAbertos(r.valor);
+        });
     }
     return () => { vivo = false; };
-  }, [clienteId, favorecidoId, emitente, doXml.ocorrencias.length, n.totais.notaCent, p.duplicatas]);
+  }, [clienteId, favorecidoId, emitente, doXml.ocorrencias.length, n.totais.notaCent, p.duplicatas, tentativa]);
 
   /* NOTA-JA-LANCADA-01 — antes de oferecer criar: a nota ja' esta' lancada? (refeito quando a Receita traz a razao social inteira) */
   /* P95 — pela chave, sem a emissao digitada nao ha' parcela para casar pelo valor: busca so' pelo numero e pela chave */
@@ -319,13 +330,18 @@ export function NotaFiscalDialog({
     [p.duplicatas, n.totais.notaCent, n.emissao]);
   useEffect(() => {
     let vivo = true;
-    if (doXml.ocorrencias.length > 0) { setAchados([]); return; }
+    if (doXml.ocorrencias.length > 0) { setAchados([]); setFalhaJaLancada(null); return; }
+    /* P146 — enquanto a busca nao responde, `achados` = null (o Criar espera); falhou = o motivo, NUNCA lista vazia */
+    setAchados(null); setFalhaJaLancada(null);
     void notaJaLancada(clienteId, {
       parcelas: parcelasDaBusca, numero: p.numeroDocumento || n.numero, chave: n.chave, emitenteDocumento: n.emitente.documento,
       nomes: [n.emitente.nome, n.emitente.fantasia, receitaNome],
-    }).then((l) => { if (vivo) setAchados(l); }, () => { if (vivo) setAchados([]); });
+    }).then((r) => {
+      if (!vivo) return;
+      if (r.ok === false) setFalhaJaLancada(r.motivo); else setAchados(r.valor);
+    });
     return () => { vivo = false; };
-  }, [clienteId, doXml.ocorrencias.length, parcelasDaBusca, p.numeroDocumento, n.numero, n.chave, n.emitente.documento, n.emitente.nome, n.emitente.fantasia, receitaNome]);
+  }, [clienteId, doXml.ocorrencias.length, parcelasDaBusca, p.numeroDocumento, n.numero, n.chave, n.emitente.documento, n.emitente.nome, n.emitente.fantasia, receitaNome, tentativa]);
   /* D — a nota que so' tem lancamento CANCELADO nao esta' lancada: o rodape so' diz quantos */
   const canceladosSo = useMemo(() => (achados && !achados.some((l) => !l.cancelado) ? canceladosDaNota(achados) : []), [achados]);
   const jaLancada = useMemo(() => (achados ? casarJaLancados(parcelasDaBusca, achados, n.totais.notaCent) : null), [achados, parcelasDaBusca, n.totais.notaCent]);
@@ -432,9 +448,13 @@ export function NotaFiscalDialog({
   }
   if (pelaChave && !digitado.emissao) faltas.push('emissão');
   if (pelaChave && !(digitado.valorCent && digitado.valorCent > 0)) faltas.push('valor');
+  /* P146 — o que a previa NAO conseguiu verificar trava como bloqueio (com "Tentar de novo"); o que ainda nao respondeu, espera */
+  const naoVerificado = falhaJaLancada ? `Não consegui verificar se esta nota já foi lançada (${falhaJaLancada}). Nada será criado até verificar.`
+    : falhaAbertos ? `Não consegui verificar os lançamentos abertos deste fornecedor (${falhaAbertos}). Nada será criado até verificar.` : null;
+  const verificando = !naoVerificado && ((doXml.ocorrencias.length === 0 && achados === null) || abertosPendente);
   const bloqueio = divergencias.length ? `A chave não confere com o lido (${divergencias.map((x) => NOME_DO_CONFERIDO[x]).join(', ')}). Nada será criado.`
-    : registrada ? `Nota já registrada neste cliente · ${ondeEsta(registrada)}` : null;
-  const podeCriar = !bloqueio && faltas.length === 0 && !ocupado;
+    : registrada ? `Nota já registrada neste cliente · ${ondeEsta(registrada)}` : naoVerificado;
+  const podeCriar = !bloqueio && !verificando && faltas.length === 0 && !ocupado;
   /* P74 — com o cartão, a conta origem das N é o cartão escolhido */
   const contaEscolhida = como === 'cartao' ? (cartaoId || null) : contaId && contaId !== '__none__' ? contaId : null;
   const escolhas = (): EscolhasDaNota | null => (favorecidoId && plano?.id ? {
@@ -451,11 +471,17 @@ export function NotaFiscalDialog({
   const cadastrar = async () => {
     setOcupado('cadastrar'); setErro(null);
     try {
-      /* o CNPJ ja' cadastrado (a lista pode estar velha): conferido no BANCO antes de criar — conflito vira frase e "Usar este" */
+      /* o CNPJ ja' cadastrado (a lista pode estar velha): conferido no BANCO antes de criar — conflito vira frase e "Usar este".
+         P146: a conferencia que FALHA para aqui (criar poderia duplicar o CNPJ) e diz por que */
       const ja = await fornecedorPeloDocumento(clienteId, n.emitente.documento);
-      if (ja) { setConflito(ja); return; }
+      if (ja.ok === false) { setErro(`Não consegui conferir o CNPJ no cadastro (${ja.motivo}). Nada foi gravado — tente de novo.`); return; }
+      if (ja.valor) { setConflito(ja.valor); return; }
       const novo = await onCriarFornecedor(razaoSocial, fazendaId || null, documentoFormatado(n.emitente.documento));
-      if (!novo) { setConflito(await fornecedorPeloDocumento(clienteId, n.emitente.documento)); return; }
+      if (!novo) {
+        const depois = await fornecedorPeloDocumento(clienteId, n.emitente.documento);
+        if (depois.ok === false) setErro(`Não consegui conferir o CNPJ no cadastro (${depois.motivo}).`); else setConflito(depois.valor);
+        return;
+      }
       setNovoPorEscolha(false); setConflito(null);
       setFavorecidoId(novo.id);
       const e = await completarCadastroPeloXml(clienteId, novo.id, emitente);
@@ -471,7 +497,8 @@ export function NotaFiscalDialog({
       if (semDocumento) {
         /* o CNPJ de outro cadastro nao entra aqui: conferido antes (a trava do banco recusaria com a frase) */
         const ja = await fornecedorPeloDocumento(clienteId, n.emitente.documento);
-        if (ja && ja.id !== favorecidoId) { setConflito(ja); return; }
+        if (ja.ok === false) { setErro(`Não consegui conferir o CNPJ no cadastro (${ja.motivo}). Nada foi gravado — tente de novo.`); return; }
+        if (ja.valor && ja.valor.id !== favorecidoId) { setConflito(ja.valor); return; }
       }
       const hoje = await cadastroParaComparar(clienteId, favorecidoId);
       if (!hoje) { setErro('O cadastro não foi lido. Nada foi gravado.'); return; }
@@ -1034,6 +1061,11 @@ export function NotaFiscalDialog({
             <span className="flex min-w-0 items-center gap-2 text-destructive" data-testid="nota-bloqueio">
               <span className="min-w-0 uma-linha-que-rola" title={bloqueio}>⚠ {bloqueio}</span>
               {registrada && <button type="button" className="shrink-0 underline underline-offset-2" onClick={() => onAbrirRegistrada(registrada)} data-testid="nota-abrir-registrada">abrir</button>}
+              {/* P146 — a verificacao que falhou se refaz daqui (o Criar so' volta quando ela responder) */}
+              {!registrada && !divergencias.length && naoVerificado && (
+                <button type="button" className="shrink-0 font-medium underline underline-offset-2" onClick={() => setTentativa((t) => t + 1)}
+                  data-testid="nota-tentar-de-novo">Tentar de novo</button>
+              )}
             </span>
           ) : erro ? (
             <span className="min-w-0 uma-linha-que-rola text-destructive" title={erro} data-testid="nota-erro">⚠ {erro}</span>
@@ -1069,7 +1101,7 @@ export function NotaFiscalDialog({
           ) : null}
           <span className="ml-auto" />
           <Button type="button" size="sm" variant="outline" className="h-[24px] shrink-0 px-2.5 text-[10.5px]" disabled={!!ocupado} onClick={onClose}>Cancelar</Button>
-          <Button type="button" size="sm" variant="outline" className="h-[24px] shrink-0 px-2.5 text-[10.5px]" disabled={!!ocupado || !!bloqueio} onClick={abrirNoLancamento}
+          <Button type="button" size="sm" variant="outline" className="h-[24px] shrink-0 px-2.5 text-[10.5px]" disabled={!!ocupado || !!bloqueio || verificando} onClick={abrirNoLancamento}
             title="Abre o Novo lançamento com tudo o que foi lido e escolhido aqui (nada se perde)." data-testid="nota-abrir-no-lancamento">
             No Novo lançamento
           </Button>
@@ -1088,7 +1120,8 @@ export function NotaFiscalDialog({
                 : `Anexar a nota a ${jaLancada.alvos.length === 1 ? 'este' : `estes ${jaLancada.alvos.length}`}`}
             </Button>
           </>) : (
-          <Button type="button" size="sm" className="h-[24px] w-[180px] shrink-0 px-2.5 text-[10.5px]" disabled={!podeCriar} onClick={() => { void criar(); }} data-testid="nota-criar">
+          <Button type="button" size="sm" className="h-[24px] w-[180px] shrink-0 px-2.5 text-[10.5px]" disabled={!podeCriar} onClick={() => { void criar(); }} data-testid="nota-criar"
+            title={bloqueio ?? (verificando ? 'Verificando se esta nota já foi lançada…' : undefined)}>
             {ocupado === 'criar' ? 'Criando…' : cabeAqui ? `Criar ${nParcelas} parcelas` : 'Criar lançamento'}
           </Button>)}
         </div>

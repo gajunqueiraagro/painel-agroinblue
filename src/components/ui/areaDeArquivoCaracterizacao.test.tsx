@@ -18,9 +18,9 @@ vi.mock('@/lib/oc/leitura/linhasDoPdf', () => leitorLinhas);
 vi.mock('@/integrations/supabase/client', () => ({ supabase: { rpc: vi.fn(), from: vi.fn(), storage: { from: vi.fn() } } }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() } }));
 vi.mock('@/lib/financeiro/nfeConsultas', () => ({
-  iePorFazenda: async () => ({ 'f-pur': '28.987.654-3' }), aliasesDasFazendas: async () => ({}), fornecedorPeloNome: async () => null, notaJaRegistrada: async () => [],
+  iePorFazenda: async () => ({ 'f-pur': '28.987.654-3' }), aliasesDasFazendas: async () => ({}), fornecedorPeloNome: async () => ({ ok: true, valor: null }), notaJaRegistrada: async () => ({ ok: true, valor: [] }),   // P146: Consulta
   ultimaClassificacaoDoFornecedor: async () => null, gravarDocumentoNoCadastro: async () => null,
-  notaJaLancada: async () => [],   // NOTA-JA-LANCADA-01
+  notaJaLancada: async () => ({ ok: true, valor: [] }),   // NOTA-JA-LANCADA-01 · P146
 }));
 
 import { FormDocumento } from '@/components/financeiro-v2/AbaDocumentosLancamento';
