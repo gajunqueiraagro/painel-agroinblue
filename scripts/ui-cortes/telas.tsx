@@ -1108,6 +1108,13 @@ if (v === 'volume') {
 if (v === 'ref') props.referenciaOperacionalInfo = { fornecedor_texto: 'AGROPECUARIA EXEMPLO LTDA', fazenda_texto: 'EXEMPLO', plano_texto: 'Nutrição Engorda',
   centro_texto: 'Suplementação', produto_texto: 'Sal mineral', valor: -1345.5, data_referencia: '10/09/2026' };
 
+  /* P117 — o fornecedor do lançamento é uma FILIAL com a cidade mais longa do caso (Presidente Prudente/SP): a linha fixa sob o campo diz
+     "CNPJ · Cidade/UF" e não empurra nem corta nada; `&cidade=sem` = o cadastro sem cidade (só o CNPJ). SINTÉTICO. */
+  if (v !== 'volume') {
+    const semCidade = q.get('cidade') === 'sem';
+    g.__fornecedoresBancada = [...(g.__fornecedoresBancada ?? []).filter((f: any) => f.id !== 'agro'),
+      { ...AGRO, municipio: semCidade ? null : 'Presidente Prudente', uf: semCidade ? null : 'SP' }];
+  }
   raiz.render(<QueryClientProvider client={qc}><MemoryRouter><Casca />
     <LancamentoV2Dialog open onClose={() => {}} onSave={async () => 'x'} fazendas={FAZENDAS} contas={CONTAS} classificacoes={CLASSIF}
       fornecedores={[AGRO]} safras={SAFRAS} onCriarFornecedor={async () => null} {...props} />

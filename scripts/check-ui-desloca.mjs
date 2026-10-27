@@ -297,6 +297,15 @@ const CENARIOS = [
     ['aba Auditoria', async (p) => { await p.getByRole('tab', { name: /Auditoria/ }).first().click(); await espera(p, 700); }],
     ['de volta à primeira aba', async (p) => { await p.locator('[role="dialog"] [role="tab"]').first().click(); await espera(p, 500); }],
   ] })),
+  /* P117 — a linha fixa sob o Fornecedor: com cidade ("CNPJ · Presidente Prudente/SP") e sem (só o CNPJ) — nada anda */
+  { nome: 'lancamento-fornecedor-cidade', url: 'tela=lancamento&m=editar', estados: [['cadastro sem cidade', { url: 'tela=lancamento&m=editar&cidade=sem' }]] },
+  /* P117 (Gabriel 27/10) — a linha sob o Fornecedor VAZIA: no Novo lançamento o campo nasce sem fornecedor (o do lançamento não tem "×");
+     escolher um enche a linha ("CNPJ · Cidade/UF") sem empurrar nada. ⚠ No modal do lançamento o cartão já reserva o espaço: a mutação que tira o `h-[14px]` NÃO cai aqui
+     (gate 27/10; aceito pelo Gabriel — o desloca prova que nada anda nesta tela) */
+  { nome: 'lancamento-fornecedor-vazio', url: 'tela=lancamento', estados: [['escolher o fornecedor', async (p) => {
+    await p.locator('button[role="combobox"]:has([data-testid="favorecido-gatilho-texto"])').first().click(); await espera(p, 400);
+    await p.locator('[data-testid="favorecido-lista"] button', { hasText: 'Agropecuaria Exemplo' }).first().click(); await espera(p, 600);
+  }]] },
   /* P74 B — "Parcelar este lançamento": abrir o bloco e escolher 4 não move a aba Pagamento acima dele nem o rodapé */
   { nome: 'lancamento-parcelar', url: 'tela=lancamento&m=editar&v=salcartao', antes: async (p) => { await clicar('text=Pagamento')(p); },
     estados: [['aberto com 4 parcelas', async (p) => { await clicar('[data-testid="parcelar-este-abrir"]')(p); await digitar('[data-testid="parcelar-este-n"]', '4')(p); }]] },
