@@ -89,9 +89,14 @@ interface Props {
    * nele aqui seria mudar uma tela que ninguém pediu. O default protege isso.
    */
   escala?: 'tela' | 'modal';
+  /**
+   * P116 (Gabriel 27/10/2026) — a coluna do autor SEMPRE, mesmo com uma pessoa só: com ela escondida o Gabriel não viu quem fez.
+   * Coluna fixa de 62px, 12px cinza (A18), primeiro nome; quebra a linha, nunca corta. Sem a prop, a regra antiga (a OC).
+   */
+  autorSempre?: boolean;
 }
 
-export function TrilhaAuditoria({ eventos, vazio, escala = 'tela' }: Props) {
+export function TrilhaAuditoria({ eventos, vazio, escala = 'tela', autorSempre = false }: Props) {
   const modal = escala === 'modal';
   /* Linha de 15px no modal contra ~19px na tela: hora mais estreita, frase um ponto menor e
      sem padding vertical — a altura passa a ser a própria `leading`. */
@@ -116,7 +121,8 @@ export function TrilhaAuditoria({ eventos, vazio, escala = 'tela' }: Props) {
      autores e a coluna volta, porque aí ela separa uma linha da outra. */
   /* ACESSOS-PERFIL-01: o evento sem autor ("sem autor registrado", "sistema · …") conta como um autor proprio — sem isso a
      coluna sumia com um membro + eventos sem autor, e a frase nunca aparecia. */
-  const mostrarAutor = new Set(eventos.map((e) => e.autorId ?? `sem:${e.autor ?? ''}`)).size > 1;
+  const mostrarAutor = autorSempre || new Set(eventos.map((e) => e.autorId ?? `sem:${e.autor ?? ''}`)).size > 1;
+  const cxAutor = autorSempre ? 'w-[62px] text-[12px] leading-[1.25]' : 'w-[88px] text-[10px]';
 
   return (
     <div className="rounded-md border overflow-hidden">
@@ -144,7 +150,7 @@ export function TrilhaAuditoria({ eventos, vazio, escala = 'tela' }: Props) {
                   <span className={`${cxHora} shrink-0 text-[10px] tabular-nums text-muted-foreground`}>{hora(e.quando)}</span>
                   {mostrarAutor && (
                     /* UI-SEM-CORTE-01: o autor quebra a linha, nunca corta. */
-                    <span className="w-[88px] shrink-0 break-words text-[10px] text-muted-foreground" data-testid="trilha-autor">{e.autor ?? '—'}</span>
+                    <span className={`${cxAutor} shrink-0 break-words text-muted-foreground`} data-testid="trilha-autor">{e.autor ?? '—'}</span>
                   )}
                   <span className={`min-w-0 flex-1 break-words ${cxFrase} text-foreground`}>
                     {e.frase}

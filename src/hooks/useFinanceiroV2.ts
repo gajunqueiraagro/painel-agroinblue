@@ -2,6 +2,7 @@
  * Hook for financeiro_lancamentos_v2 CRUD with pagination and filters.
  */
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { edicaoSemMudanca } from '@/lib/financeiro/edicaoSemMudanca';
 import { importarDoApp } from '@/lib/app/falhaDeVersao';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -1050,10 +1051,12 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
     //   ESTRUTURAL (marcador de proveniência persistido + vínculo reverso em
     //   zoo_operacao_partes), nunca por texto de UI. Campos que compõem a obrigação
     //   são preservados; tentativa de alteração estrutural é recusada de forma observável.
+    /* P116 — a linha INTEIRA do banco: o Salvar que não mudaria nenhum campo não grava (`edicaoSemMudanca`) */
+    let linhaAtual: Record<string, unknown> | null = null;
     {
       const { data: atual, error: loadErr } = await (supabase as any)
         .from('financeiro_lancamentos_v2')
-        .select('origem_lancamento, origem_tipo, valor, favorecido_id, tipo_operacao, macro_custo, grupo_custo, centro_custo, subcentro, data_competencia')
+        .select('*')
         .eq('id', id)
         .maybeSingle();
       if (loadErr || !atual) {
@@ -1066,6 +1069,7 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
         );
         return false;
       }
+      linhaAtual = atual;
       let vinculoOC = false;
       if (!isTituloOC(atual)) {
         const { data: parteVinc } = await (supabase as any)
@@ -1120,6 +1124,10 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
         };
         if (form.status_transacao) restrito.status_transacao = form.status_transacao;
 
+        if (edicaoSemMudanca(restrito, linhaAtual)) {
+          if (!opts?.silent) toast.success('Lançamento atualizado');
+          return true;
+        }
         const { error } = await (supabase as any).from('financeiro_lancamentos_v2').update(restrito).eq('id', id);
         if (error) {
           const n = reportarErro(error, 'editarLancamento.OC', opts?.silent ? () => {} : toast.error);
@@ -1208,6 +1216,12 @@ export function useFinanceiroV2(pageSize: number = DEFAULT_PAGE_SIZE) {
       + ` destino_no_payload=${!!updatePayload.conta_destino_id}`,
     );
 
+    /* P116 — nada mudou: não grava (a trilha não ganha um evento vazio, o "ajuste técnico" do Agnaldo). O retorno e o aviso são os
+       do Salvar comum — quem chamou segue igual (o modal fecha; os gestos que gravam outras tabelas depois continuam). */
+    if (edicaoSemMudanca(updatePayload, linhaAtual)) {
+      if (!opts?.silent) toast.success('Lançamento atualizado');
+      return true;
+    }
     const { error } = await supabase.from('financeiro_lancamentos_v2').update(updatePayload as any).eq('id', id);
 
     if (error) {

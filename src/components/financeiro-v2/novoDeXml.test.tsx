@@ -242,7 +242,7 @@ describe('tela A — a lista de notas', () => {
 describe('tela B — o Novo lançamento preenchido pela nota', () => {
   it('o prefill inteiro no DOM, com a pilula e as origens', async () => {
     montarModal({ prefill: prefillDaNota(doXmlDe({}, [AGRO])) });
-    await screen.findByDisplayValue('NF 12.345 · SAL MINERAL 80 P SC 30KG, RACAO ENGORDA 18% SC 40KG · 6 itens');
+    await screen.findByDisplayValue('SAL MINERAL 80 P SC 30KG, RACAO ENGORDA 18% SC 40KG · 6 itens');
     expect(screen.getByTestId('pilula-do-xml').textContent).toBe('do XML · NF 000.012.345');
     expect(screen.getByDisplayValue('30/09/2026')).toBeInTheDocument();      // competencia = emissao
     expect(screen.getByDisplayValue('05/11/2026')).toBeInTheDocument();      // 1o vencimento = 1a duplicata
@@ -376,7 +376,7 @@ describe('tela B — o Novo lançamento preenchido pela nota', () => {
     expect(m.onSave.mock.calls[0][0]).toMatchObject({
       tipo_operacao: '2-Saídas', status_transacao: 'programado', valor: 16238, data_competencia: '2026-09-30', data_vencimento: '2026-10-30',
       data_pagamento: null, favorecido_id: 'agro', fazenda_id: 'f-pur', numero_documento: '12345', tipo_documento: 'Nota Fiscal',
-      forma_pagamento: 'Boleto', plano_conta_id: 'pl-nut', descricao: 'NF 12.345 · SAL MINERAL 80 P SC 30KG, RACAO ENGORDA 18% SC 40KG · 6 itens',
+      forma_pagamento: 'Boleto', plano_conta_id: 'pl-nut', descricao: 'SAL MINERAL 80 P SC 30KG, RACAO ENGORDA 18% SC 40KG · 6 itens',
     });
     /* o documento NF pendente vai ao banco com a chave, o numero, a serie, a emissao e o valor da NOTA… */
     await waitFor(() => expect(banco.rpc.mock.calls.some((c) => c[0] === 'fin_documento_registrar')).toBe(true));

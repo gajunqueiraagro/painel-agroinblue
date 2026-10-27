@@ -940,7 +940,15 @@ if (tela === 'mesclar') {
     { id: 'a1', acao: 'editou', usuario_id: 'u-outro', created_at: '2026-10-12T14:05:00Z', dados_anteriores: { valor: 1000, descricao: 'Sal' }, dados_novos: { valor: 1345.5, descricao: DESC_LONGA }, via: null },
     { id: 'a2', acao: 'editou', usuario_id: null, created_at: '2026-10-11T10:00:00Z', dados_anteriores: { status_transacao: 'previsto' }, dados_novos: { status_transacao: 'programado' }, via: 'sistema:fn_recorrencia_gerar' },
     { id: 'a3', acao: 'editou', usuario_id: null, created_at: '2026-09-11T10:00:00Z', dados_anteriores: { valor: 900 }, dados_novos: { valor: 1000 }, via: null },
-    { id: 'a4', acao: 'editou', usuario_id: 'u1', created_at: '2026-09-10T15:00:00Z', dados_anteriores: { observacao: null }, dados_novos: { observacao: 'conferido' }, via: null }];
+    { id: 'a4', acao: 'editou', usuario_id: 'u1', created_at: '2026-09-10T15:00:00Z', dados_anteriores: { observacao: null }, dados_novos: { observacao: 'conferido' }, via: null },
+    /* P116 — o Salvar sem mudança (só `updated_at`: some), o "sistema" sem rotina (correção por migration: "sistema · manutenção"), a forma
+       de pagamento (antes "ajuste técnico") e o "criou" do gatilho (a criação; a linha do registro não duplica) */
+    { id: 'a5', acao: 'editou', usuario_id: 'u1', created_at: '2026-09-10T15:00:19Z', dados_anteriores: { updated_at: 'x' }, dados_novos: { updated_at: 'y' }, via: null },
+    { id: 'a6', acao: 'editou', usuario_id: null, created_at: '2026-09-09T12:00:00Z', dados_anteriores: { tipo_operacao: '2-Saídas' }, dados_novos: { tipo_operacao: '1-Entradas' }, via: 'sistema' },
+    { id: 'a7', acao: 'editou', usuario_id: 'u-outro', created_at: '2026-09-08T12:00:00Z', dados_anteriores: { forma_pagamento: 'Pix' }, dados_novos: { forma_pagamento: 'Cartão de crédito' }, via: null },
+    { id: 'a8', acao: 'criou', usuario_id: 'u1', created_at: '2026-09-01T09:12:47Z', dados_anteriores: null, dados_novos: { descricao: DESC_LONGA }, via: null }]
+    /* P116 — `aud=um`: uma pessoa só (a coluna do autor aparece mesmo assim, 62px) */
+    .map((e) => (q.get('aud') === 'um' ? { ...e, usuario_id: 'u1', via: null } : e));
   /* DOC-NOTA-XML-PDF-01 — `docs=nota`: a aba Documentos com a MESMA nota em PDF e XML (uma linha, selos PDF e XML), uma nota so' em XML
      (abre os itens) e um boleto; emitente de nome longo. Dados SINTETICOS. */
   const CH = '50311011222333000181550020000157861123456789';

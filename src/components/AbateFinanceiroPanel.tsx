@@ -12,6 +12,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useFazenda } from '@/contexts/FazendaContext';
 import { useCliente } from '@/contexts/ClienteContext';
 import { toast } from 'sonner';
+import { FRASE_META_NAO_VAI_AO_FINANCEIRO, ehCenarioMeta } from '@/lib/financeiro/metaNaoVaiAoFinanceiro';
 import { CATEGORIAS } from '@/types/cattle';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import { mirrorMetaToPlanejamento, deleteMetaPlanejamentoByMovimentacao } from '@/lib/financeiro/metaPlanejamentoMirror';
@@ -175,6 +176,8 @@ export const AbateFinanceiroPanel = forwardRef<AbateFinanceiroPanelRef, Props>(f
   };
 
   const handleGerarFinanceiroInternal = async (targetLancamentoId: string, overrides?: AbateFinanceiroOverrides): Promise<boolean> => {
+    /* P120 — Meta nunca vai ao financeiro: a movimentação META não gera lançamento (o banco também recusa) */
+    if (ehCenarioMeta(statusOperacional)) { toast.info(FRASE_META_NAO_VAI_AO_FINANCEIRO); return false; }
     // Use overrides if provided (avoids race condition with stale props)
     const efValorLiquido = overrides?.valorLiquido ?? valorLiquido;
     const efTotalDescontos = overrides?.totalDescontos ?? totalDescontos;

@@ -125,14 +125,11 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-    // Diagnóstico seguro: nunca logar o valor completo
+    // P126 (SEGURANÇA, Gabriel 27/10/2026) — NENHUM caractere da chave no log: só se ela tem espaço sobrando e o formato esperado.
+    // (Antes saíam os 10 primeiros e os 4 últimos caracteres.)
     const trimmed = ANTHROPIC_API_KEY.trim();
     console.log('[extract-caderno] key meta:', {
-      len_raw: ANTHROPIC_API_KEY.length,
-      len_trim: trimmed.length,
       had_whitespace: ANTHROPIC_API_KEY !== trimmed,
-      prefix: trimmed.slice(0, 10),
-      suffix: trimmed.slice(-4),
       starts_ok: trimmed.startsWith('sk-ant-'),
     });
 
