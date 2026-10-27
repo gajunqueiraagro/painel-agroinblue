@@ -299,6 +299,8 @@ const CENARIOS = [
   ] })),
   /* P117 — a linha fixa sob o Fornecedor: com cidade ("CNPJ · Presidente Prudente/SP") e sem (só o CNPJ) — nada anda */
   { nome: 'lancamento-fornecedor-cidade', url: 'tela=lancamento&m=editar', estados: [['cadastro sem cidade', { url: 'tela=lancamento&m=editar&cidade=sem' }]] },
+  /* P138 — "Usar" a safra da competência: a linha da sugestão sai e o campo se enche — nada abaixo anda */
+  { nome: 'lancamento-safra-usar', url: 'tela=lancamento&m=editar&safra=sem', estados: [['Usar a sugestão', clicar('[data-testid="safra-usar-sugestao"]')]] },
   /* P117 (Gabriel 27/10) — a linha sob o Fornecedor VAZIA: no Novo lançamento o campo nasce sem fornecedor (o do lançamento não tem "×");
      escolher um enche a linha ("CNPJ · Cidade/UF") sem empurrar nada. ⚠ No modal do lançamento o cartão já reserva o espaço: a mutação que tira o `h-[14px]` NÃO cai aqui
      (gate 27/10; aceito pelo Gabriel — o desloca prova que nada anda nesta tela) */

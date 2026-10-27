@@ -19,7 +19,11 @@ vi.mock('@/integrations/supabase/client', () => {
     b.then = (ok: (x: { data: unknown[]; error: null }) => unknown) => Promise.resolve({ data: [], error: null }).then(ok);
     return b;
   };
-  return { supabase: { from: () => cadeia(), rpc: vi.fn(), storage: { from: () => ({}) } } };
+  /* P138 — a safra da competência é do BANCO (`_fn_safra_da_competencia`): a partir de 01/07/2026, 26/27 (Soja na lavoura, Pec na pecuária) */
+  const rpc = vi.fn(async (nome: string, a: { p_escopo?: string; p_data?: string } = {}) => ({ error: null,
+    data: nome !== '_fn_safra_da_competencia' || (a.p_data ?? '') < '2026-07-01' ? null
+      : a.p_escopo === 'agricultura' ? 's-soja' : a.p_escopo === 'pecuaria' ? 's-pec' : null }));
+  return { supabase: { from: () => cadeia(), rpc, storage: { from: () => ({}) } } };
 });
 const consultas = vi.hoisted(() => ({
   camposQueOEmitenteCompleta: vi.fn(async (_c: string, _f: string, _e: unknown): Promise<string[]> => []),
@@ -206,8 +210,8 @@ describe('N2 — a prova: cadastrar, escolher o subcentro, criar 4 parcelas com 
     expect(payload).toMatchObject({
       cliente_id: 'cli', fazenda_id: 'faz-1', valor_total: 1966.56, total_parcelas: 4, data_primeira_parcela: '2026-10-20', intervalo_meses: 1,
       data_competencia: '2026-09-15', tipo_operacao: '2-Saídas', plano_conta_id: 'pl-nut', favorecido_id: 'forn-novo', tipo_financiamento: 'pecuaria',
-      /* NOTA-PREVIA-ATIVIDADE-01 — pecuaria leva a safra da pecuaria pela data (a mesma regra do Novo lancamento) */
-      safra_id: 's-pec', conta_bancaria_id: null,
+      /* P138 — fora da lavoura o payload vai SEM safra: o banco grava a da competencia na criacao (`trg_safra_da_competencia`) */
+      safra_id: null, conta_bancaria_id: null,
     });
     expect(payload.parcelas).toBeUndefined();
     expect(g.parcelas).toHaveBeenCalledWith('fin-1');
@@ -241,19 +245,19 @@ describe('N2 — a prova: cadastrar, escolher o subcentro, criar 4 parcelas com 
     expect(g.gravar.mock.calls[0][0]).toMatchObject({ plano_conta_id: 'pl-ins', safra_id: 's-soja', cultura: 'soja', total_parcelas: 4 });
   });
   /* NOTA-PREVIA-ATIVIDADE-01 (o caso da Elos, sintetico): o subcentro de PECUARIA nao vira lavoura na tela — a atividade aparece (so'
-     leitura) e a safra que se grava e' a da pecuaria pela data, a mesma do Novo lancamento */
-  it('subcentro de pecuária: "Atividade · Pecuária" e a safra 26/27-Pec pela data — e é ela que se grava; sem os campos de lavoura', async () => {
+     leitura) e a safra pela data. P138: e' a do BANCO (a tela pergunta), e quem a grava e' o banco: o payload vai sem safra */
+  it('subcentro de pecuária: "Atividade · Pecuária" e a safra 26/27-Pec pela data (do banco) — o banco a grava; sem os campos de lavoura', async () => {
     const { g, comoGravadores } = gravadoresFalsos();
     abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
     await escolherSubcentro('Nutrição Engorda');
     await waitFor(() => expect(screen.getByTestId('nota-atividade-valor').textContent).toBe('Pecuária'));
-    expect(screen.getByTestId('nota-safra-pela-data-valor').textContent).toBe('26/27-Pec');
+    await waitFor(() => expect(screen.getByTestId('nota-safra-pela-data-valor').textContent).toBe('26/27-Pec'));
     expect(screen.queryByTestId('nota-safra')).toBeNull();
     expect(screen.queryByTestId('nota-cultura')).toBeNull();
     await waitFor(() => expect(screen.getByTestId('nota-criar')).toBeEnabled());
     fireEvent.click(screen.getByTestId('nota-criar'));
     await waitFor(() => expect(g.gravar).toHaveBeenCalled());
-    expect(g.gravar.mock.calls[0][0]).toMatchObject({ plano_conta_id: 'pl-nut', safra_id: 's-pec', cultura: null });
+    expect(g.gravar.mock.calls[0][0]).toMatchObject({ plano_conta_id: 'pl-nut', safra_id: null, cultura: null });
   });
   it('"Todas (rateia)" é uma resposta: a cultura vai nula (rateia), sem o "Falta:"', async () => {
     const { g, comoGravadores } = gravadoresFalsos();

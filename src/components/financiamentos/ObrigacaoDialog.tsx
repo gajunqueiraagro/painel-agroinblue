@@ -1648,7 +1648,7 @@ export function ObrigacaoDialog({ open, onOpenChange, onSalvo, modo = 'criar', f
                           é a lista peneirada de saídas operacionais, e o cluster precisa do
                           plano INTEIRO para cruzar escopo e atividade. Quem filtra agora é o
                           `PlanoSubcentroSelect`, por `tipoOperacao`. */}
-                      <ClassificacaoLancamento regua="compacta"
+                      <ClassificacaoLancamento regua="compacta" clienteId={clienteId}
                           value={classificacao}
                           /* ⚠ O SETTER DO `useState` VAI DIRETO — o cluster manda updater
                              funcional e quem o resolve é o estado vivo do pai (PAR-01a-ii-fix1).

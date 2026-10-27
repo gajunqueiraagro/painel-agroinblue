@@ -12,7 +12,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { safraSugerida } from '@/lib/agri/safraSugerida';
 import { hashesDoCusteio } from '@/v2/lib/custeio/hashItemCusteio';
 import {
   sugerirAliasDoItem,
@@ -353,9 +352,7 @@ export default function CusteioTxtImportTab(
          já correu; para o Previsto a regra é competência + 30, mas este fluxo grava
          Realizado, então a data é a mesma. Editável no modal, como tudo aqui. */
       data_vencimento: dataMes,
-      /* Sugestão pela mesma função que o cadastro de safra usa; `null` quando não há
-         resposta única, e aí o campo abre vazio de propósito. */
-      safra_id: safraSugerida(dataMes ?? null, 'pecuaria', hookFin.safras) ?? undefined,
+      /* P138 — sem safra no prefill: o modal mostra a da competência ("ao salvar"), e o banco a grava na criação (regra única). */
       /* ⚠ A CLASSIFICAÇÃO VEM DA MEMÓRIA, E A HIERARQUIA VEM DO PLANO — 121 item 2. O
          subcentro sozinho abriria o modal com macro/grupo/centro vazios e o operador
          teria de repetir três escolhas que o plano já sabe. Sem sugestão, os quatro
@@ -571,7 +568,7 @@ export default function CusteioTxtImportTab(
           grupo_custo: clsDoItem?.grupo_custo,
           centro_custo: clsDoItem?.centro_custo,
           favorecido_id: sug?.fornecedorId ?? null,
-          safra_id: safraSugerida(dataMes, 'pecuaria', hookFin.safras),
+          safra_id: null,   /* P138 — o banco grava a safra da competência na criação (`trg_safra_da_competencia`) */
         };
       });
       const hashes = itensDoLote.map(it => hashPorLinha.get(it.linha_num));

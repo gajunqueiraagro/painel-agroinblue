@@ -18,6 +18,9 @@ vi.mock('@/integrations/supabase/client', () => ({
       insert: async (p: Record<string, unknown>) => { GRAVADO.payloads.push(p); return { error: null }; },
       update: (p: Record<string, unknown>) => { GRAVADO.payloads.push(p); return { eq: async () => ({ error: null }) }; },
     }),
+    /* P138 — a safra da competência é do BANCO (`_fn_safra_da_competencia`, pelas datas da safra) */
+    rpc: async (nome: string, a: { p_escopo?: string; p_data?: string } = {}) => ({ error: null,
+      data: nome === '_fn_safra_da_competencia' && a.p_escopo === 'pecuaria' && (a.p_data ?? '') >= '2026-07-01' ? 'sf-pec-2627' : null }),
   },
 }));
 const CLASSIF = vi.hoisted((): ClassificacaoItem[] => [
@@ -168,13 +171,13 @@ describe('RecorrenciaDialog — a classificação do lançamento', () => {
     expect(screen.queryByText('Colheita Mandioca')).toBeNull();
   });
 
-  it('nova: escolher Pecuária sugere a safra pela data do vencimento', async () => {
+  it('nova: escolher Pecuária mostra a safra da competência que o banco grava (P138: o campo fica vazio)', async () => {
     render(<RecorrenciaDialog clienteId="nj" aoFechar={() => {}} aoSalvar={() => {}} />);
     const inicio = screen.getAllByPlaceholderText('dd/mm/aaaa')[0];
     fireEvent.change(inicio, { target: { value: '01/10/2026' } });
     fireEvent.blur(inicio);
     fireEvent.click(screen.getByRole('button', { name: 'Pecuária' }));
-    await waitFor(() => expect(screen.getByText('sugerida')).toBeInTheDocument());
-    expect(screen.getAllByRole('combobox').some((c) => c.textContent?.includes('Safra 26/27 Pecuária'))).toBe(true);
+    await waitFor(() => expect(screen.getByTestId('safra-da-competencia').textContent).toBe('ao salvar: Safra 26/27 Pecuária (pela competência)'));
+    expect(screen.getAllByRole('combobox').some((c) => c.textContent?.includes('Safra 26/27 Pecuária'))).toBe(false);
   });
 });

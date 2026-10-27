@@ -101,7 +101,6 @@ import { gravarItensSemTravar } from '@/lib/financeiro/itensDaNotaBanco';
 import type { ExcelContext } from '@/v2/lib/mesa/buildExcelContext';
 import { planoDeTransferencia, ehTipoTransferencia } from '@/v2/lib/mesa/transferenciaPlano';
 import { ATIVIDADES, lembrarAtividade, ultimaAtividade, type Atividade } from '@/lib/financeiro/ultimaAtividade';
-import { safraSugerida } from '@/lib/agri/safraSugerida';
 import { conflitoSafraEscopo, mensagemConflitoSafraEscopo } from '@/lib/financeiro/safraEscopo';
 import { erroDeDirecao, tipoDaContaNoPlano } from '@/lib/financeiro/validacaoLancamento';
 import { escopoDoSubcentro, fazendaAdministrativa, AVISO_ADMIN_SEM_SAFRA, AVISO_ADMIN_SAFRA_SAI } from '@/lib/financeiro/escopoDoSubcentro';
@@ -3112,6 +3111,8 @@ export function LancamentoV2Dialog({
               subcentroDesabilitado={(isOCTitulo && !ocAjustavel) || subcentroTravado || travado('classificacao')}
               ocultarCulturaFase={!!modoOC || undefined}
               ocultarLinhaDaSafra={!!modoOC || undefined}
+              novo={!isEdit}
+              clienteId={clienteAtual?.id ?? null}
               erroSubcentro={erroDirecao && erroDirecao.subcentro === subcentro && erroDirecao.tipo === tipoOperacao
                 ? erroDirecao.texto : null}
             />

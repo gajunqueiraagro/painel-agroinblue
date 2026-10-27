@@ -36,7 +36,7 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { CampoMoeda } from '@/components/ui/campo-moeda';
 import { ROTULO_PELA_CHAVE, comDadosDigitados } from '@/lib/financeiro/nfe/chaveDigitada';
 import { CULTURAS_LANCAMENTO, SEM_CULTURA } from '@/lib/agri/rateioLancamento';
-import { safraSugerida } from '@/lib/agri/safraSugerida';
+import { useSafraDaCompetencia } from '@/hooks/useSafraDaCompetencia';
 import { ATIVIDADES } from '@/lib/financeiro/ultimaAtividade';
 import { useCulturasDaSafra } from '@/hooks/useAreaPlantada';
 import { Input } from '@/components/ui/input';
@@ -384,8 +384,10 @@ export function NotaFiscalDialog({
      do Novo lancamento, `ClassificacaoLancamento`: administrativo nao tem safra) — e e' ela que se grava */
   const atividadeDoPlano = plano?.escopo_negocio || null;
   const rotuloDaAtividade = ATIVIDADES.find((a) => a.valor === atividadeDoPlano)?.rotulo ?? (atividadeDoPlano ?? '—');
-  const safraPelaData = !lavoura && atividadeDoPlano && atividadeDoPlano !== 'administrativo'
-    ? safraSugerida(p.competencia, atividadeDoPlano, safras, { desempatar: false }) : null;
+  /* P138 — a safra pela data e' a do BANCO (`_fn_safra_da_competencia`, a regra unica): aqui so' se mostra; quem grava e' o banco, na
+     criacao (`trg_safra_da_competencia`) — o payload vai sem safra fora da lavoura */
+  const safraPelaData = useSafraDaCompetencia(clienteId, atividadeDoPlano, p.competencia, !lavoura && atividadeDoPlano !== 'administrativo');
+  const safraDaLavouraPelaData = useSafraDaCompetencia(clienteId, 'agricultura', p.competencia, lavoura);
   const nParcelas = p.duplicatas.length;
   const cabeAqui = nParcelas >= 2;
   const semDuplicata = nDuplicatasDaNota === 0;
@@ -399,9 +401,9 @@ export function NotaFiscalDialog({
     if (safraEditada) return;
     const ult = p.classificacao;
     if (ult && ult.plano_conta_id === planoId && ult.safra_id) { setSafraId(ult.safra_id); setCultura(ult.cultura ?? ''); return; }
-    setSafraId(safraSugerida(p.competencia, 'agricultura', safras, { desempatar: false }) ?? '');
+    setSafraId(safraDaLavouraPelaData ?? '');
     setCultura(null);
-  }, [lavoura, planoId, safraEditada, p.classificacao, p.competencia, safras]);
+  }, [lavoura, planoId, safraEditada, p.classificacao, safraDaLavouraPelaData]);
   const registrada = doXml.ocorrencias[0] ?? null;
   const divergencias = lido.divergencias;
   const avulsa = ehSerieAvulsa(n.serie) || ehSerieAvulsa(n.chave.slice(22, 25));
@@ -437,13 +439,13 @@ export function NotaFiscalDialog({
   const contaEscolhida = como === 'cartao' ? (cartaoId || null) : contaId && contaId !== '__none__' ? contaId : null;
   const escolhas = (): EscolhasDaNota | null => (favorecidoId && plano?.id ? {
     fazendaId, favorecidoId, contaBancariaId: contaEscolhida, planoContaId: plano.id, escopoNegocio: plano.escopo_negocio || null,
-    safraId: lavoura ? safraId || null : safraPelaData, cultura: lavoura ? cultura || null : null,
+    safraId: lavoura ? safraId || null : null, cultura: lavoura ? cultura || null : null,
   } : null);
   /* NADA ESCOLHIDO AQUI SE PERDE: o Novo lancamento recebe a nota E as escolhas */
   const abrirNoLancamento = () => onAbrirNoLancamento(prefillDoModal(doXml, {
     fazendaId, contaBancariaId: contaEscolhida, favorecidoId, favorecidoNome: fornecedores.find((f) => f.id === favorecidoId)?.nome ?? null,
     plano: plano?.id ? { id: plano.id, subcentro: plano.subcentro, macro_custo: plano.macro_custo, grupo_custo: plano.grupo_custo, centro_custo: plano.centro_custo, escopo_negocio: plano.escopo_negocio } : null,
-    safraId: lavoura ? safraId || null : safraPelaData, cultura: lavoura ? cultura : null, vencimento: cabeAqui ? null : vencimento || null,
+    safraId: lavoura ? safraId || null : null, cultura: lavoura ? cultura : null, vencimento: cabeAqui ? null : vencimento || null,
   }));
 
   const cadastrar = async () => {
