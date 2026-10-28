@@ -30,3 +30,11 @@ describe('P137 família 3 — a barra do Fluxo não muda ao trocar a fazenda', (
     expect(f).toContain("style={{ visibility: isGlobal ? 'hidden' : 'visible' }} aria-hidden={isGlobal} tabIndex={isGlobal ? -1 : undefined}");
   });
 });
+
+describe('P137 família 4 — o aviso "não conciliado" tem lugar reservado', () => {
+  it('sempre montado; só a visibilidade troca (os cards não andam)', () => {
+    const f = ler('v2/pages/V2PlanejamentoVisaoGeral.parts/BlocoResumoExecutivo.tsx');
+    expect(f).not.toContain('{!data.conciliado && (');
+    expect(f).toContain("data-testid=\"aviso-nao-conciliado\" style={{ visibility: data.conciliado ? 'hidden' : 'visible' }} aria-hidden={data.conciliado}>");
+  });
+});
