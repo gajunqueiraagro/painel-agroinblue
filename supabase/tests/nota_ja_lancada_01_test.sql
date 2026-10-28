@@ -79,7 +79,7 @@ begin
 
   -- T6
   if not (select prosecdef from pg_proc where proname = 'fn_nota_ja_lancada') then raise exception 'T6 INVOKER'; end if;
-  if has_function_privilege('anon', 'public.fn_nota_ja_lancada(uuid,jsonb,text,text,text,text[])', 'EXECUTE') then raise exception 'T6 anon'; end if;
+  if has_function_privilege('anon', 'public.fn_nota_ja_lancada(uuid,jsonb,text,text,text,text[],uuid)', 'EXECUTE')  -- P128c: 7 parametros (p_lancamento) then raise exception 'T6 anon'; end if;
 
   raise exception 'OK nota_ja_lancada_01 (T1–T6)';
 end $teste$;

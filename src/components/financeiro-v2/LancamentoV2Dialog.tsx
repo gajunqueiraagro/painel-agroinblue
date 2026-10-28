@@ -3442,6 +3442,8 @@ export function LancamentoV2Dialog({
               <AbaDocumentosLancamento api={documentosApi}
                 clienteId={clienteAtual?.id ?? null}
                 sugestao={sugestaoDoDocumento}
+                /* P127 + P128c — o "Novo documento" que lê a nota abre a MESMA prévia do "Ler a NF" (um caminho só: `onLerNotaFiscal`) */
+                onVerOQueANotaMuda={onLerNotaFiscal && lancamento?.id ? (arquivo) => onLerNotaFiscal(arquivo, lancamento.id) : undefined}
                 onAnexarBoletosDasParcelas={irmas ? () => setAnexarBoletos('irmas') : undefined} />
             ) : documentosAntesDeSalvar && formaPagamentoParc === 'parcelada' && numParcelas >= 2 ? (
               /* PR 2b — PARCELADO: os documentos da COMPRA (ligados às N) e a grade de parcelas com o boleto

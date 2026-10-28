@@ -989,6 +989,23 @@ if (tela === 'mesclar') {
     raiz.render(<ItensDaNotaDialog clienteId="cli" chave={cabecalho.chave} onClose={() => {}} carregar={async () => ({ cabecalho, lidos } as any)} />);
   };
   void montarItens();
+} else if (tela === 'documento-nota') {
+  /* P127 + P128c — o "Novo documento" do Editar lançamento que LÊ A NOTA solta no Arquivo. O cenário solta o XML SINTÉTICO exposto aqui
+     (`__xmlDaBancada`: NF 74974 no molde do print, R$ 408,77, 1 duplicata, 1 item, emitente com nome comprido) ou um PDF que não se lê.
+     O lançamento diz outra emissão, outro valor e outro favorecido: a faixa mostra as três divergências lado a lado. */
+  const montarDoc = async () => {
+    const { FormDocumento } = await import('@/components/financeiro-v2/AbaDocumentosLancamento');
+    g.__xmlDaBancada = montarNFe({ numero: '74974', vNF: '408.77', duplicatas: [['001', '2026-09-24', '408.77']],
+      nomeEmitente: 'COMERCIO SINTETICO DE PARAFUSOS E FERRAMENTAS INDUSTRIAIS DO CENTRO OESTE LTDA',
+      itens: [['PARAFUSO SINTETICO SEXTAVADO M8 X 40 ZINCADO', '100.0000', 'UN', '408.77']] });
+    const api: any = { documentos: [], confronto: null, loading: false, saving: false, operacaoId: null, operacaoTipo: null,
+      registrar: async () => ({ id: 'x', origem: 'lancamento', operacaoId: null }), editar: async () => true, cancelar: async () => true,
+      anexar: async () => true, urlAssinada: async () => null, recarregar: async () => {} };
+    montar(<FormDocumento api={api} documento={null} clienteId="cli" onFechar={() => {}}
+      sugestao={{ numero: '74974', dataEmissao: '2026-08-24', valor: 400, emitenteId: LEITOR[0]?.id ?? null }}
+      onVerOQueANotaMuda={async () => null} />);
+  };
+  void montarDoc();
 } else if (tela === 'lancamento') {
   /* com `desc`, a edição é parcela de uma compra parcelada SEM número de contrato: o rodapé fala dela (a descrição do contrato é a longa) */
   /* ACESSOS-PERFIL-01 — a aba Auditoria: eventos de dois membros e um sem autor (com e sem `via`), nomes pela fonte única. */

@@ -176,3 +176,13 @@ describe('P128a — tabela sistema × nota e a frase do achado', () => {
     expect([b.por, b.parcelaN ?? null, b.temEstaNota ?? false, b.documentos ?? 0]).toEqual([[], null, false, 0]);
   });
 });
+
+/* P128c — a âncora da porta 2: o lançamento aberto ('lancamento') recebe a nota; o irmão dele só por 'parcelamento' não */
+describe('P128c — o lançamento aberto é alvo', () => {
+  it('lido do banco e alvo do Completar; o irmão "só no sistema" fora', () => {
+    const [aberto, irmao] = lerJaLancados([{ id: 'aberto', valor_cent: 40877, por: ['lancamento'], parcelas: [] }, { id: 'irmao', valor_cent: 40877, por: ['parcelamento'], parcelas: [] }]);
+    expect(aberto.por).toEqual(['lancamento']);
+    const j = casarJaLancados([{ n: 1, vencimento: '2026-09-24', valorCent: 40877 }], [aberto, irmao], 40877);
+    expect(j?.alvos.map((x) => x.id)).toEqual(['aberto']);
+  });
+});

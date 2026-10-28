@@ -385,6 +385,16 @@ const CENARIOS = [
       if (await t.count()) { await t.first().click(); await p.waitForTimeout(400); }
       await clicar('[data-testid="nota-caminho-criar"]')(p);
     } },
+  /* P127 + P128c — o Novo documento que LÊ A NOTA: lida (com as três divergências lado a lado e o "Ver o que a nota muda") e a que não se
+     lê (PDF sem texto: a frase "itens não gravados"). O arquivo entra pelo MESMO input da área (o XML sintético exposto pela bancada). */
+  ...[['lida', 'nota.xml'], ['nao-lida', 'escaneado.pdf']].map(([v, nome]) => ({ nome: `documento-nota-${v}`, url: 'tela=documento-nota',
+    tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[role="dialog"]',
+    antes: async (p) => {
+      const conteudo = nome.endsWith('.xml') ? await p.evaluate(() => globalThis.__xmlDaBancada) : '%PDF-1.4 sem texto';
+      await p.locator('[data-testid="doc-arquivo"]').setInputFiles({ name: nome, mimeType: nome.endsWith('.xml') ? 'application/xml' : 'application/pdf', buffer: Buffer.from(conteudo) });
+      await p.locator(nome.endsWith('.xml') ? '[data-testid="nota-lida"]' : '[data-testid="nota-nao-lida"]').waitFor({ timeout: 8000 });
+      await p.waitForTimeout(400);
+    } })),
   /* P96a — a confirmação do "Juntar as 4 e anexar" (o resumo, a caixinha da competência, o efeito no DRE) e a do "Usar a nota lida" */
   { nome: 'nota-pdf-juntar-confirmar', url: 'tela=nota-pdf&v=irmas', tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[role="alertdialog"]',
     antes: async (p) => { await p.locator('[data-testid="nota-juntar-soltas"]').first().click(); await p.waitForTimeout(800); } },
