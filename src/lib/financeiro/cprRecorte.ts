@@ -96,6 +96,14 @@ export function contaEmAberto(c: Pick<ContaCpr, 'status_transacao' | 'data_pagam
   return !STATUS_PAGOS.has((c.status_transacao ?? '').toLowerCase()) && !c.data_pagamento;
 }
 
+/** P152 (CPR-COLUNAS-01, Gabriel 28/10 07:50) — A REGRA DO FLUXO DE CAIXA: cada linha fica no dia em que o dinheiro sai ou entra. Paga
+ *  (realizado, conciliado) → o dia do PAGAMENTO (o mesmo dia em que o realizado do dono do caixa já a soma); em aberto → o vencimento.
+ *  Uma regra, um dono: o agrupamento da lista, as pagas do período e a busca leem daqui. '' = sem dia (paga sem data, sem vencimento). */
+export function diaDaLinhaCpr(c: Pick<ContaCpr, 'status_transacao' | 'data_pagamento' | 'data_vencimento'>): string {
+  const dia = contaEmAberto(c) ? c.data_vencimento : (c.data_pagamento ?? c.data_vencimento);
+  return (dia ?? '').slice(0, 10);
+}
+
 export function baldeDaConta(c: ContaCpr, periodo: PeriodoCpr, hoje: string): BaldeCpr {
   if (!contaEmAberto(c)) return 'paga';
   const v = c.data_vencimento ? c.data_vencimento.slice(0, 10) : null;
@@ -374,7 +382,8 @@ export function recortarCpr<T extends ContaCpr>(
     periodoSoma: { pagar: sp.pagar, receber: sp.receber, saldo: reais(sp.cReceber - sp.cPagar), linhas: porBalde.periodo },
     semVencimento: { pagar: ss.pagar, receber: ss.receber, linhas: porBalde.sem_vencimento },
     pagas: porBalde.paga,
-    pagasNoPeriodo: porBalde.paga.filter((l) => { const v = (l.data_vencimento ?? '').slice(0, 10); return v >= periodo.de && v <= periodo.ate; }),
+    /* P152 — a paga é do período pelo dia do PAGAMENTO (paga fora do mês sai do mês do vencimento e aparece no do pagamento) */
+    pagasNoPeriodo: porBalde.paga.filter((l) => { const d = diaDaLinhaCpr(l); return d >= periodo.de && d <= periodo.ate; }),
     foraDoCaixa,
     cartoes: {
       vencidos: { pagar: cv.pagar, receber: cv.receber }, periodo: { pagar: cp.pagar, receber: cp.receber },
@@ -416,6 +425,8 @@ export function ramoDaConsultaCpr(periodo: PeriodoCpr, hoje: string): string {
     `and(data_vencimento.gte.${desde},data_vencimento.lte.${periodo.ate})`,
     `and(data_vencimento.lt.${hoje},status_transacao.in.(previsto,programado,agendado),data_pagamento.is.null)`,
     'data_vencimento.is.null',
+    /* P152 — a paga no período com vencimento FORA dele (dia do pagamento, `diaDaLinhaCpr`); só vem com a pílula Realizado ligada */
+    `and(data_pagamento.gte.${periodo.de},data_pagamento.lte.${periodo.ate})`,
   ].join(',');
 }
 

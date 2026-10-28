@@ -216,6 +216,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   lancamento + 2 vinculos; arquivo de extrato se le^ pelo charset declarado.
 - P145: a conta PERMUTA conta o razão DELA na Conciliação (os sem caixa da própria conta entram em `fn_caixa_sistema_pontas`); conta comum, VG e CPR
   seguem sem os sem caixa.
+- P124: o LOTE do mês (PalcoDoMes) usa a régua do MOTOR (`fn_candidatos_conciliacao`; a tela só agrupa: exata = pré-marcada sem empate) e grava
+  PAR A PAR pelo gravador de hoje (`vincularSelecao`); buscar é GESTO; a caixa "Vincular os exatos" saiu do palco (o ConciliarMesDialog ficou: dívida).
 - Financiamento: o saldo devedor tem uma fonte (`fn_financiamento_saldo`); captacao segue o creditado em conta; o valor do lancamento
   vinculado a' parcela manda na parcela; consorcio e' natureza propria (gerador no banco); parcela adiada e' divida mas nao vencida.
 - Recorrencia gera a vigencia inteira e nunca omite em silencio; o valor do mes tem marca e o propagar pula as marcadas.
@@ -302,9 +304,10 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   0 4px, barra do rodape navy 23px dentro do quadro. Cabecalho e totais presos, so' o corpo rola, UM scrollport por tela, fundo opaco.
   O `th` alinha como o `td`; tabela de regua fixa (`table-layout: fixed`, `colgroup` em px medido) nao estica com a janela.
 - Piso de 9,5px (excecoes declaradas: grade do DRE, selos da Conferencia, Mesa compacta, Lancamentos Financeiros, a tabela dos Itens da nota — ITENS-NOTA-FONTE-01;
-  P141: os selos OFX/PDF (7px) e a coluna Diferença (8px) de "Saldos por conta"). Tamanhos do A18.
-- P141 (CONC-LAYOUT-01): Conciliação = Saldos | Resumo | Status (3.05fr 1.7fr 0.7fr); Saldos com Data · OFX/PDF em lugar FIXO de 24px · Diferença
-  estreita · ✎ + ↗; o ↗ e a aba Sistema do Casar são UM componente (`AbaSistemaReal`, modo `grande`) e uma regra do dia (`linhasDoDia`: maior
+  P141: os selos OFX/PDF (7px) de "Saldos por conta"). Tamanhos do A18.
+- P141/P166 (CONC-TELA-02): Conciliação = FAIXA do status (1 linha, altura fixa, `FaixaDoMes`: vermelho/verde/âmbar = conciliado com sem
+  subcentro/cinza) + Saldos | Resumo do mês (1fr 260px, até o fim da janela), na régua da casa e sem CAIXA ALTA; Saldos com Data · OFX/PDF em
+  lugar FIXO de 20px · ✎ + ↗; o ↗ e a aba Sistema do Casar são UM componente (`AbaSistemaReal`, modo `grande`) e uma regra do dia (`linhasDoDia`: maior
   |valor| primeiro; saldo SÓ no fim do dia, LIDO do banco na ordem dele — nunca somado na tela).
 - Selecao se marca com navy (`Segmentado`, o unico); controle nativo nunca; seletor de entidade tem busca; todo menu aberto pelo
   `menuPadrao`; todo campo de valor e' o `CampoMoeda` ("R$" e "0,00"); todo campo de arquivo aceita arrastar.
@@ -325,6 +328,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - A pagina e' pt-BR e nao se traduz. Barra lateral 152px num token. Graficos de saida: laranja/violeta/vermelho/cinza; azul so' entrada.
 - TABELA-ALTURA-FIXA-01: o quadro da tabela tem ALTURA (nunca `maxHeight`) ate' o fim da tela, qualquer que seja o numero de linhas; o
   vazio fica dentro do quadro; em pagina que rola, `useAlturaAteOFim` (topo do quadro → fim da janela). O gate: filtrar para 6/1/0 linhas.
+- P121: o Resumo do lançamento é o `ResumoDoLancamento` (do Financeiro; `ui/linha-resumo` fica com os outros modais): blocos de ALTURA FIXA que
+  somam ~452px (cabe em 1126×579), nada rola; linha nova num bloco = refazer a conta e medir; datas dos pares nunca cortam (larguras medidas).
 - FIN-V2-FORNECEDOR-SEM-SUFIXO-01: em TABELA o fornecedor e' so' o nome ("…" + `title` com CNPJ/"sem CNPJ", cidade/UF, inativo); o final
   de filial ("…0007-69", "sem CNPJ") so' no seletor/busca e no Mesclar.
 - FIN-V2-FILTRO-FORNECEDOR-01: filtro de fornecedor = ativos (+ inativo com lançamento no recorte ou escolhido, P94); mesclado nunca (o nome antigo acha

@@ -30,7 +30,8 @@ import { AbaDocumentosLancamento } from '@/components/financeiro-v2/AbaDocumento
 import { AreaDeArquivo } from '@/components/ui/area-de-arquivo';
 import type { RegraDeAceite } from '@/lib/arquivo/aceitarArquivo';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { AsideResumo, FaixaTituloResumo, SecaoResumo, LinhaResumo } from '@/components/ui/linha-resumo';
+import { linhaDoDocumento as textoDaLinhaDoDocumento } from '@/lib/fornecedores/fornecedorTexto';
+import { ResumoDoLancamento } from '@/components/financeiro-v2/ResumoDoLancamento';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -200,6 +201,9 @@ interface Props {
   /** P128a (NOTA-JA-LANCADA, porta 2) — "Ler a NF" no Documentos do Editar: o arquivo abre a MESMA previa do "+ Da nota", partindo deste
    *  lancamento. Devolve a frase pronta do que impediu (nota nao lida, consulta que falhou) ou `null` (a previa abriu). Ausente = sem o gesto. */
   onLerNotaFiscal?: (arquivo: File, lancamentoId: string) => Promise<string | null>;
+  /** P152 — a aba em que o modal abre (o "NF nnnn" da Contas a Pagar e Receber abre direto em Documentos, onde mora a regra de abrir a
+   *  nota: o PDF; sem PDF, os itens). Ausente = 'geral', como sempre. */
+  abaInicial?: 'documentos';
   prefill?: {
     fazenda_id?: string;
     conta_bancaria_id?: string;
@@ -596,7 +600,7 @@ export function LancamentoV2Dialog({
   fornecedores, safras, defaultFazendaId, onCriarFornecedor, prefill, lockedFields, onLancamentoCriado,
   ocultarParcelamento, tiposOperacaoPermitidos, origemOC,
   referenciaOperacionalInfo, excelContext, permiteEditarFavorecidoOC, onAbrirOperacaoOC, onAbrirContrato,
-  documentosAntesDeSalvar, onLerNotaFiscal,
+  documentosAntesDeSalvar, onLerNotaFiscal, abaInicial,
 }: Props) {
   /* P128a (porta 2) — a frase do que impediu a NF lida de abrir a previa (na propria area, nunca toast) e o "lendo" */
   const [recusaDaNotaLida, setRecusaDaNotaLida] = useState<string | null>(null);
@@ -1389,7 +1393,7 @@ export function LancamentoV2Dialog({
       setDadosPagamento('');
     }
     setFornecedorSearch('');
-    setAbaAtiva('geral');
+    setAbaAtiva(abaInicial ?? 'geral');
     /* FIN-NFE-XML-01d — o XML da nota ja' nasce como o documento NF pendente do lancamento novo. */
     const doXml = !lancamento ? prefill?.doXml ?? null : null;
     setPendentes(doXml ? [pendenteDaNota(doXml, doXml.proposta.favorecidoId)] : []);
@@ -1403,7 +1407,7 @@ export function LancamentoV2Dialog({
     setAnexarBoletos(null);
     setErroAntesDeSalvar(null);
     setItemOC(''); setTentouOC(false); setSimOC(null);
-  }, [open, lancamento, defaultFazendaId, prefill, lockedFields]);
+  }, [open, lancamento, defaultFazendaId, prefill, lockedFields, abaInicial]);
   useEffect(() => {
     const d = open && !lancamento ? prefill?.doXml ?? null : null;
     const cli = clienteAtual?.id;
@@ -3768,55 +3772,37 @@ export function LancamentoV2Dialog({
               espelha o formulário em tempo real. Sem rolagem própria, sem acordeão, sem "ver mais".
               Nenhuma lógica/estado/validação — só apresentação. */}
           {!excelContext && (
-            /* MODAIS-PADRAO-01e — as pecas do Abate (`ui/linha-resumo`): 240px, so' a linha do corpo (o
-               rodape voltou a' largura inteira), pares pelo `LinhaResumo`. Mesmo texto, mesmos valores.
-               UI-MODAL-BLOCOS-01 · LANCAMENTO COMPACTO — `formato="pares"`: titulos em sentence case 11px/600, faixa de 18px,
-               linhas de 16px, rotulo na largura do maior e o valor colado (sem caixa alta). */
+            /* P121 (FIN-MODAL-RESUMO-01) — o resumo saiu para `ResumoDoLancamento` (layout próprio do Financeiro: nada rola, cada bloco
+               com altura fixa, 240px). As peças compartilhadas `ui/linha-resumo` ficam para os outros modais. Os valores são os de
+               sempre, calculados aqui; o componente só desenha. */
             <div className="col-start-2 row-start-2 min-h-0 max-[899px]:hidden">
-              <AsideResumo formato="pares" faixa={<FaixaTituloResumo titulo="Resumo do lançamento" />}>
-                <SecaoResumo titulo="Identificação" />
-                <div className="contents">
-                  <LinhaResumo rotulo="Tipo" valor={resumoTipoLabel} cor={resumoTipoCor} />
-                  {/* UI-TEXTO-LONGO-01 — a descrição NÃO se repete no resumo (ela já está no campo Produto / descrição): uma
-                      descrição de 300 caracteres crescia 15 linhas e empurrava a Classificação para fora. Só dados curtos. */}
-                  <LinhaResumo rotulo="Data competência" valor={resumoFmtData(dataCompetencia)} />
-                  <LinhaResumo rotulo="Favorecido" valor={resumoFavorecido} quebra />
-                  <LinhaResumo rotulo="Fazenda" valor={resumoFazenda} quebra />
-                </div>
-
-                <SecaoResumo titulo="Financeiro" />
-                <div className="contents">
-                  <LinhaResumo rotulo="Valor" valor={valorNum > 0 ? formatMoeda(valorNum) : null} />
-                  {!isEntrada && <LinhaResumo rotulo="Conta origem" valor={resumoContaOrigem} quebra />}
-                  {(isEntrada || isTransferencia) && <LinhaResumo rotulo="Conta destino" valor={resumoContaDestino} quebra />}
-                </div>
-
-                <SecaoResumo titulo="Classificação" />
-                <div className="contents">
-                  <LinhaResumo rotulo="Safra" valor={resumoSafra} quebra />
-                  <LinhaResumo rotulo="Centro" valor={centroCusto} quebra />
-                  <LinhaResumo rotulo="Subcentro" valor={subcentro} quebra />
-                </div>
-
-                {/* FIN-RESUMO-PAGAMENTO-01 — o status mora AQUI (saiu de "Financeiro": uma informação, um lugar), com a cor da
-                    paleta, e o vencimento aparece: previsto/programado/agendado não têm data de pagamento, e o resumo não dizia
-                    quando o lançamento sai do banco. */}
-                <SecaoResumo titulo="Pagamento" />
-                <div className="contents" data-testid="resumo-pagamento">
-                  <LinhaResumo rotulo="Status" valor={resumoStatusLabel} cor={resumoStatusCor} />
-                  <LinhaResumo rotulo="Vencimento" valor={resumoFmtData(dataVencimento)} />
-                  <LinhaResumo rotulo="Pagamento" valor={resumoFmtData(pagamentoMostrado)} />
-                  <LinhaResumo rotulo="Forma" valor={formaPgto} quebra />
-                  <LinhaResumo rotulo="Modalidade" valor={!isEdit ? (formaPagamentoParc === 'parcelada' ? 'Parcelada' : 'À vista') : null} />
-                  <LinhaResumo rotulo="Nº de parcelas" valor={!isEdit && formaPagamentoParc === 'parcelada' ? `${numParcelas}` : null} />
-                </div>
-
-                <SecaoResumo titulo="Documento" />
-                <div className="contents">
-                  <LinhaResumo rotulo="Tipo" valor={tipoDocumento || (docDoLancamento.origem === 'nota' ? 'Nota Fiscal · da compra' : docDoLancamento.origem === 'documento' ? 'Documento ligado' : null)} quebra />
-                  <LinhaResumo rotulo="Número" valor={notaFiscalDisplay || (docVemDeDocumento ? docDoLancamento.rotulo : null)} quebra />
-                </div>
-              </AsideResumo>
+              <ResumoDoLancamento
+                tipo={{ rotulo: resumoTipoLabel, cor: resumoTipoCor }}
+                competencia={resumoFmtData(dataCompetencia)}
+                favorecido={resumoFavorecido}
+                favorecidoDocumento={favorecidoId ? textoDaLinhaDoDocumento(fornecedorPorId(favorecidoId)) : ''}
+                descricao={descricao.trim() || null}
+                fazenda={resumoFazenda}
+                valor={valorNum > 0 ? formatMoeda(valorNum) : null}
+                sentido={isTransferencia ? 'transferencia' : isEntrada ? 'entrada' : 'saida'}
+                conta={isTransferencia ? [{ rotulo: 'Origem', nome: resumoContaOrigem }, { rotulo: 'Destino', nome: resumoContaDestino }]
+                  : isEntrada ? [{ rotulo: 'Conta', nome: resumoContaDestino }] : [{ rotulo: 'Conta', nome: resumoContaOrigem }]}
+                atividade={ATIVIDADES.find(a => a.valor === atividade)?.rotulo ?? null}
+                safra={resumoSafra}
+                fase={fase || null}
+                centro={centroCusto || null}
+                subcentro={subcentro || null}
+                status={{ rotulo: resumoStatusLabel, cor: resumoStatusCor }}
+                forma={formaPgto || null}
+                vencimento={resumoFmtData(dataVencimento)}
+                pagamento={resumoFmtData(pagamentoMostrado)}
+                modalidade={!isEdit ? (formaPagamentoParc === 'parcelada' ? 'Parcelada' : 'À vista') : null}
+                parcelas={!isEdit && formaPagamentoParc === 'parcelada' ? `${numParcelas}` : null}
+                documento={[
+                  tipoDocumento || (docDoLancamento.origem === 'nota' ? 'Nota Fiscal · da compra' : docDoLancamento.origem === 'documento' ? 'Documento ligado' : null),
+                  notaFiscalDisplay || (docVemDeDocumento ? docDoLancamento.rotulo : null),
+                ].filter(Boolean).join(' · ') || null}
+              />
             </div>
           )}
           </fieldset>
