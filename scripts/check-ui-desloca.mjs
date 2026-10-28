@@ -288,6 +288,12 @@ const CENARIOS = [
   ] },
   /* P127 + P128c — o Novo documento: soltar a nota (a faixa do lançamento vira a da nota lida, com as divergências) e trocar um campo para o
      do lançamento não deslocam o formulário (o modal tem altura fixa) */
+  /* P128b — a prévia campo a campo: desmarcar uma coluna, manter uma célula (✎), trocar o nº (a prévia reconferindo) não deslocam nada */
+  { nome: 'previa-completar', url: 'tela=previa-completar&cam=2', estados: [
+    ['desmarca Descrição', clicar('[data-testid="previa-coluna-descricao"]')], ['marca Conta', clicar('[data-testid="previa-coluna-conta"]')],
+    ['mantém uma célula', clicar('[data-testid="previa-linha"] [data-testid="previa-muda"]')],
+    ['troca o nº', async (p) => { await p.locator('[data-testid="previa-numero"]').fill('NF 000.004.876'); await espera(p, 700); }],
+  ] },
   { nome: 'documento-nota', url: 'tela=documento-nota', estados: [
     ['nota lida', async (p) => {
       const xml = await p.evaluate(() => globalThis.__xmlDaBancada);
@@ -335,6 +341,8 @@ const CENARIOS = [
   ] })),
   /* P117 — a linha fixa sob o Fornecedor: com cidade ("CNPJ · Presidente Prudente/SP") e sem (só o CNPJ) — nada anda */
   { nome: 'lancamento-fornecedor-cidade', url: 'tela=lancamento&m=editar', estados: [['cadastro sem cidade', { url: 'tela=lancamento&m=editar&cidade=sem' }]] },
+  /* P121 — o Resumo do lançamento: os nomes longos do mock no lugar dos curtos — nenhum bloco muda de altura, nada abaixo anda */
+  { nome: 'lancamento-resumo-longo', url: 'tela=lancamento&m=editar&v=sal', estados: [['nomes longos', { url: 'tela=lancamento&m=editar&v=sal&resumo=longo' }]] },
   /* P138 — "Usar" a safra da competência: a linha da sugestão sai e o campo se enche — nada abaixo anda */
   { nome: 'lancamento-safra-usar', url: 'tela=lancamento&m=editar&safra=sem', estados: [['Usar a sugestão', clicar('[data-testid="safra-usar-sugestao"]')]] },
   /* P117 (Gabriel 27/10) — a linha sob o Fornecedor VAZIA: no Novo lançamento o campo nasce sem fornecedor (o do lançamento não tem "×");
@@ -414,6 +422,16 @@ const CENARIOS = [
   { nome: 'fora-da-vigencia-cancelar', url: 'tela=fora-da-vigencia&v=cancelar',
     antes: async (p) => { await p.locator('[data-testid="modal-fora-da-vigencia"]').waitFor(); await espera(p); },
     estados: [['nada a cancelar', { url: 'tela=fora-da-vigencia&v=vazia' }]] },
+  /* P124 — o palco do mês: buscar, marcar todas as exatas, a prévia do lote e voltar — os chips, os botões e o rodapé não andam */
+  { nome: 'palco-do-mes', url: 'tela=palco-do-mes', tamanhos: [[1000, 600], [1126, 579], [1300, 704], [1440, 800]],
+    antes: async (p) => { await p.locator('[data-testid="linha-palco"]').first().waitFor(); await espera(p); },
+    estados: [
+      ['buscou as sugestoes', async (p) => { await p.locator('[data-testid="buscar-sugestoes"]').click(); await p.locator('[data-testid="chip-sugestao-exata"]:not([disabled])').waitFor(); await espera(p); }],
+      ['filtro exata', clicar('[data-testid="chip-sugestao-exata"]')],
+      ['marcar todas as exatas', clicar('[data-testid="marcar-exatas"]')],
+      ['previa do lote', clicar('[data-testid="conciliar-selecionados"]')],
+      ['voltar', botao(/^Voltar$/)],
+    ] },
   /* P141 (CONC-LAYOUT-01) — Saldos por conta: os selos OFX/PDF e o ↗ PRESOS (lugar fixo) entre a página com arquivos e a sem nenhum,
      a conta escolhida e o "← Todas"; o modal do ↗ entre carregando e carregado. A prova: sem a largura fixa do lugar do selo, o PDF anda. */
   { nome: 'conciliacao-saldos', url: 'tela=conciliacao', tamanhos: TAMANHOS_DO_P92,

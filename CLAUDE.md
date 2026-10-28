@@ -216,6 +216,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   lancamento + 2 vinculos; arquivo de extrato se le^ pelo charset declarado.
 - P145: a conta PERMUTA conta o razão DELA na Conciliação (os sem caixa da própria conta entram em `fn_caixa_sistema_pontas`); conta comum, VG e CPR
   seguem sem os sem caixa.
+- P124: o LOTE do mês (PalcoDoMes) usa a régua do MOTOR (`fn_candidatos_conciliacao`; a tela só agrupa: exata = pré-marcada sem empate) e grava
+  PAR A PAR pelo gravador de hoje (`vincularSelecao`); buscar é GESTO; a caixa "Vincular os exatos" saiu do palco (o ConciliarMesDialog ficou: dívida).
 - Financiamento: o saldo devedor tem uma fonte (`fn_financiamento_saldo`); captacao segue o creditado em conta; o valor do lancamento
   vinculado a' parcela manda na parcela; consorcio e' natureza propria (gerador no banco); parcela adiada e' divida mas nao vencida.
 - Recorrencia gera a vigencia inteira e nunca omite em silencio; o valor do mes tem marca e o propagar pula as marcadas.
@@ -326,6 +328,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - A pagina e' pt-BR e nao se traduz. Barra lateral 152px num token. Graficos de saida: laranja/violeta/vermelho/cinza; azul so' entrada.
 - TABELA-ALTURA-FIXA-01: o quadro da tabela tem ALTURA (nunca `maxHeight`) ate' o fim da tela, qualquer que seja o numero de linhas; o
   vazio fica dentro do quadro; em pagina que rola, `useAlturaAteOFim` (topo do quadro → fim da janela). O gate: filtrar para 6/1/0 linhas.
+- P121: o Resumo do lançamento é o `ResumoDoLancamento` (do Financeiro; `ui/linha-resumo` fica com os outros modais): blocos de ALTURA FIXA que
+  somam ~452px (cabe em 1126×579), nada rola; linha nova num bloco = refazer a conta e medir; datas dos pares nunca cortam (larguras medidas).
 - FIN-V2-FORNECEDOR-SEM-SUFIXO-01: em TABELA o fornecedor e' so' o nome ("…" + `title` com CNPJ/"sem CNPJ", cidade/UF, inativo); o final
   de filial ("…0007-69", "sem CNPJ") so' no seletor/busca e no Mesclar.
 - FIN-V2-FILTRO-FORNECEDOR-01: filtro de fornecedor = ativos (+ inativo com lançamento no recorte ou escolhido, P94); mesclado nunca (o nome antigo acha
