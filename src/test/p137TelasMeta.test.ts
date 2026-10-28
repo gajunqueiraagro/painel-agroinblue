@@ -38,6 +38,15 @@ describe('P137 família 3 — a barra do Fluxo não muda ao trocar a fazenda', (
   });
 });
 
+describe('P137 família 5 — Indicadores do Fechamento com régua fixa', () => {
+  it('a tabela da Análise Zootécnica é table-layout fixed com colgroup (as colunas não seguem os valores)', () => {
+    const f = ler('v2/pages/V2FechamentoPeriodo.parts/AnaliseZootecnica.tsx');
+    expect(f).toContain(`<table className="fechamento-table" style={{ tableLayout: 'fixed' }} data-testid="analise-zootecnica">`);
+    const cols = f.slice(f.indexOf('<colgroup>'), f.indexOf('</colgroup>')).match(/<col /g) ?? [];
+    expect(cols).toHaveLength(5);
+  });
+});
+
 describe('P137 família 4 — o aviso "não conciliado" tem lugar reservado', () => {
   it('sempre montado; só a visibilidade troca (os cards não andam)', () => {
     const f = ler('v2/pages/V2PlanejamentoVisaoGeral.parts/BlocoResumoExecutivo.tsx');

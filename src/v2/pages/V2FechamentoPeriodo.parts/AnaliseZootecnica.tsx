@@ -50,7 +50,16 @@ export default function AnaliseZootecnica({ dto, gmdSoberano = null, subtitulo }
     // descendentes (.pagina-fechamento table) seguem válidos com display:contents.
     <div className="pagina-fechamento" style={{ display: 'contents' }}>
       <BoletimContainer titulo="Análise Zootécnica" subtitulo={subtitulo} badge="OPERACIONAL" tone="operacional">
-      <table className="fechamento-table">
+      {/* P137 (família 5): régua fixa — `table-layout: fixed` + colgroup (como as tabelas do Desembolso); a largura das colunas não
+          segue mais os valores (trocar a fazenda ou a escala movia todo `th`); número numa linha só. */}
+      <table className="fechamento-table" style={{ tableLayout: 'fixed' }} data-testid="analise-zootecnica">
+        <colgroup>
+          <col style={{ width: '34%' }} />
+          <col style={{ width: '10%' }} />
+          <col style={{ width: '20%' }} />
+          <col style={{ width: '20%' }} />
+          <col style={{ width: '16%' }} />
+        </colgroup>
         <thead>
           <tr>
             <th>Indicador</th>
@@ -65,9 +74,9 @@ export default function AnaliseZootecnica({ dto, gmdSoberano = null, subtitulo }
             <tr key={l.label}>
               <td>{l.label}</td>
               <td>{l.unidade}</td>
-              <td className="num">{fmt(l.ind.comparativo.realizado, l.dec ?? 0)}</td>
-              <td className="num">{fmt(l.ind.comparativo.meta, l.dec ?? 0)}</td>
-              <td className={`num ${classeDiferenca(l.ind.comparativo.desvioMetaPct)}`}>
+              <td className="num" style={{ whiteSpace: 'nowrap' }}>{fmt(l.ind.comparativo.realizado, l.dec ?? 0)}</td>
+              <td className="num" style={{ whiteSpace: 'nowrap' }}>{fmt(l.ind.comparativo.meta, l.dec ?? 0)}</td>
+              <td className={`num ${classeDiferenca(l.ind.comparativo.desvioMetaPct)}`} style={{ whiteSpace: 'nowrap' }}>
                 {pct(l.ind.comparativo.desvioMetaPct)}
               </td>
             </tr>
