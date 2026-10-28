@@ -392,6 +392,13 @@ const CENARIOS = [
   { nome: 'criar-transferencia-gemea', url: 'tela=criar-transferencia&v=gemea',
     antes: async (p) => { await p.locator('[data-testid="aviso-gemea"]').waitFor(); await espera(p); },
     estados: [['criar mesmo assim', botao(/Criar mesmo assim/)]] },
+  /* P154 — a prévia: carregando -> com a lista -> com a recusa -> vazia; os botões e o título não andam (lugares fixos) */
+  { nome: 'fora-da-vigencia', url: 'tela=fora-da-vigencia&v=carregando',
+    antes: async (p) => { await p.locator('[data-testid="modal-fora-da-vigencia"]').waitFor(); await espera(p); },
+    estados: [['com a lista', { url: 'tela=fora-da-vigencia&v=encurtada' }], ['com a recusa', { url: 'tela=fora-da-vigencia&v=erro' }]] },
+  { nome: 'fora-da-vigencia-cancelar', url: 'tela=fora-da-vigencia&v=cancelar',
+    antes: async (p) => { await p.locator('[data-testid="modal-fora-da-vigencia"]').waitFor(); await espera(p); },
+    estados: [['nada a cancelar', { url: 'tela=fora-da-vigencia&v=vazia' }]] },
   { nome: 'casar-bloco', url: 'tela=casar-bloco', antes: async (p) => { await p.locator('[data-testid="conciliar-bloco"]').waitFor(); await espera(p); },
     estados: [
       ['regra mais antigo primeiro', botao(/Mais antigo primeiro/)],
