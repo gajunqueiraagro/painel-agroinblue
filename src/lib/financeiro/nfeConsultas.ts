@@ -270,6 +270,8 @@ export async function usoDoFornecedor(fornecedorId: string): Promise<{ lancament
 export async function notaJaLancada(clienteId: string, entrada: {
   parcelas: readonly { n: number; vencimento: string; valorCent: number }[]; numero: string | null; chave: string | null;
   emitenteDocumento: string | null; nomes: readonly (string | null | undefined)[];
+  /** P128c — a prévia aberta pelo lançamento (porta 2): ele é a ÂNCORA (+ os irmãos do parcelamento dele). Só vai ao banco quando há. */
+  lancamento?: string | null;
 }): Promise<Consulta<LancamentoJaLancado[]>> {
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
@@ -278,6 +280,7 @@ export async function notaJaLancada(clienteId: string, entrada: {
       p_parcelas: entrada.parcelas.map((p) => ({ n: p.n, vencimento: p.vencimento, valor_cent: p.valorCent })),
       p_numero: entrada.numero, p_chave: entrada.chave, p_emitente_documento: entrada.emitenteDocumento,
       p_nomes: [...new Set(entrada.nomes.filter((x): x is string => !!x && !!x.trim()))],
+      ...(entrada.lancamento ? { p_lancamento: entrada.lancamento } : {}),
     });
     if (error) { console.error('fn_nota_ja_lancada', error); return falhou(error); }
     return deu(lerJaLancados(data));

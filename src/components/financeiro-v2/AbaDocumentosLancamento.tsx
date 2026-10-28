@@ -41,6 +41,10 @@ import { QUADRO_REGUA, SECUNDARIA_REGUA, TD_REGUA, TD_REGUA_NUM, TH_REGUA } from
 import { cn } from '@/lib/utils';
 import { linhasDosDocumentos, oQueAbrir, type LinhaDeDocumento } from '@/lib/financeiro/notaDosDocumentos';
 import { ItensDaNotaDialog } from './ItensDaNotaDialog';
+import { lerNota } from '@/lib/financeiro/nfe/lerNota';
+import { resolverEmitente } from '@/lib/financeiro/nfe/resolverEmitente';
+import { gravarItensSemTravar } from '@/lib/financeiro/itensDaNotaBanco';
+import { camposDaNota, divergenciasDaNota, ehArquivoDeNota, FRASE_NOTA_NAO_LIDA, type CamposDaNota, type CampoDivergente } from '@/lib/financeiro/nfe/documentoDaNota';
 import {
   ESPECIES_LANC_DOC, rotuloEspecieDoc, type EspecieLancDoc, type LancDocumento, type LancDocPayload,
   type LancamentoDocumentosApi, type DestinoDocumento, REGRA_ARQUIVO_DO_DOCUMENTO,
@@ -74,8 +78,11 @@ function larguraDaColunaDocumento(ls: readonly LinhaDeDocumento[]): number {
   return Math.max(96, ...ls.map(uma));
 }
 
-export function AbaDocumentosLancamento({ api, somenteLeitura, clienteId, onAnexarBoletosDasParcelas, sugestao, semBoleto }: {
+export function AbaDocumentosLancamento({ api, somenteLeitura, clienteId, onAnexarBoletosDasParcelas, sugestao, semBoleto, onVerOQueANotaMuda }: {
   api: LancamentoDocumentosApi;
+  /** P127 + P128c — a nota lida no "Novo documento" abre a MESMA prévia do "+ Da nota" partindo deste lançamento (o caminho do "Ler a NF"
+   *  do P128a). Devolve a frase pronta do que impediu, ou `null` (a prévia abriu). Ausente = sem o gesto. */
+  onVerOQueANotaMuda?: (arquivo: File) => Promise<string | null>;
   /** Sem o tipo Boleto no formulário — PARC-LIVRES-01 passo 6: no CONTRATO esta lista é a dos documentos da COMPRA (valem para
    *  todas as parcelas); o boleto é de UMA parcela e entra pela grade das parcelas, logo abaixo. */
   semBoleto?: boolean;
@@ -349,6 +356,7 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, clienteId, onAnex
 
       {formAberto && (
         <FormDocumento api={api} documento={editando} clienteId={clienteId} sugestao={sugestao} semBoleto={semBoleto}
+          onVerOQueANotaMuda={onVerOQueANotaMuda}
           onFechar={() => { setFormAberto(false); setEditando(null); }} />
       )}
 
@@ -424,8 +432,10 @@ export const CAMPOS_POR_ESPECIE: Record<EspecieLancDoc, {
   outro: { numero: 'Identificação', data: 'Data', valor: 'Valor', emitente: 'Emitente', serie: false, chave: false, dataNaSugestao: 'data' },
 };
 
-export function FormDocumento({ api, documento, clienteId, onFechar, pendente, semBoleto, sugestao }: {
+export function FormDocumento({ api, documento, clienteId, onFechar, pendente, semBoleto, sugestao, onVerOQueANotaMuda }: {
   api: LancamentoDocumentosApi;
+  /** P127 + P128c — "Ver o que a nota muda": a nota lida com itens ou duplicatas abre a prévia do "+ Da nota" partindo do lançamento. */
+  onVerOQueANotaMuda?: (arquivo: File) => Promise<string | null>;
   documento: LancDocumento | null;
   /** O cliente de quem o emitente se escolhe — a lista é a do LEITOR ÚNICO (só ativos, com documento). */
   clienteId: string | null;
@@ -454,6 +464,12 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
   const [observacao, setObservacao] = useState(documento?.observacao ?? '');
   const [arquivo, setArquivo] = useState<File | null>(null);
   const [enviando, setEnviando] = useState(false);
+  /* P127 + P128c — A NOTA LIDA do arquivo (o MESMO leitor do "+ Da nota"): os campos dela, os bytes (os itens se gravam pela chave) e o
+     que o formulário tinha ANTES (o que o lançamento diz), para mostrar lado a lado onde divergem. `avisoDaNota`: a nota que não se leu. */
+  const [lida, setLida] = useState<{ campos: CamposDaNota; bytes: ArrayBuffer; emitenteId: string | null;
+    antes: { numero: string; dataEmissao: string; valor: number | null; emitenteId: string; emitenteNome: string | null } } | null>(null);
+  const [avisoDaNota, setAvisoDaNota] = useState<string | null>(null);
+  const [lendoANota, setLendoANota] = useState(false);
   /* UX-TOAST-01 — PR 2b: a recusa (arquivo em formato errado, RPC) fica AO LADO do botão, não num toast. */
   const [erroForm, setErroForm] = useState<string | null>(null);
   /* PR 2b — NF da compra (em N parcelas): cancelar pelo lápis, com motivo, sai das N de uma vez. */
@@ -494,6 +510,67 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
      principal de complementar, e o daqui nao; mandar a traducao por cima rebaixaria a complementar.
      Quem troca a especie de documento da OC e' a aba da OC. Sem `especie` no payload, o banco preserva. */
   const especieSoLeitura = documento?.origem === 'operacao';
+
+  /* P127 + P128c — o arquivo XML/PDF LÊ A NOTA (`lerNota`, o leitor do "+ Da nota"): os campos passam a ser os da NOTA; o que o formulário
+     tinha antes (o lançamento) fica guardado para o "lado a lado". Na OC não (o documento da OC é da aba da OC). A nota que não se lê
+     (PDF escaneado) DIZ que não leu — nunca em silêncio (P146) — e o formulário fica para digitar. */
+  const lerArquivoDaNota = async (f: File) => {
+    /* o "antes" é sempre o que o LANÇAMENTO dizia: uma segunda leitura (outro arquivo, ou o mesmo de novo) não o troca pelos valores que
+       já eram da nota — senão o lado a lado sumiria */
+    const antesDaNota = lida?.antes ?? null;
+    setLida(null); setAvisoDaNota(null);
+    if (destinoOC || especieSoLeitura || !ehArquivoDeNota(f.name)) return;
+    setLendoANota(true);
+    try {
+      const bytes = await f.arrayBuffer();
+      const r = await lerNota(bytes);
+      if (r.ok === false) { setAvisoDaNota(FRASE_NOTA_NAO_LIDA); return; }
+      const c = camposDaNota(r.nota);
+      const res = resolverEmitente({ documento: c.emitenteDocumento, nome: c.emitenteNome, fantasia: r.nota.emitente.fantasia }, doLeitor.fornecedores, null);
+      setLida({ campos: c, bytes, emitenteId: res.propostoId,
+        antes: antesDaNota ?? { numero, dataEmissao, valor, emitenteId: emitenteEhOutro ? '' : emitenteId, emitenteNome: nomeDoEmitente } });
+      setEspecie('nf'); setNumero(c.numero); setSerie(c.serie); setDataEmissao(c.emissao); setValor(c.valor); setChave(c.chave);
+      if (res.propostoId) setEmitenteId(res.propostoId);
+      else { setEmitenteId(OUTRO); setEmitenteNome(c.emitenteNome); setEmitenteDoc(c.emitenteDocumento); }
+    } catch (e) {
+      console.error('ler a nota do documento', e);
+      setAvisoDaNota(FRASE_NOTA_NAO_LIDA);
+    } finally { setLendoANota(false); }
+  };
+  /* onde a nota e o lançamento divergem: os dois lado a lado; "usar o do lançamento" troca SÓ aquele campo (e volta) */
+  const divergencias = lida ? divergenciasDaNota(lida.campos, {
+    numero: lida.antes.numero || null, dataEmissao: lida.antes.dataEmissao || null, valor: lida.antes.valor,
+    emitenteId: lida.antes.emitenteId || null, emitenteNome: lida.antes.emitenteNome,
+  }, lida.emitenteId) : [];
+  const usaANota = (c: CampoDivergente): boolean => {
+    if (!lida) return false;
+    if (c === 'numero') return numero === lida.campos.numero;
+    if (c === 'emissao') return dataEmissao === lida.campos.emissao;
+    if (c === 'valor') return valor === lida.campos.valor;
+    return lida.emitenteId ? emitenteId === lida.emitenteId : emitenteEhOutro;
+  };
+  const trocarCampo = (c: CampoDivergente) => {
+    if (!lida) return;
+    const daNota = !usaANota(c);
+    if (c === 'numero') setNumero(daNota ? lida.campos.numero : lida.antes.numero);
+    else if (c === 'emissao') setDataEmissao(daNota ? lida.campos.emissao : lida.antes.dataEmissao);
+    else if (c === 'valor') setValor(daNota ? lida.campos.valor : lida.antes.valor);
+    else if (daNota) {
+      if (lida.emitenteId) setEmitenteId(lida.emitenteId);
+      else { setEmitenteId(OUTRO); setEmitenteNome(lida.campos.emitenteNome); setEmitenteDoc(lida.campos.emitenteDocumento); }
+    } else setEmitenteId(lida.antes.emitenteId);
+  };
+  /* o campo que mostra o que a NOTA diz: em destaque (o lido é o que vale; o âmbar é o do lançamento) */
+  const DA_NOTA = ' bg-sky-50 border-sky-300';
+  const daNota = { numero: !!lida && numero === lida.campos.numero, data: !!lida && dataEmissao === lida.campos.emissao,
+    valor: !!lida && valor === lida.campos.valor, chave: !!lida && chave === lida.campos.chave, serie: !!lida && serie === lida.campos.serie };
+  /* "Ver o que a nota muda": a nota lida com itens ou duplicatas, num lançamento que existe (não no pendente) */
+  const podeVerOQueMuda = !!lida?.campos.muda && !!onVerOQueANotaMuda && !documento && !pendente && !!arquivo;
+  const verOQueMuda = async () => {
+    if (!arquivo || !onVerOQueANotaMuda) return;
+    setEnviando(true); setErroForm(null);
+    try { const frase = await onVerOQueANotaMuda(arquivo); if (frase) setErroForm(frase); } finally { setEnviando(false); }
+  };
 
   const payload = (): LancDocPayload => ({
     especie: especieSoLeitura ? undefined : especie,
@@ -557,6 +634,11 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
       }
       if (arquivo && id && destino) await api.anexar(id, versao, arquivo, destino);
       if (!pendente) toast.success(documento ? 'Documento atualizado.' : 'Documento registrado.');
+      /* P127 — a nota LIDA guarda os itens pela chave (ITENS-NOTA-01: a mesma função do "Criar"); a falha não trava, mas diz */
+      if (lida && !pendente && clienteId && chave === lida.campos.chave) {
+        const erroItens = await gravarItensSemTravar(clienteId, lida.bytes);
+        if (erroItens) toast.error(`Os itens da nota não foram guardados: ${erroItens}`);
+      }
       onFechar();
     } catch (e) {
       /* ⚠ A MENSAGEM DA RPC, INTEIRA: ela nomeia o que recusou (espécie inválida, versão
@@ -596,7 +678,27 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
           </p>
         )}
 
-        {(sugNumero || sugData || sugValor || sugEmitente) && (
+        {/* P127 + P128c — a NOTA lida (ou a que não se leu) no lugar da faixa do lançamento: o que a nota diz × o que o lançamento diz */}
+        {lendoANota ? (
+          <p className="rounded border border-sky-200 bg-sky-50 px-2 py-1 text-[10px] leading-[14px] text-sky-900" data-testid="nota-lendo">Lendo a nota…</p>
+        ) : avisoDaNota ? (
+          <p className="rounded border border-red-200 bg-red-50 px-2 py-1 text-[10px] leading-[14px] text-destructive" role="alert" data-testid="nota-nao-lida">
+            {avisoDaNota}</p>
+        ) : lida ? (
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded border border-sky-300 bg-sky-50 px-2 py-1 text-[10px] leading-[14px] text-sky-900"
+            data-testid="nota-lida">
+            <span className="font-medium">Lido da nota {lida.campos.numero} (chave conferida){divergencias.length ? ` · difere ${sug ? `do que ${sug.origem ?? 'o lançamento'} diz` : 'do documento'}:` : ` · confere com ${sug?.origem ?? 'o lançamento'}`}</span>
+            {divergencias.map((d) => (
+              <span key={d.campo} className="inline-flex items-center gap-1 whitespace-nowrap" data-testid="nota-divergencia" data-campo={d.campo}>
+                {d.rotulo}: <b className={usaANota(d.campo) ? 'text-sky-900' : 'font-normal text-muted-foreground line-through'}>nota {d.nota}</b>
+                <span className={usaANota(d.campo) ? 'text-muted-foreground line-through' : 'font-semibold text-foreground'}>· {sug?.origem ?? 'lanç.'} {d.lancamento}</span>
+                <button type="button" className="underline underline-offset-2" onClick={() => trocarCampo(d.campo)} data-testid="nota-divergencia-trocar"
+                  data-trocar={d.campo}>
+                  {usaANota(d.campo) ? `usar o ${sug ? 'do lançamento' : 'do documento'}` : 'usar o da nota'}</button>
+              </span>
+            ))}
+          </div>
+        ) : (sugNumero || sugData || sugValor || sugEmitente) && (
           <p className="truncate rounded border border-amber-300 bg-amber-50 px-2 py-1 text-[10px] leading-[14px] text-amber-900" data-testid="sugestao-do-lancamento"
             title={`Preenchido com o que ${sug?.origem ?? 'o lançamento'} diz — confira. Mudar aqui não muda ${sug?.origem ?? 'o lançamento'}.`}>
             Preenchido com o que {sug?.origem ?? 'o lançamento'} diz ({[sugNumero && 'número', sugData && campos.dataNaSugestao, sugValor && 'valor', sugEmitente && 'emitente'].filter(Boolean).join(', ')}) — confira. Mudar aqui não muda {sug?.origem ?? 'o lançamento'}.
@@ -629,17 +731,17 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
             <div>
               <Label className="text-[10px] text-muted-foreground">{campos.numero}</Label>
               <Input value={numero} onChange={e => setNumero(e.target.value)} data-testid="doc-numero"
-                className={`h-7 text-[11px] mt-0.5${sugNumero ? AMBAR : ''}`} placeholder="Opcional" />
+                className={`h-7 text-[11px] mt-0.5${daNota.numero ? DA_NOTA : sugNumero ? AMBAR : ''}`} placeholder="Opcional" />
             </div>
             <div>
               <Label className="text-[10px] text-muted-foreground">Série</Label>
               <Input value={serie} onChange={e => setSerie(e.target.value)} data-testid="doc-serie"
-                className="h-7 text-[11px] mt-0.5" placeholder="Opcional" />
+                className={`h-7 text-[11px] mt-0.5${daNota.serie ? DA_NOTA : ''}`} placeholder="Opcional" />
             </div>
           </>)}
           <div>
             <Label className="text-[10px] text-muted-foreground">{campos.data}</Label>
-            <DatePicker value={dataEmissao} onChange={setDataEmissao} className={`h-7 text-[11px] mt-0.5${sugData ? AMBAR : ''}`} />
+            <DatePicker value={dataEmissao} onChange={setDataEmissao} className={`h-7 text-[11px] mt-0.5${daNota.data ? DA_NOTA : sugData ? AMBAR : ''}`} />
           </div>
           {/* ⚠ NA OC, O VALOR DO DOCUMENTO NÃO É UM CAMPO — DOC-UMA-FONTE-01. Lá ele é a
               soma dos COMPONENTES (acréscimo, desconto comercial, retenção), que mexem na
@@ -657,7 +759,7 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
           ) : (
             <div>
               <Label className="text-[10px] text-muted-foreground">{campos.valor}</Label>
-              <CampoMoeda valor={valor} onChange={setValor} className={`h-7 text-[11px] mt-0.5 text-right${sugValor ? AMBAR : ''}`} />
+              <CampoMoeda valor={valor} onChange={setValor} className={`h-7 text-[11px] mt-0.5 text-right${daNota.valor ? DA_NOTA : sugValor ? AMBAR : ''}`} />
             </div>
           )}
           {/* fora da NF o número não é a identidade do papel: vem depois de data e valor, ocupando o lugar de Número + Série */}
@@ -703,7 +805,7 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
             <div className="col-span-2" data-testid="lugar-chave">
               <Label className="text-[10px] text-muted-foreground">Chave de acesso</Label>
               <Input value={chave} onChange={e => setChave(e.target.value)} data-testid="doc-chave"
-                className="h-7 text-[11px] mt-0.5 tabular-nums" placeholder="44 dígitos" />
+                className={`h-7 text-[11px] mt-0.5 tabular-nums${daNota.chave ? DA_NOTA : ''}`} placeholder="44 dígitos" />
             </div>
           )}
           {/* sem emitente (Comprovante) ou sem chave (fora da NF), a linha 2 guarda o lugar: a linha 3 fica sempre na mesma altura */}
@@ -722,12 +824,12 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
                 errado é recusado AO ESCOLHER, na própria área (a conferência ao gravar continua, pelo mesmo dono). Altura fixa
                 de 40px: o nome longo corta com o inteiro no `title`. */}
             <AreaDeArquivo regra={REGRA_ARQUIVO_DO_DOCUMENTO} testId="area-arquivo" inputTestId="doc-arquivo" className="mt-0.5 h-7"
-              onArquivos={([f]) => setArquivo(f ?? null)}
+              onArquivos={([f]) => { setArquivo(f ?? null); if (f) void lerArquivoDaNota(f); else { setLida(null); setAvisoDaNota(null); } }}
               conteudo={arquivo
                 ? <span data-testid="arquivo-escolhido">{arquivo.name}</span>
                 : documento?.url ? <>arquivo anexado · <span className="underline underline-offset-2">substituir</span></> : undefined}
               tituloDoConteudo={arquivo ? arquivo.name : documento?.url ? 'arquivo anexado · clique ou arraste outro para substituir' : undefined}
-              onRemover={arquivo ? () => setArquivo(null) : undefined} />
+              onRemover={arquivo ? () => { setArquivo(null); setLida(null); setAvisoDaNota(null); } : undefined} />
             <p className="mt-0.5 truncate text-[10px] leading-[13px] text-muted-foreground" data-testid="ajuda-do-arquivo"
               title={`${ajudaDaRegra(REGRA_ARQUIVO_DO_DOCUMENTO)}. Pode ficar para depois — o documento aparece na lista dizendo “sem arquivo”.`}>
               {ajudaDaRegra(REGRA_ARQUIVO_DO_DOCUMENTO)} · pode ficar para depois
@@ -764,9 +866,19 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
             </Button>
           )}
           <Button type="button" variant="ghost" onClick={onFechar}>Cancelar</Button>
-          <Button type="button" onClick={salvar} disabled={enviando || api.saving}>
+          <Button type="button" variant={podeVerOQueMuda ? 'outline' : 'default'} onClick={salvar} disabled={enviando || api.saving || lendoANota}
+            data-testid="doc-registrar">
             {pendente ? (documento ? 'Salvar na lista' : 'Adicionar à lista') : (documento ? 'Salvar documento' : 'Registrar documento')}
           </Button>
+          {/* P127 + P128c — a nota com itens/duplicatas: o gesto principal é ver o que ela muda (a prévia do "+ Da nota", partindo deste lançamento).
+              O LUGAR do botão é reservado sempre que o gesto existe (documento novo de um lançamento salvo): ler a nota não desloca o rodapé. */}
+          {onVerOQueANotaMuda && !documento && !pendente && (
+            <Button type="button" onClick={() => { void verOQueMuda(); }} disabled={!podeVerOQueMuda || enviando || api.saving}
+              className={podeVerOQueMuda ? undefined : 'invisible'} aria-hidden={podeVerOQueMuda ? undefined : true} tabIndex={podeVerOQueMuda ? undefined : -1}
+              data-testid="doc-ver-o-que-a-nota-muda">
+              Ver o que a nota muda
+            </Button>
+          )}
         </div>
       </DialogContent>
     </Dialog>

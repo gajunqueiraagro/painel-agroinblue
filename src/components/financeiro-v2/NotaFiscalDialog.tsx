@@ -351,12 +351,14 @@ export function NotaFiscalDialog({
     void notaJaLancada(clienteId, {
       parcelas: parcelasDaBusca, numero: p.numeroDocumento || n.numero, chave: n.chave, emitenteDocumento: n.emitente.documento,
       nomes: [n.emitente.nome, n.emitente.fantasia, receitaNome],
+      /* P128c — pela porta 2, o lançamento aberto é a âncora (ele + os irmãos do parcelamento dele, do mesmo fornecedor) */
+      lancamento: partindoDe,
     }).then((r) => {
       if (!vivo) return;
       if (r.ok === false) setFalhaJaLancada(r.motivo); else setAchados(r.valor);
     });
     return () => { vivo = false; };
-  }, [clienteId, doXml.ocorrencias.length, parcelasDaBusca, p.numeroDocumento, n.numero, n.chave, n.emitente.documento, n.emitente.nome, n.emitente.fantasia, receitaNome, tentativa]);
+  }, [clienteId, doXml.ocorrencias.length, parcelasDaBusca, p.numeroDocumento, n.numero, n.chave, n.emitente.documento, n.emitente.nome, n.emitente.fantasia, receitaNome, tentativa, partindoDe]);
   /* D — a nota que so' tem lancamento CANCELADO nao esta' lancada: o rodape so' diz quantos */
   const canceladosSo = useMemo(() => (achados && !achados.some((l) => !l.cancelado) ? canceladosDaNota(achados) : []), [achados]);
   const jaLancada = useMemo(() => (achados ? casarJaLancados(parcelasDaBusca, achados, n.totais.notaCent) : null), [achados, parcelasDaBusca, n.totais.notaCent]);
