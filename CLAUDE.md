@@ -290,6 +290,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   `menuPadrao`; todo campo de valor e' o `CampoMoeda` ("R$" e "0,00"); todo campo de arquivo aceita arrastar.
 - FIN-VALOR-CALC-01b: todo `CampoMoeda` faz conta (a lib `contaNoCampo`, nenhuma outra); o hospedeiro so' recebe o RESULTADO; o Esc/Enter
   da conta aberta sao pegos na JANELA (captura), antes do Radix; campo de valor novo = `CampoMoeda` (nunca `Input type="number"`).
+- P139: transferência pela linha do extrato SÓ pela `fn_transferencia_do_extrato` (simular; lote `fn_transferencias_do_extrato_lote`, tudo ou nada);
+  espelho ±3 = `_fn_espelhos_transferencia` (o mesmo do "Transferências entre contas"); gêmea = aviso com confirmação; já lançada = casar.
 - P134: TODA busca ignora acento, cedilha e maiúscula nos dois lados — tela `casaNaBusca`/`normalizarParaBusca` (`src/lib/texto/busca.ts`),
   banco `_fn_normalizar_texto`/`fn_texto_casa` (STABLE e aberta: IMMUTABLE fica 10× mais lenta) e os campos `busca_*`; casos em `busca.casos.json`.
 - P91: campo de NUMERO (kg, @, %, cab, dias) = `CampoNumeroComConta`; o gesto da conta e' UM hook (`useContaNoCampo`), o mesmo do `CampoMoeda`.

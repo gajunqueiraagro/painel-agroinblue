@@ -363,6 +363,14 @@ const CENARIOS = [
       ['valor do campo diferente do banco', digitar('input[aria-label^="Valor de"]', '0,02')],
       ['corrigir o valor do lancamento', botao(/Corrigir o valor do lançamento/)],
     ] },
+  /* P139 — no "Criar transferencia": escolher um dos espelhos do empate e confirmar a gemea nao mexem no movimento, na conta, na
+     lista nem no rodape (modal de tamanho fixo; o botao principal tem largura fixa) */
+  { nome: 'criar-transferencia-empate', url: 'tela=criar-transferencia&v=empate',
+    antes: async (p) => { await p.locator('[data-testid="aviso-empate"]').waitFor(); await espera(p); },
+    estados: [['escolher o 2o espelho', botao(/16\/08\/2027/)]] },
+  { nome: 'criar-transferencia-gemea', url: 'tela=criar-transferencia&v=gemea',
+    antes: async (p) => { await p.locator('[data-testid="aviso-gemea"]').waitFor(); await espera(p); },
+    estados: [['criar mesmo assim', botao(/Criar mesmo assim/)]] },
   { nome: 'casar-bloco', url: 'tela=casar-bloco', antes: async (p) => { await p.locator('[data-testid="conciliar-bloco"]').waitFor(); await espera(p); },
     estados: [
       ['regra mais antigo primeiro', botao(/Mais antigo primeiro/)],

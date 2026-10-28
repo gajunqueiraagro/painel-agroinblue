@@ -28,6 +28,9 @@ import { CadastroDeContratoDialog } from '@/components/financiamentos/CadastroDe
 import { ConsorcioDialog } from '@/components/financiamentos/ConsorcioDialog';
 import { LANCAMENTOS } from './dados/financeiro';
 import { totaisDaListaV2 } from '@/lib/financeiro/totaisDaListaV2';
+import { CriarTransferenciaDialog } from '@/components/conciliacao/CriarTransferenciaDialog';
+import { CriarTransferenciasLoteDialog } from '@/components/conciliacao/CriarTransferenciasLoteDialog';
+import type { SugestaoDeTransferencia } from '@/lib/conciliacao/transferenciaDoExtrato';
 import { volumeNJ } from './dados/volumeNJ';
 import { buscarFornecedores } from '@/lib/fornecedores/buscaDeFornecedor';
 import { FinanceiroV2Tab } from '@/pages/FinanceiroV2Tab';
@@ -671,6 +674,44 @@ if (tela === 'mesclar') {
     extrato={{ extrato_id: 'x1', data: '2025-06-30', historico: 'REND PAGO APLIC AUT MAIS · RENDIMENTO SINTETICO DA APLICACAO AUTOMATICA', valor: 0.01 }}
     iniciais={v === 'levado' ? [{ lancamento_id: 'y1', descricao: 'Rendimento de aplicação · junho', fornecedor: 'Banco Exemplo', valor_assinado: 0.01, data_vencimento: '2025-06-30', status_transacao: 'programado' }] : []}
     onConciliado={() => {}} />);
+  }
+} else if (tela === 'criar-transferencia') {
+  /* P139 — "Criar transferência" pela linha do extrato (e o lote). SINTETICO, valores no teto e historicos longos. A resposta da porta
+     (`fn_transferencia_do_extrato` com p_simular) no formato do banco: v=espelho (um, escolhido), v=empate (dois a 1 dia), v=gemea (o aviso
+     com "Criar mesmo assim"/"Ignorar como duplicada"), v=existente (casar com a ja' lancada), v=lote (o lote com 6 linhas). */
+  const CONTAS_T = [
+    { id: 'cc', nome_conta: 'Conta Movimento', nome_exibicao: 'Banco Exemplo Cooperativo de Crédito Rural · Conta Movimento', banco: 'Exemplo', agencia: null, numero_conta: null, tipo_conta: 'cc' },
+    { id: 'inv', nome_conta: 'Invest', nome_exibicao: 'Banco Exemplo · Investimento Fácil Automático', banco: 'Exemplo', agencia: null, numero_conta: null, tipo_conta: 'inv' },
+    { id: 'cb', nome_conta: 'Outra', nome_exibicao: 'Outro Banco Sintético · Conta Corrente PJ', banco: 'Outro', agencia: null, numero_conta: null, tipo_conta: 'cc' },
+  ];
+  const HIST = 'RESG AUTOMATICO INVESTIMENTO FACIL · APLICACAO SINTETICA DE EXEMPLO · CONTRATO 0000000';
+  const esp = (id: string, data: string, dist: number) => ({ id, data, descricao: 'APLICACAO AUTOMATICA INVEST FACIL · MOVIMENTO SINTETICO DE EXEMPLO', valor: '-99999999.99', distancia: dist });
+  const base = { ok: true, simulado: true, acao: 'criar', extrato_id: 'e1', valor: '99999999.99', data: '2027-08-15', origem: 'inv', destino: 'cc',
+    espelhos: [esp('m1', '2027-08-17', 2)], espelho_id: 'm1', gemeas: [], existente: null };
+  const sim = v === 'empate' ? { ...base, espelho_id: null, espelhos: [esp('m1', '2027-08-14', 1), esp('m2', '2027-08-16', 1)] }
+    : v === 'gemea' ? { ...base, gemeas: [{ id: 'g1', descricao: 'Resg/vencto Cdb · historico da outra importacao', data: '2027-08-15', valor: '99999999.99' }] }
+    : v === 'existente' ? { ...base, acao: 'casar_existente', espelhos: [], espelho_id: null,
+      existente: { id: 'l4', descricao: 'Transferência entre contas · lançada antes, sem vínculo', data: '2027-08-15', meia_ponta: true } }
+    : base;
+  g.__bancoBancada = {
+    from: (t: string) => t === 'financeiro_contas_bancarias' ? CONTAS_T : [],
+    rpc: (fn: string, a: any) => fn === 'fn_transferencia_do_extrato' ? sim
+      : fn === 'fn_transferencias_do_extrato_lote' ? { ok: true, simulado: true, transferencias: a.p_itens.length, espelhos: 3,
+        itens: a.p_itens.map((it: any, i: number) => ({ ...base, extrato_id: it.extrato_id, acao: it.outra_conta ? (i === 4 ? 'casar_existente' : 'criar') : 'escolher_conta',
+          espelho_id: i % 2 === 0 ? 'm1' : null, gemeas: i === 3 ? sim.gemeas.length ? sim.gemeas : [{ id: 'g1', descricao: 'x', data: '2027-08-15' }] : [],
+          existente: i === 4 ? { id: 'l4', descricao: 'lançada', data: '2027-08-15', meia_ponta: false } : null })) }
+      : null,
+  };
+  const MOV = { extrato_id: 'e1', data: '2027-08-15', historico: HIST, valor: 99999999.99, conta_id: 'cc' };
+  const SUG: SugestaoDeTransferencia = { extratoId: 'e1', contaSugerida: 'inv', contaNome: 'Banco Exemplo · Investimento Fácil Automático', motivo: 'aplicacao_automatica', candidatas: 1 };
+  if (v === 'lote') {
+    const movs = Array.from({ length: 6 }, (_, i) => ({ extrato_id: `e${i + 1}`, data: `2027-08-${String(10 + i).padStart(2, '0')}`, historico: `${HIST} · ${i + 1}`,
+      valor: i % 2 ? -99999999.99 : 99999999.99, conta_id: 'cc' }));
+    montar(<CriarTransferenciasLoteDialog aberto clienteId="cli" movimentos={movs}
+      sugestoes={new Map([['e1', SUG], ['e2', { ...SUG, extratoId: 'e2', contaSugerida: 'cb' }], ['e4', { ...SUG, extratoId: 'e4' }], ['e5', { ...SUG, extratoId: 'e5', contaSugerida: 'cb' }]])}
+      onFechar={() => {}} onGravado={() => {}} />);
+  } else {
+    montar(<CriarTransferenciaDialog aberto clienteId="cli" movimento={MOV} sugestao={SUG} onFechar={() => {}} onGravado={() => {}} onIgnorarDuplicada={() => {}} />);
   }
 } else if (tela === 'conciliar') {
   /* CONC-SEM-TRAVA-01 (tela) — o modal "Conciliar" no formato da resposta de `fn_conc_simular_diferenca` provada no caso real (OC

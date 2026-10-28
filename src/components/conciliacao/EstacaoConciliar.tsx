@@ -12,6 +12,9 @@ import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
 import { CriarLancamentoDaLinha } from '@/components/conciliacao/CriarLancamentoDaLinha';
+import { CriarTransferenciaDialog } from '@/components/conciliacao/CriarTransferenciaDialog';
+import { DecisaoDerivadosDialog } from '@/components/financeiro-v2/DecisaoDerivadosDialog';
+import { notificarLancamentosMudaram } from '@/hooks/useFinanceiroV2';
 import { ConciliarDiferencaModal } from '@/components/conciliacao/ConciliarDiferencaModal';
 import { formatMoeda } from '@/lib/calculos/formatters';
 import {
@@ -100,6 +103,9 @@ export function EstacaoConciliar({ movimento, aoFechar, aoMudar, contaBancariaId
   const [confirmandoGrupo, setConfirmandoGrupo] = useState<string | null>(null);
   const [vinculando, setVinculando] = useState(false);
   const [criando, setCriando] = useState(false);
+  /* P139 — criar transferência direto daqui (o movimento intocado), e o "Ignorar como duplicada" da gêmea */
+  const [criandoTransf, setCriandoTransf] = useState(false);
+  const [ignorandoId, setIgnorandoId] = useState<string | null>(null);
   const [comDiferenca, setComDiferenca] = useState(false);
   /* ⚠ MARCADO É UM MAPA id → VALOR A APLICAR, não um conjunto de ids: dois
      candidatos podem entrar no mesmo movimento com valores diferentes, e é o
@@ -559,6 +565,14 @@ export function EstacaoConciliar({ movimento, aoFechar, aoMudar, contaBancariaId
                 Criar lançamento
               </Button>
             )}
+            {/* P139 — a transferência nasce do movimento INTOCADO (a porta recusa movimento já ligado) */}
+            {estado !== 'fecha' && vinculos.length === 0 && marcados.size === 0 && contaBancariaId && (
+              <Button type="button" variant="outline" size="sm" data-testid="estacao-criar-transferencia"
+                onClick={() => setCriandoTransf(true)}
+                title="Cria a transferência entre contas deste movimento (e concilia o espelho da outra conta, se houver).">
+                Criar transferência
+              </Button>
+            )}
             {estado !== 'fecha' && (
               <Button type="button" size="sm" className="gap-1.5" data-testid="vincular-estacao"
                 disabled={(impedimento !== null && !comDiferencaPossivel) || vinculando}
@@ -582,6 +596,19 @@ export function EstacaoConciliar({ movimento, aoFechar, aoMudar, contaBancariaId
             .map(c => ({ id: c.id, data: c.dataReferencia, descricao: c.descricao ?? '—', valor: Math.abs(c.valor) }))}
           onConciliado={() => { setComDiferenca(false); setMarcados(new Map()); void recarregar(); void recarregarCand(); void aoMudar(); }} />
       )}
+
+      <CriarTransferenciaDialog aberto={criandoTransf} clienteId={clienteAtual?.id ?? null}
+        movimento={contaBancariaId ? { extrato_id: movimento.id, data: movimento.data_movimento, historico: movimento.descricao,
+          valor: movimento.valor, conta_id: contaBancariaId } : null}
+        onFechar={() => setCriandoTransf(false)}
+        onGravado={() => {
+          setCriandoTransf(false); void recarregar(); void recarregarCand(); void aoMudar();
+          if (clienteAtual?.id) notificarLancamentosMudaram(clienteAtual.id);
+        }}
+        onIgnorarDuplicada={(id) => { setCriandoTransf(false); setIgnorandoId(id); }} />
+      <DecisaoDerivadosDialog extratoId={ignorandoId} aberto={!!ignorandoId} modo="ignorar"
+        onClose={() => setIgnorandoId(null)}
+        onConcluido={() => { setIgnorandoId(null); void recarregar(); void aoMudar(); }} />
 
       {criando && (
         <CriarLancamentoDaLinha

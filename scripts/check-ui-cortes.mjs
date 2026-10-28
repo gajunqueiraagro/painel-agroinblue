@@ -529,6 +529,11 @@ const CENARIOS = [
   { nome: 'casar-1x1-pos', url: 'tela=casar-1x1&v=pos', tamanhos: TAMANHOS_DO_CONSORCIO },
   /* CONC-VALOR-CERTO-ACEITA-01 — a pergunta do valor do extrato no rodapé, com o botão "Ligar com o valor do extrato" */
   { nome: 'casar-1x1-certo', url: 'tela=casar-1x1&v=certo', tamanhos: TAMANHOS_DO_CONSORCIO },
+  /* P139 — criar transferencia pela linha do extrato (um espelho escolhido, empate, gemea, ja' lancada) e o lote de 6; valores no teto */
+  ...['espelho', 'empate', 'gemea', 'existente'].map((v) => ({ nome: `criar-transferencia-${v}`, url: `tela=criar-transferencia&v=${v}`,
+    tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[data-testid="modal-criar-transferencia"]' })),
+  { nome: 'criar-transferencias-lote', url: 'tela=criar-transferencia&v=lote', tamanhos: TAMANHOS_DO_CONSORCIO,
+    regiao: '[data-testid="modal-criar-transferencias-lote"]' },
   { nome: 'casar-bloco-pos', url: 'tela=casar-bloco&v=pos', tamanhos: TAMANHOS_DO_CONSORCIO },
   /* UI-SEM-CORTE-02 — a TABELA do Financeiro V2 segue fora (FIN-V2-SEM-CORTE-01, suspensa), mas entra pelo texto inclinado e pela
      sobreposicao: a ultima letra do fornecedor ("Maderat") sumia pela linha em italico */
