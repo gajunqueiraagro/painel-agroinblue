@@ -46,6 +46,8 @@ vi.mock('@/hooks/useRecorrencias', async (orig) => ({
     LOG.ordem.push(`gerar:${ate ?? 'sem-teto'}:${simular ? 'simular' : 'gravar'}`);
     return LOG.gerar;
   },
+  /* P154 — a vigência ENCURTADA pergunta ao banco o que ficou fora; aqui, nada (fecha como sempre). */
+  foraDaVigencia: async () => ({ ok: true, dados: { modo: 'encurtada', corte: null, cancela: [], naoMexe: [], qtde: 0, soma: 0, regraCancelada: false } }),
 }));
 const TOAST = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 vi.mock('sonner', () => ({ toast: TOAST }));

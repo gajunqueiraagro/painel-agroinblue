@@ -286,6 +286,21 @@ const CENARIOS = [
     /* P128a — a tabela sistema × nota com diferença em vermelho, "só no sistema" e o "Documento hoje" */
     ['nota no sistema com diferenca (P128a)', { url: 'tela=nota-pdf&v=diferenca' }],
   ] },
+  /* P127 + P128c — o Novo documento: soltar a nota (a faixa do lançamento vira a da nota lida, com as divergências) e trocar um campo para o
+     do lançamento não deslocam o formulário (o modal tem altura fixa) */
+  { nome: 'documento-nota', url: 'tela=documento-nota', estados: [
+    ['nota lida', async (p) => {
+      const xml = await p.evaluate(() => globalThis.__xmlDaBancada);
+      await p.locator('[data-testid="doc-arquivo"]').setInputFiles({ name: 'nota.xml', mimeType: 'application/xml', buffer: Buffer.from(xml) });
+      await p.locator('[data-testid="nota-lida"]').waitFor({ timeout: 8000 }); await espera(p, 400);
+    }],
+    ['usar o valor do lançamento', async (p) => {
+      const xml = await p.evaluate(() => globalThis.__xmlDaBancada);
+      await p.locator('[data-testid="doc-arquivo"]').setInputFiles({ name: 'nota.xml', mimeType: 'application/xml', buffer: Buffer.from(xml) });
+      await p.locator('[data-testid="nota-lida"]').waitFor({ timeout: 8000 });
+      await p.locator('[data-trocar="valor"]').first().click(); await espera(p, 400);
+    }],
+  ] },
   /* P128a — trocar o CAMINHO (Completar → Completar e atualizar → Criar novo): o texto de cada cartão e o botão do rodapé trocam no lugar */
   { nome: 'nota-pdf-caminhos', url: 'tela=nota-pdf&v=diferenca', antes: async (p) => {
     const t = p.locator('[data-testid="nota-abas"] button', { hasText: 'Parcelas e lançamento' });
@@ -392,6 +407,13 @@ const CENARIOS = [
   { nome: 'criar-transferencia-gemea', url: 'tela=criar-transferencia&v=gemea',
     antes: async (p) => { await p.locator('[data-testid="aviso-gemea"]').waitFor(); await espera(p); },
     estados: [['criar mesmo assim', botao(/Criar mesmo assim/)]] },
+  /* P154 — a prévia: carregando -> com a lista -> com a recusa -> vazia; os botões e o título não andam (lugares fixos) */
+  { nome: 'fora-da-vigencia', url: 'tela=fora-da-vigencia&v=carregando',
+    antes: async (p) => { await p.locator('[data-testid="modal-fora-da-vigencia"]').waitFor(); await espera(p); },
+    estados: [['com a lista', { url: 'tela=fora-da-vigencia&v=encurtada' }], ['com a recusa', { url: 'tela=fora-da-vigencia&v=erro' }]] },
+  { nome: 'fora-da-vigencia-cancelar', url: 'tela=fora-da-vigencia&v=cancelar',
+    antes: async (p) => { await p.locator('[data-testid="modal-fora-da-vigencia"]').waitFor(); await espera(p); },
+    estados: [['nada a cancelar', { url: 'tela=fora-da-vigencia&v=vazia' }]] },
   /* P141 (CONC-LAYOUT-01) — Saldos por conta: os selos OFX/PDF e o ↗ PRESOS (lugar fixo) entre a página com arquivos e a sem nenhum,
      a conta escolhida e o "← Todas"; o modal do ↗ entre carregando e carregado. A prova: sem a largura fixa do lugar do selo, o PDF anda. */
   { nome: 'conciliacao-saldos', url: 'tela=conciliacao', tamanhos: TAMANHOS_DO_P92,

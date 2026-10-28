@@ -19,8 +19,10 @@ import { DiaVencimentoGrade } from './DiaVencimentoGrade';
 import { ContaBancariaSelect } from '@/components/shared/ContaBancariaSelect';
 import {
   resumoVivo, primeiroVencimentoDe, mesDoFatoDe, propagarRecorrencia, mudouOQueSePropaga, geraAoSalvarAEdicao, gerarRecorrencia,
-  type Recorrencia, type MesDoFato, type ResultadoPropagacao, type PayloadDaRegra,
+  foraDaVigencia, vigenciaEncolheu,
+  type Recorrencia, type MesDoFato, type ResultadoPropagacao, type PayloadDaRegra, type ForaDaVigencia,
 } from '@/hooks/useRecorrencias';
+import { ForaDaVigenciaDialog } from './ForaDaVigenciaDialog';
 import { Segmentado } from '@/components/ui/segmentado';
 import { BlocoFormulario, REGUA_CAMPO } from '@/components/ui/bloco-formulario';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -143,6 +145,21 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
   const [propagar, setPropagar] = useState<{ previa: ResultadoPropagacao | null; recusa: string | null; geraDepois: boolean } | null>(null);
   /* O que o gerar-ao-salvar respondeu (RECORRENCIA-GERA-A-VIGENCIA-INTEIRA-01, parte 2): fica ESCRITO até o Fechar. */
   const [gerado, setGerado] = useState<EstadoDoGerado | null>(null);
+  /* P154 — a vigência ENCOLHEU: depois de gravar (e de propagar e gerar), a prévia do banco dos previstos que ficaram fora. */
+  const [limparDepois, setLimparDepois] = useState(false);
+  const [fora, setFora] = useState<{ previa: ForaDaVigencia | null; carregando: boolean; erro: string | null } | null>(null);
+
+  /**
+   * O ÚLTIMO PASSO DO SALVAR quando a vigência encolheu (P154): a simulação de `fn_recorrencia_fora_da_vigencia`. Nada fora = fecha
+   * como sempre; algo fora = a prévia (cancelar os previstos ou deixar como está). A regra JÁ ESTÁ GRAVADA nos dois casos.
+   */
+  const limparOuFechar = async (id: string) => {
+    setFora({ previa: null, carregando: true, erro: null });
+    const r = await foraDaVigencia(id, false, true);
+    if ('erro' in r) { setFora({ previa: null, carregando: false, erro: r.erro }); return; }
+    if (r.dados.cancela.length === 0 && r.dados.naoMexe.length === 0) { setFora(null); aoFechar(); return; }
+    setFora({ previa: r.dados, carregando: false, erro: null });
+  };
 
   /**
    * O ÚLTIMO PASSO DO SALVAR, quando a vigência ficou mais larga: a MESMA `fn_recorrencia_gerar` do "Gerar lançamentos", sem
@@ -257,6 +274,9 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
          operador escolher) → GERAR POR ÚLTIMO. O propagar pode mover a competência de lançamento que já existe; gerar antes
          criaria lançamento numa competência para onde outro ainda vai ser movido. */
       const geraDepois = !!ed && geraAoSalvarAEdicao(ed, payload);
+      /* P154 — encolheu: limpa POR ÚLTIMO (depois do propagar e do gerar), só com a prévia do banco. */
+      const limpa = !!ed && vigenciaEncolheu(ed, payload);
+      setLimparDepois(limpa);
       if (ed && mudouOQueSePropaga(ed, payload)) {
         const sim = await propagarRecorrencia(ed.id, 'futuros', true);
         if (!sim.ok) { setPropagar({ previa: null, recusa: sim.erro ?? 'O banco recusou a propagação.', geraDepois }); return; }
@@ -267,6 +287,7 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
       }
       if (ed && geraDepois) { await gerarAposSalvar(ed.id); return; }
       await aoSalvar();
+      if (ed && limpa) { await limparOuFechar(ed.id); return; }
       aoFechar();
     } finally {
       setSalvando(false);
@@ -275,8 +296,21 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
 
   /* ⚠ O DIÁLOGO DA PROPAGAÇÃO SUBSTITUI ESTE, não o cobre: a regra já foi gravada, e deixar
      o formulário visível atrás convidaria a editá-lo de novo sobre um estado já salvo. */
+  if (fora && ed) {
+    return (
+      <ForaDaVigenciaDialog modo="encurtada" descricao={descricao.trim()} previa={fora.previa} carregando={fora.carregando} erro={fora.erro}
+        aoFechar={aoFechar}
+        aoConfirmar={async () => {
+          const r = await foraDaVigencia(ed.id, false, false);
+          if ('erro' in r) { setFora((f) => (f ? { ...f, erro: r.erro } : f)); return; }
+          await aoSalvar();
+          aoFechar();
+        }} />
+    );
+  }
   if (gerado) {
-    return <GeradoAposSalvarDialog descricao={descricao.trim()} estado={gerado} aoFechar={aoFechar} />;
+    return <GeradoAposSalvarDialog descricao={descricao.trim()} estado={gerado}
+      aoFechar={() => { if (limparDepois && ed) { setGerado(null); void limparOuFechar(ed.id); return; } aoFechar(); }} />;
   }
   if (propagar) {
     return (
@@ -292,7 +326,7 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
           const gera = propagar.geraDepois && !!ed;
           setPropagar(null);
           if (gera && ed) { void gerarAposSalvar(ed.id); return; }
-          void (async () => { await aoSalvar(); aoFechar(); })();
+          void (async () => { await aoSalvar(); if (limparDepois && ed) { await limparOuFechar(ed.id); return; } aoFechar(); })();
         }}
       />
     );

@@ -30,6 +30,8 @@ import { LANCAMENTOS } from './dados/financeiro';
 import { totaisDaListaV2 } from '@/lib/financeiro/totaisDaListaV2';
 import { CriarTransferenciaDialog } from '@/components/conciliacao/CriarTransferenciaDialog';
 import { CriarTransferenciasLoteDialog } from '@/components/conciliacao/CriarTransferenciasLoteDialog';
+import { ForaDaVigenciaDialog } from '@/components/recorrencias/ForaDaVigenciaDialog';
+import { lerForaDaVigencia } from '@/hooks/useRecorrencias';
 import { ConciliacaoBancariaTab } from '@/pages/ConciliacaoBancariaTab';
 import { ExtratoDoSistemaDialog } from '@/components/conciliacao/ExtratoDoSistemaDialog';
 import * as CONC from './dados/conciliacao';
@@ -721,6 +723,27 @@ if (tela === 'mesclar') {
   } else {
     montar(<CriarTransferenciaDialog aberto clienteId="cli" movimento={MOV} sugestao={SUG} onFechar={() => {}} onGravado={() => {}} onIgnorarDuplicada={() => {}} />);
   }
+} else if (tela === 'fora-da-vigencia') {
+  /* P154 — a prévia dos previstos FORA da vigência (a regra encurtada ou cancelada), com dado SINTÉTICO no pior caso: 12 previstos (um
+     com o "valor do mês"), os que não se mexem (programado, conciliado, mês fechado), valores no teto. `&v=cancelar` (o cancelar da lista),
+     `&v=vazia` (nada a cancelar), `&v=carregando`, `&v=erro` (a recusa do banco no rodapé). */
+  const mes = (k: number) => { const d = new Date(2031, 8 + k, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`; };
+  const venc = (k: number) => { const d = new Date(2031, 9 + k, 5); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-05`; };
+  const cancela = Array.from({ length: 12 }, (_, k) => ({ id: `c${k}`, competencia: mes(k), vencimento: venc(k), valor: '99999999.99',
+    status: 'previsto', valor_do_mes: k === 3 }));
+  const naoMexe = [
+    { id: 'n1', competencia: mes(-1), vencimento: venc(-1), valor: '99999999.99', status: 'programado', valor_do_mes: false, motivo: 'programado: só à mão' },
+    { id: 'n2', competencia: mes(-2), vencimento: venc(-2), valor: '99999999.99', status: 'conciliado', valor_do_mes: false, motivo: 'conciliado: só à mão' },
+    { id: 'n3', competencia: mes(12), vencimento: venc(12), valor: '99999999.99', status: 'previsto', valor_do_mes: false, motivo: 'mês fechado' },
+  ];
+  const vazia = v === 'vazia';
+  const resposta = { ok: true, simulado: true, modo: v === 'cancelar' || vazia ? 'cancelada' : 'encurtada', corte: v === 'cancelar' || vazia ? '2031-09' : null,
+    qtde: vazia ? 0 : 12, soma: vazia ? '0' : '1199999999.88', regra_cancelada: false, cancela: vazia ? [] : cancela, nao_mexe: vazia ? [] : naoMexe };
+  montar(<ForaDaVigenciaDialog modo={v === 'cancelar' || vazia ? 'cancelar' : 'encurtada'}
+    descricao="Folha de Pagamento · Colaborador Sintético com o Nome Bem Comprido de Exemplo · Fazenda Exemplo"
+    previa={v === 'carregando' ? null : lerForaDaVigencia(resposta)} carregando={v === 'carregando'}
+    erro={v === 'erro' ? 'Os lançamentos mudaram durante a gravação (11 de 12). Nada foi gravado.' : null}
+    aoConfirmar={async () => {}} aoFechar={() => {}} />);
 } else if (tela === 'conciliacao' || tela === 'extrato-do-sistema') {
   /* P141 (CONC-LAYOUT-01) — a aba Conciliação (Saldos | Resumo | Status) e o "Extrato do sistema" do ↗, com as linhas do DONO no pior
      caso (`dados/conciliacao.ts`, SINTÉTICO). `&v=sem`: os mesmos números sem nenhum OFX/PDF (o deslocamento compara as duas páginas).
@@ -1008,6 +1031,23 @@ if (tela === 'mesclar') {
     raiz.render(<ItensDaNotaDialog clienteId="cli" chave={cabecalho.chave} onClose={() => {}} carregar={async () => ({ cabecalho, lidos } as any)} />);
   };
   void montarItens();
+} else if (tela === 'documento-nota') {
+  /* P127 + P128c — o "Novo documento" do Editar lançamento que LÊ A NOTA solta no Arquivo. O cenário solta o XML SINTÉTICO exposto aqui
+     (`__xmlDaBancada`: NF 74974 no molde do print, R$ 408,77, 1 duplicata, 1 item, emitente com nome comprido) ou um PDF que não se lê.
+     O lançamento diz outra emissão, outro valor e outro favorecido: a faixa mostra as três divergências lado a lado. */
+  const montarDoc = async () => {
+    const { FormDocumento } = await import('@/components/financeiro-v2/AbaDocumentosLancamento');
+    g.__xmlDaBancada = montarNFe({ numero: '74974', vNF: '408.77', duplicatas: [['001', '2026-09-24', '408.77']],
+      nomeEmitente: 'COMERCIO SINTETICO DE PARAFUSOS E FERRAMENTAS INDUSTRIAIS DO CENTRO OESTE LTDA',
+      itens: [['PARAFUSO SINTETICO SEXTAVADO M8 X 40 ZINCADO', '100.0000', 'UN', '408.77']] });
+    const api: any = { documentos: [], confronto: null, loading: false, saving: false, operacaoId: null, operacaoTipo: null,
+      registrar: async () => ({ id: 'x', origem: 'lancamento', operacaoId: null }), editar: async () => true, cancelar: async () => true,
+      anexar: async () => true, urlAssinada: async () => null, recarregar: async () => {} };
+    montar(<FormDocumento api={api} documento={null} clienteId="cli" onFechar={() => {}}
+      sugestao={{ numero: '74974', dataEmissao: '2026-08-24', valor: 400, emitenteId: LEITOR[0]?.id ?? null }}
+      onVerOQueANotaMuda={async () => null} />);
+  };
+  void montarDoc();
 } else if (tela === 'lancamento') {
   /* com `desc`, a edição é parcela de uma compra parcelada SEM número de contrato: o rodapé fala dela (a descrição do contrato é a longa) */
   /* ACESSOS-PERFIL-01 — a aba Auditoria: eventos de dois membros e um sem autor (com e sem `via`), nomes pela fonte única. */

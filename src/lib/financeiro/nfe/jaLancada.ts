@@ -37,8 +37,8 @@ export interface LancamentoJaLancado {
   cancelado: boolean;
 }
 
-export type PorDoAchado = 'valor' | 'numero' | 'chave' | 'fracao' | 'documento' | 'soma' | 'parcelamento';
-const PORES: readonly PorDoAchado[] = ['valor', 'numero', 'chave', 'fracao', 'documento', 'soma', 'parcelamento'];
+export type PorDoAchado = 'valor' | 'numero' | 'chave' | 'fracao' | 'documento' | 'soma' | 'parcelamento' | 'lancamento';
+const PORES: readonly PorDoAchado[] = ['valor', 'numero', 'chave', 'fracao', 'documento', 'soma', 'parcelamento', 'lancamento'];
 
 export interface ParcelaDaNotaParaCasar { n: number; vencimento: string; valorCent: number }
 
@@ -261,6 +261,8 @@ function comoAchou(achados: readonly LancamentoJaLancado[]): string {
   if (tem('numero') || tem('documento')) partes.push(achados.some((l) => l.fornecedorPor === 'cnpj') ? 'pelo CNPJ + nº da nota' : 'pelo nº da nota');
   if (tem('chave')) partes.push('pela chave');
   if (tem('soma')) partes.push('pela soma');
+  /* P128c — a porta 2: o lançamento aberto é a âncora, ache a nota ele ou não */
+  if (tem('lancamento')) partes.push('a partir do lançamento aberto');
   if (tem('valor') && !partes.length) partes.push('pelo valor e vencimento');
   return partes.join(' · ');
 }
