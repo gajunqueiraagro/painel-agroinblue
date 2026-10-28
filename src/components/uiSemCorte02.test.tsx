@@ -26,10 +26,13 @@ describe('item 4 — o ícone do OFX', () => {
     expect(estadoDoSlotOfx({ comSaldoNoMes: false, importaOfx: true, temExtratoNoMes: false })).toBeNull();
     expect(estadoDoSlotOfx({ comSaldoNoMes: false, importaOfx: false, temExtratoNoMes: true })).toBeNull();
   });
-  it('a frase do vazado é a do pedido, e a tela usa o MESMO lugar de 11px nos dois estados', () => {
+  /* P141 (CONC-LAYOUT-01, D1): o ícone virou o selo "OFX" (7px) num lugar FIXO de 24px — cheio e vazado no MESMO lugar e no mesmo selo */
+  it('a frase do vazado é a do pedido, e a tela usa o MESMO lugar fixo nos dois estados', () => {
     expect(TITULO_OFX_SEM_SALDO).toBe('saldo calculado pelos movimentos — o banco não informou o saldo deste mês');
     const tela = fonte('src/pages/ConciliacaoBancariaTab.tsx');
-    expect(tela).toContain('h-[11px] w-[11px] shrink-0 ${estadoOfx === \'vazado\'');
+    expect(tela).toContain("const LUGAR_SELO = 'inline-flex h-[11px] w-[24px] shrink-0");
+    expect(tela).toContain('<span className={LUGAR_SELO} data-testid="slot-ofx"');
+    expect(tela).toContain("{estadoOfx === 'vazado' && <span className={`${SELO_ARQUIVO} border-dashed");
     expect(tela).toContain('temExtratoNoMes: s.linha.tem_extrato');
   });
 });

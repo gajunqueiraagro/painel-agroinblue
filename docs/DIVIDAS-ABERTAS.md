@@ -442,3 +442,26 @@ docs/historico/frentes-ate-2026-09-29.md.
     nome, compara os campos, nao o hash). Por isso o defasado nao duplica importacao hoje.
   ⚠ QUEM FOR TRATAR decide entre recalcular tudo (troca a identidade de ~54 mil de uma vez) e completar a lista do
     gatilho; e mede antes o que a Auditoria de duplicidade passa a mostrar.
+
+## DIVIDAS DE TELA
+
+- CONC-ESTREITA (P141, Gabriel 28/10/2026, decisao a) — a aba Conciliação (os 3 cards lado a lado: Saldos | Resumo | Status) NÃO cabe
+  abaixo de ~1000px de largura, e NUNCA coube. O gate de tela da Conciliação roda de 1000px para cima (`TAMANHOS_DA_CONCILIACAO` em
+  `scripts/check-ui-cortes.mjs`); o estreito fica aqui. Medido na bancada (`tela=conciliacao`, dado SINTÉTICO no pior caso), cortes
+  nos 3 tamanhos estreitos (750x483, 750x530, 814x530):
+  · código ANTIGO (proto ba1269d1): 32 "cabeçalho não fica preso" + 12–14 cortes + 8 reticências por tamanho (a Conta some, o valor
+    corta) — e, em TODOS os 10 tamanhos, o pior valor da Diferença ("-R$ 99.999.999,99") vazava da coluna de 86px;
+  · código NOVO (P141): 44 "cabeçalho não fica preso" + 2 cortes ("falta saldo · 1 conta" passa da caixa) por tamanho; de 1000px para
+    cima, VERDE.
+  A causa é o tamanho, não a régua: com 3 cards lado a lado, o card de Saldos fica com ~325px a 750px e a régua fixa pede ~420 + a
+  Conta; a página inteira rola por fora (o cabeçalho preso do card não prende). A 1000px a coluna Conta fica com ~32px (o nome corta,
+  inteiro no title). CONSERTO = item próprio, com mock (empilhar os cards abaixo de 1000px), nunca dentro de outro PR.
+
+- FECH-ESTREITA-01 — o Fechamento do Periodo (boletim) abaixo de 1024px (decisao do Gabriel, 28/10/2026 08:52, P137; mesma natureza da
+  CONC-ESTREITA: tela estreita). O `BoletimContainer` tem 499px FIXOS (tela e impressao) com o corpo `overflow-hidden`; abaixo de 1024px
+  as grades `lg:` empilham (Bloco Executivo `lg:grid-cols-5`, Composicao Financeira, Movimentacoes do Rebanho) e o que passa dos 499px
+  fica escondido por baixo. O gate de tela NAO mede corte vertical (a regra de corte e' horizontal, `overflowX`), por isso nao acusa.
+  ⚠ TENTADO E DESFEITO (P137, 28/10): deixar o bloco crescer abaixo de 1024px (`min-h-[499px] lg:h-[499px] print:h-[499px]`) revelou a
+  tabela da Conferencia Mensal escondida (`th sticky` num quadro que nao rola, "Nascimentos" com "…") e fez a altura dos blocos depender
+  do conteudo: ao escolher uma fazenda, tudo abaixo descia 48 a 81px (desloca do `meta-fech` 51 → 74). Tratar com tela, bloco a bloco
+  (o que mostrar abaixo de 1024px), nunca so' liberando a altura.

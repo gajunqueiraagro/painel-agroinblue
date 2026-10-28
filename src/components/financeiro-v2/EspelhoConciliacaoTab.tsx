@@ -36,6 +36,7 @@ import { CriarTransferenciaDialog, type MovimentoParaTransferencia } from '@/com
 import { CriarTransferenciasLoteDialog } from '@/components/conciliacao/CriarTransferenciasLoteDialog';
 import { sugestoesDeTransferencia, porqueDaSugestao, type SugestaoDeTransferencia } from '@/lib/conciliacao/transferenciaDoExtrato';
 import { useEspelhoInternas, type EspelhoInternas } from '@/hooks/useEspelhoInternas';
+import { linhasDoDia } from '@/lib/conciliacao/linhasDoDia';
 import { saldoConfere } from '@/lib/financeiro/conciliacaoCalc';
 import {
   TabelaExtratoDoMes, EspStatusCell, fmtBRL, fmtData, corValReal,
@@ -114,66 +115,96 @@ function corDaDiferenca(v: number | null | undefined) {
  *   os do `proprio`, e na conta-mãe aparecem as linhas 'transferencia_interna' (aplicações e resgates na interna), que só
  *   existem no sistema. Em conta sem par os três são os de antes. A Conferência dia a dia segue consolidada, sem elas.
  */
-function AbaSistemaReal({ linha, onAbrir }: { linha: LinhaResumo | null; onAbrir?: (lancamentoId: string) => void }) {
+/** P141 — dd/mm/aaaa (a regra da casa; a coluna se chama "Data"). */
+const dataInteira = (s: string | null) => (s ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}` : '—');
+
+/**
+ * P141 (CONC-LAYOUT-01, D3/D4) — UM componente em dois tamanhos: `aba` (a sub-aba Sistema do Casar lançamentos) e `grande` (o modal
+ * "Extrato do sistema" da Conciliação). Os dois com a MESMA regra do dia (`linhasDoDia`): dentro do dia do maior |valor| para o menor;
+ * o saldo SÓ na última linha do dia, em negrito, com a divisória entre os dias — e o saldo é o do BANCO (fim do dia na ordem dele).
+ * Virou TABELA (era grid): o texto longo termina em "…" na célula, com o texto inteiro no `title` (a regra de corte). Status 154px nos dois.
+ */
+export function AbaSistemaReal({ linha, onAbrir, modo = 'aba' }: {
+  linha: LinhaResumo | null; onAbrir?: (lancamentoId: string) => void; modo?: 'aba' | 'grande';
+}) {
   if (!linha) {
     return <div className="min-h-0 flex-1 border-t px-3.5 py-6 text-center text-[10px] text-muted-foreground">Carregando o resumo do mês…</div>;
   }
-  const linhas = linha.linhas_sistema ?? [];
+  const linhas = linhasDoDia(linha.linhas_sistema ?? []);
   const proprio = saldosDaLinha(linha);
   const inicial = proprio.saldo_inicial;
   const final = proprio.saldo_sistema;
-  return (
+  const grande = modo === 'grande';
+  /* Data · Descrição · Fornecedor · Centro/Subcentro (o resto) · Valor · Saldo · Status */
+  const larguras = grande ? ['66px', '230px', '190px', undefined, '92px', '92px', '154px'] : ['66px', '22%', '24%', undefined, '80px', '80px', '154px'];
+  const td = 'h-[18px] px-1 py-0 leading-[17px]';
+  const colunas = <colgroup>{larguras.map((w, i) => <col key={i} style={w ? { width: w } : undefined} />)}</colgroup>;
+  /* O "Saldo final (sistema)": no modo `aba`, preso no fim da lista que rola (como sempre); no `grande`, uma faixa FIXA no rodapé do
+     modal, com a mesma régua de colunas e o mesmo vão da barra de rolagem (`scrollbar-gutter: stable`) — os números alinham. */
+  const linhaFinal = (
+    <tr className="font-semibold">
+      <td colSpan={5} className={cn(td, 'h-[22px] border-t border-border')}>Saldo final (sistema)</td>
+      <td className={cn(td, 'h-[22px] border-t border-border whitespace-nowrap text-right tabular-nums', corValReal(final ?? 0))} data-testid="sistema-saldo-final">{final != null ? fmtBRL(final) : '—'}</td>
+      <td className={cn(td, 'h-[22px] border-t border-border')} />
+    </tr>
+  );
+  const lista = (
     /* Mesma régua do Extrato acima — a lista é o scrollport, e ele é o modal inteiro. */
-    <div className="min-h-0 flex-1 overflow-y-auto border-t px-3.5 text-[10px]" data-testid="aba-sistema">
-      {/* ⚠ O MESMO CABEÇALHO DO EXTRATO — PR-CONC-CABECALHO-PADRAO-01: navy do token da casa
-          (`bg-primary`), primeira maiúscula, e `z-[3]` que faltava. Sem o z-index o cabeçalho
-          dependia da regra implícita de que um elemento posicionado cobre os não-posicionados,
-          e essa regra quebra quando alguém põe um badge posicionado numa célula. */}
-      {/* ⚠ FORNECEDOR EM COLUNA PRÓPRIA — PR-CONC-CONFERENCIA-MODAL-01-fix1 (pedido do Gabriel, 30/09): a
-          Descrição ocupava um terço da linha para "Folha de Pagamento", e o nome de quem recebeu não
-          aparecia. As três de texto dividem o que sobra em frações fixas (0,85 · 0,95 · 1,4) — largura que
-          não muda com o dado —, truncam com o texto inteiro no `title` e Centro/Subcentro fica com a maior.
-          ⚠ A COLUNA STATUS FOI DE 68 PARA 154px (PR-CONC-SALDO-UMA-REGUA-02): o parcial escreve quanto falta. Medido a
-          10px com `Range`: o real do Emerson ("parcial · falta R$ 300,00") 113,9px; o pior de sete dígitos
-          ("parcial · falta R$ 9.999.999,99") 145,2 + 8 de folga. Os 86px saem das frações de texto.
-          ⚠ GRID, COMO AS VIZINHAS: "Extrato (banco)" e "Evolução" também são grids a 10px com `py-0.5`;
-          trocar esta por `<table>` daria uma régua diferente ao lado. Data, valor, saldo e status têm
-          largura em px e `whitespace-nowrap` — não cortam. */}
-      <div className="grid grid-cols-[44px_minmax(0,0.85fr)_minmax(0,0.95fr)_minmax(0,1.4fr)_80px_80px_154px] gap-1 font-medium text-primary-foreground border-b py-1 sticky top-0 z-[3] bg-primary">
-        <span>Data</span><span>Descrição</span><span>Fornecedor</span><span>Centro/Subcentro</span><span className="text-right">Valor</span><span className="text-right">Saldo</span><span>Status</span>
-      </div>
-      {/* ⚠ SALDO INICIAL E FINAL, como no Extrato: as duas pontas que tornam a coluna conferível — as do DONO. */}
-      <div className="grid grid-cols-[44px_minmax(0,0.85fr)_minmax(0,0.95fr)_minmax(0,1.4fr)_80px_80px_154px] gap-1 py-0.5 bg-muted/40 text-[11px] font-semibold border-b">
-        <span className="col-span-4">Saldo inicial (sistema)</span>
-        <span />
-        <span className={cn('text-right tabular-nums', corValReal(inicial ?? 0))} data-testid="sistema-saldo-inicial">{inicial != null ? fmtBRL(inicial) : '—'}</span>
-        <span />
-      </div>
-      {linhas.map((r, i) => {
-        const cs = [r.centro, r.subcentro].filter(Boolean).join(' / ') || '—';
-        return (
-          <div key={`${i}-${r.extrato_id ?? ''}-${r.lancamento_id ?? ''}`}
-               onClick={() => r.lancamento_id && onAbrir?.(r.lancamento_id)}
-               data-testid="sistema-linha" data-tipo={r.tipo}
-               className="grid grid-cols-[44px_minmax(0,0.85fr)_minmax(0,0.95fr)_minmax(0,1.4fr)_80px_80px_154px] gap-1 py-0.5 border-b last:border-b-0 items-center cursor-pointer hover:bg-muted/50">
-            <span className="whitespace-nowrap text-muted-foreground">{fmtData(r.data)}</span>
-            <span className="truncate" title={r.descricao ?? ''}>{r.descricao ?? '—'}</span>
-            <span className="truncate" title={r.fornecedor ?? ''} data-testid="sistema-fornecedor">{r.fornecedor || '—'}</span>
-            <span className="truncate text-muted-foreground" title={cs}>{cs}</span>
-            <span className={`whitespace-nowrap text-right tabular-nums ${corValReal(r.valor)}`}>{fmtBRL(r.valor)}</span>
-            <span className={`whitespace-nowrap text-right tabular-nums ${corValReal(r.saldo_apos_proprio ?? 0)}`} data-testid="sistema-saldo">{r.saldo_apos_proprio != null ? fmtBRL(r.saldo_apos_proprio) : '—'}</span>
-            <StatusLinhaSistema l={r} />
-          </div>
-        );
-      })}
-      {/* ⚠ CONGELADO NO RODAPÉ (`sticky bottom-0`) e com FUNDO OPACO, o mesmo tratamento do
-          Extrato: um total transparente deixa as linhas passarem por baixo do número que se
-          está conferindo — a lição já paga naquele arquivo. */}
-      <div className="sticky bottom-0 z-[2] grid grid-cols-[44px_minmax(0,0.85fr)_minmax(0,0.95fr)_minmax(0,1.4fr)_80px_80px_154px] gap-1 border-t bg-muted py-0.5 text-[11px] font-semibold">
-        <span className="col-span-4">Saldo final (sistema)</span>
-        <span />
-        <span className={cn('text-right tabular-nums', corValReal(final ?? 0))} data-testid="sistema-saldo-final">{final != null ? fmtBRL(final) : '—'}</span>
-        <span />
+    <div className={cn('min-h-0 flex-1 overflow-y-auto text-[10px]', grande ? '[scrollbar-gutter:stable]' : 'border-t px-3.5')} data-testid="aba-sistema">
+      <table className="w-full table-fixed border-separate border-spacing-0">
+        {colunas}
+        {/* ⚠ O MESMO CABEÇALHO DO EXTRATO — PR-CONC-CABECALHO-PADRAO-01: navy do token da casa (`bg-primary`), preso, `z-[3]`. */}
+        <thead className="sticky top-0 z-[3] bg-primary text-primary-foreground">
+          <tr className="h-[22px] text-[9.5px] font-medium">
+            <th className="px-1 text-left font-medium">Data</th><th className="px-1 text-left font-medium">Descrição</th>
+            <th className="px-1 text-left font-medium">Fornecedor</th><th className="px-1 text-left font-medium">Centro / Subcentro</th>
+            <th className="px-1 text-right font-medium">Valor</th><th className="px-1 text-right font-medium">Saldo</th>
+            <th className="px-1 text-left font-medium">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {/* ⚠ SALDO INICIAL E FINAL, como no Extrato: as duas pontas que tornam a coluna conferível — as do DONO. */}
+          <tr className="bg-muted/40 font-semibold">
+            <td colSpan={5} className={cn(td, 'border-b border-border')}>Saldo inicial (sistema)</td>
+            <td className={cn(td, 'border-b border-border whitespace-nowrap text-right tabular-nums', corValReal(inicial ?? 0))} data-testid="sistema-saldo-inicial">{inicial != null ? fmtBRL(inicial) : '—'}</td>
+            <td className={cn(td, 'border-b border-border')} />
+          </tr>
+          {linhas.map(({ linha: r, fimDoDia, saldoDoDia }, i) => {
+            const cs = [r.centro, r.subcentro].filter(Boolean).join(' / ') || '—';
+            /* a divisória entre os dias: a última linha do dia leva a linha forte */
+            const borda = fimDoDia ? 'border-b border-foreground/25' : 'border-b border-border/50';
+            return (
+              <tr key={`${i}-${r.extrato_id ?? ''}-${r.lancamento_id ?? ''}`}
+                  onClick={() => r.lancamento_id && onAbrir?.(r.lancamento_id)}
+                  data-testid="sistema-linha" data-tipo={r.tipo} data-fim-do-dia={fimDoDia ? 'sim' : undefined}
+                  className="cursor-pointer hover:bg-muted/50">
+                <td className={cn(td, borda, 'whitespace-nowrap tabular-nums text-muted-foreground')}>{dataInteira(r.data)}</td>
+                <td className={cn(td, borda, 'truncate')} title={r.descricao ?? ''}>{r.descricao ?? '—'}</td>
+                <td className={cn(td, borda, 'truncate')} title={r.fornecedor ?? ''} data-testid="sistema-fornecedor">{r.fornecedor || '—'}</td>
+                <td className={cn(td, borda, 'truncate text-muted-foreground')} title={cs}>{cs}</td>
+                <td className={cn(td, borda, 'whitespace-nowrap text-right tabular-nums', corValReal(r.valor))}>{fmtBRL(r.valor)}</td>
+                {/* O SALDO SÓ NO FIM DO DIA, do banco (`saldoDoDia`); nas outras linhas do dia o lugar fica vazio. */}
+                <td className={cn(td, borda, 'whitespace-nowrap text-right tabular-nums', fimDoDia && 'font-bold', fimDoDia && corValReal(saldoDoDia ?? 0))}
+                    data-testid={fimDoDia ? 'sistema-saldo' : undefined}>
+                  {fimDoDia ? (saldoDoDia != null ? fmtBRL(saldoDoDia) : '—') : ''}
+                </td>
+                <td className={cn(td, borda, 'whitespace-nowrap')}><StatusLinhaSistema l={r} /></td>
+              </tr>
+            );
+          })}
+        </tbody>
+        {/* ⚠ CONGELADO NO RODAPÉ (`sticky bottom-0`) e com FUNDO OPACO, o mesmo tratamento do Extrato: um total transparente deixa
+            as linhas passarem por baixo do número que se está conferindo — a lição já paga naquele arquivo. */}
+        {!grande && <tfoot className="sticky bottom-0 z-[2] bg-muted">{linhaFinal}</tfoot>}
+      </table>
+    </div>
+  );
+  if (!grande) return lista;
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      {lista}
+      <div className="shrink-0 overflow-y-hidden bg-muted text-[10px] [scrollbar-gutter:stable]" data-testid="rodape-extrato-sistema">
+        <table className="w-full table-fixed border-separate border-spacing-0">{colunas}<tbody>{linhaFinal}</tbody></table>
       </div>
     </div>
   );
