@@ -5,7 +5,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const banco = vi.hoisted(() => ({ modo: 'ok' as 'ok' | 'erro' | 'estoura' }));
+const banco = vi.hoisted(() => ({ modo: 'ok' as 'ok' | 'erro' | 'estoura', pedidos: [] as unknown[] }));
 vi.mock('@/hooks/useFornecedoresDoCliente', () => ({ notificarFornecedoresMudaram: () => undefined }));
 vi.mock('@/integrations/supabase/client', () => {
   const resposta = (data: unknown) => {
@@ -18,7 +18,7 @@ vi.mock('@/integrations/supabase/client', () => {
     b.then = (ok: (x: unknown) => unknown, ruim?: (e: unknown) => unknown) => resposta(data).then(ok, ruim);
     return b;
   };
-  return { supabase: { rpc: () => resposta([]), from: () => cadeia([]) } };
+  return { supabase: { rpc: (_fn: string, args: unknown) => { banco.pedidos.push(args); return resposta([]); }, from: () => cadeia([]) } };
 });
 
 import { fornecedorPeloDocumento, fornecedorPeloNome, lancamentosAbertosComValor, notaJaLancada, notaJaRegistrada } from './nfeConsultas';
@@ -47,4 +47,18 @@ describe('P146 — falhou nunca vira vazio', () => {
       expect(await chamar()).toEqual({ ok: false, motivo: 'sem conexão com o servidor' });
     });
   }
+});
+
+/* P128c — o lançamento aberto (porta 2) vai como `p_lancamento`; sem ele (porta 1) o parâmetro NÃO vai (a chamada de sempre) */
+describe('P128c — p_lancamento só quando a prévia parte de um lançamento', () => {
+  it('com o lançamento: p_lancamento; sem: a chave nem existe no pedido', async () => {
+    banco.pedidos.length = 0;
+    const base = { parcelas: [], numero: '74974', chave: null, emitenteDocumento: null, nomes: [] };
+    await notaJaLancada('cli', { ...base, lancamento: 'lanc-aberto' });
+    await notaJaLancada('cli', base);
+    const [com, sem] = banco.pedidos.map((x) => (x && typeof x === 'object' ? Object.keys(x) : []));
+    expect(com).toContain('p_lancamento');
+    expect(sem).not.toContain('p_lancamento');
+    expect(banco.pedidos[0]).toMatchObject({ p_lancamento: 'lanc-aberto' });
+  });
 });

@@ -5,7 +5,8 @@
  *   (1) RETICENCIAS — elemento com `text-overflow: ellipsis` (ou `-webkit-line-clamp`) cujo texto nao cabe (scrollWidth > clientWidth,
  *       ou scrollHeight > clientHeight no clamp): nenhum texto com "…" em tela nenhuma; e o CORTE CALADO — texto proprio numa linha so'
  *       (`nowrap`) cortado por `overflow: hidden` sem reticencias;
- *   (2) CABECALHO PRESO COM VAO — num container que rola, rolado ate' o meio: o cabecalho preso (`position: sticky`) nao encosta no topo
+ *   (2) CABECALHO PRESO COM VAO — num container que rola, rolado ate' a TABELA DELE cruzar o topo (P137, 28/10: varias tabelas empilhadas
+ *       no mesmo quadro; antes, o quadro rolado ate' o meio): o cabecalho preso (`position: sticky`) nao encosta no topo
  *       do container (por onde as linhas aparecem ACIMA dele), tem fundo transparente (a linha aparece POR BAIXO dele), ou mora num
  *       container que nao rola dentro de um que rola (sobe com a pagina e nao fica preso);
  *   (2b) DATA OU NUMERO QUEBRADO — celula cujo texto e' so' data, hora ou numero e ocupa mais de uma linha;
@@ -388,6 +389,16 @@ const CENARIOS = [
       if (await t.count()) { await t.first().click(); await p.waitForTimeout(400); }
       await clicar('[data-testid="nota-caminho-criar"]')(p);
     } },
+  /* P127 + P128c — o Novo documento que LÊ A NOTA: lida (com as três divergências lado a lado e o "Ver o que a nota muda") e a que não se
+     lê (PDF sem texto: a frase "itens não gravados"). O arquivo entra pelo MESMO input da área (o XML sintético exposto pela bancada). */
+  ...[['lida', 'nota.xml'], ['nao-lida', 'escaneado.pdf']].map(([v, nome]) => ({ nome: `documento-nota-${v}`, url: 'tela=documento-nota',
+    tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[role="dialog"]',
+    antes: async (p) => {
+      const conteudo = nome.endsWith('.xml') ? await p.evaluate(() => globalThis.__xmlDaBancada) : '%PDF-1.4 sem texto';
+      await p.locator('[data-testid="doc-arquivo"]').setInputFiles({ name: nome, mimeType: nome.endsWith('.xml') ? 'application/xml' : 'application/pdf', buffer: Buffer.from(conteudo) });
+      await p.locator(nome.endsWith('.xml') ? '[data-testid="nota-lida"]' : '[data-testid="nota-nao-lida"]').waitFor({ timeout: 8000 });
+      await p.waitForTimeout(400);
+    } })),
   /* P96a — a confirmação do "Juntar as 4 e anexar" (o resumo, a caixinha da competência, o efeito no DRE) e a do "Usar a nota lida" */
   { nome: 'nota-pdf-juntar-confirmar', url: 'tela=nota-pdf&v=irmas', tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[role="alertdialog"]',
     antes: async (p) => { await p.locator('[data-testid="nota-juntar-soltas"]').first().click(); await p.waitForTimeout(800); } },
@@ -921,10 +932,21 @@ function medirCabecalho(regiao) {
       achados.push({ regra: 'cabecalho', texto: `cabeçalho não fica preso (o container dele não rola; quem rola é o de fora) "${(x.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 40)}"` });
     }
     if (!presos.length) continue;
-    c.scrollTop = Math.round((c.scrollHeight - c.clientHeight) / 2);
     const rc = c.getBoundingClientRect(); const topo = rc.top + c.clientTop;
     for (const h of presos) {
-      const rh = h.getBoundingClientRect(); if (rh.height === 0) continue;
+      if (h.getBoundingClientRect().height === 0) continue;
+      /* P137 (Gabriel 28/10 09:21) — cada cabeçalho preso se mede com a TABELA DELE cruzando o topo do quadro, e não com o quadro no meio:
+         com várias tabelas empilhadas no mesmo quadro (o PC-100), no meio da rolagem a de baixo ainda não chegou ao topo e o cabeçalho dela
+         está no lugar natural — isso não é vão. Rola até o meio do trecho em que a tabela cruza o topo; se o quadro não rola o bastante
+         para ela cruzar, o cabeçalho nunca precisa prender e não se mede. Numa tabela só por quadro, dá o mesmo de antes. */
+      const caixa = h.closest('table') ?? h.parentElement ?? h;
+      c.scrollTop = 0;
+      const rt0 = caixa.getBoundingClientRect(); const alto = h.getBoundingClientRect().height;
+      const inicio = rt0.top - topo; const fim = rt0.bottom - topo - alto;
+      if (fim - inicio < 2) continue;
+      c.scrollTop = Math.max(0, Math.round(inicio + (fim - inicio) / 2));
+      if (c.scrollTop < inicio + 1) continue;
+      const rh = h.getBoundingClientRect();
       const nome = (h.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 40);
       if (rh.top - topo > 0.5) achados.push({ regra: 'cabecalho', texto: `vão de ${(rh.top - topo).toFixed(1)}px acima de "${nome}"` });
       /* fundo opaco: o cabeçalho (ou as células dele) tapa a linha que passa por baixo */
@@ -961,7 +983,9 @@ try {
     <div style="height:120px;overflow:auto;padding-top:8px"><table><thead><tr><th style="position:sticky;top:0;background:rgba(255,255,255,.5)">Data</th></tr></thead>
     <tbody>${Array.from({ length: 30 }, () => '<tr><td>10/09/26</td></tr>').join('')}</tbody></table></div>
     <div style="height:120px;overflow:auto"><div style="overflow-x:auto"><table><thead style="position:sticky;top:0;background:#fff"><tr><th>Nome</th></tr></thead>
-    <tbody>${Array.from({ length: 30 }, () => '<tr><td>x</td></tr>').join('')}</tbody></table></div></div>`);
+    <tbody>${Array.from({ length: 30 }, () => '<tr><td>x</td></tr>').join('')}</tbody></table></div></div>
+    <div style="height:300px;overflow:auto"><div style="height:200px">bloco de cima</div>${['Empilhada A', 'Empilhada B'].map((n) => `<table><thead style="position:sticky;top:0;background:#fff"><tr><th>${n}</th></tr></thead>
+    <tbody>${Array.from({ length: 6 }, () => '<tr><td>y</td></tr>').join('')}</tbody></table>`).join('')}</div>`);
   /* e a rolagem (FIN-CONSORCIO-02): um modal com conteudo mais alto que a caixa tem de ser acusado */
   await p0.evaluate(() => { const d = document.createElement('div'); d.setAttribute('role', 'dialog'); d.style.cssText = 'height:40px;overflow:hidden';
     d.innerHTML = '<div style="height:120px">alto</div>'; document.body.appendChild(d); });
@@ -1010,6 +1034,9 @@ try {
   const prova = [...daRolagem0, ...daTabela0, ...daPagina0, ...daSobre0, ...(comMudanca && !semMudar ? [comMudanca] : [])].map((a) => a.regra);
   /* FORN-01b — o detector se prova na regra nova: o nome com "…" e title passa; o corte seco e o documento com "…" sao achados */
   const aceitoErrado = daPagina0.some((a) => a.texto.startsWith('Nome aceito'));
+  /* P137 — tabelas empilhadas no mesmo quadro: cabeçalho de quem ainda não chegou ao topo não é vão */
+  const empilhadaAcusada = daPagina0.filter((a) => a.regra === 'cabecalho' && a.texto.includes('Empilhada'));
+  if (empilhadaAcusada.length) { console.error(`check-ui-cortes: AUTO-TESTE DO CABEÇALHO EMPILHADO FALHOU (${empilhadaAcusada.map((a) => a.texto).join(' | ')})`); process.exit(2); }
   const seco0 = daPagina0.some((a) => a.texto.startsWith('corte seco: Nome cortado seco'));
   const doc0 = daPagina0.some((a) => a.regra === 'numero' && a.texto.includes('12.345.678/0001-90'));
   /* P104 — o detector novo se prova: o rótulo que rola no lugar e a frase que passa da altura reservada são achados; o campo, não */
