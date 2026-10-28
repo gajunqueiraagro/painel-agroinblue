@@ -265,6 +265,11 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   voltam só por `fn_parcelamento_desfazer_juncao` (volta à vista e cancelar a compra recusam a junção); NF digitada nunca se troca sozinha.
 - P120: META NUNCA VAI AO FINANCEIRO — o banco recusa `cenario = 'meta'` em `financeiro_lancamentos_v2` (`trg_00_sem_meta`) e os geradores do
   rebanho (abate, compra, venda) param na entrada (`metaNaoVaiAoFinanceiro.ts`); a meta do financeiro é calculada (P109/P110), nunca lançada.
+- P138: A SAFRA DA COMPETÊNCIA é uma regra só, a do banco (`_fn_safra_da_competencia`, datas da safra) — o banco a grava na CRIAÇÃO de
+  todo lançamento sem safra (`trg_safra_da_competencia`); a tela só a MOSTRA (`useSafraDaCompetencia`): nunca preenche o campo; na edição é
+  "sugestão · Usar". A regra antiga da tela (`safraSugerida`, temporada pelo código) não volta (trava `safraDaCompetenciaUnica.test.ts`).
+- P146: CONSULTA QUE DECIDE (criar ou não; cadastro novo ou existente) devolve `Consulta<T>` (`nfeConsultas.ts`: `{ ok, valor } | { ok: false,
+  motivo }`) — "falhou" NUNCA vira lista vazia/nulo; a prévia/lista diz "Não consegui verificar…", trava o Criar e oferece "Tentar de novo".
 - P53: a mesma pergunta ao mesmo tempo = um pedido (`criarUmPedidoPorVez`, só o voo, nada guardado); o `checkLockNow` segue direto.
 - P95 (DANFE-CHAVE-EM-GRUPOS-01): DANFE com a chave/rótulos picados em itens se lê pela linha (`chaveEmGrupos` SÓ com DV certo; `aoLado`);
   sem chave legível, DIGITAR A CHAVE (`chaveDigitada.ts`: DV, modelo 55; avulsa 890 não usa o CNPJ; o resto em branco, âmbar na prévia);
@@ -290,6 +295,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   `menuPadrao`; todo campo de valor e' o `CampoMoeda` ("R$" e "0,00"); todo campo de arquivo aceita arrastar.
 - FIN-VALOR-CALC-01b: todo `CampoMoeda` faz conta (a lib `contaNoCampo`, nenhuma outra); o hospedeiro so' recebe o RESULTADO; o Esc/Enter
   da conta aberta sao pegos na JANELA (captura), antes do Radix; campo de valor novo = `CampoMoeda` (nunca `Input type="number"`).
+- P134: TODA busca ignora acento, cedilha e maiúscula nos dois lados — tela `casaNaBusca`/`normalizarParaBusca` (`src/lib/texto/busca.ts`),
+  banco `_fn_normalizar_texto`/`fn_texto_casa` (STABLE e aberta: IMMUTABLE fica 10× mais lenta) e os campos `busca_*`; casos em `busca.casos.json`.
 - P91: campo de NUMERO (kg, @, %, cab, dias) = `CampoNumeroComConta`; o gesto da conta e' UM hook (`useContaNoCampo`), o mesmo do `CampoMoeda`.
 - P88: formulario antigo com estado em TEXTO DE MAQUINA ('1234.56') troca o `type="number"` pelo campo do sistema sem mudar o estado (`numeroDoTextoDeMaquina`/`textoDeMaquina`).
 - P92: resumo do Negociar lote = 400px, colunas fixas (`colgroup` medido para o teto); acima do teto a fonte desce ate' 2px (piso 9,5), nunca quebra; o gate tem `numero-vaza` (numero fora da caixa de conteudo da celula; tabela maior que a caixa).

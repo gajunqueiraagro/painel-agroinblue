@@ -39,15 +39,11 @@ export function ProdutoAutocomplete({
     const term = value.trim();
     if (!clienteId || term.length < 2) { setSugestoes([]); return; }
     const t = setTimeout(async () => {
-      const { data } = await supabase
-        .from('financeiro_lancamentos_v2')
-        .select('descricao')
-        .eq('cliente_id', clienteId)
-        .ilike('descricao', `%${term}%`)
-        .not('descricao', 'is', null)
-        .order('descricao')
-        .limit(30);
-      const unique = [...new Set((data ?? []).map(r => r.descricao).filter(Boolean) as string[])]
+      /* P134: a busca ignora acento, cedilha e maiúscula nos dois lados — no banco (`fn_lancamento_descricoes_buscar`, pela
+         `fn_texto_casa`), não mais `.ilike` direto na tabela (que só ignorava a maiúscula). Mesma ordem e mesmo teto de 30. */
+      const { data } = await (supabase as any).rpc('fn_lancamento_descricoes_buscar', { p_cliente: clienteId, p_busca: term, p_limite: 30 });
+      const lidas: unknown[] = Array.isArray(data) ? data : [];
+      const unique = [...new Set(lidas.filter((d): d is string => typeof d === 'string' && d !== ''))]
         .filter(p => p !== value)
         .slice(0, 8);
       setSugestoes(unique);

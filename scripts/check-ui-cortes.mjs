@@ -326,6 +326,8 @@ const CENARIOS = [
       semRolagem: { dentro: '[role="dialog"]' } },
     { nome: `criar-do-${o}-Pagamento-longo`, url: `tela=lancamento&m=novo&v=${o}&ref=longo`, tamanhos: TAMANHOS_DO_CONSORCIO, antes: clicarTexto('Pagamento') }]),
   { nome: 'lancamento-novo-Geral-7', url: 'tela=lancamento&m=novo', tamanhos: TAMANHOS_DO_CONSORCIO },
+  /* P138 — editar um lançamento gravado sem safra: "Sem safra" e a linha "sugestão: <safra> · Usar" (a da competência, do banco) */
+  { nome: 'lancamento-safra-sugestao', url: 'tela=lancamento&m=editar&safra=sem' },
   { nome: 'lancamento-vencimento-falta', url: 'tela=lancamento&m=editar&v=semvenc', tamanhos: TAMANHOS_DO_CONSORCIO,
     antes: async (p) => { await p.locator('button[tabindex="17"]').first().click(); await p.waitForTimeout(500); } },
   /* OC-DESFAZER-PREVISTO-01b — os tres estados do "Desfazer"/"Atualizar compromisso" (mock de 20/10 19h16), 460x344 fixo e sem

@@ -19,6 +19,7 @@
  * A restrição é uma união simples (`C extends ColunaView`), nunca um genérico
  * recursivo sobre o próprio builder — que é o que estoura o TS2589.
  */
+import { casaNaBusca } from '@/lib/texto/busca';
 import { filtrarListaV2NoCliente, ramoImatch, type LinhaFiltravel } from './filtrosListaV2';
 import { formatDocumento } from './documentoHelper';
 import {
@@ -509,11 +510,10 @@ export interface RegistroListaV2 extends LinhaFiltravel {
 
 /** Filtro de Documento em memória — a cadeia exata da tela. */
 export function casaDocumentoNoCliente(l: RegistroListaV2, termo?: string): boolean {
-  const q = termo?.trim().toLowerCase();
+  const q = termo?.trim();
   if (!q) return true;
-  const cru = (l.numero_documento || '').toLowerCase();
-  const formatado = formatDocumento(l.tipo_documento ?? null, l.numero_documento ?? null).toLowerCase();
-  return cru.includes(q) || formatado.includes(q);
+  /* P134: sem acento, cedilha e maiúscula nos dois lados (`casaNaBusca`, a regra única) */
+  return casaNaBusca(l.numero_documento, q) || casaNaBusca(formatDocumento(l.tipo_documento ?? null, l.numero_documento ?? null), q);
 }
 
 /** Ordenação do contrato, em memória: vencimento ASC, nulos ao fim, id ASC. */

@@ -1,3 +1,4 @@
+import { casaNaBusca } from '@/lib/texto/busca';
 import { ArrowLeft, Plus, ChevronsUpDown, ChevronUp, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -338,8 +339,9 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
     ? `parcelas com vencimento ${intervalo.de && intervalo.ate ? `entre ${filtroVencDe} e ${filtroVencAte}` : intervalo.de ? `a partir de ${filtroVencDe}` : `até ${filtroVencAte}`}`
     : null;
   const passaNosFiltros = useMemo(() => {
-    const descQ = filtroDescricao.trim().toLowerCase();
-    const contQ = filtroContrato.trim().toLowerCase();
+    /* P134: sem acento, cedilha e maiúscula nos dois lados (`casaNaBusca`, a regra única) */
+    const descQ = filtroDescricao.trim();
+    const contQ = filtroContrato.trim();
     return (f: FinanciamentoRow, situacao: string): boolean => {
       if (situacao === 'encerrados') { if (!ENCERRADOS.includes(f.status)) return false; }
       else if (situacao !== 'todos' && f.status !== situacao) return false;
@@ -352,11 +354,11 @@ export default function FinanciamentosListaPage({ onNovo, onDetalhe, onVoltar }:
          aqui pela mesma regra — sem ela, procurar "parcelamento" não acharia os
          parcelamentos. O escopo continua alcançável: ele não sumiu da linha,
          mudou de lugar (pílula → sufixo da descrição). */
-      if (descQ && ![f.descricao, f.credor_nome, f.numero_contrato ?? '',
+      if (descQ && !casaNaBusca([f.descricao, f.credor_nome, f.numero_contrato ?? '',
                      f.tipo_financiamento === 'pecuaria' ? 'PEC pecuária' : 'AGR agricultura',
                      `${PILULA_NATUREZA[f.natureza]?.sigla ?? ''} ${PILULA_NATUREZA[f.natureza]?.rotulo ?? ''}`]
-                     .join(' ').toLowerCase().includes(descQ)) return false;
-      if (contQ && !(f.numero_contrato ?? '').toLowerCase().includes(contQ)) return false;
+                     .join(' '), descQ)) return false;
+      if (contQ && !casaNaBusca(f.numero_contrato, contQ)) return false;
       if (filtroCredor !== 'todos' && f.credor_id !== filtroCredor) return false;
       const isoContratoDe = brToISO(filtroDataContratoDe);
       const isoContratoAte = brToISO(filtroDataContratoAte);

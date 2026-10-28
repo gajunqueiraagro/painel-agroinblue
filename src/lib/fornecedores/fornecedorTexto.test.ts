@@ -37,6 +37,10 @@ describe('formatação do documento', () => {
     expect(linhaDoDocumento(f('a', 'A', null))).toBe(SEM_DOCUMENTO);
     expect(linhaDoDocumento(f('a', 'A', '  '))).toBe('sem CNPJ/CPF');
     expect(linhaDoDocumento(null)).toBe('');
+    /* P117 — "CNPJ · Cidade/UF"; sem cidade só o CNPJ; sem documento a cidade não aparece sozinha */
+    expect(linhaDoDocumento({ ...f('a', 'A', '11222333000424'), municipio: 'Três Lagoas', uf: 'MS' })).toBe('11.222.333/0004-24 · Três Lagoas/MS');
+    expect(linhaDoDocumento({ ...f('a', 'A', '11222333000424'), municipio: '  ', uf: null })).toBe('11.222.333/0004-24');
+    expect(linhaDoDocumento({ ...f('a', 'A', null), municipio: 'Campo Grande', uf: 'MS' })).toBe(SEM_DOCUMENTO);
   });
 });
 

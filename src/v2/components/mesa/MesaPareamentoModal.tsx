@@ -1,3 +1,4 @@
+import { casaNaBusca } from '@/lib/texto/busca';
 import { buscarFornecedoresNoBanco } from '@/lib/fornecedores/buscaDeFornecedorBanco';
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -2476,8 +2477,9 @@ function SubcentroInline({ catalogo, valor, naturezaAlvo, disabled, onPick }: {
   const [open, setOpen] = useState(false);
   const [busca, setBusca] = useState('');
   const part = useMemo<{ primarios: SubcentroUsado[]; secundarios: SubcentroUsado[] }>(() => {
-    const q = busca.toLowerCase().trim();
-    const todos = (catalogo?.subcentros ?? []).filter((s) => !q || s.subcentro.toLowerCase().includes(q));
+    /* P134: sem acento, cedilha e maiúscula nos dois lados (`casaNaBusca`, a regra única) */
+    const q = busca.trim();
+    const todos = (catalogo?.subcentros ?? []).filter((s) => !q || casaNaBusca(s.subcentro, q));
     if (!naturezaAlvo) return { primarios: todos.slice(0, 15), secundarios: [] };
     const primariosRaw = todos.filter((s) => s.naturezas.has(naturezaAlvo));
     const secundariosRaw = todos.filter((s) => !s.naturezas.has(naturezaAlvo));
@@ -2552,11 +2554,11 @@ function PopoverOutroOfx({ extratos, ofxConsumidos, ofxAtualId, onEscolher, comp
 }) {
   const [busca, setBusca] = useState<string>('');
   const filtrados = useMemo<OfxItem[]>(() => {
-    const q = busca.toLowerCase().trim();
+    const q = busca.trim();
     return extratos.filter((e) =>
       e.id !== ofxAtualId &&
       !ofxConsumidos.has(e.id) &&
-      (!q || e.descricao.toLowerCase().includes(q)),
+      (!q || casaNaBusca(e.descricao, q)),
     );
   }, [extratos, busca, ofxAtualId, ofxConsumidos]);
 
@@ -2646,13 +2648,15 @@ function FormularioCorrecao({
   onCancelar: () => void;
 }) {
   const fornecedoresFiltrados = useMemo(() => {
-    const q = fornecedorBusca.toLowerCase().trim();
+    const q = fornecedorBusca.trim();
     if (!q || q.length < 2) return [];
+    /* P134: sem acento, cedilha e maiúscula nos dois lados (`casaNaBusca`, a regra única) — antes só o `nome_normalizado` cru
+       deixava passar sem acento, por acaso */
     return catalogo.fornecedores
       .filter((f) =>
-        f.nome.toLowerCase().includes(q)
-        || (f.nome_normalizado ?? '').includes(q)
-        || (f.aliases ?? []).some((a) => a.toLowerCase().includes(q)),
+        casaNaBusca(f.nome, q)
+        || casaNaBusca(f.nome_normalizado, q)
+        || (f.aliases ?? []).some((a) => casaNaBusca(a, q)),
       )
       .slice(0, 5);
   }, [fornecedorBusca, catalogo.fornecedores]);
@@ -2665,9 +2669,9 @@ function FormularioCorrecao({
     primarios: SubcentroUsado[];
     secundarios: SubcentroUsado[];
   }>(() => {
-    const q = subcentroBusca.toLowerCase().trim();
+    const q = subcentroBusca.trim();
     const todos = catalogo.subcentros.filter((s) =>
-      !q || s.subcentro.toLowerCase().includes(q),
+      !q || casaNaBusca(s.subcentro, q),
     );
 
     if (!naturezaAlvo) {

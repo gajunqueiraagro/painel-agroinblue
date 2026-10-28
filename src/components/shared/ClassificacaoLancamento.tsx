@@ -13,9 +13,9 @@
  *
  * ⚠ CONTROLADO, E O ESTADO DO DADO FICA NO PAI. Os quatro fluxos que escrevem a classificação de
  * fora — hidratar ao editar, transferência, prefill e reset — são do ciclo de vida do diálogo, e
- * continuam lá. Aqui moram só os três estados de INTERAÇÃO (`safraSugeridaId`,
- * `safraEditadaAMao`, `subcentroLimpoPelaAtividade`): memória de quem está digitando, não dado
- * gravado.
+ * continuam lá. Aqui mora só o estado de INTERAÇÃO (`subcentroLimpoPelaAtividade`): memória de quem
+ * está digitando, não dado gravado. P138: a safra NÃO se preenche sozinha — a da competência é do
+ * banco (`useSafraDaCompetencia`) e aqui só se MOSTRA.
  *
  * ⚠ MONTE-O EM BLOCO SIMPLES — NUNCA DENTRO DE UMA GRADE. Ele devolve um Fragment cujos dois
  * filhos de topo são `grid grid-cols-12 gap-2 items-start` COMPLETAS (:237 e :370): as colunas
@@ -37,7 +37,7 @@
  * chamam `escopoDoSubcentro`, a função pura da casa, que saiu do modal justamente para a Mesa
  * reusá-la. O pai precisa dela para o payload (`safraParaGravar`) e para travar a Fazenda.
  */
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
@@ -45,7 +45,7 @@ import { Segmentado, type OpcaoSegmentada } from '@/components/ui/segmentado';
 import { REGUA_ROTULO } from '@/components/ui/bloco-formulario';
 import { PlanoSubcentroSelect } from '@/components/shared/PlanoSubcentroSelect';
 import { ATIVIDADES, lembrarAtividade, type Atividade } from '@/lib/financeiro/ultimaAtividade';
-import { safraSugerida } from '@/lib/agri/safraSugerida';
+import { useSafraDaCompetencia } from '@/hooks/useSafraDaCompetencia';
 import { escopoDoSubcentro, AVISO_ADMIN_SEM_SAFRA, AVISO_ADMIN_SAFRA_SAI } from '@/lib/financeiro/escopoDoSubcentro';
 import { CULTURAS_LANCAMENTO, FASES, SEM_CULTURA } from '@/lib/agri/rateioLancamento';
 import type { ClassificacaoItem, Safra } from '@/hooks/useFinanceiroV2';
@@ -79,7 +79,7 @@ const OPCOES_ATIVIDADE: ReadonlyArray<OpcaoSegmentada<Atividade | ''>> = ATIVIDA
 export function ClassificacaoLancamento({
   value, onChange, classificacoes, safras, dataCompetencia,
   culturasDaSafra = [], subcentroDesabilitado = false, tipoOperacao, travado = false, motivoTravado, motivoSubcentroDesabilitado, erroSubcentro = null,
-  ocultarCulturaFase = false, ocultarLinhaDaSafra = false, regua,
+  ocultarCulturaFase = false, ocultarLinhaDaSafra = false, regua, novo = true, clienteId = null,
 }: {
   value: ClassificacaoValor;
   /**
@@ -138,6 +138,14 @@ export function ClassificacaoLancamento({
    * Default `false` = lançamento, recorrência e a CRIAÇÃO da obrigação continuam idênticos.
    */
   ocultarLinhaDaSafra?: boolean;
+  /**
+   * P138 — o que vai ser GRAVADO ainda não existe (Novo lançamento, recorrência, obrigação): sem safra escolhida, o banco grava a da
+   * competência na criação (`trg_safra_da_competencia`), e a linha diz qual. Na EDIÇÃO (`false`) o banco não mexe na safra: a da
+   * competência é só sugestão, com "Usar" — gravada só se o operador aceitar. Default `true`.
+   */
+  novo?: boolean;
+  /** P138 — o cliente para perguntar ao banco a safra da competência; sem ele, nada se mostra (e o banco ainda grava na criação). */
+  clienteId?: string | null;
 }) {
   /* ⚠ O ADAPTADOR QUE FEZ ESTE PR SER UM *MOVE*: com `setClassificacao` aqui e os campos
      desestruturados com os nomes antigos, os handlers e o JSX abaixo entraram VERBATIM, sem uma
@@ -168,24 +176,12 @@ export function ClassificacaoLancamento({
 
   const [subcentroLimpoPelaAtividade, setSubcentroLimpoPelaAtividade] = useState(false);
   /**
-   * A SAFRA SE SUGERE, MAS NÃO SE IMPÕE — PR-FIN-ATIVIDADE-01b.
-   *
-   * ⚠ DOIS ESTADOS PARA UMA COISA SÓ, e cada um responde uma pergunta diferente:
-   * `safraSugeridaId` é "este valor foi posto por mim ou escolhido por ele?" — é o que
-   * permite substituir a sugestão quando a data muda sem apagar uma escolha; e
-   * `safraEditadaAMao` é "ele já disse o que quer?" — a partir daí a sugestão cala até o
-   * modal fechar. Sem o segundo, escolher a safra e depois corrigir a data desfaria a
-   * escolha, e o operador teria de escolher de novo sem entender por quê.
-   */
-  /**
    * O subcentro com que o modal ABRIU — PR-FIN-DRE-BADGE-01.
    *
    * ⚠ NÃO É REDUNDANTE COM `lancamento.subcentro`: o valor de abertura pode vir do plano da
    * transferência (que o modal resolve ao abrir) e não do que está gravado. O badge precisa
    * saber se o operador MEXEU, e mexer é diferente de divergir do banco.
    */
-  const [safraSugeridaId, setSafraSugeridaId] = useState<string | null>(null);
-  const [safraEditadaAMao, setSafraEditadaAMao] = useState(false);
 
   const aplicarAtividade = (v: Atividade) => {
     const nova = atividade === v ? null : v;
@@ -224,8 +220,6 @@ export function ClassificacaoLancamento({
     const escopoSafra = (safraAtual?.escopo_negocio || '').trim();
     if (safraAtual && escopoSafra && escopoSafra !== nova) {
       setClassificacao((c) => ({ ...c, safra_id: '' }));
-      setSafraSugeridaId(null);
-      setSafraEditadaAMao(false);
     }
   };
 
@@ -259,26 +253,11 @@ export function ClassificacaoLancamento({
   const escopoDoPlano = escopoDoSubcentro(classificacoes, subcentro, escopoNegocio);
   const ehAdministrativo = escopoDoPlano === 'administrativo' || atividade === 'administrativo';
 
-  useEffect(() => {
-    if (ocultarLinhaDaSafra) return;
-    if (safraEditadaAMao) return;
-    if (safraId && safraId !== safraSugeridaId) return;
-    const nova = atividade && atividade !== 'administrativo'
-      ? safraSugerida(dataCompetencia, atividade, safras ?? [], { desempatar: false })
-      : null;
-    /* ⚠ A GUARDA QUE VALE MORA DENTRO DO UPDATER — PR-FIN-SAFRA-MODAL-01. Os dois `return` acima
-       leem o `value` do CLOSURE deste render, e o updater é aplicado pelo pai sobre o estado VIVO.
-       O bloco que o reset montou (safra vazia, a última atividade, a data de hoje) roda este efeito
-       com a foto do reset; quando o updater chega, o estado já é o da hidratação — e
-       `{...c, safra_id: ''}` apagava a safra GRAVADA (a NF 9297983 abria em 26/27-Lav "sugerida",
-       e salvar sem tocar gravava 26/27: 19 lançamentos de mandioca do NJ foram assim). Agora o
-       updater confere o campo VIVO: com safra que não foi esta sugestão que pôs, devolve `c` intacto.
-       Os dois `return` ficam: no bloco certo eles poupam o render. */
-    setClassificacao((c) => ((c.safra_id && c.safra_id !== safraSugeridaId) ? c : { ...c, safra_id: nova ?? '' }));
-    /* Só chega aqui com o campo vazio (ou com a sugestão anterior deste bloco) na foto deste render. */
-    setSafraSugeridaId(nova);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [atividade, dataCompetencia, safras, safraEditadaAMao, ocultarLinhaDaSafra]);
+  /* P138 (Gabriel 27/10/2026) — A SAFRA DA COMPETÊNCIA É DO BANCO, E A TELA SÓ A MOSTRA. Antes, este efeito ESCREVIA a sugestão no campo
+     (regra própria: temporada pelo código da safra): o lançamento gravado sem safra abria mostrando uma safra que o banco não tinha, e o
+     Salvar a gravava sem o operador decidir. Agora o campo mostra o GRAVADO; a da competência vem de `_fn_safra_da_competencia` e aparece
+     embaixo — na criação, "ao salvar: <safra>" (o banco a grava); na edição, "sugestão: <safra> · Usar". */
+  const safraDaCompetencia = useSafraDaCompetencia(clienteId, atividade, dataCompetencia, !ocultarLinhaDaSafra && !ehAdministrativo && !safraId);
   return (
     <>
             {/* ── LINHA 4 — Classificação INCORPORADA: Safra + Subcentro ──
@@ -369,10 +348,6 @@ export function ClassificacaoLancamento({
                       /* ⚠ É o mesmo gesto de quando o card muda: escolher no meio da sessão
                          é decisão de agora, e o campo esvazia. O RISCADO fica reservado para o
                          que já estava gravado — ali o operador precisa ver o que vai sair. */
-                      if (ehAdm) {
-                        setSafraSugeridaId(null);
-                        setSafraEditadaAMao(false);
-                      }
                     } else {
                       /* ⚠ SEM ITEM, SEM CHAVE — nunca a anterior. Hoje não acontece (o
                          seletor só oferece o que está no seu próprio mapa), mas um `id`
@@ -440,7 +415,7 @@ export function ClassificacaoLancamento({
                 <Select
                   value={safraId || '__none_safra__'}
                   disabled={ehAdministrativo}
-                  onValueChange={v => { setClassificacao((c) => ({ ...c, safra_id: v === '__none_safra__' ? '' : v })); setSafraEditadaAMao(true); setSafraSugeridaId(null); }}
+                  onValueChange={v => { setClassificacao((c) => ({ ...c, safra_id: v === '__none_safra__' ? '' : v })); }}
                 >
                   {/* ⚠ 12px E `truncate` COM `title` — o nome inteiro cabe nesta largura
                       (medido: "Safra 26/27 Amendoim" pede 132,9px e a coluna dá 216,7),
@@ -448,7 +423,6 @@ export function ClassificacaoLancamento({
                   <SelectTrigger
                     title={safraId ? safraNome(safraId) : undefined}
                     className={cn(alturaCampo, '[&>span]:truncate', fieldBg,
-                      safraSugeridaId && safraId === safraSugeridaId && 'border-dashed border-primary',
                       /* ⚠ RISCADO SÓ QUANDO HÁ O QUE RISCAR. O traço diz "este valor não vai
                          sobreviver ao save"; num campo vazio ele não diria nada. */
                       ehAdministrativo && safraId && 'line-through opacity-60')}>
@@ -473,12 +447,19 @@ export function ClassificacaoLancamento({
                     ))}
                   </SelectContent>
                 </Select>
-                {/* ⚠ SUGERIDA DIZ QUE É SUGERIDA. Um campo que se preenche sozinho e não
-                    avisa é um campo que ninguém confere — e safra errada só aparece no
-                    fechamento, meses depois. */}
-                {safraSugeridaId && safraId === safraSugeridaId && !ehAdministrativo && (
-                  <div className="mt-0.5 text-[10px] leading-snug text-primary">sugerida</div>
-                )}
+                {/* P138 — A DA COMPETÊNCIA SE MOSTRA, NÃO SE PREENCHE. Campo vazio + a safra que o banco dá para a competência: na criação o
+                    banco a grava ("ao salvar"); na edição ela só é gravada se o operador clicar "Usar". */}
+                {!safraId && safraDaCompetencia && !ehAdministrativo && (novo ? (
+                  <div data-testid="safra-da-competencia" className="mt-0.5 text-[10px] leading-snug text-primary">
+                    ao salvar: {safraNome(safraDaCompetencia)} (pela competência)
+                  </div>
+                ) : (
+                  <div data-testid="safra-da-competencia" className="mt-0.5 text-[10px] leading-snug text-primary">
+                    sugestão: {safraNome(safraDaCompetencia)} ·{' '}
+                    <button type="button" data-testid="safra-usar-sugestao" className="underline"
+                      onClick={() => setClassificacao((c) => (c.safra_id ? c : { ...c, safra_id: safraDaCompetencia }))}>Usar</button>
+                  </div>
+                ))}
                 {/* ⚠ LISTA VAZIA DIZ POR QUÊ. Silvicultura não tem nenhuma safra cadastrada
                     hoje (medido: 37 de pecuária, 9 de lavoura, zero de silvicultura), e um
                     dropdown só com "Sem safra" parece defeito da tela em vez de ausência no

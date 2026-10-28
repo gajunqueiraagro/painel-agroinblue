@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useState } from 'react';
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 
 vi.mock('@/hooks/useFornecedoresDoCliente', async () => (await import('@/test/leitorDeFornecedoresFake')).moduloDoLeitorFake());
 
@@ -71,7 +71,7 @@ describe.each(['leitor', 'lista'] as const)('a opção, a busca e o selo — mod
     expect(doc.className).toContain('whitespace-nowrap');
     expect(doc.className).not.toContain('truncate');
   });
-  it('FORN-FILIAL-01 — "Razão social · Município/UF · CNPJ completo": a cidade e o CNPJ inteiro nunca cortam; a busca acha pela cidade', () => {
+  it('FORN-FILIAL-01 / P117 — "Razão social · CNPJ completo · Município/UF": o CNPJ inteiro e a cidade nunca cortam; a busca acha pela cidade', () => {
     if (modo === 'leitor') definirFornecedoresDoLeitor(FILIAIS);
     render(<Campo modo={modo} lista={FILIAIS} />);
     abrir();
@@ -84,9 +84,21 @@ describe.each(['leitor', 'lista'] as const)('a opção, a busca e o selo — mod
     expect(cidade.className).toContain('whitespace-nowrap');
     expect(cidade.className).not.toContain('truncate');
     expect(within(tl).getByTestId('favorecido-doc-da-opcao').textContent).toBe('11.222.333/0004-24');
-    expect(tl.querySelector('span')?.getAttribute('title')).toBe('Zeta Filial Agropecuária Ltda · Três Lagoas/MS · 11.222.333/0004-24');
+    expect(tl.querySelector('span')?.getAttribute('title')).toBe('Zeta Filial Agropecuária Ltda · 11.222.333/0004-24 · Três Lagoas/MS');
+    /* P117 — a ordem na opção: o CNPJ antes da cidade */
+    const doc = within(tl).getByTestId('favorecido-doc-da-opcao');
+    expect(doc.compareDocumentPosition(cidade) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     digitar('zeta filial');
     expect(opcoes().map((o) => within(o).getByTestId('favorecido-cidade-da-opcao').textContent).sort()).toEqual(['Presidente Prudente/SP', 'Três Lagoas/MS']);
+  });
+
+  it('P117 — a linha fixa sob o campo: "CNPJ · Cidade/UF" da filial escolhida; trocar de filial troca a linha, sem mudar a altura', async () => {
+    if (modo === 'leitor') definirFornecedoresDoLeitor(FILIAIS);
+    render(<Campo modo={modo} lista={FILIAIS} inicial="fil_tl" linha />);
+    await waitFor(() => expect(screen.getByTestId('favorecido-linha-texto').textContent).toBe('11.222.333/0004-24 · Três Lagoas/MS'));
+    expect(screen.getByTestId('favorecido-documento').className).toContain('h-[14px]');
+    abrir(); digitar('prudente'); fireEvent.click(opcoes()[0]);
+    await waitFor(() => expect(screen.getByTestId('favorecido-linha-texto').textContent).toBe('11.222.333/0038-73 · Presidente Prudente/SP'));
   });
   it('sem documento a área fica VAZIA; tamanho inválido aparece como está', () => {
     render(<Campo modo={modo} />);

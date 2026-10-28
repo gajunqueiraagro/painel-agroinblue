@@ -986,7 +986,10 @@ if (tela === 'mesclar') {
   g.__bancoBancada = { from: (t: string, e: any) => v === 'salsolta' && t === 'financeiro_lancamentos_v2' && e?.eq?.favorecido_id ? IRMAS_SOLTAS
       : t === 'audit_log' ? AUDIT : t === 'vw_lancamento_documentos' ? DOCS_NOTA
       : DIV && t === 'financeiro_lancamento_partes' ? PARTES_DIV : DIV && t === 'financeiro_lancamento_divisoes' ? [{ id: 'op-div', acao: 'dividir_nota' }]
-      : DIV && t === 'nota_fiscal' ? [NOTA_DIV] : DIV && t === 'nota_fiscal_itens' ? ITENS_DIV : [], rpc: (fn: string) => fn === 'fn_nomes_dos_autores' ? [
+      : DIV && t === 'nota_fiscal' ? [NOTA_DIV] : DIV && t === 'nota_fiscal_itens' ? ITENS_DIV : [], rpc: (fn: string, a: any) =>
+    /* P138 — a safra da competência é do banco: aqui, pelas datas das safras SINTÉTICAS da bancada (a mesma regra) */
+    fn === '_fn_safra_da_competencia' ? (SAFRAS.find((s: any) => s.escopo_negocio === a?.p_escopo && a?.p_data >= s.data_inicio && a?.p_data <= s.data_fim)?.id ?? null)
+    : fn === 'fn_nomes_dos_autores' ? [
       { user_id: 'u-outro', nome: 'Beltrano Gestor da Silva', email: 'beltrano@exemplo.com', situacao: 'ex-membro' },
       { user_id: 'u1', nome: 'Eu Mesmo da Bancada', email: 'bancada@exemplo.com', situacao: 'membro ativo' }]
     : (desc && fn === 'fn_lancamento_financiamento') ? {
@@ -1099,6 +1102,8 @@ if (v === 'extrato' || v === 'planilha') {
   if (v === 'extrato') props.ocultarParcelamento = true;
 }
 if (v === 'semvenc' && m === 'editar') props.lancamento = { ...MILHO, data_vencimento: null };
+/* P138 — `&safra=sem`: o lançamento gravado SEM safra (o campo mostra "Sem safra" e embaixo "sugestão: <safra> · Usar", pela competência) */
+if (m === 'editar' && q.get('safra') === 'sem' && props.lancamento) props.lancamento = { ...props.lancamento, safra_id: null };
 if (v === 'oc' || v === 'ocdesp') {
   const nat = v === 'oc' ? 'principal' : 'obrigacao';
   props.origemOC = { operacaoId: 'a1b2c3d4-0000-4000-8000-000000000000', versao: 8, natureza: nat, tipoOperacao: 'venda', rotulo: 'OC #a1b2c3d4 · Venda 140 Novilhas',
@@ -1137,6 +1142,13 @@ if (v === 'volume') {
 if (v === 'ref') props.referenciaOperacionalInfo = { fornecedor_texto: 'AGROPECUARIA EXEMPLO LTDA', fazenda_texto: 'EXEMPLO', plano_texto: 'Nutrição Engorda',
   centro_texto: 'Suplementação', produto_texto: 'Sal mineral', valor: -1345.5, data_referencia: '10/09/2026' };
 
+  /* P117 — o fornecedor do lançamento é uma FILIAL com a cidade mais longa do caso (Presidente Prudente/SP): a linha fixa sob o campo diz
+     "CNPJ · Cidade/UF" e não empurra nem corta nada; `&cidade=sem` = o cadastro sem cidade (só o CNPJ). SINTÉTICO. */
+  if (v !== 'volume') {
+    const semCidade = q.get('cidade') === 'sem';
+    g.__fornecedoresBancada = [...(g.__fornecedoresBancada ?? []).filter((f: any) => f.id !== 'agro'),
+      { ...AGRO, municipio: semCidade ? null : 'Presidente Prudente', uf: semCidade ? null : 'SP' }];
+  }
   raiz.render(<QueryClientProvider client={qc}><MemoryRouter><Casca />
     <LancamentoV2Dialog open onClose={() => {}} onSave={async () => 'x'} fazendas={FAZENDAS} contas={CONTAS} classificacoes={CLASSIF}
       fornecedores={[AGRO]} safras={SAFRAS} onCriarFornecedor={async () => null} {...props} />

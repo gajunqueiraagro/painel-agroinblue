@@ -413,7 +413,7 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
               ⚠ A SAFRA SE SUGERE PELO PRIMEIRO VENCIMENTO (Início + Dia venc. + de que mês é a conta); sem ele, pelo
               Início. A escolha à mão cala a sugestão; empate sem sigla não escolhe. */}
           <BlocoFormulario titulo="Classificação" testId="bloco-classificacao" className="gap-1">
-          <ClassificacaoLancamento regua="compacta"
+          <ClassificacaoLancamento regua="compacta" clienteId={clienteId}
             value={classificacao}
             onChange={setClassificacao}
             classificacoes={classificacoes}

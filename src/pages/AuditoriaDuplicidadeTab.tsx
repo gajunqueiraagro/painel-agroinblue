@@ -3,6 +3,7 @@
  * Exibe lançamentos que foram sinalizados como duplicados durante importações
  * e permite retroativa comparando registros com mesmo hash no banco.
  */
+import { casaNaBusca } from '@/lib/texto/busca';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useCliente } from '@/contexts/ClienteContext';
@@ -171,11 +172,12 @@ export function AuditoriaDuplicidadeTab({ onBack }: Props) {
     if (logFilter.status !== 'all') result = result.filter(l => l.status_revisao === logFilter.status);
     if (logFilter.anoMes) result = result.filter(l => l.ano_mes === logFilter.anoMes);
     if (logFilter.search) {
-      const s = logFilter.search.toLowerCase();
+      const s = logFilter.search;
+      /* P134: sem acento, cedilha e maiúscula nos dois lados (`casaNaBusca`, a regra única) */
       result = result.filter(l =>
-        (l.descricao || '').toLowerCase().includes(s) ||
-        (l.fornecedor || '').toLowerCase().includes(s) ||
-        (l.numero_documento || '').toLowerCase().includes(s)
+        casaNaBusca(l.descricao, s) ||
+        casaNaBusca(l.fornecedor, s) ||
+        casaNaBusca(l.numero_documento, s)
       );
     }
     return result;

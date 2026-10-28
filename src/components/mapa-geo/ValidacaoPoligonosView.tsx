@@ -1,3 +1,4 @@
+import { casaNaBusca } from '@/lib/texto/busca';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -54,8 +55,8 @@ export function ValidacaoPoligonosView({ geometrias, pastos, geoLoading, onUpdat
     if (filterStatus === 'vinculado') list = list.filter(g => g.pasto_id);
     if (filterStatus === 'sem_vinculo') list = list.filter(g => !g.pasto_id);
     if (searchTerm.trim()) {
-      const q = searchTerm.toLowerCase();
-      list = list.filter(g => (g.nome_original || '').toLowerCase().includes(q));
+      /* P134: sem acento, cedilha e maiúscula nos dois lados (`casaNaBusca`, a regra única) */
+      list = list.filter(g => casaNaBusca(g.nome_original, searchTerm));
     }
     return list;
   }, [geometrias, filterStatus, searchTerm]);

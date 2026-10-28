@@ -5,6 +5,7 @@ import { ChevronsUpDown, X } from 'lucide-react';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { Popover, PopoverContent } from '@/components/ui/popover';
 import { COMBOBOX_CONTENT } from '@/components/ui/command';
+import { normalizarParaBusca } from '@/lib/texto/busca';
 import { CLASSE_DO_INEXISTENTE, FRASE_VALOR_INEXISTENTE } from '@/components/shared/ValorInexistente';
 import {
   MENU_BUSCA, MENU_ITEM, MENU_REALCE, MENU_REALCE_HOVER, MENU_SECUNDARIO, MENU_VAZIO,
@@ -179,12 +180,16 @@ export function SearchableSelect({
     ? allLabel
     : options.find(o => o.value === value)?.label || value;
 
+  /* P134: a busca ignora acento, cedilha e maiúscula nos dois lados (`normalizarParaBusca`, a regra única). O texto de cada opção é
+     normalizado UMA vez por lista, não por tecla. */
+  const indiceDaBusca = useMemo(
+    () => options.map((o) => [normalizarParaBusca(o.label), normalizarParaBusca(o.sub), normalizarParaBusca(o.busca)]),
+    [options]);
   const filtered = useMemo(() => {
     if (!search.trim()) return options;
-    const q = search.toLowerCase();
-    return options.filter(o =>
-      o.label.toLowerCase().includes(q) || (o.sub ?? '').toLowerCase().includes(q) || (o.busca ?? '').toLowerCase().includes(q));
-  }, [options, search]);
+    const q = normalizarParaBusca(search);
+    return options.filter((_, i) => indiceDaBusca[i].some((t) => t.includes(q)));
+  }, [options, indiceDaBusca, search]);
 
   // Cap de render: sem virtualização, listas grandes (milhares de contrapartes)
   // geravam DOM gigante e travavam o dropdown. Limite de 50 itens visíveis,

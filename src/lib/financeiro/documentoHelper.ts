@@ -1,3 +1,4 @@
+import { normalizarParaBusca } from '@/lib/texto/busca';
 /**
  * Helpers for Tipo de Documento + Número do Documento.
  * Official document types, NF mask logic, and smart import parsing.
@@ -302,7 +303,8 @@ const TIPO_DA_PALAVRA: Readonly<Record<string, string>> = {
 const PREFIXO_DA_ESPECIE_NO_FILTRO: Readonly<Record<string, string>> = { ...PREFIXO_POR_ESPECIE, nf_produtor: 'NF' };
 const soDigitosDoc = (s: string | null | undefined) => (s ?? '').replace(/\D/g, '');
 const semZerosAEsquerda = (s: string) => s.replace(/^0+/, '');
-const semAcentoMinusculo = (s: string | null | undefined) => (s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+/* P134: a regra única de busca (`normalizarParaBusca`), no lugar da cópia local */
+const semAcentoMinusculo = normalizarParaBusca;
 
 /** FIN-FILTRO-DOC-TEXTO-01 — o número do documento para comparar: minúsculas, sem acento, só [a-z0-9], e em cada sequência de
  *  dígitos sem os zeros à esquerda ("R_D015" -> "rd15"; "000.000.910" -> "910"). A MESMA regra nos dois lados. */

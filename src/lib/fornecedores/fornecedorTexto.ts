@@ -117,10 +117,15 @@ export function fraseDoLimite(mostrando: number, total: number): string | null {
 }
 
 export const SEM_DOCUMENTO = 'sem CNPJ/CPF';
-/** A linha fixa sob o campo: o documento do escolhido, "sem CNPJ/CPF", ou vazia quando nada foi escolhido. */
+/** A linha fixa sob o campo: o documento do escolhido, "sem CNPJ/CPF", ou vazia quando nada foi escolhido.
+ *  P117 (FORN-FILIAL-01, Gabriel 21/10): com cidade no cadastro, "CNPJ · Cidade/UF" — a filial se reconhece pela cidade; sem cidade, só o
+ *  CNPJ (nada inventado); sem documento, "sem CNPJ/CPF" (a cidade sozinha não identifica o cadastro). */
 export function linhaDoDocumento(escolhido: FornecedorDoSeletor | null | undefined): string {
   if (!escolhido) return '';
-  return formatarDocumento(escolhido.cpf_cnpj) || SEM_DOCUMENTO;
+  const doc = formatarDocumento(escolhido.cpf_cnpj);
+  if (!doc) return SEM_DOCUMENTO;
+  const cidade = cidadeDe(escolhido);
+  return cidade ? `${doc} · ${cidade}` : doc;
 }
 /** O selo do nome repetido ("3 iguais"); "" quando o nome é único. */
 export const seloDeIguais = (n: number): string => (n > 1 ? `${n} iguais` : '');

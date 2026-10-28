@@ -34,6 +34,7 @@ import type { FiltrosV2 } from './filtrosBaseV2';
 /* FIN-V2-LISTA-FLAG-01: a pagina visual da flag LISTA_PAGINADA_V2 (30 linhas) saiu; a referencia de "uma pagina" segue 30. */
 const TAMANHO_PAGINA_LISTA = 30;
 import { formatDocumento } from './documentoHelper';
+import { normalizarParaBusca } from '@/lib/texto/busca';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PostgREST simulado (idêntico em semântica ao de listaPaginadaV2.test.ts)
@@ -199,6 +200,11 @@ function linha(over: Partial<Linha> & { id: string }): Linha {
     (base.tipo_documento as string | null) ?? null,
     (base.numero_documento as string | null) ?? null,
   );
+  /* P134: os campos calculados de busca (`busca_*`, a coluna pela `_fn_normalizar_texto`) — a fixture os materializa pela MESMA regra */
+  const txt = (v: unknown) => (typeof v === 'string' ? v : null);
+  base.busca_descricao = normalizarParaBusca(txt(base.descricao));
+  base.busca_numero_documento = normalizarParaBusca(txt(base.numero_documento));
+  base.busca_documento_formatado = normalizarParaBusca(txt(base.documento_formatado));
   const mes = (d: unknown) => (d ? Number(String(d).slice(5, 7)) : null);
   base.mes_competencia = mes(base.data_competencia);
   base.mes_vencimento = mes(base.data_vencimento);

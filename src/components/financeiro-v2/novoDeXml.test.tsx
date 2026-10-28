@@ -38,8 +38,9 @@ const consultas = vi.hoisted(() => ({
   iePorFazenda: vi.fn(async () => ({ 'f-pur': '28.987.654-3' } as Record<string, string>)),
   /* NOTA-FAZENDA-PELA-IE-01 — os apelidos das fazendas (nenhum, por padrao) */
   aliasesDasFazendas: vi.fn(async (): Promise<Record<string, string[]>> => ({})),
-  fornecedorPeloNome: vi.fn(async () => null as string | null),
-  notaJaRegistrada: vi.fn(async (_c: string, _k: string) => [] as unknown[]),
+  /* P146 — as consultas que decidem devolvem `Consulta` ({ ok, valor } | { ok: false, motivo }) */
+  fornecedorPeloNome: vi.fn(async (): Promise<Consulta<string | null>> => ({ ok: true, valor: null })),
+  notaJaRegistrada: vi.fn(async (_c: string, _k: string): Promise<Consulta<unknown[]>> => ({ ok: true, valor: [] })),
   ultimaClassificacaoDoFornecedor: vi.fn(async () => null as unknown),
   gravarDocumentoNoCadastro: vi.fn(async () => null as string | null),
   /* NOTA-FORNECEDOR-COMPARAR-01 — o cadastro so' muda pela comparacao (o mesmo modal da previa) */
@@ -49,9 +50,9 @@ const consultas = vi.hoisted(() => ({
   atualizarCamposDoCadastro: vi.fn(async (..._a: unknown[]): Promise<{ ok: true; alteracaoId: string | null } | { ok: false; frase: string }> => ({ ok: true, alteracaoId: 'alt1' })),
   desfazerCamposDoCadastro: vi.fn(async () => null as string | null),
   /* NOTA-FORNECEDOR-DUPLICA-01 — o CNPJ conferido no banco antes de criar (nenhum cadastro com ele, por padrao) */
-  fornecedorPeloDocumento: vi.fn(async (): Promise<{ id: string; nome: string; ativo: boolean } | null> => null),
+  fornecedorPeloDocumento: vi.fn(async (): Promise<Consulta<{ id: string; nome: string; ativo: boolean } | null>> => ({ ok: true, valor: null })),
   /* NOTA-JA-LANCADA-01 — nada ja' lancado, por padrao */
-  notaJaLancada: vi.fn(async (_c: string, _e: unknown): Promise<{ id: string }[]> => []),
+  notaJaLancada: vi.fn(async (_c: string, _e: unknown): Promise<Consulta<{ id: string }[]>> => ({ ok: true, valor: [] })),
 }));
 vi.mock('@/lib/financeiro/nfeConsultas', () => consultas);
 vi.mock('@/hooks/useFornecedoresDoCliente', async () => (await import('@/test/leitorDeFornecedoresFake')).moduloDoLeitorFake());
@@ -68,7 +69,7 @@ import { resolverEmitente, type ResolucaoEmitente } from '@/lib/financeiro/nfe/r
 import { arquivoXmlDaNota, pendenteDaNota, prefillDaNota, type DoXml } from '@/lib/financeiro/nfePrefill';
 import { documentoFormatado } from '@/lib/financeiro/nfe/formatos';
 import { CTE, EMITENTE_CNPJ, chaveDe, montarNFe, utf8, type OpcoesNota } from '@/lib/financeiro/nfe/__fixtures__/notas';
-import type { OcorrenciaDaNota } from '@/lib/financeiro/nfeConsultas';
+import type { Consulta, OcorrenciaDaNota } from '@/lib/financeiro/nfeConsultas';
 import { TIPOS_ACEITOS } from '@/hooks/useLancamentoDocumentos';
 import { extensaoDoArquivo } from '@/lib/oc/caminhoDocumento';
 import { definirFornecedoresDoLeitor } from '@/test/leitorDeFornecedoresFake';
@@ -102,10 +103,10 @@ beforeEach(() => {
   banco.rpc.mockReset(); banco.rpc.mockImplementation(async () => ({ data: null, error: null }));
   banco.upload.mockClear();
   for (const f of Object.values(consultas)) f.mockClear();
-  consultas.notaJaRegistrada.mockImplementation(async () => []);
-  consultas.fornecedorPeloNome.mockImplementation(async () => null);
+  consultas.notaJaRegistrada.mockImplementation(async () => ({ ok: true, valor: [] }));
+  consultas.fornecedorPeloNome.mockImplementation(async () => ({ ok: true, valor: null }));
   consultas.ultimaClassificacaoDoFornecedor.mockImplementation(async () => null);
-  consultas.notaJaLancada.mockImplementation(async () => []);
+  consultas.notaJaLancada.mockImplementation(async () => ({ ok: true, valor: [] }));
 });
 
 function montarModal(props: Partial<React.ComponentProps<typeof LancamentoV2Dialog>>, fornecedores: FornecedorV2[] = [AGRO]) {
@@ -175,7 +176,7 @@ describe('tela A — a lista de notas', () => {
   });
 
   it('pergunta ao banco se a nota ja esta registrada, pela CHAVE — e a linha diz "já registrada" sem bloquear', async () => {
-    consultas.notaJaRegistrada.mockImplementation(async () => [{ origem: 'lancamento', documentoId: 'd1', lancamentoId: 'l1', operacaoId: null, operacaoTipo: null, numero: '12345', descricao: 'Sal mineral', data: '2026-09-30', valor: 16238 }]);
+    consultas.notaJaRegistrada.mockImplementation(async () => ({ ok: true, valor: [{ origem: 'lancamento', documentoId: 'd1', lancamentoId: 'l1', operacaoId: null, operacaoTipo: null, numero: '12345', descricao: 'Sal mineral', data: '2026-09-30', valor: 16238 }] }));
     const { onAbrir } = montarLista();
     soltar([arquivo('a.xml', montarNFe())]);
     await waitFor(() => expect(screen.getAllByTestId('xml-linha')).toHaveLength(1));
@@ -191,6 +192,36 @@ describe('tela A — a lista de notas', () => {
     expect([d.arquivo.name, d.arquivo.type]).toEqual(['a.xml', 'application/xml']);
   });
 
+  /* P146 — a consulta que FALHA nao vira "nada achado": a linha fica "não verificada", nao abre (nem previa, nem Novo lancamento) e
+     "Tentar de novo" refaz as consultas com o mesmo lido */
+  it('P146 — "já registrada" falhou: a linha "não verificada" (o motivo no title), sem "Abrir lançamento"; "Tentar de novo" respondendo vira nova', async () => {
+    consultas.notaJaRegistrada.mockImplementation(async () => ({ ok: false, motivo: 'tempo esgotado' }));
+    const { onAbrir } = montarLista();
+    soltar([arquivo('a.xml', montarNFe())]);
+    await waitFor(() => expect(screen.getAllByTestId('xml-linha')).toHaveLength(1));
+    const sit = screen.getByTestId('xml-situacao');
+    expect(sit.textContent).toBe('não verificada');
+    expect(sit.getAttribute('title')).toBe('Não consegui verificar se a nota já está registrada (tempo esgotado). Nada será lançado até verificar.');
+    expect(screen.queryByTestId('xml-abrir-lancamento')).toBeNull();
+    expect(consultas.notaJaLancada).not.toHaveBeenCalled();
+    consultas.notaJaRegistrada.mockImplementation(async () => ({ ok: true, valor: [] }));
+    fireEvent.click(screen.getByTestId('xml-tentar-de-novo'));
+    await waitFor(() => expect(screen.getByTestId('xml-situacao').textContent).toBe('autorizada · nova'));
+    fireEvent.click(screen.getByTestId('xml-abrir-lancamento'));
+    expect(onAbrir).toHaveBeenCalledTimes(1);
+  });
+
+  it('P146 — "nota já lançada" e "fornecedor pelo nome" falharam: os dois motivos na mesma frase, e a linha não abre', async () => {
+    consultas.fornecedorPeloNome.mockImplementation(async () => ({ ok: false, motivo: 'sem rede' }));
+    consultas.notaJaLancada.mockImplementation(async () => ({ ok: false, motivo: 'tempo esgotado' }));
+    montarLista([AGRO_SEM_DOC]);   // o cadastro sem documento: a nota pergunta pelo NOME
+    soltar([arquivo('a.xml', montarNFe())]);
+    await waitFor(() => expect(screen.getAllByTestId('xml-linha')).toHaveLength(1));
+    expect(screen.getByTestId('xml-situacao').getAttribute('title'))
+      .toBe('Não consegui verificar o fornecedor pelo nome (sem rede); se a nota já foi lançada (tempo esgotado). Nada será lançado até verificar.');
+    expect(screen.queryByTestId('xml-abrir-lancamento')).toBeNull();
+  });
+
   it('fornecedor: pelo documento nao vai ao banco; sem documento no cadastro, pergunta pelo NOME ao resolvedor', async () => {
     montarLista([AGRO]);
     soltar([arquivo('a.xml', montarNFe())]);
@@ -199,7 +230,7 @@ describe('tela A — a lista de notas', () => {
     expect(consultas.ultimaClassificacaoDoFornecedor).toHaveBeenCalledWith('cli', 'agro');
   });
   it('fornecedor achado pelo nome: o pacote leva "pelo nome" e o cadastro sem documento', async () => {
-    consultas.fornecedorPeloNome.mockImplementation(async () => 'agro');
+    consultas.fornecedorPeloNome.mockImplementation(async () => ({ ok: true, valor: 'agro' }));
     const { onAbrir } = montarLista([AGRO_SEM_DOC]);
     soltar([arquivo('a.xml', montarNFe())]);
     await waitFor(() => expect(screen.getAllByTestId('xml-linha')).toHaveLength(1));
@@ -554,7 +585,7 @@ describe('tela B — a faixa do fornecedor', () => {
   });
 
   it('o CNPJ ja e de OUTRO cadastro: a comparacao nem abre — a faixa do conflito oferece "usar este"', async () => {
-    consultas.fornecedorPeloDocumento.mockResolvedValueOnce({ id: 'outro', nome: 'Agro Outro', ativo: true });
+    consultas.fornecedorPeloDocumento.mockResolvedValueOnce({ ok: true, valor: { id: 'outro', nome: 'Agro Outro', ativo: true } });
     montarModal({ prefill: prefillDaNota(doXmlDe({}, [AGRO_SEM_DOC], { idPeloNome: 'agro' })) }, [AGRO_SEM_DOC]);
     await screen.findByDisplayValue('16.238,00');
     fireEvent.click(screen.getByTestId('xml-comparar-cadastro'));
@@ -607,7 +638,7 @@ describe('tela B — a faixa do fornecedor', () => {
     await waitFor(() => expect(m.onCriarFornecedor).toHaveBeenCalledWith('AGROPECUARIA EXEMPLO LTDA', 'f-pur', '11.222.333/0001-81'));
   });
   it('NOTA-FORNECEDOR-DUPLICA-01 — o CNPJ ja\' e\' de um cadastro (conferido no banco antes): a frase pronta, nada criado, e "usar este"', async () => {
-    consultas.fornecedorPeloDocumento.mockResolvedValueOnce({ id: 'agro-ja', nome: 'Agropecuaria Exemplo (cadastro antigo)', ativo: true });
+    consultas.fornecedorPeloDocumento.mockResolvedValueOnce({ ok: true, valor: { id: 'agro-ja', nome: 'Agropecuaria Exemplo (cadastro antigo)', ativo: true } });
     const m = montarModal({ prefill: prefillDaNota(doXmlDe({}, [], { ultima: null })) }, []);
     await screen.findByDisplayValue('16.238,00');
     fireEvent.click(screen.getByTestId('xml-criar-fornecedor'));
@@ -620,7 +651,7 @@ describe('tela B — a faixa do fornecedor', () => {
 
 describe('NOTA-JA-LANCADA-01 — o XML que parece ja\' lancado', () => {
   it('a linha diz "parece já lançada" e a nota abre na previa da nota (que oferece anexar), nao no Novo lançamento direto', async () => {
-    consultas.notaJaLancada.mockImplementation(async () => [{ id: 'velho' }]);
+    consultas.notaJaLancada.mockImplementation(async () => ({ ok: true, valor: [{ id: 'velho' }] }));
     const onAbrirNota = vi.fn();
     const onAbrir = vi.fn();
     render(<NovoDeXmlDialog open onClose={() => {}} clienteId="cli" fazendas={FAZENDAS} fornecedores={[AGRO]} onAbrirLancamento={onAbrir} onAbrirNota={onAbrirNota} lancadas={new Set()} />);
