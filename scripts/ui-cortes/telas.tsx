@@ -452,10 +452,15 @@ if (tela === 'mesclar') {
     subcentro: 'Juros de Financiamento Pecuária', macro_custo: 'Despesas Financeiras', cancelado: false, sem_movimentacao_caixa: false, ...o });
   const LINHAS_CPR = [
     lin('rec-1', 2, 435.75, 'Internet Fazenda Exemplo', { subcentro: 'Comunicação e Energia Pecuária' }),
-    lin('juros-2', 5, 35665.34, 'Juros 2/5 · 8.233.040 · Giro Rural'),
-    lin('amort-2', 5, 120004.5, 'Amortização 2/5 · 8.233.040 · Giro Rural', { subcentro: 'Amortização de Financiamento' }),
+    lin('juros-2', 5, 35665.34, 'Juros 2/5 · 8.233.040 · Giro Rural', { financiamento_id: 'fin-1' }),
+    lin('amort-2', 5, 120004.5, 'Amortização 2/5 · 8.233.040 · Giro Rural', { subcentro: 'Amortização de Financiamento', financiamento_id: 'fin-1' }),
     lin('ambas', 9, 999999999.99, 'Lançamento com as duas origens de estimativa', { subcentro: 'Juros de Financiamento Pecuária' }),
-    lin('avulsa', 12, 1500, 'Sal mineral', { subcentro: 'Nutrição Engorda' }),
+    lin('avulsa', 12, 1500, 'Sal mineral', { subcentro: 'Nutrição Engorda', tipo_documento: 'nf', numero_documento: '999999999' }),
+    /* P152 — uma PAGA antes do vencimento (fica no dia do pagamento, linha mais clara, Pgto. em azul) e uma parcela de parcelamento
+       (selo P, "i/N" do contrato) com NF anexada (o "NF" que abre a aba Documentos) */
+    lin('paga-1', 3, 2533.79, 'Manutenção do trator da sede com troca de embreagem', { status_transacao: 'realizado', data_pagamento: dia(0),
+      financiamento_id: 'parc-1', subcentro: 'Manutenção Máquinas Pecuária' }),
+    lin('parc-1', 7, 990, 'Parcela de óleo lubrificante', { financiamento_id: 'parc-2', subcentro: 'Manutenção Máquinas Pecuária' }),
     /* CPR-AJUSTES-20-10 — um VENCIDO (entra hoje, com o selo e o aviso) e uma ENTRADA no mesmo dia de uma saída (a ordem do dia) */
     lin('vencido-1', -4, 290000, 'Transferência para aplicação em CDB com o nome longo do banco', { subcentro: 'Transferência entre contas' }),
     lin('entrada-1', 12, 21000, 'Venda de bezerros desmamados', { tipo_operacao: '1-Entradas', sinal: 1, conta_bancaria_id: null, conta_destino_id: 'bb', subcentro: 'Venda de Desmama Machos' }),
@@ -470,11 +475,14 @@ if (tela === 'mesclar') {
     from: (t: string, e: any) => t === 'vw_financeiro_lancamentos_v2_doc' ? LINHAS_CPR
       : t === 'financeiro_contas_bancarias' ? [{ id: 'bb', nome_conta: 'Banco Alfa', banco: 'BB', fazenda_id: 'f1', ativo: true, ordem_exibicao: 1, tipo_conta: 'conta_corrente' }]
       : t === 'financeiro_recorrencias' ? [{ id: 'reg-1' }]
+      /* P152 — o `recorrencia_id` dos ids visíveis (o selo R) */
+      : t === 'financeiro_lancamentos_v2' && e.in.id ? [{ id: 'rec-1', recorrencia_id: 'reg-1' }, { id: 'ambas', recorrencia_id: 'reg-1' }]
+      : t === 'vw_lancamento_documentos' ? [{ lancamento_id: 'parc-1', especie: 'nf', numero: '177472', cancelado: false, chave_acesso: null }]
       : t === 'financeiro_lancamentos_v2' && e.in.recorrencia_id ? [{ id: 'rec-1', recorrencia_id: 'reg-1', valor: 435.75, data_vencimento: dia(2), status_transacao: 'programado', valor_do_mes_em: null },
           { id: 'ambas', recorrencia_id: 'reg-1', valor: 1, data_vencimento: dia(9), status_transacao: 'programado', valor_do_mes_em: null }]
       : [],
     rpc: (fn: string) => fn === 'fn_juros_estimados_do_cliente' ? [{ lancamento_id: 'juros-2' }, { lancamento_id: 'ambas' }]
-      : fn === 'fn_parcelas_dos_lancamentos' ? {} : null,
+      : fn === 'fn_parcelas_dos_lancamentos' ? { 'parc-1': [3, 10] } : null,
   };
   /* CPR-AJUSTES-20-10b — `&v=futuro`: um período que começa depois de hoje (o bloco "Vencidos em aberto · entram no saldo" antes
      do Caixa inicial, e nenhum dia de hoje). P106: o gate clica "Mês futuro" / "Mês anterior" (o retorno de sessão não restaura mais

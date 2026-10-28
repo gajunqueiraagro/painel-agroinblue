@@ -528,6 +528,10 @@ export default function V2Index() {
   const [financiamentoIdAlvo, setFinanciamentoIdAlvo] = useState<string | null>(null);
   /* PARC-CADEIA-01 — de onde se abriu o contrato: a volta retorna para lá (Lançamentos ou Contas a Pagar e Receber). */
   const [origemDoFinanciamento, setOrigemDoFinanciamento] = useState<V2Section>('financeiro-lanc');
+  /* P152 — a regra de recorrência que abre ao chegar (selo R da Contas a Pagar e Receber; a volta é para lá) */
+  const [recorrenciaIdAlvo, setRecorrenciaIdAlvo] = useState<string | null>(null);
+  /* saiu de Recorrências por outro caminho (a barra lateral): a ida acabou — a próxima visita abre a lista, sem regra e sem volta */
+  useEffect(() => { if (section !== 'recorrencias') setRecorrenciaIdAlvo(null); }, [section]);
   // Quando o lápis do modal "Lançamentos do mês" da Conciliação Bancária é clicado,
   // navegamos para 'financeiro-lanc' com ano/mês do contexto e habilitamos onBack
   // para retornar a 'conciliacao'. Resetar ao redirecionar para outras sections.
@@ -1126,7 +1130,12 @@ export default function V2Index() {
       <ContratosTab />
     );
 
-    if (section === 'recorrencias') return <V2Recorrencias />;
+    if (section === 'recorrencias') return (
+      <V2Recorrencias
+        recorrenciaIdInicial={recorrenciaIdAlvo}
+        onVoltarParaOrigem={() => { setRecorrenciaIdAlvo(null); setSection('contas-a-pagar-receber'); }}
+      />
+    );
     if (section === 'painel-periodo') return <PainelPeriodoTab />;
     if (section === 'contas-a-pagar-receber') return (
       <ContasPagarReceberTab
@@ -1135,6 +1144,10 @@ export default function V2Index() {
           setOrigemDoFinanciamento('contas-a-pagar-receber');
           setFinanciamentoIdAlvo(id);
           setSection('financiamentos');
+        } : undefined}
+        onAbrirRecorrencia={podeAbrirTela('recorrencias') ? (id) => {
+          setRecorrenciaIdAlvo(id);
+          setSection('recorrencias');
         } : undefined}
       />
     );

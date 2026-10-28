@@ -1,5 +1,6 @@
 import { useTheme } from "next-themes";
 import { Toaster as Sonner, toast } from "sonner";
+import { ESTILO_DO_AVISO } from "./avisoSobreOModal";
 
 type ToasterProps = React.ComponentProps<typeof Sonner>;
 
@@ -56,6 +57,9 @@ const Toaster = ({ ...props }: ToasterProps) => {
       closeButton
       duration={2000}
       className="toaster group"
+      /* P158b — com um modal do Radix aberto o `body` fica em `pointer-events: none`: a lista dos avisos devolve o clique a si
+         mesma, senão o ✕ não fecha (e o erro, que só fecha no ✕, fica preso). O modal não fecha por isso: `avisoSobreOModal.ts`. */
+      style={ESTILO_DO_AVISO}
       toastOptions={{
         classNames: {
           toast:
