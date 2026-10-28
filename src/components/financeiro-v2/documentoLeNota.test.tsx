@@ -11,13 +11,30 @@ vi.mock('@/integrations/supabase/client', () => ({ supabase: { rpc: vi.fn(), fro
 const itens = vi.hoisted(() => ({ gravar: vi.fn(async (_c: string, _b: ArrayBuffer): Promise<string | null> => null) }));
 vi.mock('@/lib/financeiro/itensDaNotaBanco', async (orig) => ({ ...(await orig<typeof import('@/lib/financeiro/itensDaNotaBanco')>()), gravarItensSemTravar: itens.gravar }));
 vi.mock('@/hooks/useFornecedoresDoCliente', async () => (await import('@/test/leitorDeFornecedoresFake')).moduloDoLeitorFake());
+/* P164 — a gravação do lançamento pela nota (`fn_nota_completar`, falsa): a prévia diz o que muda; gravar devolve a operação */
+const banco = vi.hoisted(() => ({
+  completarComANota: vi.fn(async (_c: string, pedido: readonly Record<string, unknown>[], o: { juntar: boolean; chave: string | null; simular: boolean })
+    : Promise<Consulta<ResultadoCompletar>> => ({ ok: true,
+    valor: { ok: true, recusas: [], operacao: o.simular ? null : 'op-1', financiamentoId: null, efeitoDre: [], linhas: pedido.map((x) => ({ id: String(x.id), descricao: null,
+      situacao: 'realizada', parcelaN: null, campos: {
+        numero_documento: { hoje: '74974', fica: x.numero_documento, muda: true, hojeNome: null, ficaNome: null, cadeado: null },
+        tipo_documento: { hoje: null, fica: x.tipo_documento, muda: true, hojeNome: null, ficaNome: null, cadeado: null },
+        data_competencia: { hoje: '2026-08-24', fica: x.data_competencia, muda: true, hojeNome: null, ficaNome: null, cadeado: null },
+        safra_id: { hoje: null, fica: 'safra-2627', muda: true, hojeNome: null, ficaNome: null, cadeado: null },
+      } })) } })),
+  desfazerCompletar: vi.fn(async (_op: string): Promise<string | null> => null),
+  fornecedorPeloDocumento: vi.fn(async (_c: string, _d: string) => ({ ok: true, valor: { id: 'agro', nome: 'Agropecuaria Exemplo Ltda', ativo: true } })),
+}));
+vi.mock('@/lib/financeiro/nfeConsultas', async (orig) => ({ ...(await orig<object>()), ...banco }));
 
-import { FormDocumento, type SugestaoDocumento } from '@/components/financeiro-v2/AbaDocumentosLancamento';
+import { FormDocumento, type CompletarPelaNota, type SugestaoDocumento } from '@/components/financeiro-v2/AbaDocumentosLancamento';
 import type { LancDocPayload, LancamentoDocumentosApi } from '@/hooks/useLancamentoDocumentos';
 import { definirFornecedoresDoLeitor } from '@/test/leitorDeFornecedoresFake';
 import { EMITENTE_CNPJ, chaveDe, montarNFe, utf8, type OpcoesNota } from '@/lib/financeiro/nfe/__fixtures__/notas';
 import { camposDaNota, divergenciasDaNota, FRASE_NOTA_NAO_LIDA } from '@/lib/financeiro/nfe/documentoDaNota';
 import { lerNota } from '@/lib/financeiro/nfe/lerNota';
+import type { Consulta } from '@/lib/financeiro/nfeConsultas';
+import type { ResultadoCompletar } from '@/lib/financeiro/nfe/notaCompletar';
 
 /* o cadastro do emitente COM o CNPJ da nota; e o favorecido que o lançamento tem (outro) */
 const FORNECEDORES = [
@@ -37,13 +54,14 @@ if (!('arrayBuffer' in Blob.prototype)) {
 function arquivo(nome: string, conteudo: string | Uint8Array): File {
   return new File([typeof conteudo === 'string' ? utf8(conteudo) : conteudo], nome, { type: '' });
 }
-function monta(p: { onVer?: (a: File) => Promise<string | null>; sugestao?: SugestaoDocumento } = {}) {
-  const registrar = vi.fn(async (_p: LancDocPayload) => ({ id: 'novo', origem: 'lancamento' as const, operacaoId: null }));
+function monta(p: { onVer?: (a: File) => Promise<string | null>; sugestao?: SugestaoDocumento; completar?: CompletarPelaNota; registrarFalha?: boolean } = {}) {
+  const registrar = vi.fn(async (_p: LancDocPayload) => (p.registrarFalha ? null : { id: 'novo', origem: 'lancamento' as const, operacaoId: null }));
   const api: LancamentoDocumentosApi = {
     documentos: [], confronto: null, loading: false, saving: false, operacaoId: null, operacaoTipo: null,
     registrar, editar: vi.fn(), cancelar: vi.fn(), anexar: vi.fn(), urlAssinada: vi.fn(), recarregar: vi.fn(),
   };
-  render(<FormDocumento api={api} documento={null} clienteId="cli" onFechar={vi.fn()} sugestao={p.sugestao ?? SUGESTAO} onVerOQueANotaMuda={p.onVer} />);
+  render(<FormDocumento api={api} documento={null} clienteId="cli" onFechar={vi.fn()} sugestao={p.sugestao ?? SUGESTAO} onVerOQueANotaMuda={p.onVer}
+    completarPelaNota={p.completar} />);
   return { registrar };
 }
 const soltar = (f: File) => fireEvent.change(screen.getByTestId('doc-arquivo'), { target: { files: [f] } });
@@ -52,6 +70,7 @@ const valorDe = (id: string) => (screen.getByTestId(id) as HTMLInputElement).val
 beforeEach(() => {
   definirFornecedoresDoLeitor(FORNECEDORES);
   itens.gravar.mockClear();
+  banco.completarComANota.mockClear(); banco.desfazerCompletar.mockClear(); banco.fornecedorPeloDocumento.mockClear();
   Element.prototype.scrollIntoView = () => {};
   Element.prototype.hasPointerCapture = () => false;
   Element.prototype.releasePointerCapture = () => {};
@@ -143,5 +162,66 @@ describe('P127 — o Novo documento lê a nota solta no campo Arquivo', () => {
     await screen.findByTestId('arquivo-escolhido');
     expect(screen.queryByTestId('nota-nao-lida')).toBeNull();
     expect(screen.queryByTestId('nota-lida')).toBeNull();
+  });
+});
+
+/* P164 (Gabriel 28/10 15:22) — a nota que CONFERE (valor e emitente iguais aos do lançamento) leva ao lançamento o nº "000.000.000", o tipo
+   Nota Fiscal e a competência = emissão, pela MESMA gravação do P128b; o lançamento grava ANTES do documento, e o documento que falha desfaz */
+describe('P164 — o Registrar documento com a nota que confere', () => {
+  const CONFERE: SugestaoDocumento = { numero: '74974', dataEmissao: '2026-08-24', valor: 408.77, emitenteId: 'agro' };
+  const completar = () => ({ lancamentoId: 'lanc-1', onCompletado: vi.fn() });
+  it('a faixa diz o que o lançamento fica (a prévia do banco); Registrar grava o lançamento ANTES do documento e o modal recebe o que ficou', async () => {
+    const c = completar();
+    const { registrar } = monta({ sugestao: CONFERE, completar: c });
+    soltar(arquivo('n.xml', montarNFe(NOTA)));
+    expect((await screen.findByTestId('nota-lancamento-fica')).textContent)
+      .toBe('· ao registrar, o lançamento fica com nº 000.074.974, tipo Nota Fiscal, competência 30/09/2026');
+    expect(banco.completarComANota.mock.calls[0][1]).toEqual([{ id: 'lanc-1', numero_documento: '000.074.974', tipo_documento: 'Nota Fiscal', data_competencia: '2026-09-30' }]);
+    expect(banco.completarComANota.mock.calls.every((x) => x[2].simular)).toBe(true);
+    fireEvent.click(screen.getByTestId('doc-registrar'));
+    await waitFor(() => expect(registrar).toHaveBeenCalled());
+    const gravou = banco.completarComANota.mock.calls.findIndex((x) => x[2].simular === false);
+    expect(gravou).toBeGreaterThanOrEqual(0);
+    expect(banco.completarComANota.mock.invocationCallOrder[gravou]).toBeLessThan(registrar.mock.invocationCallOrder[0]);
+    expect(c.onCompletado).toHaveBeenCalledWith({ numeroDocumento: '000.074.974', tipoDocumento: 'Nota Fiscal', dataCompetencia: '2026-09-30', safraId: 'safra-2627' });
+    expect(banco.desfazerCompletar).not.toHaveBeenCalled();
+  });
+  it('valor ou emitente diferentes: não confere — nada vai ao lançamento (o documento registra como sempre)', async () => {
+    const { registrar } = monta({ completar: completar() });
+    soltar(arquivo('n.xml', montarNFe(NOTA)));
+    await screen.findByTestId('nota-lida');
+    expect(screen.queryByTestId('nota-lancamento-fica')).toBeNull();
+    fireEvent.click(screen.getByTestId('doc-registrar'));
+    await waitFor(() => expect(registrar).toHaveBeenCalled());
+    expect(banco.completarComANota).not.toHaveBeenCalled();
+  });
+  it('o banco recusa a gravação: a frase fica no formulário e NADA é gravado (nem o documento)', async () => {
+    const { registrar } = monta({ sugestao: CONFERE, completar: completar() });
+    soltar(arquivo('n.xml', montarNFe(NOTA)));
+    await screen.findByTestId('nota-lancamento-fica');
+    banco.completarComANota.mockImplementationOnce(async () => ({ ok: false, motivo: 'O mês 09/2026 está fechado: reabra antes de mudar «Parafusos». Nada foi gravado.' }));
+    fireEvent.click(screen.getByTestId('doc-registrar'));
+    expect(await screen.findByText('O mês 09/2026 está fechado: reabra antes de mudar «Parafusos». Nada foi gravado.')).toBeTruthy();
+    expect(registrar).not.toHaveBeenCalled();
+  });
+  it('o documento não nasce depois de o lançamento mudar: a operação é DESFEITA e a frase diz', async () => {
+    const c = completar();
+    monta({ sugestao: CONFERE, completar: c, registrarFalha: true });
+    soltar(arquivo('n.xml', montarNFe(NOTA)));
+    await screen.findByTestId('nota-lancamento-fica');
+    fireEvent.click(screen.getByTestId('doc-registrar'));
+    expect(await screen.findByText('Não foi possível registrar o documento. O lançamento voltou ao que era.')).toBeTruthy();
+    expect(banco.desfazerCompletar).toHaveBeenCalledWith('op-1');
+    expect(c.onCompletado).not.toHaveBeenCalled();
+  });
+  it('o emitente sai do CNPJ lido: a lista ainda sem o cadastro → o banco pelo CNPJ, nunca "Outro" calado', async () => {
+    definirFornecedoresDoLeitor([{ id: 'outro', nome: 'Parafusos Sinteticos Ltda', cpf_cnpj: null, ativo: true }]);
+    const { registrar } = monta();
+    soltar(arquivo('n.xml', montarNFe(NOTA)));
+    await screen.findByTestId('nota-lida');
+    await waitFor(() => expect(banco.fornecedorPeloDocumento).toHaveBeenCalledWith('cli', expect.stringContaining('11222333')));
+    fireEvent.click(screen.getByTestId('doc-registrar'));
+    await waitFor(() => expect(registrar).toHaveBeenCalled());
+    expect(registrar.mock.calls[0][0].emitenteId).toBe('agro');
   });
 });

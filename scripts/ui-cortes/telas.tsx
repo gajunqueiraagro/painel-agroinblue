@@ -1043,8 +1043,18 @@ if (tela === 'mesclar') {
     const api: any = { documentos: [], confronto: null, loading: false, saving: false, operacaoId: null, operacaoTipo: null,
       registrar: async () => ({ id: 'x', origem: 'lancamento', operacaoId: null }), editar: async () => true, cancelar: async () => true,
       anexar: async () => true, urlAssinada: async () => null, recarregar: async () => {} };
+    /* P164 — `v=confere`: o lançamento diz o valor da nota (e não tem emitente): a nota CONFERE e a faixa diz, pela prévia do banco falso (a
+       `fn_nota_completar` com `p_simular`), o que o lançamento fica — nº, tipo e competência */
+    const confere = q.get('v') === 'confere';
+    if (confere) g.__bancoBancada = { from: () => [], rpc: (fn: string, a: any) => (fn !== 'fn_nota_completar' ? null : { ok: true, recusas: [], efeito_dre: [],
+      linhas: (a.p_lancamentos ?? []).map((x: any) => ({ id: x.id, descricao: null, situacao: 'conciliada', parcela_n: null, campos: {
+        numero_documento: { hoje: '74974', fica: x.numero_documento, muda: true, hoje_nome: null, fica_nome: null, cadeado: null },
+        tipo_documento: { hoje: null, fica: x.tipo_documento, muda: true, hoje_nome: null, fica_nome: null, cadeado: null },
+        data_competencia: { hoje: '2026-08-24', fica: x.data_competencia, muda: true, hoje_nome: null, fica_nome: null, cadeado: null } } })) }) };
     montar(<FormDocumento api={api} documento={null} clienteId="cli" onFechar={() => {}}
-      sugestao={{ numero: '74974', dataEmissao: '2026-08-24', valor: 400, emitenteId: LEITOR[0]?.id ?? null }}
+      sugestao={confere ? { numero: '74974', dataEmissao: '2026-08-24', valor: 408.77, emitenteId: null }
+        : { numero: '74974', dataEmissao: '2026-08-24', valor: 400, emitenteId: LEITOR[0]?.id ?? null }}
+      completarPelaNota={confere ? { lancamentoId: 'lanc-bancada', onCompletado: () => {} } : undefined}
       onVerOQueANotaMuda={async () => null} />);
   };
   void montarDoc();

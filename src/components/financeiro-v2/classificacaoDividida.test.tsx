@@ -54,7 +54,12 @@ vi.mock('@/hooks/useItensDaNota', () => ({
 vi.mock('@/lib/financeiro/sugestaoDeContaDosItens', async (orig) => ({ ...(await orig<object>()), historicoDoEmitente: async () => [] }));
 vi.mock('@/contexts/ClienteContext', () => ({ useCliente: () => ({ clienteAtual: { id: 'nj', nome: 'NJ' } }) }));
 vi.mock('@/v2/components/edicao/LancamentoZooModal', () => ({ LancamentoZooModal: () => null }));
-vi.mock('@/components/financeiro-v2/AbaDocumentosLancamento', () => ({ AbaDocumentosLancamento: () => null }));
+/* P164 — a aba Documentos falsa: um botão faz o que o "Registrar documento" da nota que confere faz depois de gravar (avisa o que ficou) */
+vi.mock('@/components/financeiro-v2/AbaDocumentosLancamento', () => ({
+  AbaDocumentosLancamento: (p: { completarPelaNota?: { onCompletado: (f: { numeroDocumento: string | null; tipoDocumento: string | null; dataCompetencia: string | null; safraId: string | null }) => void } }) => (
+    <button type="button" data-testid="fake-nota-completou" onClick={() => p.completarPelaNota?.onCompletado({ numeroDocumento: '000.003.241',
+      tipoDocumento: 'Nota Fiscal', dataCompetencia: '2026-09-15', safraId: '' })}>completou</button>),
+}));
 vi.mock('@/components/financeiro-v2/AbaAuditoriaLancamento', () => ({ AbaAuditoriaLancamento: () => null }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() } }));
 
@@ -292,5 +297,20 @@ describe('P165 — a conta por item mudada não some no Salvar', () => {
     fireEvent.click(botaoSalvar());
     await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
     expect(screen.queryByTestId('divisao-motivo')).toBeNull();
+  });
+});
+
+/* P164 — o "Registrar documento" da nota que confere grava nº, tipo e competência no BANCO; o modal aberto passa a mostrar isso — senão o
+   Salvar seguinte mandaria os campos de antes por cima */
+describe('P164 — o modal recebe o que a nota deixou no lançamento', () => {
+  it('depois do Registrar, o Salvar manda o nº "000.003.241", o tipo Nota Fiscal e a competência da emissão', async () => {
+    const { onSave } = montar({ ...LANC, numero_documento: '3241', tipo_documento: null, data_competencia: '2026-09-29' });
+    fireEvent.mouseDown(await screen.findByRole('tab', { name: /Documentos/ }));
+    fireEvent.click(await screen.findByTestId('fake-nota-completou'));
+    fireEvent.mouseDown(screen.getByRole('tab', { name: /Geral/ }));
+    await assentar();
+    fireEvent.click(botaoSalvar());
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    expect(onSave.mock.calls[0][0]).toMatchObject({ numero_documento: '000.003.241', tipo_documento: 'Nota Fiscal', data_competencia: '2026-09-15' });
   });
 });

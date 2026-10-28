@@ -406,7 +406,7 @@ describe('tela B — o Novo lançamento preenchido pela nota', () => {
     await waitFor(() => expect(m.onSave).toHaveBeenCalledTimes(1));
     expect(m.onSave.mock.calls[0][0]).toMatchObject({
       tipo_operacao: '2-Saídas', status_transacao: 'programado', valor: 16238, data_competencia: '2026-09-30', data_vencimento: '2026-10-30',
-      data_pagamento: null, favorecido_id: 'agro', fazenda_id: 'f-pur', numero_documento: '12345', tipo_documento: 'Nota Fiscal',
+      data_pagamento: null, favorecido_id: 'agro', fazenda_id: 'f-pur', numero_documento: '000.012.345', tipo_documento: 'Nota Fiscal',
       forma_pagamento: 'Boleto', plano_conta_id: 'pl-nut', descricao: 'SAL MINERAL 80 P SC 30KG, RACAO ENGORDA 18% SC 40KG · 6 itens',
     });
     /* o documento NF pendente vai ao banco com a chave, o numero, a serie, a emissao e o valor da NOTA… */

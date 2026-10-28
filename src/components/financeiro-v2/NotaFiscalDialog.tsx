@@ -14,7 +14,7 @@
  *   de valor: a diferenca aparece em R$ e o operador decide). NADA ESCOLHIDO AQUI SE PERDE: "Abrir no Novo lancamento" leva tudo
  *   (`prefillDoModal`).
  */
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
@@ -55,7 +55,7 @@ import { ondeEsta } from './LancamentoDoXml';
 import type { DoXml } from '@/lib/financeiro/nfePrefill';
 import { resolverEmitente } from '@/lib/financeiro/nfe/resolverEmitente';
 import { gravarItensSemTravar } from '@/lib/financeiro/itensDaNotaBanco';
-import { canceladosDaNota, casarJaLancados, fracaoDaDescricao, fraseDoAchado, linhasSistemaNota, parcelasParaCasar, TEXTO_DA_SITUACAO, type LancamentoJaLancado,
+import { canceladosDaNota, casarJaLancados, contaUnicaDasIrmas, fracaoDaDescricao, fraseDoAchado, linhasSistemaNota, parcelasParaCasar, TEXTO_DA_SITUACAO, type LancamentoJaLancado,
   type SituacaoNaTabela } from '@/lib/financeiro/nfe/jaLancada';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -70,6 +70,7 @@ import { fraseDaRemessa } from '@/lib/financeiro/nfe/remessaEntregaFutura';
 import { ORIGEM_FAZENDA_PELO_ENDERECO } from '@/lib/financeiro/nfe/proporLancamento';
 import type { EmitenteNFe } from '@/lib/financeiro/nfe/tipos';
 import { dataCurta, documentoFormatado, numeroDaNota, numeroFalado, reais, soDigitos } from '@/lib/financeiro/nfe/formatos';
+import { formatNFNumber } from '@/lib/financeiro/documentoHelper';
 import {
   camposQueOEmitenteCompleta, completarCadastroPeloXml, desfazerIeDaFazenda, fornecedorPeloDocumento, iePorFazenda, inscreverEmFazendas, lancamentosAbertosComValor,
   atualizarCamposDoCadastro, cadastroParaComparar, desfazerCamposDoCadastro, notaJaLancada, usoDoFornecedor, type CadastroComODocumento,
@@ -362,6 +363,15 @@ export function NotaFiscalDialog({
   /* D — a nota que so' tem lancamento CANCELADO nao esta' lancada: o rodape so' diz quantos */
   const canceladosSo = useMemo(() => (achados && !achados.some((l) => !l.cancelado) ? canceladosDaNota(achados) : []), [achados]);
   const jaLancada = useMemo(() => (achados ? casarJaLancados(parcelasDaBusca, achados, n.totais.notaCent) : null), [achados, parcelasDaBusca, n.totais.notaCent]);
+  /* P128b-N1 — a parcela que falta nasce com a conta das irmãs quando todas têm a mesma: a Conta da prévia COMEÇA nela (à vista, troca-se);
+     sem conta única (divergem ou alguma sem conta), "conta" entra no "Falta:" e o Criar fica apagado até escolher */
+  const contaDasIrmas = jaLancada && jaLancada.faltam.length > 0 ? contaUnicaDasIrmas(jaLancada.alvos) : null;
+  const contaDasIrmasPosta = useRef<string | null>(null);
+  useEffect(() => {
+    if (!contaDasIrmas || contaDasIrmasPosta.current === contaDasIrmas) return;
+    contaDasIrmasPosta.current = contaDasIrmas;
+    setContaId((c) => (c === '__none__' ? contaDasIrmas : c));
+  }, [contaDasIrmas]);
   /* P128a — a TABELA SISTEMA × NOTA e a frase do que foi achado (a mesma lista, as mesmas contas) */
   const linhasDaTabela = useMemo(() => (jaLancada ? linhasSistemaNota(jaLancada, n.totais.notaCent) : []), [jaLancada, n.totais.notaCent]);
   /* P128a (porta 2) — o lancamento aberto no Editar que a busca NAO achou: nada se cria daqui (a ancora pelo lancamento e' o P128c) */
@@ -478,6 +488,7 @@ export function NotaFiscalDialog({
   else if (res.inativo && favorecidoId === p.favorecidoId) faltas.push('fornecedor ativo');
   if (!fazendaId) faltas.push('fazenda');
   if (!planoId) faltas.push('subcentro');
+  if (jaLancada && caminho !== 'criar' && criarFaltam && jaLancada.faltam.length > 0 && como !== 'cartao' && (!contaId || contaId === '__none__')) faltas.push('conta');
   if (lavoura && !safraId) faltas.push('safra');
   if (lavoura && cultura === null) faltas.push('cultura');
   if (como !== 'cartao' && !cabeAqui && !vencimento) faltas.push('vencimento');
@@ -1238,7 +1249,7 @@ export function NotaFiscalDialog({
         <PreviaCompletar open onFechar={() => setPreviaAberta(false)} clienteId={clienteId}
           alvos={alvosDaPrevia} rotulos={rotulosDaPrevia} atualizarNaoPagas={caminho === 'atualizar'} juntar={!!soltas} chave={n.chave || null}
           todasIniciais={{ descricaoBase: p.descricao, favorecidoId: favorecidoId ?? null, fazendaId: fazendaId || null, contaId: contaEscolhida,
-            planoContaId: planoId || null, numeroDocumento: /^nf/i.test(p.numeroDocumento) ? p.numeroDocumento : `NF ${p.numeroDocumento || numeroFalado(n.numero)}`,
+            planoContaId: planoId || null, numeroDocumento: formatNFNumber(p.numeroDocumento || n.numero),
             competencia: n.emissao || null, safraId: lavoura && safraId ? safraId : null }}
           onConfirmar={completarComNota} />
       )}

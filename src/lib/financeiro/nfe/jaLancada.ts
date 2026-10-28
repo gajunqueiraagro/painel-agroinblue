@@ -16,6 +16,8 @@ export interface LancamentoJaLancado {
   status: string | null;
   conciliado: boolean;
   financiamentoId: string | null;
+  /** P128b-N1 — a conta do achado (a parcela que falta nasce com a das irmãs quando todas têm a mesma) */
+  contaBancariaId?: string | null;
   numeroDocumento: string | null;
   fornecedorId: string | null;
   fornecedorNome: string | null;
@@ -65,6 +67,15 @@ export interface NotaJaLancada {
  * o arredondamento de quem dividiu): 821,22 x 4 = 3.284,88. Devolve o menor N (2 a 72), ou `null`. Qual das N, a nota nao diz — a tela
  * mostra "parcela ? de N".
  */
+/** P128b-N1 (Gabriel 28/10 16:04) — a conta das irmãs para a parcela que FALTA: a conta quando TODAS as vivas têm a mesma; divergem ou
+ *  alguma está sem conta = `null` (a prévia pede a conta no "Falta:"). */
+export function contaUnicaDasIrmas(alvos: readonly LancamentoJaLancado[]): string | null {
+  const vivas = alvos.filter((l) => !l.cancelado);
+  const contas = new Set(vivas.map((l) => l.contaBancariaId ?? null));
+  if (vivas.length === 0 || contas.size !== 1 || contas.has(null)) return null;
+  return vivas[0].contaBancariaId ?? null;
+}
+
 export function fracaoDaNota(valorCent: number, notaCent: number): number | null {
   if (!(valorCent > 0) || !(notaCent > valorCent)) return null;
   for (let n = 2; n <= 72; n++) if (Math.abs(valorCent * n - notaCent) <= n) return n;
@@ -178,6 +189,7 @@ export function lerJaLancados(r: unknown): LancamentoJaLancado[] {
       id, vencimento: texto(o, 'vencimento'), pagamento: texto(o, 'pagamento'), competencia: texto(o, 'competencia'),
       descricao: texto(o, 'descricao'), valorCent: Number(Reflect.get(o, 'valor_cent')) || 0, status: texto(o, 'status'),
       conciliado: Reflect.get(o, 'conciliado') === true, financiamentoId: texto(o, 'financiamento_id'), numeroDocumento: texto(o, 'numero_documento'),
+      contaBancariaId: texto(o, 'conta_bancaria_id'),
       fornecedorId: texto(o, 'fornecedor_id'), fornecedorNome: texto(o, 'fornecedor_nome'), fornecedorPor: texto(o, 'fornecedor_por'),
       parcelas: Array.isArray(parc) ? parc.flatMap((p: unknown) => (p && typeof p === 'object'
         ? [{ n: Number(Reflect.get(p, 'n')), difCent: Number(Reflect.get(p, 'dif_cent')) || 0, difDias: Number(Reflect.get(p, 'dif_dias')) || 0 }] : [])) : [],

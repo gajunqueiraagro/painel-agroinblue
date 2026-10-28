@@ -3486,6 +3486,18 @@ export function LancamentoV2Dialog({
                 sugestao={sugestaoDoDocumento}
                 /* P127 + P128c — o "Novo documento" que lê a nota abre a MESMA prévia do "Ler a NF" (um caminho só: `onLerNotaFiscal`) */
                 onVerOQueANotaMuda={onLerNotaFiscal && lancamento?.id ? (arquivo) => onLerNotaFiscal(arquivo, lancamento.id) : undefined}
+                /* P164 — a nota que CONFERE completa o lançamento (nº, tipo, competência) pela função do banco; o modal passa a mostrar o que
+                   ficou gravado — senão o Salvar seguinte mandaria os campos de antes por cima */
+                completarPelaNota={lancamento?.id && clienteAtual?.id && !isOCTitulo ? {
+                  lancamentoId: lancamento.id,
+                  onCompletado: (fica) => {
+                    if (fica.numeroDocumento !== null) setNotaFiscal(fica.numeroDocumento);
+                    setTipoDocumento(TIPOS_DOCUMENTO.find((t) => t === fica.tipoDocumento) ?? '');
+                    if (fica.dataCompetencia) setDataCompetencia(fica.dataCompetencia);
+                    setClassificacao((c) => ({ ...c, safra_id: fica.safraId ?? '' }));
+                    if (clienteAtual?.id) notificarLancamentosMudaram(clienteAtual.id, null, [lancamento.id]);
+                  },
+                } : undefined}
                 onAnexarBoletosDasParcelas={irmas ? () => setAnexarBoletos('irmas') : undefined} />
             ) : documentosAntesDeSalvar && formaPagamentoParc === 'parcelada' && numParcelas >= 2 ? (
               /* PR 2b — PARCELADO: os documentos da COMPRA (ligados às N) e a grade de parcelas com o boleto
