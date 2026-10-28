@@ -5,7 +5,8 @@
  *   (1) RETICENCIAS — elemento com `text-overflow: ellipsis` (ou `-webkit-line-clamp`) cujo texto nao cabe (scrollWidth > clientWidth,
  *       ou scrollHeight > clientHeight no clamp): nenhum texto com "…" em tela nenhuma; e o CORTE CALADO — texto proprio numa linha so'
  *       (`nowrap`) cortado por `overflow: hidden` sem reticencias;
- *   (2) CABECALHO PRESO COM VAO — num container que rola, rolado ate' o meio: o cabecalho preso (`position: sticky`) nao encosta no topo
+ *   (2) CABECALHO PRESO COM VAO — num container que rola, rolado ate' a TABELA DELE cruzar o topo (P137, 28/10: varias tabelas empilhadas
+ *       no mesmo quadro; antes, o quadro rolado ate' o meio): o cabecalho preso (`position: sticky`) nao encosta no topo
  *       do container (por onde as linhas aparecem ACIMA dele), tem fundo transparente (a linha aparece POR BAIXO dele), ou mora num
  *       container que nao rola dentro de um que rola (sobe com a pagina e nao fica preso);
  *   (2b) DATA OU NUMERO QUEBRADO — celula cujo texto e' so' data, hora ou numero e ocupa mais de uma linha;
@@ -155,6 +156,16 @@ const CENARIOS = [
   { nome: 'lancamento-dividido-Itens', url: 'tela=lancamento&m=editar&v=sal&div=1', tamanhos: TAMANHOS_DO_CONTRATO,
     antes: async (p) => { await p.getByRole('tab', { name: /Itens da nota/ }).first().click(); await p.waitForTimeout(400);
       await p.getByRole('button', { name: 'Contas', exact: true }).first().click(); await p.waitForTimeout(500); } },
+  /* P165 — a conta de um item mudada e o Salvar: a confirmação do Dividir com "Salvar sem dividir" (Cancelar · Salvar sem dividir · Salvar e
+     dividir no rodapé de 480px; a explicação e a prévia do banco inteiras) */
+  { nome: 'lancamento-dividido-salvar-contas', url: 'tela=lancamento&m=editar&v=sal&div=1', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="divisao-motivo"]',
+    antes: async (p) => {
+      await p.getByRole('tab', { name: /Itens da nota/ }).first().click(); await p.waitForTimeout(400);
+      await p.getByRole('button', { name: 'Contas', exact: true }).first().click(); await p.waitForTimeout(500);
+      await p.locator('[data-testid="conta-do-item-1"] [role="combobox"]').first().click(); await p.waitForTimeout(400);
+      await p.locator('[data-testid="conta-barra-atividade"] button', { hasText: 'Lavoura' }).first().click(); await p.waitForTimeout(300);
+      await p.locator('[data-testid="conta-lista"] button', { hasText: 'Insumos Lavoura Milho' }).first().click(); await p.waitForTimeout(300);
+      await p.locator('button[tabindex="17"]').first().click(); await p.waitForTimeout(800); } },
   { nome: 'financeiro-dividido', url: 'tela=financeiro&div=1', regiao: '[data-testid="quadro-lancamentos"]', tamanhos: TAMANHOS_DO_CONTRATO },
   /* UI-TEXTO-LONGO-01 — a descrição de 300 caracteres: a tela é varrida (nenhum "…") e as alturas do modal, do resumo lateral e da lista
      de parcelas têm de ser as da MESMA tela com a descrição curta (`alturasComo`). O parcelado do XML traz a grade de parcelas. */
@@ -398,6 +409,10 @@ const CENARIOS = [
     } },
   /* P127 + P128c — o Novo documento que LÊ A NOTA: lida (com as três divergências lado a lado e o "Ver o que a nota muda") e a que não se
      lê (PDF sem texto: a frase "itens não gravados"). O arquivo entra pelo MESMO input da área (o XML sintético exposto pela bancada). */
+  /* P128b — a prévia campo a campo (5 parcelas, nomes compridos): juntar; o caminho 2 (Venc./Valor); a recusa do banco no rodapé */
+  ...[['juntar', ''], ['atualizar', '&cam=2'], ['recusa', '&v=recusa']].map(([v, u]) => ({ nome: `previa-completar-${v}`, url: `tela=previa-completar${u}`,
+    tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[role="dialog"]', semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="previa-rolagem"]' },
+    antes: async (p) => { await p.locator(v === 'recusa' ? '[data-testid="previa-recusa"]' : '[data-testid="previa-dre"]').waitFor({ timeout: 8000 }); await p.waitForTimeout(400); } })),
   ...[['lida', 'nota.xml'], ['nao-lida', 'escaneado.pdf']].map(([v, nome]) => ({ nome: `documento-nota-${v}`, url: 'tela=documento-nota',
     tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[role="dialog"]',
     antes: async (p) => {
@@ -406,9 +421,8 @@ const CENARIOS = [
       await p.locator(nome.endsWith('.xml') ? '[data-testid="nota-lida"]' : '[data-testid="nota-nao-lida"]').waitFor({ timeout: 8000 });
       await p.waitForTimeout(400);
     } })),
-  /* P96a — a confirmação do "Juntar as 4 e anexar" (o resumo, a caixinha da competência, o efeito no DRE) e a do "Usar a nota lida" */
-  { nome: 'nota-pdf-juntar-confirmar', url: 'tela=nota-pdf&v=irmas', tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[role="alertdialog"]',
-    antes: async (p) => { await p.locator('[data-testid="nota-juntar-soltas"]').first().click(); await p.waitForTimeout(800); } },
+  /* P96a — a confirmação do "Usar a nota lida". (A do "Juntar as 4 e anexar" saiu com o P128b: o juntar é a prévia campo a campo,
+     medida em `previa-completar-juntar`.) */
   /* a frase da NF digitada (2 linhas reservadas) nos largos — nos estreitos ela mora na aba "Parcelas e lançamento" (nota-pdf-aba-lancamento-irmas) */
   { nome: 'nota-pdf-nf-digitada', url: 'tela=nota-pdf&v=irmas', tamanhos: TAMANHOS_DO_CONSORCIO.filter(([l]) => l >= 1000),
     semRolarNoLugar: '[data-testid="nota-nf-digitada"]' },
@@ -942,10 +956,21 @@ function medirCabecalho(regiao) {
       achados.push({ regra: 'cabecalho', texto: `cabeçalho não fica preso (o container dele não rola; quem rola é o de fora) "${(x.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 40)}"` });
     }
     if (!presos.length) continue;
-    c.scrollTop = Math.round((c.scrollHeight - c.clientHeight) / 2);
     const rc = c.getBoundingClientRect(); const topo = rc.top + c.clientTop;
     for (const h of presos) {
-      const rh = h.getBoundingClientRect(); if (rh.height === 0) continue;
+      if (h.getBoundingClientRect().height === 0) continue;
+      /* P137 (Gabriel 28/10 09:21) — cada cabeçalho preso se mede com a TABELA DELE cruzando o topo do quadro, e não com o quadro no meio:
+         com várias tabelas empilhadas no mesmo quadro (o PC-100), no meio da rolagem a de baixo ainda não chegou ao topo e o cabeçalho dela
+         está no lugar natural — isso não é vão. Rola até o meio do trecho em que a tabela cruza o topo; se o quadro não rola o bastante
+         para ela cruzar, o cabeçalho nunca precisa prender e não se mede. Numa tabela só por quadro, dá o mesmo de antes. */
+      const caixa = h.closest('table') ?? h.parentElement ?? h;
+      c.scrollTop = 0;
+      const rt0 = caixa.getBoundingClientRect(); const alto = h.getBoundingClientRect().height;
+      const inicio = rt0.top - topo; const fim = rt0.bottom - topo - alto;
+      if (fim - inicio < 2) continue;
+      c.scrollTop = Math.max(0, Math.round(inicio + (fim - inicio) / 2));
+      if (c.scrollTop < inicio + 1) continue;
+      const rh = h.getBoundingClientRect();
       const nome = (h.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 40);
       if (rh.top - topo > 0.5) achados.push({ regra: 'cabecalho', texto: `vão de ${(rh.top - topo).toFixed(1)}px acima de "${nome}"` });
       /* fundo opaco: o cabeçalho (ou as células dele) tapa a linha que passa por baixo */
@@ -984,7 +1009,9 @@ try {
     <div style="height:120px;overflow:auto;padding-top:8px"><table><thead><tr><th style="position:sticky;top:0;background:rgba(255,255,255,.5)">Data</th></tr></thead>
     <tbody>${Array.from({ length: 30 }, () => '<tr><td>10/09/26</td></tr>').join('')}</tbody></table></div>
     <div style="height:120px;overflow:auto"><div style="overflow-x:auto"><table><thead style="position:sticky;top:0;background:#fff"><tr><th>Nome</th></tr></thead>
-    <tbody>${Array.from({ length: 30 }, () => '<tr><td>x</td></tr>').join('')}</tbody></table></div></div>`);
+    <tbody>${Array.from({ length: 30 }, () => '<tr><td>x</td></tr>').join('')}</tbody></table></div></div>
+    <div style="height:300px;overflow:auto"><div style="height:200px">bloco de cima</div>${['Empilhada A', 'Empilhada B'].map((n) => `<table><thead style="position:sticky;top:0;background:#fff"><tr><th>${n}</th></tr></thead>
+    <tbody>${Array.from({ length: 6 }, () => '<tr><td>y</td></tr>').join('')}</tbody></table>`).join('')}</div>`);
   /* e a rolagem (FIN-CONSORCIO-02): um modal com conteudo mais alto que a caixa tem de ser acusado */
   await p0.evaluate(() => { const d = document.createElement('div'); d.setAttribute('role', 'dialog'); d.style.cssText = 'height:40px;overflow:hidden';
     d.innerHTML = '<div style="height:120px">alto</div>'; document.body.appendChild(d); });
@@ -1033,6 +1060,9 @@ try {
   const prova = [...daRolagem0, ...daTabela0, ...daPagina0, ...daSobre0, ...(comMudanca && !semMudar ? [comMudanca] : [])].map((a) => a.regra);
   /* FORN-01b — o detector se prova na regra nova: o nome com "…" e title passa; o corte seco e o documento com "…" sao achados */
   const aceitoErrado = daPagina0.some((a) => a.texto.startsWith('Nome aceito'));
+  /* P137 — tabelas empilhadas no mesmo quadro: cabeçalho de quem ainda não chegou ao topo não é vão */
+  const empilhadaAcusada = daPagina0.filter((a) => a.regra === 'cabecalho' && a.texto.includes('Empilhada'));
+  if (empilhadaAcusada.length) { console.error(`check-ui-cortes: AUTO-TESTE DO CABEÇALHO EMPILHADO FALHOU (${empilhadaAcusada.map((a) => a.texto).join(' | ')})`); process.exit(2); }
   const seco0 = daPagina0.some((a) => a.texto.startsWith('corte seco: Nome cortado seco'));
   const doc0 = daPagina0.some((a) => a.regra === 'numero' && a.texto.includes('12.345.678/0001-90'));
   /* P121 — o clamp em N linhas dentro de célula com o texto inteiro no title passa; fora de tabela segue acusado */

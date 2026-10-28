@@ -94,6 +94,13 @@ export function BlocoCompetencia({ previa, escopo }: { previa: ResultadoPropagac
           A próxima geração {textoVagas(p.vagas)}
         </div>
       )}
+      {/* P160 — a competência recalculada que cai FORA da vigência: aviso; quem limpa é a prévia do P154, depois de propagar. */}
+      {p.foraDaVigencia.length > 0 && (
+        <div className="text-amber-700" data-testid="competencias-fora">
+          {p.foraDaVigencia.length} competência{p.foraDaVigencia.length === 1 ? '' : 's'} cairia{p.foraDaVigencia.length === 1 ? '' : 'm'} fora
+          da vigência ({p.foraDaVigencia.map((f) => mesCurto(f.compNova)).join(', ')}) — depois de propagar, a prévia mostra o que cancelar
+        </div>
+      )}
       {/* ⚠ COLISÃO REAL (fix2): a frase é a do BANCO, a mesma com que a execução recusa — a tela não a recompõe. Sem
           aviso mas com repetição (RPC anterior ao fix2), cai na lista de competências repetidas de antes. */}
       {p.aviso ? (

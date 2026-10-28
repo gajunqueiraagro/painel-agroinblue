@@ -625,7 +625,12 @@ export function LancamentoV2Dialog({
   const [divisao, setDivisao] = useState<DivisaoLida | null>(null);
   const [divisaoSeq, setDivisaoSeq] = useState(0);
   const [dividirAberto, setDividirAberto] = useState(false);
-  const [motivoDaDivisao, setMotivoDaDivisao] = useState<{ tipo: 'itens'; mapa: ReadonlyMap<number, string> } | { tipo: 'voltar' } | { tipo: 'desfazer' } | null>(null);
+  const [motivoDaDivisao, setMotivoDaDivisao] = useState<{ tipo: 'itens'; mapa: ReadonlyMap<number, string>; aoSalvar?: boolean } | { tipo: 'voltar' } | { tipo: 'desfazer' } | null>(null);
+  /* P165 — a conta por item MUDADA na vista "Contas" e ainda nao dividida: mora aqui (a aba que sai desmonta a vista) e o Salvar pergunta
+     antes de gravar — "Salvar e dividir" (os dois) ou "Salvar sem dividir" (explicito). Nada some em silencio. */
+  const [contasDosItensMudadas, setContasDosItensMudadas] = useState<ReadonlyMap<number, string> | null>(null);
+  const resultadoDoSalvarEDividir = useRef<ResultadoDaDivisao | null>(null);
+  useEffect(() => { setContasDosItensMudadas(null); }, [open, lancamento?.id]);
   const [contasAprendidas, setContasAprendidas] = useState<ReadonlyMap<number, string>>(new Map());
   /* NOTA-CONTAS-NA-CRIACAO-01 A — a divisao pelos itens escolhida no NOVO lancamento: PENDENTE na tela (nada vai ao banco antes do Salvar);
      o Salvar cria e divide (o parcelado numa transacao so'; o a' vista cancela o recem-criado se a divisao recusar) */
@@ -1845,8 +1850,13 @@ export function LancamentoV2Dialog({
     : !canSave ? MOTIVO_SALVAR_PENDENTE
     : null;
 
-  const handleSubmit = async (voltar?: { valor: number; vencimento: string }) => {
+  const handleSubmit = async (voltar?: { valor: number; vencimento: string }, aposConfirmar?: { semDividir: true } | { dividirCom: string }) => {
     if (!canSave) return;
+    /* P165 — conta por item mudada e nao dividida: o Salvar abre a confirmacao do Dividir (motivo + previa do banco); nada e' gravado antes */
+    if (contasDosItensMudadas && podeDividir && !voltar && !aposConfirmar) {
+      setMotivoDaDivisao({ tipo: 'itens', mapa: contasDosItensMudadas, aoSalvar: true });
+      return;
+    }
     /* CRIAR-DO-EXTRATO-01 — vencimento obrigatório em todo Novo/Editar (fora do modo OC, que tem a regra dele, do parcelado,
        cujos vencimentos são os da lista, e do campo travado). O rótulo e a borda acendem em vermelho e a frase sai ao lado do
        Salvar (no rótulo ela não cabe na coluna de 115px: o gate media "…"); nada é gravado. */
@@ -2232,6 +2242,22 @@ export function LancamentoV2Dialog({
     // CRITICAL: pass the stable ID for edits — ensures UPDATE, never INSERT
     const ok = await onSave(form, currentEditId || undefined);
     if (!ok) { setSaving(false); return; }
+    /* P165 — "Salvar e dividir": o lancamento gravado, a divisao pelos itens DEPOIS (a mesma RPC do botao "Dividir…"). Recusou: o
+       lancamento ja' esta' salvo e a frase diz que a divisao nao foi — o modal fica aberto, a conta por item continua a' vista */
+    if (currentIsEdit && currentEditId && aposConfirmar && 'dividirCom' in aposConfirmar && contasDosItensMudadas && clienteAtual?.id) {
+      const mapa = contasDosItensMudadas;
+      const r = financiamentoDoLanc && itensDaNota
+        ? await dividir(clienteAtual.id, { lancamentoId: currentEditId, financiamentoId: financiamentoDoLanc },
+          percentuaisDosItens(porContaDosItens(itensDaNota.lidos.itens, mapa)), aposConfirmar.dividirCom, false)
+        : await dividirPelosItens(clienteAtual.id, currentEditId, mapa, aposConfirmar.dividirCom, false);
+      resultadoDoSalvarEDividir.current = r.ok === false ? { ok: false, frase: `O lançamento foi salvo; a divisão não: ${r.frase}` } : r;
+      setSaving(false);
+      if (r.ok === false) { setErroAntesDeSalvar(`O lançamento foi salvo; a divisão não: ${r.frase}`); return; }
+      setContasDosItensMudadas(null);
+      toast.success(financiamentoDoLanc ? 'Salvo e dividido: todas as parcelas receberam a mesma proporção.' : `Salvo e dividido em ${new Set(mapa.values()).size} contas pelos itens da nota.`);
+      onClose();
+      return;
+    }
     /* NOTA-CONTAS-NA-CRIACAO-01 A — a' vista com a divisao pendente: os itens, a nota e a divisao, nessa ordem (a RPC divide pela nota
        ANEXADA); qualquer um que falhe cancela o recem-criado (`desfazerCriacao`) e a frase fica ao lado do botao — nada fica pela metade */
     if (!currentIsEdit && divisaoNaCriacao) {
@@ -2489,6 +2515,7 @@ export function LancamentoV2Dialog({
         atividade: atividadeValida(c.escopo_negocio),
       }));
     }
+    setContasDosItensMudadas(null);
     toast.success(frase, desfazivel ? { action: { label: 'Desfazer', onClick: () => setMotivoDaDivisao({ tipo: 'desfazer' }) } } : undefined);
   };
   const simularDivisao = useMemo(() => {
@@ -2511,6 +2538,12 @@ export function LancamentoV2Dialog({
     const id = lancamento?.id;
     const m = motivoDaDivisao;
     if (!cli || !id || !m) return { ok: false, frase: 'Lançamento não salvo.' };
+    /* P165 — veio do Salvar: grava os dois (o lancamento e depois a divisao), pelo proprio Salvar */
+    if (m.tipo === 'itens' && m.aoSalvar) {
+      resultadoDoSalvarEDividir.current = null;
+      await handleSubmit(undefined, { dividirCom: motivo });
+      return resultadoDoSalvarEDividir.current ?? { ok: false, frase: 'O lançamento não foi salvo: veja o aviso ao lado do Salvar.' };
+    }
     if (m.tipo === 'desfazer') {
       if (financiamentoDoLanc) {
         const r = await desfazerDivisaoDoCadastro(cli, financiamentoDoLanc, motivo, false);
@@ -3505,7 +3538,8 @@ export function LancamentoV2Dialog({
                   vistaContas={podeDividir ? (
                     <ContasDosItens itens={itensDaNota.lidos.itens} classificacoes={classificacoesDoModal} tipoOperacao={tipoOperacao}
                       contaDeHoje={lancDividido ? null : (classificacao.plano_conta_id ?? null)} sugeridas={contasIniciaisDosItens} atividadeSugerida={classificacao.atividade}
-                      gravando={!!motivoDaDivisao} onDividir={(mapa) => setMotivoDaDivisao({ tipo: 'itens', mapa })} />
+                      gravando={!!motivoDaDivisao} onDividir={(mapa) => setMotivoDaDivisao({ tipo: 'itens', mapa })}
+                      pendente={contasDosItensMudadas} onMudou={setContasDosItensMudadas} />
                   ) : podeDividirNaCriacao ? (
                     /* NOTA-CONTAS-NA-CRIACAO-01 A — no NOVO: a mesma vista; "Dividir … ao salvar" deixa a divisao PENDENTE (o Salvar grava) */
                     <ContasDosItens itens={itensDaNota.lidos.itens} classificacoes={classificacoesDoModal} tipoOperacao={tipoOperacao} aoSalvar
@@ -4009,8 +4043,11 @@ export function LancamentoV2Dialog({
       )}
       {motivoDaDivisao && (
         <MotivoDaDivisaoDialog
-          titulo={motivoDaDivisao.tipo === 'itens' ? 'Dividir pelos itens da nota' : motivoDaDivisao.tipo === 'voltar' ? 'Voltar para 1 conta' : 'Desfazer a última divisão'}
-          explicacao={motivoDaDivisao.tipo === 'itens'
+          titulo={motivoDaDivisao.tipo === 'itens' ? (motivoDaDivisao.aoSalvar ? 'Salvar — as contas dos itens mudaram' : 'Dividir pelos itens da nota')
+            : motivoDaDivisao.tipo === 'voltar' ? 'Voltar para 1 conta' : 'Desfazer a última divisão'}
+          explicacao={motivoDaDivisao.tipo === 'itens' && motivoDaDivisao.aoSalvar
+            ? 'A conta de cada item só vale dividindo o lançamento. "Salvar e dividir" grava o lançamento e a divisão; "Salvar sem dividir" grava só o lançamento e a conta dos itens não é gravada.'
+            : motivoDaDivisao.tipo === 'itens'
             ? (financiamentoDoLanc ? 'Compra parcelada: a divisão é do cadastro — todas as parcelas recebem a mesma proporção dos itens.' : 'Cada conta recebe a soma dos seus itens. Continua um lançamento só: um pagamento, uma conciliação.')
             : financiamentoDoLanc
               /* P72 — a parcela: o aviso diz que vale para as N parcelas da compra */
@@ -4018,8 +4055,10 @@ export function LancamentoV2Dialog({
                 ? 'todas voltam inteiras para a maior parte.' : 'todas voltam ao que eram antes da última operação do cadastro.'}`
               : motivoDaDivisao.tipo === 'voltar' ? 'O lançamento volta inteiro para a maior parte; depois a conta pode ser trocada no campo.'
                 : 'Volta a classificação ao que era antes da última operação.'}
-          botao={motivoDaDivisao.tipo === 'itens' ? 'Dividir' : motivoDaDivisao.tipo === 'voltar' ? 'Voltar para 1 conta' : 'Desfazer'}
-          simular={simularDivisao} confirmar={confirmarDivisao} onClose={() => setMotivoDaDivisao(null)} />
+          botao={motivoDaDivisao.tipo === 'itens' ? (motivoDaDivisao.aoSalvar ? 'Salvar e dividir' : 'Dividir') : motivoDaDivisao.tipo === 'voltar' ? 'Voltar para 1 conta' : 'Desfazer'}
+          simular={simularDivisao} confirmar={confirmarDivisao} onClose={() => setMotivoDaDivisao(null)}
+          salvarSemDividir={motivoDaDivisao.tipo === 'itens' && motivoDaDivisao.aoSalvar
+            ? () => { setMotivoDaDivisao(null); void handleSubmit(undefined, { semDividir: true }); } : undefined} />
       )}
       {xml && xmlComparar && (
         <CompararCadastroDialog hoje={xmlComparar} rotuloOrigem="Da nota"

@@ -23,7 +23,7 @@ import { cn } from '@/lib/utils';
 
 type Resultado = ResultadoDaDivisao;
 
-export function MotivoDaDivisaoDialog({ titulo, explicacao, botao, simular, confirmar, onClose }: {
+export function MotivoDaDivisaoDialog({ titulo, explicacao, botao, simular, confirmar, onClose, salvarSemDividir }: {
   titulo: string;
   explicacao: string;
   botao: string;
@@ -31,6 +31,8 @@ export function MotivoDaDivisaoDialog({ titulo, explicacao, botao, simular, conf
   simular?: () => Promise<Resultado>;
   confirmar: (motivo: string) => Promise<Resultado>;
   onClose: () => void;
+  /** P165 — o Salvar com a conta por item mudada: gravar SO' o lancamento e' escolha explicita, nunca o silencio */
+  salvarSemDividir?: () => void;
 }) {
   const [motivo, setMotivo] = useState('');
   const [previa, setPrevia] = useState<string | null>(null);
@@ -68,6 +70,10 @@ export function MotivoDaDivisaoDialog({ titulo, explicacao, botao, simular, conf
           <span className="min-w-0 uma-linha-que-rola text-destructive" data-testid="divisao-erro" title={erro ?? undefined}>{erro ? `⚠ ${erro}` : ''}</span>
           <span className="ml-auto" />
           <Button type="button" size="sm" variant="outline" className="h-[24px] shrink-0 px-2.5 text-[10.5px]" disabled={gravando} onClick={onClose}>Cancelar</Button>
+          {salvarSemDividir && (
+            <Button type="button" size="sm" variant="outline" className="h-[24px] shrink-0 px-2.5 text-[10.5px]" disabled={gravando}
+              onClick={salvarSemDividir} data-testid="divisao-salvar-sem-dividir">Salvar sem dividir</Button>
+          )}
           <Button type="button" size="sm" className="h-[24px] w-[170px] shrink-0 px-2.5 text-[10.5px]" disabled={!motivo.trim() || gravando}
             onClick={() => { void ir(); }} data-testid="divisao-confirmar">{gravando ? 'Gravando…' : botao}</Button>
         </div>

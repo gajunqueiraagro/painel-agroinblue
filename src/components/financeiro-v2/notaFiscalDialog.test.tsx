@@ -45,6 +45,14 @@ const consultas = vi.hoisted(() => ({
   ultimaClassificacaoDoFornecedor: vi.fn(async (): Promise<unknown> => null),
   fornecedorPeloDocumento: vi.fn(async (_c: string, _d: string): Promise<Consulta<{ id: string; nome: string; ativo: boolean } | null>> => ({ ok: true, valor: null })),
   usoDoFornecedor: vi.fn(async (_f: string): Promise<{ lancamentos: number; ultimo: string | null } | null> => ({ lancamentos: 3, ultimo: '2026-09-01' })),
+  /* P128b — completar com a nota: a prévia é a própria função com `simular`; por padrão aceita tudo e devolve as linhas do pedido */
+  completarComANota: vi.fn(async (_c: string, pedido: readonly Record<string, unknown>[], o: { juntar: boolean; chave: string | null; simular: boolean })
+    : Promise<Consulta<ResultadoCompletar>> => ({ ok: true, valor: { ok: true, recusas: [], efeitoDre: [], operacao: o.simular ? null : 'op-1',
+      financiamentoId: o.juntar && !o.simular ? 'fin-1' : null,
+      linhas: pedido.map((x) => ({ id: String(x.id), descricao: null, situacao: 'programada', parcelaN: null, campos: {} })) } })),
+  registrarNaOperacao: vi.fn(async (_op: string, _c: readonly string[], _d: readonly string[]): Promise<string | null> => null),
+  desfazerCompletar: vi.fn(async (_op: string): Promise<string | null> => null),
+  cancelarCriados: vi.fn(async (_ids: readonly string[], _p: string): Promise<number> => 0),
   /* NOTA-JA-LANCADA-01 — nada ja' lancado, por padrao */
   notaJaLancada: vi.fn(async (_c: string, _e: unknown): Promise<Consulta<LancamentoJaLancado[]>> => ({ ok: true, valor: [] })),
   /* NOTA-FORNECEDOR-COMPARAR-01 — o cadastro de hoje e a gravacao com trilha */
@@ -78,6 +86,8 @@ import { PAGINAS_DANFE_SINTETICO, danfeSinteticoAvulsa, danfeSinteticoSemDuplica
 import type { LancamentoJaLancado } from '@/lib/financeiro/nfe/jaLancada';
 import type { DocumentoDaParcela, GravadoresDaJuncao } from '@/lib/financeiro/juntarParcelas';
 import type { Consulta, OcorrenciaDaNota } from '@/lib/financeiro/nfeConsultas';
+import type { ResultadoCompletar } from '@/lib/financeiro/nfe/notaCompletar';
+import { toast } from 'sonner';
 
 beforeEach(() => {
   Element.prototype.scrollIntoView = () => {};
@@ -86,6 +96,10 @@ beforeEach(() => {
   consultas.camposQueOEmitenteCompleta.mockResolvedValue([]);
   consultas.lancamentosAbertosComValor.mockResolvedValue({ ok: true, valor: [] });
   consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: [] });
+  /* P128b — a recusa de um teste (J2/J3) não vaza para o próximo: a prévia volta a aceitar tudo */
+  consultas.completarComANota.mockImplementation(async (_c, pedido, o) => ({ ok: true, valor: { ok: true, recusas: [], efeitoDre: [],
+    operacao: o.simular ? null : 'op-1', financiamentoId: o.juntar && !o.simular ? 'fin-1' : null,
+    linhas: pedido.map((x) => ({ id: String(x.id), descricao: null, situacao: 'programada', parcelaN: null, campos: {} })) } }));
 });
 
 const FAZENDAS: Fazenda[] = [{ id: 'faz-1', nome: 'Faz. Sintetica', owner_id: 'u1', cliente_id: 'cli', codigo: null },
@@ -105,12 +119,14 @@ const RECEITA = vi.fn(async (_cnpj: string): Promise<RespostaDoCnpj> => ({ ok: t
   complemento: '', bairro: 'Centro', cep: '79000-000', matrizFilial: 'FILIAL',
 } }));
 
-function montarNota(opcoes: { paginas?: ItemDoDanfe[][]; fornecedores?: FornecedorV2[]; ocorrencias?: OcorrenciaDaNota[]; umaParcela?: boolean;
+function montarNota(opcoes: { paginas?: ItemDoDanfe[][]; fornecedores?: FornecedorV2[]; ocorrencias?: OcorrenciaDaNota[]; umaParcela?: boolean; semDuplicata?: boolean;
   /* NOTA-FAZENDA-PELA-IE-01 — as fazendas que a leitura conhece (padrao: a Faz. Sintetica COM a IE da nota) */
   fazendasDaLeitura?: { id: string; nome: string; ie: string | null; aliases?: string[] }[] } = {}): NotaParaLancar {
   const r = notaDoDanfe(opcoes.paginas ?? PAGINAS_DANFE_SINTETICO);
   if (r.ok === false) throw new Error(r.frase);
   /* nota de UMA parcela: a duplicata unica com o valor da nota */
+  /* P162 — nota SEM duplicata (o molde do NJ: só a emissão, o pagamento é de outro dia) */
+  if (opcoes.semDuplicata) { r.nota.duplicatas = []; r.nota.somaDuplicatasCent = 0; }
   if (opcoes.umaParcela) { r.nota.duplicatas = [{ numero: '001', vencimento: '2026-10-20', valorCent: r.nota.totais.notaCent }]; r.nota.somaDuplicatasCent = r.nota.totais.notaCent; }
   const resolucao = resolverEmitente(r.nota.emitente, opcoes.fornecedores ?? [], null);
   const p = proporLancamento({ nota: r.nota, avisosDoLeitor: r.avisos, fazendas: opcoes.fazendasDaLeitura ?? [{ id: 'faz-1', nome: 'Faz. Sintetica', ie: '280000002' }], emitente: resolucao, favorecidoId: resolucao.propostoId, ultima: null });
@@ -564,8 +580,22 @@ const jaLancado = (n: number, venc: string, status: string, extra: Partial<Lanca
 const QUATRO = [jaLancado(1, '2026-10-20', 'realizado'), jaLancado(2, '2026-11-20', 'realizado'), jaLancado(3, '2026-12-20', 'realizado', { valorCent: 49165, parcelas: [{ n: 3, difCent: 1, difDias: 0 }] }),
   jaLancado(4, '2027-01-20', 'programado')];
 
+/* P128b — "Revisar e completar" → a prévia campo a campo → gravar (a prévia confere com o banco antes de liberar o botão) */
+async function completarPelaPrevia() {
+  fireEvent.click(await screen.findByTestId('nota-completar-revisar'));
+  const pv = await screen.findByTestId('previa-completar');
+  await waitFor(() => expect(within(pv).getByTestId('previa-gravar')).toBeEnabled());
+  fireEvent.click(within(pv).getByTestId('previa-gravar'));
+  return pv;
+}
+const pedidoGravado = () => {
+  const c = consultas.completarComANota.mock.calls.find((x) => x[2].simular === false);
+  if (!c) throw new Error('não gravou');
+  return { pedido: c[1], opcoes: c[2] };
+};
+
 describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
-  it('reconhece as 4 (3 pagas + 1 programada, cadastro sem CNPJ parecido): o bloco no lugar das parcelas, "Anexar a nota a estes 4"; nada e\' criado', async () => {
+  it('reconhece as 4 (3 pagas + 1 programada, cadastro sem CNPJ parecido): o bloco no lugar das parcelas; "Revisar e completar" grava pela prévia; nada e\' criado', async () => {
     consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: QUATRO });
     const { g, comoGravadores } = gravadoresFalsos();
     const props = abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
@@ -581,10 +611,13 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
     const pedido = consultas.notaJaLancada.mock.calls[0][1] as { parcelas: { n: number; vencimento: string; valorCent: number }[]; chave: string };
     expect(pedido.parcelas).toEqual([1, 2, 3, 4].map((n, i) => ({ n, vencimento: ['2026-10-20', '2026-11-20', '2026-12-20', '2027-01-20'][i], valorCent: 49164 })));
     expect(pedido.chave).toBe('50260911222333000424550100000009371217538298');
-    const botao = screen.getByTestId('nota-anexar-ja-lancados');
-    expect(botao.textContent).toBe('Anexar a nota a estes 4');
-    fireEvent.click(botao);
+    expect(screen.getByTestId('nota-completar-revisar').textContent).toBe('Revisar e completar');
+    await completarPelaPrevia();
     await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
+    /* P128b — uma gravação só: os 4, sem juntar (já são um parcelamento); depois a nota; o que nasceu registrado na operação */
+    const gravado = pedidoGravado();
+    expect([gravado.pedido.map((x) => x.id), gravado.opcoes.juntar]).toEqual([['velho-1', 'velho-2', 'velho-3', 'velho-4'], false]);
+    expect(consultas.registrarNaOperacao).toHaveBeenCalledWith('op-1', [], expect.any(Array));
     const [, parcelas, pendentes] = g.documentosDoParcelamento.mock.calls[0];
     expect(parcelas.map((x) => x.lancamentoId)).toEqual(['velho-1', 'velho-2', 'velho-3', 'velho-4']);
     expect(pendentes[0].parcela).toBeNull();
@@ -595,7 +628,7 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
     expect(g.trocarFornecedor).not.toHaveBeenCalled();
     expect(props.gravarItens).toHaveBeenCalledTimes(1);
   });
-  it('achou 3 de 4: a que falta aparece em ambar; "Anexar e criar a que falta" cria SO\' a 4/4 (valor e vencimento da nota) e anexa a nota as 4', async () => {
+  it('achou 3 de 4: a que falta aparece em ambar; completar cria SO\' a 4/4 (valor e vencimento da nota) antes e anexa a nota as 4', async () => {
     consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: QUATRO.slice(0, 3) });
     const { g, comoGravadores } = gravadoresFalsos();
     const props = abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
@@ -605,27 +638,28 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
     const linhas = within(screen.getByTestId('nota-ja-lancada')).getAllByTestId('nota-ja-lancada-linha');
     expect(linhas.map((l) => l.getAttribute('data-situacao'))).toEqual(['conciliada', 'conciliada', 'conciliada', 'so_na_nota']);
     expect(within(linhas[3]).getByTestId('nota-ja-lancada-situacao').textContent).toBe('só na nota → criar');
-    expect(screen.getByTestId('nota-anexar-ja-lancados')).toBeDisabled();   // falta o subcentro para criar a que falta
     await escolherSubcentro('Nutrição Engorda');
-    await waitFor(() => expect(screen.getByTestId('nota-anexar-ja-lancados')).toBeEnabled());
-    expect(screen.getByTestId('nota-anexar-ja-lancados').textContent).toBe('Anexar e criar a que falta');
-    fireEvent.click(screen.getByTestId('nota-anexar-ja-lancados'));
+    await completarPelaPrevia();
     await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
+    /* P128b — a que falta nasce ANTES e entra na mesma gravação (e no registro da operação, para o desfazer) */
+    expect(pedidoGravado().pedido.map((x) => x.id)).toEqual(['velho-1', 'velho-2', 'velho-3', 'lanc-unico']);
+    expect(consultas.registrarNaOperacao).toHaveBeenCalledWith('op-1', ['lanc-unico'], expect.any(Array));
     expect(g.lancamento).toHaveBeenCalledTimes(1);
     expect(g.lancamento.mock.calls[0][0]).toMatchObject({ valor: 491.64, data_vencimento: '2027-01-20', favorecido_id: 'f1', plano_conta_id: 'pl-nut' });
     expect(g.documentosDoParcelamento.mock.calls[0][1].map((x) => x.lancamentoId)).toEqual(['velho-1', 'velho-2', 'velho-3', 'lanc-unico']);
     expect(g.gravar).not.toHaveBeenCalled();
   });
-  it('fornecedor diferente: "Trocar o fornecedor" so\' marcando — desmarcado nao troca; marcado troca os 4 pela funcao do lote', async () => {
+  /* P128b — a caixinha "Trocar o fornecedor" saiu: o fornecedor é a COLUNA da prévia (marcada), gravado pela função única com o antes */
+  it('fornecedor diferente: a coluna Fornecedor da prévia leva o da nota aos 4 (a função única), nunca a troca em lote', async () => {
     consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: QUATRO });
     const { g, comoGravadores } = gravadoresFalsos();
     const props = abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores, fornecedores: [FORN] });
-    const caixa = await screen.findByTestId('nota-trocar-fornecedor');
-    expect(caixa.textContent).toContain('Trocar o fornecedor para Agro Sintetica');
-    fireEvent.click(within(caixa).getByRole('checkbox'));
-    fireEvent.click(screen.getByTestId('nota-anexar-ja-lancados'));
+    await screen.findByTestId('nota-ja-lancada');
+    expect(screen.queryByTestId('nota-trocar-fornecedor')).toBeNull();
+    await completarPelaPrevia();
     await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
-    expect(g.trocarFornecedor).toHaveBeenCalledWith('cli', ['velho-1', 'velho-2', 'velho-3', 'velho-4'], 'f1', expect.stringContaining('fornecedor da'));
+    expect(pedidoGravado().pedido.map((x) => x.favorecido_id)).toEqual(['f1', 'f1', 'f1', 'f1']);
+    expect(g.trocarFornecedor).not.toHaveBeenCalled();
   });
   /* P128a — o "Criar mesmo assim" virou o 3º CAMINHO ("Criar um lançamento novo", com o aviso vermelho de que duplica) */
   it('o caminho "Criar um lançamento novo" avisa que duplica e pede o motivo; o parcelamento nasce com o motivo na observacao', async () => {
@@ -658,7 +692,7 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
     expect(parc.getAttribute('title')).toBe('parcela ? de 4 da nota: 4 × R$ 491,64 = R$ 1.966,56 (qual das 4, a nota não diz)');
     expect(screen.getByTestId('nota-ja-lancada-resumo').textContent).toContain('1 de 4 parcelas desta nota já estão lançadas (R$ 491,64 cada)');
     expect(screen.queryByTestId('nota-criar-faltam')).toBeNull();
-    expect(screen.getByTestId('nota-anexar-ja-lancados').textContent).toBe('Anexar a nota a este');
+    expect(screen.getByTestId('nota-completar-revisar').textContent).toBe('Revisar e completar');
   });
   /* NOTA-CONTAS-NA-CRIACAO-01 D (P76) — os lancamentos antigos da nota foram CANCELADOS (o caso de 23/10): aparecem cinza, no fim, com o
      selo, e nunca contam */
@@ -676,7 +710,7 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
     expect(linhas[5].textContent).not.toContain('agendado');
     expect(screen.getByTestId('nota-ja-lancada-resumo').textContent).toContain('4 de 4 parcelas desta nota já estão lançadas');
     expect(screen.getByTestId('nota-ja-lancada-resumo').textContent).toContain('2 cancelados (não contam)');
-    expect(screen.getByTestId('nota-anexar-ja-lancados').textContent).toBe('Anexar a nota a estes 4');
+    expect(screen.getByTestId('nota-completar-revisar').textContent).toBe('Revisar e completar');
   });
   it('D — so\' cancelados: a nota NAO esta\' lancada — "Criar 4 parcelas" e o rodape diz "Há 2 lançamentos cancelados desta nota (não contam)"', async () => {
     consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: CANCELADOS });
@@ -780,14 +814,15 @@ describe('P95 — a nota achada em N parcelas soltas (as irmas da fracao)', () =
     expect(screen.getByTestId('nota-ja-lancada-resumo').textContent)
       .toBe('4 lançamentos soltos desta nota · soma R$ 1.966,52 × nota R$ 1.966,56 (diferença R$ 0,04) · achados pelo nº da nota · 4 conciliadas');
     expect(screen.queryByTestId('nota-criar-faltam')).toBeNull();
-    /* P96a — as 4 achadas inteiras: o gesto é JUNTAR (e anexar); "Só anexar a nota" fica na confirmação */
-    expect(screen.getByTestId('nota-juntar-soltas').textContent).toBe('Juntar as 4 e anexar');
+    /* P128b — as 4 soltas achadas inteiras: a prévia JUNTA e padroniza numa gravação só */
+    fireEvent.click(screen.getByTestId('nota-completar-revisar'));
+    expect((await screen.findByTestId('previa-gravar')).textContent).toBe('Juntar as 4, padronizar e anexar');
   });
 });
 
 /* P96a — JUNTAR AS N SOLTAS como parcelas desta nota (o molde do P95: 4 irmãs, soma 1.966,52 × nota 1.966,56). A função do banco é falsa:
    simular devolve o efeito por mês; gravar devolve ok. A nota se anexa pelo MESMO caminho do "Anexar". */
-describe('P96a — juntar as parcelas soltas na prévia da nota', () => {
+describe('P96a + P128b — juntar as soltas e completar pela prévia campo a campo', () => {
   const VENC = ['2026-10-10', '2026-11-10', '2026-12-10', '2027-01-10'];
   const irma = (n: number, valorCent: number) => jaLancado(n, VENC[n - 1], 'realizado',
     { id: `irma-${n}`, descricao: `Tinta sintetica - ${n}/4`, valorCent, parcelas: [], por: ['fracao'], fracaoN: 4, financiamentoId: null });
@@ -804,66 +839,50 @@ describe('P96a — juntar as parcelas soltas na prévia da nota', () => {
     const gj: GravadoresDaJuncao = { juntar, documentos, editarDocumento };
     return { gj, juntar, editarDocumento };
   };
-  const abrirJuntar = async () => {
-    fireEvent.click(await screen.findByTestId('nota-juntar-soltas'));
-    const dialogo = await screen.findByTestId('nota-juntar-confirmar');
-    await waitFor(() => expect(within(dialogo).getByTestId('nota-juntar-efeito').textContent).not.toContain('Calculando'));
-    return dialogo;
-  };
 
-  it('J1 a confirmação: o resumo, a competência MARCADA por padrão e o efeito no DRE; "Juntar" grava com a emissão e anexa a nota às 4', async () => {
+  /* P128b — o "Juntar" do P96a agora é a MESMA gravação única da prévia campo a campo (padroniza e junta; o antes guardado) */
+  it('J1 as 4 soltas: a prévia padroniza ("base i/4", nº, competência = emissão) e JUNTA numa gravação só; a nota vai às 4', async () => {
     consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: IRMAS });
     const { g, comoGravadores } = gravadoresFalsos();
     const { gj, juntar } = falsos();
     const props = abrir(montarNota({ fornecedores: [FORN], umaParcela: true }), { g: comoGravadores, gj });
-    const dialogo = await abrirJuntar();
-    expect(juntar).toHaveBeenCalledWith('cli', ['irma-1', 'irma-2', 'irma-3', 'irma-4'], '2026-09-15', true);
-    expect(juntar).toHaveBeenCalledWith('cli', ['irma-1', 'irma-2', 'irma-3', 'irma-4'], null, true);
-    expect(within(dialogo).getByTestId('nota-juntar-texto').textContent).toContain('Soma R$\u00a01.966,52 · nota R$\u00a01.966,56 · diferença R$\u00a00,04');
-    expect(within(within(dialogo).getByTestId('nota-juntar-competencia')).getByRole('checkbox').getAttribute('data-state')).toBe('checked');
-    expect(within(dialogo).getByTestId('nota-juntar-efeito').textContent)
-      .toBe('Efeito no DRE: setembro +R$ 1.475,00; outubro, novembro e dezembro −1 parcela cada.');
-    expect(juntar.mock.calls.some((c) => c[3] === false)).toBe(false);
-    fireEvent.click(within(dialogo).getByTestId('nota-juntar-gravar'));
+    await completarPelaPrevia();
     await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
-    expect(juntar).toHaveBeenCalledWith('cli', ['irma-1', 'irma-2', 'irma-3', 'irma-4'], '2026-09-15', false);
+    const { pedido, opcoes } = pedidoGravado();
+    expect(opcoes.juntar).toBe(true);
+    expect(pedido.map((x) => x.id)).toEqual(['irma-1', 'irma-2', 'irma-3', 'irma-4']);
+    expect(pedido.map((x) => String(x.descricao).slice(-4))).toEqual([' 1/4', ' 2/4', ' 3/4', ' 4/4']);
+    expect(pedido.every((x) => x.data_competencia === '2026-09-15' && String(x.numero_documento).startsWith('NF '))).toBe(true);
+    expect(juntar).not.toHaveBeenCalled();   // a junção é a do banco, dentro da gravação única
     const [, parcelas] = g.documentosDoParcelamento.mock.calls[0];
     expect(parcelas.map((x) => x.lancamentoId)).toEqual(['irma-1', 'irma-2', 'irma-3', 'irma-4']);
   });
-  it('J2 desmarcada: grava SEM a competência (o DRE não muda)', async () => {
+  it('J2 a recusa do banco na prévia (mês fechado): a frase pronta e o gravar apagado; nada gravado', async () => {
     consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: IRMAS });
+    consultas.completarComANota.mockResolvedValue({ ok: true, valor: { ok: false, recusas: ['O mês 09/2026 está fechado: reabra antes de mudar «Tinta».'],
+      linhas: [], efeitoDre: [], operacao: null, financiamentoId: null } });
     const { comoGravadores } = gravadoresFalsos();
-    const { gj, juntar } = falsos();
-    const props = abrir(montarNota({ fornecedores: [FORN], umaParcela: true }), { g: comoGravadores, gj });
-    const dialogo = await abrirJuntar();
-    fireEvent.click(within(within(dialogo).getByTestId('nota-juntar-competencia')).getByRole('checkbox'));
-    expect(within(dialogo).getByTestId('nota-juntar-efeito').textContent).toBe('A competência de cada uma fica como está: o DRE não muda.');
-    fireEvent.click(within(dialogo).getByTestId('nota-juntar-gravar'));
-    await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
-    expect(juntar).toHaveBeenCalledWith('cli', ['irma-1', 'irma-2', 'irma-3', 'irma-4'], null, false);
+    abrir(montarNota({ fornecedores: [FORN], umaParcela: true }), { g: comoGravadores, gj: falsos().gj });
+    fireEvent.click(await screen.findByTestId('nota-completar-revisar'));
+    expect((await screen.findByTestId('previa-recusa')).textContent).toBe('O mês 09/2026 está fechado: reabra antes de mudar «Tinta».');
+    expect(screen.getByTestId('previa-gravar')).toBeDisabled();
+    expect(consultas.completarComANota.mock.calls.some((x) => x[2].simular === false)).toBe(false);
   });
-  it('J3 "Só anexar a nota": nada se junta, a nota vai às 4', async () => {
-    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: IRMAS });
+  it('J3 a gravação recusada DEPOIS de criar a que falta: a recém-criada é CANCELADA (nada pela metade) e a frase fica na prévia', async () => {
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: QUATRO.slice(0, 3) });
+    consultas.completarComANota.mockImplementation(async (_c, pedido, o) => (o.simular
+      ? { ok: true, valor: { ok: true, recusas: [], efeitoDre: [], operacao: null, financiamentoId: null,
+          linhas: pedido.map((x) => ({ id: String(x.id), descricao: null, situacao: 'programada', parcelaN: null, campos: {} })) } }
+      : { ok: false, motivo: '«Insumos» está pago: conta, valor e vencimento não mudam. Nada foi gravado.' }));
     const { g, comoGravadores } = gravadoresFalsos();
-    const { gj, juntar } = falsos();
-    const props = abrir(montarNota({ fornecedores: [FORN], umaParcela: true }), { g: comoGravadores, gj });
-    const dialogo = await abrirJuntar();
-    fireEvent.click(within(dialogo).getByTestId('nota-juntar-so-anexar'));
-    await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
-    expect(juntar.mock.calls.some((c) => c[3] === false)).toBe(false);
-    expect(g.documentosDoParcelamento).toHaveBeenCalledTimes(1);
-  });
-  it('J4 a competência recusada pelo banco (mês fechado): a caixinha sai desmarcada e apagada, com a frase; juntar sem ela segue', async () => {
-    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: IRMAS });
-    const { comoGravadores } = gravadoresFalsos();
-    const { gj } = falsos({ recusaComCompetencia: true });
-    abrir(montarNota({ fornecedores: [FORN], umaParcela: true }), { g: comoGravadores, gj });
-    const dialogo = await abrirJuntar();
-    const caixa = within(within(dialogo).getByTestId('nota-juntar-competencia')).getByRole('checkbox');
-    await waitFor(() => expect(caixa.getAttribute('data-state')).toBe('unchecked'));
-    expect(caixa).toBeDisabled();
-    expect(within(dialogo).getByTestId('nota-juntar-efeito').textContent).toBe('O mês 10/2026 está fechado: reabra antes de mudar a competência.');
-    expect(within(dialogo).getByTestId('nota-juntar-gravar')).not.toBeDisabled();
+    const props = abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
+    await screen.findByTestId('nota-ja-lancada');
+    await escolherSubcentro('Nutrição Engorda');
+    const pv = await completarPelaPrevia();
+    expect((await within(pv).findByTestId('previa-erro')).textContent).toBe('«Insumos» está pago: conta, valor e vencimento não mudam. Nada foi gravado.');
+    expect(consultas.cancelarCriados).toHaveBeenCalledWith(['lanc-unico'], expect.stringContaining('Nada foi gravado'));
+    expect(g.documentosDoParcelamento).not.toHaveBeenCalled();
+    expect(props.onCriado).not.toHaveBeenCalled();
   });
   it('J5 a NF digitada à mão numa das 4 diverge: a frase e "Usar a nota lida" — troca SÓ com a confirmação (valor e emissão, com a versão)', async () => {
     consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: IRMAS });
@@ -1014,6 +1033,64 @@ async function noCartao(n: string) {
   fireEvent.click(await screen.findByText('Cartão Elo Sintetico'));
   fireEvent.change(screen.getByTestId('nota-cartao-parcelas'), { target: { value: n } });
 }
+
+/* P162 — "Ver o que a nota muda" oferecia DUPLICAR: a nota sem duplicata achada pelo nº com o MESMO valor, pago 10 dias depois da emissão,
+   dava "0 de 1 · 1 só na nota · 1 só no sistema" e "criar a que falta"; a fazenda (de lançamento novo) travava; o subcentro sugerido (o último
+   do fornecedor) ia por cima do lançamento. Valores SINTÉTICOS. */
+describe('P162 — a nota de uma parcela já lançada não duplica', () => {
+  it('"1 de 1", sem "Falta: fazenda", nada criado; o pedido não leva o subcentro sugerido (coluna desmarcada)', async () => {
+    const nota = montarNota({ fornecedores: [FORN], semDuplicata: true, fazendasDaLeitura: [] });
+    const notaCent = nota.lido.ok ? nota.lido.nota.totais.notaCent : 0;
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: [jaLancado(1, '2031-08-10', 'realizado', { id: 'unico', valorCent: notaCent, parcelas: [],
+      por: ['numero'], financiamentoId: null, fornecedorId: 'f1', fornecedorPor: 'cnpj', numeroDocumento: '937', descricao: 'Combustivel sintetico' })] });
+    const { g, comoGravadores } = gravadoresFalsos();
+    const props = abrir(nota, { g: comoGravadores, fornecedores: [FORN] });
+    await screen.findByTestId('nota-ja-lancada');
+    expect(screen.getByTestId('nota-ja-lancada-resumo').textContent).not.toContain('só na nota');
+    expect(screen.getByTestId('nota-ja-lancada-resumo').textContent).not.toContain('só no sistema');
+    expect(screen.queryByTestId('nota-falta')).toBeNull();
+    await completarPelaPrevia();
+    await waitFor(() => expect(props.onCriado).toHaveBeenCalled(), { timeout: 3000 });
+    const { pedido } = pedidoGravado();
+    expect([pedido.map((x) => x.id), pedido.some((x) => 'plano_conta_id' in x)]).toEqual([['unico'], false]);
+    expect(g.gravar).not.toHaveBeenCalled();
+    expect(consultas.registrarNaOperacao).toHaveBeenCalledWith('op-1', [], expect.any(Array));
+  });
+});
+
+/* P128b — o "Desfazer" do aviso: a MESMA operação inteira pela `fn_nota_completar_desfazer`; a recusa do banco ("mexido depois") vem pronta */
+describe('P128b — o Desfazer do aviso', () => {
+  const desfazerDoAviso = () => {
+    const c = vi.mocked(toast.success).mock.calls.find((x) => typeof x[1] === 'object' && x[1] !== null && 'action' in x[1]);
+    const acao = c?.[1]?.action;
+    if (!acao || typeof acao !== 'object' || !('onClick' in acao)) throw new Error('sem Desfazer');
+    return acao;
+  };
+  it('desfaz a operação gravada; ao voltar, a lista relê', async () => {
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: QUATRO });
+    const { comoGravadores } = gravadoresFalsos();
+    const props = abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores, fornecedores: [FORN] });
+    await completarPelaPrevia();
+    await waitFor(() => expect(props.onCriado).toHaveBeenCalledTimes(1));
+    const acao = desfazerDoAviso();
+    expect(acao.label).toBe('Desfazer');
+    Reflect.apply(acao.onClick, undefined, []);   // o clique no botão do aviso (o evento não importa)
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Desfeito: tudo voltou como estava.'));
+    expect(consultas.desfazerCompletar).toHaveBeenCalledWith('op-1');
+    expect(props.onCriado).toHaveBeenCalledTimes(2);
+  });
+  it('a recusa do banco (mexido depois) vai como a frase pronta; nada relê', async () => {
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: QUATRO });
+    consultas.desfazerCompletar.mockResolvedValueOnce('«Insumos Sinteticos 2/4» foi mexido depois (descrição): desfaça à mão.');
+    const { comoGravadores } = gravadoresFalsos();
+    const props = abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores, fornecedores: [FORN] });
+    await completarPelaPrevia();
+    await waitFor(() => expect(props.onCriado).toHaveBeenCalledTimes(1));
+    Reflect.apply(desfazerDoAviso().onClick, undefined, []);
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('«Insumos Sinteticos 2/4» foi mexido depois (descrição): desfaça à mão.'));
+    expect(props.onCriado).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe('P74 — a nota paga no cartão em N vezes', () => {
   beforeEach(() => { cartaoNoBanco.diasDoCartao.mockResolvedValue([{ dia: 10, lancamentos: 409, ultimo: '2026-09-10' }, { dia: 13, lancamentos: 1, ultimo: '2026-09-13' }]); });
