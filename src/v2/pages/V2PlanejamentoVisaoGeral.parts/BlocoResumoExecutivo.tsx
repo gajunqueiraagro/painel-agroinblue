@@ -83,10 +83,11 @@ const MESES =['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Ou
 
 // ─── Helpers locais (replicam regra calcDelta do builder) ─────────────
 
-function calcDeltaLocal(meta: number, real: number): number {
-  if (!Number.isFinite(meta) || !Number.isFinite(real)) return 0;
-  if (meta <= 0 && real <= 0) return 0;
-  return (meta - real) / (real || 1);
+function calcDeltaLocal(meta: number, real: number): number | null {
+  // P131: a mesma regra do builder — sem base no ano anterior (Real 0 ou ausente) → null ("—").
+  if (!Number.isFinite(meta) || !Number.isFinite(real) || real === 0) return null;
+  if (meta <= 0 && real < 0) return 0;
+  return (meta - real) / real;
 }
 
 function montarLinhaSaldoFinal(

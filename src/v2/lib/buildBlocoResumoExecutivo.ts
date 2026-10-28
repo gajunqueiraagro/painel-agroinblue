@@ -124,9 +124,11 @@ const sumArrays = (...arrays: number[][]): number[] => {
 const subArrays = (a: number[], b: number[]): number[] =>
   a.map((v, i) => v - (b[i] ?? 0));
 
-const calcDelta = (meta: number, real: number): number => {
-  if (meta <= 0 && real <= 0) return 0;
-  return (meta - real) / (real || 1);
+// P131: sem base no ano anterior (Real 0) → null ("—" na tela); antes dividia por 1 e saía "+1714872142.0%".
+const calcDelta = (meta: number, real: number): number | null => {
+  if (!Number.isFinite(meta) || !Number.isFinite(real) || real === 0) return null;
+  if (meta <= 0 && real < 0) return 0;
+  return (meta - real) / real;
 };
 
 // Delta do modo Fechamento: (realAnoCorrente − meta)/meta.

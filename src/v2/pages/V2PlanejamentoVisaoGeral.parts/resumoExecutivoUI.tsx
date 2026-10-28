@@ -3,6 +3,8 @@
  * e ComposicaoFinanceira (PR-BOLETIM-2.1A). Movidos VERBATIM, sem alterar lógica.
  */
 
+import { TITULO_SEM_BASE_ANO_ANTERIOR } from '@/v2/lib/deltaSemBase';
+
 const fmtPct = (v: number): string => {
   const pct = v * 100;
   const sinal = pct >= 0 ? '+' : '';
@@ -16,7 +18,19 @@ export const fmtBRL = (v: number): string =>
     maximumFractionDigits: 0,
   }).format(v);
 
-export function DeltaBadge({ delta, inverterSemantica = false }: { delta: number; inverterSemantica?: boolean }) {
+
+export function DeltaBadge({ delta, inverterSemantica = false }: { delta: number | null; inverterSemantica?: boolean }) {
+  if (delta === null || !Number.isFinite(delta)) {
+    return (
+      <span
+        className="inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded tabular-nums text-muted-foreground"
+        title={TITULO_SEM_BASE_ANO_ANTERIOR}
+        data-testid="delta-sem-base"
+      >
+        —
+      </span>
+    );
+  }
   // inverterSemantica=true: usado em saídas no modo Fechamento, onde Real >
   // Meta (gastou mais do que planejado) é ruim — pinta de rose mesmo com
   // sinal positivo. Receitas mantêm comportamento padrão (positivo = bom).

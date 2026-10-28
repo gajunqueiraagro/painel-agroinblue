@@ -22,6 +22,7 @@ import {
 } from 'recharts';
 import { cn } from '@/lib/utils';
 import type { LinhaExecutivaModalData, DeltaSeguro } from '@/v2/lib/linhaExecutivaModalTypes';
+import { TITULO_SEM_BASE_ANO_ANTERIOR } from '@/v2/lib/deltaSemBase';
 
 type ModoModal = 'planejamento' | 'fechamento';
 
@@ -278,6 +279,9 @@ export function LinhaExecutivaExecutivoModal({
 }: Props) {
   const cfg = CFG_MODOS[modo];
   const isFechamento = modo === 'fechamento';
+  // P131: no Planejamento o Δ% sem número é "sem base no ano anterior" (o "—" diz por quê).
+  const tituloPct = (d: DeltaSeguro): string | undefined =>
+    !isFechamento && (d === null || !Number.isFinite(d)) ? TITULO_SEM_BASE_ANO_ANTERIOR : undefined;
   // Natureza da linha (receita vs despesa) — drive cor dos deltas.
   const naturezaLinha = inferirNaturezaLinha(titulo, composicaoOficialLabel);
   // PR3.1 — cor do REAL depende de natureza no Fechamento:
@@ -302,7 +306,7 @@ export function LinhaExecutivaExecutivoModal({
   // Δ% — vem da LinhaExecutiva (já correto). Δ R$ derivado por sinal do modo.
   const deltaPctTotalizadora: DeltaSeguro = isFechamento
     ? (data.linha.deltaAnoCorrente ?? null)
-    : (data.linha.delta as DeltaSeguro);
+    : data.linha.delta;
   // Δ R$ Fechamento = Real - Meta; Planejamento = Meta - Real.
   const deltaRsTotalizadora = isFechamento
     ? realTotalizadora - data.linha.meta
@@ -450,7 +454,7 @@ export function LinhaExecutivaExecutivoModal({
             <div className={cn('text-right tabular-nums', classeDeltaSemantico(deltaRsTotalizadora, naturezaLinha))}>
               {formatDeltaReais(deltaRsTotalizadora)}
             </div>
-            <div className={cn('text-right tabular-nums', classeDeltaSemantico(deltaPctTotalizadora, naturezaLinha))}>
+            <div className={cn('text-right tabular-nums', classeDeltaSemantico(deltaPctTotalizadora, naturezaLinha))} title={tituloPct(deltaPctTotalizadora)}>
               {fmtPct(deltaPctTotalizadora)}
             </div>
           </div>
@@ -486,7 +490,7 @@ export function LinhaExecutivaExecutivoModal({
                     </>
                   )}
                   <div className={cn('text-right tabular-nums', classeDeltaSemantico(deltaRs, naturezaLinha))}>{formatDeltaReais(deltaRs)}</div>
-                  <div className={cn('text-right tabular-nums', classeDeltaSemantico(centro.delta, naturezaLinha))}>{fmtPct(centro.delta)}</div>
+                  <div className={cn('text-right tabular-nums', classeDeltaSemantico(centro.delta, naturezaLinha))} title={tituloPct(centro.delta)}>{fmtPct(centro.delta)}</div>
                 </div>
                 {centro.subcentros.map((sub) => {
                   const subReal = (
@@ -514,7 +518,7 @@ export function LinhaExecutivaExecutivoModal({
                         </>
                       )}
                       <div className={cn('text-right tabular-nums', classeDeltaSemantico(impactoSub, naturezaLinha))}>{formatDeltaReais(impactoSub)}</div>
-                      <div className={cn('text-right tabular-nums', classeDeltaSemantico(sub.delta, naturezaLinha))}>{fmtPct(sub.delta)}</div>
+                      <div className={cn('text-right tabular-nums', classeDeltaSemantico(sub.delta, naturezaLinha))} title={tituloPct(sub.delta)}>{fmtPct(sub.delta)}</div>
                     </div>
                   );
                 })}
@@ -655,7 +659,7 @@ export function LinhaExecutivaExecutivoModal({
                       <span className="text-muted-foreground">Diferença </span>
                       <span className={cn('font-semibold', corValor)}>{fmtBRL(impactoAbsAjustado)}</span>
                     </div>
-                    <div className={cn('text-[11px] leading-[1.4] tabular-nums font-semibold', classeDeltaSemantico(sub.delta, naturezaLinha))}>
+                    <div className={cn('text-[11px] leading-[1.4] tabular-nums font-semibold', classeDeltaSemantico(sub.delta, naturezaLinha))} title={tituloPct(sub.delta)}>
                       Δ% {fmtPct(sub.delta)}
                     </div>
                   </div>

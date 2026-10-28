@@ -15,6 +15,7 @@
  */
 
 import { cn } from '@/lib/utils';
+import { TITULO_SEM_BASE_ANO_ANTERIOR } from '@/v2/lib/deltaSemBase';
 import type { ComparativoDuplo, FormatoExibicao } from '@/v2/lib/planejamentoVisaoGeralTypes';
 
 interface CardComparativoProps {
@@ -70,9 +71,10 @@ function formatar(valor: number | null, formato: FormatoExibicao): string {
   }
 }
 
-function fmtDelta(d: number | null, label: string): { texto: string; cor: string } {
+function fmtDelta(d: number | null, label: string): { texto: string; cor: string; title?: string } {
   if (d == null || !Number.isFinite(d)) {
-    return { texto: `— vs ${label}`, cor: 'text-muted-foreground' };
+    // P131: o "—" diz por quê (vsAnoFechado sem base: ano anterior ausente ou 0).
+    return { texto: `— vs ${label}`, cor: 'text-muted-foreground', title: TITULO_SEM_BASE_ANO_ANTERIOR };
   }
   const sinal = d >= 0 ? '+' : '';
   const positivo = d >= 0;
@@ -102,7 +104,7 @@ export function CardComparativo({ titulo, dado, className, valorClassName, hideQ
             {titulo}
           </div>
           {delta && (
-            <div className={cn('text-[9px] font-medium tabular-nums truncate shrink-0', delta.cor)}>
+            <div className={cn('text-[9px] font-medium tabular-nums truncate shrink-0', delta.cor)} title={delta.title}>
               {delta.texto}
             </div>
           )}
@@ -130,7 +132,7 @@ export function CardComparativo({ titulo, dado, className, valorClassName, hideQ
       </div>
 
       {delta && (
-        <div className={cn('text-[10px] font-medium tabular-nums truncate', delta.cor)}>
+        <div className={cn('text-[10px] font-medium tabular-nums truncate', delta.cor)} title={delta.title}>
           {delta.texto}
         </div>
       )}
