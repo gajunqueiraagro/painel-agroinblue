@@ -214,6 +214,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - Conciliacao: tolerancia de MEIO centavo (R$ 0,01 e' diferenca); a data do banco manda na conferencia; o resumo da conta tem dono no
   banco; todo vinculo com extrato da' baixa e o parcial vira divisao explicita; F5 nunca e' necessario; transferencia de OFX = 1
   lancamento + 2 vinculos; arquivo de extrato se le^ pelo charset declarado.
+- P124: o LOTE do mês (PalcoDoMes) usa a régua do MOTOR (`fn_candidatos_conciliacao`; a tela só agrupa: exata = pré-marcada sem empate) e grava
+  PAR A PAR pelo gravador de hoje (`vincularSelecao`); buscar é GESTO; a caixa "Vincular os exatos" saiu do palco (o ConciliarMesDialog ficou: dívida).
 - Financiamento: o saldo devedor tem uma fonte (`fn_financiamento_saldo`); captacao segue o creditado em conta; o valor do lancamento
   vinculado a' parcela manda na parcela; consorcio e' natureza propria (gerador no banco); parcela adiada e' divida mas nao vencida.
 - Recorrencia gera a vigencia inteira e nunca omite em silencio; o valor do mes tem marca e o propagar pula as marcadas.

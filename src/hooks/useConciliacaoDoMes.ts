@@ -85,6 +85,8 @@ export interface CandidatoConciliacao {
   /** Já coberto por inteiro: aparece para auditoria, não é acionável. */
   indisponivel: boolean;
   motivoIndisponivel: string | null;
+  /** O vencimento do lançamento (P124: a coluna "Venc." do lote). */
+  vencimento?: string | null;
 }
 
 export interface VinculoDoMovimento {
@@ -482,6 +484,31 @@ export function useSugestoesDoMes(
 }
 
 /**
+ * Uma linha de `fn_candidatos_conciliacao` lida para a tela — UMA leitura para a estação e para o lote do mês (P124). Movida verbatim
+ * de dentro de `useCandidatosDoMovimento`; o P124 acrescentou só o `vencimento` (a coluna "Venc." do lote).
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- linhas da RPC, fora de types.ts
+export const lerCandidato = (r: any): CandidatoConciliacao => ({
+        id: r.id,
+        descricao: r.descricao ?? null,
+        favorecido: r.favorecido ?? null,
+        numeroDocumento: r.numero_documento ?? null,
+        dataReferencia: r.data_referencia ?? null,
+        valor: Number(r.valor ?? 0),
+        status: r.status ?? null,
+        jaConciliado: Number(r.ja_conciliado ?? 0),
+        saldo: Number(r.saldo ?? 0),
+        deltaValor: Number(r.delta_valor ?? 0),
+        deltaDias: r.delta_dias == null ? null : Number(r.delta_dias),
+        score: r.score == null ? null : Number(r.score),
+        preMarcado: r.pre_marcado === true,
+        ambiguo: r.ambiguo === true,
+        indisponivel: r.indisponivel === true,
+        motivoIndisponivel: r.motivo_indisponivel ?? null,
+        vencimento: r.vencimento ?? null,
+      });
+
+/**
  * OS CANDIDATOS DE UM MOVIMENTO — `fn_candidatos_conciliacao`, o motor do trio.
  *
  * ⚠ UM MOVIMENTO, UMA CHAMADA. É a mesma função que `fn_sugestoes_extrato` roda
@@ -511,25 +538,7 @@ export function useCandidatosDoMovimento(clienteId: string | null, extratoId: st
          tela escreve isso; `[]` diria "perguntei e não há candidato", que é
          outra resposta. */
       if (error) { setCandidatos(null); return; }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- linhas da RPC, fora de types.ts
-      setCandidatos((data ?? []).map((r: any) => ({
-        id: r.id,
-        descricao: r.descricao ?? null,
-        favorecido: r.favorecido ?? null,
-        numeroDocumento: r.numero_documento ?? null,
-        dataReferencia: r.data_referencia ?? null,
-        valor: Number(r.valor ?? 0),
-        status: r.status ?? null,
-        jaConciliado: Number(r.ja_conciliado ?? 0),
-        saldo: Number(r.saldo ?? 0),
-        deltaValor: Number(r.delta_valor ?? 0),
-        deltaDias: r.delta_dias == null ? null : Number(r.delta_dias),
-        score: r.score == null ? null : Number(r.score),
-        preMarcado: r.pre_marcado === true,
-        ambiguo: r.ambiguo === true,
-        indisponivel: r.indisponivel === true,
-        motivoIndisponivel: r.motivo_indisponivel ?? null,
-      })));
+      setCandidatos((data ?? []).map(lerCandidato));
     } finally {
       setCarregando(false);
     }

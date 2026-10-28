@@ -465,3 +465,9 @@ docs/historico/frentes-ate-2026-09-29.md.
   tabela da Conferencia Mensal escondida (`th sticky` num quadro que nao rola, "Nascimentos" com "…") e fez a altura dos blocos depender
   do conteudo: ao escolher uma fazenda, tudo abaixo descia 48 a 81px (desloca do `meta-fech` 51 → 74). Tratar com tela, bloco a bloco
   (o que mostrar abaixo de 1024px), nunca so' liberando a altura.
+
+- CONC-EXATOS-DIALOG (P124, decisão 2 do Gabriel 28/10) — o `ConciliarMesDialog` (`src/components/conciliacao/ConciliarMesDialog.tsx:163`)
+  segue com o "Vincular os exatos" de antes (`fn_vincular_exatos_mes`: mesma data, mesmo valor, único, só realizado), outra régua que a do
+  lote do PalcoDoMes (o motor). Passar para o lote é item próprio; a função não se apaga.
+- CONC-GRAVADOR-SENTIDO (P124, decisão 4) — `fn_vincular_extrato_lancamento` NÃO confere o SENTIDO (saída do banco com entrada do sistema).
+  No lote os pares vêm do motor, que confere; a trava no gravador é item próprio do banco.

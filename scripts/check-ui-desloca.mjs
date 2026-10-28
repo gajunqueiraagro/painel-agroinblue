@@ -399,6 +399,16 @@ const CENARIOS = [
   { nome: 'fora-da-vigencia-cancelar', url: 'tela=fora-da-vigencia&v=cancelar',
     antes: async (p) => { await p.locator('[data-testid="modal-fora-da-vigencia"]').waitFor(); await espera(p); },
     estados: [['nada a cancelar', { url: 'tela=fora-da-vigencia&v=vazia' }]] },
+  /* P124 — o palco do mês: buscar, marcar todas as exatas, a prévia do lote e voltar — os chips, os botões e o rodapé não andam */
+  { nome: 'palco-do-mes', url: 'tela=palco-do-mes', tamanhos: [[1000, 600], [1126, 579], [1300, 704], [1440, 800]],
+    antes: async (p) => { await p.locator('[data-testid="linha-palco"]').first().waitFor(); await espera(p); },
+    estados: [
+      ['buscou as sugestoes', async (p) => { await p.locator('[data-testid="buscar-sugestoes"]').click(); await p.locator('[data-testid="chip-sugestao-exata"]:not([disabled])').waitFor(); await espera(p); }],
+      ['filtro exata', clicar('[data-testid="chip-sugestao-exata"]')],
+      ['marcar todas as exatas', clicar('[data-testid="marcar-exatas"]')],
+      ['previa do lote', clicar('[data-testid="conciliar-selecionados"]')],
+      ['voltar', botao(/^Voltar$/)],
+    ] },
   /* P141 (CONC-LAYOUT-01) — Saldos por conta: os selos OFX/PDF e o ↗ PRESOS (lugar fixo) entre a página com arquivos e a sem nenhum,
      a conta escolhida e o "← Todas"; o modal do ↗ entre carregando e carregado. A prova: sem a largura fixa do lugar do selo, o PDF anda. */
   { nome: 'conciliacao-saldos', url: 'tela=conciliacao', tamanhos: TAMANHOS_DO_P92,

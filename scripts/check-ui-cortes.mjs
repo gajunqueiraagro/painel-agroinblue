@@ -554,6 +554,19 @@ const CENARIOS = [
   /* P154 — a prévia dos previstos fora da vigência (encurtada e cancelar), vazia, carregando e com a recusa; valores no teto */
   ...['encurtada', 'cancelar', 'vazia', 'carregando', 'erro'].map((v) => ({ nome: `fora-da-vigencia-${v}`, url: `tela=fora-da-vigencia&v=${v}`,
     tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[data-testid="modal-fora-da-vigencia"]' })),
+  /* P124 — a Conciliação do mês com o lote (de 1000px para cima: CONC-ESTREITA); antes e depois de buscar as sugestões, com o resumo do
+     lote aberto e com a recusa do banco na linha */
+  { nome: 'palco-do-mes', url: 'tela=palco-do-mes', tamanhos: TAMANHOS_DA_CONCILIACAO, regiao: '[data-testid="palco-do-mes"]',
+    antes: async (p) => { await p.locator('[data-testid="linha-palco"]').first().waitFor(); await p.waitForTimeout(400); } },
+  { nome: 'palco-do-mes-sugestoes', url: 'tela=palco-do-mes', tamanhos: TAMANHOS_DA_CONCILIACAO, regiao: '[data-testid="palco-do-mes"]',
+    antes: async (p) => { await p.locator('[data-testid="buscar-sugestoes"]').click(); await p.locator('[data-testid="chip-sugestao-exata"]:not([disabled])').waitFor(); await p.waitForTimeout(400); } },
+  { nome: 'palco-do-mes-previa', url: 'tela=palco-do-mes', tamanhos: TAMANHOS_DA_CONCILIACAO, regiao: '[data-testid="palco-do-mes"]',
+    antes: async (p) => { await p.locator('[data-testid="buscar-sugestoes"]').click(); await p.locator('[data-testid="chip-sugestao-exata"]:not([disabled])').waitFor();
+      await p.locator('[data-testid="conciliar-selecionados"]').click(); await p.waitForTimeout(400); } },
+  { nome: 'palco-do-mes-recusa', url: 'tela=palco-do-mes&v=recusa', tamanhos: TAMANHOS_DA_CONCILIACAO, regiao: '[data-testid="palco-do-mes"]',
+    antes: async (p) => { await p.locator('[data-testid="buscar-sugestoes"]').click(); await p.locator('[data-testid="chip-sugestao-exata"]:not([disabled])').waitFor();
+      await p.locator('[data-testid="conciliar-selecionados"]').click(); await p.locator('[data-testid="confirmar-lote"]').click();
+      await p.locator('[data-testid="resultado-par"]').first().waitFor(); await p.waitForTimeout(400); } },
   /* P141 (CONC-LAYOUT-01) — a aba Conciliação (Saldos | Resumo | Status; a régua nova de Saldos com Data, OFX/PDF, a Diferença estreita e
      o ↗) e o "Extrato do sistema" do ↗, de 1000px para cima (CONC-ESTREITA), com o pior caso (`dados/conciliacao.ts`) */
   { nome: 'conciliacao-saldos', url: 'tela=conciliacao', tamanhos: TAMANHOS_DA_CONCILIACAO,
