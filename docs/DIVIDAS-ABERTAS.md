@@ -472,3 +472,9 @@ docs/historico/frentes-ate-2026-09-29.md.
   Depois do P137 (gate de 28/10, 09:57–13:10): a 1000px ficam os 38px da tabela Jan→Dez e "Nascimentos" com "…" na faixa da Conferencia
   (o P137 deixou as colunas da faixa encolherem ate' 646px para tirar os cortes de "vs A-1"; o rotulo, com minimo de 90px, passou a
   cortar com "…"); a 750px, 30 desloca (os blocos descem ao escolher uma fazenda). De 1024px para cima: zero.
+
+- CONC-EXATOS-DIALOG (P124, decisão 2 do Gabriel 28/10) — o `ConciliarMesDialog` (`src/components/conciliacao/ConciliarMesDialog.tsx:163`)
+  segue com o "Vincular os exatos" de antes (`fn_vincular_exatos_mes`: mesma data, mesmo valor, único, só realizado), outra régua que a do
+  lote do PalcoDoMes (o motor). Passar para o lote é item próprio; a função não se apaga.
+- CONC-GRAVADOR-SENTIDO (P124, decisão 4) — `fn_vincular_extrato_lancamento` NÃO confere o SENTIDO (saída do banco com entrada do sistema).
+  No lote os pares vêm do motor, que confere; a trava no gravador é item próprio do banco.

@@ -178,6 +178,28 @@ describe('P128a — tabela sistema × nota e a frase do achado', () => {
 });
 
 /* P128c — a âncora da porta 2: o lançamento aberto ('lancamento') recebe a nota; o irmão dele só por 'parcelamento' não */
+/* P162 — a nota SEM duplicata (o molde do NJ: emissão 31/07, pago 10/08, nº "9952") achada pelo NÚMERO com o MESMO valor: é ela, "1 de 1";
+   nunca "só na nota → criar" + "só no sistema" (o caminho que DUPLICAVA). Valores SINTÉTICOS. */
+describe('P162 — a nota de uma parcela achada pelo número com o mesmo valor', () => {
+  const achado = (o: Partial<LancamentoJaLancado> = {}): LancamentoJaLancado => ({ id: 'j', vencimento: '2031-08-10', pagamento: '2031-08-10',
+    competencia: '2031-07-31', descricao: 'Combustivel sintetico', valorCent: 415146, status: 'realizado', conciliado: true, financiamentoId: null,
+    numeroDocumento: '9952', fornecedorId: 'f', fornecedorNome: 'F', fornecedorPor: 'cnpj', parcelas: [], por: ['numero'], cancelado: false, ...o });
+  const NOTA = [{ n: 1, vencimento: '2031-07-31', valorCent: 415146 }];
+  it('mesmo valor (até 5 centavos), data longe da emissão: casa a parcela, nada falta, "1 de 1"', () => {
+    const j = casarJaLancados(NOTA, [achado()], 415146);
+    expect([j?.porParcela.map((x) => x.lancamento?.id ?? null), j?.faltam, j?.alvos.map((x) => x.id)]).toEqual([['j'], [], ['j']]);
+    const linhas = j ? linhasSistemaNota(j, 415146) : [];
+    expect(linhas.map((x) => x.situacao)).not.toContain('so_na_nota');
+    expect(linhas.map((x) => x.situacao)).not.toContain('so_no_sistema');
+  });
+  it('valor diferente: segue como hoje (a que falta continua; quem decide é a pessoa)', () => {
+    expect(casarJaLancados(NOTA, [achado({ valorCent: 415100 })], 415146)?.faltam.map((f) => f.n)).toEqual([1]);
+  });
+  it('o irmão achado SÓ por ser do parcelamento nunca casa a nota de uma parcela', () => {
+    expect(casarJaLancados(NOTA, [achado({ por: ['parcelamento'], financiamentoId: 'p' })], 415146)?.porParcela[0].lancamento).toBeNull();
+  });
+});
+
 describe('P128c — o lançamento aberto é alvo', () => {
   it('lido do banco e alvo do Completar; o irmão "só no sistema" fora', () => {
     const [aberto, irmao] = lerJaLancados([{ id: 'aberto', valor_cent: 40877, por: ['lancamento'], parcelas: [] }, { id: 'irmao', valor_cent: 40877, por: ['parcelamento'], parcelas: [] }]);

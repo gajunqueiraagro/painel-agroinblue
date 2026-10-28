@@ -99,14 +99,8 @@ async function abrir(lanc: LancamentoV2, extra: Partial<React.ComponentProps<typ
   await screen.findByDisplayValue('Folha de Pagamento');
   await new Promise((ok) => setTimeout(ok, 30));
 }
-/** As linhas (rótulo, valor) do bloco "Documento" do resumo lateral. */
-const linhasDocumento = () => {
-  const titulo = [...document.querySelectorAll('aside *')].find(e => e.children.length === 0 && e.textContent === 'Documento');
-  if (!titulo) throw new Error('sem a seção Documento no resumo');
-  let no: Element | null = titulo; while (no && !no.nextElementSibling) no = no.parentElement;
-  const bloco = no?.nextElementSibling; if (!bloco) throw new Error('sem o bloco da seção Documento');
-  return [...bloco.children].map(l => l.textContent ?? '');
-};
+/** P121 — o bloco "Documento" do resumo é UMA linha: "Tipo · Número" (o que faltar não entra; nada = "—"). */
+const linhaDocumento = () => screen.getByTestId('resumo-nota').textContent ?? '';
 const abaDocumentos = () => fireEvent.mouseDown(screen.getByRole('tab', { name: /Documentos/ }), { button: 0 });
 const NF = { id: 'd1', especie: 'nf', numero: '518', cancelado: false };
 
@@ -114,7 +108,7 @@ describe('a nota da compra no resumo e no topo da aba Documentos', () => {
   it('parcela SEM número próprio e com a NF ligada: resumo "Nota Fiscal · da compra" + "NF 000.000.518"; o campo Nº segue vazio', async () => {
     docs.lista = [NF];
     await abrir(FOLHA);
-    expect(linhasDocumento()).toEqual(['TipoNota Fiscal · da compra', 'NúmeroNF 000.000.518']);
+    expect(linhaDocumento()).toBe('Nota Fiscal · da compra · NF 000.000.518');
     abaDocumentos();
     const marca = await screen.findByTestId('doc-da-compra');
     expect(marca.textContent).toBe('nota da compra: NF 000.000.518');
@@ -123,7 +117,7 @@ describe('a nota da compra no resumo e no topo da aba Documentos', () => {
   });
   it('sem documento nenhum: resumo "—" e nenhuma marca (a busca sabe achar: o caso de cima acha)', async () => {
     await abrir(FOLHA);
-    expect(linhasDocumento()).toEqual(['Tipo—', 'Número—']);
+    expect(linhaDocumento()).toBe('—');
     abaDocumentos();
     await screen.findByTestId('bloco-documentos-topo');
     expect(screen.queryByTestId('doc-da-compra')).toBeNull();
@@ -131,7 +125,7 @@ describe('a nota da compra no resumo e no topo da aba Documentos', () => {
   it('o número PRÓPRIO do lançamento vence a nota ligada, e a marca não aparece', async () => {
     docs.lista = [NF];
     await abrir({ ...FOLHA, tipo_documento: 'Nota Fiscal', numero_documento: '77' });
-    expect(linhasDocumento()).toEqual(['TipoNota Fiscal', 'Número000.000.077']);
+    expect(linhaDocumento()).toBe('Nota Fiscal · 000.000.077');
     abaDocumentos();
     await screen.findByTestId('bloco-documentos-topo');
     expect(screen.queryByTestId('doc-da-compra')).toBeNull();
@@ -139,12 +133,12 @@ describe('a nota da compra no resumo e no topo da aba Documentos', () => {
   it('nota CANCELADA não conta; documento que não é nota entra como "documento ligado"', async () => {
     docs.lista = [{ ...NF, cancelado: true }];
     await abrir(FOLHA);
-    expect(linhasDocumento()).toEqual(['Tipo—', 'Número—']);
+    expect(linhaDocumento()).toBe('—');
   });
   it('só um recibo ligado: "Documento ligado" + "Rec. 12"', async () => {
     docs.lista = [{ id: 'd2', especie: 'recibo', numero: '12', cancelado: false }];
     await abrir(FOLHA);
-    expect(linhasDocumento()).toEqual(['TipoDocumento ligado', 'NúmeroRec. 12']);
+    expect(linhaDocumento()).toBe('Documento ligado · Rec. 12');
     abaDocumentos();
     expect((await screen.findByTestId('doc-da-compra')).textContent).toBe('documento ligado: Rec. 12');
   });

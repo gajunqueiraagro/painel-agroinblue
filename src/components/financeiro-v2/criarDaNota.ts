@@ -287,16 +287,20 @@ export async function anexarAosJaLancados(
   clienteId: string, d: DoXml, alvos: readonly { id: string; numero: number }[], favorecidoDaNota: string,
   opcoes: { faltam?: { form: LancamentoV2Form; numero: number }[]; trocarPara?: string | null; motivoTroca?: string },
   g: Gravadores = GRAVADORES,
-): Promise<{ ok: true; criados: number; avisos: string[] } | { ok: false; erro: string }> {
+): Promise<{ ok: true; criados: number; avisos: string[]; idsCriados: string[]; documentoIds: string[] } | { ok: false; erro: string }> {
   const avisos: string[] = [];
   const todos = [...alvos];
   let criados = 0;
+  /* P128b — os ids do que nasceu aqui (as que faltavam, os documentos da nota): a operação do "Completar" os registra para o desfazer */
+  const idsCriados: string[] = [];
+  let documentoIds: string[] = [];
   for (const f of opcoes.faltam ?? []) {
     if (!g.lancamento) return { ok: false, erro: 'Gravador do lançamento indisponível. Nada foi criado.' };
     let id: string | null;
     try { id = await g.lancamento(f.form); } catch (x) { return { ok: false, erro: erroDe(x, 'Falha ao criar a parcela que faltava.') }; }
     if (!id) return { ok: false, erro: `A parcela ${f.numero} não foi criada (veja o aviso ao lado).` };
     todos.push({ id, numero: f.numero });
+    idsCriados.push(id);
     criados += 1;
   }
   try {
@@ -304,6 +308,7 @@ export async function anexarAosJaLancados(
     const lista = await g.documentosDoParcelamento(clienteId, parcelas, [pendenteDaNota(d, favorecidoDaNota)]);
     const falha = falhaDosDocumentos(lista);
     if (falha) return { ok: false, erro: `A nota não foi anexada: ${falha}` };
+    documentoIds = lista.flatMap((x) => (x.documentoId ? [x.documentoId] : []));
     const e = await g.numeroNoLancamento(clienteId, todos.map((x) => x.id), d.proposta.numeroDocumento);
     if (e) avisos.push(`A nota foi anexada, mas o número do documento não foi gravado: ${e}`);
   } catch (x) {
@@ -316,5 +321,5 @@ export async function anexarAosJaLancados(
       if (e) avisos.push(`A nota foi anexada, mas o fornecedor não foi trocado: ${e}`);
     }
   }
-  return { ok: true, criados, avisos };
+  return { ok: true, criados, avisos, idsCriados, documentoIds };
 }

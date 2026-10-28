@@ -100,6 +100,15 @@ export function casarJaLancados(parcelas: readonly ParcelaDaNotaParaCasar[], tod
       if (melhor) { daParcela.set(parcela.n, melhor.l); usados.add(melhor.l.id); }
     }
   }
+  /* P162 — a nota de UMA parcela (sem duplicata: o "vencimento" é a emissão) achada pela nota (nº, documento, chave; o emitente o banco já
+     conferiu) com o MESMO valor (até 5 centavos) é ELA, qualquer que seja a data — sem isso, "só na nota → criar" + "só no sistema" (em dobro).
+     O irmão achado só por ser do parcelamento nunca casa. */
+  if (parcelas.length === 1 && !daParcela.has(parcelas[0].n)) {
+    const unica = parcelas[0];
+    const mesma = achados.find((l) => !usados.has(l.id) && l.por.some((x) => x !== 'valor' && x !== 'parcelamento')
+      && Math.abs(l.valorCent - unica.valorCent) <= 5);
+    if (mesma) { daParcela.set(unica.n, mesma); usados.add(mesma.id); }
+  }
   const pelaNota = achados.filter((l) => !usados.has(l.id) && pelaNotaPor(l));
   for (const l of pelaNota) usados.add(l.id);
   if (usados.size === 0) return null;
