@@ -147,6 +147,16 @@ const CENARIOS = [
   { nome: 'lancamento-dividido-Itens', url: 'tela=lancamento&m=editar&v=sal&div=1', tamanhos: TAMANHOS_DO_CONTRATO,
     antes: async (p) => { await p.getByRole('tab', { name: /Itens da nota/ }).first().click(); await p.waitForTimeout(400);
       await p.getByRole('button', { name: 'Contas', exact: true }).first().click(); await p.waitForTimeout(500); } },
+  /* P165 — a conta de um item mudada e o Salvar: a confirmação do Dividir com "Salvar sem dividir" (Cancelar · Salvar sem dividir · Salvar e
+     dividir no rodapé de 480px; a explicação e a prévia do banco inteiras) */
+  { nome: 'lancamento-dividido-salvar-contas', url: 'tela=lancamento&m=editar&v=sal&div=1', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[data-testid="divisao-motivo"]',
+    antes: async (p) => {
+      await p.getByRole('tab', { name: /Itens da nota/ }).first().click(); await p.waitForTimeout(400);
+      await p.getByRole('button', { name: 'Contas', exact: true }).first().click(); await p.waitForTimeout(500);
+      await p.locator('[data-testid="conta-do-item-1"] [role="combobox"]').first().click(); await p.waitForTimeout(400);
+      await p.locator('[data-testid="conta-barra-atividade"] button', { hasText: 'Lavoura' }).first().click(); await p.waitForTimeout(300);
+      await p.locator('[data-testid="conta-lista"] button', { hasText: 'Insumos Lavoura Milho' }).first().click(); await p.waitForTimeout(300);
+      await p.locator('button[tabindex="17"]').first().click(); await p.waitForTimeout(800); } },
   { nome: 'financeiro-dividido', url: 'tela=financeiro&div=1', regiao: '[data-testid="quadro-lancamentos"]', tamanhos: TAMANHOS_DO_CONTRATO },
   /* UI-TEXTO-LONGO-01 — a descrição de 300 caracteres: a tela é varrida (nenhum "…") e as alturas do modal, do resumo lateral e da lista
      de parcelas têm de ser as da MESMA tela com a descrição curta (`alturasComo`). O parcelado do XML traz a grade de parcelas. */

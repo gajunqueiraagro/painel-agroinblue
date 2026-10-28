@@ -5,7 +5,7 @@
  * obrigatorio; o banco soma, divide e recusa com a frase pronta). Item sem conta impede, com a frase. Sem rolagem ate' ~18 itens: a
  * tabela tem a fonte dos itens (8,5px, linha 14px) e o quadro rola dentro so' alem disso.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { EscolherConta } from '@/components/shared/EscolherConta';
 import type { Atividade } from '@/lib/financeiro/ultimaAtividade';
@@ -37,7 +37,8 @@ function ContaDoItem({ valor, classificacoes, tipoOperacao, onEscolher, nItem, d
   );
 }
 
-export function ContasDosItens({ itens, classificacoes, tipoOperacao, contaDeHoje, sugeridas, gravando, somenteLeitura, onDividir, atividadeSugerida = null, aoSalvar = false }: {
+export function ContasDosItens({ itens, classificacoes, tipoOperacao, contaDeHoje, sugeridas, gravando, somenteLeitura, onDividir, atividadeSugerida = null, aoSalvar = false,
+  pendente = null, onMudou }: {
   itens: readonly Pick<ItemFiscal, 'nItem' | 'descricao' | 'liquidoCent'>[];
   classificacoes: ClassificacaoItem[];
   tipoOperacao: string;
@@ -53,14 +54,32 @@ export function ContasDosItens({ itens, classificacoes, tipoOperacao, contaDeHoj
   atividadeSugerida?: Atividade | null;
   /** NOTA-CONTAS-NA-CRIACAO-01 A — no NOVO lancamento: o botao deixa a divisao PENDENTE ("… ao salvar"); quem grava e' o Salvar */
   aoSalvar?: boolean;
+  /** P165 — a conta por item MUDADA e ainda nao dividida mora no modal (a aba que sai desmonta esta vista): volta com ela */
+  pendente?: ReadonlyMap<number, string> | null;
+  /** P165 — avisa o modal a cada troca: o mapa quando difere do de partida, nulo quando volta a ele (o Salvar pergunta antes de gravar) */
+  onMudou?: (mapa: ReadonlyMap<number, string> | null) => void;
 }) {
   const inicial = useMemo(() => {
     const m = new Map<number, string>();
     for (const i of itens) { const c = sugeridas.get(i.nItem) ?? contaDeHoje; if (c) m.set(i.nItem, c); }
     return m;
   }, [itens, sugeridas, contaDeHoje]);
-  const [mapa, setMapa] = useState<ReadonlyMap<number, string>>(inicial);
-  useEffect(() => { setMapa(inicial); }, [inicial]);
+  const [mapa, setMapa] = useState<ReadonlyMap<number, string>>(pendente ?? inicial);
+  /* o ponto de partida mudou DE CONTEUDO (a divisao gravada, a sugestao lida): a vista volta a ele — nunca na montagem, que traz o
+     pendente, nem quando so' a identidade dos itens muda num render do modal */
+  const chaveDoInicial = [...inicial].map(([n, c]) => `${n}:${c}`).join('|');
+  const chaveAnterior = useRef(chaveDoInicial);
+  useEffect(() => {
+    if (chaveAnterior.current === chaveDoInicial) return;
+    chaveAnterior.current = chaveDoInicial;
+    setMapa(inicial);
+  }, [chaveDoInicial, inicial]);
+  const onMudouRef = useRef(onMudou);
+  onMudouRef.current = onMudou;
+  useEffect(() => {
+    const mudou = mapa.size !== inicial.size || [...mapa].some(([n, c]) => inicial.get(n) !== c);
+    onMudouRef.current?.(mudou ? mapa : null);
+  }, [mapa, inicial]);
   const porConta = porContaDosItens(itens, mapa);
   const recusa = porQueNaoDivideOsItens(itens, mapa);
   const cor = (plano: string) => CORES_DAS_CONTAS[Math.max(0, porConta.findIndex((c) => c.planoContaId === plano)) % CORES_DAS_CONTAS.length];
