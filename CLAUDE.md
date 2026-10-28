@@ -221,6 +221,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - Recorrencia gera a vigencia inteira e nunca omite em silencio; o valor do mes tem marca e o propagar pula as marcadas.
 - P154: recorrência ENCURTADA ou CANCELADA limpa SÓ os PREVISTOS fora da vigência pela `fn_recorrencia_fora_da_vigencia` (simular = a prévia; cancelar
   = competência ≥ mês do cancelamento; nunca apaga, o cancelado ocupa a competência); programado/agendado/realizado/conciliado/mês fechado: listados, só à mão.
+- P160: o Propagar AVISA a competência recalculada que cai fora da vigência (`fora_da_vigencia` na projeção, só aviso); o salvar roda por último a
+  prévia do P154 também nesse caso (nada fora = fecha).
 - Fornecedor: um leitor so' (`useFornecedoresDoCliente`), um seletor so' (`FavorecidoSelect`), uma busca so' (tela + `fn_fornecedor_buscar`,
   presas pelo `buscaDeFornecedor.casos.json`), uma regra de criacao (`decidirCadastro`); mesclar e' RPC com desfazer e o absorvido e'
   inativo sempre; nome gravado em caixa padronizada por funcao do banco; FILIAIS tem a mesma razao social (CNPJ e cidade distinguem) e
@@ -318,6 +320,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - UX-OBRIGATORIOS-01: Salvar com pendencia nao fecha nem grava; o campo pendente fica vermelho com a mensagem; UX-TOAST-01: validacao
   e erro de preenchimento nunca em toast. Dialogo/menu fechando nao aceita clique. Modal em blocos pela primitiva da casa; o
   `DialogContent` renderiza a 95%.
+- P158: o aviso é top-center com ✕ e 2 s; erro e atenção ficam até o ✕ pelo embrulho do `sonner.tsx` (161 arquivos importam de 'sonner');
+  duração própria só com motivo registrado.
 - A pagina e' pt-BR e nao se traduz. Barra lateral 152px num token. Graficos de saida: laranja/violeta/vermelho/cinza; azul so' entrada.
 - TABELA-ALTURA-FIXA-01: o quadro da tabela tem ALTURA (nunca `maxHeight`) ate' o fim da tela, qualquer que seja o numero de linhas; o
   vazio fica dentro do quadro; em pagina que rola, `useAlturaAteOFim` (topo do quadro → fim da janela). O gate: filtrar para 6/1/0 linhas.

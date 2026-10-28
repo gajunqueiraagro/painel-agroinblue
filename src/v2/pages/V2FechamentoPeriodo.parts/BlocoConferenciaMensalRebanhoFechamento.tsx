@@ -93,9 +93,11 @@ function tri(card: CardData | undefined, lente: Lente): MetricaTrio {
 }
 
 // Desktop-first: MOVIMENTO mais estreita, cabecas/preco/valor mais largas
-// para evitar wrap dos deltas. Sum fixos = 640px + label max 140 = 780px.
+// para evitar wrap dos deltas. Largura cheia (a de antes, 780px) quando cabe.
+// P137 (família 2): cada coluna é minmax(mínimo, a de antes) — a 1000px a faixa (780px fixos) passava da caixa do boletim (~740px) e
+// as últimas colunas (Total, vs A-1) eram cortadas; o mínimo somado é 646px (com os vãos). Acima disso, igual a antes.
 const GRID_FAIXA =
-  'grid grid-cols-[minmax(110px,140px)_72px_60px_60px_96px_60px_60px_112px_60px_60px] gap-1 items-center';
+  'grid grid-cols-[minmax(90px,140px)_minmax(60px,72px)_minmax(48px,60px)_minmax(48px,60px)_minmax(80px,96px)_minmax(48px,60px)_minmax(48px,60px)_minmax(92px,112px)_minmax(48px,60px)_minmax(48px,60px)] gap-1 items-center';
 
 function FaixaExecutivaResumo({
   porTipo,
