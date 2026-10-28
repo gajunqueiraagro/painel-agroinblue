@@ -19,6 +19,8 @@ export interface LinhaExecutiva {
 export interface BlocoResumoExecutivoData {
   receitaPecuaria: LinhaExecutiva;
   receitaAgricultura: LinhaExecutiva;
+  /** P130 — grupo_custo "Receita Silvícola" (arrendamento florestal etc.). */
+  receitaSilvicultura: LinhaExecutiva;
   outrasReceitas: LinhaExecutiva;
   entradasFinanceiras: LinhaExecutiva;
   totalEntradas: LinhaExecutiva;

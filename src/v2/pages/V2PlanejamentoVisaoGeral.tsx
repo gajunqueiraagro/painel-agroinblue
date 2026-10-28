@@ -31,6 +31,8 @@ import {
   agregaReceitaPecPorSubcentroMeta,
   agregaReceitaAgriPorSubcentro,
   agregaReceitaAgriPorSubcentroMeta,
+  agregaReceitaSilviPorSubcentro,
+  agregaReceitaSilviPorSubcentroMeta,
   agregaOutrasReceitasPorSubcentro,
   agregaOutrasReceitasPorSubcentroMeta,
   agregaEntradasFinanceirasPorSubcentro,
@@ -61,6 +63,7 @@ import {
 import {
   ORDEM_CENTROS_RECEITA_PECUARIA,
   ORDEM_CENTROS_RECEITA_AGRICULTURA,
+  ORDEM_CENTROS_RECEITA_SILVICOLA,
   ORDEM_CENTROS_OUTRAS_RECEITAS,
   ORDEM_CENTROS_ENTRADAS_FINANCEIRAS,
   ORDEM_CENTROS_CUSTEIO_PECUARIA,
@@ -82,7 +85,7 @@ import { BlocoResumoExecutivo } from './V2PlanejamentoVisaoGeral.parts/BlocoResu
 import { LinhaExecutivaExecutivoModal } from './V2PlanejamentoVisaoGeral.parts/LinhaExecutivaExecutivoModal';
 
 export type LinhaModalKey =
-  | 'receitaPecuaria' | 'receitaAgricultura' | 'outrasReceitas' | 'entradasFinanceiras'
+  | 'receitaPecuaria' | 'receitaAgricultura' | 'receitaSilvicultura' | 'outrasReceitas' | 'entradasFinanceiras'
   | 'custeioPecuaria' | 'custeioAgricultura'
   | 'jurosPecuaria' | 'jurosAgricultura'
   | 'investimentoPecuaria' | 'investimentoAgricultura'
@@ -112,6 +115,13 @@ const CONFIG_MODAIS_LINHA: Record<LinhaModalKey, ConfigModalLinha> = {
     ordemCentrosOficial: ORDEM_CENTROS_RECEITA_AGRICULTURA,
     agregaReal: agregaReceitaAgriPorSubcentro,
     agregaMeta: agregaReceitaAgriPorSubcentroMeta,
+  },
+  receitaSilvicultura: {
+    titulo: 'Receita Silvicultura',
+    composicaoOficialLabel: 'grupo_custo = "Receita Silvícola"',
+    ordemCentrosOficial: ORDEM_CENTROS_RECEITA_SILVICOLA,
+    agregaReal: agregaReceitaSilviPorSubcentro,
+    agregaMeta: agregaReceitaSilviPorSubcentroMeta,
   },
   outrasReceitas: {
     titulo: 'Outras Receitas',

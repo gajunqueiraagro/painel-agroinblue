@@ -23,6 +23,7 @@ import type { SubcentroGrid } from '@/hooks/usePlanejamentoFinanceiro';
 import {
   agregaReceitaPec,
   agregaReceitaAgri,
+  agregaReceitaSilvicola,
   agregaOutrasReceitas,
   agregaEntradasFinanceiras,
   agregaCusteioPecSemJuros,
@@ -38,6 +39,7 @@ import {
   agregaDeducoes,
   agregaReceitaPecMeta,
   agregaReceitaAgriMeta,
+  agregaReceitaSilvicolaMeta,
   agregaOutrasReceitasMeta,
   agregaEntradasFinanceirasMeta,
   agregaCusteioPecSemJurosMeta,
@@ -168,6 +170,7 @@ export function buildBlocoResumoExecutivo(input: BuildBlocoInput): BlocoResumoEx
   // 15 buckets REAL 2025 — number[12] cada
   const rReceitaPec    = agregaReceitaPec(lancFin2025, ANO_REAL);
   const rReceitaAgri   = agregaReceitaAgri(lancFin2025, ANO_REAL);
+  const rReceitaSilvi  = agregaReceitaSilvicola(lancFin2025, ANO_REAL);
   const rOutrasRec     = agregaOutrasReceitas(lancFin2025, ANO_REAL);
   const rEntradasFin   = agregaEntradasFinanceiras(lancFin2025, ANO_REAL);
   const rCusteioPec    = agregaCusteioPecSemJuros(lancFin2025, ANO_REAL);
@@ -186,6 +189,7 @@ export function buildBlocoResumoExecutivo(input: BuildBlocoInput): BlocoResumoEx
   // Mesmas funções de agregação que REAL 2025; só muda o ano filtrado.
   const cReceitaPec    = lancFin2026 ? agregaReceitaPec(lancFin2026, ANO_CORRENTE)             : undefined;
   const cReceitaAgri   = lancFin2026 ? agregaReceitaAgri(lancFin2026, ANO_CORRENTE)            : undefined;
+  const cReceitaSilvi  = lancFin2026 ? agregaReceitaSilvicola(lancFin2026, ANO_CORRENTE)       : undefined;
   const cOutrasRec     = lancFin2026 ? agregaOutrasReceitas(lancFin2026, ANO_CORRENTE)         : undefined;
   const cEntradasFin   = lancFin2026 ? agregaEntradasFinanceiras(lancFin2026, ANO_CORRENTE)    : undefined;
   const cCusteioPec    = lancFin2026 ? agregaCusteioPecSemJuros(lancFin2026, ANO_CORRENTE)     : undefined;
@@ -203,6 +207,7 @@ export function buildBlocoResumoExecutivo(input: BuildBlocoInput): BlocoResumoEx
   // 15 buckets META 2026 — number[12] cada
   const mReceitaPec    = agregaReceitaPecMeta(gridMeta2026);
   const mReceitaAgri   = agregaReceitaAgriMeta(gridMeta2026);
+  const mReceitaSilvi  = agregaReceitaSilvicolaMeta(gridMeta2026);
   const mOutrasRec     = agregaOutrasReceitasMeta(gridMeta2026);
   const mEntradasFin   = agregaEntradasFinanceirasMeta(gridMeta2026);
   const mCusteioPec    = agregaCusteioPecSemJurosMeta(gridMeta2026);
@@ -221,6 +226,7 @@ export function buildBlocoResumoExecutivo(input: BuildBlocoInput): BlocoResumoEx
   // simétricamente em Real ano-1, Meta e Real ano corrente.
   const receitaPecuaria        = makeLinha('Receita Pecuária',        mReceitaPec,  rReceitaPec,  cReceitaPec,  mesAlvo);
   const receitaAgricultura     = makeLinha('Receita Agricultura',     mReceitaAgri, rReceitaAgri, cReceitaAgri, mesAlvo);
+  const receitaSilvicultura    = makeLinha('Receita Silvicultura',    mReceitaSilvi, rReceitaSilvi, cReceitaSilvi, mesAlvo);
   const outrasReceitas         = makeLinha('Outras Receitas',         mOutrasRec,   rOutrasRec,   cOutrasRec,   mesAlvo);
   const entradasFinanceiras    = makeLinha('Entradas Financeiras',    mEntradasFin, rEntradasFin, cEntradasFin, mesAlvo);
   const custeioPecuaria        = makeLinha('Custeio Pecuária',        mCusteioPec,  rCusteioPec,  cCusteioPec,  mesAlvo);
@@ -236,8 +242,8 @@ export function buildBlocoResumoExecutivo(input: BuildBlocoInput): BlocoResumoEx
   const deducoesReceita        = makeLinha('Deduções de Receita',     mDeducoes,    rDeducoes,    cDeducoes,    mesAlvo);
 
   // Totais — soma de arrays mensais antes de reduzir a escalar
-  const totalEntradasMetaArr = sumArrays(mReceitaPec, mReceitaAgri, mOutrasRec, mEntradasFin);
-  const totalEntradasRealArr = sumArrays(rReceitaPec, rReceitaAgri, rOutrasRec, rEntradasFin);
+  const totalEntradasMetaArr = sumArrays(mReceitaPec, mReceitaAgri, mReceitaSilvi, mOutrasRec, mEntradasFin);
+  const totalEntradasRealArr = sumArrays(rReceitaPec, rReceitaAgri, rReceitaSilvi, rOutrasRec, rEntradasFin);
   const totalSaidasMetaArr = sumArrays(
     mCusteioPec, mCusteioAgri, mJurosPec, mJurosAgri,
     mInvPec, mInvAgri, mRepoBov, mAmortPec, mAmortAgri,
@@ -256,7 +262,7 @@ export function buildBlocoResumoExecutivo(input: BuildBlocoInput): BlocoResumoEx
 
   // Totais REAL ano corrente — só calcula se lancFin2026 foi fornecido.
   const totalEntradasAnoCorrenteArr = lancFin2026
-    ? sumArrays(cReceitaPec!, cReceitaAgri!, cOutrasRec!, cEntradasFin!)
+    ? sumArrays(cReceitaPec!, cReceitaAgri!, cReceitaSilvi!, cOutrasRec!, cEntradasFin!)
     : undefined;
   const totalSaidasAnoCorrenteArr = lancFin2026
     ? sumArrays(
@@ -348,7 +354,8 @@ export function buildBlocoResumoExecutivo(input: BuildBlocoInput): BlocoResumoEx
         : saldoInicialMeta + (serieRealAnoCorrente[idxFinal] ?? 0))
     : undefined;
 
-  // Conciliação: total absoluto bruto do grid vs soma dos 15 buckets META.
+  // Conciliação: total absoluto bruto do grid vs soma dos buckets META (P130: a Receita Silvícola é um
+  // deles — o banner some porque passa a bater, nunca porque se esconde o que não cai em balde).
   // Detecta rows com macro/grupo que não caem em nenhum predicate oficial.
   // Sempre ano inteiro — conciliação é propriedade de classificação, não
   // de período (ignora mesAlvo).
@@ -363,6 +370,7 @@ export function buildBlocoResumoExecutivo(input: BuildBlocoInput): BlocoResumoEx
   return {
     receitaPecuaria,
     receitaAgricultura,
+    receitaSilvicultura,
     outrasReceitas,
     entradasFinanceiras,
     totalEntradas,

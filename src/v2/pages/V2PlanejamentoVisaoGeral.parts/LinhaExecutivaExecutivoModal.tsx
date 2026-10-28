@@ -61,6 +61,7 @@ const TITULOS_TABELA: Record<string, string> = {
   // Entradas
   'Receita Pecuária': 'RECEITAS PECUÁRIAS',
   'Receita Agricultura': 'RECEITAS AGRÍCOLAS',
+  'Receita Silvicultura': 'RECEITAS SILVÍCOLAS',
   'Outras Receitas': 'OUTRAS RECEITAS',
   'Entradas Financeiras': 'ENTRADAS FINANCEIRAS',
   // Saídas — Custeio
