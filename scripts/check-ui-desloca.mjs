@@ -294,6 +294,11 @@ const CENARIOS = [
     ['mantém uma célula', clicar('[data-testid="previa-linha"] [data-testid="previa-muda"]')],
     ['troca o nº', async (p) => { await p.locator('[data-testid="previa-numero"]').fill('NF 000.004.876'); await espera(p, 700); }],
   ] },
+  /* P167 — abrir e fechar a confirmação do cancelamento no rodapé: o corpo do documento não anda (o rodapé troca no mesmo lugar) */
+  { nome: 'documento-nota-cancelar', url: 'tela=documento-nota&v=cancelar', estados: [
+    ['abre o cancelar', async (p) => { await p.locator('[data-testid="abrir-cancelar-nota"]').click(); await espera(p, 300); }],
+    ['volta', async (p) => { await p.locator('[data-testid="cancelar-nota"] button', { hasText: 'Voltar' }).click(); await espera(p, 300); }],
+  ] },
   { nome: 'documento-nota', url: 'tela=documento-nota', estados: [
     ['nota lida', async (p) => {
       const xml = await p.evaluate(() => globalThis.__xmlDaBancada);

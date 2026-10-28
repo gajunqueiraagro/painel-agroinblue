@@ -416,6 +416,15 @@ const CENARIOS = [
       if (v === 'confere') await p.locator('[data-testid="nota-lancamento-fica"]').waitFor({ timeout: 8000 });
       await p.waitForTimeout(400);
     } })),
+  /* P167 — o modal do documento: a confirmação do cancelamento da nota NO RODAPÉ (à vista; o Salvar some) e a faixa da NF repetida */
+  { nome: 'documento-nota-cancelar', url: 'tela=documento-nota&v=cancelar', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[role="dialog"]',
+    antes: async (p) => { await p.locator('[data-testid="abrir-cancelar-nota"]').click(); await p.locator('[data-testid="confirmar-cancelar-nota"]').waitFor({ state: 'visible', timeout: 4000 }); await p.waitForTimeout(300); } },
+  { nome: 'documento-nota-repetida', url: 'tela=documento-nota&v=repetida', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[role="dialog"]',
+    antes: async (p) => {
+      const conteudo = await p.evaluate(() => globalThis.__xmlDaBancada);
+      await p.locator('[data-testid="doc-arquivo"]').setInputFiles({ name: 'nota.xml', mimeType: 'application/xml', buffer: Buffer.from(conteudo) });
+      await p.locator('[data-testid="nota-repetida"]').waitFor({ timeout: 8000 }); await p.waitForTimeout(400);
+    } },
   /* P96a — a confirmação do "Usar a nota lida". (A do "Juntar as 4 e anexar" saiu com o P128b: o juntar é a prévia campo a campo,
      medida em `previa-completar-juntar`.) */
   /* a frase da NF digitada (2 linhas reservadas) nos largos — nos estreitos ela mora na aba "Parcelas e lançamento" (nota-pdf-aba-lancamento-irmas) */

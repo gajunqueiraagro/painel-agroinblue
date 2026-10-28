@@ -28,7 +28,7 @@ const banco = vi.hoisted(() => ({
 vi.mock('@/lib/financeiro/nfeConsultas', async (orig) => ({ ...(await orig<object>()), ...banco }));
 
 import { FormDocumento, type CompletarPelaNota, type SugestaoDocumento } from '@/components/financeiro-v2/AbaDocumentosLancamento';
-import type { LancDocPayload, LancamentoDocumentosApi } from '@/hooks/useLancamentoDocumentos';
+import type { LancDocPayload, LancDocumento, LancamentoDocumentosApi } from '@/hooks/useLancamentoDocumentos';
 import { definirFornecedoresDoLeitor } from '@/test/leitorDeFornecedoresFake';
 import { EMITENTE_CNPJ, chaveDe, montarNFe, utf8, type OpcoesNota } from '@/lib/financeiro/nfe/__fixtures__/notas';
 import { camposDaNota, divergenciasDaNota, FRASE_NOTA_NAO_LIDA } from '@/lib/financeiro/nfe/documentoDaNota';
@@ -54,15 +54,16 @@ if (!('arrayBuffer' in Blob.prototype)) {
 function arquivo(nome: string, conteudo: string | Uint8Array): File {
   return new File([typeof conteudo === 'string' ? utf8(conteudo) : conteudo], nome, { type: '' });
 }
-function monta(p: { onVer?: (a: File) => Promise<string | null>; sugestao?: SugestaoDocumento; completar?: CompletarPelaNota; registrarFalha?: boolean } = {}) {
+function monta(p: { onVer?: (a: File) => Promise<string | null>; sugestao?: SugestaoDocumento; completar?: CompletarPelaNota; registrarFalha?: boolean;
+  documentos?: LancDocumento[]; documento?: LancDocumento | null; onAbrirExistente?: (d: LancDocumento) => void } = {}) {
   const registrar = vi.fn(async (_p: LancDocPayload) => (p.registrarFalha ? null : { id: 'novo', origem: 'lancamento' as const, operacaoId: null }));
   const api: LancamentoDocumentosApi = {
-    documentos: [], confronto: null, loading: false, saving: false, operacaoId: null, operacaoTipo: null,
-    registrar, editar: vi.fn(), cancelar: vi.fn(), anexar: vi.fn(), urlAssinada: vi.fn(), recarregar: vi.fn(),
+    documentos: p.documentos ?? [], confronto: null, loading: false, saving: false, operacaoId: null, operacaoTipo: null,
+    registrar, editar: vi.fn(), cancelar: vi.fn(async (_id: string, _m: string) => true), anexar: vi.fn(), urlAssinada: vi.fn(), recarregar: vi.fn(),
   };
-  render(<FormDocumento api={api} documento={null} clienteId="cli" onFechar={vi.fn()} sugestao={p.sugestao ?? SUGESTAO} onVerOQueANotaMuda={p.onVer}
-    completarPelaNota={p.completar} />);
-  return { registrar };
+  render(<FormDocumento api={api} documento={p.documento ?? null} clienteId="cli" onFechar={vi.fn()} sugestao={p.sugestao ?? SUGESTAO} onVerOQueANotaMuda={p.onVer}
+    completarPelaNota={p.completar} onAbrirExistente={p.onAbrirExistente} />);
+  return { registrar, api };
 }
 const soltar = (f: File) => fireEvent.change(screen.getByTestId('doc-arquivo'), { target: { files: [f] } });
 const valorDe = (id: string) => (screen.getByTestId(id) as HTMLInputElement).value;
@@ -223,5 +224,44 @@ describe('P164 — o Registrar documento com a nota que confere', () => {
     fireEvent.click(screen.getByTestId('doc-registrar'));
     await waitFor(() => expect(registrar).toHaveBeenCalled());
     expect(registrar.mock.calls[0][0].emitenteId).toBe('agro');
+  });
+});
+
+/* P167 — a MESMA NF não se registra de novo (o 32ffd9af do NJ: o mesmo PDF da NF 119.237, de novo, na mesma compra) e a confirmação do
+   cancelamento da nota fica À VISTA no rodapé (no fim do corpo ela abria fora da vista e o Gabriel só conseguia "Salvar documento") */
+describe('P167 — a nota repetida e o cancelamento à vista', () => {
+  const DOC = (extra: Partial<LancDocumento>): LancDocumento => ({ id: 'doc-antigo', origem: 'lancamento', operacaoId: null, especie: 'nf', especieOC: null,
+    nome: 'nf 74974', numero: '74974', serie: null, chaveAcesso: null, dataEmissao: null, valorDocumento: 408.77, url: 'x', tipo: 'application/xml',
+    tamanhoBytes: 1, observacao: null, emitenteId: 'agro', emitenteNome: null, emitenteDocumento: null, cancelado: false, canceladoMotivo: null, versao: 1,
+    ligadoAQtd: 1, ...extra });
+  const xml = () => new File([utf8(montarNFe(NOTA))], 'n.xml', { type: 'application/xml' });
+  it('o mesmo arquivo (XML) da mesma NF já registrado aqui: a frase, "Abrir a que já existe" e o Registrar apagado', async () => {
+    const onAbrirExistente = vi.fn();
+    const { registrar } = monta({ documentos: [DOC({})], onAbrirExistente });
+    soltar(xml());
+    expect((await screen.findByTestId('nota-repetida')).textContent).toContain('Esta NF já está registrada neste lançamento');
+    expect(screen.getByTestId('doc-registrar')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('nota-abrir-existente'));
+    expect(onAbrirExistente).toHaveBeenCalledWith(expect.objectContaining({ id: 'doc-antigo' }));
+    expect(registrar).not.toHaveBeenCalled();
+  });
+  it('o PAR (a nota em PDF já está; agora o XML): não é repetida — registra, com o tipo do arquivo no pedido', async () => {
+    const { registrar } = monta({ documentos: [DOC({ tipo: 'application/pdf' })] });
+    soltar(xml());
+    await screen.findByTestId('nota-lida');
+    expect(screen.queryByTestId('nota-repetida')).toBeNull();
+    fireEvent.click(screen.getByTestId('doc-registrar'));
+    await waitFor(() => expect(registrar).toHaveBeenCalled());
+    expect(registrar.mock.calls[0][0].tipoArquivo).toBe('application/xml');
+  });
+  it('cancelar a nota de N parcelas: a confirmação abre NO RODAPÉ (fora do corpo que rola) e o "Salvar documento" some', async () => {
+    const { api } = monta({ documento: DOC({ ligadoAQtd: 6 }) });
+    fireEvent.click(screen.getByTestId('abrir-cancelar-nota'));
+    const conf = screen.getByTestId('cancelar-nota');
+    expect(screen.getByTestId('corpo-do-documento').contains(conf)).toBe(false);
+    expect(screen.queryByTestId('doc-registrar')).toBeNull();
+    fireEvent.change(screen.getByTestId('motivo-cancelar-nota'), { target: { value: 'duplicada' } });
+    fireEvent.click(screen.getByTestId('confirmar-cancelar-nota'));
+    await waitFor(() => expect(api.cancelar).toHaveBeenCalledWith('doc-antigo', 'duplicada'));
   });
 });

@@ -362,8 +362,9 @@ export function AbaDocumentosLancamento({ api, somenteLeitura, clienteId, onAnex
       )}
 
       {formAberto && (
-        <FormDocumento api={api} documento={editando} clienteId={clienteId} sugestao={sugestao} semBoleto={semBoleto}
+        <FormDocumento key={editando?.id ?? 'novo'} api={api} documento={editando} clienteId={clienteId} sugestao={sugestao} semBoleto={semBoleto}
           onVerOQueANotaMuda={onVerOQueANotaMuda} completarPelaNota={completarPelaNota}
+          onAbrirExistente={(d) => { setEditando(d); setFormAberto(true); }}
           onFechar={() => { setFormAberto(false); setEditando(null); }} />
       )}
 
@@ -439,8 +440,10 @@ export const CAMPOS_POR_ESPECIE: Record<EspecieLancDoc, {
   outro: { numero: 'Identificação', data: 'Data', valor: 'Valor', emitente: 'Emitente', serie: false, chave: false, dataNaSugestao: 'data' },
 };
 
-export function FormDocumento({ api, documento, clienteId, onFechar, pendente, semBoleto, sugestao, onVerOQueANotaMuda, completarPelaNota }: {
+export function FormDocumento({ api, documento, clienteId, onFechar, pendente, semBoleto, sugestao, onVerOQueANotaMuda, completarPelaNota, onAbrirExistente }: {
   api: LancamentoDocumentosApi;
+  /** P167 — a mesma NF já registrada aqui: abrir a que existe (no lugar de registrar outra) */
+  onAbrirExistente?: (d: LancDocumento) => void;
   /** P164 — o lançamento salvo que a nota que confere completa (ausente = o documento só se registra, como sempre) */
   completarPelaNota?: CompletarPelaNota;
   /** P127 + P128c — "Ver o que a nota muda": a nota lida com itens ou duplicatas abre a prévia do "+ Da nota" partindo do lançamento. */
@@ -618,6 +621,13 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
       dataCompetencia: t(c.data_competencia?.fica), safraId: t(c.safra_id?.fica) } };
   };
 
+  /* P167 — A MESMA NF JÁ ESTÁ AQUI (a chave, ou o emitente + o nº) COM O MESMO TIPO DE ARQUIVO: não se registra outra — "Abrir a que já existe".
+     O par PDF + XML da mesma nota segue (DOC-NOTA-XML-PDF-01). O banco recusa o mesmo na compra inteira (`fin_documento_registrar`). */
+  const semZeros = (x: string | null | undefined) => (x ?? '').replace(/\D/g, '').replace(/^0+/, '');
+  const repetida = !documento && especie === 'nf' && arquivo && arquivo.type ? api.documentos.find((d) => !d.cancelado && d.especie === 'nf' && d.tipo === arquivo.type
+    && ((semZeros(chave).length >= 43 && semZeros(d.chaveAcesso) === semZeros(chave))
+      || (!!semZeros(numero) && semZeros(d.numero) === semZeros(numero) && (d.emitenteId ?? null) === (emitenteEhOutro ? null : (emitenteId || null))))) ?? null : null;
+
   /* "Ver o que a nota muda": a nota lida com itens ou duplicatas, num lançamento que existe (não no pendente) */
   const podeVerOQueMuda = !!lida?.campos.muda && !!onVerOQueANotaMuda && !documento && !pendente && !!arquivo;
   const verOQueMuda = async () => {
@@ -639,6 +649,8 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
        apagaria o que os componentes dizem. */
     valorDocumento: destinoOC ? undefined : valor,
     observacao: observacao.trim() || null,
+    /* P167 — só no registro: o tipo do arquivo que vai subir (o banco recusa a mesma NF com o mesmo tipo já ativa nesta compra) */
+    ...(!documento && arquivo?.type ? { tipoArquivo: arquivo.type } : {}),
     ...(campos.emitente ? {
       emitenteId: emitenteEhOutro ? null : (emitenteId || null),
       emitenteNome: emitenteEhOutro ? (emitenteNome.trim() || null)
@@ -775,6 +787,16 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
             Preenchido com o que {sug?.origem ?? 'o lançamento'} diz ({[sugNumero && 'número', sugData && campos.dataNaSugestao, sugValor && 'valor', sugEmitente && 'emitente'].filter(Boolean).join(', ')}) — confira. Mudar aqui não muda {sug?.origem ?? 'o lançamento'}.
           </p>
         )}
+        {repetida && (
+          <p className="flex items-center gap-2 rounded border border-red-200 bg-red-50 px-2 py-1 text-[10px] leading-[14px] text-destructive" role="alert"
+            data-testid="nota-repetida">
+            <span className="min-w-0 flex-1">Esta NF já está registrada neste lançamento ({identidade(repetida)}, o mesmo tipo de arquivo). Nada será registrado em dobro.</span>
+            {onAbrirExistente && (
+              <button type="button" className="shrink-0 font-medium underline underline-offset-2" onClick={() => onAbrirExistente(repetida)}
+                data-testid="nota-abrir-existente">Abrir a que já existe</button>
+            )}
+          </p>
+        )}
         <BlocoFormulario titulo="Documento" testId="bloco-documento">
         <div className="grid grid-cols-4 gap-x-2 gap-y-1" data-testid="grade-do-documento">
           {/* ── O TIPO VEM PRIMEIRO, e é ele que decide os campos abaixo (`CAMPOS_POR_ESPECIE`) ── */}
@@ -909,23 +931,24 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
         </div>
         </BlocoFormulario>
 
-        {compartilhada && cancelandoNota && (
-          <div className="space-y-1 rounded border border-red-200 bg-red-50 px-2 py-1.5" data-testid="cancelar-nota">
-            <Label className="text-[10px] text-muted-foreground">Motivo do cancelamento da nota <span className="text-destructive">*</span></Label>
-            <Input value={motivoNota} onChange={e => setMotivoNota(e.target.value)} className="h-7 text-[11px]"
-              placeholder={`A nota sai das ${documento?.ligadoAQtd} parcelas`} />
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="ghost" className="h-7 text-[11px]" onClick={() => { setCancelandoNota(false); setMotivoNota(''); setErroForm(null); }}>Voltar</Button>
-              <Button type="button" variant="destructive" className="h-7 text-[11px]" disabled={enviando} onClick={cancelarNota}
-                data-testid="confirmar-cancelar-nota">
-                Cancelar nota
-              </Button>
-            </div>
-          </div>
-        )}
-
         </div>
 
+        {/* P167 — A CONFIRMAÇÃO DO CANCELAMENTO MORA NO RODAPÉ, no lugar dos botões (no fim do corpo de altura fixa ela abria fora da vista e o
+            único botão à vista era o "Salvar documento": o Gabriel tentou duas vezes cancelar a 32ffd9af e só salvou). Enquanto ela está
+            aberta, Salvar/Registrar e "Ver o que a nota muda" somem. */}
+        {compartilhada && cancelandoNota ? (
+          <div className="flex shrink-0 items-center gap-2 border-t border-red-200 bg-red-50 px-4 py-2" data-testid="cancelar-nota">
+            <Label className="shrink-0 text-[10px] text-muted-foreground">Motivo do cancelamento da nota <span className="text-destructive">*</span></Label>
+            <Input value={motivoNota} onChange={e => setMotivoNota(e.target.value)} className="h-7 min-w-0 flex-1 text-[11px]"
+              placeholder={`A nota sai das ${documento?.ligadoAQtd} parcelas`} data-testid="motivo-cancelar-nota" />
+            {erroForm && <span className="max-w-[200px] shrink-0 truncate text-[10px] text-destructive" title={erroForm} data-testid="erro-form-documento">{erroForm}</span>}
+            <Button type="button" variant="ghost" className="h-7 shrink-0 text-[11px]" onClick={() => { setCancelandoNota(false); setMotivoNota(''); setErroForm(null); }}>Voltar</Button>
+            <Button type="button" variant="destructive" className="h-7 shrink-0 text-[11px]" disabled={enviando} onClick={cancelarNota}
+              data-testid="confirmar-cancelar-nota">
+              Cancelar nota
+            </Button>
+          </div>
+        ) : (
         <div className="flex shrink-0 items-center justify-end gap-2 border-t bg-card px-4 py-2">
           {erroForm && (
             <span className="mr-auto text-[10px] leading-tight text-destructive" data-testid="erro-form-documento">{erroForm}</span>
@@ -937,7 +960,7 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
             </Button>
           )}
           <Button type="button" variant="ghost" onClick={onFechar}>Cancelar</Button>
-          <Button type="button" variant={podeVerOQueMuda ? 'outline' : 'default'} onClick={salvar} disabled={enviando || api.saving || lendoANota}
+          <Button type="button" variant={podeVerOQueMuda ? 'outline' : 'default'} onClick={salvar} disabled={enviando || api.saving || lendoANota || !!repetida}
             data-testid="doc-registrar">
             {pendente ? (documento ? 'Salvar na lista' : 'Adicionar à lista') : (documento ? 'Salvar documento' : 'Registrar documento')}
           </Button>
@@ -951,6 +974,7 @@ export function FormDocumento({ api, documento, clienteId, onFechar, pendente, s
             </Button>
           )}
         </div>
+        )}
       </DialogContent>
     </Dialog>
   );

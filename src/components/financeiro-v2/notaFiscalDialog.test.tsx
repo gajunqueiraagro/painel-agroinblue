@@ -152,6 +152,7 @@ function gravadoresFalsos() {
     parcelarExistente: vi.fn(async (_l: string, _p: PayloadParcelamento): Promise<string | null> => 'fin-velho'),
     lancamento: vi.fn(async (_f: LancamentoV2Form): Promise<string | null> => 'lanc-unico'),
     trocarFornecedor: vi.fn(async (_c: string, _ids: readonly string[], _f: string, _m: string): Promise<string | null> => null),
+    vincular: vi.fn(async (_c: string, _doc: string, _ids: readonly string[]): Promise<string | null> => null),
   };
   const comoGravadores: Gravadores = g;
   return { g, comoGravadores };
@@ -669,6 +670,39 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
     await escolherSubcentro('Nutrição Engorda');
     await waitFor(() => expect(screen.getByTestId('nota-falta').textContent).toBe('⚠ Falta: conta'));
     expect(screen.getByTestId('nota-completar-revisar')).toBeDisabled();
+  });
+  /* P167 (NOTA-COMPRA-ERRADA-01) — a nota que a compra JÁ TEM (o PDF de antes, sem chave: achado pelo emitente + nº) só se LIGA às parcelas;
+     nunca nasce um segundo documento da mesma nota (o 32ffd9af do NJ) */
+  it('P167 a compra já tem esta nota: o anexar LIGA o documento que existe (nada de outro registro da mesma nota)', async () => {
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: QUATRO.map((x, i) => (i === 0 ? { ...x, notaDocumentoId: 'doc-antigo' } : x)) });
+    const { g, comoGravadores } = gravadoresFalsos();
+    const props = abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
+    await screen.findByTestId('nota-ja-lancada');
+    await completarPelaPrevia();
+    await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
+    expect(g.vincular).toHaveBeenCalledWith('cli', 'doc-antigo', ['velho-1', 'velho-2', 'velho-3', 'velho-4']);
+    expect(g.documentosDoParcelamento).not.toHaveBeenCalled();
+  });
+  /* P167 — a soma das parcelas que recebem a nota nunca passa da nota: a frase no rodapé, o "Revisar e completar" apagado, nada gravado */
+  it('P167 as parcelas somam mais que a nota: recusa com a frase, nada gravado', async () => {
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: [...QUATRO, { ...QUATRO[0], id: 'velho-5', parcelas: [], por: ['numero'] }] });
+    const { comoGravadores } = gravadoresFalsos();
+    abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
+    await screen.findByTestId('nota-ja-lancada');
+    expect((await screen.findByTestId('nota-recusa-compra')).textContent)
+      .toBe('⚠ As parcelas que receberiam a nota somam R$ 2.458,21, mais que a nota (R$ 1.966,56). Nada será gravado — confira se todas são desta compra.');
+    expect(screen.getByTestId('nota-completar-revisar')).toBeDisabled();
+  });
+  it('P167 duas compras do mesmo fornecedor: a outra compra fica de fora (o chip diz) e não recebe a nota', async () => {
+    const outra = QUATRO.map((x, i) => ({ ...x, id: `outra-${i + 1}`, financiamentoId: 'fin-outra', parcelas: [], por: ['soma' as const, 'fracao' as const] }));
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: [...QUATRO.map((x) => ({ ...x, por: ['valor' as const, 'numero' as const] })), ...outra] });
+    const { g, comoGravadores } = gravadoresFalsos();
+    const props = abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
+    expect((await screen.findByTestId('nota-outra-compra')).textContent).toBe('4 de outra compra (fica de fora)');
+    await completarPelaPrevia();
+    await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
+    expect(pedidoGravado().pedido.map((x) => x.id)).toEqual(['velho-1', 'velho-2', 'velho-3', 'velho-4']);
+    expect(g.documentosDoParcelamento.mock.calls[0][1].map((x) => x.lancamentoId)).toEqual(['velho-1', 'velho-2', 'velho-3', 'velho-4']);
   });
   /* P128b — a caixinha "Trocar o fornecedor" saiu: o fornecedor é a COLUNA da prévia (marcada), gravado pela função única com o antes */
   it('fornecedor diferente: a coluna Fornecedor da prévia leva o da nota aos 4 (a função única), nunca a troca em lote', async () => {

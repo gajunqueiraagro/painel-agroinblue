@@ -18,6 +18,8 @@ export interface LancamentoJaLancado {
   financiamentoId: string | null;
   /** P128b-N1 — a conta do achado (a parcela que falta nasce com a das irmãs quando todas têm a mesma) */
   contaBancariaId?: string | null;
+  /** P167 — o documento DESTA nota que o achado já tem (pela chave ou pelo emitente + nº): o anexar LIGA este, nunca registra outro */
+  notaDocumentoId?: string | null;
   numeroDocumento: string | null;
   fornecedorId: string | null;
   fornecedorNome: string | null;
@@ -60,6 +62,28 @@ export interface NotaJaLancada {
   emParcelas: boolean;
   /** D — os CANCELADOS desta nota (pelo numero ou pela chave): so' para mostrar, no fim da lista */
   cancelados: LancamentoJaLancado[];
+  /** P167 — os achados de OUTRA compra (outro parcelamento do mesmo fornecedor): aparecem na frase, nunca recebem a nota */
+  outraCompra: LancamentoJaLancado[];
+  /** P167 — duas compras com a MESMA evidência (nenhuma âncora, nem nº, chave, documento ou parcela que as separe): nada se grava */
+  compraAmbigua: boolean;
+}
+
+/**
+ * P167 (NOTA-COMPRA-ERRADA-01, Gabriel 28/10) — UMA COMPRA SÓ. A nota se liga a UM parcelamento (mais as soltas, como na Alta Paulista); um
+ * parcelamento de OUTRA compra do mesmo fornecedor — mesma descrição, mesma soma: NJ, NF 119.237 × 118.480 — nunca é alvo. Com dois ou mais
+ * parcelamentos entre os achados: vale o da ÂNCORA (a parcela aberta, 'lancamento'); sem ela, o de mais evidência FORTE (nº, chave,
+ * documento: 3 cada; cada parcela casada pelo valor e data: 1). Empate = ambígua (`grupo` nulo): nenhum parcelamento é alvo.
+ */
+export function compraDaNota(achados: readonly LancamentoJaLancado[]): { grupo: string | null; ambigua: boolean } {
+  const fins = [...new Set(achados.flatMap((l) => (l.financiamentoId ? [l.financiamentoId] : [])))];
+  if (fins.length <= 1) return { grupo: fins[0] ?? null, ambigua: false };
+  const ancora = achados.find((l) => l.financiamentoId && l.por.includes('lancamento'));
+  if (ancora?.financiamentoId) return { grupo: ancora.financiamentoId, ambigua: false };
+  const forca = (l: LancamentoJaLancado) => l.por.filter((x) => x === 'numero' || x === 'chave' || x === 'documento').length * 3 + l.parcelas.length;
+  const placar = fins.map((f) => ({ f, pontos: achados.filter((l) => l.financiamentoId === f).reduce((s, l) => s + forca(l), 0) }))
+    .sort((a, b) => b.pontos - a.pontos);
+  if (placar[0].pontos === placar[1].pontos) return { grupo: null, ambigua: true };
+  return { grupo: placar[0].f, ambigua: false };
 }
 
 /**
@@ -84,7 +108,11 @@ export function fracaoDaNota(valorCent: number, notaCent: number): number | null
 
 export function casarJaLancados(parcelas: readonly ParcelaDaNotaParaCasar[], todos: readonly LancamentoJaLancado[], notaCent = 0): NotaJaLancada | null {
   /* D — o cancelado nunca casa parcela, nunca e' alvo e sozinho nao faz a nota "ja' lancada" */
-  const achados = todos.filter((l) => !l.cancelado);
+  const vivos = todos.filter((l) => !l.cancelado);
+  /* P167 — UMA COMPRA SÓ: daqui para baixo só a compra da nota (e as soltas); a outra compra fica de fora, dita na frase */
+  const compra = compraDaNota(vivos);
+  const achados = vivos.filter((l) => !l.financiamentoId || l.financiamentoId === compra.grupo);
+  const outraCompra = vivos.filter((l) => !achados.includes(l));
   const pares = achados.flatMap((l) => l.parcelas.map((p) => ({ l, ...p })))
     .filter((x) => parcelas.some((p) => p.n === x.n))
     .sort((a, b) => a.difCent - b.difCent || a.difDias - b.difDias || a.n - b.n || a.l.id.localeCompare(b.l.id));
@@ -122,7 +150,7 @@ export function casarJaLancados(parcelas: readonly ParcelaDaNotaParaCasar[], tod
   }
   const pelaNota = achados.filter((l) => !usados.has(l.id) && pelaNotaPor(l));
   for (const l of pelaNota) usados.add(l.id);
-  if (usados.size === 0) return null;
+  if (usados.size === 0 && outraCompra.length === 0) return null;
   const outrosParecidos = achados.filter((l) => !usados.has(l.id)).length;
   const porParcela = parcelas.map((parcela) => ({ parcela, lancamento: daParcela.get(parcela.n) ?? null }));
   const fracoes = new Map<string, number>();
@@ -132,10 +160,11 @@ export function casarJaLancados(parcelas: readonly ParcelaDaNotaParaCasar[], tod
   /* P128a — tambem achada PELA SOMA (o parcelamento do emitente que soma exatamente a nota): a "que falta" seria a nota inteira em dobro */
   const emParcelas = parcelas.length === 1 && (fracoes.size > 0 || pelaNota.some((l) => l.por.includes('soma')));
   return {
-    porParcela, pelaNota, outrosParecidos, fracoes, emParcelas, cancelados: canceladosDaNota(todos),
+    porParcela, pelaNota, outrosParecidos, fracoes, emParcelas, cancelados: canceladosDaNota(todos), outraCompra, compraAmbigua: compra.ambigua,
     /* P128a — o irmão achado SÓ por ser do mesmo parcelamento ("só no sistema", a parcela que sobra) nunca recebe a nota: ele não é dela */
     alvos: [...porParcela.flatMap((x) => (x.lancamento ? [x.lancamento] : [])), ...pelaNota.filter((l) => l.por.some((x) => x !== 'parcelamento'))],
-    faltam: emParcelas ? [] : porParcela.filter((x) => !x.lancamento).map((x) => x.parcela),
+    /* P167 — ambígua: nada se cria (a que "falta" pode ser a outra compra) */
+    faltam: emParcelas || compra.ambigua ? [] : porParcela.filter((x) => !x.lancamento).map((x) => x.parcela),
   };
 }
 
@@ -189,7 +218,7 @@ export function lerJaLancados(r: unknown): LancamentoJaLancado[] {
       id, vencimento: texto(o, 'vencimento'), pagamento: texto(o, 'pagamento'), competencia: texto(o, 'competencia'),
       descricao: texto(o, 'descricao'), valorCent: Number(Reflect.get(o, 'valor_cent')) || 0, status: texto(o, 'status'),
       conciliado: Reflect.get(o, 'conciliado') === true, financiamentoId: texto(o, 'financiamento_id'), numeroDocumento: texto(o, 'numero_documento'),
-      contaBancariaId: texto(o, 'conta_bancaria_id'),
+      contaBancariaId: texto(o, 'conta_bancaria_id'), notaDocumentoId: texto(o, 'nota_documento_id'),
       fornecedorId: texto(o, 'fornecedor_id'), fornecedorNome: texto(o, 'fornecedor_nome'), fornecedorPor: texto(o, 'fornecedor_por'),
       parcelas: Array.isArray(parc) ? parc.flatMap((p: unknown) => (p && typeof p === 'object'
         ? [{ n: Number(Reflect.get(p, 'n')), difCent: Number(Reflect.get(p, 'dif_cent')) || 0, difDias: Number(Reflect.get(p, 'dif_dias')) || 0 }] : [])) : [],
