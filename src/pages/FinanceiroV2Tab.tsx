@@ -73,7 +73,7 @@ import { CriarOCDoLegadoDialog } from '@/components/financeiro-v2/CriarOCDoLegad
 import { podeCriarOCDoLegado } from '@/lib/oc/criarDoLegado';
 import { prefillDeDuplicar, type PrefillDuplicar } from '@/lib/financeiro/prefillDeDuplicar';
 import { LancamentoV2Dialog } from '@/components/financeiro-v2/LancamentoV2Dialog';
-import { NovoDeXmlDialog } from '@/components/financeiro-v2/NovoDeXmlDialog';
+import { NovoDeXmlDialog, notaParaAPrevia } from '@/components/financeiro-v2/NovoDeXmlDialog';
 import { NotaFiscalDialog, type NotaParaLancar } from '@/components/financeiro-v2/NotaFiscalDialog';
 import { prefillDaNota, type DoXml } from '@/lib/financeiro/nfePrefill';
 import { ModoRapidoGrid } from '@/components/financeiro-v2/ModoRapidoGrid';
@@ -671,7 +671,8 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
   };
   /* FIN-NOTA-PDF-01 — a nota do PDF abre o "Novo lançamento · da nota fiscal" (o mock): o PDF com o lido em amarelo, criar as N
      parcelas. A lista fica montada (escondida) por baixo, como no Novo lançamento do XML. */
-  const [notaAberta, setNotaAberta] = useState<{ nota: NotaParaLancar; linhaId: string } | null>(null);
+  /* P128a — `partindoDe`: a previa aberta pela porta 2 (o Documentos do Editar lancamento), a partir deste lancamento */
+  const [notaAberta, setNotaAberta] = useState<{ nota: NotaParaLancar; linhaId: string; partindoDe?: string } | null>(null);
   const abrirOcorrenciaDaNota = (o: { origem: string; lancamentoId: string | null; operacaoId: string | null }) => {
     const destino = o.origem === 'lancamento' && o.lancamentoId ? `/?flancId=${encodeURIComponent(o.lancamentoId)}`
       : o.operacaoId ? `/?oc_id=${encodeURIComponent(o.operacaoId)}` : null;
@@ -3284,6 +3285,14 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
         /* PARC-CADEIA-01 — "Abrir o contrato" do aviso de parcela: só para quem acessa Financiamentos; os filtros ativos
            já ficam na memória da sessão (FIN-LISTA-FILTROS-01a) e voltam na remontagem. */
         onAbrirContrato={podeAbrirFinanciamento ? onAbrirFinanciamento : undefined}
+        /* P128a (porta 2) — a NF lida no Documentos do Editar abre a MESMA previa do "+ Da nota" por cima, partindo deste lancamento */
+        onLerNotaFiscal={clienteAtual?.id ? async (arquivo, lancamentoId) => {
+          const cli = clienteAtual.id;
+          const r = await notaParaAPrevia(cli, arquivo, hook.fornecedores, fazOperacionais);
+          if (r.ok === false) return r.frase;
+          setNotaAberta({ nota: r.nota, linhaId: 'porta-2', partindoDe: lancamentoId });
+          return null;
+        } : undefined}
         lancamento={editingLanc}
         fazendas={fazendas}
         contas={hook.contasBancarias}
@@ -3318,6 +3327,7 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
           clienteId={clienteAtual.id}
           clienteNome={clienteAtual.nome ?? null}
           nota={notaAberta.nota}
+          partindoDe={notaAberta.partindoDe ?? null}
           fazendas={fazendas}
           contas={hook.contasBancarias}
           classificacoes={hook.classificacoes}
@@ -3331,7 +3341,12 @@ export function FinanceiroV2Tab({ onBack, filtroAnoInicial, filtroMesInicial, on
             setNotaAberta(null); setEditingLanc(null); setPrefillDuplicar(null); setPrefillXml(prefill); setLinhaXmlAberta(linha); setDialogOpen(true);
           }}
           onAbrirRegistrada={abrirOcorrenciaDaNota}
-          onCriado={() => { const linha = notaAberta.linhaId; setLinhasXmlLancadas((antes) => new Set([...antes, linha])); }}
+          onCriado={() => {
+            const linha = notaAberta.linhaId;
+            /* P128a (porta 2) — gravado pela previa: o Editar de baixo esta' velho (documentos, nº) — fecha, para nao gravar por cima */
+            if (notaAberta.partindoDe) { setDialogOpen(false); setEditingLanc(null); return; }
+            setLinhasXmlLancadas((antes) => new Set([...antes, linha]));
+          }}
         />
       )}
 

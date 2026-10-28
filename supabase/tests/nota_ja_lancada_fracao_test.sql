@@ -10,12 +10,22 @@ begin;
 set local lock_timeout = '2s';
 set local statement_timeout = '60s';
 do $fx$
-declare c_cli constant uuid := '43f32d07-dba8-4670-900c-bf645440c04a'; fo uuid; outro uuid; ids uuid[];
+declare c_cli constant uuid := '43f32d07-dba8-4670-900c-bf645440c04a'; fo uuid; outro uuid; ids uuid[]; faz uuid; pl uuid;
 begin
   insert into public.financeiro_fornecedores (cliente_id, nome, cpf_cnpj, ativo) values (c_cli, 'Tintas Sinteticas de Teste Ltda', '55.666.777/0003-63', true) returning id into fo;
   insert into public.financeiro_fornecedores (cliente_id, nome, cpf_cnpj, ativo) values (c_cli, 'Outra Loja Sintetica Ltda', '11.222.333/0004-24', true) returning id into outro;
-  select array_agg(id order by id) into ids from (select id from public.financeiro_lancamentos_v2
-     where cliente_id = c_cli and not cancelado and origem_lancamento <> 'importacao_historica' order by id limit 6) s;
+  /* P128a (Gabriel 28/10, decisao b): seis lancamentos NOVOS, fora de financiamento — os reaproveitados do Teste eram de um financiamento e
+     o irmao do parcelamento (113000/113010) puxava o "Outra compra"; os UPDATEs abaixo dao a cada um o papel de antes. */
+  select id into faz from public.fazendas where cliente_id = c_cli order by id limit 1;
+  select id into pl from public.financeiro_plano_contas where ativo and tipo_operacao = '2-Saídas' and escopo_negocio = 'pecuaria'
+    and (cliente_id is null or cliente_id = c_cli) order by id limit 1;
+  with x as (
+    insert into public.financeiro_lancamentos_v2 (cliente_id, fazenda_id, sinal, tipo_operacao, valor, descricao, data_competencia, data_vencimento,
+        status_transacao, cenario, cancelado, plano_conta_id)
+    select c_cli, faz, '-1', '2-Saídas', 1, 'Fixture sintetico ' || k, '2031-05-01', '2031-05-01', 'programado', 'realizado', false, pl
+      from generate_series(1, 6) k
+    returning id, descricao)
+  select array_agg(id order by descricao) into ids from x;
   if cardinality(ids) < 6 then raise exception 'fixture: o Teste precisa de 6 lancamentos'; end if;
   update public.financeiro_lancamentos_v2 set favorecido_id = fo, valor = 100.02, data_vencimento = '2031-05-10', numero_documento = null, descricao = 'Tinta sintetica - 1/3' where id = ids[1];
   update public.financeiro_lancamentos_v2 set favorecido_id = fo, valor = 99.97, data_vencimento = '2031-06-10', numero_documento = 'NF_000.007.001', descricao = 'Tinta sintetica - 2/3' where id = ids[2];

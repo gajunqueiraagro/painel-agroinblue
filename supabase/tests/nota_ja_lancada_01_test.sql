@@ -11,12 +11,22 @@ begin;
 set local lock_timeout = '2s';
 set local statement_timeout = '60s';
 do $fx$
-declare c_cli constant uuid := '43f32d07-dba8-4670-900c-bf645440c04a'; lin uuid; eng uuid; ids uuid[];
+declare c_cli constant uuid := '43f32d07-dba8-4670-900c-bf645440c04a'; lin uuid; eng uuid; ids uuid[]; faz uuid; pl uuid;
 begin
   insert into public.financeiro_fornecedores (cliente_id, nome, ativo) values (c_cli, 'Lineagro Sintetica Produtos Agropecuarios SA', true) returning id into lin;
   insert into public.financeiro_fornecedores (cliente_id, nome, ativo) values (c_cli, 'Engodo Sintetico Comercio Ltda', true) returning id into eng;
-  select array_agg(id order by id) into ids from (select id from public.financeiro_lancamentos_v2
-     where cliente_id = c_cli and not cancelado and origem_lancamento <> 'importacao_historica' order by id limit 6) s;
+  /* P128a (Gabriel 28/10): seis lancamentos NOVOS, fora de financiamento — os reaproveitados do Teste eram de uma amortizacao e o irmao do
+     parcelamento (113000/113010) os puxava; o Teste so' tem 5 fora de financiamento. Os UPDATEs abaixo dao a cada um o papel de antes. */
+  select id into faz from public.fazendas where cliente_id = c_cli order by id limit 1;
+  select id into pl from public.financeiro_plano_contas where ativo and tipo_operacao = '2-Saídas' and escopo_negocio = 'pecuaria'
+    and (cliente_id is null or cliente_id = c_cli) order by id limit 1;
+  with x as (
+    insert into public.financeiro_lancamentos_v2 (cliente_id, fazenda_id, sinal, tipo_operacao, valor, descricao, data_competencia, data_vencimento,
+        status_transacao, cenario, cancelado, plano_conta_id)
+    select c_cli, faz, '-1', '2-Saídas', 1, 'Fixture sintetico ' || k, '2031-08-01', '2031-08-01', 'programado', 'realizado', false, pl
+      from generate_series(1, 6) k
+    returning id, descricao)
+  select array_agg(id order by descricao) into ids from x;
   if cardinality(ids) < 6 then raise exception 'fixture: o Teste precisa de 6 lancamentos'; end if;
   update public.financeiro_lancamentos_v2 set favorecido_id = lin, valor = 341.34, data_vencimento = '2031-08-07', data_pagamento = '2031-08-07', status_transacao = 'realizado' where id = ids[1];
   update public.financeiro_lancamentos_v2 set favorecido_id = lin, valor = 341.34, data_vencimento = '2031-09-08', data_pagamento = '2031-09-08', status_transacao = 'realizado' where id = ids[2];

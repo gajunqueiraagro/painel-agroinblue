@@ -14,7 +14,9 @@ begin
   insert into public.financeiro_fornecedores (cliente_id, nome, cpf_cnpj, ativo) values (c_cli, 'Alvorada Sintetica Agropecuaria Ltda', '55.666.777/0003-63', true) returning id into fo;
   insert into public.financeiro_fornecedores (cliente_id, nome, cpf_cnpj, ativo) values (c_cli, 'Outro Sintetico Comercio Ltda', '99.888.777/0001-10', true) returning id into ou;
   select array_agg(id order by id) into ids from (select id from public.financeiro_lancamentos_v2
-     where cliente_id = c_cli and not cancelado and origem_lancamento <> 'importacao_historica' order by id limit 5) s;
+     where cliente_id = c_cli and not cancelado and origem_lancamento <> 'importacao_historica'
+       and financiamento_id is null  -- P128a (Gabriel 28/10): fora de financiamento — o irmao do parcelamento (113000/113010) nao entra no fixture
+     order by id limit 5) s;
   if cardinality(ids) < 5 then raise exception 'fixture: o Teste precisa de 5 lancamentos'; end if;
   update public.financeiro_lancamentos_v2 set favorecido_id = fo, valor = 821.22, data_vencimento = '2031-09-10', numero_documento = 'NF_000.778.618' where id = ids[1];
   update public.financeiro_lancamentos_v2 set favorecido_id = fo, valor = 821.22, data_vencimento = '2031-10-10', numero_documento = '778618-2/4' where id = ids[2];

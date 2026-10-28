@@ -175,8 +175,8 @@ describe('tela A — a lista de notas', () => {
     expect(screen.getByText('Dados lidos do arquivo; a autenticidade da assinatura não é verificada.')).toBeTruthy();
   });
 
-  it('pergunta ao banco se a nota ja esta registrada, pela CHAVE — e a linha diz "já registrada" sem bloquear', async () => {
-    consultas.notaJaRegistrada.mockImplementation(async () => ({ ok: true, valor: [{ origem: 'lancamento', documentoId: 'd1', lancamentoId: 'l1', operacaoId: null, operacaoTipo: null, numero: '12345', descricao: 'Sal mineral', data: '2026-09-30', valor: 16238 }] }));
+  it('pergunta ao banco se a nota ja esta registrada, pela CHAVE — a registrada numa OC: a linha diz "já registrada" sem bloquear', async () => {
+    consultas.notaJaRegistrada.mockImplementation(async () => ({ ok: true, valor: [{ origem: 'oc', documentoId: 'd1', lancamentoId: null, operacaoId: 'op1', operacaoTipo: 'compra', numero: '12345', descricao: 'Sal mineral', data: '2026-09-30', valor: 16238 }] }));
     const { onAbrir } = montarLista();
     soltar([arquivo('a.xml', montarNFe())]);
     await waitFor(() => expect(screen.getAllByTestId('xml-linha')).toHaveLength(1));
@@ -663,6 +663,19 @@ describe('NOTA-JA-LANCADA-01 — o XML que parece ja\' lancado', () => {
     const pedido = consultas.notaJaLancada.mock.calls[0][1] as { chave: string; parcelas: unknown[] };
     expect(pedido.chave).toBe(chaveDe(EMITENTE_CNPJ, '55', '12345'));
     expect(pedido.parcelas).toHaveLength(2);
+  });
+  /* P128a (decisao b) — a nota ja' anexada a um LANCAMENTO e' o ponto de partida: a busca dos irmaos roda e a nota abre na previa */
+  it('a nota já anexada a um lançamento: "parece já lançada", a busca roda igual e abre a prévia da nota', async () => {
+    consultas.notaJaRegistrada.mockImplementation(async () => ({ ok: true, valor: [{ origem: 'lancamento', documentoId: 'd1', lancamentoId: 'l1', operacaoId: null, operacaoTipo: null, numero: '12345', descricao: 'Sal mineral', data: '2026-09-30', valor: 16238 }] }));
+    const onAbrirNota = vi.fn();
+    const onAbrir = vi.fn();
+    render(<NovoDeXmlDialog open onClose={() => {}} clienteId="cli" fazendas={FAZENDAS} fornecedores={[AGRO]} onAbrirLancamento={onAbrir} onAbrirNota={onAbrirNota} lancadas={new Set()} />);
+    soltar([arquivo('a.xml', montarNFe())]);
+    await waitFor(() => expect(screen.getAllByTestId('xml-linha')).toHaveLength(1));
+    expect(consultas.notaJaLancada).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('xml-situacao').textContent).toBe('parece já lançada');
+    expect(onAbrirNota).toHaveBeenCalledTimes(1);
+    expect(onAbrir).not.toHaveBeenCalled();
   });
   it('nada achado: o XML segue para o Novo lançamento, como sempre', async () => {
     const onAbrirNota = vi.fn();
