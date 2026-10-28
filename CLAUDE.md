@@ -221,6 +221,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - Recorrencia gera a vigencia inteira e nunca omite em silencio; o valor do mes tem marca e o propagar pula as marcadas.
 - P154: recorrência ENCURTADA ou CANCELADA limpa SÓ os PREVISTOS fora da vigência pela `fn_recorrencia_fora_da_vigencia` (simular = a prévia; cancelar
   = competência ≥ mês do cancelamento; nunca apaga, o cancelado ocupa a competência); programado/agendado/realizado/conciliado/mês fechado: listados, só à mão.
+- P160: o Propagar AVISA a competência recalculada que cai fora da vigência (`fora_da_vigencia` na projeção, só aviso); o salvar roda por último a
+  prévia do P154 também nesse caso (nada fora = fecha).
 - Fornecedor: um leitor so' (`useFornecedoresDoCliente`), um seletor so' (`FavorecidoSelect`), uma busca so' (tela + `fn_fornecedor_buscar`,
   presas pelo `buscaDeFornecedor.casos.json`), uma regra de criacao (`decidirCadastro`); mesclar e' RPC com desfazer e o absorvido e'
   inativo sempre; nome gravado em caixa padronizada por funcao do banco; FILIAIS tem a mesma razao social (CNPJ e cidade distinguem) e

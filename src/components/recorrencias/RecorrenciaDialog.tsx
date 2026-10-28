@@ -324,9 +324,13 @@ export function RecorrenciaDialog({ recorrencia, clienteId, aoFechar, aoSalvar }
            sempre — e, com a vigência mais larga, o gerar roda DEPOIS dela, com o resultado escrito. */
         aoFechar={() => {
           const gera = propagar.geraDepois && !!ed;
+          /* P160 — o Propagar avisou competência FORA da vigência: a prévia do P154 roda por último também (nada fora = fecha). */
+          const proj = propagar.previa?.competencia?.projecao;
+          const limpa = limparDepois || !!proj && (proj.futuros.foraDaVigencia.length > 0 || proj.todos.foraDaVigencia.length > 0);
+          if (limpa) setLimparDepois(true);
           setPropagar(null);
           if (gera && ed) { void gerarAposSalvar(ed.id); return; }
-          void (async () => { await aoSalvar(); if (limparDepois && ed) { await limparOuFechar(ed.id); return; } aoFechar(); })();
+          void (async () => { await aoSalvar(); if (limpa && ed) { await limparOuFechar(ed.id); return; } aoFechar(); })();
         }}
       />
     );
