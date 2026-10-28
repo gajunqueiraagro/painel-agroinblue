@@ -37,8 +37,8 @@ export interface LancamentoJaLancado {
   cancelado: boolean;
 }
 
-export type PorDoAchado = 'valor' | 'numero' | 'chave' | 'fracao' | 'documento' | 'soma' | 'parcelamento';
-const PORES: readonly PorDoAchado[] = ['valor', 'numero', 'chave', 'fracao', 'documento', 'soma', 'parcelamento'];
+export type PorDoAchado = 'valor' | 'numero' | 'chave' | 'fracao' | 'documento' | 'soma' | 'parcelamento' | 'lancamento';
+const PORES: readonly PorDoAchado[] = ['valor', 'numero', 'chave', 'fracao', 'documento', 'soma', 'parcelamento', 'lancamento'];
 
 export interface ParcelaDaNotaParaCasar { n: number; vencimento: string; valorCent: number }
 
@@ -99,6 +99,15 @@ export function casarJaLancados(parcelas: readonly ParcelaDaNotaParaCasar[], tod
         .sort((a, b) => a.d - b.d || a.l.id.localeCompare(b.l.id))[0];
       if (melhor) { daParcela.set(parcela.n, melhor.l); usados.add(melhor.l.id); }
     }
+  }
+  /* P162 — a nota de UMA parcela (sem duplicata: o "vencimento" é a emissão) achada pela nota (nº, documento, chave; o emitente o banco já
+     conferiu) com o MESMO valor (até 5 centavos) é ELA, qualquer que seja a data — sem isso, "só na nota → criar" + "só no sistema" (em dobro).
+     O irmão achado só por ser do parcelamento nunca casa. */
+  if (parcelas.length === 1 && !daParcela.has(parcelas[0].n)) {
+    const unica = parcelas[0];
+    const mesma = achados.find((l) => !usados.has(l.id) && l.por.some((x) => x !== 'valor' && x !== 'parcelamento')
+      && Math.abs(l.valorCent - unica.valorCent) <= 5);
+    if (mesma) { daParcela.set(unica.n, mesma); usados.add(mesma.id); }
   }
   const pelaNota = achados.filter((l) => !usados.has(l.id) && pelaNotaPor(l));
   for (const l of pelaNota) usados.add(l.id);
@@ -261,6 +270,8 @@ function comoAchou(achados: readonly LancamentoJaLancado[]): string {
   if (tem('numero') || tem('documento')) partes.push(achados.some((l) => l.fornecedorPor === 'cnpj') ? 'pelo CNPJ + nº da nota' : 'pelo nº da nota');
   if (tem('chave')) partes.push('pela chave');
   if (tem('soma')) partes.push('pela soma');
+  /* P128c — a porta 2: o lançamento aberto é a âncora, ache a nota ele ou não */
+  if (tem('lancamento')) partes.push('a partir do lançamento aberto');
   if (tem('valor') && !partes.length) partes.push('pelo valor e vencimento');
   return partes.join(' · ');
 }

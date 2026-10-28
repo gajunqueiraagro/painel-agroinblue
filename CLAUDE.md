@@ -214,6 +214,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - Conciliacao: tolerancia de MEIO centavo (R$ 0,01 e' diferenca); a data do banco manda na conferencia; o resumo da conta tem dono no
   banco; todo vinculo com extrato da' baixa e o parcial vira divisao explicita; F5 nunca e' necessario; transferencia de OFX = 1
   lancamento + 2 vinculos; arquivo de extrato se le^ pelo charset declarado.
+- P145: a conta PERMUTA conta o razão DELA na Conciliação (os sem caixa da própria conta entram em `fn_caixa_sistema_pontas`); conta comum, VG e CPR
+  seguem sem os sem caixa.
 - P124: o LOTE do mês (PalcoDoMes) usa a régua do MOTOR (`fn_candidatos_conciliacao`; a tela só agrupa: exata = pré-marcada sem empate) e grava
   PAR A PAR pelo gravador de hoje (`vincularSelecao`); buscar é GESTO; a caixa "Vincular os exatos" saiu do palco (o ConciliarMesDialog ficou: dívida).
 - Financiamento: o saldo devedor tem uma fonte (`fn_financiamento_saldo`); captacao segue o creditado em conta; o valor do lancamento
@@ -221,6 +223,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - Recorrencia gera a vigencia inteira e nunca omite em silencio; o valor do mes tem marca e o propagar pula as marcadas.
 - P154: recorrência ENCURTADA ou CANCELADA limpa SÓ os PREVISTOS fora da vigência pela `fn_recorrencia_fora_da_vigencia` (simular = a prévia; cancelar
   = competência ≥ mês do cancelamento; nunca apaga, o cancelado ocupa a competência); programado/agendado/realizado/conciliado/mês fechado: listados, só à mão.
+- P160: o Propagar AVISA a competência recalculada que cai fora da vigência (`fora_da_vigencia` na projeção, só aviso); o salvar roda por último a
+  prévia do P154 também nesse caso (nada fora = fecha).
 - Fornecedor: um leitor so' (`useFornecedoresDoCliente`), um seletor so' (`FavorecidoSelect`), uma busca so' (tela + `fn_fornecedor_buscar`,
   presas pelo `buscaDeFornecedor.casos.json`), uma regra de criacao (`decidirCadastro`); mesclar e' RPC com desfazer e o absorvido e'
   inativo sempre; nome gravado em caixa padronizada por funcao do banco; FILIAIS tem a mesma razao social (CNPJ e cidade distinguem) e
@@ -277,6 +281,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - P128a: a NOTA JÁ NO SISTEMA acha TODOS os irmãos (`fn_nota_ja_lancada`: nº no documento, "pela soma", o irmão do parcelamento) e mostra a
   TABELA SISTEMA × NOTA (`linhasSistemaNota`/`fraseDoAchado`; diferença em vermelho, nunca corrigida) com 3 caminhos; a chave num lançamento não
   barra (só a de OC); as duas portas (+ Da nota e o Documentos do Editar, `notaParaAPrevia`) abrem a MESMA prévia.
+- P155: trava que ESCREVE um campo (o `FazendaSelect` forçando Administrativo) só age com a classificação do lançamento ABERTO
+  (`classificacaoDe`): o render de transição da abertura tem o estado do reset ("última atividade") e gravava a fazenda errada no Salvar.
 - P53: a mesma pergunta ao mesmo tempo = um pedido (`criarUmPedidoPorVez`, só o voo, nada guardado); o `checkLockNow` segue direto.
 - P95 (DANFE-CHAVE-EM-GRUPOS-01): DANFE com a chave/rótulos picados em itens se lê pela linha (`chaveEmGrupos` SÓ com DV certo; `aoLado`);
   sem chave legível, DIGITAR A CHAVE (`chaveDigitada.ts`: DV, modelo 55; avulsa 890 não usa o CNPJ; o resto em branco, âmbar na prévia);
@@ -316,9 +322,13 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - UX-OBRIGATORIOS-01: Salvar com pendencia nao fecha nem grava; o campo pendente fica vermelho com a mensagem; UX-TOAST-01: validacao
   e erro de preenchimento nunca em toast. Dialogo/menu fechando nao aceita clique. Modal em blocos pela primitiva da casa; o
   `DialogContent` renderiza a 95%.
+- P158: o aviso é top-center com ✕ e 2 s; erro e atenção ficam até o ✕ pelo embrulho do `sonner.tsx` (161 arquivos importam de 'sonner');
+  duração própria só com motivo registrado.
 - A pagina e' pt-BR e nao se traduz. Barra lateral 152px num token. Graficos de saida: laranja/violeta/vermelho/cinza; azul so' entrada.
 - TABELA-ALTURA-FIXA-01: o quadro da tabela tem ALTURA (nunca `maxHeight`) ate' o fim da tela, qualquer que seja o numero de linhas; o
   vazio fica dentro do quadro; em pagina que rola, `useAlturaAteOFim` (topo do quadro → fim da janela). O gate: filtrar para 6/1/0 linhas.
+- P121: o Resumo do lançamento é o `ResumoDoLancamento` (do Financeiro; `ui/linha-resumo` fica com os outros modais): blocos de ALTURA FIXA que
+  somam ~452px (cabe em 1126×579), nada rola; linha nova num bloco = refazer a conta e medir; datas dos pares nunca cortam (larguras medidas).
 - FIN-V2-FORNECEDOR-SEM-SUFIXO-01: em TABELA o fornecedor e' so' o nome ("…" + `title` com CNPJ/"sem CNPJ", cidade/UF, inativo); o final
   de filial ("…0007-69", "sem CNPJ") so' no seletor/busca e no Mesclar.
 - FIN-V2-FILTRO-FORNECEDOR-01: filtro de fornecedor = ativos (+ inativo com lançamento no recorte ou escolhido, P94); mesclado nunca (o nome antigo acha

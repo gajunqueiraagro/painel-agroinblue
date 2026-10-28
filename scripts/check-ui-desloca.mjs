@@ -286,6 +286,27 @@ const CENARIOS = [
     /* P128a — a tabela sistema × nota com diferença em vermelho, "só no sistema" e o "Documento hoje" */
     ['nota no sistema com diferenca (P128a)', { url: 'tela=nota-pdf&v=diferenca' }],
   ] },
+  /* P127 + P128c — o Novo documento: soltar a nota (a faixa do lançamento vira a da nota lida, com as divergências) e trocar um campo para o
+     do lançamento não deslocam o formulário (o modal tem altura fixa) */
+  /* P128b — a prévia campo a campo: desmarcar uma coluna, manter uma célula (✎), trocar o nº (a prévia reconferindo) não deslocam nada */
+  { nome: 'previa-completar', url: 'tela=previa-completar&cam=2', estados: [
+    ['desmarca Descrição', clicar('[data-testid="previa-coluna-descricao"]')], ['marca Conta', clicar('[data-testid="previa-coluna-conta"]')],
+    ['mantém uma célula', clicar('[data-testid="previa-linha"] [data-testid="previa-muda"]')],
+    ['troca o nº', async (p) => { await p.locator('[data-testid="previa-numero"]').fill('NF 000.004.876'); await espera(p, 700); }],
+  ] },
+  { nome: 'documento-nota', url: 'tela=documento-nota', estados: [
+    ['nota lida', async (p) => {
+      const xml = await p.evaluate(() => globalThis.__xmlDaBancada);
+      await p.locator('[data-testid="doc-arquivo"]').setInputFiles({ name: 'nota.xml', mimeType: 'application/xml', buffer: Buffer.from(xml) });
+      await p.locator('[data-testid="nota-lida"]').waitFor({ timeout: 8000 }); await espera(p, 400);
+    }],
+    ['usar o valor do lançamento', async (p) => {
+      const xml = await p.evaluate(() => globalThis.__xmlDaBancada);
+      await p.locator('[data-testid="doc-arquivo"]').setInputFiles({ name: 'nota.xml', mimeType: 'application/xml', buffer: Buffer.from(xml) });
+      await p.locator('[data-testid="nota-lida"]').waitFor({ timeout: 8000 });
+      await p.locator('[data-trocar="valor"]').first().click(); await espera(p, 400);
+    }],
+  ] },
   /* P128a — trocar o CAMINHO (Completar → Completar e atualizar → Criar novo): o texto de cada cartão e o botão do rodapé trocam no lugar */
   { nome: 'nota-pdf-caminhos', url: 'tela=nota-pdf&v=diferenca', antes: async (p) => {
     const t = p.locator('[data-testid="nota-abas"] button', { hasText: 'Parcelas e lançamento' });
@@ -320,6 +341,8 @@ const CENARIOS = [
   ] })),
   /* P117 — a linha fixa sob o Fornecedor: com cidade ("CNPJ · Presidente Prudente/SP") e sem (só o CNPJ) — nada anda */
   { nome: 'lancamento-fornecedor-cidade', url: 'tela=lancamento&m=editar', estados: [['cadastro sem cidade', { url: 'tela=lancamento&m=editar&cidade=sem' }]] },
+  /* P121 — o Resumo do lançamento: os nomes longos do mock no lugar dos curtos — nenhum bloco muda de altura, nada abaixo anda */
+  { nome: 'lancamento-resumo-longo', url: 'tela=lancamento&m=editar&v=sal', estados: [['nomes longos', { url: 'tela=lancamento&m=editar&v=sal&resumo=longo' }]] },
   /* P138 — "Usar" a safra da competência: a linha da sugestão sai e o campo se enche — nada abaixo anda */
   { nome: 'lancamento-safra-usar', url: 'tela=lancamento&m=editar&safra=sem', estados: [['Usar a sugestão', clicar('[data-testid="safra-usar-sugestao"]')]] },
   /* P117 (Gabriel 27/10) — a linha sob o Fornecedor VAZIA: no Novo lançamento o campo nasce sem fornecedor (o do lançamento não tem "×");

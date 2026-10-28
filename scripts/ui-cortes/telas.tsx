@@ -1060,6 +1060,61 @@ if (tela === 'mesclar') {
     raiz.render(<ItensDaNotaDialog clienteId="cli" chave={cabecalho.chave} onClose={() => {}} carregar={async () => ({ cabecalho, lidos } as any)} />);
   };
   void montarItens();
+} else if (tela === 'documento-nota') {
+  /* P127 + P128c — o "Novo documento" do Editar lançamento que LÊ A NOTA solta no Arquivo. O cenário solta o XML SINTÉTICO exposto aqui
+     (`__xmlDaBancada`: NF 74974 no molde do print, R$ 408,77, 1 duplicata, 1 item, emitente com nome comprido) ou um PDF que não se lê.
+     O lançamento diz outra emissão, outro valor e outro favorecido: a faixa mostra as três divergências lado a lado. */
+  const montarDoc = async () => {
+    const { FormDocumento } = await import('@/components/financeiro-v2/AbaDocumentosLancamento');
+    g.__xmlDaBancada = montarNFe({ numero: '74974', vNF: '408.77', duplicatas: [['001', '2026-09-24', '408.77']],
+      nomeEmitente: 'COMERCIO SINTETICO DE PARAFUSOS E FERRAMENTAS INDUSTRIAIS DO CENTRO OESTE LTDA',
+      itens: [['PARAFUSO SINTETICO SEXTAVADO M8 X 40 ZINCADO', '100.0000', 'UN', '408.77']] });
+    const api: any = { documentos: [], confronto: null, loading: false, saving: false, operacaoId: null, operacaoTipo: null,
+      registrar: async () => ({ id: 'x', origem: 'lancamento', operacaoId: null }), editar: async () => true, cancelar: async () => true,
+      anexar: async () => true, urlAssinada: async () => null, recarregar: async () => {} };
+    montar(<FormDocumento api={api} documento={null} clienteId="cli" onFechar={() => {}}
+      sugestao={{ numero: '74974', dataEmissao: '2026-08-24', valor: 400, emitenteId: LEITOR[0]?.id ?? null }}
+      onVerOQueANotaMuda={async () => null} />);
+  };
+  void montarDoc();
+} else if (tela === 'previa-completar') {
+  /* P128b — a PRÉVIA CAMPO A CAMPO do "Completar com a nota", no molde da Casa da Cerca (5 parcelas: 1 conciliada, 3 pagas, 1 programada) com
+     nomes SINTÉTICOS compridos. O banco falso faz o papel da `fn_nota_completar` com `p_simular`: o que o pedido traz muda, o resto é "igual",
+     conta/valor/vencimento das pagas têm cadeado. `cam=2`: o caminho 2 (Venc./Valor da nota na programada); `v=recusa`: o mês fechado. */
+  const montarPrevia = async () => {
+    const { PreviaCompletar } = await import('@/components/financeiro-v2/PreviaCompletar');
+    const cam2 = q.get('cam') === '2';
+    const SIT = ['conciliada', 'realizada', 'realizada', 'realizada', 'programada'];
+    const NOMES: Record<string, string> = { f0: 'Comercio Sintetico de Arames e Mourões do Centro Oeste Ltda', f1: 'Cercas Sinteticas Rurais Ltda',
+      z0: 'Fazenda Sintetica Boa Vista do Rio Comprido', z1: 'Fazenda Sintetica Boa Vista', c0: 'Banco Sintetico 0001-2 c/c 99999-9', c1: 'Caixa Sintetica',
+      p0: 'Manutenção de Cercas e Benfeitorias', p1: 'Investimento em Benfeitorias Rurais', s0: '2030/31', s1: '2031/32' };
+    const HOJE: Record<string, unknown> = { descricao: 'CERCAS SINTETICAS - parcela', favorecido_id: 'f0', fazenda_id: 'z0', conta_bancaria_id: 'c0',
+      plano_conta_id: 'p0', numero_documento: '', data_competencia: '2031-05-02', safra_id: 's0' };
+    g.__bancoBancada = { from: () => [], rpc: (fn: string, a: any) => {
+      if (fn !== 'fn_nota_completar') return null;
+      if (q.get('v') === 'recusa') return { ok: false, recusas: [{ frase: 'O mês 05/2031 está fechado: reabra antes de mudar a competência de «Cercas Sinteticas Rurais Ltda - parcela 1/5».' }], linhas: [], efeito_dre: [] };
+      const linhas = (a.p_lancamentos ?? []).map((x: any, k: number) => {
+        const paga = SIT[k] !== 'programada';
+        const campos: Record<string, unknown> = {};
+        for (const [c, h] of Object.entries(HOJE)) {
+          const fica = c in x ? x[c] : h;
+          const cad = paga && c === 'conta_bancaria_id' ? `${SIT[k]}: conta, valor e vencimento não mudam` : null;
+          campos[c] = { hoje: h, fica: cad ? h : fica, muda: !cad && fica !== h, hoje_nome: NOMES[String(h)] ?? null, fica_nome: NOMES[String(fica)] ?? null, cadeado: cad };
+        }
+        const venc = `2031-${String(5 + k).padStart(2, '0')}-20`;
+        campos.data_vencimento = { hoje: venc, fica: x.data_vencimento ?? venc, muda: !paga && !!x.data_vencimento && x.data_vencimento !== venc, cadeado: paga ? 'paga' : null };
+        campos.valor = { hoje: 631.98, fica: x.valor ?? 631.98, muda: !paga && x.valor !== undefined && x.valor !== 631.98, cadeado: paga ? 'paga' : null };
+        return { id: x.id, descricao: `CERCAS SINTETICAS - parcela ${k + 1}/5`, situacao: SIT[k], parcela_n: k + 1, campos };
+      });
+      return { ok: true, recusas: [], linhas, efeito_dre: [{ mes_de: '2031-05', subcentro_de: NOMES.p0, mes_para: '2031-06', subcentro_para: NOMES.p1, valor: 3160, lancamentos: 5 }] };
+    } };
+    const alvos = [1, 2, 3, 4, 5].map((k) => ({ id: `l${k}`, programada: k === 5, notaValorCent: 63200, notaVencimento: `2031-${String(5 + k).padStart(2, '0')}-21` }));
+    montar(<PreviaCompletar open onFechar={() => {}} clienteId="cli" alvos={alvos} rotulos={Object.fromEntries(alvos.map((x, k) => [x.id, `${k + 1}/5`]))}
+      todasIniciais={{ descricaoBase: 'Cercas Sinteticas Rurais Ltda - 2/5', favorecidoId: 'f1', fazendaId: 'z1', contaId: 'c1', planoContaId: 'p1',
+        numeroDocumento: 'NF 000.004.875', competencia: '2031-06-02', safraId: null }}
+      atualizarNaoPagas={cam2} juntar={!cam2} chave="50310611222333000181550010000048751123456780" onConfirmar={async () => null} />);
+  };
+  void montarPrevia();
 } else if (tela === 'lancamento') {
   /* com `desc`, a edição é parcela de uma compra parcelada SEM número de contrato: o rodapé fala dela (a descrição do contrato é a longa) */
   /* ACESSOS-PERFIL-01 — a aba Auditoria: eventos de dois membros e um sem autor (com e sem `via`), nomes pela fonte única. */
@@ -1169,7 +1224,18 @@ if (m === 'editar' && (v === 'salcartao' || v === 'salpago')) props.lancamento =
   data_vencimento: '2026-08-10', forma_pagamento: 'Cartão', ...(v === 'salpago' ? { status_transacao: 'realizado', data_pagamento: '2026-08-12' } : {}) };
 if (v === 'rateio' && m === 'novo') props.prefill = { tipo_operacao: '2-Saídas', escopo_negocio: 'agricultura', subcentro: 'Insumos Lavoura Milho', plano_conta_id: 'pl-ins',
   macro_custo: 'Custeio Produtivo', grupo_custo: 'Custeio Lavoura', centro_custo: 'Insumos', cultura: '', fazenda_id: 'f-pur', data_competencia: '2026-05-10', valor: 5000 };
-const NOME_LONGO = 'COOPERATIVA AGROINDUSTRIAL DOS PRODUTORES RURAIS DO MATO GROSSO DO SUL E REGIAO CENTRO OESTE LTDA FILIAL CAMPO GRANDE';
+/* P121 — `&resumo=longo`: o caso "Nomes bem longos" do mock (SINTÉTICO) sobre o `v=sal` — favorecido, fazenda, conta, centro e subcentro
+   longos e o valor de 7 dígitos. O Resumo do lançamento não rola e não muda de altura (o desloca compara com o `v=sal` curto). */
+if (m === 'editar' && q.get('resumo') === 'longo') {
+  AGRO.nome = 'Cooperativa Agroindustrial dos Produtores Rurais do Vale do Rio Paraná e Região Ltda';
+  FAZENDAS[0].nome = 'Faz. Santa Maria da Boa Esperança';
+  CONTAS[0].nome_conta = 'Itaú Personalite Investimentos';
+  CONTAS[0].nome_exibicao = 'Itaú Personalite Investimentos';
+  CLASSIF[0] = { ...CLASSIF[0], subcentro: 'Peças, Pneus e Manutenção de Tratores e Implementos Pecuária', centro_custo: 'Manutenção de Máquinas e Implementos Agrícolas' };
+  props.lancamento = { ...SAL, valor: 1234567.89, subcentro: CLASSIF[0].subcentro, centro_custo: CLASSIF[0].centro_custo,
+    descricao: 'Peças de reposição para trator e implementos, conforme pedido de compra 4521 e orçamento aprovado' };
+}
+const NOME_LONGO ='COOPERATIVA AGROINDUSTRIAL DOS PRODUTORES RURAIS DO MATO GROSSO DO SUL E REGIAO CENTRO OESTE LTDA FILIAL CAMPO GRANDE';
 if (v === 'xmlnome') {
   const SEM_DOC = { id: 'agro-nd', nome: NOME_LONGO, cpf_cnpj: null, fazenda_id: null, ativo: true, tipo_recebimento: null } as any;
   const bytes = utf8(montarNFe({ nomeEmitente: NOME_LONGO, duplicatas: [['001', '2026-10-30', '3247.60'], ['002', '2026-11-29', '3247.60'], ['003', '2026-12-29', '3247.60'], ['004', '2027-01-28', '3247.60'], ['005', '2027-02-27', '3247.60']] }));

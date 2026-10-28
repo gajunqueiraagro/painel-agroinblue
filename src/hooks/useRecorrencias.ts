@@ -516,6 +516,8 @@ export interface CompetenciaPropagacao {
     aviso: string | null;
     /** As vagas que o próximo Gerar preenche abaixo da marca resultante (mesma função do banco que grava). */
     vagas: VagaRecorrencia[];
+    /** P160 — as competências recalculadas que cairiam FORA da vigência (aviso; quem limpa é a porta do P154, no fim do salvar). */
+    foraDaVigencia: { lancamentoId: string; venc: string | null; compAntiga: string | null; compNova: string }[];
   }>;
   /** Só na execução: quantas foram gravadas. */
   aplicadas: number | null;
@@ -562,6 +564,11 @@ function lerCompetencia(c: any): CompetenciaPropagacao | null {
     duplicidades: (Array.isArray(p?.duplicidades) ? p.duplicidades : []).map((d: any) => ({ competencia: String(d?.competencia ?? ''), n: Number(d?.n ?? 0) })),
     aviso: typeof p?.aviso === 'string' && p.aviso ? p.aviso : null,
     vagas: lerVagas(p?.vagas),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- jsonb da RPC
+    foraDaVigencia: (Array.isArray(p?.fora_da_vigencia) ? p.fora_da_vigencia : []).map((x: any) => ({
+      lancamentoId: String(x?.lancamento_id ?? ''), venc: x?.venc == null ? null : String(x.venc),
+      compAntiga: x?.comp_antiga == null ? null : String(x.comp_antiga), compNova: String(x?.comp_nova ?? ''),
+    })).filter((x: { lancamentoId: string }) => x.lancamentoId !== ''),
   });
   return {
     grupos: { futuros: grupo(c.futuros), passados: grupo(c.passados) },

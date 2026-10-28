@@ -86,13 +86,14 @@ async function abrir(lanc: LancamentoV2) {
   await screen.findByDisplayValue('Folha de Pagamento');
   await new Promise((ok) => setTimeout(ok, 30));
 }
-/** As linhas (rótulo, valor) do bloco Pagamento do resumo, e o elemento do valor de uma delas. */
-const linhasPagamento = () => [...screen.getByTestId('resumo-pagamento').children]
-  .map(l => [l.querySelector('span')?.textContent ?? '', (l.querySelector('span.tabular-nums')?.textContent ?? '')]);
+/** P121 — o bloco Pagamento é uma tabela de PARES (rótulo, valor, rótulo, valor) por linha: os pares em ordem de leitura. */
+const linhasPagamento = () => [...screen.getByTestId('resumo-pagamento').querySelectorAll('tr')].flatMap((tr) => {
+  const td = [...tr.querySelectorAll('td')].map((c) => c.textContent ?? '');
+  return [[td[0], td[1]], [td[2], td[3]]];
+});
 const valorDe = (rotulo: string) => {
-  const linha = [...screen.getByTestId('resumo-pagamento').children].find(l => l.querySelector('span')?.textContent === rotulo);
-  if (!linha) throw new Error(`sem a linha ${rotulo}`);
-  return linha.querySelector('span.tabular-nums') as HTMLElement;
+  if (rotulo !== 'Status') throw new Error(`só o Status tem testid: ${rotulo}`);
+  return screen.getByTestId('resumo-status');
 };
 
 describe('o status no bloco Pagamento, com a cor da paleta', () => {
@@ -117,21 +118,23 @@ describe('o status no bloco Pagamento, com a cor da paleta', () => {
 });
 
 describe('a ordem do bloco e o vencimento', () => {
-  it('Status · Vencimento · Pagamento · Forma · Modalidade · Nº de parcelas; previsto mostra o vencimento e "—" no pagamento', async () => {
+  /* P121 — em 2 colunas: Status/Forma · Venc./Pgto. · Modalid./Parcelas */
+  it('Status · Forma · Venc. · Pgto. · Modalid. · Parcelas; previsto mostra o vencimento e "—" no pagamento', async () => {
     await abrir(FOLHA);
     expect(linhasPagamento()).toEqual([
-      ['Status', 'Previsto'], ['Vencimento', '05/11/2026'], ['Pagamento', '—'], ['Forma', 'PIX'], ['Modalidade', '—'], ['Nº de parcelas', '—'],
+      ['Status', 'Previsto'], ['Forma', 'PIX'], ['Venc.', '05/11/2026'], ['Pgto.', '—'], ['Modalid.', '—'], ['Parcelas', '—'],
     ]);
   });
   it('sem vencimento: "—"; realizado mostra as duas datas', async () => {
     await abrir({ ...FOLHA, data_vencimento: null, status_transacao: 'realizado', data_pagamento: '2026-11-06' });
-    expect(linhasPagamento().slice(0, 3)).toEqual([['Status', 'Realizado'], ['Vencimento', '—'], ['Pagamento', '06/11/2026']]);
+    const l = linhasPagamento();
+    expect([l[0], l[2], l[3]]).toEqual([['Status', 'Realizado'], ['Venc.', '—'], ['Pgto.', '06/11/2026']]);
   });
   it('"Status" não aparece mais em Financeiro: uma linha só no resumo inteiro', async () => {
     await abrir(FOLHA);
     const aside = screen.getByTestId('resumo-pagamento').closest('aside') as HTMLElement;
     /* a busca sabe achar: o resumo tem as outras linhas */
-    expect(within(aside).getByText('Conta origem')).toBeInTheDocument();
+    expect(within(aside).getByText('Conta')).toBeInTheDocument();
     expect(within(aside).getAllByText('Status')).toHaveLength(1);
     expect(screen.getByTestId('resumo-pagamento').contains(within(aside).getByText('Status'))).toBe(true);
   });

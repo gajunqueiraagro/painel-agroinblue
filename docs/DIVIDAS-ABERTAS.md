@@ -465,6 +465,13 @@ docs/historico/frentes-ate-2026-09-29.md.
   tabela da Conferencia Mensal escondida (`th sticky` num quadro que nao rola, "Nascimentos" com "…") e fez a altura dos blocos depender
   do conteudo: ao escolher uma fazenda, tudo abaixo descia 48 a 81px (desloca do `meta-fech` 51 → 74). Tratar com tela, bloco a bloco
   (o que mostrar abaixo de 1024px), nunca so' liberando a altura.
+  MEDIDO abaixo de 1024px na bancada `meta-fech` (28/10, base 330662bf, sem a `regiao`), tambem desta divida: a tabela Jan→Dez da
+  Conferencia Mensal (`BlocoConferenciaMensalRebanhoFechamento.tsx`, `w-full` sem regua, 12 meses + Total) passa 38px da caixa a 1000px e
+  a ultima coluna ("Total", "0", "—") some no `overflow-hidden`; e, ao escolher uma fazenda, os blocos de baixo descem 14–16,5px a
+  750/814/1000px (35 + 5 + 5 desloca). O de 1024px para cima e' do P137 (as reticencias a 1126/1130 e as larguras dos Indicadores a x400).
+  Depois do P137 (gate de 28/10, 09:57–13:10): a 1000px ficam os 38px da tabela Jan→Dez e "Nascimentos" com "…" na faixa da Conferencia
+  (o P137 deixou as colunas da faixa encolherem ate' 646px para tirar os cortes de "vs A-1"; o rotulo, com minimo de 90px, passou a
+  cortar com "…"); a 750px, 30 desloca (os blocos descem ao escolher uma fazenda). De 1024px para cima: zero.
 
 - CONC-EXATOS-DIALOG (P124, decisão 2 do Gabriel 28/10) — o `ConciliarMesDialog` (`src/components/conciliacao/ConciliarMesDialog.tsx:163`)
   segue com o "Vincular os exatos" de antes (`fn_vincular_exatos_mes`: mesma data, mesmo valor, único, só realizado), outra régua que a do

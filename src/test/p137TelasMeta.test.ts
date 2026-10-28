@@ -16,6 +16,13 @@ describe('P137 família 1 — um scrollport por tela (o cabeçalho preso vive no
     expect(f).toMatch(/<div ref=\{quadro\.ref\} className="overflow-auto relative" style=\{\{ height: quadro\.altura \}\}>/);
   });
 
+  it('PC-100: o quadro de cada bloco não rola (o sticky usa o scrollport do conteúdo)', () => {
+    const f = ler('pages/PainelConsultorTab.tsx');
+    const bloco = f.slice(f.indexOf('const renderBlocoTable'), f.indexOf('<table', f.indexOf('const renderBlocoTable')));
+    expect(bloco).not.toBe('');
+    expect(bloco).not.toMatch(/overflow/);
+    expect(f).toContain('<div className="px-2 space-y-1 mt-1 flex-1 overflow-auto">');
+  });
 });
 
 describe('P137 família 3 — a barra do Fluxo não muda ao trocar a fazenda', () => {
@@ -28,6 +35,38 @@ describe('P137 família 3 — a barra do Fluxo não muda ao trocar a fazenda', (
     expect(f).not.toMatch(/\{!isGlobal && \(/);
     expect(f).toContain("style={{ visibility: isGlobal ? 'visible' : 'hidden' }} aria-hidden={!isGlobal}>");
     expect(f).toContain("style={{ visibility: isGlobal ? 'hidden' : 'visible' }} aria-hidden={isGlobal} tabIndex={isGlobal ? -1 : undefined}");
+  });
+});
+
+describe('P137 família 5 — Indicadores do Fechamento com régua fixa', () => {
+  it('a tabela da Análise Zootécnica é table-layout fixed com colgroup (as colunas não seguem os valores)', () => {
+    const f = ler('v2/pages/V2FechamentoPeriodo.parts/AnaliseZootecnica.tsx');
+    expect(f).toContain(`<table className="fechamento-table" style={{ tableLayout: 'fixed' }} data-testid="analise-zootecnica">`);
+    const cols = f.slice(f.indexOf('<colgroup>'), f.indexOf('</colgroup>')).match(/<col /g) ?? [];
+    expect(cols).toHaveLength(5);
+  });
+});
+
+describe('P137 família 2 — o Fechamento não corta a 1000px nem põe "…" fora de tabela', () => {
+  it('a faixa da Conferência Mensal encolhe até 646px (minmax), nunca 780px fixos', () => {
+    const f = ler('v2/pages/V2FechamentoPeriodo.parts/BlocoConferenciaMensalRebanhoFechamento.tsx');
+    const grade = f.match(/const GRID_FAIXA =\s*'grid grid-cols-\[([^\]]+)\]/);
+    expect(grade).not.toBeNull();
+    const colunas = grade![1].split('_');
+    expect(colunas).toHaveLength(10);
+    const minimo = colunas.reduce((s, c) => s + Number((c.match(/^minmax\((\d+)px,/) ?? [])[1] ?? NaN), 0);
+    expect(minimo + 9 * 4).toBeLessThanOrEqual(660);
+  });
+
+  it('o cabeçalho R$/cab/mês da legenda do Detalhe tem 30% (pedia 54px numa de 52 a 1000px)', () => {
+    const f = ler('v2/pages/V2FechamentoPeriodo.parts/DetalheCustosCentroSubcentro.tsx');
+    expect(f).toContain(`<col style={{ width: '30%' }} />`);
+  });
+
+  it('o rótulo das linhas da Composição Financeira não usa truncate (quebra no lugar)', () => {
+    const f = ler('v2/pages/V2PlanejamentoVisaoGeral.parts/ComposicaoFinanceira.tsx');
+    const linhaRow = f.slice(f.indexOf('function LinhaRow'), f.indexOf('{linha.label}'));
+    expect(linhaRow).not.toMatch(/truncate/);
   });
 });
 

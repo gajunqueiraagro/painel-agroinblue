@@ -3,6 +3,20 @@ import { Toaster as Sonner, toast } from "sonner";
 
 type ToasterProps = React.ComponentProps<typeof Sonner>;
 
+/* P158 (TOAST-POSICAO-02, Gabriel 28/10/2026 09:21) — ERRO e ATENÇÃO não somem sozinhos: ficam até o ✕. O `Toaster` do sonner tem UMA
+   duração para todos os tipos, e os 161 arquivos importam `toast` direto do 'sonner' (nenhum passa por aqui): o jeito de valer em todos
+   sem tocar neles é embrulhar UMA vez o `toast.error` e o `toast.warning` do sonner (o objeto é único no app). Sem `duration` na
+   chamada → `Infinity` (o sonner não fecha sozinho com Infinity); com `duration` explícita, vale a dela. Quem trocar a versão do sonner
+   confere que o objeto `toast` continua um só e mutável (o teste `sonner.p158.test.tsx` trava). */
+type FnAviso = typeof toast.error;
+const ficaAteOX = (fn: FnAviso): FnAviso => (mensagem, dados) => fn(mensagem, { ...dados, duration: dados?.duration ?? Infinity });
+const MARCA_EMBRULHO = '__p158FicaAteOX';
+if (!Reflect.get(toast, MARCA_EMBRULHO)) {
+  toast.error = ficaAteOX(toast.error);
+  toast.warning = ficaAteOX(toast.warning);
+  Reflect.set(toast, MARCA_EMBRULHO, true);
+}
+
 const Toaster = ({ ...props }: ToasterProps) => {
   const { theme = "system" } = useTheme();
 
@@ -31,10 +45,16 @@ const Toaster = ({ ...props }: ToasterProps) => {
          exposto a qualquer toast de 4s. As duas saídas estruturais seguem valendo, e
          nenhuma delas é mexer no canto de novo. A terceira vez não gastou a solução;
          adiou.
+         ⚠ QUARTA DECISÃO — P158 (TOAST-POSICAO-02), Gabriel 28/10/2026 08:51: "topo no centro com X e duração menor", em TODAS as
+         telas, com ou sem modal (o gabarito é o Finanças: `top-center` + `closeButton`). O que muda desta vez em relação à 1ª ida ao
+         topo (que saiu por cobrir a fita de meses e os campos) é o ✕ (fecha na hora) e a duração curta: sucesso/info 2 s (era 4 s); ERRO
+         e ATENÇÃO ficam até o ✕ (o embrulho acima). Com um modal aberto o aviso fica por cima dele, no centro, longe do Salvar/Cancelar;
+         num modal estreito (< 420px) e alto o ✕ do modal pode ficar sob o aviso — feche o aviso no ✕ dele.
          Continua sendo prop com default: o `{...props}` abaixo vem depois e vence. */
-      position="bottom-right"
-      offset="16px"
-      duration={4000}
+      position="top-center"
+      offset="12px"
+      closeButton
+      duration={2000}
       className="toaster group"
       toastOptions={{
         classNames: {

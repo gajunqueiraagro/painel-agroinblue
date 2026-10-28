@@ -30,7 +30,8 @@ import { AbaDocumentosLancamento } from '@/components/financeiro-v2/AbaDocumento
 import { AreaDeArquivo } from '@/components/ui/area-de-arquivo';
 import type { RegraDeAceite } from '@/lib/arquivo/aceitarArquivo';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { AsideResumo, FaixaTituloResumo, SecaoResumo, LinhaResumo } from '@/components/ui/linha-resumo';
+import { linhaDoDocumento as textoDaLinhaDoDocumento } from '@/lib/fornecedores/fornecedorTexto';
+import { ResumoDoLancamento } from '@/components/financeiro-v2/ResumoDoLancamento';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -624,7 +625,12 @@ export function LancamentoV2Dialog({
   const [divisao, setDivisao] = useState<DivisaoLida | null>(null);
   const [divisaoSeq, setDivisaoSeq] = useState(0);
   const [dividirAberto, setDividirAberto] = useState(false);
-  const [motivoDaDivisao, setMotivoDaDivisao] = useState<{ tipo: 'itens'; mapa: ReadonlyMap<number, string> } | { tipo: 'voltar' } | { tipo: 'desfazer' } | null>(null);
+  const [motivoDaDivisao, setMotivoDaDivisao] = useState<{ tipo: 'itens'; mapa: ReadonlyMap<number, string>; aoSalvar?: boolean } | { tipo: 'voltar' } | { tipo: 'desfazer' } | null>(null);
+  /* P165 — a conta por item MUDADA na vista "Contas" e ainda nao dividida: mora aqui (a aba que sai desmonta a vista) e o Salvar pergunta
+     antes de gravar — "Salvar e dividir" (os dois) ou "Salvar sem dividir" (explicito). Nada some em silencio. */
+  const [contasDosItensMudadas, setContasDosItensMudadas] = useState<ReadonlyMap<number, string> | null>(null);
+  const resultadoDoSalvarEDividir = useRef<ResultadoDaDivisao | null>(null);
+  useEffect(() => { setContasDosItensMudadas(null); }, [open, lancamento?.id]);
   const [contasAprendidas, setContasAprendidas] = useState<ReadonlyMap<number, string>>(new Map());
   /* NOTA-CONTAS-NA-CRIACAO-01 A — a divisao pelos itens escolhida no NOVO lancamento: PENDENTE na tela (nada vai ao banco antes do Salvar);
      o Salvar cria e divide (o parcelado numa transacao so'; o a' vista cancela o recem-criado se a divisao recusar) */
@@ -824,6 +830,11 @@ export function LancamentoV2Dialog({
   /* ⚠ SÓ PARA A `key` DO CLUSTER — ver o comentário na montagem dele. Incrementa a cada
      abertura, que é o gesto em que os estados de interação da classificação precisam zerar. */
   const [aberturaSeq, setAberturaSeq] = useState(0);
+  /* P155 (Gabriel 28/10/2026: "corrompe classificação em silêncio") — DE QUEM é a classificação que está no estado: o id do lançamento que a
+     abertura hidratou (`null` = o reset/prefill de um lançamento novo). A trava do Administrativo só age quando ela é a do lançamento ABERTO:
+     no render de transição da abertura o estado ainda é o do reset (a "última atividade" da sessão, que pode ser administrativo) e o efeito
+     do `FazendaSelect` escrevia "Administrativo" na fazenda — que a hidratação já tinha posto e não repunha; o Salvar gravava. */
+  const [classificacaoDe, setClassificacaoDe] = useState<string | null>(null);
 
   /**
    * A CLASSIFICAÇÃO INTEIRA, NUM OBJETO SÓ — PAR-01a-i, passo 1 de 2 do extract.
@@ -1189,6 +1200,7 @@ export function LancamentoV2Dialog({
     statusOriginalRef.current = lancamento?.status_transacao ?? null;
     statusTouchedRef.current = false;
     if (lancamento) {
+      setClassificacaoDe(lancamento.id);
       setFazendaId(lancamento.fazenda_id);
       setDataCompetencia(lancamento.data_competencia);
       setDataVencimento(lancamento.data_vencimento || '');   // PR-FIN-MODAL-VENCIMENTO-02B — carrega o vencimento real
@@ -1266,6 +1278,7 @@ export function LancamentoV2Dialog({
       setNumParcelas(2); setNumParcelasTexto('2');
       setModoParcelas('mensal'); setParcelasLivres([]); setBaseLivres(null);
     } else if (prefill) {
+      setClassificacaoDe(null);
       // Modo "criar a partir de fonte externa" (OFX órfão, p.ex.) — campos
       // chave vêm pré-preenchidos do prefill; demais ficam vazios igual ao
       // modo criação. Conta segue o mesmo padrão do branch `lancamento`:
@@ -1339,6 +1352,7 @@ export function LancamentoV2Dialog({
       setFormaPgto(prefill.forma_pagamento ?? '');
       setDadosPagamento(prefill.dados_pagamento ?? '');
     } else {
+      setClassificacaoDe(null);
       const today = hojeLocal();
       setFazendaId(defaultFazendaId || '');
       setDataCompetencia(today);
@@ -1836,8 +1850,13 @@ export function LancamentoV2Dialog({
     : !canSave ? MOTIVO_SALVAR_PENDENTE
     : null;
 
-  const handleSubmit = async (voltar?: { valor: number; vencimento: string }) => {
+  const handleSubmit = async (voltar?: { valor: number; vencimento: string }, aposConfirmar?: { semDividir: true } | { dividirCom: string }) => {
     if (!canSave) return;
+    /* P165 — conta por item mudada e nao dividida: o Salvar abre a confirmacao do Dividir (motivo + previa do banco); nada e' gravado antes */
+    if (contasDosItensMudadas && podeDividir && !voltar && !aposConfirmar) {
+      setMotivoDaDivisao({ tipo: 'itens', mapa: contasDosItensMudadas, aoSalvar: true });
+      return;
+    }
     /* CRIAR-DO-EXTRATO-01 — vencimento obrigatório em todo Novo/Editar (fora do modo OC, que tem a regra dele, do parcelado,
        cujos vencimentos são os da lista, e do campo travado). O rótulo e a borda acendem em vermelho e a frase sai ao lado do
        Salvar (no rótulo ela não cabe na coluna de 115px: o gate media "…"); nada é gravado. */
@@ -2223,6 +2242,22 @@ export function LancamentoV2Dialog({
     // CRITICAL: pass the stable ID for edits — ensures UPDATE, never INSERT
     const ok = await onSave(form, currentEditId || undefined);
     if (!ok) { setSaving(false); return; }
+    /* P165 — "Salvar e dividir": o lancamento gravado, a divisao pelos itens DEPOIS (a mesma RPC do botao "Dividir…"). Recusou: o
+       lancamento ja' esta' salvo e a frase diz que a divisao nao foi — o modal fica aberto, a conta por item continua a' vista */
+    if (currentIsEdit && currentEditId && aposConfirmar && 'dividirCom' in aposConfirmar && contasDosItensMudadas && clienteAtual?.id) {
+      const mapa = contasDosItensMudadas;
+      const r = financiamentoDoLanc && itensDaNota
+        ? await dividir(clienteAtual.id, { lancamentoId: currentEditId, financiamentoId: financiamentoDoLanc },
+          percentuaisDosItens(porContaDosItens(itensDaNota.lidos.itens, mapa)), aposConfirmar.dividirCom, false)
+        : await dividirPelosItens(clienteAtual.id, currentEditId, mapa, aposConfirmar.dividirCom, false);
+      resultadoDoSalvarEDividir.current = r.ok === false ? { ok: false, frase: `O lançamento foi salvo; a divisão não: ${r.frase}` } : r;
+      setSaving(false);
+      if (r.ok === false) { setErroAntesDeSalvar(`O lançamento foi salvo; a divisão não: ${r.frase}`); return; }
+      setContasDosItensMudadas(null);
+      toast.success(financiamentoDoLanc ? 'Salvo e dividido: todas as parcelas receberam a mesma proporção.' : `Salvo e dividido em ${new Set(mapa.values()).size} contas pelos itens da nota.`);
+      onClose();
+      return;
+    }
     /* NOTA-CONTAS-NA-CRIACAO-01 A — a' vista com a divisao pendente: os itens, a nota e a divisao, nessa ordem (a RPC divide pela nota
        ANEXADA); qualquer um que falhe cancela o recem-criado (`desfazerCriacao`) e a frase fica ao lado do botao — nada fica pela metade */
     if (!currentIsEdit && divisaoNaCriacao) {
@@ -2480,6 +2515,7 @@ export function LancamentoV2Dialog({
         atividade: atividadeValida(c.escopo_negocio),
       }));
     }
+    setContasDosItensMudadas(null);
     toast.success(frase, desfazivel ? { action: { label: 'Desfazer', onClick: () => setMotivoDaDivisao({ tipo: 'desfazer' }) } } : undefined);
   };
   const simularDivisao = useMemo(() => {
@@ -2502,6 +2538,12 @@ export function LancamentoV2Dialog({
     const id = lancamento?.id;
     const m = motivoDaDivisao;
     if (!cli || !id || !m) return { ok: false, frase: 'Lançamento não salvo.' };
+    /* P165 — veio do Salvar: grava os dois (o lancamento e depois a divisao), pelo proprio Salvar */
+    if (m.tipo === 'itens' && m.aoSalvar) {
+      resultadoDoSalvarEDividir.current = null;
+      await handleSubmit(undefined, { dividirCom: motivo });
+      return resultadoDoSalvarEDividir.current ?? { ok: false, frase: 'O lançamento não foi salvo: veja o aviso ao lado do Salvar.' };
+    }
     if (m.tipo === 'desfazer') {
       if (financiamentoDoLanc) {
         const r = await desfazerDivisaoDoCadastro(cli, financiamentoDoLanc, motivo, false);
@@ -2927,7 +2969,8 @@ export function LancamentoV2Dialog({
                 value={fazendaId}
                 onChange={setFazendaId}
                 fazendas={fazendas}
-                forcaAdministrativo={fazendaTravadaAdm}
+                /* P155 — só com a classificação do lançamento ABERTO (nunca a do render de transição) */
+                forcaAdministrativo={fazendaTravadaAdm && classificacaoDe === (lancamento?.id ?? null)}
                 label={xmlRotTexto('Fazenda *', 'fazenda')}
                 /* FIN-FAZENDA-PADRAO-01 — com o filtro Global o campo nasce VAZIO (nunca a primeira da lista), e o
                    vazio aparece aqui, em vermelho, antes de qualquer clique. */
@@ -3442,6 +3485,8 @@ export function LancamentoV2Dialog({
               <AbaDocumentosLancamento api={documentosApi}
                 clienteId={clienteAtual?.id ?? null}
                 sugestao={sugestaoDoDocumento}
+                /* P127 + P128c — o "Novo documento" que lê a nota abre a MESMA prévia do "Ler a NF" (um caminho só: `onLerNotaFiscal`) */
+                onVerOQueANotaMuda={onLerNotaFiscal && lancamento?.id ? (arquivo) => onLerNotaFiscal(arquivo, lancamento.id) : undefined}
                 onAnexarBoletosDasParcelas={irmas ? () => setAnexarBoletos('irmas') : undefined} />
             ) : documentosAntesDeSalvar && formaPagamentoParc === 'parcelada' && numParcelas >= 2 ? (
               /* PR 2b — PARCELADO: os documentos da COMPRA (ligados às N) e a grade de parcelas com o boleto
@@ -3493,7 +3538,8 @@ export function LancamentoV2Dialog({
                   vistaContas={podeDividir ? (
                     <ContasDosItens itens={itensDaNota.lidos.itens} classificacoes={classificacoesDoModal} tipoOperacao={tipoOperacao}
                       contaDeHoje={lancDividido ? null : (classificacao.plano_conta_id ?? null)} sugeridas={contasIniciaisDosItens} atividadeSugerida={classificacao.atividade}
-                      gravando={!!motivoDaDivisao} onDividir={(mapa) => setMotivoDaDivisao({ tipo: 'itens', mapa })} />
+                      gravando={!!motivoDaDivisao} onDividir={(mapa) => setMotivoDaDivisao({ tipo: 'itens', mapa })}
+                      pendente={contasDosItensMudadas} onMudou={setContasDosItensMudadas} />
                   ) : podeDividirNaCriacao ? (
                     /* NOTA-CONTAS-NA-CRIACAO-01 A — no NOVO: a mesma vista; "Dividir … ao salvar" deixa a divisao PENDENTE (o Salvar grava) */
                     <ContasDosItens itens={itensDaNota.lidos.itens} classificacoes={classificacoesDoModal} tipoOperacao={tipoOperacao} aoSalvar
@@ -3711,55 +3757,37 @@ export function LancamentoV2Dialog({
               espelha o formulário em tempo real. Sem rolagem própria, sem acordeão, sem "ver mais".
               Nenhuma lógica/estado/validação — só apresentação. */}
           {!excelContext && (
-            /* MODAIS-PADRAO-01e — as pecas do Abate (`ui/linha-resumo`): 240px, so' a linha do corpo (o
-               rodape voltou a' largura inteira), pares pelo `LinhaResumo`. Mesmo texto, mesmos valores.
-               UI-MODAL-BLOCOS-01 · LANCAMENTO COMPACTO — `formato="pares"`: titulos em sentence case 11px/600, faixa de 18px,
-               linhas de 16px, rotulo na largura do maior e o valor colado (sem caixa alta). */
+            /* P121 (FIN-MODAL-RESUMO-01) — o resumo saiu para `ResumoDoLancamento` (layout próprio do Financeiro: nada rola, cada bloco
+               com altura fixa, 240px). As peças compartilhadas `ui/linha-resumo` ficam para os outros modais. Os valores são os de
+               sempre, calculados aqui; o componente só desenha. */
             <div className="col-start-2 row-start-2 min-h-0 max-[899px]:hidden">
-              <AsideResumo formato="pares" faixa={<FaixaTituloResumo titulo="Resumo do lançamento" />}>
-                <SecaoResumo titulo="Identificação" />
-                <div className="contents">
-                  <LinhaResumo rotulo="Tipo" valor={resumoTipoLabel} cor={resumoTipoCor} />
-                  {/* UI-TEXTO-LONGO-01 — a descrição NÃO se repete no resumo (ela já está no campo Produto / descrição): uma
-                      descrição de 300 caracteres crescia 15 linhas e empurrava a Classificação para fora. Só dados curtos. */}
-                  <LinhaResumo rotulo="Data competência" valor={resumoFmtData(dataCompetencia)} />
-                  <LinhaResumo rotulo="Favorecido" valor={resumoFavorecido} quebra />
-                  <LinhaResumo rotulo="Fazenda" valor={resumoFazenda} quebra />
-                </div>
-
-                <SecaoResumo titulo="Financeiro" />
-                <div className="contents">
-                  <LinhaResumo rotulo="Valor" valor={valorNum > 0 ? formatMoeda(valorNum) : null} />
-                  {!isEntrada && <LinhaResumo rotulo="Conta origem" valor={resumoContaOrigem} quebra />}
-                  {(isEntrada || isTransferencia) && <LinhaResumo rotulo="Conta destino" valor={resumoContaDestino} quebra />}
-                </div>
-
-                <SecaoResumo titulo="Classificação" />
-                <div className="contents">
-                  <LinhaResumo rotulo="Safra" valor={resumoSafra} quebra />
-                  <LinhaResumo rotulo="Centro" valor={centroCusto} quebra />
-                  <LinhaResumo rotulo="Subcentro" valor={subcentro} quebra />
-                </div>
-
-                {/* FIN-RESUMO-PAGAMENTO-01 — o status mora AQUI (saiu de "Financeiro": uma informação, um lugar), com a cor da
-                    paleta, e o vencimento aparece: previsto/programado/agendado não têm data de pagamento, e o resumo não dizia
-                    quando o lançamento sai do banco. */}
-                <SecaoResumo titulo="Pagamento" />
-                <div className="contents" data-testid="resumo-pagamento">
-                  <LinhaResumo rotulo="Status" valor={resumoStatusLabel} cor={resumoStatusCor} />
-                  <LinhaResumo rotulo="Vencimento" valor={resumoFmtData(dataVencimento)} />
-                  <LinhaResumo rotulo="Pagamento" valor={resumoFmtData(pagamentoMostrado)} />
-                  <LinhaResumo rotulo="Forma" valor={formaPgto} quebra />
-                  <LinhaResumo rotulo="Modalidade" valor={!isEdit ? (formaPagamentoParc === 'parcelada' ? 'Parcelada' : 'À vista') : null} />
-                  <LinhaResumo rotulo="Nº de parcelas" valor={!isEdit && formaPagamentoParc === 'parcelada' ? `${numParcelas}` : null} />
-                </div>
-
-                <SecaoResumo titulo="Documento" />
-                <div className="contents">
-                  <LinhaResumo rotulo="Tipo" valor={tipoDocumento || (docDoLancamento.origem === 'nota' ? 'Nota Fiscal · da compra' : docDoLancamento.origem === 'documento' ? 'Documento ligado' : null)} quebra />
-                  <LinhaResumo rotulo="Número" valor={notaFiscalDisplay || (docVemDeDocumento ? docDoLancamento.rotulo : null)} quebra />
-                </div>
-              </AsideResumo>
+              <ResumoDoLancamento
+                tipo={{ rotulo: resumoTipoLabel, cor: resumoTipoCor }}
+                competencia={resumoFmtData(dataCompetencia)}
+                favorecido={resumoFavorecido}
+                favorecidoDocumento={favorecidoId ? textoDaLinhaDoDocumento(fornecedorPorId(favorecidoId)) : ''}
+                descricao={descricao.trim() || null}
+                fazenda={resumoFazenda}
+                valor={valorNum > 0 ? formatMoeda(valorNum) : null}
+                sentido={isTransferencia ? 'transferencia' : isEntrada ? 'entrada' : 'saida'}
+                conta={isTransferencia ? [{ rotulo: 'Origem', nome: resumoContaOrigem }, { rotulo: 'Destino', nome: resumoContaDestino }]
+                  : isEntrada ? [{ rotulo: 'Conta', nome: resumoContaDestino }] : [{ rotulo: 'Conta', nome: resumoContaOrigem }]}
+                atividade={ATIVIDADES.find(a => a.valor === atividade)?.rotulo ?? null}
+                safra={resumoSafra}
+                fase={fase || null}
+                centro={centroCusto || null}
+                subcentro={subcentro || null}
+                status={{ rotulo: resumoStatusLabel, cor: resumoStatusCor }}
+                forma={formaPgto || null}
+                vencimento={resumoFmtData(dataVencimento)}
+                pagamento={resumoFmtData(pagamentoMostrado)}
+                modalidade={!isEdit ? (formaPagamentoParc === 'parcelada' ? 'Parcelada' : 'À vista') : null}
+                parcelas={!isEdit && formaPagamentoParc === 'parcelada' ? `${numParcelas}` : null}
+                documento={[
+                  tipoDocumento || (docDoLancamento.origem === 'nota' ? 'Nota Fiscal · da compra' : docDoLancamento.origem === 'documento' ? 'Documento ligado' : null),
+                  notaFiscalDisplay || (docVemDeDocumento ? docDoLancamento.rotulo : null),
+                ].filter(Boolean).join(' · ') || null}
+              />
             </div>
           )}
           </fieldset>
@@ -4015,8 +4043,11 @@ export function LancamentoV2Dialog({
       )}
       {motivoDaDivisao && (
         <MotivoDaDivisaoDialog
-          titulo={motivoDaDivisao.tipo === 'itens' ? 'Dividir pelos itens da nota' : motivoDaDivisao.tipo === 'voltar' ? 'Voltar para 1 conta' : 'Desfazer a última divisão'}
-          explicacao={motivoDaDivisao.tipo === 'itens'
+          titulo={motivoDaDivisao.tipo === 'itens' ? (motivoDaDivisao.aoSalvar ? 'Salvar — as contas dos itens mudaram' : 'Dividir pelos itens da nota')
+            : motivoDaDivisao.tipo === 'voltar' ? 'Voltar para 1 conta' : 'Desfazer a última divisão'}
+          explicacao={motivoDaDivisao.tipo === 'itens' && motivoDaDivisao.aoSalvar
+            ? 'A conta de cada item só vale dividindo o lançamento. "Salvar e dividir" grava o lançamento e a divisão; "Salvar sem dividir" grava só o lançamento e a conta dos itens não é gravada.'
+            : motivoDaDivisao.tipo === 'itens'
             ? (financiamentoDoLanc ? 'Compra parcelada: a divisão é do cadastro — todas as parcelas recebem a mesma proporção dos itens.' : 'Cada conta recebe a soma dos seus itens. Continua um lançamento só: um pagamento, uma conciliação.')
             : financiamentoDoLanc
               /* P72 — a parcela: o aviso diz que vale para as N parcelas da compra */
@@ -4024,8 +4055,10 @@ export function LancamentoV2Dialog({
                 ? 'todas voltam inteiras para a maior parte.' : 'todas voltam ao que eram antes da última operação do cadastro.'}`
               : motivoDaDivisao.tipo === 'voltar' ? 'O lançamento volta inteiro para a maior parte; depois a conta pode ser trocada no campo.'
                 : 'Volta a classificação ao que era antes da última operação.'}
-          botao={motivoDaDivisao.tipo === 'itens' ? 'Dividir' : motivoDaDivisao.tipo === 'voltar' ? 'Voltar para 1 conta' : 'Desfazer'}
-          simular={simularDivisao} confirmar={confirmarDivisao} onClose={() => setMotivoDaDivisao(null)} />
+          botao={motivoDaDivisao.tipo === 'itens' ? (motivoDaDivisao.aoSalvar ? 'Salvar e dividir' : 'Dividir') : motivoDaDivisao.tipo === 'voltar' ? 'Voltar para 1 conta' : 'Desfazer'}
+          simular={simularDivisao} confirmar={confirmarDivisao} onClose={() => setMotivoDaDivisao(null)}
+          salvarSemDividir={motivoDaDivisao.tipo === 'itens' && motivoDaDivisao.aoSalvar
+            ? () => { setMotivoDaDivisao(null); void handleSubmit(undefined, { semDividir: true }); } : undefined} />
       )}
       {xml && xmlComparar && (
         <CompararCadastroDialog hoje={xmlComparar} rotuloOrigem="Da nota"

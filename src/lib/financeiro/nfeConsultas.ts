@@ -13,6 +13,7 @@ import { completarPeloEmitente, type CampoDoEmitente } from '@/lib/fornecedores/
 import type { EmitenteNFe } from '@/lib/financeiro/nfe/tipos';
 import { lerJaLancados, type LancamentoJaLancado } from '@/lib/financeiro/nfe/jaLancada';
 import type { CadastroParaComparar } from '@/lib/fornecedores/compararCadastro';
+import { lerResultadoCompletar, type ResultadoCompletar } from '@/lib/financeiro/nfe/notaCompletar';
 
 /** Onde uma nota ja' esta' registrada — uma linha de `fn_documento_chave_ja_registrada`. */
 export interface OcorrenciaDaNota {
@@ -270,6 +271,8 @@ export async function usoDoFornecedor(fornecedorId: string): Promise<{ lancament
 export async function notaJaLancada(clienteId: string, entrada: {
   parcelas: readonly { n: number; vencimento: string; valorCent: number }[]; numero: string | null; chave: string | null;
   emitenteDocumento: string | null; nomes: readonly (string | null | undefined)[];
+  /** P128c — a prévia aberta pelo lançamento (porta 2): ele é a ÂNCORA (+ os irmãos do parcelamento dele). Só vai ao banco quando há. */
+  lancamento?: string | null;
 }): Promise<Consulta<LancamentoJaLancado[]>> {
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
@@ -278,6 +281,7 @@ export async function notaJaLancada(clienteId: string, entrada: {
       p_parcelas: entrada.parcelas.map((p) => ({ n: p.n, vencimento: p.vencimento, valor_cent: p.valorCent })),
       p_numero: entrada.numero, p_chave: entrada.chave, p_emitente_documento: entrada.emitenteDocumento,
       p_nomes: [...new Set(entrada.nomes.filter((x): x is string => !!x && !!x.trim()))],
+      ...(entrada.lancamento ? { p_lancamento: entrada.lancamento } : {}),
     });
     if (error) { console.error('fn_nota_ja_lancada', error); return falhou(error); }
     return deu(lerJaLancados(data));
@@ -319,4 +323,56 @@ export async function desfazerCamposDoCadastro(alteracaoId: string, clienteId: s
   const f: unknown = alt && typeof alt === 'object' ? Reflect.get(alt, 'fornecedor_id') : null;
   notificarFornecedoresMudaram(clienteId, typeof f === 'string' && f ? [f] : undefined);
   return null;
+}
+
+/* ── P128b — COMPLETAR COM A NOTA (`fn_nota_completar`, a prévia é ela com `p_simular`) ─────────────────────────────────────────── */
+/** A recusa do banco (22023) já vem em FRASE PRONTA ("… Nada foi gravado."): vai como está; o resto vira o motivo de sempre. */
+const recusaOuMotivo = (erro: unknown): { ok: false; motivo: string } => {
+  const c: unknown = erro && typeof erro === 'object' ? Reflect.get(erro, 'code') : null;
+  const m: unknown = erro && typeof erro === 'object' ? Reflect.get(erro, 'message') : null;
+  if (c === '22023' && typeof m === 'string' && m) return { ok: false, motivo: m };
+  return falhou(erro);
+};
+/** A prévia (`simular`) ou a gravação única: os campos + a junção + o antes, numa transação. */
+export async function completarComANota(clienteId: string, pedido: readonly Record<string, unknown>[], opcoes: { juntar: boolean; chave: string | null; simular: boolean }):
+  Promise<Consulta<ResultadoCompletar>> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+    const { data, error } = await (supabase as any).rpc('fn_nota_completar', {
+      p_cliente: clienteId, p_lancamentos: pedido, p_juntar: opcoes.juntar, p_chave: opcoes.chave, p_simular: opcoes.simular,
+    });
+    if (error) return recusaOuMotivo(error);
+    return deu(lerResultadoCompletar(data));
+  } catch (e) { return falhou(e); }
+}
+/** O que nasceu DEPOIS da transação (as parcelas que faltavam, os documentos da nota): fica na operação para o desfazer. */
+export async function registrarNaOperacao(operacao: string, criados: readonly string[], documentos: readonly string[]): Promise<string | null> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+    const { error } = await (supabase as any).rpc('fn_nota_completar_registrar', { p_operacao: operacao, p_criados: criados, p_documentos: documentos });
+    if (error) { const r = recusaOuMotivo(error); return r.motivo; }
+    return null;
+  } catch (e) { return falhou(e).motivo; }
+}
+/** Desfazer a operação inteira (campos, junção, o que nasceu): o banco recusa se alguém mexeu depois, dizendo o quê. */
+export async function desfazerCompletar(operacao: string): Promise<string | null> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+    const { error } = await (supabase as any).rpc('fn_nota_completar_desfazer', { p_operacao: operacao, p_simular: false });
+    if (error) return recusaOuMotivo(error).motivo;
+    return null;
+  } catch (e) { return falhou(e).motivo; }
+}
+/** Cancela os lançamentos que nasceram para a operação quando ela foi recusada (o padrão do P75: nada fica valendo pela metade). Devolve
+ *  quantos NÃO puderam ser cancelados. */
+export async function cancelarCriados(ids: readonly string[], porque: string): Promise<number> {
+  let falhas = 0;
+  for (const id of ids) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+      const { error } = await (supabase as any).rpc('fn_cancelar_lancamento_auditoria', { p_lancamento_id: id, p_motivo: `completar com a nota não gravado: ${porque}` });
+      if (error) { console.error('cancelarCriados', error); falhas += 1; }
+    } catch (e) { console.error('cancelarCriados', e); falhas += 1; }
+  }
+  return falhas;
 }
