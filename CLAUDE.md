@@ -293,7 +293,11 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - REGUA DE TABELA UNICA (`src/components/ui/regua-tabela.tsx`, a de Recorrencias): cabecalho navy 22px 9,5/500, linha 19px 10px, padding
   0 4px, barra do rodape navy 23px dentro do quadro. Cabecalho e totais presos, so' o corpo rola, UM scrollport por tela, fundo opaco.
   O `th` alinha como o `td`; tabela de regua fixa (`table-layout: fixed`, `colgroup` em px medido) nao estica com a janela.
-- Piso de 9,5px (excecoes declaradas: grade do DRE, selos da Conferencia, Mesa compacta, Lancamentos Financeiros, a tabela dos Itens da nota — ITENS-NOTA-FONTE-01). Tamanhos do A18.
+- Piso de 9,5px (excecoes declaradas: grade do DRE, selos da Conferencia, Mesa compacta, Lancamentos Financeiros, a tabela dos Itens da nota — ITENS-NOTA-FONTE-01;
+  P141: os selos OFX/PDF (7px) e a coluna Diferença (8px) de "Saldos por conta"). Tamanhos do A18.
+- P141 (CONC-LAYOUT-01): Conciliação = Saldos | Resumo | Status (3.05fr 1.7fr 0.7fr); Saldos com Data · OFX/PDF em lugar FIXO de 24px · Diferença
+  estreita · ✎ + ↗; o ↗ e a aba Sistema do Casar são UM componente (`AbaSistemaReal`, modo `grande`) e uma regra do dia (`linhasDoDia`: maior
+  |valor| primeiro; saldo SÓ no fim do dia, LIDO do banco na ordem dele — nunca somado na tela).
 - Selecao se marca com navy (`Segmentado`, o unico); controle nativo nunca; seletor de entidade tem busca; todo menu aberto pelo
   `menuPadrao`; todo campo de valor e' o `CampoMoeda` ("R$" e "0,00"); todo campo de arquivo aceita arrastar.
 - FIN-VALOR-CALC-01b: todo `CampoMoeda` faz conta (a lib `contaNoCampo`, nenhuma outra); o hospedeiro so' recebe o RESULTADO; o Esc/Enter

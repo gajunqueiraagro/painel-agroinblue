@@ -43,6 +43,9 @@ const TAMANHOS_DO_CONTRATO = [[750, 483], [750, 530], [814, 530], [1000, 600], [
 /* P104 — os 9 tamanhos do gate e o do print do Gabriel (1750×1000) */
 const TAMANHOS_DO_P104 = [[750, 483], [750, 530], [814, 530], [1000, 600], [1126, 579], [1130, 580], [1300, 704], [1440, 800], [1440, 860], [1750, 1000]];
 const TAMANHOS_DA_VG = [[1000, 600], [1126, 579], [1130, 580], [1440, 800], [1440, 860]];
+/* P141 (Gabriel 28/10, decisão a) — a Conciliação (3 cards lado a lado) só de 1000px para cima: abaixo disso ela nunca coube, nem no código
+   antigo — dívida declarada CONC-ESTREITA (docs/DIVIDAS-ABERTAS.md); empilhar os cards é item próprio, com mock */
+const TAMANHOS_DA_CONCILIACAO = [[1000, 600], [1024, 600], [1126, 579], [1130, 580], [1300, 704], [1440, 800], [1440, 860], [1750, 1000]];
 const TAMANHOS_DO_CONSORCIO = [[750, 520], [750, 600], [814, 530], [1000, 600], [1126, 579], [1300, 704], [1440, 800]];
 /* P92 — os nove tamanhos do Negociar lote (os sete do consórcio + 750x483 e 900x600) e o 1024x600, a fronteira em que o resumo de 400px aparece */
 const TAMANHOS_DO_P92 = [[750, 483], [750, 520], [750, 600], [814, 530], [900, 600], [1000, 600], [1024, 600], [1126, 579], [1300, 704], [1440, 800]];
@@ -548,6 +551,18 @@ const CENARIOS = [
   { nome: 'criar-transferencias-lote', url: 'tela=criar-transferencia&v=lote', tamanhos: TAMANHOS_DO_CONSORCIO,
     regiao: '[data-testid="modal-criar-transferencias-lote"]' },
   { nome: 'casar-bloco-pos', url: 'tela=casar-bloco&v=pos', tamanhos: TAMANHOS_DO_CONSORCIO },
+  /* P141 (CONC-LAYOUT-01) — a aba Conciliação (Saldos | Resumo | Status; a régua nova de Saldos com Data, OFX/PDF, a Diferença estreita e
+     o ↗) e o "Extrato do sistema" do ↗, de 1000px para cima (CONC-ESTREITA), com o pior caso (`dados/conciliacao.ts`) */
+  { nome: 'conciliacao-saldos', url: 'tela=conciliacao', tamanhos: TAMANHOS_DA_CONCILIACAO,
+    antes: async (p) => { await p.locator('[data-testid="linha-saldo-conta"]').first().waitFor(); await p.waitForTimeout(500); } },
+  { nome: 'conciliacao-saldos-sem-arquivos', url: 'tela=conciliacao&v=sem', tamanhos: TAMANHOS_DA_CONCILIACAO,
+    antes: async (p) => { await p.locator('[data-testid="linha-saldo-conta"]').first().waitFor(); await p.waitForTimeout(500); } },
+  { nome: 'conciliacao-conta-escolhida', url: 'tela=conciliacao', tamanhos: TAMANHOS_DA_CONCILIACAO,
+    antes: async (p) => { await p.locator('[data-conta="cc1"]').first().waitFor(); await clicar('[data-conta="cc1"]')(p); } },
+  { nome: 'conciliacao-extrato-do-sistema', url: 'tela=extrato-do-sistema', tamanhos: TAMANHOS_DA_CONCILIACAO, regiao: '[data-testid="modal-extrato-sistema"]',
+    antes: async (p) => { await p.locator('[data-testid="sistema-saldo-final"]').waitFor(); await p.waitForTimeout(500); } },
+  { nome: 'conciliacao-extrato-do-sistema-carregando', url: 'tela=extrato-do-sistema&v=carregando', tamanhos: TAMANHOS_DA_CONCILIACAO,
+    regiao: '[data-testid="modal-extrato-sistema"]' },
   /* UI-SEM-CORTE-02 — a TABELA do Financeiro V2 segue fora (FIN-V2-SEM-CORTE-01, suspensa), mas entra pelo texto inclinado e pela
      sobreposicao: a ultima letra do fornecedor ("Maderat") sumia pela linha em italico */
   { nome: 'financeiro-tabela-italico', url: 'tela=financeiro', soRegras: ['italico', 'sobreposicao'] },

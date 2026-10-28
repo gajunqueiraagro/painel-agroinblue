@@ -344,7 +344,8 @@ describe('fix1 — a sub-aba Sistema ganha a coluna Fornecedor', () => {
     fireEvent.click(botaoSubAba('Sistema'));
     const cab = await screen.findByText('Fornecedor');
     expect([...cab.parentElement!.children].map((s) => s.textContent))
-      .toEqual(['Data', 'Descrição', 'Fornecedor', 'Centro/Subcentro', 'Valor', 'Saldo', 'Status']);
+      /* P141: o rótulo do mock aprovado, "Centro / Subcentro" (a aba e o modal grande são o mesmo componente) */
+      .toEqual(['Data', 'Descrição', 'Fornecedor', 'Centro / Subcentro', 'Valor', 'Saldo', 'Status']);
     const fornecedores = screen.getAllByTestId('sistema-fornecedor');
     expect(fornecedores.map((s) => s.textContent)).toEqual(['Antonio Peres Neto']);
     expect(fornecedores[0].getAttribute('title')).toBe('Antonio Peres Neto');
