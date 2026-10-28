@@ -8,8 +8,9 @@ export interface LinhaExecutiva {
   meta: number;
   /** Real ano anterior (referência histórica do modo Planejamento). */
   real: number;
-  /** Delta (meta − real)/real — comparativo modo Planejamento. */
-  delta: number;
+  /** Delta (meta − real)/real — comparativo modo Planejamento. `null` = sem base no ano anterior (Real do ano anterior 0):
+   *  a tela mostra "—" com o title "sem base no ano anterior", nunca um número infinito (P131). */
+  delta: number | null;
   /** Real ano corrente — populado quando buildBlocoResumoExecutivo recebe lancFin2026. */
   realAnoCorrente?: number;
   /** Delta (realAnoCorrente − meta)/meta — comparativo modo Fechamento. */
@@ -19,6 +20,8 @@ export interface LinhaExecutiva {
 export interface BlocoResumoExecutivoData {
   receitaPecuaria: LinhaExecutiva;
   receitaAgricultura: LinhaExecutiva;
+  /** P130 — grupo_custo "Receita Silvícola" (arrendamento florestal etc.). */
+  receitaSilvicultura: LinhaExecutiva;
   outrasReceitas: LinhaExecutiva;
   entradasFinanceiras: LinhaExecutiva;
   totalEntradas: LinhaExecutiva;

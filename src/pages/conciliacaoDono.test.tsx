@@ -76,6 +76,8 @@ vi.mock('@/components/shared/ContaBancariaSelect', () => ({ ContaBancariaSelect:
 vi.mock('@/components/financeiro-v2/EspelhoConciliacaoTab', () => ({
   ABAS_ESPELHO: [{ key: 'conferencia', label: 'Conferência' }, { key: 'ofx', label: 'Extrato (banco)' }],
   EspelhoOfxSistemaModal: () => null,
+  /* P141 — o modal "Extrato do sistema" (o ↗) monta a aba Sistema em modo grande */
+  AbaSistemaReal: () => <div data-testid="aba-sistema-grande" />,
   EspelhoConciliacaoTab: (p: Record<string, unknown>) => { B.espelhoProps.push(p); return <div data-testid="espelho" />; },
 }));
 vi.mock('@/v2/components/SeletorPeriodo', () => ({
@@ -359,7 +361,8 @@ const PAR_ABR24 = (mae = MAE_ABR24(), interna = INTERNA_ABR24()) => [mae, intern
     saldo_extrato: -55738.69, diferenca: -15.18, entradas: 100, saidas: -15823.51,
     motivos: [{ motivo: 'contas_nao_conciliadas', qtde: 1, contas: [{ conta_id: 'brad', conta_nome: 'Bradesco', status: 'nao_conciliado', motivos: [{ motivo: 'saldo_diverge', valor: -15.18 }], avisos: [] }] }] }),
 ];
-const celulas = (id: string) => [...linhaDaConta(id).querySelectorAll('td')].slice(1, 4).map((td) => n(td.textContent));
+/* P141: Conta · Data · Arquivos · SISTEMA · EXTRATO · DIFERENÇA · ações — os três números são as células 3 a 5 */
+const celulas = (id: string) => [...linhaDaConta(id).querySelectorAll('td')].slice(3, 6).map((td) => n(td.textContent));
 const grupoDe = (id: string) => n(linhaDaConta(id).closest('tbody')?.querySelector('tr td')?.textContent);
 const TITULO_PAR = (nome: string) => `o mês desta conta só fecha junto com ${nome}: o arquivo do banco traz o saldo das duas somado`;
 
@@ -432,10 +435,10 @@ describe('T5 — o par do Agnaldo: a mãe em Conta corrente e a interna em Inves
   it('o lápis da linha abre com o extrato PRÓPRIO — o valor que o operador digitou (−55.734,67), nunca o consolidado', async () => {
     montar();
     await screen.findAllByTestId('linha-saldo-conta');
-    fireEvent.click(within(linhaDaConta('brad')).getByRole('button'));
+    fireEvent.click(within(linhaDaConta('brad')).getByTestId('botao-lapis'));
     await waitFor(() => expect(B.lapis.length).toBe(1));
     expect(B.lapis[0]).toMatchObject({ contaId: 'brad', saldoAtual: -55734.67 });
-    fireEvent.click(within(linhaDaConta('if')).getByRole('button'));
+    fireEvent.click(within(linhaDaConta('if')).getByTestId('botao-lapis'));
     await waitFor(() => expect(B.lapis.length).toBe(2));
     expect(B.lapis[1]).toMatchObject({ contaId: 'if', saldoAtual: -4.02 });
   });
@@ -617,14 +620,14 @@ describe('LAYOUT — "Saldos por conta": sem a faixa amarela, negativo vermelho 
     expect(ativa.className).not.toContain('bg-primary/10');
     expect(ativa.style.opacity).toBe('1');
     const celulas = Array.from(ativa.querySelectorAll('td'));
-    expect(celulas).toHaveLength(5);
+    expect(celulas).toHaveLength(7);
     /* o contorno: em cima e embaixo em TODA célula, o filete de 3px na primeira e 1,5px na última */
     for (const td of celulas) {
       expect(td.className).toContain('inset_0_1.5px_0_hsl(var(--primary))');
       expect(td.className).toContain('inset_0_-1.5px_0_hsl(var(--primary))');
     }
     expect(celulas[0].className).toContain('inset_3px_0_0_hsl(var(--primary))');
-    expect(celulas[4].className).toContain('inset_-1.5px_0_0_hsl(var(--primary))');
+    expect(celulas[6].className).toContain('inset_-1.5px_0_0_hsl(var(--primary))');
     expect(within(ativa).getByTestId('nome-conta').className).toContain('font-semibold text-primary');
     for (const id of ['cartao', 'parada']) {
       const outra = linhaDaConta(id);
@@ -658,7 +661,9 @@ describe('LAYOUT — "Saldos por conta": sem a faixa amarela, negativo vermelho 
     /* a busca sabe achar: há conta COM data de saldo e conta SEM, e as duas têm a mesma forma */
     expect(formas.some((f) => /^\d\d\/\d\d$/.test(f.data))).toBe(true);
     expect(formas.some((f) => f.data === '')).toBe(true);
-    for (const f of formas) expect({ filhos: f.filhos, slots: f.slots, altura: f.altura }).toEqual({ filhos: 5, slots: '1111', altura: true });
+    /* P141: a célula da Conta tem só o ponto e o nome (data e arquivos em colunas próprias); os lugares OFX/PDF têm largura FIXA */
+    for (const f of formas) expect({ filhos: f.filhos, slots: f.slots, altura: f.altura }).toEqual({ filhos: 2, slots: '1111', altura: true });
+    for (const t of ['slot-ofx', 'slot-pdf']) for (const el of screen.getAllByTestId(t)) expect(el.className).toContain('w-[24px]');
   });
 
   it('(e) o Total é a faixa navy escura; "falta saldo" ocupa Extrato + Diferença juntas no Total e no grupo; a régua é fixa em px', async () => {
@@ -673,18 +678,18 @@ describe('LAYOUT — "Saldos por conta": sem a faixa amarela, negativo vermelho 
       expect(f.className).toContain('h-[21px]');
       expect(f.className).toContain('bg-[color-mix(in_srgb,hsl(var(--primary))_18%,hsl(var(--card)))]');
     }
-    /* a régua, lida da FONTE: tabela fixa e as quatro larguras em px (a Conta fica com o resto) */
+    /* a régua, lida da FONTE: tabela fixa e as seis larguras em px (a Conta fica com o resto) — P141 */
     const fonte = readFileSync(resolve(process.cwd(), 'src/pages/ConciliacaoBancariaTab.tsx'), 'utf8');
-    const temReguaFixa = (f: string) => /tableLayout:'fixed'/.test(f) && /const REGUA_SALDOS = \[100, 100, 86, 22\];/.test(f)
+    const temReguaFixa = (f: string) => /tableLayout:'fixed'/.test(f) && /const REGUA_SALDOS = \[40, 58, 100, 100, 82, 38\];/.test(f)
       && /REGUA_SALDOS\.map\(\(w, i\) => <col key=\{i\} style=\{\{width:`\$\{w\}px`\}\} \/>\)/.test(f);
     expect(temReguaFixa(fonte)).toBe(true);
     expect(fonte).not.toMatch(/tableLayout:'auto'/);
     /* a busca sabe achar: a tabela de antes (auto, sem a régua) é recusada */
     expect(temReguaFixa(fonte.replace("tableLayout:'fixed'", "tableLayout:'auto'"))).toBe(false);
-    expect(temReguaFixa(fonte.replace('[100, 100, 86, 22]', '[95, 95, 112, 34]'))).toBe(false);
+    expect(temReguaFixa(fonte.replace('[40, 58, 100, 100, 82, 38]', '[95, 95, 112, 34]'))).toBe(false);
     /* e o colgroup desenhado tem as quatro larguras */
     const cols = Array.from(total.closest('table')!.querySelectorAll('col')).map((c) => c.style.width);
-    expect(cols).toEqual(['', '100px', '100px', '86px', '22px']);
+    expect(cols).toEqual(['', '40px', '58px', '100px', '100px', '82px', '38px']);
   });
 });
 
@@ -830,7 +835,8 @@ describe('T9 — nenhum arquivo tocado importa a conta antiga', () => {
 });
 
 /* ── CONC-CARDS-ORDEM-01: só a ordem dos 3 cards do topo ── */
-describe('ORDEM — os 3 cards do topo: Saldos por conta | Status | Resumo das movimentações', () => {
+/* P141 (CONC-LAYOUT-01): a ordem passou a Saldos | Resumo | Status, na régua do Finanças (3.05fr 1.7fr 0.7fr) */
+describe('ORDEM — os 3 cards do topo: Saldos por conta | Resumo das movimentações | Status', () => {
   it('a ordem na tela e a régua do grid acompanham (cada card mantém a trilha dele)', async () => {
     montar();
     await screen.findAllByTestId('linha-saldo-conta');
@@ -838,10 +844,54 @@ describe('ORDEM — os 3 cards do topo: Saldos por conta | Status | Resumo das m
     const status = screen.getByTestId('card-status');
     const resumo = screen.getByText('Resumo das movimentações');
     const antes = (a: Node, b: Node) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
-    expect(antes(saldos, status)).toBe(true);
-    expect(antes(status, resumo)).toBe(true);
+    expect(antes(saldos, resumo)).toBe(true);
+    expect(antes(resumo, status)).toBe(true);
     const grid = status.parentElement!;
-    expect(grid.style.gridTemplateColumns).toBe('3.05fr 0.7fr 1.7fr');
-    expect(grid.children[1]).toBe(status);
+    expect(grid.style.gridTemplateColumns).toBe('3.05fr 1.7fr 0.7fr');
+    expect(grid.children[2]).toBe(status);
+  });
+});
+
+/* ── P141 (CONC-LAYOUT-01): o ↗ da linha abre o "Extrato do sistema" da conta — a mesma fonte, os números do dono ── */
+describe('P141 — o ↗ de "Saldos por conta"', () => {
+  it('abre o modal da conta no mês, pede ao dono SÓ aquela conta e a faixa traz os números dele (nada somado)', async () => {
+    montar();
+    await screen.findAllByTestId('linha-saldo-conta');
+    expect(screen.queryByTestId('modal-extrato-sistema')).toBeNull();
+    fireEvent.click(within(linhaDaConta(ID_LAV)).getByTestId('abrir-extrato-sistema'));
+    const modal = await screen.findByTestId('modal-extrato-sistema');
+    expect(within(modal).getByText(/^Extrato do sistema · .+ · set\/2026$/)).toBeInTheDocument();
+    await waitFor(() => expect(B.rpcs.some((r) => r.fn === 'fn_conciliacao_resumo_mes'
+      && JSON.stringify(r.args.p_conta_ids) === JSON.stringify([ID_LAV]))).toBe(true));
+    await waitFor(() => expect(n(within(modal).getByTestId('es-saldo-final').textContent)).toBe('R$ 155.972,29'));
+    expect(n(within(modal).getByTestId('es-saldo-inicial').textContent)).toBe('R$ 30.150,70');
+    expect(n(within(modal).getByTestId('es-extrato').textContent)).toBe('R$ 155.972,29');
+    expect(within(modal).getByText('Extrato 30/09/2026')).toBeInTheDocument();
+    expect(n(within(modal).getByTestId('es-diferenca').textContent)).toBe('confere');
+    expect(within(modal).getByTestId('aba-sistema-grande')).toBeInTheDocument();
+    /* o ↗ não muda a conta escolhida (abre por cima, sem selecionar a linha) */
+    expect(linhaDaConta(ID_LAV).getAttribute('data-ativa')).toBeNull();
+  });
+});
+
+/* ── P141 D6 (Gabriel 28/10): Diferença positiva VERDE, negativa VERMELHA, "confere" verde — a regra do `corDaDiferenca` ── */
+describe('P141 D6 — a cor da Diferença em "Saldos por conta"', () => {
+  const corDe = (td: Element | null | undefined) => td?.className ?? '';
+  it('positiva verde na conta e no grupo; "confere" verde; negativa vermelha', async () => {
+    B.resumo['2026-09'] = [...B.resumo['2026-09'].map((l) => (l === LINHA_PARADA ? linhaConta({ ...LINHA_PARADA, proprio: undefined,
+      saldo_extrato: 300100, diferenca: -100, motivos: [{ motivo: 'saldo_diverge', valor: -100 }] }) : l))];
+    montar();
+    await screen.findAllByTestId('linha-saldo-conta');
+    const dif = (id: string) => linhaDaConta(id).querySelectorAll('td')[5];
+    expect(n(dif('cartao').textContent)).toBe('R$ 6.470,73');
+    expect(corDe(dif('cartao'))).toContain('text-success');
+    expect(corDe(dif('cartao'))).not.toContain('text-destructive');
+    expect(corDe(dif(ID_LAV))).toContain('text-success');
+    expect(n(dif('parada').textContent)).toBe('-R$ 100,00');
+    expect(corDe(dif('parada'))).toContain('text-destructive');
+    const grupoCartao = screen.getAllByTestId('faixa-grupo').find((g) => n(g.textContent) === 'Cartão')!.parentElement!;
+    const tdDif = grupoCartao.querySelectorAll('td')[5];
+    expect(n(tdDif.textContent)).toBe('R$ 6.470,73');
+    expect(corDe(tdDif)).toContain('text-success');
   });
 });

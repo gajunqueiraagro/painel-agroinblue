@@ -631,3 +631,70 @@ export async function cancelarRecorrencia(recorrenciaId: string): Promise<{ ok: 
   const { error } = await (supabase as any).rpc('fn_recorrencia_cancelar', { p_recorrencia_id: recorrenciaId });
   return { ok: !error, erro: error?.message ?? null };
 }
+
+/**
+ * P154 (Gabriel 28/10/2026) — os PREVISTOS que ficaram fora da vigência: a regra ENCURTADA (início para a frente ou fim para trás) ou
+ * CANCELADA. A regra é do BANCO (`fn_recorrencia_fora_da_vigencia`): simular e aplicar pela MESMA chamada; só o previsto vivo, fora de
+ * mês fechado, é cancelado (nunca apagado; continua ocupando a competência); programado, agendado, realizado e conciliado vêm em
+ * `naoMexe`, cada um com o porquê. Ao cancelar a regra, "fora" = competência a partir do mês do cancelamento (D1). O previsto com o
+ * "valor do mês" ajustado também se cancela, com a marca (D2).
+ */
+export interface LancamentoForaDaVigencia {
+  id: string; competencia: string; vencimento: string | null; valor: number; status: string; valorDoMes: boolean; motivo: string | null;
+}
+export interface ForaDaVigencia {
+  modo: 'encurtada' | 'cancelada';
+  /** 'AAAA-MM' — ao cancelar, o mês a partir do qual conta */
+  corte: string | null;
+  cancela: LancamentoForaDaVigencia[];
+  naoMexe: LancamentoForaDaVigencia[];
+  qtde: number;
+  soma: number;
+  regraCancelada: boolean;
+}
+
+/* ⚠ LIDA CAMPO A CAMPO, sem `as`: o que não tiver a forma esperada vira vazio, nunca um lançamento inventado. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- jsonb da RPC
+const lerForaLista = (v: any): LancamentoForaDaVigencia[] => (Array.isArray(v) ? v : [])
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- jsonb da RPC
+  .map((x: any) => ({
+    id: String(x?.id ?? ''), competencia: String(x?.competencia ?? ''), vencimento: x?.vencimento == null ? null : String(x.vencimento),
+    valor: Number(x?.valor ?? 0), status: String(x?.status ?? ''), valorDoMes: x?.valor_do_mes === true,
+    motivo: x?.motivo == null ? null : String(x.motivo),
+  }))
+  .filter((x) => x.id !== '');
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- jsonb da RPC
+export function lerForaDaVigencia(r: any): ForaDaVigencia | null {
+  if (!r || typeof r !== 'object' || r.ok !== true) return null;
+  const modo = r.modo === 'cancelada' ? 'cancelada' : r.modo === 'encurtada' ? 'encurtada' : null;
+  if (!modo) return null;
+  return {
+    modo, corte: r.corte == null ? null : String(r.corte),
+    cancela: lerForaLista(r.cancela), naoMexe: lerForaLista(r.nao_mexe),
+    qtde: Number(r.qtde ?? 0), soma: Number(r.soma ?? 0), regraCancelada: r.regra_cancelada === true,
+  };
+}
+
+export async function foraDaVigencia(recorrenciaId: string, cancelarRegra: boolean, simular: boolean, motivo: string | null = null):
+  Promise<{ ok: true; dados: ForaDaVigencia } | { ok: false; erro: string }> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+  const { data, error } = await (supabase as any).rpc('fn_recorrencia_fora_da_vigencia', {
+    p_recorrencia_id: recorrenciaId, p_cancelar_regra: cancelarRegra, p_motivo: motivo, p_simular: simular,
+  });
+  if (error) return { ok: false, erro: error.message ?? 'O banco recusou.' };
+  const dados = lerForaDaVigencia(data);
+  return dados ? { ok: true, dados } : { ok: false, erro: 'Não deu para ler a resposta do banco. Nada foi gravado.' };
+}
+
+/** A edição ENCOLHEU a vigência de uma regra ATIVA e JÁ GERADA (início para a frente ou fim para trás, por mês)? Só então a tela pergunta. */
+export function vigenciaEncolheu(
+  antes: Pick<Recorrencia, 'dataInicio' | 'dataFim' | 'ativo' | 'ultimoLancamentoGerado'>,
+  depois: { data_inicio: string | number | null; data_fim: string | number | null },
+): boolean {
+  if (!antes.ativo || !antes.ultimoLancamentoGerado) return false;
+  const mes = (d: string | number | null) => String(d ?? '').slice(0, 7);
+  const [ia, fa, id, fd] = [mes(antes.dataInicio), mes(antes.dataFim), mes(depois.data_inicio), mes(depois.data_fim)];
+  if (!ia || !fa || !id || !fd) return false;
+  return id > ia || fd < fa;
+}

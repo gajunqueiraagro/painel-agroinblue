@@ -15,7 +15,7 @@ import type {
 } from '@/v2/lib/blocoResumoExecutivoTypes';
 
 export type LinhaModalKey =
-  | 'receitaPecuaria' | 'receitaAgricultura' | 'outrasReceitas' | 'entradasFinanceiras'
+  | 'receitaPecuaria' | 'receitaAgricultura' | 'receitaSilvicultura' | 'outrasReceitas' | 'entradasFinanceiras'
   | 'custeioPecuaria' | 'custeioAgricultura'
   | 'jurosPecuaria' | 'jurosAgricultura'
   | 'investimentoPecuaria' | 'investimentoAgricultura'
@@ -195,6 +195,7 @@ export function ComposicaoFinanceira({ data, modo = 'planejamento', onLinhaClick
   const linhasEntrada: Array<[LinhaExecutiva, LinhaModalKey]> = [
     [data.receitaPecuaria, 'receitaPecuaria'],
     [data.receitaAgricultura, 'receitaAgricultura'],
+    [data.receitaSilvicultura, 'receitaSilvicultura'],
     [data.outrasReceitas, 'outrasReceitas'],
     [data.entradasFinanceiras, 'entradasFinanceiras'],
   ];

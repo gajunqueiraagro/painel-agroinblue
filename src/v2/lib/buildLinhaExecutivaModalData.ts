@@ -59,12 +59,12 @@ function calcDeltaSeguro(
   real: number,
   modo: ModoModalLinha = 'planejamento',
 ): DeltaSeguro {
-  if (meta <= 0 && real <= 0) return 0;
   if (modo === 'fechamento') {
+    if (meta <= 0 && real <= 0) return 0;
     if (meta <= 0) return null;
     return (real - meta) / meta;
   }
-  // Planejamento (default)
+  // Planejamento (default) — P131: sem base no ano anterior (Real 0) é "—", mesmo com a Meta também 0.
   if (real <= 0) return null;
   return (meta - real) / real;
 }

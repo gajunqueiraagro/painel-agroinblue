@@ -9,10 +9,6 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import {
   Plus, Repeat, Pencil, Play, Ban, Search, MoreHorizontal,
   ChevronUp, ChevronDown, ChevronsUpDown,
 } from 'lucide-react';
@@ -20,7 +16,8 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { TH_REGUA, TD_REGUA, TD_REGUA_TEXTO, TD_REGUA_NUM, QUADRO_REGUA, RODAPE_REGUA } from '@/components/ui/regua-tabela';
 import { useFinanceiroV2 } from '@/hooks/useFinanceiroV2';
-import { useRecorrencias, useOcorrenciasDoMes, useRecorrenciasAGerar, cancelarRecorrencia, type Recorrencia, type SituacaoRecorrencia } from '@/hooks/useRecorrencias';
+import { useRecorrencias, useOcorrenciasDoMes, useRecorrenciasAGerar, cancelarRecorrencia, foraDaVigencia, type Recorrencia, type SituacaoRecorrencia, type ForaDaVigencia } from '@/hooks/useRecorrencias';
+import { ForaDaVigenciaDialog } from '@/components/recorrencias/ForaDaVigenciaDialog';
 import {
   linhasDoMes, resumoDoMes, filtrarLinhas, totalDaLista, proporcoesDoMes, ROTULO_TIPO, ROTULO_SITUACAO_DO_MES, ROTULO_NAO_GERADO, TITULO_NAO_GERADO,
   faltaGerarDaRegra, resumoFaltaGerar, seloFaltaGerar, rotuloDoGerarNoMenu, mesesAGerar, AVISO_A_GERAR_NAO_LIDO,
@@ -148,6 +145,19 @@ export default function V2Recorrencias() {
   const [editando, setEditando] = useState<Recorrencia | null | undefined>(undefined);
   const [gerando, setGerando] = useState<Recorrencia | null>(null);
   const [cancelando, setCancelando] = useState<Recorrencia | null>(null);
+  /* P154 — a prévia do banco ao CANCELAR a regra: os previstos a partir do mês do cancelamento (D1), lidos antes de confirmar. */
+  const [previaCancelar, setPreviaCancelar] = useState<{ previa: ForaDaVigencia | null; carregando: boolean; erro: string | null }>(
+    { previa: null, carregando: false, erro: null });
+  useEffect(() => {
+    if (!cancelando) return;
+    let vivo = true;
+    setPreviaCancelar({ previa: null, carregando: true, erro: null });
+    void foraDaVigencia(cancelando.id, true, true).then((r) => {
+      if (!vivo) return;
+      setPreviaCancelar('erro' in r ? { previa: null, carregando: false, erro: r.erro } : { previa: r.dados, carregando: false, erro: null });
+    });
+    return () => { vivo = false; };
+  }, [cancelando]);
   const [busca, setBusca] = useState('');
   /* Ao abrir: por Dia, crescente. O clique numa coluna comeca do MAIOR para o menor. */
   const [ordem, setOrdem] = useState<{ campo: Coluna; direcao: Direcao }>({ campo: 'dia', direcao: 'asc' });
@@ -265,11 +275,19 @@ export default function V2Recorrencias() {
 
   const recarregarTudo = async () => { await Promise.all([recarregar(), recarregarMes(), recarregarAGerar()]); };
 
-  const confirmarCancelamento = async () => {
+  /** P154 — com os previstos: a regra e os previstos pela MESMA porta, numa transação; "Só a regra": o cancelar de sempre. A recusa
+   *  fica escrita na prévia (nunca toast). */
+  const confirmarCancelamento = async (comPrevistos: boolean) => {
     if (!cancelando) return;
-    const { ok, erro } = await cancelarRecorrencia(cancelando.id);
-    if (!ok) { toast.error(erro ?? 'O banco recusou o cancelamento.'); return; }
-    toast.success('Recorrência cancelada. Os lançamentos já gerados continuam onde estão.');
+    if (comPrevistos) {
+      const r = await foraDaVigencia(cancelando.id, true, false);
+      if ('erro' in r) { setPreviaCancelar((p) => ({ ...p, erro: r.erro })); return; }
+      toast.success(`Recorrência cancelada e ${r.dados.qtde} previsto${r.dados.qtde === 1 ? '' : 's'} cancelado${r.dados.qtde === 1 ? '' : 's'}.`);
+    } else {
+      const { ok, erro } = await cancelarRecorrencia(cancelando.id);
+      if (!ok) { setPreviaCancelar((p) => ({ ...p, erro: erro ?? 'O banco recusou o cancelamento.' })); return; }
+      toast.success('Recorrência cancelada. Os lançamentos já gerados continuam onde estão.');
+    }
     setCancelando(null);
     await recarregarTudo();
   };
@@ -586,25 +604,11 @@ export default function V2Recorrencias() {
         />
       )}
 
-      <AlertDialog open={!!cancelando} onOpenChange={o => !o && setCancelando(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Cancelar recorrência?</AlertDialogTitle>
-            {/* ⚠ O TEXTO RESPONDE A DÚVIDA DO CLIQUE. */}
-            <AlertDialogDescription className="text-[11px] leading-snug">
-              A regra para de gerar daqui para a frente. <b>Os lançamentos já gerados NÃO são
-              apagados</b> — eles continuam no financeiro, editáveis e conciliáveis como quaisquer
-              outros. Você pode reativar a regra depois editando-a.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Voltar</AlertDialogCancel>
-            <AlertDialogAction onClick={() => { void confirmarCancelamento(); }}>
-              Cancelar recorrência
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {cancelando && (
+        <ForaDaVigenciaDialog modo="cancelar" descricao={cancelando.descricao} previa={previaCancelar.previa}
+          carregando={previaCancelar.carregando} erro={previaCancelar.erro}
+          aoConfirmar={confirmarCancelamento} aoFechar={() => setCancelando(null)} />
+      )}
     </div>
   );
 }

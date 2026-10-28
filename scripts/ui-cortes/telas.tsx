@@ -30,6 +30,11 @@ import { LANCAMENTOS } from './dados/financeiro';
 import { totaisDaListaV2 } from '@/lib/financeiro/totaisDaListaV2';
 import { CriarTransferenciaDialog } from '@/components/conciliacao/CriarTransferenciaDialog';
 import { CriarTransferenciasLoteDialog } from '@/components/conciliacao/CriarTransferenciasLoteDialog';
+import { ForaDaVigenciaDialog } from '@/components/recorrencias/ForaDaVigenciaDialog';
+import { lerForaDaVigencia } from '@/hooks/useRecorrencias';
+import { ConciliacaoBancariaTab } from '@/pages/ConciliacaoBancariaTab';
+import { ExtratoDoSistemaDialog } from '@/components/conciliacao/ExtratoDoSistemaDialog';
+import * as CONC from './dados/conciliacao';
 import type { SugestaoDeTransferencia } from '@/lib/conciliacao/transferenciaDoExtrato';
 import { volumeNJ } from './dados/volumeNJ';
 import { buscarFornecedores } from '@/lib/fornecedores/buscaDeFornecedor';
@@ -718,6 +723,43 @@ if (tela === 'mesclar') {
   } else {
     montar(<CriarTransferenciaDialog aberto clienteId="cli" movimento={MOV} sugestao={SUG} onFechar={() => {}} onGravado={() => {}} onIgnorarDuplicada={() => {}} />);
   }
+} else if (tela === 'fora-da-vigencia') {
+  /* P154 — a prévia dos previstos FORA da vigência (a regra encurtada ou cancelada), com dado SINTÉTICO no pior caso: 12 previstos (um
+     com o "valor do mês"), os que não se mexem (programado, conciliado, mês fechado), valores no teto. `&v=cancelar` (o cancelar da lista),
+     `&v=vazia` (nada a cancelar), `&v=carregando`, `&v=erro` (a recusa do banco no rodapé). */
+  const mes = (k: number) => { const d = new Date(2031, 8 + k, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`; };
+  const venc = (k: number) => { const d = new Date(2031, 9 + k, 5); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-05`; };
+  const cancela = Array.from({ length: 12 }, (_, k) => ({ id: `c${k}`, competencia: mes(k), vencimento: venc(k), valor: '99999999.99',
+    status: 'previsto', valor_do_mes: k === 3 }));
+  const naoMexe = [
+    { id: 'n1', competencia: mes(-1), vencimento: venc(-1), valor: '99999999.99', status: 'programado', valor_do_mes: false, motivo: 'programado: só à mão' },
+    { id: 'n2', competencia: mes(-2), vencimento: venc(-2), valor: '99999999.99', status: 'conciliado', valor_do_mes: false, motivo: 'conciliado: só à mão' },
+    { id: 'n3', competencia: mes(12), vencimento: venc(12), valor: '99999999.99', status: 'previsto', valor_do_mes: false, motivo: 'mês fechado' },
+  ];
+  const vazia = v === 'vazia';
+  const resposta = { ok: true, simulado: true, modo: v === 'cancelar' || vazia ? 'cancelada' : 'encurtada', corte: v === 'cancelar' || vazia ? '2031-09' : null,
+    qtde: vazia ? 0 : 12, soma: vazia ? '0' : '1199999999.88', regra_cancelada: false, cancela: vazia ? [] : cancela, nao_mexe: vazia ? [] : naoMexe };
+  montar(<ForaDaVigenciaDialog modo={v === 'cancelar' || vazia ? 'cancelar' : 'encurtada'}
+    descricao="Folha de Pagamento · Colaborador Sintético com o Nome Bem Comprido de Exemplo · Fazenda Exemplo"
+    previa={v === 'carregando' ? null : lerForaDaVigencia(resposta)} carregando={v === 'carregando'}
+    erro={v === 'erro' ? 'Os lançamentos mudaram durante a gravação (11 de 12). Nada foi gravado.' : null}
+    aoConfirmar={async () => {}} aoFechar={() => {}} />);
+} else if (tela === 'conciliacao' || tela === 'extrato-do-sistema') {
+  /* P141 (CONC-LAYOUT-01) — a aba Conciliação (Saldos | Resumo | Status) e o "Extrato do sistema" do ↗, com as linhas do DONO no pior
+     caso (`dados/conciliacao.ts`, SINTÉTICO). `&v=sem`: os mesmos números sem nenhum OFX/PDF (o deslocamento compara as duas páginas).
+     `&v=carregando`: o modal antes de o dono responder. */
+  const semArquivos = v === 'sem';
+  g.__bancoBancada = {
+    from: (t: string) => t === 'financeiro_contas_bancarias' ? CONC.CONTAS
+      : t === 'financeiro_importacoes_v2' ? (semArquivos ? [] : CONC.IMPORTACOES)
+      : t === 'financeiro_saldo_documentos' ? (semArquivos ? [] : CONC.DOCUMENTOS) : [],
+    rpc: (fn: string, a: any) => fn === 'fn_conciliacao_resumo_mes'
+      ? (v === 'carregando' ? new Promise(() => {}) : CONC.resumoDoMes(a.p_conta_ids ?? null))
+      : fn === 'fn_conciliacao_status_ano' ? [{ ano_mes: '2031-09', nivel: 'total', status: 'nao_conciliado', motivos: [], avisos: [] }] : null,
+  };
+  g.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} };
+  if (tela === 'conciliacao') montar(<div className="h-full"><ConciliacaoBancariaTab initialAno="2031" initialMes="09" /></div>);
+  else montar(<ExtratoDoSistemaDialog aberto clienteId="cli" contaId="cc1" contaNome={CONC.CONTAS[0].nome_conta} anoMes="2031-09" onFechar={() => {}} />);
 } else if (tela === 'conciliar') {
   /* CONC-SEM-TRAVA-01 (tela) — o modal "Conciliar" no formato da resposta de `fn_conc_simular_diferenca` provada no caso real (OC
      0731374f, Banco do Brasil), com NOMES SINTETICOS: v=sobra (Pix 30/06 R$ 375.000 x Receb. 1/3), v=falta (Pix 30/07 R$ 290.000 x

@@ -22,6 +22,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Download, Save, ChevronDown, ChevronRight, AlertTriangle, Info, Settings, ClipboardList, Bookmark, Camera, ClipboardCheck } from 'lucide-react';
 import { ResumoExecMetaModal } from '@/components/financeiro/ResumoExecMetaModal';
 import { autoDoSubcentro, ROTULO_REGIME } from '@/lib/financeiro/metaLinhas';
+import { useAlturaAteOFim } from '@/hooks/useAlturaAteOFim';
 
 const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
@@ -188,6 +189,10 @@ export function PlanejamentoFinanceiroTab({ onBack, ano: anoProp, mesAte: _mesAt
 
   // Expand state
   const [expandedMacros, setExpandedMacros] = useState<Set<string>>(new Set());
+  /* P137 (família 1): UM scrollport — o quadro da tabela vai do topo dele até o fim da janela (TABELA-ALTURA-FIXA-01); a página não
+     rola mais por fora (a raiz e o quadro tinham altura fixa pela janela, menos 60 e menos 120px: com as macros fechadas rolava a página e o
+     cabeçalho preso ficava num quadro que não rola). */
+  const quadro = useAlturaAteOFim();
   const [expandedGrupos, setExpandedGrupos] = useState<Set<string>>(new Set());
   const [expandedCentros, setExpandedCentros] = useState<Set<string>>(new Set());
   const [expandedTotalEntradas, setExpandedTotalEntradas] = useState(true);
@@ -575,7 +580,7 @@ export function PlanejamentoFinanceiroTab({ onBack, ano: anoProp, mesAte: _mesAt
   }
 
   return (
-    <div className="w-full px-2 sm:px-4 animate-fade-in flex flex-col" style={{ height: 'calc(100vh - 60px)' }}>
+    <div className="w-full px-2 sm:px-4 animate-fade-in flex flex-col">
       {/* Header — sticky, never scrolls */}
       <div className="sticky top-0 z-30 bg-background py-2 flex flex-wrap items-center gap-2 shrink-0">
         {/* P109 — o regime da meta desta tela, sempre no mesmo lugar: embaixo do título (não alarga a barra, que quebra linha) */}
@@ -593,12 +598,13 @@ export function PlanejamentoFinanceiroTab({ onBack, ano: anoProp, mesAte: _mesAt
             </SelectContent>
           </Select>
         )}
-        {isGlobal && (
-          <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
-            <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" />
-            Selecione uma fazenda para editar
-          </span>
-        )}
+        {/* P137 (família 3): o aviso do Global e o ⚙ da fazenda ficam SEMPRE montados (lugar reservado, `visibility`) — trocar a fazenda
+            não muda a barra: os botões não andam e a quebra de linha é a mesma nos dois estados (o padrão do `meta-regime` do PC-100). */}
+        <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground" data-testid="aviso-global"
+          style={{ visibility: isGlobal ? 'visible' : 'hidden' }} aria-hidden={!isGlobal}>
+          <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" />
+          Selecione uma fazenda para editar
+        </span>
         {!editaMeta && (
           <span className="inline-flex items-center gap-1 whitespace-nowrap text-[10px] text-muted-foreground" data-testid="meta-so-admin">
             <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" />
@@ -622,12 +628,12 @@ export function PlanejamentoFinanceiroTab({ onBack, ano: anoProp, mesAte: _mesAt
         >
           <ClipboardCheck className="h-4 w-4 mr-1" />Aprovar
         </Button>
-        {!isGlobal && (
-          <Button size="sm" variant="ghost" onClick={() => setNutricaoModalOpen(true)} disabled={!editaMeta}
-            title={motivoSemEdicao ?? 'Parâmetros de Nutrição'}>
-            <Settings className="h-4 w-4" />
-          </Button>
-        )}
+        <Button size="sm" variant="ghost" data-testid="botao-nutricao"
+          style={{ visibility: isGlobal ? 'hidden' : 'visible' }} aria-hidden={isGlobal} tabIndex={isGlobal ? -1 : undefined}
+          onClick={() => setNutricaoModalOpen(true)} disabled={!editaMeta}
+          title={motivoSemEdicao ?? 'Parâmetros de Nutrição'}>
+          <Settings className="h-4 w-4" />
+        </Button>
         <Button size="sm" onClick={handleSave} disabled={saving || semEdicao || !dirty} title={motivoSemEdicao}>
           <Save className="h-4 w-4 mr-1" />Salvar
         </Button>
@@ -636,7 +642,7 @@ export function PlanejamentoFinanceiroTab({ onBack, ano: anoProp, mesAte: _mesAt
       {/* Table — scrolls independently */}
       <Card className="min-h-0">
         <CardContent className="p-0">
-          <div className="overflow-auto relative" style={{ height: 'calc(100vh - 120px)' }}>
+          <div ref={quadro.ref} className="overflow-auto relative" style={{ height: quadro.altura }}>
             <table className="w-full min-w-[700px] text-[9px] tabular-nums border-collapse" style={{ tableLayout: 'fixed' }}>
               <colgroup>
                 <col style={{ width: 180 }} />

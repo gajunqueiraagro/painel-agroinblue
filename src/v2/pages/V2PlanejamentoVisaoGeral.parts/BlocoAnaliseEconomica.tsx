@@ -5,6 +5,7 @@
  * pointer-events-none e mostra placeholder de indisponibilidade.
  */
 import { cn } from '@/lib/utils';
+import { TITULO_SEM_BASE_ANO_ANTERIOR } from '@/v2/lib/deltaSemBase';
 import { BoletimContainer } from '../V2FechamentoPeriodo.parts/boletim/BoletimContainer';
 import type {
   Bloco3AnaliseEconomica,
@@ -263,6 +264,9 @@ function LinhaRow({
     ? cn('text-right tabular-nums text-[11px] font-bold', corDeltaSemantico(v, tipoSinal))
     : cn('text-right', pillDelta(v, tipoSinal));
   const deltaPctClassAnoAnt = wrapDelta(deltaAnoAntPct);
+  // P131: o Δ% contra o ano anterior sem base (Real do ano anterior ausente ou 0) é "—" com o motivo no title.
+  const semBaseAnoAnt = linha.valorAnoAnt == null || !Number.isFinite(linha.valorAnoAnt) || linha.valorAnoAnt <= 0;
+  const tituloAnoAnt = semBaseAnoAnt ? TITULO_SEM_BASE_ANO_ANTERIOR : undefined;
   const deltaPctClassMeta = wrapDelta(deltaMetaPct);
 
   return (
@@ -276,12 +280,12 @@ function LinhaRow({
           {destaqueFinal ? (
             <>
               <div className={deltaPctClassMeta}>{formatPct(deltaMetaPct)}</div>
-              <div className={deltaPctClassAnoAnt}>{formatPct(deltaAnoAntPct)}</div>
+              <div className={deltaPctClassAnoAnt} title={tituloAnoAnt}>{formatPct(deltaAnoAntPct)}</div>
             </>
           ) : (
             <>
               <div className="flex justify-end"><span className={deltaPctClassMeta}>{formatPct(deltaMetaPct)}</span></div>
-              <div className="flex justify-end"><span className={deltaPctClassAnoAnt}>{formatPct(deltaAnoAntPct)}</span></div>
+              <div className="flex justify-end"><span className={deltaPctClassAnoAnt} title={tituloAnoAnt}>{formatPct(deltaAnoAntPct)}</span></div>
             </>
           )}
         </>
@@ -290,7 +294,7 @@ function LinhaRow({
           <div className={realAnoAntClass}>{fmt(linha.valorAnoAnt)}</div>
           <div className={metaClass}>{fmt(linha.valor)}</div>
           <div className={deltaRsClassLegado}>{formatDeltaRs(linha.deltaRs)}</div>
-          <div className={deltaPctClassLegado}>{formatPct(linha.deltaPct)}</div>
+          <div className={deltaPctClassLegado} title={tituloAnoAnt}>{formatPct(linha.deltaPct)}</div>
         </>
       )}
     </div>

@@ -83,10 +83,11 @@ const MESES =['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Ou
 
 // ─── Helpers locais (replicam regra calcDelta do builder) ─────────────
 
-function calcDeltaLocal(meta: number, real: number): number {
-  if (!Number.isFinite(meta) || !Number.isFinite(real)) return 0;
-  if (meta <= 0 && real <= 0) return 0;
-  return (meta - real) / (real || 1);
+function calcDeltaLocal(meta: number, real: number): number | null {
+  // P131: a mesma regra do builder — sem base no ano anterior (Real 0 ou ausente) → null ("—").
+  if (!Number.isFinite(meta) || !Number.isFinite(real) || real === 0) return null;
+  if (meta <= 0 && real < 0) return 0;
+  return (meta - real) / real;
 }
 
 function montarLinhaSaldoFinal(
@@ -436,12 +437,13 @@ export function BlocoResumoExecutivo({ data, saldoInicialMeta, saldoInicialReal,
           : 'Real 2025 (financeiro lançamentos) vs META 2026 (planejamento financeiro). Gráfico: saldo acumulado projetado mês a mês.'}
       </p>
 
-      {!data.conciliado && (
-        <div className="mb-3 p-2 rounded border border-rose-300 bg-rose-50 dark:border-rose-900/60 dark:bg-rose-950/30 text-[11px] text-rose-800 dark:text-rose-200">
-          Planejamento não conciliado: diferença de {fmtBRL(data.diferencaMeta)}. Verificar
-          classificação.
-        </div>
-      )}
+      {/* P137 (família 4): lugar reservado — o aviso fica SEMPRE montado e só a visibilidade troca; conciliar (ou trocar de fazenda)
+          não sobe os cards 46,5px. */}
+      <div className="mb-3 p-2 rounded border border-rose-300 bg-rose-50 dark:border-rose-900/60 dark:bg-rose-950/30 text-[11px] text-rose-800 dark:text-rose-200"
+        data-testid="aviso-nao-conciliado" style={{ visibility: data.conciliado ? 'hidden' : 'visible' }} aria-hidden={data.conciliado}>
+        Planejamento não conciliado: diferença de {fmtBRL(data.diferencaMeta)}. Verificar
+        classificação.
+      </div>
 
       <div className={cn(
         'grid grid-cols-1 lg:grid-cols-5 gap-3',

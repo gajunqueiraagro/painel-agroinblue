@@ -16,6 +16,7 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import type { FechamentoPeriodoDTO } from '@/v2/types/fechamentoPeriodo';
 import { fmt, pct } from './fmt';
 import { BoletimContainer } from './boletim/BoletimContainer';
+import { agruparDemais } from '@/v2/lib/agruparDemais';
 
 // Paleta do donut — espelhada do DesembolsoProducao (design system).
 const CORES_DONUT = ['#dc2626', '#f97316', '#0ea5e9', '#8b5cf6', '#10b981', '#eab308', '#ec4899', '#14b8a6', '#6366f1', '#f43f5e'];
@@ -41,7 +42,8 @@ export function DetalheCustosCentroSubcentro({
   subtitulo,
   grupoAlvo,
 }: {
-  dto: FechamentoPeriodoDTO;
+  /** Só os meses e a estrutura de custos (P132: o teste monta só eles). */
+  dto: Pick<FechamentoPeriodoDTO, 'meses' | 'estruturaCustos'>;
   custeioAcum: number | null;
   custoCab: number | null;
   subtitulo: string;
@@ -148,23 +150,25 @@ export function DetalheCustosCentroSubcentro({
   const baseDonut = (grupo?.centros ?? [])
     .filter((c) => c.realizado != null && c.realizado > 0)
     .sort((a, b) => (b.realizado ?? 0) - (a.realizado ?? 0));
-  const topN = baseDonut.slice(0, TOP_DONUT);
-  const resto = baseDonut.slice(TOP_DONUT);
-  const restoSoma = resto.reduce((s, c) => s + (c.realizado ?? 0), 0);
-  const slices =
+  // P132: os menores viram "Demais (N)" (o centro real "Outros" fica com o nome dele; chave própria).
+  const fatias =
     denom != null
-      ? [
-          ...topN.map((c, i) => ({
+      ? agruparDemais(
+          baseDonut.map((c, i) => ({
             nome: c.centro_custo,
             real: c.realizado ?? 0,
             valor: (c.realizado ?? 0) / denom,
             cor: CORES_DONUT[i % CORES_DONUT.length],
           })),
-          ...(restoSoma > 0
-            ? [{ nome: 'Outros', real: restoSoma, valor: restoSoma / denom, cor: COR_OUTROS }]
-            : []),
-        ]
+          TOP_DONUT,
+          (f) => f.nome,
+          (resto, rotulo) => {
+            const real = resto.reduce((s, f) => s + f.real, 0);
+            return { nome: rotulo, real, valor: real / denom, cor: COR_OUTROS };
+          },
+        )
       : [];
+  const slices = fatias.map((f) => f.item);
   const partPct = (real: number) => pct((real / (totalReal || 1)) * 100);
 
   // ── Ranking diverging (centro-only). Δ R$/cab/mês = (real−meta)/denom.
@@ -399,8 +403,8 @@ export function DetalheCustosCentroSubcentro({
                       </tr>
                     </thead>
                     <tbody>
-                      {slices.map((d, i) => (
-                        <tr key={i}>
+                      {fatias.map(({ item: d, chave }) => (
+                        <tr key={chave}>
                           <td
                             style={{
                               padding: '1px 4px 1px 0',

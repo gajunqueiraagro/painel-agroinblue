@@ -80,6 +80,13 @@ function montar(props: Partial<React.ComponentProps<typeof EspelhoConciliacaoTab
 }
 const txt = (id: string) => (screen.getByTestId(id).textContent ?? '').replace(/\s/g, ' ');
 
+/** P141 — o saldo do FIM de cada dia, lido da última linha do dia NA ORDEM DO DONO (independente da tela). */
+function fimDosDias(linhas: Array<Record<string, unknown>>, campo: 'saldo_apos' | 'saldo_apos_proprio'): number[] {
+  const fim = new Map<string, number>();
+  for (const l of linhas) fim.set(String(l.data).slice(0, 10), Number(l[campo]));
+  return [...fim.values()];
+}
+
 describe('T1 — o Emerson no Casar: o quadro do topo e a aba Sistema são do dono', () => {
   it('quadro do topo: 0 nos dois lados, o retido na linha própria, sem par 0', async () => {
     montar();
@@ -96,9 +103,11 @@ describe('T1 — o Emerson no Casar: o quadro do topo e a aba Sistema são do do
     const fim = await screen.findByTestId('sistema-saldo-final');
     expect(fim.textContent).toBe('155.972,29');
     expect(txt('sistema-saldo-inicial')).toBe('30.150,70');
+    /* P141 (D4): o saldo SÓ no fim de cada dia — um por dia, e a lista inteira continua na tela */
     const saldos = screen.getAllByTestId('sistema-saldo').map((s) => s.textContent);
     expect(saldos[saldos.length - 1]).toBe('155.972,29');
-    expect(saldos.length).toBe(CASO.resumo.linhas_sistema.length);
+    expect(saldos.length).toBe(fimDosDias(CASO.resumo.linhas_sistema, 'saldo_apos').length);
+    expect(screen.getAllByTestId('sistema-linha').length).toBe(CASO.resumo.linhas_sistema.length);
     expect(screen.getByText(/^parcial · falta R\$\s300,00$/)).toBeInTheDocument();
   });
 });
@@ -131,13 +140,13 @@ describe('T6 (PR-CONC-INTERNA-SEPARADA-01b) — a aba Sistema da conta-MÃE: sal
     expect(internas.length).toBe(18);
     expect(internas[0].textContent).toBe('⇄ interna · fora do extrato');
     expect(internas[0].getAttribute('title')).toContain('transferência interna · fora do extrato');
-    /* a coluna de saldo é o `saldo_apos_proprio` de CADA linha, na ordem do dono */
+    /* P141 (D4): a coluna de saldo é o `saldo_apos_proprio` da ÚLTIMA linha de cada dia NA ORDEM DO DONO, só no fim do dia */
     const fmt = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const saldos = screen.getAllByTestId('sistema-saldo').map((s) => s.textContent);
-    expect(saldos).toEqual(AG.resumo.linhas_sistema.map((l: { saldo_apos_proprio: number }) => fmt(l.saldo_apos_proprio)));
+    expect(saldos).toEqual(fimDosDias(AG.resumo.linhas_sistema, 'saldo_apos_proprio').map(fmt));
     expect(saldos[saldos.length - 1]).toBe('54.738,55');
-    /* e NÃO o corrido consolidado: a primeira linha difere (238.757,65 no consolidado) */
-    expect(saldos[0]).not.toBe(fmt(AG.resumo.linhas_sistema[0].saldo_apos));
+    /* e NÃO o corrido consolidado: o fim do 1º dia difere do consolidado */
+    expect(saldos[0]).not.toBe(fmt(fimDosDias(AG.resumo.linhas_sistema, 'saldo_apos')[0]));
   });
 
   it('conta SEM par (o Emerson): a coluna de saldo é a de antes — o próprio é igual ao corrido', async () => {
@@ -147,7 +156,7 @@ describe('T6 (PR-CONC-INTERNA-SEPARADA-01b) — a aba Sistema da conta-MÃE: sal
     await screen.findByTestId('sistema-saldo-final');
     const fmt = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     expect(screen.getAllByTestId('sistema-saldo').map((s) => s.textContent))
-      .toEqual(CASO.resumo.linhas_sistema.map((l: { saldo_apos: number }) => fmt(l.saldo_apos)));
+      .toEqual(fimDosDias(CASO.resumo.linhas_sistema, 'saldo_apos').map(fmt));
     expect(screen.queryByTestId('sistema-transferencia-interna')).toBeNull();
   });
 });
