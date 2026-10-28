@@ -335,11 +335,11 @@ const CENARIOS = [
   /* FIN-NOTA-PDF-01 — "Novo lançamento · da nota fiscal" (o mock aprovado), o PDF SINTETICO lido de verdade, nos sete tamanhos: o modal
      fixo nao rola (so' as duas tabelas rolam dentro do quadro delas, no pior caso de 12 parcelas e 14 itens), nada passa da caixa. */
   /* P95 — `pelachave` (a previa da chave digitada: o chip, emissao e valor em ambar) e `irmas` (a nota em 4 parcelas soltas, "k/4") */
-  ...['', 'cadastrado', 'registrada', 'diverge', 'longo', 'lavoura', 'semdup', 'jalancada', 'avulsa', 'emparcela', 'cancelados', 'socancelados', 'pelachave', 'irmas'].map((v) => ({ nome: `nota-pdf${v ? `-${v}` : ''}`, url: `tela=nota-pdf&v=${v}`, tamanhos: TAMANHOS_DO_CONSORCIO,
+  ...['', 'cadastrado', 'registrada', 'diverge', 'longo', 'lavoura', 'semdup', 'jalancada', 'avulsa', 'emparcela', 'cancelados', 'socancelados', 'pelachave', 'irmas', 'diferenca'].map((v) => ({ nome: `nota-pdf${v ? `-${v}` : ''}`, url: `tela=nota-pdf&v=${v}`, tamanhos: TAMANHOS_DO_CONSORCIO,
     semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-parcelas-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="nota-ja-lancada-rolagem"]' },
   })),
   /* P101 — abaixo de 1000px a prévia tem três abas: as outras duas (Parcelas e lançamento; Arquivo) em todas as variantes, nos estreitos */
-  ...['', 'cadastrado', 'registrada', 'diverge', 'longo', 'lavoura', 'semdup', 'jalancada', 'avulsa', 'emparcela', 'cancelados', 'socancelados', 'pelachave', 'irmas']
+  ...['', 'cadastrado', 'registrada', 'diverge', 'longo', 'lavoura', 'semdup', 'jalancada', 'avulsa', 'emparcela', 'cancelados', 'socancelados', 'pelachave', 'irmas', 'diferenca']
     .flatMap((v) => [['lancamento', 'Parcelas e lançamento'], ['arquivo', 'Arquivo']].map(([a, rotulo]) => ({ nome: `nota-pdf-aba-${a}${v ? `-${v}` : ''}`,
       url: `tela=nota-pdf&v=${v}`, tamanhos: TAMANHOS_ESTREITOS_DA_NOTA,
       semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-parcelas-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="nota-ja-lancada-rolagem"]' },
@@ -374,6 +374,14 @@ const CENARIOS = [
     antes: async (p) => { await clicarTexto('Pagamento')(p); await p.locator('[data-testid="voltar-a-vista-botao"]').click(); await p.waitForTimeout(500); } },
   { nome: 'lancamento-parcelar-confirmar', url: 'tela=lancamento&m=editar&v=salcartao', tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[role="alertdialog"]',
     antes: async (p) => { await parcelarEm4(p); await p.locator('[data-testid="parcelar-este-confirmar"]').click(); await p.waitForTimeout(500); } },
+  /* P128a — os TRÊS CAMINHOS com o "Criar um lançamento novo" escolhido (o aviso vermelho "duplica", o botão "Criar novo (duplica)") */
+  { nome: 'nota-pdf-caminho-criar', url: 'tela=nota-pdf&v=diferenca', tamanhos: TAMANHOS_DO_CONSORCIO,
+    semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="nota-parcelas-rolagem"], [data-testid="nota-itens-rolagem"], [data-testid="nota-ja-lancada-rolagem"]' },
+    antes: async (p) => {
+      const t = p.locator('[data-testid="nota-abas"] button', { hasText: 'Parcelas e lançamento' });
+      if (await t.count()) { await t.first().click(); await p.waitForTimeout(400); }
+      await clicar('[data-testid="nota-caminho-criar"]')(p);
+    } },
   /* P96a — a confirmação do "Juntar as 4 e anexar" (o resumo, a caixinha da competência, o efeito no DRE) e a do "Usar a nota lida" */
   { nome: 'nota-pdf-juntar-confirmar', url: 'tela=nota-pdf&v=irmas', tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[role="alertdialog"]',
     antes: async (p) => { await p.locator('[data-testid="nota-juntar-soltas"]').first().click(); await p.waitForTimeout(800); } },

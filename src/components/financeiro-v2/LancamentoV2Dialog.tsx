@@ -27,6 +27,8 @@ import { GestoDeOperacao } from '@/components/financeiro-v2/GestoDeOperacao';
 import { FinanciamentoDoLancamento } from '@/components/financiamentos/FinanciamentoDoLancamento';
 import { useLancamentoDocumentos } from '@/hooks/useLancamentoDocumentos';
 import { AbaDocumentosLancamento } from '@/components/financeiro-v2/AbaDocumentosLancamento';
+import { AreaDeArquivo } from '@/components/ui/area-de-arquivo';
+import type { RegraDeAceite } from '@/lib/arquivo/aceitarArquivo';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { AsideResumo, FaixaTituloResumo, SecaoResumo, LinhaResumo } from '@/components/ui/linha-resumo';
 import {
@@ -195,6 +197,9 @@ interface Props {
   /** PARC-CADEIA-01 — "Abrir o contrato" do aviso de parcela de compra parcelada. Ausente = a tela não navega até o contrato
    *  (ou a pessoa não o acessa): o atalho não é oferecido. */
   onAbrirContrato?: (financiamentoId: string) => void;
+  /** P128a (NOTA-JA-LANCADA, porta 2) — "Ler a NF" no Documentos do Editar: o arquivo abre a MESMA previa do "+ Da nota", partindo deste
+   *  lancamento. Devolve a frase pronta do que impediu (nota nao lida, consulta que falhou) ou `null` (a previa abriu). Ausente = sem o gesto. */
+  onLerNotaFiscal?: (arquivo: File, lancamentoId: string) => Promise<string | null>;
   prefill?: {
     fazenda_id?: string;
     conta_bancaria_id?: string;
@@ -583,13 +588,19 @@ function getMonthLabel(dateStr: string): string {
    VendaFinanceiroPanel, BoitelPlanningDialog e useFinanciamentoCadastro): são funções próprias,
    de outras telas, e nenhuma foi tocada. */
 
+/** P128a (porta 2) — a NF que o Documentos do Editar le^ para abrir a previa: XML ou PDF, um arquivo */
+const REGRA_DA_NF_LIDA: RegraDeAceite = { tipos: ['xml', 'pdf'] };
+
 export function LancamentoV2Dialog({
   open, carregando, onClose, onSave, onDelete, lancamento, fazendas, contas, classificacoes,
   fornecedores, safras, defaultFazendaId, onCriarFornecedor, prefill, lockedFields, onLancamentoCriado,
   ocultarParcelamento, tiposOperacaoPermitidos, origemOC,
   referenciaOperacionalInfo, excelContext, permiteEditarFavorecidoOC, onAbrirOperacaoOC, onAbrirContrato,
-  documentosAntesDeSalvar,
+  documentosAntesDeSalvar, onLerNotaFiscal,
 }: Props) {
+  /* P128a (porta 2) — a frase do que impediu a NF lida de abrir a previa (na propria area, nunca toast) e o "lendo" */
+  const [recusaDaNotaLida, setRecusaDaNotaLida] = useState<string | null>(null);
+  const [lendoANota, setLendoANota] = useState(false);
   const { clienteAtual } = useCliente();
   /* ACESSOS-02b — os atalhos deste modal para a OC ("Abrir →", "corrigir na operação", "Abrir OC →", criar OC do legado) so' se
      oferecem a quem acessa a tela da OC; os avisos que dizem que o lancamento e' de uma operacao continuam. */
@@ -3413,6 +3424,19 @@ export function LancamentoV2Dialog({
                   />
                 </div>
               </div>
+              {/* P128a (porta 2) — ler a NF daqui abre a MESMA previa do "+ Da nota" (a tabela sistema × nota e os caminhos), partindo deste
+                  lancamento; nada se grava antes do clique la' */}
+              {lancamento?.id && onLerNotaFiscal && (
+                <AreaDeArquivo regra={REGRA_DA_NF_LIDA} testId="doc-ler-nf" inputTestId="doc-ler-nf-input" className="mt-1.5 h-7"
+                  convite="Ler a NF (XML ou PDF)" detalhe="abre a prévia da nota: o que já está lançado × a nota"
+                  desabilitado={lendoANota} motivoDesabilitado="Lendo a nota…" motivoExterno={recusaDaNotaLida}
+                  onArquivos={(arquivos) => {
+                    const alvo = lancamento?.id; const arquivo = arquivos[0];
+                    if (!alvo || !arquivo) return;
+                    setRecusaDaNotaLida(null); setLendoANota(true);
+                    void onLerNotaFiscal(arquivo, alvo).then((frase) => setRecusaDaNotaLida(frase)).finally(() => setLendoANota(false));
+                  }} />
+              )}
             </section>
             {lancamento?.id ? (
               <AbaDocumentosLancamento api={documentosApi}

@@ -3,7 +3,7 @@
  * cada parcela fica com o MAIS proximo, cada lancamento uma vez so'; a outra serie vira "parecidos a mais"; numero/chave entram juntos.
  */
 import { describe, it, expect } from 'vitest';
-import { canceladosDaNota, casarJaLancados, fracaoDaDescricao, fracaoDaNota, fraseEmParcelas, lerJaLancados, parcelasParaCasar, type LancamentoJaLancado } from './jaLancada';
+import { canceladosDaNota, casarJaLancados, fracaoDaDescricao, fracaoDaNota, fraseDoAchado, fraseEmParcelas, lerJaLancados, linhasSistemaNota, parcelasParaCasar, type LancamentoJaLancado } from './jaLancada';
 
 const l = (id: string, n: number, difCent: number, difDias = 0, por: LancamentoJaLancado['por'] = ['valor']): LancamentoJaLancado => ({
   id, vencimento: null, pagamento: null, competencia: null, descricao: null, valorCent: 34134 + difCent, status: 'realizado', conciliado: false,
@@ -113,5 +113,66 @@ describe('P95 — a nota em N parcelas soltas (as irmas da fracao)', () => {
     expect(fracaoDaDescricao('7/6')).toBeNull();
     expect(fracaoDaDescricao('3/6 tinta')).toBeNull();
     expect(fracaoDaDescricao(null)).toBeNull();
+  });
+});
+
+/* P128a — a TABELA SISTEMA × NOTA e a frase, nos moldes dos 5 casos do briefing (valores e nomes SINTETICOS) */
+describe('P128a — tabela sistema × nota e a frase do achado', () => {
+  const v = (id: string, valorCent: number, venc: string, o: Partial<LancamentoJaLancado> = {}): LancamentoJaLancado => ({
+    id, vencimento: venc, pagamento: null, competencia: venc, descricao: `Compra sintetica ${id}`, valorCent, status: 'programado', conciliado: false,
+    financiamentoId: null, numeroDocumento: null, fornecedorId: 'f', fornecedorNome: 'F', fornecedorPor: 'cnpj', parcelas: [], por: ['numero'],
+    cancelado: false, ...o,
+  });
+  const pago = { status: 'realizado', pagamento: '2031-01-01', conciliado: true };
+  it('caso 1 (pela soma): nota sem duplicata; o parcelamento que soma a nota = em parcelas, nada a criar, sem "parte da nota" inventada', () => {
+    const todos = [v('a', 300000, '2031-01-10', { ...pago, por: ['soma'], parcelaN: 1, financiamentoId: 'p' }),
+      ...[2, 3, 4, 5].map((k) => v(`s${k}`, 175000, `2031-0${k}-10`, { por: ['soma'], parcelaN: k, financiamentoId: 'p' }))];
+    const j = casarJaLancados([{ n: 1, vencimento: '2031-01-10', valorCent: 1000000 }], todos, 1000000);
+    expect([j?.emParcelas, j?.faltam]).toEqual([true, []]);
+    const linhas = j ? linhasSistemaNota(j, 1000000) : [];
+    expect(linhas.map((x) => x.rotulo)).toEqual(['1/5', '2/5', '3/5', '4/5', '5/5']);
+    expect(linhas.map((x) => [x.notaValorCent, x.difValor])).toEqual(Array(5).fill([null, false]));
+    expect(j && fraseDoAchado(j, linhas, 1000000)).toBe('5 parcelas lançadas num parcelamento desta nota · soma R$ 10.000,00 ✓ · achados pela soma · 1 conciliada · 4 programadas');
+  });
+  it('caso 2 (N soltos pelo nº + a chave): "soma 5 × R$ 400,00 = R$ 2.000,00 ✓", a parte da nota ao lado, a nota já anexada em um', () => {
+    const todos = [1, 2, 3, 4, 5].map((k) => v(`c${k}`, 40000, `2031-0${k}-16`, k < 5 ? { status: 'realizado', pagamento: `2031-0${k}-16`, por: k === 1 ? ['numero', 'chave'] : ['numero'], temEstaNota: k === 1, documentos: k === 1 ? 1 : 0 } : {}));
+    const j = casarJaLancados([{ n: 1, vencimento: '2031-01-16', valorCent: 200000 }], todos, 200000);
+    const linhas = j ? linhasSistemaNota(j, 200000) : [];
+    expect([j?.emParcelas, j?.faltam, linhas.length]).toEqual([true, [], 5]);
+    expect(linhas.map((x) => [x.notaValorCent, x.difValor])).toEqual(Array(5).fill([40000, false]));
+    expect(linhas.map((x) => x.situacao)).toEqual(['realizada', 'realizada', 'realizada', 'realizada', 'programada']);
+    expect(linhas[0].sistema?.temEstaNota).toBe(true);
+    expect(j && fraseDoAchado(j, linhas, 200000))
+      .toBe('5 lançamentos soltos desta nota · soma 5 × R$ 400,00 = R$ 2.000,00 ✓ · achados pelo CNPJ + nº da nota · pela chave · 4 realizadas · 1 programada');
+  });
+  const DUP = [1, 2, 3].map((n) => ({ n, vencimento: `2031-0${n + 1}-05`, valorCent: 30000 }));
+  it('caso Ferri (dia e centavos diferentes, só pelo nº): cada parcela casa com a de data mais próxima; a diferença marcada, nada falta', () => {
+    const todos = [v('f1', 30000, '2031-02-09'), v('f2', 30000, '2031-03-09'), v('f3', 30035, '2031-04-09')];
+    const j = casarJaLancados(DUP, todos, 90000);
+    const linhas = j ? linhasSistemaNota(j, 90000) : [];
+    expect(linhas.map((x) => x.sistema?.id)).toEqual(['f1', 'f2', 'f3']);
+    expect(linhas.map((x) => [x.difData, x.difValor])).toEqual([[true, false], [true, false], [true, true]]);
+    expect(j?.faltam).toEqual([]);
+    expect(j && fraseDoAchado(j, linhas, 90000)).toBe('3 de 3 parcelas desta nota já estão lançadas · soma no sistema R$ 900,35 × nota R$ 900,00 (diferença R$ 0,35) · achados pelo CNPJ + nº da nota · 3 programadas');
+  });
+  it('caso 4 (a parcela que SOBRA no sistema): o irmão do parcelamento aparece "só no sistema", com o nº da parcela', () => {
+    const casados = DUP.map((d, i) => v(`r${d.n}`, 30000, d.vencimento, { por: ['valor'], parcelas: [{ n: d.n, difCent: 0, difDias: 0 }], financiamentoId: 'p', parcelaN: i + 1 }));
+    const j = casarJaLancados(DUP, [...casados, v('sobra', 30000, '2031-05-05', { por: ['parcelamento'], financiamentoId: 'p', parcelaN: 4 })], 90000);
+    const linhas = j ? linhasSistemaNota(j, 90000) : [];
+    expect(linhas.map((x) => [x.rotulo, x.situacao])).toEqual([['1/3', 'programada'], ['2/3', 'programada'], ['3/3', 'programada'], ['4/?', 'so_no_sistema']]);
+    expect(j && fraseDoAchado(j, linhas, 90000)).toContain('soma no sistema R$ 1.200,00 × nota R$ 900,00 (diferença R$ 300,00)');
+    expect(j && fraseDoAchado(j, linhas, 90000)).toContain('1 só no sistema');    /* o irmão que sobra NUNCA recebe a nota (não é dela): fora dos alvos do "Completar" */
+    expect(j?.alvos.map((x) => x.id)).toEqual(['r1', 'r2', 'r3']);
+  });
+  it('a parcela da nota que o sistema não tem: "só na nota → criar" (e entra no que falta)', () => {
+    const j = casarJaLancados(DUP, [v('x1', 30000, '2031-02-05', { por: ['valor'], parcelas: [{ n: 1, difCent: 0, difDias: 0 }] })], 90000);
+    const linhas = j ? linhasSistemaNota(j, 90000) : [];
+    expect(linhas.map((x) => x.situacao)).toEqual(['programada', 'so_na_nota', 'so_na_nota']);
+    expect(j?.faltam.map((f) => f.n)).toEqual([2, 3]);
+  });
+  it('caso 5 (o leitor): a parcela, a nota já anexada e quantos documentos ("Documento hoje")', () => {
+    const [a, b] = lerJaLancados([{ id: 'n1', valor_cent: 1, por: ['numero', 'documento', 'soma', 'parcelamento'], parcela_n: 3, tem_esta_nota: true, documentos: 2 }, { id: 'n2', valor_cent: 1, por: ['x'] }]);
+    expect([a.por, a.parcelaN, a.temEstaNota, a.documentos]).toEqual([['numero', 'documento', 'soma', 'parcelamento'], 3, true, 2]);
+    expect([b.por, b.parcelaN ?? null, b.temEstaNota ?? false, b.documentos ?? 0]).toEqual([[], null, false, 0]);
   });
 });

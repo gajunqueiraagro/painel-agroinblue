@@ -55,7 +55,8 @@ import { ondeEsta } from './LancamentoDoXml';
 import type { DoXml } from '@/lib/financeiro/nfePrefill';
 import { resolverEmitente } from '@/lib/financeiro/nfe/resolverEmitente';
 import { gravarItensSemTravar } from '@/lib/financeiro/itensDaNotaBanco';
-import { canceladosDaNota, casarJaLancados, fracaoDaDescricao, fraseEmParcelas, parcelasParaCasar, type LancamentoJaLancado } from '@/lib/financeiro/nfe/jaLancada';
+import { canceladosDaNota, casarJaLancados, fracaoDaDescricao, fraseDoAchado, linhasSistemaNota, parcelasParaCasar, TEXTO_DA_SITUACAO, type LancamentoJaLancado,
+  type SituacaoNaTabela } from '@/lib/financeiro/nfe/jaLancada';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { CompararCadastroDialog } from './CompararCadastroDialog';
@@ -131,6 +132,12 @@ const CHIP_AVISO = `${CHIP} bg-amber-50 text-amber-800`;
 const CHIP_ERRO = `${CHIP} bg-red-50 text-red-700`;
 /* NOTA-CONTAS-NA-CRIACAO-01 D — o cancelado: cinza, sem cor de aviso (nao conta) */
 const CHIP_CANCELADO = `${CHIP} bg-muted text-muted-foreground`;
+/* P128a — a situacao de cada linha da tabela sistema x nota */
+/** P128a — um dos três caminhos da nota que já está no sistema (o que faz e o que NÃO muda, como no mock) */
+interface CaminhoDaNota { id: 'completar' | 'atualizar' | 'criar'; titulo: string; recomendado: boolean; perigo: boolean; faz: string; naoMuda: string }
+const CHIP_DA_SITUACAO: Record<SituacaoNaTabela, string> = {
+  conciliada: CHIP_OK, realizada: CHIP_OK, programada: `${CHIP} bg-blue-50 text-blue-800`, so_na_nota: CHIP_AVISO, so_no_sistema: CHIP_ERRO,
+};
 const TH = 'h-[19px] px-1.5 text-left text-[9.5px] font-medium text-primary-foreground truncate';
 const TD = 'h-[19px] px-1.5 text-[10px] leading-none truncate';
 const TDN = 'h-[19px] px-1.5 text-right text-[10px] leading-none whitespace-nowrap tabular-nums';
@@ -155,9 +162,12 @@ export interface NotaParaLancar { arquivo: File; bytes: ArrayBuffer; lido: NotaL
 export function NotaFiscalDialog({
   open, onClose, clienteId, clienteNome, nota, fazendas, contas, classificacoes, safras = [], fornecedores, onCriarFornecedor, onCriarLancamento,
   onAbrirNoLancamento, onAbrirRegistrada, onCriado, gravadores, consultarReceita = consultarCnpj, gravarItens = gravarItensSemTravar,
-  gravadoresDaJuncao = GRAVADORES_DA_JUNCAO,
+  gravadoresDaJuncao = GRAVADORES_DA_JUNCAO, partindoDe = null,
 }: {
   open: boolean;
+  /** P128a (porta 2) — a previa aberta pelo Documentos do Editar lancamento: o id dele (a linha "este lançamento" na tabela; sem ele
+   *  entre os achados, nada se cria daqui — criaria a compra em dobro). `null` = o "+ Da nota" de sempre. */
+  partindoDe?: string | null;
   onClose: () => void;
   clienteId: string;
   clienteNome: string | null;
@@ -288,7 +298,10 @@ export function NotaFiscalDialog({
   const [abertosPendente, setAbertosPendente] = useState(false);
   const [tentativa, setTentativa] = useState(0);
   const [trocarFornecedor, setTrocarFornecedor] = useState(false);
-  const [criarFaltam, setCriarFaltam] = useState(true);
+  /* P128a — o caminho "Completar com a nota" sempre cria as que faltam (o mock: "completa as 6 e cria as 4 que faltam") */
+  const criarFaltam = true;
+  /* P128a — os TRES CAMINHOS da nota que ja' esta' no sistema (o recomendado vem marcado) */
+  const [caminho, setCaminho] = useState<CaminhoDaNota['id']>('completar');
   const [mesmoAssim, setMesmoAssim] = useState<string | null>(null);
   /* NOTA-FORNECEDOR-COMPARAR-01 — o cadastro de HOJE, para mostrar o que a nota muda antes de gravar */
   const [comparar, setComparar] = useState<CadastroParaComparar | null>(null);
@@ -312,7 +325,8 @@ export function NotaFiscalDialog({
     let vivo = true;
     if (!favorecidoId) { setCompletar([]); setAbertos([]); setFalhaAbertos(null); setAbertosPendente(false); return; }
     void camposQueOEmitenteCompleta(clienteId, favorecidoId, emitente).then((c) => { if (vivo) setCompletar(c.filter((x) => x !== 'tipo_pessoa')); });
-    if (doXml.ocorrencias.length === 0) {
+    /* P128a (decisao b) — so' a nota de OC para aqui; a anexada a um lancamento segue (os abertos sao conferidos igual) */
+    if (!doXml.ocorrencias.some((o) => o.origem === 'oc')) {
       setAbertosPendente(true); setFalhaAbertos(null);
       void lancamentosAbertosComValor(clienteId, favorecidoId, [n.totais.notaCent, ...p.duplicatas.map((d) => d.valorCent)])
         .then((r) => {
@@ -330,7 +344,8 @@ export function NotaFiscalDialog({
     [p.duplicatas, n.totais.notaCent, n.emissao]);
   useEffect(() => {
     let vivo = true;
-    if (doXml.ocorrencias.length > 0) { setAchados([]); setFalhaJaLancada(null); return; }
+    /* P128a (decisao b) — a nota ja' anexada a um LANCAMENTO nao bloqueia: e' o ponto de partida, a busca roda igual. Na OC, para aqui. */
+    if (doXml.ocorrencias.some((o) => o.origem === 'oc')) { setAchados([]); setFalhaJaLancada(null); return; }
     /* P146 — enquanto a busca nao responde, `achados` = null (o Criar espera); falhou = o motivo, NUNCA lista vazia */
     setAchados(null); setFalhaJaLancada(null);
     void notaJaLancada(clienteId, {
@@ -345,8 +360,35 @@ export function NotaFiscalDialog({
   /* D — a nota que so' tem lancamento CANCELADO nao esta' lancada: o rodape so' diz quantos */
   const canceladosSo = useMemo(() => (achados && !achados.some((l) => !l.cancelado) ? canceladosDaNota(achados) : []), [achados]);
   const jaLancada = useMemo(() => (achados ? casarJaLancados(parcelasDaBusca, achados, n.totais.notaCent) : null), [achados, parcelasDaBusca, n.totais.notaCent]);
+  /* P128a — a TABELA SISTEMA × NOTA e a frase do que foi achado (a mesma lista, as mesmas contas) */
+  const linhasDaTabela = useMemo(() => (jaLancada ? linhasSistemaNota(jaLancada, n.totais.notaCent) : []), [jaLancada, n.totais.notaCent]);
+  /* P128a (porta 2) — o lancamento aberto no Editar que a busca NAO achou: nada se cria daqui (a ancora pelo lancamento e' o P128c) */
+  const naoAchouOAberto = !!partindoDe && achados !== null && !achados.some((l) => l.id === partindoDe && !l.cancelado);
+  const fraseAchado = jaLancada ? `${fraseDoAchado(jaLancada, linhasDaTabela, n.totais.notaCent)}${naoAchouOAberto ? ' · o lançamento aberto não foi achado por esta nota' : ''}` : '';
+  /* P128a (decisao c) — as PROGRAMADAS que diferem da nota (valor ou vencimento): so' elas o caminho 2 atualiza */
+  const programadasQueDiferem = linhasDaTabela.filter((x) => x.situacao === 'programada' && (x.difValor || x.difData)).length;
   /* P96a — as N soltas desta nota (todas as N frações, nenhuma já parcela): o gesto principal vira "Juntar as N e anexar" */
   const soltas = useMemo(() => soltasParaJuntar(jaLancada), [jaLancada]);
+  /* P128a — os TRES CAMINHOS, cada um dizendo o que muda e o que NAO muda (o mock); o 2 so' grava no P128b */
+  const caminhosDaNota = useMemo((): CaminhoDaNota[] => {
+    if (!jaLancada) return [];
+    const nDup = p.duplicatas.length;
+    const nAlvos = jaLancada.alvos.length;
+    const nFaltam = jaLancada.faltam.length;
+    const completa = soltas ? `Junta os ${soltas.n} numa compra parcelada e anexa a nota a todos.`
+      : `Anexa a nota ${nAlvos === 1 ? 'ao lançamento achado' : `aos ${nAlvos} achados`}${nFaltam ? ` e cria ${nFaltam === 1 ? 'a parcela que falta' : `as ${nFaltam} que faltam`}` : ''}.`;
+    return [
+      { id: 'completar', titulo: 'Completar com a nota', recomendado: true, perigo: false, faz: completa,
+        naoMuda: 'Valor, data, status e conciliação não mudam.' },
+      { id: 'atualizar', titulo: 'Completar e atualizar as não pagas', recomendado: false, perigo: false,
+        faz: programadasQueDiferem ? `Como o anterior, e ${programadasQueDiferem === 1 ? 'a programada que difere leva' : `as ${programadasQueDiferem} programadas que diferem levam`} valor e vencimento da nota.`
+          : 'Como o anterior; nenhuma programada difere da nota.',
+        naoMuda: 'Realizadas e conciliadas não mudam.' },
+      { id: 'criar', titulo: 'Criar um lançamento novo', recomendado: false, perigo: true,
+        faz: `Cria ${nDup >= 2 ? `${nDup} parcelas novas` : 'um lançamento novo'} com a nota (pede o motivo). Os achados ficam como estão.`,
+        naoMuda: '⚠ duplica: a compra fica em dobro.' },
+    ];
+  }, [jaLancada, soltas, programadasQueDiferem, p.duplicatas.length]);
   const [confirmarJuntar, setConfirmarJuntar] = useState(false);
   /* a OPÇÃO da competência (marcada por padrão, Gabriel 26/10): as N para a emissão da nota */
   const [passarCompetencia, setPassarCompetencia] = useState(true);
@@ -420,7 +462,8 @@ export function NotaFiscalDialog({
     setSafraId(safraDaLavouraPelaData ?? '');
     setCultura(null);
   }, [lavoura, planoId, safraEditada, p.classificacao, safraDaLavouraPelaData]);
-  const registrada = doXml.ocorrencias[0] ?? null;
+  /* P128a (decisao b) — so' a nota registrada numa OC barra; a de lancamento vira um dos irmaos (a busca a acha pela chave) */
+  const registrada = doXml.ocorrencias.find((o) => o.origem === 'oc') ?? null;
   const divergencias = lido.divergencias;
   const avulsa = ehSerieAvulsa(n.serie) || ehSerieAvulsa(n.chave.slice(22, 25));
   const fazendaPeloEndereco = p.origens.fazenda === ORIGEM_FAZENDA_PELO_ENDERECO && !!p.fazendaId && fazendaId === p.fazendaId;
@@ -451,10 +494,10 @@ export function NotaFiscalDialog({
   /* P146 — o que a previa NAO conseguiu verificar trava como bloqueio (com "Tentar de novo"); o que ainda nao respondeu, espera */
   const naoVerificado = falhaJaLancada ? `Não consegui verificar se esta nota já foi lançada (${falhaJaLancada}). Nada será criado até verificar.`
     : falhaAbertos ? `Não consegui verificar os lançamentos abertos deste fornecedor (${falhaAbertos}). Nada será criado até verificar.` : null;
-  const verificando = !naoVerificado && ((doXml.ocorrencias.length === 0 && achados === null) || abertosPendente);
+  const verificando = !naoVerificado && ((!registrada && achados === null) || abertosPendente);
   const bloqueio = divergencias.length ? `A chave não confere com o lido (${divergencias.map((x) => NOME_DO_CONFERIDO[x]).join(', ')}). Nada será criado.`
     : registrada ? `Nota já registrada neste cliente · ${ondeEsta(registrada)}` : naoVerificado;
-  const podeCriar = !bloqueio && !verificando && faltas.length === 0 && !ocupado;
+  const podeCriar = !bloqueio && !verificando && faltas.length === 0 && !ocupado && !naoAchouOAberto;
   /* P74 — com o cartão, a conta origem das N é o cartão escolhido */
   const contaEscolhida = como === 'cartao' ? (cartaoId || null) : contaId && contaId !== '__none__' ? contaId : null;
   const escolhas = (): EscolhasDaNota | null => (favorecidoId && plano?.id ? {
@@ -759,51 +802,56 @@ export function NotaFiscalDialog({
             {(!estreito || aba === 'lancamento') && (<>
             {/* ── NOTA-JA-LANCADA-01: no lugar de Parcelas e Itens, o que ja' esta' lancado (mesma altura: nada se desloca) ───── */}
             {jaLancada && !bloqueio ? (
+              /* P128a (NOTA-JA-LANCADA, mock aprovado 27/10) — ESTA NOTA JÁ ESTÁ NO SISTEMA: a frase do que foi achado, a TABELA SISTEMA × NOTA com todas
+                 as parcelas (rola por dentro, cabeçalho preso; diferença em vermelho; nunca corrigida sozinha no realizado/conciliado) e os TRÊS
+                 CAMINHOS lado a lado, cada um dizendo o que muda e o que não muda. Mesma altura do bloco de parcelas: nada se desloca. */
               <section className={cn(BLOCO, 'min-h-0 flex-1')} data-testid="nota-ja-lancada">
-                <TituloDoBloco nome="Esta nota parece já lançada" acao={<span className={CHIP_AVISO}>
-                  {jaLancada.outrosParecidos ? `+${jaLancada.outrosParecidos} parecido${jaLancada.outrosParecidos === 1 ? '' : 's'} (outra compra igual?)` : 'confira antes de anexar'}</span>} />
+                <TituloDoBloco nome="Esta nota já está no sistema" acao={<span className={CHIP_AVISO}>
+                  {jaLancada.outrosParecidos ? `+${jaLancada.outrosParecidos} parecido${jaLancada.outrosParecidos === 1 ? '' : 's'} (outra compra igual?)` : 'confira e escolha o caminho'}</span>} />
+                {/* a frase: 2 linhas reservadas (nada se desloca), o texto inteiro no title */}
+                <p className="h-[26px] shrink-0 overflow-hidden whitespace-normal text-[10px] leading-[13px] text-foreground" title={fraseAchado}
+                  data-testid="nota-ja-lancada-resumo">{fraseAchado}</p>
                 <div className="min-h-0 flex-1 overflow-y-auto" data-testid="nota-ja-lancada-rolagem">
                   <table className="w-full table-fixed border-collapse">
-                    <colgroup><col style={{ width: 52 }} /><col style={{ width: 78 }} /><col /><col style={{ width: 84 }} /><col style={{ width: 96 }} /><col style={{ width: '30%' }} /></colgroup>
+                    <colgroup><col style={{ width: 40 }} /><col style={{ width: 70 }} /><col style={{ width: 70 }} /><col style={{ width: 78 }} /><col style={{ width: 78 }} />
+                      <col style={{ width: 96 }} /><col /></colgroup>
                     <thead className="sticky top-0 z-10 bg-primary"><tr>
-                      {['Parc.', 'Vencimento', 'Descrição', 'Valor', 'Status', 'Fornecedor'].map((h) => (
-                        <th key={h} className={cn(TH, h === 'Valor' && 'text-right')} title={h}>{h}</th>))}
+                      {[['Parc.', ''], ['Venc. sistema', ''], ['Venc. nota', ''], ['Valor sistema', 'n'], ['Valor nota', 'n'], ['Situação', ''], ['Documento hoje', '']].map(([h, a]) => (
+                        <th key={h} className={cn(TH, a === 'n' && 'text-right')} title={h}>{h}</th>))}
                     </tr></thead>
                     <tbody>
-                      {/* NOTA-CONTAS-NA-CRIACAO-01 C — a nota achada EM PARCELAS (valor x N = a nota): "?/N" (qual das N, a nota nao diz); a linha
-                          "falta" da nota inteira sai (seria ela de novo, em dobro) */}
-                      {[...jaLancada.porParcela.filter((x) => x.lancamento || !jaLancada.emParcelas)
-                          .map((x) => ({ chave: `p${x.parcela.n}`, rotulo: `${x.parcela.n}/${jaLancada.porParcela.length}`, dica: undefined, l: x.lancamento, parcela: x.parcela })),
-                        ...jaLancada.pelaNota.map((l) => {
-                          const fr = jaLancada.fracoes.get(l.id);
-                          /* P95 — a irma conferida pelo banco (`fracao`): a descricao diz qual das N ("… - 3/6") -> "3/6"; sem ela, "?/N" */
-                          const k = fr && l.por.includes('fracao') ? fracaoDaDescricao(l.descricao) : null;
-                          const qual = k && k.n === fr ? k.k : null;
-                          return { chave: l.id, rotulo: fr ? `${qual ?? '?'}/${fr}` : 'nº doc.', l, parcela: null,
-                            dica: fr ? (qual ? `parcela ${qual} de ${fr} (pela descrição do lançamento)`
-                              : `parcela ? de ${fr} da nota: ${fr} × R$ ${reais(l.valorCent)} = R$ ${reais(n.totais.notaCent)} (qual das ${fr}, a nota não diz)`) : undefined };
-                        }),
-                        /* D — os CANCELADOS desta nota: no fim, cinza, com o selo; nunca contam nem recebem o "Anexar" */
-                        ...jaLancada.cancelados.map((l) => ({ chave: l.id, rotulo: '—', l, parcela: null, dica: 'cancelado: não conta como já lançada' }))].map((x) => (
-                        <tr key={x.chave} className={cn('border-b border-border/50', !x.l && 'bg-amber-50/60', x.l?.cancelado && 'text-muted-foreground')}
-                          data-testid={x.l?.cancelado ? 'nota-ja-lancada-cancelado' : 'nota-ja-lancada-linha'}>
-                          <td className={cn(TDN, 'text-left')} title={x.dica} data-testid="nota-ja-lancada-parc">{x.rotulo}</td>
-                          {x.l ? (<>
-                            <td className={cn(TDN, 'text-left')}>{dataInteira(x.l.vencimento ?? x.l.pagamento ?? x.l.competencia)}</td>
-                            <td className={TD} title={x.l.descricao ?? ''}>{x.l.descricao ?? '—'}</td>
-                            <td className={TDN}>{reais(x.l.valorCent)}</td>
-                            {x.l.cancelado ? (
-                              <td className={TD} title={`cancelado (era ${x.l.status ?? '—'})`}><span className={CHIP_CANCELADO} data-testid="nota-selo-cancelado">cancelado</span></td>
-                            ) : (
-                              <td className={TD} title={x.l.conciliado ? 'conciliado com o extrato' : undefined}>{x.l.status ?? '—'}{x.l.conciliado ? ' · conc.' : ''}</td>
-                            )}
-                            <td className={TD} title={`${x.l.fornecedorNome ?? ''}${x.l.fornecedorPor === 'nome' ? ' — sem CNPJ, nome parecido' : x.l.fornecedorPor === 'mesclado' ? ' — mesclado' : ''}`}>{x.l.fornecedorNome ?? '—'}</td>
-                          </>) : (<>
-                            <td className={cn(TDN, 'text-left')}>{dataInteira(x.parcela?.vencimento)}</td>
-                            <td className={cn(TD, 'text-amber-800')} title="falta · não achada no cliente">falta · não achada no cliente</td>
-                            <td className={TDN}>{reais(x.parcela?.valorCent ?? 0)}</td>
-                            <td className={TD}>—</td><td className={TD}>—</td>
-                          </>)}
+                      {linhasDaTabela.map((x) => {
+                        const l = x.sistema;
+                        const doc0 = !l ? '—' : l.temEstaNota ? 'com esta nota' : (l.documentos ?? 0) > 0
+                          ? `${l.documentos} ${l.documentos === 1 ? 'arquivo' : 'arquivos'} · sem esta nota` : 'sem a nota';
+                        /* P128a (porta 2) — o lancamento aberto no Editar */
+                        const doc = l && l.id === partindoDe ? `este lançamento · ${doc0}` : doc0;
+                        return (
+                          <tr key={x.chave} className={cn('border-b border-border/50', x.situacao === 'so_na_nota' && 'bg-amber-50/60', l && l.id === partindoDe && 'font-semibold')}
+                            data-testid="nota-ja-lancada-linha" data-situacao={x.situacao} data-este={l && l.id === partindoDe ? '' : undefined}>
+                            <td className={cn(TDN, 'text-left')} title={x.dica ?? l?.descricao ?? undefined} data-testid="nota-ja-lancada-parc">{x.rotulo}</td>
+                            <td className={cn(TDN, 'text-left', x.difData && 'font-medium text-destructive')} data-testid="nota-ja-lancada-venc-sistema"
+                              title={x.difData ? 'o vencimento do sistema difere do da nota' : undefined}>{l ? dataInteira(l.vencimento ?? l.pagamento ?? l.competencia) : '—'}</td>
+                            <td className={cn(TDN, 'text-left text-muted-foreground')}>{x.notaVencimento ? dataInteira(x.notaVencimento) : '—'}</td>
+                            <td className={cn(TDN, x.difValor && 'font-medium text-destructive')} data-testid="nota-ja-lancada-valor-sistema"
+                              title={x.difValor ? 'o valor do sistema difere do da nota' : undefined}>{l ? reais(l.valorCent) : '—'}</td>
+                            <td className={cn(TDN, 'text-muted-foreground')}>{x.notaValorCent !== null ? reais(x.notaValorCent) : '—'}</td>
+                            <td className={TD} title={l?.conciliado ? 'conciliada com o extrato: valor, data, conta e status nunca mudam' : TEXTO_DA_SITUACAO[x.situacao]}>
+                              <span className={CHIP_DA_SITUACAO[x.situacao]} data-testid="nota-ja-lancada-situacao">{TEXTO_DA_SITUACAO[x.situacao]}</span></td>
+                            <td className={cn(TD, 'text-muted-foreground')} title={doc}>{doc}</td>
+                          </tr>
+                        );
+                      })}
+                      {/* D — os CANCELADOS desta nota: no fim, cinza, com o selo; nunca contam nem recebem a nota */}
+                      {jaLancada.cancelados.map((l) => (
+                        <tr key={l.id} className="border-b border-border/50 text-muted-foreground" data-testid="nota-ja-lancada-cancelado">
+                          <td className={cn(TDN, 'text-left')} title="cancelado: não conta como já lançada">—</td>
+                          <td className={cn(TDN, 'text-left')}>{dataInteira(l.vencimento ?? l.pagamento ?? l.competencia)}</td>
+                          <td className={cn(TDN, 'text-left')}>—</td>
+                          <td className={TDN}>{reais(l.valorCent)}</td>
+                          <td className={TDN}>—</td>
+                          <td className={TD} title={`cancelado (era ${l.status ?? '—'})`}><span className={CHIP_CANCELADO} data-testid="nota-selo-cancelado">cancelado</span></td>
+                          <td className={TD} title={l.descricao ?? ''}>{l.descricao ?? '—'}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -818,23 +866,30 @@ export function NotaFiscalDialog({
                       onClick={() => setConfirmarNotaLida(true)} data-testid="nota-usar-nota-lida">Usar a nota lida</Button>
                   </div>
                 )}
-                <div className="mt-1 flex h-5 shrink-0 items-center gap-3 text-[10px]">
-                  {jaLancada.faltam.length > 0 && (
-                    <label className="flex shrink-0 items-center gap-1.5" data-testid="nota-criar-faltam">
-                      <Checkbox checked={criarFaltam} onCheckedChange={(v) => setCriarFaltam(v === true)} className="h-3 w-3" />
-                      Criar só {jaLancada.faltam.length === 1 ? 'a parcela que falta' : `as ${jaLancada.faltam.length} parcelas que faltam`}
-                    </label>
-                  )}
-                  {favorecidoId && fornecedor && jaLancada.alvos.some((l) => l.fornecedorId !== favorecidoId) && (
-                    <label className="flex min-w-0 items-center gap-1.5" data-testid="nota-trocar-fornecedor" title={`Troca o fornecedor dos lançamentos achados para ${fornecedor.nome} (com trilha e desfazer).`}>
-                      <Checkbox checked={trocarFornecedor} onCheckedChange={(v) => setTrocarFornecedor(v === true)} className="h-3 w-3" />
-                      <span className="min-w-0 uma-linha-que-rola">Trocar o fornecedor para {fornecedor.nome}</span>
-                    </label>
-                  )}
-                  <span className="ml-auto min-w-0 uma-linha-que-rola text-muted-foreground" title="Anexar põe a NF nos lançamentos achados; valor, data, status, conta e conciliação não mudam.">Valor, data, status e conciliação não mudam.</span>
-                  <button type="button" className="shrink-0 font-medium text-primary underline underline-offset-2 disabled:opacity-50" disabled={!podeCriar}
-                    onClick={() => setMesmoAssim('')} data-testid="nota-criar-mesmo-assim" title={podeCriar ? 'É outra compra: criar mesmo assim (pede o motivo).' : `Para criar, falta: ${faltas.join(', ')}`}>Criar mesmo assim</button>
+                {/* os TRÊS CAMINHOS lado a lado (altura fixa: o texto de cada um em 3 linhas reservadas) */}
+                <div className="mt-1 grid shrink-0 grid-cols-3 gap-1.5" role="radiogroup" aria-label="O que fazer com esta nota" data-testid="nota-caminhos">
+                  {caminhosDaNota.map((c) => (
+                    <button key={c.id} type="button" role="radio" aria-checked={caminho === c.id} onClick={() => setCaminho(c.id)} data-testid={`nota-caminho-${c.id}`}
+                      className={cn('flex h-[66px] min-w-0 flex-col items-start gap-0.5 rounded border px-1.5 py-1 text-left',
+                        caminho === c.id ? 'border-primary bg-primary/5' : 'border-border bg-card')}>
+                      <span className="flex w-full min-w-0 items-center gap-1 text-[10.5px] font-semibold leading-[13px]">
+                        <span className="shrink-0">{caminho === c.id ? '◉' : '○'}</span>
+                        <span className="min-w-0 uma-linha-que-rola">{c.titulo}</span>
+                        {c.recomendado && <span className={cn(CHIP_OK, 'ml-auto shrink-0')}>recomendado</span>}
+                      </span>
+                      <span className="h-[26px] w-full overflow-hidden whitespace-normal text-[9.5px] leading-[13px] text-foreground" title={c.faz}>{c.faz}</span>
+                      <span className={cn('h-[13px] w-full overflow-hidden whitespace-nowrap text-[9.5px] leading-[13px]', c.perigo ? 'font-medium text-destructive' : 'text-muted-foreground')}
+                        title={c.naoMuda}>{c.naoMuda}</span>
+                    </button>
+                  ))}
                 </div>
+                {favorecidoId && fornecedor && jaLancada.alvos.some((l) => l.fornecedorId !== favorecidoId) && (
+                  <label className="mt-1 flex h-4 min-w-0 shrink-0 items-center gap-1.5 text-[10px]" data-testid="nota-trocar-fornecedor"
+                    title={`Troca o fornecedor dos lançamentos achados para ${fornecedor.nome} (com trilha e desfazer).`}>
+                    <Checkbox checked={trocarFornecedor} onCheckedChange={(v) => setTrocarFornecedor(v === true)} className="h-3 w-3" />
+                    <span className="min-w-0 uma-linha-que-rola">Trocar o fornecedor para {fornecedor.nome}</span>
+                  </label>
+                )}
               </section>
             ) : (
             <div className="grid min-h-0 flex-1 grid-cols-2 gap-1.5">
@@ -1069,15 +1124,15 @@ export function NotaFiscalDialog({
             </span>
           ) : erro ? (
             <span className="min-w-0 uma-linha-que-rola text-destructive" title={erro} data-testid="nota-erro">⚠ {erro}</span>
+          ) : naoAchouOAberto && !jaLancada ? (
+            <span className="min-w-0 uma-linha-que-rola text-destructive" data-testid="nota-porta2-nao-achado"
+              title="Aberta pelo Editar lançamento: a busca (nº, chave, soma) não achou este lançamento; criar daqui duplicaria a compra.">
+              ⚠ O lançamento aberto não foi achado por esta nota. Nada será criado daqui.</span>
           ) : faltas.length ? (
             <span className="min-w-0 uma-linha-que-rola text-destructive" data-testid="nota-falta">⚠ Falta: {faltas.join(', ')}</span>
           ) : null}
           {!bloqueio && !erro && jaLancada ? (
-            <span className="min-w-0 uma-linha-que-rola font-medium text-amber-900" data-testid="nota-ja-lancada-frase">
-              {jaLancada.emParcelas ? fraseEmParcelas(jaLancada, n.totais.notaCent) : <>
-              Esta nota parece já lançada: {jaLancada.porParcela.length - jaLancada.faltam.length} de {jaLancada.porParcela.length} {jaLancada.porParcela.length === 1 ? 'parcela' : 'parcelas'}
-              {jaLancada.faltam.length ? ` · faltam ${jaLancada.faltam.map((f) => `${f.n}/${jaLancada.porParcela.length}`).join(', ')}` : ''}. Nada será criado em dobro.</>}
-            </span>
+            <span className="min-w-0 uma-linha-que-rola font-medium text-amber-900" data-testid="nota-ja-lancada-frase">Nada é gravado antes de você clicar.</span>
           ) : !bloqueio && !erro && aberto ? (
             /* o pedido do Gabriel: ATUALIZAR o que ja' existe, em vez de criar outro (so' com confirmacao) */
             <span className="flex min-w-0 items-center gap-2 text-amber-900" data-testid="nota-atualizar-faixa"
@@ -1101,25 +1156,36 @@ export function NotaFiscalDialog({
           ) : null}
           <span className="ml-auto" />
           <Button type="button" size="sm" variant="outline" className="h-[24px] shrink-0 px-2.5 text-[10.5px]" disabled={!!ocupado} onClick={onClose}>Cancelar</Button>
-          <Button type="button" size="sm" variant="outline" className="h-[24px] shrink-0 px-2.5 text-[10.5px]" disabled={!!ocupado || !!bloqueio || verificando} onClick={abrirNoLancamento}
+          {/* P128a (porta 2) — aberta pelo Editar: o Novo lançamento criaria outro (o lugar fica reservado: nada se desloca) */}
+          <Button type="button" size="sm" variant="outline" className={cn('h-[24px] shrink-0 px-2.5 text-[10.5px]', partindoDe && 'invisible')}
+            disabled={!!ocupado || !!bloqueio || verificando || !!partindoDe} onClick={abrirNoLancamento}
             title="Abre o Novo lançamento com tudo o que foi lido e escolhido aqui (nada se perde)." data-testid="nota-abrir-no-lancamento">
             No Novo lançamento
           </Button>
           {/* o botao principal tem a MESMA largura nos dois estados (nada se desloca); "Criar mesmo assim" mora no bloco */}
-          {jaLancada && !bloqueio && soltas ? (
+          {/* P128a — o botão principal faz o CAMINHO escolhido no bloco (a MESMA largura em todos: nada se desloca) */}
+          {jaLancada && !bloqueio && caminho === 'atualizar' ? (
+            <Button type="button" size="sm" className="h-[24px] w-[180px] shrink-0 px-2.5 text-[10.5px]" data-testid="nota-atualizar-nao-pagas"
+              disabled title="A gravação deste caminho chega na próxima fatia (P128b).">Completar e atualizar</Button>
+          ) : jaLancada && !bloqueio && caminho === 'criar' ? (
+            <Button type="button" size="sm" variant="destructive" className="h-[24px] w-[180px] shrink-0 px-2.5 text-[10.5px]" data-testid="nota-criar-duplicando"
+              disabled={!podeCriar} onClick={() => setMesmoAssim('')} title={podeCriar ? 'É outra compra: criar mesmo assim (pede o motivo).' : `Para criar, falta: ${faltas.join(', ')}`}>
+              {ocupado === 'criar' ? 'Criando…' : 'Criar novo (duplica)'}
+            </Button>
+          ) : jaLancada && !bloqueio && soltas ? (
             /* P96a — as N soltas achadas inteiras: o gesto é JUNTAR (e anexar); "Só anexar a nota" fica na confirmação */
             <Button type="button" size="sm" className="h-[24px] w-[180px] shrink-0 px-2.5 text-[10.5px]" data-testid="nota-juntar-soltas"
               disabled={!!ocupado} onClick={() => setConfirmarJuntar(true)}>
               {ocupado === 'juntar' ? 'Juntando…' : ocupado === 'atualizar' ? 'Anexando…' : `Juntar as ${soltas.n} e anexar`}
             </Button>
-          ) : jaLancada && !bloqueio ? (<>
+          ) : jaLancada && !bloqueio ? (
             <Button type="button" size="sm" className="h-[24px] w-[180px] shrink-0 px-2.5 text-[10.5px]" data-testid="nota-anexar-ja-lancados"
               disabled={!!ocupado || (criarFaltam && jaLancada.faltam.length > 0 && faltas.length > 0)} onClick={() => { void anexarJaLancados(); }}>
               {ocupado === 'atualizar' ? 'Anexando…' : criarFaltam && jaLancada.faltam.length
                 ? `Anexar e criar ${jaLancada.faltam.length === 1 ? 'a que falta' : `as ${jaLancada.faltam.length} que faltam`}`
                 : `Anexar a nota a ${jaLancada.alvos.length === 1 ? 'este' : `estes ${jaLancada.alvos.length}`}`}
             </Button>
-          </>) : (
+          ) : (
           <Button type="button" size="sm" className="h-[24px] w-[180px] shrink-0 px-2.5 text-[10.5px]" disabled={!podeCriar} onClick={() => { void criar(); }} data-testid="nota-criar"
             title={bloqueio ?? (verificando ? 'Verificando se esta nota já foi lançada…' : undefined)}>
             {ocupado === 'criar' ? 'Criando…' : cabeAqui ? `Criar ${nParcelas} parcelas` : 'Criar lançamento'}

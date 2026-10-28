@@ -804,6 +804,16 @@ if (tela === 'mesclar') {
           pagamento: null, competencia: '2026-09-15', descricao: `Medicamentos Bovinos Sinteticos no cartão, lançado à mão com descrição comprida - ${i + 1}/4`, valor_cent,
           status: i < 2 ? 'realizado' : 'agendado', conciliado: false, financiamento_id: null, numero_documento: i >= 2 ? 'NF_000.000.937' : null, fornecedor_id: 'agro-s',
           fornecedor_nome: 'Agro Sintetica Insumos Agropecuarios Ltda', fornecedor_por: 'cnpj', parcelas: [], por: i >= 2 ? ['numero', 'fracao'] : ['fracao'], fracao_n: 4 }))
+        /* P128a — `v=diferenca`: a nota no sistema com DIFERENCA (o molde Ferri & Prado: o dia 4 depois, a 3ª com R$ 0,34 a mais), a 1ª
+           conciliada, a 2ª com a nota já anexada (+1 arquivo), a 4ª programada e um irmão do parcelamento que SOBRA ("só no sistema"). SINTÉTICOS. */
+        : fn === 'fn_nota_ja_lancada' && v === 'diferenca' ? [
+          ...[['2026-10-24', 49164, 'realizado'], ['2026-11-24', 49164, 'realizado'], ['2026-12-24', 49198, 'programado'], ['2027-01-24', 49164, 'programado'], ['2027-02-24', 49164, 'programado']]
+            .map(([venc, valor_cent, st], i) => ({ id: `jl-d${i}`, vencimento: venc, pagamento: st === 'realizado' ? venc : null, competencia: '2026-09-15',
+              descricao: `Medicamentos Bovinos Sinteticos com descricao bem comprida para o pior caso ${i + 1}/5`, valor_cent, status: st, conciliado: i === 0,
+              financiamento_id: 'fin-d', numero_documento: i === 0 ? 'NF 937' : null, fornecedor_id: 'agro-s', fornecedor_nome: 'Agro Sintetica Insumos Agropecuarios Ltda',
+              fornecedor_por: 'cnpj', parcelas: [], por: i === 0 ? ['numero'] : i === 1 ? ['chave'] : ['parcelamento'], parcela_n: i + 1,
+              tem_esta_nota: i === 1, documentos: i === 1 ? 2 : i === 0 ? 1 : 0 })),
+        ]
         : fn === 'fn_nota_ja_lancada' && v === 'emparcela' ? [{ id: 'jl-p1', vencimento: '2026-10-20', pagamento: null, competencia: '2026-09-15',
           descricao: 'Medicamentos Bovinos Sinteticos — lançado à mão como uma parcela da nota', valor_cent: 49164, status: 'agendado', conciliado: false,
           financiamento_id: null, numero_documento: 'NF_000.000.937', fornecedor_id: 'agro-s', fornecedor_nome: 'Agro Sintetica Insumos Agropecuarios Ltda',
@@ -1146,6 +1156,8 @@ if (v === 'ref') props.referenciaOperacionalInfo = { fornecedor_texto: 'AGROPECU
   }
   raiz.render(<QueryClientProvider client={qc}><MemoryRouter><Casca />
     <LancamentoV2Dialog open onClose={() => {}} onSave={async () => 'x'} fazendas={FAZENDAS} contas={CONTAS} classificacoes={CLASSIF}
-      fornecedores={[AGRO]} safras={SAFRAS} onCriarFornecedor={async () => null} {...props} />
+      fornecedores={[AGRO]} safras={SAFRAS} onCriarFornecedor={async () => null}
+      /* P128a (porta 2) — o "Ler a NF" do Documentos do Editar (na bancada, a prévia não abre) */
+      onLerNotaFiscal={async () => null} {...props} />
   </MemoryRouter></QueryClientProvider>);
 }

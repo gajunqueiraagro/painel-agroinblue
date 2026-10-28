@@ -145,7 +145,7 @@ const FORN: FornecedorV2 = {
   banco: null, agencia: null, conta: null, tipo_conta: null, cpf_cnpj_pagamento: null, nome_favorecido: null, observacao_pagamento: null,
 };
 
-function abrir(nota: NotaParaLancar, extra: { fornecedores?: FornecedorV2[]; g?: Gravadores; onCriarLancamento?: (f: LancamentoV2Form) => Promise<string | null>; contas?: ContaBancariaV2[]; gj?: GravadoresDaJuncao } = {}) {
+function abrir(nota: NotaParaLancar, extra: { fornecedores?: FornecedorV2[]; g?: Gravadores; onCriarLancamento?: (f: LancamentoV2Form) => Promise<string | null>; contas?: ContaBancariaV2[]; gj?: GravadoresDaJuncao; partindoDe?: string | null } = {}) {
   const onCriarFornecedor = vi.fn(async (nome: string, _faz: string | null, _doc?: string): Promise<FornecedorV2 | null> => ({ ...FORN, id: 'forn-novo', nome }));
   const props = {
     onClose: vi.fn(), onCriado: vi.fn(), onAbrirNoLancamento: vi.fn(), onAbrirRegistrada: vi.fn(), onCriarFornecedor,
@@ -155,7 +155,7 @@ function abrir(nota: NotaParaLancar, extra: { fornecedores?: FornecedorV2[]; g?:
   render(
     <QueryClientProvider client={new QueryClient()}>
       <NotaFiscalDialog open clienteId="cli" clienteNome="NJ" nota={nota} fazendas={FAZENDAS} contas={extra.contas ?? CONTAS} classificacoes={PLANO} safras={SAFRAS}
-        fornecedores={extra.fornecedores ?? []} gravadores={extra.g} consultarReceita={RECEITA} onCriarLancamento={extra.onCriarLancamento} gravadoresDaJuncao={extra.gj} {...props} />
+        fornecedores={extra.fornecedores ?? []} gravadores={extra.g} consultarReceita={RECEITA} onCriarLancamento={extra.onCriarLancamento} gravadoresDaJuncao={extra.gj} partindoDe={extra.partindoDe} {...props} />
     </QueryClientProvider>,
   );
   return props;
@@ -309,9 +309,18 @@ describe('N10 — a fazenda pela nota', () => {
 });
 
 describe('N3 — o que barra', () => {
-  it('a segunda leitura da mesma nota: barrada, com o link para a que já existe', () => {
+  /* P128a (decisao b) — a nota ja' anexada a um LANCAMENTO nao barra: e' o ponto de partida, a busca dos irmaos roda igual */
+  it('a nota já anexada a um lançamento: NÃO barra — a busca da nota já lançada roda igual', async () => {
     const onde: OcorrenciaDaNota = { origem: 'lancamento', documentoId: 'd1', lancamentoId: 'l9', operacaoId: null, operacaoTipo: null, numero: '000.000.937', descricao: 'NF 937 · compra', data: '2026-09-15', valor: 491.64 };
+    abrir(montarNota({ ocorrencias: [onde], fornecedores: [FORN] }));
+    await waitFor(() => expect(consultas.notaJaLancada).toHaveBeenCalled());
+    expect(screen.queryByTestId('nota-bloqueio')).toBeNull();
+    expect(consultas.lancamentosAbertosComValor).toHaveBeenCalled();
+  });
+  it('a nota registrada numa OC: barrada, com o link para a que já existe; a busca não roda', () => {
+    const onde: OcorrenciaDaNota = { origem: 'oc', documentoId: 'd1', lancamentoId: null, operacaoId: 'op9', operacaoTipo: 'compra', numero: '000.000.937', descricao: 'NF 937 · compra', data: '2026-09-15', valor: 491.64 };
     const props = abrir(montarNota({ ocorrencias: [onde], fornecedores: [FORN] }));
+    expect(consultas.notaJaLancada).not.toHaveBeenCalled();
     expect(screen.getByTestId('nota-bloqueio').textContent).toContain('Nota já registrada neste cliente');
     expect(screen.getByTestId('nota-criar')).toBeDisabled();
     fireEvent.click(screen.getByTestId('nota-abrir-registrada'));
@@ -563,7 +572,12 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
     const bloco = await screen.findByTestId('nota-ja-lancada');
     expect(within(bloco).getAllByTestId('nota-ja-lancada-linha')).toHaveLength(4);
     expect(screen.queryByTestId('nota-criar')).toBeNull();
-    expect(screen.getByTestId('nota-ja-lancada-frase').textContent).toContain('4 de 4 parcelas');
+    expect(screen.getByTestId('nota-ja-lancada-resumo').textContent).toContain('4 de 4 parcelas desta nota já estão lançadas');
+    expect(screen.getByTestId('nota-ja-lancada-frase').textContent).toBe('Nada é gravado antes de você clicar.');
+    /* P128a (decisao c) — a 3/4 tem 1 centavo a mais no sistema: o valor em vermelho, nunca corrigido; as outras sem vermelho */
+    const valores = within(bloco).getAllByTestId('nota-ja-lancada-valor-sistema');
+    expect(valores.map((v) => v.className.includes('text-destructive'))).toEqual([false, false, true, false]);
+    expect(within(bloco).getAllByTestId('nota-ja-lancada-situacao').map((x) => x.textContent)).toEqual(['conciliada', 'conciliada', 'conciliada', 'programada']);
     const pedido = consultas.notaJaLancada.mock.calls[0][1] as { parcelas: { n: number; vencimento: string; valorCent: number }[]; chave: string };
     expect(pedido.parcelas).toEqual([1, 2, 3, 4].map((n, i) => ({ n, vencimento: ['2026-10-20', '2026-11-20', '2026-12-20', '2027-01-20'][i], valorCent: 49164 })));
     expect(pedido.chave).toBe('50260911222333000424550100000009371217538298');
@@ -586,7 +600,11 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
     const { g, comoGravadores } = gravadoresFalsos();
     const props = abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
     await screen.findByTestId('nota-ja-lancada');
-    expect(screen.getByTestId('nota-ja-lancada-frase').textContent).toContain('faltam 4/4');
+    expect(screen.getByTestId('nota-ja-lancada-resumo').textContent).toContain('3 de 4 parcelas desta nota já estão lançadas');
+    expect(screen.getByTestId('nota-ja-lancada-resumo').textContent).toContain('1 só na nota');
+    const linhas = within(screen.getByTestId('nota-ja-lancada')).getAllByTestId('nota-ja-lancada-linha');
+    expect(linhas.map((l) => l.getAttribute('data-situacao'))).toEqual(['conciliada', 'conciliada', 'conciliada', 'so_na_nota']);
+    expect(within(linhas[3]).getByTestId('nota-ja-lancada-situacao').textContent).toBe('só na nota → criar');
     expect(screen.getByTestId('nota-anexar-ja-lancados')).toBeDisabled();   // falta o subcentro para criar a que falta
     await escolherSubcentro('Nutrição Engorda');
     await waitFor(() => expect(screen.getByTestId('nota-anexar-ja-lancados')).toBeEnabled());
@@ -609,13 +627,17 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
     await waitFor(() => expect(props.onCriado).toHaveBeenCalled());
     expect(g.trocarFornecedor).toHaveBeenCalledWith('cli', ['velho-1', 'velho-2', 'velho-3', 'velho-4'], 'f1', expect.stringContaining('fornecedor da'));
   });
-  it('"Criar mesmo assim" pede o motivo; o parcelamento nasce com o motivo na observacao', async () => {
+  /* P128a — o "Criar mesmo assim" virou o 3º CAMINHO ("Criar um lançamento novo", com o aviso vermelho de que duplica) */
+  it('o caminho "Criar um lançamento novo" avisa que duplica e pede o motivo; o parcelamento nasce com o motivo na observacao', async () => {
     consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: QUATRO });
     const { g, comoGravadores } = gravadoresFalsos();
     const props = abrir(montarNota({ fornecedores: [FORN] }), { g: comoGravadores });
     await screen.findByTestId('nota-ja-lancada');
+    expect(screen.queryByTestId('nota-criar-mesmo-assim')).toBeNull();
     await escolherSubcentro('Nutrição Engorda');
-    fireEvent.click(screen.getByTestId('nota-criar-mesmo-assim'));
+    fireEvent.click(screen.getByTestId('nota-caminho-criar'));
+    expect(screen.getByTestId('nota-caminho-criar').textContent).toContain('duplica');
+    fireEvent.click(screen.getByTestId('nota-criar-duplicando'));
     expect(screen.getByTestId('nota-mesmo-assim-confirmar')).toBeDisabled();
     fireEvent.change(screen.getByTestId('nota-mesmo-assim-motivo'), { target: { value: 'outra compra igual no mesmo dia' } });
     fireEvent.click(screen.getByTestId('nota-mesmo-assim-confirmar'));
@@ -634,7 +656,7 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
     const parc = within(linhas[0]).getByTestId('nota-ja-lancada-parc');
     expect(parc.textContent).toBe('?/4');
     expect(parc.getAttribute('title')).toBe('parcela ? de 4 da nota: 4 × R$ 491,64 = R$ 1.966,56 (qual das 4, a nota não diz)');
-    expect(screen.getByTestId('nota-ja-lancada-frase').textContent).toBe('Esta nota parece já lançada em parcelas: achada 1 de 4 (R$ 491,64 cada). Nada será criado em dobro.');
+    expect(screen.getByTestId('nota-ja-lancada-resumo').textContent).toContain('1 de 4 parcelas desta nota já estão lançadas (R$ 491,64 cada)');
     expect(screen.queryByTestId('nota-criar-faltam')).toBeNull();
     expect(screen.getByTestId('nota-anexar-ja-lancados').textContent).toBe('Anexar a nota a este');
   });
@@ -652,7 +674,8 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
     expect(within(linhas[4]).getByTestId('nota-selo-cancelado').textContent).toBe('cancelado');
     expect(linhas[4].textContent).not.toContain('programado');
     expect(linhas[5].textContent).not.toContain('agendado');
-    expect(screen.getByTestId('nota-ja-lancada-frase').textContent).toContain('4 de 4 parcelas');
+    expect(screen.getByTestId('nota-ja-lancada-resumo').textContent).toContain('4 de 4 parcelas desta nota já estão lançadas');
+    expect(screen.getByTestId('nota-ja-lancada-resumo').textContent).toContain('2 cancelados (não contam)');
     expect(screen.getByTestId('nota-anexar-ja-lancados').textContent).toBe('Anexar a nota a estes 4');
   });
   it('D — so\' cancelados: a nota NAO esta\' lancada — "Criar 4 parcelas" e o rodape diz "Há 2 lançamentos cancelados desta nota (não contam)"', async () => {
@@ -661,6 +684,23 @@ describe('NOTA-JA-LANCADA-01 — a nota que ja\' esta\' lancada', () => {
     expect((await screen.findByTestId('nota-so-cancelados')).textContent).toBe(' Há 2 lançamentos cancelados desta nota (não contam).');
     expect(screen.queryByTestId('nota-ja-lancada')).toBeNull();
     expect(screen.getByTestId('nota-criar').textContent).toBe('Criar 4 parcelas');
+  });
+  /* P128a (porta 2) — a previa aberta pelo Documentos do Editar lancamento, partindo dele */
+  it('porta 2: o lançamento aberto achado é "este lançamento" na tabela; "No Novo lançamento" some (o lugar fica)', async () => {
+    consultas.notaJaLancada.mockResolvedValue({ ok: true, valor: QUATRO });
+    abrir(montarNota({ fornecedores: [FORN] }), { partindoDe: 'velho-2' });
+    const bloco = await screen.findByTestId('nota-ja-lancada');
+    const linhas = within(bloco).getAllByTestId('nota-ja-lancada-linha');
+    expect(linhas.map((l) => l.hasAttribute('data-este'))).toEqual([false, true, false, false]);
+    expect(linhas[1].textContent).toContain('este lançamento');
+    const novo = screen.getByTestId('nota-abrir-no-lancamento');
+    expect([novo.className.includes('invisible'), novo.hasAttribute('disabled')]).toEqual([true, true]);
+  });
+  it('porta 2: o lançamento aberto NÃO achado pela nota e nada mais achado — a frase e o Criar travado (criaria em dobro)', async () => {
+    abrir(montarNota({ fornecedores: [FORN] }), { partindoDe: 'aberto-no-editar' });
+    expect((await screen.findByTestId('nota-porta2-nao-achado')).textContent).toContain('O lançamento aberto não foi achado por esta nota');
+    await escolherSubcentro('Nutrição Engorda');
+    expect(screen.getByTestId('nota-criar')).toBeDisabled();
   });
   it('nada achado: o de sempre ("Criar 4 parcelas"), sem o bloco', async () => {
     abrir(montarNota({ fornecedores: [FORN] }));
@@ -737,8 +777,8 @@ describe('P95 — a nota achada em N parcelas soltas (as irmas da fracao)', () =
     const bloco = await screen.findByTestId('nota-ja-lancada');
     const parcs = within(bloco).getAllByTestId('nota-ja-lancada-parc').map((x) => x.textContent);
     expect(parcs).toEqual(['1/4', '2/4', '3/4', '4/4']);
-    expect(screen.getByTestId('nota-ja-lancada-frase').textContent)
-      .toBe('Esta nota parece já lançada em parcelas: achadas 4 de 4 · soma R$ 1.966,52 · nota R$ 1.966,56 · diferença R$ 0,04. Nada será criado em dobro.');
+    expect(screen.getByTestId('nota-ja-lancada-resumo').textContent)
+      .toBe('4 lançamentos soltos desta nota · soma R$ 1.966,52 × nota R$ 1.966,56 (diferença R$ 0,04) · achados pelo nº da nota · 4 conciliadas');
     expect(screen.queryByTestId('nota-criar-faltam')).toBeNull();
     /* P96a — as 4 achadas inteiras: o gesto é JUNTAR (e anexar); "Só anexar a nota" fica na confirmação */
     expect(screen.getByTestId('nota-juntar-soltas').textContent).toBe('Juntar as 4 e anexar');

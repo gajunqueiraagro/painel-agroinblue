@@ -22,13 +22,23 @@ export interface LancamentoJaLancado {
   /** como o cadastro dele se parece com o emitente: 'cnpj' (mesma raiz), 'nome' (sem CNPJ, nome parecido), 'mesclado' */
   fornecedorPor: string | null;
   parcelas: { n: number; difCent: number; difDias: number }[];
-  /** P95 — 'fracao': a IRMA de uma achada pelo numero/chave ("… - 3/6": mesmo fornecedor, mesmo N, valor ≈ nota/N) */
-  por: ('valor' | 'numero' | 'chave' | 'fracao')[];
+  /** P95 — 'fracao': a IRMA de uma achada pelo numero/chave ("… - 3/6": mesmo fornecedor, mesmo N, valor ≈ nota/N).
+   *  P128a — 'documento': o numero num documento anexado; 'soma': o parcelamento do emitente que soma EXATAMENTE a nota; 'parcelamento':
+   *  so' por ser irmao (do mesmo parcelamento) de um achado — a parcela que SOBRA no sistema aparece */
+  por: PorDoAchado[];
+  /** P128a — o numero da parcela no parcelamento (`financiamento_parcelas`); `null` no solto */
+  parcelaN?: number | null;
+  /** P128a — o documento com ESTA chave ja' esta' nele; e quantos documentos vivos ele tem ("Documento hoje") */
+  temEstaNota?: boolean;
+  documentos?: number;
   /** P95 — o N da fracao "k/N" da descricao, quando o banco a conferiu (valor ≈ nota/N); `null` sem ela */
   fracaoN?: number | null;
   /** NOTA-CONTAS-NA-CRIACAO-01 D — cancelado: aparece cinza, no fim, e NUNCA conta como "ja' lancada" nem recebe o "Anexar" */
   cancelado: boolean;
 }
+
+export type PorDoAchado = 'valor' | 'numero' | 'chave' | 'fracao' | 'documento' | 'soma' | 'parcelamento';
+const PORES: readonly PorDoAchado[] = ['valor', 'numero', 'chave', 'fracao', 'documento', 'soma', 'parcelamento'];
 
 export interface ParcelaDaNotaParaCasar { n: number; vencimento: string; valorCent: number }
 
@@ -74,7 +84,23 @@ export function casarJaLancados(parcelas: readonly ParcelaDaNotaParaCasar[], tod
     daParcela.set(x.n, x.l);
     usados.add(x.l.id);
   }
-  const pelaNota = achados.filter((l) => !usados.has(l.id) && (l.por.includes('numero') || l.por.includes('chave') || l.por.includes('fracao')));
+  /* P128a — a parcela da nota SEM par pelo valor casa com o achado pela nota (numero, documento, chave, soma, mesmo parcelamento) de data mais
+     PROXIMA (ate' 20 dias): e' a mesma parcela com valor ou dia diferente (Ferri & Prado: 05/11 × 09/11, 1.904,00 × 1.904,34) — a tabela
+     mostra a diferenca em vermelho; sem isso ela viraria "falta → criar" + "a mais no sistema" (em dobro). Nunca na nota de UMA parcela. */
+  const pelaNotaPor = (l: LancamentoJaLancado) => l.por.some((x) => x !== 'valor');
+  if (parcelas.length > 1) {
+    const dia = (x: string | null) => (x ? Date.parse(`${x}T12:00:00Z`) / 86_400_000 : Number.NaN);
+    for (const parcela of [...parcelas].sort((a, b) => a.n - b.n)) {
+      if (daParcela.has(parcela.n)) continue;
+      const melhor = achados
+        .filter((l) => !usados.has(l.id) && pelaNotaPor(l))
+        .map((l) => ({ l, d: Math.abs(dia(l.vencimento ?? l.pagamento ?? l.competencia) - dia(parcela.vencimento)) }))
+        .filter((x) => x.d <= 20)
+        .sort((a, b) => a.d - b.d || a.l.id.localeCompare(b.l.id))[0];
+      if (melhor) { daParcela.set(parcela.n, melhor.l); usados.add(melhor.l.id); }
+    }
+  }
+  const pelaNota = achados.filter((l) => !usados.has(l.id) && pelaNotaPor(l));
   for (const l of pelaNota) usados.add(l.id);
   if (usados.size === 0) return null;
   const outrosParecidos = achados.filter((l) => !usados.has(l.id)).length;
@@ -83,10 +109,12 @@ export function casarJaLancados(parcelas: readonly ParcelaDaNotaParaCasar[], tod
   /* P95 — o N conferido pelo banco (a fracao da descricao) vale antes do calculo pelo valor (1 centavo por parcela) */
   for (const l of pelaNota) { const n = l.fracaoN ?? fracaoDaNota(l.valorCent, notaCent); if (n) fracoes.set(l.id, n); }
   /* a nota de UMA parcela (sem duplicatas) ja' lancada EM PARCELAS: a "que falta" seria a nota inteira de novo — em dobro. Nao se oferece. */
-  const emParcelas = parcelas.length === 1 && fracoes.size > 0;
+  /* P128a — tambem achada PELA SOMA (o parcelamento do emitente que soma exatamente a nota): a "que falta" seria a nota inteira em dobro */
+  const emParcelas = parcelas.length === 1 && (fracoes.size > 0 || pelaNota.some((l) => l.por.includes('soma')));
   return {
     porParcela, pelaNota, outrosParecidos, fracoes, emParcelas, cancelados: canceladosDaNota(todos),
-    alvos: [...porParcela.flatMap((x) => (x.lancamento ? [x.lancamento] : [])), ...pelaNota],
+    /* P128a — o irmão achado SÓ por ser do mesmo parcelamento ("só no sistema", a parcela que sobra) nunca recebe a nota: ele não é dela */
+    alvos: [...porParcela.flatMap((x) => (x.lancamento ? [x.lancamento] : [])), ...pelaNota.filter((l) => l.por.some((x) => x !== 'parcelamento'))],
     faltam: emParcelas ? [] : porParcela.filter((x) => !x.lancamento).map((x) => x.parcela),
   };
 }
@@ -144,9 +172,131 @@ export function lerJaLancados(r: unknown): LancamentoJaLancado[] {
       fornecedorId: texto(o, 'fornecedor_id'), fornecedorNome: texto(o, 'fornecedor_nome'), fornecedorPor: texto(o, 'fornecedor_por'),
       parcelas: Array.isArray(parc) ? parc.flatMap((p: unknown) => (p && typeof p === 'object'
         ? [{ n: Number(Reflect.get(p, 'n')), difCent: Number(Reflect.get(p, 'dif_cent')) || 0, difDias: Number(Reflect.get(p, 'dif_dias')) || 0 }] : [])) : [],
-      por: Array.isArray(por) ? por.filter((x): x is 'valor' | 'numero' | 'chave' | 'fracao' => x === 'valor' || x === 'numero' || x === 'chave' || x === 'fracao') : [],
+      por: Array.isArray(por) ? por.filter((x): x is PorDoAchado => PORES.some((y) => y === x)) : [],
       fracaoN: Number.isInteger(Reflect.get(o, 'fracao_n')) ? Number(Reflect.get(o, 'fracao_n')) : null,
       cancelado: Reflect.get(o, 'cancelado') === true,
+      parcelaN: Number.isInteger(Reflect.get(o, 'parcela_n')) ? Number(Reflect.get(o, 'parcela_n')) : null,
+      temEstaNota: Reflect.get(o, 'tem_esta_nota') === true,
+      documentos: Number(Reflect.get(o, 'documentos')) || 0,
     }];
   });
+}
+
+/**
+ * P128a (NOTA-JA-LANCADA, mock aprovado 27/10) — a TABELA SISTEMA × NOTA: TODAS as parcelas, lado a lado (venc. e valor do sistema e da
+ * nota), a diferença marcada e o que cada uma é. A nota de UMA parcela achada EM N lançamentos (Casa da Cerca: 5 × 632,00 = 3.160,00) mostra
+ * os N do sistema, com a parte da nota (nota/N) ao lado. Os cancelados não entram (a frase os conta).
+ */
+export type SituacaoNaTabela = 'conciliada' | 'realizada' | 'programada' | 'so_na_nota' | 'so_no_sistema';
+export interface LinhaSistemaNota {
+  chave: string;
+  rotulo: string;
+  sistema: LancamentoJaLancado | null;
+  notaVencimento: string | null;
+  notaValorCent: number | null;
+  situacao: SituacaoNaTabela;
+  difValor: boolean;
+  difData: boolean;
+  /** o porquê do rótulo da parcela (o title): "parcela ? de 4 da nota: 4 × R$ 491,64 = R$ 1.966,56 (…)" */
+  dica?: string;
+}
+export const TEXTO_DA_SITUACAO: Record<SituacaoNaTabela, string> = {
+  conciliada: 'conciliada', realizada: 'realizada', programada: 'programada', so_na_nota: 'só na nota → criar', so_no_sistema: 'só no sistema',
+};
+const situacaoDe = (l: LancamentoJaLancado): SituacaoNaTabela =>
+  (l.conciliado ? 'conciliada' : l.status === 'realizado' || l.status === 'conciliado' || !!l.pagamento ? 'realizada' : 'programada');
+const dataDe = (l: LancamentoJaLancado) => l.vencimento ?? l.pagamento ?? l.competencia;
+
+/** Em quantas parcelas a nota foi lançada: o N mais comum das frações achadas; sem fração, quantos foram achados. */
+function nDasParcelas(j: Pick<NotaJaLancada, 'fracoes' | 'pelaNota'>): number {
+  /* achada pela soma: o parcelamento inteiro SAO as parcelas (nem toda parcela e' nota ÷ N: 33.000,00 + 6 × 12.833,33) */
+  const pelaSoma = j.pelaNota.filter((l) => l.por.includes('soma')).length;
+  if (pelaSoma) return pelaSoma;
+  const porN = new Map<number, number>();
+  for (const n of j.fracoes.values()) porN.set(n, (porN.get(n) ?? 0) + 1);
+  const [n] = [...porN].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0] ?? [0];
+  return n || j.pelaNota.length;
+}
+
+export function linhasSistemaNota(j: NotaJaLancada, notaCent: number): LinhaSistemaNota[] {
+  const total = j.porParcela.length;
+  if (j.emParcelas) {
+    /* a nota de uma parcela, achada em N lançamentos: os do sistema, a parte da nota (nota ÷ N) ao lado; qual das N, só a descrição diz
+       ("… - 3/6" -> "3/6"; sem ela, "?/N", como no P95) */
+    const n = nDasParcelas(j);
+    const parte = n > 0 ? Math.round(notaCent / n) : 0;
+    /* P95 — a descricao so' vale para a irma conferida pelo banco ('fracao') */
+    const qual = (l: LancamentoJaLancado) => {
+      const f = l.por.includes('fracao') ? fracaoDaDescricao(l.descricao) : null;
+      return f && f.n === n ? f.k : l.por.includes('soma') && l.parcelaN ? l.parcelaN : null;
+    };
+    /* a parte da nota (nota ÷ N) so' ao lado da achada como FRACAO; a achada pela soma nao tem parte da nota: "—" (nunca vermelho inventado) */
+    const temParte = (l: LancamentoJaLancado) => j.fracoes.has(l.id) && !l.por.includes('soma');
+    return [...j.pelaNota].sort((a, b) => (qual(a) ?? 99) - (qual(b) ?? 99) || (dataDe(a) ?? '').localeCompare(dataDe(b) ?? '') || a.id.localeCompare(b.id))
+      .map((l) => ({
+        chave: l.id, rotulo: `${qual(l) ?? '?'}/${n}`, sistema: l, notaVencimento: null, notaValorCent: temParte(l) ? parte : null,
+        situacao: situacaoDe(l), difValor: temParte(l) && Math.abs(l.valorCent - parte) > 1, difData: false,
+        dica: l.por.includes('soma') ? `parcela ${qual(l) ?? '?'} de ${n} do parcelamento que soma a nota`
+          : qual(l) ? `parcela ${qual(l)} de ${n} (pela descrição do lançamento)`
+          : `parcela ? de ${n} da nota: ${n} × R$ ${reais(l.valorCent)} = R$ ${reais(notaCent)} (qual das ${n}, a nota não diz)`,
+      }));
+  }
+  const linhas: LinhaSistemaNota[] = j.porParcela.map(({ parcela, lancamento: l }) => ({
+    chave: `p${parcela.n}`, rotulo: `${parcela.n}/${total}`, sistema: l, notaVencimento: parcela.vencimento, notaValorCent: parcela.valorCent,
+    situacao: l ? situacaoDe(l) : 'so_na_nota',
+    difValor: !!l && l.valorCent !== parcela.valorCent,
+    difData: !!l && (l.vencimento ?? l.pagamento ?? l.competencia) !== parcela.vencimento,
+  }));
+  for (const l of j.pelaNota) {
+    linhas.push({ chave: l.id, rotulo: l.parcelaN ? `${l.parcelaN}/?` : '—', sistema: l, notaVencimento: null, notaValorCent: null,
+      situacao: 'so_no_sistema', difValor: false, difData: false });
+  }
+  return linhas;
+}
+
+/** O que caminho achou, em palavras (a frase do mock): "pelo CNPJ + nº", "pelo documento anexado", "pela soma", … */
+function comoAchou(achados: readonly LancamentoJaLancado[]): string {
+  const tem = (p: PorDoAchado) => achados.some((l) => l.por.includes(p));
+  const partes: string[] = [];
+  if (tem('numero') || tem('documento')) partes.push(achados.some((l) => l.fornecedorPor === 'cnpj') ? 'pelo CNPJ + nº da nota' : 'pelo nº da nota');
+  if (tem('chave')) partes.push('pela chave');
+  if (tem('soma')) partes.push('pela soma');
+  if (tem('valor') && !partes.length) partes.push('pelo valor e vencimento');
+  return partes.join(' · ');
+}
+
+/** A frase do topo: quantas, como achou, a soma × a nota e o que cada uma é. */
+export function fraseDoAchado(j: NotaJaLancada, linhas: readonly LinhaSistemaNota[], notaCent: number): string {
+  const doSistema = linhas.flatMap((x) => (x.sistema ? [x.sistema] : []));
+  const conta = (s: SituacaoNaTabela) => linhas.filter((x) => x.situacao === s).length;
+  const soma = doSistema.reduce((t, l) => t + l.valorCent, 0);
+  const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
+  const partes: string[] = [];
+  if (j.emParcelas) {
+    const n = doSistema.length;
+    const deN = nDasParcelas(j);
+    const valores = new Set(doSistema.map((l) => l.valorCent));
+    if (n < deN) {
+      /* achadas só algumas das N: quantas, e o valor de cada (a soma não fecha, nem deveria) */
+      partes.push(`${n} de ${deN} parcelas desta nota já estão lançadas${valores.size === 1 ? ` (R$ ${reais(doSistema[0].valorCent)} cada)` : ''}`);
+    } else {
+      const conta1 = valores.size === 1 ? `${n} × R$ ${reais(doSistema[0].valorCent)} = R$ ${reais(soma)}` : `R$ ${reais(soma)}`;
+      partes.push(doSistema.some((l) => l.por.includes('soma')) ? `${plural(n, 'parcela lançada', 'parcelas lançadas')} num parcelamento desta nota`
+        : `${plural(n, 'lançamento solto', 'lançamentos soltos')} desta nota`);
+      partes.push(`soma ${conta1} ${soma === notaCent ? '✓' : `× nota R$ ${reais(notaCent)} (diferença R$ ${reais(Math.abs(soma - notaCent))})`}`);
+    }
+  } else {
+    const achadas = linhas.filter((x) => x.sistema && x.notaValorCent !== null).length;
+    partes.push(`${achadas} de ${j.porParcela.length} parcelas desta nota já estão lançadas`);
+    if (soma !== notaCent) partes.push(`soma no sistema R$ ${reais(soma)} × nota R$ ${reais(notaCent)} (diferença R$ ${reais(Math.abs(soma - notaCent))})`);
+  }
+  const como = comoAchou(doSistema);
+  if (como) partes.push(`achados ${como}`);
+  if (conta('conciliada')) partes.push(plural(conta('conciliada'), 'conciliada', 'conciliadas'));
+  if (conta('realizada')) partes.push(plural(conta('realizada'), 'realizada', 'realizadas'));
+  if (conta('programada')) partes.push(plural(conta('programada'), 'programada', 'programadas'));
+  if (conta('so_na_nota')) partes.push(`${conta('so_na_nota')} só na nota`);
+  if (conta('so_no_sistema')) partes.push(`${conta('so_no_sistema')} só no sistema`);
+  if (j.cancelados.length) partes.push(plural(j.cancelados.length, 'cancelado (não conta)', 'cancelados (não contam)'));
+  return partes.join(' · ');
 }

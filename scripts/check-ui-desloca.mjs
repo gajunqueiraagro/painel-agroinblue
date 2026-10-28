@@ -283,6 +283,16 @@ const CENARIOS = [
     ['nota ja lancada com cancelados no fim (D)', { url: 'tela=nota-pdf&v=cancelados' }], ['so cancelados (D)', { url: 'tela=nota-pdf&v=socancelados' }],
     /* P95 — a previa pela chave digitada (emissao e valor em ambar no lugar dos lidos) e a nota achada em parcelas soltas */
     ['nota pela chave digitada (P95)', { url: 'tela=nota-pdf&v=pelachave' }], ['nota em parcelas soltas, "k/4" (P95)', { url: 'tela=nota-pdf&v=irmas' }],
+    /* P128a — a tabela sistema × nota com diferença em vermelho, "só no sistema" e o "Documento hoje" */
+    ['nota no sistema com diferenca (P128a)', { url: 'tela=nota-pdf&v=diferenca' }],
+  ] },
+  /* P128a — trocar o CAMINHO (Completar → Completar e atualizar → Criar novo): o texto de cada cartão e o botão do rodapé trocam no lugar */
+  { nome: 'nota-pdf-caminhos', url: 'tela=nota-pdf&v=diferenca', antes: async (p) => {
+    const t = p.locator('[data-testid="nota-abas"] button', { hasText: 'Parcelas e lançamento' });
+    if (await t.count()) { await t.first().click(); await espera(p, 300); }
+  }, estados: [
+    ['Completar e atualizar as nao pagas', clicar('[data-testid="nota-caminho-atualizar"]')],
+    ['Criar um lancamento novo', clicar('[data-testid="nota-caminho-criar"]')],
   ] },
   /* P74 — "Como foi pago?": trocar À vista → Cartão em N× → (cartão, 4) → Parcelas livres → Duplicatas apagado não move o título do bloco, os
      outros blocos nem o rodapé (o conteúdo do bloco troca por dentro, na altura dele) */

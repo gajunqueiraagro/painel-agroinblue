@@ -270,6 +270,9 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
   "sugestão · Usar". A regra antiga da tela (`safraSugerida`, temporada pelo código) não volta (trava `safraDaCompetenciaUnica.test.ts`).
 - P146: CONSULTA QUE DECIDE (criar ou não; cadastro novo ou existente) devolve `Consulta<T>` (`nfeConsultas.ts`: `{ ok, valor } | { ok: false,
   motivo }`) — "falhou" NUNCA vira lista vazia/nulo; a prévia/lista diz "Não consegui verificar…", trava o Criar e oferece "Tentar de novo".
+- P128a: a NOTA JÁ NO SISTEMA acha TODOS os irmãos (`fn_nota_ja_lancada`: nº no documento, "pela soma", o irmão do parcelamento) e mostra a
+  TABELA SISTEMA × NOTA (`linhasSistemaNota`/`fraseDoAchado`; diferença em vermelho, nunca corrigida) com 3 caminhos; a chave num lançamento não
+  barra (só a de OC); as duas portas (+ Da nota e o Documentos do Editar, `notaParaAPrevia`) abrem a MESMA prévia.
 - P53: a mesma pergunta ao mesmo tempo = um pedido (`criarUmPedidoPorVez`, só o voo, nada guardado); o `checkLockNow` segue direto.
 - P95 (DANFE-CHAVE-EM-GRUPOS-01): DANFE com a chave/rótulos picados em itens se lê pela linha (`chaveEmGrupos` SÓ com DV certo; `aoLado`);
   sem chave legível, DIGITAR A CHAVE (`chaveDigitada.ts`: DV, modelo 55; avulsa 890 não usa o CNPJ; o resto em branco, âmbar na prévia);
