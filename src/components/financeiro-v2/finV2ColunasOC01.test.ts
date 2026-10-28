@@ -136,7 +136,9 @@ describe('passo 3 — clipe, Doc. e origem (lidos da fonte da lista)', () => {
   it('item 4 — a CPR (e por ela o PDF e o Excel) escreve o Doc pelo MESMO dono, não pelo `documento_formatado` da view', () => {
     const cpr = readFileSync(resolve(__dirname, 'ContasPagarReceberTab.tsx'), 'utf8');
     expect(cpr).toContain('doc: (l) => docDaLinha({ tipo_documento: l.tipo_documento, numero_documento: l.numero_documento }, null).rotulo,');
-    expect(cpr).toContain('const doc = docDaLinha({ tipo_documento: l.tipo_documento, numero_documento: l.numero_documento }, null).rotulo;');
+    /* P152: a linha passa também os documentos dela (o "NF nnnn" da coluna NF) — o MESMO dono */
+    expect(cpr).toContain('const docDaLinhaCpr = docDaLinha({ tipo_documento: l.tipo_documento, numero_documento: l.numero_documento }, documentosPorLancamento?.get(l.id));');
+    expect(cpr).toContain('const doc = docDaLinhaCpr.rotulo;');
     expect(cpr).not.toContain('l.documento_formatado');
   });
   it('a origem não sumiu: está no `title` do Status, e o clique no Status abre o minimodal do vínculo', () => {

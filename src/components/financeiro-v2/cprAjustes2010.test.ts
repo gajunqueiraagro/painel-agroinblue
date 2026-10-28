@@ -136,9 +136,14 @@ describe('(4) o vencido conta no saldo de HOJE, com o selo e o aviso', () => {
   });
 });
 
-describe('CPR-SEM-CORTE-01 — nada de "…" na CPR', () => {
-  it('nenhum truncate, text-ellipsis ou line-clamp na tela nem no Fluxo', () => {
-    expect(tela).not.toMatch(/\btruncate\b|text-ellipsis|line-clamp/);
+describe('CPR-SEM-CORTE-01 — nada de "…" na CPR (P152: só nas 3 células declaradas)', () => {
+  it('nenhum truncate, text-ellipsis ou line-clamp na tela nem no Fluxo — fora as 3 células do P152, com o title e a exceção do gate', () => {
+    /* P152 (D6, Gabriel 28/10 16:04): Descrição, Fornecedor e Subcentro terminam em "…" com o texto inteiro no `title` e
+       `data-reticencias-com-title`; nenhum outro lugar */
+    const truncados = tela.split('\n').filter((l) => /\btruncate\b/.test(l) && !l.trim().startsWith('/*') && !l.trim().startsWith('*'));
+    expect(truncados).toHaveLength(3);
+    for (const l of truncados) expect(l).toMatch(/title=\{[^}]+\} data-reticencias-com-title="">/);
+    expect(tela).not.toMatch(/text-ellipsis|line-clamp/);
     expect(fluxo).not.toMatch(/\btruncate\b|text-ellipsis|line-clamp/);
   });
 });

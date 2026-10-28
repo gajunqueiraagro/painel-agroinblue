@@ -148,7 +148,9 @@ describe('a consulta e as frases', () => {
     expect(ramoDaConsultaCpr(D30, HOJE)).toBe(
       'and(data_vencimento.gte.2026-10-05,data_vencimento.lte.2026-11-04),'
       + 'and(data_vencimento.lt.2026-10-05,status_transacao.in.(previsto,programado,agendado),data_pagamento.is.null),'
-      + 'data_vencimento.is.null');
+      + 'data_vencimento.is.null,'
+      /* P152: a paga NO PERÍODO pelo dia do pagamento (vencimento fora dele) */
+      + 'and(data_pagamento.gte.2026-10-05,data_pagamento.lte.2026-11-04)');
     /* "de" no futuro: a busca começa em HOJE (o que vence entre hoje e "de" passa pelo saldo); "de" no passado: em "de" */
     expect(ramoDaConsultaCpr({ de: '2026-10-20', ate: '2026-10-31' }, HOJE)).toContain('and(data_vencimento.gte.2026-10-05,data_vencimento.lte.2026-10-31)');
     expect(ramoDaConsultaCpr(MES, HOJE)).toContain('and(data_vencimento.gte.2026-10-01,data_vencimento.lte.2026-10-31)');
@@ -289,7 +291,8 @@ describe('a tela só renderiza o dono (lido da fonte)', () => {
       /* REC-VALOR-CERTO-02: entrou UMA leitura por cliente (`cpr-estimadas`, o conjunto dos lançamentos ainda estimados) — a view da
          lista não expõe `recorrencia_id` nem a marca do valor do mês. Continua sem consulta por linha. */
       /* P82: entrou `cpr-cartoes` (os cartões e o saldo deles, do banco: `fn_cpr_cartoes`), uma leitura por cliente */
-      .toEqual(['cpr-anexos', 'cpr-caixa', 'cpr-cartoes', 'cpr-estimadas', 'cpr-lancs']);
+      /* P152: entrou `cpr-recorrencias` (o `recorrencia_id` dos ids JÁ visíveis, para o selo R — a view não o traz), um `.in()` */
+      .toEqual(['cpr-anexos', 'cpr-caixa', 'cpr-cartoes', 'cpr-estimadas', 'cpr-lancs', 'cpr-recorrencias']);
   });
   it('o cartão tem 40px e o valor não corta; o gráfico começa em "de"', () => {
     expect(tela).toContain("'flex min-w-0 h-[40px] items-center gap-1 rounded-md border border-l-[3px] px-1 py-[3px]'");
@@ -501,7 +504,7 @@ describe('CPR-SALDO-DIA-01 — a tela só renderiza (lido da fonte)', () => {
     expect(shell).toContain("<ContasPagarReceberTab\n        onIntensiveToggle={setIntensivo}\n");
     expect(tela).toContain('useEffect(() => { onIntensiveToggle?.(ampliado); }, [ampliado, onIntensiveToggle]);');
     expect(tela).toContain('useEffect(() => () => { onIntensiveToggle?.(false); }, [onIntensiveToggle]);');
-    expect(tela).toContain("!ampliado && 'max-w-5xl mx-auto'");
+    expect(tela).toContain("!ampliado && 'max-w-[1240px] mx-auto'");   // P152: a régua do mock não cabia em 1.024px
     expect(tela).toContain('data-testid="cpr-faixa-recolhida"');
   });
 });
@@ -659,7 +662,8 @@ describe('CPR-SALDO-DIA-02 — pílula Realizado ligada não derruba a tela', ()
   });
   it('a tela não abre grupo de dia sem data: a chave vazia é pulada ANTES de formatar', () => {
     const grupos = tela.slice(tela.indexOf('const grupos = useMemo((): Grupo[] => {'), tela.indexOf('// ── Abrir o lançamento'));
-    expect(grupos).toMatch(/const chave = \(l\.data_vencimento \?\? ''\)\.slice\(0, 10\);[\s\S]{0,420}if \(!chave\) continue;\s+const atual = mapa\.get\(chave\);/);
+    /* P152: a chave é o dia do dinheiro (`diaDaLinhaCpr`, '' = sem dia) — a guarda da chave vazia continua antes de formatar */
+    expect(grupos).toMatch(/const chave = diaDaLinhaCpr\(l\);[\s\S]{0,420}if \(!chave\) continue;\s+const atual = mapa\.get\(chave\);/);
     /* toda chave que chega a `faixaDaData` vem do mapa (já sem a vazia) ou dos dias da série (que têm data) */
     expect(grupos).toContain('const chaves = Array.from(new Set([...mapa.keys(), ...passos.keys(), ...(hojeNoPeriodo ? [hojeIso] : [])])).sort();');
   });
@@ -794,7 +798,7 @@ describe('CPR-TRANSFERENCIAS-NO-FLUXO-01 — a transferência tem duas pontas, e
     expect(tela).not.toContain('tipo_operacao.not.like');
     expect(tela).toContain(".or('sem_movimentacao_caixa.is.null,sem_movimentacao_caixa.eq.false')");
     expect(tela).toContain('key={chaveDaLinhaCpr(l)}');
-    expect(tela).toContain('onClick={() => void abrir(l.id)}');
+    expect(tela).toContain('onClick={() => { if (catalogosProntos && !abrindo) void abrir(l.id); }}');   // P152: a linha é div role="button"
     expect(tela).toContain('...recorte.foraDoCaixa]');
     const semComentario = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
     /* a direção não se decide por prefixo fora do dono */

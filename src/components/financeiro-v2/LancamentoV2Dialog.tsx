@@ -200,6 +200,9 @@ interface Props {
   /** P128a (NOTA-JA-LANCADA, porta 2) — "Ler a NF" no Documentos do Editar: o arquivo abre a MESMA previa do "+ Da nota", partindo deste
    *  lancamento. Devolve a frase pronta do que impediu (nota nao lida, consulta que falhou) ou `null` (a previa abriu). Ausente = sem o gesto. */
   onLerNotaFiscal?: (arquivo: File, lancamentoId: string) => Promise<string | null>;
+  /** P152 — a aba em que o modal abre (o "NF nnnn" da Contas a Pagar e Receber abre direto em Documentos, onde mora a regra de abrir a
+   *  nota: o PDF; sem PDF, os itens). Ausente = 'geral', como sempre. */
+  abaInicial?: 'documentos';
   prefill?: {
     fazenda_id?: string;
     conta_bancaria_id?: string;
@@ -596,7 +599,7 @@ export function LancamentoV2Dialog({
   fornecedores, safras, defaultFazendaId, onCriarFornecedor, prefill, lockedFields, onLancamentoCriado,
   ocultarParcelamento, tiposOperacaoPermitidos, origemOC,
   referenciaOperacionalInfo, excelContext, permiteEditarFavorecidoOC, onAbrirOperacaoOC, onAbrirContrato,
-  documentosAntesDeSalvar, onLerNotaFiscal,
+  documentosAntesDeSalvar, onLerNotaFiscal, abaInicial,
 }: Props) {
   /* P128a (porta 2) — a frase do que impediu a NF lida de abrir a previa (na propria area, nunca toast) e o "lendo" */
   const [recusaDaNotaLida, setRecusaDaNotaLida] = useState<string | null>(null);
@@ -1384,7 +1387,7 @@ export function LancamentoV2Dialog({
       setDadosPagamento('');
     }
     setFornecedorSearch('');
-    setAbaAtiva('geral');
+    setAbaAtiva(abaInicial ?? 'geral');
     /* FIN-NFE-XML-01d — o XML da nota ja' nasce como o documento NF pendente do lancamento novo. */
     const doXml = !lancamento ? prefill?.doXml ?? null : null;
     setPendentes(doXml ? [pendenteDaNota(doXml, doXml.proposta.favorecidoId)] : []);
@@ -1398,7 +1401,7 @@ export function LancamentoV2Dialog({
     setAnexarBoletos(null);
     setErroAntesDeSalvar(null);
     setItemOC(''); setTentouOC(false); setSimOC(null);
-  }, [open, lancamento, defaultFazendaId, prefill, lockedFields]);
+  }, [open, lancamento, defaultFazendaId, prefill, lockedFields, abaInicial]);
   useEffect(() => {
     const d = open && !lancamento ? prefill?.doXml ?? null : null;
     const cli = clienteAtual?.id;

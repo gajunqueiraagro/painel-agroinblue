@@ -19,9 +19,13 @@ const COR_SELO: Record<TipoVinculo, string> = {
   P: 'bg-[#dcfce7] text-[#15803d] border-[#86efac]',
 };
 const SELO = 'inline-flex h-[13px] w-[13px] shrink-0 items-center justify-center rounded-[3px] border font-semibold leading-none';
+/** P152 — o selo de 11px da Contas a Pagar e Receber (Gabriel 28/10, D1): as MESMAS cores, só o tamanho. */
+const SELO_PEQUENO = 'h-[11px] w-[11px] rounded-[2px]';
 
-export function CelulaVinculos({ vinculos, abrir }: {
+export function CelulaVinculos({ vinculos, abrir, pequeno = false }: {
   vinculos: readonly Vinculo[];
+  /** P152 — 11px (a CPR); ausente = os 13px de Lançamentos */
+  pequeno?: boolean;
   /** O gesto de abrir a origem, por tipo; ausente = só a marca. */
   abrir?: Partial<Record<TipoVinculo, () => void>>;
 }) {
@@ -31,12 +35,12 @@ export function CelulaVinculos({ vinculos, abrir }: {
         const gesto = abrir?.[v.tipo];
         const testid = v.tipo === 'O' ? (gesto ? 'icone-oc' : 'marca-oc') : `vinculo-${v.tipo}`;
         if (!gesto) {
-          return <span key={v.tipo} data-testid={testid} title={v.titulo} aria-label={v.titulo} className={cn(SELO, COR_SELO[v.tipo])}>{v.tipo}</span>;
+          return <span key={v.tipo} data-testid={testid} title={v.titulo} aria-label={v.titulo} className={cn(SELO, COR_SELO[v.tipo], pequeno && SELO_PEQUENO)}>{v.tipo}</span>;
         }
         return (
           <button key={v.tipo} type="button" data-testid={testid} title={`${v.titulo} — clique para abrir`} aria-label={v.titulo}
             onClick={(e: MouseEvent) => { e.stopPropagation(); gesto(); }}
-            className={cn(SELO, COR_SELO[v.tipo], 'cursor-pointer hover:brightness-95')}>
+            className={cn(SELO, COR_SELO[v.tipo], pequeno && SELO_PEQUENO, 'cursor-pointer hover:brightness-95')}>
             {v.tipo}
           </button>
         );
