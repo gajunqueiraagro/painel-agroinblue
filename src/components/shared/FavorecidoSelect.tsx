@@ -289,8 +289,10 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
           4px do item 3. */}
       <div className="flex items-center gap-1">
         <Popover open={open} onOpenChange={v => { setOpen(v); if (!v) onSearchChange(''); }}>
+          {/* P117 (Gabriel 27/10) — EXCEÇÃO DECLARADA do gate de cortes (a do P71): o nome longo do fornecedor PODE terminar em "…" no campo,
+              porque o `title` do gatilho leva o nome inteiro (e o CNPJ · cidade). Só este campo; nenhum outro achado se esconde. */}
           <PopoverTrigger asChild>
-            <Button tabIndex={tabIndex} variant="outline" role="combobox" aria-expanded={open} disabled={disabled} title={tituloDoGatilho} className={cn("flex-1 min-w-0 h-8 justify-between font-normal text-[12px]", size === 'compact' && 'h-5 px-1.5 text-[11px] [&_svg]:h-3 [&_svg]:w-3', triggerClassName, inexistente && CLASSE_DO_INEXISTENTE)}>
+            <Button tabIndex={tabIndex} variant="outline" role="combobox" aria-expanded={open} disabled={disabled} title={tituloDoGatilho} data-reticencias-com-title="" className={cn("flex-1 min-w-0 h-8 justify-between font-normal text-[12px]", size === 'compact' && 'h-5 px-1.5 text-[11px] [&_svg]:h-3 [&_svg]:w-3', triggerClassName, inexistente && CLASSE_DO_INEXISTENTE)}>
               {/* UI-DROPDOWN-PADRAO-01: o texto que não cabe começa na borda esquerda (o botão centraliza por padrão) */}
               {inexistente
                 ? <ValorInexistente onLimpar={() => onChange('')} />
@@ -359,9 +361,9 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
                   <Check className={cn("mr-2 h-3.5 w-3.5 shrink-0", value === o.f.id ? "opacity-100" : "opacity-0")} />
                   {/* nome à esquerda: é o ÚNICO que corta (inteiro no `title`) */}
                   {/* FORN-CADASTRO-02: "RAZÃO SOCIAL · Fantasia" (a fantasia em tom apagado), numa linha — o item de menu é o da casa */}
-                  {/* FORN-FILIAL-01: "Razão social · Município/UF · CNPJ completo" — a cidade e o documento à direita NUNCA cortam (filiais têm
+                  {/* FORN-FILIAL-01 / P117: "Razão social · CNPJ completo · Município/UF" — o documento e a cidade à direita NUNCA cortam (filiais têm
                       a mesma razão social: é a cidade e o CNPJ que as distinguem); o `title` leva a linha inteira */}
-                  <span className="min-w-0 flex-1 truncate text-left" title={[o.f.nome, fantasiaDe(o.f), cidadeDe(o.f), o.documento].filter(Boolean).join(' · ')}>
+                  <span className="min-w-0 flex-1 truncate text-left" title={[o.f.nome, fantasiaDe(o.f), o.documento, cidadeDe(o.f)].filter(Boolean).join(' · ')}>
                     {o.f.nome}{fantasiaDe(o.f) ? <span data-testid="favorecido-fantasia" className={MENU_SECUNDARIO}> · {fantasiaDe(o.f)}</span> : null}
                   </span>
                   {/* FORN-BUSCA-UNICA-01 — inativo / "mesclado em <dono>": só aparece quando o filtro pede (situação ≠ 'ativos') */}
@@ -372,11 +374,12 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
                     <span data-testid="favorecido-iguais" className="ml-1.5 shrink-0 rounded-sm bg-amber-400/90 px-1 text-zinc-900"
                       title={`${o.iguais} cadastros ativos com este nome — confira o CNPJ/CPF`}>{seloDeIguais(o.iguais)}</span>
                   )}
+                  {/* documento à direita, em tom apagado: NUNCA corta. Sem documento a área fica vazia (D5). */}
+                  <span data-testid="favorecido-doc-da-opcao" className={cn("ml-2 shrink-0 whitespace-nowrap tabular-nums", MENU_SECUNDARIO)}>{o.documento}</span>
+                  {/* P117 — a cidade DEPOIS do CNPJ: "nome · CNPJ · Cidade/UF", a mesma ordem da linha sob o campo */}
                   {cidadeDe(o.f) && (
                     <span data-testid="favorecido-cidade-da-opcao" className={cn("ml-2 shrink-0 whitespace-nowrap", MENU_SECUNDARIO)}>{cidadeDe(o.f)}</span>
                   )}
-                  {/* documento à direita, em tom apagado: NUNCA corta. Sem documento a área fica vazia (D5). */}
-                  <span data-testid="favorecido-doc-da-opcao" className={cn("ml-2 shrink-0 whitespace-nowrap tabular-nums", MENU_SECUNDARIO)}>{o.documento}</span>
                   {mostrarUso && <span data-testid="favorecido-uso" className={cn("ml-2 shrink-0 whitespace-nowrap tabular-nums", MENU_SECUNDARIO)}>{o.uso} lanç.</span>}
                 </button>
               ))}
@@ -428,7 +431,7 @@ export function FavorecidoSelect<F extends FavorecidoOpcao = FornecedorV2>({
               <button type="button" className="shrink-0 underline text-destructive" onClick={lidos.tentarDeNovo}>Tentar de novo</button>
             </>
           ) : (
-            <span className="whitespace-nowrap tabular-nums" title={documentoDoEscolhido || undefined}>{textoDaLinhaDoDocumento(escolhido)}</span>
+            <span className="whitespace-nowrap tabular-nums" data-testid="favorecido-linha-texto" title={textoDaLinhaDoDocumento(escolhido) || documentoDoEscolhido || undefined}>{textoDaLinhaDoDocumento(escolhido)}</span>
           )}
         </div>
       )}

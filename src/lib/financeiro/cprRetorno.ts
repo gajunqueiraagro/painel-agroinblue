@@ -31,7 +31,8 @@ export function lerRetornoCpr(texto: string | null | undefined): Partial<Retorno
   if (!ehObjeto(j)) return null;
   const r: Partial<RetornoCpr> = {};
   if (j.visao === 'lista' || j.visao === 'fluxo') r.visao = j.visao;
-  if (j.atalho === 'mes' || j.atalho === '30' || j.atalho === '60' || j.atalho === 'datas') r.atalho = j.atalho;
+  /* P106 — o atalho antigo ("mes", "30", "60") é ignorado; e a tela NÃO restaura atalho, datas nem lado (abre em Mês atual + Ambos) */
+  if (j.atalho === 'anterior' || j.atalho === 'atual' || j.atalho === 'futuro' || j.atalho === 'datas') r.atalho = j.atalho;
   if (j.datas === null) r.datas = null;
   else if (ehObjeto(j.datas)) {
     const de = j.datas.de; const ate = j.datas.ate;

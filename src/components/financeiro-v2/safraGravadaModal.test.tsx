@@ -28,7 +28,11 @@ vi.mock('@/integrations/supabase/client', () => {
   return {
     supabase: {
       from: () => vazio(),
-      rpc: () => Promise.resolve({ data: null, error: null }),
+      /* P138 — a safra da competência é do BANCO: `_fn_safra_da_competencia` responde pelas datas (o mesmo calendário das safras daqui) */
+      rpc: (nome: string, a: { p_escopo?: string; p_data?: string } = {}) => Promise.resolve({ error: null,
+        data: nome !== '_fn_safra_da_competencia' || !a.p_data ? null
+          : a.p_escopo === 'agricultura' ? (a.p_data >= '2026-07-01' ? '5c9e3439-0000-0000-0000-000000000000' : '55d99920-add0-4091-b1a7-0b0ce3faaedb')
+          : a.p_escopo === 'pecuaria' && a.p_data >= '2026-07-01' ? 'p2627' : null }),
       storage: { from: () => ({ list: async () => ({ data: [], error: null }) }) },
       auth: { getUser: async () => ({ data: { user: { id: 'u1' } } }) },
     },
@@ -100,12 +104,13 @@ function montar(inicial: Props) {
   return { onSave, abrir: (p: Props) => r.rerender(tree(p)) };
 }
 
-/** O gatilho do select da Safra e o "sugerida" logo abaixo dele (o rótulo "Safra" é o dono do bloco). */
+/** O gatilho do select da Safra e a linha da safra da competência logo abaixo dele (P138; o rótulo "Safra" é o dono do bloco). */
 function campoSafra() {
   const rotulo = screen.getAllByText('Safra').find((el) => el.tagName === 'LABEL');
   if (!rotulo?.parentElement) throw new Error('sem o campo Safra');
   const bloco = rotulo.parentElement;
-  return { gatilho: within(bloco).getByRole('combobox'), sugerida: within(bloco).queryByText('sugerida') };
+  return { gatilho: within(bloco).getByRole('combobox'), sugerida: within(bloco).queryByTestId('safra-da-competencia'),
+    usar: within(bloco).queryByTestId('safra-usar-sugestao') };
 }
 const botaoSalvar = () => document.querySelector('button[tabindex="17"]') as HTMLButtonElement;
 /* deixa rodar todos os efeitos e as resoluções pendentes (consultas falsas) */
@@ -141,13 +146,44 @@ describe('T1b — o caso da tela: a sessão já vinha de Lavoura (o reset monta 
   });
 });
 
-describe('T2 — lançamento NOVO: campo vazio continua sendo sugerido', () => {
-  it('com atividade Lavoura e competência 26/08/2026, a safra vem 26/27 "sugerida"', async () => {
+describe('T2 — lançamento NOVO (P138): o campo fica VAZIO e a linha diz a safra que o banco grava', () => {
+  it('com atividade Lavoura e competência 26/08/2026: "Sem safra" e "ao salvar: Safra 26/27 Lavoura (pela competência)"; o payload vai sem safra', async () => {
     const { abrir } = montar({});
     abrir({ open: true, lancamento: null, prefill: { data_competencia: '2026-08-26', subcentro: 'Venda de Mandioca', plano_conta_id: 'pl-venda', escopo_negocio: 'agricultura', tipo_operacao: '1-Entradas' } as React.ComponentProps<typeof LancamentoV2Dialog>['prefill'] });
     await assentar();
-    await waitFor(() => expect(campoSafra().gatilho.textContent).toBe('Safra 26/27 Lavoura'));
-    expect(campoSafra().sugerida).not.toBeNull();
+    await waitFor(() => expect(campoSafra().sugerida?.textContent).toBe('ao salvar: Safra 26/27 Lavoura (pela competência)'));
+    expect(campoSafra().gatilho.textContent).toBe('Sem safra');
+    expect(campoSafra().usar).toBeNull();
+  });
+});
+
+describe('T5 — P138: EDITAR um lançamento gravado SEM safra (o defeito: a tela mostrava uma safra que o banco não tinha)', () => {
+  const SEM = { ...VENDA, id: 'sem-safra', descricao: 'Gravado sem safra', safra_id: null, cultura: null } as LancamentoV2;
+  it('abre "Sem safra" (o gravado) com "sugestão: Safra 26/27 Lavoura · Usar"; salvar sem tocar NÃO grava a sugestão', async () => {
+    const { abrir, onSave } = montar({});
+    abrir({ open: true, lancamento: SEM });
+    await screen.findByDisplayValue('Gravado sem safra');
+    await assentar();
+    await waitFor(() => expect(campoSafra().sugerida?.textContent).toBe('sugestão: Safra 26/27 Lavoura · Usar'));
+    expect(campoSafra().gatilho.textContent).toBe('Sem safra');
+    await waitFor(() => expect(botaoSalvar().disabled).toBe(false));
+    fireEvent.click(botaoSalvar());
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    expect(onSave.mock.calls[0][0].safra_id || null).toBeNull();
+  });
+  it('"Usar" põe a safra no campo (o operador aceitou) e ela vai no payload', async () => {
+    const { abrir, onSave } = montar({});
+    abrir({ open: true, lancamento: SEM });
+    await screen.findByDisplayValue('Gravado sem safra');
+    await assentar();
+    const usar = await waitFor(() => { const u = campoSafra().usar; if (!u) throw new Error('sem o Usar'); return u; });
+    fireEvent.click(usar);
+    await assentar();
+    expect(campoSafra().gatilho.textContent).toBe('Safra 26/27 Lavoura');
+    expect(campoSafra().sugerida).toBeNull();
+    fireEvent.click(botaoSalvar());
+    await waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    expect(onSave.mock.calls[0][0].safra_id).toBe(L2627);
   });
 });
 
@@ -166,25 +202,25 @@ describe('T3 — cultura e atividade num lançamento com safra gravada', () => {
     expect(campoSafra().sugerida).toBeNull();
   });
 
-  it('trocar a ATIVIDADE para Pecuária limpa a safra de lavoura e volta a sugerir (PR-FIN-SAFRA-ESCOPO-01)', async () => {
+  it('trocar a ATIVIDADE para Pecuária limpa a safra de lavoura e mostra a da competência como sugestão (PR-FIN-SAFRA-ESCOPO-01; P138)', async () => {
     const { abrir } = montar({});
     abrir({ open: true, lancamento: VENDA });
     await screen.findByDisplayValue('Venda 17,68 t Mandioca · NF 9297983');
     await assentar();
     fireEvent.click(screen.getByRole('button', { name: /Pecuária/ }));
     await assentar();
-    await waitFor(() => expect(campoSafra().gatilho.textContent).toBe('Safra 26/27 Pecuária'));
-    expect(campoSafra().sugerida).not.toBeNull();
+    await waitFor(() => expect(campoSafra().sugerida?.textContent).toBe('sugestão: Safra 26/27 Pecuária · Usar'));
+    expect(campoSafra().gatilho.textContent).toBe('Sem safra');
   });
 });
 
 describe('T4 — dois lançamentos em sequência (reset → hidratação)', () => {
   it('o segundo abre com a PRÓPRIA safra, depois de um novo e de outro gravado', async () => {
     const { abrir } = montar({});
-    /* 1º: um lançamento novo de lavoura (a sugestão põe 26/27 e o bloco guarda que ela é dele) */
+    /* 1º: um lançamento novo de lavoura (P138: o campo fica vazio, a linha diz a 26/27 que o banco grava) */
     abrir({ open: true, lancamento: null, prefill: { data_competencia: '2026-08-26', subcentro: 'Venda de Mandioca', plano_conta_id: 'pl-venda', escopo_negocio: 'agricultura', tipo_operacao: '1-Entradas' } as React.ComponentProps<typeof LancamentoV2Dialog>['prefill'] });
     await assentar();
-    await waitFor(() => expect(campoSafra().gatilho.textContent).toBe('Safra 26/27 Lavoura'));
+    await waitFor(() => expect(campoSafra().sugerida?.textContent).toBe('ao salvar: Safra 26/27 Lavoura (pela competência)'));
     abrir({ open: false, lancamento: null });
     await assentar();
     /* 2º: o gravado em 25/26 */

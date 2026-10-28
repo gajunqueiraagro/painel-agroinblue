@@ -32,11 +32,36 @@ const texto = (o: object, chave: string): string | null => {
   return typeof v === 'string' && v ? v : null;
 };
 
-/** "Esta chave ja' esta' registrada neste cliente?" — o dono e' o banco (FIN-NFE-XML-01b1). Falha de leitura = lista vazia. */
-export async function notaJaRegistrada(clienteId: string, chave: string): Promise<OcorrenciaDaNota[]> {
+/**
+ * P146 (Gabriel 27/10/2026) — A RESPOSTA DE UMA CONSULTA QUE DECIDE (criar ou nao; cadastro novo ou existente): "FALHOU" NUNCA VIRA "VAZIO".
+ * Antes a falha devolvia lista vazia / nulo, e a previa tratava "nao consegui verificar" igual a "nao achei" e oferecia "Criar" (Neosolar,
+ * NF 65.089, 27/10 11:01: 10 parcelas criadas por cima de 6 lancamentos da nota ja' lancados). Quem chama mostra o motivo e trava o gesto.
+ */
+export type Consulta<T> = { ok: true; valor: T } | { ok: false; motivo: string };
+const deu = <T>(valor: T): Consulta<T> => ({ ok: true, valor });
+/** O motivo da falha em FRASE PRONTA (OC-ABRIR-LENTO-01: o erro do banco nunca vai cru a' tela; o texto cru vai ao console). */
+export function motivoDoErro(erro: unknown): string {
+  const m: unknown = erro && typeof erro === 'object' ? Reflect.get(erro, 'message') : null;
+  const c: unknown = erro && typeof erro === 'object' ? Reflect.get(erro, 'code') : null;
+  const t = typeof m === 'string' ? m.toLowerCase() : '';
+  if (t.includes('timeout') || t.includes('canceling statement') || c === '57014') return 'o banco demorou demais para responder';
+  if (t.includes('failed to fetch') || t.includes('network') || t.includes('load failed')) return 'sem conexão com o servidor';
+  if (c === '42501' || t.includes('permission') || t.includes('sem acesso')) return 'sem permissão para consultar';
+  return 'a consulta ao banco não respondeu';
+}
+const falhou = (erro: unknown): { ok: false; motivo: string } => {
+  if (erro) console.error('[P146] consulta da nota falhou', erro);
+  return { ok: false, motivo: motivoDoErro(erro) };
+};
+
+/** "Esta chave ja' esta' registrada neste cliente?" — o dono e' o banco (FIN-NFE-XML-01b1). P146: falha = `{ ok: false }`, nunca lista vazia. */
+export async function notaJaRegistrada(clienteId: string, chave: string): Promise<Consulta<OcorrenciaDaNota[]>> {
+  try {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
   const { data, error } = await (supabase as any).rpc('fn_documento_chave_ja_registrada', { p_cliente: clienteId, p_chave: chave });
-  if (error || !Array.isArray(data)) return [];
+  if (error) return falhou(error);
+  if (data == null) return deu([]);   // sem erro e sem linhas: nenhuma ocorrencia (nao e' falha)
+  if (!Array.isArray(data)) return falhou(null);
   const saida: OcorrenciaDaNota[] = [];
   for (const linha of data) {
     if (!linha || typeof linha !== 'object') continue;
@@ -50,18 +75,22 @@ export async function notaJaRegistrada(clienteId: string, chave: string): Promis
       data: texto(linha, 'data'), valor: typeof valor === 'number' ? valor : null,
     });
   }
-  return saida;
+  return deu(saida);
+  } catch (e) { return falhou(e); }
 }
 
-/** O fornecedor que o RESOLVEDOR DO BANCO acha para este nome (nome normalizado e apelidos) — o mesmo do de-para. */
-export async function fornecedorPeloNome(clienteId: string, nome: string): Promise<string | null> {
-  if (!nome.trim()) return null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
-  const { data, error } = await (supabase as any).rpc('fn_classificacao_depara_resolver', {
-    p_cliente_id: clienteId, p_textos: { fornecedor: [nome], fazenda: [], safra: [], subcentro: [] },
-  });
-  if (error) return null;
-  return lerResolucoesDoBanco(data).fornecedor?.[nome]?.valor ?? null;
+/** O fornecedor que o RESOLVEDOR DO BANCO acha para este nome (nome normalizado e apelidos) — o mesmo do de-para. P146: falha = `{ ok: false }`
+ *  (antes, nulo = "nao achei" e a previa oferecia cadastrar de novo). */
+export async function fornecedorPeloNome(clienteId: string, nome: string): Promise<Consulta<string | null>> {
+  if (!nome.trim()) return deu(null);
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+    const { data, error } = await (supabase as any).rpc('fn_classificacao_depara_resolver', {
+      p_cliente_id: clienteId, p_textos: { fornecedor: [nome], fazenda: [], safra: [], subcentro: [] },
+    });
+    if (error) return falhou(error);
+    return deu(lerResolucoesDoBanco(data).fornecedor?.[nome]?.valor ?? null);
+  } catch (e) { return falhou(e); }
 }
 
 /** A classificacao do ULTIMO lancamento vivo e classificado deste fornecedor (pela competencia). */
@@ -190,34 +219,40 @@ export interface LancamentoAbertoDaNota {
  * quem atualiza e' o gesto, com confirmacao. FIN-NOTA-PDF-01b: o PAGO entra (marcado `pago`) — o a' vista pago pode virar a parcela
  * 1/N sem mudar de valor ("Atualizar e parcelar"); a parcela de um parcelamento so' entra aberta (anexar a nota).
  */
-export async function lancamentosAbertosComValor(clienteId: string, fornecedorId: string, valoresCent: readonly number[]): Promise<LancamentoAbertoDaNota[]> {
+export async function lancamentosAbertosComValor(clienteId: string, fornecedorId: string, valoresCent: readonly number[]): Promise<Consulta<LancamentoAbertoDaNota[]>> {
   const valores = [...new Set(valoresCent.filter((v) => v > 0))].map((v) => v / 100);
-  if (!valores.length) return [];
+  if (!valores.length) return deu([]);
+  try {
   const { data, error } = await supabase.from('financeiro_lancamentos_v2')
     .select('id, data_vencimento, data_competencia, descricao, valor, financiamento_id, numero_documento, status_transacao, data_pagamento')
     .eq('cliente_id', clienteId).eq('favorecido_id', fornecedorId).eq('cancelado', false).eq('cenario', 'realizado')
     .in('valor', valores)
     .order('data_vencimento', { ascending: true })
     .limit(20);
-  if (error || !Array.isArray(data)) return [];
-  return data.map((l) => ({
+  if (error) return falhou(error);
+  if (!Array.isArray(data)) return falhou(null);
+  return deu(data.map((l) => ({
     id: l.id, vencimento: l.data_vencimento ?? null, competencia: l.data_competencia ?? null, descricao: l.descricao ?? null,
     valorCent: Math.round(Math.abs(Number(l.valor)) * 100), financiamentoId: l.financiamento_id ?? null, numeroDocumento: l.numero_documento ?? null,
     pago: l.status_transacao === 'realizado' || l.status_transacao === 'conciliado' || !!l.data_pagamento,
-  })).filter((l) => !(l.pago && l.financiamentoId));
+  })).filter((l) => !(l.pago && l.financiamentoId)));
+  } catch (e) { return falhou(e); }
 }
 
 /** NOTA-FORNECEDOR-DUPLICA-01 — o cadastro do cliente que JA' tem este CNPJ/CPF (o mascarado ou so' digitos), lido no banco ANTES de criar. */
 export interface CadastroComODocumento { id: string; nome: string; ativo: boolean }
-export async function fornecedorPeloDocumento(clienteId: string, documento: string): Promise<CadastroComODocumento | null> {
+export async function fornecedorPeloDocumento(clienteId: string, documento: string): Promise<Consulta<CadastroComODocumento | null>> {
   const digitos = soDigitos(documento);
-  if (!digitos) return null;
+  if (!digitos) return deu(null);
   const formatos = [...new Set([digitos, validarDocumento(digitos).formatado].filter((x): x is string => !!x))];
-  const { data, error } = await supabase.from('financeiro_fornecedores').select('id, nome, ativo, fundido_em_id')
-    .eq('cliente_id', clienteId).in('cpf_cnpj', formatos).order('ativo', { ascending: false }).limit(5);
-  if (error || !Array.isArray(data)) return null;
-  const vivo = data.find((f) => f.ativo !== false && !f.fundido_em_id) ?? data.find((f) => !f.fundido_em_id) ?? null;
-  return vivo ? { id: vivo.id, nome: vivo.nome, ativo: vivo.ativo !== false } : null;
+  try {
+    const { data, error } = await supabase.from('financeiro_fornecedores').select('id, nome, ativo, fundido_em_id')
+      .eq('cliente_id', clienteId).in('cpf_cnpj', formatos).order('ativo', { ascending: false }).limit(5);
+    if (error) return falhou(error);
+    if (!Array.isArray(data)) return falhou(null);
+    const vivo = data.find((f) => f.ativo !== false && !f.fundido_em_id) ?? data.find((f) => !f.fundido_em_id) ?? null;
+    return deu(vivo ? { id: vivo.id, nome: vivo.nome, ativo: vivo.ativo !== false } : null);
+  } catch (e) { return falhou(e); }
 }
 
 /** NOTA-FORNECEDOR-DUPLICA-01 — o uso do cadastro achado pelo nome (a tela mostra: lancamentos e ultimo uso). Falha = nulo. */
@@ -230,20 +265,23 @@ export async function usoDoFornecedor(fornecedorId: string): Promise<{ lancament
   return { lancamentos: typeof n === 'number' ? n : Number(n) || 0, ultimo: typeof u === 'string' && u ? u : null };
 }
 
-/** NOTA-JA-LANCADA-01 — os lancamentos do cliente que ja' parecem ser esta nota (`fn_nota_ja_lancada`). Falha = lista vazia (nunca trava). */
+/** NOTA-JA-LANCADA-01 — os lancamentos do cliente que ja' parecem ser esta nota (`fn_nota_ja_lancada`). P146: falha = `{ ok: false, motivo }`
+ *  — NUNCA lista vazia (era assim, e a previa oferecia "Criar" por cima do que ja' estava lancado). */
 export async function notaJaLancada(clienteId: string, entrada: {
   parcelas: readonly { n: number; vencimento: string; valorCent: number }[]; numero: string | null; chave: string | null;
   emitenteDocumento: string | null; nomes: readonly (string | null | undefined)[];
-}): Promise<LancamentoJaLancado[]> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
-  const { data, error } = await (supabase as any).rpc('fn_nota_ja_lancada', {
-    p_cliente: clienteId,
-    p_parcelas: entrada.parcelas.map((p) => ({ n: p.n, vencimento: p.vencimento, valor_cent: p.valorCent })),
-    p_numero: entrada.numero, p_chave: entrada.chave, p_emitente_documento: entrada.emitenteDocumento,
-    p_nomes: [...new Set(entrada.nomes.filter((x): x is string => !!x && !!x.trim()))],
-  });
-  if (error) { console.error('fn_nota_ja_lancada', error); return []; }
-  return lerJaLancados(data);
+}): Promise<Consulta<LancamentoJaLancado[]>> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- idioma documentado: o `.rpc` do repo
+    const { data, error } = await (supabase as any).rpc('fn_nota_ja_lancada', {
+      p_cliente: clienteId,
+      p_parcelas: entrada.parcelas.map((p) => ({ n: p.n, vencimento: p.vencimento, valor_cent: p.valorCent })),
+      p_numero: entrada.numero, p_chave: entrada.chave, p_emitente_documento: entrada.emitenteDocumento,
+      p_nomes: [...new Set(entrada.nomes.filter((x): x is string => !!x && !!x.trim()))],
+    });
+    if (error) { console.error('fn_nota_ja_lancada', error); return falhou(error); }
+    return deu(lerJaLancados(data));
+  } catch (e) { console.error('fn_nota_ja_lancada', e); return falhou(e); }
 }
 
 /** NOTA-FORNECEDOR-COMPARAR-01 — o cadastro como esta' HOJE (as colunas que a nota ou a Receita podem mudar). Falha = `null`. */

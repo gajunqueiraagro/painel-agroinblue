@@ -9,7 +9,8 @@
  *   G1 a gaveta escreve o que o banco mandou (a tela não soma): indicadores, resumo, filhos (clique desce), total fixo
  *   G2 subcentro: lançamentos com data dd/mm/aaaa; a parte 2 da divisão ("id#2") abre o LANÇAMENTO (o lancamento_id); "Mais N de M ›"
  *      pede a página seguinte e a acrescenta; nó vazio: a frase dentro do quadro
- *   G6 (P103) o subcentro com as colunas Comp. · Venc. · Pgto. · Status · Favorecido · Descrição · Conta · Valor; o status no chip da
+ *   G6 (P103; P148 a ordem da lista do Financeiro) o subcentro com as colunas Comp. · Venc. · Pgto. · Descrição · Favorecido · Conta ·
+ *      Valor · Status (o total termina na coluna Valor); o status no chip da
  *      casa (Realizado, Conciliado, Agendado, Programado, Previsto, Vencido — as cores da lista); "—" no pagamento do não pago; "Pagos"
  *      e "Em aberto" do banco só quando há não pagos; nível com filhos: as colunas de antes
  *   G3 salvou (a versão subiu): a gaveta relê as páginas já abertas, sem fechar; "Ver na lista" leva os filtros equivalentes
@@ -325,10 +326,16 @@ describe('modal de análise', () => {
     expect(screen.queryByTestId('gaveta-aberto')).toBeNull();
     fireEvent.click(screen.getByTestId('gaveta-irmao-0'));
     await passar();
-    expect(screen.getByTestId('gaveta-lista').querySelector('thead')!.textContent).toBe('COMP.VENC.PGTO.STATUSFAVORECIDODESCRIÇÃOCONTAVALOR');
+    /* P148 — a MESMA ordem da lista do Financeiro, o Status no fim */
+    expect(screen.getByTestId('gaveta-lista').querySelector('thead')!.textContent).toBe('COMP.VENC.PGTO.DESCRIÇÃOFAVORECIDOCONTAVALORSTATUS');
     const tds = (i: number) => [...screen.getByTestId(`gaveta-linha-${i}`).querySelectorAll('td')].map((td) => td.textContent);
-    expect(tds(0)).toEqual(['01/09/2026', '10/09/2026', '10/09/2026', 'Realizado', 'Favorecido 0', 'Compra 0', 'Itau BBA', 'R$ 100,00']);
-    expect(tds(1)[6]).toBe('Banco do Brasil → Itau BBA');
+    expect(tds(0)).toEqual(['01/09/2026', '10/09/2026', '10/09/2026', 'Compra 0', 'Favorecido 0', 'Itau BBA', 'R$ 100,00', 'Realizado']);
+    expect(tds(1)[5]).toBe('Banco do Brasil → Itau BBA');
+    /* o total do rodapé TERMINA na coluna Valor (a 7ª de 8): as células da linha do total somam 8 colunas e o Status fica vazio */
+    const rodape = [...screen.getByTestId('gaveta-total-fixo').querySelectorAll('td')];
+    const fim = rodape.slice(0, rodape.indexOf(screen.getByTestId('gaveta-rodape-total')) + 1).reduce((t, td) => t + (td.colSpan || 1), 0);
+    expect(fim).toBe(7);
+    expect(rodape.reduce((t, td) => t + (td.colSpan || 1), 0)).toBe(8);
     expect(st.map((_, i) => screen.getByTestId(`gaveta-status-${i}`).textContent)).toEqual(['Realizado', 'Conciliado', 'Agendado', 'Programado', 'Previsto', 'Vencido']);
     /* as cores da lista de Lançamentos: a caixa só no Realizado e no Conciliado; o Vencido em vermelho */
     expect(screen.getByTestId('gaveta-status-0').className).toContain('bg-[#f0fdf4]');

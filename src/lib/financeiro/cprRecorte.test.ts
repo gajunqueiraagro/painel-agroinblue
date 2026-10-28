@@ -18,17 +18,24 @@ let n = 0;
 const conta = (venc: string | null, valor: number, o: Partial<ContaCpr> = {}): ContaCpr => ({
   id: `c${String(++n).padStart(3, '0')}`, data_vencimento: venc, data_pagamento: null, status_transacao: 'programado', tipo_operacao: '2-Saídas', valor, ...o,
 });
-const MES = periodoDoAtalho('mes', HOJE);
-const D30 = periodoDoAtalho('30', HOJE);
+const MES = periodoDoAtalho('atual', HOJE);
+/* P106 — o atalho "30 dias" saiu; a janela hoje → hoje+30 segue como período dos casos (um "Escolher datas") */
+const D30 = { de: HOJE, ate: somarDiasIso(HOJE, 30) };
 
 describe('os atalhos — datas locais, em texto', () => {
-  it('Este mês = 1º ao último dia; 30 e 60 dias = hoje a hoje+N', () => {
+  it('P106 — Mês anterior / atual / futuro = o mês inteiro; a virada do ano é do calendário', () => {
     expect(MES).toEqual({ de: '2026-10-01', ate: '2026-10-31' });
     expect(D30).toEqual({ de: '2026-10-05', ate: '2026-11-04' });
-    expect(periodoDoAtalho('60', HOJE)).toEqual({ de: '2026-10-05', ate: '2026-12-04' });
-    expect(periodoDoAtalho('mes', '2028-02-10')).toEqual({ de: '2028-02-01', ate: '2028-02-29' });
-    expect(periodoDoAtalho('mes', '2026-12-31')).toEqual({ de: '2026-12-01', ate: '2026-12-31' });
-    expect(periodoDoAtalho('30', '2026-12-20')).toEqual({ de: '2026-12-20', ate: '2027-01-19' });
+    /* hoje 26/10 (o print do Gabriel) */
+    expect(periodoDoAtalho('anterior', '2026-10-26')).toEqual({ de: '2026-09-01', ate: '2026-09-30' });
+    expect(periodoDoAtalho('atual', '2026-10-26')).toEqual({ de: '2026-10-01', ate: '2026-10-31' });
+    expect(periodoDoAtalho('futuro', '2026-10-26')).toEqual({ de: '2026-11-01', ate: '2026-11-30' });
+    /* virada do ano nos dois sentidos, e fevereiro bissexto */
+    expect(periodoDoAtalho('anterior', '2027-01-15')).toEqual({ de: '2026-12-01', ate: '2026-12-31' });
+    expect(periodoDoAtalho('futuro', '2026-12-31')).toEqual({ de: '2027-01-01', ate: '2027-01-31' });
+    expect(periodoDoAtalho('atual', '2028-02-10')).toEqual({ de: '2028-02-01', ate: '2028-02-29' });
+    expect(periodoDoAtalho('anterior', '2028-03-31')).toEqual({ de: '2028-02-01', ate: '2028-02-29' });
+    expect(periodoDoAtalho('futuro', '2028-01-31')).toEqual({ de: '2028-02-01', ate: '2028-02-29' });
   });
   it('a aritmética de dias não usa o relógio nem o fuso', () => {
     expect(somarDiasIso('2026-10-31', 1)).toBe('2026-11-01');

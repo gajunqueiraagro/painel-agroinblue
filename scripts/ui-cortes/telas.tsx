@@ -434,8 +434,14 @@ if (tela === 'mesclar') {
      futuros de um contrato pós-fixado, e uma linha com as duas origens. SINTÉTICO; datas em torno de hoje. */
   const hj = new Date(); const dia = (d: number) => { const x = new Date(hj.getFullYear(), hj.getMonth(), hj.getDate() + d);
     return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
+  /* P106 — a tela abre SEMPRE em "Mês atual" (nada se restaura): `&v=futuro` e `&v=encerrado` são abertos pelo gate clicando "Mês
+     futuro" / "Mês anterior". Os dias daqui se medem a partir de hoje; `ate1o(k)` = dias de hoje até o dia 1º do mês hoje+k */
+  const ate1o = (k: number) => Math.round((new Date(hj.getFullYear(), hj.getMonth() + k, 1).getTime() - new Date(hj.getFullYear(), hj.getMonth(), hj.getDate()).getTime()) / 86_400_000);
+  /* no `futuro` as contas do período andam junto com o 1º do mês seguinte (como no período de antes, de hoje+10: as de +2 a +9 caem
+     ANTES dele, a de +12 dentro); o vencido não anda */
+  const desl = v === 'futuro' ? ate1o(1) - 10 : 0;
   const lin = (id: string, d: number, valor: number, descricao: string, o: Record<string, unknown> = {}) => ({
-    id, cliente_id: 'cli', fazenda_id: 'f1', data_vencimento: dia(d), data_competencia: dia(d), data_pagamento: null, status_transacao: 'programado',
+    id, cliente_id: 'cli', fazenda_id: 'f1', data_vencimento: dia(d < 0 ? d : d + desl), data_competencia: dia(d < 0 ? d : d + desl), data_pagamento: null, status_transacao: 'programado',
     tipo_operacao: '2-Saídas', valor, sinal: -1, conta_bancaria_id: 'bb', conta_destino_id: null, descricao, favorecido_nome: 'Banco Cooperativo Exemplo de Crédito',
     subcentro: 'Juros de Financiamento Pecuária', macro_custo: 'Despesas Financeiras', cancelado: false, sem_movimentacao_caixa: false, ...o });
   const LINHAS_CPR = [
@@ -450,8 +456,8 @@ if (tela === 'mesclar') {
     /* CPR-AJUSTES-20-10c — `&v=encerrado`: dois vencidos em aberto DENTRO de um período já encerrado (o grupo "Saem hoje", depois do
        Fim do período) — um a pagar com o nome longo e um a receber */
     ...(v === 'encerrado' ? [
-      lin('venc-enc-1', -20, 112.82, 'Segurança do Trabalho com o laudo técnico anual das instalações da sede', { status_transacao: 'previsto' }),
-      lin('venc-enc-2', -15, 500, 'Venda de couro do abate', { tipo_operacao: '1-Entradas', sinal: 1, conta_bancaria_id: null, conta_destino_id: 'bb', subcentro: 'Outras Receitas' }),
+      lin('venc-enc-1', Math.min(-1, ate1o(-1) + 9), 112.82, 'Segurança do Trabalho com o laudo técnico anual das instalações da sede', { status_transacao: 'previsto' }),
+      lin('venc-enc-2', Math.min(-1, ate1o(-1) + 14), 500, 'Venda de couro do abate', { tipo_operacao: '1-Entradas', sinal: 1, conta_bancaria_id: null, conta_destino_id: 'bb', subcentro: 'Outras Receitas' }),
     ] : []),
   ];
   g.__bancoBancada = {
@@ -465,9 +471,8 @@ if (tela === 'mesclar') {
       : fn === 'fn_parcelas_dos_lancamentos' ? {} : null,
   };
   /* CPR-AJUSTES-20-10b — `&v=futuro`: um período que começa depois de hoje (o bloco "Vencidos em aberto · entram no saldo" antes
-     do Caixa inicial, e nenhum dia de hoje), aberto pelo mesmo retorno de sessão que a tela já lê */
-  if (v === 'futuro') sessionStorage.setItem('cpr_retorno_do_contrato', JSON.stringify({ atalho: 'datas', datas: { de: dia(10), ate: dia(40) } }));
-  if (v === 'encerrado') sessionStorage.setItem('cpr_retorno_do_contrato', JSON.stringify({ atalho: 'datas', datas: { de: dia(-40), ate: dia(-10) }, segmento: 'ambos' }));
+     do Caixa inicial, e nenhum dia de hoje). P106: o gate clica "Mês futuro" / "Mês anterior" (o retorno de sessão não restaura mais
+     o período) */
   montar(<div className="h-full"><ContasPagarReceberTab onIntensiveToggle={() => {}} /></div>);
 } else if (tela === 'contas') {
   /* CAD-CONTAS-BANCARIAS-01 — Financeiro › Contas bancárias: a lista (`&n=longo` = o pior caso), o modal da conta (`&v=editar&aba=dados|gerente|
@@ -1022,7 +1027,10 @@ if (tela === 'mesclar') {
   g.__bancoBancada = { from: (t: string, e: any) => v === 'salsolta' && t === 'financeiro_lancamentos_v2' && e?.eq?.favorecido_id ? IRMAS_SOLTAS
       : t === 'audit_log' ? AUDIT : t === 'vw_lancamento_documentos' ? DOCS_NOTA
       : DIV && t === 'financeiro_lancamento_partes' ? PARTES_DIV : DIV && t === 'financeiro_lancamento_divisoes' ? [{ id: 'op-div', acao: 'dividir_nota' }]
-      : DIV && t === 'nota_fiscal' ? [NOTA_DIV] : DIV && t === 'nota_fiscal_itens' ? ITENS_DIV : [], rpc: (fn: string) => fn === 'fn_nomes_dos_autores' ? [
+      : DIV && t === 'nota_fiscal' ? [NOTA_DIV] : DIV && t === 'nota_fiscal_itens' ? ITENS_DIV : [], rpc: (fn: string, a: any) =>
+    /* P138 — a safra da competência é do banco: aqui, pelas datas das safras SINTÉTICAS da bancada (a mesma regra) */
+    fn === '_fn_safra_da_competencia' ? (SAFRAS.find((s: any) => s.escopo_negocio === a?.p_escopo && a?.p_data >= s.data_inicio && a?.p_data <= s.data_fim)?.id ?? null)
+    : fn === 'fn_nomes_dos_autores' ? [
       { user_id: 'u-outro', nome: 'Beltrano Gestor da Silva', email: 'beltrano@exemplo.com', situacao: 'ex-membro' },
       { user_id: 'u1', nome: 'Eu Mesmo da Bancada', email: 'bancada@exemplo.com', situacao: 'membro ativo' }]
     : (desc && fn === 'fn_lancamento_financiamento') ? {
@@ -1135,6 +1143,8 @@ if (v === 'extrato' || v === 'planilha') {
   if (v === 'extrato') props.ocultarParcelamento = true;
 }
 if (v === 'semvenc' && m === 'editar') props.lancamento = { ...MILHO, data_vencimento: null };
+/* P138 — `&safra=sem`: o lançamento gravado SEM safra (o campo mostra "Sem safra" e embaixo "sugestão: <safra> · Usar", pela competência) */
+if (m === 'editar' && q.get('safra') === 'sem' && props.lancamento) props.lancamento = { ...props.lancamento, safra_id: null };
 if (v === 'oc' || v === 'ocdesp') {
   const nat = v === 'oc' ? 'principal' : 'obrigacao';
   props.origemOC = { operacaoId: 'a1b2c3d4-0000-4000-8000-000000000000', versao: 8, natureza: nat, tipoOperacao: 'venda', rotulo: 'OC #a1b2c3d4 · Venda 140 Novilhas',
@@ -1173,6 +1183,13 @@ if (v === 'volume') {
 if (v === 'ref') props.referenciaOperacionalInfo = { fornecedor_texto: 'AGROPECUARIA EXEMPLO LTDA', fazenda_texto: 'EXEMPLO', plano_texto: 'Nutrição Engorda',
   centro_texto: 'Suplementação', produto_texto: 'Sal mineral', valor: -1345.5, data_referencia: '10/09/2026' };
 
+  /* P117 — o fornecedor do lançamento é uma FILIAL com a cidade mais longa do caso (Presidente Prudente/SP): a linha fixa sob o campo diz
+     "CNPJ · Cidade/UF" e não empurra nem corta nada; `&cidade=sem` = o cadastro sem cidade (só o CNPJ). SINTÉTICO. */
+  if (v !== 'volume') {
+    const semCidade = q.get('cidade') === 'sem';
+    g.__fornecedoresBancada = [...(g.__fornecedoresBancada ?? []).filter((f: any) => f.id !== 'agro'),
+      { ...AGRO, municipio: semCidade ? null : 'Presidente Prudente', uf: semCidade ? null : 'SP' }];
+  }
   raiz.render(<QueryClientProvider client={qc}><MemoryRouter><Casca />
     <LancamentoV2Dialog open onClose={() => {}} onSave={async () => 'x'} fazendas={FAZENDAS} contas={CONTAS} classificacoes={CLASSIF}
       fornecedores={[AGRO]} safras={SAFRAS} onCriarFornecedor={async () => null} {...props} />
