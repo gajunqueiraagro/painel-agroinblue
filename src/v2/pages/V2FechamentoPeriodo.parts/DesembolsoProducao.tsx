@@ -28,6 +28,7 @@ import {
 import type { FechamentoPeriodoDTO, GrupoNode } from '@/v2/types/fechamentoPeriodo';
 import { fmt, pct } from './fmt';
 import { BoletimContainer } from './boletim/BoletimContainer';
+import { agruparDemais } from '@/v2/lib/agruparDemais';
 
 // ── Cores (design system — espelhadas de BlocoMovimentacoesRebanhoFechamento) ──
 const COR_REAL = '#dc2626';    // vermelho — Realizado
@@ -67,7 +68,8 @@ function temSerie(arr: number[] | undefined, meses: number[]): boolean {
 }
 
 interface Props {
-  dto: FechamentoPeriodoDTO;
+  /** Só a estrutura de custos (P132: o teste monta só ela). */
+  dto: Pick<FechamentoPeriodoDTO, 'estruturaCustos'>;
   /** Totais soberanos do PC-100 (Visão Geral), espelhados nos cards. */
   custoCab: number | null;
   custoArr: number | null;
@@ -186,16 +188,12 @@ export default function DesembolsoProducao({
   ).sort((a, b) => b.realizado - a.realizado);
 
   const TOP_CENTROS = 6;
-  const centrosTopN = resumoCentros.slice(0, TOP_CENTROS);
-  const centrosResto = resumoCentros.slice(TOP_CENTROS);
-  const linhaOutros = centrosResto.length
-    ? {
-        centro_custo: 'Outros',
-        realizado: centrosResto.reduce((s, c) => s + c.realizado, 0),
-        meta: centrosResto.reduce((s, c) => s + c.meta, 0),
-      }
-    : null;
-  const linhasCentro = linhaOutros ? [...centrosTopN, linhaOutros] : centrosTopN;
+  // P132: os menores viram "Demais (N)" (o centro real "Outros" do plano fica com o nome dele; chave própria).
+  const linhasCentro = agruparDemais(resumoCentros, TOP_CENTROS, (c) => c.centro_custo, (resto, rotulo) => ({
+    centro_custo: rotulo,
+    realizado: resto.reduce((s, c) => s + c.realizado, 0),
+    meta: resto.reduce((s, c) => s + c.meta, 0),
+  }));
   const totalCentro = {
     realizado: resumoCentros.reduce((s, c) => s + c.realizado, 0),
     meta: resumoCentros.reduce((s, c) => s + c.meta, 0),
@@ -453,11 +451,11 @@ export default function DesembolsoProducao({
                 </tr>
               </thead>
               <tbody>
-                {linhasCentro.map((c) => {
+                {linhasCentro.map(({ item: c, chave }) => {
                   const metaAusente = c.meta == null || c.meta === 0;
                   const desvioMetaPct = metaAusente ? null : ((c.realizado - c.meta) / c.meta) * 100;
                   return (
-                    <tr key={c.centro_custo}>
+                    <tr key={chave}>
                       <td style={{ ...cell, textAlign: 'left' }}>{c.centro_custo}</td>
                       <td style={cellNum}>{fmtMedioPeriodo(c.realizado)}</td>
                       <td style={{ ...cellNum, color: COR_REAL_COL }}>{fmtRsCabMes(c.realizado)}</td>
