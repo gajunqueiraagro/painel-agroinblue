@@ -122,24 +122,27 @@ describe('a Atividade numa linha, ao lado do Subcentro', () => {
   });
 });
 
-describe('o resumo lateral: sentence case, faixa de 18px, pares rótulo-valor', () => {
-  it('nenhuma caixa alta; títulos 11px/600; o corpo é uma grade de duas colunas (rótulo na largura do maior)', async () => {
+/* P121 (FIN-MODAL-RESUMO-01, mock v1.1 aprovado 27/10) — o resumo virou o `ResumoDoLancamento`: títulos de bloco pequenos, MAIÚSCULOS e
+   navy (o "sem caixa alta" do LANCAMENTO COMPACTO valia para as peças compartilhadas, que seguem nos outros modais); cada bloco com
+   ALTURA FIXA e nada rola. */
+describe('o resumo lateral: blocos de altura fixa, nada rola, rótulos curtos', () => {
+  it('a faixa de 18px; os 5 blocos na ordem, cada um com altura fixa e overflow escondido; o corpo não rola', async () => {
     await abrir();
-    const aside = screen.getByTestId('resumo-pagamento').closest('aside') as HTMLElement;
-    /* a busca sabe achar: há classes no resumo */
-    expect(aside.querySelectorAll('[class]').length).toBeGreaterThan(10);
-    expect(aside.querySelectorAll('[class*="uppercase"], [class*="tracking-"]')).toHaveLength(0);
+    const aside = screen.getByTestId('resumo-lancamento');
     const faixa = aside.firstElementChild as HTMLElement;
     expect(faixa.textContent).toBe('Resumo do lançamento');
     expect(faixa.className).toContain('h-[18px]');
-    expect(faixa.className).toContain('text-[11px] font-semibold');
-    const secoes = [...aside.querySelectorAll('[data-secao-resumo]')].map(e => e.textContent);
-    expect(secoes).toEqual(['Identificação', 'Financeiro', 'Classificação', 'Pagamento', 'Documento']);
-    const corpo = faixa.nextElementSibling as HTMLElement;
-    expect(corpo.className).toContain('grid-cols-[max-content_minmax(0,1fr)]');
-    const linha = aside.querySelector('[data-linha-resumo]') as HTMLElement;
-    expect(linha.className).toBe('contents');
-    expect(linha.children[0].className).toContain('leading-4');
-    expect(within(aside).getByText('Data competência')).toBeInTheDocument();
+    const blocos = ['identificacao', 'financeiro', 'classificacao', 'pagamento', 'documento'].map((b) => screen.getByTestId(`resumo-${b}`));
+    expect(blocos.map((b) => b.querySelector('h4')?.textContent)).toEqual(['Identificação', 'Financeiro', 'Classificação', 'Pagamento', 'Documento']);
+    for (const b of blocos) {
+      expect(b.className).toMatch(/(^| )h-\[\d+px\]/);
+      expect(b.className).toContain('overflow-hidden');
+      expect(b.querySelector('h4')?.className).toContain('uppercase');
+    }
+    /* a busca sabe achar: o corpo tem classes; nenhuma rolagem no resumo inteiro */
+    expect(aside.querySelectorAll('[class]').length).toBeGreaterThan(10);
+    expect(aside.querySelectorAll('[class*="overflow-auto"], [class*="overflow-y-auto"], [class*="overflow-scroll"]')).toHaveLength(0);
+    expect(within(aside).getByText('Comp.')).toBeInTheDocument();
+    expect(within(aside).getByText('Passe o mouse num nome cortado para ver inteiro.')).toBeInTheDocument();
   });
 });

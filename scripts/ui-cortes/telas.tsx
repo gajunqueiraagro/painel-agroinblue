@@ -1157,7 +1157,18 @@ if (m === 'editar' && (v === 'salcartao' || v === 'salpago')) props.lancamento =
   data_vencimento: '2026-08-10', forma_pagamento: 'Cartão', ...(v === 'salpago' ? { status_transacao: 'realizado', data_pagamento: '2026-08-12' } : {}) };
 if (v === 'rateio' && m === 'novo') props.prefill = { tipo_operacao: '2-Saídas', escopo_negocio: 'agricultura', subcentro: 'Insumos Lavoura Milho', plano_conta_id: 'pl-ins',
   macro_custo: 'Custeio Produtivo', grupo_custo: 'Custeio Lavoura', centro_custo: 'Insumos', cultura: '', fazenda_id: 'f-pur', data_competencia: '2026-05-10', valor: 5000 };
-const NOME_LONGO = 'COOPERATIVA AGROINDUSTRIAL DOS PRODUTORES RURAIS DO MATO GROSSO DO SUL E REGIAO CENTRO OESTE LTDA FILIAL CAMPO GRANDE';
+/* P121 — `&resumo=longo`: o caso "Nomes bem longos" do mock (SINTÉTICO) sobre o `v=sal` — favorecido, fazenda, conta, centro e subcentro
+   longos e o valor de 7 dígitos. O Resumo do lançamento não rola e não muda de altura (o desloca compara com o `v=sal` curto). */
+if (m === 'editar' && q.get('resumo') === 'longo') {
+  AGRO.nome = 'Cooperativa Agroindustrial dos Produtores Rurais do Vale do Rio Paraná e Região Ltda';
+  FAZENDAS[0].nome = 'Faz. Santa Maria da Boa Esperança';
+  CONTAS[0].nome_conta = 'Itaú Personalite Investimentos';
+  CONTAS[0].nome_exibicao = 'Itaú Personalite Investimentos';
+  CLASSIF[0] = { ...CLASSIF[0], subcentro: 'Peças, Pneus e Manutenção de Tratores e Implementos Pecuária', centro_custo: 'Manutenção de Máquinas e Implementos Agrícolas' };
+  props.lancamento = { ...SAL, valor: 1234567.89, subcentro: CLASSIF[0].subcentro, centro_custo: CLASSIF[0].centro_custo,
+    descricao: 'Peças de reposição para trator e implementos, conforme pedido de compra 4521 e orçamento aprovado' };
+}
+const NOME_LONGO ='COOPERATIVA AGROINDUSTRIAL DOS PRODUTORES RURAIS DO MATO GROSSO DO SUL E REGIAO CENTRO OESTE LTDA FILIAL CAMPO GRANDE';
 if (v === 'xmlnome') {
   const SEM_DOC = { id: 'agro-nd', nome: NOME_LONGO, cpf_cnpj: null, fazenda_id: null, ativo: true, tipo_recebimento: null } as any;
   const bytes = utf8(montarNFe({ nomeEmitente: NOME_LONGO, duplicatas: [['001', '2026-10-30', '3247.60'], ['002', '2026-11-29', '3247.60'], ['003', '2026-12-29', '3247.60'], ['004', '2027-01-28', '3247.60'], ['005', '2027-02-27', '3247.60']] }));
