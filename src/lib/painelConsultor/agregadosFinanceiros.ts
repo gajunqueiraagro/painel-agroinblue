@@ -811,6 +811,14 @@ export function agregaReceitaAgriPorSubcentroMeta(grid: SubcentroGrid[]) {
   return agregaPorSubcentroGenerico(makeMetaSource(grid), isReceitaAgricola, 'agregaReceitaAgriPorSubcentroMeta');
 }
 
+/* P130 — a receita de silvicultura tem linha propria no Bloco (antes nao caia em balde nenhum e o banner acusava a diferenca). */
+export function agregaReceitaSilviPorSubcentro(lancFin: FinanceiroLancamento[], ano: number) {
+  return agregaPorSubcentroGenerico(makeRealizadoSourceEntrada(lancFin, ano), isReceitaSilvicola, 'agregaReceitaSilviPorSubcentro');
+}
+export function agregaReceitaSilviPorSubcentroMeta(grid: SubcentroGrid[]) {
+  return agregaPorSubcentroGenerico(makeMetaSource(grid), isReceitaSilvicola, 'agregaReceitaSilviPorSubcentroMeta');
+}
+
 export function agregaOutrasReceitasPorSubcentro(lancFin: FinanceiroLancamento[], ano: number) {
   return agregaPorSubcentroGenerico(makeRealizadoSourceEntrada(lancFin, ano), isOutrasReceitas, 'agregaOutrasReceitasPorSubcentro');
 }

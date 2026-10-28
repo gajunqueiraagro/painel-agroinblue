@@ -74,8 +74,9 @@ export function situacaoDaNota(l: LinhaDeNota): SituacaoDaNota {
   if (l.recusa) return 'recusada';
   if (l.lancada) return 'lancada';
   if (l.naoVerificada) return 'nao_verificada';
-  if ((l.doXml?.ocorrencias.length ?? 0) > 0) return 'ja_registrada';
-  if ((l.jaLancados ?? 0) > 0) return 'ja_lancada';
+  /* P128a (decisao b) — so' a nota registrada numa OC barra; a ja' anexada a um lancamento e' "parece já lançada" (abre a previa) */
+  if (l.doXml?.ocorrencias.some((o) => o.origem === 'oc')) return 'ja_registrada';
+  if ((l.jaLancados ?? 0) > 0 || l.doXml?.ocorrencias.some((o) => o.origem === 'lancamento')) return 'ja_lancada';
   if (l.avisos.includes('sem_protocolo')) return 'sem_protocolo';
   return 'nova';
 }
@@ -122,6 +123,78 @@ export function jaEstaNaLista(linhas: readonly LinhaDeNota[], arquivo: { name: s
   return linhas.some((l) => (l.arquivoNome === arquivo.name && l.arquivoTamanho === arquivo.size) || (!!chave && !l.recusa && l.nota?.chave === chave));
 }
 
+/* A nota LIDA (do arquivo, ou da chave digitada — P95) vira a linha pelo MESMO caminho: o fornecedor, a proposta, "ja' registrada",
+   "parece ja' lancada".
+   P128a — exportada (a porta 2, o Documentos do Editar lancamento, monta a MESMA previa pelo MESMO caminho). */
+export async function fazendasComIEDoCliente(cli: string, fazendas: ReadonlyArray<{ id: string; nome: string }>): Promise<FazendaComIE[]> {
+  const [ies, apelidos] = await Promise.all([iePorFazenda(cli), aliasesDasFazendas(cli)]);
+  /* NOTA-FAZENDA-PELA-IE-01 — com os apelidos: sem a IE gravada, a fazenda pelo nome no endereco do destinatario */
+  return fazendas.map((f) => ({ id: f.id, nome: f.nome, ie: ies[f.id] ?? null, aliases: apelidos[f.id] ?? null }));
+}
+
+/** P128a (porta 2) — o Documentos do Editar lancamento: o arquivo da NF vira a MESMA previa do "+ Da nota" (o mesmo leitor, as mesmas
+ *  consultas, `montarLinhaDaNota`). Sempre abre a previa quando a nota foi lida e conferida; senao, a frase pronta do que impediu. */
+export async function notaParaAPrevia(cli: string, arquivo: File, fornecedores: readonly FornecedorParaResolver[],
+  fazendas: ReadonlyArray<{ id: string; nome: string }>): Promise<{ ok: true; nota: NotaParaLancar } | { ok: false; frase: string }> {
+  const bytes = await arquivo.arrayBuffer();
+  const lido = await lerNota(bytes);
+  if (lido.ok === false) return { ok: false, frase: lido.frase };
+  const base = { id: 'porta-2', arquivoNome: arquivo.name, arquivoTamanho: arquivo.size, doXml: null, nota: null, avisos: [], fazenda: null, lancada: false };
+  const linha = await montarLinhaDaNota(cli, base, arquivo, bytes, lido, await fazendasComIEDoCliente(cli, fazendas), fornecedores);
+  if (linha.recusa) return { ok: false, frase: linha.recusa };
+  if (linha.naoVerificada) return { ok: false, frase: linha.naoVerificada };
+  if (!linha.doXml) return { ok: false, frase: 'Não consegui ler esta nota.' };
+  return { ok: true, nota: linha.paraLancar ?? { arquivo: linha.doXml.arquivo, bytes, lido, doXml: linha.doXml } };
+}
+
+export async function montarLinhaDaNota(cli: string, base: Omit<LinhaDeNota, 'recusa'>, arquivo: File, bytes: ArrayBuffer, lido: NotaLidaOk,
+  fazendasComIE: FazendaComIE[], fornecedores: readonly FornecedorParaResolver[]): Promise<LinhaDeNota> {
+  const { nota, avisos } = lido;
+  /* O fornecedor: pelo documento; so' vai ao banco pelo nome quando o documento nao achou ninguem (e ha' nome: a chave digitada nao traz). */
+  /* P146 — a consulta que FALHA entra em `falhas` (nunca vira "nao achei"): a linha fica "não verificada" e nao abre */
+  const falhas: string[] = [];
+  let resolucao: ResolucaoEmitente = resolverEmitente(nota.emitente, fornecedores, null);
+  if (!resolucao.achadoPor && nota.emitente.nome) {
+    const pelo = await fornecedorPeloNome(cli, nota.emitente.nome);
+    if (pelo.ok === false) falhas.push(`o fornecedor pelo nome (${pelo.motivo})`);
+    resolucao = resolverEmitente(nota.emitente, fornecedores, pelo.ok === false ? null : pelo.valor);
+  }
+  const [registrada, ultima] = await Promise.all([
+    notaJaRegistrada(cli, nota.chave),
+    resolucao.propostoId ? ultimaClassificacaoDoFornecedor(cli, resolucao.propostoId) : Promise.resolve(null),
+  ]);
+  if (registrada.ok === false) falhas.push(`se a nota já está registrada (${registrada.motivo})`);
+  const ocorrencias = registrada.ok === false ? [] : registrada.valor;
+  const proposta = proporLancamento({ nota, avisosDoLeitor: avisos, fazendas: fazendasComIE, emitente: resolucao, favorecidoId: resolucao.propostoId, ultima });
+  if (proposta.ok === false) return { ...base, nota, avisos, recusa: proposta.frase };
+  const ehPdf = lido.origem === 'pdf';
+  const doXml: DoXml = {
+    proposta: proposta.proposta, emitenteNome: nota.emitente.nome, emitenteDocumento: nota.emitente.documento, emitente: nota.emitente, resolucao,
+    ocorrencias, arquivo: ehPdf ? arquivoPdfDaNota(bytes, arquivo.name) : arquivoXmlDaNota(bytes, arquivo.name),
+  };
+  /* NOTA-JA-LANCADA-01 — a nota ja' lancada (qualquer status, cadastro parecido): a linha avisa e abre a previa da nota
+     (que oferece anexar), nunca o Novo lancamento direto. P95 — pela chave, sem valor nem data: so' o numero, o CNPJ e a chave. */
+  const pr = proposta.proposta;
+  let jaLancados = 0;
+  const naOc = ocorrencias.some((o) => o.origem === 'oc');
+  const noLancamento = ocorrencias.some((o) => o.origem === 'lancamento');
+  if (registrada.ok === true && !naOc) {
+    const ja = await notaJaLancada(cli, {
+      parcelas: lido.pelaChave ? [] : parcelasParaCasar(pr.duplicatas, nota.totais.notaCent, pr.duplicatas[0]?.vencimento ?? nota.emissao),
+      numero: pr.numeroDocumento || nota.numero, chave: nota.chave, emitenteDocumento: nota.emitente.documento,
+      nomes: [nota.emitente.nome, nota.emitente.fantasia],
+    });
+    if (ja.ok === false) falhas.push(`se a nota já foi lançada (${ja.motivo})`); else jaLancados = ja.valor.length;
+  }
+  const naoVerificada = falhas.length ? `Não consegui verificar ${falhas.join('; ')}. Nada será lançado até verificar.` : null;
+  return {
+    ...base, nota, avisos, recusa: null,
+    fazenda: fazendasComIE.find((f) => f.id === proposta.proposta.fazendaId) ?? null,
+    doXml, jaLancados, naoVerificada, paraRefazer: naoVerificada ? { arquivo, bytes, lido } : null,
+    paraLancar: naoVerificada ? null : ehPdf || jaLancados > 0 || noLancamento ? { arquivo: doXml.arquivo, bytes, lido, doXml } : null,
+  };
+}
+
 export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedores, onAbrirLancamento, onAbrirNota, lancadas, linhasIniciais, avisoInicial }: {
   open: boolean;
   onClose: () => void;
@@ -150,59 +223,10 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
   const [chaves, setChaves] = useState<Record<string, string>>({});
   const [errosDaChave, setErrosDaChave] = useState<Record<string, string>>({});
 
-  const fazendasDoCliente = useCallback(async (cli: string): Promise<FazendaComIE[]> => {
-    const [ies, apelidos] = await Promise.all([iePorFazenda(cli), aliasesDasFazendas(cli)]);
-    /* NOTA-FAZENDA-PELA-IE-01 — com os apelidos: sem a IE gravada, a fazenda pelo nome no endereco do destinatario */
-    return fazendas.map((f) => ({ id: f.id, nome: f.nome, ie: ies[f.id] ?? null, aliases: apelidos[f.id] ?? null }));
-  }, [fazendas]);
+  const fazendasDoCliente = useCallback((cli: string) => fazendasComIEDoCliente(cli, fazendas), [fazendas]);
 
-  /* A nota LIDA (do arquivo, ou da chave digitada — P95) vira a linha pelo MESMO caminho: o fornecedor, a proposta, "ja' registrada",
-     "parece ja' lancada". */
-  const montarLinha = useCallback(async (cli: string, base: Omit<LinhaDeNota, 'recusa'>, arquivo: File, bytes: ArrayBuffer, lido: NotaLidaOk,
-    fazendasComIE: FazendaComIE[]): Promise<LinhaDeNota> => {
-    const { nota, avisos } = lido;
-    /* O fornecedor: pelo documento; so' vai ao banco pelo nome quando o documento nao achou ninguem (e ha' nome: a chave digitada nao traz). */
-    /* P146 — a consulta que FALHA entra em `falhas` (nunca vira "nao achei"): a linha fica "não verificada" e nao abre */
-    const falhas: string[] = [];
-    let resolucao: ResolucaoEmitente = resolverEmitente(nota.emitente, fornecedores, null);
-    if (!resolucao.achadoPor && nota.emitente.nome) {
-      const pelo = await fornecedorPeloNome(cli, nota.emitente.nome);
-      if (pelo.ok === false) falhas.push(`o fornecedor pelo nome (${pelo.motivo})`);
-      resolucao = resolverEmitente(nota.emitente, fornecedores, pelo.ok === false ? null : pelo.valor);
-    }
-    const [registrada, ultima] = await Promise.all([
-      notaJaRegistrada(cli, nota.chave),
-      resolucao.propostoId ? ultimaClassificacaoDoFornecedor(cli, resolucao.propostoId) : Promise.resolve(null),
-    ]);
-    if (registrada.ok === false) falhas.push(`se a nota já está registrada (${registrada.motivo})`);
-    const ocorrencias = registrada.ok === false ? [] : registrada.valor;
-    const proposta = proporLancamento({ nota, avisosDoLeitor: avisos, fazendas: fazendasComIE, emitente: resolucao, favorecidoId: resolucao.propostoId, ultima });
-    if (proposta.ok === false) return { ...base, nota, avisos, recusa: proposta.frase };
-    const ehPdf = lido.origem === 'pdf';
-    const doXml: DoXml = {
-      proposta: proposta.proposta, emitenteNome: nota.emitente.nome, emitenteDocumento: nota.emitente.documento, emitente: nota.emitente, resolucao,
-      ocorrencias, arquivo: ehPdf ? arquivoPdfDaNota(bytes, arquivo.name) : arquivoXmlDaNota(bytes, arquivo.name),
-    };
-    /* NOTA-JA-LANCADA-01 — a nota ja' lancada (qualquer status, cadastro parecido): a linha avisa e abre a previa da nota
-       (que oferece anexar), nunca o Novo lancamento direto. P95 — pela chave, sem valor nem data: so' o numero, o CNPJ e a chave. */
-    const pr = proposta.proposta;
-    let jaLancados = 0;
-    if (registrada.ok === true && ocorrencias.length === 0) {
-      const ja = await notaJaLancada(cli, {
-        parcelas: lido.pelaChave ? [] : parcelasParaCasar(pr.duplicatas, nota.totais.notaCent, pr.duplicatas[0]?.vencimento ?? nota.emissao),
-        numero: pr.numeroDocumento || nota.numero, chave: nota.chave, emitenteDocumento: nota.emitente.documento,
-        nomes: [nota.emitente.nome, nota.emitente.fantasia],
-      });
-      if (ja.ok === false) falhas.push(`se a nota já foi lançada (${ja.motivo})`); else jaLancados = ja.valor.length;
-    }
-    const naoVerificada = falhas.length ? `Não consegui verificar ${falhas.join('; ')}. Nada será lançado até verificar.` : null;
-    return {
-      ...base, nota, avisos, recusa: null,
-      fazenda: fazendasComIE.find((f) => f.id === proposta.proposta.fazendaId) ?? null,
-      doXml, jaLancados, naoVerificada, paraRefazer: naoVerificada ? { arquivo, bytes, lido } : null,
-      paraLancar: naoVerificada ? null : ehPdf || jaLancados > 0 ? { arquivo: doXml.arquivo, bytes, lido, doXml } : null,
-    };
-  }, [fornecedores]);
+  const montarLinha = useCallback((cli: string, base: Omit<LinhaDeNota, 'recusa'>, arquivo: File, bytes: ArrayBuffer, lido: NotaLidaOk,
+    fazendasComIE: FazendaComIE[]) => montarLinhaDaNota(cli, base, arquivo, bytes, lido, fazendasComIE, fornecedores), [fornecedores]);
 
   const lerArquivos = useCallback(async (arquivos: File[]) => {
     if (!clienteId || arquivos.length === 0) return;
@@ -376,7 +400,7 @@ export function NovoDeXmlDialog({ open, onClose, clienteId, fazendas, fornecedor
                   const d = l.doXml;
                   if (!n || !d) return null;
                   const s = TEXTO_DA_SITUACAO[sit];
-                  const onde = d.ocorrencias[0];
+                  const onde = d.ocorrencias.find((o) => o.origem === 'oc');
                   /* P95 — a nota da chave digitada: o emitente e' o do cadastro (a chave so' traz o CNPJ); emissao e valor sao do operador ("—") */
                   const pelaChave = l.paraLancar?.lido.pelaChave === true;
                   const emitenteNome = n.emitente.nome || fornecedores.find((f) => f.id === d.proposta.favorecidoId)?.nome || '—';

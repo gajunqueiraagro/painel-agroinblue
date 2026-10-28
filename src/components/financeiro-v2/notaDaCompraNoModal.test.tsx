@@ -83,7 +83,7 @@ beforeEach(() => {
   docs.lista = [];
 });
 
-async function abrir(lanc: LancamentoV2) {
+async function abrir(lanc: LancamentoV2, extra: Partial<React.ComponentProps<typeof LancamentoV2Dialog>> = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const tree = (p: Partial<React.ComponentProps<typeof LancamentoV2Dialog>>) => (
     <QueryClientProvider client={qc}>
@@ -95,7 +95,7 @@ async function abrir(lanc: LancamentoV2) {
     </QueryClientProvider>
   );
   const r = render(tree({}));
-  r.rerender(tree({ open: true, lancamento: lanc }));
+  r.rerender(tree({ open: true, lancamento: lanc, ...extra }));
   await screen.findByDisplayValue('Folha de Pagamento');
   await new Promise((ok) => setTimeout(ok, 30));
 }
@@ -175,5 +175,35 @@ describe('PARC-FECHA-02 item 1 — o topo em leitura na parcela de parcelamento'
     expect((screen.getByPlaceholderText('Número') as HTMLInputElement).disabled).toBe(false);
     expect(bloco.querySelector('[role="combobox"]')?.hasAttribute('disabled')).toBe(false);
     expect(screen.queryByTestId('motivo-topo-parcelado')).toBeNull();
+  });
+});
+
+/* P128a (NOTA-JA-LANCADA, porta 2) — "Ler a NF" no Documentos do Editar: o arquivo vai a quem abre a MESMA previa do "+ Da nota",
+   com o id deste lancamento; o que impediu fica escrito NA area (nunca toast) */
+describe('P128a — ler a NF no Documentos do Editar (porta 2)', () => {
+  const nf = () => new File(['<nfeProc/>'], 'nota.xml', { type: 'application/xml' });
+  it('o arquivo vai com o id do lançamento; a prévia abriu = nada escrito na área', async () => {
+    const onLerNotaFiscal = vi.fn(async (_a: File, _id: string): Promise<string | null> => null);
+    await abrir(FOLHA, { onLerNotaFiscal });
+    abaDocumentos();
+    const area = await screen.findByTestId('doc-ler-nf');
+    expect(area.textContent).toContain('Ler a NF (XML ou PDF)');
+    fireEvent.change(screen.getByTestId('doc-ler-nf-input'), { target: { files: [nf()] } });
+    await vi.waitFor(() => expect(onLerNotaFiscal).toHaveBeenCalledTimes(1));
+    expect([onLerNotaFiscal.mock.calls[0][0].name, onLerNotaFiscal.mock.calls[0][1]]).toEqual(['nota.xml', FOLHA.id]);
+    await vi.waitFor(() => expect(screen.queryByTestId('area-de-arquivo-recusa')).toBeNull());
+  });
+  it('a nota não abriu a prévia: a frase pronta fica na área', async () => {
+    await abrir(FOLHA, { onLerNotaFiscal: async () => 'Não consegui ler esta nota.' });
+    abaDocumentos();
+    await screen.findByTestId('doc-ler-nf');
+    fireEvent.change(screen.getByTestId('doc-ler-nf-input'), { target: { files: [nf()] } });
+    expect((await screen.findByTestId('area-de-arquivo-recusa')).textContent).toBe('Não consegui ler esta nota.');
+  });
+  it('sem quem abra a prévia (ou no Novo lançamento): a área não aparece', async () => {
+    await abrir(FOLHA);
+    abaDocumentos();
+    await screen.findByTestId('bloco-documentos-topo');
+    expect(screen.queryByTestId('doc-ler-nf')).toBeNull();
   });
 });
