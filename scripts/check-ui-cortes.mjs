@@ -390,6 +390,10 @@ const CENARIOS = [
     } },
   /* P127 + P128c — o Novo documento que LÊ A NOTA: lida (com as três divergências lado a lado e o "Ver o que a nota muda") e a que não se
      lê (PDF sem texto: a frase "itens não gravados"). O arquivo entra pelo MESMO input da área (o XML sintético exposto pela bancada). */
+  /* P128b — a prévia campo a campo (5 parcelas, nomes compridos): juntar; o caminho 2 (Venc./Valor); a recusa do banco no rodapé */
+  ...[['juntar', ''], ['atualizar', '&cam=2'], ['recusa', '&v=recusa']].map(([v, u]) => ({ nome: `previa-completar-${v}`, url: `tela=previa-completar${u}`,
+    tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[role="dialog"]', semRolagem: { dentro: '[role="dialog"]', exceto: '[data-testid="previa-rolagem"]' },
+    antes: async (p) => { await p.locator(v === 'recusa' ? '[data-testid="previa-recusa"]' : '[data-testid="previa-dre"]').waitFor({ timeout: 8000 }); await p.waitForTimeout(400); } })),
   ...[['lida', 'nota.xml'], ['nao-lida', 'escaneado.pdf']].map(([v, nome]) => ({ nome: `documento-nota-${v}`, url: 'tela=documento-nota',
     tamanhos: TAMANHOS_DO_CONTRATO, regiao: '[role="dialog"]',
     antes: async (p) => {
@@ -398,9 +402,8 @@ const CENARIOS = [
       await p.locator(nome.endsWith('.xml') ? '[data-testid="nota-lida"]' : '[data-testid="nota-nao-lida"]').waitFor({ timeout: 8000 });
       await p.waitForTimeout(400);
     } })),
-  /* P96a — a confirmação do "Juntar as 4 e anexar" (o resumo, a caixinha da competência, o efeito no DRE) e a do "Usar a nota lida" */
-  { nome: 'nota-pdf-juntar-confirmar', url: 'tela=nota-pdf&v=irmas', tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[role="alertdialog"]',
-    antes: async (p) => { await p.locator('[data-testid="nota-juntar-soltas"]').first().click(); await p.waitForTimeout(800); } },
+  /* P96a — a confirmação do "Usar a nota lida". (A do "Juntar as 4 e anexar" saiu com o P128b: o juntar é a prévia campo a campo,
+     medida em `previa-completar-juntar`.) */
   /* a frase da NF digitada (2 linhas reservadas) nos largos — nos estreitos ela mora na aba "Parcelas e lançamento" (nota-pdf-aba-lancamento-irmas) */
   { nome: 'nota-pdf-nf-digitada', url: 'tela=nota-pdf&v=irmas', tamanhos: TAMANHOS_DO_CONSORCIO.filter(([l]) => l >= 1000),
     semRolarNoLugar: '[data-testid="nota-nf-digitada"]' },

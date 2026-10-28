@@ -1048,6 +1048,44 @@ if (tela === 'mesclar') {
       onVerOQueANotaMuda={async () => null} />);
   };
   void montarDoc();
+} else if (tela === 'previa-completar') {
+  /* P128b — a PRÉVIA CAMPO A CAMPO do "Completar com a nota", no molde da Casa da Cerca (5 parcelas: 1 conciliada, 3 pagas, 1 programada) com
+     nomes SINTÉTICOS compridos. O banco falso faz o papel da `fn_nota_completar` com `p_simular`: o que o pedido traz muda, o resto é "igual",
+     conta/valor/vencimento das pagas têm cadeado. `cam=2`: o caminho 2 (Venc./Valor da nota na programada); `v=recusa`: o mês fechado. */
+  const montarPrevia = async () => {
+    const { PreviaCompletar } = await import('@/components/financeiro-v2/PreviaCompletar');
+    const cam2 = q.get('cam') === '2';
+    const SIT = ['conciliada', 'realizada', 'realizada', 'realizada', 'programada'];
+    const NOMES: Record<string, string> = { f0: 'Comercio Sintetico de Arames e Mourões do Centro Oeste Ltda', f1: 'Cercas Sinteticas Rurais Ltda',
+      z0: 'Fazenda Sintetica Boa Vista do Rio Comprido', z1: 'Fazenda Sintetica Boa Vista', c0: 'Banco Sintetico 0001-2 c/c 99999-9', c1: 'Caixa Sintetica',
+      p0: 'Manutenção de Cercas e Benfeitorias', p1: 'Investimento em Benfeitorias Rurais', s0: '2030/31', s1: '2031/32' };
+    const HOJE: Record<string, unknown> = { descricao: 'CERCAS SINTETICAS - parcela', favorecido_id: 'f0', fazenda_id: 'z0', conta_bancaria_id: 'c0',
+      plano_conta_id: 'p0', numero_documento: '', data_competencia: '2031-05-02', safra_id: 's0' };
+    g.__bancoBancada = { from: () => [], rpc: (fn: string, a: any) => {
+      if (fn !== 'fn_nota_completar') return null;
+      if (q.get('v') === 'recusa') return { ok: false, recusas: [{ frase: 'O mês 05/2031 está fechado: reabra antes de mudar a competência de «Cercas Sinteticas Rurais Ltda - parcela 1/5».' }], linhas: [], efeito_dre: [] };
+      const linhas = (a.p_lancamentos ?? []).map((x: any, k: number) => {
+        const paga = SIT[k] !== 'programada';
+        const campos: Record<string, unknown> = {};
+        for (const [c, h] of Object.entries(HOJE)) {
+          const fica = c in x ? x[c] : h;
+          const cad = paga && c === 'conta_bancaria_id' ? `${SIT[k]}: conta, valor e vencimento não mudam` : null;
+          campos[c] = { hoje: h, fica: cad ? h : fica, muda: !cad && fica !== h, hoje_nome: NOMES[String(h)] ?? null, fica_nome: NOMES[String(fica)] ?? null, cadeado: cad };
+        }
+        const venc = `2031-${String(5 + k).padStart(2, '0')}-20`;
+        campos.data_vencimento = { hoje: venc, fica: x.data_vencimento ?? venc, muda: !paga && !!x.data_vencimento && x.data_vencimento !== venc, cadeado: paga ? 'paga' : null };
+        campos.valor = { hoje: 631.98, fica: x.valor ?? 631.98, muda: !paga && x.valor !== undefined && x.valor !== 631.98, cadeado: paga ? 'paga' : null };
+        return { id: x.id, descricao: `CERCAS SINTETICAS - parcela ${k + 1}/5`, situacao: SIT[k], parcela_n: k + 1, campos };
+      });
+      return { ok: true, recusas: [], linhas, efeito_dre: [{ mes_de: '2031-05', subcentro_de: NOMES.p0, mes_para: '2031-06', subcentro_para: NOMES.p1, valor: 3160, lancamentos: 5 }] };
+    } };
+    const alvos = [1, 2, 3, 4, 5].map((k) => ({ id: `l${k}`, programada: k === 5, notaValorCent: 63200, notaVencimento: `2031-${String(5 + k).padStart(2, '0')}-21` }));
+    montar(<PreviaCompletar open onFechar={() => {}} clienteId="cli" alvos={alvos} rotulos={Object.fromEntries(alvos.map((x, k) => [x.id, `${k + 1}/5`]))}
+      todasIniciais={{ descricaoBase: 'Cercas Sinteticas Rurais Ltda - 2/5', favorecidoId: 'f1', fazendaId: 'z1', contaId: 'c1', planoContaId: 'p1',
+        numeroDocumento: 'NF 000.004.875', competencia: '2031-06-02', safraId: null }}
+      atualizarNaoPagas={cam2} juntar={!cam2} chave="50310611222333000181550010000048751123456780" onConfirmar={async () => null} />);
+  };
+  void montarPrevia();
 } else if (tela === 'lancamento') {
   /* com `desc`, a edição é parcela de uma compra parcelada SEM número de contrato: o rodapé fala dela (a descrição do contrato é a longa) */
   /* ACESSOS-PERFIL-01 — a aba Auditoria: eventos de dois membros e um sem autor (com e sem `via`), nomes pela fonte única. */
