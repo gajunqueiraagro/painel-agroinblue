@@ -16,6 +16,13 @@ describe('P137 família 1 — um scrollport por tela (o cabeçalho preso vive no
     expect(f).toMatch(/<div ref=\{quadro\.ref\} className="overflow-auto relative" style=\{\{ height: quadro\.altura \}\}>/);
   });
 
+  it('PC-100: o quadro de cada bloco não rola (o sticky usa o scrollport do conteúdo)', () => {
+    const f = ler('pages/PainelConsultorTab.tsx');
+    const bloco = f.slice(f.indexOf('const renderBlocoTable'), f.indexOf('<table', f.indexOf('const renderBlocoTable')));
+    expect(bloco).not.toBe('');
+    expect(bloco).not.toMatch(/overflow/);
+    expect(f).toContain('<div className="px-2 space-y-1 mt-1 flex-1 overflow-auto">');
+  });
 });
 
 describe('P137 família 3 — a barra do Fluxo não muda ao trocar a fazenda', () => {

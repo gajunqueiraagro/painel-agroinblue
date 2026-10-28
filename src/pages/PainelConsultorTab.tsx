@@ -2568,8 +2568,10 @@ export function PainelConsultorTab({ onBack, onTabChange, filtroGlobal, metaCons
   }, []);
 
   // ─── Table render ───
+  /* P137 (família 1): o quadro do bloco NÃO rola (era `overflow-x-auto`): o cabeçalho e a 1ª coluna presos (sticky) usam o MESMO scrollport
+     do conteúdo (`flex-1 overflow-auto`, que rola nos dois eixos) — UM scrollport por tela. `w-max min-w-full`: a borda abraça a tabela. */
   const renderBlocoTable = (blocoRows: Row[]) => (
-    <div className="overflow-x-auto border rounded border-border/40 -mx-2 sm:mx-0">
+    <div className="w-max min-w-full border rounded border-border/40 -mx-2 sm:mx-0">
       <table className="text-[10px] border-collapse" style={{ tableLayout: 'fixed', minWidth: '1070px' }}>
         <colgroup>
           <col style={{ width: '180px', minWidth: '180px', maxWidth: '180px' }} />
