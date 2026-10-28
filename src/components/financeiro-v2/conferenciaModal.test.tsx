@@ -284,13 +284,26 @@ describe('fix1 — a coluna de ações é a alça + "⋯"', () => {
 
   /* PR-CONC-SUGESTOES-CASAR-01: o menu ganhou "Ver sugestões (N)". Aqui o banco pagou -134.613,84 e o único candidato é
      a folha de -3.407,89 do Jonatas — nem valor, nem soma, nem nome: N = 0, desabilitado e dizendo por quê. */
-  it('extrato sem par: o menu tem Ver sugestões (0) desabilitado com o motivo, Criar e Ignorar', async () => {
+  it('extrato sem par: o menu tem Ver sugestões (0) desabilitado com o motivo, Criar, Criar transferência (P139) e Ignorar', async () => {
     const modal = await abrirConferencia();
     const semPar = within(modal).getByText('— nenhum lançamento vinculado').closest('tr')!;
     expect(itens(await abrirMenu(semPar))).toEqual([
       { texto: 'Ver sugestões (0)nenhuma sugestão para este movimento', desabilitado: true },
-      { texto: 'Criar', desabilitado: false }, { texto: 'Ignorar', desabilitado: false },
+      { texto: 'Criar', desabilitado: false }, { texto: 'Criar transferência', desabilitado: false }, { texto: 'Ignorar', desabilitado: false },
     ]);
+  });
+
+  it('P139: "Criar transferência" abre o diálogo por cima e pede a prévia à porta do banco; marcar só o sem par oferece o lote', async () => {
+    fixture.chamadas.length = 0;
+    const modal = await abrirConferencia();
+    const semPar = within(modal).getByText('— nenhum lançamento vinculado').closest('tr')!;
+    fireEvent.click(within(await abrirMenu(semPar)).getByText('Criar transferência'));
+    expect(await screen.findByTestId('modal-criar-transferencia')).toBeInTheDocument();
+    await waitFor(() => expect(fixture.chamadas.some((c) => c.fn === 'fn_transferencia_do_extrato')).toBe(true));
+    expect(screen.getByTestId('modal-conferencia')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Fechar' }));
+    fireEvent.click(within(semPar).getByRole('checkbox', { name: 'Marcar movimento do banco' }));
+    expect(await screen.findByTestId('barra-criar-transferencias')).toHaveTextContent('Criar transferências (1)');
   });
 
   it('com um candidato de mesmo valor: "Ver sugestões (1)" habilitado abre o modal POR CIMA da Conferência', async () => {

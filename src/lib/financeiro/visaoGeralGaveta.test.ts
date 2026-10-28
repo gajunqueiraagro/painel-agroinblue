@@ -46,7 +46,8 @@ describe('gaveta (lib)', () => {
     expect(proximaOrdem({ coluna: 'vencimento', sentido: 'asc' }, 'vencimento')).toEqual({ coluna: 'vencimento', sentido: 'desc' });
     expect(proximaOrdem({ coluna: 'vencimento', sentido: 'desc' }, 'vencimento')).toEqual({ coluna: 'vencimento', sentido: 'asc' });
     expect(proximaOrdem({ coluna: 'vencimento', sentido: 'desc' }, 'conta')).toEqual({ coluna: 'conta', sentido: 'asc' });
-    expect(COLUNAS_ORDEM_GAVETA).toEqual(['competencia', 'vencimento', 'pagamento', 'status', 'favorecido', 'descricao', 'conta', 'valor']);
+    /* P148 — a ordem da lista do Financeiro: Comp. · Venc. · Pgto. · Descrição · Favorecido · Conta · Valor · Status */
+    expect(COLUNAS_ORDEM_GAVETA).toEqual(['competencia', 'vencimento', 'pagamento', 'descricao', 'favorecido', 'conta', 'valor', 'status']);
   });
 
   it('F2 recarregar relê as páginas abertas', async () => {

@@ -38,7 +38,8 @@ export interface GavetaVG {
   lista?: { vencidos_fora: number; transf_internas: number; faturas_cartao?: number } | null;
 }
 /** P119 — as colunas da lista de lançamentos que ordenam (na ordem do cabeçalho) e a ordem escolhida; nula = a de sempre (do banco) */
-export const COLUNAS_ORDEM_GAVETA = ['competencia', 'vencimento', 'pagamento', 'status', 'favorecido', 'descricao', 'conta', 'valor'] as const;
+/* P148 (Gabriel 27/10) — a MESMA ordem da lista do Financeiro: Comp. · Venc. · Pgto. · Descrição · Favorecido · Conta · Valor · Status */
+export const COLUNAS_ORDEM_GAVETA = ['competencia', 'vencimento', 'pagamento', 'descricao', 'favorecido', 'conta', 'valor', 'status'] as const;
 export type ColunaOrdemGavetaVG = (typeof COLUNAS_ORDEM_GAVETA)[number];
 export interface OrdemGavetaVG { coluna: ColunaOrdemGavetaVG; sentido: 'asc' | 'desc' }
 /** o clique no cabeçalho: outra coluna começa crescente; a mesma alterna crescente ↔ decrescente */

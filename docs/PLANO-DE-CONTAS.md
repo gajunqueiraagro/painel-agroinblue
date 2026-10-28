@@ -16,6 +16,9 @@
 > ⚠ **3015, 5005 e 5006 saem de uso** pelo OC-CC-CLASSIFICACAO-01: o recebimento/pagamento da OC conta corrente fica no subcentro
 > da operação, fora do DRE pela parte da OC (ADR-2026-21, adendo). A migration de dado `20261027173100` devolve os 7 lançamentos
 > delas à conta da operação e as DESATIVA (não apaga, não renumera) — aplicada em 29/09/2026 (registrada `20260929105100`).
+> ⚠ Idem para as 4 **Alimentação e Cantina <atividade>** (P149, 28/10/2026, migration `20261028114000`): 6175 / 11165 / 20235 /
+> 21105, no centro Mão de Obra, antes de Benefícios, no vão, sem renumerar; bloco "fixo" nas 4 (inclusive Silvicultura) — conferido:
+> 254 linhas, 231 globais.
 
 Fonte: `public.financeiro_plano_contas` no Supabase **proto** (`binbcdfbisgscrifztia`).
 Hierarquia: **tipo de operação › macro custo › grupo de custo › centro de custo › subcentro**.
@@ -140,6 +143,7 @@ nula no banco, que aqui significa ausência de decisão, não `false`.
 | 21080 | Administração | Viagens e Deslocamentos Administrativo | administrativo | sim | — | fixo | Custeio | sim | global |
 | 21090 | Financeiro | Despesas Financeiras Administrativo | administrativo | sim | — | fixo | Custeio | sim | global |
 | 21100 | Impostos | Taxas e Impostos Administrativos | administrativo | sim | — | fixo | Custeio | sim | global |
+| 21105 | Mão de Obra | Alimentação e Cantina Administrativo | administrativo | sim | — | fixo | Custeio | sim | global |
 | 21110 | Mão de Obra | Benefícios e Premiações Administrativo | administrativo | sim | — | fixo | Custeio | sim | global |
 | 21120 | Mão de Obra | Rescisões e Acertos Administrativo | administrativo | sim | — | fixo | Custeio | sim | global |
 | 21130 | Mão de Obra | Salários e Encargos Administrativo | administrativo | sim | — | fixo | Custeio | sim | global |
@@ -167,6 +171,7 @@ nula no banco, que aqui significa ausência de decisão, não `false`.
 | 11140 | Manutenção Fazenda | Manutenção Estradas Agricultura | agricultura | sim | — | fixo | Custeio | sim | global |
 | 11150 | Manutenção Fazenda | Manutenção Rede Hidráulica Agricultura | agricultura | sim | — | fixo | Custeio | sim | global |
 | 11160 | Manutenção Fazenda | Segurança Patrimonial Agricultura | agricultura | sim | — | fixo | Custeio | sim | global |
+| 11165 | Mão de Obra | Alimentação e Cantina Agricultura | agricultura | sim | — | fixo | Custeio | sim | global |
 | 11170 | Mão de Obra | Benefícios e Premiações Agricultura | agricultura | sim | — | fixo | Custeio | sim | global |
 | 11180 | Mão de Obra | Rescisões e Acertos Agricultura | agricultura | sim | — | fixo | Custeio | sim | global |
 | 11190 | Mão de Obra | Salários e Encargos Agricultura | agricultura | sim | — | fixo | Custeio | sim | global |
@@ -193,6 +198,7 @@ nula no banco, que aqui significa ausência de decisão, não `false`.
 | 6150 | Manutenção Fazenda | Manutenção de Rede Elétrica Pecuária | pecuaria | sim | — | fixo | Custeio | sim | global |
 | 6160 | Manutenção Fazenda | Manutenção Rede Hidráulica Pecuária | pecuaria | sim | — | fixo | Custeio | sim | global |
 | 6170 | Manutenção Fazenda | Segurança Patrimonial Pecuária | pecuaria | sim | — | fixo | Custeio | sim | global |
+| 6175 | Mão de Obra | Alimentação e Cantina Pecuária | pecuaria | sim | — | fixo | Custeio | sim | global |
 | 6180 | Mão de Obra | Benefícios e Premiações Pecuária | pecuaria | sim | — | fixo | Custeio | sim | global |
 | 6190 | Mão de Obra | Rescisões e Acertos Pecuária | pecuaria | sim | — | fixo | Custeio | sim | global |
 | 6200 | Mão de Obra | Salários e Encargos Pecuária | pecuaria | sim | — | fixo | Custeio | sim | global |
@@ -210,6 +216,7 @@ nula no banco, que aqui significa ausência de decisão, não `false`.
 | 20210 | Administração | Outras Desp. Administrativas Silvicultura | silvicultura | sim | — | — | Custeio | sim | global |
 | 20220 | Impostos | Taxas e Impostos Fixos Silvicultura | silvicultura | sim | — | — | Custeio | sim | global |
 | 20230 | Manutenção Fazenda | Manutenção de Estradas e Aceiros Silvicultura | silvicultura | sim | — | — | Custeio | sim | global |
+| 20235 | Mão de Obra | Alimentação e Cantina Silvicultura | silvicultura | sim | — | fixo | Custeio | sim | global |
 | 20240 | Mão de Obra | Benefícios e Premiações Silvicultura | silvicultura | sim | — | — | Custeio | sim | global |
 | 20250 | Mão de Obra | Rescisões e Acertos Silvicultura | silvicultura | sim | — | — | Custeio | sim | global |
 | 20260 | Mão de Obra | Salários e Encargos Silvicultura | silvicultura | sim | — | — | Custeio | sim | global |

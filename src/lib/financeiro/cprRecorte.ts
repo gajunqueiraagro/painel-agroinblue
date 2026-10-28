@@ -10,13 +10,14 @@
  * ⚠ CADA CONTA CAI EM EXATAMENTE UM BALDE, e nada se arredonda: os valores somam em CENTAVOS inteiros.
  */
 
-export type AtalhoCpr = 'mes' | '30' | '60' | 'datas';
+/* P106 (Gabriel 26/10) — o período é por MÊS: anterior, atual e futuro (os "30 dias" e "60 dias" saíram, sem substituto) */
+export type AtalhoCpr = 'anterior' | 'atual' | 'futuro' | 'datas';
 export interface PeriodoCpr { de: string; ate: string }
 
 export const ATALHOS_CPR: { valor: AtalhoCpr; rotulo: string }[] = [
-  { valor: 'mes', rotulo: 'Este mês' },
-  { valor: '30', rotulo: '30 dias' },
-  { valor: '60', rotulo: '60 dias' },
+  { valor: 'anterior', rotulo: 'Mês anterior' },
+  { valor: 'atual', rotulo: 'Mês atual' },
+  { valor: 'futuro', rotulo: 'Mês futuro' },
   { valor: 'datas', rotulo: 'Escolher datas' },
 ];
 
@@ -30,13 +31,14 @@ export function somarDiasIso(iso: string, n: number): string { return isoDe(msDe
 /** Dias de `de` até `ate` (positivo = `ate` depois). */
 export function diasEntre(de: string, ate: string): number { return Math.round((msDe(ate) - msDe(de)) / 86_400_000); }
 
-/** O período de um atalho. "Este mês" = 1º ao último dia do mês de hoje; "30 dias" = hoje a hoje+30; "60 dias" = hoje a hoje+60. */
+/** O período de um atalho: o mês INTEIRO (1º ao último dia) — o de hoje ("Mês atual"), o anterior ou o seguinte. A virada do
+ *  ano é do calendário (jan → "Mês anterior" = dez do ano anterior; dez → "Mês futuro" = jan do seguinte). */
 export function periodoDoAtalho(atalho: Exclude<AtalhoCpr, 'datas'>, hoje: string): PeriodoCpr {
-  if (atalho === 'mes') {
-    const { a, m } = partes(hoje);
-    return { de: `${a}-${p2(m)}-01`, ate: isoDe(Date.UTC(a, m, 0)) };
-  }
-  return { de: hoje, ate: somarDiasIso(hoje, Number(atalho)) };
+  const { a, m } = partes(hoje);
+  const desloc = atalho === 'anterior' ? -1 : atalho === 'futuro' ? 1 : 0;
+  const ini = new Date(Date.UTC(a, m - 1 + desloc, 1));
+  const ai = ini.getUTCFullYear(), mi = ini.getUTCMonth() + 1;
+  return { de: `${ai}-${p2(mi)}-01`, ate: isoDe(Date.UTC(ai, mi, 0)) };
 }
 
 /** O que a função precisa de cada linha (a view entrega mais; aqui só o que decide). */

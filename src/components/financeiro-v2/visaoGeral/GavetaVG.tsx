@@ -4,8 +4,8 @@
  *   caminho clicável + contexto + atalhos dos irmãos (2 linhas) → indicadores (lançamentos · total · valor médio) → resumo (4 linhas:
  *   por favorecido no subcentro, maiores filhos acima) → tabela (rola) → total (fixo) → rodapé: a linha do AVISO (o que a lista não
  *   reproduz; lugar reservado, vazia quando não há diferença) e "Ver na lista de Lançamentos ›".
- *   · Nível com filhos: lista os filhos (clique desce). Subcentro: os lançamentos (P103: competência · vencimento · pagamento · status ·
- *     favorecido · descrição · conta · valor; o status no chip da casa — o da lista de Lançamentos; "—" no pagamento do não pago) e, no
+ *   · Nível com filhos: lista os filhos (clique desce). Subcentro: os lançamentos (P148: a ordem da lista do Financeiro — competência ·
+ *     vencimento · pagamento · descrição · favorecido · conta · valor · status; o status no chip da casa — o da lista de Lançamentos; "—" no pagamento do não pago) e, no
  *     topo, "Pagos" e "Em aberto" quando há não pagos (do banco: total = pago + aberto).
  *   · P103 — LARGURA: cobre o gráfico e metade da tabela da esquerda (≈ 77,5% do modal), nunca menos de 960px; abaixo disso, a janela
  *     inteira menos 16px (a largura do modal). A mesma em todo nível: nada muda de lugar ao descer.
@@ -29,10 +29,10 @@ const prefixoParte = (l: LancamentoGavetaVG) => (l.partes_total > 1 ? `parte ${l
 /* as colunas (px; favorecido e descrição levam o resto) — as mesmas no cabeçalho, nas linhas e no total: uma tabela só. P103: as três
    datas (dd/mm/aaaa a 8,5px), o status (o chip mais largo, "Programado"), a conta (a transferência "Origem → Destino" corta com "…") e o
    valor ("R$ 99.999.999,99") */
-const COLS_FOLHA = [68, 68, 68, 84, null, null, 128, 100];
+const COLS_FOLHA = [68, 68, 68, null, null, 128, 100, 84];
 /* a 1ª coluna tem a mesma largura nas duas (o "Total" do rodapé não anda ao descer até o subcentro) */
 const COLS_FILHOS = [68, null, 50, 100];
-const CAB_FOLHA = ['COMP.', 'VENC.', 'PGTO.', 'STATUS', 'FAVORECIDO', 'DESCRIÇÃO', 'CONTA', 'VALOR'];
+const CAB_FOLHA = ['COMP.', 'VENC.', 'PGTO.', 'DESCRIÇÃO', 'FAVORECIDO', 'CONTA', 'VALOR', 'STATUS'];
 const CAB_FILHOS = ['LANÇ.', 'ITEM · clique para descer', '%', 'VALOR'];
 const celData = 'whitespace-nowrap px-1 text-[8.5px] tabular-nums text-[#3a4655]';
 
@@ -134,7 +134,7 @@ export function GavetaVG({ g, caminho, carregando, erro, contexto, avisos = [], 
               tabela, o total e o rodapé não andam */}
           <thead className="sticky top-0 z-[1] bg-[#2f3d4f]" data-desloca-livre="">
             <tr className="h-[18px] bg-[#2f3d4f] text-[8.5px] font-semibold tracking-[0.03em] text-white">
-              {folha ? CAB_FOLHA.map((r, i, a) => {
+              {folha ? CAB_FOLHA.map((r, i) => {
                 /* P119 — toda coluna ordena (no BANCO, antes da página): clique = crescente, de novo = decrescente; a seta tem lugar
                    reservado (nada anda ao aparecer) e só aparece na coluna escolhida — na ordem de sempre, nenhuma */
                 const col = COLUNAS_ORDEM_GAVETA[i];
@@ -142,7 +142,7 @@ export function GavetaVG({ g, caminho, carregando, erro, contexto, avisos = [], 
                 return (
                   <th key={r} className="whitespace-nowrap px-1 font-semibold" aria-sort={sentido === 'asc' ? 'ascending' : sentido === 'desc' ? 'descending' : 'none'}>
                     <button type="button" onClick={() => onOrdenar?.(col)} data-testid={`gaveta-ordem-${col}`} title={`Ordenar por ${r.toLowerCase()}`}
-                      className={cn('flex h-[18px] w-full items-center gap-[2px] font-semibold hover:underline', i === a.length - 1 ? 'justify-end' : 'justify-start')}>
+                      className={cn('flex h-[18px] w-full items-center gap-[2px] font-semibold hover:underline', col === 'valor' ? 'justify-end' : 'justify-start')}>
                       <span>{r}</span>
                       <span className="inline-block h-[9px] w-[7px] shrink-0 text-center text-[7px] leading-[9px]" data-testid={`gaveta-seta-${col}`} aria-hidden>
                         {sentido === 'asc' ? '▲' : sentido === 'desc' ? '▼' : ''}
@@ -165,14 +165,14 @@ export function GavetaVG({ g, caminho, carregando, erro, contexto, avisos = [], 
                   <td className={cn(celData, l.vencido && 'font-semibold')} style={l.vencido ? { color: COR.neg } : undefined}
                     title={l.vencido ? 'Vencido e não pago' : 'Vencimento'}>{dataLonga(l.vencimento)}</td>
                   <td className={celData} title={l.previsto ? 'Não pago' : 'Pagamento'} data-testid={`gaveta-pgto-${i}`}>{l.previsto ? '—' : dataLonga(l.pagamento)}</td>
-                  <td className="whitespace-nowrap px-1"><ChipStatus l={l} i={i} /></td>
-                  <td className="truncate px-1 text-[#1b2430]" title={l.favorecido}>{l.favorecido}</td>
                   {/* classificação dividida: a linha é só a PARTE deste nó — "parte 1/2" na descrição e "de R$ (o lançamento)" no title */}
                   <td className="truncate px-1 text-[#3a4655]" title={`${prefixoParte(l)}${l.descricao ?? ''}${l.partes_total > 1 ? ` (de ${brl(l.valor_lancamento)})` : ''}`}>
                     {l.partes_total > 1 && <span className="text-muted-foreground" data-testid={`gaveta-parte-${i}`}>{prefixoParte(l)}</span>}{l.descricao ?? ''}
                   </td>
+                  <td className="truncate px-1 text-[#1b2430]" title={l.favorecido}>{l.favorecido}</td>
                   <td className="truncate px-1 text-muted-foreground" title={l.conta}>{l.conta}</td>
                   <td className="whitespace-nowrap px-1 text-right tabular-nums" style={{ color: cor }} title={parteDe(l) || undefined}>{brl(l.valor)}</td>
+                  <td className="whitespace-nowrap px-1"><ChipStatus l={l} i={i} /></td>
                 </tr>
               ) : (
                 <tr key={chaveCaminho(l.caminho)} onClick={() => onIr(l.caminho)} data-testid={`gaveta-linha-${i}`}
@@ -201,9 +201,11 @@ export function GavetaVG({ g, caminho, carregando, erro, contexto, avisos = [], 
         <tbody>
           <tr className="h-6 text-[10.5px] font-bold">
             <td className="whitespace-nowrap px-1 tabular-nums text-muted-foreground" data-testid="gaveta-rodape-qtd">{g ? (folha ? `${n(g.total_linhas)}` : n(g.qtd)) : ''}</td>
-            <td className="px-1 text-[#1b2430]" colSpan={cols.length - 3}>Total</td>
-            {/* o total ocupa as duas últimas colunas: o do nó inteiro pode passar de R$ 99.999.999,99 (negrito, 10,5px) */}
+            <td className="px-1 text-[#1b2430]" colSpan={cols.length - (folha ? 4 : 3)}>Total</td>
+            {/* o total termina na coluna VALOR e ocupa também a da esquerda (Conta, nos lançamentos): o do nó inteiro pode passar de
+                R$ 99.999.999,99 (negrito, 10,5px). P148: nos lançamentos o Status vem depois do Valor — a última célula fica vazia */}
             <td className="whitespace-nowrap px-1 text-right tabular-nums" colSpan={2} style={{ color: cor }} data-testid="gaveta-rodape-total">{g ? brl(g.total) : ''}</td>
+            {folha && <td />}
           </tr>
         </tbody>
       </table>

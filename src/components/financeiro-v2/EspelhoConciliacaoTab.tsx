@@ -32,6 +32,9 @@ import {
 } from '@/components/financeiro-v2/CasarComBancoModal';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { DecisaoDerivadosDialog } from '@/components/financeiro-v2/DecisaoDerivadosDialog';
+import { CriarTransferenciaDialog, type MovimentoParaTransferencia } from '@/components/conciliacao/CriarTransferenciaDialog';
+import { CriarTransferenciasLoteDialog } from '@/components/conciliacao/CriarTransferenciasLoteDialog';
+import { sugestoesDeTransferencia, porqueDaSugestao, type SugestaoDeTransferencia } from '@/lib/conciliacao/transferenciaDoExtrato';
 import { useEspelhoInternas, type EspelhoInternas } from '@/hooks/useEspelhoInternas';
 import { saldoConfere } from '@/lib/financeiro/conciliacaoCalc';
 import {
@@ -557,8 +560,12 @@ function AvisosDoVinculo(a: AvisosVinculo) {
  * podem ser chamados dentro de um `.map()` — a regra dos hooks proíbe, e o React quebraria ao
  * mudar a contagem de linhas entre renders. Extrair não foi estética: era a única forma.
  */
-function LinhaExtratoSemPar({ e, marcado, onMarcar, onCriar, onIgnorar, nSugestoes, onSugestoes }: {
+function LinhaExtratoSemPar({ e, marcado, onMarcar, onCriar, onIgnorar, nSugestoes, onSugestoes, onCriarTransferencia, transf }: {
   e: EspOfx; marcado: boolean; onMarcar: () => void; onCriar: () => void; onIgnorar: () => void;
+  /** P139 — "Criar transferência" direto do "⋯" (sem os três cliques do Criar → diferença → tipo) */
+  onCriarTransferencia?: () => void;
+  /** P139 — a sugestão do banco (`fn_extrato_transferencias_provaveis`): o selo "transf.?" no lugar do "○", com o porquê no `title` */
+  transf?: SugestaoDeTransferencia;
   nSugestoes: number; onSugestoes: () => void;
 }) {
   /* ⚠ A MESMA LINHA É ALVO E ORIGEM. Alvo quando um lançamento vem por cima (1:N); origem
@@ -576,7 +583,10 @@ function LinhaExtratoSemPar({ e, marcado, onMarcar, onCriar, onIgnorar, nSugesto
       <td className={CEL_DATA}>{fmtData(e.data)}</td>
       <td className={cn(CEL, 'font-medium')} title={e.historico ?? ''}>{e.historico ?? '—'}</td>
       <td className={cn(CEL, 'text-right font-medium tabular-nums', corVal(e.valor))}>{fmtBRL(e.valor)}</td>
-      <td className={cn(MEIO, 'text-muted-foreground')} title="sem correspondência">○</td>
+      {/* P139: o selo "transf.?" ocupa o MESMO lugar do "○" (nada se desloca); o porquê vai no `title` */}
+      {transf
+        ? <td className={cn(MEIO, 'text-[9.5px] font-medium text-primary')} title={porqueDaSugestao(transf)} data-testid="selo-transf">⇄?</td>
+        : <td className={cn(MEIO, 'text-muted-foreground')} title="sem correspondência">○</td>}
       <td />
       <td />
       <td />
@@ -594,6 +604,8 @@ function LinhaExtratoSemPar({ e, marcado, onMarcar, onCriar, onIgnorar, nSugesto
       <CelAcoes alcaId={`dragExt:${e.extrato_id}`} itens={[
         { rotulo: `Ver sugestões (${nSugestoes})`, onClick: nSugestoes > 0 ? onSugestoes : undefined, motivo: 'nenhuma sugestão para este movimento' },
         { rotulo: 'Criar', onClick: onCriar },
+        { rotulo: transf?.contaNome ? `Criar transferência → ${transf.contaNome}` : 'Criar transferência', onClick: onCriarTransferencia,
+          motivo: 'movimento sem conta' },
         { rotulo: 'Ignorar', onClick: onIgnorar },
       ]} />
     </tr>
@@ -886,6 +898,26 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
     return m;
   }, [dias, candidatos]);
 
+  /* P139 — os movimentos SEM PAR do recorte (a barra só oferece "Criar transferências (N)" quando todos os marcados são deles) e a
+     SUGESTÃO de transferência do banco para eles (titular de outra conta; aplicação/resgate automático → a única conta de investimento
+     do mesmo banco). Uma consulta por conta e mês; a tela só mostra. */
+  const semParIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const d of dias) for (const e of d.extratosSemPar) s.add(e.extrato_id);
+    return s;
+  }, [dias]);
+  const chaveSemPar = useMemo(() => [...semParIds].sort().join(','), [semParIds]);
+  const { data: transfProvaveis } = useQuery({
+    queryKey: ['p139-transf-provaveis', contaId, anoMes, chaveSemPar],
+    enabled: !!contaId && semParIds.size > 0,
+    queryFn: () => {
+      const [ano, mes] = anoMes.split('-').map(Number);
+      const fim = new Date(ano, mes, 0).getDate();
+      return sugestoesDeTransferencia(contaId ?? '', `${anoMes}-01`, `${anoMes}-${String(fim).padStart(2, '0')}`);
+    },
+  });
+  const transfPorLinha: ReadonlyMap<string, SugestaoDeTransferencia> = transfProvaveis ?? new Map<string, SugestaoDeTransferencia>();
+
   /**
    * OS VENCIDOS — PR-ESPELHO-VENCIDOS-NO-TOPO-08. O que já passou da data e continua em aberto.
    *
@@ -958,6 +990,11 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
   const [casarN1, setCasarN1] = useState<{ sis: EspSis; extratos: EspOfx[] } | null>(null);
   /* CONC-BLOCOS-TELA-01 — a variante BLOCO (N extratos × M lançamentos, `fn_conciliar_bloco`). */
   const [casarBloco, setCasarBloco] = useState<{ extratos: EspOfx[]; lancs: EspSis[]; regra: RegraBloco } | null>(null);
+  /* P139 — criar transferência pela linha (uma) e pelo lote (as marcadas, todas sem par) */
+  const [transf, setTransf] = useState<MovimentoParaTransferencia | null>(null);
+  const [transfLote, setTransfLote] = useState<MovimentoParaTransferencia[] | null>(null);
+  const paraTransferencia = (e: EspOfx): MovimentoParaTransferencia | null =>
+    contaId ? { extrato_id: e.extrato_id, data: e.data, historico: e.historico, valor: e.valor, conta_id: contaId } : null;
   /* O passo de desfazer um bloco: o id do bloco aberto, o motivo digitado e a recusa (inline, nunca toast). */
   const [desfazendoBloco, setDesfazendoBloco] = useState<string | null>(null);
   const [motivoDesfazer, setMotivoDesfazer] = useState('');
@@ -1482,6 +1519,8 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
                       iniciais: [],
                     })}
                     onIgnorar={() => setIgnorarId(e.extrato_id)}
+                    onCriarTransferencia={contaId ? () => setTransf(paraTransferencia(e)) : undefined}
+                    transf={transfPorLinha.get(e.extrato_id)}
                     nSugestoes={sugestoesPorLinha.get(e.extrato_id)?.length ?? 0}
                     onSugestoes={() => setSugerir({ extrato_id: e.extrato_id, data: e.data, historico: e.historico, valor: e.valor })} />
                 ))}
@@ -1659,6 +1698,17 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
         onConcluido={() => { setIgnorarId(null); void refetchIgnorados(); onMudou(); }}
       />
 
+      {/* P139 — criar transferência pela linha / pelo lote. Gravou: a Conferência, os saldos e o Casar releem (onMudou + o canal dos
+          lançamentos), sem F5. A gêmea reconhecida vai ao "Ignorar" da casa (o mesmo diálogo, com motivo). */}
+      <CriarTransferenciaDialog aberto={!!transf} clienteId={clienteId} movimento={transf}
+        sugestao={transf ? transfPorLinha.get(transf.extrato_id) ?? null : null}
+        onFechar={() => setTransf(null)}
+        onGravado={() => { setTransf(null); limpar(); onMudou(); if (clienteId) notificarLancamentosMudaram(clienteId); }}
+        onIgnorarDuplicada={(id) => { setTransf(null); setIgnorarId(id); }} />
+      <CriarTransferenciasLoteDialog aberto={!!transfLote} clienteId={clienteId} movimentos={transfLote ?? []} sugestoes={transfPorLinha}
+        onFechar={() => setTransfLote(null)}
+        onGravado={() => { setTransfLote(null); limpar(); onMudou(); if (clienteId) notificarLancamentosMudaram(clienteId); }} />
+
       {/* ⚠ DESFAZER BLOCO — CONC-BLOCOS-TELA-01: passo inline, no lugar da barra, com motivo obrigatório. A recusa da RPC
           aparece aqui, em vermelho — nunca em toast. */}
       {desfazendoBloco && (
@@ -1708,6 +1758,15 @@ function AbaConferencia({ data, anoMes, nomeConta, clienteId, contaId, internos,
                     : 'bg-primary-foreground/20 text-primary-foreground/50 cursor-not-allowed')}>
                 Casar com o banco…
               </button>
+              {/* P139 — só movimentos SEM PAR marcados (nenhum lançamento): viram transferências de uma vez, cada um com a sua conta */}
+              {contaId && sel.lancamentos.size === 0 && sel.extratos.size >= 1 && [...sel.extratos].every((id) => semParIds.has(id)) && (
+                <button type="button" data-testid="barra-criar-transferencias"
+                  onClick={() => setTransfLote([...sel.extratos].map((id) => extratoIndex.get(id)).filter((x): x is EspOfx => !!x)
+                    .map(paraTransferencia).filter((x): x is MovimentoParaTransferencia => !!x))}
+                  className="rounded bg-primary-foreground/20 px-2 py-0.5 text-[11px] hover:bg-primary-foreground/30">
+                  Criar transferências ({sel.extratos.size})…
+                </button>
+              )}
               {/* ⚠ "MAIS ANTIGO PRIMEIRO" COM QUALQUER SELEÇÃO — CONC-BLOCOS-TELA-01: o operador que escolhe a regra abre a
                   variante bloco já nela (o depósito que paga duas vendas e deixa uma parcial). */}
               {sentido !== 'bloco' && sel.extratos.size >= 1 && sel.lancamentos.size >= 1 && (

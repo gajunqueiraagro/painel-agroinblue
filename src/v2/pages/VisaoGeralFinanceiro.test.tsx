@@ -111,12 +111,13 @@ describe('Visão Geral — render-only', () => {
     expect(screen.getByTestId('card-conciliado-saldo').textContent).toBe('R$ 1.234.567,89');
   });
 
-  it('V2 abre em Entradas × saídas, Ano e no mês vigente, e pede jan → o mês vigente ao banco', async () => {
+  /* P147 (Gabriel 27/10 18:25) — o Ano é jan a DEZ, sempre: o mês vigente define só o card e o destaque */
+  it('V2 abre em Entradas × saídas, Ano e no mês vigente, e pede jan → dez ao banco', async () => {
     render(<VisaoGeralFinanceiro hoje="2026-02-15" />);
     await screen.findByTestId('grade-vg');
     expect(screen.getByTestId('card-vg-titulo').textContent).toBe('Entradas e saídas · fev/26');
     const pedido = rpc.mock.calls.find((c) => c[0] === 'fn_vg_tela')![1];
-    expect(pedido).toMatchObject({ p_cliente: 'cli', p_de: '2026-01-01', p_ate: '2026-02-28', p_contas: null, p_atividade: null, p_hoje: '2026-02-15',
+    expect(pedido).toMatchObject({ p_cliente: 'cli', p_de: '2026-01-01', p_ate: '2026-12-31', p_contas: null, p_atividade: null, p_hoje: '2026-02-15',
       p_status: ['previsto', 'programado', 'agendado'], p_incluir_vencidos: true });
   });
 
@@ -141,22 +142,22 @@ describe('Visão Geral — render-only', () => {
     expect(screen.getByTestId('grade-celula-saida:grupo:Custeio:-2026-02').getAttribute('title')).toContain('R$ 30,00 de previsto vencido');
   });
 
-  it('V5 trocar o mês pela pílula pede o novo período ao banco e o card mostra o mês', async () => {
+  it('V5 trocar o mês pela pílula: o card mostra o mês; no Ano o período segue jan → dez (P147)', async () => {
     render(<VisaoGeralFinanceiro hoje="2026-02-15" />);
     await screen.findByTestId('grade-vg');
     fireEvent.click(screen.getByTestId('vg-mes-4'));
     await waitFor(() => expect(screen.getByTestId('card-vg-titulo').textContent).toBe('Entradas e saídas · abr/26 (previsto)'));
     expect(celula('card-valor-entrada')).toBe('R$ 400,00');
-    expect(rpc.mock.calls.filter((c) => c[0] === 'fn_vg_tela').at(-1)![1]).toMatchObject({ p_de: '2026-01-01', p_ate: '2026-04-30' });
+    expect(rpc.mock.calls.filter((c) => c[0] === 'fn_vg_tela').at(-1)![1]).toMatchObject({ p_de: '2026-01-01', p_ate: '2026-12-31' });
   });
 
-  it('V18 o mês escolhido é o fim do período: Ano AGO = jan–ago (8 colunas); Últ. 12; 6 + 6 inalterado; DEZ com o previsto', async () => {
+  /* P147 (Gabriel 27/10 18:25, substitui o P100 item 6 de 24/10): o Ano é jan a DEZ para qualquer mês escolhido */
+  it('V18 Ano AGO = jan–dez (12 colunas, nov/dez com o previsto); o card é o de ago; Últ. 12; 6 + 6 inalterado; DEZ = jan–dez', async () => {
     render(<VisaoGeralFinanceiro hoje="2026-10-15" inicial={{ sel: '2026-08' }} />);
     await screen.findByTestId('grade-vg');
-    expect(rpc.mock.calls.filter((c) => c[0] === 'fn_vg_tela').at(-1)![1]).toMatchObject({ p_de: '2026-01-01', p_ate: '2026-08-31' });
-    await waitFor(() => expect(screen.getByTestId('grade-celula-saldo_final-2026-08')).toBeTruthy());
-    expect(screen.queryByTestId('grade-celula-saldo_final-2026-09')).toBeNull();
-    expect(document.querySelectorAll('[data-testid^="grade-celula-saldo_final-"]')).toHaveLength(8);
+    expect(rpc.mock.calls.filter((c) => c[0] === 'fn_vg_tela').at(-1)![1]).toMatchObject({ p_de: '2026-01-01', p_ate: '2026-12-31' });
+    await waitFor(() => expect(screen.getByTestId('grade-celula-saldo_final-2026-12')).toBeTruthy());
+    expect(document.querySelectorAll('[data-testid^="grade-celula-saldo_final-"]')).toHaveLength(12);
     /* o card: o saldo final é o do fim de ago (o do banco) */
     expect(celula('card-saldo-final')).toBe('R$ 5.007,00');
     /* Últ. 12 → set/25–ago/26 */
