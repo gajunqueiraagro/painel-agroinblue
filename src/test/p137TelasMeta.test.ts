@@ -47,6 +47,29 @@ describe('P137 família 5 — Indicadores do Fechamento com régua fixa', () => 
   });
 });
 
+describe('P137 família 2 — o Fechamento não corta a 1000px nem põe "…" fora de tabela', () => {
+  it('a faixa da Conferência Mensal encolhe até 646px (minmax), nunca 780px fixos', () => {
+    const f = ler('v2/pages/V2FechamentoPeriodo.parts/BlocoConferenciaMensalRebanhoFechamento.tsx');
+    const grade = f.match(/const GRID_FAIXA =\s*'grid grid-cols-\[([^\]]+)\]/);
+    expect(grade).not.toBeNull();
+    const colunas = grade![1].split('_');
+    expect(colunas).toHaveLength(10);
+    const minimo = colunas.reduce((s, c) => s + Number((c.match(/^minmax\((\d+)px,/) ?? [])[1] ?? NaN), 0);
+    expect(minimo + 9 * 4).toBeLessThanOrEqual(660);
+  });
+
+  it('o cabeçalho R$/cab/mês da legenda do Detalhe tem 30% (pedia 54px numa de 52 a 1000px)', () => {
+    const f = ler('v2/pages/V2FechamentoPeriodo.parts/DetalheCustosCentroSubcentro.tsx');
+    expect(f).toContain(`<col style={{ width: '30%' }} />`);
+  });
+
+  it('o rótulo das linhas da Composição Financeira não usa truncate (quebra no lugar)', () => {
+    const f = ler('v2/pages/V2PlanejamentoVisaoGeral.parts/ComposicaoFinanceira.tsx');
+    const linhaRow = f.slice(f.indexOf('function LinhaRow'), f.indexOf('{linha.label}'));
+    expect(linhaRow).not.toMatch(/truncate/);
+  });
+});
+
 describe('P137 família 4 — o aviso "não conciliado" tem lugar reservado', () => {
   it('sempre montado; só a visibilidade troca (os cards não andam)', () => {
     const f = ler('v2/pages/V2PlanejamentoVisaoGeral.parts/BlocoResumoExecutivo.tsx');

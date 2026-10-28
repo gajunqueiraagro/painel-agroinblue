@@ -150,7 +150,8 @@ function LinhaRow({
         onClick && 'cursor-pointer hover:bg-muted/40 transition-colors',
       )}
     >
-      <div className={cn('text-[11px] truncate', destaque ? 'text-foreground uppercase tracking-wide' : 'text-foreground')}>
+      {/* P137 (família 2): fora de tabela nada de "…" (REGRA DE CORTE) — o rótulo quebra no lugar dele (a 1126px a coluna estreita) */}
+      <div className={cn('text-[11px] leading-tight break-words', destaque ? 'text-foreground uppercase tracking-wide' : 'text-foreground')}>
         {linha.label}
       </div>
       {isFechamento ? (
