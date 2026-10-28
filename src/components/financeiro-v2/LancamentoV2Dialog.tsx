@@ -824,6 +824,11 @@ export function LancamentoV2Dialog({
   /* ⚠ SÓ PARA A `key` DO CLUSTER — ver o comentário na montagem dele. Incrementa a cada
      abertura, que é o gesto em que os estados de interação da classificação precisam zerar. */
   const [aberturaSeq, setAberturaSeq] = useState(0);
+  /* P155 (Gabriel 28/10/2026: "corrompe classificação em silêncio") — DE QUEM é a classificação que está no estado: o id do lançamento que a
+     abertura hidratou (`null` = o reset/prefill de um lançamento novo). A trava do Administrativo só age quando ela é a do lançamento ABERTO:
+     no render de transição da abertura o estado ainda é o do reset (a "última atividade" da sessão, que pode ser administrativo) e o efeito
+     do `FazendaSelect` escrevia "Administrativo" na fazenda — que a hidratação já tinha posto e não repunha; o Salvar gravava. */
+  const [classificacaoDe, setClassificacaoDe] = useState<string | null>(null);
 
   /**
    * A CLASSIFICAÇÃO INTEIRA, NUM OBJETO SÓ — PAR-01a-i, passo 1 de 2 do extract.
@@ -1189,6 +1194,7 @@ export function LancamentoV2Dialog({
     statusOriginalRef.current = lancamento?.status_transacao ?? null;
     statusTouchedRef.current = false;
     if (lancamento) {
+      setClassificacaoDe(lancamento.id);
       setFazendaId(lancamento.fazenda_id);
       setDataCompetencia(lancamento.data_competencia);
       setDataVencimento(lancamento.data_vencimento || '');   // PR-FIN-MODAL-VENCIMENTO-02B — carrega o vencimento real
@@ -1266,6 +1272,7 @@ export function LancamentoV2Dialog({
       setNumParcelas(2); setNumParcelasTexto('2');
       setModoParcelas('mensal'); setParcelasLivres([]); setBaseLivres(null);
     } else if (prefill) {
+      setClassificacaoDe(null);
       // Modo "criar a partir de fonte externa" (OFX órfão, p.ex.) — campos
       // chave vêm pré-preenchidos do prefill; demais ficam vazios igual ao
       // modo criação. Conta segue o mesmo padrão do branch `lancamento`:
@@ -1339,6 +1346,7 @@ export function LancamentoV2Dialog({
       setFormaPgto(prefill.forma_pagamento ?? '');
       setDadosPagamento(prefill.dados_pagamento ?? '');
     } else {
+      setClassificacaoDe(null);
       const today = hojeLocal();
       setFazendaId(defaultFazendaId || '');
       setDataCompetencia(today);
@@ -2927,7 +2935,8 @@ export function LancamentoV2Dialog({
                 value={fazendaId}
                 onChange={setFazendaId}
                 fazendas={fazendas}
-                forcaAdministrativo={fazendaTravadaAdm}
+                /* P155 — só com a classificação do lançamento ABERTO (nunca a do render de transição) */
+                forcaAdministrativo={fazendaTravadaAdm && classificacaoDe === (lancamento?.id ?? null)}
                 label={xmlRotTexto('Fazenda *', 'fazenda')}
                 /* FIN-FAZENDA-PADRAO-01 — com o filtro Global o campo nasce VAZIO (nunca a primeira da lista), e o
                    vazio aparece aqui, em vermelho, antes de qualquer clique. */

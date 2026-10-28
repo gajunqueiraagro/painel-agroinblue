@@ -273,6 +273,8 @@ briefing atual: nao editar, nao stagear, nao limpar, nao stash.
 - P128a: a NOTA JÁ NO SISTEMA acha TODOS os irmãos (`fn_nota_ja_lancada`: nº no documento, "pela soma", o irmão do parcelamento) e mostra a
   TABELA SISTEMA × NOTA (`linhasSistemaNota`/`fraseDoAchado`; diferença em vermelho, nunca corrigida) com 3 caminhos; a chave num lançamento não
   barra (só a de OC); as duas portas (+ Da nota e o Documentos do Editar, `notaParaAPrevia`) abrem a MESMA prévia.
+- P155: trava que ESCREVE um campo (o `FazendaSelect` forçando Administrativo) só age com a classificação do lançamento ABERTO
+  (`classificacaoDe`): o render de transição da abertura tem o estado do reset ("última atividade") e gravava a fazenda errada no Salvar.
 - P53: a mesma pergunta ao mesmo tempo = um pedido (`criarUmPedidoPorVez`, só o voo, nada guardado); o `checkLockNow` segue direto.
 - P95 (DANFE-CHAVE-EM-GRUPOS-01): DANFE com a chave/rótulos picados em itens se lê pela linha (`chaveEmGrupos` SÓ com DV certo; `aoLado`);
   sem chave legível, DIGITAR A CHAVE (`chaveDigitada.ts`: DV, modelo 55; avulsa 890 não usa o CNPJ; o resto em branco, âmbar na prévia);
