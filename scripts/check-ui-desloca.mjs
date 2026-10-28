@@ -382,6 +382,15 @@ const CENARIOS = [
   { nome: 'criar-transferencia-gemea', url: 'tela=criar-transferencia&v=gemea',
     antes: async (p) => { await p.locator('[data-testid="aviso-gemea"]').waitFor(); await espera(p); },
     estados: [['criar mesmo assim', botao(/Criar mesmo assim/)]] },
+  /* P141 (CONC-LAYOUT-01) — Saldos por conta: os selos OFX/PDF e o ↗ PRESOS (lugar fixo) entre a página com arquivos e a sem nenhum,
+     a conta escolhida e o "← Todas"; o modal do ↗ entre carregando e carregado. A prova: sem a largura fixa do lugar do selo, o PDF anda. */
+  { nome: 'conciliacao-saldos', url: 'tela=conciliacao', tamanhos: TAMANHOS_DO_P92,
+    presos: '[data-conta="cc1"] [data-testid="slot-ofx"], [data-conta="cc1"] [data-testid="slot-pdf"], [data-conta="cc1"] [data-testid="abrir-extrato-sistema"]',
+    antes: async (p) => { await p.locator('[data-testid="linha-saldo-conta"]').first().waitFor(); await espera(p); },
+    estados: [['sem nenhum arquivo', { url: 'tela=conciliacao&v=sem' }], ['conta escolhida', clicar('[data-conta="cc2"]')], ['← Todas', botao(/← Todas/)]] },
+  { nome: 'conciliacao-extrato-do-sistema', url: 'tela=extrato-do-sistema&v=carregando', tamanhos: TAMANHOS_DO_P92,
+    antes: async (p) => { await p.locator('[data-testid="modal-extrato-sistema"]').waitFor(); await espera(p); },
+    estados: [['carregado', { url: 'tela=extrato-do-sistema' }]] },
   { nome: 'casar-bloco', url: 'tela=casar-bloco', antes: async (p) => { await p.locator('[data-testid="conciliar-bloco"]').waitFor(); await espera(p); },
     estados: [
       ['regra mais antigo primeiro', botao(/Mais antigo primeiro/)],

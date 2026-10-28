@@ -30,6 +30,9 @@ import { LANCAMENTOS } from './dados/financeiro';
 import { totaisDaListaV2 } from '@/lib/financeiro/totaisDaListaV2';
 import { CriarTransferenciaDialog } from '@/components/conciliacao/CriarTransferenciaDialog';
 import { CriarTransferenciasLoteDialog } from '@/components/conciliacao/CriarTransferenciasLoteDialog';
+import { ConciliacaoBancariaTab } from '@/pages/ConciliacaoBancariaTab';
+import { ExtratoDoSistemaDialog } from '@/components/conciliacao/ExtratoDoSistemaDialog';
+import * as CONC from './dados/conciliacao';
 import type { SugestaoDeTransferencia } from '@/lib/conciliacao/transferenciaDoExtrato';
 import { volumeNJ } from './dados/volumeNJ';
 import { buscarFornecedores } from '@/lib/fornecedores/buscaDeFornecedor';
@@ -718,6 +721,22 @@ if (tela === 'mesclar') {
   } else {
     montar(<CriarTransferenciaDialog aberto clienteId="cli" movimento={MOV} sugestao={SUG} onFechar={() => {}} onGravado={() => {}} onIgnorarDuplicada={() => {}} />);
   }
+} else if (tela === 'conciliacao' || tela === 'extrato-do-sistema') {
+  /* P141 (CONC-LAYOUT-01) — a aba Conciliação (Saldos | Resumo | Status) e o "Extrato do sistema" do ↗, com as linhas do DONO no pior
+     caso (`dados/conciliacao.ts`, SINTÉTICO). `&v=sem`: os mesmos números sem nenhum OFX/PDF (o deslocamento compara as duas páginas).
+     `&v=carregando`: o modal antes de o dono responder. */
+  const semArquivos = v === 'sem';
+  g.__bancoBancada = {
+    from: (t: string) => t === 'financeiro_contas_bancarias' ? CONC.CONTAS
+      : t === 'financeiro_importacoes_v2' ? (semArquivos ? [] : CONC.IMPORTACOES)
+      : t === 'financeiro_saldo_documentos' ? (semArquivos ? [] : CONC.DOCUMENTOS) : [],
+    rpc: (fn: string, a: any) => fn === 'fn_conciliacao_resumo_mes'
+      ? (v === 'carregando' ? new Promise(() => {}) : CONC.resumoDoMes(a.p_conta_ids ?? null))
+      : fn === 'fn_conciliacao_status_ano' ? [{ ano_mes: '2031-09', nivel: 'total', status: 'nao_conciliado', motivos: [], avisos: [] }] : null,
+  };
+  g.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} };
+  if (tela === 'conciliacao') montar(<div className="h-full"><ConciliacaoBancariaTab initialAno="2031" initialMes="09" /></div>);
+  else montar(<ExtratoDoSistemaDialog aberto clienteId="cli" contaId="cc1" contaNome={CONC.CONTAS[0].nome_conta} anoMes="2031-09" onFechar={() => {}} />);
 } else if (tela === 'conciliar') {
   /* CONC-SEM-TRAVA-01 (tela) — o modal "Conciliar" no formato da resposta de `fn_conc_simular_diferenca` provada no caso real (OC
      0731374f, Banco do Brasil), com NOMES SINTETICOS: v=sobra (Pix 30/06 R$ 375.000 x Receb. 1/3), v=falta (Pix 30/07 R$ 290.000 x
