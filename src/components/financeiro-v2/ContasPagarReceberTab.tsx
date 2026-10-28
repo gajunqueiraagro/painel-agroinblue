@@ -191,7 +191,7 @@ const MOTIVO_SALDO_DOIS_LADOS = 'saldo considera a pagar e a receber';
 /** CPR-CONTA-01: quantas contas a faixa do resumo desenha antes do "+N" — MEDIDO a 1.126px (ver CLAUDE.md). */
 const MAX_CONTAS_NA_FAIXA = 4;
 /* P80 (Gabriel 23/10) — o valor de cada conta da faixa "A pagar por conta" ocupa SEMPRE a largura do maior valor possível (até
-   R$ 9.999.999.999,99): trocar o período ("Este mês") mudava o valor e a largura do botão, e os vizinhos andavam (ui-desloca). */
+   R$ 9.999.999.999,99): trocar o período ("Mês atual") mudava o valor e a largura do botão, e os vizinhos andavam (ui-desloca). */
 const RESERVA_DO_VALOR_NA_FAIXA = `R$\u00a0${reservaDeNumero(10)},99`;
 const FONTE_STATUS = 'text-[9px]';
 /** Subcentro, Safra, Faz. e datas: 9,5px (o piso global) — CPR-SALDO-DIA-01. */
@@ -328,9 +328,11 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
   const [retorno] = useState(consumirRetornoCpr);
   const [visao, setVisao] = useState<Visao>(retorno?.visao ?? 'lista');
   /* CPR-PERIODO-VENCIDOS-01 — UM PERÍODO, igual nas duas visões. O atalho dá as datas; editar uma data vira "Escolher datas".
-     30 dias segue o default (PR-CPR-2B.3.6). CPR-AJUSTES-20-10c: os vencidos não têm caixa — o dono diz onde cada um mora. */
-  const [atalho, setAtalho] = useState<AtalhoCpr>(retorno?.atalho ?? '30');
-  const [datas, setDatas] = useState<PeriodoCpr | null>(retorno?.datas ?? null);
+     CPR-AJUSTES-20-10c: os vencidos não têm caixa — o dono diz onde cada um mora.
+     P106 (Gabriel 26/10) — a tela ABRE SEMPRE em "Mês atual" e em "Ambos": período e lado NÃO se restauram (nem do instantâneo da
+     volta do contrato); os outros filtros (visão, conta, status, ampliado) seguem como antes. Dentro da tela, trocar é livre. */
+  const [atalho, setAtalho] = useState<AtalhoCpr>('atual');
+  const [datas, setDatas] = useState<PeriodoCpr | null>(null);
   /* CPR-CONTA-01 — o filtro de conta: `null` = todas; um id; ou `SEM_CONTA`. Trocar de cliente volta a "Todas". */
   const [contaSel, setContaSel] = useState<FiltroContaCpr>(retorno?.contaSel ?? null);
   /* trocar de CLIENTE volta a "Todas"; a montagem não é troca (senão a conta restaurada da ida ao contrato seria apagada) */
@@ -340,7 +342,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
     clienteDaConta.current = clienteId;
     setContaSel(null);
   }, [clienteId]);
-  const [segmento, setSegmento] = useState<Segmento>(retorno?.segmento ?? 'pagar');
+  const [segmento, setSegmento] = useState<Segmento>('ambos');
   const [statusLigados, setStatusLigados] = useState<string[]>(retorno?.statusLigados ?? STATUS_INICIAIS);
   const [lancEdicao, setLancEdicao] = useState<LancamentoV2 | null>(null);
   const [abrindo, setAbrindo] = useState(false);
@@ -376,7 +378,7 @@ export function ContasPagarReceberTab({ onIntensiveToggle, onAbrirFinanciamento 
   const hoje = useMemo(() => hojeLocal(), []);
   const hojeIso = useMemo(() => isoLocal(hoje), [hoje]);
   const periodo = useMemo<PeriodoCpr>(
-    () => (atalho === 'datas' && datas ? datas : periodoDoAtalho(atalho === 'datas' ? '30' : atalho, hojeIso)),
+    () => (atalho === 'datas' && datas ? datas : periodoDoAtalho(atalho === 'datas' ? 'atual' : atalho, hojeIso)),
     [atalho, datas, hojeIso]);
   /* editar "de" ou "até" parte das datas que estão na tela e passa a "Escolher datas"; campo esvaziado não muda nada */
   const editarData = (campo: 'de' | 'ate', v: string) => {

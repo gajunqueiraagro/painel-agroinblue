@@ -10,7 +10,7 @@ import { describe, it, expect } from 'vitest';
 import { periodoDoAtalho, recortarCpr, serieDoSaldoCpr, realizadoComCartoesCpr, type ContaCpr } from '@/lib/financeiro/cprRecorte';
 
 const HOJE = '2026-10-05';
-const MES = periodoDoAtalho('mes', HOJE);
+const MES = periodoDoAtalho('atual', HOJE);
 const ANC = new Map([['BANCO', '2026-09-30']]);
 const CARTOES = new Set(['CARTAO']);
 let n = 0;

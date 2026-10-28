@@ -431,8 +431,14 @@ if (tela === 'mesclar') {
      futuros de um contrato pós-fixado, e uma linha com as duas origens. SINTÉTICO; datas em torno de hoje. */
   const hj = new Date(); const dia = (d: number) => { const x = new Date(hj.getFullYear(), hj.getMonth(), hj.getDate() + d);
     return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
+  /* P106 — a tela abre SEMPRE em "Mês atual" (nada se restaura): `&v=futuro` e `&v=encerrado` são abertos pelo gate clicando "Mês
+     futuro" / "Mês anterior". Os dias daqui se medem a partir de hoje; `ate1o(k)` = dias de hoje até o dia 1º do mês hoje+k */
+  const ate1o = (k: number) => Math.round((new Date(hj.getFullYear(), hj.getMonth() + k, 1).getTime() - new Date(hj.getFullYear(), hj.getMonth(), hj.getDate()).getTime()) / 86_400_000);
+  /* no `futuro` as contas do período andam junto com o 1º do mês seguinte (como no período de antes, de hoje+10: as de +2 a +9 caem
+     ANTES dele, a de +12 dentro); o vencido não anda */
+  const desl = v === 'futuro' ? ate1o(1) - 10 : 0;
   const lin = (id: string, d: number, valor: number, descricao: string, o: Record<string, unknown> = {}) => ({
-    id, cliente_id: 'cli', fazenda_id: 'f1', data_vencimento: dia(d), data_competencia: dia(d), data_pagamento: null, status_transacao: 'programado',
+    id, cliente_id: 'cli', fazenda_id: 'f1', data_vencimento: dia(d < 0 ? d : d + desl), data_competencia: dia(d < 0 ? d : d + desl), data_pagamento: null, status_transacao: 'programado',
     tipo_operacao: '2-Saídas', valor, sinal: -1, conta_bancaria_id: 'bb', conta_destino_id: null, descricao, favorecido_nome: 'Banco Cooperativo Exemplo de Crédito',
     subcentro: 'Juros de Financiamento Pecuária', macro_custo: 'Despesas Financeiras', cancelado: false, sem_movimentacao_caixa: false, ...o });
   const LINHAS_CPR = [
@@ -447,8 +453,8 @@ if (tela === 'mesclar') {
     /* CPR-AJUSTES-20-10c — `&v=encerrado`: dois vencidos em aberto DENTRO de um período já encerrado (o grupo "Saem hoje", depois do
        Fim do período) — um a pagar com o nome longo e um a receber */
     ...(v === 'encerrado' ? [
-      lin('venc-enc-1', -20, 112.82, 'Segurança do Trabalho com o laudo técnico anual das instalações da sede', { status_transacao: 'previsto' }),
-      lin('venc-enc-2', -15, 500, 'Venda de couro do abate', { tipo_operacao: '1-Entradas', sinal: 1, conta_bancaria_id: null, conta_destino_id: 'bb', subcentro: 'Outras Receitas' }),
+      lin('venc-enc-1', Math.min(-1, ate1o(-1) + 9), 112.82, 'Segurança do Trabalho com o laudo técnico anual das instalações da sede', { status_transacao: 'previsto' }),
+      lin('venc-enc-2', Math.min(-1, ate1o(-1) + 14), 500, 'Venda de couro do abate', { tipo_operacao: '1-Entradas', sinal: 1, conta_bancaria_id: null, conta_destino_id: 'bb', subcentro: 'Outras Receitas' }),
     ] : []),
   ];
   g.__bancoBancada = {
@@ -462,9 +468,8 @@ if (tela === 'mesclar') {
       : fn === 'fn_parcelas_dos_lancamentos' ? {} : null,
   };
   /* CPR-AJUSTES-20-10b — `&v=futuro`: um período que começa depois de hoje (o bloco "Vencidos em aberto · entram no saldo" antes
-     do Caixa inicial, e nenhum dia de hoje), aberto pelo mesmo retorno de sessão que a tela já lê */
-  if (v === 'futuro') sessionStorage.setItem('cpr_retorno_do_contrato', JSON.stringify({ atalho: 'datas', datas: { de: dia(10), ate: dia(40) } }));
-  if (v === 'encerrado') sessionStorage.setItem('cpr_retorno_do_contrato', JSON.stringify({ atalho: 'datas', datas: { de: dia(-40), ate: dia(-10) }, segmento: 'ambos' }));
+     do Caixa inicial, e nenhum dia de hoje). P106: o gate clica "Mês futuro" / "Mês anterior" (o retorno de sessão não restaura mais
+     o período) */
   montar(<div className="h-full"><ContasPagarReceberTab onIntensiveToggle={() => {}} /></div>);
 } else if (tela === 'contas') {
   /* CAD-CONTAS-BANCARIAS-01 — Financeiro › Contas bancárias: a lista (`&n=longo` = o pior caso), o modal da conta (`&v=editar&aba=dados|gerente|

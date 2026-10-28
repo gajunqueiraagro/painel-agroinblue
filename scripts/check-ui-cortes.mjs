@@ -161,7 +161,8 @@ const CENARIOS = [
      REC-COLUNAS-01b no CLAUDE.md; quando fechar, este cenário passa a TAMANHOS_DO_CONSORCIO. */
   { nome: 'recorrencias', url: 'tela=recorrencias', tamanhos: [[1000, 600], [1126, 579], [1300, 704], [1440, 800]],
     soRegras: ['corte', 'quebra', 'numero', 'sobreposicao', 'italico', 'cabecalho', 'data', 'valor', 'altura', 'rolagem', 'tabela'] },
-  { nome: 'cpr-futuro', url: 'tela=cpr&v=futuro', tamanhos: TAMANHOS_DO_CONSORCIO },
+  /* P106 — a tela abre em "Mês atual": o período futuro é o botão "Mês futuro" */
+  { nome: 'cpr-futuro', url: 'tela=cpr&v=futuro', tamanhos: TAMANHOS_DO_CONSORCIO, antes: clicarTexto('Mês futuro') },
   /* CAD-CONTAS-BANCARIAS-01 — Financeiro › Contas bancárias nos sete tamanhos: a lista do mock, o pior caso (nome, banco e gerente longos,
      saldo de 999.999.999,99), com as inativas, e o modal (780x500) em cada aba, editando e criando */
   /* FIN-VISAO-GERAL-01 PR 3 — a Visão Geral nos três tamanhos do gate + os dois do mock (1130x580 e 1440x860), nos três modos, com 24
@@ -300,9 +301,11 @@ const CENARIOS = [
   { nome: 'barra-lateral-nome-longo', url: 'tela=recorrencias&lateral=1&submenu=financeiro', regiao: '[data-testid="barra-lateral"]', tamanhos: TAMANHOS_DO_CONTRATO,
     soRegras: ['corte', 'quebra', 'numero', 'sobreposicao', 'italico', 'cabecalho', 'data', 'valor', 'altura', 'tabela'] },
   /* CPR-AJUSTES-20-10c — período encerrado: o grupo "Saem hoje · fora do saldo do período" DEPOIS do Fim do período (rolado até ele) */
-  { nome: 'cpr-encerrado', url: 'tela=cpr&v=encerrado', tamanhos: TAMANHOS_DO_CONSORCIO },
+  /* P106 — o período encerrado é o botão "Mês anterior" (os dois vencidos do bancada caem nele) */
+  { nome: 'cpr-encerrado', url: 'tela=cpr&v=encerrado', tamanhos: TAMANHOS_DO_CONSORCIO, antes: clicarTexto('Mês anterior') },
   { nome: 'cpr-encerrado-saem-hoje', url: 'tela=cpr&v=encerrado', tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[data-testid="cpr-grupo-saem_hoje"]',
-    antes: async (p) => { await p.locator('[data-testid="cpr-grupo-saem_hoje"]').first().scrollIntoViewIfNeeded(); await p.waitForTimeout(400); } },
+    antes: async (p) => { await clicarTexto('Mês anterior')(p);
+      await p.locator('[data-testid="cpr-grupo-saem_hoje"]').first().scrollIntoViewIfNeeded(); await p.waitForTimeout(400); } },
   { nome: 'cpr-ampliado', url: 'tela=cpr', tamanhos: TAMANHOS_DO_CONSORCIO, antes: clicar('[data-testid="cpr-ampliar"]') },
   { nome: 'cpr-selo-estimado', url: 'tela=cpr', tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[data-testid="cpr-selo-estimado"]' },
   { nome: 'cpr-ampliado-totais', url: 'tela=cpr', tamanhos: TAMANHOS_DO_CONSORCIO, regiao: '[data-testid="cpr-confirmado-estimado"]', antes: clicar('[data-testid="cpr-ampliar"]') },
